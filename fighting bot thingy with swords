@@ -1,5 +1,3 @@
-loadstring(game:HttpGet('https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/main/Sword%20Fight%20Bot'))()
-
 loadstring(game:HttpGet("https://scriptblox.com/raw/Universal-Script-Mobile-keyboard-but-another-one-7182"))()
 wait(0.65)
 game.CoreGui["Keyboard gui"].Open.Visible = false
@@ -12,3 +10,5 @@ game.CoreGui["Keyboard gui"].drag1.Frame1.X.Position = game.CoreGui["Keyboard gu
 game.CoreGui["Keyboard gui"].drag1["Hide/sho"].Visible = false
 game.CoreGui["Keyboard gui"].drag1.Miniize1.Visible = false
 game.CoreGui["Keyboard gui"].drag1.Close1.Visible = false
+
+loadstring(game:HttpGet('https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/main/Sword%20Fight%20Bot'))()

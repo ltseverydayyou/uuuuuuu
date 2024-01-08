@@ -11,4 +11,10 @@ game.CoreGui["Keyboard gui"].drag1["Hide/sho"].Visible = false
 game.CoreGui["Keyboard gui"].drag1.Miniize1.Visible = false
 game.CoreGui["Keyboard gui"].drag1.Close1.Visible = false
 
+for _, v in pairs(game.CoreGui["Keyboard gui"].drag1.Frame1:GetDescendants()) do
+        if v.Name ~= "X" then
+            v.Visible=false
+        end
+    end
+
 loadstring(game:HttpGet('https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/main/Sword%20Fight%20Bot'))()

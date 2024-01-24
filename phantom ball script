@@ -27,7 +27,7 @@ end
 Player.Character.ChildAdded:Connect(function(hi)
 if hi.Name == "PlayerBallHighlight" then
 db = false
-task.wait(2)
+task.wait(1)
 if db then
 db = false
 end

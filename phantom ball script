@@ -70,4 +70,4 @@ end
             OldTick = tick()
             OldPosition = Ball.Position
         end
-    end)
+    end) 

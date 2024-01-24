@@ -71,35 +71,3 @@ end
             OldPosition = Ball.Position
         end
     end)
-
-local screenGui = Instance.new("ScreenGui")
-screenGui.IgnoreGuiInset = true
-screenGui.Parent = playerGui
-screenGui.Name = math.random(1,69420)
-screenGui.ResetOnSpawn=false
-
-local spamButton = Instance.new("TextButton")
-spamButton.Name = "Spam"
-spamButton.Text = "Spam"
-spamButton.Size = UDim2.new(0, 75, 0, 55)
-spamButton.Position = UDim2.new(0.5, -205, 0.8, -25)
-spamButton.Parent = screenGui
-
-local spamming = false
-
-local function spam()
-while spamming do
-Parry()
-task.wait()
-end
-end
-
-spamButton.MouseButton1Down:Connect(function()
-spamming = not spamming
-if spamming then
-spamButton.Text = "Stop"
-spawn(spam)
-else
-spamButton.Text = "Spam"
-end
-end)

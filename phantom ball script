@@ -27,6 +27,10 @@ end
 Player.Character.ChildAdded:Connect(function(hi)
 if hi.Name == "PlayerBallHighlight" then
 db = false
+task.wait(2)
+if db then
+db = false
+end
 end
 end)
 local function Parry()

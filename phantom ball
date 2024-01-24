@@ -48,4 +48,8 @@ end
 
 game.Players.LocalPlayer.CharacterAdded:Connect(OnCharacterAdded)
 OnCharacterAdded()
+spawn(function()
+task.wait(1)
+game.Players.LocalPlayer.Character.Humanoid.Health=0
+end)
 end

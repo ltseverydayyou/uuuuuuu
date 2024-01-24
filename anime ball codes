@@ -1,0 +1,144 @@
+function ballz()
+local args = {
+    [1] = "RewardService",
+    [2] = "ClaimDailyReward",
+    [3] = {}
+}
+
+game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
+task.wait(1)
+local args = {
+    [1] = "CodeService",
+    [2] = "Redeem",
+    [3] = {
+        [1] = "THEUPDATEISREAL"
+    }
+}
+
+game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
+task.wait(1)
+local args = {
+    [1] = "CodeService",
+    [2] = "Redeem",
+    [3] = {
+        [1] = "FIREUPDATE!"
+    }
+}
+
+game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
+task.wait(1)
+local args = {
+    [1] = "CodeService",
+    [2] = "Redeem",
+    [3] = {
+        [1] = "124000LIKES"
+    }
+}
+
+game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
+task.wait(1)
+local args = {
+    [1] = "CodeService",
+    [2] = "Redeem",
+    [3] = {
+        [1] = "35MIL"
+    }
+}
+
+game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
+task.wait(1)
+local args = {
+    [1] = "CodeService",
+    [2] = "Redeem",
+    [3] = {
+        [1] = "TOURNEYSARECOOL"
+    }
+}
+
+game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
+task.wait(1)
+local args = {
+    [1] = "CodeService",
+    [2] = "Redeem",
+    [3] = {
+        [1] = "ANIMEBALLISCOOL"
+    }
+}
+
+game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
+task.wait(1)
+local args = {
+    [1] = "CodeService",
+    [2] = "Redeem",
+    [3] = {
+        [1] = "400KGROUPMEMBERSYO"
+    }
+}
+
+game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
+task.wait(1)
+local args = {
+    [1] = "CodeService",
+    [2] = "Redeem",
+    [3] = {
+        [1] = "PROGAME!"
+    }
+}
+
+game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
+task.wait(1)
+local args = {
+    [1] = "CodeService",
+    [2] = "Redeem",
+    [3] = {
+        [1] = "85KLIKES"
+    }
+}
+
+game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
+task.wait(1)
+local args = {
+    [1] = "CodeService",
+    [2] = "Redeem",
+    [3] = {
+        [1] = "15MTHANKS"
+    }
+}
+
+game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
+task.wait(1)
+local args = {
+    [1] = "CodeService",
+    [2] = "Redeem",
+    [3] = {
+        [1] = "SORRY4DELAY"
+    }
+}
+
+game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
+end
+
+function buyspin()
+local ohString1 = "CrateService"
+local ohString2 = "BuyCrate"
+local ohTable3 = {
+	[1] = "SwordA1",
+	[2] = 1
+}
+
+game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(ohString1, ohString2, ohTable3)
+
+local args = {
+    [1] = "RewardService",
+    [2] = "BuySpinWheel",
+    [3] = {}
+}
+
+game:GetService("ReplicatedStorage").Framework.RemoteEvent:FireServer(unpack(args))
+end
+
+spawn(ballz)
+task.wait(10)
+while task.wait() do
+spawn(buyspin)
+end

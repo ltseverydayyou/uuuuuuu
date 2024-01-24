@@ -2,7 +2,7 @@ if game.GameId == 5120885191 then
 getgenv().visualizer = true
 loadstring(game:HttpGet("https://raw.githubusercontent.com/1f0yt/community/main/RedCircleBlock"))()
 
-loadstring(game:HttpGet("https://scriptblox.com/raw/Universal-Script-Mobile-keyboard-but-another-one-7182"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/main/keyboard"))()
 wait(0.65)
 game.CoreGui["Keyboard gui"].Open.Visible = false
 game.CoreGui["Keyboard gui"].drag1.Visible = true

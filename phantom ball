@@ -38,6 +38,14 @@ spamButton.MouseButton1Down:Connect(function()
 		spamButton.Text = "Spam"
 	end
 end)
-
+function parry()
 loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/main/phantom%20ball%20script"))()
+end
+
+local function OnCharacterAdded()
+	parry()
+end
+
+game.Players.LocalPlayer.CharacterAdded:Connect(OnCharacterAdded)
+OnCharacterAdded()
 end

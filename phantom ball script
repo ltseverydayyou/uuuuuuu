@@ -1,0 +1,101 @@
+local Debug = false
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+
+local Player = Players.LocalPlayer or Players.PlayerAdded:Wait()
+local Remotes = ReplicatedStorage:WaitForChild("Network_Generated", 9e9)
+local Ball = workspace:WaitForChild("GameBall", 9e9)
+db = false
+
+-- Functions
+
+local function print(...) -- Debug print.
+    if Debug then
+        warn(...)
+    end
+end
+
+local function VerifyBall(Ball)
+    if Ball:IsA("BasePart") then
+        return true
+    end
+end
+
+local function IsTarget()
+    return (Player.Character and Player.Character:FindFirstChild("PlayerBallHighlight"))
+end
+Player.Character.ChildAdded:Connect(function(hi)
+if hi.Name == "PlayerBallHighlight" then
+db = false
+end
+end)
+local function Parry()
+    local args = {
+        [1] = 5.520474058077904e+76,
+        [2] = 1,
+        [3] = 2.933813859058389e+76
+    }
+
+    Remotes.GeneratedEvent241:FireServer(unpack(args))
+end
+
+-- The actual code
+    if not VerifyBall(Ball) then
+        return
+    end
+    
+    local OldPosition = Ball.Position
+    local OldTick = tick()
+    
+    Ball:GetPropertyChangedSignal("Position"):Connect(function()
+        if IsTarget() then
+            local Distance = (Ball.Position - workspace.CurrentCamera.Focus.Position).Magnitude
+            local Velocity = (OldPosition - Ball.Position).Magnitude -- Fix for .Velocity not working. Yes I got the lowest possible grade in accuplacer math.
+            
+            print(`Distance: {Distance}\nVelocity: {Velocity}\nTime: {Distance / Velocity}`)
+        
+            if (Distance / Velocity) <= 10 then
+if not db then
+                Parry()
+db = true
+end
+            end
+        end
+        
+        if (tick() - OldTick >= 1/60) then
+            OldTick = tick()
+            OldPosition = Ball.Position
+        end
+    end)
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.IgnoreGuiInset = true
+screenGui.Parent = playerGui
+screenGui.Name = math.random(1,69420)
+screenGui.ResetOnSpawn=false
+
+local spamButton = Instance.new("TextButton")
+spamButton.Name = "Spam"
+spamButton.Text = "Spam"
+spamButton.Size = UDim2.new(0, 75, 0, 55)
+spamButton.Position = UDim2.new(0.5, -205, 0.8, -25)
+spamButton.Parent = screenGui
+
+local spamming = false
+
+local function spam()
+while spamming do
+Parry()
+task.wait()
+end
+end
+
+spamButton.MouseButton1Down:Connect(function()
+spamming = not spamming
+if spamming then
+spamButton.Text = "Stop"
+spawn(spam)
+else
+spamButton.Text = "Spam"
+end
+end)

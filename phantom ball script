@@ -27,8 +27,8 @@ end
 Player.Character.ChildAdded:Connect(function(hi)
 if hi.Name == "PlayerBallHighlight" then
 db = false
-task.wait()
-for _, v in pairs(game.workspace:GetDescendants()) do
+spawn(function()
+for _, v in pairs(game.workspace.Game.Maps:GetDescendants()) do
         if v.Name == "Ball Spawn" then
 if Ball.Position == v.Position then
 db=true
@@ -36,6 +36,7 @@ task.wait(1.5)
 db=false
         end
     end
+end)
 end
 end)
 local function Parry()

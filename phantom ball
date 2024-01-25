@@ -14,6 +14,13 @@ spamButton.Size = UDim2.new(0, 75, 0, 55)
 spamButton.Position = UDim2.new(0.5,155 , 0.8, -25)
 spamButton.Parent = screenGui
 
+local audiobtn = Instance.new("TextButton")
+audiobtn.Name = "Audio Fix"
+audiobtn.Text = "Fix Game Audio (if broken)"
+audiobtn.Size = UDim2.new(0, 75, 0, 55)
+audiobtn.Position = UDim2.new(0.5, -205, 0.8, -25)
+audiobtn.Parent = screenGui
+
 local spamming = false
 
 local function spam()
@@ -37,6 +44,16 @@ spamButton.MouseButton1Down:Connect(function()
 	else
 		spamButton.Text = "Spam"
 	end
+end)
+audiobtn.MouseButton1Down:Connect(function()
+	for i, v in pairs(game.SoundService.Master.Music.Game:GetChildren()) do
+        if not v.Playing then
+v.Volume = 1
+v.Playing=true
+game.SoundService.Master.Music.Lobby.Main:Play()
+game.SoundService.Master.Music.Lobby.Main.Volume=1
+end
+    end
 end)
 function parry()
 loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/main/phantom%20ball%20script"))()

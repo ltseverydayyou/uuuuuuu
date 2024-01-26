@@ -27,15 +27,6 @@ end
 Player.Character.ChildAdded:Connect(function(hi)
 if hi.Name == "PlayerBallHighlight" then
 db = false
-task.wait(2)
-db=false
-end
-end)
-Player.Character.ChildRemoved:Connect(function(hi)
-if hi.Name == "PlayerBallHighlight" then
-db = true
-end
-
 end
 end)
 local function Parry()

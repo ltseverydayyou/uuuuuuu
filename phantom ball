@@ -65,14 +65,6 @@ end
 
 game.Players.LocalPlayer.CharacterAdded:Connect(OnCharacterAdded)
 OnCharacterAdded()
-spawn(function()
-task.wait(1)
---[[for i, v in pairs(game.workspace:GetDescendants()) do
-        if v.Name == "Leaderboards" then
-            v:Destroy()
-        end
-    end
-end)]]
---print'loaded'
 end
+print("loaded v4")
 --v4

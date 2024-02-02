@@ -1,5 +1,5 @@
 if game.GameId == 4538598064 then
---[[local playerGui = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+local playerGui = game.Players.LocalPlayer:WaitForChild("PlayerGui")
 
 local screenGui = Instance.new("ScreenGui")
 screenGui.IgnoreGuiInset = true
@@ -14,12 +14,12 @@ spamButton.Size = UDim2.new(0, 75, 0, 55)
 spamButton.Position = UDim2.new(0.5,155 , 0.8, -25)
 spamButton.Parent = screenGui
 
-local audiobtn = Instance.new("TextButton")
+--[[local audiobtn = Instance.new("TextButton")
 audiobtn.Name = "Audio Fix"
 audiobtn.Text = "Fix Audio"
 audiobtn.Size = UDim2.new(0, 75, 0, 55)
 audiobtn.Position = UDim2.new(0.5, -205, 0.8, -25)
-audiobtn.Parent = screenGui
+audiobtn.Parent = screenGui]]
 
 local spamming = false
 
@@ -45,7 +45,7 @@ spamButton.MouseButton1Down:Connect(function()
 		spamButton.Text = "Spam"
 	end
 end)
-audiobtn.MouseButton1Down:Connect(function()
+--[[audiobtn.MouseButton1Down:Connect(function()
 	for i, v in pairs(game.SoundService.Master.Music.Game:GetChildren()) do
         if not v.Playing then
 v.Volume = 1
@@ -54,7 +54,7 @@ game.SoundService.Master.Music.Lobby.Main:Play()
 game.SoundService.Master.Music.Lobby.Main.Volume=1
 end
     end
-end)
+end)]]
 function parry()
 loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/main/phantom%20ball%20script"))()
 end
@@ -66,16 +66,5 @@ end
 game.Players.LocalPlayer.CharacterAdded:Connect(OnCharacterAdded)
 OnCharacterAdded()
 end
-]]
-while true do
-		local args = {
-			[1] = 5.520474058077904e+76,
-			[2] = 1,
-			[3] = 2.933813859058389e+76
-		}
-
-		game.ReplicatedStorage.Network_Generated.GeneratedEvent241:FireServer(unpack(args))
-		task.wait()
-	end
 print("loaded v4")
 --v4

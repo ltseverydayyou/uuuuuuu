@@ -78,6 +78,6 @@ end
 game.Players.LocalPlayer.CharacterAdded:Connect(OnCharacterAdded)
 OnCharacterAdded()
 end]]
-sex()
+spawn(sex)
 print("loaded v4")
 --v4

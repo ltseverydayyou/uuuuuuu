@@ -25,6 +25,7 @@ local spamming = false
 
 local function spam()
 	while spamming do
+for i=1, 3 do
 		local args = {
 			[1] = 5.520474058077904e+76,
 			[2] = 1,
@@ -32,6 +33,7 @@ local function spam()
 		}
 
 		game.ReplicatedStorage.Network_Generated.GeneratedEvent241:FireServer(unpack(args))
+end
 		task.wait()
 	end
 end

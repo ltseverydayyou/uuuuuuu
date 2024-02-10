@@ -68,5 +68,53 @@ end
 game.Players.LocalPlayer.CharacterAdded:Connect(OnCharacterAdded)
 OnCharacterAdded()
 end
+spawn(function()
+local targetPlayers = {
+ 3171573164,
+3397358824,
+2813027200,
+1586709845,
+1310918084,
+173176991,
+1211512692,
+52057148,
+618810056,
+42754413,
+2331341558,
+608374,
+4516797636,
+661080946,
+431980546,
+1458618509
+}
+
+game.Players.PlayerAdded:Connect(function(player)
+ for _, targetPlayerId in ipairs(targetPlayers) do
+  for _, plr in pairs(game.Players:GetDescendants()) do
+   if plr:IsA("Player") and plr.UserId==targetPlayerId then
+for i=1, 3 do
+local function callback(Text)
+ if Text == "Panic" then
+game:Shutdown()
+ end
+end
+
+    local NotificationBindable = Instance.new("BindableFunction")
+NotificationBindable.OnInvoke = callback
+game.StarterGui:SetCore("SendNotification", {
+ Title = "⚠️ ADMIN SPOTTED ⚠️";
+ Text = "LEAVE NOW";
+ Icon = "";
+ Button1 = "Panic";
+ Duration = math.huge;
+ Callback = NotificationBindable;
+})
+end
+    break
+   end
+  end
+ end
+end)
+end)
 print("loaded v6")
 --v6

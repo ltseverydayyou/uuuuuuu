@@ -27,12 +27,10 @@ local function spam()
 	while spamming do
 for i=1, 3 do
 		local args = {
-			[1] = 5.520474058077904e+76,
-			[2] = 1,
-			[3] = 2.933813859058389e+76
-		}
+    [1] = 2.933813859058389e+76
+}
 
-		game.ReplicatedStorage.Network_Generated.GeneratedEvent241:FireServer(unpack(args))
+game:GetService("ReplicatedStorage").Remotes.ReqDef:FireServer(unpack(args))
 end
 		task.wait()
 	end

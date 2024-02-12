@@ -16,7 +16,7 @@ local function print(...) -- Debug print.
 end
 
 local function VerifyBall(Ball)
-    if Ball:IsA("BasePart") then
+    if Ball:IsA("MeshPart") then
         return true
     end
 end

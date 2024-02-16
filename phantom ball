@@ -69,7 +69,7 @@ OnCharacterAdded()
 end
 spawn(function()
 game.Players.LocalPlayer.PlayerScripts.TS.VFX.BlockingHighlights.Disabled=true
-end
+end)
 --remove block highlight for less lag
 print("loaded v7")
 --v7

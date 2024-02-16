@@ -67,5 +67,9 @@ end
 game.Players.LocalPlayer.CharacterAdded:Connect(OnCharacterAdded)
 OnCharacterAdded()
 end
-print("loaded v6")
---v6
+spawn(function()
+game.Players.LocalPlayer.PlayerScripts.TS.VFX.BlockingHighlights.Disabled=true
+end
+--remove block highlight for less lag
+print("loaded v7")
+--v7

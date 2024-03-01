@@ -21,6 +21,16 @@ local args = {
     [1] = "CodeService",
     [2] = "Redeem",
     [3] = {
+        [1] = "THE0NEP1ECEISREAL"
+    }
+}
+
+game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
+task.wait(1)
+local args = {
+    [1] = "CodeService",
+    [2] = "Redeem",
+    [3] = {
         [1] = "FIREUPDATE!"
     }
 }
@@ -141,4 +151,5 @@ spawn(ballz)
 task.wait(10)
 while task.wait() do
 spawn(buyspin)
+game.Players.LocalPlayer.PlayerGui.SpinWheel.Holder.Visible=true
 end

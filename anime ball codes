@@ -151,5 +151,7 @@ spawn(ballz)
 task.wait(10)
 while task.wait() do
 spawn(buyspin)
+if game.PlaceId ~= 15440283215 then
 game.Players.LocalPlayer.PlayerGui.SpinWheel.Holder.Visible=true
+end
 end

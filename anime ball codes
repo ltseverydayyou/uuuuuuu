@@ -21,6 +21,16 @@ local args = {
     [1] = "CodeService",
     [2] = "Redeem",
     [3] = {
+        [1] = "450KFANS"
+    }
+}
+
+game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
+task.wait(1)
+local args = {
+    [1] = "CodeService",
+    [2] = "Redeem",
+    [3] = {
         [1] = "GAMEISALIVE!"
     }
 }

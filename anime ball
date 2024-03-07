@@ -38,7 +38,7 @@ local bruh = Instance.new("TextButton")
 bruh.Name = "Unfreeze"
 bruh.Text = "Unfreeze"
 bruh.Size = UDim2.new(0, 75, 0, 55)
-bruh.Position = UDim2.new(0.81, -205, 0.8, -25)
+bruh.Position = UDim2.new(0.8, -205, 0.8, -25)
 bruh.Parent = screenGui
 
 parryButton.MouseButton1Down:Connect(function()

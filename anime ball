@@ -1,11 +1,11 @@
 if game.GameId == 5120885191 then
 local input = game:GetService("UserInputService")
-vim=game:GetService("VirtualInputManager")
+local vim = game:GetService("VirtualInputManager")
 local p = game:GetService("Players").LocalPlayer
 local gui = p:WaitForChild("PlayerGui")
 getgenv().visualizer = true
 loadstring(game:HttpGet("https://raw.githubusercontent.com/1f0yt/community/main/RedCircleBlock"))()
-
+task.wait(.5)
 local screenGui = Instance.new("ScreenGui")
 screenGui.IgnoreGuiInset = true
 screenGui.Parent = gui
@@ -13,7 +13,7 @@ screenGui.ResetOnSpawn = false
 screenGui.Name = math.random(1,69420)
 
 local spamButton = Instance.new("TextButton")
-spamButton.Name="Spam"
+spamButton.Name = "Spam"
 spamButton.Text = "Spam"
 spamButton.Parent=screenGui
 spamButton.Size = UDim2.new(0, 75, 0, 55)

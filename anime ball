@@ -6,6 +6,16 @@ local gui = p:WaitForChild("PlayerGui")
 
 getgenv().visualizer = true
 loadstring(game:HttpGet("https://raw.githubusercontent.com/1f0yt/community/main/RedCircleBlock"))()
+spawn(function()
+game.DescendantAdded:Connect(function(d)
+  if d.Name == "MainView" then
+      task.wait()
+      d.Parent.Parent:Destroy()
+  end
+end)
+task.wait(1)
+vim:SendKeyEvent(true, "F9", 0, game)
+end)
 task.wait(.5)
 local screenGui = Instance.new("ScreenGui")
 screenGui.IgnoreGuiInset = true

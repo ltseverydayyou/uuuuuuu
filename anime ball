@@ -1,36 +1,10 @@
 if game.GameId == 5120885191 then
 local input = game:GetService("UserInputService")
+vim=game:GetService("VirtualInputManager")
 local p = game:GetService("Players").LocalPlayer
 local gui = p:WaitForChild("PlayerGui")
 getgenv().visualizer = true
 loadstring(game:HttpGet("https://raw.githubusercontent.com/1f0yt/community/main/RedCircleBlock"))()
-
-loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/main/keyboard"))()
-wait(0.65)
-game.CoreGui["Keyboard gui"].Open.Visible = false
-game.CoreGui["Keyboard gui"].drag1.Visible = true
-game.CoreGui["Keyboard gui"].drag1.Size = UDim2.new(0.5,0,0.1,0)
-game.CoreGui["Keyboard gui"].drag1.Frame1.BackgroundTransparency = 1
-game.CoreGui["Keyboard gui"].drag1.Frame1.X.Text = "Spam"
-game.CoreGui["Keyboard gui"].drag1.BackgroundTransparency = 1
-game.CoreGui["Keyboard gui"].drag1.Frame1.X.Position = game.CoreGui["Keyboard gui"].drag1.Position + UDim2.new(-0.05,0,-0.1,0)
-game.CoreGui["Keyboard gui"].drag1["Hide/sho"].Visible = false
-game.CoreGui["Keyboard gui"].drag1.Miniize1.Visible = false
-game.CoreGui["Keyboard gui"].drag1.Close1.Visible = false
-
-local spampos = Instance.new("TextButton")
-spampos.Name = "position"
-spampos.Text = ""
-spampos.Size = UDim2.new(0, 75, 0, 55)
-spampos.Position = UDim2.new(0.5, -205, 0.8, -25)
-spampos.Transparency=1
-
-for i, v in pairs(game.CoreGui["Keyboard gui"].drag1.Frame1:GetDescendants()) do
-if v.Name ~= "X" then
-v.Visible = false
-end
-end
-
 
 local screenGui = Instance.new("ScreenGui")
 screenGui.IgnoreGuiInset = true
@@ -38,12 +12,12 @@ screenGui.Parent = gui
 screenGui.ResetOnSpawn = false
 screenGui.Name = math.random(1,69420)
 
-local spamButton = game.CoreGui["Keyboard gui"].drag1.Frame1.X
+local spamButton = Instance.new("TextButton")
+spamButton.Name="Spam"
 spamButton.Text = "Spam"
 spamButton.Parent=screenGui
-spamButton.Size = spampos.Size
-spamButton.Position=spampos.Position
-game.CoreGui["Keyboard gui"].Enabled=false
+spamButton.Size = UDim2.new(0, 75, 0, 55)
+spamButton.Position=UDim2.new(0.5, -205, 0.8, -25)
 
 local parryButton = Instance.new("TextButton")
 parryButton.Name = "Parry"
@@ -56,26 +30,18 @@ local gay = Instance.new("TextButton")
 gay.Name = "Freeze"
 gay.Text = "Freeze"
 gay.Size = UDim2.new(0, 75, 0, 55)
-gay.Position = UDim2.new(0.6, -205, 0.8, -24)
+gay.Position = UDim2.new(0.58, -205, 0.8, -25)
 gay.Parent = screenGui
 
 local bruh = Instance.new("TextButton")
 bruh.Name = "Unfreeze"
 bruh.Text = "Unfreeze"
 bruh.Size = UDim2.new(0, 75, 0, 55)
-bruh.Position = UDim2.new(0.75, -205, 0.8, -24)
+bruh.Position = UDim2.new(0.76, -205, 0.8, -25)
 bruh.Parent = screenGui
 
 parryButton.MouseButton1Down:Connect(function()
-local args = {
-[1] = "SwordService",
-[2] = "Block",
-[3] = {
-[1] = -0.5340168476104736
-}
-}
-
-game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
+vim:SendKeyEvent(true, "F", 0, game)
 end)
 
 gay.MouseButton1Down:Connect(function()
@@ -92,19 +58,8 @@ local spamming = false
 
 local function spam()
 while spamming do
-for i=1, 3 do
-local args = {
-[1] = "SwordService",
-[2] = "Block",
-[3] = {
-[1] = -0.5340168476104736
-}
-}
-
-game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
-end
+vim:SendKeyEvent(true, "F", 0, game)
 task.wait()
-end
 end
 
 spamButton.MouseButton1Down:Connect(function()
@@ -141,6 +96,7 @@ Callback = NotificationBindable;
 })
 elseif bell.Color == balls1.UltimateBall1.Color then
 bell.Name = "UltimateBall"
+bell.Parent=game.workspace
 local highlight = Instance.new("SelectionBox")
 highlight.Color3 = bell.Color
 highlight.Adornee = bell

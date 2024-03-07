@@ -3,6 +3,7 @@ local input = game:GetService("UserInputService")
 local vim = game:GetService("VirtualInputManager")
 local p = game:GetService("Players").LocalPlayer
 local gui = p:WaitForChild("PlayerGui")
+
 getgenv().visualizer = true
 loadstring(game:HttpGet("https://raw.githubusercontent.com/1f0yt/community/main/RedCircleBlock"))()
 task.wait(.5)
@@ -15,7 +16,7 @@ screenGui.Name = math.random(1,69420)
 local spamButton = Instance.new("TextButton")
 spamButton.Name = "Spam"
 spamButton.Text = "Spam"
-spamButton.Parent=screenGui
+spamButton.Parent = screenGui
 spamButton.Size = UDim2.new(0, 75, 0, 55)
 spamButton.Position=UDim2.new(0.5, -205, 0.8, -25)
 
@@ -60,6 +61,7 @@ local function spam()
 while spamming do
 vim:SendKeyEvent(true, "F", 0, game)
 task.wait()
+end
 end
 
 spamButton.MouseButton1Down:Connect(function()

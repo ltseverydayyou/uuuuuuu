@@ -15,6 +15,8 @@ game.DescendantAdded:Connect(function(d)
 end)
 task.wait(1)
 vim:SendKeyEvent(true, "F9", 0, game)
+task.wait()
+vim:SendKeyEvent(false, "F9", 0, game)
 end)
 spawn(function()
 game.ReplicatedStorage.Storage.Explosions:Destroy()
@@ -29,33 +31,34 @@ screenGui.Parent = gui
 screenGui.ResetOnSpawn = false
 screenGui.Name = math.random(1,69420)
 
-local spamButton = Instance.new("TextButton")
-spamButton.Name = "Spam"
-spamButton.Text = "Spam"
-spamButton.Parent = screenGui
-spamButton.Size = UDim2.new(0, 75, 0, 55)
-spamButton.Position=UDim2.new(0.5, -205, 0.8, -25)
+local frame = Instance.new("Frame")
+frame.Name = "manage"
+frame.Size = UDim2.new(0, 300, 0, 200)
+frame.Position = UDim2.new(0.5, -150, 0.75, -200)
+frame.BackgroundTransparency = 1
+frame.Parent = screenGui
 
-local parryButton = Instance.new("TextButton")
-parryButton.Name = "Parry"
-parryButton.Text = "Parry"
-parryButton.Size = UDim2.new(0, 75, 0, 55)
-parryButton.Position = UDim2.new(0.5,155 , 0.8, -25)
-parryButton.Parent = screenGui
+local listLayout = Instance.new("UIListLayout")
+listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+listLayout.Parent = frame
+listLayout.FillDirection = Enum.FillDirection.Horizontal
+listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+listLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
 
-local gay = Instance.new("TextButton")
-gay.Name = "Freeze"
-gay.Text = "Freeze"
-gay.Size = UDim2.new(0, 75, 0, 55)
-gay.Position = UDim2.new(0.58, -205, 0.8, -25)
-gay.Parent = screenGui
+local function createButton(name, text, layoutOrder)
+    local button = Instance.new("TextButton")
+    button.Name = name
+    button.Text = text
+    button.Size = UDim2.new(0, 60, 0, 40)
+    button.LayoutOrder = layoutOrder
+    button.Parent = frame
+    return button
+end
 
-local bruh = Instance.new("TextButton")
-bruh.Name = "Unfreeze"
-bruh.Text = "Unfreeze"
-bruh.Size = UDim2.new(0, 75, 0, 55)
-bruh.Position = UDim2.new(0.8, -205, 0.8, -25)
-bruh.Parent = screenGui
+local spamButton = createButton("Spam", "Spam", 1)
+local gay = createButton("Freeze", "Freeze", 2)
+local bruh = createButton("Unfreeze", "Unfreeze", 3)
+local parryButton = createButton("Parry", "Parry", 4)
 
 parryButton.MouseButton1Down:Connect(function()
 local args = {

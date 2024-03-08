@@ -34,7 +34,7 @@ screenGui.Name = math.random(1,69420)
 local frame = Instance.new("Frame")
 frame.Name = "manage"
 frame.Size = UDim2.new(0, 300, 0, 200)
-frame.Position = UDim2.new(0.5, -150, 0.90, -200)
+frame.Position = UDim2.new(0.5, -150, 0.93, -200)
 frame.BackgroundTransparency = 1
 frame.Parent = screenGui
 

@@ -31,6 +31,10 @@ screenGui.Parent = game.CoreGui
 screenGui.ResetOnSpawn = false
 screenGui.Name = math.random(1,69420)
 
+local foldd = Instance.new("Folder")
+foldd.Name="realBalls"
+foldd.Parent=game.Workspace
+
 local listLayout = Instance.new("UIListLayout")
 listLayout.SortOrder = Enum.SortOrder.LayoutOrder
 listLayout.Parent = screenGui
@@ -138,16 +142,26 @@ end
 end
 
 local function movebell(pro)
-while wait() do
-pro.Position = pro.Position + Vector3.new(0,1,0)
-wait()
-pro.Position = pro.Position + Vector3.new(0,-1,0)
+h=Instance.new("Part")
+h.Parent=game.Workspace.Balls
+h.Transparency=1
+h.CanCollide=false
+h.Name="FakeBall"
+h.Anchored=true
+pro.Parent=foldd
+spawn(function()
+while task.wait() do
+h.Position=pro.Position
+h.Position=h.Position + Vector3.new(0,0.1,0)
 end
+end)
 end
 
 game.workspace.Balls.ChildAdded:Connect(function(balz)
+if balz.Name ~= "FakeBall" then
 ballz(balz)
 movebell(balz)
+end
 end)
 wait(1)
 game.Workspace.Effects:Remove()

@@ -141,20 +141,23 @@ Callback = NotificationBindable;
 end
 end
 
-local function movebell(pro)
-h=Instance.new("Part")
-h.Parent=game.Workspace.Balls
-h.Transparency=1
-h.CanCollide=false
-h.Name="FakeBall"
-h.Anchored=true
-pro.Parent=foldd
-spawn(function()
+function max(lo,ol)
 while task.wait() do
-h.Position=pro.Position
-h.Position=h.Position + Vector3.new(0,0.1,0)
+lo.Position=ol.Position
+task.wait()
+lo.Position=lo.Position + Vector3.new(0,0.1,0)
 end
-end)
+end
+
+local function movebell(pro)
+som=Instance.new("Part")
+som.Parent = game.workspace.Balls
+som.Transparency=1
+som.CanCollide=false
+som.Name="FakeBall"
+som.Anchored=true
+pro.Parent=foldd
+max(som,pro)
 end
 
 game.workspace.Balls.ChildAdded:Connect(function(balz)

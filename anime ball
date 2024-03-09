@@ -118,9 +118,6 @@ Icon = "";
 Duration = 1;
 Callback = NotificationBindable;
 })
-while task.wait() do
-bell.CFrame = bell.CFrame + CFrame.new(0,0.001,0)
-end
 elseif bell.Color == balls1.UltimateBall1.Color then
 bell.Name = "UltimateBall"
 bell.Parent=game.workspace

@@ -119,7 +119,7 @@ Duration = 1;
 Callback = NotificationBindable;
 })
 while task.wait() do
-bell.Position = bell.Position + Vector3.new(0,0.001,0)
+bell.CFrame = bell.CFrame + CFrame.new(0,0.001,0)
 end
 elseif bell.Color == balls1.UltimateBall1.Color then
 bell.Name = "UltimateBall"

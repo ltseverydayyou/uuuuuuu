@@ -138,10 +138,10 @@ end
 end
 
 local function movebell(pro)
-while task.wait() do
-pro.CFrame += Vector3.new(0,10,0)
+while wait() do
+pro.Position = pro.Position + Vector3.new(0,1,0)
 wait()
-pro.CFrame += Vector3.new(0,-10,0)
+pro.Position = pro.Position + Vector3.new(0,-1,0)
 end
 end
 

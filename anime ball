@@ -151,12 +151,17 @@ end
 
 local function movebell(pro)
 som=Instance.new("Part")
-som.Parent = game.workspace.Balls
+som.Name="FakeBall"
 som.Transparency=1
 som.CanCollide=false
-som.Name="FakeBall"
 som.Anchored=true
+som.Parent = game.workspace.Balls
 pro.Parent=foldd
+game.workspace.realBalls.ChildRemove:Connect(function(hh)
+if hh.Name == pro.Name then
+som:Destroy()
+end
+end)
 max(som,pro)
 end
 

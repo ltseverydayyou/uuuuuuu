@@ -50,6 +50,7 @@ local function createButton(name, text, layoutOrder)
     return button
 end
 
+
 local spamButton = createButton("Spam", "Spam", 1)
 local gay = createButton("Freeze", "Freeze", 2)
 local bruh = createButton("Unfreeze", "Unfreeze", 3)
@@ -136,7 +137,18 @@ Callback = NotificationBindable;
 end
 end
 
-game.workspace.Balls.ChildAdded:Connect(ballz)
+local function movebell(pro)
+while task.wait() do
+pro.CFrame += Vector3.new(0,10,0)
+wait()
+pro.CFrame += Vector3.new(0,-10,0)
+end
+end
+
+game.workspace.Balls.ChildAdded:Connect(function(balz)
+ballz(balz)
+movebell(balz)
+end)
 wait(1)
 game.Workspace.Effects:Remove()
 

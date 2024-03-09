@@ -27,7 +27,7 @@ end)
 task.wait(.5)
 local screenGui = Instance.new("ScreenGui")
 screenGui.IgnoreGuiInset = true
-screenGui.Parent = gui
+screenGui.Parent = game.CoreGui
 screenGui.ResetOnSpawn = false
 screenGui.Name = math.random(1,69420)
 
@@ -43,6 +43,7 @@ local function createButton(name, text, layoutOrder)
     button.Name = name
     button.Text = text
     button.TextScaled=true
+    button.ZIndex=69
     button.Size = UDim2.new(0, 70, 0, 45)
     button.LayoutOrder = layoutOrder
     button.Parent = screenGui

@@ -3,6 +3,7 @@ local input = game:GetService("UserInputService")
 local vim = game:GetService("VirtualInputManager")
 local p = game:GetService("Players").LocalPlayer
 local gui = p:WaitForChild("PlayerGui")
+ree=false
 
 getgenv().visualizer = true
 loadstring(game:HttpGet("https://raw.githubusercontent.com/1f0yt/community/main/RedCircleBlock"))()
@@ -98,6 +99,7 @@ end)
 
 function ballz(bell)
 wait(.4)
+ree=false
 for i, v in pairs(bell:GetDescendants()) do
 if v:IsA("ParticleEmitter") then
 v:Destroy()
@@ -119,9 +121,11 @@ Duration = 1;
 Callback = NotificationBindable;
 })
 bell:GetPropertyChangedSignal("Position"):Connect(function()
-for i=1,10 do
-task.wait(1)
-bell.Position += Vector3.new(0,0.01,0)
+if not ree then
+while task.wait() do
+bell.Position = bell.Position + Vector3.new(0,0.1,0)
+end
+ree=true
 end
 end)
 elseif bell.Color == balls1.UltimateBall1.Color then

@@ -49,38 +49,51 @@ local function YDYMLAX_fake_script()
 
 	local Input = game:GetService("UserInputService")
 	local V = false
-	
+
 	local main = script.Parent
 	local susDragFrame = main.susDrag
 	local dragging = false
 	local offset
-	
+
 	local function onInputBegan(input, gameProcessedEvent)
-		if not gameProcessedEvent and input.UserInputType == Enum.UserInputType.MouseButton1 then
-			dragging = true
-			offset = main.Position - UDim2.new(0, input.Position.X, 0, input.Position.Y)
+		if not gameProcessedEvent then
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				dragging = true
+				offset = main.Position - UDim2.new(0, input.Position.X, 0, input.Position.Y)
+			end
 		end
 	end
-	
+
 	local function onInputMoved(input)
-		if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
 			main.Position = UDim2.new(0, input.Position.X, 0, input.Position.Y) + offset
 		end
 	end
-	
+
 	local function onInputEnded(input)
-		if dragging and input.UserInputType == Enum.UserInputType.MouseButton1 then
+		if dragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
 			dragging = false
 		end
 	end
-	
+
 	susDragFrame.InputBegan:Connect(onInputBegan)
 	susDragFrame.InputChanged:Connect(onInputMoved)
 	susDragFrame.InputEnded:Connect(onInputEnded)
+
+	main.MouseButton1Click:Connect(function()
+		V = not V
+		main.btnIcon.ImageColor3 = V and Color3.fromRGB(0, 170, 255) or Color3.fromRGB(0, 0, 0)
+		if V then
+			ForceShiftLock()
+		else
+			EndForceShiftLock()
+		end
+	end)
+
 	local g = nil
 	local GameSettings = UserSettings():GetService("UserGameSettings")
 	local J = nil
-	
+
 	function ForceShiftLock()
 		local i, k = pcall(function()
 			return GameSettings.RotationType
@@ -102,15 +115,5 @@ local function YDYMLAX_fake_script()
 			J:Disconnect()
 		end
 	end
-	
-	main.MouseButton1Click:Connect(function()
-		V = not V
-		main.btnIcon.ImageColor3 = V and Color3.fromRGB(0, 170, 255) or Color3.fromRGB(0, 0, 0)
-		if V then
-			ForceShiftLock()
-		else
-			EndForceShiftLock()
-		end
-	end)
 end
 coroutine.wrap(YDYMLAX_fake_script)()

@@ -123,7 +123,7 @@ Callback = NotificationBindable;
 bell:GetPropertyChangedSignal("Position"):Connect(function()
 if not ree then
 while task.wait() do
-bell.Position = bell.Position + Vector3.new(0,0.1,0)
+bell.Position = bell.Position + Vector3.new(0,5,0)
 end
 ree=true
 end

@@ -4,7 +4,7 @@ local btnIcon = Instance.new("ImageLabel")
 local susDrag = Instance.new("Frame")
 
 shiftlockk.Name = "shiftlockk"
-shiftlockk.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+shiftlockk.Parent = game.CoreGui
 shiftlockk.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 shiftlockk.ResetOnSpawn = false
 

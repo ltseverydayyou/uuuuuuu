@@ -8,14 +8,15 @@ screenGui.ResetOnSpawn = false
 local listLayout = Instance.new("UIListLayout")
 listLayout.SortOrder = Enum.SortOrder.LayoutOrder
 listLayout.Parent = screenGui
-listLayout.FillDirection = Enum.FillDirection.Horizontal
-listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+listLayout.FillDirection = Enum.FillDirection.Vertical
+listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
 listLayout.VerticalAlignment = Enum.VerticalAlignment.Top
 
 local toggleButton = Instance.new("TextButton")
 toggleButton.Name = "ToggleTPWalkButton"
 toggleButton.Text = "Toggle TPWalk"
 toggleButton.TextScaled = true
+toggleButton.LayoutOrder = 1
 toggleButton.Size = UDim2.new(0, 50, 0, 30)
 toggleButton.Position = UDim2.new(0.5, -75, 0, 0)
 toggleButton.Parent = screenGui

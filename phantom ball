@@ -14,12 +14,12 @@ spamButton.Size = UDim2.new(0, 75, 0, 55)
 spamButton.Position = UDim2.new(0.5,155 , 0.8, -25)
 spamButton.Parent = screenGui
 
-local audiobtn = Instance.new("TextButton")
+--[[local audiobtn = Instance.new("TextButton")
 audiobtn.Name = "Audio Fix"
 audiobtn.Text = "Fix Audio"
 audiobtn.Size = UDim2.new(0, 75, 0, 55)
 audiobtn.Position = UDim2.new(0.5, -205, 0.8, -25)
-audiobtn.Parent = screenGui
+audiobtn.Parent = screenGui]]
 
 local spamming = false
 
@@ -45,7 +45,7 @@ spamButton.MouseButton1Down:Connect(function()
 		spamButton.Text = "Spam"
 	end
 end)
-audiobtn.MouseButton1Down:Connect(function()
+--[[audiobtn.MouseButton1Down:Connect(function()
 	for i, v in pairs(game.SoundService.Master.Music.Game:GetChildren()) do
         if not v.Playing then
 v.Volume = 1
@@ -54,7 +54,7 @@ game.SoundService.Master.Music.Lobby.Main:Play()
 game.SoundService.Master.Music.Lobby.Main.Volume=1
 end
     end
-end)
+end)]]
 
 function parry()
 loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/main/phantom%20ball%20script"))()
@@ -71,5 +71,98 @@ spawn(function()
 game.Players.LocalPlayer.PlayerScripts.TS.VFX.BlockingHighlights.Disabled=true
 end)
 --remove block highlight for less lag
-print("loaded v7")
---v7
+print("loaded v9")
+spawn(function()
+--check for admins & mods
+local targetPlayers = {
+3171573164,
+3397358824,
+2813027200,
+1586709845,
+1310918084,
+173176991,
+1211512692,
+52057148,
+618810056,
+42754413,
+2331341558,
+608374,
+4516797636,
+661080946,
+431980546,
+1458618509
+}
+
+game.Players.PlayerAdded:Connect(function(player)
+ for _, targetPlayerId in ipairs(targetPlayers) do
+  for _, plr in pairs(game.Players:GetDescendants()) do
+   if plr:IsA("Player") and plr.UserId==targetPlayerId then
+local function callback(Text)
+ if Text == "Panic" then
+game:Shutdown()
+ end
+end
+
+    local NotificationBindable = Instance.new("BindableFunction")
+NotificationBindable.OnInvoke = callback
+game.StarterGui:SetCore("SendNotification", {
+ Title = "⚠️ ADMIN SPOTTED ⚠️";
+ Text = "LEAVE NOW";
+ Icon = "";
+ Button1 = "Panic";
+ Duration = math.huge;
+ Callback = NotificationBindable;
+})
+    break
+   end
+  end
+ end
+end)
+end)
+spawn(function()
+local function callback(Text)
+ if Text == "Yes" then
+_G.Settings = {
+    Players = {
+        ["Ignore Me"] = true,
+        ["Ignore Others"] = true
+    },
+    Meshes = {
+        Destroy = true,
+        LowDetail = true
+    },
+    Images = {
+        Invisible = true,
+        LowDetail = true,
+        Destroy = true,
+    },
+    Other = {
+        ["No Particles"] = true,
+        ["No Camera Effects"] = true,
+        ["No Explosions"] = true,
+        ["No Clothes"] = true,
+        ["Low Water Graphics"] = true,
+        ["No Shadows"] = true,
+        ["Low Rendering"] = true,
+        ["Low Quality Parts"] = true
+    }
+}
+loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/main/low%20detail"))()
+elseif Text == "No" then
+print'Declined'
+ end
+end
+
+    local NotificationBindable = Instance.new("BindableFunction")
+NotificationBindable.OnInvoke = callback
+game.StarterGui:SetCore("SendNotification", {
+ Title = "LDM";
+ Text = "would you like to execute low detail?";
+ Icon = "";
+ Button1 = "Yes";
+ Button2 = "No";
+ Duration = 10;
+ Callback = NotificationBindable;
+})
+end)
+--v9

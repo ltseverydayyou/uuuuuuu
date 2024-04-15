@@ -84,15 +84,7 @@ local bruh = createButton("Unfreeze", "Unfreeze", 3)
 local parryButton = createButton("Parry", "Parry", 4)
 
 parryButton.MouseButton1Down:Connect(function()
-local args = {
-    [1] = "SwordService",
-    [2] = "Block",
-    [3] = {
-        [1] = -0.5532016754150391
-    }
-}
-
-game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
+firesignal(game.Players.LocalPlayer.PlayerGui.HUD.MobileLarge.Block.Detection.MouseButton1Down)
 end)
 
 gay.MouseButton1Down:Connect(function()
@@ -109,7 +101,7 @@ local spamming = false
 
 local function spam()
 while spamming do
-vim:SendKeyEvent(true, "F", 0, game)
+firesignal(game.Players.LocalPlayer.PlayerGui.HUD.MobileLarge.Block.Detection.MouseButton1Down)
 task.wait()
 end
 end

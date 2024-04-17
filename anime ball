@@ -123,9 +123,9 @@ end
 end)
 
 function ballz(bell)
-repeat wait() until bell
-for i, v in pairs(bell:GetDescendants()) do
-if v:IsA("ParticleEmitter") or v:IsA("Beam") or v:IsA("Trail") then
+wait(.4)
+for _, v in ipairs(bell:GetDescendants()) do
+if v:IsA("ParticleEmitter") then
 v:Destroy()
 end
 end

@@ -13,7 +13,7 @@ if CodexFolder and CodexFolder:IsA("Folder") then
     CodexFolder:Destroy()
 end
 
-local curUi = game.CoreGui:FindFirstChild("Codex")
+local curUi = game.CoreGui:WaitForChild("Codex").gui
 
 local CodexUi = game:GetService("RunService"):IsStudio() and game.StarterGui.Codex or game:GetService("CoreGui"):WaitForChild("Codex")
 local gui

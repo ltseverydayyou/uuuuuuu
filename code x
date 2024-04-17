@@ -1,0 +1,42 @@
+local image =	_G.CodexSpooferImage = 17167842900
+local text =	_G.CodexSpooferText = "Fluxus"
+local powered = _G.CodexSpooferPoweredBy = "Powered by FluxTeam"
+local curUi
+for _,v in ipairs(game.CoreGui.Codex:GetDescendants()) do
+if v.Name == "gui" then
+v:SetAttribute("RealCodexOmg", true)
+end
+end
+for _,h in ipairs(game:GetDescendants()) do
+if h.Name == "gui" and h:GetAttribute("RealCodexOmg") == true then
+curUi = h
+end
+end
+CodexUi = game:GetService("RunService"):IsStudio() and game.StarterGui.Codex or game:GetService("CoreGui"):WaitForChild("Codex")
+if CodexUi or _G.Codex_gui_Object then
+gui = _G.Codex_gui_Object or curUi
+end
+if not gui then
+return warn("unable to find codex")
+end
+_G.Codex_gui_Object = gui
+function HideForever(object) 
+	object.Visible = false
+	object:GetPropertyChangedSignal("Visible"):Connect(function()
+		object.Visible = false
+	end)
+end
+
+HideForever(gui:WaitForChild("fade"))
+task.wait(0.3)
+gui.tabs.editor.contentContainer.inputBox.MultiLine = true
+gui.navbar.floatingIcon.codexIcon2.Image = "http://www.roblox.com/asset/?id="..image
+gui.navbar.main.codexIcon.Image = "http://www.roblox.com/asset/?id="..image
+gui.navbar.main.title.Text = text
+gui.navbar.main.title:GetPropertyChangedSignal("Text"):Connect(function()
+	gui.navbar.main.title.Text = text
+end)
+gui.navbar.main.poweredBy:GetPropertyChangedSignal("Text"):Connect(function()
+	gui.navbar.main.poweredBy.Text = powered
+end)
+gui.navbar.main.poweredBy.Text = powered

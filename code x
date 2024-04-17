@@ -2,8 +2,13 @@ local image = _G.CodexSpooferImage or 17167842900
 local text = _G.CodexSpooferText or "Fluxus"
 local poweredBy = _G.CodexSpooferPoweredBy or "Powered by FluxTeam"
 
+repeat wait() until game.CoreGui.Codex
+
 local CodexFolder = game.CoreGui:WaitForChild("Codex")
+
+spawn(function()
 if CodexFolder and CodexFolder:IsA("Folder") then
+wait(6)
     local gui = Instance.new("ScreenGui")
     gui.Name = "Codex"
     for _, child in ipairs(CodexFolder:GetChildren()) do
@@ -12,6 +17,7 @@ if CodexFolder and CodexFolder:IsA("Folder") then
     gui.Parent = game.CoreGui
     CodexFolder:Destroy()
 end
+end)
 
 local curUi = game.CoreGui:WaitForChild("Codex").gui
 

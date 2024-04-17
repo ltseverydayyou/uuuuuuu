@@ -1,7 +1,7 @@
 _G.CodexSpooferImage = 17167842900
 _G.CodexSpooferText = "Fluxus"
 _G.CodexSpooferPoweredBy = "Powered by FluxTeam"
-local curUi
+local curUi = nil
 for _,v in ipairs(game.CoreGui.Codex:GetDescendants()) do
     if v.Name == "gui" then
         v:SetAttribute("RealCodexOmg", true)

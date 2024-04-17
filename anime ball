@@ -4,25 +4,30 @@ local vim = game:GetService("VirtualInputManager")
 local p = game:GetService("Players").LocalPlayer
 local gui = p:WaitForChild("PlayerGui")
 
+getgenv().ballzui = true
 getgenv().visualizer = true
+
+local h
+
 loadstring(game:HttpGet("https://raw.githubusercontent.com/1f0yt/community/main/RedCircleBlock"))()
 spawn(function()
-game.DescendantAdded:Connect(function(d)
+h = game.DescendantAdded:Connect(function(d)
   if d.Name == "MainView" then
-      task.wait()
+      task.wait();
       d.Parent.Parent:Destroy()
   end
 end)
-task.wait(1)
+task.wait(1);
 vim:SendKeyEvent(true, "F9", 0, game)
-task.wait()
 vim:SendKeyEvent(false, "F9", 0, game)
+task.wait(0.5);
+h:Disconnect()
 end)
 spawn(function()
-game.ReplicatedStorage.Storage.Explosions:Destroy()
-game.ReplicatedStorage.Storage.Cloaks:Destroy()
-game.ReplicatedStorage.Storage.Assets.BallHits:Destroy()
-game.ReplicatedStorage.Storage.Assets.Rocks:Destroy()
+game.Workspace.Effects.ChildAdded:Connect(function(j)
+repeat wait() until j
+j:Destroy()
+end)
 end)
 spawn(function()
 _G.Settings = {
@@ -100,9 +105,10 @@ end)
 local spamming = false
 
 local function spam()
-while spamming do
+while spamming and task.wait() do
+pcall(function()
 firesignal(game.Players.LocalPlayer.PlayerGui.HUD.MobileLarge.Block.Detection.MouseButton1Down)
-task.wait()
+end)
 end
 end
 
@@ -117,9 +123,9 @@ end
 end)
 
 function ballz(bell)
-wait(.4)
+repeat wait() until bell
 for i, v in pairs(bell:GetDescendants()) do
-if v:IsA("ParticleEmitter") then
+if v:IsA("ParticleEmitter") or v:IsA("Beam") or v:IsA("Trail") then
 v:Destroy()
 end
 end
@@ -135,7 +141,7 @@ game.StarterGui:SetCore("SendNotification", {
 Title = "Ball Spawned";
 Text = "Ball Name: " ..bell.Name;
 Icon = "";
-Duration = 1;
+Duration = 0.7;
 Callback = NotificationBindable;
 })
 elseif bell.Color == balls1.UltimateBall1.Color then
@@ -150,7 +156,7 @@ game.StarterGui:SetCore("SendNotification", {
 Title = "Ultimate Ball Spawned";
 Text = "Ultimate Ball Name: " ..bell.Name;
 Icon = "";
-Duration = 2;
+Duration = 1.5;
 Callback = NotificationBindable;
 })
 end
@@ -158,9 +164,6 @@ end
 
 game.workspace.Balls.ChildAdded:Connect(ballz)
 wait(1)
-game.Workspace.Effects:Remove()
-
-getgenv().ballzui = true;
 
 while getgenv().ballzui and task.wait() do
 pcall(function()

@@ -8,7 +8,7 @@ local CodexFolder = game.CoreGui:WaitForChild("Codex")
 
 spawn(function()
 if CodexFolder and CodexFolder:IsA("Folder") then
-wait(6)
+wait(12)
     local gui = Instance.new("ScreenGui")
     gui.Name = "Codex"
     for _, child in ipairs(CodexFolder:GetChildren()) do

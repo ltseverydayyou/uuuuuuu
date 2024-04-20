@@ -1,6 +1,4 @@
 --!native
--- https://discord.gg/wx4ThpAsmw
-
 local Params = {
 	RepoURL = "https://raw.githubusercontent.com/luau/SomeHub/main/",
 	UMF = "UniversalMethodFinder",
@@ -10,16 +8,14 @@ local finder, globalcontainer = loadstring(game:HttpGet(Params.RepoURL .. Params
 finder({
 	-- readbinarystring = 'string.find(...,"bin",nil,true)', -- ! Could match some unwanted stuff
 	decompile = '(string.find(...,"decomp",nil,true) and string.sub(...,#...) ~= "s") or string.find(...,"assembl",nil,true)',
-	gethiddenproperties = 'string.find(...,"get",nil,true) and string.find(...,"h",nil,true) and string.find(...,"prop",nil,true) and string.sub(...,#...) == "s"',
 	gethiddenproperty = 'string.find(...,"get",nil,true) and string.find(...,"h",nil,true) and string.find(...,"prop",nil,true) and string.sub(...,#...) ~= "s"',
+	gethiddenproperties = 'string.find(...,"get",nil,true) and string.find(...,"h",nil,true) and string.find(...,"prop",nil,true) and string.sub(...,#...) == "s"',
+	sethiddenproperty = 'string.find(...,"set",nil,true) and string.find(...,"h",nil,true) and string.find(...,"prop",nil,true) and string.sub(...,#...) ~= "s"',
 	gethui = 'string.find(...,"get",nil,true) and string.find(...,"h",nil,true) and string.find(...,"ui",nil,true)',
 	getnilinstances = 'string.find(...,"nil",nil,true)', -- ! Could match some unwanted stuff
 	getproperties = 'string.find(...,"get",nil,true) and string.find(...,"prop",nil,true) and string.sub(...,#...) == "s"',
-	getscriptbytecode = 'string.find(...,"get",nil,true) and string.find(...,"bytecode",nil,true)',
 	getspecialinfo = 'string.find(...,"get",nil,true) and string.find(...,"spec",nil,true)',
 	protectgui = 'string.find(...,"protect",nil,true) and string.find(...,"ui",nil,true) and not string.find(...,"un",nil,true)',
-	request = 'string.find(...,"request",nil,true) and not string.find(...,"internal",nil,true)',
-	sethiddenproperty = 'string.find(...,"set",nil,true) and string.find(...,"h",nil,true) and string.find(...,"prop",nil,true) and string.sub(...,#...) ~= "s"',
 	writefile = 'string.find(...,"file",nil,true) and string.find(...,"write",nil,true)',
 }, true)
 
@@ -27,9 +23,6 @@ local decompile = globalcontainer.decompile
 local gethiddenproperty = globalcontainer.gethiddenproperty
 local sethiddenproperty = globalcontainer.sethiddenproperty
 local writefile = globalcontainer.writefile
-
-local request = globalcontainer.request
-local getscriptbytecode = globalcontainer.getscriptbytecode
 
 if not globalcontainer.getspecialinfo then
 	globalcontainer.getspecialinfo = globalcontainer.gethiddenproperties
@@ -111,69 +104,6 @@ do
 	end
 end
 
--- if not decompile then
-if request and getscriptbytecode then
-	decompile = function(Script)
-		local bytecode = getscriptbytecode(Script)
-
-		if bytecode == "" then
-			error("Bytecode is empty")
-		end
-
-		local response = request({
-			Url = "https://decompile.glitch.me/bytecode",
-			Method = "POST",
-			Headers = {
-				["Content-Type"] = "application/json",
-			},
-			Body = service.HttpService:JSONEncode({
-				version = 5,
-				bytecode = Base64_Encode(bytecode),
-			}),
-		})
-
-		if response.Success == false then -- Server Issue
-			return response.StatusMessage
-		end
-
-		local decoded = service.HttpService:JSONDecode(response.Body)
-
-		if decoded.status ~= "ok" then -- Decompiler Issue
-			return decoded.status
-		end
-
-		return decoded.output
-	end
-end
-local DecompileHandler
-if decompile then
-	DecompileHandler = function(Script, Timeout)
-		local thread = coroutine.running()
-		local finished
-
-		task.spawn(function()
-			local ok, result = pcall(decompile, Script, Timeout + 1, Timeout + 1) -- ! This might break on Syn due to second param being bool or string (deprecated tho)
-
-			if not finished then
-				finished = true
-
-				coroutine.resume(thread, ok, result)
-			end
-		end)
-
-		task.spawn(function()
-			task.wait(Timeout)
-
-			if not finished then
-				finished = true
-				coroutine.resume(thread, nil, "Decompiler timed out")
-			end
-		end)
-
-		return coroutine.yield()
-	end
-end
-
 local SharedStrings = {}
 local sharedstrings = setmetatable({
 	identifier = 1e15, -- 1 quadrillion, up to 9.(9) quadrillion, in theory this shouldn't ever run out and be enough for all sharedstrings ever imaginable
@@ -201,7 +131,7 @@ Descriptors = {
 		end
 
 		local precision
-		if type(default) == "string" then -- TODO: This part isn't too necessary at all and affects speed
+		if type(default) == "string" then
 			local dotIndex = Find(default, ".")
 
 			if dotIndex then
@@ -225,7 +155,7 @@ Descriptors = {
 
 		for Index, Bit in { ... } do
 			if Bit then
-				Value += 2 ^ (Index - 1)
+				Value = Value + 2 ^ (Index - 1)
 			end
 		end
 
@@ -253,7 +183,7 @@ Descriptors = {
 		return Extreme
 	end,
 	__PROTECTEDSTRING = function(raw) -- ? its purpose is to "protect" data from being treated as ordinary character data during processing;
-		return Find(raw, "]]>") and Descriptors.string(raw, true) or Descriptors.__CDATA(raw)
+		return Find(raw, "]]>") and Descriptors.string(raw) or Descriptors.__CDATA(raw)
 	end,
 	__SEQUENCE = function(raw, ValueFormat) --The value is the text content, formatted as a space-separated list of floating point numbers.
 		-- tostring(raw) also works (but way slower rn)
@@ -323,13 +253,10 @@ Descriptors = {
 			+ (math.floor(raw.R * 255) * 0x10000)
 			+ (math.floor(raw.G * 255) * 0x100)
 			+ math.floor(raw.B * 255) -- ? It is recommended that Color3uint8 is encoded with text instead of elements.
-
 		-- return bit32.bor(
 		-- 	bit32.bor(bit32.bor(bit32.lshift(0xFF, 24), bit32.lshift(0xFF * raw.R, 16)), bit32.lshift(0xFF * raw.G, 8)),
 		-- 	0xFF * raw.B
 		-- )
-
-		-- return tonumber(string.format("0xFF%02X%02X%02X",raw.R*255,raw.G*255,raw.B*255))
 	end,
 	ColorSequence = function(raw)
 		--The value is the text content, formatted as a space-separated list of FLOATing point numbers.
@@ -465,8 +392,7 @@ The value of each component is represented by the text content formatted as a 32
 	 account for anyway. They generate diff noise, so we shouldn't serialize
 	 them until we have to.
 	]]
-	-- https://github.com/MaximumADHD/Roblox-Client-Tracker/blob/roblox/LuaPackages/Packages/_Index/ApolloClientTesting/ApolloClientTesting/utilities/common/makeUniqueId.lua#L62
-	-- 	return "" -- ? No idea if this even needs a Descriptor
+	-- 	return string.lower(string.gsub(game.HttpService:GenerateGUID(false), "-", "")) -- ? No idea if this even needs a Descriptor
 	-- end,
 
 	Vector2 = function(raw)
@@ -574,10 +500,10 @@ local NotScriptableFixes = {
 	BasePart = { -- TODO: Find a way to integrate this into settings
 		Color3uint8 = "Color",
 	},
-} -- For more info: https://github.com/luau/UniversalSynSaveInstance/blob/master/Tests/Potentially%20Missing%20Properties%20Tracker.luau
+} -- For more info: https://github.com/luau/UniversalSynSaveInstance/blob/main/Tests/Potentially%20Missing%20Properties%20Tracker.luau
 
 do
-	-- TODO: More @ https://github.com/Dekkonot/rbx-instance-serializer/blob/master/src/API.lua#L19
+	-- TODO: More @ https://github.com/Dekkonot/rbx-instance-serializer/blob/23f772f6f78af879a21faa9fea3e6c4f93d1cdee/src/API.lua#L19
 	-- ! IgnoreClassProperties aren't needed anymore due to CanSave filter (see below)
 	-- local IgnoreClassProperties = {
 	-- GuiObject = { "Transparency" },
@@ -715,6 +641,7 @@ local inheritedproperties = setmetatable({}, {
 
 			layer = ClassList[layer.Superclass]
 		end
+
 		self[ClassName] = proplist
 
 		return proplist
@@ -804,7 +731,7 @@ local function synsaveinstance(CustomOptions)
 		noscripts = false,
 		scriptcache = true,
 		-- decomptype = "new", -- * Deprecated
-		timeout = 10, -- Description: If the decompilation run time exceeds this value it gets cancelled.
+		timeout = 30, -- Description: If the decompilation run time exceeds this value it gets cancelled.
 		--* New:
 		__DEBUG_MODE = false, -- Recommended to enable if you wish to help us improve our products and find bugs / issues with it!
 
@@ -840,7 +767,6 @@ local function synsaveinstance(CustomOptions)
 
 			-- Service = function(instance) end, -- ? Have yet to encounter a case where an Instance with Service Tag is deleted
 		},
-
 		ScriptsClasses = { "LocalScript", "ModuleScript", Script = false }, -- Please keep this updated; "= false" means it won't be decompiled
 		IgnoreDefaults = {
 			__api_dump_class_not_creatable__ = true,
@@ -856,7 +782,7 @@ local function synsaveinstance(CustomOptions)
 		-- Decompile = not OPTIONS.noscripts, -- ! This takes priority over OPTIONS.noscripts if set, Description: If true scripts will be decompiled.
 		-- DecompileTimeout = OPTIONS.timeout, -- ! This takes priority over OPTIONS.timeout if set
 		IgnoreDefaultProperties = true, -- Description: When enabled it will ignore default properties while saving.
-		IgnoreNotArchivable = true, -- Description: Ignores the Archivable property and saves Non-Archivable instances.
+		IgnoreNotArchivable = true,
 		IgnorePropertiesOfNotScriptsOnScriptsMode = false, -- Ignores property of every instance that is not a script in "scripts" mode
 		IgnoreSpecialProperties = false, -- true will disable Terrain & Break MeshPart Sizes (very likely)
 		IsolateStarterPlayer = false, --If enabled, StarterPlayer will be cleared and the saved starter player will be placed into folders.
@@ -1100,7 +1026,7 @@ local function synsaveinstance(CustomOptions)
 		ldecompile = function()
 			return "-- Decompiling is disabled"
 		end
-	elseif DecompileHandler then
+	elseif decompile then
 		ldecompile = function(Script)
 			-- local name = scr.ClassName .. scr.Name
 			do
@@ -1115,10 +1041,9 @@ local function synsaveinstance(CustomOptions)
 					task.wait()
 				end
 			end
-
-			local ok, result = DecompileHandler(Script, Timeout)
-			ldeccache[Script] = result -- ? Should we cache even if it timed out?
-			return ok and result or "--[[ Failed to decompile\nReason:\n" .. (result or "") .. "\n]]"
+			local ok, result = pcall(decompile, Script, Timeout, Timeout) -- ! This might break on Syn due to second param being bool or string (deprecated tho)
+			ldeccache[Script] = result
+			return ok and result or "--[[Failed to decompile\nReason:\n" .. (result or "") .. "\n]]"
 		end
 	else
 		ldecompile = function()
@@ -1489,7 +1414,6 @@ local function synsaveinstance(CustomOptions)
 							end
 
 							if ApiFormatify(raw, Category, ValueType, Default) == Default then -- ! PhysicalProperties, Font, CFrame, BrickColor (and Enum to some extent) aren't being defaulted properly in the api dump, meaning an issue must be created.. (They're not being tostringed or fail to do so)
-								-- TODO: tostring(Vector3.new(0/0,math.huge,-math.huge)) returns lowercase Extremes - "nan, inf, -inf" meanwhile for everything else (in xml & dump defaults they seem to be uppercase), this can cause issues later on when a Vector3 Property comes out, default of which will include either of these of Extreme values (Needs to be watched)
 								-- print("Default not serializing", PropertyName)
 
 								continue
@@ -1541,8 +1465,7 @@ local function synsaveinstance(CustomOptions)
 											value = ldecompile(instance)
 										end
 									end
-									value = "-- Saved using UniversalSynSaveInstance https://discord.gg/wx4ThpAsmw\n\n"
-										.. value
+									value = "-- Saved using UniversalSynSaveInstance\n\n" .. value
 								end
 
 								value = Descriptors.__PROTECTEDSTRING(value)
@@ -1684,41 +1607,31 @@ local function synsaveinstance(CustomOptions)
 		end
 
 		if OPTIONS.ReadMe then
-			saveextra(
-				"README",
-				nil,
-				"Script",
-				"--[[\n"
-					.. [[
-				Thank you for using SynSaveInstance Revival.
-				We recommended to save the game right away to take advantage of the binary format (if you didn't save in binary) AND to preserve values of certain properties if you used IgnoreDefaultProperties setting (as they might change in the future).
-				If your player cannot spawn into the game, please move the scripts in StarterPlayer elsewhere. (This is done by default)
-				If the chat system does not work, please use the explorer and delete everything inside the Chat service. 
-				Or run `game:GetService("Chat"):ClearAllChildren()`
-				
-				If Union and MeshPart collisions don't work, run the script below in the Studio Command Bar:
-				
-				
-				local C = game:GetService("CoreGui")
-				local D = Enum.CollisionFidelity.Default
-				
-				for _, v in game:GetDescendants() do
-					if v:IsA("TriangleMeshPart") and not v:IsDescendantOf(C) then
-						v.CollisionFidelity = D
-					end
+			saveextra("README", nil, "Script", "--[[\n" .. [[
+			Thank you for using SynSaveInstance Revival.
+			We recommended to save the game right away to take advantage of the binary format (if you didn't save in binary) AND to preserve values of certain properties if you used IgnoreDefaultProperties setting (as they might change in the future).
+			If your player cannot spawn into the game, please move the scripts in StarterPlayer elsewhere. (This is done by default)
+			If the chat system does not work, please use the explorer and delete everything inside the Chat service. 
+			Or run `game:GetService("Chat"):ClearAllChildren()`
+	
+			If Union and MeshPart collisions don't work, run the script below in the Studio Command Bar:
+	
+	
+			local C = game:GetService("CoreGui")
+			local D = Enum.CollisionFidelity.Default
+	
+			for _, v in game:GetDescendants() do
+				if v:IsA("TriangleMeshPart") and not v:IsDescendantOf(C) then
+					v.CollisionFidelity = D
 				end
-				
-				If you can't move the Camera, run the scripts in the Studio Command Bar:
-			
-				workspace.CurrentCamera.CameraType = Enum.CameraType.Fixed
-				
-				This file was generated with the following settings:
-				]]
-					.. service.HttpService:JSONEncode(OPTIONS)
-					.. "\n\nElapsed time: "
-					.. os.clock() - elapse_t
-					.. "\n]]"
-			)
+			end
+	
+			If you can't move the Camera, run the scripts in the Studio Command Bar:
+
+			workspace.CurrentCamera.CameraType = Enum.CameraType.Fixed
+	
+			This file was generated with the following settings:
+	]] .. service.HttpService:JSONEncode(OPTIONS) .. "\n\nElapsed time: " .. os.clock() - elapse_t .. "\n]]")
 		end
 
 		local tmp = { "<SharedStrings>" }
@@ -1743,39 +1656,31 @@ local function synsaveinstance(CustomOptions)
 		StatusTextClone = globalenv.StatusText:Clone()
 		StatusTextClone.Parent = StatusGui
 	end
-	local Connections
+
 	do
 		local Players = service.Players
 		local LocalPlayer = Players.LocalPlayer
 
-		if IgnoreList.Model ~= true then
-			Connections = {}
-			local function IgnoreCharacter(Player)
-				table.insert(
-					Connections,
-					Player.CharacterAdded:Connect(function(Character)
-						IgnoreList[Character] = true
-					end)
-				)
+		local function IgnoreCharacter(Player)
+			Player.CharacterAdded:Connect(function(Character)
+				IgnoreList[Character] = true
+			end)
 
-				local Character = Player.Character
-				if Character then
-					IgnoreList[Character] = true
-				end
+			local Character = Player.Character
+			if Character then
+				IgnoreList[Character] = true
 			end
+		end
 
+		if IgnoreList.Model ~= true then
 			if OPTIONS.RemovePlayerCharacters then
-				table.insert(
-					Connections,
-					Players.PlayerAdded:Connect(function(Player)
-						IgnoreCharacter(Player)
-					end)
-				)
 				for _, Player in Players:GetPlayers() do
 					IgnoreCharacter(Player)
 				end
-			elseif IsolateLocalPlayerCharacter then
-				IgnoreCharacter(LocalPlayer)
+			else
+				if IsolateLocalPlayerCharacter then
+					IgnoreCharacter(LocalPlayer)
+				end
 			end
 		end
 		if IsolateLocalPlayer and IgnoreList.Player ~= true then
@@ -1796,13 +1701,12 @@ local function synsaveinstance(CustomOptions)
 		local ok, err = xpcall(savegame, function(err)
 			return debug.traceback(err)
 		end)
-		for _, Connection in Connections do
-			Connection:Disconnect()
-		end
+		elapse_t = os.clock() - elapse_t
+
+		local Log10 = math.log10(elapse_t)
+
 		if StatusTextClone then
 			task.spawn(function()
-				elapse_t = os.clock() - elapse_t
-				local Log10 = math.log10(elapse_t)
 				local ExtraTime = 10
 				if ok then
 					StatusTextClone.Text = string.format("Saved! Time %.3f seconds; Size %s", elapse_t, getsizeformat())

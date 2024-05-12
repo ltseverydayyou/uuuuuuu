@@ -1,7 +1,7 @@
 local shiftlockk = Instance.new("ScreenGui")
 local LockButton = Instance.new("ImageButton")
 local btnIcon = Instance.new("ImageLabel")
-local susDrag = Instance.new("Frame")
+--local susDrag = Instance.new("Frame")
 
 shiftlockk.Name = "shiftlockk"
 shiftlockk.Parent = game.CoreGui
@@ -36,13 +36,56 @@ btnIcon.ImageColor3 = Color3.fromRGB(0, 0, 0)
 btnIcon.ScaleType = Enum.ScaleType.Fit
 btnIcon.SliceCenter = Rect.new(-160, 0, 100, 0)
 
-susDrag.Name = "susDrag"
+--[[susDrag.Name = "susDrag"
 susDrag.Parent = LockButton
 susDrag.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 susDrag.BorderColor3 = Color3.fromRGB(0, 0, 0)
 susDrag.BorderSizePixel = 0
 susDrag.Position = UDim2.new(0.899999976, 0, -0.233333334, 0)
-susDrag.Size = UDim2.new(0, 20, 0, 20)
+susDrag.Size = UDim2.new(0, 20, 0, 20)]]
+
+DragThingy = function(ui, dragui)
+	 if not dragui then dragui = ui end
+	 local UserInputService = game:GetService("UserInputService")
+	 
+	 local dragging
+	 local dragInput
+	 local dragStart
+	 local startPos
+	 
+	 local function update(input)
+		 local delta = input.Position - dragStart
+		 ui.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+	 end
+	 
+	 dragui.InputBegan:Connect(function(input)
+		 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			 dragging = true
+			 dragStart = input.Position
+			 startPos = ui.Position
+			 
+			 input.Changed:Connect(function()
+				 if input.UserInputState == Enum.UserInputState.End then
+					 dragging = false
+				 end
+			 end)
+		 end
+	 end)
+	 
+	 dragui.InputChanged:Connect(function(input)
+		 if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+			 dragInput = input
+		 end
+	 end)
+	 
+	 UserInputService.InputChanged:Connect(function(input)
+		 if input == dragInput and dragging then
+			 update(input)
+		 end
+	 end)
+ end
+
+DragThingy(LockButton)
 
 local function YDYMLAX_fake_script()
 	local script = Instance.new('LocalScript', LockButton)
@@ -51,34 +94,6 @@ local function YDYMLAX_fake_script()
 	local V = false
 
 	local main = script.Parent
-	local susDragFrame = main.susDrag
-	local dragging = false
-	local offset
-
-	local function onInputBegan(input, gameProcessedEvent)
-		if not gameProcessedEvent then
-			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-				dragging = true
-				offset = main.Position - UDim2.new(0, input.Position.X, 0, input.Position.Y)
-			end
-		end
-	end
-
-	local function onInputMoved(input)
-		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-			main.Position = UDim2.new(0, input.Position.X, 0, input.Position.Y) + offset
-		end
-	end
-
-	local function onInputEnded(input)
-		if dragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
-			dragging = false
-		end
-	end
-
-	susDragFrame.InputBegan:Connect(onInputBegan)
-	susDragFrame.InputChanged:Connect(onInputMoved)
-	susDragFrame.InputEnded:Connect(onInputEnded)
 
 	main.MouseButton1Click:Connect(function()
 		V = not V

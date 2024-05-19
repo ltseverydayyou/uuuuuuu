@@ -1,394 +1,397 @@
 // ==UserScript==
-// @name         loot labbing
-// @namespace    bypass-city
-// @homepageURL  https://bypass.city
-// @description  lootlabs support lol
-// @author       maxype (on discord)
-// @match        *://*.loot-link.com/*
-// @match        *://*.lootlabs.gg/*
-// @match        *://*.loot-links.com/*
-// @match        https://bypass.city/*
-// @match        https://adbypass.org/*
-// @match        http://localhost:3000/*
-// @exclude      *://publisher.loot-link.com/*
-// @exclude      *://loot-link.com/search*
-// @exclude      *://loot-link.com/login*
-// @exclude      *://loot-link.com/profile*
-// @exclude      *://blog.loot-link.com
-// @exclude      *://blog.loot-link.com/*
-// @exclude      *://loot-link.com/assets/vendor/*
-// @exclude      *://publisher.loot-link.com/*
-// @exclude      *://link-mutation.loot-link.com/*
-// @exclude      *://loot-link.com/assets/external/thinksuggest
-
-// @grant        GM_getValue
-// @grant        GM.getValue
-
-// @grant        GM_setValue
-// @grant        GM.setValue
-
-// @grant        GM_deleteValue
-// @grant        GM.deleteValue
-
-// @grant        GM_addStyle
-// @grant        GM.addStyle
-
-// @grant        GM_xmlhttpRequest
-// @grant        GM.xmlHttpRequest
-
-// @grant        GM.info
-// @grant        GM_info
-
-// @grant        GM_getResourceURL
-// @grant        GM.getResourceURL
-
-// @resource logo.png https://bypass.city/generated/android-chrome-36x36.png
-
-// @version      12.8.0
-// @author       bypass.city team
-// @connect      bypass.city
-// @icon         https://bypass.city/favicon.ico
-
-
-// @downloadURL https://update.greasyfork.org/scripts/427869/%5BWorking%5D%20linkvertise%20and%20krnl%20bypasser.user.js
-// @updateURL https://update.greasyfork.org/scripts/427869/%5BWorking%5D%20linkvertise%20and%20krnl%20bypasser.meta.js
+// @name        LootDest/Loot-Link (Lootlabs) Bypass
+// @namespace   OmegaLolBypasser
+// @match        *://loot-link.com/s?*
+// @match        *://loot-links.com/s?*
+// @match        *://lootlink.org/s?*
+// @match        *://lootlinks.co/s?*
+// @match        *://lootdest.info/s?*
+// @match        *://lootdest.org/s?*
+// @match        *://lootdest.com/s?*
+// @match        *://links-loot.com/s?*
+// @match        *://linksloot.net/s?*
+// @grant       none
+// @version     2.1
+// @author      idk
+// @description Released - 2/21/2024
+// @license     MIT
+// @run-at      document-start
+// @downloadURL https://update.greasyfork.org/scripts/487969/LootDestLoot-Link%20%28Lootlabs%29%20Bypass.user.js
+// @updateURL https://update.greasyfork.org/scripts/487969/LootDestLoot-Link%20%28Lootlabs%29%20Bypass.meta.js
 // ==/UserScript==
 
+// URL decoder (due to their encryption)
+function decodeURI(encodedString, prefixLength = 5) {
+	let decodedString = '';
+	const base64Decoded = atob(encodedString);
+	const prefix = base64Decoded.substring(0, prefixLength);
+	const encodedPortion = base64Decoded.substring(prefixLength);
 
-/*
-release: 12.8.0 (d5773fd), 1/26/2024, 8:22:13 PM
-Discord: https://discord.gg/tX8G9G5BMV
-additional copyright/license info:
-© All Rights Reserved
+	for (let i = 0; i < encodedPortion.length; i++) {
+		const encodedChar = encodedPortion.charCodeAt(i);
+		const prefixChar = prefix.charCodeAt(i % prefix.length);
+		const decodedChar = encodedChar ^ prefixChar;
+		decodedString += String.fromCharCode(decodedChar);
+	}
 
-Linkvertise Bypass © 2024 by bypass.city team
-*/
-
-(() => {
-  // src/polyfills.ts
-  var UserScript = {
-    getValue: (key, defaultValue) => {
-      return typeof GM_getValue == "undefined" ? GM.getValue(key, defaultValue) : new Promise((resolve) => resolve(GM_getValue(key, defaultValue)));
-    },
-    setValue: (key, value) => {
-      return typeof GM_setValue === "undefined" ? GM.setValue(key, value) : new Promise((resolve) => resolve(GM_setValue(key, value)));
-    },
-    deleteValue: (key) => {
-      return typeof GM_deleteValue === "undefined" ? GM.deleteValue(key) : new Promise((resolve) => resolve(GM_deleteValue(key)));
-    },
-    addStyle: (css) => {
-      return typeof GM_addStyle === "undefined" ? GM.addStyle(css) : new Promise((resolve) => resolve(GM_addStyle(css)));
-    },
-    xmlHttpRequest: (details) => {
-      return typeof GM_xmlhttpRequest === "undefined" ? GM.xmlHttpRequest(details) : GM_xmlhttpRequest(details);
-    },
-    getResourceURL: (name, fallbackUrl, isBlobUrl) => {
-      return typeof GM_getResourceURL !== "undefined" ? new Promise((resolve) => resolve(GM_getResourceURL(name, isBlobUrl))) : typeof GM.getResourceURL !== "undefined" ? GM.getResourceURL(name, isBlobUrl) : new Promise((resolve) => resolve(fallbackUrl));
-    },
-    info: typeof GM_info === "undefined" ? GM.info : GM_info
-  };
-
-  // src/config.ts
-  var config = {
-    version: UserScript.info.script.version,
-    buildTime: "1/26/2024, 8:22:13 PM",
-    branch: "release",
-    release: "d5773fd",
-    installed: true,
-    releaseTag: "12.8.0 (d5773fd)"
-  };
-
-  // src/gmWrappedStorage.ts
-  var WrappedGet = async (key) => {
-    const value = await UserScript.getValue(key);
-    return value ? JSON.parse(value) : void 0;
-  };
-  var WrappedSet = async (key, value) => {
-    await UserScript.setValue(key, JSON.stringify(value));
-  };
-
-  // src/utils.ts
-  var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-  // src/bypass-city.ts
-  var bypassCityListener = async () => {
-  if (window.location.hostname !== "bypass.city" && window.location.hostname !== "localhost" && window.location.hostname !== "adbypass.org") {
-    return;
-  }
-  injectScriptInfo();
-  sendUserscriptInfoEvent();
-  window.addEventListener("bypassComplete", async (event) => {
-    const data = event.detail;
-    console.log("bypassMessage", data);
-    await UserScript.deleteValue("bypass.data");
-    await sleep(1);
-    WrappedSet("bypass.data", data);
-    if (data.bypassData) {
-      window.open(data.bypassData, "_self", "noopener,noreferrer");
-    } else {
-      console.error("No bypassData provided in the event.");
-    }
-  });
-};
-  var injectScriptInfo = () => {
-    const injectJs = `window.scriptInfo = JSON.parse('${JSON.stringify(config)}')`;
-    const script = document.createElement("script");
-    script.textContent = injectJs;
-    document.body.appendChild(script);
-  };
-  var sendUserscriptInfoEvent = () => {
-    console.log("sendUserscriptInfoEvent");
-    const event = new CustomEvent("userScriptInfo", {
-      detail: config
-    });
-    window.dispatchEvent(event);
-  };
-
-  // src/notify.scss
-  var notify_default = `.notification-tray {
-  position: fixed;
-  top: 10px;
-  right: 10px;
-  z-index: 4000000;
+	return decodedString;
 }
 
-.notification {
-  position: block;
-  margin: 10px;
-  padding: 10px;
-  padding-right: 20px;
-  background-color: #25262b;
-  color: white;
-  transition: opacity 0.6s; /* 600ms to fade out */
-  width: 300px;
-  border-radius: 10px; /* Rounded border */
-  border: 2px solid #3b5bdb;
-  animation: glow 1s ease-in-out infinite alternate;
-}
+// We'll use this to detect their typical Unlock Content square and replace it with a custom one
+(function() {
+	'use strict';
 
-.notification .grid-container {
-  display: grid;
-  grid-template-columns: auto auto;
-  gap: 10px;
-}
+	const waitForElementAndModifyParent = () => {
+		// Function to modify the parent element
+		const modifyParentElement = (targetElement) => {
+			const parentElement = targetElement.parentElement;
 
-.notification .links {
-  display: flex;
-  justify-content: right;
-  align-items: center;
-}
+			if (parentElement) {
+				// This assumes our task loaded, we'll then check for what type of task as they all have minimum wait times.
+				const images = document.querySelectorAll('img');
+				let countdownSeconds = 60;
 
-.notification .links span {
-  padding-bottom: 4px;
-  opacity: 0.7;
-}
+				for (let img of images) {
+					if (img.src.includes('eye.png')) {
+						countdownSeconds = 13;
+						break;
+					} else if (img.src.includes('bell.png')) {
+						countdownSeconds = 30;
+						break;
+					} else if (img.src.includes('apps.png') || img.src.includes('fire.png')) {
+						countdownSeconds = 60;
+						break;
+					} else if (img.src.includes('gamers.png')) {
+						countdownSeconds = 90;
+						break;
+					}
+				}
 
-.notification .links a, .notification .links span {
-  display: block;
-  color: white;
-  font-size: 0.8rem;
-  padding: 5px;
-  margin-bottom: 5px;
-}
+				// Clear parent element's content
+				parentElement.innerHTML = '';
 
-.grid-item img {
-  margin-top: 15px;
-  margin-right: 5px;
-  width: 32px;
-}
+				const popupHTML = `
+                <div id="tm-overlay" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.75); z-index:999999; display:flex; justify-content:center; align-items:center;">
+                    <center>
+                      <div id="tm-popup" style="padding:40px; background:#fff; border-radius:5px; box-shadow:0 2px 10px rgba(0,0,0,0.5); z-index:1000000;">
+                          <div style="margin-bottom:20px;"><h1>Please wait,</h1><h2>hamsters are working hard in the background to bypass..</h2></div>
+                          <div class="wheel-and-hamster" role="img" aria-label="Orange and tan hamster running in a metal wheel">
+                            <div class="wheel"></div>
+                            <div class="hamster"><div class="hamster__body"><div class="hamster__head"><div class="hamster__ear"></div><div class="hamster__eye"></div><div class="hamster__nose"></div></div><div class="hamster__limb hamster__limb--fr"></div><div class="hamster__limb hamster__limb--fl"></div><div class="hamster__limb hamster__limb--br"></div><div class="hamster__limb hamster__limb--bl"></div><div class="hamster__tail"></div></div></div>
+                            <div class="spoke"></div>
+                          </div>
+                          <br>
+                          <div id="countdown" style="margin-bottom:20px;"><h4>(Estimated ${countdownSeconds} seconds remaining..)</h4></div>
+                          <div id="countdown" style="margin-bottom:20px;"><h4>(Minimum wait time due to the server returning the URL.)</h4></div>
+                      </div>
+                    </center>
+                </div>
+              `;
 
-.grid-item h3 {
-  padding-top: 10px;
-  padding-bottom: 3px;
-  font-size: 1.5rem;
-  color: white;
-}
+				// Function to update the countdown every second
+				const startCountdown = (duration) => {
+					let remaining = duration;
+					const countdownTimer = setInterval(() => {
+						remaining--;
+						document.getElementById('countdown').textContent = `(Estimated ${remaining} seconds remaining..)`;
+						if (remaining <= 0) clearInterval(countdownTimer);
+					}, 1000);
+				};
 
-.grid-item p {
-  font-style: italic;
-  font-size: 1rem;
-  color: white;
-}
-.grid-item p a {
-  opacity: 1;
-  font-weight: 600;
-  text-decoration: underline !important;
-  margin-bottom: 8px;
-  display: inline-block;
-}
+				const spinnerCSS = `
+                .wheel-and-hamster {
+                  --dur: 1s;
+                  position: relative;
+                  width: 12em;
+                  height: 12em;
+                  margin: auto;
+                }
+                .wheel,
+                .hamster,
+                .hamster div,
+                .spoke {
+                  position: absolute;
+                }
+                .wheel,
+                .spoke {
+                  border-radius: 50%;
+                  top: 0;
+                  left: 0;
+                  width: 100%;
+                  height: 100%;
+                }
+                .wheel {
+                  background: radial-gradient(100% 100% at center,hsla(0,0%,60%,0) 47.8%,hsl(0,0%,60%) 48%);
+                  z-index: 2;
+                }
+                .hamster {
+                  animation: hamster var(--dur) ease-in-out infinite;
+                  top: 50%;
+                  left: calc(50% - 3.5em);
+                  width: 7em;
+                  height: 3.75em;
+                  transform: rotate(4deg) translate(-0.8em,1.85em);
+                  transform-origin: 50% 0;
+                  z-index: 1;
+                }
+                .hamster__head {
+                  animation: hamsterHead var(--dur) ease-in-out infinite;
+                  background: hsl(30,90%,55%);
+                  border-radius: 70% 30% 0 100% / 40% 25% 25% 60%;
+                  box-shadow:
+                    0 -0.25em 0 hsl(30,90%,80%) inset,
+                    0.75em -1.55em 0 hsl(30,90%,90%) inset;
+                  top: 0;
+                  left: -2em;
+                  width: 2.75em;
+                  height: 2.5em;
+                  transform-origin: 100% 50%;
+                }
+                .hamster__ear {
+                  animation: hamsterEar var(--dur) ease-in-out infinite;
+                  background: hsl(0,90%,85%);
+                  border-radius: 50%;
+                  box-shadow: -0.25em 0 hsl(30,90%,55%) inset;
+                  top: -0.25em;
+                  right: -0.25em;
+                  width: 0.75em;
+                  height: 0.75em;
+                  transform-origin: 50% 75%;
+                }
+                .hamster__eye {
+                  animation: hamsterEye var(--dur) linear infinite;
+                  background-color: hsl(0,0%,0%);
+                  border-radius: 50%;
+                  top: 0.375em;
+                  left: 1.25em;
+                  width: 0.5em;
+                  height: 0.5em;
+                }
+                .hamster__nose {
+                  background: hsl(0,90%,75%);
+                  border-radius: 35% 65% 85% 15% / 70% 50% 50% 30%;
+                  top: 0.75em;
+                  left: 0;
+                  width: 0.2em;
+                  height: 0.25em;
+                }
+                .hamster__body {
+                  animation: hamsterBody var(--dur) ease-in-out infinite;
+                  background: hsl(30,90%,90%);
+                  border-radius: 50% 30% 50% 30% / 15% 60% 40% 40%;
+                  box-shadow:
+                    0.1em 0.75em 0 hsl(30,90%,55%) inset,
+                    0.15em -0.5em 0 hsl(30,90%,80%) inset;
+                  top: 0.25em;
+                  left: 2em;
+                  width: 4.5em;
+                  height: 3em;
+                  transform-origin: 17% 50%;
+                  transform-style: preserve-3d;
+                }
+                .hamster__limb--fr,
+                .hamster__limb--fl {
+                  clip-path: polygon(0 0,100% 0,70% 80%,60% 100%,0% 100%,40% 80%);
+                  top: 2em;
+                  left: 0.5em;
+                  width: 1em;
+                  height: 1.5em;
+                  transform-origin: 50% 0;
+                }
+                .hamster__limb--fr {
+                  animation: hamsterFRLimb var(--dur) linear infinite;
+                  background: linear-gradient(hsl(30,90%,80%) 80%,hsl(0,90%,75%) 80%);
+                  transform: rotate(15deg) translateZ(-1px);
+                }
+                .hamster__limb--fl {
+                  animation: hamsterFLLimb var(--dur) linear infinite;
+                  background: linear-gradient(hsl(30,90%,90%) 80%,hsl(0,90%,85%) 80%);
+                  transform: rotate(15deg);
+                }
+                .hamster__limb--br,
+                .hamster__limb--bl {
+                  border-radius: 0.75em 0.75em 0 0;
+                  clip-path: polygon(0 0,100% 0,100% 30%,70% 90%,70% 100%,30% 100%,40% 90%,0% 30%);
+                  top: 1em;
+                  left: 2.8em;
+                  width: 1.5em;
+                  height: 2.5em;
+                  transform-origin: 50% 30%;
+                }
+                .hamster__limb--br {
+                  animation: hamsterBRLimb var(--dur) linear infinite;
+                  background: linear-gradient(hsl(30,90%,80%) 90%,hsl(0,90%,75%) 90%);
+                  transform: rotate(-25deg) translateZ(-1px);
+                }
+                .hamster__limb--bl {
+                  animation: hamsterBLLimb var(--dur) linear infinite;
+                  background: linear-gradient(hsl(30,90%,90%) 90%,hsl(0,90%,85%) 90%);
+                  transform: rotate(-25deg);
+                }
+                .hamster__tail {
+                  animation: hamsterTail var(--dur) linear infinite;
+                  background: hsl(0,90%,85%);
+                  border-radius: 0.25em 50% 50% 0.25em;
+                  box-shadow: 0 -0.2em 0 hsl(0,90%,75%) inset;
+                  top: 1.5em;
+                  right: -0.5em;
+                  width: 1em;
+                  height: 0.5em;
+                  transform: rotate(30deg) translateZ(-1px);
+                  transform-origin: 0.25em 0.25em;
+                }
+                .spoke {
+                  animation: spoke var(--dur) linear infinite;
+                  background:
+                    radial-gradient(100% 100% at center,hsl(0,0%,60%) 4.8%,hsla(0,0%,60%,0) 5%),
+                    linear-gradient(hsla(0,0%,55%,0) 46.9%,hsl(0,0%,65%) 47% 52.9%,hsla(0,0%,65%,0) 53%) 50% 50% / 99% 99% no-repeat;
+                }
 
-.grid-item h3, .grid-item p {
-  margin: 0;
-}
+                /* Animations */
+                @keyframes hamster {
+                  from, to { transform: rotate(4deg) translate(-0.8em,1.85em); }
+                  50% { transform: rotate(0) translate(-0.8em,1.85em); }
+                }
+                @keyframes hamsterHead {
+                  from, 25%, 50%, 75%, to { transform: rotate(0); }
+                  12.5%, 37.5%, 62.5%, 87.5% { transform: rotate(8deg); }
+                }
+                @keyframes hamsterEye {
+                  from, 90%, to { transform: scaleY(1); }
+                  95% { transform: scaleY(0); }
+                }
+                @keyframes hamsterEar {
+                  from, 25%, 50%, 75%, to { transform: rotate(0); }
+                  12.5%, 37.5%, 62.5%, 87.5% { transform: rotate(12deg); }
+                }
+                @keyframes hamsterBody {
+                  from, 25%, 50%, 75%, to { transform: rotate(0); }
+                  12.5%, 37.5%, 62.5%, 87.5% { transform: rotate(-2deg); }
+                }
+                @keyframes hamsterFRLimb {
+                  from, 25%, 50%, 75%, to { transform: rotate(50deg) translateZ(-1px); }
+                  12.5%, 37.5%, 62.5%, 87.5% { transform: rotate(-30deg) translateZ(-1px); }
+                }
+                @keyframes hamsterFLLimb {
+                  from, 25%, 50%, 75%, to { transform: rotate(-30deg); }
+                  12.5%, 37.5%, 62.5%, 87.5% { transform: rotate(50deg); }
+                }
+                @keyframes hamsterBRLimb {
+                  from, 25%, 50%, 75%, to { transform: rotate(-60deg) translateZ(-1px); }
+                  12.5%, 37.5%, 62.5%, 87.5% { transform: rotate(20deg) translateZ(-1px); }
+                }
+                @keyframes hamsterBLLimb {
+                  from, 25%, 50%, 75%, to { transform: rotate(20deg); }
+                  12.5%, 37.5%, 62.5%, 87.5% { transform: rotate(-60deg); }
+                }
+                @keyframes hamsterTail {
+                  from, 25%, 50%, 75%, to { transform: rotate(30deg) translateZ(-1px); }
+                  12.5%, 37.5%, 62.5%, 87.5% { transform: rotate(10deg) translateZ(-1px); }
+                }
+                @keyframes spoke {
+                  from { transform: rotate(0); }
+                  to { transform: rotate(-1turn); }
+                }
+              `;
 
-@keyframes glow {
-  from {
-    box-shadow: 0 0 10px #3b5bdb;
-  }
-  to {
-    box-shadow: 0 0 20px #3b5bdb;
-  }
-}`;
+				// Insert HTML and CSS
+				parentElement.insertAdjacentHTML('afterbegin', popupHTML);
 
-  // src/notify-element.html
-  var notify_element_default = '<div id="bypass-notification" class="notification">\n    <div class="grid-container">\n      <div class="grid-item">\n        <img height="32" id="bypass-logo" alt="B">\n      </div>\n      <div class="grid-item">\n        <h3 id="title"></h3>\n        <p>\n            <span id="text"></span>\n            <a id="help" href="https://discord.gg/tX8G9G5BMV">Get Support on our Discord</a>\n        </p>\n      </div>\n    </div>\n   \n      <div id="links" class="links">\n        <span id="version">Release</span>\n        <span>&#8226;</span>\n        <a  href="https://discord.gg/tX8G9G5BMV">Get Support</a>\n        <span>&#8226;</span>\n        <a href="https://bypass.city/privacy">Privacy Policy</a>\n      \n      </div>\n  </div>\n  ';
+				// Start the countdown
+				startCountdown(countdownSeconds);
 
-  // src/logo.svg
-  var logo_default = 'data:image/svg+xml,<svg width="1280" height="1280" viewBox="0 0 1280 1280" fill="none" xmlns="http://www.w3.org/2000/svg">%0A<path d="M109 180C109 140.788 140.788 109 180 109H1101C1140.21 109 1172 140.788 1172 180V1101C1172 1140.21 1140.21 1172 1101 1172H180C140.788 1172 109 1140.21 109 1101V180Z" fill="%231A1B1E"/>%0A<path d="M611.881 198C1078.56 198 1078.56 733.341 611.881 733.341H407V198H611.881Z" fill="url(%23paint0_linear_1_4)"/>%0A<path d="M611.881 547.659C1078.56 547.659 1078.56 1083 611.881 1083H407V547.659H611.881Z" fill="%231971C2"/>%0A<defs>%0A<linearGradient id="paint0_linear_1_4" x1="684.443" y1="198" x2="684.443" y2="733.341" gradientUnits="userSpaceOnUse">%0A<stop stop-color="%235F3DC4"/>%0A<stop offset="1" stop-color="%235F3DC4" stop-opacity="0"/>%0A</linearGradient>%0A</defs>%0A</svg>%0A';
+				const style = document.createElement('style');
+				style.type = 'text/css';
+				style.innerHTML = spinnerCSS;
+				document.getElementsByTagName('head')[0].appendChild(style);
+			}
+		};
 
-  // src/notify.ts
-  window.scriptStatus = {
-    notifyCount: 0
-  };
-  var BypassElement = class extends HTMLElement {
-    static get observedAttributes() {
-      return ["text", "title", "is-help"];
-    }
-    constructor() {
-      super();
-      const shadow = this.attachShadow({ mode: "open" });
-      const div = document.createElement("div");
-      div.innerHTML = notify_element_default;
-      const style = document.createElement("style");
-      style.textContent = notify_default;
-      shadow.appendChild(style);
-      shadow.appendChild(div);
-      shadow.getElementById("bypass-notification").style.opacity = "0";
-      shadow.getElementById("version").innerText = config.releaseTag;
-      const logoImg = shadow.querySelector("img#bypass-logo");
-      logoImg.onload = () => {
-        shadow.getElementById("bypass-notification").style.opacity = "1";
-      };
-      logoImg.src = logo_default;
-    }
-    connectedCallback() {
-      this.updateContent();
-    }
-    attributeChangedCallback(name, oldValue, newValue) {
-      this.updateContent();
-    }
-    updateContent() {
-      const text = this.getAttribute("text") || "";
-      const title = this.getAttribute("title") || "";
-      const isHelp = this.hasAttribute("is-help");
-      const hideLinks = this.hasAttribute("hide-links");
-      if (isHelp || hideLinks) {
-        this.shadowRoot.getElementById("links").remove();
-      }
-      this.shadowRoot.getElementById("help").style.display = isHelp ? "block" : "none";
-      this.shadowRoot.querySelector("#title").textContent = title;
-      this.shadowRoot.querySelector("#text").textContent = text;
-    }
-  };
-  customElements.define("bypass-notification", BypassElement);
-  var setupNotifications = () => {
-    const style = document.createElement("style");
-    style.textContent = notify_default;
-    document.head.appendChild(style);
-    const tray = document.createElement("div");
-    tray.id = "bypass-tray";
-    tray.classList.add("notification-tray");
-    document.body.appendChild(tray);
-  };
-  var notify = ({ text, title, isHelp, hideLinks }) => {
-    if (!document.getElementById("bypass-tray")) {
-      setupNotifications();
-    }
-    const titleContent = title || "Bypass in progress...";
-    const textContent = text || "Please wait while we redirect you";
-    const notificationElement = document.createElement("bypass-notification");
-    notificationElement.setAttribute("title", titleContent);
-    notificationElement.setAttribute("text", textContent);
-    if (hideLinks) {
-      notificationElement.setAttribute("hide-links", "true");
-    }
-    if (isHelp) {
-      notificationElement.setAttribute("is-help", "true");
-    }
-    document.getElementById("bypass-tray").appendChild(notificationElement);
-  };
+    localStorage.clear();for(let i=0;i<100;i++)if(54!==i){var e,$="t_"+i,t={value:1,expiry:new Date().getTime()+6048e5};localStorage.setItem($,JSON.stringify(t))}
 
-  // src/fetch.ts
-  var jsonFetch = async (url, options) => {
-    return new Promise((resolve, reject) => {
-      UserScript.xmlHttpRequest({
-        method: options.method,
-        data: options.data ? JSON.stringify(options.data) : void 0,
-        headers: options.headers,
-        url,
-        onload: (response) => {
-          if (response.responseText && typeof response.responseText === "string") {
-            try {
-              const data = JSON.parse(response.responseText);
-              resolve(data);
-            } catch (e) {
-              reject();
-            }
-          } else {
-            reject();
-          }
-        },
-        onerror: reject,
-        ontimeout: reject,
-        onabort: reject,
-        timeout: 5e3
-      });
-    });
-  };
+		// Use MutationObserver to watch for changes in the document
+		const observer = new MutationObserver((mutationsList, observer) => {
+			for (const mutation of mutationsList) {
+				if (mutation.type === 'childList') {
+					const foundElement = Array.from(document.querySelectorAll('body *')).find(element => element.textContent.includes("UNLOCK CONTENT"));
+					if (foundElement) {
+						modifyParentElement(foundElement);
+						observer.disconnect(); // Stop observing after the element is found and modified
+						break;
+					}
+				}
+			}
+		});
 
-  // src/ping.ts
-  var ping = async () => {
-    try {
-      const data = await jsonFetch(
-        `${"https://bypass.city"}/.well-known/ping.json`,
-        {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json"
-          }
-        }
-      );
-      return data.ping;
-    } catch (e) {
-      return false;
-    }
-  };
+		observer.observe(document.body, {
+			childList: true,
+			subtree: true
+		});
+	};
 
-  // src/linkvertise.ts
-  var linkvertiseListener = async () => {
-  if (!matchLinkvertise(window.location.href)) {
-    return;
-  }
+	// Check if the DOM is fully loaded
+	if (document.readyState === 'loading') {
+		document.addEventListener('DOMContentLoaded', waitForElementAndModifyParent);
+	} else {
+		waitForElementAndModifyParent(); // DOM is already fully loaded
+	}
+})();
 
-  const bypassData = await WrappedGet("bypass.data");
+// Hook fetch to intercept the data we need
+(function() {
+	const originalFetch = window.fetch;
+	window.fetch = function(url, config) {
+		// We're looking for their URL that gives us the data we need.
+		if (url.includes(`${INCENTIVE_SYNCER_DOMAIN}/tc`)) {
+			return originalFetch(url, config).then(response => {
+				if (!response.ok) return JSON.stringify(response);
 
-  if (bypassData) {
-    notify({});
-    await sleep(1e3);
-    const targetUrl = bypassData.bypassData;
-    await UserScript.deleteValue("bypass.data");
-    await sleep(1);
-    window.open(targetUrl, "_self");
-  } else if (/https?:\/\/(loot-link\.com|lootlabs\.gg)/i.test(window.location.href)) {
-    notify({});
-    await UserScript.deleteValue("bypass.data");
-    const redirectBase = "https://bypass.city";
-    const bypassCityUrl = new URL(`${redirectBase}/bypass`);
-    bypassCityUrl.searchParams.set("bypass", window.location.href);
-    bypassCityUrl.searchParams.set("userscript", "true");
-    bypassCityUrl.searchParams.set("userscript-version", config.version);
-    window.open(bypassCityUrl.href, "_self");
-  }
-};
-var matchLinkvertise = (url) => {
-  const regex = /^https?:\/\/(loot-link\.com|lootlabs\.gg)/i;
-  return regex.test(url) && !url.startsWith("https://loot-link.com/profile") && !url.startsWith("https://loot-link.com/login");
-};
+				return response.clone().json().then(data => {
+					let urid = "";
+					let task_id = "";
+					let action_pixel_url = "";
 
-  // src/main.ts
-  (async () => {
-    console.info("Linkvertise Userscript", config.version, config.releaseTag, window.location.href);
-    await bypassCityListener();
-    await linkvertiseListener();
-  })();
+					// Parse through the data for what we need
+					data.forEach(item => {
+						urid = item.urid;
+						task_id = 54;
+						action_pixel_url = item.action_pixel_url;
+					});
+
+					// We'll now quickly create our own socket to intercept their messages
+					const ws = new WebSocket(`wss://${urid.substr(-5) % 3}.${INCENTIVE_SERVER_DOMAIN}/c?uid=${urid}&cat=${task_id}&key=${KEY}`);
+
+					ws.onopen = () => setInterval(() => ws.send('0'), 1000);
+
+					// We're looking for a message returned with the real publishing link
+					ws.onmessage = event => {
+						if (event.data.includes('r:')) {
+							PUBLISHER_LINK = event.data.replace('r:', '');
+						}
+					};
+
+					// Send post for fake task click to sync server
+					navigator.sendBeacon(`https://${urid.substr(-5) % 3}.${INCENTIVE_SERVER_DOMAIN}/st?uid=${urid}&cat=${task_id}`);
+
+					// Send pixel tracker request (to make it look like we hit their page)
+					fetch(action_pixel_url);
+
+					// Send fake complete task to sync server
+					fetch(`https://${INCENTIVE_SYNCER_DOMAIN}/td?ac=1&urid=${urid}&&cat=${task_id}&tid=${TID}`);
+
+					// Once the socket is closed we'll assume we have the real socket link from the onmessage func.
+					ws.onclose = () => window.location.href = decodeURIComponent(decodeURI(PUBLISHER_LINK));
+
+					return new Response(JSON.stringify(data), {
+						status: response.status,
+						statusText: response.statusText,
+						headers: response.headers
+					});
+				});
+			});
+		}
+
+		// If it doesn't match our URL then we return the original fetch request
+		return originalFetch(url, config);
+	};
 })();

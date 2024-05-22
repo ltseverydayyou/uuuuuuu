@@ -94,10 +94,16 @@ if type(getinfo) ~= 'function' then
 end
 
 local IsOnMobile = table.find({Enum.Platform.IOS, Enum.Platform.Android}, game:GetService("UserInputService"):GetPlatform())
+local UI = nil
+local UIRepo = 'https://raw.githubusercontent.com/Bart3kk/LinLib/main/'
+if IsOnMobile then
+	UI = loadstring(game:HttpGet('https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/main/Library'))()
+else
+	UI = loadstring(game:HttpGet(UIRepo .. 'Library.lua'))()
+end
+local ScriptRepo = 'https://raw.githubusercontent.com/Bart3kk/funky-friday-autoplay/main/'
 
-local UI = loadstring(game:HttpGet('https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/main/Library'))()
-
-local metadata = loadstring(game:HttpGet('https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/main/Funky%20Friday/version.lua'))()
+local metadata = loadstring(game:HttpGet(ScriptRepo .. 'metadata.lua'))()
 local httpService = game:GetService('HttpService')
 
 local framework, scrollHandler, network

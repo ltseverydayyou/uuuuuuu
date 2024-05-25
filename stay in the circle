@@ -17,11 +17,13 @@ function character()
 end
 
 function GetPlrs()
-local sort = nil
-for _,plr in ipairs(game:GetService("Players"):GetPlayers()) do
-sort = plr
-end
-return sort
+        local sorted = {}
+        for _, plr in ipairs(plrs:GetPlayers()) do
+            if plr ~= plrs.LocalPlayer then
+                table.insert(sorted, plr)
+            end
+        end
+        return sorted
 end
 
 local function rtc(value)
@@ -127,7 +129,7 @@ end)
 
 rs.Stepped:Connect(function()
     if getgenv().kill_aura == true then
-        v=GetPlrs()
+        for _, v in ipairs(GetPlrs()) do
             if v.Character and v.Character:FindFirstChildOfClass("Humanoid") and v.Character:FindFirstChild("HumanoidRootPart") and v ~= plrs.LocalPlayer then
                 local distance = (plrs.LocalPlayer.Character:FindFirstChild("HumanoidRootPart").Position - v.Character:FindFirstChild("HumanoidRootPart").Position).Magnitude
                 if distance <= getgenv().aura then
@@ -137,13 +139,14 @@ rs.Stepped:Connect(function()
                 end
             end
         end
+    end
 end)
 rs.Stepped:Connect(function()
     if getgenv().plrtween == true then
         local plr = plrs.LocalPlayer
         local char = plr.Character or plr.CharacterAdded:Wait()
-        for i,v in pairs(plrs:GetPlayers()) do
-            if char and char.HumanoidRootPart and v.Character and v.Character.Humanoid and v.Character.HumanoidRootPart and v~=plrs.LocalPlayer then
+        for _, v in ipairs(GetPlrs()) do
+           if char and char:FindFirstChild("HumanoidRootPart") and v.Character and v.Character:FindFirstChild("HumanoidRootPart") and v ~= plrs.LocalPlayer then
                 local distance = (plrs.LocalPlayer.Character.HumanoidRootPart.Position - v.Character.HumanoidRootPart.Position).Magnitude
                 if distance <= getgenv().aura then
                     hold = true

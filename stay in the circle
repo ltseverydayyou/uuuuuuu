@@ -12,8 +12,20 @@ local plrs = game:GetService("Players")
 local rs = game:GetService("RunService")
 local ts = game:GetService("TweenService")
 
+function character()
+   return game:GetService("Players").LocalPlayer.Character
+end
+
+function GetPlrs()
+local sort = nil
+for _,plr in ipairs(game:GetService("Players"):GetPlayers()) do
+sort = plr
+end
+return sort
+end
+
 local function rtc(value)
-    local character = plrs.LocalPlayer.Character
+    local character = character()
     if character then
         local hrp = character:FindFirstChild("HumanoidRootPart")
         if hrp and getgenv().ragdoll then
@@ -23,7 +35,7 @@ local function rtc(value)
 end
 
 local function srl()
-    local character = plrs.LocalPlayer.Character
+    local character = character()
     if character then
         local rt = character:FindFirstChild("RagdollTrigger")
         if rt then
@@ -36,7 +48,7 @@ local Rayfield = loadstring(game:HttpGet('https://raw.githubusercontent.com/ltse
 local Window = Rayfield:CreateWindow({
 	Name = "Stay in the Circle",
 	LoadingTitle = "Stay in the Circle",
-	LoadingSubtitle = "by idk",
+	LoadingSubtitle = "edited by v3r_",
 	ConfigurationSaving = {
 		Enabled = true,
 		FolderName = "Stay In Circle",
@@ -115,9 +127,9 @@ end)
 
 rs.Stepped:Connect(function()
     if getgenv().kill_aura == true then
-        for i,v in pairs(plrs:GetPlayers()) do
-            if v.Character and v.Character.Humanoid and v.Character.HumanoidRootPart and v ~= plrs.LocalPlayer then
-                local distance = (plrs.LocalPlayer.Character.HumanoidRootPart.Position - v.Character.HumanoidRootPart.Position).Magnitude
+        v=GetPlrs()
+            if v.Character and v.Character:FindFirstChildOfClass("Humanoid") and v.Characte:FindFirstChild("HumanoidRootPart") and v ~= plrs.LocalPlayer then
+                local distance = (plrs.LocalPlayer.Character:FindFirstChild("HumanoidRootPart").Position - v.Character:FindFirstChild("HumanoidRootPart").Position).Magnitude
                 if distance <= getgenv().aura then
                     game:GetService("ReplicatedStorage").RemoteEvents.Combat.Hit:FireServer()
                     local args = {[1] = v.Character.Humanoid}

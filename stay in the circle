@@ -128,7 +128,7 @@ end)
 rs.Stepped:Connect(function()
     if getgenv().kill_aura == true then
         v=GetPlrs()
-            if v.Character and v.Character:FindFirstChildOfClass("Humanoid") and v.Characte:FindFirstChild("HumanoidRootPart") and v ~= plrs.LocalPlayer then
+            if v.Character and v.Character:FindFirstChildOfClass("Humanoid") and v.Character:FindFirstChild("HumanoidRootPart") and v ~= plrs.LocalPlayer then
                 local distance = (plrs.LocalPlayer.Character:FindFirstChild("HumanoidRootPart").Position - v.Character:FindFirstChild("HumanoidRootPart").Position).Magnitude
                 if distance <= getgenv().aura then
                     game:GetService("ReplicatedStorage").RemoteEvents.Combat.Hit:FireServer()

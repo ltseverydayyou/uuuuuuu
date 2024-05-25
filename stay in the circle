@@ -1,0 +1,201 @@
+getgenv().kill_aura = false
+getgenv().tween = false
+getgenv().tele = false
+getgenv().walkto = false
+getgenv().plrtween = false
+getgenv().aura = 20
+getgenv().ragdoll = false
+local hold = false
+
+local plrs = game:GetService("Players")
+local rs = game:GetService("RunService")
+local ts = game:GetService("TweenService")
+
+local function rtc(value)
+    local character = plrs.LocalPlayer.Character
+    if character then
+        local hrp = character:FindFirstChild("HumanoidRootPart")
+        if hrp and getgenv().ragdoll then
+            hrp.Anchored = value
+        end
+    end
+end
+
+local function srl()
+    local character = plrs.LocalPlayer.Character
+    if character then
+        local rt = character:FindFirstChild("RagdollTrigger")
+        if rt then
+            rt.Changed:Connect(rtc)
+        end
+    end
+end
+
+local ouxie = loadstring(game:HttpGet("https://raw.githubusercontent.com/SkireScripts/Ouxie/main/Assets/Ouxie%20UI.lua"))()
+ouxie:Window({
+	Name = "Ouxie / Stay in the Circle";
+	Size = UDim2.new(0,350,0,370);
+})
+local basic = ouxie:NewTab({
+	TabName = "Basic";
+	IconId = "rbxassetid://7072706318";
+})
+local blant = ouxie:NewTab({
+	TabName = "Blatant";
+	IconId = "rbxassetid://7072706318";
+})
+blant:Toggle({
+	Name = "Tween to circle";
+	Callback = function(bool)
+		getgenv().tween = bool
+	end;
+})
+blant:Toggle({
+	Name = "Teleport to circle";
+	Callback = function(bool)
+		getgenv().tele = bool
+	end;
+})
+blant:Toggle({
+	Name = "Walk to circle";
+	Callback = function(bool)
+		getgenv().walkto = bool
+	end;
+})
+blant:Toggle({
+	Name = "Tween to near players (useless)";
+	Callback = function(bool)
+		getgenv().plrtween = bool
+	end;
+})
+blant:Toggle({
+	Name = "Anti Ragdoll";
+	Callback = function(bool)
+		getgenv().ragdoll = bool
+if not bool then
+plrs.LocalPlayer.Character.HumanoidRootPart.Anchored=false
+end
+	end;
+})
+basic:Toggle({
+	Name = "Kill Aura";
+	Callback = function(bool)
+		getgenv().kill_aura = bool
+	end;
+})
+basic:Input({
+    Name = "Range";
+    Default = "20";
+    Callback = function(raw)
+        getgenv().aura = tonumber(raw)
+    end
+})
+
+task.spawn(function()
+plrs.LocalPlayer.CharacterAdded:Connect(srl)
+
+if plrs.LocalPlayer.Character then
+    srl()
+end
+end)
+
+rs.Stepped:Connect(function()
+    if getgenv().kill_aura == true then
+        for i,v in pairs(plrs:GetPlayers()) do
+            if v.Character and v.Character.Humanoid and v.Character.HumanoidRootPart and v ~= plrs.LocalPlayer then
+                local distance = (plrs.LocalPlayer.Character.HumanoidRootPart.Position - v.Character.HumanoidRootPart.Position).Magnitude
+                if distance <= getgenv().aura then
+                    game:GetService("ReplicatedStorage").RemoteEvents.Combat.Hit:FireServer()
+                    local args = {[1] = v.Character.Humanoid}
+                    game:GetService("ReplicatedStorage").RemoteEvents.Combat.HitboxCollision:FireServer(unpack(args))
+                end
+            end
+        end
+    end
+end)
+rs.Stepped:Connect(function()
+    if getgenv().plrtween == true then
+        local plr = plrs.LocalPlayer
+        local char = plr.Character or plr.CharacterAdded:Wait()
+        for i,v in pairs(plrs:GetPlayers()) do
+            if char and char.HumanoidRootPart and v.Character and v.Character.Humanoid and v.Character.HumanoidRootPart and v~=plrs.LocalPlayer then
+                local distance = (plrs.LocalPlayer.Character.HumanoidRootPart.Position - v.Character.HumanoidRootPart.Position).Magnitude
+                if distance <= getgenv().aura then
+                    hold = true
+                    ts:Create(char.HumanoidRootPart, TweenInfo.new(0.2, Enum.EasingStyle.Linear), {CFrame = v.Character.HumanoidRootPart.CFrame}):Play()
+                    task.wait(0.2)
+                    hold = false
+                end
+            end
+        end
+    end
+    wait(0.5)
+end)
+while task.wait(1) do
+pcall(function()
+    if getgenv().walkto == true then
+        local plr = plrs.LocalPlayer
+        local char = plr.Character or plr.CharacterAdded:Wait()
+        local circle;for i,v in pairs(game.Workspace:GetDescendants()) do if v.Name == "Detect" then circle = v end end
+        if char and char.HumanoidRootPart ~= nil then
+            if hold == false then
+         char:FindFirstChildOfClass("Humanoid"):MoveTo(circle.Position)
+            end
+        end
+        if circle == nil then
+            repeat
+                for i,v in pairs(game.Workspace:GetDescendants()) do if v.Name == "Detect" then circle = v end end
+            until circle ~= nil
+        end
+    end 
+end)
+end
+rs.Stepped:Connect(function()
+    if getgenv().tween == true then
+        local plr = plrs.LocalPlayer
+        local char = plr.Character or plr.CharacterAdded:Wait()
+        local circle;for i,v in pairs(game.Workspace:GetDescendants()) do if v.Name == "Detect" then circle = v end end
+        if char and char.HumanoidRootPart ~= nil then
+            if hold == false then
+                ts:Create(char.HumanoidRootPart, TweenInfo.new(1, Enum.EasingStyle.Linear), {CFrame = circle.CFrame}):Play()
+            end
+        end
+        if circle == nil then
+            repeat
+                for i,v in pairs(game.Workspace:GetDescendants()) do if v.Name == "Detect" then circle = v end end
+            until circle ~= nil
+        end
+    end 
+    wait(0.5)
+end)
+rs.Stepped:Connect(function()
+    if getgenv().tween == true then
+        local plr = plrs.LocalPlayer
+        local char = plr.Character or plr.CharacterAdded:Wait()
+        local circle;for i,v in pairs(game.Workspace:GetDescendants()) do if v.Name == "Detect" then circle = v end end
+        if char and char.HumanoidRootPart ~= nil then
+            if hold == false then
+                ts:Create(char.HumanoidRootPart, TweenInfo.new(1, Enum.EasingStyle.Linear), {CFrame = circle.CFrame}):Play()
+            end
+        end
+        if circle == nil then
+            repeat
+                for i,v in pairs(game.Workspace:GetDescendants()) do if v.Name == "Detect" then circle = v end end
+            until circle ~= nil
+        end
+    end 
+    wait(0.5)
+end)
+rs.Stepped:Connect(function()
+    local player = plrs.LocalPlayer
+    local character = player.Character
+    if getgenv().ragdoll and character then
+        local ragdollTrigger = character:FindFirstChild("RagdollTrigger")
+        if ragdollTrigger then
+            local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+            if humanoidRootPart then
+                humanoidRootPart.Anchored = ragdollTrigger.Value
+            end
+        end
+    end
+end)

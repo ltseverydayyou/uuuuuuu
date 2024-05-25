@@ -212,3 +212,5 @@ rs.Stepped:Connect(function()
         end
     end
 end)
+
+Rayfield:LoadConfiguration()

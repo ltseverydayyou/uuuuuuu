@@ -137,7 +137,6 @@ rs.Stepped:Connect(function()
                 end
             end
         end
-    end
 end)
 rs.Stepped:Connect(function()
     if getgenv().plrtween == true then

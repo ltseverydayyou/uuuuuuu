@@ -6,17 +6,12 @@ if game.GameId == 5205364928 then
 	getgenv().plrtween = false
 	getgenv().aura = 20
 	getgenv().ragdoll = false
-	
-	
-	getgenv().Char = nil
-	getgenv().hrp = nil
 
 	local plrs = game:GetService("Players")
 	local rs = game:GetService("RunService")
 	local ts = game:GetService("TweenService")
 	
 	getgenv().Char = plrs.LocalPlayer.Character or plrs.LocalPlayer.CharacterAdded:Wait()
-	getgenv().hrp = getgenv().Char:WaitForChild("HumanoidRootPart")
 
 	function GetPlrs()
 		local sorted = {}
@@ -30,22 +25,6 @@ if game.GameId == 5205364928 then
 	
 	function char(bru)
 		getgenv().Char = bru
-	end
-
-	local function rtc(value)
-		local hrp = getgenv().Char:FindFirstChild("HumanoidRootPart")
-		if hrp and getgenv().ragdoll then
-			hrp.Anchored = value
-		end
-	end
-
-	local function srl()
-		local rt = getgenv().Char:FindFirstChild("RagdollTrigger")
-		if rt then
-			rt.Changed:Connect(function()
-				rtc(rt.Value)
-			end)
-		end
 	end
 	
 	spawn(function()
@@ -109,15 +88,6 @@ if game.GameId == 5205364928 then
 		Flag = "noRagdoll",
 		Callback = function(bool)
 			getgenv().ragdoll = bool
-			if not bool then
-				local char = getgenv().Char
-				if char then
-					local hrp = char:FindFirstChild("HumanoidRootPart")
-					if hrp then
-						hrp.Anchored = false
-					end
-				end
-			end
 		end,
 	})
 
@@ -212,14 +182,11 @@ if game.GameId == 5205364928 then
 	end)
 
 	rs.Stepped:Connect(function()
-		local char = getgenv().Char
 		if getgenv().ragdoll and char then
-			local ragdollTrigger = char:FindFirstChild("RagdollTrigger")
-			if ragdollTrigger then
-				local humanoidRootPart = char:FindFirstChild("HumanoidRootPart")
-				if humanoidRootPart then
-					humanoidRootPart.Anchored = ragdollTrigger.Value
-				end
+			local plr = plrs.LocalPlayer
+			local char = plr.Character or plr.CharacterAdded:Wait()
+			if char and char.RagdollTrigger ~= nil then
+				char.RagdollTrigger.Value = false
 			end
 		end
 	end)

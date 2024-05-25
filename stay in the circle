@@ -146,6 +146,7 @@ if game.GameId == 5205364928 then
 		wait(0.5)
 	end)
 
+	spawn(function()
 	while task.wait(1) do
 		pcall(function()
 			if getgenv().walkto == true then
@@ -164,6 +165,7 @@ if game.GameId == 5205364928 then
 			end
 		end)
 	end
+end)
 
 	rs.Stepped:Connect(function()
 		if getgenv().tween == true then
@@ -182,7 +184,7 @@ if game.GameId == 5205364928 then
 	end)
 
 	rs.Stepped:Connect(function()
-		if getgenv().ragdoll and char then
+		if getgenv().ragdoll == true then
 			local plr = plrs.LocalPlayer
 			local char = plr.Character or plr.CharacterAdded:Wait()
 			if char and char.RagdollTrigger ~= nil then

@@ -1,3 +1,4 @@
+if game.GameId == 5205364928 then
 getgenv().kill_aura = false
 getgenv().tween = false
 getgenv().tele = false
@@ -214,3 +215,4 @@ rs.Stepped:Connect(function()
 end)
 
 Rayfield:LoadConfiguration()
+end

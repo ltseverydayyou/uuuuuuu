@@ -31,64 +31,77 @@ local function srl()
     end
 end
 
-local ouxie = loadstring(game:HttpGet("https://raw.githubusercontent.com/SkireScripts/Ouxie/main/Assets/Ouxie%20UI.lua"))()
-ouxie:Window({
-	Name = "Ouxie / Stay in the Circle";
-	Size = UDim2.new(0,350,0,370);
+local Rayfield = loadstring(game:HttpGet('https://raw.githubusercontent.com/ltseverydayyou/Rayfield-backup/main/Rayfield'))()
+local Window = Rayfield:CreateWindow({
+	Name = "Stay in the Circle",
+	LoadingTitle = "Stay in the Circle",
+	LoadingSubtitle = "by idk",
+	ConfigurationSaving = {
+		Enabled = true,
+		FolderName = "Stay In Circle",
+		FileName = "BigCircle"
+	}
 })
-local basic = ouxie:NewTab({
-	TabName = "Basic";
-	IconId = "rbxassetid://7072706318";
-})
-local blant = ouxie:NewTab({
-	TabName = "Blatant";
-	IconId = "rbxassetid://7072706318";
-})
-blant:Toggle({
-	Name = "Tween to circle";
+local Tab = Window:CreateTab("Basic", 7072706318)
+local Tab1 = Window:CreateTab("Blatant", 7072706318)
+Tab1:CreateToggle({
+	Name = "Tween to circle",
+	CurrentValue = false,
+	Flag = "tweenCircle",
 	Callback = function(bool)
 		getgenv().tween = bool
-	end;
+	end,
 })
-blant:Toggle({
-	Name = "Teleport to circle";
+Tab1:CreateToggle({
+	Name = "Teleport to circle",
+	CurrentValue = false,
+	Flag = "toCircle",
 	Callback = function(bool)
 		getgenv().tele = bool
-	end;
+	end,
 })
-blant:Toggle({
-	Name = "Walk to circle";
+Tab1:CreateToggle({
+	Name = "Walk to circle",
+	CurrentValue = false,
+	Flag = "walkCircle",
 	Callback = function(bool)
 		getgenv().walkto = bool
-	end;
+	end,
 })
-blant:Toggle({
-	Name = "Tween to near players (useless)";
+Tab1:CreateToggle({
+	Name = "Tween to near players (useless)",
+	CurrentValue = false,
+	Flag = "tweenPlayer",
 	Callback = function(bool)
 		getgenv().plrtween = bool
-	end;
+	end,
 })
-blant:Toggle({
-	Name = "Anti Ragdoll";
+Tab1:CreateToggle({
+	Name = "Anti Ragdoll",
+	CurrentValue = false,
+	Flag = "noRagdoll",
 	Callback = function(bool)
 		getgenv().ragdoll = bool
-if not bool then
-plrs.LocalPlayer.Character.HumanoidRootPart.Anchored=false
-end
-	end;
+        if not bool then
+            plrs.LocalPlayer.Character.HumanoidRootPart.Anchored=false
+        end
+	end,
 })
-basic:Toggle({
-	Name = "Kill Aura";
+Tab:CreateToggle({
+	Name = "Kill Aura",
+	CurrentValue = false,
+	Flag = "noobAura",
 	Callback = function(bool)
 		getgenv().kill_aura = bool
-	end;
+	end,
 })
-basic:Input({
-    Name = "Range";
-    Default = "20";
-    Callback = function(raw)
+Tab:CreateInput({
+	Name = "Range",
+	PlaceholderText = "20",
+	RemoveTextAfterFocusLost = false,
+	Callback = function(raw)
         getgenv().aura = tonumber(raw)
-    end
+	end,
 })
 
 task.spawn(function()

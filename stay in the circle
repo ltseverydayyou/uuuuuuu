@@ -100,14 +100,16 @@ if game.GameId == 5205364928 then
 		end,
 	})
 
-	Tab:CreateInput({
-		Name = "Range",
-		PlaceholderText = "20",
-		RemoveTextAfterFocusLost = false,
-		Callback = function(raw)
-			getgenv().aura = tonumber(raw)
-		end,
-	})
+Tab:CreateSlider({
+	Name = "Range",
+	Range = {0, 50},
+	Increment = 1,
+	CurrentValue = 20,
+	Flag = "range",
+	Callback = function(val)
+		getgenv().aura = val
+	end,
+})
 
 	rs.Stepped:Connect(function()
 		if getgenv().kill_aura == true then

@@ -183,6 +183,22 @@ end)
 		wait(0.5)
 	end)
 
+rs.Stepped:Connect(function()
+		if getgenv().tele == true then
+			local char = getgenv().Char
+			local circle
+			for i, v in pairs(game.Workspace:GetDescendants()) do
+				if v.Name == "Detect" then
+					circle = v
+				end
+			end
+			if char and char:FindFirstChild("HumanoidRootPart") and circle then
+				char.HumanoidRootPart.CFrame=circle.CFrame
+			end
+		end
+		wait(0.5)
+	end)
+
 	rs.Stepped:Connect(function()
 		if getgenv().ragdoll == true then
 			local plr = plrs.LocalPlayer

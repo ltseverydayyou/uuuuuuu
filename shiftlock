@@ -1,3 +1,7 @@
+if GrimExLoaded then
+return game.Players.LocalPlayer:Kick("i ain't getting my shit stolen")
+end
+
 local shiftlockk = Instance.new("ScreenGui")
 local LockButton = Instance.new("ImageButton")
 local btnIcon = Instance.new("ImageLabel")

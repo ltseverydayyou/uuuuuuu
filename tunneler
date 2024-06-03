@@ -1,4 +1,5 @@
 -- this is so trash
+if game.GameId==1524368576 then
 local Rayfield = loadstring(game:HttpGet('https://raw.githubusercontent.com/ltseverydayyou/Rayfield-backup/main/Rayfield'))()
 
 plr=game:GetService("Players").LocalPlayer
@@ -216,12 +217,10 @@ end)
 
 rs.Stepped:connect(function()
 	ui.PortalLevel.Value=gunLevel
-	if not rgbEnabled then
+	if not rgbEnabled and gunLoop then
 		ui.wantedColor.Value=GunColor
-	elseif not rgbEnabled and gunLoop then
-		ui.wantedColor.Value=GunColor
-	else
 	end
 end)
 
 Rayfield:LoadConfiguration()
+end

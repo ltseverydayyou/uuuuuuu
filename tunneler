@@ -1,10 +1,49 @@
 -- this is so trash
 if game.GameId==1524368576 then
-local Rayfield = loadstring(game:HttpGet('https://raw.githubusercontent.com/ltseverydayyou/Rayfield-backup/main/Rayfield'))()
-
 plr=game:GetService("Players").LocalPlayer
 ui=plr.PlayerGui
 rs=game:GetService("RunService")
+
+a=false
+b=false
+c=false
+d=false
+e=false
+f=false
+g=false
+
+if ui.god then
+a=true
+end
+if ui.thirdperson then
+b=true
+end
+if ui.hasPortalGun then
+c=true
+end
+if ui.ForceFOV then
+d=true
+end
+if ui.velocityLimit then
+e=true
+end
+if ui.wantedColor then
+f=true
+end
+if ui.portalsIgnoreMaterial then
+g=true
+end
+
+wait();
+
+if a and b and c and d and e and f and g then
+print'values found loading script'
+else
+return warn'missing values cancelling script'
+end
+
+
+local Rayfield = loadstring(game:HttpGet('https://raw.githubusercontent.com/ltseverydayyou/Rayfield-backup/main/Rayfield'))()
 
 getgenv().GunColor=Color3.fromRGB(255,255,255)
 getgenv().rgbEnabled=false
@@ -221,6 +260,5 @@ rs.Stepped:connect(function()
 		ui.wantedColor.Value=GunColor
 	end
 end)
-
 Rayfield:LoadConfiguration()
 end

@@ -12,26 +12,33 @@ e=false
 f=false
 g=false
 
-if ui.god then
+if ui:FindFirstChild("god") then
 a=true
+else
 end
-if ui.thirdperson then
+if ui:FindFirstChild("thirdperson") then
 b=true
+else
 end
-if ui.hasPortalGun then
+if ui:FindFirstChild("hasPortalGun") then
 c=true
+else
 end
-if ui.ForceFOV then
+if ui:FindFirstChild("ForceFOV") then
 d=true
+else
 end
-if ui.velocityLimit then
+if ui:FindFirstChild("velocityLimit") then
 e=true
+else
 end
-if ui.wantedColor then
+if ui:FindFirstChild("wantedColor") then
 f=true
+else
 end
-if ui.portalsIgnoreMaterial then
+if ui:FindFirstChild("portalsIgnoreMaterial") then
 g=true
+else
 end
 
 wait();

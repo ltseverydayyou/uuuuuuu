@@ -47,6 +47,15 @@ if identifyexecutor() == "Fluxus" then
 
 	--  tabs if you are planning to use them  --
 
+	function FluxusButtonUI()
+		for _, v in ipairs(fluxusUI:GetDescendants()) do
+			if v.Name:lower() == "logo" then
+				return v.Parent
+			end
+		end
+		return nil
+	end
+
 	function scriptTab()
 		for _, v in ipairs(fluxusUI:GetDescendants()) do
 			if v.Name:lower() == "delete" then

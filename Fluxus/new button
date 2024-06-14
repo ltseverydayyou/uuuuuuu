@@ -1,4 +1,8 @@
 if identifyexecutor() == "Fluxus" then
+    if FluxusButtonLoaded then
+        return
+    end
+    pcall(function() getgenv().FluxusButtonLoaded = true end)
 local fluxusUI = game:GetService("CoreGui"):WaitForChild("FluxusAndroidUI")
 draggable = function(ui, dragui)
 	if not dragui then dragui = ui end

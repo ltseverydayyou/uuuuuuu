@@ -1,0 +1,130 @@
+if identifyexecutor() == "Fluxus" then
+local fluxusUI = game:GetService("CoreGui"):WaitForChild("FluxusAndroidUI")
+draggable = function(ui, dragui)
+	if not dragui then dragui = ui end
+	local UserInputService = game:GetService("UserInputService")
+
+	local dragging
+	local dragInput
+	local dragStart
+	local startPos
+
+	local function update(input)
+		local delta = input.Position - dragStart
+		ui.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+	end
+
+	dragui.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			dragStart = input.Position
+			startPos = ui.Position
+
+			input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					dragging = false
+				end
+			end)
+		end
+	end)
+
+	dragui.InputChanged:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+			dragInput = input
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input)
+		if input == dragInput and dragging then
+			update(input)
+		end
+	end)
+end
+
+---------------------------------------------------
+
+--  tabs if you are planning to use them  --
+
+function scriptTab()
+	for _, v in ipairs(fluxusUI:GetDescendants()) do
+		if v.Name:lower() == "delete" then
+			return v.Parent.Parent
+		end
+	end
+	return nil
+end
+
+function consoleTab()
+	for _, v in ipairs(fluxusUI:GetDescendants()) do
+		if v:IsA("UIListLayout") and v.SortOrder == Enum.SortOrder.LayoutOrder then
+			return v.Parent.Parent
+		end
+	end
+	return nil
+end
+
+function scripthubTab()
+	for _, v in ipairs(fluxusUI:GetDescendants()) do
+		if v:IsA("UIListLayout") and v.SortOrder == Enum.SortOrder.Name then
+			return v.Parent.Parent
+		end
+	end
+	return nil
+end
+
+---------------------------------------------------
+
+local UICorner = Instance.new("UICorner")
+local FluxusButton = Instance.new("ImageButton")
+
+FluxusButton.Name = "FluxusButton"
+FluxusButton.Parent = fluxusUI
+FluxusButton.BackgroundColor3 = Color3.fromRGB(45,47,51)
+FluxusButton.Image="rbxassetid://13327193518"
+FluxusButton.BackgroundTransparency = 1.000
+FluxusButton.AnchorPoint = Vector2.new(0.5, 0)
+FluxusButton.Position = UDim2.new(0.5, 0, 0, 0)
+FluxusButton.Size = UDim2.new(0, 2, 0, 33)
+FluxusButton.ZIndex=500
+
+
+UICorner.CornerRadius = UDim.new(1, 0)
+UICorner.Parent = FluxusButton
+
+effect = function()
+	local script = Instance.new('LocalScript', FluxusButton)
+	fluxus = script.Parent
+	fluxus.Size = UDim2.new(0, 0, 0, 0)
+	fluxus.BackgroundTransparency = 0.14
+	fluxus:TweenSize(UDim2.new(0, 30, 0, 30), "Out", "Quint",0.5,true)
+	fluxus:TweenPosition(UDim2.new(0.48909232, 0, 0, 0), "Out", "Quint",0.5,true)
+	fluxus.Active = true
+	draggable(fluxus)
+end
+coroutine.wrap(effect)()
+useButton = function()
+	local script = Instance.new('LocalScript', FluxusButton)
+	script.Parent.MouseButton1Click:Connect(function()
+	if firesignal then
+		firesignal(fluxusUI.Frame.Logo.MouseButton1Down)
+	else
+		local leftBarFrame = script.Parent:FindFirstChild("LeftBarFrame")
+		local frame = script.Parent:FindFirstChild("Frame")
+		if leftBarFrame and not leftBarFrame.Visible then
+			leftBarFrame.Visible = false
+			leftBarFrame.Position = UDim2.new(0, -225, 0, 0)
+		elseif leftBarFrame then
+			leftBarFrame.Visible = true
+			leftBarFrame.Position = UDim2.new(0, 0, 0, 0)
+		end
+	end
+	end)
+end
+coroutine.wrap(useButton)()
+
+game:GetService("RunService").RenderStepped:connect(function()
+	fluxusUI:FindFirstChild("Frame").Visible=false
+	end)
+else
+	print'you are not using fluxus lil bud'
+end

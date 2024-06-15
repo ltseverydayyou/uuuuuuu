@@ -95,10 +95,10 @@ local function createButton(name, text, order)
     return button
 end
 
-local spamButton = createButton("spem", "Spam", 3)
-local gay = createButton("fr", "Freeze", 0)
-local bruh = createButton("unfr", "Unfreeze", 1)
-local parryButton = createButton("par", "Parry", 2)
+local spamButton = createButton("spem", "Spam", 0)
+local gay = createButton("fr", "Freeze", 1)
+local bruh = createButton("unfr", "Unfreeze", 2)
+local parryButton = createButton("par", "Parry", 3)
 
 parryButton.MouseButton1Down:Connect(function()
 if firesignal then

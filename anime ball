@@ -1,37 +1,46 @@
 if game.GameId == 5120885191 then
+
 local input = game:GetService("UserInputService")
 local vim = game:GetService("VirtualInputManager")
 local p = game:GetService("Players").LocalPlayer
-local gui = p:WaitForChild("PlayerGui")
+local gui = p:FindFirstChild("PlayerGui")
+local rs = game:GetService("RunService")
 
 getgenv().ballzui = true
 getgenv().visualizer = true
 
-local h
+function getRoot(char)
+	local rootPart = char:FindFirstChild('HumanoidRootPart') or char:FindFirstChild('Torso') or char:FindFirstChild('UpperTorso')
+	return rootPart
+end
+
+local h=nil
+
 if game.Players.LocalPlayer.UserId ~= 156256804 then
 loadstring(game:HttpGet("https://raw.githubusercontent.com/1f0yt/community/main/RedCircleBlock"))()
 else
 loadstring(game:HttpGet("https://raw.githubusercontent.com/FFJ1/Roblox-Exploits/main/scripts/Loader.lua"))()
 end
-spawn(function()
+
 h = game.DescendantAdded:Connect(function(d)
   if d.Name == "MainView" then
-      task.wait();
+      wait();
       d.Parent.Parent:Destroy()
   end
 end)
-task.wait(1);
+
+task.wait(.5);
 vim:SendKeyEvent(true, "F9", 0, game)
 vim:SendKeyEvent(false, "F9", 0, game)
-task.wait(0.5);
-h:Disconnect()
-end)
-spawn(function()
+task.wait(.5);
+
+if h then h:Disconnect() h=nil end
+
 game.Workspace.Effects.ChildAdded:Connect(function(j)
-repeat wait() until j
+wait();
 j:Destroy()
 end)
-end)
+
 spawn(function()
 _G.Settings = {
     Players = {
@@ -60,7 +69,7 @@ _G.Settings = {
 }
 loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/main/low%20detail"))()
 end)
-task.wait(.5)
+task.wait(.5);
 local screenGui = Instance.new("ScreenGui")
 screenGui.IgnoreGuiInset = true
 screenGui.Parent = game.CoreGui
@@ -74,52 +83,48 @@ listLayout.FillDirection = Enum.FillDirection.Horizontal
 listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 listLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
 
-local function createButton(name, text, layoutOrder)
+local function createButton(name, text, order)
     local button = Instance.new("TextButton")
-    button.Name = name
-    button.Text = text
+    button.Name = (name or "name")
+    button.Text = (text or "nothing")
     button.TextScaled=true
     button.ZIndex=69
     button.Size = UDim2.new(0, 70, 0, 45)
-    button.LayoutOrder = layoutOrder
+    button.LayoutOrder = (order or 0)
     button.Parent = screenGui
     return button
 end
 
-local spamButton = createButton("Spam", "Spam", 1)
-local gay = createButton("Freeze", "Freeze", 2)
-local bruh = createButton("Unfreeze", "Unfreeze", 3)
-local parryButton = createButton("Parry", "Parry", 4)
+local spamButton = createButton("spem", "Spam", 3)
+local gay = createButton("fr", "Freeze", 0)
+local bruh = createButton("unfr", "Unfreeze", 1)
+local parryButton = createButton("par", "Parry", 2)
 
 parryButton.MouseButton1Down:Connect(function()
-firesignal(game.Players.LocalPlayer.PlayerGui.HUD.MobileLarge.Block.Detection.MouseButton1Down)
-end)
-
-gay.MouseButton1Down:Connect(function()
-p.Character.HumanoidRootPart.Anchored=true
-end)
-
-
-bruh.MouseButton1Down:Connect(function()
-p.Character.HumanoidRootPart.Anchored=false
-end)
-
-
-local spamming = false
-
-local function spam()
-while spamming and task.wait() do
-pcall(function()
-firesignal(game.Players.LocalPlayer.PlayerGui.HUD.MobileLarge.Block.Detection.MouseButton1Down)
-end)
+if firesignal then
+firesignal(gui.HUD.MobileLarge.Block.Detection.MouseButton1Down)
+else
+vim:SendKeyEvent(true, "F", 0, game)
+vim:SendKeyEvent(false, "F", 0, game)
 end
-end
+end)
+
+gay.MouseButton1Click:Connect(function()
+getRoot(p.Character).Anchored=true
+end)
+
+
+bruh.MouseButton1Click:Connect(function()
+getRoot(p.Character).Anchored=false
+end)
+
+
+local spem = false
 
 spamButton.MouseButton1Down:Connect(function()
-spamming = not spamming
-if spamming then
+spem = not spem
+if spem then
 spamButton.Text = "Stop"
-spawn(spam)
 else
 spamButton.Text = "Spam"
 end
@@ -165,10 +170,10 @@ Callback = NotificationBindable;
 end
 end
 
-game.workspace.Balls.ChildAdded:Connect(ballz)
-wait(1)
+workspace.Balls.ChildAdded:Connect(ballz)
 
-while getgenv().ballzui and task.wait() do
+rs.RenderStepped:connect(function()
+if getgenv().ballzui then
 pcall(function()
 local ui = p.PlayerGui.HUD
 if input.TouchEnabled then
@@ -183,4 +188,17 @@ ui.Actions.Visible = true
 end
 end)
 end
+end)
+
+rs.RenderStepped:connect(function()
+if spem then
+if firesignal then
+firesignal(gui.HUD.MobileLarge.Block.Detection.MouseButton1Down)
+else
+vim:SendKeyEvent(true, "F", 0, game)
+vim:SendKeyEvent(false, "F", 0, game)
+end
+end
+end)
+
 end

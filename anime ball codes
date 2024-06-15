@@ -1,5 +1,9 @@
 local function fire(service, action, args)
+    if args then
     game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(service, action, args)
+    else
+    game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(service, action)
+    end
 end
 
 local function redeemCodes(codes)
@@ -10,7 +14,7 @@ local function redeemCodes(codes)
 end
 
 function ballz()
-    fire("RewardService", "ClaimDailyReward", {})
+    fire("RewardService", "ClaimDailyReward")
     task.wait(1)
 
     local codes = {

@@ -16,7 +16,7 @@ end
 
 local h=nil
 
-if game.Players.LocalPlayer.UserId ~= 156256804 then
+if p.UserId ~= 156256804 then
 loadstring(game:HttpGet("https://raw.githubusercontent.com/1f0yt/community/main/RedCircleBlock"))()
 else
 loadstring(game:HttpGet("https://raw.githubusercontent.com/FFJ1/Roblox-Exploits/main/scripts/Loader.lua"))()
@@ -131,7 +131,7 @@ end
 end)
 
 function ballz(bell)
-wait(.4)
+wait(.1);
 for _, v in ipairs(bell:GetDescendants()) do
 if v:IsA("ParticleEmitter") then
 v:Destroy()
@@ -173,7 +173,6 @@ end
 workspace.Balls.ChildAdded:Connect(ballz)
 
 rs.RenderStepped:connect(function()
-if getgenv().ballzui then
 pcall(function()
 local ui = p.PlayerGui.HUD
 if input.TouchEnabled then
@@ -187,7 +186,6 @@ ui.MobileSmall.Visible = false
 ui.Actions.Visible = true
 end
 end)
-end
 end)
 
 rs.RenderStepped:connect(function()

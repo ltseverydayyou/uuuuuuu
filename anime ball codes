@@ -14,7 +14,13 @@ local function redeemCodes(codes)
 end
 
 function ballz()
-    fire("RewardService", "ClaimDailyReward")
+    local args = {
+        [1] = "RewardService",
+        [2] = "ClaimDailyReward",
+        [3] = {}
+    }
+    
+    game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
     task.wait(1)
 
     local codes = {

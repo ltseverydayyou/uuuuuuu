@@ -1,16 +1,16 @@
-local function invokeServer(service, action, args)
+local function fire(service, action, args)
     game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(service, action, args)
 end
 
 local function redeemCodes(codes)
     for _, code in ipairs(codes) do
-        invokeServer("CodeService", "Redeem", {code})
+        fire("CodeService", "Redeem", {code})
         task.wait(1)
     end
 end
 
 function ballz()
-    invokeServer("RewardService", "ClaimDailyReward", {})
+    fire("RewardService", "ClaimDailyReward", {})
     task.wait(1)
 
     local codes = {
@@ -29,22 +29,22 @@ function ballz()
         "85KLIKES",
         "15MTHANKS",
         "SORRY4DELAY",
-	"HYPE!",
-	"YOURETHEBEST"
+        "HYPE!",
+        "YOURETHEBEST"
     }
 
     redeemCodes(codes)
 end
 
-function buyspin()
-    invokeServer("CrateService", "BuyCrate", {"SwordA1", 1})
-    game:GetService("ReplicatedStorage").Framework.RemoteEvent:FireServer("RewardService", "BuySpinWheel", {})
+function spin()
+    fire("CrateService", "BuyCrate", {"SwordA1", 1})
+    fire("RewardService", "BuySpinWheel", {})
 end
 
 spawn(ballz)
 task.wait(5)
 while task.wait() do
-    spawn(buyspin)
+    spawn(spin)
     if game.PlaceId ~= 15440283215 then
         game.Players.LocalPlayer.PlayerGui.SpinWheel.Holder.Visible = true
     end

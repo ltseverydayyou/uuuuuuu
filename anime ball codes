@@ -9,7 +9,7 @@ end
 local function redeemCodes(codes)
     for _, code in ipairs(codes) do
         fire("CodeService", "Redeem", {code})
-        task.wait(1)
+        task.wait(1.3)
     end
 end
 
@@ -48,8 +48,8 @@ end
 spawn(ballz)
 task.wait(5)
 while task.wait() do
-    --spawn(spin)
+    spawn(spin)
     if game.PlaceId ~= 15440283215 then
-        --game.Players.LocalPlayer.PlayerGui.SpinWheel.Holder.Visible = true
+        game.Players.LocalPlayer.PlayerGui.SpinWheel.Holder.Visible = true
     end
 end

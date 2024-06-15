@@ -1,177 +1,51 @@
+local function invokeServer(service, action, args)
+    game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(service, action, args)
+end
+
+local function redeemCodes(codes)
+    for _, code in ipairs(codes) do
+        invokeServer("CodeService", "Redeem", {code})
+        task.wait(1)
+    end
+end
+
 function ballz()
-local args = {
-    [1] = "RewardService",
-    [2] = "ClaimDailyReward",
-    [3] = {}
-}
+    invokeServer("RewardService", "ClaimDailyReward", {})
+    task.wait(1)
 
-game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
-task.wait(1)
-local args = {
-    [1] = "CodeService",
-    [2] = "Redeem",
-    [3] = {
-        [1] = "THEUPDATEISREAL"
+    local codes = {
+        "THEUPDATEISREAL",
+        "50M-OMG",
+        "450KFANS",
+        "GAMEISALIVE!",
+        "THE0NEP1ECEISREAL",
+        "FIREUPDATE!",
+        "124000LIKES",
+        "35MIL",
+        "TOURNEYSARECOOL",
+        "ANIMEBALLISCOOL",
+        "400KGROUPMEMBERSYO",
+        "PROGAME!",
+        "85KLIKES",
+        "15MTHANKS",
+        "SORRY4DELAY",
+	"HYPE!",
+	"YOURETHEBEST"
     }
-}
 
-game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
-task.wait(1)
-local args = {
-    [1] = "CodeService",
-    [2] = "Redeem",
-    [3] = {
-        [1] = "450KFANS"
-    }
-}
-
-game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
-task.wait(1)
-local args = {
-    [1] = "CodeService",
-    [2] = "Redeem",
-    [3] = {
-        [1] = "GAMEISALIVE!"
-    }
-}
-
-game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
-task.wait(1)
-local args = {
-    [1] = "CodeService",
-    [2] = "Redeem",
-    [3] = {
-        [1] = "THE0NEP1ECEISREAL"
-    }
-}
-
-game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
-task.wait(1)
-local args = {
-    [1] = "CodeService",
-    [2] = "Redeem",
-    [3] = {
-        [1] = "FIREUPDATE!"
-    }
-}
-
-game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
-task.wait(1)
-local args = {
-    [1] = "CodeService",
-    [2] = "Redeem",
-    [3] = {
-        [1] = "124000LIKES"
-    }
-}
-
-game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
-task.wait(1)
-local args = {
-    [1] = "CodeService",
-    [2] = "Redeem",
-    [3] = {
-        [1] = "35MIL"
-    }
-}
-
-game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
-task.wait(1)
-local args = {
-    [1] = "CodeService",
-    [2] = "Redeem",
-    [3] = {
-        [1] = "TOURNEYSARECOOL"
-    }
-}
-
-game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
-task.wait(1)
-local args = {
-    [1] = "CodeService",
-    [2] = "Redeem",
-    [3] = {
-        [1] = "ANIMEBALLISCOOL"
-    }
-}
-
-game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
-task.wait(1)
-local args = {
-    [1] = "CodeService",
-    [2] = "Redeem",
-    [3] = {
-        [1] = "400KGROUPMEMBERSYO"
-    }
-}
-
-game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
-task.wait(1)
-local args = {
-    [1] = "CodeService",
-    [2] = "Redeem",
-    [3] = {
-        [1] = "PROGAME!"
-    }
-}
-
-game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
-task.wait(1)
-local args = {
-    [1] = "CodeService",
-    [2] = "Redeem",
-    [3] = {
-        [1] = "85KLIKES"
-    }
-}
-
-game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
-task.wait(1)
-local args = {
-    [1] = "CodeService",
-    [2] = "Redeem",
-    [3] = {
-        [1] = "15MTHANKS"
-    }
-}
-
-game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
-task.wait(1)
-local args = {
-    [1] = "CodeService",
-    [2] = "Redeem",
-    [3] = {
-        [1] = "SORRY4DELAY"
-    }
-}
-
-game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
+    redeemCodes(codes)
 end
 
 function buyspin()
-local ohString1 = "CrateService"
-local ohString2 = "BuyCrate"
-local ohTable3 = {
-	[1] = "SwordA1",
-	[2] = 1
-}
-
-game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(ohString1, ohString2, ohTable3)
-
-local args = {
-    [1] = "RewardService",
-    [2] = "BuySpinWheel",
-    [3] = {}
-}
-
-game:GetService("ReplicatedStorage").Framework.RemoteEvent:FireServer(unpack(args))
+    invokeServer("CrateService", "BuyCrate", {"SwordA1", 1})
+    game:GetService("ReplicatedStorage").Framework.RemoteEvent:FireServer("RewardService", "BuySpinWheel", {})
 end
 
 spawn(ballz)
 task.wait(5)
 while task.wait() do
-spawn(buyspin)
-if game.PlaceId ~= 15440283215 then
-game.Players.LocalPlayer.PlayerGui.SpinWheel.Holder.Visible=true
-end
+    spawn(buyspin)
+    if game.PlaceId ~= 15440283215 then
+        game.Players.LocalPlayer.PlayerGui.SpinWheel.Holder.Visible = true
+    end
 end

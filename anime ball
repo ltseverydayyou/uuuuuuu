@@ -40,35 +40,6 @@ game.Workspace.Effects.ChildAdded:Connect(function(j)
 wait();
 j:Destroy()
 end)
-
-spawn(function()
-_G.Settings = {
-    Players = {
-        ["Ignore Me"] = true,
-        ["Ignore Others"] = true
-    },
-    Meshes = {
-        Destroy = false,
-        LowDetail = true
-    },
-    Images = {
-        Invisible = true,
-        LowDetail = true,
-        Destroy = true,
-    },
-    Other = {
-        ["No Particles"] = true,
-        ["No Camera Effects"] = true,
-        ["No Explosions"] = true,
-        ["No Clothes"] = true,
-        ["Low Water Graphics"] = true,
-        ["No Shadows"] = true,
-        ["Low Rendering"] = true,
-        ["Low Quality Parts"] = true
-    }
-}
-loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/main/low%20detail"))()
-end)
 task.wait(.5);
 local screenGui = Instance.new("ScreenGui")
 screenGui.IgnoreGuiInset = true

@@ -232,9 +232,9 @@ if game.GameId == 847722000 then
 	})
 
 	--Tabs
+	local PlayerTab = Window:CreateTab("Player", 11252440515)
 	local ClientTab = Window:CreateTab("Client", 4483345998)
 	local ExploitsTab = Window:CreateTab("Exploits", 11252440817)
-	local PlayerTab = Window:CreateTab("Player", 11252440515)
 	local SettingsTab = Window:CreateTab("Settings", 11252440305)
 
 	ClientTab:CreateToggle({

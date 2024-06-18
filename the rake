@@ -214,7 +214,7 @@ if game.GameId == 847722000 then
 
 
 
-
+	pcall(function() getgenv().RakeGui = true end)
 
 
 	local Rayfield = loadstring(game:HttpGet('https://raw.githubusercontent.com/ltseverydayyou/Rayfield-backup/main/Rayfield'))()
@@ -226,15 +226,12 @@ if game.GameId == 847722000 then
 		LoadingSubtitle = "Sleepy Hub",
 		ConfigurationSaving = {
 			Enabled = true,
-			FolderName = "NameHere",
+			FolderName = "ProjectTheRake",
 			FileName = "Project"
 		}
 	})
 
-	pcall(function() getgenv().RakeGui = true end)
-
 	--Tabs
-	local PlayerTab = Window:CreateTab("Player", 11252440515)
 	local ClientTab = Window:CreateTab("Client", 4483345998)
 	local ExploitsTab = Window:CreateTab("Exploits", 11252440817)
 	local PlayerTab = Window:CreateTab("Player", 11252440515)
@@ -1127,6 +1124,7 @@ if game.GameId == 847722000 then
 			end)
 		end
 		HidePart:Remove()
+		getgenv().RakeGui=false
 		Rayfield:Destroy()
 	end
 

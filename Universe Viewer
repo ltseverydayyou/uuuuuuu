@@ -1,6 +1,7 @@
 local ui=nil
 local Gui = game:GetObjects("rbxassetid://18105980633")[1]
 local COREGUI=game:GetService("CoreGui")
+local connect=nil
 function cursed()
 	local length = math.random(10,20)
 	local array = {}
@@ -97,6 +98,7 @@ menustuff = function(menu)
 		end
 	end)
 	exit.MouseButton1Click:Connect(function()
+		if connect then connect:Disconnect() connect=nil end
 		menu.Parent:Destroy()
 	end)
 	Draggable(menu, menu.Topbar)
@@ -125,4 +127,8 @@ task.spawn(function()
 		end
 		page:AdvanceToNextPageAsync()
 	end
+end)
+
+connect = game:GetService"RunService".Stepped:Connect(function()
+    UniverseList.CanvasSize = UDim2.new(0, 0, 0, UniverseList:FindFirstChildOfClass("UIListLayout").AbsoluteContentSize.Y)
 end)

@@ -2,32 +2,6 @@ if identifyexecutor() == "Fluxus" then
 	local fluxusUI = game:GetService("CoreGui"):WaitForChild("FluxusAndroidUI")
 	if fluxusUI:FindFirstChild("FluxusButton") then return print'you already have the fluxus button' end
 	fluxusUI.DisplayOrder=999
-	LeftBar=fluxusUI:FindFirstChild("LeftBarFrame")
-	logo1=fluxusUI:FindFirstChild("Frame"):FindFirstChild("Logo")
-	logo2=LeftBar:FindFirstChild("Logo")
-	find=LeftBar:FindFirstChild("Settings",true)
-	logo1.Size=UDim2.new(1, 0, 1, 0)
-	if getgenv().FluxIcon1 then
-		game:GetService("RunService").RenderStepped:Connect(function()
-			logo1.Image="rbxassetid://"..getgenv().FluxIcon1
-			logo2.Image="rbxassetid://"..getgenv().FluxIcon1
-		end)
-	end
-	if getgenv().FluxBackground then
-		game:GetService("RunService").RenderStepped:Connect(function()
-			LeftBar.BackgroundColor3=getgenv().FluxBackground
-			fluxusUI.Frame.BackgroundColor3=getgenv().FluxBackground
-		end)
-	end
-	if getgenv().FluxBtns then
-		game:GetService("RunService").RenderStepped:Connect(function()
-			for _,btn in ipairs(find.Parent:GetChildren()) do
-				if btn:IsA("Frame") then
-					btn.BackgroundColor3=getgenv().FluxBtns
-				end
-			end
-		end)
-	end
 	draggable = function(ui, dragui)
 		if not dragui then dragui = ui end
 		local UserInputService = game:GetService("UserInputService")
@@ -116,8 +90,8 @@ if identifyexecutor() == "Fluxus" then
 
 	FluxusButton.Name = "FluxusButton"
 	FluxusButton.Parent = fluxusUI
-	FluxusButton.BackgroundColor3 = (fluxusUI.Frame.Backgroundcolor3 or Color3.fromRGB(45,47,51))
-	FluxusButton.Image=LeftBar.Logo.Image
+	FluxusButton.BackgroundColor3 = Color3.fromRGB(45,47,51)
+	FluxusButton.Image="rbxassetid://13327193518"
 	FluxusButton.BackgroundTransparency = 1.000
 	FluxusButton.AnchorPoint = Vector2.new(0.5, 0)
 	FluxusButton.Position = UDim2.new(0.5, 0, 0, 0)

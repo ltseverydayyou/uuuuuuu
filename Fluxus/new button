@@ -16,7 +16,7 @@ if identifyexecutor() == "Fluxus" then
 		fluxusUI.Frame.BackgroundColor3=getgenv().FluxBackground
 	end
 	if getgenv().FluxBtns then
-		for _,btn in ipairs(find.Parent:GetChildren()) then
+		for _,btn in ipairs(find.Parent:GetChildren()) do
 			if btn:IsA"Frame" then
 				btn.BackgroundColor3=getgenv().FluxBtns
 			end

@@ -285,8 +285,8 @@ if game.GameId == 847722000 then
 				until _G.FreeCam == false
 				pcall(function()
 					game.Players.LocalPlayer.Character.HumanoidRootPart.Anchored = false
-					game.Workspace.CurrentCamera.CameraType = Enum.CameraType.Scriptable
-					game.Workspace.CurrentCamera.CameraSubject = game.Players.LocalPlayer.Character.Head
+					game.Workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
+					game.Workspace.CurrentCamera.CameraSubject = game.Players.LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid")
 				end)
 			end
 		end,

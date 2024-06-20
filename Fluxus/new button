@@ -2,9 +2,9 @@ if identifyexecutor() == "Fluxus" then
 	local fluxusUI = game:GetService("CoreGui"):WaitForChild("FluxusAndroidUI")
 	if fluxusUI:FindFirstChild("FluxusButton") then return print'you already have the fluxus button' end
 	fluxusUI.DisplayOrder=999
-	LeftBar=fluxusUI.LeftBarFrame
-	logo1=fluxusUI.Frame.Logo
-	logo2=leftBarFrame.Logo
+	LeftBar=fluxusUI:FindFirstChild("LeftBarFrame")
+	logo1=fluxusUI:FindFirstChild("Frame"):FindFirstChild("Logo")
+	logo2=LeftBar:FindFirstChild("Logo")
 	find=LeftBar:FindFirstChild("Executor",true)
 	logo1.Size=UDim2.new(1, 0, 1, 0)
 	if getgenv().FluxIcon1 then
@@ -17,7 +17,7 @@ if identifyexecutor() == "Fluxus" then
 	end
 	if getgenv().FluxBtns then
 		for _,btn in ipairs(find.Parent:GetChildren()) do
-			if btn:IsA"Frame" then
+			if btn:IsA("Frame") then
 				btn.BackgroundColor3=getgenv().FluxBtns
 			end
 		end

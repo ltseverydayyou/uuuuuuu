@@ -348,7 +348,7 @@ if game.GameId == 847722000 then
 		Flag = "InfStamina",
 		Callback = function(state)
 			_G.InfStamina = state
-			if _G.InfStamina then
+			if _G.InfStamina == true then
 				for i,v in pairs(getgc(true)) do
 					if type(v) == "table" then
 						if rawget(v,"STAMINA_REGEN") then
@@ -370,7 +370,7 @@ if game.GameId == 847722000 then
 		Flag = "InfNightVision",
 		Callback = function(state)
 			_G.InfNightVision = state
-			if _G.InfNightVision then
+			if _G.InfNightVision == true then
 				for i,v in pairs(getgc(true)) do
 					if type(v) == "table" then
 						if rawget(v,"NVG_TAKE") then
@@ -395,7 +395,7 @@ if game.GameId == 847722000 then
 				Duration = 1,
 				Image = 4483362458,
 			})
-			if _G.RakeKillAura then
+			if _G.RakeKillAura == true then
 				repeat wait()
 					pcall(function()
 						for i,v in pairs(game.Workspace:GetChildren()) do
@@ -456,11 +456,11 @@ if game.GameId == 847722000 then
 					v:SetAttribute("hasESP",false)
 				end
 			end
-			if _G.RakeChams then
+			if _G.RakeChams == true then
 				repeat wait()
 
 				until _G.RakeChams == false
-			else
+			elseif _G.RakeChams == false then
 				if game.Workspace:FindFirstChild("Rake") then
 					if game.Workspace:FindFirstChild("Rake"):FindFirstChild("RakeChams") then
 						game.Workspace:FindFirstChild("Rake"):FindFirstChild("RakeChams"):Remove()
@@ -476,7 +476,7 @@ if game.GameId == 847722000 then
 		Flag = "PlrEsp",
 		Callback = function(state)
 			_G.PlayerESP = state
-			if _G.PlayerESP then
+			if _G.PlayerESP == true then
 				repeat wait()
 
 				until _G.PlayerESP == false
@@ -1102,7 +1102,7 @@ if game.GameId == 847722000 then
 		CurrentValue = 16,
 		Flag = "walkspeed",
 		Callback = function(state)
-			_G.enableSpeed=state
+			_G.WalkSpeedd=state
 		end,
 	})
 
@@ -1111,7 +1111,7 @@ if game.GameId == 847722000 then
 		CurrentValue = false,
 		Flag = "tglSpeed",
 		Callback = function(state)
-			_G.WalkSpeedd = state
+			_G.enableSpeed = state
 		end,
 	})
 
@@ -1162,7 +1162,7 @@ if game.GameId == 847722000 then
 
 	game:GetService("RunService").RenderStepped:Connect(function()
 		if AllowRunService then
-			if _G.enableFOV then
+			if _G.enableFOV == true then
 				local num = _G.FieldOfView
 				local hh=game:GetService("TweenService"):Create(workspace.CurrentCamera, TweenInfo.new(0, Enum.EasingStyle.Linear), {FieldOfView=tonumber(num)})
 				hh:Play()
@@ -1172,8 +1172,9 @@ if game.GameId == 847722000 then
 	
 	game:GetService("RunService").RenderStepped:Connect(function()
 		if AllowRunService then
-			if _G.enableSpeed then
-				getHum().WalkSpeed= _G.WalkSpeedd
+			local spedyy = _G.WalkSpeedd
+			if _G.enableSpeed == true and getHum() then
+				getHum().WalkSpeed = tonumber(spedyy)
 			end
 		end
 	end)

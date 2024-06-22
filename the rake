@@ -54,8 +54,15 @@ if game.GameId == 847722000 then
 	HidePartHightLight.OutlineTransparency = .8
 	HidePartHightLight.Parent = HidePart
 
-
-
+	
+	local function getHum()
+		if game:GetService("Players").LocalPlayer and game:GetService("Players").LocalPlayer.Character and game:GetService("Players").LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+			return game:GetService("Players").LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+		else
+			return false
+		end
+	end
+	
 	local function GET_HRP()
 		if not game.Players.LocalPlayer.Character then
 
@@ -119,7 +126,7 @@ if game.GameId == 847722000 then
 		local waypoints = path:GetWaypoints()
 
 		for i,v in pairs(waypoints) do
-			game.Players.LocalPlayer.Character:WaitForChild("Humanoid"):MoveTo(v.Position)
+			getHum():MoveTo(v.Position)
 		end
 	end
 
@@ -259,7 +266,7 @@ if game.GameId == 847722000 then
 							local tween = tweenService:Create(part, tweenInfo, goal)
 							tween:Play()
 						end
-						game.Workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
+						game.Workspace.CurrentCamera.CameraType = Enum.CameraType.Scriptable
 						local mouse = game.Players.LocalPlayer:GetMouse()
 						game.Players.LocalPlayer.Character:WaitForChild("HumanoidRootPart").Anchored = true
 						game.Workspace.CurrentCamera.CameraSubject = FreeCamPart
@@ -286,7 +293,7 @@ if game.GameId == 847722000 then
 				pcall(function()
 					game.Players.LocalPlayer.Character.HumanoidRootPart.Anchored = false
 					game.Workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
-					game.Workspace.CurrentCamera.CameraSubject = game.Players.LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid")
+					game.Workspace.CurrentCamera.CameraSubject = game.Players.LocalPlayer.Character.Head
 				end)
 			end
 		end,
@@ -341,7 +348,7 @@ if game.GameId == 847722000 then
 		Flag = "InfStamina",
 		Callback = function(state)
 			_G.InfStamina = state
-			if _G.InfStamina == true then
+			if _G.InfStamina then
 				for i,v in pairs(getgc(true)) do
 					if type(v) == "table" then
 						if rawget(v,"STAMINA_REGEN") then
@@ -363,7 +370,7 @@ if game.GameId == 847722000 then
 		Flag = "InfNightVision",
 		Callback = function(state)
 			_G.InfNightVision = state
-			if _G.InfNightVision == true then
+			if _G.InfNightVision then
 				for i,v in pairs(getgc(true)) do
 					if type(v) == "table" then
 						if rawget(v,"NVG_TAKE") then
@@ -388,7 +395,7 @@ if game.GameId == 847722000 then
 				Duration = 1,
 				Image = 4483362458,
 			})
-			if _G.RakeKillAura == true then
+			if _G.RakeKillAura then
 				repeat wait()
 					pcall(function()
 						for i,v in pairs(game.Workspace:GetChildren()) do
@@ -449,11 +456,11 @@ if game.GameId == 847722000 then
 					v:SetAttribute("hasESP",false)
 				end
 			end
-			if _G.RakeChams == true then
+			if _G.RakeChams then
 				repeat wait()
 
 				until _G.RakeChams == false
-			elseif _G.RakeChams == false then
+			else
 				if game.Workspace:FindFirstChild("Rake") then
 					if game.Workspace:FindFirstChild("Rake"):FindFirstChild("RakeChams") then
 						game.Workspace:FindFirstChild("Rake"):FindFirstChild("RakeChams"):Remove()
@@ -469,7 +476,7 @@ if game.GameId == 847722000 then
 		Flag = "PlrEsp",
 		Callback = function(state)
 			_G.PlayerESP = state
-			if _G.PlayerESP == true then
+			if _G.PlayerESP then
 				repeat wait()
 
 				until _G.PlayerESP == false
@@ -1068,6 +1075,46 @@ if game.GameId == 847722000 then
 		end,
 	})
 
+	PlayerTab:CreateSlider({
+		Name = "Field Of View",
+		Range = {0, 120},
+		Increment = 1,
+		CurrentValue = 70,
+		Flag = "FOV",
+		Callback = function(state)
+			_G.FieldOfView=state
+		end,
+	})
+
+	PlayerTab:CreateToggle({
+		Name = "Toggle FOV",
+		CurrentValue = false,
+		Flag = "tglFOV",
+		Callback = function(state)
+			_G.enableFOV = state
+		end,
+	})
+	
+	PlayerTab:CreateSlider({
+		Name = "WalkSpeed",
+		Range = {0, 30},
+		Increment = 1,
+		CurrentValue = 16,
+		Flag = "walkspeed",
+		Callback = function(state)
+			_G.enableSpeed=state
+		end,
+	})
+
+	PlayerTab:CreateToggle({
+		Name = "Toggle WalkSpeed",
+		CurrentValue = false,
+		Flag = "tglSpeed",
+		Callback = function(state)
+			_G.WalkSpeedd = state
+		end,
+	})
+
 	-- no fall damage hook
 
 	local mt = getrawmetatable(game)
@@ -1109,6 +1156,24 @@ if game.GameId == 847722000 then
 					end
 					game:GetService("Workspace").Debris.SupplyCrates.Box.UnlockValue.Value = 100
 				end)
+			end
+		end
+	end)
+
+	game:GetService("RunService").RenderStepped:Connect(function()
+		if AllowRunService then
+			if _G.enableFOV then
+				local num = _G.FieldOfView
+				local hh=game:GetService("TweenService"):Create(workspace.CurrentCamera, TweenInfo.new(0, Enum.EasingStyle.Linear), {FieldOfView=tonumber(num)})
+				hh:Play()
+			end
+		end
+	end)
+	
+	game:GetService("RunService").RenderStepped:Connect(function()
+		if AllowRunService then
+			if _G.enableSpeed then
+				getHum().WalkSpeed= _G.WalkSpeedd
 			end
 		end
 	end)

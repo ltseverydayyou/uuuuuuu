@@ -43,7 +43,7 @@ end)
 task.wait(.5);
 local screenGui = Instance.new("ScreenGui")
 screenGui.IgnoreGuiInset = true
-screenGui.Parent = game.CoreGui
+screenGui.Parent = (game:GetService("CoreGui") or game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui"))
 screenGui.ResetOnSpawn = false
 screenGui.Name = math.random(1,69420)
 

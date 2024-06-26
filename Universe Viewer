@@ -1,6 +1,6 @@
 local ui=nil
 local Gui = game:GetObjects("rbxassetid://18105980633")[1]
-local COREGUI=game:GetService("CoreGui")
+local COREGUI= (game:GetService("CoreGui") or game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui")) -- solara is gay
 local connect=nil
 function cursed()
 	local length = math.random(10,20)

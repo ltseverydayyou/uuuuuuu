@@ -512,7 +512,7 @@ if game.GameId == 847722000 then
 		Callback = function()
 			for i,v in pairs(game.Workspace.Filter.ScrapSpawns:GetDescendants()) do
 				if v.Name:lower() == "scrap" then
-					v.CFrame = game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame
+					v:PivotTo(game.Players.LocalPlayer.Character:GetPivot())
 				end
 			end
 		end,

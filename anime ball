@@ -6,11 +6,6 @@ local p = game:GetService("Players").LocalPlayer
 local gui = p:FindFirstChild("PlayerGui")
 local rs = game:GetService("RunService")
 
-local RunService = rs
-local BallFolder = workspace:WaitForChild("Balls")
-local player = p
-local canParry = true
-
 getgenv().ballzui = true
 getgenv().visualizer = true
 
@@ -19,71 +14,11 @@ function getRoot(char)
 	return rootPart
 end
 
---[[if p.UserId ~= 156256804 then
+--if p.UserId ~= 156256804 then
 loadstring(game:HttpGet("https://raw.githubusercontent.com/1f0yt/community/main/RedCircleBlock"))()
-else
+--[[else
 loadstring(game:HttpGet("https://raw.githubusercontent.com/FFJ1/Roblox-Exploits/main/scripts/Loader.lua"))()
 end]]
-
-
-
----
-
-local function calculatePredictionTime(ball, player)
-    local character = player.Character
-    if character then
-        local rootPart = character:FindFirstChild("HumanoidRootPart")
-        if rootPart then
-            local relativePosition = ball.Position - rootPart.Position
-            local relativeVelocity = ball.Velocity - rootPart.Velocity
-            local a = ball.Size.Magnitude / 1
-            local b = relativePosition.Magnitude
-            local c = math.sqrt(a * a + b * b)
-            return (c - a) / relativeVelocity.Magnitude
-        end
-    end
-    return math.huge
-end
-
-local function parry()
-    if canParry then
-        canParry = false
-        if firesignal then
-firesignal(gui.HUD.MobileLarge.Block.Detection.MouseButton1Down)
-else
-vim:SendKeyEvent(true, "F", 0, game)
-vim:SendKeyEvent(false, "F", 0, game)
-end
-        task.delay(.1, function()
-            canParry = true
-        end)
-    end
-end
-
-local function checkProximityToPlayer(ball, player)
-    local predictionTime = calculatePredictionTime(ball, player)
-    if predictionTime then
-        local ballSpeedThreshold = math.max(0.4, 0.6 - ball.Velocity.Magnitude * 0.03)
-        if predictionTime <= ballSpeedThreshold and ball:FindFirstChildOfClass("Highlight") then
-            parry()
-        end
-    end
-end
-
-local function checkBallsProximity()
-    if player and player.Character then
-        for _, ball in ipairs(BallFolder:GetChildren()) do
-            if ball:IsA("BasePart") then
-                checkProximityToPlayer(ball, player)
-            end
-        end
-    end
-end
-
-RunService.RenderStepped:Connect(checkBallsProximity)
-
----
-
 
 game.Workspace.Effects.ChildAdded:Connect(function(j)
 wait();

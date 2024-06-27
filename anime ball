@@ -54,7 +54,7 @@ else
 vim:SendKeyEvent(true, "F", 0, game)
 vim:SendKeyEvent(false, "F", 0, game)
 end
-        task.delay(.05, function()
+        task.delay(.1, function()
             canParry = true
         end)
     end
@@ -80,7 +80,7 @@ local function checkBallsProximity()
     end
 end
 
-RunService.Heartbeat:Connect(checkBallsProximity)
+RunService.RenderStepped:Connect(checkBallsProximity)
 
 ---
 

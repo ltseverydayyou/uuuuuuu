@@ -14,14 +14,19 @@ function getRoot(char)
 	return rootPart
 end
 
-if p.UserId ~= 156256804 then
-loadstring(game:HttpGet("https://raw.githubusercontent.com/1f0yt/community/main/RedCircleBlock"))()
-else
-    if identifyexecutor() == "Solara" then
+function corrupt()
+	local length = math.random(10,20)
+	local array = {}
+	for i = 1, length do
+		array[i] = string.char(math.random(32, 126))
+	end
+	return table.concat(array)
+end
+
+if p.UserId ~= 156256804 or identifyexecutor() == "Solara" then
 loadstring(game:HttpGet("https://raw.githubusercontent.com/1f0yt/community/main/RedCircleBlock"))()
 else
 loadstring(game:HttpGet("https://raw.githubusercontent.com/FFJ1/Roblox-Exploits/main/scripts/Loader.lua"))()
-    end
 end
 
 game.Workspace.Effects.ChildAdded:Connect(function(j)
@@ -29,11 +34,15 @@ wait();
 j:Destroy()
 end)
 task.wait(.5);
-local screenGui = Instance.new("ScreenGui")
+local bobloxUI=game:GetService("CoreGui"):FindFirstChildWhichIsA("ScreenGui")
+local screenGui = nil
+if not bobloxUI then
+screenGui = Instance.new("ScreenGui")
 screenGui.IgnoreGuiInset = true
 screenGui.Parent = (game:GetService("CoreGui") or game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui"))
 screenGui.ResetOnSpawn = false
-screenGui.Name = math.random(1,69420)
+screenGui.Name = corrupt()
+end
 
 local listLayout = Instance.new("UIListLayout")
 listLayout.SortOrder = Enum.SortOrder.LayoutOrder
@@ -48,9 +57,9 @@ local function createButton(name, text, order)
     button.Text = (text or "nothing")
     button.TextScaled=true
     button.ZIndex=69
-    button.Size = UDim2.new(0, 70, 0, 45)
+    button.Size = UDim2.new(0, 75, 0, 50)
     button.LayoutOrder = (order or 0)
-    button.Parent = screenGui
+    button.Parent = (bobloxUI or screenGui)
     return button
 end
 
@@ -64,13 +73,12 @@ local args = {
 }
 
 game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
-
 end
 
-local spamButton = createButton("spem", "Spam", 0)
-local gay = createButton("fr", "Freeze", 1)
-local bruh = createButton("unfr", "Unfreeze", 2)
-local parryButton = createButton("par", "Parry", 3)
+local spamButton = createButton("spem", "spam", 0)
+local gay = createButton("fr", "freeze", 1)
+local bruh = createButton("unfr", "unfreeze", 2)
+local parryButton = createButton("par", "parry", 3)
 
 parryButton.MouseButton1Down:Connect(function()
 task.spawn(doParry)
@@ -91,9 +99,9 @@ local spem = false
 spamButton.MouseButton1Down:Connect(function()
 spem = not spem
 if spem then
-spamButton.Text = "Stop"
+spamButton.Text="unspam"
 else
-spamButton.Text = "Spam"
+spamButton.Text="spam"
 end
 end)
 

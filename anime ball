@@ -23,10 +23,14 @@ function corrupt()
 	return table.concat(array)
 end
 
-if p.UserId ~= 156256804 or identifyexecutor() == "Solara" then
+if p.UserId ~= 156256804 then
+loadstring(game:HttpGet("https://raw.githubusercontent.com/1f0yt/community/main/RedCircleBlock"))()
+else
+if identifyexecutor() == "Solara" then
 loadstring(game:HttpGet("https://raw.githubusercontent.com/1f0yt/community/main/RedCircleBlock"))()
 else
 loadstring(game:HttpGet("https://raw.githubusercontent.com/FFJ1/Roblox-Exploits/main/scripts/Loader.lua"))()
+end
 end
 
 game.Workspace.Effects.ChildAdded:Connect(function(j)
@@ -34,15 +38,11 @@ wait();
 j:Destroy()
 end)
 task.wait(.5);
-local bobloxUI=game:GetService("CoreGui"):FindFirstChildWhichIsA("ScreenGui")
-local screenGui = nil
-if not bobloxUI then
-screenGui = Instance.new("ScreenGui")
+local screenGui = Instance.new("ScreenGui")
 screenGui.IgnoreGuiInset = true
 screenGui.Parent = (game:GetService("CoreGui") or game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui"))
 screenGui.ResetOnSpawn = false
 screenGui.Name = corrupt()
-end
 
 local listLayout = Instance.new("UIListLayout")
 listLayout.SortOrder = Enum.SortOrder.LayoutOrder
@@ -59,7 +59,7 @@ local function createButton(name, text, order)
     button.ZIndex=69
     button.Size = UDim2.new(0, 75, 0, 50)
     button.LayoutOrder = (order or 0)
-    button.Parent = (bobloxUI or screenGui)
+    button.Parent = screenGui
     return button
 end
 
@@ -106,9 +106,9 @@ end
 end)
 
 function ballz(bell)
-wait();
+wait(.1);
 for _, v in ipairs(bell:GetDescendants()) do
-if v:IsA("ParticleEmitter") then
+if v.ClssName:lower() == "particleemitter" or v.ClassName:lower() == "beam" or v.ClassName:lower() == "trail" or v.ClassName:lower() == "attachment" then
 wait();
 v:Destroy()
 end
@@ -123,9 +123,9 @@ highlight.Parent = bell
 highlight.Name = "ball1"
 game.StarterGui:SetCore("SendNotification", {
 Title = "Ball Spawned";
-Text = "Ball Name: " ..bell.Name;
+Text = bell.Name;
 Icon = "";
-Duration = 0.7;
+Duration = 0.64;
 Callback = NotificationBindable;
 })
 elseif bell.Color == balls1.UltimateBall1.Color then
@@ -137,9 +137,9 @@ highlight.Parent = bell
 highlight.Name = "ultimateball1"
 game.StarterGui:SetCore("SendNotification", {
 Title = "Ultimate Ball Spawned";
-Text = "Ultimate Ball Name: " ..bell.Name;
+Text = bell.Name;
 Icon = "";
-Duration = 1.5;
+Duration = 1;
 Callback = NotificationBindable;
 })
 end

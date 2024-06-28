@@ -108,7 +108,7 @@ end)
 function ballz(bell)
 wait(.1);
 for _, v in ipairs(bell:GetDescendants()) do
-if v.ClssName:lower() == "particleemitter" or v.ClassName:lower() == "beam" or v.ClassName:lower() == "trail" or v.ClassName:lower() == "attachment" then
+if v.ClassName:lower() == "particleemitter" or v.ClassName:lower() == "beam" or v.ClassName:lower() == "trail" or v.ClassName:lower() == "attachment" then
 wait();
 v:Destroy()
 end

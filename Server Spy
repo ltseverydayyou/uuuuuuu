@@ -202,7 +202,7 @@ function handleRemote(remote)
 			local argsFormatted = Format(args)
 			local argsString = table.concat(argsFormatted, ",\n    ")
 
-			_G.Code = string.format("RemoteEvent: [%s]\nreturned: %s", fullPath, argsString)
+			_G.Code = string.format("RemoteEvent: [%s]\n\nreturned: %s", fullPath, argsString)
 			local template = SRLExample
 			local list = SRLList
 			local btn = template:Clone()
@@ -218,7 +218,7 @@ function handleRemote(remote)
 			local argsFormatted = Format(args)
 			local argsString = table.concat(argsFormatted, ",\n")
 
-			_G.Code = string.format("RemoteFunction: [%s]\nreturned: %s", fullPath, argsString)
+			_G.Code = string.format("RemoteFunction: [%s]\n\nreturned: %s", fullPath, argsString)
 			local template = SRLExample
 			local list = SRLList
 			local btn = template:Clone()

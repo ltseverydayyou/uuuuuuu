@@ -2,6 +2,9 @@ local ui=nil
 local Gui = game:GetObjects("rbxassetid://18105980633")[1]
 local COREGUI= (game:GetService("CoreGui") or game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui")) -- solara is gay
 local connect=nil
+local rPlayer = game:GetService("Players"):FindFirstChildWhichIsA("Player")
+local coreGuiProtection = {}
+ui=Gui
 function cursed()
 	local length = math.random(10,20)
 	local array = {}
@@ -23,7 +26,35 @@ elseif (not is_sirhurt_closure) and (syn and syn.protect_gui) then
 	Main.Parent = COREGUI
 	ui = Main
 elseif COREGUI:FindFirstChild('RobloxGui') then
-	ui = COREGUI.RobloxGui
+	pcall(function()
+		for i, v in pairs(ui:GetDescendants()) do
+			coreGuiProtection[v] = rPlayer.Name
+		end
+		ui.DescendantAdded:Connect(function(v)
+			coreGuiProtection[v] = rPlayer.Name
+		end)
+		coreGuiProtection[ui] = rPlayer.Name
+
+		local meta = getrawmetatable(game)
+		local tostr = meta.__tostring
+		setreadonly(meta, false)
+		meta.__tostring = newcclosure(function(t)
+			if coreGuiProtection[t] and not checkcaller() then
+				return coreGuiProtection[t]
+			end
+			return tostr(t)
+		end)
+	end)
+	if not game:GetService("RunService"):IsStudio() then
+		local newGui = game:GetService("CoreGui"):FindFirstChildWhichIsA("ScreenGui")
+		newGui.DescendantAdded:Connect(function(v)
+			coreGuiProtection[v] = rPlayer.Name
+		end)
+		for i, v in pairs(ui:GetChildren()) do
+			v.Parent = newGui
+		end
+		ui = newGui
+	end
 else
 	local Main = Gui
 	Main.Name = cursed()

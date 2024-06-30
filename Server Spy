@@ -231,31 +231,31 @@ function handleRemote(remote)
 	end
 end
 
-function wrapRemotes()
-	for _, obj in ipairs(game:GetDescendants()) do
+function wrapRemotes(ss)
+	for _, obj in ipairs(ss:GetDescendants()) do
 		if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
 			handleRemote(obj)
 		end
 	end
-	con=game.DescendantAdded:Connect(function(descendant)
+	con=ss.DescendantAdded:Connect(function(descendant)
 		if descendant:IsA("RemoteEvent") or descendant:IsA("RemoteFunction") then
 			handleRemote(descendant)
 		end
 	end)
 end
 
---[[local services = {
+local services = {
 	game:GetService("ReplicatedStorage"),
 	game:GetService("StarterGui"),
 	game:GetService("StarterPack"),
 	game:GetService("StarterPlayer"),
 	game:GetService("Players"),
 	game:GetService("Workspace")
-}]]
+}
 
---for _, folder in ipairs(services) do
-wrapRemotes()
---end
+for _, folder in ipairs(services) do
+wrapRemotes(folder)
+end
 
 menustuff(SRLFrame)
 SRLFrame.Position = UDim2.new(0.5, -283/2+5, 0.5, -260/2+5)

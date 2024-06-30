@@ -107,7 +107,7 @@ if IsMobile then
     UI = loadstring(game:HttpGet('https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/main/library.lua'))
 else
     UI = loadstring(game:HttpGet(UIRepo .. 'Library.lua'))()
-
+end
 local metadata = loadstring(game:HttpGet(ScriptRepo .. 'metadata.lua'))()
 local httpService = game:GetService('HttpService')
 local ThemeManager = {} do
@@ -1096,4 +1096,4 @@ do
 	})
 end
 
-UI:Notify(string.format('Loaded script in %.4f second(s)!', tick() - start), 3) end --idfk why its needed but it is i guess
+UI:Notify(string.format('Loaded script in %.4f second(s)!', tick() - start), 3)

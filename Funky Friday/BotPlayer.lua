@@ -734,7 +734,12 @@ addRichText(Groups.Credits:AddLabel('<font color="#3da5ff">wally</font> - script
 addRichText(Groups.Credits:AddLabel('<font color="#de6cff">Sezei</font> - contributor'))
 Groups.Credits:AddLabel('Inori - ui library')
 Groups.Credits:AddLabel('Jan - old ui library')
-Groups.Credits:AddLabel('Bart3kk - https://github.com/Bart3kk/funky-friday-autoplay/releases')
+--Groups.Credits:AddLabel('Bart3kk - https://github.com/Bart3kk/funky-friday-autoplay/releases')
+Groups.Credits:AddButton('Bart3kk', function()
+	if pcall(setclipboard, "https://github.com/Bart3kk/funky-friday-autoplay/releases") then
+		UI:Notify("Successfully copied Bart3kk's GitHub link to your clipboard!", 5)
+	end
+end)
 
 
 Groups.Misc = Tabs.Miscellaneous:AddRightGroupbox('Miscellaneous')

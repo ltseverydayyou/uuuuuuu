@@ -735,7 +735,7 @@ addRichText(Groups.Credits:AddLabel('<font color="#ff00ff">Bart3kk</font> - mobi
 addRichText(Groups.Credits:AddLabel('<font color="#de6cff">Sezei</font> - contributor'))
 Groups.Credits:AddLabel('Inori - ui library')
 Groups.Credits:AddLabel('Jan - old ui library')
-Groups.Credits:AddLabel('v3r - ui library (mobile support)')
+Groups.Credits:AddLabel('v3r_ - ui library (mobile support)')
 --Groups.Credits:AddLabel('Bart3kk - https://github.com/Bart3kk/funky-friday-autoplay/releases')
 Groups.Credits:AddButton('copy link to official repo', function()
 	if pcall(setclipboard, "https://github.com/Bart3kk/funky-friday/autoplay") then

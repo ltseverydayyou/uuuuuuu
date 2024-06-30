@@ -135,6 +135,7 @@ menustuff = function(menu)
 	end)
 	exit.MouseButton1Click:Connect(function()
 		if con then con:Disconnect() con=nil end
+		if con1 then con1:Disconnect() con1=nil end
 		if connect then connect:Disconnect() connect=nil end
 		ui:Destroy()
 	end)

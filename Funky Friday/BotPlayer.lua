@@ -1,8 +1,8 @@
-print("Credits to mstudio45 for the ported UI lib of Linoria")
-print("Credits to Wally-RBLX and his devs for making this amazing script")
-print("I DO NOT OWN ANY OF THIS CODE. CREDITS TO THIS CODE AND UI LIBS ETC GO TO THEIR OWNERS.")
-print(" ")
-print("Wally RBLX's Funky Friday AutoPlay script mobile port. (READ LINES ABOVE!)")
+print("Credits to mstudio45 for the ported UI lib of Linoria\nCredits to Wally-RBLX and his devs for making this amazing script\nI DO NOT OWN ANY OF THIS CODE. CREDITS TO THIS CODE AND UI LIBS ETC GO TO THEIR OWNERS.\n\nWally RBLX's Funky Friday AutoPlay script mobile port. (READ LINES ABOVE!)")
+--print("Credits to Wally-RBLX and his devs for making this amazing script")
+--print("I DO NOT OWN ANY OF THIS CODE. CREDITS TO THIS CODE AND UI LIBS ETC GO TO THEIR OWNERS.")
+--print(" ")
+--print("Wally RBLX's Funky Friday AutoPlay script mobile port. (READ LINES ABOVE!)")
 
 local start = tick()
 local client = game:GetService('Players').LocalPlayer;
@@ -735,7 +735,7 @@ addRichText(Groups.Credits:AddLabel('<font color="#de6cff">Sezei</font> - contri
 Groups.Credits:AddLabel('Inori - ui library')
 Groups.Credits:AddLabel('Jan - old ui library')
 --Groups.Credits:AddLabel('Bart3kk - https://github.com/Bart3kk/funky-friday-autoplay/releases')
-Groups.Credits:AddButton('Bart3kk', function()
+Groups.Credits:AddButton('Bart3kk - script', function()
 	if pcall(setclipboard, "https://github.com/Bart3kk/funky-friday-autoplay/releases") then
 		UI:Notify("Successfully copied Bart3kk's GitHub link to your clipboard!", 5)
 	end

@@ -171,6 +171,12 @@ function formatValue(value)
 		return value and "true" or "false"
 	elseif typeof(value) == "Instance" then
 		return PathInstance(value)
+	elseif typeof(value) == "table" then
+		local result = "{"
+		for k, v in pairs(value) do
+			result = result .. string.format("[%s] = %s, ", formatValue(k), formatValue(v))
+		end
+		return result .. "}"
 	else
 		return string.format("%q", tostring(value))
 	end
@@ -200,7 +206,7 @@ function handleRemote(remote)
 		remote.OnClientEvent:Connect(function(...)
 			local args = {...}
 			local argsFormatted = Format(args)
-			local argsString = table.concat(argsFormatted, ",\n    ")
+			local argsString = table.concat(argsFormatted, ",")
 
 			_G.Code = string.format("RemoteEvent: [%s]\nreturned: %s", fullPath, argsString)
 			local template = SRLExample
@@ -216,7 +222,7 @@ function handleRemote(remote)
 		remote.OnClientInvoke = function(...)
 			local args = {...}
 			local argsFormatted = Format(args)
-			local argsString = table.concat(argsFormatted, ",\n")
+			local argsString = table.concat(argsFormatted, ",")
 
 			_G.Code = string.format("RemoteFunction: [%s]\nreturned: %s", fullPath, argsString)
 			local template = SRLExample
@@ -254,7 +260,7 @@ local services = {
 }
 
 for _, folder in ipairs(services) do
-wrapRemotes(folder)
+	wrapRemotes(folder)
 end
 
 menustuff(SRLFrame)

@@ -174,7 +174,7 @@ function formatValue(value)
 	elseif typeof(value) == "Instance" then
 		return PathInstance(value)
 	elseif typeof(value) == "table" then
-		local result = "Tabel = {\n"
+		local result = "table = {\n"
 		for k, v in pairs(value) do
 			result = result .. string.format("[%s] = %s;\n", formatValue(k), formatValue(v))
 		end

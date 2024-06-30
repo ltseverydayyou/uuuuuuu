@@ -154,13 +154,12 @@ menustuff = function(menu)
 end
 
 function updTxtScale()
-    local height = 100
-    local perChar = 10
-    
-    local lenght = string.len(SRStxt.Text)
-    local newHeight = height + (lenght * perChar)
-    
-    SRStxt.Size = UDim2.new(1, 0, 0, newHeight)
+    local width = SRStxt.AbsoluteSize.X
+    local text = SRStxt.Text
+    local font = SRStxt.Font
+    local textSize = SRStxt.TextSize
+    local textBounds = game:GetService("TextService"):GetTextSize(text, textSize, font, Vector2.new(width, math.huge))
+    SRStxt.Size = UDim2.new(1, 0, 0, textBounds.Y)
 end
 
 function PathInstance(instance)

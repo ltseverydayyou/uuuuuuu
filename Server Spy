@@ -205,7 +205,7 @@ function Format(args)
 end
 
 function handleRemote(remote)
-	local path = {}
+	--[[local path = {}
 	local current = remote
 	while current and current.Parent ~= game do
 		local name = current.Name
@@ -214,15 +214,15 @@ function handleRemote(remote)
 		end
 		table.insert(path, 1, name)
 		current = current.Parent
-	end
-	local fullPath = table.concat(path, ".")
+	end]]
+	local fullPath = remote:GetFullName() --table.concat(path, ".")
 	if remote:IsA("RemoteEvent") then
 		remote.OnClientEvent:Connect(function(...)
 			local args = {...}
 			local argsFormatted = Format(args)
 			local argsString = table.concat(argsFormatted, ", ")
 
-			_G.Code = string.format("RemoteEvent: [%s]\nreturned: %s", fullPath, argsString)
+			_G.Code = string.format("RemoteEvent: [game.%s]\nreturned: %s", fullPath, argsString)
 			local template = SRSExample
 			local list = SRSList
 			local btn = template:Clone()
@@ -241,7 +241,7 @@ function handleRemote(remote)
 			local argsFormatted = Format(args)
 			local argsString = table.concat(argsFormatted, ", ")
 
-			_G.Code = string.format("RemoteFunction: [%s]\nreturned: %s", fullPath, argsString)
+			_G.Code = string.format("RemoteFunction: [game.%s]\nreturned: %s", fullPath, argsString)
 			local template = SRSExample
 			local list = SRSList
 			local btn = template:Clone()

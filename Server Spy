@@ -4,6 +4,7 @@ local COREGUI= (game:GetService("CoreGui") or game:GetService("Players").LocalPl
 local connect=nil
 local rPlayer = game:GetService("Players"):FindFirstChildWhichIsA("Player")
 local con=nil
+local con1=nil
 local coreGuiProtection = {}
 ui=Gui
 function cursed()
@@ -63,11 +64,12 @@ else
 	ui = Main
 end
 
-local SRLFrame = ui.SRL
-local SRLList = SRLFrame.Container.Logs
-local SRLresult = SRLFrame.result.answer
-local SRLExample = SRLList.mrlabel
-SRLExample.Parent = nil
+local SRSFrame = ui.SRS
+local SRSList = SRSFrame.Container.Logs
+local SRSresult = SRSFrame.result.answer
+local SRStxt = SRSresult.txt
+local SRSExample = SRSList.mrlabel
+SRSExample.Parent = nil
 
 Draggable = function(ui, dragui)
 	if not dragui then dragui = ui end
@@ -144,10 +146,20 @@ menustuff = function(menu)
 					v:Destroy()
 				end
 			end
-			SRLresult.Text=". . ."
+			SRStxt.Text=". . ."
 		end)
 	end
 	Draggable(menu, menu.Topbar)
+end
+
+function updTxtScale()
+    local height = 100
+    local perChar = 10
+    
+    local lenght = string.len(SRStxt.Text)
+    local newHeight = height + (lenght * perChar)
+    
+    SRStxt.Size = UDim2.new(1, 0, 0, newHeight)
 end
 
 function PathInstance(instance)
@@ -211,14 +223,14 @@ function handleRemote(remote)
 			local argsString = table.concat(argsFormatted, ",\n")
 
 			_G.Code = string.format("RemoteEvent: [%s]\nreturned: %s", fullPath, argsString)
-			local template = SRLExample
-			local list = SRLList
+			local template = SRSExample
+			local list = SRSList
 			local btn = template:Clone()
 			btn.Parent=list
 			btn.Name=cursed()
 			btn.Text=_G.Code
 			btn.MouseButton1Click:connect(function()
-				SRLresult.Text=btn.Text
+				SRSresult.Text=btn.Text
 			end)
 
 			return ...
@@ -230,14 +242,14 @@ function handleRemote(remote)
 			local argsString = table.concat(argsFormatted, ",\n")
 
 			_G.Code = string.format("RemoteFunction: [%s]\nreturned: %s", fullPath, argsString)
-			local template = SRLExample
-			local list = SRLList
+			local template = SRSExample
+			local list = SRSList
 			local btn = template:Clone()
 			btn.Parent=list
 			btn.Name=cursed()
 			btn.Text=_G.Code
 			btn.MouseButton1Click:connect(function()
-				SRLresult.Text=btn.Text
+				SRSresult.Text=btn.Text
 			end)
 
 			return ...
@@ -271,9 +283,12 @@ end
 wrapRemotes()
 --end
 
-menustuff(SRLFrame)
-SRLFrame.Position = UDim2.new(0.5, -283/2+5, 0.5, -260/2+5)
+menustuff(SRSFrame)
+SRSFrame.Position = UDim2.new(0.5, -283/2+5, 0.5, -260/2+5)
+
+con1=SRStxt:GetPropertyChangedSignal("Text"):Connect(updTxtScale)
 
 connect = game:GetService("RunService").Stepped:Connect(function()
-	SRLList.CanvasSize = UDim2.new(0, 0, 0, SRLList:FindFirstChildOfClass("UIListLayout").AbsoluteContentSize.Y)
+	SRSList.CanvasSize = UDim2.new(0, 0, 0, SRSList:FindFirstChildOfClass("UIListLayout").AbsoluteContentSize.Y)
+	SRSresult.CanvasSize = UDim2.new(0, 0, 0, SRSresult:FindFirstChildOfClass("UIListLayout").AbsoluteContentSize.Y)
 end)

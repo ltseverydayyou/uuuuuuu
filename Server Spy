@@ -218,7 +218,7 @@ function handleRemote(remote)
 			btn.Name=cursed()
 			btn.Text=_G.Code
 			btn.MouseButton1Click:connect(function()
-				SRLresult.Text=_G.Code
+				SRLresult.Text=btn.Text
 			end)
 
 			return ...
@@ -237,7 +237,7 @@ function handleRemote(remote)
 			btn.Name=cursed()
 			btn.Text=_G.Code
 			btn.MouseButton1Click:connect(function()
-				SRLresult.Text=_G.Code
+				SRLresult.Text=btn.Text
 			end)
 
 			return ...

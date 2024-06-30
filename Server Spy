@@ -65,6 +65,7 @@ end
 
 local SRLFrame = ui.SRL
 local SRLList = SRLFrame.Container.Logs
+local SRLresult = SRLFrame.result.answer
 local SRLExample = SRLList.mrlabel
 SRLExample.Parent = nil
 
@@ -172,7 +173,7 @@ function formatValue(value)
 	elseif typeof(value) == "Instance" then
 		return PathInstance(value)
 	elseif typeof(value) == "table" then
-		local result = "{"
+		local result = "Tabel = {\n"
 		for k, v in pairs(value) do
 			result = result .. string.format("[%s] = %s;\n", formatValue(k), formatValue(v))
 		end
@@ -215,6 +216,9 @@ function handleRemote(remote)
 			btn.Parent=list
 			btn.Name=cursed()
 			btn.Text=_G.Code
+			btn.MouseButton1Click:connect(function()
+				SRLresult.Text=_G.Code
+			end)
 
 			return ...
 		end)
@@ -231,26 +235,29 @@ function handleRemote(remote)
 			btn.Parent=list
 			btn.Name=cursed()
 			btn.Text=_G.Code
+			btn.MouseButton1Click:connect(function()
+				SRLresult.Text=_G.Code
+			end)
 
 			return ...
 		end
 	end
 end
 
-function wrapRemotes(ss)
-	for _, obj in ipairs(ss:GetDescendants()) do
+function wrapRemotes()
+	for _, obj in ipairs(game:GetDescendants()) do
 		if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
 			handleRemote(obj)
 		end
 	end
-	con=ss.DescendantAdded:Connect(function(descendant)
+	con=game.DescendantAdded:Connect(function(descendant)
 		if descendant:IsA("RemoteEvent") or descendant:IsA("RemoteFunction") then
 			handleRemote(descendant)
 		end
 	end)
 end
 
-local services = {
+--[[local services = {
 	game:GetService("ReplicatedStorage"),
 	game:GetService("StarterGui"),
 	game:GetService("StarterPack"),
@@ -258,10 +265,10 @@ local services = {
 	game:GetService("Players"),
 	game:GetService("Workspace")
 }
-
-for _, folder in ipairs(services) do
-	wrapRemotes(folder)
-end
+]]
+--for _, folder in ipairs(services) do
+wrapRemotes()
+--end
 
 menustuff(SRLFrame)
 SRLFrame.Position = UDim2.new(0.5, -283/2+5, 0.5, -260/2+5)

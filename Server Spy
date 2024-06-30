@@ -174,7 +174,7 @@ function formatValue(value)
 	elseif typeof(value) == "table" then
 		local result = "{"
 		for k, v in pairs(value) do
-			result = result .. string.format("[%s] = %s, ", formatValue(k), formatValue(v))
+			result = result .. string.format("[%s] = %s;\n", formatValue(k), formatValue(v))
 		end
 		return result .. "}"
 	else
@@ -206,7 +206,7 @@ function handleRemote(remote)
 		remote.OnClientEvent:Connect(function(...)
 			local args = {...}
 			local argsFormatted = Format(args)
-			local argsString = table.concat(argsFormatted, ",")
+			local argsString = table.concat(argsFormatted, ",\n")
 
 			_G.Code = string.format("RemoteEvent: [%s]\nreturned: %s", fullPath, argsString)
 			local template = SRLExample
@@ -222,7 +222,7 @@ function handleRemote(remote)
 		remote.OnClientInvoke = function(...)
 			local args = {...}
 			local argsFormatted = Format(args)
-			local argsString = table.concat(argsFormatted, ",")
+			local argsString = table.concat(argsFormatted, ",\n")
 
 			_G.Code = string.format("RemoteFunction: [%s]\nreturned: %s", fullPath, argsString)
 			local template = SRLExample

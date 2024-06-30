@@ -144,7 +144,7 @@ menustuff = function(menu)
 					v:Destroy()
 				end
 			end
-			SRLresult=". . ."
+			SRLresult.Text=". . ."
 		end)
 	end
 	Draggable(menu, menu.Topbar)

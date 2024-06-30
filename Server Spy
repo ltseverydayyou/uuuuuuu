@@ -140,7 +140,7 @@ menustuff = function(menu)
 		clear.MouseButton1Click:Connect(function()
 			local t=menu:FindFirstChild("Container",true):FindFirstChildOfClass("ScrollingFrame"):FindFirstChildOfClass("UIListLayout",true)
 			for _,v in ipairs(t.Parent:GetChildren()) do
-				if v and v:IsA("TextLabel") then
+				if v and v:IsA("TextLabel") or v:IsA("TextButton") then
 					v:Destroy()
 				end
 			end

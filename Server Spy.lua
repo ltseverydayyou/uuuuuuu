@@ -191,7 +191,7 @@ function formatValue(value)
             result = result .. string.format("[%s] = %s;\n", formatValue(k), formatValue(v))
         end
         result = result:sub(1, -2)
-        return result .. "}"
+        return result .. " }"
     else
         return string.format("%q", tostring(value))
     end

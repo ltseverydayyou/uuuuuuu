@@ -47,26 +47,26 @@ end
 
 -- attempt to block imcompatible exploits
 -- rewrote because old checks literally did not work
-if type(set_identity) ~= 'function' then return fail('Unsupported exploit (missing "set_thread_identity")') end
-if type(getconnections) ~= 'function' then return fail('Unsupported exploit (missing "getconnections")') end
-if type(getloadedmodules) ~= 'function' then return fail('Unsupported exploit (misssing "getloadedmodules")') end
-if type(getgc) ~= 'function' then   return fail('Unsupported exploit (misssing "getgc")') end
+if type(set_identity) ~= 'function' then fail('Unsupported exploit (missing "set_thread_identity")') end
+if type(getconnections) ~= 'function' then fail('Unsupported exploit (missing "getconnections")') end
+if type(getloadedmodules) ~= 'function' then fail('Unsupported exploit (misssing "getloadedmodules")') end
+if type(getgc) ~= 'function' then   fail('Unsupported exploit (misssing "getgc")') end
 
 local getinfo = debug.getinfo or getinfo;
 local getupvalue = debug.getupvalue or getupvalue;
 local getupvalues = debug.getupvalues or getupvalues;
 local setupvalue = debug.setupvalue or setupvalue;
 
-if type(setupvalue) ~= 'function' then return fail('Unsupported exploit (misssing "debug.setupvalue")') end
-if type(getupvalue) ~= 'function' then return fail('Unsupported exploit (misssing "debug.getupvalue")') end
-if type(getupvalues) ~= 'function' then return fail('Unsupported exploit (missing "debug.getupvalues")') end
+if type(setupvalue) ~= 'function' then fail('Unsupported exploit (misssing "debug.setupvalue")') end
+if type(getupvalue) ~= 'function' then fail('Unsupported exploit (misssing "debug.getupvalue")') end
+if type(getupvalues) ~= 'function' then fail('Unsupported exploit (missing "debug.getupvalues")') end
 
 -- free exploit bandaid fix
 if type(getinfo) ~= 'function' then
 	local debug_info = debug.info;
 	if type(debug_info) ~= 'function' then
 		-- if your exploit doesnt have getrenv you have no hope
-		if type(getrenv) ~= 'function' then return fail('Unsupported exploit (missing "getrenv")') end
+		if type(getrenv) ~= 'function' then fail('Unsupported exploit (missing "getrenv")') end
 		debug_info = getrenv().debug.info
 	end
 	getinfo = function(f)

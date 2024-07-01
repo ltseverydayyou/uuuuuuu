@@ -138,8 +138,8 @@ if getgenv().ConsoleClear then
     if tabb then
         local window = tabb.Container.ScrollingFrame
 
-        local function noob()
-            for _, uhh in ipairs(window:GetChildren()) do
+        function noob()
+            for _, uhh in ipairs(window:GetDescendants()) do
                 if uhh:IsA("TextLabel") then
                     uhh:Destroy()
                 end
@@ -148,7 +148,7 @@ if getgenv().ConsoleClear then
 
         noob()
 
-        window.ChildAdded:Connect(noob)
+        window.DescendantAdded:Connect(noob)
 else
 warn'tab not found'
     end

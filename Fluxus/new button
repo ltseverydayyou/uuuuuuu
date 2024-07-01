@@ -67,7 +67,7 @@ if identifyexecutor() == "Fluxus" then
 
 	function consoleTab()
 		for _, v in ipairs(fluxusUI:GetDescendants()) do
-			if v:IsA("UIListLayout") and v.SortOrder == Enum.SortOrder.LayoutOrder then
+			if v:IsA("UIListLayout") and v.SortOrder == "LayoutOrder" then
 				return v.Parent.Parent
 			end
 		end
@@ -76,7 +76,7 @@ if identifyexecutor() == "Fluxus" then
 
 	function scripthubTab()
 		for _, v in ipairs(fluxusUI:GetDescendants()) do
-			if v:IsA("UIListLayout") and v.SortOrder == Enum.SortOrder.Name then
+			if v:IsA("UIListLayout") and v.SortOrder == "Name" then
 				return v.Parent.Parent
 			end
 		end
@@ -135,7 +135,6 @@ if identifyexecutor() == "Fluxus" then
 
 if getgenv().ConsoleClear then
     local tabb = consoleTab()
-    if tabb then
         local window = tabb.Container.ScrollingFrame
 
         function noob()
@@ -149,9 +148,6 @@ if getgenv().ConsoleClear then
         noob()
 
         window.DescendantAdded:Connect(noob)
-else
-warn'tab not found'
-    end
 end
 
 	game:GetService("RunService").RenderStepped:connect(function()

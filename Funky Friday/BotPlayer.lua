@@ -1,8 +1,10 @@
 print("Credits to mstudio45 for the ported UI lib of Linoria\nCredits to Wally-RBLX and his devs for making this amazing script\nI DO NOT OWN ANY OF THIS CODE. CREDITS TO THIS CODE AND UI LIBS ETC GO TO THEIR OWNERS.\n\nWally RBLX's Funky Friday AutoPlay script mobile port. (READ LINES ABOVE!)")
---print("Credits to Wally-RBLX and his devs for making this amazing script")
---print("I DO NOT OWN ANY OF THIS CODE. CREDITS TO THIS CODE AND UI LIBS ETC GO TO THEIR OWNERS.")
---print(" ")
---print("Wally RBLX's Funky Friday AutoPlay script mobile port. (READ LINES ABOVE!)")
+
+local virtualInputManager = game:GetService('VirtualInputManager')
+
+virtualInputManager:SendKeyEvent(true, Enum.KeyCode.F9, false, game)
+task.wait(0.1);
+virtualInputManager:SendKeyEvent(false, Enum.KeyCode.F9, false, game)
 
 local start = tick()
 local client = game:GetService('Players').LocalPlayer;
@@ -689,8 +691,8 @@ Groups.HitChances:AddDropdown('AutoplayerMode', {
 	Tooltip = 'Mode to use for deciding when to hit notes.\n* Automatic: hits notes based on chance sliders\n* Manual: hits notes based on held keybinds',
 })
 
-Groups.HitChances:AddSlider('SickChance',   { Text = 'Sick chance', Min = 0, Max = 100, Default = 100, Suffix = '%', Rounding = 0, Compact = true })
-Groups.HitChances:AddSlider('GoodChance',   { Text = 'Good chance', Min = 0, Max = 100, Default = 0, Suffix = '%', Rounding = 0, Compact = true })
+Groups.HitChances:AddSlider('SickChance',   { Text = 'Sick chance', Min = 0, Max = 100, Default = 95, Suffix = '%', Rounding = 0, Compact = true })
+Groups.HitChances:AddSlider('GoodChance',   { Text = 'Good chance', Min = 0, Max = 100, Default = 5, Suffix = '%', Rounding = 0, Compact = true })
 Groups.HitChances:AddSlider('OkChance',     { Text = 'Ok chance',   Min = 0, Max = 100, Default = 0, Suffix = '%', Rounding = 0, Compact = true })
 Groups.HitChances:AddSlider('BadChance',    { Text = 'Bad chance',  Min = 0, Max = 100, Default = 0, Suffix = '%', Rounding = 0, Compact = true })
 Groups.HitChances:AddSlider('MissChance',   { Text = 'Miss chance', Min = 0, Max = 100, Default = 0, Suffix = '%', Rounding = 0, Compact = true })
@@ -708,11 +710,11 @@ Groups.HitTiming:AddSlider('ReleaseDelay',   { Text = 'Note delay', Min = 0, Max
 Groups.HitTiming:AddSlider('HeldDelay',      { Text = 'Held note delay', Min = -20, Max = 100, Default = 0, Rounding = 0, Compact = true, Suffix = 'ms' })
 
 Groups.HitTiming:AddLabel('Random delay')
-Groups.HitTiming:AddSlider('NoteDelayMin',   { Text = 'Min note delay', Min = 0, Max = 100, Default = 0,    Rounding = 0, Compact = true, Suffix = 'ms' })
-Groups.HitTiming:AddSlider('NoteDelayMax',   { Text = 'Max note delay', Min = 0, Max = 500, Default = 20,   Rounding = 0, Compact = true, Suffix = 'ms' })
+Groups.HitTiming:AddSlider('NoteDelayMin',   { Text = 'Min note delay', Min = 0, Max = 100, Default = 40,    Rounding = 0, Compact = true, Suffix = 'ms' })
+Groups.HitTiming:AddSlider('NoteDelayMax',   { Text = 'Max note delay', Min = 0, Max = 500, Default = 60,   Rounding = 0, Compact = true, Suffix = 'ms' })
 
-Groups.HitTiming:AddSlider('HeldDelayMin',   { Text = 'Min held note delay', Min = 0, Max = 100, Default = 0,   Rounding = 0, Compact = true, Suffix = 'ms' })
-Groups.HitTiming:AddSlider('HeldDelayMax',   { Text = 'Max held note delay', Min = 0, Max = 500, Default = 20,  Rounding = 0, Compact = true, Suffix = 'ms' })
+Groups.HitTiming:AddSlider('HeldDelayMin',   { Text = 'Min held note delay', Min = 0, Max = 100, Default = 20,   Rounding = 0, Compact = true, Suffix = 'ms' })
+Groups.HitTiming:AddSlider('HeldDelayMax',   { Text = 'Max held note delay', Min = 0, Max = 500, Default = 65,  Rounding = 0, Compact = true, Suffix = 'ms' })
 
 Groups.Misc = Tabs.Main:AddRightGroupbox('Misc')
 Groups.Misc:AddButton('Unlock developer notes', ActivateUnlockables)

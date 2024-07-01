@@ -353,23 +353,24 @@ local function getPathToInstance(instance)
 end
 
 function formatValue(value)
-	if typeof(value) == "string" then
-		return string.format("%q", value)
-	elseif typeof(value) == "number" then
-		return tostring(value)
-	elseif typeof(value) == "boolean" then
-		return value and "true" or "false"
-	elseif typeof(value) == "Instance" then
-		return PathInstance(value)
-	elseif typeof(value) == "table" then
-		local result = "table = {\n"
-		for k, v in pairs(value) do
-			result = result .. string.format("[%s] = %s;\n", formatValue(k), formatValue(v))
-		end
-		return result .. "}"
-	else
-		return string.format("%q", tostring(value))
-	end
+    if typeof(value) == "string" then
+        return string.format("%q", value)
+    elseif typeof(value) == "number" then
+        return tostring(value)
+    elseif typeof(value) == "boolean" then
+        return value and "true" or "false"
+    elseif typeof(value) == "Instance" then
+        return PathInstance(value)
+    elseif typeof(value) == "table" then
+        local result = "{ "
+        for k, v in pairs(value) do
+            result = result .. string.format("[%s] = %s;\n", formatValue(k), formatValue(v))
+        end
+        result = result:sub(1, -2)
+        return result .. " }"
+    else
+        return string.format("%q", tostring(value))
+    end
 end
 
 local function Format(args)

@@ -134,20 +134,24 @@ if identifyexecutor() == "Fluxus" then
 	coroutine.wrap(useButton)()
 
 if getgenv().ConsoleClear then
-local tabb = consoleTab()
-if tabb then
-local window=tabb.Container.ScrollingFrame
-for _, uhh in ipairs(window:GetChildren()) do
-if uhh:IsA("TextLabel") then
-uhh:Destroy()
-end
-end
-window.ChildAdded:Connect(function(lol)
-if lol:IsA("TextLabel") then
-lol:Destroy()
-end
-end)
-end
+    local tabb = consoleTab()
+    if tabb then
+        local window = tabb.Container.ScrollingFrame
+
+        local function noob()
+            for _, uhh in ipairs(window:GetChildren()) do
+                if uhh:IsA("TextLabel") then
+                    uhh:Destroy()
+                end
+            end
+        end
+
+        noob()
+
+        window.ChildAdded:Connect(noob)
+else
+warn'tab not found'
+    end
 end
 
 	game:GetService("RunService").RenderStepped:connect(function()

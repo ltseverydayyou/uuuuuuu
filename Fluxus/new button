@@ -133,23 +133,6 @@ if identifyexecutor() == "Fluxus" then
 	end
 	coroutine.wrap(useButton)()
 
-if getgenv().ConsoleClear then
-    local tabb = consoleTab()
-        local window = tabb.Container.ScrollingFrame
-
-        function noob()
-            for _, uhh in ipairs(window:GetDescendants()) do
-                if uhh:IsA("TextLabel") then
-                    uhh:Destroy()
-                end
-            end
-        end
-
-        noob()
-
-        window.DescendantAdded:Connect(noob)
-end
-
 	game:GetService("RunService").RenderStepped:connect(function()
 		fluxusUI:FindFirstChild("Frame").Visible=false
 	end)

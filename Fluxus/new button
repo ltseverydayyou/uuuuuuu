@@ -43,48 +43,6 @@ if identifyexecutor() == "Fluxus" then
 		end)
 	end
 
-	---------------------------------------------------
-
-	--  tabs if you are planning to use them  --
-
-	function FluxusButtonUI()
-		for _, v in ipairs(fluxusUI:GetDescendants()) do
-			if v.Name:lower() == "logo" then
-				return v.Parent
-			end
-		end
-		return nil
-	end
-
-	function scriptTab()
-		for _, v in ipairs(fluxusUI:GetDescendants()) do
-			if v.Name:lower() == "delete" then
-				return v.Parent.Parent
-			end
-		end
-		return nil
-	end
-
-	function consoleTab()
-		for _, v in ipairs(fluxusUI:GetDescendants()) do
-			if v:IsA("UIListLayout") and v.SortOrder == "LayoutOrder" then
-				return v.Parent.Parent
-			end
-		end
-		return nil
-	end
-
-	function scripthubTab()
-		for _, v in ipairs(fluxusUI:GetDescendants()) do
-			if v:IsA("UIListLayout") and v.SortOrder == "Name" then
-				return v.Parent.Parent
-			end
-		end
-		return nil
-	end
-
-	---------------------------------------------------
-
 	local UICorner = Instance.new("UICorner")
 	local FluxusButton = Instance.new("ImageButton")
 

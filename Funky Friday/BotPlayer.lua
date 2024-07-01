@@ -11,7 +11,7 @@ local client = game:GetService('Players').LocalPlayer;
 local set_identity = (type(syn) == 'table' and syn.set_thread_identity) or setidentity or setthreadcontext
 local executor = identifyexecutor and identifyexecutor() or 'Unknown'
 
-local function fail(r) return client:Kick(r) end
+local function fail(r) return print(r) end
 
 -- gracefully handle errors when loading external scripts
 -- added a cache to make hot reloading a bit faster

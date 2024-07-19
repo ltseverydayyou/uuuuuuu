@@ -9,7 +9,7 @@ end
 local function redeemCodes(codes)
     for _, code in ipairs(codes) do
         fire("CodeService", "Redeem", {code})
-        task.wait(1.3)
+        task.wait(2)
     end
 end
 

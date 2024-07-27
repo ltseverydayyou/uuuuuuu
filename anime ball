@@ -7,7 +7,7 @@ local gui = p:FindFirstChild("PlayerGui")
 local rs = game:GetService("RunService")
 
 getgenv().ballzui = true
-getgenv().visualizer = true
+getgenv().visualizer = false
 
 function getRoot(char)
 	local rootPart = char:FindFirstChild('HumanoidRootPart') or char:FindFirstChild('Torso') or char:FindFirstChild('UpperTorso')

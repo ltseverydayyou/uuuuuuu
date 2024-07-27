@@ -98,7 +98,7 @@ if game.GameId == 5120885191 then
 
 	input.InputBegan:Connect(function(inputObj, gp)
 		if not gp then
-			if inputObj.KeyCode == Enum.KeyCode.Z then
+			if inputObj.KeyCode == Enum.KeyCode.R then
 				if not input.TouchEnabled then
 					spem = not spem
 					if spem then

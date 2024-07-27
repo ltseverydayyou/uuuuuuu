@@ -110,7 +110,7 @@ if game.GameId==5120885191 then
 	local gay=createButton("fr","freeze",1,50,75,frame)
 	local bruh=createButton("unfr","unfreeze",2,50,75,frame)
 	if input.KeyboardEnabled then
-		local SpamCheck=createButton("isEnabled?","Spamming: false",2,150,75,frame2)
+		local SpamCheck=createButton("isEnabled?","Spamming: false",2,75,150,frame2)
 		input.InputBegan:Connect(function(inputObj,gp)
 			if not gp then
 				if inputObj.KeyCode==Enum.KeyCode.R then

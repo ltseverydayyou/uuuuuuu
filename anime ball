@@ -5,9 +5,9 @@ if game.GameId==5120885191 then
 	local gui=p:FindFirstChild("PlayerGui")
 	local rs=game:GetService("RunService")
 	local spem=false
-	
+
 	getgenv().visualizer=false
-	
+
 	if not gethui then
 		getgenv().gethui=function()
 			local h=(game:GetService("CoreGui"):FindFirstChildWhichIsA("ScreenGui") or game:GetService("CoreGui") or game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui"))
@@ -35,20 +35,20 @@ if game.GameId==5120885191 then
 		wait()
 		j:Destroy()
 	end)
-	
+
 	task.wait(0.5)
 	local screenGui=Instance.new("ScreenGui")
 	screenGui.IgnoreGuiInset=true
 	screenGui.Parent=gethui()
 	screenGui.ResetOnSpawn=false
 	screenGui.Name=corrupt()
-	
+
 	local frame=Instance.new("Frame")
 	frame.Name=corrupt()
 	frame.Parent=screenGui
 	frame.Size=UDim2.new(1,0,1,0)
 	frame.BackgroundTransparency=1
-	
+
 	local frame2=Instance.new("Frame")
 	frame2.Name=corrupt()
 	frame2.Parent=screenGui
@@ -62,7 +62,7 @@ if game.GameId==5120885191 then
 	listLayout.FillDirection=Enum.FillDirection.Horizontal
 	listLayout.HorizontalAlignment=Enum.HorizontalAlignment.Center
 	listLayout.VerticalAlignment=Enum.VerticalAlignment.Bottom
-	
+
 	local layoutList=Instance.new("UIListLayout")
 	layoutList.Name=corrupt()
 	layoutList.SortOrder=Enum.SortOrder.LayoutOrder
@@ -109,7 +109,35 @@ if game.GameId==5120885191 then
 	end
 	local gay=createButton("fr","freeze",1,50,75,frame)
 	local bruh=createButton("unfr","unfreeze",2,50,75,frame)
-	local SpamCheck=createButton("isEnabled?","Spamming: false",2,50,75,frame2)
+	if input.TouchEnabled then
+		local SpamCheck=createButton("isEnabled?","Spamming: false",2,100,100,frame2)
+		input.InputBegan:Connect(function(inputObj,gp)
+			if not gp then
+				if inputObj.KeyCode==Enum.KeyCode.R then
+					if not input.TouchEnabled then
+						spem=not spem
+						if spem then
+						--[[game.StarterGui:SetCore("SendNotification",{
+							Title="Spamming";
+							Text="Enabled";
+							Duration=0.3;
+						})]]
+							SpamCheck.Text="Spamming: True"
+							SpamCheck.TextColor3=Color3.new(0,1,0)
+						else
+						--[[game.StarterGui:SetCore("SendNotification",{
+							Title="Spamming";
+							Text="Disabled";
+							Duration=0.3;
+						})]]
+							SpamCheck.Text="Spamming: False"
+							SpamCheck.TextColor3=Color3.new(1,0,0)
+						end
+					end
+				end
+			end
+		end)
+	end
 	if input.TouchEnabled then
 		local parryButton=createButton("par","parry",3,50,75,frame)
 
@@ -124,33 +152,6 @@ if game.GameId==5120885191 then
 
 	bruh.MouseButton1Click:Connect(function()
 		getRoot(p.Character).Anchored=false
-	end)
-
-	input.InputBegan:Connect(function(inputObj,gp)
-		if not gp then
-			if inputObj.KeyCode==Enum.KeyCode.R then
-				if not input.TouchEnabled then
-					spem=not spem
-					if spem then
-						--[[game.StarterGui:SetCore("SendNotification",{
-							Title="Spamming";
-							Text="Enabled";
-							Duration=0.3;
-						})]]
-						SpamCheck.Text="Spamming: True"
-						SpamCheck.TextColor3=Color3.new(0,1,0)
-					else
-						--[[game.StarterGui:SetCore("SendNotification",{
-							Title="Spamming";
-							Text="Disabled";
-							Duration=0.3;
-						})]]
-						SpamCheck.Text="Spamming: False"
-						SpamCheck.TextColor3=Color3.new(1,0,0)
-					end
-				end
-			end
-		end
 	end)
 
 	function ballz(bell)

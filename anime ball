@@ -1,25 +1,30 @@
-if game.GameId == 5120885191 then
-
-	local input = game:GetService("UserInputService")
-	local vim = game:GetService("VirtualInputManager")
-	local p = game:GetService("Players").LocalPlayer
-	local gui = p:FindFirstChild("PlayerGui")
-	local rs = game:GetService("RunService")
-	local spem = false
-
-	getgenv().ballzui = true
-	getgenv().visualizer = false
+if game.GameId==5120885191 then
+	local input=game:GetService("UserInputService")
+	local vim=game:GetService("VirtualInputManager")
+	local p=game:GetService("Players").LocalPlayer
+	local gui=p:FindFirstChild("PlayerGui")
+	local rs=game:GetService("RunService")
+	local spem=false
+	
+	getgenv().visualizer=false
+	
+	if not gethui then
+		getgenv().gethui=function()
+			local h=(game:GetService("CoreGui"):FindFirstChildWhichIsA("ScreenGui") or game:GetService("CoreGui") or game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui"))
+			return h
+		end
+	end
 
 	function getRoot(char)
-		local rootPart = char:FindFirstChild('HumanoidRootPart') or char:FindFirstChild('Torso') or char:FindFirstChild('UpperTorso')
+		local rootPart=char:FindFirstChild('HumanoidRootPart') or char:FindFirstChild('Torso') or char:FindFirstChild('UpperTorso')
 		return rootPart
 	end
 
 	function corrupt()
-		local length = math.random(10,20)
-		local array = {}
-		for i = 1, length do
-			array[i] = string.char(math.random(32, 126))
+		local length=math.random(10,20)
+		local array={}
+		for i=1,length do
+			array[i]=string.char(math.random(32,126))
 		end
 		return table.concat(array)
 	end
@@ -30,58 +35,83 @@ if game.GameId == 5120885191 then
 		wait()
 		j:Destroy()
 	end)
+	
 	task.wait(0.5)
-	local screenGui = Instance.new("ScreenGui")
-	screenGui.IgnoreGuiInset = true
-	screenGui.Parent = (game:GetService("CoreGui") or game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui"))
-	screenGui.ResetOnSpawn = false
-	screenGui.Name = corrupt()
+	local screenGui=Instance.new("ScreenGui")
+	screenGui.IgnoreGuiInset=true
+	screenGui.Parent=gethui()
+	screenGui.ResetOnSpawn=false
+	screenGui.Name=corrupt()
+	
+	local frame=Instance.new("Frame")
+	frame.Name=corrupt()
+	frame.Parent=screenGui
+	frame.Size=UDim2.new(1,0,1,0)
+	frame.BackgroundTransparency=1
+	
+	local frame2=Instance.new("Frame")
+	frame2.Name=corrupt()
+	frame2.Parent=screenGui
+	frame2.Size=UDim2.new(1,0,1,0)
+	frame2.BackgroundTransparency=1
 
-	local listLayout = Instance.new("UIListLayout")
-	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
-	listLayout.Parent = screenGui
-	listLayout.FillDirection = Enum.FillDirection.Horizontal
-	listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-	listLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+	local listLayout=Instance.new("UIListLayout")
+	listLayout.Name=corrupt()
+	listLayout.SortOrder=Enum.SortOrder.LayoutOrder
+	listLayout.Parent=frame
+	listLayout.FillDirection=Enum.FillDirection.Horizontal
+	listLayout.HorizontalAlignment=Enum.HorizontalAlignment.Center
+	listLayout.VerticalAlignment=Enum.VerticalAlignment.Bottom
+	
+	local layoutList=Instance.new("UIListLayout")
+	layoutList.Name=corrupt()
+	layoutList.SortOrder=Enum.SortOrder.LayoutOrder
+	layoutList.Parent=frame2
+	layoutList.FillDirection=Enum.FillDirection.Horizontal
+	layoutList.HorizontalAlignment=Enum.HorizontalAlignment.Center
+	layoutList.VerticalAlignment=Enum.VerticalAlignment.Top
 
-	local function createButton(name, text, order)
-		local button = Instance.new("TextButton")
-		button.Name = (name or "name")
-		button.Text = (text or "nothing")
-		button.TextScaled = true
-		button.ZIndex = 69
-		button.Size = UDim2.new(0, 75, 0, 35)
-		button.LayoutOrder = (order or 0)
-		button.Parent = screenGui
+	local function createButton(name,text,order,num,num2,parent)
+		local button=Instance.new("TextButton")
+		button.Name=(name or "name")
+		button.Text=(text or "nothing")
+		button.TextScaled=true
+		button.BackgroundColor3=Color3.new(0,0,0)
+		button.TextColor3=Color3.new(1,1,1)
+		button.ZIndex=69
+		button.Size=UDim2.new(0,(num2 or 75),0,(num or 50))
+		button.LayoutOrder=(order or 0)
+		button.Parent=(parent or screenGui)
 		return button
 	end
 
 	function doParry()
-		local args = {
-			[1] = "SwordService",
-			[2] = "Block",
-			[3] = {
-				[1] = -0.2588194012641907
+		local args={
+			[1]="SwordService",
+			[2]="Block",
+			[3]={
+				[1]=-0.2588194012641907
 			}
 		}
 
 		game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
 	end
 	if input.TouchEnabled then
-		local spamButton = createButton("spem", "spam", 0)
+		local spamButton=createButton("spem","spam",0,50,75,frame)
 		spamButton.MouseButton1Down:Connect(function()
-			spem = not spem
+			spem=not spem
 			if spem then
-				spamButton.Text = "unspam"
+				spamButton.Text="unspam"
 			else
-				spamButton.Text = "spam"
+				spamButton.Text="spam"
 			end
 		end)
-		end
-	local gay = createButton("fr", "freeze", 1)
-	local bruh = createButton("unfr", "unfreeze", 2)
+	end
+	local gay=createButton("fr","freeze",1,50,75,frame)
+	local bruh=createButton("unfr","unfreeze",2,50,75,frame)
+	local SpamCheck=createButton("isEnabled?","Spamming: false",2,50,75,frame2)
 	if input.TouchEnabled then
-		local parryButton = createButton("par", "parry", 3)
+		local parryButton=createButton("par","parry",3,50,75,frame)
 
 		parryButton.MouseButton1Down:Connect(function()
 			task.spawn(doParry)
@@ -89,30 +119,34 @@ if game.GameId == 5120885191 then
 	end
 
 	gay.MouseButton1Click:Connect(function()
-		getRoot(p.Character).Anchored = true
+		getRoot(p.Character).Anchored=true
 	end)
 
 	bruh.MouseButton1Click:Connect(function()
-		getRoot(p.Character).Anchored = false
+		getRoot(p.Character).Anchored=false
 	end)
 
-	input.InputBegan:Connect(function(inputObj, gp)
+	input.InputBegan:Connect(function(inputObj,gp)
 		if not gp then
-			if inputObj.KeyCode == Enum.KeyCode.R then
+			if inputObj.KeyCode==Enum.KeyCode.R then
 				if not input.TouchEnabled then
-					spem = not spem
+					spem=not spem
 					if spem then
-						game.StarterGui:SetCore("SendNotification", {
-							Title = "Spamming";
-							Text = "Enabled";
-							Duration = 0.3;
-						})
+						--[[game.StarterGui:SetCore("SendNotification",{
+							Title="Spamming";
+							Text="Enabled";
+							Duration=0.3;
+						})]]
+						SpamCheck.Text="Spamming: True"
+						SpamCheck.TextColor3=Color3.new(0,1,0)
 					else
-						game.StarterGui:SetCore("SendNotification", {
-							Title = "Spamming";
-							Text = "Disabled";
-							Duration = 0.3;
-						})
+						--[[game.StarterGui:SetCore("SendNotification",{
+							Title="Spamming";
+							Text="Disabled";
+							Duration=0.3;
+						})]]
+						SpamCheck.Text="Spamming: False"
+						SpamCheck.TextColor3=Color3.new(1,0,0)
 					end
 				end
 			end
@@ -121,36 +155,36 @@ if game.GameId == 5120885191 then
 
 	function ballz(bell)
 		wait(0.1)
-		for _, v in ipairs(bell:GetDescendants()) do
-			if v.ClassName:lower() == "particleemitter" or v.ClassName:lower() == "beam" or v.ClassName:lower() == "trail" or v.ClassName:lower() == "attachment" then
+		for _,v in ipairs(bell:GetDescendants()) do
+			if v.ClassName:lower()=="particleemitter" or v.ClassName:lower()=="beam" or v.ClassName:lower()=="trail" or v.ClassName:lower()=="attachment" then
 				wait()
 				v:Destroy()
 			end
 		end
-		bell.Transparency = 0
-		local balls1 = game.ReplicatedStorage.Storage.Balls
-		if bell.Color == balls1.Ball1.Color then
-			local highlight = Instance.new("SelectionBox")
-			highlight.Color3 = bell.Color
-			highlight.Adornee = bell
-			highlight.Parent = bell
-			highlight.Name = "ball1"
-			game.StarterGui:SetCore("SendNotification", {
-				Title = "Ball Spawned";
-				Text = bell.Name;
-				Duration = 0.64;
+		bell.Transparency=0
+		local balls1=game.ReplicatedStorage.Storage.Balls
+		if bell.Color==balls1.Ball1.Color then
+			local highlight=Instance.new("SelectionBox")
+			highlight.Color3=bell.Color
+			highlight.Adornee=bell
+			highlight.Parent=bell
+			highlight.Name="ball1"
+			game.StarterGui:SetCore("SendNotification",{
+				Title="Ball Spawned";
+				Text=bell.Name;
+				Duration=0.64;
 			})
-		elseif bell.Color == balls1.UltimateBall1.Color then
-			bell.Parent = game.workspace
-			local highlight = Instance.new("SelectionBox")
-			highlight.Color3 = bell.Color
-			highlight.Adornee = bell
-			highlight.Parent = bell
-			highlight.Name = "ultimateball1"
-			game.StarterGui:SetCore("SendNotification", {
-				Title = "Ultimate Ball Spawned";
-				Text = bell.Name;
-				Duration = 1;
+		elseif bell.Color==balls1.UltimateBall1.Color then
+			bell.Parent=game.workspace
+			local highlight=Instance.new("SelectionBox")
+			highlight.Color3=bell.Color
+			highlight.Adornee=bell
+			highlight.Parent=bell
+			highlight.Name="ultimateball1"
+			game.StarterGui:SetCore("SendNotification",{
+				Title="Ultimate Ball Spawned";
+				Text=bell.Name;
+				Duration=1;
 			})
 		end
 	end
@@ -159,16 +193,16 @@ if game.GameId == 5120885191 then
 
 	rs.RenderStepped:Connect(function()
 		pcall(function()
-			local ui = p.PlayerGui.HUD
+			local ui=p.PlayerGui.HUD
 			if input.TouchEnabled then
-				ui.MobileLarge.Visible = true
-				ui.MobileSmall.Visible = false
-				ui.Actions.Visible = false
-				ui.MobileLarge.Block.Visible = false
+				ui.MobileLarge.Visible=true
+				ui.MobileSmall.Visible=false
+				ui.Actions.Visible=false
+				ui.MobileLarge.Block.Visible=false
 			else
-				ui.MobileLarge.Visible = false
-				ui.MobileSmall.Visible = false
-				ui.Actions.Visible = true
+				ui.MobileLarge.Visible=false
+				ui.MobileSmall.Visible=false
+				ui.Actions.Visible=true
 			end
 		end)
 	end)

@@ -1,172 +1,181 @@
 if game.GameId == 5120885191 then
 
-local input = game:GetService("UserInputService")
-local vim = game:GetService("VirtualInputManager")
-local p = game:GetService("Players").LocalPlayer
-local gui = p:FindFirstChild("PlayerGui")
-local rs = game:GetService("RunService")
+	local input = game:GetService("UserInputService")
+	local vim = game:GetService("VirtualInputManager")
+	local p = game:GetService("Players").LocalPlayer
+	local gui = p:FindFirstChild("PlayerGui")
+	local rs = game:GetService("RunService")
+	local spem = false
 
-getgenv().ballzui = true
-getgenv().visualizer = false
+	getgenv().ballzui = true
+	getgenv().visualizer = false
 
-function getRoot(char)
-	local rootPart = char:FindFirstChild('HumanoidRootPart') or char:FindFirstChild('Torso') or char:FindFirstChild('UpperTorso')
-	return rootPart
-end
-
-function corrupt()
-	local length = math.random(10,20)
-	local array = {}
-	for i = 1, length do
-		array[i] = string.char(math.random(32, 126))
+	function getRoot(char)
+		local rootPart = char:FindFirstChild('HumanoidRootPart') or char:FindFirstChild('Torso') or char:FindFirstChild('UpperTorso')
+		return rootPart
 	end
-	return table.concat(array)
-end
 
---if p.UserId ~= 156256804 then
-loadstring(game:HttpGet("https://raw.githubusercontent.com/1f0yt/community/main/RedCircleBlock"))()
---[[else
-if identifyexecutor() == "Solara" then
-loadstring(game:HttpGet("https://raw.githubusercontent.com/1f0yt/community/main/RedCircleBlock"))()
-else
-loadstring(game:HttpGet("https://raw.githubusercontent.com/FFJ1/Roblox-Exploits/main/scripts/Loader.lua"))()
-end
-end]]
+	function corrupt()
+		local length = math.random(10,20)
+		local array = {}
+		for i = 1, length do
+			array[i] = string.char(math.random(32, 126))
+		end
+		return table.concat(array)
+	end
 
-game.Workspace.Effects.ChildAdded:Connect(function(j)
-wait();
-j:Destroy()
-end)
-task.wait(.5);
-local screenGui = Instance.new("ScreenGui")
-screenGui.IgnoreGuiInset = true
-screenGui.Parent = (game:GetService("CoreGui") or game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui"))
-screenGui.ResetOnSpawn = false
-screenGui.Name = corrupt()
+	loadstring(game:HttpGet("https://raw.githubusercontent.com/1f0yt/community/main/RedCircleBlock"))()
 
-local listLayout = Instance.new("UIListLayout")
-listLayout.SortOrder = Enum.SortOrder.LayoutOrder
-listLayout.Parent = screenGui
-listLayout.FillDirection = Enum.FillDirection.Horizontal
-listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-listLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+	game.Workspace.Effects.ChildAdded:Connect(function(j)
+		wait()
+		j:Destroy()
+	end)
+	task.wait(0.5)
+	local screenGui = Instance.new("ScreenGui")
+	screenGui.IgnoreGuiInset = true
+	screenGui.Parent = (game:GetService("CoreGui") or game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui"))
+	screenGui.ResetOnSpawn = false
+	screenGui.Name = corrupt()
 
-local function createButton(name, text, order)
-    local button = Instance.new("TextButton")
-    button.Name = (name or "name")
-    button.Text = (text or "nothing")
-    button.TextScaled=true
-    button.ZIndex=69
-    button.Size = UDim2.new(0, 75, 0, 50)
-    button.LayoutOrder = (order or 0)
-    button.Parent = screenGui
-    return button
-end
+	local listLayout = Instance.new("UIListLayout")
+	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	listLayout.Parent = screenGui
+	listLayout.FillDirection = Enum.FillDirection.Horizontal
+	listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	listLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
 
-function doParry()
-local args = {
-    [1] = "SwordService",
-    [2] = "Block",
-    [3] = {
-        [1] = -0.2588194012641907
-    }
-}
+	local function createButton(name, text, order)
+		local button = Instance.new("TextButton")
+		button.Name = (name or "name")
+		button.Text = (text or "nothing")
+		button.TextScaled = true
+		button.ZIndex = 69
+		button.Size = UDim2.new(0, 75, 0, 35)
+		button.LayoutOrder = (order or 0)
+		button.Parent = screenGui
+		return button
+	end
 
-game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
-end
+	function doParry()
+		local args = {
+			[1] = "SwordService",
+			[2] = "Block",
+			[3] = {
+				[1] = -0.2588194012641907
+			}
+		}
 
-local spamButton = createButton("spem", "spam", 0)
-local gay = createButton("fr", "freeze", 1)
-local bruh = createButton("unfr", "unfreeze", 2)
-local parryButton = createButton("par", "parry", 3)
+		game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
+	end
+	if input.TouchEnabled then
+		local spamButton = createButton("spem", "spam", 0)
+		spamButton.MouseButton1Down:Connect(function()
+			spem = not spem
+			if spem then
+				spamButton.Text = "unspam"
+			else
+				spamButton.Text = "spam"
+			end
+		end)
+		end
+	local gay = createButton("fr", "freeze", 1)
+	local bruh = createButton("unfr", "unfreeze", 2)
+	if input.TouchEnabled then
+		local parryButton = createButton("par", "parry", 3)
 
-parryButton.MouseButton1Down:Connect(function()
-task.spawn(doParry)
-end)
+		parryButton.MouseButton1Down:Connect(function()
+			task.spawn(doParry)
+		end)
+	end
 
-gay.MouseButton1Click:Connect(function()
-getRoot(p.Character).Anchored=true
-end)
+	gay.MouseButton1Click:Connect(function()
+		getRoot(p.Character).Anchored = true
+	end)
 
+	bruh.MouseButton1Click:Connect(function()
+		getRoot(p.Character).Anchored = false
+	end)
 
-bruh.MouseButton1Click:Connect(function()
-getRoot(p.Character).Anchored=false
-end)
+	input.InputBegan:Connect(function(inputObj, gp)
+		if not gp then
+			if inputObj.KeyCode == Enum.KeyCode.Z then
+				if not input.TouchEnabled then
+					spem = not spem
+					if spem then
+						game.StarterGui:SetCore("SendNotification", {
+							Title = "Spamming";
+							Text = "Enabled";
+							Duration = 0.3;
+						})
+					else
+						game.StarterGui:SetCore("SendNotification", {
+							Title = "Spamming";
+							Text = "Disabled";
+							Duration = 0.3;
+						})
+					end
+				end
+			end
+		end
+	end)
 
+	function ballz(bell)
+		wait(0.1)
+		for _, v in ipairs(bell:GetDescendants()) do
+			if v.ClassName:lower() == "particleemitter" or v.ClassName:lower() == "beam" or v.ClassName:lower() == "trail" or v.ClassName:lower() == "attachment" then
+				wait()
+				v:Destroy()
+			end
+		end
+		bell.Transparency = 0
+		local balls1 = game.ReplicatedStorage.Storage.Balls
+		if bell.Color == balls1.Ball1.Color then
+			local highlight = Instance.new("SelectionBox")
+			highlight.Color3 = bell.Color
+			highlight.Adornee = bell
+			highlight.Parent = bell
+			highlight.Name = "ball1"
+			game.StarterGui:SetCore("SendNotification", {
+				Title = "Ball Spawned";
+				Text = bell.Name;
+				Duration = 0.64;
+			})
+		elseif bell.Color == balls1.UltimateBall1.Color then
+			bell.Parent = game.workspace
+			local highlight = Instance.new("SelectionBox")
+			highlight.Color3 = bell.Color
+			highlight.Adornee = bell
+			highlight.Parent = bell
+			highlight.Name = "ultimateball1"
+			game.StarterGui:SetCore("SendNotification", {
+				Title = "Ultimate Ball Spawned";
+				Text = bell.Name;
+				Duration = 1;
+			})
+		end
+	end
 
-local spem = false
+	workspace.Balls.ChildAdded:Connect(ballz)
 
-spamButton.MouseButton1Down:Connect(function()
-spem = not spem
-if spem then
-spamButton.Text="unspam"
-else
-spamButton.Text="spam"
-end
-end)
+	rs.RenderStepped:Connect(function()
+		pcall(function()
+			local ui = p.PlayerGui.HUD
+			if input.TouchEnabled then
+				ui.MobileLarge.Visible = true
+				ui.MobileSmall.Visible = false
+				ui.Actions.Visible = false
+				ui.MobileLarge.Block.Visible = false
+			else
+				ui.MobileLarge.Visible = false
+				ui.MobileSmall.Visible = false
+				ui.Actions.Visible = true
+			end
+		end)
+	end)
 
-function ballz(bell)
-wait(.1);
-for _, v in ipairs(bell:GetDescendants()) do
-if v.ClassName:lower() == "particleemitter" or v.ClassName:lower() == "beam" or v.ClassName:lower() == "trail" or v.ClassName:lower() == "attachment" then
-wait();
-v:Destroy()
-end
-end
-bell.Transparency=0
-local balls1 = game.ReplicatedStorage.Storage.Balls
-if bell.Color == balls1.Ball1.Color then
-local highlight = Instance.new("SelectionBox")
-highlight.Color3 = bell.Color
-highlight.Adornee = bell
-highlight.Parent = bell
-highlight.Name = "ball1"
-game.StarterGui:SetCore("SendNotification", {
-Title = "Ball Spawned";
-Text = bell.Name;
-Icon = "";
-Duration = 0.64;
-Callback = NotificationBindable;
-})
-elseif bell.Color == balls1.UltimateBall1.Color then
-bell.Parent=game.workspace
-local highlight = Instance.new("SelectionBox")
-highlight.Color3 = bell.Color
-highlight.Adornee = bell
-highlight.Parent = bell
-highlight.Name = "ultimateball1"
-game.StarterGui:SetCore("SendNotification", {
-Title = "Ultimate Ball Spawned";
-Text = bell.Name;
-Icon = "";
-Duration = 1;
-Callback = NotificationBindable;
-})
-end
-end
-
-workspace.Balls.ChildAdded:Connect(ballz)
-
-rs.RenderStepped:connect(function()
-pcall(function()
-local ui = p.PlayerGui.HUD
-if input.TouchEnabled then
-ui.MobileLarge.Visible = true
-ui.MobileSmall.Visible = false
-ui.Actions.Visible = false
-ui.MobileLarge.Block.Visible = false
-else
-ui.MobileLarge.Visible = false
-ui.MobileSmall.Visible = false
-ui.Actions.Visible = true
-end
-end)
-end)
-
-rs.RenderStepped:connect(function()
-if spem then
-task.spawn(doParry)
-end
-end)
-
+	rs.RenderStepped:Connect(function()
+		if spem then
+			task.spawn(doParry)
+		end
+	end)
 end

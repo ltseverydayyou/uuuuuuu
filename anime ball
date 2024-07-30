@@ -99,7 +99,7 @@ if game.GameId==5120885191 then
 		end
 	end
 	if input.TouchEnabled then
-		local spamButton=createButton("spem","spam",0,50,75,frame)
+		local spamButton=createButton(nil,"spem","spam",0,50,75,frame)
 		spamButton.MouseButton1Down:Connect(function()
 			spem=not spem
 			if spem then
@@ -109,8 +109,8 @@ if game.GameId==5120885191 then
 			end
 		end)
 	end
-	local gay=createButton("fr","freeze",1,50,75,frame)
-	local bruh=createButton("unfr","unfreeze",2,50,75,frame)
+	local gay=createButton(nil,"fr","freeze",1,50,75,frame)
+	local bruh=createButton(nil,"unfr","unfreeze",2,50,75,frame)
 	if input.KeyboardEnabled then
 		local SpamCheck=createButton(Instance.new("TextLabel"),"isEnabled?","Spamming: false",2,75,150,frame2)
 		input.InputBegan:Connect(function(inputObj,gp)
@@ -141,7 +141,7 @@ if game.GameId==5120885191 then
 		end)
 	end
 	if input.TouchEnabled then
-		local parryButton=createButton("par","parry",3,50,75,frame)
+		local parryButton=createButton(nil,"par","parry",3,50,75,frame)
 
 		parryButton.MouseButton1Down:Connect(function()
 			task.spawn(doParry)

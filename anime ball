@@ -86,7 +86,6 @@ if game.GameId==5120885191 then
 	end
 
 	function doParry()
-		for i =1,3 do
 			local args={
 				[1]="SwordService",
 				[2]="Block",
@@ -96,7 +95,6 @@ if game.GameId==5120885191 then
 			}
 
 			game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
-		end
 	end
 	if input.TouchEnabled then
 		local spamButton=createButton(nil,"spem","spam",0,50,75,frame)

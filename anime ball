@@ -86,7 +86,7 @@ if game.GameId==5120885191 then
 	end
 
 	function doParry()
-		for =1,3 do
+		for i =1,3 do
 			local args={
 				[1]="SwordService",
 				[2]="Block",

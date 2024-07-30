@@ -71,8 +71,8 @@ if game.GameId==5120885191 then
 	layoutList.HorizontalAlignment=Enum.HorizontalAlignment.Center
 	layoutList.VerticalAlignment=Enum.VerticalAlignment.Top
 
-	local function createButton(name,text,order,num,num2,parent)
-		local button=Instance.new("TextButton")
+	local function createButton(inst,name,text,order,num,num2,parent)
+		local button=(inst or Instance.new("TextButton"))
 		button.Name=(name or "name")
 		button.Text=(text or "nothing")
 		button.TextScaled=true
@@ -112,7 +112,7 @@ if game.GameId==5120885191 then
 	local gay=createButton("fr","freeze",1,50,75,frame)
 	local bruh=createButton("unfr","unfreeze",2,50,75,frame)
 	if input.KeyboardEnabled then
-		local SpamCheck=createButton("isEnabled?","Spamming: false",2,75,150,frame2)
+		local SpamCheck=createButton(Instance.new("TextLabel"),"isEnabled?","Spamming: false",2,75,150,frame2)
 		input.InputBegan:Connect(function(inputObj,gp)
 			if not gp then
 				if inputObj.KeyCode==Enum.KeyCode.R then

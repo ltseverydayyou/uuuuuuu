@@ -84,9 +84,6 @@ else
 	gui.navbar.floatingIcon:FindFirstChildWhichIsA("ImageLabel").Image = "http://www.roblox.com/asset/?id="..image
 	gui.navbar.main:FindFirstChildWhichIsA("ImageLabel").Image = "http://www.roblox.com/asset/?id="..image
 	gui.navbar.main.title.Text = text
-    if ConsoleEnabled then
-        gui.navbar.main.container.console.Name=curse()
-    end
 	if _G.LoadedCodexSwitcherHooks  then
 	for i,v in pairs(_G.LoadedCodexSwitcherHooks) do if v then pcall(function() v:Disconnect() end) end end -- yes
 	_G.LoadedCodexSwitcherHooks = {}
@@ -146,5 +143,8 @@ else
 		gui.navbar.main.poweredBy.Text = powered
 	end)
 	gui.navbar.main.poweredBy.Text = powered
+	if ConsoleEnabled then
+        gui.navbar.main.container.console.Name=curse()
+    end
 	_G.LoadedCodexSwitcherHooks = {["Icons"] = iconConnections }
 end

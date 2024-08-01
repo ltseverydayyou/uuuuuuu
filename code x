@@ -1,47 +1,53 @@
 local image = _G.CodexSpooferImage or nil -- 9524079125
-local text = _G.CodexSpooferText or nil -- "Synapse X"
-local powered = _G.CodexSpooferPoweredBy or nil -- "Powered by Nameless Admin"
-
+local text = _G.CodexSpooferText or nil-- "Synapse X"
+local powered = _G.CodexSpooferPoweredBy or nil-- "Powered by Nameless Admin"
 function curse()
-	local length = math.random(10, 20)
-	local array = {}
-	for i = 1, length do
-		array[i] = string.char(math.random(32, 126))
+	local length=math.random(10,20)
+	local array={}
+	for i=1,length do
+		array[i]=string.char(math.random(32,126))
 	end
 	return table.concat(array)
 end
 
+if not gethui then
+	getgenv().gethui=function()
+		local h=(game:GetService("CoreGui"):FindFirstChildWhichIsA("ScreenGui") or game:GetService("CoreGui") or game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui"))
+		return h
+	end
+end
+
+
 if image or text or powered then
 	-- old build
-	loadstring(game:HttpGet("https://github.com/ltseverydayyou/uuuuuuu/blob/main/codex%20clickbait?raw=codex"))()
+	loadstring(game:HttpGet("https://github.com/ltseverydayyou/uuuuuuu/blob/main/codex%20clickbait?raw=codex" ))();
 else
 	if not _G.CodexUiCustomSettings then
 		_G.CodexUiCustomSettings = {
 			CodexSpooferImage = 9524079125,
 			CodexSpooferText = "Synapse X",
 			CodexSpooferPoweredBy = "Powered by Nameless Admin",
-			FloatingIconColor = Color3.fromRGB(59, 59, 59),
+			FloatingIconColor=Color3.fromRGB(59, 59, 59),
 			MainUiBackground = Color3.fromRGB(20, 20, 20),
-			Icons = Color3.fromRGB(170, 85, 127),
+			Icons=Color3.fromRGB(170, 85, 127),
 			IconsOff = Color3.fromRGB(0, 0, 0),
-			ConsoleEnabled = true,
+			ConsoleEnabled=true,
 			Fade = true
 		}
 	end
-
-	_G.LoadedCodexSwitcher = {_G.CodexUiCustomSettings, tick(), math.random(0, 10000)}
+	_G.LoadedCodexSwitcher = {_G.CodexUiCustomSettings,tick(),math.random(0,10000)}
 	local patch = _G.LoadedCodexSwitcher
 	local floatingColor = _G.CodexUiCustomSettings["FloatingIconColor"] or Color3.fromRGB(59, 59, 59)
 	local MainUiBackground = _G.CodexUiCustomSettings["MainUiBackground"] or Color3.fromRGB(20, 20, 20)
 	local image = _G.CodexUiCustomSettings["CodexSpooferImage"] or 9524079125 -- new
 	local text = _G.CodexUiCustomSettings["CodexSpooferText"] or "Synapse X"
 	local powered = _G.CodexUiCustomSettings["CodexSpooferPoweredBy"] or "Powered by Nameless Admin"
-	local Fadeobject = _G.CodexUiCustomSettings["Fade"] or true
-	local IconsOn = _G.CodexUiCustomSettings["IconsOn"] or Color3.fromRGB(170, 85, 127)
-	local IconsOff = _G.CodexUiCustomSettings["IconsOff"] or Color3.fromRGB(0, 0, 0)
-	local ConsoleEnabled = _G.CodexUiCustomSettings["ConsoleEnabled"] or true
-
+	local Fadeobject =_G.CodexUiCustomSettings["Fade"] or true
+	local IconsOn =_G.CodexUiCustomSettings["IconsOn"] or Color3.fromRGB(170, 85, 127)
+	local IconsOff =_G.CodexUiCustomSettings["IconsOff"] or Color3.fromRGB(0, 0, 0)
+	local conEnable =_G.CodexUiCustomSettings["ConsoleEnabled"] or true
 	repeat wait() until game.CoreGui:FindFirstChild("Codex")
+
 	local CodexFolder = game.CoreGui:WaitForChild("Codex")
 
 	spawn(function()
@@ -52,14 +58,14 @@ else
 			for _, child in ipairs(CodexFolder:GetChildren()) do
 				child.Parent = gui
 			end
-			gui.Parent = game.CoreGui
+			gui.Parent = gethui()
 			CodexFolder:Destroy()
 		end
 	end)
 
-	local curUi = game.CoreGui:WaitForChild("Codex"):WaitForChild("gui")
+	local curUi = game.CoreGui:WaitForChild("Codex").gui
 
-	local CodexUi = game:GetService("RunService"):IsStudio() and game.StarterGui:WaitForChild("Codex") or game:GetService("CoreGui"):WaitForChild("Codex")
+	local CodexUi = game:GetService("RunService"):IsStudio() and game.StarterGui.Codex or game:GetService("CoreGui"):WaitForChild("Codex")
 	local gui = nil
 	if CodexUi or _G.Codex_gui_Object then
 		gui = _G.Codex_gui_Object or curUi
@@ -71,97 +77,85 @@ else
 
 	_G.Codex_gui_Object = gui
 
-	local function HideForever(object)
+	local function HideForever(object) 
 		object.Visible = false
-		local Patch1 = object:GetPropertyChangedSignal("Visible"):Connect(function()
+		Patch1 = object:GetPropertyChangedSignal("Visible"):Connect(function()
 			if Patch1 and _G.LoadedCodexSwitcher ~= patch then
 				Patch1:Disconnect()
 			end
 			object.Visible = false
 		end)
 	end
-
 	if Fadeobject then
-		local fade = gui:WaitForChild("fade")
-		HideForever(fade)
+		HideForever(gui:WaitForChild("fade"))
 	end
-
+	if conEnable then
+		gui.navbar.main:FindFirstChild("console",true).Name=curse()
+	end
 	gui.tabs.editor.contentContainer.inputBox.MultiLine = true
-	local navbar = gui:WaitForChild("navbar")
-	navbar:WaitForChild("floatingIcon"):FindFirstChildWhichIsA("ImageLabel").Image = "http://www.roblox.com/asset/?id=" .. image
-	navbar:WaitForChild("main"):FindFirstChildWhichIsA("ImageLabel").Image = "http://www.roblox.com/asset/?id=" .. image
-	navbar:WaitForChild("main"):WaitForChild("title").Text = text
-
-	if _G.LoadedCodexSwitcherHooks then
-		for _, v in pairs(_G.LoadedCodexSwitcherHooks) do
-			if v then pcall(function() v:Disconnect() end) end
-		end
+	gui.navbar.floatingIcon:FindFirstChildWhichIsA("ImageLabel").Image = "rbxassetid://"..image
+	gui.navbar.main:FindFirstChildWhichIsA("ImageLabel").Image = "rbxassetid://"..image
+	gui.navbar.main.title.Text = text
+	
+	
+	if _G.LoadedCodexSwitcherHooks  then
+		for i,v in pairs(_G.LoadedCodexSwitcherHooks) do if v then pcall(function() v:Disconnect() end) end end -- yes
 		_G.LoadedCodexSwitcherHooks = {}
 	end
-
 	local iconConnections = {}
 	local function ChangeIcon(object)
 		local iconConnection
 		local icon = object:WaitForChild("icon")
 
 		iconConnection = icon:GetPropertyChangedSignal("ImageColor3"):Connect(function()
-			if icon.ImageColor3 == Color3.fromRGB(151, 158, 189) then
+			if Color3.fromRGB(151, 158, 189) == icon.ImageColor3 then
 				icon.ImageColor3 = IconsOff
-			elseif icon.ImageColor3 ~= IconsOff and icon.ImageColor3 ~= IconsOn then
-				icon.ImageColor3 = IconsOn
+			else
+				if icon.ImageColor3 == IconsOff or icon.ImageColor3 == IconsOn then
+					return;
+				else
+					icon.ImageColor3 = IconsOn
+				end
 			end
 		end)
 		table.insert(iconConnections, iconConnection)
 		icon.ImageColor3 = IconsOff
 	end
 
-	navbar:WaitForChild("floatingIcon").BackgroundColor3 = floatingColor
-	navbar:WaitForChild("main").BackgroundColor3 = MainUiBackground
-	gui:WaitForChild("background").BackgroundColor3 = MainUiBackground
-
-	for _, v in pairs(navbar:WaitForChild("main"):WaitForChild("container"):GetChildren()) do
+	gui.navbar.floatingIcon.BackgroundColor3 = floatingColor
+	gui.navbar.main.BackgroundColor3 = MainUiBackground
+	gui.background.BackgroundColor3 = MainUiBackground
+	for i,v in pairs(gui.navbar.main.container:GetChildren()) do
 		if v:IsA("TextButton") then
 			task.spawn(function()
 				ChangeIcon(v)
 			end)
 		end
 	end
-
-	ChangeIcon(navbar:WaitForChild("main"):WaitForChild("settings"))
-
-	for _, tab in pairs(gui:WaitForChild("tabs"):GetChildren()) do
-		local buttons = tab:FindFirstChild("buttons")
-		if buttons then
-			for _, btn in pairs(buttons:GetChildren()) do
-				if btn:IsA("TextButton") then
+	ChangeIcon(gui.navbar.main.settings) -- more colored buttons
+	for i,v in pairs(gui.tabs:GetChildren()) do
+		if v:FindFirstChild("buttons") then
+			for i,v in pairs(v.buttons:GetChildren()) do
+				if v:IsA("TextButton") then
 					task.spawn(function()
-						ChangeIcon(btn)
+						ChangeIcon(v)
 					end)
 				end
 			end
 		end
 	end
-
-	local title = navbar:WaitForChild("main"):WaitForChild("title"):GetPropertyChangedSignal("Text"):Connect(function()
+	title = gui.navbar.main.title:GetPropertyChangedSignal("Text"):Connect(function()
 		if title and _G.LoadedCodexSwitcher ~= patch then
 			title:Disconnect()
 		end
-		navbar:WaitForChild("main"):WaitForChild("title").Text = text
+		gui.navbar.main.title.Text = text
 	end)
-
-	local poweredBy = navbar:WaitForChild("main"):WaitForChild("poweredBy"):GetPropertyChangedSignal("Text"):Connect(function()
-		if poweredBy and _G.LoadedCodexSwitcher ~= patch then
-			poweredBy:Disconnect()
+	title1 = gui.navbar.main.poweredBy:GetPropertyChangedSignal("Text"):Connect(function()
+		if title1 and _G.LoadedCodexSwitcher ~= patch then
+			title1:Disconnect()
 		end
-		navbar:WaitForChild("main"):WaitForChild("poweredBy").Text = powered
+		gui.navbar.main.poweredBy.Text = powered
 	end)
-
-	navbar:WaitForChild("main"):WaitForChild("poweredBy").Text = powered
-
-	if ConsoleEnabled then
-		local console = navbar:WaitForChild("main"):WaitForChild("container"):WaitForChild("console")
-		console.Name = curse()
-	end
-
-	_G.LoadedCodexSwitcherHooks = {["Icons"] = iconConnections}
+	gui.navbar.main.poweredBy.Text = powered
+	_G.LoadedCodexSwitcherHooks = {["Icons"] = iconConnections }
 end

@@ -31,7 +31,6 @@ else
 			MainUiBackground = Color3.fromRGB(20, 20, 20),
 			Icons=Color3.fromRGB(170, 85, 127),
 			IconsOff = Color3.fromRGB(0, 0, 0),
-			ConsoleEnabled=true,
 			Fade = true
 		}
 	end
@@ -45,7 +44,6 @@ else
 	local Fadeobject =_G.CodexUiCustomSettings["Fade"] or true
 	local IconsOn =_G.CodexUiCustomSettings["IconsOn"] or Color3.fromRGB(170, 85, 127)
 	local IconsOff =_G.CodexUiCustomSettings["IconsOff"] or Color3.fromRGB(0, 0, 0)
-	local conEnable =_G.CodexUiCustomSettings["ConsoleEnabled"] or true
 	repeat wait() until game.CoreGui:FindFirstChild("Codex")
 
 	local CodexFolder = game.CoreGui:WaitForChild("Codex")
@@ -88,9 +86,6 @@ else
 	end
 	if Fadeobject then
 		HideForever(gui:WaitForChild("fade"))
-	end
-	if conEnable then
-		gui.navbar.main:FindFirstChild("console",true).Name=curse()
 	end
 	gui.tabs.editor.contentContainer.inputBox.MultiLine = true
 	gui.navbar.floatingIcon:FindFirstChildWhichIsA("ImageLabel").Image = "rbxassetid://"..image

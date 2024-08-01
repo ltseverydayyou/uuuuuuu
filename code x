@@ -144,7 +144,7 @@ else
 	end)
 	gui.navbar.main.poweredBy.Text = powered
 	if ConsoleEnabled then
-        gui.navbar.main.container:WaitForChild("console",true).Name=curse()
+        gui.navbar.main.container:WaitForChild("console").Name=curse()
     end
 	_G.LoadedCodexSwitcherHooks = {["Icons"] = iconConnections }
 end

@@ -1,6 +1,6 @@
 --// variables
 
-local player = game:GetService("Players").LocalPlayer;
+local player = game:FindService("Players").LocalPlayer;
 
 local accuracy_bounds = {
     Perfect = -0, 

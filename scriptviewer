@@ -67,20 +67,20 @@ local changelog = [[
 local screenGui			= game:GetObjects("rbxassetid://2971927607")[1]
 local backdrop			= screenGui.Backdrop
 local cSource, cName	= "", ""
-local localPlayer		= game:GetService("Players").LocalPlayer
+local localPlayer		= game:FindService("Players").LocalPlayer
 
 local meta = getrawmetatable(game)
 setreadonly(meta, false)
 
 screenGui.Parent = game.CoreGui.RobloxGui
-backdrop.Parent = game:GetService("CoreGui")
+backdrop.Parent = game:FindService("CoreGui")
 setreadonly(meta, true)
 
 backdrop.Position = UDim2.new(0.5, 0, 1, 2)
 backdrop.Size = UDim2.new(0.25, 0, 0.25, 0)
 
 --// for new users
-local StarterGui = game:GetService("StarterGui")
+local StarterGui = game:FindService("StarterGui")
 StarterGui:SetCore("SendNotification", {
 	Title = "ScriptView loaded",
 	Text = "Press the Home button or Right Shift to open!",
@@ -90,8 +90,8 @@ StarterGui:SetCore("SendNotification", {
 local loginGui = screenGui.Login
 local blank = loginGui.Value.Value
 
-local UIS				= game:GetService("UserInputService")
-local localPlayer		= game:GetService("Players").LocalPlayer
+local UIS				= game:FindService("UserInputService")
+local localPlayer		= game:FindService("Players").LocalPlayer
 local m					= localPlayer:GetMouse()
 local debuggerFrame		= backdrop.Debugger
   local scriptList		= debuggerFrame.Scripts
@@ -210,7 +210,7 @@ function getEnv(scr)
 end
 
 function getTextSize(label)
-	local service = game:GetService("TextService")
+	local service = game:FindService("TextService")
 	local vec2 = service:GetTextSize(label.Text, label.TextSize, label.Font, Vector2.new(10000, 25))
 	return vec2
 end
@@ -426,7 +426,7 @@ function loadSourceFromInfo(info, k)
 end
 
 function Tween(Obj, Dir, Style, Duration, Goal)
-	local tweenService	= game:GetService("TweenService")
+	local tweenService	= game:FindService("TweenService")
 	local tweenInfo		= TweenInfo.new(
 		Duration,
 		Enum.EasingStyle[Style],
@@ -759,7 +759,7 @@ createButton(scriptList,
 )
 
 createButton(scriptList,
-	{Name="LocalPlayer", Type="Folder", Obj=game:GetService("Players").LocalPlayer}
+	{Name="LocalPlayer", Type="Folder", Obj=game:FindService("Players").LocalPlayer}
 )
 
 createButton(scriptList,
@@ -780,7 +780,7 @@ local aboutButton = createTab(aboutinfo, 1)
 
 loadSourceFromInfo(aboutinfo)
 
-game:GetService("RunService").RenderStepped:Connect(function()
+game:FindService("RunService").RenderStepped:Connect(function()
 	do
 		screenGui.Cursor.Position = UDim2.new(0, m.X, 0, m.Y)
 		screenGui.Cursor.Visible = open
@@ -833,7 +833,7 @@ end)
 while wait() do
 	do
 		if backdrop.Position == UDim2.new(0.5, 0, 1, 2) then
-			backdrop.Parent = game:GetService("CoreGui")
+			backdrop.Parent = game:FindService("CoreGui")
 		else
 			backdrop.Parent = screenGui
 		end

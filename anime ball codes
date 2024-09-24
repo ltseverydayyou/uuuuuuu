@@ -1,8 +1,8 @@
 local function fire(service, action, args)
     if args then
-    game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(service, action, args)
+    game:FindService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(service, action, args)
     else
-    game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(service, action)
+    game:FindService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(service, action)
     end
 end
 
@@ -20,7 +20,7 @@ function ballz()
         [3] = {}
     }
     
-    game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
+    game:FindService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
     task.wait(1)
 
     local codes = {

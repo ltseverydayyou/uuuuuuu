@@ -1,8 +1,8 @@
 local ui=nil
 local Gui = game:GetObjects("rbxassetid://18266429159")[1]
-local COREGUI= (game:GetService("CoreGui") or game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui"))
+local COREGUI= (game:FindService("CoreGui") or game:FindService("Players").LocalPlayer:FindFirstChild("PlayerGui"))
 local connect=nil
-local rPlayer = game:GetService("Players"):FindFirstChildWhichIsA("Player")
+local rPlayer = game:FindService("Players"):FindFirstChildWhichIsA("Player")
 local con=nil
 local con1=nil
 local coreGuiProtection = {}
@@ -47,8 +47,8 @@ elseif COREGUI:FindFirstChild('RobloxGui') then
 			return tostr(t)
 		end)
 	end)
-	if not game:GetService("RunService"):IsStudio() then
-		local newGui = game:GetService("CoreGui"):FindFirstChildWhichIsA("ScreenGui")
+	if not game:FindService("RunService"):IsStudio() then
+		local newGui = game:FindService("CoreGui"):FindFirstChildWhichIsA("ScreenGui")
 		newGui.DescendantAdded:Connect(function(v)
 			coreGuiProtection[v] = rPlayer.Name
 		end)
@@ -73,7 +73,7 @@ SRSExample.Parent = nil
 
 Draggable = function(ui, dragui)
 	if not dragui then dragui = ui end
-	local UserInputService = game:GetService("UserInputService")
+	local UserInputService = game:FindService("UserInputService")
 
 	local dragging
 	local dragInput
@@ -113,7 +113,7 @@ Draggable = function(ui, dragui)
 end
 tweeny = function(obj, style, direction, duration, goal)
 	local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle[style], Enum.EasingDirection[direction])
-	local tween = game:GetService("TweenService"):Create(obj, tweenInfo, goal)
+	local tween = game:FindService("TweenService"):Create(obj, tweenInfo, goal)
 	tween:Play()
 	return tween
 end
@@ -158,7 +158,7 @@ function updTxtScale()
     local text = SRStxt.Text
     local font = SRStxt.Font
     local textSize = SRStxt.TextSize
-    local textBounds = game:GetService("TextService"):GetTextSize(text, textSize, font, Vector2.new(width, math.huge))
+    local textBounds = game:FindService("TextService"):GetTextSize(text, textSize, font, Vector2.new(width, math.huge))
     SRStxt.Size = UDim2.new(1, 0, 0, textBounds.Y)
 end
 
@@ -272,12 +272,12 @@ function wrapRemotes()
 end
 
 --[[local services = {
-	game:GetService("ReplicatedStorage"),
-	game:GetService("StarterGui"),
-	game:GetService("StarterPack"),
-	game:GetService("StarterPlayer"),
-	game:GetService("Players"),
-	game:GetService("Workspace")
+	game:FindService("ReplicatedStorage"),
+	game:FindService("StarterGui"),
+	game:FindService("StarterPack"),
+	game:FindService("StarterPlayer"),
+	game:FindService("Players"),
+	game:FindService("Workspace")
 }
 ]]
 --for _, folder in ipairs(services) do
@@ -289,7 +289,7 @@ SRSFrame.Position = UDim2.new(0.5, -283/2+5, 0.5, -260/2+5)
 
 con1=SRStxt:GetPropertyChangedSignal("Text"):Connect(updTxtScale)
 
-connect = game:GetService("RunService").Stepped:Connect(function()
+connect = game:FindService("RunService").Stepped:Connect(function()
 	SRSList.CanvasSize = UDim2.new(0, 0, 0, SRSList:FindFirstChildOfClass("UIListLayout").AbsoluteContentSize.Y)
 	SRSresult.CanvasSize = UDim2.new(0, 0, 0, SRSresult:FindFirstChildOfClass("UIListLayout").AbsoluteContentSize.Y)
 end)

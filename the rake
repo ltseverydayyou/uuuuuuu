@@ -56,8 +56,8 @@ if game.GameId == 847722000 then
 
 	
 	local function getHum()
-		if game:GetService("Players").LocalPlayer and game:GetService("Players").LocalPlayer.Character and game:GetService("Players").LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
-			return game:GetService("Players").LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+		if game:FindService("Players").LocalPlayer and game:FindService("Players").LocalPlayer.Character and game:FindService("Players").LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+			return game:FindService("Players").LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
 		else
 			return false
 		end
@@ -85,7 +85,7 @@ if game.GameId == 847722000 then
 		for i = 1,1 do
 			local lastpos = game.Players.LocalPlayer.Character:WaitForChild("HumanoidRootPart").CFrame
 
-			SET_HRP_CFRAME(game:GetService("Workspace").Map.SafeHouse.Door.Door.CFrame+Vector3.new(0,-7,0))
+			SET_HRP_CFRAME(game:FindService("Workspace").Map.SafeHouse.Door.Door.CFrame+Vector3.new(0,-7,0))
 			wait()
 			GET_HRP().Anchored = true
 			wait(.4)
@@ -103,7 +103,7 @@ if game.GameId == 847722000 then
 	local function MOUSETP()
 		local mouse = game.Players.LocalPlayer:GetMouse()
 
-		local tweenService = game:GetService("TweenService")
+		local tweenService = game:FindService("TweenService")
 		local tweenInfo = TweenInfo.new(1, Enum.EasingStyle.Linear, Enum.EasingDirection.In, 0, false, 0)
 		local part = game.Players.LocalPlayer.Character:WaitForChild("HumanoidRootPart")
 		local goal = {CFrame = CFrame.new(mouse.Hit.Position)}
@@ -115,11 +115,11 @@ if game.GameId == 847722000 then
 		local ohString1 = "Open"
 		local ohBoolean2 = true
 
-		game:GetService("ReplicatedStorage").SupplyClientEvent:FireServer(ohString1, ohBoolean2)
+		game:FindService("ReplicatedStorage").SupplyClientEvent:FireServer(ohString1, ohBoolean2)
 	end
 
 	local function aigoto(pos : Vector3)
-		local path = game:GetService("PathfindingService"):CreatePath()
+		local path = game:FindService("PathfindingService"):CreatePath()
 
 		path:ComputeAsync(game.Players.LocalPlayer.Character:WaitForChild("HumanoidRootPart").Position,pos)
 
@@ -150,15 +150,15 @@ if game.GameId == 847722000 then
 
 	local function airdropchams(mode)
 		if tostring(mode) == "Enable" then
-			if game:GetService("Workspace").Debris.SupplyCrates:FindFirstChild("Box") then
-				if game:GetService("Workspace").Debris.SupplyCrates.Box:FindFirstChild("SleepyDropChams") then
+			if game:FindService("Workspace").Debris.SupplyCrates:FindFirstChild("Box") then
+				if game:FindService("Workspace").Debris.SupplyCrates.Box:FindFirstChild("SleepyDropChams") then
 
 				else
 					local chams = Instance.new("Highlight")
 					chams.FillColor = Color3.new(0.317647, 1, 0)
 					chams.OutlineColor = Color3.new(0, 1, 0.250980)
-					chams.Parent = game:GetService("Workspace").Debris.SupplyCrates.Box
-					chams.Adornee = game:GetService("Workspace").Debris.SupplyCrates.Box
+					chams.Parent = game:FindService("Workspace").Debris.SupplyCrates.Box
+					chams.Adornee = game:FindService("Workspace").Debris.SupplyCrates.Box
 					chams.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
 					chams.OutlineTransparency = 0
 					chams.FillTransparency = 1
@@ -166,7 +166,7 @@ if game.GameId == 847722000 then
 				end
 			end
 		elseif tostring(mode) == "Disable" then
-			for i,v in pairs(game:GetService("Workspace").Debris.SupplyCrates:GetDescendants()) do
+			for i,v in pairs(game:FindService("Workspace").Debris.SupplyCrates:GetDescendants()) do
 				if v.Name == "SleepyDropChams" then
 					v:Remove()
 				end
@@ -207,8 +207,8 @@ if game.GameId == 847722000 then
 
 
 
-	local RunService = game:GetService("RunService")
-	local InputService = game:GetService("UserInputService")
+	local RunService = game:FindService("RunService")
+	local InputService = game:FindService("UserInputService")
 	local FreeCamPart = Instance.new("Part")
 	FreeCamPart.Anchored = true
 	FreeCamPart.Size = Vector3.new(1,1,1)
@@ -258,7 +258,7 @@ if game.GameId == 847722000 then
 				repeat wait()
 					pcall(function()
 						function tweenPart(time,partto,TSCF)
-							local tweenService = game:GetService("TweenService")
+							local tweenService = game:FindService("TweenService")
 							local tweenInfo = TweenInfo.new(time, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, 0, false, 0)
 							local part = partto
 							local goal = {}
@@ -317,17 +317,17 @@ if game.GameId == 847722000 then
 		Callback = function(state)
 			_G.NoFog = state
 			if state == false then
-				game:GetService("ReplicatedStorage").CurrentLightingProperties.FogEnd.Value = 75
+				game:FindService("ReplicatedStorage").CurrentLightingProperties.FogEnd.Value = 75
 			end
 		end,
 	})
 
 	-- no fog
 
-	game:GetService("RunService").Heartbeat:Connect(function()
+	game:FindService("RunService").Heartbeat:Connect(function()
 		if AllowRunService == true then
 			if _G.NoFog == true then
-				game:GetService("ReplicatedStorage").CurrentLightingProperties.FogEnd.Value = 9e9
+				game:FindService("ReplicatedStorage").CurrentLightingProperties.FogEnd.Value = 9e9
 			end
 		end
 	end)
@@ -415,7 +415,7 @@ if game.GameId == 847722000 then
 	})
 
 	-- rake killaura hitpart 
-	game:GetService("RunService").Heartbeat:Connect(function()
+	game:FindService("RunService").Heartbeat:Connect(function()
 		if AllowRunService == true then
 			if _G.RakeKillAura == true then
 				pcall(function()
@@ -480,7 +480,7 @@ if game.GameId == 847722000 then
 				repeat wait()
 
 				until _G.PlayerESP == false
-				for i,v in pairs(game:GetService("Players"):GetPlayers()) do
+				for i,v in pairs(game:FindService("Players"):GetPlayers()) do
 					pcall(function()
 						if not v.Character then
 						else
@@ -525,8 +525,8 @@ if game.GameId == 847722000 then
 		Callback = function(state)
 			_G.FlareGunESP = state
 			if _G.FlareGunESP == false then
-				if game:GetService("Workspace"):FindFirstChild("FlareGunPickUp") then
-					game:GetService("Workspace"):FindFirstChild("FlareGunPickUp"):SetAttribute("FlareGunESP",false)
+				if game:FindService("Workspace"):FindFirstChild("FlareGunPickUp") then
+					game:FindService("Workspace"):FindFirstChild("FlareGunPickUp"):SetAttribute("FlareGunESP",false)
 				end
 				for i,v in pairs(game.Workspace:GetChildren()) do
 					if v.Name == "FlareGunPickUp" then
@@ -545,7 +545,7 @@ if game.GameId == 847722000 then
 		Flag = "SupplyDropESP",
 		Callback = function(state)
 			_G.SupplyDropESP = state
-			for i,v in pairs(game:GetService("Workspace").Debris.SupplyCrates:GetChildren()) do
+			for i,v in pairs(game:FindService("Workspace").Debris.SupplyCrates:GetChildren()) do
 				v:SetAttribute("SupplyDropESP",false)
 			end
 		end,
@@ -555,14 +555,14 @@ if game.GameId == 847722000 then
 
 	-- Flare Gun ESP 
 
-	game:GetService("RunService").Heartbeat:Connect(function(deltaTime)
+	game:FindService("RunService").Heartbeat:Connect(function(deltaTime)
 		if AllowRunService == true then
 			if _G.FlareGunESP == true then
-				if game:GetService("Workspace"):FindFirstChild("FlareGunPickUp") then
-					if game:GetService("Workspace"):FindFirstChild("FlareGunPickUp"):GetAttribute("FlareGunESP") == true then
+				if game:FindService("Workspace"):FindFirstChild("FlareGunPickUp") then
+					if game:FindService("Workspace"):FindFirstChild("FlareGunPickUp"):GetAttribute("FlareGunESP") == true then
 
 					else
-						game:GetService("Workspace"):FindFirstChild("FlareGunPickUp"):SetAttribute("FlareGunESP",true)
+						game:FindService("Workspace"):FindFirstChild("FlareGunPickUp"):SetAttribute("FlareGunESP",true)
 						local esp = Drawing.new("Text")
 						esp.Text = "Flare Gun"
 						esp.Color = Color3.fromRGB(0, 225, 255)
@@ -571,12 +571,12 @@ if game.GameId == 847722000 then
 						esp.Font = 2
 						esp.Size = 12
 						esp.Visible = true
-						game:GetService("RunService").Heartbeat:Connect(function()
+						game:FindService("RunService").Heartbeat:Connect(function()
 							if AllowRunService == true then
 								if _G.FlareGunESP == true then
-									if game:GetService("Workspace"):FindFirstChild("FlareGunPickUp") then
+									if game:FindService("Workspace"):FindFirstChild("FlareGunPickUp") then
 										local cam = workspace.CurrentCamera
-										local Pos,OnScreen = cam:WorldToViewportPoint(game:GetService("Workspace").FlareGunPickUp.FlareGun.Position)
+										local Pos,OnScreen = cam:WorldToViewportPoint(game:FindService("Workspace").FlareGunPickUp.FlareGun.Position)
 										if OnScreen then
 											esp.Visible = true
 											esp.Position = Vector2.new(Pos.X,Pos.Y)
@@ -620,7 +620,7 @@ if game.GameId == 847722000 then
 
 
 
-	game:GetService("RunService").Heartbeat:Connect(function()
+	game:FindService("RunService").Heartbeat:Connect(function()
 		if AllowRunService == true then
 			if _G.RakeChams == true then
 				for i,v in pairs(game.Workspace:GetChildren()) do
@@ -653,7 +653,7 @@ if game.GameId == 847722000 then
 								ESP.Size = 12
 								ESP.Color = Color3.fromRGB(255, 0, 0)
 								ESP.Visible = true
-								game:GetService("RunService").Heartbeat:Connect(function()
+								game:FindService("RunService").Heartbeat:Connect(function()
 									pcall(function()
 										if AllowRunService == true then
 											if _G.RakeChams == true then
@@ -689,10 +689,10 @@ if game.GameId == 847722000 then
 
 	-- Player Esp 
 
-	game:GetService("RunService").Heartbeat:Connect(function()
+	game:FindService("RunService").Heartbeat:Connect(function()
 		if AllowRunService == true then
 			if _G.PlayerESP == true then
-				for i,v in pairs(game:GetService("Players"):GetPlayers()) do
+				for i,v in pairs(game:FindService("Players"):GetPlayers()) do
 					if v.Name ~= game.Players.LocalPlayer.Name then
 						if not v.Character then
 
@@ -711,11 +711,11 @@ if game.GameId == 847722000 then
 									ESP.Visible = false
 
 									v.Character:SetAttribute("PlayerESP",true)
-									game:GetService("RunService").Heartbeat:Connect(function()
+									game:FindService("RunService").Heartbeat:Connect(function()
 										pcall(function()
 											if AllowRunService == true then
 												if _G.PlayerESP == true then
-													if game:GetService("Players"):FindFirstChild(tostring(v.Name)) then
+													if game:FindService("Players"):FindFirstChild(tostring(v.Name)) then
 														local cam = workspace.CurrentCamera
 														local Pos,OnScreen = cam:WorldToViewportPoint(v.Character.Head.Position)
 														if OnScreen then
@@ -773,10 +773,10 @@ if game.GameId == 847722000 then
 
 	-- SupplyDrop ESP
 
-	game:GetService("RunService").Heartbeat:Connect(function(deltaTime)
+	game:FindService("RunService").Heartbeat:Connect(function(deltaTime)
 		if AllowRunService == true then
 			if _G.SupplyDropESP == true then
-				for i,v in pairs(game:GetService("Workspace").Debris.SupplyCrates:GetChildren()) do
+				for i,v in pairs(game:FindService("Workspace").Debris.SupplyCrates:GetChildren()) do
 					if v.Name == "Box" then
 						if v:GetAttribute("SupplyDropESP") == true then
 
@@ -791,12 +791,12 @@ if game.GameId == 847722000 then
 							ESP.Text = "Supply Drop"
 							ESP.Visible = true
 							ESP.Center = true
-							game:GetService("RunService").Heartbeat:Connect(function()
+							game:FindService("RunService").Heartbeat:Connect(function()
 								pcall(function()
 									if AllowRunService == true then
 										if _G.SupplyDropESP == true then
 
-											if game:GetService("Workspace").Debris.SupplyCrates:FindFirstChild(v.Name) then
+											if game:FindService("Workspace").Debris.SupplyCrates:FindFirstChild(v.Name) then
 												local cam = workspace.CurrentCamera
 												local Pos,OnScreen = cam:WorldToViewportPoint(v.HitBox.Position)
 												if OnScreen then
@@ -867,7 +867,7 @@ if game.GameId == 847722000 then
 		end,
 	})
 
-	game:GetService("RunService").Heartbeat:Connect(function(deltaTime)
+	game:FindService("RunService").Heartbeat:Connect(function(deltaTime)
 		if AllowRunService == true then
 			if _G.LocationESP == true then
 				for i,v in pairs(Locations) do
@@ -883,7 +883,7 @@ if game.GameId == 847722000 then
 						ESP.Visible = true
 						ESP.Center = true
 						ESP.Outline = false
-						game:GetService("RunService").Heartbeat:Connect(function()
+						game:FindService("RunService").Heartbeat:Connect(function()
 							if AllowRunService == true then
 								if _G.LocationESP == true then
 									local cam = workspace.CurrentCamera
@@ -910,7 +910,7 @@ if game.GameId == 847722000 then
 
 	-- Scrap ESP
 
-	game:GetService("RunService").Heartbeat:Connect(function()
+	game:FindService("RunService").Heartbeat:Connect(function()
 		if AllowRunService == true then
 			if _G.ScrapESP == true then
 				for i,v in pairs(game.Workspace.Filter.ScrapSpawns:GetDescendants()) do
@@ -926,7 +926,7 @@ if game.GameId == 847722000 then
 							ScrapESP.Font = 2
 							ScrapESP.Text = "Scrap"..", Points "..tostring(v.Parent.PointsVal.Value)..", Level "..tostring(v.Parent.LevelVal.Value)
 							ScrapESP.Visible = false
-							game:GetService("RunService").Heartbeat:Connect(function()
+							game:FindService("RunService").Heartbeat:Connect(function()
 								if AllowRunService == true then
 									if v.Parent == nil then
 										ScrapESP.Visible = false
@@ -982,7 +982,7 @@ if game.GameId == 847722000 then
 				repeat wait()
 
 				until _G.ScrapESP == false
-				for i,v in pairs(game:GetService("Workspace").Filter.ScrapSpawns:GetDescendants()) do
+				for i,v in pairs(game:FindService("Workspace").Filter.ScrapSpawns:GetDescendants()) do
 					pcall(function()
 						if v.Name == "ScrapChams" then
 							v:Remove()
@@ -993,7 +993,7 @@ if game.GameId == 847722000 then
 					end)
 				end
 			elseif _G.ScrapESP == false then
-				for i,v in pairs(game:GetService("Workspace").Filter.ScrapSpawns:GetDescendants()) do
+				for i,v in pairs(game:FindService("Workspace").Filter.ScrapSpawns:GetDescendants()) do
 					pcall(function()
 						if v.Name == "ScrapChams" then
 							v:Remove()
@@ -1015,7 +1015,7 @@ if game.GameId == 847722000 then
 	ExploitsTab:CreateButton({
 		Name = "Remove Invis Walls",
 		Callback = function()
-			for i,v in pairs(game:GetService("Workspace").Filter.InvisibleWalls:GetChildren()) do
+			for i,v in pairs(game:FindService("Workspace").Filter.InvisibleWalls:GetChildren()) do
 				if v.Name:lower() == "invisiblewall" or v.Name:lower() == "invis" then
 					v:Remove()
 				end
@@ -1144,33 +1144,33 @@ if game.GameId == 847722000 then
 		end,
 	})
 
-	game:GetService("RunService").Heartbeat:Connect(function()
+	game:FindService("RunService").Heartbeat:Connect(function()
 		if AllowRunService == true then
 			if _G.InstaOpenSupplyDrop == true then
 				pcall(function()
-					for i,v in pairs(game:GetService("Workspace").Debris.SupplyCrates.Box.GUIPart.ProximityPrompt:GetAttributes()) do
+					for i,v in pairs(game:FindService("Workspace").Debris.SupplyCrates.Box.GUIPart.ProximityPrompt:GetAttributes()) do
 
 
-						game:GetService("Workspace").Debris.SupplyCrates.Box.GUIPart.ProximityPrompt:SetAttribute(tostring(i),false)
+						game:FindService("Workspace").Debris.SupplyCrates.Box.GUIPart.ProximityPrompt:SetAttribute(tostring(i),false)
 
 					end
-					game:GetService("Workspace").Debris.SupplyCrates.Box.UnlockValue.Value = 100
+					game:FindService("Workspace").Debris.SupplyCrates.Box.UnlockValue.Value = 100
 				end)
 			end
 		end
 	end)
 
-	game:GetService("RunService").RenderStepped:Connect(function()
+	game:FindService("RunService").RenderStepped:Connect(function()
 		if AllowRunService then
 			if _G.enableFOV == true then
 				local num = _G.FieldOfView
-				local hh=game:GetService("TweenService"):Create(workspace.CurrentCamera, TweenInfo.new(0, Enum.EasingStyle.Linear), {FieldOfView=tonumber(num)})
+				local hh=game:FindService("TweenService"):Create(workspace.CurrentCamera, TweenInfo.new(0, Enum.EasingStyle.Linear), {FieldOfView=tonumber(num)})
 				hh:Play()
 			end
 		end
 	end)
 	
-	game:GetService("RunService").RenderStepped:Connect(function()
+	game:FindService("RunService").RenderStepped:Connect(function()
 		if AllowRunService then
 			local spedyy = _G.WalkSpeedd
 			if _G.enableSpeed == true and getHum() then
@@ -1199,13 +1199,13 @@ if game.GameId == 847722000 then
 
 	-- update time until day label
 
-	game:GetService("RunService").Heartbeat:Connect(function()
+	game:FindService("RunService").Heartbeat:Connect(function()
 		if AllowRunService == true then
-			if game:GetService("ReplicatedStorage").Night.Value == true then
-				TimeUntilDayCounter:Set("Time Until Day : "..game:GetService("ReplicatedStorage").Timer.Value)
+			if game:FindService("ReplicatedStorage").Night.Value == true then
+				TimeUntilDayCounter:Set("Time Until Day : "..game:FindService("ReplicatedStorage").Timer.Value)
 			end
-			if game:GetService("ReplicatedStorage").Night.Value == false then
-				TimeUntilDayCounter:Set("Time Until Night : "..game:GetService("ReplicatedStorage").Timer.Value)
+			if game:FindService("ReplicatedStorage").Night.Value == false then
+				TimeUntilDayCounter:Set("Time Until Night : "..game:FindService("ReplicatedStorage").Timer.Value)
 			end
 		end
 	end)
@@ -1213,15 +1213,15 @@ if game.GameId == 847722000 then
 	-- update rakes targetlabel
 
 
-	game:GetService("RunService").Heartbeat:Connect(function()
+	game:FindService("RunService").Heartbeat:Connect(function()
 		if AllowRunService == true then
 			pcall(function()
-				if game:GetService("Workspace"):FindFirstChild("Rake") then
-					if game:GetService("Workspace").Rake.TargetVal.Value == nil then
+				if game:FindService("Workspace"):FindFirstChild("Rake") then
+					if game:FindService("Workspace").Rake.TargetVal.Value == nil then
 
 					else
 						pcall(function()
-							RakeTargetCounter:Set("Rake's Target : "..tostring(game:GetService("Workspace").Rake.TargetVal.Value.Parent))
+							RakeTargetCounter:Set("Rake's Target : "..tostring(game:FindService("Workspace").Rake.TargetVal.Value.Parent))
 						end)
 					end
 
@@ -1233,16 +1233,16 @@ if game.GameId == 847722000 then
 
 	-- alert if blood hour
 
-	game:GetService("RunService").Heartbeat:Connect(function()
+	game:FindService("RunService").Heartbeat:Connect(function()
 		if AllowRunService == true then
-			if game:GetService("ReplicatedStorage").InitiateBloodHour.Value == true then
+			if game:FindService("ReplicatedStorage").InitiateBloodHour.Value == true then
 				Rayfield:Notify({
 					Title = "ALERT",
 					Content = "HOLY JESUS BLOOD HOUR IS COMING NOW",
 					Duration = 5,
 					Image = 4483362458,
 				})
-				game:GetService("ReplicatedStorage").InitiateBloodHour.Value = false
+				game:FindService("ReplicatedStorage").InitiateBloodHour.Value = false
 			end
 		end
 	end)

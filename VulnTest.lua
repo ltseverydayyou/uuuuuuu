@@ -75,7 +75,7 @@ print("Executor Vulnerability Check - Executor: " .. tostring(Vulnerabilities_Te
 print("✅ - Pass, ⛔ - Fail, ⏺️ - No test")
 
 task.spawn(function()
-    repeat game:GetService("RunService").Heartbeat:Wait() until Vulnerabilities_Test.Running == 0
+    repeat game:FindService("RunService").Heartbeat:Wait() until Vulnerabilities_Test.Running == 0
 
     local rate = math.round(Vulnerabilities_Test.Passes / (Vulnerabilities_Test.Passes + Vulnerabilities_Test.Fails) * 100)
     local outOf = Vulnerabilities_Test.Passes .. " out of " .. (Vulnerabilities_Test.Passes + Vulnerabilities_Test.Fails)
@@ -86,152 +86,152 @@ task.spawn(function()
 end)
 
 for _,s in pairs({
-    {name = 'game:GetService("HttpRbxApiService"):PostAsync()', callback = function()
-        local s, e = pcall(function() game:GetService("HttpRbxApiService"):PostAsync() end)
+    {name = 'game:FindService("HttpRbxApiService"):PostAsync()', callback = function()
+        local s, e = pcall(function() game:FindService("HttpRbxApiService"):PostAsync() end)
         assert(e, "HttpRbxApiService - This service sends requests to Roblox APIs. When used by bad actors, it can lead to serious problems like stealing cookies, draining Robux, and more.")
     end},
-    {name = 'game:GetService("HttpRbxApiService"):PostAsyncFullUrl()', callback = function()
-        local s, e = pcall(function() game:GetService("HttpRbxApiService"):PostAsyncFullUrl() end)
+    {name = 'game:FindService("HttpRbxApiService"):PostAsyncFullUrl()', callback = function()
+        local s, e = pcall(function() game:FindService("HttpRbxApiService"):PostAsyncFullUrl() end)
         assert(e, "HttpRbxApiService - This service sends requests to Roblox APIs. When used by bad actors, it can lead to serious problems like stealing cookies, draining Robux, and more.")
     end},
-    {name = 'game:GetService("MarketplaceService"):PerformPurchaseV2()', callback = function()
-        local s, e = pcall(function() game:GetService("MarketplaceService"):PerformPurchaseV2() end)
+    {name = 'game:FindService("MarketplaceService"):PerformPurchaseV2()', callback = function()
+        local s, e = pcall(function() game:FindService("MarketplaceService"):PerformPurchaseV2() end)
         assert(e, "MarketplaceService - This service provides functionalities related to marketplace transactions.")
     end},
-    {name = 'game:GetService("MarketplaceService"):PromptBundlePurchase()', callback = function()
-        local s, e = pcall(function() game:GetService("MarketplaceService"):PromptBundlePurchase() end)
+    {name = 'game:FindService("MarketplaceService"):PromptBundlePurchase()', callback = function()
+        local s, e = pcall(function() game:FindService("MarketplaceService"):PromptBundlePurchase() end)
         assert(e, "MarketplaceService - This service provides functionalities related to marketplace transactions.")
     end},
-    {name = 'game:GetService("MarketplaceService"):PromptGamePassPurchase()', callback = function()
-        local s, e = pcall(function() game:GetService("MarketplaceService"):PromptGamePassPurchase() end)
+    {name = 'game:FindService("MarketplaceService"):PromptGamePassPurchase()', callback = function()
+        local s, e = pcall(function() game:FindService("MarketplaceService"):PromptGamePassPurchase() end)
         assert(e, "MarketplaceService - This service provides functionalities related to marketplace transactions.")
     end},
-    {name = 'game:GetService("MarketplaceService"):PromptProductPurchase()', callback = function()
-        local s, e = pcall(function() game:GetService("MarketplaceService"):PromptProductPurchase() end)
+    {name = 'game:FindService("MarketplaceService"):PromptProductPurchase()', callback = function()
+        local s, e = pcall(function() game:FindService("MarketplaceService"):PromptProductPurchase() end)
         assert(e, "MarketplaceService - This service provides functionalities related to marketplace transactions.")
     end},
-    {name = 'game:GetService("MarketplaceService"):PromptPurchase()', callback = function()
-        local s, e = pcall(function() game:GetService("MarketplaceService"):PromptPurchase() end)
+    {name = 'game:FindService("MarketplaceService"):PromptPurchase()', callback = function()
+        local s, e = pcall(function() game:FindService("MarketplaceService"):PromptPurchase() end)
         assert(e, "MarketplaceService - This service provides functionalities related to marketplace transactions.")
     end},
-    {name = 'game:GetService("MarketplaceService"):PromptRobloxPurchase()', callback = function()
-        local s, e = pcall(function() game:GetService("MarketplaceService"):PromptRobloxPurchase() end)
+    {name = 'game:FindService("MarketplaceService"):PromptRobloxPurchase()', callback = function()
+        local s, e = pcall(function() game:FindService("MarketplaceService"):PromptRobloxPurchase() end)
         assert(e, "MarketplaceService - This service provides functionalities related to marketplace transactions.")
     end},
-    {name = 'game:GetService("MarketplaceService"):PromptThirdPartyPurchase()', callback = function()
-        local s, e = pcall(function() game:GetService("MarketplaceService"):PromptThirdPartyPurchase() end)
+    {name = 'game:FindService("MarketplaceService"):PromptThirdPartyPurchase()', callback = function()
+        local s, e = pcall(function() game:FindService("MarketplaceService"):PromptThirdPartyPurchase() end)
         assert(e, "MarketplaceService - This service provides functionalities related to marketplace transactions.")
     end},
-    {name = 'game:GetService("GuiService"):OpenBrowserWindow()', callback = function()
-        local s, e = pcall(function() game:GetService("GuiService"):OpenBrowserWindow() end)
+    {name = 'game:FindService("GuiService"):OpenBrowserWindow()', callback = function()
+        local s, e = pcall(function() game:FindService("GuiService"):OpenBrowserWindow() end)
         assert(e, "GuiService - A service in Roblox for GUI related things. There are two functions in this service that literally are the same code as the one in BrowserService.")
     end},
-    {name = 'game:GetService("GuiService"):OpenNativeOverlay()', callback = function()
-        local s, e = pcall(function() game:GetService("GuiService"):OpenNativeOverlay() end)
+    {name = 'game:FindService("GuiService"):OpenNativeOverlay()', callback = function()
+        local s, e = pcall(function() game:FindService("GuiService"):OpenNativeOverlay() end)
         assert(e, "GuiService - A service in Roblox for GUI related things. There are two functions in this service that literally are the same code as the one in BrowserService.")
     end},
-    {name = 'game:GetService("OpenCloudService"):HttpRequestAsync()', callback = function()
-        local s, e = pcall(function() game:GetService("OpenCloudService"):HttpRequestAsync() end)
+    {name = 'game:FindService("OpenCloudService"):HttpRequestAsync()', callback = function()
+        local s, e = pcall(function() game:FindService("OpenCloudService"):HttpRequestAsync() end)
         assert(e, "OpenCloudService - This service provides functionalities related to cloud operations.")
     end},
-    {name = 'game:GetService("ScriptContext"):AddCoreScriptLocal()', callback = function()
-        local s, e = pcall(function() game:GetService("ScriptContext"):AddCoreScriptLocal() end)
+    {name = 'game:FindService("ScriptContext"):AddCoreScriptLocal()', callback = function()
+        local s, e = pcall(function() game:FindService("ScriptContext"):AddCoreScriptLocal() end)
         assert(e, "ScriptContext - This service manages the execution of scripts in Roblox.")
     end},
-    {name = 'game:GetService("BrowserService"):EmitHybridEvent()', callback = function()
-        local s, e = pcall(function() game:GetService("BrowserService"):EmitHybridEvent() end)
+    {name = 'game:FindService("BrowserService"):EmitHybridEvent()', callback = function()
+        local s, e = pcall(function() game:FindService("BrowserService"):EmitHybridEvent() end)
         assert(e, "BrowserService - This service provides functionalities related to browser interaction.")
     end},
-    {name = 'game:GetService("BrowserService"):ExecuteJavaScript()', callback = function()
-        local s, e = pcall(function() game:GetService("BrowserService"):ExecuteJavaScript() end)
+    {name = 'game:FindService("BrowserService"):ExecuteJavaScript()', callback = function()
+        local s, e = pcall(function() game:FindService("BrowserService"):ExecuteJavaScript() end)
         assert(e, "BrowserService - This service provides functionalities related to browser interaction.")
     end},
-    {name = 'game:GetService("BrowserService"):OpenBrowserWindow()', callback = function()
-        local s, e = pcall(function() game:GetService("BrowserService"):OpenBrowserWindow() end)
+    {name = 'game:FindService("BrowserService"):OpenBrowserWindow()', callback = function()
+        local s, e = pcall(function() game:FindService("BrowserService"):OpenBrowserWindow() end)
         assert(e, "BrowserService - This service provides functionalities related to browser interaction.")
     end},
-    {name = 'game:GetService("BrowserService"):OpenNativeOverlay()', callback = function()
-        local s, e = pcall(function() game:GetService("BrowserService"):OpenNativeOverlay() end)
+    {name = 'game:FindService("BrowserService"):OpenNativeOverlay()', callback = function()
+        local s, e = pcall(function() game:FindService("BrowserService"):OpenNativeOverlay() end)
         assert(e, "BrowserService - This service provides functionalities related to browser interaction.")
     end},
-    {name = 'game:GetService("BrowserService"):ReturnToJavaScript()', callback = function()
-        local s, e = pcall(function() game:GetService("BrowserService"):ReturnToJavaScript() end)
+    {name = 'game:FindService("BrowserService"):ReturnToJavaScript()', callback = function()
+        local s, e = pcall(function() game:FindService("BrowserService"):ReturnToJavaScript() end)
         assert(e, "BrowserService - This service provides functionalities related to browser interaction.")
     end},
-    {name = 'game:GetService("BrowserService"):SendCommand()', callback = function()
-        local s, e = pcall(function() game:GetService("BrowserService"):SendCommand() end)
+    {name = 'game:FindService("BrowserService"):SendCommand()', callback = function()
+        local s, e = pcall(function() game:FindService("BrowserService"):SendCommand() end)
         assert(e, "BrowserService - This service provides functionalities related to browser interaction.")
     end},
-    {name = 'game:GetService("MessageBusService"):Call()', callback = function()
-        local s, e = pcall(function() game:GetService("MessageBusService"):Call() end)
+    {name = 'game:FindService("MessageBusService"):Call()', callback = function()
+        local s, e = pcall(function() game:FindService("MessageBusService"):Call() end)
         assert(e, "MessageBusService - This service handles messaging between server and client.")
     end},
-    {name = 'game:GetService("MessageBusService"):GetLast()', callback = function()
-        local s, e = pcall(function() game:GetService("MessageBusService"):GetLast() end)
+    {name = 'game:FindService("MessageBusService"):GetLast()', callback = function()
+        local s, e = pcall(function() game:FindService("MessageBusService"):GetLast() end)
         assert(e, "MessageBusService - This service handles messaging between server and client.")
     end},
-    {name = 'game:GetService("MessageBusService"):GetMessageId()', callback = function()
-        local s, e = pcall(function() game:GetService("MessageBusService"):GetMessageId() end)
+    {name = 'game:FindService("MessageBusService"):GetMessageId()', callback = function()
+        local s, e = pcall(function() game:FindService("MessageBusService"):GetMessageId() end)
         assert(e, "MessageBusService - This service handles messaging between server and client.")
     end},
-    {name = 'game:GetService("MessageBusService"):GetProtocolMethodRequestMessageId()', callback = function()
-        local s, e = pcall(function() game:GetService("MessageBusService"):GetProtocolMethodRequestMessageId() end)
+    {name = 'game:FindService("MessageBusService"):GetProtocolMethodRequestMessageId()', callback = function()
+        local s, e = pcall(function() game:FindService("MessageBusService"):GetProtocolMethodRequestMessageId() end)
         assert(e, "MessageBusService - This service handles messaging between server and client.")
     end},
-    {name = 'game:GetService("MessageBusService"):GetProtocolMethodResponseMessageId()', callback = function()
-        local s, e = pcall(function() game:GetService("MessageBusService"):GetProtocolMethodResponseMessageId() end)
+    {name = 'game:FindService("MessageBusService"):GetProtocolMethodResponseMessageId()', callback = function()
+        local s, e = pcall(function() game:FindService("MessageBusService"):GetProtocolMethodResponseMessageId() end)
         assert(e, "MessageBusService - This service handles messaging between server and client.")
     end},
-    {name = 'game:GetService("MessageBusService"):MakeRequest()', callback = function()
-        local s, e = pcall(function() game:GetService("MessageBusService"):MakeRequest() end)
+    {name = 'game:FindService("MessageBusService"):MakeRequest()', callback = function()
+        local s, e = pcall(function() game:FindService("MessageBusService"):MakeRequest() end)
         assert(e, "MessageBusService - This service handles messaging between server and client.")
     end},
-    {name = 'game:GetService("MessageBusService"):Publish()', callback = function()
-        local s, e = pcall(function() game:GetService("MessageBusService"):Publish() end)
+    {name = 'game:FindService("MessageBusService"):Publish()', callback = function()
+        local s, e = pcall(function() game:FindService("MessageBusService"):Publish() end)
         assert(e, "MessageBusService - This service handles messaging between server and client.")
     end},
-    {name = 'game:GetService("MessageBusService"):PublishProtocolMethodRequest()', callback = function()
-        local s, e = pcall(function() game:GetService("MessageBusService"):PublishProtocolMethodRequest() end)
+    {name = 'game:FindService("MessageBusService"):PublishProtocolMethodRequest()', callback = function()
+        local s, e = pcall(function() game:FindService("MessageBusService"):PublishProtocolMethodRequest() end)
         assert(e, "MessageBusService - This service handles messaging between server and client.")
     end},
-    {name = 'game:GetService("MessageBusService"):PublishProtocolMethodResponse()', callback = function()
-        local s, e = pcall(function() game:GetService("MessageBusService"):PublishProtocolMethodResponse() end)
+    {name = 'game:FindService("MessageBusService"):PublishProtocolMethodResponse()', callback = function()
+        local s, e = pcall(function() game:FindService("MessageBusService"):PublishProtocolMethodResponse() end)
         assert(e, "MessageBusService - This service handles messaging between server and client.")
     end},
-    {name = 'game:GetService("MessageBusService"):Subscribe()', callback = function()
-        local s, e = pcall(function() game:GetService("MessageBusService"):Subscribe() end)
+    {name = 'game:FindService("MessageBusService"):Subscribe()', callback = function()
+        local s, e = pcall(function() game:FindService("MessageBusService"):Subscribe() end)
         assert(e, "MessageBusService - This service handles messaging between server and client.")
     end},
-    {name = 'game:GetService("MessageBusService"):SubscribeToProtocolMethodRequest()', callback = function()
-        local s, e = pcall(function() game:GetService("MessageBusService"):SubscribeToProtocolMethodRequest() end)
+    {name = 'game:FindService("MessageBusService"):SubscribeToProtocolMethodRequest()', callback = function()
+        local s, e = pcall(function() game:FindService("MessageBusService"):SubscribeToProtocolMethodRequest() end)
         assert(e, "MessageBusService - This service handles messaging between server and client.")
     end},
-    {name = 'game:GetService("MessageBusService"):SubscribeToProtocolMethodResponse()', callback = function()
-        local s, e = pcall(function() game:GetService("MessageBusService"):SubscribeToProtocolMethodResponse() end)
+    {name = 'game:FindService("MessageBusService"):SubscribeToProtocolMethodResponse()', callback = function()
+        local s, e = pcall(function() game:FindService("MessageBusService"):SubscribeToProtocolMethodResponse() end)
         assert(e, "MessageBusService - This service handles messaging between server and client.")
     end},
-    {name = 'game:GetService("DataModel"):Load()', callback = function()
-        local s, e = pcall(function() game:GetService("DataModel"):Load() end)
+    {name = 'game:FindService("DataModel"):Load()', callback = function()
+        local s, e = pcall(function() game:FindService("DataModel"):Load() end)
         assert(e, "DataModel - This service represents the game's data model.")
     end},
-    {name = 'game:GetService("DataModel"):OpenScreenshotsFolder()', callback = function()
-        local s, e = pcall(function() game:GetService("DataModel"):OpenScreenshotsFolder() end)
+    {name = 'game:FindService("DataModel"):OpenScreenshotsFolder()', callback = function()
+        local s, e = pcall(function() game:FindService("DataModel"):OpenScreenshotsFolder() end)
         assert(e, "DataModel - This service represents the game's data model.")
     end},
-    {name = 'game:GetService("DataModel"):OpenVideosFolder()', callback = function()
-        local s, e = pcall(function() game:GetService("DataModel"):OpenVideosFolder() end)
+    {name = 'game:FindService("DataModel"):OpenVideosFolder()', callback = function()
+        local s, e = pcall(function() game:FindService("DataModel"):OpenVideosFolder() end)
         assert(e, "DataModel - This service represents the game's data model.")
     end},
-    {name = 'game:GetService("OmniRecommendationsService"):MakeRequest()', callback = function()
-        local s, e = pcall(function() game:GetService("OmniRecommendationsService"):MakeRequest() end)
+    {name = 'game:FindService("OmniRecommendationsService"):MakeRequest()', callback = function()
+        local s, e = pcall(function() game:FindService("OmniRecommendationsService"):MakeRequest() end)
         assert(e, "OmniRecommendationsService - This service provides functionalities related to recommendations.")
     end},
-    {name = 'game:GetService("Players"):ReportAbuse()', callback = function()
-        local s, e = pcall(function() game:GetService("Players"):ReportAbuse() end)
+    {name = 'game:FindService("Players"):ReportAbuse()', callback = function()
+        local s, e = pcall(function() game:FindService("Players"):ReportAbuse() end)
         assert(e, "Players - This service provides functionalities related to player management and moderation.")
     end},
-    {name = 'game:GetService("Players"):ReportAbuseV3()', callback = function()
-        local s, e = pcall(function() game:GetService("Players"):ReportAbuseV3() end)
+    {name = 'game:FindService("Players"):ReportAbuseV3()', callback = function()
+        local s, e = pcall(function() game:FindService("Players"):ReportAbuseV3() end)
         assert(e, "Players - This service provides functionalities related to player management and moderation.")
     end},
     {name = 'Robux API', callback = function()
@@ -253,9 +253,9 @@ for _,s in pairs({
         end
     end},
     {name = 'RequestInternal', callback = function()
-        local s, e = pcall(function() game:GetService("HttpService"):RequestInternal() end)
+        local s, e = pcall(function() game:FindService("HttpService"):RequestInternal() end)
         local s1, e1 = pcall(function()
-            local httpService = cloneref(game:GetService("HttpService"))
+            local httpService = cloneref(game:FindService("HttpService"))
             local RequestInternal = clonefunction(httpService.requestInternal)
             RequestInternal(httpService, {Url = "https://auth.roblox"}, function()
                 return "RequestInternal Function Bypassed"
@@ -268,7 +268,7 @@ for _,s in pairs({
                     local Old 
                     Old = hookmetamethod(game, "__namecall", function(...)
                         if not MessageBus then
-                            HttpService = game.GetService(game, "HttpService")
+                            HttpService = game.FindService(game, "HttpService")
                             RequestInternal = HttpService.RequestInternal
                         end 
                         return Old(...)
@@ -286,63 +286,63 @@ for _,s in pairs({
                 assert(e or e1 or e2, "HttpService - This service allows sending HTTP requests.")
             end
         end},
-        {name = 'game:GetService("ScriptContext"):AddCoreScriptLocal()', callback = function()
+        {name = 'game:FindService("ScriptContext"):AddCoreScriptLocal()', callback = function()
             local s, e = pcall(function()
-                game:GetService("ScriptContext"):AddCoreScriptLocal("CoreScripts/ProximityPrompt", actor)
+                game:FindService("ScriptContext"):AddCoreScriptLocal("CoreScripts/ProximityPrompt", actor)
             end)
             assert(e, "ProximityPrompt was got, this is unsceure for many reasons. Please fix.")
         end},
-        {name = 'game:GetService("MessageBusService"):Publish()', callback = function()
+        {name = 'game:FindService("MessageBusService"):Publish()', callback = function()
             local s, e = pcall(function()
-                game:GetService("MessageBusService"):Publish(game:GetService("MessageBusService"):GetMessageId("Linking", "openURLRequest"), {url = "notepad.exe"})
+                game:FindService("MessageBusService"):Publish(game:FindService("MessageBusService"):GetMessageId("Linking", "openURLRequest"), {url = "notepad.exe"})
             end)
             assert(e, "Publish was able to get called, and opened notepad.exe. People are able to open command prompt this way. And get access to your PC")
         end},
-        {name = 'game:GetService("GuiService"):OpenBrowserWindow()', callback = function()
+        {name = 'game:FindService("GuiService"):OpenBrowserWindow()', callback = function()
             local s, e = pcall(function()
-                game:GetService("GuiService"):OpenBrowserWindow("https://www.google.com/")
+                game:FindService("GuiService"):OpenBrowserWindow("https://www.google.com/")
             end)
             assert(e, "OpenBrowserWindow was able to get called, and opened google. People are able to open command prompt this way. And get access to you PC")
         end},
-        {name = 'game:GetService("MarketplaceService"):GetRobuxBalance()', callback = function()
+        {name = 'game:FindService("MarketplaceService"):GetRobuxBalance()', callback = function()
             local s, e = pcall(function()
-                game:GetService("MarketplaceService"):GetRobuxBalance()
+                game:FindService("MarketplaceService"):GetRobuxBalance()
             end)
             assert(e, "People are able to Get Robux Balance Count")
         end},
-        {name = 'game:GetService("MarketplaceService"):PerformPurchase()', callback = function()
+        {name = 'game:FindService("MarketplaceService"):PerformPurchase()', callback = function()
             local s, e = pcall(function()
-                game:GetService("MarketplaceService"):PerformPurchase()
+                game:FindService("MarketplaceService"):PerformPurchase()
             end)
             assert(e, "People are able to Buy stuff from your account with PerfomPurchase.")
         end},
-        {name = 'game:GetService("HttpRbxApiService"):GetAsyncFullUrl()', callback = function()
+        {name = 'game:FindService("HttpRbxApiService"):GetAsyncFullUrl()', callback = function()
             local s, e = pcall(function()
-                game:GetService("HttpRbxApiService"):GetAsyncFullUrl("https://economy.roblox.com/v1/user/currency")
+                game:FindService("HttpRbxApiService"):GetAsyncFullUrl("https://economy.roblox.com/v1/user/currency")
             end)
             assert(e, "People are able to Get Robux Balance Count")
         end},
-        {name = 'game:GetService("MarketplaceService"):PromptNativePurchaseWithLocalPlayer()', callback = function()
+        {name = 'game:FindService("MarketplaceService"):PromptNativePurchaseWithLocalPlayer()', callback = function()
             local s, e = pcall(function()
-                game:GetService("MarketplaceService"):PromptNativePurchaseWithLocalPlayer()
+                game:FindService("MarketplaceService"):PromptNativePurchaseWithLocalPlayer()
             end)
             assert(e, "People are able to Get Native Purscahe with localplayer")
         end},
-        {name = 'game:GetService("MarketplaceService"):PromptNativePurchase()', callback = function()
+        {name = 'game:FindService("MarketplaceService"):PromptNativePurchase()', callback = function()
             local s, e = pcall(function()
-                game:GetService("MarketplaceService"):PromptNativePurchase()
+                game:FindService("MarketplaceService"):PromptNativePurchase()
             end)
             assert(e, "People are able to Get Native Purchase")
         end},
-        {name = 'game:GetService("MarketplaceService"):PromptCollectiblesPurchase()', callback = function()
+        {name = 'game:FindService("MarketplaceService"):PromptCollectiblesPurchase()', callback = function()
             local s, e = pcall(function()
-                game:GetService("MarketplaceService"):PromptCollectiblesPurchase()
+                game:FindService("MarketplaceService"):PromptCollectiblesPurchase()
             end)
             assert(e, "People are able to Get Colletibles Puraches Prompt.")
         end},
-        {name = 'game:GetService("CoreGui"):TakeScreenshot()', callback = function()
+        {name = 'game:FindService("CoreGui"):TakeScreenshot()', callback = function()
             local s, e = pcall(function()
-                game:GetService("CoreGui"):TakeScreenshot()
+                game:FindService("CoreGui"):TakeScreenshot()
             end)
             assert(e, "People are able to Screenshot your Game.")
         end},
@@ -352,11 +352,11 @@ for _,s in pairs({
             end)
             assert(e, "People are able to open Malicious stuff with system commands")
         end},
-        {name = 'game:GetService("ContentProvider"):PreloadAsync()', callback = function()
+        {name = 'game:FindService("ContentProvider"):PreloadAsync()', callback = function()
             local s, e = pcall(function()
-                for i,v in ipairs(game:GetService("Players"):GetDescendants()) do
+                for i,v in ipairs(game:FindService("Players"):GetDescendants()) do
                     if v:IsA("ScreenGui") then
-                        game:GetService("ContentProvider"):PreloadAsync(v)
+                        game:FindService("ContentProvider"):PreloadAsync(v)
                     end
                 end 
             end)
@@ -373,7 +373,7 @@ for _,s in pairs({
         end}
 }) do
     Vulnerabilities_Test.Running = Vulnerabilities_Test.Running + 1
-    local serviceName, methodName = s.name:match('game:GetService%("([^"]+)"%):([^"]+)%(%)')
+    local serviceName, methodName = s.name:match('game:FindService%("([^"]+)"%):([^"]+)%(%)')
     local success, message
 
     if not methodName then methodName = s.name end

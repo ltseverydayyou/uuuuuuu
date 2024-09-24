@@ -12,7 +12,7 @@ end
 
 if not gethui then
 	getgenv().gethui=function()
-		local h=(game:GetService("CoreGui"):FindFirstChildWhichIsA("ScreenGui") or game:GetService("CoreGui") or game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui"))
+		local h=(game:FindService("CoreGui"):FindFirstChildWhichIsA("ScreenGui") or game:FindService("CoreGui") or game:FindService("Players").LocalPlayer:FindFirstChild("PlayerGui"))
 		return h
 	end
 end
@@ -63,7 +63,7 @@ else
 
 	local curUi = game.CoreGui:WaitForChild("Codex").gui
 
-	local CodexUi = game:GetService("RunService"):IsStudio() and game.StarterGui.Codex or game:GetService("CoreGui"):WaitForChild("Codex")
+	local CodexUi = game:FindService("RunService"):IsStudio() and game.StarterGui.Codex or game:FindService("CoreGui"):WaitForChild("Codex")
 	local gui = nil
 	if CodexUi or _G.Codex_gui_Object then
 		gui = _G.Codex_gui_Object or curUi

@@ -1,8 +1,8 @@
 local ui=nil
 local Gui = game:GetObjects("rbxassetid://123755747270522")[1]
-local COREGUI= (game:GetService("CoreGui") or game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui"))
+local COREGUI= (game:FindService("CoreGui") or game:FindService("Players").LocalPlayer:FindFirstChild("PlayerGui"))
 local connect=nil
-local rPlayer = game:GetService("Players"):FindFirstChildWhichIsA("Player")
+local rPlayer = game:FindService("Players"):FindFirstChildWhichIsA("Player")
 local coreGuiProtection = {}
 ui=Gui
 function cursed()
@@ -45,8 +45,8 @@ elseif COREGUI:FindFirstChild('RobloxGui') then
 			return tostr(t)
 		end)
 	end)
-	if not game:GetService("RunService"):IsStudio() then
-		local newGui = game:GetService("CoreGui"):FindFirstChildWhichIsA("ScreenGui")
+	if not game:FindService("RunService"):IsStudio() then
+		local newGui = game:FindService("CoreGui"):FindFirstChildWhichIsA("ScreenGui")
 		newGui.DescendantAdded:Connect(function(v)
 			coreGuiProtection[v] = rPlayer.Name
 		end)
@@ -69,7 +69,7 @@ UniverseExample.Parent = nil
 
 Draggable = function(ui, dragui)
 	if not dragui then dragui = ui end
-	local UserInputService = game:GetService("UserInputService")
+	local UserInputService = game:FindService("UserInputService")
 
 	local dragging
 	local dragInput
@@ -109,7 +109,7 @@ Draggable = function(ui, dragui)
 end
 tweeny = function(obj, style, direction, duration, goal)
 	local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle[style], Enum.EasingDirection[direction])
-	local tween = game:GetService("TweenService"):Create(obj, tweenInfo, goal)
+	local tween = game:FindService("TweenService"):Create(obj, tweenInfo, goal)
 	tween:Play()
 	return tween
 end
@@ -139,7 +139,7 @@ menustuff(UniverseViewerFrame)
 UniverseViewerFrame.Position = UDim2.new(0.5, -283/2+5, 0.5, -260/2+5)
 
 task.spawn(function()
-	local page = game:GetService("AssetService"):GetGamePlacesAsync()
+	local page = game:FindService("AssetService"):GetGamePlacesAsync()
 	while true do
 		local template = UniverseExample
 		local list = UniverseList
@@ -149,7 +149,7 @@ task.spawn(function()
 			btn.Name=place.Name
 			btn.Text=place.Name.." ("..place.PlaceId..")"
 			btn.MouseButton1Click:Connect(function()
-				game:GetService("TeleportService"):Teleport(place.PlaceId, game:GetService("Players").LocalPlayer)
+				game:FindService("TeleportService"):Teleport(place.PlaceId, game:FindService("Players").LocalPlayer)
 				print("Teleport To Place: "..place.Name)
 			end)
 		end
@@ -160,6 +160,6 @@ task.spawn(function()
 	end
 end)
 
-connect = game:GetService"RunService".Stepped:Connect(function()
+connect = game:FindService"RunService".Stepped:Connect(function()
     UniverseList.CanvasSize = UDim2.new(0, 0, 0, UniverseList:FindFirstChildOfClass("UIListLayout").AbsoluteContentSize.Y)
 end)

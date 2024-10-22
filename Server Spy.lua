@@ -1,5 +1,5 @@
 local ui=nil
-local Gui = game:GetObjects("rbxassetid://18266429159")[1]
+local Gui = game:GetObjects("rbxassetid://81848243052574")[1]
 local COREGUI= (game:GetService("CoreGui") or game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui"))
 local connect=nil
 local rPlayer = game:GetService("Players"):FindFirstChildWhichIsA("Player")
@@ -67,8 +67,8 @@ end
 local SRSFrame = ui.SRS
 local SRSList = SRSFrame.Container.Logs
 local SRSresult = SRSFrame.result.answer
-local SRStxt = SRSresult.txt
-local SRSExample = SRSList.mrlabel
+local SRStxt = SRSresult:FindFirstChildWhichIsA("TextLabel")
+local SRSExample = SRSList:FindFirstChildWhichIsA("TextButton")
 SRSExample.Parent = nil
 
 Draggable = function(ui, dragui)
@@ -154,12 +154,12 @@ menustuff = function(menu)
 end
 
 function updTxtScale()
-    local width = SRStxt.AbsoluteSize.X
-    local text = SRStxt.Text
-    local font = SRStxt.Font
-    local textSize = SRStxt.TextSize
-    local textBounds = game:GetService("TextService"):GetTextSize(text, textSize, font, Vector2.new(width, math.huge))
-    SRStxt.Size = UDim2.new(1, 0, 0, textBounds.Y)
+	local width = SRStxt.AbsoluteSize.X
+	local text = SRStxt.Text
+	local font = SRStxt.Font
+	local textSize = SRStxt.TextSize
+	local textBounds = game:GetService("TextService"):GetTextSize(text, textSize, font, Vector2.new(width, math.huge))
+	SRStxt.Size = UDim2.new(1, 0, 0, textBounds.Y)
 end
 
 function PathInstance(instance)
@@ -177,24 +177,24 @@ function PathInstance(instance)
 end
 
 function formatValue(value)
-    if typeof(value) == "string" then
-        return string.format("%q", value)
-    elseif typeof(value) == "number" then
-        return tostring(value)
-    elseif typeof(value) == "boolean" then
-        return value and "true" or "false"
-    elseif typeof(value) == "Instance" then
-        return PathInstance(value)
-    elseif typeof(value) == "table" then
-        local result = "{ "
-        for k, v in pairs(value) do
-            result = result .. string.format("[%s] = %s; \n", formatValue(k), formatValue(v))
-        end
-        result = result:sub(1, -2)
-        return result .. "}"
-    else
-        return string.format("%q", tostring(value))
-    end
+	if typeof(value) == "string" then
+		return string.format("%q", value)
+	elseif typeof(value) == "number" then
+		return tostring(value)
+	elseif typeof(value) == "boolean" then
+		return value and "true" or "false"
+	elseif typeof(value) == "Instance" then
+		return PathInstance(value)
+	elseif typeof(value) == "table" then
+		local result = "{ "
+		for k, v in pairs(value) do
+			result = result .. string.format("[%s] = %s; \n", formatValue(k), formatValue(v))
+		end
+		result = result:sub(1, -2)
+		return result .. "}"
+	else
+		return string.format("%q", tostring(value))
+	end
 end
 
 function Format(args)
@@ -255,17 +255,36 @@ function handleRemote(remote)
 
 			return ...
 		end
+	elseif remote:IsA("BindableFunction") then
+		remote.OnInvoke = function(...)
+			local args = {...}
+			local argsFormatted = Format(args)
+			local argsString = table.concat(argsFormatted, ", ")
+
+			_G.Code = string.format("BindableFunction: [game.%s]\nreturned: %s", fullPath, argsString)
+			local template = SRSExample
+			local list = SRSList
+			local btn = template:Clone()
+			btn.Parent=list
+			btn.Name=cursed()
+			btn.Text=_G.Code
+			btn.MouseButton1Click:connect(function()
+				SRStxt.Text=btn.Text
+			end)
+
+			return ...
+		end
 	end
 end
 
 function wrapRemotes()
 	for _, obj in ipairs(game:GetDescendants()) do
-		if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
+		if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") or obj:IsA("BindableFunction") then
 			handleRemote(obj)
 		end
 	end
 	con=game.DescendantAdded:Connect(function(descendant)
-		if descendant:IsA("RemoteEvent") or descendant:IsA("RemoteFunction") then
+		if descendant:IsA("RemoteEvent") or descendant:IsA("RemoteFunction") or descendant:IsA("BindableFunction") then
 			handleRemote(descendant)
 		end
 	end)

@@ -1,10 +1,10 @@
 if identifyexecutor() == "Fluxus" then
-	local fluxusUI = game:FindService("CoreGui"):WaitForChild("FluxusAndroidUI")
+	local fluxusUI = game:GetService("CoreGui"):WaitForChild("FluxusAndroidUI")
 	if fluxusUI:FindFirstChild("FluxusButton") then return print'you already have the fluxus button' end
 	fluxusUI.DisplayOrder=999
 	draggable = function(ui, dragui)
 		if not dragui then dragui = ui end
-		local UserInputService = game:FindService("UserInputService")
+		local UserInputService = game:GetService("UserInputService")
 
 		local dragging
 		local dragInput
@@ -91,7 +91,7 @@ if identifyexecutor() == "Fluxus" then
 	end
 	coroutine.wrap(useButton)()
 
-	game:FindService("RunService").RenderStepped:connect(function()
+	game:GetService("RunService").RenderStepped:connect(function()
 		fluxusUI:FindFirstChild("Frame").Visible=false
 	end)
 else

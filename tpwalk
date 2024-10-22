@@ -40,7 +40,7 @@ local function toggleTPWalk()
         TPWalking:Disconnect()
     else
         TPWalk = true
-        TPWalking = game:FindService("RunService").Stepped:Connect(function()
+        TPWalking = game:GetService("RunService").Stepped:Connect(function()
             if TPWalk then
                 local character = player.Character
                 local humanoid = character and character:FindFirstChildWhichIsA("Humanoid")

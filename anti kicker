@@ -4,7 +4,7 @@ if getgenv().ED_AntiKick then
 	return
 end
 
-local Players, StarterGui, OldNamecall = game:FindService("Players"), game:FindService("StarterGui")
+local Players, StarterGui, OldNamecall = game:GetService("Players"), game:GetService("StarterGui")
 
 getgenv().ED_AntiKick = {
 	Enabled = true,

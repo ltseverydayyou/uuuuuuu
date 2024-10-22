@@ -27,8 +27,8 @@ repeat wait()
      
      
     function _CameraUI()
-        local Players = game:FindService("Players")
-        local TweenService = game:FindService("TweenService")
+        local Players = game:GetService("Players")
+        local TweenService = game:GetService("TweenService")
      
         local LocalPlayer = Players.LocalPlayer
         if not LocalPlayer then
@@ -227,9 +227,9 @@ repeat wait()
     end
      
     function _CameraToggleStateController()
-        local Players = game:FindService("Players")
-        local UserInputService = game:FindService("UserInputService")
-        local GameSettings = UserSettings():FindService("UserGameSettings")
+        local Players = game:GetService("Players")
+        local UserInputService = game:GetService("UserInputService")
+        local GameSettings = UserSettings():GetService("UserGameSettings")
      
         local LocalPlayer = Players.LocalPlayer
         if not LocalPlayer then
@@ -314,7 +314,7 @@ repeat wait()
     end
      
     function _CameraInput()
-        local UserInputService = game:FindService("UserInputService")
+        local UserInputService = game:GetService("UserInputService")
      
         local MB_TAP_LENGTH = 0.3 -- length of time for a short mouse button tap to be registered
      
@@ -499,13 +499,13 @@ repeat wait()
         local CameraUI = _CameraUI()
      
         --[[ Roblox Services ]]--
-        local Players = game:FindService("Players")
-        local UserInputService = game:FindService("UserInputService")
-        local StarterGui = game:FindService("StarterGui")
-        local GuiService = game:FindService("GuiService")
-        local ContextActionService = game:FindService("ContextActionService")
-        local VRService = game:FindService("VRService")
-        local UserGameSettings = UserSettings():FindService("UserGameSettings")
+        local Players = game:GetService("Players")
+        local UserInputService = game:GetService("UserInputService")
+        local StarterGui = game:GetService("StarterGui")
+        local GuiService = game:GetService("GuiService")
+        local ContextActionService = game:GetService("ContextActionService")
+        local VRService = game:GetService("VRService")
+        local UserGameSettings = UserSettings():GetService("UserGameSettings")
      
         local player = Players.LocalPlayer 
      
@@ -2026,7 +2026,7 @@ repeat wait()
      
     function _Popper()
      
-        local Players = game:FindService("Players")
+        local Players = game:GetService("Players")
      
         local camera = game.Workspace.CurrentCamera
      
@@ -2372,7 +2372,7 @@ repeat wait()
         local pi = math.pi
      
         local cameraMinZoomDistance, cameraMaxZoomDistance do
-            local Player = game:FindService("Players").LocalPlayer
+            local Player = game:GetService("Players").LocalPlayer
      
             local function updateBounds()
                 cameraMinZoomDistance = Player.CameraMinZoomDistance
@@ -2490,8 +2490,8 @@ repeat wait()
         local MOUSELOCK_ACTION_PRIORITY = Enum.ContextActionPriority.Default.Value
      
         --[[ Services ]]--
-        local PlayersService = game:FindService("Players")
-        local ContextActionService = game:FindService("ContextActionService")
+        local PlayersService = game:GetService("Players")
+        local ContextActionService = game:GetService("ContextActionService")
         local Settings = UserSettings()	-- ignore warning
         local GameSettings = Settings.GameSettings
         local Mouse = PlayersService.LocalPlayer:GetMouse()
@@ -3000,7 +3000,7 @@ repeat wait()
     function _Invisicam()
      
         --[[ Top Level Roblox Services ]]--
-        local PlayersService = game:FindService("Players")
+        local PlayersService = game:GetService("Players")
      
         --[[ Constants ]]--
         local ZERO_VECTOR3 = Vector3.new(0,0,0)
@@ -3555,7 +3555,7 @@ repeat wait()
         local Util = _CameraUtils()
      
         --[[ Services ]]--
-        local PlayersService = game:FindService('Players')
+        local PlayersService = game:GetService('Players')
      
         --[[ The Module ]]--
         local BaseCamera = _BaseCamera()
@@ -3709,8 +3709,8 @@ repeat wait()
         local Util = _CameraUtils()
      
         --[[ Services ]]--
-        local PlayersService = game:FindService('Players')
-        local VRService = game:FindService("VRService")
+        local PlayersService = game:GetService('Players')
+        local VRService = game:GetService("VRService")
      
         --[[ The Module ]]--
         local BaseCamera = _BaseCamera()
@@ -4095,8 +4095,8 @@ repeat wait()
         end
      
         --[[ Services ]]--
-        local PlayersService = game:FindService('Players')
-        local VRService = game:FindService("VRService")
+        local PlayersService = game:GetService('Players')
+        local VRService = game:GetService("VRService")
      
         local CameraInput = _CameraInput()
         local Util = _CameraUtils()
@@ -4575,10 +4575,10 @@ repeat wait()
         }
      
         --[[ Roblox Services ]]--
-        local Players = game:FindService("Players")
-        local RunService = game:FindService("RunService")
-        local UserInputService = game:FindService("UserInputService")
-        local UserGameSettings = UserSettings():FindService("UserGameSettings")
+        local Players = game:GetService("Players")
+        local RunService = game:GetService("RunService")
+        local UserInputService = game:GetService("UserInputService")
+        local UserGameSettings = UserSettings():GetService("UserGameSettings")
      
         -- Camera math utility library
         local CameraUtils = _CameraUtils()
@@ -5211,10 +5211,10 @@ repeat wait()
         local TRAIL_DOT_MAX_SCALE = 2.5
         local TRAIL_DOT_MAX_DISTANCE = 100
      
-        local PlayersService = game:FindService("Players")
-        local TweenService = game:FindService("TweenService")
-        local RunService = game:FindService("RunService")
-        local Workspace = game:FindService("Workspace")
+        local PlayersService = game:GetService("Players")
+        local TweenService = game:GetService("TweenService")
+        local RunService = game:GetService("RunService")
+        local Workspace = game:GetService("Workspace")
      
         local LocalPlayer = PlayersService.LocalPlayer
      
@@ -5705,7 +5705,7 @@ repeat wait()
     end
      
     function _VehicleController()
-        local ContextActionService = game:FindService("ContextActionService")
+        local ContextActionService = game:GetService("ContextActionService")
      
         --[[ Constants ]]--
         -- Set this to true if you want to instead use the triggers for the throttle
@@ -5888,8 +5888,8 @@ repeat wait()
      
     function _TouchJump()
      
-        local Players = game:FindService("Players")
-        local GuiService = game:FindService("GuiService")
+        local Players = game:GetService("Players")
+        local GuiService = game:GetService("GuiService")
      
         --[[ Constants ]]--
         local TOUCH_CONTROL_SHEET = "rbxasset://textures/ui/Input/TouchControlsSheetV2.png"
@@ -6088,14 +6088,14 @@ repeat wait()
      
     function _ClickToMoveController()
         --[[ Roblox Services ]]--
-        local UserInputService = game:FindService("UserInputService")
-        local PathfindingService = game:FindService("PathfindingService")
-        local Players = game:FindService("Players")
-        local DebrisService = game:FindService('Debris')
-        local StarterGui = game:FindService("StarterGui")
-        local Workspace = game:FindService("Workspace")
-        local CollectionService = game:FindService("CollectionService")
-        local GuiService = game:FindService("GuiService")
+        local UserInputService = game:GetService("UserInputService")
+        local PathfindingService = game:GetService("PathfindingService")
+        local Players = game:GetService("Players")
+        local DebrisService = game:GetService('Debris')
+        local StarterGui = game:GetService("StarterGui")
+        local Workspace = game:GetService("Workspace")
+        local CollectionService = game:GetService("CollectionService")
+        local GuiService = game:GetService("GuiService")
      
         --[[ Configuration ]]
         local ShowPath = true
@@ -7200,9 +7200,9 @@ repeat wait()
     end
      
     function _TouchThumbstick()
-        local Players = game:FindService("Players")
-        local GuiService = game:FindService("GuiService")
-        local UserInputService = game:FindService("UserInputService")
+        local Players = game:GetService("Players")
+        local GuiService = game:GetService("GuiService")
+        local UserInputService = game:GetService("UserInputService")
         --[[ Constants ]]--
         local ZERO_VECTOR3 = Vector3.new(0,0,0)
         local TOUCH_CONTROL_SHEET = "rbxasset://textures/ui/TouchControlsSheet.png"
@@ -7410,12 +7410,12 @@ repeat wait()
         local FADE_IN_OUT_BALANCE_DEFAULT = 0.5
         local ThumbstickFadeTweenInfo = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
      
-        local Players = game:FindService("Players")
-        local GuiService = game:FindService("GuiService")
-        local UserInputService = game:FindService("UserInputService")
-        local ContextActionService = game:FindService("ContextActionService")
-        local RunService = game:FindService("RunService")
-        local TweenService = game:FindService("TweenService")
+        local Players = game:GetService("Players")
+        local GuiService = game:GetService("GuiService")
+        local UserInputService = game:GetService("UserInputService")
+        local ContextActionService = game:GetService("ContextActionService")
+        local RunService = game:GetService("RunService")
+        local TweenService = game:GetService("TweenService")
      
         local LocalPlayer = Players.LocalPlayer
         if not LocalPlayer then
@@ -7929,8 +7929,8 @@ repeat wait()
     end
      
     function _Gamepad()
-        local UserInputService = game:FindService("UserInputService")
-        local ContextActionService = game:FindService("ContextActionService")
+        local UserInputService = game:GetService("UserInputService")
+        local ContextActionService = game:GetService("ContextActionService")
      
         --[[ Constants ]]--
         local ZERO_VECTOR3 = Vector3.new(0,0,0)
@@ -8141,8 +8141,8 @@ repeat wait()
     function _Keyboard()
      
         --[[ Roblox Services ]]--
-        local UserInputService = game:FindService("UserInputService")
-        local ContextActionService = game:FindService("ContextActionService")
+        local UserInputService = game:GetService("UserInputService")
+        local ContextActionService = game:GetService("ContextActionService")
      
         --[[ Constants ]]--
         local ZERO_VECTOR3 = Vector3.new(0,0,0)
@@ -8317,11 +8317,11 @@ repeat wait()
         ControlModule.__index = ControlModule
      
         --[[ Roblox Services ]]--
-        local Players = game:FindService("Players")
-        local RunService = game:FindService("RunService")
-        local UserInputService = game:FindService("UserInputService")
-        local Workspace = game:FindService("Workspace")
-        local UserGameSettings = UserSettings():FindService("UserGameSettings")
+        local Players = game:GetService("Players")
+        local RunService = game:GetService("RunService")
+        local UserInputService = game:GetService("UserInputService")
+        local Workspace = game:GetService("Workspace")
+        local UserGameSettings = UserSettings():GetService("UserGameSettings")
      
         -- Roblox User Input Control Modules - each returns a new() constructor function used to create controllers as needed
         local Keyboard = _Keyboard()
@@ -8838,8 +8838,8 @@ repeat wait()
      
         local SetState = Instance.new("BindableEvent",script)
      
-        local Players = game:FindService("Players")
-        local RunService = game:FindService("RunService")
+        local Players = game:GetService("Players")
+        local RunService = game:GetService("RunService")
      
         local SOUND_DATA = {
             Climbing = {
@@ -9829,7 +9829,7 @@ repeat wait()
         onHook()
      
         -- setup emote chat hook
-        game:FindService("Players").LocalPlayer.Chatted:connect(function(msg)
+        game:GetService("Players").LocalPlayer.Chatted:connect(function(msg)
             local emote = ""
             if msg == "/e dance" then
                 emote = dances[math.random(1, #dances)]
@@ -10018,7 +10018,7 @@ repeat wait()
      
             local allowCustomAnimations = true
      
-            local success, msg = pcall(function() allowCustomAnimations = game:FindService("StarterPlayer").AllowCustomAnimations end)
+            local success, msg = pcall(function() allowCustomAnimations = game:GetService("StarterPlayer").AllowCustomAnimations end)
             if not success then
                 allowCustomAnimations = true
             end
@@ -10091,7 +10091,7 @@ repeat wait()
      
             local allowCustomAnimations = true
      
-            local success, msg = pcall(function() allowCustomAnimations = game:FindService("StarterPlayer").AllowCustomAnimations end)
+            local success, msg = pcall(function() allowCustomAnimations = game:GetService("StarterPlayer").AllowCustomAnimations end)
             if not success then
                 allowCustomAnimations = true
             end
@@ -10632,7 +10632,7 @@ repeat wait()
         onHook()
      
         -- setup emote chat hook
-        game:FindService("Players").LocalPlayer.Chatted:connect(function(msg)
+        game:GetService("Players").LocalPlayer.Chatted:connect(function(msg)
             local emote = ""
             if (string.sub(msg, 1, 3) == "/e ") then
                 emote = string.sub(msg, 4)
@@ -10752,8 +10752,8 @@ repeat wait()
     local TRANSITION = 0.15
     local WALKF = 200 / 3
      
-    local UIS = game:FindService("UserInputService")
-    local RUNSERVICE = game:FindService("RunService")
+    local UIS = game:GetService("UserInputService")
+    local RUNSERVICE = game:GetService("RunService")
      
     local InitObjects = _InitObjects()
     local AnimationHandler = _AnimationHandler()
@@ -10813,7 +10813,7 @@ repeat wait()
         -- Animation
         self.AnimationHandler = AnimationHandler.new(self.Humanoid, self.Character:WaitForChild("Animate"))
         self.AnimationHandler:EnableDefault(false)
-        local ssss = game:FindService("Players").LocalPlayer.PlayerScripts:FindFirstChild("SetState") or Instance.new("BindableEvent",game:FindService("Players").LocalPlayer.PlayerScripts)
+        local ssss = game:GetService("Players").LocalPlayer.PlayerScripts:FindFirstChild("SetState") or Instance.new("BindableEvent",game:GetService("Players").LocalPlayer.PlayerScripts)
         local soundState = ExecutedSounds
         ssss.Name = "SetState"
      
@@ -11420,7 +11420,7 @@ repeat wait()
      
     --END TEST
      
-    local PLAYERS = game:FindService("Players")
+    local PLAYERS = game:GetService("Players")
      
     local GravityController = _GravityController()
     local Controller = GravityController.new(PLAYERS.LocalPlayer)
@@ -11539,7 +11539,7 @@ repeat wait()
     Controller.GetGravityUp = GetGravityUp
      
     -- E is toggle
-    game:FindService("ContextActionService"):BindAction("Toggle", function(action, state, input)
+    game:GetService("ContextActionService"):BindAction("Toggle", function(action, state, input)
         if not (state == Enum.UserInputState.Begin) then
             return
         end

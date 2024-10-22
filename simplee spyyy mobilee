@@ -19,8 +19,8 @@ if _G.SimpleSpyExecuted and type(_G.SimpleSpyShutdown) == "function" then
 	print(pcall(_G.SimpleSpyShutdown))
 end
 
-local Players = game:FindService("Players")
-local CoreGui = game:FindService("CoreGui")
+local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
 local Highlight =
 	loadstring(
 		game:HttpGet("https://github.com/exxtremestuffs/SimpleSpySource/raw/master/highlight.lua")
@@ -323,11 +323,11 @@ TextLabel.TextYAlignment = Enum.TextYAlignment.Top
 
 -------------------------------------------------------------------------------
 -- init
-local RunService = game:FindService("RunService")
-local UserInputService = game:FindService("UserInputService")
-local TweenService = game:FindService("TweenService")
-local ContentProvider = game:FindService("ContentProvider")
-local TextService = game:FindService("TextService")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local ContentProvider = game:GetService("ContentProvider")
+local TextService = game:GetService("TextService")
 local Mouse
 
 local selectedColor = Color3.new(0.321569, 0.333333, 1)
@@ -419,7 +419,7 @@ local recordReturnValues = false
 
 -- functions
 
---- Converts arguments to a string and generates code that calls the specified method with them, recommended to be used in conjunction with ValueToString (method must be a string, e.g. `game:FindService("ReplicatedStorage").Remote.remote:FireServer`)
+--- Converts arguments to a string and generates code that calls the specified method with them, recommended to be used in conjunction with ValueToString (method must be a string, e.g. `game:GetService("ReplicatedStorage").Remote.remote:FireServer`)
 --- @param method string
 --- @param args any[]
 --- @return string
@@ -1446,7 +1446,7 @@ function i2p(i)
 		while true do
 			if parent and parent == player.Character then
 				if player == Players.LocalPlayer then
-					return 'game:FindService("Players").LocalPlayer.Character' .. out
+					return 'game:GetService("Players").LocalPlayer.Character' .. out
 				else
 					return i2p(player) .. ".Character" .. out
 				end
@@ -1462,12 +1462,12 @@ function i2p(i)
 	elseif parent ~= game then
 		while true do
 			if parent and parent.Parent == game then
-				local service = game:FindService(parent.ClassName)
+				local service = game:GetService(parent.ClassName)
 				if service then
 					if parent.ClassName == "Workspace" then
 						return "workspace" .. out
 					else
-						return 'game:FindService("' .. service.ClassName .. '")' .. out
+						return 'game:GetService("' .. service.ClassName .. '")' .. out
 					end
 				else
 					if parent.Name:match("[%a_]+[%w_]*") then

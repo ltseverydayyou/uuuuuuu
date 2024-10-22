@@ -1,8 +1,8 @@
 -- this is so trash
 if game.GameId==1524368576 then
-plr=game:FindService("Players").LocalPlayer
+plr=game:GetService("Players").LocalPlayer
 ui=plr.PlayerGui
-rs=game:FindService("RunService")
+rs=game:GetService("RunService")
 
 a=false
 b=false
@@ -85,7 +85,7 @@ badgeList = {
 
 local function getBadges()
 	for _, id in ipairs(badgeList) do
-		game:FindService("ReplicatedStorage"):FindFirstChild("DataStore"):FindFirstChild("Award"):FireServer(id)
+		game:GetService("ReplicatedStorage"):FindFirstChild("DataStore"):FindFirstChild("Award"):FireServer(id)
 	end
 end
 

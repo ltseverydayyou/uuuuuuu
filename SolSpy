@@ -3,7 +3,7 @@ local G2L = {};
 _G.Code = ""
 
 -- StarterGui.SolSpy
-G2L["1"] = Instance.new("ScreenGui", (game:FindService("CoreGui") or game:FindService("Players").LocalPlayer:WaitForChild("PlayerGui")));
+G2L["1"] = Instance.new("ScreenGui", (game:GetService("CoreGui") or game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")));
 G2L["1"]["Name"] = [[SolSpy]];
 G2L["1"]["ResetOnSpawn"] = false
 G2L["1"]["ZIndexBehavior"] = Enum.ZIndexBehavior.Sibling;
@@ -246,7 +246,7 @@ G2L["13"]["Name"] = [[Main]];
 local function C_12()
 local script = G2L["12"];
 	local frame = script.Parent
-	local UserInputService = game:FindService("UserInputService")
+	local UserInputService = game:GetService("UserInputService")
 	
 	local dragging
 	local dragInput
@@ -289,7 +289,7 @@ task.spawn(C_12);
 -- StarterGui.SolSpy.Frame.Main
 local function C_13()
 local script = G2L["13"];
-	local TweenService = game:FindService("TweenService")
+	local TweenService = game:GetService("TweenService")
 	
 	local MainFrame = script.Parent
 	local TopBar = MainFrame.TopBar

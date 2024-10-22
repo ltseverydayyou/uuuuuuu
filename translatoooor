@@ -4,7 +4,7 @@
     Credits to Riptxde for the sending chathook
 --]]
 
-if not game['Loaded'] then game['Loaded']:Wait() end; repeat wait(.06) until game:FindService('Players').LocalPlayer ~= nil
+if not game['Loaded'] then game['Loaded']:Wait() end; repeat wait(.06) until game:GetService('Players').LocalPlayer ~= nil
 local YourLang = "en" -- Language code that the messages are going to be translated to
 
 local googlev = isfile'googlev.txt' and readfile'googlev.txt' or ''
@@ -203,7 +203,7 @@ do -- init
     bl = InitialReq.Body:match('"cfb2h":"(.-)"')
 end
 
-local HttpService = game:FindService("HttpService")
+local HttpService = game:GetService("HttpService")
 function jsonE(o)
     return HttpService:JSONEncode(o)
 end
@@ -253,13 +253,13 @@ function translate(str, to, from)
     return result
 end
 
-local Players = game:FindService("Players")
+local Players = game:GetService("Players")
 local LP = Players.LocalPlayer
-local StarterGui = game:FindService('StarterGui')
+local StarterGui = game:GetService('StarterGui')
 for i=1, 15 do
     local r = pcall(StarterGui["SetCore"])
     if r then break end
-    game:FindService('RunService').RenderStepped:wait()
+    game:GetService('RunService').RenderStepped:wait()
 end
 wait()
 
@@ -269,7 +269,7 @@ local properties = {
     TextSize = 16;
 }
 
-game:FindService("StarterGui"):SetCore("SendNotification",
+game:GetService("StarterGui"):SetCore("SendNotification",
     {
         Title = "Chat Translator",
         Text = "Ported to Google Translate",
@@ -327,7 +327,7 @@ function disableSend()
     StarterGui:SetCore("ChatMakeSystemMessage", properties)
 end
 
-local CBar, CRemote, Connected = LP['PlayerGui']:WaitForChild('Chat')['Frame'].ChatBarParentFrame['Frame'].BoxFrame['Frame'].ChatBar, game:FindService('ReplicatedStorage').DefaultChatSystemChatEvents['SayMessageRequest'], {}
+local CBar, CRemote, Connected = LP['PlayerGui']:WaitForChild('Chat')['Frame'].ChatBarParentFrame['Frame'].BoxFrame['Frame'].ChatBar, game:GetService('ReplicatedStorage').DefaultChatSystemChatEvents['SayMessageRequest'], {}
 
 local HookChat = function(Bar)
     coroutine.wrap(function()
@@ -349,12 +349,12 @@ local HookChat = function(Bar)
                     elseif sendEnabled then
                         Message = translateTo(Message, target)
                         if not _G.SecureChat then
-                            game:FindService('Players'):Chat(Message); 
+                            game:GetService('Players'):Chat(Message); 
                         end
                         CRemote:FireServer(Message,'All')
                     else
                         if not _G.SecureChat then
-                            game:FindService('Players'):Chat(Message); 
+                            game:GetService('Players'):Chat(Message); 
                         end
                         CRemote:FireServer(Message,'All')
                     end

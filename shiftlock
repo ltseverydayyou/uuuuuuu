@@ -50,7 +50,7 @@ susDrag.Size = UDim2.new(0, 20, 0, 20)]]
 
 DragThingy = function(ui, dragui)
 	 if not dragui then dragui = ui end
-	 local UserInputService = game:FindService("UserInputService")
+	 local UserInputService = game:GetService("UserInputService")
 	 
 	 local dragging
 	 local dragInput
@@ -94,7 +94,7 @@ DragThingy(LockButton)
 local function YDYMLAX_fake_script()
 	local script = Instance.new('LocalScript', LockButton)
 
-	local Input = game:FindService("UserInputService")
+	local Input = game:GetService("UserInputService")
 	local V = false
 
 	local main = script.Parent
@@ -110,7 +110,7 @@ local function YDYMLAX_fake_script()
 	end)
 
 	local g = nil
-	local GameSettings = UserSettings():FindService("UserGameSettings")
+	local GameSettings = UserSettings():GetService("UserGameSettings")
 	local J = nil
 
 	function ForceShiftLock()
@@ -119,7 +119,7 @@ local function YDYMLAX_fake_script()
 		end)
 		_ = i
 		g = k
-		J = game:FindService("RunService").RenderStepped:Connect(function()
+		J = game:GetService("RunService").RenderStepped:Connect(function()
 			pcall(function()
 				GameSettings.RotationType = Enum.RotationType.CameraRelative
 			end)

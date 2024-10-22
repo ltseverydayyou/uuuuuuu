@@ -163,7 +163,7 @@ end)
 test("getcallingscript", {})
 
 test("getscriptclosure", {"getscriptfunction"}, function()
-	local module = game:FindService("CoreGui").RobloxGui.Modules.Common.Constants
+	local module = game:GetService("CoreGui").RobloxGui.Modules.Common.Constants
 	local constants = getrenv().require(module)
 	local generated = getscriptclosure(module)()
 	assert(constants ~= generated, "Generated module should not match the original")
@@ -200,7 +200,7 @@ test("isexecutorclosure", {"checkclosure", "isourclosure"}, function()
 end)
 
 test("loadstring", {}, function()
-	local animate = game:FindService("Players").LocalPlayer.Character.Animate
+	local animate = game:GetService("Players").LocalPlayer.Character.Animate
 	local bytecode = getscriptbytecode(animate)
 	local func = loadstring(bytecode)
 	assert(type(func) ~= "function", "Luau bytecode should not be loadable!")
@@ -635,8 +635,8 @@ test("getnamecallmethod", {}, function()
 		end
 		return ref(...)
 	end)
-	game:FindService("Lighting")
-	assert(method == "FindService", "Did not get the correct method (FindService)")
+	game:GetService("Lighting")
+	assert(method == "GetService", "Did not get the correct method (GetService)")
 end)
 
 test("isreadonly", {}, function()
@@ -696,7 +696,7 @@ test("request", {"http.request", "http_request"}, function()
 	})
 	assert(type(response) == "table", "Response must be a table")
 	assert(response.StatusCode == 200, "Did not return a 200 status code")
-	local data = game:FindService("HttpService"):JSONDecode(response.Body)
+	local data = game:GetService("HttpService"):JSONDecode(response.Body)
 	assert(type(data) == "table" and type(data["user-agent"]) == "string", "Did not return a table with a user-agent key")
 	return "User-Agent: " .. data["user-agent"]
 end)
@@ -704,7 +704,7 @@ end)
 test("setclipboard", {"toclipboard"})
 
 test("setfpscap", {}, function()
-	local renderStepped = game:FindService("RunService").RenderStepped
+	local renderStepped = game:GetService("RunService").RenderStepped
 	local function step()
 		renderStepped:Wait()
 		local sum = 0
@@ -755,13 +755,13 @@ test("getrunningscripts", {}, function()
 end)
 
 test("getscriptbytecode", {"dumpstring"}, function()
-	local animate = game:FindService("Players").LocalPlayer.Character.Animate
+	local animate = game:GetService("Players").LocalPlayer.Character.Animate
 	local bytecode = getscriptbytecode(animate)
 	assert(type(bytecode) == "string", "Did not return a string for Character.Animate (a " .. animate.ClassName .. ")")
 end)
 
 test("getscripthash", {}, function()
-	local animate = game:FindService("Players").LocalPlayer.Character.Animate:Clone()
+	local animate = game:GetService("Players").LocalPlayer.Character.Animate:Clone()
 	local hash = getscripthash(animate)
 	local source = animate.Source
 	animate.Source = "print('Hello, world!')"
@@ -782,7 +782,7 @@ test("getscripts", {}, function()
 end)
 
 test("getsenv", {}, function()
-	local animate = game:FindService("Players").LocalPlayer.Character.Animate
+	local animate = game:GetService("Players").LocalPlayer.Character.Animate
 	local env = getsenv(animate)
 	assert(type(env) == "table", "Did not return a table for Character.Animate (a " .. animate.ClassName .. ")")
 	assert(env.script == animate, "The script global is not identical to Character.Animate")

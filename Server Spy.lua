@@ -255,36 +255,17 @@ function handleRemote(remote)
 
 			return ...
 		end
-	elseif remote:IsA("BindableFunction") then
-		remote.OnInvoke = function(...)
-			local args = {...}
-			local argsFormatted = Format(args)
-			local argsString = table.concat(argsFormatted, ", ")
-
-			_G.Code = string.format("BindableFunction: [game.%s]\nreturned: %s", fullPath, argsString)
-			local template = SRSExample
-			local list = SRSList
-			local btn = template:Clone()
-			btn.Parent=list
-			btn.Name=cursed()
-			btn.Text=_G.Code
-			btn.MouseButton1Click:connect(function()
-				SRStxt.Text=btn.Text
-			end)
-
-			return ...
-		end
 	end
 end
 
 function wrapRemotes()
 	for _, obj in ipairs(game:GetDescendants()) do
-		if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") or obj:IsA("BindableFunction") then
+		if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
 			handleRemote(obj)
 		end
 	end
 	con=game.DescendantAdded:Connect(function(descendant)
-		if descendant:IsA("RemoteEvent") or descendant:IsA("RemoteFunction") or descendant:IsA("BindableFunction") then
+		if descendant:IsA("RemoteEvent") or descendant:IsA("RemoteFunction") then
 			handleRemote(descendant)
 		end
 	end)

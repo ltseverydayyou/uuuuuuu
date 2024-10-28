@@ -1,0 +1,144 @@
+function esp(gj)
+if not gj then return end
+check = gj:IsA("Model")
+				base = gj:IsA("BasePart")
+				if check then
+					local BillboardGui = Instance.new("BillboardGui")
+					local TextLabel = Instance.new("TextLabel")
+					BillboardGui.Adornee = gj:FindFirstChildOfClass("Part")
+					BillboardGui.Name = gj.Name
+					BillboardGui.Parent = gj
+					BillboardGui.Size = UDim2.new(0, 100, 0, 150)
+					BillboardGui.StudsOffset = Vector3.new(0, 1, 0)
+					BillboardGui.AlwaysOnTop = true
+					TextLabel.Parent = BillboardGui
+					TextLabel.BackgroundTransparency = 1
+					TextLabel.Position = UDim2.new(0, 0, 0, -50)
+					TextLabel.Size = UDim2.new(0, 100, 0, 100)
+					TextLabel.Font = Enum.Font.SourceSansSemibold
+					TextLabel.TextSize = 17
+					TextLabel.TextColor3 = Color3.new(1, 1, 1)
+					TextLabel.TextStrokeTransparency = 0.3
+					TextLabel.TextYAlignment = Enum.TextYAlignment.Bottom
+					TextLabel.Text = '['..gj.Name..']'
+					TextLabel.ZIndex = 10
+
+					local a = Instance.new("BoxHandleAdornment")
+					a.Name = gj.Name:lower().."_EndlessESP"
+					a.Parent = BillboardGui
+					a.Adornee = gj
+					a.AlwaysOnTop = true
+					a.ZIndex = 0
+					a.Transparency = 0.45
+					a.Color3 = Color3.new(1, 1,1)
+				elseif base then
+					local BillboardGui = Instance.new("BillboardGui")
+					local TextLabel = Instance.new("TextLabel")
+					BillboardGui.Adornee = gj
+					BillboardGui.Name = gj.Name
+					BillboardGui.Parent = gj
+					BillboardGui.Size = UDim2.new(0, 100, 0, 150)
+					BillboardGui.StudsOffset = Vector3.new(0, 1, 0)
+					BillboardGui.AlwaysOnTop = true
+					TextLabel.Parent = BillboardGui
+					TextLabel.BackgroundTransparency = 1
+					TextLabel.Position = UDim2.new(0, 0, 0, -50)
+					TextLabel.Size = UDim2.new(0, 100, 0, 100)
+					TextLabel.Font = Enum.Font.SourceSansSemibold
+					TextLabel.TextSize = 17
+					TextLabel.TextColor3 = Color3.new(1, 1,1)
+					TextLabel.TextStrokeTransparency = 0.3
+					TextLabel.TextYAlignment = Enum.TextYAlignment.Bottom
+					TextLabel.Text = '['..gj.Name..']'
+					TextLabel.ZIndex = 10
+
+					local a = Instance.new("BoxHandleAdornment")
+					a.Name = gj.Name:lower().."_EndlessESP"
+					a.Parent = BillboardGui
+					a.Adornee = gj
+					a.AlwaysOnTop = true
+					a.ZIndex = 0
+					a.Size = gj.Size
+					a.Transparency = 0.45
+					a.Color3 = Color3.new(1,1,1)
+				else
+				end
+end
+
+function inter(gj)
+if not gj then return end
+check = gj:IsA("Model")
+				base = gj:IsA("BasePart")
+				if check then
+					local BillboardGui = Instance.new("BillboardGui")
+					local TextLabel = Instance.new("TextLabel")
+					BillboardGui.Adornee = gj:FindFirstChildOfClass("Part")
+					BillboardGui.Name = gj.Name
+					BillboardGui.Parent = gj
+					BillboardGui.Size = UDim2.new(0, 100, 0, 150)
+					BillboardGui.StudsOffset = Vector3.new(0, 1, 0)
+					BillboardGui.AlwaysOnTop = true
+					TextLabel.Parent = BillboardGui
+					TextLabel.BackgroundTransparency = 1
+					TextLabel.Position = UDim2.new(0, 0, 0, -50)
+					TextLabel.Size = UDim2.new(0, 100, 0, 100)
+					TextLabel.Font = Enum.Font.SourceSansSemibold
+					TextLabel.TextSize = 17
+					TextLabel.TextColor3 = Color3.new(1,0,0)
+					TextLabel.TextStrokeTransparency = 0.3
+					TextLabel.TextYAlignment = Enum.TextYAlignment.Bottom
+					TextLabel.Text = '['..gj.Name..']'
+					TextLabel.ZIndex = 10
+
+					local a = Instance.new("BoxHandleAdornment")
+					a.Name = gj.Name:lower().."_EndlessESP"
+					a.Parent = BillboardGui
+					a.Adornee = gj
+					a.AlwaysOnTop = true
+					a.ZIndex = 0
+					a.Transparency = 0.45
+					a.Color3 = Color3.new(1,0,0)
+				elseif base then
+					local BillboardGui = Instance.new("BillboardGui")
+					local TextLabel = Instance.new("TextLabel")
+					BillboardGui.Adornee = gj
+					BillboardGui.Name = gj.Name
+					BillboardGui.Parent = gj
+					BillboardGui.Size = UDim2.new(0, 100, 0, 150)
+					BillboardGui.StudsOffset = Vector3.new(0, 1, 0)
+					BillboardGui.AlwaysOnTop = true
+					TextLabel.Parent = BillboardGui
+					TextLabel.BackgroundTransparency = 1
+					TextLabel.Position = UDim2.new(0, 0, 0, -50)
+					TextLabel.Size = UDim2.new(0, 100, 0, 100)
+					TextLabel.Font = Enum.Font.SourceSansSemibold
+					TextLabel.TextSize = 17
+					TextLabel.TextColor3 = Color3.new(1,0,0)
+					TextLabel.TextStrokeTransparency = 0.3
+					TextLabel.TextYAlignment = Enum.TextYAlignment.Bottom
+					TextLabel.Text = '['..gj.Name..']'
+					TextLabel.ZIndex = 10
+
+					local a = Instance.new("BoxHandleAdornment")
+					a.Name = gj.Name:lower().."_EndlessESP"
+					a.Parent = BillboardGui
+					a.Adornee = gj
+					a.AlwaysOnTop = true
+					a.ZIndex = 0
+					a.Size = gj.Size
+					a.Transparency = 0.45
+					a.Color3 = Color3.new(1,0,0)
+				else
+				end
+end
+
+workspace:FindFirstChild("Tools",true).ChildAdded:Connect(esp)
+workspace:FindFirstChild("Interacts",true).ChildAdded:Connect(inter)
+
+for _,tool in ipairs(workspace:FindFirstChild("Tools",true):GetChildren()) do
+esp(tool)
+end
+
+for _,touch in ipairs(workspace:FindFirstChild("Interacts",true):GetChildren()) do
+inter(touch)
+end

@@ -1,139 +1,31 @@
--- TurtleSpy V1.5.3, credits to Intrer#0421
-
 local colorSettings =
-{
-    ["Main"] = {
-        ["HeaderColor"] = Color3.fromRGB(0, 168, 255),
-        ["HeaderShadingColor"] = Color3.fromRGB(0, 151, 230),
-        ["HeaderTextColor"] = Color3.fromRGB(47, 54, 64),
-        ["MainBackgroundColor"] = Color3.fromRGB(47, 54, 64),
-        ["InfoScrollingFrameBgColor"] = Color3.fromRGB(47, 54, 64),
-        ["ScrollBarImageColor"] = Color3.fromRGB(127, 143, 166)
-    },
-    ["RemoteButtons"] = {
-        ["BorderColor"] = Color3.fromRGB(113, 128, 147),
-        ["BackgroundColor"] = Color3.fromRGB(53, 59, 72),
-        ["TextColor"] = Color3.fromRGB(220, 221, 225),
-        ["NumberTextColor"] = Color3.fromRGB(203, 204, 207)
-    },
-    ["MainButtons"] = { 
-        ["BorderColor"] = Color3.fromRGB(113, 128, 147),
-        ["BackgroundColor"] = Color3.fromRGB(53, 59, 72),
-        ["TextColor"] = Color3.fromRGB(220, 221, 225)
-    },
-    ['Code'] = {
-        ['BackgroundColor'] = Color3.fromRGB(35, 40, 48),
-        ['TextColor'] = Color3.fromRGB(220, 221, 225),
-        ['CreditsColor'] = Color3.fromRGB(108, 108, 108)
-    },
-}
+	{
+		["Main"] = {
+			["HeaderColor"] = Color3.fromRGB(0, 168, 255),
+			["HeaderShadingColor"] = Color3.fromRGB(0, 151, 230),
+			["HeaderTextColor"] = Color3.fromRGB(47, 54, 64),
+			["MainBackgroundColor"] = Color3.fromRGB(47, 54, 64),
+			["InfoScrollingFrameBgColor"] = Color3.fromRGB(47, 54, 64),
+			["ScrollBarImageColor"] = Color3.fromRGB(127, 143, 166)
+		},
+		["RemoteButtons"] = {
+			["BorderColor"] = Color3.fromRGB(113, 128, 147),
+			["BackgroundColor"] = Color3.fromRGB(53, 59, 72),
+			["TextColor"] = Color3.fromRGB(220, 221, 225),
+			["NumberTextColor"] = Color3.fromRGB(203, 204, 207)
+		},
+		["MainButtons"] = { 
+			["BorderColor"] = Color3.fromRGB(113, 128, 147),
+			["BackgroundColor"] = Color3.fromRGB(53, 59, 72),
+			["TextColor"] = Color3.fromRGB(220, 221, 225)
+		},
+		['Code'] = {
+			['BackgroundColor'] = Color3.fromRGB(35, 40, 48),
+			['TextColor'] = Color3.fromRGB(220, 221, 225),
+			['CreditsColor'] = Color3.fromRGB(108, 108, 108)
+		},
+	}
 
-local settings = {
-["Keybind"] = "P"
-}
-
-if PROTOSMASHER_LOADED then
-    getgenv().isfile = newcclosure(function(File)
-        local Suc, Er = pcall(readfile, File)
-        if not Suc then
-            return false
-        end
-        return true
-    end)
-end
-
-local HttpService = game:GetService("HttpService")
--- read settings for keybind
-if not isfile("TurtleSpySettings.json") then
-    writefile("TurtleSpySettings.json", HttpService:JSONEncode(settings))
-else
-    if HttpService:JSONDecode(readfile("TurtleSpySettings.json"))["Main"] then
-        writefile("TurtleSpySettings.json", HttpService:JSONEncode(settings))
-    else
-        settings = HttpService:JSONDecode(readfile("TurtleSpySettings.json"))
-    end
-end
-
--- Compatibility for protosmasher: credits to sdjsdj (v3rm username) for converting to proto
-
-function isSynapse()
-    if PROTOSMASHER_LOADED then
-        return false
-    else
-    return true
-    end
-end
-function Parent(GUI)
-    if syn and syn.protect_gui then
-        syn.protect_gui(GUI)
-        GUI.Parent = game:GetService("CoreGui")
-    elseif PROTOSMASHER_LOADED then
-        GUI.Parent = get_hidden_gui()
-    else
-        GUI.Parent = game:GetService("CoreGui")
-    end
-end
-
-local client = game.Players.LocalPlayer
-local function toUnicode(string)
-    local codepoints = "utf8.char("
-    
-    for _i, v in utf8.codes(string) do
-        codepoints = codepoints .. v .. ', '
-    end
-    
-    return codepoints:sub(1, -3) .. ')'
-end
-local function GetFullPathOfAnInstance(instance)
-    local name = instance.Name
-    local head = (#name > 0 and '.' .. name) or "['']"
-    
-    if not instance.Parent and instance ~= game then
-        return head .. " --[[ PARENTED TO NIL OR DESTROYED ]]"
-    end
-    
-    if instance == game then
-        return "game"
-    elseif instance == workspace then
-        return "workspace"
-    else
-        local _success, result = pcall(game.GetService, game, instance.ClassName)
-        
-        if result then
-            head = ':GetService("' .. instance.ClassName .. '")'
-        elseif instance == client then
-            head = '.LocalPlayer' 
-        else
-            local nonAlphaNum = name:gsub('[%w_]', '')
-            local noPunct = nonAlphaNum:gsub('[%s%p]', '')
-            
-            if tonumber(name:sub(1, 1)) or (#nonAlphaNum ~= 0 and #noPunct == 0) then
-                head = '["' .. name:gsub('"', '\\"'):gsub('\\', '\\\\') .. '"]'
-            elseif #nonAlphaNum ~= 0 and #noPunct > 0 then
-                head = '[' .. toUnicode(name) .. ']'
-            end
-        end
-    end
-    
-    return GetFullPathOfAnInstance(instance.Parent) .. head
-end
--- Main Script
-
--- references to game functions (to prevent using namecall inside of a namecall hook)
-local isA = game.IsA
-local clone = game.Clone
-
-local TextService = game:GetService("TextService")
-local getTextSize = TextService.GetTextSize
-game.StarterGui.ResetPlayerGuiOnSpawn = false
-local mouse = game.Players.LocalPlayer:GetMouse()
-
--- delete the previous instances of turtlespy
-if game.CoreGui:FindFirstChild("TurtleSpyGUI") then
-    game.CoreGui.TurtleSpyGUI:Destroy()
-end
-
---Important tables and GUI offsets
 local buttonOffset = -25
 local scrollSizeOffset = 287
 local functionImage = "http://www.roblox.com/asset/?id=413369623"
@@ -148,7 +40,6 @@ local IgnoreList = {}
 local connections = {}
 local unstacked = {}
 
--- (mostly) generated code by Gui to lua
 local TurtleSpyGUI = Instance.new("ScreenGui")
 local mainFrame = Instance.new("Frame")
 local Header = Instance.new("Frame")
@@ -164,7 +55,6 @@ local InfoFrameHeader = Instance.new("Frame")
 local InfoTitleShading = Instance.new("Frame")
 local CodeFrame = Instance.new("ScrollingFrame")
 local Code = Instance.new("TextLabel")
-local CodeComment = Instance.new("TextLabel")
 local InfoHeaderText = Instance.new("TextLabel")
 local InfoButtonsScroll = Instance.new("ScrollingFrame")
 local CopyCode = Instance.new("TextButton")
@@ -195,7 +85,7 @@ local RemoteIcon2 = Instance.new("ImageLabel")
 
 TurtleSpyGUI.Name = "TurtleSpyGUI"
 
-Parent(TurtleSpyGUI)
+TurtleSpyGUI.Parent=game.StarterGui
 
 mainFrame.Name = "mainFrame"
 mainFrame.Parent = TurtleSpyGUI
@@ -251,7 +141,7 @@ CloseInfoFrame2.Text = "X"
 CloseInfoFrame2.TextColor3 = Color3.fromRGB(0, 0, 0)
 CloseInfoFrame2.TextSize = 20.000
 CloseInfoFrame2.MouseButton1Click:Connect(function()
-    BrowserHeader.Visible = not BrowserHeader.Visible
+	BrowserHeader.Visible = not BrowserHeader.Visible
 end)
 
 RemoteBrowserFrame.Name = "RemoteBrowserFrame"
@@ -318,41 +208,6 @@ ImageButton.Size = UDim2.new(0, 18, 0, 18)
 ImageButton.ZIndex = 9
 ImageButton.Image = "rbxassetid://169476802"
 ImageButton.ImageColor3 = Color3.fromRGB(53, 53, 53)
-ImageButton.MouseButton1Click:Connect(function()
-    BrowserHeader.Visible = not BrowserHeader.Visible
-    for i, v in pairs(game:GetDescendants()) do
-        if isA(v, "RemoteEvent") or isA(v, "RemoteFunction") then
-            local bButton = clone(RemoteButton2)
-            bButton.Parent = RemoteBrowserFrame
-            bButton.Visible = true
-            bButton.Position = UDim2.new(0, 17, 0, browsedButtonOffset)
-            local fireFunction = ""
-            if isA(v, "RemoteEvent") then
-                fireFunction = ":FireServer()"
-                bButton.RemoteIcon2.Image = eventImage
-            else
-                fireFunction = ":InvokeServer()"
-            end
-            bButton.RemoteName2.Text = v.Name
-            local connection = bButton.MouseButton1Click:Connect(function()
-                setclipboard(GetFullPathOfAnInstance(v)..fireFunction)
-            end)
-            table.insert(browsedConnections, connection)
-            browsedButtonOffset = browsedButtonOffset + 35
-
-            if #browsedConnections > 8 then
-                browserCanvasSize = browserCanvasSize + 35
-                RemoteBrowserFrame.CanvasSize = UDim2.new(0, 0, 0, browserCanvasSize)
-            end
-        end
-    end
-end)
-
-mouse.KeyDown:Connect(function(key)
-    if key:lower() == settings["Keybind"]:lower() then
-        TurtleSpyGUI.Enabled = not TurtleSpyGUI.Enabled
-    end
-end)
 
 Header.Name = "Header"
 Header.Parent = mainFrame
@@ -489,19 +344,6 @@ Code.TextColor3 = colorSettings["Code"]["TextColor"]
 Code.TextSize = 14.000
 Code.TextWrapped = true
 Code.TextXAlignment = Enum.TextXAlignment.Left
-
-CodeComment.Name = "CodeComment"
-CodeComment.Parent = CodeFrame
-CodeComment.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-CodeComment.BackgroundTransparency = 1.000
-CodeComment.Position = UDim2.new(0.0119285434, 0, -0.001968503, 0)
-CodeComment.Size = UDim2.new(0, 1000, 0, 25)
-CodeComment.ZIndex = 18
-CodeComment.Font = Enum.Font.SourceSans
-CodeComment.Text = "-- Script generated by TurtleSpy, made by Intrer#0421"
-CodeComment.TextColor3 = colorSettings["Code"]["CreditsColor"]
-CodeComment.TextSize = 14.000
-CodeComment.TextXAlignment = Enum.TextXAlignment.Left
 
 InfoHeaderText.Name = "InfoHeaderText"
 InfoHeaderText.Parent = InfoFrame
@@ -668,9 +510,9 @@ CloseInfoFrame.Text = "X"
 CloseInfoFrame.TextColor3 = Color3.fromRGB(0, 0, 0)
 CloseInfoFrame.TextSize = 20.000
 CloseInfoFrame.MouseButton1Click:Connect(function()
-    InfoFrame.Visible = false
-    InfoFrameOpen = false
-    mainFrame.Size = UDim2.new(0, 207, 0, 35)
+	InfoFrame.Visible = false
+	InfoFrameOpen = false
+	mainFrame.Size = UDim2.new(0, 207, 0, 35)
 end)
 
 OpenInfoFrame.Name = "OpenInfoFrame"
@@ -716,8 +558,8 @@ Minimize.MouseButton1Click:Connect(function()
 	else
 		--Open
 		if InfoFrameOpen then
-		    mainFrame.Size = UDim2.new(0, 565, 0, 35)
-		    OpenInfoFrame.Text = "<"
+			mainFrame.Size = UDim2.new(0, 565, 0, 35)
+			OpenInfoFrame.Text = "<"
 			InfoFrame.Visible = true
 		else
 			mainFrame.Size = UDim2.new(0, 207, 0, 35)
@@ -726,447 +568,4 @@ Minimize.MouseButton1Click:Connect(function()
 		end
 	end
 	RemoteScrollFrame.Visible = not RemoteScrollFrame.Visible
-end)
-
-local function FindRemote(remote, args)
-    local currentId = (get_thread_context or syn.get_thread_identity)()
-    ;(set_thread_context or syn.set_thread_identity)(7)
-    local i
-    if table.find(unstacked, remote) then
-    local numOfRemotes = 0
-        for b, v in pairs(remotes) do
-            if v == remote then
-                numOfRemotes = numOfRemotes + 1
-                for i2, v2 in pairs(remoteArgs) do
-                    if table.unpack(remoteArgs[b]) == table.unpack(args) then
-                        i = b
-                    end
-                end
-            end
-        end
-    else
-        i = table.find(remotes, remote)
-    end
-    ;(set_thread_context or syn.set_thread_identity)(currentId)
-    return i
-end
-
--- creates a simple color and text change effect
-local function ButtonEffect(textlabel, text)
-    if not text then
-        text = "Copied!"
-    end
-    local orgText = textlabel.Text
-    local orgColor = textlabel.TextColor3
-    textlabel.Text = text
-    textlabel.TextColor3 = Color3.fromRGB(76, 209, 55)
-    wait(0.8)
-    textlabel.Text = orgText
-    textlabel.TextColor3 = orgColor
-end
-
--- important values for later
-local lookingAt
-local lookingAtArgs
-local lookingAtButton
-
-CopyCode.MouseButton1Click:Connect(function()
-    if not lookingAt then return end
-    -- copy the code's text to clipboard if the user is lookin at a remote
-    setclipboard(CodeComment.Text.. "\n\n"..Code.Text)
-    ButtonEffect(CopyCode)
-end)
-
-RunCode.MouseButton1Click:Connect(function()
-    -- find the index of the remote the user is looking at
-    if lookingAt then
-    if isA(lookingAt, "RemoteFunction") then
-        -- fire remote with its args
-        lookingAt:InvokeServer(unpack(lookingAtArgs))
-    elseif isA(lookingAt, "RemoteEvent") then
-        lookingAt:FireServer(unpack(lookingAtArgs))
-    end
-    end
-end)
-CopyScriptPath.MouseButton1Click:Connect(function()
-    -- get remote index
-    local remote = FindRemote(lookingAt, lookingAtArgs)
-    if remote and lookingAt then
-        -- copy the script name at that index
-        setclipboard(GetFullPathOfAnInstance(remoteScripts[remote]))
-        ButtonEffect(CopyScriptPath)
-    end
-end)
--- bool to make decompilations queue instead of running simultaneously
-local decompiling
-CopyDecompiled.MouseButton1Click:Connect(function()
-    local remote = FindRemote(lookingAt, lookingAtArgs)
-    if not isSynapse() then
-        CopyDecompiled.Text = "This exploit doesn't support decompilation!"
-        CopyDecompiled.TextColor3 = Color3.fromRGB(232, 65, 24)
-        wait(1.6)
-        CopyDecompiled.Text = "Copy decompiled script"
-        CopyDecompiled.TextColor3 = Color3.fromRGB(250, 251, 255)
-        return
-    end
-    if not decompiling and remote and lookingAt then
-        decompiling = true
-
-        -- button effect
-        spawn(function()
-            while true do
-                if decompiling == false then return end
-                CopyDecompiled.Text = "Decompiling."
-                wait(0.8)
-                if decompiling == false then return end
-                CopyDecompiled.Text = "Decompiling.."
-                wait(0.8)
-                if decompiling == false then return end
-                CopyDecompiled.Text = "Decompiling..."
-                wait(0.8)
-            end
-        end)
-
-        -- Decompile the remotescript of the remote
-        local success = { pcall(function()setclipboard(decompile(remoteScripts[remote]))end) }
-        decompiling = false
-        if success[1] then
-            CopyDecompiled.Text = "Copied decompilation!"
-            CopyDecompiled.TextColor3 = Color3.fromRGB(76, 209, 55)
-        else
-            warn(success[2], success[3])
-            CopyDecompiled.Text = "Decompilation error! Check F9 to see the error."
-            CopyDecompiled.TextColor3 = Color3.fromRGB(232, 65, 24)
-        end
-        wait(1.6)
-        CopyDecompiled.Text = "Copy decompiled script"
-        CopyDecompiled.TextColor3 = Color3.fromRGB(250, 251, 255)
-    end
-end)
-
-BlockRemote.MouseButton1Click:Connect(function()
-    -- find the remote the user is looking at and check whether it's blocked or not
-    local bRemote = table.find(BlockList, lookingAt)
-
-    if lookingAt and not bRemote then
-        -- remote isn't blocked, add it to the blocklist
-        table.insert(BlockList, lookingAt)
-        BlockRemote.Text = "Unblock remote"
-        BlockRemote.TextColor3 = Color3.fromRGB(251, 197, 49)
-        local remote = table.find(remotes, lookingAt)
-        if remote then
-            remoteButtons[remote].Parent.RemoteName.TextColor3 = Color3.fromRGB(225, 177, 44)
-        end
-    elseif lookingAt and bRemote then
-        -- remote is
-        table.remove(BlockList, bRemote)
-        BlockRemote.Text = "Block remote from firing"
-        BlockRemote.TextColor3 = Color3.fromRGB(250, 251, 255)
-        local remote = table.find(remotes, lookingAt)
-        if remote then
-            remoteButtons[remote].Parent.RemoteName.TextColor3 = Color3.fromRGB(245, 246, 250)
-        end
-    end
-end)
-
-IgnoreRemote.MouseButton1Click:Connect(function()
-    -- check if remote is blocked
-    local iRemote = table.find(IgnoreList, lookingAt)
-    if lookingAt and not iRemote then
-        table.insert(IgnoreList, lookingAt)
-        IgnoreRemote.Text = "Stop ignoring remote"
-        IgnoreRemote.TextColor3 = Color3.fromRGB(127, 143, 166)
-        local remote = table.find(remotes, lookingAt)
-        local unstacked = table.find(unstacked, lookingAt)
-        if remote then
-            remoteButtons[remote].Parent.RemoteName.TextColor3 = Color3.fromRGB(127, 143, 166)
-        end
-    elseif lookingAt and iRemote then
-        table.remove(IgnoreList, iRemote)
-        IgnoreRemote.Text = "Ignore remote"
-        IgnoreRemote.TextColor3 = Color3.fromRGB(250, 251, 255)
-        local remote = table.find(remotes, lookingAt)
-        if remote then
-            remoteButtons[remote].Parent.RemoteName.TextColor3 = Color3.fromRGB(245, 246, 250)
-        end
-    end
-end)
-
-WhileLoop.MouseButton1Click:Connect(function()
-    if not lookingAt then return end
-    setclipboard("while wait() do\n   "..Code.Text.."\nend")
-    ButtonEffect(WhileLoop)
-end)
-
-Clear.MouseButton1Click:Connect(function()
-    for i, v in pairs(RemoteScrollFrame:GetChildren()) do
-        if i > 1 then 
-        v:Destroy()
-        end
-    end
-    for i, v in pairs(connections) do
-        v:Disconnect()
-    end
-    -- reset everything
-    buttonOffset = -25
-    scrollSizeOffset = 0
-    remotes = {}
-    remoteArgs = {}
-    remoteButtons = {}
-    remoteScripts = {}
-    IgnoreList = {}
-    BlockList = {}
-    IgnoreList = {}
-    RemoteScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 287)
-    unstacked = {}
-    connections = {}
-
-    ButtonEffect(Clear, "Cleared!")
-end)
-
-DoNotStack.MouseButton1Click:Connect(function()
-    if lookingAt then
-        local isUnstacked = table.find(unstacked, lookingAt)
-        if isUnstacked then
-            table.remove(unstacked, isUnstacked)
-            DoNotStack.Text = "Unstack remote when fired with new args"
-            DoNotStack.TextColor3 = Color3.fromRGB(245, 246, 250)
-        else
-            table.insert(unstacked, lookingAt)
-            DoNotStack.Text = "Stack remote"
-            DoNotStack.TextColor3 = Color3.fromRGB(251, 197, 49)
-        end
-    end
-end)
-
-local function len(t)
-    local n = 0
-
-    for _ in pairs(t) do
-        n = n + 1
-    end
-    return n
-end
-
--- converts tables to a string, good for formatting arguments
-local function convertTableToString(args)
-    local string = ""
-    local index = 1
-    for i,v in pairs(args) do
-        if type(i) == "string" then
-            string = string .. '["' .. tostring(i) .. '"] = '
-        elseif type(i) == "userdata" and typeof(i) ~= "Instance" then
-            string = string .. "[" .. typeof(i) .. ".new(" .. tostring(i) .. ")] = "
-        elseif type(i) == "userdata" then
-            string = string .. "[" .. GetFullPathOfAnInstance(i) .. "] = "
-        end
-        if v == nil then
-            string = string ..  "nil"
-        elseif typeof(v) == "Instance"  then
-            string = string .. GetFullPathOfAnInstance(v)
-        elseif type(v) == "number" or type(v) == "function" then
-            string = string .. tostring(v)
-        elseif type(v) == "userdata" then
-            string = string .. typeof(v)..".new("..tostring(v)..")"
-        elseif type(v) == "string" then
-            string = string .. [["]]..v..[["]]
-        elseif type(v) == "table" then
-            string = string .. "{"
-            string = string .. convertTableToString(v)
-            string = string .. "}"
-        elseif type(v) == 'boolean' then
-            if v then
-                string = string..'true'
-            else
-                string = string..'false'
-            end
-        end
-        if len(args) > 1 and index < len(args) then
-            string =  string .. ","
-        end
-        index = index + 1
-    end
-return string
-end
-CopyReturn.MouseButton1Click:Connect(function()
-    local remote = FindRemote(lookingAt, lookingAtArgs)
-    if lookingAt and remote then
-    if isA(lookingAt, "RemoteFunction") then
-        -- execute the remote and copy the return value, pretty easy stuff
-        local result = remotes[remote]:InvokeServer(unpack(remoteArgs[remote]))
-        setclipboard(convertTableToString(table.pack(result)))
-        ButtonEffect(CopyReturn)
-    end
-    end
-end)
-
--- detect when a child is added to the remotescrollframe and add a mousebutton1click signal (doing this in the addToList function causes problems since it's in a roblox thread)
-RemoteScrollFrame.ChildAdded:Connect(function(child)
-    -- get all essential info that will be useful later when the user presses the button
-    local remote = remotes[#remotes]
-    local args = remoteArgs[#remotes]
-    local event = true
-    local fireFunction = ":FireServer("
-    if isA(remote, "RemoteFunction") then
-        event = false
-        fireFunction = ":InvokeServer("
-    end
-    local connection = child.MouseButton1Click:Connect(function()
-        
-        InfoHeaderText.Text = "Info: "..remote.Name
-        if event then 
-            InfoButtonsScroll.CanvasSize = UDim2.new(0, 0, 1, 0)
-        else
-            -- make space for the execute and copy return button since it's a remote function
-            InfoButtonsScroll.CanvasSize = UDim2.new(0, 0, 1.1, 0)
-        end
-        mainFrame.Size = UDim2.new(0, 565, 0, 35)
-        OpenInfoFrame.Text = ">"
-        InfoFrame.Visible = true
-        Code.Text = GetFullPathOfAnInstance(remote)..fireFunction..convertTableToString(args)..")"
-        -- gets text size and updates code box's size accordingly
-        local textsize = TextService:GetTextSize(Code.Text, Code.TextSize, Code.Font, Vector2.new(math.huge, math.huge))
-        CodeFrame.CanvasSize = UDim2.new(0, textsize.X + 11, 2, 0)
-        lookingAt = remote
-        lookingAtArgs = args
-        lookingAtButton = child.Number
-
-        -- is the remote ignored/blocked? in that case, change those buttons
-        local blocked = table.find(BlockList, remote)
-        if blocked then
-            BlockRemote.Text = "Unblock remote"
-            BlockRemote.TextColor3 = Color3.fromRGB(251, 197, 49)
-        else
-            BlockRemote.Text = "Block remote from firing"
-            BlockRemote.TextColor3 = Color3.fromRGB(250, 251, 255)
-        end
-        local iRemote = table.find(IgnoreList, lookingAt)
-        if iRemote then
-            IgnoreRemote.Text = "Stop ignoring remote"
-            IgnoreRemote.TextColor3 = Color3.fromRGB(127, 143, 166)
-        else
-            IgnoreRemote.Text = "Ignore remote"
-            IgnoreRemote.TextColor3 = Color3.fromRGB(250, 251, 255)
-        end
-        InfoFrameOpen = true
-    end)
-    -- insert them into a connections table in order to be able to disconnect all of them
-    table.insert(connections, connection)
-end)
-
-
--- Main function: add a remote to the list (event: is it a RemoteEvent?, remote: the remote fired, ...: the args)
-function addToList(event, remote, ...)
-    -- set thread context since this is running in a game thread
-    local currentId = (get_thread_context or syn.get_thread_identity)()
-    ;(set_thread_context or syn.set_thread_identity)(7)
-    if not remote then return end
-
-    -- important variables
-    local name = remote.Name
-    local args = {...}
-
-    -- call the FindRemote function to find this specific remote with these args
-    local i = FindRemote(remote, args)
-
-    -- if the remote hasn't been found
-    if not i then
-        -- add remote to remotes table (important)
-        table.insert(remotes, remote)
-
-        local rButton = clone(RemoteButton)
-        -- add all useful info about the remote to tables
-        remoteButtons[#remotes] = rButton.Number
-        remoteArgs[#remotes] = args
-        remoteScripts[#remotes] = (isSynapse() and getcallingscript() or rawget(getfenv(0), "script"))
-
-        -- clone a little baby of the remotebutton
-        rButton.Parent = RemoteScrollFrame
-        rButton.Visible = true
-        local numberTextsize = getTextSize(TextService, rButton.Number.Text, rButton.Number.TextSize, rButton.Number.Font, Vector2.new(math.huge, math.huge))
-        rButton.RemoteName.Position = UDim2.new(0,numberTextsize.X + 10, 0, 0)
-        if name then
-            rButton.RemoteName.Text = name
-        end
-        if not event then
-            rButton.RemoteIcon.Image = "http://www.roblox.com/asset/?id=413369623"
-        end
-        buttonOffset = buttonOffset + 35
-        rButton.Position = UDim2.new(0.0912411734, 0, 0, buttonOffset)
-        if #remotes > 8 then
-            scrollSizeOffset = scrollSizeOffset + 35
-            RemoteScrollFrame.CanvasSize = UDim2.new(0, 0, 0, scrollSizeOffset)
-        end
-    else
-        -- the remote has been found, increment the remote's button's number text
-        remoteButtons[i].Text = tostring(tonumber(remoteButtons[i].Text) + 1)
-        -- get the size in pixels of the number text and change the name's position accordingly
-        local numberTextsize = getTextSize(TextService, remoteButtons[i].Text, remoteButtons[i].TextSize, remoteButtons[i].Font, Vector2.new(math.huge, math.huge))
-        remoteButtons[i].Parent.RemoteName.Position = UDim2.new(0,numberTextsize.X + 10, 0, 0)
-        remoteButtons[i].Parent.RemoteName.Size = UDim2.new(0, 149 -numberTextsize.X, 0, 26)
-
-        -- update the arguments
-        remoteArgs[i] = args
-
-        -- update the codebox if the player is looking at it
-        if lookingAt and lookingAt == remote and lookingAtButton == remoteButtons[i] and InfoFrame.Visible then
-            local fireFunction = ":FireServer("
-            if isA(remote, "RemoteFunction") then
-                fireFunction = ":InvokeServer("
-            end
-            Code.Text = GetFullPathOfAnInstance(remote)..fireFunction..convertTableToString(remoteArgs[i])..")"
-            local textsize = getTextSize(TextService, Code.Text, Code.TextSize, Code.Font, Vector2.new(math.huge, math.huge))
-            CodeFrame.CanvasSize = UDim2.new(0, textsize.X + 11, 2, 0)
-        end
-    end
-    ;(set_thread_context or syn.set_thread_identity)(currentId)
-end
-
-local OldEvent
-OldEvent = hookfunction(Instance.new("RemoteEvent").FireServer, function(Self, ...)
-    if not checkcaller() and table.find(BlockList, Self) then
-        return
-    elseif table.find(IgnoreList, Self) then
-        --if ignored then don't call the addToList
-        return OldEvent(Self, ...)
-    end
-    addToList(true, Self, ...)
-end)
-
-local OldFunction
-OldFunction = hookfunction(Instance.new("RemoteFunction").InvokeServer, function(Self, ...)
-    if not checkcaller() and table.find(BlockList, Self) then
-        return
-    elseif table.find(IgnoreList, Self) then
-        --if ignored then don't call the addToList
-        return OldFunction(Self, ...)
-    end
-    addToList(false, Self, ...)
-end)
-
--- game namecall hook (makes the script detect the remotes, basically)
-local OldNamecall
-OldNamecall = hookmetamethod(game,"__namecall",function(...)
-    local args = {...}
-    local Self = args[1]
-    local method = (getnamecallmethod or get_namecall_method)()
-    if method == "FireServer" and isA(Self, "RemoteEvent")  then
-        -- if the remote is blocked and the remote is being fired by the game then block it
-        if not checkcaller() and table.find(BlockList, Self) then
-            return
-        elseif table.find(IgnoreList, Self) then
-            --if ignored then don't call the addToList
-            return OldNamecall(...)
-        end
-        addToList(true, ...)
-    elseif method == "InvokeServer" and isA(Self, 'RemoteFunction') then
-        if not checkcaller() and table.find(BlockList, Self) then
-            return
-        elseif table.find(IgnoreList, Self) then
-            return OldNamecall(...)
-        end
-        addToList(false, ...)
-    end
-
-    return OldNamecall(...)
 end)

@@ -8,12 +8,6 @@
         Frosty - GUI to Lua
 ]]
 
---[[
-
-  Modification Made By - REDz
-  
-]]
-
 -- shuts down the previous instance of SimpleSpy
 if _G.SimpleSpyExecuted and type(_G.SimpleSpyShutdown) == "function" then
 	print(pcall(_G.SimpleSpyShutdown))
@@ -57,7 +51,7 @@ local MinimizeButton = Instance.new("TextButton")
 local ImageLabel_3 = Instance.new("ImageLabel")
 local ToolTip = Instance.new("Frame")
 local TextLabel = Instance.new("TextLabel")
-local gui = Instance.new("ScreenGui",Background)
+local gui = Instance.new("ScreenGui", Background)
 local nextb = Instance.new("ImageButton", gui)
 local gui = Instance.new("UICorner", nextb)
 
@@ -66,7 +60,7 @@ local gui = Instance.new("UICorner", nextb)
 SimpleSpy2.Name = "SimpleSpy2"
 SimpleSpy2.ResetOnSpawn = false
 
-local SpyFind = CoreGui:FindFirstChild(SimpleSpy2.Name)
+local SpyFind = CoreGui:FindFirstChild(SimpleSpy2.Name,true)
 
 if SpyFind and SpyFind ~= SimpleSpy2 then
   SpyFind:Destroy()
@@ -76,7 +70,7 @@ Background.Name = "Background"
 Background.Parent = SimpleSpy2
 Background.BackgroundColor3 = Color3.new(1, 1, 1)
 Background.BackgroundTransparency = 1
-Background.Position = UDim2.new(0, 160, 0, 100)
+Background.Position = UDim2.new(0, 500, 0, 200)
 Background.Size = UDim2.new(0, 450, 0, 268)
 Background.Active = true
 Background.Draggable = true
@@ -87,7 +81,7 @@ nextb.BackgroundColor3 = Color3.fromRGB(53, 52, 55)
 nextb.Image = "rbxassetid://7072720870"
 nextb.Active = true
 nextb.Draggable = true
-nextb.MouseButton1Down:connect(function()
+nextb.MouseButton1Click:connect(function()
 nextb.Image = (Background.Visible and "rbxassetid://7072720870") or "rbxassetid://7072719338"
 Background.Visible = not Background.Visible
 end)
@@ -240,7 +234,7 @@ Simple.Position = UDim2.new(0, 5, 0, 0)
 Simple.Size = UDim2.new(0, 57, 0, 18)
 Simple.Font = Enum.Font.SourceSansBold
 Simple.Text = "SimpleSpy"
-Simple.TextColor3 = Color3.new(0, 0, 1)
+Simple.TextColor3 = Color3.new(1, 1, 1)
 Simple.TextSize = 14
 Simple.TextXAlignment = Enum.TextXAlignment.Left
 
@@ -1462,7 +1456,7 @@ function i2p(i)
 	elseif parent ~= game then
 		while true do
 			if parent and parent.Parent == game then
-				local service = game:GetService(parent.ClassName)
+				local service = game:FindService(parent.ClassName)
 				if service then
 					if parent.ClassName == "Workspace" then
 						return "workspace" .. out

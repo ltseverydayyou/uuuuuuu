@@ -1,7 +1,7 @@
 local ui=nil
 local Gui = game:GetObjects("rbxassetid://81848243052574")[1]
 local COREGUI= (game:GetService("CoreGui") or game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui"))
-local connect=nil
+local connect,copyCon=nil,nil
 local rPlayer = game:GetService("Players"):FindFirstChildWhichIsA("Player")
 local con=nil
 local con1=nil
@@ -67,8 +67,10 @@ end
 local SRSFrame = ui.SRS
 local SRSList = SRSFrame.Container.Logs
 local SRSresult = SRSFrame.result.answer
+local SRSresulter = SRSFrame.result
 local SRStxt = SRSresult:FindFirstChildWhichIsA("TextLabel")
 local SRSExample = SRSList:FindFirstChildWhichIsA("TextButton")
+local copySignalBtn=SRSresulter.copySignal
 SRSExample.Parent = nil
 
 Draggable = function(ui, dragui)
@@ -137,6 +139,7 @@ menustuff = function(menu)
 		if con then con:Disconnect() con=nil end
 		if con1 then con1:Disconnect() con1=nil end
 		if connect then connect:Disconnect() connect=nil end
+		if copyCon then copyCon:Disconnect() copyCon=nil end
 		ui:Destroy()
 	end)
 	if clear then 
@@ -148,6 +151,7 @@ menustuff = function(menu)
 				end
 			end
 			SRStxt.Text=". . ."
+			copySignalBtn.path.Text,copySignalBtn.class.Text,copySignalBtn.args.Text='','',''
 		end)
 	end
 	Draggable(menu, menu.Topbar)
@@ -174,6 +178,66 @@ function PathInstance(instance)
 		current = current.Parent
 	end
 	return table.concat(path, ".")
+end
+
+local function GetInstancePath(obj)
+	local path = {}
+
+	function b(obj)
+		return obj.Parent == game and obj ~= game
+	end
+
+	if b(obj) then
+		table.insert(path, string.format('game:GetService("%s")',obj.ClassName))
+	else
+		while obj and obj.Parent do
+			local name = obj.Name
+			if name:match("^[%a_][%w_]*$") then
+				table.insert(path, 1, "."..name)
+			else
+				table.insert(path, 1, '["'..name:gsub('"', '\\"')..'"]')
+			end
+
+			if b(obj.Parent) then
+				table.insert(path, 1, string.format('game:GetService("%s")', obj.Parent.ClassName))
+				break
+			end
+
+			obj = obj.Parent
+		end
+	end
+
+	return table.concat(path):gsub("^%.", "")
+end
+
+local function GetChildPath(obj)
+	local path = {}
+
+	local function b(obj)
+		return obj.Parent == game and obj ~= game
+	end
+
+	if b(obj) then
+		table.insert(path, string.format('game:GetService("%s")', obj.ClassName))
+	else
+		while obj and obj.Parent do
+			local name = obj.Name
+			if name:match("^[%a_][%w_]*$") then
+				table.insert(path, 1, ":FindFirstChild(\"" .. name .. "\")")
+			else
+				table.insert(path, 1, '["' .. name:gsub('"', '\\"') .. '"]')
+			end
+
+			if b(obj.Parent) then
+				table.insert(path, 1, string.format('game:GetService("%s")', obj.Parent.ClassName))
+				break
+			end
+
+			obj = obj.Parent
+		end
+	end
+
+	return table.concat(path):gsub("^%.", "")
 end
 
 function formatValue(value)
@@ -216,14 +280,15 @@ function handleRemote(remote)
 		table.insert(path, 1, name)
 		current = current.Parent
 	end]]
-	local fullPath = remote:GetFullName() --table.concat(path, ".")
+	local fullPath = GetInstancePath(remote) --table.concat(path, ".")
+	local findChildPath = GetChildPath(remote)
 	if remote:IsA("RemoteEvent") then
 		remote.OnClientEvent:Connect(function(...)
 			local args = {...}
 			local argsFormatted = Format(args)
 			local argsString = table.concat(argsFormatted, ", ")
 
-			_G.Code = string.format("RemoteEvent: [game.%s]\nreturned: %s", fullPath, argsString)
+			_G.Code = string.format("RemoteEvent: [%s]\nreturned: %s", fullPath, argsString)
 			local template = SRSExample
 			local list = SRSList
 			local btn = template:Clone()
@@ -232,6 +297,9 @@ function handleRemote(remote)
 			btn.Text=_G.Code
 			btn.MouseButton1Click:connect(function()
 				SRStxt.Text=btn.Text
+				copySignalBtn.path.Text=findChildPath
+				copySignalBtn.class.Text=".OnClientEvent"
+				copySignalBtn.args.Text=argsString
 			end)
 
 			return ...
@@ -242,7 +310,7 @@ function handleRemote(remote)
 			local argsFormatted = Format(args)
 			local argsString = table.concat(argsFormatted, ", ")
 
-			_G.Code = string.format("RemoteFunction: [game.%s]\nreturned: %s", fullPath, argsString)
+			_G.Code = string.format("RemoteFunction: [%s]\nreturned: %s", fullPath, argsString)
 			local template = SRSExample
 			local list = SRSList
 			local btn = template:Clone()
@@ -251,6 +319,9 @@ function handleRemote(remote)
 			btn.Text=_G.Code
 			btn.MouseButton1Click:connect(function()
 				SRStxt.Text=btn.Text
+				copySignalBtn.path.Text=findChildPath
+				copySignalBtn.class.Text=".OnClientInvoke"
+				copySignalBtn.args.Text=argsString
 			end)
 
 			return ...
@@ -293,4 +364,15 @@ spawn(updTxtScale)
 connect = game:GetService("RunService").Stepped:Connect(function()
 	SRSList.CanvasSize = UDim2.new(0, 0, 0, SRSList:FindFirstChildOfClass("UIListLayout").AbsoluteContentSize.Y)
 	SRSresult.CanvasSize = UDim2.new(0, 0, 0, SRSresult:FindFirstChildOfClass("UIListLayout").AbsoluteContentSize.Y)
+end)
+
+copyCon = copySignalBtn.MouseButton1Click:Connect(function()
+	if setclipboard and (copySignalBtn.path.Text ~= '' and copySignalBtn.class.Text ~= '' and copySignalBtn.args.Text ~= '') then
+		local thingy = string.format(
+			"firesignal(%s, %s)", 
+			copySignalBtn.path.Text .. copySignalBtn.class.Text,
+			copySignalBtn.args.Text
+		)
+		setclipboard(thingy)
+	end
 end)

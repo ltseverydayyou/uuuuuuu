@@ -255,7 +255,7 @@ function formatValue(value)
 	elseif typeof(value) == "boolean" then
 		return value and "true" or "false"
 	elseif typeof(value) == "Instance" then
-		return GetChildPath(value)
+		return GetInstancePath(value)
 	elseif typeof(value) == "table" then
 		local result = "{ "
 		for k, v in pairs(value) do

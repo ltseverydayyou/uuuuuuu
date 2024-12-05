@@ -1,7 +1,7 @@
 local ui=nil
 local Gui = game:GetObjects("rbxassetid://81848243052574")[1]
 local COREGUI= (game:GetService("CoreGui") or game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui"))
-local connect,copyCon=nil,nil
+local connect,copyCon,fireCon,smallButton=nil,nil,nil,nil
 local rPlayer = game:GetService("Players"):FindFirstChildWhichIsA("Player")
 local con=nil
 local con1=nil
@@ -64,13 +64,14 @@ else
 	ui = Main
 end
 
-local SRSFrame = ui.SRS
+local SRSFrame = ui:FindFirstChildWhichIsA("Frame")
 local SRSList = SRSFrame.Container.Logs
 local SRSresult = SRSFrame.result.answer
 local SRSresulter = SRSFrame.result
 local SRStxt = SRSresult:FindFirstChildWhichIsA("TextLabel")
 local SRSExample = SRSList:FindFirstChildWhichIsA("TextButton")
 local copySignalBtn=SRSresulter.copySignal
+local fireSignalBtn=SRSresulter.fireSignal
 SRSExample.Parent = nil
 
 Draggable = function(ui, dragui)
@@ -125,23 +126,29 @@ menustuff = function(menu)
 	local clear = menu:FindFirstChild("Clear", true);
 	local minimized = false
 	local sizeX, sizeY = Instance.new("IntValue", menu), Instance.new("IntValue", menu)
-	mini.MouseButton1Click:Connect(function()
-		minimized = not minimized
-		if minimized then
-			sizeX.Value = menu.Size.X.Offset
-			sizeY.Value = menu.Size.Y.Offset
-			tweeny(menu, "Quart", "Out", 0.5, {Size = UDim2.new(0, 283, 0, 25)})
-		else
-			tweeny(menu, "Quart", "Out", 0.5, {Size = UDim2.new(0, sizeX.Value, 0, sizeY.Value)})
-		end
-	end)
-	exit.MouseButton1Click:Connect(function()
-		if con then con:Disconnect() con=nil end
-		if con1 then con1:Disconnect() con1=nil end
-		if connect then connect:Disconnect() connect=nil end
-		if copyCon then copyCon:Disconnect() copyCon=nil end
-		ui:Destroy()
-	end)
+	if mini then
+		mini.MouseButton1Click:Connect(function()
+			minimized = not minimized
+			if minimized then
+				sizeX.Value = menu.Size.X.Offset
+				sizeY.Value = menu.Size.Y.Offset
+				tweeny(menu, "Quart", "Out", 0.5, {Size = UDim2.new(0, 283, 0, 25)})
+			else
+				tweeny(menu, "Quart", "Out", 0.5, {Size = UDim2.new(0, sizeX.Value, 0, sizeY.Value)})
+			end
+		end)
+	end
+	if exit then
+		exit.MouseButton1Click:Connect(function()
+			if con then con:Disconnect() con=nil end
+			if con1 then con1:Disconnect() con1=nil end
+			if connect then connect:Disconnect() connect=nil end
+			if copyCon then copyCon:Disconnect() copyCon=nil end
+			if fireCon then fireCon:Disconnect() fireCon=nil end
+			if smallButton then smallButton:Disconnect() smallButton=nil end
+			ui:Destroy()
+		end)
+	end
 	if clear then 
 		clear.MouseButton1Click:Connect(function()
 			local t=menu:FindFirstChild("Container",true):FindFirstChildOfClass("ScrollingFrame"):FindFirstChildOfClass("UIListLayout",true)
@@ -151,7 +158,7 @@ menustuff = function(menu)
 				end
 			end
 			SRStxt.Text=". . ."
-			copySignalBtn.path.Text,copySignalBtn.class.Text,copySignalBtn.args.Text='','',''
+			_G.SRSclass,_G.SRSargs,_G.SRSpath=nil,nil,nil
 		end)
 	end
 	Draggable(menu, menu.Topbar)
@@ -166,7 +173,7 @@ function updTxtScale()
 	SRStxt.Size = UDim2.new(1, 0, 0, textBounds.Y)
 end
 
-function PathInstance(instance)
+--[[function PathInstance(instance)
 	local path = {}
 	local current = instance
 	while current and current ~= game do
@@ -178,7 +185,7 @@ function PathInstance(instance)
 		current = current.Parent
 	end
 	return table.concat(path, ".")
-end
+end]]
 
 local function GetInstancePath(obj)
 	local path = {}
@@ -248,7 +255,7 @@ function formatValue(value)
 	elseif typeof(value) == "boolean" then
 		return value and "true" or "false"
 	elseif typeof(value) == "Instance" then
-		return PathInstance(value)
+		return GetChildPath(value)
 	elseif typeof(value) == "table" then
 		local result = "{ "
 		for k, v in pairs(value) do
@@ -297,9 +304,7 @@ function handleRemote(remote)
 			btn.Text=_G.Code
 			btn.MouseButton1Click:connect(function()
 				SRStxt.Text=btn.Text
-				copySignalBtn.path.Text=findChildPath
-				copySignalBtn.class.Text=".OnClientEvent"
-				copySignalBtn.args.Text=argsString
+				_G.SRSclass,_G.SRSargs,_G.SRSpath=".OnClientEvent",argsString,findChildPath
 			end)
 
 			return ...
@@ -319,9 +324,7 @@ function handleRemote(remote)
 			btn.Text=_G.Code
 			btn.MouseButton1Click:connect(function()
 				SRStxt.Text=btn.Text
-				copySignalBtn.path.Text=findChildPath
-				copySignalBtn.class.Text=".OnClientInvoke"
-				copySignalBtn.args.Text=argsString
+				_G.SRSclass,_G.SRSargs,_G.SRSpath=".OnClientInvoke",argsString,findChildPath
 			end)
 
 			return ...
@@ -367,12 +370,61 @@ connect = game:GetService("RunService").Stepped:Connect(function()
 end)
 
 copyCon = copySignalBtn.MouseButton1Click:Connect(function()
-	if setclipboard and (copySignalBtn.path.Text ~= '' and copySignalBtn.class.Text ~= '' and copySignalBtn.args.Text ~= '') then
-		local thingy = string.format(
-			"firesignal(%s, %s)", 
-			copySignalBtn.path.Text .. copySignalBtn.class.Text,
-			copySignalBtn.args.Text
-		)
-		setclipboard(thingy)
+	if setclipboard then 
+		if (_G.SRSclass~=nil and _G.SRSargs~=nil and _G.SRSpath~=nil) then
+			local thingy = string.format("firesignal(%s, %s)",_G.SRSpath.._G.SRSclass,_G.SRSargs)
+			setclipboard(thingy)
+		end
+	else
+		game:GetService("StarterGui"):SetCore("SendNotification", {Title = "Missing Variable";Text = "setclipboard";Duration = 5;})
+	end
+end)
+
+fireCon = fireSignalBtn.MouseButton1Click:Connect(function()
+	if firesignal then 
+		if (_G.SRSclass~=nil and _G.SRSargs~=nil and _G.SRSpath~=nil) then
+			local thingy = string.format("firesignal(%s, %s)",_G.SRSpath.._G.SRSclass,_G.SRSargs)
+			assert(loadstring(thingy))()
+		end
+	else
+		game:GetService("StarterGui"):SetCore("SendNotification", {Title = "Missing Variable";Text = "firesignal";Duration = 5;})
+	end	
+end)
+
+local TextLabelLabel=Instance.new("TextButton")
+local UICorner=Instance.new("UICorner")
+local open=false
+TextLabelLabel.Parent=ui
+TextLabelLabel.BackgroundColor3=Color3.fromRGB(30, 30, 30)
+TextLabelLabel.BackgroundTransparency=0.14
+TextLabelLabel.AnchorPoint=Vector2.new(0.5,0.5)
+TextLabelLabel.Position=UDim2.new(0.5,0,0,0)
+TextLabelLabel.Size=UDim2.new(0,2,0,33)
+TextLabelLabel.Font=Enum.Font.SourceSansBold
+TextLabelLabel.Text="Toggle UI"
+TextLabelLabel.TextColor3=Color3.fromRGB(255,255,255)
+TextLabelLabel.TextSize=20.000
+TextLabelLabel.TextWrapped=true
+TextLabelLabel.ZIndex=9999
+TextLabelLabel.BackgroundTransparency=0.14
+TextLabelLabel.Active=true
+TextLabelLabel.Draggable=true
+
+UICorner.CornerRadius=UDim.new(1,0)
+UICorner.Parent=TextLabelLabel
+
+local textWidth=game:GetService("TextService"):GetTextSize(TextLabelLabel.Text,TextLabelLabel.TextSize,TextLabelLabel.Font,Vector2.new(math.huge,math.huge)).X
+local newSize=UDim2.new(0,textWidth+69,0,33)
+
+TextLabelLabel:TweenSize(newSize,"Out","Quint",1,true)
+TextLabelLabel:TweenPosition(UDim2.new(0.5,0,0,0),"Out","Quint",1,true)
+
+smallButton=TextLabelLabel.MouseButton1Click:Connect(function()
+	if open == false then
+		open = true
+		SRSFrame.Visible = false
+	else
+		open = false
+		SRSFrame.Visible = true
 	end
 end)

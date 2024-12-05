@@ -338,7 +338,7 @@ local script = G2L["13"];
 end;
 task.spawn(C_13);
 
-local function getPathToInstance(instance)
+--[[local function getPathToInstance(instance)
     local path = {}
     local current = instance
     while current and current ~= game do
@@ -350,27 +350,87 @@ local function getPathToInstance(instance)
         current = current.Parent
     end
     return table.concat(path, ".")
+end]]
+
+local function GetInstancePath(obj)
+	local path = {}
+
+	function b(obj)
+		return obj.Parent == game and obj ~= game
+	end
+
+	if b(obj) then
+		table.insert(path, string.format('game:GetService("%s")',obj.ClassName))
+	else
+		while obj and obj.Parent do
+			local name = obj.Name
+			if name:match("^[%a_][%w_]*$") then
+				table.insert(path, 1, "."..name)
+			else
+				table.insert(path, 1, '["'..name:gsub('"', '\\"')..'"]')
+			end
+
+			if b(obj.Parent) then
+				table.insert(path, 1, string.format('game:GetService("%s")', obj.Parent.ClassName))
+				break
+			end
+
+			obj = obj.Parent
+		end
+	end
+
+	return table.concat(path):gsub("^%.", "")
+end
+
+local function GetChildPath(obj)
+	local path = {}
+
+	local function b(obj)
+		return obj.Parent == game and obj ~= game
+	end
+
+	if b(obj) then
+		table.insert(path, string.format('game:GetService("%s")', obj.ClassName))
+	else
+		while obj and obj.Parent do
+			local name = obj.Name
+			if name:match("^[%a_][%w_]*$") then
+				table.insert(path, 1, ":FindFirstChild(\"" .. name .. "\")")
+			else
+				table.insert(path, 1, '["' .. name:gsub('"', '\\"') .. '"]')
+			end
+
+			if b(obj.Parent) then
+				table.insert(path, 1, string.format('game:GetService("%s")', obj.Parent.ClassName))
+				break
+			end
+
+			obj = obj.Parent
+		end
+	end
+
+	return table.concat(path):gsub("^%.", "")
 end
 
 function formatValue(value)
-    if typeof(value) == "string" then
-        return string.format("%q", value)
-    elseif typeof(value) == "number" then
-        return tostring(value)
-    elseif typeof(value) == "boolean" then
-        return value and "true" or "false"
-    elseif typeof(value) == "Instance" then
-        return PathInstance(value)
-    elseif typeof(value) == "table" then
-        local result = "{ "
-        for k, v in pairs(value) do
-            result = result .. string.format("[%s] = %s; \n", formatValue(k), formatValue(v))
-        end
-        result = result:sub(1, -2)
-        return result .. "}"
-    else
-        return string.format("%q", tostring(value))
-    end
+	if typeof(value) == "string" then
+		return string.format("%q", value)
+	elseif typeof(value) == "number" then
+		return tostring(value)
+	elseif typeof(value) == "boolean" then
+		return value and "true" or "false"
+	elseif typeof(value) == "Instance" then
+		return GetInstancePath(value)
+	elseif typeof(value) == "table" then
+		local result = "{ "
+		for k, v in pairs(value) do
+			result = result .. string.format("[%s] = %s; \n", formatValue(k), formatValue(v))
+		end
+		result = result:sub(1, -2)
+		return result .. "}"
+	else
+		return string.format("%q", tostring(value))
+	end
 end
 
 local function Format(args)

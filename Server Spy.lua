@@ -5,6 +5,7 @@ local connect,copyCon,fireCon,smallButton=nil,nil,nil,nil
 local rPlayer = game:GetService("Players"):FindFirstChildWhichIsA("Player")
 local con=nil
 local con1=nil
+local order=0
 local coreGuiProtection = {}
 ui=Gui
 function cursed()
@@ -159,6 +160,7 @@ menustuff = function(menu)
 			end
 			SRStxt.Text=". . ."
 			_G.SRSclass,_G.SRSargs,_G.SRSpath=nil,nil,nil
+			order=0
 		end)
 	end
 	Draggable(menu, menu.Topbar)
@@ -299,9 +301,11 @@ function handleRemote(remote)
 			local template = SRSExample
 			local list = SRSList
 			local btn = template:Clone()
+			order=order-1
 			btn.Parent=list
 			btn.Name=cursed()
 			btn.Text=_G.Code
+			btn.LayoutOrder=order
 			btn.MouseButton1Click:connect(function()
 				SRStxt.Text=btn.Text
 				_G.SRSclass,_G.SRSargs,_G.SRSpath=".OnClientEvent",argsString,findChildPath
@@ -319,9 +323,11 @@ function handleRemote(remote)
 			local template = SRSExample
 			local list = SRSList
 			local btn = template:Clone()
+			order=order-1
 			btn.Parent=list
 			btn.Name=cursed()
 			btn.Text=_G.Code
+			btn.LayoutOrder=order
 			btn.MouseButton1Click:connect(function()
 				SRStxt.Text=btn.Text
 				_G.SRSclass,_G.SRSargs,_G.SRSpath=".OnClientInvoke",argsString,findChildPath

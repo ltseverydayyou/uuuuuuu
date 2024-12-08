@@ -296,6 +296,8 @@ function handleRemote(remote)
 			local args = {...}
 			local argsFormatted = Format(args)
 			local argsString = table.concat(argsFormatted, ", ")
+			
+			argsString = argsString ~= "" and ", "..argsString or ""
 
 			_G.Code = string.format("RemoteEvent: [%s]\nreturned: %s", fullPath, argsString)
 			local template = SRSExample
@@ -318,6 +320,8 @@ function handleRemote(remote)
 			local args = {...}
 			local argsFormatted = Format(args)
 			local argsString = table.concat(argsFormatted, ", ")
+			
+			argsString = argsString ~= "" and ", "..argsString or ""
 
 			_G.Code = string.format("RemoteFunction: [%s]\nreturned: %s", fullPath, argsString)
 			local template = SRSExample
@@ -378,7 +382,7 @@ end)
 copyCon = copySignalBtn.MouseButton1Click:Connect(function()
 	if setclipboard then 
 		if (_G.SRSclass~=nil and _G.SRSargs~=nil and _G.SRSpath~=nil) then
-			local thingy = string.format("firesignal(%s, %s)",_G.SRSpath.._G.SRSclass,_G.SRSargs)
+			local thingy = string.format("firesignal(%s)",_G.SRSpath.._G.SRSclass.._G.SRSargs)
 			setclipboard(thingy)
 		end
 	else
@@ -389,7 +393,7 @@ end)
 fireCon = fireSignalBtn.MouseButton1Click:Connect(function()
 	if firesignal then 
 		if (_G.SRSclass~=nil and _G.SRSargs~=nil and _G.SRSpath~=nil) then
-			local thingy = string.format("firesignal(%s, %s)",_G.SRSpath.._G.SRSclass,_G.SRSargs)
+			local thingy = string.format("firesignal(%s)",_G.SRSpath.._G.SRSclass.._G.SRSargs)
 			assert(loadstring(thingy))()
 		end
 	else

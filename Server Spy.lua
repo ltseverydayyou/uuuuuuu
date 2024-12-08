@@ -296,8 +296,13 @@ function handleRemote(remote)
 			local args = {...}
 			local argsFormatted = Format(args)
 			local argsString = table.concat(argsFormatted, ", ")
+			local replacer = ''
 			
-			argsString = argsString ~= "" and ", "..argsString or ""
+			if argsString~='' then
+				replacer = ", "..argsString
+			else
+				argsString='nil'
+			end
 
 			_G.Code = string.format("RemoteEvent: [%s]\nreturned: %s", fullPath, argsString)
 			local template = SRSExample
@@ -310,7 +315,7 @@ function handleRemote(remote)
 			btn.LayoutOrder=order
 			btn.MouseButton1Click:connect(function()
 				SRStxt.Text=btn.Text
-				_G.SRSclass,_G.SRSargs,_G.SRSpath=".OnClientEvent",argsString,findChildPath
+				_G.SRSclass,_G.SRSargs,_G.SRSpath=".OnClientEvent",replacer,findChildPath
 			end)
 
 			return ...
@@ -320,8 +325,13 @@ function handleRemote(remote)
 			local args = {...}
 			local argsFormatted = Format(args)
 			local argsString = table.concat(argsFormatted, ", ")
+			local replacer = ''
 			
-			argsString = argsString ~= "" and ", "..argsString or ""
+			if argsString~='' then
+				replacer = ", "..argsString
+			else
+				argsString='nil'
+			end
 
 			_G.Code = string.format("RemoteFunction: [%s]\nreturned: %s", fullPath, argsString)
 			local template = SRSExample
@@ -334,7 +344,7 @@ function handleRemote(remote)
 			btn.LayoutOrder=order
 			btn.MouseButton1Click:connect(function()
 				SRStxt.Text=btn.Text
-				_G.SRSclass,_G.SRSargs,_G.SRSpath=".OnClientInvoke",argsString,findChildPath
+				_G.SRSclass,_G.SRSargs,_G.SRSpath=".OnClientInvoke",replacer,findChildPath
 			end)
 
 			return ...

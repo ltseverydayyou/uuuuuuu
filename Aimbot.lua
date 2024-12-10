@@ -8,8 +8,8 @@ local TeleportService = game:GetService("TeleportService")
 local players = game:GetService("Players")
 local wrk = game:GetService("Workspace")
 local plr = players.LocalPlayer
-local hrp = plr.Character:WaitForChild("HumanoidRootPart")
-local humanoid = plr.Character:WaitForChild("Humanoid")
+local hrp = nil
+local humanoid = nil
 local function onCharacterAdded(character)
     hrp = character:WaitForChild("HumanoidRootPart")
     humanoid = character:WaitForChild("Humanoid")
@@ -18,6 +18,8 @@ end
 plr.CharacterAdded:Connect(onCharacterAdded)
 
 if plr.Character then
+    hrp=plr.Character:FindFirstChild("HumanoidRootPart")
+    humanoid=plr.Character:FindFirstChild("Humanoid")
     onCharacterAdded(plr.Character)
 end
 

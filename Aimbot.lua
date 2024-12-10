@@ -1,7 +1,7 @@
 if getgenv().AimbotLoaded then return end
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-
+getgenv().AimbotLoaded=true
 local HttpService = game:GetService("HttpService")
 local RunService = game:GetService("RunService")
 local TeleportService = game:GetService("TeleportService")
@@ -10,7 +10,6 @@ local wrk = game:GetService("Workspace")
 local plr = players.LocalPlayer
 local hrp = plr.Character:WaitForChild("HumanoidRootPart")
 local humanoid = plr.Character:WaitForChild("Humanoid")
-getgenv().AimbotLoaded=true
 local function onCharacterAdded(character)
     hrp = character:WaitForChild("HumanoidRootPart")
     humanoid = character:WaitForChild("Humanoid")

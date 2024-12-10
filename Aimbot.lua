@@ -11,8 +11,8 @@ local plr = players.LocalPlayer
 local hrp = nil
 local humanoid = nil
 local function onCharacterAdded(character)
-    hrp = character:WaitForChild("HumanoidRootPart")
-    humanoid = character:WaitForChild("Humanoid")
+    hrp = character:WaitForChild("HumanoidRootPart",math.huge)
+    humanoid = character:WaitForChild("Humanoid",math.huge)
 end
 
 plr.CharacterAdded:Connect(onCharacterAdded)
@@ -39,7 +39,7 @@ local predictionStrength = 0.065
 local smoothing = 0.05
 
 local aimbotEnabled = false
-local wallCheck = true
+local wallCheck = false
 local stickyAimEnabled = false
 local teamCheck = false
 local healthCheck = false
@@ -67,7 +67,7 @@ local ignoreSelf = true
 local Window = Rayfield:CreateWindow({
     Name = "Aimbot",
     LoadingTitle = "Loading...",
-    LoadingSubtitle = "by nobody",
+    LoadingSubtitle = "",
     ConfigurationSaving = {
         Enabled = true,
         FolderName = "UniversalHub",
@@ -327,7 +327,7 @@ local aimbotfov = Aimbot:CreateSlider({
 
 local wallcheck = Aimbot:CreateToggle({
     Name = "Wall Check",
-    CurrentValue = true,
+    CurrentValue = false,
     Flag = "WallCheck",
     Callback = function(Value)
         wallCheck = Value

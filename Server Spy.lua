@@ -308,11 +308,11 @@ function handleRemote(remote)
 			local template = SRSExample
 			local list = SRSList
 			local btn = template:Clone()
-			order=order-1
+			--order=order-1
 			btn.Parent=list
 			btn.Name=cursed()
 			btn.Text=_G.Code
-			btn.LayoutOrder=order
+			--btn.LayoutOrder=order
 			btn.MouseButton1Click:connect(function()
 				SRStxt.Text=btn.Text
 				_G.SRSclass,_G.SRSargs,_G.SRSpath=".OnClientEvent",replacer,findChildPath
@@ -337,11 +337,11 @@ function handleRemote(remote)
 			local template = SRSExample
 			local list = SRSList
 			local btn = template:Clone()
-			order=order-1
+			--order=order-1
 			btn.Parent=list
 			btn.Name=cursed()
 			btn.Text=_G.Code
-			btn.LayoutOrder=order
+			--btn.LayoutOrder=order
 			btn.MouseButton1Click:connect(function()
 				SRStxt.Text=btn.Text
 				_G.SRSclass,_G.SRSargs,_G.SRSpath=".OnClientInvoke",replacer,findChildPath

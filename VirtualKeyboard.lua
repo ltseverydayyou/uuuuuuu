@@ -46,7 +46,7 @@ TitleCorner.Parent = TitleBar
 
 local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Name = "Title"
-TitleLabel.Size = UDim2.new(1, -60, 1, 0)
+TitleLabel.Size = UDim2.new(1, -120, 1, 0)
 TitleLabel.Position = UDim2.new(0, 10, 0, 0)
 TitleLabel.BackgroundTransparency = 1
 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -59,7 +59,7 @@ TitleLabel.Parent = TitleBar
 local CloseButton = Instance.new("TextButton")
 CloseButton.Name = "CloseButton"
 CloseButton.Size = UDim2.new(0, 40, 0, 25)
-CloseButton.Position = UDim2.new(1, -45, 0, 2.5)
+CloseButton.Position = UDim2.new(1, -85, 0, 2.5)
 CloseButton.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
 CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 CloseButton.Text = "X"
@@ -70,6 +70,21 @@ CloseButton.Parent = TitleBar
 local CloseCorner = Instance.new("UICorner")
 CloseCorner.CornerRadius = UDim.new(0, 5)
 CloseCorner.Parent = CloseButton
+
+local AddButton = Instance.new("TextButton")
+AddButton.Name = "AddButton"
+AddButton.Size = UDim2.new(0, 40, 0, 25)
+AddButton.Position = UDim2.new(1, -45, 0, 2.5)
+AddButton.BackgroundColor3 = Color3.fromRGB(60, 180, 60)
+AddButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+AddButton.Text = "+"
+AddButton.TextSize = 16
+AddButton.Font = Enum.Font.SourceSansBold
+AddButton.Parent = TitleBar
+
+local AddCorner = Instance.new("UICorner")
+AddCorner.CornerRadius = UDim.new(0, 5)
+AddCorner.Parent = AddButton
 
 local KeysContainer = Instance.new("Frame")
 KeysContainer.Name = "KeysContainer"
@@ -95,9 +110,9 @@ ToggleCorner.Parent = ToggleButton
 
 local keyboardLayout = {
     {"1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "=", "Backspace"},
-    {"Tab", "q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "[", "]", "\\"},
-    {"Caps", "a", "s", "d", "f", "g", "h", "j", "k", "l", ";", "'", "Enter"},
-    {"Shift", "z", "x", "c", "v", "b", "n", "m", ",", ".", "/", "Shift"},
+    {"Tab", "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "[", "]", "\\"},
+    {"Caps", "A", "S", "D", "F", "G", "H", "J", "K", "L", ";", "'", "Enter"},
+    {"Shift", "Z", "X", "C", "V", "B", "N", "M", ",", ".", "/", "Shift"},
     {"Ctrl", "Win", "Alt", "Space", "Alt", "Fn", "Ctrl"}
 }
 
@@ -116,40 +131,40 @@ local keyToEnum = {
     ["="] = Enum.KeyCode.Equals,
     ["Backspace"] = Enum.KeyCode.Backspace,
     ["Tab"] = Enum.KeyCode.Tab,
-    ["q"] = Enum.KeyCode.Q,
-    ["w"] = Enum.KeyCode.W,
-    ["e"] = Enum.KeyCode.E,
-    ["r"] = Enum.KeyCode.R,
-    ["t"] = Enum.KeyCode.T,
-    ["y"] = Enum.KeyCode.Y,
-    ["u"] = Enum.KeyCode.U,
-    ["i"] = Enum.KeyCode.I,
-    ["o"] = Enum.KeyCode.O,
-    ["p"] = Enum.KeyCode.P,
+    ["Q"] = Enum.KeyCode.Q,
+    ["W"] = Enum.KeyCode.W,
+    ["E"] = Enum.KeyCode.E,
+    ["R"] = Enum.KeyCode.R,
+    ["T"] = Enum.KeyCode.T,
+    ["Y"] = Enum.KeyCode.Y,
+    ["U"] = Enum.KeyCode.U,
+    ["I"] = Enum.KeyCode.I,
+    ["O"] = Enum.KeyCode.O,
+    ["P"] = Enum.KeyCode.P,
     ["["] = Enum.KeyCode.LeftBracket,
     ["]"] = Enum.KeyCode.RightBracket,
     ["\\"] = Enum.KeyCode.BackSlash,
     ["Caps"] = Enum.KeyCode.CapsLock,
-    ["a"] = Enum.KeyCode.A,
-    ["s"] = Enum.KeyCode.S,
-    ["d"] = Enum.KeyCode.D,
-    ["f"] = Enum.KeyCode.F,
-    ["g"] = Enum.KeyCode.G,
-    ["h"] = Enum.KeyCode.H,
-    ["j"] = Enum.KeyCode.J,
-    ["k"] = Enum.KeyCode.K,
-    ["l"] = Enum.KeyCode.L,
+    ["A"] = Enum.KeyCode.A,
+    ["S"] = Enum.KeyCode.S,
+    ["D"] = Enum.KeyCode.D,
+    ["F"] = Enum.KeyCode.F,
+    ["G"] = Enum.KeyCode.G,
+    ["H"] = Enum.KeyCode.H,
+    ["J"] = Enum.KeyCode.J,
+    ["K"] = Enum.KeyCode.K,
+    ["L"] = Enum.KeyCode.L,
     [";"] = Enum.KeyCode.Semicolon,
     ["'"] = Enum.KeyCode.Quote,
     ["Enter"] = Enum.KeyCode.Return,
     ["Shift"] = Enum.KeyCode.LeftShift,
-    ["z"] = Enum.KeyCode.Z,
-    ["x"] = Enum.KeyCode.X,
-    ["c"] = Enum.KeyCode.C,
-    ["v"]= Enum.KeyCode.V,
-    ["b"] = Enum.KeyCode.B,
-    ["n"] = Enum.KeyCode.N,
-    ["m"] = Enum.KeyCode.M,
+    ["Z"] = Enum.KeyCode.Z,
+    ["X"] = Enum.KeyCode.X,
+    ["C"] = Enum.KeyCode.C,
+    ["V"] = Enum.KeyCode.V,
+    ["B"] = Enum.KeyCode.B,
+    ["N"] = Enum.KeyCode.N,
+    ["M"] = Enum.KeyCode.M,
     [","] = Enum.KeyCode.Comma,
     ["."] = Enum.KeyCode.Period,
     ["/"] = Enum.KeyCode.Slash,
@@ -165,7 +180,7 @@ local specialKeySizes = {
     ["Tab"] = 1.5,
     ["Caps"] = 1.75,
     ["Enter"] = 1.75,
-    ["Shift"]= 2.25,
+    ["Shift"] = 2.25,
     ["Ctrl"] = 1.5,
     ["Win"] = 1.25,
     ["Alt"] = 1.25,
@@ -183,32 +198,32 @@ local function createKey(text, row, col, width)
     key.TextSize = 16
     key.Font = Enum.Font.SourceSans
     key.AutoButtonColor = true
-    
+
     local keyCorner = Instance.new("UICorner")
     keyCorner.CornerRadius = UDim.new(0, 5)
     keyCorner.Parent = key
-    
+
     local isHolding = false
     local keyCode = keyToEnum[text]
-    
+
     key.MouseButton1Down:Connect(function()
         key.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
         isHolding = true
-        
+
         if keyCode then
             VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
         end
     end)
-    
+
     key.MouseButton1Up:Connect(function()
         key.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
         isHolding = false
-        
+
         if keyCode then
             VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
         end
     end)
-    
+
     key.MouseLeave:Connect(function()
         if isHolding and keyCode then
             VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
@@ -216,7 +231,7 @@ local function createKey(text, row, col, width)
             key.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
         end
     end)
-    
+
     return key
 end
 
@@ -228,20 +243,20 @@ for rowIndex, row in ipairs(keyboardLayout) do
     for _, key in ipairs(row) do
         totalWidth = totalWidth + (specialKeySizes[key] or 1)
     end
-    
+
     local currentX = 0
     for keyIndex, keyText in ipairs(row) do
         local keyWidth = specialKeySizes[keyText] or 1
         local relativeWidth = keyWidth / totalWidth
-        
+
         local key = createKey(keyText, rowIndex, keyIndex, keyWidth)
         key.Size = UDim2.new(relativeWidth, -2, rowHeight, -2)
         key.Position = UDim2.new(currentX, 1, currentY, 1)
         key.Parent = KeysContainer
-        
+
         currentX = currentX + relativeWidth
     end
-    
+
     currentY = currentY + rowHeight
 end
 
@@ -250,13 +265,13 @@ local function makeDraggable(frame, handle)
     local dragInput
     local dragStart
     local startPos
-    
+
     handle.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             isDragging = true
             dragStart = input.Position
             startPos = frame.Position
-            
+
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
                     isDragging = false
@@ -264,20 +279,20 @@ local function makeDraggable(frame, handle)
             end)
         end
     end)
-    
+
     handle.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
             dragInput = input
         end
     end)
-    
+
     UserInputService.InputChanged:Connect(function(input)
         if input == dragInput and isDragging then
             local delta = input.Position - dragStart
             frame.Position = UDim2.new(
-                startPos.X.Scale, 
-                startPos.X.Offset + delta.X, 
-                startPos.Y.Scale, 
+                startPos.X.Scale,
+                startPos.X.Offset + delta.X,
+                startPos.Y.Scale,
                 startPos.Y.Offset + delta.Y
             )
         end
@@ -286,6 +301,92 @@ end
 
 makeDraggable(MainFrame, TitleBar)
 makeDraggable(ToggleButton, ToggleButton)
+
+local isSelectionMode = false
+
+AddButton.MouseButton1Click:Connect(function()
+    isSelectionMode = not isSelectionMode
+    AddButton.BackgroundColor3 = isSelectionMode and Color3.fromRGB(180, 60, 60) or Color3.fromRGB(60, 180, 60)
+end)
+
+local function createFloatingKey(text)
+    local floatingKey = Instance.new("TextButton")
+    floatingKey.Name = "FloatingKey_" .. text
+    floatingKey.Size = UDim2.new(0, 50, 0, 50)
+    floatingKey.Position = UDim2.new(0.5, -25, 0.5, -25)
+    floatingKey.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    floatingKey.TextColor3 = Color3.fromRGB(255, 255, 255)
+    floatingKey.Text = text
+    floatingKey.TextSize = 20
+    floatingKey.Font = Enum.Font.SourceSansBold
+    floatingKey.Parent = KeyboardGui
+
+    local keyCorner = Instance.new("UICorner")
+    keyCorner.CornerRadius = UDim.new(0, 10)
+    keyCorner.Parent = floatingKey
+
+    local removeButton = Instance.new("TextButton")
+    removeButton.Name = "RemoveButton"
+    removeButton.Size = UDim2.new(0, 20, 0, 20)
+    removeButton.Position = UDim2.new(1, -25, 0, -5)
+    removeButton.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+    removeButton.Text = "X"
+    removeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    removeButton.TextSize = 16
+    removeButton.Font = Enum.Font.SourceSansBold
+    removeButton.Parent = floatingKey
+
+    local removeCorner = Instance.new("UICorner")
+    removeCorner.CornerRadius = UDim.new(0, 10)
+    removeCorner.Parent = removeButton
+
+    local isHolding = false
+    local keyCode = keyToEnum[text]
+
+    floatingKey.MouseButton1Down:Connect(function()
+        floatingKey.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+        isHolding = true
+
+        if keyCode then
+            VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
+        end
+    end)
+
+    floatingKey.MouseButton1Up:Connect(function()
+        floatingKey.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        isHolding = false
+
+        if keyCode then
+            VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
+        end
+    end)
+
+    floatingKey.MouseLeave:Connect(function()
+        if isHolding and keyCode then
+            VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
+            isHolding = false
+            floatingKey.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        end
+    end)
+
+    removeButton.MouseButton1Click:Connect(function()
+        floatingKey:Destroy()
+    end)
+
+    makeDraggable(floatingKey, floatingKey)
+end
+
+for _, key in ipairs(KeysContainer:GetChildren()) do
+    if key:IsA("TextButton") then
+        key.MouseButton1Click:Connect(function()
+            if isSelectionMode then
+                createFloatingKey(key.Text)
+                isSelectionMode = false
+                AddButton.BackgroundColor3 = Color3.fromRGB(60, 180, 60)
+            end
+        end)
+    end
+end
 
 CloseButton.MouseButton1Click:Connect(function()
     KeyboardGui:Destroy()

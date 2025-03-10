@@ -1,5 +1,9 @@
 pcall(function()
     local TextChatService = game:GetService("TextChatService")
+    local Players = game:GetService("Players")
+    local LocalPlayer = Players.LocalPlayer
+    local PlayerGui = LocalPlayer.PlayerGui
+
     local chatWindowConfiguration = TextChatService:FindFirstChildOfClass("ChatWindowConfiguration")
     local chatBarConfiguration = TextChatService:FindFirstChildOfClass("ChatBarConfiguration")
 
@@ -11,9 +15,14 @@ pcall(function()
         chatBarConfiguration.Enabled = true
     end
 
-    if game:GetService("Players").LocalPlayer.PlayerGui.Chat.Frame then
-        local chatFrame = game:GetService("Players").LocalPlayer.PlayerGui.Chat.Frame
-        chatFrame.ChatChannelParentFrame.Visible = true
-        chatFrame.ChatBarParentFrame.Position = chatFrame.ChatChannelParentFrame.Position + UDim2.new(0, 0, chatFrame.ChatChannelParentFrame.Size.Y.Scale, chatFrame.ChatChannelParentFrame.Size.Y.Offset)
+    local chatFrame = PlayerGui.Chat and PlayerGui.Chat:FindFirstChild("Frame")
+    if chatFrame then
+        local chatChannelParentFrame = chatFrame:FindFirstChild("ChatChannelParentFrame")
+        local chatBarParentFrame = chatFrame:FindFirstChild("ChatBarParentFrame")
+
+        if chatChannelParentFrame and chatBarParentFrame then
+            chatChannelParentFrame.Visible = true
+            chatBarParentFrame.Position = chatChannelParentFrame.Position + UDim2.new(0, 0, chatChannelParentFrame.Size.Y.Scale, chatChannelParentFrame.Size.Y.Offset)
+        end
     end
 end)

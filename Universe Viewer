@@ -229,6 +229,33 @@ CopyBtn.AutoButtonColor = true
 CopyCorner.CornerRadius = UDim.new(0, 4)
 CopyCorner.Parent = CopyBtn
 
+local Notification=nil
+
+repeat 
+	local s,r=pcall(function()
+		return loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/Nameless-Admin/main/NamelessAdminNotifications.lua"))()
+	end);
+
+	if s then
+		Notification=r;
+	else
+		warn("Couldn't load notification module, retrying...");
+		task.wait();
+	end
+until Notification~=nil
+
+local Notify=Notification.Notify;
+
+local function DoNotif(txt,dur,naem)
+	if not dur then dur=5 end
+	if not naem then naem='Notification' end
+	Notify({
+		Description=txt;
+		Title=naem;
+		Duration=dur;
+	});
+end
+
 local function updateSearch()
     local searchText = string.lower(SearchBar.Text)
     for _, item in pairs(GamesList:GetChildren()) do
@@ -325,12 +352,12 @@ task.spawn(function()
             
             btn.ButtonsHolder.TeleportBtn.MouseButton1Click:Connect(function()
                 game:GetService("TeleportService"):Teleport(place.PlaceId, game:GetService("Players").LocalPlayer)
-                print("Teleport To Place: " .. place.Name)
+                DoNotif("Teleport To Place: " .. place.Name, 3, "Universe Viewer")
             end)
             
             btn.ButtonsHolder.CopyIDBtn.MouseButton1Click:Connect(function()
                 setclipboard(tostring(place.PlaceId))
-                print("Copied PlaceId: " .. place.PlaceId)
+                DoNotif("Copied PlaceId: " .. place.PlaceId, 3, "Universe Viewer")
             end)
         end
         if page.IsFinished then

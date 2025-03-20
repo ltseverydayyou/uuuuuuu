@@ -41,7 +41,6 @@ MainFrame.Position = UDim2.new(0.5,-283/2+5,0.5,-260/2+5)
 MainFrame.Size = UDim2.new(0, 300, 0, 300)
 MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 MainFrame.ClipsDescendants = true
-MainFrame.Draggable = true
 
 MainCorner.CornerRadius = UDim.new(0, 8)
 MainCorner.Parent = MainFrame
@@ -280,6 +279,50 @@ end)
 local UVFrame = MainFrame
 local UVList = GamesList
 local UVExample = GameTemplate
+
+draggable=function(ui, dragui)
+	if not dragui then dragui = ui end
+	local UserInputService = game:GetService("UserInputService")
+
+	local dragging
+	local dragInput
+	local dragStart
+	local startPos
+
+	local function update(input)
+		local delta = input.Position - dragStart
+		ui.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+	end
+
+	dragui.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			dragStart = input.Position
+			startPos = ui.Position
+
+			input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					dragging = false
+				end
+			end)
+		end
+	end)
+
+	dragui.InputChanged:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+			dragInput = input
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input)
+		if input == dragInput and dragging then
+			update(input)
+		end
+	end)
+	ui.Active=true
+end
+
+draggable(MainFrame)
 
 local originalSize = UVFrame.Size
 local minimized = false

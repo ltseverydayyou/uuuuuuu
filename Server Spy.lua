@@ -1,5 +1,5 @@
 local ui=nil
-local Gui = game:GetObjects("rbxassetid://81848243052574")[1]
+local Gui = loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/refs/heads/main/srs%20UI.lua"))()
 local COREGUI= (game:GetService("CoreGui") or game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui"))
 local connect,copyCon,fireCon,smallButton=nil,nil,nil,nil
 local rPlayer = game:GetService("Players"):FindFirstChildWhichIsA("Player")

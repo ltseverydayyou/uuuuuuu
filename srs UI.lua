@@ -9,7 +9,6 @@ local UIGradient = Instance.new("UIGradient")
 local UICorner_2 = Instance.new("UICorner")
 local UIGradient_2 = Instance.new("UIGradient")
 local Topbar = Instance.new("Frame")
-local Icon = Instance.new("ImageLabel")
 local Exit = Instance.new("TextButton")
 local TopBar = Instance.new("Frame")
 local ImageLabel = Instance.new("ImageLabel")
@@ -106,16 +105,6 @@ Topbar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 Topbar.BackgroundTransparency = 1
 Topbar.BorderColor3 = Color3.fromRGB(27, 42, 53)
 Topbar.Size = UDim2.new(1, 0, 0, 25)
-
-Icon.Name = "Icon"
-Icon.Parent = Topbar
-Icon.AnchorPoint = Vector2.new(0, 0.5)
-Icon.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-Icon.BackgroundTransparency = 1
-Icon.BorderColor3 = Color3.fromRGB(27, 42, 53)
-Icon.Position = UDim2.new(0, 10, 0.5, 0)
-Icon.Size = UDim2.new(0, 13, 0, 13)
-Icon.Image = "rbxassetid://6031225819"
 
 Exit.Name = "Exit"
 Exit.Parent = Topbar

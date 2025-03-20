@@ -118,8 +118,7 @@ if game.GameId == 5120885191 then
     
     local spamBtn = mkBtn("SpamBtn", "Spam: OFF", 0.55, 0.2, function()
         spam = not spam
-        spamBtn.Text = "Spam: " .. (spam and "ON" or "OFF")
-        spamBtn.BackgroundColor3 = spam and Color3.fromRGB(0, 120, 0) or Color3.fromRGB(60, 60, 60)
+        task.spawn(toggleSpam)
     end)
     
     local freezeBtn = mkBtn("FreezeBtn", "Freeze", 0.05, 0.4, function()
@@ -134,6 +133,14 @@ if game.GameId == 5120885191 then
         getgenv().visualizer = not getgenv().visualizer
         toggleVisBtn.BackgroundColor3 = getgenv().visualizer and Color3.fromRGB(0, 120, 0) or Color3.fromRGB(60, 60, 60)
     end)
+
+    local function toggleSpam()
+        spam = not spam
+        pcall(function()
+            spamBtn.Text = "Spam: " .. (spam and "ON" or "OFF")
+            spamBtn.BackgroundColor3 = spam and Color3.fromRGB(0, 120, 0) or Color3.fromRGB(60, 60, 60)
+        end)
+    end
     
     local statusLbl = Instance.new("TextLabel")
     statusLbl.Name = "Status"
@@ -160,9 +167,7 @@ if game.GameId == 5120885191 then
     
     UIS.InputBegan:Connect(function(input, gp)
         if not gp and input.KeyCode == Enum.KeyCode.R then
-            spam = not spam
-            spamBtn.Text = "Spam: " .. (spam and "ON" or "OFF")
-            spamBtn.BackgroundColor3 = spam and Color3.fromRGB(0, 120, 0) or Color3.fromRGB(60, 60, 60)
+            task.spawn(toggleSpam)
         end
     end)
     

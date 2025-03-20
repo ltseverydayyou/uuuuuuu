@@ -1,165 +1,345 @@
-local ui=nil
-local Gui = game:GetObjects("rbxassetid://123755747270522")[1]
-local COREGUI= (game:GetService("CoreGui") or game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui"))
-local connect=nil
-local rPlayer = game:GetService("Players"):FindFirstChildWhichIsA("Player")
-local coreGuiProtection = {}
-ui=Gui
-function cursed()
-	local length = math.random(10,20)
-	local array = {}
-	for i = 1, length do
-		array[i] = string.char(math.random(32, 126))
-	end
-	return table.concat(array)
+local UniverseViewer = Instance.new("ScreenGui")
+local MainFrame = Instance.new("Frame")
+local Container = Instance.new("Frame")
+local GamesList = Instance.new("ScrollingFrame")
+local UIListLayout = Instance.new("UIListLayout")
+local GameTemplate = Instance.new("Frame")
+local GameBtn = Instance.new("TextButton")
+local GameCorner = Instance.new("UICorner")
+local BtnHolder = Instance.new("Frame")
+local TPBtn = Instance.new("TextButton")
+local TPCorner = Instance.new("UICorner")
+local CopyBtn = Instance.new("TextButton")
+local CopyCorner = Instance.new("UICorner")
+local ContainerCorner = Instance.new("UICorner")
+local ContainerGradient = Instance.new("UIGradient")
+local MainCorner = Instance.new("UICorner")
+local MainGradient = Instance.new("UIGradient")
+local Topbar = Instance.new("Frame")
+local TopbarCorner = Instance.new("UICorner")
+local Icon = Instance.new("ImageLabel")
+local Title = Instance.new("TextLabel")
+local TopBtnHolder = Instance.new("Frame")
+local MinBtn = Instance.new("TextButton")
+local MinCorner = Instance.new("UICorner")
+local ExitBtn = Instance.new("TextButton")
+local ExitCorner = Instance.new("UICorner")
+local UIPadding = Instance.new("UIPadding")
+local SearchBar = Instance.new("TextBox")
+local SearchIcon = Instance.new("ImageLabel")
+local SearchCorner = Instance.new("UICorner")
+
+UniverseViewer.Name = "UV"
+UniverseViewer.Parent = gethui() or game:GetService("CoreGui") or game:GetService("Players").LocalPlayer.PlayerGui
+UniverseViewer.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+UniverseViewer.ResetOnSpawn = false
+
+MainFrame.Name = "UniverseViewer"
+MainFrame.Parent = UniverseViewer
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+MainFrame.Position = UDim2.new(0.5, -150, 0.5, -150)
+MainFrame.Size = UDim2.new(0, 300, 0, 300)
+MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+MainFrame.ClipsDescendants = true
+
+MainCorner.CornerRadius = UDim.new(0, 8)
+MainCorner.Parent = MainFrame
+
+MainGradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0.00, Color3.fromRGB(20, 10, 30)),
+    ColorSequenceKeypoint.new(1.00, Color3.fromRGB(10, 5, 15))
+}
+MainGradient.Parent = MainFrame
+
+Topbar.Name = "Topbar"
+Topbar.Parent = MainFrame
+Topbar.BackgroundColor3 = Color3.fromRGB(15, 7, 20)
+Topbar.Size = UDim2.new(1, 0, 0, 36)
+Topbar.ZIndex = 2
+
+TopbarCorner.CornerRadius = UDim.new(0, 8)
+TopbarCorner.Parent = Topbar
+
+Icon.Name = "Icon"
+Icon.Parent = Topbar
+Icon.AnchorPoint = Vector2.new(0, 0.5)
+Icon.BackgroundTransparency = 1
+Icon.Position = UDim2.new(0, 10, 0.5, 0)
+Icon.Size = UDim2.new(0, 20, 0, 20)
+Icon.Image = "rbxassetid://6031225816"
+Icon.ImageColor3 = Color3.fromRGB(255, 255, 255)
+
+Title.Name = "Title"
+Title.Parent = Topbar
+Title.BackgroundTransparency = 1
+Title.Position = UDim2.new(0, 40, 0, 0)
+Title.Size = UDim2.new(0.6, 0, 1, 0)
+Title.Font = Enum.Font.GothamBold
+Title.Text = "Universe Viewer"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 16
+Title.TextXAlignment = Enum.TextXAlignment.Left
+
+TopBtnHolder.Name = "ButtonsHolder"
+TopBtnHolder.Parent = Topbar
+TopBtnHolder.BackgroundTransparency = 1
+TopBtnHolder.Position = UDim2.new(1, -80, 0, 0)
+TopBtnHolder.Size = UDim2.new(0, 80, 1, 0)
+
+MinBtn.Name = "Minimize"
+MinBtn.Parent = TopBtnHolder
+MinBtn.BackgroundColor3 = Color3.fromRGB(40, 20, 60)
+MinBtn.Position = UDim2.new(0, 5, 0.5, -12)
+MinBtn.Size = UDim2.new(0, 30, 0, 24)
+MinBtn.Font = Enum.Font.GothamBold
+MinBtn.Text = "-"
+MinBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+MinBtn.TextSize = 18
+MinBtn.AutoButtonColor = true
+
+MinCorner.CornerRadius = UDim.new(0, 4)
+MinCorner.Parent = MinBtn
+
+ExitBtn.Name = "Exit"
+ExitBtn.Parent = TopBtnHolder
+ExitBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+ExitBtn.Position = UDim2.new(0, 40, 0.5, -12)
+ExitBtn.Size = UDim2.new(0, 30, 0, 24)
+ExitBtn.Font = Enum.Font.GothamBold
+ExitBtn.Text = "X"
+ExitBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ExitBtn.TextSize = 14
+ExitBtn.AutoButtonColor = true
+
+ExitCorner.CornerRadius = UDim.new(0, 4)
+ExitCorner.Parent = ExitBtn
+
+SearchBar.Name = "SearchBar"
+SearchBar.Parent = MainFrame
+SearchBar.BackgroundColor3 = Color3.fromRGB(25, 15, 35)
+SearchBar.Position = UDim2.new(0, 10, 0, 46)
+SearchBar.Size = UDim2.new(1, -20, 0, 30)
+SearchBar.Font = Enum.Font.Gotham
+SearchBar.PlaceholderText = "Search Places..."
+SearchBar.Text = ""
+SearchBar.TextColor3 = Color3.fromRGB(255, 255, 255)
+SearchBar.TextSize = 14
+SearchBar.ClearTextOnFocus = false
+
+SearchIcon.Name = "SearchIcon"
+SearchIcon.Parent = SearchBar
+SearchIcon.BackgroundTransparency = 1
+SearchIcon.Position = UDim2.new(0, 5, 0.5, -8)
+SearchIcon.Size = UDim2.new(0, 16, 0, 16)
+SearchIcon.Image = "rbxassetid://3192528333"
+SearchIcon.ImageColor3 = Color3.fromRGB(180, 180, 180)
+
+UIPadding.Parent = SearchBar
+UIPadding.PaddingLeft = UDim.new(0, 26)
+
+SearchCorner.CornerRadius = UDim.new(0, 6)
+SearchCorner.Parent = SearchBar
+
+Container.Name = "Container"
+Container.Parent = MainFrame
+Container.BackgroundColor3 = Color3.fromRGB(20, 10, 30)
+Container.Position = UDim2.new(0, 10, 0, 86)
+Container.Size = UDim2.new(1, -20, 1, -96)
+Container.BackgroundTransparency = 0.2
+
+ContainerCorner.CornerRadius = UDim.new(0, 8)
+ContainerCorner.Parent = Container
+
+ContainerGradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0.00, Color3.fromRGB(15, 7, 20)),
+    ColorSequenceKeypoint.new(1.00, Color3.fromRGB(25, 12, 35))
+}
+ContainerGradient.Parent = Container
+
+GamesList.Name = "List"
+GamesList.Parent = Container
+GamesList.BackgroundTransparency = 1
+GamesList.Position = UDim2.new(0, 5, 0, 5)
+GamesList.Size = UDim2.new(1, -10, 1, -10)
+GamesList.CanvasSize = UDim2.new(0, 0, 0, 0)
+GamesList.ScrollBarThickness = 4
+GamesList.ScrollBarImageColor3 = Color3.fromRGB(100, 50, 150)
+GamesList.BottomImage = "rbxassetid://6889812791"
+GamesList.MidImage = "rbxassetid://6889812721"
+GamesList.TopImage = "rbxassetid://6889812965"
+GamesList.AutomaticCanvasSize = Enum.AutomaticSize.Y
+
+UIListLayout.Parent = GamesList
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout.Padding = UDim.new(0, 6)
+
+GameTemplate.Name = "TextButton"
+GameTemplate.Parent = nil
+GameTemplate.BackgroundColor3 = Color3.fromRGB(30, 15, 45)
+GameTemplate.Size = UDim2.new(1, -4, 0, 50)
+GameTemplate.Position = UDim2.new(0, 2, 0, 0)
+GameTemplate.BackgroundTransparency = 0
+
+GameCorner.CornerRadius = UDim.new(0, 6)
+GameCorner.Parent = GameTemplate
+
+GameBtn.Name = "GameButton"
+GameBtn.Parent = GameTemplate
+GameBtn.BackgroundTransparency = 1
+GameBtn.Size = UDim2.new(0.65, 0, 1, 0)
+GameBtn.Font = Enum.Font.GothamSemibold
+GameBtn.Text = "  Game Name (ID: 12345)"
+GameBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+GameBtn.TextScaled = true
+GameBtn.TextXAlignment = Enum.TextXAlignment.Center
+GameBtn.TextYAlignment = Enum.TextYAlignment.Center
+GameBtn.TextTruncate = Enum.TextTruncate.AtEnd
+
+BtnHolder.Name = "ButtonsHolder"
+BtnHolder.Parent = GameTemplate
+BtnHolder.BackgroundTransparency = 1
+BtnHolder.Position = UDim2.new(0.65, 0, 0, 0)
+BtnHolder.Size = UDim2.new(0.35, 0, 1, 0)
+
+TPBtn.Name = "TeleportBtn"
+TPBtn.Parent = BtnHolder
+TPBtn.BackgroundColor3 = Color3.fromRGB(40, 80, 170)
+TPBtn.Position = UDim2.new(0.5, -42, 0.5, -10)
+TPBtn.Size = UDim2.new(0, 36, 0, 20)
+TPBtn.Font = Enum.Font.GothamBold
+TPBtn.Text = "TP"
+TPBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+TPBtn.TextSize = 12
+TPBtn.AutoButtonColor = true
+
+TPCorner.CornerRadius = UDim.new(0, 4)
+TPCorner.Parent = TPBtn
+
+CopyBtn.Name = "CopyIDBtn"
+CopyBtn.Parent = BtnHolder
+CopyBtn.BackgroundColor3 = Color3.fromRGB(60, 120, 60)
+CopyBtn.Position = UDim2.new(0.5, 6, 0.5, -10)
+CopyBtn.Size = UDim2.new(0, 36, 0, 20)
+CopyBtn.Font = Enum.Font.GothamBold
+CopyBtn.Text = "Copy"
+CopyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+CopyBtn.TextSize = 12
+CopyBtn.AutoButtonColor = true
+
+CopyCorner.CornerRadius = UDim.new(0, 4)
+CopyCorner.Parent = CopyBtn
+
+local function updateSearch()
+    local searchText = string.lower(SearchBar.Text)
+    for _, item in pairs(GamesList:GetChildren()) do
+        if item:IsA("Frame") then
+            local gameText = string.lower(item.GameButton.Text)
+            if searchText == "" or string.find(gameText, searchText) then
+                item.Visible = true
+            else
+                item.Visible = false
+            end
+        end
+    end
 end
-if get_hidden_gui or gethui then
-	local hiddenUI = get_hidden_gui or gethui
-	local Main = Gui
-	Main.Name = cursed()
-	Main.Parent = hiddenUI()
-	ui = Main
-elseif (not is_sirhurt_closure) and (syn and syn.protect_gui) then
-	local Main = Gui
-	Main.Name = cursed()
-	syn.protect_gui(Main)
-	Main.Parent = COREGUI
-	ui = Main
-elseif COREGUI:FindFirstChild('RobloxGui') then
-	pcall(function()
-		for i, v in pairs(ui:GetDescendants()) do
-			coreGuiProtection[v] = rPlayer.Name
-		end
-		ui.DescendantAdded:Connect(function(v)
-			coreGuiProtection[v] = rPlayer.Name
-		end)
-		coreGuiProtection[ui] = rPlayer.Name
 
-		local meta = getrawmetatable(game)
-		local tostr = meta.__tostring
-		setreadonly(meta, false)
-		meta.__tostring = newcclosure(function(t)
-			if coreGuiProtection[t] and not checkcaller() then
-				return coreGuiProtection[t]
-			end
-			return tostr(t)
-		end)
-	end)
-	if not game:GetService("RunService"):IsStudio() then
-		local newGui = game:GetService("CoreGui"):FindFirstChildWhichIsA("ScreenGui")
-		newGui.DescendantAdded:Connect(function(v)
-			coreGuiProtection[v] = rPlayer.Name
-		end)
-		for i, v in pairs(ui:GetChildren()) do
-			v.Parent = newGui
-		end
-		ui = newGui
-	end
-else
-	local Main = Gui
-	Main.Name = cursed()
-	Main.Parent = COREGUI
-	ui = Main
-end
-
-local UniverseViewerFrame = ui.UniverseViewer
-local UniverseList = UniverseViewerFrame.Container.List
-local UniverseExample = UniverseList.TextButton
-UniverseExample.Parent = nil
-
-Draggable = function(ui, dragui)
-	if not dragui then dragui = ui end
-	local UserInputService = game:GetService("UserInputService")
-
-	local dragging
-	local dragInput
-	local dragStart
-	local startPos
-
-	local function update(input)
-		local delta = input.Position - dragStart
-		ui.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-	end
-
-	dragui.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			dragging = true
-			dragStart = input.Position
-			startPos = ui.Position
-
-			input.Changed:Connect(function()
-				if input.UserInputState == Enum.UserInputState.End then
-					dragging = false
-				end
-			end)
-		end
-	end)
-
-	dragui.InputChanged:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-			dragInput = input
-		end
-	end)
-
-	UserInputService.InputChanged:Connect(function(input)
-		if input == dragInput and dragging then
-			update(input)
-		end
-	end)
-end
-tweeny = function(obj, style, direction, duration, goal)
-	local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle[style], Enum.EasingDirection[direction])
-	local tween = game:GetService("TweenService"):Create(obj, tweenInfo, goal)
-	tween:Play()
-	return tween
-end
-menustuff = function(menu)
-	local mini = menu:FindFirstChild("Minimize", true)
-	local exit = menu:FindFirstChild("Exit", true)
-	local minimized = false
-	local sizeX, sizeY = Instance.new("IntValue", menu), Instance.new("IntValue", menu)
-	mini.MouseButton1Click:Connect(function()
-		minimized = not minimized
-		if minimized then
-			sizeX.Value = menu.Size.X.Offset
-			sizeY.Value = menu.Size.Y.Offset
-			tweeny(menu, "Quart", "Out", 0.5, {Size = UDim2.new(0, 283, 0, 25)})
-		else
-			tweeny(menu, "Quart", "Out", 0.5, {Size = UDim2.new(0, sizeX.Value, 0, sizeY.Value)})
-		end
-	end)
-	exit.MouseButton1Click:Connect(function()
-		if connect then connect:Disconnect() connect=nil end
-		menu.Parent:Destroy()
-	end)
-	Draggable(menu, menu.Topbar)
-end
-
-menustuff(UniverseViewerFrame)
-UniverseViewerFrame.Position = UDim2.new(0.5, -283/2+5, 0.5, -260/2+5)
-
-task.spawn(function()
-	local page = game:GetService("AssetService"):GetGamePlacesAsync()
-	while true do
-		local template = UniverseExample
-		local list = UniverseList
-		for _, place in page:GetCurrentPage() do
-			local btn = template:Clone()
-			btn.Parent=list
-			btn.Name=place.Name
-			btn.Text=place.Name.." ("..place.PlaceId..")"
-			btn.MouseButton1Click:Connect(function()
-				game:GetService("TeleportService"):Teleport(place.PlaceId, game:GetService("Players").LocalPlayer)
-				print("Teleport To Place: "..place.Name)
-			end)
-		end
-		if page.IsFinished then
-			break
-		end
-		page:AdvanceToNextPageAsync()
-	end
+SearchBar.Changed:Connect(function(prop)
+    if prop == "Text" then
+        updateSearch()
+    end
 end)
 
-connect = game:GetService"RunService".Stepped:Connect(function()
-    UniverseList.CanvasSize = UDim2.new(0, 0, 0, UniverseList:FindFirstChildOfClass("UIListLayout").AbsoluteContentSize.Y)
+local UVFrame = MainFrame
+local UVList = GamesList
+local UVExample = GameTemplate
+
+local UserInputService = game:GetService("UserInputService")
+local dragging
+local dragInput
+local dragStart
+local startPos
+
+local function updateDrag(input)
+    local delta = input.Position - dragStart
+    UVFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
+
+Topbar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = UVFrame.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+Topbar.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        updateDrag(input)
+    end
+end)
+
+local originalSize = UVFrame.Size
+local minimized = false
+
+MinBtn.MouseButton1Click:Connect(function()
+    minimized = not minimized
+    if minimized then
+        originalSize = UVFrame.Size
+        UVFrame.Size = UDim2.new(0, 300, 0, 36)
+        Container.Visible = false
+        SearchBar.Visible = false
+    else
+        UVFrame.Size = originalSize
+        Container.Visible = true
+        SearchBar.Visible = true
+    end
+end)
+
+ExitBtn.MouseButton1Click:Connect(function()
+    UniverseViewer:Destroy()
+    if connect then connect:Disconnect() end
+end)
+
+task.spawn(function()
+    local page = game:GetService("AssetService"):GetGamePlacesAsync()
+    while true do
+        local template = UVExample
+        local list = UVList
+        for _, place in page:GetCurrentPage() do
+            local btn = template:Clone()
+            btn.Parent = list
+            btn.Name = place.Name
+            btn.GameButton.Text = "  " .. place.Name .. " (" .. place.PlaceId .. ")"
+            
+            btn.ButtonsHolder.TeleportBtn.MouseButton1Click:Connect(function()
+                game:GetService("TeleportService"):Teleport(place.PlaceId, game:GetService("Players").LocalPlayer)
+                print("Teleport To Place: " .. place.Name)
+            end)
+            
+            btn.ButtonsHolder.CopyIDBtn.MouseButton1Click:Connect(function()
+                setclipboard(tostring(place.PlaceId))
+                print("Copied PlaceId: " .. place.PlaceId)
+            end)
+        end
+        if page.IsFinished then
+            break
+        end
+        page:AdvanceToNextPageAsync()
+    end
+end)
+
+connect = game:GetService("RunService").Stepped:Connect(function()
+    UVList.CanvasSize = UDim2.new(0, 0, 0, UVList:FindFirstChildOfClass("UIListLayout").AbsoluteContentSize.Y)
 end)

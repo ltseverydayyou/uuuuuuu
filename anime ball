@@ -94,6 +94,8 @@ if game.GameId == 5120885191 then
     minimizeBtn.Font = Enum.Font.SourceSansBold
     minimizeBtn.Parent = frame
     
+    local spamBtn
+    
     local function mkBtn(name, text, posX, posY, callback)
         local btn = Instance.new("TextButton")
         btn.Name = name
@@ -111,12 +113,20 @@ if game.GameId == 5120885191 then
         btn.MouseButton1Click:Connect(callback)
         return btn
     end
+
+    local function toggleSpam()
+        spam = not spam
+        pcall(function()
+            spamBtn.Text = "Spam: " .. (spam and "ON" or "OFF")
+            spamBtn.BackgroundColor3 = spam and Color3.fromRGB(0, 120, 0) or Color3.fromRGB(60, 60, 60)
+        end)
+    end
     
     local parryBtn = mkBtn("ParryBtn", "Parry", 0.05, 0.2, function()
         task.spawn(parry)
     end)
-    
-    local spamBtn = mkBtn("SpamBtn", "Spam: OFF", 0.55, 0.2, function()
+
+    spamBtn = mkBtn("SpamBtn", "Spam: OFF", 0.55, 0.2, function()
         spam = not spam
         task.spawn(toggleSpam)
     end)
@@ -133,14 +143,6 @@ if game.GameId == 5120885191 then
         getgenv().visualizer = not getgenv().visualizer
         toggleVisBtn.BackgroundColor3 = getgenv().visualizer and Color3.fromRGB(0, 120, 0) or Color3.fromRGB(60, 60, 60)
     end)
-
-    local function toggleSpam()
-        spam = not spam
-        pcall(function()
-            spamBtn.Text = "Spam: " .. (spam and "ON" or "OFF")
-            spamBtn.BackgroundColor3 = spam and Color3.fromRGB(0, 120, 0) or Color3.fromRGB(60, 60, 60)
-        end)
-    end
     
     local statusLbl = Instance.new("TextLabel")
     statusLbl.Name = "Status"

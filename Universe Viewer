@@ -30,7 +30,7 @@ local SearchIcon = Instance.new("ImageLabel")
 local SearchCorner = Instance.new("UICorner")
 
 UniverseViewer.Name = "UV"
-UniverseViewer.Parent = gethui() or game:GetService("CoreGui") or game:GetService("Players").LocalPlayer.PlayerGui
+UniverseViewer.Parent = gethui() or (game:GetService("CoreGui") or game:GetService("Players").LocalPlayer.PlayerGui)
 UniverseViewer.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 UniverseViewer.ResetOnSpawn = false
 

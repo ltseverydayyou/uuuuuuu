@@ -34,7 +34,7 @@ Explorer = function()
 
 -- Common Locals
 
-local Decompile do
+--[[local Decompile do
 	local Success, Decompile_Source = pcall(function()
 		return game:HttpGet("https://raw.githubusercontent.com/w-a-e/Advanced-Decompiler-V3/main/init.lua", true)
 	end)
@@ -54,7 +54,7 @@ local SHOW_REFERENCES = true
 local SHOW_OPERATION_NAMES = false
 local SHOW_MISC_OPERATIONS = false
 local LIST_USED_GLOBALS = true
-local RETURN_ELAPSED_TIME = false]]
+local RETURN_ELAPSED_TIME = false
 		
 		xpcall(function()
 			return loadstring(
@@ -71,7 +71,7 @@ local RETURN_ELAPSED_TIME = false]]
 		local _ENV = (getgenv or getrenv or getfenv)()
 		Decompile = _ENV.decompile
 		
-		--[[local request = request or http_request or (syn and syn.request)
+		local request = request or http_request or (syn and syn.request)
 		
 		local cleanScript = function(ucScript, cUrl)
 			local Url = (cUrl or "http://localhost:5000/fix_script")
@@ -105,9 +105,9 @@ local RETURN_ELAPSED_TIME = false]]
 		
 		_ENV.decompile = function(Source)
 			return BetterDecompiler(Source, true)
-		end]]
+		end
 	end
-end
+end]]
 
 local Main,Lib,Apps,Settings -- Main Containers
 local Explorer, Properties, ScriptViewer, Notebook -- Major Apps

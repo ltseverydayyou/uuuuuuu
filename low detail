@@ -27,7 +27,7 @@ end
 
 _G.Ignore = _G.Ignore or {}
 _G.WaitPerAmount = _G.WaitPerAmount or 500
-_G.SendNotifications = _G.SendNotifications or false
+_G.SendNotifications = _G.SendNotifications or true
 _G.ConsoleLogs = _G.ConsoleLogs or false
 
 if not game:IsLoaded() then

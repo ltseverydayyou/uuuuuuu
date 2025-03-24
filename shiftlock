@@ -80,26 +80,33 @@ LockButton.MouseButton1Up:Connect(function()
     hoverTween:Play()
 end)
 
-DragThingy = function(ui, dragui)
+NAdrag=function(ui, dragui)
     if not dragui then dragui = ui end
     local UserInputService = game:GetService("UserInputService")
-    
+
     local dragging
     local dragInput
     local dragStart
     local startPos
-    
+
     local function update(input)
         local delta = input.Position - dragStart
-        ui.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-    end
+        local newXOffset = startPos.X.Offset + delta.X
+        local newYOffset = startPos.Y.Offset + delta.Y
+        
+        local screenSize = ui.Parent.AbsoluteSize
+        local newXScale = startPos.X.Scale + (newXOffset / screenSize.X)
+        local newYScale = startPos.Y.Scale + (newYOffset / screenSize.Y)
     
+        ui.Position = UDim2.new(newXScale, 0, newYScale, 0)
+    end
+
     dragui.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
             dragStart = input.Position
             startPos = ui.Position
-            
+
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
                     dragging = false
@@ -107,21 +114,22 @@ DragThingy = function(ui, dragui)
             end)
         end
     end)
-    
+
     dragui.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
             dragInput = input
         end
     end)
-    
+
     UserInputService.InputChanged:Connect(function(input)
         if input == dragInput and dragging then
             update(input)
         end
     end)
+    ui.Active=true
 end
 
-DragThingy(LockButton)
+NAdrag(LockButton)
 
 local function YDYMLAX_fake_script()
     local script = Instance.new('LocalScript', LockButton)

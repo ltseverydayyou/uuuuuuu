@@ -28,6 +28,8 @@ local UIPadding = Instance.new("UIPadding")
 local SearchBar = Instance.new("TextBox")
 local SearchIcon = Instance.new("ImageLabel")
 local SearchCorner = Instance.new("UICorner")
+local MAX_RETRIES = 30
+local RETRY_DELAY = 0.5
 
 UniverseViewer.Name = "UV"
 UniverseViewer.Parent = gethui() or (game:GetService("CoreGui") or game:GetService("Players").LocalPlayer.PlayerGui)
@@ -345,27 +347,61 @@ ExitBtn.MouseButton1Click:Connect(function()
     if connect then connect:Disconnect() end
 end)
 
+local function fetchGamePlaces()
+    local attempts = 0
+    local success = false
+    local page
+
+    DoNotif("Loading game places, please wait...", 3, "Loading")
+
+    while attempts < MAX_RETRIES do
+        attempts += 1
+        local s, r = pcall(function()
+            page = game:GetService("AssetService"):GetGamePlacesAsync()
+        end)
+
+        if s then
+            success = true
+            break
+        else
+            warn("Attempt " .. attempts .. " failed: " .. tostring(r))
+            task.wait(RETRY_DELAY)
+        end
+    end
+
+    if not success then
+        DoNotif("HTTP failed to retrieve game places after " .. MAX_RETRIES .. " attempts.", 5, "Error")
+        return nil
+    end
+
+    return page
+end
+
 task.spawn(function()
-    local page = game:GetService("AssetService"):GetGamePlacesAsync()
+    local page = fetchGamePlaces()
+    if not page then return end
+
+    local template = UVExample
+    local list = UVList
+
     while true do
-        local template = UVExample
-        local list = UVList
         for _, place in page:GetCurrentPage() do
             local btn = template:Clone()
             btn.Parent = list
             btn.Name = place.Name
             btn.GameButton.Text = "  " .. place.Name .. " (" .. place.PlaceId .. ")"
-            
+
             btn.ButtonsHolder.TeleportBtn.MouseButton1Click:Connect(function()
                 game:GetService("TeleportService"):Teleport(place.PlaceId, game:GetService("Players").LocalPlayer)
-                DoNotif("Teleport To Place: " .. place.Name, 3, "Universe Viewer")
+                DoNotif("Teleporting To Place: " .. place.Name, 3, "Universe Viewer")
             end)
-            
+
             btn.ButtonsHolder.CopyIDBtn.MouseButton1Click:Connect(function()
                 setclipboard(tostring(place.PlaceId))
                 DoNotif("Copied PlaceId: " .. place.PlaceId, 3, "Universe Viewer")
             end)
         end
+
         if page.IsFinished then
             break
         end

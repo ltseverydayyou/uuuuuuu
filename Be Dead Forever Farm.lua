@@ -139,7 +139,7 @@ task.spawn(function()
             local hrp = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
             local mh = game:GetService("Workspace").Buildings.DeadBurger.DumpsterMoneyMaker:FindFirstChild("MoneyHitbox")
             if hrp and mh then
-                local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut)
+                local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut)
                 local tween1 = TweenService:Create(mh, tweenInfo, {CFrame = hrp.CFrame})
                 local tween2 = TweenService:Create(mh, tweenInfo, {CFrame = hrp.CFrame + Vector3.new(0, 10, 0)})
                 tween1:Play()

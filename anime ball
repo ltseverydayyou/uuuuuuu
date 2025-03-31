@@ -4,19 +4,20 @@ if game.GameId == 5120885191 then
     local rs = game:GetService("RunService")
     local rep = game:GetService("ReplicatedStorage")
     local spam = false
-    
+    local debounce = false
+
     getgenv().visualizer = false
-    
+
     if not gethui then
         getgenv().gethui = function()
             return game:GetService("CoreGui"):FindFirstChildWhichIsA("ScreenGui") or game:GetService("CoreGui") or plr:FindFirstChild("PlayerGui")
         end
     end
-    
+
     local function getRoot(char)
         return char:FindFirstChild('HumanoidRootPart') or char:FindFirstChild('Torso') or char:FindFirstChild('UpperTorso')
     end
-    
+
     local function rndStr()
         local len = math.random(10, 20)
         local arr = {}
@@ -25,26 +26,26 @@ if game.GameId == 5120885191 then
         end
         return table.concat(arr)
     end
-    
+
     local function parry()
         rep.Framework.RemoteFunction:InvokeServer("SwordService", "Block", {-0.2588194012641907})
     end
-    
+
     loadstring(game:HttpGet("https://raw.githubusercontent.com/1f0yt/community/main/RedCircleBlock"))()
-    
+
     game.Workspace.Effects.ChildAdded:Connect(function(j)
         task.wait()
         j:Destroy()
     end)
-    
+
     task.wait(0.5)
-    
+
     local gui = Instance.new("ScreenGui")
     gui.IgnoreGuiInset = true
     gui.Parent = gethui()
     gui.ResetOnSpawn = false
     gui.Name = rndStr()
-    
+
     local frame = Instance.new("Frame")
     frame.Name = "MainFrame"
     frame.Size = UDim2.new(0, 250, 0, 200)
@@ -56,7 +57,7 @@ if game.GameId == 5120885191 then
     frame.Active = true
     frame.Draggable = true
     frame.Parent = gui
-    
+
     local title = Instance.new("TextLabel")
     title.Name = "Title"
     title.Size = UDim2.new(1, -50, 0, 30)
@@ -68,7 +69,7 @@ if game.GameId == 5120885191 then
     title.Font = Enum.Font.SourceSansBold
     title.Text = "Ball Script"
     title.Parent = frame
-    
+
     local closeBtn = Instance.new("TextButton")
     closeBtn.Name = "CloseBtn"
     closeBtn.Text = "X"
@@ -82,7 +83,7 @@ if game.GameId == 5120885191 then
     closeBtn.MouseButton1Click:Connect(function()
         gui:Destroy()
     end)
-    
+
     local minimizeBtn = Instance.new("TextButton")
     minimizeBtn.Name = "MinimizeBtn"
     minimizeBtn.Text = "-"
@@ -93,9 +94,9 @@ if game.GameId == 5120885191 then
     minimizeBtn.TextSize = 16
     minimizeBtn.Font = Enum.Font.SourceSansBold
     minimizeBtn.Parent = frame
-    
+
     local spamBtn
-    
+
     local function mkBtn(name, text, posX, posY, callback)
         local btn = Instance.new("TextButton")
         btn.Name = name
@@ -110,7 +111,13 @@ if game.GameId == 5120885191 then
         btn.BorderSizePixel = 1
         btn.BorderColor3 = Color3.fromRGB(100, 100, 100)
         btn.Parent = frame
-        btn.MouseButton1Click:Connect(callback)
+        btn.MouseButton1Click:Connect(function()
+            if debounce then return end
+            debounce = true
+            callback()
+            task.wait(0.3)
+            debounce = false
+        end)
         return btn
     end
 
@@ -121,7 +128,7 @@ if game.GameId == 5120885191 then
             spamBtn.BackgroundColor3 = spam and Color3.fromRGB(0, 120, 0) or Color3.fromRGB(60, 60, 60)
         end)
     end
-    
+
     local parryBtn = mkBtn("ParryBtn", "Parry", 0.05, 0.2, function()
         task.spawn(parry)
     end)
@@ -130,20 +137,20 @@ if game.GameId == 5120885191 then
         spam = not spam
         task.spawn(toggleSpam)
     end)
-    
+
     local freezeBtn = mkBtn("FreezeBtn", "Freeze", 0.05, 0.4, function()
         getRoot(plr.Character).Anchored = true
     end)
-    
+
     local unfreezeBtn = mkBtn("UnfreezeBtn", "Unfreeze", 0.55, 0.4, function()
         getRoot(plr.Character).Anchored = false
     end)
-    
+
     local toggleVisBtn = mkBtn("ToggleVisBtn", "Toggle Effects", 0.05, 0.6, function()
         getgenv().visualizer = not getgenv().visualizer
         toggleVisBtn.BackgroundColor3 = getgenv().visualizer and Color3.fromRGB(0, 120, 0) or Color3.fromRGB(60, 60, 60)
     end)
-    
+
     local statusLbl = Instance.new("TextLabel")
     statusLbl.Name = "Status"
     statusLbl.Size = UDim2.new(1, -20, 0, 30)
@@ -155,7 +162,7 @@ if game.GameId == 5120885191 then
     statusLbl.Text = "Press R to toggle spam"
     statusLbl.TextXAlignment = Enum.TextXAlignment.Left
     statusLbl.Parent = frame
-    
+
     local minimized = false
     minimizeBtn.MouseButton1Click:Connect(function()
         minimized = not minimized
@@ -166,64 +173,10 @@ if game.GameId == 5120885191 then
         end
         frame.Size = minimized and UDim2.new(0, 250, 0, 30) or UDim2.new(0, 250, 0, 200)
     end)
-    
+
     UIS.InputBegan:Connect(function(input, gp)
         if not gp and input.KeyCode == Enum.KeyCode.R then
             task.spawn(toggleSpam)
-        end
-    end)
-    
-    local function handleBall(ball)
-        task.wait(0.1)
-        for _, v in ipairs(ball:GetDescendants()) do
-            if v:IsA("ParticleEmitter") or v:IsA("Beam") or v:IsA("Trail") or v:IsA("Attachment") then
-                task.wait()
-                v:Destroy()
-            end
-        end
-        
-        ball.Transparency = 0
-        local balls = game.ReplicatedStorage.Storage.Balls
-        
-        local highlight = Instance.new("SelectionBox")
-        highlight.Adornee = ball
-        highlight.Parent = ball
-        
-        if ball.Color == balls.Ball1.Color then
-            highlight.Color3 = ball.Color
-            highlight.Name = "ball1"
-            game.StarterGui:SetCore("SendNotification", {
-                Title = "Ball Spawned",
-                Text = ball.Name,
-                Duration = 0.64,
-            })
-        elseif ball.Color == balls.UltimateBall1.Color then
-            ball.Parent = game.Workspace
-            highlight.Color3 = ball.Color
-            highlight.Name = "ultimateball1"
-            game.StarterGui:SetCore("SendNotification", {
-                Title = "Ultimate Ball Spawned",
-                Text = ball.Name,
-                Duration = 1,
-            })
-        end
-    end
-    
-    workspace.Balls.ChildAdded:Connect(handleBall)
-    
-    rs.RenderStepped:Connect(function()
-        pcall(function()
-            local ui = plr.PlayerGui.HUD
-            ui.MobileLarge.Visible = UIS.TouchEnabled
-            ui.MobileSmall.Visible = false
-            ui.Actions.Visible = not UIS.TouchEnabled
-            ui.MobileLarge.Block.Visible = false
-        end)
-    end)
-    
-    rs.RenderStepped:Connect(function()
-        if spam then
-            task.spawn(parry)
         end
     end)
 end

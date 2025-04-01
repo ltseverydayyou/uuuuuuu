@@ -13,7 +13,9 @@ local function hp()
     dc:FireServer(unpack(a))
 end
 
-hm:GetPropertyChangedSignal("Value"):Connect(hp)
+hm:GetPropertyChangedSignal("Value"):Connect(function()
+task.spawn(hp)
+end)
 
 runService.RenderStepped:Connect(function()
 task.spawn(hp)

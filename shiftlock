@@ -3,6 +3,9 @@ local LockButton = Instance.new("ImageButton")
 local btnIcon = Instance.new("ImageLabel")
 local buttonEffect = Instance.new("UICorner")
 local buttonStroke = Instance.new("UIStroke")
+local closeButton = Instance.new("TextButton")
+local closeEffect = Instance.new("UICorner")
+local closeStroke = Instance.new("UIStroke")
 
 shiftlockk.Name = "shiftlockk"
 shiftlockk.Parent = game.CoreGui
@@ -41,6 +44,30 @@ btnIcon.Image = "rbxasset://textures/ui/mouseLock_off.png"
 btnIcon.ImageColor3 = Color3.fromRGB(255, 255, 255)
 btnIcon.ScaleType = Enum.ScaleType.Fit
 
+closeButton.Name = "CloseButton"
+closeButton.Parent = LockButton
+closeButton.AnchorPoint = Vector2.new(1, 0)
+closeButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+closeButton.BackgroundTransparency = 0.3
+closeButton.BorderColor3 = Color3.fromRGB(27, 42, 53)
+closeButton.BorderSizePixel = 0
+closeButton.Position = UDim2.new(1, 0, 0, -5)
+closeButton.Size = UDim2.new(0, 20, 0, 20)
+closeButton.ZIndex = 4
+closeButton.Text = "X"
+closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeButton.TextScaled = true
+closeButton.Font = Enum.Font.SourceSans
+closeButton.AutoButtonColor = true
+
+closeEffect.Parent = closeButton
+closeEffect.CornerRadius = UDim.new(0.5, 0)
+
+closeStroke.Parent = closeButton
+closeStroke.Color = Color3.fromRGB(255, 255, 255)
+closeStroke.Thickness = 1
+closeStroke.Transparency = 0.3
+
 local tweenService = game:GetService("TweenService")
 local hoverInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local clickInfo = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
@@ -78,6 +105,10 @@ end)
 
 LockButton.MouseButton1Up:Connect(function()
     hoverTween:Play()
+end)
+
+closeButton.MouseButton1Click:Connect(function()
+    shiftlockk:Destroy()
 end)
 
 NAdrag=function(ui, dragui)

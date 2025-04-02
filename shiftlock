@@ -22,6 +22,7 @@ function protectUI(sGui)
     local rPlayer = SafeGetService("Players"):FindFirstChildWhichIsA("Player")
     local coreGuiProtection = {}
     local RunService = SafeGetService("RunService")
+    local LocalPlayer = SafeGetService("Players").LocalPlayer
 
     local function NAProtection(inst, var)
         if inst then
@@ -80,9 +81,9 @@ function protectUI(sGui)
         NAProtection(sGui)
         sGui.Parent = COREGUI
         return sGui
-    elseif rPlayer and rPlayer:FindFirstChild("PlayerGui") then
+    elseif LocalPlayer and LocalPlayer:FindFirstChild("PlayerGui") then
         NAProtection(sGui)
-        sGui.Parent = rPlayer:FindFirstChild("PlayerGui")
+        sGui.Parent = LocalPlayer:FindFirstChild("PlayerGui")
         return sGui
     else
         return nil

@@ -10,7 +10,9 @@ local runService = game:GetService("RunService")
 local a = { -math.huge }
 
 local function hp()
-    dc:FireServer(unpack(a))
+    task.spawn(function()
+        dc:FireServer(unpack(a))
+    end)
 end
 
 hm:GetPropertyChangedSignal("Value"):Connect(function()

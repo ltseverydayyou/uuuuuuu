@@ -20,6 +20,89 @@ local function restoreModule(module)
     end
 end
 
+function protectUI(sGui)
+    local function blankfunction(...)
+        return ...
+    end
+
+    local cloneref = cloneref or blankfunction
+
+    local function SafeGetService(service)
+        return cloneref(game:GetService(service)) or game:GetService(service)
+    end
+
+    local cGUI = SafeGetService("CoreGui")
+    local rPlr = SafeGetService("Players"):FindFirstChildWhichIsA("Player")
+    local cGUIProtect = {}
+    local rService = SafeGetService("RunService")
+    local lPlr = SafeGetService("Players").LocalPlayer
+
+    local function NAProtection(inst, var)
+        if inst then
+            if var then
+                inst[var] = "\0"
+                inst.Archivable = false
+            else
+                inst.Name = "\0"
+                inst.Archivable = false
+            end
+        end
+    end
+
+    if (get_hidden_gui or gethui) then
+        local hiddenUI = (get_hidden_gui or gethui)
+        NAProtection(sGui)
+        sGui.Parent = hiddenUI()
+        return sGui
+    elseif (not is_sirhurt_closure) and (syn and syn.protect_gui) then
+        NAProtection(sGui)
+        syn.protect_gui(sGui)
+        sGui.Parent = cGUI
+        return sGui
+    elseif cGUI:FindFirstChildWhichIsA("ScreenGui") then
+        pcall(function()
+            for _, v in pairs(sGui:GetDescendants()) do
+                cGUIProtect[v] = rPlr.Name
+            end
+            sGui.DescendantAdded:Connect(function(v)
+                cGUIProtect[v] = rPlr.Name
+            end)
+            cGUIProtect[sGui] = rPlr.Name
+
+            local meta = getrawmetatable(game)
+            local tostr = meta.__tostring
+            setreadonly(meta, false)
+            meta.__tostring = newcclosure(function(t)
+                if cGUIProtect[t] and not checkcaller() then
+                    return cGUIProtect[t]
+                end
+                return tostr(t)
+            end)
+        end)
+        if not rService:IsStudio() then
+            local newGui = cGUI:FindFirstChildWhichIsA("ScreenGui")
+            newGui.DescendantAdded:Connect(function(v)
+                cGUIProtect[v] = rPlr.Name
+            end)
+            for _, v in pairs(sGui:GetChildren()) do
+                v.Parent = newGui
+            end
+            sGui = newGui
+        end
+        return sGui
+    elseif cGUI then
+        NAProtection(sGui)
+        sGui.Parent = cGUI
+        return sGui
+    elseif lPlr and lPlr:FindFirstChild("PlayerGui") then
+        NAProtection(sGui)
+        sGui.Parent = lPlr:FindFirstChild("PlayerGui")
+        return sGui
+    else
+        return nil
+    end
+end
+
 local success, errorMsg = pcall(function()
     restoreModule(rep:FindFirstChild("PermanentEyefestation", true))
     restoreModule(rep:FindFirstChild("Searchlight", true))
@@ -38,13 +121,6 @@ game:GetService("Players").LocalPlayer.Character:FindFirstChildWhichIsA("Humanoi
     end)
 end)
 
-if not gethui then
-    getgenv().gethui = function()
-        local h = game:GetService("CoreGui"):FindFirstChildWhichIsA("ScreenGui") or game:GetService("CoreGui") or game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui")
-        return h
-    end
-end
-
 local function randomString(length)
     length = length or math.random(10, 20)
     local array = {}
@@ -55,7 +131,7 @@ local function randomString(length)
 end
 
 ScreenGui.Name = randomString()
-ScreenGui.Parent = gethui()
+protectUI(ScreenGui)
 ttLabel.Name = randomString()
 ttLabel.Parent = ScreenGui
 ttLabel.BackgroundColor3 = Color3.fromRGB(4, 4, 4)

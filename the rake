@@ -42,7 +42,7 @@ if game.GameId == 847722000 then
 
 	local HidePart = Instance.new("Part")
 	HidePart.Size = Vector3.new(20,1000,20)
-	HidePart.Parent = workspace
+	HidePart.Parent = game:GetService("Workspace")
 	HidePart.Position = Vector3.new(0,10000,0)
 	HidePart.Anchored = true
 
@@ -176,15 +176,15 @@ if game.GameId == 847722000 then
 	end
 
 	local function rakechams()
-		if game.Workspace:FindFirstChild("Rake") then
-			if game.Workspace.Rake:FindFirstChild("SleepyRakeChams") then
+		if game:GetService("Workspace"):FindFirstChild("Rake") then
+			if game:GetService("Workspace").Rake:FindFirstChild("SleepyRakeChams") then
 
 			else
 				local chams = Instance.new("Highlight")
 				chams.FillColor = Color3.new(170, 0, 0)
 				chams.OutlineColor = Color3.new(255,255,255)
-				chams.Parent = game.Workspace.Rake
-				chams.Adornee = game.Workspace.Rake
+				chams.Parent = game:GetService("Workspace").Rake
+				chams.Adornee = game:GetService("Workspace").Rake
 				chams.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
 				chams.OutlineTransparency = .9
 				chams.FillTransparency = 0.5
@@ -196,8 +196,8 @@ if game.GameId == 847722000 then
 	end
 
 	local function disablerakechams()
-		if game.Workspace:FindFirstChild("Rake") then
-			for i,v in pairs(game.Workspace:FindFirstChild("Rake"):GetDescendants()) do
+		if game:GetService("Workspace"):FindFirstChild("Rake") then
+			for i,v in pairs(game:GetService("Workspace"):FindFirstChild("Rake"):GetDescendants()) do
 				if v.Name == "SleepyRakeChams" then
 					v:Destroy()
 				end
@@ -212,7 +212,7 @@ if game.GameId == 847722000 then
 	local FreeCamPart = Instance.new("Part")
 	FreeCamPart.Anchored = true
 	FreeCamPart.Size = Vector3.new(1,1,1)
-	FreeCamPart.Parent = workspace
+	FreeCamPart.Parent = game:GetService("Workspace")
 	FreeCamPart.CFrame = CFrame.new(0,10000,0)
 	FreeCamPart.Transparency = 1
 	FreeCamPart.Name = "FreeCamPart"
@@ -266,10 +266,10 @@ if game.GameId == 847722000 then
 							local tween = tweenService:Create(part, tweenInfo, goal)
 							tween:Play()
 						end
-						game.Workspace.CurrentCamera.CameraType = Enum.CameraType.Scriptable
+						game:GetService("Workspace").CurrentCamera.CameraType = Enum.CameraType.Scriptable
 						local mouse = game.Players.LocalPlayer:GetMouse()
 						game.Players.LocalPlayer.Character:WaitForChild("HumanoidRootPart").Anchored = true
-						game.Workspace.CurrentCamera.CameraSubject = FreeCamPart
+						game:GetService("Workspace").CurrentCamera.CameraSubject = FreeCamPart
 
 						FreeCamPart.CFrame = CFrame.new(FreeCamPart.Position,mouse.Hit.Position)
 						if InputService:IsKeyDown(Enum.KeyCode.Space) then
@@ -292,8 +292,8 @@ if game.GameId == 847722000 then
 				until _G.FreeCam == false
 				pcall(function()
 					game.Players.LocalPlayer.Character.HumanoidRootPart.Anchored = false
-					game.Workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
-					game.Workspace.CurrentCamera.CameraSubject = game.Players.LocalPlayer.Character.Head
+					game:GetService("Workspace").CurrentCamera.CameraType = Enum.CameraType.Custom
+					game:GetService("Workspace").CurrentCamera.CameraSubject = game.Players.LocalPlayer.Character.Head
 				end)
 			end
 		end,
@@ -398,9 +398,9 @@ if game.GameId == 847722000 then
 			if _G.RakeKillAura == true then
 				repeat wait()
 					pcall(function()
-						for i,v in pairs(game.Workspace:GetChildren()) do
-							if game.Workspace:FindFirstChild("Rake") then
-								if (game.Workspace.Rake.HumanoidRootPart.Position - game.Players.LocalPlayer.Character.HumanoidRootPart.Position).Magnitude < 200 then
+						for i,v in pairs(game:GetService("Workspace"):GetChildren()) do
+							if game:GetService("Workspace"):FindFirstChild("Rake") then
+								if (game:GetService("Workspace").Rake.HumanoidRootPart.Position - game.Players.LocalPlayer.Character.HumanoidRootPart.Position).Magnitude < 200 then
 									game.Players.LocalPlayer.Character.StunStick.Event:FireServer("S")
 									wait()
 									game.Players.LocalPlayer.Character.StunStick.Event:FireServer("H", workspace.Rake.HumanoidRootPart)	
@@ -419,8 +419,8 @@ if game.GameId == 847722000 then
 		if AllowRunService == true then
 			if _G.RakeKillAura == true then
 				pcall(function()
-					if game.Workspace:FindFirstChild("Rake") then
-						game.Players.LocalPlayer.Character.StunStick.HitPart.Position = game.Workspace:FindFirstChild("Rake").HumanoidRootPart.Position
+					if game:GetService("Workspace"):FindFirstChild("Rake") then
+						game.Players.LocalPlayer.Character.StunStick.HitPart.Position = game:GetService("Workspace"):FindFirstChild("Rake").HumanoidRootPart.Position
 					end
 				end)
 			end
@@ -451,7 +451,7 @@ if game.GameId == 847722000 then
 		Flag = "RakeChams",
 		Callback = function(state)
 			_G.RakeChams = state
-			for i,v in pairs(game.Workspace:GetChildren()) do
+			for i,v in pairs(game:GetService("Workspace"):GetChildren()) do
 				if v.Name == "Rake" then
 					v:SetAttribute("hasESP",false)
 				end
@@ -461,9 +461,9 @@ if game.GameId == 847722000 then
 
 				until _G.RakeChams == false
 			elseif _G.RakeChams == false then
-				if game.Workspace:FindFirstChild("Rake") then
-					if game.Workspace:FindFirstChild("Rake"):FindFirstChild("RakeChams") then
-						game.Workspace:FindFirstChild("Rake"):FindFirstChild("RakeChams"):Remove()
+				if game:GetService("Workspace"):FindFirstChild("Rake") then
+					if game:GetService("Workspace"):FindFirstChild("Rake"):FindFirstChild("RakeChams") then
+						game:GetService("Workspace"):FindFirstChild("Rake"):FindFirstChild("RakeChams"):Remove()
 					end
 				end
 			end
@@ -510,7 +510,7 @@ if game.GameId == 847722000 then
 	ExploitsTab:CreateButton({
 		Name = "Bring Scraps",
 		Callback = function()
-			for i,v in pairs(game.Workspace.Filter.ScrapSpawns:GetDescendants()) do
+			for i,v in pairs(game:GetService("Workspace").Filter.ScrapSpawns:GetDescendants()) do
 				if v.Name:lower() == "scrap" then
 					v:PivotTo(game.Players.LocalPlayer.Character:GetPivot())
 				end
@@ -528,7 +528,7 @@ if game.GameId == 847722000 then
 				if game:GetService("Workspace"):FindFirstChild("FlareGunPickUp") then
 					game:GetService("Workspace"):FindFirstChild("FlareGunPickUp"):SetAttribute("FlareGunESP",false)
 				end
-				for i,v in pairs(game.Workspace:GetChildren()) do
+				for i,v in pairs(game:GetService("Workspace"):GetChildren()) do
 					if v.Name == "FlareGunPickUp" then
 						if v:FindFirstChild("FlareGunChams") then
 							v.FlareGunChams:Remove()
@@ -594,7 +594,7 @@ if game.GameId == 847722000 then
 							end
 						end)
 					end
-					for i,v in pairs(game.Workspace:GetChildren()) do
+					for i,v in pairs(game:GetService("Workspace"):GetChildren()) do
 						if v.Name == "FlareGunPickUp" then
 							if v:FindFirstChild("FlareGunChams") then
 								v.FlareGunChams.Enabled = true
@@ -623,7 +623,7 @@ if game.GameId == 847722000 then
 	game:GetService("RunService").Heartbeat:Connect(function()
 		if AllowRunService == true then
 			if _G.RakeChams == true then
-				for i,v in pairs(game.Workspace:GetChildren()) do
+				for i,v in pairs(game:GetService("Workspace"):GetChildren()) do
 					if v.Name == "Rake" then
 						if v:FindFirstChild("RakeChams") then
 							v.RakeChams.Enabled = true
@@ -639,7 +639,7 @@ if game.GameId == 847722000 then
 						end
 					end
 				end
-				for i,v in pairs(game.Workspace:GetChildren()) do
+				for i,v in pairs(game:GetService("Workspace"):GetChildren()) do
 					if v.Name == "Rake" then
 						if v:GetAttribute("hasESP") == true then
 
@@ -657,7 +657,7 @@ if game.GameId == 847722000 then
 									pcall(function()
 										if AllowRunService == true then
 											if _G.RakeChams == true then
-												if game.Workspace:FindFirstChild(v.Name) then
+												if game:GetService("Workspace"):FindFirstChild(v.Name) then
 													local cam = workspace.CurrentCamera
 													local Pos,OnScreen = cam:WorldToViewportPoint(v.Head.Position)
 													if OnScreen then
@@ -913,7 +913,7 @@ if game.GameId == 847722000 then
 	game:GetService("RunService").Heartbeat:Connect(function()
 		if AllowRunService == true then
 			if _G.ScrapESP == true then
-				for i,v in pairs(game.Workspace.Filter.ScrapSpawns:GetDescendants()) do
+				for i,v in pairs(game:GetService("Workspace").Filter.ScrapSpawns:GetDescendants()) do
 					if v.Name == "Scrap" then
 						if v:GetAttribute("ScrapESP") == true then
 						else
@@ -952,7 +952,7 @@ if game.GameId == 847722000 then
 						end
 					end
 				end
-				for i,v in pairs(game.Workspace.Filter.ScrapSpawns:GetDescendants()) do
+				for i,v in pairs(game:GetService("Workspace").Filter.ScrapSpawns:GetDescendants()) do
 					if v.Name == "Scrap" then
 						if v:FindFirstChild("ScrapChams") then
 							v.ScrapChams.Enabled = true
@@ -1001,7 +1001,7 @@ if game.GameId == 847722000 then
 						end
 					end)
 				end
-				for i,v in pairs(game.Workspace.Filter.ScrapSpawns:GetDescendants()) do
+				for i,v in pairs(game:GetService("Workspace").Filter.ScrapSpawns:GetDescendants()) do
 					pcall(function()
 						if v:GetAttribute("ScrapESP") == true then
 							v:SetAttribute("ScrapESP",false)
@@ -1182,7 +1182,7 @@ if game.GameId == 847722000 then
 	function DestroyUI()
 		AllowRunService = false
 		FreeCamPart:Remove()
-		for i,v in pairs(game.Workspace.Filter.ScrapSpawns:GetDescendants()) do
+		for i,v in pairs(game:GetService("Workspace").Filter.ScrapSpawns:GetDescendants()) do
 			pcall(function()
 				if v:GetAttribute("ScrapESP") == true then
 					v:SetAttribute("ScrapESP",false)

@@ -1,13 +1,12 @@
 local ui=nil
 local Gui = loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/refs/heads/main/srs%20UI.lua"))()
-local COREGUI= (game:GetService("CoreGui") or game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui"))
 local connect,copyCon,fireCon,smallButton=nil,nil,nil,nil
-local rPlayer = game:GetService("Players"):FindFirstChildWhichIsA("Player")
 local con=nil
 local con1=nil
 local order=0
-local coreGuiProtection = {}
+
 ui=Gui
+
 function cursed()
 	local length = math.random(10,20)
 	local array = {}
@@ -16,54 +15,91 @@ function cursed()
 	end
 	return table.concat(array)
 end
-if get_hidden_gui or gethui then
-	local hiddenUI = get_hidden_gui or gethui
-	local Main = Gui
-	Main.Name = cursed()
-	Main.Parent = hiddenUI()
-	ui = Main
-elseif (not is_sirhurt_closure) and (syn and syn.protect_gui) then
-	local Main = Gui
-	Main.Name = cursed()
-	syn.protect_gui(Main)
-	Main.Parent = COREGUI
-	ui = Main
-elseif COREGUI:FindFirstChild('RobloxGui') then
-	pcall(function()
-		for i, v in pairs(ui:GetDescendants()) do
-			coreGuiProtection[v] = rPlayer.Name
-		end
-		ui.DescendantAdded:Connect(function(v)
-			coreGuiProtection[v] = rPlayer.Name
-		end)
-		coreGuiProtection[ui] = rPlayer.Name
 
-		local meta = getrawmetatable(game)
-		local tostr = meta.__tostring
-		setreadonly(meta, false)
-		meta.__tostring = newcclosure(function(t)
-			if coreGuiProtection[t] and not checkcaller() then
-				return coreGuiProtection[t]
-			end
-			return tostr(t)
-		end)
-	end)
-	if not game:GetService("RunService"):IsStudio() then
-		local newGui = game:GetService("CoreGui"):FindFirstChildWhichIsA("ScreenGui")
-		newGui.DescendantAdded:Connect(function(v)
-			coreGuiProtection[v] = rPlayer.Name
-		end)
-		for i, v in pairs(ui:GetChildren()) do
-			v.Parent = newGui
-		end
-		ui = newGui
-	end
-else
-	local Main = Gui
-	Main.Name = cursed()
-	Main.Parent = COREGUI
-	ui = Main
+function protectUI(sGui)
+    local function blankfunction(...)
+        return ...
+    end
+
+    local cloneref = cloneref or blankfunction
+
+    local function SafeGetService(service)
+        return cloneref(game:GetService(service)) or game:GetService(service)
+    end
+
+    local cGUI = SafeGetService("CoreGui")
+    local rPlr = SafeGetService("Players"):FindFirstChildWhichIsA("Player")
+    local cGUIProtect = {}
+    local rService = SafeGetService("RunService")
+    local lPlr = SafeGetService("Players").LocalPlayer
+
+    local function NAProtection(inst, var)
+        if inst then
+            if var then
+                inst[var] = "\0"
+                inst.Archivable = false
+            else
+                inst.Name = "\0"
+                inst.Archivable = false
+            end
+        end
+    end
+
+    if (get_hidden_gui or gethui) then
+        local hiddenUI = (get_hidden_gui or gethui)
+        NAProtection(sGui)
+        sGui.Parent = hiddenUI()
+        return sGui
+    elseif (not is_sirhurt_closure) and (syn and syn.protect_gui) then
+        NAProtection(sGui)
+        syn.protect_gui(sGui)
+        sGui.Parent = cGUI
+        return sGui
+    elseif cGUI:FindFirstChildWhichIsA("ScreenGui") then
+        pcall(function()
+            for _, v in pairs(sGui:GetDescendants()) do
+                cGUIProtect[v] = rPlr.Name
+            end
+            sGui.DescendantAdded:Connect(function(v)
+                cGUIProtect[v] = rPlr.Name
+            end)
+            cGUIProtect[sGui] = rPlr.Name
+
+            local meta = getrawmetatable(game)
+            local tostr = meta.__tostring
+            setreadonly(meta, false)
+            meta.__tostring = newcclosure(function(t)
+                if cGUIProtect[t] and not checkcaller() then
+                    return cGUIProtect[t]
+                end
+                return tostr(t)
+            end)
+        end)
+        if not rService:IsStudio() then
+            local newGui = cGUI:FindFirstChildWhichIsA("ScreenGui")
+            newGui.DescendantAdded:Connect(function(v)
+                cGUIProtect[v] = rPlr.Name
+            end)
+            for _, v in pairs(sGui:GetChildren()) do
+                v.Parent = newGui
+            end
+            sGui = newGui
+        end
+        return sGui
+    elseif cGUI then
+        NAProtection(sGui)
+        sGui.Parent = cGUI
+        return sGui
+    elseif lPlr and lPlr:FindFirstChild("PlayerGui") then
+        NAProtection(sGui)
+        sGui.Parent = lPlr:FindFirstChild("PlayerGui")
+        return sGui
+    else
+        return nil
+    end
 end
+
+protectUI(ui)
 
 local SRSFrame = ui:FindFirstChildWhichIsA("Frame")
 local SRSList = SRSFrame.Container.Logs

@@ -32,7 +32,6 @@ local UIStroke_2 = Instance.new("UIStroke")
 ScreenGui.Name = "SRS"
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.ResetOnSpawn = false
-ScreenGui.Parent=game.StarterGui
 
 SRS.Name = "SRS"
 SRS.Parent = ScreenGui

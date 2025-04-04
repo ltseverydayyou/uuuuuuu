@@ -13,19 +13,15 @@ function protectUI(sGui)
     local function blankfunction(...)
         return ...
     end
-
     local cloneref = cloneref or blankfunction
-
     local function SafeGetService(service)
         return cloneref(game:GetService(service)) or game:GetService(service)
     end
-
     local cGUI = SafeGetService("CoreGui")
     local rPlr = SafeGetService("Players"):FindFirstChildWhichIsA("Player")
     local cGUIProtect = {}
     local rService = SafeGetService("RunService")
     local lPlr = SafeGetService("Players").LocalPlayer
-
     local function NAProtection(inst, var)
         if inst then
             if var then
@@ -37,7 +33,6 @@ function protectUI(sGui)
             end
         end
     end
-
     if (get_hidden_gui or gethui) then
         local hiddenUI = (get_hidden_gui or gethui)
         NAProtection(sGui)
@@ -57,7 +52,6 @@ function protectUI(sGui)
                 cGUIProtect[v] = rPlr.Name
             end)
             cGUIProtect[sGui] = rPlr.Name
-
             local meta = getrawmetatable(game)
             local tostr = meta.__tostring
             setreadonly(meta, false)
@@ -92,33 +86,27 @@ function protectUI(sGui)
     end
 end
 
-NAdrag=function(ui, dragui)
+NAdrag = function(ui, dragui)
     if not dragui then dragui = ui end
     local UserInputService = game:GetService("UserInputService")
-
     local dragging
     local dragInput
     local dragStart
     local startPos
-
     local function update(input)
         local delta = input.Position - dragStart
         local newXOffset = startPos.X.Offset + delta.X
         local newYOffset = startPos.Y.Offset + delta.Y
-        
         local screenSize = ui.Parent.AbsoluteSize
         local newXScale = startPos.X.Scale + (newXOffset / screenSize.X)
         local newYScale = startPos.Y.Scale + (newYOffset / screenSize.Y)
-    
         ui.Position = UDim2.new(newXScale, 0, newYScale, 0)
     end
-
     dragui.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
             dragStart = input.Position
             startPos = ui.Position
-
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
                     dragging = false
@@ -126,19 +114,17 @@ NAdrag=function(ui, dragui)
             end)
         end
     end)
-
     dragui.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
             dragInput = input
         end
     end)
-
     UserInputService.InputChanged:Connect(function(input)
         if input == dragInput and dragging then
             update(input)
         end
     end)
-    ui.Active=true
+    ui.Active = true
 end
 
 local sg = Instance.new("ScreenGui")
@@ -148,13 +134,15 @@ protectUI(sg)
 
 local m = Instance.new("Frame")
 m.Name = "MainFrame"
-m.Size = UDim2.new(0, 600, 0, 500)
-m.Position = UDim2.new(0.5, -300, 0.5, -250)
+m.Size = UDim2.new(0.9, 0, 0.9, 0)
+m.Position = UDim2.new(0.05, 0, 0.05, 0)
 m.BackgroundColor3 = c.bg
 m.BorderSizePixel = 0
 m.Active = true
 m.ClipsDescendants = true
 m.Parent = sg
+
+local originalSize = m.Size
 
 local mc = Instance.new("UICorner")
 mc.CornerRadius = UDim.new(0, 10)
@@ -187,7 +175,7 @@ tbc.Parent = tb
 
 local t = Instance.new("TextLabel")
 t.Name = "Title"
-t.Size = UDim2.new(1, -120, 1, 0)
+t.Size = UDim2.new(1, -140, 1, 0)
 t.Position = UDim2.new(0, 15, 0, 0)
 t.BackgroundTransparency = 1
 t.Font = Enum.Font.GothamBold
@@ -196,6 +184,18 @@ t.TextColor3 = c.tx
 t.TextSize = 20
 t.TextXAlignment = Enum.TextXAlignment.Left
 t.Parent = tb
+
+local mb = Instance.new("TextButton")
+mb.Name = "MinimizeButton"
+mb.Size = UDim2.new(0, 24, 0, 24)
+mb.Position = UDim2.new(1, -60, 0.5, -12)
+mb.AnchorPoint = Vector2.new(0.5, 0.5)
+mb.BackgroundTransparency = 1
+mb.Text = "_"
+mb.TextColor3 = c.tx
+mb.Font = Enum.Font.GothamBold
+mb.TextSize = 14
+mb.Parent = tb
 
 local cb = Instance.new("ImageButton")
 cb.Name = "CloseButton"
@@ -266,6 +266,26 @@ cb.MouseButton1Click:Connect(function()
     sg:Destroy()
 end)
 
+local minimized = false
+mb.MouseButton1Click:Connect(function()
+    minimized = not minimized
+    if minimized then
+        gIcon.Visible = false
+        gName.Visible = false
+        gOwner.Visible = false
+        rc.Visible = false
+        m:TweenSize(UDim2.new(originalSize.X.Scale, originalSize.X.Offset, 0, 50), "Out", "Quad", 0.3, true)
+        mb.Text = "+"
+    else
+        gIcon.Visible = true
+        gName.Visible = true
+        gOwner.Visible = true
+        rc.Visible = true
+        m:TweenSize(originalSize, "Out", "Quad", 0.3, true)
+        mb.Text = "_"
+    end
+end)
+
 NAdrag(m, tb)
 
 local function updTxtScale(lbl)
@@ -284,11 +304,9 @@ local function addInfo(key, value)
     container.BackgroundColor3 = c.sc
     container.BorderSizePixel = 0
     container.Parent = sf
-
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 8)
     corner.Parent = container
-
     local lbl = Instance.new("TextLabel")
     lbl.Size = UDim2.new(1, -20, 0, 0)
     lbl.Position = UDim2.new(0, 10, 0, 0)
@@ -300,7 +318,6 @@ local function addInfo(key, value)
     lbl.TextXAlignment = Enum.TextXAlignment.Left
     lbl.TextWrapped = true
     lbl.Parent = container
-
     updTxtScale(lbl)
 end
 
@@ -310,22 +327,23 @@ local function addDropdown(key, tbl)
     container.BackgroundColor3 = c.sc
     container.BorderSizePixel = 0
     container.Parent = sf
-
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 8)
     corner.Parent = container
-
-    local lbl = Instance.new("TextLabel")
-    lbl.Size = UDim2.new(1, -40, 1, 0)
-    lbl.Position = UDim2.new(0, 10, 0, 0)
-    lbl.BackgroundTransparency = 1
-    lbl.Font = Enum.Font.Gotham
-    lbl.Text = key
-    lbl.TextColor3 = c.tx
-    lbl.TextSize = 14
-    lbl.TextXAlignment = Enum.TextXAlignment.Left
-    lbl.Parent = container
-
+    local header = Instance.new("Frame")
+    header.Size = UDim2.new(1, 0, 0, 50)
+    header.BackgroundTransparency = 1
+    header.Parent = container
+    local headerLbl = Instance.new("TextLabel")
+    headerLbl.Size = UDim2.new(1, -40, 1, 0)
+    headerLbl.Position = UDim2.new(0, 10, 0, 0)
+    headerLbl.BackgroundTransparency = 1
+    headerLbl.Font = Enum.Font.Gotham
+    headerLbl.Text = key
+    headerLbl.TextColor3 = c.tx
+    headerLbl.TextSize = 14
+    headerLbl.TextXAlignment = Enum.TextXAlignment.Left
+    headerLbl.Parent = header
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(0, 30, 0, 30)
     btn.Position = UDim2.new(1, -35, 0.5, -15)
@@ -334,35 +352,37 @@ local function addDropdown(key, tbl)
     btn.TextColor3 = c.tx
     btn.Font = Enum.Font.GothamBold
     btn.TextSize = 14
-    btn.Parent = container
-
-    local cornerBtn = Instance.new("UICorner")
-    cornerBtn.CornerRadius = UDim.new(0, 8)
-    cornerBtn.Parent = btn
-
+    btn.Parent = header
+    local btnCorner = Instance.new("UICorner")
+    btnCorner.CornerRadius = UDim.new(0, 8)
+    btnCorner.Parent = btn
+    local content = Instance.new("Frame")
+    content.Name = "DropdownContent"
+    content.Size = UDim2.new(1, 0, 0, 0)
+    content.Position = UDim2.new(0, 0, 0.2, 0)
+    content.BackgroundTransparency = 1
+    content.ClipsDescendants = true
+    content.Parent = container
+    local layout = Instance.new("UIListLayout")
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Parent = content
     local expanded = false
-    local subFrames = {}
-
     btn.MouseButton1Click:Connect(function()
         expanded = not expanded
         if expanded then
             btn.Text = "-"
             for subKey, subValue in pairs(tbl) do
                 local subContainer = Instance.new("Frame")
-                subContainer.Size = UDim2.new(0.9, 0, 0, 30)
-                subContainer.Position = UDim2.new(0.1, 0, 0, 0)
+                subContainer.Size = UDim2.new(1, -20, 0, 30)
                 subContainer.BackgroundColor3 = c.sc
                 subContainer.BorderSizePixel = 0
-                subContainer.Parent = sf
-                subContainer.Name = key.."_SubFrame"
-
+                subContainer.Parent = content
                 local subCorner = Instance.new("UICorner")
                 subCorner.CornerRadius = UDim.new(0, 8)
                 subCorner.Parent = subContainer
-
                 local subLbl = Instance.new("TextLabel")
-                subLbl.Size = UDim2.new(1, -20, 1, 0)
-                subLbl.Position = UDim2.new(0, 10, 0, 0)
+                subLbl.Size = UDim2.new(1, -10, 1, 0)
+                subLbl.Position = UDim2.new(0, 5, 0, 0)
                 subLbl.BackgroundTransparency = 1
                 subLbl.Font = Enum.Font.Gotham
                 subLbl.Text = subKey..": "..tostring(subValue)
@@ -371,15 +391,20 @@ local function addDropdown(key, tbl)
                 subLbl.TextXAlignment = Enum.TextXAlignment.Left
                 subLbl.TextWrapped = true
                 subLbl.Parent = subContainer
-
-                table.insert(subFrames, subContainer)
             end
+            wait()
+            local contentHeight = layout.AbsoluteContentSize.Y
+            content.Size = UDim2.new(1, 0, 0, contentHeight)
+            container.Size = UDim2.new(1, 0, 0, 50 + contentHeight)
         else
             btn.Text = "+"
-            for _, subFrame in ipairs(subFrames) do
-                subFrame:Destroy()
+            for _, child in pairs(content:GetChildren()) do
+                if child:IsA("Frame") then
+                    child:Destroy()
+                end
             end
-            subFrames = {}
+            content.Size = UDim2.new(1, 0, 0, 0)
+            container.Size = UDim2.new(1, 0, 0, 50)
         end
         sf.CanvasSize = UDim2.new(0, 0, 0, ul.AbsoluteContentSize.Y)
     end)
@@ -390,15 +415,12 @@ local function displayGameInfo()
     gIcon.Image = "https://assetgame.roblox.com/Game/Tools/ThumbnailAsset.ashx?aid="..gameInfo.IconImageAssetId.."&fmt=png&wd=1920&ht=1080"
     gName.Text = gameInfo.Name
     gOwner.Text = "Owned by: "..gameInfo.Creator.Name
-
     for key, value in pairs(gameInfo) do
         if key ~= "Creator" and key ~= "ProductId" then
             addInfo(key, value)
         end
     end
-
     addDropdown("Creator", gameInfo.Creator)
-
     sf.CanvasSize = UDim2.new(0, 0, 0, ul.AbsoluteContentSize.Y)
 end
 

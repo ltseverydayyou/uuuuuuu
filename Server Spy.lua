@@ -217,7 +217,7 @@ end
 	while current and current ~= game do
 		local name = current.Name
 		if name:sub(1, 4) == "Game" then
-			name = "game" .. name:sub(5)
+			name = "game"..name:sub(5)
 		end
 		table.insert(path, 1, name)
 		current = current.Parent
@@ -268,9 +268,9 @@ local function GetChildPath(obj)
 		while obj and obj.Parent do
 			local name = obj.Name
 			if name:match("^[%a_][%w_]*$") then
-				table.insert(path, 1, ":FindFirstChild(\"" .. name .. "\")")
+				table.insert(path, 1, ":FindFirstChild(\""..name.."\")")
 			else
-				table.insert(path, 1, '["' .. name:gsub('"', '\\"') .. '"]')
+				table.insert(path, 1, '["'..name:gsub('"', '\\"')..'"]')
 			end
 
 			if b(obj.Parent) then
@@ -297,10 +297,10 @@ function formatValue(value)
 	elseif typeof(value) == "table" then
 		local result = "{ "
 		for k, v in pairs(value) do
-			result = result .. string.format("[%s] = %s; \n", formatValue(k), formatValue(v))
+			result = result..string.format("[%s] = %s; \n", formatValue(k), formatValue(v))
 		end
 		result = result:sub(1, -2)
-		return result .. "}"
+		return result.."}"
 	else
 		return string.format("%q", tostring(value))
 	end
@@ -320,7 +320,7 @@ function handleRemote(remote)
 	while current and current.Parent ~= game do
 		local name = current.Name
 		if name:sub(1, 4) == "Game" then
-			name = "game" .. name:sub(5)
+			name = "game"..name:sub(5)
 		end
 		table.insert(path, 1, name)
 		current = current.Parent
@@ -432,7 +432,7 @@ copyCon = copySignalBtn.MouseButton1Click:Connect(function()
 			setclipboard(thingy)
 		end
 	else
-		game:GetService("StarterGui"):SetCore("SendNotification", {Title = "Missing Variable";Text = "setclipboard";Duration = 5;})
+		game:GetService("StarterGui"):SetCore("SendNotification", {Title = "Missing Function";Text = "setclipboard";Duration = 5;})
 	end
 end)
 
@@ -443,7 +443,7 @@ fireCon = fireSignalBtn.MouseButton1Click:Connect(function()
 			assert(loadstring(thingy))()
 		end
 	else
-		game:GetService("StarterGui"):SetCore("SendNotification", {Title = "Missing Variable";Text = "firesignal";Duration = 5;})
+		game:GetService("StarterGui"):SetCore("SendNotification", {Title = "Missing Function";Text = "firesignal";Duration = 5;})
 	end	
 end)
 

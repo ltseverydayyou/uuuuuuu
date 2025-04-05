@@ -324,7 +324,7 @@ local function scrapefirst()
 		serverCapacity.Position = UDim2.new(0.324895531, 0, 0.0533333384, 0)
 		serverCapacity.Size = UDim2.new(0, 68, 0, 43)
 		serverCapacity.Font = Enum.Font.SciFi
-		serverCapacity.Text = table.playing .. "/" .. table.maxPlayers
+		serverCapacity.Text = table.playing.."/"..table.maxPlayers
 		serverCapacity.TextColor3 = Color3.fromRGB(255, 255, 255)
 		serverCapacity.TextSize = 20.000
 
@@ -336,7 +336,7 @@ local function scrapefirst()
 		ping.Position = UDim2.new(0.572656751, 0, 0.0533333384, 0)
 		ping.Size = UDim2.new(0, 68, 0, 43)
 		ping.Font = Enum.Font.SciFi
-		ping.Text = table.ping .. " ms"
+		ping.Text = table.ping.." ms"
 		ping.TextColor3 = Color3.fromRGB(255, 255, 255)
 		ping.TextSize = 20.000
 
@@ -429,7 +429,7 @@ local function scrapeservers()
 				serverCapacity.Position = UDim2.new(0.324895531, 0, 0.0533333384, 0)
 				serverCapacity.Size = UDim2.new(0, 68, 0, 43)
 				serverCapacity.Font = Enum.Font.SciFi
-				serverCapacity.Text = table.playing .. "/" .. table.maxPlayers
+				serverCapacity.Text = table.playing.."/"..table.maxPlayers
 				serverCapacity.TextColor3 = Color3.fromRGB(255, 255, 255)
 				serverCapacity.TextSize = 20.000
 
@@ -441,7 +441,7 @@ local function scrapeservers()
 				ping.Position = UDim2.new(0.572656751, 0, 0.0533333384, 0)
 				ping.Size = UDim2.new(0, 68, 0, 43)
 				ping.Font = Enum.Font.SciFi
-				ping.Text = table.ping .. " ms"
+				ping.Text = table.ping.." ms"
 				ping.TextColor3 = Color3.fromRGB(255, 255, 255)
 				ping.TextSize = 20.000
 
@@ -571,7 +571,7 @@ scrapeServer.MouseButton1Down:connect(function()
 	local clipboard = ""
 	Players = game:GetService("Players")
 	for i, player in pairs(Players:GetPlayers()) do
-		clipboard = clipboard .. "\n" .. player.Name
+		clipboard = clipboard.."\n"..player.Name
 	end
 	setclipboard(clipboard)
 end)

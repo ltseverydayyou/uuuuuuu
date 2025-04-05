@@ -260,7 +260,7 @@ local specialKeySizes = {
 
 local function createKey(text, row, col, width)
     local key = Instance.new("TextButton")
-    key.Name = "Key_" .. text
+    key.Name = "Key_"..text
     key.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
     key.BorderSizePixel = 0
     key.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -381,7 +381,7 @@ end)
 
 local function createFloatingKey(text)
     local floatingKey = Instance.new("TextButton")
-    floatingKey.Name = "FloatingKey_" .. text
+    floatingKey.Name = "FloatingKey_"..text
     floatingKey.Size = UDim2.new(0, 50, 0, 50)
     floatingKey.Position = UDim2.new(0.5, -25, 0.5, -25)
     floatingKey.BackgroundColor3 = Color3.fromRGB(60, 60, 60)

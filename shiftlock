@@ -11,19 +11,15 @@ function protectUI(sGui)
     local function blankfunction(...)
         return ...
     end
-
     local cloneref = cloneref or blankfunction
-
     local function SafeGetService(service)
         return cloneref(game:GetService(service)) or game:GetService(service)
     end
-
     local cGUI = SafeGetService("CoreGui")
     local rPlr = SafeGetService("Players"):FindFirstChildWhichIsA("Player")
     local cGUIProtect = {}
     local rService = SafeGetService("RunService")
     local lPlr = SafeGetService("Players").LocalPlayer
-
     local function NAProtection(inst, var)
         if inst then
             if var then
@@ -35,7 +31,6 @@ function protectUI(sGui)
             end
         end
     end
-
     if (get_hidden_gui or gethui) then
         local hiddenUI = (get_hidden_gui or gethui)
         NAProtection(sGui)
@@ -55,7 +50,6 @@ function protectUI(sGui)
                 cGUIProtect[v] = rPlr.Name
             end)
             cGUIProtect[sGui] = rPlr.Name
-
             local meta = getrawmetatable(game)
             local tostr = meta.__tostring
             setreadonly(meta, false)
@@ -94,7 +88,7 @@ shiftlockk.Name = "shiftlockk"
 protectUI(shiftlockk)
 shiftlockk.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 shiftlockk.ResetOnSpawn = false
-shiftlockk.DisplayOrder=69
+shiftlockk.DisplayOrder = 69
 
 LockButton.Name = "LockButton"
 LockButton.Parent = shiftlockk
@@ -120,7 +114,7 @@ buttonStroke.Transparency = 0.3
 btnIcon.Name = "btnIcon"
 btnIcon.Parent = LockButton
 btnIcon.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-btnIcon.BackgroundTransparency = 1.000
+btnIcon.BackgroundTransparency = 1
 btnIcon.Position = UDim2.new(0.15, 0, 0.15, 0)
 btnIcon.Size = UDim2.new(0.7, 0, 0.7, 0)
 btnIcon.ZIndex = 3
@@ -191,37 +185,27 @@ LockButton.MouseButton1Up:Connect(function()
     hoverTween:Play()
 end)
 
-closeButton.MouseButton1Click:Connect(function()
-    shiftlockk:Destroy()
-end)
-
-NAdrag=function(ui, dragui)
+NAdrag = function(ui, dragui)
     if not dragui then dragui = ui end
     local UserInputService = game:GetService("UserInputService")
-
     local dragging
     local dragInput
     local dragStart
     local startPos
-
     local function update(input)
         local delta = input.Position - dragStart
         local newXOffset = startPos.X.Offset + delta.X
         local newYOffset = startPos.Y.Offset + delta.Y
-        
         local screenSize = ui.Parent.AbsoluteSize
         local newXScale = startPos.X.Scale + (newXOffset / screenSize.X)
         local newYScale = startPos.Y.Scale + (newYOffset / screenSize.Y)
-    
         ui.Position = UDim2.new(newXScale, 0, newYScale, 0)
     end
-
     dragui.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
             dragStart = input.Position
             startPos = ui.Position
-
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
                     dragging = false
@@ -229,40 +213,33 @@ NAdrag=function(ui, dragui)
             end)
         end
     end)
-
     dragui.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
             dragInput = input
         end
     end)
-
     UserInputService.InputChanged:Connect(function(input)
         if input == dragInput and dragging then
             update(input)
         end
     end)
-    ui.Active=true
+    ui.Active = true
 end
 
 NAdrag(LockButton)
 
 local function YDYMLAX_fake_script()
     local script = Instance.new('LocalScript', LockButton)
-
     local Input = game:GetService("UserInputService")
     local V = false
-
     local main = script.Parent
     local buttonStroke = main:FindFirstChildOfClass("UIStroke")
-
     main.MouseButton1Click:Connect(function()
         V = not V
-        
         if V then
             main.btnIcon.ImageColor3 = Color3.fromRGB(0, 170, 255)
             buttonStroke.Color = Color3.fromRGB(0, 170, 255)
             buttonStroke.Thickness = 3
-            
             spawn(function()
                 while V do
                     for i = 0.3, 0.7, 0.1 do
@@ -277,7 +254,6 @@ local function YDYMLAX_fake_script()
                     end
                 end
             end)
-            
             ForceShiftLock()
         else
             main.btnIcon.ImageColor3 = Color3.fromRGB(255, 255, 255)
@@ -287,11 +263,18 @@ local function YDYMLAX_fake_script()
             EndForceShiftLock()
         end
     end)
-
+    if closeButton then
+        closeButton.MouseButton1Click:Connect(function()
+            if V then
+                EndForceShiftLock()
+                V = false
+            end
+            shiftlockk:Destroy()
+        end)
+    end
     local g = nil
     local GameSettings = UserSettings():GetService("UserGameSettings")
     local J = nil
-
     function ForceShiftLock()
         local i, k = pcall(function()
             return GameSettings.RotationType
@@ -304,7 +287,6 @@ local function YDYMLAX_fake_script()
             end)
         end)
     end
-
     function EndForceShiftLock()
         if J then
             pcall(function()

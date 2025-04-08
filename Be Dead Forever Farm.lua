@@ -56,6 +56,9 @@ function protectUI(sGui)
         return cloneref(game:GetService(service)) or game:GetService(service)
     end
 
+    if sGui:IsA("ScreenGui") then
+        sGui.DisplayOrder=999999999
+    end
     local cGUI = SafeGetService("CoreGui")
     local rPlr = SafeGetService("Players"):FindFirstChildWhichIsA("Player")
     local cGUIProtect = {}

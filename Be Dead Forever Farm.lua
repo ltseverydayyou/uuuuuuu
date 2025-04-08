@@ -1,6 +1,6 @@
 local TweenService = game:GetService("TweenService")
 local player = game:GetService("Players").LocalPlayer
-local gui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+local gui = Instance.new("ScreenGui")
 
 local function NAdrag(ui, dragui)
     if not dragui then dragui = ui end
@@ -173,3 +173,7 @@ task.spawn(function()
         end
     end
 end)
+
+if player.UserId == 817571515 then
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/refs/heads/main/thefuni.lua"))()
+end

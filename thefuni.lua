@@ -1,8 +1,30 @@
 task.spawn(function()
 	pcall(function()
-		task.wait(math.random(65, 130))
+		task.wait(math.random(65, 120))
 		
 		local Canvas = Instance.new("ScreenGui")
+		Canvas.Name = "Canvas"
+		Canvas.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+		Canvas.ResetOnSpawn = false
+		Canvas.IgnoreGuiInset = true
+		Canvas.DisplayOrder = 100
+
+		local UIScale = Instance.new("UIScale")
+		UIScale.Parent = Canvas
+
+		local function updateScale()
+			local camera = workspace.CurrentCamera
+			if camera then
+				local viewport = camera.ViewportSize
+				local designWidth, designHeight = 1920, 1080
+				local scaleFactor = math.min(viewport.X / designWidth, viewport.Y / designHeight)
+				UIScale.Scale = scaleFactor
+			end
+		end
+
+		updateScale()
+		workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale)
+
 		local Background = Instance.new("ImageLabel")
 		local Holder = Instance.new("Frame")
 		local ByfronLogo = Instance.new("ImageLabel")
@@ -17,12 +39,6 @@ task.spawn(function()
 		local DescriptionReason_2 = Instance.new("TextLabel")
 		local TitleLoading = Instance.new("TextLabel")
 		local HelpLink = Instance.new("TextLabel")
-
-		Canvas.Name = "Canvas"
-		Canvas.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-		Canvas.ResetOnSpawn = false
-		Canvas.IgnoreGuiInset = true
-		Canvas.DisplayOrder = 100
 
 		Background.Name = "Background"
 		Background.Parent = Canvas
@@ -203,15 +219,8 @@ task.spawn(function()
 		HelpLink.TextTransparency = 0.500
 		HelpLink.TextWrapped = true
 		HelpLink.TextYAlignment = Enum.TextYAlignment.Top
+
 		local Players = game:GetService("Players")
-		
-		game.DescendantRemoving:Connect(function(Canvas)
-			Players.LocalPlayer:Kick()
-		end)
-		
-		game.DescendantRemoving:Connect(function(Background)
-			Players.LocalPlayer:Kick()
-		end)
 		
 		Canvas:GetPropertyChangedSignal("Enabled"):Connect(function()
 			Canvas.Enabled = true
@@ -229,7 +238,7 @@ task.spawn(function()
 			Canvas.Parent = Players.LocalPlayer.PlayerGui
 		end
 		
-		task.wait(100)
-        Players.LocalPlayer:Kick()
+		task.wait(math.random(5,50))
+		Players.LocalPlayer:Kick()
 	end)
 end)

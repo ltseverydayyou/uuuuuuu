@@ -17,7 +17,7 @@ if game.GameId == 5120885191 then
         return char:FindFirstChild('HumanoidRootPart') or char:FindFirstChild('Torso') or char:FindFirstChild('UpperTorso')
     end
 
-    local function rndStr()
+    function rndStr()
         local len = math.random(10, 20)
         local arr = {}
         for i = 1, len do
@@ -26,7 +26,7 @@ if game.GameId == 5120885191 then
         return table.concat(arr)
     end
 
-    local function parry()
+    function parry()
         rep.Framework.RemoteFunction:InvokeServer("SwordService", "Block", {-0.2588194012641907})
     end
 
@@ -114,7 +114,7 @@ if game.GameId == 5120885191 then
         return btn
     end
 
-    local function toggleSpam()
+    function toggleSpam()
         spam = not spam
         pcall(function()
             spamBtn.Text = "Spam: " .. (spam and "ON" or "OFF")
@@ -173,7 +173,7 @@ if game.GameId == 5120885191 then
         end
     end)
 
-    local function handleBall(ball)
+    function handleBall(ball)
         task.wait(0.1)
         for _, v in ipairs(ball:GetDescendants()) do
             if v:IsA("ParticleEmitter") or v:IsA("Beam") or v:IsA("Trail") or v:IsA("Attachment") then

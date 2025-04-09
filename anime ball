@@ -4,6 +4,7 @@ if game.GameId == 5120885191 then
     local rs = game:GetService("RunService")
     local rep = game:GetService("ReplicatedStorage")
     local spam = false
+    spamBtn = nil
 
     getgenv().visualizer = false
 
@@ -13,7 +14,7 @@ if game.GameId == 5120885191 then
         end
     end
 
-    local function getRoot(char)
+    function getRoot(char)
         return char:FindFirstChild('HumanoidRootPart') or char:FindFirstChild('Torso') or char:FindFirstChild('UpperTorso')
     end
 
@@ -94,9 +95,7 @@ if game.GameId == 5120885191 then
     minimizeBtn.Font = Enum.Font.SourceSansBold
     minimizeBtn.Parent = frame
 
-    local spamBtn
-
-    local function mkBtn(name, text, posX, posY, callback)
+    function mkBtn(name, text, posX, posY, callback)
         local btn = Instance.new("TextButton")
         btn.Name = name
         btn.Text = text

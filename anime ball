@@ -126,7 +126,6 @@ if game.GameId == 5120885191 then
     end)
 
     spamBtn = mkBtn("SpamBtn", "Spam: OFF", 0.55, 0.2, function()
-        spam = not spam
         task.spawn(toggleSpam)
     end)
 

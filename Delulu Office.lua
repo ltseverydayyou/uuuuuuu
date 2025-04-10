@@ -28,7 +28,7 @@ namecall = hookmetamethod(game, "__namecall", function(self, ...)
     local method = getnamecallmethod():lower()
     if not checkcaller() and self == dc and (method == "invokeserver" or method == "fireserver") then
         local args = {...}
-        args[1] = -math.huge
+        args[1] = -9999
         return namecall(self, unpack(args))
     end
     return namecall(self, ...)

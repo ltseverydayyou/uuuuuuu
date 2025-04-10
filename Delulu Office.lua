@@ -7,7 +7,7 @@ local hm = c:FindFirstChild("HealthManager", true)
 local r = rs:WaitForChild("Remotes")
 local dc = r:WaitForChild("DamageCall")
 local runService = game:GetService("RunService")
-local a = { -math.huge }
+local a = { -9999 }
 
 local function hp()
     task.spawn(function()

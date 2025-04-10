@@ -7,7 +7,7 @@ local hm = c:FindFirstChild("HealthManager", true)
 local r = rs:WaitForChild("Remotes")
 local dc = r:WaitForChild("DamageCall")
 local runService = game:GetService("RunService")
-local a = { -9999 }
+local a = { -9999999999999 }
 
 local function hp()
     task.spawn(function()
@@ -28,7 +28,7 @@ namecall = hookmetamethod(game, "__namecall", function(self, ...)
     local method = getnamecallmethod():lower()
     if not checkcaller() and self == dc and (method == "invokeserver" or method == "fireserver") then
         local args = {...}
-        args[1] = -9999
+        args[1] = -9999999999999
         return namecall(self, unpack(args))
     end
     return namecall(self, ...)

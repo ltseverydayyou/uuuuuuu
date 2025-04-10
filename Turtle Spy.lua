@@ -42,7 +42,6 @@ if PROTOSMASHER_LOADED then
 end
 
 local HttpService = game:GetService("HttpService")
-local prevTables = {}
 if not isfile("TurtleSpySettings.json") then
     writefile("TurtleSpySettings.json", HttpService:JSONEncode(settings))
 else
@@ -931,42 +930,40 @@ local function len(t)
     return n
 end
 
-function convertTableToString(args)
-	prevTables = {}
-	local str = ""
-	if #args > 0 then
-		xpcall(function()
-			str = v2v({args = args}).."\n"
-		end, function(err)
-			str ..= "-- An error has occured:\n--"..err.."\n-- TableToString failure! Reverting to legacy functionality (results may vary)\nlocal args = {"
-			xpcall(function()
-				for k, v in next, args do
-					if type(k) ~= "Instance" and type(k) ~= "userdata" then
-						str = str.."\n    [object] = "
-					elseif type(k) == "string" then
-						str = str..'\n    ["'..k..'"] = '
-					elseif type(k) == "userdata" and typeof(k) ~= "Instance" then
-						str = str.."\n    ["..string.format("nil --[[%s]]", typeof(v))..")] = "
-					elseif type(k) == "userdata" then
-						str = str.."\n    [game."..k:GetFullName().."] = "
-					end
-					if type(v) ~= "Instance" and type(v) ~= "userdata" then
-						str = str.."object"
-					elseif type(v) == "string" then
-						str = str..'"'..v..'"'
-					elseif type(v) == "userdata" and typeof(v) ~= "Instance" then
-						str = str..string.format("nil --[[%s]]", typeof(v))
-					elseif type(v) == "userdata" then
-						str = str.."game."..v:GetFullName()
-					end
-				end
-				str ..= "\n}\n\n"
-			end, function()
-				str ..= "\n}\n-- Legacy tableToString failure! Unable to decompile."
-			end)
-		end)
-	end
-	return str
+local function convertTableToString(tbl)
+    local parts = {}
+    local count = 0
+    for _ in pairs(tbl) do count = count + 1 end
+    local index = 1
+    for k, v in pairs(tbl) do
+        if type(k) == "string" then
+            table.insert(parts, '["'..tostring(k)..'"] = ')
+        elseif type(k) == "userdata" and typeof(k) ~= "Instance" then
+            table.insert(parts, "["..typeof(k)..".new("..tostring(k)..")] = ")
+        elseif type(k) == "userdata" then
+            table.insert(parts, "["..GetFullPathOfAnInstance(k).."] = ")
+        end
+        if v == nil then
+            table.insert(parts, "nil")
+        elseif typeof(v) == "Instance" then
+            table.insert(parts, GetFullPathOfAnInstance(v))
+        elseif type(v) == "number" or type(v) == "function" then
+            table.insert(parts, tostring(v))
+        elseif type(v) == "userdata" then
+            table.insert(parts, typeof(v)..".new("..tostring(v)..")")
+        elseif type(v) == "string" then
+            table.insert(parts, '"'..v..'"')
+        elseif type(v) == "table" then
+            table.insert(parts, "{"..convertTableToString(v).."}")
+        elseif type(v) == "boolean" then
+            table.insert(parts, v and "true" or "false")
+        end
+        if count > 1 and index < count then
+            table.insert(parts, ",")
+        end
+        index = index + 1
+    end
+    return table.concat(parts)
 end
 
 CopyReturn.MouseButton1Click:Connect(function()
@@ -1028,54 +1025,67 @@ RemoteScrollFrame.ChildAdded:Connect(function(child)
     table.insert(connections, connection)
 end)
 
+
 function addToList(event, remote, ...)
-	local get_identity = (syn and syn.get_thread_identity) or getidentity or getthreadidentity or function() return 2 end
-	local set_identity = (syn and syn.set_thread_identity) or setidentity or setthreadidentity or function() end
-	local currentId = get_identity()
-	set_identity(7)
-	if not remote then return end
-	local name = remote.Name
-	local args = { ... }
-	local i = FindRemote(remote, args)
-	if not i then
-		table.insert(remotes, remote)
-		local rButton = clone(RemoteButton)
-		remoteButtons[#remotes] = rButton.Number
-		remoteArgs[#remotes] = args
-		remoteScripts[#remotes] = (isSynapse() and getcallingscript() or rawget(getfenv(0), "script"))
-		rButton.Parent = RemoteScrollFrame
-		rButton.Visible = true
-		local numberTextsize = getTextSize(TextService, rButton.Number.Text, rButton.Number.TextSize, rButton.Number.Font, Vector2.new(math.huge, math.huge))
-		rButton.RemoteName.Position = UDim2.new(0, numberTextsize.X + 10, 0, 0)
-		if name then
-			rButton.RemoteName.Text = name
-		end
-		if not event then
-			rButton.RemoteIcon.Image = "http://www.roblox.com/asset/?id=413369623"
-		end
-		buttonOffset = buttonOffset + 35
-		rButton.Position = UDim2.new(0.0912411734, 0, 0, buttonOffset)
-		if #remotes > 8 then
-			scrollSizeOffset = scrollSizeOffset + 35
-			RemoteScrollFrame.CanvasSize = UDim2.new(0, 0, 0, scrollSizeOffset)
-		end
-	else
-		remoteButtons[i].Text = tostring(tonumber(remoteButtons[i].Text) + 1)
-		local numberTextsize = getTextSize(TextService, remoteButtons[i].Text, remoteButtons[i].TextSize, remoteButtons[i].Font, Vector2.new(math.huge, math.huge))
-		remoteButtons[i].Parent.RemoteName.Position = UDim2.new(0, numberTextsize.X + 10, 0, 0)
-		remoteButtons[i].Parent.RemoteName.Size = UDim2.new(0, 149 - numberTextsize.X, 0, 26)
-		remoteArgs[i] = args
-		if lookingAt and lookingAt == remote and lookingAtButton == remoteButtons[i] and InfoFrame.Visible then
-			local fireFunction = ":FireServer("
-			if isA(remote, "RemoteFunction") then
-				fireFunction = ":InvokeServer("
-			end
-			Code.Text = GetFullPathOfAnInstance(remote)..fireFunction..convertTableToString(remoteArgs[i])..")"
-			local textsize = getTextSize(TextService, Code.Text, Code.TextSize, Code.Font, Vector2.new(math.huge, math.huge))
-			CodeFrame.CanvasSize = UDim2.new(0, textsize.X + 11, 2, 0)
-		end
-	end
-	set_identity(currentId)
+    local get_identity = (syn and syn.get_thread_identity) or getidentity or getthreadidentity or function() return 2 end
+    local set_identity = (syn and syn.set_thread_identity) or setidentity or setthreadidentity or function() end
+    local currentId = get_identity()
+    set_identity(7)
+    if not remote then return end
+
+    local name = remote.Name
+    local args = {...}
+
+    local i = FindRemote(remote, args)
+
+
+    if not i then
+        table.insert(remotes, remote)
+        local rButton = clone(RemoteButton)
+
+        remoteButtons[#remotes] = rButton.Number
+        remoteArgs[#remotes] = args
+        remoteScripts[#remotes] = (isSynapse() and getcallingscript() or rawget(getfenv(0), "script"))
+
+        rButton.Parent = RemoteScrollFrame
+        rButton.Visible = true
+        local numberTextsize = getTextSize(TextService, rButton.Number.Text, rButton.Number.TextSize, rButton.Number.Font, Vector2.new(math.huge, math.huge))
+        rButton.RemoteName.Position = UDim2.new(0,numberTextsize.X + 10, 0, 0)
+        if name then
+            rButton.RemoteName.Text = name
+        end
+        if not event then
+            rButton.RemoteIcon.Image = "http://www.roblox.com/asset/?id=413369623"
+        end
+        buttonOffset = buttonOffset + 35
+        rButton.Position = UDim2.new(0.0912411734, 0, 0, buttonOffset)
+        if #remotes > 8 then
+            scrollSizeOffset = scrollSizeOffset + 35
+            RemoteScrollFrame.CanvasSize = UDim2.new(0, 0, 0, scrollSizeOffset)
+        end
+    else
+
+        remoteButtons[i].Text = tostring(tonumber(remoteButtons[i].Text) + 1)
+
+        local numberTextsize = getTextSize(TextService, remoteButtons[i].Text, remoteButtons[i].TextSize, remoteButtons[i].Font, Vector2.new(math.huge, math.huge))
+        remoteButtons[i].Parent.RemoteName.Position = UDim2.new(0,numberTextsize.X + 10, 0, 0)
+        remoteButtons[i].Parent.RemoteName.Size = UDim2.new(0, 149 -numberTextsize.X, 0, 26)
+
+
+        remoteArgs[i] = args
+
+
+        if lookingAt and lookingAt == remote and lookingAtButton == remoteButtons[i] and InfoFrame.Visible then
+            local fireFunction = ":FireServer("
+            if isA(remote, "RemoteFunction") then
+                fireFunction = ":InvokeServer("
+            end
+            Code.Text = GetFullPathOfAnInstance(remote)..fireFunction..convertTableToString(remoteArgs[i])..")"
+            local textsize = getTextSize(TextService, Code.Text, Code.TextSize, Code.Font, Vector2.new(math.huge, math.huge))
+            CodeFrame.CanvasSize = UDim2.new(0, textsize.X + 11, 2, 0)
+        end
+    end
+    set_identity(currentId)
 end
 
 local OldEvent

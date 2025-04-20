@@ -1088,29 +1088,6 @@ function addToList(event, remote, ...)
     set_identity(currentId)
 end
 
-local OldEvent
-OldEvent = hookfunction(Instance.new("RemoteEvent").FireServer, function(Self, ...)
-    if not checkcaller() and table.find(BlockList, Self) then
-        return
-    elseif table.find(IgnoreList, Self) then
-
-        return OldEvent(Self, ...)
-    end
-    addToList(true, Self, ...)
-end)
-
-local OldFunction
-OldFunction = hookfunction(Instance.new("RemoteFunction").InvokeServer, function(Self, ...)
-    if not checkcaller() and table.find(BlockList, Self) then
-        return
-    elseif table.find(IgnoreList, Self) then
-
-        return OldFunction(Self, ...)
-    end
-    addToList(false, Self, ...)
-end)
-
-
 local OldNamecall
 OldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
     local method = getnamecallmethod()

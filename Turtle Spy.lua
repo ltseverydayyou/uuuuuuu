@@ -1112,25 +1112,20 @@ end)
 
 
 local OldNamecall
-OldNamecall = hookmetamethod(game,"__namecall",function(...)
-    local args = {...}
-    local Self = args[1]
-    local method = (getnamecallmethod or get_namecall_method)()
-    if method == "FireServer" and isA(Self, "RemoteEvent")  then
-        if not checkcaller() and table.find(BlockList, Self) then
-            return
-        elseif table.find(IgnoreList, Self) then
-            return OldNamecall(...)
+OldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+    local method = getnamecallmethod()
+
+    if not checkcaller() then
+        if method == "FireServer" and isA(self, "RemoteEvent") then
+            if not table.find(BlockList, self) and not table.find(IgnoreList, self) then
+                addToList(true, self, ...)
+            end
+        elseif method == "InvokeServer" and isA(self, "RemoteFunction") then
+            if not table.find(BlockList, self) and not table.find(IgnoreList, self) then
+                addToList(false, self, ...)
+            end
         end
-        addToList(true, ...)
-    elseif method == "InvokeServer" and isA(Self, 'RemoteFunction') then
-        if not checkcaller() and table.find(BlockList, Self) then
-            return
-        elseif table.find(IgnoreList, Self) then
-            return OldNamecall(...)
-        end
-        addToList(false, ...)
     end
 
-    return OldNamecall(...)
+    return OldNamecall(self, ...)
 end)

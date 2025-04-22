@@ -149,8 +149,11 @@ task.spawn(function()
 			if t and t.Character and t.Character:FindFirstChild("HumanoidRootPart") then
 				local tp = t.Character.HumanoidRootPart
 				local lp = l.Character.HumanoidRootPart
-				lp.CFrame = CFrame.new(lp.Position, tp.Position) * CFrame.Angles(0, math.rad(25), 0)
-				l.Character.Humanoid:MoveTo(tp.Position + Vector3.new(-3, 0, 0))
+				local myPos = lp.Position
+				local targetPos = Vector3.new(tp.Position.X, myPos.Y, tp.Position.Z)
+				lp.CFrame = CFrame.new(myPos, targetPos) * CFrame.Angles(0, math.rad(25), 0)
+				local moveTarget = Vector3.new(tp.Position.X - 3, lp.Position.Y, tp.Position.Z)
+				l.Character.Humanoid:MoveTo(moveTarget)
 				if t.Character.Humanoid:GetState() == Enum.HumanoidStateType.Freefall then
 					l.Character.Humanoid.Jump = true
 				end

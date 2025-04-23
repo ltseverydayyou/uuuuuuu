@@ -142,6 +142,9 @@ local function gc()
 	return cp
 end
 
+local currentTargetConnection
+local currentTrackedTarget
+
 task.spawn(function()
 	while task.wait() do
 		if swordtGayFighterAhh and l.Character and l.Character:FindFirstChild("HumanoidRootPart") then
@@ -154,8 +157,24 @@ task.spawn(function()
 				lp.CFrame = CFrame.new(myPos, targetPos) * CFrame.Angles(0, math.rad(25), 0)
 				local moveTarget = Vector3.new(tp.Position.X - 3, lp.Position.Y, tp.Position.Z)
 				l.Character.Humanoid:MoveTo(moveTarget)
-				if t.Character.Humanoid:GetState() == Enum.HumanoidStateType.Freefall then
-					l.Character.Humanoid.Jump = true
+
+				if not currentTrackedTarget or currentTrackedTarget ~= t then
+					if currentTargetConnection then
+						currentTargetConnection:Disconnect()
+					end
+
+					local humanoid = t.Character:FindFirstChildOfClass("Humanoid")
+					if humanoid then
+						currentTargetConnection = humanoid.StateChanged:Connect(function(_, newState)
+							if newState == Enum.HumanoidStateType.Freefall or newState == Enum.HumanoidStateType.Jumping then
+								local myHumanoid = l.Character and l.Character:FindFirstChildOfClass("Humanoid")
+								if myHumanoid and myHumanoid:GetState() ~= Enum.HumanoidStateType.Freefall and myHumanoid:GetState() ~= Enum.HumanoidStateType.Jumping then
+									myHumanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+								end
+							end
+						end)
+						currentTrackedTarget = t
+					end
 				end
 			end
 		end

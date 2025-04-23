@@ -447,13 +447,13 @@ local function fetchGamePlaces()
             success = true
             break
         else
-            warn("Attempt " .. attempts .. " failed: " .. tostring(r))
+            warn("Attempt "..attempts.." failed: "..tostring(r))
             task.wait(RETRY_DELAY)
         end
     end
 
     if not success then
-        DoNotif("HTTP failed to retrieve game places after " .. MAX_RETRIES .. " attempts.", 5, "Error")
+        DoNotif("HTTP failed to retrieve game places after "..MAX_RETRIES.." attempts.", 5, "Error")
         return nil
     end
 
@@ -472,16 +472,27 @@ task.spawn(function()
             local btn = template:Clone()
             btn.Parent = list
             btn.Name = place.Name
-            btn.GameButton.Text = "  " .. place.Name .. " (" .. place.PlaceId .. ")"
+            btn.GameButton.Text = "  "..place.Name.." ("..place.PlaceId..")"
 
             btn.ButtonsHolder.TeleportBtn.MouseButton1Click:Connect(function()
-                game:GetService("TeleportService"):Teleport(place.PlaceId, game:GetService("Players").LocalPlayer)
-                DoNotif("Teleporting To Place: " .. place.Name, 3, "Universe Viewer")
+                local TeleportService = game:GetService("TeleportService")
+                local Players = game:GetService("Players")
+                local localPlayer = Players.LocalPlayer
+            
+                local success, err = pcall(function()
+                    TeleportService:Teleport(place.PlaceId, localPlayer)
+                end)
+            
+                if success then
+                    DoNotif("Teleporting to: "..place.Name, 3, "Universe Viewer")
+                else
+                    DoNotif("Failed to teleport: "..tostring(err), 5, "Teleport Error")
+                end
             end)
-
+            
             btn.ButtonsHolder.CopyIDBtn.MouseButton1Click:Connect(function()
                 setclipboard(tostring(place.PlaceId))
-                DoNotif("Copied PlaceId: " .. place.PlaceId, 3, "Universe Viewer")
+                DoNotif("Copied PlaceId: "..place.PlaceId, 3, "Universe Viewer")
             end)
         end
 

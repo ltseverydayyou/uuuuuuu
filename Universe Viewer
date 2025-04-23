@@ -28,7 +28,7 @@ local UIPadding = Instance.new("UIPadding")
 local SearchBar = Instance.new("TextBox")
 local SearchIcon = Instance.new("ImageLabel")
 local SearchCorner = Instance.new("UICorner")
-local MAX_RETRIES = 30
+local MAX_RETRIES = 69
 local RETRY_DELAY = 0.5
 
 function protectUI(sGui)

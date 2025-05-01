@@ -12,7 +12,7 @@ function SafeGetService(name)
 end
 
 if not SafeGetService("UserInputService").TouchEnabled then
-	return print'This script is not supported on PC'
+	return
 end
 
 function guiCHECKINGAHHHHH()

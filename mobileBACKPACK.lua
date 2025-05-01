@@ -1,3 +1,11 @@
+if BACKPACKmobile then return end
+
+pcall(function() getgenv().BACKPACKmobile = true end)
+
+if not game:IsLoaded() then
+	game.Loaded:Wait()
+end
+
 function SafeGetService(name)
 	local service = game:GetService(name)
 	return if cloneref then cloneref(service) else service
@@ -69,7 +77,7 @@ local swapBtn = Instance.new("TextButton")
 swapBtn.Name = "SwapToggle"
 swapBtn.Size = UDim2.new(0, 40, 0, 40)
 swapBtn.Position = UDim2.new(1, -45, 0.5, -20)
-swapBtn.Text = "↔"
+swapBtn.Text = "Swap"
 swapBtn.Font = Enum.Font.GothamBold
 swapBtn.TextScaled = true
 swapBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
@@ -198,7 +206,7 @@ local function makeBtn(t)
 		dropBtn.Size = UDim2.new(0, 16, 0, 16)
 		dropBtn.Position = UDim2.new(1, -4, 1, -4)
 		dropBtn.AnchorPoint = Vector2.new(1, 1)
-		dropBtn.Text = "🗑"
+		dropBtn.Text = "D"
 		dropBtn.TextScaled = true
 		dropBtn.TextColor3 = Color3.new(1, 1, 1)
 		dropBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
@@ -320,7 +328,7 @@ swapBtn.MouseButton1Click:Connect(function()
 
 	swapping = not swapping
 	selectedSwapTool = nil
-	swapBtn.Text = swapping and "X" or "↔"
+	swapBtn.Text = swapping and "X" or "Swap"
 	refresh()
 end)
 
@@ -396,4 +404,6 @@ end)
 setupToolTracking()
 refresh()
 
-SafeGetService("StarterGui"):SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
+SafeGetService("RunService").RenderStepped:Connect(function()
+	SafeGetService("StarterGui"):SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
+end)

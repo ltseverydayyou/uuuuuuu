@@ -11,9 +11,9 @@ function SafeGetService(name)
 	return if cloneref then cloneref(service) else service
 end
 
-if not SafeGetService("UserInputService").TouchEnabled then
+--[[if not SafeGetService("UserInputService").TouchEnabled then
 	return
-end
+end]]
 
 function guiCHECKINGAHHHHH()
 	return (gethui and gethui()) or SafeGetService("CoreGui"):FindFirstChild("RobloxGui") or SafeGetService("CoreGui") or SafeGetService("Players").LocalPlayer:FindFirstChild("PlayerGui")
@@ -21,6 +21,8 @@ end
 
 local p = SafeGetService("Players").LocalPlayer
 local ts = SafeGetService("TweenService")
+local UserInputService = SafeGetService("UserInputService")
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
 local swapping = false
 local selectedSwapTool = nil
@@ -142,6 +144,24 @@ fl.CellSize = UDim2.new(0, 50, 0, 50)
 fl.CellPadding = UDim2.new(0, 5, 0, 5)
 fl.Parent = full
 
+local function addKeybindLabel(btn, keyText)
+	if isMobile then return end
+
+	local lbl = Instance.new("TextLabel")
+	lbl.Size = UDim2.new(1, -4, 0, 12)
+	lbl.Position = UDim2.new(0, 2, 0, 0)
+	lbl.BackgroundTransparency = 1
+	lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+	lbl.TextStrokeTransparency = 0.6
+	lbl.TextXAlignment = Enum.TextXAlignment.Left
+	lbl.TextYAlignment = Enum.TextYAlignment.Top
+	lbl.Font = Enum.Font.GothamSemibold
+	lbl.TextSize = 12
+	lbl.Text = keyText
+	lbl.ZIndex = btn.ZIndex + 1
+	lbl.Parent = btn
+end
+
 local tOrder = {}
 
 local function makeBtn(t)
@@ -165,6 +185,17 @@ local function makeBtn(t)
 	Instance.new("UICorner", b).CornerRadius = UDim.new(0.2, 0)
 
 	toolButtons[b] = t
+
+	local idx = 0
+for _, c in ipairs(qb:GetChildren()) do
+	if c:IsA("GuiButton") then
+		idx += 1
+	end
+end
+idx += 1
+if not isMobile and idx <= 8 then
+	addKeybindLabel(b, tostring(idx))
+end
 
 	b.MouseButton1Click:Connect(function()
 		if swapping then
@@ -318,7 +349,7 @@ function refresh()
 	full.CanvasSize = UDim2.new(0, 0, 0, (55 * row))
 end
 
-swapBtn.MouseButton1Click:Connect(function()
+local function toggleSwap()
 	local bp = p:FindFirstChild("Backpack")
 	local count = 0
 	for _, item in ipairs(bp:GetChildren()) do
@@ -330,9 +361,11 @@ swapBtn.MouseButton1Click:Connect(function()
 	selectedSwapTool = nil
 	swapBtn.Text = swapping and "X" or "Swap"
 	refresh()
-end)
+end
 
-dropAllBtn.MouseButton1Click:Connect(function()
+swapBtn.MouseButton1Click:Connect(toggleSwap)
+
+local function dropAllTools()
 	local tools = {}
 
 	for _, container in {p.Backpack, p.Character} do
@@ -359,9 +392,10 @@ dropAllBtn.MouseButton1Click:Connect(function()
 
 	if hum then hum:UnequipTools() end
 	refresh()
-end)
+end
+dropAllBtn.MouseButton1Click:Connect(dropAllTools)
 
-ex.MouseButton1Click:Connect(function()
+local function toggleOpen()
 	open = not open
 	local h = open and 250 or 0
 	local tween = ts:Create(full, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
@@ -369,7 +403,8 @@ ex.MouseButton1Click:Connect(function()
 	})
 	tween:Play()
 	ex.Text = open and "Close" or "Open"
-end)
+end
+ex.MouseButton1Click:Connect(toggleOpen)
 
 collapseBtn.MouseButton1Click:Connect(callCLOSE)
 
@@ -400,6 +435,54 @@ p.CharacterAdded:Connect(function()
 	refresh()
 	setupToolTracking()
 end)
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if not isMobile then
+	if gameProcessed then return end
+
+	local keyVal = input.KeyCode.Value
+	if keyVal >= Enum.KeyCode.One.Value and keyVal <= Enum.KeyCode.Eight.Value then
+		local index = keyVal - Enum.KeyCode.One.Value + 1
+		local btns = {}
+		for _, child in ipairs(qb:GetChildren()) do
+			if child:IsA("GuiButton") then
+				table.insert(btns, child)
+			end
+		end
+		local btn = btns[index]
+		local tool = btn and toolButtons[btn]
+		if tool then
+			local hum = p.Character and p.Character:FindFirstChildOfClass("Humanoid")
+			if hum then
+				if selectedTool == tool then
+					hum:UnequipTools()
+					selectedTool = nil
+				else
+					hum:EquipTool(tool)
+					selectedTool = tool
+				end
+				refresh()
+			end
+		end
+	end
+
+	if input.KeyCode == Enum.KeyCode.Q then
+		toggleSwap()
+	elseif input.KeyCode == Enum.KeyCode.E then
+		dropAllTools()
+	elseif input.KeyCode == Enum.KeyCode.C then
+		callCLOSE()
+	elseif input.KeyCode == Enum.KeyCode.Backquote then
+		toggleOpen()
+	end
+
+	end
+end)
+
+addKeybindLabel(swapBtn, "[Q]")
+addKeybindLabel(dropAllBtn, "[E]")
+addKeybindLabel(collapseBtn, "[C]")
+addKeybindLabel(ex, "[`]")
 
 setupToolTracking()
 refresh()

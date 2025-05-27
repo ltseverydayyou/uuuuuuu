@@ -2,10 +2,16 @@ if getgenv().PressureBallsLoaded then return end
 
 pcall(function() getgenv().PressureBallsLoaded = true end)
 
+local function ClonedService(name)
+    local service = game:GetService(name)
+    local zeServicee = (cloneref and cloneref(service)) or service
+    return zeServicee
+end
+
 local ScreenGui = Instance.new("ScreenGui")
 local ttLabel = Instance.new("TextButton")
 local UICorner = Instance.new("UICorner")
-local rep = game:GetService("ReplicatedStorage")
+local rep = ClonedService("ReplicatedStorage")
 local plrUI = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
 local isRan = false
 local modulesToRestore = {}
@@ -21,21 +27,11 @@ local function restoreModule(module)
 end
 
 function protectUI(sGui)
-    local function blankfunction(...)
-        return ...
-    end
-
-    local cloneref = cloneref or blankfunction
-
-    local function SafeGetService(service)
-        return cloneref(game:GetService(service)) or game:GetService(service)
-    end
-
-    local cGUI = SafeGetService("CoreGui")
+  local cGUI = ClonedService("CoreGui")
     local rPlr = SafeGetService("Players"):FindFirstChildWhichIsA("Player")
     local cGUIProtect = {}
-    local rService = SafeGetService("RunService")
-    local lPlr = SafeGetService("Players").LocalPlayer
+    local rService = ClonedService("RunService")
+    local lPlr = ClonedService("Players").LocalPlayer
 
     local function NAProtection(inst, var)
         if inst then
@@ -111,7 +107,7 @@ local success, errorMsg = pcall(function()
     restoreModule(plrUI:FindFirstChild("LocalEntities", true))
 end)
 
-game:GetService("Players").LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid").Died:Connect(function()
+ClonedService("Players").LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid").Died:Connect(function()
     task.spawn(function()
         for _, moduleInfo in pairs(modulesToRestore) do
             task.spawn(function()
@@ -121,18 +117,9 @@ game:GetService("Players").LocalPlayer.Character:FindFirstChildWhichIsA("Humanoi
     end)
 end)
 
-local function randomString(length)
-    length = length or math.random(10, 20)
-    local array = {}
-    for i = 1, length do
-        array[i] = string.char(math.random(32, 126))
-    end
-    return table.concat(array)
-end
-
-ScreenGui.Name = randomString()
+ScreenGui.Name = '\0'
 protectUI(ScreenGui)
-ttLabel.Name = randomString()
+ttLabel.Name = '\0’
 ttLabel.Parent = ScreenGui
 ttLabel.BackgroundColor3 = Color3.fromRGB(4, 4, 4)
 ttLabel.BackgroundTransparency = 1.0
@@ -155,7 +142,7 @@ local function draggable(frame)
 end
 
 local function removeKillables(eye)
-    if eye.Parent == game:GetService("Workspace"):FindFirstChild("deathModel") then
+    if eye.Parent == ClonedService("Workspace"):FindFirstChild("deathModel") then
         return
     end
 
@@ -167,10 +154,10 @@ local function removeKillables(eye)
 end
 
 local function perform()
-    local oldPivot = game:GetService("Players").LocalPlayer.Character:GetPivot()
+    local oldPivot = ClonedService("Players").LocalPlayer.Character:GetPivot()
     local enterFunction = nil
 
-    for _, v in ipairs(game:GetService("Workspace"):GetDescendants()) do
+    for _, v in ipairs(ClonedService("Workspace"):GetDescendants()) do
         if v.Name:lower() == "locker" and (v:IsA("Model") or v:IsA("BasePart")) then
             local success, errorMsg = pcall(function()
                 for _, rem in ipairs(v:GetDescendants()) do
@@ -180,7 +167,7 @@ local function perform()
                 end
                 if enterFunction then
                     for i = 1, 5 do
-                        game:GetService("Players").LocalPlayer.Character:PivotTo(v:GetPivot())
+                        ClonedService("Players").LocalPlayer.Character:PivotTo(v:GetPivot())
                         enterFunction:InvokeServer("true")
                         task.wait(0.1)
                     end
@@ -190,7 +177,7 @@ local function perform()
             if not success then
                 warn("Error invoking Remote: " .. errorMsg)
             end
-            game:GetService("Players").LocalPlayer.Character:PivotTo(oldPivot)
+            ClonedService("Players").LocalPlayer.Character:PivotTo(oldPivot)
             if enterFunction then break end
         end
     end
@@ -198,7 +185,7 @@ local function perform()
     task.wait(0.5)
 
     local success, errorMsg = pcall(function()
-        game:GetService("Players").LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid").WalkSpeed = 20
+        ClonedService("Players").LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid").WalkSpeed = 20
     end)
     if not success then warn("No humanoid") end
 
@@ -209,13 +196,13 @@ local function perform()
         end)
     end
 
-    for _, g in ipairs(game:GetService("Workspace"):GetDescendants()) do
+    for _, g in ipairs(ClonedService("Workspace"):GetDescendants()) do
         removeKillables(g)
     end
 
     if not isRan then
         isRan = true
-        game:GetService("Workspace").DescendantAdded:Connect(removeKillables)
+        ClonedService("Workspace").DescendantAdded:Connect(removeKillables)
     end
 end
 
@@ -223,7 +210,7 @@ local function initializeUI()
     local txtlabel = ttLabel
     txtlabel.Size = UDim2.new(0, 32, 0, 33)
     txtlabel.BackgroundTransparency = 0.14
-    local textWidth = game:GetService("TextService"):GetTextSize(txtlabel.Text, txtlabel.TextSize, txtlabel.Font, Vector2.new(math.huge, math.huge)).X
+    local textWidth = ClonedService("TextService"):GetTextSize(txtlabel.Text, txtlabel.TextSize, txtlabel.Font, Vector2.new(math.huge, math.huge)).X
     local newSize = UDim2.new(0, textWidth + 69, 0, 33)
     txtlabel:TweenSize(newSize, "Out", "Quint", 1, true)
     txtlabel.MouseButton1Click:Connect(function()

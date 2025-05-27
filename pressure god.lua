@@ -3,16 +3,15 @@ if getgenv().PressureBallsLoaded then return end
 pcall(function() getgenv().PressureBallsLoaded = true end)
 
 local function ClonedService(name)
-    local service = game:GetService(name)
-    local zeServicee = (cloneref and cloneref(service)) or service
-    return zeServicee
+    local service = (cloneref and cloneref(game:GetService(name))) or game:GetService(name)
+    return service
 end
 
 local ScreenGui = Instance.new("ScreenGui")
 local ttLabel = Instance.new("TextButton")
 local UICorner = Instance.new("UICorner")
 local rep = ClonedService("ReplicatedStorage")
-local plrUI = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+local plrUI = ClonedService("Players").LocalPlayer:WaitForChild("PlayerGui")
 local isRan = false
 local modulesToRestore = {}
 
@@ -28,7 +27,7 @@ end
 
 function protectUI(sGui)
   local cGUI = ClonedService("CoreGui")
-    local rPlr = SafeGetService("Players"):FindFirstChildWhichIsA("Player")
+    local rPlr = ClonedService("Players"):FindFirstChildWhichIsA("Player")
     local cGUIProtect = {}
     local rService = ClonedService("RunService")
     local lPlr = ClonedService("Players").LocalPlayer

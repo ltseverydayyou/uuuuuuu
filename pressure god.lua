@@ -116,9 +116,9 @@ ClonedService("Players").LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid"
     end)
 end)
 
-ScreenGui.Name = '\0'
+ScreenGui.Name = "\0"
 protectUI(ScreenGui)
-ttLabel.Name = '\0’
+ttLabel.Name = "\0"
 ttLabel.Parent = ScreenGui
 ttLabel.BackgroundColor3 = Color3.fromRGB(4, 4, 4)
 ttLabel.BackgroundTransparency = 1.0
@@ -126,7 +126,7 @@ ttLabel.AnchorPoint = Vector2.new(0.5, 0.5)
 ttLabel.Position = UDim2.new(0.5, 0, 0, 0)
 ttLabel.Size = UDim2.new(0, 32, 0, 33)
 ttLabel.Font = Enum.Font.SourceSansBold
-ttLabel.Text = "God Mode (click me)"
+ttLabel.Text = "God Mode (click)"
 ttLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 ttLabel.TextSize = 20.0
 ttLabel.TextWrapped = true

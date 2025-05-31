@@ -2,23 +2,21 @@
 -- Sadly never made an editor, maybe someone can improve this
 -- An api (not mine) was used to make syntax highlighting work since my way was stupid
 -- Yeas this ui is just like dnspy i did that on purpose
+local function ClonedService(name)
+    local service = (cloneref and cloneref(game:GetService(name))) or game:GetService(name)
+    return service
+end
 
-function protectUI(sGui)
-    local function blankfunction(...)
-        return ...
+
+local function protectUI(sGui)
+    if sGui:IsA("ScreenGui") then
+        sGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+		sGui.DisplayOrder = 999999999
+		sGui.ResetOnSpawn = false
+		sGui.IgnoreGuiInset = true
     end
-
-    local cloneref = cloneref or blankfunction
-
-    local function SafeGetService(service)
-        return cloneref(game:GetService(service)) or game:GetService(service)
-    end
-
-    local cGUI = SafeGetService("CoreGui")
-    local rPlr = SafeGetService("Players"):FindFirstChildWhichIsA("Player")
-    local cGUIProtect = {}
-    local rService = SafeGetService("RunService")
-    local lPlr = SafeGetService("Players").LocalPlayer
+    local cGUI = ClonedService("CoreGui")
+    local lPlr = ClonedService("Players").LocalPlayer
 
     local function NAProtection(inst, var)
         if inst then
@@ -32,58 +30,26 @@ function protectUI(sGui)
         end
     end
 
-    if (get_hidden_gui or gethui) then
-        local hiddenUI = (get_hidden_gui or gethui)
-        NAProtection(sGui)
-        sGui.Parent = hiddenUI()
-        return sGui
-    elseif (not is_sirhurt_closure) and (syn and syn.protect_gui) then
-        NAProtection(sGui)
-        syn.protect_gui(sGui)
-        sGui.Parent = cGUI
-        return sGui
-    elseif cGUI:FindFirstChildWhichIsA("ScreenGui") then
-        pcall(function()
-            for _, v in pairs(sGui:GetDescendants()) do
-                cGUIProtect[v] = rPlr.Name
-            end
-            sGui.DescendantAdded:Connect(function(v)
-                cGUIProtect[v] = rPlr.Name
-            end)
-            cGUIProtect[sGui] = rPlr.Name
-
-            local meta = getrawmetatable(game)
-            local tostr = meta.__tostring
-            setreadonly(meta, false)
-            meta.__tostring = newcclosure(function(t)
-                if cGUIProtect[t] and not checkcaller() then
-                    return cGUIProtect[t]
-                end
-                return tostr(t)
-            end)
-        end)
-        if not rService:IsStudio() then
-            local newGui = cGUI:FindFirstChildWhichIsA("ScreenGui")
-            newGui.DescendantAdded:Connect(function(v)
-                cGUIProtect[v] = rPlr.Name
-            end)
-            for _, v in pairs(sGui:GetChildren()) do
-                v.Parent = newGui
-            end
-            sGui = newGui
-        end
-        return sGui
-    elseif cGUI then
-        NAProtection(sGui)
-        sGui.Parent = cGUI
-        return sGui
-    elseif lPlr and lPlr:FindFirstChild("PlayerGui") then
-        NAProtection(sGui)
-        sGui.Parent = lPlr:FindFirstChild("PlayerGui")
-        return sGui
-    else
-        return nil
-    end
+    if gethui then
+		NAProtection(sGui)
+		sGui.Parent = gethui()
+		return sGui
+	elseif cGUI and cGUI:FindFirstChild("RobloxGui") then
+		NAProtection(sGui)
+		sGui.Parent = cGUI:FindFirstChild("RobloxGui")
+		return sGui
+	elseif cGUI then
+		NAProtection(sGui)
+		sGui.Parent = cGUI
+		return sGui
+	elseif lPlr and lPlr:FindFirstChild("PlayerGui") then
+		NAProtection(sGui)
+		sGui.Parent = lPlr:FindFirstChild("PlayerGui")
+		sGui.ResetOnSpawn = false
+		return sGui
+	else
+		return nil
+	end
 end
 
 local version = "1.4.15"
@@ -150,7 +116,7 @@ local changelog = [[
 local screenGui			= game:GetObjects("rbxassetid://2971927607")[1]
 local backdrop			= screenGui.Backdrop
 local cSource, cName	= "", ""
-local localPlayer		= game:GetService("Players").LocalPlayer
+local localPlayer		= ClonedService("Players").LocalPlayer
 
 local meta = getrawmetatable(game)
 setreadonly(meta, false)
@@ -163,7 +129,7 @@ backdrop.Position = UDim2.new(0.5, 0, 1, 2)
 backdrop.Size = UDim2.new(0.25, 0, 0.25, 0)
 
 --// for new users
-local StarterGui = game:GetService("StarterGui")
+local StarterGui = ClonedService("StarterGui")
 StarterGui:SetCore("SendNotification", {
 	Title = "ScriptView loaded",
 	Text = "Press the Home button or Right Shift to open!",
@@ -173,8 +139,8 @@ StarterGui:SetCore("SendNotification", {
 local loginGui = screenGui.Login
 local blank = loginGui.Value.Value
 
-local UIS				= game:GetService("UserInputService")
-local localPlayer		= game:GetService("Players").LocalPlayer
+local UIS				= ClonedService("UserInputService")
+local localPlayer		= ClonedService("Players").LocalPlayer
 local m					= localPlayer:GetMouse()
 local debuggerFrame		= backdrop.Debugger
   local scriptList		= debuggerFrame.Scripts
@@ -293,7 +259,7 @@ function getEnv(scr)
 end
 
 function getTextSize(label)
-	local service = game:GetService("TextService")
+	local service = ClonedService("TextService")
 	local vec2 = service:GetTextSize(label.Text, label.TextSize, label.Font, Vector2.new(10000, 25))
 	return vec2
 end
@@ -509,7 +475,7 @@ function loadSourceFromInfo(info, k)
 end
 
 function Tween(Obj, Dir, Style, Duration, Goal)
-	local tweenService	= game:GetService("TweenService")
+	local tweenService	= ClonedService("TweenService")
 	local tweenInfo		= TweenInfo.new(
 		Duration,
 		Enum.EasingStyle[Style],
@@ -842,7 +808,7 @@ createButton(scriptList,
 )
 
 createButton(scriptList,
-	{Name="LocalPlayer", Type="Folder", Obj=game:GetService("Players").LocalPlayer}
+	{Name="LocalPlayer", Type="Folder", Obj=ClonedService("Players").LocalPlayer}
 )
 
 createButton(scriptList,
@@ -863,7 +829,7 @@ local aboutButton = createTab(aboutinfo, 1)
 
 loadSourceFromInfo(aboutinfo)
 
-game:GetService("RunService").RenderStepped:Connect(function()
+ClonedService("RunService").RenderStepped:Connect(function()
 	do
 		screenGui.Cursor.Position = UDim2.new(0, m.X, 0, m.Y)
 		screenGui.Cursor.Visible = open

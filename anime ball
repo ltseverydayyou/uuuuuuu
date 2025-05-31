@@ -1,18 +1,62 @@
 if game.GameId == 5120885191 then
-    local UIS = game:GetService("UserInputService")
-    local plr = game:GetService("Players").LocalPlayer
-    local rs = game:GetService("RunService")
-    local rep = game:GetService("ReplicatedStorage")
+    local function ClonedService(name)
+        local service = (cloneref and cloneref(game:GetService(name))) or game:GetService(name)
+        return service
+    end
+
+    local UIS = ClonedService("UserInputService")
+    local plr = ClonedService("Players").LocalPlayer
+    local rs = ClonedService("RunService")
+    local rep = ClonedService("ReplicatedStorage")
     local spam = false
     spamBtn = nil
 
     getgenv().visualizer = false
 
-    if not gethui then
-        getgenv().gethui = function()
-            return game:GetService("CoreGui"):FindFirstChildWhichIsA("ScreenGui") or game:GetService("CoreGui") or plr:FindFirstChild("PlayerGui")
+    local function protectUI(sGui)
+
+    if sGui:IsA("ScreenGui") then
+        sGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+		sGui.DisplayOrder = 999999999
+		sGui.ResetOnSpawn = false
+		sGui.IgnoreGuiInset = true
+    end
+    local cGUI = ClonedService("CoreGui")
+    local lPlr = ClonedService("Players").LocalPlayer
+
+    local function NAProtection(inst, var)
+        if inst then
+            if var then
+                inst[var] = "\0"
+                inst.Archivable = false
+            else
+                inst.Name = "\0"
+                inst.Archivable = false
+            end
         end
     end
+
+    if gethui then
+		NAProtection(sGui)
+		sGui.Parent = gethui()
+		return sGui
+	elseif cGUI and cGUI:FindFirstChild("RobloxGui") then
+		NAProtection(sGui)
+		sGui.Parent = cGUI:FindFirstChild("RobloxGui")
+		return sGui
+	elseif cGUI then
+		NAProtection(sGui)
+		sGui.Parent = cGUI
+		return sGui
+	elseif lPlr and lPlr:FindFirstChild("PlayerGui") then
+		NAProtection(sGui)
+		sGui.Parent = lPlr:FindFirstChild("PlayerGui")
+		sGui.ResetOnSpawn = false
+		return sGui
+	else
+		return nil
+	end
+end
 
     function getRoot(char)
         return char:FindFirstChild('HumanoidRootPart') or char:FindFirstChild('Torso') or char:FindFirstChild('UpperTorso')
@@ -33,7 +77,7 @@ if game.GameId == 5120885191 then
 
     loadstring(game:HttpGet("https://raw.githubusercontent.com/1f0yt/community/main/RedCircleBlock"))()
 
-    game.Workspace.Effects.ChildAdded:Connect(function(j)
+    ClonedService("Workspace").Effects.ChildAdded:Connect(function(j)
         task.wait()
         j:Destroy()
     end)
@@ -42,7 +86,7 @@ if game.GameId == 5120885191 then
 
     local gui = Instance.new("ScreenGui")
     gui.IgnoreGuiInset = true
-    gui.Parent = gethui()
+    protectUI(gui)
     gui.ResetOnSpawn = false
     gui.Name = rndStr()
 
@@ -181,7 +225,7 @@ if game.GameId == 5120885191 then
         end
 
         ball.Transparency = 0
-        local balls = game.ReplicatedStorage.Storage.Balls
+        local balls = ClonedService("ReplicatedStorage").Storage.Balls
 
         local highlight = Instance.new("SelectionBox")
         highlight.Adornee = ball
@@ -190,16 +234,16 @@ if game.GameId == 5120885191 then
         if ball.Color == balls.Ball1.Color then
             highlight.Color3 = ball.Color
             highlight.Name = "ball1"
-            game.StarterGui:SetCore("SendNotification", {
+            ClonedService("StarterGui"):SetCore("SendNotification", {
                 Title = "Ball Spawned",
                 Text = ball.Name,
                 Duration = 0.64,
             })
         elseif ball.Color == balls.UltimateBall1.Color then
-            ball.Parent = game.Workspace
+            ball.Parent = ClonedService("Workspace")
             highlight.Color3 = ball.Color
             highlight.Name = "ultimateball1"
-            game.StarterGui:SetCore("SendNotification", {
+            ClonedService("StarterGui"):SetCore("SendNotification", {
                 Title = "Ultimate Ball Spawned",
                 Text = ball.Name,
                 Duration = 1,

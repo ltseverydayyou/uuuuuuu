@@ -1,10 +1,15 @@
 local library = {flags = {}, windows = {}, open = true}
 
+local function ClonedService(name)
+    local service = (cloneref and cloneref(game:GetService(name))) or game:GetService(name)
+    return service
+end
+
 --Services
-local runService = game:GetService"RunService"
-local tweenService = game:GetService"TweenService"
-local textService = game:GetService"TextService"
-local inputService = game:GetService"UserInputService"
+local runService = ClonedService("RunService")
+local tweenService = ClonedService("TweenService")
+local textService = ClonedService("TextService")
+local inputService = ClonedService("UserInputService")
 
 --Locals
 local dragging, dragInput, dragStart, startPos, dragObject
@@ -1654,14 +1659,14 @@ function library:Init()
 	self.base = self.base or self:Create("ScreenGui")
 	if (syn and syn.protect_gui) then
 		syn.protect_gui(self.base)
-		self.base.Parent = game:GetService"CoreGui"
+		self.base.Parent = ClonedService("CoreGui")
 	elseif type(get_hidden_gui) == 'function' then
 		self.base.Parent = get_hidden_gui()
 	elseif type(gethui) == 'function' then
 		self.base.Parent = gethui()
 	else
 		self.base.Name = tostring(math.random())
-		self.base.Parent = game:GetService"CoreGui"
+		self.base.Parent = ClonedService("CoreGui")
 	end
 	
 	

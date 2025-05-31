@@ -1,11 +1,16 @@
 local connectionStorage = {}
 
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
-local ContextActionService = game:GetService("ContextActionService")
-local ScreenPath = gethui and gethui() or (game:GetService("CoreGui") or game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui"))
+local function ClonedService(name)
+    local service = (cloneref and cloneref(game:GetService(name))) or game:GetService(name)
+    return service
+end
+
+local Players = ClonedService("Players")
+local RunService = ClonedService("RunService")
+local UserInputService = ClonedService("UserInputService")
+local TweenService = ClonedService("TweenService")
+local ContextActionService = ClonedService("ContextActionService")
+local ScreenPath = gethui and gethui() or (ClonedService("CoreGui") or ClonedService("Players").LocalPlayer:WaitForChild("PlayerGui"))
 
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera

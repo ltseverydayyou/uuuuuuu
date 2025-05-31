@@ -1,12 +1,17 @@
 if getgenv().AimbotLoaded then return end
 
-local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+local function ClonedService(name)
+    local service = (cloneref and cloneref(game:GetService(name))) or game:GetService(name)
+    return service
+end
+
+local Rayfield = loadstring(game:HttpGet('https://raw.githubusercontent.com/ltseverydayyou/Rayfield-backup/main/Rayfield'))()
 getgenv().AimbotLoaded=true
-local HttpService = game:GetService("HttpService")
-local RunService = game:GetService("RunService")
-local TeleportService = game:GetService("TeleportService")
-local players = game:GetService("Players")
-local wrk = game:GetService("Workspace")
+local HttpService = ClonedService("HttpService")
+local RunService = ClonedService("RunService")
+local TeleportService = ClonedService("TeleportService")
+local players = ClonedService("Players")
+local wrk = ClonedService("Workspace")
 local plr = players.LocalPlayer
 local hrp = nil
 local humanoid = nil

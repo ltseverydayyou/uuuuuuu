@@ -7,31 +7,20 @@ local order=0
 
 ui=Gui
 
-function cursed()
-	local length = math.random(10,20)
-	local array = {}
-	for i = 1, length do
-		array[i] = string.char(math.random(32, 126))
-	end
-	return table.concat(array)
+local function ClonedService(name)
+    local service = (cloneref and cloneref(game:GetService(name))) or game:GetService(name)
+    return service
 end
 
-function protectUI(sGui)
-    local function blankfunction(...)
-        return ...
+local function protectUI(sGui)
+    if sGui:IsA("ScreenGui") then
+        sGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+		sGui.DisplayOrder = 999999999
+		sGui.ResetOnSpawn = false
+		sGui.IgnoreGuiInset = true
     end
-
-    local cloneref = cloneref or blankfunction
-
-    local function SafeGetService(service)
-        return cloneref(game:GetService(service)) or game:GetService(service)
-    end
-
-    local cGUI = SafeGetService("CoreGui")
-    local rPlr = SafeGetService("Players"):FindFirstChildWhichIsA("Player")
-    local cGUIProtect = {}
-    local rService = SafeGetService("RunService")
-    local lPlr = SafeGetService("Players").LocalPlayer
+    local cGUI = ClonedService("CoreGui")
+    local lPlr = ClonedService("Players").LocalPlayer
 
     local function NAProtection(inst, var)
         if inst then
@@ -45,58 +34,26 @@ function protectUI(sGui)
         end
     end
 
-    if (get_hidden_gui or gethui) then
-        local hiddenUI = (get_hidden_gui or gethui)
-        NAProtection(sGui)
-        sGui.Parent = hiddenUI()
-        return sGui
-    elseif (not is_sirhurt_closure) and (syn and syn.protect_gui) then
-        NAProtection(sGui)
-        syn.protect_gui(sGui)
-        sGui.Parent = cGUI
-        return sGui
-    elseif cGUI:FindFirstChildWhichIsA("ScreenGui") then
-        pcall(function()
-            for _, v in pairs(sGui:GetDescendants()) do
-                cGUIProtect[v] = rPlr.Name
-            end
-            sGui.DescendantAdded:Connect(function(v)
-                cGUIProtect[v] = rPlr.Name
-            end)
-            cGUIProtect[sGui] = rPlr.Name
-
-            local meta = getrawmetatable(game)
-            local tostr = meta.__tostring
-            setreadonly(meta, false)
-            meta.__tostring = newcclosure(function(t)
-                if cGUIProtect[t] and not checkcaller() then
-                    return cGUIProtect[t]
-                end
-                return tostr(t)
-            end)
-        end)
-        if not rService:IsStudio() then
-            local newGui = cGUI:FindFirstChildWhichIsA("ScreenGui")
-            newGui.DescendantAdded:Connect(function(v)
-                cGUIProtect[v] = rPlr.Name
-            end)
-            for _, v in pairs(sGui:GetChildren()) do
-                v.Parent = newGui
-            end
-            sGui = newGui
-        end
-        return sGui
-    elseif cGUI then
-        NAProtection(sGui)
-        sGui.Parent = cGUI
-        return sGui
-    elseif lPlr and lPlr:FindFirstChild("PlayerGui") then
-        NAProtection(sGui)
-        sGui.Parent = lPlr:FindFirstChild("PlayerGui")
-        return sGui
-    else
-        return nil
-    end
+    if gethui then
+		NAProtection(sGui)
+		sGui.Parent = gethui()
+		return sGui
+	elseif cGUI and cGUI:FindFirstChild("RobloxGui") then
+		NAProtection(sGui)
+		sGui.Parent = cGUI:FindFirstChild("RobloxGui")
+		return sGui
+	elseif cGUI then
+		NAProtection(sGui)
+		sGui.Parent = cGUI
+		return sGui
+	elseif lPlr and lPlr:FindFirstChild("PlayerGui") then
+		NAProtection(sGui)
+		sGui.Parent = lPlr:FindFirstChild("PlayerGui")
+		sGui.ResetOnSpawn = false
+		return sGui
+	else
+		return nil
+	end
 end
 
 protectUI(ui)
@@ -113,7 +70,7 @@ SRSExample.Parent = nil
 
 Draggable = function(ui, dragui)
 	if not dragui then dragui = ui end
-	local UserInputService = game:GetService("UserInputService")
+	local UserInputService = ClonedService("UserInputService")
 
 	local dragging
 	local dragInput
@@ -153,7 +110,7 @@ Draggable = function(ui, dragui)
 end
 tweeny = function(obj, style, direction, duration, goal)
 	local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle[style], Enum.EasingDirection[direction])
-	local tween = game:GetService("TweenService"):Create(obj, tweenInfo, goal)
+	local tween = ClonedService("TweenService"):Create(obj, tweenInfo, goal)
 	tween:Play()
 	return tween
 end
@@ -207,7 +164,7 @@ function updTxtScale()
 	local text = SRStxt.Text
 	local font = SRStxt.Font
 	local textSize = SRStxt.TextSize
-	local textBounds = game:GetService("TextService"):GetTextSize(text, textSize, font, Vector2.new(width, math.huge))
+	local textBounds = ClonedService("TextService"):GetTextSize(text, textSize, font, Vector2.new(width, math.huge))
 	SRStxt.Size = UDim2.new(1, 0, 0, textBounds.Y)
 end
 
@@ -346,7 +303,7 @@ function handleRemote(remote)
 			local btn = template:Clone()
 			--order=order-1
 			btn.Parent=list
-			btn.Name=cursed()
+			btn.Name="\0"
 			btn.Text=_G.Code
 			--btn.LayoutOrder=order
 			btn.MouseButton1Click:connect(function()
@@ -375,7 +332,7 @@ function handleRemote(remote)
 			local btn = template:Clone()
 			--order=order-1
 			btn.Parent=list
-			btn.Name=cursed()
+			btn.Name="\0"
 			btn.Text=_G.Code
 			--btn.LayoutOrder=order
 			btn.MouseButton1Click:connect(function()
@@ -402,12 +359,12 @@ function wrapRemotes()
 end
 
 --[[local services = {
-	game:GetService("ReplicatedStorage"),
-	game:GetService("StarterGui"),
-	game:GetService("StarterPack"),
-	game:GetService("StarterPlayer"),
-	game:GetService("Players"),
-	game:GetService("Workspace")
+	ClonedService("ReplicatedStorage"),
+	ClonedService("StarterGui"),
+	ClonedService("StarterPack"),
+	ClonedService("StarterPlayer"),
+	ClonedService("Players"),
+	ClonedService("Workspace")
 }
 ]]
 --for _, folder in ipairs(services) do
@@ -420,7 +377,7 @@ SRSFrame.Position = UDim2.new(0.5, -283/2+5, 0.5, -260/2+5)
 con1=SRStxt:GetPropertyChangedSignal("Text"):Connect(updTxtScale)
 spawn(updTxtScale)
 
-connect = game:GetService("RunService").Stepped:Connect(function()
+connect = ClonedService("RunService").Stepped:Connect(function()
 	SRSList.CanvasSize = UDim2.new(0, 0, 0, SRSList:FindFirstChildOfClass("UIListLayout").AbsoluteContentSize.Y)
 	SRSresult.CanvasSize = UDim2.new(0, 0, 0, SRSresult:FindFirstChildOfClass("UIListLayout").AbsoluteContentSize.Y)
 end)
@@ -432,7 +389,7 @@ copyCon = copySignalBtn.MouseButton1Click:Connect(function()
 			setclipboard(thingy)
 		end
 	else
-		game:GetService("StarterGui"):SetCore("SendNotification", {Title = "Missing Function";Text = "setclipboard";Duration = 5;})
+		ClonedService("StarterGui"):SetCore("SendNotification", {Title = "Missing Function";Text = "setclipboard";Duration = 5;})
 	end
 end)
 
@@ -443,7 +400,7 @@ fireCon = fireSignalBtn.MouseButton1Click:Connect(function()
 			assert(loadstring(thingy))()
 		end
 	else
-		game:GetService("StarterGui"):SetCore("SendNotification", {Title = "Missing Function";Text = "firesignal";Duration = 5;})
+		ClonedService("StarterGui"):SetCore("SendNotification", {Title = "Missing Function";Text = "firesignal";Duration = 5;})
 	end	
 end)
 
@@ -469,7 +426,7 @@ TextLabelLabel.Draggable=true
 UICorner.CornerRadius=UDim.new(1,0)
 UICorner.Parent=TextLabelLabel
 
-local textWidth=game:GetService("TextService"):GetTextSize(TextLabelLabel.Text,TextLabelLabel.TextSize,TextLabelLabel.Font,Vector2.new(math.huge,math.huge)).X
+local textWidth=ClonedService("TextService"):GetTextSize(TextLabelLabel.Text,TextLabelLabel.TextSize,TextLabelLabel.Font,Vector2.new(math.huge,math.huge)).X
 local newSize=UDim2.new(0,textWidth+69,0,33)
 
 TextLabelLabel:TweenSize(newSize,"Out","Quint",1,true)

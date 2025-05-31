@@ -1,19 +1,17 @@
-function protectUI(sGui)
-    local function blankfunction(...)
-        return ...
+local function ClonedService(name)
+    local service = (cloneref and cloneref(game:GetService(name))) or game:GetService(name)
+    return service
+end
+
+local function protectUI(sGui)
+    if sGui:IsA("ScreenGui") then
+        sGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+		sGui.DisplayOrder = 999999999
+		sGui.ResetOnSpawn = false
+		sGui.IgnoreGuiInset = true
     end
-
-    local cloneref = cloneref or blankfunction
-
-    local function SafeGetService(service)
-        return cloneref(game:GetService(service)) or game:GetService(service)
-    end
-
-    local cGUI = SafeGetService("CoreGui")
-    local rPlr = SafeGetService("Players"):FindFirstChildWhichIsA("Player")
-    local cGUIProtect = {}
-    local rService = SafeGetService("RunService")
-    local lPlr = SafeGetService("Players").LocalPlayer
+    local cGUI = ClonedService("CoreGui")
+    local lPlr = ClonedService("Players").LocalPlayer
 
     local function NAProtection(inst, var)
         if inst then
@@ -27,58 +25,26 @@ function protectUI(sGui)
         end
     end
 
-    if (get_hidden_gui or gethui) then
-        local hiddenUI = (get_hidden_gui or gethui)
-        NAProtection(sGui)
-        sGui.Parent = hiddenUI()
-        return sGui
-    elseif (not is_sirhurt_closure) and (syn and syn.protect_gui) then
-        NAProtection(sGui)
-        syn.protect_gui(sGui)
-        sGui.Parent = cGUI
-        return sGui
-    elseif cGUI:FindFirstChildWhichIsA("ScreenGui") then
-        pcall(function()
-            for _, v in pairs(sGui:GetDescendants()) do
-                cGUIProtect[v] = rPlr.Name
-            end
-            sGui.DescendantAdded:Connect(function(v)
-                cGUIProtect[v] = rPlr.Name
-            end)
-            cGUIProtect[sGui] = rPlr.Name
-
-            local meta = getrawmetatable(game)
-            local tostr = meta.__tostring
-            setreadonly(meta, false)
-            meta.__tostring = newcclosure(function(t)
-                if cGUIProtect[t] and not checkcaller() then
-                    return cGUIProtect[t]
-                end
-                return tostr(t)
-            end)
-        end)
-        if not rService:IsStudio() then
-            local newGui = cGUI:FindFirstChildWhichIsA("ScreenGui")
-            newGui.DescendantAdded:Connect(function(v)
-                cGUIProtect[v] = rPlr.Name
-            end)
-            for _, v in pairs(sGui:GetChildren()) do
-                v.Parent = newGui
-            end
-            sGui = newGui
-        end
-        return sGui
-    elseif cGUI then
-        NAProtection(sGui)
-        sGui.Parent = cGUI
-        return sGui
-    elseif lPlr and lPlr:FindFirstChild("PlayerGui") then
-        NAProtection(sGui)
-        sGui.Parent = lPlr:FindFirstChild("PlayerGui")
-        return sGui
-    else
-        return nil
-    end
+    if gethui then
+		NAProtection(sGui)
+		sGui.Parent = gethui()
+		return sGui
+	elseif cGUI and cGUI:FindFirstChild("RobloxGui") then
+		NAProtection(sGui)
+		sGui.Parent = cGUI:FindFirstChild("RobloxGui")
+		return sGui
+	elseif cGUI then
+		NAProtection(sGui)
+		sGui.Parent = cGUI
+		return sGui
+	elseif lPlr and lPlr:FindFirstChild("PlayerGui") then
+		NAProtection(sGui)
+		sGui.Parent = lPlr:FindFirstChild("PlayerGui")
+		sGui.ResetOnSpawn = false
+		return sGui
+	else
+		return nil
+	end
 end
 
 local ServerListGUI = Instance.new("ScreenGui")
@@ -266,7 +232,7 @@ local firstdone = false
 local cursortrue = false
 local cursor = ""
 local function scrapefirst()
-	local HttpService = game:GetService("HttpService")
+	local HttpService = ClonedService("HttpService")
 	local getServers = req({
 		Url = "https://games.roblox.com/v1/games/"
 			.. tostring(serverID.Text)
@@ -308,11 +274,11 @@ local function scrapefirst()
 		joinButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 		joinButton.TextSize = 14.000
 		joinButton.MouseButton1Down:connect(function()
-			local player = game.Players.LocalPlayer
+			local player = ClonedService("Players").LocalPlayer
 			local jobID = table.id
 			local placeID = serverID.Text
 
-			local TeleportService = game:GetService("TeleportService")
+			local TeleportService = ClonedService("TeleportService")
 			TeleportService:TeleportToPlaceInstance(placeID, jobID, player)
 		end)
 
@@ -363,7 +329,7 @@ local function scrapeservers()
 	until firstdone == true
 	if cursortrue == true then
 		while cursortrue == true do
-			local HttpService = game:GetService("HttpService")
+			local HttpService = ClonedService("HttpService")
 			local getServers = syn.request({
 				Url = "https://games.roblox.com/v1/games/"
 					.. tostring(serverID.Text)
@@ -413,11 +379,11 @@ local function scrapeservers()
 				joinButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 				joinButton.TextSize = 14.000
 				joinButton.MouseButton1Down:connect(function()
-					local player = game.Players.LocalPlayer
+					local player = ClonedService("Players").LocalPlayer
 					local jobID = table.id
 					local placeID = serverID.Text
 
-					local TeleportService = game:GetService("TeleportService")
+					local TeleportService = ClonedService("TeleportService")
 					TeleportService:TeleportToPlaceInstance(placeID, jobID, player)
 				end)
 
@@ -569,14 +535,14 @@ end)
 
 scrapeServer.MouseButton1Down:connect(function()
 	local clipboard = ""
-	Players = game:GetService("Players")
+	Players = ClonedService("Players")
 	for i, player in pairs(Players:GetPlayers()) do
 		clipboard = clipboard.."\n"..player.Name
 	end
 	setclipboard(clipboard)
 end)
 
-local mouse = game.Players.LocalPlayer:GetMouse()
+local mouse = ClonedService("Players").LocalPlayer:GetMouse()
 local gui = ServerListGUI.Background
 local open = false
 
@@ -616,7 +582,7 @@ TextLabelLabel.Draggable=true
 UICorner.CornerRadius=UDim.new(1,0)
 UICorner.Parent=TextLabelLabel
 
-local textWidth=game:GetService("TextService"):GetTextSize(TextLabelLabel.Text,TextLabelLabel.TextSize,TextLabelLabel.Font,Vector2.new(math.huge,math.huge)).X
+local textWidth=ClonedService("TextService"):GetTextSize(TextLabelLabel.Text,TextLabelLabel.TextSize,TextLabelLabel.Font,Vector2.new(math.huge,math.huge)).X
 local newSize=UDim2.new(0,textWidth+69,0,33)
 
 TextLabelLabel:TweenSize(newSize,"Out","Quint",1,true)

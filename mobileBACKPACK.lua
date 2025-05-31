@@ -6,9 +6,9 @@ if not game:IsLoaded() then
 	game.Loaded:Wait()
 end
 
-function SafeGetService(name)
-	local service = game:GetService(name)
-	return if cloneref then cloneref(service) else service
+local function SafeGetService(name)
+    local service = (cloneref and cloneref(game:GetService(name))) or game:GetService(name)
+    return service
 end
 
 --[[if not SafeGetService("UserInputService").TouchEnabled then

@@ -10,10 +10,52 @@ function curse()
 	return table.concat(array)
 end
 
-if not gethui then
-	getgenv().gethui=function()
-		local h=(game:GetService("CoreGui"):FindFirstChildWhichIsA("ScreenGui") or game:GetService("CoreGui") or game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui"))
-		return h
+local function ClonedService(name)
+    local service = (cloneref and cloneref(game:GetService(name))) or game:GetService(name)
+    return service
+end
+
+local function protectUI(sGui)
+    if sGui:IsA("ScreenGui") then
+        sGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+		sGui.DisplayOrder = 999999999
+		sGui.ResetOnSpawn = false
+		sGui.IgnoreGuiInset = true
+    end
+    local cGUI = ClonedService("CoreGui")
+    local lPlr = ClonedService("Players").LocalPlayer
+
+    local function NAProtection(inst, var)
+        if inst then
+            if var then
+                inst[var] = "\0"
+                inst.Archivable = false
+            else
+                inst.Name = "\0"
+                inst.Archivable = false
+            end
+        end
+    end
+
+    if gethui then
+		NAProtection(sGui)
+		sGui.Parent = gethui()
+		return sGui
+	elseif cGUI and cGUI:FindFirstChild("RobloxGui") then
+		NAProtection(sGui)
+		sGui.Parent = cGUI:FindFirstChild("RobloxGui")
+		return sGui
+	elseif cGUI then
+		NAProtection(sGui)
+		sGui.Parent = cGUI
+		return sGui
+	elseif lPlr and lPlr:FindFirstChild("PlayerGui") then
+		NAProtection(sGui)
+		sGui.Parent = lPlr:FindFirstChild("PlayerGui")
+		sGui.ResetOnSpawn = false
+		return sGui
+	else
+		return nil
 	end
 end
 
@@ -44,26 +86,25 @@ else
 	local Fadeobject =_G.CodexUiCustomSettings["Fade"] or true
 	local IconsOn =_G.CodexUiCustomSettings["IconsOn"] or Color3.fromRGB(170, 85, 127)
 	local IconsOff =_G.CodexUiCustomSettings["IconsOff"] or Color3.fromRGB(0, 0, 0)
-	repeat wait() until game.CoreGui:FindFirstChild("Codex")
+	repeat task.wait() until gethui():FindFirstChild("Codex")
 
-	local CodexFolder = game.CoreGui:WaitForChild("Codex")
+	local CodexFolder = gethui():WaitForChild("Codex")
 
 	spawn(function()
 		if CodexFolder and CodexFolder:IsA("Folder") then
-			wait(12)
+			task.wait(12)
 			local gui = Instance.new("ScreenGui")
-			gui.Name = curse()
 			for _, child in ipairs(CodexFolder:GetChildren()) do
 				child.Parent = gui
 			end
-			gui.Parent = gethui()
+			protectUI(gui)
 			CodexFolder:Destroy()
 		end
 	end)
 
-	local curUi = game.CoreGui:WaitForChild("Codex").gui
+	local curUi = gethui():WaitForChild("Codex").gui
 
-	local CodexUi = game:GetService("RunService"):IsStudio() and game.StarterGui.Codex or game:GetService("CoreGui"):WaitForChild("Codex")
+	local CodexUi = ClonedService("RunService"):IsStudio() and ClonedService("StarterGui").Codex or ClonedService("CoreGui"):WaitForChild("Codex")
 	local gui = nil
 	if CodexUi or _G.Codex_gui_Object then
 		gui = _G.Codex_gui_Object or curUi
@@ -75,7 +116,7 @@ else
 
 	_G.Codex_gui_Object = gui
 
-	local function HideForever(object) 
+	local function HideForever(object)
 		object.Visible = false
 		Patch1 = object:GetPropertyChangedSignal("Visible"):Connect(function()
 			if Patch1 and _G.LoadedCodexSwitcher ~= patch then

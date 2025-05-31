@@ -41,7 +41,12 @@ if PROTOSMASHER_LOADED then
     end)
 end
 
-local HttpService = game:GetService("HttpService")
+local function ClonedService(name)
+    local service = (cloneref and cloneref(game:GetService(name))) or game:GetService(name)
+    return service
+end
+
+local HttpService = ClonedService("HttpService")
 if not isfile("TurtleSpySettings.json") then
     writefile("TurtleSpySettings.json", HttpService:JSONEncode(settings))
 else
@@ -52,7 +57,6 @@ else
     end
 end
 
-
 function isSynapse()
     if PROTOSMASHER_LOADED then
         return false
@@ -61,7 +65,7 @@ function isSynapse()
     end
 end
 
-local client = game:GetService("Players").LocalPlayer
+local client = ClonedService("Players").LocalPlayer
 local function toUnicode(string)
     local codepoints = "utf8.char("
     
@@ -127,13 +131,13 @@ end
 local isA = game.IsA
 local clone = game.Clone
 
-local TextService = game:GetService("TextService")
+local TextService = ClonedService("TextService")
 local getTextSize = TextService.GetTextSize
-game:GetService("StarterGui").ResetPlayerGuiOnSpawn = false
-local mouse = game:GetService("Players").LocalPlayer:GetMouse()
+ClonedService("StarterGui").ResetPlayerGuiOnSpawn = false
+local mouse = ClonedService("Players").LocalPlayer:GetMouse()
 
-if game:GetService("CoreGui"):FindFirstChild("TurtleSpyGUI") then
-    game:GetService("CoreGui").TurtleSpyGUI:Destroy()
+if ClonedService("CoreGui"):FindFirstChild("TurtleSpyGUI") then
+    ClonedService("CoreGui").TurtleSpyGUI:Destroy()
 end
 local buttonOffset = -25
 local scrollSizeOffset = 287
@@ -192,7 +196,7 @@ local RemoteName2 = Instance.new("TextLabel")
 local RemoteIcon2 = Instance.new("ImageLabel")
 
 TurtleSpyGUI.Name = "TurtleSpyGUI"
-TurtleSpyGUI.Parent = game:GetService("CoreGui")
+TurtleSpyGUI.Parent = ClonedService("CoreGui")
 
 mainFrame.Name = "mainFrame"
 mainFrame.Parent = TurtleSpyGUI

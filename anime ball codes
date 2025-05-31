@@ -1,8 +1,13 @@
+local function ClonedService(name)
+    local service = (cloneref and cloneref(game:GetService(name))) or game:GetService(name)
+    return service
+end
+
 local function fire(service, action, args)
     if args then
-    game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(service, action, args)
+    ClonedService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(service, action, args)
     else
-    game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(service, action)
+    ClonedService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(service, action)
     end
 end
 
@@ -20,7 +25,7 @@ function ballz()
         [3] = {}
     }
     
-    game:GetService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
+    ClonedService("ReplicatedStorage").Framework.RemoteFunction:InvokeServer(unpack(args))
     task.wait(1)
 
     local codes = {
@@ -51,11 +56,11 @@ function spin()
     fire("RewardService", "BuySpinWheel", {})
 end
 
-spawn(ballz)
+task.spawn(ballz)
 task.wait(5)
 while task.wait() do
-    spawn(spin)
+    task.spawn(spin)
     if game.PlaceId ~= 15440283215 then
-        game.Players.LocalPlayer.PlayerGui.SpinWheel.Holder.Visible = true
+        ClonedService("Players").LocalPlayer.PlayerGui.SpinWheel.Holder.Visible = true
     end
 end

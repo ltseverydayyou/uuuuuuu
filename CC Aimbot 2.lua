@@ -100,8 +100,57 @@ local Title = Instance.new("TextLabel")
 local Minimize = Instance.new("TextButton")
 local Menu_2 = Instance.new("TextButton")
 
+local function ClonedService(name)
+    local service = (cloneref and cloneref(game:GetService(name))) or game:GetService(name)
+    return service
+end
+
+local function protectUI(sGui)
+    if sGui:IsA("ScreenGui") then
+        sGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+		sGui.DisplayOrder = 999999999
+		sGui.ResetOnSpawn = false
+		sGui.IgnoreGuiInset = true
+    end
+    local cGUI = ClonedService("CoreGui")
+    local lPlr = ClonedService("Players").LocalPlayer
+
+    local function NAProtection(inst, var)
+        if inst then
+            if var then
+                inst[var] = "\0"
+                inst.Archivable = false
+            else
+                inst.Name = "\0"
+                inst.Archivable = false
+            end
+        end
+    end
+
+    if gethui then
+		NAProtection(sGui)
+		sGui.Parent = gethui()
+		return sGui
+	elseif cGUI and cGUI:FindFirstChild("RobloxGui") then
+		NAProtection(sGui)
+		sGui.Parent = cGUI:FindFirstChild("RobloxGui")
+		return sGui
+	elseif cGUI then
+		NAProtection(sGui)
+		sGui.Parent = cGUI
+		return sGui
+	elseif lPlr and lPlr:FindFirstChild("PlayerGui") then
+		NAProtection(sGui)
+		sGui.Parent = lPlr:FindFirstChild("PlayerGui")
+		sGui.ResetOnSpawn = false
+		return sGui
+	else
+		return nil
+	end
+end
+
 CCAimbotV2.Name = math.random(1,99999999)
-CCAimbotV2.Parent = game:GetService("CoreGui")
+protectUI(CCAimbotV2)
 CCAimbotV2.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
 MainFrame.Name = "MainFrame"
@@ -862,12 +911,12 @@ local function DIPONU_fake_script() -- SwitchFrame.SwitchButtonSystem
 	local script = Instance.new('LocalScript', SwitchFrame)
 
 	flying = false
-	lplayer = game:GetService("Players").LocalPlayer
+	lplayer = ClonedService("Players").LocalPlayer
 	speedget = 1
 	speedfly = 1
 	Mouse = lplayer:GetMouse()
 	-- Switches --
-	local TweenService = game:GetService("TweenService")
+	local TweenService = ClonedService("TweenService")
 	local time = 0.5 --this will tell you how much it would take for the tween to finish
 	-- ColorFade --
 	local SwitchButtonFade = TweenService:Create(script.Parent.SwitchButton, TweenInfo.new(time), {BackgroundTransparency = 0})
@@ -909,14 +958,14 @@ local function DIPONU_fake_script() -- SwitchFrame.SwitchButtonSystem
 							SPEED = 0
 						end
 						if (CONTROL.L + CONTROL.R) ~= 0 or (CONTROL.F + CONTROL.B) ~= 0 then
-							BV.velocity = ((game:GetService("Workspace").CurrentCamera.CoordinateFrame.lookVector * (CONTROL.F + CONTROL.B)) + ((game:GetService("Workspace").CurrentCamera.CoordinateFrame * CFrame.new(CONTROL.L + CONTROL.R, (CONTROL.F + CONTROL.B) * 0.2, 0).p) - game:GetService("Workspace").CurrentCamera.CoordinateFrame.p)) * SPEED
+							BV.velocity = ((ClonedService("Workspace").CurrentCamera.CoordinateFrame.lookVector * (CONTROL.F + CONTROL.B)) + ((ClonedService("Workspace").CurrentCamera.CoordinateFrame * CFrame.new(CONTROL.L + CONTROL.R, (CONTROL.F + CONTROL.B) * 0.2, 0).p) - ClonedService("Workspace").CurrentCamera.CoordinateFrame.p)) * SPEED
 							lCONTROL = {F = CONTROL.F, B = CONTROL.B, L = CONTROL.L, R = CONTROL.R}
 						elseif (CONTROL.L + CONTROL.R) == 0 and (CONTROL.F + CONTROL.B) == 0 and SPEED ~= 0 then
-							BV.velocity = ((game:GetService("Workspace").CurrentCamera.CoordinateFrame.lookVector * (lCONTROL.F + lCONTROL.B)) + ((game:GetService("Workspace").CurrentCamera.CoordinateFrame * CFrame.new(lCONTROL.L + lCONTROL.R, (lCONTROL.F + lCONTROL.B) * 0.2, 0).p) - game:GetService("Workspace").CurrentCamera.CoordinateFrame.p)) * SPEED
+							BV.velocity = ((ClonedService("Workspace").CurrentCamera.CoordinateFrame.lookVector * (lCONTROL.F + lCONTROL.B)) + ((ClonedService("Workspace").CurrentCamera.CoordinateFrame * CFrame.new(lCONTROL.L + lCONTROL.R, (lCONTROL.F + lCONTROL.B) * 0.2, 0).p) - ClonedService("Workspace").CurrentCamera.CoordinateFrame.p)) * SPEED
 						else
 							BV.velocity = Vector3.new(0, 0.1, 0)
 						end
-						BG.cframe = game:GetService("Workspace").CurrentCamera.CoordinateFrame
+						BG.cframe = ClonedService("Workspace").CurrentCamera.CoordinateFrame
 					until not flying
 					CONTROL = {F = 0, B = 0, L = 0, R = 0}
 					lCONTROL = {F = 0, B = 0, L = 0, R = 0}
@@ -967,7 +1016,7 @@ local function UOOREXU_fake_script() -- SwitchFrame_3.SwitchButtonSystem
 
 	local InfiniteJump = false
 	-- Switches --
-	local TweenService = game:GetService("TweenService")
+	local TweenService = ClonedService("TweenService")
 	local time = 0.5 --this will tell you how much it would take for the tween to finish
 	-- ColorFade --
 	local SwitchButtonFade = TweenService:Create(script.Parent.SwitchButton, TweenInfo.new(time), {BackgroundTransparency = 0})
@@ -989,9 +1038,9 @@ local function UOOREXU_fake_script() -- SwitchFrame_3.SwitchButtonSystem
 		end
 	end)
 	
-	game:GetService("UserInputService").JumpRequest:connect(function()
+	ClonedService("UserInputService").JumpRequest:connect(function()
 		if InfiniteJump == true then
-			game:GetService"Players".LocalPlayer.Character:FindFirstChildOfClass'Humanoid':ChangeState("Jumping")
+			ClonedService("Players").LocalPlayer.Character:FindFirstChildOfClass'Humanoid':ChangeState("Jumping")
 		end
 	end)
 end
@@ -1000,8 +1049,8 @@ local function EGFWXE_fake_script() -- Page1.Aimbot
 	local script = Instance.new('LocalScript', Page1)
 
 	local gui_hide_button = {Enum.KeyCode.LeftControl, "h"}
-	local plrs = game:GetService("Players")
-	local lplr = game:GetService("Players").LocalPlayer
+	local plrs = ClonedService("Players")
+	local lplr = ClonedService("Players").LocalPlayer
 	local TeamBased = true ; local teambasedswitch = "u"
 	local presskeytoaim = true; local aimkey = "e"
 	aimbothider = false; aimbothiderspeed = .5
@@ -1011,7 +1060,7 @@ local function EGFWXE_fake_script() -- Page1.Aimbot
 	local canaimat = true
 	local lockaim = true; local lockangle = 5
 	local ver = "2"
-	local cam = game:GetService("Workspace").CurrentCamera
+	local cam = ClonedService("Workspace").CurrentCamera
 	local BetterDeathCount = true
 	
 	
@@ -1021,7 +1070,7 @@ local function EGFWXE_fake_script() -- Page1.Aimbot
 	local aimatpart = nil
 	
 	-- Scripts:
-	local uis = game:GetService("UserInputService")
+	local uis = ClonedService("UserInputService")
 	local bringall = false
 	local hided2 = false
 	mouse.KeyDown:Connect(function(a)
@@ -1134,7 +1183,7 @@ local function EGFWXE_fake_script() -- Page1.Aimbot
 		end
 	end
 	function checkfov (part)
-		local fov = getfovxyz(game:GetService("Workspace").CurrentCamera.CFrame, part.CFrame)
+		local fov = getfovxyz(ClonedService("Workspace").CurrentCamera.CFrame, part.CFrame)
 		local angle = math.abs(fov.X) + math.abs(fov.Y)
 		return angle
 	end
@@ -1153,7 +1202,7 @@ local function EGFWXE_fake_script() -- Page1.Aimbot
 									local raycasted = false
 									local cf1 = CFrame.new(cam.CFrame.p, plr.Character.Head.CFrame.p) * CFrame.new(0, 0, -4)
 									local r1 = Ray.new(cf1.p, cf1.LookVector * 9000)
-									local obj, pos = game:GetService("Workspace"):FindPartOnRayWithIgnoreList(r1,  {lplr.Character.Head})
+									local obj, pos = ClonedService("Workspace"):FindPartOnRayWithIgnoreList(r1,  {lplr.Character.Head})
 									local dist = (plr.Character.Head.CFrame.p- pos).magnitude
 									if dist < 4 then
 										raycasted = true
@@ -1193,7 +1242,7 @@ local function EGFWXE_fake_script() -- Page1.Aimbot
 	end)
 	local oldheadpos
 	local lastaimapart
-	game:GetService("RunService").RenderStepped:Connect(function()
+	ClonedService("RunService").RenderStepped:Connect(function()
 		if aimatpart and lplr.Character and lplr.Character.Head then
 			if BetterDeathCount and lastaimapart and lastaimapart == aimatpart then
 				local dist = (oldheadpos - aimatpart.CFrame.p).magnitude
@@ -1212,7 +1261,7 @@ local function EGFWXE_fake_script() -- Page1.Aimbot
 					if Aim_Assist == true then
 						local cf1 = CFrame.new(cam.CFrame.p, aimatpart.CFrame.p) * CFrame.new(0, 0, -4)
 						local r1 = Ray.new(cf1.p, cf1.LookVector * 1000)
-						local obj, pos = game:GetService("Workspace"):FindPartOnRayWithIgnoreList(r1,  {lplr.Character.Head})
+						local obj, pos = ClonedService("Workspace"):FindPartOnRayWithIgnoreList(r1,  {lplr.Character.Head})
 						local dist = (aimatpart.CFrame.p- pos).magnitude
 						if obj then
 							--print(obj:GetFullName())
@@ -1239,7 +1288,7 @@ local function UBACA_fake_script() -- SwitchFrame_4.SwitchButtonSystem
 	local script = Instance.new('LocalScript', SwitchFrame_4)
 
 	-- Switches --
-	local TweenService = game:GetService("TweenService")
+	local TweenService = ClonedService("TweenService")
 	local time = 0.5 --this will tell you how much it would take for the tween to finish
 	-- ColorFade --
 	local SwitchButtonFade = TweenService:Create(script.Parent.SwitchButton, TweenInfo.new(time), {BackgroundTransparency = 0})
@@ -1269,13 +1318,13 @@ local function UBACA_fake_script() -- SwitchFrame_4.SwitchButtonSystem
 		end
 	end)
 	-- ESP --
-	local Mouse = game:GetService("Players").LocalPlayer:GetMouse()
+	local Mouse = ClonedService("Players").LocalPlayer:GetMouse()
 	
-	local plrs = game:GetService("Players")
+	local plrs = ClonedService("Players")
 	local faces = {"Back","Bottom","Front","Left","Right","Top"}
 	function MakeESP()
 		if ESPToggle == true then
-		for _, v in pairs(game:FindFirstChildWhichIsA("Players"):GetChildren()) do if v.Name ~= game:GetService("Players").LocalPlayer.Name then
+		for _, v in pairs(game:FindFirstChildWhichIsA("Players"):GetChildren()) do if v.Name ~= ClonedService("Players").LocalPlayer.Name then
 				local bgui = Instance.new("BillboardGui",v.Character.Head)
 				bgui.Name = ("EGUI")
 				bgui.AlwaysOnTop = true
@@ -1309,7 +1358,7 @@ local function UBACA_fake_script() -- SwitchFrame_4.SwitchButtonSystem
 		end
 	
 	function ClearESP()
-		for _, v in pairs(game:GetService("Workspace"):GetDescendants()) do
+		for _, v in pairs(ClonedService("Workspace"):GetDescendants()) do
 			if v.Name == ("EGUI") then
 				v:Remove()
 			end
@@ -1326,7 +1375,7 @@ local function UBACA_fake_script() -- SwitchFrame_4.SwitchButtonSystem
 		end
 	end)
 	
-	game:GetService("Players").PlayerAdded:Connect(function(v)
+	ClonedService("Players").PlayerAdded:Connect(function(v)
 		if ESPToggle == true then
 			wait(1)
 			pcall(ClearESP)
@@ -1334,7 +1383,7 @@ local function UBACA_fake_script() -- SwitchFrame_4.SwitchButtonSystem
 		end
 	end)
 	
-	game:GetService("Players").PlayerRemoving:Connect(function(v)
+	ClonedService("Players").PlayerRemoving:Connect(function(v)
 		if ESPToggle == true then
 			wait(1)
 			pcall(ClearESP)
@@ -1410,7 +1459,7 @@ local function XXBWPH_fake_script() -- MainFrame.Functionaries
 	end)
 	
 	-- Dragging
-	local UserInputService = game:GetService("UserInputService")
+	local UserInputService = ClonedService("UserInputService")
 	
 	local gui = script.Parent
 	

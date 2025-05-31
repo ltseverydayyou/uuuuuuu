@@ -1,10 +1,16 @@
 local getgenv, getnamecallmethod, hookmetamethod, newcclosure, checkcaller, stringlower = getgenv, getnamecallmethod, hookmetamethod, newcclosure, checkcaller, string.lower
 
+local function ClonedService(name)
+    local service = (cloneref and cloneref(game:GetService(name))) or game:GetService(name)
+    return service
+end
+
+
 if getgenv().ED_AntiKick then
 	return
 end
 
-local Players, StarterGui, OldNamecall = game:GetService("Players"), game:GetService("StarterGui")
+local Players, StarterGui, OldNamecall = ClonedService("Players"), ClonedService("StarterGui")
 
 getgenv().ED_AntiKick = {
 	Enabled = true,

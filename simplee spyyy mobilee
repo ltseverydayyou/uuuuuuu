@@ -18,22 +18,20 @@ configsmetatable.__index = function(self,index)
     return realconfigs[index]
 end
 
-function protectUI(sGui)
-    local function blankfunction(...)
-        return ...
+local function ClonedService(name)
+    local service = (cloneref and cloneref(game:GetService(name))) or game:GetService(name)
+    return service
+end
+
+local function protectUI(sGui)
+    if sGui:IsA("ScreenGui") then
+        sGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+		sGui.DisplayOrder = 999999999
+		sGui.ResetOnSpawn = false
+		sGui.IgnoreGuiInset = true
     end
-
-    local cloneref = cloneref or blankfunction
-
-    local function SafeGetService(service)
-        return cloneref(game:GetService(service)) or game:GetService(service)
-    end
-
-    local cGUI = SafeGetService("CoreGui")
-    local rPlr = SafeGetService("Players"):FindFirstChildWhichIsA("Player")
-    local cGUIProtect = {}
-    local rService = SafeGetService("RunService")
-    local lPlr = SafeGetService("Players").LocalPlayer
+    local cGUI = ClonedService("CoreGui")
+    local lPlr = ClonedService("Players").LocalPlayer
 
     local function NAProtection(inst, var)
         if inst then
@@ -47,58 +45,26 @@ function protectUI(sGui)
         end
     end
 
-    if (get_hidden_gui or gethui) then
-        local hiddenUI = (get_hidden_gui or gethui)
-        NAProtection(sGui)
-        sGui.Parent = hiddenUI()
-        return sGui
-    elseif (not is_sirhurt_closure) and (syn and syn.protect_gui) then
-        NAProtection(sGui)
-        syn.protect_gui(sGui)
-        sGui.Parent = cGUI
-        return sGui
-    elseif cGUI:FindFirstChildWhichIsA("ScreenGui") then
-        pcall(function()
-            for _, v in pairs(sGui:GetDescendants()) do
-                cGUIProtect[v] = rPlr.Name
-            end
-            sGui.DescendantAdded:Connect(function(v)
-                cGUIProtect[v] = rPlr.Name
-            end)
-            cGUIProtect[sGui] = rPlr.Name
-
-            local meta = getrawmetatable(game)
-            local tostr = meta.__tostring
-            setreadonly(meta, false)
-            meta.__tostring = newcclosure(function(t)
-                if cGUIProtect[t] and not checkcaller() then
-                    return cGUIProtect[t]
-                end
-                return tostr(t)
-            end)
-        end)
-        if not rService:IsStudio() then
-            local newGui = cGUI:FindFirstChildWhichIsA("ScreenGui")
-            newGui.DescendantAdded:Connect(function(v)
-                cGUIProtect[v] = rPlr.Name
-            end)
-            for _, v in pairs(sGui:GetChildren()) do
-                v.Parent = newGui
-            end
-            sGui = newGui
-        end
-        return sGui
-    elseif cGUI then
-        NAProtection(sGui)
-        sGui.Parent = cGUI
-        return sGui
-    elseif lPlr and lPlr:FindFirstChild("PlayerGui") then
-        NAProtection(sGui)
-        sGui.Parent = lPlr:FindFirstChild("PlayerGui")
-        return sGui
-    else
-        return nil
-    end
+    if gethui then
+		NAProtection(sGui)
+		sGui.Parent = gethui()
+		return sGui
+	elseif cGUI and cGUI:FindFirstChild("RobloxGui") then
+		NAProtection(sGui)
+		sGui.Parent = cGUI:FindFirstChild("RobloxGui")
+		return sGui
+	elseif cGUI then
+		NAProtection(sGui)
+		sGui.Parent = cGUI
+		return sGui
+	elseif lPlr and lPlr:FindFirstChild("PlayerGui") then
+		NAProtection(sGui)
+		sGui.Parent = lPlr:FindFirstChild("PlayerGui")
+		sGui.ResetOnSpawn = false
+		return sGui
+	else
+		return nil
+	end
 end
 
 local oth = syn and syn.oth
@@ -182,10 +148,6 @@ local function Create(instance, properties, children)
     return obj;
 end
 
-local function SafeGetService(service)
-    return cloneref(game:GetService(service))
-end
-
 local function Search(logtable,tbl)
     table.insert(logtable,tbl)
     
@@ -256,15 +218,15 @@ local function rawtostring(userdata)
 	return tostring(userdata)
 end
 
-local CoreGui = SafeGetService("CoreGui")
-local Players = SafeGetService("Players")
-local RunService = SafeGetService("RunService")
-local UserInputService = SafeGetService("UserInputService")
-local TweenService = SafeGetService("TweenService")
-local ContentProvider = SafeGetService("ContentProvider")
-local TextService = SafeGetService("TextService")
-local http = SafeGetService("HttpService")
-local GuiInset = game:GetService("GuiService"):GetGuiInset() :: Vector2 -- pulled from rewrite
+local CoreGui = ClonedService("CoreGui")
+local Players = ClonedService("Players")
+local RunService = ClonedService("RunService")
+local UserInputService = ClonedService("UserInputService")
+local TweenService = ClonedService("TweenService")
+local ContentProvider = ClonedService("ContentProvider")
+local TextService = ClonedService("TextService")
+local http = ClonedService("HttpService")
+local GuiInset = ClonedService("GuiService"):GetGuiInset() :: Vector2 -- pulled from rewrite
 
 local function jsone(str) return http:JSONEncode(str) end
 local function jsond(str)
@@ -1508,7 +1470,7 @@ function i2p(i,customgen)
     elseif parent ~= game then
         while true do
             if parent and parent.Parent == game then
-                if SafeGetService(parent.ClassName) then
+                if ClonedService(parent.ClassName) then
                     if lower(parent.ClassName) == "workspace" then
                         return `workspace{out}`
                     else

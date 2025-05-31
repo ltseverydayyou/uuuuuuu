@@ -1,63 +1,54 @@
-local UIS = game:GetService("UserInputService")
-local GuiS = game:GetService("GuiService")
-local VIM = game:GetService("VirtualInputManager")
-local TS = game:GetService("TextService")
+local function ClonedService(name)
+    local service = (cloneref and cloneref(game:GetService(name))) or game:GetService(name)
+    return service
+end
 
-function protectUI(sGui)
-	local function blank(...) return ... end
-	local cloneref = cloneref or blank
-	local get = function(s) return cloneref(game:GetService(s)) or game:GetService(s) end
+local UIS = ClonedService("UserInputService")
+local GuiS = ClonedService("GuiService")
+local VIM = ClonedService("VirtualInputManager")
+local TS = ClonedService("TextService")
 
-	local CG = get("CoreGui")
-	local plr = get("Players"):FindFirstChildWhichIsA("Player")
-	local cgp = {}
-	local RS = get("RunService")
-	local LP = get("Players").LocalPlayer
+local function protectUI(sGui)
+    if sGui:IsA("ScreenGui") then
+        sGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+		sGui.DisplayOrder = 999999999
+		sGui.ResetOnSpawn = false
+		sGui.IgnoreGuiInset = true
+    end
+    local cGUI = ClonedService("CoreGui")
+    local lPlr = ClonedService("Players").LocalPlayer
 
-	local function na(inst, v)
-		if inst then
-			if v then inst[v] = "\0" else inst.Name = "\0" end
-			inst.Archivable = false
-		end
-	end
+    local function NAProtection(inst, var)
+        if inst then
+            if var then
+                inst[var] = "\0"
+                inst.Archivable = false
+            else
+                inst.Name = "\0"
+                inst.Archivable = false
+            end
+        end
+    end
 
-	if (get_hidden_gui or gethui) then
-		na(sGui)
-		sGui.Parent = (get_hidden_gui or gethui)()
+    if gethui then
+		NAProtection(sGui)
+		sGui.Parent = gethui()
 		return sGui
-	elseif (not is_sirhurt_closure) and (syn and syn.protect_gui) then
-		na(sGui)
-		syn.protect_gui(sGui)
-		sGui.Parent = CG
+	elseif cGUI and cGUI:FindFirstChild("RobloxGui") then
+		NAProtection(sGui)
+		sGui.Parent = cGUI:FindFirstChild("RobloxGui")
 		return sGui
-	elseif CG:FindFirstChildWhichIsA("ScreenGui") then
-		pcall(function()
-			for _, v in pairs(sGui:GetDescendants()) do cgp[v] = plr.Name end
-			sGui.DescendantAdded:Connect(function(v) cgp[v] = plr.Name end)
-			cgp[sGui] = plr.Name
-			local mt = getrawmetatable(game)
-			local tstr = mt.__tostring
-			setreadonly(mt, false)
-			mt.__tostring = newcclosure(function(t)
-				if cgp[t] and not checkcaller() then return cgp[t] end
-				return tstr(t)
-			end)
-		end)
-		if not RS:IsStudio() then
-			local g = CG:FindFirstChildWhichIsA("ScreenGui")
-			g.DescendantAdded:Connect(function(v) cgp[v] = plr.Name end)
-			for _, v in pairs(sGui:GetChildren()) do v.Parent = g end
-			sGui = g
-		end
+	elseif cGUI then
+		NAProtection(sGui)
+		sGui.Parent = cGUI
 		return sGui
-	elseif CG then
-		na(sGui)
-		sGui.Parent = CG
+	elseif lPlr and lPlr:FindFirstChild("PlayerGui") then
+		NAProtection(sGui)
+		sGui.Parent = lPlr:FindFirstChild("PlayerGui")
+		sGui.ResetOnSpawn = false
 		return sGui
-	elseif LP and LP:FindFirstChild("PlayerGui") then
-		na(sGui)
-		sGui.Parent = LP:FindFirstChild("PlayerGui")
-		return sGui
+	else
+		return nil
 	end
 end
 

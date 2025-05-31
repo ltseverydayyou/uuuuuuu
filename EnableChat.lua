@@ -1,8 +1,13 @@
 pcall(function()
-    local TextChatService = game:GetService("TextChatService")
-    local Players = game:GetService("Players")
+    local function ClonedService(name)
+        local service = (cloneref and cloneref(game:GetService(name))) or game:GetService(name)
+        return service
+    end
+
+    local TextChatService = ClonedService("TextChatService")
+    local Players = ClonedService("Players")
     local LocalPlayer = Players.LocalPlayer
-    local PlayerGui = LocalPlayer.PlayerGui
+    local PlayerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
 
     local chatWindowConfiguration = TextChatService:FindFirstChildOfClass("ChatWindowConfiguration")
     local chatBarConfiguration = TextChatService:FindFirstChildOfClass("ChatBarConfiguration")

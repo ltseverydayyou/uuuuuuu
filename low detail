@@ -13,7 +13,10 @@ if _G.ConsoleLogs == nil then
     _G.ConsoleLogs = false
 end
 
-
+local function ClonedService(name)
+    local service = (cloneref and cloneref(game:GetService(name))) or game:GetService(name)
+    return service
+end
 
 if not game:IsLoaded() then
     repeat
@@ -71,7 +74,7 @@ if not _G.Settings then
         }
     }
 end
-local Players, Lighting, StarterGui, MaterialService = game:GetService("Players"), game:GetService("Lighting"), game:GetService("StarterGui"), game:GetService("MaterialService")
+local Players, Lighting, StarterGui, MaterialService = ClonedService("Players"), ClonedService("Lighting"), ClonedService("StarterGui"), ClonedService("MaterialService")
 local ME, CanBeEnabled = Players.LocalPlayer, {"ParticleEmitter", "Trail", "Smoke", "Fire", "Sparkles"}
 local function PartOfCharacter(Instance)
     for i, v in pairs(Players:GetPlayers()) do

@@ -9,14 +9,17 @@
 	Dex is a debugging suite designed to help the user debug games and find any potential vulnerabilities.
 ]]
 
-	
 
-local cloneref = cloneref or (function(...) return ... end)
 local getnilinstances = getnilinstances or (function() return {} end)
+
+local function ClonedService(name)
+    local service = (cloneref and cloneref(game:GetService(name))) or game:GetService(name)
+    return service
+end
 
 local nodes, service = {}, setmetatable({}, {
 	__index = function(self, name)
-		local serv = cloneref(game:GetService(name))
+		local serv = ClonedService(name)
 		self[name] = serv
 		return serv
 	end

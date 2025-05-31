@@ -1,7 +1,11 @@
 if game.GameId == 1524368576 then
-    local plr = game:GetService("Players").LocalPlayer
+    local function ClonedService(name)
+    local service = (cloneref and cloneref(game:GetService(name))) or game:GetService(name)
+    return service
+end
+    local plr = ClonedService("Players").LocalPlayer
     local ui = plr.PlayerGui
-    local rs = game:GetService("RunService")
+    local rs = ClonedService("RunService")
 
     local function checkUI(element)
         return ui:FindFirstChild(element) ~= nil
@@ -14,7 +18,7 @@ if game.GameId == 1524368576 then
     local function getBgs(badgeList)
         for _, id in ipairs(badgeList) do
             pcall(function()
-                game:GetService("ReplicatedStorage"):FindFirstChild("DataStore"):FindFirstChild("Award"):FireServer(id)
+                ClonedService("ReplicatedStorage"):FindFirstChild("DataStore"):FindFirstChild("Award"):FireServer(id)
             end)
         end
     end

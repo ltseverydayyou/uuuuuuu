@@ -1,11 +1,16 @@
 
-local TweenService = game:GetService("TweenService")
-local player = game:GetService("Players").LocalPlayer
+local function ClonedService(name)
+    local service = (cloneref and cloneref(game:GetService(name))) or game:GetService(name)
+    return service
+end
+
+local TweenService = ClonedService("TweenService")
+local player = ClonedService("Players").LocalPlayer
 local gui = Instance.new("ScreenGui")
 
 local function NAdrag(ui, dragui)
     if not dragui then dragui = ui end
-    local UserInputService = game:GetService("UserInputService")
+    local UserInputService = ClonedService("UserInputService")
     local dragging, dragInput, dragStart, startPos
 
     local function update(input)
@@ -45,25 +50,15 @@ local function NAdrag(ui, dragui)
     ui.Active = true
 end
 
-function protectUI(sGui)
-    local function blankfunction(...)
-        return ...
-    end
-
-    local cloneref = cloneref or blankfunction
-
-    local function SafeGetService(service)
-        return cloneref(game:GetService(service)) or game:GetService(service)
-    end
-
+local function protectUI(sGui)
     if sGui:IsA("ScreenGui") then
-        sGui.DisplayOrder=999999999
+        sGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+		sGui.DisplayOrder = 999999999
+		sGui.ResetOnSpawn = false
+		sGui.IgnoreGuiInset = true
     end
-    local cGUI = SafeGetService("CoreGui")
-    local rPlr = SafeGetService("Players"):FindFirstChildWhichIsA("Player")
-    local cGUIProtect = {}
-    local rService = SafeGetService("RunService")
-    local lPlr = SafeGetService("Players").LocalPlayer
+    local cGUI = ClonedService("CoreGui")
+    local lPlr = ClonedService("Players").LocalPlayer
 
     local function NAProtection(inst, var)
         if inst then
@@ -77,58 +72,26 @@ function protectUI(sGui)
         end
     end
 
-    if (get_hidden_gui or gethui) then
-        local hiddenUI = (get_hidden_gui or gethui)
-        NAProtection(sGui)
-        sGui.Parent = hiddenUI()
-        return sGui
-    elseif (not is_sirhurt_closure) and (syn and syn.protect_gui) then
-        NAProtection(sGui)
-        syn.protect_gui(sGui)
-        sGui.Parent = cGUI
-        return sGui
-    elseif cGUI:FindFirstChildWhichIsA("ScreenGui") then
-        pcall(function()
-            for _, v in pairs(sGui:GetDescendants()) do
-                cGUIProtect[v] = rPlr.Name
-            end
-            sGui.DescendantAdded:Connect(function(v)
-                cGUIProtect[v] = rPlr.Name
-            end)
-            cGUIProtect[sGui] = rPlr.Name
-
-            local meta = getrawmetatable(game)
-            local tostr = meta.__tostring
-            setreadonly(meta, false)
-            meta.__tostring = newcclosure(function(t)
-                if cGUIProtect[t] and not checkcaller() then
-                    return cGUIProtect[t]
-                end
-                return tostr(t)
-            end)
-        end)
-        if not rService:IsStudio() then
-            local newGui = cGUI:FindFirstChildWhichIsA("ScreenGui")
-            newGui.DescendantAdded:Connect(function(v)
-                cGUIProtect[v] = rPlr.Name
-            end)
-            for _, v in pairs(sGui:GetChildren()) do
-                v.Parent = newGui
-            end
-            sGui = newGui
-        end
-        return sGui
-    elseif cGUI then
-        NAProtection(sGui)
-        sGui.Parent = cGUI
-        return sGui
-    elseif lPlr and lPlr:FindFirstChild("PlayerGui") then
-        NAProtection(sGui)
-        sGui.Parent = lPlr:FindFirstChild("PlayerGui")
-        return sGui
-    else
-        return nil
-    end
+    if gethui then
+		NAProtection(sGui)
+		sGui.Parent = gethui()
+		return sGui
+	elseif cGUI and cGUI:FindFirstChild("RobloxGui") then
+		NAProtection(sGui)
+		sGui.Parent = cGUI:FindFirstChild("RobloxGui")
+		return sGui
+	elseif cGUI then
+		NAProtection(sGui)
+		sGui.Parent = cGUI
+		return sGui
+	elseif lPlr and lPlr:FindFirstChild("PlayerGui") then
+		NAProtection(sGui)
+		sGui.Parent = lPlr:FindFirstChild("PlayerGui")
+		sGui.ResetOnSpawn = false
+		return sGui
+	else
+		return nil
+	end
 end
 
 protectUI(gui)
@@ -224,9 +187,9 @@ end)
 task.spawn(function()
     while task.wait(0.1) do
         if moneyFarmEnabled then
-            local p = game:GetService("Players").LocalPlayer
+            local p = ClonedService("Players").LocalPlayer
             local hrp = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
-            local mh = game:GetService("Workspace").Buildings.DeadBurger.DumpsterMoneyMaker:FindFirstChild("MoneyHitbox")
+            local mh = ClonedService("Workspace").Buildings.DeadBurger.DumpsterMoneyMaker:FindFirstChild("MoneyHitbox")
             if hrp and mh then
                 local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut)
                 local tween1 = TweenService:Create(mh, tweenInfo, {CFrame = hrp.CFrame})
@@ -256,13 +219,9 @@ task.spawn(function()
     while task.wait(0.1) do
         if shutterEnabled then
             pcall(function()
-                local s = game:GetService("Workspace").Model.Shutter.Root:FindFirstChildWhichIsA("ClickDetector", true)
+                local s = ClonedService("Workspace").Model.Shutter.Root:FindFirstChildWhichIsA("ClickDetector", true)
                 if s then fireclickdetector(s) end
             end)
         end
     end
 end)
-
-if player.UserId == 817571515 then
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/refs/heads/main/thefuni.lua"))()
-end

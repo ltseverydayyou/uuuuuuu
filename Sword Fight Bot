@@ -1,45 +1,63 @@
 getgenv().swordtGayFighterAhh = false
 
-local p = game:GetService("Players")
+local function SafeGetService(name)
+    local service = (cloneref and cloneref(game:GetService(name))) or game:GetService(name)
+    return service
+end
+
+local p = SafeGetService("Players")
 local l = p.LocalPlayer
 local m = l:GetMouse()
-local rs = game:GetService("RunService")
-local uis = game:GetService("UserInputService")
+local rs = SafeGetService("RunService")
+local uis = SafeGetService("UserInputService")
 
-function protectUI(sGui)
-	local function blank(...) return ... end
-	local cloneref = cloneref or blank
-	local function safe(s) return cloneref(game:GetService(s)) or game:GetService(s) end
-	if sGui:IsA("ScreenGui") then
-		sGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+local function protectUI(sGui)
+    if sGui:IsA("ScreenGui") then
+        sGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
 		sGui.DisplayOrder = 999999999
 		sGui.ResetOnSpawn = false
 		sGui.IgnoreGuiInset = true
+    end
+    local cGUI = SafeGetService("CoreGui")
+    local lPlr = SafeGetService("Players").LocalPlayer
+
+    local function NAProtection(inst, var)
+        if inst then
+            if var then
+                inst[var] = "\0"
+                inst.Archivable = false
+            else
+                inst.Name = "\0"
+                inst.Archivable = false
+            end
+        end
+    end
+
+    if gethui then
+		NAProtection(sGui)
+		sGui.Parent = gethui()
+		return sGui
+	elseif cGUI and cGUI:FindFirstChild("RobloxGui") then
+		NAProtection(sGui)
+		sGui.Parent = cGUI:FindFirstChild("RobloxGui")
+		return sGui
+	elseif cGUI then
+		NAProtection(sGui)
+		sGui.Parent = cGUI
+		return sGui
+	elseif lPlr and lPlr:FindFirstChild("PlayerGui") then
+		NAProtection(sGui)
+		sGui.Parent = lPlr:FindFirstChild("PlayerGui")
+		sGui.ResetOnSpawn = false
+		return sGui
+	else
+		return nil
 	end
-	local cg = safe("CoreGui")
-	local pl = safe("Players").LocalPlayer
-	local function hide(inst, var)
-		if inst then
-			if var then inst[var] = "\0" else inst.Name = "\0" end
-			inst.Archivable = false
-		end
-	end
-	if cg and cg:FindFirstChild("RobloxGui") then
-		hide(sGui)
-		sGui.Parent = cg:FindFirstChild("RobloxGui")
-	elseif cg then
-		hide(sGui)
-		sGui.Parent = cg
-	elseif pl and pl:FindFirstChild("PlayerGui") then
-		hide(sGui)
-		sGui.Parent = pl:FindFirstChild("PlayerGui")
-	end
-	return sGui
 end
 
 NAdragV2 = function(ui, drag)
 	if not drag then drag = ui end
-	local uis = game:GetService("UserInputService")
+	local uis = SafeGetService("UserInputService")
 	local sg = ui:FindFirstAncestorWhichIsA("ScreenGui") or ui.Parent
 	local d, i, s, p
 

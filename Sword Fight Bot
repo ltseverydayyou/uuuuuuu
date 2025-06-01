@@ -237,43 +237,48 @@ local currentTrackedTarget
 
 task.spawn(function()
 	while task.wait() do
-		if swordtGayFighterAhh and l.Character and getRoot(l.Character) then
-			local t = gc()
-			local myRoot = getRoot(l.Character)
-			local myHum = getPlrHum(l)
+		local s,f = pcall(function()
+			if swordtGayFighterAhh and l.Character and getRoot(l.Character) then
+				local t = gc()
+				local myRoot = getRoot(l.Character)
+				local myHum = getPlrHum(l.Character)
 
-			if t and t.Character and getRoot(t.Character) then
-				local targetRoot = getRoot(t.Character)
-				local targetPos = Vector3.new(targetRoot.Position.X, myRoot.Position.Y, targetRoot.Position.Z)
-				myRoot.CFrame = CFrame.new(myRoot.Position, targetPos) * CFrame.Angles(0, math.rad(25), 0)
-				local moveTarget = Vector3.new(targetRoot.Position.X - 3, myRoot.Position.Y, targetRoot.Position.Z)
-				myHum:MoveTo(moveTarget)
+				if t and t.Character and getRoot(t.Character) and myHum then
+					local targetRoot = getRoot(t.Character)
+					local targetPos = Vector3.new(targetRoot.Position.X, myRoot.Position.Y, targetRoot.Position.Z)
+					myRoot.CFrame = CFrame.new(myRoot.Position, targetPos) * CFrame.Angles(0, math.rad(25), 0)
+					local moveTarget = Vector3.new(targetRoot.Position.X - 3, myRoot.Position.Y, targetRoot.Position.Z)
+					myHum:MoveTo(moveTarget)
 
-				if not currentTrackedTarget or currentTrackedTarget ~= t then
-					if currentTargetConnection then
-						currentTargetConnection:Disconnect()
-						currentTargetConnection = nil
-					end
+					if not currentTrackedTarget or currentTrackedTarget ~= t then
+						if currentTargetConnection then
+							currentTargetConnection:Disconnect()
+							currentTargetConnection = nil
+						end
 
-					local targetHum = getPlrHum(t)
-					if targetHum then
-						currentTargetConnection = targetHum.StateChanged:Connect(function(_, newState)
-							if swordtGayFighterAhh and (newState == Enum.HumanoidStateType.Freefall or newState == Enum.HumanoidStateType.Jumping) then
-								if myHum and myHum:GetState() ~= Enum.HumanoidStateType.Freefall and myHum:GetState() ~= Enum.HumanoidStateType.Jumping then
-									myHum:ChangeState(Enum.HumanoidStateType.Jumping)
+						local targetHum = getPlrHum(t)
+						if targetHum then
+							currentTargetConnection = targetHum.StateChanged:Connect(function(_, newState)
+								if swordtGayFighterAhh and (newState == Enum.HumanoidStateType.Freefall or newState == Enum.HumanoidStateType.Jumping) then
+									if myHum and myHum:GetState() ~= Enum.HumanoidStateType.Freefall and myHum:GetState() ~= Enum.HumanoidStateType.Jumping then
+										myHum:ChangeState(Enum.HumanoidStateType.Jumping)
+									end
 								end
-							end
-						end)
-						currentTrackedTarget = t
+							end)
+							currentTrackedTarget = t
+						end
 					end
 				end
+			else
+				if currentTargetConnection then
+					currentTargetConnection:Disconnect()
+					currentTargetConnection = nil
+					currentTrackedTarget = nil
+				end
 			end
-		else
-			if currentTargetConnection then
-				currentTargetConnection:Disconnect()
-				currentTargetConnection = nil
-				currentTrackedTarget = nil
-			end
+		end)
+		if not s then
+			warn("Error in Sword Fighter Bot: "..tostring(f))
 		end
 	end
 end)

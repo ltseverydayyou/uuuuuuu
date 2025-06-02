@@ -1,8 +1,9 @@
 if game.GameId == 1524368576 then
     local function ClonedService(name)
-    local service = (cloneref and cloneref(game:GetService(name))) or game:GetService(name)
-    return service
-end
+        local Service = (game.GetService);
+        local Reference = (cloneref) or function(reference) return reference end
+        return Reference(Service(game, name));
+    end
     local plr = ClonedService("Players").LocalPlayer
     local ui = plr.PlayerGui
     local rs = ClonedService("RunService")

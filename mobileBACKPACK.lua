@@ -7,8 +7,9 @@ if not game:IsLoaded() then
 end
 
 local function SafeGetService(name)
-    local service = (cloneref and cloneref(game:GetService(name))) or game:GetService(name)
-    return service
+    local Service = (game.GetService);
+	local Reference = (cloneref) or function(reference) return reference end
+	return Reference(Service(game, name));
 end
 
 --[[if not SafeGetService("UserInputService").TouchEnabled then
@@ -16,7 +17,7 @@ end
 end]]
 
 function guiCHECKINGAHHHHH()
-	return (gethui and gethui()) or SafeGetService("CoreGui"):FindFirstChild("RobloxGui") or SafeGetService("CoreGui") or SafeGetService("Players").LocalPlayer:FindFirstChild("PlayerGui")
+	return (gethui and gethui()) or SafeGetService("CoreGui"):FindFirstChild("RobloxGui") or SafeGetService("CoreGui") or SafeGetService("Players").LocalPlayer:FindFirstChildWhichIsA("PlayerGui")
 end
 
 local p = SafeGetService("Players").LocalPlayer

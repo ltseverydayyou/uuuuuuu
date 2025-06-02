@@ -1,8 +1,9 @@
 if game.GameId == 5170973975 then
     local function ClonedService(name)
-    local service = (cloneref and cloneref(game:GetService(name))) or game:GetService(name)
-    return service
-end
+        local Service = (game.GetService);
+        local Reference = (cloneref) or function(reference) return reference end
+        return Reference(Service(game, name));
+    end
 repeat wait() until
 ClonedService("Players").LocalPlayer.PlayerGui.AreaGui.Enabled == true
 

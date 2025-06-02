@@ -3,8 +3,9 @@ if getgenv().PressureBallsLoaded then return end
 pcall(function() getgenv().PressureBallsLoaded = true end)
 
 local function ClonedService(name)
-    local service = (cloneref and cloneref(game:GetService(name))) or game:GetService(name)
-    return service
+    local Service = (game.GetService);
+	local Reference = (cloneref) or function(reference) return reference end
+	return Reference(Service(game, name));
 end
 
 local ScreenGui = Instance.new("ScreenGui")
@@ -59,9 +60,9 @@ local function protectUI(sGui)
 		NAProtection(sGui)
 		sGui.Parent = cGUI
 		return sGui
-	elseif lPlr and lPlr:FindFirstChild("PlayerGui") then
+	elseif lPlr and lPlr:FindFirstChildWhichIsA("PlayerGui") then
 		NAProtection(sGui)
-		sGui.Parent = lPlr:FindFirstChild("PlayerGui")
+		sGui.Parent = lPlr:FindFirstChildWhichIsA("PlayerGui")
 		sGui.ResetOnSpawn = false
 		return sGui
 	else

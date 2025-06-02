@@ -1,4 +1,9 @@
 if game.GameId == 5205364928 then
+	local function ClonedService(name)
+		local Service = (game.GetService);
+		local Reference = (cloneref) or function(reference) return reference end
+		return Reference(Service(game, name));
+	end
 	getgenv().kill_aura = false
 	getgenv().tween = false
 	getgenv().tele = false
@@ -7,9 +12,9 @@ if game.GameId == 5205364928 then
 	getgenv().aura = 20
 	getgenv().ragdoll = false
 
-	local plrs = game:GetService("Players")
-	local rs = game:GetService("RunService")
-	local ts = game:GetService("TweenService")
+	local plrs = ClonedService("Players")
+	local rs = ClonedService("RunService")
+	local ts = ClonedService("TweenService")
 	
 	getgenv().Char = plrs.LocalPlayer.Character or plrs.LocalPlayer.CharacterAdded:Wait()
 
@@ -118,8 +123,8 @@ Tab:CreateSlider({
 				if v.Character and v.Character:FindFirstChildOfClass("Humanoid") and v.Character:FindFirstChild("HumanoidRootPart") then
 					local distance = (char:FindFirstChild("HumanoidRootPart").Position - v.Character:FindFirstChild("HumanoidRootPart").Position).Magnitude
 					if distance <= getgenv().aura then
-						local hitEvent = game:GetService("ReplicatedStorage"):FindFirstChild("RemoteEvents"):FindFirstChild("Combat"):FindFirstChild("Hit")
-						local hitboxEvent = game:GetService("ReplicatedStorage"):FindFirstChild("RemoteEvents"):FindFirstChild("Combat"):FindFirstChild("HitboxCollision")
+						local hitEvent = ClonedService("ReplicatedStorage"):FindFirstChild("RemoteEvents"):FindFirstChild("Combat"):FindFirstChild("Hit")
+						local hitboxEvent = ClonedService("ReplicatedStorage"):FindFirstChild("RemoteEvents"):FindFirstChild("Combat"):FindFirstChild("HitboxCollision")
 
 						if hitEvent and hitboxEvent then
 							hitEvent:FireServer()

@@ -1,3 +1,5 @@
+-- sneaky ass new anticheat pressure devs
+
 if getgenv().PressureBallsLoaded then return end
 
 pcall(function() getgenv().PressureBallsLoaded = true end)
@@ -11,12 +13,11 @@ end
 local ScreenGui = Instance.new("ScreenGui")
 local ttLabel = Instance.new("TextButton")
 local UICorner = Instance.new("UICorner")
-local rep = ClonedService("ReplicatedStorage")
 local plrUI = ClonedService("Players").LocalPlayer:WaitForChild("PlayerGui")
 local isRan = false
-local modulesToRestore = {}
+--local modulesToRestore = {}
 
-local function restoreModule(module)
+--[[local function restoreModule(module)
     if module then
         for _, child in pairs(module:GetChildren()) do
             restoreModule(child)
@@ -24,7 +25,7 @@ local function restoreModule(module)
         modulesToRestore[#modulesToRestore + 1] = {module, module.Parent}
         module:Remove()
     end
-end
+end]]
 
 local function protectUI(sGui)
     if sGui:IsA("ScreenGui") then
@@ -70,13 +71,13 @@ local function protectUI(sGui)
 	end
 end
 
-local success, errorMsg = pcall(function()
+--[[local success, errorMsg = pcall(function()
     restoreModule(rep:FindFirstChild("PermanentEyefestation", true))
     restoreModule(rep:FindFirstChild("Searchlight", true))
     restoreModule(plrUI:FindFirstChild("LocalParasites", true))
     restoreModule(plrUI:FindFirstChild("LocalSquiddles", true))
     restoreModule(plrUI:FindFirstChild("LocalEntities", true))
-end)
+end)]]
 
 ClonedService("Players").LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid").Died:Connect(function()
     task.spawn(function()
@@ -88,7 +89,6 @@ ClonedService("Players").LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid"
     end)
 end)
 
-ScreenGui.Name = "\0"
 protectUI(ScreenGui)
 ttLabel.Name = "\0"
 ttLabel.Parent = ScreenGui
@@ -118,9 +118,12 @@ local function removeKillables(eye)
     end
 
     local lowerName = eye.Name:lower()
-    if lowerName == "eyes" or lowerName == "eye" or lowerName == "damageparts" or lowerName == "damagepart" or (lowerName == "pandemonium" and eye:IsA("Part")) or lowerName == "monsterlocker" or lowerName == "tricksterroom" then
-        task.wait()
-        eye:Destroy()
+    if lowerName == "eyes" or lowerName == "eye" or lowerName == "damageparts" or
+       lowerName == "damagepart" or (lowerName == "pandemonium" and eye:IsA("BasePart")) or
+       lowerName == "monsterlocker" or lowerName == "tricksterroom" then
+        task.defer(function()
+            eye:Destroy()
+        end)
     end
 end
 

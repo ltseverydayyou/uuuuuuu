@@ -77,7 +77,7 @@ end
     restoreModule(plrUI:FindFirstChild("LocalParasites", true))
     restoreModule(plrUI:FindFirstChild("LocalSquiddles", true))
     restoreModule(plrUI:FindFirstChild("LocalEntities", true))
-end)]]
+end)
 
 ClonedService("Players").LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid").Died:Connect(function()
     task.spawn(function()
@@ -87,7 +87,7 @@ ClonedService("Players").LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid"
             end)
         end
     end)
-end)
+end)]]
 
 protectUI(ScreenGui)
 ttLabel.Name = "\0"
@@ -95,7 +95,7 @@ ttLabel.Parent = ScreenGui
 ttLabel.BackgroundColor3 = Color3.fromRGB(4, 4, 4)
 ttLabel.BackgroundTransparency = 1.0
 ttLabel.AnchorPoint = Vector2.new(0.5, 0.5)
-ttLabel.Position = UDim2.new(0.5, 0, 0, 0)
+ttLabel.Position = UDim2.new(0.5, 0, 0.05, 0)
 ttLabel.Size = UDim2.new(0, 32, 0, 33)
 ttLabel.Font = Enum.Font.SourceSansBold
 ttLabel.Text = "God Mode (click)"
@@ -118,9 +118,7 @@ local function removeKillables(eye)
     end
 
     local lowerName = eye.Name:lower()
-    if lowerName == "eyes" or lowerName == "eye" or lowerName == "damageparts" or
-       lowerName == "damagepart" or (lowerName == "pandemonium" and eye:IsA("BasePart")) or
-       lowerName == "monsterlocker" or lowerName == "tricksterroom" then
+    if lowerName == "eyes" or lowerName == "eye" or lowerName == "damageparts" or lowerName == "damagepart" or (lowerName == "pandemonium" and eye:IsA("BasePart")) or lowerName == "monsterlocker" or lowerName == "tricksterroom" then
         task.defer(function()
             eye:Destroy()
         end)

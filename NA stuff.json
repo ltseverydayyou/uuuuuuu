@@ -1,4 +1,4 @@
 {
-  "ver": "2.4.4",
-  "annc": ""
+  "ver": "2.4.5",
+  "annc": "Most commands for setting up keybinds and other options have been moved to the settings menu (use the 'settings' command)"
 }

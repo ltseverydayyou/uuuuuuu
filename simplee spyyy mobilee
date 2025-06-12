@@ -18,56 +18,6 @@ configsmetatable.__index = function(self,index)
     return realconfigs[index]
 end
 
-local function ClonedService(name)
-    local Service = (game.GetService);
-	local Reference = (cloneref) or function(reference) return reference end
-	return Reference(Service(game, name));
-end
-
-local function protectUI(sGui)
-    if sGui:IsA("ScreenGui") then
-        sGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
-		sGui.DisplayOrder = 999999999
-		sGui.ResetOnSpawn = false
-		sGui.IgnoreGuiInset = true
-    end
-    local cGUI = ClonedService("CoreGui")
-    local lPlr = ClonedService("Players").LocalPlayer
-
-    local function NAProtection(inst, var)
-        if inst then
-            if var then
-                inst[var] = "\0"
-                inst.Archivable = false
-            else
-                inst.Name = "\0"
-                inst.Archivable = false
-            end
-        end
-    end
-
-    if gethui then
-		NAProtection(sGui)
-		sGui.Parent = gethui()
-		return sGui
-	elseif cGUI and cGUI:FindFirstChild("RobloxGui") then
-		NAProtection(sGui)
-		sGui.Parent = cGUI:FindFirstChild("RobloxGui")
-		return sGui
-	elseif cGUI then
-		NAProtection(sGui)
-		sGui.Parent = cGUI
-		return sGui
-	elseif lPlr and lPlr:FindFirstChildWhichIsA("PlayerGui") then
-		NAProtection(sGui)
-		sGui.Parent = lPlr:FindFirstChildWhichIsA("PlayerGui")
-		sGui.ResetOnSpawn = false
-		return sGui
-	else
-		return nil
-	end
-end
-
 local oth = syn and syn.oth
 local unhook = oth and oth.unhook
 local hook = oth and oth.hook
@@ -149,6 +99,56 @@ local function Create(instance, properties, children)
     return obj;
 end
 
+local function SafeGetService(name)
+    local Service = (game.GetService);
+    local Reference = (cloneref) or function(reference) return reference end
+    return Reference(Service(game, name));
+end
+
+local function protectUI(sGui)
+    if sGui:IsA("ScreenGui") then
+        sGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+		sGui.DisplayOrder = 999999999
+		sGui.ResetOnSpawn = false
+		--sGui.IgnoreGuiInset = true
+    end
+    local cGUI = SafeGetService("CoreGui")
+    local lPlr = SafeGetService("Players").LocalPlayer
+
+    local function NAProtection(inst, var)
+        if inst then
+            if var then
+                inst[var] = "\0"
+                inst.Archivable = false
+            else
+                inst.Name = "\0"
+                inst.Archivable = false
+            end
+        end
+    end
+
+    if gethui then
+		NAProtection(sGui)
+		sGui.Parent = gethui()
+		return sGui
+	elseif cGUI and cGUI:FindFirstChild("RobloxGui") then
+		NAProtection(sGui)
+		sGui.Parent = cGUI:FindFirstChild("RobloxGui")
+		return sGui
+	elseif cGUI then
+		NAProtection(sGui)
+		sGui.Parent = cGUI
+		return sGui
+	elseif lPlr and lPlr:FindFirstChildWhichIsA("PlayerGui") then
+		NAProtection(sGui)
+		sGui.Parent = lPlr:FindFirstChildWhichIsA("PlayerGui")
+		sGui.ResetOnSpawn = false
+		return sGui
+	else
+		return nil
+	end
+end
+
 local function Search(logtable,tbl)
     table.insert(logtable,tbl)
     
@@ -165,7 +165,7 @@ local function IsCyclicTable(tbl)
     local function SearchTable(tbl)
         table.insert(checkedtables,tbl)
         
-        for i,v in tbl do
+        for i,v in next, tbl do -- Stupid mistake on my part thanks 59it for pointing it out
             if type(v) == "table" then
                 return table.find(checkedtables,v) and true or SearchTable(v)
             end
@@ -219,15 +219,15 @@ local function rawtostring(userdata)
 	return tostring(userdata)
 end
 
-local CoreGui = ClonedService("CoreGui")
-local Players = ClonedService("Players")
-local RunService = ClonedService("RunService")
-local UserInputService = ClonedService("UserInputService")
-local TweenService = ClonedService("TweenService")
-local ContentProvider = ClonedService("ContentProvider")
-local TextService = ClonedService("TextService")
-local http = ClonedService("HttpService")
-local GuiInset = ClonedService("GuiService"):GetGuiInset() :: Vector2 -- pulled from rewrite
+local CoreGui = SafeGetService("CoreGui")
+local Players = SafeGetService("Players")
+local RunService = SafeGetService("RunService")
+local UserInputService = SafeGetService("UserInputService")
+local TweenService = SafeGetService("TweenService")
+local ContentProvider = SafeGetService("ContentProvider")
+local TextService = SafeGetService("TextService")
+local http = SafeGetService("HttpService")
+local GuiInset = SafeGetService("GuiService"):GetGuiInset() :: Vector2 -- pulled from rewrite
 
 local function jsone(str) return http:JSONEncode(str) end
 local function jsond(str)
@@ -284,27 +284,26 @@ local ImageLabel_2 = Create("ImageLabel",{Parent = MaximizeButton,BackgroundColo
 local MinimizeButton = Create("TextButton",{Parent = TopBar,BackgroundColor3 = Color3.new(0.145098, 0.141176, 0.14902),BorderSizePixel = 0,Position = UDim2.new(1, -57, 0, 0),Size = UDim2.new(0, 19, 0, 19),Font = Enum.Font.SourceSans,Text = "",TextColor3 = Color3.new(0, 0, 0),TextSize = 14})
 local ImageLabel_3 = Create("ImageLabel",{Parent = MinimizeButton,BackgroundColor3 = Color3.new(1, 1, 1),BackgroundTransparency = 1,Position = UDim2.new(0, 5, 0, 5),Size = UDim2.new(0, 9, 0, 9),Image = "http://www.roblox.com/asset/?id=5597105827"})
 local gui = Create("ScreenGui",{Parent = Background})
-local nextb = Create("ImageButton", {Parent = gui})
+local nextb = Create("TextButton", {Parent = gui})
 local gui = Create("UICorner", {Parent = nextb})
-
-Background.Active = true
-Background.Draggable = true
-
-nextb.Position = UDim2.new(0,100,0,60)
-nextb.Size = UDim2.new(0,40,0,40)
-nextb.BackgroundColor3 = Color3.fromRGB(53, 52, 55)
-nextb.Image = "rbxassetid://7072719338"
-nextb.Active = true
-nextb.Draggable = true
-nextb.MouseButton1Click:connect(function()
-nextb.Image = (Background.Visible and "rbxassetid://7072720870") or "rbxassetid://7072719338"
-Background.Visible = not Background.Visible
-end)
-
 local ToolTip = Create("Frame",{Parent = SimpleSpy3,BackgroundColor3 = Color3.fromRGB(26, 26, 26),BackgroundTransparency = 0.1,BorderColor3 = Color3.new(1, 1, 1),Size = UDim2.new(0, 200, 0, 50),ZIndex = 3,Visible = false})
 local TextLabel = Create("TextLabel",{Parent = ToolTip,BackgroundColor3 = Color3.new(1, 1, 1),BackgroundTransparency = 1,Position = UDim2.new(0, 2, 0, 2),Size = UDim2.new(0, 196, 0, 46),ZIndex = 3,Font = Enum.Font.SourceSans,Text = "This is some slightly longer text.",TextColor3 = Color3.new(1, 1, 1),TextSize = 14,TextWrapped = true,TextXAlignment = Enum.TextXAlignment.Left,TextYAlignment = Enum.TextYAlignment.Top})
 
 -------------------------------------------------------------------------------
+
+nextb.Position = UDim2.new(0,100,0,60)
+nextb.Size = UDim2.new(0,35,0,35)
+nextb.BackgroundColor3 = Color3.fromRGB(53, 52, 55)
+nextb.Text = "-"
+nextb.TextScaled = true
+nextb.TextColor3 = Color3.fromRGB(255, 255, 255)
+nextb.Active = true
+nextb.Draggable = true
+nextb.MouseButton1Click:connect(function()
+    nextb.Text = (Background.Visible and "+") or "-"
+    Background.Visible = not Background.Visible
+end)
+
 
 local selectedColor = Color3.new(0.321569, 0.333333, 1)
 local deselectedColor = Color3.new(0.8, 0.8, 0.8)
@@ -1471,7 +1470,7 @@ function i2p(i,customgen)
     elseif parent ~= game then
         while true do
             if parent and parent.Parent == game then
-                if ClonedService(parent.ClassName) then
+                if game:FindService(parent.ClassName) then  -- You arent getting clout off of this
                     if lower(parent.ClassName) == "workspace" then
                         return `workspace{out}`
                     else

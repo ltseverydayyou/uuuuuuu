@@ -1,41 +1,43 @@
-if game.GameId==6352299542 then
-    local function ClonedService(name)
-        local service = (cloneref and cloneref(game:GetService(name))) or game:GetService(name)
-        return service
-    end
-    local rs = ClonedService("ReplicatedStorage")
-    local p = ClonedService("Players")
-    local lp = p.LocalPlayer
-    local c = lp.Character
-    local hm = c:FindFirstChild("HealthManager", true)
-    local r = rs:WaitForChild("Remotes")
-    local dc = r:WaitForChild("DamageCall")
-    local runService = ClonedService("RunService")
-    local a = { -9999999999999 }
+local GAME_ID = 6352299542
+if game.GameId ~= GAME_ID then return end
 
-    local function hp()
-        task.spawn(function()
-            dc:FireServer(unpack(a))
-        end)
-    end
+local function getSvc(name)
+    return (cloneref and cloneref(game:GetService(name))) or game:GetService(name)
+end
 
-    hm:GetPropertyChangedSignal("Value"):Connect(function()
-        task.spawn(hp)
+local repS = getSvc("ReplicatedStorage")
+local pls  = getSvc("Players")
+local runS = getSvc("RunService")
+
+local pl = pls.LocalPlayer or pls.PlayerAdded:Wait()
+local ch = pl.Character    or pl.CharacterAdded:Wait()
+local hm = ch:WaitForChild("HealthManager", 5)
+if not hm then return end
+
+local r   = repS:WaitForChild("Remotes")
+local dc  = r:WaitForChild("DamageCall")
+local dmg = { -99999999999 }
+
+local function sendD()
+    task.spawn(function()
+        dc:FireServer(table.unpack(dmg))
     end)
+end
 
-    runService.RenderStepped:Connect(function()
-        task.spawn(hp)
-    end)
-    if hookmetamethod then
-        local namecall
-        namecall = hookmetamethod(game, "__namecall", function(self, ...)
-            local method = getnamecallmethod():lower()
-            if not checkcaller() and self == dc and (method == "invokeserver" or method == "fireserver") then
-                local args = {...}
-                args[1] = -9999999999999
-                return namecall(self, unpack(args))
+hm:GetPropertyChangedSignal("Value"):Connect(sendD)
+runS.Stepped:Connect(sendD)
+
+if hookmetamethod then
+    local orig
+    orig = hookmetamethod(game, "__namecall", function(self, ...)
+        if not checkcaller() and self == dc then
+            local m = getnamecallmethod():lower()
+            if m == "fireserver" or m == "invokeserver" then
+                local a = {...}
+                a[1] = dmg[1]
+                return orig(self, table.unpack(a))
             end
-            return namecall(self, ...)
-        end)
-    end
+        end
+        return orig(self, ...)
+    end)
 end

@@ -111,7 +111,7 @@ task.spawn(function()
             while running do
                 local RL=C:FindFirstChild("Right Leg")
                 local FA=RL and RL:FindFirstChild("RightFootAttachment")
-                if KR and FA then pcall(function()KR:FireServer(false,FA)end)end
+                if KR and FA then pcall(function()KR:FireServer(false,FA)end) pcall(function()KR:FireServer(0,FA)end)end
                 task.wait()
             end
         end) end

@@ -8,7 +8,7 @@ local P=PS.LocalPlayer or PS.PlayerAdded:Wait()
 local GUI=P:FindFirstChild("PlayerGui") or P:WaitForChild("PlayerGui")
 if GUI then
     local ROG=GUI:FindFirstChild("ResetOnSpawnGui")
-    if ROG then ROG.Enabled=false ROG.ResetOnSpawn=false end
+    if ROG then ROG:Destroy() end
     local MG=GUI:FindFirstChild("MainGui")
     local TH=MG and MG:FindFirstChild("MainTextHolder")
     local TG=TH and TH:FindFirstChild("TextGenerator")

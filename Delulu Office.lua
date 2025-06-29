@@ -60,7 +60,7 @@ task.spawn(function()
     btn.Text="Auto Kick"
     btn.Size=UDim2.new(0,100,0,30)
     btn.AnchorPoint=Vector2.new(0.5,0)
-    btn.Position=UDim2.new(0.5,0,0,3)
+    btn.Position=UDim2.new(0.5,0,0,10)
     btn.BackgroundColor3=Color3.fromRGB(70,70,70)
     btn.TextColor3=Color3.fromRGB(255,255,255)
     btn.BorderSizePixel=0

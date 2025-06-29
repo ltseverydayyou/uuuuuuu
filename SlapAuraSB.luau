@@ -7,7 +7,7 @@ local U=game:GetService"UserInputService"
 local pl=P.LocalPlayer
 local m={}
 for _,v in ipairs(R:GetDescendants())do if v:IsA"RemoteEvent"and v.Name:lower():sub(-3)=="hit"then m[#m+1]=v end end
-local rad,dt=20,1.3
+local rad,dt=15,0.7
 local root,A,ig=false
 
 local function g(c) return c:FindFirstChild"HumanoidRootPart"or c:FindFirstChild"Torso"end

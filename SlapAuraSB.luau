@@ -1,4 +1,3 @@
-if not game.GameId==2380077519 then return 'wrong game buddy' end
 local P=game:GetService"Players"
 local R=game:GetService"ReplicatedStorage"
 local RS=game:GetService"RunService"
@@ -67,7 +66,7 @@ T.BorderSizePixel=0
 Instance.new("UICorner",T).CornerRadius=UDim.new(0.5,0)
 T.MouseButton1Click:Connect(function()ig=not ig;T.Text=ig and"Ignore Friends: On"or"Ignore Friends: Off"end)
 
-local dragging,dragInput,dragStart,startPos
+local dragInput,dragStart,startPos,dragging
 c.InputBegan:Connect(function(i)
     if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
         dragging=true;dragStart=i.Position;startPos=c.Position
@@ -76,9 +75,9 @@ c.InputBegan:Connect(function(i)
 end)
 c.InputChanged:Connect(function(i)if i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch then dragInput=i end end)
 U.InputChanged:Connect(function(i)
-    if i==dragInput and dragging then
-        local d=i.Position-dragStart
-        c.Position=UDim2.new(startPos.X.Scale,startPos.X.Offset+d.X,startPos.Y.Scale,startPos.Y.Offset+d.Y)
+    if dragging and i==dragInput then
+        local delta=i.Position-dragStart
+        c.Position=UDim2.new(startPos.X.Scale,startPos.X.Offset+delta.X,startPos.Y.Scale,startPos.Y.Offset+delta.Y)
     end
 end)
 
@@ -90,19 +89,24 @@ task.spawn(function()
         if nr and nr~=rad then rad=nr; if A then TS:Create(A,TweenInfo.new(0.5,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{Size=Vector3.new(rad*2,rad*2,rad*2)}):Play()end end
         local nd=tonumber(dB.Text)
         if nd then dt=nd end
+
         if root then
-            local tgt,bd
+            local inRange={}
             for _,plr in ipairs(P:GetPlayers())do
                 if plr~=pl and plr.Character and (not ig or not pl:IsFriendsWith(plr.UserId)) then
                     local p=g(plr.Character)
-                    if p then
-                        local d=(p.Position-root.Position).Magnitude
-                        if d<=rad and (not bd or d<bd)then tgt,bd=p,d end
+                    if p and (p.Position-root.Position).Magnitude<=rad then
+                        inRange[#inRange+1]=p
                     end
                 end
             end
-            if tgt then for _,e in ipairs(m)do e:FireServer(tgt)end end
+            for _,tgt in ipairs(inRange)do
+                for _,e in ipairs(m)do
+                    e:FireServer(tgt)
+                end
+            end
         end
+
         task.wait(dt)
     end
 end)

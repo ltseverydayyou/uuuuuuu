@@ -6,7 +6,7 @@ local TS=game:GetService"TweenService"
 local U=game:GetService"UserInputService"
 local pl=P.LocalPlayer
 local m={}
-for _,v in ipairs(R:GetDescendants())do if v:IsA"RemoteEvent"and v.Name:lower():sub(-3)=="hit"then m[#m+1]=v end end
+for _,v in ipairs(R:GetDescendants())do if v:IsA"RemoteEvent"and v.Name:lower():sub(-3)=="hit" or v.Name:lower()=="disarmh" or v.Name:lower()=="b" or v.Name:lower()=="htstun" then m[#m+1]=v end end
 local rad,dt=20,0.7
 local root,A,ig=false
 

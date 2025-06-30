@@ -26,7 +26,7 @@ local function gR()
     return t
 end
 local m=gR()
-local rd,dt=20,0.7
+local rd,dt=20,0.85
 local rt,ar,ig
 local function g(c) return c:FindFirstChild"HumanoidRootPart"or c:FindFirstChild"Torso" end
 local function cA() if ar then ar:Destroy() end; ar=Instance.new("Part",workspace); ar.Name="Aura"; ar.Shape=Enum.PartType.Ball; ar.Anchored=true; ar.CanCollide=false; ar.CastShadow=false; ar.Material=Enum.Material.SmoothPlastic; ar.Transparency=0.9; ar.Size=Vector3.new(rd*2,rd*2,rd*2) end

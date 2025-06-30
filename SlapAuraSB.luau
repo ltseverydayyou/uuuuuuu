@@ -37,8 +37,8 @@ local function makeAura()
     aura.Anchored=true
     aura.CanCollide=false
     aura.CastShadow=false
-    aura.Material=Enum.Material.SmoothPlastic
-    aura.Transparency=0.9
+    aura.Material=Enum.Material.ForceField
+    aura.Transparency=0
     aura.Size=Vector3.new(rad*2,rad*2,rad*2)
 end
 local function onChar(c)

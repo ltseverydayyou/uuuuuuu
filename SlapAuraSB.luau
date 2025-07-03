@@ -183,21 +183,35 @@ RunService.RenderStepped:Connect(function()
         for _,other in ipairs(Players:GetPlayers()) do
             if other~=localPlayer and other.Character and (not ignoreFriends or not localPlayer:IsFriendsWith(other.UserId)) then
                 local rp=getRootPart(other.Character)
-                if rp and (rp.Position-rootPart.Position).Magnitude<=radius then
+                local flag=other.Character:FindFirstChild("isInArena") or other.Character:FindFirstChild("IsInDefaultArena")
+                if flag and flag.Value then
                     if not loops[other] then
                         loops[other]=true
                         task.spawn(function()
                             while loops[other] and auraEnabled do
                                 local tp=getRootPart(other.Character)
-                                if not tp or (tp.Position-rootPart.Position).Magnitude>radius then break end
+                                if not tp then break end
                                 for _,ev in ipairs(attackRemotes) do ev:FireServer(tp) end
                                 task.wait(delay)
                             end
                             loops[other]=nil
                         end)
                     end
-                else
+                    continue
+                end
+                if not rp then
                     loops[other]=nil
+                else
+                    loops[other]=true
+                    task.spawn(function()
+                        while loops[other] and auraEnabled do
+                            local tp=getRootPart(other.Character)
+                            if not tp or (tp.Position-rootPart.Position).Magnitude>radius then break end
+                            for _,ev in ipairs(attackRemotes) do ev:FireServer(tp) end
+                            task.wait(delay)
+                        end
+                        loops[other]=nil
+                    end)
                 end
             else
                 loops[other]=nil

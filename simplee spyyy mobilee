@@ -283,27 +283,23 @@ local MaximizeButton = Create("TextButton",{Parent = TopBar,BackgroundColor3 = C
 local ImageLabel_2 = Create("ImageLabel",{Parent = MaximizeButton,BackgroundColor3 = Color3.new(1, 1, 1),BackgroundTransparency = 1,Position = UDim2.new(0, 5, 0, 5),Size = UDim2.new(0, 9, 0, 9),Image = "http://www.roblox.com/asset/?id=5597108117"})
 local MinimizeButton = Create("TextButton",{Parent = TopBar,BackgroundColor3 = Color3.new(0.145098, 0.141176, 0.14902),BorderSizePixel = 0,Position = UDim2.new(1, -57, 0, 0),Size = UDim2.new(0, 19, 0, 19),Font = Enum.Font.SourceSans,Text = "",TextColor3 = Color3.new(0, 0, 0),TextSize = 14})
 local ImageLabel_3 = Create("ImageLabel",{Parent = MinimizeButton,BackgroundColor3 = Color3.new(1, 1, 1),BackgroundTransparency = 1,Position = UDim2.new(0, 5, 0, 5),Size = UDim2.new(0, 9, 0, 9),Image = "http://www.roblox.com/asset/?id=5597105827"})
-local gui = Create("ScreenGui",{Parent = Background})
-local nextb = Create("TextButton", {Parent = gui})
-local gui = Create("UICorner", {Parent = nextb})
+local nextb = Create("TextButton", {
+    Parent = SimpleSpy3,
+    Position = UDim2.new(0,100,0,60),
+    ZIndex = 5,
+    BackgroundColor3 = Color3.fromRGB(53, 52, 55),
+    Text = "-",
+    TextScaled = true,
+    TextColor3 = Color3.fromRGB(255, 255, 255),
+    AutoButtonColor = false,
+    Size = UDim2.new(0,35,0,35),
+    Active = true
+})
+Create("UICorner", { Parent = nextb })
 local ToolTip = Create("Frame",{Parent = SimpleSpy3,BackgroundColor3 = Color3.fromRGB(26, 26, 26),BackgroundTransparency = 0.1,BorderColor3 = Color3.new(1, 1, 1),Size = UDim2.new(0, 200, 0, 50),ZIndex = 3,Visible = false})
 local TextLabel = Create("TextLabel",{Parent = ToolTip,BackgroundColor3 = Color3.new(1, 1, 1),BackgroundTransparency = 1,Position = UDim2.new(0, 2, 0, 2),Size = UDim2.new(0, 196, 0, 46),ZIndex = 3,Font = Enum.Font.SourceSans,Text = "This is some slightly longer text.",TextColor3 = Color3.new(1, 1, 1),TextSize = 14,TextWrapped = true,TextXAlignment = Enum.TextXAlignment.Left,TextYAlignment = Enum.TextYAlignment.Top})
 
 -------------------------------------------------------------------------------
-
-nextb.Position = UDim2.new(0,100,0,60)
-nextb.Size = UDim2.new(0,35,0,35)
-nextb.BackgroundColor3 = Color3.fromRGB(53, 52, 55)
-nextb.Text = "-"
-nextb.TextScaled = true
-nextb.TextColor3 = Color3.fromRGB(255, 255, 255)
-nextb.Active = true
-nextb.Draggable = true
-nextb.MouseButton1Click:connect(function()
-    nextb.Text = (Background.Visible and "+") or "-"
-    Background.Visible = not Background.Visible
-end)
-
 
 local selectedColor = Color3.new(0.321569, 0.333333, 1)
 local deselectedColor = Color3.new(0.8, 0.8, 0.8)
@@ -2051,6 +2047,39 @@ end
             - blacklist: (string[] | Instance[] (RemoteEvent) | Instance[] (RemoteFunction)) an array of blacklisted names and remotes
             - codebox: (Instance (TextBox)) the textbox that holds all the code- cleared often
 ]]
+
+do
+    nextb.MouseButton1Click:Connect(function()
+        Background.Visible = not Background.Visible
+        nextb.Text = Background.Visible and "-" or "+"
+    end)
+    nextb.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        local lastPos = UserInputService:GetMouseLocation()
+        local startPos = nextb.AbsolutePosition
+        if not connections["dragNextb"] then
+            connections["dragNextb"] = RunService.RenderStepped:Connect(function()
+                local newPos = UserInputService:GetMouseLocation()
+                if newPos ~= lastPos then
+                    local dx, dy = newPos.X - lastPos.X, newPos.Y - lastPos.Y
+                    startPos = startPos + Vector2.new(dx, dy)
+                    nextb.Position = UDim2.fromOffset(startPos.X, startPos.Y)
+                    lastPos = newPos
+                end
+            end)
+        end
+        table.insert(connections, UserInputService.InputEnded:Connect(function(e)
+            if e == input and connections["dragNextb"] then
+                connections["dragNextb"]:Disconnect()
+                connections["dragNextb"] = nil
+            end
+        end))
+    end
+end)
+
+end
+
+
 -- Copies the contents of the codebox
 newButton(
     "Copy Code",

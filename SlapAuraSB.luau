@@ -1,4 +1,4 @@
-if game.GameId ~= 2380077519 then return 'wrong game buddy' end
+if game.GameId ~= 2380077519 then return end
 local Players           = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService        = game:GetService("RunService")

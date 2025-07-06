@@ -103,7 +103,7 @@ task.spawn(function()
         if running then task.spawn(function()
             local KR
             repeat
-                task.wait(1)
+                task.wait(0.1)
                 KR=C:FindFirstChild("MainControls") and C.MainControls:FindFirstChild("ScriptsForCall") and C.MainControls.ScriptsForCall:FindFirstChild("KickRemote")
             until KR
             while running do

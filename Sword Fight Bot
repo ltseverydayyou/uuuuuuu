@@ -214,8 +214,8 @@ end
 local function setupUI()
 	local gui=protectUI(Instance.new("ScreenGui"))
 	if UserInput.TouchEnabled then
-		local t=makeButton{Parent=gui;Size=UDim2.new(0,80,0,30);AnchorPoint=Vector2.new(0.5,1);Position=UDim2.new(0.5,0,1,-40);Text="Bot: OFF"}
-		local m=makeButton{Parent=gui;Size=UDim2.new(0,80,0,30);AnchorPoint=Vector2.new(0.5,1);Position=UDim2.new(0.5,0,1,-80);Text="Mode: Player"}
+		local t=makeButton{Parent=gui;Size=UDim2.new(0,80,0,30);AnchorPoint=Vector2.new(0.5,1);Position=UDim2.new(0.47, 0,0.95, 0);Text="Bot: OFF"}
+		local m=makeButton{Parent=gui;Size=UDim2.new(0,80,0,30);AnchorPoint=Vector2.new(0.5,1);Position=UDim2.new(0.53, 0,0.95, 0);Text="Mode: Player"}
 		t.MouseButton1Click:Connect(function()
 			getgenv().swordFighterActive=not getgenv().swordFighterActive
 			if getHum() then getHum().AutoRotate=not getgenv().swordFighterActive end
@@ -229,9 +229,10 @@ local function setupUI()
 	else
 		pcLabel=Instance.new("TextLabel")
 		pcLabel.Size=UDim2.new(0,300,0,30); pcLabel.AnchorPoint=Vector2.new(0.5,1)
-		pcLabel.Position=UDim2.new(0.5,0,1,-20); pcLabel.Font=Enum.Font.GothamBold
+		pcLabel.Position=UDim2.new(0.5,0,0.95,0); pcLabel.Font=Enum.Font.GothamBold
 		pcLabel.TextScaled=true; pcLabel.BackgroundColor3=Color3.fromRGB(30,30,30)
 		pcLabel.TextColor3=Color3.new(1,1,1); pcLabel.Parent=gui
+		NAdragV2(pcLabel)
 		Instance.new("UICorner",pcLabel).CornerRadius=UDim.new(0.25,0)
 		updatePCLabel()
 	end

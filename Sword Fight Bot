@@ -1,28 +1,30 @@
-getgenv().swordtGayFighterAhh = false
+getgenv().swordFighterActive = false
+getgenv().targetMode = "Player"
 
 local function SafeGetService(name)
-	local Service = (game.GetService);
-	local Reference = (cloneref) or function(reference) return reference end
-	return Reference(Service(game, name));
+	local Service = game.GetService
+	local Reference = cloneref or function(r) return r end
+	return Reference(Service(game, name))
 end
 
-local p = SafeGetService("Players")
-local l = p.LocalPlayer
-local m = l:GetMouse()
-local rs = SafeGetService("RunService")
-local uis = SafeGetService("UserInputService")
+local Players     = SafeGetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local Mouse       = LocalPlayer:GetMouse()
+local RunService  = SafeGetService("RunService")
+local UserInput   = SafeGetService("UserInputService")
+local Workspace   = workspace
 
 local function getRoot(char)
 	if not char or not char:IsA("Model") then return nil end
 	if char:IsA("Player") then char = char.Character end
 	local fallback
-	for _, v in pairs(char:GetDescendants()) do
+	for _,v in pairs(char:GetDescendants()) do
 		if not v:IsA("BasePart") then continue end
-		local name = v.Name:lower()
-		if name == "humanoidrootpart" or name == "torso" or name == "uppertorso" or name == "lowertorso" then
+		local n=v.Name:lower()
+		if n=="humanoidrootpart" or n=="torso" or n=="uppertorso" or n=="lowertorso" then
 			return v
 		elseif not fallback then
-			fallback = v
+			fallback=v
 		end
 	end
 	return fallback
@@ -32,13 +34,13 @@ local function getTorso(char)
 	if not char or not char:IsA("Model") then return nil end
 	if char:IsA("Player") then char = char.Character end
 	local fallback
-	for _, v in pairs(char:GetDescendants()) do
+	for _,v in pairs(char:GetDescendants()) do
 		if not v:IsA("BasePart") then continue end
-		local name = v.Name:lower()
-		if name == "torso" or name == "uppertorso" or name == "lowertorso" or name == "humanoidrootpart" then
+		local n=v.Name:lower()
+		if n=="torso" or n=="uppertorso" or n=="lowertorso" or n=="humanoidrootpart" then
 			return v
 		elseif not fallback then
-			fallback = v
+			fallback=v
 		end
 	end
 	return fallback
@@ -48,278 +50,267 @@ local function getHead(char)
 	if not char or not char:IsA("Model") then return nil end
 	if char:IsA("Player") then char = char.Character end
 	local fallback
-	for _, v in pairs(char:GetDescendants()) do
+	for _,v in pairs(char:GetDescendants()) do
 		if not v:IsA("BasePart") then continue end
-		local name = v.Name:lower()
-		if name == "head" then
+		local n=v.Name:lower()
+		if n=="head" then
 			return v
 		elseif not fallback then
-			fallback = v
+			fallback=v
 		end
 	end
 	return fallback
 end
 
 local function getChar()
-	return p.LocalPlayer.Character
+	return Players.LocalPlayer.Character
 end
 
 local function getPlrChar(plr)
-	return plr:IsA("Player") and plr.Character or plr or nil
-end
-
-local function getBp()
-	return p.LocalPlayer:FindFirstChildWhichIsA("Backpack")
+	if plr:IsA("Player") then return plr.Character end
+	return plr
 end
 
 local function getHum()
-	local char = getChar()
-	if not char then return nil end
-	for _, v in pairs(char:GetDescendants()) do
+	local c=getChar()
+	if not c then return nil end
+	for _,v in pairs(c:GetDescendants()) do
 		if v:IsA("Humanoid") then return v end
 	end
 	return nil
 end
 
 local function getPlrHum(pp)
-	local char = (pp:IsA("Player") and getPlrChar(pp)) or pp
-	if not char then return nil end
-	for _, v in pairs(char:GetDescendants()) do
+	local c=pp:IsA("Player") and getPlrChar(pp) or pp
+	if not c then return nil end
+	for _,v in pairs(c:GetDescendants()) do
 		if v:IsA("Humanoid") then return v end
 	end
 	return nil
 end
 
-local function protectUI(sGui)
-	if sGui:IsA("ScreenGui") then
-		sGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
-		sGui.DisplayOrder = 999999999
-		sGui.ResetOnSpawn = false
-		sGui.IgnoreGuiInset = true
+local function CheckIfNPC(c)
+	if c and c:IsA("Model") then
+		local h=c:FindFirstChildOfClass("Humanoid")
+		if h and not Players:GetPlayerFromCharacter(c) then
+			return true
+		end
 	end
+	return false
+end
 
-	local cGUI = SafeGetService("CoreGui")
-	local lPlr = SafeGetService("Players").LocalPlayer
-
-	local function NAProtection(inst, var)
-		if inst then
-			if var then
-				inst[var] = "\0"
-				inst.Archivable = false
-			else
-				inst.Name = "\0"
-				inst.Archivable = false
+local function gcPlayer()
+	local best,bd=nil,math.huge
+	local my=getRoot(getChar())
+	if not my then return nil end
+	for _,p in pairs(Players:GetPlayers()) do
+		if p~=LocalPlayer then
+			local char=getPlrChar(p)
+			local hrp=getRoot(char)
+			local hum=getPlrHum(p)
+			if hrp and hum and hum.Health>0 then
+				local d=(hrp.Position-my.Position).Magnitude
+				if d<bd then best,bd=p,d end
 			end
 		end
 	end
-
-	if gethui then
-		NAProtection(sGui)
-		sGui.Parent = gethui()
-	elseif cGUI and cGUI:FindFirstChild("RobloxGui") then
-		NAProtection(sGui)
-		sGui.Parent = cGUI:FindFirstChild("RobloxGui")
-	elseif cGUI then
-		NAProtection(sGui)
-		sGui.Parent = cGUI
-	elseif lPlr and lPlr:FindFirstChildWhichIsA("PlayerGui") then
-		NAProtection(sGui)
-		sGui.Parent = lPlr:FindFirstChildWhichIsA("PlayerGui")
-		sGui.ResetOnSpawn = false
-	end
-
-	return sGui
+	return best
 end
 
-NAdragV2 = function(ui, drag)
-	if not drag then drag = ui end
-	local sg = ui:FindFirstAncestorWhichIsA("ScreenGui") or ui.Parent
-	local d, i, s, p
-
-	local function upd(inp)
-		local delta = inp.Position - s
-		local ps = sg.AbsoluteSize
-		local us = ui.AbsoluteSize
-		local nx = p.X.Scale + (delta.X / ps.X)
-		local ny = p.Y.Scale + (delta.Y / ps.Y)
-		local a = ui.AnchorPoint
-		local minX = a.X * (us.X / ps.X)
-		local maxX = 1 - (1 - a.X) * (us.X / ps.X)
-		local minY = a.Y * (us.Y / ps.Y)
-		local maxY = 1 - (1 - a.Y) * (us.Y / ps.Y)
-		nx = math.clamp(nx, minX, maxX)
-		ny = math.clamp(ny, minY, maxY)
-		ui.Position = UDim2.new(nx, 0, ny, 0)
+local function gcNPC()
+	local best,bd=nil,math.huge
+	local my=getRoot(getChar())
+	if not my then return nil end
+	for _,o in pairs(Workspace:GetDescendants()) do
+		if CheckIfNPC(o) then
+			local hrp=getRoot(o)
+			local hum=getPlrHum(o)
+			if hrp and hum and hum.Health>0 then
+				local d=(hrp.Position-my.Position).Magnitude
+				if d<bd then best,bd=o,d end
+			end
+		end
 	end
+	return best
+end
 
+local function protectUI(s)
+	if s:IsA("ScreenGui") then
+		s.ZIndexBehavior=Enum.ZIndexBehavior.Global
+		s.DisplayOrder=999999999
+		s.ResetOnSpawn=false
+		s.IgnoreGuiInset=true
+	end
+	local core=SafeGetService("CoreGui")
+	local lp=Players.LocalPlayer
+	local function NA(i,v)
+		if i then
+			if v then i[v]="\0"; i.Archivable=false
+			else i.Name="\0"; i.Archivable=false end
+		end
+	end
+	if gethui then
+		NA(s); s.Parent=gethui()
+	elseif core and core:FindFirstChild("RobloxGui") then
+		NA(s); s.Parent=core.RobloxGui
+	elseif core then
+		NA(s); s.Parent=core
+	elseif lp and lp:FindFirstChildWhichIsA("PlayerGui") then
+		NA(s); s.Parent=lp:FindFirstChildWhichIsA("PlayerGui"); s.ResetOnSpawn=false
+	end
+	return s
+end
+
+local function NAdragV2(ui,drag)
+	if not drag then drag=ui end
+	local sg=ui:FindFirstAncestorWhichIsA("ScreenGui") or ui.Parent
+	local dragging,input0,startPos
+	local function upd(inp)
+		local delta=inp.Position-input0
+		local ps,us=sg.AbsoluteSize,ui.AbsoluteSize
+		local nx=startPos.X.Scale+delta.X/ps.X
+		local ny=startPos.Y.Scale+delta.Y/ps.Y
+		local a=ui.AnchorPoint
+		local minX=a.X*us.X/ps.X
+		local maxX=1-(1-a.X)*us.X/ps.X
+		local minY=a.Y*us.Y/ps.Y
+		local maxY=1-(1-a.Y)*us.Y/ps.Y
+		ui.Position=UDim2.new(math.clamp(nx,minX,maxX),0,math.clamp(ny,minY,maxY),0)
+	end
 	drag.InputBegan:Connect(function(inp)
-		if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
-			d, s, p = true, inp.Position, ui.Position
+		if inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch then
+			dragging,input0,startPos=true,inp.Position,ui.Position
 			inp.Changed:Connect(function()
-				if inp.UserInputState == Enum.UserInputState.End then d = false end
+				if inp.UserInputState==Enum.UserInputState.End then dragging=false end
 			end)
 		end
 	end)
-
-	drag.InputChanged:Connect(function(inp)
-		if inp.UserInputType == Enum.UserInputType.MouseMovement or inp.UserInputType == Enum.UserInputType.Touch then
-			i = inp
-		end
+	UserInput.InputChanged:Connect(function(inp)
+		if dragging then upd(inp) end
 	end)
-
-	uis.InputChanged:Connect(function(inp)
-		if inp == i and d then upd(inp) end
-	end)
-
-	sg:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-		local ps = sg.AbsoluteSize
-		local us = ui.AbsoluteSize
-		local pos = ui.Position
-		local a = ui.AnchorPoint
-		local minX = a.X * (us.X / ps.X)
-		local maxX = 1 - (1 - a.X) * (us.X / ps.X)
-		local minY = a.Y * (us.Y / ps.Y)
-		local maxY = 1 - (1 - a.Y) * (us.Y / ps.Y)
-		local nx = math.clamp(pos.X.Scale, minX, maxX)
-		local ny = math.clamp(pos.Y.Scale, minY, maxY)
-		ui.Position = UDim2.new(nx, 0, ny, 0)
-	end)
-
-	ui.Active = true
+	sg:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() ui.Position=ui.Position end)
+	ui.Active=true
 end
 
-rs.RenderStepped:Connect(function()
-	if swordtGayFighterAhh then
-		task.spawn(function()
-			local t = l.Character and l.Character:FindFirstChildOfClass("Tool")
-			if t and t:FindFirstChild("Handle") then
-				t:Activate()
-				for _, v in pairs(p:GetPlayers()) do
-					if v ~= l and v.Character then
-						local ch = v.Character
-						local h = getPlrHum(v)
-						local hrp = getRoot(ch)
-						if h and h.Health > 0 and hrp and (l:DistanceFromCharacter(hrp.Position) <= 8) then
-							for _, bp in pairs(ch:GetChildren()) do
-								if bp:IsA("BasePart") then
-									firetouchinterest(t.Handle, bp, 0)
-									firetouchinterest(t.Handle, bp, 1)
-								end
-							end
-						end
-					end
-				end
-			end
+local function makeButton(p)
+	local b=Instance.new("TextButton")
+	b.Size=p.Size; b.Position=p.Position; b.AnchorPoint=p.AnchorPoint or Vector2.new(0,0)
+	b.Text=p.Text or ""; b.Font=p.Font or Enum.Font.GothamBold; b.TextScaled=true
+	b.BackgroundColor3=p.BGColor or Color3.fromRGB(30,30,30); b.TextColor3=p.TextColor3 or Color3.new(1,1,1)
+	b.Parent=p.Parent
+	Instance.new("UICorner",b).CornerRadius=UDim.new(0.25,0)
+	return b
+end
+
+local pcLabel
+local function updatePCLabel()
+	if pcLabel then
+		pcLabel.Text="Bot: "..(getgenv().swordFighterActive and "ON" or "OFF")
+			.." | Mode: "..getgenv().targetMode
+			.." | X: Toggle | C: Switch"
+	end
+end
+
+local function setupUI()
+	local gui=protectUI(Instance.new("ScreenGui"))
+	if UserInput.TouchEnabled then
+		local t=makeButton{Parent=gui;Size=UDim2.new(0,80,0,30);AnchorPoint=Vector2.new(0.5,1);Position=UDim2.new(0.5,0,1,-40);Text="Bot: OFF"}
+		local m=makeButton{Parent=gui;Size=UDim2.new(0,80,0,30);AnchorPoint=Vector2.new(0.5,1);Position=UDim2.new(0.5,0,1,-80);Text="Mode: Player"}
+		t.MouseButton1Click:Connect(function()
+			getgenv().swordFighterActive=not getgenv().swordFighterActive
+			if getHum() then getHum().AutoRotate=not getgenv().swordFighterActive end
+			t.Text=getgenv().swordFighterActive and "Bot: ON" or "Bot: OFF"
 		end)
+		m.MouseButton1Click:Connect(function()
+			getgenv().targetMode=getgenv().targetMode=="Player" and "NPC" or "Player"
+			m.Text="Mode: "..getgenv().targetMode
+		end)
+		NAdragV2(t); NAdragV2(m)
+	else
+		pcLabel=Instance.new("TextLabel")
+		pcLabel.Size=UDim2.new(0,300,0,30); pcLabel.AnchorPoint=Vector2.new(0.5,1)
+		pcLabel.Position=UDim2.new(0.5,0,1,-20); pcLabel.Font=Enum.Font.GothamBold
+		pcLabel.TextScaled=true; pcLabel.BackgroundColor3=Color3.fromRGB(30,30,30)
+		pcLabel.TextColor3=Color3.new(1,1,1); pcLabel.Parent=gui
+		Instance.new("UICorner",pcLabel).CornerRadius=UDim.new(0.25,0)
+		updatePCLabel()
+	end
+end
+
+setupUI()
+
+Mouse.KeyDown:Connect(function(k)
+	k=k:lower()
+	if k=="x" then
+		getgenv().swordFighterActive=not getgenv().swordFighterActive
+		if getHum() then getHum().AutoRotate=not getgenv().swordFighterActive end
+		updatePCLabel()
+	elseif k=="c" then
+		getgenv().targetMode=getgenv().targetMode=="Player" and "NPC" or "Player"
+		updatePCLabel()
 	end
 end)
 
-local function gc()
-	local cp, d = nil, math.huge
-	for _, v in pairs(p:GetPlayers()) do
-		if v ~= l and v.Character then
-			local ch = v.Character
-			local hrp = getRoot(ch)
-			local h = getPlrHum(v)
-			if hrp and h and h.Health > 0 and not ch:FindFirstChildOfClass("ForceField") then
-				local mag = (hrp.Position - getRoot(l.Character).Position).Magnitude
-				if mag < d then
-					cp = v
-					d = mag
-				end
+RunService.RenderStepped:Connect(function()
+	if not getgenv().swordFighterActive then return end
+	local tool=LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
+	if not tool or not tool:FindFirstChild("Handle") then return end
+	tool:Activate()
+	local myRoot=getRoot(getChar()); local myHum=getHum()
+	if not myRoot or not myHum then return end
+	local target
+	if getgenv().targetMode=="Player" then target=gcPlayer() else target=gcNPC() end
+	if not target then return end
+	local model=getgenv().targetMode=="Player" and getPlrChar(target) or target
+	local tr=getRoot(model)
+	if not tr then return end
+	tr = tr
+	local aim=Vector3.new(tr.Position.X,myRoot.Position.Y,tr.Position.Z)
+	myRoot.CFrame=CFrame.new(myRoot.Position,aim)
+	myHum:MoveTo(tr.Position-(tr.CFrame.LookVector*3))
+	if (myRoot.Position-tr.Position).Magnitude<=8 then
+		for _,p in pairs(model:GetChildren()) do
+			if p:IsA("BasePart") then
+				firetouchinterest(tool.Handle,p,0)
+				firetouchinterest(tool.Handle,p,1)
 			end
 		end
 	end
-	return cp
-end
+end)
 
-local currentTargetConnection
-local currentTrackedTarget
-
+local ctConn,ctTarget
 task.spawn(function()
 	while task.wait() do
-		local s,f = pcall(function()
-			if swordtGayFighterAhh and l.Character and getRoot(l.Character) then
-				local t = gc()
-				local myRoot = getRoot(l.Character)
-				local myHum = getPlrHum(l.Character)
-
-				if t and t.Character and getRoot(t.Character) and myHum then
-					local targetRoot = getRoot(t.Character)
-					local targetPos = Vector3.new(targetRoot.Position.X, myRoot.Position.Y, targetRoot.Position.Z)
-					myRoot.CFrame = CFrame.new(myRoot.Position, targetPos) * CFrame.Angles(0, math.rad(25), 0)
-					local moveTarget = Vector3.new(targetRoot.Position.X - 3, myRoot.Position.Y, targetRoot.Position.Z)
-					myHum:MoveTo(moveTarget)
-
-					if not currentTrackedTarget or currentTrackedTarget ~= t then
-						if currentTargetConnection then
-							currentTargetConnection:Disconnect()
-							currentTargetConnection = nil
+		if getgenv().swordFighterActive and getRoot(getChar()) then
+			local tgt= getgenv().targetMode=="Player" and gcPlayer() or gcNPC()
+			local hum = tgt and getPlrHum(getgenv().targetMode=="Player" and getPlrChar(tgt) or tgt)
+			if hum and hum.Health>0 then
+				if hum~=ctTarget then
+					if ctConn then ctConn:Disconnect() end
+					ctConn=hum.StateChanged:Connect(function(_,ns)
+						if getgenv().swordFighterActive and (ns==Enum.HumanoidStateType.Freefall or ns==Enum.HumanoidStateType.Jumping) then
+							local mh=getHum()
+							if mh and mh:GetState()~=Enum.HumanoidStateType.Freefall and mh:GetState()~=Enum.HumanoidStateType.Jumping then
+								mh:ChangeState(Enum.HumanoidStateType.Jumping)
+							end
 						end
-
-						local targetHum = getPlrHum(t)
-						if targetHum then
-							currentTargetConnection = targetHum.StateChanged:Connect(function(_, newState)
-								if swordtGayFighterAhh and (newState == Enum.HumanoidStateType.Freefall or newState == Enum.HumanoidStateType.Jumping) then
-									if myHum and myHum:GetState() ~= Enum.HumanoidStateType.Freefall and myHum:GetState() ~= Enum.HumanoidStateType.Jumping then
-										myHum:ChangeState(Enum.HumanoidStateType.Jumping)
-									end
-								end
-							end)
-							currentTrackedTarget = t
-						end
-					end
+					end)
+					ctTarget=hum
 				end
 			else
-				if currentTargetConnection then
-					currentTargetConnection:Disconnect()
-					currentTargetConnection = nil
-					currentTrackedTarget = nil
-				end
+				if ctConn then ctConn:Disconnect() end
+				ctTarget=nil
 			end
-		end)
-		if not s then
-			warn("Error in Sword Fighter Bot: "..tostring(f))
+		else
+			if ctConn then ctConn:Disconnect() end
+			ctTarget=nil
 		end
 	end
 end)
 
 task.spawn(function()
-	local ch = l.Character or l.CharacterAdded:Wait()
-	local h = ch:WaitForChild("Humanoid")
-	h:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
-	h:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
-end)
-
-if uis.TouchEnabled then
-	local gui = protectUI(Instance.new("ScreenGui"))
-	local b = Instance.new("TextButton", gui)
-	b.Size = UDim2.new(0, 120, 0, 50)
-	b.AnchorPoint = Vector2.new(0.5,0)
-	b.Position = UDim2.new(0.5, 0, 0.9, 0)
-	b.AnchorPoint = Vector2.new(0, 1)
-	b.Text = "Sword Fighter: OFF"
-	b.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-	b.TextColor3 = Color3.new(1, 1, 1)
-	b.Font = Enum.Font.GothamBold
-	b.TextScaled = true
-
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0.25, 0)
-	corner.Parent = b
-
-	b.MouseButton1Click:Connect(function()
-		swordtGayFighterAhh = not swordtGayFighterAhh
-		l.Character.Humanoid.AutoRotate = not swordtGayFighterAhh
-		b.Text = swordtGayFighterAhh and "Sword Fighter: ON" or "Sword Fighter: OFF"
-	end)
-
-	NAdragV2(b)
-end
-
-m.KeyDown:Connect(function(k)
-	if k:lower() == "x" then
-		swordtGayFighterAhh = not swordtGayFighterAhh
-		l.Character.Humanoid.AutoRotate = not swordtGayFighterAhh
-	end
+	local ch=LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+	local h=getHum()
+	h:SetStateEnabled(Enum.HumanoidStateType.FallingDown,false)
+	h:SetStateEnabled(Enum.HumanoidStateType.Ragdoll,false)
 end)

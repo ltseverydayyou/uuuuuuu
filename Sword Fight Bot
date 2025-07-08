@@ -269,7 +269,7 @@ RunService.RenderStepped:Connect(function()
 	local aim=Vector3.new(tr.Position.X,myRoot.Position.Y,tr.Position.Z)
 	myRoot.CFrame=CFrame.new(myRoot.Position,aim)
 	myHum:MoveTo(tr.Position-(tr.CFrame.LookVector*3))
-	if (myRoot.Position-tr.Position).Magnitude<=8 then
+	if (myRoot.Position-tr.Position).Magnitude<=15 then
 		for _,p in pairs(model:GetChildren()) do
 			if p:IsA("BasePart") then
 				firetouchinterest(tool.Handle,p,0)

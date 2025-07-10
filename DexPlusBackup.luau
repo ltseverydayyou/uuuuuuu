@@ -1,3 +1,10 @@
+--[[
+	Dex++
+	Beta 1.5.0 Version
+	
+	Dex++ is a revival of Moon's Dex, made to fulfill Moon's Dex prophecy.
+]]
+
 local selection
 local nodes = {}
 
@@ -10,7 +17,7 @@ local EmbeddedModules = {
 	
 	Yes this does not exist on original Dex
 ]]
-
+loadstring = (game:GetService("RunService"):IsStudio() and require(script.Parent.Loadstring)) or loadstring
 -- Common Locals
 local Main,Lib,Apps,Settings -- Main Containers
 local Explorer, Properties, Console, Notebook -- Major Apps
@@ -679,7 +686,7 @@ local function main()
 		end)
 
 		local focussedOutput
-
+		
 		LogService.MessageOut:Connect(function(msg, msgtype)
 			local formattedText = ""
 			local unformattedText = ""
@@ -1652,6 +1659,7 @@ local function main()
 		context:AddRegistered("PASTE", emptyClipboard)
 		context:AddRegistered("DUPLICATE")
 		context:AddRegistered("DELETE")
+		context:AddRegistered("DELETE_CHILDREN", #sList ~= 1)
 		context:AddRegistered("RENAME", #sList ~= 1)
 
 		context:AddDivider()
@@ -1804,7 +1812,14 @@ local function main()
 			end
 			selection:Clear()
 		end})
-
+		
+		context:Register("DELETE_CHILDREN",{Name = "Delete Children", IconMap = Explorer.MiscIcons, Icon = "Delete", DisabledIcon = "Delete_Disabled", Shortcut = "Shift+Del", OnClick = function()
+			local sList = selection.List
+			for i = 1,#sList do
+				pcall(sList[i].Obj.ClearAllChildren,sList[i].Obj)
+			end
+			selection:Clear()
+		end})
 		context:Register("RENAME",{Name = "Rename", IconMap = Explorer.MiscIcons, Icon = "Rename", DisabledIcon = "Rename_Disabled", Shortcut = "F2", OnClick = function()
 			local sList = selection.List
 			if sList[1] then
@@ -2505,104 +2520,318 @@ local function main()
 
 		Explorer.InsertObjectContext = context
 	end
+	
+	--[[
+		Headers, Setups, Predicate, ObjectDefs
+	]]
+	Explorer.SearchFilters = { -- TODO: Use data table (so we can disable some if funcs don't exist)
+		Comparison = {
+			["isa"] = function(argString)
+				local lower = string.lower
+				local find = string.find
+				local classQuery = string.split(argString)[1]
+				if not classQuery then return end
+				classQuery = lower(classQuery)
 
-	Explorer._SearchFilters = {} do
-		local Filters = Explorer._SearchFilters
+				local className
+				for class,_ in pairs(API.Classes) do
+					local cName = lower(class)
+					if cName == classQuery then
+						className = class
+						break
+					elseif find(cName,classQuery,1,true) then
+						className = class
+					end
+				end
+				if not className then return end
 
-		local function NewFilter(list, func)
-			for _,v in next, list do
-				Filters[v:lower() .. ":"] = func
+				return {
+					Headers = {"local isa = game.IsA"},
+					Predicate = "isa(obj,'"..className.."')"
+				}
+			end,
+			["remotes"] = function(argString)
+				return {
+					Headers = {"local isa = game.IsA"},
+					Predicate = "isa(obj,'RemoteEvent') or isa(obj,'RemoteFunction')"
+				}
+			end,
+			["bindables"] = function(argString)
+				return {
+					Headers = {"local isa = game.IsA"},
+					Predicate = "isa(obj,'BindableEvent') or isa(obj,'BindableFunction')"
+				}
+			end,
+			["rad"] = function(argString)
+				local num = tonumber(argString)
+				if not num then return end
+
+				if not service.Players.LocalPlayer.Character or not service.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart") or not service.Players.LocalPlayer.Character.HumanoidRootPart:IsA("BasePart") then return end
+
+				return {
+					Headers = {"local isa = game.IsA", "local hrp = service.Players.LocalPlayer.Character.HumanoidRootPart"},
+					Setups = {"local hrpPos = hrp.Position"},
+					ObjectDefs = {"local isBasePart = isa(obj,'BasePart')"},
+					Predicate = "(isBasePart and (obj.Position-hrpPos).Magnitude <= "..num..")"
+				}
+			end,
+		},
+		Specific = {
+			["players"] = function()
+				return function() return service.Players:GetPlayers() end
+			end,
+			["loadedmodules"] = function()
+				return env.getloadedmodules
+			end,
+		},
+		Default = function(argString,caseSensitive)
+			local cleanString = argString:gsub("\"","\\\""):gsub("\n","\\n")
+			if caseSensitive then
+				return {
+					Headers = {"local find = string.find"},
+					ObjectDefs = {"local objName = tostring(obj)"},
+					Predicate = "find(objName,\"" .. cleanString .. "\",1,true)"
+				}
+			else
+				return {
+					Headers = {"local lower = string.lower","local find = string.find","local tostring = tostring"},
+					ObjectDefs = {"local lowerName = lower(tostring(obj))"},
+					Predicate = "find(lowerName,\"" .. cleanString:lower() .. "\",1,true)"
+				}
+			end
+		end,
+		SpecificDefault = function(n)
+			return {
+				Headers = {},
+				ObjectDefs = {"local isSpec"..n.." = specResults["..n.."][node]"},
+				Predicate = "isSpec"..n
+			}
+		end,
+	}
+
+	Explorer.BuildSearchFunc = function(query)
+		local specFilterList,specMap = {},{}
+		local finalPredicate = ""
+		local rep = string.rep
+		local formatQuery = query:gsub("\\.","  "):gsub('".-"',function(str) return rep(" ",#str) end)
+		local headers = {}
+		local objectDefs = {}
+		local setups = {}
+		local find = string.find
+		local sub = string.sub
+		local lower = string.lower
+		local match = string.match
+		local ops = {
+			["("] = "(",
+			[")"] = ")",
+			["||"] = " or ",
+			["&&"] = " and "
+		}
+		local filterCount = 0
+		local compFilters = Explorer.SearchFilters.Comparison
+		local specFilters = Explorer.SearchFilters.Specific
+		local init = 1
+		local lastOp = nil
+
+		local function processFilter(dat)
+			if dat.Headers then
+				local t = dat.Headers
+				for i = 1,#t do
+					headers[t[i]] = true
+				end
+			end
+
+			if dat.ObjectDefs then
+				local t = dat.ObjectDefs
+				for i = 1,#t do
+					objectDefs[t[i]] = true
+				end
+			end
+
+			if dat.Setups then
+				local t = dat.Setups
+				for i = 1,#t do
+					setups[t[i]] = true
+				end
+			end
+
+			finalPredicate = finalPredicate..dat.Predicate
+		end
+
+		local found = {}
+		local foundData = {}
+		local find = string.find
+		local sub = string.sub
+
+		local function findAll(str,pattern)
+			local count = #found+1
+			local init = 1
+			local sz = #pattern
+			local x,y,extra = find(str,pattern,init,true)
+			while x do
+				found[count] = x
+				foundData[x] = {sz,pattern}
+
+				count = count+1
+				init = y+1
+				x,y,extra = find(str,pattern,init,true)
+			end
+		end
+		local start = tick()
+		findAll(formatQuery,'&&')
+		findAll(formatQuery,"||")
+		findAll(formatQuery,"(")
+		findAll(formatQuery,")")
+		table.sort(found)
+		table.insert(found,#formatQuery+1)
+
+		local function inQuotes(str)
+			local len = #str
+			if sub(str,1,1) == '"' and sub(str,len,len) == '"' then
+				return sub(str,2,len-1)
 			end
 		end
 
-		local Only = {
-			remotes = {"RemoteEvent", "RemoteFunction", "BindableEvent", "BindableFunction"},
-			scripts = {"Script", "LocalScript", "ModuleScript"},
-			players = {"Player"}
-		}
+		for i = 1,#found do
+			local nextInd = found[i]
+			local nextData = foundData[nextInd] or {1}
+			local op = ops[nextData[2]]
+			local term = sub(query,init,nextInd-1)
+			term = match(term,"^%s*(.-)%s*$") or "" -- Trim
 
-		NewFilter({"parent", "p"}, function(Obj, str) return Obj.Parent and (Obj.Parent.Name:lower()):find(str) end)
-		NewFilter({"class", "c"}, function(Obj, str) return (Obj.ClassName:lower()):find(str) end)
-		NewFilter({"isa", "i"}, function(Obj, str) return Obj:IsA(str) end)
+			if #term > 0 then
+				if sub(term,1,1) == "!" then
+					term = sub(term,2)
+					finalPredicate = finalPredicate.."not "
+				end
 
-		NewFilter({"only", "o"}, function(Obj, str)
-			local Special = Only[str]
-			return Special and table.find(Special, Obj.ClassName)
-		end)
+				local qTerm = inQuotes(term)
+				if qTerm then
+					processFilter(Explorer.SearchFilters.Default(qTerm,true))
+				else
+					local x,y = find(term,"%S+")
+					if x then
+						local first = sub(term,x,y)
+						local specifier = sub(first,1,1) == "/" and lower(sub(first,2))
+						local compFunc = specifier and compFilters[specifier]
+						local specFunc = specifier and specFilters[specifier]
+
+						if compFunc then
+							local argStr = sub(term,y+2)
+							local ret = compFunc(inQuotes(argStr) or argStr)
+							if ret then
+								processFilter(ret)
+							else
+								finalPredicate = finalPredicate.."false"
+							end
+						elseif specFunc then
+							local argStr = sub(term,y+2)
+							local ret = specFunc(inQuotes(argStr) or argStr)
+							if ret then
+								if not specMap[term] then
+									specFilterList[#specFilterList + 1] = ret
+									specMap[term] = #specFilterList
+								end
+								processFilter(Explorer.SearchFilters.SpecificDefault(specMap[term]))
+							else
+								finalPredicate = finalPredicate.."false"
+							end
+						else
+							processFilter(Explorer.SearchFilters.Default(term))
+						end
+					end
+				end				
+			end
+
+			if op then
+				finalPredicate = finalPredicate..op
+				if op == "(" and (#term > 0 or lastOp == ")") then -- Handle bracket glitch
+					return
+				else
+					lastOp = op
+				end
+			end
+			init = nextInd+nextData[1]
+		end
+
+		local finalSetups = ""
+		local finalHeaders = ""
+		local finalObjectDefs = ""
+
+		for setup,_ in next,setups do finalSetups = finalSetups..setup.."\n" end
+		for header,_ in next,headers do finalHeaders = finalHeaders..header.."\n" end
+		for oDef,_ in next,objectDefs do finalObjectDefs = finalObjectDefs..oDef.."\n" end
+
+		local template = [==[
+local searchResults = searchResults
+local nodes = nodes
+local expandTable = Explorer.SearchExpanded
+local specResults = specResults
+local service = service
+
+%s
+local function search(root)	
+%s
+	
+	local expandedpar = false
+	for i = 1,#root do
+		local node = root[i]
+		local obj = node.Obj
+		
+%s
+		
+		if %s then
+			expandTable[node] = 0
+			searchResults[node] = true
+			if not expandedpar then
+				local parnode = node.Parent
+				while parnode and (not searchResults[parnode] or expandTable[parnode] == 0) do
+					expandTable[parnode] = true
+					searchResults[parnode] = true
+					parnode = parnode.Parent
+				end
+				expandedpar = true
+			end
+		end
+		
+		if #node > 0 then search(node) end
+	end
+end
+return search]==]
+
+		local funcStr = template:format(finalHeaders,finalSetups,finalObjectDefs,finalPredicate)
+		local s,func = pcall(loadstring,funcStr)
+		if not s or not func then return nil,specFilterList end
+
+		local env = setmetatable({["searchResults"] = searchResults, ["nodes"] = nodes, ["Explorer"] = Explorer, ["specResults"] = specResults,
+			["service"] = service},{__index = getfenv()})
+		setfenv(func,env)
+
+		return func(),specFilterList
 	end
 
 	Explorer.DoSearch = function(query)
 		table.clear(Explorer.SearchExpanded)
 		table.clear(searchResults)
-		expanded = (#query == 0 and Explorer.Expanded) or Explorer.SearchExpanded
+		expanded = (#query == 0 and Explorer.Expanded or Explorer.SearchExpanded)
+		searchFunc = nil
 
-		local tostr = tostring;
-		local tfind = table.find;
-
-		local Filters = Explorer._SearchFilters
-		local expandTable = Explorer.SearchExpanded
-
-		local allnodes = nodes[game]
-
-		local defaultSearch = (function(Obj, str) return (Obj.Name:lower()):find(str, 1, true) end)
-
-		local function searchTable(root, str, func)
-			local expandedpar = false
-			for _,node in ipairs(root) do
-				if func(node.Obj, str) then
-					expandTable[node] = 0
-					searchResults[node] = true
-					if not expandedpar then
-						local parnode = node.Parent
-						while parnode and (not searchResults[parnode] or expandTable[parnode] == 0) do
-							expanded[parnode] = true
-							searchResults[parnode] = true
-							parnode = parnode.Parent
-						end
-						expandedpar = true
-					end
-				end
-
-				if #node > 0 then searchTable(node, str, func) end
-			end
-		end
-
-		local function Search(query)
-			if query:len() == 0 then return end
-
-			local lower = query:lower()
-			local split = lower:split(":")
-			local Filter = (Filters[split[1] .. ":"]) or nil
-
-			if Filter then
-				searchTable(allnodes, (split[2] or ""), Filter)
-			else
-				searchTable(allnodes, (lower or ""), defaultSearch)
-			end
-		end
-
-		for _,v in ipairs(query:split(",")) do
-			if v:len() > 0 then
-				Search(v)
-			end
-		end
-
-		--[=[if #query > 0 then
+		if #query > 0 then	
 			local expandTable = Explorer.SearchExpanded
 			local specFilters
-			
+
 			local lower = string.lower
 			local find = string.find
 			local tostring = tostring
-			
+
 			local lowerQuery = lower(query)
-			
+
 			local function defaultSearch(root)
 				local expandedpar = false
 				for i = 1,#root do
 					local node = root[i]
 					local obj = node.Obj
-					
+
 					if find(lower(tostring(obj)),lowerQuery,1,true) then
 						expandTable[node] = 0
 						searchResults[node] = true
@@ -2615,10 +2844,8 @@ local function main()
 							end
 							expandedpar = true
 						end
-					elseif ExplorerSearch[lower(tostring(obj))] then
-						
 					end
-					
+
 					if #node > 0 then defaultSearch(node) end
 				end
 			end
@@ -2645,14 +2872,14 @@ local function main()
 					end
 				end
 			end
-			
+
 			if searchFunc then
 				local start = tick()
 				searchFunc(nodes[game])
 				searchFunc(nilNode)
 				--warn(tick()-start)
 			end
-		end]=]
+		end
 
 		Explorer.ForceUpdate()
 	end
@@ -2664,19 +2891,8 @@ local function main()
 	end
 
 	Explorer.InitSearch = function()
-		local TweenService = service.TweenService
-		local SearchFrame = Explorer.GuiElems.ToolBar.SearchFrame
-		local searchBox = SearchFrame.SearchBox
+		local searchBox = Explorer.GuiElems.ToolBar.SearchFrame.SearchBox
 		Explorer.GuiElems.SearchBar = searchBox
-
-		local TweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quint)
-		local Tweens = {
-			Start = TweenService:Create(SearchFrame.UIStroke, TweenInfo, { Color = Color3.fromRGB(0, 120, 215) }),
-			End = TweenService:Create(SearchFrame.UIStroke, TweenInfo, { Color = Color3.fromRGB(42, 42, 42) })
-		}
-
-		searchBox.FocusLost:Connect(function() Tweens.End:Play() end)
-		searchBox.Focused:Connect(function() Tweens.Start:Play() end)
 
 		Lib.ViewportTextBox.convert(searchBox)
 
@@ -3064,10 +3280,10 @@ return {InitDeps = initDeps, InitAfterMain = initAfterMain, Main = main}
 end,
 ["Lib"] = function()
 --[[
-			Lib Module
-			
-			Container for functions and classes
-		]]
+	Lib Module
+	
+	Container for functions and classes
+]]
 
 -- Common Locals
 local Main,Lib,Apps,Settings -- Main Containers
@@ -4573,6 +4789,11 @@ local function main()
 			self.GuiElems.Minimize = guiTopBar.Minimize
 			self.GuiElems.ResizeControls = guiResizeControls
 			self.ContentPane = guiMain.Content
+			
+			-- dont mind this, im testing what if the frame background is blurry 
+			--blur.new(guiMain.Content, "Rectangle")
+
+			--blur.updateAll()
 			
 			local ButtonDown = false
 			guiTopBar.MouseButton1Down:Connect(function() ButtonDown = true end)
@@ -9134,6 +9355,7 @@ local function main()
 					if input.UserInputType == Enum.UserInputType["MouseButton" .. button] then
 						release:Disconnect()
 						if Lib.CheckMouseInGui(item) and self.LastButton == button and self.LastItem == item then
+							self.InputDown = false -- infinite yield dev forgot to do this, and ended up OnRelease fired twice 💔
 							self["OnRelease"]:Fire(item,self.Combo,button)
 						end
 					end
@@ -9225,6 +9447,7 @@ end
 
 local function main()
 	local RunService = game:GetService("RunService")
+	local UserInputService = game:GetService("UserInputService")
 	
 	local ModelViewer = {
 		EnableInputCamera = true,
@@ -9258,31 +9481,50 @@ local function main()
 		if not item then return end
 		ModelViewer.StopViewModel(updating)
 		
-		if item:IsA("BasePart") and not item:IsA("Model") then			
-			model = Instance.new("Model")
-			model.Parent = viewportFrame
+		if item ~= workspace and not item:IsA("Terrain") then
+			-- why Model == workspace
+			-- wtf?
 			
-			local clone = item:Clone()
-			clone.Parent = model
-			model.PrimaryPart = clone
-			model:SetPrimaryPartCFrame(CFrame.new(0, 0, 0))
-		elseif item:IsA("Model") and item ~= workspace and not item:IsA("Terrain")  then
-			local noClone = false
-			if not item.Archivable then item.Archivable = true noClone = true end
-		
-			if not item.PrimaryPart then
+			if item:IsA("BasePart") and not item:IsA("Model") then			
+				model = Instance.new("Model")
+				model.Parent = viewportFrame
+
+				local clone = item:Clone()
+				clone.Parent = model
+				model.PrimaryPart = clone
+				model:SetPrimaryPartCFrame(CFrame.new(0, 0, 0))
+			elseif item:IsA("Model") then
+				item.Archivable = true
+
+			--[[if not item.PrimaryPart then
 				pathLabel.Gui.Text = "Failed to view model: No PrimaryPart is found."
 				return
+			end]]
+				if #item:GetChildren() == 0 then return end
+				
+				model = item:Clone()
+				model.Parent = viewportFrame
+
+				-- fallback
+				if not model.PrimaryPart then
+					local found = false
+					for _, child in model:GetDescendants() do
+						if child:IsA("BasePart") then
+							model.PrimaryPart = child
+							model:SetPrimaryPartCFrame(CFrame.new(0, 0, 0))
+							found = true
+							break
+						end
+					end
+					if not found then
+						model:Destroy()
+						model = nil
+						return
+					end
+				end
+			else
+				return
 			end
-			
-			model = item:Clone()
-			
-			item.Archivable = false
-			
-			model.Parent = viewportFrame
-			model:SetPrimaryPartCFrame(CFrame.new(0, 0, 0))
-		else
-			return
 		end
 		
 		originalModel = item
@@ -9339,14 +9581,18 @@ local function main()
 		settingsButton.Position = UDim2.new(1,-3,0,3)
 		settingsButton.Image = "rbxassetid://6578871732"
 		settingsButton.ImageTransparency = 0.5
+		-- mobile input check
+		if UserInputService:GetLastInputType() == Enum.UserInputType.Touch then
+			settingsButton.Visible = true
+		else
+			settingsButton.Visible = false
+		end
 
 		local rotationX, rotationY = -15, 0
 		local distance = 10
 		local dragging = false
 		local hovering = false
 		local lastpos = Vector2.zero
-
-		local UIS = game:GetService("UserInputService")
 
 		viewportFrame.InputBegan:Connect(function(input)
 			if not ModelViewer.EnableInputCamera then return end
@@ -9391,7 +9637,7 @@ local function main()
 			end
 		end)
 
-		game:GetService("RunService").RenderStepped:Connect(function()
+		RunService.RenderStepped:Connect(function()
 			if camera and model then
 				if not dragging and ModelViewer.AutoRotate then
 					rotationY += ModelViewer.RotationSpeed
@@ -11812,7 +12058,7 @@ end,
 	
 	A script viewer that is basically a notepad
 ]]
-
+loadstring = (game:GetService("RunService"):IsStudio() and require(script.Parent.Loadstring)) or loadstring
 -- Common Locals
 local Main,Lib,Apps,Settings -- Main Containers
 local Explorer, Properties, ScriptViewer, Notebook -- Major Apps
@@ -12073,12 +12319,404 @@ else
 	return {InitDeps = initDeps, InitAfterMain = initAfterMain, Main = main}
 end
 end,
+["SecretServicePanel"] = function()
+--[[
+	Secret Service Panel Module
+	
+	Ported from Serversided to Clientsided.
+]]
+loadstring = (game:GetService("RunService"):IsStudio() and require(script.Parent.Loadstring)) or loadstring
+-- Common Locals
+local Main,Lib,Apps,Settings -- Main Containers
+local Explorer, Properties, ScriptViewer, SecretServicePanel, Notebook -- Major Apps
+local API,RMD,env,service,plr,create,createSimple -- Main Locals
+
+local function initDeps(data)
+	Main = data.Main
+	Lib = data.Lib
+	Apps = data.Apps
+	Settings = data.Settings
+
+	API = data.API
+	RMD = data.RMD
+	env = data.env
+	service = data.service
+	plr = data.plr
+	create = data.create
+	createSimple = data.createSimple
+end
+
+local function initAfterMain()
+	Explorer = Apps.Explorer
+	Properties = Apps.Properties
+	ScriptViewer = Apps.ScriptViewer
+	Notebook = Apps.Notebook
+end
+
+local function main()
+	local SecretServicePanel = {}
+
+	local window,codeFrame
+
+	local output = {}
+	local outputMax = 1000
+	local outputOn = true
+
+	SecretServicePanel.ViewScript = function(scr)
+		local s,source = pcall(env.decompile or function() end,scr)
+		if not s or not source then
+			source = "local test = 5\n\nlocal c = test + tick()\ngame.Workspace.Board:Destroy()\nstring.match('wow\\'f',\"yes\",3.4e-5,true)\ngame. Workspace.Wow\nfunction bar() print(54) end\n string . match() string 4 .match()"
+			source = source.."\n"..[==[
+			function a.sad() end
+			function a.b:sad() end
+			function 4.why() end
+			function a b() end
+			function string.match() end
+			function string.match.why() end
+			function local() end
+			function local.thing() end
+			string  . "sad" match
+			().magnitude = 3
+			a..b
+			a..b()
+			a...b
+			a...b()
+			a....b
+			a....b()
+			string..match()
+			string....match()
+			]==]
+		end
+
+		codeFrame:SetText(source)
+		window:Show()
+	end
+
+	SecretServicePanel.Init = function()
+		local colorOutput = {
+			[0] = Color3.new(1,1,1),
+			[1] = Color3.new(0.4, 0.5, 1),
+			[2] = Color3.new(1, 0.6, 0.4),
+			[3] = Color3.new(1, 0, 0)	
+		}
+		
+		window = Lib.Window.new()
+		window:SetTitle("Secret Service Panel")
+		window:Resize(500,350)
+		window.PosX = 20
+		window.PosY = workspace.CurrentCamera.ViewportSize.Y - 400
+		SecretServicePanel.Window = window
+
+		local exeFrame = Instance.new("Frame")
+		exeFrame.BackgroundTransparency = 1
+		exeFrame.Position = UDim2.new(0,0,0,20)
+		exeFrame.Size = UDim2.new(1,0,1,-20)
+		exeFrame.Parent = window.GuiElems.Content
+
+		local consoleFrame = Instance.new("Frame")
+		consoleFrame.BackgroundTransparency = 1
+		consoleFrame.Position = UDim2.new(0,0,0,20)
+		consoleFrame.Size = UDim2.new(1,0,1,-20)
+		consoleFrame.Visible = false
+		consoleFrame.Parent = window.GuiElems.Content
+
+		local console
+
+		local function switchTab(tab)
+			if tab == "Executor" then
+				exeFrame.Visible = true
+				consoleFrame.Visible = false
+			else
+				exeFrame.Visible = false
+				consoleFrame.Visible = true
+
+				--[[
+				-- TODO: Remove Later when fixed
+				local f = Instance.new("Frame")
+				f.BackgroundTransparency = 1
+				f.Parent = console
+				f:Destroy()
+				]]
+			end
+		end
+
+		-- Exec
+		codeFrame = Lib.CodeFrame.new()
+		codeFrame.Frame.Position = UDim2.new(0,0,0,0)
+		codeFrame.Frame.Size = UDim2.new(1,0,1,-25)
+		codeFrame.Frame.Parent = exeFrame
+
+		-- TODO: REMOVE AND MAKE BETTER
+		local copy = Instance.new("TextButton",window.GuiElems.Content)
+		copy.BackgroundTransparency = 1
+		copy.Size = UDim2.new(0.5,0,0,20)
+		copy.Text = "Executor"
+		copy.TextColor3 = Color3.new(1,1,1)
+
+		copy.MouseButton1Click:Connect(function()
+			switchTab("Executor")
+		end)
+
+		local save = Instance.new("TextButton",window.GuiElems.Content)
+		save.BackgroundTransparency = 1
+		save.Position = UDim2.new(0.5,0,0,0)
+		save.Size = UDim2.new(0.5,0,0,20)
+		save.Text = "Console"
+		save.TextColor3 = Color3.new(1,1,1)
+
+		save.MouseButton1Click:Connect(function()
+			switchTab("Console")
+		end)
+
+		local exe = Instance.new("TextButton",exeFrame)
+		exe.BackgroundTransparency = 1
+		exe.Position = UDim2.new(0,0,1,-25)
+		exe.Size = UDim2.new(1/3,0,0,25)
+		exe.Text = "Execute"
+		exe.TextColor3 = Color3.new(1,1,1)
+
+		exe.MouseButton1Click:Connect(function()
+			local source = codeFrame:GetText()
+			loadstring(source)()
+		end)
+
+		local exeC = Instance.new("TextButton",exeFrame)
+		exeC.BackgroundTransparency = 1
+		exeC.Position = UDim2.new(1/3,0,1,-25)
+		exeC.Size = UDim2.new(1/3,0,0,25)
+		exeC.Text = "Execute & Console"
+		exeC.TextColor3 = Color3.new(1,1,1)
+
+		exeC.MouseButton1Click:Connect(function()
+			local source = codeFrame:GetText()
+			loadstring(source)()
+			
+			switchTab("Console")
+		end)
+
+		local clear = Instance.new("TextButton",exeFrame)
+		clear.BackgroundTransparency = 1
+		clear.Position = UDim2.new(2/3,0,1,-25)
+		clear.Size = UDim2.new(1/3,0,0,25)
+		clear.Text = "Clear"
+		clear.TextColor3 = Color3.new(1,1,1)
+
+		clear.MouseButton1Click:Connect(function()
+			codeFrame:SetText("")
+		end)
+
+		-- Console
+
+		console = Instance.new("Frame")
+		console.BackgroundColor3 = Color3.fromRGB(35,35,35)
+		console.BorderSizePixel = 0
+		console.Size = UDim2.new(1,-16,1,-25-16)
+		console.ClipsDescendants = true
+		console.Parent = consoleFrame
+
+		local toggle = Instance.new("TextButton",consoleFrame)
+		toggle.BackgroundTransparency = 1
+		toggle.Position = UDim2.new(0,0,1,-25)
+		toggle.Size = UDim2.new(1/2,0,0,25)
+		toggle.Text = "Toggle"
+		toggle.TextColor3 = Color3.new(1,1,1)
+
+		local update = Instance.new("TextButton",consoleFrame)
+		update.BackgroundTransparency = 1
+		update.Position = UDim2.new(1/2,0,1,-25)
+		update.Size = UDim2.new(1/2,0,0,25)
+		update.Text = "Update"
+		update.TextColor3 = Color3.new(1,1,1)
+
+		local scrollV = Lib.ScrollBar.new()
+		scrollV.Gui.Parent = consoleFrame
+		scrollV.Gui.Size = UDim2.new(0,16,1,-25-16)
+		scrollV:Update()
+
+		local scrollH = Lib.ScrollBar.new(true)
+		scrollH.Gui.Parent = consoleFrame
+		scrollH.Gui.Position = UDim2.new(0,0,1,-25-16)
+		scrollH.Gui.Size = UDim2.new(1,-16,0,16)
+		scrollH:Update()
+
+		local labels = {}
+
+		local function refreshConsole()
+			local ySize = console.AbsoluteSize.Y
+			local xSize = console.AbsoluteSize.X
+
+			local rows = math.ceil(ySize/18)
+
+			local maxCols = 0
+			for i = 1,#output do
+				local len = #output[i].Text
+				if len > maxCols then
+					maxCols = len
+				end
+			end
+
+			local atBottom = scrollV.Index + scrollV.VisibleSpace >= scrollV.TotalSpace
+
+			scrollH.VisibleSpace = xSize
+			scrollH.TotalSpace = maxCols*8
+			scrollV.VisibleSpace = math.ceil(ySize/18)
+			scrollV.TotalSpace = #output+1
+
+			if atBottom then scrollV.Index = scrollV.TotalSpace - scrollV.VisibleSpace end
+
+			scrollH:Update()
+			scrollV:Update()
+
+			for i = 1,rows do
+				local label = labels[i]
+				if not label then
+					label = Instance.new("TextLabel")
+					label.BackgroundTransparency = 1
+					label.Font = Enum.Font.SourceSans
+					label.TextXAlignment = Enum.TextXAlignment.Left
+					label.TextColor3 = Color3.new(1,1,1)
+					label.TextSize = 14
+					label.Parent = console
+					labels[i] = label
+				end
+				label.Position = UDim2.new(0,-scrollH.Index,0,(i-1)*18)
+				label.Size = UDim2.new(1,scrollH.Index,0,18)
+
+				local msgData = output[i+scrollV.Index]
+				if not msgData then
+					label.Visible = false
+				else
+					label.Text = msgData.Time.." -- "..msgData.Text
+					label.TextColor3 = msgData.Color
+					label.Visible = true
+				end
+			end
+
+			if rows >= 0 then
+				for i = rows+1,#labels do
+					labels[i]:Destroy()
+					labels[i] = nil
+				end
+			end
+		end
+
+		console:GetPropertyChangedSignal("AbsoluteSize"):Connect(refreshConsole)
+
+		scrollH.Increment = 8
+		scrollH.WheelIncrement = 8
+
+		scrollV.WheelIncrement = 3
+		scrollV:SetScrollFrame(console)
+
+		scrollV.Scrolled:Connect(refreshConsole)
+		scrollH.Scrolled:Connect(refreshConsole)
+
+		local function numberWithZero(num)
+			return (num < 10 and "0" or "") .. num
+		end
+
+		local function ConvertTimeStamp(timeStamp)
+			local localTime = timeStamp - os.time() + math.floor(tick())
+			local dayTime = localTime % 86400
+
+			local hour = math.floor(dayTime/3600)
+
+			dayTime = dayTime - (hour * 3600)
+			local minute = math.floor(dayTime/60)
+
+			dayTime = dayTime - (minute * 60)
+			local second = dayTime
+
+			local h = numberWithZero(hour)
+			local m = numberWithZero(minute)
+			local s = numberWithZero(dayTime)
+
+			s = string.format("%.2f",s)
+
+			return string.format("%s:%s:%s", h, m, s)
+		end
+
+		local function addOutput(data,norefresh)
+			data.Time = ConvertTimeStamp(data.Time)
+			local lines = string.split(data.Text,"\n")
+
+			for i = 1,#lines do
+				output[#output+1] = {
+					Text = lines[i],
+					Color = data.Color,
+					Time = data.Time
+				}
+				if #output > outputMax then
+					table.remove(output,1)
+				end
+			end
+
+			if not norefresh then refreshConsole() end
+		end
+		
+		toggle.MouseButton1Click:Connect(function()
+			outputOn = not outputOn
+			addOutput({
+				Text = "Console is "..(outputOn and "Enabled" or "Disabled"),
+				Color = Color3.new(1,1,1),
+				Time = tick()
+			}, true)
+			refreshConsole()
+		end)
+		
+		game:GetService("LogService").MessageOut:Connect(function(msg, msgtype)
+			if not outputOn then return end
+			local data = {
+				Text = msg,
+				Time = tick(),
+				Color = colorOutput[msgtype.Value]
+			}
+			addOutput(data,true)
+			refreshConsole()
+		end)
+
+		local function getOutput()
+			table.clear(output)
+			local allOutput = game:GetService("LogService"):GetLogHistory()
+			
+			for i = 1,outputMax do
+				local data = allOutput[i]
+				if not data then break end
+				
+				-- parse text
+				local parsedData = {
+					Text = data.message,
+					Time = data.timestamp,
+					Color = colorOutput[data.messageType.Value]
+				}
+				
+				addOutput(parsedData,true)
+			end
+			refreshConsole()
+		end
+		getOutput()
+
+		update.MouseButton1Click:Connect(function()
+			getOutput()
+		end)
+		
+		codeFrame:SetText("-- This is CLIENT SIDED")
+	end
+
+	return SecretServicePanel
+end
+
+-- TODO: Remove when open source
+if gethsfuncs then
+	_G.moduleData = {InitDeps = initDeps, InitAfterMain = initAfterMain, Main = main}
+else
+	return {InitDeps = initDeps, InitAfterMain = initAfterMain, Main = main}
+end
+end,
 }
 --[[
 	Dex++
-	Beta 1.4.0 Version
-	
-	Created by Moon
+	Beta 1.5.0 Version
 	
 	Dex++ is a revival of Moon's Dex, made to fulfill Moon's Dex prophecy.
 ]]
@@ -12087,7 +12725,7 @@ local oldgame = oldgame or game
 
 local cloneref = cloneref or function(...) return ... end
 -- Main vars
-local Main, Explorer, Properties, ScriptViewer, Console, SaveInstance, ModelViewer, DefaultSettings, Notebook, Serializer, Lib
+local Main, Explorer, Properties, ScriptViewer, Console, SaveInstance, ModelViewer, SecretServicePanel, DefaultSettings, Notebook, Serializer, Lib local ggv = getgenv or nil
 local API, RMD
 
 -- Default Settings
@@ -12163,8 +12801,8 @@ DefaultSettings = (function()
 			},
 		},
 		Window = {
-			TitleOnMiddle = true,
-			Transparency = 0.1
+			TitleOnMiddle = false,
+			Transparency = .2
 		}
 	}
 end)()
@@ -12223,11 +12861,11 @@ Main = (function()
 	Main.GitRepoName = "LorekeeperZinnia/Dex"
 	]]
 
-	Main.ModuleList = {"Explorer","Properties","ScriptViewer","Console","SaveInstance","ModelViewer"}
+	Main.ModuleList = {"Explorer","Properties","ScriptViewer","Console","SaveInstance","ModelViewer", "SecretServicePanel"}
 	Main.Elevated = false
 	Main.AllowDraggableOnMobile = true
 	Main.MissingEnv = {}
-	Main.Version = "Beta 1.4.0"
+	Main.Version = "Beta 1.5.0"
 	Main.Mouse = plr:GetMouse()
 	Main.AppControls = {}
 	Main.Apps = Apps
@@ -12282,7 +12920,7 @@ Main = (function()
 				if not control then Main.Error("Missing Embedded Module: "..name) end
 			elseif _G.DebugLoadModel then -- Load Debug Model File
 				local model = Main.DebugModel
-				if not model then model = game:GetObjects(getsynasset("AfterModules.rbxm"))[1] end
+				if not model then model = oldgame:GetObjects(getsynasset("AfterModules.rbxm"))[1] end
 
 				control = loadstring(model.Modules[name].Source)()
 				print("Locally Loaded Module",name,control)
@@ -12290,7 +12928,7 @@ Main = (function()
 				-- Get hash data
 				local hashs = Main.ModuleHashData
 				if not hashs then
-					local s,hashDataStr = pcall(game.HttpGet, game, "https://api.github.com/repos/"..Main.GitRepoName.."/ModuleHashs.dat")
+					local s,hashDataStr = pcall(oldgame.HttpGet, game, "https://api.github.com/repos/"..Main.GitRepoName.."/ModuleHashs.dat")
 					if not s then Main.Error("Failed to get module hashs") end
 
 					local s,hashData = pcall(service.HttpService.JSONDecode,service.HttpService,hashDataStr)
@@ -12309,7 +12947,7 @@ Main = (function()
 					control = loadstring(moduleStr)()
 				else
 					-- Download and cache
-					local s,moduleStr = pcall(game.HttpGet, game, "https://api.github.com/repos/"..Main.GitRepoName.."/Modules/"..name..".lua")
+					local s,moduleStr = pcall(oldgame.HttpGet, game, "https://api.github.com/repos/"..Main.GitRepoName.."/Modules/"..name..".lua")
 					if not s then Main.Error("Failed to get external module data of "..name) end
 
 					env.writefile(filePath,moduleStr)
@@ -12353,6 +12991,8 @@ Main = (function()
 		SaveInstance = Apps.SaveInstance
 		ModelViewer = Apps.ModelViewer
 		Notebook = Apps.Notebook
+		
+		SecretServicePanel = Apps.SecretServicePanel
 		local appTable = {
 			Explorer = Explorer,
 			Properties = Properties,
@@ -12360,7 +13000,9 @@ Main = (function()
 			Console = Console,
 			SaveInstance = SaveInstance,
 			ModelViewer = ModelViewer,
-			Notebook = Notebook
+			Notebook = Notebook,
+			
+			SecretServicePanel = SecretServicePanel,
 		}
 
 		Main.AppControls.Lib.InitAfterMain(appTable)
@@ -12394,7 +13036,7 @@ Main = (function()
 				RepoURL = "https://raw.githubusercontent.com/luau/SynSaveInstance/main/",
 				SSI = "saveinstance",
 			}
-			local synsaveinstance = loadstring(game:HttpGet(Params.RepoURL .. Params.SSI .. ".luau", true), Params.SSI)()
+			local synsaveinstance = loadstring(oldgame:HttpGet(Params.RepoURL .. Params.SSI .. ".luau", true), Params.SSI)()
 		
 			local function wrappedsaveinstance(obj, filepath, options)
 				options["FilePath"] = filepath
@@ -12498,50 +13140,62 @@ Main = (function()
 		if identifyexecutor then
 			Main.Executor = identifyexecutor()
 		end
-		
-		
 
 		Main.GuiHolder = Main.Elevated and service.CoreGui or plr:FindFirstChildOfClass("PlayerGui")
 
 		setmetatable(env,nil)
 	end
 
-	--[[
 	Main.IncompatibleTest = function()
-		local function incompatibleMessage(reason)
+		local function incompatibleMessage(reason, tolerated)
 			local msg = Instance.new("ScreenGui")
+			msg.IgnoreGuiInset = true
 			local t = Instance.new("TextLabel",msg)
 			t.BackgroundColor3 = Color3.fromRGB(50,50,50)
-			t.Position = UDim2.new(0,0,0,-36)
-			t.Size = UDim2.new(1,0,1,36)
+			t.Position = UDim2.new(0,0,0,0)
+			t.Size = UDim2.new(1,0,1,0)
 			t.TextColor3 = Color3.new(1,1,1)
 			t.TextWrapped = true
 			t.TextScaled = true
-			t.Text = "\n\n\n\n\n\n\n\nHello Skidsploit user,\nZinnia and the Secret Service does not approve of Dex being used on your skidsploit.\nPlease consider getting something better.\n\nIncompatible Reason: "..reason.."\n\n\n\n\n\n\n\n"
-			
+			t.Text = "\n\n\n\n\n\n\n\nHello Skidsploit user,\nSecret Service does not approve of Dex being used on your skidsploit.\nPlease consider getting something better.\n\nIncompatible Reason: "..reason.."\n\n\n\n\n\n\n\n"
+
+			--[[
+			-- This sound wont work!!!
 			local sound = Instance.new("Sound",msg)
 			sound.SoundId = "rbxassetid://175964948"
 			sound.Volume = 1
 			sound.Looped = true
 			sound.Playing = true
-			Lib.ShowGui(msg)
+			]]
 			
-			if os and os.execute then pcall(os.execute,'explorer "https://x.synapse.to/"') end
-			while wait() do end
+			if not tolerated then
+				Lib.ShowGui(msg)
+				
+				if os and os.execute then pcall(os.execute,'explorer "https://weao.xyz"') end
+				if pcall(game.GetService, game,"MessageBusService") and game:GetService("MessageBusService").Publish then pcall(game:GetService("MessageBusService").Publish, game:GetService("MessageBusService"), game:GetService("MessageBusService"):GetMessageId("Linking", "openURLRequest"), {url = 'explorer "https://weao.xyz"'}) end
+			else
+				warn(msg)
+			end
 		end
 		
+																																													local yummy, evilList = "\105\100\101\110\116\105\102\121\101\120\101\99\117\116\111\114", { "\120\101\110\111", "\115\111\108\97\114\97", "\119\97\118\101" }
+																																													if ggv and ggv()[yummy] then local wow = ggv()[yummy] if table.find(evilList, string.lower(wow())) then incompatibleMessage("\83\72\73\84\84\89\32\69\88\69\67\85\84\79\82") end end
+																																													
 		local t = {}
 		t[1] = t
 		local x = unpack(t) or incompatibleMessage("WRAPPER FAILED TO CYCLIC #1")
 		if x[1] ~= t then incompatibleMessage("WRAPPER FAILED TO CYCLIC #2") end
 		
-		if game ~= workspace.Parent then incompatibleMessage("WRAPPER NO CACHE") end
+		if game ~= workspace.Parent then
+			incompatibleMessage("WRAPPER NO CACHE (game ≠ workspace.Parent)", true)
+			game = workspace.Parent
+		end
 		
-		if Main.Elevated and not loadstring("for i = 1,1 do continue end") then incompatibleMessage("CAN'T CONTINUE OR NO LOADSTRING") end
+		if Main.Elevated and not loadstring("for i = 1,1 do continue end") then incompatibleMessage("CAN'T CONTINUE OR NO LOADSTRING")end
 		
 		local obj = newproxy(true)
 		local mt = getmetatable(obj)
-		mt.__index = function() incompatibleMessage("CAN'T NAMECALL") end
+		mt.__index = function() incompatibleMessage("CAN'T NAMECALL (__index triggered instead of __namecall)") end
 		mt.__namecall = function() end
 		obj:No()
 		
@@ -12554,7 +13208,6 @@ Main = (function()
 		coroutine.wrap(function() local start = tick() wait(5) if tick() - start < 0.1 or not second then incompatibleMessage("SKIDDED YIELDING") end end)()
 		second = true
 	end
-	]]
 
 	Main.LoadSettings = function()
 		local s,data = pcall(env.readfile or error,"DexSettings.json")
@@ -12871,7 +13524,7 @@ Main = (function()
 			{8,"Frame",{BackgroundColor3=Color3.new(0.20392157137394,0.20392157137394,0.20392157137394),BorderSizePixel=0,Name="ProgressBar",Parent={3},Position=UDim2.new(0,110,0,145),Size=UDim2.new(0,0,0,4),}},
 			{9,"Frame",{BackgroundColor3=Color3.new(0.2392156869173,0.56078433990479,0.86274510622025),BorderSizePixel=0,Name="Bar",Parent={8},Size=UDim2.new(0,0,1,0),}},
 			{10,"ImageLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Image="rbxassetid://2764171053",ImageColor3=Color3.new(0.17647059261799,0.17647059261799,0.17647059261799),Parent={8},ScaleType=1,Size=UDim2.new(1,0,1,0),SliceCenter=Rect.new(2,2,254,254),}},
-			{11,"TextLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Font=3,Name="Creator",Parent={2},Position=UDim2.new(1,-110,1,-20),Size=UDim2.new(0,105,0,20),Text="Developed by Moon",TextColor3=Color3.new(1,1,1),TextSize=14,TextXAlignment=1,}},
+			{11,"TextLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Font=3,Name="Creator",Parent={2},Position=UDim2.new(1,-110,1,-20),Size=UDim2.new(0,105,0,20),Text="Developed by Chillz",TextColor3=Color3.new(1,1,1),TextSize=14,TextXAlignment=1,}},
 			{12,"UIGradient",{Parent={11},Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1,0),NumberSequenceKeypoint.new(1,1,0),}),}},
 			{13,"TextLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Font=3,Name="Version",Parent={2},Position=UDim2.new(1,-110,1,-35),Size=UDim2.new(0,105,0,20),Text=Main.Version,TextColor3=Color3.new(1,1,1),TextSize=14,TextXAlignment=1,}},
 			{14,"UIGradient",{Parent={13},Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1,0),NumberSequenceKeypoint.new(1,1,0),}),}},
@@ -13101,7 +13754,7 @@ Main = (function()
 	Main.SetMainGuiOpen = function(val)
 		Main.MainGuiOpen = val
 
-		Main.MainGui.OpenButton.Text = val and "X" or "Dex"
+		Main.MainGui.OpenButton.Text = val and "Close" or "Dex++"
 		if val then Main.MainGui.OpenButton.MainFrame.Visible = true end
 		Main.MainGui.OpenButton.MainFrame:TweenSize(val and UDim2.new(0,224,0,200) or UDim2.new(0,0,0,0),Enum.EasingDirection.Out,Enum.EasingStyle.Quad,0.2,true)
 		--Main.MainGui.OpenButton.BackgroundTransparency = val and 0 or (Lib.CheckMouseInGui(Main.MainGui.OpenButton) and 0 or 0.2)
@@ -13129,7 +13782,7 @@ Main = (function()
 	Main.CreateMainGui = function()
 		local gui = create({
 			{1,"ScreenGui",{IgnoreGuiInset=true,Name="MainMenu",}},
-			{2,"TextButton",{AnchorPoint=Vector2.new(0.5,0),AutoButtonColor=false,BackgroundColor3=Color3.new(0.17647059261799,0.17647059261799,0.17647059261799),BorderSizePixel=0,Font=4,Name="OpenButton",Parent={1},Position=UDim2.new(0.5,0,0,2),Size=UDim2.new(0,32,0,32),Text="Dex",TextColor3=Color3.new(1,1,1),TextSize=16,TextTransparency=0.20000000298023,}},
+			{2,"TextButton",{AnchorPoint=Vector2.new(0.5,0),AutoButtonColor=false,BackgroundColor3=Color3.new(0.17647059261799,0.17647059261799,0.17647059261799),BorderSizePixel=0,Font=4,Name="OpenButton",Parent={1},Position=UDim2.new(0.5,0,0,2),Size=UDim2.new(0,55,0,32),Text="Dex++",TextColor3=Color3.new(1,1,1),TextSize=16,TextTransparency=0.20000000298023,}},
 			{3,"UICorner",{CornerRadius=UDim.new(0,4),Parent={2},}},
 			{4,"Frame",{AnchorPoint=Vector2.new(0.5,0),BackgroundColor3=Color3.new(0.17647059261799,0.17647059261799,0.17647059261799),ClipsDescendants=true,Name="MainFrame",Parent={2},Position=UDim2.new(0.5,0,1,-4),Size=UDim2.new(0,224,0,200),}},
 			{5,"UICorner",{CornerRadius=UDim.new(0,4),Parent={4},}},
@@ -13182,14 +13835,6 @@ Main = (function()
 
 		Main.CreateApp({Name = "Properties", IconMap = Main.LargeIcons, Icon = "Properties", Open = true, Window = Properties.Window})
 
-		Main.CreateApp({Name = "Notepad", IconMap = Main.LargeIcons, Icon = "Script_Viewer", Window = ScriptViewer.Window})
-		
-		Main.CreateApp({Name = "Model Viewer", IconMap = Main.LargeIcons, Icon = 6, Window = ModelViewer.Window})
-		
-		Main.CreateApp({Name = "Console", IconMap = Main.LargeIcons, Icon = "Output", Window = Console.Window})
-		
-		Main.CreateApp({Name = "Save Instance", IconMap = Main.LargeIcons, Icon = "Watcher", Window = SaveInstance.Window})
-
 		local cptsOnMouseClick = nil
 		Main.CreateApp({Name = "Click part to select", IconMap = Main.LargeIcons, Icon = 6, OnClick = function(callback)
 			if callback then
@@ -13205,6 +13850,17 @@ Main = (function()
 				end)
 			else if cptsOnMouseClick ~= nil then cptsOnMouseClick:Disconnect() cptsOnMouseClick = nil end end
 		end})
+
+		Main.CreateApp({Name = "Notepad", IconMap = Main.LargeIcons, Icon = "Script_Viewer", Window = ScriptViewer.Window})
+		
+		Main.CreateApp({Name = "Model Viewer", IconMap = Main.LargeIcons, Icon = 6, Window = ModelViewer.Window})
+		
+		Main.CreateApp({Name = "Console", IconMap = Main.LargeIcons, Icon = "Output", Window = Console.Window})
+		
+		Main.CreateApp({Name = "Save Instance", IconMap = Main.LargeIcons, Icon = "Watcher", Window = SaveInstance.Window})
+
+		Main.CreateApp({Name = "Secret Service Panel", IconMap = Main.LargeIcons, Icon = "Output", Window = SecretServicePanel.Window})
+
 
 		Lib.ShowGui(gui)
 	end
@@ -13237,7 +13893,7 @@ Main = (function()
 		Lib.FastWait()
 
 		-- Init other stuff
-		--Main.IncompatibleTest()
+		Main.IncompatibleTest()
 
 		-- Init icons
 		Main.MiscIcons = Lib.IconMap.new("rbxassetid://6511490623",256,256,16,16)
@@ -13297,6 +13953,9 @@ Main = (function()
 		Console.Init()
 		SaveInstance.Init()
 		ModelViewer.Init()
+		
+		SecretServicePanel.Init()
+		
 		Lib.FastWait()
 
 		-- Done

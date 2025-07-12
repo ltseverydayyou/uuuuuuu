@@ -11,67 +11,67 @@ local headOff     = 3
 local rayEnabled  = true
 local overhead    = false
 
-local uiTweenInfo = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local uiTweenInfo = TweenInfo.new(0.25,Enum.EasingStyle.Quad,Enum.EasingDirection.Out)
 
-local screenGui = Instance.new("ScreenGui", gethui())
+local screenGui = Instance.new("ScreenGui",gethui())
 screenGui.Name = "MiniMapGui"
 
-local container = Instance.new("Frame", screenGui)
+local container = Instance.new("Frame",screenGui)
 container.Name               = "MiniMapContainer"
-container.AnchorPoint        = Vector2.new(1, 0)
-container.Position           = UDim2.new(0.95, 0, 0.05, 0)
-container.Size               = UDim2.new(0, 200, 0, 200)
-container.BackgroundColor3   = Color3.fromRGB(30, 30, 30)
+container.AnchorPoint        = Vector2.new(1,0)
+container.Position           = UDim2.new(0.95,0,0.05,0)
+container.Size               = UDim2.new(0,200,0,200)
+container.BackgroundColor3   = Color3.fromRGB(30,30,30)
 container.BackgroundTransparency = 0.2
-container.Active             = true
-Instance.new("UICorner", container).CornerRadius = UDim.new(0, 5)
+container.Active = true
+Instance.new("UICorner",container).CornerRadius = UDim.new(0,5)
 
-local viewport = Instance.new("ViewportFrame", container)
-viewport.Size                = UDim2.new(1, 0, 1, 0)
+local viewport = Instance.new("ViewportFrame",container)
+viewport.Size                = UDim2.new(1,0,1,0)
 viewport.BackgroundTransparency = 1
 
-local worldModel = Instance.new("WorldModel", viewport)
-local cloneRoot  = Instance.new("Model", worldModel)
+local worldModel = Instance.new("WorldModel",viewport)
+local cloneRoot  = Instance.new("Model",worldModel)
 
-local camera = Instance.new("Camera", viewport)
+local camera = Instance.new("Camera",viewport)
 viewport.CurrentCamera = camera
 camera.FieldOfView     = 70
 
-local lightPart = Instance.new("Part", worldModel)
+local lightPart = Instance.new("Part",worldModel)
 lightPart.Size         = Vector3.new(1,1,1)
 lightPart.Transparency = 1
 lightPart.Anchored     = true
 lightPart.CanCollide   = false
-local pointLight = Instance.new("PointLight", lightPart)
+local pointLight = Instance.new("PointLight",lightPart)
 pointLight.Brightness = 2
 pointLight.Range      = 500
 
-local marker = Instance.new("Part", worldModel)
+local marker = Instance.new("Part",worldModel)
 marker.Size       = Vector3.new(1,2,1)
 marker.Anchored   = true
 marker.CanCollide = false
 marker.Material   = Enum.Material.Neon
 marker.Color      = Color3.new(1,0,0)
-local mesh = Instance.new("SpecialMesh", marker)
+local mesh = Instance.new("SpecialMesh",marker)
 mesh.MeshType = Enum.MeshType.Sphere
 mesh.Scale    = Vector3.new(0.5,1,0.5)
 
 local rayParams = RaycastParams.new()
-rayParams.FilterType             = Enum.RaycastFilterType.Blacklist
-rayParams.IgnoreWater            = true
-local ignoreList = { player.Character }
+rayParams.FilterType = Enum.RaycastFilterType.Blacklist
+rayParams.IgnoreWater = true
+local ignoreList = {player.Character}
 rayParams.FilterDescendantsInstances = ignoreList
 
 local function trackPart(p)
     if p:IsA("BasePart") then
-        if not p.CanCollide then table.insert(ignoreList, p) end
+        if not p.CanCollide then table.insert(ignoreList,p) end
         p:GetPropertyChangedSignal("CanCollide"):Connect(function()
             if p.CanCollide then
                 for i,v in ipairs(ignoreList) do
-                    if v == p then table.remove(ignoreList,i); break end
+                    if v==p then table.remove(ignoreList,i); break end
                 end
             else
-                table.insert(ignoreList, p)
+                table.insert(ignoreList,p)
             end
             rayParams.FilterDescendantsInstances = ignoreList
         end)
@@ -90,36 +90,25 @@ local function addClone(o)
     if o:IsDescendantOf(Workspace.Terrain) then return end
     if o:IsA("BasePart") or o:IsA("MeshPart") or o:IsA("UnionOperation") then
         o.Archivable = true
-        local ok, cp = pcall(function() return o:Clone() end)
+        local ok,cp = pcall(function() return o:Clone() end)
         if ok and cp then
             clones[o] = cp
             cp.Parent = cloneRoot
             cp.CFrame = o.CFrame
             for _,prop in ipairs({"Size","Transparency","Color","BrickColor","Material","Reflectance","CastShadow","Anchored","CanCollide"}) do
-                o:GetPropertyChangedSignal(prop):Connect(function()
-                    cp[prop] = o[prop]
-                end)
+                o:GetPropertyChangedSignal(prop):Connect(function() cp[prop] = o[prop] end)
             end
-            o:GetPropertyChangedSignal("CFrame"):Connect(function()
-                cp.CFrame = o.CFrame
-            end)
+            o:GetPropertyChangedSignal("CFrame"):Connect(function() cp.CFrame = o.CFrame end)
             if o:IsA("MeshPart") then
-                o:GetPropertyChangedSignal("MeshId"):Connect(function()
-                    cp.MeshId = o.MeshId
-                end)
-                o:GetPropertyChangedSignal("TextureID"):Connect(function()
-                    cp.TextureID = o.TextureID
-                end)
+                o:GetPropertyChangedSignal("MeshId"):Connect(function() cp.MeshId = o.MeshId end)
+                o:GetPropertyChangedSignal("TextureID"):Connect(function() cp.TextureID = o.TextureID end)
             end
         end
     end
 end
 local function removeClone(o)
     local cp = clones[o]
-    if cp then
-        cp:Destroy()
-        clones[o] = nil
-    end
+    if cp then cp:Destroy(); clones[o] = nil end
 end
 
 for _,o in ipairs(Workspace:GetDescendants()) do addClone(o) end
@@ -135,16 +124,27 @@ local function style(btn)
     Instance.new("UICorner",btn).CornerRadius = UDim.new(0,4)
 end
 
-local dragBtn = Instance.new("TextButton", container)
+local dragBtn = Instance.new("TextButton",container)
 dragBtn.Text     = "⇅"
 dragBtn.Size     = UDim2.new(0,24,0,24)
 dragBtn.Position = UDim2.new(0,8,0,8)
 style(dragBtn)
 
-local menuBtn = Instance.new("TextButton", container)
+local closeBtn = Instance.new("TextButton",container)
+closeBtn.Text     = "X"
+closeBtn.Size     = UDim2.new(0,24,0,24)
+closeBtn.Position = UDim2.new(1,-8,0,8)
+closeBtn.AnchorPoint = Vector2.new(1,0)
+style(closeBtn)
+closeBtn.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+end)
+
+local menuBtn = Instance.new("TextButton",container)
 menuBtn.Text     = ":"
 menuBtn.Size     = UDim2.new(0,24,0,24)
-menuBtn.Position = UDim2.new(1,-32,0,8)
+menuBtn.Position = UDim2.new(1,-40,0,8)
+menuBtn.AnchorPoint = Vector2.new(1,0)
 style(menuBtn)
 
 local buttonHeight = 24
@@ -164,30 +164,25 @@ end
 
 zoomInBtn.Text   = "+"
 zoomInBtn.Size   = UDim2.new(0,24,0,buttonHeight)
-
 zoomOutBtn.Text  = "–"
 zoomOutBtn.Size  = UDim2.new(0,24,0,buttonHeight)
-
 rayBtn.Text      = "Ray:On"
 rayBtn.Size      = UDim2.new(0,60,0,buttonHeight)
-
 viewBtn.Text     = "3D"
 viewBtn.Size     = UDim2.new(0,60,0,buttonHeight)
-
 sizeUpBtn.Text   = "S+"
 sizeUpBtn.Size   = UDim2.new(0,36,0,buttonHeight)
-
 sizeDownBtn.Text = "S-"
 sizeDownBtn.Size = UDim2.new(0,36,0,buttonHeight)
 
 local dropButtons = {zoomInBtn,zoomOutBtn,rayBtn,viewBtn,sizeUpBtn,sizeDownBtn}
 
 local function updateButtons()
-    local totalHeight = #dropButtons * buttonHeight + (#dropButtons - 1) * spacing
-    local startY = (container.Size.Y.Offset - totalHeight) / 2
+    local totalHeight = #dropButtons*buttonHeight + (#dropButtons-1)*spacing
+    local startY = (container.Size.Y.Offset-totalHeight)/2
     for i,btn in ipairs(dropButtons) do
-        local pos = UDim2.new(1, 4, 0, startY + (i - 1)*(buttonHeight+spacing))
-        TweenService:Create(btn, uiTweenInfo, {Position = pos}):Play()
+        local pos = UDim2.new(1,4,0,startY + (i-1)*(buttonHeight+spacing))
+        TweenService:Create(btn,uiTweenInfo,{Position=pos}):Play()
     end
 end
 
@@ -197,11 +192,11 @@ menuBtn.MouseButton1Click:Connect(function()
         btn.Visible = show
         if show then
             btn.Position = UDim2.new(1,4,0,container.Size.Y.Offset/2)
-            TweenService:Create(btn, uiTweenInfo, {TextTransparency=0}):Play()
+            TweenService:Create(btn,uiTweenInfo,{TextTransparency=0}):Play()
         else
-            local t = TweenService:Create(btn, uiTweenInfo, {TextTransparency=1})
+            local t = TweenService:Create(btn,uiTweenInfo,{TextTransparency=1})
             t:Play()
-            t.Completed:Connect(function() btn.Visible = false end)
+            t.Completed:Connect(function() btn.Visible=false end)
         end
     end
     if show then updateButtons() end
@@ -235,20 +230,20 @@ end
 dragger(container,dragBtn)
 
 zoomInBtn.MouseButton1Click:Connect(function()
-    zoomDist   = math.max(5, zoomDist - 5)
-    zoomHeight = math.max(5, zoomHeight - 5)
+    zoomDist   = math.max(5,zoomDist-5)
+    zoomHeight = math.max(5,zoomHeight-5)
 end)
 zoomOutBtn.MouseButton1Click:Connect(function()
-    zoomDist   = zoomDist + 5
-    zoomHeight = zoomHeight + 5
+    zoomDist   = zoomDist+5
+    zoomHeight = zoomHeight+5
 end)
 rayBtn.MouseButton1Click:Connect(function()
     rayEnabled = not rayEnabled
-    rayBtn.Text = rayEnabled and "Ray:On" or "Ray:Off"
+    rayBtn.Text=rayEnabled and"Ray:On" or"Ray:Off"
 end)
 viewBtn.MouseButton1Click:Connect(function()
     overhead = not overhead
-    viewBtn.Text = overhead and "Top" or "3D"
+    viewBtn.Text = overhead and"Top" or"3D"
 end)
 sizeUpBtn.MouseButton1Click:Connect(function()
     local newSize = container.Size + UDim2.new(0,50,0,50)
@@ -280,22 +275,22 @@ RunService.RenderStepped:Connect(function(dt)
         local target
         if overhead then
             local look = Workspace.CurrentCamera.CFrame.LookVector
-            local yaw  = math.atan2(-look.X, -look.Z)
-            local pos  = focus + Vector3.new(0, zoomHeight, 0)
-            target = CFrame.new(pos) * CFrame.Angles(0, yaw, 0) * CFrame.Angles(-math.pi/2, 0, 0)
+            look = Vector3.new(look.X,0,look.Z).Unit
+            local pos = focus + Vector3.new(0, zoomHeight, 0)
+            target = CFrame.lookAt(pos, focus + look)
         else
             local dir = Workspace.CurrentCamera.CFrame.LookVector
-            dir = Vector3.new(dir.X, 0, dir.Z)
-            dir = (dir.Magnitude > 0 and dir.Unit) or Vector3.new(0, 0, -1)
+            dir = Vector3.new(dir.X,0,dir.Z)
+            dir = (dir.Magnitude>0 and dir.Unit) or Vector3.new(0,0,-1)
             local desired = hrp.Position - dir*zoomDist + Vector3.new(0, zoomHeight, 0)
             local camPos  = desired
             if rayEnabled then
                 rayParams.FilterDescendantsInstances = ignoreList
-                local r = Workspace:Raycast(focus, desired - focus, rayParams)
+                local r = Workspace:Raycast(focus, desired-focus, rayParams)
                 if r then camPos = r.Position + r.Normal*0.5 end
             end
             target = CFrame.lookAt(camPos, focus)
         end
-        camera.CFrame = camera.CFrame:Lerp(target, math.clamp(dt * 8, 0, 1))
+        camera.CFrame = target
     end
 end)

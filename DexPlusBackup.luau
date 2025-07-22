@@ -12092,8 +12092,8 @@ local executorName = "Unknown"
 local executorVersion = "???"
 if identifyexecutor then
 	local name,ver = identifyexecutor()
-	executorName = name
-	executorVersion = ver
+	executorName = name or executorName
+	executorVersion = ver or executorVersion -- this should fix krnl and other executors who don't return a version
 elseif game:GetService("RunService"):IsStudio() then
 	executorName = "Studio"
 	executorVersion = version()

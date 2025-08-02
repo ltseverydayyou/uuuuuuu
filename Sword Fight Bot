@@ -80,7 +80,7 @@ local function protectUI(s)
     return s
 end
 
-local function NAdragV2(ui,drag)
+local function NAdragV2(ui, dragui)
     dragui = dragui or ui
 	local UserInputService = SafeGetService("UserInputService")
 	local dragging = false

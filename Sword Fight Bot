@@ -81,25 +81,76 @@ local function protectUI(s)
 end
 
 local function NAdragV2(ui,drag)
-    if not drag then drag=ui end
-    local sg=ui:FindFirstAncestorWhichIsA("ScreenGui")or ui.Parent
-    local dragging,input0,startPos
-    local function upd(inp)
-        local d=inp.Position-input0 local ps,us=sg.AbsoluteSize,ui.AbsoluteSize
-        local nx=startPos.X.Scale+d.X/ps.X local ny=startPos.Y.Scale+d.Y/ps.Y
-        local a=ui.AnchorPoint; local minX=a.X*(us.X/ps.X); local maxX=1-(1-a.X)*(us.X/ps.X)
-        local minY=a.Y*(us.Y/ps.Y); local maxY=1-(1-a.Y)*(us.Y/ps.Y)
-        ui.Position=UDim2.new(math.clamp(nx,minX,maxX),0,math.clamp(ny,minY,maxY),0)
-    end
-    drag.InputBegan:Connect(function(inp)
-        if inp.UserInputType==Enum.UserInputType.MouseButton1 or inp.UserInputType==Enum.UserInputType.Touch then
-            dragging,input0,startPos=true,inp.Position,ui.Position
-            inp.Changed:Connect(function() if inp.UserInputState==Enum.UserInputState.End then dragging=false end end)
-        end
-    end)
-    UserInput.InputChanged:Connect(function(inp) if dragging then upd(inp) end end)
-    sg:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() ui.Position=ui.Position end)
-    ui.Active=true
+    dragui = dragui or ui
+	local UserInputService = SafeGetService("UserInputService")
+	local dragging = false
+	local dragInput
+	local dragStart
+	local startPos
+
+	local function update(input)
+		local success, err = pcall(function()
+			local delta = input.Position - dragStart
+			local screenSize = ui.Parent.AbsoluteSize
+			local newXScale = startPos.X.Scale + (startPos.X.Offset + delta.X) / screenSize.X
+			local newYScale = startPos.Y.Scale + (startPos.Y.Offset + delta.Y) / screenSize.Y
+			ui.Position = UDim2.new(newXScale, 0, newYScale, 0)
+		end)
+		if not success then
+			warn("[Dragger] update error:", err)
+		end
+	end
+
+	pcall(function()
+		dragui.InputBegan:Connect(function(input)
+			local success, err = pcall(function()
+				if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+					dragging = true
+					dragStart = input.Position
+					startPos = ui.Position
+
+					pcall(function()
+						input.Changed:Connect(function()
+							local ok, innerErr = pcall(function()
+								if input.UserInputState == Enum.UserInputState.End then
+									dragging = false
+								end
+							end)
+							if not ok then warn("[Dragger] input.Changed error:", innerErr) end
+						end)
+					end)
+				end
+			end)
+			if not success then warn("[Dragger] InputBegan error:", err) end
+		end)
+	end)
+
+	pcall(function()
+		dragui.InputChanged:Connect(function(input)
+			local success, err = pcall(function()
+				if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+					dragInput = input
+				end
+			end)
+			if not success then warn("[Dragger] InputChanged error:", err) end
+		end)
+	end)
+
+	pcall(function()
+		UserInputService.InputChanged:Connect(function(input)
+			local success, err = pcall(function()
+				if input == dragInput and dragging then
+					update(input)
+				end
+			end)
+			if not success then warn("[Dragger] UserInputService.InputChanged error:", err) end
+		end)
+	end)
+
+	local success, err = pcall(function()
+		ui.Active = true
+	end)
+	if not success then warn("[Dragger] Set Active error:", err) end
 end
 
 local function makeButton(p)

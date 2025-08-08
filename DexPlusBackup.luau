@@ -1,28 +1,50 @@
---[[
-	Dex++
-	Beta 1.5.0 Version
-	
-	Developed by Chillz
-	
-	Dex++ is a revival of Moon's Dex, made to fulfill Moon's Dex prophecy.
-]]
-
 local selection
 local nodes = {}
 
 local oldgame = game
 local game = workspace.Parent
+
+cloneref = cloneref or function(ref)
+	if not getreg then return ref end
+	
+	local InstanceList
+	
+	local a = Instance.new("Part")
+	for _, c in pairs(getreg()) do
+		if type(c) == "table" and #c then
+			if rawget(c, "__mode") == "kvs" then
+				for d, e in pairs(c) do
+					if e == a then
+						InstanceList = c
+						break
+					end
+				end
+			end
+		end
+	end
+	local f = {}
+	function f.invalidate(g)
+		if not InstanceList then
+			return
+		end
+		for b, c in pairs(InstanceList) do
+			if c == g then
+				InstanceList[b] = nil
+				return g
+			end
+		end
+	end
+	return f.invalidate
+end
+
 local EmbeddedModules = {
 ["Console"] = function()
 --[[
-	Console App Module
-	
-	Yes this does not exist on original Dex
+	Console Module
 ]]
-loadstring = (game:GetService("RunService"):IsStudio() and require(script.Parent.Loadstring)) or loadstring
 -- Common Locals
 local Main,Lib,Apps,Settings -- Main Containers
-local Explorer, Properties, Console, Notebook -- Major Apps
+local Explorer, Properties, ScriptViewer, Notebook -- Major Apps
 local API,RMD,env,service,plr,create,createSimple -- Main Locals
 
 local function initDeps(data)
@@ -43,7 +65,7 @@ end
 local function initAfterMain()
 	Explorer = Apps.Explorer
 	Properties = Apps.Properties
-	Console = Apps.Console
+	ScriptViewer = Apps.ScriptViewer
 	Notebook = Apps.Notebook
 end
 
@@ -51,10 +73,10 @@ local function main()
 	local Console = {}
 
 	local window,ConsoleFrame
-	
+
 	local OutputLimit = 500 -- Same as Roblox Console.
-	
-	
+
+
 	-- Instances: 29 | Scripts: 1 | Modules: 1 | Tags: 0
 	local G2L = {};
 
@@ -161,7 +183,7 @@ local function main()
 	-- StarterGui.ScreenGui.Console.CommandLine.ScrollingFrame.Highlight.UIPadding
 	G2L["9"] = Instance.new("UIPadding", G2L["8"]);
 	G2L["9"]["PaddingLeft"] = UDim.new(0, 7);
-	
+
 	G2L["backgroundOutput"] = Instance.new("Frame", ConsoleFrame);
 	G2L["backgroundOutput"]["BorderSizePixel"] = 0;
 	G2L["backgroundOutput"]["BackgroundColor3"] = Color3.fromRGB(36, 36, 36);
@@ -171,7 +193,7 @@ local function main()
 	G2L["backgroundOutput"]["Position"] = UDim2.new(0, 4, 0, 23);
 	G2L["backgroundOutput"]["BorderColor3"] = Color3.fromRGB(0, 0, 0);
 	G2L["backgroundOutput"]["ZIndex"] = 1;
-	
+
 	local scrollbar = Lib.ScrollBar.new()
 	scrollbar.Gui.Parent = ConsoleFrame
 	scrollbar.Gui.Size = UDim2.new(0, 16, 1, -55);
@@ -198,10 +220,6 @@ local function main()
 	G2L["a"].ScrollBarImageColor3 = Color3.fromRGB(70, 70, 70)
 	G2L["a"]["ScrollBarThickness"] = 16;
 	G2L["a"]["ZIndex"] = 1;
-
-	if Settings.Window.Transparency then
-		G2L["a"].BackgroundTransparency = Settings.Window.Transparency
-	end
 
 	G2L["a"]:GetPropertyChangedSignal("AbsoluteWindowSize"):Connect(function()
 		if G2L["a"].AbsoluteCanvasSize ~= G2L["a"].AbsoluteWindowSize then
@@ -375,6 +393,37 @@ local function main()
 	G2L["1b"]["PaddingTop"] = UDim.new(0, 1);
 	G2L["1b"]["PaddingBottom"] = UDim.new(0, 1);
 
+	-- StarterGui.ScreenGui.Console.AutoScroll
+	G2L["20"] = Instance.new("ImageButton", ConsoleFrame);
+	G2L["20"]["BorderSizePixel"] = 0;
+	G2L["20"]["BackgroundColor3"] = Color3.fromRGB(57, 57, 57);
+	G2L["20"]["Size"] = UDim2.new(0, 60, 0, 15);
+	G2L["20"]["BorderColor3"] = Color3.fromRGB(0, 0, 0);
+	G2L["20"]["Name"] = [[AutoScroll]];
+	G2L["20"]["Position"] = UDim2.new(0, 110, 0, 4);
+
+
+	-- StarterGui.ScreenGui.Console.AutoScroll.TextLabel
+	G2L["1e"] = Instance.new("TextLabel", G2L["20"]);
+	G2L["1e"]["TextWrapped"] = true;
+	G2L["1e"]["Interactable"] = false;
+	G2L["1e"]["BorderSizePixel"] = 0;
+	G2L["1e"]["TextSize"] = 20;
+	G2L["1e"]["TextScaled"] = true;
+	G2L["1e"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255);
+	G2L["1e"]["FontFace"] = Font.new([[rbxasset://fonts/families/SourceSansPro.json]], Enum.FontWeight.Regular, Enum.FontStyle.Normal);
+	G2L["1e"]["TextColor3"] = Color3.fromRGB(255, 255, 255);
+	G2L["1e"]["BackgroundTransparency"] = 1;
+	G2L["1e"]["Size"] = UDim2.new(1, 0, 1, 0);
+	G2L["1e"]["BorderColor3"] = Color3.fromRGB(0, 0, 0);
+	G2L["1e"]["Text"] = [[Auto Scroll]];
+
+
+	-- StarterGui.ScreenGui.Console.AutoScroll.UIPadding
+	G2L["1f"] = Instance.new("UIPadding", G2L["20"]);
+	G2L["1f"]["PaddingTop"] = UDim.new(0, 1);
+	G2L["1f"]["PaddingBottom"] = UDim.new(0, 1);
+
 
 	-- StarterGui.ScreenGui.ConsoleHandler
 	G2L["1c"] = Instance.new("LocalScript", G2L["1"]);
@@ -384,12 +433,12 @@ local function main()
 	-- StarterGui.ScreenGui.ConsoleHandler.SyntaxHighlighter
 	G2L["1d"] = Instance.new("ModuleScript", G2L["1c"]);
 	G2L["1d"]["Name"] = [[SyntaxHighlighter]];
-	
-	
+
+
 	-- Require G2L wrapper
 	local G2L_REQUIRE = require;
 	local G2L_MODULES = {};
-	local function require(Module:ModuleScript)
+	local function require(Module)
 		local ModuleState = G2L_MODULES[Module];
 		if ModuleState then
 			if not ModuleState.Required then
@@ -584,12 +633,12 @@ local function main()
 			return highlighter
 		end;
 	};
-	
+
 	Console.Init = function()
 		-- StarterGui.ScreenGui.ConsoleHandler
-		local script = G2L["1c"];
 
 		local CtrlScroll = false
+		local AutoScroll = false
 
 		local LogService = game:GetService("LogService")
 		local Players = game:GetService("Players")
@@ -599,7 +648,7 @@ local function main()
 		local RunService = game:GetService("RunService")
 
 		local Console = ConsoleFrame
-		local SyntaxHighlightingModule = require(script.SyntaxHighlighter)
+		local SyntaxHighlightingModule = require(G2L["1c"].SyntaxHighlighter)
 		local OutputTextSize = Console.Output.OutputTextSize
 
 		local function Tween(obj, info, prop)
@@ -641,6 +690,22 @@ local function main()
 				end
 			end
 		end)
+
+		if AutoScroll == true then
+			Console.AutoScroll.BackgroundColor3 = Color3.fromRGB(11, 90, 175)
+		elseif AutoScroll == false then
+			Console.AutoScroll.BackgroundColor3 = Color3.fromRGB(56, 56, 56)
+		end
+		Console.AutoScroll.MouseButton1Click:Connect(function()
+			AutoScroll = not AutoScroll
+			if AutoScroll == true then
+				Console.AutoScroll.BackgroundColor3 = Color3.fromRGB(11, 90, 175)
+				Console.Output.CanvasPosition = Vector2.new(0, 9e9)
+			elseif AutoScroll == false then
+				Console.AutoScroll.BackgroundColor3 = Color3.fromRGB(56, 56, 56)
+			end
+		end)
+
 		-- Console part
 		local displayedOutput = {}
 		local OutputLimit = Console.Output.OutputLimit
@@ -688,7 +753,7 @@ local function main()
 		end)
 
 		local focussedOutput
-		
+
 		LogService.MessageOut:Connect(function(msg, msgtype)
 			local formattedText = ""
 			local unformattedText = ""
@@ -733,6 +798,10 @@ local function main()
 
 			newOutputText.Parent = Console.Output
 			newOutputText.Visible = true
+
+			if AutoScroll then
+				Console.Output.CanvasPosition = Vector2.new(0, 9e9)
+			end
 		end)
 
 		Console.Output.MouseLeave:Connect(function()
@@ -762,12 +831,7 @@ local function main()
 	return Console
 end
 
--- TODO: Remove when open source
-if gethsfuncs then
-	_G.moduleData = {InitDeps = initDeps, InitAfterMain = initAfterMain, Main = main}
-else
-	return {InitDeps = initDeps, InitAfterMain = initAfterMain, Main = main}
-end
+return {InitDeps = initDeps, InitAfterMain = initAfterMain, Main = main}
 end,
 ["Explorer"] = function()
 --[[
@@ -823,6 +887,8 @@ local function main()
 	local connectSignal = game.DescendantAdded.Connect
 	local addObject,removeObject,moveObject = nil,nil,nil
 
+	local iconData
+	local remote_blocklist = {} -- list of remotes beng blocked, k = the remote instance, v = their old function :3
 	nodes = nodes or {}
 
 	addObject = function(root)
@@ -1687,8 +1753,8 @@ local function main()
 
 		if presentClasses["BasePart"] or presentClasses["Model"] then
 			context:AddRegistered("TELEPORT_TO")
-			context:AddRegistered("VIEW_MODEL")
-			context:AddRegistered("SPECTATE_OBJECT")
+			context:AddRegistered("VIEW_OBJECT")
+			context:AddRegistered("3DVIEW_MODEL")
 		end
 		if presentClasses["Tween"] then context:AddRegistered("PLAY_TWEEN") end
 		if presentClasses["Animation"] then
@@ -1699,7 +1765,26 @@ local function main()
 		if presentClasses["TouchTransmitter"] then context:AddRegistered("FIRE_TOUCHTRANSMITTER", firetouchinterest == nil) end
 		if presentClasses["ClickDetector"] then context:AddRegistered("FIRE_CLICKDETECTOR", fireclickdetector == nil) end
 		if presentClasses["ProximityPrompt"] then context:AddRegistered("FIRE_PROXIMITYPROMPT", fireproximityprompt == nil) end
+		
+		
+		if presentClasses["RemoteEvent"] then context:AddRegistered("BLOCK_REMOTE", env.hookfunction == nil) end
+		if presentClasses["RemoteEvent"] then context:AddRegistered("UNBLOCK_REMOTE", env.hookfunction == nil) end
+		
+		if presentClasses["RemoteFunction"] then context:AddRegistered("BLOCK_REMOTE", env.hookfunction == nil) end
+		if presentClasses["RemoteFunction"] then context:AddRegistered("UNBLOCK_REMOTE", env.hookfunction == nil) end
 
+		if presentClasses["UnreliableRemoteEvent"] then context:AddRegistered("BLOCK_REMOTE", env.hookfunction == nil) end
+		if presentClasses["UnreliableRemoteEvent"] then context:AddRegistered("UNBLOCK_REMOTE", env.hookfunction == nil) end
+		
+		
+		if presentClasses["BindableEvent"] then context:AddRegistered("BLOCK_REMOTE", env.hookfunction == nil) end
+		if presentClasses["BindableEvent"] then context:AddRegistered("UNBLOCK_REMOTE", env.hookfunction == nil) end
+		
+		if presentClasses["BindableFunction"] then context:AddRegistered("BLOCK_REMOTE", env.hookfunction == nil) end
+		if presentClasses["BindableFunction"] then context:AddRegistered("UNBLOCK_REMOTE", env.hookfunction == nil) end
+		
+		
+		
 		if presentClasses["Player"] then context:AddRegistered("SELECT_CHARACTER")context:AddRegistered("VIEW_PLAYER") end
 		if presentClasses["Players"] then
 			context:AddRegistered("SELECT_LOCAL_PLAYER")
@@ -1708,7 +1793,7 @@ local function main()
 
 		if presentClasses["LuaSourceContainer"] then
 			context:AddRegistered("VIEW_SCRIPT", not presentClasses.isViableDecompileScript or env.decompile == nil)
-			context:AddRegistered("DUMP_FUNCTIONS", not presentClasses.isViableDecompileScript or env.decompile == nil)
+			context:AddRegistered("DUMP_FUNCTIONS", not presentClasses.isViableDecompileScript or env.getupvalues == nil or env.getconstants == nil)
 			context:AddRegistered("SAVE_SCRIPT", not presentClasses.isViableDecompileScript or env.decompile == nil or env.writefile == nil)
 			context:AddRegistered("SAVE_BYTECODE", not presentClasses.isViableDecompileScript or env.getscriptbytecode == nil or env.writefile == nil)
 
@@ -2079,7 +2164,7 @@ local function main()
 			return str
 		end
 
-		context:Register("COPY_PATH",{Name = "Copy Path", IconMap = Explorer.ClassIcons, Icon = 50, OnClick = function()
+		context:Register("COPY_PATH",{Name = "Copy Path", IconMap = Explorer.LegacyClassIcons, Icon = 50, OnClick = function()
 			local sList = selection.List
 			if #sList == 1 then
 				env.setclipboard(clth(Explorer.GetInstancePath(sList[1].Obj)))
@@ -2115,17 +2200,23 @@ local function main()
 		context:Register("SAVE_INST",{Name = "Save to File", IconMap = Explorer.MiscIcons, Icon = "Save", OnClick = function()
 			local sList = selection.List
 			if #sList == 1 then
-				env.saveinstance(sList[1].Obj, "Place_"..game.PlaceId.."_"..sList[1].Obj.ClassName.."_"..sList[1].Obj.Name.."_"..os.time(), {
-					Decompile = true
-				})
+				Lib.SaveAsPrompt("Place_"..game.PlaceId.."_"..sList[1].Obj.ClassName.."_"..sList[1].Obj.Name.."_"..os.time(), function(filename)
+					env.saveinstance(sList[1].Obj, filename, {
+						Decompile = true,
+						RemovePlayerCharacters = false
+					})
+				end)
 			elseif #sList > 1 then
 				for i = 1,#sList do
 					-- sList[i].Obj.Name.." ("..sList[1].Obj.ClassName..")"
 					-- "Place_"..game.PlaceId.."_"..sList[1].Obj.ClassName.."_"..sList[i].Obj.Name.."_"..os.time()
-
-					env.saveinstance(sList[i].Obj, "Place_"..game.PlaceId.."_"..sList[i].Obj.ClassName.."_"..sList[i].Obj.Name.."_"..os.time(), {
-						Decompile = true
-					})
+					Lib.SaveAsPrompt("Place_"..game.PlaceId.."_"..sList[i].Obj.ClassName.."_"..sList[i].Obj.Name.."_"..os.time(), function(filename)
+						env.saveinstance(sList[i].Obj, filename, {
+							Decompile = true,
+							RemovePlayerCharacters = false
+						})
+					end)
+					
 					task.wait(0.1)
 				end
 			end
@@ -2134,6 +2225,48 @@ local function main()
         --[[context:Register("VIEW_CONNECTIONS",{Name = "View Connections", OnClick = function()
             
         end})]]
+		local ClassFire = {
+			RemoteEvent = "FireServer",
+			RemoteFunction = "InvokeServer",
+			UnreliableRemoteEvent = "FireServer",
+
+			BindableRemote = "Fire",
+			BindableFunction = "Invoke",
+		}
+		context:Register("BLOCK_REMOTE",{Name = "Block From Firing", IconMap = Explorer.MiscIcons, Icon = "Delete", DisabledIcon = "Empty", OnClick = function()
+			local sList = selection.List
+			for i, list in sList do
+				local obj = list.Obj
+				if not remote_blocklist[obj] then
+					local functionToHook = ClassFire[obj.ClassName]
+					remote_blocklist[obj] = true
+					local old; old = env.hookmetamethod((oldgame or game), "__namecall", function(self, ...)
+						if remote_blocklist[obj] and self == obj and getnamecallmethod() == functionToHook then
+							return nil
+						end
+						return old(self,...)
+					end)
+					if Settings.RemoteBlockWriteAttribute then
+						obj:SetAttribute("IsBlocked", true)
+					end
+					--print("blocking ",functionToHook)
+				end
+			end
+		end})
+		
+		context:Register("UNBLOCK_REMOTE",{Name = "Unblock", IconMap = Explorer.MiscIcons, Icon = "Play", DisabledIcon = "Empty", OnClick = function()
+			local sList = selection.List
+			for i, list in sList do
+				local obj = list.Obj
+				if remote_blocklist[obj] then
+					remote_blocklist[obj] = nil
+					if Settings.RemoteBlockWriteAttribute then
+						list.Obj:SetAttribute("IsBlocked", false)
+					end
+					--print("unblocking ",functionToHook)
+				end
+			end
+		end})
 
 		context:Register("COPY_API_PAGE",{Name = "Copy Roblox API Page URL", IconMap = Explorer.MiscIcons, Icon = "Reference", OnClick = function()
 			local sList = selection.List
@@ -2144,7 +2277,19 @@ local function main()
 			end
 		end})
 
-		context:Register("SPECTATE_OBJECT",{Name = "Spectate Object (Right click to reset)", IconMap = Explorer.ClassIcons, Icon = 5, OnClick = function()
+		context:Register("3DVIEW_MODEL",{Name = "3D Preview Object", IconMap = Explorer.LegacyClassIcons, Icon = 54, OnClick = function()
+			local sList = selection.List
+			local isa = game.IsA
+			
+			if #sList == 1 then
+				if isa(sList[1].Obj,"BasePart") or isa(sList[1].Obj,"Model") then
+					ModelViewer.ViewModel(sList[1].Obj)
+					return
+				end
+			end
+		end})
+		
+		context:Register("VIEW_OBJECT",{Name = "View Object (Right click to reset)", IconMap = Explorer.LegacyClassIcons, Icon = 5, OnClick = function()
 			local sList = selection.List
 			local isa = game.IsA
 
@@ -2160,76 +2305,67 @@ local function main()
 			workspace.CurrentCamera.CameraSubject = plr.Character
 		end})
 
-		context:Register("VIEW_MODEL",{Name = "View Model", IconMap = Explorer.ClassIcons, Icon = 5, OnClick = function()
-			local sList = selection.List
-			local isa = game.IsA
-			
-			if #sList == 1 then
-				if isa(sList[1].Obj,"BasePart") or isa(sList[1].Obj,"Model") then
-					ModelViewer.ViewModel(sList[1].Obj)
-					return
-				end
-			end
-		end})
-
-		context:Register("VIEW_SCRIPT",{Name = "View Script", IconMap = Explorer.MiscIcons, Icon = "ViewScript", OnClick = function()
+		context:Register("VIEW_SCRIPT",{Name = "View Script", IconMap = Explorer.MiscIcons, Icon = "ViewScript", DisabledIcon = "Empty", OnClick = function()
 			local scr = selection.List[1] and selection.List[1].Obj
 			if scr then ScriptViewer.ViewScript(scr) end
 		end})
-		context:Register("DUMP_FUNCTIONS",{Name = "Dump Functions", IconMap = Explorer.MiscIcons, Icon = "ViewScript", OnClick = function()
+		context:Register("DUMP_FUNCTIONS",{Name = "Dump Functions", IconMap = Explorer.MiscIcons, Icon = "SelectChildren", DisabledIcon = "Empty", OnClick = function()
 			local scr = selection.List[1] and selection.List[1].Obj
 			if scr then ScriptViewer.DumpFunctions(scr) end
 		end})
 
-		context:Register("FIRE_TOUCHTRANSMITTER",{Name = "Fire TouchTransmitter", IconMap = Explorer.ClassIcons, Icon = 37, OnClick = function()
+		context:Register("FIRE_TOUCHTRANSMITTER",{Name = "Fire TouchTransmitter", OnClick = function()
 			local hrp = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
 			if not hrp then return end
 			for _, v in ipairs(selection.List) do if v.Obj and v.Obj:IsA("TouchTransmitter") then firetouchinterest(hrp, v.Obj.Parent, 0) end end
 		end})
 
-		context:Register("FIRE_CLICKDETECTOR",{Name = "Fire ClickDetector", IconMap = Explorer.ClassIcons, Icon = 41, OnClick = function()
+		context:Register("FIRE_CLICKDETECTOR",{Name = "Fire ClickDetector", OnClick = function()
 			local hrp = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
 			if not hrp then return end
 			for _, v in ipairs(selection.List) do if v.Obj and v.Obj:IsA("ClickDetector") then fireclickdetector(v.Obj) end end
 		end})
 
-		context:Register("FIRE_PROXIMITYPROMPT",{Name = "Fire ProximityPrompt", IconMap = Explorer.ClassIcons, Icon = 124, OnClick = function()
+		context:Register("FIRE_PROXIMITYPROMPT",{Name = "Fire ProximityPrompt", OnClick = function()
 			local hrp = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
 			if not hrp then return end
 			for _, v in ipairs(selection.List) do if v.Obj and v.Obj:IsA("ProximityPrompt") then fireproximityprompt(v.Obj) end end
 		end})
 
-		context:Register("VIEW_SCRIPT",{Name = "View Script", IconMap = Explorer.MiscIcons, Icon = "ViewScript", OnClick = function()
+		context:Register("VIEW_SCRIPT",{Name = "View Script", IconMap = Explorer.MiscIcons, Icon = "ViewScript", DisabledIcon = "Empty", OnClick = function()
 			local scr = selection.List[1] and selection.List[1].Obj
 			if scr then ScriptViewer.ViewScript(scr) end
 		end})
 
-		context:Register("SAVE_SCRIPT",{Name = "Save Script", IconMap = Explorer.MiscIcons, Icon = "Save", OnClick = function()
+		context:Register("SAVE_SCRIPT",{Name = "Save Script", IconMap = Explorer.MiscIcons, Icon = "Save", DisabledIcon = "Empty", OnClick = function()
 			for _, v in next, selection.List do
 				if v.Obj:IsA("LuaSourceContainer") and env.isViableDecompileScript(v.Obj) then
 					local success, source = pcall(env.decompile, v.Obj)
 					if not success or not source then source = ("-- DEX - %s failed to decompile %s"):format(env.executor, v.Obj.ClassName) end
-					local fileName = ("%i.%s.%s.Source.txt"):format(game.PlaceId, v.Obj.ClassName, env.parsefile(v.Obj.Name))
-					env.writefile(fileName, source)
+					local fileName = ("%s_%s_%i_Source.txt"):format(env.parsefile(v.Obj.Name), v.Obj.ClassName, game.PlaceId)
+					--env.writefile(fileName, source)
+					Lib.SaveAsPrompt(fileName, source)
+					
 					task.wait(0.2)
 				end
 			end
 		end})
 
-		context:Register("SAVE_BYTECODE",{Name = "Save Script Bytecode", IconMap = Explorer.MiscIcons, Icon = "Save", OnClick = function()
+		context:Register("SAVE_BYTECODE",{Name = "Save Script Bytecode", IconMap = Explorer.MiscIcons, Icon = "Save", DisabledIcon = "Empty", OnClick = function()
 			for _, v in next, selection.List do
 				if v.Obj:IsA("LuaSourceContainer") and env.isViableDecompileScript(v.Obj) then
-					local success, bytecode = pcall(getscriptbytecode, v.Obj)
+					local success, bytecode = pcall(env.getscriptbytecode, v.Obj)
 					if success and type(bytecode) == "string" then
-						local fileName = ("%i.%s.%s.Bytecode.txt"):format(game.PlaceId, v.Obj.ClassName, env.parsefile(v.Obj.Name))
-						env.writefile(fileName, bytecode)
+						local fileName = ("%s_%s_%i_Bytecode.txt"):format(env.parsefile(v.Obj.Name), v.Obj.ClassName, game.PlaceId)
+						--env.writefile(fileName, bytecode)
+						Lib.SaveAsPrompt(fileName, bytecode)
 						task.wait(0.2)
 					end
 				end
 			end
 		end})
 
-		context:Register("SELECT_CHARACTER",{Name = "Select Character", IconMap = Explorer.ClassIcons, Icon = 9, OnClick = function()
+		context:Register("SELECT_CHARACTER",{Name = "Select Character", IconMap = Explorer.LegacyClassIcons, Icon = 9, OnClick = function()
 			local newSelection = {}
 			local count = 1
 			local sList = selection.List
@@ -2251,7 +2387,7 @@ local function main()
 			end
 		end})
 
-		context:Register("VIEW_PLAYER",{Name = "View Player", IconMap = Explorer.ClassIcons, Icon = 5, OnClick = function()
+		context:Register("VIEW_PLAYER",{Name = "View Player", IconMap = Explorer.LegacyClassIcons, Icon = 5, OnClick = function()
 			local newSelection = {}
 			local count = 1
 			local sList = selection.List
@@ -2267,11 +2403,11 @@ local function main()
 			end
 		end})
 
-		context:Register("SELECT_LOCAL_PLAYER",{Name = "Select Local Player", IconMap = Explorer.ClassIcons, Icon = 9, OnClick = function()
+		context:Register("SELECT_LOCAL_PLAYER",{Name = "Select Local Player", IconMap = Explorer.LegacyClassIcons, Icon = 9, OnClick = function()
 			pcall(function() if nodes[plr] then selection:Set(nodes[plr]) Explorer.ViewNode(nodes[plr]) end end)
 		end})
 
-		context:Register("SELECT_ALL_CHARACTERS",{Name = "Select All Characters", IconMap = Explorer.ClassIcons, Icon = 2, OnClick = function()
+		context:Register("SELECT_ALL_CHARACTERS",{Name = "Select All Characters", IconMap = Explorer.LegacyClassIcons, Icon = 2, OnClick = function()
 			local newSelection = {}
 			local sList = selection.List
 
@@ -2517,7 +2653,14 @@ local function main()
 				context:AddDivider(category)
 				lastCategory = category
 			end
-			context:Add({Name = class.Name, IconMap = Explorer.ClassIcons, Icon = iconInd, OnClick = onClick})
+			
+			local icon
+			if iconData then
+				icon = iconData.Icons[class.Name] or iconData.Icons.Placeholder
+			else
+				icon = iconInd
+			end
+			context:Add({Name = class.Name, IconMap = Explorer.ClassIcons, Icon = icon, OnClick = onClick})
 		end
 
 		Explorer.InsertObjectContext = context
@@ -2555,7 +2698,7 @@ local function main()
 			["remotes"] = function(argString)
 				return {
 					Headers = {"local isa = game.IsA"},
-					Predicate = "isa(obj,'RemoteEvent') or isa(obj,'RemoteFunction')"
+					Predicate = "isa(obj,'RemoteEvent') or isa(obj,'RemoteFunction') or isa(obj,'UnreliableRemoteFunction')"
 				}
 			end,
 			["bindables"] = function(argString)
@@ -3134,7 +3277,24 @@ return search]==]
 	end
 
 	Explorer.Init = function()
-		Explorer.ClassIcons = Lib.IconMap.newLinear("rbxasset://textures/ClassImages.PNG", 16, 16)
+		Explorer.LegacyClassIcons = Lib.IconMap.newLinear("rbxasset://textures/ClassImages.PNG", 16,16)
+		
+		if Settings.ClassIcon ~= nil and Settings.ClassIcon ~= "Old" then
+			iconData = Lib.IconMap.getIconDataFromName(Settings.ClassIcon)
+			
+			Explorer.ClassIcons = Lib.IconMap.new("rbxassetid://"..tostring(iconData.MapId), iconData.IconSize * iconData.Witdh, iconData.IconSize * iconData.Height,iconData.IconSize,iconData.IconSize)
+			-- move every value dict 1 behind because SetDict starts at 0 not 1 lol
+			local fixed = {}
+			for i,v in pairs(iconData.Icons) do
+				fixed[i] = v - 1
+			end
+			
+			iconData.Icons = fixed
+			Explorer.ClassIcons:SetDict(fixed)
+		else
+			Explorer.ClassIcons = Lib.IconMap.newLinear("rbxasset://textures/ClassImages.PNG", 16,16)
+		end
+		
 		Explorer.MiscIcons = Main.MiscIcons
 
 		clipboard = {}
@@ -3705,16 +3865,7 @@ local function main()
 
 	Lib.ProtectedGuis = {}
 
-	Lib.ShowGui = function(gui)
-		if env.gethui then
-			gui.Parent = env.gethui()
-		elseif env.protectgui then
-			env.protectgui(gui)
-			gui.Parent = Main.GuiHolder
-		else
-			gui.Parent = Main.GuiHolder
-		end
-	end
+	Lib.ShowGui = Main.SecureGui
 
 	Lib.ColorToBytes = function(col)
 		local round = math.round
@@ -3747,6 +3898,108 @@ local function main()
 
 		env.writefile(filepath,data)
 		return Lib.LoadCustomAsset(filepath)
+	end
+	
+	local currentfilename, currentextension, currentclickhandler
+	currentclickhandler = function() end
+	Lib.SaveAsPrompt = function(filename, codeToSave, ext)		
+		local win = ScriptViewer.SaveAsWindow
+		if not win then
+			win = Lib.Window.new()
+			win.Alignable = false
+			win.Resizable = false
+			win:SetTitle("Save As")
+			win:SetSize(300,95)
+
+			local saveButton = Lib.Button.new()
+			local nameLabel = Lib.Label.new()
+			nameLabel.Text = "Name"
+			nameLabel.Position = UDim2.new(0,30,0,10)
+			nameLabel.Size = UDim2.new(0,40,0,20)
+			win:Add(nameLabel)
+
+			local nameBox = Lib.ViewportTextBox.new()
+			nameBox.Position = UDim2.new(0,75,0,10)
+			nameBox.Size = UDim2.new(0,220,0,20)
+			win:Add(nameBox,"NameBox")
+
+			--nameBox.TextBox.Text = filename or ""
+
+			nameBox.TextBox:GetPropertyChangedSignal("Text"):Connect(function()
+				saveButton:SetDisabled(#nameBox:GetText() == 0)
+			end)
+
+			local errorLabel = Lib.Label.new()
+			errorLabel.Text = ""
+			errorLabel.Position = UDim2.new(0,5,1,-45)
+			errorLabel.Size = UDim2.new(1,-10,0,20)
+			errorLabel.TextColor3 = Settings.Theme.Important
+			win.ErrorLabel = errorLabel
+			win:Add(errorLabel,"Error")
+
+			local cancelButton = Lib.Button.new()
+			cancelButton.AnchorPoint = Vector2.new(1,1)
+			cancelButton.Text = "Cancel"
+			cancelButton.Position = UDim2.new(1,-5,1,-5)
+			cancelButton.Size = UDim2.new(0.5,-10,0,20)
+			cancelButton.OnClick:Connect(function()
+				win:Close()
+			end)
+			win:Add(cancelButton)
+
+			saveButton.Text = "Save"
+			saveButton.AnchorPoint = Vector2.new(0,1)
+			saveButton.Position = UDim2.new(0,5,1,-5)
+			saveButton.Size = UDim2.new(0.5,-5,0,20)
+			saveButton.OnClick:Connect(function()
+				currentclickhandler()
+			end)
+
+			win:Add(saveButton,"SaveButton")
+
+			ScriptViewer.SaveAsWindow = win
+		end
+
+		currentclickhandler = function()
+			if type(codeToSave) == "string" then
+				filename = (win.Elements.NameBox.TextBox.Text ~= "" and win.Elements.NameBox.TextBox.Text) or filename
+				currentextension = ext or filename:match("%.([^%.]+)$") or "txt"
+				filename = filename:gsub("%.[^.]+$", "") .. "." .. currentextension
+
+				local codeText = codeToSave or ""
+				if env.writefile then
+					local s, msg = pcall(env.writefile, filename, codeText)
+					if not s then
+						win.Elements.Error.Text = "Error: " .. msg
+						task.spawn(error, msg)
+						task.wait(1)
+					end
+				else
+					win.Elements.Error.Text = "Your executor does not support 'writefile'"
+					task.wait(1)
+				end
+			elseif type(codeToSave) == "function" then
+				filename = (win.Elements.NameBox.TextBox.Text ~= "" and win.Elements.NameBox.TextBox.Text) or filename
+				currentextension = ext or filename:match("%.([^%.]+)$") or "txt"
+				filename = filename:gsub("%.[^.]+$", "") .. "." .. currentextension
+
+				local s, msg = pcall(codeToSave,filename) -- callback
+				if not s then
+					win.Elements.Error.Text = "Error: " .. msg
+					task.spawn(error, msg)
+					Lib.FastWait(1)
+				end
+			end
+			win:Close()
+		end
+
+		win:SetTitle("Save As")
+		win.Elements.Error.Text = ""
+		win.Elements.NameBox:SetText(filename or "")
+		
+		win.Elements.SaveButton:SetDisabled(win.Elements.NameBox:GetText() == 0)
+		
+		win:Show()
 	end
 
 	-- Classes
@@ -3888,218 +4141,1186 @@ local function main()
 
 		return {new = new}
 	end)()
-
+	
 	Lib.IconMap = (function()
 		local funcs = {}
-		local _MapId, _Icons = (483448923), {
-			["Accessory"] = 32;
-			["Accoutrement"] = 32;
-			["AdService"] = 73;
-			["Animation"] = 60;
-			["AnimationController"] = 60;
-			["AnimationTrack"] = 60;
-			["Animator"] = 60;
-			["ArcHandles"] = 56;
-			["AssetService"] = 72;
-			["Attachment"] = 34;
-			["Backpack"] = 20;
-			["BadgeService"] = 75;
-			["BallSocketConstraint"] = 89;
-			["BillboardGui"] = 64;
-			["BinaryStringValue"] = 4;
-			["BindableEvent"] = 67;
-			["BindableFunction"] = 66;
-			["BlockMesh"] = 8;
-			["BloomEffect"] = 90;
-			["BlurEffect"] = 90;
-			["BodyAngularVelocity"] = 14;
-			["BodyForce"] = 14;
-			["BodyGyro"] = 14;
-			["BodyPosition"] = 14;
-			["BodyThrust"] = 14;
-			["BodyVelocity"] = 14;
-			["BoolValue"] = 4;
-			["BoxHandleAdornment"] = 54;
-			["BrickColorValue"] = 4;
-			["Camera"] = 5;
-			["CFrameValue"] = 4;
-			["CharacterMesh"] = 60;
-			["Chat"] = 33;
-			["ClickDetector"] = 41;
-			["CollectionService"] = 30;
-			["Color3Value"] = 4;
-			["ColorCorrectionEffect"] = 90;
-			["ConeHandleAdornment"] = 54;
-			["Configuration"] = 58;
-			["ContentProvider"] = 72;
-			["ContextActionService"] = 41;
-			["CoreGui"] = 46;
-			["CoreScript"] = 18;
-			["CornerWedgePart"] = 1;
-			["CustomEvent"] = 4;
-			["CustomEventReceiver"] = 4;
-			["CylinderHandleAdornment"] = 54;
-			["CylinderMesh"] = 8;
-			["CylindricalConstraint"] = 89;
-			["Debris"] = 30;
-			["Decal"] = 7;
-			["Dialog"] = 62;
-			["DialogChoice"] = 63;
-			["DoubleConstrainedValue"] = 4;
-			["Explosion"] = 36;
-			["FileMesh"] = 8;
-			["Fire"] = 61;
-			["Flag"] = 38;
-			["FlagStand"] = 39;
-			["FloorWire"] = 4;
-			["Folder"] = 70;
-			["ForceField"] = 37;
-			["Frame"] = 48;
-			["GamePassService"] = 19;
-			["Glue"] = 34;
-			["GuiButton"] = 52;
-			["GuiMain"] = 47;
-			["GuiService"] = 47;
-			["Handles"] = 53;
-			["HapticService"] = 84;
-			["Hat"] = 45;
-			["HingeConstraint"] = 89;
-			["Hint"] = 33;
-			["HopperBin"] = 22;
-			["HttpService"] = 76;
-			["Humanoid"] = 9;
-			["ImageButton"] = 52;
-			["ImageLabel"] = 49;
-			["InsertService"] = 72;
-			["IntConstrainedValue"] = 4;
-			["IntValue"] = 4;
-			["JointInstance"] = 34;
-			["JointsService"] = 34;
-			["Keyframe"] = 60;
-			["KeyframeSequence"] = 60;
-			["KeyframeSequenceProvider"] = 60;
-			["Lighting"] = 13;
-			["LineHandleAdornment"] = 54;
-			["LocalScript"] = 18;
-			["LogService"] = 87;
-			["MarketplaceService"] = 46;
-			["Message"] = 33;
-			["Model"] = 2;
-			["ModuleScript"] = 71;
-			["Motor"] = 34;
-			["Motor6D"] = 34;
-			["MoveToConstraint"] = 89;
-			["NegateOperation"] = 78;
-			["NetworkClient"] = 16;
-			["NetworkReplicator"] = 29;
-			["NetworkServer"] = 15;
-			["NumberValue"] = 4;
-			["ObjectValue"] = 4;
-			["Pants"] = 44;
-			["ParallelRampPart"] = 1;
-			["Part"] = 1;
-			["ParticleEmitter"] = 69;
-			["PartPairLasso"] = 57;
-			["PathfindingService"] = 37;
-			["Platform"] = 35;
-			["Player"] = 12;
-			["PlayerGui"] = 46;
-			["Players"] = 21;
-			["PlayerScripts"] = 82;
-			["PointLight"] = 13;
-			["PointsService"] = 83;
-			["Pose"] = 60;
-			["PrismaticConstraint"] = 89;
-			["PrismPart"] = 1;
-			["PyramidPart"] = 1;
-			["RayValue"] = 4;
-			["ReflectionMetadata"] = 86;
-			["ReflectionMetadataCallbacks"] = 86;
-			["ReflectionMetadataClass"] = 86;
-			["ReflectionMetadataClasses"] = 86;
-			["ReflectionMetadataEnum"] = 86;
-			["ReflectionMetadataEnumItem"] = 86;
-			["ReflectionMetadataEnums"] = 86;
-			["ReflectionMetadataEvents"] = 86;
-			["ReflectionMetadataFunctions"] = 86;
-			["ReflectionMetadataMember"] = 86;
-			["ReflectionMetadataProperties"] = 86;
-			["ReflectionMetadataYieldFunctions"] = 86;
-			["RemoteEvent"] = 80;
-			["RemoteFunction"] = 79;
-			["ReplicatedFirst"] = 72;
-			["ReplicatedStorage"] = 72;
-			["RightAngleRampPart"] = 1;
-			["RocketPropulsion"] = 14;
-			["RodConstraint"] = 89;
-			["RopeConstraint"] = 89;
-			["Rotate"] = 34;
-			["RotateP"] = 34;
-			["RotateV"] = 34;
-			["RunService"] = 66;
-			["ScreenGui"] = 47;
-			["Script"] = 6;
-			["ScrollingFrame"] = 48;
-			["Seat"] = 35;
-			["Selection"] = 55;
-			["SelectionBox"] = 54;
-			["SelectionPartLasso"] = 57;
-			["SelectionPointLasso"] = 57;
-			["SelectionSphere"] = 54;
-			["ServerScriptService"] = 0;
-			["ServerStorage"] = 74;
-			["Shirt"] = 43;
-			["ShirtGraphic"] = 40;
-			["SkateboardPlatform"] = 35;
-			["Sky"] = 28;
-			["SlidingBallConstraint"] = 89;
-			["Smoke"] = 59;
-			["Snap"] = 34;
-			["Sound"] = 11;
-			["SoundService"] = 31;
-			["Sparkles"] = 42;
-			["SpawnLocation"] = 25;
-			["SpecialMesh"] = 8;
-			["SphereHandleAdornment"] = 54;
-			["SpotLight"] = 13;
-			["SpringConstraint"] = 89;
-			["StarterCharacterScripts"] = 82;
-			["StarterGear"] = 20;
-			["StarterGui"] = 46;
-			["StarterPack"] = 20;
-			["StarterPlayer"] = 88;
-			["StarterPlayerScripts"] = 82;
-			["Status"] = 2;
-			["StringValue"] = 4;
-			["SunRaysEffect"] = 90;
-			["SurfaceGui"] = 64;
-			["SurfaceLight"] = 13;
-			["SurfaceSelection"] = 55;
-			["Team"] = 24;
-			["Teams"] = 23;
-			["TeleportService"] = 81;
-			["Terrain"] = 65;
-			["TerrainRegion"] = 65;
-			["TestService"] = 68;
-			["TextBox"] = 51;
-			["TextButton"] = 51;
-			["TextLabel"] = 50;
-			["Texture"] = 10;
-			["TextureTrail"] = 4;
-			["Tool"] = 17;
-			["TouchTransmitter"] = 37;
-			["TrussPart"] = 1;
-			["UnionOperation"] = 77;
-			["UserInputService"] = 84;
-			["Vector3Value"] = 4;
-			["VehicleSeat"] = 35;
-			["VelocityMotor"] = 34;
-			["WedgePart"] = 1;
-			["Weld"] = 34;
-			["Workspace"] = 19;
+		local IconList = {
+			Old = {
+				MapId = 483448923,
+				IconSize = 16,
+				Witdh = 16,
+				Height = 16,
+				Icons = {
+					["Accessory"] = 32;
+					["Accoutrement"] = 32;
+					["AdService"] = 73;
+					["Animation"] = 60;
+					["AnimationController"] = 60;
+					["AnimationTrack"] = 60;
+					["Animator"] = 60;
+					["ArcHandles"] = 56;
+					["AssetService"] = 72;
+					["Attachment"] = 34;
+					["Backpack"] = 20;
+					["BadgeService"] = 75;
+					["BallSocketConstraint"] = 89;
+					["BillboardGui"] = 64;
+					["BinaryStringValue"] = 4;
+					["BindableEvent"] = 67;
+					["BindableFunction"] = 66;
+					["BlockMesh"] = 8;
+					["BloomEffect"] = 90;
+					["BlurEffect"] = 90;
+					["BodyAngularVelocity"] = 14;
+					["BodyForce"] = 14;
+					["BodyGyro"] = 14;
+					["BodyPosition"] = 14;
+					["BodyThrust"] = 14;
+					["BodyVelocity"] = 14;
+					["BoolValue"] = 4;
+					["BoxHandleAdornment"] = 54;
+					["BrickColorValue"] = 4;
+					["Camera"] = 5;
+					["CFrameValue"] = 4;
+					["CharacterMesh"] = 60;
+					["Chat"] = 33;
+					["ClickDetector"] = 41;
+					["CollectionService"] = 30;
+					["Color3Value"] = 4;
+					["ColorCorrectionEffect"] = 90;
+					["ConeHandleAdornment"] = 54;
+					["Configuration"] = 58;
+					["ContentProvider"] = 72;
+					["ContextActionService"] = 41;
+					["CoreGui"] = 46;
+					["CoreScript"] = 18;
+					["CornerWedgePart"] = 1;
+					["CustomEvent"] = 4;
+					["CustomEventReceiver"] = 4;
+					["CylinderHandleAdornment"] = 54;
+					["CylinderMesh"] = 8;
+					["CylindricalConstraint"] = 89;
+					["Debris"] = 30;
+					["Decal"] = 7;
+					["Dialog"] = 62;
+					["DialogChoice"] = 63;
+					["DoubleConstrainedValue"] = 4;
+					["Explosion"] = 36;
+					["FileMesh"] = 8;
+					["Fire"] = 61;
+					["Flag"] = 38;
+					["FlagStand"] = 39;
+					["FloorWire"] = 4;
+					["Folder"] = 70;
+					["ForceField"] = 37;
+					["Frame"] = 48;
+					["GamePassService"] = 19;
+					["Glue"] = 34;
+					["GuiButton"] = 52;
+					["GuiMain"] = 47;
+					["GuiService"] = 47;
+					["Handles"] = 53;
+					["HapticService"] = 84;
+					["Hat"] = 45;
+					["HingeConstraint"] = 89;
+					["Hint"] = 33;
+					["HopperBin"] = 22;
+					["HttpService"] = 76;
+					["Humanoid"] = 9;
+					["ImageButton"] = 52;
+					["ImageLabel"] = 49;
+					["InsertService"] = 72;
+					["IntConstrainedValue"] = 4;
+					["IntValue"] = 4;
+					["JointInstance"] = 34;
+					["JointsService"] = 34;
+					["Keyframe"] = 60;
+					["KeyframeSequence"] = 60;
+					["KeyframeSequenceProvider"] = 60;
+					["Lighting"] = 13;
+					["LineHandleAdornment"] = 54;
+					["LocalScript"] = 18;
+					["LogService"] = 87;
+					["MarketplaceService"] = 46;
+					["Message"] = 33;
+					["Model"] = 2;
+					["ModuleScript"] = 71;
+					["Motor"] = 34;
+					["Motor6D"] = 34;
+					["MoveToConstraint"] = 89;
+					["NegateOperation"] = 78;
+					["NetworkClient"] = 16;
+					["NetworkReplicator"] = 29;
+					["NetworkServer"] = 15;
+					["NumberValue"] = 4;
+					["ObjectValue"] = 4;
+					["Pants"] = 44;
+					["ParallelRampPart"] = 1;
+					["Part"] = 1;
+					["ParticleEmitter"] = 69;
+					["PartPairLasso"] = 57;
+					["PathfindingService"] = 37;
+					["Platform"] = 35;
+					["Player"] = 12;
+					["PlayerGui"] = 46;
+					["Players"] = 21;
+					["PlayerScripts"] = 82;
+					["PointLight"] = 13;
+					["PointsService"] = 83;
+					["Pose"] = 60;
+					["PrismaticConstraint"] = 89;
+					["PrismPart"] = 1;
+					["PyramidPart"] = 1;
+					["RayValue"] = 4;
+					["ReflectionMetadata"] = 86;
+					["ReflectionMetadataCallbacks"] = 86;
+					["ReflectionMetadataClass"] = 86;
+					["ReflectionMetadataClasses"] = 86;
+					["ReflectionMetadataEnum"] = 86;
+					["ReflectionMetadataEnumItem"] = 86;
+					["ReflectionMetadataEnums"] = 86;
+					["ReflectionMetadataEvents"] = 86;
+					["ReflectionMetadataFunctions"] = 86;
+					["ReflectionMetadataMember"] = 86;
+					["ReflectionMetadataProperties"] = 86;
+					["ReflectionMetadataYieldFunctions"] = 86;
+					["RemoteEvent"] = 80;
+					["RemoteFunction"] = 79;
+					["ReplicatedFirst"] = 72;
+					["ReplicatedStorage"] = 72;
+					["RightAngleRampPart"] = 1;
+					["RocketPropulsion"] = 14;
+					["RodConstraint"] = 89;
+					["RopeConstraint"] = 89;
+					["Rotate"] = 34;
+					["RotateP"] = 34;
+					["RotateV"] = 34;
+					["RunService"] = 66;
+					["ScreenGui"] = 47;
+					["Script"] = 6;
+					["ScrollingFrame"] = 48;
+					["Seat"] = 35;
+					["Selection"] = 55;
+					["SelectionBox"] = 54;
+					["SelectionPartLasso"] = 57;
+					["SelectionPointLasso"] = 57;
+					["SelectionSphere"] = 54;
+					["ServerScriptService"] = 0;
+					["ServerStorage"] = 74;
+					["Shirt"] = 43;
+					["ShirtGraphic"] = 40;
+					["SkateboardPlatform"] = 35;
+					["Sky"] = 28;
+					["SlidingBallConstraint"] = 89;
+					["Smoke"] = 59;
+					["Snap"] = 34;
+					["Sound"] = 11;
+					["SoundService"] = 31;
+					["Sparkles"] = 42;
+					["SpawnLocation"] = 25;
+					["SpecialMesh"] = 8;
+					["SphereHandleAdornment"] = 54;
+					["SpotLight"] = 13;
+					["SpringConstraint"] = 89;
+					["StarterCharacterScripts"] = 82;
+					["StarterGear"] = 20;
+					["StarterGui"] = 46;
+					["StarterPack"] = 20;
+					["StarterPlayer"] = 88;
+					["StarterPlayerScripts"] = 82;
+					["Status"] = 2;
+					["StringValue"] = 4;
+					["SunRaysEffect"] = 90;
+					["SurfaceGui"] = 64;
+					["SurfaceLight"] = 13;
+					["SurfaceSelection"] = 55;
+					["Team"] = 24;
+					["Teams"] = 23;
+					["TeleportService"] = 81;
+					["Terrain"] = 65;
+					["TerrainRegion"] = 65;
+					["TestService"] = 68;
+					["TextBox"] = 51;
+					["TextButton"] = 51;
+					["TextLabel"] = 50;
+					["Texture"] = 10;
+					["TextureTrail"] = 4;
+					["Tool"] = 17;
+					["TouchTransmitter"] = 37;
+					["TrussPart"] = 1;
+					["UnionOperation"] = 77;
+					["UserInputService"] = 84;
+					["Vector3Value"] = 4;
+					["VehicleSeat"] = 35;
+					["VelocityMotor"] = 34;
+					["WedgePart"] = 1;
+					["Weld"] = 34;
+					["Workspace"] = 19;
 
+				}
+			},
+			Vanilla3 = {
+				MapId = (114851699900089),
+				IconSize = 32,
+				Witdh = 25,
+				Height = 25,
+				Icons = {
+					Accessory = 1,
+					Accoutrement = 2,
+					Actor = 3,
+					AdGui = 4,
+					AdPortal = 5,
+					AdService = 6,
+					AdvancedDragger = 7,
+					AirController = 8,
+					AlignOrientation = 9,
+					AlignPosition = 10,
+					AnalysticsService = 11,
+					AnalysticsSettings = 12,
+					AnalyticsService = 13,
+					AngularVelocity = 14,
+					Animation = 15,
+					AnimationClip = 16,
+					AnimationClipProvider = 17,
+					AnimationController = 18,
+					AnimationFromVideoCreatorService = 19,
+					AnimationFromVideoCreatorStudioService = 20,
+					AnimationRigData = 21,
+					AnimationStreamTrack = 22,
+					AnimationTrack = 23,
+					Animator = 24,
+					AppStorageService = 25,
+					AppUpdateService = 26,
+					ArcHandles = 27,
+					AssetCounterService = 28,
+					AssetDeliveryProxy = 29,
+					AssetImportService = 30,
+					AssetImportSession = 31,
+					AssetManagerService = 32,
+					AssetService = 33,
+					AssetSoundEffect = 34,
+					Atmosphere = 35,
+					Attachment = 36,
+					AvatarEditorService = 37,
+					AvatarImportService = 38,
+					Backpack = 39,
+					BackpackItem = 40,
+					BadgeService = 41,
+					BallSocketConstraint = 42,
+					BasePart = 43,
+					BasePlayerGui = 44,
+					BaseScript = 45,
+					BaseWrap = 46,
+					Beam = 47,
+					BevelMesh = 48,
+					BillboardGui = 49,
+					BinaryStringValue = 50,
+					BindableEvent = 51,
+					BindableFunction = 52,
+					BlockMesh = 53,
+					BloomEffect = 54,
+					BlurEffect = 55,
+					BodyAngularVelocity = 56,
+					BodyColors = 57,
+					BodyForce = 58,
+					BodyGyro = 59,
+					BodyMover = 60,
+					BodyPosition = 61,
+					BodyThrust = 62,
+					BodyVelocity = 63,
+					Bone = 64,
+					BoolValue = 65,
+					BoxHandleAdornment = 66,
+					Breakpoint = 67,
+					BreakpointManager = 68,
+					BrickColorValue = 69,
+					BrowserService = 70,
+					BubbleChatConfiguration = 71,
+					BulkImportService = 72,
+					CacheableContentProvider = 73,
+					CalloutService = 74,
+					Camera = 75,
+					CanvasGroup = 76,
+					CatalogPages = 77,
+					CFrameValue = 78,
+					ChangeHistoryService = 79,
+					ChannelSelectorSoundEffect = 80,
+					CharacterAppearance = 81,
+					CharacterMesh = 82,
+					Chat = 83,
+					ChatInputBarConfiguration = 84,
+					ChatWindowConfiguration = 85,
+					ChorusSoundEffect = 86,
+					ClickDetector = 87,
+					ClientReplicator = 88,
+					ClimbController = 89,
+					Clothing = 90,
+					Clouds = 91,
+					ClusterPacketCache = 92,
+					CollectionService = 93,
+					Color3Value = 94,
+					ColorCorrectionEffect = 95,
+					CommandInstance = 96,
+					CommandService = 97,
+					CompressorSoundEffect = 98,
+					ConeHandleAdornment = 99,
+					Configuration = 100,
+					ConfigureServerService = 101,
+					Constraint = 102,
+					ContentProvider = 103,
+					ContextActionService = 104,
+					Controller = 105,
+					ControllerBase = 106,
+					ControllerManager = 107,
+					ControllerService = 108,
+					CookiesService = 109,
+					CoreGui = 110,
+					CorePackages = 111,
+					CoreScript = 112,
+					CoreScriptSyncService = 113,
+					CornerWedgePart = 114,
+					CrossDMScriptChangeListener = 115,
+					CSGDictionaryService = 116,
+					CurveAnimation = 117,
+					CustomEvent = 118,
+					CustomEventReceiver = 119,
+					CustomSoundEffect = 120,
+					CylinderHandleAdornment = 121,
+					CylinderMesh = 122,
+					CylindricalConstraint = 123,
+					DataModel = 124,
+					DataModelMesh = 125,
+					DataModelPatchService = 126,
+					DataModelSession = 127,
+					DataStore = 128,
+					DataStoreIncrementOptions = 129,
+					DataStoreInfo = 130,
+					DataStoreKey = 131,
+					DataStoreKeyInfo = 132,
+					DataStoreKeyPages = 133,
+					DataStoreListingPages = 134,
+					DataStoreObjectVersionInfo = 135,
+					DataStoreOptions = 136,
+					DataStorePages = 137,
+					DataStoreService = 138,
+					DataStoreSetOptions = 139,
+					DataStoreVersionPages = 140,
+					Debris = 141,
+					DebuggablePluginWatcher = 142,
+					DebuggerBreakpoint = 143,
+					DebuggerConnection = 144,
+					DebuggerConnectionManager = 145,
+					DebuggerLuaResponse = 146,
+					DebuggerManager = 147,
+					DebuggerUIService = 148,
+					DebuggerVariable = 149,
+					DebuggerWatch = 150,
+					DebugSettings = 151,
+					Decal = 152,
+					DepthOfFieldEffect = 153,
+					DeviceIdService = 154,
+					Dialog = 155,
+					DialogChoice = 156,
+					DistortionSoundEffect = 157,
+					DockWidgetPluginGui = 158,
+					DoubleConstrainedValue = 159,
+					DraftsService = 160,
+					Dragger = 161,
+					DraggerService = 162,
+					DynamicRotate = 163,
+					EchoSoundEffect = 164,
+					EmotesPages = 165,
+					EqualizerSoundEffect = 166,
+					EulerRotationCurve = 167,
+					EventIngestService = 168,
+					Explosion = 169,
+					FaceAnimatorService = 170,
+					FaceControls = 171,
+					FaceInstance = 172,
+					FacialAnimationRecordingService = 173,
+					FacialAnimationStreamingService = 174,
+					Feature = 175,
+					File = 176,
+					FileMesh = 177,
+					Fire = 178,
+					Flag = 179,
+					FlagStand = 180,
+					FlagStandService = 181,
+					FlangeSoundEffect = 182,
+					FloatCurve = 183,
+					FloorWire = 184,
+					FlyweightService = 185,
+					Folder = 186,
+					ForceField = 187,
+					FormFactorPart = 188,
+					Frame = 189,
+					FriendPages = 190,
+					FriendService = 191,
+					FunctionalTest = 192,
+					GamepadService = 193,
+					GamePassService = 194,
+					GameSettings = 195,
+					GenericSettings = 196,
+					Geometry = 197,
+					GetTextBoundsParams = 198,
+					GlobalDataStore = 199,
+					GlobalSettings = 200,
+					Glue = 201,
+					GoogleAnalyticsConfiguration = 202,
+					GroundController = 203,
+					GroupService = 204,
+					GuiBase = 205,
+					GuiBase2d = 206,
+					GuiBase3d = 207,
+					GuiButton = 208,
+					GuidRegistryService = 209,
+					GuiLabel = 210,
+					GuiMain = 211,
+					GuiObject = 212,
+					GuiService = 213,
+					HandleAdornment = 214,
+					Handles = 215,
+					HandlesBase = 216,
+					HapticService = 217,
+					Hat = 218,
+					HeightmapImporterService = 219,
+					HiddenSurfaceRemovalAsset = 220,
+					Highlight = 221,
+					HingeConstraint = 222,
+					Hint = 223,
+					Hole = 224,
+					Hopper = 225,
+					HopperBin = 226,
+					HSRDataContentProvider = 227,
+					HttpRbxApiService = 228,
+					HttpRequest = 229,
+					HttpService = 230,
+					Humanoid = 231,
+					HumanoidController = 232,
+					HumanoidDescription = 233,
+					IKControl = 234,
+					ILegacyStudioBridge = 235,
+					ImageButton = 236,
+					ImageHandleAdornment = 237,
+					ImageLabel = 238,
+					ImporterAnimationSettings = 239,
+					ImporterBaseSettings = 240,
+					ImporterFacsSettings = 241,
+					ImporterGroupSettings = 242,
+					ImporterJointSettings = 243,
+					ImporterMaterialSettings = 244,
+					ImporterMeshSettings = 245,
+					ImporterRootSettings = 246,
+					IncrementalPatchBuilder = 247,
+					InputObject = 248,
+					InsertService = 249,
+					Instance = 250,
+					InstanceAdornment = 251,
+					IntConstrainedValue = 252,
+					IntValue = 253,
+					InventoryPages = 254,
+					IXPService = 255,
+					JointInstance = 256,
+					JointsService = 257,
+					KeyboardService = 258,
+					Keyframe = 259,
+					KeyframeMarker = 260,
+					KeyframeSequence = 261,
+					KeyframeSequenceProvider = 262,
+					LanguageService = 263,
+					LayerCollector = 264,
+					LegacyStudioBridge = 265,
+					Light = 266,
+					Lighting = 267,
+					LinearVelocity = 268,
+					LineForce = 269,
+					LineHandleAdornment = 270,
+					LocalDebuggerConnection = 271,
+					LocalizationService = 272,
+					LocalizationTable = 273,
+					LocalScript = 274,
+					LocalStorageService = 275,
+					LodDataEntity = 276,
+					LodDataService = 277,
+					LoginService = 278,
+					LogService = 279,
+					LSPFileSyncService = 280,
+					LuaSettings = 281,
+					LuaSourceContainer = 282,
+					LuauScriptAnalyzerService = 283,
+					LuaWebService = 284,
+					ManualGlue = 285,
+					ManualSurfaceJointInstance = 286,
+					ManualWeld = 287,
+					MarkerCurve = 288,
+					MarketplaceService = 289,
+					MaterialService = 290,
+					MaterialVariant = 291,
+					MemoryStoreQueue = 292,
+					MemoryStoreService = 293,
+					MemoryStoreSortedMap = 294,
+					MemStorageConnection = 295,
+					MemStorageService = 296,
+					MeshContentProvider = 297,
+					MeshPart = 298,
+					Message = 299,
+					MessageBusConnection = 300,
+					MessageBusService = 301,
+					MessagingService = 302,
+					MetaBreakpoint = 303,
+					MetaBreakpointContext = 304,
+					MetaBreakpointManager = 305,
+					Model = 306,
+					ModuleScript = 307,
+					Motor = 308,
+					Motor6D = 309,
+					MotorFeature = 310,
+					Mouse = 311,
+					MouseService = 312,
+					MultipleDocumentInterfaceInstance = 313,
+					NegateOperation = 314,
+					NetworkClient = 315,
+					NetworkMarker = 316,
+					NetworkPeer = 317,
+					NetworkReplicator = 318,
+					NetworkServer = 319,
+					NetworkSettings = 320,
+					NoCollisionConstraint = 321,
+					NonReplicatedCSGDictionaryService = 322,
+					NotificationService = 323,
+					NumberPose = 324,
+					NumberValue = 325,
+					ObjectValue = 326,
+					OrderedDataStore = 327,
+					OutfitPages = 328,
+					PackageLink = 329,
+					PackageService = 330,
+					PackageUIService = 331,
+					Pages = 332,
+					Pants = 333,
+					ParabolaAdornment = 334,
+					Part = 335,
+					PartAdornment = 336,
+					ParticleEmitter = 337,
+					PartOperation = 338,
+					PartOperationAsset = 339,
+					PatchMapping = 340,
+					Path = 341,
+					PathfindingLink = 342,
+					PathfindingModifier = 343,
+					PathfindingService = 344,
+					PausedState = 345,
+					PausedStateBreakpoint = 346,
+					PausedStateException = 347,
+					PermissionsService = 348,
+					PhysicsService = 349,
+					PhysicsSettings = 350,
+					PitchShiftSoundEffect = 351,
+					Plane = 352,
+					PlaneConstraint = 353,
+					Platform = 354,
+					Player = 355,
+					PlayerEmulatorService = 356,
+					PlayerGui = 357,
+					PlayerMouse = 358,
+					Players = 359,
+					PlayerScripts = 360,
+					Plugin = 361,
+					PluginAction = 362,
+					PluginDebugService = 363,
+					PluginDragEvent = 364,
+					PluginGui = 365,
+					PluginGuiService = 366,
+					PluginManagementService = 367,
+					PluginManager = 368,
+					PluginManagerInterface = 369,
+					PluginMenu = 370,
+					PluginMouse = 371,
+					PluginPolicyService = 372,
+					PluginToolbar = 373,
+					PluginToolbarButton = 374,
+					PointLight = 375,
+					PointsService = 376,
+					PolicyService = 377,
+					Pose = 378,
+					PoseBase = 379,
+					PostEffect = 380,
+					PrismaticConstraint = 381,
+					ProcessInstancePhysicsService = 382,
+					ProximityPrompt = 383,
+					ProximityPromptService = 384,
+					PublishService = 385,
+					PVAdornment = 386,
+					PVInstance = 387,
+					QWidgetPluginGui = 388,
+					RayValue = 389,
+					RbxAnalyticsService = 390,
+					ReflectionMetadata = 391,
+					ReflectionMetadataCallbacks = 392,
+					ReflectionMetadataClass = 393,
+					ReflectionMetadataClasses = 394,
+					ReflectionMetadataEnum = 395,
+					ReflectionMetadataEnumItem = 396,
+					ReflectionMetadataEnums = 397,
+					ReflectionMetadataEvents = 398,
+					ReflectionMetadataFunctions = 399,
+					ReflectionMetadataItem = 400,
+					ReflectionMetadataMember = 401,
+					ReflectionMetadataProperties = 402,
+					ReflectionMetadataYieldFunctions = 403,
+					RemoteDebuggerServer = 404,
+					RemoteEvent = 405,
+					RemoteFunction = 406,
+					RenderingTest = 407,
+					RenderSettings = 408,
+					ReplicatedFirst = 409,
+					ReplicatedStorage = 410,
+					ReverbSoundEffect = 411,
+					RigidConstraint = 412,
+					RobloxPluginGuiService = 413,
+					RobloxReplicatedStorage = 414,
+					RocketPropulsion = 415,
+					RodConstraint = 416,
+					RopeConstraint = 417,
+					Rotate = 418,
+					RotateP = 419,
+					RotateV = 420,
+					RotationCurve = 421,
+					RtMessagingService = 422,
+					RunningAverageItemDouble = 423,
+					RunningAverageItemInt = 424,
+					RunningAverageTimeIntervalItem = 425,
+					RunService = 426,
+					RuntimeScriptService = 427,
+					ScreenGui = 428,
+					ScreenshotHud = 429,
+					Script = 430,
+					ScriptChangeService = 431,
+					ScriptCloneWatcher = 432,
+					ScriptCloneWatcherHelper = 433,
+					ScriptContext = 434,
+					ScriptDebugger = 435,
+					ScriptDocument = 436,
+					ScriptEditorService = 437,
+					ScriptRegistrationService = 438,
+					ScriptService = 439,
+					ScrollingFrame = 440,
+					Seat = 441,
+					Selection = 442,
+					SelectionBox = 443,
+					SelectionLasso = 444,
+					SelectionPartLasso = 445,
+					SelectionPointLasso = 446,
+					SelectionSphere = 447,
+					ServerReplicator = 448,
+					ServerScriptService = 449,
+					ServerStorage = 450,
+					ServiceProvider = 451,
+					SessionService = 452,
+					Shirt = 453,
+					ShirtGraphic = 454,
+					SkateboardController = 455,
+					SkateboardPlatform = 456,
+					Skin = 457,
+					Sky = 458,
+					SlidingBallConstraint = 459,
+					Smoke = 460,
+					Snap = 461,
+					SnippetService = 462,
+					SocialService = 463,
+					SolidModelContentProvider = 464,
+					Sound = 465,
+					SoundEffect = 466,
+					SoundGroup = 467,
+					SoundService = 468,
+					Sparkles = 469,
+					SpawnerService = 470,
+					SpawnLocation = 471,
+					Speaker = 472,
+					SpecialMesh = 473,
+					SphereHandleAdornment = 474,
+					SpotLight = 475,
+					SpringConstraint = 476,
+					StackFrame = 477,
+					StandalonePluginScripts = 478,
+					StandardPages = 479,
+					StarterCharacterScripts = 480,
+					StarterGear = 481,
+					StarterGui = 482,
+					StarterPack = 483,
+					StarterPlayer = 484,
+					StarterPlayerScripts = 485,
+					Stats = 486,
+					StatsItem = 487,
+					Status = 488,
+					StopWatchReporter = 489,
+					StringValue = 490,
+					Studio = 491,
+					StudioAssetService = 492,
+					StudioData = 493,
+					StudioDeviceEmulatorService = 494,
+					StudioHighDpiService = 495,
+					StudioPublishService = 496,
+					StudioScriptDebugEventListener = 497,
+					StudioService = 498,
+					StudioTheme = 499,
+					SunRaysEffect = 500,
+					SurfaceAppearance = 501,
+					SurfaceGui = 502,
+					SurfaceGuiBase = 503,
+					SurfaceLight = 504,
+					SurfaceSelection = 505,
+					SwimController = 506,
+					TaskScheduler = 507,
+					Team = 508,
+					TeamCreateService = 509,
+					Teams = 510,
+					TeleportAsyncResult = 511,
+					TeleportOptions = 512,
+					TeleportService = 513,
+					TemporaryCageMeshProvider = 514,
+					TemporaryScriptService = 515,
+					Terrain = 516,
+					TerrainDetail = 517,
+					TerrainRegion = 518,
+					TestService = 519,
+					TextBox = 520,
+					TextBoxService = 521,
+					TextButton = 522,
+					TextChannel = 523,
+					TextChatCommand = 524,
+					TextChatConfigurations = 525,
+					TextChatMessage = 526,
+					TextChatMessageProperties = 527,
+					TextChatService = 528,
+					TextFilterResult = 529,
+					TextLabel = 530,
+					TextService = 531,
+					TextSource = 532,
+					Texture = 533,
+					ThirdPartyUserService = 534,
+					ThreadState = 535,
+					TimerService = 536,
+					ToastNotificationService = 537,
+					Tool = 538,
+					ToolboxService = 539,
+					Torque = 540,
+					TorsionSpringConstraint = 541,
+					TotalCountTimeIntervalItem = 542,
+					TouchInputService = 543,
+					TouchTransmitter = 544,
+					TracerService = 545,
+					TrackerStreamAnimation = 546,
+					Trail = 547,
+					Translator = 548,
+					TremoloSoundEffect = 549,
+					TriangleMeshPart = 550,
+					TrussPart = 551,
+					Tween = 552,
+					TweenBase = 553,
+					TweenService = 554,
+					UGCValidationService = 555,
+					UIAspectRatioConstraint = 556,
+					UIBase = 557,
+					UIComponent = 558,
+					UIConstraint = 559,
+					UICorner = 560,
+					UIGradient = 561,
+					UIGridLayout = 562,
+					UIGridStyleLayout = 563,
+					UILayout = 564,
+					UIListLayout = 565,
+					UIPadding = 566,
+					UIPageLayout = 567,
+					UIScale = 568,
+					UISizeConstraint = 569,
+					UIStroke = 570,
+					UITableLayout = 571,
+					UITextSizeConstraint = 572,
+					UnionOperation = 573,
+					UniversalConstraint = 574,
+					UnvalidatedAssetService = 575,
+					UserGameSettings = 576,
+					UserInputService = 577,
+					UserService = 578,
+					UserSettings = 579,
+					UserStorageService = 580,
+					ValueBase = 581,
+					Vector3Curve = 582,
+					Vector3Value = 583,
+					VectorForce = 584,
+					VehicleController = 585,
+					VehicleSeat = 586,
+					VelocityMotor = 587,
+					VersionControlService = 588,
+					VideoCaptureService = 589,
+					VideoFrame = 590,
+					ViewportFrame = 591,
+					VirtualInputManager = 592,
+					VirtualUser = 593,
+					VisibilityService = 594,
+					Visit = 595,
+					VoiceChannel = 596,
+					VoiceChatInternal = 597,
+					VoiceChatService = 598,
+					VoiceSource = 599,
+					VRService = 600,
+					WedgePart = 601,
+					Weld = 602,
+					WeldConstraint = 603,
+					WireframeHandleAdornment = 604,
+					Workspace = 605,
+					WorldModel = 606,
+					WorldRoot = 607,
+					WrapLayer = 608,
+					WrapTarget = 609,
+
+				}
+			},
+			NewDark = {
+				MapId = 135148380892747,
+				Icons = {
+					Accessory = 1,
+					Actor = 2,
+					AdGui = 3,
+					AdPortal = 4,
+					AirController = 5,
+					AlignOrientation = 6,
+					AlignPosition = 7,
+					AngularVelocity = 8,
+					Animation = 9,
+					AnimationConstraint = 10,
+					AnimationController = 11,
+					AnimationFromVideoCreatorService = 12,
+					Animator = 13,
+					ArcHandles = 14,
+					Atmosphere = 15,
+					Attachment = 16,
+					AudioAnalyzer = 17,
+					AudioChannelMixer = 18,
+					AudioChannelSplitter = 19,
+					AudioChorus = 20,
+					AudioCompressor = 21,
+					AudioDeviceInput = 22,
+					AudioDeviceOutput = 23,
+					AudioDistortion = 24,
+					AudioEcho = 25,
+					AudioEmitter = 26,
+					AudioEqualizer = 27,
+					AudioFader = 28,
+					AudioFilter = 29,
+					AudioFlanger = 30,
+					AudioGate = 31,
+					AudioLimiter = 32,
+					AudioListener = 33,
+					AudioPitchShifter = 34,
+					AudioPlayer = 35,
+					AudioRecorder = 36,
+					AudioReverb = 37,
+					AudioTextToSpeech = 38,
+					AuroraScript = 39,
+					AvatarEditorService = 40,
+					AvatarSettings = 41,
+					Backpack = 42,
+					BallSocketConstraint = 43,
+					BasePlate = 44,
+					Beam = 45,
+					BillboardGui = 46,
+					BindableEvent = 47,
+					BindableFunction = 48,
+					BlockMesh = 49,
+					BloomEffect = 50,
+					BlurEffect = 51,
+					BodyAngularVelocity = 52,
+					BodyColors = 53,
+					BodyForce = 54,
+					BodyGyro = 55,
+					BodyPosition = 56,
+					BodyThrust = 57,
+					BodyVelocity = 58,
+					Bone = 59,
+					BoolValue = 60,
+					BoxHandleAdornment = 61,
+					Breakpoint = 62,
+					BrickColorValue = 63,
+					BubbleChatConfiguration = 64,
+					Buggaroo = 65,
+					Camera = 66,
+					CanvasGroup = 67,
+					CFrameValue = 68,
+					ChannelTabsConfiguration = 69,
+					CharacterControllerManager = 70,
+					CharacterMesh = 71,
+					Chat = 72,
+					ChatInputBarConfiguration = 73,
+					ChatWindowConfiguration = 74,
+					ChorusSoundEffect = 75,
+					Class = 76,
+					Cleanup = 77,
+					ClickDetector = 78,
+					ClientReplicator = 79,
+					ClimbController = 80,
+					Clouds = 81,
+					Color = 82,
+					ColorCorrectionEffect = 83,
+					CompressorSoundEffect = 84,
+					ConeHandleAdornment = 85,
+					Configuration = 86,
+					Constant = 87,
+					Constructor = 88,
+					Controller = 89,
+					CoreGui = 90,
+					CornerWedgePart = 91,
+					CylinderHandleAdornment = 92,
+					CylindricalConstraint = 93,
+					Decal = 94,
+					DepthOfFieldEffect = 95,
+					Dialog = 96,
+					DialogChoice = 97,
+					DistortionSoundEffect = 98,
+					DragDetector = 99,
+					EchoSoundEffect = 100,
+					EditableImage = 101,
+					EditableMesh = 102,
+					Enum = 103,
+					EnumMember = 104,
+					EqualizerSoundEffect = 105,
+					Event = 106,
+					Explosion = 107,
+					FaceControls = 108,
+					Field = 109,
+					File = 110,
+					Fire = 111,
+					FlangeSoundEffect = 112,
+					Folder = 113,
+					ForceField = 114,
+					Frame = 115,
+					Function = 116,
+					GameSettings = 117,
+					GroundController = 118,
+					Handles = 119,
+					HapticEffect = 120,
+					HapticService = 121,
+					HeightmapImporterService = 122,
+					Highlight = 123,
+					HingeConstraint = 124,
+					Humanoid = 125,
+					HumanoidDescription = 126,
+					IKControl = 127,
+					ImageButton = 128,
+					ImageHandleAdornment = 129,
+					ImageLabel = 130,
+					InputAction = 131,
+					InputBinding = 132,
+					InputContext = 133,
+					Interface = 134,
+					IntersectOperation = 135,
+					Keyword = 136,
+					Lighting = 137,
+					LinearVelocity = 138,
+					LineForce = 139,
+					LineHandleAdornment = 140,
+					LocalFile = 141,
+					LocalizationService = 142,
+					LocalizationTable = 143,
+					LocalScript = 144,
+					MaterialService = 145,
+					MaterialVariant = 146,
+					MemoryStoreService = 147,
+					MeshPart = 148,
+					Meshparts = 149,
+					MessagingService = 150,
+					Method = 151,
+					Model = 152,
+					Modelgroups = 153,
+					Module = 154,
+					ModuleScript = 155,
+					Motor6D = 156,
+					NegateOperation = 157,
+					NetworkClient = 158,
+					NoCollisionConstraint = 159,
+					Operator = 160,
+					PackageLink = 161,
+					Pants = 162,
+					Part = 163,
+					ParticleEmitter = 164,
+					Path2D = 165,
+					PathfindingLink = 166,
+					PathfindingModifier = 167,
+					PathfindingService = 168,
+					PitchShiftSoundEffect = 169,
+					Place = 170,
+					Placeholder = 171,
+					Plane = 172,
+					PlaneConstraint = 173,
+					Player = 174,
+					Players = 175,
+					PluginGuiService = 176,
+					PointLight = 177,
+					PrismaticConstraint = 178,
+					Property = 179,
+					ProximityPrompt = 180,
+					PublishService = 181,
+					Reference = 182,
+					RemoteEvent = 183,
+					RemoteFunction = 184,
+					RenderingTest = 185,
+					ReplicatedFirst = 186,
+					ReplicatedScriptService = 187,
+					ReplicatedStorage = 188,
+					ReverbSoundEffect = 189,
+					RigidConstraint = 190,
+					RobloxPluginGuiService = 191,
+					RocketPropulsion = 192,
+					RodConstraint = 193,
+					RopeConstraint = 194,
+					Rotate = 195,
+					ScreenGui = 196,
+					Script = 197,
+					ScrollingFrame = 198,
+					Seat = 199,
+					Selected_Workspace = 200,
+					SelectionBox = 201,
+					SelectionSphere = 202,
+					ServerScriptService = 203,
+					ServerStorage = 204,
+					Service = 205,
+					Shirt = 206,
+					ShirtGraphic = 207,
+					SkinnedMeshPart = 208,
+					Sky = 209,
+					Smoke = 210,
+					Snap = 211,
+					Snippet = 212,
+					SocialService = 213,
+					Sound = 214,
+					SoundEffect = 215,
+					SoundGroup = 216,
+					SoundService = 217,
+					Sparkles = 218,
+					SpawnLocation = 219,
+					SpecialMesh = 220,
+					SphereHandleAdornment = 221,
+					SpotLight = 222,
+					SpringConstraint = 223,
+					StandalonePluginScripts = 224,
+					StarterCharacterScripts = 225,
+					StarterGui = 226,
+					StarterPack = 227,
+					StarterPlayer = 228,
+					StarterPlayerScripts = 229,
+					Struct = 230,
+					StyleDerive = 231,
+					StyleLink = 232,
+					StyleRule = 233,
+					StyleSheet = 234,
+					SunRaysEffect = 235,
+					SurfaceAppearance = 236,
+					SurfaceGui = 237,
+					SurfaceLight = 238,
+					SurfaceSelection = 239,
+					SwimController = 240,
+					TaskScheduler = 241,
+					Team = 242,
+					Teams = 243,
+					Terrain = 244,
+					TerrainDetail = 245,
+					TestService = 246,
+					TextBox = 247,
+					TextBoxService = 248,
+					TextButton = 249,
+					TextChannel = 250,
+					TextChatCommand = 251,
+					TextChatService = 252,
+					TextLabel = 253,
+					TextString = 254,
+					Texture = 255,
+					Tool = 256,
+					Torque = 257,
+					TorsionSpringConstraint = 258,
+					Trail = 259,
+					TremoloSoundEffect = 260,
+					TrussPart = 261,
+					TypeParameter = 262,
+					UGCValidationService = 263,
+					UIAspectRatioConstraint = 264,
+					UICorner = 265,
+					UIDragDetector = 266,
+					UIFlexItem = 267,
+					UIGradient = 268,
+					UIGridLayout = 269,
+					UIListLayout = 270,
+					UIPadding = 271,
+					UIPageLayout = 272,
+					UIScale = 273,
+					UISizeConstraint = 274,
+					UIStroke = 275,
+					UITableLayout = 276,
+					UITextSizeConstraint = 277,
+					UnionOperation = 278,
+					Unit = 279,
+					UniversalConstraint = 280,
+					UnreliableRemoteEvent = 281,
+					UpdateAvailable = 282,
+					UserService = 283,
+					Value = 284,
+					Variable = 285,
+					VectorForce = 286,
+					VehicleSeat = 287,
+					VideoDisplay = 288,
+					VideoFrame = 289,
+					VideoPlayer = 290,
+					ViewportFrame = 291,
+					VirtualUser = 292,
+					VoiceChannel = 293,
+					Voicechat = 294,
+					VoiceChatService = 295,
+					VRService = 296,
+					WedgePart = 297,
+					Weld = 298,
+					WeldConstraint = 299,
+					Wire = 300,
+					WireframeHandleAdornment = 301,
+					Workspace = 302,
+					WorldModel = 303,
+					WrapDeformer = 304,
+					WrapLayer = 305,
+					WrapTarget = 306,
+					
+					Color3Value = 284,
+					IntValue = 284,
+					NumberValue = 284,
+					ObjectValue = 284,
+					RayValue = 284,
+					StringValue = 284,
+					Vector3Value = 284,
+				},
+				IconSize = 32,
+				Witdh = 18,
+				Height = 18,
+			},
+			NewLight = {
+				MapId = "",
+				Icons = {
+					Class = "rbxasset://studio_svg_textures/Shared/InsertableObjects/Light/Standard/",
+				},
+				IconSize = 16,
+				Witdh = 18,
+				Height = 18,
+			}
 		}
-		funcs.ExplorerIcons = { ["MapId"] = _MapId, ["Icons"] = _Icons }
+		if Settings.ClassIcon and IconList[Settings.ClassIcon] then
+			funcs.ExplorerIcons = {
+				["MapId"] = IconList[Settings.ClassIcon].MapId,
+				["Icons"] = IconList[Settings.ClassIcon].Icons,
+				["IconSize"] = IconList[Settings.ClassIcon].IconSize,
+				["Witdh"] = IconList[Settings.ClassIcon].Witdh,
+				["Height"] = IconList[Settings.ClassIcon].Height}
+		else
+			funcs.ExplorerIcons = { ["MapId"] = IconList.Old.MapId, ["Icons"] = IconList.Old.Icons, ["IconSize"] = IconList.Old.IconSize }
+		end
+		
+		
 
 		funcs.GetLabel = function(self)
 			local label = Instance.new("ImageLabel")
@@ -4117,6 +5338,7 @@ local function main()
 
 		funcs.Display = function(self,obj,index)
 			obj.Image = self.MapId
+			obj.ImageRectSize = Vector2.new(self.IconSizeX, self.IconSizeY)
 			if not self.NumX then
 				obj.ImageRectOffset = Vector2.new(self.IconSizeX*index, 0)
 			else
@@ -4136,16 +5358,40 @@ local function main()
 		funcs.IconDehash = function(self, _id)
 			return math.floor(_id / 14 % 14), math.floor(_id % 14)
 		end
-
+		
+		local ClassNameNoImage = {}
 		funcs.GetExplorerIcon = function(self, obj, index)
-			index = (self.ExplorerIcons.Icons[index] or 0)
-			local row, col = self:IconDehash(index)
-			local MapSize = Vector2.new(256, 256)
-			local pad, border = 2, 1
-			local IconSize = 16
+			if Settings.ClassIcon == "Vanilla3" then
+				obj.Size = UDim2.fromOffset(16, 16)
 
-			obj.Position = UDim2.new(-col - (pad * (col + 1) + border) / IconSize, 0, -row - (pad * (row + 1) + border) / IconSize, 0)
-			obj.Size = UDim2.new(MapSize.X / IconSize, 0, MapSize.Y / IconSize, 0)
+				index = (self.ExplorerIcons.Icons[index] or 250) - 1
+				obj.ImageRectOffset = Vector2.new(funcs.ExplorerIcons.IconSize * (index % funcs.ExplorerIcons.Height), funcs.ExplorerIcons.IconSize * math.floor(index / funcs.ExplorerIcons.Height))
+				obj.ImageRectSize = Vector2.new(funcs.ExplorerIcons.IconSize, funcs.ExplorerIcons.IconSize)
+			elseif Settings.ClassIcon == "Old" then
+				index = (self.ExplorerIcons.Icons[index] or 0)
+				local row, col = self:IconDehash(index)
+				local MapSize = Vector2.new(256, 256)
+				local pad, border = 2, 1
+
+				obj.Position = UDim2.new(-col - (pad * (col + 1) + border) / funcs.ExplorerIcons.IconSize, 0, -row - (pad * (row + 1) + border) / funcs.ExplorerIcons.IconSize, 0)
+				obj.Size = UDim2.new(MapSize.X / funcs.ExplorerIcons.IconSize, 0, MapSize.Y / funcs.ExplorerIcons.IconSize, 0)
+			elseif Settings.ClassIcon == "NewLight" or Settings.ClassIcon == "NewDark" then
+				local isService = string.find(index, "Service") and game:GetService(index)
+				
+				obj.Size = UDim2.fromOffset(16, 16)
+				index = (self.ExplorerIcons.Icons[index] or (isService and self.ExplorerIcons.Icons.Service) or self.ExplorerIcons.Icons.Placeholder) - 1
+				obj.ImageRectOffset = Vector2.new(funcs.ExplorerIcons.IconSize * (index % funcs.ExplorerIcons.Height), funcs.ExplorerIcons.IconSize * math.floor(index / funcs.ExplorerIcons.Height))
+				obj.ImageRectSize = Vector2.new(funcs.ExplorerIcons.IconSize, funcs.ExplorerIcons.IconSize)
+			else
+				index = (self.ExplorerIcons.Icons[index] or 0)
+				local row, col = self:IconDehash(index)
+				local MapSize = Vector2.new(256, 256)
+				local pad, border = 2, 1
+
+				obj.Position = UDim2.new(-col - (pad * (col + 1) + border) / funcs.ExplorerIcons.IconSize, 0, -row - (pad * (row + 1) + border) / funcs.ExplorerIcons.IconSize, 0)
+				obj.Size = UDim2.new(MapSize.X / funcs.ExplorerIcons.IconSize, 0, MapSize.Y / funcs.ExplorerIcons.IconSize, 0)
+			end
+			
 		end
 
 		funcs.DisplayExplorerIcons = function(self, Frame, index)
@@ -4191,8 +5437,12 @@ local function main()
 			},mt)
 			return obj
 		end
+		
+		local function getIconDataFromName(name)
+			return IconList[name] or error("Name not found")
+		end
 
-		return {new = new, newLinear = newLinear}
+		return {new = new, newLinear = newLinear, getIconDataFromName = getIconDataFromName}
 	end)()
 
 	Lib.ScrollBar = (function()
@@ -5361,6 +6611,46 @@ local function main()
 			self.Gui.Parent = nil
 			updateWindows(true)
 		end
+		
+		funcs.Destroy = function(self)
+			self.Closed = true
+			self:SetResizableInternal(false)
+
+			Lib.FindAndRemove(leftSide.Windows,self)
+			Lib.FindAndRemove(rightSide.Windows,self)
+			Lib.FindAndRemove(visibleWindows,self)
+
+			self.MinimizeAnim.Disable()
+			self.CloseAnim.Disable()
+			self.ClosedSide = self.Side
+			self.Side = nil
+			self.OnDeactivate:Fire()
+
+			if not self.Aligned then
+				self:StopTweens()
+				local ti = TweenInfo.new(0.2,Enum.EasingStyle.Quad,Enum.EasingDirection.Out)
+
+				local closeTime = tick()
+				self.LastClose = closeTime
+
+				self:DoTween(self.GuiElems.Main,ti,{Size = UDim2.new(0,self.SizeX,0,20)})
+				self:DoTween(self.GuiElems.Title,ti,{TextTransparency = 1})
+				self:DoTween(self.GuiElems.Minimize.ImageLabel,ti,{ImageTransparency = 1})
+				self:DoTween(self.GuiElems.Close.ImageLabel,ti,{ImageTransparency = 1})
+				Lib.FastWait(0.2)
+				if closeTime ~= self.LastClose then return end
+
+				self:DoTween(self.GuiElems.TopBar,ti,{BackgroundTransparency = 1})
+				self:DoTween(self.GuiElems.Outlines,ti,{ImageTransparency = 1})
+				Lib.FastWait(0.2)
+				if closeTime ~= self.LastClose then return end
+			end
+
+			self.Aligned = false
+			--self.Gui.Parent = nil
+			updateWindows(true)
+			self.Gui:Destroy()
+		end
 
 		funcs.Hide = funcs.Close
 
@@ -5696,6 +6986,8 @@ local function main()
 				IconMap = item.IconMap,
 				OnRightClick = item.OnRightClick
 			}
+			
+			newItem.DisabledIcon = newItem.Icon
 
 			if self.QueuedDivider then
 				local text = self.QueuedDividerText and #self.QueuedDividerText > 0 and self.QueuedDividerText
@@ -5796,8 +7088,14 @@ local function main()
 						newEntry.EntryName.Position = UDim2.new(0,2,0,0)
 						newEntry.EntryName.Size = UDim2.new(1,-4,0,20)
 						newEntry.Icon.Visible = false
-					else
-						local iconIndex = item.Disabled and item.DisabledIcon or item.Icon
+					else			
+						local iconIndex
+						if item.Disabled and item.DisabledIcon then
+							iconIndex = item.DisabledIcon
+						elseif item.Icon then
+							iconIndex =  item.Icon
+						end
+						
 						-- Explorer.MiscIcons:DisplayExplorerIcons(newEntry.Icon, iconIndex)
 						if item.IconMap then
 							if type(iconIndex) == "number" then
@@ -7366,8 +8664,26 @@ local function main()
 				Checkmark2 = filler.checkmark2,
 				Middle = filler.middle
 			}
+	
+			-- New:
+			--[[checkbox.Activated:Connect(function()
+				if Lib.CheckMouseInGui(checkbox) then
+					if self.Style == 0 then
+						ripple(ripples_container, self.Disabled and self.Colors.Disabled or self.Colors.Primary)
+					end
 
-			checkbox.Activated:Connect(function()
+					if not self.Disabled then
+						self:SetState(not self.Toggled,true)
+					else
+						self:Paint()
+					end
+
+					self.OnInput:Fire()
+				end
+			end)]]
+			
+			-- Best input compatibility:
+			checkbox.MouseButton1Up:Connect(function()
 				if Lib.CheckMouseInGui(checkbox) then
 					if self.Style == 0 then
 						ripple(ripples_container, self.Disabled and self.Colors.Disabled or self.Colors.Primary)
@@ -9074,6 +10390,7 @@ local function main()
 
 		local function new()
 			local textBox = Instance.new("TextBox")
+			textBox.Active = true
 			textBox.Size = UDim2.new(0,100,0,20)
 			textBox.BackgroundColor3 = Settings.Theme.TextBox
 			textBox.BorderColor3 = Settings.Theme.Outline3
@@ -9357,7 +10674,7 @@ local function main()
 					if input.UserInputType == Enum.UserInputType["MouseButton" .. button] then
 						release:Disconnect()
 						if Lib.CheckMouseInGui(item) and self.LastButton == button and self.LastItem == item then
-							self.InputDown = false -- infinite yield dev forgot to do this, and ended up OnRelease fired twice 💔
+							self.InputDown = false -- infinite yield dev forgot to do this, and ended up OnRelease fired twice ??
 							self["OnRelease"]:Fire(item,self.Combo,button)
 						end
 					end
@@ -9474,7 +10791,7 @@ local function main()
 			viewportFrame:ClearAllChildren()
 			
 			ModelViewer.IsViewing = false
-			window:SetTitle("Model Viewer")
+			window:SetTitle("3D Preview")
 			pathLabel.Gui.Text = ""
 		end
 	end
@@ -9548,7 +10865,7 @@ local function main()
 			camera.Parent = viewportFrame
 			camera.FieldOfView = 60
 			
-			window:SetTitle(item.Name.." - Model Viewer")
+			window:SetTitle(item.Name.." - 3D Preview")
 			pathLabel.Gui.Text = "path: " .. getPath(originalModel)
 			window:Show()
 			ModelViewer.IsViewing = true
@@ -9557,7 +10874,7 @@ local function main()
 
 	ModelViewer.Init = function()
 		window = Lib.Window.new()
-		window:SetTitle("Model Viewer")
+		window:SetTitle("3D Preview")
 		window:Resize(350,200)
 		ModelViewer.Window =  window
 		
@@ -9695,29 +11012,34 @@ local function main()
 		end})
 		context:Register("SAVE_INST",{Name = "Save to File", OnClick = function()
 			if model then
-				window:SetTitle(originalModel.Name.." - Model Viewer - Saving")
-				local success, result = pcall(env.saveinstance,
-					originalModel, "Place_"..game.PlaceId.."_"..originalModel.Name.."_"..os.time(),
-					{
-						Decompile = true
-					}
-				)
-				if success then
-					window:SetTitle(originalModel.Name.." - Model Viewer - Saved")
-					context:Hide()
-					task.wait(5)
-					if model then
-						window:SetTitle(originalModel.Name.." - Model Viewer")
+				Lib.SaveAsPrompt("Place_"..game.PlaceId.."_"..originalModel.Name.."_"..os.time(), function(filename)
+					window:SetTitle(originalModel.Name.." - Model Viewer - Saving")	
+					
+					local success, result = pcall(env.saveinstance,
+					originalModel, filename,
+						{
+							Decompile = true,
+							RemovePlayerCharacters = false
+						}
+					)
+					
+					if success then
+						window:SetTitle(originalModel.Name.." - Model Viewer - Saved")
+						context:Hide()
+						task.wait(5)
+						if model then
+							window:SetTitle(originalModel.Name.." - Model Viewer")
+						end
+					else
+						window:SetTitle(originalModel.Name.." - Model Viewer - Error")
+						warn("Error while saving model: "..result)
+						context:Hide()
+						task.wait(5)
+						if model then
+							window:SetTitle(originalModel.Name.." - Model Viewer")
+						end
 					end
-				else
-					window:SetTitle(originalModel.Name.." - Model Viewer - Error")
-					warn("Error while saving model: "..result)
-					context:Hide()
-					task.wait(5)
-					if model then
-						window:SetTitle(originalModel.Name.." - Model Viewer")
-					end
-				end
+				end)
 			end
 		end})
 		
@@ -11823,66 +13145,36 @@ local function main()
 		listlayout.Padding = UDim.new(0, 10)
 
 		-- Textbox
-		local textbox = Lib.ViewportTextBox.new()
+		local textbox = Instance.new("TextBox") -- replaced cuz why Moon make every inputs only work on mouse/pc users >:( 
+		textbox.BackgroundColor3 = Settings.Theme.TextBox
+		textbox.BorderColor3 = Settings.Theme.Outline3
+		textbox.ClearTextOnFocus = false
+		textbox.TextColor3 = Settings.Theme.Text
+		textbox.Font = Enum.Font.SourceSans
+		textbox.TextSize = 14
+		textbox.ZIndex = 2
 
-		textbox.Gui.Parent = frame.Gui
+		textbox.Parent = frame.Gui
 		if sizeX and type(sizeX) == "number" then
-			textbox.Gui.Size = UDim2.new(0,sizeX,0,15)
+			textbox.Size = UDim2.new(0,sizeX,0,15)
 		else
-			textbox.Gui.Size = UDim2.new(0,45,0,15)
+			textbox.Size = UDim2.new(0,45,0,15)
 		end
 		
-		textbox.Gui.AutomaticSize = Enum.AutomaticSize.X
-		textbox.TextBox.AutomaticSize = Enum.AutomaticSize.X
+		frame.Gui.AutomaticSize = Enum.AutomaticSize.X
+		textbox.AutomaticSize = Enum.AutomaticSize.X
 
 		-- Label
 		local label = Lib.Label.new()
 
-		label.Gui.Parent = frame.Gui
-		label.Gui.Size = UDim2.new(1, 0,1, -15)
-		label.Gui.Text = title
+		label.Parent = frame.Gui
+		label.Size = UDim2.new(1, 0,1, -15)
+		label.Text = title
 		label.TextTruncate = Enum.TextTruncate.AtEnd
 
-		textbox:SetText(default)
+		textbox.Text = default
 
-		return textbox
-	end
-	
-	local function AddDropdown(title, items, default, sizeX)
-		local frame = Lib.Frame.new()
-		frame.Gui.Parent = ListFrame
-		frame.Gui.Transparency = 1
-		frame.Gui.Size = UDim2.new(1,0,0,20)
-
-		local listlayout = Instance.new("UIListLayout")
-		listlayout.Parent = frame.Gui
-		listlayout.FillDirection = Enum.FillDirection.Horizontal
-		listlayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
-		listlayout.VerticalAlignment = Enum.VerticalAlignment.Center
-		listlayout.Padding = UDim.new(0, 10)
-
-		-- Textbox
-		local dropdown = Lib.ViewportTextBox.new()
-
-		dropdown.Gui.Parent = frame.Gui
-		if sizeX and type(sizeX) == "number" then
-			dropdown.Gui.Size = UDim2.new(0,sizeX,0,15)
-		else
-			dropdown.Gui.Size = UDim2.new(0,65,0,15)
-		end
-
-		-- Label
-		local label = Lib.Label.new()
-		
-		label.Gui.Parent = frame.Gui
-		label.Gui.Size = UDim2.new(1, 0,1, -15)
-		label.Gui.Text = title
-		label.TextTruncate = Enum.TextTruncate.AtEnd
-
-		dropdown:SetOptions(items)
-		dropdown:SetSelected(default)
-
-		return dropdown
+		return {TextBox = textbox}
 	end
 	
 	SaveInstance.Init = function()
@@ -12060,7 +13352,6 @@ end,
 	
 	A script viewer that is basically a notepad
 ]]
-loadstring = (game:GetService("RunService"):IsStudio() and require(script.Parent.Loadstring)) or loadstring
 -- Common Locals
 local Main,Lib,Apps,Settings -- Main Containers
 local Explorer, Properties, ScriptViewer, Notebook -- Major Apps
@@ -12092,8 +13383,8 @@ local executorName = "Unknown"
 local executorVersion = "???"
 if identifyexecutor then
 	local name,ver = identifyexecutor()
-	executorName = name or executorName
-	executorVersion = ver or executorVersion -- this should fix krnl and other executors who don't return a version
+	executorName = name
+	executorVersion = ver
 elseif game:GetService("RunService"):IsStudio() then
 	executorName = "Studio"
 	executorVersion = version()
@@ -12110,41 +13401,10 @@ end
 local function main()
 	local ScriptViewer = {}
 	local window, codeFrame
+	
+	local execute, clear, dumpbtn
+	
 	local PreviousScr = nil
-
-	ScriptViewer.ViewScript = function(scr)
-		local oldtick = tick()
-		local s,source = pcall(env.decompile or function() end,scr)
-		
-		if not s or not source then
-			PreviousScr = nil
-			source = "-- Unable to view source.\n"
-			source = source .. "-- Script Path: "..getPath(scr).."\n"
-			if scr:IsA("Script") and scr.RunContext == Enum.RunContext.Legacy and not scr:IsA("LocalScript") then
-				source = source .. "-- Reason: The script is likely to be running on server, or your executor does not support decompiler.\n"
-			else
-				source = source .. "-- Reason: Your executor does not support decompiler.\n"
-			end
-			source = source .. "-- Executor: "..executorName.." ("..executorVersion..")"
-		else
-			PreviousScr = scr
-			local decompiled = source
-
-			source = "-- Script Path: "..getPath(scr).."\n"
-			source = source .. "-- Took "..tostring(math.floor( (tick() - oldtick) * 100) / 100).."s to decompile.\n"
-			source = source .. "-- Executor: "..executorName.." ("..executorVersion..")\n\n"
-			
-			
-			source = source .. "-- // local script = "..getPath(scr).."\n"
-			source = source .. decompiled
-			
-			oldtick = nil
-			decompiled = nil
-		end
-		
-		codeFrame:SetText(source)
-		window:Show()
-	end
 	
 	ScriptViewer.DumpFunctions = function(scr)
 		-- thanks King.Kevin#6025 you'll obviously be credited (no discord tag since that can easily be impersonated)
@@ -12229,6 +13489,8 @@ local function main()
 
 		if dump ~= original then source = source .. dump .. "]]" end
 		codeFrame:SetText(source)
+		
+		window:Show()
 	end
 
 	ScriptViewer.Init = function()
@@ -12247,11 +13509,18 @@ local function main()
 		copy.Size = UDim2.new(0.33,0,0,20)
 		copy.Position = UDim2.new(0,0,0,0)
 		copy.Text = "Copy to Clipboard"
-		copy.TextColor3 = Color3.new(1,1,1)
+		
+		if env.setclipboard then
+			copy.TextColor3 = Color3.new(1,1,1)
+			copy.Interactable = true
+		else
+			copy.TextColor3 = Color3.new(0.5,0.5,0.5)
+			copy.Interactable = false
+		end
 
 		copy.MouseButton1Click:Connect(function()
 			local source = codeFrame:GetText()
-			setclipboard(source)
+			env.setclipboard(source)
 		end)
 
 		local save = Instance.new("TextButton",window.GuiElems.Content)
@@ -12260,23 +13529,37 @@ local function main()
 		save.Position = UDim2.new(0.33,0,0,0)
 		save.Text = "Save to File"
 		save.TextColor3 = Color3.new(1,1,1)
+		
+		if env.writefile then
+			save.TextColor3 = Color3.new(1,1,1)
+			save.Interactable = true
+		else
+			save.TextColor3 = Color3.new(0.5,0.5,0.5)
+			--save.Interactable = false
+		end
 
 		save.MouseButton1Click:Connect(function()
 			local source = codeFrame:GetText()
 			local filename = "Place_"..game.PlaceId.."_Script_"..os.time()..".txt"
 
-			writefile(filename,source)
-			--[[if movefileas then -- TODO: USE ENV
-				movefileas(filename,".txt")
-			end]]
+			Lib.SaveAsPrompt(filename,source)
+			--env.writefile(filename,source)
 		end)
 		
-		local dumpbtn = Instance.new("TextButton",window.GuiElems.Content)
+		dumpbtn = Instance.new("TextButton",window.GuiElems.Content)
 		dumpbtn.BackgroundTransparency = 1
 		dumpbtn.Position = UDim2.new(0.7,0,0,0)
 		dumpbtn.Size = UDim2.new(0.3,0,0,20)
 		dumpbtn.Text = "Dump Functions"
-		dumpbtn.TextColor3 = Color3.new(1,1,1)
+		dumpbtn.TextColor3 = Color3.new(0.5,0.5,0.5)
+		
+		if env.getgc then
+			dumpbtn.TextColor3 = Color3.new(1,1,1)
+			dumpbtn.Interactable = true
+		else
+			dumpbtn.TextColor3 = Color3.new(0.5,0.5,0.5)
+			dumpbtn.Interactable = false
+		end
 
 		dumpbtn.MouseButton1Click:Connect(function()
 			if PreviousScr ~= nil then
@@ -12287,19 +13570,27 @@ local function main()
 		-- Buttons below the editor
 		
 		
-		local execute = Instance.new("TextButton",window.GuiElems.Content)
+		execute = Instance.new("TextButton",window.GuiElems.Content)
 		execute.BackgroundTransparency = 1
 		execute.Size = UDim2.new(0.5,0,0,20)
 		execute.Position = UDim2.new(0,0,1,-20)
 		execute.Text = "Execute"
 		execute.TextColor3 = Color3.new(1,1,1)
+		
+		if env.loadstring then
+			execute.TextColor3 = Color3.new(1,1,1)
+			execute.Interactable = true
+		else
+			execute.TextColor3 = Color3.new(0.5,0.5,0.5)
+			execute.Interactable = false
+		end
 
 		execute.MouseButton1Click:Connect(function()
 			local source = codeFrame:GetText()
-			loadstring(source)()
+			env.loadstring(source)()
 		end)
 
-		local clear = Instance.new("TextButton",window.GuiElems.Content)
+		clear = Instance.new("TextButton",window.GuiElems.Content)
 		clear.BackgroundTransparency = 1
 		clear.Size = UDim2.new(0.5,0,0,20)
 		clear.Position = UDim2.new(0.5,0,1,-20)
@@ -12309,6 +13600,43 @@ local function main()
 		clear.MouseButton1Click:Connect(function()
 			codeFrame:SetText("")
 		end)
+	end
+	
+	ScriptViewer.ViewScript = function(scr)
+		local oldtick = tick()
+		local s,source = pcall(env.decompile or function() end,scr)
+
+		if not s or not source then
+			PreviousScr = nil
+			dumpbtn.TextColor3 = Color3.new(0.5,0.5,0.5)
+			source = "-- Unable to view source.\n"
+			source = source .. "-- Script Path: "..getPath(scr).."\n"
+			if (scr.ClassName == "Script" and (scr.RunContext == Enum.RunContext.Legacy or scr.RunContext == Enum.RunContext.Server)) or not scr:IsA("LocalScript") then
+				source = source .. "-- Reason: The script is not running on client. (attempt to decompile ServerScript or 'Script' with RunContext Server)\n"
+			elseif not env.decompile then
+				source = source .. "-- Reason: Your executor does not support decompiler. (missing 'decompile' function)\n"
+			else
+				source = source .. "-- Reason: Unknown\n"
+			end
+			source = source .. "-- Executor: "..executorName.." ("..executorVersion..")"
+		else
+			PreviousScr = scr
+			dumpbtn.TextColor3 = Color3.new(1,1,1)
+
+			local decompiled = source
+
+			source = "-- Script Path: "..getPath(scr).."\n"
+			source = source .. "-- Took "..tostring(math.floor( (tick() - oldtick) * 100) / 100).."s to decompile.\n"
+			source = source .. "-- Executor: "..executorName.." ("..executorVersion..")\n\n"
+
+			source = source .. decompiled
+
+			oldtick = nil
+			decompiled = nil
+		end
+
+		codeFrame:SetText(source)
+		window:Show()
 	end
 
 	return ScriptViewer
@@ -12321,420 +13649,62 @@ else
 	return {InitDeps = initDeps, InitAfterMain = initAfterMain, Main = main}
 end
 end,
-["SecretServicePanel"] = function()
---[[
-	Secret Service Panel Module
-	
-	Ported from Serversided to Clientsided.
-]]
-loadstring = (game:GetService("RunService"):IsStudio() and require(script.Parent.Loadstring)) or loadstring
--- Common Locals
-local Main,Lib,Apps,Settings -- Main Containers
-local Explorer, Properties, ScriptViewer, SecretServicePanel, Notebook -- Major Apps
-local API,RMD,env,service,plr,create,createSimple -- Main Locals
-
-local function initDeps(data)
-	Main = data.Main
-	Lib = data.Lib
-	Apps = data.Apps
-	Settings = data.Settings
-
-	API = data.API
-	RMD = data.RMD
-	env = data.env
-	service = data.service
-	plr = data.plr
-	create = data.create
-	createSimple = data.createSimple
-end
-
-local function initAfterMain()
-	Explorer = Apps.Explorer
-	Properties = Apps.Properties
-	ScriptViewer = Apps.ScriptViewer
-	Notebook = Apps.Notebook
-end
-
-local function main()
-	local SecretServicePanel = {}
-
-	local window,codeFrame
-
-	local output = {}
-	local outputMax = 1000
-	local outputOn = true
-
-	SecretServicePanel.ViewScript = function(scr)
-		local s,source = pcall(env.decompile or function() end,scr)
-		if not s or not source then
-			source = "local test = 5\n\nlocal c = test + tick()\ngame.Workspace.Board:Destroy()\nstring.match('wow\\'f',\"yes\",3.4e-5,true)\ngame. Workspace.Wow\nfunction bar() print(54) end\n string . match() string 4 .match()"
-			source = source.."\n"..[==[
-			function a.sad() end
-			function a.b:sad() end
-			function 4.why() end
-			function a b() end
-			function string.match() end
-			function string.match.why() end
-			function local() end
-			function local.thing() end
-			string  . "sad" match
-			().magnitude = 3
-			a..b
-			a..b()
-			a...b
-			a...b()
-			a....b
-			a....b()
-			string..match()
-			string....match()
-			]==]
-		end
-
-		codeFrame:SetText(source)
-		window:Show()
-	end
-
-	SecretServicePanel.Init = function()
-		local colorOutput = {
-			[0] = Color3.new(1,1,1),
-			[1] = Color3.new(0.4, 0.5, 1),
-			[2] = Color3.new(1, 0.6, 0.4),
-			[3] = Color3.new(1, 0, 0)	
-		}
-		
-		window = Lib.Window.new()
-		window:SetTitle("Secret Service Panel")
-		window:Resize(500,350)
-		window.PosX = 20
-		window.PosY = workspace.CurrentCamera.ViewportSize.Y - 400
-		SecretServicePanel.Window = window
-
-		local exeFrame = Instance.new("Frame")
-		exeFrame.BackgroundTransparency = 1
-		exeFrame.Position = UDim2.new(0,0,0,20)
-		exeFrame.Size = UDim2.new(1,0,1,-20)
-		exeFrame.Parent = window.GuiElems.Content
-
-		local consoleFrame = Instance.new("Frame")
-		consoleFrame.BackgroundTransparency = 1
-		consoleFrame.Position = UDim2.new(0,0,0,20)
-		consoleFrame.Size = UDim2.new(1,0,1,-20)
-		consoleFrame.Visible = false
-		consoleFrame.Parent = window.GuiElems.Content
-
-		local console
-
-		local function switchTab(tab)
-			if tab == "Executor" then
-				exeFrame.Visible = true
-				consoleFrame.Visible = false
-			else
-				exeFrame.Visible = false
-				consoleFrame.Visible = true
-
-				--[[
-				-- TODO: Remove Later when fixed
-				local f = Instance.new("Frame")
-				f.BackgroundTransparency = 1
-				f.Parent = console
-				f:Destroy()
-				]]
-			end
-		end
-
-		-- Exec
-		codeFrame = Lib.CodeFrame.new()
-		codeFrame.Frame.Position = UDim2.new(0,0,0,0)
-		codeFrame.Frame.Size = UDim2.new(1,0,1,-25)
-		codeFrame.Frame.Parent = exeFrame
-
-		-- TODO: REMOVE AND MAKE BETTER
-		local copy = Instance.new("TextButton",window.GuiElems.Content)
-		copy.BackgroundTransparency = 1
-		copy.Size = UDim2.new(0.5,0,0,20)
-		copy.Text = "Executor"
-		copy.TextColor3 = Color3.new(1,1,1)
-
-		copy.MouseButton1Click:Connect(function()
-			switchTab("Executor")
-		end)
-
-		local save = Instance.new("TextButton",window.GuiElems.Content)
-		save.BackgroundTransparency = 1
-		save.Position = UDim2.new(0.5,0,0,0)
-		save.Size = UDim2.new(0.5,0,0,20)
-		save.Text = "Console"
-		save.TextColor3 = Color3.new(1,1,1)
-
-		save.MouseButton1Click:Connect(function()
-			switchTab("Console")
-		end)
-
-		local exe = Instance.new("TextButton",exeFrame)
-		exe.BackgroundTransparency = 1
-		exe.Position = UDim2.new(0,0,1,-25)
-		exe.Size = UDim2.new(1/3,0,0,25)
-		exe.Text = "Execute"
-		exe.TextColor3 = Color3.new(1,1,1)
-
-		exe.MouseButton1Click:Connect(function()
-			local source = codeFrame:GetText()
-			loadstring(source)()
-		end)
-
-		local exeC = Instance.new("TextButton",exeFrame)
-		exeC.BackgroundTransparency = 1
-		exeC.Position = UDim2.new(1/3,0,1,-25)
-		exeC.Size = UDim2.new(1/3,0,0,25)
-		exeC.Text = "Execute & Console"
-		exeC.TextColor3 = Color3.new(1,1,1)
-
-		exeC.MouseButton1Click:Connect(function()
-			local source = codeFrame:GetText()
-			loadstring(source)()
-			
-			switchTab("Console")
-		end)
-
-		local clear = Instance.new("TextButton",exeFrame)
-		clear.BackgroundTransparency = 1
-		clear.Position = UDim2.new(2/3,0,1,-25)
-		clear.Size = UDim2.new(1/3,0,0,25)
-		clear.Text = "Clear"
-		clear.TextColor3 = Color3.new(1,1,1)
-
-		clear.MouseButton1Click:Connect(function()
-			codeFrame:SetText("")
-		end)
-
-		-- Console
-
-		console = Instance.new("Frame")
-		console.BackgroundColor3 = Color3.fromRGB(35,35,35)
-		console.BorderSizePixel = 0
-		console.Size = UDim2.new(1,-16,1,-25-16)
-		console.ClipsDescendants = true
-		console.Parent = consoleFrame
-
-		local toggle = Instance.new("TextButton",consoleFrame)
-		toggle.BackgroundTransparency = 1
-		toggle.Position = UDim2.new(0,0,1,-25)
-		toggle.Size = UDim2.new(1/2,0,0,25)
-		toggle.Text = "Toggle"
-		toggle.TextColor3 = Color3.new(1,1,1)
-
-		local update = Instance.new("TextButton",consoleFrame)
-		update.BackgroundTransparency = 1
-		update.Position = UDim2.new(1/2,0,1,-25)
-		update.Size = UDim2.new(1/2,0,0,25)
-		update.Text = "Update"
-		update.TextColor3 = Color3.new(1,1,1)
-
-		local scrollV = Lib.ScrollBar.new()
-		scrollV.Gui.Parent = consoleFrame
-		scrollV.Gui.Size = UDim2.new(0,16,1,-25-16)
-		scrollV:Update()
-
-		local scrollH = Lib.ScrollBar.new(true)
-		scrollH.Gui.Parent = consoleFrame
-		scrollH.Gui.Position = UDim2.new(0,0,1,-25-16)
-		scrollH.Gui.Size = UDim2.new(1,-16,0,16)
-		scrollH:Update()
-
-		local labels = {}
-
-		local function refreshConsole()
-			local ySize = console.AbsoluteSize.Y
-			local xSize = console.AbsoluteSize.X
-
-			local rows = math.ceil(ySize/18)
-
-			local maxCols = 0
-			for i = 1,#output do
-				local len = #output[i].Text
-				if len > maxCols then
-					maxCols = len
-				end
-			end
-
-			local atBottom = scrollV.Index + scrollV.VisibleSpace >= scrollV.TotalSpace
-
-			scrollH.VisibleSpace = xSize
-			scrollH.TotalSpace = maxCols*8
-			scrollV.VisibleSpace = math.ceil(ySize/18)
-			scrollV.TotalSpace = #output+1
-
-			if atBottom then scrollV.Index = scrollV.TotalSpace - scrollV.VisibleSpace end
-
-			scrollH:Update()
-			scrollV:Update()
-
-			for i = 1,rows do
-				local label = labels[i]
-				if not label then
-					label = Instance.new("TextLabel")
-					label.BackgroundTransparency = 1
-					label.Font = Enum.Font.SourceSans
-					label.TextXAlignment = Enum.TextXAlignment.Left
-					label.TextColor3 = Color3.new(1,1,1)
-					label.TextSize = 14
-					label.Parent = console
-					labels[i] = label
-				end
-				label.Position = UDim2.new(0,-scrollH.Index,0,(i-1)*18)
-				label.Size = UDim2.new(1,scrollH.Index,0,18)
-
-				local msgData = output[i+scrollV.Index]
-				if not msgData then
-					label.Visible = false
-				else
-					label.Text = msgData.Time.." -- "..msgData.Text
-					label.TextColor3 = msgData.Color
-					label.Visible = true
-				end
-			end
-
-			if rows >= 0 then
-				for i = rows+1,#labels do
-					labels[i]:Destroy()
-					labels[i] = nil
-				end
-			end
-		end
-
-		console:GetPropertyChangedSignal("AbsoluteSize"):Connect(refreshConsole)
-
-		scrollH.Increment = 8
-		scrollH.WheelIncrement = 8
-
-		scrollV.WheelIncrement = 3
-		scrollV:SetScrollFrame(console)
-
-		scrollV.Scrolled:Connect(refreshConsole)
-		scrollH.Scrolled:Connect(refreshConsole)
-
-		local function numberWithZero(num)
-			return (num < 10 and "0" or "") .. num
-		end
-
-		local function ConvertTimeStamp(timeStamp)
-			local localTime = timeStamp - os.time() + math.floor(tick())
-			local dayTime = localTime % 86400
-
-			local hour = math.floor(dayTime/3600)
-
-			dayTime = dayTime - (hour * 3600)
-			local minute = math.floor(dayTime/60)
-
-			dayTime = dayTime - (minute * 60)
-			local second = dayTime
-
-			local h = numberWithZero(hour)
-			local m = numberWithZero(minute)
-			local s = numberWithZero(dayTime)
-
-			s = string.format("%.2f",s)
-
-			return string.format("%s:%s:%s", h, m, s)
-		end
-
-		local function addOutput(data,norefresh)
-			data.Time = ConvertTimeStamp(data.Time)
-			local lines = string.split(data.Text,"\n")
-
-			for i = 1,#lines do
-				output[#output+1] = {
-					Text = lines[i],
-					Color = data.Color,
-					Time = data.Time
-				}
-				if #output > outputMax then
-					table.remove(output,1)
-				end
-			end
-
-			if not norefresh then refreshConsole() end
-		end
-		
-		toggle.MouseButton1Click:Connect(function()
-			outputOn = not outputOn
-			addOutput({
-				Text = "Console is "..(outputOn and "Enabled" or "Disabled"),
-				Color = Color3.new(1,1,1),
-				Time = tick()
-			}, true)
-			refreshConsole()
-		end)
-		
-		game:GetService("LogService").MessageOut:Connect(function(msg, msgtype)
-			if not outputOn then return end
-			local data = {
-				Text = msg,
-				Time = tick(),
-				Color = colorOutput[msgtype.Value]
-			}
-			addOutput(data,true)
-			refreshConsole()
-		end)
-
-		local function getOutput()
-			table.clear(output)
-			local allOutput = game:GetService("LogService"):GetLogHistory()
-			
-			for i = 1,outputMax do
-				local data = allOutput[i]
-				if not data then break end
-				
-				-- parse text
-				local parsedData = {
-					Text = data.message,
-					Time = data.timestamp,
-					Color = colorOutput[data.messageType.Value]
-				}
-				
-				addOutput(parsedData,true)
-			end
-			refreshConsole()
-		end
-		getOutput()
-
-		update.MouseButton1Click:Connect(function()
-			getOutput()
-		end)
-		
-		codeFrame:SetText("-- This is CLIENT SIDED")
-	end
-
-	return SecretServicePanel
-end
-
--- TODO: Remove when open source
-if gethsfuncs then
-	_G.moduleData = {InitDeps = initDeps, InitAfterMain = initAfterMain, Main = main}
-else
-	return {InitDeps = initDeps, InitAfterMain = initAfterMain, Main = main}
-end
-end,
 }
---[[
-	Dex++
-	Beta 1.5.0 Version
-	
-	Developed by Chillz
-	
-	Dex++ is a revival of Moon's Dex, made to fulfill Moon's Dex prophecy.
-]]
+-- inject virutal env cuz why not
+if game:GetService("RunService"):IsStudio() then
+	if script:FindFirstChild("Modules"):FindFirstChild("VirtualFS") then
+		for namefunc, func in require(script.Modules.VirtualFS) do
+			getfenv()[namefunc] = func
+			--print("Inserting "..namefunc)
+		end
+	end
+end
 
 local oldgame = oldgame or game
 
-local cloneref = cloneref or function(...) return ... end
+cloneref = cloneref or function(ref)
+	if not getreg then return ref end
+	
+	local InstanceList
+	
+	local a = Instance.new("Part")
+	for _, c in pairs(getreg()) do
+		if type(c) == "table" and #c then
+			if rawget(c, "__mode") == "kvs" then
+				for d, e in pairs(c) do
+					if e == a then
+						InstanceList = c
+						break
+					end
+				end
+			end
+		end
+	end
+	local f = {}
+	function f.invalidate(g)
+		if not InstanceList then
+			return
+		end
+		for b, c in pairs(InstanceList) do
+			if c == g then
+				InstanceList[b] = nil
+				return g
+			end
+		end
+	end
+	return f.invalidate
+end
+
+local isFsSupported = readfile and writefile and isfile and isfolder and listfiles and delfile and delfolder
+
 -- Main vars
-local Main, Explorer, Properties, ScriptViewer, Console, SaveInstance, ModelViewer, SecretServicePanel, DefaultSettings, Notebook, Serializer, Lib local ggv = getgenv or nil
+local Main, Explorer, Properties, ScriptViewer, Console, SaveInstance, ModelViewer--[[, SecretServicePanel]], DefaultSettings, Notebook, Serializer, Lib local ggv = getgenv or nil
 local API, RMD
 
 -- Default Settings
 DefaultSettings = (function()
-	local rgb = Color3.fromRGB
+	local rgb = Color3.fromRGB	
+	
 	return {
 		Explorer = {
 			_Recurse = true,
@@ -12750,14 +13720,14 @@ DefaultSettings = (function()
 		Properties = {
 			_Recurse = true,
 			MaxConflictCheck = 50,
-			ShowDeprecated = false,
-			ShowHidden = true,
+			ShowDeprecated = true,
+			ShowHidden = false,
 			ClearOnFocus = false,
 			LoadstringInput = true,
 			NumberRounding = 3,
-			ShowAttributes = false,
+			ShowAttributes = true,
 			MaxAttributes = 50,
-			ScaleType = 1 -- 0 Full Name Shown, 1 Equal Halves
+			ScaleType = 0 -- 0 Full Name Shown, 1 Equal Halves
 		},
 		Theme = {
 			_Recurse = true,
@@ -12807,12 +13777,18 @@ DefaultSettings = (function()
 		Window = {
 			TitleOnMiddle = false,
 			Transparency = .2
-		}
+		},
+		RemoteBlockWriteAttribute = false, -- writes attribute to remote instance if remote is blocked/unblocked
+		ClassIcon = "NewDark",
+		-- What available icons:
+		-- > Vanilla3
+		-- > Old
+		-- > NewDark
 	}
 end)()
 
 -- Vars
-local Settings = {}
+local Settings = DefaultSettings or {}
 local Apps = {}
 local env = {}
 
@@ -12850,26 +13826,12 @@ end
 
 Main = (function()
 	local Main = {}
-	
-	--[[
-	-- Original Backup
-	
-	Main.ModuleList = {"Explorer","Properties","ScriptViewer"}
-	Main.Elevated = false
-	Main.MissingEnv = {}
-	Main.Version = "Beta 1.0.0"
-	Main.Mouse = plr:GetMouse()
-	Main.AppControls = {}
-	Main.Apps = Apps
-	Main.MenuApps = {}
-	Main.GitRepoName = "LorekeeperZinnia/Dex"
-	]]
 
-	Main.ModuleList = {"Explorer","Properties","ScriptViewer","Console","SaveInstance","ModelViewer", "SecretServicePanel"}
+	Main.ModuleList = {"Explorer","Properties","ScriptViewer","Console","SaveInstance","ModelViewer"}
 	Main.Elevated = false
 	Main.AllowDraggableOnMobile = true
 	Main.MissingEnv = {}
-	Main.Version = "Beta 1.5.0"
+	Main.Version = "2.2"
 	Main.Mouse = plr:GetMouse()
 	Main.AppControls = {}
 	Main.Apps = Apps
@@ -12882,6 +13844,104 @@ Main = (function()
 		Menu = 100000,
 		Core = 101000
 	}
+	
+	--[[Main.LoadAdonisBypass = function()
+		-- skidded off reddit :pensive:
+		local getinfo = getinfo or debug.getinfo
+		local DEBUG = false
+		local Hooked = {}
+
+		local Detected, Kill
+
+		setthreadidentity(2)
+
+		for i, v in getgc(true) do
+			if typeof(v) == "table" then
+				local DetectFunc = rawget(v, "Detected")
+				local KillFunc = rawget(v, "Kill")
+
+				if typeof(DetectFunc) == "function" and not Detected then
+					Detected = DetectFunc
+
+					local Old; Old = hookfunction(Detected, function(Action, Info, NoCrash)
+						if Action ~= "_" then
+							if DEBUG then
+								warn(`Adonis AntiCheat flagged\nMethod: {Action}\nInfo: {Info}`)
+							end
+						end
+
+						return true
+					end)
+
+					table.insert(Hooked, Detected)
+				end
+
+				if rawget(v, "Variables") and rawget(v, "Process") and typeof(KillFunc) == "function" and not Kill then
+					Kill = KillFunc
+					local Old; Old = hookfunction(Kill, function(Info)
+						if DEBUG then
+							warn(`Adonis AntiCheat tried to kill (fallback): {Info}`)
+						end
+					end)
+
+					table.insert(Hooked, Kill)
+				end
+			end
+		end
+
+		local Old; Old = hookfunction(getrenv().debug.info, newcclosure(function(...)
+			local LevelOrFunc, Info = ...
+
+			if Detected and LevelOrFunc == Detected then
+				if DEBUG then
+					warn(`Adonis AntiCheat sanity check detected and broken`)
+				end
+
+				return coroutine.yield(coroutine.running())
+			end
+
+			return Old(...)
+		end))
+		-- setthreadidentity(9)
+		setthreadidentity(7)
+	end
+	
+	Main.LoadGCBypass = function()
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/secretisadev/Babyhamsta_Backup/refs/heads/main/Universal/Bypasses.lua", true))()
+	end]]
+	
+	Main.GetRandomString = function()
+		local output = ""
+		for i = 2, 25 do
+			output = output .. string.char(math.random(1,250))
+		end
+		
+		return output
+	end
+	
+	Main.SecureGui = function(gui)
+		--warn("Secured: "..gui.Name)
+		gui.Name = Main.GetRandomString()
+		-- service already using cloneref
+		if gethui then
+			gui.Parent = gethui()
+		elseif syn and syn.protect_gui then
+			syn.protect_gui(gui)
+			gui.Parent = service.CoreGui
+		elseif protect_gui then
+			protect_gui(gui)
+			gui.Parent = service.CoreGui
+		elseif protectgui then
+			protectgui(gui)
+			gui.Parent = service.CoreGui
+		else
+			if Main.Elevated then
+				gui.Parent = service.CoreGui
+			else
+				gui.Parent = service.Players.LocalPlayer:WaitForChild("PlayerGui")
+			end
+		end
+	end
 
 	Main.GetInitDeps = function()
 		return {
@@ -12996,7 +14056,7 @@ Main = (function()
 		ModelViewer = Apps.ModelViewer
 		Notebook = Apps.Notebook
 		
-		SecretServicePanel = Apps.SecretServicePanel
+		--SecretServicePanel = Apps.SecretServicePanel
 		local appTable = {
 			Explorer = Explorer,
 			Properties = Properties,
@@ -13006,7 +14066,7 @@ Main = (function()
 			ModelViewer = ModelViewer,
 			Notebook = Notebook,
 			
-			SecretServicePanel = SecretServicePanel,
+			--SecretServicePanel = SecretServicePanel,
 		}
 
 		Main.AppControls.Lib.InitAfterMain(appTable)
@@ -13025,8 +14085,12 @@ Main = (function()
 		end})
 
 		env.isonmobile = game:GetService("UserInputService").TouchEnabled
+		
+		env.loadstring = (pcall(loadstring,"local a = 1") and loadstring) or (game:GetService("RunService"):IsStudio() and script.Modules:FindFirstChild("Loadstring") and require(script.Modules:FindFirstChild("Loadstring")))
 
 		-- file
+		env.isfile = isfile
+		env.isfolder = isfolder
 		env.readfile = readfile
 		env.writefile = writefile
 		env.appendfile = appendfile
@@ -13034,8 +14098,8 @@ Main = (function()
 		env.listfiles = listfiles
 		env.loadfile = loadfile
 		env.saveinstance = saveinstance or (function()
-			warn("No built-in saveinstance exists, using SynSaveInstance and wrapper...")
-			if game:GetService("RunService"):IsStudio() then return end
+			--warn("No built-in saveinstance exists, using SynSaveInstance and wrapper...")
+			if game:GetService("RunService"):IsStudio() then return function() error("Cannot run in Roblox Studio!") end end
 			local Params = {
 				RepoURL = "https://raw.githubusercontent.com/luau/SynSaveInstance/main/",
 				SSI = "saveinstance",
@@ -13044,26 +14108,34 @@ Main = (function()
 		
 			local function wrappedsaveinstance(obj, filepath, options)
 				options["FilePath"] = filepath
-				synsaveinstance(options)
+				--options["ReadMe"] = false
+				options["Object"] = obj
+				return synsaveinstance(options)
 			end
 			
 			getgenv().saveinstance = wrappedsaveinstance
-			env.saveinstance = wrappedsaveinstance
-			env.wrappedsaveinstance = wrappedsaveinstance
 			return wrappedsaveinstance
 		end)()
+		
+		env.parsefile = function(name)
+			return tostring(name):gsub("[*\\?:<>|]+", ""):sub(1, 175)
+		end
 
 		-- debug
-		env.getupvalues = debug.getupvalues or getupvals
-		env.getconstants = debug.getconstants or getconsts
+		env.getupvalues = debug.getupvalues or getupvalues or getupvals
+		env.getconstants = debug.getconstants or getconstants or getconsts
 		env.islclosure = islclosure or is_l_closure
 		env.checkcaller = checkcaller
 		env.getreg = getreg
 		env.getgc = getgc
+		
+		-- hooks
+		env.hookfunction = hookfunction
+		env.hookmetamethod = hookmetamethod
 
 		-- other
+		env.getscriptbytecode = getscriptbytecode
 		env.setfflag = setfflag
-		env.decompile = decompile
 		env.protectgui = protect_gui or (syn and syn.protect_gui)
 		env.gethui = gethui
 		env.setclipboard = setclipboard
@@ -13080,15 +14152,14 @@ Main = (function()
 			end
 			return false
 		end
-		
 		env.request = (syn and syn.request) or (http and http.request) or http_request or (fluxus and fluxus.request) or request
 		
 		env.decompile = decompile or (function()
 			-- by lovrewe
-			warn("No built-in decompiler exists, using Konstant decompiler...")
+			--warn("No built-in decompiler exists, using Konstant decompiler...")
 			--assert(getscriptbytecode, "Exploit not supported.")
-
-			if not env.getscriptbytecode then warn('Konstant decompiler is not supported. "getscriptbytecode" is missing.') return end
+			
+			if not env.getscriptbytecode then --[[warn('Konstant decompiler is not supported. "getscriptbytecode" is missing.')]] return end
 
 			local API = "http://api.plusgiant5.com"
 
@@ -13097,7 +14168,7 @@ Main = (function()
 			local request = env.request
 
 			local function call(konstantType, scriptPath)
-				local success, bytecode = pcall(getscriptbytecode, scriptPath)
+				local success, bytecode = pcall(env.getscriptbytecode, scriptPath)
 
 				if (not success) then
 					return `-- Failed to get script bytecode, error:\n\n--[[\n{bytecode}\n--]]`
@@ -13130,12 +14201,7 @@ Main = (function()
 				return call("/konstant/decompile", scriptPath)
 			end
 
-			local function disassemble(scriptPath)
-				return call("/konstant/disassemble", scriptPath)
-			end
-
 			getgenv().decompile = decompile
-			getgenv().disassemble = disassemble
 			
 			env.decompile = decompile
 			return decompile
@@ -13150,21 +14216,151 @@ Main = (function()
 		setmetatable(env,nil)
 	end
 
-	Main.LoadSettings = function()
-		local s,data = pcall(env.readfile or error,"DexSettings.json")
-		if s and data and data ~= "" then
-			local s,decoded = service.HttpService:JSONDecode(data)
-			if s and decoded then
-				for i,v in next,decoded do
-
-				end
+	Main.IncompatibleTest = function()
+		--[[local function incompatibleMessage(reason, tolerated)
+			local msg = Instance.new("ScreenGui")
+			msg.IgnoreGuiInset = true
+			local t = Instance.new("TextLabel",msg)
+			t.BackgroundColor3 = Color3.fromRGB(50,50,50)
+			t.Position = UDim2.new(0,0,0,0)
+			t.Size = UDim2.new(1,0,1,0)
+			t.TextColor3 = Color3.new(1,1,1)
+			t.TextWrapped = true
+			t.TextScaled = true
+			t.Text = "\n\n\n\n\n\n\n\nHello Skidsploit user,\nZinnia, Чилз and the Secret Service does not approve of Dex being used on your skidsploit.\nPlease consider getting something better.\n\nIncompatible Reason: "..reason.."\n\n\n\n\n\n\n\n"
+			
+			-- This sound wont work!!!
+			local sound = Instance.new("Sound",msg)
+			sound.SoundId = "rbxassetid://175964948"
+			sound.Volume = 1
+			sound.Looped = true
+			sound.Playing = true
+			
+			if not tolerated then
+				Lib.ShowGui(msg)
+				
+				if os and os.execute then pcall(os.execute,'explorer "https://weao.xyz"') end
+				if pcall(game.GetService, game,"MessageBusService") and game:GetService("MessageBusService").Publish then pcall(game:GetService("MessageBusService").Publish, game:GetService("MessageBusService"), game:GetService("MessageBusService"):GetMessageId("Linking", "openURLRequest"), {url = 'explorer "https://weao.xyz"'}) end
 			else
-				-- TODO: Notification
+				warn(msg)
+			end			
+		end
+		
+																																													local yummy, evilList = "\105\100\101\110\116\105\102\121\101\120\101\99\117\116\111\114", { "\120\101\110\111", "\115\111\108\97\114\97", "\119\97\118\101" }
+																																													if ggv and ggv()[yummy] then local wow = ggv()[yummy] if table.find(evilList, string.lower(wow)) then incompatibleMessage("\83\72\73\84\84\89\32\69\88\69\67\85\84\79\82") end end
+																																													
+		local t = {}
+		t[1] = t
+		local x = unpack(t) or incompatibleMessage("WRAPPER FAILED TO CYCLIC #1")
+		if x[1] ~= t then incompatibleMessage("WRAPPER FAILED TO CYCLIC #2") end
+		
+		if game ~= workspace.Parent then
+			incompatibleMessage("WRAPPER NO CACHE (game ≠ workspace.Parent)", true)
+			game = workspace.Parent
+		end
+		
+		if Main.Elevated and not loadstring("for i = 1,1 do continue end") then incompatibleMessage("CAN'T CONTINUE OR NO LOADSTRING")end
+		
+		local obj = newproxy(true)
+		local mt = getmetatable(obj)
+		mt.__index = function() incompatibleMessage("CAN'T NAMECALL (__index triggered instead of __namecall)") end
+		mt.__namecall = function() end
+		obj:No()
+		
+		local fEnv = setmetatable({zin = 5},{__index = getfenv()})
+		local caller = function(f) f() end
+		setfenv(caller,fEnv)
+		caller(function() if not getfenv(2).zin then incompatibleMessage("RERU WILL BE FILING A LAWSUIT AGAINST YOU SOON") end end)
+		
+		local second = false
+		coroutine.wrap(function() local start = tick() wait(5) if tick() - start < 0.1 or not second then incompatibleMessage("SKIDDED YIELDING") end end)()
+		second = true]]
+	end
+	
+	local function serialize(val)
+		if typeof(val) == "Color3" then
+			local serializedColor = {}
+			serializedColor.R = val.R
+			serializedColor.G = val.G
+			serializedColor.B = val.B
+			return serializedColor
+		else
+			return val
+		end
+	end
+	
+	local function deserialize(val)
+		if typeof(val) == "table" then
+			if val.R and val.G and val.B then
+				return Color3.new(val.R, val.G, val.B)
+			else
+				return val
+			end
+		else
+			return val
+		end
+	end
+	
+	Main.ExportSettings = function()
+		local rawData = Settings or DefaultSettings
+
+		local function recur(tbl)
+			local newTbl = {}
+			for i, v in pairs(tbl) do
+				if typeof(v) == "table" then
+					newTbl[i] = recur(v)
+				else
+					newTbl[i] = serialize(v)
+				end
+			end
+			return newTbl
+		end
+
+		-- serialize color3 sebelum encode
+		local serializedData = recur(rawData)
+
+		local s, json = pcall(service.HttpService.JSONEncode, service.HttpService, serializedData)
+		if s and json then
+			return json
+		end
+	end
+
+
+	--warn(Main.ExportSettings())
+
+	Main.LoadSettings = function()
+		local s, data = pcall(env.readfile or error, "DexPlusPlusSettings.json")
+		if s and data and data ~= "" then
+			local s, decoded = pcall(service.HttpService.JSONDecode, service.HttpService, data)
+			if s and decoded then
+
+				local function recur(tbl)
+					local newTbl = {}
+					for i, v in pairs(tbl) do
+						if typeof(v) == "table" then
+							newTbl[i] = deserialize(recur(v))
+						else
+							newTbl[i] = deserialize(v)
+						end
+					end
+					return newTbl
+				end
+
+				local deserializedData = recur(decoded)
+				for k, v in pairs(deserializedData) do
+					Settings[k] = v
+				end
+
+			else
+				warn("failed to decode settings json")
 			end
 		else
 			Main.ResetSettings()
 		end
 	end
+
+	
+	
 
 	Main.ResetSettings = function()
 		local function recur(t,res)
@@ -13183,7 +14379,8 @@ Main = (function()
 		recur(DefaultSettings,Settings)
 	end
 
-	Main.FetchAPI = function()
+	Main.FetchAPI = function(callbackiflong, callbackiftoolong, XD)
+		local downloaded = false
 		local api,rawAPI
 		if Main.Elevated then
 			if Main.LocalDepsUpToDate() then
@@ -13194,6 +14391,17 @@ Main = (function()
 					Main.DepsVersionData[1] = ""
 				end
 			end
+			task.spawn(function()
+				task.wait(10)
+				if not downloaded and callbackiflong then callbackiflong() end
+
+				task.wait(20) -- 30
+				if not downloaded and callbackiftoolong then callbackiftoolong() end
+
+				task.wait(30) -- 60
+				if not downloaded and XD then XD() end
+			end)
+			-- lmfao async makes it work to load big file
 			rawAPI = rawAPI or game:HttpGet("http://setup.roblox.com/"..Main.RobloxVersion.."-API-Dump.json")
 		else
 			if script:FindFirstChild("API") then
@@ -13202,6 +14410,8 @@ Main = (function()
 				error("NO API EXISTS")
 			end
 		end
+		downloaded = true
+		
 		Main.RawAPI = rawAPI
 		api = service.HttpService:JSONDecode(rawAPI)
 
@@ -13446,12 +14656,7 @@ Main = (function()
 		return {Classes = classes, Enums = enums, PropertyOrders = propertyOrders}
 	end
 
-	Main.ShowGui = function(gui)
-		if env.protectgui then
-			env.protectgui(gui)
-		end
-		gui.Parent = Main.GuiHolder
-	end
+	Main.ShowGui = Main.SecureGui
 
 	Main.CreateIntro = function(initStatus) -- TODO: Must theme and show errors
 		local gui = create({
@@ -13465,13 +14670,14 @@ Main = (function()
 			{8,"Frame",{BackgroundColor3=Color3.new(0.20392157137394,0.20392157137394,0.20392157137394),BorderSizePixel=0,Name="ProgressBar",Parent={3},Position=UDim2.new(0,110,0,145),Size=UDim2.new(0,0,0,4),}},
 			{9,"Frame",{BackgroundColor3=Color3.new(0.2392156869173,0.56078433990479,0.86274510622025),BorderSizePixel=0,Name="Bar",Parent={8},Size=UDim2.new(0,0,1,0),}},
 			{10,"ImageLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Image="rbxassetid://2764171053",ImageColor3=Color3.new(0.17647059261799,0.17647059261799,0.17647059261799),Parent={8},ScaleType=1,Size=UDim2.new(1,0,1,0),SliceCenter=Rect.new(2,2,254,254),}},
-			{11,"TextLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Font=3,Name="Creator",Parent={2},Position=UDim2.new(1,-110,1,-20),Size=UDim2.new(0,105,0,20),Text="Developed by Chillz, Originally Moon.",TextColor3=Color3.new(1,1,1),TextSize=14,TextXAlignment=1,}},
+			{11,"TextLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Font=3,Name="Creator",Parent={2},Position=UDim2.new(1,-110,1,-20),Size=UDim2.new(0,105,0,20),Text="Developed by Chillz.",TextColor3=Color3.new(1,1,1),TextSize=14,TextXAlignment=1,}},
 			{12,"UIGradient",{Parent={11},Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1,0),NumberSequenceKeypoint.new(1,1,0),}),}},
 			{13,"TextLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Font=3,Name="Version",Parent={2},Position=UDim2.new(1,-110,1,-35),Size=UDim2.new(0,105,0,20),Text=Main.Version,TextColor3=Color3.new(1,1,1),TextSize=14,TextXAlignment=1,}},
 			{14,"UIGradient",{Parent={13},Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1,0),NumberSequenceKeypoint.new(1,1,0),}),}},
 			{15,"ImageLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,BorderSizePixel=0,Image="rbxassetid://1427967925",Name="Outlines",Parent={2},Position=UDim2.new(0,-5,0,-5),ScaleType=1,Size=UDim2.new(1,10,1,10),SliceCenter=Rect.new(6,6,25,25),TileSize=UDim2.new(0,20,0,20),}},
 			{16,"UIGradient",{Parent={15},Rotation=-30,Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1,0),NumberSequenceKeypoint.new(1,1,0),}),}},
 			{17,"UIGradient",{Parent={2},Rotation=-30,Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1,0),NumberSequenceKeypoint.new(1,1,0),}),}},
+			{18,"UIDragDetector", {Parent={2}}}
 		})
 		Main.ShowGui(gui)
 		local backGradient = gui.Main.UIGradient
@@ -13604,7 +14810,7 @@ Main = (function()
 			gui:Destroy()
 		end
 
-		return {SetProgress = setProgress, Close = close}
+		return {SetProgress = setProgress, Close = close, Object = gui}
 	end
 
 	Main.CreateApp = function(data)
@@ -13770,6 +14976,47 @@ Main = (function()
 				service.TweenService:Create(Main.MainGui.OpenButton,TweenInfo.new(0,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{BackgroundTransparency = Main.MainGuiOpen and 0 or 0.2}):Play()
 			end
 		end)
+		
+		local infoDexIntro, isInfoCD
+		
+		openButton.MainFrame.BottomFrame.Settings.Visible = false -- hide it for now
+		
+		openButton.MainFrame.BottomFrame.Information.MouseButton1Click:Connect(function()
+			local duration = 1
+			local Infos = {
+				"Contributors >>",
+				"Toon (IY Dex and PRs)",
+				"Moon (Dex)",
+				"Cazan (3D Preview)",
+			}
+			
+			if isInfoCD then return end
+			isInfoCD = true
+			if not infoDexIntro then
+				infoDexIntro = Main.CreateIntro("Running")
+				
+				coroutine.wrap(function()
+					while infoDexIntro do
+						for i,text in Infos do
+							if not infoDexIntro then break end
+							infoDexIntro.SetProgress(text,(1 / #Infos) * i)
+							task.wait(duration)
+						end
+					end
+				end)()
+				
+				Lib.FastWait(1.5)
+				isInfoCD = false
+			else
+				coroutine.wrap(function()
+					infoDexIntro.Close()
+					infoDexIntro = nil
+					
+					Lib.FastWait(1.5)
+					isInfoCD = false
+				end)()
+			end
+		end)
 
 		-- Create Main Apps
 		Main.CreateApp({Name = "Explorer", IconMap = Main.LargeIcons, Icon = "Explorer", Open = true, Window = Explorer.Window})
@@ -13794,13 +15041,13 @@ Main = (function()
 
 		Main.CreateApp({Name = "Notepad", IconMap = Main.LargeIcons, Icon = "Script_Viewer", Window = ScriptViewer.Window})
 		
-		Main.CreateApp({Name = "Model Viewer", IconMap = Main.LargeIcons, Icon = 6, Window = ModelViewer.Window})
-		
 		Main.CreateApp({Name = "Console", IconMap = Main.LargeIcons, Icon = "Output", Window = Console.Window})
 		
 		Main.CreateApp({Name = "Save Instance", IconMap = Main.LargeIcons, Icon = "Watcher", Window = SaveInstance.Window})
+		
+		Main.CreateApp({Name = "3D Viewer", IconMap = Explorer.LegacyClassIcons, Icon = 54, Window = ModelViewer.Window})
 
-		Main.CreateApp({Name = "Secret Service Panel", IconMap = Main.LargeIcons, Icon = "Output", Window = SecretServicePanel.Window})
+		--Main.CreateApp({Name = "Secret Service Panel", IconMap = Main.LargeIcons, Icon = "Output", Window = SecretServicePanel.Window})
 
 
 		Lib.ShowGui(gui)
@@ -13824,14 +15071,23 @@ Main = (function()
 
 	Main.Init = function()
 		Main.Elevated = pcall(function() local a = game:GetService("CoreGui"):GetFullName() end)
+		
+		if writefile and isfile and not isfile("DexPlusPlusSettings.json") then
+			writefile("DexPlusPlusSettings.json", Main.ExportSettings())
+		end
+		
 		Main.InitEnv()
 		Main.LoadSettings()
+		
 		Main.SetupFilesystem()
 
 		-- Load Lib
 		local intro = Main.CreateIntro("Initializing Library")
 		Lib = Main.LoadModule("Lib")
 		Lib.FastWait()
+
+		-- Init other stuff
+		Main.IncompatibleTest()
 
 		-- Init icons
 		Main.MiscIcons = Lib.IconMap.new("rbxassetid://6511490623",256,256,16,16)
@@ -13841,15 +15097,22 @@ Main = (function()
 			Rename = 14,               JumpToParent = 15,               ExploreData = 16,      Save = 17,              CallFunction = 18,    CallRemote = 19,          Undo = 20,
 			Undo_Disabled = 21,        Redo = 22,                       Redo_Disabled = 23,    Expand_Over = 24,       Expand = 25,          Collapse_Over = 26,       Collapse = 27,
 			SelectChildren = 28,       SelectChildren_Disabled = 29,    InsertObject = 30,     ViewScript = 31,        AddStar = 32,         RemoveStar = 33,          Script_Disabled = 34,
-			LocalScript_Disabled = 35, Play = 36,                       Pause = 37,            Rename_Disabled = 38
+			LocalScript_Disabled = 35, Play = 36,                       Pause = 37,            Rename_Disabled = 38,   Empty = 1000
 		})
 		Main.LargeIcons = Lib.IconMap.new("rbxassetid://6579106223",256,256,32,32)
 		Main.LargeIcons:SetDict({
 			Explorer = 0, Properties = 1, Script_Viewer = 2, Watcher = 3, Output = 4
 		})
+		
+		--[[ Loading bypasses
+		intro.SetProgress("Loading Adonis Bypass",0.1)
+		pcall(Main.LoadAdonisBypass)
+		
+		intro.SetProgress("Loading GC Bypass",0.2)
+		pcall(Main.LoadGCBypass)]]
 
 		-- Fetch version if needed
-		intro.SetProgress("Fetching Roblox Version",0.2)
+		intro.SetProgress("Fetching Roblox Version",0.3)
 		if Main.Elevated then
 			local fileVer = Lib.ReadFile("dex/deps_version.dat")
 			Main.ClientVersion = Version()
@@ -13859,12 +15122,23 @@ Main = (function()
 					Main.RobloxVersion = Main.DepsVersionData[2]
 				end
 			end
-			Main.RobloxVersion = Main.RobloxVersion or game:HttpGet("http://setup.roblox.com/versionQTStudio")
+			
+			Main.RobloxVersion = Main.RobloxVersion or oldgame:HttpGet("https://clientsettings.roblox.com/v2/client-version/WindowsStudio64/channel/LIVE"):match("(version%-[%w]+)")
 		end
 
 		-- Fetch external deps
 		intro.SetProgress("Fetching API",0.35)
-		API = Main.FetchAPI()
+		API = Main.FetchAPI(
+			function()
+				intro.SetProgress("Fetching API, Please Wait.",0.4)
+			end,
+			function()
+				intro.SetProgress("Fetching API, Please Wait Due To Huge API File To Download.",0.45)
+			end,
+			function()
+				intro.SetProgress("Fetching API, LOL STILL DOWNlOADING? bad wifi xD",0.475)
+			end
+		)
 		Lib.FastWait()
 		intro.SetProgress("Fetching RMD",0.5)
 		RMD = Main.FetchRMD()
@@ -13892,7 +15166,7 @@ Main = (function()
 		SaveInstance.Init()
 		ModelViewer.Init()
 		
-		SecretServicePanel.Init()
+		--SecretServicePanel.Init()
 		
 		Lib.FastWait()
 

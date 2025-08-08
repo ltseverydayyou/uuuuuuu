@@ -1,493 +1,270 @@
-if BACKPACKmobile then return end
+do local ok,e=pcall(getgenv) if ok and type(e)=="table" then if e.BPX then return end e.BPX=true end end
+if not game:IsLoaded() then game.Loaded:Wait() end
 
-pcall(function() getgenv().BACKPACKmobile = true end)
+local function sgs(n) local gs=game.GetService local cr=rawget(getfenv(0) or {},"cloneref") local s=gs(game,n) return (cr and cr(s)) or s end
+local Plr=sgs("Players").LocalPlayer
+local TS=sgs("TweenService")
+local UIS=sgs("UserInputService")
+local SG=sgs("StarterGui")
+local WS=sgs("Workspace")
+local TSvc=sgs("TextService")
+pcall(function() SG:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack,false) end)
 
-if not game:IsLoaded() then
-	game.Loaded:Wait()
+local mob=UIS.TouchEnabled and not UIS.KeyboardEnabled
+local sw=false local swSel=nil local sel=nil local col=false local exp=false
+local need=false local tBtns={} local tOrder={} local qtxt="" local strokes={}
+local dropCnt=0 local toolCnt=0
+
+local Thm={bg=Color3.fromRGB(14,14,16),soft=Color3.fromRGB(26,26,30),acc=Color3.fromRGB(45,120,255),acc2=Color3.fromRGB(0,185,95),dng=Color3.fromRGB(205,60,60),txt=Color3.fromRGB(255,255,255),mtx=Color3.fromRGB(210,210,210),str=Color3.fromRGB(60,60,62),hot=Color3.fromRGB(42,42,46),yel=Color3.fromRGB(255,225,90),lk=Color3.fromRGB(150,150,150)}
+
+local function root() local ok,r=pcall(function() return gethui and gethui() end) if ok and typeof(r)=="Instance" then return r end local cg=sgs("CoreGui") return cg:FindFirstChild("RobloxGui") or cg or Plr:FindFirstChildOfClass("PlayerGui") end
+local function tw(i,t,p,e,d) TS:Create(i, TweenInfo.new(t or .2,e or Enum.EasingStyle.Quad,d or Enum.EasingDirection.Out), p):Play() end
+local function stroke(i,th) local s=Instance.new("UIStroke") s.Color=Thm.str s.Thickness=th or 1 s.ApplyStrokeMode=Enum.ApplyStrokeMode.Border s.Parent=i table.insert(strokes,s) return s end
+local function corner(i,r) local c=Instance.new("UICorner") c.CornerRadius=UDim.new(0,r or 10) c.Parent=i return c end
+local function attr(g,n,v) pcall(function() g:SetAttribute(n,v) end) end
+local function getattr(g,n,d) local ok,v=pcall(function() return g:GetAttribute(n) end) if ok and v~=nil then return v end return d end
+local function hum() return Plr.Character and Plr.Character:FindFirstChildOfClass("Humanoid") end
+local function equip(t) local h=hum() if not h then return end h:UnequipTools() if sel~=t then h:EquipTool(t) sel=t else sel=nil end end
+local function canDrop(t) return t:IsA("Tool") and t.CanBeDropped and not getattr(t,"BP_Lock",false) end
+local function dropOne(t) local c=Plr.Character if not c then return end if t.Parent==c then t.Parent=WS else t.Parent=c task.wait() t.Parent=WS end end
+
+local ui=Instance.new("ScreenGui") ui.Name="BPX" ui.IgnoreGuiInset=true ui.DisplayOrder=9e8 ui.ResetOnSpawn=false ui.ZIndexBehavior=Enum.ZIndexBehavior.Global ui.Parent=root()
+
+local qbW=600
+local bar=Instance.new("Frame") bar.Name="Bar" bar.AnchorPoint=Vector2.new(.5,1) bar.Position=UDim2.new(.5,0,1,-10) bar.Size=UDim2.new(0,qbW+260,0,64) bar.BackgroundTransparency=1 bar.Parent=ui
+local qb=Instance.new("Frame") qb.Name="QB" qb.Size=UDim2.new(0,qbW,0,60) qb.Position=UDim2.new(.5,-qbW/2,0,2) qb.BackgroundColor3=Thm.soft qb.BackgroundTransparency=.25 qb.ClipsDescendants=true qb.Parent=bar corner(qb,12) stroke(qb,1)
+local ql=Instance.new("UIGridLayout") ql.FillDirection=Enum.FillDirection.Horizontal ql.CellSize=UDim2.new(0,50,0,50) ql.CellPadding=UDim2.new(0,5,0,5) ql.HorizontalAlignment=Enum.HorizontalAlignment.Center ql.VerticalAlignment=Enum.VerticalAlignment.Center ql.SortOrder=Enum.SortOrder.LayoutOrder ql.Parent=qb
+
+local ex=Instance.new("TextButton") ex.Name="Ex" ex.AnchorPoint=Vector2.new(.5,.5) ex.Size=UDim2.new(0,44,0,44) ex.Position=UDim2.new(.5,-qbW/2-38,.5,2) ex.Text="Open" ex.Font=Enum.Font.GothamBold ex.TextScaled=true ex.BackgroundColor3=Thm.hot ex.BackgroundTransparency=.2 ex.TextColor3=Thm.txt ex.Parent=bar corner(ex,10) stroke(ex,1)
+
+local rDock=Instance.new("Frame") rDock.Name="RD" rDock.AnchorPoint=Vector2.new(0,.5) rDock.Size=UDim2.new(0,170,0,44) rDock.Position=UDim2.new(.5,qbW/2+14,.5,2) rDock.BackgroundTransparency=1 rDock.Parent=bar
+local rList=Instance.new("UIListLayout") rList.FillDirection=Enum.FillDirection.Horizontal rList.HorizontalAlignment=Enum.HorizontalAlignment.Left rList.VerticalAlignment=Enum.VerticalAlignment.Center rList.Padding=UDim.new(0,8) rList.Parent=rDock
+
+local swBtn=Instance.new("TextButton") swBtn.Size=UDim2.new(0,52,0,44) swBtn.Text="Swap" swBtn.Font=Enum.Font.GothamBold swBtn.TextScaled=true swBtn.BackgroundColor3=Thm.soft swBtn.BackgroundTransparency=.1 swBtn.TextColor3=Thm.txt swBtn.Visible=false swBtn.Parent=rDock corner(swBtn,10) stroke(swBtn,1)
+local drpBtn=Instance.new("TextButton") drpBtn.Size=UDim2.new(0,52,0,44) drpBtn.Text="Drop(0)" drpBtn.Font=Enum.Font.GothamBold drpBtn.TextScaled=true drpBtn.BackgroundColor3=Thm.dng drpBtn.BackgroundTransparency=.5 drpBtn.TextTransparency=.4 drpBtn.TextColor3=Thm.txt drpBtn.Active=false drpBtn.AutoButtonColor=false drpBtn.Parent=rDock corner(drpBtn,10) stroke(drpBtn,1)
+local colBtn=Instance.new("TextButton") colBtn.Size=UDim2.new(0,52,0,44) colBtn.Text="-" colBtn.Font=Enum.Font.GothamBold colBtn.TextScaled=true colBtn.BackgroundColor3=Thm.soft colBtn.BackgroundTransparency=.1 colBtn.TextColor3=Thm.txt colBtn.Parent=rDock corner(colBtn,10) stroke(colBtn,1)
+
+local expFr=Instance.new("Frame") expFr.Name="Exp" expFr.Size=UDim2.new(0,qbW,0,0) expFr.AnchorPoint=Vector2.new(.5,1) expFr.Position=UDim2.new(.5,0,1,-74) expFr.BackgroundColor3=Thm.bg expFr.BackgroundTransparency=.2 expFr.BorderSizePixel=0 expFr.Visible=true expFr.ClipsDescendants=true expFr.Parent=ui corner(expFr,12) stroke(expFr,1)
+local hdr=Instance.new("Frame") hdr.Size=UDim2.new(1,-10,0,40) hdr.Position=UDim2.new(0,5,0,5) hdr.BackgroundColor3=Thm.soft hdr.BackgroundTransparency=.2 hdr.Parent=expFr corner(hdr,8) stroke(hdr,1)
+local srch=Instance.new("TextBox") srch.Size=UDim2.new(1,-10,1,0) srch.Position=UDim2.new(0,5,0,0) srch.ClearTextOnFocus=false srch.PlaceholderText="Search" srch.Text="" srch.Font=Enum.Font.Gotham srch.TextSize=14 srch.TextColor3=Thm.txt srch.PlaceholderColor3=Thm.mtx srch.BackgroundTransparency=1 srch.TextXAlignment=Enum.TextXAlignment.Left srch.Parent=hdr
+local scr=Instance.new("ScrollingFrame") scr.Size=UDim2.new(1,-10,1,-50) scr.Position=UDim2.new(0,5,0,45) scr.CanvasSize=UDim2.new(0,0,0,0) scr.ScrollBarThickness=4 scr.ScrollingDirection=Enum.ScrollingDirection.Y scr.BackgroundTransparency=1 scr.Parent=expFr
+local gl=Instance.new("UIGridLayout") gl.CellSize=UDim2.new(0,50,0,50) gl.CellPadding=UDim2.new(0,5,0,5) gl.SortOrder=Enum.SortOrder.LayoutOrder gl.Parent=scr
+
+local cfm=Instance.new("Frame") cfm.Name="Cfm" cfm.Size=UDim2.new(0,320,0,84) cfm.BackgroundColor3=Thm.soft cfm.BackgroundTransparency=1 cfm.Visible=false cfm.ZIndex=60 cfm.Parent=ui corner(cfm,10) stroke(cfm,1)
+local cScale=Instance.new("UIScale") cScale.Scale=.95 cScale.Parent=cfm
+local cfmT=Instance.new("TextLabel") cfmT.BackgroundTransparency=1 cfmT.Size=UDim2.new(1,-140,1,-18) cfmT.Position=UDim2.new(0,12,0,9) cfmT.Font=Enum.Font.GothamSemibold cfmT.TextSize=14 cfmT.TextColor3=Thm.txt cfmT.TextXAlignment=Enum.TextXAlignment.Left cfmT.TextYAlignment=Enum.TextYAlignment.Top cfmT.TextWrapped=true cfmT.TextTransparency=1 cfmT.Text="Drop all unlocked tools?" cfmT.ZIndex=61 cfmT.Parent=cfm
+local cYes=Instance.new("TextButton") cYes.Size=UDim2.new(0,56,0,40) cYes.Position=UDim2.new(1,-124,.5,-20) cYes.Text="Yes" cYes.Font=Enum.Font.GothamBold cYes.TextScaled=true cYes.BackgroundColor3=Thm.dng cYes.TextColor3=Thm.txt cYes.TextTransparency=1 cYes.ZIndex=61 cYes.Parent=cfm corner(cYes,8) stroke(cYes,1)
+local cNo=Instance.new("TextButton") cNo.Size=UDim2.new(0,56,0,40) cNo.Position=UDim2.new(1,-62,.5,-20) cNo.Text="No" cNo.Font=Enum.Font.GothamBold cNo.TextScaled=true cNo.BackgroundColor3=Thm.soft cNo.TextColor3=Thm.txt cNo.TextTransparency=1 cNo.ZIndex=61 cNo.Parent=cfm corner(cNo,8) stroke(cNo,1)
+
+local minBtn=Instance.new("TextButton") minBtn.AnchorPoint=Vector2.new(.5,1) minBtn.Size=UDim2.new(0,68,0,36) minBtn.Position=UDim2.new(.5,0,1,-10) minBtn.Text="Open" minBtn.Font=Enum.Font.GothamBold minBtn.TextScaled=true minBtn.BackgroundColor3=Thm.soft minBtn.BackgroundTransparency=.1 minBtn.TextColor3=Thm.txt minBtn.Visible=false minBtn.Parent=ui corner(minBtn,10) stroke(minBtn,1)
+
+local tip=Instance.new("Frame") tip.Name="Tip" tip.BackgroundColor3=Thm.soft tip.BackgroundTransparency=.05 tip.Visible=false tip.ZIndex=500 tip.Parent=ui corner(tip,8) stroke(tip,1)
+local tipT=Instance.new("TextLabel") tipT.BackgroundTransparency=1 tipT.Size=UDim2.new(1,-14,1,-8) tipT.Position=UDim2.new(0,7,0,4) tipT.Font=Enum.Font.GothamSemibold tipT.TextScaled=true tipT.TextColor3=Color3.new(1,1,1) tipT.TextStrokeTransparency=0 tipT.TextStrokeColor3=Color3.new(0,0,0) tipT.Text="" tipT.ZIndex=501 tipT.Parent=tip local tipMax=Instance.new("UITextSizeConstraint") tipMax.MaxTextSize=18 tipMax.MinTextSize=10 tipMax.Parent=tipT
+
+local function setStrokeOn(on) for _,s in ipairs(strokes) do if s and s.Parent then s.Transparency=on and 0 or 1 end end end
+
+local function keyChip(btn,txt)
+	if not txt then return end
+	local old=btn:FindFirstChild("Key")
+	if old then old:Destroy() end
+	local f=Instance.new("Frame") f.Name="Key" f.Size=UDim2.new(0,20,0,20) f.Position=UDim2.new(0,3,0,3) f.BackgroundColor3=Thm.bg f.BackgroundTransparency=.1 f.ZIndex=btn.ZIndex+2 f.Parent=btn corner(f,5) stroke(f,1)
+	local t=Instance.new("TextLabel") t.BackgroundTransparency=1 t.Size=UDim2.new(1,0,1,0) t.Font=Enum.Font.GothamBold t.TextScaled=true t.TextColor3=Thm.txt t.Text=txt t.ZIndex=f.ZIndex+1 t.Parent=f local ts=Instance.new("UITextSizeConstraint") ts.MaxTextSize=14 ts.MinTextSize=10 ts.Parent=t
+	return f
+end
+keyChip(ex,"`") keyChip(drpBtn,"E") keyChip(colBtn,"C")
+
+local function cntDrop() local n=0 for _,cont in ipairs({Plr.Backpack,Plr.Character}) do if cont then for _,t in ipairs(cont:GetChildren()) do if canDrop(t) then n+=1 end end end end return n end
+local function posCfm() local v=workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1920,1080) local rx=rDock.AbsolutePosition.X+rDock.AbsoluteSize.X+10 local y=bar.AbsolutePosition.Y-96 if rx+cfm.AbsoluteSize.X>v.X then cfm.Position=UDim2.new(0,rDock.AbsolutePosition.X-10-cfm.AbsoluteSize.X,0,y) else cfm.Position=UDim2.new(0,rx,0,y) end end
+local function showCfm() dropCnt=cntDrop() if dropCnt<=0 then return end posCfm() cfm.Visible=true cfm.BackgroundTransparency=1 cScale.Scale=.95 cfmT.TextTransparency=1 cYes.TextTransparency=1 cNo.TextTransparency=1 tw(cfm,.16,{BackgroundTransparency=.1}) tw(cScale,.16,{Scale=1},Enum.EasingStyle.Back) tw(cfmT,.16,{TextTransparency=0}) tw(cYes,.16,{TextTransparency=0}) tw(cNo,.16,{TextTransparency=0}) end
+local function hideCfm() if not cfm.Visible then return end tw(cfm,.12,{BackgroundTransparency=1}) tw(cScale,.12,{Scale=.95}) tw(cfmT,.12,{TextTransparency=1}) tw(cYes,.12,{TextTransparency=1}) tw(cNo,.12,{TextTransparency=1}) task.delay(.12,function() cfm.Visible=false end) end
+local function layout() qb.Position=UDim2.new(.5,-qbW/2,0,2) ex.Position=UDim2.new(.5,-qbW/2-38,.5,2) rDock.Position=UDim2.new(.5,qbW/2+14,.5,2) expFr.Position=UDim2.new(.5,0,1,-74) end
+
+local function opsBar(b,t)
+	local ops=Instance.new("Frame") ops.Name="Ops" ops.Size=UDim2.new(1,0,0,16) ops.Position=UDim2.new(0,0,1,-16) ops.BackgroundColor3=Thm.bg ops.BackgroundTransparency=.35 ops.Visible=false ops.ZIndex=7 ops.Parent=b
+	local ol=Instance.new("UIListLayout") ol.FillDirection=Enum.FillDirection.Horizontal ol.HorizontalAlignment=Enum.HorizontalAlignment.Center ol.VerticalAlignment=Enum.VerticalAlignment.Center ol.Padding=UDim.new(0,6) ol.Parent=ops
+	local function mini(txt) local x=Instance.new("TextButton") x.Size=UDim2.new(0,18,0,12) x.Text=txt x.Font=Enum.Font.GothamBold x.TextScaled=true x.BackgroundColor3=Thm.soft x.BackgroundTransparency=.1 x.TextColor3=Thm.txt x.BorderSizePixel=0 x.ZIndex=8 x.Parent=ops corner(x,4) return x end
+	local fav=mini("★") local lock=mini(getattr(t,"BP_Lock",false) and "🔒" or "🔓") local drop=nil if t.CanBeDropped then drop=mini("D") end
+	fav.TextColor3=getattr(t,"BP_Fav",false) and Thm.yel or Thm.txt
+	fav.MouseButton1Click:Connect(function()
+		local nv=not getattr(t,"BP_Fav",false)
+		attr(t,"BP_Fav",nv)
+		fav.TextColor3 = nv and Thm.yel or Thm.txt
+		need=false rebuild()
+	end)
+	lock.MouseButton1Click:Connect(function() local nv=not getattr(t,"BP_Lock",false) attr(t,"BP_Lock",nv) lock.Text=nv and "🔒" or "🔓" need=false rebuild() end)
+	if drop then drop.MouseButton1Click:Connect(function() if canDrop(t) then dropOne(t) need=false rebuild() end end) end
+	b.MouseEnter:Connect(function() ops.Visible=true end)
+	b.MouseLeave:Connect(function() ops.Visible=false end)
+	b.MouseButton1Down:Connect(function() ops.Visible=true end)
 end
 
-local function SafeGetService(name)
-    local Service = (game.GetService);
-	local Reference = (cloneref) or function(reference) return reference end
-	return Reference(Service(game, name));
+local function tipForBtn(b,name)
+	local padX=16 local h=26
+	local sz=TSvc:GetTextSize(name,18,Enum.Font.GothamSemibold,Vector2.new(500,36))
+	local w=math.clamp(sz.X+padX,80,260)
+	tip.Size=UDim2.fromOffset(w,h) tipT.Text=name
+	local bp=b.AbsolutePosition local bs=b.AbsoluteSize
+	tip.Position=UDim2.fromOffset(bp.X+(bs.X-w)/2, bp.Y - h - 2)
+	tip.Visible=true
 end
 
---[[if not SafeGetService("UserInputService").TouchEnabled then
-	return
-end]]
-
-function guiCHECKINGAHHHHH()
-	return (gethui and gethui()) or SafeGetService("CoreGui"):FindFirstChild("RobloxGui") or SafeGetService("CoreGui") or SafeGetService("Players").LocalPlayer:FindFirstChildWhichIsA("PlayerGui")
+local function orderedQBButtons()
+	local arr={}
+	for _,ch in ipairs(qb:GetChildren()) do if ch:IsA("GuiButton") then table.insert(arr,ch) end end
+	table.sort(arr,function(a,b) return (a.LayoutOrder or 0) < (b.LayoutOrder or 0) end)
+	return arr
 end
 
-local p = SafeGetService("Players").LocalPlayer
-local ts = SafeGetService("TweenService")
-local UserInputService = SafeGetService("UserInputService")
-local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+function rebuild()
+	for _,c in ipairs(qb:GetChildren()) do if c:IsA("GuiButton") then c:Destroy() end end
+	for _,c in ipairs(scr:GetChildren()) do if c:IsA("GuiButton") then c:Destroy() end end
+	table.clear(tBtns)
 
-local swapping = false
-local selectedSwapTool = nil
-local selectedTool = nil
-local toolButtons = {}
-local collapsed = false
+	local bp=Plr:FindFirstChild("Backpack")
+	local map={}
+	for _,cont in ipairs({bp,Plr.Character}) do if cont then for _,t in ipairs(cont:GetChildren()) do if t:IsA("Tool") then map[t]=true end end end end
+	toolCnt=0 for _ in pairs(map) do toolCnt+=1 end
 
-local gui = Instance.new("ScreenGui")
-gui.Name = "InvUI"
-gui.Parent = guiCHECKINGAHHHHH()
-gui.ZIndexBehavior = Enum.ZIndexBehavior.Global
-gui.DisplayOrder = 999999999
-gui.ResetOnSpawn = false
-gui.IgnoreGuiInset = true
+	for t in pairs(map) do if not table.find(tOrder,t) then table.insert(tOrder,t) end end
+	for i=#tOrder,1,-1 do if not map[tOrder[i]] then table.remove(tOrder,i) end end
 
-local frameWrap = Instance.new("Frame")
-frameWrap.AnchorPoint = Vector2.new(0.5, 1)
-frameWrap.Position = UDim2.new(0.5, 0, 1, -10)
-frameWrap.Size = UDim2.new(0, 650, 0, 60)
-frameWrap.BackgroundTransparency = 1
-frameWrap.Parent = gui
+	sel=Plr.Character and Plr.Character:FindFirstChildOfClass("Tool")
 
-local qb = Instance.new("Frame")
-qb.Name = "QB"
-qb.Size = UDim2.new(0, 550, 0, 60)
-qb.Position = UDim2.new(0.5, -275, 0, 0)
-qb.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-qb.BackgroundTransparency = 0.4
-qb.ClipsDescendants = true
-qb.Parent = frameWrap
-Instance.new("UICorner", qb).CornerRadius = UDim.new(0, 12)
-
-local ql = Instance.new("UIGridLayout")
-ql.FillDirection = Enum.FillDirection.Horizontal
-ql.CellSize = UDim2.new(0, 50, 0, 50)
-ql.CellPadding = UDim2.new(0, 5, 0, 5)
-ql.SortOrder = Enum.SortOrder.LayoutOrder
-ql.Parent = qb
-
-local ex = Instance.new("TextButton")
-ex.Name = "Ex"
-ex.Size = UDim2.new(0, 40, 0, 40)
-ex.Position = UDim2.new(0, 0, 0.5, -15)
-ex.Text = "Open"
-ex.Font = Enum.Font.GothamBold
-ex.TextScaled = true
-ex.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-ex.BackgroundTransparency = 0.3
-ex.TextColor3 = Color3.fromRGB(255, 255, 255)
-ex.Parent = frameWrap
-Instance.new("UICorner", ex).CornerRadius = UDim.new(0, 10)
-
-local swapBtn = Instance.new("TextButton")
-swapBtn.Name = "SwapToggle"
-swapBtn.Size = UDim2.new(0, 40, 0, 40)
-swapBtn.Position = UDim2.new(1, -45, 0.5, -20)
-swapBtn.Text = "Swap"
-swapBtn.Font = Enum.Font.GothamBold
-swapBtn.TextScaled = true
-swapBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-swapBtn.BackgroundTransparency = 0.2
-swapBtn.TextColor3 = Color3.new(1, 1, 1)
-swapBtn.Parent = frameWrap
-
-local swapCorner = Instance.new("UICorner")
-swapCorner.CornerRadius = UDim.new(0, 10)
-swapCorner.Parent = swapBtn
-
-local dropAllBtn = Instance.new("TextButton")
-dropAllBtn.Name = "DropAll"
-dropAllBtn.Size = UDim2.new(0, 40, 0, 40)
-dropAllBtn.Position = UDim2.new(1, -95, 0.5, -20)
-dropAllBtn.Text = "Drop Tools"
-dropAllBtn.Font = Enum.Font.GothamBold
-dropAllBtn.TextScaled = true
-dropAllBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-dropAllBtn.BackgroundTransparency = 0.2
-dropAllBtn.TextColor3 = Color3.new(1, 1, 1)
-dropAllBtn.Parent = frameWrap
-
-local dropAllCorner = Instance.new("UICorner")
-dropAllCorner.CornerRadius = UDim.new(0, 10)
-dropAllCorner.Parent = dropAllBtn
-
-local collapseBtn = Instance.new("TextButton")
-collapseBtn.Name = "Collapse"
-collapseBtn.Size = UDim2.new(0, 40, 0, 40)
-collapseBtn.Position = UDim2.new(1, -145, 0.5, -20)
-collapseBtn.Text = "-"
-collapseBtn.Font = Enum.Font.GothamBold
-collapseBtn.TextScaled = true
-collapseBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-collapseBtn.BackgroundTransparency = 0.2
-collapseBtn.TextColor3 = Color3.new(1, 1, 1)
-collapseBtn.Parent = frameWrap
-
-local collapseCorner = Instance.new("UICorner")
-collapseCorner.CornerRadius = UDim.new(0, 10)
-collapseCorner.Parent = collapseBtn
-
-local full = Instance.new("ScrollingFrame")
-full.Name = "Full"
-full.Size = UDim2.new(0, 550, 0, 0)
-full.AnchorPoint = Vector2.new(0.5, 1)
-full.Position = UDim2.new(0.5, 0, 1, -70)
-full.CanvasSize = UDim2.new(0, 0, 0, 0)
-full.ScrollBarThickness = 4
-full.ScrollingDirection = Enum.ScrollingDirection.Y
-full.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-full.BackgroundTransparency = 0.4
-full.BorderSizePixel = 0
-full.Visible = true
-full.ClipsDescendants = true
-full.Parent = gui
-Instance.new("UICorner", full).CornerRadius = UDim.new(0, 12)
-
-local fl = Instance.new("UIGridLayout")
-fl.CellSize = UDim2.new(0, 50, 0, 50)
-fl.CellPadding = UDim2.new(0, 5, 0, 5)
-fl.Parent = full
-
-local function addKeybindLabel(btn, keyText)
-	if isMobile then return end
-
-	local lbl = Instance.new("TextLabel")
-	lbl.Size = UDim2.new(1, -4, 0, 12)
-	lbl.Position = UDim2.new(0, 2, 0, 0)
-	lbl.BackgroundTransparency = 1
-	lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
-	lbl.TextStrokeTransparency = 0.6
-	lbl.TextXAlignment = Enum.TextXAlignment.Left
-	lbl.TextYAlignment = Enum.TextYAlignment.Top
-	lbl.Font = Enum.Font.GothamSemibold
-	lbl.TextSize = 12
-	lbl.Text = keyText
-	lbl.ZIndex = btn.ZIndex + 1
-	lbl.Parent = btn
-end
-
-local tOrder = {}
-
-local function makeBtn(t)
-	local hasImg = t.TextureId and t.TextureId ~= ""
-	local b = hasImg and Instance.new("ImageButton") or Instance.new("TextButton")
-	if not hasImg then
-		b.Text = t.Name
-		b.TextScaled = true
-		b.TextColor3 = Color3.fromRGB(255, 255, 255)
-	else
-		b.Image = t.TextureId
-	end
-	b.Name = t.Name
-	b.Active = true
-	b.Size = UDim2.new(0, 50, 0, 50)
-	b.BackgroundColor3 = (swapping and selectedSwapTool == t)
-		and Color3.fromRGB(0, 180, 50)
-		or (selectedTool == t and Color3.fromRGB(30, 90, 255))
-		or Color3.fromRGB(40, 40, 40)
-	b.AutoButtonColor = false
-	Instance.new("UICorner", b).CornerRadius = UDim.new(0.2, 0)
-
-	toolButtons[b] = t
-
-	local idx = 0
-for _, c in ipairs(qb:GetChildren()) do
-	if c:IsA("GuiButton") then
-		idx += 1
-	end
-end
-idx += 1
-if not isMobile and idx <= 8 then
-	addKeybindLabel(b, tostring(idx))
-end
-
-	b.MouseButton1Click:Connect(function()
-		if swapping then
-			if not selectedSwapTool then
-				selectedSwapTool = t
-				refresh()
-			elseif selectedSwapTool == t then
-				selectedSwapTool = nil
-				refresh()
-			else
-				local i1, i2
-				for i, v in ipairs(tOrder) do
-					if v == selectedSwapTool then i1 = i end
-					if v == t then i2 = i end
-				end
-				if i1 and i2 then
-					tOrder[i1], tOrder[i2] = tOrder[i2], tOrder[i1]
-				end
-				selectedSwapTool = nil
-				refresh()
-			end
-		else
-			local hum = p.Character and p.Character:FindFirstChildOfClass("Humanoid")
-			if hum then
-				if selectedTool == t then
-					hum:UnequipTools()
-					selectedTool = nil
-				else
-					hum:EquipTool(t)
-					selectedTool = t
-				end
-				refresh()
+	local list={}
+	local idxMap={} for i,v in ipairs(tOrder) do idxMap[v]=i end
+	local q=qtxt local qlwr=(q~="") and string.lower(q) or nil
+	for _,t in ipairs(tOrder) do
+		if map[t] then
+			if not qlwr or string.find(string.lower(t.Name),qlwr,1,true) then
+				table.insert(list,t)
 			end
 		end
+	end
+
+	table.sort(list,function(a,b)
+		local fa = getattr(a,"BP_Fav",false) and 0 or 1
+		local fb = getattr(b,"BP_Fav",false) and 0 or 1
+		if fa ~= fb then return fa < fb end
+		return (idxMap[a] or 1e9) < (idxMap[b] or 1e9)
 	end)
 
-	if t.CanBeDropped then
-		local dropBtn = Instance.new("TextButton")
-		dropBtn.Size = UDim2.new(0, 16, 0, 16)
-		dropBtn.Position = UDim2.new(1, -4, 1, -4)
-		dropBtn.AnchorPoint = Vector2.new(1, 1)
-		dropBtn.Text = "D"
-		dropBtn.TextScaled = true
-		dropBtn.TextColor3 = Color3.new(1, 1, 1)
-		dropBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
-		dropBtn.BackgroundTransparency = 0.1
-		dropBtn.BorderSizePixel = 0
-		dropBtn.ZIndex = 2
-		dropBtn.Parent = b
+	local function mkBtn(t,idx)
+		local has=t.TextureId and t.TextureId~=""
+		local b=has and Instance.new("ImageButton") or Instance.new("TextButton")
+		if has then b.Image=t.TextureId else b.Text=t.Name b.TextScaled=true b.TextColor3=Thm.txt end
+		b.Name=t.Name b.Size=UDim2.new(0,50,0,50) b.AutoButtonColor=false
+		b.BackgroundColor3= sw and ((swSel==t) and Thm.acc2 or Thm.hot) or ((sel==t) and Thm.acc or Thm.hot)
+		local cr=Instance.new("UICorner") cr.CornerRadius=UDim.new(0,.2) cr.Parent=b
+		local bs=stroke(b,2) bs.Color=getattr(t,"BP_Fav",false) and Thm.yel or Thm.str
+		local lk=Instance.new("Frame") lk.Size=UDim2.new(1,0,0,2) lk.BackgroundColor3=getattr(t,"BP_Lock",false) and Thm.lk or Color3.fromRGB(0,0,0) lk.BackgroundTransparency=getattr(t,"BP_Lock",false) and .15 or 1 lk.BorderSizePixel=0 lk.ZIndex=6 lk.Parent=b
+		tBtns[b]=t
+		if idx then keyChip(b, idx==10 and "0" or tostring(idx)) end
+		opsBar(b,t)
 
-		local corner = Instance.new("UICorner")
-		corner.CornerRadius = UDim.new(1, 0)
-		corner.Parent = dropBtn
+		b.MouseEnter:Connect(function() if not mob then tipForBtn(b,t.Name) end end)
+		b.MouseLeave:Connect(function() if not mob then tip.Visible=false end end)
+		b.MouseButton1Down:Connect(function() tipForBtn(b,t.Name) end)
+		b.MouseButton1Up:Connect(function() if not mob then tip.Visible=false end end)
 
-		dropBtn.MouseButton1Click:Connect(function()
-			local char = p.Character
-			local hum = char and char:FindFirstChildOfClass("Humanoid")
-			if hum and char then
-				t.Parent = char
-				task.wait(0.05)
-				t.Parent = SafeGetService("Workspace")
+		b.MouseButton1Click:Connect(function()
+			if sw then
+				if not swSel then swSel=t rebuild() return end
+				if swSel==t then swSel=nil rebuild() return end
+				local i1,i2 for i,v in ipairs(tOrder) do if v==swSel then i1=i end if v==t then i2=i end end
+				if i1 and i2 then tOrder[i1],tOrder[i2]=tOrder[i2],tOrder[i1] end
+				swSel=nil rebuild()
+			else
+				equip(t) rebuild()
 			end
-			refresh()
 		end)
+		return b
 	end
 
-	return b
+	for i,t in ipairs(list) do
+		local btn=mkBtn(t, i<=10 and i or nil)
+		btn.LayoutOrder=i
+		if i<=10 then btn.Parent=qb else btn.Parent=scr end
+	end
+
+	local extra=math.max(#list-10,0) local rows=math.ceil(extra/10)
+	scr.CanvasSize=UDim2.new(0,0,0,rows*(50+5))
+
+	dropCnt=cntDrop()
+	drpBtn.AutoButtonColor=dropCnt>0 drpBtn.Active=dropCnt>0
+	drpBtn.TextTransparency=dropCnt>0 and 0 or .4 drpBtn.BackgroundTransparency=dropCnt>0 and .05 or .5
+	drpBtn.Text="Drop("..tostring(dropCnt)..")"
+
+	swBtn.Visible=(toolCnt>=2) and not col and bar.Visible
+	if swBtn.Visible then keyChip(swBtn,"Q") end
+	if not swBtn.Visible then sw=false swSel=nil end
+	swBtn.Text=sw and "X" or "Swap"
+
+	if col then bar.Visible=false exp=false expFr.Visible=false minBtn.Visible=true minBtn.Text="Open" setStrokeOn(false)
+	else bar.Visible=true minBtn.Visible=false expFr.Visible=true setStrokeOn(true) end
+
+	local h=exp and 260 or 0
+	tw(expFr,.18,{Size=UDim2.new(0,qbW,0,h)})
+	ex.Text=exp and "Close" or "Open"
 end
 
-function updateCollapseState()
-	local isCollapsed = collapsed
+local function req() if need then return end need=true task.defer(function() task.wait(.02) need=false rebuild() end) end
+local function setSwap() if toolCnt<2 then return end sw=not sw swSel=nil swBtn.Text=sw and "X" or "Swap" tw(swBtn,.12,{BackgroundColor3=sw and Thm.acc2 or Thm.soft}) req() end
+local function slideBar(show) if show then bar.Position=UDim2.new(.5,0,1,64) bar.Visible=true tw(bar,.2,{Position=UDim2.new(.5,0,1,-10)}) else tw(bar,.16,{Position=UDim2.new(.5,0,1,64)}) task.delay(.16,function() if col then bar.Visible=false end end) end end
+local function toggleCol() col=not col if col then hideCfm() slideBar(false) exp=false setStrokeOn(false) minBtn.Visible=true minBtn.Text="Open" else minBtn.Visible=false setStrokeOn(true) slideBar(true) end req() end
+local function toggleExp() if col then return end exp=not exp local sc=qb:FindFirstChildOfClass("UIScale") or Instance.new("UIScale",qb) sc.Scale=exp and .95 or 1.05 tw(sc,.16,{Scale=1}) req() end
 
-	local targetSize = isCollapsed and UDim2.new(0, 0, 0, 0) or UDim2.new(0, 650, 0, 60)
-	ts:Create(frameWrap, TweenInfo.new(0.25), { Size = targetSize }):Play()
+local running=false
+local function doDropAll() dropCnt=cntDrop() if dropCnt<=0 then return end if running then return end showCfm() end
 
-	for _, child in ipairs(frameWrap:GetChildren()) do
-		if child:IsA("GuiButton") and child ~= collapseBtn then
-			child.Visible = not isCollapsed
+cYes.MouseButton1Click:Connect(function()
+	if running then return end
+	running=true
+	local lst={}
+	for _,cont in ipairs({Plr.Backpack,Plr.Character}) do if cont then for _,t in ipairs(cont:GetChildren()) do if canDrop(t) then table.insert(lst,t) end end end end
+	local h=hum() if h then h:UnequipTools() end
+	local c=Plr.Character
+	for _,t in ipairs(lst) do if t and t.Parent and t.Parent~=WS then if c and t.Parent~=c then t.Parent=c task.wait() end t.Parent=WS end end
+	hideCfm() running=false req()
+end)
+cNo.MouseButton1Click:Connect(function() hideCfm() end)
+
+UIS.InputBegan:Connect(function(i,gp)
+	if gp or mob then return end
+	local kc=i.KeyCode
+	if not sw then
+		local map={ [Enum.KeyCode.One]=1,[Enum.KeyCode.Two]=2,[Enum.KeyCode.Three]=3,[Enum.KeyCode.Four]=4,[Enum.KeyCode.Five]=5,[Enum.KeyCode.Six]=6,[Enum.KeyCode.Seven]=7,[Enum.KeyCode.Eight]=8,[Enum.KeyCode.Nine]=9,[Enum.KeyCode.Zero]=10 }
+		local idx=map[kc]
+		if idx then
+			local arr=orderedQBButtons()
+			local b=arr[idx] local t=b and tBtns[b]
+			if t then equip(t) req() end
 		end
 	end
-
-	collapseBtn.Position = isCollapsed
-		and UDim2.new(0.5, -20, 1, -20)
-		or UDim2.new(1, -145, 0.5, -20)
-
-	collapseBtn.Text = isCollapsed and "+" or "-"
-end
-
-function callCLOSE()
-	collapsed = not collapsed
-	updateCollapseState()
-
-	local tween = ts:Create(full, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		Size = UDim2.new(0, 550, 0, 0)
-	})
-	tween:Play()
-	ex.Text = "Open"
-	open = false
-end
-
-function refresh()
-	local bp = p:FindFirstChild("Backpack")
-	if not bp then return end
-
-	for _, c in ipairs(qb:GetChildren()) do
-		if c:IsA("GuiButton") then c:Destroy() end
-	end
-	for _, c in ipairs(full:GetChildren()) do
-		if c:IsA("GuiButton") then c:Destroy() end
-	end
-	table.clear(toolButtons)
-
-	local toolsMap = {}
-	for _, container in {bp, p.Character} do
-		if container then
-			for _, t in ipairs(container:GetChildren()) do
-				if t:IsA("Tool") then
-					toolsMap[t] = true
-				end
-			end
-		end
-	end
-
-	local tools = {}
-	for tool in pairs(toolsMap) do
-		table.insert(tools, tool)
-	end
-
-	for _, t in ipairs(tools) do
-		if not table.find(tOrder, t) then
-			table.insert(tOrder, t)
-		end
-	end
-
-	for i = #tOrder, 1, -1 do
-		if not toolsMap[tOrder[i]] then
-			table.remove(tOrder, i)
-		end
-	end
-
-	selectedTool = p.Character and p.Character:FindFirstChildOfClass("Tool")
-
-	for i, t in ipairs(tOrder) do
-		if toolsMap[t] then
-			local btn = makeBtn(t)
-			if i <= 8 then btn.Parent = qb else btn.Parent = full end
-		end
-	end
-
-	local row = math.ceil((#tOrder - 8) / 10)
-	full.CanvasSize = UDim2.new(0, 0, 0, (55 * row))
-end
-
-local function toggleSwap()
-	local bp = p:FindFirstChild("Backpack")
-	local count = 0
-	for _, item in ipairs(bp:GetChildren()) do
-		if item:IsA("Tool") then count += 1 end
-	end
-	if count < 2 then return end
-
-	swapping = not swapping
-	selectedSwapTool = nil
-	swapBtn.Text = swapping and "X" or "Swap"
-	refresh()
-end
-
-swapBtn.MouseButton1Click:Connect(toggleSwap)
-
-local function dropAllTools()
-	local tools = {}
-
-	for _, container in {p.Backpack, p.Character} do
-		if container then
-			for _, t in ipairs(container:GetChildren()) do
-				if t:IsA("Tool") and t.CanBeDropped then
-					table.insert(tools, t)
-				end
-			end
-		end
-	end
-
-	local hum = p.Character and p.Character:FindFirstChildOfClass("Humanoid")
-	local char = p.Character
-
-	for _, tool in ipairs(tools) do
-		if tool.Parent ~= char then
-			tool.Parent = char
-			tool.Parent = SafeGetService("Workspace")
-		elseif tool.Parent == char then
-			tool.Parent = SafeGetService("Workspace")
-		end
-	end
-
-	if hum then hum:UnequipTools() end
-	refresh()
-end
-dropAllBtn.MouseButton1Click:Connect(dropAllTools)
-
-local function toggleOpen()
-	open = not open
-	local h = open and 250 or 0
-	local tween = ts:Create(full, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		Size = UDim2.new(0, 550, 0, h)
-	})
-	tween:Play()
-	ex.Text = open and "Close" or "Open"
-end
-ex.MouseButton1Click:Connect(toggleOpen)
-
-collapseBtn.MouseButton1Click:Connect(callCLOSE)
-
-local toolConnections = {}
-
-local function disconnectToolTracking()
-	for _, conn in ipairs(toolConnections) do
-		if conn and conn.Disconnect then conn:Disconnect() end
-	end
-	table.clear(toolConnections)
-end
-
-local function setupToolTracking()
-	disconnectToolTracking()
-	local bp = p:FindFirstChild("Backpack")
-	if bp then
-		table.insert(toolConnections, bp.ChildAdded:Connect(refresh))
-		table.insert(toolConnections, bp.ChildRemoved:Connect(refresh))
-	end
-	if p.Character then
-		table.insert(toolConnections, p.Character.ChildAdded:Connect(refresh))
-		table.insert(toolConnections, p.Character.ChildRemoved:Connect(refresh))
-	end
-end
-
-p.CharacterAdded:Connect(function()
-	task.wait(0.1)
-	refresh()
-	setupToolTracking()
+	if kc==Enum.KeyCode.Q then setSwap()
+	elseif kc==Enum.KeyCode.E then doDropAll()
+	elseif kc==Enum.KeyCode.C then toggleCol()
+	elseif kc==Enum.KeyCode.Backquote then toggleExp()
+	elseif kc==Enum.KeyCode.F then if sel and sel:IsA("Tool") then attr(sel,"BP_Fav",not getattr(sel,"BP_Fav",false)) req() end
+	elseif kc==Enum.KeyCode.L then if sel and sel:IsA("Tool") then attr(sel,"BP_Lock",not getattr(sel,"BP_Lock",false)) req() end end
 end)
 
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if not isMobile then
-	if gameProcessed then return end
+swBtn.MouseButton1Click:Connect(setSwap)
+drpBtn.MouseButton1Click:Connect(doDropAll)
+colBtn.MouseButton1Click:Connect(toggleCol)
+ex.MouseButton1Click:Connect(toggleExp)
+minBtn.MouseButton1Click:Connect(toggleCol)
+srch:GetPropertyChangedSignal("Text"):Connect(function() qtxt=srch.Text or "" req() end)
 
-	local keyVal = input.KeyCode.Value
-	if keyVal >= Enum.KeyCode.One.Value and keyVal <= Enum.KeyCode.Eight.Value then
-		local index = keyVal - Enum.KeyCode.One.Value + 1
-		local btns = {}
-		for _, child in ipairs(qb:GetChildren()) do
-			if child:IsA("GuiButton") then
-				table.insert(btns, child)
-			end
-		end
-		local btn = btns[index]
-		local tool = btn and toolButtons[btn]
-		if tool then
-			local hum = p.Character and p.Character:FindFirstChildOfClass("Humanoid")
-			if hum then
-				if selectedTool == tool then
-					hum:UnequipTools()
-					selectedTool = nil
-				else
-					hum:EquipTool(tool)
-					selectedTool = tool
-				end
-				refresh()
-			end
-		end
-	end
+local conns={}
+local function hook()
+	for _,c in ipairs(conns) do if c and c.Disconnect then c:Disconnect() end end table.clear(conns)
+	local bp=Plr:FindFirstChild("Backpack")
+	if bp then table.insert(conns,bp.ChildAdded:Connect(req)) table.insert(conns,bp.ChildRemoved:Connect(req)) end
+	if Plr.Character then table.insert(conns,Plr.Character.ChildAdded:Connect(req)) table.insert(conns,Plr.Character.ChildRemoved:Connect(req)) end
+end
+Plr.CharacterAdded:Connect(function() task.wait(.1) req() hook() end)
 
-	if input.KeyCode == Enum.KeyCode.Q then
-		toggleSwap()
-	elseif input.KeyCode == Enum.KeyCode.E then
-		dropAllTools()
-	elseif input.KeyCode == Enum.KeyCode.C then
-		callCLOSE()
-	elseif input.KeyCode == Enum.KeyCode.Backquote then
-		toggleOpen()
-	end
-
-	end
-end)
-
-addKeybindLabel(swapBtn, "[Q]")
-addKeybindLabel(dropAllBtn, "[E]")
-addKeybindLabel(collapseBtn, "[C]")
-addKeybindLabel(ex, "[`]")
-
-setupToolTracking()
-refresh()
-
-SafeGetService("RunService").RenderStepped:Connect(function()
-	SafeGetService("StarterGui"):SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
-end)
+hook()
+rebuild()
+bar:GetPropertyChangedSignal("AbsoluteSize"):Connect(layout)
+sgs("RunService").Heartbeat:Connect(function() if ui.Parent==nil then ui.Parent=root() end if cfm.Visible then posCfm() end end)

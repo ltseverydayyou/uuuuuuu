@@ -1,135 +1,402 @@
 local function SafeGetService(name)
-    local Service = (game.GetService);
-	local Reference = (cloneref) or function(reference) return reference end
-	return Reference(Service(game, name));
+    local GetService = game.GetService
+    local Ref = cloneref or function(x) return x end
+    return Ref(GetService(game, name))
 end
 
-local player = SafeGetService("Players").LocalPlayer
+local Players = SafeGetService("Players")
+local RunService = SafeGetService("RunService")
+local TweenService = SafeGetService("TweenService")
+local UserInputService = SafeGetService("UserInputService")
+local CoreGui = SafeGetService("CoreGui")
+local player = Players.LocalPlayer
 
-local function protectUI(sGui)
-    if sGui:IsA("ScreenGui") then
-        sGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
-		sGui.DisplayOrder = 999999999
-		sGui.ResetOnSpawn = false
-		sGui.IgnoreGuiInset = true
+local function protectUI(gui)
+    if gui:IsA("ScreenGui") then
+        gui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+        gui.DisplayOrder = 2147483647
+        gui.ResetOnSpawn = false
+        gui.IgnoreGuiInset = true
     end
-    local cGUI = SafeGetService("CoreGui")
-    local lPlr = SafeGetService("Players").LocalPlayer
-
-    local function NAProtection(inst, var)
-        if inst then
-            if var then
-                inst[var] = "\0"
-                inst.Archivable = false
-            else
-                inst.Name = "\0"
-                inst.Archivable = false
-            end
-        end
-    end
-
+    local target
     if gethui then
-		NAProtection(sGui)
-		sGui.Parent = gethui()
-		return sGui
-	elseif cGUI and cGUI:FindFirstChild("RobloxGui") then
-		NAProtection(sGui)
-		sGui.Parent = cGUI:FindFirstChild("RobloxGui")
-		return sGui
-	elseif cGUI then
-		NAProtection(sGui)
-		sGui.Parent = cGUI
-		return sGui
-	elseif lPlr and lPlr:FindFirstChildWhichIsA("PlayerGui") then
-		NAProtection(sGui)
-		sGui.Parent = lPlr:FindFirstChildWhichIsA("PlayerGui")
-		sGui.ResetOnSpawn = false
-		return sGui
-	else
-		return nil
-	end
+        target = gethui()
+    elseif CoreGui and CoreGui:FindFirstChild("RobloxGui") then
+        target = CoreGui:FindFirstChild("RobloxGui")
+    elseif CoreGui then
+        target = CoreGui
+    elseif player then
+        target = player:FindFirstChildOfClass("PlayerGui")
+    end
+    if not target then return nil end
+    gui.Name = "\0"
+    gui.Archivable = false
+    gui.Parent = target
+    return gui
+end
+
+local function t(i, time, style, dir, props)
+    TweenService:Create(i, TweenInfo.new(time, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out), props):Play()
 end
 
 local screenGui = Instance.new("ScreenGui")
-protectUI(screenGui)
-screenGui.Name = math.random(1, 100000)
-screenGui.ResetOnSpawn = false
+if not protectUI(screenGui) then return end
 
-local listLayout = Instance.new("UIListLayout")
-listLayout.SortOrder = Enum.SortOrder.LayoutOrder
-listLayout.Parent = screenGui
-listLayout.FillDirection = Enum.FillDirection.Vertical
-listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
-listLayout.VerticalAlignment = Enum.VerticalAlignment.Top
+local root = Instance.new("Frame")
+root.Size = UDim2.fromOffset(260, 140)
+root.Position = UDim2.new(0.5, 0, 0, 16)
+root.AnchorPoint = Vector2.new(0.5, 0)
+root.BackgroundTransparency = 0.1
+root.BackgroundColor3 = Color3.fromRGB(18, 18, 20)
+root.ClipsDescendants = false
+root.Parent = screenGui
 
-local toggleButton = Instance.new("TextButton")
-toggleButton.Name = "ToggleTPWalkButton"
-toggleButton.Text = "Toggle TPWalk"
-toggleButton.TextScaled = true
-toggleButton.LayoutOrder = 1
-toggleButton.Size = UDim2.new(0, 50, 0, 30)
-toggleButton.Position = UDim2.new(0.5, -75, 0, 0)
-toggleButton.Parent = screenGui
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 10)
+corner.Parent = root
 
-local speedTextBox = Instance.new("TextBox")
-speedTextBox.Name = "SpeedTextBox"
-speedTextBox.Text = "Enter Speed"
-speedTextBox.TextScaled = true
-speedTextBox.Size = UDim2.new(0, 100, 0, 30)
-speedTextBox.Position = UDim2.new(0.5, -75, 0, 50)
-speedTextBox.Parent = screenGui
+local stroke = Instance.new("UIStroke")
+stroke.Thickness = 1
+stroke.Color = Color3.fromRGB(255, 255, 255)
+stroke.Transparency = 0.75
+stroke.Parent = root
 
-local TPWalk = false
-local TPWalking
-local Speed = 1
-local DefaultSpeed = 1
+local gradient = Instance.new("UIGradient")
+gradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(50, 90, 255)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(170, 60, 255))
+}
+gradient.Rotation = 35
+gradient.Transparency = NumberSequence.new{
+    NumberSequenceKeypoint.new(0, 0.1),
+    NumberSequenceKeypoint.new(1, 0.1)
+}
+gradient.Parent = root
 
-local function toggleTPWalk()
-    if TPWalk then
-        TPWalk = false
-        TPWalking:Disconnect()
+local inner = Instance.new("Frame")
+inner.BackgroundTransparency = 0.15
+inner.BackgroundColor3 = Color3.fromRGB(10, 10, 12)
+inner.Size = UDim2.fromScale(1, 1)
+inner.ClipsDescendants = false
+inner.Parent = root
+
+local innerCorner = Instance.new("UICorner")
+innerCorner.CornerRadius = UDim.new(0, 10)
+innerCorner.Parent = inner
+
+local padding = Instance.new("UIPadding")
+padding.PaddingTop = UDim.new(0, 10)
+padding.PaddingBottom = UDim.new(0, 10)
+padding.PaddingLeft = UDim.new(0, 12)
+padding.PaddingRight = UDim.new(0, 12)
+padding.Parent = inner
+
+local list = Instance.new("UIListLayout")
+list.FillDirection = Enum.FillDirection.Vertical
+list.HorizontalAlignment = Enum.HorizontalAlignment.Left
+list.SortOrder = Enum.SortOrder.LayoutOrder
+list.Padding = UDim.new(0, 10)
+list.Parent = inner
+
+local header = Instance.new("Frame")
+header.Size = UDim2.new(1, 0, 0, 28)
+header.BackgroundTransparency = 1
+header.LayoutOrder = 1
+header.Parent = inner
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -32, 1, 0)
+title.BackgroundTransparency = 1
+title.Text = "TPWalk"
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Font = Enum.Font.GothamSemibold
+title.TextSize = 18
+title.TextColor3 = Color3.fromRGB(230, 230, 235)
+title.Parent = header
+
+local mini = Instance.new("TextButton")
+mini.Size = UDim2.fromOffset(24, 24)
+mini.AnchorPoint = Vector2.new(1, 0.5)
+mini.Position = UDim2.new(1, 0, 0.5, 0)
+mini.BackgroundTransparency = 1
+mini.Text = "—"
+mini.TextScaled = true
+mini.Font = Enum.Font.GothamSemibold
+mini.TextColor3 = Color3.fromRGB(200, 200, 210)
+mini.Parent = header
+
+local rowToggle = Instance.new("Frame")
+rowToggle.Size = UDim2.new(1, 0, 0, 36)
+rowToggle.BackgroundTransparency = 1
+rowToggle.LayoutOrder = 2
+rowToggle.Parent = inner
+
+local lblToggle = Instance.new("TextLabel")
+lblToggle.Size = UDim2.new(1, -70, 1, 0)
+lblToggle.BackgroundTransparency = 1
+lblToggle.Text = "Enabled"
+lblToggle.TextXAlignment = Enum.TextXAlignment.Left
+lblToggle.Font = Enum.Font.Gotham
+lblToggle.TextSize = 16
+lblToggle.TextColor3 = Color3.fromRGB(210, 210, 220)
+lblToggle.Parent = rowToggle
+
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.fromOffset(64, 30)
+toggleBtn.Position = UDim2.new(1, 0, 0.5, 0)
+toggleBtn.AnchorPoint = Vector2.new(1, 0.5)
+toggleBtn.AutoButtonColor = false
+toggleBtn.Text = ""
+toggleBtn.BackgroundColor3 = Color3.fromRGB(70, 75, 85)
+toggleBtn.Parent = rowToggle
+
+local toggleCorner = Instance.new("UICorner")
+toggleCorner.CornerRadius = UDim.new(0, 15)
+toggleCorner.Parent = toggleBtn
+
+local knob = Instance.new("Frame")
+knob.Size = UDim2.fromOffset(26, 26)
+knob.Position = UDim2.new(0, 2, 0.5, 0)
+knob.AnchorPoint = Vector2.new(0, 0.5)
+knob.BackgroundColor3 = Color3.fromRGB(240, 240, 245)
+knob.Parent = toggleBtn
+
+local knobCorner = Instance.new("UICorner")
+knobCorner.CornerRadius = UDim.new(1, 0)
+knobCorner.Parent = knob
+
+local knobStroke = Instance.new("UIStroke")
+knobStroke.Thickness = 1
+knobStroke.Transparency = 0.5
+knobStroke.Color = Color3.fromRGB(0, 0, 0)
+knobStroke.Parent = knob
+
+local rowSpeed = Instance.new("Frame")
+rowSpeed.Size = UDim2.new(1, 0, 0, 56)
+rowSpeed.BackgroundTransparency = 1
+rowSpeed.LayoutOrder = 3
+rowSpeed.Parent = inner
+
+local lblSpeed = Instance.new("TextLabel")
+lblSpeed.Size = UDim2.new(0, 54, 1, 0)
+lblSpeed.BackgroundTransparency = 1
+lblSpeed.Text = "Speed"
+lblSpeed.TextXAlignment = Enum.TextXAlignment.Left
+lblSpeed.Font = Enum.Font.Gotham
+lblSpeed.TextSize = 16
+lblSpeed.TextColor3 = Color3.fromRGB(210, 210, 220)
+lblSpeed.Parent = rowSpeed
+
+local slider = Instance.new("Frame")
+slider.Size = UDim2.new(1, -90, 0, 8)
+slider.Position = UDim2.new(0, 60, 0.5, 0)
+slider.AnchorPoint = Vector2.new(0, 0.5)
+slider.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+slider.Parent = rowSpeed
+
+local sliderCorner = Instance.new("UICorner")
+sliderCorner.CornerRadius = UDim.new(0, 4)
+sliderCorner.Parent = slider
+
+local fill = Instance.new("Frame")
+fill.Size = UDim2.new(0, 0, 1, 0)
+fill.BackgroundColor3 = Color3.fromRGB(120, 130, 255)
+fill.Parent = slider
+
+local fillCorner = Instance.new("UICorner")
+fillCorner.CornerRadius = UDim.new(0, 4)
+fillCorner.Parent = fill
+
+local handle = Instance.new("Frame")
+handle.Size = UDim2.fromOffset(18, 18)
+handle.Position = UDim2.new(0, 0, 0.5, 0)
+handle.AnchorPoint = Vector2.new(0.5, 0.5)
+handle.BackgroundColor3 = Color3.fromRGB(230, 230, 240)
+handle.Parent = slider
+
+local handleCorner = Instance.new("UICorner")
+handleCorner.CornerRadius = UDim.new(1, 0)
+handleCorner.Parent = handle
+
+local speedValue = Instance.new("TextLabel")
+speedValue.Size = UDim2.fromOffset(64, 24)
+speedValue.AnchorPoint = Vector2.new(1, 0.5)
+speedValue.Position = UDim2.new(1, 0, 0.5, 0)
+speedValue.BackgroundTransparency = 1
+speedValue.TextXAlignment = Enum.TextXAlignment.Right
+speedValue.Font = Enum.Font.GothamSemibold
+speedValue.TextSize = 14
+speedValue.TextColor3 = Color3.fromRGB(235, 235, 240)
+speedValue.Parent = rowSpeed
+
+local active = false
+local collapsed = false
+local draggingHeader = false
+local dragInput
+local dragStart
+local startPos
+local draggingSlider = false
+local minSpeed, maxSpeed = 0, 50
+local speed = 1
+
+local function setToggle(on)
+    active = on
+    if on then
+        t(toggleBtn, 0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, {BackgroundColor3 = Color3.fromRGB(95, 120, 255)})
+        t(knob, 0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, {Position = UDim2.new(1, -28, 0.5, 0)})
+        t(knob, 0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, {Size = UDim2.fromOffset(28, 28)})
+        task.delay(0.12, function()
+            t(knob, 0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, {Size = UDim2.fromOffset(26, 26)})
+        end)
+        t(stroke, 0.25, Enum.EasingStyle.Sine, Enum.EasingDirection.Out, {Transparency = 0.45})
     else
-        TPWalk = true
-        TPWalking = SafeGetService("RunService").Stepped:Connect(function()
-            if TPWalk then
-                local character = player.Character
-                local humanoid = character and character:FindFirstChildWhichIsA("Humanoid")
+        t(toggleBtn, 0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, {BackgroundColor3 = Color3.fromRGB(70, 75, 85)})
+        t(knob, 0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, {Position = UDim2.new(0, 2, 0.5, 0)})
+        t(stroke, 0.25, Enum.EasingStyle.Sine, Enum.EasingDirection.Out, {Transparency = 0.75})
+    end
+end
 
-                if humanoid and humanoid.MoveDirection.Magnitude > 0 then
-                    local moveDirection = humanoid.MoveDirection
+local function speedToPct(v)
+    return (math.clamp(v, minSpeed, maxSpeed) - minSpeed) / (maxSpeed - minSpeed)
+end
 
-                    if Speed then
-                        character:TranslateBy(moveDirection * Speed)
-                    else
-                        character:TranslateBy(moveDirection)
-                    end
-                end
-            else
-                TPWalking:Disconnect()
+local function pctToSpeed(p)
+    return minSpeed + p * (maxSpeed - minSpeed)
+end
+
+local function applySlider(v, animate)
+    speed = math.floor(math.clamp(v, minSpeed, maxSpeed) * 10 + 0.5) / 10
+    local p = speedToPct(speed)
+    local x = slider.AbsoluteSize.X * p
+    speedValue.Text = tostring(speed)
+    if animate then
+        t(fill, 0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, {Size = UDim2.new(p, 0, 1, 0)})
+        t(handle, 0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, {Position = UDim2.new(0, x, 0.5, 0)})
+    else
+        fill.Size = UDim2.new(p, 0, 1, 0)
+        handle.Position = UDim2.new(0, x, 0.5, 0)
+    end
+end
+
+local function setSliderFromInput(input)
+    local xPos = (input and input.Position and input.Position.X) or UserInputService:GetMouseLocation().X
+    local left = slider.AbsolutePosition.X
+    local width = math.max(1, slider.AbsoluteSize.X)
+    local p = math.clamp((xPos - left) / width, 0, 1)
+    applySlider(pctToSpeed(p), true)
+end
+
+toggleBtn.MouseEnter:Connect(function()
+    t(knob, 0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, {Size = UDim2.fromOffset(28, 28)})
+end)
+toggleBtn.MouseLeave:Connect(function()
+    t(knob, 0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, {Size = UDim2.fromOffset(26, 26)})
+end)
+toggleBtn.MouseButton1Click:Connect(function()
+    setToggle(not active)
+end)
+toggleBtn.TouchTap:Connect(function()
+    setToggle(not active)
+end)
+
+slider.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        draggingSlider = true
+        setSliderFromInput(input)
+        t(handle, 0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, {Size = UDim2.fromOffset(20, 20)})
+    end
+end)
+slider.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        draggingSlider = false
+        t(handle, 0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, {Size = UDim2.fromOffset(18, 18)})
+    end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if draggingSlider and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        setSliderFromInput(input)
+    end
+end)
+
+mini.MouseButton1Click:Connect(function()
+    collapsed = not collapsed
+    local h = collapsed and 48 or 140
+    t(root, 0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, {Size = UDim2.fromOffset(root.AbsoluteSize.X, h)})
+end)
+mini.TouchTap:Connect(function()
+    collapsed = not collapsed
+    local h = collapsed and 48 or 140
+    t(root, 0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, {Size = UDim2.fromOffset(root.AbsoluteSize.X, h)})
+end)
+
+local function clampToScreen(xOff, yOff, w, h)
+    local s = screenGui.AbsoluteSize
+    local m = 6
+    local minX = -s.X/2 + w/2 + m
+    local maxX =  s.X/2 - w/2 - m
+    local minY = m
+    local maxY = s.Y - h - m
+    return math.clamp(xOff, minX, maxX), math.clamp(yOff, minY, maxY)
+end
+
+header.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        draggingHeader = true
+        dragStart = input.Position
+        startPos = root.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                draggingHeader = false
             end
         end)
     end
-end
+end)
 
-local function updateSpeed()
-    local newSpeed = tonumber(speedTextBox.Text)
-
-    if newSpeed then
-        local formattedSpeed = string.format("%.1f", newSpeed)
-        Speed = tonumber(formattedSpeed)
-        speedTextBox.Text = formattedSpeed
-    else
-        speedTextBox.Text = "1"
-        Speed = 1
+header.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
     end
-end
-toggleButton.MouseButton1Click:Connect(toggleTPWalk)
-speedTextBox.FocusLost:Connect(updateSpeed)
+end)
 
-speedTextBox:GetPropertyChangedSignal("Text"):Connect(function()
-    local newText = speedTextBox.Text:gsub("[^%d.]", "")
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and draggingHeader then
+        local delta = input.Position - dragStart
+        local x = startPos.X.Offset + delta.X
+        local y = startPos.Y.Offset + delta.Y
+        local w = root.AbsoluteSize.X
+        local h = root.AbsoluteSize.Y
+        local cx, cy = clampToScreen(x, y, w, h)
+        root.Position = UDim2.new(0.5, cx, 0, cy)
+    end
+end)
 
-    if newText ~= speedTextBox.Text then
-        speedTextBox.Text = newText
+applySlider(1, false)
+setToggle(false)
+
+root.Visible = true
+root.Position = UDim2.new(0.5, 0, 0, -60)
+t(root, 0.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out, {Position = UDim2.new(0.5, 0, 0, 16)})
+root.BackgroundTransparency = 1
+stroke.Transparency = 1
+title.TextTransparency = 1
+lblToggle.TextTransparency = 1
+lblSpeed.TextTransparency = 1
+speedValue.TextTransparency = 1
+t(root, 0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, {BackgroundTransparency = 0.1})
+t(stroke, 0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, {Transparency = 0.75})
+t(title, 0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, {TextTransparency = 0})
+t(lblToggle, 0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, {TextTransparency = 0})
+t(lblSpeed, 0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, {TextTransparency = 0})
+t(speedValue, 0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, {TextTransparency = 0})
+
+RunService.Heartbeat:Connect(function(dt)
+    if not active then return end
+    local character = player and player.Character
+    if not character then return end
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return end
+    local dir = humanoid.MoveDirection
+    if dir.Magnitude > 0 then
+        character:TranslateBy(dir * speed * (60 * dt))
     end
 end)

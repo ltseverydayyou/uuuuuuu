@@ -1,475 +1,635 @@
-local UniverseViewer = Instance.new("ScreenGui")
-local MainFrame = Instance.new("Frame")
-local Container = Instance.new("Frame")
-local GamesList = Instance.new("ScrollingFrame")
-local UIListLayout = Instance.new("UIListLayout")
-local GameTemplate = Instance.new("Frame")
-local GameBtn = Instance.new("TextButton")
-local GameCorner = Instance.new("UICorner")
-local BtnHolder = Instance.new("Frame")
-local TPBtn = Instance.new("TextButton")
-local TPCorner = Instance.new("UICorner")
-local CopyBtn = Instance.new("TextButton")
-local CopyCorner = Instance.new("UICorner")
-local ContainerCorner = Instance.new("UICorner")
-local ContainerGradient = Instance.new("UIGradient")
-local MainCorner = Instance.new("UICorner")
-local MainGradient = Instance.new("UIGradient")
-local Topbar = Instance.new("Frame")
-local TopbarCorner = Instance.new("UICorner")
-local Icon = Instance.new("ImageLabel")
-local Title = Instance.new("TextLabel")
-local TopBtnHolder = Instance.new("Frame")
-local MinBtn = Instance.new("TextButton")
-local MinCorner = Instance.new("UICorner")
-local ExitBtn = Instance.new("TextButton")
-local ExitCorner = Instance.new("UICorner")
-local UIPadding = Instance.new("UIPadding")
-local SearchBar = Instance.new("TextBox")
-local SearchIcon = Instance.new("ImageLabel")
-local SearchCorner = Instance.new("UICorner")
+local G = Instance.new("ScreenGui")
+local M = Instance.new("Frame")
+local T = Instance.new("Frame")
+local TTL = Instance.new("TextLabel")
+local BH = Instance.new("Frame")
+local BTN_MIN = Instance.new("TextButton")
+local BTN_REF = Instance.new("TextButton")
+local BTN_X = Instance.new("TextButton")
+local BTN_MIN_C = Instance.new("UICorner")
+local BTN_REF_C = Instance.new("UICorner")
+local BTN_X_C = Instance.new("UICorner")
+local M_C = Instance.new("UICorner")
+local M_S = Instance.new("UIStroke")
+local M_GR = Instance.new("UIGradient")
+local T_C = Instance.new("UICorner")
+local T_S = Instance.new("UIStroke")
+local SB = Instance.new("TextBox")
+local SB_C = Instance.new("UICorner")
+local PAD = Instance.new("UIPadding")
+local SORT = Instance.new("TextButton")
+local SORT_C = Instance.new("UICorner")
+local C = Instance.new("Frame")
+local C_S = Instance.new("UIStroke")
+local C_C = Instance.new("UICorner")
+local LST = Instance.new("ScrollingFrame")
+local LYT = Instance.new("UIListLayout")
+local ROW_T = Instance.new("Frame")
+local ROW_C = Instance.new("UICorner")
+local ROW_S = Instance.new("UIStroke")
+local ROW_TXT = Instance.new("TextButton")
+local ROW_B = Instance.new("Frame")
+local BTN_TP = Instance.new("TextButton")
+local BTN_TP_C = Instance.new("UICorner")
+local BTN_CP = Instance.new("TextButton")
+local BTN_CP_C = Instance.new("UICorner")
+local SP = Instance.new("TextLabel")
+local EMP = Instance.new("TextLabel")
+local SC = Instance.new("UIScale")
 local MAX_RETRIES = 69
 local RETRY_DELAY = 0.5
 
-local function ClonedService(name)
-    local Service = (game.GetService);
-	local Reference = (cloneref) or function(reference) return reference end
-	return Reference(Service(game, name));
+local function sv(n)
+	local g = game.GetService
+	local r = cloneref or function(x) return x end
+	return r(g(game,n))
 end
 
-local function protectUI(sGui)
-    if sGui:IsA("ScreenGui") then
-        sGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
-		sGui.DisplayOrder = 999999999
-		sGui.ResetOnSpawn = false
-		sGui.IgnoreGuiInset = true
-    end
-    local cGUI = ClonedService("CoreGui")
-    local lPlr = ClonedService("Players").LocalPlayer
-
-    local function NAProtection(inst, var)
-        if inst then
-            if var then
-                inst[var] = "\0"
-                inst.Archivable = false
-            else
-                inst.Name = "\0"
-                inst.Archivable = false
-            end
-        end
-    end
-
-    if gethui then
-		NAProtection(sGui)
-		sGui.Parent = gethui()
-		return sGui
-	elseif cGUI and cGUI:FindFirstChild("RobloxGui") then
-		NAProtection(sGui)
-		sGui.Parent = cGUI:FindFirstChild("RobloxGui")
-		return sGui
-	elseif cGUI then
-		NAProtection(sGui)
-		sGui.Parent = cGUI
-		return sGui
-	elseif lPlr and lPlr:FindFirstChildWhichIsA("PlayerGui") then
-		NAProtection(sGui)
-		sGui.Parent = lPlr:FindFirstChildWhichIsA("PlayerGui")
-		sGui.ResetOnSpawn = false
-		return sGui
-	else
-		return nil
+local function protect(sg)
+	if sg:IsA("ScreenGui") then
+		sg.ZIndexBehavior = Enum.ZIndexBehavior.Global
+		sg.DisplayOrder = 999999999
+		sg.ResetOnSpawn = false
+		sg.IgnoreGuiInset = true
 	end
+	local cg = sv("CoreGui")
+	local lp = sv("Players").LocalPlayer
+	local function na(i,v)
+		if i then
+			if v then i[v] = "\0" i.Archivable = false else i.Name = "\0" i.Archivable = false end
+		end
+	end
+	if gethui then na(sg) sg.Parent = gethui() return sg
+	elseif cg and cg:FindFirstChild("RobloxGui") then na(sg) sg.Parent = cg:FindFirstChild("RobloxGui") return sg
+	elseif cg then na(sg) sg.Parent = cg return sg
+	elseif lp and lp:FindFirstChildWhichIsA("PlayerGui") then na(sg) sg.Parent = lp:FindFirstChildWhichIsA("PlayerGui") sg.ResetOnSpawn=false return sg
+	else return nil end
 end
 
-UniverseViewer.Name = "UV"
-protectUI(UniverseViewer)
-UniverseViewer.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-UniverseViewer.ResetOnSpawn = false
+G.Name = "UV"
+protect(G)
+G.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+G.ResetOnSpawn = false
 
-MainFrame.Name = "UniverseViewer"
-MainFrame.Parent = UniverseViewer
-MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-MainFrame.Position = UDim2.new(0.5,-283/2+5,0.5,-260/2+5)
-MainFrame.Size = UDim2.new(0, 300, 0, 300)
-MainFrame.ClipsDescendants = true
+M.Name = "M"
+M.Parent = G
+M.BackgroundColor3 = Color3.fromRGB(22,20,28)
+M.Position = UDim2.fromScale(.5,.5)
+M.AnchorPoint = Vector2.new(.5,.5)
+M.Size = UDim2.new(.44,0,.58,0)
+M.ClipsDescendants = true
 
-MainCorner.CornerRadius = UDim.new(0, 8)
-MainCorner.Parent = MainFrame
+SC.Parent = M
+SC.Scale = 1
 
-MainGradient.Color = ColorSequence.new{
-    ColorSequenceKeypoint.new(0.00, Color3.fromRGB(20, 10, 30)),
-    ColorSequenceKeypoint.new(1.00, Color3.fromRGB(10, 5, 15))
+M_C.CornerRadius = UDim.new(0,12)
+M_C.Parent = M
+
+M_S.Parent = M
+M_S.Thickness = 1
+M_S.Transparency = .45
+M_S.Color = Color3.fromRGB(140,120,200)
+
+M_GR.Color = ColorSequence.new{
+	ColorSequenceKeypoint.new(0,Color3.fromRGB(18,16,24)),
+	ColorSequenceKeypoint.new(1,Color3.fromRGB(12,10,16))
 }
-MainGradient.Parent = MainFrame
+M_GR.Rotation = 90
+M_GR.Parent = M
 
-Topbar.Name = "Topbar"
-Topbar.Parent = MainFrame
-Topbar.BackgroundColor3 = Color3.fromRGB(15, 7, 20)
-Topbar.Size = UDim2.new(1, 0, 0, 36)
-Topbar.ZIndex = 2
+T.Name = "T"
+T.Parent = M
+T.BackgroundColor3 = Color3.fromRGB(28,24,36)
+T.Size = UDim2.new(1,0,0,42)
+T.ZIndex = 2
 
-TopbarCorner.CornerRadius = UDim.new(0, 8)
-TopbarCorner.Parent = Topbar
+T_S.Parent = T
+T_S.Thickness = 1
+T_S.Transparency = .25
+T_S.Color = Color3.fromRGB(110,95,170)
 
-Icon.Name = "Icon"
-Icon.Parent = Topbar
-Icon.AnchorPoint = Vector2.new(0, 0.5)
-Icon.BackgroundTransparency = 1
-Icon.Position = UDim2.new(0, 10, 0.5, 0)
-Icon.Size = UDim2.new(0, 20, 0, 20)
-Icon.Image = "rbxassetid://6031225816"
-Icon.ImageColor3 = Color3.fromRGB(255, 255, 255)
+T_C.CornerRadius = UDim.new(0,12)
+T_C.Parent = T
 
-Title.Name = "Title"
-Title.Parent = Topbar
-Title.BackgroundTransparency = 1
-Title.Position = UDim2.new(0, 40, 0, 0)
-Title.Size = UDim2.new(0.6, 0, 1, 0)
-Title.Font = Enum.Font.GothamBold
-Title.Text = "Universe Viewer"
-Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-Title.TextSize = 16
-Title.TextXAlignment = Enum.TextXAlignment.Left
+TTL.Name = "TTL"
+TTL.Parent = T
+TTL.BackgroundTransparency = 1
+TTL.Position = UDim2.new(0,12,0,0)
+TTL.Size = UDim2.new(.6,0,1,0)
+TTL.Font = Enum.Font.SourceSans
+TTL.Text = "Universe Viewer"
+TTL.TextColor3 = Color3.fromRGB(240,235,255)
+TTL.TextSize = 20
+TTL.TextXAlignment = Enum.TextXAlignment.Left
 
-TopBtnHolder.Name = "ButtonsHolder"
-TopBtnHolder.Parent = Topbar
-TopBtnHolder.BackgroundTransparency = 1
-TopBtnHolder.Position = UDim2.new(1, -80, 0, 0)
-TopBtnHolder.Size = UDim2.new(0, 80, 1, 0)
+BH.Name = "BH"
+BH.Parent = T
+BH.BackgroundTransparency = 1
+BH.Position = UDim2.new(1,-156,0,0)
+BH.Size = UDim2.new(0,156,1,0)
 
-MinBtn.Name = "Minimize"
-MinBtn.Parent = TopBtnHolder
-MinBtn.BackgroundColor3 = Color3.fromRGB(40, 20, 60)
-MinBtn.Position = UDim2.new(0, 5, 0.5, -12)
-MinBtn.Size = UDim2.new(0, 30, 0, 24)
-MinBtn.Font = Enum.Font.GothamBold
-MinBtn.Text = "-"
-MinBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-MinBtn.TextSize = 18
-MinBtn.AutoButtonColor = true
+BTN_MIN.Name = "BTN_MIN"
+BTN_MIN.Parent = BH
+BTN_MIN.BackgroundColor3 = Color3.fromRGB(48,40,70)
+BTN_MIN.Position = UDim2.new(0,8,0.5,-13)
+BTN_MIN.Size = UDim2.new(0,40,0,26)
+BTN_MIN.Font = Enum.Font.SourceSans
+BTN_MIN.Text = "▁"
+BTN_MIN.TextColor3 = Color3.fromRGB(230,225,255)
+BTN_MIN.TextSize = 18
 
-MinCorner.CornerRadius = UDim.new(0, 4)
-MinCorner.Parent = MinBtn
+BTN_MIN_C.CornerRadius = UDim.new(0,6)
+BTN_MIN_C.Parent = BTN_MIN
 
-ExitBtn.Name = "Exit"
-ExitBtn.Parent = TopBtnHolder
-ExitBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
-ExitBtn.Position = UDim2.new(0, 40, 0.5, -12)
-ExitBtn.Size = UDim2.new(0, 30, 0, 24)
-ExitBtn.Font = Enum.Font.GothamBold
-ExitBtn.Text = "X"
-ExitBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-ExitBtn.TextSize = 14
-ExitBtn.AutoButtonColor = true
+BTN_REF.Name = "BTN_REF"
+BTN_REF.Parent = BH
+BTN_REF.BackgroundColor3 = Color3.fromRGB(56,46,92)
+BTN_REF.Position = UDim2.new(0,56,0.5,-13)
+BTN_REF.Size = UDim2.new(0,48,0,26)
+BTN_REF.Font = Enum.Font.SourceSans
+BTN_REF.Text = "🔃"
+BTN_REF.TextColor3 = Color3.fromRGB(230,225,255)
+BTN_REF.TextSize = 18
 
-ExitCorner.CornerRadius = UDim.new(0, 4)
-ExitCorner.Parent = ExitBtn
+BTN_REF_C.CornerRadius = UDim.new(0,6)
+BTN_REF_C.Parent = BTN_REF
 
-SearchBar.Name = "SearchBar"
-SearchBar.Parent = MainFrame
-SearchBar.BackgroundColor3 = Color3.fromRGB(25, 15, 35)
-SearchBar.Position = UDim2.new(0, 10, 0, 46)
-SearchBar.Size = UDim2.new(1, -20, 0, 30)
-SearchBar.Font = Enum.Font.Gotham
-SearchBar.PlaceholderText = "Search Places..."
-SearchBar.Text = ""
-SearchBar.TextColor3 = Color3.fromRGB(255, 255, 255)
-SearchBar.TextSize = 14
-SearchBar.ClearTextOnFocus = false
+BTN_X.Name = "BTN_X"
+BTN_X.Parent = BH
+BTN_X.BackgroundColor3 = Color3.fromRGB(186,54,74)
+BTN_X.Position = UDim2.new(0,108,0.5,-13)
+BTN_X.Size = UDim2.new(0,40,0,26)
+BTN_X.Font = Enum.Font.SourceSans
+BTN_X.Text = "✖"
+BTN_X.TextColor3 = Color3.fromRGB(255,255,255)
+BTN_X.TextSize = 16
 
-SearchIcon.Name = "SearchIcon"
-SearchIcon.Parent = SearchBar
-SearchIcon.BackgroundTransparency = 1
-SearchIcon.Position = UDim2.new(0, 5, 0.5, -8)
-SearchIcon.Size = UDim2.new(0, 16, 0, 16)
-SearchIcon.Image = "rbxassetid://3192528333"
-SearchIcon.ImageColor3 = Color3.fromRGB(180, 180, 180)
+BTN_X_C.CornerRadius = UDim.new(0,6)
+BTN_X_C.Parent = BTN_X
 
-UIPadding.Parent = SearchBar
-UIPadding.PaddingLeft = UDim.new(0, 26)
+SB.Name = "SB"
+SB.Parent = M
+SB.BackgroundColor3 = Color3.fromRGB(30,26,42)
+SB.Position = UDim2.new(0,12,0,54)
+SB.Size = UDim2.new(1,-24,0,36)
+SB.Font = Enum.Font.SourceSans
+SB.PlaceholderText = "Search"
+SB.Text = ""
+SB.TextColor3 = Color3.fromRGB(240,235,255)
+SB.TextSize = 18
+SB.ClearTextOnFocus = false
 
-SearchCorner.CornerRadius = UDim.new(0, 6)
-SearchCorner.Parent = SearchBar
+PAD.Parent = SB
+PAD.PaddingLeft = UDim.new(0,12)
+PAD.PaddingRight = UDim.new(0,96)
 
-Container.Name = "Container"
-Container.Parent = MainFrame
-Container.BackgroundColor3 = Color3.fromRGB(20, 10, 30)
-Container.Position = UDim2.new(0, 10, 0, 86)
-Container.Size = UDim2.new(1, -20, 1, -96)
-Container.BackgroundTransparency = 0.2
+SB_C.CornerRadius = UDim.new(0,8)
+SB_C.Parent = SB
 
-ContainerCorner.CornerRadius = UDim.new(0, 8)
-ContainerCorner.Parent = Container
+SORT.Name = "SORT"
+SORT.Parent = SB
+SORT.AnchorPoint = Vector2.new(1,.5)
+SORT.Position = UDim2.new(1,-6,.5,0)
+SORT.Size = UDim2.new(0,90,0,26)
+SORT.BackgroundColor3 = Color3.fromRGB(54,48,76)
+SORT.Font = Enum.Font.SourceSans
+SORT.Text = "Sort: A→Z"
+SORT.TextSize = 16
+SORT.TextColor3 = Color3.fromRGB(230,225,255)
 
-ContainerGradient.Color = ColorSequence.new{
-    ColorSequenceKeypoint.new(0.00, Color3.fromRGB(15, 7, 20)),
-    ColorSequenceKeypoint.new(1.00, Color3.fromRGB(25, 12, 35))
-}
-ContainerGradient.Parent = Container
+SORT_C.CornerRadius = UDim.new(0,6)
+SORT_C.Parent = SORT
 
-GamesList.Name = "List"
-GamesList.Parent = Container
-GamesList.BackgroundTransparency = 1
-GamesList.Position = UDim2.new(0, 5, 0, 5)
-GamesList.Size = UDim2.new(1, -10, 1, -10)
-GamesList.CanvasSize = UDim2.new(0, 0, 0, 0)
-GamesList.ScrollBarThickness = 4
-GamesList.ScrollBarImageColor3 = Color3.fromRGB(100, 50, 150)
-GamesList.BottomImage = "rbxassetid://6889812791"
-GamesList.MidImage = "rbxassetid://6889812721"
-GamesList.TopImage = "rbxassetid://6889812965"
-GamesList.AutomaticCanvasSize = Enum.AutomaticSize.Y
+C.Name = "C"
+C.Parent = M
+C.BackgroundColor3 = Color3.fromRGB(24,20,34)
+C.Position = UDim2.new(0,12,0,98)
+C.Size = UDim2.new(1,-24,1,-110)
+C.BackgroundTransparency = .05
 
-UIListLayout.Parent = GamesList
-UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-UIListLayout.Padding = UDim.new(0, 6)
+C_S.Parent = C
+C_S.Thickness = 1
+C_S.Transparency = .4
+C_S.Color = Color3.fromRGB(115,100,175)
 
-GameTemplate.Name = "TextButton"
-GameTemplate.Parent = nil
-GameTemplate.BackgroundColor3 = Color3.fromRGB(30, 15, 45)
-GameTemplate.Size = UDim2.new(1, -4, 0, 50)
-GameTemplate.Position = UDim2.new(0, 2, 0, 0)
-GameTemplate.BackgroundTransparency = 0
+C_C.CornerRadius = UDim.new(0,10)
+C_C.Parent = C
 
-GameCorner.CornerRadius = UDim.new(0, 6)
-GameCorner.Parent = GameTemplate
+LST.Name = "LST"
+LST.Parent = C
+LST.BackgroundTransparency = 1
+LST.Position = UDim2.new(0,8,0,8)
+LST.Size = UDim2.new(1,-16,1,-16)
+LST.CanvasSize = UDim2.new(0,0,0,0)
+LST.ScrollBarThickness = 6
+LST.AutomaticCanvasSize = Enum.AutomaticSize.Y
 
-GameBtn.Name = "GameButton"
-GameBtn.Parent = GameTemplate
-GameBtn.BackgroundTransparency = 1
-GameBtn.Size = UDim2.new(0.65, 0, 1, 0)
-GameBtn.Font = Enum.Font.GothamSemibold
-GameBtn.Text = "  Game Name (ID: 12345)"
-GameBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-GameBtn.TextScaled = true
-GameBtn.TextXAlignment = Enum.TextXAlignment.Center
-GameBtn.TextYAlignment = Enum.TextYAlignment.Center
-GameBtn.TextTruncate = Enum.TextTruncate.AtEnd
+LYT.Parent = LST
+LYT.SortOrder = Enum.SortOrder.LayoutOrder
+LYT.Padding = UDim.new(0,8)
 
-BtnHolder.Name = "ButtonsHolder"
-BtnHolder.Parent = GameTemplate
-BtnHolder.BackgroundTransparency = 1
-BtnHolder.Position = UDim2.new(0.65, 0, 0, 0)
-BtnHolder.Size = UDim2.new(0.35, 0, 1, 0)
+ROW_T.Name = "ROW_T"
+ROW_T.Parent = nil
+ROW_T.BackgroundColor3 = Color3.fromRGB(34,28,50)
+ROW_T.Size = UDim2.new(1,-4,0,58)
+ROW_T.Position = UDim2.new(0,2,0,0)
+ROW_T.BackgroundTransparency = .1
 
-TPBtn.Name = "TeleportBtn"
-TPBtn.Parent = BtnHolder
-TPBtn.BackgroundColor3 = Color3.fromRGB(40, 80, 170)
-TPBtn.Position = UDim2.new(0.5, -42, 0.5, -10)
-TPBtn.Size = UDim2.new(0, 36, 0, 20)
-TPBtn.Font = Enum.Font.GothamBold
-TPBtn.Text = "TP"
-TPBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-TPBtn.TextSize = 12
-TPBtn.AutoButtonColor = true
+ROW_C.CornerRadius = UDim.new(0,8)
+ROW_C.Parent = ROW_T
 
-TPCorner.CornerRadius = UDim.new(0, 4)
-TPCorner.Parent = TPBtn
+ROW_S.Parent = ROW_T
+ROW_S.Thickness = 1
+ROW_S.Transparency = .55
+ROW_S.Color = Color3.fromRGB(140,120,200)
+ROW_S.Name = "S"
 
-CopyBtn.Name = "CopyIDBtn"
-CopyBtn.Parent = BtnHolder
-CopyBtn.BackgroundColor3 = Color3.fromRGB(60, 120, 60)
-CopyBtn.Position = UDim2.new(0.5, 6, 0.5, -10)
-CopyBtn.Size = UDim2.new(0, 36, 0, 20)
-CopyBtn.Font = Enum.Font.GothamBold
-CopyBtn.Text = "Copy"
-CopyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-CopyBtn.TextSize = 12
-CopyBtn.AutoButtonColor = true
+ROW_TXT.Name = "ROW_TXT"
+ROW_TXT.Parent = ROW_T
+ROW_TXT.BackgroundTransparency = 1
+ROW_TXT.Size = UDim2.new(.62,0,1,0)
+ROW_TXT.Font = Enum.Font.SourceSans
+ROW_TXT.Text = "Name (ID)"
+ROW_TXT.TextColor3 = Color3.fromRGB(245,240,255)
+ROW_TXT.TextSize = 18
+ROW_TXT.TextXAlignment = Enum.TextXAlignment.Left
+ROW_TXT.TextYAlignment = Enum.TextYAlignment.Center
+ROW_TXT.TextTruncate = Enum.TextTruncate.AtEnd
 
-CopyCorner.CornerRadius = UDim.new(0, 4)
-CopyCorner.Parent = CopyBtn
+ROW_B.Name = "ROW_B"
+ROW_B.Parent = ROW_T
+ROW_B.BackgroundTransparency = 1
+ROW_B.Position = UDim2.new(.62,0,0,0)
+ROW_B.Size = UDim2.new(.38,0,1,0)
 
-local Notification=nil
+BTN_TP.Name = "BTN_TP"
+BTN_TP.Parent = ROW_B
+BTN_TP.BackgroundColor3 = Color3.fromRGB(72,126,232)
+BTN_TP.Position = UDim2.new(0,4,0.5,-12)
+BTN_TP.Size = UDim2.new(0,96,0,26)
+BTN_TP.Font = Enum.Font.SourceSans
+BTN_TP.Text = "Teleport"
+BTN_TP.TextColor3 = Color3.fromRGB(255,255,255)
+BTN_TP.TextSize = 16
 
-repeat 
-	local s,r=pcall(function()
-		return loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/Nameless-Admin/main/NamelessAdminNotifications.lua"))()
-	end);
+BTN_TP_C.CornerRadius = UDim.new(0,6)
+BTN_TP_C.Parent = BTN_TP
 
-	if s then
-		Notification=r;
-	else
-		warn("Couldn't load notification module, retrying...");
-		task.wait();
-	end
-until Notification~=nil
+BTN_CP.Name = "BTN_CP"
+BTN_CP.Parent = ROW_B
+BTN_CP.BackgroundColor3 = Color3.fromRGB(84,186,128)
+BTN_CP.Position = UDim2.new(0,108,0.5,-12)
+BTN_CP.Size = UDim2.new(0,96,0,26)
+BTN_CP.Font = Enum.Font.SourceSans
+BTN_CP.Text = "Copy ID"
+BTN_CP.TextColor3 = Color3.fromRGB(255,255,255)
+BTN_CP.TextSize = 16
 
-local Notify=Notification.Notify;
+BTN_CP_C.CornerRadius = UDim.new(0,6)
+BTN_CP_C.Parent = BTN_CP
 
-local function DoNotif(txt,dur,naem)
-	if not dur then dur=5 end
-	if not naem then naem='Notification' end
-	Notify({
-		Description=txt;
-		Title=naem;
-		Duration=dur;
-	});
+SP.Name = "SP"
+SP.Parent = C
+SP.AnchorPoint = Vector2.new(.5,.5)
+SP.BackgroundTransparency = 1
+SP.Size = UDim2.new(0,30,0,30)
+SP.Position = UDim2.new(.5,0,.5,0)
+SP.Text = "⏳"
+SP.TextColor3 = Color3.fromRGB(210,205,235)
+SP.Font = Enum.Font.SourceSans
+SP.TextSize = 22
+SP.Visible = false
+
+EMP.Name = "EMP"
+EMP.Parent = C
+EMP.BackgroundTransparency = 1
+EMP.Text = "No places"
+EMP.Font = Enum.Font.SourceSans
+EMP.TextSize = 16
+EMP.TextColor3 = Color3.fromRGB(210,205,230)
+EMP.AnchorPoint = Vector2.new(.5,1)
+EMP.Position = UDim2.new(.5,0,1,-8)
+EMP.Visible = false
+
+local TS = sv("TweenService")
+local UIS = sv("UserInputService")
+local RS = sv("RunService")
+local TPX = sv("TeleportService")
+local P = sv("Players")
+local AS = sv("AssetService")
+local LP = P.LocalPlayer
+
+local function tw(o,t,e,d,g) return TS:Create(o,TweenInfo.new(t,e or Enum.EasingStyle.Quad,d or Enum.EasingDirection.Out),g) end
+
+local function rp(b)
+	local r = Instance.new("Frame")
+	r.BackgroundColor3 = Color3.fromRGB(255,255,255)
+	r.BackgroundTransparency = .7
+	r.Size = UDim2.fromOffset(0,0)
+	r.AnchorPoint = Vector2.new(.5,.5)
+	r.Position = UDim2.fromScale(.5,.5)
+	r.ZIndex = b.ZIndex+1
+	r.Parent = b
+	local rc = Instance.new("UICorner")
+	rc.CornerRadius = UDim.new(1,0)
+	rc.Parent = r
+	tw(r,.2,nil,nil,{Size=UDim2.fromOffset(84,84),BackgroundTransparency=1}):Play()
+	task.delay(.25,function() r:Destroy() end)
 end
 
-local function updateSearch()
-    local searchText = string.lower(SearchBar.Text)
-    for _, item in pairs(GamesList:GetChildren()) do
-        if item:IsA("Frame") then
-            local gameText = string.lower(item.GameButton.Text)
-            if searchText == "" or string.find(gameText, searchText) then
-                item.Visible = true
-            else
-                item.Visible = false
-            end
-        end
-    end
+local function press(b)
+	local s = b:FindFirstChildOfClass("UIScale") or Instance.new("UIScale",b)
+	b.MouseButton1Down:Connect(function() tw(s,.08,nil,Enum.EasingDirection.In,{Scale=.96}):Play() end)
+	b.MouseButton1Up:Connect(function() tw(s,.1,nil,nil,{Scale=1}):Play() end)
 end
 
-SearchBar.Changed:Connect(function(prop)
-    if prop == "Text" then
-        updateSearch()
-    end
-end)
+local function hv(b,base,light)
+	b.MouseEnter:Connect(function() tw(b,.15,nil,nil,{BackgroundColor3=light}):Play() end)
+	b.MouseLeave:Connect(function() tw(b,.18,nil,nil,{BackgroundColor3=base}):Play() end)
+	b.MouseButton1Click:Connect(function() rp(b) end)
+	press(b)
+end
 
-local UVFrame = MainFrame
-local UVList = GamesList
-local UVExample = GameTemplate
+hv(BTN_MIN, BTN_MIN.BackgroundColor3, Color3.fromRGB(64,56,100))
+hv(BTN_REF, BTN_REF.BackgroundColor3, Color3.fromRGB(74,62,120))
+hv(BTN_X, BTN_X.BackgroundColor3, Color3.fromRGB(210,70,92))
+hv(SORT, SORT.BackgroundColor3, Color3.fromRGB(66,58,92))
+hv(BTN_TP, BTN_TP.BackgroundColor3, Color3.fromRGB(92,146,242))
+hv(BTN_CP, BTN_CP.BackgroundColor3, Color3.fromRGB(104,206,148))
 
-draggable=function(ui, dragui)
-	if not dragui then dragui = ui end
-	local UserInputService = ClonedService("UserInputService")
-
-	local dragging
-	local dragInput
-	local dragStart
-	local startPos
-
-	local function update(input)
-		local delta = input.Position - dragStart
-		ui.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+local function drag(ui,bar)
+	bar = bar or ui
+	local dr,di,ds,sp
+	local function upd(i)
+		local d = i.Position - ds
+		ui.Position = UDim2.new(sp.X.Scale, sp.X.Offset + d.X, sp.Y.Scale, sp.Y.Offset + d.Y)
 	end
-
-	dragui.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			dragging = true
-			dragStart = input.Position
-			startPos = ui.Position
-
-			input.Changed:Connect(function()
-				if input.UserInputState == Enum.UserInputState.End then
-					dragging = false
-				end
-			end)
+	bar.InputBegan:Connect(function(i)
+		if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+			dr=true ds=i.Position sp=ui.Position
+			i.Changed:Connect(function() if i.UserInputState==Enum.UserInputState.End then dr=false end end)
 		end
 	end)
-
-	dragui.InputChanged:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-			dragInput = input
-		end
-	end)
-
-	UserInputService.InputChanged:Connect(function(input)
-		if input == dragInput and dragging then
-			update(input)
-		end
-	end)
+	bar.InputChanged:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch then di=i end end)
+	UIS.InputChanged:Connect(function(i) if i==di and dr then upd(i) end end)
 	ui.Active=true
 end
 
-draggable(MainFrame)
+drag(M,T)
 
-local originalSize = UVFrame.Size
-local minimized = false
-
-MinBtn.MouseButton1Click:Connect(function()
-    minimized = not minimized
-    if minimized then
-        originalSize = UVFrame.Size
-        UVFrame.Size = UDim2.new(0, 300, 0, 36)
-        Container.Visible = false
-        SearchBar.Visible = false
-    else
-        UVFrame.Size = originalSize
-        Container.Visible = true
-        SearchBar.Visible = true
-    end
-end)
-
-ExitBtn.MouseButton1Click:Connect(function()
-    UniverseViewer:Destroy()
-    if connect then connect:Disconnect() end
-end)
-
-local function fetchGamePlaces()
-    local attempts = 0
-    local success = false
-    local page
-
-    DoNotif("Loading game places, please wait...", 3, "Loading")
-
-    while attempts < MAX_RETRIES do
-        attempts += 1
-        local s, r = pcall(function()
-            page = ClonedService("AssetService"):GetGamePlacesAsync()
-        end)
-
-        if s then
-            success = true
-            break
-        else
-            warn("Attempt "..attempts.." failed: "..tostring(r))
-            task.wait(RETRY_DELAY)
-        end
-    end
-
-    if not success then
-        DoNotif("HTTP failed to retrieve game places after "..MAX_RETRIES.." attempts.", 5, "Error")
-        return nil
-    end
-
-    return page
+local function inFX()
+	SC.Scale = .92
+	M.BackgroundTransparency = .2
+	tw(SC,.22,Enum.EasingStyle.Quad,Enum.EasingDirection.Out,{Scale=1}):Play()
+	tw(M,.22,Enum.EasingStyle.Quad,Enum.EasingDirection.Out,{BackgroundTransparency=0}):Play()
 end
 
-task.spawn(function()
-    local page = fetchGamePlaces()
-    if not page then return end
+local sortMode = "NAME"
+local minimized = false
+local szDesktop = UDim2.new(.44,0,.58,0)
+local szMobile = UDim2.new(.94,0,.66,0)
+local normSize = szDesktop
 
-    local template = UVExample
-    local list = UVList
+local function pickSize()
+	local cam = workspace.CurrentCamera
+	local vs = cam and cam.ViewportSize or Vector2.new(1280,720)
+	local mobile = UIS.TouchEnabled and not UIS.MouseEnabled
+	if mobile or vs.X<900 then normSize = szMobile else normSize = szDesktop end
+end
 
-    while true do
-        for _, place in page:GetCurrentPage() do
-            local btn = template:Clone()
-            btn.Parent = list
-            btn.Name = place.Name
-            btn.GameButton.Text = "  "..place.Name.." ("..place.PlaceId..")"
+local function applySize(force)
+	if minimized and not force then return end
+	M.Size = minimized and UDim2.new(normSize.X.Scale,normSize.X.Offset,0,42) or normSize
+end
 
-            btn.ButtonsHolder.TeleportBtn.MouseButton1Click:Connect(function()
-                local TeleportService = ClonedService("TeleportService")
-                local Players = ClonedService("Players")
-                local localPlayer = Players.LocalPlayer
-            
-                local success, err = pcall(function()
-                    TeleportService:Teleport(place.PlaceId, localPlayer)
-                end)
-            
-                if success then
-                    DoNotif("Teleporting to: "..place.Name, 3, "Universe Viewer")
-                else
-                    DoNotif("Failed to teleport: "..tostring(err), 5, "Teleport Error")
-                end
-            end)
-            
-            btn.ButtonsHolder.CopyIDBtn.MouseButton1Click:Connect(function()
-                setclipboard(tostring(place.PlaceId))
-                DoNotif("Copied PlaceId: "..place.PlaceId, 3, "Universe Viewer")
-            end)
-        end
-
-        if page.IsFinished then
-            break
-        end
-        page:AdvanceToNextPageAsync()
-    end
+workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+	local cam = workspace.CurrentCamera
+	if cam then cam:GetPropertyChangedSignal("ViewportSize"):Connect(function() pickSize() applySize(false) end) end
 end)
 
-connect = ClonedService("RunService").Stepped:Connect(function()
-    UVList.CanvasSize = UDim2.new(0, 0, 0, UVList:FindFirstChildOfClass("UIListLayout").AbsoluteContentSize.Y)
+UIS.LastInputTypeChanged:Connect(function() pickSize() applySize(false) end)
+
+local function hideBody(h)
+	minimized = h
+	if h then
+		tw(M,.2,nil,nil,{Size=UDim2.new(normSize.X.Scale,normSize.X.Offset,0,42)}):Play()
+		C.Visible=false SB.Visible=false
+	else
+		tw(M,.2,nil,nil,{Size=normSize}):Play()
+		task.delay(.16,function() if not minimized then C.Visible=true SB.Visible=true end end)
+	end
+end
+
+BTN_MIN.MouseButton1Click:Connect(function() hideBody(not minimized) end)
+
+BTN_X.MouseButton1Click:Connect(function()
+	rp(BTN_X)
+	tw(SC,.15,Enum.EasingStyle.Quad,Enum.EasingDirection.In,{Scale=.92}):Play()
+	tw(M,.15,Enum.EasingStyle.Quad,Enum.EasingDirection.In,{BackgroundTransparency=.25}):Play()
+	task.delay(.14,function() if _G._uv_canvas and _G._uv_canvas.Disconnect then _G._uv_canvas:Disconnect() end if _G._uv_df and _G._uv_df.Disconnect then _G._uv_df:Disconnect() end G:Destroy() end)
 end)
+
+local function spn(v)
+	SP.Visible = v
+	if v then
+		task.spawn(function()
+			local a={"⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"}
+			local i=1
+			while SP.Visible do
+				SP.Text=a[i]; i=(i%#a)+1; task.wait(.08)
+			end
+		end)
+	end
+end
+
+local toRoot = Instance.new("Frame")
+toRoot.Name = "TOAST_ROOT"
+toRoot.Parent = G
+toRoot.AnchorPoint = Vector2.new(1,0)
+toRoot.Position = UDim2.new(1,-12,0,12)
+toRoot.Size = UDim2.new(0,320,1,-24)
+toRoot.BackgroundTransparency = 1
+toRoot.ZIndex = 5
+
+local toList = Instance.new("UIListLayout")
+toList.Parent = toRoot
+toList.FillDirection = Enum.FillDirection.Vertical
+toList.HorizontalAlignment = Enum.HorizontalAlignment.Right
+toList.VerticalAlignment = Enum.VerticalAlignment.Top
+toList.SortOrder = Enum.SortOrder.LayoutOrder
+toList.Padding = UDim.new(0,8)
+
+local function toast(ti,tx,dur)
+	dur = dur or 3
+	local f = Instance.new("Frame")
+	f.Size = UDim2.new(0,320,0,0)
+	f.BackgroundColor3 = Color3.fromRGB(36,32,48)
+	f.BackgroundTransparency = .2
+	f.Parent = toRoot
+	f.ClipsDescendants = true
+	f.ZIndex = 6
+	local fc = Instance.new("UICorner",f)
+	fc.CornerRadius = UDim.new(0,10)
+	local fs = Instance.new("UIStroke",f)
+	fs.Color = Color3.fromRGB(120,100,180)
+	fs.Transparency = .35
+	local t1 = Instance.new("TextLabel")
+	t1.Parent = f
+	t1.BackgroundTransparency = 1
+	t1.Size = UDim2.new(1,-16,0,22)
+	t1.Position = UDim2.new(0,8,0,8)
+	t1.Font = Enum.Font.SourceSans
+	t1.TextXAlignment = Enum.TextXAlignment.Left
+	t1.TextColor3 = Color3.fromRGB(245,240,255)
+	t1.TextSize = 18
+	t1.Text = ti or "Notice"
+	local t2 = Instance.new("TextLabel")
+	t2.Parent = f
+	t2.BackgroundTransparency = 1
+	t2.Size = UDim2.new(1,-16,0,18)
+	t2.Position = UDim2.new(0,8,0,32)
+	t2.Font = Enum.Font.SourceSans
+	t2.TextXAlignment = Enum.TextXAlignment.Left
+	t2.TextColor3 = Color3.fromRGB(225,220,240)
+	t2.TextSize = 16
+	t2.TextWrapped = true
+	t2.Text = tx or ""
+	f.Size = UDim2.new(0,320,0,60)
+	f.BackgroundTransparency = 1
+	fs.Transparency = 1
+	tw(f,.18,nil,nil,{BackgroundTransparency=.2}):Play()
+	tw(fs,.18,nil,nil,{Transparency=.35}):Play()
+	task.delay(dur,function()
+		tw(f,.18,nil,Enum.EasingDirection.In,{BackgroundTransparency=1,Size=UDim2.new(0,320,0,0)}):Play()
+		tw(fs,.14,nil,Enum.EasingDirection.In,{Transparency=1}):Play()
+		task.delay(.18,function() f:Destroy() end)
+	end)
+end
+
+local function note(t,d,nm) toast(nm or "Notice",t,d) end
+
+local rows = {}
+local fetching = false
+
+local function clr()
+	for _,it in ipairs(rows) do
+		if it.f then it.f:Destroy() end
+	end
+	table.clear(rows)
+end
+
+local function apply()
+	local q = string.lower(SB.Text)
+	local a = {}
+	for _,it in ipairs(rows) do
+		local v = (q=="" or string.find(string.lower(it.n), q) or string.find(tostring(it.id), q))
+		it.f.Visible = v
+		if v then table.insert(a,it) end
+	end
+	if sortMode=="NAME" then table.sort(a,function(x,y) return string.lower(x.n)<string.lower(y.n) end)
+	else table.sort(a,function(x,y) return x.id<y.id end) end
+	for i,ob in ipairs(a) do ob.f.LayoutOrder=i end
+	EMP.Visible = (#a==0)
+end
+
+local function mk(pl,idx)
+	local f = ROW_T:Clone()
+	f.Parent = LST
+	f.Name = "R"
+	f.BackgroundTransparency = 1
+	local s = f:FindFirstChild("S") or f:FindFirstChildWhichIsA("UIStroke")
+	if s then s.Transparency = 1 end
+	f.Visible = false
+	f.ROW_TXT.Text = pl.Name.." ("..pl.PlaceId..")"
+	local it = {f=f,n=pl.Name,id=pl.PlaceId}
+	table.insert(rows,it)
+	f.MouseEnter:Connect(function()
+		tw(f,.12,nil,nil,{BackgroundTransparency=.05}):Play()
+		if s then tw(s,.15,nil,nil,{Transparency=.25}):Play() end
+	end)
+	f.MouseLeave:Connect(function()
+		tw(f,.18,nil,nil,{BackgroundTransparency=.1}):Play()
+		if s then tw(s,.2,nil,nil,{Transparency=.55}):Play() end
+	end)
+	f.ROW_B.BTN_TP.MouseButton1Click:Connect(function()
+		local ok,e = pcall(function() TPX:Teleport(pl.PlaceId, LP) end)
+		if ok then note("Teleporting to "..pl.Name,2,"Universe Viewer") else note("Teleport failed: "..tostring(e),4,"Universe Viewer") end
+	end)
+	f.ROW_B.BTN_CP.MouseButton1Click:Connect(function()
+		if setclipboard then setclipboard(tostring(pl.PlaceId)) note("Copied ID: "..pl.PlaceId,2,"Universe Viewer") else note("Clipboard unavailable",3,"Universe Viewer") end
+	end)
+	task.delay(idx*0.012,function()
+		f.Visible=true
+		f.BackgroundTransparency=.2
+		if s then s.Transparency = .7 end
+		f.Size = UDim2.new(1,-4,0,0)
+		tw(f,.18,Enum.EasingStyle.Quad,Enum.EasingDirection.Out,{Size=UDim2.new(1,-4,0,58),BackgroundTransparency=.1}):Play()
+		if s then tw(s,.18,Enum.EasingStyle.Quad,Enum.EasingDirection.Out,{Transparency=.55}):Play() end
+	end)
+end
+
+local function fetch()
+	if fetching then return end
+	fetching = true
+	spn(true)
+	EMP.Visible = false
+	clr()
+	note("Loading places...",2,"Universe Viewer")
+	local tr,ok,pg = 0,false,nil
+	while tr<MAX_RETRIES do
+		tr+=1
+		local s,r = pcall(function() pg = AS:GetGamePlacesAsync() end)
+		if s then ok=true break else task.wait(RETRY_DELAY) end
+	end
+	if not ok then spn(false) fetching=false note("Failed to load places",4,"Universe Viewer") return end
+	local i=0
+	while true do
+		for _,pl in pg:GetCurrentPage() do
+			i+=1
+			mk(pl,i)
+		end
+		if pg.IsFinished then break end
+		pg:AdvanceToNextPageAsync()
+	end
+	spn(false)
+	apply()
+	fetching=false
+end
+
+local function deb()
+	if _G._uv_df and _G._uv_df.Disconnect then _G._uv_df:Disconnect() end
+	local rs = RS.RenderStepped:Connect(function() end)
+	_G._uv_df = rs
+	task.delay(.08,function() if _G._uv_df then _G._uv_df:Disconnect() _G._uv_df=nil end apply() end)
+end
+
+SB.Focused:Connect(function()
+	tw(SB,.12,nil,nil,{BackgroundColor3=Color3.fromRGB(36,32,50)}):Play()
+end)
+SB.FocusLost:Connect(function()
+	tw(SB,.16,nil,nil,{BackgroundColor3=Color3.fromRGB(30,26,42)}):Play()
+end)
+SB.Changed:Connect(function(p) if p=="Text" then deb() end end)
+
+SORT.MouseButton1Click:Connect(function()
+	sortMode = (sortMode=="NAME") and "ID" or "NAME"
+	SORT.Text = (sortMode=="NAME") and "Sort: A→Z" or "Sort: ID"
+	rp(SORT)
+	apply()
+end)
+
+BTN_REF.MouseButton1Click:Connect(function() rp(BTN_REF) fetch() end)
+
+local function canvas()
+	if _G._uv_canvas and _G._uv_canvas.Disconnect then _G._uv_canvas:Disconnect() end
+	_G._uv_canvas = RS.Stepped:Connect(function()
+		local ly = LST:FindFirstChildOfClass("UIListLayout")
+		if ly then LST.CanvasSize = UDim2.new(0,0,0,ly.AbsoluteContentSize.Y) end
+	end)
+end
+
+pickSize()
+applySize(true)
+inFX()
+canvas()
+fetch()

@@ -1,30 +1,31 @@
 local c = {
-    bg = Color3.fromRGB(30, 30, 35),
-    ac = Color3.fromRGB(0, 0, 0),
-    sc = Color3.fromRGB(45, 45, 50),
-    tx = Color3.fromRGB(255, 255, 255),
-    td = Color3.fromRGB(180, 180, 180),
-    su = Color3.fromRGB(40, 180, 99),
-    wa = Color3.fromRGB(255, 153, 51),
-    er = Color3.fromRGB(220, 53, 69)
+    bg = Color3.fromRGB(20, 22, 28),
+    ac = Color3.fromRGB(14, 15, 18),
+    sc = Color3.fromRGB(36, 38, 46),
+    tx = Color3.fromRGB(235, 238, 245),
+    td = Color3.fromRGB(164, 170, 186),
+    ux = Color3.fromRGB(64, 132, 255),
+    gx = Color3.fromRGB(140, 99, 255),
+    ok = Color3.fromRGB(52, 199, 89),
+    warn = Color3.fromRGB(255, 186, 65),
+    stop = Color3.fromRGB(232, 62, 67)
 }
 
 local function ClonedService(name)
-    local Service = (game.GetService);
-	local Reference = (cloneref) or function(reference) return reference end
-	return Reference(Service(game, name));
+    local Service = (game.GetService)
+    local Reference = (cloneref) or function(r) return r end
+    return Reference(Service(game, name))
 end
 
 local function protectUI(sGui)
     if sGui:IsA("ScreenGui") then
         sGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
-		sGui.DisplayOrder = 999999999
-		sGui.ResetOnSpawn = false
-		sGui.IgnoreGuiInset = true
+        sGui.DisplayOrder = 2147483647
+        sGui.ResetOnSpawn = false
+        sGui.IgnoreGuiInset = true
     end
     local cGUI = ClonedService("CoreGui")
     local lPlr = ClonedService("Players").LocalPlayer
-
     local function NAProtection(inst, var)
         if inst then
             if var then
@@ -36,44 +37,43 @@ local function protectUI(sGui)
             end
         end
     end
-
     if gethui then
-		NAProtection(sGui)
-		sGui.Parent = gethui()
-		return sGui
-	elseif cGUI and cGUI:FindFirstChild("RobloxGui") then
-		NAProtection(sGui)
-		sGui.Parent = cGUI:FindFirstChild("RobloxGui")
-		return sGui
-	elseif cGUI then
-		NAProtection(sGui)
-		sGui.Parent = cGUI
-		return sGui
-	elseif lPlr and lPlr:FindFirstChildWhichIsA("PlayerGui") then
-		NAProtection(sGui)
-		sGui.Parent = lPlr:FindFirstChildWhichIsA("PlayerGui")
-		sGui.ResetOnSpawn = false
-		return sGui
-	else
-		return nil
-	end
+        NAProtection(sGui)
+        sGui.Parent = gethui()
+        return sGui
+    elseif cGUI and cGUI:FindFirstChild("RobloxGui") then
+        NAProtection(sGui)
+        sGui.Parent = cGUI:FindFirstChild("RobloxGui")
+        return sGui
+    elseif cGUI then
+        NAProtection(sGui)
+        sGui.Parent = cGUI
+        return sGui
+    elseif lPlr and lPlr:FindFirstChildWhichIsA("PlayerGui") then
+        NAProtection(sGui)
+        sGui.Parent = lPlr:FindFirstChildWhichIsA("PlayerGui")
+        sGui.ResetOnSpawn = false
+        return sGui
+    else
+        return nil
+    end
 end
 
-NAdrag = function(ui, dragui)
-    if not dragui then dragui = ui end
-    local UserInputService = ClonedService("UserInputService")
-    local dragging
-    local dragInput
-    local dragStart
-    local startPos
+local TweenService = ClonedService("TweenService")
+local TextService = ClonedService("TextService")
+local HttpService = ClonedService("HttpService")
+local UIS = ClonedService("UserInputService")
+local MarketplaceService = ClonedService("MarketplaceService")
+
+local function NAdrag(ui, dragui)
+    dragui = dragui or ui
+    local dragging, dragInput, dragStart, startPos
     local function update(input)
         local delta = input.Position - dragStart
-        local newXOffset = startPos.X.Offset + delta.X
-        local newYOffset = startPos.Y.Offset + delta.Y
-        local screenSize = ui.Parent.AbsoluteSize
-        local newXScale = startPos.X.Scale + (newXOffset / screenSize.X)
-        local newYScale = startPos.Y.Scale + (newYOffset / screenSize.Y)
-        ui.Position = UDim2.new(newXScale, 0, newYScale, 0)
+        local s = ui.Parent.AbsoluteSize
+        local nx = math.clamp(startPos.X.Scale + (startPos.X.Offset + delta.X)/s.X, 0, 1)
+        local ny = math.clamp(startPos.Y.Scale + (startPos.Y.Offset + delta.Y)/s.Y, 0, 1)
+        ui.Position = UDim2.new(nx, 0, ny, 0)
     end
     dragui.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -92,7 +92,7 @@ NAdrag = function(ui, dragui)
             dragInput = input
         end
     end)
-    UserInputService.InputChanged:Connect(function(input)
+    UIS.InputChanged:Connect(function(input)
         if input == dragInput and dragging then
             update(input)
         end
@@ -100,301 +100,434 @@ NAdrag = function(ui, dragui)
     ui.Active = true
 end
 
-local sg = Instance.new("ScreenGui")
-sg.Name = "GameInfoUI"
-sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-protectUI(sg)
-
-local m = Instance.new("Frame")
-m.Name = "MainFrame"
-m.Size = UDim2.new(0.9, 0, 0.9, 0)
-m.Position = UDim2.new(0.05, 0, 0.05, 0)
-m.BackgroundColor3 = c.bg
-m.BorderSizePixel = 0
-m.Active = true
-m.ClipsDescendants = true
-m.Parent = sg
-
-local originalSize = m.Size
-
-local mc = Instance.new("UICorner")
-mc.CornerRadius = UDim.new(0, 10)
-mc.Parent = m
-
-local sh = Instance.new("ImageLabel")
-sh.Name = "Shadow"
-sh.AnchorPoint = Vector2.new(0.5, 0.5)
-sh.BackgroundTransparency = 1
-sh.Position = UDim2.new(0.5, 0, 0.5, 0)
-sh.Size = UDim2.new(1, 40, 1, 40)
-sh.ZIndex = -1
-sh.Image = "rbxassetid://5554236805"
-sh.ImageColor3 = Color3.fromRGB(0, 0, 0)
-sh.ImageTransparency = 0.4
-sh.ScaleType = Enum.ScaleType.Slice
-sh.SliceCenter = Rect.new(23, 23, 277, 277)
-sh.Parent = m
-
-local tb = Instance.new("Frame")
-tb.Name = "TitleBar"
-tb.Size = UDim2.new(1, 0, 0, 50)
-tb.BackgroundColor3 = c.ac
-tb.BorderSizePixel = 0
-tb.Parent = m
-
-local tbc = Instance.new("UICorner")
-tbc.CornerRadius = UDim.new(0, 10)
-tbc.Parent = tb
-
-local t = Instance.new("TextLabel")
-t.Name = "Title"
-t.Size = UDim2.new(1, -140, 1, 0)
-t.Position = UDim2.new(0, 15, 0, 0)
-t.BackgroundTransparency = 1
-t.Font = Enum.Font.GothamBold
-t.Text = "Game Information"
-t.TextColor3 = c.tx
-t.TextSize = 20
-t.TextXAlignment = Enum.TextXAlignment.Left
-t.Parent = tb
-
-local mb = Instance.new("TextButton")
-mb.Name = "MinimizeButton"
-mb.Size = UDim2.new(0, 24, 0, 24)
-mb.Position = UDim2.new(1, -60, 0.5, -12)
-mb.AnchorPoint = Vector2.new(0.5, 0.5)
-mb.BackgroundTransparency = 1
-mb.Text = "_"
-mb.TextColor3 = c.tx
-mb.Font = Enum.Font.GothamBold
-mb.TextSize = 14
-mb.Parent = tb
-
-local cb = Instance.new("ImageButton")
-cb.Name = "CloseButton"
-cb.Size = UDim2.new(0, 24, 0, 24)
-cb.Position = UDim2.new(1, -32, 0.5, -12)
-cb.AnchorPoint = Vector2.new(0.5, 0.5)
-cb.BackgroundTransparency = 1
-cb.Image = "rbxassetid://6031094678"
-cb.ImageColor3 = c.tx
-cb.Parent = tb
-
-local gIcon = Instance.new("ImageLabel")
-gIcon.Name = "GameIcon"
-gIcon.Size = UDim2.new(0, 100, 0, 100)
-gIcon.Position = UDim2.new(0, 20, 0, 60)
-gIcon.BackgroundTransparency = 1
-gIcon.Image = "rbxassetid://0"
-gIcon.Parent = m
-
-local gName = Instance.new("TextLabel")
-gName.Name = "GameName"
-gName.Size = UDim2.new(1, -140, 0, 50)
-gName.Position = UDim2.new(0, 140, 0, 60)
-gName.BackgroundTransparency = 1
-gName.Font = Enum.Font.GothamBold
-gName.Text = "Game Name"
-gName.TextColor3 = c.tx
-gName.TextSize = 18
-gName.TextXAlignment = Enum.TextXAlignment.Left
-gName.Parent = m
-
-local gOwner = Instance.new("TextLabel")
-gOwner.Name = "GameOwner"
-gOwner.Size = UDim2.new(1, -140, 0, 30)
-gOwner.Position = UDim2.new(0, 140, 0, 110)
-gOwner.BackgroundTransparency = 1
-gOwner.Font = Enum.Font.Gotham
-gOwner.Text = "Owned by: Owner"
-gOwner.TextColor3 = c.td
-gOwner.TextSize = 14
-gOwner.TextXAlignment = Enum.TextXAlignment.Left
-gOwner.Parent = m
-
-local rc = Instance.new("Frame")
-rc.Name = "ContentFrame"
-rc.Size = UDim2.new(1, -40, 1, -180)
-rc.Position = UDim2.new(0, 20, 0, 180)
-rc.BackgroundTransparency = 1
-rc.BorderSizePixel = 0
-rc.Parent = m
-
-local sf = Instance.new("ScrollingFrame")
-sf.Name = "ScrollingFrame"
-sf.Size = UDim2.new(1, 0, 1, 0)
-sf.BackgroundTransparency = 1
-sf.BorderSizePixel = 0
-sf.ScrollBarThickness = 6
-sf.ScrollBarImageColor3 = c.ac
-sf.CanvasSize = UDim2.new(0, 0, 0, 0)
-sf.Parent = rc
-
-local ul = Instance.new("UIListLayout")
-ul.SortOrder = Enum.SortOrder.LayoutOrder
-ul.Padding = UDim.new(0, 10)
-ul.Parent = sf
-
-cb.MouseButton1Click:Connect(function()
-    sg:Destroy()
-end)
-
-local minimized = false
-mb.MouseButton1Click:Connect(function()
-    minimized = not minimized
-    if minimized then
-        gIcon.Visible = false
-        gName.Visible = false
-        gOwner.Visible = false
-        rc.Visible = false
-        m:TweenSize(UDim2.new(originalSize.X.Scale, originalSize.X.Offset, 0, 50), "Out", "Quad", 0.3, true)
-        mb.Text = "+"
-    else
-        gIcon.Visible = true
-        gName.Visible = true
-        gOwner.Visible = true
-        rc.Visible = true
-        m:TweenSize(originalSize, "Out", "Quad", 0.3, true)
-        mb.Text = "_"
-    end
-end)
-
-NAdrag(m, tb)
-
-local function updTxtScale(lbl)
-    local width = lbl.AbsoluteSize.X
-    local text = lbl.Text
-    local font = lbl.Font
-    local textSize = lbl.TextSize
-    local textBounds = ClonedService("TextService"):GetTextSize(text, textSize, font, Vector2.new(width, math.huge))
-    lbl.Size = UDim2.new(1, -20, 0, textBounds.Y + 10)
-    lbl.Parent.Size = UDim2.new(1, 0, 0, textBounds.Y + 20)
-end
-
-local function addInfo(key, value)
-    local container = Instance.new("Frame")
-    container.Size = UDim2.new(1, 0, 0, 50)
-    container.BackgroundColor3 = c.sc
-    container.BorderSizePixel = 0
-    container.Parent = sf
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 8)
-    corner.Parent = container
-    local lbl = Instance.new("TextLabel")
-    lbl.Size = UDim2.new(1, -20, 0, 0)
-    lbl.Position = UDim2.new(0, 10, 0, 0)
-    lbl.BackgroundTransparency = 1
-    lbl.Font = Enum.Font.Gotham
-    lbl.Text = key..": "..tostring(value)
-    lbl.TextColor3 = c.tx
-    lbl.TextSize = 14
-    lbl.TextXAlignment = Enum.TextXAlignment.Left
-    lbl.TextWrapped = true
-    lbl.Parent = container
-    updTxtScale(lbl)
-end
-
-local function addDropdown(key, tbl)
-    local container = Instance.new("Frame")
-    container.Size = UDim2.new(1, 0, 0, 50)
-    container.BackgroundColor3 = c.sc
-    container.BorderSizePixel = 0
-    container.Parent = sf
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 8)
-    corner.Parent = container
-    local header = Instance.new("Frame")
-    header.Size = UDim2.new(1, 0, 0, 50)
-    header.BackgroundTransparency = 1
-    header.Parent = container
-    local headerLbl = Instance.new("TextLabel")
-    headerLbl.Size = UDim2.new(1, -40, 1, 0)
-    headerLbl.Position = UDim2.new(0, 10, 0, 0)
-    headerLbl.BackgroundTransparency = 1
-    headerLbl.Font = Enum.Font.Gotham
-    headerLbl.Text = key
-    headerLbl.TextColor3 = c.tx
-    headerLbl.TextSize = 14
-    headerLbl.TextXAlignment = Enum.TextXAlignment.Left
-    headerLbl.Parent = header
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, 30, 0, 30)
-    btn.Position = UDim2.new(1, -35, 0.5, -15)
-    btn.BackgroundColor3 = c.ac
-    btn.Text = "+"
-    btn.TextColor3 = c.tx
-    btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 14
-    btn.Parent = header
-    local btnCorner = Instance.new("UICorner")
-    btnCorner.CornerRadius = UDim.new(0, 8)
-    btnCorner.Parent = btn
-    local content = Instance.new("Frame")
-    content.Name = "DropdownContent"
-    content.Size = UDim2.new(1, 0, 0, 0)
-    content.Position = UDim2.new(0, 0, 0.2, 0)
-    content.BackgroundTransparency = 1
-    content.ClipsDescendants = true
-    content.Parent = container
-    local layout = Instance.new("UIListLayout")
-    layout.SortOrder = Enum.SortOrder.LayoutOrder
-    layout.Parent = content
-    local expanded = false
-    btn.MouseButton1Click:Connect(function()
-        expanded = not expanded
-        if expanded then
-            btn.Text = "-"
-            for subKey, subValue in pairs(tbl) do
-                local subContainer = Instance.new("Frame")
-                subContainer.Size = UDim2.new(1, -20, 0, 30)
-                subContainer.BackgroundColor3 = c.sc
-                subContainer.BorderSizePixel = 0
-                subContainer.Parent = content
-                local subCorner = Instance.new("UICorner")
-                subCorner.CornerRadius = UDim.new(0, 8)
-                subCorner.Parent = subContainer
-                local subLbl = Instance.new("TextLabel")
-                subLbl.Size = UDim2.new(1, -10, 1, 0)
-                subLbl.Position = UDim2.new(0, 5, 0, 0)
-                subLbl.BackgroundTransparency = 1
-                subLbl.Font = Enum.Font.Gotham
-                subLbl.Text = subKey..": "..tostring(subValue)
-                subLbl.TextColor3 = c.td
-                subLbl.TextSize = 12
-                subLbl.TextXAlignment = Enum.TextXAlignment.Left
-                subLbl.TextWrapped = true
-                subLbl.Parent = subContainer
-            end
-            wait()
-            local contentHeight = layout.AbsoluteContentSize.Y
-            content.Size = UDim2.new(1, 0, 0, contentHeight)
-            container.Size = UDim2.new(1, 0, 0, 50 + contentHeight)
-        else
-            btn.Text = "+"
-            for _, child in pairs(content:GetChildren()) do
-                if child:IsA("Frame") then
-                    child:Destroy()
-                end
-            end
-            content.Size = UDim2.new(1, 0, 0, 0)
-            container.Size = UDim2.new(1, 0, 0, 50)
+local function ripple(btn)
+    btn.ClipsDescendants = true
+    btn.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            local rel = Vector2.new(input.Position.X - btn.AbsolutePosition.X, input.Position.Y - btn.AbsolutePosition.Y)
+            local c0 = Instance.new("Frame")
+            c0.BackgroundColor3 = Color3.fromRGB(255,255,255)
+            c0.BackgroundTransparency = 0.75
+            c0.AnchorPoint = Vector2.new(0.5,0.5)
+            c0.Position = UDim2.fromOffset(rel.X, rel.Y)
+            c0.Size = UDim2.fromOffset(0,0)
+            c0.ZIndex = 10
+            c0.Parent = btn
+            local corner = Instance.new("UICorner")
+            corner.CornerRadius = UDim.new(1,0)
+            corner.Parent = c0
+            local d = math.max(btn.AbsoluteSize.X, btn.AbsoluteSize.Y) * 2
+            TweenService:Create(c0, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.fromOffset(d,d), BackgroundTransparency = 1}):Play()
+            task.delay(0.4, function() c0:Destroy() end)
         end
-        sf.CanvasSize = UDim2.new(0, 0, 0, ul.AbsoluteContentSize.Y)
     end)
 end
 
+local function lerpColor(a, b, t)
+    return Color3.new(a.R + (b.R - a.R)*t, a.G + (b.G - a.G)*t, a.B + (b.B - a.B)*t)
+end
+
+local sg = Instance.new("ScreenGui")
+sg.Name = "\0"
+protectUI(sg)
+
+local root = Instance.new("Frame")
+root.AnchorPoint = Vector2.new(0.5,0.5)
+root.Position = UDim2.fromScale(0.5,0.5)
+root.Size = UDim2.fromScale(0.64,0.6)
+root.BackgroundColor3 = c.bg
+root.BorderSizePixel = 0
+root.ClipsDescendants = true
+root.Parent = sg
+
+local rootCorner = Instance.new("UICorner")
+rootCorner.CornerRadius = UDim.new(0,14)
+rootCorner.Parent = root
+
+local stroke = Instance.new("UIStroke")
+stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+stroke.Color = Color3.fromRGB(64,66,74)
+stroke.Transparency = 0.55
+stroke.Thickness = 1
+stroke.Parent = root
+
+local topbar = Instance.new("Frame")
+topbar.Size = UDim2.new(1,0,0,54)
+topbar.BackgroundColor3 = c.ac
+topbar.BorderSizePixel = 0
+topbar.Parent = root
+
+local topCorner = Instance.new("UICorner")
+topCorner.CornerRadius = UDim.new(0,14)
+topCorner.Parent = topbar
+
+local title = Instance.new("TextLabel")
+title.BackgroundTransparency = 1
+title.Position = UDim2.new(0,16,0,0)
+title.Size = UDim2.new(1,-200,1,0)
+title.Font = Enum.Font.GothamBold
+title.Text = "Game Information"
+title.TextSize = 18
+title.TextColor3 = c.tx
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Parent = topbar
+
+local ctrl = Instance.new("Frame")
+ctrl.BackgroundTransparency = 1
+ctrl.Size = UDim2.new(0,180,1,0)
+ctrl.Position = UDim2.new(1,-188,0,0)
+ctrl.Parent = topbar
+
+local ctrlList = Instance.new("UIListLayout")
+ctrlList.FillDirection = Enum.FillDirection.Horizontal
+ctrlList.HorizontalAlignment = Enum.HorizontalAlignment.Right
+ctrlList.VerticalAlignment = Enum.VerticalAlignment.Center
+ctrlList.Padding = UDim.new(0,8)
+ctrlList.Parent = ctrl
+
+local function makeTextButton(txt, baseColor)
+    local b = Instance.new("TextButton")
+    b.AutoButtonColor = false
+    b.Size = UDim2.fromOffset(34,34)
+    b.BackgroundColor3 = baseColor
+    b.Font = Enum.Font.GothamBold
+    b.Text = txt
+    b.TextSize = 16
+    b.TextColor3 = c.tx
+    local cr = Instance.new("UICorner"); cr.CornerRadius = UDim.new(0,8); cr.Parent = b
+    local st = Instance.new("UIStroke"); st.Thickness = 1; st.Transparency = 0.5; st.Color = lerpColor(baseColor, Color3.new(0,0,0), 0.5); st.Parent = b
+    b.MouseEnter:Connect(function() TweenService:Create(b, TweenInfo.new(0.12), {BackgroundColor3 = lerpColor(baseColor, Color3.new(1,1,1), 0.06)}):Play() end)
+    b.MouseLeave:Connect(function() TweenService:Create(b, TweenInfo.new(0.12), {BackgroundColor3 = baseColor}):Play() end)
+    ripple(b)
+    return b
+end
+
+local btnRefresh = makeTextButton("🔃", c.ux); btnRefresh.Parent = ctrl
+local btnMin = makeTextButton("V", c.warn); btnMin.Parent = ctrl
+local btnClose = makeTextButton("X", c.stop); btnClose.Parent = ctrl
+
+local header = Instance.new("Frame")
+header.BackgroundTransparency = 1
+header.ClipsDescendants = true
+header.Position = UDim2.new(0,0,0,54)
+header.Size = UDim2.new(1,0,0,96)
+header.Parent = root
+
+local gIcon = Instance.new("ImageLabel")
+gIcon.BackgroundTransparency = 1
+gIcon.Size = UDim2.fromOffset(78,78)
+gIcon.Position = UDim2.new(0,18,0.5,-39)
+gIcon.Image = "rbxassetid://0"
+gIcon.Parent = header
+
+local gName = Instance.new("TextLabel")
+gName.BackgroundTransparency = 1
+gName.Position = UDim2.new(0,110,0,12)
+gName.Size = UDim2.new(1,-130,0,34)
+gName.Font = Enum.Font.GothamMedium
+gName.Text = "Game Name"
+gName.TextSize = 20
+gName.TextColor3 = c.tx
+gName.TextXAlignment = Enum.TextXAlignment.Left
+gName.Parent = header
+
+local gOwner = Instance.new("TextLabel")
+gOwner.BackgroundTransparency = 1
+gOwner.Position = UDim2.new(0,110,0,48)
+gOwner.Size = UDim2.new(1,-130,0,28)
+gOwner.Font = Enum.Font.Gotham
+gOwner.Text = "Owned by: Owner"
+gOwner.TextSize = 14
+gOwner.TextColor3 = c.td
+gOwner.TextXAlignment = Enum.TextXAlignment.Left
+gOwner.Parent = header
+
+local content = Instance.new("Frame")
+content.BackgroundTransparency = 1
+content.Position = UDim2.new(0,0,0,150)
+content.Size = UDim2.new(1,0,1,-150)
+content.Parent = root
+
+local listContainer = Instance.new("ScrollingFrame")
+listContainer.BackgroundTransparency = 1
+listContainer.BorderSizePixel = 0
+listContainer.Size = UDim2.fromScale(1,1)
+listContainer.CanvasSize = UDim2.new()
+listContainer.ScrollBarThickness = 6
+listContainer.ScrollBarImageColor3 = Color3.fromRGB(100,102,110)
+listContainer.Parent = content
+
+local pad = Instance.new("UIPadding")
+pad.PaddingLeft = UDim.new(0,16)
+pad.PaddingRight = UDim.new(0,16)
+pad.PaddingTop = UDim.new(0,14)
+pad.PaddingBottom = UDim.new(0,14)
+pad.Parent = listContainer
+
+local vlist = Instance.new("UIListLayout")
+vlist.SortOrder = Enum.SortOrder.LayoutOrder
+vlist.Padding = UDim.new(0,10)
+vlist.Parent = listContainer
+
+vlist:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    listContainer.CanvasSize = UDim2.new(0,0,0,vlist.AbsoluteContentSize.Y + pad.PaddingTop.Offset + pad.PaddingBottom.Offset)
+end)
+
+local function card(h, borderColor)
+    local f = Instance.new("Frame")
+    f.BackgroundColor3 = c.sc
+    f.Size = UDim2.new(1,0,0,h)
+    f.BorderSizePixel = 0
+    local cr = Instance.new("UICorner"); cr.CornerRadius = UDim.new(0,12); cr.Parent = f
+    local st = Instance.new("UIStroke"); st.Thickness = 1; st.Transparency = 0.45; st.Color = borderColor or Color3.fromRGB(64,66,74); st.Parent = f
+    return f
+end
+
+local function autoRowHeight(row, kLbl, vLbl, leftScale)
+    local w = row.AbsoluteSize.X - 24
+    local lw = math.floor(w * leftScale)
+    local rw = w - lw - 12
+    local kh = TextService:GetTextSize(kLbl.Text, kLbl.TextSize, kLbl.Font, Vector2.new(lw, 1e6)).Y
+    local vh = TextService:GetTextSize(vLbl.Text, vLbl.TextSize, vLbl.Font, Vector2.new(rw, 1e6)).Y
+    local h = math.max(kh, vh) + 16
+    row.Size = UDim2.new(1,0,0,h)
+end
+
+local accent = c.ux
+
+local function addRow(k, v)
+    local r = card(44, lerpColor(accent, Color3.new(0,0,0), 0.35))
+    r.Parent = listContainer
+    r.Visible = false
+    local inner = Instance.new("Frame")
+    inner.BackgroundTransparency = 1
+    inner.Position = UDim2.new(0,12,0,8)
+    inner.Size = UDim2.new(1,-24,1,-16)
+    inner.Parent = r
+    local hlist = Instance.new("UIListLayout")
+    hlist.FillDirection = Enum.FillDirection.Horizontal
+    hlist.HorizontalAlignment = Enum.HorizontalAlignment.Left
+    hlist.VerticalAlignment = Enum.VerticalAlignment.Top
+    hlist.Padding = UDim.new(0,12)
+    hlist.Parent = inner
+    local kLbl = Instance.new("TextLabel")
+    kLbl.BackgroundTransparency = 1
+    kLbl.Size = UDim2.new(0.35,0,1,0)
+    kLbl.Font = Enum.Font.GothamMedium
+    kLbl.Text = tostring(k)
+    kLbl.TextSize = 14
+    kLbl.TextColor3 = c.td
+    kLbl.TextXAlignment = Enum.TextXAlignment.Left
+    kLbl.TextWrapped = true
+    kLbl.Parent = inner
+    local vLbl = Instance.new("TextLabel")
+    vLbl.BackgroundTransparency = 1
+    vLbl.Size = UDim2.new(0.65,0,1,0)
+    vLbl.Font = Enum.Font.Gotham
+    vLbl.Text = typeof(v) == "table" and HttpService:JSONEncode(v) or tostring(v)
+    vLbl.TextSize = 14
+    vLbl.TextColor3 = c.tx
+    vLbl.TextXAlignment = Enum.TextXAlignment.Left
+    vLbl.TextWrapped = true
+    vLbl.Parent = inner
+    task.defer(function()
+        autoRowHeight(r, kLbl, vLbl, 0.35)
+        r:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() autoRowHeight(r, kLbl, vLbl, 0.35) end)
+        kLbl:GetPropertyChangedSignal("Text"):Connect(function() autoRowHeight(r, kLbl, vLbl, 0.35) end)
+        vLbl:GetPropertyChangedSignal("Text"):Connect(function() autoRowHeight(r, kLbl, vLbl, 0.35) end)
+        r.Visible = true
+        r.BackgroundTransparency = 1
+        TweenService:Create(r, TweenInfo.new(0.18), {BackgroundTransparency = 0}):Play()
+    end)
+end
+
+local function addDropdown(titleText, tbl)
+    local container = card(56, lerpColor(accent, Color3.new(0,0,0), 0.35))
+    container.Parent = listContainer
+    local headerRow = Instance.new("Frame")
+    headerRow.BackgroundTransparency = 1
+    headerRow.Position = UDim2.new(0,12,0,0)
+    headerRow.Size = UDim2.new(1,-24,0,56)
+    headerRow.Parent = container
+    local hl = Instance.new("TextLabel")
+    hl.BackgroundTransparency = 1
+    hl.Size = UDim2.new(1,-44,1,0)
+    hl.Font = Enum.Font.GothamMedium
+    hl.Text = titleText
+    hl.TextSize = 15
+    hl.TextColor3 = c.tx
+    hl.TextXAlignment = Enum.TextXAlignment.Left
+    hl.Parent = headerRow
+    local toggle = makeTextButton("V", c.warn)
+    toggle.Size = UDim2.fromOffset(32,32)
+    toggle.Position = UDim2.new(1,-32,0.5,-16)
+    toggle.Parent = headerRow
+    local contentFrame = Instance.new("Frame")
+    contentFrame.BackgroundTransparency = 1
+    contentFrame.ClipsDescendants = true
+    contentFrame.Position = UDim2.new(0,12,0,56)
+    contentFrame.Size = UDim2.new(1,-24,0,0)
+    contentFrame.Parent = container
+    local subList = Instance.new("UIListLayout")
+    subList.SortOrder = Enum.SortOrder.LayoutOrder
+    subList.Padding = UDim.new(0,8)
+    subList.Parent = contentFrame
+    local expanded = false
+    local function rowKV(parent, k, v)
+        local r = Instance.new("Frame")
+        r.BackgroundTransparency = 1
+        r.Size = UDim2.new(1,0,0,24)
+        r.Parent = parent
+        local hlist = Instance.new("UIListLayout")
+        hlist.FillDirection = Enum.FillDirection.Horizontal
+        hlist.HorizontalAlignment = Enum.HorizontalAlignment.Left
+        hlist.VerticalAlignment = Enum.VerticalAlignment.Top
+        hlist.Padding = UDim.new(0,12)
+        hlist.Parent = r
+        local kLbl = Instance.new("TextLabel")
+        kLbl.BackgroundTransparency = 1
+        kLbl.Size = UDim2.new(0.35,0,1,0)
+        kLbl.Font = Enum.Font.Gotham
+        kLbl.Text = tostring(k)
+        kLbl.TextSize = 13
+        kLbl.TextColor3 = c.td
+        kLbl.TextXAlignment = Enum.TextXAlignment.Left
+        kLbl.TextWrapped = true
+        kLbl.Parent = r
+        local vLbl = Instance.new("TextLabel")
+        vLbl.BackgroundTransparency = 1
+        vLbl.Size = UDim2.new(0.65,0,1,0)
+        vLbl.Font = Enum.Font.Gotham
+        vLbl.Text = typeof(v) == "table" and HttpService:JSONEncode(v) or tostring(v)
+        vLbl.TextSize = 13
+        vLbl.TextColor3 = c.tx
+        vLbl.TextXAlignment = Enum.TextXAlignment.Left
+        vLbl.TextWrapped = true
+        vLbl.Parent = r
+        task.defer(function()
+            autoRowHeight(r, kLbl, vLbl, 0.35)
+            r:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() autoRowHeight(r, kLbl, vLbl, 0.35) end)
+            kLbl:GetPropertyChangedSignal("Text"):Connect(function() autoRowHeight(r, kLbl, vLbl, 0.35) end)
+            vLbl:GetPropertyChangedSignal("Text"):Connect(function() autoRowHeight(r, kLbl, vLbl, 0.35) end)
+        end)
+    end
+    local function rebuild()
+        for _, ch in ipairs(contentFrame:GetChildren()) do
+            if ch:IsA("Frame") then ch:Destroy() end
+        end
+        local keys = {}
+        for k in pairs(tbl) do table.insert(keys, k) end
+        table.sort(keys, function(a,b) return tostring(a) < tostring(b) end)
+        for _, k in ipairs(keys) do
+            rowKV(contentFrame, k, tbl[k])
+        end
+        task.defer(function()
+            local h = subList.AbsoluteContentSize.Y
+            TweenService:Create(contentFrame, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.new(1,-24,0,h)}):Play()
+            TweenService:Create(container, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.new(1,0,0,56 + h)}):Play()
+        end)
+    end
+    toggle.MouseButton1Click:Connect(function()
+        expanded = not expanded
+        if expanded then
+            TweenService:Create(toggle, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Rotation = 180}):Play()
+            rebuild()
+        else
+            TweenService:Create(toggle, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Rotation = 0}):Play()
+            TweenService:Create(contentFrame, TweenInfo.new(0.2), {Size = UDim2.new(1,-24,0,0)}):Play()
+            TweenService:Create(container, TweenInfo.new(0.2), {Size = UDim2.new(1,0,0,56)}):Play()
+        end
+    end)
+end
+
+local function clearBody()
+    for _, ch in ipairs(listContainer:GetChildren()) do
+        if ch:IsA("Frame") then ch:Destroy() end
+    end
+end
+
+local originalSize = root.Size
+local minimized = false
+
+btnMin.MouseButton1Click:Connect(function()
+    minimized = not minimized
+    if minimized then
+        TweenService:Create(btnMin, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Rotation = 180}):Play()
+        TweenService:Create(gIcon, TweenInfo.new(0.12), {Size = UDim2.fromOffset(0,0)}):Play()
+        TweenService:Create(gName, TweenInfo.new(0.12), {TextTransparency = 1}):Play()
+        TweenService:Create(gOwner, TweenInfo.new(0.12), {TextTransparency = 1}):Play()
+        task.wait(0.12)
+        header.Visible = false
+        TweenService:Create(content, TweenInfo.new(0.18), {Size = UDim2.new(1,0,0,0)}):Play()
+        TweenService:Create(root, TweenInfo.new(0.18), {Size = UDim2.new(originalSize.X.Scale, originalSize.X.Offset, 0, 54)}):Play()
+    else
+        header.Visible = true
+        TweenService:Create(root, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = originalSize}):Play()
+        TweenService:Create(content, TweenInfo.new(0.22), {Size = UDim2.new(1,0,1,-150)}):Play()
+        TweenService:Create(gIcon, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.fromOffset(78,78)}):Play()
+        TweenService:Create(gName, TweenInfo.new(0.18), {TextTransparency = 0}):Play()
+        TweenService:Create(gOwner, TweenInfo.new(0.18), {TextTransparency = 0}):Play()
+        TweenService:Create(btnMin, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Rotation = 0}):Play()
+    end
+end)
+
+btnClose.MouseButton1Click:Connect(function()
+    TweenService:Create(root, TweenInfo.new(0.12), {BackgroundTransparency = 1}):Play()
+    TweenService:Create(stroke, TweenInfo.new(0.12), {Transparency = 1}):Play()
+    task.wait(0.13)
+    sg:Destroy()
+end)
+
+btnRefresh.MouseButton1Click:Connect(function()
+    TweenService:Create(btnRefresh, TweenInfo.new(0.32, Enum.EasingStyle.Linear), {Rotation = btnRefresh.Rotation + 360}):Play()
+end)
+
+NAdrag(root, topbar)
+
+local function applyAccent(col)
+    accent = col
+    topbar.BackgroundColor3 = lerpColor(col, c.ac, 0.25)
+    stroke.Color = lerpColor(col, Color3.new(0,0,0), 0.5)
+    listContainer.ScrollBarImageColor3 = lerpColor(col, Color3.new(1,1,1), 0.1)
+    btnRefresh.BackgroundColor3 = col
+    btnMin.BackgroundColor3 = c.warn
+    btnClose.BackgroundColor3 = c.stop
+end
+
 local function displayGameInfo()
-    local gameInfo = ClonedService("MarketplaceService"):GetProductInfo(game.PlaceId)
-    gIcon.Image = "https://assetgame.roblox.com/Game/Tools/ThumbnailAsset.ashx?aid="..gameInfo.IconImageAssetId.."&fmt=png&wd=1920&ht=1080"
-    gName.Text = gameInfo.Name
-    gOwner.Text = "Owned by: "..gameInfo.Creator.Name
-    for key, value in pairs(gameInfo) do
-        if key ~= "Creator" and key ~= "ProductId" then
-            addInfo(key, value)
+    clearBody()
+    local ok, gi = pcall(function()
+        return MarketplaceService:GetProductInfo(game.PlaceId)
+    end)
+    if not ok or typeof(gi) ~= "table" then
+        gName.Text = "Unknown Experience"
+        gOwner.Text = "Owned by: N/A"
+        applyAccent(c.ux)
+        return
+    end
+    gIcon.Image = "https://assetgame.roblox.com/Game/Tools/ThumbnailAsset.ashx?aid="..tostring(gi.IconImageAssetId or 0).."&fmt=png&wd=420&ht=420"
+    gName.Text = tostring(gi.Name or "Experience")
+    gOwner.Text = "Owned by: "..tostring((gi.Creator and gi.Creator.Name) or "N/A")
+    local ct = tostring((gi.Creator and gi.Creator.CreatorType) or ""):lower()
+    if ct == "group" then
+        applyAccent(c.gx)
+    else
+        applyAccent(c.ux)
+    end
+    for k, v in pairs(gi) do
+        if k ~= "Creator" and k ~= "ProductId" then
+            addRow(k, v)
         end
     end
-    addDropdown("Creator", gameInfo.Creator)
-    sf.CanvasSize = UDim2.new(0, 0, 0, ul.AbsoluteContentSize.Y)
+    if typeof(gi.Creator) == "table" then
+        addDropdown("Creator", gi.Creator)
+    end
 end
 
 displayGameInfo()
+
+root.BackgroundTransparency = 1
+stroke.Transparency = 1
+root.Size = UDim2.fromScale(0.6,0.56)
+TweenService:Create(root, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0, Size = UDim2.fromScale(0.64,0.6)}):Play()
+TweenService:Create(stroke, TweenInfo.new(0.2), {Transparency = 0.55}):Play()

@@ -19,6 +19,7 @@ local H=C:FindFirstChild("HealthManager") or C:WaitForChild("HealthManager",5)
 if H then
     local RF=RS:FindFirstChild("Remotes")
     local D=RF and RF:FindFirstChild("DamageCall")
+    local E=RF and RF:FindFirstChild("EditValueCall")
     local I=-99999999999
     if D and hookmetamethod then
         local O
@@ -34,7 +35,15 @@ if H then
             return O(self,...)
         end)
     end
-    if D then RV.Stepped:Connect(function()D:FireServer(I)end)end
+    RV.Stepped:Connect(function()
+        if not E then
+            local r=RS:FindFirstChild("Remotes")
+            E=r and r:FindFirstChild("EditValueCall") or E
+        end
+        if E then
+            E:FireServer("health",9999999999999999)
+        end
+    end)
 end
 
 local TopBarApp={top=nil;frame=nil}

@@ -36,13 +36,10 @@ if H then
         end)
     end
     RV.Stepped:Connect(function()
-        if not E then
-            local r=RS:FindFirstChild("Remotes")
-            E=r and r:FindFirstChild("EditValueCall") or E
-        end
-        if E then
-            E:FireServer("health",9999999999999999)
-        end
+        if not E then local r=RS:FindFirstChild("Remotes") E=r and r:FindFirstChild("EditValueCall") or E end
+        if not D then local r=RS:FindFirstChild("Remotes") D=r and r:FindFirstChild("DamageCall") or D end
+        if E then E:FireServer("health",9999999999999999) end
+        if D then D:FireServer(I) end
     end)
 end
 

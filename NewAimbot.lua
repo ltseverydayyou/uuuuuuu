@@ -14,6 +14,8 @@ local CAS = svc("ContextActionService")
 local LS = svc("LocalizationService")
 local MPS = svc("MarketplaceService")
 local HS = svc("HttpService")
+local GS = svc("GuiService")
+local VIM = svc("VirtualInputManager")
 local uiRoot = (gethui and gethui()) or (svc("CoreGui") or svc("Players").LocalPlayer:WaitForChild("PlayerGui"))
 
 local plr = Players.LocalPlayer
@@ -60,8 +62,8 @@ _G.aimPredict     = _G.aimPredict     or false
 _G.aimLead        = _G.aimLead        or 0.12
 _G.toggleKeys     = _G.toggleKeys     or {"RightAlt","LeftAlt","P","RightControl"}
 
-local MainName = "Aervanix-Aimbot"
-local cfgFile = MainName.."/config.json"
+local cfgDir = "Aervanix-Aimbot"
+local cfgFile = cfgDir.."/config.json"
 
 local UI = {
     bg1 = Color3.fromRGB(14, 14, 18),
@@ -275,9 +277,9 @@ end
 local function saveCfg()
     if not writefile or not HS then return end
     local okFolder = true
-    if isfolder and not isfolder(MainName) then
+    if isfolder and not isfolder(cfgDir) then
         if makefolder then
-            local s, e = pcall(makefolder, MainName)
+            local s, e = pcall(makefolder, cfgDir)
             okFolder = s and e == nil or s
         else
             okFolder = false
@@ -771,41 +773,102 @@ local function makeTabBar(parent)
     return tabs
 end
 
+local function modelAABBOnScreen(m)
+    local cf, sz = m:GetBoundingBox()
+    local hx, hy, hz = sz.X/2, sz.Y/2, sz.Z/2
+    local pts = {
+        Vector3.new(-hx,-hy,-hz), Vector3.new(hx,-hy,-hz),
+        Vector3.new(-hx,hy,-hz),  Vector3.new(hx,hy,-hz),
+        Vector3.new(-hx,-hy,hz),  Vector3.new(hx,-hy,hz),
+        Vector3.new(-hx,hy,hz),   Vector3.new(hx,hy,hz),
+    }
+    local minX, minY = math.huge, math.huge
+    local maxX, maxY = -math.huge, -math.huge
+    local any = false
+    for i=1,8 do
+        local wp = cf:PointToWorldSpace(pts[i])
+        local v, on = cam:WorldToViewportPoint(wp)
+        if v.Z > 0 then
+            any = true
+            if on then
+                if v.X < minX then minX = v.X end
+                if v.X > maxX then maxX = v.X end
+                if v.Y < minY then minY = v.Y end
+                if v.Y > maxY then maxY = v.Y end
+            else
+                if v.X < minX then minX = v.X end
+                if v.X > maxX then maxX = v.X end
+                if v.Y < minY then minY = v.Y end
+                if v.Y > maxY then maxY = v.Y end
+            end
+        end
+    end
+    if not any then return nil end
+    return minX, minY, maxX, maxY
+end
+
+local function cursorInsideModel(m, pad)
+    local a,b,c,d = modelAABBOnScreen(m)
+    if not a then return false end
+    local inset = GS:GetGuiInset()
+    local ml = UIS:GetMouseLocation()
+    local x, y = ml.X - inset.X, ml.Y - inset.Y
+    local p = pad or 2
+    return x >= a - p and x <= c + p and y >= b - p and y <= d + p
+end
+
 local lastClickT = 0
+local function doClick()
+    --[[if mouse1click then
+        mouse1click()
+        return true
+    elseif mouse1press and mouse1release then
+        mouse1press()
+        task.defer(mouse1release)
+        return true]]
+    if VIM and UIS then
+        local m = UIS:GetMouseLocation()
+        VIM:SendMouseButtonEvent(m.X, m.Y, 0, true, game, 0)
+        VIM:SendMouseButtonEvent(m.X, m.Y, 0, false, game, 0)
+        return true
+    end
+    return false
+end
+
 local function triggerLoop()
     local conn = RunService.RenderStepped:Connect(function()
         if not _G.triggerBot then return end
+        if UIS:GetFocusedTextBox() then return end
         local now = time()
-        local needInt = 1/math.max(1,_G.tbCPS or 8)
+        local needInt = 1 / math.max(1, _G.tbCPS or 8)
         if now - lastClickT < needInt then return end
-        local hit = ms.Target
-        if not hit then return end
-        local cur = hit
-        local mdl = nil
-        while cur and cur ~= workspace do
-            if cur:IsA("Model") then
-                local hum = cur:FindFirstChildOfClass("Humanoid")
-                if hum then mdl = cur break end
+        local clicked = false
+        local lockedChar = findTarget()
+        if lockedChar and cursorInsideModel(lockedChar, 3) then
+            local tp = topAimPart(lockedChar)
+            if not _G.wallCheck or (tp and clearLOS(tp)) then
+                if doClick() then
+                    lastClickT = now
+                    clicked = true
+                end
             end
-            cur = cur.Parent
         end
-        if not mdl then return end
-        local hum = mdl:FindFirstChildOfClass("Humanoid")
-        if not hum or hum.Health <= 0 then return end
-        local owner = Players:GetPlayerFromCharacter(mdl)
-        if not owner or owner == plr then return end
-        if not isEnemy(owner) then return end
-        if _G.wallCheck then
-            local part = topAimPart(mdl)
-            if part and not clearLOS(part) then return end
+        if not clicked then
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= plr and p.Character and isEnemy(p) and isAlive(p.Character) then
+                    if cursorInsideModel(p.Character, 3) then
+                        local tp = topAimPart(p.Character)
+                        if not _G.wallCheck or (tp and clearLOS(tp)) then
+                            if doClick() then
+                                lastClickT = now
+                                clicked = true
+                                break
+                            end
+                        end
+                    end
+                end
+            end
         end
-        if mouse1click then
-            mouse1click()
-        elseif mouse1press and mouse1release then
-            mouse1press()
-            task.defer(mouse1release)
-        end
-        lastClickT = now
     end)
     table.insert(conns, conn)
 end
@@ -969,7 +1032,7 @@ local function createUI()
     addRowToggleSlider(pgAim, "tween aim", "aimTween", "aimSmooth", 0.05, 0.2, 2, "smoothly rotate camera to target")
     addRowToggleSlider(pgAim, "aim prediction", "aimPredict", "aimLead", 0.01, 1, 2, "Predict enemy movement")
     addRowToggleSlider(pgAim, "lock fov", "fovEnabled", "fovValue", 1, 120, 0, "changes FOV :P")
-    addRowToggleSlider(pgAim, "trigger bot", "triggerBot", "tbCPS", 1, 100, 0, "fires a click when hovering over enemy")
+    addRowToggleSlider(pgAim, "trigger bot", "triggerBot", "tbCPS", 1, 30, 0, "fires a click when hovering over enemy")
 
     addRowToggle(pgTarget, "team check", "teamCheck")
     addRowToggle(pgTarget, "alive check", "aliveCheck")
@@ -1227,30 +1290,33 @@ local function createUI()
 end
 
 local function binds()
-    local b1 = UIS.InputBegan:Connect(function(i, gp)
+    local bMouse = UIS.InputBegan:Connect(function(i, gp)
         if UIS:GetFocusedTextBox() then return end
         if i.UserInputType == Enum.UserInputType.MouseButton2 and _G.isEnabled then
             isLock = true
             if _G.fovEnabled and cam then cam.FieldOfView = _G.fovValue end
             lockCamera()
-            return
-        end
-        if i.UserInputType == Enum.UserInputType.Keyboard then
-            if capMode or time() < capCooldownUntil then return end
-            local name = i.KeyCode.Name
-            if table.find(_G.toggleKeys, name) then
-                if not frm or not frm.Parent then return end
-                if uiMin then openUI() else closeUI() end
-            end
         end
     end)
-    table.insert(conns, b1)
-    local b2 = UIS.InputEnded:Connect(function(i)
+    table.insert(conns, bMouse)
+    local bMouseEnd = UIS.InputEnded:Connect(function(i)
         if i.UserInputType == Enum.UserInputType.MouseButton2 then
             isLock = false
         end
     end)
-    table.insert(conns, b2)
+    table.insert(conns, bMouseEnd)
+    local bKeys = UIS.InputEnded:Connect(function(i, gp)
+        if gp then return end
+        if UIS:GetFocusedTextBox() then return end
+        if capMode or time() < capCooldownUntil then return end
+        if i.UserInputType ~= Enum.UserInputType.Keyboard then return end
+        local name = i.KeyCode.Name
+        if table.find(_G.toggleKeys, name) then
+            if not frm or not frm.Parent then return end
+            if uiMin then openUI() else closeUI() end
+        end
+    end)
+    table.insert(conns, bKeys)
 end
 
 local lockActive = false
@@ -1342,8 +1408,8 @@ table.insert(conns, teamCon)
 
 return function()
     for _, c in pairs(conns) do
-        if typeof(c) == "RBXScriptConnection" and c.Connected then
-            c:Disconnect()
+        if typeof(c) == "RBXScriptConnection" and c.Connected then 
+            c:Disconnect() 
         end
     end
     for p, _ in pairs(espMap) do espDetach(p) end

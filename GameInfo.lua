@@ -398,7 +398,23 @@ local function addDropdown(titleText, tbl)
         vLbl.BackgroundTransparency = 1
         vLbl.Size = UDim2.new(0.65,0,1,0)
         vLbl.Font = Enum.Font.Gotham
-        vLbl.Text = typeof(v) == "table" and HttpService:JSONEncode(v) or tostring(v)
+        if typeof(v) == "table" then
+            local n=0; local isArray=true; local maxk=0
+            for kk in pairs(v) do
+                n+=1
+                if typeof(kk)~="number" then isArray=false else if kk>maxk then maxk=kk end end
+            end
+            if n==0 then return end
+            if isArray and maxk==n then
+                local parts={}
+                for i=1,#v do parts[i]=tostring(v[i]) end
+                vLbl.Text = table.concat(parts,", ")
+            else
+                vLbl.Text = HttpService:JSONEncode(v)
+            end
+        else
+            vLbl.Text = tostring(v)
+        end
         vLbl.TextSize = 13
         vLbl.TextColor3 = c.tx
         vLbl.TextXAlignment = Enum.TextXAlignment.Left
@@ -478,10 +494,6 @@ btnClose.MouseButton1Click:Connect(function()
     sg:Destroy()
 end)
 
-btnRefresh.MouseButton1Click:Connect(function()
-    TweenService:Create(btnRefresh, TweenInfo.new(0.32, Enum.EasingStyle.Linear), {Rotation = btnRefresh.Rotation + 360}):Play()
-end)
-
 NAdrag(root, topbar)
 
 local function applyAccent(col)
@@ -494,35 +506,155 @@ local function applyAccent(col)
     btnClose.BackgroundColor3 = c.stop
 end
 
-local function displayGameInfo()
-    clearBody()
-    local ok, gi = pcall(function()
-        return MarketplaceService:GetProductInfo(game.PlaceId)
-    end)
-    if not ok or typeof(gi) ~= "table" then
-        gName.Text = "Unknown Experience"
-        gOwner.Text = "Owned by: N/A"
-        applyAccent(c.ux)
-        return
-    end
-    gIcon.Image = "https://assetgame.roblox.com/Game/Tools/ThumbnailAsset.ashx?aid="..tostring(gi.IconImageAssetId or 0).."&fmt=png&wd=420&ht=420"
-    gName.Text = tostring(gi.Name or "Experience")
-    gOwner.Text = "Owned by: "..tostring((gi.Creator and gi.Creator.Name) or "N/A")
-    local ct = tostring((gi.Creator and gi.Creator.CreatorType) or ""):lower()
-    if ct == "group" then
-        applyAccent(c.gx)
-    else
-        applyAccent(c.ux)
-    end
-    for k, v in pairs(gi) do
-        if k ~= "Creator" and k ~= "ProductId" then
-            addRow(k, v)
+local req = (syn and syn.request) or request or http_request or (http and http.request) or (fluxus and fluxus.request) or (krnl and krnl.request) or krnl_request
+
+local function jget(url)
+    if req then
+        local ok, r = pcall(function()
+            return req({
+                Url = url,
+                Method = "GET",
+                Headers = {
+                    ["Accept"] = "application/json",
+                    ["Cache-Control"] = "no-cache",
+                    ["Pragma"] = "no-cache",
+                    ["User-Agent"] = "Roblox-Client"
+                }
+            })
+        end)
+        if not ok or not r or (r.StatusCode ~= 200 and r.StatusCode ~= 201) or type(r.Body) ~= "string" then
+            return nil
         end
-    end
-    if typeof(gi.Creator) == "table" then
-        addDropdown("Creator", gi.Creator)
+        local ok2, data = pcall(function() return HttpService:JSONDecode(r.Body) end)
+        if not ok2 then return nil end
+        return data
+    else
+        local ok, res = pcall(function() return HttpService:GetAsync(url, true) end)
+        if not ok or type(res) ~= "string" then return nil end
+        local ok2, data = pcall(function() return HttpService:JSONDecode(res) end)
+        if not ok2 then return nil end
+        return data
     end
 end
+
+local function displayGameInfo()
+    clearBody()
+    local universeId = tostring(game.GameId)
+    local placeId = game.PlaceId
+
+    local gi
+    do
+        local ok, res = pcall(function()
+            return MarketplaceService:GetProductInfo(placeId)
+        end)
+        if ok and typeof(res) == "table" then gi = res end
+    end
+
+    if gi and gi.IconImageAssetId and gi.IconImageAssetId > 0 then
+        gIcon.Image = "https://assetgame.roblox.com/Game/Tools/ThumbnailAsset.ashx?aid="..tostring(gi.IconImageAssetId).."&fmt=png&wd=420&ht=420"
+    end
+
+    local gjson = jget("https://games.roproxy.com/v1/games?universeIds="..universeId)
+    local gdata = gjson and gjson.data and gjson.data[1]
+
+    if gdata and gdata.name then
+        gName.Text = tostring(gdata.name)
+    elseif gi and gi.Name then
+        gName.Text = tostring(gi.Name)
+    else
+        gName.Text = "Experience"
+    end
+
+    local creator = (gdata and gdata.creator) or {}
+    local cType = tostring(creator.type or (gi and gi.Creator and gi.Creator.CreatorType) or ""):lower()
+    local cName = tostring(creator.name or (gi and gi.Creator and gi.Creator.Name) or "N/A")
+    gOwner.Text = "Owned by: "..cName
+    if cType == "group" then applyAccent(c.gx) else applyAccent(c.ux) end
+
+    local seen = {}
+    local function mark(k) seen[string.lower(k)] = true end
+    local function seenKey(k) return seen[string.lower(k)] == true end
+
+    local function stringify(v)
+        if typeof(v) == "table" then
+            local n=0; local isArray=true; local maxk=0
+            for kk in pairs(v) do
+                n+=1
+                if typeof(kk)~="number" then isArray=false else if kk>maxk then maxk=kk end end
+            end
+            if n==0 then return nil end
+            if isArray and maxk==n then
+                local parts={}
+                for i=1,#v do parts[i]=tostring(v[i]) end
+                return table.concat(parts,", ")
+            else
+                return HttpService:JSONEncode(v)
+            end
+        end
+        return v
+    end
+
+    local function addKV(k, v)
+        if v == nil then return end
+        if typeof(v) == "string" and v == "" then return end
+        if seenKey(k) then return end
+        local sv = stringify(v)
+        if sv == nil then return end
+        addRow(k, sv)
+        mark(k)
+    end
+
+    if gdata then
+        for k, v in pairs(gdata) do
+            if k ~= "creator" then
+                addKV(k, v)
+            end
+        end
+    end
+
+    if gi then
+        for k, v in pairs(gi) do
+            if k ~= "Creator" and k ~= "ProductId" then
+                addKV(k, v)
+            end
+        end
+    end
+
+    local cdrop = {}
+    if creator then
+        for ck, cv in pairs(creator) do cdrop[ck] = cv end
+    end
+    if next(cdrop) == nil and gi and typeof(gi.Creator) == "table" then
+        for ck, cv in pairs(gi.Creator) do cdrop[ck] = cv end
+    end
+    if next(cdrop) ~= nil then
+        addDropdown("Creator", cdrop)
+    end
+
+    local vjson = jget("https://games.roproxy.com/v1/games/votes?universeIds="..universeId)
+    local votes = vjson and vjson.data and vjson.data[1]
+    if votes then
+        local up = votes.upVotes or 0
+        local down = votes.downVotes or 0
+        local total = up + down
+        local ratio = total > 0 and math.floor((up/total)*1000)/10 or 0
+        addDropdown("Votes", {upVotes = up, downVotes = down, total = total, likeRatioPercent = ratio})
+    end
+
+    local socials = jget("https://games.roproxy.com/v1/games/"..universeId.."/social-links/list")
+    if socials and socials.data and #socials.data > 0 then
+        local stbl = {}
+        for _, s in ipairs(socials.data) do
+            stbl[(s.type or "Link").." ("..(s.title or "")..")"] = s.url or ""
+        end
+        addDropdown("Social Links", stbl)
+    end
+end
+
+btnRefresh.MouseButton1Click:Connect(function()
+    TweenService:Create(btnRefresh, TweenInfo.new(0.32, Enum.EasingStyle.Linear), {Rotation = btnRefresh.Rotation + 360}):Play()
+    task.defer(displayGameInfo)
+end)
 
 displayGameInfo()
 

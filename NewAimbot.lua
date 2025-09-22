@@ -15,7 +15,7 @@ local LS = svc("LocalizationService")
 local MPS = svc("MarketplaceService")
 local HS = svc("HttpService")
 local GS = svc("GuiService")
-local VIM = svc("VirtualInputManager")
+--local VIM = svc("VirtualInputManager")
 local uiRoot = (gethui and gethui()) or (svc("CoreGui") or svc("Players").LocalPlayer:WaitForChild("PlayerGui"))
 
 local plr = Players.LocalPlayer
@@ -56,7 +56,7 @@ _G.espShowName    = (_G.espShowName ~= nil) and _G.espShowName or true
 _G.espShowHP      = (_G.espShowHP   ~= nil) and _G.espShowHP   or true
 _G.espShowTeam    = (_G.espShowTeam ~= nil) and _G.espShowTeam or true
 _G.espTeamColor   = (_G.espTeamColor~= nil) and _G.espTeamColor or true
-_G.triggerBot     = _G.triggerBot     or false
+--_G.triggerBot     = _G.triggerBot     or false
 _G.tbCPS          = _G.tbCPS          or 8
 _G.aimPredict     = _G.aimPredict     or false
 _G.aimLead        = _G.aimLead        or 0.12
@@ -290,7 +290,7 @@ local function saveCfg()
         isEnabled=_G.isEnabled,lockToHead=_G.lockToHead,espEnabled=_G.espEnabled,lockToNearest=_G.lockToNearest,
         aliveCheck=_G.aliveCheck,teamCheck=_G.teamCheck,wallCheck=_G.wallCheck,aimTween=_G.aimTween,aimSmooth=_G.aimSmooth,
         fovEnabled=_G.fovEnabled,fovValue=_G.fovValue,espShowName=_G.espShowName,espShowHP=_G.espShowHP,espShowTeam=_G.espShowTeam,
-        espTeamColor=_G.espTeamColor,triggerBot=_G.triggerBot,tbCPS=_G.tbCPS,aimPredict=_G.aimPredict,aimLead=_G.aimLead,
+        espTeamColor=_G.espTeamColor--[[,triggerBot=_G.triggerBot]],tbCPS=_G.tbCPS,aimPredict=_G.aimPredict,aimLead=_G.aimLead,
         toggleKeys=_G.toggleKeys
     }
     local ok, enc = pcall(function() return HS:JSONEncode(data) end)
@@ -817,15 +817,8 @@ local function cursorInsideModel(m, pad)
     return x >= a - p and x <= c + p and y >= b - p and y <= d + p
 end
 
-local lastClickT = 0
+--[[local lastClickT = 0
 local function doClick()
-    --[[if mouse1click then
-        mouse1click()
-        return true
-    elseif mouse1press and mouse1release then
-        mouse1press()
-        task.defer(mouse1release)
-        return true]]
     if VIM and UIS then
         local m = UIS:GetMouseLocation()
         VIM:SendMouseButtonEvent(m.X, m.Y, 0, true, game, 0)
@@ -871,7 +864,7 @@ local function triggerLoop()
         end
     end)
     table.insert(conns, conn)
-end
+end]]
 
 local function showTopBtn(state)
     if not topBtn then return end
@@ -1032,7 +1025,7 @@ local function createUI()
     addRowToggleSlider(pgAim, "tween aim", "aimTween", "aimSmooth", 0.05, 0.2, 2, "smoothly rotate camera to target")
     addRowToggleSlider(pgAim, "aim prediction", "aimPredict", "aimLead", 0.01, 1, 2, "Predict enemy movement")
     addRowToggleSlider(pgAim, "lock fov", "fovEnabled", "fovValue", 1, 120, 0, "changes FOV :P")
-    addRowToggleSlider(pgAim, "trigger bot", "triggerBot", "tbCPS", 1, 30, 0, "fires a click when hovering over enemy")
+    --addRowToggleSlider(pgAim, "trigger bot", "triggerBot", "tbCPS", 1, 30, 0, "fires a click when hovering over enemy")
 
     addRowToggle(pgTarget, "team check", "teamCheck")
     addRowToggle(pgTarget, "alive check", "aliveCheck")
@@ -1251,7 +1244,7 @@ local function createUI()
         _G.aliveCheck = false
         _G.teamCheck = false
         _G.wallCheck = false
-        _G.triggerBot = false
+        --_G.triggerBot = false
         for p, _ in pairs(espMap) do espDetach(p) end
         espMap = {}
         CAS:UnbindAction("AervanixBot")
@@ -1384,7 +1377,7 @@ end
 frm = createUI()
 binds()
 setupPlayerMonitoring()
-triggerLoop()
+--triggerLoop()
 if _G.espEnabled then updateESP() end
 toast("Aimbot loaded")
 saveCfg()

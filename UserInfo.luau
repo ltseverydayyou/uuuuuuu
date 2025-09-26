@@ -19,6 +19,17 @@ local function svc(n)
 	return r(g(game, n))
 end
 
+local IsOnMobile=(function()
+	local platform=svc("UserInputService"):GetPlatform()
+	if platform==Enum.Platform.IOS or platform==Enum.Platform.Android or platform==Enum.Platform.AndroidTV or platform==Enum.Platform.Chromecast or platform==Enum.Platform.MetaOS then
+		return true
+	end
+	if platform==Enum.Platform.None then
+		return svc("UserInputService").TouchEnabled and not (svc("UserInputService").KeyboardEnabled or svc("UserInputService").MouseEnabled)
+	end
+	return false
+end)()
+
 local Tween = svc("TweenService")
 local Json = svc("HttpService")
 local UIS = svc("UserInputService")
@@ -1154,8 +1165,7 @@ end)
 local function layout()
 	local cam = workspace.CurrentCamera
 	local vs = cam and cam.ViewportSize or Vector2.new(1280, 720)
-	local isMobile = UIS.TouchEnabled and not UIS.KeyboardEnabled
-	local lw = math.floor(math.clamp(vs.X * (isMobile and 0.38 or 0.30), 220, 420))
+	local lw = math.floor(math.clamp(vs.X * (IsOnMobile and 0.38 or 0.30), 220, 420))
 	left.Size = UDim2.new(0, lw, 1, 0)
 	right.Size = UDim2.new(1, -lw, 1, 0)
 	right.Position = UDim2.new(0, lw, 0, 0)

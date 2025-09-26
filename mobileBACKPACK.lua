@@ -10,7 +10,18 @@ local WS=sgs("Workspace")
 local TSvc=sgs("TextService")
 pcall(function() SG:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack,false) end)
 
-local mob=UIS.TouchEnabled
+local IsOnMobile=(function()
+	local platform=UIS:GetPlatform()
+	if platform==Enum.Platform.IOS or platform==Enum.Platform.Android or platform==Enum.Platform.AndroidTV or platform==Enum.Platform.Chromecast or platform==Enum.Platform.MetaOS then
+		return true
+	end
+	if platform==Enum.Platform.None then
+		return UIS.TouchEnabled and not (UIS.KeyboardEnabled or UIS.MouseEnabled)
+	end
+	return false
+end)()
+
+local mob=IsOnMobile
 local sw=false local swSel=nil local sel=nil local col=false local exp=false
 local need=false local tBtns={} local tOrder={} local qtxt="" local strokes={}
 local toolCnt=0

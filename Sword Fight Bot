@@ -7,6 +7,17 @@ local RunService=SafeGetService("RunService")
 local UserInput=SafeGetService("UserInputService")
 local Workspace=workspace
 
+local IsOnMobile=(function()
+	local platform=SafeGetService("UserInputService"):GetPlatform()
+	if platform==Enum.Platform.IOS or platform==Enum.Platform.Android or platform==Enum.Platform.AndroidTV or platform==Enum.Platform.Chromecast or platform==Enum.Platform.MetaOS then
+		return true
+	end
+	if platform==Enum.Platform.None then
+		return SafeGetService("UserInputService").TouchEnabled and not (SafeGetService("UserInputService").KeyboardEnabled or SafeGetService("UserInputService").MouseEnabled)
+	end
+	return false
+end)()
+
 local function getCharacter(x) if x and x:IsA("Player") then return x.Character end return x end
 local function getHumanoid(c) if not c then return end if c:IsA("Player") then c=c.Character end return c and c:IsA("Model") and c:FindFirstChildOfClass("Humanoid") end
 local function getRootPart(c) if not c then return end if c:IsA("Player") then c=c.Character end if c and c:IsA("Model") then local p=c:FindFirstChild("HumanoidRootPart")or c:FindFirstChild("Torso")or c:FindFirstChild("UpperTorso")or c:FindFirstChild("LowerTorso");if p and p:IsA("BasePart")then return p end for _,v in pairs(c:GetChildren())do if v:IsA("BasePart")then return v end end end end
@@ -173,7 +184,7 @@ local currentConn,currentHum
 
 local function setupUI()
     local gui=protectUI(Instance.new("ScreenGui"))
-    if UserInput.TouchEnabled then
+    if IsOnMobile then
         local t=makeButton{Parent=gui;Size=UDim2.new(0,80,0,30);AnchorPoint=Vector2.new(0.5,1);Position=UDim2.new(0.5,0,1,-40);Text="Bot: OFF"}
         local m=makeButton{Parent=gui;Size=UDim2.new(0,80,0,30);AnchorPoint=Vector2.new(0.5,1);Position=UDim2.new(0.5,0,1,-80);Text="Mode: Player"}
         t.MouseButton1Click:Connect(function()

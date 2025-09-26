@@ -15,6 +15,17 @@ local function ClonedService(name)
 	return Reference(Service(game, name));
 end
 
+local IsOnMobile=(function()
+	local platform=ClonedService("UserInputService"):GetPlatform()
+	if platform==Enum.Platform.IOS or platform==Enum.Platform.Android or platform==Enum.Platform.AndroidTV or platform==Enum.Platform.Chromecast or platform==Enum.Platform.MetaOS then
+		return true
+	end
+	if platform==Enum.Platform.None then
+		return ClonedService("UserInputService").TouchEnabled and not (ClonedService("UserInputService").KeyboardEnabled or ClonedService("UserInputService").MouseEnabled)
+	end
+	return false
+end)()
+
 repeat wait()
     a = pcall(function()
         ClonedService("Players").LocalPlayer:WaitForChild("PlayerScripts").ChildAdded:Connect(function(c)
@@ -691,7 +702,7 @@ repeat wait()
         function BaseCamera:OnCharacterAdded(char)
             self.resetCameraAngle = self.resetCameraAngle or self:GetEnabled()
             self.humanoidRootPart = nil
-            if UserInputService.TouchEnabled then
+            if IsOnMobile then
                 self.PlayerGui = player:WaitForChild("PlayerGui")
                 for _, child in ipairs(char:GetChildren()) do
                     if child:IsA("Tool") then
@@ -824,14 +835,14 @@ repeat wait()
             local camera = game.Workspace.CurrentCamera
             local size = camera.ViewportSize
             self.portraitMode = size.X < size.Y
-            self.isSmallTouchScreen = UserInputService.TouchEnabled and (size.Y < 500 or size.X < 700)
+            self.isSmallTouchScreen = IsOnMobile and (size.Y < 500 or size.X < 700)
      
             self:UpdateDefaultSubjectDistance()
         end
      
         -- Listener for changes to workspace.CurrentCamera
         function BaseCamera:OnCurrentCameraChanged()
-            if UserInputService.TouchEnabled then
+            if IsOnMobile then
                 if self.viewportSizeChangedConn then
                     self.viewportSizeChangedConn:Disconnect()
                     self.viewportSizeChangedConn = nil
@@ -863,7 +874,7 @@ repeat wait()
         end
      
         function BaseCamera:OnDynamicThumbstickEnabled()
-            if UserInputService.TouchEnabled then
+            if IsOnMobile then
                 self.isDynamicThumbstickEnabled = true
             end
         end
@@ -1153,7 +1164,7 @@ repeat wait()
             self.isMiddleMouseDown = false
             self:OnMousePanButtonReleased() -- this function doesn't seem to actually need parameters
      
-            if UserInputService.TouchEnabled then
+            if IsOnMobile then
                 --[[menu opening was causing serious touch issues
                 this should disable all active touch events if
                 they're active when menu opens.]]
@@ -4653,7 +4664,7 @@ repeat wait()
             self.activeTransparencyController = TransparencyController.new()
             self.activeTransparencyController:Enable(true)
      
-            if not UserInputService.TouchEnabled then
+            if not IsOnMobile then
                 self.activeMouseLockController = MouseLockController.new()
                 local toggleEvent = self.activeMouseLockController:GetBindableToggleEvent()
                 if toggleEvent then
@@ -4701,7 +4712,7 @@ repeat wait()
             end
      
             local devMode, userMode
-            if UserInputService.TouchEnabled then
+            if IsOnMobile then
                 devMode = CameraUtils.ConvertCameraModeEnumToStandard(Players.LocalPlayer.DevTouchCameraMode)
                 userMode = CameraUtils.ConvertCameraModeEnumToStandard(UserGameSettings.TouchCameraMovementMode)
             else
@@ -5018,7 +5029,7 @@ repeat wait()
             local player = Players.LocalPlayer
      
             if player then
-                if self.lastInputType == Enum.UserInputType.Touch or UserInputService.TouchEnabled then
+                if self.lastInputType == Enum.UserInputType.Touch or IsOnMobile then
                     -- Touch
                     if player.DevTouchCameraMode == Enum.DevTouchCameraMovementMode.UserChoice then
                         return CameraUtils.ConvertCameraModeEnumToStandard( UserGameSettings.TouchCameraMovementMode )
@@ -6946,7 +6957,7 @@ repeat wait()
             end)
      
             local function OnCharacterChildAdded(child)
-                if UserInputService.TouchEnabled then
+                if IsOnMobile then
                     if child:IsA('Tool') then
                         child.ManualActivationOnly = true
                     end
@@ -6965,7 +6976,7 @@ repeat wait()
                 OnCharacterChildAdded(child)
             end)
             self.characterChildRemovedConn = character.ChildRemoved:Connect(function(child)
-                if UserInputService.TouchEnabled then
+                if IsOnMobile then
                     if child:IsA('Tool') then
                         child.ManualActivationOnly = false
                     end
@@ -7008,7 +7019,7 @@ repeat wait()
                     self:DisconnectEvents()
                     CleanupPath()
                     -- Restore tool activation on shutdown
-                    if UserInputService.TouchEnabled then
+                    if IsOnMobile then
                         local character = Player.Character
                         if character then
                             for _, child in pairs(character:GetChildren()) do
@@ -8448,7 +8459,7 @@ repeat wait()
             self.touchGui = nil
             self.playerGuiAddedConn = nil
      
-            if UserInputService.TouchEnabled then
+            if IsOnMobile then
                 self.playerGui = Players.LocalPlayer:FindFirstChildOfClass("PlayerGui")
                 if self.playerGui then
                     self:CreateTouchGuiContainer()
@@ -8568,7 +8579,7 @@ repeat wait()
         -- Choose current Touch control module based on settings (user, dev)
         -- Returns module (possibly nil) and success code to differentiate returning nil due to error vs Scriptable
         function ControlModule:SelectTouchModule()
-            if not UserInputService.TouchEnabled then
+            if not IsOnMobile then
                 return nil, false
             end
             local touchModule

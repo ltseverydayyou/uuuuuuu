@@ -66,6 +66,17 @@ local function protect(sg)
 	else return nil end
 end
 
+local IsOnMobile=(function()
+	local platform=sv("UserInputService"):GetPlatform()
+	if platform==Enum.Platform.IOS or platform==Enum.Platform.Android or platform==Enum.Platform.AndroidTV or platform==Enum.Platform.Chromecast or platform==Enum.Platform.MetaOS then
+		return true
+	end
+	if platform==Enum.Platform.None then
+		return sv("UserInputService").TouchEnabled and not (sv("UserInputService").KeyboardEnabled or sv("UserInputService").MouseEnabled)
+	end
+	return false
+end)()
+
 G.Name = "UV"
 protect(G)
 G.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
@@ -393,8 +404,7 @@ local normSize = szDesktop
 local function pickSize()
 	local cam = workspace.CurrentCamera
 	local vs = cam and cam.ViewportSize or Vector2.new(1280,720)
-	local mobile = UIS.TouchEnabled and not UIS.MouseEnabled
-	if mobile or vs.X<900 then normSize = szMobile else normSize = szDesktop end
+	if IsOnMobile or vs.X<900 then normSize = szMobile else normSize = szDesktop end
 end
 
 local function applySize(force)

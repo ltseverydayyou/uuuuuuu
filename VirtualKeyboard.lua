@@ -43,11 +43,20 @@ ui.ResetOnSpawn = false
 ui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 protectUI(ui)
 
-local isMobile = uis.TouchEnabled and not uis.KeyboardEnabled
+local IsOnMobile=(function()
+	local platform=ClonedService("UserInputService"):GetPlatform()
+	if platform==Enum.Platform.IOS or platform==Enum.Platform.Android or platform==Enum.Platform.AndroidTV or platform==Enum.Platform.Chromecast or platform==Enum.Platform.MetaOS then
+		return true
+	end
+	if platform==Enum.Platform.None then
+		return ClonedService("UserInputService").TouchEnabled and not (ClonedService("UserInputService").KeyboardEnabled or ClonedService("UserInputService").MouseEnabled)
+	end
+	return false
+end)()
 
 local mainFrm = Instance.new("Frame")
 mainFrm.Name = "Main"
-mainFrm.Size = UDim2.new(isMobile and 0.85 or 0.46, 0, isMobile and 0.56 or 0.40, 0)
+mainFrm.Size = UDim2.new(IsOnMobile and 0.85 or 0.46, 0, IsOnMobile and 0.56 or 0.40, 0)
 mainFrm.Position = UDim2.new(0.5, 0, 1, -8)
 mainFrm.AnchorPoint = Vector2.new(0.5, 1)
 mainFrm.BackgroundColor3 = themes.Dark.Bg
@@ -222,7 +231,7 @@ local function makeDrag(obj, handle)
 end
 
 local function makeFloatKey(lbl, kc)
-    local size = isMobile and 72 or 64
+    local size = IsOnMobile and 72 or 64
 
     local wrap = Instance.new("Frame")
     wrap.Name = "Float_"..lbl
@@ -383,7 +392,7 @@ end
 
 local function layAll()
     clearKeys()
-    local per, h = (isMobile and 12 or 16), 32
+    local per, h = (IsOnMobile and 12 or 16), 32
     local items = Enum.KeyCode:GetEnumItems()
     local row, count = nil, 0
     for _,kc in ipairs(items) do

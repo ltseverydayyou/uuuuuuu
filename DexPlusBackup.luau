@@ -135,6 +135,62 @@ local service = setmetatable({},{__index = function(self,name)
 	self[name] = serv
 	return serv
 end})
+
+
+local function decodeBase64(data)
+	data = (data or ""):gsub("%s+", "")
+
+	local methods = {
+		function(str)
+			if service.HttpService and service.HttpService.Base64Decode then
+				return service.HttpService:Base64Decode(str)
+			end
+			error("HttpService.Base64Decode unavailable")
+		end,
+		function(str)
+			if syn and syn.crypt and syn.crypt.base64 and syn.crypt.base64.decode then
+				return syn.crypt.base64.decode(str)
+			end
+			error("syn.crypt.base64.decode unavailable")
+		end,
+		function(str)
+			if crypt and crypt.base64decode then
+				return crypt.base64decode(str)
+			end
+			error("crypt.base64decode unavailable")
+		end,
+		function(str)
+			local b = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+			str = str:gsub('[^'..b..'=]', '')
+			return (str:gsub('.', function(x)
+				if x == '=' then return '' end
+				local r, f = '', (b:find(x) - 1)
+				for i = 6, 1, -1 do
+					r = r .. ((f % 2^i - f % 2^(i - 1) > 0) and '1' or '0')
+				end
+				return r
+			end):gsub('%d%d%d?%d?%d?%d?%d?%d?', function(x)
+				if #x ~= 8 then return '' end
+				local c = 0
+				for i = 1, 8 do
+					if x:sub(i, i) == '1' then
+						c = c + 2^(8 - i)
+					end
+				end
+				return string.char(c)
+			end))
+		end,
+	}
+
+	for _, method in ipairs(methods) do
+		local ok, result = pcall(method, data)
+		if ok and type(result) == "string" then
+			return true, result
+		end
+	end
+
+	return false, "Base64 decode failed"
+end
 local plr = service.Players.LocalPlayer or service.Players.PlayerAdded:wait()
 
 local create = function(data)
@@ -175,6 +231,8 @@ Main = (function()
 	Main.Apps = Apps
 	Main.MenuApps = {}
 	Main.GitRepoName = "AZYsGithub/DexPlusPlus"
+	Main.GitRepoBranch = "main"
+	Main.GitModulesPath = "modules"
 
 	Main.DisplayOrders = {
 		SideWindow = 8,
@@ -294,10 +352,54 @@ Main = (function()
 	Main.Error = function(str)
 		if rconsoleprint then
 			rconsoleprint("DEX ERROR: "..tostring(str).."\n")
-			wait(9e9)
-		else
-			error(str)
 		end
+		error(str)
+	end
+
+	Main.FetchRepoFile = function(path)
+		local branch = Main.GitRepoBranch or "main"
+		local apiUrl = ("https://api.github.com/repos/%s/contents/%s?ref=%s"):format(Main.GitRepoName, path, branch)
+		local base64Error
+		local success, body = pcall(oldgame.HttpGet, game, apiUrl)
+		if success then
+			local ok, payload = pcall(service.HttpService.JSONDecode, service.HttpService, body)
+			if ok and type(payload) == "table" then
+				base64Error = nil
+				if payload.content and payload.encoding == "base64" then
+					local decodeSuccess, decoded = decodeBase64(payload.content)
+					if decodeSuccess then
+						return true, decoded
+					else
+						base64Error = decoded
+					end
+				end
+
+				if payload.download_url then
+					local rawSuccess, rawBody = pcall(oldgame.HttpGet, game, payload.download_url)
+					if rawSuccess then
+						return true, rawBody
+					else
+						return false, rawBody
+					end
+				end
+
+				if payload.message then
+					return false, payload.message
+				end
+			else
+				return false, "Failed to decode GitHub metadata: "..tostring(payload)
+			end
+		else
+			return false, body
+		end
+
+		local rawUrl = ("https://raw.githubusercontent.com/%s/%s/%s"):format(Main.GitRepoName, branch, path)
+		local rawSuccess, rawBody = pcall(oldgame.HttpGet, game, rawUrl)
+		if rawSuccess then
+			return true, rawBody
+		end
+
+		return false, rawBody or base64Error or body or "Unknown error fetching "..path
 	end
 
 	Main.LoadModule = function(name)
@@ -323,13 +425,15 @@ Main = (function()
 				-- Get hash data
 				local hashs = Main.ModuleHashData
 				if not hashs then
-					local s,hashDataStr = pcall(oldgame.HttpGet, game, "https://api.github.com/repos/"..Main.GitRepoName.."/ModuleHashs.dat")
-					if not s then Main.Error("Failed to get module hashs") end
+					local ok, hashDataStr = Main.FetchRepoFile("ModuleHashs.dat")
+					if ok then
+						local success, hashData = pcall(service.HttpService.JSONDecode, service.HttpService, hashDataStr)
+						if success and type(hashData) == "table" then
+							hashs = hashData
+						end
+					end
 
-					local s,hashData = pcall(service.HttpService.JSONDecode,service.HttpService,hashDataStr)
-					if not s then Main.Error("Failed to decode module hash JSON") end
-
-					hashs = hashData
+					hashs = hashs or {}
 					Main.ModuleHashData = hashs
 				end
 
@@ -342,8 +446,9 @@ Main = (function()
 					control = loadstring(moduleStr)()
 				else
 					-- Download and cache
-					local s,moduleStr = pcall(oldgame.HttpGet, game, "https://api.github.com/repos/"..Main.GitRepoName.."/Modules/"..name..".lua")
-					if not s then Main.Error("Failed to get external module data of "..name) end
+					local modulePath = (Main.GitModulesPath or "Modules").."/"..name..".lua"
+					local ok,moduleStr = Main.FetchRepoFile(modulePath)
+					if not ok then Main.Error("Failed to get external module data of "..name.." ("..tostring(moduleStr)..")") end
 
 					env.writefile(filePath,moduleStr)
 					control = loadstring(moduleStr)()

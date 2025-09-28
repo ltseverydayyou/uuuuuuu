@@ -6,6 +6,7 @@ local Players=game:GetService("Players")
 local LP=Players.LocalPlayer
 local TCS=game:GetService("TextChatService")
 local CoreGui=game:GetService("CoreGui")
+local YourLang = "en"
 
 local function req(opt)
 	local fn=(syn and syn.request) or (http and http.request) or http_request or request
@@ -206,4 +207,14 @@ task.spawn(function()
 
 	box.FocusLost:Connect(function(e) if e then hook() end end)
 	btn.MouseButton1Click:Connect(hook)
+end)
+
+TCS.MessageReceived:Connect(function(msg)
+	if not msg.TextSource or msg.TextSource.UserId == LP.UserId then return end
+	local p = Players:GetPlayerByUserId(msg.TextSource.UserId)
+	local name = p and p.Name or tostring(msg.TextSource.UserId)
+	local t = translate(msg.Text, YourLang, "auto")
+	if t and t ~= "" and t ~= msg.Text then
+		sys("["..name.."]: "..t)
+	end
 end)

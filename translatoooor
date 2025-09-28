@@ -85,6 +85,23 @@ local function translate(txt,tgt,src)
 	return out[2][1][1][6][1][1]
 end
 
+local function translateInfo(txt, tgt, src)
+	rid += 10000
+	tgt = iso(tgt) or "en"
+	src = iso(src) or "auto"
+	local data = {{txt, src, tgt, true}, {nil}}
+	local freq = {{{rpc, jE(data), nil, "generic"}}}
+	local url = exec.."?"..q{rpcids=rpc, ["f.sid"]=fsid, bl=bl, hl="en", _reqid=rid-10000, rt="c"}
+	local body = q{["f.req"]=jE(freq)}
+	local res = got(url, "POST", body)
+	local ok, out = pcall(function()
+		local arr = jD((res.Body or ""):match("%[.-%]\n"))
+		return jD(arr[1][3])
+	end)
+	if not ok or not out then return nil, nil end
+	return out[2][1][1][6][1][1], out[3]
+end
+
 local function sys(msg)
 	local chans=TCS:WaitForChild("TextChannels")
 	local c=chans:FindFirstChild("RBXSystem") or chans:FindFirstChild("RBXGeneral") or chans:GetChildren()[1]
@@ -211,10 +228,14 @@ end)
 
 TCS.MessageReceived:Connect(function(msg)
 	if not msg.TextSource or msg.TextSource.UserId == LP.UserId then return end
-	local p = Players:GetPlayerByUserId(msg.TextSource.UserId)
-	local name = p and p.Name or tostring(msg.TextSource.UserId)
-	local t = translate(msg.Text, YourLang, "auto")
-	if t and t ~= "" and t ~= msg.Text then
-		sys("["..name.."]: "..t)
+	local uid = msg.TextSource.UserId
+	local p = Players:GetPlayerByUserId(uid)
+	local disp = p and p.DisplayName or tostring(uid)
+	local user = p and p.Name or tostring(uid)
+	local nameStr = (disp == user) and ("@"..user) or (disp.." (@"..user..")")
+	local text, detected = translateInfo(msg.Text, YourLang, "auto")
+	if text and text ~= "" and text ~= msg.Text then
+		local langTag = detected and detected ~= "" and detected:upper() or "AUTO"
+		sys("("..langTag..") ["..nameStr.."]: "..text)
 	end
 end)

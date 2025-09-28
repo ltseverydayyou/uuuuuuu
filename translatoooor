@@ -150,10 +150,15 @@ local function chunkSend(prefix, list, size)
 end
 
 local function showUsage()
-	sys("[TR] Usage:")
-	sys("  >d          — disable persistent sending")
-	sys("  >help       — show usage")
-	sys("  >langs      — list available language codes")
+	sys("translator prefix: '>'")
+	sys("usage:")
+	sys(">d            = disable persistent sending")
+	sys(">help         = show usage")
+	sys(">langs        = list available language codes")
+	sys("examples:")
+	sys(">ru hello")
+	sys(">th how are you?")
+	sys(">ja")
 end
 
 local function showLangs()

@@ -8,7 +8,8 @@ local UIS=sgs("UserInputService")
 local SG=sgs("StarterGui")
 local WS=sgs("Workspace")
 local TSvc=sgs("TextService")
-pcall(function() SG:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack,false) end)
+local RS=sgs("RunService")
+pcall(function() RS.Stepped:Connect(function() SG:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack,false) end) end)
 
 local IsOnMobile=(function()
 	local platform=UIS:GetPlatform()
@@ -25,6 +26,7 @@ local mob=IsOnMobile
 local sw=false local swSel=nil local sel=nil local col=false local exp=false
 local need=false local tBtns={} local tOrder={} local qtxt="" local strokes={}
 local toolCnt=0
+local me=false
 
 local Thm={bg=Color3.fromRGB(14,14,16),soft=Color3.fromRGB(26,26,30),acc=Color3.fromRGB(45,120,255),acc2=Color3.fromRGB(0,185,95),dng=Color3.fromRGB(205,60,60),txt=Color3.fromRGB(255,255,255),mtx=Color3.fromRGB(210,210,210),str=Color3.fromRGB(60,60,62),hot=Color3.fromRGB(42,42,46),yel=Color3.fromRGB(255,225,90),lk=Color3.fromRGB(150,150,150)}
 
@@ -52,6 +54,10 @@ local row=Instance.new("Frame") row.AnchorPoint=Vector2.new(.5,.5) row.Position=
 local rowLay=Instance.new("UIListLayout") rowLay.FillDirection=Enum.FillDirection.Horizontal rowLay.HorizontalAlignment=Enum.HorizontalAlignment.Center rowLay.VerticalAlignment=Enum.VerticalAlignment.Center rowLay.Padding=UDim.new(0, mob and 8 or 10) rowLay.Parent=row
 
 local ex=Instance.new("TextButton") ex.Name="Ex" ex.Size=UDim2.new(0,(mob and 40 or 44),0,(mob and 40 or 44)) ex.Text="Open" ex.Font=Enum.Font.GothamBold ex.TextScaled=true ex.BackgroundColor3=Thm.hot ex.BackgroundTransparency=.2 ex.TextColor3=Thm.txt ex.Parent=row corner(ex,10) stroke(ex,1)
+
+local lDock=Instance.new("Frame") lDock.Name="LD" lDock.Size=UDim2.new(0, bW,0,bH) lDock.BackgroundTransparency=1 lDock.Parent=row
+local lList=Instance.new("UIListLayout") lList.FillDirection=Enum.FillDirection.Horizontal lList.HorizontalAlignment=Enum.HorizontalAlignment.Left lList.VerticalAlignment=Enum.VerticalAlignment.Center lList.Padding=UDim.new(0,(mob and 8 or 8)) lList.Parent=lDock
+local meBtn=Instance.new("TextButton") meBtn.Size=UDim2.new(0,bW,0,bH) meBtn.Text="Multi" meBtn.Font=Enum.Font.GothamBold meBtn.TextScaled=true meBtn.BackgroundColor3=Thm.soft meBtn.BackgroundTransparency=.1 meBtn.TextColor3=Thm.txt meBtn.Parent=lDock corner(meBtn,10) stroke(meBtn,1)
 
 local qb=Instance.new("Frame") qb.Name="QB" qb.Size=UDim2.new(0,qbW,0,(mob and 54 or 60)) qb.BackgroundColor3=Thm.soft qb.BackgroundTransparency=.25 qb.ClipsDescendants=true qb.Parent=row corner(qb,12) stroke(qb,1)
 local ql=Instance.new("UIGridLayout") ql.FillDirection=Enum.FillDirection.Horizontal ql.CellSize=UDim2.new(0,cell,0,cell) ql.CellPadding=UDim2.new(0,pad,0,pad) ql.HorizontalAlignment=Enum.HorizontalAlignment.Center ql.VerticalAlignment=Enum.VerticalAlignment.Center ql.SortOrder=Enum.SortOrder.LayoutOrder ql.Parent=qb
@@ -185,7 +191,12 @@ function rebuild()
 		local b=has and Instance.new("ImageButton") or Instance.new("TextButton")
 		if has then b.Image=t.TextureId else b.Text=t.Name b.TextScaled=true b.TextColor3=Thm.txt end
 		b.Name=t.Name b.Size=UDim2.new(0,cell,0,cell) b.AutoButtonColor=false
-		b.BackgroundColor3= sw and ((swSel==t) and Thm.acc2 or Thm.hot) or ((sel==t) and Thm.acc or Thm.hot)
+		local isEquipped = t.Parent==Plr.Character
+		if sw then
+			b.BackgroundColor3 = (swSel==t) and Thm.acc2 or Thm.hot
+		else
+			b.BackgroundColor3 = isEquipped and Thm.acc or Thm.hot
+		end
 		local cr=Instance.new("UICorner") cr.CornerRadius=UDim.new(0,.2) cr.Parent=b
 		local bs=stroke(b,2) bs.Color=getattr(t,"BP_Fav",false) and Thm.yel or Thm.str
 		local lk=Instance.new("Frame") lk.Size=UDim2.new(1,0,0,2) lk.BackgroundColor3=getattr(t,"BP_Lock",false) and Thm.lk or Color3.fromRGB(0,0,0) lk.BackgroundTransparency=getattr(t,"BP_Lock",false) and .15 or 1 lk.BorderSizePixel=0 lk.ZIndex=6 lk.Parent=b
@@ -206,7 +217,14 @@ function rebuild()
 				if i1 and i2 then tOrder[i1],tOrder[i2]=tOrder[i2],tOrder[i1] end
 				swSel=nil rebuild()
 			else
-				tog(t) rebuild()
+				if me then
+					local c=Plr.Character local bp=Plr:FindFirstChildOfClass("Backpack") or Plr:FindFirstChild("Backpack")
+					if not c or not bp then return end
+					if t.Parent==bp then t.Parent=c else t.Parent=bp end
+					rebuild()
+				else
+					tog(t) rebuild()
+				end
 			end
 		end)
 		return b
@@ -226,6 +244,7 @@ function rebuild()
 	local h=exp and (mob and 220 or 260) or 0
 	tw(expFr,.18,{Size=UDim2.new(0,qbW,0,h)}) ex.Text=exp and "Close" or "Open"
 	place() updMobileTop()
+	meBtn.BackgroundColor3 = me and Thm.acc2 or Thm.soft
 end
 
 local function req() if need then return end need=true task.defer(function() task.wait(.02) need=false rebuild() end) end
@@ -254,10 +273,19 @@ cNo.MouseButton1Click:Connect(function() hideCfm() end)
 UIS.InputBegan:Connect(function(i,gp)
 	if gp or mob then return end
 	local kc=i.KeyCode
-	if not sw then
-		local map={ [Enum.KeyCode.One]=1,[Enum.KeyCode.Two]=2,[Enum.KeyCode.Three]=3,[Enum.KeyCode.Four]=4,[Enum.KeyCode.Five]=5,[Enum.KeyCode.Six]=6,[Enum.KeyCode.Seven]=7,[Enum.KeyCode.Eight]=8,[Enum.KeyCode.Nine]=9,[Enum.KeyCode.Zero]=10 }
-		local idx=map[kc]
-		if idx then local arr=orderedQBButtons() local b=arr[idx] local t=b and tBtns[b] if t then tog(t) req() end end
+	local map={ [Enum.KeyCode.One]=1,[Enum.KeyCode.Two]=2,[Enum.KeyCode.Three]=3,[Enum.KeyCode.Four]=4,[Enum.KeyCode.Five]=5,[Enum.KeyCode.Six]=6,[Enum.KeyCode.Seven]=7,[Enum.KeyCode.Eight]=8,[Enum.KeyCode.Nine]=9,[Enum.KeyCode.Zero]=10 }
+	local idx=map[kc]
+	if idx then
+		local arr=orderedQBButtons() local b=arr[idx] local t=b and tBtns[b]
+		if t then
+			if me then
+				local c=Plr.Character local bp=Plr:FindFirstChildOfClass("Backpack") or Plr:FindFirstChild("Backpack")
+				if c and bp then if t.Parent==bp then t.Parent=c else t.Parent=bp end end
+				req()
+			elseif not sw then
+				tog(t) req()
+			end
+		end
 	end
 	if kc==Enum.KeyCode.Q then setSwap()
 	elseif kc==Enum.KeyCode.E then doDropAll()
@@ -275,20 +303,47 @@ mini.MouseButton1Click:Connect(toggleCol)
 srch:GetPropertyChangedSignal("Text"):Connect(function() qtxt=srch.Text or "" req() end)
 
 local conns={}
+local tConns={}
+local function attachToolSignals(t)
+	if not t or not t:IsA("Tool") then return end
+	if tConns[t] then for _,c in ipairs(tConns[t]) do if c and c.Disconnect then c:Disconnect() end end end
+	tConns[t]={}
+	table.insert(tConns[t], t.Equipped:Connect(function() sel=t updMobileTop() req() end))
+	table.insert(tConns[t], t.Unequipped:Connect(function() if sel==t then sel=nil updMobileTop() req() end end))
+	table.insert(tConns[t], t.AncestryChanged:Connect(function()
+		if t.Parent==Plr.Character then sel=t updMobileTop() req() elseif sel==t and t.Parent~=Plr.Character then sel=nil updMobileTop() req() end
+	end))
+end
+
 local function hook()
 	for _,c in ipairs(conns) do if c and c.Disconnect then c:Disconnect() end end table.clear(conns)
 	local bp=Plr:FindFirstChild("Backpack")
 	if bp then
-		table.insert(conns,bp.ChildAdded:Connect(req))
-		table.insert(conns,bp.ChildRemoved:Connect(function(ch) if ch==sel then sel=nil updMobileTop() end req() end))
+		for _,t in ipairs(bp:GetChildren()) do attachToolSignals(t) end
+		table.insert(conns,bp.ChildAdded:Connect(function(ch) attachToolSignals(ch) req() end))
+		table.insert(conns,bp.ChildRemoved:Connect(function(ch) if tConns[ch] then for _,c in ipairs(tConns[ch]) do if c and c.Disconnect then c:Disconnect() end end tConns[ch]=nil end if ch==sel then sel=nil updMobileTop() end req() end))
 	end
 	if Plr.Character then
-		table.insert(conns,Plr.Character.ChildAdded:Connect(req))
-		table.insert(conns,Plr.Character.ChildRemoved:Connect(function(ch) if ch==sel then sel=nil updMobileTop() end req() end))
+		for _,t in ipairs(Plr.Character:GetChildren()) do attachToolSignals(t) end
+		table.insert(conns,Plr.Character.ChildAdded:Connect(function(ch) attachToolSignals(ch) req() end))
+		table.insert(conns,Plr.Character.ChildRemoved:Connect(function(ch) if tConns[ch] then for _,c in ipairs(tConns[ch]) do if c and c.Disconnect then c:Disconnect() end end tConns[ch]=nil end if ch==sel then sel=nil updMobileTop() end req() end))
 	end
 end
 Plr.CharacterAdded:Connect(function() task.wait(.1) req() hook() end)
 
+meBtn.MouseButton1Click:Connect(function()
+	me=not me
+	meBtn.BackgroundColor3 = me and Thm.acc2 or Thm.soft
+end)
+
 hook()
 rebuild()
-sgs("RunService").Heartbeat:Connect(function() if ui.Parent==nil then ui.Parent=root() end end)
+RS.Heartbeat:Connect(function()
+	if ui.Parent==nil then ui.Parent=root() end
+	local c=Plr.Character
+	if c then
+		local anyTool=nil
+		for _,t in ipairs(c:GetChildren()) do if t:IsA("Tool") then anyTool=t break end end
+		if sel~=anyTool then sel=anyTool updMobileTop() req() end
+	end
+end)

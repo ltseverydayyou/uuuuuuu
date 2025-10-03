@@ -10613,6 +10613,8 @@ Main = (function()
 	Main.AppControls = {}
 	Main.Apps = Apps
 	Main.MenuApps = {}
+	Main.ModuleErrors = {}
+	Main.StubbedApps = {}
 	
 	Main.DisplayOrders = {
 		SideWindow = 8,
@@ -10641,66 +10643,118 @@ Main = (function()
 	Main.Error = function(str)
 		if rconsoleprint then
 			rconsoleprint("DEX ERROR: "..tostring(str).."\n")
-			wait(9e9)
+		elseif printconsole then
+			printconsole("DEX ERROR: "..tostring(str))
 		else
-			error(str)
+			error("DEX ERROR: "..tostring(str))
 		end
+	end
+	
+	Main.Warn = function(str)
+		local message = "DEX WARN: "..tostring(str)
+		if rconsoleprint then
+			rconsoleprint(message.."\n")
+		else
+			warn(message)
+		end
+	end
+	
+	local function createAppStub(name)
+		local noop = function(...) end
+		local windowStub = {
+			Show = noop,
+			Hide = noop,
+			Close = noop
+		}
+		setmetatable(windowStub, {
+			__index = function()
+				return noop
+			end,
+			__newindex = function() end
+		})
+		local stub = {
+			__is_stub = true,
+			Name = name,
+			Window = windowStub,
+			Init = noop,
+			InitAfterMain = noop,
+			GuiElems = {}
+		}
+		setmetatable(stub, {
+			__index = function(_, _)
+				return noop
+			end,
+			__newindex = function() end
+		})
+		return stub
+	end
+	
+	local function isStubModule(mod)
+		return type(mod) == "table" and mod.__is_stub == true
 	end
 	
 	Main.LoadModule = function(name)
-		if Main.Elevated then -- If you don't have filesystem api then ur outta luck tbh
-			local control
-			
-			if EmbeddedModules then -- Offline Modules
-				control = EmbeddedModules[name]()
-				
-				if not control then Main.Error("Missing Embedded Module: "..name) end
-			end
-			
-			Main.AppControls[name] = control
-			control.InitDeps(Main.GetInitDeps())
+		local control
 
-			local moduleData = control.Main()
-			Apps[name] = moduleData
-			return moduleData
+		if EmbeddedModules and EmbeddedModules[name] then
+			control = EmbeddedModules[name]()
 		else
-			local module = script:WaitForChild("Modules"):WaitForChild(name, 2)
+			local module = nil
+			if script then
+				local modulesFolder = script:FindFirstChild("Modules")
+				if modulesFolder then
+					module = modulesFolder:FindFirstChild(name) or modulesFolder:WaitForChild(name, 2)
+				end
+			end
 			if not module then Main.Error("CANNOT FIND MODULE " .. name) end
-			
-			local control = require(module)
-			Main.AppControls[name] = control
-			control.InitDeps(Main.GetInitDeps())
-			
-			local moduleData = control.Main()
-			Apps[name] = moduleData
-			return moduleData
+			control = require(module)
 		end
+
+		if not control then
+			Main.Error("Missing Embedded Module: "..name)
+		end
+
+		Main.AppControls[name] = control
+		control.InitDeps(Main.GetInitDeps())
+
+		local moduleData = control.Main()
+		Apps[name] = moduleData
+		return moduleData
 	end
 	
 	Main.LoadModules = function()
-		for i,v in pairs(Main.ModuleList) do
-			local s,e = pcall(Main.LoadModule,v)
-			if not s then
-				Main.Error(("FAILED LOADING %s CAUSE %s"):format(v, e))
+		Main.ModuleErrors = {}
+		Main.StubbedApps = {}
+
+		for _, name in ipairs(Main.ModuleList) do
+			local success, err = pcall(Main.LoadModule, name)
+			if not success then
+				local message = ("FAILED LOADING %s CAUSE %s"):format(name, err)
+				Main.ModuleErrors[name] = message
+				Main.StubbedApps[name] = true
+				Main.Warn(message)
+				Apps[name] = Apps[name] or createAppStub(name)
 			end
 		end
-		
-		-- Init Major Apps and define them in modules
-		Explorer = Apps.Explorer
-		Properties = Apps.Properties
-		ScriptViewer = Apps.ScriptViewer
-		Notebook = Apps.Notebook
+
+		Explorer = Apps.Explorer or createAppStub("Explorer")
+		Properties = Apps.Properties or createAppStub("Properties")
+		ScriptViewer = Apps.ScriptViewer or createAppStub("ScriptViewer")
+		Notebook = Apps.Notebook or createAppStub("Notebook")
+
 		local appTable = {
 			Explorer = Explorer,
 			Properties = Properties,
 			ScriptViewer = ScriptViewer,
 			Notebook = Notebook
 		}
-		
-		Main.AppControls.Lib.InitAfterMain(appTable)
-		for i,v in pairs(Main.ModuleList) do
-			local control = Main.AppControls[v]
-			if control then
+
+		if Main.AppControls.Lib and Main.AppControls.Lib.InitAfterMain then
+			Main.AppControls.Lib.InitAfterMain(appTable)
+		end
+		for _, name in ipairs(Main.ModuleList) do
+			local control = Main.AppControls[name]
+			if control and control.InitAfterMain then
 				control.InitAfterMain(appTable)
 			end
 		end
@@ -10750,18 +10804,124 @@ Main = (function()
 		end
 
 	Main.LoadSettings = function()
+		local function toColor3(value)
+			if typeof(value) == "Color3" then
+				return value
+			end
+
+			local function toNumber(component)
+				if type(component) == "number" then
+					return component
+				elseif type(component) == "string" then
+					return tonumber(component)
+				end
+			end
+
+			if type(value) == "table" then
+				local r = value.R or value.r or value.Red or value.red or value[1]
+				local g = value.G or value.g or value.Green or value.green or value[2]
+				local b = value.B or value.b or value.Blue or value.blue or value[3]
+
+				r = toNumber(r)
+				g = toNumber(g)
+				b = toNumber(b)
+
+				if r and g and b then
+					if r <= 1 and g <= 1 and b <= 1 then
+						return Color3.new(r, g, b)
+					end
+
+					return Color3.fromRGB(
+						math.clamp(r, 0, 255),
+						math.clamp(g, 0, 255),
+						math.clamp(b, 0, 255)
+					)
+				end
+
+				local hex = value.Hex or value.hex
+				if type(hex) == "string" then
+					return toColor3(hex)
+				end
+
+				local nested = value.Color or value.color or value.Value or value.value
+				if nested ~= nil then
+					local nestedColor = toColor3(nested)
+					if nestedColor then
+						return nestedColor
+					end
+				end
+			elseif type(value) == "string" then
+				local hex = value:gsub("#", "")
+				if hex:match("^%x%x%x%x%x%x$") then
+					return Color3.fromRGB(
+						tonumber(hex:sub(1, 2), 16),
+						tonumber(hex:sub(3, 4), 16),
+						tonumber(hex:sub(5, 6), 16)
+					)
+				elseif hex:match("^%x%x%x$") then
+					local rHex = hex:sub(1, 1)
+					local gHex = hex:sub(2, 2)
+					local bHex = hex:sub(3, 3)
+
+					return Color3.fromRGB(
+						tonumber(rHex .. rHex, 16),
+						tonumber(gHex .. gHex, 16),
+						tonumber(bHex .. bHex, 16)
+					)
+				end
+			end
+		end
+
+		local function coerceByTemplate(value, templateValue, fallback)
+			if templateValue ~= nil then
+				if typeof(templateValue) == "Color3" then
+					return toColor3(value) or fallback or templateValue
+				elseif type(templateValue) == "table" then
+					if type(value) == "table" then
+						local fallbackTable = type(fallback) == "table" and fallback or nil
+						for subKey, subTemplate in pairs(templateValue) do
+							if subKey ~= "_Recurse" and value[subKey] ~= nil then
+								local subFallback = fallbackTable and fallbackTable[subKey] or nil
+								value[subKey] = coerceByTemplate(value[subKey], subTemplate, subFallback)
+							end
+						end
+
+						return value
+					end
+
+					return fallback or templateValue
+				end
+			end
+
+			if value == nil then
+				return fallback
+			end
+
+			return value
+		end
+
+		local function apply(src, dest, template)
+			for key, val in pairs(src) do
+				local destVal = dest[key]
+				local templateVal = template and template[key] or destVal
+				if type(val) == "table" and type(destVal) == "table" and destVal._Recurse then
+					templateVal = templateVal or destVal
+					apply(val, destVal, templateVal)
+				else
+					dest[key] = coerceByTemplate(val, templateVal, destVal)
+				end
+			end
+		end
+
+		Main.ResetSettings()
 		local s,data = pcall(env.readfile or error,"DexSettings.json")
 		if s and data and data ~= "" then
-			local s,decoded = service.HttpService:JSONDecode(data)
-			if s and decoded then
-				for i,v in next,decoded do
-					
-				end
+			local success,decoded = pcall(service.HttpService.JSONDecode, service.HttpService, data)
+			if success and type(decoded) == "table" then
+				apply(decoded, Settings, DefaultSettings)
 			else
-				-- TODO: Notification
+				Main.Warn("Failed to decode DexSettings.json: " .. tostring(decoded))
 			end
-		else
-			Main.ResetSettings()
 		end
 	end
 	
@@ -11374,27 +11534,35 @@ Main = (function()
 		end)
 		
 		-- Create Main Apps
-		Main.CreateApp({Name = "Explorer", IconMap = Main.LargeIcons, Icon = "Explorer", Open = true, Window = Explorer.Window})
+		if Explorer and Explorer.Window and not isStubModule(Explorer) then
+			Main.CreateApp({Name = "Explorer", IconMap = Main.LargeIcons, Icon = "Explorer", Open = true, Window = Explorer.Window})
+		end
 		
-		Main.CreateApp({Name = "Properties", IconMap = Main.LargeIcons, Icon = "Properties", Open = true, Window = Properties.Window})
+		if Properties and Properties.Window and not isStubModule(Properties) then
+			Main.CreateApp({Name = "Properties", IconMap = Main.LargeIcons, Icon = "Properties", Open = true, Window = Properties.Window})
+		end
 		
-		Main.CreateApp({Name = "Script Viewer", IconMap = Main.LargeIcons, Icon = "Script_Viewer", Window = ScriptViewer.Window})
+		if ScriptViewer and ScriptViewer.Window and not isStubModule(ScriptViewer) then
+			Main.CreateApp({Name = "Script Viewer", IconMap = Main.LargeIcons, Icon = "Script_Viewer", Window = ScriptViewer.Window})
+		end
 		
 		local cptsOnMouseClick = nil
-		Main.CreateApp({Name = "Click part to select", IconMap = Main.LargeIcons, Icon = 6, OnClick = function(callback)
-			if callback then
-				local mouse = Main.Mouse
-				cptsOnMouseClick = mouse.Button1Down:Connect(function()
-					pcall(function()
-						local object = mouse.Target
-						if nodes[object] then
-							selection:Set(nodes[object])
-							Explorer.ViewNode(nodes[object])
-						end
+		if Explorer and not isStubModule(Explorer) then
+			Main.CreateApp({Name = "Click part to select", IconMap = Main.LargeIcons, Icon = 6, OnClick = function(callback)
+				if callback then
+					local mouse = Main.Mouse
+					cptsOnMouseClick = mouse.Button1Down:Connect(function()
+						pcall(function()
+							local object = mouse.Target
+							if nodes[object] then
+								selection:Set(nodes[object])
+								Explorer.ViewNode(nodes[object])
+							end
+						end)
 					end)
-				end)
-			else if cptsOnMouseClick ~= nil then cptsOnMouseClick:Disconnect() cptsOnMouseClick = nil end end
-		end})
+				else if cptsOnMouseClick ~= nil then cptsOnMouseClick:Disconnect() cptsOnMouseClick = nil end end
+			end})
+		end
 		
 		Lib.ShowGui(gui)
 	end
@@ -11513,9 +11681,9 @@ Main = (function()
 		
 		-- Init other modules
 		intro.SetProgress("Initializing Modules",0.9)
-		Explorer.Init()
-		Properties.Init()
-		ScriptViewer.Init()
+		if Explorer and Explorer.Init then Explorer.Init() end
+		if Properties and Properties.Init then Properties.Init() end
+		if ScriptViewer and ScriptViewer.Init then ScriptViewer.Init() end
 		Lib.FastWait()
 		
 		-- Done
@@ -11528,9 +11696,17 @@ Main = (function()
 		-- Init window system, create main menu, show explorer and properties
 		Lib.Window.Init()
 		Main.CreateMainGui()
-		Explorer.Window:Show({Align = "right", Pos = 1, Size = 0.5, Silent = true})
-		Properties.Window:Show({Align = "right", Pos = 2, Size = 0.5, Silent = true})
-		Lib.DeferFunc(function() Lib.Window.ToggleSide("right") end)
+		local explorerReady = Explorer and Explorer.Window and Explorer.Window.Show and not isStubModule(Explorer)
+		local propertiesReady = Properties and Properties.Window and Properties.Window.Show and not isStubModule(Properties)
+		if explorerReady then
+			Explorer.Window:Show({Align = "right", Pos = 1, Size = 0.5, Silent = true})
+		end
+		if propertiesReady then
+			Properties.Window:Show({Align = "right", Pos = 2, Size = 0.5, Silent = true})
+		end
+		if explorerReady and propertiesReady then
+			Lib.DeferFunc(function() Lib.Window.ToggleSide("right") end)
+		end
 	end
 	
 	return Main

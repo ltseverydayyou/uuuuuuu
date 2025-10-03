@@ -1,5 +1,55 @@
-if getgenv().NamelessAPI then
+if getgenv().NAAPIMutex then
     return
+end
+
+local getgc = getgc or debug.getgc
+local hookfunc = hookfunction
+local getrenv = getrenv
+local debugInfo = (getrenv and getrenv().debug and getrenv().debug.info)
+    or debug.info
+local newcclosure = newcclosure or function(f)
+    return f
+end
+
+if getgc and hookfunc and getrenv and debugInfo then
+    local IsDebug = false
+    local DetectedMeth, KillMeth
+    for _, v in getgc(true) do
+        if typeof(v) == 'table' then
+            local det = rawget(v, 'Detected')
+            local kill = rawget(v, 'Kill')
+            local vars = rawget(v, 'Variables')
+            local proc = rawget(v, 'Process')
+            if
+                (typeof(det) == 'function')
+                or (typeof(kill) == 'function' and vars and proc)
+            then
+                if typeof(det) == 'function' then
+                    DetectedMeth = det
+                    hookfunc(DetectedMeth, function(methodName, methodFunc)
+                        return true
+                    end)
+                end
+                if typeof(kill) == 'function' then
+                    KillMeth = kill
+                    hookfunc(KillMeth, function(killFunc) end)
+                end
+            end
+        end
+    end
+    if DetectedMeth and debugInfo then
+        local originalDebug = debugInfo
+        hookfunc(
+            debugInfo,
+            newcclosure(function(...)
+                local name = ...
+                if name == DetectedMeth then
+                    return coroutine.yield(coroutine.running())
+                end
+                return originalDebug(...)
+            end)
+        )
+    end
 end
 
 local function getExecutor()
@@ -27,9 +77,8 @@ local globalGetHooks, globalSetHooks, globalCallHooks = {}, {}, {}
 local propertyTypes, propertyValues = {}, {}
 
 local rawmeta = getrawmetatable(game)
-local oldIndex = rawmeta.__index
-local oldNew = rawmeta.__newindex
-local oldName = rawmeta.__namecall
+local oldIndex, oldNewIndex, oldNamecall =
+    rawmeta.__index, rawmeta.__newindex, rawmeta.__namecall
 
 if getExecutor() == 0 then
     make_writeable(rawmeta)
@@ -83,7 +132,7 @@ rawmeta.__newindex = newcclosure(function(obj, key, val)
         propertyValues[obj][key] = val
         return
     end
-    return oldNew(obj, key, val)
+    return oldNewIndex(obj, key, val)
 end)
 
 rawmeta.__namecall = newcclosure(function(obj, ...)
@@ -99,7 +148,6 @@ rawmeta.__namecall = newcclosure(function(obj, ...)
         end
         return { remove = r, Remove = r }
     end
-
     if method == 'AddGlobalGetHook' then
         local prop, val, isCb = table.unpack(args)
         globalGetHooks[prop] = { Value = val, IsCallback = isCb }
@@ -108,7 +156,6 @@ rawmeta.__namecall = newcclosure(function(obj, ...)
         end
         return { remove = r, Remove = r }
     end
-
     if method == 'AddSetHook' then
         local _, prop, cb = obj, table.unpack(args)
         setHooks[obj] = setHooks[obj] or {}
@@ -118,7 +165,6 @@ rawmeta.__namecall = newcclosure(function(obj, ...)
         end
         return { remove = r, Remove = r }
     end
-
     if method == 'AddGlobalSetHook' then
         local prop, cb = table.unpack(args)
         globalSetHooks[prop] = { Callback = cb }
@@ -127,7 +173,6 @@ rawmeta.__namecall = newcclosure(function(obj, ...)
         end
         return { remove = r, Remove = r }
     end
-
     if method == 'AddCallHook' then
         local _, name, cb = obj, table.unpack(args)
         callHooks[obj] = callHooks[obj] or {}
@@ -137,7 +182,6 @@ rawmeta.__namecall = newcclosure(function(obj, ...)
         end
         return { remove = r, Remove = r }
     end
-
     if method == 'AddGlobalCallHook' then
         local name, cb = table.unpack(args)
         globalCallHooks[name] = { Callback = cb }
@@ -146,7 +190,6 @@ rawmeta.__namecall = newcclosure(function(obj, ...)
         end
         return { remove = r, Remove = r }
     end
-
     if method == 'AddPropertyEmulator' then
         local _, prop = obj, table.unpack(args)
         local v = oldIndex(obj, prop)
@@ -167,7 +210,6 @@ rawmeta.__namecall = newcclosure(function(obj, ...)
             table.unpack(args)
         )
     end
-
     if globalCallHooks[method] then
         return globalCallHooks[method].Callback(
             obj,
@@ -176,8 +218,8 @@ rawmeta.__namecall = newcclosure(function(obj, ...)
         )
     end
 
-    return oldName(obj, ...)
+    return oldNamecall(obj, ...)
 end)
 
 setreadonly(rawmeta, true)
-getgenv().NamelessAPI = true
+getgenv().NAAPIMutex = true

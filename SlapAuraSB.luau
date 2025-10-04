@@ -119,7 +119,7 @@ if localPlayer.Character then onCharacterAdded(localPlayer.Character) end
 
 local guiParent = (type(gethui)=="function" and gethui()) or game:GetService("CoreGui") or localPlayer:WaitForChild("PlayerGui")
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name="Slap Hub"
+screenGui.Name="Sex Hub"
 screenGui.IgnoreGuiInset=true
 screenGui.ResetOnSpawn=false
 screenGui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
@@ -239,7 +239,7 @@ header.Parent=panel
 local title=Instance.new("TextLabel")
 title.BackgroundTransparency=1
 title.Size=UDim2.new(1,-120,1,0)
-title.Text="Slap Hub"
+title.Text="Sex Hub"
 title.Font=Enum.Font.GothamSemibold
 title.TextColor3=Color3.fromRGB(240,240,255)
 title.TextSize=18
@@ -672,7 +672,7 @@ table.insert(rgbStrokes,miniStroke)
 local miniText=Instance.new("TextLabel")
 miniText.BackgroundTransparency=1
 miniText.Size=UDim2.new(1,0,1,0)
-miniText.Text="SH"
+miniText.Text="69"
 miniText.Font=Enum.Font.GothamBold
 miniText.TextSize=18
 miniText.TextColor3=Color3.fromRGB(255,255,255)

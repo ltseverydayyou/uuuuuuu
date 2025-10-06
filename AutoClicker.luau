@@ -6,9 +6,7 @@ local VirtualInputManager = cloneref(game:GetService('VirtualInputManager'))
 local TweenService = cloneref(game:GetService('TweenService'))
 local LocalPlayer = Players.LocalPlayer
 local CoreGui = game:GetService('CoreGui')
-local parentUI = (gethui and gethui())
-    or CoreGui
-    or LocalPlayer:WaitForChild('PlayerGui')
+local parentUI = (gethui and gethui()) or CoreGui or LocalPlayer:WaitForChild('PlayerGui')
 
 local ui = Instance.new('ScreenGui')
 ui.IgnoreGuiInset = true
@@ -18,15 +16,14 @@ ui.Parent = parentUI
 
 local root = Instance.new('Frame')
 root.Size = UDim2.new(0.22, 0, 0.3, 0)
-root.Position = UDim2.new(0.04, 0, 0.12, 0)
+root.Position = UDim2.new(0.06, 0, 0.12, 0)
 root.BackgroundColor3 = Color3.fromRGB(24, 25, 28)
 root.Active = true
 root.Parent = ui
 local rootCorner = Instance.new('UICorner', root)
 rootCorner.CornerRadius = UDim.new(0, 12)
 local rootGrad = Instance.new('UIGradient', root)
-rootGrad.Color =
-    ColorSequence.new(Color3.fromRGB(30, 31, 36), Color3.fromRGB(20, 20, 24))
+rootGrad.Color = ColorSequence.new(Color3.fromRGB(30, 31, 36), Color3.fromRGB(20, 20, 24))
 
 local header = Instance.new('Frame')
 header.Size = UDim2.new(1, 0, 0.14, 0)
@@ -54,17 +51,17 @@ local right = Instance.new('Frame')
 right.BackgroundTransparency = 1
 right.AnchorPoint = Vector2.new(1, 0)
 right.Position = UDim2.new(0.985, 0, 0, 0)
-right.Size = UDim2.new(0.3, 0, 1, 0)
+right.Size = UDim2.new(0.34, 0, 1, 0)
 right.ZIndex = 51
 right.Parent = header
 local rightLayout = Instance.new('UIListLayout', right)
 rightLayout.FillDirection = Enum.FillDirection.Horizontal
 rightLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
 rightLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-rightLayout.Padding = UDim.new(0.05, 0)
+rightLayout.Padding = UDim.new(0.03, 0)
 
 local btnMin = Instance.new('TextButton')
-btnMin.Size = UDim2.new(0.46, 0, 0.7, 0)
+btnMin.Size = UDim2.new(0.28, 0, 0.68, 0)
 btnMin.BackgroundColor3 = Color3.fromRGB(40, 40, 46)
 btnMin.Text = '-'
 btnMin.Font = Enum.Font.GothamBold
@@ -79,7 +76,7 @@ local btnMinMax = Instance.new('UITextSizeConstraint', btnMin)
 btnMinMax.MaxTextSize = 18
 
 local btnClose = Instance.new('TextButton')
-btnClose.Size = UDim2.new(0.46, 0, 0.7, 0)
+btnClose.Size = UDim2.new(0.28, 0, 0.68, 0)
 btnClose.BackgroundColor3 = Color3.fromRGB(58, 30, 34)
 btnClose.Text = 'X'
 btnClose.Font = Enum.Font.GothamBold
@@ -121,10 +118,7 @@ local function card(p, h)
     local c = Instance.new('UICorner', f)
     c.CornerRadius = UDim.new(0, 10)
     local g = Instance.new('UIGradient', f)
-    g.Color = ColorSequence.new(
-        Color3.fromRGB(38, 39, 44),
-        Color3.fromRGB(30, 31, 36)
-    )
+    g.Color = ColorSequence.new(Color3.fromRGB(38, 39, 44),Color3.fromRGB(30, 31, 36))
     return f
 end
 
@@ -301,16 +295,27 @@ dockTitle.Text = 'Auto Clicker'
 dockTitle.Font = Enum.Font.GothamSemibold
 dockTitle.TextScaled = true
 dockTitle.TextColor3 = Color3.fromRGB(235, 235, 240)
-dockTitle.Size = UDim2.new(0.6, 0, 1, 0)
-dockTitle.Position = UDim2.new(0.05, 0, 0, 0)
+dockTitle.Size = UDim2.new(0.38, 0, 1, 0)
+dockTitle.Position = UDim2.new(0.04, 0, 0, 0)
 local dockTitleMax = Instance.new('UITextSizeConstraint', dockTitle)
 dockTitleMax.MaxTextSize = 16
+
+local dockStatus = Instance.new('TextLabel', dockBar)
+dockStatus.BackgroundTransparency = 1
+dockStatus.Text = 'OFF [P]'
+dockStatus.Font = Enum.Font.GothamMedium
+dockStatus.TextScaled = true
+dockStatus.TextColor3 = Color3.fromRGB(200, 200, 210)
+dockStatus.Size = UDim2.new(0.28, 0, 1, 0)
+dockStatus.Position = UDim2.new(0.46, 0, 0, 0)
+local dockStatusMax = Instance.new('UITextSizeConstraint', dockStatus)
+dockStatusMax.MaxTextSize = 14
 
 local dockBtns = Instance.new('Frame', dockBar)
 dockBtns.BackgroundTransparency = 1
 dockBtns.AnchorPoint = Vector2.new(1, 0)
-dockBtns.Position = UDim2.new(0.95, 0, 0, 0)
-dockBtns.Size = UDim2.new(0.35, 0, 1, 0)
+dockBtns.Position = UDim2.new(0.96, 0, 0, 0)
+dockBtns.Size = UDim2.new(0.26, 0, 1, 0)
 local dockLayout = Instance.new('UIListLayout', dockBtns)
 dockLayout.FillDirection = Enum.FillDirection.Horizontal
 dockLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
@@ -352,9 +357,16 @@ local nextClickTime = 0
 local minimized = false
 local storedPos = root.Position
 local storedSize = root.Size
+local clickConn = nil
+local Burst = 8
 
 local function refreshKeyLabel()
     keyLabel.Text = '[' .. toggleKey.Name .. ']'
+end
+
+local function updateDockStatus()
+    local state = clicking and 'ON' or (pending and 'ARMED' or 'OFF')
+    dockStatus.Text = state .. ' [' .. toggleKey.Name .. ']'
 end
 
 local function pointInGui(obj, px, py)
@@ -380,32 +392,67 @@ local function doClick()
     local pos = UserInputService:GetMouseLocation()
     if VirtualInputManager and VirtualInputManager.SendMouseButtonEvent then
         VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game, 0)
-        VirtualInputManager:SendMouseButtonEvent(
-            pos.X,
-            pos.Y,
-            0,
-            false,
-            game,
-            0
-        )
+        VirtualInputManager:SendMouseButtonEvent(pos.X,pos.Y,0,false,game,0)
     elseif mouse1click then
         mouse1click()
     end
 end
 
+local function startFastLoop()
+    if clickConn then
+        clickConn:Disconnect()
+        clickConn = nil
+    end
+    clickConn = RunService.Heartbeat:Connect(function()
+        if pending then
+            local remain = math.max(0, startDeadline - os.clock())
+            if remain > 0 then
+                statusLabel.Text = 'Starting in '..string.format('%.1f', remain)..'s'
+                updateDockStatus()
+                return
+            else
+                pending = false
+                clicking = true
+                nextClickTime = os.clock()
+                statusLabel.Text = 'Active'
+                updateDockStatus()
+            end
+        end
+        if not clicking then
+            return
+        end
+        if overOwnUI() then
+            return
+        end
+        if clickInterval <= 0 then
+            for i = 1, Burst do
+                doClick()
+            end
+        else
+            local now = os.clock()
+            while now >= nextClickTime do
+                doClick()
+                nextClickTime = nextClickTime + clickInterval
+                now = os.clock()
+            end
+        end
+    end)
+end
+
+local conns = {}
+local function bind(sig, fn)
+    local c = sig:Connect(fn)
+    table.insert(conns, c)
+    return c
+end
+
 refreshKeyLabel()
+updateDockStatus()
 statusLabel.Text = 'Idle'
 delayBox.Text = ''
 delayBox.PlaceholderText = '0'
 intervalBox.Text = ''
 intervalBox.PlaceholderText = '0  (0 = fastest)'
-
-local conns = {}
-local function bind(signal, fn)
-    local c = signal:Connect(fn)
-    table.insert(conns, c)
-    return c
-end
 
 bind(keyButton.MouseButton1Click, function()
     listening = true
@@ -427,9 +474,7 @@ bind(intervalBox.FocusLost, function()
         clickInterval = v
     end
     intervalBox.Text = ''
-    intervalBox.PlaceholderText = (
-        clickInterval == 0 and '0  (0 = fastest)' or tostring(clickInterval)
-    )
+    intervalBox.PlaceholderText = (clickInterval == 0 and '0  (0 = fastest)' or tostring(clickInterval))
 end)
 
 bind(startBtn.MouseButton1Click, function()
@@ -438,16 +483,18 @@ bind(startBtn.MouseButton1Click, function()
     end
     startDeadline = os.clock() + startDelay
     pending = true
+    if not clickConn then
+        startFastLoop()
+    end
     if startDelay <= 0 then
         pending = false
         clicking = true
         nextClickTime = os.clock()
         statusLabel.Text = 'Active'
     else
-        statusLabel.Text = 'Starting in '
-            .. string.format('%.1f', startDelay)
-            .. 's'
+        statusLabel.Text = 'Starting in '..string.format('%.1f', startDelay)..'s'
     end
+    updateDockStatus()
 end)
 
 bind(stopBtn.MouseButton1Click, function()
@@ -455,6 +502,7 @@ bind(stopBtn.MouseButton1Click, function()
     pending = false
     nextClickTime = math.huge
     statusLabel.Text = 'Idle'
+    updateDockStatus()
 end)
 
 bind(UserInputService.InputBegan, function(input, processed)
@@ -462,25 +510,23 @@ bind(UserInputService.InputBegan, function(input, processed)
         toggleKey = input.KeyCode
         listening = false
         refreshKeyLabel()
+        updateDockStatus()
         return
     end
-    if
-        input.UserInputType == Enum.UserInputType.Keyboard
-        and input.KeyCode == toggleKey
-        and not processed
-    then
+    if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == toggleKey and not processed then
         if not clicking and not pending then
             startDeadline = os.clock() + startDelay
             pending = true
+            if not clickConn then
+                startFastLoop()
+            end
             if startDelay <= 0 then
                 pending = false
                 clicking = true
                 nextClickTime = os.clock()
                 statusLabel.Text = 'Active'
             else
-                statusLabel.Text = 'Starting in '
-                    .. string.format('%.1f', startDelay)
-                    .. 's'
+                statusLabel.Text = 'Starting in '..string.format('%.1f', startDelay)..'s'
             end
         else
             clicking = false
@@ -488,77 +534,38 @@ bind(UserInputService.InputBegan, function(input, processed)
             nextClickTime = math.huge
             statusLabel.Text = 'Idle'
         end
-    end
-end)
-
-local stepConn
-stepConn = bind(RunService.RenderStepped, function(_, dt)
-    if pending then
-        local remain = math.max(0, startDeadline - os.clock())
-        if remain > 0 then
-            statusLabel.Text = 'Starting in '
-                .. string.format('%.1f', remain)
-                .. 's'
-        else
-            pending = false
-            clicking = true
-            nextClickTime = os.clock()
-            statusLabel.Text = 'Active'
-        end
-        return
-    end
-    if not clicking then
-        return
-    end
-    if overOwnUI() then
-        return
-    end
-    if clickInterval <= 0 then
-        doClick()
-    else
-        local now = os.clock()
-        if now >= nextClickTime then
-            doClick()
-            nextClickTime = now + clickInterval
-        end
+        updateDockStatus()
     end
 end)
 
 local dragging = false
-local dragStart
-local startMouse
+local baseScale = nil
+local startMouse = nil
 local function beginDrag()
+    local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1920, 1080)
     dragging = true
-    dragStart = root.Position
+    baseScale = Vector2.new(root.Position.X.Scale, root.Position.Y.Scale)
     startMouse = UserInputService:GetMouseLocation()
+    root.Position = UDim2.new(baseScale.X, 0, baseScale.Y, 0)
 end
 local function endDrag()
     dragging = false
 end
 
 bind(header.InputBegan, function(input)
-    if
-        input.UserInputType == Enum.UserInputType.MouseButton1
-        or input.UserInputType == Enum.UserInputType.Touch
-    then
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         beginDrag()
     end
 end)
 
 bind(title.InputBegan, function(input)
-    if
-        input.UserInputType == Enum.UserInputType.MouseButton1
-        or input.UserInputType == Enum.UserInputType.Touch
-    then
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         beginDrag()
     end
 end)
 
 bind(UserInputService.InputEnded, function(input)
-    if
-        input.UserInputType == Enum.UserInputType.MouseButton1
-        or input.UserInputType == Enum.UserInputType.Touch
-    then
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         endDrag()
     end
 end)
@@ -567,19 +574,12 @@ bind(UserInputService.InputChanged, function(input)
     if not dragging then
         return
     end
-    if
-        input.UserInputType == Enum.UserInputType.MouseMovement
-        or input.UserInputType == Enum.UserInputType.Touch
-    then
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1920, 1080)
         local pos = UserInputService:GetMouseLocation()
-        local dx = pos.X - startMouse.X
-        local dy = pos.Y - startMouse.Y
-        root.Position = UDim2.new(
-            dragStart.X.Scale,
-            dragStart.X.Offset + dx,
-            dragStart.Y.Scale,
-            dragStart.Y.Offset + dy
-        )
+        local dx = (pos.X - startMouse.X) / math.max(1, vp.X)
+        local dy = (pos.Y - startMouse.Y) / math.max(1, vp.Y)
+        root.Position = UDim2.new(baseScale.X + dx, 0, baseScale.Y + dy, 0)
     end
 end)
 
@@ -587,31 +587,22 @@ local function showDock()
     dockBar.Visible = true
     dockBar.Size = UDim2.new(0, 0, 0, 0)
     dockTitle.Visible = false
+    dockStatus.Visible = false
     dockBtns.Visible = false
     dockBar.Position = UDim2.new(0.5, 0, 0, 0)
-    TweenService
-        :Create(
-            dockBar,
-            TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-            { Size = UDim2.new(0.22, 0, 0.045, 0) }
-        )
-        :Play()
+    TweenService:Create(dockBar,TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),{ Size = UDim2.new(0.26, 0, 0.045, 0) }):Play()
     task.delay(0.18, function()
         dockTitle.Visible = true
+        dockStatus.Visible = true
         dockBtns.Visible = true
     end)
 end
 
 local function hideDock()
     dockTitle.Visible = false
+    dockStatus.Visible = false
     dockBtns.Visible = false
-    TweenService
-        :Create(
-            dockBar,
-            TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-            { Size = UDim2.new(0, 0, 0, 0) }
-        )
-        :Play()
+    TweenService:Create(dockBar,TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),{ Size = UDim2.new(0, 0, 0, 0) }):Play()
     task.delay(0.16, function()
         dockBar.Visible = false
     end)
@@ -622,47 +613,14 @@ bind(btnMin.MouseButton1Click, function()
         minimized = true
         storedPos = root.Position
         storedSize = root.Size
-        content.Visible = false
-        TweenService
-            :Create(
-                root,
-                TweenInfo.new(
-                    0.18,
-                    Enum.EasingStyle.Quad,
-                    Enum.EasingDirection.Out
-                ),
-                {
-                    Size = UDim2.new(storedSize.X.Scale, 0, 0.09, 0),
-                    Position = UDim2.new(
-                        storedPos.X.Scale,
-                        storedPos.X.Offset,
-                        0,
-                        0
-                    ),
-                }
-            )
-            :Play()
-        task.delay(0.2, showDock)
+        root.Visible = false
+        showDock()
     else
         minimized = false
         hideDock()
-        TweenService
-            :Create(
-                root,
-                TweenInfo.new(
-                    0.2,
-                    Enum.EasingStyle.Quad,
-                    Enum.EasingDirection.Out
-                ),
-                {
-                    Size = storedSize,
-                    Position = storedPos,
-                }
-            )
-            :Play()
-        task.delay(0.2, function()
-            content.Visible = true
-        end)
+        root.Visible = true
+        root.Position = storedPos
+        root.Size = storedSize
     end
 end)
 
@@ -670,23 +628,9 @@ bind(dockRestore.MouseButton1Click, function()
     if minimized then
         minimized = false
         hideDock()
-        TweenService
-            :Create(
-                root,
-                TweenInfo.new(
-                    0.2,
-                    Enum.EasingStyle.Quad,
-                    Enum.EasingDirection.Out
-                ),
-                {
-                    Size = storedSize,
-                    Position = storedPos,
-                }
-            )
-            :Play()
-        task.delay(0.2, function()
-            content.Visible = true
-        end)
+        root.Visible = true
+        root.Position = storedPos
+        root.Size = storedSize
     end
 end)
 
@@ -694,13 +638,17 @@ local function cleanup()
     clicking = false
     pending = false
     nextClickTime = math.huge
+    updateDockStatus()
+    if clickConn then
+        clickConn:Disconnect()
+        clickConn = nil
+    end
     for _, c in ipairs(conns) do
         pcall(function()
             c:Disconnect()
         end)
     end
     conns = {}
-    ui.Enabled = false
     ui:Destroy()
 end
 
@@ -708,3 +656,4 @@ bind(dockClose.MouseButton1Click, cleanup)
 bind(btnClose.MouseButton1Click, cleanup)
 
 refreshKeyLabel()
+updateDockStatus()

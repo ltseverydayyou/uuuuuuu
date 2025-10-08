@@ -1238,6 +1238,11 @@ local function main()
 		context:Register("TELEPORT_TO",{Name = "Teleport To", IconMap = Explorer.MiscIcons, Icon = "TeleportTo", OnClick = function()
 			local sList = selection.List
 			local plrRP = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+			local offset = Settings and Settings.Explorer and Settings.Explorer.TeleportToOffset
+			
+			if typeof(offset) ~= "Vector3" then
+				offset = Vector3.new()
+			end
 			
 			if not plrRP then return end
 			
@@ -1248,7 +1253,7 @@ local function main()
 					if Obj.CanCollide then
 						plr.Character:MoveTo(Obj.Position)
 					else
-						plrRP.CFrame = CFrame.new(Obj.Position + Settings.Explorer.TeleportToOffset)
+						plrRP.CFrame = CFrame.new(Obj.Position + offset)
 					end
 					break
 				elseif Obj:IsA("Model") then
@@ -1256,7 +1261,7 @@ local function main()
 						if Obj.PrimaryPart.CanCollide then
 							plr.Character:MoveTo(Obj.PrimaryPart.Position)
 						else
-							plrRP.CFrame = CFrame.new(Obj.PrimaryPart.Position + Settings.Explorer.TeleportToOffset)
+							plrRP.CFrame = CFrame.new(Obj.PrimaryPart.Position + offset)
 						end
 						break
 					else
@@ -1265,11 +1270,16 @@ local function main()
 							if part.CanCollide then
 								plr.Character:MoveTo(part.Position)
 							else
-								plrRP.CFrame = CFrame.new(part.Position + Settings.Explorer.TeleportToOffset)
+								plrRP.CFrame = CFrame.new(part.Position + offset)
 							end
 							break
 						elseif Obj.WorldPivot then
-							plrRP.CFrame = Obj.WorldPivot
+							local pivot = Obj.WorldPivot
+							if typeof(pivot) == "CFrame" then
+								plrRP.CFrame = pivot + offset
+							else
+								plrRP.CFrame = pivot
+							end
 						end
 					end
 				end
@@ -6834,14 +6844,22 @@ local function main()
 		end
 		
 		funcs.AddRegistered = function(self,name,disabled)
-			if not self.Registered[name] then error(name.." is not registered") end
+			if not name then
+				return
+			end
+
+			local registeredEntry = self.Registered[name]
+			if not registeredEntry then
+				warn("[Dex] Context action '"..tostring(name).."' is not registered")
+				return
+			end
 			
 			if self.QueuedDivider then
 				local text = self.QueuedDividerText and #self.QueuedDividerText > 0 and self.QueuedDividerText
 				self:AddDivider(text)
 			end
-			self.Registered[name].Disabled = disabled
-			self.Items[#self.Items+1] = self.Registered[name]
+			registeredEntry.Disabled = disabled
+			self.Items[#self.Items+1] = registeredEntry
 			self.Updated = nil
 		end
 		

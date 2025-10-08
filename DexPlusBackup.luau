@@ -514,6 +514,39 @@ Main = (function()
 		end
 	end
 
+	local function patchContextMenu(context)
+		if context and type(context.AddRegistered) == "function" and not context.__dexSafeAddRegistered then
+			local originalAdd = context.AddRegistered
+			context.AddRegistered = function(self,name,disabled)
+				if not name then
+					return
+				end
+				if not (self.Registered and self.Registered[name]) then
+					warn("[Dex] Context action '"..tostring(name).."' is not registered")
+					return
+				end
+				return originalAdd(self,name,disabled)
+			end
+			context.__dexSafeAddRegistered = true
+		end
+	end
+
+	Main.ApplyPatches = function()
+		if Lib and Lib.ContextMenu and type(Lib.ContextMenu.new) == "function" and not Main.ContextMenuPatched then
+			Main.ContextMenuPatched = true
+			local originalNew = Lib.ContextMenu.new
+			Lib.ContextMenu.new = function(...)
+				local context = originalNew(...)
+				patchContextMenu(context)
+				return context
+			end
+		end
+
+		if Explorer and Explorer.RightClickContext then
+			patchContextMenu(Explorer.RightClickContext)
+		end
+	end
+
 	Main.InitEnv = function()
 		setmetatable(env,{__newindex = function(self,name,func)
 			if not func then Main.MissingEnv[#Main.MissingEnv+1] = name return end
@@ -703,6 +736,23 @@ Main = (function()
 
 	--warn(Main.ExportSettings())
 
+	Main.ValidateSettings = function()
+		local explorer = Settings.Explorer
+		if type(explorer) ~= "table" then
+			explorer = {}
+			Settings.Explorer = explorer
+		end
+
+		local defaultOffset = DefaultSettings
+			and DefaultSettings.Explorer
+			and DefaultSettings.Explorer.TeleportToOffset
+			or Vector3.new()
+
+		if typeof(explorer.TeleportToOffset) ~= "Vector3" then
+			explorer.TeleportToOffset = defaultOffset
+		end
+	end
+
 	Main.LoadSettings = function()
 		local s, data = pcall(env.readfile or error, "DexSettings.json")
 		if s and data and data ~= "" then
@@ -725,6 +775,7 @@ Main = (function()
 				for k, v in pairs(deserializedData) do
 					Settings[k] = v
 				end
+				Main.ValidateSettings()
 
 			else
 				warn("failed to decode settings json")
@@ -752,6 +803,7 @@ Main = (function()
 			return res
 		end
 		recur(DefaultSettings,Settings)
+		Main.ValidateSettings()
 	end
 
 	Main.FetchAPI = function(callbackiflong, callbackiftoolong, XD)
@@ -1526,6 +1578,7 @@ Main = (function()
 		intro.SetProgress("Loading Modules",0.75)
 		Main.AppControls.Lib.InitDeps(Main.GetInitDeps()) -- Missing deps now available
 		Main.LoadModules()
+		Main.ApplyPatches()
 		Lib.FastWait()
 
 		-- Init other modules

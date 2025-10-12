@@ -30,7 +30,6 @@ local CLenv = CL and getsenv(CL) or nil
 local newAlert = CLenv and CLenv.newAlert or nil
 local function Alert(s)
     if newAlert then newAlert(tostring(s), nil, nil, "rainbow") end
-    print("[AF] " .. tostring(s))
 end
 
 local function uiParent()

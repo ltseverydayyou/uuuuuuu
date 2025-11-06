@@ -1223,6 +1223,9 @@ ufunctions = {
     Color3 = function(u)
         return `Color3.new({u.R}, {u.G}, {u.B})`
     end,
+    buffer = function(u)
+        return buffer_literal(u)
+    end,
     RBXScriptSignal = function(u) -- The server doesnt recive this
         return "RBXScriptSignal --[[RBXScriptSignal's are not supported]]"
     end,
@@ -1264,7 +1267,10 @@ local typeofv2sfunctions = {
 }
 
 local typev2sfunctions = {
-    userdata = function(v,vtypeof)
+    userdata = function(v, vtypeof)
+        if is_buffer(v) then
+            return buffer_literal(v)
+        end
         if ufunctions[vtypeof] then
             return ufunctions[vtypeof](v)
         end
@@ -1273,8 +1279,10 @@ local typev2sfunctions = {
     vector = ufunctions["Vector3"]
 }
 
-
 function v2s(v, l, p, n, vtv, i, pt, path, tables, tI)
+    if is_buffer(v) then
+        return buffer_literal(v)
+    end
     local vtypeof = typeof(v)
     local vtypeoffunc = typeofv2sfunctions[vtypeof]
     local vtypefunc = typev2sfunctions[type(v)]
@@ -1627,6 +1635,25 @@ function handlespecials(s, indentation)
         return s, true
     end
     return s, false
+end
+
+function is_buffer(u)
+    if typeof(u) == "buffer" then return true end
+    if buffer then
+        local ok = pcall(buffer.len, u)
+        if ok then return true end
+    end
+    return false
+end
+
+function buffer_literal(u)
+    local ok, s = pcall(buffer.tostring, u)
+    if ok and type(s) == "string" then
+        return "buffer.fromstring(" .. formatstr(s) .. ")"
+    end
+    local n = 0
+    pcall(function() n = buffer.len(u) end)
+    return ("buffer.fromstring(\"\") --[[Generation Failure: unreadable buffer (len=%d)]]"):format(n)
 end
 
 --- finds script from 'src' from getinfo, returns nil if not found

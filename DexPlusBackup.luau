@@ -809,6 +809,21 @@ Main = (function()
 	Main.FetchAPI = function(callbackiflong, callbackiftoolong, XD)
 		local downloaded = false
 		local api,rawAPI
+		local timeoutSeconds = 30
+		local function skipAPI(reason)
+			downloaded = true
+			warn("[Dex] "..reason)
+			return {
+				Classes = {},
+				Enums = {},
+				CategoryOrder = {},
+				GetMember = function()
+					return {}
+				end,
+				Skipped = true,
+				Reason = reason
+			}
+		end
 		if Main.Elevated then
 			if Main.LocalDepsUpToDate() then
 				local localAPI = Lib.ReadFile("dex/rbx_api.dat")
@@ -828,8 +843,32 @@ Main = (function()
 				task.wait(30) -- 60
 				if not downloaded and XD then XD() end
 			end)
-			-- lmfao async makes it work to load big file
-			rawAPI = rawAPI or game:HttpGet("http://setup.roblox.com/"..Main.RobloxVersion.."-API-Dump.json")
+			if not rawAPI then
+				local requestCompleted = false
+				local requestSucceeded = false
+				local requestData
+				task.spawn(function()
+					local ok, response = pcall(oldgame.HttpGet, game, "http://setup.roblox.com/"..Main.RobloxVersion.."-API-Dump.json")
+					requestCompleted = true
+					requestSucceeded = ok
+					requestData = response
+				end)
+
+				local start = os.clock()
+				while not requestCompleted and os.clock() - start < timeoutSeconds do
+					task.wait(0.25)
+				end
+
+				if not requestCompleted then
+					return skipAPI(("API request timed out after %d seconds; continuing without API data."):format(timeoutSeconds))
+				end
+
+				if not requestSucceeded then
+					return skipAPI("API request failed: "..tostring(requestData))
+				end
+
+				rawAPI = requestData
+			end
 		else
 			if script:FindFirstChild("API") then
 				rawAPI = require(script.API)
@@ -837,6 +876,11 @@ Main = (function()
 				error("NO API EXISTS")
 			end
 		end
+
+		if not rawAPI then
+			return skipAPI("API data unavailable; continuing without API data.")
+		end
+
 		downloaded = true
 		
 		Main.RawAPI = rawAPI
@@ -1570,8 +1614,12 @@ Main = (function()
 		-- Save external deps locally if needed
 		if Main.Elevated and env.writefile and not Main.LocalDepsUpToDate() then
 			env.writefile("dex/deps_version.dat",Main.ClientVersion.."\n"..Main.RobloxVersion)
-			env.writefile("dex/rbx_api.dat",Main.RawAPI)
-			env.writefile("dex/rbx_rmd.dat",Main.RawRMD)
+			if Main.RawAPI then
+				env.writefile("dex/rbx_api.dat",Main.RawAPI)
+			end
+			if Main.RawRMD then
+				env.writefile("dex/rbx_rmd.dat",Main.RawRMD)
+			end
 		end
 
 		-- Load other modules

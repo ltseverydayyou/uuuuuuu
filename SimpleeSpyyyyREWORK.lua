@@ -1,9 +1,4 @@
-﻿if
-    getgenv().SimpleSpyExecuted
-    and type(getgenv().SimpleSpyShutdown) == 'function'
-then
-    getgenv().SimpleSpyShutdown()
-end
+﻿if getgenv().SimpleSpyExecuted and type(getgenv().SimpleSpyShutdown) == 'function' then getgenv().SimpleSpyShutdown() end
 
 local realconfigs = {
     logcheckcaller = false,

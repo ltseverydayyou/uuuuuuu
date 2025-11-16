@@ -1,1 +1,1 @@
-・・・
+stop skidding my shit kthxbye

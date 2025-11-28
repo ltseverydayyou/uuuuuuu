@@ -154,7 +154,9 @@ end
         btn.BorderSizePixel = 1
         btn.BorderColor3 = Color3.fromRGB(100, 100, 100)
         btn.Parent = frame
-        btn.MouseButton1Click:Connect(callback)
+        btn.MouseButton1Click:Connect(function(...)
+            callback(btn, ...)
+        end)
         return btn
     end
 
@@ -182,9 +184,11 @@ end
         getRoot(plr.Character).Anchored = false
     end)
 
-    local toggleVisBtn = mkBtn("ToggleVisBtn", "Toggle Effects", 0.05, 0.6, function()
+    local toggleVisBtn = mkBtn("ToggleVisBtn", "Toggle Effects", 0.05, 0.6, function(btn)
         getgenv().visualizer = not getgenv().visualizer
-        toggleVisBtn.BackgroundColor3 = getgenv().visualizer and Color3.fromRGB(0, 120, 0) or Color3.fromRGB(60, 60, 60)
+        if btn then
+            btn.BackgroundColor3 = getgenv().visualizer and Color3.fromRGB(0, 120, 0) or Color3.fromRGB(60, 60, 60)
+        end
     end)
 
     local statusLbl = Instance.new("TextLabel")

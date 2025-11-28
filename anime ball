@@ -76,8 +76,7 @@ end
         rep.Framework.RemoteFunction:InvokeServer("SwordService", "Block", {-0.2588194012641907})
     end
 
-    --loadstring(game:HttpGet("https://raw.githubusercontent.com/1f0yt/community/main/RedCircleBlock"))()
-    loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-Anime-ball-61244"))()
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/1f0yt/community/main/RedCircleBlock"))()
 
     ClonedService("Workspace").Effects.ChildAdded:Connect(function(j)
         task.wait()

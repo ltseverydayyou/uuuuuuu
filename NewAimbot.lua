@@ -63,7 +63,7 @@ _G.aimPredict = _G.aimPredict or false
 _G.aimLead = _G.aimLead or 0.12
 _G.toggleKeys = _G.toggleKeys or { 'RightAlt', 'LeftAlt', 'P', 'RightControl' }
 
-local cfgDir = 'Aervanix-Aimbot'
+local cfgDir = 'ltseverydayyou-Aimbot'
 local cfgFile = cfgDir .. '/config.json'
 
 local UI = {
@@ -87,7 +87,7 @@ local UI = {
 
 local function cleanup()
     for _, g in pairs(uiRoot:GetChildren()) do
-        if g:IsA('ScreenGui') and g.Name == 'AervanixBot' then
+        if g:IsA('ScreenGui') and g.Name == 'VyperiaBot' then
             g:Destroy()
         end
     end
@@ -1147,7 +1147,7 @@ end
 local function createUI()
     cleanup()
     gui = Instance.new('ScreenGui', uiRoot)
-    gui.Name = 'AervanixBot'
+    gui.Name = 'VyperiaBot'
     gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     gui.ResetOnSpawn = false
     gui.DisplayOrder = 999999
@@ -1211,7 +1211,7 @@ local function createUI()
     title.Name = 'Title'
     title.Size = UDim2.new(0, 260, 1, 0)
     title.Position = UDim2.new(0, 16, 0, 0)
-    title.Text = 'Aervanix Aimbot'
+    title.Text = 'Vyperia Aimbot'
     title.TextColor3 = UI.text
     title.BackgroundTransparency = 1
     title.Font = Enum.Font.GothamSemibold
@@ -1591,8 +1591,8 @@ local function createUI()
             espDetach(p)
         end
         espMap = {}
-        CAS:UnbindAction('AervanixBot')
-        CAS:UnbindAction('AervanixBotBlock')
+        CAS:UnbindAction('VyperiaBot')
+        CAS:UnbindAction('VyperiaBotBlock')
         toast('Aimbot unloaded')
         task.delay(0.5, function()
             if gui and gui.Parent then
@@ -1889,8 +1889,8 @@ return function()
     for p, _ in pairs(espMap) do
         espDetach(p)
     end
-    CAS:UnbindAction('AervanixBot')
-    CAS:UnbindAction('AervanixBotBlock')
+    CAS:UnbindAction('VyperiaBot')
+    CAS:UnbindAction('VyperiaBotBlock')
     if gui and gui.Parent then
         gui:Destroy()
     end

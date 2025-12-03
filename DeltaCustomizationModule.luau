@@ -273,15 +273,9 @@ local mainGui = getMain()
 local iconGui, iconBtn = getIconGui()
 
 local iconStroke = iconBtn and (iconBtn:FindFirstChildOfClass("UIStroke") or iconBtn:FindFirstChildWhichIsA("UIStroke", true))
-
-if iconGui and iconGui:IsA("ScreenGui") then
-	pcall(function() iconGui.IgnoreGuiInset = true end)
-end
-
-if iconBtn then
-	pcall(function() iconBtn.Draggable = false end)
-	uiLib.draggerV2(iconBtn, iconBtn)
-end
+local iconBaseColor = iconStroke and iconStroke.Color
+local iconBaseSize = iconBtn and iconBtn.Size
+local iconColorUseCustom = false
 
 task.defer(function()
 	while not mainGui do
@@ -331,9 +325,26 @@ task.defer(function()
 	local sidebar = mainGui:FindFirstChild("Sidebar", true)
 	local activeColorValue = sidebar and sidebar:FindFirstChild("ActiveColor")
 	local inactiveColorValue = sidebar and sidebar:FindFirstChild("InactiveColor")
-    local sidebarGradient = nil
-    local sidebarGrad1 = nil
-    local sidebarGrad2 = nil
+	local darkOverlay = mainGui:FindFirstChild("DarkOverlay")
+	local sidebarGradient = nil
+	local sidebarGrad1 = nil
+	local sidebarGrad2 = nil
+
+	if iconGui and iconGui:IsA("ScreenGui") then
+		pcall(function() iconGui.IgnoreGuiInset = true end)
+	end
+
+	if iconBtn then
+		pcall(function() iconBtn.Draggable = false end)
+		uiLib.draggerV2(iconBtn, iconBtn)
+	end
+
+	if darkOverlay then
+		darkOverlay.Visible=false
+		darkOverlay:GetPropertyChangedSignal("Visible"):Connect(function()
+			darkOverlay.Visible=false
+		end)
+	end
 
 	local settingsFrame
 	do
@@ -354,46 +365,100 @@ task.defer(function()
 		end
 	end
 
-    if sidebar then
-        local existingGrad = sidebar:FindFirstChildOfClass("UIGradient")
+	if sidebar then
+		local existingGrad = sidebar:FindFirstChildOfClass("UIGradient")
 
-        local c1
-        local c2
+		local c1
+		local c2
 
-        if existingGrad then
-            local kps = existingGrad.Color.Keypoints
-            c1 = (kps[1] and kps[1].Value) or Color3.fromRGB(79, 164, 242)
-            c2 = (kps[#kps] and kps[#kps].Value) or Color3.fromRGB(28, 34, 46)
-            sidebarGradient = existingGrad
-        else
-            c1 = Color3.fromRGB(79, 164, 242)
-            c2 = Color3.fromRGB(28, 34, 46)
-            sidebarGradient = Instance.new("UIGradient")
-            sidebarGradient.Name = "DeltaCustomGradient"
-            sidebarGradient.Parent = sidebar
-        end
+		if existingGrad then
+			local kps = existingGrad.Color.Keypoints
+			c1 = (kps[1] and kps[1].Value) or Color3.fromRGB(79, 164, 242)
+			c2 = (kps[#kps] and kps[#kps].Value) or Color3.fromRGB(28, 34, 46)
+			sidebarGradient = existingGrad
+		else
+			c1 = Color3.fromRGB(79, 164, 242)
+			c2 = Color3.fromRGB(28, 34, 46)
+			sidebarGradient = Instance.new("UIGradient")
+			sidebarGradient.Name = "DeltaCustomGradient"
+			sidebarGradient.Parent = sidebar
+		end
 
-        sidebarGradient.Rotation = 100
-        sidebarGradient.Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, c1),
-            ColorSequenceKeypoint.new(1, c2),
-        })
+		sidebarGradient.Rotation = 100
+		sidebarGradient.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, c1),
+			ColorSequenceKeypoint.new(1, c2),
+		})
 
-        sidebarGrad1 = Instance.new("Color3Value")
-        sidebarGrad1.Name = "SidebarGradientColor1"
-        sidebarGrad1.Value = c1
+		sidebarGrad1 = Instance.new("Color3Value")
+		sidebarGrad1.Name = "SidebarGradientColor1"
+		sidebarGrad1.Value = c1
 
-        sidebarGrad2 = Instance.new("Color3Value")
-        sidebarGrad2.Name = "SidebarGradientColor2"
-        sidebarGrad2.Value = c2
-    end
+		sidebarGrad2 = Instance.new("Color3Value")
+		sidebarGrad2.Name = "SidebarGradientColor2"
+		sidebarGrad2.Value = c2
+	end
+
+	local iconColorValue
+	if iconStroke then
+		iconColorValue = Instance.new("Color3Value")
+		iconColorValue.Name = "IconColorValue"
+		iconColorValue.Value = iconBaseColor or iconStroke.Color
+
+		iconColorValue.Changed:Connect(function()
+			if not iconColorUseCustom then
+				return
+			end
+			pcall(function()
+				iconStroke.Color = iconColorValue.Value
+			end)
+		end)
+	end
+
+	local iconSizeValue
+	if iconBtn and iconBaseSize then
+		iconSizeValue = Instance.new("NumberValue")
+		iconSizeValue.Name = "IconSizeValue"
+		iconSizeValue.Value = 1
+
+		local sizeCfg = colorConfig["IconSize"]
+		if type(sizeCfg) == "table" and type(sizeCfg.value) == "number" then
+			iconSizeValue.Value = math.clamp(sizeCfg.value, 0.5, 5)
+		end
+
+		local function applyIconSize(v)
+			v = math.clamp(v, 0.5, 5)
+			if not iconBtn or not iconBaseSize then return end
+			local sx = iconBaseSize.X.Scale * v
+			local so = iconBaseSize.X.Offset * v
+			local sy = iconBaseSize.Y.Scale * v
+			local syo = iconBaseSize.Y.Offset * v
+			iconBtn.Size = UDim2.new(sx, so, sy, syo)
+		end
+
+		iconSizeValue.Changed:Connect(function()
+			applyIconSize(iconSizeValue.Value)
+			if HS and type(writefile) == "function" then
+				colorConfig["IconSize"] = { value = math.clamp(iconSizeValue.Value, 0.5, 5) }
+				local ok, encoded = pcall(function()
+					return HS:JSONEncode(colorConfig)
+				end)
+				if ok and encoded then
+					pcall(writefile, colorsPath, encoded)
+				end
+			end
+		end)
+
+		applyIconSize(iconSizeValue.Value)
+	end
 
 	local function makeColorSlider(id, titleText, descText, colorValue)
 		if not (settingsHolder and settingTemplate and colorValue) then
 			return
 		end
 
-		local key = id or titleText or "Color_" .. tostring(math.random(1, 1e9))
+		local key = id or titleText or ("Color_" .. tostring(math.random(1, 1e9)))
+		local isIcon = (id == "IconColor") and iconStroke ~= nil
 
 		local frame = settingTemplate:Clone()
 		frame.Parent = settingsHolder
@@ -506,7 +571,11 @@ task.defer(function()
 		local saved = colorConfig[key]
 		if type(saved) == "table" then
 			if type(saved.customColor) == "table" and #saved.customColor == 3 then
-				lastCustomColor = Color3.new(saved.customColor[1], saved.customColor[2], saved.customColor[3])
+				lastCustomColor = Color3.new(
+					saved.customColor[1],
+					saved.customColor[2],
+					saved.customColor[3]
+				)
 			end
 			if saved.useCustom ~= nil then
 				customEnabled = saved.useCustom and true or false
@@ -524,7 +593,7 @@ task.defer(function()
 			if not (HS and type(writefile) == "function") then return end
 			colorConfig[key] = {
 				useCustom = customEnabled,
-				customColor = { lastCustomColor.R, lastCustomColor.G, lastCustomColor.B }
+				customColor = { lastCustomColor.R, lastCustomColor.G, lastCustomColor.B },
 			}
 			local ok, encoded = pcall(function()
 				return HS:JSONEncode(colorConfig)
@@ -560,9 +629,20 @@ task.defer(function()
 		end
 
 		if customEnabled then
+			if isIcon then
+				iconColorUseCustom = true
+			end
 			applyColor(lastCustomColor, false)
 			toggle.Text = "C"
 		else
+			if isIcon then
+				iconColorUseCustom = false
+				if iconStroke then
+					pcall(function()
+						iconStroke.Color = iconBaseColor or iconStroke.Color
+					end)
+				end
+			end
 			applyColor(defaultColor, false)
 			toggle.Text = "D"
 		end
@@ -577,6 +657,9 @@ task.defer(function()
 			rel = math.clamp(rel, 0, 1)
 			customEnabled = true
 			toggle.Text = "C"
+			if isIcon then
+				iconColorUseCustom = true
+			end
 			applyHue(rel, true)
 		end
 
@@ -614,6 +697,9 @@ task.defer(function()
 				local c = Color3.new(r, g, b)
 				customEnabled = true
 				toggle.Text = "C"
+				if isIcon then
+					iconColorUseCustom = true
+				end
 				applyColor(c, true)
 			else
 				setBoxFromColor(colorValue.Value)
@@ -624,129 +710,312 @@ task.defer(function()
 			if customEnabled then
 				customEnabled = false
 				toggle.Text = "D"
+				if isIcon then
+					iconColorUseCustom = false
+					if iconStroke then
+						pcall(function()
+							iconStroke.Color = iconBaseColor or iconStroke.Color
+						end)
+					end
+				end
 				applyColor(defaultColor, false)
 			else
 				customEnabled = true
 				toggle.Text = "C"
-				applyColor(lastCustomColor or defaultColor, false)
+				if isIcon then
+					iconColorUseCustom = true
+				end
+				applyColor(lastCustomColor or defaultColor, true)
 			end
 			saveState()
 		end)
 	end
 
-        local function makeIconRgbToggle()
-        if not (settingsHolder and settingTemplate and iconBtn and iconStroke) then
-            return
-        end
+	local function makeSizeSlider(id, titleText, descText, numValue, minV, maxV)
+		if not (settingsHolder and settingTemplate and numValue) then
+			return
+		end
 
-        local key = "IconRGB"
+		local key = id or titleText or ("Size_" .. tostring(math.random(1, 1e9)))
+		minV = minV or 0.5
+		maxV = maxV or 5
 
-        local frame = settingTemplate:Clone()
-        frame.Parent = settingsHolder
-        frame.Visible = true
+		local frame = settingTemplate:Clone()
+		frame.Parent = settingsHolder
+		frame.Visible = true
 
-        for _, d in ipairs(frame:GetDescendants()) do
-            if d:IsA("LocalScript") then
-                d:Destroy()
-            end
-        end
+		local tLabel = frame:FindFirstChild("Title", true)
+		local dLabel = frame:FindFirstChild("Desc", true)
+		if tLabel then
+			tLabel.Text = titleText
+		end
+		if dLabel then
+			dLabel.Text = descText
+		end
 
-        local tLabel = frame:FindFirstChild("Title", true)
-        local dLabel = frame:FindFirstChild("Desc", true)
-        if tLabel then
-            tLabel.Text = "rbg icon"
-        end
-        if dLabel then
-            dLabel.Text = "Rainbow outline on the Delta icon."
-        end
+		local oldBtn = frame:FindFirstChild("Button", true)
+		local size, pos, order
+		if oldBtn then
+			size = oldBtn.Size
+			pos = oldBtn.Position
+			order = oldBtn.LayoutOrder
+			oldBtn:Destroy()
+		end
 
-        local btnFrame = frame:FindFirstChild("Button", true)
-        if not btnFrame then return end
+		local basePos = pos or UDim2.new(1, -160, 0.5, 0)
+		local bx, bo = basePos.X.Scale, basePos.X.Offset
+		local by, byo = basePos.Y.Scale, basePos.Y.Offset
 
-        local clickable = btnFrame:FindFirstChildWhichIsA("GuiButton") or btnFrame
+		local slider = Instance.new("Frame")
+		slider.Name = "SizeSlider"
+		slider.BackgroundTransparency = 1
+		slider.Size = size or UDim2.new(0, 150, 0, 18)
+		slider.AnchorPoint = Vector2.new(1, 0.5)
+		slider.Position = UDim2.new(bx, bo - 90, by, byo)
+		slider.LayoutOrder = order or 0
+		slider.Parent = frame
 
-        local defaultColor = iconStroke.Color
-        local enabled = false
-        local saved = colorConfig[key]
-        if type(saved) == "table" then
-            if type(saved.iconColor) == "table" and #saved.iconColor == 3 then
-                defaultColor = Color3.new(saved.iconColor[1], saved.iconColor[2], saved.iconColor[3])
-            end
-            if saved.enabled ~= nil then
-                enabled = saved.enabled and true or false
-            end
-        end
+		local valueBox = Instance.new("TextBox")
+		valueBox.Name = "SizeValue"
+		valueBox.Size = UDim2.new(0, 70, 0, 18)
+		valueBox.AnchorPoint = Vector2.new(1, 0.5)
+		valueBox.Position = UDim2.new(bx, bo, by, byo)
+		valueBox.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+		valueBox.BorderSizePixel = 0
+		valueBox.ClearTextOnFocus = false
+		valueBox.TextXAlignment = Enum.TextXAlignment.Center
+		valueBox.Font = Enum.Font.Gotham
+		valueBox.TextSize = 12
+		valueBox.TextColor3 = Color3.new(1, 1, 1)
+		valueBox.Parent = frame
 
-        local hue = 0
+		local bar = Instance.new("Frame")
+		bar.Name = "Bar"
+		bar.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+		bar.BorderSizePixel = 0
+		bar.AnchorPoint = Vector2.new(0.5, 0.5)
+		bar.Position = UDim2.new(0.5, 0, 0.5, 0)
+		bar.Size = UDim2.new(1, 0, 0, 6)
+		bar.Parent = slider
 
-        local function saveState()
-            if not (HS and type(writefile) == "function") then return end
-            colorConfig[key] = {
-                enabled = enabled,
-                iconColor = { defaultColor.R, defaultColor.G, defaultColor.B },
-            }
-            local ok, encoded = pcall(function()
-                return HS:JSONEncode(colorConfig)
-            end)
-            if ok and encoded then
-                pcall(writefile, colorsPath, encoded)
-            end
-        end
+		local barCorner = Instance.new("UICorner")
+		barCorner.CornerRadius = UDim.new(0, 3)
+		barCorner.Parent = bar
 
-        local function setVisualToggle()
-            if enabled then
-                btnFrame.BackgroundColor3 = Color3.fromRGB(79, 164, 242)
-            else
-                btnFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-            end
-        end
+		local fill = Instance.new("Frame")
+		fill.Name = "Fill"
+		fill.BorderSizePixel = 0
+		fill.AnchorPoint = Vector2.new(0, 0.5)
+		fill.Position = UDim2.new(0, 0, 0.5, 0)
+		fill.Size = UDim2.new(0, 0, 1, 0)
+		fill.Parent = bar
 
-        local function setIconState(state)
-            enabled = state and true or false
-            setVisualToggle()
-            saveState()
+		local fillCorner = Instance.new("UICorner")
+		fillCorner.CornerRadius = UDim.new(0, 3)
+		fillCorner.Parent = fill
 
-            NAlib.disconnect("IconRGB_Loop")
+		local knob = Instance.new("Frame")
+		knob.Name = "Knob"
+		knob.Size = UDim2.new(0, 12, 0, 12)
+		knob.AnchorPoint = Vector2.new(0.5, 0.5)
+		knob.BackgroundColor3 = Color3.new(1, 1, 1)
+		knob.BorderSizePixel = 0
+		knob.Parent = bar
 
-            if not enabled then
-                pcall(function()
-                    iconStroke.Color = defaultColor
-                end)
-                return
-            end
+		local knobCorner = Instance.new("UICorner")
+		knobCorner.CornerRadius = UDim.new(1, 0)
+		knobCorner.Parent = knob
 
-            if not saved or not saved.iconColor then
-                defaultColor = iconStroke.Color
-                saveState()
-            end
+		local function saveState(v)
+			if not (HS and type(writefile) == "function") then return end
+			colorConfig[key] = { value = v }
+			local ok, encoded = pcall(function()
+				return HS:JSONEncode(colorConfig)
+			end)
+			if ok and encoded then
+				pcall(writefile, colorsPath, encoded)
+			end
+		end
 
-            NAlib.connect("IconRGB_Loop", RS.Heartbeat:Connect(function(dt)
-                hue = (hue + dt * 0.2) % 1
-                local c = Color3.fromHSV(hue, 1, 1)
-                pcall(function()
-                    iconStroke.Color = c
-                end)
-            end))
-        end
+		local function setVisual(v)
+			v = math.clamp(v, minV, maxV)
+			local alpha = (v - minV) / (maxV - minV)
+			fill.Size = UDim2.new(alpha, 0, 1, 0)
+			knob.Position = UDim2.new(alpha, 0, 0.5, 0)
+			valueBox.Text = string.format("%.2f", v)
+		end
 
-        setVisualToggle()
-        setIconState(enabled)
+		local function apply(v)
+			v = math.clamp(v, minV, maxV)
+			numValue.Value = v
+			setVisual(v)
+			saveState(v)
+		end
 
-        local function toggleClick()
-            setIconState(not enabled)
-        end
+		local initial = numValue.Value
+		local savedCfg = colorConfig[key]
+		if type(savedCfg) == "table" and type(savedCfg.value) == "number" then
+			initial = math.clamp(savedCfg.value, minV, maxV)
+			numValue.Value = initial
+		end
+		setVisual(initial)
 
-        if clickable:IsA("GuiButton") then
-            clickable.MouseButton1Click:Connect(toggleClick)
-        else
-            clickable.InputBegan:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1
-                    or input.UserInputType == Enum.UserInputType.Touch then
-                    toggleClick()
-                end
-            end)
-        end
-    end
+		local dragging = false
+
+		local function updateFromInput(input)
+			local rel = 0
+			pcall(function()
+				rel = (input.Position.X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X
+			end)
+			rel = math.clamp(rel, 0, 1)
+			local v = minV + (maxV - minV) * rel
+			apply(v)
+		end
+
+		bar.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1
+				or input.UserInputType == Enum.UserInputType.Touch then
+				dragging = true
+				updateFromInput(input)
+			end
+		end)
+
+		UIS.InputChanged:Connect(function(input)
+			if not dragging then return end
+			if input.UserInputType == Enum.UserInputType.MouseMovement
+				or input.UserInputType == Enum.UserInputType.Touch then
+				updateFromInput(input)
+			end
+		end)
+
+		UIS.InputEnded:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1
+				or input.UserInputType == Enum.UserInputType.Touch then
+				dragging = false
+			end
+		end)
+
+		valueBox.FocusLost:Connect(function()
+			local txt = valueBox.Text or ""
+			local v = tonumber(txt)
+			if v then
+				apply(v)
+			else
+				setVisual(numValue.Value)
+			end
+		end)
+	end
+
+	local function makeIconRgbToggle()
+		if not (settingsHolder and settingTemplate and iconBtn and iconStroke) then
+			return
+		end
+
+		local key = "IconRGB"
+
+		local frame = settingTemplate:Clone()
+		frame.Parent = settingsHolder
+		frame.Visible = true
+
+		for _, d in ipairs(frame:GetDescendants()) do
+			if d:IsA("LocalScript") then
+				d:Destroy()
+			end
+		end
+
+		local tLabel = frame:FindFirstChild("Title", true)
+		local dLabel = frame:FindFirstChild("Desc", true)
+		if tLabel then
+			tLabel.Text = "RGB icon"
+		end
+		if dLabel then
+			dLabel.Text = "Rainbow outline on the Delta icon."
+		end
+
+		local btnFrame = frame:FindFirstChild("Button", true)
+		if not btnFrame then return end
+
+		local clickable = btnFrame:FindFirstChildWhichIsA("GuiButton") or btnFrame
+
+		local saved = colorConfig[key]
+		local enabled = false
+		if type(saved) == "table" and saved.enabled ~= nil then
+			enabled = saved.enabled and true or false
+		end
+
+		local hue = 0
+
+		local function saveState()
+			if not (HS and type(writefile) == "function") then return end
+			colorConfig[key] = {
+				enabled = enabled,
+			}
+			local ok, encoded = pcall(function()
+				return HS:JSONEncode(colorConfig)
+			end)
+			if ok and encoded then
+				pcall(writefile, colorsPath, encoded)
+			end
+		end
+
+		local function setVisualToggle()
+			if enabled then
+				btnFrame.BackgroundColor3 = Color3.fromRGB(79, 164, 242)
+			else
+				btnFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+			end
+		end
+
+		local function startLoop()
+			NAlib.disconnect("IconRGB_Loop")
+			NAlib.connect("IconRGB_Loop", RS.Heartbeat:Connect(function(dt)
+				hue = (hue + dt * 0.2) % 1
+				local c = Color3.fromHSV(hue, 1, 1)
+				pcall(function()
+					iconStroke.Color = c
+				end)
+			end))
+		end
+
+		local function stopLoop()
+			NAlib.disconnect("IconRGB_Loop")
+			pcall(function()
+				if iconColorUseCustom and iconColorValue then
+					iconStroke.Color = iconColorValue.Value
+				else
+					iconStroke.Color = iconBaseColor or iconStroke.Color
+				end
+			end)
+		end
+
+		local function applyState()
+			setVisualToggle()
+			if enabled then
+				startLoop()
+			else
+				stopLoop()
+			end
+			saveState()
+		end
+
+		applyState()
+
+		local function toggleClick()
+			enabled = not enabled
+			applyState()
+		end
+
+		if clickable:IsA("GuiButton") then
+			clickable.MouseButton1Click:Connect(toggleClick)
+		else
+			clickable.InputBegan:Connect(function(input)
+				if input.UserInputType == Enum.UserInputType.MouseButton1
+					or input.UserInputType == Enum.UserInputType.Touch then
+					toggleClick()
+				end
+			end)
+		end
+	end
 
 	if activeColorValue then
 		makeColorSlider(
@@ -766,35 +1035,55 @@ task.defer(function()
 		)
 	end
 
-    if sidebarGrad1 and sidebarGrad2 and sidebarGradient then
-        makeColorSlider(
-            "SidebarGradient1",
-            "Sidebar Gradient 1",
-            "First sidebar gradient color.",
-            sidebarGrad1
-        )
+	if iconColorValue then
+		makeColorSlider(
+			"IconColor",
+			"Icon Color",
+			"Custom color for the Delta icon.",
+			iconColorValue
+		)
+	end
 
-        makeColorSlider(
-            "SidebarGradient2",
-            "Sidebar Gradient 2",
-            "Second sidebar gradient color.",
-            sidebarGrad2
-        )
+	if iconSizeValue then
+		makeSizeSlider(
+			"IconSize",
+			"Icon Size",
+			"Scale the Delta icon size.",
+			iconSizeValue,
+			0.5,
+			5
+		)
+	end
 
-        local function updateSidebarGradient()
-            sidebarGradient.Color = ColorSequence.new({
-                ColorSequenceKeypoint.new(0, sidebarGrad1.Value),
-                ColorSequenceKeypoint.new(1, sidebarGrad2.Value),
-            })
-        end
+	if sidebarGrad1 and sidebarGrad2 and sidebarGradient then
+		makeColorSlider(
+			"SidebarGradient1",
+			"Sidebar Gradient 1",
+			"First sidebar gradient color.",
+			sidebarGrad1
+		)
 
-        updateSidebarGradient()
+		makeColorSlider(
+			"SidebarGradient2",
+			"Sidebar Gradient 2",
+			"Second sidebar gradient color.",
+			sidebarGrad2
+		)
 
-        sidebarGrad1:GetPropertyChangedSignal("Value"):Connect(updateSidebarGradient)
-        sidebarGrad2:GetPropertyChangedSignal("Value"):Connect(updateSidebarGradient)
-    end
+		local function updateSidebarGradient()
+			sidebarGradient.Color = ColorSequence.new({
+				ColorSequenceKeypoint.new(0, sidebarGrad1.Value),
+				ColorSequenceKeypoint.new(1, sidebarGrad2.Value),
+			})
+		end
 
-    makeIconRgbToggle()
+		updateSidebarGradient()
+
+		sidebarGrad1:GetPropertyChangedSignal("Value"):Connect(updateSidebarGradient)
+		sidebarGrad2:GetPropertyChangedSignal("Value"):Connect(updateSidebarGradient)
+	end
+
+	makeIconRgbToggle()
 
 	local sidemenu = execFrame:FindFirstChild("Sidemenu", true)
 	if sidemenu then
@@ -898,7 +1187,6 @@ task.defer(function()
 			end))
 		end
 	end
-
 
 	local tabs = overlay:FindFirstChild("Tabs", true)
 	local codeSf = overlay:FindFirstChild("Code", true)

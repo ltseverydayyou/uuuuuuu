@@ -1,5 +1,13 @@
 if not identifyexecutor():lower()=='delta' then return end
 
+local deltaEnv = type(getgenv) == "function" and getgenv() or _G
+if type(deltaEnv) == "table" then
+	if deltaEnv.__DeltaTabSaverLoaded then
+		return
+	end
+	deltaEnv.__DeltaTabSaverLoaded = true
+end
+
 local SRV = setmetatable({}, {
     __index = function(self, n)
         local ref = cloneref and type(cloneref) == "function" and cloneref or function(v) return v end

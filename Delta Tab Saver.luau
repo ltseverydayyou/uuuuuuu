@@ -119,11 +119,9 @@ uiLib.draggerV2 = function(ui, dragui)
         pcall(function()
             if input.UserInputType == Enum.UserInputType.MouseButton1
                 or input.UserInputType == Enum.UserInputType.Touch then
-
                 dragging = true
                 dragStart = input.Position
                 startPos = ui.Position
-
                 local c = input.Changed:Connect(function()
                     pcall(function()
                         if input.UserInputState == Enum.UserInputState.End then
@@ -131,7 +129,6 @@ uiLib.draggerV2 = function(ui, dragui)
                         end
                     end)
                 end)
-
                 NAlib.connect(id, c)
             end
         end)
@@ -294,6 +291,69 @@ task.defer(function()
         return
     end
 
+    -- i love advertisement
+    local sidemenu = execFrame:FindFirstChild("Sidemenu", true)
+    if sidemenu then
+        local oldBtn = sidemenu:FindFirstChild("Script", true)
+        if oldBtn and oldBtn:IsA("ImageLabel") then
+            local parent = oldBtn.Parent
+            local newBtn = oldBtn:Clone()
+            oldBtn:Destroy()
+            newBtn.Parent = parent
+            newBtn.Name = "Script"
+
+            local labs = {}
+            for _, d in ipairs(newBtn:GetDescendants()) do
+                if d:IsA("TextLabel") then
+                    table.insert(labs, d)
+                end
+            end
+
+            if #labs >= 3 then
+                table.sort(labs, function(a, b)
+                    return a.AbsolutePosition.Y < b.AbsolutePosition.Y
+                end)
+
+                local bigHeader = labs[1]
+                local subTitle = labs[2]
+                local desc = labs[3]
+
+                if bigHeader then
+                    bigHeader.Text = "Featured"
+                end
+                if subTitle then
+                    subTitle.Text = "Nameless Admin"
+                end
+                if desc then
+                    desc.Text = "continuation of Nameless Admin with advanced features, fixed commands and lots of customization."
+                end
+            end
+
+            for _, d in ipairs(newBtn:GetDescendants()) do
+                if d:IsA("LocalScript") then
+                    d:Destroy()
+                end
+            end
+
+            local clickable = newBtn:FindFirstChildWhichIsA("GuiButton") or newBtn
+            local function runNA()
+                pcall(function()
+                    loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/Nameless-Admin/main/Source.lua"))()
+                end)
+            end
+            if clickable:IsA("GuiButton") then
+                clickable.MouseButton1Click:Connect(runNA)
+            else
+                clickable.InputBegan:Connect(function(input)
+                    if input.UserInputType == Enum.UserInputType.MouseButton1
+                        or input.UserInputType == Enum.UserInputType.Touch then
+                        runNA()
+                    end
+                end)
+            end
+        end
+    end
+
     local tabs = overlay:FindFirstChild("Tabs", true)
     local codeSf = overlay:FindFirstChild("Code", true)
     if not tabs then
@@ -311,6 +371,62 @@ task.defer(function()
             Duration = 4,
         })
         return
+    end
+
+    local btns = overlay:FindFirstChild("Buttons", true)
+    if btns then
+        local bl = {}
+        for _, v in ipairs(btns:GetChildren()) do
+            if v:IsA("ImageButton") or v:IsA("TextButton") then
+                table.insert(bl, v)
+            end
+        end
+
+        local tpl = btns:FindFirstChild("ExecuteClipboard") or btns:FindFirstChild("Execute") or bl[1]
+        if tpl then
+            local cp = tpl:Clone()
+            cp.Name = "CopyCode"
+            local tl = cp:FindFirstChild("Title", true) or cp:FindFirstChildWhichIsA("TextLabel")
+            if tl then
+                tl.Text = "Copy Code"
+            end
+            cp.Parent = btns
+            table.insert(bl, cp)
+
+            local cnt = #bl
+            if cnt > 0 then
+                local w
+                if cnt == 4 then
+                    w = 0.22
+                else
+                    w = 1 / cnt
+                end
+                for _, b in ipairs(bl) do
+                    b.Size = UDim2.new(w, 0, 1, 0)
+                end
+            end
+
+            cp.MouseButton1Click:Connect(function()
+                if type(setclipboard) ~= "function" then
+                    return
+                end
+                local cur
+                for _, tb in ipairs(codeSf:GetDescendants()) do
+                    if tb:IsA("TextBox") and tb.Visible then
+                        cur = tb
+                        break
+                    end
+                end
+                if cur then
+                    setclipboard(cur.Text or "")
+                    notify({
+                        Title = "Delta Tabs",
+                        Description = "Copied code from the selected tab.",
+                        Duration = 4,
+                    })
+                end
+            end)
+        end
     end
 
     local hasFS = type(isfolder) == "function"
@@ -376,9 +492,9 @@ task.defer(function()
     if #saved > 0 then
         local desc
         if #saved > #boxes then
-            desc = "Saved tabs: " .. tostring(#saved) .. "\nPlease create your tabs in Delta to automatically load your saved code."
+            desc = "Saved tabs: " .. tostring(#saved) .. "\nCreate your tabs in Delta and the saved code will load automatically."
         else
-            desc = "Saved tabs: " .. tostring(#saved) .. "\nYour saved code will automatically load into matching tabs."
+            desc = "Saved tabs: " .. tostring(#saved) .. "\nYour saved code will load into matching tabs automatically."
         end
         notify({
             Title = "Delta Tabs",

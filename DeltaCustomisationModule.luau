@@ -283,7 +283,7 @@ task.defer(function()
 	end
 	if not mainGui then
 		notify({
-			Title = "Delta Customisation",
+			Title = "Delta Customization",
 			Description = "Failed to find Delta UI.",
 			Duration = 4,
 		})
@@ -293,7 +293,7 @@ task.defer(function()
 	local execFrame = mainGui:FindFirstChild("Executor")
 	if not (execFrame and execFrame:IsA("Frame")) then
 		notify({
-			Title = "Delta Customisation",
+			Title = "Delta Customization",
 			Description = "Executor frame not found.",
 			Duration = 4,
 		})
@@ -303,7 +303,7 @@ task.defer(function()
 	local execImage = execFrame:FindFirstChild("Executor")
 	if not (execImage and execImage:IsA("ImageLabel")) then
 		notify({
-			Title = "Delta Customisation",
+			Title = "Delta Customization",
 			Description = "Executor image not found.",
 			Duration = 4,
 		})
@@ -313,7 +313,7 @@ task.defer(function()
 	local overlay = execImage:FindFirstChild("Overlay")
 	if not overlay then
 		notify({
-			Title = "Delta Customisation",
+			Title = "Delta Customization",
 			Description = "Overlay frame not found.",
 			Duration = 4,
 		})
@@ -896,7 +896,7 @@ task.defer(function()
 	local codeSf = overlay:FindFirstChild("Code", true)
 	if not tabs then
 		notify({
-			Title = "Delta Customisation",
+			Title = "Delta Customization",
 			Description = "Tabs frame not found.",
 			Duration = 4,
 		})
@@ -904,7 +904,7 @@ task.defer(function()
 	end
 	if not codeSf then
 		notify({
-			Title = "Delta Customisation",
+			Title = "Delta Customization",
 			Description = "Code frame not found.",
 			Duration = 4,
 		})
@@ -958,7 +958,7 @@ task.defer(function()
 				if cur then
 					setclipboard(cur.Text or "")
 					notify({
-						Title = "Delta Customisation",
+						Title = "Delta Customization",
 						Description = "Copied code from the selected tab.",
 						Duration = 4,
 					})
@@ -976,7 +976,7 @@ task.defer(function()
 
 	if not hasFS then
 		notify({
-			Title = "Delta Customisation",
+			Title = "Delta Customization",
 			Description = "Your executor does not support saving tabs.",
 			Duration = 5,
 		})
@@ -1040,13 +1040,13 @@ task.defer(function()
 			desc = "Saved tabs: " .. tostring(#saved) .. "\nYour saved code will load into matching tabs automatically."
 		end
 		notify({
-			Title = "Delta Customisation",
+			Title = "Delta Customization",
 			Description = desc,
 			Duration = 8,
 		})
 	else
 		notify({
-			Title = "Delta Customisation",
+			Title = "Delta Customization",
 			Description = "No saved tabs yet. Anything you type will be saved automatically.",
 			Duration = 6,
 		})

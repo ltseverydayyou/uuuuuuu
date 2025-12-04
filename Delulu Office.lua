@@ -236,3 +236,13 @@ task.spawn(function()
         o.Value=0
     end)
 end)
+
+task.spawn(function()
+    workspace.DescendantAdded:Connect(function(k)
+        task.defer(function()
+            if k:IsA("Sound") and k.Name:lower()=='kicksound' then
+                k:Destroy()
+            end
+        end)
+    end)
+end)

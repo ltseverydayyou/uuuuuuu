@@ -440,18 +440,33 @@ Main = (function()
 				-- Check if local copy exists with matching hashs
 				local hashfunc = (syn and syn.crypt.hash) or function() return "" end
 				local filePath = "dex/ModuleCache/"..name..".lua"
-				local s,moduleStr = pcall(env.readfile,filePath)
 
-				if s and hashfunc(moduleStr) == hashs[name] then
-					control = loadstring(moduleStr)()
+				local cachedModuleStr
+				local cachedHasValidHash = false
+				local readSuccess, readResult = pcall(env.readfile, filePath)
+				if readSuccess and type(readResult) == "string" then
+					cachedModuleStr = readResult
+					if hashs[name] then
+						cachedHasValidHash = hashfunc(readResult) == hashs[name]
+					end
+				end
+
+				if cachedHasValidHash then
+					control = loadstring(cachedModuleStr)()
 				else
-					-- Download and cache
 					local modulePath = (Main.GitModulesPath or "Modules").."/"..name..".lua"
 					local ok,moduleStr = Main.FetchRepoFile(modulePath)
-					if not ok then Main.Error("Failed to get external module data of "..name.." ("..tostring(moduleStr)..")") end
-
-					env.writefile(filePath,moduleStr)
-					control = loadstring(moduleStr)()
+					if ok then
+						if env.writefile then
+							pcall(env.writefile,filePath,moduleStr)
+						end
+						control = loadstring(moduleStr)()
+					elseif cachedModuleStr then
+						warn("Failed to get external module data of "..name.." ("..tostring(moduleStr).."), using cached copy.")
+						control = loadstring(cachedModuleStr)()
+					else
+						Main.Error("Failed to get external module data of "..name.." ("..tostring(moduleStr)..")")
+					end
 				end
 			end
 

@@ -1121,14 +1121,18 @@ task.defer(function()
 					desc.Text = "continuation of Nameless Admin with advanced features, fixed commands and lots of customization."
 				end
 			end
+			
+			local clickable = nil
 
 			for _, d in ipairs(newCard:GetDescendants()) do
 				if d:IsA("LocalScript") then
 					d:Destroy()
+				elseif d:IsA("TextButton") then
+					clickable = d
 				end
 			end
 
-			local clickable = newCard:FindFirstChildWhichIsA("GuiButton") or newCard
+			--local clickable = newCard:FindFirstChildWhichIsA("GuiButton") or newCard
 			local function runNA()
 				pcall(function()
 					loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/Nameless-Admin/main/Source.lua"))()

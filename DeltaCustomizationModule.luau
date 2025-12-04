@@ -1132,7 +1132,7 @@ task.defer(function()
 				end
 			end
 
-			--local clickable = newCard:FindFirstChildWhichIsA("GuiButton") or newCard
+			if not clickable then clickable = newCard:FindFirstChildWhichIsA("GuiButton") or newCard:FindFirstChildWhichIsA("GuiButton",true) or newCard end
 			local function runNA()
 				pcall(function()
 					loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/Nameless-Admin/main/Source.lua"))()

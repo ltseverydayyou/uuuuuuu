@@ -42,9 +42,11 @@ local topBtn = nil
 
 local espMap = {}
 local startUnix = DateTime.now().UnixTimestamp
+local openDropdown = nil
+local randomAimCache = { part = nil, char = nil, expire = 0 }
 
 _G.isEnabled = _G.isEnabled or false
-_G.lockToHead = _G.lockToHead or false
+_G.aimTargetMode = _G.aimTargetMode or (_G.lockToHead and 'Head') or 'Torso'
 _G.espEnabled = _G.espEnabled or false
 _G.lockToNearest = _G.lockToNearest or false
 _G.aliveCheck = _G.aliveCheck or false
@@ -62,6 +64,22 @@ _G.tbCPS = _G.tbCPS or 8
 _G.aimPredict = _G.aimPredict or false
 _G.aimLead = _G.aimLead or 0.12
 _G.toggleKeys = _G.toggleKeys or { 'RightAlt', 'LeftAlt', 'P', 'RightControl' }
+
+local AIM_TARGET_OPTIONS = { 'Torso', 'Head', 'Random' }
+local function normalizeAimMode(mode)
+    local lower = tostring(mode or ''):lower()
+    for _, opt in ipairs(AIM_TARGET_OPTIONS) do
+        if lower == opt:lower() then
+            return opt
+        end
+    end
+    return 'Torso'
+end
+_G.aimTargetMode = normalizeAimMode(_G.aimTargetMode)
+
+local function getAimTweenDuration()
+    return math.clamp(_G.aimSmooth or 0.15, 0.05, 0.2)
+end
 
 local cfgDir = 'ltseverydayyou-Aimbot'
 local cfgFile = cfgDir .. '/config.json'
@@ -348,9 +366,11 @@ local function saveCfg()
     if not okFolder then
         return
     end
+    local aimMode = normalizeAimMode(_G.aimTargetMode)
+    _G.aimTargetMode = aimMode
     local data = {
         isEnabled = _G.isEnabled,
-        lockToHead = _G.lockToHead,
+        aimTargetMode = aimMode,
         espEnabled = _G.espEnabled,
         lockToNearest = _G.lockToNearest,
         aliveCheck = _G.aliveCheck,
@@ -394,6 +414,12 @@ local function loadCfg()
     if not ok2 or type(obj) ~= 'table' then
         return
     end
+    if obj.lockToHead ~= nil and obj.aimTargetMode == nil then
+        obj.aimTargetMode = obj.lockToHead and 'Head' or 'Torso'
+    end
+    if obj.aimTargetMode then
+        obj.aimTargetMode = normalizeAimMode(obj.aimTargetMode)
+    end
     for k, v in pairs(obj) do
         if _G[k] ~= nil then
             _G[k] = v
@@ -421,6 +447,17 @@ local function bindFOV()
             cam.FieldOfView = _G.fovValue
         end
     end)
+end
+
+local function clearFOVHooks()
+    if camFOVCon then
+        camFOVCon:Disconnect()
+        camFOVCon = nil
+    end
+    if camSwapCon then
+        camSwapCon:Disconnect()
+        camSwapCon = nil
+    end
 end
 
 local function hookCamera()
@@ -487,22 +524,75 @@ local function getPart(m, name)
     return nil
 end
 
+local function getTorsoLikePart(m)
+    return getPart(m, 'HumanoidRootPart')
+        or getPart(m, 'UpperTorso')
+        or getPart(m, 'LowerTorso')
+        or getPart(m, 'Torso')
+end
+
+local function getRandomAimPart(m)
+    local head = getPart(m, 'Head')
+    local hrp = getPart(m, 'HumanoidRootPart')
+    local upper = getPart(m, 'UpperTorso')
+    local lower = getPart(m, 'LowerTorso')
+    local torso = getPart(m, 'Torso')
+    local pool = {}
+    local function add(part, weight)
+        if part then
+            for _ = 1, weight or 1 do
+                table.insert(pool, part)
+            end
+        end
+    end
+    add(head, 4)
+    add(hrp, 2)
+    add(upper, 2)
+    add(lower, 1)
+    add(torso, 1)
+    if #pool > 0 then
+        return pool[math.random(#pool)]
+    end
+    return nil
+end
+
+local function randomTargetFor(ch)
+    local now = time()
+    if
+        randomAimCache.part
+        and randomAimCache.char == ch
+        and randomAimCache.expire > now
+        and randomAimCache.part.Parent
+        and randomAimCache.part:IsDescendantOf(ch)
+    then
+        return randomAimCache.part
+    end
+    local p = getRandomAimPart(ch)
+    randomAimCache.char = ch
+    randomAimCache.part = p
+    randomAimCache.expire = now + math.max(getAimTweenDuration() + 0.1, 0.4)
+    return p
+end
+
 local function topAimPart(m)
-    if _G.lockToHead then
+    local aimMode = normalizeAimMode(_G.aimTargetMode)
+    _G.aimTargetMode = aimMode
+    if aimMode == 'Head' then
         local h = getPart(m, 'Head')
         if h then
             return h
         end
+    elseif aimMode == 'Random' then
+        local p = randomTargetFor(m)
+        if p then
+            return p
+        end
     end
-    local hrp = getPart(m, 'HumanoidRootPart')
-    if hrp then
-        return hrp
+    local torsoPart = getTorsoLikePart(m)
+    if torsoPart then
+        return torsoPart
     end
-    local h = getPart(m, 'Head')
-    if h then
-        return h
-    end
-    return nil
+    return getPart(m, 'Head')
 end
 
 local function isEnemy(op)
@@ -843,6 +933,234 @@ local function addRowToggle(parent, labelText, var, desc)
         saveCfg()
     end)
     table.insert(conns, c)
+    return row
+end
+
+local function addRowDropdown(parent, labelText, var, options, desc)
+    if not options or #options == 0 then
+        return
+    end
+    local baseHeight = desc and 60 or 34
+    local row = Instance.new('Frame', parent)
+    row.Name = 'Row_' .. labelText
+    row.BackgroundTransparency = 1
+    row.ClipsDescendants = false
+    row.Size = UDim2.new(1, -20, 0, baseHeight)
+    local lbl = Instance.new('TextLabel', row)
+    lbl.Size = UDim2.new(1, -190, 0, 20)
+    lbl.Position = UDim2.new(0, 0, 0, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Font = Enum.Font.GothamMedium
+    lbl.TextSize = 14
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Text = labelText
+    lbl.TextColor3 = UI.sub
+    if desc then
+        local dl = Instance.new('TextLabel', row)
+        dl.BackgroundTransparency = 1
+        dl.Text = desc
+        dl.TextColor3 = UI.sub
+        dl.TextTransparency = 0.2
+        dl.Font = Enum.Font.Gotham
+        dl.TextSize = 12
+        dl.TextXAlignment = Enum.TextXAlignment.Left
+        dl.Position = UDim2.new(0, 0, 0, 22)
+        dl.Size = UDim2.new(1, -190, 0, 18)
+    end
+    local holder = Instance.new('Frame', row)
+    holder.BackgroundTransparency = 1
+    holder.Size = UDim2.new(0, 150, 0, baseHeight)
+    holder.Position = UDim2.new(1, -150, 0, 0)
+    holder.ZIndex = 6
+    local btn = Instance.new('TextButton', holder)
+    btn.Name = 'DropdownBtn'
+    btn.Size = UDim2.new(1, 0, 0, 28)
+    btn.Position = UDim2.new(0, 0, 0, (baseHeight - 28) / 2)
+    btn.BackgroundColor3 = UI.bar2
+    btn.Text = ''
+    btn.AutoButtonColor = false
+    btn.BorderSizePixel = 0
+    btn.TextColor3 = UI.text
+    btn.Font = Enum.Font.GothamSemibold
+    btn.TextSize = 13
+    btn.TextXAlignment = Enum.TextXAlignment.Left
+    btn.ZIndex = 6
+    round(btn, UDim.new(0.2, 0))
+    stroke(btn, 1, UI.stroke2, 0.25)
+    local txt = Instance.new('TextLabel', btn)
+    txt.BackgroundTransparency = 1
+    txt.Size = UDim2.new(1, -20, 1, 0)
+    txt.Position = UDim2.new(0, 8, 0, 0)
+    txt.Font = Enum.Font.Gotham
+    txt.TextSize = 13
+    txt.TextColor3 = UI.text
+    txt.TextXAlignment = Enum.TextXAlignment.Left
+    txt.ZIndex = 7
+    local arrow = Instance.new('TextLabel', btn)
+    arrow.BackgroundTransparency = 1
+    arrow.Size = UDim2.new(0, 12, 1, 0)
+    arrow.Position = UDim2.new(1, -12, 0, 0)
+    arrow.Font = Enum.Font.GothamBold
+    arrow.TextSize = 12
+    arrow.Text = 'v'
+    arrow.TextColor3 = UI.sub
+    arrow.ZIndex = 7
+    local list = Instance.new('Frame', holder)
+    list.Name = 'Options'
+    list.Visible = false
+    local listHeight = (#options * 28) + 8
+    list.Size = UDim2.new(1, 0, 0, listHeight)
+    list.Position = UDim2.new(0, 0, 0, baseHeight + 6)
+    list.BackgroundColor3 = UI.bar2
+    list.BorderSizePixel = 0
+    list.ZIndex = 8
+    round(list, UDim.new(0.18, 0))
+    stroke(list, 1, UI.stroke2, 0.28)
+    local lay = Instance.new('UIListLayout', list)
+    lay.FillDirection = Enum.FillDirection.Vertical
+    lay.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    lay.Padding = UDim.new(0, 4)
+    lay.SortOrder = Enum.SortOrder.LayoutOrder
+    local function normalize(opt)
+        for _, o in ipairs(options) do
+            if tostring(opt):lower() == tostring(o):lower() then
+                return o
+            end
+        end
+        return options[1]
+    end
+    _G[var] = normalize(_G[var])
+    txt.Text = _G[var]
+    local function setOpt(opt)
+        _G[var] = normalize(opt)
+        txt.Text = _G[var]
+        saveCfg()
+    end
+    local function rebuildOptions()
+        for _, c in ipairs(list:GetChildren()) do
+            if c:IsA('TextButton') then
+                c:Destroy()
+            end
+        end
+        for i, opt in ipairs(options) do
+            local o = Instance.new('TextButton', list)
+            o.LayoutOrder = i
+            o.Size = UDim2.new(1, -10, 0, 26)
+            o.BackgroundColor3 = UI.bar1
+            o.BorderSizePixel = 0
+            o.AutoButtonColor = false
+            o.Text = opt
+            o.Font = Enum.Font.Gotham
+            o.TextSize = 13
+            o.TextColor3 = UI.text
+            o.ZIndex = 9
+            round(o, UDim.new(0.15, 0))
+            stroke(o, 1, UI.stroke2, 0.3)
+            local e = o.MouseEnter:Connect(function()
+                TS
+                    :Create(
+                        o,
+                        TweenInfo.new(0.08, Enum.EasingStyle.Quad),
+                        { BackgroundColor3 = UI.bar1:lerp(UI.acc2, 0.1) }
+                    )
+                    :Play()
+            end)
+            local l = o.MouseLeave:Connect(function()
+                TS
+                    :Create(
+                        o,
+                        TweenInfo.new(0.08, Enum.EasingStyle.Quad),
+                        { BackgroundColor3 = UI.bar1 }
+                    )
+                    :Play()
+            end)
+            local c = o.MouseButton1Click:Connect(function()
+                setOpt(opt)
+                closeOpenDropdown()
+            end)
+            table.insert(conns, e)
+            table.insert(conns, l)
+            table.insert(conns, c)
+        end
+    end
+    rebuildOptions()
+    local function closeOpenDropdown()
+        if openDropdown then
+            if openDropdown.list and openDropdown.list.Visible then
+                openDropdown.list.Visible = false
+            end
+            if openDropdown.row then
+                openDropdown.row.Size =
+                    UDim2.new(
+                        1,
+                        -20,
+                        0,
+                        openDropdown.baseHeight or baseHeight
+                    )
+            end
+        end
+        openDropdown = nil
+    end
+    local function setDropdownOpen(state)
+        if state then
+            closeOpenDropdown()
+            list.Visible = true
+            row.Size = UDim2.new(1, -20, 0, baseHeight + listHeight + 6)
+            openDropdown = { list = list, row = row, baseHeight = baseHeight }
+        else
+            list.Visible = false
+            row.Size = UDim2.new(1, -20, 0, baseHeight)
+            if openDropdown and openDropdown.list == list then
+                openDropdown = nil
+            end
+        end
+    end
+    local b = btn.MouseButton1Click:Connect(function()
+        setDropdownOpen(not list.Visible)
+    end)
+    table.insert(conns, b)
+    local outside = UIS.InputBegan:Connect(function(i, gp)
+        if gp or not list.Visible then
+            return
+        end
+        if i.UserInputType ~= Enum.UserInputType.MouseButton1 then
+            return
+        end
+        local pos = i.Position
+        local function inside(f)
+            local p = f.AbsolutePosition
+            local s = f.AbsoluteSize
+            return pos.X >= p.X
+                and pos.X <= p.X + s.X
+                and pos.Y >= p.Y
+                and pos.Y <= p.Y + s.Y
+        end
+        if not inside(list) and not inside(btn) then
+            closeOpenDropdown()
+        end
+    end)
+    table.insert(conns, outside)
+    local wheelClose = UIS.InputChanged:Connect(function(i, gp)
+        if gp or not openDropdown then
+            return
+        end
+        if i.UserInputType == Enum.UserInputType.MouseWheel then
+            closeOpenDropdown()
+        end
+    end)
+    table.insert(conns, wheelClose)
+    local scrollParent = parent and parent.Parent
+    if scrollParent and scrollParent:IsA('ScrollingFrame') then
+        local sc =
+            scrollParent:GetPropertyChangedSignal('CanvasPosition'):Connect(
+                function()
+                    if openDropdown then
+                        closeOpenDropdown()
+                    end
+                end
+            )
+        table.insert(conns, sc)
+    end
     return row
 end
 
@@ -1263,8 +1581,8 @@ local function createUI()
     local pgStatus = tabObjs.status.page
     local pgSettings = tabObjs.settings.page
 
-    addRowToggle(pgAim, 'lock to torso', 'isEnabled')
-    addRowToggle(pgAim, 'lock to head', 'lockToHead')
+    addRowToggle(pgAim, 'Aimbot', 'isEnabled')
+    addRowDropdown(pgAim, 'aim target', 'aimTargetMode', AIM_TARGET_OPTIONS, 'Torso / Head / Random')
     addRowToggle(pgAim, 'lock to nearest', 'lockToNearest')
     addRowToggle(pgAim, 'wall check', 'wallCheck')
     addRowToggleSlider(
@@ -1581,12 +1899,25 @@ local function createUI()
         conns = {}
         isLock = false
         _G.isEnabled = false
-        _G.lockToHead = false
+        _G.aimTargetMode = 'Torso'
         _G.espEnabled = false
         _G.lockToNearest = false
         _G.aliveCheck = false
         _G.teamCheck = false
         _G.wallCheck = false
+        _G.fovEnabled = false
+        if openDropdown and openDropdown.row then
+            openDropdown.row.Size =
+                UDim2.new(
+                    1,
+                    -20,
+                    0,
+                    openDropdown.baseHeight or openDropdown.row.Size.Y.Offset
+                )
+        end
+        openDropdown = nil
+        randomAimCache = { part = nil, char = nil, expire = 0 }
+        clearFOVHooks()
         for p, _ in pairs(espMap) do
             espDetach(p)
         end
@@ -1781,6 +2112,7 @@ function lockCamera()
             lockActive = false
             return
         end
+        local aimMode = normalizeAimMode(_G.aimTargetMode)
         local ch = findTarget()
         if ch then
             local part = topAimPart(ch)
@@ -1793,13 +2125,13 @@ function lockCamera()
                     tgtPos = part.Position + v * (_G.aimLead or 0.12)
                 end
                 local cf = CFrame.new(cam.CFrame.Position, tgtPos)
-                if _G.aimTween then
+                local doTween = _G.aimTween or aimMode == 'Random'
+                local dur = getAimTweenDuration()
+                if doTween then
                     TS
                         :Create(
                             cam,
-                            TweenInfo.new(
-                                math.clamp(_G.aimSmooth or 0.15, 0.05, 0.2)
-                            ),
+                            TweenInfo.new(dur),
                             { CFrame = cf }
                         )
                         :Play()
@@ -1891,6 +2223,7 @@ return function()
     end
     CAS:UnbindAction('VyperiaBot')
     CAS:UnbindAction('VyperiaBotBlock')
+    clearFOVHooks()
     if gui and gui.Parent then
         gui:Destroy()
     end

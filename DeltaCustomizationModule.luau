@@ -1,4 +1,4 @@
-if not identifyexecutor():lower()=='delta' then return end
+if identifyexecutor():lower() ~= "delta" then return end
 
 local deltaEnv = type(getgenv) == "function" and getgenv() or _G
 if type(deltaEnv) == "table" then
@@ -375,6 +375,72 @@ task.defer(function()
 
 	local settingsHolder = settingsFrame and settingsFrame:FindFirstChild("Holder")
 	local settingTemplate
+	local function setupAutoScroll(sf)
+		if not (sf and sf:IsA("ScrollingFrame")) then return end
+		local layout = sf:FindFirstChildWhichIsA("UIListLayout") or sf:FindFirstChildWhichIsA("UIGridLayout")
+		if not layout then return end
+
+		local fixed = false
+
+		local function fixSizesOnce()
+			if fixed then return end
+			fixed = true
+
+			if layout:IsA("UIGridLayout") then
+				local cs = layout.CellSize
+				if cs.Y.Scale > 0 and cs.Y.Offset == 0 then
+					local abs = layout.AbsoluteCellSize
+					local oy = abs.Y
+					if oy <= 0 then
+						oy = cs.Y.Scale * sf.AbsoluteSize.Y
+					end
+					layout.CellSize = UDim2.new(
+						cs.X.Scale,
+						cs.X.Offset,
+						0,
+						math.floor(oy + 0.5)
+					)
+				end
+			else
+				for _, ch in ipairs(sf:GetChildren()) do
+					if ch:IsA("GuiObject") then
+						local cs = ch.Size
+						if cs.Y.Scale > 0 and cs.Y.Offset == 0 then
+							local oy = ch.AbsoluteSize.Y
+							if oy <= 0 then
+								oy = cs.Y.Scale * sf.AbsoluteSize.Y
+							end
+							ch.Size = UDim2.new(
+								cs.X.Scale,
+								cs.X.Offset,
+								0,
+								math.floor(oy + 0.5)
+							)
+						end
+					end
+				end
+			end
+		end
+
+		local function upd()
+			fixSizesOnce()
+			local size = layout.AbsoluteContentSize
+			sf.CanvasSize = UDim2.new(0, 0, 0, size.Y + 250)
+		end
+
+		upd()
+
+		layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(upd)
+
+		sf.ChildAdded:Connect(function()
+			fixed = false
+			task.defer(upd)
+		end)
+
+		sf.ChildRemoved:Connect(function()
+			task.defer(upd)
+		end)
+	end
 	if settingsHolder then
 		for _, c in ipairs(settingsHolder:GetChildren()) do
 			if c:IsA("Frame") and c.Name == "Button" then
@@ -382,6 +448,41 @@ task.defer(function()
 				break
 			end
 		end
+	end
+
+	if settingsHolder and settingTemplate then
+		local function makeSectionTitle(text, order, isCustom)
+			local f = settingTemplate:Clone()
+			f.Name = isCustom and "Section_Customization" or "Section_Delta"
+			f.Parent = settingsHolder
+			f.LayoutOrder = order
+			for _, d in ipairs(f:GetDescendants()) do
+				if d:IsA("LocalScript") then
+					d:Destroy()
+				end
+			end
+			local btn = f:FindFirstChild("Button", true)
+			if btn then
+				btn:Destroy()
+			end
+			local tLabel = f:FindFirstChild("Title", true)
+			local dLabel = f:FindFirstChild("Desc", true)
+			if tLabel then
+				tLabel.Text = text
+				if isCustom then
+					tLabel.TextColor3 = Color3.fromRGB(160, 200, 255)
+				else
+					tLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+				end
+			end
+			if dLabel then
+				dLabel.Text = ""
+			end
+			return f
+		end
+
+		makeSectionTitle("Customization", -3, true)
+		makeSectionTitle("Delta settings", -1, false)
 	end
 
 	if sidebar then
@@ -416,6 +517,31 @@ task.defer(function()
 		sidebarGrad2 = Instance.new("Color3Value")
 		sidebarGrad2.Name = "SidebarGradientColor2"
 		sidebarGrad2.Value = c2
+
+		sidebar:GetPropertyChangedSignal("Position"):Connect(function()
+			local p = sidebar.Position
+			if p.X.Scale > sidebarOpenPos.X.Scale then
+				task.spawn(function()
+					local last = p
+					local stable = 0
+					local step = 0.05
+					while stable < 0.1 do
+						task.wait(step)
+						local cur = sidebar.Position
+						if cur ~= last then
+							last = cur
+							stable = 0
+						else
+							stable = stable + step
+						end
+					end
+					if sidebar.Parent and sidebar.Position.X.Scale > sidebarOpenPos.X.Scale then
+						local cur = sidebar.Position
+						sidebar.Position = UDim2.new(sidebarClosedPos.X.Scale, 0, cur.Y.Scale, cur.Y.Offset)
+					end
+				end)
+			end
+		end)
 	end
 
 	local iconColorValue
@@ -479,26 +605,70 @@ task.defer(function()
 		end
 	end
 
-	local function applyIconUserVisibility()
+	local function tweenIconVisual(imgT, bgT, instant)
 		if not iconBtn then return end
-		pcall(function()
-			if iconVisible then
-				iconBtn.ImageTransparency = 0
-				iconBtn.BackgroundTransparency = 0
-				if iconStroke then
-					iconStroke.Enabled = true
-				end
-			else
-				iconBtn.ImageTransparency = 1
-				iconBtn.BackgroundTransparency = 1
-				if iconStroke then
-					iconStroke.Enabled = false
-				end
-			end
-		end)
+		if TS and not instant then
+			pcall(function()
+				TS:Create(iconBtn, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+					ImageTransparency = imgT,
+					BackgroundTransparency = bgT,
+				}):Play()
+			end)
+		else
+			pcall(function()
+				iconBtn.ImageTransparency = imgT
+				iconBtn.BackgroundTransparency = bgT
+			end)
+		end
 	end
 
-	applyIconUserVisibility()
+	local function applyIconUserVisibility(instant)
+		if not iconBtn then return end
+		if iconVisible then
+			tweenIconVisual(0, 0, instant)
+			if iconStroke then
+				iconStroke.Enabled = true
+			end
+		else
+			tweenIconVisual(1, 1, instant)
+			if iconStroke then
+				iconStroke.Enabled = false
+			end
+		end
+	end
+
+	local function setIconForcedHidden(hidden)
+		if not iconBtn then return end
+		if hidden then
+			tweenIconVisual(1, 1, false)
+			if iconStroke then
+				iconStroke.Enabled = false
+			end
+		else
+			applyIconUserVisibility(false)
+		end
+	end
+
+	applyIconUserVisibility(true)
+
+	local scriptHubHolder
+	local homeHolder
+
+	do
+		local sh = mainGui:FindFirstChild("Scripthub")
+		if sh then
+			scriptHubHolder = sh:FindFirstChild("Holder")
+		end
+
+		local ho = mainGui:FindFirstChild("Home")
+		if ho then
+			homeHolder = ho:FindFirstChild("Holder")
+		end
+	end
+
+	setupAutoScroll(settingsHolder)
+	setupAutoScroll(scriptHubHolder)
+	setupAutoScroll(homeHolder)
 
 	local function makeColorSlider(id, titleText, descText, colorValue)
 		if not (settingsHolder and settingTemplate and colorValue) then
@@ -511,6 +681,7 @@ task.defer(function()
 		local frame = settingTemplate:Clone()
 		frame.Parent = settingsHolder
 		frame.Visible = true
+		frame.LayoutOrder = -2
 
 		local tLabel = frame:FindFirstChild("Title", true)
 		local dLabel = frame:FindFirstChild("Desc", true)
@@ -791,6 +962,7 @@ task.defer(function()
 		local frame = settingTemplate:Clone()
 		frame.Parent = settingsHolder
 		frame.Visible = true
+		frame.LayoutOrder = -2
 
 		local tLabel = frame:FindFirstChild("Title", true)
 		local dLabel = frame:FindFirstChild("Desc", true)
@@ -901,7 +1073,7 @@ task.defer(function()
 		end
 
 		local initial = numValue.Value
-		local savedCfg = colorConfig[key]
+		local savedCfg = settingsConfig[key]
 		if type(savedCfg) == "table" and type(savedCfg.value) == "number" then
 			initial = math.clamp(savedCfg.value, minV, maxV)
 			numValue.Value = initial
@@ -964,6 +1136,7 @@ task.defer(function()
 		local frame = settingTemplate:Clone()
 		frame.Parent = settingsHolder
 		frame.Visible = true
+		frame.LayoutOrder = -2
 
 		for _, d in ipairs(frame:GetDescendants()) do
 			if d:IsA("LocalScript") then
@@ -982,6 +1155,10 @@ task.defer(function()
 
 		local btnFrame = frame:FindFirstChild("Button", true)
 		if not btnFrame then return end
+		local btnLabel = btnFrame:FindFirstChildWhichIsA("TextLabel")
+		if btnLabel then
+			btnLabel.Text="Toggle"
+		end
 
 		local clickable = btnFrame:FindFirstChildWhichIsA("GuiButton") or btnFrame
 
@@ -1075,6 +1252,7 @@ task.defer(function()
 		local frame = settingTemplate:Clone()
 		frame.Parent = settingsHolder
 		frame.Visible = true
+		frame.LayoutOrder = -2
 
 		for _, d in ipairs(frame:GetDescendants()) do
 			if d:IsA("LocalScript") then
@@ -1093,19 +1271,23 @@ task.defer(function()
 
 		local btnFrame = frame:FindFirstChild("Button", true)
 		if not btnFrame then return end
+		local btnLabel = btnFrame:FindFirstChildWhichIsA("TextLabel")
+		if btnLabel then
+			btnLabel.Text="Toggle"
+		end
 
 		local clickable = btnFrame:FindFirstChildWhichIsA("GuiButton") or btnFrame
 
 		local function saveState()
 			if not (HS and type(writefile) == "function") then return end
-			colorConfig[key] = {
+			settingsConfig[key] = {
 				enabled = iconVisible,
 			}
 			local ok, encoded = pcall(function()
-				return HS:JSONEncode(colorConfig)
+				return HS:JSONEncode(settingsConfig)
 			end)
 			if ok and encoded then
-				pcall(writefile, colorsPath, encoded)
+				pcall(writefile, settingsPath, encoded)
 			end
 		end
 
@@ -1121,7 +1303,7 @@ task.defer(function()
 
 		local function toggleClick()
 			iconVisible = not iconVisible
-			applyIconUserVisibility()
+			applyIconUserVisibility(false)
 			setVisual()
 			saveState()
 		end
@@ -1138,24 +1320,145 @@ task.defer(function()
 		end
 	end
 
-	local sidebarClosedPos = UDim2.new(1.07799995, 0, 0.474000007, 0)
+	local function makeDestroyUIButton()
+		if not (settingsHolder and settingTemplate) then
+			return
+		end
+
+		local frame = settingTemplate:Clone()
+		frame.Parent = settingsHolder
+		frame.Visible = true
+		frame.LayoutOrder = -2
+
+		for _, d in ipairs(frame:GetDescendants()) do
+			if d:IsA("LocalScript") then
+				d:Destroy()
+			end
+		end
+
+		local tLabel = frame:FindFirstChild("Title", true)
+		local dLabel = frame:FindFirstChild("Desc", true)
+		if tLabel then
+			tLabel.Text = "Destroy Delta UI"
+			tLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
+		end
+		if dLabel then
+			dLabel.Text = "Deletes Delta's UI and icon until you rejoin."
+			dLabel.TextColor3 = Color3.fromRGB(255, 120, 120)
+		end
+
+		local btnFrame = frame:FindFirstChild("Button", true)
+		if not btnFrame then return end
+		local btnLabel = btnFrame:FindFirstChildWhichIsA("TextLabel")
+		if btnLabel then
+			btnLabel.Text="KILL"
+		end
+		btnFrame.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
+
+		local clickable = btnFrame:FindFirstChildWhichIsA("GuiButton") or btnFrame
+
+		local function click()
+			if iconGui then
+				pcall(function() iconGui:Destroy() end)
+				iconGui = nil
+			end
+			if mainGui then
+				pcall(function() mainGui:Destroy() end)
+				mainGui = nil
+			end
+		end
+
+		if clickable:IsA("GuiButton") then
+			clickable.MouseButton1Click:Connect(click)
+		else
+			clickable.InputBegan:Connect(function(input)
+				if input.UserInputType == Enum.UserInputType.MouseButton1
+					or input.UserInputType == Enum.UserInputType.Touch then
+					click()
+				end
+			end)
+		end
+	end
+
+	local sidebarClosedPos = UDim2.new(1.08, 0, 0.474000007, 0)
 	local sidebarOpenPos   = UDim2.new(1,          0, 0.474000007, 0)
 
 	local sidebarGestureEnabled = false
+	local sidebarGestureVisible = true
+	local sidebarGestureWidth = 18
+	local sidebarGestureHeight = 120
 	local sidebarGestureFrame
 	local sidebarDragActive = false
 	local sidebarDragStartX = 0
 	local sidebarDragStartAlpha = 0
 	local sidebarDragAlpha  = 0
 	local sidebarCurrentSection = nil
+	local autoCloseOnLoad = true
 
 	local sectionsList = { "Executor", "Home", "Scripthub", "Settings", "Console" }
+
+	local gestureWidthValue = Instance.new("NumberValue")
+	gestureWidthValue.Name = "GestureWidthValue"
+	gestureWidthValue.Value = sidebarGestureWidth
+
+	local gestureHeightValue = Instance.new("NumberValue")
+	gestureHeightValue.Name = "GestureHeightValue"
+	gestureHeightValue.Value = sidebarGestureHeight
+
+	do
+		local cfg = settingsConfig["GestureWidth"]
+		if type(cfg) == "table" and type(cfg.value) == "number" then
+			gestureWidthValue.Value = math.clamp(cfg.value, 6, 80)
+		end
+	end
+
+	do
+		local cfg = settingsConfig["GestureHeight"]
+		if type(cfg) == "table" and type(cfg.value) == "number" then
+			gestureHeightValue.Value = math.clamp(cfg.value, 60, 400)
+		end
+	end
 
 	do
 		local cfg = settingsConfig["SidebarGesture"]
 		if type(cfg) == "table" and cfg.enabled ~= nil then
 			sidebarGestureEnabled = cfg.enabled and true or false
 		end
+	end
+
+	do
+		local cfg = settingsConfig["SidebarGestureVisible"]
+		if type(cfg) == "table" and cfg.enabled ~= nil then
+			sidebarGestureVisible = cfg.enabled and true or false
+		end
+	end
+
+	do
+		local cfg = settingsConfig["AutoCloseOnLoad"]
+		if type(cfg) == "table" and cfg.enabled ~= nil then
+			autoCloseOnLoad = cfg.enabled and true or false
+		end
+	end
+
+	local function closeDeltaSidebar()
+		if sidebar then
+			sidebar.Position = sidebarClosedPos
+		end
+
+		if mainGui then
+			for _, n in ipairs(sectionsList) do
+				local fr = mainGui:FindFirstChild(n)
+				if fr and fr:IsA("GuiObject") then
+					fr.Visible = false
+				end
+			end
+		end
+
+		if iconGui then
+			iconGui.Enabled = true
+		end
+
+		setIconForcedHidden(false)
 	end
 
 	local function saveSidebarGesture()
@@ -1169,6 +1472,47 @@ task.defer(function()
 		end
 	end
 
+	local function saveSidebarGestureVisible()
+		if not (HS and type(writefile) == "function") then return end
+		settingsConfig["SidebarGestureVisible"] = { enabled = sidebarGestureVisible }
+		local ok, encoded = pcall(function()
+			return HS:JSONEncode(settingsConfig)
+		end)
+		if ok and encoded then
+			pcall(writefile, settingsPath, encoded)
+		end
+	end
+
+	local function applyGestureVisual()
+		if sidebarGestureFrame then
+			sidebarGestureFrame.BackgroundTransparency = sidebarGestureVisible and 0.4 or 1
+		end
+	end
+
+	local function applyGestureSize()
+		if not sidebarGestureFrame then return end
+		local h = gestureHeightValue and gestureHeightValue.Value or sidebarGestureHeight
+		h = math.clamp(h, 60, 400)
+		local w = gestureWidthValue and gestureWidthValue.Value or sidebarGestureWidth
+		w = math.clamp(w, 6, 80)
+		if UIS and UIS.TouchEnabled then
+			w = math.floor(w * 1.6)
+		end
+		sidebarGestureFrame.Size = UDim2.new(0, w, 0, h)
+	end
+
+	gestureWidthValue.Changed:Connect(function()
+		if sidebarGestureFrame then
+			applyGestureSize()
+		end
+	end)
+
+	gestureHeightValue.Changed:Connect(function()
+		if sidebarGestureFrame then
+			applyGestureSize()
+		end
+	end)
+
 	local function ensureSidebarGestureFrame()
 		if sidebarGestureFrame or not (sidebar and mainGui) then return end
 
@@ -1176,10 +1520,9 @@ task.defer(function()
 		sidebarGestureFrame = f
 		f.Name = "SidebarGestureZone"
 		f.BackgroundColor3 = Color3.new(1, 1, 1)
-		f.BackgroundTransparency = 0.4
 		f.BorderSizePixel = 0
 		f.AnchorPoint = Vector2.new(1, 0.5)
-		f.Size = UDim2.new(0, 6, 0, 120)
+		f.Size = UDim2.new(0, sidebarGestureWidth, 0, sidebarGestureHeight)
 		f.Active = false
 		f.Visible = false
 		f.Parent = mainGui
@@ -1187,6 +1530,9 @@ task.defer(function()
 		local corner = Instance.new("UICorner")
 		corner.CornerRadius = UDim.new(0, 6)
 		corner.Parent = f
+
+		applyGestureSize()
+		applyGestureVisual()
 	end
 
 	local function makeSidebarGestureToggle()
@@ -1199,6 +1545,7 @@ task.defer(function()
 		local frame = settingTemplate:Clone()
 		frame.Parent = settingsHolder
 		frame.Visible = true
+		frame.LayoutOrder = -2
 
 		for _, d in ipairs(frame:GetDescendants()) do
 			if d:IsA("LocalScript") then
@@ -1212,11 +1559,15 @@ task.defer(function()
 			tLabel.Text = "Sidebar gesture"
 		end
 		if dLabel then
-			dLabel.Text = "Drag the small bar next to the sidebar to open/close it"
+			dLabel.Text = "Drag from the right edge to open/close the sidebar"
 		end
 
 		local btnFrame = frame:FindFirstChild("Button", true)
 		if not btnFrame then return end
+		local btnLabel = btnFrame:FindFirstChildWhichIsA("TextLabel")
+		if btnLabel then
+			btnLabel.Text="Toggle"
+		end
 
 		local clickable = btnFrame:FindFirstChildWhichIsA("GuiButton") or btnFrame
 
@@ -1228,10 +1579,18 @@ task.defer(function()
 			end
 		end
 
+		setVisual()
+
 		local function toggleClick()
 			sidebarGestureEnabled = not sidebarGestureEnabled
 			setVisual()
 			saveSidebarGesture()
+			if not sidebarGestureEnabled then
+				if iconGui then
+					iconGui.Enabled = true
+				end
+				setIconForcedHidden(false)
+			end
 			task.defer(function()
 				if applySidebarGestureState then
 					applySidebarGestureState()
@@ -1239,7 +1598,149 @@ task.defer(function()
 			end)
 		end
 
+		if clickable:IsA("GuiButton") then
+			clickable.MouseButton1Click:Connect(toggleClick)
+		else
+			clickable.InputBegan:Connect(function(input)
+				if input.UserInputType == Enum.UserInputType.MouseButton1
+					or input.UserInputType == Enum.UserInputType.Touch then
+					toggleClick()
+				end
+			end)
+		end
+	end
+
+	local function makeSidebarGestureBarVisibilityToggle()
+		if not (settingsHolder and settingTemplate) then
+			return
+		end
+
+		local key = "SidebarGestureVisible"
+
+		local frame = settingTemplate:Clone()
+		frame.Parent = settingsHolder
+		frame.Visible = true
+		frame.LayoutOrder = -2
+
+		for _, d in ipairs(frame:GetDescendants()) do
+			if d:IsA("LocalScript") then
+				d:Destroy()
+			end
+		end
+
+		local tLabel = frame:FindFirstChild("Title", true)
+		local dLabel = frame:FindFirstChild("Desc", true)
+		if tLabel then
+			tLabel.Text = "Gesture bar visible"
+		end
+		if dLabel then
+			dLabel.Text = "Hide the sidebar gesture bar but keep it usable"
+		end
+
+		local btnFrame = frame:FindFirstChild("Button", true)
+		if not btnFrame then return end
+		local btnLabel = btnFrame:FindFirstChildWhichIsA("TextLabel")
+		if btnLabel then
+			btnLabel.Text="Toggle"
+		end
+
+		local clickable = btnFrame:FindFirstChildWhichIsA("GuiButton") or btnFrame
+
+		local function setVisual()
+			if sidebarGestureVisible then
+				btnFrame.BackgroundColor3 = Color3.fromRGB(79, 164, 242)
+			else
+				btnFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+			end
+		end
+
 		setVisual()
+		applyGestureVisual()
+
+		local function toggleClick()
+			sidebarGestureVisible = not sidebarGestureVisible
+			setVisual()
+			applyGestureVisual()
+			saveSidebarGestureVisible()
+		end
+
+		if clickable:IsA("GuiButton") then
+			clickable.MouseButton1Click:Connect(toggleClick)
+		else
+			clickable.InputBegan:Connect(function(input)
+				if input.UserInputType == Enum.UserInputType.MouseButton1
+					or input.UserInputType == Enum.UserInputType.Touch then
+					toggleClick()
+				end
+			end)
+		end
+	end
+
+	local function makeAutoCloseToggle()
+		if not (settingsHolder and settingTemplate and sidebar) then
+			return
+		end
+
+		local key = "AutoCloseOnLoad"
+
+		local frame = settingTemplate:Clone()
+		frame.Parent = settingsHolder
+		frame.Visible = true
+		frame.LayoutOrder = -2
+
+		for _, d in ipairs(frame:GetDescendants()) do
+			if d:IsA("LocalScript") then
+				d:Destroy()
+			end
+		end
+
+		local tLabel = frame:FindFirstChild("Title", true)
+		local dLabel = frame:FindFirstChild("Desc", true)
+		if tLabel then
+			tLabel.Text = "Auto-close on load"
+		end
+		if dLabel then
+			dLabel.Text = "Close the Delta sidebar right after it loads"
+		end
+
+		local btnFrame = frame:FindFirstChild("Button", true)
+		if not btnFrame then return end
+
+		local btnLabel = btnFrame:FindFirstChildWhichIsA("TextLabel")
+		if btnLabel then
+			btnLabel.Text = "Toggle"
+		end
+
+		local clickable = btnFrame:FindFirstChildWhichIsA("GuiButton") or btnFrame
+
+		local function saveState()
+			if not (HS and type(writefile) == "function") then return end
+			settingsConfig[key] = {
+				enabled = autoCloseOnLoad,
+			}
+			local ok, encoded = pcall(function()
+				return HS:JSONEncode(settingsConfig)
+			end)
+			if ok and encoded then
+				pcall(writefile, settingsPath, encoded)
+			end
+		end
+
+		local function setVisual()
+			if autoCloseOnLoad then
+				btnFrame.BackgroundColor3 = Color3.fromRGB(79, 164, 242)
+			else
+				btnFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+			end
+		end
+
+		setVisual()
+
+		local function toggleClick()
+			autoCloseOnLoad = not autoCloseOnLoad
+			setVisual()
+			saveState()
+		end
 
 		if clickable:IsA("GuiButton") then
 			clickable.MouseButton1Click:Connect(toggleClick)
@@ -1297,6 +1798,8 @@ task.defer(function()
 
 		sidebarGestureFrame.Active = true
 		sidebarGestureFrame.Visible = true
+		applyGestureVisual()
+		applyGestureSize()
 
 		local id = "SidebarGesture"
 
@@ -1354,17 +1857,6 @@ task.defer(function()
 
 			local sx = sidebarClosedPos.X.Scale + (sidebarOpenPos.X.Scale - sidebarClosedPos.X.Scale) * alpha
 			sidebar.Position = UDim2.new(sx, 0, sidebarClosedPos.Y.Scale, sidebarClosedPos.Y.Offset)
-		end
-
-		local function hideMainSections()
-			if not mainGui then return end
-			local names = { "Executor", "Home", "Scripthub", "Settings", "Console" }
-			for _, n in ipairs(names) do
-				local fr = mainGui:FindFirstChild(n)
-				if fr and fr:IsA("GuiObject") then
-					fr.Visible = false
-				end
-			end
 		end
 
 		NAlib.connect(id, sidebarGestureFrame.InputBegan:Connect(function(input)
@@ -1432,15 +1924,7 @@ task.defer(function()
 					iconGui.Enabled = false
 				end
 
-				if iconBtn then
-					pcall(function()
-						iconBtn.ImageTransparency = 1
-						iconBtn.BackgroundTransparency = 1
-						if iconStroke then
-							iconStroke.Enabled = false
-						end
-					end)
-				end
+				setIconForcedHidden(true)
 
 				if mainGui and sidebarCurrentSection then
 					for _, n in ipairs(sectionsList) do
@@ -1467,72 +1951,20 @@ task.defer(function()
 					iconGui.Enabled = true
 				end
 
-				if iconBtn then
-					applyIconUserVisibility()
-				end
+				setIconForcedHidden(false)
 			end
 		end))
 
 		saveSidebarGesture()
 	end
 
-	local function makeSidebarGestureToggle()
-		if not (settingsHolder and settingTemplate and sidebar) then
-			return
-		end
-
-		local key = "SidebarGesture"
-
-		local frame = settingTemplate:Clone()
-		frame.Parent = settingsHolder
-		frame.Visible = true
-
-		for _, d in ipairs(frame:GetDescendants()) do
-			if d:IsA("LocalScript") then
-				d:Destroy()
+	if toggleUIBtn and toggleUIBtn:IsA("GuiButton") then
+		toggleUIBtn.MouseButton1Click:Connect(function()
+			if iconGui then
+				iconGui.Enabled = true
 			end
-		end
-
-		local tLabel = frame:FindFirstChild("Title", true)
-		local dLabel = frame:FindFirstChild("Desc", true)
-		if tLabel then
-			tLabel.Text = "Sidebar gesture"
-		end
-		if dLabel then
-			dLabel.Text = "Drag from the right edge to open the sidebar"
-		end
-
-		local btnFrame = frame:FindFirstChild("Button", true)
-		if not btnFrame then return end
-
-		local clickable = btnFrame:FindFirstChildWhichIsA("GuiButton") or btnFrame
-
-		local function setVisual()
-			if sidebarGestureEnabled then
-				btnFrame.BackgroundColor3 = Color3.fromRGB(79, 164, 242)
-			else
-				btnFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-			end
-		end
-
-		setVisual()
-
-		local function toggleClick()
-			sidebarGestureEnabled = not sidebarGestureEnabled
-			setVisual()
-			applySidebarGestureState()
-		end
-
-		if clickable:IsA("GuiButton") then
-			clickable.MouseButton1Click:Connect(toggleClick)
-		else
-			clickable.InputBegan:Connect(function(input)
-				if input.UserInputType == Enum.UserInputType.MouseButton1
-					or input.UserInputType == Enum.UserInputType.Touch then
-					toggleClick()
-				end
-			end)
-		end
+			setIconForcedHidden(false)
+		end)
 	end
 
 	if activeColorValue then
@@ -1604,7 +2036,45 @@ task.defer(function()
 	makeIconVisibilityToggle()
 	makeIconRgbToggle()
 	makeSidebarGestureToggle()
+	makeSidebarGestureBarVisibilityToggle()
+
+	if gestureWidthValue then
+		makeSizeSlider(
+			"GestureWidth",
+			"Gesture width",
+			"Width of the sidebar gesture area",
+			gestureWidthValue,
+			6,
+			80
+		)
+	end
+
+	if gestureHeightValue then
+		makeSizeSlider(
+			"GestureHeight",
+			"Gesture height",
+			"Height of the sidebar gesture area",
+			gestureHeightValue,
+			60,
+			400
+		)
+	end
+
+	makeAutoCloseToggle()
+	makeDestroyUIButton()
 	applySidebarGestureState()
+
+	if autoCloseOnLoad then
+		task.defer(function()
+			pcall(function()
+				closeDeltaSidebar()
+				if iconGui then
+					iconGui.Enabled = true
+				end
+				setIconForcedHidden(false)
+			end)
+		end)
+	end
 
 	local sidemenu = execFrame:FindFirstChild("Sidemenu", true)
 	if sidemenu then

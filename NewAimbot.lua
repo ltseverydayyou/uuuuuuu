@@ -48,6 +48,7 @@ local randomAimCache = { part = nil, char = nil, expire = 0 }
 _G.isEnabled = _G.isEnabled or false
 _G.aimTargetMode = _G.aimTargetMode or (_G.lockToHead and 'Head') or 'Torso'
 _G.espEnabled = _G.espEnabled or false
+_G.espTransparency = _G.espTransparency or 0.3
 _G.lockToNearest = _G.lockToNearest or false
 _G.aliveCheck = _G.aliveCheck or false
 _G.teamCheck = _G.teamCheck or false
@@ -384,6 +385,7 @@ local function saveCfg()
         espShowHP = _G.espShowHP,
         espShowTeam = _G.espShowTeam,
         espTeamColor = _G.espTeamColor,
+        espTransparency = _G.espTransparency,
         tbCPS = _G.tbCPS,
         aimPredict = _G.aimPredict,
         aimLead = _G.aimLead,
@@ -419,6 +421,9 @@ local function loadCfg()
     end
     if obj.aimTargetMode then
         obj.aimTargetMode = normalizeAimMode(obj.aimTargetMode)
+    end
+    if obj.espTransparency ~= nil then
+        obj.espTransparency = math.clamp(obj.espTransparency, 0, 1)
     end
     for k, v in pairs(obj) do
         if _G[k] ~= nil then
@@ -531,6 +536,31 @@ local function getTorsoLikePart(m)
         or getPart(m, 'Torso')
 end
 
+local function pickPreferredPart(m, prefer)
+    local head = getPart(m, 'Head')
+    local torso = getTorsoLikePart(m)
+    local order = {}
+    if prefer == 'Head' then
+        table.insert(order, head)
+        table.insert(order, torso)
+    else
+        table.insert(order, torso)
+        table.insert(order, head)
+    end
+    local fallback = nil
+    for _, part in ipairs(order) do
+        if part then
+            if not _G.wallCheck or clearLOS(part) then
+                return part
+            end
+            if not fallback then
+                fallback = part
+            end
+        end
+    end
+    return fallback
+end
+
 local function getRandomAimPart(m)
     local head = getPart(m, 'Head')
     local hrp = getPart(m, 'HumanoidRootPart')
@@ -578,21 +608,22 @@ local function topAimPart(m)
     local aimMode = normalizeAimMode(_G.aimTargetMode)
     _G.aimTargetMode = aimMode
     if aimMode == 'Head' then
-        local h = getPart(m, 'Head')
-        if h then
-            return h
+        local p = pickPreferredPart(m, 'Head')
+        if p then
+            return p
         end
     elseif aimMode == 'Random' then
         local p = randomTargetFor(m)
         if p then
             return p
         end
+    else -- Torso mode
+        local p = pickPreferredPart(m, 'Torso')
+        if p then
+            return p
+        end
     end
-    local torsoPart = getTorsoLikePart(m)
-    if torsoPart then
-        return torsoPart
-    end
-    return getPart(m, 'Head')
+    return getTorsoLikePart(m) or getPart(m, 'Head')
 end
 
 local function isEnemy(op)
@@ -737,8 +768,9 @@ local function espAttach(p)
     local col = getTeamColorSafe(p)
     hi.FillColor = col
     hi.OutlineColor = col:lerp(Color3.new(1, 1, 1), 0.25)
-    hi.FillTransparency = 0.3
-    hi.OutlineTransparency = 0.1
+    local tr = math.clamp(_G.espTransparency or 0.3, 0, 1)
+    hi.FillTransparency = tr
+    hi.OutlineTransparency = math.clamp(tr * 0.4, 0, 1)
     hi.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
     hi.Adornee = ch
     hi.Parent = gui
@@ -803,6 +835,16 @@ local function updateESP()
     for p, _ in pairs(espMap) do
         if not table.find(Players:GetPlayers(), p) then
             espDetach(p)
+        end
+    end
+end
+
+local function refreshESPTransparency()
+    local tr = math.clamp(_G.espTransparency or 0.3, 0, 1)
+    for _, rec in pairs(espMap) do
+        if rec.hi then
+            rec.hi.FillTransparency = tr
+            rec.hi.OutlineTransparency = math.clamp(tr * 0.4, 0, 1)
         end
     end
 end
@@ -1262,6 +1304,119 @@ local function addRowToggleSlider(
     return row
 end
 
+local function addRowSlider(parent, labelText, valueVar, min, max, decimals, desc, onChange)
+    local row = Instance.new('Frame', parent)
+    row.Name = 'Row_' .. labelText
+    row.BackgroundTransparency = 1
+    row.Size = UDim2.new(1, -20, 0, desc and 60 or 34)
+    local lbl = Instance.new('TextLabel', row)
+    lbl.Size = UDim2.new(1, -190, 0, 20)
+    lbl.Position = UDim2.new(0, 0, 0, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Font = Enum.Font.GothamMedium
+    lbl.TextSize = 14
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Text = labelText
+    lbl.TextColor3 = UI.sub
+    if desc then
+        local dl = Instance.new('TextLabel', row)
+        dl.BackgroundTransparency = 1
+        dl.Text = desc
+        dl.TextColor3 = UI.sub
+        dl.TextTransparency = 0.2
+        dl.Font = Enum.Font.Gotham
+        dl.TextSize = 12
+        dl.TextXAlignment = Enum.TextXAlignment.Left
+        dl.Position = UDim2.new(0, 0, 0, 22)
+        dl.Size = UDim2.new(1, -190, 0, 18)
+    end
+    local track = Instance.new('Frame', row)
+    track.BackgroundColor3 = UI.bar2
+    track.BorderSizePixel = 0
+    track.Size = UDim2.new(0, 220, 0, 8)
+    track.Position = UDim2.new(1, -(12 + 220), 0.5, -4)
+    round(track, UDim.new(0, 4))
+    stroke(track, 1, UI.stroke2, 0.3)
+    local fill = Instance.new('Frame', track)
+    fill.BackgroundColor3 = UI.acc2
+    fill.BorderSizePixel = 0
+    fill.Size = UDim2.new(0, 0, 1, 0)
+    round(fill, UDim.new(0, 4))
+    local knob = Instance.new('Frame', track)
+    knob.Size = UDim2.new(0, 14, 0, 14)
+    knob.Position = UDim2.new(0, -7, 0.5, -7)
+    knob.BackgroundColor3 = UI.knob
+    knob.BorderSizePixel = 0
+    round(knob, UDim.new(1, 0))
+    stroke(knob, 1, UI.stroke2, 0.15)
+    local valLbl = Instance.new('TextLabel', row)
+    valLbl.BackgroundTransparency = 1
+    valLbl.Font = Enum.Font.Gotham
+    valLbl.TextSize = 13
+    valLbl.TextColor3 = UI.text
+    valLbl.Size = UDim2.new(0, 64, 0, 20)
+    valLbl.Position = UDim2.new(1, -(12 + 220 + 8 + 64), 0.5, -10)
+    local function fmt(n)
+        local m = decimals or 0
+        if m <= 0 then
+            return tostring(math.floor(n + 0.5))
+        end
+        local p = 10 ^ m
+        return tostring(math.floor(n * p + 0.5) / p)
+    end
+    local function setVal(n, fromDrag)
+        n = math.clamp(n, min, max)
+        _G[valueVar] = n
+        valLbl.Text = fmt(n)
+        local alpha = (n - min) / (max - min)
+        fill.Size = UDim2.new(alpha, 0, 1, 0)
+        knob.Position = UDim2.new(alpha, -7, 0.5, -7)
+        saveCfg()
+        if onChange then
+            onChange(n)
+        end
+        if not fromDrag then
+            TS:Create(knob, TweenInfo.new(0.08), { BackgroundColor3 = UI.knob })
+                :Play()
+        end
+    end
+    setVal(_G[valueVar] or min)
+    local draggingS = false
+    local function posToVal(x)
+        local ax =
+            math.clamp(x - track.AbsolutePosition.X, 0, track.AbsoluteSize.X)
+        local a = ax / track.AbsoluteSize.X
+        return min + a * (max - min)
+    end
+    local tb = track.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then
+            draggingS = true
+            setVal(posToVal(i.Position.X), true)
+            TS:Create(knob, TweenInfo.new(0.06), { BackgroundColor3 = UI.acc2 })
+                :Play()
+        end
+    end)
+    local te = track.InputEnded:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then
+            draggingS = false
+            TS:Create(knob, TweenInfo.new(0.1), { BackgroundColor3 = UI.knob })
+                :Play()
+        end
+    end)
+    local tc = UIS.InputChanged:Connect(function(i)
+        if
+            draggingS
+            and i.UserInputType == Enum.UserInputType.MouseMovement
+        then
+            setVal(posToVal(i.Position.X), true)
+        end
+    end)
+    table.insert(conns, tb)
+    table.insert(conns, te)
+    table.insert(conns, tc)
+    return row
+end
+
 local function makeTabBar(parent)
     local bar = Instance.new('Frame')
     bar.Name = 'Tabs'
@@ -1624,6 +1779,18 @@ local function createUI()
     addRowToggle(pgESP, 'show name', 'espShowName')
     addRowToggle(pgESP, 'show health', 'espShowHP')
     addRowToggle(pgESP, 'show team', 'espShowTeam')
+    addRowSlider(
+        pgESP,
+        'esp transparency',
+        'espTransparency',
+        0,
+        1,
+        2,
+        'highlight fill transparency',
+        function()
+            refreshESPTransparency()
+        end
+    )
 
     local function addRow(parent, labelText, valueText, copyFn)
         local row = Instance.new('Frame', parent)

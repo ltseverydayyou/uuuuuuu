@@ -348,6 +348,8 @@ task.defer(function()
 	local sidebarGradient = nil
 	local sidebarGrad1 = nil
 	local sidebarGrad2 = nil
+	local sidebarClosedPos = UDim2.new(1.08, 0, 0.474000007, 0)
+	local sidebarOpenPos   = UDim2.new(1,          0, 0.474000007, 0)
 
 	if iconGui and iconGui:IsA("ScreenGui") then
 		pcall(function() iconGui.IgnoreGuiInset = true end)
@@ -1379,9 +1381,6 @@ task.defer(function()
 			end)
 		end
 	end
-
-	local sidebarClosedPos = UDim2.new(1.08, 0, 0.474000007, 0)
-	local sidebarOpenPos   = UDim2.new(1,          0, 0.474000007, 0)
 
 	local sidebarGestureEnabled = false
 	local sidebarGestureVisible = true

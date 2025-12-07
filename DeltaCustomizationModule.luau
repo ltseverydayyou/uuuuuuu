@@ -294,6 +294,494 @@ local iconStroke = iconBtn and (iconBtn:FindFirstChildOfClass("UIStroke") or ico
 local iconBaseColor = iconStroke and iconStroke.Color
 local iconBaseSize = iconBtn and iconBtn.Size
 local iconColorUseCustom = false
+local updateIconStatusUI
+
+local function fsOk()
+	return type(isfile) == "function"
+		and type(writefile) == "function"
+end
+
+local function gaOk()
+	return type(getcustomasset) == "function"
+end
+
+local function iconFsOk()
+	return fsOk() and gaOk()
+end
+
+local function trim(s)
+	if type(s) ~= "string" then return "" end
+	return s:match("^%s*(.-)%s*$") or ""
+end
+
+local function sName(name)
+	if type(name) ~= "string" then
+		return nil
+	end
+	local t = trim(name)
+	t = t:gsub("[^%w%._%-]", "_")
+	t = t:gsub("_+", "_")
+	t = t:gsub("^_+", "")
+	t = t:gsub("_+$", "")
+	if t == "" then
+		return nil
+	end
+	return t
+end
+
+local function getName(path)
+	if type(path) ~= "string" then
+		return nil
+	end
+	local n = path:gsub("\\", "/")
+	return n:match("([^/]+)$")
+end
+
+local function fileFromUrl(u)
+	if type(u) ~= "string" then
+		return nil
+	end
+	return u:match("/([^/%?]+)$")
+end
+
+local function iconPreUrl(u)
+	if type(u) ~= "string" then
+		return nil
+	end
+	local t = trim(u)
+	if t == "" then
+		return nil
+	end
+	t = t:gsub(" ", "%%20")
+	local q = t:find("%?")
+	local base = q and t:sub(1, q - 1) or t
+	return t, base
+end
+
+local function iconNormUrl(u)
+	local t, base = iconPreUrl(u)
+	if not t then
+		return nil
+	end
+	local owner, repo, kind, rest = base:match("^https?://github.com/([^/]+)/([^/]+)/([^/]+)/(.+)$")
+	if owner and repo and kind and rest then
+		local s = rest
+		if s:sub(1, 11) == "refs/heads/" then
+			s = s:sub(12)
+		elseif s:sub(1, 10) == "refs/tags/" then
+			s = s:sub(11)
+		end
+		local branch, path = s:match("^([^/]+)/(.+)$")
+		if branch and path and (kind == "blob" or kind == "raw") then
+			branch = branch:gsub("%%2[Ff]", "/")
+			path = path:gsub("%%2[Ff]", "/")
+			return string.format("https://raw.githubusercontent.com/%s/%s/%s/%s", owner, repo, branch, path)
+		end
+	end
+	local rawDir = base:match("^https?://raw%.githubusercontent%.com/.+")
+	if rawDir then
+		return t
+	end
+	return t
+end
+
+local function ensureDir(path)
+	if not fsOk() then
+		return false
+	end
+	if type(isfolder) == "function" then
+		local ok, ex = pcall(isfolder, path)
+		if ok and ex then
+			return true
+		end
+		if type(makefolder) ~= "function" then
+			return false
+		end
+		local okMk = pcall(makefolder, path)
+		return okMk == true
+	end
+	return true
+end
+
+local baseDir = "DeltaCustom"
+local iconDir = baseDir.."/DeltaIcons"
+local cfgPath = baseDir.."/delta_icon.json"
+
+local dIcons = {
+	entries = {},
+	index = 0,
+	enabled = false,
+	localPath = "",
+	assetId = "",
+	defaultImage = "",
+	pendingInput = "",
+}
+
+local function ensureIconDir()
+	if not ensureDir(baseDir) then
+		return false
+	end
+	return ensureDir(iconDir)
+end
+
+local function loadIconCfg()
+	if not fsOk() or not HS then
+		return
+	end
+	if type(isfolder) == "function" and type(makefolder) == "function" then
+		local okB, exB = pcall(isfolder, baseDir)
+		if not (okB and exB) then
+			pcall(makefolder, baseDir)
+		end
+	end
+	if type(isfile) == "function" and type(writefile) == "function" then
+		if not isfile(cfgPath) then
+			pcall(writefile, cfgPath, HS:JSONEncode({
+				enabled = false,
+				assetId = "",
+				localPath = "",
+				index = 0,
+			}))
+		end
+	end
+	if type(isfile) ~= "function" or type(readfile) ~= "function" then
+		return
+	end
+	if not isfile(cfgPath) then
+		return
+	end
+	local ok, raw = pcall(readfile, cfgPath)
+	if not (ok and type(raw) == "string") then
+		return
+	end
+	local okD, dec = pcall(HS.JSONDecode, HS, raw)
+	if not (okD and type(dec) == "table") then
+		return
+	end
+	if type(dec.enabled) == "boolean" then
+		dIcons.enabled = dec.enabled
+	end
+	if type(dec.assetId) == "string" then
+		dIcons.assetId = dec.assetId
+	end
+	if type(dec.localPath) == "string" then
+		dIcons.localPath = dec.localPath
+	end
+	if type(dec.index) == "number" then
+		dIcons.index = dec.index
+	end
+end
+
+local function saveIconCfg()
+	if not fsOk() or not HS then
+		return
+	end
+	local payload = {
+		enabled = dIcons.enabled and true or false,
+		assetId = type(dIcons.assetId) == "string" and dIcons.assetId or "",
+		localPath = type(dIcons.localPath) == "string" and dIcons.localPath or "",
+		index = tonumber(dIcons.index) or 0,
+	}
+	pcall(writefile, cfgPath, HS:JSONEncode(payload))
+end
+
+local function scanIcons()
+	dIcons.entries = {}
+	dIcons.index = 0
+	if not (fsOk() and type(listfiles) == "function") then
+		return
+	end
+	if not ensureIconDir() then
+		return
+	end
+	local ok, items = pcall(listfiles, iconDir)
+	if not (ok and type(items) == "table") then
+		return
+	end
+	local list = {}
+	for _, full in ipairs(items) do
+		local n = getName(full)
+		if n then
+			list[#list + 1] = { file = n }
+		end
+	end
+	dIcons.entries = list
+	if type(dIcons.localPath) == "string" and dIcons.localPath ~= "" then
+		local cur = getName(dIcons.localPath)
+		if cur then
+			for i, e in ipairs(list) do
+				if e.file == cur then
+					dIcons.index = i
+					if updateIconStatusUI then
+						updateIconStatusUI()
+					end
+					return
+				end
+			end
+		end
+	end
+	if #list > 0 then
+		dIcons.index = 1
+	end
+	if updateIconStatusUI then
+		updateIconStatusUI()
+	end
+end
+
+local function formatIconStatus()
+	local list = dIcons.entries
+	local n = #list
+	if n == 0 then
+		return "No custom icons installed"
+	end
+	if n == 1 then
+		return "1 custom icon installed"
+	end
+	return tostring(n).." custom icons installed"
+end
+
+local function iconSaveFromUrl(url)
+	if not iconFsOk() then
+		return false, "Custom icons require file support and getcustomasset."
+	end
+	if not ensureIconDir() then
+		return false, "Unable to prepare DeltaIcons folder."
+	end
+	local norm = iconNormUrl(url)
+	if not norm then
+		return false, "Enter a valid image URL or asset id."
+	end
+	local ok, data = pcall(function()
+		return game:HttpGet(norm)
+	end)
+	if not (ok and type(data) == "string" and data ~= "") then
+		return false, "Unable to download icon image."
+	end
+	local remote = fileFromUrl(norm) or "DeltaIcon.png"
+	local safe = sName(remote) or ("icon_"..tostring(os.time())..".png")
+	local full = iconDir.."/"..safe
+	local okW, errW = pcall(writefile, full, data)
+	if not okW then
+		return false, errW or "Unable to save icon image."
+	end
+	local okA, asset = pcall(getcustomasset, full)
+	if not (okA and type(asset) == "string") then
+		return false, "Unable to load icon image."
+	end
+	dIcons.localPath = full
+	local list = dIcons.entries
+	local idx
+	for i, e in ipairs(list) do
+		if e.file == safe then
+			idx = i
+			break
+		end
+	end
+	if not idx then
+		list[#list + 1] = { file = safe }
+		idx = #list
+	end
+	dIcons.entries = list
+	dIcons.index = idx
+	if updateIconStatusUI then
+		updateIconStatusUI()
+	end
+	return true, asset
+end
+
+local function applyIcon()
+	if not iconBtn or not iconBtn:IsA("ImageButton") then
+		return false
+	end
+	local img
+	if dIcons.enabled and type(dIcons.assetId) == "string" and dIcons.assetId ~= "" then
+		img = dIcons.assetId
+	elseif type(dIcons.defaultImage) == "string" and dIcons.defaultImage ~= "" then
+		img = dIcons.defaultImage
+	end
+	local ok = false
+	if img and img ~= "" then
+		iconBtn.Image = img
+		ok = true
+	else
+		iconBtn.Image = ""
+	end
+	return ok
+end
+
+local function setIconEnabled(flag)
+	if not iconFsOk() then
+		return false, "Custom icon requires file support and getcustomasset."
+	end
+	flag = flag and true or false
+	if flag and (not dIcons.assetId or dIcons.assetId == "") then
+		return false, "Add an asset id or image URL before enabling."
+	end
+	dIcons.enabled = flag
+	applyIcon()
+	saveIconCfg()
+	return true
+end
+
+local function setIconAsset(input, opts)
+	opts = opts or {}
+	if not iconFsOk() then
+		return false, "Custom icon requires file support and getcustomasset."
+	end
+	local raw = type(input) == "string" and input or tostring(input)
+	if type(raw) ~= "string" then
+		return false, "Enter a valid asset id or image URL."
+	end
+	raw = trim(raw)
+	if raw == "" then
+		return false, "Enter a valid asset id or image URL."
+	end
+	local digits = raw:match("^rbxassetid://(%d+)$") or raw:match("id=(%d+)") or raw:match("^(%d+)$")
+	local newAsset
+	dIcons.localPath = ""
+	if digits then
+		newAsset = "rbxassetid://"..digits
+	else
+		local okIcon, res = iconSaveFromUrl(raw)
+		if not okIcon then
+			return false, res or "Unable to save custom icon."
+		end
+		newAsset = res
+		scanIcons()
+	end
+	dIcons.assetId = newAsset
+	if opts.autoEnable ~= false then
+		dIcons.enabled = true
+	end
+	applyIcon()
+	saveIconCfg()
+	if digits then
+		return true, digits
+	end
+	return true, raw
+end
+
+local function cycleIcon(delta)
+	local list = dIcons.entries
+	if #list == 0 then
+		return
+	end
+
+	delta = delta or 1
+	local idx = dIcons.index or 1
+	if idx < 1 or idx > #list then
+		idx = 1
+	end
+	idx = ((idx - 1 + delta) % #list) + 1
+
+	local e = list[idx]
+	if not e or not e.file then
+		return
+	end
+
+	local full = iconDir.."/"..e.file
+	if fsOk() and type(isfile) == "function" then
+		local okEx, ex = pcall(isfile, full)
+		if not (okEx and ex) then
+			scanIcons()
+			return
+		end
+	end
+
+	local okA, asset = pcall(getcustomasset, full)
+	if not (okA and type(asset) == "string") then
+		return
+	end
+
+	dIcons.localPath = full
+	dIcons.assetId = asset
+	dIcons.index = idx
+
+	applyIcon()
+	saveIconCfg()
+
+	if updateIconStatusUI then
+		updateIconStatusUI()
+	end
+end
+
+local function delIconFile(name)
+	if type(name) ~= "string" or name == "" then
+		return
+	end
+	if not (fsOk() and type(delfile) == "function" and type(isfile) == "function") then
+		return
+	end
+	local full = iconDir.."/"..name
+	local okEx, ex = pcall(isfile, full)
+	if okEx and ex then
+		pcall(delfile, full)
+	end
+end
+
+local function clearIfCurrent(name)
+	if type(name) ~= "string" or name == "" then
+		return
+	end
+	local full = iconDir.."/"..name
+	if dIcons.localPath == full then
+		dIcons.localPath = ""
+		dIcons.assetId = ""
+		dIcons.index = 0
+		dIcons.enabled = false
+		applyIcon()
+		saveIconCfg()
+	end
+end
+
+local function removeIconEntry(entry)
+	if not (entry and entry.file) then
+		return
+	end
+	delIconFile(entry.file)
+	clearIfCurrent(entry.file)
+	scanIcons()
+end
+
+local function removeAllIcons()
+	local list = dIcons.entries or {}
+	for _, e in ipairs(list) do
+		if e and e.file then
+			delIconFile(e.file)
+		end
+	end
+	dIcons.entries = {}
+	dIcons.index = 0
+	dIcons.localPath = ""
+	dIcons.assetId = ""
+	dIcons.enabled = false
+	applyIcon()
+	saveIconCfg()
+	scanIcons()
+end
+
+if iconBtn and type(iconBtn.Image) == "string" and iconBtn.Image ~= "" then
+	dIcons.defaultImage = iconBtn.Image
+end
+
+loadIconCfg()
+scanIcons()
+if dIcons.enabled and type(dIcons.assetId) == "string" and dIcons.assetId ~= "" then
+	applyIcon()
+end
+
+local deltaIconApi = {
+	status = formatIconStatus,
+	setEnabled = setIconEnabled,
+	setAsset = setIconAsset,
+	cycle = cycleIcon,
+	scan = scanIcons,
+	removeEntry = removeIconEntry,
+	removeAll = removeAllIcons,
+	data = dIcons,
+}
+
+deltaEnv.DeltaIcon = deltaIconApi
 
 task.defer(function()
 	while not mainGui do
@@ -695,11 +1183,10 @@ task.defer(function()
 		end
 
 		local oldBtn = frame:FindFirstChild("Button", true)
-		local size, pos, anchor, order
+		local size, pos, order
 		if oldBtn then
 			size = oldBtn.Size
 			pos = oldBtn.Position
-			anchor = oldBtn.AnchorPoint
 			order = oldBtn.LayoutOrder
 			oldBtn:Destroy()
 		end
@@ -1382,6 +1869,474 @@ task.defer(function()
 		end
 	end
 
+	local function makeIconEnableToggle()
+		if not (settingsHolder and settingTemplate and iconBtn) then
+			return
+		end
+
+		local key = "IconEnabled"
+
+		local frame = settingTemplate:Clone()
+		frame.Parent = settingsHolder
+		frame.Visible = true
+		frame.LayoutOrder = -2
+
+		for _, d in ipairs(frame:GetDescendants()) do
+			if d:IsA("LocalScript") then
+				d:Destroy()
+			end
+		end
+
+		local tLabel = frame:FindFirstChild("Title", true)
+		local dLabel = frame:FindFirstChild("Desc", true)
+
+		if tLabel then
+			tLabel.Text = "Use custom icon"
+		end
+
+		if dLabel then
+			if iconFsOk() then
+				dLabel.Text = "Toggle between default and custom Delta icon"
+			else
+				dLabel.Text = "Requires file system + getcustomasset support"
+			end
+		end
+
+		local btnFrame = frame:FindFirstChild("Button", true)
+		if not btnFrame then return end
+
+		local btnLabel = btnFrame:FindFirstChildWhichIsA("TextLabel")
+		if btnLabel then
+			btnLabel.Text = "Toggle"
+		end
+
+		local clickable = btnFrame:FindFirstChildWhichIsA("GuiButton") or btnFrame
+		local enabled = dIcons.enabled and true or false
+
+		local function setVisual()
+			if enabled then
+				btnFrame.BackgroundColor3 = Color3.fromRGB(79, 164, 242)
+			else
+				btnFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+			end
+		end
+
+		setVisual()
+
+		local function toggleClick()
+			local target = not enabled
+			local ok, err = setIconEnabled(target)
+			if not ok then
+				notify({
+					Title = "Delta Icon",
+					Description = err or "Failed to toggle custom icon.",
+					Duration = 5,
+				})
+				return
+			end
+			enabled = target
+			setVisual()
+		end
+
+		if clickable:IsA("GuiButton") then
+			clickable.MouseButton1Click:Connect(toggleClick)
+		else
+			clickable.InputBegan:Connect(function(input)
+				if input.UserInputType == Enum.UserInputType.MouseButton1
+					or input.UserInputType == Enum.UserInputType.Touch then
+					toggleClick()
+				end
+			end)
+		end
+	end
+
+	local function makeIconInputRow()
+		if not (settingsHolder and settingTemplate and iconBtn) then
+			return
+		end
+
+		local frame = settingTemplate:Clone()
+		frame.Parent = settingsHolder
+		frame.Visible = true
+		frame.LayoutOrder = -2
+
+		for _, d in ipairs(frame:GetDescendants()) do
+			if d:IsA("LocalScript") then
+				d:Destroy()
+			end
+		end
+
+		local tLabel = frame:FindFirstChild("Title", true)
+		local dLabel = frame:FindFirstChild("Desc", true)
+		if tLabel then
+			tLabel.Text = "Icon source"
+		end
+		if dLabel then
+			dLabel.Text = "Asset id or image URL (GitHub/External supported)"
+		end
+
+		local oldBtn = frame:FindFirstChild("Button", true)
+		local size, pos, order
+		if oldBtn then
+			size = oldBtn.Size
+			pos = oldBtn.Position
+			order = oldBtn.LayoutOrder
+			oldBtn:Destroy()
+		end
+
+		local basePos = pos or UDim2.new(1, -160, 0.5, 0)
+		local bx, bo = basePos.X.Scale, basePos.X.Offset
+		local by, byo = basePos.Y.Scale, basePos.Y.Offset
+
+		local box = Instance.new("TextBox")
+		box.Name = "IconInput"
+		box.Size = UDim2.new(0, 160, 0, 18)
+		box.AnchorPoint = Vector2.new(1, 0.5)
+		box.Position = UDim2.new(bx, bo, by, byo)
+		box.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+		box.BorderSizePixel = 0
+		box.ClearTextOnFocus = true
+		box.TextXAlignment = Enum.TextXAlignment.Left
+		box.Font = Enum.Font.Gotham
+		box.TextSize = 12
+		box.Text=''
+		box.TextColor3 = Color3.new(1, 1, 1)
+		box.PlaceholderText = "id or image URL"
+		box.Parent = frame
+
+		local setBtn = Instance.new("TextButton")
+		setBtn.Name = "Apply"
+		setBtn.Size = UDim2.new(0, 50, 0, 18)
+		setBtn.AnchorPoint = Vector2.new(1, 0.5)
+		setBtn.Position = UDim2.new(bx, bo - 170, by, byo)
+		setBtn.BackgroundColor3 = Color3.fromRGB(79, 164, 242)
+		setBtn.BorderSizePixel = 0
+		setBtn.Font = Enum.Font.GothamBold
+		setBtn.TextSize = 11
+		setBtn.TextColor3 = Color3.new(1, 1, 1)
+		setBtn.Text = "SET"
+		setBtn.Parent = frame
+
+		local setCorner = Instance.new("UICorner")
+		setCorner.CornerRadius = UDim.new(0, 4)
+		setCorner.Parent = setBtn
+
+		local defBtn = Instance.new("TextButton")
+		defBtn.Name = "Default"
+		defBtn.Size = UDim2.new(0, 50, 0, 18)
+		defBtn.AnchorPoint = Vector2.new(1, 0.5)
+		defBtn.Position = UDim2.new(bx, bo - 230, by, byo)
+		defBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+		defBtn.BorderSizePixel = 0
+		defBtn.Font = Enum.Font.GothamBold
+		defBtn.TextSize = 11
+		defBtn.TextColor3 = Color3.new(1, 1, 1)
+		defBtn.Text = "DEF"
+		defBtn.Parent = frame
+
+		local defCorner = Instance.new("UICorner")
+		defCorner.CornerRadius = UDim.new(0, 4)
+		defCorner.Parent = defBtn
+
+		local function applyInput()
+			if not iconFsOk() then
+				notify({
+					Title = "Delta Icon",
+					Description = "Custom icons require file system + getcustomasset.",
+					Duration = 5,
+				})
+				return
+			end
+
+			local txt = trim(box.Text or "")
+			if txt == "" then
+				notify({
+					Title = "Delta Icon",
+					Description = "Enter an asset id or image URL.",
+					Duration = 4,
+				})
+				return
+			end
+
+			local ok, msg = setIconAsset(txt, { autoEnable = dIcons.enabled })
+			if not ok then
+				notify({
+					Title = "Delta Icon",
+					Description = msg or "Failed to set custom icon.",
+					Duration = 5,
+				})
+				return
+			end
+
+			if updateIconStatusUI then
+				updateIconStatusUI()
+			end
+
+			box.Text = ""
+
+			notify({
+				Title = "Delta Icon",
+				Description = "Custom icon updated.",
+				Duration = 4,
+			})
+		end
+
+		local function resetDefault()
+			dIcons.enabled = false
+			dIcons.assetId = ""
+			dIcons.localPath = ""
+			applyIcon()
+			saveIconCfg()
+			if updateIconStatusUI then
+				updateIconStatusUI()
+			end
+			notify({
+				Title = "Delta Icon",
+				Description = "Reverted to default icon.",
+				Duration = 4,
+			})
+		end
+
+		setBtn.MouseButton1Click:Connect(applyInput)
+		defBtn.MouseButton1Click:Connect(resetDefault)
+
+		box.FocusLost:Connect(function(enter)
+			if enter then
+				applyInput()
+			end
+		end)
+	end
+
+	local function makeIconManagerRow()
+		if not (settingsHolder and settingTemplate) then
+			return
+		end
+
+		local frame = settingTemplate:Clone()
+		frame.Parent = settingsHolder
+		frame.Visible = true
+		frame.LayoutOrder = -2
+
+		for _, d in ipairs(frame:GetDescendants()) do
+			if d:IsA("LocalScript") then
+				d:Destroy()
+			end
+		end
+
+		local tLabel = frame:FindFirstChild("Title", true)
+		local dLabel = frame:FindFirstChild("Desc", true)
+		if tLabel then
+			tLabel.Text = "Icon manager"
+		end
+		if dLabel then
+			if iconFsOk() then
+				dLabel.Text = formatIconStatus()
+			else
+				dLabel.Text = "File system/getcustomasset not supported."
+			end
+		end
+
+		local oldBtn = frame:FindFirstChild("Button", true)
+		local size, pos, order
+		if oldBtn then
+			size = oldBtn.Size
+			pos = oldBtn.Position
+			order = oldBtn.LayoutOrder
+			oldBtn:Destroy()
+		end
+
+		local basePos = pos or UDim2.new(1, -160, 0.5, 0)
+		local bx, bo = basePos.X.Scale, basePos.X.Offset
+		local by, byo = basePos.Y.Scale, basePos.Y.Offset
+
+		local prevBtn = Instance.new("TextButton")
+		prevBtn.Name = "Prev"
+		prevBtn.Size = UDim2.new(0, 24, 0, 18)
+		prevBtn.AnchorPoint = Vector2.new(1, 0.5)
+		prevBtn.Position = UDim2.new(bx, bo - 210, by, byo)
+		prevBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+		prevBtn.BorderSizePixel = 0
+		prevBtn.Font = Enum.Font.GothamBold
+		prevBtn.TextSize = 11
+		prevBtn.TextColor3 = Color3.new(1, 1, 1)
+		prevBtn.Text = "<"
+		prevBtn.Parent = frame
+
+		local prevCorner = Instance.new("UICorner")
+		prevCorner.CornerRadius = UDim.new(0, 4)
+		prevCorner.Parent = prevBtn
+
+		local nextBtn = Instance.new("TextButton")
+		nextBtn.Name = "Next"
+		nextBtn.Size = UDim2.new(0, 24, 0, 18)
+		nextBtn.AnchorPoint = Vector2.new(1, 0.5)
+		nextBtn.Position = UDim2.new(bx, bo - 180, by, byo)
+		nextBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+		nextBtn.BorderSizePixel = 0
+		nextBtn.Font = Enum.Font.GothamBold
+		nextBtn.TextSize = 11
+		nextBtn.TextColor3 = Color3.new(1, 1, 1)
+		nextBtn.Text = ">"
+		nextBtn.Parent = frame
+
+		local nextCorner = Instance.new("UICorner")
+		nextCorner.CornerRadius = UDim.new(0, 4)
+		nextCorner.Parent = nextBtn
+
+		local delBtn = Instance.new("TextButton")
+		delBtn.Name = "Del"
+		delBtn.Size = UDim2.new(0, 32, 0, 18)
+		delBtn.AnchorPoint = Vector2.new(1, 0.5)
+		delBtn.Position = UDim2.new(bx, bo - 140, by, byo)
+		delBtn.BackgroundColor3 = Color3.fromRGB(80, 40, 40)
+		delBtn.BorderSizePixel = 0
+		delBtn.Font = Enum.Font.GothamBold
+		delBtn.TextSize = 11
+		delBtn.TextColor3 = Color3.new(1, 1, 1)
+		delBtn.Text = "DEL"
+		delBtn.Parent = frame
+
+		local delCorner = Instance.new("UICorner")
+		delCorner.CornerRadius = UDim.new(0, 4)
+		delCorner.Parent = delBtn
+
+		local clrBtn = Instance.new("TextButton")
+		clrBtn.Name = "Clr"
+		clrBtn.Size = UDim2.new(0, 36, 0, 18)
+		clrBtn.AnchorPoint = Vector2.new(1, 0.5)
+		clrBtn.Position = UDim2.new(bx, bo - 95, by, byo)
+		clrBtn.BackgroundColor3 = Color3.fromRGB(60, 30, 30)
+		clrBtn.BorderSizePixel = 0
+		clrBtn.Font = Enum.Font.GothamBold
+		clrBtn.TextSize = 11
+		clrBtn.TextColor3 = Color3.new(1, 1, 1)
+		clrBtn.Text = "CLR"
+		clrBtn.Parent = frame
+
+		local clrCorner = Instance.new("UICorner")
+		clrCorner.CornerRadius = UDim.new(0, 4)
+		clrCorner.Parent = clrBtn
+
+		local statusLabel = Instance.new("TextLabel")
+		statusLabel.Name = "Status"
+		statusLabel.Size = UDim2.new(0, 60, 0, 18)
+		statusLabel.AnchorPoint = Vector2.new(1, 0.5)
+		statusLabel.Position = UDim2.new(bx, bo, by, byo)
+		statusLabel.BackgroundTransparency = 1
+		statusLabel.Font = Enum.Font.Gotham
+		statusLabel.TextSize = 11
+		statusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+		statusLabel.TextXAlignment = Enum.TextXAlignment.Right
+		statusLabel.Text = "-/-"
+		statusLabel.Parent = frame
+
+		function updateIconStatusUI()
+			if not statusLabel then
+				return
+			end
+			local n = #dIcons.entries
+			local idx = dIcons.index
+			if dLabel then
+				if iconFsOk() then
+					dLabel.Text = formatIconStatus()
+				else
+					dLabel.Text = "File system/getcustomasset not supported."
+				end
+			end
+			if n <= 0 then
+				statusLabel.Text = "-/-"
+			else
+				if idx < 1 or idx > n then
+					idx = 1
+				end
+				statusLabel.Text = tostring(idx).."/"..tostring(n)
+			end
+		end
+
+		updateIconStatusUI()
+
+		local function chkFs()
+			if iconFsOk() then
+				return true
+			end
+			notify({
+				Title = "Delta Icon",
+				Description = "Custom icon manager requires file system + getcustomasset.",
+				Duration = 5,
+			})
+			return false
+		end
+
+		prevBtn.MouseButton1Click:Connect(function()
+			if not chkFs() then return end
+			if #dIcons.entries == 0 then
+				notify({
+					Title = "Delta Icon",
+					Description = "No custom icons to cycle.",
+					Duration = 4,
+				})
+				return
+			end
+			cycleIcon(-1)
+		end)
+
+		nextBtn.MouseButton1Click:Connect(function()
+			if not chkFs() then return end
+			if #dIcons.entries == 0 then
+				notify({
+					Title = "Delta Icon",
+					Description = "No custom icons to cycle.",
+					Duration = 4,
+				})
+				return
+			end
+			cycleIcon(1)
+		end)
+
+		delBtn.MouseButton1Click:Connect(function()
+			if not chkFs() then return end
+			local list = dIcons.entries
+			local idx = dIcons.index
+			if #list == 0 or idx < 1 or idx > #list then
+				notify({
+					Title = "Delta Icon",
+					Description = "No icon selected to delete.",
+					Duration = 4,
+				})
+				return
+			end
+			local e = list[idx]
+			if not e or not e.file then
+				return
+			end
+			removeIconEntry(e)
+			if updateIconStatusUI then
+				updateIconStatusUI()
+			end
+		end)
+
+		clrBtn.MouseButton1Click:Connect(function()
+			if not chkFs() then return end
+			if #dIcons.entries == 0 then
+				notify({
+					Title = "Delta Icon",
+					Description = "No custom icons to clear.",
+					Duration = 4,
+				})
+				return
+			end
+			removeAllIcons()
+			if updateIconStatusUI then
+				updateIconStatusUI()
+			end
+			notify({
+				Title = "Delta Icon",
+				Description = "Cleared all custom icons.",
+				Duration = 4,
+			})
+		end)
+	end
+
 	local sidebarGestureEnabled = false
 	local sidebarGestureVisible = true
 	local sidebarGestureWidth = 18
@@ -1916,7 +2871,7 @@ task.defer(function()
 
 			if targetPos == sidebarOpenPos then
 				if not sidebarCurrentSection then
-					sidebarCurrentSection = getCurrentSectionName() or "Executor"
+					sidebarCurrentSection = getCurrentSectionName()
 				end
 
 				if iconGui then
@@ -2034,6 +2989,9 @@ task.defer(function()
 
 	makeIconVisibilityToggle()
 	makeIconRgbToggle()
+	makeIconEnableToggle()
+	makeIconInputRow()
+	makeIconManagerRow()
 	makeSidebarGestureToggle()
 	makeSidebarGestureBarVisibilityToggle()
 
@@ -2063,15 +3021,13 @@ task.defer(function()
 	makeDestroyUIButton()
 	applySidebarGestureState()
 
-	if autoCloseOnLoad then
+	if autoCloseOnLoad and sidebar then
 		task.defer(function()
-			pcall(function()
+			local t0 = tick()
+			while tick() - t0 < 1.5 do
 				closeDeltaSidebar()
-				if iconGui then
-					iconGui.Enabled = true
-				end
-				setIconForcedHidden(false)
-			end)
+				task.wait(0.1)
+			end
 		end)
 	end
 

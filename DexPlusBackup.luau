@@ -438,7 +438,7 @@ Main = (function()
 				end
 
 				-- Check if local copy exists with matching hashs
-				local hashfunc = (syn and syn.crypt.hash) or function() return "" end
+				local hashfunc = (syn and syn.crypt and syn.crypt.hash) or (crypt and crypt.hash) or function() return "" end
 				local filePath = "dex/ModuleCache/"..name..".lua"
 
 				local cachedModuleStr

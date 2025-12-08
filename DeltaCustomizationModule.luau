@@ -766,6 +766,35 @@ end
 
 loadIconCfg()
 scanIcons()
+
+local function refreshIconFromPath()
+	if not iconFsOk() then return end
+	if type(dIcons.localPath) ~= "string" or dIcons.localPath == "" then return end
+
+	local full = dIcons.localPath
+	local okEx, ex = pcall(isfile, full)
+	if not (okEx and ex) then
+		dIcons.localPath = ""
+		dIcons.assetId = ""
+		dIcons.enabled = false
+		saveIconCfg()
+		return
+	end
+
+	local okA, asset = pcall(getcustomasset, full)
+	if not (okA and type(asset) == "string") then
+		dIcons.assetId = ""
+		dIcons.enabled = false
+		saveIconCfg()
+		return
+	end
+
+	dIcons.assetId = asset
+	saveIconCfg()
+end
+
+refreshIconFromPath()
+
 if dIcons.enabled and type(dIcons.assetId) == "string" and dIcons.assetId ~= "" then
 	applyIcon()
 end

@@ -3385,7 +3385,16 @@ task.defer(function()
 	end)
 
 	codeSf.DescendantRemoving:Connect(function(obj)
-		if obj:IsA("TextBox") and isScriptName(obj.Name) and type(delfile) == "function" then
+		if not (obj:IsA("TextBox") and isScriptName(obj.Name) and type(delfile) == "function") then
+			return
+		end
+
+		local txt = ""
+		pcall(function()
+			txt = obj.Text
+		end)
+
+		if type(txt) ~= "string" or txt:match("^%s*$") then
 			local path = tabsDir .. "/" .. obj.Name
 			if isfile(path) then
 				pcall(function()

@@ -1116,11 +1116,31 @@ task.defer(function()
 		applyIconSize(iconSizeValue.Value)
 	end
 
+	local iconRgbSpeedValue
+	if iconStroke then
+		iconRgbSpeedValue = Instance.new("NumberValue")
+		iconRgbSpeedValue.Name = "IconRgbSpeedValue"
+		local sp = 0.2
+		local spCfg = settingsConfig["IconRgbSpeed"]
+		if type(spCfg) == "table" and type(spCfg.value) == "number" then
+			sp = math.clamp(spCfg.value, 0.05, 2)
+		end
+		iconRgbSpeedValue.Value = sp
+	end
+
 	local iconVisible = true
 	do
 		local cfg = settingsConfig["IconVisible"]
 		if type(cfg) == "table" and cfg.enabled ~= nil then
 			iconVisible = cfg.enabled and true or false
+		end
+	end
+
+	local tabNotifEnabled = true
+	do
+		local cfg = settingsConfig["TabNotifications"]
+		if type(cfg) == "table" and cfg.enabled ~= nil then
+			tabNotifEnabled = cfg.enabled and true or false
 		end
 	end
 
@@ -1712,7 +1732,8 @@ task.defer(function()
 		local function startLoop()
 			NAlib.disconnect("IconRGB_Loop")
 			NAlib.connect("IconRGB_Loop", RS.Heartbeat:Connect(function(dt)
-				hue = (hue + dt * 0.2) % 1
+				local spd = iconRgbSpeedValue and math.clamp(iconRgbSpeedValue.Value, 0.05, 2) or 0.2
+				hue = (hue + dt * spd) % 1
 				local c = Color3.fromHSV(hue, 1, 1)
 				pcall(function()
 					iconStroke.Color = c
@@ -1822,6 +1843,83 @@ task.defer(function()
 		local function toggleClick()
 			iconVisible = not iconVisible
 			applyIconUserVisibility(false)
+			setVisual()
+			saveState()
+		end
+
+		if clickable:IsA("GuiButton") then
+			clickable.MouseButton1Click:Connect(toggleClick)
+		else
+			clickable.InputBegan:Connect(function(input)
+				if input.UserInputType == Enum.UserInputType.MouseButton1
+					or input.UserInputType == Enum.UserInputType.Touch then
+					toggleClick()
+				end
+			end)
+		end
+	end
+
+	local function makeTabNotifToggle()
+		if not (settingsHolder and settingTemplate) then
+			return
+		end
+
+		local key = "TabNotifications"
+
+		local frame = settingTemplate:Clone()
+		frame.Parent = settingsHolder
+		frame.Visible = true
+		frame.LayoutOrder = -2
+
+		for _, d in ipairs(frame:GetDescendants()) do
+			if d:IsA("LocalScript") then
+				d:Destroy()
+			end
+		end
+
+		local tLabel = frame:FindFirstChild("Title", true)
+		local dLabel = frame:FindFirstChild("Desc", true)
+		if tLabel then
+			tLabel.Text = "Tab notifications"
+		end
+		if dLabel then
+			dLabel.Text = "Show info popups about saved tabs"
+		end
+
+		local btnFrame = frame:FindFirstChild("Button", true)
+		if not btnFrame then return end
+		local btnLabel = btnFrame:FindFirstChildWhichIsA("TextLabel")
+		if btnLabel then
+			btnLabel.Text = "Toggle"
+		end
+
+		local clickable = btnFrame:FindFirstChildWhichIsA("GuiButton") or btnFrame
+
+		local function saveState()
+			if not (HS and type(writefile) == "function") then return end
+			settingsConfig[key] = {
+				enabled = tabNotifEnabled,
+			}
+			local ok, encoded = pcall(function()
+				return HS:JSONEncode(settingsConfig)
+			end)
+			if ok and encoded then
+				pcall(writefile, settingsPath, encoded)
+			end
+		end
+
+		local function setVisual()
+			if tabNotifEnabled then
+				btnFrame.BackgroundColor3 = Color3.fromRGB(79, 164, 242)
+			else
+				btnFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+			end
+		end
+
+		setVisual()
+
+		local function toggleClick()
+			tabNotifEnabled = not tabNotifEnabled
 			setVisual()
 			saveState()
 		end
@@ -2028,8 +2126,8 @@ task.defer(function()
 		box.TextXAlignment = Enum.TextXAlignment.Left
 		box.Font = Enum.Font.Gotham
 		box.TextSize = 12
-		box.Text=''
 		box.TextColor3 = Color3.new(1, 1, 1)
+		box.Text=''
 		box.PlaceholderText = "id or image URL"
 		box.Parent = frame
 
@@ -2988,6 +3086,17 @@ task.defer(function()
 		)
 	end
 
+	if iconRgbSpeedValue then
+		makeSizeSlider(
+			"IconRgbSpeed",
+			"RGB Speed",
+			"Speed of the RGB icon effect",
+			iconRgbSpeedValue,
+			0.05,
+			2
+		)
+	end
+
 	if sidebarGrad1 and sidebarGrad2 and sidebarGradient then
 		makeColorSlider(
 			"SidebarGradient1",
@@ -3018,6 +3127,7 @@ task.defer(function()
 
 	makeIconVisibilityToggle()
 	makeIconRgbToggle()
+	makeTabNotifToggle()
 	makeIconEnableToggle()
 	makeIconInputRow()
 	makeIconManagerRow()
@@ -3307,24 +3417,26 @@ task.defer(function()
 	local saved = getSavedNames()
 	local boxes = getCodeBoxes()
 
-	if #saved > 0 then
-		local desc
-		if #saved > #boxes then
-			desc = "Saved tabs: " .. tostring(#saved) .. "\nCreate your tabs in Delta and the saved code will load automatically."
+	if tabNotifEnabled then
+		if #saved > 0 then
+			local desc
+			if #saved > #boxes then
+				desc = "Saved tabs: " .. tostring(#saved) .. "\nCreate your tabs in Delta and the saved code will load automatically."
+			else
+				desc = "Saved tabs: " .. tostring(#saved) .. "\nYour saved code will load into matching tabs automatically."
+			end
+			notify({
+				Title = "Delta Customization",
+				Description = desc,
+				Duration = 8,
+			})
 		else
-			desc = "Saved tabs: " .. tostring(#saved) .. "\nYour saved code will load into matching tabs automatically."
+			notify({
+				Title = "Delta Customization",
+				Description = "No saved tabs yet. Anything you type will be saved automatically.",
+				Duration = 6,
+			})
 		end
-		notify({
-			Title = "Delta Customization",
-			Description = desc,
-			Duration = 8,
-		})
-	else
-		notify({
-			Title = "Delta Customization",
-			Description = "No saved tabs yet. Anything you type will be saved automatically.",
-			Duration = 6,
-		})
 	end
 
 	local hooked = {}

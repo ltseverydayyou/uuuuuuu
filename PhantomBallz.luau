@@ -12,7 +12,9 @@ local UIS   = game:GetService("UserInputService")
 
 local Net = require(RSrv.TS.Network.Network).Network
 local Def = require(RSrv.TS.Abilities.DeflectAbility).DeflectAbility
+local PNotif = RS:WaitForChild("PromptNotification")
 
+PNotif:Fire("super scuffed autoparry loaded 💀💀💀", true)
 --local oSet;oSet=hookfunction(Def.SetCooldown,function(self,t,...)return oSet(self,0.1,...)end)
 local oAvail;oAvail=hookfunction(Def.IsAvailable,function(self,...)return true end)
 local oSend;oSend=hookfunction(Net.CSendEvent,function(self,router,evt,...)
@@ -238,13 +240,13 @@ do
 		local hrp = ch:WaitForChild("HumanoidRootPart", 9e9)
 
 		local ring = Instance.new("Part")
-		ring.Name = "__na_ring"
+		ring.Name = "__ltseverydayyou__VISUALIZER__"
 		ring.Anchored = true
 		ring.CanCollide = false
 		ring.CanTouch = false
 		ring.CanQuery = false
 		ring.Material = Enum.Material.ForceField
-		ring.Transparency = 0.65
+		ring.Transparency = 0.5
 		ring.Color = Color3.fromRGB(255, 255, 255)
 		ring.Shape = Enum.PartType.Ball
 		ring.Size = Vector3.new(10, 10, 10)

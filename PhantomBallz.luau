@@ -6,10 +6,25 @@ local Plrs  = game:GetService("Players")
 local RS    = game:GetService("RunService")
 local SS    = game:GetService("SoundService")
 local TS    = game:GetService("TweenService")
-local VIM   = game:GetService("VirtualInputManager")
 local RSrv  = game:GetService("ReplicatedStorage")
 local WS    = workspace
 local Stats = game:GetService("Stats")
+local UIS   = game:GetService("UserInputService")
+
+local Net
+do
+	local ok, mod = pcall(function()
+		return require(RSrv:WaitForChild("TS"):WaitForChild("Network"):WaitForChild("Network")).Network
+	end)
+	if ok and mod then
+		Net = mod
+	end
+end
+
+local function sendParry()
+	if not Net then return end
+	Net:CSendEvent(4.6848415795802784e76, 6.8467442838735085e75)
+end
 
 local function getPing()
 	local net = Stats.Network
@@ -205,6 +220,28 @@ do
 		return h and h.Enabled or false
 	end
 
+	local spamOn = false
+	local spamConn
+
+	UIS.InputBegan:Connect(function(inp, gpe)
+		if gpe then return end
+		if inp.KeyCode == Enum.KeyCode.X then
+			spamOn = not spamOn
+			if spamOn then
+				if not spamConn and Net then
+					spamConn = RS.RenderStepped:Connect(function()
+						sendParry()
+					end)
+				end
+			else
+				if spamConn then
+					spamConn:Disconnect()
+					spamConn = nil
+				end
+			end
+		end
+	end)
+
 	local hb
 	local function bind(ch)
 		if hb then hb:Disconnect() hb = nil end
@@ -226,7 +263,7 @@ do
 		local lastPos, lastT = nil, nil
 		local vel = Vector3.zero
 		local tau = 0.05
-		local minR = 9
+		local minR, maxR = 9, 70
 		local cd = 0.3
 		local lastFire = 0
 		local flashT = 0
@@ -236,7 +273,7 @@ do
 
 			local b = getBall()
 			if not (b and b.Parent) then
-				ring.Color = Color3.fromRGB(255, 255, 255)
+				ring.Color = spamOn and Color3.fromRGB(255, 0, 0) or Color3.fromRGB(255, 255, 255)
 				return
 			end
 
@@ -276,6 +313,7 @@ do
 
 			local rad = spd * win + 4
 			if rad < minR then rad = minR end
+			if rad > maxR then rad = maxR end
 
 			local pre = 5 + math.clamp(pingS * 10, 0, 8)
 			local parryRad = rad + pre
@@ -292,21 +330,24 @@ do
 
 			local can = ok and app and spd > 5 and d <= parryRad
 
-			if now - flashT <= 0.12 then
-				ring.Color = Color3.fromRGB(255, 60, 60)
+			if spamOn then
+				ring.Color = Color3.fromRGB(255, 0, 0)
 			else
-				if not ok then
-					ring.Color = Color3.fromRGB(255, 255, 255)
-				elseif d <= rad then
-					ring.Color = Color3.fromRGB(60, 255, 120)
+				if now - flashT <= 0.12 then
+					ring.Color = Color3.fromRGB(255, 60, 60)
 				else
-					ring.Color = Color3.fromRGB(255, 200, 60)
+					if not ok then
+						ring.Color = Color3.fromRGB(255, 255, 255)
+					elseif d <= rad then
+						ring.Color = Color3.fromRGB(60, 255, 120)
+					else
+						ring.Color = Color3.fromRGB(255, 200, 60)
+					end
 				end
 			end
 
 			if can and (now - lastFire) >= cd then
-				VIM:SendKeyEvent(true, Enum.KeyCode.F, false, game)
-				VIM:SendKeyEvent(false, Enum.KeyCode.F, false, game)
+				sendParry()
 				lastFire = now
 				flashT = now
 			end

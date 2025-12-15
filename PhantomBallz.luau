@@ -2,13 +2,13 @@ if getgenv().__na_aex then return end
 getgenv().__na_aex = true
 if game.GameId ~= 4538598064 then return end
 
-local Plrs = game:GetService("Players")
-local RS = game:GetService("RunService")
-local SS = game:GetService("SoundService")
-local TS = game:GetService("TweenService")
-local VIM = game:GetService("VirtualInputManager")
-local RSrv = game:GetService("ReplicatedStorage")
-local WS = workspace
+local Plrs  = game:GetService("Players")
+local RS    = game:GetService("RunService")
+local SS    = game:GetService("SoundService")
+local TS    = game:GetService("TweenService")
+local VIM   = game:GetService("VirtualInputManager")
+local RSrv  = game:GetService("ReplicatedStorage")
+local WS    = workspace
 local Stats = game:GetService("Stats")
 
 local function getPing()
@@ -225,13 +225,13 @@ do
 
 		local lastPos, lastT = nil, nil
 		local vel = Vector3.zero
-		local tau = 0.1
-		local minR, maxR = 7, 35
-		local cd = 0.35
+		local tau = 0.07
+		local minR, maxR = 9, 40
+		local cd = 0.3
 		local lastFire = 0
 		local flashT = 0
 
-		hb = RS.Heartbeat:Connect(function()
+		hb = RS.Heartbeat:Connect(function(dt)
 			if not (ch and ch.Parent and hrp and hrp.Parent) then return end
 
 			local b = getBall()
@@ -243,16 +243,25 @@ do
 			local now = tick()
 			local bp = b.Position
 
-			if not lastT then
-				lastT, lastPos = now, bp
+			local raw = nil
+			local okVel, av = pcall(function() return b.AssemblyLinearVelocity end)
+			if okVel and typeof(av) == "Vector3" and av.Magnitude > 0.1 then
+				raw = av
 			else
-				local dtt = now - lastT
-				if dtt > 0 then
-					local raw = (bp - lastPos) / dtt
-					local a = dtt / (tau + dtt)
-					vel = vel + (raw - vel) * a
+				if not lastT then
 					lastT, lastPos = now, bp
+				else
+					local dtt = now - lastT
+					if dtt > 0 then
+						raw = (bp - lastPos) / dtt
+						lastT, lastPos = now, bp
+					end
 				end
+			end
+
+			if raw then
+				local a = dt / (tau + dt)
+				vel = vel + (raw - vel) * a
 			end
 
 			local hrpPos = hrp.Position
@@ -260,11 +269,14 @@ do
 
 			local pingMs = getPing()
 			local pingS = pingMs / 1000
-			local baseWin = 0.32
-			local extraWin = math.clamp(pingS * 0.9, 0, 0.32)
-			local tWin = baseWin + extraWin
+			local lag = math.clamp(pingS, 0, 0.4)
 
-			local rad = math.clamp(spd * tWin + 2, minR, maxR)
+			local baseWin = 0.26
+			local win = baseWin + lag
+			if spd > 150 then win = win + 0.08 end
+			if spd > 300 then win = win + 0.08 end
+
+			local rad = math.clamp(spd * win + 3, minR, maxR)
 			ring.Size = Vector3.new(rad * 2, rad * 2, rad * 2)
 			ring.CFrame = CFrame.new(hrpPos)
 
@@ -274,7 +286,14 @@ do
 			local tgt = tgtOn()
 			local ballHl = hasHl(b)
 			local ok = tgt and ballHl
-			local can = ok and app and spd > 1 and d <= rad
+
+			local tImp = 9e9
+			if spd > 1 then
+				tImp = (d - rad) / spd
+			end
+
+			local lead = dt * 2 + lag * 0.6
+			local can = ok and app and spd > 5 and tImp <= lead and d <= rad * 1.5
 
 			if now - flashT <= 0.12 then
 				ring.Color = Color3.fromRGB(255, 60, 60)

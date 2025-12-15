@@ -211,13 +211,13 @@ do
 		local hrp = ch:WaitForChild("HumanoidRootPart", 9e9)
 
 		local ring = Instance.new("Part")
-		ring.Name = "__na_ring"
+		ring.Name = "\0"
 		ring.Anchored = true
 		ring.CanCollide = false
 		ring.CanTouch = false
 		ring.CanQuery = false
 		ring.Material = Enum.Material.ForceField
-		ring.Transparency = 0.65
+		ring.Transparency = 0
 		ring.Color = Color3.fromRGB(90, 90, 90)
 		ring.Shape = Enum.PartType.Ball
 		ring.Size = Vector3.new(10, 10, 10)

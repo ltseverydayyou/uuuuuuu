@@ -353,3 +353,26 @@ do
 	lp.CharacterAdded:Connect(bind)
 	if lp.Character then bind(lp.Character) end
 end
+
+do
+	local del = {"ballhit","slasheffect"}
+	local function chk(inst)
+		local n = inst.Name
+		if type(n) ~= "string" then return end
+		local l = n:lower()
+		for _, k in ipairs(del) do
+			if l:find(k, 1, true) then
+				pcall(function() inst:Destroy() end)
+				break
+			end
+		end
+	end
+
+	for _, d in ipairs(game:GetDescendants()) do
+		task.defer(chk, d)
+	end
+
+	game.DescendantAdded:Connect(function(inst)
+		task.defer(chk, inst)
+	end)
+end

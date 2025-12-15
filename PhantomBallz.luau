@@ -8,33 +8,23 @@ local SS    = game:GetService("SoundService")
 local TS    = game:GetService("TweenService")
 local RSrv  = game:GetService("ReplicatedStorage")
 local WS    = workspace
-local Stats = game:GetService("Stats")
 local UIS   = game:GetService("UserInputService")
 
-local Net
-do
-	local ok, mod = pcall(function()
-		return require(RSrv:WaitForChild("TS"):WaitForChild("Network"):WaitForChild("Network")).Network
-	end)
-	if ok and mod then
-		Net = mod
+local Net = require(RSrv.TS.Network.Network).Network
+local Def = require(RSrv.TS.Abilities.DeflectAbility).DeflectAbility
+
+--local oSet;oSet=hookfunction(Def.SetCooldown,function(self,t,...)return oSet(self,0.1,...)end)
+local oAvail;oAvail=hookfunction(Def.IsAvailable,function(self,...)return true end)
+local oSend;oSend=hookfunction(Net.CSendEvent,function(self,router,evt,...)
+	if router==4.6848415795802784e76 then
+		return oSend(self,router,2.933813859058389e76,...)
 	end
-end
+	return oSend(self,router,evt,...)
+end)
 
 local function sendParry()
 	if not Net then return end
 	Net:CSendEvent(4.6848415795802784e76, 6.8467442838735085e75)
-end
-
-local function getPing()
-	local net = Stats.Network
-	if not net or not net.ServerStatsItem then return 0 end
-	local stat = net.ServerStatsItem["Data Ping"] or net.ServerStatsItem["Data Ping (ms)"]
-	if not stat then return 0 end
-	local ok, v = pcall(function() return stat:GetValue() end)
-	if not ok or type(v) ~= "number" then return 0 end
-	if v < 0 then v = 0 end
-	return v
 end
 
 do
@@ -263,7 +253,7 @@ do
 		local lastPos, lastT = nil, nil
 		local vel = Vector3.zero
 		local tau = 0.05
-		local minR, maxR = 9, 70
+		local minR, maxR = 9, 90
 		local cd = 0.3
 		local lastFire = 0
 		local flashT = 0
@@ -302,20 +292,13 @@ do
 			local hrpPos = hrp.Position
 			local spd = vel.Magnitude
 
-			local pingMs = getPing()
-			local pingS = pingMs / 1000
-			local lag = math.clamp(pingS, 0, 0.45)
-
-			local baseWin = 0.28
-			local win = baseWin + lag
-			if spd > 150 then win = win + 0.09 end
-			if spd > 300 then win = win + 0.09 end
-
-			local rad = spd * win + 4
+			local baseWin = 0.32
+			local baseOff = 6
+			local rad = spd * baseWin + baseOff
 			if rad < minR then rad = minR end
 			if rad > maxR then rad = maxR end
 
-			local pre = 5 + math.clamp(pingS * 10, 0, 8)
+			local pre = 8
 			local parryRad = rad + pre
 
 			ring.Size = Vector3.new(rad * 2, rad * 2, rad * 2)
@@ -328,7 +311,12 @@ do
 			local ballHl = hasHl(b)
 			local ok = tgt and ballHl
 
-			local can = ok and app and spd > 5 and d <= parryRad
+			local tImp = 1e6
+			if spd > 1 then
+				tImp = d / spd
+			end
+
+			local can = ok and app and spd > 5 and d <= parryRad and tImp <= 0.35
 
 			if spamOn then
 				ring.Color = Color3.fromRGB(255, 0, 0)

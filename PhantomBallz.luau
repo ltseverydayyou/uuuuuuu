@@ -211,22 +211,22 @@ do
 		local hrp = ch:WaitForChild("HumanoidRootPart", 9e9)
 
 		local ring = Instance.new("Part")
-		ring.Name = "\0"
+		ring.Name = "__na_ring"
 		ring.Anchored = true
 		ring.CanCollide = false
 		ring.CanTouch = false
 		ring.CanQuery = false
 		ring.Material = Enum.Material.ForceField
-		ring.Transparency = 0
-		ring.Color = Color3.fromRGB(90, 90, 90)
+		ring.Transparency = 0.65
+		ring.Color = Color3.fromRGB(255, 255, 255)
 		ring.Shape = Enum.PartType.Ball
 		ring.Size = Vector3.new(10, 10, 10)
 		ring.Parent = WS
 
 		local lastPos, lastT = nil, nil
 		local vel = Vector3.zero
-		local tau = 0.07
-		local minR, maxR = 9, 40
+		local tau = 0.05
+		local minR = 9
 		local cd = 0.3
 		local lastFire = 0
 		local flashT = 0
@@ -236,17 +236,18 @@ do
 
 			local b = getBall()
 			if not (b and b.Parent) then
-				ring.Color = Color3.fromRGB(90, 90, 90)
+				ring.Color = Color3.fromRGB(255, 255, 255)
 				return
 			end
 
 			local now = tick()
 			local bp = b.Position
 
-			local raw = nil
+			local raw
 			local okVel, av = pcall(function() return b.AssemblyLinearVelocity end)
 			if okVel and typeof(av) == "Vector3" and av.Magnitude > 0.1 then
 				raw = av
+				vel = av
 			else
 				if not lastT then
 					lastT, lastPos = now, bp
@@ -254,14 +255,11 @@ do
 					local dtt = now - lastT
 					if dtt > 0 then
 						raw = (bp - lastPos) / dtt
+						local a = dt / (tau + dt)
+						vel = vel + (raw - vel) * a
 						lastT, lastPos = now, bp
 					end
 				end
-			end
-
-			if raw then
-				local a = dt / (tau + dt)
-				vel = vel + (raw - vel) * a
 			end
 
 			local hrpPos = hrp.Position
@@ -269,14 +267,19 @@ do
 
 			local pingMs = getPing()
 			local pingS = pingMs / 1000
-			local lag = math.clamp(pingS, 0, 0.4)
+			local lag = math.clamp(pingS, 0, 0.45)
 
-			local baseWin = 0.26
+			local baseWin = 0.28
 			local win = baseWin + lag
-			if spd > 150 then win = win + 0.08 end
-			if spd > 300 then win = win + 0.08 end
+			if spd > 150 then win = win + 0.09 end
+			if spd > 300 then win = win + 0.09 end
 
-			local rad = math.clamp(spd * win + 3, minR, maxR)
+			local rad = spd * win + 4
+			if rad < minR then rad = minR end
+
+			local pre = 5 + math.clamp(pingS * 10, 0, 8)
+			local parryRad = rad + pre
+
 			ring.Size = Vector3.new(rad * 2, rad * 2, rad * 2)
 			ring.CFrame = CFrame.new(hrpPos)
 
@@ -287,19 +290,13 @@ do
 			local ballHl = hasHl(b)
 			local ok = tgt and ballHl
 
-			local tImp = 9e9
-			if spd > 1 then
-				tImp = (d - rad) / spd
-			end
-
-			local lead = dt * 2 + lag * 0.6
-			local can = ok and app and spd > 5 and tImp <= lead and d <= rad * 1.5
+			local can = ok and app and spd > 5 and d <= parryRad
 
 			if now - flashT <= 0.12 then
 				ring.Color = Color3.fromRGB(255, 60, 60)
 			else
 				if not ok then
-					ring.Color = Color3.fromRGB(90, 90, 90)
+					ring.Color = Color3.fromRGB(255, 255, 255)
 				elseif d <= rad then
 					ring.Color = Color3.fromRGB(60, 255, 120)
 				else

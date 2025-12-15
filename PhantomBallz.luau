@@ -12,9 +12,9 @@ local UIS   = game:GetService("UserInputService")
 
 local Net = require(RSrv.TS.Network.Network).Network
 local Def = require(RSrv.TS.Abilities.DeflectAbility).DeflectAbility
-local PNotif = RS:WaitForChild("PromptNotification")
+local PNotif = RSrv:WaitForChild("PromptNotification")
 
-PNotif:Fire("super scuffed autoparry loaded 💀💀💀", true)
+task.spawn(function() PNotif:Fire("super scuffed autoparry loaded 💀💀💀", true) end)
 --local oSet;oSet=hookfunction(Def.SetCooldown,function(self,t,...)return oSet(self,0.1,...)end)
 local oAvail;oAvail=hookfunction(Def.IsAvailable,function(self,...)return true end)
 local oSend;oSend=hookfunction(Net.CSendEvent,function(self,router,evt,...)

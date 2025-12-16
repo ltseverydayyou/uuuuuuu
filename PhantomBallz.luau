@@ -15,7 +15,7 @@ local Def = require(RSrv.TS.Abilities.DeflectAbility).DeflectAbility
 local PNotif = RSrv:WaitForChild("PromptNotification")
 
 task.spawn(function() PNotif:Fire("super scuffed autoparry loaded 💀💀💀", true) end)
---local oSet;oSet=hookfunction(Def.SetCooldown,function(self,t,...)return oSet(self,0.1,...)end)
+
 local oAvail;oAvail=hookfunction(Def.IsAvailable,function(self,...)return true end)
 local oSend;oSend=hookfunction(Net.CSendEvent,function(self,router,evt,...)
 	if router==4.6848415795802784e76 then
@@ -27,6 +27,45 @@ end)
 local function sendParry()
 	if not Net then return end
 	Net:CSendEvent(4.6848415795802784e76, 6.8467442838735085e75)
+end
+
+local function NADrag(ui, dragui)
+	if not dragui then dragui = ui end
+	local UISvc = game:GetService("UserInputService")
+	local drag
+	local dragInput
+	local dragStart
+	local startPos
+	local function upd(input)
+		local d = input.Position - dragStart
+		local sz = ui.Parent.AbsoluteSize
+		local nx = startPos.X.Scale + (d.X / sz.X)
+		local ny = startPos.Y.Scale + (d.Y / sz.Y)
+		ui.Position = UDim2.new(nx, 0, ny, 0)
+	end
+	dragui.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			drag = true
+			dragStart = input.Position
+			startPos = ui.Position
+			input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					drag = false
+				end
+			end)
+		end
+	end)
+	dragui.InputChanged:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+			dragInput = input
+		end
+	end)
+	UISvc.InputChanged:Connect(function(input)
+		if input == dragInput and drag then
+			upd(input)
+		end
+	end)
+	ui.Active = true
 end
 
 do
@@ -206,32 +245,84 @@ do
 		return false
 	end
 
-	local function hasHl(obj)
-		if not obj then return false end
-		local h = obj:FindFirstChildWhichIsA("Highlight", true)
-		return h and h.Enabled or false
-	end
-
 	local spamOn = false
 	local spamConn
+	local mobBtn
+
+	local function setSpam(v)
+		if spamOn == v then return end
+		spamOn = v
+		if spamOn then
+			if not spamConn and Net then
+				spamConn = RS.Stepped:Connect(function()
+					sendParry()
+				end)
+			end
+		else
+			if spamConn then
+				spamConn:Disconnect()
+				spamConn = nil
+			end
+		end
+		if mobBtn then
+			if spamOn then
+				mobBtn.BackgroundColor3 = Color3.fromRGB(200, 40, 40)
+				mobBtn.Text = "Parry spam: ON"
+			else
+				mobBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+				mobBtn.Text = "Parry spam: OFF"
+			end
+		end
+	end
 
 	UIS.InputBegan:Connect(function(inp, gpe)
 		if gpe then return end
 		if inp.KeyCode == Enum.KeyCode.X then
-			spamOn = not spamOn
-			if spamOn then
-				if not spamConn and Net then
-					spamConn = RS.Stepped:Connect(function()
-						sendParry()
-					end)
-				end
-			else
-				if spamConn then
-					spamConn:Disconnect()
-					spamConn = nil
-				end
-			end
+			setSpam(not spamOn)
 		end
+	end)
+
+	task.spawn(function()
+		if not UIS.TouchEnabled then return end
+		local hui = (gethui and gethui()) or game:GetService("CoreGui") or Plrs.LocalPlayer:FindFirstChildOfClass("PlayerGui")
+		if not hui then return end
+
+		local gui = Instance.new("ScreenGui")
+		gui.Name = "__na_parry_mobile"
+		gui.ResetOnSpawn = false
+		gui.IgnoreGuiInset = true
+		gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+		gui.Parent = hui
+
+		local holder = Instance.new("Frame")
+		holder.Name = "Holder"
+		holder.Size = UDim2.fromOffset(200, 48)
+		holder.Position = UDim2.new(0.5, -100, 0.75, 0)
+		holder.BackgroundTransparency = 1
+		holder.Parent = gui
+
+		local b = Instance.new("TextButton")
+		b.Name = "Toggle"
+		b.Size = UDim2.fromScale(1, 1)
+		b.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+		b.TextColor3 = Color3.fromRGB(255, 255, 255)
+		b.Font = Enum.Font.GothamBold
+		b.TextSize = 14
+		b.AutoButtonColor = false
+		b.Text = "Parry spam: OFF"
+		b.Parent = holder
+
+		local c = Instance.new("UICorner")
+		c.CornerRadius = UDim.new(0, 18)
+		c.Parent = b
+
+		NADrag(holder, b)
+
+		b.MouseButton1Click:Connect(function()
+			setSpam(not spamOn)
+		end)
+
+		mobBtn = b
 	end)
 
 	local hb
@@ -310,8 +401,7 @@ do
 			local dot = vel:Dot(hrpPos - bp)
 			local app = dot > 0
 			local tgt = tgtOn()
-			local ballHl = hasHl(b)
-			local ok = tgt and ballHl
+			local ok = tgt
 
 			local tImp = 1e6
 			if spd > 1 then
@@ -359,6 +449,7 @@ end
 do
 	local del = {"ballhit","slasheffect"}
 	local function chk(inst)
+		if not inst:IsDescendantOf(workspace) then return end
 		local n = inst.Name
 		if type(n) ~= "string" then return end
 		local l = n:lower()
@@ -370,11 +461,11 @@ do
 		end
 	end
 
-	for _, d in ipairs(game:GetDescendants()) do
+	for _, d in ipairs(workspace:GetDescendants()) do
 		task.defer(chk, d)
 	end
 
-	game.DescendantAdded:Connect(function(inst)
+	workspace.DescendantAdded:Connect(function(inst)
 		task.defer(chk, inst)
 	end)
 end

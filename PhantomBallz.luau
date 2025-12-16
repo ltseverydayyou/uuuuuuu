@@ -221,7 +221,7 @@ do
 			spamOn = not spamOn
 			if spamOn then
 				if not spamConn and Net then
-					spamConn = RS.RenderStepped:Connect(function()
+					spamConn = RS.Stepped:Connect(function()
 						sendParry()
 					end)
 				end

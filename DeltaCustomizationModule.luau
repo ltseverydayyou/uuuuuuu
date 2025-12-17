@@ -293,6 +293,7 @@ local iconGui, iconBtn = getIconGui()
 local iconStroke = iconBtn and (iconBtn:FindFirstChildOfClass("UIStroke") or iconBtn:FindFirstChildWhichIsA("UIStroke", true))
 local iconBaseColor = iconStroke and iconStroke.Color
 local iconBaseSize = iconBtn and iconBtn.Size
+local iconSzLock = false
 local iconColorUseCustom = false
 local updateIconStatusUI
 
@@ -896,70 +897,180 @@ task.defer(function()
 	local settingTemplate
 	local function setupAutoScroll(sf)
 		if not (sf and sf:IsA("ScrollingFrame")) then return end
-		local layout = sf:FindFirstChildWhichIsA("UIListLayout") or sf:FindFirstChildWhichIsA("UIGridLayout")
-		if not layout then return end
+		local lay = sf:FindFirstChildWhichIsA("UIListLayout") or sf:FindFirstChildWhichIsA("UIGridLayout")
+		if not lay then return end
 
-		local fixed = false
+		local id = "AutoScroll_" .. sf:GetDebugId()
+		NAlib.disconnect(id)
 
-		local function fixSizesOnce()
-			if fixed then return end
-			fixed = true
+		local function fixRowHeights()
+			if not lay:IsA("UIListLayout") then
+				return
+			end
 
-			if layout:IsA("UIGridLayout") then
-				local cs = layout.CellSize
-				if cs.Y.Scale > 0 and cs.Y.Offset == 0 then
-					local abs = layout.AbsoluteCellSize
-					local oy = abs.Y
-					if oy <= 0 then
-						oy = cs.Y.Scale * sf.AbsoluteSize.Y
-					end
-					layout.CellSize = UDim2.new(
-						cs.X.Scale,
-						cs.X.Offset,
-						0,
-						math.floor(oy + 0.5)
-					)
-				end
-			else
+			local hParent = sf.AbsoluteSize.Y
+			if hParent <= 0 then
+				return
+			end
+
+			local ratio = sf:GetAttribute("NA_RowRatio")
+			if type(ratio) ~= "number" or ratio <= 0 then
+				local maxH = 0
 				for _, ch in ipairs(sf:GetChildren()) do
 					if ch:IsA("GuiObject") then
-						local cs = ch.Size
-						if cs.Y.Scale > 0 and cs.Y.Offset == 0 then
-							local oy = ch.AbsoluteSize.Y
-							if oy <= 0 then
-								oy = cs.Y.Scale * sf.AbsoluteSize.Y
-							end
-							ch.Size = UDim2.new(
-								cs.X.Scale,
-								cs.X.Offset,
-								0,
-								math.floor(oy + 0.5)
-							)
+						local h = ch.AbsoluteSize.Y
+						if h > maxH then
+							maxH = h
 						end
+					end
+				end
+
+				if maxH <= 0 then
+					ratio = 0.065
+				else
+					ratio = maxH / hParent
+					if ratio < 0.05 then
+						ratio = 0.065
+					end
+				end
+
+				ratio = math.clamp(ratio, 0.05, 0.11)
+				sf:SetAttribute("NA_RowRatio", ratio)
+			end
+
+			local target = math.floor(hParent * ratio + 0.5)
+			for _, ch in ipairs(sf:GetChildren()) do
+				if ch:IsA("GuiObject") then
+					local s = ch.Size
+					if math.abs(ch.AbsoluteSize.Y - target) > 1 then
+						ch.Size = UDim2.new(s.X.Scale, s.X.Offset, 0, target)
 					end
 				end
 			end
 		end
 
 		local function upd()
-			fixSizesOnce()
-			local size = layout.AbsoluteContentSize
+			fixRowHeights()
+			local size = lay.AbsoluteContentSize
 			sf.CanvasSize = UDim2.new(0, 0, 0, size.Y + 250)
 		end
 
 		upd()
 
-		layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(upd)
-
-		sf.ChildAdded:Connect(function()
-			fixed = false
+		NAlib.connect(id, lay:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(upd))
+		NAlib.connect(id, sf.ChildAdded:Connect(function()
 			task.defer(upd)
-		end)
-
-		sf.ChildRemoved:Connect(function()
+		end))
+		NAlib.connect(id, sf.ChildRemoved:Connect(function()
 			task.defer(upd)
-		end)
+		end))
+		if sf.GetPropertyChangedSignal then
+			NAlib.connect(id, sf:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+				task.defer(upd)
+			end))
+		end
 	end
+
+	local function mkDock(fr)
+		local d = Instance.new("Frame")
+		d.Name = "Dock"
+		d.BackgroundTransparency = 1
+		d.AnchorPoint = Vector2.new(1, 0.5)
+		d.Position = UDim2.new(1, -14, 0.5, 0)
+		d.Size = UDim2.new(0, 320, 0, 18)
+		d.Parent = fr
+
+		local l = Instance.new("UIListLayout")
+		l.FillDirection = Enum.FillDirection.Horizontal
+		l.HorizontalAlignment = Enum.HorizontalAlignment.Right
+		l.VerticalAlignment = Enum.VerticalAlignment.Center
+		l.Padding = UDim.new(0, 8)
+		l.Parent = d
+
+		return d
+	end
+
+	local function mkTog(par)
+		local t = Instance.new("TextButton")
+		t.Name = "Toggle"
+		t.Size = UDim2.new(0, 18, 0, 18)
+		t.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+		t.BorderSizePixel = 0
+		t.Font = Enum.Font.GothamBold
+		t.TextSize = 11
+		t.TextColor3 = Color3.new(1, 1, 1)
+		t.Text = "C"
+		t.Parent = par
+
+		local c = Instance.new("UICorner")
+		c.CornerRadius = UDim.new(0, 4)
+		c.Parent = t
+
+		return t
+	end
+
+	local function mkBox(par)
+		local b = Instance.new("TextBox")
+		b.Name = "ValueBox"
+		b.Size = UDim2.new(0, 70, 0, 18)
+		b.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+		b.BorderSizePixel = 0
+		b.ClearTextOnFocus = false
+		b.TextXAlignment = Enum.TextXAlignment.Center
+		b.Font = Enum.Font.Gotham
+		b.TextSize = 12
+		b.TextColor3 = Color3.new(1, 1, 1)
+		b.Parent = par
+		return b
+	end
+
+	local function mkSl(par, w)
+		local s = Instance.new("Frame")
+		s.Name = "Slider"
+		s.BackgroundTransparency = 1
+		s.Size = UDim2.new(0, w or 150, 0, 18)
+		s.Parent = par
+
+		local bar = Instance.new("Frame")
+		bar.Name = "Bar"
+		bar.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+		bar.BorderSizePixel = 0
+		bar.AnchorPoint = Vector2.new(0.5, 0.5)
+		bar.Position = UDim2.new(0.5, 0, 0.5, 0)
+		bar.Size = UDim2.new(1, 0, 0, 6)
+		bar.Parent = s
+
+		local bc = Instance.new("UICorner")
+		bc.CornerRadius = UDim.new(0, 3)
+		bc.Parent = bar
+
+		local fill = Instance.new("Frame")
+		fill.Name = "Fill"
+		fill.BorderSizePixel = 0
+		fill.AnchorPoint = Vector2.new(0, 0.5)
+		fill.Position = UDim2.new(0, 0, 0.5, 0)
+		fill.Size = UDim2.new(0, 0, 1, 0)
+		fill.Parent = bar
+
+		local fc = Instance.new("UICorner")
+		fc.CornerRadius = UDim.new(0, 3)
+		fc.Parent = fill
+
+		local kb = Instance.new("Frame")
+		kb.Name = "Knob"
+		kb.Size = UDim2.new(0, 12, 0, 12)
+		kb.AnchorPoint = Vector2.new(0.5, 0.5)
+		kb.BackgroundColor3 = Color3.new(1, 1, 1)
+		kb.BorderSizePixel = 0
+		kb.Parent = bar
+
+		local kc = Instance.new("UICorner")
+		kc.CornerRadius = UDim.new(1, 0)
+		kc.Parent = kb
+
+		return s, bar, fill, kb
+	end
+
 	if settingsHolder then
 		for _, c in ipairs(settingsHolder:GetChildren()) do
 			if c:IsA("Frame") and c.Name == "Button" then
@@ -1093,11 +1204,26 @@ task.defer(function()
 		local function applyIconSize(v)
 			v = math.clamp(v, 0.5, 5)
 			if not iconBtn or not iconBaseSize then return end
+			iconSzLock = true
 			local sx = iconBaseSize.X.Scale * v
 			local so = iconBaseSize.X.Offset * v
 			local sy = iconBaseSize.Y.Scale * v
 			local syo = iconBaseSize.Y.Offset * v
 			iconBtn.Size = UDim2.new(sx, so, sy, syo)
+			iconSzLock = false
+		end
+
+		if iconBtn and iconBtn.GetPropertyChangedSignal and mainGui and mainGui.GetPropertyChangedSignal then
+			mainGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+				task.defer(function()
+					if iconBtn and iconSizeValue and not iconSzLock then
+						local v = math.clamp(iconSizeValue.Value, 0.5, 5)
+						local s = iconBtn.Size
+						iconBaseSize = UDim2.new(s.X.Scale / v, s.X.Offset / v, s.Y.Scale / v, s.Y.Offset / v)
+						applyIconSize(v)
+					end
+				end)
+			end)
 		end
 
 		iconSizeValue.Changed:Connect(function()
@@ -1209,190 +1335,239 @@ task.defer(function()
 	setupAutoScroll(scriptHubHolder)
 	setupAutoScroll(homeHolder)
 
-	local function makeColorSlider(id, titleText, descText, colorValue)
-		if not (settingsHolder and settingTemplate and colorValue) then
+	local function makeColorSlider(id, tt, dt, cVal)
+		if not (settingsHolder and settingTemplate and cVal) then
 			return
 		end
 
-		local key = id or titleText or ("Color_" .. tostring(math.random(1, 1e9)))
-		local isIcon = (id == "IconColor") and iconStroke ~= nil
+		local key = id or tt or ("Color_" .. tostring(math.random(1, 1e9)))
+		local isIc = (id == "IconColor") and iconStroke ~= nil
 
-		local frame = settingTemplate:Clone()
-		frame.Parent = settingsHolder
-		frame.Visible = true
-		frame.LayoutOrder = -2
+		local fr = settingTemplate:Clone()
+		fr.Parent = settingsHolder
+		fr.Visible = true
+		fr.LayoutOrder = -2
 
-		local tLabel = frame:FindFirstChild("Title", true)
-		local dLabel = frame:FindFirstChild("Desc", true)
-		if tLabel then
-			tLabel.Text = titleText
-		end
-		if dLabel then
-			dLabel.Text = descText
-		end
-
-		local oldBtn = frame:FindFirstChild("Button", true)
-		local size, pos, order
-		if oldBtn then
-			size = oldBtn.Size
-			pos = oldBtn.Position
-			order = oldBtn.LayoutOrder
-			oldBtn:Destroy()
-		end
-
-		local basePos = pos or UDim2.new(1, -160, 0.5, 0)
-		local bx, bo = basePos.X.Scale, basePos.X.Offset
-		local by, byo = basePos.Y.Scale, basePos.Y.Offset
-
-		local slider = Instance.new("Frame")
-		slider.Name = "ColorSlider"
-		slider.BackgroundTransparency = 1
-		slider.Size = size or UDim2.new(0, 150, 0, 18)
-		slider.AnchorPoint = Vector2.new(1, 0.5)
-		slider.Position = UDim2.new(bx, bo - 90, by, byo)
-		slider.LayoutOrder = order or 0
-		slider.Parent = frame
-
-		local valueBox = Instance.new("TextBox")
-		valueBox.Name = "ColorValue"
-		valueBox.Size = UDim2.new(0, 70, 0, 18)
-		valueBox.AnchorPoint = Vector2.new(1, 0.5)
-		valueBox.Position = UDim2.new(bx, bo, by, byo)
-		valueBox.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-		valueBox.BorderSizePixel = 0
-		valueBox.ClearTextOnFocus = false
-		valueBox.TextXAlignment = Enum.TextXAlignment.Center
-		valueBox.Font = Enum.Font.Gotham
-		valueBox.TextSize = 12
-		valueBox.TextColor3 = Color3.new(1, 1, 1)
-		valueBox.Parent = frame
-
-		local toggle = Instance.new("TextButton")
-		toggle.Name = "Toggle"
-		toggle.Size = UDim2.new(0, 18, 0, 18)
-		toggle.AnchorPoint = Vector2.new(1, 0.5)
-		toggle.Position = UDim2.new(bx, bo - 200, by, byo)
-		toggle.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-		toggle.BorderSizePixel = 0
-		toggle.Font = Enum.Font.GothamBold
-		toggle.TextSize = 11
-		toggle.TextColor3 = Color3.new(1, 1, 1)
-		toggle.Text = "C"
-		toggle.Parent = frame
-
-		local toggleCorner = Instance.new("UICorner")
-		toggleCorner.CornerRadius = UDim.new(0, 4)
-		toggleCorner.Parent = toggle
-
-		local bar = Instance.new("Frame")
-		bar.Name = "Bar"
-		bar.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-		bar.BorderSizePixel = 0
-		bar.AnchorPoint = Vector2.new(0.5, 0.5)
-		bar.Position = UDim2.new(0.5, 0, 0.5, 0)
-		bar.Size = UDim2.new(1, 0, 0, 6)
-		bar.Parent = slider
-
-		local barCorner = Instance.new("UICorner")
-		barCorner.CornerRadius = UDim.new(0, 3)
-		barCorner.Parent = bar
-
-		local fill = Instance.new("Frame")
-		fill.Name = "Fill"
-		fill.BorderSizePixel = 0
-		fill.AnchorPoint = Vector2.new(0, 0.5)
-		fill.Position = UDim2.new(0, 0, 0.5, 0)
-		fill.Size = UDim2.new(0, 0, 1, 0)
-		fill.Parent = bar
-
-		local fillCorner = Instance.new("UICorner")
-		fillCorner.CornerRadius = UDim.new(0, 3)
-		fillCorner.Parent = fill
-
-		local knob = Instance.new("Frame")
-		knob.Name = "Knob"
-		knob.Size = UDim2.new(0, 12, 0, 12)
-		knob.AnchorPoint = Vector2.new(0.5, 0.5)
-		knob.BackgroundColor3 = Color3.new(1, 1, 1)
-		knob.BorderSizePixel = 0
-		knob.Parent = bar
-
-		local knobCorner = Instance.new("UICorner")
-		knobCorner.CornerRadius = UDim.new(1, 0)
-		knobCorner.Parent = knob
-
-		local defaultColor = colorValue and colorValue.Value or Color3.new(1, 1, 1)
-		local customEnabled = true
-		local lastCustomColor = defaultColor
-
-		local saved = colorConfig[key]
-		if type(saved) == "table" then
-			if type(saved.customColor) == "table" and #saved.customColor == 3 then
-				lastCustomColor = Color3.new(
-					saved.customColor[1],
-					saved.customColor[2],
-					saved.customColor[3]
-				)
-			end
-			if saved.useCustom ~= nil then
-				customEnabled = saved.useCustom and true or false
+		for _, d in ipairs(fr:GetDescendants()) do
+			if d:IsA("LocalScript") then
+				d:Destroy()
 			end
 		end
 
-		local function setBoxFromColor(c)
+		local tL = fr:FindFirstChild("Title", true)
+		local dL = fr:FindFirstChild("Desc", true)
+		if tL then tL.Text = tt end
+		if dL then dL.Text = dt end
+
+		local ob = fr:FindFirstChild("Button", true)
+		local ord = 0
+		if ob then
+			ord = ob.LayoutOrder
+			ob:Destroy()
+		end
+
+		local pad = 14
+		local vbW = 74
+		local tgW = 20
+		local slW = 190
+
+		local sl = Instance.new("Frame")
+		sl.Name = "ColorSlider"
+		sl.BackgroundTransparency = 1
+		sl.Size = UDim2.new(0, slW, 1, 0)
+		sl.AnchorPoint = Vector2.new(1, 0.5)
+		sl.LayoutOrder = ord
+		sl.Parent = fr
+
+		local vb = Instance.new("TextBox")
+		vb.Name = "ColorValue"
+		vb.Size = UDim2.new(0, vbW, 0, 18)
+		vb.AnchorPoint = Vector2.new(1, 0.5)
+		vb.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+		vb.BorderSizePixel = 0
+		vb.ClearTextOnFocus = false
+		vb.TextXAlignment = Enum.TextXAlignment.Center
+		vb.Font = Enum.Font.Gotham
+		vb.TextSize = 12
+		vb.TextColor3 = Color3.new(1, 1, 1)
+		vb.Parent = fr
+
+		local tg = Instance.new("TextButton")
+		tg.Name = "Toggle"
+		tg.Size = UDim2.new(0, tgW, 0, 18)
+		tg.AnchorPoint = Vector2.new(1, 0.5)
+		tg.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+		tg.BorderSizePixel = 0
+		tg.Font = Enum.Font.GothamBold
+		tg.TextSize = 11
+		tg.TextColor3 = Color3.new(1, 1, 1)
+		tg.Text = "C"
+		tg.Parent = fr
+
+		local tgc = Instance.new("UICorner")
+		tgc.CornerRadius = UDim.new(0, 4)
+		tgc.Parent = tg
+
+		local function lay()
+			local y = 0.5
+			vb.Position = UDim2.new(1, -pad, y, 0)
+			tg.Position = UDim2.new(1, -(pad + vbW + 8), y, 0)
+			sl.Position = UDim2.new(1, -(pad + vbW + 8 + tgW + 8), y, 0)
+		end
+
+		lay()
+		fr:GetPropertyChangedSignal("AbsoluteSize"):Connect(lay)
+
+		local function mkBar(nm, yy)
+			local b = Instance.new("Frame")
+			b.Name = nm
+			b.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+			b.BorderSizePixel = 0
+			b.AnchorPoint = Vector2.new(0.5, 0)
+			b.Position = UDim2.new(0.5, 0, 0, yy)
+			b.Size = UDim2.new(1, 0, 0, 5)
+			b.Active = true
+			b.Parent = sl
+
+			local bc = Instance.new("UICorner")
+			bc.CornerRadius = UDim.new(0, 3)
+			bc.Parent = b
+
+			local k = Instance.new("Frame")
+			k.Name = "Knob"
+			k.Size = UDim2.new(0, 9, 0, 9)
+			k.AnchorPoint = Vector2.new(0.5, 0.5)
+			k.Position = UDim2.new(0, 0, 0.5, 0)
+			k.BackgroundColor3 = Color3.new(1, 1, 1)
+			k.BorderSizePixel = 0
+			k.Parent = b
+
+			local kc = Instance.new("UICorner")
+			kc.CornerRadius = UDim.new(1, 0)
+			kc.Parent = k
+
+			return b, k
+		end
+
+		local bH, kH = mkBar("Hue", 13)
+		local bS, kS = mkBar("Sat", 30)
+		local bV, kV = mkBar("Val", 47)
+
+		local gH = Instance.new("UIGradient")
+		gH.Rotation = 0
+		gH.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0.00, Color3.fromRGB(255, 0, 0)),
+			ColorSequenceKeypoint.new(0.17, Color3.fromRGB(255, 255, 0)),
+			ColorSequenceKeypoint.new(0.33, Color3.fromRGB(0, 255, 0)),
+			ColorSequenceKeypoint.new(0.50, Color3.fromRGB(0, 255, 255)),
+			ColorSequenceKeypoint.new(0.67, Color3.fromRGB(0, 0, 255)),
+			ColorSequenceKeypoint.new(0.83, Color3.fromRGB(255, 0, 255)),
+			ColorSequenceKeypoint.new(1.00, Color3.fromRGB(255, 0, 0)),
+		})
+		gH.Parent = bH
+
+		local gS = Instance.new("UIGradient")
+		gS.Rotation = 0
+		gS.Parent = bS
+
+		local gV = Instance.new("UIGradient")
+		gV.Rotation = 0
+		gV.Parent = bV
+
+		local defC = cVal.Value or Color3.new(1, 1, 1)
+		local cOn = true
+		local lastC = defC
+
+		local sv = colorConfig[key]
+		if type(sv) == "table" then
+			if type(sv.customColor) == "table" and #sv.customColor == 3 then
+				lastC = Color3.new(sv.customColor[1], sv.customColor[2], sv.customColor[3])
+			end
+			if sv.useCustom ~= nil then
+				cOn = sv.useCustom and true or false
+			end
+		end
+
+		local h, s, v = Color3.toHSV(lastC)
+
+		local function boxC(c)
 			local r = math.floor(c.R * 255 + 0.5)
 			local g = math.floor(c.G * 255 + 0.5)
 			local b = math.floor(c.B * 255 + 0.5)
-			valueBox.Text = string.format("%d,%d,%d", r, g, b)
+			vb.Text = string.format("%d,%d,%d", r, g, b)
 		end
 
-		local function saveState()
+		local function save()
 			if not (HS and type(writefile) == "function") then return end
 			colorConfig[key] = {
-				useCustom = customEnabled,
-				customColor = { lastCustomColor.R, lastCustomColor.G, lastCustomColor.B },
+				useCustom = cOn,
+				customColor = { lastC.R, lastC.G, lastC.B },
 			}
-			local ok, encoded = pcall(function()
+			local ok, enc = pcall(function()
 				return HS:JSONEncode(colorConfig)
 			end)
-			if ok and encoded then
-				pcall(writefile, colorsPath, encoded)
+			if ok and enc then
+				pcall(writefile, colorsPath, enc)
 			end
 		end
 
-		local function setVisualFromColor(c)
-			local h = select(1, Color3.toHSV(c)) or 0
-			fill.Size = UDim2.new(h, 0, 1, 0)
-			fill.BackgroundColor3 = c
-			knob.Position = UDim2.new(h, 0, 0.5, 0)
-			setBoxFromColor(c)
+		local function updGrad()
+			local c0 = Color3.fromHSV(h, 0, v)
+			local c1 = Color3.fromHSV(h, 1, v)
+			gS.Color = ColorSequence.new({
+				ColorSequenceKeypoint.new(0, c0),
+				ColorSequenceKeypoint.new(1, c1),
+			})
+
+			local cv0 = Color3.fromHSV(h, s, 0)
+			local cv1 = Color3.fromHSV(h, s, 1)
+			gV.Color = ColorSequence.new({
+				ColorSequenceKeypoint.new(0, cv0),
+				ColorSequenceKeypoint.new(1, cv1),
+			})
 		end
 
-		local function applyColor(c, storeCustom)
-			if colorValue then
-				colorValue.Value = c
+		local function setVis()
+			kH.Position = UDim2.new(h, 0, 0.5, 0)
+			kS.Position = UDim2.new(s, 0, 0.5, 0)
+			kV.Position = UDim2.new(v, 0, 0.5, 0)
+			updGrad()
+			boxC(Color3.fromHSV(h, s, v))
+		end
+
+		local function applyC(col, st)
+			if cVal then
+				cVal.Value = col
 			end
-			if storeCustom then
-				lastCustomColor = c
+			if st then
+				lastC = col
 			end
-			setVisualFromColor(c)
-			saveState()
+			save()
 		end
 
-		local function applyHue(alpha, storeCustom)
-			alpha = math.clamp(alpha, 0, 1)
-			local c = Color3.fromHSV(alpha, 0.9, 1)
-			applyColor(c, storeCustom)
+		local function setHSV(nh, ns, nv, st)
+			h = math.clamp(nh, 0, 1)
+			s = math.clamp(ns, 0, 1)
+			v = math.clamp(nv, 0, 1)
+			local col = Color3.fromHSV(h, s, v)
+			setVis()
+			applyC(col, st)
 		end
 
-		if customEnabled then
-			if isIcon then
+		local function syncFromC(col)
+			h, s, v = Color3.toHSV(col)
+			setVis()
+		end
+
+		if cOn then
+			if isIc then
 				iconColorUseCustom = true
 			end
-			applyColor(lastCustomColor, false)
-			toggle.Text = "C"
+			syncFromC(lastC)
+			applyC(lastC, false)
+			tg.Text = "C"
 		else
-			if isIcon then
+			if isIc then
 				iconColorUseCustom = false
 				if iconStroke then
 					pcall(function()
@@ -1400,74 +1575,94 @@ task.defer(function()
 					end)
 				end
 			end
-			applyColor(defaultColor, false)
-			toggle.Text = "D"
+			syncFromC(defC)
+			applyC(defC, false)
+			tg.Text = "D"
 		end
 
-		local dragging = false
+		local drag = nil
 
-		local function updateFromInput(input)
-			local rel = 0
-			pcall(function()
-				rel = (input.Position.X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X
-			end)
-			rel = math.clamp(rel, 0, 1)
-			customEnabled = true
-			toggle.Text = "C"
-			if isIcon then
+		local function relX(bar, inp)
+			local w = bar.AbsoluteSize.X
+			if w <= 1 then
+				return nil
+			end
+			local x = (inp.Position.X - bar.AbsolutePosition.X) / w
+			if x ~= x then
+				x = 0
+			end
+			return math.clamp(x, 0, 1)
+		end
+
+		local function useDrag(inp)
+			if not drag then return end
+			local a = relX(drag, inp)
+			if not a then return end
+			cOn = true
+			tg.Text = "C"
+			if isIc then
 				iconColorUseCustom = true
 			end
-			applyHue(rel, true)
+			if drag == bH then
+				setHSV(a, s, v, true)
+			elseif drag == bS then
+				setHSV(h, a, v, true)
+			elseif drag == bV then
+				setHSV(h, s, a, true)
+			end
 		end
 
-		bar.InputBegan:Connect(function(input)
-			if input.UserInputType == Enum.UserInputType.MouseButton1
-				or input.UserInputType == Enum.UserInputType.Touch then
-				dragging = true
-				updateFromInput(input)
+		local function beg(bar, inp)
+			if inp.UserInputType ~= Enum.UserInputType.MouseButton1 and inp.UserInputType ~= Enum.UserInputType.Touch then
+				return
+			end
+			drag = bar
+			useDrag(inp)
+		end
+
+		bH.InputBegan:Connect(function(i) beg(bH, i) end)
+		bS.InputBegan:Connect(function(i) beg(bS, i) end)
+		bV.InputBegan:Connect(function(i) beg(bV, i) end)
+
+		UIS.InputChanged:Connect(function(i)
+			if not drag then return end
+			if i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch then
+				useDrag(i)
 			end
 		end)
 
-		UIS.InputChanged:Connect(function(input)
-			if not dragging then return end
-			if input.UserInputType == Enum.UserInputType.MouseMovement
-				or input.UserInputType == Enum.UserInputType.Touch then
-				updateFromInput(input)
+		UIS.InputEnded:Connect(function(i)
+			if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+				drag = nil
 			end
 		end)
 
-		UIS.InputEnded:Connect(function(input)
-			if input.UserInputType == Enum.UserInputType.MouseButton1
-				or input.UserInputType == Enum.UserInputType.Touch then
-				dragging = false
-			end
-		end)
-
-		valueBox.FocusLost:Connect(function()
-			local txt = valueBox.Text or ""
+		vb.FocusLost:Connect(function()
+			local txt = vb.Text or ""
 			local r, g, b = txt:match("(%d+)%s*,%s*(%d+)%s*,%s*(%d+)")
 			r, g, b = tonumber(r), tonumber(g), tonumber(b)
 			if r and g and b then
 				r = math.clamp(r, 0, 255) / 255
 				g = math.clamp(g, 0, 255) / 255
 				b = math.clamp(b, 0, 255) / 255
-				local c = Color3.new(r, g, b)
-				customEnabled = true
-				toggle.Text = "C"
-				if isIcon then
+				local col = Color3.new(r, g, b)
+				cOn = true
+				tg.Text = "C"
+				if isIc then
 					iconColorUseCustom = true
 				end
-				applyColor(c, true)
+				syncFromC(col)
+				applyC(col, true)
 			else
-				setBoxFromColor(colorValue.Value)
+				boxC(cVal.Value)
 			end
 		end)
 
-		toggle.MouseButton1Click:Connect(function()
-			if customEnabled then
-				customEnabled = false
-				toggle.Text = "D"
-				if isIcon then
+		tg.MouseButton1Click:Connect(function()
+			if cOn then
+				cOn = false
+				tg.Text = "D"
+				if isIc then
 					iconColorUseCustom = false
 					if iconStroke then
 						pcall(function()
@@ -1475,16 +1670,18 @@ task.defer(function()
 						end)
 					end
 				end
-				applyColor(defaultColor, false)
+				syncFromC(defC)
+				applyC(defC, false)
 			else
-				customEnabled = true
-				toggle.Text = "C"
-				if isIcon then
+				cOn = true
+				tg.Text = "C"
+				if isIc then
 					iconColorUseCustom = true
 				end
-				applyColor(lastCustomColor or defaultColor, true)
+				syncFromC(lastC or defC)
+				applyC(lastC or defC, true)
 			end
-			saveState()
+			save()
 		end)
 	end
 
@@ -1497,130 +1694,57 @@ task.defer(function()
 		minV = minV or 0.5
 		maxV = maxV or 5
 
-		local frame = settingTemplate:Clone()
-		frame.Parent = settingsHolder
-		frame.Visible = true
-		frame.LayoutOrder = -2
+		local fr = settingTemplate:Clone()
+		fr.Parent = settingsHolder
+		fr.Visible = true
+		fr.LayoutOrder = -2
 
-		local tLabel = frame:FindFirstChild("Title", true)
-		local dLabel = frame:FindFirstChild("Desc", true)
-		if tLabel then
-			tLabel.Text = titleText
+		local tl = fr:FindFirstChild("Title", true)
+		local dl = fr:FindFirstChild("Desc", true)
+		if tl then tl.Text = titleText end
+		if dl then dl.Text = descText end
+
+		local ob = fr:FindFirstChild("Button", true)
+		if ob then ob:Destroy() end
+
+		local dock = mkDock(fr)
+		local vb = mkBox(dock)
+		local sl, bar, fill, kb = mkSl(dock, 150)
+
+		local sv = settingsConfig[key]
+		if type(sv) == "table" and type(sv.value) == "number" then
+			numValue.Value = math.clamp(sv.value, minV, maxV)
 		end
-		if dLabel then
-			dLabel.Text = descText
-		end
 
-		local oldBtn = frame:FindFirstChild("Button", true)
-		local size, pos, order
-		if oldBtn then
-			size = oldBtn.Size
-			pos = oldBtn.Position
-			order = oldBtn.LayoutOrder
-			oldBtn:Destroy()
-		end
-
-		local basePos = pos or UDim2.new(1, -160, 0.5, 0)
-		local bx, bo = basePos.X.Scale, basePos.X.Offset
-		local by, byo = basePos.Y.Scale, basePos.Y.Offset
-
-		local slider = Instance.new("Frame")
-		slider.Name = "SizeSlider"
-		slider.BackgroundTransparency = 1
-		slider.Size = size or UDim2.new(0, 150, 0, 18)
-		slider.AnchorPoint = Vector2.new(1, 0.5)
-		slider.Position = UDim2.new(bx, bo - 90, by, byo)
-		slider.LayoutOrder = order or 0
-		slider.Parent = frame
-
-		local valueBox = Instance.new("TextBox")
-		valueBox.Name = "SizeValue"
-		valueBox.Size = UDim2.new(0, 70, 0, 18)
-		valueBox.AnchorPoint = Vector2.new(1, 0.5)
-		valueBox.Position = UDim2.new(bx, bo, by, byo)
-		valueBox.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-		valueBox.BorderSizePixel = 0
-		valueBox.ClearTextOnFocus = false
-		valueBox.TextXAlignment = Enum.TextXAlignment.Center
-		valueBox.Font = Enum.Font.Gotham
-		valueBox.TextSize = 12
-		valueBox.TextColor3 = Color3.new(1, 1, 1)
-		valueBox.Parent = frame
-
-		local bar = Instance.new("Frame")
-		bar.Name = "Bar"
-		bar.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-		bar.BorderSizePixel = 0
-		bar.AnchorPoint = Vector2.new(0.5, 0.5)
-		bar.Position = UDim2.new(0.5, 0, 0.5, 0)
-		bar.Size = UDim2.new(1, 0, 0, 6)
-		bar.Parent = slider
-
-		local barCorner = Instance.new("UICorner")
-		barCorner.CornerRadius = UDim.new(0, 3)
-		barCorner.Parent = bar
-
-		local fill = Instance.new("Frame")
-		fill.Name = "Fill"
-		fill.BorderSizePixel = 0
-		fill.AnchorPoint = Vector2.new(0, 0.5)
-		fill.Position = UDim2.new(0, 0, 0.5, 0)
-		fill.Size = UDim2.new(0, 0, 1, 0)
-		fill.Parent = bar
-
-		local fillCorner = Instance.new("UICorner")
-		fillCorner.CornerRadius = UDim.new(0, 3)
-		fillCorner.Parent = fill
-
-		local knob = Instance.new("Frame")
-		knob.Name = "Knob"
-		knob.Size = UDim2.new(0, 12, 0, 12)
-		knob.AnchorPoint = Vector2.new(0.5, 0.5)
-		knob.BackgroundColor3 = Color3.new(1, 1, 1)
-		knob.BorderSizePixel = 0
-		knob.Parent = bar
-
-		local knobCorner = Instance.new("UICorner")
-		knobCorner.CornerRadius = UDim.new(1, 0)
-		knobCorner.Parent = knob
-
-		local function saveState(v)
+		local function save(v)
 			if not (HS and type(writefile) == "function") then return end
 			settingsConfig[key] = { value = v }
-			local ok, encoded = pcall(function()
-				return HS:JSONEncode(settingsConfig)
-			end)
-			if ok and encoded then
-				pcall(writefile, settingsPath, encoded)
+			local ok, enc = pcall(function() return HS:JSONEncode(settingsConfig) end)
+			if ok and enc then
+				pcall(writefile, settingsPath, enc)
 			end
 		end
 
-		local function setVisual(v)
+		local function setVis(v)
 			v = math.clamp(v, minV, maxV)
-			local alpha = (v - minV) / (maxV - minV)
-			fill.Size = UDim2.new(alpha, 0, 1, 0)
-			knob.Position = UDim2.new(alpha, 0, 0.5, 0)
-			valueBox.Text = string.format("%.2f", v)
+			local a = (v - minV) / (maxV - minV)
+			fill.Size = UDim2.new(a, 0, 1, 0)
+			kb.Position = UDim2.new(a, 0, 0.5, 0)
+			vb.Text = string.format("%.2f", v)
 		end
 
 		local function apply(v)
 			v = math.clamp(v, minV, maxV)
 			numValue.Value = v
-			setVisual(v)
-			saveState(v)
+			setVis(v)
+			save(v)
 		end
 
-		local initial = numValue.Value
-		local savedCfg = settingsConfig[key]
-		if type(savedCfg) == "table" and type(savedCfg.value) == "number" then
-			initial = math.clamp(savedCfg.value, minV, maxV)
-			numValue.Value = initial
-		end
-		setVisual(initial)
+		setVis(numValue.Value)
 
-		local dragging = false
+		local drag = false
 
-		local function updateFromInput(input)
+		local function fromIn(input)
 			local rel = 0
 			pcall(function()
 				rel = (input.Position.X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X
@@ -1631,36 +1755,45 @@ task.defer(function()
 		end
 
 		bar.InputBegan:Connect(function(input)
-			if input.UserInputType == Enum.UserInputType.MouseButton1
-				or input.UserInputType == Enum.UserInputType.Touch then
-				dragging = true
-				updateFromInput(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				drag = true
+				fromIn(input)
 			end
 		end)
 
 		UIS.InputChanged:Connect(function(input)
-			if not dragging then return end
-			if input.UserInputType == Enum.UserInputType.MouseMovement
-				or input.UserInputType == Enum.UserInputType.Touch then
-				updateFromInput(input)
+			if not drag then return end
+			if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+				fromIn(input)
 			end
 		end)
 
 		UIS.InputEnded:Connect(function(input)
-			if input.UserInputType == Enum.UserInputType.MouseButton1
-				or input.UserInputType == Enum.UserInputType.Touch then
-				dragging = false
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				drag = false
 			end
 		end)
 
-		valueBox.FocusLost:Connect(function()
-			local txt = valueBox.Text or ""
-			local v = tonumber(txt)
+		vb.FocusLost:Connect(function()
+			local v = tonumber(vb.Text or "")
 			if v then
 				apply(v)
 			else
-				setVisual(numValue.Value)
+				setVis(numValue.Value)
 			end
+		end)
+
+		local function updDock()
+			local w = math.clamp(math.floor(fr.AbsoluteSize.X * 0.46), 240, 380)
+			dock.Size = UDim2.new(0, w, 0, 18)
+			local sw = w - (70 + 8)
+			sw = math.clamp(sw, 140, 280)
+			sl.Size = UDim2.new(0, sw, 0, 18)
+		end
+
+		updDock()
+		fr:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+			task.defer(updDock)
 		end)
 	end
 
@@ -2123,12 +2256,12 @@ task.defer(function()
 		box.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 		box.BorderSizePixel = 0
 		box.ClearTextOnFocus = true
-		box.TextXAlignment = Enum.TextXAlignment.Left
+		box.TextXAlignment = Enum.TextXAlignment.Center
 		box.Font = Enum.Font.Gotham
 		box.TextSize = 12
 		box.TextColor3 = Color3.new(1, 1, 1)
 		box.Text=''
-		box.PlaceholderText = "id or image URL"
+		box.PlaceholderText = "ID or image URL"
 		box.Parent = frame
 
 		local setBtn = Instance.new("TextButton")
@@ -2520,6 +2653,16 @@ task.defer(function()
 			autoCloseOnLoad = cfg.enabled and true or false
 		end
 	end
+	
+	local gestCol = gestCol or Instance.new("Color3Value")
+	gestCol.Name = "GestureColorValue"
+	gestCol.Value = Color3.fromRGB(255, 255, 255)
+
+	gestCol.Changed:Connect(function()
+		if sidebarGestureFrame then
+			sidebarGestureFrame.BackgroundColor3 = gestCol.Value
+		end
+	end)
 
 	local function closeDeltaSidebar()
 		if sidebar then
@@ -2600,7 +2743,7 @@ task.defer(function()
 		local f = Instance.new("Frame")
 		sidebarGestureFrame = f
 		f.Name = "SidebarGestureZone"
-		f.BackgroundColor3 = Color3.new(1, 1, 1)
+		f.BackgroundColor3 = gestCol.Value
 		f.BorderSizePixel = 0
 		f.AnchorPoint = Vector2.new(1, 0.5)
 		f.Size = UDim2.new(0, sidebarGestureWidth, 0, sidebarGestureHeight)
@@ -3131,6 +3274,12 @@ task.defer(function()
 	makeIconEnableToggle()
 	makeIconInputRow()
 	makeIconManagerRow()
+	makeColorSlider(
+		"GestureColor",
+		"Gesture Color",
+		"Color of the sidebar gesture bar",
+		gestCol
+	)
 	makeSidebarGestureToggle()
 	makeSidebarGestureBarVisibilityToggle()
 

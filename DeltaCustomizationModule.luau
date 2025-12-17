@@ -1424,7 +1424,7 @@ task.defer(function()
 			b.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 			b.BorderSizePixel = 0
 			b.AnchorPoint = Vector2.new(0.5, 0)
-			b.Position = UDim2.new(0.5, 0, 0, yy)
+			b.Position = UDim2.new(0.5, 0, yy, 0)
 			b.Size = UDim2.new(1, 0, 0, 5)
 			b.Active = true
 			b.Parent = sl
@@ -1449,9 +1449,9 @@ task.defer(function()
 			return b, k
 		end
 
-		local bH, kH = mkBar("Hue", 13)
-		local bS, kS = mkBar("Sat", 30)
-		local bV, kV = mkBar("Val", 47)
+		local bH, kH = mkBar("Hue", 0.2)
+		local bS, kS = mkBar("Sat", 0.5)
+		local bV, kV = mkBar("Val", 0.8)
 
 		local gH = Instance.new("UIGradient")
 		gH.Rotation = 0

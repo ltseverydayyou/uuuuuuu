@@ -26,7 +26,7 @@ local cfg = {
 	w = 260,
 	h = 52,
 	gap = 8,
-	mode = "instant",  -- "auto", "instant", "hold"
+	mode = getgenv().promptModeBtn or "auto",  -- "auto", "instant", "hold"
 	defHold = 0.4
 }
 

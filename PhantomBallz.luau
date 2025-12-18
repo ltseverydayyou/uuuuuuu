@@ -336,6 +336,7 @@ do
 		ring.CanCollide = false
 		ring.CanTouch = false
 		ring.CanQuery = false
+		ring.CastShadow = false
 		ring.Material = Enum.Material.ForceField
 		ring.Transparency = 0.5
 		ring.Color = Color3.fromRGB(255, 255, 255)

@@ -174,7 +174,8 @@ local function addPrompt(pr)
 		return
 	end
 
-	order += 1
+	-- New prompts get LOWER LayoutOrder so they appear ABOVE old ones
+	order -= 1
 
 	local wrap = Instance.new("Frame")
 	wrap.Name = "PromptWrap"

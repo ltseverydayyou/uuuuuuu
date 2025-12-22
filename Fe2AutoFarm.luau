@@ -42,7 +42,7 @@ end
 
 local LiftRemote do
     local ok, r = pcall(function()
-        return ReplicatedStorage:WaitForChild("Remote"):WaitForChild("dKgyIXnLdhwvSyEorkEWJJAkgUslGCtR")
+        return (ReplicatedStorage:FindFirstChild("Remote"):FindFirstChild("dKgyIXnLdhwvSyEorkEWJJAkgUslGCtR") or ReplicatedStorage:FindFirstChild("Remote"):FindFirstChild("AddedWaiting"))
     end)
     LiftRemote = ok and r or nil
 end

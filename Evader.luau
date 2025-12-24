@@ -683,6 +683,22 @@ local function isInSafeZone(pos)
     return false
 end
 
+local function isCharInSafeZone(ch)
+    if not ch then return false end
+    for _, part in ipairs(ch:GetDescendants()) do
+        if part:IsA("BasePart") then
+            local p = part.Position
+            for i = 1, #safeZoneParts do
+                local sz = safeZoneParts[i]
+                if sz.Parent and isPointInPart(sz, p) then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
 local function getDown(pos)
     local bestP, bestRoot
     local bestDist = math.huge
@@ -987,25 +1003,32 @@ addConn(rs.Heartbeat, function()
     local maxVoidDist = 800
 
     if hum and not saveActive then
-        if hum.FloorMaterial ~= Enum.Material.Air and not isInSafeZone(pos) then
+        if hum.FloorMaterial ~= Enum.Material.Air and not isCharInSafeZone(ch) then
             lastSafePos = pos
         end
 
         if hum.FloorMaterial == Enum.Material.Air and lastSafePos then
-            local dist = (pos - lastSafePos).Magnitude
-            if dist > maxVoidDist then
-                lastSafePos = nil
-            elseif (pos.Y < lastSafePos.Y - 20 or r.AssemblyLinearVelocity.Y < -60) then
-                r.CFrame = CFrame.new(lastSafePos, lastSafePos + r.CFrame.LookVector)
-                r.AssemblyLinearVelocity = Vector3.new()
-                r.AssemblyAngularVelocity = Vector3.new()
-                dbg("Void fail-safe")
-                return
+            rayParams.FilterDescendantsInstances = buildFilter(ch)
+            local groundHit = ws:Raycast(pos, Vector3.new(0, -300, 0), rayParams)
+
+            if groundHit then
+                lastSafePos = groundHit.Position + Vector3.new(0, 3, 0)
+            else
+                local dist = (pos - lastSafePos).Magnitude
+                if dist > maxVoidDist then
+                    lastSafePos = nil
+                elseif (pos.Y < lastSafePos.Y - 40 or r.AssemblyLinearVelocity.Y < -80) then
+                    r.CFrame = CFrame.new(lastSafePos, lastSafePos + r.CFrame.LookVector)
+                    r.AssemblyLinearVelocity = Vector3.new()
+                    r.AssemblyAngularVelocity = Vector3.new()
+                    dbg("Void fail-safe")
+                    return
+                end
             end
         end
     end
 
-    if isInSafeZone(pos) and lastSafePos and not isInSafeZone(lastSafePos) then
+    if isCharInSafeZone(ch) and lastSafePos and not isInSafeZone(lastSafePos) then
         r.CFrame = CFrame.new(lastSafePos, lastSafePos + r.CFrame.LookVector)
         r.AssemblyLinearVelocity = Vector3.new()
         r.AssemblyAngularVelocity = Vector3.new()
@@ -1044,8 +1067,7 @@ addConn(rs.Heartbeat, function()
             dbg("Auto Save: returned to start")
         else
             if rootT then
-                local basePos = rootT.Position - Vector3.new(0, saveOff, 0)
-                local tpPos = attachToGround(basePos, ch) or basePos
+                local tpPos = rootT.Position - Vector3.new(0, saveOff, 0)
                 if (r.Position - tpPos).Magnitude > 1 then
                     r.CFrame = CFrame.new(tpPos, tpPos + r.CFrame.LookVector)
                 end

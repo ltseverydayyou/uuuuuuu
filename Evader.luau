@@ -501,7 +501,7 @@ local function dbg(msg)
             Lib:Notify({
                 Title = "Evader Debug",
                 Description = msg,
-                Time = 4,
+                Time = 2,
             })
         end)
     end

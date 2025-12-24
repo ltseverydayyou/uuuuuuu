@@ -28,38 +28,37 @@ local function qtp()
 end
 
 local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
-local Lib = loadstring(game:HttpGet(repo .. "Library.lua"))()
-local Theme = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
-local Save = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
+local Lib = loadstring(game:HttpGet(repo.."Library.lua"))()
+local Theme = loadstring(game:HttpGet(repo.."addons/ThemeManager.lua"))()
+local Save = loadstring(game:HttpGet(repo.."addons/SaveManager.lua"))()
 
 local Opt = Lib.Options
 local Tog = Lib.Toggles
 
 local foot = {
-    "Try not to scream IRL.",
-    "Certified nextbot juker.",
-    "Mariah Carey is behind you.",
-    "Evade now, question later.",
-    "0 HP? Not on my watch.",
-    "Oops, all jump scares.",
-    "Respawn speedrun any%.",
-    "Revive tax not included.",
-    "Hitbox? I hardly know her.",
-    "Bots fear this script.",
-    "Evade.exe stopped responding.",
-    "Skill issue mitigator.",
-    "Powered by sheer panic.",
-    "Walking L detector online.",
-    "Sigma jukes enabled."
+    "Try not to scream IRL",
+    "Certified nextbot juker",
+    "Mariah Carey is behind you",
+    "Evade now, question later",
+    "0 HP? Not on my watch",
+    "Oops, all jump scares",
+    "Respawn speedrun any%",
+    "Revive tax not included",
+    "Hitbox? I hardly know her",
+    "Bots fear this script",
+    "Evade.exe stopped responding",
+    "Skill issue mitigator",
+    "Powered by sheer panic",
+    "Walking L detector online",
+    "Sigma jukes enabled"
 }
 
 math.randomseed(tick())
 local footer = foot[math.random(#foot)]
 
 local win = Lib:CreateWindow({
-    Title = "Evade - ltseverydayyou",
+    Title = "Evader",
     Footer = footer,
-    Icon = 0,
     NotifySide = "Right",
     ShowCustomCursor = true,
     Center = true,
@@ -75,29 +74,30 @@ local Tabs = {
 
 local gbCore = Tabs.Main:AddLeftGroupbox("Core")
 local gbESP = Tabs.Main:AddRightGroupbox("ESP")
+local gbInfo = Tabs.Main:AddRightGroupbox("Info")
 
 gbCore:AddToggle("AutoRevive", {
     Text = "Auto Revive",
     Default = true,
-    Tooltip = "Auto revives nearby downs."
+    Tooltip = "Auto revives nearby downs"
 })
 
 gbCore:AddToggle("AutoSave", {
     Text = "Auto Save (Teleport)",
     Default = false,
-    Tooltip = "TP under downs, then go back."
+    Tooltip = "TP under downs, then go back"
 })
 
 gbCore:AddToggle("AntiNextbot", {
     Text = "Anti Nextbot",
     Default = true,
-    Tooltip = "Push away from nextbots."
+    Tooltip = "Push away from nextbots"
 })
 
 gbCore:AddToggle("AutoRespawn", {
     Text = "Auto Respawn",
     Default = false,
-    Tooltip = "Respawn at 0 HP."
+    Tooltip = "Respawn at 0 HP"
 })
 
 gbCore:AddSlider("ReviveRange", {
@@ -134,25 +134,25 @@ end)
 gbESP:AddToggle("ESPPlayers", {
     Text = "Player ESP",
     Default = false,
-    Tooltip = "ESP for alive players."
+    Tooltip = "ESP for alive players"
 })
 
 gbESP:AddToggle("ESPDead", {
     Text = "Downed ESP",
     Default = false,
-    Tooltip = "ESP for downed players."
+    Tooltip = "ESP for downed players"
 })
 
 gbESP:AddToggle("ESPBots", {
     Text = "Nextbot ESP",
     Default = false,
-    Tooltip = "ESP for nextbots."
+    Tooltip = "ESP for nextbots"
 })
 
 gbESP:AddToggle("ESPShowDist", {
     Text = "Show Distance",
     Default = false,
-    Tooltip = "Show studs on ESP."
+    Tooltip = "Show studs on ESP"
 })
 
 gbESP:AddSlider("ESPTextSize", {
@@ -190,19 +190,27 @@ gbESP:AddLabel("Nextbot Color"):AddColorPicker("ESPBotColor", {
     Transparency = 0
 })
 
+local infoTimerLabel = gbInfo:AddLabel("Timer: 00:00")
+
 local gbScript = Tabs.Settings:AddLeftGroupbox("Script")
 local gbUI = Tabs.Settings:AddRightGroupbox("Obsidian UI")
 
 gbScript:AddToggle("RunOnTeleport", {
     Text = "Run on Teleport",
     Default = false,
-    Tooltip = "Re-run script after teleport."
+    Tooltip = "Re-run script after teleport"
 })
 
 gbScript:AddLabel("Menu Bind"):AddKeyPicker("MenuKeybind", {
-    Default = "RightShift",
+    Default = "RightControl",
     NoUI = true,
     Text = "Menu key"
+})
+
+gbScript:AddToggle("DebugLogs", {
+    Text = "Debug Logs",
+    Default = false,
+    Tooltip = "Show debug notifications"
 })
 
 gbScript:AddButton("Reload Run on Teleport", function()
@@ -211,14 +219,42 @@ gbScript:AddButton("Reload Run on Teleport", function()
     end
 end)
 
+local running = true
+local conns = {}
+local espObjs = {}
+local wmGui, wmLbl
+
+local function addConn(sig, fn)
+    local c = sig:Connect(fn)
+    conns[#conns + 1] = c
+    return c
+end
+
 gbScript:AddButton("Unload Script", function()
+    running = false
+    for _, c in ipairs(conns) do
+        c:Disconnect()
+    end
+    conns = {}
+    for _, info in pairs(espObjs) do
+        if info.gui then
+            info.gui:Destroy()
+        end
+    end
+    espObjs = {}
+    if wmGui then
+        wmGui:Destroy()
+        wmGui = nil
+        wmLbl = nil
+    end
     Lib:Unload()
+    g.evade_vyperia = nil
 end)
 
 gbUI:AddToggle("UICursor", {
     Text = "Custom Cursor",
     Default = true,
-    Tooltip = "Toggle custom cursor.",
+    Tooltip = "Toggle custom cursor",
     Callback = function(v)
         Lib.ShowCustomCursor = v
     end
@@ -226,15 +262,15 @@ gbUI:AddToggle("UICursor", {
 
 gbUI:AddToggle("UIWatermark", {
     Text = "FPS / Ping HUD",
-    Default = true,
-    Tooltip = "Show FPS and ping box."
+    Default = false,
+    Tooltip = "Show FPS and ping box"
 })
 
 gbUI:AddDropdown("NotifySide", {
     Values = { "Left", "Right" },
     Default = "Right",
     Text = "Notification Side",
-    Tooltip = "Where toasts appear.",
+    Tooltip = "Where toasts appear",
     Callback = function(v)
         if Lib.SetNotifySide then
             Lib:SetNotifySide(v)
@@ -246,7 +282,7 @@ gbUI:AddDropdown("DPIScale", {
     Values = { "50%", "75%", "100%", "125%", "150%", "175%", "200%" },
     Default = "100%",
     Text = "DPI Scale",
-    Tooltip = "Scale the UI.",
+    Tooltip = "Scale the UI",
     Callback = function(v)
         if Lib.SetDPIScale then
             local n = tonumber(v:gsub("%%", ""))
@@ -260,7 +296,7 @@ gbUI:AddDropdown("DPIScale", {
 gbUI:AddToggle("CompactSidebar", {
     Text = "Compact Sidebar",
     Default = false,
-    Tooltip = "Thin sidebar layout.",
+    Tooltip = "Thin sidebar layout",
     Callback = function(v)
         if win.SetCompact then
             win:SetCompact(v)
@@ -272,7 +308,7 @@ Theme:SetLibrary(Lib)
 Save:SetLibrary(Lib)
 Save:IgnoreThemeSettings()
 Save:SetFolder("NamelessAdmin")
-Save:SetSubFolder("Evade_" .. tostring(game.PlaceId))
+Save:SetSubFolder("Evade_"..tostring(game.PlaceId))
 Save:BuildConfigSection(Tabs.Settings)
 Theme:ApplyToTab(Tabs.Settings)
 Save:LoadAutoloadConfig()
@@ -286,6 +322,7 @@ local autoSave = Tog.AutoSave.Value
 local antiBot = Tog.AntiNextbot.Value
 local autoResp = Tog.AutoRespawn.Value
 local runTP = Tog.RunOnTeleport.Value
+local debugOn = Tog.DebugLogs.Value
 
 local revR = Opt.ReviveRange.Value
 local botR = Opt.NextbotRange.Value
@@ -307,13 +344,13 @@ Tog.AutoRevive:OnChanged(function(v) autoRev = v end)
 Tog.AutoSave:OnChanged(function(v) autoSave = v end)
 Tog.AntiNextbot:OnChanged(function(v) antiBot = v end)
 Tog.AutoRespawn:OnChanged(function(v) autoResp = v end)
-
 Tog.RunOnTeleport:OnChanged(function(v)
     runTP = v
     if v then
         qtp()
     end
 end)
+Tog.DebugLogs:OnChanged(function(v) debugOn = v end)
 
 Opt.ReviveRange:OnChanged(function(v) revR = v end)
 Opt.NextbotRange:OnChanged(function(v) botR = v end)
@@ -332,6 +369,9 @@ Opt.ESPBotColor:OnChanged(function(v) colBt = v end)
 
 Tog.UIWatermark:OnChanged(function(v)
     wmOn = v
+    if wmGui then
+        wmGui.Enabled = v
+    end
 end)
 
 if runTP then
@@ -351,7 +391,9 @@ local NA_GRAB_BODY = (function()
 
     local function firstPart(m)
         for _, d in ipairs(m:GetDescendants()) do
-            if d:IsA("BasePart") then return d end
+            if d:IsA("BasePart") then
+                return d
+            end
         end
         return nil
     end
@@ -362,6 +404,7 @@ local NA_GRAB_BODY = (function()
         local bestRoot, bestRootRank = nil, math.huge
         local bestTorso, bestTorsoRank = nil, math.huge
         local head, hum, fb = nil, nil, nil
+        local partCount = 0
         local q = { ch }
         local i = 1
         while i <= #q do
@@ -377,6 +420,7 @@ local NA_GRAB_BODY = (function()
                     hum = c
                 end
                 if c:IsA("BasePart") then
+                    partCount += 1
                     local nm = string.lower(c.Name)
                     local rnk = rp[nm]
                     if rnk and rnk < bestRootRank then
@@ -402,6 +446,7 @@ local NA_GRAB_BODY = (function()
         rec.torso = bestTorso
         rec.head = head
         rec.humanoid = hum
+        rec.partCount = partCount
         rec.dirty = false
     end
 
@@ -445,12 +490,34 @@ local rep = S("ReplicatedStorage")
 local ws = S("Workspace")
 local cg = S("CoreGui")
 local st = S("Stats")
+local UIS = S("UserInputService")
+local sg = S("StarterGui")
+
+local function dbg(msg)
+    if not debugOn then return end
+    local ok = true
+    if Lib.Notify then
+        ok = pcall(function()
+            Lib:Notify({
+                Title = "Evader Debug",
+                Description = msg,
+                Time = 4,
+            })
+        end)
+    end
+    if not ok and sg then
+        pcall(function()
+            sg:SetCore("SendNotification", { Title = "Evader Debug", Text = msg, Duration = 4 })
+        end)
+    end
+end
 
 local lp = ps.LocalPlayer
 repeat task.wait() lp = ps.LocalPlayer until lp
 
 local fps = 60
-rs.RenderStepped:Connect(function(dt)
+addConn(rs.RenderStepped, function(dt)
+    if not running then return end
     if dt > 0 then
         fps = fps + ((1 / dt) - fps) * 0.1
     end
@@ -458,31 +525,30 @@ end)
 
 local function getPing()
     local ok, v = pcall(function()
-        if not st then return end
-        local net = st:FindFirstChild("Network")
-        if not net then return end
-        local srv = net:FindFirstChild("ServerStatsItem")
-        if not srv then return end
-        local ping = srv:FindFirstChild("Data Ping") or srv:FindFirstChild("DataPing")
-        if ping and ping.Value then
-            return ping.Value
-        end
+        if not st then return 0 end
+        local net = st:WaitForChild("Network")
+        local serverItem = net:WaitForChild("ServerStatsItem")
+        local pingItem = serverItem:WaitForChild("Data Ping")
+        local s = pingItem:GetValueString()
+        local num = tonumber(s:match("%d+")) or 0
+        return num
     end)
     if ok and v then return v end
     return 0
 end
 
-local wmGui = Instance.new("ScreenGui")
+wmGui = Instance.new("ScreenGui")
 wmGui.Name = "EvadeStatsHUD"
 wmGui.ResetOnSpawn = false
 wmGui.IgnoreGuiInset = true
 wmGui.Enabled = wmOn
 wmGui.Parent = (gethui and gethui()) or cg
 
-local wmLbl = Instance.new("TextLabel")
+wmLbl = Instance.new("TextLabel")
 wmLbl.Name = "StatsLabel"
 wmLbl.Size = UDim2.new(0, 220, 0, 20)
-wmLbl.Position = UDim2.new(0, 10, 0, 10)
+wmLbl.AnchorPoint = Vector2.new(0.5, 0)
+wmLbl.Position = UDim2.new(0.5, 0, 0, 10)
 wmLbl.BackgroundTransparency = 0.35
 wmLbl.BackgroundColor3 = Color3.new(0, 0, 0)
 wmLbl.TextColor3 = Color3.new(1, 1, 1)
@@ -490,23 +556,47 @@ wmLbl.Font = Enum.Font.Code
 wmLbl.TextSize = 14
 wmLbl.TextXAlignment = Enum.TextXAlignment.Left
 wmLbl.Text = ""
+wmLbl.Active = true
+wmLbl.Draggable = true
 wmLbl.Parent = wmGui
 
 Tog.UIWatermark:OnChanged(function(v)
     wmOn = v
-    wmGui.Enabled = v
+    if wmGui then
+        wmGui.Enabled = v
+    end
 end)
 
 task.spawn(function()
-    while true do
-        if wmOn then
+    while running do
+        if wmOn and wmGui and wmLbl then
             local pf = math.floor(fps + 0.5)
             local pg = math.floor(getPing() + 0.5)
             wmLbl.Text = ("FPS: %d | Ping: %dms"):format(pf, pg)
-        else
-            wmLbl.Text = ""
         end
         task.wait(0.5)
+    end
+end)
+
+local gameStats
+pcall(function()
+    local gFolder = ws:WaitForChild("Game", 5)
+    if gFolder then
+        gameStats = gFolder:WaitForChild("Stats", 5)
+    end
+end)
+
+task.spawn(function()
+    if not gameStats or not infoTimerLabel then return end
+    while running do
+        local v = gameStats:GetAttribute("Timer")
+        if typeof(v) == "number" then
+            local sec = math.max(0, math.floor(v - 1))
+            local m = math.floor(sec / 60)
+            local s = sec % 60
+            infoTimerLabel:SetText(("Timer: %02d:%02d"):format(m, s))
+        end
+        task.wait(1)
     end
 end)
 
@@ -538,12 +628,60 @@ local function updOthers()
 end
 
 updOthers()
-ps.PlayerAdded:Connect(updOthers)
-ps.PlayerRemoving:Connect(updOthers)
+addConn(ps.PlayerAdded, function()
+    if not running then return end
+    updOthers()
+end)
+
+addConn(ps.PlayerRemoving, function()
+    if not running then return end
+    updOthers()
+end)
 
 local rayParams = RaycastParams.new()
 rayParams.FilterType = Enum.RaycastFilterType.Blacklist
 rayParams.IgnoreWater = true
+
+local safeZoneParts = {}
+
+local function refreshSafeZones()
+    table.clear(safeZoneParts)
+    local gFolder = ws:FindFirstChild("Game")
+    if not gFolder then return end
+    for _, inst in ipairs(gFolder:GetDescendants()) do
+        if inst:IsA("Model") and inst.Name == "SafeZones" then
+            for _, ch in ipairs(inst:GetDescendants()) do
+                if ch:IsA("BasePart") then
+                    safeZoneParts[#safeZoneParts + 1] = ch
+                end
+            end
+        end
+    end
+end
+
+refreshSafeZones()
+task.spawn(function()
+    while running do
+        refreshSafeZones()
+        task.wait(5)
+    end
+end)
+
+local function isPointInPart(part, pos)
+    local rel = part.CFrame:PointToObjectSpace(pos)
+    local s = part.Size * 0.5
+    return math.abs(rel.X) <= s.X and math.abs(rel.Y) <= s.Y and math.abs(rel.Z) <= s.Z
+end
+
+local function isInSafeZone(pos)
+    for i = 1, #safeZoneParts do
+        local p = safeZoneParts[i]
+        if p.Parent and isPointInPart(p, pos) then
+            return true
+        end
+    end
+    return false
+end
 
 local function getDown(pos)
     local bestP, bestRoot
@@ -551,7 +689,7 @@ local function getDown(pos)
     for i = 1, #others do
         local p = others[i]
         local rec, mdl = NA_GRAB_BODY.ensure(p)
-        if rec and rec.humanoid then
+        if rec and rec.humanoid and (rec.partCount or 0) >= 3 then
             local hp = rec.humanoid.Health
             if hp <= 0 then
                 local r2 = rec.root or (mdl and NA_GRAB_BODY.firstPart(mdl))
@@ -571,26 +709,51 @@ end
 
 local function getBot(pos)
     if not botFolder then return end
-    local bestHit, bestDist, bestPos
+    local bestRoot, bestDist, bestPos
     local kids = botFolder:GetChildren()
     for i = 1, #kids do
         local m = kids[i]
-        local h = m:FindFirstChild("Hitbox")
-        if h and h:IsA("BasePart") then
-            local d = (pos - h.Position).Magnitude
-            if not bestDist or d < bestDist then
-                bestDist = d
-                bestHit = h
-                bestPos = h.Position
+        if m:IsA("Model") then
+            local pl = ps:GetPlayerFromCharacter(m)
+            if not pl then
+                local hit = m:FindFirstChild("Hitbox")
+                local root
+                if hit and hit:IsA("BasePart") then
+                    root = hit
+                else
+                    local humRoot = m:FindFirstChild("HumanoidRootPart")
+                    if humRoot and humRoot:IsA("BasePart") then
+                        root = humRoot
+                    else
+                        local rec = NA_GRAB_BODY.ensure(m)
+                        root = rec and (rec.root or NA_GRAB_BODY.firstPart(m)) or nil
+                    end
+                end
+                if root then
+                    local d = (pos - root.Position).Magnitude
+                    if not bestDist or d < bestDist then
+                        bestDist = d
+                        bestRoot = root
+                        bestPos = root.Position
+                    end
+                end
             end
         end
     end
-    if not bestHit then return end
-    return bestHit, bestDist, bestPos
+    if not bestRoot then return end
+    return bestRoot, bestDist, bestPos
+end
+
+local function buildFilter(ch)
+    local list = { ch }
+    for i = 1, #safeZoneParts do
+        list[#list + 1] = safeZoneParts[i]
+    end
+    return list
 end
 
 local function getSafePos(curPos, ch, botPos, dist)
-    rayParams.FilterDescendantsInstances = { ch }
+    rayParams.FilterDescendantsInstances = buildFilter(ch)
     local away = Vector3.new(curPos.X - botPos.X, 0, curPos.Z - botPos.Z)
     local mag = away.Magnitude
     if mag < 1e-3 then
@@ -618,12 +781,32 @@ local function getSafePos(curPos, ch, botPos, dist)
             end
             if useDist then
                 local p = origin + dir * useDist
-                return Vector3.new(p.X, curPos.Y, p.Z)
+                local pos = Vector3.new(p.X, curPos.Y, p.Z)
+                if not isInSafeZone(pos) then
+                    return pos
+                end
             end
         end
     end
     local fb = origin + away * dist * 0.5
-    return Vector3.new(fb.X, curPos.Y, fb.Z)
+    local fbPos = Vector3.new(fb.X, curPos.Y, fb.Z)
+    if not isInSafeZone(fbPos) then
+        return fbPos
+    end
+    return nil
+end
+
+local function attachToGround(pos, ch)
+    rayParams.FilterDescendantsInstances = buildFilter(ch)
+    local origin = pos + Vector3.new(0, 50, 0)
+    local res = ws:Raycast(origin, Vector3.new(0, -500, 0), rayParams)
+    if res then
+        local p = Vector3.new(pos.X, res.Position.Y + 3, pos.Z)
+        if not isInSafeZone(p) then
+            return p
+        end
+    end
+    return nil
 end
 
 local revCd = 0.1
@@ -633,9 +816,13 @@ local respLast = 0
 local saveActive = false
 local savePos
 local saveTarget
+local lastSafePos
 
-local espParent = (gethui and gethui()) or cg
-local espObjs = {}
+local espParent = Instance.new("ScreenGui")
+espParent.Name = "EvadeESPContainer"
+espParent.ResetOnSpawn = false
+espParent.IgnoreGuiInset = true
+espParent.Parent = (gethui and gethui()) or cg
 
 local function setESP(key, adornee, txt, col, maxDist)
     local info = espObjs[key]
@@ -664,6 +851,7 @@ local function setESP(key, adornee, txt, col, maxDist)
         lbl.TextScaled = false
         lbl.TextSize = espSize
         lbl.Font = Enum.Font.GothamBold
+        lbl.TextColor3 = col
         lbl.Parent = gui
         info = { gui = gui, lbl = lbl }
         espObjs[key] = info
@@ -676,6 +864,7 @@ local function setESP(key, adornee, txt, col, maxDist)
 end
 
 local function updESP()
+    if not running then return end
     if not (espPl or espDn or espBt) then
         for _, info in pairs(espObjs) do
             if info.gui then info.gui:Destroy() end
@@ -693,28 +882,29 @@ local function updESP()
         for i = 1, #others do
             local p = others[i]
             local rec, mdl = NA_GRAB_BODY.ensure(p)
-            if rec and rec.root and rec.humanoid then
+            if rec and rec.root and rec.humanoid and (rec.partCount or 0) >= 3 then
                 local hp = rec.humanoid.Health
                 local dead = hp <= 0
                 local root = rec.root or (mdl and NA_GRAB_BODY.firstPart(mdl))
                 local ok = true
                 local dt = ""
+                local dist
                 if selfPos and root then
-                    local d = (selfPos - root.Position).Magnitude
-                    if d > maxD then
+                    dist = (selfPos - root.Position).Magnitude
+                    if dist > maxD then
                         ok = false
                     else
                         if espShow then
-                            dt = " [" .. tostring(math.floor(d)) .. "u]"
+                            dt = " | "..tostring(math.floor(dist))
                         end
                     end
                 end
-                local key = "pl_" .. p.UserId
+                local key = "pl_"..p.UserId
                 local show = ok and ((dead and espDn) or ((not dead) and espPl))
                 if show then
                     vis[key] = true
-                    local t = dead and (p.Name .. " [DOWN]") or (p.Name .. " [" .. math.floor(hp) .. "]")
-                    t = t .. dt
+                    local t = dead and (p.Name.." [DOWN]") or (p.Name.." ["..math.floor(hp).."]")
+                    t = t..dt
                     local c = dead and colDn or colPl
                     setESP(key, root, t, c, maxD)
                 end
@@ -726,26 +916,43 @@ local function updESP()
         local kids = botFolder:GetChildren()
         for i = 1, #kids do
             local m = kids[i]
-            local h = m:FindFirstChild("Hitbox")
-            if h and h:IsA("BasePart") then
-                local root = h
-                local ok = true
-                local dt = ""
-                if selfPos and root then
-                    local d = (selfPos - root.Position).Magnitude
-                    if d > maxD then
-                        ok = false
+            if m:IsA("Model") then
+                local pl = ps:GetPlayerFromCharacter(m)
+                if not pl then
+                    local hit = m:FindFirstChild("Hitbox")
+                    local root
+                    if hit and hit:IsA("BasePart") then
+                        root = hit
                     else
-                        if espShow then
-                            dt = " [" .. tostring(math.floor(d)) .. "u]"
+                        local humRoot = m:FindFirstChild("HumanoidRootPart")
+                        if humRoot and humRoot:IsA("BasePart") then
+                            root = humRoot
+                        else
+                            local rec = NA_GRAB_BODY.ensure(m)
+                            root = rec and (rec.root or NA_GRAB_BODY.firstPart(m)) or nil
                         end
                     end
-                end
-                if ok then
-                    local key = "nb_" .. m:GetDebugId()
-                    vis[key] = true
-                    local t = m.Name .. dt
-                    setESP(key, root, t, colBt, maxD)
+                    if root then
+                        local ok = true
+                        local dt = ""
+                        local dist
+                        if selfPos then
+                            dist = (selfPos - root.Position).Magnitude
+                            if dist > maxD then
+                                ok = false
+                            else
+                                if espShow then
+                                    dt = " | "..tostring(math.floor(dist))
+                                end
+                            end
+                        end
+                        if ok then
+                            local key = "nb_"..m:GetDebugId()
+                            vis[key] = true
+                            local t = m.Name..dt
+                            setESP(key, root, t, colBt, maxD)
+                        end
+                    end
                 end
             end
         end
@@ -760,13 +967,14 @@ local function updESP()
 end
 
 task.spawn(function()
-    while true do
+    while running do
         task.wait(0.2)
         updESP()
     end
 end)
 
-rs.Heartbeat:Connect(function()
+addConn(rs.Heartbeat, function()
+    if not running then return end
     local ch = getChar()
     if not ch then return end
     local r = getRoot(ch)
@@ -776,6 +984,34 @@ rs.Heartbeat:Connect(function()
     local hum = recSelf and recSelf.humanoid
     local pos = r.Position
     local t = tick()
+    local maxVoidDist = 800
+
+    if hum and not saveActive then
+        if hum.FloorMaterial ~= Enum.Material.Air and not isInSafeZone(pos) then
+            lastSafePos = pos
+        end
+
+        if hum.FloorMaterial == Enum.Material.Air and lastSafePos then
+            local dist = (pos - lastSafePos).Magnitude
+            if dist > maxVoidDist then
+                lastSafePos = nil
+            elseif (pos.Y < lastSafePos.Y - 20 or r.AssemblyLinearVelocity.Y < -60) then
+                r.CFrame = CFrame.new(lastSafePos, lastSafePos + r.CFrame.LookVector)
+                r.AssemblyLinearVelocity = Vector3.new()
+                r.AssemblyAngularVelocity = Vector3.new()
+                dbg("Void fail-safe")
+                return
+            end
+        end
+    end
+
+    if isInSafeZone(pos) and lastSafePos and not isInSafeZone(lastSafePos) then
+        r.CFrame = CFrame.new(lastSafePos, lastSafePos + r.CFrame.LookVector)
+        r.AssemblyLinearVelocity = Vector3.new()
+        r.AssemblyAngularVelocity = Vector3.new()
+        dbg("SafeZone eject")
+        return
+    end
 
     local downP, downRoot, downDist = getDown(pos)
 
@@ -786,27 +1022,35 @@ rs.Heartbeat:Connect(function()
 
     if autoRev and autoSave and downP and downRoot and not saveActive then
         saveActive = true
-        savePos = pos
+        savePos = lastSafePos or pos
         saveTarget = downP
+        dbg("Auto Save: saving "..downP.Name)
     end
 
     if saveActive and saveTarget then
         local recT, mdlT = NA_GRAB_BODY.ensure(saveTarget)
         local humT = recT and recT.humanoid
         local rootT = recT and (recT.root or (mdlT and NA_GRAB_BODY.firstPart(mdlT))) or nil
-        if not humT or humT.Parent == nil or humT.Health > 0 then
+        if not humT or humT.Parent == nil or humT.Health > 0 or (recT.partCount or 0) < 3 then
             if savePos then
-                r.CFrame = CFrame.new(savePos, savePos + r.CFrame.LookVector)
+                local back = attachToGround(savePos, ch) or savePos
+                r.CFrame = CFrame.new(back, back + r.CFrame.LookVector)
             end
+            r.AssemblyLinearVelocity = Vector3.new()
+            r.AssemblyAngularVelocity = Vector3.new()
             saveActive = false
             savePos = nil
             saveTarget = nil
+            dbg("Auto Save: returned to start")
         else
             if rootT then
-                local tpPos = rootT.Position - Vector3.new(0, saveOff, 0)
+                local basePos = rootT.Position - Vector3.new(0, saveOff, 0)
+                local tpPos = attachToGround(basePos, ch) or basePos
                 if (r.Position - tpPos).Magnitude > 1 then
                     r.CFrame = CFrame.new(tpPos, tpPos + r.CFrame.LookVector)
                 end
+                r.AssemblyLinearVelocity = Vector3.new()
+                r.AssemblyAngularVelocity = Vector3.new()
             end
         end
     end
@@ -814,14 +1058,20 @@ rs.Heartbeat:Connect(function()
     if autoResp and respEvt and hum and hum.Health <= 0 and t - respLast >= respCd then
         respLast = t
         respEvt:FireServer(true)
+        dbg("Auto Respawn: fired")
     end
 
     if antiBot and botR > 0 then
         local hit, dist, botPos = getBot(pos)
         if hit and dist and dist < botR then
             local safePos = getSafePos(pos, ch, botPos, botR)
-            if safePos and (safePos - pos).Magnitude > 1 then
-                r.CFrame = CFrame.new(safePos, safePos + r.CFrame.LookVector)
+            if safePos then
+                local grounded = attachToGround(safePos, ch) or safePos
+                if not isInSafeZone(grounded) and (grounded - pos).Magnitude > 1 then
+                    r.CFrame = CFrame.new(grounded, grounded + r.CFrame.LookVector)
+                    r.AssemblyLinearVelocity = Vector3.new()
+                    r.AssemblyAngularVelocity = Vector3.new()
+                end
             end
         end
     end

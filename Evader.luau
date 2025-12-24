@@ -2,7 +2,7 @@ local g = getgenv and getgenv() or _G
 if g.evade_vyperia then return end
 g.evade_vyperia = true
 
-local srcUrl = "https://your.raw.script.url/here.lua"
+local srcUrl = "https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/refs/heads/main/Evader.luau"
 
 local srv = setmetatable({}, {
     __index = function(self, n)

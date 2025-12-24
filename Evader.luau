@@ -825,6 +825,28 @@ local function attachToGround(pos, ch)
     return nil
 end
 
+local function findSafeZoneExit(ch, r)
+    if not ch or not r then return nil end
+    local pos = r.Position
+    local radii = {6, 10, 15, 20, 30}
+    local step = 30
+    for i = 1, #radii do
+        local rad = radii[i]
+        for deg = 0, 330, step do
+            local dir = Vector3.new(math.cos(math.rad(deg)), 0, math.sin(math.rad(deg)))
+            local base = pos + dir * rad
+            local grounded = attachToGround(base, ch)
+            if grounded and not isInSafeZone(grounded) then
+                return grounded
+            end
+        end
+    end
+    if lastSafePos and not isInSafeZone(lastSafePos) then
+        return lastSafePos
+    end
+    return nil
+end
+
 local revCd = 0.1
 local respCd = 0.5
 local revLast = 0
@@ -1002,38 +1024,42 @@ addConn(rs.Heartbeat, function()
     local t = tick()
     local maxVoidDist = 800
 
+    if hum and autoResp and respEvt and hum.Health <= 0 and t - respLast >= respCd then
+        respLast = t
+        respEvt:FireServer(true)
+        dbg("Auto Respawn: fired")
+    end
+
     if hum and not saveActive then
-        if hum.FloorMaterial ~= Enum.Material.Air and not isCharInSafeZone(ch) then
-            lastSafePos = pos
-        end
-
-        if hum.FloorMaterial == Enum.Material.Air and lastSafePos then
-            rayParams.FilterDescendantsInstances = buildFilter(ch)
-            local groundHit = ws:Raycast(pos, Vector3.new(0, -300, 0), rayParams)
-
-            if groundHit then
-                lastSafePos = groundHit.Position + Vector3.new(0, 3, 0)
-            else
-                local dist = (pos - lastSafePos).Magnitude
-                if dist > maxVoidDist then
-                    lastSafePos = nil
-                elseif (pos.Y < lastSafePos.Y - 40 or r.AssemblyLinearVelocity.Y < -80) then
-                    r.CFrame = CFrame.new(lastSafePos, lastSafePos + r.CFrame.LookVector)
-                    r.AssemblyLinearVelocity = Vector3.new()
-                    r.AssemblyAngularVelocity = Vector3.new()
-                    dbg("Void fail-safe")
-                    return
-                end
+        rayParams.FilterDescendantsInstances = buildFilter(ch)
+        local groundHit = ws:Raycast(pos + Vector3.new(0, 5, 0), Vector3.new(0, -1000, 0), rayParams)
+        if groundHit and not isCharInSafeZone(ch) then
+            lastSafePos = groundHit.Position + Vector3.new(0, 3, 0)
+        elseif not groundHit and lastSafePos then
+            local dist = (pos - lastSafePos).Magnitude
+            local drop = lastSafePos.Y - pos.Y
+            local vy = -r.AssemblyLinearVelocity.Y
+            if dist > maxVoidDist then
+                lastSafePos = nil
+            elseif drop > 60 or vy > 100 then
+                r.CFrame = CFrame.new(lastSafePos, lastSafePos + r.CFrame.LookVector)
+                r.AssemblyLinearVelocity = Vector3.new()
+                r.AssemblyAngularVelocity = Vector3.new()
+                dbg("Void fail-safe")
+                return
             end
         end
     end
 
-    if isCharInSafeZone(ch) and lastSafePos and not isInSafeZone(lastSafePos) then
-        r.CFrame = CFrame.new(lastSafePos, lastSafePos + r.CFrame.LookVector)
-        r.AssemblyLinearVelocity = Vector3.new()
-        r.AssemblyAngularVelocity = Vector3.new()
-        dbg("SafeZone eject")
-        return
+    if isCharInSafeZone(ch) then
+        local exitPos = findSafeZoneExit(ch, r)
+        if exitPos then
+            r.CFrame = CFrame.new(exitPos, exitPos + r.CFrame.LookVector)
+            r.AssemblyLinearVelocity = Vector3.new()
+            r.AssemblyAngularVelocity = Vector3.new()
+            dbg("SafeZone eject")
+            return
+        end
     end
 
     local downP, downRoot, downDist = getDown(pos)
@@ -1077,22 +1103,20 @@ addConn(rs.Heartbeat, function()
         end
     end
 
-    if autoResp and respEvt and hum and hum.Health <= 0 and t - respLast >= respCd then
-        respLast = t
-        respEvt:FireServer(true)
-        dbg("Auto Respawn: fired")
-    end
-
     if antiBot and botR > 0 then
         local hit, dist, botPos = getBot(pos)
         if hit and dist and dist < botR then
             local safePos = getSafePos(pos, ch, botPos, botR)
             if safePos then
-                local grounded = attachToGround(safePos, ch) or safePos
-                if not isInSafeZone(grounded) and (grounded - pos).Magnitude > 1 then
-                    r.CFrame = CFrame.new(grounded, grounded + r.CFrame.LookVector)
-                    r.AssemblyLinearVelocity = Vector3.new()
-                    r.AssemblyAngularVelocity = Vector3.new()
+                rayParams.FilterDescendantsInstances = buildFilter(ch)
+                local groundSafe = ws:Raycast(safePos + Vector3.new(0, 50, 0), Vector3.new(0, -200, 0), rayParams)
+                if groundSafe then
+                    local p = groundSafe.Position + Vector3.new(0, 3, 0)
+                    if not isInSafeZone(p) and (p - pos).Magnitude > 1 then
+                        r.CFrame = CFrame.new(p, p + r.CFrame.LookVector)
+                        r.AssemblyLinearVelocity = Vector3.new()
+                        r.AssemblyAngularVelocity = Vector3.new()
+                    end
                 end
             end
         end

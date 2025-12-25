@@ -437,6 +437,7 @@ end
 if Tog.ESPSafeZones then
     Tog.ESPSafeZones:OnChanged(function(v)
         szEsp = v
+        refreshSafeZones()
     end)
 end
 
@@ -683,6 +684,54 @@ local rayParams = RaycastParams.new()
 rayParams.FilterType = Enum.RaycastFilterType.Blacklist
 rayParams.IgnoreWater = true
 
+local function isPointInPart(part, pos)
+    local rel = part.CFrame:PointToObjectSpace(pos)
+    local s = part.Size * 0.5
+    return math.abs(rel.X) <= s.X and math.abs(rel.Y) <= s.Y and math.abs(rel.Z) <= s.Z
+end
+
+local function isInSafeZone(pos)
+    for i = 1, #safeZoneParts do
+        local p = safeZoneParts[i]
+        if p.Parent and isPointInPart(p, pos) then
+            return true
+        end
+    end
+    return false
+end
+
+local function isCharInSafeZone(ch)
+    if not ch then return false end
+    for _, part in ipairs(ch:GetDescendants()) do
+        if part:IsA("BasePart") then
+            local p = part.Position
+            for i = 1, #safeZoneParts do
+                local sz = safeZoneParts[i]
+                if sz.Parent and isPointInPart(sz, p) then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+local function getCharSafeZoneContact(ch)
+    if not ch then return nil, nil, nil end
+    for _, part in ipairs(ch:GetDescendants()) do
+        if part:IsA("BasePart") then
+            local p = part.Position
+            for i = 1, #safeZoneParts do
+                local sz = safeZoneParts[i]
+                if sz.Parent and isPointInPart(sz, p) then
+                    return part, sz, p
+                end
+            end
+        end
+    end
+    return nil, nil, nil
+end
+
 local function refreshSafeZones()
     for i = 1, #safeZoneParts do
         local part = safeZoneParts[i]
@@ -733,54 +782,6 @@ if Tog.ESPSafeZones then
         szEsp = v
         refreshSafeZones()
     end)
-end
-
-local function isPointInPart(part, pos)
-    local rel = part.CFrame:PointToObjectSpace(pos)
-    local s = part.Size * 0.5
-    return math.abs(rel.X) <= s.X and math.abs(rel.Y) <= s.Y and math.abs(rel.Z) <= s.Z
-end
-
-local function isInSafeZone(pos)
-    for i = 1, #safeZoneParts do
-        local p = safeZoneParts[i]
-        if p.Parent and isPointInPart(p, pos) then
-            return true
-        end
-    end
-    return false
-end
-
-local function isCharInSafeZone(ch)
-    if not ch then return false end
-    for _, part in ipairs(ch:GetDescendants()) do
-        if part:IsA("BasePart") then
-            local p = part.Position
-            for i = 1, #safeZoneParts do
-                local sz = safeZoneParts[i]
-                if sz.Parent and isPointInPart(sz, p) then
-                    return true
-                end
-            end
-        end
-    end
-    return false
-end
-
-local function getCharSafeZoneContact(ch)
-    if not ch then return nil, nil, nil end
-    for _, part in ipairs(ch:GetDescendants()) do
-        if part:IsA("BasePart") then
-            local p = part.Position
-            for i = 1, #safeZoneParts do
-                local sz = safeZoneParts[i]
-                if sz.Parent and isPointInPart(sz, p) then
-                    return part, sz, p
-                end
-            end
-        end
-    end
-    return nil, nil, nil
 end
 
 local function getDown(pos)
@@ -907,6 +908,70 @@ local function attachToGround(pos, ch)
         end
     end
     return nil
+end
+
+local function pushOutOfSafeZone(ch, r)
+    local hitPart, hitZone = getCharSafeZoneContact(ch)
+    if not hitPart or not hitZone then return false end
+    local rootPos = r.Position
+    local rel = hitZone.CFrame:PointToObjectSpace(rootPos)
+    local hs = hitZone.Size * 0.5
+    local dx = hs.X - math.abs(rel.X)
+    local dz = hs.Z - math.abs(rel.Z)
+    local axis = dx < dz and "X" or "Z"
+    local dirLocal
+    if axis == "X" then
+        dirLocal = Vector3.new(rel.X >= 0 and 1 or -1, 0, 0)
+    else
+        dirLocal = Vector3.new(0, 0, rel.Z >= 0 and 1 or -1)
+    end
+    local dirWorld = hitZone.CFrame:VectorToWorldSpace(dirLocal)
+    local dir = Vector3.new(dirWorld.X, 0, dirWorld.Z)
+    if dir.Magnitude < 1e-3 then
+        dir = Vector3.new(1, 0, 0)
+    end
+    dir = dir.Unit
+    local step = 2
+    local maxPush = math.max(szDist, 8)
+    local target
+    for d = step, maxPush, step do
+        local testPos = rootPos + dir * d
+        if not isInSafeZone(testPos) then
+            target = testPos
+            break
+        end
+    end
+    if not target then
+        local alt = {30, -30, 60, -60, 90, -90, 150, -150, 180}
+        local baseCF = CFrame.new(Vector3.zero, dir)
+        for i = 1, #alt do
+            local a = alt[i]
+            local v = (baseCF * CFrame.Angles(0, math.rad(a), 0)).LookVector
+            v = Vector3.new(v.X, 0, v.Z)
+            if v.Magnitude > 1e-3 then
+                v = v.Unit
+                for d = step, maxPush, step do
+                    local testPos = rootPos + v * d
+                    if not isInSafeZone(testPos) then
+                        target = testPos
+                        break
+                    end
+                end
+                if target then
+                    break
+                end
+            end
+        end
+    end
+    if target then
+        local newPos = target + Vector3.new(0, 0.1, 0)
+        r.CFrame = CFrame.new(newPos, newPos + r.CFrame.LookVector)
+        r.AssemblyLinearVelocity = Vector3.new()
+        r.AssemblyAngularVelocity = Vector3.new()
+        dbg("SafeZone push")
+        return true
+    end
+    return false
 end
 
 local revCd = 0.1
@@ -1137,33 +1202,8 @@ addConn(rs.Heartbeat, function()
     end
 
     if antiSZ then
-        local hitPart, hitZone, hitPos = getCharSafeZoneContact(ch)
-        if hitPart and hitZone and hitPos then
-            local rel = hitZone.CFrame:PointToObjectSpace(hitPos)
-            local hs = hitZone.Size * 0.5
-            local dx = hs.X - math.abs(rel.X)
-            local dz = hs.Z - math.abs(rel.Z)
-            local axis = dx < dz and "X" or "Z"
-            local dirLocal
-            if axis == "X" then
-                dirLocal = Vector3.new(rel.X >= 0 and 1 or -1, 0, 0)
-            else
-                dirLocal = Vector3.new(0, 0, rel.Z >= 0 and 1 or -1)
-            end
-            local dirWorld = hitZone.CFrame:VectorToWorldSpace(dirLocal)
-            local horiz = Vector3.new(dirWorld.X, 0, dirWorld.Z)
-            if horiz.Magnitude > 1e-3 then
-                horiz = horiz.Unit
-                local basePos = Vector3.new(pos.X, pos.Y, pos.Z)
-                local target = basePos + horiz * szDist
-                if not isInSafeZone(target) then
-                    r.CFrame = CFrame.new(target, target + r.CFrame.LookVector)
-                    r.AssemblyLinearVelocity = Vector3.new()
-                    r.AssemblyAngularVelocity = Vector3.new()
-                    dbg("SafeZone push")
-                    return
-                end
-            end
+        if pushOutOfSafeZone(ch, r) then
+            return
         end
     end
 

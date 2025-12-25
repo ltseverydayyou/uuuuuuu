@@ -94,6 +94,12 @@ gbCore:AddToggle("AntiNextbot", {
     Tooltip = "Push away from nextbots"
 })
 
+gbCore:AddToggle("AntiSafeZone", {
+    Text = "Anti SafeZone",
+    Default = true,
+    Tooltip = "Keep you out of SafeZones"
+})
+
 gbCore:AddToggle("AutoRespawn", {
     Text = "Auto Respawn",
     Default = false,
@@ -124,6 +130,15 @@ gbCore:AddSlider("SaveOffset", {
     Rounding = 0
 })
 
+gbCore:AddSlider("SafeZoneDistance", {
+    Text = "SafeZone Distance",
+    Min = 3,
+    Max = 25,
+    Default = 8,
+    Rounding = 0,
+    Suffix = " studs"
+})
+
 gbCore:AddButton("Respawn", function()
     local rep = S("ReplicatedStorage")
     if not rep then return end
@@ -147,6 +162,12 @@ gbESP:AddToggle("ESPBots", {
     Text = "Nextbot ESP",
     Default = false,
     Tooltip = "ESP for nextbots"
+})
+
+gbESP:AddToggle("ESPSafeZones", {
+    Text = "SafeZone ESP",
+    Default = false,
+    Tooltip = "Show SafeZone hitboxes"
 })
 
 gbESP:AddToggle("ESPShowDist", {
@@ -320,6 +341,7 @@ end
 local autoRev = Tog.AutoRevive.Value
 local autoSave = Tog.AutoSave.Value
 local antiBot = Tog.AntiNextbot.Value
+local antiSZ = Tog.AntiSafeZone and Tog.AntiSafeZone.Value or true
 local autoResp = Tog.AutoRespawn.Value
 local runTP = Tog.RunOnTeleport.Value
 local debugOn = Tog.DebugLogs.Value
@@ -327,10 +349,12 @@ local debugOn = Tog.DebugLogs.Value
 local revR = Opt.ReviveRange.Value
 local botR = Opt.NextbotRange.Value
 local saveOff = Opt.SaveOffset.Value
+local szDist = Opt.SafeZoneDistance and Opt.SafeZoneDistance.Value or 8
 
 local espPl = Tog.ESPPlayers.Value
 local espDn = Tog.ESPDead.Value
 local espBt = Tog.ESPBots.Value
+local szEsp = Tog.ESPSafeZones and Tog.ESPSafeZones.Value or false
 local espShow = Tog.ESPShowDist.Value
 local espSize = Opt.ESPTextSize.Value
 local espMax = Opt.ESPMaxDist.Value
@@ -352,9 +376,21 @@ Tog.RunOnTeleport:OnChanged(function(v)
 end)
 Tog.DebugLogs:OnChanged(function(v) debugOn = v end)
 
+if Tog.AntiSafeZone then
+    Tog.AntiSafeZone:OnChanged(function(v)
+        antiSZ = v
+    end)
+end
+
 Opt.ReviveRange:OnChanged(function(v) revR = v end)
 Opt.NextbotRange:OnChanged(function(v) botR = v end)
 Opt.SaveOffset:OnChanged(function(v) saveOff = v end)
+
+if Opt.SafeZoneDistance then
+    Opt.SafeZoneDistance:OnChanged(function(v)
+        szDist = v
+    end)
+end
 
 Tog.ESPPlayers:OnChanged(function(v) espPl = v end)
 Tog.ESPDead:OnChanged(function(v) espDn = v end)
@@ -374,8 +410,34 @@ Tog.UIWatermark:OnChanged(function(v)
     end
 end)
 
-if runTP then
-    qtp()
+local safeZoneParts = {}
+
+local function dbg(msg)
+    if not debugOn then return end
+    local ok = true
+    if Lib.Notify then
+        ok = pcall(function()
+            Lib:Notify({
+                Title = "Evader Debug",
+                Description = msg,
+                Time = 4,
+            })
+        end)
+    end
+    if not ok then
+        local sg = S("StarterGui")
+        if sg then
+            pcall(function()
+                sg:SetCore("SendNotification", { Title = "Evader Debug", Text = msg, Duration = 4 })
+            end)
+        end
+    end
+end
+
+if Tog.ESPSafeZones then
+    Tog.ESPSafeZones:OnChanged(function(v)
+        szEsp = v
+    end)
 end
 
 local NA_GRAB_BODY = (function()
@@ -490,27 +552,6 @@ local rep = S("ReplicatedStorage")
 local ws = S("Workspace")
 local cg = S("CoreGui")
 local st = S("Stats")
-local UIS = S("UserInputService")
-local sg = S("StarterGui")
-
-local function dbg(msg)
-    if not debugOn then return end
-    local ok = true
-    if Lib.Notify then
-        ok = pcall(function()
-            Lib:Notify({
-                Title = "Evader Debug",
-                Description = msg,
-                Time = 2,
-            })
-        end)
-    end
-    if not ok and sg then
-        pcall(function()
-            sg:SetCore("SendNotification", { Title = "Evader Debug", Text = msg, Duration = 4 })
-        end)
-    end
-end
 
 local lp = ps.LocalPlayer
 repeat task.wait() lp = ps.LocalPlayer until lp
@@ -642,9 +683,16 @@ local rayParams = RaycastParams.new()
 rayParams.FilterType = Enum.RaycastFilterType.Blacklist
 rayParams.IgnoreWater = true
 
-local safeZoneParts = {}
-
 local function refreshSafeZones()
+    for i = 1, #safeZoneParts do
+        local part = safeZoneParts[i]
+        if part and part:IsA("BasePart") then
+            local sb = part:FindFirstChild("EvadeSafeZoneSB")
+            if sb then
+                sb:Destroy()
+            end
+        end
+    end
     table.clear(safeZoneParts)
     local gFolder = ws:FindFirstChild("Game")
     if not gFolder then return end
@@ -653,6 +701,19 @@ local function refreshSafeZones()
             for _, ch in ipairs(inst:GetDescendants()) do
                 if ch:IsA("BasePart") then
                     safeZoneParts[#safeZoneParts + 1] = ch
+                    if szEsp then
+                        local sb = ch:FindFirstChild("EvadeSafeZoneSB")
+                        if not sb then
+                            sb = Instance.new("SelectionBox")
+                            sb.Name = "EvadeSafeZoneSB"
+                            sb.Adornee = ch
+                            sb.LineThickness = 0.02
+                            sb.Color3 = Color3.fromRGB(180, 0, 255)
+                            sb.SurfaceColor3 = Color3.fromRGB(120, 0, 200)
+                            sb.SurfaceTransparency = 0.85
+                            sb.Parent = ch
+                        end
+                    end
                 end
             end
         end
@@ -666,6 +727,13 @@ task.spawn(function()
         task.wait(5)
     end
 end)
+
+if Tog.ESPSafeZones then
+    Tog.ESPSafeZones:OnChanged(function(v)
+        szEsp = v
+        refreshSafeZones()
+    end)
+end
 
 local function isPointInPart(part, pos)
     local rel = part.CFrame:PointToObjectSpace(pos)
@@ -697,6 +765,22 @@ local function isCharInSafeZone(ch)
         end
     end
     return false
+end
+
+local function getCharSafeZoneContact(ch)
+    if not ch then return nil, nil, nil end
+    for _, part in ipairs(ch:GetDescendants()) do
+        if part:IsA("BasePart") then
+            local p = part.Position
+            for i = 1, #safeZoneParts do
+                local sz = safeZoneParts[i]
+                if sz.Parent and isPointInPart(sz, p) then
+                    return part, sz, p
+                end
+            end
+        end
+    end
+    return nil, nil, nil
 end
 
 local function getDown(pos)
@@ -821,28 +905,6 @@ local function attachToGround(pos, ch)
         if not isInSafeZone(p) then
             return p
         end
-    end
-    return nil
-end
-
-local function findSafeZoneExit(ch, r)
-    if not ch or not r then return nil end
-    local pos = r.Position
-    local radii = {6, 10, 15, 20, 30}
-    local step = 30
-    for i = 1, #radii do
-        local rad = radii[i]
-        for deg = 0, 330, step do
-            local dir = Vector3.new(math.cos(math.rad(deg)), 0, math.sin(math.rad(deg)))
-            local base = pos + dir * rad
-            local grounded = attachToGround(base, ch)
-            if grounded and not isInSafeZone(grounded) then
-                return grounded
-            end
-        end
-    end
-    if lastSafePos and not isInSafeZone(lastSafePos) then
-        return lastSafePos
     end
     return nil
 end
@@ -1024,10 +1086,20 @@ addConn(rs.Heartbeat, function()
     local t = tick()
     local maxVoidDist = 800
 
-    if hum and autoResp and respEvt and hum.Health <= 0 and t - respLast >= respCd then
-        respLast = t
-        respEvt:FireServer(true)
-        dbg("Auto Respawn: fired")
+    if autoResp and respEvt and t - respLast >= respCd then
+        local need = false
+        if hum then
+            if hum.Health <= 0 then
+                need = true
+            end
+        else
+            need = true
+        end
+        if need then
+            respLast = t
+            respEvt:FireServer(true)
+            dbg("Auto Respawn: fired")
+        end
     end
 
     if hum and not saveActive then
@@ -1051,14 +1123,47 @@ addConn(rs.Heartbeat, function()
         end
     end
 
-    if isCharInSafeZone(ch) then
-        local exitPos = findSafeZoneExit(ch, r)
-        if exitPos then
-            r.CFrame = CFrame.new(exitPos, exitPos + r.CFrame.LookVector)
-            r.AssemblyLinearVelocity = Vector3.new()
-            r.AssemblyAngularVelocity = Vector3.new()
-            dbg("SafeZone eject")
-            return
+    if saveActive and not autoSave then
+        if savePos then
+            local back = attachToGround(savePos, ch) or savePos
+            r.CFrame = CFrame.new(back, back + r.CFrame.LookVector)
+        end
+        r.AssemblyLinearVelocity = Vector3.new()
+        r.AssemblyAngularVelocity = Vector3.new()
+        saveActive = false
+        savePos = nil
+        saveTarget = nil
+        dbg("Auto Save: cancelled")
+    end
+
+    if antiSZ then
+        local hitPart, hitZone, hitPos = getCharSafeZoneContact(ch)
+        if hitPart and hitZone and hitPos then
+            local rel = hitZone.CFrame:PointToObjectSpace(hitPos)
+            local hs = hitZone.Size * 0.5
+            local dx = hs.X - math.abs(rel.X)
+            local dz = hs.Z - math.abs(rel.Z)
+            local axis = dx < dz and "X" or "Z"
+            local dirLocal
+            if axis == "X" then
+                dirLocal = Vector3.new(rel.X >= 0 and 1 or -1, 0, 0)
+            else
+                dirLocal = Vector3.new(0, 0, rel.Z >= 0 and 1 or -1)
+            end
+            local dirWorld = hitZone.CFrame:VectorToWorldSpace(dirLocal)
+            local horiz = Vector3.new(dirWorld.X, 0, dirWorld.Z)
+            if horiz.Magnitude > 1e-3 then
+                horiz = horiz.Unit
+                local basePos = Vector3.new(pos.X, pos.Y, pos.Z)
+                local target = basePos + horiz * szDist
+                if not isInSafeZone(target) then
+                    r.CFrame = CFrame.new(target, target + r.CFrame.LookVector)
+                    r.AssemblyLinearVelocity = Vector3.new()
+                    r.AssemblyAngularVelocity = Vector3.new()
+                    dbg("SafeZone push")
+                    return
+                end
+            end
         end
     end
 
@@ -1076,7 +1181,7 @@ addConn(rs.Heartbeat, function()
         dbg("Auto Save: saving "..downP.Name)
     end
 
-    if saveActive and saveTarget then
+    if saveActive and saveTarget and autoSave then
         local recT, mdlT = NA_GRAB_BODY.ensure(saveTarget)
         local humT = recT and recT.humanoid
         local rootT = recT and (recT.root or (mdlT and NA_GRAB_BODY.firstPart(mdlT))) or nil

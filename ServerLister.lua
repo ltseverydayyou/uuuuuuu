@@ -1,600 +1,745 @@
-local function ClonedService(name)
-    local Service = (game.GetService);
-	local Reference = (cloneref) or function(reference) return reference end
-	return Reference(Service(game, name));
-end
-
-local function protectUI(sGui)
-    if sGui:IsA("ScreenGui") then
-        sGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
-		sGui.DisplayOrder = 999999999
-		sGui.ResetOnSpawn = false
-		sGui.IgnoreGuiInset = true
-    end
-    local cGUI = ClonedService("CoreGui")
-    local lPlr = ClonedService("Players").LocalPlayer
-
-    local function NAProtection(inst, var)
-        if inst then
-            if var then
-                inst[var] = "\0"
-                inst.Archivable = false
-            else
-                inst.Name = "\0"
-                inst.Archivable = false
-            end
-        end
-    end
-
-    if gethui then
-		NAProtection(sGui)
-		sGui.Parent = gethui()
-		return sGui
-	elseif cGUI and cGUI:FindFirstChild("RobloxGui") then
-		NAProtection(sGui)
-		sGui.Parent = cGUI:FindFirstChild("RobloxGui")
-		return sGui
-	elseif cGUI then
-		NAProtection(sGui)
-		sGui.Parent = cGUI
-		return sGui
-	elseif lPlr and lPlr:FindFirstChildWhichIsA("PlayerGui") then
-		NAProtection(sGui)
-		sGui.Parent = lPlr:FindFirstChildWhichIsA("PlayerGui")
-		sGui.ResetOnSpawn = false
-		return sGui
-	else
-		return nil
+local srv = setmetatable({}, {
+	__index = function(self, n)
+		local ref = cloneref and type(cloneref) == "function" and cloneref or function(x) return x end
+		local ok, s = pcall(function() return ref(game:GetService(n)) end)
+		if ok and s then
+			rawset(self, n, s)
+			return s
+		end
 	end
+})
+
+local function S(n) return srv[n] end
+
+local function protectUI(g)
+	if g:IsA("ScreenGui") then
+		g.ZIndexBehavior = Enum.ZIndexBehavior.Global
+		g.DisplayOrder = 999999999
+		g.ResetOnSpawn = false
+		g.IgnoreGuiInset = true
+	end
+	local cg = S("CoreGui")
+	local function npt(i, v)
+		if i then
+			if v then i[v] = "\0" else i.Name = "\0" end
+			i.Archivable = false
+		end
+	end
+	if gethui then
+		npt(g)
+		g.Parent = gethui()
+	elseif cg and cg:FindFirstChild("RobloxGui") then
+		npt(g)
+		g.Parent = cg.RobloxGui
+	elseif cg then
+		npt(g)
+		g.Parent = cg
+	else
+		local lp = S("Players").LocalPlayer
+		local pg = lp and lp:FindFirstChildWhichIsA("PlayerGui")
+		if pg then
+			npt(g)
+			g.Parent = pg
+			g.ResetOnSpawn = false
+		end
+	end
+	return g
 end
 
-local ServerListGUI = Instance.new("ScreenGui")
-local Background = Instance.new("ImageLabel")
-local refreshButton = Instance.new("TextButton")
-local serverID = Instance.new("TextBox")
-local scrapeAll = Instance.new("TextButton")
-local scrapeServer = Instance.new("TextButton")
-local serverList = Instance.new("ScrollingFrame")
-local UIListLayout = Instance.new("UIListLayout")
+local tw = S("TweenService")
+local uis = S("UserInputService")
+local hs = S("HttpService")
+local ts = S("TextService")
+local cam = workspace.CurrentCamera or workspace:FindFirstChildOfClass("Camera")
+
+local req = request or http_request or (syn and syn.request) or function() end
+
+local gui = protectUI(Instance.new("ScreenGui"))
+
+local win = Instance.new("Frame")
+win.Name = "ServerWin"
+win.Parent = gui
+win.AnchorPoint = Vector2.new(0, 0)
+win.Size = UDim2.new(0, 560, 0, 380)
+win.BackgroundColor3 = Color3.fromRGB(10, 10, 12)
+win.BackgroundTransparency = 0.06
+win.BorderSizePixel = 0
+win.ZIndex = 10
+win.Active = true
+
+do
+	local v = cam and cam.ViewportSize or Vector2.new(1280, 720)
+	local cx = (v.X - win.Size.X.Offset) * 0.5
+	local cy = (v.Y - win.Size.Y.Offset) * 0.5
+	win.Position = UDim2.fromOffset(cx, cy)
+end
+
+local scl = Instance.new("UIScale")
+scl.Parent = win
+scl.Scale = 1
+
+local winCorner = Instance.new("UICorner")
+winCorner.Parent = win
+winCorner.CornerRadius = UDim.new(0, 14)
+
+local winStroke = Instance.new("UIStroke")
+winStroke.Parent = win
+winStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+winStroke.Color = Color3.fromRGB(255, 255, 255)
+winStroke.Thickness = 1
+winStroke.Transparency = 0.86
+winStroke.ZIndex = 11
+
+local winGrad = Instance.new("UIGradient")
+winGrad.Rotation = 90
+winGrad.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(18, 18, 24)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(8, 8, 10))
+})
+winGrad.Parent = win
+
+local winPad = Instance.new("UIPadding")
+winPad.Parent = win
+winPad.PaddingTop = UDim.new(0, 12)
+winPad.PaddingBottom = UDim.new(0, 12)
+winPad.PaddingLeft = UDim.new(0, 12)
+winPad.PaddingRight = UDim.new(0, 12)
+
+local top = Instance.new("Frame")
+top.Parent = win
+top.BackgroundTransparency = 1
+top.Position = UDim2.new(0, 0, 0, 0)
+top.Size = UDim2.new(1, 0, 0, 32)
+top.ZIndex = 12
+
 local title = Instance.new("TextLabel")
-local close = Instance.new("ImageButton")
-local players = Instance.new("TextLabel")
-local fps = Instance.new("TextLabel")
-local sortPlayers = Instance.new("TextButton")
-local sortPing = Instance.new("TextButton")
-local sortFPS = Instance.new("TextButton")
-local ping = Instance.new("TextLabel")
-
-req=request or http_request or (syn and syn.request) or function() end
-
-protectUI(ServerListGUI)
-
-Background.Name = "Background"
-Background.Parent = ServerListGUI
-Background.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-Background.BackgroundTransparency = 1.000
-Background.Position = UDim2.new(0.264210522, 0, 0.216599196, 0)
-Background.Size = UDim2.new(0, 500, 0, 300)
-Background.Image = "rbxassetid://3570695787"
-Background.ImageColor3 = Color3.fromRGB(30, 30, 30)
-Background.ScaleType = Enum.ScaleType.Slice
-Background.SliceCenter = Rect.new(100, 100, 100, 100)
-Background.SliceScale = 0.120
-
-refreshButton.Name = "refreshButton"
-refreshButton.Parent = Background
-refreshButton.BackgroundColor3 = Color3.fromRGB(0, 36, 116)
-refreshButton.BorderColor3 = Color3.fromRGB(30, 30, 30)
-refreshButton.BorderSizePixel = 5
-refreshButton.Position = UDim2.new(0.0399999991, 0, 0.230000004, 0)
-refreshButton.Size = UDim2.new(0, 102, 0, 30)
-refreshButton.Style = Enum.ButtonStyle.RobloxRoundDefaultButton
-refreshButton.Font = Enum.Font.SciFi
-refreshButton.Text = "Refresh"
-refreshButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-refreshButton.TextSize = 14.000
-
-serverID.Name = "serverID"
-serverID.Parent = Background
-serverID.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-serverID.BorderSizePixel = 0
-serverID.Position = UDim2.new(0.0460000001, 0, 0.143333361, 0)
-serverID.Size = UDim2.new(0, 96, 0, 26)
-serverID.Font = Enum.Font.SourceSans
-serverID.Text = game.PlaceId
-serverID.TextColor3 = Color3.fromRGB(0, 0, 0)
-serverID.TextSize = 14.000
-
-scrapeServer.Name = "scrapeAll"
-scrapeServer.Parent = Background
-scrapeServer.BackgroundColor3 = Color3.fromRGB(0, 36, 116)
-scrapeServer.BorderColor3 = Color3.fromRGB(30, 30, 30)
-scrapeServer.BorderSizePixel = 5
-scrapeServer.Position = UDim2.new(0.0399999991, 0, 0.833333373, 0)
-scrapeServer.Size = UDim2.new(0, 102, 0, 30)
-scrapeServer.Style = Enum.ButtonStyle.RobloxRoundDefaultButton
-scrapeServer.Font = Enum.Font.SciFi
-scrapeServer.Text = "Scrape Server"
-scrapeServer.TextColor3 = Color3.fromRGB(255, 255, 255)
-scrapeServer.TextSize = 14.000
-
-serverList.Name = "serverList"
-serverList.Parent = Background
-serverList.Active = true
-serverList.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-serverList.BorderColor3 = Color3.fromRGB(27, 42, 53)
-serverList.BorderSizePixel = 0
-serverList.Position = UDim2.new(0.285052747, 0, 0.230000004, 0)
-serverList.Size = UDim2.new(0, 350, 0, 217)
-serverList.CanvasPosition = Vector2.new(0, 74.6544647)
-
-UIListLayout.Parent = serverList
-UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-
-title.Name = "title"
-title.Parent = Background
-title.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-title.BackgroundTransparency = 1.000
-title.BorderSizePixel = 0
-title.Position = UDim2.new(0.0460000001, 0, 0, 0)
-title.Size = UDim2.new(0, 171, 0, 43)
-title.Font = Enum.Font.SciFi
+title.Parent = top
+title.BackgroundTransparency = 1
+title.Size = UDim2.new(1, -32, 1, 0)
+title.Position = UDim2.new(0, 0, 0, 0)
+title.Font = Enum.Font.GothamSemibold
 title.Text = "Server Lister"
+title.TextSize = 18
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
-title.TextSize = 20.000
 title.TextXAlignment = Enum.TextXAlignment.Left
+title.ZIndex = 999
 
-close.Name = "close"
-close.Parent = Background
-close.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-close.BackgroundTransparency = 1.000
-close.Position = UDim2.new(0.957000017, 0, 0.0433333367, 0)
-close.Size = UDim2.new(0, 16, 0, 16)
+local close = Instance.new("ImageButton")
+close.Parent = top
+close.BackgroundTransparency = 1
+close.Size = UDim2.new(0, 20, 0, 20)
+close.Position = UDim2.new(1, -20, 0, 6)
 close.Image = "rbxassetid://56290972"
-close.ImageColor3 = Color3.fromRGB(170, 0, 0)
+close.ImageColor3 = Color3.fromRGB(255, 90, 90)
+close.ZIndex = 14
 
-players.Name = "players"
-players.Parent = Background
-players.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-players.BackgroundTransparency = 1.000
-players.BorderSizePixel = 0
-players.Position = UDim2.new(0.504000008, 0, 0.113333337, 0)
-players.Size = UDim2.new(0, 68, 0, 43)
-players.Font = Enum.Font.SciFi
-players.Text = "Players"
-players.TextColor3 = Color3.fromRGB(255, 255, 255)
-players.TextSize = 20.000
-players.TextXAlignment = Enum.TextXAlignment.Left
+local row1 = Instance.new("Frame")
+row1.Parent = win
+row1.BackgroundTransparency = 1
+row1.Position = UDim2.new(0, 0, 0, 40)
+row1.Size = UDim2.new(1, 0, 0, 32)
+row1.ZIndex = 12
 
-fps.Name = "fps"
-fps.Parent = Background
-fps.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-fps.BackgroundTransparency = 1.000
-fps.BorderSizePixel = 0
-fps.Position = UDim2.new(0.835999966, 0, 0.113333337, 0)
-fps.Size = UDim2.new(0, 34, 0, 43)
-fps.Font = Enum.Font.SciFi
-fps.Text = "FPS"
-fps.TextColor3 = Color3.fromRGB(255, 255, 255)
-fps.TextSize = 20.000
-fps.TextXAlignment = Enum.TextXAlignment.Left
+local r1l = Instance.new("UIListLayout")
+r1l.Parent = row1
+r1l.FillDirection = Enum.FillDirection.Horizontal
+r1l.SortOrder = Enum.SortOrder.LayoutOrder
+r1l.Padding = UDim.new(0, 8)
+r1l.VerticalAlignment = Enum.VerticalAlignment.Center
 
-sortPlayers.Name = "sortPlayers"
-sortPlayers.Parent = Background
-sortPlayers.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-sortPlayers.BackgroundTransparency = 1.000
-sortPlayers.Position = UDim2.new(0.483999997, 0, 0.143333331, 0)
-sortPlayers.Size = UDim2.new(0, 86, 0, 26)
-sortPlayers.ZIndex = 10
-sortPlayers.Font = Enum.Font.SourceSans
-sortPlayers.TextColor3 = Color3.fromRGB(0, 0, 0)
-sortPlayers.TextSize = 14.000
-sortPlayers.TextTransparency = 1.000
+local idBox = Instance.new("TextBox")
+idBox.Parent = row1
+idBox.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+idBox.BackgroundTransparency = 0.02
+idBox.BorderSizePixel = 0
+idBox.Size = UDim2.new(1, -144, 1, 0)
+idBox.Font = Enum.Font.Gotham
+idBox.Text = tostring(game.PlaceId)
+idBox.TextSize = 14
+idBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+idBox.TextXAlignment = Enum.TextXAlignment.Left
+idBox.ClearTextOnFocus = false
+idBox.ZIndex = 13
+idBox.LayoutOrder = 1
 
-sortPing.Name = "sortPing"
-sortPing.Parent = Background
-sortPing.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-sortPing.BackgroundTransparency = 1.000
-sortPing.Position = UDim2.new(0.684000015, 0, 0.143333331, 0)
-sortPing.Size = UDim2.new(0, 53, 0, 26)
-sortPing.ZIndex = 10
-sortPing.Font = Enum.Font.SourceSans
-sortPing.TextColor3 = Color3.fromRGB(0, 0, 0)
-sortPing.TextSize = 14.000
-sortPing.TextTransparency = 1.000
+local idPad = Instance.new("UIPadding")
+idPad.Parent = idBox
+idPad.PaddingLeft = UDim.new(0, 10)
+idPad.PaddingRight = UDim.new(0, 10)
 
-sortFPS.Name = "sortFPS"
-sortFPS.Parent = Background
-sortFPS.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-sortFPS.BackgroundTransparency = 1.000
-sortFPS.Position = UDim2.new(0.815999985, 0, 0.143333331, 0)
-sortFPS.Size = UDim2.new(0, 51, 0, 26)
-sortFPS.ZIndex = 10
-sortFPS.Font = Enum.Font.SourceSans
-sortFPS.TextColor3 = Color3.fromRGB(0, 0, 0)
-sortFPS.TextSize = 14.000
-sortFPS.TextTransparency = 1.000
+local idCorner = Instance.new("UICorner")
+idCorner.Parent = idBox
+idCorner.CornerRadius = UDim.new(0, 8)
 
-ping.Name = "ping"
-ping.Parent = Background
-ping.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-ping.BackgroundTransparency = 1.000
-ping.BorderSizePixel = 0
-ping.Position = UDim2.new(0.698000014, 0, 0.113333337, 0)
-ping.Size = UDim2.new(0, 40, 0, 43)
-ping.Font = Enum.Font.SciFi
-ping.Text = "Ping"
-ping.TextColor3 = Color3.fromRGB(255, 255, 255)
-ping.TextSize = 20.000
-ping.TextXAlignment = Enum.TextXAlignment.Left
+local idStroke = Instance.new("UIStroke")
+idStroke.Parent = idBox
+idStroke.Color = Color3.fromRGB(80, 80, 95)
+idStroke.Transparency = 0.25
+idStroke.Thickness = 1
+idStroke.ZIndex = 14
 
--- Functionality
-local firstdone = false
-local cursortrue = false
-local cursor = ""
-local function scrapefirst()
-	local HttpService = ClonedService("HttpService")
-	local getServers = req({
-		Url = "https://games.roblox.com/v1/games/"
-			.. tostring(serverID.Text)
-			.. "/servers/Public?sortOrder=Asc&limit=100",
-		Method = "GET",
-	})
-	local serverTable = HttpService:JSONDecode(getServers.Body)
+local refBtn = Instance.new("TextButton")
+refBtn.Parent = row1
+refBtn.BackgroundColor3 = Color3.fromRGB(235, 235, 235)
+refBtn.BorderSizePixel = 0
+refBtn.Size = UDim2.new(0, 132, 1, 0)
+refBtn.Font = Enum.Font.GothamSemibold
+refBtn.Text = "Refresh"
+refBtn.TextSize = 14
+refBtn.TextColor3 = Color3.fromRGB(10, 10, 10)
+refBtn.AutoButtonColor = false
+refBtn.ZIndex = 13
+refBtn.LayoutOrder = 2
 
-	if serverTable.nextPageCursor == nil then
-		cursortrue = false
+local refCorner = Instance.new("UICorner")
+refCorner.Parent = refBtn
+refCorner.CornerRadius = UDim.new(0, 8)
+
+local refStroke = Instance.new("UIStroke")
+refStroke.Parent = refBtn
+refStroke.Color = Color3.fromRGB(180, 180, 180)
+refStroke.Transparency = 0.25
+refStroke.Thickness = 1
+refStroke.ZIndex = 14
+
+local row2 = Instance.new("Frame")
+row2.Parent = win
+row2.BackgroundTransparency = 1
+row2.Position = UDim2.new(0, 0, 0, 80)
+row2.Size = UDim2.new(1, 0, 0, 26)
+row2.ZIndex = 12
+
+local hdr = Instance.new("Frame")
+hdr.Parent = row2
+hdr.BackgroundColor3 = Color3.fromRGB(14, 14, 18)
+hdr.BackgroundTransparency = 0.12
+hdr.BorderSizePixel = 0
+hdr.Size = UDim2.new(1, 0, 1, 0)
+hdr.ZIndex = 13
+
+local hdrCorner = Instance.new("UICorner")
+hdrCorner.Parent = hdr
+hdrCorner.CornerRadius = UDim.new(0, 10)
+
+local hdrStroke = Instance.new("UIStroke")
+hdrStroke.Parent = hdr
+hdrStroke.Color = Color3.fromRGB(60, 60, 70)
+hdrStroke.Transparency = 0.45
+hdrStroke.Thickness = 1
+hdrStroke.ZIndex = 14
+
+local hdrPad = Instance.new("UIPadding")
+hdrPad.Parent = hdr
+hdrPad.PaddingLeft = UDim.new(0, 12)
+hdrPad.PaddingRight = UDim.new(0, 12)
+
+local hdrList = Instance.new("UIListLayout")
+hdrList.Parent = hdr
+hdrList.FillDirection = Enum.FillDirection.Horizontal
+hdrList.SortOrder = Enum.SortOrder.LayoutOrder
+hdrList.Padding = UDim.new(0, 8)
+hdrList.VerticalAlignment = Enum.VerticalAlignment.Center
+
+local function mkHdr(t, s)
+	local b = Instance.new("TextButton")
+	b.Parent = hdr
+	b.BackgroundTransparency = 1
+	b.BorderSizePixel = 0
+	b.Size = UDim2.new(s, 0, 1, 0)
+	b.Font = Enum.Font.GothamSemibold
+	b.Text = t
+	b.TextSize = 13
+	b.TextColor3 = Color3.fromRGB(255, 255, 255)
+	b.TextXAlignment = Enum.TextXAlignment.Left
+	b.AutoButtonColor = false
+	b.ZIndex = 15
+	return b
+end
+
+local hPl = mkHdr("Players", 0.34)
+local hPg = mkHdr("Ping", 0.33)
+local hFp = mkHdr("FPS", 0.33)
+
+local list = Instance.new("ScrollingFrame")
+list.Parent = win
+list.Active = true
+list.BackgroundColor3 = Color3.fromRGB(14, 14, 18)
+list.BackgroundTransparency = 0.08
+list.BorderSizePixel = 0
+list.Position = UDim2.new(0, 0, 0, 116)
+list.Size = UDim2.new(1, 0, 1, -160)
+list.ScrollBarThickness = 3
+list.ZIndex = 12
+list.CanvasSize = UDim2.new(0, 0, 0, 0)
+list.ClipsDescendants = true
+pcall(function() list.AutomaticCanvasSize = Enum.AutomaticSize.Y end)
+
+local listCorner = Instance.new("UICorner")
+listCorner.Parent = list
+listCorner.CornerRadius = UDim.new(0, 12)
+
+local listStroke = Instance.new("UIStroke")
+listStroke.Parent = list
+listStroke.Color = Color3.fromRGB(55, 55, 65)
+listStroke.Transparency = 0.4
+listStroke.Thickness = 1
+listStroke.ZIndex = 13
+
+local listPad = Instance.new("UIPadding")
+listPad.Parent = list
+listPad.PaddingTop = UDim.new(0, 8)
+listPad.PaddingBottom = UDim.new(0, 8)
+listPad.PaddingLeft = UDim.new(0, 8)
+listPad.PaddingRight = UDim.new(0, 8)
+
+local listLayout = Instance.new("UIListLayout")
+listLayout.Parent = list
+listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+listLayout.Padding = UDim.new(0, 6)
+
+local bottom = Instance.new("Frame")
+bottom.Parent = win
+bottom.BackgroundTransparency = 1
+bottom.AnchorPoint = Vector2.new(0, 1)
+bottom.Position = UDim2.new(0, 0, 1, -10)
+bottom.Size = UDim2.new(1, 0, 0, 32)
+bottom.ZIndex = 12
+
+local bList = Instance.new("UIListLayout")
+bList.Parent = bottom
+bList.FillDirection = Enum.FillDirection.Horizontal
+bList.SortOrder = Enum.SortOrder.LayoutOrder
+bList.Padding = UDim.new(0, 8)
+bList.VerticalAlignment = Enum.VerticalAlignment.Center
+
+local function mkBtn(txt, w)
+	local b = Instance.new("TextButton")
+	b.Parent = bottom
+	b.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+	b.BackgroundTransparency = 0.02
+	b.BorderSizePixel = 0
+	b.Size = UDim2.new(0, w, 1, 0)
+	b.Font = Enum.Font.Gotham
+	b.Text = txt
+	b.TextSize = 14
+	b.TextColor3 = Color3.fromRGB(255, 255, 255)
+	b.AutoButtonColor = false
+	b.ZIndex = 13
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, 8)
+	c.Parent = b
+	local s = Instance.new("UIStroke")
+	s.Parent = b
+	s.Color = Color3.fromRGB(80, 80, 90)
+	s.Transparency = 0.3
+	s.Thickness = 1
+	s.ZIndex = 14
+	return b
+end
+
+local cpBtn = mkBtn("Copy players", 150)
+cpBtn.LayoutOrder = 1
+
+local hideBtn = mkBtn("Hide full: OFF", 140)
+hideBtn.LayoutOrder = 2
+
+local autoBtn = mkBtn("Auto ping sort: OFF", 180)
+autoBtn.LayoutOrder = 3
+
+local pill = Instance.new("TextButton")
+pill.Parent = gui
+pill.BackgroundColor3 = Color3.fromRGB(16, 16, 20)
+pill.BackgroundTransparency = 0.06
+pill.BorderSizePixel = 0
+pill.AnchorPoint = Vector2.new(0.5, 0)
+pill.Position = UDim2.new(0.5, 0, 0.1, 0)
+pill.Size = UDim2.new(0, 150, 0, 34)
+pill.Font = Enum.Font.GothamSemibold
+pill.Text = "Server Lister"
+pill.TextSize = 14
+pill.TextColor3 = Color3.fromRGB(255, 255, 255)
+pill.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+pill.TextStrokeTransparency = 0.5
+pill.AutoButtonColor = false
+pill.ZIndex = 30
+pill.Active = true
+
+local pillCorner = Instance.new("UICorner")
+pillCorner.Parent = pill
+pillCorner.CornerRadius = UDim.new(1, 0)
+
+local pillStroke = Instance.new("UIStroke")
+pillStroke.Parent = pill
+pillStroke.Color = Color3.fromRGB(95, 95, 110)
+pillStroke.Transparency = 0.45
+pillStroke.Thickness = 1
+pillStroke.ZIndex = 31
+
+local function tbg(b, c)
+	tw:Create(b, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = c}):Play()
+end
+
+refBtn.MouseEnter:Connect(function() tbg(refBtn, Color3.fromRGB(250, 250, 250)) end)
+refBtn.MouseLeave:Connect(function() tbg(refBtn, Color3.fromRGB(235, 235, 235)) end)
+cpBtn.MouseEnter:Connect(function() tbg(cpBtn, Color3.fromRGB(26, 26, 30)) end)
+cpBtn.MouseLeave:Connect(function() tbg(cpBtn, Color3.fromRGB(18, 18, 22)) end)
+hideBtn.MouseEnter:Connect(function() tbg(hideBtn, Color3.fromRGB(26, 26, 30)) end)
+hideBtn.MouseLeave:Connect(function() tbg(hideBtn, Color3.fromRGB(18, 18, 22)) end)
+autoBtn.MouseEnter:Connect(function() tbg(autoBtn, Color3.fromRGB(26, 26, 30)) end)
+autoBtn.MouseLeave:Connect(function() tbg(autoBtn, Color3.fromRGB(18, 18, 22)) end)
+pill.MouseEnter:Connect(function() tbg(pill, Color3.fromRGB(26, 26, 32)) end)
+pill.MouseLeave:Connect(function() tbg(pill, Color3.fromRGB(16, 16, 20)) end)
+
+local open = true
+local hideFull = false
+local autoPing = false
+
+local function clampWin()
+	if not cam then return end
+	local v = cam.ViewportSize
+	local s = win.AbsoluteSize
+	local p = win.Position
+	local minX, maxX = 8, v.X - s.X - 8
+	local minY, maxY = 8, v.Y - s.Y - 8
+	local newX = math.clamp(p.X.Offset, minX, maxX)
+	local newY = math.clamp(p.Y.Offset, minY, maxY)
+	win.Position = UDim2.fromOffset(newX, newY)
+end
+
+if cam then
+	cam:GetPropertyChangedSignal("ViewportSize"):Connect(clampWin)
+end
+
+local function setOpen(v)
+	open = v
+	if v then
+		win.Visible = true
+		scl.Scale = 0.9
+		win.BackgroundTransparency = 1
+		tw:Create(scl, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Scale = 1}):Play()
+		tw:Create(win, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.06}):Play()
 	else
-		cursortrue = true
-		cursor = serverTable.nextPageCursor
-	end
-
-	for index, table in pairs(serverTable.data) do
-		local serverTemplate = Instance.new("Frame")
-		local joinButton = Instance.new("TextButton")
-		local serverCapacity = Instance.new("TextLabel")
-		local ping = Instance.new("TextLabel")
-		local fps = Instance.new("TextLabel")
-
-		serverTemplate.Name = "serverTemplate"
-		serverTemplate.Parent = ServerListGUI.Background.serverList
-		serverTemplate.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-		serverTemplate.BackgroundTransparency = 1.000
-		serverTemplate.Size = UDim2.new(0, 335, 0, 50)
-
-		joinButton.Name = "joinButton"
-		joinButton.Parent = serverTemplate
-		joinButton.BackgroundColor3 = Color3.fromRGB(0, 36, 116)
-		joinButton.BorderColor3 = Color3.fromRGB(30, 30, 30)
-		joinButton.BorderSizePixel = 5
-		joinButton.Position = UDim2.new(0.0220895335, 0, 0.189999998, 0)
-		joinButton.Size = UDim2.new(0, 80, 0, 30)
-		joinButton.Style = Enum.ButtonStyle.RobloxRoundDefaultButton
-		joinButton.Font = Enum.Font.SciFi
-		joinButton.Text = "Join"
-		joinButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-		joinButton.TextSize = 14.000
-		joinButton.MouseButton1Down:connect(function()
-			local player = ClonedService("Players").LocalPlayer
-			local jobID = table.id
-			local placeID = serverID.Text
-
-			local TeleportService = ClonedService("TeleportService")
-			TeleportService:TeleportToPlaceInstance(placeID, jobID, player)
+		local t1 = tw:Create(scl, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Scale = 0.9})
+		local t2 = tw:Create(win, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1})
+		t1:Play()
+		t2:Play()
+		t2.Completed:Connect(function()
+			if not open then
+				win.Visible = false
+			end
 		end)
-
-		serverCapacity.Name = "serverCapacity"
-		serverCapacity.Parent = serverTemplate
-		serverCapacity.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-		serverCapacity.BackgroundTransparency = 1.000
-		serverCapacity.BorderSizePixel = 0
-		serverCapacity.Position = UDim2.new(0.324895531, 0, 0.0533333384, 0)
-		serverCapacity.Size = UDim2.new(0, 68, 0, 43)
-		serverCapacity.Font = Enum.Font.SciFi
-		serverCapacity.Text = table.playing.."/"..table.maxPlayers
-		serverCapacity.TextColor3 = Color3.fromRGB(255, 255, 255)
-		serverCapacity.TextSize = 20.000
-
-		ping.Name = "ping"
-		ping.Parent = serverTemplate
-		ping.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-		ping.BackgroundTransparency = 1.000
-		ping.BorderSizePixel = 0
-		ping.Position = UDim2.new(0.572656751, 0, 0.0533333384, 0)
-		ping.Size = UDim2.new(0, 68, 0, 43)
-		ping.Font = Enum.Font.SciFi
-		ping.Text = table.ping.." ms"
-		ping.TextColor3 = Color3.fromRGB(255, 255, 255)
-		ping.TextSize = 20.000
-
-		fps.Name = "fps"
-		fps.Parent = serverTemplate
-		fps.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-		fps.BackgroundTransparency = 1.000
-		fps.BorderSizePixel = 0
-		fps.Position = UDim2.new(0.769671679, 0, 0.0533333384, 0)
-		fps.Size = UDim2.new(0, 68, 0, 43)
-		fps.Font = Enum.Font.SciFi
-		fps.Text = string.split(table.fps, ".")[1]
-		fps.TextColor3 = Color3.fromRGB(255, 255, 255)
-		fps.TextSize = 20.000
 	end
-
-	firstdone = true
 end
 
-local function scrapeservers()
-	spawn(scrapefirst)
-	repeat
-		wait()
-	until firstdone == true
-	if cursortrue == true then
-		while cursortrue == true do
-			local HttpService = ClonedService("HttpService")
-			local getServers = syn.request({
-				Url = "https://games.roblox.com/v1/games/"
-					.. tostring(serverID.Text)
-					.. "/servers/Public?sortOrder=Asc&limit=100&cursor="
-					.. tostring(cursor),
-				Method = "GET",
-			})
-			local serverTable = HttpService:JSONDecode(getServers.Body)
-			print(
-				"https://games.roblox.com/v1/games/"
-					.. tostring(serverID.Text)
-					.. "/servers/Public?sortOrder=Asc&limit=100&cursor="
-					.. tostring(cursor)
-			)
+close.MouseButton1Down:Connect(function()
+	gui:Destroy()
+end)
 
-			if serverTable.nextPageCursor == nil then
-				cursortrue = false
-			else
-				cursortrue = true
-				cursor = serverTable.nextPageCursor
+local function mkDrag(handle, root, clamp)
+	local dragging = false
+	local startPos
+	local startInput
+	handle.InputBegan:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			startInput = i.Position
+			startPos = root.Position
+		end
+	end)
+	handle.InputEnded:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+			dragging = false
+			if clamp then clamp() end
+		end
+	end)
+	uis.InputChanged:Connect(function(i)
+		if not dragging then return end
+		if i.UserInputType ~= Enum.UserInputType.MouseMovement and i.UserInputType ~= Enum.UserInputType.Touch then return end
+		local d = i.Position - startInput
+		root.Position = UDim2.fromOffset(startPos.X.Offset + d.X, startPos.Y.Offset + d.Y)
+	end)
+end
+
+local function mkDragClick(handle, root, cb)
+	local dragging = false
+	local startPos
+	local startInput
+	handle.InputBegan:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			startInput = i.Position
+			startPos = root.Position
+		end
+	end)
+	handle.InputEnded:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+			local dist = (i.Position - startInput).Magnitude
+			dragging = false
+			if dist <= 6 and cb then
+				cb()
 			end
+		end
+	end)
+	uis.InputChanged:Connect(function(i)
+		if not dragging then return end
+		if i.UserInputType ~= Enum.UserInputType.MouseMovement and i.UserInputType ~= Enum.UserInputType.Touch then return end
+		local d = i.Position - startInput
+		root.Position = UDim2.fromOffset(startPos.X.Offset + d.X, startPos.Y.Offset + d.Y)
+	end)
+end
 
-			for index, table in pairs(serverTable.data) do
-				local serverTemplate = Instance.new("Frame")
-				local joinButton = Instance.new("TextButton")
-				local serverCapacity = Instance.new("TextLabel")
-				local ping = Instance.new("TextLabel")
-				local fps = Instance.new("TextLabel")
+mkDrag(top, win, clampWin)
+mkDragClick(pill, pill, function() setOpen(not open) end)
 
-				serverTemplate.Name = "serverTemplate"
-				serverTemplate.Parent =
-					ServerListGUI.Background.serverList
-				serverTemplate.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-				serverTemplate.BackgroundTransparency = 1.000
-				serverTemplate.Size = UDim2.new(0, 335, 0, 50)
+if uis.KeyboardEnabled then
+	uis.InputBegan:Connect(function(i, gpe)
+		if gpe then return end
+		if i.KeyCode == Enum.KeyCode.L then
+			setOpen(not open)
+		end
+	end)
+end
 
-				joinButton.Name = "joinButton"
-				joinButton.Parent = serverTemplate
-				joinButton.BackgroundColor3 = Color3.fromRGB(0, 36, 116)
-				joinButton.BorderColor3 = Color3.fromRGB(30, 30, 30)
-				joinButton.BorderSizePixel = 5
-				joinButton.Position = UDim2.new(0.0220895335, 0, 0.189999998, 0)
-				joinButton.Size = UDim2.new(0, 80, 0, 30)
-				joinButton.Style = Enum.ButtonStyle.RobloxRoundDefaultButton
-				joinButton.Font = Enum.Font.SciFi
-				joinButton.Text = "Join"
-				joinButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-				joinButton.TextSize = 14.000
-				joinButton.MouseButton1Down:connect(function()
-					local player = ClonedService("Players").LocalPlayer
-					local jobID = table.id
-					local placeID = serverID.Text
-
-					local TeleportService = ClonedService("TeleportService")
-					TeleportService:TeleportToPlaceInstance(placeID, jobID, player)
-				end)
-
-				serverCapacity.Name = "serverCapacity"
-				serverCapacity.Parent = serverTemplate
-				serverCapacity.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-				serverCapacity.BackgroundTransparency = 1.000
-				serverCapacity.BorderSizePixel = 0
-				serverCapacity.Position = UDim2.new(0.324895531, 0, 0.0533333384, 0)
-				serverCapacity.Size = UDim2.new(0, 68, 0, 43)
-				serverCapacity.Font = Enum.Font.SciFi
-				serverCapacity.Text = table.playing.."/"..table.maxPlayers
-				serverCapacity.TextColor3 = Color3.fromRGB(255, 255, 255)
-				serverCapacity.TextSize = 20.000
-
-				ping.Name = "ping"
-				ping.Parent = serverTemplate
-				ping.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-				ping.BackgroundTransparency = 1.000
-				ping.BorderSizePixel = 0
-				ping.Position = UDim2.new(0.572656751, 0, 0.0533333384, 0)
-				ping.Size = UDim2.new(0, 68, 0, 43)
-				ping.Font = Enum.Font.SciFi
-				ping.Text = table.ping.." ms"
-				ping.TextColor3 = Color3.fromRGB(255, 255, 255)
-				ping.TextSize = 20.000
-
-				fps.Name = "fps"
-				fps.Parent = serverTemplate
-				fps.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-				fps.BackgroundTransparency = 1.000
-				fps.BorderSizePixel = 0
-				fps.Position = UDim2.new(0.769671679, 0, 0.0533333384, 0)
-				fps.Size = UDim2.new(0, 68, 0, 43)
-				fps.Font = Enum.Font.SciFi
-				fps.Text = string.split(table.fps, ".")[1]
-				fps.TextColor3 = Color3.fromRGB(255, 255, 255)
-				fps.TextSize = 20.000
-			end
+local function wipe()
+	for _, v in ipairs(list:GetChildren()) do
+		if v:IsA("Frame") and v.Name == "row" then
+			v:Destroy()
 		end
 	end
 end
 
-Background.Active = true
-Background.Selectable = true
-Background.Draggable = true
+local function mkRow(t)
+	if hideFull and t.playing >= t.maxPlayers then return end
+	local row = Instance.new("Frame")
+	row.Parent = list
+	row.Name = "row"
+	row.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
+	row.BackgroundTransparency = 0.08
+	row.BorderSizePixel = 0
+	row.Size = UDim2.new(1, 0, 0, 46)
+	row.ZIndex = 13
 
-close.MouseButton1Down:connect(function()
-	ServerListGUI:Destroy()
-end)
+	local rc = Instance.new("UICorner")
+	rc.Parent = row
+	rc.CornerRadius = UDim.new(0, 10)
 
-refreshButton.MouseButton1Down:connect(function()
-	local todestroy =
-		ServerListGUI.Background.serverList:GetChildren()
-	for index, destroy in pairs(todestroy) do
-		if destroy.Name ~= "UIListLayout" then
-			destroy:Destroy()
-		end
-	end
-	spawn(scrapeservers)
-end)
+	local rs = Instance.new("UIStroke")
+	rs.Parent = row
+	rs.Color = Color3.fromRGB(55, 55, 70)
+	rs.Transparency = 0.45
+	rs.Thickness = 1
+	rs.ZIndex = 14
 
-local scrollframe = serverList
-scrollframe.CanvasSize = UDim2.new(0, 0, 0, scrollframe:FindFirstChildWhichIsA("UIListLayout").AbsoluteContentSize.Y)
-scrollframe.ChildAdded:Connect(function()
-	wait()
-	scrollframe.CanvasSize = UDim2.new(0, 0, 0, scrollframe:FindFirstChildWhichIsA("UIListLayout").AbsoluteContentSize.Y)
-end)
+	local btn = Instance.new("TextButton")
+	btn.Parent = row
+	btn.BackgroundColor3 = Color3.fromRGB(235, 235, 235)
+	btn.BorderSizePixel = 0
+	btn.Position = UDim2.new(0, 10, 0, 9)
+	btn.Size = UDim2.new(0, 90, 0, 28)
+	btn.Font = Enum.Font.GothamSemibold
+	btn.Text = "Join"
+	btn.TextSize = 14
+	btn.TextColor3 = Color3.fromRGB(10, 10, 10)
+	btn.AutoButtonColor = false
+	btn.ZIndex = 15
 
-scrollframe.ChildRemoved:Connect(function()
-	wait()
-	scrollframe.CanvasSize = UDim2.new(0, 0, 0, scrollframe:FindFirstChildWhichIsA("UIListLayout").AbsoluteContentSize.Y)
-end)
+	local bc = Instance.new("UICorner")
+	bc.Parent = btn
+	bc.CornerRadius = UDim.new(0, 8)
 
-local playerToggle = false
-sortPlayers.MouseButton1Down:connect(function()
-	local torename =
-		ServerListGUI.Background.serverList:GetChildren()
-	if playerToggle == false then
-		for index, rename in pairs(torename) do
-			if rename.Name ~= "UIListLayout" then
-				local playersOn = string.split(rename.serverCapacity.Text, "/")[1]
-				rename.LayoutOrder = playersOn
-			end
-		end
-		playerToggle = true
+	local bs = Instance.new("UIStroke")
+	bs.Parent = btn
+	bs.Color = Color3.fromRGB(180, 180, 180)
+	bs.Transparency = 0.25
+	bs.Thickness = 1
+	bs.ZIndex = 16
+
+	local cap = Instance.new("TextLabel")
+	cap.Parent = row
+	cap.Name = "cap"
+	cap.BackgroundTransparency = 1
+	cap.Position = UDim2.new(0.38, 0, 0, 0)
+	cap.Size = UDim2.new(0.18, 0, 1, 0)
+	cap.Font = Enum.Font.Gotham
+	cap.Text = tostring(t.playing) .. "/" .. tostring(t.maxPlayers)
+	cap.TextSize = 14
+	cap.TextColor3 = Color3.fromRGB(255, 255, 255)
+	cap.TextXAlignment = Enum.TextXAlignment.Center
+	cap.ZIndex = 15
+
+	local ping = Instance.new("TextLabel")
+	ping.Parent = row
+	ping.Name = "pg"
+	ping.BackgroundTransparency = 1
+	ping.Position = UDim2.new(0.58, 0, 0, 0)
+	ping.Size = UDim2.new(0.2, 0, 1, 0)
+	ping.Font = Enum.Font.Gotham
+	ping.Text = tostring(t.ping) .. " ms"
+	ping.TextSize = 14
+	ping.TextColor3 = Color3.fromRGB(255, 255, 255)
+	ping.TextXAlignment = Enum.TextXAlignment.Center
+	ping.ZIndex = 15
+
+	local fps = Instance.new("TextLabel")
+	fps.Parent = row
+	fps.Name = "fp"
+	fps.BackgroundTransparency = 1
+	fps.Position = UDim2.new(0.8, 0, 0, 0)
+	fps.Size = UDim2.new(0.2, -10, 1, 0)
+	fps.Font = Enum.Font.Gotham
+	fps.Text = tostring(string.split(tostring(t.fps), ".")[1] or t.fps)
+	fps.TextSize = 14
+	fps.TextColor3 = Color3.fromRGB(255, 255, 255)
+	fps.TextXAlignment = Enum.TextXAlignment.Center
+	fps.ZIndex = 15
+
+	btn.MouseEnter:Connect(function() tbg(btn, Color3.fromRGB(255, 255, 255)) end)
+	btn.MouseLeave:Connect(function() tbg(btn, Color3.fromRGB(235, 235, 235)) end)
+
+	btn.MouseButton1Down:Connect(function()
+		local pl = S("Players").LocalPlayer
+		local job = t.id
+		local pid = idBox.Text
+		S("TeleportService"):TeleportToPlaceInstance(pid, job, pl)
+	end)
+
+	row.MouseEnter:Connect(function()
+		tw:Create(row, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.02}):Play()
+	end)
+	row.MouseLeave:Connect(function()
+		tw:Create(row, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.08}):Play()
+	end)
+end
+
+local function pull(url)
+	local r = req({Url = url, Method = "GET"})
+	if not r or not r.Body then return nil end
+	local ok, d = pcall(function() return hs:JSONDecode(r.Body) end)
+	if not ok then return nil end
+	return d
+end
+
+local hasCur = false
+local cur = nil
+
+local function scrapePage(first)
+	local pid = tostring(idBox.Text)
+	local url
+	if first then
+		url = "https://games.roblox.com/v1/games/" .. pid .. "/servers/Public?sortOrder=Asc&limit=100"
 	else
-		if playerToggle == true then
-			for index, rename in pairs(torename) do
-				if rename.Name ~= "UIListLayout" then
-					local playersOn = string.split(rename.serverCapacity.Text, "/")[1]
-					rename.LayoutOrder = -playersOn
+		url = "https://games.roblox.com/v1/games/" .. pid .. "/servers/Public?sortOrder=Asc&limit=100&cursor=" .. tostring(cur)
+	end
+	local d = pull(url)
+	if not d then return false end
+	cur = d.nextPageCursor
+	hasCur = cur ~= nil
+	for _, t in pairs(d.data or {}) do
+		mkRow(t)
+	end
+	return true
+end
+
+local function sortList(kind, up)
+	for _, r in ipairs(list:GetChildren()) do
+		if r:IsA("Frame") and r.Name == "row" then
+			local v = 0
+			if kind == "p" then
+				local lb = r:FindFirstChild("cap")
+				if lb and lb:IsA("TextLabel") then
+					v = tonumber(string.split(lb.Text, "/")[1]) or 0
+				end
+			elseif kind == "g" then
+				local lb = r:FindFirstChild("pg")
+				if lb and lb:IsA("TextLabel") then
+					v = tonumber(string.split(lb.Text, " ")[1]) or 0
+				end
+			elseif kind == "f" then
+				local lb = r:FindFirstChild("fp")
+				if lb and lb:IsA("TextLabel") then
+					v = tonumber(lb.Text) or 0
 				end
 			end
-			playerToggle = false
+			r.LayoutOrder = up and v or -v
 		end
 	end
+end
+
+local pUp, gUp, fUp = true, true, true
+
+local function updHdr()
+	hPl.Text = "Players " .. (pUp and "▲" or "▼")
+	hPg.Text = "Ping " .. (gUp and "▲" or "▼")
+	hFp.Text = "FPS " .. (fUp and "▲" or "▼")
+end
+
+updHdr()
+
+hPl.MouseButton1Down:Connect(function()
+	pUp = not pUp
+	updHdr()
+	sortList("p", pUp)
 end)
 
-local pingToggle = false
-sortPing.MouseButton1Down:connect(function()
-	local torename =
-		ServerListGUI.Background.serverList:GetChildren()
-	if pingToggle == false then
-		for index, rename in pairs(torename) do
-			if rename.Name ~= "UIListLayout" then
-				local ping = string.split(rename.ping.Text, " ")[1]
-				rename.LayoutOrder = ping
-			end
-		end
-		pingToggle = true
-	else
-		if pingToggle == true then
-			for index, rename in pairs(torename) do
-				if rename.Name ~= "UIListLayout" then
-					local ping = string.split(rename.ping.Text, " ")[1]
-					rename.LayoutOrder = -ping
-				end
-			end
-			pingToggle = false
-		end
+hPg.MouseButton1Down:Connect(function()
+	gUp = not gUp
+	updHdr()
+	sortList("g", gUp)
+end)
+
+hFp.MouseButton1Down:Connect(function()
+	fUp = not fUp
+	updHdr()
+	sortList("f", fUp)
+end)
+
+if list.AutomaticCanvasSize ~= Enum.AutomaticSize.Y then
+	local function updCanvas()
+		task.wait()
+		list.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 16)
 	end
-end)
+	updCanvas()
+	list.ChildAdded:Connect(updCanvas)
+	list.ChildRemoved:Connect(updCanvas)
+end
 
-local fpsToggle = false
-sortFPS.MouseButton1Down:connect(function()
-	local torename =
-		ServerListGUI.Background.serverList:GetChildren()
-	if fpsToggle == false then
-		for index, rename in pairs(torename) do
-			if rename.Name ~= "UIListLayout" then
-				local fps = rename.fps.Text
-				rename.LayoutOrder = fps
-			end
-		end
-		fpsToggle = true
-	else
-		if fpsToggle == true then
-			for index, rename in pairs(torename) do
-				if rename.Name ~= "UIListLayout" then
-					local fps = rename.fps.Text
-					rename.LayoutOrder = -fps
-				end
-			end
-			fpsToggle = false
-		end
+local function doScrape()
+	wipe()
+	cur = nil
+	hasCur = false
+	scrapePage(true)
+	while hasCur do
+		if not scrapePage(false) then break end
 	end
-end)
-
-scrapeServer.MouseButton1Down:connect(function()
-	local clipboard = ""
-	Players = ClonedService("Players")
-	for i, player in pairs(Players:GetPlayers()) do
-		clipboard = clipboard.."\n"..player.Name
+	if autoPing then
+		gUp = true
+		updHdr()
+		sortList("g", true)
 	end
-	setclipboard(clipboard)
-end)
+end
 
-local mouse = ClonedService("Players").LocalPlayer:GetMouse()
-local gui = ServerListGUI.Background
-local open = false
+refBtn.MouseButton1Down:Connect(doScrape)
 
-mouse.KeyDown:connect(function(key)
-	if open == false then
-		open = true
-		if key:lower() == "l" then
-			gui.Visible = false
-		end
-	else
-		open = false
-		if key:lower() == "l" then
-			gui.Visible = true
-		end
+cpBtn.MouseButton1Down:Connect(function()
+	local plrs = S("Players"):GetPlayers()
+	local s = ""
+	for i = 1, #plrs do
+		s = s .. "\n" .. plrs[i].Name
 	end
+	if setclipboard then setclipboard(s) end
 end)
 
-local TextLabelLabel=Instance.new("TextButton")
-local UICorner=Instance.new("UICorner")
-
-TextLabelLabel.Parent=ServerListGUI
-TextLabelLabel.BackgroundColor3=Color3.fromRGB(30, 30, 30)
-TextLabelLabel.BackgroundTransparency=0.14
-TextLabelLabel.AnchorPoint=Vector2.new(0.5,0.5)
-TextLabelLabel.Position=UDim2.new(0.5,0,0,0)
-TextLabelLabel.Size=UDim2.new(0,2,0,33)
-TextLabelLabel.Font=Enum.Font.SourceSansBold
-TextLabelLabel.Text="Server Lister"
-TextLabelLabel.TextColor3=Color3.fromRGB(255,255,255)
-TextLabelLabel.TextSize=20.000
-TextLabelLabel.TextWrapped=true
-TextLabelLabel.ZIndex=9999
-TextLabelLabel.BackgroundTransparency=0.14
-TextLabelLabel.Active=true
-TextLabelLabel.Draggable=true
-
-UICorner.CornerRadius=UDim.new(1,0)
-UICorner.Parent=TextLabelLabel
-
-local textWidth=ClonedService("TextService"):GetTextSize(TextLabelLabel.Text,TextLabelLabel.TextSize,TextLabelLabel.Font,Vector2.new(math.huge,math.huge)).X
-local newSize=UDim2.new(0,textWidth+69,0,33)
-
-TextLabelLabel:TweenSize(newSize,"Out","Quint",1,true)
-TextLabelLabel:TweenPosition(UDim2.new(0.5,0,0,0),"Out","Quint",1,true)
-
-TextLabelLabel.MouseButton1Click:Connect(function()
-	if open == false then
-		open = true
-		gui.Visible = false
-	else
-		open = false
-		gui.Visible = true
-	end
+hideBtn.MouseButton1Down:Connect(function()
+	hideFull = not hideFull
+	hideBtn.Text = "Hide full: " .. (hideFull and "ON" or "OFF")
+	doScrape()
 end)
+
+autoBtn.MouseButton1Down:Connect(function()
+	autoPing = not autoPing
+	autoBtn.Text = "Auto ping sort: " .. (autoPing and "ON" or "OFF")
+	doScrape()
+end)
+
+setOpen(true)
+doScrape()

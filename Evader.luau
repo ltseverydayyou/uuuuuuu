@@ -244,6 +244,16 @@ local running = true
 local conns = {}
 local espObjs = {}
 local wmGui, wmLbl
+local wmScale = 1
+local dpiMap = {
+    ["50%"] = 0.5,
+    ["75%"] = 0.75,
+    ["100%"] = 1,
+    ["125%"] = 1.25,
+    ["150%"] = 1.5,
+    ["175%"] = 1.75,
+    ["200%"] = 2,
+}
 
 local function addConn(sig, fn)
     local c = sig:Connect(fn)
@@ -303,13 +313,11 @@ gbUI:AddDropdown("DPIScale", {
     Values = { "50%", "75%", "100%", "125%", "150%", "175%", "200%" },
     Default = "100%",
     Text = "DPI Scale",
-    Tooltip = "Scale the UI",
+    Tooltip = "Scale HUD text",
     Callback = function(v)
-        if Lib.SetDPIScale then
-            local n = tonumber(v:gsub("%%", ""))
-            if n then
-                Lib:SetDPIScale(n)
-            end
+        wmScale = dpiMap[v] or 1
+        if wmLbl then
+            wmLbl.TextSize = math.floor(14 * wmScale)
         end
     end
 })
@@ -363,6 +371,35 @@ local colDn = Opt.ESPDeadColor.Value
 local colBt = Opt.ESPBotColor.Value
 
 local wmOn = Tog.UIWatermark.Value
+local safeZoneParts = {}
+
+local function dbg(msg)
+    if not debugOn then return end
+    local ok = true
+    if Lib.Notify then
+        ok = pcall(function()
+            Lib:Notify({
+                Title = "Evader Debug",
+                Description = msg,
+                Time = 4,
+            })
+        end)
+    end
+    if not ok then
+        local sg = S("StarterGui")
+        if sg then
+            pcall(function()
+                sg:SetCore("SendNotification", { Title = "Evader Debug", Text = msg, Duration = 4 })
+            end)
+        end
+    end
+end
+
+if Tog.ESPSafeZones then
+    Tog.ESPSafeZones:OnChanged(function(v)
+        szEsp = v
+    end)
+end
 
 Tog.AutoRevive:OnChanged(function(v) autoRev = v end)
 Tog.AutoSave:OnChanged(function(v) autoSave = v end)
@@ -409,37 +446,6 @@ Tog.UIWatermark:OnChanged(function(v)
         wmGui.Enabled = v
     end
 end)
-
-local safeZoneParts = {}
-
-local function dbg(msg)
-    if not debugOn then return end
-    local ok = true
-    if Lib.Notify then
-        ok = pcall(function()
-            Lib:Notify({
-                Title = "Evader Debug",
-                Description = msg,
-                Time = 4,
-            })
-        end)
-    end
-    if not ok then
-        local sg = S("StarterGui")
-        if sg then
-            pcall(function()
-                sg:SetCore("SendNotification", { Title = "Evader Debug", Text = msg, Duration = 4 })
-            end)
-        end
-    end
-end
-
-if Tog.ESPSafeZones then
-    Tog.ESPSafeZones:OnChanged(function(v)
-        szEsp = v
-        refreshSafeZones()
-    end)
-end
 
 local NA_GRAB_BODY = (function()
     local T = {}
@@ -556,6 +562,22 @@ local st = S("Stats")
 
 local lp = ps.LocalPlayer
 repeat task.wait() lp = ps.LocalPlayer until lp
+
+local function setupTeleportHook()
+    local ok, conn = pcall(function()
+        return lp.OnTeleport:Connect(function(state)
+            if not running or not runTP then return end
+            if state == Enum.TeleportState.Started or state == Enum.TeleportState.InProgress then
+                qtp()
+            end
+        end)
+    end)
+    if ok and conn then
+        conns[#conns + 1] = conn
+    end
+end
+
+setupTeleportHook()
 
 local fps = 60
 addConn(rs.RenderStepped, function(dt)
@@ -777,12 +799,83 @@ task.spawn(function()
     end
 end)
 
-if Tog.ESPSafeZones then
-    Tog.ESPSafeZones:OnChanged(function(v)
-        szEsp = v
-        refreshSafeZones()
+local dmgParts = {}
+local dmgMap = {}
+local dmgConns = {}
+local recentHits = {}
+
+local function addDamagePart(inst)
+    if not inst:IsA("BasePart") then return end
+    if not inst:FindFirstChildWhichIsA("TouchTransmitter", true) then return end
+    if dmgConns[inst] then return end
+    dmgConns[inst] = inst.Touched:Connect(function(hit)
+        local ch = getChar()
+        if not ch then return end
+        if hit and hit:IsDescendantOf(ch) then
+            recentHits[#recentHits + 1] = { part = inst, time = tick() }
+        end
     end)
 end
+
+for _, inst in ipairs(ws:GetDescendants()) do
+    addDamagePart(inst)
+end
+addConn(ws.DescendantAdded, addDamagePart)
+
+local function addDamageFlag(part)
+    if not dmgMap[part] then
+        dmgMap[part] = true
+        dmgParts[#dmgParts + 1] = part
+        dbg("Marked damage part")
+    end
+end
+
+local function isPointInDamage(pos)
+    for i = 1, #dmgParts do
+        local p = dmgParts[i]
+        if p.Parent and isPointInPart(p, pos) then
+            return true
+        end
+    end
+    return false
+end
+
+local function isCharOnDamage(ch)
+    if not ch then return false end
+    for _, part in ipairs(ch:GetDescendants()) do
+        if part:IsA("BasePart") then
+            if isPointInDamage(part.Position) then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+task.spawn(function()
+    local lastHp = 100
+    while running do
+        local rec, mdl = NA_GRAB_BODY.ensure(lp)
+        local hum = rec and rec.humanoid
+        if hum then
+            local hp = hum.Health
+            if hp < lastHp - 1 then
+                local now = tick()
+                for i = #recentHits, 1, -1 do
+                    local info = recentHits[i]
+                    if now - info.time > 0.6 then
+                        table.remove(recentHits, i)
+                    else
+                        addDamageFlag(info.part)
+                        table.remove(recentHits, i)
+                    end
+                end
+            end
+            lastHp = hp
+        end
+        task.wait(0.1)
+    end
+end)
 
 local function getDown(pos)
     local bestP, bestRoot
@@ -850,6 +943,9 @@ local function buildFilter(ch)
     for i = 1, #safeZoneParts do
         list[#list + 1] = safeZoneParts[i]
     end
+    for i = 1, #dmgParts do
+        list[#list + 1] = dmgParts[i]
+    end
     return list
 end
 
@@ -883,7 +979,7 @@ local function getSafePos(curPos, ch, botPos, dist)
             if useDist then
                 local p = origin + dir * useDist
                 local pos = Vector3.new(p.X, curPos.Y, p.Z)
-                if not isInSafeZone(pos) then
+                if not isInSafeZone(pos) and not isPointInDamage(pos) then
                     return pos
                 end
             end
@@ -891,7 +987,7 @@ local function getSafePos(curPos, ch, botPos, dist)
     end
     local fb = origin + away * dist * 0.5
     local fbPos = Vector3.new(fb.X, curPos.Y, fb.Z)
-    if not isInSafeZone(fbPos) then
+    if not isInSafeZone(fbPos) and not isPointInDamage(fbPos) then
         return fbPos
     end
     return nil
@@ -903,7 +999,7 @@ local function attachToGround(pos, ch)
     local res = ws:Raycast(origin, Vector3.new(0, -500, 0), rayParams)
     if res then
         local p = Vector3.new(pos.X, res.Position.Y + 3, pos.Z)
-        if not isInSafeZone(p) then
+        if not isInSafeZone(p) and not isPointInDamage(p) then
             return p
         end
     end
@@ -936,7 +1032,7 @@ local function pushOutOfSafeZone(ch, r)
     local target
     for d = step, maxPush, step do
         local testPos = rootPos + dir * d
-        if not isInSafeZone(testPos) then
+        if not isInSafeZone(testPos) and not isPointInDamage(testPos) then
             target = testPos
             break
         end
@@ -952,7 +1048,7 @@ local function pushOutOfSafeZone(ch, r)
                 v = v.Unit
                 for d = step, maxPush, step do
                     local testPos = rootPos + v * d
-                    if not isInSafeZone(testPos) then
+                    if not isInSafeZone(testPos) and not isPointInDamage(testPos) then
                         target = testPos
                         break
                     end
@@ -1151,26 +1247,16 @@ addConn(rs.Heartbeat, function()
     local t = tick()
     local maxVoidDist = 800
 
-    if autoResp and respEvt and t - respLast >= respCd then
-        local need = false
-        if hum then
-            if hum.Health <= 0 then
-                need = true
-            end
-        else
-            need = true
-        end
-        if need then
-            respLast = t
-            respEvt:FireServer(true)
-            dbg("Auto Respawn: fired")
-        end
+    if autoResp and respEvt and hum and hum.Health <= 0 and t - respLast >= respCd then
+        respLast = t
+        respEvt:FireServer(true)
+        dbg("Auto Respawn: fired")
     end
 
     if hum and not saveActive then
         rayParams.FilterDescendantsInstances = buildFilter(ch)
         local groundHit = ws:Raycast(pos + Vector3.new(0, 5, 0), Vector3.new(0, -1000, 0), rayParams)
-        if groundHit and not isCharInSafeZone(ch) then
+        if groundHit and not isCharInSafeZone(ch) and not isCharOnDamage(ch) then
             lastSafePos = groundHit.Position + Vector3.new(0, 3, 0)
         elseif not groundHit and lastSafePos then
             local dist = (pos - lastSafePos).Magnitude
@@ -1188,6 +1274,12 @@ addConn(rs.Heartbeat, function()
         end
     end
 
+    if antiSZ and isCharInSafeZone(ch) then
+        if pushOutOfSafeZone(ch, r) then
+            return
+        end
+    end
+
     if saveActive and not autoSave then
         if savePos then
             local back = attachToGround(savePos, ch) or savePos
@@ -1199,12 +1291,6 @@ addConn(rs.Heartbeat, function()
         savePos = nil
         saveTarget = nil
         dbg("Auto Save: cancelled")
-    end
-
-    if antiSZ then
-        if pushOutOfSafeZone(ch, r) then
-            return
-        end
     end
 
     local downP, downRoot, downDist = getDown(pos)
@@ -1248,20 +1334,25 @@ addConn(rs.Heartbeat, function()
         end
     end
 
-    if antiBot and botR > 0 then
+    if antiBot and botR > 0 and hum and hum.Health > 0 and not saveActive then
         local hit, dist, botPos = getBot(pos)
         if hit and dist and dist < botR then
             local safePos = getSafePos(pos, ch, botPos, botR)
-            if safePos then
-                rayParams.FilterDescendantsInstances = buildFilter(ch)
-                local groundSafe = ws:Raycast(safePos + Vector3.new(0, 50, 0), Vector3.new(0, -200, 0), rayParams)
-                if groundSafe then
-                    local p = groundSafe.Position + Vector3.new(0, 3, 0)
-                    if not isInSafeZone(p) and (p - pos).Magnitude > 1 then
-                        r.CFrame = CFrame.new(p, p + r.CFrame.LookVector)
-                        r.AssemblyLinearVelocity = Vector3.new()
-                        r.AssemblyAngularVelocity = Vector3.new()
-                    end
+            local targetPos = safePos
+            if not targetPos then
+                local away = Vector3.new(pos.X - botPos.X, 0, pos.Z - botPos.Z)
+                if away.Magnitude < 1e-3 then
+                    away = Vector3.new(1, 0, 0)
+                end
+                away = away.Unit * botR
+                targetPos = pos + away
+            end
+            if targetPos then
+                local grounded = attachToGround(targetPos, ch) or targetPos
+                if not isInSafeZone(grounded) and not isPointInDamage(grounded) and (grounded - pos).Magnitude > 1 then
+                    r.CFrame = CFrame.new(grounded, grounded + r.CFrame.LookVector)
+                    r.AssemblyLinearVelocity = Vector3.new()
+                    r.AssemblyAngularVelocity = Vector3.new()
                 end
             end
         end

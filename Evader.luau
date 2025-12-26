@@ -342,6 +342,10 @@ Save:BuildConfigSection(Tabs.Settings)
 Theme:ApplyToTab(Tabs.Settings)
 Save:LoadAutoloadConfig()
 
+if Opt.DPIScale then
+    wmScale = dpiMap[Opt.DPIScale.Value] or 1
+end
+
 if Opt.MenuKeybind then
     Lib.ToggleKeybind = Opt.MenuKeybind
 end
@@ -617,7 +621,7 @@ wmLbl.BackgroundTransparency = 0.35
 wmLbl.BackgroundColor3 = Color3.new(0, 0, 0)
 wmLbl.TextColor3 = Color3.new(1, 1, 1)
 wmLbl.Font = Enum.Font.Code
-wmLbl.TextSize = 14
+wmLbl.TextSize = math.floor(14 * wmScale)
 wmLbl.TextXAlignment = Enum.TextXAlignment.Left
 wmLbl.Text = ""
 wmLbl.Active = true
@@ -637,6 +641,7 @@ task.spawn(function()
             local pf = math.floor(fps + 0.5)
             local pg = math.floor(getPing() + 0.5)
             wmLbl.Text = ("FPS: %d | Ping: %dms"):format(pf, pg)
+            wmLbl.TextSize = math.floor(14 * wmScale)
         end
         task.wait(0.5)
     end

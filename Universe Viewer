@@ -77,6 +77,28 @@ local IsOnMobile=(function()
 	return false
 end)()
 
+local paddingBase = IsOnMobile and 16 or 12
+local innerPadding = IsOnMobile and 12 or 8
+local buttonHeight = IsOnMobile and 32 or 26
+local rowHeight = IsOnMobile and 64 or 58
+local fontSizeTitle = IsOnMobile and 22 or 20
+local fontSizeMain = IsOnMobile and 20 or 18
+local fontSizeSecondary = IsOnMobile and 18 or 16
+local titleBarHeight = IsOnMobile and 48 or 42
+local searchBarHeight = IsOnMobile and 40 or 36
+local sortButtonWidth = IsOnMobile and 100 or 90
+local sortButtonHeight = IsOnMobile and 28 or 26
+local buttonMinWidth = IsOnMobile and 44 or 40
+local buttonRefWidth = IsOnMobile and 52 or 48
+local buttonXWidth = IsOnMobile and 44 or 40
+local buttonTpWidth = IsOnMobile and 130 or 120
+local buttonCpWidth = IsOnMobile and 100 or 90
+local buttonSrvWidth = IsOnMobile and 120 or 110
+local expHeaderHeight = IsOnMobile and 36 or 32
+local expListHeight = IsOnMobile and 200 or 180
+local szDesktop = UDim2.new(.5,0,.6,0)
+local szMobile = UDim2.new(.94,0,.75,0)
+
 G.Name = "UV"
 protect(G)
 G.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
@@ -111,7 +133,7 @@ M_GR.Parent = M
 T.Name = "T"
 T.Parent = M
 T.BackgroundColor3 = Color3.fromRGB(28,24,36)
-T.Size = UDim2.new(1,0,0,42)
+T.Size = UDim2.new(1,0,0,titleBarHeight)
 T.ZIndex = 2
 
 T_S.Parent = T
@@ -125,27 +147,27 @@ T_C.Parent = T
 TTL.Name = "TTL"
 TTL.Parent = T
 TTL.BackgroundTransparency = 1
-TTL.Position = UDim2.new(0,12,0,0)
+TTL.Position = UDim2.new(0,paddingBase,0,0)
 TTL.Size = UDim2.new(.6,0,1,0)
 TTL.Font = Enum.Font.SourceSans
 TTL.Text = "Universe Viewer"
 TTL.TextColor3 = Color3.fromRGB(240,235,255)
-TTL.TextSize = 20
+TTL.TextSize = fontSizeTitle
 TTL.TextXAlignment = Enum.TextXAlignment.Left
 
 BH.Name = "BH"
 BH.Parent = T
 BH.BackgroundTransparency = 1
 BH.AnchorPoint = Vector2.new(1,0)
-BH.Position = UDim2.new(1,-8,0,8)
-BH.Size = UDim2.new(0,0,0,26)
+BH.Position = UDim2.new(1,-paddingBase,0,innerPadding)
+BH.Size = UDim2.new(0,0,0,buttonHeight)
 BH.AutomaticSize = Enum.AutomaticSize.X
 BH.ZIndex = 3
 
 local BH_LYT = Instance.new("UIListLayout")
 BH_LYT.Parent = BH
 BH_LYT.FillDirection = Enum.FillDirection.Horizontal
-BH_LYT.Padding = UDim.new(0,8)
+BH_LYT.Padding = UDim.new(0,innerPadding)
 BH_LYT.HorizontalAlignment = Enum.HorizontalAlignment.Right
 BH_LYT.VerticalAlignment = Enum.VerticalAlignment.Center
 BH_LYT.SortOrder = Enum.SortOrder.LayoutOrder
@@ -153,11 +175,11 @@ BH_LYT.SortOrder = Enum.SortOrder.LayoutOrder
 BTN_MIN.Name = "BTN_MIN"
 BTN_MIN.Parent = BH
 BTN_MIN.BackgroundColor3 = Color3.fromRGB(48,40,70)
-BTN_MIN.Size = UDim2.new(0,40,0,26)
+BTN_MIN.Size = UDim2.new(0,buttonMinWidth,0,buttonHeight)
 BTN_MIN.Font = Enum.Font.SourceSans
 BTN_MIN.Text = "▁"
 BTN_MIN.TextColor3 = Color3.fromRGB(230,225,255)
-BTN_MIN.TextSize = 18
+BTN_MIN.TextSize = fontSizeSecondary
 BTN_MIN.LayoutOrder = 1
 
 BTN_MIN_C.CornerRadius = UDim.new(0,6)
@@ -166,11 +188,11 @@ BTN_MIN_C.Parent = BTN_MIN
 BTN_REF.Name = "BTN_REF"
 BTN_REF.Parent = BH
 BTN_REF.BackgroundColor3 = Color3.fromRGB(56,46,92)
-BTN_REF.Size = UDim2.new(0,48,0,26)
+BTN_REF.Size = UDim2.new(0,buttonRefWidth,0,buttonHeight)
 BTN_REF.Font = Enum.Font.SourceSans
 BTN_REF.Text = "🔃"
 BTN_REF.TextColor3 = Color3.fromRGB(230,225,255)
-BTN_REF.TextSize = 18
+BTN_REF.TextSize = fontSizeSecondary
 BTN_REF.LayoutOrder = 2
 
 BTN_REF_C.CornerRadius = UDim.new(0,6)
@@ -179,11 +201,11 @@ BTN_REF_C.Parent = BTN_REF
 BTN_X.Name = "BTN_X"
 BTN_X.Parent = BH
 BTN_X.BackgroundColor3 = Color3.fromRGB(186,54,74)
-BTN_X.Size = UDim2.new(0,40,0,26)
+BTN_X.Size = UDim2.new(0,buttonXWidth,0,buttonHeight)
 BTN_X.Font = Enum.Font.SourceSans
 BTN_X.Text = "✖"
 BTN_X.TextColor3 = Color3.fromRGB(255,255,255)
-BTN_X.TextSize = 16
+BTN_X.TextSize = fontSizeSecondary
 BTN_X.LayoutOrder = 4
 
 BTN_X_C.CornerRadius = UDim.new(0,6)
@@ -192,18 +214,18 @@ BTN_X_C.Parent = BTN_X
 SB.Name = "SB"
 SB.Parent = M
 SB.BackgroundColor3 = Color3.fromRGB(30,26,42)
-SB.Position = UDim2.new(0,12,0,54)
-SB.Size = UDim2.new(1,-24,0,36)
+SB.Position = UDim2.new(0,paddingBase,0,titleBarHeight + innerPadding)
+SB.Size = UDim2.new(1,-paddingBase*2,0,searchBarHeight)
 SB.Font = Enum.Font.SourceSans
 SB.PlaceholderText = "Search"
 SB.Text = ""
 SB.TextColor3 = Color3.fromRGB(240,235,255)
-SB.TextSize = 18
+SB.TextSize = fontSizeMain
 SB.ClearTextOnFocus = false
 
 PAD.Parent = SB
-PAD.PaddingLeft = UDim.new(0,12)
-PAD.PaddingRight = UDim.new(0,96)
+PAD.PaddingLeft = UDim.new(0,paddingBase)
+PAD.PaddingRight = UDim.new(0,paddingBase + sortButtonWidth + innerPadding)
 
 SB_C.CornerRadius = UDim.new(0,8)
 SB_C.Parent = SB
@@ -211,12 +233,12 @@ SB_C.Parent = SB
 SORT.Name = "SORT"
 SORT.Parent = SB
 SORT.AnchorPoint = Vector2.new(1,.5)
-SORT.Position = UDim2.new(1,-6,.5,0)
-SORT.Size = UDim2.new(0,90,0,26)
+SORT.Position = UDim2.new(1,-innerPadding,.5,0)
+SORT.Size = UDim2.new(0,sortButtonWidth,0,sortButtonHeight)
 SORT.BackgroundColor3 = Color3.fromRGB(54,48,76)
 SORT.Font = Enum.Font.SourceSans
 SORT.Text = "Sort: A→Z"
-SORT.TextSize = 16
+SORT.TextSize = fontSizeSecondary
 SORT.TextColor3 = Color3.fromRGB(230,225,255)
 
 SORT_C.CornerRadius = UDim.new(0,6)
@@ -225,8 +247,8 @@ SORT_C.Parent = SORT
 C.Name = "C"
 C.Parent = M
 C.BackgroundColor3 = Color3.fromRGB(24,20,34)
-C.Position = UDim2.new(0,12,0,98)
-C.Size = UDim2.new(1,-24,1,-110)
+C.Position = UDim2.new(0,paddingBase,0,titleBarHeight + searchBarHeight + innerPadding * 2)
+C.Size = UDim2.new(1,-paddingBase*2,1,-(titleBarHeight + searchBarHeight + innerPadding * 3))
 C.BackgroundTransparency = .05
 
 C_S.Parent = C
@@ -240,20 +262,20 @@ C_C.Parent = C
 LST.Name = "LST"
 LST.Parent = C
 LST.BackgroundTransparency = 1
-LST.Position = UDim2.new(0,8,0,8)
-LST.Size = UDim2.new(1,-16,1,-16)
+LST.Position = UDim2.new(0,innerPadding,0,innerPadding)
+LST.Size = UDim2.new(1,-innerPadding*2,1,-innerPadding*2)
 LST.CanvasSize = UDim2.new(0,0,0,0)
 LST.ScrollBarThickness = 6
 LST.AutomaticCanvasSize = Enum.AutomaticSize.Y
 
 LYT.Parent = LST
 LYT.SortOrder = Enum.SortOrder.LayoutOrder
-LYT.Padding = UDim.new(0,8)
+LYT.Padding = UDim.new(0,innerPadding)
 
 ROW_T.Name = "ROW_T"
 ROW_T.Parent = nil
 ROW_T.BackgroundColor3 = Color3.fromRGB(34,28,50)
-ROW_T.Size = UDim2.new(1,-4,0,58)
+ROW_T.Size = UDim2.new(1,-4,0,rowHeight)
 ROW_T.Position = UDim2.new(0,2,0,0)
 ROW_T.BackgroundTransparency = .1
 ROW_T.ClipsDescendants = false
@@ -270,12 +292,12 @@ ROW_S.Name = "S"
 ROW_TXT.Name = "ROW_TXT"
 ROW_TXT.Parent = ROW_T
 ROW_TXT.BackgroundTransparency = 1
-ROW_TXT.Position = UDim2.new(0,10,0,0)
-ROW_TXT.Size = UDim2.new(.58,-10,1,0)
+ROW_TXT.Position = UDim2.new(0,innerPadding,0,0)
+ROW_TXT.Size = UDim2.new(.58,-innerPadding,1,0)
 ROW_TXT.Font = Enum.Font.SourceSans
 ROW_TXT.Text = "Name (ID)"
 ROW_TXT.TextColor3 = Color3.fromRGB(245,240,255)
-ROW_TXT.TextSize = 18
+ROW_TXT.TextSize = fontSizeMain
 ROW_TXT.TextXAlignment = Enum.TextXAlignment.Left
 ROW_TXT.TextYAlignment = Enum.TextYAlignment.Center
 ROW_TXT.TextTruncate = Enum.TextTruncate.AtEnd
@@ -284,12 +306,12 @@ ROW_B.Name = "ROW_B"
 ROW_B.Parent = ROW_T
 ROW_B.BackgroundTransparency = 1
 ROW_B.Position = UDim2.new(.58,0,0,0)
-ROW_B.Size = UDim2.new(.42,-8,1,0)
+ROW_B.Size = UDim2.new(.42,-innerPadding,1,0)
 
 local RB_LYT = Instance.new("UIListLayout")
 RB_LYT.Parent = ROW_B
 RB_LYT.FillDirection = Enum.FillDirection.Horizontal
-RB_LYT.Padding = UDim.new(0,8)
+RB_LYT.Padding = UDim.new(0,innerPadding)
 RB_LYT.HorizontalAlignment = Enum.HorizontalAlignment.Right
 RB_LYT.VerticalAlignment = Enum.VerticalAlignment.Center
 RB_LYT.SortOrder = Enum.SortOrder.LayoutOrder
@@ -297,11 +319,11 @@ RB_LYT.SortOrder = Enum.SortOrder.LayoutOrder
 BTN_TP.Name = "BTN_TP"
 BTN_TP.Parent = ROW_B
 BTN_TP.BackgroundColor3 = Color3.fromRGB(72,126,232)
-BTN_TP.Size = UDim2.new(0,120,0,26)
+BTN_TP.Size = UDim2.new(0,buttonTpWidth,0,buttonHeight)
 BTN_TP.Font = Enum.Font.SourceSans
 BTN_TP.Text = "Teleport"
 BTN_TP.TextColor3 = Color3.fromRGB(255,255,255)
-BTN_TP.TextSize = 16
+BTN_TP.TextSize = fontSizeSecondary
 
 BTN_TP_C.CornerRadius = UDim.new(0,6)
 BTN_TP_C.Parent = BTN_TP
@@ -309,11 +331,11 @@ BTN_TP_C.Parent = BTN_TP
 BTN_CP.Name = "BTN_CP"
 BTN_CP.Parent = ROW_B
 BTN_CP.BackgroundColor3 = Color3.fromRGB(84,186,128)
-BTN_CP.Size = UDim2.new(0,90,0,26)
+BTN_CP.Size = UDim2.new(0,buttonCpWidth,0,buttonHeight)
 BTN_CP.Font = Enum.Font.SourceSans
 BTN_CP.Text = "Copy ID"
 BTN_CP.TextColor3 = Color3.fromRGB(255,255,255)
-BTN_CP.TextSize = 16
+BTN_CP.TextSize = fontSizeSecondary
 
 BTN_CP_C.CornerRadius = UDim.new(0,6)
 BTN_CP_C.Parent = BTN_CP
@@ -335,10 +357,10 @@ EMP.Parent = C
 EMP.BackgroundTransparency = 1
 EMP.Text = "No places"
 EMP.Font = Enum.Font.SourceSans
-EMP.TextSize = 16
+EMP.TextSize = fontSizeSecondary
 EMP.TextColor3 = Color3.fromRGB(210,205,230)
 EMP.AnchorPoint = Vector2.new(.5,1)
-EMP.Position = UDim2.new(.5,0,1,-8)
+EMP.Position = UDim2.new(.5,0,1,-innerPadding)
 EMP.Visible = false
 
 local TS = sv("TweenService")
@@ -418,8 +440,6 @@ end
 
 local sortMode = "NAME"
 local minimized = false
-local szDesktop = UDim2.new(.44,0,.58,0)
-local szMobile = UDim2.new(.94,0,.66,0)
 local normSize = szDesktop
 
 local function pickSize()
@@ -430,7 +450,7 @@ end
 
 local function applySize(force)
 	if minimized and not force then return end
-	M.Size = minimized and UDim2.new(normSize.X.Scale,normSize.X.Offset,0,42) or normSize
+	M.Size = minimized and UDim2.new(normSize.X.Scale,normSize.X.Offset,0,titleBarHeight) or normSize
 end
 
 workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
@@ -443,7 +463,7 @@ UIS.LastInputTypeChanged:Connect(function() pickSize() applySize(false) end)
 local function hideBody(h)
 	minimized = h
 	if h then
-		tw(M,.2,nil,nil,{Size=UDim2.new(normSize.X.Scale,normSize.X.Offset,0,42)}):Play()
+		tw(M,.2,nil,nil,{Size=UDim2.new(normSize.X.Scale,normSize.X.Offset,0,titleBarHeight)}):Play()
 		C.Visible=false SB.Visible=false
 	else
 		tw(M,.2,nil,nil,{Size=normSize}):Play()
@@ -477,8 +497,8 @@ local toRoot = Instance.new("Frame")
 toRoot.Name = "TOAST_ROOT"
 toRoot.Parent = G
 toRoot.AnchorPoint = Vector2.new(1,0)
-toRoot.Position = UDim2.new(1,-12,0,12)
-toRoot.Size = UDim2.new(0,320,1,-24)
+toRoot.Position = UDim2.new(1,-paddingBase,0,paddingBase)
+toRoot.Size = UDim2.new(0,IsOnMobile and 360 or 320,1,-paddingBase*2)
 toRoot.BackgroundTransparency = 1
 toRoot.ZIndex = 5
 
@@ -488,12 +508,12 @@ toList.FillDirection = Enum.FillDirection.Vertical
 toList.HorizontalAlignment = Enum.HorizontalAlignment.Right
 toList.VerticalAlignment = Enum.VerticalAlignment.Top
 toList.SortOrder = Enum.SortOrder.LayoutOrder
-toList.Padding = UDim.new(0,8)
+toList.Padding = UDim.new(0,innerPadding)
 
 local function toast(ti,tx,dur)
 	dur = dur or 3
 	local f = Instance.new("Frame")
-	f.Size = UDim2.new(0,320,0,0)
+	f.Size = UDim2.new(0,IsOnMobile and 360 or 320,0,0)
 	f.BackgroundColor3 = Color3.fromRGB(36,32,48)
 	f.BackgroundTransparency = .2
 	f.Parent = toRoot
@@ -507,31 +527,31 @@ local function toast(ti,tx,dur)
 	local t1 = Instance.new("TextLabel")
 	t1.Parent = f
 	t1.BackgroundTransparency = 1
-	t1.Size = UDim2.new(1,-16,0,22)
-	t1.Position = UDim2.new(0,8,0,8)
+	t1.Size = UDim2.new(1,-paddingBase,0,fontSizeMain + innerPadding)
+	t1.Position = UDim2.new(0,innerPadding,0,innerPadding)
 	t1.Font = Enum.Font.SourceSans
 	t1.TextXAlignment = Enum.TextXAlignment.Left
 	t1.TextColor3 = Color3.fromRGB(245,240,255)
-	t1.TextSize = 18
+	t1.TextSize = fontSizeMain
 	t1.Text = ti or "Notice"
 	local t2 = Instance.new("TextLabel")
 	t2.Parent = f
 	t2.BackgroundTransparency = 1
-	t2.Size = UDim2.new(1,-16,0,18)
-	t2.Position = UDim2.new(0,8,0,32)
+	t2.Size = UDim2.new(1,-paddingBase,0,fontSizeSecondary + innerPadding)
+	t2.Position = UDim2.new(0,innerPadding,0,fontSizeMain + innerPadding * 2)
 	t2.Font = Enum.Font.SourceSans
 	t2.TextXAlignment = Enum.TextXAlignment.Left
 	t2.TextColor3 = Color3.fromRGB(225,220,240)
-	t2.TextSize = 16
+	t2.TextSize = fontSizeSecondary
 	t2.TextWrapped = true
 	t2.Text = tx or ""
-	f.Size = UDim2.new(0,320,0,60)
+	f.Size = UDim2.new(0,IsOnMobile and 360 or 320,0,fontSizeMain + fontSizeSecondary + innerPadding * 4)
 	f.BackgroundTransparency = 1
 	fs.Transparency = 1
 	tw(f,.18,nil,nil,{BackgroundTransparency=.2}):Play()
 	tw(fs,.18,nil,nil,{Transparency=.35}):Play()
 	task.delay(dur,function()
-		tw(f,.18,nil,Enum.EasingDirection.In,{BackgroundTransparency=1,Size=UDim2.new(0,320,0,0)}):Play()
+		tw(f,.18,nil,Enum.EasingDirection.In,{BackgroundTransparency=1,Size=UDim2.new(0,IsOnMobile and 360 or 320,0,0)}):Play()
 		tw(fs,.14,nil,Enum.EasingDirection.In,{Transparency=1}):Play()
 		task.delay(.18,function() f:Destroy() end)
 	end)
@@ -570,8 +590,8 @@ end
 local function closeRow(r)
 	if not r or not r.expOpen then return end
 	r.expOpen=false
-	tw(r.f,.16,nil,Enum.EasingDirection.In,{Size=UDim2.new(1,-4,0,58)}):Play()
-	tw(r.exp,.16,nil,Enum.EasingDirection.In,{Size=UDim2.new(1,-16,0,0),BackgroundTransparency=1}):Play()
+	tw(r.f,.16,nil,Enum.EasingDirection.In,{Size=UDim2.new(1,-4,0,rowHeight)}):Play()
+	tw(r.exp,.16,nil,Enum.EasingDirection.In,{Size=UDim2.new(1,-innerPadding*2,0,0),BackgroundTransparency=1}):Play()
 	task.delay(.16,function() r.exp.Visible=false r.hdr.Visible=false end)
 	if r.btnSRV then r.btnSRV.Text = "Servers" end
 end
@@ -622,20 +642,20 @@ local function srvFetch(placeId,r)
 		b.Parent = r.slist
 		b.BackgroundColor3 = Color3.fromRGB(36,32,50)
 		b.AutoButtonColor = true
-		b.Size = UDim2.new(1,0,0,32)
+		b.Size = UDim2.new(1,0,0,buttonHeight)
 		b.AutomaticSize = Enum.AutomaticSize.Y
 		b.TextColor3 = Color3.fromRGB(245,240,255)
 		b.Font = Enum.Font.SourceSans
-		b.TextSize = 16
+		b.TextSize = fontSizeSecondary
 		b.TextWrapped = true
 		b.TextXAlignment = Enum.TextXAlignment.Left
 		b.TextYAlignment = Enum.TextYAlignment.Center
 		b.Text = tostring(entry.playing).."/"..tostring(entry.max).." - "..tostring(entry.id).."\nFPS: "..string.format("%.2f",entry.fps).."  •  Ping: "..tostring(entry.ping).."ms"
 		local pad = Instance.new("UIPadding",b)
-		pad.PaddingLeft = UDim.new(0,10)
-		pad.PaddingRight = UDim.new(0,10)
-		pad.PaddingTop = UDim.new(0,6)
-		pad.PaddingBottom = UDim.new(0,6)
+		pad.PaddingLeft = UDim.new(0,innerPadding)
+		pad.PaddingRight = UDim.new(0,innerPadding)
+		pad.PaddingTop = UDim.new(0,innerPadding / 2)
+		pad.PaddingBottom = UDim.new(0,innerPadding / 2)
 		local bc = Instance.new("UICorner",b)
 		bc.CornerRadius = UDim.new(0,6)
 		local bs = Instance.new("UIStroke",b)
@@ -668,24 +688,21 @@ local function mk(pl,idx)
 	bsrv.Name = "BTN_SRV"
 	bsrv.Parent = f.ROW_B
 	bsrv.BackgroundColor3 = Color3.fromRGB(64,54,112)
-	bsrv.Size = UDim2.new(0,110,0,26)
+	bsrv.Size = UDim2.new(0,buttonSrvWidth,0,buttonHeight)
 	bsrv.Font = Enum.Font.SourceSans
 	bsrv.Text = "Servers"
 	bsrv.TextColor3 = Color3.fromRGB(230,225,255)
-	bsrv.TextSize = 16
+	bsrv.TextSize = fontSizeSecondary
 	local bsrv_c = Instance.new("UICorner",bsrv)
 	bsrv_c.CornerRadius = UDim.new(0,6)
 	hv(bsrv, bsrv.BackgroundColor3, Color3.fromRGB(76,64,132))
-
-	local expHeaderH = 32
-	local expListH = 180
 
 	local hdr = Instance.new("Frame")
 	hdr.Name = "EXP_HDR"
 	hdr.Parent = f
 	hdr.BackgroundTransparency = 1
-	hdr.Position = UDim2.new(0,8,0,66)
-	hdr.Size = UDim2.new(1,-16,0,expHeaderH)
+	hdr.Position = UDim2.new(0,innerPadding,0,rowHeight + innerPadding / 2)
+	hdr.Size = UDim2.new(1,-innerPadding*2,0,expHeaderHeight)
 	hdr.Visible = false
 	hdr.ZIndex = 7
 
@@ -696,7 +713,7 @@ local function mk(pl,idx)
 	hl.Size = UDim2.new(1,-90,1,0)
 	hl.Text = "Available Servers"
 	hl.Font = Enum.Font.SourceSans
-	hl.TextSize = 18
+	hl.TextSize = fontSizeMain
 	hl.TextXAlignment = Enum.TextXAlignment.Left
 	hl.TextColor3 = Color3.fromRGB(235,230,250)
 	hl.ZIndex = 7
@@ -708,7 +725,7 @@ local function mk(pl,idx)
 	hclose.Position = UDim2.new(1,-80,0,0)
 	hclose.Font = Enum.Font.SourceSans
 	hclose.Text = "Close"
-	hclose.TextSize = 16
+	hclose.TextSize = fontSizeSecondary
 	hclose.TextColor3 = Color3.fromRGB(230,225,255)
 	hclose.ZIndex = 7
 	local hclose_c = Instance.new("UICorner",hclose)
@@ -719,8 +736,8 @@ local function mk(pl,idx)
 	exp.Name = "EXP"
 	exp.Parent = f
 	exp.BackgroundColor3 = Color3.fromRGB(24,20,34)
-	exp.Position = UDim2.new(0,8,0,66+expHeaderH)
-	exp.Size = UDim2.new(1,-16,0,0)
+	exp.Position = UDim2.new(0,innerPadding,0,rowHeight + expHeaderHeight + innerPadding)
+	exp.Size = UDim2.new(1,-innerPadding*2,0,0)
 	exp.BackgroundTransparency = 1
 	exp.Visible=false
 	exp.ZIndex = 6
@@ -733,14 +750,14 @@ local function mk(pl,idx)
 	local slist = Instance.new("ScrollingFrame")
 	slist.Parent = exp
 	slist.BackgroundTransparency = 1
-	slist.Position = UDim2.new(0,8,0,8)
-	slist.Size = UDim2.new(1,-16,1,-16)
+	slist.Position = UDim2.new(0,innerPadding / 2,0,innerPadding / 2)
+	slist.Size = UDim2.new(1,-innerPadding,1,-innerPadding)
 	slist.CanvasSize = UDim2.new(0,0,0,0)
 	slist.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	slist.ScrollBarThickness = 6
 	slist.ZIndex = 7
 	local slyt = Instance.new("UIListLayout",slist)
-	slyt.Padding = UDim.new(0,8)
+	slyt.Padding = UDim.new(0,innerPadding / 2)
 	slyt.SortOrder = Enum.SortOrder.LayoutOrder
 
 	local ssp = Instance.new("TextLabel")
@@ -761,10 +778,10 @@ local function mk(pl,idx)
 	semp.BackgroundTransparency = 1
 	semp.Text = "No servers"
 	semp.Font = Enum.Font.SourceSans
-	semp.TextSize = 16
+	semp.TextSize = fontSizeSecondary
 	semp.TextColor3 = Color3.fromRGB(210,205,230)
 	semp.AnchorPoint = Vector2.new(.5,1)
-	semp.Position = UDim2.new(.5,0,1,-8)
+	semp.Position = UDim2.new(.5,0,1,-innerPadding / 2)
 	semp.ZIndex = 7
 	semp.Visible = false
 
@@ -820,8 +837,8 @@ local function mk(pl,idx)
 			it.hdr.Visible=true
 			it.exp.Visible=true
 			it.expOpen=true
-			tw(it.f,.16,nil,nil,{Size=UDim2.new(1,-4,0,58+expHeaderH+expListH+16)}):Play()
-			tw(it.exp,.16,nil,nil,{Size=UDim2.new(1,-16,0,expListH),BackgroundTransparency=.05}):Play()
+			tw(it.f,.16,nil,nil,{Size=UDim2.new(1,-4,0,rowHeight + expHeaderHeight + expListHeight + innerPadding * 2)}):Play()
+			tw(it.exp,.16,nil,nil,{Size=UDim2.new(1,-innerPadding*2,0,expListHeight),BackgroundTransparency=.05}):Play()
 			it.btnSRV.Text = "Servers (close)"
 			openRow=it
 			srvFetch(pl.PlaceId,it)
@@ -834,7 +851,7 @@ local function mk(pl,idx)
 		f.BackgroundTransparency=.2
 		if s then s.Transparency = isCurrent and .35 or .7 end
 		f.Size = UDim2.new(1,-4,0,0)
-		tw(f,.18,Enum.EasingStyle.Quad,Enum.EasingDirection.Out,{Size=UDim2.new(1,-4,0,58),BackgroundTransparency=.1}):Play()
+		tw(f,.18,Enum.EasingStyle.Quad,Enum.EasingDirection.Out,{Size=UDim2.new(1,-4,0,rowHeight),BackgroundTransparency=.1}):Play()
 		if s then tw(s,.18,Enum.EasingStyle.Quad,Enum.EasingDirection.Out,{Transparency=isCurrent and .35 or .55}):Play() end
 	end)
 end

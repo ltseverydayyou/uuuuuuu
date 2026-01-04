@@ -162,9 +162,12 @@ local function startScheduler()
             while loopRun do
                 local hrp=getHRP()
                 local pos=hrp and hrp.Position or nil
-                local ops=math.max(1,math.floor((#activeClickIdxList+#activePromptIdxList)/20))
-                if clicksEnabled then stepClicks(pos,ops) end
-                if promptsEnabled then stepPrompts(pos,ops) end
+                local burst=waitTime<=0.1
+                local baseOps=math.max(1,math.floor((#activeClickIdxList+#activePromptIdxList)/20))
+                local clickOps=burst and #activeClickIdxList or baseOps
+                local promptOps=burst and #activePromptIdxList or baseOps
+                if clicksEnabled and clickOps>0 then stepClicks(pos,clickOps) end
+                if promptsEnabled and promptOps>0 then stepPrompts(pos,promptOps) end
                 task.wait(waitTime)
             end
         end)

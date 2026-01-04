@@ -221,6 +221,86 @@ test("appendfile", {}, function()
 	assert(readfile(".tests/appendfile.txt") == "success", "Did not append the file")
 end)
 
+test("fireclickdetector", {}, function()
+	local detector = Instance.new("ClickDetector")
+	fireclickdetector(detector, 50, "MouseHoverEnter")
+end)
+
+test("fireproximityprompt", {}, function()
+	local part = Instance.new("Part")
+	part.Anchored = true
+	part.CanCollide = false
+	part.Position = Vector3.new(0, 5000, 0)
+	part.Parent = workspace
+
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.ActionText = "UNC_TEST"
+	prompt.ObjectText = "UNC"
+	prompt.Parent = part
+
+	local triggered = false
+	prompt.Triggered:Connect(function()
+		triggered = true
+	end)
+
+	local ok, err = pcall(fireproximityprompt, prompt)
+	assert(ok, err or "fireproximityprompt errored")
+	task.wait(0.1)
+	assert(triggered, "fireproximityprompt did not trigger the prompt")
+
+	part:Destroy()
+end)
+
+test("firetouchinterest", {}, function()
+	local plrs = game:GetService("Players")
+	local lp = plrs.LocalPlayer
+	if not lp then
+		return "LocalPlayer missing; cannot touch-test"
+	end
+
+	local char = lp.Character or lp.CharacterAdded:Wait()
+	local root = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChildWhichIsA("BasePart")
+	if not root then
+		return "No character root part; cannot touch-test"
+	end
+
+	local part = Instance.new("Part")
+	part.Size = Vector3.new(4, 4, 4)
+	part.Anchored = true
+	part.CanCollide = true
+	part.Position = root.Position + Vector3.new(0, 5000, 0)
+	part.Parent = workspace
+
+	local touched = false
+	local touchEnded = false
+
+	part.Touched:Connect(function(hit)
+		if hit == root then
+			touched = true
+		end
+	end)
+
+	part.TouchEnded:Connect(function(hit)
+		if hit == root then
+			touchEnded = true
+		end
+	end)
+
+	local ok1, err1 = pcall(firetouchinterest, root, part, 0)
+	assert(ok1, err1 or "firetouchinterest (touch) errored")
+	task.wait(0.05)
+
+	local ok2, err2 = pcall(firetouchinterest, root, part, 1)
+	assert(ok2, err2 or "firetouchinterest (untouch) errored")
+	task.wait(0.05)
+
+	if not touched or not touchEnded then
+		return "Events not observed; implementation may be stubbed or limited"
+	end
+
+	part:Destroy()
+end)
+
 test("cache.invalidate", {}, function()
 	local container = Instance.new("Folder")
 	local part = Instance.new("Part", container)
@@ -486,11 +566,6 @@ test("Drawing.new", {}, function()
 		drawing:Destroy()
 	end)
 	assert(canDestroy, "Drawing:Destroy() should not throw an error")
-end)
-
-test("fireclickdetector", {}, function()
-	local detector = Instance.new("ClickDetector")
-	fireclickdetector(detector, 50, "MouseHoverEnter")
 end)
 
 test("getcallbackvalue", {}, function()

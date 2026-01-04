@@ -461,11 +461,9 @@ test("delfolder", {}, function()
 end)
 
 test("dofile", {}, function()
-	writefile(".tests/dofile.lua", "return ({...})[1] + 1")
-	local r1 = dofile(".tests/dofile.lua", 1)
-	assert(r1 == 2, "dofile did not return expected result for first call")
-	local r2 = dofile(".tests/dofile.lua", 41)
-	assert(r2 == 42, "dofile did not return expected result for second call")
+	writefile(".tests/dofile.lua", "local v = 0 for i = 1, 2 do v = v + 1 end return v")
+	local r1 = dofile(".tests/dofile.lua")
+	assert(r1 == 2, "dofile did not return expected result")
 
 	writefile(".tests/dofile_bad.lua", "f")
 	local ok, err = pcall(dofile, ".tests/dofile_bad.lua")
@@ -839,15 +837,10 @@ test("queue_on_teleport", {"queueonteleport"}, function()
 end)
 
 test("rconsoleclear", {"consoleclear"}, nil, true)
-
 test("rconsolecreate", {"consolecreate"}, nil, true)
-
 test("rconsoledestroy", {"consoledestroy"}, nil, true)
-
 test("rconsoleinput", {"consoleinput"}, nil, true)
-
 test("rconsoleprint", {"consoleprint"}, nil, true)
-
 test("rconsolesettitle", {"rconsolename", "consolesettitle"}, nil, true)
 
 test("readfile", {}, function()
@@ -974,3 +967,163 @@ test("WebSocket.connect", {}, function()
 	end
 	ws:Close()
 end)
+
+local function runRcon()
+	local lp, lf = 0, 0
+
+	local function dropExist(n)
+		for i, v in ipairs(list_exists_only) do
+			if v == n then
+				table.remove(list_exists_only, i)
+				existsOnly -= 1
+				break
+			end
+		end
+	end
+
+	local defs = {
+		{
+			n = "rconsolecreate",
+			a = {"consolecreate"},
+			f = function(fn)
+				local ok, err = pcall(fn, "UNC_TEST")
+				assert(ok, err or "rconsolecreate errored")
+			end,
+		},
+		{
+			n = "rconsolesettitle",
+			a = {"rconsolename", "consolesettitle"},
+			f = function(fn)
+				local ok, err = pcall(fn, "UNC_UNC")
+				assert(ok, err or "rconsolesettitle errored")
+			end,
+		},
+		{
+			n = "rconsoleprint",
+			a = {"consoleprint"},
+			f = function(fn)
+				local ok, err = pcall(fn, "UNC rconsoleprint test\n")
+				assert(ok, err or "rconsoleprint errored")
+			end,
+		},
+		{
+			n = "rconsoleclear",
+			a = {"consoleclear"},
+			f = function(fn)
+				local ok, err = pcall(fn)
+				assert(ok, err or "rconsoleclear errored")
+			end,
+		},
+		{
+			n = "rconsoledestroy",
+			a = {"consoledestroy"},
+			f = function(fn)
+				local ok, err = pcall(fn)
+				assert(ok, err or "rconsoledestroy errored")
+			end,
+		},
+	}
+
+	print("UNC rconsole tests: starting")
+
+	for _, d in ipairs(defs) do
+		local fn
+		local names = {d.n}
+		for _, al in ipairs(d.a) do
+			table.insert(names, al)
+		end
+		for _, nm in ipairs(names) do
+			local g = getGlobal(nm)
+			if type(g) == "function" then
+				fn = g
+				break
+			end
+		end
+
+		if fn then
+			dropExist(d.n)
+			local ok, msg = pcall(d.f, fn)
+			if ok then
+				lp += 1
+				passes += 1
+				table.insert(list_pass, d.n)
+				print("✅ [rconsole] " .. d.n)
+			else
+				lf += 1
+				fails += 1
+				local e = d.n .. " • " .. tostring(msg)
+				table.insert(list_fail, e)
+				warn("⛔ [rconsole] " .. e)
+			end
+		end
+	end
+
+	print("UNC rconsole tests: " .. lp .. " passes, " .. lf .. " fails")
+
+	local testedTotal = passes + fails
+	local rate = testedTotal > 0 and math.round(passes / testedTotal * 100) or 0
+	local outOf = passes .. " out of " .. testedTotal
+
+	print("\nUNC Summary (after rconsole)")
+	print("✅ Passes: " .. passes)
+	print("⛔ Fails: " .. fails)
+	print("⏺️ Exists but untested: " .. existsOnly)
+	print("❌ Missing required globals: " .. missing)
+	print("⏺️ Missing optional globals: " .. optionalMissing)
+	print("⚠️ Globals with missing aliases: " .. undefined)
+	print("Tested success rate: " .. rate .. "% (" .. outOf .. ")\n")
+
+	local verdict
+	if testedTotal == 0 then
+		verdict = "No UNC functions were actually tested. Almost everything is missing."
+	elseif rate >= 90 and fails == 0 and missing == 0 then
+		verdict = "Excellent UNC compatibility: almost everything matches and behaves correctly."
+	elseif rate >= 80 and fails == 0 then
+		verdict = "Very good UNC compatibility: core features behave correctly, some globals or aliases missing."
+	elseif rate >= 60 then
+		verdict = "Decent UNC compatibility: usable, but several functions are missing or behave differently."
+	elseif rate >= 30 then
+		verdict = "Poor UNC compatibility: many UNC features fail or are missing."
+	else
+		verdict = "Very bad UNC compatibility: this environment barely matches UNC."
+	end
+
+	print("Verdict: " .. verdict .. "\n")
+end
+
+local function promptRcon()
+	local has =
+		getGlobal("rconsoleclear")
+		or getGlobal("rconsolecreate")
+		or getGlobal("rconsoleprint")
+		or getGlobal("rconsolesettitle")
+		or getGlobal("consoleclear")
+		or getGlobal("consolecreate")
+		or getGlobal("consoleprint")
+		or getGlobal("consolesettitle")
+
+	if not has then
+		return
+	end
+
+	local sg = game:GetService("StarterGui")
+	local bf = Instance.new("BindableFunction")
+	bf.OnInvoke = function(ans)
+		if ans == "Sure" then
+			runRcon()
+		end
+	end
+
+	pcall(function()
+		sg:SetCore("SendNotification", {
+			Title = "UNC rconsole tests",
+			Text = "Some executors can crash when rconsole is used.\nRun extra rconsole tests?",
+			Duration = 15,
+			Button1 = "Sure",
+			Button2 = "Nah",
+			Callback = bf,
+		})
+	end)
+end
+
+promptRcon()

@@ -8,6 +8,17 @@ local list_missing = {}
 local list_alias_missing = {}
 local list_optional_missing = {}
 
+local IsOnMobile=(function()
+	local platform=game:GetService("UserInputService"):GetPlatform()
+	if platform==Enum.Platform.IOS or platform==Enum.Platform.Android or platform==Enum.Platform.AndroidTV or platform==Enum.Platform.Chromecast or platform==Enum.Platform.MetaOS then
+		return true
+	end
+	if platform==Enum.Platform.None then
+		return game:GetService("UserInputService").TouchEnabled and not (game:GetService("UserInputService").KeyboardEnabled or game:GetService("UserInputService").MouseEnabled)
+	end
+	return false
+end)()
+
 local function getGlobal(path)
 	local value = getfenv(0)
 	while value ~= nil and path ~= "" do
@@ -227,28 +238,59 @@ test("fireclickdetector", {}, function()
 end)
 
 test("fireproximityprompt", {}, function()
-	local part = Instance.new("Part")
-	part.Anchored = true
-	part.CanCollide = false
-	part.Position = Vector3.new(0, 5000, 0)
-	part.Parent = workspace
+	local cam = workspace.CurrentCamera
+	if not cam then
+		return "No CurrentCamera; cannot proximity-test"
+	end
 
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.ActionText = "UNC_TEST"
-	prompt.ObjectText = "UNC"
-	prompt.Parent = part
+	local baseCF = cam.CFrame
 
-	local triggered = false
-	prompt.Triggered:Connect(function()
-		triggered = true
-	end)
+	local function worldPos(ofs)
+		return baseCF.Position
+			+ baseCF.RightVector * ofs.X
+			+ baseCF.UpVector * ofs.Y
+			+ baseCF.LookVector * ofs.Z
+	end
 
-	local ok, err = pcall(fireproximityprompt, prompt)
-	assert(ok, err or "fireproximityprompt errored")
-	task.wait(0.1)
-	assert(triggered, "fireproximityprompt did not trigger the prompt")
+	local function runCase(ofs)
+		local part = Instance.new("Part")
+		part.Anchored = true
+		part.CanCollide = false
+		part.Size = Vector3.new(3, 3, 3)
+		part.Position = worldPos(ofs)
+		part.Parent = workspace
 
-	part:Destroy()
+		local prompt = Instance.new("ProximityPrompt")
+		prompt.ActionText = "UNC_TEST"
+		prompt.ObjectText = "UNC"
+		prompt.RequiresLineOfSight = false
+		prompt.MaxActivationDistance = 10000
+		prompt.Parent = part
+
+		local triggered = false
+		prompt.Triggered:Connect(function()
+			triggered = true
+		end)
+
+		local ok, err = pcall(fireproximityprompt, prompt)
+		assert(ok, err or "fireproximityprompt errored")
+		task.wait(0.15)
+
+		part:Destroy()
+		return triggered
+	end
+
+	local near = runCase(Vector3.new(0, 0, 10))
+	assert(near, "fireproximityprompt did not trigger for nearby/in-view prompt")
+
+	local behind = runCase(Vector3.new(0, 0, -10))
+	assert(behind, "fireproximityprompt did not trigger for prompt behind camera/out of view")
+
+	local far = runCase(Vector3.new(0, 0, 2000))
+	assert(far, "fireproximityprompt did not trigger for a very far prompt (large MaxActivationDistance)")
+
+	local side = runCase(Vector3.new(2000, 0, 10))
+	assert(side, "fireproximityprompt did not trigger for prompt far off to the side/out of view")
 end)
 
 test("firetouchinterest", {}, function()
@@ -300,6 +342,8 @@ test("firetouchinterest", {}, function()
 
 	part:Destroy()
 end)
+
+task.wait(.5) -- added this wait cause volcano fucks up when using cache.replace
 
 test("cache.invalidate", {}, function()
 	local container = Instance.new("Folder")
@@ -550,7 +594,20 @@ test("dofile", {}, function()
 	assert(not ok and type(err) == "string", "dofile did not raise a compile error on invalid file")
 end)
 
-test("Drawing", {})
+test("Drawing", {}, function()
+	assert(type(Drawing) == "table", "Drawing must be a table")
+	assert(type(Drawing.new) == "function", "Drawing.new must be a function")
+	assert(type(Drawing.Fonts) == "table", "Drawing.Fonts must be a table")
+
+	local obj = Drawing.new("Square")
+	assert(obj ~= nil, "Drawing.new did not return an object")
+	obj.Visible = false
+
+	local ok = pcall(function()
+		obj:Destroy()
+	end)
+	assert(ok, "Drawing object could not be destroyed")
+end)
 
 test("Drawing.Fonts", {}, function()
 	assert(Drawing.Fonts.UI == 0, "Did not return the correct id for UI")
@@ -644,6 +701,42 @@ test("getloadedmodules", {}, function()
 	assert(#modules > 0, "Did not return a table with any values")
 	assert(typeof(modules[1]) == "Instance", "First value is not an Instance")
 	assert(modules[1]:IsA("ModuleScript"), "First value is not a ModuleScript")
+end)
+
+test("require", {}, function()
+	local plrs = game:GetService("Players")
+	local lp = plrs.LocalPlayer
+	if not lp then
+		return "LocalPlayer missing; cannot test require(Invisicam)"
+	end
+
+	local playerScripts = lp:FindFirstChild("PlayerScripts")
+	if not playerScripts then
+		return "PlayerScripts missing; cannot test require(Invisicam)"
+	end
+
+	local playerModule = playerScripts:FindFirstChild("PlayerModule")
+	if not playerModule then
+		return "PlayerModule missing; cannot test require(Invisicam)"
+	end
+
+	local cameraModule = playerModule:FindFirstChild("CameraModule")
+	if not cameraModule then
+		return "CameraModule missing; cannot test require(Invisicam)"
+	end
+
+	local invisicam = cameraModule:FindFirstChild("Invisicam")
+	if not (invisicam and invisicam:IsA("ModuleScript")) then
+		return "Invisicam ModuleScript not found; cannot test require(Invisicam)"
+	end
+
+	local ok, mod = pcall(require, invisicam)
+	assert(ok, mod or "require(Invisicam) errored")
+
+	local t = type(mod)
+	assert(t == "table" or t == "function", "require(Invisicam) returned unexpected type: " .. t)
+
+	return "require(Invisicam) succeeded (" .. t .. ")"
 end)
 
 test("getnamecallmethod", {}, function()
@@ -837,12 +930,17 @@ test("makefolder", {}, function()
 end)
 
 test("messagebox", {}, function()
+	if IsOnMobile then
+		return "Mobile / touch-only device, skipping messagebox test"
+	end
+
 	print("UNC: A messagebox will appear. Click 'OK' to continue the UNC test.")
 	local ok, res = pcall(messagebox, "UNC_TEST_MESSAGEBOX", "UNC UNC_TEST", 0)
 	assert(ok, res or "messagebox errored")
+
 	local t = type(res)
 	assert(t == "number" or t == "nil", "messagebox must return button id (number) or nil")
-end)
+end, true)
 
 test("mouse1click", {}, function()
 	local ok1, err1 = pcall(mouse1click)
@@ -924,15 +1022,44 @@ test("readfile", {}, function()
 end)
 
 test("request", {"http.request", "http_request"}, function()
-	local response = request({
+	local hs = game:GetService("HttpService")
+
+	local function basic()
+		local res = request({
+			Url = "https://httpbin.org/user-agent",
+			Method = "GET",
+		})
+		assert(type(res) == "table", "Response must be a table")
+		assert(res.StatusCode == 200, "Did not return a 200 status code")
+		local data = hs:JSONDecode(res.Body)
+		assert(type(data) == "table" and data["user-agent"] ~= nil, "Did not return a table with a user-agent key (can be empty string)")
+		return data["user-agent"]
+	end
+
+	local uaDefault = basic()
+
+	local okCustom, res2 = pcall(request, {
 		Url = "https://httpbin.org/user-agent",
 		Method = "GET",
+		Headers = {
+			["User-Agent"] = "UNC_TEST_AGENT",
+		},
 	})
-	assert(type(response) == "table", "Response must be a table")
-	assert(response.StatusCode == 200, "Did not return a 200 status code")
-	local data = game:GetService("HttpService"):JSONDecode(response.Body)
-	assert(type(data) == "table" and type(data["user-agent"]) == "string", "Did not return a table with a user-agent key")
-	return "User-Agent: " .. data["user-agent"]
+
+	if not okCustom or type(res2) ~= "table" or res2.StatusCode ~= 200 then
+		return "Basic request OK; custom User-Agent unsupported or blocked"
+	end
+
+	local data2 = hs:JSONDecode(res2.Body)
+	if type(data2) ~= "table" or type(data2["user-agent"]) ~= "string" then
+		return "Basic request OK; custom User-Agent behavior unknown"
+	end
+
+	if data2["user-agent"]:find("UNC_TEST_AGENT", 1, true) then
+		return "User-Agent: default=" .. tostring(uaDefault) .. " custom=" .. data2["user-agent"]
+	else
+		return "Basic request OK; custom User-Agent overridden: " .. data2["user-agent"]
+	end
 end)
 
 test("setclipboard", {"toclipboard"}, function()
@@ -1020,6 +1147,114 @@ end)
 test("setthreadidentity", {"setidentity", "setthreadcontext"}, function()
 	setthreadidentity(3)
 	assert(getthreadidentity() == 3, "Did not set the thread identity")
+end)
+
+test("getactors", {}, function()
+	local ok, acts = pcall(getactors)
+	assert(ok, "getactors threw: " .. tostring(acts))
+	assert(type(acts) == "table", "getactors must return a table")
+
+	if not acts[1] then
+		return "getactors returned an empty table (no initialized Actors yet)"
+	end
+
+	assert(typeof(acts[1]) == "Instance" and acts[1]:IsA("Actor"), "First item from getactors is not an Actor")
+end)
+
+test("getregistry", {"getreg"}, function()
+	local r = getregistry()
+	assert(type(r) == "table", "getregistry must return a table")
+	assert(r[1] ~= nil, "getregistry returned empty or non-indexable table")
+end)
+
+test("getscriptclosure", {}, function()
+	local plrs = game:GetService("Players")
+	local lp = plrs.LocalPlayer
+	if not lp then
+		return "LocalPlayer missing; cannot test getscriptclosure"
+	end
+
+	local char = lp.Character or lp.CharacterAdded:Wait()
+	local scr = char:FindFirstChildOfClass("LocalScript")
+	if not scr then
+		return "No LocalScript on character; cannot test getscriptclosure"
+	end
+
+	local f = getscriptclosure(scr)
+	assert(type(f) == "function", "getscriptclosure did not return a function")
+
+	local env = getsenv(scr)
+	assert(type(env) == "table", "getsenv did not return a table")
+	assert(env.script == scr, "getsenv().script mismatch with target script")
+
+	return "Got closure for " .. scr.Name
+end, true)
+
+test("decompile", {}, function()
+	local plrs = game:GetService("Players")
+	local lp = plrs.LocalPlayer
+	if not lp then
+		return "LocalPlayer missing; cannot test decompile"
+	end
+
+	local char = lp.Character or lp.CharacterAdded:Wait()
+	local scr = char:FindFirstChildOfClass("LocalScript") or char:FindFirstChild("Animate")
+	if not scr or not scr:IsA("LocalScript") then
+		return "No suitable LocalScript to decompile"
+	end
+
+	local ok, out = pcall(decompile, scr)
+	assert(ok, out or "decompile errored")
+	assert(type(out) == "string", "decompile did not return a string")
+	assert(#out > 0, "decompile returned an empty string")
+
+	return "Decompiled " .. scr.Name .. " (" .. #out .. " chars)"
+end, true)
+
+test("run_on_actor", {"runonactor"}, function()
+	if typeof(getactors) ~= "function" then
+		return "getactors missing; cannot test run_on_actor"
+	end
+
+	local okA, acts = pcall(getactors)
+	if not okA or type(acts) ~= "table" or not acts[1] then
+		return "getactors returned no usable Actor; cannot test run_on_actor"
+	end
+
+	local act = acts[1]
+	if typeof(act) ~= "Instance" or not act:IsA("Actor") then
+		return "getactors[1] is not an Actor"
+	end
+
+	local rp = game:GetService("ReplicatedStorage")
+	local flag = Instance.new("BoolValue")
+	flag.Name = "UNC_ACTOR_TEST"
+	flag.Value = false
+	flag.Parent = rp
+
+	local src = [[
+local rp = game:GetService("ReplicatedStorage")
+local v = rp:FindFirstChild("UNC_ACTOR_TEST")
+if v then
+	v.Value = true
+end
+]]
+
+	local ok, err = pcall(run_on_actor, act, src)
+	assert(ok, err or "run_on_actor errored")
+
+	local rs = game:GetService("RunService")
+	local t0 = tick()
+	while tick() - t0 < 5 do
+		if flag.Value then
+			break
+		end
+		rs.Heartbeat:Wait()
+	end
+
+	assert(flag.Value == true, "run_on_actor did not appear to execute code on the actor")
+
+	flag:Destroy()
 end)
 
 test("WebSocket", {})

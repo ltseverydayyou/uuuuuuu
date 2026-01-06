@@ -19,7 +19,16 @@ local Reference = Import(iconModule.Reference)
 local referenceObject = Reference.getObject()
 local leadPackage = referenceObject and referenceObject.Value
 if leadPackage and leadPackage ~= iconModule then
-	return Import(leadPackage) :: Types.StaticIcon
+	if typeof(leadPackage) == "Instance" then
+		local ok, mod = pcall(require, leadPackage)
+		if ok and mod then
+			return mod :: Types.StaticIcon
+		end
+	elseif type(leadPackage) == "table" and rawget(leadPackage, "__path") then
+		return Import(leadPackage) :: Types.StaticIcon
+	elseif type(leadPackage) == "string" then
+		return Import(leadPackage) :: Types.StaticIcon
+	end
 end
 if not referenceObject then
 	Reference.addToReplicatedStorage()

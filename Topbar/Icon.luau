@@ -1057,11 +1057,19 @@ function Icon:setCaption(text)
 	return self
 end
 
-function Icon:setCaptionHint(keyCodeEnum)
-	assert(typeof(keyCodeEnum) == "EnumItem", "argument[1] must be a KeyCode EnumItem!")
-	self.fakeToggleKey = keyCodeEnum
-	self.fakeToggleKeyChanged:Fire(keyCodeEnum)
-	self:setCaption("_hotkey_")
+function Icon:setCaptionHint(keyCodeOrText)
+	if typeof(keyCodeOrText) == "EnumItem" then
+		self.fakeToggleKey = keyCodeOrText
+		self.fakeToggleKeyChanged:Fire(keyCodeOrText)
+		self:setCaption("_hotkey_")
+	elseif type(keyCodeOrText) == "string" then
+		self.fakeToggleKey = nil
+		self.fakeToggleKeyChanged:Fire(nil)
+		self:setCaption(keyCodeOrText)
+	elseif keyCodeOrText == nil then
+		self.fakeToggleKey = nil
+		self.fakeToggleKeyChanged:Fire(nil)
+	end
 	return self
 end
 

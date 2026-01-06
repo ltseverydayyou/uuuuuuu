@@ -30,9 +30,14 @@ Quick recipes
   ```
 - Notices (badge): 
   ```lua
-  local ico = Icon.new():setName("Updates")
-  ico:notify() -- shows badge
-  ico:clearNotices()
+  local ico = Icon.new()
+    :setName("Updates")
+    :setLabel("Updates")                -- add text
+    :setImage("rbxassetid://6031068421")-- optional image
+    
+    ico:notify()       -- show badge
+    
+    ico:clearNotices() -- hide badge
   ```
 - Themes (global and per-icon):
   ```lua

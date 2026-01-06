@@ -7,7 +7,7 @@ return function(icon, Icon)
 	widget.Visible = true
 	widget.ZIndex = 20
 	widget.Active = false
-	widget.ClipsDescendants = true
+	widget.ClipsDescendants = false
 
 	local button = Instance.new("Frame")
 	button.Name = "IconButton"
@@ -15,7 +15,7 @@ return function(icon, Icon)
 	button.ZIndex = 2
 	button.BorderSizePixel = 0
 	button.Parent = widget
-	button.ClipsDescendants = true
+	button.ClipsDescendants = false
 	button.Active = false
 	icon.deselected:Connect(function()
 		button.ClipsDescendants = true

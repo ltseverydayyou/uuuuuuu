@@ -1036,7 +1036,15 @@ function Icon:setCaption(text)
 		return self
 	end
 	local captionJanitor = self.captionJanitor
-	self.captionJanitor:clean()
+	if not captionJanitor or not (captionJanitor.clean or captionJanitor.Clean or captionJanitor.Cleanup) then
+		local Janitor = Import(self.iconModule.Packages.Janitor)
+		captionJanitor = Janitor.new()
+		self.captionJanitor = captionJanitor
+	end
+	local cleaner = captionJanitor.clean or captionJanitor.Clean or captionJanitor.Cleanup
+	if cleaner then
+		cleaner(captionJanitor)
+	end
 	if not text or text == "" then
 		self.caption = nil
 		self.captionText = nil

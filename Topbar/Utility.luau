@@ -338,15 +338,19 @@ function Utility.clipOutside(icon, instance)
 
 
 		local updatePropertyPatch = Utility.createStagger(0.5, updateProperty, true)
-		cloneJanitor:add(clone:GetPropertyChangedSignal(absoluteProperty):Connect(updatePropertyPatch))
+		if clone then
+			cloneJanitor:add(clone:GetPropertyChangedSignal(absoluteProperty):Connect(updatePropertyPatch))
+		end
 
 
 
 
 		if property == "Position" then
-			cloneJanitor:add(screenGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-				updatePropertyStaggered()
-			end))
+			if screenGui then
+				cloneJanitor:add(screenGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+					updatePropertyStaggered()
+				end))
+			end
 		end
 
 	end

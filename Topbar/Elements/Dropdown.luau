@@ -11,7 +11,7 @@ return function(icon)
 	dropdown.BorderSizePixel = 0
 	dropdown.AnchorPoint = Vector2.new(0.5, 0)
 	dropdown.Position = UDim2.new(0.5, 0, 1, 10)
-	dropdown.ZIndex = 50
+	dropdown.ZIndex = -2
 	dropdown.ClipsDescendants = false
 	dropdown.Parent = icon.widget
 
@@ -41,7 +41,7 @@ return function(icon)
 	dropdownScroller.BorderSizePixel = 0
 	dropdownScroller.AnchorPoint = Vector2.new(0, 0)
 	dropdownScroller.Position = UDim2.new(0, 0, 0, 0)
-	dropdownScroller.ZIndex = 51
+	dropdownScroller.ZIndex = -1
 	dropdownScroller.ClipsDescendants = false
 	dropdownScroller.Visible = true
 	dropdownScroller.VerticalScrollBarInset = Enum.ScrollBarInset.None

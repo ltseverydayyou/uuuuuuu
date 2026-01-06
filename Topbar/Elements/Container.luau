@@ -167,7 +167,7 @@ return function(Icon)
 	left.Visible = true
 	left.ZIndex = 1
 	left.Active = false
-	left.ClipsDescendants = true
+	left.ClipsDescendants = false
 	left.HorizontalScrollBarInset = Enum.ScrollBarInset.None
 	left.CanvasSize = UDim2.new(0, 0, 1, -1)
 	left.AutomaticCanvasSize = Enum.AutomaticSize.X
@@ -196,6 +196,7 @@ return function(Icon)
 	center.ScrollingEnabled = false
 	center.UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 	center.Name = "Center"
+	center.ClipsDescendants = false
 	center.Parent = holdersCenter
 
 	local right = left:Clone()
@@ -206,6 +207,7 @@ return function(Icon)
 	right.Name = "Right"
 	right.AnchorPoint = Vector2.new(1, 0)
 	right.Position = UDim2.new(1, -12, 0, 0)
+	right.ClipsDescendants = false
 	right.Parent = holders
 
 

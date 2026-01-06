@@ -29,45 +29,6 @@ local function sendParry()
 	Net:CSendEvent(4.6848415795802784e76, 6.8467442838735085e75)
 end
 
-local function NADrag(ui, dragui)
-	if not dragui then dragui = ui end
-	local UISvc = game:GetService("UserInputService")
-	local drag
-	local dragInput
-	local dragStart
-	local startPos
-	local function upd(input)
-		local d = input.Position - dragStart
-		local sz = ui.Parent.AbsoluteSize
-		local nx = startPos.X.Scale + (d.X / sz.X)
-		local ny = startPos.Y.Scale + (d.Y / sz.Y)
-		ui.Position = UDim2.new(nx, 0, ny, 0)
-	end
-	dragui.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			drag = true
-			dragStart = input.Position
-			startPos = ui.Position
-			input.Changed:Connect(function()
-				if input.UserInputState == Enum.UserInputState.End then
-					drag = false
-				end
-			end)
-		end
-	end)
-	dragui.InputChanged:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-			dragInput = input
-		end
-	end)
-	UISvc.InputChanged:Connect(function(input)
-		if input == dragInput and drag then
-			upd(input)
-		end
-	end)
-	ui.Active = true
-end
-
 do
 	local mas = SS:FindFirstChild("Master")
 	local mus = mas and mas:FindFirstChild("Music")
@@ -247,10 +208,26 @@ do
 
 	local spamOn = false
 	local spamConn
-	local mobBtn
+	local mobIcon
+	local syncingIcon = false
+
+	local function syncTopbarIcon()
+		if not mobIcon then return end
+		syncingIcon = true
+		mobIcon:setLabel(spamOn and "Parry spam: ON" or "Parry spam: OFF")
+		if spamOn then
+			mobIcon:select("Sync", mobIcon)
+		else
+			mobIcon:deselect("Sync", mobIcon)
+		end
+		syncingIcon = false
+	end
 
 	local function setSpam(v)
-		if spamOn == v then return end
+		if spamOn == v then
+			syncTopbarIcon()
+			return
+		end
 		spamOn = v
 		if spamOn then
 			if not spamConn and Net then
@@ -264,15 +241,7 @@ do
 				spamConn = nil
 			end
 		end
-		if mobBtn then
-			if spamOn then
-				mobBtn.BackgroundColor3 = Color3.fromRGB(200, 40, 40)
-				mobBtn.Text = "Parry spam: ON"
-			else
-				mobBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-				mobBtn.Text = "Parry spam: OFF"
-			end
-		end
+		syncTopbarIcon()
 	end
 
 	UIS.InputBegan:Connect(function(inp, gpe)
@@ -283,46 +252,29 @@ do
 	end)
 
 	task.spawn(function()
-		if not UIS.TouchEnabled then return end
-		local hui = (gethui and gethui()) or game:GetService("CoreGui") or Plrs.LocalPlayer:FindFirstChildOfClass("PlayerGui")
-		if not hui then return end
+		--if not UIS.TouchEnabled then return end
+		local ok, Icon = pcall(function()
+			return loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/refs/heads/main/Icon.luau"))()
+		end)
+		if not ok or not Icon then
+			warn("Failed to load topbar icon for parry spam")
+			return
+		end
 
-		local gui = Instance.new("ScreenGui")
-		gui.Name = "__na_parry_mobile"
-		gui.ResetOnSpawn = false
-		gui.IgnoreGuiInset = true
-		gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-		gui.Parent = hui
-
-		local holder = Instance.new("Frame")
-		holder.Name = "Holder"
-		holder.Size = UDim2.fromOffset(200, 48)
-		holder.Position = UDim2.new(0.5, -100, 0.75, 0)
-		holder.BackgroundTransparency = 1
-		holder.Parent = gui
-
-		local b = Instance.new("TextButton")
-		b.Name = "Toggle"
-		b.Size = UDim2.fromScale(1, 1)
-		b.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-		b.TextColor3 = Color3.fromRGB(255, 255, 255)
-		b.Font = Enum.Font.GothamBold
-		b.TextSize = 14
-		b.AutoButtonColor = false
-		b.Text = "Parry spam: OFF"
-		b.Parent = holder
-
-		local c = Instance.new("UICorner")
-		c.CornerRadius = UDim.new(0, 18)
-		c.Parent = b
-
-		NADrag(holder, b)
-
-		b.MouseButton1Click:Connect(function()
-			setSpam(not spamOn)
+		local ico = Icon.new():setName("ParrySpam"):setLabel("Parry spam: OFF")
+		ico:autoDeselect(false)
+		ico:align("Center")
+		ico.selected:Connect(function()
+			if syncingIcon then return end
+			setSpam(true)
+		end)
+		ico.deselected:Connect(function()
+			if syncingIcon then return end
+			setSpam(false)
 		end)
 
-		mobBtn = b
+		mobIcon = ico
+		syncTopbarIcon()
 	end)
 
 	local hb

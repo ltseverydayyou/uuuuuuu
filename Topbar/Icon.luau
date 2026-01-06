@@ -741,17 +741,30 @@ end
 Icon.disableStateOverlay = Icon.disableOverlay
 
 function Icon:setImage(imageId, iconState)
-	self:modifyTheme({"IconImage", "Image", imageId, iconState})
+	local useBuilderFont = iconState == true
+	local state = useBuilderFont and nil or iconState
 
+	if useBuilderFont then
+		local builderFont = Font.new("rbxasset://fonts/families/BuilderIcons.json")
+		self:modifyTheme({"IconImage", "Image", "", state})
+		self:modifyTheme({"IconImage", "ImageTransparency", 1, state})
+		self:modifyTheme({"IconLabel", "FontFace", builderFont, state})
+		self:modifyTheme({"IconLabel", "TextScaled", true, state})
+		self:modifyTheme({"IconLabel", "TextSize", 24, state})
+		self:modifyTheme({"IconLabel", "Text", tostring(imageId or ""), state})
+	else
+		self:modifyTheme({"IconImage", "ImageTransparency", 0, state})
+		self:modifyTheme({"IconLabel", "Text", "", state})
+		self:modifyTheme({"IconImage", "Image", imageId, state})
 
-	task.spawn(function()
-		local newIdContent = if tonumber(imageId) then `rbxassetid://{imageId}` else imageId
-		local initialAssetFetchStatus = ContentProvider:GetAssetFetchStatus(newIdContent)
-
-		if initialAssetFetchStatus ~= Enum.AssetFetchStatus.Success then
-			pcall(ContentProvider.PreloadAsync, ContentProvider, { newIdContent })
-		end
-	end)
+		task.spawn(function()
+			local newIdContent = if tonumber(imageId) then `rbxassetid://{imageId}` else imageId
+			local initialAssetFetchStatus = ContentProvider:GetAssetFetchStatus(newIdContent)
+			if initialAssetFetchStatus ~= Enum.AssetFetchStatus.Success then
+				pcall(ContentProvider.PreloadAsync, ContentProvider, { newIdContent })
+			end
+		end)
+	end
 
 	return self
 end

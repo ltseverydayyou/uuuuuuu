@@ -9,7 +9,10 @@ function Reference.addToReplicatedStorage()
     end
     local objectValue = Instance.new("ObjectValue")
 	objectValue.Name = Reference.objectName
-    objectValue.Value = script.Parent
+	local parent = script.Parent
+    if typeof(parent) == "Instance" then
+	    objectValue.Value = parent
+    end
     objectValue.Parent = replicatedStorage
     return objectValue
 end

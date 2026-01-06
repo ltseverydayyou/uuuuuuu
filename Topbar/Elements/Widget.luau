@@ -17,14 +17,6 @@ return function(icon, Icon)
 	button.Parent = widget
 	button.ClipsDescendants = false
 	button.Active = false
-	icon.deselected:Connect(function()
-		button.ClipsDescendants = true
-		task.delay(0.2, function()
-			if icon.isSelected then
-				button.ClipsDescendants = false
-			end
-		end)
-	end)
 
 
 	local GuiService = game:GetService("GuiService")

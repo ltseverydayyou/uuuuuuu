@@ -145,19 +145,8 @@ return function(icon)
 	box:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
 		dropShadow.Size = UDim2.new(1, 0, 0, box.AbsoluteSize.Y + 8)
 	end)
-
-
-
-
 	local captionJanitor = icon.captionJanitor
-	local _, captionClone = icon:clipOutside(caption)
-	captionClone.AutomaticSize = Enum.AutomaticSize.None
-	local function matchSize()
-		local absolute = caption.AbsoluteSize
-		captionClone.Size = UDim2.fromOffset(absolute.X, absolute.Y)
-	end
-	captionJanitor:add(caption:GetPropertyChangedSignal("AbsoluteSize"):Connect(matchSize))
-	matchSize()
+	local captionClone = caption
 
 
 
@@ -292,6 +281,7 @@ return function(icon)
 		updatePosition()
 		updateHotkey()
 	end
+	setCaptionEnabled(false)
 
 	local WAIT_DURATION = 0.5
 	local RECOVER_PERIOD = 0.3

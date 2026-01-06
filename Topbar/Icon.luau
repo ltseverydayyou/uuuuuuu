@@ -130,9 +130,50 @@ end
 task.defer(Gamepad.start, Icon)
 task.defer(Overflow.start, Icon)
 task.defer(function()
-	local playerGui = localPlayer:WaitForChild("PlayerGui")
+	local function protectGui(g)
+		if g:IsA("ScreenGui") then
+			g.ZIndexBehavior = Enum.ZIndexBehavior.Global
+			g.ResetOnSpawn = false
+			g.IgnoreGuiInset = true
+		end
+		local coreGui = game:GetService("CoreGui")
+		local lp = Players.LocalPlayer
+		local function nap(obj, prop)
+			if obj then
+				if prop then
+					obj[prop] = "\0"
+				else
+					obj.Name = "\0"
+				end
+				obj.Archivable = false
+			end
+		end
+		if typeof(gethui) == "function" then
+			nap(g)
+			g.Parent = gethui()
+			return g
+		end
+		if coreGui then
+			nap(g)
+			local robloxGui = coreGui:FindFirstChild("RobloxGui")
+			if robloxGui then
+				g.Parent = robloxGui
+			else
+				g.Parent = coreGui
+			end
+			return g
+		end
+		local playerGui = lp and lp:FindFirstChildWhichIsA("PlayerGui")
+		if playerGui then
+			nap(g)
+			g.Parent = playerGui
+			g.ResetOnSpawn = false
+			return g
+		end
+		return nil
+	end
 	for _, screenGui in pairs(Icon.container) do
-		screenGui.Parent = playerGui
+		protectGui(screenGui)
 	end
 end)
 

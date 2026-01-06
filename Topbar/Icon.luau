@@ -1097,6 +1097,12 @@ end
 function Icon:joinDropdown(parentIcon)
 	parentIcon:getDropdown()
 	Utility.joinFeature(self, parentIcon, parentIcon.dropdownIcons, parentIcon:getInstance("DropdownScroller"))
+	self:removeModification("JoinModification")
+	local cr = self:getInstance("ClickRegion")
+	if cr then
+		cr.Active = true
+		cr.Selectable = true
+	end
 	parentIcon.dropdownChildAdded:Fire(self)
 	return self
 end

@@ -1,6 +1,6 @@
 local replicatedStorage = game:GetService("ReplicatedStorage")
 local Reference = {}
-Reference.objectName = "TopbarPlusReference"
+Reference.objectName = "TopbarPlusReference_LTS"
 
 function Reference.addToReplicatedStorage()
 	local existingItem = replicatedStorage:FindFirstChild(Reference.objectName)

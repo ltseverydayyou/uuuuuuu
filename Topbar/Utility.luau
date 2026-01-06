@@ -130,8 +130,9 @@ function Utility.localPlayerRespawned(callback)
 end
 
 function Utility.getClippedContainer(screenGui)
-
-
+	if not screenGui then
+		return nil
+	end
 	local clippedContainer = screenGui:FindFirstChild("ClippedContainer")
 	if not clippedContainer then
 		clippedContainer = Instance.new("Folder")
@@ -177,9 +178,18 @@ function Utility.clipOutside(icon, instance)
 	local container = Icon.container
 	local function updateScreenGui()
 		local originalScreenGui = originalParent:FindFirstAncestorWhichIsA("ScreenGui")
+		if not originalScreenGui then
+			return
+		end
 		screenGui = if string.match(originalScreenGui.Name, "Clipped") then originalScreenGui else container[originalScreenGui.Name.."Clipped"]
+		if not screenGui then
+			return
+		end
 		instance.AnchorPoint = Vector2.new(0, 0)
-		instance.Parent = Utility.getClippedContainer(screenGui)
+		local clippedContainer = Utility.getClippedContainer(screenGui)
+		if clippedContainer then
+			instance.Parent = clippedContainer
+		end
 	end
 	cloneJanitor:add(icon.alignmentChanged:Connect(updateScreenGui))
 	updateScreenGui()

@@ -41,6 +41,9 @@ Icon.__index = Icon
 
 
 local localPlayer = Players.LocalPlayer
+local function isNode(value)
+	return type(value) == "table" and rawget(value, "__path") ~= nil
+end
 local themes = iconModule.Features.Themes
 local iconsDict = {}
 local anyIconSelected = Signal.new()
@@ -62,6 +65,8 @@ Icon.isOldTopbar = false
 Icon.iconsDictionary = iconsDict
 Icon.insetHeightChanged = Signal.new()
 Icon.container = Import(elements.Container)(Icon)
+Icon.Features = iconModule.Features
+Icon.Themes = themes
 Icon.topbarEnabled = true
 Icon.iconAdded = Signal.new()
 Icon.iconRemoved = Signal.new()
@@ -108,6 +113,9 @@ function Icon.setTopbarEnabled(bool, isInternal)
 end
 
 function Icon.modifyBaseTheme(modifications)
+	if isNode(modifications) then
+		modifications = Import(modifications)
+	end
 	modifications = Themes.getModifications(modifications)
 	for _, modification in pairs(modifications) do
 		for _, detail in pairs(Icon.baseTheme) do
@@ -1038,6 +1046,18 @@ function Icon:joinMenu(parentIcon)
 	return self
 end
 
+function Icon:addMenu()
+	local parentIcon = self
+	parentIcon:getInstance("Menu")
+	local builder = {}
+	function builder:new()
+		local child = Icon.new()
+		child:joinMenu(parentIcon)
+		return child
+	end
+	return builder
+end
+
 function Icon:setMenu(arrayOfIcons)
 	self.menuSet:Fire(arrayOfIcons)
 	return self
@@ -1064,6 +1084,18 @@ function Icon:joinDropdown(parentIcon)
 	Utility.joinFeature(self, parentIcon, parentIcon.dropdownIcons, parentIcon:getInstance("DropdownScroller"))
 	parentIcon.dropdownChildAdded:Fire(self)
 	return self
+end
+
+function Icon:addDropdown()
+	local parentIcon = self
+	parentIcon:getDropdown()
+	local builder = {}
+	function builder:new()
+		local child = Icon.new()
+		child:joinDropdown(parentIcon)
+		return child
+	end
+	return builder
 end
 
 function Icon:getDropdown()

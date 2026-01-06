@@ -268,6 +268,8 @@ function Themes.set(icon, theme)
 	end
 	if typeof(theme) == "Instance" and theme:IsA("ModuleScript") then
 		theme = Import(theme)
+	elseif type(theme) == "table" and rawget(theme, "__path") then
+		theme = Import(theme)
 	end
 	icon.appliedTheme = theme
 	Themes.rebuild(icon)

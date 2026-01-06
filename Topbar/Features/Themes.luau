@@ -276,10 +276,9 @@ function Themes.set(icon, theme)
 end
 
 function Themes.statesMatch(state1, state2)
-
-	local state1lower = (state1 and string.lower(state1))
-	local state2lower = (state2 and string.lower(state2))
-	return state1lower == state2lower or not state1 or not state2
+	local state1lower = (type(state1) == "string" and string.lower(state1)) or state1
+	local state2lower = (type(state2) == "string" and string.lower(state2)) or state2
+	return state1lower == state2lower or state1lower == nil or state2lower == nil
 end
 
 function Themes.rebuild(icon)

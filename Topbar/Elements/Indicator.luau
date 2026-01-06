@@ -74,8 +74,14 @@ return function(icon, Icon)
 	icon.indicatorSet:Connect(function(keyCode)
 		local visibility = false
 		if keyCode then
-			imageLabel.Image = UserInputService:GetImageForKeyCode(keyCode)
-			visibility = true
+			if typeof(keyCode) == "EnumItem" then
+				imageLabel.Image = UserInputService:GetImageForKeyCode(keyCode)
+				visibility = true
+			else
+				local id = tostring(keyCode)
+				imageLabel.Image = id
+				visibility = true
+			end
 		end
 		setIndicatorVisible(visibility)
 	end)

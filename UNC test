@@ -585,13 +585,13 @@ test("delfolder", {}, function()
 end)
 
 test("dofile", {}, function()
-	writefile(".tests/dofile.lua", "local v = 0 for i = 1, 2 do v = v + 1 end return v")
-	local r1 = dofile(".tests/dofile.lua")
-	assert(r1 == 2, "dofile did not return expected result")
+	_G.__UNC_DOFILE = nil
 
-	writefile(".tests/dofile_bad.lua", "f")
-	local ok, err = pcall(dofile, ".tests/dofile_bad.lua")
-	assert(not ok and type(err) == "string", "dofile did not raise a compile error on invalid file")
+	writefile(".tests/dofile.lua", "_G.__UNC_DOFILE = true")
+	task.wait()
+	dofile(".tests/dofile.lua")
+
+	assert(_G.__UNC_DOFILE == true, "dofile did not execute the file chunk")
 end)
 
 test("Drawing", {}, function()

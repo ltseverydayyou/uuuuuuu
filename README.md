@@ -52,6 +52,44 @@ Quick recipes
   Icon.new():setName("CenterGuy"):align("Center"):setOrder(2)
   Icon.new():setName("Righty"):align("Right"):setOrder(3)
   ```
+- Click callbacks / toggle vs one-click:
+  ```lua
+  -- Default toggle: stays selected until deselected
+  local ico = Icon.new():setName("ToggleMe")
+  ico.selected:Connect(function() print("turned on") end)
+  ico.deselected:Connect(function() print("turned off") end)
+
+  -- One-click: fires once, does not stay selected
+  local once = Icon.new():setName("RunOnce"):oneClick(function(icon)
+    print("ran once")
+  end)
+
+  -- Treat as a button: run code on select, then force deselect
+  local btn = Icon.new():setName("DoStuff")
+  btn:bindEvent("selected", function(icon)
+    print("button pressed")
+    -- your code here
+    icon:deselect()
+  end)
+  ```
+- Images and text tweaks:
+  ```lua
+  local ico = Icon.new():setName("PicButton")
+  ico:setImage("rbxassetid://6031075930")                -- icon image
+  ico:setImageScale(0.8)                                  -- scale inside button
+  ico:setImageRatio(1)                                   -- keep square
+  ico:setLabel("Open")                                   -- button text
+  ico:setCornerRadius(0.4)                               -- rounded look
+  ico:setCaption("Small helper text")                    -- caption under text
+  ico:setCaptionHint("Tooltip when hovered")
+  ```
+- More notice styles:
+  ```lua
+  local updates = Icon.new():setName("Updates")
+  updates:notify()                                       -- badge on
+  updates:setIndicator("rbxassetid://6031068421")        -- indicator image
+  updates:disableOverlay(true)                           -- hide hover overlay if you want
+  ```
 - Toggle/visibility helpers:
   ```lua
   local ico = Icon.new()

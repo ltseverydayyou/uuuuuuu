@@ -283,6 +283,9 @@ function Utility.clipOutside(icon, instance)
 			if not clone or not instance then
 				return
 			end
+			if not instance:IsA("GuiObject") or not clone:IsA("GuiObject") then
+				return
+			end
 			local cloneValue = clone[absoluteProperty]
 			if not cloneValue then
 				return
@@ -338,7 +341,7 @@ function Utility.clipOutside(icon, instance)
 
 
 		local updatePropertyPatch = Utility.createStagger(0.5, updateProperty, true)
-		if clone then
+		if clone and clone.GetPropertyChangedSignal then
 			cloneJanitor:add(clone:GetPropertyChangedSignal(absoluteProperty):Connect(updatePropertyPatch))
 		end
 
@@ -346,7 +349,7 @@ function Utility.clipOutside(icon, instance)
 
 
 		if property == "Position" then
-			if screenGui then
+			if screenGui and screenGui.GetPropertyChangedSignal then
 				cloneJanitor:add(screenGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
 					updatePropertyStaggered()
 				end))
@@ -360,20 +363,27 @@ function Utility.clipOutside(icon, instance)
 	trackProperty("Position")
 
 
-	cloneJanitor:add(instance:GetPropertyChangedSignal("Visible"):Connect(function()
-
-
-	end))
+	if instance and instance.GetPropertyChangedSignal then
+		cloneJanitor:add(instance:GetPropertyChangedSignal("Visible"):Connect(function()
+		end))
+	end
 
 
 	local shouldTrackCloneSize = instance:GetAttribute("TrackCloneSize")
 	if shouldTrackCloneSize then
 		trackProperty("Size")
 	else
-		cloneJanitor:add(instance:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-			local absolute = instance.AbsoluteSize
-			clone.Size = UDim2.fromOffset(absolute.X, absolute.Y)
-		end))
+		if instance and instance.GetPropertyChangedSignal then
+			cloneJanitor:add(instance:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+				if not instance or not clone or not instance:IsA("GuiObject") then
+					return
+				end
+				local absolute = instance.AbsoluteSize
+				if absolute then
+					clone.Size = UDim2.fromOffset(absolute.X, absolute.Y)
+				end
+			end))
+		end
 	end
 
 	return clone
@@ -381,9 +391,16 @@ end
 
 function Utility.joinFeature(originalIcon, parentIcon, iconsArray, scrollingFrameOrFrame)
 
-
 	local joinJanitor = originalIcon.joinJanitor
-	joinJanitor:clean()
+	if not joinJanitor or not (joinJanitor.clean or joinJanitor.Clean or joinJanitor.Cleanup) then
+		local Janitor = Import(script.Parent.Packages.Janitor)
+		joinJanitor = Janitor.new()
+		originalIcon.joinJanitor = joinJanitor
+	end
+	local cleanFn = joinJanitor.clean or joinJanitor.Clean or joinJanitor.Cleanup
+	if cleanFn then
+		cleanFn(joinJanitor)
+	end
 	if not scrollingFrameOrFrame then
 		originalIcon:leave()
 		return

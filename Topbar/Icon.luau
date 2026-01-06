@@ -1103,7 +1103,13 @@ function Icon:getDropdown()
 	if not dropdown then
 		dropdown = Import(elements.Dropdown)(self)
 		self.dropdown = dropdown
-		self:clipOutside(dropdown)
+		if self.widget then
+			self.widget.ClipsDescendants = false
+		end
+		local iconButton = self:getInstance("IconButton")
+		if iconButton then
+			iconButton.ClipsDescendants = false
+		end
 	end
 	return dropdown
 end

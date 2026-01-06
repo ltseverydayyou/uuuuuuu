@@ -994,9 +994,15 @@ function Icon:autoDeselect(bool)
 	return self
 end
 
-function Icon:oneClick(bool)
-
-
+function Icon:oneClick(callbackOrBool)
+	local enable = callbackOrBool
+	local callback = nil
+	if type(callbackOrBool) == "function" then
+		enable = true
+		callback = callbackOrBool
+	elseif callbackOrBool == nil then
+		enable = true
+	end
 	local singleClickJanitor = self.singleClickJanitor
 	if not singleClickJanitor or not (singleClickJanitor.clean or singleClickJanitor.Clean or singleClickJanitor.Cleanup) then
 		local Janitor = Import(self.iconModule.Packages.Janitor)
@@ -1007,16 +1013,18 @@ function Icon:oneClick(bool)
 	if cleaner then
 		cleaner(singleClickJanitor)
 	end
-	if bool or bool == nil then
+	if enable then
 		local addFn = singleClickJanitor.add or singleClickJanitor.Add
-		if addFn then
-			addFn(singleClickJanitor, self.selected:Connect(function()
+		local connFn = function()
+			if callback then
+				callback(self)
+			end
 			self:deselect("OneClick", self)
-			end))
+		end
+		if addFn then
+			addFn(singleClickJanitor, self.selected:Connect(connFn))
 		else
-			self.selected:Connect(function()
-				self:deselect("OneClick", self)
-			end)
+			self.selected:Connect(connFn)
 		end
 	end
 	self.oneClickEnabled = true

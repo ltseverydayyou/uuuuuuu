@@ -745,7 +745,7 @@ function Icon:setImage(imageId, iconState)
 	local state = useBuilderFont and nil or iconState
 
 	if useBuilderFont then
-		local builderFont = Font.new("rbxasset://fonts/families/BuilderIcons.json")
+		local builderFont = Font.new("rbxasset://LuaPackages/Packages/_Index/BuilderIcons/BuilderIcons/BuilderIcons.json")
 		self:modifyTheme({"IconImage", "Image", "", state})
 		self:modifyTheme({"IconImage", "ImageTransparency", 1, state})
 		self:modifyTheme({"IconLabel", "FontFace", builderFont, state})

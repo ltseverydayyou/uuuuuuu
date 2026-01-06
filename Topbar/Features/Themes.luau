@@ -250,13 +250,22 @@ end
 
 function Themes.set(icon, theme)
 
-
-
 	local themesJanitor = icon.themesJanitor
-	themesJanitor:clean()
-	themesJanitor:add(icon.stateChanged:Connect(function()
-		Themes.change(icon)
-	end))
+	if not themesJanitor then
+		local Janitor = Import(script.Parent.Parent.Packages.Janitor)
+		themesJanitor = Janitor.new()
+		icon.themesJanitor = themesJanitor
+	end
+	local cleaner = themesJanitor and (themesJanitor.clean or themesJanitor.Clean or themesJanitor.Cleanup)
+	if cleaner then
+		cleaner(themesJanitor)
+	end
+	local adder = themesJanitor and (themesJanitor.add or themesJanitor.Add)
+	if adder then
+		adder(themesJanitor, icon.stateChanged:Connect(function()
+			Themes.change(icon)
+		end))
+	end
 	if typeof(theme) == "Instance" and theme:IsA("ModuleScript") then
 		theme = Import(theme)
 	end

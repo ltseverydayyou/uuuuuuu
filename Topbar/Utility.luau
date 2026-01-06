@@ -295,7 +295,8 @@ function Utility.clipOutside(icon, instance)
 
 
 				local SIDE_PADDING = 4
-				local limitX = camera.ViewportSize.X - instance.AbsoluteSize.X - SIDE_PADDING
+				local cam = workspace.CurrentCamera
+				local limitX = (cam and cam.ViewportSize.X or 0) - (instance.AbsoluteSize and instance.AbsoluteSize.X or 0) - SIDE_PADDING
 				local inputX = absoluteValue.X.Offset
 				if inputX < SIDE_PADDING then
 					inputX = SIDE_PADDING
@@ -306,10 +307,15 @@ function Utility.clipOutside(icon, instance)
 
 
 
+				local cam2 = workspace.CurrentCamera
+				if not screenGui or not cam2 then
+					instance[property] = absoluteValue
+					return
+				end
 				local topbarInset = GuiService.TopbarInset
-				local viewportWidth = workspace.CurrentCamera.ViewportSize.X
-				local guiWidth = screenGui.AbsoluteSize.X
-				local guiOffset = screenGui.AbsolutePosition.X
+				local viewportWidth = cam2.ViewportSize.X
+				local guiWidth = screenGui.AbsoluteSize and screenGui.AbsoluteSize.X or 0
+				local guiOffset = screenGui.AbsolutePosition and screenGui.AbsolutePosition.X or 0
 
 				local oldTopbarCenterOffset = 0
 				local offsetX = if Icon.isOldTopbar then guiOffset else viewportWidth - guiWidth - oldTopbarCenterOffset
@@ -327,10 +333,14 @@ function Utility.clipOutside(icon, instance)
 
 
 		local updatePropertyStaggered = Utility.createStagger(0.01, updateProperty)
-		cloneJanitor:add(clone:GetPropertyChangedSignal(absoluteProperty):Connect(updatePropertyStaggered))
-		cloneJanitor:add(clone:GetAttributeChangedSignal("ForceUpdate"):Connect(function()
-			updatePropertyStaggered()
-		end))
+		if clone and clone.GetPropertyChangedSignal then
+			cloneJanitor:add(clone:GetPropertyChangedSignal(absoluteProperty):Connect(updatePropertyStaggered))
+		end
+		if clone and clone.GetAttributeChangedSignal then
+			cloneJanitor:add(clone:GetAttributeChangedSignal("ForceUpdate"):Connect(function()
+				updatePropertyStaggered()
+			end))
+		end
 
 
 

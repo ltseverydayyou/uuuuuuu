@@ -182,7 +182,7 @@ function Janitor.__index:Cleanup()
 			local function warnUser(warning)
 				local cleanupLine = debug.traceback("", 3)
 				local addedLine = OriginalTraceback
-				warn("
+				warn("Janitor error: " .. tostring(warning) .. "\n" .. cleanupLine .. addedLine)
 			end
 			if MethodName == true then
 				local success, warning = pcall(Object)

@@ -116,7 +116,12 @@ function Utility.setVisible(instance, bool, sourceUID)
 end
 
 function Utility.formatStateName(incomingStateName)
-	return string.upper(string.sub(incomingStateName, 1, 1))..string.lower(string.sub(incomingStateName, 2))
+	if type(incomingStateName) ~= "string" then
+		return "Deselected"
+	end
+	local first = string.sub(incomingStateName, 1, 1)
+	local rest = string.sub(incomingStateName, 2)
+	return string.upper(first)..string.lower(rest)
 end
 
 function Utility.localPlayerRespawned(callback)

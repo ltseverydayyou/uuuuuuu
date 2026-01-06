@@ -998,11 +998,26 @@ function Icon:oneClick(bool)
 
 
 	local singleClickJanitor = self.singleClickJanitor
-	singleClickJanitor:clean()
+	if not singleClickJanitor or not (singleClickJanitor.clean or singleClickJanitor.Clean or singleClickJanitor.Cleanup) then
+		local Janitor = Import(self.iconModule.Packages.Janitor)
+		singleClickJanitor = Janitor.new()
+		self.singleClickJanitor = singleClickJanitor
+	end
+	local cleaner = singleClickJanitor.clean or singleClickJanitor.Clean or singleClickJanitor.Cleanup
+	if cleaner then
+		cleaner(singleClickJanitor)
+	end
 	if bool or bool == nil then
-		singleClickJanitor:add(self.selected:Connect(function()
+		local addFn = singleClickJanitor.add or singleClickJanitor.Add
+		if addFn then
+			addFn(singleClickJanitor, self.selected:Connect(function()
 			self:deselect("OneClick", self)
-		end))
+			end))
+		else
+			self.selected:Connect(function()
+				self:deselect("OneClick", self)
+			end)
+		end
 	end
 	self.oneClickEnabled = true
 	return self

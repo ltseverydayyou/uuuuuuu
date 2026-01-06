@@ -280,7 +280,13 @@ function Utility.clipOutside(icon, instance)
 	local function trackProperty(property)
 		local absoluteProperty = "Absolute"..property
 		local function updateProperty()
+			if not clone or not instance then
+				return
+			end
 			local cloneValue = clone[absoluteProperty]
+			if not cloneValue then
+				return
+			end
 			local absoluteValue = UDim2.fromOffset(cloneValue.X, cloneValue.Y)
 			if property == "Position" then
 

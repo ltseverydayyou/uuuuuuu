@@ -213,8 +213,6 @@ createPredictSphere()
 RS.Heartbeat:Connect(function()
 	local hrp = root()
 	if not hrp then return end
-	if not ballBillboard then createBallVisualizer() end
-	if not predictSphere then createPredictSphere() end
 
 	local char = lp.Character
 	if not char then return end
@@ -233,6 +231,9 @@ RS.Heartbeat:Connect(function()
 	end
 
 	task.defer(function()
+		if not ballBillboard then createBallVisualizer() end
+		if not predictSphere then createPredictSphere() end
+
 		local ball = findBall()
 		if not ball or not ball:IsA("BasePart") then
 			if ballBillboard then ballBillboard.Enabled = false end
@@ -302,8 +303,18 @@ RS.Heartbeat:Connect(function()
 		local dirToYou = toYou / mag
 		local velDir = currVel > 1e-3 and (velVec / currVel) or -dirToYou
 		local dot = dirToYou:Dot(velDir)
-
 		if dot <= 0.4 then return end
+
+		local targetName = ball:GetAttribute("Target")
+		local isTarget = (targetName == lp.Name)
+
+		if not isTarget then
+			return
+		end
+
+		if not hasHighlight then
+			return
+		end
 
 		if dist <= predict and not hasParried and (now - lastParryTime) >= 0.25 then
 			DoParry()

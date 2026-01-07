@@ -76,8 +76,8 @@ end
         rep.Framework.RemoteFunction:InvokeServer("SwordService", "Block", {-0.2588194012641907})
     end
 
-    --loadstring(game:HttpGet("https://raw.githubusercontent.com/1f0yt/community/main/RedCircleBlock"))()
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/refs/heads/main/AnimeBallParry.lua"))()
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/1f0yt/community/main/RedCircleBlock"))()
+    --loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/refs/heads/main/AnimeBallParry.lua"))()
 
     ClonedService("Workspace").Effects.ChildAdded:Connect(function(j)
         task.wait()

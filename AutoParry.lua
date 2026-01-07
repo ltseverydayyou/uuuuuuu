@@ -1,50 +1,11 @@
 local G = (getgenv and getgenv()) or _G
-if G.__apb2 then return end
-G.__apb2 = true
+if G.__apb2_f then return end
+G.__apb2_f = true
 
 local Plrs = game:GetService("Players")
 local RS   = game:GetService("RunService")
-local RSrv = game:GetService("ReplicatedStorage")
 local WS   = workspace
-
-local FW
-local Net
-local Sw
-local Snd
-local FRemote
-
-do
-	local okFW, fw = pcall(function()
-		return require(RSrv:WaitForChild("Framework"))
-	end)
-	if okFW and fw then
-		FW = fw
-		local okNet, svc = pcall(function()
-			return FW:Fetch("SwordService")
-		end)
-		if okNet and svc then
-			Net = svc
-		end
-		local okSw, swc = pcall(function()
-			return FW:Get("SwordController")
-		end)
-		if okSw then
-			Sw = swc
-		end
-		local okSnd, sdc = pcall(function()
-			return FW:Get("SoundController")
-		end)
-		if okSnd then
-			Snd = sdc
-		end
-	end
-	local okRf, rf = pcall(function()
-		return RSrv:WaitForChild("Framework"):WaitForChild("RemoteFunction")
-	end)
-	if okRf and rf then
-		FRemote = rf
-	end
-end
+local VIM  = game:GetService("VirtualInputManager")
 
 local lp = Plrs.LocalPlayer
 
@@ -69,44 +30,12 @@ local function DoParry()
 	if now - lastParryTime < 0.25 then return end
 	lastParryTime = now
 
-	local cam = WS.CurrentCamera
-	if not cam then return end
+	VIM:SendKeyEvent(true, Enum.KeyCode.F, false, game)
+	task.wait(0.03)
+	VIM:SendKeyEvent(false, Enum.KeyCode.F, false, game)
 
-	local y = cam.CFrame.LookVector.Y
-	local success = false
-
-	if Net and Net.Block then
-		local ok, res = pcall(function()
-			return Net.Block:Invoke(y)
-		end)
-		if ok and res ~= nil then
-			success = true
-		end
-	end
-
-	if not success and FRemote then
-		local ok = pcall(function()
-			FRemote:InvokeServer("SwordService", "Block", {y})
-		end)
-		if ok then
-			success = true
-		end
-	end
-
-	if success then
-		local hold = Sw and Sw.GetSwordAnim and Sw.GetSwordAnim("Hold") or nil
-		if hold then
-			hold:Play()
-		end
-		if Snd and Snd.PlaySound then
-			Snd.PlaySound("Block")
-		end
-		if Sw and Sw.ShowShield then
-			Sw.ShowShield()
-		end
-		incrementBonus = math.clamp(incrementBonus + 1, 0, 8)
-		detectionDistance = baseDetectionDistance + (incrementBonus * 1.5)
-	end
+	incrementBonus = math.clamp(incrementBonus + 1, 0, 8)
+	detectionDistance = baseDetectionDistance + (incrementBonus * 1.5)
 end
 
 local function createBallVisualizer()
@@ -213,26 +142,19 @@ createPredictSphere()
 RS.Heartbeat:Connect(function()
 	local hrp = root()
 	if not hrp then return end
-	if not ballBillboard then createBallVisualizer() end
-	if not predictSphere then createPredictSphere() end
-
-	local char = lp.Character
-	if not char then return end
 
 	local now = tick()
 	local parryCooldown = 1.8
-	local hasHighlight = char:FindFirstChild("Highlight") ~= nil
-
-	if now - lastParryTime > parryCooldown and detectionDistance > baseDetectionDistance then
-		detectionDistance = baseDetectionDistance
-		incrementBonus = 0
-	end
-
-	if hasParried and hasHighlight and (now - lastParryTime) >= parryCooldown then
-		hasParried = false
-	end
 
 	task.defer(function()
+		if not ballBillboard then createBallVisualizer() end
+		if not predictSphere then createPredictSphere() end
+
+		if now - lastParryTime > parryCooldown and detectionDistance > baseDetectionDistance then
+			detectionDistance = baseDetectionDistance
+			incrementBonus = 0
+		end
+
 		local ball = findBall()
 		if not ball or not ball:IsA("BasePart") then
 			if ballBillboard then ballBillboard.Enabled = false end

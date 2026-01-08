@@ -41,7 +41,7 @@ spawn(function()
 	end;
 end);
 local curUi = (game.CoreGui:WaitForChild("Codex")).gui;
-local CodexUi = (game:GetService("RunService")):IsStudio() and game.StarterGui.Codex or (game:GetService("CoreGui")):WaitForChild("Codex");
+local CodexUi = (game:GetService("RunService")):IsStudio() and game.StarterGui.Codex or (gethui():WaitForChild("Codex");
 local gui = nil;
 if CodexUi or _G.Codex_gui_Object then
 	gui = _G.Codex_gui_Object or curUi;

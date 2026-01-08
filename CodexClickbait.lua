@@ -25,23 +25,11 @@ local Fadeobject = _G.CodexUiCustomSettings.Fade or true;
 local IconsOn = _G.CodexUiCustomSettings.IconsOn or Color3.fromRGB(170, 85, 127);
 local IconsOff = _G.CodexUiCustomSettings.IconsOff or Color3.fromRGB(0, 0, 0);
 repeat
-	wait();
-until game.CoreGui.Codex;
-local CodexFolder = game.CoreGui:WaitForChild("Codex");
-spawn(function()
-	if CodexFolder and CodexFolder:IsA("Folder") then
-		wait(12);
-		local gui = Instance.new("ScreenGui");
-		gui.Name = "Codex";
-		for _, child in ipairs(CodexFolder:GetChildren()) do
-			child.Parent = gui;
-		end;
-		gui.Parent = game.CoreGui;
-		CodexFolder:Destroy();
-	end;
-end);
-local curUi = (game.CoreGui:WaitForChild("Codex")).gui;
-local CodexUi = (game:GetService("RunService")):IsStudio() and game.StarterGui.Codex or (gethui():WaitForChild("Codex");
+	task.wait();
+until gethui():FindFirstChild("Codex");
+local CodexFolder = gethui():FindFirstChild("Codex");
+local curUi = (gethui():FindFirstChild("Codex")).gui;
+local CodexUi = (gethui():WaitForChild("Codex"));
 local gui = nil;
 if CodexUi or _G.Codex_gui_Object then
 	gui = _G.Codex_gui_Object or curUi;

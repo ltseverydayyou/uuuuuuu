@@ -1,265 +1,267 @@
 if game.GameId == 1524368576 then
-    local function ClonedService(name)
-        local Service = (game.GetService);
-        local Reference = (cloneref) or function(reference) return reference end
-        return Reference(Service(game, name));
-    end
-    local plr = ClonedService("Players").LocalPlayer
-    local ui = plr.PlayerGui
-    local rs = ClonedService("RunService")
-
-    local function checkUI(element)
-        return ui:FindFirstChild(element) ~= nil
-    end
-
-    local function loadRay()
-        return loadstring(game:HttpGet('https://raw.githubusercontent.com/ltseverydayyou/Rayfield-backup/main/Rayfield'))()
-    end
-
-    local function getBgs(badgeList)
-        for _, id in ipairs(badgeList) do
-            pcall(function()
-                ClonedService("ReplicatedStorage"):FindFirstChild("DataStore"):FindFirstChild("Award"):FireServer(id)
-            end)
-        end
-    end
-
-    local function createWin()
-        local Rayfield = loadRay()
-        local Window = Rayfield:CreateWindow({
-            Name = "TUNNELER",
-            LoadingTitle = "TUNNELER",
-            LoadingSubtitle = "i am currently inside your tunnels",
-            ConfigurationSaving = {
-                Enabled = true,
-                FolderName = "tunnels",
-                FileName = "meal"
-            }
-        })
-        return Window
-    end
-
-    local function createTabs(Window)
-        local Tab = Window:CreateTab("Misc", 4483362458)
-        local Tab1 = Window:CreateTab("Gun Functions", 4483362458)
-        return Tab, Tab1
-    end
-
-    local function createUIElems(Tab, Tab1, badgeList)
-        local elements = {}
-
-        if checkUI("god") then
-            elements.gmod = Tab:CreateToggle({
-                Name = "God Mode",
-                CurrentValue = false,
-                Flag = "god",
-                Callback = function(v)
-                    ui.god.Value = v
-                end,
-            })
-        end
-
-        if checkUI("thirdperson") then
-            elements.lol = Tab:CreateToggle({
-                Name = "Third Person",
-                CurrentValue = false,
-                Flag = "thirdp",
-                Callback = function(v)
-                    ui.thirdperson.Value = v
-                end,
-            })
-        end
-
-        if checkUI("hasPortalGun") then
-            elements.check = Tab:CreateToggle({
-                Name = "Portal Gun",
-                CurrentValue = false,
-                Flag = "gun",
-                Callback = function(v)
-                    ui.hasPortalGun.Value = v
-                end,
-            })
-        end
-
-        if checkUI("ForceFOV") then
-            Tab:CreateSlider({
-                Name = "Field Of View",
-                Range = {0, 120},
-                Increment = 1,
-                Suffix = "FOV",
-                CurrentValue = 70,
-                Flag = "fieldofview",
-                Callback = function(fov)
-                    ui.ForceFOV.Value = fov
-                end,
-            })
-        end
-
-        if checkUI("velocityLimit") then
-            Tab:CreateInput({
-                Name = "Velocity Limit",
-                PlaceholderText = "Input Limit",
-                RemoveTextAfterFocusLost = false,
-                Flag = "velLimit",
-                Callback = function(vel)
-                    ui.velocityLimit.Value = vel
-                end,
-            })
-        end
-
-        if checkUI("wantedColor") then
-            Tab1:CreateColorPicker({
-                Name = "Portal Gun Color",
-                Color = Color3.fromRGB(255, 255, 255),
-                Flag = "ColorPicker1",
-                Callback = function(c)
-                    ui.wantedColor.Value = c
-                    getgenv().GunColor = c
-                end,
-            })
-        end
-
-        Tab1:CreateToggle({
-            Name = "Loop Portal Gun Color",
-            CurrentValue = false,
-            Flag = "loopRGB",
-            Callback = function(v)
-                getgenv().gunLoop = v
-            end,
-        })
-
-        Tab1:CreateToggle({
-            Name = "Rainbow Gun",
-            CurrentValue = false,
-            Flag = "RGB",
-            Callback = function(v)
-                getgenv().rgbEnabled = v
-            end,
-        })
-
-        if checkUI("portalsIgnoreMaterial") then
-            elements.no = Tab1:CreateToggle({
-                Name = "Portal Ignore Material",
-                CurrentValue = false,
-                Flag = "materials",
-                Callback = function(v)
-                    ui.portalsIgnoreMaterial.Value = v
-                end,
-            })
-        end
-
-        if checkUI("PortalLevel") then
-            Tab1:CreateSlider({
-                Name = "Portal Level",
-                Range = {0, 2},
-                Increment = 1,
-                CurrentValue = 2,
-                Flag = "portalLevel",
-                Callback = function(lvl)
-                    getgenv().gunLevel = lvl
-                end,
-            })
-        end
-
-        Tab:CreateButton({
-            Name = "Get All Badges",
-            Callback = function()
-                getBgs(badgeList)
-            end,
-        })
-
-        return elements
-    end
-
-    local function syncUI(elements)
-        task.spawn(function()
-            if elements.check then
-                ui:FindFirstChild("hasPortalGun").Changed:Connect(function(v)
-                    elements.check:Set(v)
-                end)
-            end
-            if elements.lol then
-                ui:FindFirstChild("thirdperson").Changed:Connect(function(v)
-                    elements.lol:Set(v)
-                end)
-            end
-            if elements.no then
-                ui:FindFirstChild("portalsIgnoreMaterial").Changed:Connect(function(v)
-                    elements.no:Set(v)
-                end)
-            end
-            if elements.gmod then
-                ui:FindFirstChild("god").Changed:Connect(function(v)
-                    elements.gmod:Set(v)
-                end)
-            end
-        end)
-    end
-
-    local function rainbowEffect()
-        task.spawn(function()
-            while true do
-                if getgenv().rgbEnabled then
-                    for i = 0, 255, 5 do
-                        ui.wantedColor.Value = Color3.fromRGB(255, i, 0)
-                        wait(0.01)
-                    end
-                    for i = 255, 0, -5 do
-                        ui.wantedColor.Value = Color3.fromRGB(i, 255, 0)
-                        wait(0.01)
-                    end
-                    for i = 0, 255, 5 do
-                        ui.wantedColor.Value = Color3.fromRGB(0, 255, i)
-                        wait(0.01)
-                    end
-                    for i = 255, 0, -5 do
-                        ui.wantedColor.Value = Color3.fromRGB(0, i, 255)
-                        wait(0.01)
-                    end
-                    for i = 0, 255, 5 do
-                        ui.wantedColor.Value = Color3.fromRGB(i, 0, 255)
-                        wait(0.01)
-                    end
-                    for i = 255, 0, -5 do
-                        ui.wantedColor.Value = Color3.fromRGB(255, 0, i)
-                        wait(0.01)
-                    end
-                end
-                wait()
-            end
-        end)
-    end
-
-    local function updatePortalLvl()
-        rs.Stepped:Connect(function()
-            if checkUI("PortalLevel") then
-                ui.PortalLevel.Value = getgenv().gunLevel
-            end
-            if not getgenv().rgbEnabled and getgenv().gunLoop then
-                ui.wantedColor.Value = getgenv().GunColor
-            end
-        end)
-    end
-
-    local badgeList = {
-        2124531179, 2124531181, 2124531182, 2124531184, 2124531185,
-        2124531198, 2124531213, 2124531723, 2124587582, 2124587583,
-        2124587597, 2124587936, 2124948632, 2124948674, 2124948729,
-        2124948745, 2124948842, 2124969259, 2124970540, 2125003412,
-        2125003419, 2125793440, 2143211391
-    }
-
-    getgenv().GunColor = Color3.fromRGB(255, 255, 255)
-    getgenv().rgbEnabled = false
-    getgenv().gunLoop = false
-    getgenv().gunLevel = 2
-
-    print('values found loading script')
-    local Window = createWin()
-    local Tab, Tab1 = createTabs(Window)
-    local elements = createUIElems(Tab, Tab1, badgeList)
-    syncUI(elements)
-    rainbowEffect()
-    updatePortalLvl()
-    Rayfield:LoadConfiguration()
-end
+	local function ClonedService(name)
+		local Service = game.GetService;
+		local Reference = cloneref or function(reference)
+			return reference;
+		end;
+		return Reference(Service(game, name));
+	end;
+	local plr = (ClonedService("Players")).LocalPlayer;
+	local ui = plr.PlayerGui;
+	local rs = ClonedService("RunService");
+	local function checkUI(element)
+		return ui:FindFirstChild(element) ~= nil;
+	end;
+	local function loadRay()
+		return (loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/Rayfield-backup/main/Rayfield")))();
+	end;
+	local function getBgs(badgeList)
+		for _, id in ipairs(badgeList) do
+			pcall(function()
+				(((ClonedService("ReplicatedStorage")):FindFirstChild("DataStore")):FindFirstChild("Award")):FireServer(id);
+			end);
+		end;
+	end;
+	local function createWin()
+		local Rayfield = loadRay();
+		local Window = Rayfield:CreateWindow({
+			Name = "TUNNELER",
+			LoadingTitle = "TUNNELER",
+			LoadingSubtitle = "i am currently inside your tunnels",
+			ConfigurationSaving = {
+				Enabled = true,
+				FolderName = "tunnels",
+				FileName = "meal"
+			}
+		});
+		return Window;
+	end;
+	local function createTabs(Window)
+		local Tab = Window:CreateTab("Misc", 4483362458);
+		local Tab1 = Window:CreateTab("Gun Functions", 4483362458);
+		return Tab, Tab1;
+	end;
+	local function createUIElems(Tab, Tab1, badgeList)
+		local elements = {};
+		if checkUI("god") then
+			elements.gmod = Tab:CreateToggle({
+				Name = "God Mode",
+				CurrentValue = false,
+				Flag = "god",
+				Callback = function(v)
+					ui.god.Value = v;
+				end
+			});
+		end;
+		if checkUI("thirdperson") then
+			elements.lol = Tab:CreateToggle({
+				Name = "Third Person",
+				CurrentValue = false,
+				Flag = "thirdp",
+				Callback = function(v)
+					ui.thirdperson.Value = v;
+				end
+			});
+		end;
+		if checkUI("hasPortalGun") then
+			elements.check = Tab:CreateToggle({
+				Name = "Portal Gun",
+				CurrentValue = false,
+				Flag = "gun",
+				Callback = function(v)
+					ui.hasPortalGun.Value = v;
+				end
+			});
+		end;
+		if checkUI("ForceFOV") then
+			Tab:CreateSlider({
+				Name = "Field Of View",
+				Range = {
+					0,
+					120
+				},
+				Increment = 1,
+				Suffix = "FOV",
+				CurrentValue = 70,
+				Flag = "fieldofview",
+				Callback = function(fov)
+					ui.ForceFOV.Value = fov;
+				end
+			});
+		end;
+		if checkUI("velocityLimit") then
+			Tab:CreateInput({
+				Name = "Velocity Limit",
+				PlaceholderText = "Input Limit",
+				RemoveTextAfterFocusLost = false,
+				Flag = "velLimit",
+				Callback = function(vel)
+					ui.velocityLimit.Value = vel;
+				end
+			});
+		end;
+		if checkUI("wantedColor") then
+			Tab1:CreateColorPicker({
+				Name = "Portal Gun Color",
+				Color = Color3.fromRGB(255, 255, 255),
+				Flag = "ColorPicker1",
+				Callback = function(c)
+					ui.wantedColor.Value = c;
+					(getgenv()).GunColor = c;
+				end
+			});
+		end;
+		Tab1:CreateToggle({
+			Name = "Loop Portal Gun Color",
+			CurrentValue = false,
+			Flag = "loopRGB",
+			Callback = function(v)
+				(getgenv()).gunLoop = v;
+			end
+		});
+		Tab1:CreateToggle({
+			Name = "Rainbow Gun",
+			CurrentValue = false,
+			Flag = "RGB",
+			Callback = function(v)
+				(getgenv()).rgbEnabled = v;
+			end
+		});
+		if checkUI("portalsIgnoreMaterial") then
+			elements.no = Tab1:CreateToggle({
+				Name = "Portal Ignore Material",
+				CurrentValue = false,
+				Flag = "materials",
+				Callback = function(v)
+					ui.portalsIgnoreMaterial.Value = v;
+				end
+			});
+		end;
+		if checkUI("PortalLevel") then
+			Tab1:CreateSlider({
+				Name = "Portal Level",
+				Range = {
+					0,
+					2
+				},
+				Increment = 1,
+				CurrentValue = 2,
+				Flag = "portalLevel",
+				Callback = function(lvl)
+					(getgenv()).gunLevel = lvl;
+				end
+			});
+		end;
+		Tab:CreateButton({
+			Name = "Get All Badges",
+			Callback = function()
+				getBgs(badgeList);
+			end
+		});
+		return elements;
+	end;
+	local function syncUI(elements)
+		task.spawn(function()
+			if elements.check then
+				(ui:FindFirstChild("hasPortalGun")).Changed:Connect(function(v)
+					elements.check:Set(v);
+				end);
+			end;
+			if elements.lol then
+				(ui:FindFirstChild("thirdperson")).Changed:Connect(function(v)
+					elements.lol:Set(v);
+				end);
+			end;
+			if elements.no then
+				(ui:FindFirstChild("portalsIgnoreMaterial")).Changed:Connect(function(v)
+					elements.no:Set(v);
+				end);
+			end;
+			if elements.gmod then
+				(ui:FindFirstChild("god")).Changed:Connect(function(v)
+					elements.gmod:Set(v);
+				end);
+			end;
+		end);
+	end;
+	local function rainbowEffect()
+		task.spawn(function()
+			while true do
+				if (getgenv()).rgbEnabled then
+					for i = 0, 255, 5 do
+						ui.wantedColor.Value = Color3.fromRGB(255, i, 0);
+						wait(0.01);
+					end;
+					for i = 255, 0, -5 do
+						ui.wantedColor.Value = Color3.fromRGB(i, 255, 0);
+						wait(0.01);
+					end;
+					for i = 0, 255, 5 do
+						ui.wantedColor.Value = Color3.fromRGB(0, 255, i);
+						wait(0.01);
+					end;
+					for i = 255, 0, -5 do
+						ui.wantedColor.Value = Color3.fromRGB(0, i, 255);
+						wait(0.01);
+					end;
+					for i = 0, 255, 5 do
+						ui.wantedColor.Value = Color3.fromRGB(i, 0, 255);
+						wait(0.01);
+					end;
+					for i = 255, 0, -5 do
+						ui.wantedColor.Value = Color3.fromRGB(255, 0, i);
+						wait(0.01);
+					end;
+				end;
+				wait();
+			end;
+		end);
+	end;
+	local function updatePortalLvl()
+		rs.Stepped:Connect(function()
+			if checkUI("PortalLevel") then
+				ui.PortalLevel.Value = (getgenv()).gunLevel;
+			end;
+			if not (getgenv()).rgbEnabled and (getgenv()).gunLoop then
+				ui.wantedColor.Value = (getgenv()).GunColor;
+			end;
+		end);
+	end;
+	local badgeList = {
+		2124531179,
+		2124531181,
+		2124531182,
+		2124531184,
+		2124531185,
+		2124531198,
+		2124531213,
+		2124531723,
+		2124587582,
+		2124587583,
+		2124587597,
+		2124587936,
+		2124948632,
+		2124948674,
+		2124948729,
+		2124948745,
+		2124948842,
+		2124969259,
+		2124970540,
+		2125003412,
+		2125003419,
+		2125793440,
+		2143211391
+	};
+	(getgenv()).GunColor = Color3.fromRGB(255, 255, 255);
+	(getgenv()).rgbEnabled = false;
+	(getgenv()).gunLoop = false;
+	(getgenv()).gunLevel = 2;
+	print("values found loading script");
+	local Window = createWin();
+	local Tab, Tab1 = createTabs(Window);
+	local elements = createUIElems(Tab, Tab1, badgeList);
+	syncUI(elements);
+	rainbowEffect();
+	updatePortalLvl();
+	Rayfield:LoadConfiguration();
+end;

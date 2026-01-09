@@ -1,68 +1,59 @@
 local function createESP(gj, color)
-    if not gj then return end
-
-    local isModel = gj:IsA("Model")
-    local isBasePart = gj:IsA("BasePart")
-
-    if isModel or isBasePart then
-        local BillboardGui = Instance.new("BillboardGui")
-        local TextLabel = Instance.new("TextLabel")
-        local BoxHandleAdornment = Instance.new("BoxHandleAdornment")
-
-        BillboardGui.Adornee = isModel and gj:FindFirstChildOfClass("Part") or gj
-        BillboardGui.Name = gj.Name
-        BillboardGui.Parent = gj
-        BillboardGui.Size = UDim2.new(0, 100, 0, 150)
-        BillboardGui.StudsOffset = Vector3.new(0, 1, 0)
-        BillboardGui.AlwaysOnTop = true
-
-        TextLabel.Parent = BillboardGui
-        TextLabel.BackgroundTransparency = 1
-        TextLabel.Position = UDim2.new(0, 0, 0, -50)
-        TextLabel.Size = UDim2.new(0, 100, 0, 100)
-        TextLabel.Font = Enum.Font.SourceSansSemibold
-        TextLabel.TextSize = 17
-        TextLabel.TextColor3 = color
-        TextLabel.TextStrokeTransparency = 0.3
-        TextLabel.TextYAlignment = Enum.TextYAlignment.Bottom
-        TextLabel.Text = '[' .. gj.Name .. ']'
-        TextLabel.ZIndex = 10
-
-        BoxHandleAdornment.Name = gj.Name:lower() .. "_EndlessESP"
-        BoxHandleAdornment.Parent = BillboardGui
-        BoxHandleAdornment.Adornee = gj
-        BoxHandleAdornment.AlwaysOnTop = true
-        BoxHandleAdornment.ZIndex = 0
-        BoxHandleAdornment.Transparency = 0.45
-        BoxHandleAdornment.Color3 = color
-
-        if isBasePart then
-            BoxHandleAdornment.Size = gj.Size
-        end
-    end
-end
-
+	if not gj then
+		return;
+	end;
+	local isModel = gj:IsA("Model");
+	local isBasePart = gj:IsA("BasePart");
+	if isModel or isBasePart then
+		local BillboardGui = Instance.new("BillboardGui");
+		local TextLabel = Instance.new("TextLabel");
+		local BoxHandleAdornment = Instance.new("BoxHandleAdornment");
+		BillboardGui.Adornee = isModel and gj:FindFirstChildOfClass("Part") or gj;
+		BillboardGui.Name = gj.Name;
+		BillboardGui.Parent = gj;
+		BillboardGui.Size = UDim2.new(0, 100, 0, 150);
+		BillboardGui.StudsOffset = Vector3.new(0, 1, 0);
+		BillboardGui.AlwaysOnTop = true;
+		TextLabel.Parent = BillboardGui;
+		TextLabel.BackgroundTransparency = 1;
+		TextLabel.Position = UDim2.new(0, 0, 0, -50);
+		TextLabel.Size = UDim2.new(0, 100, 0, 100);
+		TextLabel.Font = Enum.Font.SourceSansSemibold;
+		TextLabel.TextSize = 17;
+		TextLabel.TextColor3 = color;
+		TextLabel.TextStrokeTransparency = 0.3;
+		TextLabel.TextYAlignment = Enum.TextYAlignment.Bottom;
+		TextLabel.Text = "[" .. gj.Name .. "]";
+		TextLabel.ZIndex = 10;
+		BoxHandleAdornment.Name = gj.Name:lower() .. "_EndlessESP";
+		BoxHandleAdornment.Parent = BillboardGui;
+		BoxHandleAdornment.Adornee = gj;
+		BoxHandleAdornment.AlwaysOnTop = true;
+		BoxHandleAdornment.ZIndex = 0;
+		BoxHandleAdornment.Transparency = 0.45;
+		BoxHandleAdornment.Color3 = color;
+		if isBasePart then
+			BoxHandleAdornment.Size = gj.Size;
+		end;
+	end;
+end;
 local function esp(gj)
-    createESP(gj, Color3.new(1, 1, 1))
-end
-
+	createESP(gj, Color3.new(1, 1, 1));
+end;
 local function inter(gj)
-    createESP(gj, Color3.new(1, 0, 0))
-end
-
-local toolsFolder = workspace:FindFirstChild("Tools", true)
-local interactsFolder = workspace:FindFirstChild("Interacts", true)
-
+	createESP(gj, Color3.new(1, 0, 0));
+end;
+local toolsFolder = workspace:FindFirstChild("Tools", true);
+local interactsFolder = workspace:FindFirstChild("Interacts", true);
 if toolsFolder then
-    toolsFolder.ChildAdded:Connect(esp)
-    for _, tool in ipairs(toolsFolder:GetChildren()) do
-        esp(tool)
-    end
-end
-
+	toolsFolder.ChildAdded:Connect(esp);
+	for _, tool in ipairs(toolsFolder:GetChildren()) do
+		esp(tool);
+	end;
+end;
 if interactsFolder then
-    interactsFolder.ChildAdded:Connect(inter)
-    for _, touch in ipairs(interactsFolder:GetChildren()) do
-        inter(touch)
-    end
-end
+	interactsFolder.ChildAdded:Connect(inter);
+	for _, touch in ipairs(interactsFolder:GetChildren()) do
+		inter(touch);
+	end;
+end;

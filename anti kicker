@@ -1,46 +1,39 @@
-local getgenv, getnamecallmethod, hookmetamethod, newcclosure, checkcaller, stringlower = getgenv, getnamecallmethod, hookmetamethod, newcclosure, checkcaller, string.lower
-
+local getgenv, getnamecallmethod, hookmetamethod, newcclosure, checkcaller, stringlower = getgenv, getnamecallmethod, hookmetamethod, newcclosure, checkcaller, string.lower;
 local function ClonedService(name)
-    local Service = (game.GetService);
-	local Reference = (cloneref) or function(reference) return reference end
+	local Service = game.GetService;
+	local Reference = cloneref or function(reference)
+		return reference;
+	end;
 	return Reference(Service(game, name));
-end
-
-
-if getgenv().ED_AntiKick then
-	return
-end
-
-local Players, StarterGui, OldNamecall = ClonedService("Players"), ClonedService("StarterGui")
-
-getgenv().ED_AntiKick = {
+end;
+if (getgenv()).ED_AntiKick then
+	return;
+end;
+local Players, StarterGui, OldNamecall = ClonedService("Players"), ClonedService("StarterGui");
+(getgenv()).ED_AntiKick = {
 	Enabled = true,
 	SendNotifications = true,
 	CheckCaller = true
-}
-
+};
 OldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(...)
-	if (getgenv().ED_AntiKick.CheckCaller and not checkcaller() or true) and stringlower(getnamecallmethod()) == "kick" and ED_AntiKick.Enabled then
-		if getgenv().ED_AntiKick.SendNotifications then
+	if ((getgenv()).ED_AntiKick.CheckCaller and (not checkcaller()) or true) and stringlower(getnamecallmethod()) == "kick" and ED_AntiKick.Enabled then
+		if (getgenv()).ED_AntiKick.SendNotifications then
 			StarterGui:SetCore("SendNotification", {
 				Title = "Exunys Developer",
 				Text = "The script has successfully intercepted an attempted kick.",
 				Icon = "rbxassetid://6238540373",
-				Duration = 2,
-			})
-		end
-
-		return nil
-	end
-
-	return OldNamecall(...)
-end))
-
-if getgenv().ED_AntiKick.SendNotifications then
+				Duration = 2
+			});
+		end;
+		return nil;
+	end;
+	return OldNamecall(...);
+end));
+if (getgenv()).ED_AntiKick.SendNotifications then
 	StarterGui:SetCore("SendNotification", {
 		Title = "Exunys Developer",
 		Text = "Anti-Kick script loaded!",
 		Icon = "rbxassetid://6238537240",
-		Duration = 3,
-	})
-end
+		Duration = 3
+	});
+end;

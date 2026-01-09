@@ -1,42 +1,38 @@
 if game.GameId == 5205364928 then
 	local function ClonedService(name)
-		local Service = (game.GetService);
-		local Reference = (cloneref) or function(reference) return reference end
+		local Service = game.GetService;
+		local Reference = cloneref or function(reference)
+			return reference;
+		end;
 		return Reference(Service(game, name));
-	end
-	getgenv().kill_aura = false
-	getgenv().tween = false
-	getgenv().tele = false
-	getgenv().walkto = false
-	getgenv().plrtween = false
-	getgenv().aura = 20
-	getgenv().ragdoll = false
-
-	local plrs = ClonedService("Players")
-	local rs = ClonedService("RunService")
-	local ts = ClonedService("TweenService")
-	
-	getgenv().Char = plrs.LocalPlayer.Character or plrs.LocalPlayer.CharacterAdded:Wait()
-
+	end;
+	(getgenv()).kill_aura = false;
+	(getgenv()).tween = false;
+	(getgenv()).tele = false;
+	(getgenv()).walkto = false;
+	(getgenv()).plrtween = false;
+	(getgenv()).aura = 20;
+	(getgenv()).ragdoll = false;
+	local plrs = ClonedService("Players");
+	local rs = ClonedService("RunService");
+	local ts = ClonedService("TweenService");
+	(getgenv()).Char = plrs.LocalPlayer.Character or plrs.LocalPlayer.CharacterAdded:Wait();
 	function GetPlrs()
-		local sorted = {}
+		local sorted = {};
 		for _, plr in ipairs(plrs:GetPlayers()) do
 			if plr ~= plrs.LocalPlayer then
-				table.insert(sorted, plr)
-			end
-		end
-		return sorted
-	end
-	
+				table.insert(sorted, plr);
+			end;
+		end;
+		return sorted;
+	end;
 	function char(bru)
-		getgenv().Char = bru
-	end
-	
+		(getgenv()).Char = bru;
+	end;
 	spawn(function()
-		plrs.LocalPlayer.CharacterAdded:Connect(char)
-	end)
-
-	local Rayfield = loadstring(game:HttpGet('https://raw.githubusercontent.com/ltseverydayyou/Rayfield-backup/main/Rayfield'))()
+		plrs.LocalPlayer.CharacterAdded:Connect(char);
+	end);
+	local Rayfield = (loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/Rayfield-backup/main/Rayfield")))();
 	local Window = Rayfield:CreateWindow({
 		Name = "Stay in the Circle",
 		LoadingTitle = "Stay in the Circle",
@@ -46,175 +42,168 @@ if game.GameId == 5205364928 then
 			FolderName = "Stay In Circle",
 			FileName = "BigCircle"
 		}
-	})
-
-	local Tab = Window:CreateTab("Basic", 7072706318)
-	local Tab1 = Window:CreateTab("Blatant", 7072706318)
-
+	});
+	local Tab = Window:CreateTab("Basic", 7072706318);
+	local Tab1 = Window:CreateTab("Blatant", 7072706318);
 	Tab1:CreateToggle({
 		Name = "Tween to circle",
 		CurrentValue = false,
 		Flag = "tweenCircle",
 		Callback = function(bool)
-			getgenv().tween = bool
-		end,
-	})
-
+			(getgenv()).tween = bool;
+		end
+	});
 	Tab1:CreateToggle({
 		Name = "Teleport to circle",
 		CurrentValue = false,
 		Flag = "toCircle",
 		Callback = function(bool)
-			getgenv().tele = bool
-		end,
-	})
-
+			(getgenv()).tele = bool;
+		end
+	});
 	Tab1:CreateToggle({
 		Name = "Walk to circle",
 		CurrentValue = false,
 		Flag = "walkCircle",
 		Callback = function(bool)
-			getgenv().walkto = bool
-		end,
-	})
-
+			(getgenv()).walkto = bool;
+		end
+	});
 	Tab1:CreateToggle({
 		Name = "Tween to near players (useless)",
 		CurrentValue = false,
 		Flag = "tweenPlayer",
 		Callback = function(bool)
-			getgenv().plrtween = bool
-		end,
-	})
-
+			(getgenv()).plrtween = bool;
+		end
+	});
 	Tab1:CreateToggle({
 		Name = "Anti Ragdoll",
 		CurrentValue = false,
 		Flag = "noRagdoll",
 		Callback = function(bool)
-			getgenv().ragdoll = bool
-		end,
-	})
-
+			(getgenv()).ragdoll = bool;
+		end
+	});
 	Tab:CreateToggle({
 		Name = "Kill Aura",
 		CurrentValue = false,
 		Flag = "noobAura",
 		Callback = function(bool)
-			getgenv().kill_aura = bool
-		end,
-	})
-
-Tab:CreateSlider({
-	Name = "Range",
-	Range = {0, 50},
-	Increment = 1,
-	CurrentValue = 20,
-	Flag = "range",
-	Callback = function(val)
-		getgenv().aura = val
-	end,
-})
-
-	rs.Stepped:Connect(function()
-		if getgenv().kill_aura == true then
-			for _, v in ipairs(GetPlrs()) do
-				local char = getgenv().Char
-				if v.Character and v.Character:FindFirstChildOfClass("Humanoid") and v.Character:FindFirstChild("HumanoidRootPart") then
-					local distance = (char:FindFirstChild("HumanoidRootPart").Position - v.Character:FindFirstChild("HumanoidRootPart").Position).Magnitude
-					if distance <= getgenv().aura then
-						local hitEvent = ClonedService("ReplicatedStorage"):FindFirstChild("RemoteEvents"):FindFirstChild("Combat"):FindFirstChild("Hit")
-						local hitboxEvent = ClonedService("ReplicatedStorage"):FindFirstChild("RemoteEvents"):FindFirstChild("Combat"):FindFirstChild("HitboxCollision")
-
-						if hitEvent and hitboxEvent then
-							hitEvent:FireServer()
-							local args = { v.Character.Humanoid }
-							hitboxEvent:FireServer(unpack(args))
-						end
-					end
-				end
-			end
+			(getgenv()).kill_aura = bool;
 		end
-	end)
-
+	});
+	Tab:CreateSlider({
+		Name = "Range",
+		Range = {
+			0,
+			50
+		},
+		Increment = 1,
+		CurrentValue = 20,
+		Flag = "range",
+		Callback = function(val)
+			(getgenv()).aura = val;
+		end
+	});
 	rs.Stepped:Connect(function()
-		if getgenv().plrtween == true then
-			local char = getgenv().Char
+		if (getgenv()).kill_aura == true then
+			for _, v in ipairs(GetPlrs()) do
+				local char = (getgenv()).Char;
+				if v.Character and v.Character:FindFirstChildOfClass("Humanoid") and v.Character:FindFirstChild("HumanoidRootPart") then
+					local distance = ((char:FindFirstChild("HumanoidRootPart")).Position - (v.Character:FindFirstChild("HumanoidRootPart")).Position).Magnitude;
+					if distance <= (getgenv()).aura then
+						local hitEvent = (((ClonedService("ReplicatedStorage")):FindFirstChild("RemoteEvents")):FindFirstChild("Combat")):FindFirstChild("Hit");
+						local hitboxEvent = (((ClonedService("ReplicatedStorage")):FindFirstChild("RemoteEvents")):FindFirstChild("Combat")):FindFirstChild("HitboxCollision");
+						if hitEvent and hitboxEvent then
+							hitEvent:FireServer();
+							local args = {
+								v.Character.Humanoid
+							};
+							hitboxEvent:FireServer(unpack(args));
+						end;
+					end;
+				end;
+			end;
+		end;
+	end);
+	rs.Stepped:Connect(function()
+		if (getgenv()).plrtween == true then
+			local char = (getgenv()).Char;
 			for _, v in ipairs(GetPlrs()) do
 				if char and char:FindFirstChild("HumanoidRootPart") and v.Character and v.Character:FindFirstChild("HumanoidRootPart") then
-					local distance = (char.HumanoidRootPart.Position - v.Character.HumanoidRootPart.Position).Magnitude
-					if distance <= getgenv().aura then
-						ts:Create(char.HumanoidRootPart, TweenInfo.new(0.2, Enum.EasingStyle.Linear), { CFrame = v.Character.HumanoidRootPart.CFrame }):Play()
-						task.wait(0.2)
-					end
-				end
-			end
-		end
-		wait(0.5)
-	end)
-
+					local distance = (char.HumanoidRootPart.Position - v.Character.HumanoidRootPart.Position).Magnitude;
+					if distance <= (getgenv()).aura then
+						(ts:Create(char.HumanoidRootPart, TweenInfo.new(0.2, Enum.EasingStyle.Linear), {
+							CFrame = v.Character.HumanoidRootPart.CFrame
+						})):Play();
+						task.wait(0.2);
+					end;
+				end;
+			end;
+		end;
+		wait(0.5);
+	end);
 	spawn(function()
-	while task.wait(1) do
-		pcall(function()
-			if getgenv().walkto == true then
-				local char = getgenv().Char
-				local circle
-				for i, v in pairs(game.Workspace:GetDescendants()) do
-					if v.Name == "Detect" then
-						circle = v
-					end
-				end
-				if char and char:FindFirstChild("HumanoidRootPart") then
-					if circle then
-						char:FindFirstChildOfClass("Humanoid"):MoveTo(circle.Position)
-					end
-				end
-			end
-		end)
-	end
-end)
-
+		while task.wait(1) do
+			pcall(function()
+				if (getgenv()).walkto == true then
+					local char = (getgenv()).Char;
+					local circle;
+					for i, v in pairs(game.Workspace:GetDescendants()) do
+						if v.Name == "Detect" then
+							circle = v;
+						end;
+					end;
+					if char and char:FindFirstChild("HumanoidRootPart") then
+						if circle then
+							(char:FindFirstChildOfClass("Humanoid")):MoveTo(circle.Position);
+						end;
+					end;
+				end;
+			end);
+		end;
+	end);
 	rs.Stepped:Connect(function()
-		if getgenv().tween == true then
-			local char = getgenv().Char
-			local circle
+		if (getgenv()).tween == true then
+			local char = (getgenv()).Char;
+			local circle;
 			for i, v in pairs(game.Workspace:GetDescendants()) do
 				if v.Name == "Detect" then
-					circle = v
-				end
-			end
+					circle = v;
+				end;
+			end;
 			if char and char:FindFirstChild("HumanoidRootPart") and circle then
-				ts:Create(char.HumanoidRootPart, TweenInfo.new(1, Enum.EasingStyle.Linear), { CFrame = circle.CFrame }):Play()
-			end
-		end
-		wait(0.5)
-	end)
-
-rs.Stepped:Connect(function()
-		if getgenv().tele == true then
-			local char = getgenv().Char
-			local circle
+				(ts:Create(char.HumanoidRootPart, TweenInfo.new(1, Enum.EasingStyle.Linear), {
+					CFrame = circle.CFrame
+				})):Play();
+			end;
+		end;
+		wait(0.5);
+	end);
+	rs.Stepped:Connect(function()
+		if (getgenv()).tele == true then
+			local char = (getgenv()).Char;
+			local circle;
 			for i, v in pairs(game.Workspace:GetDescendants()) do
 				if v.Name == "Detect" then
-					circle = v
-				end
-			end
+					circle = v;
+				end;
+			end;
 			if char and char:FindFirstChild("HumanoidRootPart") and circle then
-				char.HumanoidRootPart.CFrame=circle.CFrame
-			end
-		end
-		wait(0.5)
-	end)
-
+				char.HumanoidRootPart.CFrame = circle.CFrame;
+			end;
+		end;
+		wait(0.5);
+	end);
 	rs.Stepped:Connect(function()
-		if getgenv().ragdoll == true then
-			local plr = plrs.LocalPlayer
-			local char = plr.Character or plr.CharacterAdded:Wait()
+		if (getgenv()).ragdoll == true then
+			local plr = plrs.LocalPlayer;
+			local char = plr.Character or plr.CharacterAdded:Wait();
 			if char and char.RagdollTrigger ~= nil then
-				char.RagdollTrigger.Value = false
-			end
-		end
-	end)
-
-	Rayfield:LoadConfiguration()
-end
+				char.RagdollTrigger.Value = false;
+			end;
+		end;
+	end);
+	Rayfield:LoadConfiguration();
+end;

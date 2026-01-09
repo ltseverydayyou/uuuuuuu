@@ -21,15 +21,15 @@
 // ==/UserScript==
 
 if (document.title == 'Just a moment...') {
-    return;
+  return;
 }
 
 var currentURL = window.location.href;
 var newerURL = currentURL.replace('https://spdmteam.com/key-system-1?hwid=', 'https://spdmteam.com/api/keysystem?hwid=').replace('&zone=Europe/Rome', '&zone=Europe/Rome&advertiser=lootlabs&OS=ios');
 var pageTitle = document.title;
-var API = "https://spdmteam.com/api/keysystem?step=";       
+var API = "https://spdmteam.com/api/keysystem?step=";
 if (currentURL.includes("https://spdmteam.com/key-system-1?hwid=")) {
-  window.location.replace(newerURL); 
+  window.location.replace(newerURL);
 } else if (pageTitle.includes("NEO") && pageTitle.includes("1")) {
   window.location.href = API + "1&advertiser=linkvertise&OS=ios";
 } else if (currentURL.includes("https://spdmteam.com/key-system-2?hwid=")) {

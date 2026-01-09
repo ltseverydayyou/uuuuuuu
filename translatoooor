@@ -1,246 +1,462 @@
-if not game["Loaded"] then game["Loaded"]:Wait() end
-repeat task.wait(.06) until game:GetService("Players").LocalPlayer
-
-local Http=game:GetService("HttpService")
-local Players=game:GetService("Players")
-local LP=Players.LocalPlayer
-local TCS=game:GetService("TextChatService")
-local CoreGui=game:GetService("CoreGui")
-local YourLang = "en"
-
+if not game.Loaded then
+	game.Loaded:Wait();
+end;
+repeat
+	task.wait(0.06);
+until (game:GetService("Players")).LocalPlayer;
+local Http = game:GetService("HttpService");
+local Players = game:GetService("Players");
+local LP = Players.LocalPlayer;
+local TCS = game:GetService("TextChatService");
+local CoreGui = game:GetService("CoreGui");
+local YourLang = "en";
 local function req(opt)
-	local fn=(syn and syn.request) or (http and http.request) or http_request or request
-	if fn then return fn(opt) end
-	return Http:RequestAsync(opt)
-end
-
-local gv=isfile and isfile("googlev.txt") and readfile("googlev.txt") or ""
-
+	local fn = syn and syn.request or http and http.request or http_request or request;
+	if fn then
+		return fn(opt);
+	end;
+	return Http:RequestAsync(opt);
+end;
+local gv = isfile and isfile("googlev.txt") and readfile("googlev.txt") or "";
 local function consent(body)
-	local t={}
-	for tag in body:gmatch('<input type="hidden" name=".-" value=".-">') do
-		local k,v=tag:match('<input type="hidden" name="(.-)" value="(.-)">'); t[k]=v
-	end
-	gv=t.v or ""; if writefile then writefile("googlev.txt",gv) end
-end
-
-local function got(url,method,body)
-	method=method or "GET"
-	local res=req({Url=url,Method=method,Headers={cookie="CONSENT=YES+"..(gv or "")},Body=body})
-	local b=res.Body or res.body or ""; if type(b)~="string" then b=tostring(b) end
+	local t = {};
+	for tag in body:gmatch("<input type=\"hidden\" name=\".-\" value=\".-\">") do
+		local k, v = tag:match("<input type=\"hidden\" name=\"(.-)\" value=\"(.-)\">");
+		t[k] = v;
+	end;
+	gv = t.v or "";
+	if writefile then
+		writefile("googlev.txt", gv);
+	end;
+end;
+local function got(url, method, body)
+	method = method or "GET";
+	local res = req({
+		Url = url,
+		Method = method,
+		Headers = {
+			cookie = "CONSENT=YES+" .. (gv or "")
+		},
+		Body = body
+	});
+	local b = res.Body or res.body or "";
+	if type(b) ~= "string" then
+		b = tostring(b);
+	end;
 	if b:match("https://consent.google.com/s") then
-		consent(b)
-		res=req({Url=url,Method="GET",Headers={cookie="CONSENT=YES+"..(gv or "")}})
-	end
-	return res
-end
-
-local langs={
-	auto="Automatic",af="Afrikaans",sq="Albanian",am="Amharic",ar="Arabic",hy="Armenian",az="Azerbaijani",eu="Basque",be="Belarusian",bn="Bengali",bs="Bosnian",bg="Bulgarian",ca="Catalan",ceb="Cebuano",ny="Chichewa",
-	["zh-cn"]="Chinese Simplified",["zh-tw"]="Chinese Traditional",co="Corsican",hr="Croatian",cs="Czech",da="Danish",nl="Dutch",en="English",eo="Esperanto",et="Estonian",tl="Filipino",fi="Finnish",fr="French",fy="Frisian",
-	gl="Galician",ka="Georgian",de="German",el="Greek",gu="Gujarati",ht="Haitian Creole",ha="Hausa",haw="Hawaiian",iw="Hebrew",hi="Hindi",hmn="Hmong",hu="Hungarian",is="Icelandic",ig="Igbo",id="Indonesian",ga="Irish",it="Italian",
-	ja="Japanese",jw="Javanese",kn="Kannada",kk="Kazakh",km="Khmer",ko="Korean",ku="Kurdish (Kurmanji)",ky="Kyrgyz",lo="Lao",la="Latin",lv="Latvian",lt="Lithuanian",lb="Luxembourgish",mk="Macedonian",mg="Malagasy",ms="Malay",
-	ml="Malayalam",mt="Maltese",mi="Maori",mr="Marathi",mn="Mongolian",my="Myanmar (Burmese)",ne="Nepali",no="Norwegian",ps="Pashto",fa="Persian",pl="Polish",pt="Portuguese",pa="Punjabi",ro="Romanian",ru="Russian",sm="Samoan",
-	gd="Scots Gaelic",sr="Serbian",st="Sesotho",sn="Shona",sd="Sindhi",si="Sinhala",sk="Slovak",sl="Slovenian",so="Somali",es="Spanish",su="Sundanese",sw="Swahili",sv="Swedish",tg="Tajik",ta="Tamil",te="Telugu",th="Thai",tr="Turkish",
-	uk="Ukrainian",ur="Urdu",uz="Uzbek",vi="Vietnamese",cy="Welsh",xh="Xhosa",yi="Yiddish",yo="Yoruba",zu="Zulu"
-}
-
+		consent(b);
+		res = req({
+			Url = url,
+			Method = "GET",
+			Headers = {
+				cookie = "CONSENT=YES+" .. (gv or "")
+			}
+		});
+	end;
+	return res;
+end;
+local langs = {
+	auto = "Automatic",
+	af = "Afrikaans",
+	sq = "Albanian",
+	am = "Amharic",
+	ar = "Arabic",
+	hy = "Armenian",
+	az = "Azerbaijani",
+	eu = "Basque",
+	be = "Belarusian",
+	bn = "Bengali",
+	bs = "Bosnian",
+	bg = "Bulgarian",
+	ca = "Catalan",
+	ceb = "Cebuano",
+	ny = "Chichewa",
+	["zh-cn"] = "Chinese Simplified",
+	["zh-tw"] = "Chinese Traditional",
+	co = "Corsican",
+	hr = "Croatian",
+	cs = "Czech",
+	da = "Danish",
+	nl = "Dutch",
+	en = "English",
+	eo = "Esperanto",
+	et = "Estonian",
+	tl = "Filipino",
+	fi = "Finnish",
+	fr = "French",
+	fy = "Frisian",
+	gl = "Galician",
+	ka = "Georgian",
+	de = "German",
+	el = "Greek",
+	gu = "Gujarati",
+	ht = "Haitian Creole",
+	ha = "Hausa",
+	haw = "Hawaiian",
+	iw = "Hebrew",
+	hi = "Hindi",
+	hmn = "Hmong",
+	hu = "Hungarian",
+	is = "Icelandic",
+	ig = "Igbo",
+	id = "Indonesian",
+	ga = "Irish",
+	it = "Italian",
+	ja = "Japanese",
+	jw = "Javanese",
+	kn = "Kannada",
+	kk = "Kazakh",
+	km = "Khmer",
+	ko = "Korean",
+	ku = "Kurdish (Kurmanji)",
+	ky = "Kyrgyz",
+	lo = "Lao",
+	la = "Latin",
+	lv = "Latvian",
+	lt = "Lithuanian",
+	lb = "Luxembourgish",
+	mk = "Macedonian",
+	mg = "Malagasy",
+	ms = "Malay",
+	ml = "Malayalam",
+	mt = "Maltese",
+	mi = "Maori",
+	mr = "Marathi",
+	mn = "Mongolian",
+	my = "Myanmar (Burmese)",
+	ne = "Nepali",
+	no = "Norwegian",
+	ps = "Pashto",
+	fa = "Persian",
+	pl = "Polish",
+	pt = "Portuguese",
+	pa = "Punjabi",
+	ro = "Romanian",
+	ru = "Russian",
+	sm = "Samoan",
+	gd = "Scots Gaelic",
+	sr = "Serbian",
+	st = "Sesotho",
+	sn = "Shona",
+	sd = "Sindhi",
+	si = "Sinhala",
+	sk = "Slovak",
+	sl = "Slovenian",
+	so = "Somali",
+	es = "Spanish",
+	su = "Sundanese",
+	sw = "Swahili",
+	sv = "Swedish",
+	tg = "Tajik",
+	ta = "Tamil",
+	te = "Telugu",
+	th = "Thai",
+	tr = "Turkish",
+	uk = "Ukrainian",
+	ur = "Urdu",
+	uz = "Uzbek",
+	vi = "Vietnamese",
+	cy = "Welsh",
+	xh = "Xhosa",
+	yi = "Yiddish",
+	yo = "Yoruba",
+	zu = "Zulu"
+};
 local function iso(s)
-	if not s then return end
-	for k,v in pairs(langs) do if k==s or v==s then return k end end
-end
-
+	if not s then
+		return;
+	end;
+	for k, v in pairs(langs) do
+		if k == s or v == s then
+			return k;
+		end;
+	end;
+end;
 local function q(data)
-	local s=""
-	for k,v in pairs(data) do
-		if type(v)=="table" then for _,vv in pairs(v) do s..="&"..Http:UrlEncode(k).."="..Http:UrlEncode(vv) end
-		else s..="&"..Http:UrlEncode(k).."="..Http:UrlEncode(v) end
-	end
-	return s:sub(2)
-end
-
-local jE=function(x) return Http:JSONEncode(x) end
-local jD=function(x) return Http:JSONDecode(x) end
-
-local rpc="MkEWBc"
-local root="https://translate.google.com/"
-local exec="https://translate.google.com/_/TranslateWebserverUi/data/batchexecute"
-local fsid,bl,rid=nil,nil,math.random(1000,9999)
-
+	local s = "";
+	for k, v in pairs(data) do
+		if type(v) == "table" then
+			for _, vv in pairs(v) do
+				s ..= "&" .. Http:UrlEncode(k) .. "=" .. Http:UrlEncode(vv);
+			end;
+		else
+			s ..= "&" .. Http:UrlEncode(k) .. "=" .. Http:UrlEncode(v);
+		end;
+	end;
+	return s:sub(2);
+end;
+local jE = function(x)
+	return Http:JSONEncode(x);
+end;
+local jD = function(x)
+	return Http:JSONDecode(x);
+end;
+local rpc = "MkEWBc";
+local root = "https://translate.google.com/";
+local exec = "https://translate.google.com/_/TranslateWebserverUi/data/batchexecute";
+local fsid, bl, rid = nil, nil, math.random(1000, 9999);
 do
-	local b=(got(root).Body or "")
-	fsid=b:match('"FdrFJe":"(.-)"'); bl=b:match('"cfb2h":"(.-)"')
-end
-
-local function translate(txt,tgt,src)
-	rid+=10000
-	tgt=iso(tgt) or "en"; src=iso(src) or "auto"
-	local data={{txt,src,tgt,true},{nil}}
-	local freq={{{rpc,jE(data),nil,"generic"}}}
-	local url=exec.."?"..q{rpcids=rpc,["f.sid"]=fsid,bl=bl,hl="en",_reqid=rid-10000,rt="c"}
-	local body=q{["f.req"]=jE(freq)}
-	local res=got(url,"POST",body)
-	local ok,out=pcall(function() local arr=jD((res.Body or ""):match("%[.-%]\n")); return jD(arr[1][3]) end)
-	if not ok then return nil end
-	return out[2][1][1][6][1][1]
-end
-
-local function translateInfo(txt, tgt, src)
-	rid += 10000
-	tgt = iso(tgt) or "en"
-	src = iso(src) or "auto"
-	local data = {{txt, src, tgt, true}, {nil}}
-	local freq = {{{rpc, jE(data), nil, "generic"}}}
-	local url = exec.."?"..q{rpcids=rpc, ["f.sid"]=fsid, bl=bl, hl="en", _reqid=rid-10000, rt="c"}
-	local body = q{["f.req"]=jE(freq)}
-	local res = got(url, "POST", body)
+	local b = (got(root)).Body or "";
+	fsid = b:match("\"FdrFJe\":\"(.-)\"");
+	bl = b:match("\"cfb2h\":\"(.-)\"");
+end;
+local function translate(txt, tgt, src)
+	rid += 10000;
+	tgt = iso(tgt) or "en";
+	src = iso(src) or "auto";
+	local data = {
+		{
+			txt,
+			src,
+			tgt,
+			true
+		},
+		{
+			nil
+		}
+	};
+	local freq = {
+		{
+			{
+				rpc,
+				jE(data),
+				nil,
+				"generic"
+			}
+		}
+	};
+	local url = exec .. "?" .. q({
+		rpcids = rpc,
+		["f.sid"] = fsid,
+		bl = bl,
+		hl = "en",
+		_reqid = rid - 10000,
+		rt = "c"
+	});
+	local body = q({
+		["f.req"] = jE(freq)
+	});
+	local res = got(url, "POST", body);
 	local ok, out = pcall(function()
-		local arr = jD((res.Body or ""):match("%[.-%]\n"))
-		return jD(arr[1][3])
-	end)
-	if not ok or not out then return nil, nil end
-	return out[2][1][1][6][1][1], out[3]
-end
-
+		local arr = jD((res.Body or ""):match("%[.-%]\n"));
+		return jD(arr[1][3]);
+	end);
+	if not ok then
+		return nil;
+	end;
+	return out[2][1][1][6][1][1];
+end;
+local function translateInfo(txt, tgt, src)
+	rid += 10000;
+	tgt = iso(tgt) or "en";
+	src = iso(src) or "auto";
+	local data = {
+		{
+			txt,
+			src,
+			tgt,
+			true
+		},
+		{
+			nil
+		}
+	};
+	local freq = {
+		{
+			{
+				rpc,
+				jE(data),
+				nil,
+				"generic"
+			}
+		}
+	};
+	local url = exec .. "?" .. q({
+		rpcids = rpc,
+		["f.sid"] = fsid,
+		bl = bl,
+		hl = "en",
+		_reqid = rid - 10000,
+		rt = "c"
+	});
+	local body = q({
+		["f.req"] = jE(freq)
+	});
+	local res = got(url, "POST", body);
+	local ok, out = pcall(function()
+		local arr = jD((res.Body or ""):match("%[.-%]\n"));
+		return jD(arr[1][3]);
+	end);
+	if not ok or (not out) then
+		return nil, nil;
+	end;
+	return out[2][1][1][6][1][1], out[3];
+end;
 local function sys(msg)
-	local chans=TCS:WaitForChild("TextChannels")
-	local c=chans:FindFirstChild("RBXSystem") or chans:FindFirstChild("RBXGeneral") or chans:GetChildren()[1]
-	if c and c.DisplaySystemMessage then c:DisplaySystemMessage(msg) end
-end
-
+	local chans = TCS:WaitForChild("TextChannels");
+	local c = chans:FindFirstChild("RBXSystem") or chans:FindFirstChild("RBXGeneral") or (chans:GetChildren())[1];
+	if c and c.DisplaySystemMessage then
+		c:DisplaySystemMessage(msg);
+	end;
+end;
 local function findWhisper(recipient)
-	if not recipient or recipient=="All" then return nil end
-	for _,c in ipairs(TCS.TextChannels:GetChildren()) do
-		if string.find(c.Name,"^RBXWhisper:") and c:FindFirstChild(recipient) then return c end
-	end
-end
-
+	if not recipient or recipient == "All" then
+		return nil;
+	end;
+	for _, c in ipairs(TCS.TextChannels:GetChildren()) do
+		if string.find(c.Name, "^RBXWhisper:") and c:FindFirstChild(recipient) then
+			return c;
+		end;
+	end;
+end;
 local function defaultChannel()
-	return TCS.TextChannels:FindFirstChild("RBXGeneral") or TCS.TextChannels:FindFirstChild("General") or TCS.TextChannels:FindFirstChild("RBXSystem")
-end
-
+	return TCS.TextChannels:FindFirstChild("RBXGeneral") or TCS.TextChannels:FindFirstChild("General") or TCS.TextChannels:FindFirstChild("RBXSystem");
+end;
 local function resolveRecipient(chip)
 	if chip and chip:IsA("TextButton") then
-		local txt=chip.Text or ""
-		local who=string.match(txt,"^%[To%s+(.+)%]$")
-		if who and who~="" then
-			local d=string.lower(who)
-			for _,plr in ipairs(Players:GetPlayers()) do
-				if string.lower(plr.DisplayName)==d then return plr.Name end
-			end
-		end
-	end
-	return "All"
-end
-
-local function sendChat(text,recipient)
+		local txt = chip.Text or "";
+		local who = string.match(txt, "^%[To%s+(.+)%]$");
+		if who and who ~= "" then
+			local d = string.lower(who);
+			for _, plr in ipairs(Players:GetPlayers()) do
+				if string.lower(plr.DisplayName) == d then
+					return plr.Name;
+				end;
+			end;
+		end;
+	end;
+	return "All";
+end;
+local function sendChat(text, recipient)
 	task.spawn(function()
-		local chan=findWhisper(recipient) or defaultChannel()
-		if chan then chan:SendAsync(text) end
-	end)
-end
-
+		local chan = findWhisper(recipient) or defaultChannel();
+		if chan then
+			chan:SendAsync(text);
+		end;
+	end);
+end;
 local function chunkSend(prefix, list, size)
-	local i=1
-	while i<=#list do
-		local j=math.min(i+size-1,#list)
-		sys(prefix..table.concat(list,", ",i,j))
-		i=j+1
-	end
-end
-
+	local i = 1;
+	while i <= (#list) do
+		local j = math.min(i + size - 1, #list);
+		sys(prefix .. table.concat(list, ", ", i, j));
+		i = j + 1;
+	end;
+end;
 local function showUsage()
-	sys("translator prefix: '>'")
-	sys("usage:")
-	sys(">d            = disable persistent sending")
-	sys(">help         = show usage")
-	sys(">langs        = list available language codes")
-	sys("examples:")
-	sys(">ru hello")
-	sys(">th how are you?")
-	sys(">ja")
-end
-
+	sys("translator prefix: '>'");
+	sys("usage:");
+	sys(">d            = disable persistent sending");
+	sys(">help         = show usage");
+	sys(">langs        = list available language codes");
+	sys("examples:");
+	sys(">ru hello");
+	sys(">th how are you?");
+	sys(">ja");
+end;
 local function showLangs()
-	local codes={}
-	for code,_ in pairs(langs) do table.insert(codes,code) end
-	table.sort(codes,function(a,b) return a<b end)
-	chunkSend("[TR] Languages: ", codes, 20)
-end
-
-sys("[TR] Chat Translator ready")
-showUsage()
-
-local tr_on=false
-local tr_lang=""
-
-local function handleOutgoing(raw,recipient)
-	if raw==">help" then showUsage(); return true end
-	if raw==">langs" then showLangs(); return true end
-	if raw==">d" then tr_on=false; sys("[TR] Sending Disabled"); return true end
-	local code,msg=raw:match("^>(%a%a)%s+(.+)$")
+	local codes = {};
+	for code, _ in pairs(langs) do
+		table.insert(codes, code);
+	end;
+	table.sort(codes, function(a, b)
+		return a < b;
+	end);
+	chunkSend("[TR] Languages: ", codes, 20);
+end;
+sys("[TR] Chat Translator ready");
+showUsage();
+local tr_on = false;
+local tr_lang = "";
+local function handleOutgoing(raw, recipient)
+	if raw == ">help" then
+		showUsage();
+		return true;
+	end;
+	if raw == ">langs" then
+		showLangs();
+		return true;
+	end;
+	if raw == ">d" then
+		tr_on = false;
+		sys("[TR] Sending Disabled");
+		return true;
+	end;
+	local code, msg = raw:match("^>(%a%a)%s+(.+)$");
 	if code and msg then
-		local lang=iso(string.lower(code))
+		local lang = iso(string.lower(code));
 		if lang then
-			local out=translate(msg,lang,"auto") or msg
-			sendChat(out,recipient)
-			sys("[TR] Sent in "..lang)
+			local out = translate(msg, lang, "auto") or msg;
+			sendChat(out, recipient);
+			sys("[TR] Sent in " .. lang);
 		else
-			sys("[TR] Invalid language code")
-		end
-		return true
-	end
-	local only=raw:match("^>(%a%a)$")
+			sys("[TR] Invalid language code");
+		end;
+		return true;
+	end;
+	local only = raw:match("^>(%a%a)$");
 	if only then
-		local lang=iso(string.lower(only))
-		if lang then tr_on=true; tr_lang=lang; sys("[TR] Target "..lang) else sys("[TR] Invalid language code") end
-		return true
-	end
-	if tr_on and tr_lang~="" and raw:sub(1,1)~="/" then
-		local out=translate(raw,tr_lang,"auto") or raw
-		sendChat(out,recipient)
-		return true
-	end
-	return false
-end
-
+		local lang = iso(string.lower(only));
+		if lang then
+			tr_on = true;
+			tr_lang = lang;
+			sys("[TR] Target " .. lang);
+		else
+			sys("[TR] Invalid language code");
+		end;
+		return true;
+	end;
+	if tr_on and tr_lang ~= "" and raw:sub(1, 1) ~= "/" then
+		local out = translate(raw, tr_lang, "auto") or raw;
+		sendChat(out, recipient);
+		return true;
+	end;
+	return false;
+end;
 task.spawn(function()
-	repeat task.wait() until CoreGui:FindFirstChild("ExperienceChat")
-	local ec=CoreGui:WaitForChild("ExperienceChat")
-	local al=ec:WaitForChild("appLayout")
-	local cb=al:WaitForChild("chatInputBar")
-	local bg=cb:WaitForChild("Background")
-	local ct=bg:WaitForChild("Container")
-	local tc=ct:WaitForChild("TextContainer")
-	local bc=tc:WaitForChild("TextBoxContainer")
-	local box=bc:WaitForChild("TextBox")
-	local btn=ct:WaitForChild("SendButton")
-	local chip=tc:FindFirstChild("TargetChannelChip")
-
+	repeat
+		task.wait();
+	until CoreGui:FindFirstChild("ExperienceChat");
+	local ec = CoreGui:WaitForChild("ExperienceChat");
+	local al = ec:WaitForChild("appLayout");
+	local cb = al:WaitForChild("chatInputBar");
+	local bg = cb:WaitForChild("Background");
+	local ct = bg:WaitForChild("Container");
+	local tc = ct:WaitForChild("TextContainer");
+	local bc = tc:WaitForChild("TextBoxContainer");
+	local box = bc:WaitForChild("TextBox");
+	local btn = ct:WaitForChild("SendButton");
+	local chip = tc:FindFirstChild("TargetChannelChip");
 	local function hook()
-		local m=box.Text
-		if m=="" then return end
-		box.Text=""
-		local rec=resolveRecipient(chip)
-		if not handleOutgoing(m,rec) then
-			sendChat(m,rec)
-		end
-	end
-
-	box.FocusLost:Connect(function(e) if e then hook() end end)
-	btn.MouseButton1Click:Connect(hook)
-end)
-
+		local m = box.Text;
+		if m == "" then
+			return;
+		end;
+		box.Text = "";
+		local rec = resolveRecipient(chip);
+		if not handleOutgoing(m, rec) then
+			sendChat(m, rec);
+		end;
+	end;
+	box.FocusLost:Connect(function(e)
+		if e then
+			hook();
+		end;
+	end);
+	btn.MouseButton1Click:Connect(hook);
+end);
 TCS.MessageReceived:Connect(function(msg)
-	if not msg.TextSource or msg.TextSource.UserId == LP.UserId then return end
-	local uid = msg.TextSource.UserId
-	local p = Players:GetPlayerByUserId(uid)
-	local disp = p and p.DisplayName or tostring(uid)
-	local user = p and p.Name or tostring(uid)
-	local nameStr = (disp == user) and ("@"..user) or (disp.." (@"..user..")")
-	local text, detected = translateInfo(msg.Text, YourLang, "auto")
+	if not msg.TextSource or msg.TextSource.UserId == LP.UserId then
+		return;
+	end;
+	local uid = msg.TextSource.UserId;
+	local p = Players:GetPlayerByUserId(uid);
+	local disp = p and p.DisplayName or tostring(uid);
+	local user = p and p.Name or tostring(uid);
+	local nameStr = disp == user and "@" .. user or disp .. " (@" .. user .. ")";
+	local text, detected = translateInfo(msg.Text, YourLang, "auto");
 	if text and text ~= "" and text ~= msg.Text then
-		local langTag = detected and detected ~= "" and detected:upper() or "AUTO"
-		sys("("..langTag..") ["..nameStr.."]: "..text)
-	end
-end)
+		local langTag = detected and detected ~= "" and detected:upper() or "AUTO";
+		sys("(" .. langTag .. ") [" .. nameStr .. "]: " .. text);
+	end;
+end);

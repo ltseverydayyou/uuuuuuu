@@ -69,13 +69,13 @@ local TopBarApp = {
 };
 task.spawn(function()
 	TopBarApp.top = Instance.new("ScreenGui");
-	TopBarApp.top.Name = "\8203\8204";
+	TopBarApp.top.Name = "\0";
 	TopBarApp.top.Enabled = true;
 	TopBarApp.top.DisplayOrder = 2147483647;
 	TopBarApp.top.IgnoreGuiInset = true;
 	TopBarApp.top.Parent = gethui and gethui() or S("CoreGui") or GUI;
 	TopBarApp.frame = Instance.new("Frame");
-	TopBarApp.frame.Name = "\8203\8204";
+	TopBarApp.frame.Name = "\0";
 	TopBarApp.frame.Size = UDim2.new(1, 0, 0, 36);
 	TopBarApp.frame.Position = UDim2.new(0, 0, 0, 0);
 	TopBarApp.frame.BackgroundTransparency = 1;
@@ -86,7 +86,7 @@ task.spawn(function()
 		task.wait();
 	until TopBarApp.frame;
 	local btn = Instance.new("TextButton");
-	btn.Name = "\8203\8204";
+	btn.Name = "\0";
 	btn.Text = "Auto Kick";
 	btn.Size = UDim2.new(0, 100, 0, 30);
 	btn.AnchorPoint = Vector2.new(0.5, 0);
@@ -96,7 +96,7 @@ task.spawn(function()
 	btn.BorderSizePixel = 0;
 	btn.Parent = TopBarApp.frame;
 	local UC = Instance.new("UICorner", btn);
-	UC.Name = "\8203\8204";
+	UC.Name = "\0";
 	UC.CornerRadius = UDim.new(1, 0);
 	local UIS = S("UserInputService");
 	local dragging = false;
@@ -156,7 +156,7 @@ task.spawn(function()
 		end;
 	end);
 	local fixBtn = Instance.new("TextButton");
-	fixBtn.Name = "\8203\8204";
+	fixBtn.Name = "\0";
 	fixBtn.Text = "Anchor Stuck Fix";
 	fixBtn.Size = UDim2.new(0, 100, 0, 30);
 	fixBtn.AnchorPoint = Vector2.new(0.5, 0);
@@ -166,7 +166,7 @@ task.spawn(function()
 	fixBtn.BorderSizePixel = 0;
 	fixBtn.Parent = TopBarApp.frame;
 	local fixUC = Instance.new("UICorner", fixBtn);
-	fixUC.Name = "\8203\8204";
+	fixUC.Name = "\0";
 	fixUC.CornerRadius = UDim.new(1, 0);
 	local fixDragging = false;
 	local fixDragInput, fixDragStart, fixStartPos;
@@ -199,7 +199,7 @@ task.spawn(function()
 	end);
 	fixBtn.Activated:Connect(function()
 		local promptGui = Instance.new("ScreenGui");
-		promptGui.Name = "\8203\8204";
+		promptGui.Name = "\0";
 		promptGui.DisplayOrder = 2147483647;
 		promptGui.Parent = gethui and gethui() or S("CoreGui") or GUI;
 		local promptFrame = Instance.new("Frame", promptGui);

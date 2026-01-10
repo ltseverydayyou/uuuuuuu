@@ -809,6 +809,9 @@ function Icon:align(leftCenterOrRight, isFromParentIcon)
 	if direction ~= "left" and direction ~= "center" and direction ~= "right" then
 		direction = "left"
 	end
+	if self.parentIconUID and not isFromParentIcon then
+		self:leave()
+	end
 	local screenGui = (direction == "center" and Icon.container.TopbarCentered) or Icon.container.TopbarStandard
 	local holders = screenGui.Holders
 	local finalDirection = string.upper(string.sub(direction, 1, 1))..string.sub(direction, 2)

@@ -99,6 +99,11 @@ gbCore:AddToggle("VoidFailsafe", {
 	Default = true,
 	Tooltip = "TP back if falling into void"
 });
+gbCore:AddToggle("CollectibleFarm", {
+	Text = "Collectible Autofarm",
+	Default = false,
+	Tooltip = "Teleport to collectible tickets"
+});
 gbCore:AddSlider("ReviveRange", {
 	Text = "Revive Range",
 	Min = 2,
@@ -335,7 +340,7 @@ end;
 local autoRev = Tog.AutoRevive.Value;
 local autoSave = Tog.AutoSave.Value;
 local antiBot = Tog.AntiNextbot.Value;
-local antiSZ = Tog.AntiSafeZone and Tog.AntiSafeZone.Value or true;
+local antiSZ = Tog.AntiSafeZone and Tog.AntiSafeZone.Value or false;
 local autoResp = Tog.AutoRespawn.Value;
 local runTP = Tog.RunOnTeleport.Value;
 local debugOn = Tog.DebugLogs.Value;
@@ -355,7 +360,8 @@ local colPl = Opt.ESPPlayerColor.Value;
 local colDn = Opt.ESPDeadColor.Value;
 local colBt = Opt.ESPBotColor.Value;
 local wmOn = Tog.UIWatermark.Value;
-local voidFS = Tog.VoidFailsafe and Tog.VoidFailsafe.Value or true;
+local voidFS = Tog.VoidFailsafe and Tog.VoidFailsafe.Value or false;
+local collFarm = Tog.CollectibleFarm and Tog.CollectibleFarm.Value or false;
 local safeZoneParts = {};
 local function dbg(msg)
 	if not debugOn then
@@ -418,6 +424,11 @@ end;
 if Tog.VoidFailsafe then
 	Tog.VoidFailsafe:OnChanged(function(v)
 		voidFS = v;
+	end);
+end;
+if Tog.CollectibleFarm then
+	Tog.CollectibleFarm:OnChanged(function(v)
+		collFarm = v;
 	end);
 end;
 Opt.ReviveRange:OnChanged(function(v)
@@ -1165,6 +1176,34 @@ local saveTarget;
 local lastSafePos;
 local pendingSaveTarget;
 local pendingSavePos;
+task.spawn(function()
+	while running do
+		if collFarm then
+			local ch = getChar();
+			local r = ch and getRoot(ch);
+			local rec, mdl = NA_GRAB_BODY.ensure(lp);
+			local hum = rec and rec.humanoid;
+			if ch and r and hum and hum.Health > 0 and ch:GetAttribute("Downed") ~= true and not saveActive then
+				local gFolder = ws:FindFirstChild("Game");
+				local eff = gFolder and gFolder:FindFirstChild("Effects");
+				local tFolder = eff and eff:FindFirstChild("Tickets");
+				if tFolder then
+					for _, v in ipairs(tFolder:GetChildren()) do
+						if not running or not collFarm then
+							break;
+						end;
+						local hrp = v:FindFirstChild("HumanoidRootPart");
+						if hrp then
+							r.CFrame = hrp.CFrame;
+							task.wait(0.15);
+						end;
+					end;
+				end;
+			end;
+		end;
+		task.wait(1.5);
+	end;
+end);
 local espParent = Instance.new("ScreenGui");
 espParent.Name = "EvadeESPContainer";
 espParent.ResetOnSpawn = false;

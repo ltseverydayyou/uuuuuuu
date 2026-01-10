@@ -94,6 +94,11 @@ gbCore:AddToggle("AutoRespawn", {
 	Default = false,
 	Tooltip = "Respawn at 0 HP"
 });
+gbCore:AddToggle("VoidFailsafe", {
+	Text = "Void Fail-Safe",
+	Default = true,
+	Tooltip = "TP back if falling into void"
+});
 gbCore:AddSlider("ReviveRange", {
 	Text = "Revive Range",
 	Min = 2,
@@ -114,6 +119,14 @@ gbCore:AddSlider("SaveOffset", {
 	Max = 10,
 	Default = 6,
 	Rounding = 0
+});
+gbCore:AddSlider("SaveDelay", {
+	Text = "Save Delay",
+	Min = 0,
+	Max = 5,
+	Default = 2.7,
+	Rounding = 1,
+	Suffix = " s"
 });
 gbCore:AddSlider("SafeZoneDistance", {
 	Text = "SafeZone Distance",
@@ -329,6 +342,7 @@ local debugOn = Tog.DebugLogs.Value;
 local revR = Opt.ReviveRange.Value;
 local botR = Opt.NextbotRange.Value;
 local saveOff = Opt.SaveOffset.Value;
+local saveDelay = Opt.SaveDelay and Opt.SaveDelay.Value or 2.7;
 local szDist = Opt.SafeZoneDistance and Opt.SafeZoneDistance.Value or 8;
 local espPl = Tog.ESPPlayers.Value;
 local espDn = Tog.ESPDead.Value;
@@ -341,6 +355,7 @@ local colPl = Opt.ESPPlayerColor.Value;
 local colDn = Opt.ESPDeadColor.Value;
 local colBt = Opt.ESPBotColor.Value;
 local wmOn = Tog.UIWatermark.Value;
+local voidFS = Tog.VoidFailsafe and Tog.VoidFailsafe.Value or true;
 local safeZoneParts = {};
 local function dbg(msg)
 	if not debugOn then
@@ -400,6 +415,11 @@ if Tog.AntiSafeZone then
 		antiSZ = v;
 	end);
 end;
+if Tog.VoidFailsafe then
+	Tog.VoidFailsafe:OnChanged(function(v)
+		voidFS = v;
+	end);
+end;
 Opt.ReviveRange:OnChanged(function(v)
 	revR = v;
 end);
@@ -409,6 +429,11 @@ end);
 Opt.SaveOffset:OnChanged(function(v)
 	saveOff = v;
 end);
+if Opt.SaveDelay then
+	Opt.SaveDelay:OnChanged(function(v)
+		saveDelay = v;
+	end);
+end;
 if Opt.SafeZoneDistance then
 	Opt.SafeZoneDistance:OnChanged(function(v)
 		szDist = v;
@@ -919,10 +944,10 @@ local function getDown(pos)
 	local bestDist = math.huge;
 	for i = 1, #others do
 		local p = others[i];
-		local rec, mdl = NA_GRAB_BODY.ensure(p);
-		if rec and rec.humanoid and (rec.partCount or 0) >= 3 then
-			local hp = rec.humanoid.Health;
-			if hp <= 0 then
+		local ch = p.Character;
+		if ch and ch:GetAttribute("Downed") == true then
+			local rec, mdl = NA_GRAB_BODY.ensure(p);
+			if rec and (rec.partCount or 0) >= 3 then
 				local r2 = rec.root or mdl and NA_GRAB_BODY.firstPart(mdl);
 				if r2 then
 					local d = (pos - r2.Position).Magnitude;
@@ -1138,6 +1163,8 @@ local saveActive = false;
 local savePos;
 local saveTarget;
 local lastSafePos;
+local pendingSaveTarget;
+local pendingSavePos;
 local espParent = Instance.new("ScreenGui");
 espParent.Name = "EvadeESPContainer";
 espParent.ResetOnSpawn = false;
@@ -1313,7 +1340,7 @@ addConn(rs.Heartbeat, function()
 		respEvt:FireServer(true);
 		dbg("Auto Respawn: fired");
 	end;
-	if hum and (not saveActive) then
+	if voidFS and hum and (not saveActive) then
 		rayParams.FilterDescendantsInstances = buildFilter(ch);
 		local groundHit = ws:Raycast(pos + Vector3.new(0, 5, 0), Vector3.new(0, -1000, 0), rayParams);
 		if groundHit and (not isCharInSafeZone(ch)) and (not isCharOnDamage(ch)) then
@@ -1348,24 +1375,64 @@ addConn(rs.Heartbeat, function()
 		saveActive = false;
 		savePos = nil;
 		saveTarget = nil;
+		pendingSaveTarget = nil;
+		pendingSavePos = nil;
 		dbg("Auto Save: cancelled");
 	end;
-	local downP, downRoot, downDist = getDown(pos);
+	if not autoSave and pendingSaveTarget then
+		pendingSaveTarget = nil;
+		pendingSavePos = nil;
+	end;
+	local needDown = autoRev and revR > 0 or autoSave;
+	local downP, downRoot, downDist;
+	if needDown then
+		downP, downRoot, downDist = getDown(pos);
+	end;
 	if autoRev and evt and revR > 0 and downP and downDist <= revR and t - revLast >= revCd then
 		revLast = t;
 		evt:FireServer("Revive", true, downP.Name);
 	end;
-	if autoRev and autoSave and downP and downRoot and (not saveActive) then
-		saveActive = true;
-		savePos = lastSafePos or pos;
-		saveTarget = downP;
-		dbg("Auto Save: saving " .. downP.Name);
+	if autoSave and downP and downRoot and (not saveActive) and (not pendingSaveTarget) then
+		pendingSaveTarget = downP;
+		pendingSavePos = lastSafePos or pos;
+		dbg("Auto Save: queued " .. downP.Name);
+		local tgt = downP;
+		local startPos = pendingSavePos;
+		task.delay(saveDelay, function()
+			if not running then
+				return;
+			end;
+			if pendingSaveTarget ~= tgt then
+				return;
+			end;
+			if not autoSave then
+				pendingSaveTarget = nil;
+				pendingSavePos = nil;
+				return;
+			end;
+			if saveActive then
+				return;
+			end;
+			local chT = tgt.Character;
+			if not chT or chT:GetAttribute("Downed") ~= true then
+				pendingSaveTarget = nil;
+				pendingSavePos = nil;
+				return;
+			end;
+			saveActive = true;
+			savePos = startPos;
+			saveTarget = tgt;
+			pendingSaveTarget = nil;
+			pendingSavePos = nil;
+			dbg("Auto Save: saving " .. tgt.Name);
+		end);
 	end;
 	if saveActive and saveTarget and autoSave then
 		local recT, mdlT = NA_GRAB_BODY.ensure(saveTarget);
 		local humT = recT and recT.humanoid;
 		local rootT = recT and (recT.root or mdlT and NA_GRAB_BODY.firstPart(mdlT)) or nil;
-		if not humT or humT.Parent == nil or humT.Health > 0 or (recT.partCount or 0) < 3 then
+		local chT = saveTarget.Character;
+		if not chT or chT:GetAttribute("Downed") ~= true or (not humT) or humT.Parent == nil or (recT.partCount or 0) < 3 then
 			if savePos then
 				local back = attachToGround(savePos, ch) or savePos;
 				r.CFrame = CFrame.new(back, back + r.CFrame.LookVector);

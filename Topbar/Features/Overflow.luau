@@ -186,7 +186,6 @@ function Overflow.updateBoundary(alignment)
 		local order = (isLeft and -9999999) or 9999999
 		overflowIcon = Icon.new()
 		overflowIcon:setImage(6069276526, "Deselected")
-		overflowIcon:setLabel("...")
 		overflowIcon:setName("Overflow"..alignment)
 		overflowIcon:setOrder(order)
 		overflowIcon:setAlignment(alignment)

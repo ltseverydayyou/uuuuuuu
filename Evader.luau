@@ -102,7 +102,7 @@ gbCore:AddToggle("VoidFailsafe", {
 gbCore:AddToggle("CollectibleFarm", {
 	Text = "Collectible Autofarm",
 	Default = false,
-	Tooltip = "Teleport to collectible tickets"
+	Tooltip = "Teleport to collectible items, such as (tickets, gingerbread, etc)"
 });
 gbCore:AddSlider("ReviveRange", {
 	Text = "Revive Range",

@@ -323,7 +323,7 @@ RunService.RenderStepped:Connect(function()
 		local veryFastHit = highlightsMatch and nearHitTime <= (0.18 + ping * pingTimeScale)
 
 		local canPredict = (approaching and inPredict and highlightsMatch and speed >= 12) or closeHit or veryFastHit
-		if spam or canPredict then
+		if canPredict then
 			local now = tick()
 			if now - lastFire > 0.5 then
 				lastFire = now
@@ -350,4 +350,11 @@ RunService.RenderStepped:Connect(function()
 
 	updateRingColors()
 	applyVisualizerVisible(showViz)
+end)
+
+RunService.RenderStepped:Connect(function()
+	if spam then
+		VirtualInputManager:SendKeyEvent(true, "F", false, game)
+		VirtualInputManager:SendKeyEvent(false, "F", false, game)
+	end
 end)

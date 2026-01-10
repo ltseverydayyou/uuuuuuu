@@ -79,24 +79,6 @@ return function(icon, Icon)
 	local Gamepad = Import(script.Parent.Parent.Features.Gamepad)
 	Gamepad.registerButton(clickRegion)
 
-	local function setMenuClip(clipped)
-		menu.ClipsDescendants = clipped
-		menu.AutomaticCanvasSize = Enum.AutomaticSize.X
-	end
-	setMenuClip(true)
-	clickRegion.MouseEnter:Connect(function()
-		setMenuClip(false)
-	end)
-	clickRegion.MouseLeave:Connect(function()
-		setMenuClip(true)
-	end)
-	icon.viewingStarted:Connect(function()
-		setMenuClip(false)
-	end)
-	icon.viewingEnded:Connect(function()
-		setMenuClip(true)
-	end)
-
 	local clickRegionCorner = iconCorner:Clone()
 	clickRegionCorner.Parent = clickRegion
 

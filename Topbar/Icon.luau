@@ -78,6 +78,7 @@ Icon.insetHeightChanged = Signal.new()
 Icon.container = Import(elements.Container)(Icon)
 Icon.Features = iconModule.Features
 Icon.Themes = themes
+Icon.closeableOverflowMenus = true
 Icon.topbarEnabled = true
 Icon.iconAdded = Signal.new()
 Icon.iconRemoved = Signal.new()

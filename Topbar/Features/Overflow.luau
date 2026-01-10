@@ -186,6 +186,7 @@ function Overflow.updateBoundary(alignment)
 		local order = (isLeft and -9999999) or 9999999
 		overflowIcon = Icon.new()
 		overflowIcon:setImage(6069276526, "Deselected")
+		overflowIcon:setLabel("...")
 		overflowIcon:setName("Overflow"..alignment)
 		overflowIcon:setOrder(order)
 		overflowIcon:setAlignment(alignment)
@@ -196,7 +197,7 @@ function Overflow.updateBoundary(alignment)
 		overflowIcon:setEnabled(false)
 		overflowIcons[alignment] = overflowIcon
 		overflowIconUIDs[overflowIcon.UID] = true
-		if not Icon.closeableOverflowMenus then
+		if Icon.closeableOverflowMenus == false then
 			local iconSpot = overflowIcon:getInstance("IconSpot")
 			iconSpot.Visible = false
 		end

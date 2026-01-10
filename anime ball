@@ -70,7 +70,7 @@ if game.GameId == 5120885191 then
 			-0.2588194012641907
 		});
 	end;
-	(loadstring(game:HttpGet("https://raw.githubusercontent.com/1f0yt/community/main/RedCircleBlock")))();
+	(loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/main/AnimeBallParry.lua")))();
 	(ClonedService("Workspace")).Effects.ChildAdded:Connect(function(j)
 		task.wait();
 		j:Destroy();

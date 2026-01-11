@@ -383,6 +383,11 @@ local safeZoneParts = {};
 local colColl = Opt.ESPCollColor and Opt.ESPCollColor.Value or Color3.fromRGB(255, 170, 0);
 local farmPlatform;
 local farmPos = Vector3.new(0, 5000, 0);
+local plrGUI;
+local menuRespawnLoopRunning = false;
+local hideRewards;
+local startMenuRespawnLoop;
+local stopMenuRespawnLoop;
 local function dbg(msg)
 	if not debugOn then
 		return;
@@ -457,6 +462,16 @@ if Tog.AutoFarm then
 		if not v and farmPlatform then
 			farmPlatform:Destroy();
 			farmPlatform = nil;
+		end;
+		if v then
+			if startMenuRespawnLoop then
+				startMenuRespawnLoop();
+			end;
+			if hideRewards then
+				hideRewards();
+			end;
+		elseif stopMenuRespawnLoop then
+			stopMenuRespawnLoop();
 		end;
 	end);
 end;
@@ -767,6 +782,62 @@ end);
 local evt = ((rep:WaitForChild("Events")):WaitForChild("Character")):WaitForChild("Interact");
 local respEvt = ((rep:WaitForChild("Events")):WaitForChild("Player")):WaitForChild("ChangePlayerMode");
 local botFolder = (ws:WaitForChild("Game")):WaitForChild("Players");
+plrGUI = lp:FindFirstChildOfClass("PlayerGui") or lp:FindFirstChild("PlayerGui") or lp:WaitForChild("PlayerGui");
+hideRewards = function()
+	if not autoFarm then
+		return;
+	end;
+	if not plrGUI or (not plrGUI.Parent) then
+		plrGUI = lp:FindFirstChildOfClass("PlayerGui") or lp:FindFirstChild("PlayerGui");
+		if not plrGUI then
+			return;
+		end;
+	end;
+	local globalGui = plrGUI:FindFirstChild("Global");
+	if not (globalGui and globalGui:IsA("ScreenGui")) then
+		return;
+	end;
+	local rewards = globalGui:FindFirstChild("Rewards", true) or globalGui:FindFirstChild("Rewards");
+	if rewards and rewards:IsA("GuiObject") then
+		rewards.Visible = false;
+	end;
+end;
+startMenuRespawnLoop = function()
+	if menuRespawnLoopRunning then
+		return;
+	end;
+	menuRespawnLoopRunning = true;
+	task.spawn(function()
+		while running and menuRespawnLoopRunning do
+			if not autoFarm then
+				break;
+			end;
+			if respEvt then
+				if not plrGUI or (not plrGUI.Parent) then
+					plrGUI = lp:FindFirstChildOfClass("PlayerGui") or lp:FindFirstChild("PlayerGui");
+				end;
+				local menuGui = plrGUI and plrGUI:FindFirstChild("Menu");
+				if menuGui and menuGui:IsA("ScreenGui") then
+					respEvt:FireServer(true);
+					dbg("AutoFarm: attempting respawn");
+				end;
+			end;
+			task.wait(1);
+		end;
+		menuRespawnLoopRunning = false;
+	end);
+end;
+stopMenuRespawnLoop = function()
+	menuRespawnLoopRunning = false;
+end;
+task.spawn(function()
+	while running do
+		if autoFarm then
+			hideRewards();
+		end;
+		task.wait(1);
+	end;
+end);
 local function getChar()
 	local rec, mdl = NA_GRAB_BODY.ensure(ps.LocalPlayer);
 	if not rec then

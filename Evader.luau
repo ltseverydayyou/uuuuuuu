@@ -69,6 +69,11 @@ local Tabs = {
 local gbCore = Tabs.Main:AddLeftGroupbox("Core");
 local gbESP = Tabs.Main:AddRightGroupbox("ESP");
 local gbInfo = Tabs.Main:AddRightGroupbox("Info");
+gbCore:AddToggle("AutoFarm", {
+	Text = "Autofarm",
+	Default = false,
+	Tooltip = "Place you on a sky platform at (0, 5000, 0)"
+});
 gbCore:AddToggle("AutoRevive", {
 	Text = "Auto Revive",
 	Default = true,
@@ -174,6 +179,11 @@ gbESP:AddToggle("ESPShowDist", {
 	Default = false,
 	Tooltip = "Show studs on ESP"
 });
+gbESP:AddToggle("ESPCollectibles", {
+	Text = "Collectible ESP",
+	Default = false,
+	Tooltip = "ESP for collectible items"
+});
 gbESP:AddSlider("ESPTextSize", {
 	Text = "Text Size",
 	Min = 10,
@@ -184,10 +194,15 @@ gbESP:AddSlider("ESPTextSize", {
 gbESP:AddSlider("ESPMaxDist", {
 	Text = "ESP Max Distance",
 	Min = 50,
-	Max = 2000,
+	Max = 5000,
 	Default = 500,
 	Rounding = 0,
 	Suffix = " studs"
+});
+(gbESP:AddLabel("Collectible Color")):AddColorPicker("ESPCollColor", {
+	Title = "Collectible Color",
+	Default = Color3.fromRGB(255, 170, 0),
+	Transparency = 0
 });
 (gbESP:AddLabel("Player Color")):AddColorPicker("ESPPlayerColor", {
 	Title = "Player Color",
@@ -362,7 +377,12 @@ local colBt = Opt.ESPBotColor.Value;
 local wmOn = Tog.UIWatermark.Value;
 local voidFS = Tog.VoidFailsafe and Tog.VoidFailsafe.Value or false;
 local collFarm = Tog.CollectibleFarm and Tog.CollectibleFarm.Value or false;
+local autoFarm = Tog.AutoFarm and Tog.AutoFarm.Value or false;
+local espColl = Tog.ESPCollectibles and Tog.ESPCollectibles.Value or false;
 local safeZoneParts = {};
+local colColl = Opt.ESPCollColor and Opt.ESPCollColor.Value or Color3.fromRGB(255, 170, 0);
+local farmPlatform;
+local farmPos = Vector3.new(0, 5000, 0);
 local function dbg(msg)
 	if not debugOn then
 		return;
@@ -429,6 +449,25 @@ end;
 if Tog.CollectibleFarm then
 	Tog.CollectibleFarm:OnChanged(function(v)
 		collFarm = v;
+	end);
+end;
+if Tog.AutoFarm then
+	Tog.AutoFarm:OnChanged(function(v)
+		autoFarm = v;
+		if not v and farmPlatform then
+			farmPlatform:Destroy();
+			farmPlatform = nil;
+		end;
+	end);
+end;
+if Tog.ESPCollectibles then
+	Tog.ESPCollectibles:OnChanged(function(v)
+		espColl = v;
+	end);
+end;
+if Opt.ESPCollColor then
+	Opt.ESPCollColor:OnChanged(function(v)
+		colColl = v;
 	end);
 end;
 Opt.ReviveRange:OnChanged(function(v)
@@ -692,12 +731,6 @@ wmLbl.Text = "";
 wmLbl.Active = true;
 wmLbl.Draggable = true;
 wmLbl.Parent = wmGui;
-Tog.UIWatermark:OnChanged(function(v)
-	wmOn = v;
-	if wmGui then
-		wmGui.Enabled = v;
-	end;
-end);
 task.spawn(function()
 	while running do
 		if wmOn and wmGui and wmLbl then
@@ -773,6 +806,34 @@ end);
 local rayParams = RaycastParams.new();
 rayParams.FilterType = Enum.RaycastFilterType.Blacklist;
 rayParams.IgnoreWater = true;
+local losParams = RaycastParams.new();
+losParams.FilterType = Enum.RaycastFilterType.Blacklist;
+losParams.IgnoreWater = true;
+local getBotRootPart;
+local hasClearPath;
+local dangerousBots = {};
+local function isDangerousBotName(n)
+	n = typeof(n) == "string" and n:lower() or "";
+	return n == "rebel" or n == "slasher";
+end;
+local function markBotDangerous(m)
+	if m then
+		dangerousBots[m] = tick();
+	end;
+end;
+local function isBotMarkedDangerous(m)
+	if not m then
+		return false;
+	end;
+	if dangerousBots[m] then
+		return true;
+	end;
+	if isDangerousBotName(m.Name) then
+		dangerousBots[m] = dangerousBots[m] or tick();
+		return true;
+	end;
+	return false;
+end;
 local function isPointInPart(part, pos)
 	local rel = part.CFrame:PointToObjectSpace(pos);
 	local s = part.Size * 0.5;
@@ -870,6 +931,7 @@ local dmgParts = {};
 local dmgMap = {};
 local dmgConns = {};
 local recentHits = {};
+local collCollecting = false;
 local function addDamagePart(inst)
 	if not inst:IsA("BasePart") then
 		return;
@@ -926,6 +988,87 @@ local function isCharOnDamage(ch)
 	end;
 	return false;
 end;
+local function ensureFarmPlatform()
+	if not autoFarm then
+		return nil;
+	end;
+	if farmPlatform and farmPlatform.Parent then
+		farmPlatform.Anchored = true;
+		farmPlatform.CFrame = CFrame.new(farmPos);
+		return farmPlatform;
+	end;
+	local p = Instance.new("Part");
+	p.Name = "EvaderFarmPlatform";
+	p.Anchored = true;
+	p.CanCollide = true;
+	p.Size = Vector3.new(20, 1, 20);
+	p.Transparency = 0.8;
+	p.Position = farmPos;
+	p.TopSurface = Enum.SurfaceType.Smooth;
+	p.BottomSurface = Enum.SurfaceType.Smooth;
+	p.Parent = ws;
+	farmPlatform = p;
+	p.AncestryChanged:Connect(function(_, parent)
+		if not parent then
+			farmPlatform = nil;
+		end;
+	end);
+	return p;
+end;
+local function getHomePos(fallbackPos)
+	if autoFarm then
+		local pf = ensureFarmPlatform();
+		if pf then
+			return pf.Position + Vector3.new(0, 3, 0);
+		end;
+	end;
+	return fallbackPos;
+end;
+getBotRootPart = function(m)
+	local hit = m:FindFirstChild("Hitbox");
+	if hit and hit:IsA("BasePart") then
+		return hit;
+	end;
+	local humRoot = m:FindFirstChild("HumanoidRootPart");
+	if humRoot and humRoot:IsA("BasePart") then
+		return humRoot;
+	end;
+	local recB, mdlB = NA_GRAB_BODY.ensure(m);
+	if recB then
+		return recB.root or mdlB and NA_GRAB_BODY.firstPart(mdlB) or nil;
+	end;
+	return nil;
+end;
+local function buildFilter(ch)
+	local list = {
+		ch
+	};
+	for i = 1, #safeZoneParts do
+		list[(#list) + 1] = safeZoneParts[i];
+	end;
+	for i = 1, #dmgParts do
+		list[(#list) + 1] = dmgParts[i];
+	end;
+	return list;
+end;
+hasClearPath = function(fromPos, toPos, ch, botModel)
+	local dir = toPos - fromPos;
+	local mag = dir.Magnitude;
+	if mag < 0.001 then
+		return true;
+	end;
+	dir = dir / mag;
+	local list = {};
+	if ch then
+		list[(#list) + 1] = ch;
+	end;
+	if botModel then
+		list[(#list) + 1] = botModel;
+	end;
+	losParams.FilterDescendantsInstances = list;
+	local res = ws:Raycast(fromPos, dir * mag, losParams);
+	return res == nil;
+end;
 task.spawn(function()
 	local lastHp = 100;
 	while running do
@@ -944,6 +1087,28 @@ task.spawn(function()
 						table.remove(recentHits, i);
 					end;
 				end;
+				local ch = mdl;
+				local root = ch and getRoot(ch);
+				if root and botFolder then
+					local selfEye = root.Position + Vector3.new(0, 2, 0);
+					local kids = botFolder:GetChildren();
+					for j = 1, #kids do
+						local m = kids[j];
+						if m:IsA("Model") then
+							local pl = ps:GetPlayerFromCharacter(m);
+							if not pl then
+								local rootB = getBotRootPart(m);
+								if rootB then
+									local botEye = rootB.Position + Vector3.new(0, 2, 0);
+									local dBot = (selfEye - botEye).Magnitude;
+									if dBot <= botR * 1.5 and hasClearPath(botEye, selfEye, ch, m) then
+										markBotDangerous(m);
+									end;
+								end;
+							end;
+						end;
+					end;
+				end;
 			end;
 			lastHp = hp;
 		end;
@@ -956,7 +1121,7 @@ local function getDown(pos)
 	for i = 1, #others do
 		local p = others[i];
 		local ch = p.Character;
-		if ch and ch:GetAttribute("Downed") == true then
+		if ch and ch:GetAttribute("Downed") == true and (not isCharInSafeZone(ch)) then
 			local rec, mdl = NA_GRAB_BODY.ensure(p);
 			if rec and (rec.partCount or 0) >= 3 then
 				local r2 = rec.root or mdl and NA_GRAB_BODY.firstPart(mdl);
@@ -977,32 +1142,21 @@ local function getBot(pos)
 	if not botFolder then
 		return;
 	end;
-	local bestRoot, bestDist, bestPos;
+	local bestRoot, bestDist, bestPos, bestModel;
 	local kids = botFolder:GetChildren();
 	for i = 1, #kids do
 		local m = kids[i];
 		if m:IsA("Model") then
 			local pl = ps:GetPlayerFromCharacter(m);
 			if not pl then
-				local hit = m:FindFirstChild("Hitbox");
-				local root;
-				if hit and hit:IsA("BasePart") then
-					root = hit;
-				else
-					local humRoot = m:FindFirstChild("HumanoidRootPart");
-					if humRoot and humRoot:IsA("BasePart") then
-						root = humRoot;
-					else
-						local rec = NA_GRAB_BODY.ensure(m);
-						root = rec and (rec.root or NA_GRAB_BODY.firstPart(m)) or nil;
-					end;
-				end;
+				local root = getBotRootPart(m);
 				if root then
 					local d = (pos - root.Position).Magnitude;
 					if not bestDist or d < bestDist then
 						bestDist = d;
 						bestRoot = root;
 						bestPos = root.Position;
+						bestModel = m;
 					end;
 				end;
 			end;
@@ -1011,19 +1165,26 @@ local function getBot(pos)
 	if not bestRoot then
 		return;
 	end;
-	return bestRoot, bestDist, bestPos;
+	return bestRoot, bestDist, bestPos, bestModel;
 end;
-local function buildFilter(ch)
-	local list = {
-		ch
-	};
-	for i = 1, #safeZoneParts do
-		list[(#list) + 1] = safeZoneParts[i];
+local function isNearAnyBot(pos, minDist)
+	if not botFolder then
+		return false;
 	end;
-	for i = 1, #dmgParts do
-		list[(#list) + 1] = dmgParts[i];
+	local kids = botFolder:GetChildren();
+	for i = 1, #kids do
+		local m = kids[i];
+		if m:IsA("Model") then
+			local pl = ps:GetPlayerFromCharacter(m);
+			if not pl then
+				local br = getBotRootPart(m);
+				if br and (br.Position - pos).Magnitude < minDist then
+					return true;
+				end;
+			end;
+		end;
 	end;
-	return list;
+	return false;
 end;
 local function getSafePos(curPos, ch, botPos, dist)
 	rayParams.FilterDescendantsInstances = buildFilter(ch);
@@ -1066,7 +1227,7 @@ local function getSafePos(curPos, ch, botPos, dist)
 			if useDist then
 				local p = origin + dir * useDist;
 				local pos = Vector3.new(p.X, curPos.Y, p.Z);
-				if not isInSafeZone(pos) and (not isPointInDamage(pos)) then
+				if not isInSafeZone(pos) and (not isPointInDamage(pos)) and (not isNearAnyBot(pos, (dist * 0.6))) then
 					return pos;
 				end;
 			end;
@@ -1074,7 +1235,7 @@ local function getSafePos(curPos, ch, botPos, dist)
 	end;
 	local fb = origin + away * dist * 0.5;
 	local fbPos = Vector3.new(fb.X, curPos.Y, fb.Z);
-	if not isInSafeZone(fbPos) and (not isPointInDamage(fbPos)) then
+	if not isInSafeZone(fbPos) and (not isPointInDamage(fbPos)) and (not isNearAnyBot(fbPos, (dist * 0.6))) then
 		return fbPos;
 	end;
 	return nil;
@@ -1087,6 +1248,64 @@ local function attachToGround(pos, ch)
 		local p = Vector3.new(pos.X, res.Position.Y + 3, pos.Z);
 		if not isInSafeZone(p) and (not isPointInDamage(p)) then
 			return p;
+		end;
+	end;
+	return nil;
+end;
+local function getCoverPos(curPos, ch, botRoot, botModel, dist)
+	if not botRoot then
+		return nil;
+	end;
+	dist = dist or botR;
+	local origin = botRoot.Position + Vector3.new(0, 2, 0);
+	local away = Vector3.new(curPos.X - botRoot.Position.X, 0, curPos.Z - botRoot.Position.Z);
+	local mag = away.Magnitude;
+	if mag < 1 then
+		away = Vector3.new(1, 0, 0);
+		mag = 1;
+	end;
+	away = away / mag;
+	local baseCF = CFrame.new(Vector3.zero, away);
+	local angs = {
+		0,
+		30,
+		-30,
+		60,
+		-60,
+		90,
+		-90,
+		150,
+		-150,
+		180
+	};
+	rayParams.FilterDescendantsInstances = buildFilter(ch);
+	for i = 1, #angs do
+		local ang = angs[i];
+		local dir = (baseCF * CFrame.Angles(0, math.rad(ang), 0)).LookVector;
+		dir = Vector3.new(dir.X, 0, dir.Z);
+		local dmag = dir.Magnitude;
+		if dmag > 0.001 then
+			dir = dir / dmag;
+			local res = ws:Raycast(origin, dir * dist, rayParams);
+			local useDist = dist;
+			if res then
+				useDist = res.Distance - 2;
+				if useDist < dist * 0.4 then
+					useDist = nil;
+				end;
+			end;
+			if useDist then
+				local p = origin + dir * useDist;
+				local pos = Vector3.new(p.X, curPos.Y, p.Z);
+				local ground = attachToGround(pos, ch) or pos;
+				if not isInSafeZone(ground) and (not isPointInDamage(ground)) and (not isNearAnyBot(ground, (dist * 0.5))) then
+					local eye = ground + Vector3.new(0, 2, 0);
+					local botEye = botRoot.Position + Vector3.new(0, 2, 0);
+					if not hasClearPath(botEye, eye, ch, botModel) then
+						return ground;
+					end;
+				end;
+			end;
 		end;
 	end;
 	return nil;
@@ -1183,24 +1402,37 @@ task.spawn(function()
 			local r = ch and getRoot(ch);
 			local rec, mdl = NA_GRAB_BODY.ensure(lp);
 			local hum = rec and rec.humanoid;
-			if ch and r and hum and hum.Health > 0 and ch:GetAttribute("Downed") ~= true and not saveActive then
+			if ch and r and hum and hum.Health > 0 and ch:GetAttribute("Downed") ~= true and (not saveActive) then
+				local homePos = getHomePos(r.Position);
 				local gFolder = ws:FindFirstChild("Game");
 				local eff = gFolder and gFolder:FindFirstChild("Effects");
 				local tFolder = eff and eff:FindFirstChild("Tickets");
 				if tFolder then
 					for _, v in ipairs(tFolder:GetChildren()) do
-						if not running or not collFarm then
+						if not running or (not collFarm) then
+							collCollecting = false;
 							break;
 						end;
 						local hrp = v:FindFirstChild("HumanoidRootPart");
 						if hrp then
+							collCollecting = true;
 							r.CFrame = hrp.CFrame;
-							task.wait(0.15);
+							r.AssemblyLinearVelocity = Vector3.new();
+							r.AssemblyAngularVelocity = Vector3.new();
+							task.wait(1);
+							collCollecting = false;
 						end;
 					end;
 				end;
+				if homePos and autoFarm then
+					local tp = homePos;
+					r.CFrame = CFrame.new(tp, tp + r.CFrame.LookVector);
+					r.AssemblyLinearVelocity = Vector3.new();
+					r.AssemblyAngularVelocity = Vector3.new();
+				end;
 			end;
 		end;
+		collCollecting = false;
 		task.wait(1.5);
 	end;
 end);
@@ -1254,7 +1486,7 @@ local function updESP()
 	if not running then
 		return;
 	end;
-	if not (espPl or espDn or espBt) then
+	if not (espPl or espDn or espBt or espColl) then
 		for _, info in pairs(espObjs) do
 			if info.gui then
 				info.gui:Destroy();
@@ -1342,6 +1574,35 @@ local function updESP()
 			end;
 		end;
 	end;
+	if espColl and selfPos then
+		local gFolder = ws:FindFirstChild("Game");
+		local eff = gFolder and gFolder:FindFirstChild("Effects");
+		if eff then
+			local effKids = eff:GetChildren();
+			for i = 1, #effKids do
+				local f = effKids[i];
+				if f:IsA("Folder") or f:IsA("Model") then
+					local items = f:GetChildren();
+					for j = 1, #items do
+						local v = items[j];
+						local hrp = v:FindFirstChild("HumanoidRootPart");
+						if hrp then
+							local dist = (selfPos - hrp.Position).Magnitude;
+							if dist <= maxD then
+								local key = "col_" .. v:GetDebugId();
+								vis[key] = true;
+								local label = f.Name;
+								if espShow then
+									label = label .. " | " .. tostring(math.floor(dist));
+								end;
+								setESP(key, hrp, label, colColl, maxD);
+							end;
+						end;
+					end;
+				end;
+			end;
+		end;
+	end;
 	for k, info in pairs(espObjs) do
 		if not vis[k] then
 			if info.gui then
@@ -1374,6 +1635,18 @@ addConn(rs.Heartbeat, function()
 	local pos = r.Position;
 	local t = tick();
 	local maxVoidDist = 800;
+	if autoFarm and hum and hum.Health > 0 and ch:GetAttribute("Downed") ~= true and (not saveActive) and (not collFarm) then
+		local pf = ensureFarmPlatform();
+		if pf then
+			local target = pf.Position + Vector3.new(0, 3, 0);
+			if (pos - target).Magnitude > 1 then
+				r.CFrame = CFrame.new(target, target + r.CFrame.LookVector);
+				r.AssemblyLinearVelocity = Vector3.new();
+				r.AssemblyAngularVelocity = Vector3.new();
+				pos = target;
+			end;
+		end;
+	end;
 	if autoResp and respEvt and hum and hum.Health <= 0 and t - respLast >= respCd then
 		respLast = t;
 		respEvt:FireServer(true);
@@ -1399,7 +1672,7 @@ addConn(rs.Heartbeat, function()
 			end;
 		end;
 	end;
-	if antiSZ and isCharInSafeZone(ch) then
+	if antiSZ and (not collCollecting) and isCharInSafeZone(ch) then
 		if pushOutOfSafeZone(ch, r) then
 			return;
 		end;
@@ -1433,7 +1706,7 @@ addConn(rs.Heartbeat, function()
 	end;
 	if autoSave and downP and downRoot and (not saveActive) and (not pendingSaveTarget) then
 		pendingSaveTarget = downP;
-		pendingSavePos = lastSafePos or pos;
+		pendingSavePos = getHomePos(lastSafePos or pos);
 		dbg("Auto Save: queued " .. downP.Name);
 		local tgt = downP;
 		local startPos = pendingSavePos;
@@ -1492,17 +1765,50 @@ addConn(rs.Heartbeat, function()
 		end;
 	end;
 	if antiBot and botR > 0 and hum and hum.Health > 0 and (not saveActive) then
-		local hit, dist, botPos = getBot(pos);
-		if hit and dist and dist < botR then
-			local safePos = getSafePos(pos, ch, botPos, botR);
-			local targetPos = safePos;
-			if not targetPos then
-				local away = Vector3.new(pos.X - botPos.X, 0, pos.Z - botPos.Z);
-				if away.Magnitude < 0.001 then
-					away = Vector3.new(1, 0, 0);
+		local dangerRoot, dangerDist, dangerPos, dangerModel;
+		if botFolder then
+			local kids = botFolder:GetChildren();
+			for i = 1, #kids do
+				local m = kids[i];
+				if m:IsA("Model") and isBotMarkedDangerous(m) then
+					local rootB = getBotRootPart(m);
+					if rootB then
+						local d = (pos - rootB.Position).Magnitude;
+						if not dangerDist or d < dangerDist then
+							dangerDist = d;
+							dangerRoot = rootB;
+							dangerPos = rootB.Position;
+							dangerModel = m;
+						end;
+					end;
 				end;
-				away = away.Unit * botR;
-				targetPos = pos + away;
+			end;
+		end;
+		local useRoot, useDist, usePos, useModel = nil, nil, nil, nil;
+		if dangerRoot and dangerDist and dangerDist < botR * 1.3 then
+			useRoot, useDist, usePos, useModel = dangerRoot, dangerDist, dangerPos, dangerModel;
+		else
+			local hit, dist, botPos, botModel = getBot(pos);
+			if hit and dist then
+				useRoot, useDist, usePos, useModel = hit, dist, botPos, botModel;
+			end;
+		end;
+		if useRoot and useDist and useDist < botR then
+			local targetPos;
+			if isBotMarkedDangerous(useModel) then
+				targetPos = getCoverPos(pos, ch, useRoot, useModel, botR * 1.2);
+			end;
+			if not targetPos then
+				local safePos = getSafePos(pos, ch, usePos, botR);
+				targetPos = safePos;
+				if not targetPos then
+					local away = Vector3.new(pos.X - usePos.X, 0, pos.Z - usePos.Z);
+					if away.Magnitude < 0.001 then
+						away = Vector3.new(1, 0, 0);
+					end;
+					away = away.Unit * botR;
+					targetPos = pos + away;
+				end;
 			end;
 			if targetPos then
 				local grounded = attachToGround(targetPos, ch) or targetPos;

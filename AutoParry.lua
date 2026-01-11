@@ -230,7 +230,7 @@ local function updateRingColors()
 end
 
 UserInputService.InputBegan:Connect(function(input, gpe)
-	if input.KeyCode == Enum.KeyCode.X then
+	if input.KeyCode == Enum.KeyCode.X and not gpe then
 		spam = not spam
 		updateRingColors()
 	end

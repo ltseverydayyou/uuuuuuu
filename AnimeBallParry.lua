@@ -232,6 +232,25 @@ local lastFire = 0
 local resetToken = 0
 local wasInPredict = false
 local ringLimited = false
+local lastHighlightMatch = false
+local lastBallSamples = {}
+local lastBallVel = {}
+local currentBall = nil
+local function QuickParry()
+	local cam = workspace.CurrentCamera
+	local y = cam and cam.CFrame.LookVector.Y or 0
+	if Net and Net.Block then
+		pcall(function()
+			Net.Block:Invoke(y)
+		end)
+		return
+	end
+	if FRemote then
+		pcall(function()
+			FRemote:InvokeServer("SwordService", "Block", { y })
+		end)
+	end
+end
 local function DoParry()
 	local cam = workspace.CurrentCamera
 	local y = cam and cam.CFrame.LookVector.Y or 0
@@ -320,6 +339,11 @@ RunService.RenderStepped:Connect(function()
 	updateGuiTargets(hrp, ball)
 
 	if ball and ball.Position then
+		if ball ~= currentBall then
+			currentBall = ball
+			lastBallSamples = {}
+			lastBallVel = {}
+		end
 		local lookAtBall = CFrame.lookAt(hrp.Position, ball.Position)
 		ringPlayer.CFrame = lookAtBall
 		ringPlayerNoUnit.CFrame = lookAtBall
@@ -328,8 +352,27 @@ RunService.RenderStepped:Connect(function()
 		local rawDist = (ball.Position - hrp.Position).Magnitude
 		local dist = rawDist / distanceDivisor
 
+		local now = tick()
 		local velocity = ball.AssemblyLinearVelocity or ball.Velocity or Vector3.zero
 		local speed = velocity.Magnitude
+		local lastVel = lastBallVel[ball] or Vector3.zero
+		local sample = lastBallSamples[ball]
+		local dt = sample and (now - sample.t) or 0
+		local posDelta = sample and (ball.Position - sample.pos) or Vector3.zero
+		if (not sample) or dt > 0.4 then
+			sample = {pos = ball.Position, t = now}
+			dt = 0
+			posDelta = Vector3.zero
+		end
+		local manualVel = (dt > 0 and posDelta / dt) or velocity
+		local chosenVel = velocity
+		if chosenVel.Magnitude < 1e-3 or chosenVel.Magnitude < manualVel.Magnitude * 0.5 then
+			chosenVel = manualVel
+		end
+		lastBallSamples[ball] = {pos = ball.Position, t = now}
+		velocity = chosenVel:Lerp(lastVel, 0.5)
+		speed = velocity.Magnitude
+		lastBallVel[ball] = velocity
 		local baseSize = 10 + speed * speedScale * 2
 		local appliedPlayerSize = rescaleRing(ringPlayer, baseSize, maxSize)
 		ringLimited = appliedPlayerSize >= maxSize - 0.1
@@ -377,6 +420,10 @@ RunService.RenderStepped:Connect(function()
 		local ballHighlight, ballColor = getHighlightColor(ball)
 		local charHighlight, charColor = getHighlightColor(character)
 		local highlightsMatch = ballHighlight and charHighlight and colorsClose(ballColor, charColor, 0.07)
+		if highlightsMatch and not lastHighlightMatch then
+			lastFire = 0
+		end
+		lastHighlightMatch = highlightsMatch
 
 		local approaching = false
 		if speed >= 8 then
@@ -394,10 +441,11 @@ RunService.RenderStepped:Connect(function()
 		local nearHitTime = speed > 1 and (rawDist / speed) or math.huge
 		local veryFastHit = highlightsMatch and nearHitTime <= (0.18 + ping * pingTimeScale)
 
-		local canPredict = (approaching and inPredict and highlightsMatch and speed >= 12) or closeHit or veryFastHit
+		local closeHitSafe = closeHit and (nearHitTime <= 0.3 or speed >= 25)
+		local canPredict = (approaching and inPredict and highlightsMatch and (speed >= 12 or nearHitTime <= 0.25)) or closeHitSafe or veryFastHit
 		if canPredict then
 			local now = tick()
-			if now - lastFire > 0.5 then
+			if now - lastFire > 1 then
 				lastFire = now
 				task.defer(function()
 					task.spawn(DoParry)
@@ -423,8 +471,8 @@ RunService.RenderStepped:Connect(function()
 	applyVisualizerVisible(showViz)
 end)
 
-RunService.RenderStepped:Connect(function()
+RunService.Stepped:Connect(function()
 	if spam then
-		task.spawn(DoParry)
+		task.spawn(QuickParry)
 	end
 end)

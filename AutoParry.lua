@@ -39,7 +39,7 @@ end
 
 local speedScale = type(visualizerConfig) == "table" and visualizerConfig.speedScale or 0.06
 local minSize = type(visualizerConfig) == "table" and visualizerConfig.minSize or 5
-local maxSize = type(visualizerConfig) == "table" and visualizerConfig.maxSize or 400
+local maxSize = type(visualizerConfig) == "table" and visualizerConfig.maxSize or 200
 local predictMaxSize = type(visualizerConfig) == "table" and visualizerConfig.predictMaxSize or 400
 local predictMinRadius = type(visualizerConfig) == "table" and visualizerConfig.predictMinRadius or 10
 local pingPredictScale = type(visualizerConfig) == "table" and visualizerConfig.pingPredictScale or 0.1

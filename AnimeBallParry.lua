@@ -78,7 +78,7 @@ end
 
 local speedScale = type(visualizerConfig) == "table" and visualizerConfig.speedScale or 0.06
 local minSize = type(visualizerConfig) == "table" and visualizerConfig.minSize or 5
-local maxSize = type(visualizerConfig) == "table" and visualizerConfig.maxSize or 400
+local maxSize = type(visualizerConfig) == "table" and visualizerConfig.maxSize or 200
 local predictMaxSize = type(visualizerConfig) == "table" and visualizerConfig.predictMaxSize or 400
 local predictMinRadius = type(visualizerConfig) == "table" and visualizerConfig.predictMinRadius or 10
 local pingPredictScale = type(visualizerConfig) == "table" and visualizerConfig.pingPredictScale or 0.1
@@ -441,8 +441,9 @@ RunService.RenderStepped:Connect(function()
 		local nearHitTime = speed > 1 and (rawDist / speed) or math.huge
 		local veryFastHit = highlightsMatch and nearHitTime <= (0.18 + ping * pingTimeScale)
 
-		local closeHitSafe = closeHit and (nearHitTime <= 0.3 or speed >= 25)
-		local canPredict = (approaching and inPredict and highlightsMatch and (speed >= 12 or nearHitTime <= 0.25)) or closeHitSafe or veryFastHit
+		local slowGuard = (speed < 20) and (nearHitTime > 0.2)
+		local closeHitSafe = closeHit and (nearHitTime <= 0.2 or speed >= 25)
+		local canPredict = (not slowGuard) and ((approaching and inPredict and highlightsMatch and (speed >= 12 or nearHitTime <= 0.2)) or closeHitSafe or veryFastHit)
 		if canPredict then
 			local now = tick()
 			if now - lastFire > 1 then

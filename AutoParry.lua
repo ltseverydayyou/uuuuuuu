@@ -47,8 +47,8 @@ local pingTimeScale = type(visualizerConfig) == "table" and visualizerConfig.pin
 local ringBaseTransparency = type(visualizerConfig) == "table" and visualizerConfig.transparency or 0.3
 local ringPinkTransparency = type(visualizerConfig) == "table" and visualizerConfig.pinkTransparency or 0.55
 local distanceDivisor = type(visualizerConfig) == "table" and visualizerConfig.distanceDivisor or 10
-local predictBase = type(visualizerConfig) == "table" and visualizerConfig.predictBase or 28
-local predictExtra = type(visualizerConfig) == "table" and visualizerConfig.predictExtra or 10
+local predictBase = type(visualizerConfig) == "table" and visualizerConfig.predictBase or 35
+local predictExtra = type(visualizerConfig) == "table" and visualizerConfig.predictExtra or 5
 
 local function ensureIdentity()
 	pcall(function()
@@ -107,7 +107,7 @@ local function newRing(name, color)
 	local mesh = Instance.new("SpecialMesh")
 	mesh.MeshType = Enum.MeshType.FileMesh
 	mesh.MeshId = "rbxassetid://471124075"
-	mesh.Scale = Vector3.new(0.067, 0.042, 0.067)
+	mesh.Scale = Vector3.new(0.067, 0.1, 0.067)
 	mesh.Parent = part
 	part.Parent = workspace
 	return part
@@ -129,7 +129,7 @@ local function rescaleRing(part, diameter, overrideMax)
 	local mesh = part:FindFirstChildOfClass("SpecialMesh")
 	if mesh then
 		local factor = size / 10
-		mesh.Scale = Vector3.new(0.067 * factor, 0.042 * factor, 0.067 * factor)
+		mesh.Scale = Vector3.new(0.067 * factor, 0.1, 0.067 * factor)
 		mesh.Offset = Vector3.new(0, -(0.2 * factor - 0.2), 0)
 	end
 	return size
@@ -196,6 +196,7 @@ local lastBallSamples = {}
 local lastBallVel = {}
 local currentBall = nil
 local lastHighlightMatch = false
+local lastParryPerBall = {}
 local function getHighlightColor(inst)
 	local h = inst and (inst:FindFirstChildOfClass("Highlight") or inst:FindFirstChild("Highlight"))
 	return h, h and h.FillColor
@@ -241,7 +242,7 @@ local function updateGuiTargets(hrp, ball)
 	distanceGui.Adornee = ball or hrp
 end
 
-RunService.RenderStepped:Connect(function()
+RunService.Heartbeat:Connect(function()
 	character = localPlayer.Character or character
 	local hrp = waitForChildFast(character, "HumanoidRootPart")
 	local ball = getBall()
@@ -310,7 +311,11 @@ RunService.RenderStepped:Connect(function()
 			speedBoost = 0.07
 		end
 		local ping = Stats.Network.ServerStatsItem["Data Ping"]:GetValue()
-		local predictRadius = predictMinRadius + predictExtra + effectiveSpeed * (multiplier + speedBoost) + ping * pingPredictScale
+		local baseFactor = math.clamp(predictBase / 50, 0.25, 2)
+		local predictRadiusNoPing = predictMinRadius + (predictExtra * baseFactor) + effectiveSpeed * (multiplier + speedBoost) * baseFactor
+		local predictRadius = predictRadiusNoPing + ping * pingPredictScale
+		local appliedPlayerPredict = rescaleRing(ringPlayer, predictRadiusNoPing * 2, maxSize)
+		ringLimited = appliedPlayerPredict >= maxSize - 0.1
 		local appliedPredictSize = rescaleRing(ringPlayerNoUnit, predictRadius * 2, predictMaxSize)
 		ringPlayerNoUnit.Transparency = ringPinkTransparency
 		rescaleRing(ringBall, baseSize)
@@ -336,6 +341,7 @@ RunService.RenderStepped:Connect(function()
 		local highlightsMatch = ballHighlight and charHighlight and colorsClose(ballColor, charColor, 0.07)
 		if highlightsMatch and not lastHighlightMatch then
 			lastFire = 0
+			lastParryPerBall[ball] = -math.huge
 		end
 		lastHighlightMatch = highlightsMatch
 
@@ -356,11 +362,14 @@ RunService.RenderStepped:Connect(function()
 		local veryFastHit = highlightsMatch and nearHitTime <= (0.18 + ping * pingTimeScale)
 
 		local closeHitSafe = closeHit and (nearHitTime <= 0.3 or speed >= 25)
-		local canPredict = (approaching and inPredict and highlightsMatch and (speed >= 12 or nearHitTime <= 0.25)) or closeHitSafe or veryFastHit
+		local targetSnap = highlightsMatch and inPredict and (nearHitTime <= 0.6 or rawDist <= math.max(10, predictRadius * 0.6))
+		local canPredict = (approaching and inPredict and highlightsMatch and (speed >= 12 or nearHitTime <= 0.25)) or closeHitSafe or veryFastHit or targetSnap
 		if canPredict then
 			local now = tick()
-			if now - lastFire > 1 then
+			local lastBallFire = lastParryPerBall[ball] or -math.huge
+			if (now - lastBallFire) > 0.35 and (now - lastFire) > 1 then
 				lastFire = now
+				lastParryPerBall[ball] = now
 				task.defer(function()
 					VirtualInputManager:SendKeyEvent(true, "F", false, game)
 					VirtualInputManager:SendKeyEvent(false, "F", false, game)

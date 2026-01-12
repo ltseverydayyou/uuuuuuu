@@ -964,7 +964,7 @@ refreshSafeZones();
 task.spawn(function()
 	while running do
 		refreshSafeZones();
-		task.wait(5);
+		task.wait(15);
 	end;
 end);
 local dmgParts = {};
@@ -972,6 +972,53 @@ local dmgMap = {};
 local dmgConns = {};
 local recentHits = {};
 local collCollecting = false;
+local function cleanupLeakTables()
+	local now = tick();
+	for m, _ in pairs(dangerousBots) do
+		if not m or (not m.Parent) then
+			dangerousBots[m] = nil;
+		end;
+	end;
+	for inst, conn in pairs(dmgConns) do
+		if not inst or (not inst.Parent) then
+			if conn then
+				pcall(function()
+					conn:Disconnect();
+				end);
+			end;
+			dmgConns[inst] = nil;
+		end;
+	end;
+	for i = #dmgParts, 1, -1 do
+		local p = dmgParts[i];
+		if not p or (not p.Parent) then
+			table.remove(dmgParts, i);
+		end;
+	end;
+	for p, _ in pairs(dmgMap) do
+		if not p or (not p.Parent) then
+			dmgMap[p] = nil;
+		end;
+	end;
+	for i = #recentHits, 1, -1 do
+		local info = recentHits[i];
+		if not info or now - (info.time or 0) > 5 then
+			table.remove(recentHits, i);
+		end;
+	end;
+	for k, info in pairs(espObjs) do
+		local gui = info and info.gui;
+		if gui and (not gui.Parent) then
+			espObjs[k] = nil;
+		end;
+	end;
+end;
+task.spawn(function()
+	while running do
+		cleanupLeakTables();
+		task.wait(30);
+	end;
+end);
 local function addDamagePart(inst)
 	if not inst:IsA("BasePart") then
 		return;

@@ -88,58 +88,6 @@ print("✅ - Pass (exists and behavior works)");
 print("⛔ - Fail (missing or behavior broken)");
 print("⏺️ - Exists but not behavior-tested / optional missing");
 print("⚠️ - Missing aliases\n");
-task.defer(function()
-	repeat
-		task.wait();
-	until running == 0;
-	local function sortList(t)
-		table.sort(t, function(a, b)
-			return a < b;
-		end);
-	end;
-	sortList(list_pass);
-	sortList(list_fail);
-	sortList(list_exists_only);
-	sortList(list_missing);
-	sortList(list_alias_missing);
-	sortList(list_optional_missing);
-	local testedTotal = passes + fails;
-	local rate = testedTotal > 0 and math.round(passes / testedTotal * 100) or 0;
-	local outOf = passes .. " out of " .. testedTotal;
-	print("\nUNC Summary");
-	print("✅ Passes: " .. passes);
-	print("⛔ Fails: " .. fails);
-	print("⏺️ Exists but untested: " .. existsOnly);
-	print("❌ Missing required globals: " .. missing);
-	print("⏺️ Missing optional globals: " .. optionalMissing);
-	print("⚠️ Globals with missing aliases: " .. undefined);
-	print("Tested success rate: " .. rate .. "% (" .. outOf .. ")\n");
-	local verdict;
-	if testedTotal == 0 then
-		verdict = "No UNC functions were actually tested. Almost everything is missing.";
-	elseif rate >= 90 and fails == 0 and missing == 0 then
-		verdict = "Excellent UNC compatibility: almost everything matches and behaves correctly.";
-	elseif rate >= 80 and fails == 0 then
-		verdict = "Very good UNC compatibility: core features behave correctly, some globals or aliases missing.";
-	elseif rate >= 60 then
-		verdict = "Decent UNC compatibility: usable, but several functions are missing or behave differently.";
-	elseif rate >= 30 then
-		verdict = "Poor UNC compatibility: many UNC features fail or are missing.";
-	else
-		verdict = "Very bad UNC compatibility: this environment barely matches UNC.";
-	end;
-	print("Verdict: " .. verdict .. "\n");
-	if #list_missing > 0 then
-		print("❌ Completely missing required globals:");
-		print("  " .. table.concat(list_missing, ", "));
-		print("");
-	end;
-	if #list_optional_missing > 0 then
-		print("⏺️ Missing optional (executor-specific) globals:");
-		print("  " .. table.concat(list_optional_missing, ", "));
-		print("");
-	end;
-end);
 local function shallowEqual(t1, t2)
 	if t1 == t2 then
 		return true;
@@ -266,6 +214,18 @@ test("firetouchinterest", {}, function()
 		return "Events not observed; implementation may be stubbed or limited";
 	end;
 	part:Destroy();
+end);
+test("firesignal", {}, function()
+	local b = Instance.new("BindableEvent");
+	local hit = 0;
+	b.Event:Connect(function(a, b)
+		if a == 1 and b == 2 then
+			hit += 1;
+		end;
+	end);
+	firesignal(b.Event, 1, 2);
+	task.wait();
+	assert(hit == 1, "firesignal did not invoke RBXScriptSignal correctly");
 end);
 task.wait(0.5);
 test("cache.invalidate", {}, function()
@@ -543,7 +503,7 @@ end);
 test("getclipboard", {}, function()
 	local v = getclipboard();
 	assert(v == nil or type(v) == "string", "getclipboard must return a string or nil");
-end);
+end, true);
 test("getconnections", {}, function()
 	local types = {
 		Enabled = "boolean",
@@ -641,6 +601,31 @@ test("getnamecallmethod", {}, function()
 	end);
 	game:GetService("Lighting");
 	assert(method == "GetService", "Did not get the correct method (GetService)");
+end);
+test("hookmetamethod", {}, function()
+	local seen = false;
+	local old;
+	old = hookmetamethod(game, "__namecall", function(self, ...)
+		local m = getnamecallmethod();
+		if self == game and m == "GetService" then
+			seen = true;
+		end;
+		return old(self, ...);
+	end);
+	game:GetService("Lighting");
+	assert(seen == true, "hookmetamethod did not intercept __namecall");
+end);
+test("hookfunction", {
+	"hookfunc"
+}, function()
+	local called = false;
+	local old;
+	old = hookfunction(print, function(...)
+		called = true;
+		return old(...);
+	end);
+	print("UNC_HOOKFUNCTION_TEST");
+	assert(called == true, "hookfunction did not intercept target function");
 end);
 test("getnilinstances", {}, function()
 	assert((getnilinstances())[1]:IsA("Instance"), "The first value is not an Instance");
@@ -1110,8 +1095,13 @@ test("run_on_actor", {
 	assert(flag.Value == true, "run_on_actor did not appear to execute code on the actor");
 	flag:Destroy();
 end);
-test("WebSocket", {});
+test("WebSocket", {}, function()
+	assert(type(WebSocket) == "table" or type(WebSocket) == "userdata", "WebSocket must be a table or userdata");
+end);
 test("WebSocket.connect", {}, function()
+	if type(WebSocket) ~= "table" and type(WebSocket) ~= "userdata" then
+		return "WebSocket global is not table/userdata; cannot test connect";
+	end;
 	local types = {
 		Send = "function",
 		Close = "function",
@@ -1124,8 +1114,28 @@ test("WebSocket.connect", {}, function()
 			"userdata"
 		}
 	};
-	local ws = WebSocket.connect("ws://echo.websocket.events");
-	assert(type(ws) == "table" or type(ws) == "userdata", "Did not return a table or userdata");
+	local urls = {
+		"wss://echo.websocket.events",
+		"ws://echo.websocket.events",
+		"wss://ws.ifelse.io",
+		"wss://stream.binance.com:9443/ws/btcusdt@trade"
+	};
+	local ws;
+	local usedUrl;
+	local lastErr;
+	for _, url in ipairs(urls) do
+		local ok, res = pcall(WebSocket.connect, url);
+		if ok and res then
+			ws = res;
+			usedUrl = url;
+			break;
+		else
+			lastErr = res;
+		end;
+	end;
+	if not ws then
+		return "Unable to connect to any test WebSocket URL (likely blocked): " .. tostring(lastErr);
+	end;
 	for k, v in pairs(types) do
 		if type(v) == "table" then
 			assert(table.find(v, type(ws[k])), "Did not return a " .. table.concat(v, ", ") .. " for " .. k .. " (a " .. type(ws[k]) .. ")");
@@ -1133,7 +1143,62 @@ test("WebSocket.connect", {}, function()
 			assert(type(ws[k]) == v, "Did not return a " .. v .. " for " .. k .. " (a " .. type(ws[k]) .. ")");
 		end;
 	end;
-	ws:Close();
+	pcall(function()
+		ws:Close();
+	end);
+	return "Connected to " .. tostring(usedUrl);
+end);
+task.defer(function()
+	repeat
+		task.wait();
+	until running == 0;
+	local function sortList(t)
+		table.sort(t, function(a, b)
+			return a < b;
+		end);
+	end;
+	sortList(list_pass);
+	sortList(list_fail);
+	sortList(list_exists_only);
+	sortList(list_missing);
+	sortList(list_alias_missing);
+	sortList(list_optional_missing);
+	local testedTotal = passes + fails;
+	local rate = testedTotal > 0 and math.round(passes / testedTotal * 100) or 0;
+	local outOf = passes .. " out of " .. testedTotal;
+	print("\nUNC Summary");
+	print("✅ Passes: " .. passes);
+	print("⛔ Fails: " .. fails);
+	print("⏺️ Exists but untested: " .. existsOnly);
+	print("❌ Missing required globals: " .. missing);
+	print("⏺️ Missing optional globals: " .. optionalMissing);
+	print("⚠️ Globals with missing aliases: " .. undefined);
+	print("Tested success rate: " .. rate .. "% (" .. outOf .. ")\n");
+	local verdict;
+	if testedTotal == 0 then
+		verdict = "No UNC functions were actually tested. Almost everything is missing.";
+	elseif rate >= 90 and fails == 0 and missing == 0 then
+		verdict = "Excellent UNC compatibility: almost everything matches and behaves correctly.";
+	elseif rate >= 80 and fails == 0 then
+		verdict = "Very good UNC compatibility: core features behave correctly, some globals or aliases missing.";
+	elseif rate >= 60 then
+		verdict = "Decent UNC compatibility: usable, but several functions are missing or behave differently.";
+	elseif rate >= 30 then
+		verdict = "Poor UNC compatibility: many UNC features fail or are missing.";
+	else
+		verdict = "Very bad UNC compatibility: this environment barely matches UNC.";
+	end;
+	print("Verdict: " .. verdict .. "\n");
+	if #list_missing > 0 then
+		print("❌ Completely missing required globals:");
+		print("  " .. table.concat(list_missing, ", "));
+		print("");
+	end;
+	if #list_optional_missing > 0 then
+		print("⏺️ Missing optional (executor-specific) globals:");
+		print("  " .. table.concat(list_optional_missing, ", "));
+		print("");
+	end;
 end);
 local function runRcon()
 	local lp, lf = 0, 0;

@@ -245,8 +245,11 @@ end);
 local running = true;
 local conns = {};
 local espObjs = {};
+local safeZoneParts = {};
 local wmGui, wmLbl;
+local espParent;
 local wmScale = 1;
+local farmPlatform;
 local dpiMap = {
 	["50%"] = 0.5,
 	["75%"] = 0.75,
@@ -278,6 +281,24 @@ gbScript:AddButton("Unload Script", function()
 		wmGui = nil;
 		wmLbl = nil;
 	end;
+	if espParent then
+		espParent:Destroy();
+		espParent = nil;
+	end;
+	if farmPlatform then
+		farmPlatform:Destroy();
+		farmPlatform = nil;
+	end;
+	for i = 1, #safeZoneParts do
+		local part = safeZoneParts[i];
+		if part and part:IsA("BasePart") then
+			local sb = part:FindFirstChild("EvadeSafeZoneSB");
+			if sb then
+				sb:Destroy();
+			end;
+		end;
+	end;
+	table.clear(safeZoneParts);
 	Lib:Unload();
 	g.evade_vyperia = nil;
 end);
@@ -379,9 +400,7 @@ local voidFS = Tog.VoidFailsafe and Tog.VoidFailsafe.Value or false;
 local collFarm = Tog.CollectibleFarm and Tog.CollectibleFarm.Value or false;
 local autoFarm = Tog.AutoFarm and Tog.AutoFarm.Value or false;
 local espColl = Tog.ESPCollectibles and Tog.ESPCollectibles.Value or false;
-local safeZoneParts = {};
 local colColl = Opt.ESPCollColor and Opt.ESPCollColor.Value or Color3.fromRGB(255, 170, 0);
-local farmPlatform;
 local farmPos = Vector3.new(0, 5000, 0);
 local plrGUI;
 local menuRespawnLoopRunning = false;
@@ -806,6 +825,9 @@ startMenuRespawnLoop = function()
 end;
 stopMenuRespawnLoop = function()
 	menuRespawnLoopRunning = false;
+end;
+if autoFarm then
+	startMenuRespawnLoop();
 end;
 local function getChar()
 	local rec, mdl = NA_GRAB_BODY.ensure(ps.LocalPlayer);
@@ -1523,7 +1545,7 @@ task.spawn(function()
 		task.wait(1.5);
 	end;
 end);
-local espParent = Instance.new("ScreenGui");
+espParent = Instance.new("ScreenGui");
 espParent.Name = "EvadeESPContainer";
 espParent.ResetOnSpawn = false;
 espParent.IgnoreGuiInset = true;

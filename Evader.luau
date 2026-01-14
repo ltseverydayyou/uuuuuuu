@@ -406,6 +406,9 @@ local plrGUI;
 local menuRespawnLoopRunning = false;
 local startMenuRespawnLoop;
 local stopMenuRespawnLoop;
+local function saveOn()
+	return autoSave and autoRev;
+end;
 local function dbg(msg)
 	if not debugOn then
 		return;
@@ -1295,7 +1298,7 @@ local function isNearAnyBot(pos, minDist)
 	end;
 	return false;
 end;
-local function getSafePos(curPos, ch, botPos, dist)
+local function getSafePos(curPos, ch, botPos, dist, botRoot, botModel)
 	rayParams.FilterDescendantsInstances = buildFilter(ch);
 	local away = Vector3.new(curPos.X - botPos.X, 0, curPos.Z - botPos.Z);
 	local mag = away.Magnitude;
@@ -1336,7 +1339,15 @@ local function getSafePos(curPos, ch, botPos, dist)
 			if useDist then
 				local p = origin + dir * useDist;
 				local pos = Vector3.new(p.X, curPos.Y, p.Z);
-				if not isInSafeZone(pos) and (not isPointInDamage(pos)) and (not isNearAnyBot(pos, (dist * 0.6))) then
+				local okPos = not isInSafeZone(pos) and (not isPointInDamage(pos)) and (not isNearAnyBot(pos, (dist * 0.6)));
+				if okPos and botRoot and botModel and ch then
+					local eye = pos + Vector3.new(0, 2, 0);
+					local botEye = botRoot.Position + Vector3.new(0, 2, 0);
+					if hasClearPath(botEye, eye, ch, botModel) then
+						okPos = false;
+					end;
+				end;
+				if okPos then
 					return pos;
 				end;
 			end;
@@ -1344,7 +1355,15 @@ local function getSafePos(curPos, ch, botPos, dist)
 	end;
 	local fb = origin + away * dist * 0.5;
 	local fbPos = Vector3.new(fb.X, curPos.Y, fb.Z);
-	if not isInSafeZone(fbPos) and (not isPointInDamage(fbPos)) and (not isNearAnyBot(fbPos, (dist * 0.6))) then
+	local okFb = not isInSafeZone(fbPos) and (not isPointInDamage(fbPos)) and (not isNearAnyBot(fbPos, (dist * 0.6)));
+	if okFb and botRoot and botModel and ch then
+		local eye = fbPos + Vector3.new(0, 2, 0);
+		local botEye = botRoot.Position + Vector3.new(0, 2, 0);
+		if hasClearPath(botEye, eye, ch, botModel) then
+			okFb = false;
+		end;
+	end;
+	if okFb then
 		return fbPos;
 	end;
 	return nil;
@@ -1500,10 +1519,27 @@ local revLast = 0;
 local respLast = 0;
 local saveActive = false;
 local savePos;
+local saveCF;
 local saveTarget;
 local lastSafePos;
 local pendingSaveTarget;
 local pendingSavePos;
+local pendingSaveCF;
+local pendingSaveReady = false;
+local function beginSave(tgt, startPos, startCF)
+	if saveActive then
+		return;
+	end;
+	saveActive = true;
+	savePos = startPos;
+	saveCF = startCF;
+	saveTarget = tgt;
+	pendingSaveTarget = nil;
+	pendingSavePos = nil;
+	pendingSaveCF = nil;
+	pendingSaveReady = false;
+	dbg("Auto Save: saving " .. tgt.Name);
+end;
 task.spawn(function()
 	while running do
 		if collFarm then
@@ -1786,25 +1822,25 @@ addConn(rs.Heartbeat, function()
 			return;
 		end;
 	end;
-	if saveActive and (not autoSave) then
-		if savePos then
-			local back = attachToGround(savePos, ch) or savePos;
-			r.CFrame = CFrame.new(back, back + r.CFrame.LookVector);
+	if saveActive and (not saveOn()) then
+		if saveCF then
+			r.CFrame = saveCF;
+		elseif savePos then
+			r.CFrame = CFrame.new(savePos, savePos + r.CFrame.LookVector);
 		end;
 		r.AssemblyLinearVelocity = Vector3.new();
 		r.AssemblyAngularVelocity = Vector3.new();
 		saveActive = false;
 		savePos = nil;
+		saveCF = nil;
 		saveTarget = nil;
 		pendingSaveTarget = nil;
 		pendingSavePos = nil;
+		pendingSaveCF = nil;
+		pendingSaveReady = false;
 		dbg("Auto Save: cancelled");
 	end;
-	if not autoSave and pendingSaveTarget then
-		pendingSaveTarget = nil;
-		pendingSavePos = nil;
-	end;
-	local needDown = autoRev and revR > 0 or autoSave;
+	local needDown = autoRev and revR > 0 or saveOn();
 	local downP, downRoot, downDist;
 	if needDown then
 		downP, downRoot, downDist = getDown(pos);
@@ -1813,12 +1849,15 @@ addConn(rs.Heartbeat, function()
 		revLast = t;
 		evt:FireServer("Revive", true, downP.Name);
 	end;
-	if autoSave and downP and downRoot and (not saveActive) and (not pendingSaveTarget) then
+	if downP and downRoot and (not saveActive) and (not pendingSaveTarget) then
 		pendingSaveTarget = downP;
 		pendingSavePos = getHomePos(lastSafePos or pos);
+		pendingSaveCF = CFrame.new(pendingSavePos, pendingSavePos + r.CFrame.LookVector);
+		pendingSaveReady = false;
 		dbg("Auto Save: queued " .. downP.Name);
 		local tgt = downP;
 		local startPos = pendingSavePos;
+		local startCF = pendingSaveCF;
 		task.delay(saveDelay, function()
 			if not running then
 				return;
@@ -1826,42 +1865,32 @@ addConn(rs.Heartbeat, function()
 			if pendingSaveTarget ~= tgt then
 				return;
 			end;
-			if not autoSave then
-				pendingSaveTarget = nil;
-				pendingSavePos = nil;
+			pendingSaveReady = true;
+			if not saveOn() then
 				return;
 			end;
-			if saveActive then
-				return;
-			end;
-			local chT = tgt.Character;
-			if not chT or chT:GetAttribute("Downed") ~= true then
-				pendingSaveTarget = nil;
-				pendingSavePos = nil;
-				return;
-			end;
-			saveActive = true;
-			savePos = startPos;
-			saveTarget = tgt;
-			pendingSaveTarget = nil;
-			pendingSavePos = nil;
-			dbg("Auto Save: saving " .. tgt.Name);
+			beginSave(tgt, startPos, startCF);
 		end);
 	end;
-	if saveActive and saveTarget and autoSave then
+	if saveOn() and pendingSaveTarget and pendingSaveReady and (not saveActive) then
+		beginSave(pendingSaveTarget, pendingSavePos, pendingSaveCF);
+	end;
+	if saveActive and saveTarget and saveOn() then
 		local recT, mdlT = NA_GRAB_BODY.ensure(saveTarget);
 		local humT = recT and recT.humanoid;
 		local rootT = recT and (recT.root or mdlT and NA_GRAB_BODY.firstPart(mdlT)) or nil;
 		local chT = saveTarget.Character;
 		if not chT or chT:GetAttribute("Downed") ~= true or (not humT) or humT.Parent == nil or (recT.partCount or 0) < 3 then
-			if savePos then
-				local back = attachToGround(savePos, ch) or savePos;
-				r.CFrame = CFrame.new(back, back + r.CFrame.LookVector);
+			if saveCF then
+				r.CFrame = saveCF;
+			elseif savePos then
+				r.CFrame = CFrame.new(savePos, savePos + r.CFrame.LookVector);
 			end;
 			r.AssemblyLinearVelocity = Vector3.new();
 			r.AssemblyAngularVelocity = Vector3.new();
 			saveActive = false;
 			savePos = nil;
+			saveCF = nil;
 			saveTarget = nil;
 			dbg("Auto Save: returned to start");
 		elseif rootT then
@@ -1908,7 +1937,7 @@ addConn(rs.Heartbeat, function()
 				targetPos = getCoverPos(pos, ch, useRoot, useModel, botR * 1.2);
 			end;
 			if not targetPos then
-				local safePos = getSafePos(pos, ch, usePos, botR);
+				local safePos = getSafePos(pos, ch, usePos, botR, isBotMarkedDangerous(useModel) and useRoot or nil, isBotMarkedDangerous(useModel) and useModel or nil);
 				targetPos = safePos;
 				if not targetPos then
 					local away = Vector3.new(pos.X - usePos.X, 0, pos.Z - usePos.Z);

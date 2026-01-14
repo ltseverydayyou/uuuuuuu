@@ -402,6 +402,7 @@ local autoFarm = Tog.AutoFarm and Tog.AutoFarm.Value or false;
 local espColl = Tog.ESPCollectibles and Tog.ESPCollectibles.Value or false;
 local colColl = Opt.ESPCollColor and Opt.ESPCollColor.Value or Color3.fromRGB(255, 170, 0);
 local farmPos = Vector3.new(0, 5000, 0);
+local dmgAvoidRange = 7;
 local plrGUI;
 local menuRespawnLoopRunning = false;
 local startMenuRespawnLoop;
@@ -994,41 +995,18 @@ task.spawn(function()
 end);
 local dmgParts = {};
 local dmgMap = {};
-local dmgConns = {};
-local recentHits = {};
 local collCollecting = false;
 local function cleanupLeakTables()
 	local now = tick();
-	for m, _ in pairs(dangerousBots) do
-		if not m or (not m.Parent) then
-			dangerousBots[m] = nil;
-		end;
-	end;
-	for inst, conn in pairs(dmgConns) do
-		if not inst or (not inst.Parent) then
-			if conn then
-				pcall(function()
-					conn:Disconnect();
-				end);
-			end;
-			dmgConns[inst] = nil;
-		end;
-	end;
-	for i = #dmgParts, 1, -1 do
-		local p = dmgParts[i];
-		if not p or (not p.Parent) then
-			table.remove(dmgParts, i);
-		end;
-	end;
 	for p, _ in pairs(dmgMap) do
 		if not p or (not p.Parent) then
 			dmgMap[p] = nil;
 		end;
 	end;
-	for i = #recentHits, 1, -1 do
-		local info = recentHits[i];
-		if not info or now - (info.time or 0) > 5 then
-			table.remove(recentHits, i);
+	for i = #dmgParts, 1, -1 do
+		local part = dmgParts[i];
+		if not part or (not part.Parent) then
+			table.remove(dmgParts, i);
 		end;
 	end;
 	for k, info in pairs(espObjs) do
@@ -1044,40 +1022,33 @@ task.spawn(function()
 		task.wait(30);
 	end;
 end);
-local function addDamagePart(inst)
-	if not inst:IsA("BasePart") then
-		return;
-	end;
-	if not inst:FindFirstChildWhichIsA("TouchTransmitter", true) then
-		return;
-	end;
-	if dmgConns[inst] then
-		return;
-	end;
-	dmgConns[inst] = inst.Touched:Connect(function(hit)
-		local ch = getChar();
-		if not ch then
-			return;
-		end;
-		if hit and hit:IsDescendantOf(ch) then
-			recentHits[(#recentHits) + 1] = {
-				part = inst,
-				time = tick()
-			};
-		end;
-	end);
-end;
-for _, inst in ipairs(ws:GetDescendants()) do
-	addDamagePart(inst);
-end;
-addConn(ws.DescendantAdded, addDamagePart);
 local function addDamageFlag(part)
+	if not part or (not part:IsA("BasePart")) then
+		return;
+	end;
 	if not dmgMap[part] then
 		dmgMap[part] = true;
 		dmgParts[(#dmgParts) + 1] = part;
-		dbg("Marked damage part");
+		dbg("Marked TouchTransmitter part");
 	end;
 end;
+local function markTouchDamage(tt)
+	local parent = tt.Parent;
+	local part = parent and parent:IsA("BasePart") and parent or tt:FindFirstAncestorWhichIsA("BasePart");
+	if part then
+		addDamageFlag(part);
+	end;
+end;
+for _, inst in ipairs(ws:GetDescendants()) do
+	if inst:IsA("TouchTransmitter") then
+		markTouchDamage(inst);
+	end;
+end;
+addConn(ws.DescendantAdded, function(inst)
+	if inst:IsA("TouchTransmitter") then
+		markTouchDamage(inst);
+	end;
+end);
 local function isPointInDamage(pos)
 	for i = 1, #dmgParts do
 		local p = dmgParts[i];
@@ -1099,6 +1070,27 @@ local function isCharOnDamage(ch)
 		end;
 	end;
 	return false;
+end;
+local function getNearestDamage(pos)
+	local bestPart, bestDist, bestPos;
+	if #dmgParts == 0 then
+		return nil, nil, nil;
+	end;
+	local self2D = Vector3.new(pos.X, 0, pos.Z);
+	for i = 1, #dmgParts do
+		local part = dmgParts[i];
+		if part and part.Parent then
+			local p = part.Position;
+			local part2D = Vector3.new(p.X, 0, p.Z);
+			local d = (self2D - part2D).Magnitude;
+			if not bestDist or d < bestDist then
+				bestDist = d;
+				bestPart = part;
+				bestPos = p;
+			end;
+		end;
+	end;
+	return bestPart, bestDist, bestPos;
 end;
 local function ensureFarmPlatform()
 	if not autoFarm then
@@ -1182,23 +1174,13 @@ hasClearPath = function(fromPos, toPos, ch, botModel)
 	return res == nil;
 end;
 task.spawn(function()
-	local lastHp = 100;
+	local lastHp = nil;
 	while running do
 		local rec, mdl = NA_GRAB_BODY.ensure(lp);
 		local hum = rec and rec.humanoid;
 		if hum then
 			local hp = hum.Health;
-			if hp < lastHp - 1 then
-				local now = tick();
-				for i = #recentHits, 1, -1 do
-					local info = recentHits[i];
-					if now - info.time > 0.6 then
-						table.remove(recentHits, i);
-					else
-						addDamageFlag(info.part);
-						table.remove(recentHits, i);
-					end;
-				end;
+			if lastHp and hp < lastHp - 1 then
 				local ch = mdl;
 				local root = ch and getRoot(ch);
 				if root and botFolder then
@@ -1376,6 +1358,21 @@ local function attachToGround(pos, ch)
 		local p = Vector3.new(pos.X, res.Position.Y + 3, pos.Z);
 		if not isInSafeZone(p) and (not isPointInDamage(p)) then
 			return p;
+		end;
+	end;
+	return nil;
+end;
+local function findLocalSafe(pos, ch)
+	local stepR = 6;
+	local maxR = 60;
+	for radius = stepR, maxR, stepR do
+		for ang = 0, 330, 30 do
+			local rad = math.rad(ang);
+			local test = Vector3.new(pos.X + math.cos(rad) * radius, pos.Y, pos.Z + math.sin(rad) * radius);
+			local ground = attachToGround(test, ch) or test;
+			if not isInSafeZone(ground) and (not isPointInDamage(ground)) then
+				return ground;
+			end;
 		end;
 	end;
 	return nil;
@@ -1822,6 +1819,45 @@ addConn(rs.Heartbeat, function()
 			return;
 		end;
 	end;
+	local dmgPart, dmgDist, dmgPos = getNearestDamage(pos);
+	if hum and hum.Health > 0 and (not saveActive) and dmgPart and dmgDist and dmgDist < dmgAvoidRange then
+		local self2D = Vector3.new(pos.X, 0, pos.Z);
+		local dmg2D = Vector3.new(dmgPos.X, 0, dmgPos.Z);
+		local away = self2D - dmg2D;
+		if away.Magnitude < 1 then
+			away = Vector3.new(1, 0, 0);
+		end;
+		away = away.Unit;
+		local target2D = dmg2D + away * (dmgAvoidRange + 4);
+		local target = Vector3.new(target2D.X, pos.Y, target2D.Z);
+		local grounded = attachToGround(target, ch) or target;
+		if not isInSafeZone(grounded) and (not isPointInDamage(grounded)) then
+			local final = grounded + Vector3.new(0, 0.1, 0);
+			r.CFrame = CFrame.new(final, final + r.CFrame.LookVector);
+			r.AssemblyLinearVelocity = Vector3.new();
+			r.AssemblyAngularVelocity = Vector3.new();
+			dbg("Damage distance push");
+			return;
+		end;
+	end;
+	if isCharOnDamage(ch) and hum and hum.Health > 0 and (not saveActive) then
+		local safe = lastSafePos;
+		if not safe then
+			if autoFarm then
+				safe = getHomePos(pos);
+			else
+				safe = findLocalSafe(pos, ch);
+			end;
+		end;
+		if safe then
+			local target = safe + Vector3.new(0, 0.1, 0);
+			r.CFrame = CFrame.new(target, target + r.CFrame.LookVector);
+			r.AssemblyLinearVelocity = Vector3.new();
+			r.AssemblyAngularVelocity = Vector3.new();
+			dbg("Damage fail-safe");
+			return;
+		end;
+	end;
 	if saveActive and (not saveOn()) then
 		if saveCF then
 			r.CFrame = saveCF;
@@ -1923,7 +1959,7 @@ addConn(rs.Heartbeat, function()
 			end;
 		end;
 		local useRoot, useDist, usePos, useModel = nil, nil, nil, nil;
-		if dangerRoot and dangerDist and dangerDist < botR * 1.3 then
+		if dangerRoot and dangerDist then
 			useRoot, useDist, usePos, useModel = dangerRoot, dangerDist, dangerPos, dangerModel;
 		else
 			local hit, dist, botPos, botModel = getBot(pos);
@@ -1931,29 +1967,43 @@ addConn(rs.Heartbeat, function()
 				useRoot, useDist, usePos, useModel = hit, dist, botPos, botModel;
 			end;
 		end;
-		if useRoot and useDist and useDist < botR then
-			local targetPos;
-			if isBotMarkedDangerous(useModel) then
-				targetPos = getCoverPos(pos, ch, useRoot, useModel, botR * 1.2);
-			end;
-			if not targetPos then
-				local safePos = getSafePos(pos, ch, usePos, botR, isBotMarkedDangerous(useModel) and useRoot or nil, isBotMarkedDangerous(useModel) and useModel or nil);
-				targetPos = safePos;
-				if not targetPos then
-					local away = Vector3.new(pos.X - usePos.X, 0, pos.Z - usePos.Z);
-					if away.Magnitude < 0.001 then
-						away = Vector3.new(1, 0, 0);
-					end;
-					away = away.Unit * botR;
-					targetPos = pos + away;
+		if useRoot and useDist then
+			local selfEye = pos + Vector3.new(0, 2, 0);
+			local botEye = useRoot.Position + Vector3.new(0, 2, 0);
+			local see = hasClearPath(botEye, selfEye, ch, useModel);
+			local danger = isBotMarkedDangerous(useModel);
+			local limit = botR;
+			if danger then
+				if see then
+					limit = botR * 3;
+				else
+					limit = botR * 1.5;
 				end;
 			end;
-			if targetPos then
-				local grounded = attachToGround(targetPos, ch) or targetPos;
-				if not isInSafeZone(grounded) and (not isPointInDamage(grounded)) and (grounded - pos).Magnitude > 1 then
-					r.CFrame = CFrame.new(grounded, grounded + r.CFrame.LookVector);
-					r.AssemblyLinearVelocity = Vector3.new();
-					r.AssemblyAngularVelocity = Vector3.new();
+			if useDist < limit then
+				local targetPos;
+				if danger then
+					targetPos = getCoverPos(pos, ch, useRoot, useModel, botR * 1.2);
+				end;
+				if not targetPos then
+					local safePos = getSafePos(pos, ch, usePos, botR, danger and useRoot or nil, danger and useModel or nil);
+					targetPos = safePos;
+					if not targetPos then
+						local away = Vector3.new(pos.X - usePos.X, 0, pos.Z - usePos.Z);
+						if away.Magnitude < 0.001 then
+							away = Vector3.new(1, 0, 0);
+						end;
+						away = away.Unit * botR;
+						targetPos = pos + away;
+					end;
+				end;
+				if targetPos then
+					local grounded = attachToGround(targetPos, ch) or targetPos;
+					if not isInSafeZone(grounded) and (not isPointInDamage(grounded)) and (grounded - pos).Magnitude > 1 then
+						r.CFrame = CFrame.new(grounded, grounded + r.CFrame.LookVector);
+						r.AssemblyLinearVelocity = Vector3.new();
+						r.AssemblyAngularVelocity = Vector3.new();
+					end;
 				end;
 			end;
 		end;

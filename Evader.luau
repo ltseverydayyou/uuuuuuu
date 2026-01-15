@@ -1215,7 +1215,7 @@ local function getDown(pos)
 	for i = 1, #others do
 		local p = others[i];
 		local ch = p.Character;
-		if ch and ch:GetAttribute("Downed") == true and (not isCharInSafeZone(ch)) then
+		if ch and ch:GetAttribute("Downed") == true then
 			local rec, mdl = NA_GRAB_BODY.ensure(p);
 			if rec and (rec.partCount or 0) >= 3 then
 				local r2 = rec.root or mdl and NA_GRAB_BODY.firstPart(mdl);

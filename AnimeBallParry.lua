@@ -1,8 +1,8 @@
 local Players = game:GetService("Players");
 local RunService = game:GetService("RunService");
 local UserInputService = game:GetService("UserInputService");
-local Stats = game:GetService("Stats");
 local ReplicatedStorage = game:GetService("ReplicatedStorage");
+local Stats = game:GetService("Stats");
 local guiCHECKINGAHHHHH = function()
 	return gethui and gethui() or (game:GetService("CoreGui")):FindFirstChildWhichIsA("ScreenGui") or game:GetService("CoreGui") or (game:GetService("Players")).LocalPlayer:FindFirstChildWhichIsA("PlayerGui");
 end;
@@ -150,8 +150,13 @@ ringPlayerNoUnit.Name = "VisualizerNoUnit";
 ringPlayerNoUnit.Color = Color3.new(1, 0, 1);
 ringPlayerNoUnit.Transparency = 0.55;
 ringPlayerNoUnit.Parent = workspace;
-local function rescaleRing(part, diameter, overrideMax)
-	local size = math.clamp(diameter or 10, minSize, overrideMax or maxSize);
+local ringSizeState = {};
+local function rescaleRing(part, diameter, overrideMax, dt)
+	local target = math.clamp(diameter or 10, minSize, overrideMax or maxSize);
+	local current = ringSizeState[part] or part and part.Size.X or target;
+	local alpha = dt and math.clamp(dt / 0.03, 0.08, 0.6) or 0.35;
+	local size = current + (target - current) * alpha;
+	ringSizeState[part] = size;
 	part.Size = Vector3.new(size, 0.4, size);
 	local mesh = part:FindFirstChildOfClass("SpecialMesh");
 	if mesh then
@@ -159,7 +164,7 @@ local function rescaleRing(part, diameter, overrideMax)
 		mesh.Scale = Vector3.new(0.067 * factor, 0.1, 0.067 * factor);
 		mesh.Offset = Vector3.new(0, -(0.2 * factor - 0.2), 0);
 	end;
-	return size;
+	return target;
 end;
 local function newBillboard(name, size, studsOffset, includeMulti)
 	ensureIdentity();
@@ -210,6 +215,29 @@ local function applyVisualizerVisible(show)
 	ringBall.Transparency = show and ringBaseTransparency or 1;
 	ringPlayerNoUnit.Transparency = show and ringPinkTransparency or 1;
 end;
+local visualizerAttached = true;
+local function attachVisualizer(hasBall)
+	if hasBall then
+		if not visualizerAttached then
+			local guiParent = guiCHECKINGAHHHHH();
+			rangeGui.Parent = guiParent;
+			distanceGui.Parent = guiParent;
+			ringPlayer.Parent = workspace;
+			ringBall.Parent = workspace;
+			ringPlayerNoUnit.Parent = workspace;
+			visualizerAttached = true;
+		end;
+	elseif visualizerAttached then
+		rangeGui.Parent = nil;
+		distanceGui.Parent = nil;
+		rangeGui.Adornee = nil;
+		distanceGui.Adornee = nil;
+		ringPlayer.Parent = nil;
+		ringBall.Parent = nil;
+		ringPlayerNoUnit.Parent = nil;
+		visualizerAttached = false;
+	end;
+end;
 local spam = false;
 local lastFire = 0;
 local resetToken = 0;
@@ -217,9 +245,13 @@ local wasInPredict = false;
 local ringLimited = false;
 local lastBallSamples = {};
 local lastBallVel = {};
+local lastBallMoveTime = {};
+local closeParryBlocked = {};
+local smoothedSpeed = {};
 local currentBall = nil;
 local lastHighlightMatch = false;
 local lastParryPerBall = {};
+local predictEnterAt = {};
 local function QuickParry()
 	local cam = workspace.CurrentCamera;
 	local y = cam and cam.CFrame.LookVector.Y or 0;
@@ -273,6 +305,9 @@ local function DoParry()
 end;
 local function getHighlightColor(inst)
 	local h = inst and (inst:FindFirstChildOfClass("Highlight") or inst:FindFirstChild("Highlight"));
+	if h and h.Enabled == false then
+		return nil, nil;
+	end;
 	return h, h and h.FillColor;
 end;
 local function colorsClose(a, b, tol)
@@ -309,13 +344,19 @@ UserInputService.InputBegan:Connect(function(input, gpe)
 end);
 updateRingColors();
 local function updateGuiTargets(hrp, ball)
-	rangeGui.Adornee = hrp;
-	distanceGui.Adornee = ball or hrp;
+	if ball then
+		rangeGui.Adornee = hrp;
+		distanceGui.Adornee = ball;
+	else
+		rangeGui.Adornee = nil;
+		distanceGui.Adornee = nil;
+	end;
 end;
-RunService.Heartbeat:Connect(function()
+RunService.RenderStepped:Connect(function(dt)
 	character = localPlayer.Character or character;
 	local hrp = waitForChildFast(character, "HumanoidRootPart");
 	local ball = getBall();
+	attachVisualizer(ball ~= nil);
 	local showViz = isVisualizerEnabled();
 	if not (hrp and hrp.Position) then
 		return;
@@ -326,6 +367,11 @@ RunService.Heartbeat:Connect(function()
 			currentBall = ball;
 			lastBallSamples = {};
 			lastBallVel = {};
+			lastBallMoveTime = {};
+			closeParryBlocked = {};
+			smoothedSpeed = {};
+			predictEnterAt = {};
+			ringSizeState = {};
 		end;
 		local lookAtBall = CFrame.lookAt(hrp.Position, ball.Position);
 		ringPlayer.CFrame = lookAtBall;
@@ -335,33 +381,43 @@ RunService.Heartbeat:Connect(function()
 		local dist = rawDist / distanceDivisor;
 		local now = tick();
 		local velocity = ball.AssemblyLinearVelocity or ball.Velocity or Vector3.zero;
-		local speed = velocity.Magnitude;
 		local lastVel = lastBallVel[ball] or Vector3.zero;
 		local sample = lastBallSamples[ball];
-		local dt = sample and now - sample.t or 0;
+		local sampleDt = sample and now - sample.t or 0;
 		local posDelta = sample and ball.Position - sample.pos or Vector3.zero;
-		if not sample or dt > 0.4 then
+		if not sample or sampleDt > 0.4 then
 			sample = {
 				pos = ball.Position,
 				t = now
 			};
-			dt = 0;
+			sampleDt = 0;
 			posDelta = Vector3.zero;
 		end;
-		local manualVel = dt > 0 and posDelta / dt or velocity;
+		local manualVel = sampleDt > 0 and posDelta / math.max(sampleDt, 0.001) or velocity;
 		local chosenVel = velocity;
 		if chosenVel.Magnitude < 0.001 or chosenVel.Magnitude < manualVel.Magnitude * 0.5 then
 			chosenVel = manualVel;
 		end;
+		local lastMoveTime = lastBallMoveTime[ball] or 0;
+		if chosenVel.Magnitude >= 4 then
+			lastBallMoveTime[ball] = now;
+		elseif lastVel.Magnitude > 8 and now - lastMoveTime < 0.2 then
+			chosenVel = lastVel:Lerp(chosenVel, 0.15);
+		end;
+		local smoothingAlpha = sampleDt > 0 and math.clamp(sampleDt / 0.06, 0.18, 0.65) or 0.35;
 		lastBallSamples[ball] = {
 			pos = ball.Position,
 			t = now
 		};
-		velocity = chosenVel:Lerp(lastVel, 0.5);
-		speed = velocity.Magnitude;
+		velocity = lastVel:Lerp(chosenVel, smoothingAlpha);
+		local speed = velocity.Magnitude;
+		local prevSpeed = smoothedSpeed[ball] or speed;
+		local speedLerp = math.clamp((dt or 0.016) / 0.12, 0.08, 0.5);
+		speed = prevSpeed + (speed - prevSpeed) * speedLerp;
+		smoothedSpeed[ball] = speed;
 		lastBallVel[ball] = velocity;
 		local baseSize = 10 + speed * speedScale * 2;
-		local appliedPlayerSize = rescaleRing(ringPlayer, baseSize, maxSize);
+		local appliedPlayerSize = rescaleRing(ringPlayer, baseSize, maxSize, dt);
 		ringLimited = appliedPlayerSize >= maxSize - 0.1;
 		local multiplier = 0.12;
 		if speed < 60 then
@@ -384,28 +440,42 @@ RunService.Heartbeat:Connect(function()
 		local baseFactor = math.clamp(predictBase / 50, 0.25, 2);
 		local predictRadiusNoPing = predictMinRadius + predictExtra * baseFactor + effectiveSpeed * (multiplier + speedBoost) * baseFactor;
 		local predictRadius = predictRadiusNoPing + ping * pingPredictScale;
-		local appliedPlayerPredict = rescaleRing(ringPlayer, predictRadiusNoPing * 2, maxSize);
+		local predictEntryInset = math.clamp(predictRadius * 0.025 + ping * 0.01, 1, 6);
+		local preEntryMargin = math.clamp(predictRadius * 0.025 + ping * 0.0085, 0.6, 3);
+		local parryPredictRadius = predictRadius + preEntryMargin;
+		local appliedPlayerPredict = rescaleRing(ringPlayer, predictRadiusNoPing * 2, maxSize, dt);
 		ringLimited = appliedPlayerPredict >= maxSize - 0.1;
-		local appliedPredictSize = rescaleRing(ringPlayerNoUnit, predictRadius * 2, predictMaxSize);
+		local appliedPredictSize = rescaleRing(ringPlayerNoUnit, predictRadius * 2, predictMaxSize, dt);
 		ringPlayerNoUnit.Transparency = ringPinkTransparency;
-		rescaleRing(ringBall, baseSize);
+		rescaleRing(ringBall, baseSize, nil, dt);
 		local inPredict = rawDist <= predictRadius;
+		local nearPredict = rawDist <= predictRadius + preEntryMargin;
+		local inParryPredict = rawDist <= parryPredictRadius;
 		local displayedPredict = predictRadius;
 		rangeText.Text = tostring(round(displayedPredict, 1));
 		if rangeMulti then
 			rangeMulti.Text = string.format("%.1fx", round(displayedPredict / 100, 1));
 		end;
 		distanceText.Text = tostring(round(dist, 1));
-		if inPredict then
+		if nearPredict then
+			predictEnterAt[ball] = predictEnterAt[ball] or now;
 			resetToken = resetToken + 1;
 		elseif wasInPredict then
+			predictEnterAt[ball] = nil;
 			scheduleReset();
+		else
+			predictEnterAt[ball] = nil;
 		end;
-		wasInPredict = inPredict;
+		wasInPredict = nearPredict;
+		local settleTime = math.clamp(0.01 + ping * 0.0005, 0.01, 0.04);
+		local settledInPredict = nearPredict and predictEnterAt[ball] and now - predictEnterAt[ball] >= settleTime;
 		local ballHighlight, ballColor = getHighlightColor(ball);
 		local charHighlight, charColor = getHighlightColor(character);
 		local highlightsMatch = ballHighlight and charHighlight and colorsClose(ballColor, charColor, 0.07);
 		if highlightsMatch and (not lastHighlightMatch) then
+			lastFire = 0;
+			lastParryPerBall[ball] = -math.huge;
+		elseif not highlightsMatch and lastHighlightMatch then
 			lastFire = 0;
 			lastParryPerBall[ball] = -math.huge;
 		end;
@@ -425,14 +495,23 @@ RunService.Heartbeat:Connect(function()
 		local nearHitTime = speed > 1 and rawDist / speed or math.huge;
 		local veryFastHit = highlightsMatch and nearHitTime <= 0.18 + ping * pingTimeScale;
 		local closeHitSafe = closeHit and (nearHitTime <= 0.3 or speed >= 25);
-		local targetSnap = highlightsMatch and inPredict and (nearHitTime <= 0.6 or rawDist <= math.max(10, predictRadius * 0.6));
-		local canPredict = approaching and inPredict and highlightsMatch and (speed >= 12 or nearHitTime <= 0.25) or closeHitSafe or veryFastHit or targetSnap;
+		local targetSnap = highlightsMatch and inParryPredict and settledInPredict and (nearHitTime <= 0.6 or rawDist <= math.max(10, parryPredictRadius * 0.6));
+		if closeParryBlocked[ball] and rawDist > parryPredictRadius * 1.15 then
+			closeParryBlocked[ball] = nil;
+		end;
+		local inCloseBlock = closeParryBlocked[ball] and rawDist <= parryPredictRadius * 1.15;
+		local canPredict = approaching and inParryPredict and settledInPredict and highlightsMatch and (speed >= 12 or nearHitTime <= 0.25) or closeHitSafe or veryFastHit or targetSnap;
+		canPredict = canPredict and (not inCloseBlock);
 		if canPredict then
 			local now = tick();
 			local lastBallFire = lastParryPerBall[ball] or (-math.huge);
-			if now - lastBallFire > 0.35 and now - lastFire > 1 then
+			local minBallCooldown = highlightsMatch and 0.7 or 0.35;
+			if now - lastBallFire > minBallCooldown and now - lastFire > 1 then
 				lastFire = now;
 				lastParryPerBall[ball] = now;
+				if rawDist <= parryPredictRadius * 0.8 then
+					closeParryBlocked[ball] = true;
+				end;
 				task.defer(function()
 					task.spawn(DoParry);
 				end);
@@ -442,6 +521,13 @@ RunService.Heartbeat:Connect(function()
 		ringPlayer.CFrame = CFrame.new(hrp.Position);
 		ringPlayerNoUnit.CFrame = ringPlayer.CFrame;
 		ringBall.CFrame = ringPlayer.CFrame;
+		currentBall = nil;
+		lastBallSamples = {};
+		lastBallVel = {};
+		lastBallMoveTime = {};
+		smoothedSpeed = {};
+		closeParryBlocked = {};
+		predictEnterAt = {};
 		lastFire = 0;
 		ringLimited = false;
 		resetToken = resetToken + 1;

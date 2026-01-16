@@ -606,14 +606,11 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 						closeParryBlocked[ball] = true;
 					end;
 					parryTriggered = true;
-					task.defer(function()
-						task.spawn(DoParry);
-					end);
+					task.spawn(DoParry);
 				end;
 			end;
 		end;
-		attemptParry();
-		task.defer(attemptParry);
+		task.spawn(attemptParry);
 	else
 		ringPlayer.CFrame = CFrame.new(hrp.Position);
 		ringPlayerNoUnit.CFrame = ringPlayer.CFrame;

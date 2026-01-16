@@ -7,12 +7,15 @@ if game.GameId == 5120885191 then
 		return Reference(Service(game, name));
 	end;
 	local UIS = ClonedService("UserInputService");
-	local plr = (ClonedService("Players")).LocalPlayer;
+	local plrs = ClonedService("Players");
+	local plr = plrs.LocalPlayer;
 	local rs = ClonedService("RunService");
 	local rep = ClonedService("ReplicatedStorage");
+	local TweenService = ClonedService("TweenService");
 	local spam = false;
 	spamBtn = nil;
-	(getgenv()).visualizer = false;
+	local G = getgenv and getgenv() or _G;
+	G.visualizer = G.visualizer ~= nil and G.visualizer or false;
 	local function protectUI(sGui)
 		if sGui:IsA("ScreenGui") then
 			sGui.ZIndexBehavior = Enum.ZIndexBehavior.Global;
@@ -21,7 +24,7 @@ if game.GameId == 5120885191 then
 			sGui.IgnoreGuiInset = true;
 		end;
 		local cGUI = ClonedService("CoreGui");
-		local lPlr = (ClonedService("Players")).LocalPlayer;
+		local lPlr = plrs.LocalPlayer;
 		local function NAProtection(inst, var)
 			if inst then
 				if var then
@@ -55,7 +58,7 @@ if game.GameId == 5120885191 then
 		end;
 	end;
 	function getRoot(char)
-		return char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso");
+		return char and (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso"));
 	end;
 	function rndStr()
 		local len = math.random(10, 20);
@@ -70,6 +73,76 @@ if game.GameId == 5120885191 then
 			-0.2588194012641907
 		});
 	end;
+	local function initVisCfg()
+		local v = G.visualizer;
+		if type(v) ~= "table" then
+			v = {
+				enabled = v == true
+			};
+		end;
+		if v.enabled == nil then
+			v.enabled = true;
+		end;
+		v.speedScale = v.speedScale or 0.06;
+		v.minSize = v.minSize or 5;
+		v.maxSize = v.maxSize or 200;
+		v.predictMaxSize = v.predictMaxSize or 400;
+		v.predictMinRadius = v.predictMinRadius or 10;
+		v.pingPredictScale = v.pingPredictScale or 0.1;
+		v.pingTimeScale = v.pingTimeScale or 0.001;
+		v.transparency = v.transparency or 0.3;
+		v.pinkTransparency = v.pinkTransparency or 0.55;
+		v.distanceDivisor = v.distanceDivisor or 10;
+		v.predictBase = v.predictBase or 35;
+		v.predictExtra = v.predictExtra or 5;
+		v.profile = v.profile or "Balanced";
+		G.visualizer = v;
+		return v;
+	end;
+	local visCfg = initVisCfg();
+	local profiles = {
+		Safe = {
+			speedScale = 0.045,
+			predictBase = 28,
+			predictExtra = 4,
+			distanceDivisor = 11,
+			pingPredictScale = 0.09,
+			pingTimeScale = 0.0012
+		},
+		Balanced = {
+			speedScale = 0.06,
+			predictBase = 35,
+			predictExtra = 5,
+			distanceDivisor = 10,
+			pingPredictScale = 0.1,
+			pingTimeScale = 0.001
+		},
+		Aggressive = {
+			speedScale = 0.08,
+			predictBase = 44,
+			predictExtra = 7,
+			distanceDivisor = 9,
+			pingPredictScale = 0.12,
+			pingTimeScale = 0.0009
+		}
+	};
+	local order = {
+		"Safe",
+		"Balanced",
+		"Aggressive"
+	};
+	local function applyProfile(name)
+		local cfg = initVisCfg();
+		local p = profiles[name];
+		if p then
+			for k, v in pairs(p) do
+				cfg[k] = v;
+			end;
+			cfg.profile = name;
+			G.visualizer = cfg;
+		end;
+		(loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/main/AnimeBallParry.lua")))();
+	end;
 	(loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/main/AnimeBallParry.lua")))();
 	(ClonedService("Workspace")).Effects.ChildAdded:Connect(function(j)
 		task.wait();
@@ -83,116 +156,334 @@ if game.GameId == 5120885191 then
 	gui.Name = rndStr();
 	local frame = Instance.new("Frame");
 	frame.Name = "MainFrame";
-	frame.Size = UDim2.new(0, 250, 0, 200);
-	frame.Position = UDim2.new(0.5, -125, 0.2, 0);
-	frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30);
-	frame.BackgroundTransparency = 0.2;
-	frame.BorderSizePixel = 2;
-	frame.BorderColor3 = Color3.fromRGB(60, 60, 60);
+	local fullSize = UDim2.new(0, 340, 0, 270);
+	local miniSize = UDim2.new(0, 340, 0, 54);
+	local fullPos = UDim2.new(0.5, -170, 0.5, -135);
+	frame.Size = fullSize;
+	frame.Position = fullPos;
+	frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0);
+	frame.BackgroundTransparency = 0.1;
+	frame.BorderSizePixel = 0;
 	frame.Active = true;
 	frame.Draggable = true;
 	frame.Parent = gui;
+	frame.ClipsDescendants = true;
+	local corner = Instance.new("UICorner");
+	corner.CornerRadius = UDim.new(0, 10);
+	corner.Parent = frame;
+	local stroke = Instance.new("UIStroke");
+	stroke.Thickness = 1.5;
+	stroke.Color = Color3.fromRGB(255, 255, 255);
+	stroke.Transparency = 0.2;
+	stroke.Parent = frame;
+	local toggleBtn = Instance.new("TextButton");
+	toggleBtn.Name = "ToggleButton";
+	toggleBtn.Size = UDim2.new(0, 40, 0, 40);
+	toggleBtn.Position = UDim2.new(0.5, -20, 0, 10);
+	toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0);
+	toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255);
+	toggleBtn.TextSize = 14;
+	toggleBtn.Font = Enum.Font.GothamBold;
+	toggleBtn.Text = "AB";
+	toggleBtn.AutoButtonColor = false;
+	toggleBtn.Visible = false;
+	toggleBtn.Parent = gui;
+	local tCorner = Instance.new("UICorner");
+	tCorner.CornerRadius = UDim.new(1, 0);
+	tCorner.Parent = toggleBtn;
+	local tStroke = Instance.new("UIStroke");
+	tStroke.Thickness = 1;
+	tStroke.Color = Color3.fromRGB(255, 255, 255);
+	tStroke.Transparency = 0.25;
+	tStroke.Parent = toggleBtn;
 	local title = Instance.new("TextLabel");
 	title.Name = "Title";
-	title.Size = UDim2.new(1, -50, 0, 30);
-	title.Position = UDim2.new(0, 0, 0, 0);
-	title.BackgroundColor3 = Color3.fromRGB(40, 40, 40);
-	title.BackgroundTransparency = 0.2;
+	title.Size = UDim2.new(1, -110, 0, 26);
+	title.Position = UDim2.new(0, 14, 0, 6);
+	title.BackgroundTransparency = 1;
 	title.TextColor3 = Color3.fromRGB(255, 255, 255);
 	title.TextSize = 18;
-	title.Font = Enum.Font.SourceSansBold;
-	title.Text = "Ball Script";
+	title.Font = Enum.Font.GothamBold;
+	title.TextXAlignment = Enum.TextXAlignment.Left;
+	title.Text = "Anime Ball Parry";
 	title.Parent = frame;
+	local deviceLbl = Instance.new("TextLabel");
+	deviceLbl.Name = "Device";
+	deviceLbl.Size = UDim2.new(0, 80, 0, 18);
+	deviceLbl.Position = UDim2.new(0, 14, 0, 30);
+	deviceLbl.BackgroundTransparency = 1;
+	deviceLbl.TextColor3 = Color3.fromRGB(200, 200, 200);
+	deviceLbl.TextSize = 12;
+	deviceLbl.Font = Enum.Font.Gotham;
+	deviceLbl.TextXAlignment = Enum.TextXAlignment.Left;
+	deviceLbl.Text = UIS.TouchEnabled and "MOBILE" or "PC";
+	deviceLbl.Parent = frame;
 	local closeBtn = Instance.new("TextButton");
 	closeBtn.Name = "CloseBtn";
 	closeBtn.Text = "X";
-	closeBtn.Size = UDim2.new(0, 25, 0, 25);
-	closeBtn.Position = UDim2.new(1, -25, 0, 0);
-	closeBtn.BackgroundColor3 = Color3.fromRGB(180, 0, 0);
+	closeBtn.Size = UDim2.new(0, 26, 0, 26);
+	closeBtn.Position = UDim2.new(1, -32, 0, 6);
+	closeBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0);
 	closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255);
 	closeBtn.TextSize = 16;
-	closeBtn.Font = Enum.Font.SourceSansBold;
+	closeBtn.Font = Enum.Font.GothamBold;
+	closeBtn.AutoButtonColor = false;
 	closeBtn.Parent = frame;
-	closeBtn.MouseButton1Click:Connect(function()
-		gui:Destroy();
-	end);
+	local closeCorner = Instance.new("UICorner");
+	closeCorner.CornerRadius = UDim.new(0, 6);
+	closeCorner.Parent = closeBtn;
 	local minimizeBtn = Instance.new("TextButton");
 	minimizeBtn.Name = "MinimizeBtn";
 	minimizeBtn.Text = "-";
-	minimizeBtn.Size = UDim2.new(0, 25, 0, 25);
-	minimizeBtn.Position = UDim2.new(1, -50, 0, 0);
-	minimizeBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60);
+	minimizeBtn.Size = UDim2.new(0, 26, 0, 26);
+	minimizeBtn.Position = UDim2.new(1, -64, 0, 6);
+	minimizeBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0);
 	minimizeBtn.TextColor3 = Color3.fromRGB(255, 255, 255);
 	minimizeBtn.TextSize = 16;
-	minimizeBtn.Font = Enum.Font.SourceSansBold;
+	minimizeBtn.Font = Enum.Font.GothamBold;
+	minimizeBtn.AutoButtonColor = false;
 	minimizeBtn.Parent = frame;
-	function mkBtn(name, text, posX, posY, callback)
+	local miniCorner = Instance.new("UICorner");
+	miniCorner.CornerRadius = UDim.new(0, 6);
+	miniCorner.Parent = minimizeBtn;
+	local statusLbl = Instance.new("TextLabel");
+	statusLbl.Name = "Status";
+	statusLbl.Size = UDim2.new(1, -28, 0, 18);
+	statusLbl.Position = UDim2.new(0, 14, 0, 52);
+	statusLbl.BackgroundTransparency = 1;
+	statusLbl.TextColor3 = Color3.fromRGB(220, 220, 220);
+	statusLbl.TextSize = 12;
+	statusLbl.Font = Enum.Font.Gotham;
+	statusLbl.TextXAlignment = Enum.TextXAlignment.Left;
+	statusLbl.Parent = frame;
+	local hintLbl = Instance.new("TextLabel");
+	hintLbl.Name = "Hint";
+	hintLbl.Size = UDim2.new(1, -28, 0, 30);
+	hintLbl.Position = UDim2.new(0, 14, 0, 70);
+	hintLbl.BackgroundTransparency = 1;
+	hintLbl.TextColor3 = Color3.fromRGB(180, 180, 180);
+	hintLbl.TextSize = 11;
+	hintLbl.Font = Enum.Font.Gotham;
+	hintLbl.TextXAlignment = Enum.TextXAlignment.Left;
+	hintLbl.TextWrapped = true;
+	hintLbl.Parent = frame;
+	local divider = Instance.new("Frame");
+	divider.Size = UDim2.new(1, -28, 0, 1);
+	divider.Position = UDim2.new(0, 14, 0, 104);
+	divider.BackgroundColor3 = Color3.fromRGB(255, 255, 255);
+	divider.BackgroundTransparency = 0.8;
+	divider.BorderSizePixel = 0;
+	divider.Parent = frame;
+	local section1 = Instance.new("TextLabel");
+	section1.Name = "SecControls";
+	section1.Size = UDim2.new(1, -28, 0, 16);
+	section1.Position = UDim2.new(0, 14, 0, 108);
+	section1.BackgroundTransparency = 1;
+	section1.TextColor3 = Color3.fromRGB(210, 210, 210);
+	section1.TextSize = 11;
+	section1.Font = Enum.Font.Gotham;
+	section1.TextXAlignment = Enum.TextXAlignment.Left;
+	section1.Text = "Controls";
+	section1.Parent = frame;
+	local function setBtnState(btn, on)
+		if not btn then
+			return;
+		end;
+		if on then
+			btn.BackgroundColor3 = Color3.fromRGB(255, 255, 255);
+			btn.TextColor3 = Color3.fromRGB(0, 0, 0);
+		else
+			btn.BackgroundColor3 = Color3.fromRGB(0, 0, 0);
+			btn.TextColor3 = Color3.fromRGB(255, 255, 255);
+		end;
+	end;
+	local function mkBtn(name, text, size, pos, callback)
 		local btn = Instance.new("TextButton");
 		btn.Name = name;
 		btn.Text = text;
-		btn.Size = UDim2.new(0, 110, 0, 35);
-		btn.Position = UDim2.new(posX, 0, posY, 0);
-		btn.BackgroundColor3 = Color3.fromRGB(60, 60, 60);
-		btn.BackgroundTransparency = 0.2;
+		btn.Size = size;
+		btn.Position = pos;
+		btn.BackgroundColor3 = Color3.fromRGB(0, 0, 0);
+		btn.BackgroundTransparency = 0;
 		btn.TextColor3 = Color3.fromRGB(255, 255, 255);
-		btn.TextSize = 16;
-		btn.Font = Enum.Font.SourceSans;
-		btn.BorderSizePixel = 1;
-		btn.BorderColor3 = Color3.fromRGB(100, 100, 100);
+		btn.TextSize = 14;
+		btn.Font = Enum.Font.Gotham;
+		btn.BorderSizePixel = 0;
+		btn.AutoButtonColor = false;
 		btn.Parent = frame;
+		local bCorner = Instance.new("UICorner");
+		bCorner.CornerRadius = UDim.new(0, 8);
+		bCorner.Parent = btn;
+		local bStroke = Instance.new("UIStroke");
+		bStroke.Thickness = 1;
+		bStroke.Color = Color3.fromRGB(255, 255, 255);
+		bStroke.Transparency = 0.3;
+		bStroke.Parent = btn;
 		btn.MouseButton1Click:Connect(function(...)
 			callback(btn, ...);
 		end);
 		return btn;
 	end;
-	function toggleSpam()
-		spam = not spam;
-		pcall(function()
-			spamBtn.Text = "Spam: " .. (spam and "ON" or "OFF");
-			spamBtn.BackgroundColor3 = spam and Color3.fromRGB(0, 120, 0) or Color3.fromRGB(60, 60, 60);
-		end);
+	local function visOn()
+		local v = G.visualizer;
+		if type(v) == "boolean" then
+			return v;
+		elseif type(v) == "table" then
+			return v.enabled ~= false;
+		end;
+		return false;
 	end;
-	local parryBtn = mkBtn("ParryBtn", "Parry", 0.05, 0.2, function()
+	local function getProfile()
+		local v = G.visualizer;
+		if type(v) == "table" and v.profile then
+			return v.profile;
+		end;
+		return "Balanced";
+	end;
+	local function updateStatus()
+		local v = visOn();
+		local dev = UIS.TouchEnabled and "MOBILE" or "PC";
+		statusLbl.Text = "Spam: " .. (spam and "ON" or "OFF") .. "   Visualizer: " .. (v and "ON" or "OFF") .. "   Profile: " .. getProfile() .. "   Device: " .. dev;
+		if UIS.TouchEnabled then
+			hintLbl.Text = "Tap buttons to toggle spam, visualizer, profile and freeze.";
+		else
+			hintLbl.Text = "Press R to toggle spam. Use buttons for visualizer, profiles and freeze.";
+		end;
+	end;
+	local function tween(obj, t, goal)
+		local tw = TweenService:Create(obj, TweenInfo.new(t, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), goal);
+		tw:Play();
+		return tw;
+	end;
+	local function toggleSpam()
+		spam = not spam;
+		if spamBtn then
+			spamBtn.Text = "Spam: " .. (spam and "ON" or "OFF");
+			setBtnState(spamBtn, spam);
+		end;
+		updateStatus();
+	end;
+	local parryBtn = mkBtn("ParryBtn", "Manual Parry", UDim2.new(0, 150, 0, 34), UDim2.new(0, 14, 0, 126), function()
 		task.spawn(parry);
 	end);
-	spamBtn = mkBtn("SpamBtn", "Spam: OFF", 0.55, 0.2, function()
+	spamBtn = mkBtn("SpamBtn", "Spam: OFF", UDim2.new(0, 150, 0, 34), UDim2.new(0, 176, 0, 126), function()
 		task.spawn(toggleSpam);
 	end);
-	local freezeBtn = mkBtn("FreezeBtn", "Freeze", 0.05, 0.4, function()
-		(getRoot(plr.Character)).Anchored = true;
-	end);
-	local unfreezeBtn = mkBtn("UnfreezeBtn", "Unfreeze", 0.55, 0.4, function()
-		(getRoot(plr.Character)).Anchored = false;
-	end);
-	local toggleVisBtn = mkBtn("ToggleVisBtn", "Toggle Effects", 0.05, 0.6, function(btn)
-		(getgenv()).visualizer = not (getgenv()).visualizer;
-		if btn then
-			btn.BackgroundColor3 = (getgenv()).visualizer and Color3.fromRGB(0, 120, 0) or Color3.fromRGB(60, 60, 60);
+	local freezeBtn = mkBtn("FreezeBtn", "Freeze", UDim2.new(0, 150, 0, 34), UDim2.new(0, 14, 0, 166), function()
+		local r = getRoot(plr.Character);
+		if r then
+			r.Anchored = true;
 		end;
 	end);
-	local statusLbl = Instance.new("TextLabel");
-	statusLbl.Name = "Status";
-	statusLbl.Size = UDim2.new(1, -20, 0, 30);
-	statusLbl.Position = UDim2.new(0, 10, 0.8, 0);
-	statusLbl.BackgroundTransparency = 1;
-	statusLbl.TextColor3 = Color3.fromRGB(255, 255, 255);
-	statusLbl.TextSize = 14;
-	statusLbl.Font = Enum.Font.SourceSans;
-	statusLbl.Text = "Press R to toggle spam";
-	statusLbl.TextXAlignment = Enum.TextXAlignment.Left;
-	statusLbl.Parent = frame;
+	local unfreezeBtn = mkBtn("UnfreezeBtn", "Unfreeze", UDim2.new(0, 150, 0, 34), UDim2.new(0, 176, 0, 166), function()
+		local r = getRoot(plr.Character);
+		if r then
+			r.Anchored = false;
+		end;
+	end);
+	local divider2 = Instance.new("Frame");
+	divider2.Size = UDim2.new(1, -28, 0, 1);
+	divider2.Position = UDim2.new(0, 14, 0, 204);
+	divider2.BackgroundColor3 = Color3.fromRGB(255, 255, 255);
+	divider2.BackgroundTransparency = 0.8;
+	divider2.BorderSizePixel = 0;
+	divider2.Parent = frame;
+	local section2 = Instance.new("TextLabel");
+	section2.Name = "SecVis";
+	section2.Size = UDim2.new(1, -28, 0, 16);
+	section2.Position = UDim2.new(0, 14, 0, 208);
+	section2.BackgroundTransparency = 1;
+	section2.TextColor3 = Color3.fromRGB(210, 210, 210);
+	section2.TextSize = 11;
+	section2.Font = Enum.Font.Gotham;
+	section2.TextXAlignment = Enum.TextXAlignment.Left;
+	section2.Text = "Visualizer & Profile";
+	section2.Parent = frame;
+	local visBtn = mkBtn("ToggleVisBtn", "Visualizer: " .. (visOn() and "ON" or "OFF"), UDim2.new(0.5, -18, 0, 30), UDim2.new(0, 14, 0, 228), function(btn)
+		local cfg = initVisCfg();
+		cfg.enabled = not visOn();
+		G.visualizer = cfg;
+		btn.Text = "Visualizer: " .. (cfg.enabled and "ON" or "OFF");
+		setBtnState(btn, cfg.enabled);
+		updateStatus();
+	end);
+	local modeBtn = mkBtn("ProfileBtn", "Profile: " .. getProfile(), UDim2.new(0.5, -18, 0, 30), UDim2.new(0, 176, 0, 228), function(btn)
+		local cur = getProfile();
+		local idx = 1;
+		for i, n in ipairs(order) do
+			if n == cur then
+				idx = i;
+				break;
+			end;
+		end;
+		idx = idx + 1;
+		if idx > (#order) then
+			idx = 1;
+		end;
+		local nxt = order[idx];
+		applyProfile(nxt);
+		btn.Text = "Profile: " .. nxt;
+		updateStatus();
+	end);
+	setBtnState(spamBtn, false);
+	setBtnState(visBtn, visOn());
+	updateStatus();
 	local minimized = false;
 	minimizeBtn.MouseButton1Click:Connect(function()
 		minimized = not minimized;
+		if minimized then
+			tween(frame, 0.22, {
+				Size = miniSize
+			});
+		else
+			tween(frame, 0.22, {
+				Size = fullSize
+			});
+		end;
 		for _, v in pairs(frame:GetChildren()) do
-			if v ~= title and v ~= closeBtn and v ~= minimizeBtn then
+			if v ~= title and v ~= closeBtn and v ~= minimizeBtn and v ~= deviceLbl then
 				v.Visible = not minimized;
 			end;
 		end;
-		frame.Size = minimized and UDim2.new(0, 250, 0, 30) or UDim2.new(0, 250, 0, 200);
 	end);
+	local function setFrameVisible(state)
+		if state then
+			toggleBtn.Visible = false;
+			frame.Visible = true;
+			frame.Position = fullPos;
+			frame.Size = UDim2.new(0, 0, 0, 0);
+			frame.BackgroundTransparency = 1;
+			local targetSize = minimized and miniSize or fullSize;
+			tween(frame, 0.25, {
+				Size = targetSize,
+				BackgroundTransparency = 0.1
+			});
+		else
+			local tw = tween(frame, 0.2, {
+				Size = UDim2.new(0, 0, 0, 0),
+				BackgroundTransparency = 1
+			});
+			tw.Completed:Connect(function()
+				frame.Visible = false;
+				toggleBtn.Visible = true;
+			end);
+		end;
+	end;
+	closeBtn.MouseButton1Click:Connect(function()
+		setFrameVisible(false);
+	end);
+	toggleBtn.MouseButton1Click:Connect(function()
+		setFrameVisible(true);
+	end);
+	frame.Size = UDim2.new(0, 0, 0, 0);
+	frame.Position = fullPos;
+	frame.BackgroundTransparency = 1;
+	tween(frame, 0.28, {
+		Size = fullSize,
+		BackgroundTransparency = 0.1
+	});
 	UIS.InputBegan:Connect(function(input, gp)
-		if not gp and input.KeyCode == Enum.KeyCode.R then
+		if not gp and input.KeyCode == Enum.KeyCode.R and (not UIS.TouchEnabled) then
 			task.spawn(toggleSpam);
 		end;
 	end);
@@ -210,7 +501,7 @@ if game.GameId == 5120885191 then
 		highlight.Adornee = ball;
 		highlight.Parent = ball;
 		if ball.Color == balls.Ball1.Color then
-			highlight.Color3 = ball.Color;
+			highlight.Color3 = Color3.fromRGB(255, 255, 255);
 			highlight.Name = "ball1";
 			(ClonedService("StarterGui")):SetCore("SendNotification", {
 				Title = "Ball Spawned",
@@ -219,7 +510,7 @@ if game.GameId == 5120885191 then
 			});
 		elseif ball.Color == balls.UltimateBall1.Color then
 			ball.Parent = ClonedService("Workspace");
-			highlight.Color3 = ball.Color;
+			highlight.Color3 = Color3.fromRGB(255, 255, 255);
 			highlight.Name = "ultimateball1";
 			(ClonedService("StarterGui")):SetCore("SendNotification", {
 				Title = "Ultimate Ball Spawned",
@@ -242,5 +533,6 @@ if game.GameId == 5120885191 then
 		if spam then
 			task.spawn(parry);
 		end;
+		updateStatus();
 	end);
 end;

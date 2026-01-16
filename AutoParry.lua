@@ -32,33 +32,219 @@ end;
 pcall(function()
 	setfpscap(240);
 end);
-local visualizerRaw = (getgenv()).visualizer;
-if visualizerRaw == nil then
-	(getgenv()).visualizer = false;
-	visualizerRaw = false;
+local VisualizerDefaults = {
+	enabled = false,
+	speedScale = 0.06,
+	minSize = 5,
+	maxSize = 200,
+	predictMaxSize = 400,
+	predictMinRadius = 10,
+	pingPredictScale = 0.1,
+	pingTimeScale = 0.001,
+	transparency = 0.3,
+	pinkTransparency = 0.55,
+	distanceDivisor = 10,
+	predictBase = 35,
+	predictExtra = 5,
+	profile = "Balanced"
+};
+local VisualizerProfiles = {
+	Safe = {
+		speedScale = 0.045,
+		predictBase = 28,
+		predictExtra = 4,
+		distanceDivisor = 11,
+		pingPredictScale = 0.09,
+		pingTimeScale = 0.0012
+	},
+	Balanced = {
+		speedScale = 0.06,
+		predictBase = 35,
+		predictExtra = 5,
+		distanceDivisor = 10,
+		pingPredictScale = 0.1,
+		pingTimeScale = 0.001
+	},
+	Aggressive = {
+		speedScale = 0.08,
+		predictBase = 44,
+		predictExtra = 7,
+		distanceDivisor = 9,
+		pingPredictScale = 0.12,
+		pingTimeScale = 0.0009
+	}
+};
+local profileOrder = {
+	"Safe",
+	"Balanced",
+	"Aggressive"
+};
+local function normalizeVisualizerConfig()
+	local raw = (getgenv()).visualizer;
+	if type(raw) ~= "table" then
+		raw = {
+			enabled = raw == true
+		};
+	end;
+	for key, defaultValue in pairs(VisualizerDefaults) do
+		if raw[key] == nil then
+			raw[key] = defaultValue;
+		end;
+	end;
+	(getgenv()).visualizer = raw;
+	return raw;
 end;
-local visualizerConfig = type(visualizerRaw) == "table" and visualizerRaw or {};
+local visualizerConfig = normalizeVisualizerConfig();
+visualizerConfig.profile = visualizerConfig.profile or VisualizerDefaults.profile;
+local speedScale;
+local minSize;
+local maxSize;
+local predictMaxSize;
+local predictMinRadius;
+local pingPredictScale;
+local pingTimeScale;
+local ringBaseTransparency;
+local ringPinkTransparency;
+local distanceDivisor;
+local predictBase;
+local predictExtra;
+local function refreshVisualizerDerived()
+	local cfg = visualizerConfig;
+	speedScale = cfg.speedScale or VisualizerDefaults.speedScale;
+	minSize = cfg.minSize or VisualizerDefaults.minSize;
+	maxSize = cfg.maxSize or VisualizerDefaults.maxSize;
+	predictMaxSize = cfg.predictMaxSize or VisualizerDefaults.predictMaxSize;
+	predictMinRadius = cfg.predictMinRadius or VisualizerDefaults.predictMinRadius;
+	pingPredictScale = cfg.pingPredictScale or VisualizerDefaults.pingPredictScale;
+	pingTimeScale = cfg.pingTimeScale or VisualizerDefaults.pingTimeScale;
+	ringBaseTransparency = cfg.transparency or VisualizerDefaults.transparency;
+	ringPinkTransparency = cfg.pinkTransparency or VisualizerDefaults.pinkTransparency;
+	distanceDivisor = cfg.distanceDivisor or VisualizerDefaults.distanceDivisor;
+	predictBase = cfg.predictBase or VisualizerDefaults.predictBase;
+	predictExtra = cfg.predictExtra or VisualizerDefaults.predictExtra;
+end;
+refreshVisualizerDerived();
+
+local spam = false;
+local topbarIconInstance;
+local spamOption;
+local visualizerOption;
+local modeOption;
+local modeDropdown;
+local updateRingColors = function() end
+
+local function updateTopbarCaption()
+	if not topbarIconInstance then
+		return;
+	end;
+	local profileName = visualizerConfig.profile or VisualizerDefaults.profile;
+	topbarIconInstance:setCaption("Mode: " .. profileName);
+end;
 local function isVisualizerEnabled()
-	local v = (getgenv()).visualizer;
-	if type(v) == "boolean" then
-		return v;
-	elseif type(v) == "table" then
-		return v.enabled ~= false;
+	local cfg = visualizerConfig;
+	if type(cfg) == "table" then
+		return cfg.enabled ~= false;
 	end;
 	return false;
 end;
-local speedScale = type(visualizerConfig) == "table" and visualizerConfig.speedScale or 0.06;
-local minSize = type(visualizerConfig) == "table" and visualizerConfig.minSize or 5;
-local maxSize = type(visualizerConfig) == "table" and visualizerConfig.maxSize or 200;
-local predictMaxSize = type(visualizerConfig) == "table" and visualizerConfig.predictMaxSize or 400;
-local predictMinRadius = type(visualizerConfig) == "table" and visualizerConfig.predictMinRadius or 10;
-local pingPredictScale = type(visualizerConfig) == "table" and visualizerConfig.pingPredictScale or 0.1;
-local pingTimeScale = type(visualizerConfig) == "table" and visualizerConfig.pingTimeScale or 0.001;
-local ringBaseTransparency = type(visualizerConfig) == "table" and visualizerConfig.transparency or 0.3;
-local ringPinkTransparency = type(visualizerConfig) == "table" and visualizerConfig.pinkTransparency or 0.55;
-local distanceDivisor = type(visualizerConfig) == "table" and visualizerConfig.distanceDivisor or 10;
-local predictBase = type(visualizerConfig) == "table" and visualizerConfig.predictBase or 35;
-local predictExtra = type(visualizerConfig) == "table" and visualizerConfig.predictExtra or 5;
+local function updateSpamLabel()
+	if not spamOption then
+		return;
+	end;
+	spamOption:setLabel("Spam: " .. (spam and "ON" or "OFF"));
+end;
+local function updateVisualizerLabel()
+	if not visualizerOption then
+		return;
+	end;
+	visualizerOption:setLabel("Visualizer: " .. (isVisualizerEnabled() and "ON" or "OFF"));
+end;
+local function updateModeLabel()
+	if not modeOption then
+		return;
+	end;
+	local profileName = visualizerConfig.profile or VisualizerDefaults.profile;
+	modeOption:setLabel("Mode: " .. profileName);
+	updateTopbarCaption();
+end;
+local function toggleSpam()
+	spam = not spam;
+	updateSpamLabel();
+	updateRingColors();
+end;
+local function toggleVisualizer()
+	visualizerConfig.enabled = not isVisualizerEnabled();
+	(getgenv()).visualizer = visualizerConfig;
+	updateVisualizerLabel();
+end;
+local function applyProfile(name)
+	local profile = VisualizerProfiles[name];
+	if not profile then
+		return;
+	end;
+	for key, value in pairs(profile) do
+		visualizerConfig[key] = value;
+	end;
+	visualizerConfig.profile = name;
+	refreshVisualizerDerived();
+	updateModeLabel();
+end;
+local function findProfileIndex(name)
+	for idx, profileName in ipairs(profileOrder) do
+		if profileName == name then
+			return idx;
+		end;
+	end;
+	return nil;
+end;
+local function cycleProfile()
+	local current = visualizerConfig.profile or VisualizerDefaults.profile;
+	local idx = findProfileIndex(current) or 1;
+	local nextIdx = (idx % #profileOrder) + 1;
+	applyProfile(profileOrder[nextIdx]);
+end;
+local function setupTopbarIcon()
+	local ok, IconModule = pcall(function()
+		return loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/refs/heads/main/Icon.luau"))();
+	end);
+	if not ok or not IconModule then
+		return;
+	end;
+	local existing = IconModule.getIcon and IconModule.getIcon("AutoParry");
+	if existing then
+		existing:destroy();
+	end;
+	local icon = IconModule.new();
+	icon:setName("AutoParry"):setLabel("Auto Parry"):setImage("rbxassetid://395920626"):align("Center");
+	topbarIconInstance = icon;
+	local dropdown = icon:addDropdown();
+	spamOption = dropdown:new():setLabel("Spam: OFF");
+	spamOption:oneClick(function()
+		toggleSpam();
+	end);
+	visualizerOption = dropdown:new():setLabel("Visualizer: OFF");
+	visualizerOption:oneClick(function()
+		toggleVisualizer();
+	end);
+	modeOption = dropdown:new():setLabel("Mode: " .. (visualizerConfig.profile or VisualizerDefaults.profile));
+	modeOption:oneClick(function()
+		cycleProfile();
+	end);
+	modeDropdown = modeOption:addDropdown();
+	local function addModeEntry(name)
+		local entry = modeDropdown:new():setLabel(name);
+		entry:oneClick(function()
+			applyProfile(name);
+		end);
+	end;
+	for _, name in ipairs(profileOrder) do
+		addModeEntry(name);
+	end;
+	updateSpamLabel();
+	updateVisualizerLabel();
+	updateModeLabel();
+end;
+setupTopbarIcon();
 local function ensureIdentity()
 	pcall(function()
 		local level = 8;
@@ -119,7 +305,7 @@ local function newRing(name, color)
 	part.CanCollide = false;
 	part.CastShadow = false;
 	part.CanQuery = false;
-	part.Transparency = type(visualizerConfig) == "table" and visualizerConfig.transparency or 0.3;
+	part.Transparency = ringBaseTransparency;
 	local mesh = Instance.new("SpecialMesh");
 	mesh.MeshType = Enum.MeshType.FileMesh;
 	mesh.MeshId = "rbxassetid://471124075";
@@ -249,7 +435,6 @@ local function attachVisualizer(hasBall)
 		visualizerAttached = false;
 	end;
 end;
-local spam = false;
 local lastFire = 0;
 local resetToken = 0;
 local wasInPredict = false;
@@ -314,7 +499,7 @@ local function scheduleReset()
 		end;
 	end);
 end;
-local function updateRingColors()
+updateRingColors = function()
 	if ringLimited then
 		ringPlayer.Color = Color3.new(0, 1, 0);
 	elseif spam then
@@ -325,8 +510,7 @@ local function updateRingColors()
 end;
 trackConnection(UserInputService.InputBegan:Connect(function(input, gpe)
 	if input.KeyCode == Enum.KeyCode.X and (not gpe) then
-		spam = not spam;
-		updateRingColors();
+		toggleSpam();
 	end;
 end));
 updateRingColors();

@@ -6,6 +6,20 @@ local Stats = game:GetService("Stats");
 local guiCHECKINGAHHHHH = function()
 	return gethui and gethui() or (game:GetService("CoreGui")):FindFirstChildWhichIsA("ScreenGui") or game:GetService("CoreGui") or (game:GetService("Players")).LocalPlayer:FindFirstChildWhichIsA("PlayerGui");
 end;
+do
+	local ok, guiParent = pcall(guiCHECKINGAHHHHH);
+	if ok and guiParent then
+		for _, n in ipairs({
+			"Range",
+			"Distance"
+		}) do
+			local old = guiParent:FindFirstChild(n);
+			if old then
+				old:Destroy();
+			end;
+		end;
+	end;
+end;
 local localPlayer = Players.LocalPlayer;
 local character = localPlayer and localPlayer.Character;
 local Framework;

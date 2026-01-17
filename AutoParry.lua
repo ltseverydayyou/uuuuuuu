@@ -455,11 +455,10 @@ local function DoParry()
 end;
 local function getHighlightColor(inst)
 	if not inst then
-		return nil, nil, nil;
+		return nil, nil;
 	end;
 	local best;
 	local bestColor;
-	local bestOutline;
 	local bestTrans = math.huge;
 	for _, child in ipairs(inst:GetChildren()) do
 		if child:IsA("Highlight") then
@@ -467,7 +466,6 @@ local function getHighlightColor(inst)
 			if child.Enabled ~= false and ft < bestTrans then
 				best = child;
 				bestColor = child.FillColor;
-				bestOutline = child.OutlineColor;
 				bestTrans = ft;
 			end;
 		end;
@@ -476,78 +474,57 @@ local function getHighlightColor(inst)
 		best = inst:FindFirstChildOfClass("Highlight") or inst:FindFirstChild("Highlight");
 		if best and best.Enabled ~= false then
 			bestColor = best.FillColor;
-			bestOutline = best.OutlineColor;
 		else
 			best = nil;
 			bestColor = nil;
-			bestOutline = nil;
 		end;
 	end;
-	return best, bestColor, bestOutline;
+	return best, bestColor;
 end;
-local function findTargetAttribute(inst)
-	if not inst then
+local function isBallTargetingYou(ball, char)
+	local ballHighlight, ballColor = getHighlightColor(ball);
+	local charHighlight, charColor = getHighlightColor(char);
+	local targetedColor = ballHighlight and charHighlight and ballColor and charColor and ballHighlight.Enabled ~= false and charHighlight.Enabled ~= false and (ballHighlight.FillTransparency or 0) < 0.9 and (charHighlight.FillTransparency or 0) < 0.9 and colorsClose(ballColor, charColor, 0.05);
+	local targeted = targetedColor;
+	return targeted, ballHighlight, charHighlight, ballColor, charColor;
+end;
+local function getBallTargetAttr(ball)
+	if not ball then
 		return nil;
 	end;
-	local attrs = inst:GetAttributes();
-	for key, value in pairs(attrs) do
-		if typeof(key) == "string" and key:lower() == "target" then
-			return value;
+	local attrs = ball:GetAttributes();
+	for k, v in pairs(attrs) do
+		if typeof(k) == "string" and k:lower() == "target" then
+			return v;
 		end;
 	end;
 	return nil;
 end;
-local function isAttributeTargetMatch(value, char)
-	if not value then
+local function isBallTargetingYouAttr(ball, char)
+	local v = getBallTargetAttr(ball);
+	if not v then
 		return false;
 	end;
-	if typeof(value) == "Instance" then
-		if char and value == char then
+	if typeof(v) == "Instance" then
+		if char and v == char then
 			return true;
 		end;
-		if value:IsA("Player") and localPlayer and value == localPlayer then
+		if v:IsA("Player") and localPlayer and v == localPlayer then
 			return true;
 		end;
-	elseif typeof(value) == "string" then
-		local function playerFromCharacter(character)
-			return character and Players:GetPlayerFromCharacter(character);
+	elseif typeof(v) == "string" then
+		local plr = Players:GetPlayerFromCharacter(char) or localPlayer;
+		if not plr then
+			return false;
 		end;
-		local function matchesFromString(str, player)
-			if not str or (not player) then
-				return false;
-			end;
-			local lower = str:lower();
-			local function containsName(name)
-				return name and name ~= "" and lower:find(name:lower(), 1, true);
-			end;
-			return containsName(player.Name) or containsName(player.DisplayName);
-		end;
-		if matchesFromString(value, localPlayer) then
-			return true;
-		end;
-		local playerForChar = playerFromCharacter(char);
-		if matchesFromString(value, playerForChar) then
+		local lower = v:lower();
+		local n1 = plr.Name and plr.Name:lower() or "";
+		local n2 = plr.DisplayName and plr.DisplayName:lower() or "";
+		if (n1 ~= "" and lower:find(n1, 1, true)) or (n2 ~= "" and lower:find(n2, 1, true)) then
 			return true;
 		end;
 	end;
 	return false;
-end;
-local function isBallTargetingYou(ball, char)
-	local ballHighlight, ballColor, ballOutline = getHighlightColor(ball);
-	local charHighlight, charColor, charOutline = getHighlightColor(char);
-	local targetedColor = false;
-	if ballHighlight and charHighlight and ballHighlight.Enabled ~= false and charHighlight.Enabled ~= false and (ballHighlight.FillTransparency or 0) < 0.9 and (charHighlight.FillTransparency or 0) < 0.9 then
-		local matchColor = function(a, b)
-			return a and b and colorsClose(a, b, 0.05);
-		end;
-		targetedColor = matchColor(ballColor, charColor) or matchColor(ballColor, charOutline) or matchColor(ballOutline, charColor) or matchColor(ballOutline, charOutline);
-	end;
-	local targeted = targetedColor;
-	if not targeted then
-		local attrValue = findTargetAttribute(ball);
-		targeted = isAttributeTargetMatch(attrValue, char);
-	end;
-	return targeted, ballHighlight, charHighlight, ballColor, charColor;
 end;
 local function scheduleReset()
 	resetToken = resetToken + 1;
@@ -785,6 +762,33 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 			end;
 		end;
 		task.spawn(attemptParry);
+		task.spawn(function()
+			if parryTriggered then
+				return;
+			end;
+			if targeted then
+				return;
+			end;
+			if not nearPredict then
+				return;
+			end;
+
+			local attrTargeted = isBallTargetingYouAttr(ball, character);
+			if not attrTargeted then
+				return;
+			end;
+
+			local nowAttr = tick();
+			local lastBallFire = lastParryPerBall[ball] or (-math.huge);
+			if nowAttr - lastBallFire > 0.9 and nowAttr - lastFire > 1.1 then
+				if rawDist <= math.max(10, parryPredictRadius * 0.7) then
+					lastFire = nowAttr;
+					lastParryPerBall[ball] = nowAttr;
+					parryTriggered = true;
+					task.spawn(DoParry);
+				end;
+			end;
+		end);
 	else
 		ringPlayer.CFrame = CFrame.new(hrp.Position);
 		ringPlayerNoUnit.CFrame = ringPlayer.CFrame;

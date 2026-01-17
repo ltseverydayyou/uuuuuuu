@@ -592,7 +592,10 @@ local function isAttributeTargetMatch(value, char)
 		if value:IsA("Player") and localPlayer and value == localPlayer then
 			return true;
 		end;
-	elseif typeof(value) == "string" and localPlayer then
+	elseif typeof(value) == "string" then
+		local function playerFromCharacter(character)
+			return character and Players:GetPlayerFromCharacter(character);
+		end;
 		local function matchesFromString(str, player)
 			if not str or (not player) then
 				return false;
@@ -606,7 +609,8 @@ local function isAttributeTargetMatch(value, char)
 		if matchesFromString(value, localPlayer) then
 			return true;
 		end;
-		if char and matchesFromString(value, char) then
+		local playerForChar = playerFromCharacter(char);
+		if matchesFromString(value, playerForChar) then
 			return true;
 		end;
 	end;

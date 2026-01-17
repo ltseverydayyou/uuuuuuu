@@ -456,10 +456,11 @@ local function DoParry()
 end;
 local function getHighlightColor(inst)
 	if not inst then
-		return nil, nil;
+		return nil, nil, nil;
 	end;
 	local best;
 	local bestColor;
+	local bestOutline;
 	local bestTrans = math.huge;
 	for _, child in ipairs(inst:GetChildren()) do
 		if child:IsA("Highlight") then
@@ -467,6 +468,7 @@ local function getHighlightColor(inst)
 			if child.Enabled ~= false and ft < bestTrans then
 				best = child;
 				bestColor = child.FillColor;
+				bestOutline = child.OutlineColor;
 				bestTrans = ft;
 			end;
 		end;
@@ -475,17 +477,25 @@ local function getHighlightColor(inst)
 		best = inst:FindFirstChildOfClass("Highlight") or inst:FindFirstChild("Highlight");
 		if best and best.Enabled ~= false then
 			bestColor = best.FillColor;
+			bestOutline = best.OutlineColor;
 		else
 			best = nil;
 			bestColor = nil;
+			bestOutline = nil;
 		end;
 	end;
-	return best, bestColor;
+	return best, bestColor, bestOutline;
 end;
 local function isBallTargetingYou(ball, char)
-	local ballHighlight, ballColor = getHighlightColor(ball);
-	local charHighlight, charColor = getHighlightColor(char);
-	local targetedColor = ballHighlight and charHighlight and ballColor and charColor and ballHighlight.Enabled ~= false and charHighlight.Enabled ~= false and (ballHighlight.FillTransparency or 0) < 0.9 and (charHighlight.FillTransparency or 0) < 0.9 and colorsClose(ballColor, charColor, 0.05);
+	local ballHighlight, ballColor, ballOutline = getHighlightColor(ball);
+	local charHighlight, charColor, charOutline = getHighlightColor(char);
+	local targetedColor = false;
+	if ballHighlight and charHighlight and ballHighlight.Enabled ~= false and charHighlight.Enabled ~= false and (ballHighlight.FillTransparency or 0) < 0.9 and (charHighlight.FillTransparency or 0) < 0.9 then
+		local matchColor = function(a, b)
+			return a and b and colorsClose(a, b, 0.05);
+		end;
+		targetedColor = matchColor(ballColor, charColor) or matchColor(ballColor, charOutline) or matchColor(ballOutline, charColor) or matchColor(ballOutline, charOutline);
+	end;
 	local targeted = targetedColor;
 	return targeted, ballHighlight, charHighlight, ballColor, charColor;
 end;

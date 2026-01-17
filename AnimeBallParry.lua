@@ -6,6 +6,14 @@ local Stats = game:GetService("Stats");
 local guiCHECKINGAHHHHH = function()
 	return gethui and gethui() or (game:GetService("CoreGui")):FindFirstChildWhichIsA("ScreenGui") or game:GetService("CoreGui") or (game:GetService("Players")).LocalPlayer:FindFirstChildWhichIsA("PlayerGui");
 end;
+task.spawn(function()
+	task.wait(1);
+	for _, v in ipairs(workspace:GetDescendants()) do
+		if (v.Name:lower()):find("leaderboard") or v.Name:lower() == "tourneywins" then
+			v:Destroy();
+		end;
+	end;
+end);
 do
 	local ok, guiParent = pcall(guiCHECKINGAHHHHH);
 	if ok and guiParent then

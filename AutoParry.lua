@@ -124,15 +124,14 @@ local function refreshVisualizerDerived()
 	predictExtra = cfg.predictExtra or VisualizerDefaults.predictExtra;
 end;
 refreshVisualizerDerived();
-
 local spam = false;
 local topbarIconInstance;
 local spamOption;
 local visualizerOption;
 local modeOption;
 local modeDropdown;
-local updateRingColors = function() end
-
+local updateRingColors = function()
+end;
 local function updateTopbarCaption()
 	if not topbarIconInstance then
 		return;
@@ -200,14 +199,14 @@ end;
 local function cycleProfile()
 	local current = visualizerConfig.profile or VisualizerDefaults.profile;
 	local idx = findProfileIndex(current) or 1;
-	local nextIdx = (idx % #profileOrder) + 1;
+	local nextIdx = idx % (#profileOrder) + 1;
 	applyProfile(profileOrder[nextIdx]);
 end;
 local function setupTopbarIcon()
 	local ok, IconModule = pcall(function()
-		return loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/refs/heads/main/Icon.luau"))();
+		return (loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/refs/heads/main/Icon.luau")))();
 	end);
-	if not ok or not IconModule then
+	if not ok or (not IconModule) then
 		return;
 	end;
 	local existing = IconModule.getIcon and IconModule.getIcon("AutoParry");
@@ -215,24 +214,24 @@ local function setupTopbarIcon()
 		existing:destroy();
 	end;
 	local icon = IconModule.new();
-	icon:setName("AutoParry"):setLabel("Auto Parry"):setImage("rbxassetid://395920626"):align("Center");
+	(((icon:setName("AutoParry")):setLabel("Auto Parry")):setImage("rbxassetid://395920626")):align("Center");
 	topbarIconInstance = icon;
 	local dropdown = icon:addDropdown();
-	spamOption = dropdown:new():setLabel("Spam: OFF");
+	spamOption = (dropdown:new()):setLabel("Spam: OFF");
 	spamOption:oneClick(function()
 		toggleSpam();
 	end);
-	visualizerOption = dropdown:new():setLabel("Visualizer: OFF");
+	visualizerOption = (dropdown:new()):setLabel("Visualizer: OFF");
 	visualizerOption:oneClick(function()
 		toggleVisualizer();
 	end);
-	modeOption = dropdown:new():setLabel("Mode: " .. (visualizerConfig.profile or VisualizerDefaults.profile));
+	modeOption = (dropdown:new()):setLabel("Mode: " .. (visualizerConfig.profile or VisualizerDefaults.profile));
 	modeOption:oneClick(function()
 		cycleProfile();
 	end);
 	modeDropdown = modeOption:addDropdown();
 	local function addModeEntry(name)
-		local entry = modeDropdown:new():setLabel(name);
+		local entry = (modeDropdown:new()):setLabel(name);
 		entry:oneClick(function()
 			applyProfile(name);
 		end);
@@ -486,6 +485,49 @@ local function getHighlightColor(inst)
 	end;
 	return best, bestColor, bestOutline;
 end;
+local function findTargetAttribute(inst)
+	if not inst then
+		return nil;
+	end;
+	local attrs = inst:GetAttributes();
+	for key, value in pairs(attrs) do
+		if typeof(key) == "string" and key:lower() == "target" then
+			return value;
+		end;
+	end;
+	return nil;
+end;
+local function isAttributeTargetMatch(value, char)
+	if not value then
+		return false;
+	end;
+	if typeof(value) == "Instance" then
+		if char and value == char then
+			return true;
+		end;
+		if value:IsA("Player") and localPlayer and value == localPlayer then
+			return true;
+		end;
+	elseif typeof(value) == "string" and localPlayer then
+		local function matchesFromString(str, player)
+			if not str or (not player) then
+				return false;
+			end;
+			local lower = str:lower();
+			local function containsName(name)
+				return name and name ~= "" and lower:find(name:lower(), 1, true);
+			end;
+			return containsName(player.Name) or containsName(player.DisplayName);
+		end;
+		if matchesFromString(value, localPlayer) then
+			return true;
+		end;
+		if char and matchesFromString(value, char) then
+			return true;
+		end;
+	end;
+	return false;
+end;
 local function isBallTargetingYou(ball, char)
 	local ballHighlight, ballColor, ballOutline = getHighlightColor(ball);
 	local charHighlight, charColor, charOutline = getHighlightColor(char);
@@ -497,6 +539,10 @@ local function isBallTargetingYou(ball, char)
 		targetedColor = matchColor(ballColor, charColor) or matchColor(ballColor, charOutline) or matchColor(ballOutline, charColor) or matchColor(ballOutline, charOutline);
 	end;
 	local targeted = targetedColor;
+	if not targeted then
+		local attrValue = findTargetAttribute(ball);
+		targeted = isAttributeTargetMatch(attrValue, char);
+	end;
 	return targeted, ballHighlight, charHighlight, ballColor, charColor;
 end;
 local function scheduleReset()

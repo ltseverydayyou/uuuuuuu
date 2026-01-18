@@ -222,7 +222,7 @@ local function setupTopbarIcon()
 		existing:destroy();
 	end;
 	local icon = IconModule.new();
-	(((icon:setName("AutoParry")):setLabel("Auto Parry")):setImage("rbxassetid://395920626")):align("Right");
+	(((icon:setName("AutoParry")):setLabel("Auto Parry")):setImage("rbxassetid://395920626")):align("Center");
 	topbarIconInstance = icon;
 	local dropdown = icon:addMenu();
 	spamOption = (dropdown:new()):setLabel("Spam: OFF");

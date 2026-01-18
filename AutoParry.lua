@@ -222,9 +222,9 @@ local function setupTopbarIcon()
 		existing:destroy();
 	end;
 	local icon = IconModule.new();
-	(((icon:setName("AutoParry")):setLabel("Auto Parry")):setImage("rbxassetid://395920626")):align("Center");
+	(((icon:setName("AutoParry")):setLabel("Auto Parry")):setImage("rbxassetid://395920626")):align("Right");
 	topbarIconInstance = icon;
-	local dropdown = icon:addDropdown();
+	local dropdown = icon:addMenu();
 	spamOption = (dropdown:new()):setLabel("Spam: OFF");
 	spamOption:oneClick(function()
 		toggleSpam();
@@ -237,7 +237,7 @@ local function setupTopbarIcon()
 	modeOption:oneClick(function()
 		cycleProfile();
 	end);
-	modeDropdown = modeOption:addDropdown();
+	modeDropdown = modeOption:addMenu();
 	local function addModeEntry(name)
 		local entry = (modeDropdown:new()):setLabel(name);
 		entry:oneClick(function()

@@ -576,12 +576,40 @@ local function getHighlightColor(inst)
 	return best, bestColor;
 end;
 local function isBallTargetingYou(ball, char)
-	local ballHighlight, ballColor = getHighlightColor(ball);
-	local charHighlight, charColor = getHighlightColor(char);
-	local targetedColor = ballHighlight and charHighlight and ballColor and charColor and ballHighlight.Enabled ~= false and charHighlight.Enabled ~= false and (ballHighlight.FillTransparency or 0) < 0.9 and (charHighlight.FillTransparency or 0) < 0.9 and colorsClose(ballColor, charColor, 0.05);
-	local targeted = targetedColor;
-	return targeted, ballHighlight, charHighlight, ballColor, charColor;
-end;
+	local charHighlight, charColor = getHighlightColor(char)
+	local ballHighlight, hlBallColor = getHighlightColor(ball)
+
+	local ballColorPrimary
+	if ball and ball:IsA("BasePart") then
+		ballColorPrimary = ball.Color
+	end
+
+	local targetedColor = false
+	local usedBallColor
+
+	if ballColorPrimary and charHighlight and charColor then
+		if colorsClose(ballColorPrimary, charColor, 0.05) then
+			targetedColor = true
+			usedBallColor = ballColorPrimary
+		end
+	end
+
+	if (not targetedColor)
+		and ballHighlight and hlBallColor
+		and charHighlight and charColor
+		and ballHighlight.Enabled ~= false
+		and charHighlight.Enabled ~= false
+		and (ballHighlight.FillTransparency or 0) < 0.9
+		and (charHighlight.FillTransparency or 0) < 0.9
+		and colorsClose(hlBallColor, charColor, 0.05)
+	then
+		targetedColor = true
+		usedBallColor = hlBallColor
+	end
+
+	local targeted = targetedColor
+	return targeted, ballHighlight, charHighlight, usedBallColor, charColor
+end
 local function getBallTargetAttr(ball)
 	if not ball then
 		return nil;

@@ -868,9 +868,6 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 			if targeted then
 				return;
 			end;
-			if not nearPredict then
-				return;
-			end;
 			if closeParryBlocked[ball] then
 				return;
 			end;
@@ -880,16 +877,20 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 				return;
 			end;
 
+			local attrNear = rawDist <= math.max(10, parryPredictRadius * 0.9);
+			local attrFast = speed > 20 or nearHitTime <= 0.35;
+			if not (attrNear and attrFast) then
+				return;
+			end;
+
 			local nowAttr = tick();
 			local lastBallFire = lastParryPerBall[ball] or (-math.huge);
-			if nowAttr >= nextPar and nowAttr - lastBallFire > 0.9 then
-				if rawDist <= math.max(10, parryPredictRadius * 0.7) then
-					nextPar = nowAttr + parCd;
-					lastFire = nowAttr;
-					lastParryPerBall[ball] = nowAttr;
-					parryTriggered = true;
-					task.defer(DoParry);
-				end;
+			if nowAttr >= nextPar and nowAttr - lastBallFire > 0.7 then
+				nextPar = nowAttr + parCd;
+				lastFire = nowAttr;
+				lastParryPerBall[ball] = nowAttr;
+				parryTriggered = true;
+				task.defer(DoParry);
 			end;
 		end);
 	else

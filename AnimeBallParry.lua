@@ -20,7 +20,7 @@ do
 		for _, n in ipairs({
 			"Range",
 			"Distance"
-		}) do
+			}) do
 			local old = guiParent:FindFirstChild(n);
 			if old then
 				old:Destroy();
@@ -481,6 +481,8 @@ local function attachVisualizer(hasBall)
 end;
 local lastFire = 0;
 local resetToken = 0;
+local parCd = 1.75;
+local nextPar = 0;
 local wasInPredict = false;
 local ringLimited = false;
 local lastBallSamples = {};
@@ -772,22 +774,27 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 		local settledInPredict = nearPredict and predictEnterAt[ball] and now - predictEnterAt[ball] >= settleTime;
 		local targeted, ballHighlight, charHighlight, ballColor, charColor = isBallTargetingYou(ball, character);
 		local charHighlightEnabled = charHighlight and charHighlight.Enabled ~= false;
+
 		if charHighlightEnabled and (not lastCharHighlightEnabled) then
-			lastFire = 0;
 			lastParryPerBall[ball] = -math.huge;
 		end;
+
 		local targetAge = targeted and targetedSince[ball] and now - targetedSince[ball] or math.huge;
 		local hasTargetLock = targeted and targetedSince[ball] ~= nil;
 		local highlightsMatch = targeted;
+
 		if highlightsMatch and (not lastHighlightMatch) then
-			lastFire = 0;
 			lastParryPerBall[ball] = -math.huge;
 			targetedSince[ball] = now;
 		elseif not highlightsMatch and lastHighlightMatch then
-			lastFire = 0;
 			lastParryPerBall[ball] = -math.huge;
 			targetedSince[ball] = nil;
+			local stillAttrTarget = isBallTargetingYouAttr(ball, character);
+			if not stillAttrTarget then
+				nextPar = 0;
+			end;
 		end;
+
 		lastHighlightMatch = highlightsMatch;
 		lastCharHighlightEnabled = charHighlightEnabled;
 		local approaching = false;
@@ -813,14 +820,13 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 		if innerEmergency and hasTargetLock and (not closeParryBlocked[ball]) then
 			local nowInner = tick();
 			local lastBallFire = lastParryPerBall[ball] or (-math.huge);
-			if nowInner - lastBallFire > 0.05 and nowInner - lastFire > 0.15 then
+			if nowInner >= nextPar and nowInner - lastBallFire > 0.05 then
+				nextPar = nowInner + parCd;
 				lastFire = nowInner;
 				lastParryPerBall[ball] = nowInner;
 				closeParryBlocked[ball] = true;
 				parryTriggered = true;
-				task.defer(function()
-					task.spawn(DoParry);
-				end);
+				task.defer(DoParry);
 				return;
 			end;
 		end;
@@ -842,14 +848,15 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 				local nowTry = tick();
 				local lastBallFire = lastParryPerBall[ball] or (-math.huge);
 				local minBallCooldown = highlightsMatch and 0.7 or 0.35;
-				if nowTry - lastBallFire > minBallCooldown and nowTry - lastFire > 1 then
+				if nowTry >= nextPar and nowTry - lastBallFire > minBallCooldown then
+					nextPar = nowTry + parCd;
 					lastFire = nowTry;
 					lastParryPerBall[ball] = nowTry;
 					if rawDist <= parryPredictRadius * 0.8 then
 						closeParryBlocked[ball] = true;
 					end;
 					parryTriggered = true;
-					task.spawn(DoParry);
+					task.defer(DoParry);
 				end;
 			end;
 		end;
@@ -864,6 +871,9 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 			if not nearPredict then
 				return;
 			end;
+			if closeParryBlocked[ball] then
+				return;
+			end;
 
 			local attrTargeted = isBallTargetingYouAttr(ball, character);
 			if not attrTargeted then
@@ -872,12 +882,13 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 
 			local nowAttr = tick();
 			local lastBallFire = lastParryPerBall[ball] or (-math.huge);
-			if nowAttr - lastBallFire > 0.9 and nowAttr - lastFire > 1.1 then
+			if nowAttr >= nextPar and nowAttr - lastBallFire > 0.9 then
 				if rawDist <= math.max(10, parryPredictRadius * 0.7) then
+					nextPar = nowAttr + parCd;
 					lastFire = nowAttr;
 					lastParryPerBall[ball] = nowAttr;
 					parryTriggered = true;
-					task.spawn(DoParry);
+					task.defer(DoParry);
 				end;
 			end;
 		end);
@@ -893,6 +904,7 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 		closeParryBlocked = {};
 		predictEnterAt = {};
 		lastFire = 0;
+		nextPar = 0;
 		ringLimited = false;
 		resetToken = resetToken + 1;
 		rangeText.Text = "0";
@@ -906,7 +918,6 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 end));
 trackConnection(RunService.Stepped:Connect(function()
 	if spam then
-		task.spawn(QuickParry);
 		task.defer(QuickParry);
 	end;
 end));

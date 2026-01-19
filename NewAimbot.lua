@@ -60,6 +60,9 @@ _G.espTeamColor = _G.espTeamColor ~= nil and _G.espTeamColor or true;
 _G.tbCPS = _G.tbCPS or 8;
 _G.aimPredict = _G.aimPredict or false;
 _G.aimLead = _G.aimLead or 0.12;
+_G.aimRadius = _G.aimRadius or 150;
+_G.aimLock = _G.aimLock or false;
+_G.lockKey = _G.lockKey or "MouseButton2";
 _G.toggleKeys = _G.toggleKeys or {
 	"RightAlt",
 	"LeftAlt",
@@ -365,6 +368,9 @@ local function saveCfg()
 		tbCPS = _G.tbCPS,
 		aimPredict = _G.aimPredict,
 		aimLead = _G.aimLead,
+		aimRadius = _G.aimRadius,
+		aimLock = _G.aimLock,
+		lockKey = _G.lockKey,
 		toggleKeys = _G.toggleKeys
 	};
 	local ok, enc = pcall(function()
@@ -448,7 +454,9 @@ local function hookCamera()
 end;
 hookCamera();
 local NA_GRAB_BODY = (function()
-	local _cache = setmetatable({}, { __mode = "k" });
+	local _cache = setmetatable({}, {
+		__mode = "k"
+	});
 	local function asChar(obj)
 		if not obj or typeof(obj) ~= "Instance" then
 			return nil;
@@ -492,12 +500,14 @@ local NA_GRAB_BODY = (function()
 	end;
 	local function ensure(obj)
 		local model = asChar(obj) or obj;
-		if not model or not model:IsA("Model") then
+		if not model or (not model:IsA("Model")) then
 			return nil;
 		end;
 		local rec = _cache[model];
 		if not rec then
-			rec = { dirty = true };
+			rec = {
+				dirty = true
+			};
 			_cache[model] = rec;
 			rec.a = model.DescendantAdded:Connect(function()
 				rec.dirty = true;
@@ -521,7 +531,7 @@ local NA_GRAB_BODY = (function()
 				_cache[model] = nil;
 			end);
 		end;
-		if rec.dirty or (rec.humanoid and rec.humanoid.Parent == nil) then
+		if rec.dirty or rec.humanoid and rec.humanoid.Parent == nil then
 			rebuild(model, rec);
 		end;
 		return rec, model;
@@ -538,10 +548,10 @@ local function getHumanoid(m)
 end;
 local function getPart(m, name)
 	local rec, model = NA_GRAB_BODY.ensure(m);
-	if not rec or not model then
+	if not rec or (not model) then
 		return nil;
 	end;
-	local lname = tostring(name or ""):lower();
+	local lname = (tostring(name or "")):lower();
 	if lname == "head" and rec.head then
 		return rec.head;
 	end;
@@ -663,23 +673,8 @@ end;
 local function findTarget()
 	local near = nil;
 	local minD = math.huge;
-
-	-- prioritise whatever the mouse is directly over
-	local mt = ms and ms.Target;
-	if mt then
-		local model = mt:IsA("Model") and mt or mt:FindFirstAncestorOfClass("Model");
-		if model and model ~= plr.Character then
-			local hum = getHumanoid(model);
-			local owner = Players:GetPlayerFromCharacter(model);
-			if hum and hum.Health > 0 and owner and isEnemy(owner) then
-				if not _G.wallCheck or clearLOS(mt) then
-					return model;
-				end;
-			end;
-		end;
-	end;
-
-	for _, op in pairs(Players:GetPlayers()) do
+	local maxR = _G.aimRadius or 150;
+	for _, op in ipairs(Players:GetPlayers()) do
 		if op ~= plr and op.Character and isEnemy(op) then
 			local ch = op.Character;
 			if not isAlive(ch) then
@@ -701,7 +696,7 @@ local function findTarget()
 							minD = dist;
 							near = ch;
 						end;
-					elseif sdist < minD then
+					elseif sdist < maxR and sdist < minD then
 						minD = sdist;
 						near = ch;
 					end;
@@ -1691,8 +1686,10 @@ local function createUI()
 	local pgStatus = tabObjs.status.page;
 	local pgSettings = tabObjs.settings.page;
 	addRowToggle(pgAim, "Aimbot", "isEnabled");
+	addRowToggle(pgAim, "Aim Lock", "aimLock", "tap lock key to toggle, off = hold key");
 	addRowDropdown(pgAim, "aim target", "aimTargetMode", AIM_TARGET_OPTIONS, "Torso / Head / Random");
 	addRowToggle(pgAim, "lock to nearest", "lockToNearest");
+	addRowSlider(pgAim, "aim radius", "aimRadius", 10, 400, 0, "cursor lock radius (px)");
 	addRowToggle(pgAim, "wall check", "wallCheck");
 	addRowToggleSlider(pgAim, "tween aim", "aimTween", "aimSmooth", 0.05, 0.2, 2, "smoothly rotate camera to target");
 	addRowToggleSlider(pgAim, "aim prediction", "aimPredict", "aimLead", 0.01, 1, 2, "predict enemy movement");
@@ -1778,14 +1775,6 @@ local function createUI()
 			vGame.Text = info.Name;
 		end;
 	end);
-	local setLbl = Instance.new("TextLabel", pgSettings);
-	setLbl.BackgroundTransparency = 1;
-	setLbl.Text = "toggle keys";
-	setLbl.TextColor3 = UI.sub;
-	setLbl.Font = Enum.Font.GothamMedium;
-	setLbl.TextSize = 14;
-	setLbl.TextXAlignment = Enum.TextXAlignment.Left;
-	setLbl.Size = UDim2.new(1, -20, 0, 24);
 	local chips = Instance.new("Frame", pgSettings);
 	chips.Name = "Keys";
 	chips.BackgroundTransparency = 1;
@@ -1821,7 +1810,15 @@ local function createUI()
 		end;
 	end;
 	rebuildChips();
-	local addKey = Instance.new("TextButton", pgSettings);
+	local btnRow = Instance.new("Frame", pgSettings);
+	btnRow.BackgroundTransparency = 1;
+	btnRow.Size = UDim2.new(1, -20, 0, 30);
+	local btnLayout = Instance.new("UIListLayout", btnRow);
+	btnLayout.FillDirection = Enum.FillDirection.Horizontal;
+	btnLayout.Padding = UDim.new(0, 8);
+	btnLayout.SortOrder = Enum.SortOrder.LayoutOrder;
+	btnLayout.VerticalAlignment = Enum.VerticalAlignment.Center;
+	local addKey = Instance.new("TextButton", btnRow);
 	addKey.Text = "add key";
 	addKey.Font = Enum.Font.GothamSemibold;
 	addKey.TextSize = 13;
@@ -1831,7 +1828,7 @@ local function createUI()
 	addKey.Size = UDim2.new(0, 80, 0, 26);
 	round(addKey, UDim.new(0.2, 0));
 	stroke(addKey, 1, UI.stroke2, 0.15);
-	local clrKey = Instance.new("TextButton", pgSettings);
+	local clrKey = Instance.new("TextButton", btnRow);
 	clrKey.Text = "clear";
 	clrKey.Font = Enum.Font.GothamSemibold;
 	clrKey.TextSize = 13;
@@ -1841,10 +1838,9 @@ local function createUI()
 	clrKey.Size = UDim2.new(0, 80, 0, 26);
 	round(clrKey, UDim.new(0.2, 0));
 	stroke(clrKey, 1, UI.stroke2, 0.15);
-	local btnRow = Instance.new("Frame", pgSettings);
-	btnRow.BackgroundTransparency = 1;
-	btnRow.Size = UDim2.new(1, -20, 0, 4);
 	local capConn;
+	local lockCapConn;
+	local lockCapMode = false;
 	local function stopCap()
 		capMode = false;
 		capCooldownUntil = time() + 0.3;
@@ -1853,8 +1849,16 @@ local function createUI()
 		end;
 		capConn = nil;
 	end;
+	local function stopLockCap()
+		lockCapMode = false;
+		capCooldownUntil = time() + 0.3;
+		if lockCapConn and lockCapConn.Connected then
+			lockCapConn:Disconnect();
+		end;
+		lockCapConn = nil;
+	end;
 	local addCon = addKey.MouseButton1Click:Connect(function()
-		if capMode then
+		if capMode or lockCapMode then
 			return;
 		end;
 		capMode = true;
@@ -1892,6 +1896,74 @@ local function createUI()
 		rebuildChips();
 		saveCfg();
 	end);
+	local lockLbl = Instance.new("TextLabel", pgSettings);
+	lockLbl.BackgroundTransparency = 1;
+	lockLbl.Text = "lock key";
+	lockLbl.TextColor3 = UI.sub;
+	lockLbl.Font = Enum.Font.GothamMedium;
+	lockLbl.TextSize = 14;
+	lockLbl.TextXAlignment = Enum.TextXAlignment.Left;
+	lockLbl.Size = UDim2.new(1, -20, 0, 24);
+	local lockBtn = Instance.new("TextButton", pgSettings);
+	lockBtn.Text = _G.lockKey or "MouseButton2";
+	lockBtn.Font = Enum.Font.GothamSemibold;
+	lockBtn.TextSize = 13;
+	lockBtn.TextColor3 = UI.text;
+	lockBtn.AutoButtonColor = false;
+	lockBtn.BackgroundColor3 = UI.bar2;
+	lockBtn.Size = UDim2.new(0, 120, 0, 26);
+	round(lockBtn, UDim.new(0.2, 0));
+	stroke(lockBtn, 1, UI.stroke2, 0.25);
+	local lockCon = lockBtn.MouseButton1Click:Connect(function()
+		if capMode or lockCapMode then
+			return;
+		end;
+		if time() < capCooldownUntil then
+			return;
+		end;
+		lockCapMode = true;
+		toast("press key or mouse for lock");
+		lockCapConn = UIS.InputBegan:Connect(function(i, gp)
+			if not lockCapMode then
+				return;
+			end;
+			local name;
+			if i.UserInputType == Enum.UserInputType.Keyboard then
+				if i.KeyCode == Enum.KeyCode.Unknown then
+					stopLockCap();
+					return;
+				end;
+				name = i.KeyCode.Name;
+			elseif i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.MouseButton2 or i.UserInputType == Enum.UserInputType.MouseButton3 then
+				name = i.UserInputType.Name;
+			else
+				return;
+			end;
+			_G.lockKey = name;
+			lockBtn.Text = name;
+			saveCfg();
+			stopLockCap();
+		end);
+		table.insert(conns, lockCapConn);
+	end);
+	table.insert(conns, lockCon);
+	local lockReset = Instance.new("TextButton", pgSettings);
+	lockReset.Text = "reset lock key";
+	lockReset.Font = Enum.Font.GothamSemibold;
+	lockReset.TextSize = 13;
+	lockReset.TextColor3 = UI.text;
+	lockReset.AutoButtonColor = false;
+	lockReset.BackgroundColor3 = UI.bar2;
+	lockReset.Size = UDim2.new(0, 140, 0, 26);
+	round(lockReset, UDim.new(0.2, 0));
+	stroke(lockReset, 1, UI.stroke2, 0.25);
+	local lockResetCon = lockReset.MouseButton1Click:Connect(function()
+		_G.lockKey = "MouseButton2";
+		lockBtn.Text = "MouseButton2";
+		saveCfg();
+		toast("lock key reset to MouseButton2");
+	end);
+	table.insert(conns, lockResetCon);
 	table.insert(conns, clrCon);
 	local statusLoop = RunService.Heartbeat:Connect(function()
 		local num = Players.NumPlayers or (#Players:GetPlayers());
@@ -2061,12 +2133,39 @@ local function cursorInsideModel(m, pad)
 	local p = pad or 2;
 	return x >= a - p and x <= c + p and y >= b - p and y <= d + p;
 end;
+local function isLockInput(i)
+	local key = _G.lockKey or "MouseButton2";
+	if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.MouseButton2 or i.UserInputType == Enum.UserInputType.MouseButton3 then
+		return i.UserInputType.Name == key;
+	end;
+	if i.UserInputType == Enum.UserInputType.Keyboard then
+		return i.KeyCode.Name == key;
+	end;
+	return false;
+end;
 local function binds()
 	local bMouse = UIS.InputBegan:Connect(function(i, gp)
+		if gp then
+			return;
+		end;
 		if UIS:GetFocusedTextBox() then
 			return;
 		end;
-		if i.UserInputType == Enum.UserInputType.MouseButton2 and _G.isEnabled then
+		if not _G.isEnabled then
+			return;
+		end;
+		if not isLockInput(i) then
+			return;
+		end;
+		if _G.aimLock then
+			isLock = not isLock;
+			if isLock then
+				if _G.fovEnabled and cam then
+					cam.FieldOfView = _G.fovValue;
+				end;
+				lockCamera();
+			end;
+		else
 			isLock = true;
 			if _G.fovEnabled and cam then
 				cam.FieldOfView = _G.fovValue;
@@ -2076,9 +2175,13 @@ local function binds()
 	end);
 	table.insert(conns, bMouse);
 	local bMouseEnd = UIS.InputEnded:Connect(function(i)
-		if i.UserInputType == Enum.UserInputType.MouseButton2 then
-			isLock = false;
+		if not isLockInput(i) then
+			return;
 		end;
+		if _G.aimLock then
+			return;
+		end;
+		isLock = false;
 	end);
 	table.insert(conns, bMouseEnd);
 	local bKeys = UIS.InputEnded:Connect(function(i, gp)
@@ -2108,17 +2211,11 @@ local function binds()
 	end);
 	table.insert(conns, bKeys);
 end;
-local lockActive = false;
 function lockCamera()
-	if lockActive then
-		return;
-	end;
-	lockActive = true;
 	local loop;
 	loop = RunService.RenderStepped:Connect(function()
 		if not isLock or (not _G.isEnabled) then
 			loop:Disconnect();
-			lockActive = false;
 			return;
 		end;
 		local aimMode = normalizeAimMode(_G.aimTargetMode);

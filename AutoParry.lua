@@ -459,6 +459,7 @@ local lastCharHighlightEnabled = false;
 local lastParryPerBall = {};
 local predictEnterAt = {};
 local targetedSince = {};
+local lastAttrTargeted = {};
 local function DoParry()
 	VirtualInputManager:SendKeyEvent(true, "F", false, game);
 	VirtualInputManager:SendKeyEvent(false, "F", false, game);
@@ -816,7 +817,24 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 				return;
 			end;
 
+			local nowAttr = tick();
 			local attrTargeted = isBallTargetingYouAttr(ball, character);
+			local prevAttr = lastAttrTargeted[ball];
+
+			if attrTargeted and not prevAttr then
+				lastParryPerBall[ball] = -math.huge;
+				if nowAttr < nextPar then
+					nextPar = nowAttr;
+				end;
+			elseif (not attrTargeted) and prevAttr then
+				lastParryPerBall[ball] = -math.huge;
+				if not targeted then
+					nextPar = 0;
+				end;
+			end;
+
+			lastAttrTargeted[ball] = attrTargeted;
+
 			if not attrTargeted then
 				return;
 			end;
@@ -827,7 +845,6 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 				return;
 			end;
 
-			local nowAttr = tick();
 			local lastBallFire = lastParryPerBall[ball] or (-math.huge);
 			if nowAttr >= nextPar and nowAttr - lastBallFire > 0.7 then
 				nextPar = nowAttr + parCd;

@@ -447,50 +447,115 @@ local function hookCamera()
 	bindFOV();
 end;
 hookCamera();
-local function getHumanoid(m)
-	if not m then
-		return nil;
-	end;
-	local h = m:FindFirstChildOfClass("Humanoid");
-	if h then
-		return h;
-	end;
-	for _, d in ipairs(m:GetDescendants()) do
-		if d:IsA("Humanoid") then
-			return d;
+local NA_GRAB_BODY = (function()
+	local _cache = setmetatable({}, { __mode = "k" });
+	local function asChar(obj)
+		if not obj or typeof(obj) ~= "Instance" then
+			return nil;
 		end;
-	end;
-	return nil;
-end;
-local function getPart(m, name)
-	if not m then
+		if obj:IsA("Player") then
+			return obj.Character;
+		end;
+		if obj:IsA("Model") then
+			return obj;
+		end;
 		return nil;
 	end;
-	local p = m:FindFirstChild(name, true);
-	if p and p:IsA("BasePart") then
-		return p;
-	end;
-	local h = getHumanoid(m);
-	if h and h.RootPart and (name == "HumanoidRootPart" or name == "RootPart") then
-		return h.RootPart;
-	end;
-	local fallback = {
-		"HumanoidRootPart",
-		"UpperTorso",
-		"LowerTorso",
-		"Torso",
-		"Head"
-	};
-	for _, n in ipairs(fallback) do
-		local q = m:FindFirstChild(n, true);
-		if q and q:IsA("BasePart") then
-			if name == "Head" and q.Name ~= "Head" then
-			else
-				return q;
+	local function firstPart(model)
+		for _, d in ipairs(model:GetDescendants()) do
+			if d:IsA("BasePart") then
+				return d;
 			end;
 		end;
+		return nil;
 	end;
-	return nil;
+	local function rebuild(model, rec)
+		rec.head = nil;
+		rec.root = nil;
+		rec.torso = nil;
+		rec.humanoid = nil;
+		for _, inst in ipairs(model:GetDescendants()) do
+			if inst:IsA("Humanoid") or inst:IsA("AnimationController") then
+				rec.humanoid = rec.humanoid or inst;
+			elseif inst:IsA("BasePart") then
+				local ln = inst.Name:lower();
+				if ln:find("root") then
+					rec.root = rec.root or inst;
+				elseif ln:find("torso") then
+					rec.torso = rec.torso or inst;
+				elseif ln:find("head") then
+					rec.head = rec.head or inst;
+				end;
+			end;
+		end;
+		rec.dirty = false;
+	end;
+	local function ensure(obj)
+		local model = asChar(obj) or obj;
+		if not model or not model:IsA("Model") then
+			return nil;
+		end;
+		local rec = _cache[model];
+		if not rec then
+			rec = { dirty = true };
+			_cache[model] = rec;
+			rec.a = model.DescendantAdded:Connect(function()
+				rec.dirty = true;
+			end);
+			rec.r = model.DescendantRemoving:Connect(function()
+				rec.dirty = true;
+			end);
+			rec.c = model.AncestryChanged:Connect(function(_, parent)
+				if parent then
+					return;
+				end;
+				if rec.a then
+					rec.a:Disconnect();
+				end;
+				if rec.r then
+					rec.r:Disconnect();
+				end;
+				if rec.c then
+					rec.c:Disconnect();
+				end;
+				_cache[model] = nil;
+			end);
+		end;
+		if rec.dirty or (rec.humanoid and rec.humanoid.Parent == nil) then
+			rebuild(model, rec);
+		end;
+		return rec, model;
+	end;
+	return {
+		ensure = ensure,
+		firstPart = firstPart,
+		asChar = asChar
+	};
+end)();
+local function getHumanoid(m)
+	local rec = NA_GRAB_BODY.ensure(m);
+	return rec and rec.humanoid or nil;
+end;
+local function getPart(m, name)
+	local rec, model = NA_GRAB_BODY.ensure(m);
+	if not rec or not model then
+		return nil;
+	end;
+	local lname = tostring(name or ""):lower();
+	if lname == "head" and rec.head then
+		return rec.head;
+	end;
+	if (lname == "humanoidrootpart" or lname == "rootpart") and rec.root then
+		return rec.root;
+	end;
+	if (lname == "upper torso" or lname == "upper_torso" or lname == "upper" or lname == "lower torso" or lname == "torso") and rec.torso then
+		return rec.torso;
+	end;
+	local direct = model:FindFirstChild(name, true);
+	if direct and direct:IsA("BasePart") then
+		return direct;
+	end;
+	return rec.root or rec.torso or rec.head or NA_GRAB_BODY.firstPart(model);
 end;
 local function getTorsoLikePart(m)
 	return getPart(m, "HumanoidRootPart") or getPart(m, "UpperTorso") or getPart(m, "LowerTorso") or getPart(m, "Torso");
@@ -598,6 +663,22 @@ end;
 local function findTarget()
 	local near = nil;
 	local minD = math.huge;
+
+	-- prioritise whatever the mouse is directly over
+	local mt = ms and ms.Target;
+	if mt then
+		local model = mt:IsA("Model") and mt or mt:FindFirstAncestorOfClass("Model");
+		if model and model ~= plr.Character then
+			local hum = getHumanoid(model);
+			local owner = Players:GetPlayerFromCharacter(model);
+			if hum and hum.Health > 0 and owner and isEnemy(owner) then
+				if not _G.wallCheck or clearLOS(mt) then
+					return model;
+				end;
+			end;
+		end;
+	end;
+
 	for _, op in pairs(Players:GetPlayers()) do
 		if op ~= plr and op.Character and isEnemy(op) then
 			local ch = op.Character;
@@ -620,7 +701,7 @@ local function findTarget()
 							minD = dist;
 							near = ch;
 						end;
-					elseif sdist < 150 and sdist < minD then
+					elseif sdist < minD then
 						minD = sdist;
 						near = ch;
 					end;

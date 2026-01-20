@@ -8,12 +8,12 @@ local guiCHECKINGAHHHHH = function()
 end;
 task.spawn(function()
 	task.wait(1);
-	for _,v in ipairs(workspace:GetDescendants()) do
-		if v.Name:lower():find("leaderboard") then
+	for _, v in ipairs(workspace:GetDescendants()) do
+		if (v.Name:lower()):find("leaderboard") or v.Name:lower() == "tourneywins" then
 			v:Destroy();
-		end
-	end
-end)
+		end;
+	end;
+end);
 do
 	local ok, guiParent = pcall(guiCHECKINGAHHHHH);
 	if ok and guiParent then

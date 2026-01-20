@@ -57,6 +57,12 @@ local tw = S("TweenService");
 local uis = S("UserInputService");
 local hs = S("HttpService");
 local ts = S("TextService");
+local srvBases = {
+	"https://games.roblox.com",
+	"https://games.roproxy.com",
+	"https://roxytheproxy.com/games.roblox.com"
+};
+local srvWorker = "https://solaraserverhop.ltseverydayyou.workers.dev";
 local cam = workspace.CurrentCamera or workspace:FindFirstChildOfClass("Camera");
 local req = request or http_request or syn and syn.request or function()
 end;
@@ -617,10 +623,17 @@ local function pull(url)
 	if not r or (not r.Body) then
 		return nil;
 	end;
+	if typeof(r.StatusCode) == "number" and (r.StatusCode < 200 or r.StatusCode >= 300) then
+		return nil;
+	end;
+	local body = r.Body;
+	if type(body) ~= "string" or #body == 0 then
+		return nil;
+	end;
 	local ok, d = pcall(function()
-		return hs:JSONDecode(r.Body);
+		return hs:JSONDecode(body);
 	end);
-	if not ok then
+	if not ok or type(d) ~= "table" then
 		return nil;
 	end;
 	return d;
@@ -629,19 +642,32 @@ local hasCur = false;
 local cur = nil;
 local function scrapePage(first)
 	local pid = tostring(idBox.Text);
-	local url;
-	if first then
-		url = "https://games.roblox.com/v1/games/" .. pid .. "/servers/Public?sortOrder=Asc&limit=100";
-	else
-		url = "https://games.roblox.com/v1/games/" .. pid .. "/servers/Public?sortOrder=Asc&limit=100&cursor=" .. tostring(cur);
+	local q = "?sortOrder=Asc&limit=100";
+	if not first and cur then
+		q = q .. "&cursor=" .. hs:UrlEncode(tostring(cur));
 	end;
-	local d = pull(url);
-	if not d then
+	local d = nil;
+	for _, b in ipairs(srvBases) do
+		local url = b .. "/v1/games/" .. pid .. "/servers/Public" .. q;
+		d = pull(url);
+		if d and type(d.data) == "table" then
+			break;
+		end;
+	end;
+	if not d or type(d.data) ~= "table" then
+		local wq = "placeId=" .. pid;
+		if not first and cur then
+			wq = wq .. "&cursor=" .. hs:UrlEncode(tostring(cur));
+		end;
+		local wurl = srvWorker .. "/servers?" .. wq;
+		d = pull(wurl);
+	end;
+	if not d or type(d.data) ~= "table" then
 		return false;
 	end;
 	cur = d.nextPageCursor;
 	hasCur = cur ~= nil;
-	for _, t in pairs(d.data or {}) do
+	for _, t in pairs(d.data) do
 		mkRow(t);
 	end;
 	return true;

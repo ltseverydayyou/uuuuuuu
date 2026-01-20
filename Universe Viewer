@@ -349,6 +349,12 @@ local P = sv("Players");
 local AS = sv("AssetService");
 local HS = sv("HttpService");
 local LP = P.LocalPlayer;
+local srvBases = {
+	"https://games.roblox.com",
+	"https://games.roproxy.com",
+	"https://roxytheproxy.com/games.roblox.com"
+};
+local srvWorker = "https://solaraserverhop.ltseverydayyou.workers.dev";
 local function tw(o, t, e, d, g)
 	return TS:Create(o, TweenInfo.new(t, e or Enum.EasingStyle.Quad, d or Enum.EasingDirection.Out), g);
 end;
@@ -712,31 +718,54 @@ local function srvFetch(placeId, r)
 	end;
 	r.semp.Visible = false;
 	srvSpin(r.ssp, true);
-	local url = "https://games.roblox.com/v1/games/" .. tostring(placeId) .. "/servers/Public?sortOrder=Asc&limit=100";
-	local ok, resp = pcall(function()
-		return game:HttpGetAsync(url);
-	end);
-	if not ok then
+	local pid = tostring(placeId);
+	local query = "?sortOrder=Asc&limit=100";
+	local resTable = nil;
+	for _, base in ipairs(srvBases) do
+		local url = base .. "/v1/games/" .. pid .. "/servers/Public" .. query;
+		local ok, resp = pcall(function()
+			return game:HttpGetAsync(url);
+		end);
+		if ok and type(resp) == "string" and #resp > 0 then
+			local decOk, js = pcall(function()
+				return HS:JSONDecode(resp);
+			end);
+			if decOk and type(js) == "table" and type(js.data) == "table" then
+				resTable = js;
+				break;
+			end;
+		end;
+	end;
+	if not resTable then
+		local wurl = srvWorker .. "/servers?placeId=" .. HS:UrlEncode(pid);
+		local ok, resp = pcall(function()
+			return game:HttpGetAsync(wurl);
+		end);
+		if ok and type(resp) == "string" and #resp > 0 then
+			local decOk, js = pcall(function()
+				return HS:JSONDecode(resp);
+			end);
+			if decOk and type(js) == "table" and type(js.data) == "table" then
+				resTable = js;
+			end;
+		end;
+	end;
+	if not resTable or type(resTable.data) ~= "table" then
 		srvSpin(r.ssp, false);
 		r.semp.Text = "Failed to load";
 		r.semp.Visible = true;
 		return;
 	end;
 	local data = {};
-	local decOk, res = pcall(function()
-		return HS:JSONDecode(resp);
-	end);
-	if decOk and res and res.data then
-		for _, v in ipairs(res.data) do
-			if type(v) == "table" and v.maxPlayers > v.playing and v.id ~= game.JobId then
-				table.insert(data, {
-					id = v.id,
-					playing = v.playing,
-					max = v.maxPlayers,
-					fps = tonumber(v.fps) or 0,
-					ping = tonumber(v.ping) or 0
-				});
-			end;
+	for _, v in ipairs(resTable.data) do
+		if type(v) == "table" and v.maxPlayers > v.playing and v.id ~= game.JobId then
+			table.insert(data, {
+				id = v.id,
+				playing = v.playing,
+				max = v.maxPlayers,
+				fps = tonumber(v.fps) or 0,
+				ping = tonumber(v.ping) or 0
+			});
 		end;
 	end;
 	table.sort(data, function(a, b)

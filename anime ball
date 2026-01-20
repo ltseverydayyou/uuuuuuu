@@ -526,7 +526,6 @@ if game.GameId == 5120885191 then
 			ui.MobileLarge.Visible = UIS.TouchEnabled;
 			ui.MobileSmall.Visible = false;
 			ui.Actions.Visible = not UIS.TouchEnabled;
-			ui.MobileLarge.Block.Visible = false;
 		end);
 	end);
 	rs.RenderStepped:Connect(function()

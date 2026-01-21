@@ -1062,8 +1062,10 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 	updateRingColors();
 	applyVisualizerVisible(showViz);
 end));
-trackConnection(RunService.RenderStepped:Connect(function()
+trackConnection(RunService.Stepped:Connect(function()
 	if spam then
+		task.defer(QuickParry);
+		task.defer(QuickParry);
 		task.defer(QuickParry);
 	end;
 end));

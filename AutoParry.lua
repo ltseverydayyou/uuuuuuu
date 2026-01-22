@@ -556,6 +556,9 @@ local function DoParry()
 	VirtualInputManager:SendKeyEvent(true, "F", false, game);
 	VirtualInputManager:SendKeyEvent(false, "F", false, game);
 end;
+local function queueParry()
+	task.spawn(DoParry);
+end;
 local function getHighlightColor(inst)
 	if not inst then
 		return nil, nil;
@@ -846,7 +849,7 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 						closeParryBlocked[ball] = true;
 						lastParryTime = nowInner;
 						parryTriggered = true;
-						task.defer(DoParry);
+						task.defer(queueParry);
 					end;
 				end;
 				local outsideRing = rawDist >= math.max(predictRadius - math.max(preEntryMargin * 1.1, 2.5), predictRadius * 0.85);
@@ -876,7 +879,7 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 							end;
 							lastParryTime = nowTry;
 							parryTriggered = true;
-							task.defer(DoParry);
+							task.defer(queueParry);
 						end;
 					end;
 				end;
@@ -921,7 +924,7 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 						lastParryPerBall[ball] = nowAttr;
 						lastParryTime = nowAttr;
 						parryTriggered = true;
-						task.defer(DoParry);
+						task.defer(queueParry);
 					end;
 				end);
 			end;
@@ -981,8 +984,6 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 end));
 trackConnection(RunService.RenderStepped:Connect(function()
 	if spam then
-		for i = 1, 10 do
-			task.defer(DoParry)
-		end
+		task.defer(queueParry)
 	end;
 end));

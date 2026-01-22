@@ -25,11 +25,9 @@ if game.GameId == 5120885191 then
 	local G = getgenv and getgenv() or _G
 	G.visualizer = G.visualizer ~= nil and G.visualizer or false
 
-	local ballCam = false
-	local ballCamBtn
-	local ballModeBtn
-	local ballCamMode = "Look"
-	local ballModes = { "Look", "Follow" }
+	local antiKb = false
+	local antiKbBtn
+	local antiKbConn
 
 	local abpUrl = "https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/main/AnimeBallParry.lua"
 
@@ -95,6 +93,10 @@ if game.GameId == 5120885191 then
 		rep.Framework.RemoteFunction:InvokeServer("SwordService", "Block", { -0.2588194012641907 })
 	end
 
+	local function queueParry()
+		task.spawn(parry)
+	end
+
 	local function initVisCfg()
 		local v = G.visualizer
 		if type(v) ~= "table" then
@@ -122,9 +124,48 @@ if game.GameId == 5120885191 then
 
 	initVisCfg()
 
+	local function isVelocityInstance(inst)
+		if not inst then
+			return false
+		end
+		if inst:IsA("BodyVelocity") or inst:IsA("BodyAngularVelocity") or inst:IsA("LinearVelocity") or inst:IsA("AngularVelocity") then
+			return true
+		end
+		return string.find(inst.ClassName, "Velocity") ~= nil
+	end
+
+	local function disconnectAntiKb()
+		if antiKbConn then
+			antiKbConn:Disconnect()
+			antiKbConn = nil
+		end
+	end
+
+	local function attachAntiKb(char)
+		disconnectAntiKb()
+		if not (antiKb and char) then
+			return
+		end
+		for _, desc in ipairs(char:GetDescendants()) do
+			if isVelocityInstance(desc) then
+				desc:Destroy()
+			end
+		end
+		antiKbConn = char.DescendantAdded:Connect(function(desc)
+			task.defer(function()
+				if isVelocityInstance(desc) then
+					desc:Destroy()
+				end
+			end)
+		end)
+	end
+
 	wk.Effects.ChildAdded:Connect(function(j)
-		task.wait()
-		j:Destroy()
+		task.defer(function()
+			if j then
+				j:Destroy()
+			end
+		end)
 	end)
 
 	task.wait(0.5)
@@ -353,11 +394,11 @@ if game.GameId == 5120885191 then
 
 	local function updateStatus()
 		local dev = UIS.TouchEnabled and "MOBILE" or "PC"
-		statusLbl.Text = "Spam: " .. (spam and "ON" or "OFF") .. "   Speed: " .. spamMode .. "   Ball Cam: " .. (ballCam and "ON" or "OFF") .. "   Mode: " .. ballCamMode .. "   Device: " .. dev
+		statusLbl.Text = "Spam: " .. (spam and "ON" or "OFF") .. "   Speed: " .. spamMode .. "   Anti KB: " .. (antiKb and "ON" or "OFF") .. "   Device: " .. dev
 		if UIS.TouchEnabled then
-			hintLbl.Text = "Tap buttons to toggle spam, speed, ball cam and freeze."
+			hintLbl.Text = "Tap buttons to toggle spam, speed, anti knockback and freeze."
 		else
-			hintLbl.Text = "Press R to toggle spam. Use buttons for speed, ball cam and freeze."
+			hintLbl.Text = "Press R to toggle spam. Use buttons for speed, anti knockback and freeze."
 		end
 	end
 
@@ -395,32 +436,22 @@ if game.GameId == 5120885191 then
 		updateStatus()
 	end
 
-	local function setBallCam(state)
-		ballCam = state
-		if ballCamBtn then
-			ballCamBtn.Text = "Ball Cam: " .. (ballCam and "ON" or "OFF")
-			setBtnState(ballCamBtn, ballCam)
+	local function setAntiKb(state)
+		antiKb = state
+		if antiKbBtn then
+			antiKbBtn.Text = "Anti Knockback: " .. (antiKb and "ON" or "OFF")
+			setBtnState(antiKbBtn, antiKb)
+		end
+		if antiKb then
+			attachAntiKb(plr.Character)
+		else
+			disconnectAntiKb()
 		end
 		updateStatus()
 	end
 
-	local function cycleBallMode()
-		local idx = 1
-		for i, n in ipairs(ballModes) do
-			if n == ballCamMode then
-				idx = i
-				break
-			end
-		end
-		idx = idx + 1
-		if idx > #ballModes then
-			idx = 1
-		end
-		ballCamMode = ballModes[idx]
-		if ballModeBtn then
-			ballModeBtn.Text = "Mode: " .. ballCamMode
-		end
-		updateStatus()
+	local function toggleAntiKb()
+		setAntiKb(not antiKb)
 	end
 
 	local parryBtn = mkBtn("ParryBtn", "Manual Parry", UDim2.new(0, 100, 0, 34), UDim2.new(0, 14, 0, 78), function()
@@ -451,16 +482,12 @@ if game.GameId == 5120885191 then
 		end
 	end, true)
 
-	ballCamBtn = mkBtn("BallCamBtn", "Ball Cam: OFF", UDim2.new(0, 150, 0, 30), UDim2.new(0, 14, 0, 158), function()
-		setBallCam(not ballCam)
-	end, false)
-
-	ballModeBtn = mkBtn("BallModeBtn", "Mode: " .. ballCamMode, UDim2.new(0, 150, 0, 30), UDim2.new(0, 176, 0, 158), function()
-		cycleBallMode()
+	antiKbBtn = mkBtn("AntiKnockbackBtn", "Anti Knockback: OFF", UDim2.new(1, -28, 0, 34), UDim2.new(0, 14, 0, 158), function()
+		toggleAntiKb()
 	end, false)
 
 	setBtnState(spamBtn, false)
-	setBtnState(ballCamBtn, ballCam)
+	setAntiKb(antiKb)
 	updateStatus()
 
 	local minimized = false
@@ -509,6 +536,16 @@ if game.GameId == 5120885191 then
 
 	toggleBtn.MouseButton1Click:Connect(function()
 		setFrameVisible(true)
+	end)
+
+	plr.CharacterAdded:Connect(function(char)
+		if antiKb then
+			attachAntiKb(char)
+		end
+	end)
+
+	plr.CharacterRemoving:Connect(function()
+		disconnectAntiKb()
 	end)
 
 	frame.Size = UDim2.new(0, 0, 0, 0)
@@ -596,46 +633,11 @@ if game.GameId == 5120885191 then
 		task.defer(function()
 			if spam then
 				if spamMode == "Extreme" then
-					task.defer(parry)
-					task.defer(parry)
-					task.defer(parry)
+					task.defer(queueParry)
+					task.defer(queueParry)
+					task.defer(queueParry)
 				else
-					task.defer(parry)
-				end
-			end
-			if ballCam then
-				local cam = wk.CurrentCamera or workspace.CurrentCamera
-				local char = plr.Character
-				local root = getRoot(char)
-				local ballsFolder = wk:FindFirstChild("Balls")
-				if cam and root and ballsFolder then
-					local closest
-					local closestDist
-					local rp = root.Position
-					for _, b in ipairs(ballsFolder:GetChildren()) do
-						local part
-						if b:IsA("BasePart") then
-							part = b
-						elseif b:IsA("Model") then
-							part = b:FindFirstChildWhichIsA("BasePart")
-						end
-						if part then
-							local d = (part.Position - rp).Magnitude
-							if not closestDist or d < closestDist then
-								closestDist = d
-								closest = part
-							end
-						end
-					end
-					if closest then
-						local pos = cam.CFrame.Position
-						local targetCf = CFrame.new(pos, closest.Position)
-						if ballCamMode == "Follow" then
-							cam.CFrame = cam.CFrame:Lerp(targetCf, 0.35)
-						else
-							cam.CFrame = targetCf
-						end
-					end
+					task.defer(queueParry)
 				end
 			end
 			updateStatus()

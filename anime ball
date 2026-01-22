@@ -177,16 +177,20 @@ if game.GameId == 5120885191 then
 		end
 	end
 
-	local function attachAntiFx()
-		disconnectAntiFx()
-		if not antiFx then
-			return
-		end
+	local function purgeEffects()
 		for _, desc in ipairs(wk:GetDescendants()) do
 			if isEffectInstance(desc) then
 				desc:Destroy()
 			end
 		end
+	end
+
+	local function attachAntiFx()
+		disconnectAntiFx()
+		if not antiFx then
+			return
+		end
+		task.spawn(purgeEffects)
 		antiFxConn = wk.DescendantAdded:Connect(function(desc)
 			task.defer(function()
 				if isEffectInstance(desc) then

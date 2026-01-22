@@ -874,8 +874,9 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 				local settleTime = math.clamp(0.003 + ping * 0.0002, 0.002, 0.014);
 				local settledInPredict = nearPredict and predictEnterAt[ball] and now - predictEnterAt[ball] >= settleTime;
 				local targeted, ballHighlight, charHighlight, ballColor, charColor = isBallTargetingYou(ball, character);
+				local attrNow = isBallTargetingYouAttr(ball, character);
 				local charHighlightEnabled = charHighlight and charHighlight.Enabled ~= false;
-				if targeted then
+				if targeted or attrNow then
 					anyTargeted = true;
 				end;
 				local lastChar = lastCharHighlightEnabled[ball] or false;
@@ -1062,10 +1063,10 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 	updateRingColors();
 	applyVisualizerVisible(showViz);
 end));
-trackConnection(RunService.Stepped:Connect(function()
+trackConnection(RunService.RenderStepped:Connect(function()
 	if spam then
-		task.defer(QuickParry);
-		task.defer(QuickParry);
-		task.defer(QuickParry);
+		for i = 1, 10 do
+			task.defer(QuickParry)
+		end
 	end;
 end));

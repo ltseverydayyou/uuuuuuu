@@ -28,6 +28,9 @@ if game.GameId == 5120885191 then
 	local antiKb = false
 	local antiKbBtn
 	local antiKbConn
+	local antiFx = false
+	local antiFxBtn
+	local antiFxConn
 
 	local abpUrl = "https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/main/AnimeBallParry.lua"
 
@@ -134,6 +137,13 @@ if game.GameId == 5120885191 then
 		return string.find(inst.ClassName, "Velocity") ~= nil
 	end
 
+	local function isEffectInstance(inst)
+		if not inst then
+			return false
+		end
+		return inst:IsA("ParticleEmitter") or inst:IsA("Beam") or inst:IsA("Trail")
+	end
+
 	local function disconnectAntiKb()
 		if antiKbConn then
 			antiKbConn:Disconnect()
@@ -154,6 +164,32 @@ if game.GameId == 5120885191 then
 		antiKbConn = char.DescendantAdded:Connect(function(desc)
 			task.defer(function()
 				if isVelocityInstance(desc) then
+					desc:Destroy()
+				end
+			end)
+		end)
+	end
+
+	local function disconnectAntiFx()
+		if antiFxConn then
+			antiFxConn:Disconnect()
+			antiFxConn = nil
+		end
+	end
+
+	local function attachAntiFx()
+		disconnectAntiFx()
+		if not antiFx then
+			return
+		end
+		for _, desc in ipairs(wk:GetDescendants()) do
+			if isEffectInstance(desc) then
+				desc:Destroy()
+			end
+		end
+		antiFxConn = wk.DescendantAdded:Connect(function(desc)
+			task.defer(function()
+				if isEffectInstance(desc) then
 					desc:Destroy()
 				end
 			end)
@@ -394,11 +430,11 @@ if game.GameId == 5120885191 then
 
 	local function updateStatus()
 		local dev = UIS.TouchEnabled and "MOBILE" or "PC"
-		statusLbl.Text = "Spam: " .. (spam and "ON" or "OFF") .. "   Speed: " .. spamMode .. "   Anti KB: " .. (antiKb and "ON" or "OFF") .. "   Device: " .. dev
+		statusLbl.Text = "Spam: " .. (spam and "ON" or "OFF") .. "   Speed: " .. spamMode .. "   Anti KB: " .. (antiKb and "ON" or "OFF") .. "   Anti FX: " .. (antiFx and "ON" or "OFF") .. "   Device: " .. dev
 		if UIS.TouchEnabled then
-			hintLbl.Text = "Tap buttons to toggle spam, speed, anti knockback and freeze."
+			hintLbl.Text = "Tap buttons to toggle spam, speed, anti knockback, anti effects and freeze."
 		else
-			hintLbl.Text = "Press R to toggle spam. Use buttons for speed, anti knockback and freeze."
+			hintLbl.Text = "Press R to toggle spam. Use buttons for speed, anti knockback, anti effects and freeze."
 		end
 	end
 
@@ -454,6 +490,24 @@ if game.GameId == 5120885191 then
 		setAntiKb(not antiKb)
 	end
 
+	local function setAntiFx(state)
+		antiFx = state
+		if antiFxBtn then
+			antiFxBtn.Text = "Anti Effects: " .. (antiFx and "ON" or "OFF")
+			setBtnState(antiFxBtn, antiFx)
+		end
+		if antiFx then
+			attachAntiFx()
+		else
+			disconnectAntiFx()
+		end
+		updateStatus()
+	end
+
+	local function toggleAntiFx()
+		setAntiFx(not antiFx)
+	end
+
 	local parryBtn = mkBtn("ParryBtn", "Manual Parry", UDim2.new(0, 100, 0, 34), UDim2.new(0, 14, 0, 78), function()
 		parry()
 	end, true)
@@ -482,12 +536,16 @@ if game.GameId == 5120885191 then
 		end
 	end, true)
 
-	antiKbBtn = mkBtn("AntiKnockbackBtn", "Anti Knockback: OFF", UDim2.new(1, -28, 0, 34), UDim2.new(0, 14, 0, 158), function()
+	antiKbBtn = mkBtn("AntiKnockbackBtn", "Anti Knockback: OFF", UDim2.new(0, 150, 0, 34), UDim2.new(0, 14, 0, 158), function()
 		toggleAntiKb()
+	end, false)
+	antiFxBtn = mkBtn("AntiEffectsBtn", "Anti Effects: OFF", UDim2.new(0, 150, 0, 34), UDim2.new(0, 176, 0, 158), function()
+		toggleAntiFx()
 	end, false)
 
 	setBtnState(spamBtn, false)
 	setAntiKb(antiKb)
+	setAntiFx(antiFx)
 	updateStatus()
 
 	local minimized = false
@@ -546,6 +604,7 @@ if game.GameId == 5120885191 then
 
 	plr.CharacterRemoving:Connect(function()
 		disconnectAntiKb()
+		disconnectAntiFx()
 	end)
 
 	frame.Size = UDim2.new(0, 0, 0, 0)

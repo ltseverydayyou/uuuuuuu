@@ -9,7 +9,6 @@ local re = fw:WaitForChild("RemoteEvent")
 local plrs = game:GetService("Players")
 local lp = plrs.LocalPlayer
 local gs = game:GetService("GroupService")
-local sg = game:GetService("StarterGui")
 
 local aAFK = { "MatchService", "SetAFK", { true } }
 local aDaily = { "RewardService", "ClaimDailyReward", {} }
@@ -20,7 +19,7 @@ local aCr2 = { "CrateService", "BuyCrate", { "GoldCrateA1", 1, false } }
 local aSpin = { "RewardService", "ClaimSpinReward", {} }
 local aLuck = { "BoostService", "UseBoost", { "Luck" } }
 local aYen = { "BoostService", "UseBoost", { "Yen" } }
-local aGVerify = { "SocialsService2", "Verify", { lp, { "Group" } } }
+local aGVer = { "SocialsService2", "Verify", { lp, { "Group" } } }
 
 local gid
 if game.CreatorType == Enum.CreatorType.Group then
@@ -28,45 +27,21 @@ if game.CreatorType == Enum.CreatorType.Group then
 end
 
 if gid then
-	local ok, info = pcall(function()
-		return gs:GetGroupInfoAsync(gid)
-	end)
-	local txt = "Group: " .. tostring(gid)
-	if ok and info and info.Name then
-		txt = tostring(info.Name) .. " (" .. tostring(gid) .. ")"
-	end
-	pcall(function()
-		sg:SetCore("SendNotification", {
-			Title = "Game Group",
-			Text = txt,
-			Duration = 5
-		})
-	end)
-
-	task.spawn(function()
-		if not lp:IsInGroup(gid) and gs and typeof(gs.PromptJoinAsync) == "function" then
-			pcall(function()
-				gs:PromptJoinAsync(gid)
+	if lp:IsInGroup(gid) then
+		task.delay(0.5, function()
+			rf:InvokeServer(unpack(aGVer))
+		end)
+	else
+		task.spawn(function()
+			local ok, res = pcall(function()
+				return gs:PromptJoinAsync(gid)
 			end)
-		end
-
-		if lp:IsInGroup(gid) then
-			task.wait(0.5)
-			rf:InvokeServer(unpack(aGVerify))
-			return
-		end
-
-		local tries = 0
-		while tries < 120 do
-			tries += 1
-			if lp:IsInGroup(gid) then
+			if ok and res then
 				task.wait(0.5)
-				rf:InvokeServer(unpack(aGVerify))
-				break
+				rf:InvokeServer(unpack(aGVer))
 			end
-			task.wait(1)
-		end
-	end)
+		end)
+	end
 end
 
 re:FireServer(unpack(aAFK))

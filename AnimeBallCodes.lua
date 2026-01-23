@@ -48,9 +48,23 @@ if game.PlaceId ~= 15440283215 then
 			if sw and (not h or not h.Parent) then
 				h = sw:FindFirstChild("Holder") or sw:WaitForChild("Holder", 5)
 			end
+			local t
 			if h then
-				h.Visible = true
-				re:FireServer(unpack(aSpin))
+				local spin = h:FindFirstChild("Spin")
+				if spin then
+					local inside = spin:FindFirstChild("Inside")
+					if inside then
+						t = inside:FindFirstChild("Title")
+					end
+				end
+			end
+			if h then
+				if t and typeof(t.Text) == "string" and t.Text:find("SPIN (x0)") then
+					h.Visible = false
+				else
+					h.Visible = true
+					re:FireServer(unpack(aSpin))
+				end
 			end
 			task.wait(0.1)
 		end

@@ -97,7 +97,7 @@ local function startAll()
 					return gs:PromptJoinAsync(gid);
 				end);
 				if ok and res then
-					for _ = 1, 30 do
+					while true do
 						rf:InvokeServer(unpack(aGVer));
 						task.wait(1);
 					end;

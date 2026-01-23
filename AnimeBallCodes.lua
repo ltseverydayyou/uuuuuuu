@@ -106,13 +106,13 @@ local function startAll()
 		end;
 	end;
 	re:FireServer(unpack(aAFK));
-	task.wait(0.5);
+	task.wait(1);
 	rf:InvokeServer(unpack(aDaily));
-	task.wait(0.5);
+	task.wait(1);
 	rf:InvokeServer(unpack(aCode1));
-	task.wait(0.5);
+	task.wait(1);
 	rf:InvokeServer(unpack(aCode2));
-	task.wait(0.5);
+	task.wait(1);
 	task.spawn(function()
 		while true do
 			rf:InvokeServer(unpack(aCr1));

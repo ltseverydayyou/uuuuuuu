@@ -20,10 +20,11 @@ local aLuck = { "BoostService", "UseBoost", { "Luck" } }
 local aYen = { "BoostService", "UseBoost", { "Yen" } }
 
 re:FireServer(unpack(aAFK))
-
+task.wait(0.5)
 rf:InvokeServer(unpack(aDaily))
 task.wait(0.5)
 rf:InvokeServer(unpack(aCode1))
+task.wait(0.5)
 rf:InvokeServer(unpack(aCode2))
 task.wait(0.5)
 
@@ -70,7 +71,7 @@ if game.PlaceId ~= 15440283215 then
 				spin = h:FindFirstChild("Spin") or h:WaitForChild("Spin", 5)
 				inside = spin:FindFirstChild("Inside") or spin:WaitForChild("Inside", 5)
 				title = inside:FindFirstChild("Title") or inside:WaitForChild("Title", 5)
-				darken = h:FindFirstChild("Darken")
+				darken = h:FindFirstChild("Darken") or h:WaitForChild("Darken", 5)
 			end
 
 			if not darken or not darken.Parent then

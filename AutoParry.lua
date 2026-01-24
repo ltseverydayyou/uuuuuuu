@@ -3,7 +3,7 @@ local RunService = game:GetService("RunService");
 local UserInputService = game:GetService("UserInputService");
 local VirtualInputManager = game:GetService("VirtualInputManager");
 local Stats = game:GetService("Stats");
-local GuiService = game:GetService("GuiService");
+--[[local GuiService = game:GetService("GuiService");
 
 local function lockTouchControls()
 	local UIS = UserInputService;
@@ -34,7 +34,7 @@ task.spawn(function()
 	if isMobile then
 		lockTouchControls();
 	end;
-end);
+end);]]
 
 local guiCHECKINGAHHHHH = function()
 	return gethui and gethui() or (game:GetService("CoreGui")):FindFirstChildWhichIsA("ScreenGui") or game:GetService("CoreGui") or (game:GetService("Players")).LocalPlayer:FindFirstChildWhichIsA("PlayerGui");
@@ -421,18 +421,40 @@ local function round(num, places)
 	return math.floor((num * mult + 0.5)) / mult;
 end;
 local function getBalls()
-	local folder = workspace:FindFirstChild("Balls");
-	if not folder then
-		return {};
-	end;
 	local list = {};
-	for _, child in ipairs(folder:GetChildren()) do
-		if child:IsA("BasePart") then
-			table.insert(list, child);
+	local p = visualizerConfig and visualizerConfig.path;
+
+	local paths;
+	if p == nil then
+		local folder = workspace:FindFirstChild("Balls");
+		if folder then
+			paths = { folder };
+		else
+			paths = {};
+		end;
+	elseif typeof(p) == "table" then
+		paths = p;
+	else
+		paths = { p };
+	end;
+
+	for _, src in ipairs(paths) do
+		if typeof(src) == "Instance" then
+			if src:IsA("BasePart") then
+				table.insert(list, src);
+			else
+				for _, child in ipairs(src:GetDescendants()) do
+					if child:IsA("BasePart") then
+						table.insert(list, child);
+					end;
+				end;
+			end;
 		end;
 	end;
+
 	return list;
 end;
+
 local function newRing(name, color)
 	ensureIdentity();
 	local part = Instance.new("Part");

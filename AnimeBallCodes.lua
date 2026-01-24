@@ -137,9 +137,10 @@ local function startAll()
 			local spin = h:WaitForChild("Spin");
 			local inside = spin:WaitForChild("Inside");
 			local title = inside:WaitForChild("Title");
+			local detect = inside:FindFirstChild("Detection") or inside:WaitForChild("Detection", 5);
 			local darken = h:FindFirstChild("Darken");
 			while true do
-				if not sw.Parent or (not h.Parent) or (not title.Parent) then
+				if (not sw.Parent) or (not h.Parent) or (not title.Parent) then
 					sw = gui:FindFirstChild("SpinWheel") or gui:WaitForChild("SpinWheel", 5);
 					if not sw then
 						task.wait(0.5);
@@ -154,8 +155,9 @@ local function startAll()
 					inside = spin:FindFirstChild("Inside") or spin:WaitForChild("Inside", 5);
 					title = inside:FindFirstChild("Title") or inside:WaitForChild("Title", 5);
 					darken = h:FindFirstChild("Darken") or h:WaitForChild("Darken", 5);
+					detect = inside:FindFirstChild("Detection") or inside:WaitForChild("Detection", 5);
 				end;
-				if not darken or (not darken.Parent) then
+				if (not darken) or (not darken.Parent) then
 					darken = h:FindFirstChild("Darken");
 				end;
 				if darken then
@@ -170,6 +172,11 @@ local function startAll()
 					re:FireServer(unpack(aSpin));
 					re:FireServer(unpack(aLuck));
 					re:FireServer(unpack(aYen));
+					if typeof(firesignal) == "function" and detect and detect.Parent and h.Visible then
+						pcall(function()
+							firesignal(detect.Activated);
+						end);
+					end;
 				end;
 				task.wait(0.1);
 			end;

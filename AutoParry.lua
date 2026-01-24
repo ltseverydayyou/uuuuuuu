@@ -3,6 +3,39 @@ local RunService = game:GetService("RunService");
 local UserInputService = game:GetService("UserInputService");
 local VirtualInputManager = game:GetService("VirtualInputManager");
 local Stats = game:GetService("Stats");
+local GuiService = game:GetService("GuiService");
+
+local function lockTouchControls()
+	local UIS = UserInputService;
+	local GS = GuiService;
+
+	if getconnections then
+		for _, c in ipairs(getconnections(UIS.LastInputTypeChanged)) do
+			pcall(function()
+				c:Disable();
+			end);
+		end;
+	end;
+
+	pcall(function()
+		GS.TouchControlsEnabled = true;
+		GS:GetPropertyChangedSignal("TouchControlsEnabled"):Connect(function()
+			pcall(function()
+				GS.TouchControlsEnabled = true;
+			end);
+		end);
+	end);
+end;
+
+task.spawn(function()
+	task.wait(0.1);
+	local UIS = UserInputService;
+	local isMobile = UIS.TouchEnabled and (not UIS.KeyboardEnabled) and (not UIS.MouseEnabled);
+	if isMobile then
+		lockTouchControls();
+	end;
+end);
+
 local guiCHECKINGAHHHHH = function()
 	return gethui and gethui() or (game:GetService("CoreGui")):FindFirstChildWhichIsA("ScreenGui") or game:GetService("CoreGui") or (game:GetService("Players")).LocalPlayer:FindFirstChildWhichIsA("PlayerGui");
 end;

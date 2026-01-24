@@ -438,22 +438,42 @@ local function getBalls()
 		paths = { p }
 	end
 
-	for _, src in ipairs(paths) do
-		if typeof(src) == "Instance" then
+	for i, src in ipairs(paths) do
+		local t = typeof(src)
+		if t == "Instance" then
 			if src:IsA("BasePart") then
 				local par = src.Parent
 				if par and par.Parent then
 					local cur = par:FindFirstChild(src.Name)
 					if cur and cur:IsA("BasePart") and cur.Parent then
-						table.insert(list, cur)
+						list[#list + 1] = cur
+						paths[i] = { parent = par, name = src.Name }
 					end
 				end
 			else
 				if src.Parent then
 					for _, ch in ipairs(src:GetChildren()) do
 						if ch:IsA("BasePart") and ch.Parent then
-							table.insert(list, ch)
+							list[#list + 1] = ch
 						end
+					end
+				end
+			end
+		elseif t == "table" then
+			local par = src.parent
+			local name = src.name
+			local cont = src.container
+			if cont and typeof(cont) == "Instance" and cont.Parent then
+				for _, ch in ipairs(cont:GetChildren()) do
+					if ch:IsA("BasePart") and ch.Parent then
+						list[#list + 1] = ch
+					end
+				end
+			elseif typeof(par) == "Instance" and type(name) == "string" then
+				if par.Parent then
+					local cur = par:FindFirstChild(name)
+					if cur and cur:IsA("BasePart") and cur.Parent then
+						list[#list + 1] = cur
 					end
 				end
 			end

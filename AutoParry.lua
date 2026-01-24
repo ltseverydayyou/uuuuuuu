@@ -421,40 +421,94 @@ local function round(num, places)
 	return math.floor((num * mult + 0.5)) / mult;
 end;
 local function getBalls()
-	local list = {};
-	local p = visualizerConfig and visualizerConfig.path;
+	local list = {}
+	local cfg = visualizerConfig
+	local p = cfg and cfg.path
+	local paths
 
-	local paths;
 	if p == nil then
-		local folder = workspace:FindFirstChild("Balls");
+		local folder = workspace:FindFirstChild("Balls")
 		if folder then
-			paths = { folder };
+			paths = { folder }
 		else
-			paths = {};
-		end;
+			paths = {}
+		end
 	elseif typeof(p) == "table" then
-		paths = p;
+		paths = p
 	else
-		paths = { p };
-	end;
+		paths = { p }
+	end
 
-	for _, src in ipairs(paths) do
-		if typeof(src) == "Instance" then
-			if src:IsA("BasePart") then
-				table.insert(list, src);
-			else
-				for _, child in ipairs(src:GetDescendants()) do
-					if child:IsA("BasePart") then
-						table.insert(list, child);
-					end;
-				end;
-			end;
-		end;
-	end;
+	local function addFromInstance(inst)
+		if not inst then
+			return
+		end
+		if inst:IsA("BasePart") then
+			table.insert(list, inst)
+		else
+			for _, ch in ipairs(inst:GetChildren()) do
+				if ch:IsA("BasePart") then
+					table.insert(list, ch)
+				end
+			end
+		end
+	end
 
-	return list;
-end;
+	for i, src in ipairs(paths) do
+		if typeof(src) == "function" then
+			local ok, res = pcall(src)
+			if ok and res ~= nil then
+				if typeof(res) == "Instance" then
+					if res.Parent ~= nil then
+						addFromInstance(res)
+					end
+				elseif typeof(res) == "table" then
+					for _, r in ipairs(res) do
+						if typeof(r) == "Instance" and r.Parent ~= nil then
+							addFromInstance(r)
+						end
+					end
+				end
+			end
+		elseif typeof(src) == "Instance" then
+			local orig = src
+			if src.Parent == nil then
+				local new = workspace:FindFirstChild(orig.Name, true)
+				if new then
+					src = new
+					if typeof(p) == "table" then
+						for idx, v in ipairs(p) do
+							if v == orig then
+								p[idx] = new
+								break
+							end
+						end
+					elseif cfg.path == orig then
+						cfg.path = new
+					end
+				else
+					if typeof(p) == "table" then
+						for idx, v in ipairs(p) do
+							if v == orig then
+								p[idx] = false
+								break
+							end
+						end
+					elseif cfg.path == orig then
+						cfg.path = false
+					end
+					src = nil
+				end
+			end
 
+			if src and src.Parent ~= nil then
+				addFromInstance(src)
+			end
+		end
+	end
+
+	return list
+end
 local function newRing(name, color)
 	ensureIdentity();
 	local part = Instance.new("Part");

@@ -425,52 +425,44 @@ local function getBalls()
 	local p = visualizerConfig and visualizerConfig.path
 	local paths
 
-	if p == nil or (typeof(p) == "table" and next(p) == nil) then
-		local folder = workspace:FindFirstChild("Balls")
-		if folder then
-			paths = { folder }
-		else
-			paths = {}
-		end
+	if p == nil or (typeof(p) == "table" and #p == 0) then
+		paths = { { parent = workspace, name = "Balls" } }
 	elseif typeof(p) == "table" then
 		paths = p
 	else
 		paths = { p }
 	end
 
-	for i, src in ipairs(paths) do
-		local t = typeof(src)
-		if t == "Instance" then
-			if src:IsA("BasePart") then
-				if src.Parent and src.Parent.Parent then
-					list[#list + 1] = src
-					paths[i] = { parent = src.Parent, name = src.Name }
-				end
-			else
-				if src.Parent then
-					for _, ch in ipairs(src:GetChildren()) do
-						if ch:IsA("BasePart") and ch.Parent then
-							list[#list + 1] = ch
-						end
-					end
+	local function addFromContainer(container)
+		if not (typeof(container) == "Instance" and container.Parent) then
+			return
+		end
+		if container:IsA("BasePart") then
+			list[#list + 1] = container
+		else
+			for _, d in ipairs(container:GetDescendants()) do
+				if d:IsA("BasePart") and d.Parent then
+					list[#list + 1] = d
 				end
 			end
+		end
+	end
+
+	for _, src in ipairs(paths) do
+		local t = typeof(src)
+		if t == "Instance" then
+			addFromContainer(src)
 		elseif t == "table" then
 			local par = src.parent
 			local name = src.name
-			local cont = src.container
-			if cont and typeof(cont) == "Instance" and cont.Parent then
-				for _, ch in ipairs(cont:GetChildren()) do
-					if ch:IsA("BasePart") and ch.Parent then
-						list[#list + 1] = ch
-					end
-				end
-			elseif typeof(par) == "Instance" and type(name) == "string" then
-				if par.Parent then
-					local cur = par:FindFirstChild(name)
-					if cur and cur:IsA("BasePart") and cur.Parent then
-						list[#list + 1] = cur
-					end
+			local container = src.container
+
+			if typeof(container) == "Instance" then
+				addFromContainer(container)
+			elseif typeof(par) == "Instance" and type(name) == "string" and par.Parent then
+				local found = par:FindFirstChild(name)
+				if found and found.Parent then
+					addFromContainer(found)
 				end
 			end
 		end

@@ -425,7 +425,7 @@ local function getBalls()
 	local p = visualizerConfig and visualizerConfig.path
 	local paths
 
-	if p == nil then
+	if p == nil or (typeof(p) == "table" and next(p) == nil) then
 		local folder = workspace:FindFirstChild("Balls")
 		if folder then
 			paths = { folder }
@@ -442,13 +442,9 @@ local function getBalls()
 		local t = typeof(src)
 		if t == "Instance" then
 			if src:IsA("BasePart") then
-				local par = src.Parent
-				if par and par.Parent then
-					local cur = par:FindFirstChild(src.Name)
-					if cur and cur:IsA("BasePart") and cur.Parent then
-						list[#list + 1] = cur
-						paths[i] = { parent = par, name = src.Name }
-					end
+				if src.Parent and src.Parent.Parent then
+					list[#list + 1] = src
+					paths[i] = { parent = src.Parent, name = src.Name }
 				end
 			else
 				if src.Parent then

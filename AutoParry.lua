@@ -149,11 +149,12 @@ local ringPinkTransparency;
 local distanceDivisor;
 local predictBase;
 local predictExtra;
-local lastFire = 0;
 local resetToken = 0;
 local parCd = 1.75;
 local nextPar = 0;
 local lastParryTime = 0;
+local curFrame = 0
+local lastParryFrame = -1
 local wasInPredict = {};
 local ringLimited = false;
 local lastBallSamples = {};
@@ -161,7 +162,6 @@ local lastBallVel = {};
 local lastBallMoveTime = {};
 local closeParryBlocked = {};
 local smoothedSpeed = {};
-local currentBall = nil;
 local lastHighlightMatch = {};
 local lastCharHighlightEnabled = {};
 local lastParryPerBall = {};
@@ -818,8 +818,12 @@ local function DoParry()
 	VirtualInputManager:SendKeyEvent(false, "F", false, game);
 end
 local function queueParry()
-	task.spawn(DoParry);
-end;
+	if curFrame == lastParryFrame then
+		return
+	end
+	lastParryFrame = curFrame
+	task.spawn(DoParry)
+end
 local function getHighlightColor(inst)
 	if not inst then
 		return nil, nil;
@@ -908,16 +912,6 @@ local function isBallTargetingYouAttr(ball, char)
 	end;
 	return false;
 end;
-local function scheduleReset()
-	resetToken = resetToken + 1;
-	local token = resetToken;
-	lastFire = 0;
-	task.delay(0.001, function()
-		if resetToken == token then
-			lastFire = 0;
-		end;
-	end);
-end;
 updateRingColors = function()
 	if ringLimited then
 		ringPlayer.Color = Color3.new(0, 1, 0);
@@ -943,6 +937,7 @@ local function updateGuiTargets(hrp, ball)
 	end;
 end;
 trackConnection(RunService.RenderStepped:Connect(function(dt)
+	curFrame = curFrame + 1
 	character = localPlayer.Character or character;
 	local hrp = waitForChildFast(character, "HumanoidRootPart");
 	local balls = getBalls();
@@ -1046,7 +1041,6 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 					resetToken = resetToken + 1;
 				elseif prevInPredict then
 					predictEnterAt[ball] = nil;
-					scheduleReset();
 				else
 					predictEnterAt[ball] = nil;
 				end;
@@ -1105,7 +1099,6 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 					local lastBallFire = lastParryPerBall[ball] or (-math.huge);
 					if nowInner >= nextPar and nowInner - lastBallFire > 0.05 then
 						nextPar = nowInner + parCd;
-						lastFire = nowInner;
 						lastParryPerBall[ball] = nowInner;
 						closeParryBlocked[ball] = true;
 						lastParryTime = nowInner;
@@ -1133,7 +1126,6 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 						local minBallCooldown = highlightsMatch and 0.7 or 0.35;
 						if nowTry >= nextPar and nowTry - lastBallFire > minBallCooldown then
 							nextPar = nowTry + parCd;
-							lastFire = nowTry;
 							lastParryPerBall[ball] = nowTry;
 							if rawDist <= parryPredictRadius * 0.8 then
 								closeParryBlocked[ball] = true;
@@ -1181,7 +1173,6 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 					local lastBallFire = lastParryPerBall[ball] or (-math.huge);
 					if nowAttr >= nextPar and nowAttr - lastBallFire > 0.7 then
 						nextPar = nowAttr + parCd;
-						lastFire = nowAttr;
 						lastParryPerBall[ball] = nowAttr;
 						lastParryTime = nowAttr;
 						parryTriggered = true;
@@ -1194,7 +1185,6 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 		ringPlayer.CFrame = CFrame.new(hrp.Position);
 		ringPlayerNoUnit.CFrame = ringPlayer.CFrame;
 		ringBall.CFrame = ringPlayer.CFrame;
-		currentBall = nil;
 		lastBallSamples = {};
 		lastBallVel = {};
 		lastBallMoveTime = {};
@@ -1206,7 +1196,6 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 		lastCharHighlightEnabled = {};
 		targetedSince = {};
 		lastAttrTargeted = {};
-		lastFire = 0;
 		nextPar = 0;
 		ringLimited = false;
 		resetToken = 0;

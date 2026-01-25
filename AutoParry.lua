@@ -622,10 +622,99 @@ local function attachVisualizer(hasBall)
 		visualizerAttached = false;
 	end;
 end;
+local function resolveBtn()
+	local cfg = visualizerConfig
+	local b = cfg and cfg.btn
+	if not b then
+		return nil
+	end
+
+	local function resolveOne(x)
+		if typeof(x) == "Instance" then
+			if x:IsA("GuiButton") and x.Parent then
+				return x
+			end
+		elseif type(x) == "table" then
+			local par = x.parent
+			local name = x.name
+			if typeof(par) == "Instance" and type(name) == "string" and par.Parent then
+				local f = par:FindFirstChild(name, true)
+				if f and f:IsA("GuiButton") and f.Parent then
+					return f
+				end
+			end
+		end
+		return nil
+	end
+
+	if typeof(b) == "Instance" or (type(b) == "table" and (b.parent or b.name)) then
+		return resolveOne(b)
+	elseif type(b) == "table" then
+		for _, v in ipairs(b) do
+			local r = resolveOne(v)
+			if r then
+				return r
+			end
+		end
+	end
+
+	return nil
+end
+
+local function pressBtn(btn)
+	if typeof(firesignal) ~= "function" then
+		return false
+	end
+	if not (btn and btn:IsA("GuiButton") and btn.Parent) then
+		return false
+	end
+
+	local fired = false
+	local ev
+
+	ev = btn.MouseButton1Down
+	if ev then
+		pcall(function()
+			firesignal(ev)
+		end)
+		fired = true
+	end
+
+	ev = btn.MouseButton1Up
+	if ev then
+		pcall(function()
+			firesignal(ev)
+		end)
+		fired = true
+	end
+
+	ev = btn.MouseButton1Click
+	if ev then
+		pcall(function()
+			firesignal(ev)
+		end)
+		fired = true
+	end
+
+	ev = btn.Activated
+	if ev then
+		pcall(function()
+			firesignal(ev)
+		end)
+		fired = true
+	end
+
+	return fired
+end
+
 local function DoParry()
-	VirtualInputManager:SendKeyEvent(true, "F", false, game);
-	VirtualInputManager:SendKeyEvent(false, "F", false, game);
-end;
+	local btn = resolveBtn()
+	if btn and pressBtn(btn) then
+		return
+	end
+	VirtualInputManager:SendKeyEvent(true, "F", false, game)
+	VirtualInputManager:SendKeyEvent(false, "F", false, game)
+end
 local function queueParry()
 	task.spawn(DoParry);
 end;

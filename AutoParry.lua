@@ -622,6 +622,102 @@ local function attachVisualizer(hasBall)
 		visualizerAttached = false;
 	end;
 end;
+
+local function resolveRemote()
+	local cfg = visualizerConfig;
+	local r = cfg and cfg.remote;
+	if not r then
+		return nil, nil;
+	end;
+
+	local function resolveOne(x)
+		if typeof(x) == "Instance" then
+			if x.Parent then
+				return x, nil;
+			end;
+		elseif type(x) == "table" then
+			local inst = x.inst or x[1];
+			local args = x.args or x[2];
+
+			if typeof(inst) == "Instance" and inst.Parent then
+				return inst, args;
+			end;
+
+			local par = x.parent;
+			local name = x.name;
+			if not inst and typeof(par) == "Instance" and type(name) == "string" and par.Parent then
+				local f = par:FindFirstChild(name, true);
+				if f and f.Parent then
+					return f, args;
+				end;
+			end;
+		end;
+		return nil, nil;
+	end;
+
+	if typeof(r) == "Instance" or (type(r) == "table" and (r.inst or r.parent or r[1])) then
+		return resolveOne(r);
+	elseif type(r) == "table" then
+		for _, v in ipairs(r) do
+			local inst, args = resolveOne(v);
+			if inst then
+				return inst, args;
+			end;
+		end;
+	end;
+
+	return nil, nil;
+end;
+
+local function fireRemote(rem, args)
+	if not (rem and typeof(rem) == "Instance" and rem.Parent) then
+		return false;
+	end;
+
+	local a = args;
+	if a == nil then
+		a = {};
+	end;
+	if typeof(a) ~= "table" then
+		a = { a };
+	end;
+
+	local t = rem.ClassName;
+	local ok = false;
+
+	if t == "RemoteEvent" then
+		local s = pcall(function()
+			rem:FireServer(unpack(a));
+		end);
+		if s then
+			ok = true;
+		end;
+	elseif t == "RemoteFunction" then
+		local s = pcall(function()
+			rem:InvokeServer(unpack(a));
+		end);
+		if s then
+			ok = true;
+		end;
+	elseif t == "BindableEvent" then
+		local s = pcall(function()
+			rem:Fire(unpack(a));
+		end);
+		if s then
+			ok = true;
+		end;
+	elseif t == "BindableFunction" then
+		local s = pcall(function()
+			rem:Invoke(unpack(a));
+		end);
+		if s then
+			ok = true;
+		end;
+	end;
+
+	return ok;
+end;
+
 local function resolveBtn()
 	local cfg = visualizerConfig
 	local b = cfg and cfg.btn
@@ -708,12 +804,18 @@ local function pressBtn(btn)
 end
 
 local function DoParry()
-	local btn = resolveBtn()
+	local rem, rargs = resolveRemote();
+	if rem and fireRemote(rem, rargs) then
+		return;
+	end;
+
+	local btn = resolveBtn();
 	if btn and pressBtn(btn) then
-		return
-	end
-	VirtualInputManager:SendKeyEvent(true, "F", false, game)
-	VirtualInputManager:SendKeyEvent(false, "F", false, game)
+		return;
+	end;
+
+	VirtualInputManager:SendKeyEvent(true, "F", false, game);
+	VirtualInputManager:SendKeyEvent(false, "F", false, game);
 end
 local function queueParry()
 	task.spawn(DoParry);
@@ -1143,6 +1245,8 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 end));
 trackConnection(RunService.RenderStepped:Connect(function()
 	if spam then
+		task.defer(queueParry)
+		task.defer(queueParry)
 		task.defer(queueParry)
 	end;
 end));

@@ -79,7 +79,7 @@ local VisualizerDefaults = {
 	distanceDivisor = 10,
 	predictBase = 35,
 	predictExtra = 5,
-	profile = "Balanced"
+	profile = "Safe"
 };
 local VisualizerProfiles = {
 	Safe = {
@@ -90,7 +90,7 @@ local VisualizerProfiles = {
 		pingPredictScale = 0.09,
 		pingTimeScale = 0.0012
 	},
-	Balanced = {
+	Balance = {
 		speedScale = 0.06,
 		predictBase = 35,
 		predictExtra = 5,
@@ -98,7 +98,7 @@ local VisualizerProfiles = {
 		pingPredictScale = 0.1,
 		pingTimeScale = 0.001
 	},
-	Aggressive = {
+	Brutal = {
 		speedScale = 0.08,
 		predictBase = 44,
 		predictExtra = 7,
@@ -109,8 +109,8 @@ local VisualizerProfiles = {
 };
 local profileOrder = {
 	"Safe",
-	"Balanced",
-	"Aggressive"
+	"Balance",
+	"Brutal"
 };
 local function normalizeVisualizerConfig()
 	local raw = (getgenv()).visualizer;
@@ -145,9 +145,9 @@ local resetToken = 0;
 local parCd = 1.75;
 local nextPar = 0;
 local lastParryTime = 0;
-local curFrame = 0
-local lastParryFrame = -1
-local lastQueueTime = 0
+local curFrame = 0;
+local lastParryFrame = -1;
+local lastQueueTime = 0;
 local wasInPredict = {};
 local ringLimited = false;
 local lastBallSamples = {};
@@ -178,7 +178,9 @@ local function refreshVisualizerDerived()
 end;
 refreshVisualizerDerived();
 local spam = false;
+local apEnabled = true;
 local topbarIconInstance;
+local apOption;
 local spamOption;
 local visualizerOption;
 local modeOption;
@@ -215,11 +217,17 @@ local function updateSpamLabel()
 	end;
 	spamOption:setLabel("Spam: " .. (spam and "ON" or "OFF"));
 end;
+local function updateApLabel()
+	if not apOption then
+		return;
+	end;
+	apOption:setLabel("AP: " .. (apEnabled and "ON" or "OFF"));
+end;
 local function updateVisualizerLabel()
 	if not visualizerOption then
 		return;
 	end;
-	visualizerOption:setLabel("Visualizer: " .. (isVisualizerEnabled() and "ON" or "OFF"));
+	visualizerOption:setLabel("Visual: " .. (isVisualizerEnabled() and "ON" or "OFF"));
 end;
 local function updateModeLabel()
 	if not modeOption then
@@ -253,14 +261,14 @@ local function updateDebugMenu(numBalls, anyTargeted, nowTime)
 end;
 local function iconHide(ico)
 	if ico and ico.setEnabled then
-		ico:setEnabled(false)
-	end
+		ico:setEnabled(false);
+	end;
 end
 
 local function iconShow(ico)
 	if ico and ico.setEnabled then
-		ico:setEnabled(true)
-	end
+		ico:setEnabled(true);
+	end;
 end
 local function toggleSpam()
 	spam = not spam;
@@ -299,28 +307,28 @@ local function cycleProfile()
 	applyProfile(profileOrder[nextIdx]);
 end;
 local function setupDebugIcon(IconModule)
-	local existing = IconModule.getIcon and IconModule.getIcon("APDebug")
+	local existing = IconModule.getIcon and IconModule.getIcon("APDebug");
 	if existing then
-		iconHide(existing)
-	end
+		iconHide(existing);
+	end;
 
-	local icon = IconModule.new()
-	icon:disableOverlay(true)
+	local icon = IconModule.new();
+	icon:disableOverlay(true);
 	icon:setName("APDebug")
 	    :setImage("rbxassetid://11348555035")
-		:align("Right")
+		:align("Right");
 
-	debugIconInstance = icon
+	debugIconInstance = icon;
 
-	local menu = icon:addMenu()
-	debugStateOption   = menu:new():setLabel("State: " .. apState)
-	debugTargetOption  = menu:new():setLabel("Targeted: No")
-	debugBallsOption   = menu:new():setLabel("Balls: 0")
-	debugCooldownOption = menu:new():setLabel("CD: 0.00s")
+	local menu = icon:addMenu();
+	debugStateOption   = menu:new():setLabel("State: " .. apState);
+	debugTargetOption  = menu:new():setLabel("Targeted: No");
+	debugBallsOption   = menu:new():setLabel("Balls: 0");
+	debugCooldownOption = menu:new():setLabel("CD: 0.00s");
 
 	if icon.setCaption then
-		icon:setCaption(apState)
-	end
+		icon:setCaption(apState);
+	end;
 end
 local function setupTopbarIcon()
 	local ok, IconModule = pcall(function()
@@ -337,7 +345,14 @@ local function setupTopbarIcon()
 	(((icon:setName("AutoParry")):setLabel("Auto Parry")):setImage("rbxassetid://11322093465")):align("Center");
 	topbarIconInstance = icon;
 	local dropdown = icon:addMenu();
-	visualizerOption = (dropdown:new()):setLabel("Visualizer: OFF");
+
+	apOption = (dropdown:new()):setLabel("AP: ON");
+	apOption:oneClick(function()
+		apEnabled = not apEnabled;
+		updateApLabel();
+	end);
+
+	visualizerOption = (dropdown:new()):setLabel("Visual: OFF");
 	visualizerOption:oneClick(function()
 		toggleVisualizer();
 	end);
@@ -352,23 +367,23 @@ local function setupTopbarIcon()
 	end);
 	debugToggleOption = (dropdown:new()):setLabel("Debug: OFF");
 	debugToggleOption:oneClick(function()
-		debugEnabled = not debugEnabled
+		debugEnabled = not debugEnabled;
 
 		if debugEnabled then
 			if debugIconInstance then
-				iconShow(debugIconInstance)
+				iconShow(debugIconInstance);
 			else
-				setupDebugIcon(IconModule)
-			end
-			updateDebugMenu(0, false, tick())
+				setupDebugIcon(IconModule);
+			end;
+			updateDebugMenu(0, false, tick());
 		else
-			iconHide(debugIconInstance)
-		end
+			iconHide(debugIconInstance);
+		end;
 
 		if debugToggleOption then
-			debugToggleOption:setLabel("Debug: " .. (debugEnabled and "ON" or "OFF"))
-		end
-	end)
+			debugToggleOption:setLabel("Debug: " .. (debugEnabled and "ON" or "OFF"));
+		end;
+	end);
 	local function addModeEntry(name)
 		local entry = (modeDropdown:new()):setLabel(name);
 		entry:oneClick(function()
@@ -378,6 +393,7 @@ local function setupTopbarIcon()
 	for _, name in ipairs(profileOrder) do
 		addModeEntry(name);
 	end;
+	updateApLabel();
 	updateSpamLabel();
 	updateVisualizerLabel();
 	updateModeLabel();
@@ -414,54 +430,54 @@ local function round(num, places)
 	return math.floor((num * mult + 0.5)) / mult;
 end;
 local function getBalls()
-	local list = {}
-	local p = visualizerConfig and visualizerConfig.path
-	local paths
+	local list = {};
+	local p = visualizerConfig and visualizerConfig.path;
+	local paths;
 
 	if p == nil or (typeof(p) == "table" and #p == 0) then
-		paths = { { parent = workspace, name = "Balls" } }
+		paths = { { parent = workspace, name = "Balls" } };
 	elseif typeof(p) == "table" then
-		paths = p
+		paths = p;
 	else
-		paths = { p }
-	end
+		paths = { p };
+	end;
 
 	local function addFromContainer(container)
 		if not (typeof(container) == "Instance" and container.Parent) then
-			return
-		end
+			return;
+		end;
 		if container:IsA("BasePart") then
-			list[#list + 1] = container
+			list[#list + 1] = container;
 		else
 			for _, d in ipairs(container:GetDescendants()) do
 				if d:IsA("BasePart") and d.Parent then
-					list[#list + 1] = d
-				end
-			end
-		end
-	end
+					list[#list + 1] = d;
+				end;
+			end;
+		end;
+	end;
 
 	for _, src in ipairs(paths) do
-		local t = typeof(src)
+		local t = typeof(src);
 		if t == "Instance" then
-			addFromContainer(src)
+			addFromContainer(src);
 		elseif t == "table" then
-			local par = src.parent
-			local name = src.name
-			local container = src.container
+			local par = src.parent;
+			local name = src.name;
+			local container = src.container;
 
 			if typeof(container) == "Instance" then
-				addFromContainer(container)
+				addFromContainer(container);
 			elseif typeof(par) == "Instance" and type(name) == "string" and par.Parent then
-				local found = par:FindFirstChild(name)
+				local found = par:FindFirstChild(name);
 				if found and found.Parent then
-					addFromContainer(found)
-				end
-			end
-		end
-	end
+					addFromContainer(found);
+				end;
+			end;
+		end;
+	end;
 
-	return list
+	return list;
 end
 local function newRing(name, color)
 	ensureIdentity();
@@ -582,13 +598,13 @@ local function cleanup()
 	end);
 
 	pcall(function()
-		iconHide(debugIconInstance)
-		debugIconInstance = nil
-		debugStateOption = nil
-		debugTargetOption = nil
-		debugBallsOption = nil
-		debugCooldownOption = nil
-	end)
+		iconHide(debugIconInstance);
+		debugIconInstance = nil;
+		debugStateOption = nil;
+		debugTargetOption = nil;
+		debugBallsOption = nil;
+		debugCooldownOption = nil;
+	end);
 
 	getgenv().AutoParryCleanup = nil;
 end;
@@ -712,88 +728,88 @@ local function fireRemote(rem, args)
 end;
 
 local function resolveBtn()
-	local cfg = visualizerConfig
-	local b = cfg and cfg.btn
+	local cfg = visualizerConfig;
+	local b = cfg and cfg.btn;
 	if not b then
-		return nil
-	end
+		return nil;
+	end;
 
 	local function resolveOne(x)
 		if typeof(x) == "Instance" then
 			if x:IsA("GuiButton") and x.Parent then
-				return x
-			end
+				return x;
+			end;
 		elseif type(x) == "table" then
-			local par = x.parent
-			local name = x.name
+			local par = x.parent;
+			local name = x.name;
 			if typeof(par) == "Instance" and type(name) == "string" and par.Parent then
-				local f = par:FindFirstChild(name, true)
+				local f = par:FindFirstChild(name, true);
 				if f and f:IsA("GuiButton") and f.Parent then
-					return f
-				end
-			end
-		end
-		return nil
-	end
+					return f;
+				end;
+			end;
+		end;
+		return nil;
+	end;
 
 	if typeof(b) == "Instance" or (type(b) == "table" and (b.parent or b.name)) then
-		return resolveOne(b)
+		return resolveOne(b);
 	elseif type(b) == "table" then
 		for _, v in ipairs(b) do
-			local r = resolveOne(v)
+			local r = resolveOne(v);
 			if r then
-				return r
-			end
-		end
-	end
+				return r;
+			end;
+		end;
+	end;
 
-	return nil
+	return nil;
 end
 
 local function pressBtn(btn)
 	if typeof(firesignal) ~= "function" then
-		return false
-	end
+		return false;
+	end;
 	if not (btn and btn:IsA("GuiButton") and btn.Parent) then
-		return false
-	end
+		return false;
+	end;
 
-	local fired = false
-	local ev
+	local fired = false;
+	local ev;
 
-	ev = btn.MouseButton1Down
+	ev = btn.MouseButton1Down;
 	if ev then
 		pcall(function()
-			firesignal(ev)
-		end)
-		fired = true
-	end
+			firesignal(ev);
+		end);
+		fired = true;
+	end;
 
-	ev = btn.MouseButton1Up
+	ev = btn.MouseButton1Up;
 	if ev then
 		pcall(function()
-			firesignal(ev)
-		end)
-		fired = true
-	end
+			firesignal(ev);
+		end);
+		fired = true;
+	end;
 
-	ev = btn.MouseButton1Click
+	ev = btn.MouseButton1Click;
 	if ev then
 		pcall(function()
-			firesignal(ev)
-		end)
-		fired = true
-	end
+			firesignal(ev);
+		end);
+		fired = true;
+	end;
 
-	ev = btn.Activated
+	ev = btn.Activated;
 	if ev then
 		pcall(function()
-			firesignal(ev)
-		end)
-		fired = true
-	end
+			firesignal(ev);
+		end);
+		fired = true;
+	end;
 
-	return fired
+	return fired;
 end
 
 local function DoParry()
@@ -811,18 +827,21 @@ local function DoParry()
 	VirtualInputManager:SendKeyEvent(false, "F", false, game);
 end
 local function queueParry(isSpam)
-	local now = tick()
+	if (not apEnabled) and (not isSpam) then
+		return;
+	end;
+	local now = tick();
 	if curFrame == lastParryFrame then
-		return
-	end
+		return;
+	end;
 	if not isSpam and now - lastQueueTime < 0.03 then
-		return
-	end
-	lastParryFrame = curFrame
+		return;
+	end;
+	lastParryFrame = curFrame;
 	if not isSpam then
-		lastQueueTime = now
-	end
-	task.spawn(DoParry)
+		lastQueueTime = now;
+	end;
+	task.spawn(DoParry);
 end
 local function getHighlightColor(inst)
 	if not inst then
@@ -937,7 +956,7 @@ local function updateGuiTargets(hrp, ball)
 	end;
 end;
 trackConnection(RunService.RenderStepped:Connect(function(dt)
-	curFrame = curFrame + 1
+	curFrame = curFrame + 1;
 	character = localPlayer.Character or character;
 	local hrp = waitForChildFast(character, "HumanoidRootPart");
 	local balls = getBalls();
@@ -1081,8 +1100,8 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 					if mag > 0.001 then
 						local dirToYou = toYou / mag;
 						local velDir = speed > 0.001 and velocity.Unit or (-dirToYou);
-						local dot = dirToYou:Dot(velDir);
-						approaching = dot > 0.4;
+						local dot = toYou:Dot(velDir);
+						approaching = dot < -0.4;
 					end;
 				end;
 				local toRingTime = approaching and speed > 1 and math.max((rawDist - parryPredictRadius), 0) / speed or math.huge;
@@ -1208,7 +1227,9 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 	local nowStateTime = tick();
 	local inCooldown = nowStateTime < nextPar;
 	local state;
-	if lastParryTime > 0 and nowStateTime - lastParryTime <= 0.25 then
+	if not apEnabled then
+		state = "Disabled";
+	elseif lastParryTime > 0 and nowStateTime - lastParryTime <= 0.25 then
 		state = "Parried";
 	elseif #balls == 0 then
 		if inCooldown then
@@ -1235,9 +1256,9 @@ end));
 trackConnection(RunService.RenderStepped:Connect(function()
 	if spam then
 		task.defer(function()
-			queueParry(true)
-			queueParry(true)
-			queueParry(true)
-		end)
-	end
+			queueParry(true);
+			queueParry(true);
+			queueParry(true);
+		end);
+	end;
 end));

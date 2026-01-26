@@ -147,6 +147,7 @@ local nextPar = 0;
 local lastParryTime = 0;
 local curFrame = 0
 local lastParryFrame = -1
+local lastQueueTime = 0
 local wasInPredict = {};
 local ringLimited = false;
 local lastBallSamples = {};
@@ -809,11 +810,18 @@ local function DoParry()
 	VirtualInputManager:SendKeyEvent(true, "F", false, game);
 	VirtualInputManager:SendKeyEvent(false, "F", false, game);
 end
-local function queueParry()
+local function queueParry(isSpam)
+	local now = tick()
 	if curFrame == lastParryFrame then
 		return
 	end
+	if not isSpam and now - lastQueueTime < 0.03 then
+		return
+	end
 	lastParryFrame = curFrame
+	if not isSpam then
+		lastQueueTime = now
+	end
 	task.spawn(DoParry)
 end
 local function getHighlightColor(inst)
@@ -1226,8 +1234,10 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 end));
 trackConnection(RunService.RenderStepped:Connect(function()
 	if spam then
-		task.defer(queueParry)
-		task.defer(queueParry)
-		task.defer(queueParry)
-	end;
+		task.defer(function()
+			queueParry(true)
+			queueParry(true)
+			queueParry(true)
+		end)
+	end
 end));

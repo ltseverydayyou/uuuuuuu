@@ -142,7 +142,7 @@ local distanceDivisor;
 local predictBase;
 local predictExtra;
 local resetToken = 0;
-local parCd = 1.75;
+local parCd = 1.6;
 local nextPar = 0;
 local lastParryTime = 0;
 local curFrame = 0;
@@ -186,7 +186,6 @@ local visualizerOption;
 local modeOption;
 local modeDropdown;
 local apState = "Idle";
-
 local debugEnabled = false;
 local debugIconInstance;
 local debugToggleOption;
@@ -194,7 +193,6 @@ local debugStateOption;
 local debugTargetOption;
 local debugBallsOption;
 local debugCooldownOption;
-
 local updateRingColors = function()
 end;
 local function updateTopbarCaption()
@@ -263,13 +261,12 @@ local function iconHide(ico)
 	if ico and ico.setEnabled then
 		ico:setEnabled(false);
 	end;
-end
-
+end;
 local function iconShow(ico)
 	if ico and ico.setEnabled then
 		ico:setEnabled(true);
 	end;
-end
+end;
 local function toggleSpam()
 	spam = not spam;
 	updateSpamLabel();
@@ -311,25 +308,19 @@ local function setupDebugIcon(IconModule)
 	if existing then
 		iconHide(existing);
 	end;
-
 	local icon = IconModule.new();
 	icon:disableOverlay(true);
-	icon:setName("APDebug")
-	    :setImage("rbxassetid://11348555035")
-		:align("Right");
-
+	((icon:setName("APDebug")):setImage("rbxassetid://11348555035")):align("Right");
 	debugIconInstance = icon;
-
 	local menu = icon:addMenu();
-	debugStateOption   = menu:new():setLabel("State: " .. apState);
-	debugTargetOption  = menu:new():setLabel("Targeted: No");
-	debugBallsOption   = menu:new():setLabel("Balls: 0");
-	debugCooldownOption = menu:new():setLabel("CD: 0.00s");
-
+	debugStateOption = (menu:new()):setLabel("State: " .. apState);
+	debugTargetOption = (menu:new()):setLabel("Targeted: No");
+	debugBallsOption = (menu:new()):setLabel("Balls: 0");
+	debugCooldownOption = (menu:new()):setLabel("CD: 0.00s");
 	if icon.setCaption then
 		icon:setCaption(apState);
 	end;
-end
+end;
 local function setupTopbarIcon()
 	local ok, IconModule = pcall(function()
 		return (loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/refs/heads/main/Icon.luau")))();
@@ -345,13 +336,11 @@ local function setupTopbarIcon()
 	(((icon:setName("AutoParry")):setLabel("Auto Parry")):setImage("rbxassetid://11322093465")):align("Center");
 	topbarIconInstance = icon;
 	local dropdown = icon:addMenu();
-
 	apOption = (dropdown:new()):setLabel("AP: ON");
 	apOption:oneClick(function()
 		apEnabled = not apEnabled;
 		updateApLabel();
 	end);
-
 	visualizerOption = (dropdown:new()):setLabel("Visual: OFF");
 	visualizerOption:oneClick(function()
 		toggleVisualizer();
@@ -368,7 +357,6 @@ local function setupTopbarIcon()
 	debugToggleOption = (dropdown:new()):setLabel("Debug: OFF");
 	debugToggleOption:oneClick(function()
 		debugEnabled = not debugEnabled;
-
 		if debugEnabled then
 			if debugIconInstance then
 				iconShow(debugIconInstance);
@@ -379,7 +367,6 @@ local function setupTopbarIcon()
 		else
 			iconHide(debugIconInstance);
 		end;
-
 		if debugToggleOption then
 			debugToggleOption:setLabel("Debug: " .. (debugEnabled and "ON" or "OFF"));
 		end;
@@ -399,7 +386,6 @@ local function setupTopbarIcon()
 	updateModeLabel();
 	updateDebugMenu(0, false, tick());
 end;
-
 setupTopbarIcon();
 local function ensureIdentity()
 	pcall(function()
@@ -441,7 +427,6 @@ local function getBalls()
 	else
 		paths = { p };
 	end;
-
 	local function addFromContainer(container)
 		if not (typeof(container) == "Instance" and container.Parent) then
 			return;
@@ -456,7 +441,6 @@ local function getBalls()
 			end;
 		end;
 	end;
-
 	for _, src in ipairs(paths) do
 		local t = typeof(src);
 		if t == "Instance" then
@@ -465,7 +449,6 @@ local function getBalls()
 			local par = src.parent;
 			local name = src.name;
 			local container = src.container;
-
 			if typeof(container) == "Instance" then
 				addFromContainer(container);
 			elseif typeof(par) == "Instance" and type(name) == "string" and par.Parent then
@@ -476,9 +459,8 @@ local function getBalls()
 			end;
 		end;
 	end;
-
 	return list;
-end
+end;
 local function newRing(name, color)
 	ensureIdentity();
 	local part = Instance.new("Part");
@@ -585,18 +567,15 @@ local function cleanup()
 		end);
 	end;
 	connections = {};
-
 	pcall(function()
 		rangeGui.Parent = nil;
 		distanceGui.Parent = nil;
 	end);
-
 	pcall(function()
 		ringPlayer:Destroy();
 		ringBall:Destroy();
 		ringPlayerNoUnit:Destroy();
 	end);
-
 	pcall(function()
 		iconHide(debugIconInstance);
 		debugIconInstance = nil;
@@ -631,14 +610,12 @@ local function attachVisualizer(hasBall)
 		visualizerAttached = false;
 	end;
 end;
-
 local function resolveRemote()
 	local cfg = visualizerConfig;
 	local r = cfg and cfg.remote;
 	if not r then
 		return nil, nil;
 	end;
-
 	local function resolveOne(x)
 		if typeof(x) == "Instance" then
 			if x.Parent then
@@ -647,11 +624,9 @@ local function resolveRemote()
 		elseif type(x) == "table" then
 			local inst = x.inst or x[1];
 			local args = x.args or x[2];
-
 			if typeof(inst) == "Instance" and inst.Parent then
 				return inst, args;
 			end;
-
 			local par = x.parent;
 			local name = x.name;
 			if not inst and typeof(par) == "Instance" and type(name) == "string" and par.Parent then
@@ -674,15 +649,12 @@ local function resolveRemote()
 			end;
 		end;
 	end;
-
 	return nil, nil;
 end;
-
 local function fireRemote(rem, args)
 	if not (rem and typeof(rem) == "Instance" and rem.Parent) then
 		return false;
 	end;
-
 	local a = args;
 	if a == nil then
 		a = {};
@@ -690,10 +662,8 @@ local function fireRemote(rem, args)
 	if typeof(a) ~= "table" then
 		a = { a };
 	end;
-
 	local t = rem.ClassName;
 	local ok = false;
-
 	if t == "RemoteEvent" then
 		local s = pcall(function()
 			rem:FireServer(unpack(a));
@@ -723,17 +693,14 @@ local function fireRemote(rem, args)
 			ok = true;
 		end;
 	end;
-
 	return ok;
 end;
-
 local function resolveBtn()
 	local cfg = visualizerConfig;
 	local b = cfg and cfg.btn;
 	if not b then
 		return nil;
 	end;
-
 	local function resolveOne(x)
 		if typeof(x) == "Instance" then
 			if x:IsA("GuiButton") and x.Parent then
@@ -762,10 +729,8 @@ local function resolveBtn()
 			end;
 		end;
 	end;
-
 	return nil;
-end
-
+end;
 local function pressBtn(btn)
 	if typeof(firesignal) ~= "function" then
 		return false;
@@ -773,10 +738,8 @@ local function pressBtn(btn)
 	if not (btn and btn:IsA("GuiButton") and btn.Parent) then
 		return false;
 	end;
-
 	local fired = false;
 	local ev;
-
 	ev = btn.MouseButton1Down;
 	if ev then
 		pcall(function()
@@ -784,7 +747,6 @@ local function pressBtn(btn)
 		end);
 		fired = true;
 	end;
-
 	ev = btn.MouseButton1Up;
 	if ev then
 		pcall(function()
@@ -792,7 +754,6 @@ local function pressBtn(btn)
 		end);
 		fired = true;
 	end;
-
 	ev = btn.MouseButton1Click;
 	if ev then
 		pcall(function()
@@ -800,7 +761,6 @@ local function pressBtn(btn)
 		end);
 		fired = true;
 	end;
-
 	ev = btn.Activated;
 	if ev then
 		pcall(function()
@@ -808,24 +768,20 @@ local function pressBtn(btn)
 		end);
 		fired = true;
 	end;
-
 	return fired;
-end
-
+end;
 local function DoParry()
 	local rem, rargs = resolveRemote();
 	if rem and fireRemote(rem, rargs) then
 		return;
 	end;
-
 	local btn = resolveBtn();
 	if btn and pressBtn(btn) then
 		return;
 	end;
-
 	VirtualInputManager:SendKeyEvent(true, "F", false, game);
 	VirtualInputManager:SendKeyEvent(false, "F", false, game);
-end
+end;
 local function queueParry(isSpam)
 	if (not apEnabled) and (not isSpam) then
 		return;
@@ -842,7 +798,7 @@ local function queueParry(isSpam)
 		lastQueueTime = now;
 	end;
 	task.spawn(DoParry);
-end
+end;
 local function getHighlightColor(inst)
 	if not inst then
 		return nil, nil;
@@ -1076,7 +1032,6 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 				if charHighlightEnabled and (not lastChar) then
 					lastParryPerBall[ball] = -math.huge;
 				end;
-				local targetAge = targeted and targetedSince[ball] and now - targetedSince[ball] or math.huge;
 				local hasTargetLock = targeted and targetedSince[ball] ~= nil;
 				local lastMatch = lastHighlightMatch[ball] or false;
 				local highlightsMatch = targeted;
@@ -1084,12 +1039,7 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 					lastParryPerBall[ball] = -math.huge;
 					targetedSince[ball] = now;
 				elseif not highlightsMatch and lastMatch then
-					lastParryPerBall[ball] = -math.huge;
 					targetedSince[ball] = nil;
-					local stillAttrTarget = isBallTargetingYouAttr(ball, character);
-					if not stillAttrTarget then
-						nextPar = 0;
-					end;
 				end;
 				lastHighlightMatch[ball] = highlightsMatch;
 				lastCharHighlightEnabled[ball] = charHighlightEnabled;

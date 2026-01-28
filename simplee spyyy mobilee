@@ -1,1 +1,0 @@
-loadstring(game:HttpGet('https://gist.githubusercontent.com/ltseverydayyou/2398adb0db70abc4f752219a676f6cb2/raw/245dda86aca173098a7dfcfad1f02b2e9668517e/SimpleSpyRework.luau'))()

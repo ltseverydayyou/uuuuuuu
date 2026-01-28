@@ -1039,7 +1039,12 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 					lastParryPerBall[ball] = -math.huge;
 					targetedSince[ball] = now;
 				elseif not highlightsMatch and lastMatch then
+					lastParryPerBall[ball] = -math.huge;
 					targetedSince[ball] = nil;
+					if not attrNow then
+						closeParryBlocked[ball] = nil;
+						nextPar = 0;
+					end;
 				end;
 				lastHighlightMatch[ball] = highlightsMatch;
 				lastCharHighlightEnabled[ball] = charHighlightEnabled;
@@ -1051,7 +1056,7 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 						local dirToYou = toYou / mag;
 						local velDir = speed > 0.001 and velocity.Unit or (-dirToYou);
 						local dot = toYou:Dot(velDir);
-						approaching = dot < -0.4;
+						approaching = dot < (-0.4);
 					end;
 				end;
 				local toRingTime = approaching and speed > 1 and math.max((rawDist - parryPredictRadius), 0) / speed or math.huge;
@@ -1124,7 +1129,7 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 						if nowAttr < nextPar then
 							nextPar = nowAttr;
 						end;
-					elseif (not attrTargeted) and prevAttr then
+					elseif not attrTargeted and prevAttr then
 						lastParryPerBall[ball] = -math.huge;
 						if not targeted then
 							nextPar = 0;
@@ -1206,9 +1211,9 @@ end));
 trackConnection(RunService.RenderStepped:Connect(function()
 	if spam then
 		task.defer(function()
-			queueParry(true);
-			queueParry(true);
-			queueParry(true);
+			task.defer(DoParry);
+			task.defer(DoParry);
+			task.defer(DoParry);
 		end);
 	end;
 end));

@@ -29,7 +29,7 @@ local settings = {
 };
 if PROTOSMASHER_LOADED then
 	(getgenv()).isfile = newcclosure(function(File)
-		local Suc, Er = pcall(readfile, File);
+		local Suc = pcall(readfile, File);
 		if not Suc then
 			return false;
 		end;
@@ -51,7 +51,7 @@ elseif (HttpService:JSONDecode(readfile("TurtleSpySettings.json"))).Main then
 else
 	settings = HttpService:JSONDecode(readfile("TurtleSpySettings.json"));
 end;
-function isSynapse()
+local function isSynapse()
 	if PROTOSMASHER_LOADED then
 		return false;
 	else
@@ -59,62 +59,84 @@ function isSynapse()
 	end;
 end;
 local client = (ClonedService("Players")).LocalPlayer;
-local function toUnicode(string)
+local G = getgenv and getgenv() or _G;
+G.__tspy = G.__tspy or {};
+local tstate = G.__tspy;
+if tstate.cleanup then
+	pcall(tstate.cleanup);
+end;
+tstate.enabled = true;
+local pathMode = "dot";
+local function toUnicode(stringValue)
 	local codepoints = "utf8.char(";
-	for _i, v in utf8.codes(string) do
+	for _, v in utf8.codes(stringValue) do
 		codepoints = codepoints .. v .. ", ";
 	end;
 	return codepoints:sub(1, -3) .. ")";
 end;
-local function GetFullPathOfAnInstance(instance)
-	local function isService(obj)
-		return obj.Parent == game and obj ~= game;
-	end;
-	if not instance.Parent and instance ~= game then
-		local name = instance.Name or "";
-		local head = #name > 0 and "." .. name or "['']";
-		return head .. " --[[ PARENTED TO NIL OR DESTROYED ]]";
-	end;
-	if instance == game then
-		return "game";
-	elseif instance == workspace then
-		return "workspace";
-	end;
-	local path = {};
-	while instance and instance.Parent do
-		local name = instance.Name;
-		local head = nil;
-		if isService(instance) then
-			head = string.format("game:GetService(\"%s\")", instance.ClassName);
-		elseif instance == client then
-			head = ".LocalPlayer";
-		else
-			local success, result = pcall(game.GetService, game, instance.ClassName);
-			if result then
-				head = ":GetService(\"" .. instance.ClassName .. "\")";
-			elseif name:match("^[%a_][%w_]*$") then
-				head = "." .. name;
-			else
-				head = string.format(":FindFirstChild(\"%s\")", name:gsub("\"", "\\\""));
-			end;
-		end;
-		table.insert(path, 1, head);
-		if instance.Parent and isService(instance.Parent) then
-			table.insert(path, 1, string.format("game:GetService(\"%s\")", instance.Parent.ClassName));
-			break;
-		end;
-		instance = instance.Parent;
-	end;
-	local fullPath = table.concat(path);
-	fullPath = fullPath:gsub("^%.", "");
-	return fullPath;
-end;
 local isA = game.IsA;
 local clone = game.Clone;
-local TextService = ClonedService("TextService");
-local getTextSize = TextService.GetTextSize;
+local function MeasureText(text, size, font, bounds)
+	local ts = ClonedService("TextService");
+	local ok, v = pcall(function()
+		return ts:GetTextSize(text, size, font, bounds or Vector2.new(math.huge, math.huge));
+	end);
+	if ok then
+		return v;
+	end;
+	return Vector2.new(0, 0);
+end;
 (ClonedService("StarterGui")).ResetPlayerGuiOnSpawn = false;
 local mouse = (ClonedService("Players")).LocalPlayer:GetMouse();
+local function formatChild(parentPath, inst)
+	local name = inst.Name;
+	local safe = name:match("^[%a_][%w_]*$");
+	if pathMode == "dot" and safe then
+		return parentPath .. "." .. name;
+	end;
+	local method = pathMode == "wait" and ":WaitForChild(" or ":FindFirstChild(";
+	return parentPath .. method .. string.format("%q", name) .. ")";
+end;
+local function GetFullPathOfAnInstance(instance)
+	if instance == game then
+		return "game";
+	end;
+	if instance == workspace then
+		return "workspace";
+	end;
+	local parent = instance.Parent;
+	if not parent then
+		return instance.Name or "nil";
+	end;
+	local parentPath = GetFullPathOfAnInstance(parent);
+	if parent == game then
+		local svcName = instance.ClassName;
+		local ok, svc = pcall(game.GetService, game, svcName);
+		if not ok or svc ~= instance then
+			svcName = instance.Name;
+			ok, svc = pcall(game.GetService, game, svcName);
+		end;
+		if ok and svc == instance then
+			return string.format("game:GetService(%q)", svcName);
+		end;
+	end;
+	local siblings = parent:GetChildren();
+	local sameCount = 0;
+	local sameIndex = 0;
+	for i, child in ipairs(siblings) do
+		if child.Name == instance.Name and child.ClassName == instance.ClassName then
+			sameCount = sameCount + 1;
+			sameIndex = i;
+		end;
+	end;
+	if sameCount > 1 then
+		return parentPath .. ":GetChildren()[" .. sameIndex .. "]";
+	end;
+	if instance == client and parent == ClonedService("Players") then
+		return "game:GetService(\"Players\").LocalPlayer";
+	end;
+	return formatChild(parentPath, instance);
+end;
 if (ClonedService("CoreGui")):FindFirstChild("TurtleSpyGUI") then
 	(ClonedService("CoreGui")).TurtleSpyGUI:Destroy();
 end;
@@ -122,15 +144,47 @@ local buttonOffset = -25;
 local scrollSizeOffset = 287;
 local functionImage = "http://www.roblox.com/asset/?id=413369623";
 local eventImage = "http://www.roblox.com/asset/?id=413369506";
-local remotes = {};
-local remoteArgs = {};
-local remoteButtons = {};
-local remoteScripts = {};
-local IgnoreList = {};
-local BlockList = {};
-local IgnoreList = {};
-local connections = {};
-local unstacked = {};
+local remotes = {}
+tstate.remotes = remotes
+
+local remoteArgs = {}
+tstate.remoteArgs = remoteArgs
+
+local remoteButtons = {}
+tstate.remoteButtons = remoteButtons
+
+local remoteScripts = {}
+tstate.remoteScripts = remoteScripts
+
+local remoteLogs = {}
+tstate.remoteLogs = remoteLogs
+
+local IgnoreList = {}
+tstate.IgnoreList = IgnoreList
+
+local BlockList = {}
+tstate.BlockList = BlockList
+
+local connections = {}
+tstate.connections = connections
+
+local unstacked = {}
+tstate.unstacked = unstacked
+
+local clientEventConns = {}
+tstate.clientEventConns = clientEventConns
+
+local logClientEvents = false
+tstate.logClientEvents = logClientEvents
+
+local descAddedConn = nil
+tstate.descAddedConn = descAddedConn
+
+local BlockedSignals = {}
+tstate.BlockedSignals = BlockedSignals
+
+local BlockedEventSaved = {}
+tstate.BlockedEventSaved = BlockedEventSaved
 local TurtleSpyGUI = Instance.new("ScreenGui");
 local mainFrame = Instance.new("Frame");
 local Header = Instance.new("Frame");
@@ -141,6 +195,7 @@ local RemoteButton = Instance.new("TextButton");
 local Number = Instance.new("TextLabel");
 local RemoteName = Instance.new("TextLabel");
 local RemoteIcon = Instance.new("ImageLabel");
+local ExpandButton = Instance.new("TextButton");
 local InfoFrame = Instance.new("Frame");
 local InfoFrameHeader = Instance.new("Frame");
 local InfoTitleShading = Instance.new("Frame");
@@ -171,13 +226,32 @@ local RemoteBrowserFrame = Instance.new("ScrollingFrame");
 local RemoteButton2 = Instance.new("TextButton");
 local RemoteName2 = Instance.new("TextLabel");
 local RemoteIcon2 = Instance.new("ImageLabel");
+local BrowserSearch = Instance.new("TextBox");
+local BrowseExecFrame = Instance.new("Frame");
+local BrowseExecHeader = Instance.new("Frame");
+local BrowseExecTitle = Instance.new("TextLabel");
+local BrowseExecClose = Instance.new("TextButton");
+local BrowseExecArgsLabel = Instance.new("TextLabel");
+local BrowseExecArgsBox = Instance.new("TextBox");
+local BrowseExecTimesLabel = Instance.new("TextLabel");
+local BrowseExecTimesBox = Instance.new("TextBox");
+local BrowseExecRun = Instance.new("TextButton");
+local BrowseExecLoop = Instance.new("TextButton");
+local CallsScroll = Instance.new("ScrollingFrame");
+local CallButton = Instance.new("TextButton");
+local ClientEventToggle = Instance.new("TextButton");
+local PathModeBtn = Instance.new("TextButton");
 TurtleSpyGUI.Name = "TurtleSpyGUI";
 TurtleSpyGUI.Parent = ClonedService("CoreGui");
+TurtleSpyGUI.ResetOnSpawn = false;
+TurtleSpyGUI.IgnoreGuiInset = true;
+TurtleSpyGUI.DisplayOrder = 999999;
+TurtleSpyGUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling;
 mainFrame.Name = "mainFrame";
 mainFrame.Parent = TurtleSpyGUI;
 mainFrame.BackgroundColor3 = Color3.fromRGB(53, 59, 72);
 mainFrame.BorderColor3 = Color3.fromRGB(53, 59, 72);
-mainFrame.Position = UDim2.new(0.100000001, 0, 0.239999995, 0);
+mainFrame.Position = UDim2.new(0.1, 0, 0.24, 0);
 mainFrame.Size = UDim2.new(0, 207, 0, 35);
 mainFrame.ZIndex = 8;
 mainFrame.Active = true;
@@ -186,8 +260,8 @@ BrowserHeader.Name = "BrowserHeader";
 BrowserHeader.Parent = TurtleSpyGUI;
 BrowserHeader.BackgroundColor3 = colorSettings.Main.HeaderShadingColor;
 BrowserHeader.BorderColor3 = colorSettings.Main.HeaderShadingColor;
-BrowserHeader.Position = UDim2.new(0.712152421, 0, 0.339464903, 0);
-BrowserHeader.Size = UDim2.new(0, 207, 0, 33);
+BrowserHeader.Position = UDim2.new(0.7, 0, 0.34, 0);
+BrowserHeader.Size = UDim2.new(0, 230, 0, 320);
 BrowserHeader.ZIndex = 20;
 BrowserHeader.Active = true;
 BrowserHeader.Draggable = true;
@@ -196,14 +270,14 @@ BrowserHeaderFrame.Name = "BrowserHeaderFrame";
 BrowserHeaderFrame.Parent = BrowserHeader;
 BrowserHeaderFrame.BackgroundColor3 = colorSettings.Main.HeaderColor;
 BrowserHeaderFrame.BorderColor3 = colorSettings.Main.HeaderColor;
-BrowserHeaderFrame.Position = UDim2.new(0, 0, -0.0202544238, 0);
-BrowserHeaderFrame.Size = UDim2.new(0, 207, 0, 26);
+BrowserHeaderFrame.Position = UDim2.new(0, 0, 0, 0);
+BrowserHeaderFrame.Size = UDim2.new(0, 230, 0, 26);
 BrowserHeaderFrame.ZIndex = 21;
 BrowserHeaderText.Name = "InfoHeaderText";
 BrowserHeaderText.Parent = BrowserHeaderFrame;
 BrowserHeaderText.BackgroundTransparency = 1;
-BrowserHeaderText.Position = UDim2.new(0, 0, -0.00206991332, 0);
-BrowserHeaderText.Size = UDim2.new(0, 206, 0, 33);
+BrowserHeaderText.Position = UDim2.new(0, 0, -0.002, 0);
+BrowserHeaderText.Size = UDim2.new(0, 206, 0, 26);
 BrowserHeaderText.ZIndex = 22;
 BrowserHeaderText.Font = Enum.Font.SourceSans;
 BrowserHeaderText.Text = "Remote Browser";
@@ -213,25 +287,35 @@ CloseInfoFrame2.Name = "CloseInfoFrame";
 CloseInfoFrame2.Parent = BrowserHeaderFrame;
 CloseInfoFrame2.BackgroundColor3 = colorSettings.Main.HeaderColor;
 CloseInfoFrame2.BorderColor3 = colorSettings.Main.HeaderColor;
-CloseInfoFrame2.Position = UDim2.new(0, 185, 0, 2);
-CloseInfoFrame2.Size = UDim2.new(0, 22, 0, 22);
+CloseInfoFrame2.Position = UDim2.new(0, 208, 0, 2);
+CloseInfoFrame2.Size = UDim2.new(0, 20, 0, 20);
 CloseInfoFrame2.ZIndex = 38;
 CloseInfoFrame2.Font = Enum.Font.SourceSansLight;
 CloseInfoFrame2.Text = "X";
 CloseInfoFrame2.TextColor3 = Color3.fromRGB(0, 0, 0);
 CloseInfoFrame2.TextSize = 20;
-CloseInfoFrame2.MouseButton1Click:Connect(function()
-	BrowserHeader.Visible = not BrowserHeader.Visible;
-end);
+BrowserSearch.Name = "BrowserSearch";
+BrowserSearch.Parent = BrowserHeader;
+BrowserSearch.BackgroundColor3 = Color3.fromRGB(47, 54, 64);
+BrowserSearch.BorderColor3 = Color3.fromRGB(53, 59, 72);
+BrowserSearch.Position = UDim2.new(0, 8, 0, 30);
+BrowserSearch.Size = UDim2.new(0, 214, 0, 22);
+BrowserSearch.ZIndex = 21;
+BrowserSearch.Font = Enum.Font.SourceSans;
+BrowserSearch.PlaceholderText = "Search remotes...";
+BrowserSearch.Text = "";
+BrowserSearch.TextColor3 = colorSettings.RemoteButtons.TextColor;
+BrowserSearch.TextSize = 16;
+BrowserSearch.ClearTextOnFocus = false;
 RemoteBrowserFrame.Name = "RemoteBrowserFrame";
 RemoteBrowserFrame.Parent = BrowserHeader;
 RemoteBrowserFrame.Active = true;
 RemoteBrowserFrame.BackgroundColor3 = Color3.fromRGB(47, 54, 64);
 RemoteBrowserFrame.BorderColor3 = Color3.fromRGB(47, 54, 64);
-RemoteBrowserFrame.Position = UDim2.new(-0.004540205, 0, 1.03504682, 0);
-RemoteBrowserFrame.Size = UDim2.new(0, 207, 0, 286);
+RemoteBrowserFrame.Position = UDim2.new(0, 0, 0, 58);
+RemoteBrowserFrame.Size = UDim2.new(0, 230, 0, 252);
 RemoteBrowserFrame.ZIndex = 19;
-RemoteBrowserFrame.CanvasSize = UDim2.new(0, 0, 0, 287);
+RemoteBrowserFrame.CanvasSize = UDim2.new(0, 0, 0, 252);
 RemoteBrowserFrame.ScrollBarThickness = 8;
 RemoteBrowserFrame.VerticalScrollBarPosition = Enum.VerticalScrollBarPosition.Left;
 RemoteBrowserFrame.ScrollBarImageColor3 = colorSettings.Main.ScrollBarImageColor;
@@ -240,7 +324,7 @@ RemoteButton2.Parent = RemoteBrowserFrame;
 RemoteButton2.BackgroundColor3 = colorSettings.RemoteButtons.BackgroundColor;
 RemoteButton2.BorderColor3 = colorSettings.RemoteButtons.BorderColor;
 RemoteButton2.Position = UDim2.new(0, 17, 0, 10);
-RemoteButton2.Size = UDim2.new(0, 182, 0, 26);
+RemoteButton2.Size = UDim2.new(0, 196, 0, 26);
 RemoteButton2.ZIndex = 20;
 RemoteButton2.Selected = true;
 RemoteButton2.Font = Enum.Font.SourceSans;
@@ -254,10 +338,10 @@ RemoteName2.Name = "RemoteName2";
 RemoteName2.Parent = RemoteButton2;
 RemoteName2.BackgroundTransparency = 1;
 RemoteName2.Position = UDim2.new(0, 5, 0, 0);
-RemoteName2.Size = UDim2.new(0, 155, 0, 26);
+RemoteName2.Size = UDim2.new(0, 160, 0, 26);
 RemoteName2.ZIndex = 21;
 RemoteName2.Font = Enum.Font.SourceSans;
-RemoteName2.Text = "RemoteEventaasdadad";
+RemoteName2.Text = "RemoteEvent";
 RemoteName2.TextColor3 = colorSettings.RemoteButtons.TextColor;
 RemoteName2.TextSize = 16;
 RemoteName2.TextXAlignment = Enum.TextXAlignment.Left;
@@ -265,55 +349,266 @@ RemoteName2.TextTruncate = 1;
 RemoteIcon2.Name = "RemoteIcon2";
 RemoteIcon2.Parent = RemoteButton2;
 RemoteIcon2.BackgroundTransparency = 1;
-RemoteIcon2.Position = UDim2.new(0.840260386, 0, 0.0225472748, 0);
+RemoteIcon2.Position = UDim2.new(0.84, 0, 0.022, 0);
 RemoteIcon2.Size = UDim2.new(0, 24, 0, 24);
 RemoteIcon2.ZIndex = 21;
 RemoteIcon2.Image = functionImage;
-local browsedRemotes = {};
-local browsedConnections = {};
+BrowseExecFrame.Name = "BrowseExecFrame";
+BrowseExecFrame.Parent = TurtleSpyGUI;
+BrowseExecFrame.BackgroundColor3 = colorSettings.Main.MainBackgroundColor;
+BrowseExecFrame.BorderColor3 = colorSettings.Main.MainBackgroundColor;
+BrowseExecFrame.Position = UDim2.new(0.7, 0, 0.34, 0);
+BrowseExecFrame.Size = UDim2.new(0, 230, 0, 170);
+BrowseExecFrame.ZIndex = 20;
+BrowseExecFrame.Visible = false;
+BrowseExecFrame.Active = true;
+BrowseExecFrame.Draggable = true;
+BrowseExecHeader.Name = "BrowseExecHeader";
+BrowseExecHeader.Parent = BrowseExecFrame;
+BrowseExecHeader.BackgroundColor3 = colorSettings.Main.HeaderColor;
+BrowseExecHeader.BorderColor3 = colorSettings.Main.HeaderColor;
+BrowseExecHeader.Size = UDim2.new(0, 230, 0, 24);
+BrowseExecHeader.ZIndex = 21;
+BrowseExecTitle.Name = "BrowseExecTitle";
+BrowseExecTitle.Parent = BrowseExecHeader;
+BrowseExecTitle.BackgroundTransparency = 1;
+BrowseExecTitle.Position = UDim2.new(0, 5, 0, 0);
+BrowseExecTitle.Size = UDim2.new(0, 200, 0, 24);
+BrowseExecTitle.ZIndex = 22;
+BrowseExecTitle.Font = Enum.Font.SourceSans;
+BrowseExecTitle.Text = "Execute remote";
+BrowseExecTitle.TextColor3 = colorSettings.Main.HeaderTextColor;
+BrowseExecTitle.TextSize = 16;
+BrowseExecTitle.TextXAlignment = Enum.TextXAlignment.Left;
+BrowseExecClose.Name = "BrowseExecClose";
+BrowseExecClose.Parent = BrowseExecHeader;
+BrowseExecClose.BackgroundColor3 = colorSettings.Main.HeaderColor;
+BrowseExecClose.BorderColor3 = colorSettings.Main.HeaderColor;
+BrowseExecClose.Position = UDim2.new(0, 208, 0, 1);
+BrowseExecClose.Size = UDim2.new(0, 20, 0, 20);
+BrowseExecClose.ZIndex = 22;
+BrowseExecClose.Font = Enum.Font.SourceSans;
+BrowseExecClose.Text = "X";
+BrowseExecClose.TextColor3 = Color3.fromRGB(0, 0, 0);
+BrowseExecClose.TextSize = 16;
+BrowseExecArgsLabel.Name = "BrowseExecArgsLabel";
+BrowseExecArgsLabel.Parent = BrowseExecFrame;
+BrowseExecArgsLabel.BackgroundTransparency = 1;
+BrowseExecArgsLabel.Position = UDim2.new(0, 8, 0, 30);
+BrowseExecArgsLabel.Size = UDim2.new(0, 214, 0, 18);
+BrowseExecArgsLabel.ZIndex = 21;
+BrowseExecArgsLabel.Font = Enum.Font.SourceSans;
+BrowseExecArgsLabel.Text = "Args (Lua expression)";
+BrowseExecArgsLabel.TextColor3 = colorSettings.RemoteButtons.TextColor;
+BrowseExecArgsLabel.TextSize = 14;
+BrowseExecArgsLabel.TextXAlignment = Enum.TextXAlignment.Left;
+BrowseExecArgsBox.Name = "BrowseExecArgsBox";
+BrowseExecArgsBox.Parent = BrowseExecFrame;
+BrowseExecArgsBox.BackgroundColor3 = Color3.fromRGB(47, 54, 64);
+BrowseExecArgsBox.BorderColor3 = Color3.fromRGB(53, 59, 72);
+BrowseExecArgsBox.Position = UDim2.new(0, 8, 0, 48);
+BrowseExecArgsBox.Size = UDim2.new(0, 214, 0, 22);
+BrowseExecArgsBox.ZIndex = 21;
+BrowseExecArgsBox.Font = Enum.Font.SourceSans;
+BrowseExecArgsBox.Text = "";
+BrowseExecArgsBox.TextColor3 = colorSettings.RemoteButtons.TextColor;
+BrowseExecArgsBox.TextSize = 14;
+BrowseExecArgsBox.ClearTextOnFocus = false;
+BrowseExecTimesLabel.Name = "BrowseExecTimesLabel";
+BrowseExecTimesLabel.Parent = BrowseExecFrame;
+BrowseExecTimesLabel.BackgroundTransparency = 1;
+BrowseExecTimesLabel.Position = UDim2.new(0, 8, 0, 76);
+BrowseExecTimesLabel.Size = UDim2.new(0, 100, 0, 18);
+BrowseExecTimesLabel.ZIndex = 21;
+BrowseExecTimesLabel.Font = Enum.Font.SourceSans;
+BrowseExecTimesLabel.Text = "Times";
+BrowseExecTimesLabel.TextColor3 = colorSettings.RemoteButtons.TextColor;
+BrowseExecTimesLabel.TextSize = 14;
+BrowseExecTimesLabel.TextXAlignment = Enum.TextXAlignment.Left;
+BrowseExecTimesBox.Name = "BrowseExecTimesBox";
+BrowseExecTimesBox.Parent = BrowseExecFrame;
+BrowseExecTimesBox.BackgroundColor3 = Color3.fromRGB(47, 54, 64);
+BrowseExecTimesBox.BorderColor3 = Color3.fromRGB(53, 59, 72);
+BrowseExecTimesBox.Position = UDim2.new(0, 8, 0, 94);
+BrowseExecTimesBox.Size = UDim2.new(0, 80, 0, 22);
+BrowseExecTimesBox.ZIndex = 21;
+BrowseExecTimesBox.Font = Enum.Font.SourceSans;
+BrowseExecTimesBox.Text = "1";
+BrowseExecTimesBox.TextColor3 = colorSettings.RemoteButtons.TextColor;
+BrowseExecTimesBox.TextSize = 14;
+BrowseExecTimesBox.ClearTextOnFocus = false;
+BrowseExecRun.Name = "BrowseExecRun";
+BrowseExecRun.Parent = BrowseExecFrame;
+BrowseExecRun.BackgroundColor3 = colorSettings.MainButtons.BackgroundColor;
+BrowseExecRun.BorderColor3 = colorSettings.MainButtons.BorderColor;
+BrowseExecRun.Position = UDim2.new(0, 8, 0, 126);
+BrowseExecRun.Size = UDim2.new(0, 100, 0, 26);
+BrowseExecRun.ZIndex = 21;
+BrowseExecRun.Font = Enum.Font.SourceSans;
+BrowseExecRun.Text = "Run";
+BrowseExecRun.TextColor3 = Color3.fromRGB(250, 251, 255);
+BrowseExecRun.TextSize = 16;
+BrowseExecLoop.Name = "BrowseExecLoop";
+BrowseExecLoop.Parent = BrowseExecFrame;
+BrowseExecLoop.BackgroundColor3 = colorSettings.MainButtons.BackgroundColor;
+BrowseExecLoop.BorderColor3 = colorSettings.MainButtons.BorderColor;
+BrowseExecLoop.Position = UDim2.new(0, 122, 0, 126);
+BrowseExecLoop.Size = UDim2.new(0, 100, 0, 26);
+BrowseExecLoop.ZIndex = 21;
+BrowseExecLoop.Font = Enum.Font.SourceSans;
+BrowseExecLoop.Text = "Loop: OFF";
+BrowseExecLoop.TextColor3 = Color3.fromRGB(250, 251, 255);
+BrowseExecLoop.TextSize = 16;
 local browsedButtonOffset = 10;
-local browserCanvasSize = 286;
-ImageButton.Parent = Header;
-ImageButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255);
-ImageButton.BackgroundTransparency = 1;
-ImageButton.Position = UDim2.new(0, 8, 0, 8);
-ImageButton.Size = UDim2.new(0, 18, 0, 18);
-ImageButton.ZIndex = 9;
-ImageButton.Image = "rbxassetid://169476802";
-ImageButton.ImageColor3 = Color3.fromRGB(53, 53, 53);
-ImageButton.MouseButton1Click:Connect(function()
-	BrowserHeader.Visible = not BrowserHeader.Visible;
-	for i, v in pairs(game:GetDescendants()) do
-		if isA(v, "RemoteEvent") or isA(v, "RemoteFunction") then
-			local bButton = clone(RemoteButton2);
-			bButton.Parent = RemoteBrowserFrame;
-			bButton.Visible = true;
-			bButton.Position = UDim2.new(0, 17, 0, browsedButtonOffset);
-			local fireFunction = "";
-			if isA(v, "RemoteEvent") then
-				fireFunction = ":FireServer()";
-				bButton.RemoteIcon2.Image = eventImage;
-			else
-				fireFunction = ":InvokeServer()";
-			end;
-			bButton.RemoteName2.Text = v.Name;
-			local connection = bButton.MouseButton1Click:Connect(function()
-				setclipboard(GetFullPathOfAnInstance(v) .. fireFunction);
-			end);
-			table.insert(browsedConnections, connection);
-			browsedButtonOffset = browsedButtonOffset + 35;
-			if #browsedConnections > 8 then
-				browserCanvasSize = browserCanvasSize + 35;
-				RemoteBrowserFrame.CanvasSize = UDim2.new(0, 0, 0, browserCanvasSize);
+local browseRemotes = {};
+local browseSelRemote;
+local browseLoop = false;
+local browseLoopToken = 0;
+local function parseArgsText(txt)
+	txt = txt or "";
+	txt = txt:match("^%s*(.-)%s*$");
+	if txt == "" then
+		return table.pack();
+	end;
+	if typeof(loadstring) == "function" then
+		local src = "return " .. txt;
+		local ok, fn = pcall(loadstring, src);
+		if ok and type(fn) == "function" then
+			local ok2, r1, r2, r3, r4, r5 = pcall(fn);
+			if ok2 then
+				return table.pack(r1, r2, r3, r4, r5);
 			end;
 		end;
 	end;
-end);
-mouse.KeyDown:Connect(function(key)
-	if key:lower() == settings.Keybind:lower() then
-		TurtleSpyGUI.Enabled = not TurtleSpyGUI.Enabled;
+	return table.pack(txt);
+end;
+local function fireRemoteNow(r, argsPack)
+	if not r then
+		return
+	end
+	if table.find(BlockList, r) then
+		return
+	end
+
+	local a = argsPack or table.pack()
+	local n = a.n or #a
+
+	if r:IsA("RemoteEvent") or r:IsA("UnreliableRemoteEvent") then
+		r:FireServer(table.unpack(a, 1, n))
+	elseif r:IsA("RemoteFunction") then
+		r:InvokeServer(table.unpack(a, 1, n))
+	end
+end
+local function openBrowseRunner(r)
+	browseSelRemote = r;
+	if not r then
+		return;
+	end;
+	BrowseExecFrame.Visible = true;
+	BrowseExecTitle.Text = "Execute: " .. (r.Name or "Remote");
+end;
+local function refreshBrowserList(filter)
+	for _, child in ipairs(RemoteBrowserFrame:GetChildren()) do
+		if child:IsA("TextButton") and child ~= RemoteButton2 then
+			child:Destroy()
+		end
+	end
+
+	browsedButtonOffset = 10
+	filter = filter and filter:lower() or ""
+
+	for _, r in ipairs(browseRemotes) do
+		local name = r.Name or ""
+		if filter == "" or name:lower():find(filter, 1, true) then
+			local btn = RemoteButton2:Clone()
+			btn.Parent = RemoteBrowserFrame
+			btn.Visible = true
+			btn.Position = UDim2.new(0, 17, 0, browsedButtonOffset)
+
+			if r:IsA("RemoteEvent") or r:IsA("UnreliableRemoteEvent") then
+				btn.RemoteIcon2.Image = eventImage
+			else
+				btn.RemoteIcon2.Image = functionImage
+			end
+
+			btn.RemoteName2.Text = name
+
+			btn.MouseButton1Click:Connect(function()
+				openBrowseRunner(r)
+			end)
+
+			browsedButtonOffset = browsedButtonOffset + 35
+		end
+	end
+
+	if browsedButtonOffset > 252 then
+		RemoteBrowserFrame.CanvasSize = UDim2.new(0, 0, 0, browsedButtonOffset)
+	else
+		RemoteBrowserFrame.CanvasSize = UDim2.new(0, 0, 0, 252)
+	end
+end
+BrowserSearch:GetPropertyChangedSignal("Text"):Connect(function()
+	if BrowserHeader.Visible then
+		refreshBrowserList(BrowserSearch.Text);
 	end;
 end);
+BrowseExecClose.MouseButton1Click:Connect(function()
+	browseLoopToken = browseLoopToken + 1
+	browseLoop = false
+	BrowseExecFrame.Visible = false
+end)
+BrowseExecLoop.MouseButton1Click:Connect(function()
+	local r = browseSelRemote
+	if not r then
+		return
+	end
+
+	if not browseLoop then
+		browseLoop = true
+		browseLoopToken = browseLoopToken + 1
+		local token = browseLoopToken
+
+		BrowseExecLoop.Text = "Loop: ON"
+		BrowseExecLoop.TextColor3 = Color3.fromRGB(76, 209, 55)
+
+		local argsPack = parseArgsText(BrowseExecArgsBox.Text)
+		local times = tonumber(BrowseExecTimesBox.Text) or 1
+		if times < 1 then
+			times = 1
+		end
+
+		task.spawn(function()
+			while browseLoop and token == browseLoopToken and tstate.enabled do
+				for i = 1, times do
+					fireRemoteNow(r, argsPack)
+				end
+				task.wait()
+			end
+		end)
+	else
+		browseLoop = false
+		browseLoopToken = browseLoopToken + 1
+		BrowseExecLoop.Text = "Loop: OFF"
+		BrowseExecLoop.TextColor3 = Color3.fromRGB(250, 251, 255)
+	end
+end)
+
+BrowseExecRun.MouseButton1Click:Connect(function()
+	local r = browseSelRemote
+	if not r then
+		return
+	end
+
+	local argsPack = parseArgsText(BrowseExecArgsBox.Text)
+	local times = tonumber(BrowseExecTimesBox.Text) or 1
+	if times < 1 then
+		times = 1
+	end
+
+	for i = 1, times do
+		fireRemoteNow(r, argsPack)
+	end
+end)
 Header.Name = "Header";
 Header.Parent = mainFrame;
 Header.BackgroundColor3 = colorSettings.Main.HeaderColor;
@@ -324,25 +619,33 @@ HeaderShading.Name = "HeaderShading";
 HeaderShading.Parent = Header;
 HeaderShading.BackgroundColor3 = colorSettings.Main.HeaderShadingColor;
 HeaderShading.BorderColor3 = colorSettings.Main.HeaderShadingColor;
-HeaderShading.Position = UDim2.new(0.000000146719131, 0, 0.285714358, 0);
+HeaderShading.Position = UDim2.new(0, 0, 0.286, 0);
 HeaderShading.Size = UDim2.new(0, 207, 0, 27);
 HeaderShading.ZIndex = 8;
 HeaderTextLabel.Name = "HeaderTextLabel";
 HeaderTextLabel.Parent = HeaderShading;
 HeaderTextLabel.BackgroundTransparency = 1;
-HeaderTextLabel.Position = UDim2.new(-0.00507604145, 0, -0.202857122, 0);
+HeaderTextLabel.Position = UDim2.new(-0.005, 0, -0.203, 0);
 HeaderTextLabel.Size = UDim2.new(0, 215, 0, 29);
 HeaderTextLabel.ZIndex = 10;
 HeaderTextLabel.Font = Enum.Font.SourceSans;
 HeaderTextLabel.Text = "Turtle Spy";
 HeaderTextLabel.TextColor3 = colorSettings.Main.HeaderTextColor;
 HeaderTextLabel.TextSize = 17;
+ImageButton.Parent = Header;
+ImageButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255);
+ImageButton.BackgroundTransparency = 1;
+ImageButton.Position = UDim2.new(0, 8, 0, 8);
+ImageButton.Size = UDim2.new(0, 18, 0, 18);
+ImageButton.ZIndex = 9;
+ImageButton.Image = "rbxassetid://169476802";
+ImageButton.ImageColor3 = Color3.fromRGB(53, 53, 53);
 RemoteScrollFrame.Name = "RemoteScrollFrame";
 RemoteScrollFrame.Parent = mainFrame;
 RemoteScrollFrame.Active = true;
 RemoteScrollFrame.BackgroundColor3 = Color3.fromRGB(47, 54, 64);
 RemoteScrollFrame.BorderColor3 = Color3.fromRGB(47, 54, 64);
-RemoteScrollFrame.Position = UDim2.new(0, 0, 1.02292562, 0);
+RemoteScrollFrame.Position = UDim2.new(0, 0, 1.0229, 0);
 RemoteScrollFrame.Size = UDim2.new(0, 207, 0, 286);
 RemoteScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 287);
 RemoteScrollFrame.ScrollBarThickness = 8;
@@ -379,7 +682,7 @@ RemoteName.Name = "RemoteName";
 RemoteName.Parent = RemoteButton;
 RemoteName.BackgroundTransparency = 1;
 RemoteName.Position = UDim2.new(0, 20, 0, 0);
-RemoteName.Size = UDim2.new(0, 134, 0, 26);
+RemoteName.Size = UDim2.new(0, 120, 0, 26);
 RemoteName.Font = Enum.Font.SourceSans;
 RemoteName.Text = "RemoteEvent";
 RemoteName.TextColor3 = colorSettings.RemoteButtons.TextColor;
@@ -389,14 +692,24 @@ RemoteName.TextTruncate = 1;
 RemoteIcon.Name = "RemoteIcon";
 RemoteIcon.Parent = RemoteButton;
 RemoteIcon.BackgroundTransparency = 1;
-RemoteIcon.Position = UDim2.new(0.840260386, 0, 0.0225472748, 0);
+RemoteIcon.Position = UDim2.new(0.78, 0, 0.022, 0);
 RemoteIcon.Size = UDim2.new(0, 24, 0, 24);
-RemoteIcon.Image = "http://www.roblox.com/asset/?id=413369506";
+RemoteIcon.Image = eventImage;
+ExpandButton.Name = "Expand";
+ExpandButton.Parent = RemoteButton;
+ExpandButton.BackgroundTransparency = 1;
+ExpandButton.Position = UDim2.new(0.9, 0, 0, 0);
+ExpandButton.Size = UDim2.new(0, 20, 0, 26);
+ExpandButton.ZIndex = 3;
+ExpandButton.Font = Enum.Font.SourceSansBold;
+ExpandButton.Text = "+";
+ExpandButton.TextColor3 = colorSettings.RemoteButtons.TextColor;
+ExpandButton.TextSize = 18;
 InfoFrame.Name = "InfoFrame";
 InfoFrame.Parent = mainFrame;
 InfoFrame.BackgroundColor3 = colorSettings.Main.MainBackgroundColor;
 InfoFrame.BorderColor3 = colorSettings.Main.MainBackgroundColor;
-InfoFrame.Position = UDim2.new(0.368141592, 0, -0.0000558035717, 0);
+InfoFrame.Position = UDim2.new(0.3681, 0, 0, 0);
 InfoFrame.Size = UDim2.new(0, 357, 0, 322);
 InfoFrame.Visible = false;
 InfoFrame.ZIndex = 6;
@@ -410,7 +723,7 @@ InfoTitleShading.Name = "InfoTitleShading";
 InfoTitleShading.Parent = InfoFrame;
 InfoTitleShading.BackgroundColor3 = colorSettings.Main.HeaderShadingColor;
 InfoTitleShading.BorderColor3 = colorSettings.Main.HeaderShadingColor;
-InfoTitleShading.Position = UDim2.new(-0.00280881394, 0, 0, 0);
+InfoTitleShading.Position = UDim2.new(-0.0028, 0, 0, 0);
 InfoTitleShading.Size = UDim2.new(0, 358, 0, 34);
 InfoTitleShading.ZIndex = 13;
 CodeFrame.Name = "CodeFrame";
@@ -418,29 +731,29 @@ CodeFrame.Parent = InfoFrame;
 CodeFrame.Active = true;
 CodeFrame.BackgroundColor3 = colorSettings.Code.BackgroundColor;
 CodeFrame.BorderColor3 = colorSettings.Code.BackgroundColor;
-CodeFrame.Position = UDim2.new(0.0391303748, 0, 0.141156405, 0);
+CodeFrame.Position = UDim2.new(0.0391, 0, 0.141, 0);
 CodeFrame.Size = UDim2.new(0, 329, 0, 63);
 CodeFrame.ZIndex = 16;
-CodeFrame.CanvasSize = UDim2.new(0, 670, 2, 0);
+CodeFrame.CanvasSize = UDim2.new(0, 670, 0, 63);
 CodeFrame.ScrollBarThickness = 8;
-CodeFrame.ScrollingDirection = 1;
+CodeFrame.ScrollingDirection = Enum.ScrollingDirection.XY;
 CodeFrame.ScrollBarImageColor3 = colorSettings.Main.ScrollBarImageColor;
 Code.Name = "Code";
 Code.Parent = CodeFrame;
 Code.BackgroundTransparency = 1;
-Code.Position = UDim2.new(0.00888902973, 0, 0.0394801199, 0);
+Code.Position = UDim2.new(0.0089, 0, 0.039, 0);
 Code.Size = UDim2.new(0, 100000, 0, 25);
 Code.ZIndex = 18;
 Code.Font = Enum.Font.SourceSans;
 Code.Text = "Thanks for using Turtle Spy! :D";
 Code.TextColor3 = colorSettings.Code.TextColor;
 Code.TextSize = 14;
-Code.TextWrapped = true;
+Code.TextWrapped = false;
 Code.TextXAlignment = Enum.TextXAlignment.Left;
 InfoHeaderText.Name = "InfoHeaderText";
 InfoHeaderText.Parent = InfoFrame;
 InfoHeaderText.BackgroundTransparency = 1;
-InfoHeaderText.Position = UDim2.new(0.0391303934, 0, -0.00206972216, 0);
+InfoHeaderText.Position = UDim2.new(0.0391, 0, -0.002, 0);
 InfoHeaderText.Size = UDim2.new(0, 342, 0, 35);
 InfoHeaderText.ZIndex = 18;
 InfoHeaderText.Font = Enum.Font.SourceSans;
@@ -452,10 +765,10 @@ InfoButtonsScroll.Parent = InfoFrame;
 InfoButtonsScroll.Active = true;
 InfoButtonsScroll.BackgroundColor3 = colorSettings.Main.MainBackgroundColor;
 InfoButtonsScroll.BorderColor3 = colorSettings.Main.MainBackgroundColor;
-InfoButtonsScroll.Position = UDim2.new(0.0391303748, 0, 0.355857909, 0);
+InfoButtonsScroll.Position = UDim2.new(0.0391, 0, 0.3558, 0);
 InfoButtonsScroll.Size = UDim2.new(0, 329, 0, 199);
 InfoButtonsScroll.ZIndex = 11;
-InfoButtonsScroll.CanvasSize = UDim2.new(0, 0, 1, 0);
+InfoButtonsScroll.CanvasSize = UDim2.new(0, 0, 2.5, 0);
 InfoButtonsScroll.ScrollBarThickness = 8;
 InfoButtonsScroll.VerticalScrollBarPosition = Enum.VerticalScrollBarPosition.Left;
 InfoButtonsScroll.ScrollBarImageColor3 = colorSettings.Main.ScrollBarImageColor;
@@ -525,17 +838,17 @@ BlockRemote.Font = Enum.Font.SourceSans;
 BlockRemote.Text = "Block remote from firing";
 BlockRemote.TextColor3 = Color3.fromRGB(250, 251, 255);
 BlockRemote.TextSize = 16;
-WhileLoop.Name = "WhileLoop";
-WhileLoop.Parent = InfoButtonsScroll;
-WhileLoop.BackgroundColor3 = colorSettings.MainButtons.BackgroundColor;
-WhileLoop.BorderColor3 = colorSettings.MainButtons.BorderColor;
-WhileLoop.Position = UDim2.new(0.0645, 0, 0, 290);
-WhileLoop.Size = UDim2.new(0, 294, 0, 26);
-WhileLoop.ZIndex = 15;
-WhileLoop.Font = Enum.Font.SourceSans;
-WhileLoop.Text = "Generate while loop script";
-WhileLoop.TextColor3 = Color3.fromRGB(250, 251, 255);
-WhileLoop.TextSize = 16;
+DoNotStack.Name = "CopyReturn";
+DoNotStack.Parent = InfoButtonsScroll;
+DoNotStack.BackgroundColor3 = colorSettings.MainButtons.BackgroundColor;
+DoNotStack.BorderColor3 = colorSettings.MainButtons.BorderColor;
+DoNotStack.Position = UDim2.new(0.0645, 0, 0, 150);
+DoNotStack.Size = UDim2.new(0, 294, 0, 26);
+DoNotStack.ZIndex = 15;
+DoNotStack.Font = Enum.Font.SourceSans;
+DoNotStack.Text = "Unstack remote when fired with new args";
+DoNotStack.TextColor3 = Color3.fromRGB(250, 251, 255);
+DoNotStack.TextSize = 16;
 Clear.Name = "Clear";
 Clear.Parent = InfoButtonsScroll;
 Clear.BackgroundColor3 = colorSettings.MainButtons.BackgroundColor;
@@ -558,17 +871,29 @@ CopyReturn.Font = Enum.Font.SourceSans;
 CopyReturn.Text = "Execute and copy return value";
 CopyReturn.TextColor3 = Color3.fromRGB(250, 251, 255);
 CopyReturn.TextSize = 16;
-DoNotStack.Name = "CopyReturn";
-DoNotStack.Parent = InfoButtonsScroll;
-DoNotStack.BackgroundColor3 = colorSettings.MainButtons.BackgroundColor;
-DoNotStack.BorderColor3 = colorSettings.MainButtons.BorderColor;
-DoNotStack.Position = UDim2.new(0.0645, 0, 0, 150);
-DoNotStack.Size = UDim2.new(0, 294, 0, 26);
-DoNotStack.ZIndex = 15;
-DoNotStack.Font = Enum.Font.SourceSans;
-DoNotStack.Text = "Unstack remote when fired with new args";
-DoNotStack.TextColor3 = Color3.fromRGB(250, 251, 255);
-DoNotStack.TextSize = 16;
+CopyReturn.Visible = false
+ClientEventToggle.Name = "ClientEventToggle";
+ClientEventToggle.Parent = InfoButtonsScroll;
+ClientEventToggle.BackgroundColor3 = colorSettings.MainButtons.BackgroundColor;
+ClientEventToggle.BorderColor3 = colorSettings.MainButtons.BorderColor;
+ClientEventToggle.Position = UDim2.new(0.0645, 0, 0, 360);
+ClientEventToggle.Size = UDim2.new(0, 294, 0, 26);
+ClientEventToggle.ZIndex = 15;
+ClientEventToggle.Font = Enum.Font.SourceSans;
+ClientEventToggle.Text = "Log OnClientEvent: OFF";
+ClientEventToggle.TextColor3 = Color3.fromRGB(250, 251, 255);
+ClientEventToggle.TextSize = 16;
+PathModeBtn.Name = "PathModeBtn";
+PathModeBtn.Parent = InfoButtonsScroll;
+PathModeBtn.BackgroundColor3 = colorSettings.MainButtons.BackgroundColor;
+PathModeBtn.BorderColor3 = colorSettings.MainButtons.BorderColor;
+PathModeBtn.Position = UDim2.new(0.0645, 0, 0, 395);
+PathModeBtn.Size = UDim2.new(0, 294, 0, 26);
+PathModeBtn.ZIndex = 15;
+PathModeBtn.Font = Enum.Font.SourceSans;
+PathModeBtn.Text = "Path: .";
+PathModeBtn.TextColor3 = Color3.fromRGB(250, 251, 255);
+PathModeBtn.TextSize = 16;
 FrameDivider.Name = "FrameDivider";
 FrameDivider.Parent = InfoFrame;
 FrameDivider.BackgroundColor3 = Color3.fromRGB(53, 59, 72);
@@ -588,11 +913,6 @@ CloseInfoFrame.Font = Enum.Font.SourceSansLight;
 CloseInfoFrame.Text = "X";
 CloseInfoFrame.TextColor3 = Color3.fromRGB(0, 0, 0);
 CloseInfoFrame.TextSize = 20;
-CloseInfoFrame.MouseButton1Click:Connect(function()
-	InfoFrame.Visible = false;
-	InfoFrameOpen = false;
-	mainFrame.Size = UDim2.new(0, 207, 0, 35);
-end);
 OpenInfoFrame.Name = "OpenInfoFrame";
 OpenInfoFrame.Parent = mainFrame;
 OpenInfoFrame.BackgroundColor3 = colorSettings.Main.HeaderColor;
@@ -604,17 +924,6 @@ OpenInfoFrame.Font = Enum.Font.SourceSans;
 OpenInfoFrame.Text = ">";
 OpenInfoFrame.TextColor3 = Color3.fromRGB(0, 0, 0);
 OpenInfoFrame.TextSize = 16;
-OpenInfoFrame.MouseButton1Click:Connect(function()
-	if not InfoFrame.Visible then
-		mainFrame.Size = UDim2.new(0, 565, 0, 35);
-		OpenInfoFrame.Text = "<";
-	elseif RemoteScrollFrame.Visible then
-		mainFrame.Size = UDim2.new(0, 207, 0, 35);
-		OpenInfoFrame.Text = ">";
-	end;
-	InfoFrame.Visible = not InfoFrame.Visible;
-	InfoFrameOpen = not InfoFrameOpen;
-end);
 Minimize.Name = "Minimize";
 Minimize.Parent = mainFrame;
 Minimize.BackgroundColor3 = colorSettings.Main.HeaderColor;
@@ -626,81 +935,268 @@ Minimize.Font = Enum.Font.SourceSans;
 Minimize.Text = "_";
 Minimize.TextColor3 = Color3.fromRGB(0, 0, 0);
 Minimize.TextSize = 16;
-Minimize.MouseButton1Click:Connect(function()
-	if RemoteScrollFrame.Visible then
-		mainFrame.Size = UDim2.new(0, 207, 0, 35);
-		OpenInfoFrame.Text = "<";
-		InfoFrame.Visible = false;
-	elseif InfoFrameOpen then
-		mainFrame.Size = UDim2.new(0, 565, 0, 35);
-		OpenInfoFrame.Text = "<";
-		InfoFrame.Visible = true;
-	else
-		mainFrame.Size = UDim2.new(0, 207, 0, 35);
-		OpenInfoFrame.Text = ">";
-		InfoFrame.Visible = false;
-	end;
-	RemoteScrollFrame.Visible = not RemoteScrollFrame.Visible;
-end);
-local function argsMatch(a, b)
-	if #a ~= (#b) then
-		return false;
-	end;
-	for i = 1, #a do
-		if typeof(a[i]) ~= typeof(b[i]) then
-			return false;
-		end;
-		if typeof(a[i]) == "Instance" then
-			if a[i] ~= b[i] then
-				return false;
-			end;
-		elseif typeof(a[i]) == "Vector3" or typeof(a[i]) == "CFrame" then
-			if tostring(a[i]) ~= tostring(b[i]) then
-				return false;
-			end;
-		elseif a[i] ~= b[i] then
-			return false;
-		end;
-	end;
-	return true;
-end;
-local function FindRemote(remote, args)
-	local get_identity = syn and syn.get_thread_identity or getidentity or getthreadidentity or function()
-		return 2;
-	end;
-	local set_identity = syn and syn.set_thread_identity or setidentity or setthreadidentity or function()
-	end;
-	local currentIdentity = get_identity();
-	set_identity(7);
-	local foundIndex = nil;
-	if table.find(unstacked, remote) then
-		for index, value in pairs(remotes) do
-			if value == remote and argsMatch(remoteArgs[index], args) then
-				foundIndex = index;
-				break;
-			end;
-		end;
-	else
-		foundIndex = table.find(remotes, remote);
-	end;
-	set_identity(currentIdentity);
-	return foundIndex;
-end;
+CallsScroll.Name = "CallsScroll";
+CallsScroll.Parent = InfoFrame;
+CallsScroll.Active = true;
+CallsScroll.BackgroundColor3 = colorSettings.Main.MainBackgroundColor;
+CallsScroll.BorderColor3 = colorSettings.Main.MainBackgroundColor;
+CallsScroll.Position = InfoButtonsScroll.Position;
+CallsScroll.Size = InfoButtonsScroll.Size;
+CallsScroll.ZIndex = 30;
+CallsScroll.CanvasSize = UDim2.new(0, 0, 0, 0);
+CallsScroll.ScrollBarThickness = 8;
+CallsScroll.VerticalScrollBarPosition = Enum.VerticalScrollBarPosition.Left;
+CallsScroll.ScrollBarImageColor3 = colorSettings.Main.ScrollBarImageColor;
+CallsScroll.Visible = false;
+CallButton.Name = "CallButton";
+CallButton.Parent = CallsScroll;
+CallButton.BackgroundColor3 = colorSettings.MainButtons.BackgroundColor;
+CallButton.BorderColor3 = colorSettings.MainButtons.BorderColor;
+CallButton.Position = UDim2.new(0, 10, 0, 10);
+CallButton.Size = UDim2.new(0, 309, 0, 26);
+CallButton.ZIndex = 31;
+CallButton.Font = Enum.Font.SourceSans;
+CallButton.Text = "Call #1";
+CallButton.TextColor3 = Color3.fromRGB(250, 251, 255);
+CallButton.TextSize = 16;
+CallButton.Visible = false;
+local defaultButtonState = {}
 local function ButtonEffect(textlabel, text)
-	if not text then
-		text = "Copied!";
+	if not textlabel then
+		return
+	end
+	local state = defaultButtonState[textlabel]
+	if not state then
+		state = {
+			text = textlabel.Text,
+			color = textlabel.TextColor3
+		}
+		defaultButtonState[textlabel] = state
+	end
+	local msg = text or "Copied!"
+	textlabel.Text = msg
+	textlabel.TextColor3 = Color3.fromRGB(76, 209, 55)
+	task.delay(0.8, function()
+		if defaultButtonState[textlabel] == state and textlabel.Parent then
+			textlabel.Text = state.text
+			textlabel.TextColor3 = state.color
+		end
+	end)
+end
+local function len(t)
+	local n = 0;
+	for _ in pairs(t) do
+		n = n + 1;
 	end;
-	local orgText = textlabel.Text;
-	local orgColor = textlabel.TextColor3;
-	textlabel.Text = text;
-	textlabel.TextColor3 = Color3.fromRGB(76, 209, 55);
-	wait(0.8);
-	textlabel.Text = orgText;
-	textlabel.TextColor3 = orgColor;
+	return n;
 end;
-local lookingAt;
-local lookingAtArgs;
-local lookingAtButton;
+local hasBuffer = type(buffer) == "table" and type(buffer.fromstring) == "function" and type(buffer.tostring) == "function";
+local function isArray(tbl)
+	local max = 0;
+	local c = 0;
+	for k in pairs(tbl) do
+		if type(k) ~= "number" then
+			return false;
+		end;
+		if k > max then
+			max = k;
+		end;
+		c = c + 1;
+	end;
+	return max == c;
+end;
+local function needsUnicodeEncoding(str)
+	for _, cp in utf8.codes(str) do
+		if cp < 32 or cp > 126 then
+			return true;
+		end;
+	end;
+	return false;
+end;
+local function serializeValue(v, depth)
+	depth = depth or 0;
+	local t = typeof(v);
+	if t == "Instance" then
+		return GetFullPathOfAnInstance(v);
+	elseif t == "buffer" and hasBuffer then
+		local ok, s = pcall(function()
+			return buffer.tostring(v);
+		end);
+		if not ok or type(s) ~= "string" then
+			return "buffer.fromstring(\"<buffer dump failed>\")";
+		end;
+		return "buffer.fromstring(" .. string.format("%q", s) .. ")";
+	elseif t == "Vector3" then
+		return string.format("Vector3.new(%s, %s, %s)", v.X, v.Y, v.Z);
+	elseif t == "Vector2" then
+		return string.format("Vector2.new(%s, %s)", v.X, v.Y);
+	elseif t == "CFrame" then
+		local comps = {
+			v:GetComponents()
+		};
+		return "CFrame.new(" .. table.concat(comps, ", ") .. ")";
+	elseif t == "Color3" then
+		return string.format("Color3.new(%s, %s, %s)", v.R, v.G, v.B);
+	elseif t == "BrickColor" then
+		return string.format("BrickColor.new(%q)", v.Name);
+	elseif t == "EnumItem" then
+		return tostring(v);
+	end;
+	if type(v) == "string" then
+		if needsUnicodeEncoding(v) then
+			return toUnicode(v);
+		end;
+		return string.format("%q", v);
+	elseif type(v) == "number" or type(v) == "boolean" then
+		return tostring(v);
+	elseif type(v) == "table" then
+		return convertTableToString(v, depth);
+	elseif type(v) == "userdata" then
+		return "(" .. tostring(v) .. ")";
+	else
+		return tostring(v);
+	end;
+end;
+function convertTableToString(tbl, depth)
+	depth = depth or 0;
+	local indent = string.rep("\t", depth);
+	if type(tbl) ~= "table" then
+		return serializeValue(tbl, depth);
+	end;
+	local parts = {};
+	local innerIndent = indent .. "\t";
+	if isArray(tbl) then
+		for i = 1, #tbl do
+			parts[(#parts) + 1] = innerIndent .. serializeValue(tbl[i], depth + 1);
+		end;
+	else
+		local keys = {};
+		for k in pairs(tbl) do
+			keys[(#keys) + 1] = k;
+		end;
+		table.sort(keys, function(a, b)
+			return tostring(a) < tostring(b);
+		end);
+		for _, k in ipairs(keys) do
+			local keyStr;
+			if type(k) == "string" and k:match("^[%a_][%w_]*$") then
+				keyStr = k .. " = ";
+			else
+				keyStr = "[" .. serializeValue(k, depth + 1) .. "] = ";
+			end;
+			parts[(#parts) + 1] = innerIndent .. keyStr .. serializeValue(tbl[k], depth + 1);
+		end;
+	end;
+	if #parts == 0 then
+		return "{}";
+	end;
+	return "{\n" .. table.concat(parts, ",\n") .. "\n" .. indent .. "}";
+end;
+local function buildNamedListTable(name, list)
+	if type(list) ~= "table" then
+		list = {
+			list
+		};
+	end;
+	local lines = {};
+	lines[(#lines) + 1] = "local " .. name .. " = {";
+	for i = 1, #list do
+		lines[(#lines) + 1] = "\t[" .. i .. "] = " .. serializeValue(list[i], 1) .. ",";
+	end;
+	lines[(#lines) + 1] = "}";
+	lines[(#lines) + 1] = "";
+	return table.concat(lines, "\n");
+end;
+local function buildArgsTable(args)
+	args = args or {};
+	local n = args.n or #args;
+	if n == 0 then
+		return "";
+	end;
+	return buildNamedListTable("args", args);
+end;
+local function buildResultTable(results)
+	return buildNamedListTable("result", results or {});
+end;
+local function updateCodeDisplay(remote, args, isClientEvent)
+	if not remote then
+		return
+	end
+	args = args or {}
+	local path = GetFullPathOfAnInstance(remote)
+	local n = args.n or #args
+	local codeText
+	if isClientEvent then
+		local evtPath = path .. ".OnClientEvent"
+		if n == 0 then
+			codeText = "firesignal(" .. evtPath .. ")"
+		else
+			codeText = buildArgsTable(args) .. "firesignal(" .. evtPath .. ", unpack(args))"
+		end
+	else
+		local call = ":FireServer"
+		if isA(remote, "RemoteFunction") then
+			call = ":InvokeServer"
+		end
+		if n == 0 then
+			codeText = path .. call .. "()"
+		else
+			codeText = buildArgsTable(args) .. path .. call .. "(unpack(args))"
+		end
+	end
+	Code.TextWrapped = false
+	Code.Text = codeText
+	local ts = MeasureText(Code.Text, Code.TextSize, Code.Font, Vector2.new(1000000, 1000000))
+	local w = math.max(ts.X, 329)
+	local h = math.max(ts.Y, 63)
+	Code.Size = UDim2.new(0, w, 0, h)
+	CodeFrame.CanvasSize = UDim2.new(0, w + 10, 0, h + 10)
+end
+local function isRemoteEvent(obj)
+	return isA(obj, "RemoteEvent") or isA(obj, "UnreliableRemoteEvent");
+end;
+local lookingAt
+local lookingAtArgs
+local lookingAtButton
+local lookingAtIsClientEvent
+local callLocked = false
+local function attachClientLogger(re)
+	if clientEventConns[re] then
+		return
+	end
+	clientEventConns[re] = re.OnClientEvent:Connect(function(...)
+		if logClientEvents and not table.find(BlockList, re) and not table.find(IgnoreList, re) then
+			local args = table.pack(...)
+			addToList(true, re, args, nil)
+		end
+	end)
+	table.insert(connections, clientEventConns[re])
+end
+local function setClientEventLogging(on)
+	logClientEvents = on;
+	if on then
+		for _, v in ipairs(game:GetDescendants()) do
+			if isRemoteEvent(v) then
+				attachClientLogger(v);
+			end;
+		end;
+		if not descAddedConn then
+			descAddedConn = game.DescendantAdded:Connect(function(o)
+				if isRemoteEvent(o) then
+					attachClientLogger(o);
+				end;
+			end);
+			table.insert(connections, descAddedConn);
+		end;
+	else
+		for _, c in pairs(clientEventConns) do
+			pcall(function()
+				c:Disconnect();
+			end);
+		end;
+		clientEventConns = {};
+	end;
+end;
 CopyCode.MouseButton1Click:Connect(function()
 	if not lookingAt then
 		return;
@@ -709,56 +1205,88 @@ CopyCode.MouseButton1Click:Connect(function()
 	ButtonEffect(CopyCode);
 end);
 RunCode.MouseButton1Click:Connect(function()
-	if lookingAt then
+	if not lookingAt then
+		return
+	end
+	if table.find(BlockList, lookingAt) then
+		ButtonEffect(RunCode, "Blocked")
+		return
+	end
+	if lookingAtIsClientEvent and isRemoteEvent(lookingAt) then
+		if firesignal then
+			firesignal(lookingAt.OnClientEvent, unpack(lookingAtArgs or {}))
+		end
+	else
 		if isA(lookingAt, "RemoteFunction") then
-			lookingAt:InvokeServer(unpack(lookingAtArgs));
-		elseif isA(lookingAt, "RemoteEvent") then
-			lookingAt:FireServer(unpack(lookingAtArgs));
+			lookingAt:InvokeServer(unpack(lookingAtArgs or {}))
+		elseif isRemoteEvent(lookingAt) then
+			lookingAt:FireServer(unpack(lookingAtArgs or {}))
+		end
+	end
+end)
+CopyScriptPath.MouseButton1Click:Connect(function()
+	local remoteIdx = nil;
+	if lookingAt then
+		if table.find(unstacked, lookingAt) then
+			for i, v in ipairs(remotes) do
+				if v == lookingAt and remoteArgs[i] == lookingAtArgs then
+					remoteIdx = i;
+					break;
+				end;
+			end;
+		else
+			remoteIdx = table.find(remotes, lookingAt);
 		end;
 	end;
-end);
-CopyScriptPath.MouseButton1Click:Connect(function()
-	local remote = FindRemote(lookingAt, lookingAtArgs);
-	if remote and lookingAt then
-		setclipboard(GetFullPathOfAnInstance(remoteScripts[remote]));
+	if remoteIdx and lookingAt then
+		setclipboard(GetFullPathOfAnInstance(remoteScripts[remoteIdx]));
 		ButtonEffect(CopyScriptPath);
 	end;
 end);
 local decompiling;
 CopyDecompiled.MouseButton1Click:Connect(function()
-	local remote = FindRemote(lookingAt, lookingAtArgs);
+	local remoteIdx = nil;
+	if lookingAt then
+		if table.find(unstacked, lookingAt) then
+			for i, v in ipairs(remotes) do
+				if v == lookingAt and remoteArgs[i] == lookingAtArgs then
+					remoteIdx = i;
+					break;
+				end;
+			end;
+		else
+			remoteIdx = table.find(remotes, lookingAt);
+		end;
+	end;
 	if not isSynapse() then
 		CopyDecompiled.Text = "This exploit doesn't support decompilation!";
 		CopyDecompiled.TextColor3 = Color3.fromRGB(232, 65, 24);
-		wait(1.6);
+		task.wait(1.6);
 		CopyDecompiled.Text = "Copy decompiled script";
 		CopyDecompiled.TextColor3 = Color3.fromRGB(250, 251, 255);
 		return;
 	end;
-	if not decompiling and remote and lookingAt then
+	if not decompiling and remoteIdx and lookingAt then
 		decompiling = true;
-		spawn(function()
-			while true do
-				if decompiling == false then
-					return;
-				end;
+		task.spawn(function()
+			while decompiling do
 				CopyDecompiled.Text = "Decompiling.";
-				wait(0.8);
-				if decompiling == false then
-					return;
+				task.wait(0.8);
+				if not decompiling then
+					break;
 				end;
 				CopyDecompiled.Text = "Decompiling..";
-				wait(0.8);
-				if decompiling == false then
-					return;
+				task.wait(0.8);
+				if not decompiling then
+					break;
 				end;
 				CopyDecompiled.Text = "Decompiling...";
-				wait(0.8);
+				task.wait(0.8);
 			end;
 		end);
 		local success = {
 			pcall(function()
-				setclipboard(decompile(remoteScripts[remote]));
+				setclipboard(decompile(remoteScripts[remoteIdx]));
 			end)
 		};
 		decompiling = false;
@@ -770,49 +1298,102 @@ CopyDecompiled.MouseButton1Click:Connect(function()
 			CopyDecompiled.Text = "Decompilation error! Check F9 to see the error.";
 			CopyDecompiled.TextColor3 = Color3.fromRGB(232, 65, 24);
 		end;
-		wait(1.6);
+		task.wait(1.6);
 		CopyDecompiled.Text = "Copy decompiled script";
 		CopyDecompiled.TextColor3 = Color3.fromRGB(250, 251, 255);
 	end;
 end);
 BlockRemote.MouseButton1Click:Connect(function()
-	local bRemote = table.find(BlockList, lookingAt);
-	if lookingAt and (not bRemote) then
-		table.insert(BlockList, lookingAt);
-		BlockRemote.Text = "Unblock remote";
-		BlockRemote.TextColor3 = Color3.fromRGB(251, 197, 49);
-		local remote = table.find(remotes, lookingAt);
-		if remote then
-			remoteButtons[remote].Parent.RemoteName.TextColor3 = Color3.fromRGB(225, 177, 44);
-		end;
-	elseif lookingAt and bRemote then
-		table.remove(BlockList, bRemote);
-		BlockRemote.Text = "Block remote from firing";
-		BlockRemote.TextColor3 = Color3.fromRGB(250, 251, 255);
-		local remote = table.find(remotes, lookingAt);
-		if remote then
-			remoteButtons[remote].Parent.RemoteName.TextColor3 = Color3.fromRGB(245, 246, 250);
-		end;
-	end;
-end);
+	local idx = table.find(BlockList, lookingAt)
+	if lookingAt and not idx then
+		table.insert(BlockList, lookingAt)
+		BlockRemote.Text = "Unblock remote"
+		BlockRemote.TextColor3 = Color3.fromRGB(251, 197, 49)
+		local rIndex = table.find(remotes, lookingAt)
+		if rIndex then
+			local num = remoteButtons[rIndex]
+			if num and num.Parent then
+				local rn = num.Parent:FindFirstChild("RemoteName")
+				if rn then
+					rn.TextColor3 = Color3.fromRGB(225, 177, 44)
+				end
+			end
+		end
+		if isRemoteEvent(lookingAt) then
+			BlockedSignals[lookingAt.OnClientEvent] = true
+			if typeof(getconnections) == "function" then
+				local saved = {}
+				for _, c in ipairs(getconnections(lookingAt.OnClientEvent)) do
+					local ok, f = pcall(function()
+						return c.Function
+					end)
+					if ok and type(f) == "function" then
+						table.insert(saved, f)
+					end
+					pcall(function()
+						c:Disconnect()
+					end)
+				end
+				BlockedEventSaved[lookingAt] = saved
+			end
+		end
+	elseif lookingAt and idx then
+		table.remove(BlockList, idx)
+		BlockRemote.Text = "Block remote from firing"
+		BlockRemote.TextColor3 = Color3.fromRGB(250, 251, 255)
+		local rIndex = table.find(remotes, lookingAt)
+		if rIndex then
+			local num = remoteButtons[rIndex]
+			if num and num.Parent then
+				local rn = num.Parent:FindFirstChild("RemoteName")
+				if rn then
+					rn.TextColor3 = Color3.fromRGB(245, 246, 250)
+				end
+			end
+		end
+		if isRemoteEvent(lookingAt) then
+			BlockedSignals[lookingAt.OnClientEvent] = nil
+			local saved = BlockedEventSaved[lookingAt]
+			if saved then
+				for _, f in ipairs(saved) do
+					pcall(function()
+						lookingAt.OnClientEvent:Connect(f)
+					end)
+				end
+			end
+			BlockedEventSaved[lookingAt] = nil
+		end
+	end
+end)
 IgnoreRemote.MouseButton1Click:Connect(function()
-	local iRemote = table.find(IgnoreList, lookingAt);
-	if lookingAt and (not iRemote) then
+	local idx = table.find(IgnoreList, lookingAt);
+	if lookingAt and (not idx) then
 		table.insert(IgnoreList, lookingAt);
 		IgnoreRemote.Text = "Stop ignoring remote";
 		IgnoreRemote.TextColor3 = Color3.fromRGB(127, 143, 166);
-		local remote = table.find(remotes, lookingAt);
-		local unstacked = table.find(unstacked, lookingAt);
-		if remote then
-			remoteButtons[remote].Parent.RemoteName.TextColor3 = Color3.fromRGB(127, 143, 166);
+		local rIndex = table.find(remotes, lookingAt);
+		if rIndex then
+			local num = remoteButtons[rIndex];
+			if num and num.Parent then
+				local rn = num.Parent:FindFirstChild("RemoteName");
+				if rn then
+					rn.TextColor3 = Color3.fromRGB(127, 143, 166);
+				end;
+			end;
 		end;
-	elseif lookingAt and iRemote then
-		table.remove(IgnoreList, iRemote);
+	elseif lookingAt and idx then
+		table.remove(IgnoreList, idx);
 		IgnoreRemote.Text = "Ignore remote";
 		IgnoreRemote.TextColor3 = Color3.fromRGB(250, 251, 255);
-		local remote = table.find(remotes, lookingAt);
-		if remote then
-			remoteButtons[remote].Parent.RemoteName.TextColor3 = Color3.fromRGB(245, 246, 250);
+		local rIndex = table.find(remotes, lookingAt);
+		if rIndex then
+			local num = remoteButtons[rIndex];
+			if num and num.Parent then
+				local rn = num.Parent:FindFirstChild("RemoteName");
+				if rn then
+					rn.TextColor3 = Color3.fromRGB(245, 246, 250);
+				end;
+			end;
 		end;
 	end;
 end);
@@ -820,17 +1401,19 @@ WhileLoop.MouseButton1Click:Connect(function()
 	if not lookingAt then
 		return;
 	end;
-	setclipboard("while wait() do\n   " .. Code.Text .. "\nend");
+	setclipboard("while task.wait() do\n   " .. Code.Text .. "\nend");
 	ButtonEffect(WhileLoop);
 end);
 Clear.MouseButton1Click:Connect(function()
-	for i, v in pairs(RemoteScrollFrame:GetChildren()) do
-		if i > 1 then
+	for i, v in ipairs(RemoteScrollFrame:GetChildren()) do
+		if i > 1 and v:IsA("TextButton") then
 			v:Destroy();
 		end;
 	end;
-	for i, v in pairs(connections) do
-		v:Disconnect();
+	for _, v in ipairs(connections) do
+		pcall(function()
+			v:Disconnect();
+		end);
 	end;
 	buttonOffset = -25;
 	scrollSizeOffset = 0;
@@ -838,12 +1421,14 @@ Clear.MouseButton1Click:Connect(function()
 	remoteArgs = {};
 	remoteButtons = {};
 	remoteScripts = {};
+	remoteLogs = {};
 	IgnoreList = {};
 	BlockList = {};
-	IgnoreList = {};
-	RemoteScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 287);
 	unstacked = {};
 	connections = {};
+	BlockedSignals = {}
+	BlockedEventSaved = {}
+	RemoteScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 287);
 	ButtonEffect(Clear, "Cleared!");
 end);
 DoNotStack.MouseButton1Click:Connect(function()
@@ -860,174 +1445,333 @@ DoNotStack.MouseButton1Click:Connect(function()
 		end;
 	end;
 end);
-local function len(t)
-	local n = 0;
-	for _ in pairs(t) do
-		n = n + 1;
-	end;
-	return n;
-end;
-local function convertTableToString(tbl)
-	local parts = {};
-	local count = 0;
-	for _ in pairs(tbl) do
-		count = count + 1;
-	end;
-	local index = 1;
-	for k, v in pairs(tbl) do
-		if type(k) == "string" then
-			table.insert(parts, "[\"" .. tostring(k) .. "\"] = ");
-		elseif type(k) == "userdata" and typeof(k) ~= "Instance" then
-			table.insert(parts, "[" .. typeof(k) .. ".new(" .. tostring(k) .. ")] = ");
-		elseif type(k) == "userdata" then
-			table.insert(parts, "[" .. GetFullPathOfAnInstance(k) .. "] = ");
-		end;
-		if v == nil then
-			table.insert(parts, "nil");
-		elseif typeof(v) == "Instance" then
-			table.insert(parts, GetFullPathOfAnInstance(v));
-		elseif type(v) == "number" or type(v) == "function" then
-			table.insert(parts, tostring(v));
-		elseif type(v) == "userdata" then
-			table.insert(parts, typeof(v) .. ".new(" .. tostring(v) .. ")");
-		elseif type(v) == "string" then
-			table.insert(parts, "\"" .. v .. "\"");
-		elseif type(v) == "table" then
-			table.insert(parts, "{" .. convertTableToString(v) .. "}");
-		elseif type(v) == "boolean" then
-			table.insert(parts, v and "true" or "false");
-		end;
-		if count > 1 and index < count then
-			table.insert(parts, ",");
-		end;
-		index = index + 1;
-	end;
-	return table.concat(parts);
-end;
-CopyReturn.MouseButton1Click:Connect(function()
-	local remote = FindRemote(lookingAt, lookingAtArgs);
-	if lookingAt and remote then
-		if isA(lookingAt, "RemoteFunction") then
-			local result = remotes[remote]:InvokeServer(unpack(remoteArgs[remote]));
-			setclipboard(convertTableToString(table.pack(result)));
-			ButtonEffect(CopyReturn);
-		end;
-	end;
-end);
+local function showCallsForRemote(remote, idx, button)
+	CallsScroll.Visible = true
+	for _, c in ipairs(CallsScroll:GetChildren()) do
+		if c:IsA("TextButton") and c ~= CallButton then
+			c:Destroy()
+		end
+	end
+	local list = remoteLogs[idx] or {}
+	local offset = 10
+	for i, data in ipairs(list) do
+		local btn = CallButton:Clone()
+		btn.Name = "CallItem"
+		btn.Parent = CallsScroll
+		btn.Visible = true
+		btn.Position = UDim2.new(0, 10, 0, offset)
+		btn.Text = "Call #" .. i
+		btn.MouseButton1Click:Connect(function()
+			InfoHeaderText.Text = "Info: " .. remote.Name .. " #" .. i
+			lookingAt = remote
+			lookingAtArgs = data.args
+			lookingAtIsClientEvent = data.isClientEvent
+			lookingAtButton = button.Number
+			callLocked = true
+			updateCodeDisplay(remote, data.args, data.isClientEvent)
+			CallsScroll.Visible = false
+		end)
+		offset = offset + 30
+	end
+	CallsScroll.CanvasSize = UDim2.new(0, 0, 0, offset)
+end
 RemoteScrollFrame.ChildAdded:Connect(function(child)
-	local remote = remotes[#remotes];
-	local args = remoteArgs[#remotes];
-	local event = true;
-	local fireFunction = ":FireServer(";
+	if not child:IsA("TextButton") then
+		return
+	end
+	local idx = #remotes
+	local remote = remotes[idx]
+	local event = true
 	if isA(remote, "RemoteFunction") then
-		event = false;
-		fireFunction = ":InvokeServer(";
-	end;
+		event = false
+	end
 	local connection = child.MouseButton1Click:Connect(function()
-		InfoHeaderText.Text = "Info: " .. remote.Name;
-		if event then
-			InfoButtonsScroll.CanvasSize = UDim2.new(0, 0, 1, 0);
-		else
-			InfoButtonsScroll.CanvasSize = UDim2.new(0, 0, 1.1, 0);
-		end;
-		mainFrame.Size = UDim2.new(0, 565, 0, 35);
-		OpenInfoFrame.Text = ">";
-		InfoFrame.Visible = true;
-		Code.Text = GetFullPathOfAnInstance(remote) .. fireFunction .. convertTableToString(args) .. ")";
-		local textsize = TextService:GetTextSize(Code.Text, Code.TextSize, Code.Font, Vector2.new(math.huge, math.huge));
-		CodeFrame.CanvasSize = UDim2.new(0, textsize.X + 11, 2, 0);
-		lookingAt = remote;
-		lookingAtArgs = args;
-		lookingAtButton = child.Number;
-		local blocked = table.find(BlockList, remote);
+		InfoHeaderText.Text = "Info: " .. remote.Name
+		mainFrame.Size = UDim2.new(0, 565, 0, 35)
+		OpenInfoFrame.Text = ">"
+		InfoFrame.Visible = true
+		local list = remoteLogs[idx]
+		local last = list and list[#list] or nil
+		lookingAt = remote
+		lookingAtArgs = last and last.args or remoteArgs[idx]
+		lookingAtIsClientEvent = last and last.isClientEvent or false
+		lookingAtButton = child.Number
+		callLocked = false
+		updateCodeDisplay(remote, lookingAtArgs, lookingAtIsClientEvent)
+		local blocked = table.find(BlockList, remote)
 		if blocked then
-			BlockRemote.Text = "Unblock remote";
-			BlockRemote.TextColor3 = Color3.fromRGB(251, 197, 49);
+			BlockRemote.Text = "Unblock remote"
+			BlockRemote.TextColor3 = Color3.fromRGB(251, 197, 49)
 		else
-			BlockRemote.Text = "Block remote from firing";
-			BlockRemote.TextColor3 = Color3.fromRGB(250, 251, 255);
-		end;
-		local iRemote = table.find(IgnoreList, lookingAt);
+			BlockRemote.Text = "Block remote from firing"
+			BlockRemote.TextColor3 = Color3.fromRGB(250, 251, 255)
+		end
+		local iRemote = table.find(IgnoreList, lookingAt)
 		if iRemote then
-			IgnoreRemote.Text = "Stop ignoring remote";
-			IgnoreRemote.TextColor3 = Color3.fromRGB(127, 143, 166);
+			IgnoreRemote.Text = "Stop ignoring remote"
+			IgnoreRemote.TextColor3 = Color3.fromRGB(127, 143, 166)
 		else
-			IgnoreRemote.Text = "Ignore remote";
-			IgnoreRemote.TextColor3 = Color3.fromRGB(250, 251, 255);
-		end;
-		InfoFrameOpen = true;
-	end);
-	table.insert(connections, connection);
-end);
-function addToList(event, remote, ...)
+			IgnoreRemote.Text = "Ignore remote"
+			IgnoreRemote.TextColor3 = Color3.fromRGB(250, 251, 255)
+		end
+		InfoFrameOpen = true
+	end)
+	table.insert(connections, connection)
+	local expand = child:FindFirstChild("Expand")
+	if expand then
+		expand.MouseButton1Click:Connect(function()
+			showCallsForRemote(remote, idx, child)
+		end)
+	end
+end)
+local function FindRemote(remote, args)
 	local get_identity = syn and syn.get_thread_identity or getidentity or getthreadidentity or function()
 		return 2;
 	end;
 	local set_identity = syn and syn.set_thread_identity or setidentity or setthreadidentity or function()
 	end;
-	local currentId = get_identity();
+	local currentIdentity = get_identity();
 	set_identity(7);
-	if not remote then
-		return;
-	end;
-	local name = remote.Name;
-	local args = {
-		...
-	};
-	local i = FindRemote(remote, args);
-	if not i then
-		table.insert(remotes, remote);
-		local rButton = clone(RemoteButton);
-		remoteButtons[#remotes] = rButton.Number;
-		remoteArgs[#remotes] = args;
-		remoteScripts[#remotes] = isSynapse() and getcallingscript() or rawget(getfenv(0), "script");
-		rButton.Parent = RemoteScrollFrame;
-		rButton.Visible = true;
-		local numberTextsize = getTextSize(TextService, rButton.Number.Text, rButton.Number.TextSize, rButton.Number.Font, Vector2.new(math.huge, math.huge));
-		rButton.RemoteName.Position = UDim2.new(0, numberTextsize.X + 10, 0, 0);
-		if name then
-			rButton.RemoteName.Text = name;
-		end;
-		if not event then
-			rButton.RemoteIcon.Image = "http://www.roblox.com/asset/?id=413369623";
-		end;
-		buttonOffset = buttonOffset + 35;
-		rButton.Position = UDim2.new(0.0912411734, 0, 0, buttonOffset);
-		if #remotes > 8 then
-			scrollSizeOffset = scrollSizeOffset + 35;
-			RemoteScrollFrame.CanvasSize = UDim2.new(0, 0, 0, scrollSizeOffset);
+	local foundIndex = nil;
+	if table.find(unstacked, remote) then
+		for index, value in ipairs(remotes) do
+			if value == remote and remoteArgs[index] == args then
+				foundIndex = index;
+				break;
+			end;
 		end;
 	else
-		remoteButtons[i].Text = tostring(tonumber(remoteButtons[i].Text) + 1);
-		local numberTextsize = getTextSize(TextService, remoteButtons[i].Text, remoteButtons[i].TextSize, remoteButtons[i].Font, Vector2.new(math.huge, math.huge));
-		remoteButtons[i].Parent.RemoteName.Position = UDim2.new(0, numberTextsize.X + 10, 0, 0);
-		remoteButtons[i].Parent.RemoteName.Size = UDim2.new(0, 149 - numberTextsize.X, 0, 26);
-		remoteArgs[i] = args;
-		if lookingAt and lookingAt == remote and lookingAtButton == remoteButtons[i] and InfoFrame.Visible then
-			local fireFunction = ":FireServer(";
-			if isA(remote, "RemoteFunction") then
-				fireFunction = ":InvokeServer(";
-			end;
-			Code.Text = GetFullPathOfAnInstance(remote) .. fireFunction .. convertTableToString(remoteArgs[i]) .. ")";
-			local textsize = getTextSize(TextService, Code.Text, Code.TextSize, Code.Font, Vector2.new(math.huge, math.huge));
-			CodeFrame.CanvasSize = UDim2.new(0, textsize.X + 11, 2, 0);
-		end;
+		foundIndex = table.find(remotes, remote);
 	end;
-	set_identity(currentId);
+	set_identity(currentIdentity);
+	return foundIndex;
 end;
-local OldNamecall;
-OldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-	local method = getnamecallmethod();
-	if not checkcaller() then
-		if method == "FireServer" and isA(self, "RemoteEvent") then
-			if not table.find(BlockList, self) and (not table.find(IgnoreList, self)) then
-				addToList(true, self, ...);
-			end;
-		elseif method == "InvokeServer" and isA(self, "RemoteFunction") then
-			if not table.find(BlockList, self) and (not table.find(IgnoreList, self)) then
-				addToList(false, self, ...);
-			end;
+function addToList(event, remote, argsPack, results)
+	local get_identity = syn and syn.get_thread_identity or getidentity or getthreadidentity or function()
+		return 2
+	end
+	local set_identity = syn and syn.set_thread_identity or setidentity or setthreadidentity or function()
+	end
+	local currentId = get_identity()
+	set_identity(7)
+	if not remote then
+		set_identity(currentId)
+		return
+	end
+	local args = {}
+	if type(argsPack) == "table" then
+		local n = argsPack.n or #argsPack
+		for i = 1, n do
+			args[i] = argsPack[i]
+		end
+	end
+	local isClientEvent = event and results == nil
+	local name = remote.Name
+	local i = FindRemote(remote, args)
+	if not i then
+		table.insert(remotes, remote)
+		local rButton = clone(RemoteButton)
+		remoteButtons[#remotes] = rButton.Number
+		remoteArgs[#remotes] = args
+		remoteScripts[#remotes] = isSynapse() and getcallingscript() or rawget(getfenv(0), "script")
+		remoteLogs[#remotes] = { { args = args, results = results, isClientEvent = isClientEvent } }
+		rButton.Parent = RemoteScrollFrame
+		rButton.Visible = true
+		local numberTextsize = MeasureText(rButton.Number.Text, rButton.Number.TextSize, rButton.Number.Font)
+		rButton.RemoteName.Position = UDim2.new(0, numberTextsize.X + 10, 0, 0)
+		if name then
+			rButton.RemoteName.Text = name
+		end
+		if not event then
+			rButton.RemoteIcon.Image = functionImage
+		end
+		buttonOffset = buttonOffset + 35
+		rButton.Position = UDim2.new(0.0912, 0, 0, buttonOffset)
+		if #remotes > 8 then
+			scrollSizeOffset = scrollSizeOffset + 35
+			RemoteScrollFrame.CanvasSize = UDim2.new(0, 0, 0, scrollSizeOffset)
+		end
+	else
+		local list = remoteLogs[i]
+		if not list then
+			list = {}
+			remoteLogs[i] = list
+		end
+		table.insert(list, { args = args, results = results, isClientEvent = isClientEvent })
+		remoteButtons[i].Text = tostring(#list)
+		local numberTextsize = MeasureText(remoteButtons[i].Text, remoteButtons[i].TextSize, remoteButtons[i].Font)
+		if remoteButtons[i].Parent then
+			remoteButtons[i].Parent.RemoteName.Position = UDim2.new(0, numberTextsize.X + 10, 0, 0)
+			remoteButtons[i].Parent.RemoteName.Size = UDim2.new(0, 149 - numberTextsize.X, 0, 26)
+		end
+		remoteArgs[i] = args
+		if not callLocked and lookingAt and lookingAt == remote and lookingAtButton == remoteButtons[i] and InfoFrame.Visible then
+			local last = list[#list]
+			if last then
+				lookingAtArgs = last.args
+				lookingAtIsClientEvent = last.isClientEvent
+				updateCodeDisplay(remote, lookingAtArgs, lookingAtIsClientEvent)
+			else
+				updateCodeDisplay(remote, remoteArgs[i], false)
+			end
+		end
+	end
+	set_identity(currentId)
+end
+local pathModeList = {
+	"dot",
+	"wait",
+	"find"
+};
+ClientEventToggle.MouseButton1Click:Connect(function()
+	setClientEventLogging(not logClientEvents);
+	if logClientEvents then
+		ClientEventToggle.Text = "Log OnClientEvent: ON";
+		ClientEventToggle.TextColor3 = Color3.fromRGB(76, 209, 55);
+	else
+		ClientEventToggle.Text = "Log OnClientEvent: OFF";
+		ClientEventToggle.TextColor3 = Color3.fromRGB(250, 251, 255);
+	end;
+end);
+PathModeBtn.MouseButton1Click:Connect(function()
+	local idx = table.find(pathModeList, pathMode) or 1;
+	idx = idx % (#pathModeList) + 1;
+	pathMode = pathModeList[idx];
+	if pathMode == "dot" then
+		PathModeBtn.Text = "Path: .";
+	elseif pathMode == "wait" then
+		PathModeBtn.Text = "Path: WaitForChild";
+	else
+		PathModeBtn.Text = "Path: FindFirstChild";
+	end;
+	if lookingAt then
+		updateCodeDisplay(lookingAt, lookingAtArgs, lookingAtIsClientEvent);
+	end;
+end);
+ImageButton.MouseButton1Click:Connect(function()
+	BrowserHeader.Visible = not BrowserHeader.Visible;
+	if not BrowserHeader.Visible then
+		return;
+	end;
+	browseRemotes = {};
+	for _, v in ipairs(game:GetDescendants()) do
+		if isRemoteEvent(v) or isA(v, "RemoteFunction") then
+			table.insert(browseRemotes, v);
 		end;
 	end;
-	return OldNamecall(self, ...);
+	refreshBrowserList(BrowserSearch.Text);
 end);
+CloseInfoFrame2.MouseButton1Click:Connect(function()
+	BrowserHeader.Visible = false
+end)
+CloseInfoFrame.MouseButton1Click:Connect(function()
+	if tstate and tstate.cleanup then
+		tstate.cleanup();
+	end;
+end);
+OpenInfoFrame.MouseButton1Click:Connect(function()
+	if not InfoFrame.Visible then
+		mainFrame.Size = UDim2.new(0, 565, 0, 35);
+		OpenInfoFrame.Text = "<";
+	elseif RemoteScrollFrame.Visible then
+		mainFrame.Size = UDim2.new(0, 207, 0, 35);
+		OpenInfoFrame.Text = ">";
+	end;
+	InfoFrame.Visible = not InfoFrame.Visible;
+	InfoFrameOpen = not InfoFrameOpen;
+end);
+Minimize.MouseButton1Click:Connect(function()
+	if RemoteScrollFrame.Visible then
+		mainFrame.Size = UDim2.new(0, 207, 0, 35);
+		OpenInfoFrame.Text = "<";
+		InfoFrame.Visible = false;
+	elseif InfoFrameOpen then
+		mainFrame.Size = UDim2.new(0, 565, 0, 35);
+		OpenInfoFrame.Text = "<";
+		InfoFrame.Visible = true;
+	else
+		mainFrame.Size = UDim2.new(0, 207, 0, 35);
+		OpenInfoFrame.Text = ">";
+		InfoFrame.Visible = false;
+	end;
+	RemoteScrollFrame.Visible = not RemoteScrollFrame.Visible;
+end);
+table.insert(connections, mouse.KeyDown:Connect(function(key)
+	if key:lower() == settings.Keybind:lower() then
+		TurtleSpyGUI.Enabled = not TurtleSpyGUI.Enabled;
+	end;
+end));
+if not tstate.hooked then
+	local old
+	old = hookmetamethod(game, "__namecall", function(self, ...)
+		local method = getnamecallmethod():lower()
+		if tstate.enabled then
+			if not checkcaller() and (method == "fireserver" or method == "invokeserver") then
+				if table.find(BlockList, self) then
+					if method == "invokeserver" then
+						return nil
+					else
+						return
+					end
+				end
+				local args = table.pack(...)
+				local results = { old(self, ...) }
+				if tstate.handler then
+					task.spawn(function()
+						pcall(tstate.handler, self, method, args, results)
+					end)
+				end
+				return table.unpack(results)
+			end
+			if BlockedSignals[self] then
+				if method == "connect" or method == "once" then
+					local conn = old(self, function() end)
+					pcall(function()
+						conn:Disconnect()
+					end)
+					return conn
+				elseif method == "wait" then
+					return nil
+				end
+			end
+		end
+		return old(self, ...)
+	end)
+	tstate.hooked = true
+	tstate.old = tstate.old or old
+end
+tstate.handler = function(self, method, args, results)
+	if method == "fireserver" and isRemoteEvent(self) then
+		if not table.find(BlockList, self) and not table.find(IgnoreList, self) then
+			addToList(true, self, args, results)
+		end
+	elseif method == "invokeserver" and isA(self, "RemoteFunction") then
+		if not table.find(BlockList, self) and not table.find(IgnoreList, self) then
+			addToList(false, self, args, results)
+		end
+	end
+end
+tstate.cleanup = function()
+	tstate.enabled = false;
+	for _, c in ipairs(connections) do
+		pcall(function()
+			c:Disconnect();
+		end);
+	end;
+	for _, c in pairs(clientEventConns) do
+		pcall(function()
+			c:Disconnect();
+		end);
+	end;
+	if descAddedConn then
+		pcall(function()
+			descAddedConn:Disconnect();
+		end);
+		descAddedConn = nil;
+	end;
+	clientEventConns = {};
+	connections = {};
+	if TurtleSpyGUI and TurtleSpyGUI.Parent then
+		TurtleSpyGUI:Destroy();
+	end;
+end;

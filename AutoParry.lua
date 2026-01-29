@@ -161,6 +161,8 @@ local lastParryPerBall = {};
 local predictEnterAt = {};
 local targetedSince = {};
 local lastAttrTargeted = {};
+local lastDirDot = {};
+local baitUntil = {};
 local function refreshVisualizerDerived()
 	local cfg = visualizerConfig;
 	speedScale = cfg.speedScale or VisualizerDefaults.speedScale;
@@ -1049,15 +1051,26 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 				lastHighlightMatch[ball] = highlightsMatch;
 				lastCharHighlightEnabled[ball] = charHighlightEnabled;
 				local approaching = false;
-				if speed >= 8 then
+				local isBait = false;
+				local dotNow = 0;
+				if speed >= 4 then
 					local toYou = hrp.Position - ball.Position;
 					local mag = toYou.Magnitude;
 					if mag > 0.001 then
 						local dirToYou = toYou / mag;
-						local velDir = speed > 0.001 and velocity.Unit or (-dirToYou);
-						local dot = toYou:Dot(velDir);
-						approaching = dot < (-0.4);
+						local velDir = speed > 0.001 and velocity.Unit or dirToYou;
+						dotNow = dirToYou:Dot(velDir);
+						local toward = dotNow > 0.25;
+						local prevDot = lastDirDot[ball];
+						if prevDot and prevDot < -0.25 and toward then
+							baitUntil[ball] = now + 0.09;
+						end;
+						lastDirDot[ball] = dotNow;
+						isBait = baitUntil[ball] and now < baitUntil[ball];
+						approaching = toward and (not isBait);
 					end;
+				else
+					lastDirDot[ball] = 0;
 				end;
 				local toRingTime = approaching and speed > 1 and math.max((rawDist - parryPredictRadius), 0) / speed or math.huge;
 				local closeHit = targeted and rawDist <= math.max(10, appliedPredictSize * 0.45);
@@ -1085,6 +1098,9 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 				local ringTimeSoon = toRingTime <= 0.55 + ping * 0.003;
 				local function attemptParry()
 					if parryTriggered then
+						return;
+					end;
+					if isBait and not innerEmergency then
 						return;
 					end;
 					if closeParryBlocked[ball] and (rawDist > parryPredictRadius * 1.15 or tick() - (lastParryPerBall[ball] or 0) > 1.2) then
@@ -1119,6 +1135,9 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 						return;
 					end;
 					if closeParryBlocked[ball] then
+						return;
+					end;
+					if isBait and not innerEmergency then
 						return;
 					end;
 					local nowAttr = tick();

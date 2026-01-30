@@ -1212,7 +1212,16 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 						closeParryBlocked[ball] = nil
 					end
 					local inCloseBlock = closeParryBlocked[ball] and rawDist <= parryPredictRadius * 1.15
-					local canPredict = approaching and nearPredict and settledInPredict and highlightsMatch and hasTargetLock and (outsideRing or fastApproach) and (speed >= 12 or nearHitTime <= 0.25 or ringTimeSoon or fastApproach) or closeHitSafe and hasTargetLock or veryFastHit and hasTargetLock or targetSnap and hasTargetLock or innerEmergency and hasTargetLock
+					
+					local slowClose = targeted
+					and approaching
+					and hasTargetLock
+					and isPrimaryBall
+					and rawDist <= math.max(14, parryPredictRadius * 0.55)
+					and speed >= 3
+					and nearHitTime <= 1.1
+
+					local canPredict = approaching and nearPredict and settledInPredict and highlightsMatch and hasTargetLock and (outsideRing or fastApproach) and (speed >= 12 or nearHitTime <= 0.25 or ringTimeSoon or fastApproach) or closeHitSafe and hasTargetLock or veryFastHit and hasTargetLock or targetSnap and hasTargetLock or innerEmergency and hasTargetLock or slowClose
 					canPredict = canPredict and ringEdgeSafe
 					canPredict = canPredict and (not inCloseBlock)
 					canPredict = canPredict and isPrimaryBall

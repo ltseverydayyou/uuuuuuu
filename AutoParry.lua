@@ -159,6 +159,8 @@ local targetedSince = {};
 local lastAttrTargeted = {};
 local lastDirDot = {};
 local baitUntil = {};
+local awaySince = {};
+local lastAwayFlag = {};
 local function refreshVisualizerDerived()
 	local cfg = visualizerConfig;
 	speedScale = cfg.speedScale or VisualizerDefaults.speedScale;
@@ -978,6 +980,7 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 	end
 	updateGuiTargets(hrp, hasBalls)
 	local anyTargeted = false
+	local primaryBall = nil
 
 	if hasBalls then
 		local seen = {}
@@ -1125,6 +1128,10 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 				end
 				lastHighlightMatch[ball] = highlightsMatch
 				lastCharHighlightEnabled[ball] = charHighlightEnabled
+				
+				if (targeted or attrNow) and not primaryBall then
+					primaryBall = ball
+				end
 
 				local approaching = false
 				local isBait = false
@@ -1136,17 +1143,33 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 						local dirToYou = toYou / mag
 						local velDir = speed > 0.001 and velocity.Unit or dirToYou
 						dotNow = dirToYou:Dot(velDir)
-						local toward = dotNow > 0.25
-						local prevDot = lastDirDot[ball]
-						if prevDot and prevDot < -0.25 and toward then
-							baitUntil[ball] = now + 0.09
+						local toward = dotNow > 0.2
+						local away = dotNow < -0.2
+
+						local wasAway = lastAwayFlag[ball]
+						if away then
+							if not wasAway then
+								awaySince[ball] = now
+							end
+							lastAwayFlag[ball] = true
+						else
+							if wasAway then
+								local startAway = awaySince[ball]
+								if toward and startAway and now - startAway >= 0.06 then
+									baitUntil[ball] = now + 0.14
+								end
+							end
+							lastAwayFlag[ball] = false
 						end
+
 						lastDirDot[ball] = dotNow
-						isBait = baitUntil[ball] and now < baitUntil[ball]
+						isBait = baitUntil[ball] and now < baitUntil[ball] and rawDist > parryPredictRadius * 0.6
 						approaching = toward and (not isBait)
 					end
 				else
 					lastDirDot[ball] = 0
+					lastAwayFlag[ball] = false
+					awaySince[ball] = nil
 				end
 
 				local toRingTime = approaching and speed > 1 and math.max((rawDist - parryPredictRadius), 0) / speed or math.huge
@@ -1157,9 +1180,11 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 				local targetSnap = targeted and inParryPredict and settledInPredict and (nearHitTime <= 0.6 or rawDist <= math.max(10, parryPredictRadius * 0.6))
 				local innerEmergency = targeted and rawDist <= math.max(8, predictRadius * 0.4)
 				local fastApproach = targeted and approaching and (nearHitTime <= 0.22 or rawDist <= parryPredictRadius * 0.95)
+				
+				local isPrimaryBall = (primaryBall == nil) or (primaryBall == ball)
 
 				local parryTriggered = false
-				if innerEmergency and hasTargetLock and (not closeParryBlocked[ball]) then
+				if innerEmergency and hasTargetLock and isPrimaryBall and (not closeParryBlocked[ball]) then
 					local nowInner = tick()
 					local lastBallFire = lastParryPerBall[ball] or (-math.huge)
 					if nowInner >= nextPar and nowInner - lastBallFire > 0.05 then
@@ -1190,6 +1215,7 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 					local canPredict = approaching and nearPredict and settledInPredict and highlightsMatch and hasTargetLock and (outsideRing or fastApproach) and (speed >= 12 or nearHitTime <= 0.25 or ringTimeSoon or fastApproach) or closeHitSafe and hasTargetLock or veryFastHit and hasTargetLock or targetSnap and hasTargetLock or innerEmergency and hasTargetLock
 					canPredict = canPredict and ringEdgeSafe
 					canPredict = canPredict and (not inCloseBlock)
+					canPredict = canPredict and isPrimaryBall
 					if canPredict then
 						local nowTry = tick()
 						local lastBallFire = lastParryPerBall[ball] or (-math.huge)
@@ -1220,6 +1246,9 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 						return
 					end
 					if isBait and not innerEmergency then
+						return
+					end
+					if not isPrimaryBall then
 						return
 					end
 					local nowAttr = tick()
@@ -1274,6 +1303,8 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 				lastParryPerBall[b] = nil
 				baitUntil[b] = nil
 				lastDirDot[b] = nil
+				awaySince[b] = nil
+				lastAwayFlag[b] = nil
 			end
 		end
 	else
@@ -1291,6 +1322,11 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 		lastCharHighlightEnabled = {}
 		targetedSince = {}
 		lastAttrTargeted = {}
+		lastParryPerBall = {}
+		lastDirDot = {}
+		baitUntil = {}
+		awaySince = {}
+		lastAwayFlag = {}
 		nextPar = 0
 		ringLimited = false
 		resetToken = 0

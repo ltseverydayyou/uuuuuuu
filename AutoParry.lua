@@ -75,7 +75,7 @@ local VisualizerDefaults = {
 	distanceDivisor = 10,
 	predictBase = 35,
 	predictExtra = 5,
-	profile = "Safe"
+	profile = "Balance"
 };
 local VisualizerProfiles = {
 	Safe = {

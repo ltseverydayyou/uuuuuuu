@@ -978,12 +978,18 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 	if not (hrp and hrp.Position) then
 		return
 	end
+	local nowFrame = tick()
+	local pingItem = Stats.Network.ServerStatsItem and Stats.Network.ServerStatsItem["Data Ping"]
+	local pingFrame = pingItem and pingItem:GetValue() or 0
 	updateGuiTargets(hrp, hasBalls)
 	local anyTargeted = false
-	local primaryBall = nil
 
 	if hasBalls then
 		local seen = {}
+		local focusPos = nil
+		local focusDist = math.huge
+		local focusPosTargeted = nil
+		local focusDistTargeted = math.huge
 
 		for _, ball in ipairs(balls) do
 			if ball and ball.Position then
@@ -995,12 +1001,13 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 
 				local rawDist = (ball.Position - hrp.Position).Magnitude
 				local dist = rawDist / distanceDivisor
-				local now = tick()
-				local lookAtBall = CFrame.lookAt(hrp.Position, ball.Position)
-				ringPlayer.CFrame = lookAtBall
-				ringPlayerNoUnit.CFrame = lookAtBall
+				local now = nowFrame
 				if ringBall then
 					ringBall.CFrame = CFrame.new(ball.Position)
+				end
+				if rawDist < focusDist then
+					focusDist = rawDist
+					focusPos = ball.Position
 				end
 
 				local velocity = ball.AssemblyLinearVelocity or ball.Velocity or Vector3.zero
@@ -1058,7 +1065,7 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 					speedBoost = 0.07
 				end
 
-				local ping = Stats.Network.ServerStatsItem["Data Ping"]:GetValue()
+				local ping = pingFrame
 				local baseFactor = math.clamp(predictBase / 50, 0.25, 2)
 				local predictRadiusNoPing = predictMinRadius + predictExtra * baseFactor + effectiveSpeed * (multiplier + speedBoost) * baseFactor
 				local predictRadius = predictRadiusNoPing + ping * pingPredictScale
@@ -1105,6 +1112,10 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 				local charHighlightEnabled = charHighlight and charHighlight.Enabled ~= false
 				if targeted or attrNow then
 					anyTargeted = true
+					if rawDist < focusDistTargeted then
+						focusDistTargeted = rawDist
+						focusPosTargeted = ball.Position
+					end
 				end
 
 				local lastChar = lastCharHighlightEnabled[ball] or false
@@ -1128,10 +1139,6 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 				end
 				lastHighlightMatch[ball] = highlightsMatch
 				lastCharHighlightEnabled[ball] = charHighlightEnabled
-				
-				if (targeted or attrNow) and not primaryBall then
-					primaryBall = ball
-				end
 
 				local approaching = false
 				local isBait = false
@@ -1180,11 +1187,9 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 				local targetSnap = targeted and inParryPredict and settledInPredict and (nearHitTime <= 0.6 or rawDist <= math.max(10, parryPredictRadius * 0.6))
 				local innerEmergency = targeted and rawDist <= math.max(8, predictRadius * 0.4)
 				local fastApproach = targeted and approaching and (nearHitTime <= 0.22 or rawDist <= parryPredictRadius * 0.95)
-				
-				local isPrimaryBall = (primaryBall == nil) or (primaryBall == ball)
 
 				local parryTriggered = false
-				if innerEmergency and hasTargetLock and isPrimaryBall and (not closeParryBlocked[ball]) then
+				if innerEmergency and hasTargetLock and (not closeParryBlocked[ball]) then
 					local nowInner = tick()
 					local lastBallFire = lastParryPerBall[ball] or (-math.huge)
 					if nowInner >= nextPar and nowInner - lastBallFire > 0.05 then
@@ -1214,17 +1219,21 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 					local inCloseBlock = closeParryBlocked[ball] and rawDist <= parryPredictRadius * 1.15
 
 					local slowClose = targeted
-					and approaching
-					and hasTargetLock
-					and isPrimaryBall
-					and rawDist <= math.max(14, parryPredictRadius * 0.55)
-					and speed >= 3
-					and nearHitTime <= 1.1
+						and approaching
+						and hasTargetLock
+						and rawDist <= math.max(14, parryPredictRadius * 0.55)
+						and speed >= 3
+						and nearHitTime <= 1.1
 
-					local canPredict = approaching and nearPredict and settledInPredict and highlightsMatch and hasTargetLock and (outsideRing or fastApproach) and (speed >= 12 or nearHitTime <= 0.25 or ringTimeSoon or fastApproach) or closeHitSafe and hasTargetLock or veryFastHit and hasTargetLock or targetSnap and hasTargetLock or innerEmergency and hasTargetLock or slowClose
+					local slowVeryClose = targeted
+						and hasTargetLock
+						and rawDist <= math.max(10, parryPredictRadius * 0.45)
+						and speed > 0
+						and speed <= 4
+
+					local canPredict = approaching and nearPredict and settledInPredict and highlightsMatch and hasTargetLock and (outsideRing or fastApproach) and (speed >= 12 or nearHitTime <= 0.25 or ringTimeSoon or fastApproach) or closeHitSafe and hasTargetLock or veryFastHit and hasTargetLock or targetSnap and hasTargetLock or innerEmergency and hasTargetLock or slowClose or slowVeryClose
 					canPredict = canPredict and ringEdgeSafe
 					canPredict = canPredict and (not inCloseBlock)
-					canPredict = canPredict and isPrimaryBall
 					if canPredict then
 						local nowTry = tick()
 						local lastBallFire = lastParryPerBall[ball] or (-math.huge)
@@ -1255,9 +1264,6 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 						return
 					end
 					if isBait and not innerEmergency then
-						return
-					end
-					if not isPrimaryBall then
 						return
 					end
 					local nowAttr = tick()
@@ -1293,6 +1299,16 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 					end
 				end)
 			end
+		end
+
+		local focus = focusPosTargeted or focusPos
+		if focus then
+			local lookAtBall = CFrame.lookAt(hrp.Position, focus)
+			ringPlayer.CFrame = lookAtBall
+			ringPlayerNoUnit.CFrame = lookAtBall
+		else
+			ringPlayer.CFrame = CFrame.new(hrp.Position)
+			ringPlayerNoUnit.CFrame = ringPlayer.CFrame
 		end
 
 		for b in pairs(ballVis) do

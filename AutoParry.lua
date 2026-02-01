@@ -3,38 +3,107 @@ local RunService = game:GetService("RunService");
 local UserInputService = game:GetService("UserInputService");
 local VirtualInputManager = game:GetService("VirtualInputManager");
 local Stats = game:GetService("Stats");
---[[local GuiService = game:GetService("GuiService");
+local GuiService = game:GetService("GuiService");
 
-local function lockTouchControls()
-	local UIS = UserInputService;
-	local GS = GuiService;
+local touchLock = false
+local touchOpt
+local lastInputConns = {}
+local prefInputConns = {}
+local touchConn
+local touchPatched = false
 
-	if getconnections then
-		for _, c in ipairs(getconnections(UIS.LastInputTypeChanged)) do
+local function isMobile()
+	local u = UserInputService
+	return u.TouchEnabled and (not u.KeyboardEnabled) and (not u.MouseEnabled)
+end
+
+local function applyTouchLock()
+	if touchPatched then
+		return
+	end
+	if not getconnections then
+		return
+	end
+	if not isMobile() then
+		return
+	end
+
+	table.clear(lastInputConns)
+	table.clear(prefInputConns)
+
+	for _, c in ipairs(getconnections(UserInputService.LastInputTypeChanged)) do
+		table.insert(lastInputConns, c)
+		pcall(function()
+			if c.Disable then
+				c:Disable()
+			end
+		end)
+	end
+
+	local prefSignal
+	pcall(function()
+		prefSignal = UserInputService:GetPropertyChangedSignal("PreferredInput")
+	end)
+	if prefSignal then
+		for _, c in ipairs(getconnections(prefSignal)) do
+			table.insert(prefInputConns, c)
 			pcall(function()
-				c:Disable();
-			end);
-		end;
-	end;
+				if c.Disable then
+					c:Disable()
+				end
+			end)
+		end
+	end
 
 	pcall(function()
-		GS.TouchControlsEnabled = true;
-		GS:GetPropertyChangedSignal("TouchControlsEnabled"):Connect(function()
-			pcall(function()
-				GS.TouchControlsEnabled = true;
-			end);
-		end);
-	end);
-end;
+		GuiService.TouchControlsEnabled = true
+	end)
 
-task.spawn(function()
-	task.wait(0.1);
-	local UIS = UserInputService;
-	local isMobile = UIS.TouchEnabled and (not UIS.KeyboardEnabled) and (not UIS.MouseEnabled);
-	if isMobile then
-		lockTouchControls();
-	end;
-end);]]
+	if touchConn then
+		pcall(function()
+			touchConn:Disconnect()
+		end)
+		touchConn = nil
+	end
+
+	touchConn = GuiService:GetPropertyChangedSignal("TouchControlsEnabled"):Connect(function()
+		if isMobile() then
+			pcall(function()
+				GuiService.TouchControlsEnabled = true
+			end)
+		end
+	end)
+
+	touchPatched = true
+end
+
+local function revertTouchLock()
+	if touchConn then
+		pcall(function()
+			touchConn:Disconnect()
+		end)
+		touchConn = nil
+	end
+
+	if getconnections then
+		for _, c in ipairs(lastInputConns) do
+			pcall(function()
+				if c.Enable then
+					c:Enable()
+				end
+			end)
+		end
+		for _, c in ipairs(prefInputConns) do
+			pcall(function()
+				if c.Enable then
+					c:Enable()
+				end
+			end)
+		end
+	end
+
+	touchPatched = false
+end
 
 local guiCHECKINGAHHHHH = function()
 	return gethui and gethui() or (game:GetService("CoreGui")):FindFirstChildWhichIsA("ScreenGui") or game:GetService("CoreGui") or (game:GetService("Players")).LocalPlayer:FindFirstChildWhichIsA("PlayerGui");
@@ -371,6 +440,25 @@ local function setupTopbarIcon()
 			debugToggleOption:setLabel("Debug: " .. (debugEnabled and "ON" or "OFF"));
 		end;
 	end);
+
+	if isMobile() then
+		touchOpt = (dropdown:new()):setLabel("TouchLock: OFF")
+		touchOpt:oneClick(function()
+			if not isMobile() then
+				return
+			end
+			touchLock = not touchLock
+			if touchLock then
+				applyTouchLock()
+			else
+				revertTouchLock()
+			end
+			if touchOpt then
+				touchOpt:setLabel("TouchLock: " .. (touchLock and "ON" or "OFF"))
+			end
+		end)
+	end
+
 	local function addModeEntry(name)
 		local entry = (modeDropdown:new()):setLabel(name);
 		entry:oneClick(function()
@@ -630,6 +718,9 @@ local function cleanup()
 		debugBallsOption = nil;
 		debugCooldownOption = nil;
 	end);
+
+	touchLock = false
+	revertTouchLock()
 
 	getgenv().AutoParryCleanup = nil;
 end;

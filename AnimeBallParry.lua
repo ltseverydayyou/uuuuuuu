@@ -3,38 +3,142 @@ local RunService = game:GetService("RunService");
 local UserInputService = game:GetService("UserInputService");
 local ReplicatedStorage = game:GetService("ReplicatedStorage");
 local Stats = game:GetService("Stats");
---[[local GuiService = game:GetService("GuiService");
+local GuiService = game:GetService("GuiService");
 
-local function lockTouchControls()
-	local UIS = UserInputService;
-	local GS = GuiService;
+local IsOnMobile=(function()
+	local platform=UserInputService:GetPlatform()
+	if platform==Enum.Platform.IOS or platform==Enum.Platform.Android or platform==Enum.Platform.AndroidTV or platform==Enum.Platform.Chromecast or platform==Enum.Platform.MetaOS then
+		return true
+	end
+	if platform==Enum.Platform.None then
+		return UserInputService.TouchEnabled and not (UserInputService.KeyboardEnabled or UserInputService.MouseEnabled)
+	end
+	return false
+end)()
+local IsOnPC=(function()
+	local platform=UserInputService:GetPlatform()
+	if platform==Enum.Platform.Windows or platform==Enum.Platform.OSX or platform==Enum.Platform.Linux or platform==Enum.Platform.SteamOS or platform==Enum.Platform.UWP or platform==Enum.Platform.DOS or platform==Enum.Platform.BeOS then
+		return true
+	end
+	if platform==Enum.Platform.None then
+		return UserInputService.KeyboardEnabled or UserInputService.MouseEnabled
+	end
+	return false
+end)()
 
-	if getconnections then
-		for _, c in ipairs(getconnections(UIS.LastInputTypeChanged)) do
+local connections = {}
+local touchOpt = nil
+local touchLock = false
+
+local connect = function(name, connection)
+	connections[name] = connections[name] or {}
+	table.insert(connections[name], connection)
+	return connection
+end
+
+local disconnect = function(name)
+	if connections[name] then
+		for _, conn in ipairs(connections[name]) do
+			conn:Disconnect()
+		end
+		connections[name] = nil
+	end
+end
+
+local LastInputConns = {}
+local PreferredInputConns = {}
+local LastInputPatched = false
+
+local ApplyLastInputPatch = function()
+	if not IsOnMobile then
+		return
+	end
+
+	if getconnections and not LastInputPatched then
+		table.clear(LastInputConns)
+		table.clear(PreferredInputConns)
+
+		for _, c in ipairs(getconnections(UserInputService.LastInputTypeChanged)) do
+			table.insert(LastInputConns, c)
 			pcall(function()
-				c:Disable();
-			end);
-		end;
-	end;
+				if c.Disable then
+					c:Disable()
+				end
+			end)
+		end
+
+		local prefSignal
+		pcall(function()
+			prefSignal = UserInputService:GetPropertyChangedSignal("PreferredInput")
+		end)
+
+		if prefSignal then
+			for _, c in ipairs(getconnections(prefSignal)) do
+				table.insert(PreferredInputConns, c)
+				pcall(function()
+					if c.Disable then
+						c:Disable()
+					end
+				end)
+			end
+		end
+	end
 
 	pcall(function()
-		GS.TouchControlsEnabled = true;
-		GS:GetPropertyChangedSignal("TouchControlsEnabled"):Connect(function()
-			pcall(function()
-				GS.TouchControlsEnabled = true;
-			end);
-		end);
-	end);
-end;
+		GuiService.TouchControlsEnabled = true
+	end)
 
-task.spawn(function()
-	task.wait(0.1);
-	local UIS = UserInputService;
-	local isMobile = UIS.TouchEnabled and (not UIS.KeyboardEnabled) and (not UIS.MouseEnabled);
-	if isMobile then
-		lockTouchControls();
-	end;
-end);]]
+	if connect and disconnect then
+		disconnect("_LastInputTouch")
+		connect("_LastInputTouch", GuiService:GetPropertyChangedSignal("TouchControlsEnabled"):Connect(function()
+			if IsOnMobile then
+				pcall(function()
+					GuiService.TouchControlsEnabled = true
+				end)
+			end
+		end))
+	else
+		GuiService:GetPropertyChangedSignal("TouchControlsEnabled"):Connect(function()
+			if IsOnMobile then
+				pcall(function()
+					GuiService.TouchControlsEnabled = true
+				end)
+			end
+		end)
+	end
+
+	LastInputPatched = true
+end
+
+local RevertLastInputPatch = function()
+	if disconnect then
+		disconnect("_LastInputTouch")
+	end
+
+	if getconnections then
+		if LastInputConns and #LastInputConns > 0 then
+			for _, c in ipairs(LastInputConns) do
+				pcall(function()
+					if c.Enable then
+						c:Enable()
+					end
+				end)
+			end
+		end
+
+		if PreferredInputConns and #PreferredInputConns > 0 then
+			for _, c in ipairs(PreferredInputConns) do
+				pcall(function()
+					if c.Enable then
+						c:Enable()
+					end
+				end)
+			end
+		end
+	end
+
+	LastInputPatched = false
+end
 
 local guiCHECKINGAHHHHH = function()
 	return gethui and gethui() or (game:GetService("CoreGui")):FindFirstChildWhichIsA("ScreenGui") or game:GetService("CoreGui") or (game:GetService("Players")).LocalPlayer:FindFirstChildWhichIsA("PlayerGui");
@@ -408,6 +512,22 @@ local function setupTopbarIcon()
 			debugToggleOption:setLabel("Debug: " .. (debugEnabled and "ON" or "OFF"));
 		end;
 	end);
+
+	if IsOnMobile then
+		touchOpt = (dropdown:new()):setLabel("TouchLock: " .. (touchLock and "ON" or "OFF"))
+		touchOpt:oneClick(function()
+			touchLock = not touchLock
+			if touchLock then
+				ApplyLastInputPatch()
+			else
+				RevertLastInputPatch()
+			end
+			if touchOpt then
+				touchOpt:setLabel("TouchLock: " .. (touchLock and "ON" or "OFF"))
+			end
+		end)
+	end
+
 	local function addModeEntry(name)
 		local entry = (modeDropdown:new()):setLabel(name);
 		entry:oneClick(function()
@@ -667,6 +787,9 @@ local function cleanup()
 		debugBallsOption = nil;
 		debugCooldownOption = nil;
 	end);
+
+	touchLock = false
+	RevertLastInputPatch()
 
 	getgenv().AutoParryCleanup = nil;
 end;

@@ -265,6 +265,9 @@ local lastDirDot = {};
 local baitUntil = {};
 local awaySince = {};
 local lastAwayFlag = {};
+local lastTeleport = {};
+local lagBallUntil = {};
+local lastDist = {};
 local function refreshVisualizerDerived()
 	local cfg = visualizerConfig;
 	speedScale = cfg.speedScale or VisualizerDefaults.speedScale;
@@ -722,18 +725,18 @@ local function applyVisualizerVisible(show)
 	end
 end
 local visualizerAttached = true;
-local connections = {};
+local trackedConnections = {};
 local function trackConnection(conn)
-	table.insert(connections, conn);
+	table.insert(trackedConnections, conn);
 	return conn;
 end;
 local function cleanup()
-	for _, c in ipairs(connections) do
+	for _, c in ipairs(trackedConnections) do
 		pcall(function()
 			c:Disconnect();
 		end);
 	end;
-	connections = {};
+	trackedConnections = {};
 	pcall(function()
 		rangeGui.Parent = nil
 	end)
@@ -752,7 +755,7 @@ local function cleanup()
 	end);
 
 	touchLock = false
-	revertTouchLock()
+	RevertLastInputPatch()
 
 	getgenv().AutoParryCleanup = nil;
 end;
@@ -1143,10 +1146,24 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 					sampleDt = 0
 					posDelta = Vector3.zero
 				end
+				local stepDist = posDelta.Magnitude
 				local manualVel = sampleDt > 0 and posDelta / math.max(sampleDt, 0.001) or velocity
+				local teleported = sampleDt > 0 and stepDist > 35 and stepDist / math.max(sampleDt, 0.001) > 130
+				if teleported then
+					lastTeleport[ball] = now
+				end
+				local isLagBallNow = lastTeleport[ball] and now - lastTeleport[ball] <= 0.25
+				if isLagBallNow then
+					lagBallUntil[ball] = now + 0.25
+				elseif lagBallUntil[ball] and now > lagBallUntil[ball] then
+					lagBallUntil[ball] = nil
+				end
 				local chosenVel = velocity
 				if chosenVel.Magnitude < 0.001 or chosenVel.Magnitude < manualVel.Magnitude * 0.5 then
 					chosenVel = manualVel
+				end
+				if lagBallUntil[ball] and chosenVel.Magnitude > 160 then
+					chosenVel = chosenVel.Unit * 160
 				end
 				local lastMoveTime = lastBallMoveTime[ball] or 0
 				if chosenVel.Magnitude >= 4 then
@@ -1266,14 +1283,21 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 				local approaching = false
 				local isBait = false
 				local dotNow = 0
-				if speed >= 4 then
+				local prevDist = lastDist[ball] or rawDist
+				local distDelta = prevDist - rawDist
+				local toBallVec = ball.Position - hrp.Position
+				local toBallMag = toBallVec.Magnitude
+				local frontDot = toBallMag > 0.001 and (toBallVec / toBallMag):Dot(hrp.CFrame.LookVector) or 0
+				local isBehind = frontDot < -0.1
+				local isLagBallNow = lagBallUntil[ball] ~= nil
+				if speed >= 3 then
 					local toYou = hrp.Position - ball.Position
 					local mag = toYou.Magnitude
 					if mag > 0.001 then
 						local dirToYou = toYou / mag
 						local velDir = speed > 0.001 and velocity.Unit or dirToYou
 						dotNow = dirToYou:Dot(velDir)
-						local toward = dotNow > 0.2
+						local toward = dotNow > 0.25
 						local away = dotNow < -0.2
 
 						local wasAway = lastAwayFlag[ball]
@@ -1286,21 +1310,29 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 							if wasAway then
 								local startAway = awaySince[ball]
 								if toward and startAway and now - startAway >= 0.06 then
-									baitUntil[ball] = now + 0.14
+									baitUntil[ball] = now + 0.18
 								end
 							end
 							lastAwayFlag[ball] = false
 						end
 
 						lastDirDot[ball] = dotNow
-						isBait = baitUntil[ball] and now < baitUntil[ball] and rawDist > parryPredictRadius * 0.6
-						approaching = toward and (not isBait)
+						local distDecreasing = distDelta > 0.5
+						local curveBehind = isBehind and distDelta <= 0.5 and rawDist > parryPredictRadius * 0.7
+						local baitActive = baitUntil[ball] and now < baitUntil[ball]
+						if not isLagBallNow then
+							isBait = (baitActive or curveBehind) and rawDist > math.max(10, parryPredictRadius * 0.5)
+						else
+							isBait = false
+						end
+						approaching = toward and distDecreasing and (not isBait)
 					end
 				else
 					lastDirDot[ball] = 0
 					lastAwayFlag[ball] = false
 					awaySince[ball] = nil
 				end
+				lastDist[ball] = rawDist
 
 				local toRingTime = approaching and speed > 1 and math.max((rawDist - parryPredictRadius), 0) / speed or math.huge
 				local closeHit = targeted and rawDist <= math.max(10, appliedPredictSize * 0.45)
@@ -1354,7 +1386,11 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 						and speed > 0
 						and speed <= 4
 
-					local canPredict = approaching and nearPredict and settledInPredict and highlightsMatch and hasTargetLock and (outsideRing or fastApproach) and (speed >= 12 or nearHitTime <= 0.25 or ringTimeSoon or fastApproach) or closeHitSafe and hasTargetLock or veryFastHit and hasTargetLock or targetSnap and hasTargetLock or innerEmergency and hasTargetLock or slowClose or slowVeryClose
+					local basePredict = approaching and nearPredict and settledInPredict and highlightsMatch and hasTargetLock and (outsideRing or fastApproach) and (speed >= 12 or nearHitTime <= 0.25 or ringTimeSoon or fastApproach)
+					local canPredict = basePredict or closeHitSafe and hasTargetLock or veryFastHit and hasTargetLock or targetSnap and hasTargetLock or innerEmergency and hasTargetLock or slowClose or slowVeryClose
+					if not lagBallUntil[ball] then
+						canPredict = canPredict and dotNow > 0.25
+					end
 					canPredict = canPredict and ringEdgeSafe
 					canPredict = canPredict and (not inCloseBlock)
 					if canPredict then
@@ -1408,7 +1444,7 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 						return
 					end
 					local attrNear = rawDist <= math.max(10, parryPredictRadius * 0.9)
-					local attrFast = speed > 20 or nearHitTime <= 0.35
+					local attrFast = speed > 20 or nearHitTime <= (lagBallUntil[ball] and 0.5 or 0.35)
 					if not (attrNear and attrFast) then
 						return
 					end
@@ -1453,6 +1489,9 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 				lastDirDot[b] = nil
 				awaySince[b] = nil
 				lastAwayFlag[b] = nil
+				lastTeleport[b] = nil
+				lagBallUntil[b] = nil
+				lastDist[b] = nil
 			end
 		end
 	else
@@ -1475,6 +1514,9 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 		baitUntil = {}
 		awaySince = {}
 		lastAwayFlag = {}
+		lastTeleport = {}
+		lagBallUntil = {}
+		lastDist = {}
 		nextPar = 0
 		ringLimited = false
 		resetToken = 0

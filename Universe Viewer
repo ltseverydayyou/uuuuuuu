@@ -96,71 +96,74 @@ local IsOnMobile = (function()
 	end;
 	return false;
 end)();
-local paddingBase = IsOnMobile and 16 or 12;
+local paddingBase = IsOnMobile and 18 or 14;
 local innerPadding = IsOnMobile and 12 or 8;
 local buttonHeight = IsOnMobile and 32 or 26;
-local rowHeight = IsOnMobile and 64 or 58;
+local rowHeight = IsOnMobile and 70 or 60;
 local fontSizeTitle = IsOnMobile and 22 or 20;
 local fontSizeMain = IsOnMobile and 20 or 18;
 local fontSizeSecondary = IsOnMobile and 18 or 16;
-local titleBarHeight = IsOnMobile and 48 or 42;
+local titleBarHeight = IsOnMobile and 52 or 44;
 local searchBarHeight = IsOnMobile and 40 or 36;
-local sortButtonWidth = IsOnMobile and 100 or 90;
+local sortButtonWidth = IsOnMobile and 110 or 100;
 local sortButtonHeight = IsOnMobile and 28 or 26;
 local buttonMinWidth = IsOnMobile and 44 or 40;
 local buttonRefWidth = IsOnMobile and 52 or 48;
 local buttonXWidth = IsOnMobile and 44 or 40;
-local buttonTpWidth = IsOnMobile and 130 or 120;
-local buttonCpWidth = IsOnMobile and 100 or 90;
-local buttonSrvWidth = IsOnMobile and 120 or 110;
-local expHeaderHeight = IsOnMobile and 36 or 32;
-local expListHeight = IsOnMobile and 200 or 180;
-local szDesktop = UDim2.new(0.5, 0, 0.6, 0);
-local szMobile = UDim2.new(0.94, 0, 0.75, 0);
+local buttonTpWidth = IsOnMobile and 110 or 104;
+local buttonCpWidth = IsOnMobile and 90 or 84;
+local buttonSrvWidth = IsOnMobile and 110 or 104;
+local buttonRjWidth = IsOnMobile and 110 or 104;
+local buttonAdvWidth = IsOnMobile and 128 or 118;
+local expHeaderHeight = IsOnMobile and 38 or 34;
+local expListHeight = IsOnMobile and 210 or 190;
+local szDesktop = UDim2.new(0.52, 0, 0.64, 0);
+local szMobile = UDim2.new(0.96, 0, 0.78, 0);
 G.Name = "UV";
 protect(G);
 G.ZIndexBehavior = Enum.ZIndexBehavior.Sibling;
 G.ResetOnSpawn = false;
 M.Name = "M";
 M.Parent = G;
-M.BackgroundColor3 = Color3.fromRGB(22, 20, 28);
-M.Position = UDim2.fromScale(0.5, 0.5);
-M.AnchorPoint = Vector2.new(0.5, 0.5);
+M.BackgroundColor3 = Color3.fromRGB(10, 8, 16);
+M.Position = UDim2.new(0.5, 0, 0.5, 0);
+M.AnchorPoint = Vector2.new(0.5, 0);
 M.Size = UDim2.new(0.44, 0, 0.58, 0);
 M.ClipsDescendants = true;
 SC.Parent = M;
 SC.Scale = 1;
-M_C.CornerRadius = UDim.new(0, 12);
+M_C.CornerRadius = UDim.new(0, 14);
 M_C.Parent = M;
 M_S.Parent = M;
-M_S.Thickness = 1;
-M_S.Transparency = 0.45;
-M_S.Color = Color3.fromRGB(140, 120, 200);
+M_S.Thickness = 1.3;
+M_S.Transparency = 0.4;
+M_S.Color = Color3.fromRGB(140, 120, 220);
 M_GR.Color = ColorSequence.new({
-	ColorSequenceKeypoint.new(0, Color3.fromRGB(18, 16, 24)),
-	ColorSequenceKeypoint.new(1, Color3.fromRGB(12, 10, 16))
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(14, 10, 26)),
+	ColorSequenceKeypoint.new(0.5, Color3.fromRGB(9, 8, 18)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(6, 6, 12))
 });
 M_GR.Rotation = 90;
 M_GR.Parent = M;
 T.Name = "T";
 T.Parent = M;
-T.BackgroundColor3 = Color3.fromRGB(28, 24, 36);
+T.BackgroundColor3 = Color3.fromRGB(20, 16, 36);
 T.Size = UDim2.new(1, 0, 0, titleBarHeight);
 T.ZIndex = 2;
 T_S.Parent = T;
 T_S.Thickness = 1;
-T_S.Transparency = 0.25;
-T_S.Color = Color3.fromRGB(110, 95, 170);
-T_C.CornerRadius = UDim.new(0, 12);
+T_S.Transparency = 0.3;
+T_S.Color = Color3.fromRGB(120, 100, 210);
+T_C.CornerRadius = UDim.new(0, 14);
 T_C.Parent = T;
 TTL.Name = "TTL";
 TTL.Parent = T;
 TTL.BackgroundTransparency = 1;
 TTL.Position = UDim2.new(0, paddingBase, 0, 0);
 TTL.Size = UDim2.new(0.6, 0, 1, 0);
-TTL.Font = Enum.Font.SourceSans;
+TTL.Font = Enum.Font.SourceSansSemibold;
 TTL.Text = "Universe Viewer";
-TTL.TextColor3 = Color3.fromRGB(240, 235, 255);
+TTL.TextColor3 = Color3.fromRGB(242, 238, 255);
 TTL.TextSize = fontSizeTitle;
 TTL.TextXAlignment = Enum.TextXAlignment.Left;
 BH.Name = "BH";
@@ -180,44 +183,44 @@ BH_LYT.VerticalAlignment = Enum.VerticalAlignment.Center;
 BH_LYT.SortOrder = Enum.SortOrder.LayoutOrder;
 BTN_MIN.Name = "BTN_MIN";
 BTN_MIN.Parent = BH;
-BTN_MIN.BackgroundColor3 = Color3.fromRGB(48, 40, 70);
+BTN_MIN.BackgroundColor3 = Color3.fromRGB(32, 26, 60);
 BTN_MIN.Size = UDim2.new(0, buttonMinWidth, 0, buttonHeight);
-BTN_MIN.Font = Enum.Font.SourceSans;
-BTN_MIN.Text = "▁";
-BTN_MIN.TextColor3 = Color3.fromRGB(230, 225, 255);
+BTN_MIN.Font = Enum.Font.SourceSansBold;
+BTN_MIN.Text = "-";
+BTN_MIN.TextColor3 = Color3.fromRGB(234, 230, 255);
 BTN_MIN.TextSize = fontSizeSecondary;
 BTN_MIN.LayoutOrder = 1;
-BTN_MIN_C.CornerRadius = UDim.new(0, 6);
+BTN_MIN_C.CornerRadius = UDim.new(0, 8);
 BTN_MIN_C.Parent = BTN_MIN;
 BTN_REF.Name = "BTN_REF";
 BTN_REF.Parent = BH;
-BTN_REF.BackgroundColor3 = Color3.fromRGB(56, 46, 92);
+BTN_REF.BackgroundColor3 = Color3.fromRGB(40, 32, 86);
 BTN_REF.Size = UDim2.new(0, buttonRefWidth, 0, buttonHeight);
 BTN_REF.Font = Enum.Font.SourceSans;
-BTN_REF.Text = "🔃";
+BTN_REF.Text = "R";
 BTN_REF.TextColor3 = Color3.fromRGB(230, 225, 255);
 BTN_REF.TextSize = fontSizeSecondary;
 BTN_REF.LayoutOrder = 2;
-BTN_REF_C.CornerRadius = UDim.new(0, 6);
+BTN_REF_C.CornerRadius = UDim.new(0, 8);
 BTN_REF_C.Parent = BTN_REF;
 BTN_X.Name = "BTN_X";
 BTN_X.Parent = BH;
-BTN_X.BackgroundColor3 = Color3.fromRGB(186, 54, 74);
+BTN_X.BackgroundColor3 = Color3.fromRGB(196, 60, 90);
 BTN_X.Size = UDim2.new(0, buttonXWidth, 0, buttonHeight);
-BTN_X.Font = Enum.Font.SourceSans;
-BTN_X.Text = "✖";
+BTN_X.Font = Enum.Font.SourceSansBold;
+BTN_X.Text = "X";
 BTN_X.TextColor3 = Color3.fromRGB(255, 255, 255);
 BTN_X.TextSize = fontSizeSecondary;
 BTN_X.LayoutOrder = 4;
-BTN_X_C.CornerRadius = UDim.new(0, 6);
+BTN_X_C.CornerRadius = UDim.new(0, 8);
 BTN_X_C.Parent = BTN_X;
 SB.Name = "SB";
 SB.Parent = M;
-SB.BackgroundColor3 = Color3.fromRGB(30, 26, 42);
+SB.BackgroundColor3 = Color3.fromRGB(18, 14, 30);
 SB.Position = UDim2.new(0, paddingBase, 0, titleBarHeight + innerPadding);
 SB.Size = UDim2.new(1, (-paddingBase) * 2, 0, searchBarHeight);
 SB.Font = Enum.Font.SourceSans;
-SB.PlaceholderText = "Search";
+SB.PlaceholderText = "Search places or IDs";
 SB.Text = "";
 SB.TextColor3 = Color3.fromRGB(240, 235, 255);
 SB.TextSize = fontSizeMain;
@@ -232,24 +235,24 @@ SORT.Parent = SB;
 SORT.AnchorPoint = Vector2.new(1, 0.5);
 SORT.Position = UDim2.new(1, -innerPadding, 0.5, 0);
 SORT.Size = UDim2.new(0, sortButtonWidth, 0, sortButtonHeight);
-SORT.BackgroundColor3 = Color3.fromRGB(54, 48, 76);
+SORT.BackgroundColor3 = Color3.fromRGB(40, 32, 80);
 SORT.Font = Enum.Font.SourceSans;
 SORT.Text = "Sort: A→Z";
 SORT.TextSize = fontSizeSecondary;
-SORT.TextColor3 = Color3.fromRGB(230, 225, 255);
-SORT_C.CornerRadius = UDim.new(0, 6);
+SORT.TextColor3 = Color3.fromRGB(232, 228, 255);
+SORT_C.CornerRadius = UDim.new(0, 7);
 SORT_C.Parent = SORT;
 C.Name = "C";
 C.Parent = M;
-C.BackgroundColor3 = Color3.fromRGB(24, 20, 34);
+C.BackgroundColor3 = Color3.fromRGB(14, 10, 24);
 C.Position = UDim2.new(0, paddingBase, 0, titleBarHeight + searchBarHeight + innerPadding * 2);
 C.Size = UDim2.new(1, (-paddingBase) * 2, 1, -(titleBarHeight + searchBarHeight + innerPadding * 3));
-C.BackgroundTransparency = 0.05;
+C.BackgroundTransparency = 0;
 C_S.Parent = C;
 C_S.Thickness = 1;
-C_S.Transparency = 0.4;
-C_S.Color = Color3.fromRGB(115, 100, 175);
-C_C.CornerRadius = UDim.new(0, 10);
+C_S.Transparency = 0.5;
+C_S.Color = Color3.fromRGB(110, 96, 200);
+C_C.CornerRadius = UDim.new(0, 12);
 C_C.Parent = C;
 LST.Name = "LST";
 LST.Parent = C;
@@ -264,24 +267,24 @@ LYT.SortOrder = Enum.SortOrder.LayoutOrder;
 LYT.Padding = UDim.new(0, innerPadding);
 ROW_T.Name = "ROW_T";
 ROW_T.Parent = nil;
-ROW_T.BackgroundColor3 = Color3.fromRGB(34, 28, 50);
+ROW_T.BackgroundColor3 = Color3.fromRGB(26, 20, 44);
 ROW_T.Size = UDim2.new(1, -4, 0, rowHeight);
 ROW_T.Position = UDim2.new(0, 2, 0, 0);
-ROW_T.BackgroundTransparency = 0.1;
-ROW_T.ClipsDescendants = false;
-ROW_C.CornerRadius = UDim.new(0, 8);
+ROW_T.BackgroundTransparency = 0.12;
+ROW_T.ClipsDescendants = true;
+ROW_C.CornerRadius = UDim.new(0, 10);
 ROW_C.Parent = ROW_T;
 ROW_S.Parent = ROW_T;
 ROW_S.Thickness = 1;
-ROW_S.Transparency = 0.55;
-ROW_S.Color = Color3.fromRGB(140, 120, 200);
+ROW_S.Transparency = 0.6;
+ROW_S.Color = Color3.fromRGB(140, 120, 220);
 ROW_S.Name = "S";
 ROW_TXT.Name = "ROW_TXT";
 ROW_TXT.Parent = ROW_T;
 ROW_TXT.BackgroundTransparency = 1;
 ROW_TXT.Position = UDim2.new(0, innerPadding, 0, 0);
-ROW_TXT.Size = UDim2.new(0.58, -innerPadding, 1, 0);
-ROW_TXT.Font = Enum.Font.SourceSans;
+ROW_TXT.Size = UDim2.new(0.5, -innerPadding, 0, rowHeight);
+ROW_TXT.Font = Enum.Font.SourceSansSemibold;
 ROW_TXT.Text = "Name (ID)";
 ROW_TXT.TextColor3 = Color3.fromRGB(245, 240, 255);
 ROW_TXT.TextSize = fontSizeMain;
@@ -291,8 +294,8 @@ ROW_TXT.TextTruncate = Enum.TextTruncate.AtEnd;
 ROW_B.Name = "ROW_B";
 ROW_B.Parent = ROW_T;
 ROW_B.BackgroundTransparency = 1;
-ROW_B.Position = UDim2.new(0.58, 0, 0, 0);
-ROW_B.Size = UDim2.new(0.42, -innerPadding, 1, 0);
+ROW_B.Position = UDim2.new(0.5, innerPadding, 0, 0);
+ROW_B.Size = UDim2.new(0.5, -innerPadding * 2, 0, rowHeight);
 local RB_LYT = Instance.new("UIListLayout");
 RB_LYT.Parent = ROW_B;
 RB_LYT.FillDirection = Enum.FillDirection.Horizontal;
@@ -308,7 +311,7 @@ BTN_TP.Font = Enum.Font.SourceSans;
 BTN_TP.Text = "Teleport";
 BTN_TP.TextColor3 = Color3.fromRGB(255, 255, 255);
 BTN_TP.TextSize = fontSizeSecondary;
-BTN_TP_C.CornerRadius = UDim.new(0, 6);
+BTN_TP_C.CornerRadius = UDim.new(0, 7);
 BTN_TP_C.Parent = BTN_TP;
 BTN_CP.Name = "BTN_CP";
 BTN_CP.Parent = ROW_B;
@@ -318,7 +321,7 @@ BTN_CP.Font = Enum.Font.SourceSans;
 BTN_CP.Text = "Copy ID";
 BTN_CP.TextColor3 = Color3.fromRGB(255, 255, 255);
 BTN_CP.TextSize = fontSizeSecondary;
-BTN_CP_C.CornerRadius = UDim.new(0, 6);
+BTN_CP_C.CornerRadius = UDim.new(0, 7);
 BTN_CP_C.Parent = BTN_CP;
 SP.Name = "SP";
 SP.Parent = C;
@@ -326,7 +329,7 @@ SP.AnchorPoint = Vector2.new(0.5, 0.5);
 SP.BackgroundTransparency = 1;
 SP.Size = UDim2.new(0, 30, 0, 30);
 SP.Position = UDim2.new(0.5, 0, 0.5, 0);
-SP.Text = "⏳";
+SP.Text = "...";
 SP.TextColor3 = Color3.fromRGB(210, 205, 235);
 SP.Font = Enum.Font.SourceSans;
 SP.TextSize = 22;
@@ -408,10 +411,10 @@ local function hv(b, base, light, lock)
 	end);
 	press(b);
 end;
-hv(BTN_MIN, BTN_MIN.BackgroundColor3, Color3.fromRGB(64, 56, 100));
-hv(BTN_REF, BTN_REF.BackgroundColor3, Color3.fromRGB(74, 62, 120));
-hv(BTN_X, BTN_X.BackgroundColor3, Color3.fromRGB(210, 70, 92));
-hv(SORT, SORT.BackgroundColor3, Color3.fromRGB(66, 58, 92));
+hv(BTN_MIN, BTN_MIN.BackgroundColor3, Color3.fromRGB(50, 42, 90));
+hv(BTN_REF, BTN_REF.BackgroundColor3, Color3.fromRGB(58, 48, 112));
+hv(BTN_X, BTN_X.BackgroundColor3, Color3.fromRGB(214, 78, 102));
+hv(SORT, SORT.BackgroundColor3, Color3.fromRGB(54, 46, 96));
 hv(BTN_TP, BTN_TP.BackgroundColor3, Color3.fromRGB(92, 146, 242));
 hv(BTN_CP, BTN_CP.BackgroundColor3, Color3.fromRGB(104, 206, 148));
 local function drag(ui, bar)
@@ -533,16 +536,10 @@ local function spn(v)
 	if v then
 		task.spawn(function()
 			local a = {
-				"⠋",
-				"⠙",
-				"⠹",
-				"⠸",
-				"⠼",
-				"⠴",
-				"⠦",
-				"⠧",
-				"⠇",
-				"⠏"
+				"|",
+				"/",
+				"-",
+				"\\"
 			};
 			local i = 1;
 			while SP.Visible do
@@ -572,22 +569,22 @@ local function toast(ti, tx, dur)
 	dur = dur or 3;
 	local f = Instance.new("Frame");
 	f.Size = UDim2.new(0, IsOnMobile and 360 or 320, 0, 0);
-	f.BackgroundColor3 = Color3.fromRGB(36, 32, 48);
-	f.BackgroundTransparency = 0.2;
+	f.BackgroundColor3 = Color3.fromRGB(26, 22, 44);
+	f.BackgroundTransparency = 0.15;
 	f.Parent = toRoot;
 	f.ClipsDescendants = true;
 	f.ZIndex = 6;
 	local fc = Instance.new("UICorner", f);
 	fc.CornerRadius = UDim.new(0, 10);
 	local fs = Instance.new("UIStroke", f);
-	fs.Color = Color3.fromRGB(120, 100, 180);
-	fs.Transparency = 0.35;
+	fs.Color = Color3.fromRGB(120, 100, 200);
+	fs.Transparency = 0.3;
 	local t1 = Instance.new("TextLabel");
 	t1.Parent = f;
 	t1.BackgroundTransparency = 1;
 	t1.Size = UDim2.new(1, -paddingBase, 0, fontSizeMain + innerPadding);
 	t1.Position = UDim2.new(0, innerPadding, 0, innerPadding);
-	t1.Font = Enum.Font.SourceSans;
+	t1.Font = Enum.Font.SourceSansSemibold;
 	t1.TextXAlignment = Enum.TextXAlignment.Left;
 	t1.TextColor3 = Color3.fromRGB(245, 240, 255);
 	t1.TextSize = fontSizeMain;
@@ -607,10 +604,10 @@ local function toast(ti, tx, dur)
 	f.BackgroundTransparency = 1;
 	fs.Transparency = 1;
 	(tw(f, 0.18, nil, nil, {
-		BackgroundTransparency = 0.2
+		BackgroundTransparency = 0.15
 	})):Play();
 	(tw(fs, 0.18, nil, nil, {
-		Transparency = 0.35
+		Transparency = 0.3
 	})):Play();
 	task.delay(dur, function()
 		(tw(f, 0.18, nil, Enum.EasingDirection.In, {
@@ -685,39 +682,7 @@ local function closeRow(r)
 		r.btnSRV.Text = "Servers";
 	end;
 end;
-local function srvSpin(lbl, v)
-	lbl.Visible = v;
-	if v then
-		task.spawn(function()
-			local a = {
-				"⠋",
-				"⠙",
-				"⠹",
-				"⠸",
-				"⠼",
-				"⠴",
-				"⠦",
-				"⠧",
-				"⠇",
-				"⠏"
-			};
-			local i = 1;
-			while lbl.Visible do
-				lbl.Text = a[i];
-				i = i % (#a) + 1;
-				task.wait(0.08);
-			end;
-		end);
-	end;
-end;
-local function srvFetch(placeId, r)
-	for _, c in ipairs(r.slist:GetChildren()) do
-		if c:IsA("TextButton") or c:IsA("Frame") then
-			c:Destroy();
-		end;
-	end;
-	r.semp.Visible = false;
-	srvSpin(r.ssp, true);
+local function getSrvData(placeId, allowSame)
 	local pid = tostring(placeId);
 	local query = "?sortOrder=Asc&limit=100";
 	local resTable = nil;
@@ -751,14 +716,11 @@ local function srvFetch(placeId, r)
 		end;
 	end;
 	if not resTable or type(resTable.data) ~= "table" then
-		srvSpin(r.ssp, false);
-		r.semp.Text = "Failed to load";
-		r.semp.Visible = true;
-		return;
+		return nil;
 	end;
 	local data = {};
 	for _, v in ipairs(resTable.data) do
-		if type(v) == "table" and v.maxPlayers > v.playing and v.id ~= game.JobId then
+		if type(v) == "table" and v.maxPlayers > v.playing and (allowSame or v.id ~= game.JobId) then
 			table.insert(data, {
 				id = v.id,
 				playing = v.playing,
@@ -767,6 +729,42 @@ local function srvFetch(placeId, r)
 				ping = tonumber(v.ping) or 0
 			});
 		end;
+	end;
+	return data;
+end;
+local function srvSpin(lbl, v)
+	lbl.Visible = v;
+	if v then
+		task.spawn(function()
+			local a = {
+				"|",
+				"/",
+				"-",
+				"\\"
+			};
+			local i = 1;
+			while lbl.Visible do
+				lbl.Text = a[i];
+				i = i % (#a) + 1;
+				task.wait(0.08);
+			end;
+		end);
+	end;
+end;
+local function srvFetch(placeId, r)
+	for _, c in ipairs(r.slist:GetChildren()) do
+		if c:IsA("TextButton") or c:IsA("Frame") then
+			c:Destroy();
+		end;
+	end;
+	r.semp.Visible = false;
+	srvSpin(r.ssp, true);
+	local data = getSrvData(placeId, false);
+	if not data then
+		srvSpin(r.ssp, false);
+		r.semp.Text = "Failed to load";
+		r.semp.Visible = true;
+		return;
 	end;
 	table.sort(data, function(a, b)
 		return a.playing > b.playing;
@@ -780,7 +778,7 @@ local function srvFetch(placeId, r)
 	for _, entry in ipairs(data) do
 		local b = Instance.new("TextButton");
 		b.Parent = r.slist;
-		b.BackgroundColor3 = Color3.fromRGB(36, 32, 50);
+		b.BackgroundColor3 = Color3.fromRGB(30, 24, 52);
 		b.AutoButtonColor = true;
 		b.Size = UDim2.new(1, 0, 0, buttonHeight);
 		b.AutomaticSize = Enum.AutomaticSize.Y;
@@ -790,18 +788,18 @@ local function srvFetch(placeId, r)
 		b.TextWrapped = true;
 		b.TextXAlignment = Enum.TextXAlignment.Left;
 		b.TextYAlignment = Enum.TextYAlignment.Center;
-		b.Text = tostring(entry.playing) .. "/" .. tostring(entry.max) .. " - " .. tostring(entry.id) .. "\nFPS: " .. string.format("%.2f", entry.fps) .. "  •  Ping: " .. tostring(entry.ping) .. "ms";
+		b.Text = tostring(entry.playing) .. "/" .. tostring(entry.max) .. " - " .. tostring(entry.id) .. "\nFPS: " .. string.format("%.2f", entry.fps) .. " | Ping: " .. tostring(entry.ping) .. "ms";
 		local pad = Instance.new("UIPadding", b);
 		pad.PaddingLeft = UDim.new(0, innerPadding);
 		pad.PaddingRight = UDim.new(0, innerPadding);
 		pad.PaddingTop = UDim.new(0, innerPadding / 2);
 		pad.PaddingBottom = UDim.new(0, innerPadding / 2);
 		local bc = Instance.new("UICorner", b);
-		bc.CornerRadius = UDim.new(0, 6);
+		bc.CornerRadius = UDim.new(0, 7);
 		local bs = Instance.new("UIStroke", b);
-		bs.Color = Color3.fromRGB(120, 100, 180);
+		bs.Color = Color3.fromRGB(120, 100, 190);
 		bs.Transparency = 0.55;
-		hv(b, b.BackgroundColor3, Color3.fromRGB(44, 38, 62));
+		hv(b, b.BackgroundColor3, Color3.fromRGB(38, 32, 66));
 		b.MouseButton1Click:Connect(function()
 			local ok2, e = pcall(function()
 				TPX:TeleportToPlaceInstance(placeId, entry.id, LP);
@@ -814,33 +812,82 @@ local function srvFetch(placeId, r)
 		end);
 	end;
 end;
+local function advHop()
+	note("Finding a better server...", 2, "Universe Viewer");
+	local data = getSrvData(game.PlaceId, false);
+	if not data then
+		note("Failed to fetch servers", 4, "Universe Viewer");
+		return;
+	end;
+	if #data == 0 then
+		note("Unable to server hop: only this server exists", 4, "Universe Viewer");
+		return;
+	end;
+	table.sort(data, function(a, b)
+		local ap, bp = a.ping, b.ping;
+		if ap == 0 and bp > 0 then
+			return false;
+		end;
+		if bp == 0 and ap > 0 then
+			return true;
+		end;
+		if ap > 0 and bp > 0 and ap ~= bp then
+			return ap < bp;
+		end;
+		if a.playing ~= b.playing then
+			return a.playing > b.playing;
+		end;
+		return a.id < b.id;
+	end);
+	local t = data[1];
+	local ok, e = pcall(function()
+		TPX:TeleportToPlaceInstance(game.PlaceId, t.id, LP);
+	end);
+	if ok then
+		note("Advanced hop: " .. tostring(t.playing) .. "/" .. tostring(t.max) .. " | " .. tostring(t.ping) .. "ms", 4, "Universe Viewer");
+	else
+		note("Teleport failed: " .. tostring(e), 4, "Universe Viewer");
+	end;
+end;
 local function mk(pl, idx)
 	local f = ROW_T:Clone();
 	f.Parent = LST;
 	f.Name = "R";
-	f.BackgroundTransparency = 1;
+	f.BackgroundTransparency = 0.18;
 	local s = f:FindFirstChild("S") or f:FindFirstChildWhichIsA("UIStroke");
 	if s then
-		s.Transparency = 1;
+		s.Transparency = 0.8;
 	end;
 	f.Visible = false;
-	f.ROW_TXT.Text = pl.Name .. " (" .. pl.PlaceId .. ")";
-	local btp = f.ROW_B.BTN_TP;
-	local bcp = f.ROW_B.BTN_CP;
-	hv(btp, btp.BackgroundColor3, Color3.fromRGB(92, 146, 242));
-	hv(bcp, bcp.BackgroundColor3, Color3.fromRGB(104, 206, 148));
+	local txt = f.ROW_TXT;
+	local bar = f.ROW_B;
+	txt.Text = pl.Name .. " (" .. pl.PlaceId .. ")";
+	txt.TextYAlignment = Enum.TextYAlignment.Center;
+	txt.ZIndex = 5;
+	bar.ZIndex = 5;
+	for _, ch in ipairs(bar:GetChildren()) do
+		if ch:IsA("GuiObject") then
+			ch.ZIndex = 5;
+		end;
+	end;
+	local btp = bar.BTN_TP;
+	local bcp = bar.BTN_CP;
+	btp.LayoutOrder = 1;
+	bcp.LayoutOrder = 5;
+	hv(bcp, bcp.BackgroundColor3, Color3.fromRGB(110, 210, 154));
 	local bsrv = Instance.new("TextButton");
 	bsrv.Name = "BTN_SRV";
-	bsrv.Parent = f.ROW_B;
-	bsrv.BackgroundColor3 = Color3.fromRGB(64, 54, 112);
+	bsrv.Parent = bar;
+	bsrv.BackgroundColor3 = Color3.fromRGB(64, 54, 120);
 	bsrv.Size = UDim2.new(0, buttonSrvWidth, 0, buttonHeight);
 	bsrv.Font = Enum.Font.SourceSans;
 	bsrv.Text = "Servers";
 	bsrv.TextColor3 = Color3.fromRGB(230, 225, 255);
 	bsrv.TextSize = fontSizeSecondary;
+	bsrv.LayoutOrder = 4;
+	bsrv.ZIndex = 5;
 	local bsrv_c = Instance.new("UICorner", bsrv);
-	bsrv_c.CornerRadius = UDim.new(0, 6);
-	hv(bsrv, bsrv.BackgroundColor3, Color3.fromRGB(76, 64, 132));
+	bsrv_c.CornerRadius = UDim.new(0, 7);
 	local hdr = Instance.new("Frame");
 	hdr.Name = "EXP_HDR";
 	hdr.Parent = f;
@@ -855,7 +902,7 @@ local function mk(pl, idx)
 	hl.Position = UDim2.new(0, 0, 0, 0);
 	hl.Size = UDim2.new(1, -90, 1, 0);
 	hl.Text = "Available Servers";
-	hl.Font = Enum.Font.SourceSans;
+	hl.Font = Enum.Font.SourceSansSemibold;
 	hl.TextSize = fontSizeMain;
 	hl.TextXAlignment = Enum.TextXAlignment.Left;
 	hl.TextColor3 = Color3.fromRGB(235, 230, 250);
@@ -871,21 +918,21 @@ local function mk(pl, idx)
 	hclose.TextColor3 = Color3.fromRGB(230, 225, 255);
 	hclose.ZIndex = 7;
 	local hclose_c = Instance.new("UICorner", hclose);
-	hclose_c.CornerRadius = UDim.new(0, 6);
+	hclose_c.CornerRadius = UDim.new(0, 7);
 	hv(hclose, hclose.BackgroundColor3, Color3.fromRGB(74, 62, 120));
 	local exp = Instance.new("Frame");
 	exp.Name = "EXP";
 	exp.Parent = f;
-	exp.BackgroundColor3 = Color3.fromRGB(24, 20, 34);
+	exp.BackgroundColor3 = Color3.fromRGB(16, 12, 30);
 	exp.Position = UDim2.new(0, innerPadding, 0, rowHeight + expHeaderHeight + innerPadding);
 	exp.Size = UDim2.new(1, (-innerPadding) * 2, 0, 0);
 	exp.BackgroundTransparency = 1;
 	exp.Visible = false;
 	exp.ZIndex = 6;
 	local expc = Instance.new("UICorner", exp);
-	expc.CornerRadius = UDim.new(0, 8);
+	expc.CornerRadius = UDim.new(0, 10);
 	local exps = Instance.new("UIStroke", exp);
-	exps.Color = Color3.fromRGB(120, 100, 180);
+	exps.Color = Color3.fromRGB(120, 100, 190);
 	exps.Transparency = 0.45;
 	local slist = Instance.new("ScrollingFrame");
 	slist.Parent = exp;
@@ -905,7 +952,7 @@ local function mk(pl, idx)
 	ssp.BackgroundTransparency = 1;
 	ssp.Size = UDim2.new(0, 30, 0, 30);
 	ssp.Position = UDim2.new(0.5, 0, 0.5, 0);
-	ssp.Text = "⏳";
+	ssp.Text = "...";
 	ssp.TextColor3 = Color3.fromRGB(210, 205, 235);
 	ssp.Font = Enum.Font.SourceSans;
 	ssp.TextSize = 22;
@@ -923,23 +970,57 @@ local function mk(pl, idx)
 	semp.ZIndex = 7;
 	semp.Visible = false;
 	local isCurrent = pl.PlaceId == game.PlaceId;
+	local brj;
+	local badv;
 	if isCurrent then
-		f.BackgroundColor3 = Color3.fromRGB(40, 34, 64);
+		f.BackgroundColor3 = Color3.fromRGB(34, 26, 70);
 		if s then
 			s.Transparency = 0.35;
 		end;
 		local cya = Color3.fromRGB(0, 208, 255);
-		btp.Text = "You Are Here";
+		btp.Text = "Server Hop";
 		btp.AutoButtonColor = false;
 		btp.Active = true;
 		btp.BackgroundColor3 = cya;
 		btp.TextColor3 = Color3.fromRGB(20, 24, 28);
+		btp.ZIndex = 5;
 		hv(btp, cya, cya, true);
 		local ylw = Color3.fromRGB(248, 196, 84);
 		bsrv.BackgroundColor3 = ylw;
 		bsrv.TextColor3 = Color3.fromRGB(30, 26, 20);
 		bsrv.AutoButtonColor = false;
 		hv(bsrv, ylw, ylw, true);
+		brj = Instance.new("TextButton");
+		brj.Name = "BTN_RJ";
+		brj.Parent = bar;
+		brj.BackgroundColor3 = Color3.fromRGB(72, 126, 232);
+		brj.Size = UDim2.new(0, buttonRjWidth, 0, buttonHeight);
+		brj.Font = Enum.Font.SourceSans;
+		brj.Text = "Rejoin";
+		brj.TextColor3 = Color3.fromRGB(255, 255, 255);
+		brj.TextSize = fontSizeSecondary;
+		brj.LayoutOrder = 2;
+		brj.ZIndex = 5;
+		local brj_c = Instance.new("UICorner", brj);
+		brj_c.CornerRadius = UDim.new(0, 7);
+		hv(brj, brj.BackgroundColor3, Color3.fromRGB(92, 146, 242));
+		badv = Instance.new("TextButton");
+		badv.Name = "BTN_ADV";
+		badv.Parent = bar;
+		badv.BackgroundColor3 = Color3.fromRGB(94, 78, 188);
+		badv.Size = UDim2.new(0, buttonAdvWidth, 0, buttonHeight);
+		badv.Font = Enum.Font.SourceSans;
+		badv.Text = "Advanced Hop";
+		badv.TextColor3 = Color3.fromRGB(255, 255, 255);
+		badv.TextSize = fontSizeSecondary;
+		badv.LayoutOrder = 3;
+		badv.ZIndex = 5;
+		local badv_c = Instance.new("UICorner", badv);
+		badv_c.CornerRadius = UDim.new(0, 7);
+		hv(badv, badv.BackgroundColor3, Color3.fromRGB(114, 96, 208));
+	else
+		hv(btp, btp.BackgroundColor3, Color3.fromRGB(92, 146, 242));
+		hv(bsrv, bsrv.BackgroundColor3, Color3.fromRGB(76, 64, 132));
 	end;
 	local it = {
 		f = f,
@@ -957,21 +1038,21 @@ local function mk(pl, idx)
 	table.insert(rows, it);
 	f.MouseEnter:Connect(function()
 		(tw(f, 0.12, nil, nil, {
-			BackgroundTransparency = 0.05
+			BackgroundTransparency = 0.1
 		})):Play();
 		if s then
 			(tw(s, 0.15, nil, nil, {
-				Transparency = isCurrent and 0.25 or 0.25
+				Transparency = isCurrent and 0.28 or 0.45
 			})):Play();
 		end;
 	end);
 	f.MouseLeave:Connect(function()
 		(tw(f, 0.18, nil, nil, {
-			BackgroundTransparency = 0.1
+			BackgroundTransparency = 0.18
 		})):Play();
 		if s then
 			(tw(s, 0.2, nil, nil, {
-				Transparency = isCurrent and 0.35 or 0.55
+				Transparency = isCurrent and 0.35 or 0.6
 			})):Play();
 		end;
 	end);
@@ -981,7 +1062,7 @@ local function mk(pl, idx)
 				TPX:Teleport(game.PlaceId);
 			end);
 			if ok then
-				note("Rejoining this server", 2, "Universe Viewer");
+				note("Server hopping this experience", 2, "Universe Viewer");
 			else
 				note("Teleport failed: " .. tostring(e), 4, "Universe Viewer");
 			end;
@@ -996,6 +1077,23 @@ local function mk(pl, idx)
 			end;
 		end;
 	end);
+	if brj then
+		brj.MouseButton1Click:Connect(function()
+			local ok, e = pcall(function()
+				TPX:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP);
+			end);
+			if ok then
+				note("Rejoining this server", 2, "Universe Viewer");
+			else
+				note("Teleport failed: " .. tostring(e), 4, "Universe Viewer");
+			end;
+		end);
+	end;
+	if badv then
+		badv.MouseButton1Click:Connect(function()
+			advHop();
+		end);
+	end;
 	bcp.MouseButton1Click:Connect(function()
 		if setclipboard then
 			setclipboard(tostring(pl.PlaceId));
@@ -1037,18 +1135,18 @@ local function mk(pl, idx)
 	end);
 	task.delay(idx * 0.012, function()
 		f.Visible = true;
-		f.BackgroundTransparency = 0.2;
+		f.BackgroundTransparency = 0.24;
 		if s then
-			s.Transparency = isCurrent and 0.35 or 0.7;
+			s.Transparency = isCurrent and 0.45 or 0.8;
 		end;
 		f.Size = UDim2.new(1, -4, 0, 0);
 		(tw(f, 0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, {
 			Size = UDim2.new(1, -4, 0, rowHeight),
-			BackgroundTransparency = 0.1
+			BackgroundTransparency = 0.18
 		})):Play();
 		if s then
 			(tw(s, 0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, {
-				Transparency = isCurrent and 0.35 or 0.55
+				Transparency = isCurrent and 0.35 or 0.6
 			})):Play();
 		end;
 	end);
@@ -1083,7 +1181,7 @@ local function fetch()
 	end;
 	local i = 0;
 	while true do
-		for _, pl in pg:GetCurrentPage() do
+		for _, pl in ipairs(pg:GetCurrentPage()) do
 			i += 1;
 			mk(pl, i);
 		end;
@@ -1113,12 +1211,12 @@ local function deb()
 end;
 SB.Focused:Connect(function()
 	(tw(SB, 0.12, nil, nil, {
-		BackgroundColor3 = Color3.fromRGB(36, 32, 50)
+		BackgroundColor3 = Color3.fromRGB(24, 20, 46)
 	})):Play();
 end);
 SB.FocusLost:Connect(function()
 	(tw(SB, 0.16, nil, nil, {
-		BackgroundColor3 = Color3.fromRGB(30, 26, 42)
+		BackgroundColor3 = Color3.fromRGB(18, 14, 30)
 	})):Play();
 end);
 SB.Changed:Connect(function(p)
@@ -1149,6 +1247,7 @@ local function canvas()
 end;
 pickSize();
 applySize(true);
+M.Position = UDim2.new(0.5, 0, 0.5 - normSize.Y.Scale / 2, 0);
 inFX();
 canvas();
 fetch();

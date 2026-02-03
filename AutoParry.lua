@@ -265,6 +265,7 @@ local lastDirDot = {};
 local baitUntil = {};
 local awaySince = {};
 local lastAwayFlag = {};
+local canAPParry = false;
 local function refreshVisualizerDerived()
 	local cfg = visualizerConfig;
 	speedScale = cfg.speedScale or VisualizerDefaults.speedScale;
@@ -967,6 +968,9 @@ local function queueParry(isSpam)
 	if (not apEnabled) and (not isSpam) then
 		return;
 	end;
+	if not isSpam and not canAPParry then
+		return;
+	end;
 	local now = tick();
 	if curFrame == lastParryFrame then
 		return;
@@ -978,7 +982,7 @@ local function queueParry(isSpam)
 	if not isSpam then
 		lastQueueTime = now;
 	end;
-	task.spawn(DoParry);
+	task.defer(DoParry);
 end;
 local function getHighlightColor(inst)
 	if not inst then
@@ -1483,6 +1487,8 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 			rangeMulti.Text = "0x"
 		end
 	end
+
+	canAPParry = anyTargeted
 
 	local nowStateTime = tick()
 	local inCooldown = nowStateTime < nextPar

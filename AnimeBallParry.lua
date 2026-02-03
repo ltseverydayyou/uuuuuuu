@@ -298,11 +298,9 @@ local lastParryPerBall = {};
 local predictEnterAt = {};
 local targetedSince = {};
 local lastAttrTargeted = {};
-local lastDirDot = {};
 local baitUntil = {};
 local awaySince = {};
 local lastAwayFlag = {};
-local canAPParry = false;
 local function refreshVisualizerDerived()
 	local cfg = visualizerConfig;
 	speedScale = cfg.speedScale or VisualizerDefaults.speedScale;
@@ -573,52 +571,6 @@ local function round(num, places)
 	local mult = 10 ^ (places or 0);
 	return math.floor((num * mult + 0.5)) / mult;
 end;
-local function getBalls()
-	local list = {};
-	local p = visualizerConfig and visualizerConfig.path;
-	local paths;
-
-	if p == nil or (typeof(p) == "table" and #p == 0) then
-		paths = { { parent = workspace, name = "Balls" } };
-	elseif typeof(p) == "table" then
-		paths = p;
-	else
-		paths = { p };
-	end;
-	local function addFromContainer(container)
-		if not (typeof(container) == "Instance" and container.Parent) then
-			return;
-		end;
-		if container:IsA("BasePart") then
-			list[#list + 1] = container;
-		else
-			for _, d in ipairs(container:GetDescendants()) do
-				if d:IsA("BasePart") and d.Parent then
-					list[#list + 1] = d;
-				end;
-			end;
-		end;
-	end;
-	for _, src in ipairs(paths) do
-		local t = typeof(src);
-		if t == "Instance" then
-			addFromContainer(src);
-		elseif t == "table" then
-			local par = src.parent;
-			local name = src.name;
-			local container = src.container;
-			if typeof(container) == "Instance" then
-				addFromContainer(container);
-			elseif typeof(par) == "Instance" and type(name) == "string" and par.Parent then
-				local found = par:FindFirstChild(name);
-				if found and found.Parent then
-					addFromContainer(found);
-				end;
-			end;
-		end;
-	end;
-	return list;
-end;
 local function newRing(name, color)
 	ensureIdentity();
 	local part = Instance.new("Part");
@@ -704,6 +656,113 @@ local function newBillboard(name, size, studsOffset, includeMulti)
 end;
 local rangeGui, rangeText, rangeMulti = newBillboard("Range", UDim2.new(3, 0, 3, 0), Vector3.new(0, 5, 0), true)
 
+local ballsMap = {}
+local ballList = {}
+local ballConns = {}
+local containerConns = {}
+local ballsDirty = false
+
+local function addBall(b)
+	if ballsMap[b] or not (b and b:IsA("BasePart") and b.Parent) then
+		return
+	end
+	ballsMap[b] = true
+	ballsDirty = true
+end
+
+local function removeBall(b)
+	if not ballsMap[b] then
+		return
+	end
+	ballsMap[b] = nil
+	ballsDirty = true
+end
+
+local function attachContainer(c)
+	if not (c and c.Parent) or ballConns[c] then
+		return
+	end
+	for _, d in ipairs(c:GetDescendants()) do
+		if d:IsA("BasePart") then
+			addBall(d)
+		end
+	end
+	local added = c.DescendantAdded:Connect(function(d)
+		if d:IsA("BasePart") then
+			addBall(d)
+		end
+	end)
+	local removing = c.DescendantRemoving:Connect(function(d)
+		if d:IsA("BasePart") then
+			removeBall(d)
+		end
+	end)
+	ballConns[c] = {added, removing}
+end
+
+local function trackNamedContainer(parent, name)
+	if not (typeof(parent) == "Instance" and parent.Parent and type(name) == "string") then
+		return
+	end
+	local existing = parent:FindFirstChild(name)
+	if existing then
+		attachContainer(existing)
+	end
+	if containerConns[parent] then
+		return
+	end
+	local c = parent.ChildAdded:Connect(function(ch)
+		if ch.Name == name then
+			attachContainer(ch)
+		end
+	end)
+	containerConns[parent] = c
+end
+
+local function setupBallTracking()
+	local p = visualizerConfig and visualizerConfig.path
+	local paths
+	if p == nil or (typeof(p) == "table" and #p == 0) then
+		paths = { { parent = workspace, name = "Balls" } }
+	elseif typeof(p) == "table" then
+		paths = p
+	else
+		paths = { p }
+	end
+	for _, src in ipairs(paths) do
+		local t = typeof(src)
+		if t == "Instance" then
+			attachContainer(src)
+		elseif t == "table" then
+			local par = src.parent
+			local name = src.name
+			local container = src.container
+			if typeof(container) == "Instance" then
+				attachContainer(container)
+			elseif typeof(par) == "Instance" and type(name) == "string" then
+				trackNamedContainer(par, name)
+			end
+		end
+	end
+end
+
+local function getBalls()
+	if ballsDirty then
+		ballsDirty = false
+		table.clear(ballList)
+		for b in pairs(ballsMap) do
+			if b and b.Parent then
+				ballList[#ballList + 1] = b
+			else
+				ballsMap[b] = nil
+			end
+		end
+	end
+	return ballList
+end
+
+setupBallTracking()
+
 local function getBallVisual(ball)
 	if not ball then
 		return nil
@@ -760,18 +819,37 @@ local function applyVisualizerVisible(show)
 	end
 end
 local visualizerAttached = true;
-local connections = {};
+local trackedConnections = {};
 local function trackConnection(conn)
-	table.insert(connections, conn);
+	trackedConnections[#trackedConnections + 1] = conn;
 	return conn;
 end;
 local function cleanup()
-	for _, c in ipairs(connections) do
+	for _, c in ipairs(trackedConnections) do
 		pcall(function()
-			c:Disconnect();
-		end);
-	end;
-	connections = {};
+			c:Disconnect()
+		end)
+	end
+	trackedConnections = {}
+
+	for _, conns in pairs(ballConns) do
+		for _, conn in ipairs(conns) do
+			pcall(function()
+				conn:Disconnect()
+			end)
+		end
+	end
+	ballConns = {}
+	for _, conn in pairs(containerConns) do
+		pcall(function()
+			conn:Disconnect()
+		end)
+	end
+	containerConns = {}
+	ballsMap = {}
+	ballList = {}
+	ballsDirty = false
+
 	pcall(function()
 		rangeGui.Parent = nil
 	end)
@@ -787,10 +865,11 @@ local function cleanup()
 		debugTargetOption = nil;
 		debugBallsOption = nil;
 		debugCooldownOption = nil;
-	end);
+	end)
 
 	touchLock = false
 	RevertLastInputPatch()
+	table.clear(connections)
 
 	getgenv().AutoParryCleanup = nil;
 end;
@@ -1048,11 +1127,11 @@ local function DoParry()
 	end;
 	return success;
 end;
-local function queueParry(isSpam)
+local function queueParry(isSpam, hasTarget)
 	if (not apEnabled) and (not isSpam) then
 		return;
 	end;
-	if not isSpam and not canAPParry then
+	if not isSpam and not hasTarget then
 		return;
 	end;
 	local now = tick();
@@ -1201,6 +1280,8 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 		local focusDist = math.huge
 		local focusPosTargeted = nil
 		local focusDistTargeted = math.huge
+		local focusIsTargeted = false
+		local primBaseSize, primPredictNoPing, primPredictRadius
 
 		for _, ball in ipairs(balls) do
 			if ball and ball.Position then
@@ -1215,10 +1296,6 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 				local now = nowFrame
 				if ringBall then
 					ringBall.CFrame = CFrame.new(ball.Position)
-				end
-				if rawDist < focusDist then
-					focusDist = rawDist
-					focusPos = ball.Position
 				end
 
 				local velocity = ball.AssemblyLinearVelocity or ball.Velocity or Vector3.zero
@@ -1254,8 +1331,6 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 				lastBallVel[ball] = velocity
 
 				local baseSize = 10 + speed * speedScale * 2
-				local appliedPlayerSize = rescaleRing(ringPlayer, baseSize, maxSize, dt)
-				ringLimited = appliedPlayerSize >= maxSize - 0.1
 
 				local multiplier = 0.12
 				if speed < 60 then
@@ -1283,12 +1358,16 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 				local preEntryMargin = math.clamp(predictRadius * 0.12 + ping * 0.018, 3, 14)
 				local parryPredictRadius = predictRadius + preEntryMargin
 
-				local appliedPlayerPredict = rescaleRing(ringPlayer, predictRadiusNoPing * 2, maxSize, dt)
-				ringLimited = appliedPlayerPredict >= maxSize - 0.1
-				local appliedPredictSize = rescaleRing(ringPlayerNoUnit, predictRadius * 2, predictMaxSize, dt)
-				ringPlayerNoUnit.Transparency = ringPinkTransparency
 				if ringBall then
 					rescaleRing(ringBall, baseSize, nil, dt)
+				end
+
+				if not focusIsTargeted and rawDist < focusDist then
+					focusDist = rawDist
+					focusPos = ball.Position
+					primBaseSize = baseSize
+					primPredictNoPing = predictRadiusNoPing
+					primPredictRadius = predictRadius
 				end
 
 				local inPredict = rawDist <= predictRadius
@@ -1326,6 +1405,10 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 					if rawDist < focusDistTargeted then
 						focusDistTargeted = rawDist
 						focusPosTargeted = ball.Position
+						focusIsTargeted = true
+						primBaseSize = baseSize
+						primPredictNoPing = predictRadiusNoPing
+						primPredictRadius = predictRadius
 					end
 				end
 
@@ -1380,18 +1463,16 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 							lastAwayFlag[ball] = false
 						end
 
-						lastDirDot[ball] = dotNow
 						isBait = baitUntil[ball] and now < baitUntil[ball] and rawDist > parryPredictRadius * 0.6
 						approaching = toward and (not isBait)
 					end
 				else
-					lastDirDot[ball] = 0
 					lastAwayFlag[ball] = false
 					awaySince[ball] = nil
 				end
 
 				local toRingTime = approaching and speed > 1 and math.max((rawDist - parryPredictRadius), 0) / speed or math.huge
-				local closeHit = targeted and rawDist <= math.max(10, appliedPredictSize * 0.45)
+				local closeHit = targeted and rawDist <= math.max(10, parryPredictRadius * 0.45)
 				local nearHitTime = speed > 1 and rawDist / speed or math.huge
 				local veryFastHit = targeted and nearHitTime <= 0.18 + ping * pingTimeScale
 				local closeHitSafe = closeHit and (nearHitTime <= 0.3 or speed >= 25)
@@ -1409,7 +1490,7 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 						closeParryBlocked[ball] = true
 						lastParryTime = nowInner
 						parryTriggered = true
-						task.defer(queueParry)
+						queueParry(false, true)
 					end
 				end
 
@@ -1457,14 +1538,14 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 							end
 							lastParryTime = nowTry
 							parryTriggered = true
-							task.defer(queueParry)
+							queueParry(false, true)
 						end
 					end
 				end
 
-				task.spawn(attemptParry)
+				task.defer(attemptParry)
 
-				task.spawn(function()
+				task.defer(function()
 					if parryTriggered then
 						return
 					end
@@ -1506,7 +1587,7 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 						lastParryPerBall[ball] = nowAttr
 						lastParryTime = nowAttr
 						parryTriggered = true
-						task.defer(queueParry)
+						queueParry(false, true)
 					end
 				end)
 			end
@@ -1520,6 +1601,17 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 		else
 			ringPlayer.CFrame = CFrame.new(hrp.Position)
 			ringPlayerNoUnit.CFrame = ringPlayer.CFrame
+		end
+
+		if primBaseSize and primPredictNoPing and primPredictRadius then
+			local appliedPlayerPredict = rescaleRing(ringPlayer, primPredictNoPing * 2, maxSize, dt)
+			ringLimited = appliedPlayerPredict >= maxSize - 0.1
+			rescaleRing(ringPlayerNoUnit, primPredictRadius * 2, predictMaxSize, dt)
+			ringPlayerNoUnit.Transparency = ringPinkTransparency
+		else
+			rescaleRing(ringPlayer, 10, maxSize, dt)
+			rescaleRing(ringPlayerNoUnit, 10, predictMaxSize, dt)
+			ringLimited = false
 		end
 
 		for b in pairs(ballVis) do
@@ -1538,7 +1630,6 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 				lastAttrTargeted[b] = nil
 				lastParryPerBall[b] = nil
 				baitUntil[b] = nil
-				lastDirDot[b] = nil
 				awaySince[b] = nil
 				lastAwayFlag[b] = nil
 			end
@@ -1559,7 +1650,6 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 		targetedSince = {}
 		lastAttrTargeted = {}
 		lastParryPerBall = {}
-		lastDirDot = {}
 		baitUntil = {}
 		awaySince = {}
 		lastAwayFlag = {}
@@ -1571,8 +1661,6 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 			rangeMulti.Text = "0x"
 		end
 	end
-
-	canAPParry = anyTargeted
 
 	local nowStateTime = tick()
 	local inCooldown = nowStateTime < nextPar
@@ -1605,10 +1693,8 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 end));
 trackConnection(RunService.RenderStepped:Connect(function()
 	if spam then
-		task.defer(function()
-			task.defer(QuickParry);
-			task.defer(QuickParry);
-			task.defer(QuickParry);
-		end);
+		queueParry(true);
+		queueParry(true);
+		queueParry(true);
 	end;
 end));

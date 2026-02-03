@@ -8,6 +8,7 @@ local VirtualInputManager = cloneref(game:GetService("VirtualInputManager"));
 local TweenService = cloneref(game:GetService("TweenService"));
 local LocalPlayer = Players.LocalPlayer;
 local CoreGui = game:GetService("CoreGui");
+local GuiService = cloneref(game:GetService("GuiService"))
 local parentUI = gethui and gethui() or CoreGui or LocalPlayer:WaitForChild("PlayerGui");
 local ui = Instance.new("ScreenGui");
 ui.IgnoreGuiInset = true;
@@ -24,6 +25,14 @@ local rootCorner = Instance.new("UICorner", root);
 rootCorner.CornerRadius = UDim.new(0, 12);
 local rootGrad = Instance.new("UIGradient", root);
 rootGrad.Color = ColorSequence.new(Color3.fromRGB(30, 31, 36), Color3.fromRGB(20, 20, 24));
+local IsOnMobile = UserInputService.TouchEnabled and not (UserInputService.KeyboardEnabled or UserInputService.MouseEnabled);
+if IsOnMobile then
+	root.AnchorPoint = Vector2.new(0.5, 0);
+	root.Size = UDim2.new(0.36, 0, 0.42, 0);
+	root.Position = UDim2.new(0.5, 0, 0.14, 0);
+else
+	root.AnchorPoint = Vector2.new(0, 0);
+end;
 local header = Instance.new("Frame");
 header.Size = UDim2.new(1, 0, 0.14, 0);
 header.BackgroundColor3 = Color3.fromRGB(28, 29, 34);
@@ -145,6 +154,10 @@ keyLabel.TextScaled = true;
 keyLabel.ZIndex = 13;
 local keyLabelMax = Instance.new("UITextSizeConstraint", keyLabel);
 keyLabelMax.MaxTextSize = 16;
+if IsOnMobile then
+	keyCard.Visible = false;
+	keyCard.Size = UDim2.new(1, 0, 0, 0);
+end;
 local delayCard = card(content);
 local delayTitle = Instance.new("TextLabel", delayCard);
 delayTitle.BackgroundTransparency = 1;
@@ -201,6 +214,31 @@ local intervalCorner = Instance.new("UICorner", intervalBox);
 intervalCorner.CornerRadius = UDim.new(0, 8);
 local intervalMax = Instance.new("UITextSizeConstraint", intervalBox);
 intervalMax.MaxTextSize = 16;
+local modeCard = card(content, 0.2);
+local modeTitle = Instance.new("TextLabel", modeCard);
+modeTitle.BackgroundTransparency = 1;
+modeTitle.Size = UDim2.new(0.5, 0, 0.5, 0);
+modeTitle.Position = UDim2.new(0.05, 0, 0.05, 0);
+modeTitle.Text = "Input Method";
+modeTitle.TextColor3 = Color3.fromRGB(210, 210, 220);
+modeTitle.Font = Enum.Font.Gotham;
+modeTitle.TextScaled = true;
+modeTitle.ZIndex = 12;
+local modeTitleMax = Instance.new("UITextSizeConstraint", modeTitle);
+modeTitleMax.MaxTextSize = 18;
+local modeBtn = Instance.new("TextButton", modeCard);
+modeBtn.Size = UDim2.new(0.35, 0, 0.5, 0);
+modeBtn.Position = UDim2.new(0.6, 0, 0.25, 0);
+modeBtn.BackgroundColor3 = Color3.fromRGB(48, 49, 56);
+modeBtn.Text = "";
+modeBtn.TextColor3 = Color3.fromRGB(240, 240, 240);
+modeBtn.Font = Enum.Font.GothamMedium;
+modeBtn.TextScaled = true;
+modeBtn.ZIndex = 12;
+local modeBtnCorner = Instance.new("UICorner", modeBtn);
+modeBtnCorner.CornerRadius = UDim.new(0, 8);
+local modeBtnMax = Instance.new("UITextSizeConstraint", modeBtn);
+modeBtnMax.MaxTextSize = 16;
 local statusCard = card(content, 0.2);
 statusCard.LayoutOrder = 99;
 local statusTitle = Instance.new("TextLabel", statusCard);
@@ -326,14 +364,28 @@ local pending = false;
 local startDeadline = 0;
 local startDelay = 0;
 local clickInterval = 0;
-local nextClickTime = 0;
 local minimized = false;
 local storedPos = root.Position;
 local storedSize = root.Size;
 local clickConn = nil;
 local Burst = 8;
+local clickAccum = 0;
+local inputMode = "Mouse";
+local lastPos
+do
+	local cam = workspace.CurrentCamera;
+	if cam then
+		local vs = cam.ViewportSize;
+		lastPos = Vector2.new(vs.X / 2, vs.Y / 2);
+	else
+		lastPos = Vector2.new(0, 0);
+	end;
+end;
 local function refreshKeyLabel()
 	keyLabel.Text = "[" .. toggleKey.Name .. "]";
+end;
+local function refreshModeLabel()
+	modeBtn.Text = inputMode;
 end;
 local function updateDockStatus()
 	local state = clicking and "ON" or (pending and "ARMED" or "OFF");
@@ -348,7 +400,7 @@ local function pointInGui(obj, px, py)
 	return px >= p.X and px <= p.X + s.X and py >= p.Y and py <= p.Y + s.Y;
 end;
 local function overOwnUI()
-	local pos = UserInputService:GetMouseLocation();
+	local pos = lastPos or UserInputService:GetMouseLocation();
 	for _, o in ipairs(ui:GetDescendants()) do
 		if o:IsA("GuiObject") and pointInGui(o, pos.X, pos.Y) then
 			return true;
@@ -357,20 +409,36 @@ local function overOwnUI()
 	return false;
 end;
 local function doClick()
-	local pos = UserInputService:GetMouseLocation();
+	local pos = lastPos or UserInputService:GetMouseLocation()
+	if IsOnMobile then
+		local inset = GuiService:GetGuiInset()
+		if typeof(inset) == "Vector2" then
+			pos = pos + inset
+		end
+	end
+	if inputMode == "Touch" and VirtualInputManager and VirtualInputManager.SendTouchEvent then
+		local ok = pcall(function()
+			VirtualInputManager:SendTouchEvent(pos.X, pos.Y, 0, true, game, 0)
+			VirtualInputManager:SendTouchEvent(pos.X, pos.Y, 0, false, game, 0)
+		end)
+		if ok then
+			return
+		end
+	end
 	if VirtualInputManager and VirtualInputManager.SendMouseButtonEvent then
-		VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game, 0);
-		VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, false, game, 0);
+		VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game, 0)
+		VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, false, game, 0)
 	elseif mouse1click then
-		mouse1click();
-	end;
-end;
+		mouse1click()
+	end
+end
 local function startFastLoop()
 	if clickConn then
 		clickConn:Disconnect();
 		clickConn = nil;
 	end;
-	clickConn = RunService.Heartbeat:Connect(function()
+	clickAccum = 0;
+	clickConn = RunService.Heartbeat:Connect(function(dt)
 		if pending then
 			local remain = math.max(0, startDeadline - os.clock());
 			if remain > 0 then
@@ -380,12 +448,11 @@ local function startFastLoop()
 			else
 				pending = false;
 				clicking = true;
-				nextClickTime = os.clock();
 				statusLabel.Text = "Active";
 				updateDockStatus();
 			end;
 		end;
-		if not clicking then
+		if not clicking or minimized then
 			return;
 		end;
 		if overOwnUI() then
@@ -396,11 +463,10 @@ local function startFastLoop()
 				doClick();
 			end;
 		else
-			local now = os.clock();
-			while now >= nextClickTime do
+			clickAccum = clickAccum + dt;
+			while clickAccum >= clickInterval do
 				doClick();
-				nextClickTime = nextClickTime + clickInterval;
-				now = os.clock();
+				clickAccum = clickAccum - clickInterval;
 			end;
 		end;
 	end);
@@ -412,6 +478,7 @@ local function bind(sig, fn)
 	return c;
 end;
 refreshKeyLabel();
+refreshModeLabel();
 updateDockStatus();
 statusLabel.Text = "Idle";
 delayBox.Text = "";
@@ -419,8 +486,19 @@ delayBox.PlaceholderText = "0";
 intervalBox.Text = "";
 intervalBox.PlaceholderText = "0  (0 = fastest)";
 bind(keyButton.MouseButton1Click, function()
+	if IsOnMobile then
+		return;
+	end;
 	listening = true;
 	keyLabel.Text = "[Press a key]";
+end);
+bind(modeBtn.MouseButton1Click, function()
+	if inputMode == "Mouse" then
+		inputMode = "Touch";
+	else
+		inputMode = "Mouse";
+	end;
+	refreshModeLabel();
 end);
 bind(delayBox.FocusLost, function()
 	local v = tonumber(delayBox.Text);
@@ -444,13 +522,13 @@ bind(startBtn.MouseButton1Click, function()
 	end;
 	startDeadline = os.clock() + startDelay;
 	pending = true;
+	clickAccum = 0;
 	if not clickConn then
 		startFastLoop();
 	end;
 	if startDelay <= 0 then
 		pending = false;
 		clicking = true;
-		nextClickTime = os.clock();
 		statusLabel.Text = "Active";
 	else
 		statusLabel.Text = "Starting in " .. string.format("%.1f", startDelay) .. "s";
@@ -460,7 +538,7 @@ end);
 bind(stopBtn.MouseButton1Click, function()
 	clicking = false;
 	pending = false;
-	nextClickTime = math.huge;
+	clickAccum = 0;
 	statusLabel.Text = "Idle";
 	updateDockStatus();
 end);
@@ -476,13 +554,13 @@ bind(UserInputService.InputBegan, function(input, processed)
 		if not clicking and (not pending) then
 			startDeadline = os.clock() + startDelay;
 			pending = true;
+			clickAccum = 0;
 			if not clickConn then
 				startFastLoop();
 			end;
 			if startDelay <= 0 then
 				pending = false;
 				clicking = true;
-				nextClickTime = os.clock();
 				statusLabel.Text = "Active";
 			else
 				statusLabel.Text = "Starting in " .. string.format("%.1f", startDelay) .. "s";
@@ -490,7 +568,7 @@ bind(UserInputService.InputBegan, function(input, processed)
 		else
 			clicking = false;
 			pending = false;
-			nextClickTime = math.huge;
+			clickAccum = 0;
 			statusLabel.Text = "Idle";
 		end;
 		updateDockStatus();
@@ -499,11 +577,19 @@ end);
 local dragging = false;
 local baseScale = nil;
 local startMouse = nil;
-local function beginDrag()
+local function beginDrag(input)
 	local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1920, 1080);
 	dragging = true;
 	baseScale = Vector2.new(root.Position.X.Scale, root.Position.Y.Scale);
-	startMouse = UserInputService:GetMouseLocation();
+	local p
+	if input.UserInputType == Enum.UserInputType.Touch then
+		local v = input.Position;
+		p = Vector2.new(v.X, v.Y);
+	else
+		local v = UserInputService:GetMouseLocation();
+		p = Vector2.new(v.X, v.Y);
+	end;
+	startMouse = p;
 	root.Position = UDim2.new(baseScale.X, 0, baseScale.Y, 0);
 end;
 local function endDrag()
@@ -511,12 +597,12 @@ local function endDrag()
 end;
 bind(header.InputBegan, function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-		beginDrag();
+		beginDrag(input);
 	end;
 end);
 bind(title.InputBegan, function(input)
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-		beginDrag();
+		beginDrag(input);
 	end;
 end);
 bind(UserInputService.InputEnded, function(input)
@@ -524,16 +610,25 @@ bind(UserInputService.InputEnded, function(input)
 		endDrag();
 	end;
 end);
-bind(UserInputService.InputChanged, function(input)
-	if not dragging then
-		return;
+local function getPointerPosition(input)
+	if input.UserInputType == Enum.UserInputType.Touch then
+		local v = input.Position;
+		return Vector2.new(v.X, v.Y);
+	else
+		local v = UserInputService:GetMouseLocation();
+		return Vector2.new(v.X, v.Y);
 	end;
+end;
+bind(UserInputService.InputChanged, function(input)
 	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-		local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1920, 1080);
-		local pos = UserInputService:GetMouseLocation();
-		local dx = (pos.X - startMouse.X) / math.max(1, vp.X);
-		local dy = (pos.Y - startMouse.Y) / math.max(1, vp.Y);
-		root.Position = UDim2.new(baseScale.X + dx, 0, baseScale.Y + dy, 0);
+		local p = getPointerPosition(input);
+		lastPos = Vector2.new(p.X, p.Y);
+		if dragging then
+			local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1920, 1080);
+			local dx = (p.X - startMouse.X) / math.max(1, vp.X);
+			local dy = (p.Y - startMouse.Y) / math.max(1, vp.Y);
+			root.Position = UDim2.new(baseScale.X + dx, 0, baseScale.Y + dy, 0);
+		end;
 	end;
 end);
 local function showDock()
@@ -590,7 +685,7 @@ end);
 local function cleanup()
 	clicking = false;
 	pending = false;
-	nextClickTime = math.huge;
+	clickAccum = 0;
 	updateDockStatus();
 	if clickConn then
 		clickConn:Disconnect();
@@ -607,4 +702,5 @@ end;
 bind(dockClose.MouseButton1Click, cleanup);
 bind(btnClose.MouseButton1Click, cleanup);
 refreshKeyLabel();
+refreshModeLabel();
 updateDockStatus();

@@ -978,7 +978,7 @@ local function mk(pl, idx)
 	btp.MouseButton1Click:Connect(function()
 		if isCurrent then
 			local ok, e = pcall(function()
-				TPX:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP);
+				TPX:Teleport(game.PlaceId);
 			end);
 			if ok then
 				note("Rejoining this server", 2, "Universe Viewer");

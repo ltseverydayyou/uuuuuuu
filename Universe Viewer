@@ -5,9 +5,11 @@ local TTL = Instance.new("TextLabel");
 local BH = Instance.new("Frame");
 local BTN_MIN = Instance.new("TextButton");
 local BTN_REF = Instance.new("TextButton");
+local BTN_AUTO = Instance.new("TextButton");
 local BTN_X = Instance.new("TextButton");
 local BTN_MIN_C = Instance.new("UICorner");
 local BTN_REF_C = Instance.new("UICorner");
+local BTN_AUTO_C = Instance.new("UICorner");
 local BTN_X_C = Instance.new("UICorner");
 local M_C = Instance.new("UICorner");
 local M_S = Instance.new("UIStroke");
@@ -19,6 +21,7 @@ local SB_C = Instance.new("UICorner");
 local PAD = Instance.new("UIPadding");
 local SORT = Instance.new("TextButton");
 local SORT_C = Instance.new("UICorner");
+local STATS = Instance.new("TextLabel");
 local C = Instance.new("Frame");
 local C_S = Instance.new("UIStroke");
 local C_C = Instance.new("UICorner");
@@ -105,6 +108,7 @@ local fontSizeMain = IsOnMobile and 20 or 18;
 local fontSizeSecondary = IsOnMobile and 18 or 16;
 local titleBarHeight = IsOnMobile and 52 or 44;
 local searchBarHeight = IsOnMobile and 40 or 36;
+local statsHeight = IsOnMobile and 26 or 22;
 local sortButtonWidth = IsOnMobile and 110 or 100;
 local sortButtonHeight = IsOnMobile and 28 or 26;
 local buttonMinWidth = IsOnMobile and 44 or 40;
@@ -203,8 +207,28 @@ BTN_REF.TextSize = fontSizeSecondary;
 BTN_REF.LayoutOrder = 2;
 BTN_REF_C.CornerRadius = UDim.new(0, 8);
 BTN_REF_C.Parent = BTN_REF;
+BTN_AUTO.Name = "BTN_AUTO";
+BTN_AUTO.Parent = BH;
+BTN_AUTO.BackgroundColor3 = Color3.fromRGB(52, 44, 96);
+BTN_AUTO.Size = UDim2.new(0, buttonAdvWidth - 10, 0, buttonHeight);
+BTN_AUTO.Font = Enum.Font.SourceSans;
+BTN_AUTO.Text = "AutoHop: Off";
+BTN_AUTO.TextColor3 = Color3.fromRGB(230, 225, 255);
+BTN_AUTO.TextSize = fontSizeSecondary;
+BTN_AUTO.LayoutOrder = 3;
+BTN_AUTO_C.CornerRadius = UDim.new(0, 8);
+BTN_AUTO_C.Parent = BTN_AUTO;
 BTN_X.Name = "BTN_X";
 BTN_X.Parent = BH;
+BTN_X.BackgroundColor3 = Color3.fromRGB(196, 60, 90);
+BTN_X.Size = UDim2.new(0, buttonXWidth, 0, buttonHeight);
+BTN_X.Font = Enum.Font.SourceSansBold;
+BTN_X.Text = "X";
+BTN_X.TextColor3 = Color3.fromRGB(255, 255, 255);
+BTN_X.TextSize = fontSizeSecondary;
+BTN_X.LayoutOrder = 4;
+BTN_X_C.CornerRadius = UDim.new(0, 8);
+BTN_X_C.Parent = BTN_X;
 BTN_X.BackgroundColor3 = Color3.fromRGB(196, 60, 90);
 BTN_X.Size = UDim2.new(0, buttonXWidth, 0, buttonHeight);
 BTN_X.Font = Enum.Font.SourceSansBold;
@@ -257,14 +281,26 @@ C_C.Parent = C;
 LST.Name = "LST";
 LST.Parent = C;
 LST.BackgroundTransparency = 1;
-LST.Position = UDim2.new(0, innerPadding, 0, innerPadding);
-LST.Size = UDim2.new(1, (-innerPadding) * 2, 1, (-innerPadding) * 2);
+LST.Position = UDim2.new(0, innerPadding, 0, innerPadding + statsHeight + innerPadding / 2);
+LST.Size = UDim2.new(1, (-innerPadding) * 2, 1, (-innerPadding) * 2 - statsHeight - innerPadding / 2);
 LST.CanvasSize = UDim2.new(0, 0, 0, 0);
 LST.ScrollBarThickness = 6;
 LST.AutomaticCanvasSize = Enum.AutomaticSize.Y;
 LYT.Parent = LST;
 LYT.SortOrder = Enum.SortOrder.LayoutOrder;
 LYT.Padding = UDim.new(0, innerPadding);
+STATS.Name = "STATS";
+STATS.Parent = C;
+STATS.BackgroundTransparency = 1;
+STATS.Position = UDim2.new(0, innerPadding, 0, innerPadding);
+STATS.Size = UDim2.new(1, (-innerPadding) * 2, 0, statsHeight);
+STATS.Font = Enum.Font.SourceSans;
+STATS.TextXAlignment = Enum.TextXAlignment.Left;
+STATS.TextYAlignment = Enum.TextYAlignment.Center;
+STATS.TextColor3 = Color3.fromRGB(210, 205, 230);
+STATS.TextSize = fontSizeSecondary;
+STATS.Text = "";
+STATS.ZIndex = 4;
 ROW_T.Name = "ROW_T";
 ROW_T.Parent = nil;
 ROW_T.BackgroundColor3 = Color3.fromRGB(26, 20, 44);
@@ -283,7 +319,7 @@ ROW_TXT.Name = "ROW_TXT";
 ROW_TXT.Parent = ROW_T;
 ROW_TXT.BackgroundTransparency = 1;
 ROW_TXT.Position = UDim2.new(0, innerPadding, 0, 0);
-ROW_TXT.Size = UDim2.new(0.5, -innerPadding, 0, rowHeight);
+ROW_TXT.Size = UDim2.new(0.6, -innerPadding, 0, rowHeight);
 ROW_TXT.Font = Enum.Font.SourceSansSemibold;
 ROW_TXT.Text = "Name (ID)";
 ROW_TXT.TextColor3 = Color3.fromRGB(245, 240, 255);
@@ -294,12 +330,12 @@ ROW_TXT.TextTruncate = Enum.TextTruncate.AtEnd;
 ROW_B.Name = "ROW_B";
 ROW_B.Parent = ROW_T;
 ROW_B.BackgroundTransparency = 1;
-ROW_B.Position = UDim2.new(0.5, innerPadding, 0, 0);
-ROW_B.Size = UDim2.new(0.5, -innerPadding * 2, 0, rowHeight);
+ROW_B.Position = UDim2.new(0.6, innerPadding, 0, 0);
+ROW_B.Size = UDim2.new(0.4, (-innerPadding) * 2, 0, rowHeight);
 local RB_LYT = Instance.new("UIListLayout");
 RB_LYT.Parent = ROW_B;
-RB_LYT.FillDirection = Enum.FillDirection.Horizontal;
-RB_LYT.Padding = UDim.new(0, innerPadding);
+RB_LYT.FillDirection = Enum.FillDirection.Vertical;
+RB_LYT.Padding = UDim.new(0, innerPadding / 2);
 RB_LYT.HorizontalAlignment = Enum.HorizontalAlignment.Right;
 RB_LYT.VerticalAlignment = Enum.VerticalAlignment.Center;
 RB_LYT.SortOrder = Enum.SortOrder.LayoutOrder;
@@ -351,6 +387,7 @@ local TPX = sv("TeleportService");
 local P = sv("Players");
 local AS = sv("AssetService");
 local HS = sv("HttpService");
+local ST = sv("Stats");
 local LP = P.LocalPlayer;
 local srvBases = {
 	"https://games.roblox.com",
@@ -358,6 +395,50 @@ local srvBases = {
 	"https://roxytheproxy.com/games.roblox.com"
 };
 local srvWorker = "https://solaraserverhop.ltseverydayyou.workers.dev";
+local autoGuard = false;
+local autoGuardConn = nil;
+local autoPingLimit = 280;
+local autoCooldown = 15;
+local lastHopTime = 0;
+local favFile = "uv_favs.json";
+local favs = {};
+local function loadFavs()
+	if not (isfile and readfile) then
+		return;
+	end;
+	local ok, data = pcall(readfile, favFile);
+	if not ok or (not data) or data == "" then
+		return;
+	end;
+	local ok2, decoded = pcall(function()
+		return HS:JSONDecode(data);
+	end);
+	if ok2 and type(decoded) == "table" then
+		favs = decoded;
+	end;
+end;
+local function saveFavs()
+	if not writefile then
+		return;
+	end;
+	local ok, data = pcall(function()
+		return HS:JSONEncode(favs);
+	end);
+	if ok and data then
+		pcall(writefile, favFile, data);
+	end;
+end;
+local function isFav(id)
+	return favs[tostring(id)] == true;
+end;
+local function setFav(id, v)
+	if v then
+		favs[tostring(id)] = true;
+	else
+		favs[tostring(id)] = nil;
+	end;
+	saveFavs();
+end;
 local function tw(o, t, e, d, g)
 	return TS:Create(o, TweenInfo.new(t, e or Enum.EasingStyle.Quad, d or Enum.EasingDirection.Out), g);
 end;
@@ -413,6 +494,7 @@ local function hv(b, base, light, lock)
 end;
 hv(BTN_MIN, BTN_MIN.BackgroundColor3, Color3.fromRGB(50, 42, 90));
 hv(BTN_REF, BTN_REF.BackgroundColor3, Color3.fromRGB(58, 48, 112));
+hv(BTN_AUTO, BTN_AUTO.BackgroundColor3, Color3.fromRGB(70, 60, 118));
 hv(BTN_X, BTN_X.BackgroundColor3, Color3.fromRGB(214, 78, 102));
 hv(SORT, SORT.BackgroundColor3, Color3.fromRGB(54, 46, 96));
 hv(BTN_TP, BTN_TP.BackgroundColor3, Color3.fromRGB(92, 146, 242));
@@ -628,6 +710,7 @@ end;
 local rows = {};
 local fetching = false;
 local openRow = nil;
+loadFavs();
 local function clr()
 	for _, it in ipairs(rows) do
 		if it.f then
@@ -648,6 +731,9 @@ local function apply()
 		end;
 	end;
 	table.sort(a, function(x, y)
+		if x.pinned ~= y.pinned then
+			return x.pinned and true or false;
+		end;
 		if x.cur ~= y.cur then
 			return x.cur;
 		end;
@@ -801,6 +887,12 @@ local function srvFetch(placeId, r)
 		bs.Transparency = 0.55;
 		hv(b, b.BackgroundColor3, Color3.fromRGB(38, 32, 66));
 		b.MouseButton1Click:Connect(function()
+			if setclipboard and UIS:IsKeyDown(Enum.KeyCode.LeftShift) then
+				local s = "game:GetService(\"TeleportService\"):TeleportToPlaceInstance(" .. tostring(placeId) .. ", \"" .. tostring(entry.id) .. "\", game:GetService(\"Players\").LocalPlayer)";
+				setclipboard(s);
+				note("Copied join script", 2, "Universe Viewer");
+				return;
+			end;
 			local ok2, e = pcall(function()
 				TPX:TeleportToPlaceInstance(placeId, entry.id, LP);
 			end);
@@ -812,9 +904,9 @@ local function srvFetch(placeId, r)
 		end);
 	end;
 end;
-local function advHop()
+local function advHopPlace(pid)
 	note("Finding a better server...", 2, "Universe Viewer");
-	local data = getSrvData(game.PlaceId, false);
+	local data = getSrvData(pid, false);
 	if not data then
 		note("Failed to fetch servers", 4, "Universe Viewer");
 		return;
@@ -841,7 +933,7 @@ local function advHop()
 	end);
 	local t = data[1];
 	local ok, e = pcall(function()
-		TPX:TeleportToPlaceInstance(game.PlaceId, t.id, LP);
+		TPX:TeleportToPlaceInstance(pid, t.id, LP);
 	end);
 	if ok then
 		note("Advanced hop: " .. tostring(t.playing) .. "/" .. tostring(t.max) .. " | " .. tostring(t.ping) .. "ms", 4, "Universe Viewer");
@@ -849,179 +941,360 @@ local function advHop()
 		note("Teleport failed: " .. tostring(e), 4, "Universe Viewer");
 	end;
 end;
-local function mk(pl, idx)
-	local f = ROW_T:Clone();
-	f.Parent = LST;
-	f.Name = "R";
-	f.BackgroundTransparency = 0.18;
-	local s = f:FindFirstChild("S") or f:FindFirstChildWhichIsA("UIStroke");
-	if s then
-		s.Transparency = 0.8;
+local function hopByPlayers(mode)
+	local data = getSrvData(game.PlaceId, false);
+	if not data then
+		note("Failed to fetch servers", 4, "Universe Viewer");
+		return;
 	end;
-	f.Visible = false;
-	local txt = f.ROW_TXT;
-	local bar = f.ROW_B;
-	txt.Text = pl.Name .. " (" .. pl.PlaceId .. ")";
-	txt.TextYAlignment = Enum.TextYAlignment.Center;
-	txt.ZIndex = 5;
-	bar.ZIndex = 5;
+	if #data == 0 then
+		note("No servers available", 4, "Universe Viewer");
+		return;
+	end;
+	if mode == "SMALL" then
+		table.sort(data, function(a, b)
+			return a.playing < b.playing;
+		end);
+	else
+		table.sort(data, function(a, b)
+			return a.playing > b.playing;
+		end);
+	end;
+	local t = data[1];
+	local ok, e = pcall(function()
+		TPX:TeleportToPlaceInstance(game.PlaceId, t.id, LP);
+	end);
+	if ok then
+		note((mode == "SMALL" and "Smallest" or "Fullest") .. " server: " .. tostring(t.playing) .. "/" .. tostring(t.max) .. " | " .. tostring(t.ping) .. "ms", 4, "Universe Viewer");
+	else
+		note("Teleport failed: " .. tostring(e), 4, "Universe Viewer");
+	end;
+end;
+local function advHop()
+	advHopPlace(game.PlaceId);
+end;
+local function startGuard()
+	if autoGuardConn then
+		autoGuardConn:Disconnect();
+		autoGuardConn = nil;
+	end;
+	if not autoGuard then
+		return;
+	end;
+	local bad = 0;
+	autoGuardConn = RS.Heartbeat:Connect(function(dt)
+		if tick() - lastHopTime < autoCooldown then
+			return;
+		end;
+		local ping = 0;
+		if ST and ST.Network and ST.Network.ServerStatsItem and ST.Network.ServerStatsItem["Data Ping"] then
+			local v = ST.Network.ServerStatsItem["Data Ping"]:GetValue();
+			if typeof(v) == "number" then
+				ping = v;
+			end;
+		end;
+		if ping >= autoPingLimit and ping < 10000 then
+			bad += dt;
+			if bad >= 5 then
+				lastHopTime = tick();
+				bad = 0;
+				note("Auto hop: ping " .. tostring(math.floor(ping)) .. "ms, finding better server...", 3, "Universe Viewer");
+				advHop();
+			end;
+		else
+			bad = 0;
+		end;
+	end);
+end;
+local function mk(pl, idx)
+	local f = ROW_T:Clone()
+	f.Parent = LST
+	f.Name = "R"
+	f.BackgroundTransparency = 0.18
+	local s = f:FindFirstChild("S") or f:FindFirstChildWhichIsA("UIStroke")
+	if s then
+		s.Transparency = 0.8
+	end
+	f.Visible = false
+
+	local txt = f.ROW_TXT
+	local bar = f.ROW_B
+
+	local isCurrent = pl.PlaceId == game.PlaceId
+	local pinned = isFav(pl.PlaceId)
+
+	txt.Text = pl.Name
+	txt.TextYAlignment = Enum.TextYAlignment.Center
+	txt.ZIndex = 5
+	bar.ZIndex = 5
 	for _, ch in ipairs(bar:GetChildren()) do
 		if ch:IsA("GuiObject") then
-			ch.ZIndex = 5;
-		end;
-	end;
-	local btp = bar.BTN_TP;
-	local bcp = bar.BTN_CP;
-	btp.LayoutOrder = 1;
-	bcp.LayoutOrder = 5;
-	hv(bcp, bcp.BackgroundColor3, Color3.fromRGB(110, 210, 154));
-	local bsrv = Instance.new("TextButton");
-	bsrv.Name = "BTN_SRV";
-	bsrv.Parent = bar;
-	bsrv.BackgroundColor3 = Color3.fromRGB(64, 54, 120);
-	bsrv.Size = UDim2.new(0, buttonSrvWidth, 0, buttonHeight);
-	bsrv.Font = Enum.Font.SourceSans;
-	bsrv.Text = "Servers";
-	bsrv.TextColor3 = Color3.fromRGB(230, 225, 255);
-	bsrv.TextSize = fontSizeSecondary;
-	bsrv.LayoutOrder = 4;
-	bsrv.ZIndex = 5;
-	local bsrv_c = Instance.new("UICorner", bsrv);
-	bsrv_c.CornerRadius = UDim.new(0, 7);
-	local hdr = Instance.new("Frame");
-	hdr.Name = "EXP_HDR";
-	hdr.Parent = f;
-	hdr.BackgroundTransparency = 1;
-	hdr.Position = UDim2.new(0, innerPadding, 0, rowHeight + innerPadding / 2);
-	hdr.Size = UDim2.new(1, (-innerPadding) * 2, 0, expHeaderHeight);
-	hdr.Visible = false;
-	hdr.ZIndex = 7;
-	local hl = Instance.new("TextLabel");
-	hl.Parent = hdr;
-	hl.BackgroundTransparency = 1;
-	hl.Position = UDim2.new(0, 0, 0, 0);
-	hl.Size = UDim2.new(1, -90, 1, 0);
-	hl.Text = "Available Servers";
-	hl.Font = Enum.Font.SourceSansSemibold;
-	hl.TextSize = fontSizeMain;
-	hl.TextXAlignment = Enum.TextXAlignment.Left;
-	hl.TextColor3 = Color3.fromRGB(235, 230, 250);
-	hl.ZIndex = 7;
-	local hclose = Instance.new("TextButton");
-	hclose.Parent = hdr;
-	hclose.BackgroundColor3 = Color3.fromRGB(56, 46, 92);
-	hclose.Size = UDim2.new(0, 80, 1, 0);
-	hclose.Position = UDim2.new(1, -80, 0, 0);
-	hclose.Font = Enum.Font.SourceSans;
-	hclose.Text = "Close";
-	hclose.TextSize = fontSizeSecondary;
-	hclose.TextColor3 = Color3.fromRGB(230, 225, 255);
-	hclose.ZIndex = 7;
-	local hclose_c = Instance.new("UICorner", hclose);
-	hclose_c.CornerRadius = UDim.new(0, 7);
-	hv(hclose, hclose.BackgroundColor3, Color3.fromRGB(74, 62, 120));
-	local exp = Instance.new("Frame");
-	exp.Name = "EXP";
-	exp.Parent = f;
-	exp.BackgroundColor3 = Color3.fromRGB(16, 12, 30);
-	exp.Position = UDim2.new(0, innerPadding, 0, rowHeight + expHeaderHeight + innerPadding);
-	exp.Size = UDim2.new(1, (-innerPadding) * 2, 0, 0);
-	exp.BackgroundTransparency = 1;
-	exp.Visible = false;
-	exp.ZIndex = 6;
-	local expc = Instance.new("UICorner", exp);
-	expc.CornerRadius = UDim.new(0, 10);
-	local exps = Instance.new("UIStroke", exp);
-	exps.Color = Color3.fromRGB(120, 100, 190);
-	exps.Transparency = 0.45;
-	local slist = Instance.new("ScrollingFrame");
-	slist.Parent = exp;
-	slist.BackgroundTransparency = 1;
-	slist.Position = UDim2.new(0, innerPadding / 2, 0, innerPadding / 2);
-	slist.Size = UDim2.new(1, -innerPadding, 1, -innerPadding);
-	slist.CanvasSize = UDim2.new(0, 0, 0, 0);
-	slist.AutomaticCanvasSize = Enum.AutomaticSize.Y;
-	slist.ScrollBarThickness = 6;
-	slist.ZIndex = 7;
-	local slyt = Instance.new("UIListLayout", slist);
-	slyt.Padding = UDim.new(0, innerPadding / 2);
-	slyt.SortOrder = Enum.SortOrder.LayoutOrder;
-	local ssp = Instance.new("TextLabel");
-	ssp.Parent = exp;
-	ssp.AnchorPoint = Vector2.new(0.5, 0.5);
-	ssp.BackgroundTransparency = 1;
-	ssp.Size = UDim2.new(0, 30, 0, 30);
-	ssp.Position = UDim2.new(0.5, 0, 0.5, 0);
-	ssp.Text = "...";
-	ssp.TextColor3 = Color3.fromRGB(210, 205, 235);
-	ssp.Font = Enum.Font.SourceSans;
-	ssp.TextSize = 22;
-	ssp.ZIndex = 8;
-	ssp.Visible = false;
-	local semp = Instance.new("TextLabel");
-	semp.Parent = exp;
-	semp.BackgroundTransparency = 1;
-	semp.Text = "No servers";
-	semp.Font = Enum.Font.SourceSans;
-	semp.TextSize = fontSizeSecondary;
-	semp.TextColor3 = Color3.fromRGB(210, 205, 230);
-	semp.AnchorPoint = Vector2.new(0.5, 1);
-	semp.Position = UDim2.new(0.5, 0, 1, (-innerPadding) / 2);
-	semp.ZIndex = 7;
-	semp.Visible = false;
-	local isCurrent = pl.PlaceId == game.PlaceId;
-	local brj;
-	local badv;
+			ch.ZIndex = 5
+		end
+	end
+
+	local rowTop = Instance.new("Frame")
+	rowTop.Name = "ROW_TOP"
+	rowTop.Parent = bar
+	rowTop.BackgroundTransparency = 1
+	rowTop.Size = UDim2.new(1, 0, 0, buttonHeight)
+
+	local rowBot = Instance.new("Frame")
+	rowBot.Name = "ROW_BOT"
+	rowBot.Parent = bar
+	rowBot.BackgroundTransparency = 1
+	rowBot.Size = UDim2.new(1, 0, 0, buttonHeight)
+
+	local rt = Instance.new("UIListLayout")
+	rt.Parent = rowTop
+	rt.FillDirection = Enum.FillDirection.Horizontal
+	rt.Padding = UDim.new(0, innerPadding)
+	rt.HorizontalAlignment = Enum.HorizontalAlignment.Right
+	rt.VerticalAlignment = Enum.VerticalAlignment.Center
+	rt.SortOrder = Enum.SortOrder.LayoutOrder
+
+	local rb2 = Instance.new("UIListLayout")
+	rb2.Parent = rowBot
+	rb2.FillDirection = Enum.FillDirection.Horizontal
+	rb2.Padding = UDim.new(0, innerPadding)
+	rb2.HorizontalAlignment = Enum.HorizontalAlignment.Right
+	rb2.VerticalAlignment = Enum.VerticalAlignment.Center
+	rb2.SortOrder = Enum.SortOrder.LayoutOrder
+
+	local btp = bar.BTN_TP
+	local bcp = bar.BTN_CP
+	btp.Parent = rowTop
+	bcp.Parent = rowBot
+	btp.LayoutOrder = 1
+	bcp.LayoutOrder = 5
+	btp.Size = UDim2.new(0, buttonTpWidth, 0, buttonHeight)
+	bcp.Size = UDim2.new(0, buttonCpWidth, 0, buttonHeight)
+
+	local bpin = Instance.new("TextButton")
+	bpin.Name = "BTN_PIN"
+	bpin.Parent = rowTop
+	bpin.BackgroundColor3 = Color3.fromRGB(52, 44, 88)
+	bpin.Size = UDim2.new(0, innerPadding + buttonHeight, 0, buttonHeight)
+	bpin.Font = Enum.Font.SourceSans
+	bpin.Text = pinned and "★" or "☆"
+	bpin.TextColor3 = pinned and Color3.fromRGB(255, 221, 120) or Color3.fromRGB(230, 225, 255)
+	bpin.TextSize = fontSizeSecondary
+	bpin.LayoutOrder = 0
+	bpin.ZIndex = 5
+	local bpin_c = Instance.new("UICorner", bpin)
+	bpin_c.CornerRadius = UDim.new(0, 7)
+	hv(bpin, bpin.BackgroundColor3, Color3.fromRGB(64, 54, 112))
+	hv(bcp, bcp.BackgroundColor3, Color3.fromRGB(110, 210, 154))
+
+	local bsrv = Instance.new("TextButton")
+	bsrv.Name = "BTN_SRV"
+	bsrv.Parent = rowBot
+	bsrv.BackgroundColor3 = Color3.fromRGB(64, 54, 120)
+	bsrv.Size = UDim2.new(0, buttonSrvWidth, 0, buttonHeight)
+	bsrv.Font = Enum.Font.SourceSans
+	bsrv.Text = "Servers"
+	bsrv.TextColor3 = Color3.fromRGB(230, 225, 255)
+	bsrv.TextSize = fontSizeSecondary
+	bsrv.LayoutOrder = 4
+	bsrv.ZIndex = 5
+	local bsrv_c = Instance.new("UICorner", bsrv)
+	bsrv_c.CornerRadius = UDim.new(0, 7)
+
+	local hdr = Instance.new("Frame")
+	hdr.Name = "EXP_HDR"
+	hdr.Parent = f
+	hdr.BackgroundTransparency = 1
+	hdr.Position = UDim2.new(0, innerPadding, 0, rowHeight + innerPadding / 2)
+	hdr.Size = UDim2.new(1, (-innerPadding) * 2, 0, expHeaderHeight)
+	hdr.Visible = false
+	hdr.ZIndex = 7
+
+	local hl = Instance.new("TextLabel")
+	hl.Parent = hdr
+	hl.BackgroundTransparency = 1
+	hl.Position = UDim2.new(0, 0, 0, 0)
+	hl.Size = UDim2.new(1, -90, 1, 0)
+	hl.Text = "Available Servers"
+	hl.Font = Enum.Font.SourceSansSemibold
+	hl.TextSize = fontSizeMain
+	hl.TextXAlignment = Enum.TextXAlignment.Left
+	hl.TextColor3 = Color3.fromRGB(235, 230, 250)
+	hl.ZIndex = 7
+
+	local hclose = Instance.new("TextButton")
+	hclose.Parent = hdr
+	hclose.BackgroundColor3 = Color3.fromRGB(56, 46, 92)
+	hclose.Size = UDim2.new(0, 80, 1, 0)
+	hclose.Position = UDim2.new(1, -80, 0, 0)
+	hclose.Font = Enum.Font.SourceSans
+	hclose.Text = "Close"
+	hclose.TextSize = fontSizeSecondary
+	hclose.TextColor3 = Color3.fromRGB(230, 225, 255)
+	hclose.ZIndex = 7
+	local hclose_c = Instance.new("UICorner", hclose)
+	hclose_c.CornerRadius = UDim.new(0, 7)
+	hv(hclose, hclose.BackgroundColor3, Color3.fromRGB(74, 62, 120))
+
+	local exp = Instance.new("Frame")
+	exp.Name = "EXP"
+	exp.Parent = f
+	exp.BackgroundColor3 = Color3.fromRGB(16, 12, 30)
+	exp.Position = UDim2.new(0, innerPadding, 0, rowHeight + expHeaderHeight + innerPadding)
+	exp.Size = UDim2.new(1, (-innerPadding) * 2, 0, 0)
+	exp.BackgroundTransparency = 1
+	exp.Visible = false
+	exp.ZIndex = 6
+	local expc = Instance.new("UICorner", exp)
+	expc.CornerRadius = UDim.new(0, 10)
+	local exps = Instance.new("UIStroke", exp)
+	exps.Color = Color3.fromRGB(120, 100, 190)
+	exps.Transparency = 0.45
+
+	local slist = Instance.new("ScrollingFrame")
+	slist.Parent = exp
+	slist.BackgroundTransparency = 1
+	slist.Position = UDim2.new(0, innerPadding / 2, 0, innerPadding / 2)
+	slist.Size = UDim2.new(1, -innerPadding, 1, -innerPadding)
+	slist.CanvasSize = UDim2.new(0, 0, 0, 0)
+	slist.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	slist.ScrollBarThickness = 6
+	slist.ZIndex = 7
+	local slyt = Instance.new("UIListLayout", slist)
+	slyt.Padding = UDim.new(0, innerPadding / 2)
+	slyt.SortOrder = Enum.SortOrder.LayoutOrder
+
+	local ssp = Instance.new("TextLabel")
+	ssp.Parent = exp
+	ssp.AnchorPoint = Vector2.new(0.5, 0.5)
+	ssp.BackgroundTransparency = 1
+	ssp.Size = UDim2.new(0, 30, 0, 30)
+	ssp.Position = UDim2.new(0.5, 0, 0.5, 0)
+	ssp.Text = "..."
+	ssp.TextColor3 = Color3.fromRGB(210, 205, 235)
+	ssp.Font = Enum.Font.SourceSans
+	ssp.TextSize = 22
+	ssp.ZIndex = 8
+	ssp.Visible = false
+
+	local semp = Instance.new("TextLabel")
+	semp.Parent = exp
+	semp.BackgroundTransparency = 1
+	semp.Text = "No servers"
+	semp.Font = Enum.Font.SourceSans
+	semp.TextSize = fontSizeSecondary
+	semp.TextColor3 = Color3.fromRGB(210, 205, 230)
+	semp.AnchorPoint = Vector2.new(0.5, 1)
+	semp.Position = UDim2.new(0.5, 0, 1, (-innerPadding) / 2)
+	semp.ZIndex = 7
+	semp.Visible = false
+
+	local brj
+	local badv
+	local bsm
+	local bfull
+
 	if isCurrent then
-		f.BackgroundColor3 = Color3.fromRGB(34, 26, 70);
+		f.BackgroundColor3 = Color3.fromRGB(34, 26, 70)
 		if s then
-			s.Transparency = 0.35;
-		end;
-		local cya = Color3.fromRGB(0, 208, 255);
-		btp.Text = "Server Hop";
-		btp.AutoButtonColor = false;
-		btp.Active = true;
-		btp.BackgroundColor3 = cya;
-		btp.TextColor3 = Color3.fromRGB(20, 24, 28);
-		btp.ZIndex = 5;
-		hv(btp, cya, cya, true);
-		local ylw = Color3.fromRGB(248, 196, 84);
-		bsrv.BackgroundColor3 = ylw;
-		bsrv.TextColor3 = Color3.fromRGB(30, 26, 20);
-		bsrv.AutoButtonColor = false;
-		hv(bsrv, ylw, ylw, true);
-		brj = Instance.new("TextButton");
-		brj.Name = "BTN_RJ";
-		brj.Parent = bar;
-		brj.BackgroundColor3 = Color3.fromRGB(72, 126, 232);
-		brj.Size = UDim2.new(0, buttonRjWidth, 0, buttonHeight);
-		brj.Font = Enum.Font.SourceSans;
-		brj.Text = "Rejoin";
-		brj.TextColor3 = Color3.fromRGB(255, 255, 255);
-		brj.TextSize = fontSizeSecondary;
-		brj.LayoutOrder = 2;
-		brj.ZIndex = 5;
-		local brj_c = Instance.new("UICorner", brj);
-		brj_c.CornerRadius = UDim.new(0, 7);
-		hv(brj, brj.BackgroundColor3, Color3.fromRGB(92, 146, 242));
-		badv = Instance.new("TextButton");
-		badv.Name = "BTN_ADV";
-		badv.Parent = bar;
-		badv.BackgroundColor3 = Color3.fromRGB(94, 78, 188);
-		badv.Size = UDim2.new(0, buttonAdvWidth, 0, buttonHeight);
-		badv.Font = Enum.Font.SourceSans;
-		badv.Text = "Advanced Hop";
-		badv.TextColor3 = Color3.fromRGB(255, 255, 255);
-		badv.TextSize = fontSizeSecondary;
-		badv.LayoutOrder = 3;
-		badv.ZIndex = 5;
-		local badv_c = Instance.new("UICorner", badv);
-		badv_c.CornerRadius = UDim.new(0, 7);
-		hv(badv, badv.BackgroundColor3, Color3.fromRGB(114, 96, 208));
+			s.Transparency = 0.35
+		end
+		local cya = Color3.fromRGB(0, 208, 255)
+		btp.Text = "Server Hop"
+		btp.AutoButtonColor = false
+		btp.Active = true
+		btp.BackgroundColor3 = cya
+		btp.TextColor3 = Color3.fromRGB(20, 24, 28)
+		btp.ZIndex = 5
+		hv(btp, cya, cya, true)
+
+		local ylw = Color3.fromRGB(248, 196, 84)
+		bsrv.BackgroundColor3 = ylw
+		bsrv.TextColor3 = Color3.fromRGB(30, 26, 20)
+		bsrv.AutoButtonColor = false
+		hv(bsrv, ylw, ylw, true)
+
+		brj = Instance.new("TextButton")
+		brj.Name = "BTN_RJ"
+		brj.Parent = rowTop
+		brj.BackgroundColor3 = Color3.fromRGB(72, 126, 232)
+		brj.Size = UDim2.new(0, buttonRjWidth, 0, buttonHeight)
+		brj.Font = Enum.Font.SourceSans
+		brj.Text = "Rejoin"
+		brj.TextColor3 = Color3.fromRGB(255, 255, 255)
+		brj.TextSize = fontSizeSecondary
+		brj.LayoutOrder = 2
+		brj.ZIndex = 5
+		local brj_c = Instance.new("UICorner", brj)
+		brj_c.CornerRadius = UDim.new(0, 7)
+		hv(brj, brj.BackgroundColor3, Color3.fromRGB(92, 146, 242))
+
+		badv = Instance.new("TextButton")
+		badv.Name = "BTN_ADV"
+		badv.Parent = rowTop
+		badv.BackgroundColor3 = Color3.fromRGB(94, 78, 188)
+		badv.Size = UDim2.new(0, buttonAdvWidth, 0, buttonHeight)
+		badv.Font = Enum.Font.SourceSans
+		badv.Text = "Advanced Hop"
+		badv.TextColor3 = Color3.fromRGB(255, 255, 255)
+		badv.TextSize = fontSizeSecondary
+		badv.LayoutOrder = 3
+		badv.ZIndex = 5
+		local badv_c = Instance.new("UICorner", badv)
+		badv_c.CornerRadius = UDim.new(0, 7)
+		hv(badv, badv.BackgroundColor3, Color3.fromRGB(114, 96, 208))
+
+		bsm = Instance.new("TextButton")
+		bsm.Name = "BTN_SMALLEST"
+		bsm.Parent = rowBot
+		bsm.BackgroundColor3 = Color3.fromRGB(62, 142, 114)
+		bsm.Size = UDim2.new(0, buttonSrvWidth, 0, buttonHeight)
+		bsm.Font = Enum.Font.SourceSans
+		bsm.Text = "Smallest"
+		bsm.TextColor3 = Color3.fromRGB(255, 255, 255)
+		bsm.TextSize = fontSizeSecondary
+		bsm.LayoutOrder = 6
+		bsm.ZIndex = 5
+		local bsm_c = Instance.new("UICorner", bsm)
+		bsm_c.CornerRadius = UDim.new(0, 7)
+		hv(bsm, bsm.BackgroundColor3, Color3.fromRGB(72, 162, 134))
+
+		bfull = Instance.new("TextButton")
+		bfull.Name = "BTN_FULLEST"
+		bfull.Parent = rowBot
+		bfull.BackgroundColor3 = Color3.fromRGB(142, 68, 173)
+		bfull.Size = UDim2.new(0, buttonSrvWidth, 0, buttonHeight)
+		bfull.Font = Enum.Font.SourceSans
+		bfull.Text = "Fullest"
+		bfull.TextColor3 = Color3.fromRGB(255, 255, 255)
+		bfull.TextSize = fontSizeSecondary
+		bfull.LayoutOrder = 7
+		bfull.ZIndex = 5
+		local bfull_c = Instance.new("UICorner", bfull)
+		bfull_c.CornerRadius = UDim.new(0, 7)
+		hv(bfull, bfull.BackgroundColor3, Color3.fromRGB(162, 88, 193))
 	else
-		hv(btp, btp.BackgroundColor3, Color3.fromRGB(92, 146, 242));
-		hv(bsrv, bsrv.BackgroundColor3, Color3.fromRGB(76, 64, 132));
-	end;
+		hv(btp, btp.BackgroundColor3, Color3.fromRGB(92, 146, 242))
+		hv(bsrv, bsrv.BackgroundColor3, Color3.fromRGB(76, 64, 132))
+
+		local badv2 = Instance.new("TextButton")
+		badv2.Name = "BTN_ADV_PLACE"
+		badv2.Parent = rowTop
+		badv2.BackgroundColor3 = Color3.fromRGB(94, 78, 188)
+		badv2.Size = UDim2.new(0, buttonAdvWidth, 0, buttonHeight)
+		badv2.Font = Enum.Font.SourceSans
+		badv2.Text = "Adv. Hop"
+		badv2.TextColor3 = Color3.fromRGB(255, 255, 255)
+		badv2.TextSize = fontSizeSecondary
+		badv2.LayoutOrder = 3
+		badv2.ZIndex = 5
+		local badv2_c = Instance.new("UICorner", badv2)
+		badv2_c.CornerRadius = UDim.new(0, 7)
+		hv(badv2, badv2.BackgroundColor3, Color3.fromRGB(114, 96, 208))
+		badv2.MouseButton1Click:Connect(function()
+			advHopPlace(pl.PlaceId)
+		end)
+	end
+
 	local it = {
 		f = f,
 		n = pl.Name,
@@ -1033,123 +1306,146 @@ local function mk(pl, idx)
 		semp = semp,
 		expOpen = false,
 		btnSRV = bsrv,
-		cur = isCurrent
-	};
-	table.insert(rows, it);
+		cur = isCurrent,
+		pinned = pinned,
+		pinBtn = bpin
+	}
+	table.insert(rows, it)
+
+	bpin.MouseButton1Click:Connect(function()
+		pinned = not pinned
+		it.pinned = pinned
+		setFav(pl.PlaceId, pinned or nil)
+		bpin.Text = pinned and "★" or "☆"
+		bpin.TextColor3 = pinned and Color3.fromRGB(255, 221, 120) or Color3.fromRGB(230, 225, 255)
+		apply()
+	end)
+
+	if bsm then
+		bsm.MouseButton1Click:Connect(function()
+			hopByPlayers("SMALL")
+		end)
+	end
+
+	if bfull then
+		bfull.MouseButton1Click:Connect(function()
+			hopByPlayers("FULL")
+		end)
+	end
+
 	f.MouseEnter:Connect(function()
-		(tw(f, 0.12, nil, nil, {
-			BackgroundTransparency = 0.1
-		})):Play();
+		tw(f, 0.12, nil, nil, {BackgroundTransparency = 0.1}):Play()
 		if s then
-			(tw(s, 0.15, nil, nil, {
-				Transparency = isCurrent and 0.28 or 0.45
-			})):Play();
-		end;
-	end);
+			tw(s, 0.15, nil, nil, {Transparency = isCurrent and 0.28 or 0.45}):Play()
+		end
+	end)
+
 	f.MouseLeave:Connect(function()
-		(tw(f, 0.18, nil, nil, {
-			BackgroundTransparency = 0.18
-		})):Play();
+		tw(f, 0.18, nil, nil, {BackgroundTransparency = 0.18}):Play()
 		if s then
-			(tw(s, 0.2, nil, nil, {
-				Transparency = isCurrent and 0.35 or 0.6
-			})):Play();
-		end;
-	end);
+			tw(s, 0.2, nil, nil, {Transparency = isCurrent and 0.35 or 0.6}):Play()
+		end
+	end)
+
 	btp.MouseButton1Click:Connect(function()
 		if isCurrent then
 			local ok, e = pcall(function()
-				TPX:Teleport(game.PlaceId);
-			end);
+				TPX:Teleport(game.PlaceId)
+			end)
 			if ok then
-				note("Server hopping this experience", 2, "Universe Viewer");
+				note("Server hopping this experience", 2, "Universe Viewer")
 			else
-				note("Teleport failed: " .. tostring(e), 4, "Universe Viewer");
-			end;
+				note("Teleport failed: " .. tostring(e), 4, "Universe Viewer")
+			end
 		else
 			local ok, e = pcall(function()
-				TPX:Teleport(pl.PlaceId, LP);
-			end);
+				TPX:Teleport(pl.PlaceId, LP)
+			end)
 			if ok then
-				note("Teleporting to " .. pl.Name, 2, "Universe Viewer");
+				note("Teleporting to " .. pl.Name, 2, "Universe Viewer")
 			else
-				note("Teleport failed: " .. tostring(e), 4, "Universe Viewer");
-			end;
-		end;
-	end);
+				note("Teleport failed: " .. tostring(e), 4, "Universe Viewer")
+			end
+		end
+	end)
+
 	if brj then
 		brj.MouseButton1Click:Connect(function()
 			local ok, e = pcall(function()
-				TPX:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP);
-			end);
+				TPX:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP)
+			end)
 			if ok then
-				note("Rejoining this server", 2, "Universe Viewer");
+				note("Rejoining this server", 2, "Universe Viewer")
 			else
-				note("Teleport failed: " .. tostring(e), 4, "Universe Viewer");
-			end;
-		end);
-	end;
+				note("Teleport failed: " .. tostring(e), 4, "Universe Viewer")
+			end
+		end)
+	end
+
 	if badv then
 		badv.MouseButton1Click:Connect(function()
-			advHop();
-		end);
-	end;
+			advHop()
+		end)
+	end
+
 	bcp.MouseButton1Click:Connect(function()
 		if setclipboard then
-			setclipboard(tostring(pl.PlaceId));
-			note("Copied ID: " .. pl.PlaceId, 2, "Universe Viewer");
+			setclipboard(tostring(pl.PlaceId))
+			note("Copied ID: " .. pl.PlaceId, 2, "Universe Viewer")
 		else
-			note("Clipboard unavailable", 3, "Universe Viewer");
-		end;
-	end);
+			note("Clipboard unavailable", 3, "Universe Viewer")
+		end
+	end)
+
 	bsrv.MouseButton1Click:Connect(function()
 		if it.expOpen then
-			closeRow(it);
+			closeRow(it)
 			if openRow == it then
-				openRow = nil;
-			end;
+				openRow = nil
+			end
 		else
 			if openRow and openRow ~= it then
-				closeRow(openRow);
-			end;
-			it.hdr.Visible = true;
-			it.exp.Visible = true;
-			it.expOpen = true;
-			(tw(it.f, 0.16, nil, nil, {
-				Size = UDim2.new(1, -4, 0, rowHeight + expHeaderHeight + expListHeight + innerPadding * 2)
-			})):Play();
-			(tw(it.exp, 0.16, nil, nil, {
-				Size = UDim2.new(1, (-innerPadding) * 2, 0, expListHeight),
-				BackgroundTransparency = 0.05
-			})):Play();
-			it.btnSRV.Text = "Servers (close)";
-			openRow = it;
-			srvFetch(pl.PlaceId, it);
-		end;
-	end);
+				closeRow(openRow)
+			end
+			it.hdr.Visible = true
+			it.exp.Visible = true
+			it.expOpen = true
+			tw(it.f, 0.16, nil, nil, {Size = UDim2.new(1, -4, 0, rowHeight + expHeaderHeight + expListHeight + innerPadding * 2)}):Play()
+			tw(it.exp, 0.16, nil, nil, {Size = UDim2.new(1, (-innerPadding) * 2, 0, expListHeight), BackgroundTransparency = 0.05}):Play()
+			it.btnSRV.Text = "Servers (close)"
+			openRow = it
+			srvFetch(pl.PlaceId, it)
+		end
+	end)
+
 	hclose.MouseButton1Click:Connect(function()
-		closeRow(it);
+		closeRow(it)
 		if openRow == it then
-			openRow = nil;
-		end;
-	end);
+			openRow = nil
+		end
+	end)
+
 	task.delay(idx * 0.012, function()
-		f.Visible = true;
-		f.BackgroundTransparency = 0.24;
+		f.Visible = true
+		f.BackgroundTransparency = 0.24
 		if s then
-			s.Transparency = isCurrent and 0.45 or 0.8;
-		end;
-		f.Size = UDim2.new(1, -4, 0, 0);
-		(tw(f, 0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, {
-			Size = UDim2.new(1, -4, 0, rowHeight),
-			BackgroundTransparency = 0.18
-		})):Play();
+			s.Transparency = isCurrent and 0.45 or 0.8
+		end
+		f.Size = UDim2.new(1, -4, 0, 0)
+		tw(f, 0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, {Size = UDim2.new(1, -4, 0, rowHeight), BackgroundTransparency = 0.18}):Play()
 		if s then
-			(tw(s, 0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, {
-				Transparency = isCurrent and 0.35 or 0.6
-			})):Play();
+			tw(s, 0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, {Transparency = isCurrent and 0.35 or 0.6}):Play()
+		end
+	end)
+end
+local function updateStats(total, curName, curId)
+	if STATS then
+		local t = "Places: " .. tostring(total);
+		if curName and curId then
+			t = t .. " • Current: " .. tostring(curName) .. " (" .. tostring(curId) .. ")";
 		end;
-	end);
+		STATS.Text = t;
+	end;
 end;
 local function fetch()
 	if fetching then
@@ -1192,6 +1488,16 @@ local function fetch()
 	end;
 	spn(false);
 	apply();
+	local curName;
+	local curId;
+	for _, r in ipairs(rows) do
+		if r.cur then
+			curName = r.n;
+			curId = r.id;
+			break;
+		end;
+	end;
+	updateStats(#rows, curName, curId);
 	fetching = false;
 end;
 local function deb()
@@ -1234,6 +1540,12 @@ BTN_REF.MouseButton1Click:Connect(function()
 	rp(BTN_REF);
 	fetch();
 end);
+BTN_AUTO.MouseButton1Click:Connect(function()
+	autoGuard = not autoGuard;
+	BTN_AUTO.Text = autoGuard and "AutoHop: On" or "AutoHop: Off";
+	BTN_AUTO.BackgroundColor3 = autoGuard and Color3.fromRGB(94, 78, 188) or Color3.fromRGB(52, 44, 96);
+	startGuard();
+end);
 local function canvas()
 	if _G._uv_canvas and _G._uv_canvas.Disconnect then
 		_G._uv_canvas:Disconnect();
@@ -1251,3 +1563,4 @@ M.Position = UDim2.new(0.5, 0, 0.5 - normSize.Y.Scale / 2, 0);
 inFX();
 canvas();
 fetch();
+startGuard();

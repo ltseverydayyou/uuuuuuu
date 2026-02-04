@@ -174,17 +174,122 @@ tstate.unstacked = unstacked
 local clientEventConns = {}
 tstate.clientEventConns = clientEventConns
 
+local wrappedClientInvoke = {}
+local wrappedInvokeCallbacks = setmetatable({}, { __mode = "k" })
+local _origClientInvoke = setmetatable({}, { __mode = "k" })
+tstate.wrappedClientInvoke = wrappedClientInvoke
+
 local logClientEvents = false
 tstate.logClientEvents = logClientEvents
 
 local descAddedConn = nil
 tstate.descAddedConn = descAddedConn
+local descAddedInvokeConn = nil
+tstate.descAddedInvokeConn = descAddedInvokeConn
 
 local BlockedSignals = {}
 tstate.BlockedSignals = BlockedSignals
 
 local BlockedEventSaved = {}
 tstate.BlockedEventSaved = BlockedEventSaved
+tstate.adonisBypassed = tstate.adonisBypassed or false
+
+local function safeDebugInfo(target, what)
+	if not debug or not debug.info then
+		return nil
+	end
+	local ok, result = pcall(debug.info, target, what)
+	return ok and result or nil
+end
+
+local function safeGetScriptFromThread(thread)
+	if not getscriptfromthread or not thread then
+		return nil
+	end
+	local ok, script = pcall(getscriptfromthread, thread)
+	return ok and script or nil
+end
+
+local adonisThreads = {}
+local function detectAdonis()
+	if not getreg or not getgc then
+		return false
+	end
+	local detected = false
+	for _, thread in getreg() do
+		if type(thread) ~= "thread" then
+			continue
+		end
+		local src = safeDebugInfo(thread, "s")
+		if src and (src:find(".Core.Anti") or src:find(".Plugins.Anti_Cheat")) then
+			detected = true
+			table.insert(adonisThreads, thread)
+		end
+	end
+	return detected
+end
+
+local function hookAdonisDetections(adonisTables)
+	for _, t in ipairs(adonisTables) do
+		for _, fn in pairs(t) do
+			if type(fn) ~= "function" then
+				continue
+			end
+			if isfunctionhooked and isfunctionhooked(fn) then
+				continue
+			end
+			local function blocker(...)
+				coroutine.yield(coroutine.running())
+				return task.wait(9e9)
+			end
+			if hookfunction then
+				pcall(hookfunction, fn, blocker)
+			elseif syn and syn.oth and syn.oth.hook then
+				pcall(syn.oth.hook, fn, clonefunction and clonefunction(blocker) or blocker)
+			end
+		end
+	end
+end
+
+local function bypassAdonis()
+	for _, thread in ipairs(adonisThreads) do
+		pcall(coroutine.close, thread)
+	end
+	local adonisTables = {}
+	if filtergc then
+		local ok, cont = pcall(filtergc, "table", { Keys = { "Detected", "RLocked" } }, false)
+		if ok and type(cont) == "table" then
+			for _, tbl in ipairs(cont) do
+				if typeof(rawget(tbl, "Detected")) == "function" then
+					table.insert(adonisTables, tbl)
+				end
+			end
+		end
+	end
+	if #adonisTables == 0 and getgc then
+		for _, tbl in ipairs(getgc(true)) do
+			if type(tbl) ~= "table" then
+				continue
+			end
+			local detectFn = rawget(tbl, "Detected")
+			if typeof(detectFn) == "function" and rawget(tbl, "RLocked") then
+				table.insert(adonisTables, tbl)
+			end
+		end
+	end
+	hookAdonisDetections(adonisTables)
+end
+
+local function runAdonisBypass()
+	if tstate.adonisBypassed then
+		return
+	end
+	local ok, detected = pcall(detectAdonis)
+	if ok and detected then
+		bypassAdonis()
+		tstate.adonisBypassed = true
+	end
+end
 local TurtleSpyGUI = Instance.new("ScreenGui");
 local mainFrame = Instance.new("Frame");
 local Header = Instance.new("Frame");
@@ -1118,7 +1223,7 @@ end;
 local function buildResultTable(results)
 	return buildNamedListTable("result", results or {});
 end;
-local function updateCodeDisplay(remote, args, isClientEvent)
+local function updateCodeDisplay(remote, args, isClientEvent, callType)
 	if not remote then
 		return
 	end
@@ -1126,7 +1231,9 @@ local function updateCodeDisplay(remote, args, isClientEvent)
 	local path = GetFullPathOfAnInstance(remote)
 	local n = args.n or #args
 	local codeText
-	if isClientEvent then
+	if callType == "OnClientInvoke" then
+		codeText = buildArgsTable(args) .. path .. ".OnClientInvoke = function(...)\n\t-- TODO: return something\n\treturn nil\nend"
+	elseif isClientEvent or callType == "OnClientEvent" then
 		local evtPath = path .. ".OnClientEvent"
 		if n == 0 then
 			codeText = "firesignal(" .. evtPath .. ")"
@@ -1134,8 +1241,8 @@ local function updateCodeDisplay(remote, args, isClientEvent)
 			codeText = buildArgsTable(args) .. "firesignal(" .. evtPath .. ", unpack(args))"
 		end
 	else
-		local call = ":FireServer"
-		if isA(remote, "RemoteFunction") then
+		local call = (callType == "InvokeServer" and ":InvokeServer") or ":FireServer"
+		if callType == nil and isA(remote, "RemoteFunction") then
 			call = ":InvokeServer"
 		end
 		if n == 0 then
@@ -1167,10 +1274,66 @@ local function attachClientLogger(re)
 	clientEventConns[re] = re.OnClientEvent:Connect(function(...)
 		if logClientEvents and not table.find(BlockList, re) and not table.find(IgnoreList, re) then
 			local args = table.pack(...)
-			addToList(true, re, args, nil)
+			addToList(true, re, args, nil, "OnClientEvent")
 		end
 	end)
 	table.insert(connections, clientEventConns[re])
+end
+
+local function wrapOnClientInvokeCallback(rf, callback)
+	if type(callback) ~= "function" then
+		return callback
+	end
+	if wrappedInvokeCallbacks[callback] then
+		return callback
+	end
+wrappedInvokeCallbacks[callback] = true
+return function(...)
+	local args = table.pack(...)
+	local ok, results = pcall(function()
+		return table.pack(callback(table.unpack(args, 1, args.n or #args)))
+	end)
+	if not ok then
+		addToList(false, rf, args, { results }, "OnClientInvoke")
+		error(results)
+	end
+	addToList(false, rf, args, results, "OnClientInvoke")
+	return table.unpack(results, 1, results.n or #results)
+end
+end
+
+local function wrapClientInvoke(rf)
+	if wrappedClientInvoke[rf] then
+		return
+	end
+	wrappedClientInvoke[rf] = true
+
+	local current
+	if getcallbackmember then
+		local ok, cb = pcall(getcallbackmember, rf, "OnClientInvoke")
+		if ok and type(cb) == "function" then
+			current = cb
+		end
+	end
+	if not current then
+		local ok, cb = pcall(function()
+			return rf.OnClientInvoke
+		end)
+		if ok and type(cb) == "function" then
+			current = cb
+		end
+	end
+
+	if type(current) == "function" then
+		_origClientInvoke[rf] = current
+		local ok = pcall(function()
+			rf.OnClientInvoke = wrapOnClientInvokeCallback(rf, current)
+		end)
+		if not ok then
+			-- failed to set, undo bookkeeping so we can retry later
+			wrappedClientInvoke[rf] = nil
+		end
+	end
 end
 local function setClientEventLogging(on)
 	logClientEvents = on;
@@ -1197,6 +1360,22 @@ local function setClientEventLogging(on)
 		clientEventConns = {};
 	end;
 end;
+
+local function initClientInvokeLogging()
+	for _, v in ipairs(game:GetDescendants()) do
+		if isA(v, "RemoteFunction") then
+			wrapClientInvoke(v)
+		end
+	end
+	if not descAddedInvokeConn then
+		descAddedInvokeConn = game.DescendantAdded:Connect(function(o)
+			if isA(o, "RemoteFunction") then
+				wrapClientInvoke(o)
+			end
+		end)
+		table.insert(connections, descAddedInvokeConn)
+	end
+end
 CopyCode.MouseButton1Click:Connect(function()
 	if not lookingAt then
 		return;
@@ -1446,6 +1625,19 @@ DoNotStack.MouseButton1Click:Connect(function()
 	end;
 end);
 local function showCallsForRemote(remote, idx, button)
+	local function callTypeLabel(entry)
+		local t = entry and entry.callType
+		if not t or t == "" then
+			if entry and entry.isClientEvent then
+				t = "OnClientEvent"
+			elseif isA(remote, "RemoteFunction") then
+				t = "InvokeServer"
+			else
+				t = "FireServer"
+			end
+		end
+		return t
+	end
 	CallsScroll.Visible = true
 	for _, c in ipairs(CallsScroll:GetChildren()) do
 		if c:IsA("TextButton") and c ~= CallButton then
@@ -1460,7 +1652,7 @@ local function showCallsForRemote(remote, idx, button)
 		btn.Parent = CallsScroll
 		btn.Visible = true
 		btn.Position = UDim2.new(0, 10, 0, offset)
-		btn.Text = "Call #" .. i
+		btn.Text = ("Call #%d [%s]"):format(i, callTypeLabel(data))
 		btn.MouseButton1Click:Connect(function()
 			InfoHeaderText.Text = "Info: " .. remote.Name .. " #" .. i
 			lookingAt = remote
@@ -1468,7 +1660,7 @@ local function showCallsForRemote(remote, idx, button)
 			lookingAtIsClientEvent = data.isClientEvent
 			lookingAtButton = button.Number
 			callLocked = true
-			updateCodeDisplay(remote, data.args, data.isClientEvent)
+			updateCodeDisplay(remote, data.args, data.isClientEvent, data.callType)
 			CallsScroll.Visible = false
 		end)
 		offset = offset + 30
@@ -1497,7 +1689,7 @@ RemoteScrollFrame.ChildAdded:Connect(function(child)
 		lookingAtIsClientEvent = last and last.isClientEvent or false
 		lookingAtButton = child.Number
 		callLocked = false
-		updateCodeDisplay(remote, lookingAtArgs, lookingAtIsClientEvent)
+		updateCodeDisplay(remote, lookingAtArgs, lookingAtIsClientEvent, last and last.callType or nil)
 		local blocked = table.find(BlockList, remote)
 		if blocked then
 			BlockRemote.Text = "Unblock remote"
@@ -1546,7 +1738,7 @@ local function FindRemote(remote, args)
 	set_identity(currentIdentity);
 	return foundIndex;
 end;
-function addToList(event, remote, argsPack, results)
+function addToList(event, remote, argsPack, results, callType)
 	local get_identity = syn and syn.get_thread_identity or getidentity or getthreadidentity or function()
 		return 2
 	end
@@ -1574,7 +1766,7 @@ function addToList(event, remote, argsPack, results)
 		remoteButtons[#remotes] = rButton.Number
 		remoteArgs[#remotes] = args
 		remoteScripts[#remotes] = isSynapse() and getcallingscript() or rawget(getfenv(0), "script")
-		remoteLogs[#remotes] = { { args = args, results = results, isClientEvent = isClientEvent } }
+		remoteLogs[#remotes] = { { args = args, results = results, isClientEvent = isClientEvent, callType = callType } }
 		rButton.Parent = RemoteScrollFrame
 		rButton.Visible = true
 		local numberTextsize = MeasureText(rButton.Number.Text, rButton.Number.TextSize, rButton.Number.Font)
@@ -1597,7 +1789,7 @@ function addToList(event, remote, argsPack, results)
 			list = {}
 			remoteLogs[i] = list
 		end
-		table.insert(list, { args = args, results = results, isClientEvent = isClientEvent })
+		table.insert(list, { args = args, results = results, isClientEvent = isClientEvent, callType = callType })
 		remoteButtons[i].Text = tostring(#list)
 		local numberTextsize = MeasureText(remoteButtons[i].Text, remoteButtons[i].TextSize, remoteButtons[i].Font)
 		if remoteButtons[i].Parent then
@@ -1610,9 +1802,9 @@ function addToList(event, remote, argsPack, results)
 			if last then
 				lookingAtArgs = last.args
 				lookingAtIsClientEvent = last.isClientEvent
-				updateCodeDisplay(remote, lookingAtArgs, lookingAtIsClientEvent)
+				updateCodeDisplay(remote, lookingAtArgs, lookingAtIsClientEvent, last.callType)
 			else
-				updateCodeDisplay(remote, remoteArgs[i], false)
+				updateCodeDisplay(remote, remoteArgs[i], false, nil)
 			end
 		end
 	end
@@ -1645,7 +1837,7 @@ PathModeBtn.MouseButton1Click:Connect(function()
 		PathModeBtn.Text = "Path: FindFirstChild";
 	end;
 	if lookingAt then
-		updateCodeDisplay(lookingAt, lookingAtArgs, lookingAtIsClientEvent);
+		updateCodeDisplay(lookingAt, lookingAtArgs, lookingAtIsClientEvent, nil);
 	end;
 end);
 ImageButton.MouseButton1Click:Connect(function()
@@ -1743,35 +1935,70 @@ end
 tstate.handler = function(self, method, args, results)
 	if method == "fireserver" and isRemoteEvent(self) then
 		if not table.find(BlockList, self) and not table.find(IgnoreList, self) then
-			addToList(true, self, args, results)
+			addToList(true, self, args, results, "FireServer")
 		end
 	elseif method == "invokeserver" and isA(self, "RemoteFunction") then
 		if not table.find(BlockList, self) and not table.find(IgnoreList, self) then
-			addToList(false, self, args, results)
+			addToList(false, self, args, results, "InvokeServer")
 		end
 	end
 end
+runAdonisBypass()
+if not tstate.newIndexHooked and hookmetamethod then
+	local oldNewIndex
+	oldNewIndex = hookmetamethod(game, "__newindex", function(self, k, v)
+		if tstate.enabled and not checkcaller() and typeof(self) == "Instance" and self:IsA("RemoteFunction") and k == "OnClientInvoke" and type(v) == "function" then
+			wrapClientInvoke(self)
+			return oldNewIndex(self, k, wrapOnClientInvokeCallback(self, v))
+		end
+		return oldNewIndex(self, k, v)
+	end)
+	tstate.newIndexHooked = true
+	tstate.oldNewIndex = tstate.oldNewIndex or oldNewIndex
+end
+initClientInvokeLogging()
 tstate.cleanup = function()
 	tstate.enabled = false;
 	for _, c in ipairs(connections) do
 		pcall(function()
-			c:Disconnect();
-		end);
-	end;
+			c:Disconnect()
+		end)
+	end
 	for _, c in pairs(clientEventConns) do
 		pcall(function()
-			c:Disconnect();
-		end);
-	end;
+			c:Disconnect()
+		end)
+	end
+	if descAddedInvokeConn then
+		pcall(function()
+			descAddedInvokeConn:Disconnect()
+		end)
+		descAddedInvokeConn = nil
+	end
 	if descAddedConn then
 		pcall(function()
-			descAddedConn:Disconnect();
-		end);
-		descAddedConn = nil;
-	end;
-	clientEventConns = {};
-	connections = {};
+			descAddedConn:Disconnect()
+		end)
+		descAddedConn = nil
+	end
+	if tstate.old then
+		pcall(function()
+			hookmetamethod(game, "__namecall", tstate.old)
+		end)
+	end
+	if tstate.oldNewIndex then
+		pcall(function()
+			hookmetamethod(game, "__newindex", tstate.oldNewIndex)
+		end)
+	end
+	connections = {}
+	clientEventConns = {}
+	wrappedClientInvoke = {}
+	wrappedInvokeCallbacks = setmetatable({}, { __mode = "k" })
+	_origClientInvoke = setmetatable({}, { __mode = "k" })
 	if TurtleSpyGUI and TurtleSpyGUI.Parent then
-		TurtleSpyGUI:Destroy();
-	end;
+		pcall(function()
+			TurtleSpyGUI:Destroy()
+		end)
+	end
 end;

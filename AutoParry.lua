@@ -645,36 +645,55 @@ local function attachContainer(c)
 	if not (c and c.Parent) or ballConns[c] then
 		return
 	end
+
+	if c:IsA("BasePart") then
+		addBall(c)
+	end
+
 	for _, d in ipairs(c:GetDescendants()) do
 		if d:IsA("BasePart") then
 			addBall(d)
 		end
 	end
+
 	local added = c.DescendantAdded:Connect(function(d)
 		if d:IsA("BasePart") then
 			addBall(d)
 		end
 	end)
+
 	local removing = c.DescendantRemoving:Connect(function(d)
 		if d:IsA("BasePart") then
 			removeBall(d)
 		end
 	end)
-	ballConns[c] = {added, removing}
+
+	local ancestry = c.AncestryChanged:Connect(function(inst, parent)
+		if inst == c and parent == nil and c:IsA("BasePart") then
+			removeBall(c)
+		end
+	end)
+
+	ballConns[c] = {added, removing, ancestry}
 end
 
 local function trackNamedContainer(parent, name)
 	if not (typeof(parent) == "Instance" and type(name) == "string") then
 		return
 	end
-	local existing = parent:FindFirstChild(name)
-	if existing then
-		attachContainer(existing)
+	for _, inst in ipairs(parent:GetDescendants()) do
+		if inst.Name == name then
+			attachContainer(inst)
+		end
+	end
+	local direct = parent:FindFirstChild(name)
+	if direct then
+		attachContainer(direct)
 	end
 	if containerConns[parent] then
 		return
 	end
-	local c = parent.ChildAdded:Connect(function(ch)
+	local c = parent.DescendantAdded:Connect(function(ch)
 		if ch.Name == name then
 			attachContainer(ch)
 		end
@@ -685,13 +704,19 @@ end
 local function setupBallTracking()
 	local p = visualizerConfig and visualizerConfig.path
 	local paths
-	if p == nil or (typeof(p) == "table" and #p == 0) then
+
+	if p == nil then
 		paths = { { parent = workspace, name = "Balls" } }
 	elseif typeof(p) == "table" then
-		paths = p
+		if p[1] == nil and (p.parent or p.container or p.name) then
+			paths = { p }
+		else
+			paths = p
+		end
 	else
 		paths = { p }
 	end
+
 	for _, src in ipairs(paths) do
 		local t = typeof(src)
 		if t == "Instance" then

@@ -664,7 +664,7 @@ local function attachContainer(c)
 end
 
 local function trackNamedContainer(parent, name)
-	if not (typeof(parent) == "Instance" and parent.Parent and type(name) == "string") then
+	if not (typeof(parent) == "Instance" and type(name) == "string") then
 		return
 	end
 	local existing = parent:FindFirstChild(name)

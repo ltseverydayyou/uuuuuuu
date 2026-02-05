@@ -758,14 +758,38 @@ local function main()
 
 		local CtrlScroll = false
 		local AutoScroll = false
-		local listenEnabled = true
+		local userFilters = (Main.UserSettings and Main.UserSettings.ConsoleFilters) or {}
+		Main.UserSettings = Main.UserSettings or {}
+		Main.UserSettings.ConsoleFilters = userFilters
+
+		local function getFlag(name, default)
+			local val = userFilters[name]
+			if val == nil then
+				userFilters[name] = default
+				return default
+			end
+			return val
+		end
+
+		local listenEnabled = getFlag("Listen", true)
 
 		local filterState = {
-			[Enum.MessageType.MessageOutput] = true,
-			[Enum.MessageType.MessageInfo] = true,
-			[Enum.MessageType.MessageWarning] = true,
-			[Enum.MessageType.MessageError] = true
+			[Enum.MessageType.MessageOutput] = getFlag("Output", true),
+			[Enum.MessageType.MessageInfo] = getFlag("Info", true),
+			[Enum.MessageType.MessageWarning] = getFlag("Warn", true),
+			[Enum.MessageType.MessageError] = getFlag("Error", true)
 		}
+
+		local function persistFilters()
+			userFilters.Output = filterState[Enum.MessageType.MessageOutput] ~= false
+			userFilters.Info = filterState[Enum.MessageType.MessageInfo] ~= false
+			userFilters.Warn = filterState[Enum.MessageType.MessageWarning] ~= false
+			userFilters.Error = filterState[Enum.MessageType.MessageError] ~= false
+			userFilters.Listen = listenEnabled
+			if Main.SaveUserSettings then
+				Main.SaveUserSettings()
+			end
+		end
 
 		local LogService = game:GetService("LogService")
 		local Players = game:GetService("Players")
@@ -855,6 +879,7 @@ local function main()
 			filterState[enumType] = not filterState[enumType]
 			setToggle(btn, filterState[enumType])
 			refreshVisibility()
+			persistFilters()
 		end
 
 		Console.FilterOutput.MouseButton1Click:Connect(function()
@@ -873,6 +898,7 @@ local function main()
 		Console.Listen.MouseButton1Click:Connect(function()
 			listenEnabled = not listenEnabled
 			setToggle(Console.Listen, listenEnabled)
+			persistFilters()
 		end)
 
 		-- Console part

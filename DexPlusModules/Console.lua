@@ -1046,6 +1046,24 @@ local function main()
 				loadstring(Console.CommandLine.ScrollingFrame.TextBox.Text)()
 			end
 		end)
+
+		Console.ApplyTheme = function()
+			local t = Settings and Settings.Theme
+			if not t then return end
+			if Console.Window and Console.Window.ApplyTheme then
+				Console.Window:ApplyTheme()
+			end
+			if ConsoleFrame then
+				ConsoleFrame.BackgroundColor3 = t.Main1 or ConsoleFrame.BackgroundColor3
+			end
+			if G2L and G2L["3"] then
+				G2L["3"].BackgroundColor3 = t.TextBox or G2L["3"].BackgroundColor3
+			end
+			if G2L and G2L["6"] then
+				G2L["6"].TextColor3 = t.Text or G2L["6"].TextColor3
+				G2L["6"].PlaceholderColor3 = t.PlaceholderText or G2L["6"].PlaceholderColor3
+			end
+		end
 	end
 
 	return Console

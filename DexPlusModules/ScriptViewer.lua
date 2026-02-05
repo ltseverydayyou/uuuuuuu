@@ -233,6 +233,17 @@ end
 		clear.MouseButton1Click:Connect(function()
 			codeFrame:SetText("")
 		end)
+
+		ScriptViewer.ApplyTheme = function()
+			local t = Settings and Settings.Theme
+			if not t then return end
+			if ScriptViewer.Window and ScriptViewer.Window.ApplyTheme then
+				ScriptViewer.Window:ApplyTheme()
+			end
+			if codeFrame and codeFrame.Frame then
+				codeFrame.Frame.BackgroundColor3 = t.TextBox or codeFrame.Frame.BackgroundColor3
+			end
+		end
 	end
 	
 	ScriptViewer.ViewScript = function(scr)

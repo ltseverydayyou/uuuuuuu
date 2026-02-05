@@ -182,6 +182,17 @@ local function main()
 			settingsButton.Visible = false
 		end
 
+		ModelViewer.ApplyTheme = function()
+			local t = Settings and Settings.Theme
+			if not t then return end
+			if ModelViewer.Window and ModelViewer.Window.ApplyTheme then
+				ModelViewer.Window:ApplyTheme()
+			end
+			if viewportFrame then
+				viewportFrame.BackgroundColor3 = t.Main1 or viewportFrame.BackgroundColor3
+			end
+		end
+
 		local rotationX, rotationY = -15, 0
 		local distance = 10
 		local dragging = false

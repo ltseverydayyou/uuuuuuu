@@ -1922,6 +1922,18 @@ local function main()
 		scrollH.Gui.Parent = window.GuiElems.Content
 		Properties.InitInputBox()
 		Properties.InitSearch()
+
+		Properties.ApplyTheme = function()
+			local t = Settings and Settings.Theme
+			if not t then return end
+			if Properties.Window and Properties.Window.ApplyTheme then
+				Properties.Window:ApplyTheme()
+			end
+			local g = Properties.GuiElems
+			if g.ToolBar then g.ToolBar.BackgroundColor3 = t.Main2 or g.ToolBar.BackgroundColor3 end
+			if g.PropsFrame then g.PropsFrame.BackgroundColor3 = t.Main1 or g.PropsFrame.BackgroundColor3 end
+			if g.ScrollCorner then g.ScrollCorner.BackgroundColor3 = t.Main1 or g.ScrollCorner.BackgroundColor3 end
+		end
 	end
 
 return Properties

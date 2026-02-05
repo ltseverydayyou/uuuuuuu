@@ -2532,6 +2532,19 @@ return search]==]
 		scrollV.Gui.Parent = window.GuiElems.Content
 		scrollH.Gui.Parent = window.GuiElems.Content
 
+		Explorer.ApplyTheme = function()
+			local t = Settings and Settings.Theme
+			if not t then return end
+			if Explorer.Window and Explorer.Window.ApplyTheme then
+				Explorer.Window:ApplyTheme()
+			end
+			local g = Explorer.GuiElems
+			if g.ToolBar then g.ToolBar.BackgroundColor3 = t.Main2 or g.ToolBar.BackgroundColor3 end
+			if g.TreeFrame then g.TreeFrame.BackgroundColor3 = t.Main1 or g.TreeFrame.BackgroundColor3 end
+			if g.ScrollCorner then g.ScrollCorner.BackgroundColor3 = t.Main1 or g.ScrollCorner.BackgroundColor3 end
+			if g.SearchBar then g.SearchBar.BackgroundColor3 = t.TextBox or g.SearchBar.BackgroundColor3 end
+		end
+
 		-- Init stuff that requires the window
 		Explorer.InitRenameBox()
 		Explorer.InitSearch()

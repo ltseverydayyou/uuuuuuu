@@ -142,6 +142,19 @@ local function main()
 				end
 			end
 		end
+
+		if Main and Main.Apps then
+			for _, app in pairs(Main.Apps) do
+				if type(app) == "table" then
+					local okApply, applyFunc = pcall(function() return app.ApplyTheme end)
+					if okApply and type(applyFunc) == "function" then
+						pcall(function() app:ApplyTheme() end)
+					elseif app.Window and app.Window.ApplyTheme then
+						pcall(function() app.Window:ApplyTheme() end)
+					end
+				end
+			end
+		end
 	end
 
 	Lib.CreateArrow = function(size,num,dir)

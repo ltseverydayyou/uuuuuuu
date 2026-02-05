@@ -89,6 +89,7 @@ local function main()
 
 		local rows = {}
 		local activeKey
+		local refreshRows
 
 		local colorPicker = Lib.ColorPicker.new()
 		local function getThemeColor(path)
@@ -109,7 +110,7 @@ local function main()
 			ref[path[#path]] = col
 		end
 
-		local function refreshRows()
+		function refreshRows()
 			for _, row in ipairs(rows) do
 				local col = getThemeColor(row.path) or Color3.fromRGB(60,60,60)
 				row.preview.BackgroundColor3 = col

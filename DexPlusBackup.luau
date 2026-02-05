@@ -36,7 +36,7 @@ end
 local isFsSupported = readfile and writefile and isfile and isfolder and listfiles and delfile and delfolder
 
 -- Main vars
-local Main, Explorer, Properties, ScriptViewer, Console, SaveInstance, ModelViewer--[[, SecretServicePanel]], DefaultSettings, Notebook, Serializer, Lib local ggv = getgenv or nil
+local Main, Explorer, Properties, ScriptViewer, Console, SaveInstance, ModelViewer, ThemeManager--[[, SecretServicePanel]], DefaultSettings, Notebook, Serializer, Lib local ggv = getgenv or nil
 local API, RMD
 
 -- Default Settings
@@ -124,11 +124,6 @@ DefaultSettings = (function()
 		-- > NewDark
 	}
 end)()
-
--- Vars
-local Settings = DefaultSettings or {}
-local Apps = {}
-local env = {}
 
 local service = setmetatable({},{__index = function(self,name)
 	local serv = cloneref(game:GetService(name))
@@ -218,27 +213,86 @@ local createSimple = function(class,props)
 	return inst
 end
 
+local function deepCopy(obj)
+	local objType = typeof(obj)
+	if objType == "Color3" then
+		return Color3.new(obj.R, obj.G, obj.B)
+	elseif objType == "Vector3" then
+		return Vector3.new(obj.X, obj.Y, obj.Z)
+	elseif type(obj) == "table" then
+		local t = {}
+		for k,v in pairs(obj) do
+			t[k] = deepCopy(v)
+		end
+		return t
+	else
+		return obj
+	end
+end
+
 Main = (function()
 	local Main = {}
+	local Settings = deepCopy(DefaultSettings)
+	local Apps = {}
+	local env = {}
+	local DefaultSettingsOrig = deepCopy(DefaultSettings)
 
-	Main.ModuleList = {"Explorer","Properties","ScriptViewer","Console","SaveInstance","ModelViewer"}
+	Main.UserSettings = {
+		ConsoleFilters = {
+			Output = true,
+			Info = true,
+			Warn = true,
+			Error = true,
+			Listen = true,
+		}
+	}
+	Main.ThemeSettings = {}
+
+	Main.ModuleList = {"Explorer","Properties","ScriptViewer","Console","SaveInstance","ModelViewer","ThemeManager"}
 	Main.Elevated = false
 	Main.AllowDraggableOnMobile = true
 	Main.MissingEnv = {}
-	Main.Version = "2.2"
+	Main.Version = "2.3"
 	Main.Mouse = plr:GetMouse()
 	Main.AppControls = {}
 	Main.Apps = Apps
 	Main.MenuApps = {}
-	Main.GitRepoName = "AZYsGithub/DexPlusPlus"
+	Main.GitRepoName = "ltseverydayyou/uuuuuuu"
 	Main.GitRepoBranch = "main"
-	Main.GitModulesPath = "modules"
+	Main.GitModulesPath = "DexPlusModules"
+	Main.ModuleHashData = {} -- prevent remote hash fetch; prefer local modules
+	Main.UserSettingsFile = "DexPlusSettings.json"
+	Main.ThemeFile = "DexPlusTheme.json"
+	Main.IconOverrides = {
+		["rbxassetid://6511490623"] = "NewestIcons.png",
+		["rbxassetid://6579106223"] = "icons.png",
+		["rbxassetid://6578933307"] = "info.png",
+		["rbxassetid://6578871732"] = "settings.png",
+		["rbxassetid://1427967925"] = "borders.png",
+		["rbxassetid://2764171053"] = "2.png",
+		["rbxassetid://5642383285"] = "Test_Icons.png",
+		["rbxassetid://5034718129"] = "search2.png",
+		["rbxassetid://5642310344"] = "refresh-icon3.png",
+		["rbxassetid://5034718180"] = "settings2.png",
+		["rbxassetid://5054663650"] = "close3.png",
+		["rbxassetid://5034768003"] = "minimize2.png",
+		["rbxassetid://5060023708"] = "arrow3.png",
+		["rbxassetid://5448127505"] = "squares_icon2.png",
+		["rbxassetid://6234266378"] = "checkmark.png",
+		["rbxassetid://6401617475"] = "checkmark (2).png",
+		["rbxassetid://6425281788"] = "luvlies.png",
+		["rbxassetid://1281023007"] = "honey icon.png",
+		["rbxassetid://1072518406"] = "colors.png",
+		["rbxassetid://1072518502"] = "colorstrip.png",
+		["rbxassetid://135148380892747"] = "Texture.png",
+	}
+	Main.IconSourceBaseUrl = "https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/main/DexPlusIcons/"
 
 	Main.DisplayOrders = {
-		SideWindow = 8,
-		Window = 10,
-		Menu = 100000,
-		Core = 101000
+		SideWindow = 2147483628,
+		Window = 2147483629,
+		Menu = 2147483630,
+		Core = 2147483631
 	}
 	
 	--[[Main.LoadAdonisBypass = function()
@@ -306,7 +360,43 @@ Main = (function()
 		loadstring(game:HttpGet("https://raw.githubusercontent.com/secretisadev/Babyhamsta_Backup/refs/heads/main/Universal/Bypasses.lua", true))()
 	end]]
 	
-	Main.GetRandomString = function() return '\0' end
+Main.GetRandomString = function() return '\0' end
+	
+Main.ResolveAsset = function(assetId)
+		local override = Main.IconOverrides and Main.IconOverrides[assetId]
+		if override then
+			local getter = (env and env.getcustomasset) or getcustomasset or getsynasset
+			local path = "DexPlusPlus/assets/"..override
+			if env and env.makefolder then
+				pcall(env.makefolder,"DexPlusPlus")
+				pcall(env.makefolder,"DexPlusPlus/assets")
+			end
+
+		local function ensureFile()
+			if env and env.isfile and env.isfile(path) then
+				return true
+			end
+			if not (env and env.writefile) then
+				return false
+			end
+			local url = Main.IconSourceBaseUrl .. override
+			local ok, bytes = pcall(oldgame.HttpGet, game, url)
+			if ok and type(bytes) == "string" then
+				local okWrite = pcall(env.writefile, path, bytes)
+				return okWrite
+			end
+			return false
+		end
+
+		if ensureFile() and getter then
+			local ok, result = pcall(getter, path)
+			if ok and result then
+				return result
+			end
+		end
+	end
+	return assetId
+end
 	
 	Main.SecureGui = function(gui)
 		--warn("Secured: "..gui.Name)
@@ -409,11 +499,6 @@ Main = (function()
 			if EmbeddedModules then -- Offline Modules
 				control = EmbeddedModules[name]()
 
-				-- TODO: Remove when open source
-				if gethsfuncs then
-					control = _G.moduleData
-				end
-
 				if not control then Main.Error("Missing Embedded Module: "..name) end
 			elseif _G.DebugLoadModel then -- Load Debug Model File
 				local model = Main.DebugModel
@@ -422,51 +507,35 @@ Main = (function()
 				control = loadstring(model.Modules[name].Source)()
 				print("Locally Loaded Module",name,control)
 			else
-				-- Get hash data
-				local hashs = Main.ModuleHashData
-				if not hashs then
-					local ok, hashDataStr = Main.FetchRepoFile("ModuleHashs.dat")
-					if ok then
-						local success, hashData = pcall(service.HttpService.JSONDecode, service.HttpService, hashDataStr)
-						if success and type(hashData) == "table" then
-							hashs = hashData
-						end
-					end
-
-					hashs = hashs or {}
-					Main.ModuleHashData = hashs
-				end
-
-				-- Check if local copy exists with matching hashs
-				local hashfunc = (syn and syn.crypt and syn.crypt.hash) or (crypt and crypt.hash) or function() return "" end
-				local filePath = "dex/ModuleCache/"..name..".lua"
-
-				local cachedModuleStr
-				local cachedHasValidHash = false
-				local readSuccess, readResult = pcall(env.readfile, filePath)
-				if readSuccess and type(readResult) == "string" then
-					cachedModuleStr = readResult
-					if hashs[name] then
-						cachedHasValidHash = hashfunc(readResult) == hashs[name]
+				local modulePathLocal = (Main.GitModulesPath or "Modules").."/"..name..".lua"
+				if env and env.readfile and env.isfile and pcall(env.isfile, modulePathLocal) then
+					local okLocal, moduleStrLocal = pcall(env.readfile, modulePathLocal)
+					if okLocal and type(moduleStrLocal) == "string" then
+						control = loadstring(moduleStrLocal)()
 					end
 				end
 
-				if cachedHasValidHash then
-					control = loadstring(cachedModuleStr)()
-				else
+				if not control then
 					local modulePath = (Main.GitModulesPath or "Modules").."/"..name..".lua"
-					local ok,moduleStr = Main.FetchRepoFile(modulePath)
-					if ok then
+					local okRemote, moduleStr = Main.FetchRepoFile(modulePath)
+					if okRemote and type(moduleStr) == "string" then
 						if env.writefile then
-							pcall(env.writefile,filePath,moduleStr)
+							pcall(env.writefile, "DexPlusPlus/ModuleCache/"..name..".lua", moduleStr)
 						end
 						control = loadstring(moduleStr)()
-					elseif cachedModuleStr then
-						warn("Failed to get external module data of "..name.." ("..tostring(moduleStr).."), using cached copy.")
-						control = loadstring(cachedModuleStr)()
-					else
-						Main.Error("Failed to get external module data of "..name.." ("..tostring(moduleStr)..")")
 					end
+				end
+
+				if not control then
+					local filePath = "DexPlusPlus/ModuleCache/"..name..".lua"
+					local readSuccess, readResult = pcall(env.readfile, filePath)
+					if readSuccess and type(readResult) == "string" then
+						control = loadstring(readResult)()
+					end
+				end
+
+				if not control then
+					Main.Error("Failed to get external module data of "..name.." (no local, remote, or cached copy)")
 				end
 			end
 
@@ -505,6 +574,7 @@ Main = (function()
 		Console = Apps.Console
 		SaveInstance = Apps.SaveInstance
 		ModelViewer = Apps.ModelViewer
+		ThemeManager = Apps.ThemeManager
 		Notebook = Apps.Notebook
 		
 		--SecretServicePanel = Apps.SecretServicePanel
@@ -515,6 +585,7 @@ Main = (function()
 			Console = Console,
 			SaveInstance = SaveInstance,
 			ModelViewer = ModelViewer,
+			ThemeManager = ThemeManager,
 			Notebook = Notebook,
 			
 			--SecretServicePanel = SecretServicePanel,
@@ -561,8 +632,34 @@ Main = (function()
 			patchContextMenu(Explorer.RightClickContext)
 		end
 	end
+	
+	Main.EnsureAllIcons = function()
+		if not (env and env.writefile and env.makefolder and ((env.getcustomasset) or getcustomasset or getsynasset)) then
+			return false
+		end
+		pcall(env.makefolder,"DexPlusPlus")
+		pcall(env.makefolder,"DexPlusPlus/assets")
+		for _, fileName in pairs(Main.IconOverrides) do
+			local path = "DexPlusPlus/assets/"..fileName
+			local needDownload = true
+			if env.isfile then
+				local ok, exists = pcall(env.isfile, path)
+				if ok and exists then
+					needDownload = false
+				end
+			end
+			if needDownload then
+				local url = Main.IconSourceBaseUrl .. fileName
+				local ok, data = pcall(oldgame.HttpGet, game, url)
+				if ok and type(data) == "string" then
+					pcall(env.writefile, path, data)
+				end
+			end
+		end
+		return true
+	end
 
-	Main.InitEnv = function()
+Main.InitEnv = function()
 		setmetatable(env,{__newindex = function(self,name,func)
 			if not func then Main.MissingEnv[#Main.MissingEnv+1] = name return end
 			rawset(self,name,func)
@@ -687,15 +784,17 @@ Main = (function()
 
 			getgenv().decompile = decompile
 			
-			env.decompile = decompile
-			return decompile
-		end)()
+		env.decompile = decompile
+		return decompile
+	end)()
 
-		if identifyexecutor then
-			Main.Executor = identifyexecutor()
-		end
+	if identifyexecutor then
+		Main.Executor = identifyexecutor()
+	end
 
-		Main.GuiHolder = Main.Elevated and service.CoreGui or plr:FindFirstChildOfClass("PlayerGui")
+	env.getcustomasset = getcustomasset or getsynasset or env.getcustomasset
+
+	Main.GuiHolder = Main.Elevated and service.CoreGui or plr:FindFirstChildOfClass("PlayerGui")
 
 		setmetatable(env,nil)
 	end
@@ -744,7 +843,73 @@ Main = (function()
 
 		local s, json = pcall(service.HttpService.JSONEncode, service.HttpService, serializedData)
 		if s and json then
-			return json
+		return json
+		end
+	end
+
+	Main.SaveUserSettings = function()
+		if not (env and env.writefile) then return end
+		local ok, encoded = pcall(service.HttpService.JSONEncode, service.HttpService, Main.UserSettings)
+		if ok and encoded then
+			pcall(env.writefile, Main.UserSettingsFile, encoded)
+		end
+	end
+
+	Main.LoadUserSettings = function()
+		local fileData
+		if env and env.readfile then
+			local s, data = pcall(env.readfile, Main.UserSettingsFile)
+			if s and data and #data > 0 then
+				fileData = data
+			end
+		end
+		if fileData then
+			local ok, decoded = pcall(service.HttpService.JSONDecode, service.HttpService, fileData)
+			if ok and type(decoded) == "table" then
+				for k,v in pairs(decoded) do
+					Main.UserSettings[k] = v
+				end
+			end
+		end
+	end
+
+	Main.SaveThemeSettings = function()
+		if not (env and env.writefile) then return end
+		local ok, encoded = pcall(Main.ExportSettings)
+		if ok and encoded then
+			pcall(env.writefile, Main.ThemeFile, encoded)
+		end
+	end
+
+	Main.LoadThemeSettings = function()
+		local fileData
+		if env and env.readfile then
+			local s, data = pcall(env.readfile, Main.ThemeFile)
+			if s and data and #data > 0 then
+				fileData = data
+			end
+		end
+		if fileData then
+			local ok, decoded = pcall(service.HttpService.JSONDecode, service.HttpService, fileData)
+			if ok and type(decoded) == "table" then
+				local function recur(tbl)
+					local newTbl = {}
+					for k,v in pairs(tbl) do
+						if typeof(v) == "table" and v.R and v.G and v.B then
+							newTbl[k] = deserialize(v)
+						elseif typeof(v) == "table" then
+							newTbl[k] = recur(v)
+						else
+							newTbl[k] = deserialize(v)
+						end
+					end
+					return newTbl
+				end
+
+				if decoded.Theme and type(decoded.Theme) == "table" then
+					Settings.Theme = recur(decoded.Theme)
+				end
+			end
 		end
 	end
 
@@ -804,21 +969,22 @@ Main = (function()
 	
 
 	Main.ResetSettings = function()
-		local function recur(t,res)
-			for set,val in pairs(t) do
-				if type(val) == "table" and val._Recurse then
-					if type(res[set]) ~= "table" then
-						res[set] = {}
-					end
-					recur(val,res[set])
+		for k in pairs(Settings) do Settings[k] = nil end
+		local function copyInto(dest, src)
+			for key, val in pairs(src) do
+				if type(val) == "table" then
+					dest[key] = copyInto({}, val)
 				else
-					res[set] = val
+					dest[key] = deepCopy(val)
 				end
 			end
-			return res
+			return dest
 		end
-		recur(DefaultSettings,Settings)
+		copyInto(Settings, DefaultSettingsOrig)
 		Main.ValidateSettings()
+		if Lib and Lib.RefreshTheme then
+			pcall(Lib.RefreshTheme)
+		end
 	end
 
 	Main.FetchAPI = function(callbackiflong, callbackiftoolong, XD)
@@ -841,7 +1007,7 @@ Main = (function()
 		end
 		if Main.Elevated then
 			if Main.LocalDepsUpToDate() then
-				local localAPI = Lib.ReadFile("dex/rbx_api.dat")
+				local localAPI = Lib.ReadFile("DexPlusPlus/rbx_api.dat")
 				if localAPI then 
 					rawAPI = localAPI
 				else
@@ -1031,7 +1197,7 @@ Main = (function()
 		local rawXML
 		if Main.Elevated then
 			if Main.LocalDepsUpToDate() then
-				local localRMD = Lib.ReadFile("dex/rbx_rmd.dat")
+				local localRMD = Lib.ReadFile("DexPlusPlus/rbx_rmd.dat")
 				if localRMD then 
 					rawXML = localRMD
 				else
@@ -1144,7 +1310,7 @@ Main = (function()
 
 	Main.ShowGui = Main.SecureGui
 
-	Main.CreateIntro = function(initStatus) -- TODO: Must theme and show errors
+	Main.CreateIntro = function(initStatus)
 		local gui = create({
 			{1,"ScreenGui",{Name="Intro",}},
 			{2,"Frame",{Active=true,BackgroundColor3=Color3.new(0.20392157137394,0.20392157137394,0.20392157137394),BorderSizePixel=0,Name="Main",Parent={1},Position=UDim2.new(0.5,-175,0.5,-100),Size=UDim2.new(0,350,0,200),}},
@@ -1155,12 +1321,12 @@ Main = (function()
 			{7,"TextLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Font=3,Name="StatusText",Parent={3},Position=UDim2.new(0,20,0,110),Size=UDim2.new(0,180,0,25),Text="Fetching API",TextColor3=Color3.new(1,1,1),TextSize=14,TextTransparency=1,}},
 			{8,"Frame",{BackgroundColor3=Color3.new(0.20392157137394,0.20392157137394,0.20392157137394),BorderSizePixel=0,Name="ProgressBar",Parent={3},Position=UDim2.new(0,110,0,145),Size=UDim2.new(0,0,0,4),}},
 			{9,"Frame",{BackgroundColor3=Color3.new(0.2392156869173,0.56078433990479,0.86274510622025),BorderSizePixel=0,Name="Bar",Parent={8},Size=UDim2.new(0,0,1,0),}},
-			{10,"ImageLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Image="rbxassetid://2764171053",ImageColor3=Color3.new(0.17647059261799,0.17647059261799,0.17647059261799),Parent={8},ScaleType=1,Size=UDim2.new(1,0,1,0),SliceCenter=Rect.new(2,2,254,254),}},
-			{11,"TextLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Font=3,Name="Creator",Parent={2},Position=UDim2.new(1,-110,1,-20),Size=UDim2.new(0,105,0,20),Text="Developed by Chillz.",TextColor3=Color3.new(1,1,1),TextSize=14,TextXAlignment=1,}},
+			{10,"ImageLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Image=Main.ResolveAsset("rbxassetid://2764171053"),ImageColor3=Color3.new(0.17647059261799,0.17647059261799,0.17647059261799),Parent={8},ScaleType=1,Size=UDim2.new(1,0,1,0),SliceCenter=Rect.new(2,2,254,254),}},
+			{11,"TextLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Font=3,Name="Creator",Parent={2},Position=UDim2.new(0,10,1,-42),Size=UDim2.new(0,220,0,32),Text="Developed by Chillz\nUpdated by ltseverydayyou",TextColor3=Color3.new(1,1,1),TextSize=12,TextXAlignment=0,TextWrapped=true,TextYAlignment=0}},
 			{12,"UIGradient",{Parent={11},Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1,0),NumberSequenceKeypoint.new(1,1,0),}),}},
 			{13,"TextLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Font=3,Name="Version",Parent={2},Position=UDim2.new(1,-110,1,-35),Size=UDim2.new(0,105,0,20),Text=Main.Version,TextColor3=Color3.new(1,1,1),TextSize=14,TextXAlignment=1,}},
 			{14,"UIGradient",{Parent={13},Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1,0),NumberSequenceKeypoint.new(1,1,0),}),}},
-			{15,"ImageLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,BorderSizePixel=0,Image="rbxassetid://1427967925",Name="Outlines",Parent={2},Position=UDim2.new(0,-5,0,-5),ScaleType=1,Size=UDim2.new(1,10,1,10),SliceCenter=Rect.new(6,6,25,25),TileSize=UDim2.new(0,20,0,20),}},
+			{15,"ImageLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,BorderSizePixel=0,Image=Main.ResolveAsset("rbxassetid://1427967925"),Name="Outlines",Parent={2},Position=UDim2.new(0,-5,0,-5),ScaleType=1,Size=UDim2.new(1,10,1,10),SliceCenter=Rect.new(6,6,25,25),TileSize=UDim2.new(0,20,0,20),}},
 			{16,"UIGradient",{Parent={15},Rotation=-30,Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1,0),NumberSequenceKeypoint.new(1,1,0),}),}},
 			{17,"UIGradient",{Parent={2},Rotation=-30,Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1,0),NumberSequenceKeypoint.new(1,1,0),}),}},
 			{18,"UIDragDetector", {Parent={2}}}
@@ -1178,6 +1344,23 @@ Main = (function()
 		local statusText = gui.Main.Holder.StatusText
 		local progressBar = gui.Main.Holder.ProgressBar
 		local tweenS = service.TweenService
+		local theme = Settings and Settings.Theme or DefaultSettings.Theme or {}
+		local defaultBarColor = Color3.new(0.2392156869173,0.56078433990479,0.86274510622025)
+		local defaultStatusColor = Color3.new(1,1,1)
+
+		local function applyTheme()
+			gui.Main.BackgroundColor3 = theme.Main2 or gui.Main.BackgroundColor3
+			gui.Main.Holder.BackgroundColor3 = theme.Main1 or gui.Main.Holder.BackgroundColor3
+			progressBar.BackgroundColor3 = theme.TextBox or progressBar.BackgroundColor3
+			progressBar.Bar.BackgroundColor3 = theme.ListSelection or defaultBarColor
+			titleText.TextColor3 = theme.Text or titleText.TextColor3
+			descText.TextColor3 = theme.Text or descText.TextColor3
+			statusText.TextColor3 = theme.Text or statusText.TextColor3
+			versionText.TextColor3 = theme.Text or versionText.TextColor3
+			creatorText.TextColor3 = theme.Text or creatorText.TextColor3
+		end
+
+		applyTheme()
 
 		local renderStepped = service.RunService.RenderStepped
 		local signalWait = renderStepped.wait
@@ -1254,7 +1437,15 @@ Main = (function()
 
 		local function setProgress(text,n)
 			statusText.Text = text
+			statusText.TextColor3 = theme.Text or defaultStatusColor
+			progressBar.Bar.BackgroundColor3 = theme.ListSelection or defaultBarColor
 			tweenS:Create(progressBar.Bar,progressTI,{Size = UDim2.new(n,0,1,0)}):Play()
+		end
+
+		local function setError(text)
+			statusText.Text = text
+			statusText.TextColor3 = theme.Important or Color3.new(1,0,0)
+			progressBar.Bar.BackgroundColor3 = theme.Important or Color3.new(1,0,0)
 		end
 
 		local function close()
@@ -1296,11 +1487,21 @@ Main = (function()
 			gui:Destroy()
 		end
 
-		return {SetProgress = setProgress, Close = close, Object = gui}
+		return {SetProgress = setProgress, SetError = setError, Close = close, Object = gui}
 	end
 
 	Main.CreateApp = function(data)
-		if Main.MenuApps[data.Name] then return end -- TODO: Handle conflict
+		local baseName = data.Name or "App"
+		local finalName = baseName
+		local suffix = 2
+		while Main.MenuApps[finalName] do
+			finalName = string.format("%s (%d)", baseName, suffix)
+			suffix = suffix + 1
+		end
+		if finalName ~= baseName then
+			warn(("[Dex] App name conflict: '%s' already exists, using '%s' instead."):format(baseName, finalName))
+		end
+		data.Name = finalName
 		local control = {}
 
 		local app = Main.AppTemplate:Clone()
@@ -1424,15 +1625,15 @@ Main = (function()
 			{8,"Frame",{BackgroundColor3=Color3.new(0.20392157137394,0.20392157137394,0.20392157137394),BorderSizePixel=0,Name="CoverFrame",Parent={6},Size=UDim2.new(1,0,0,4),}},
 			{9,"Frame",{BackgroundColor3=Color3.new(0.1294117718935,0.1294117718935,0.1294117718935),BorderSizePixel=0,Name="Line",Parent={8},Position=UDim2.new(0,0,0,-1),Size=UDim2.new(1,0,0,1),}},
 			{10,"TextButton",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Font=3,Name="Settings",Parent={6},Position=UDim2.new(1,-48,0,0),Size=UDim2.new(0,24,1,0),Text="",TextColor3=Color3.new(1,1,1),TextSize=14,}},
-			{11,"ImageLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Image="rbxassetid://6578871732",ImageTransparency=0.20000000298023,Name="Icon",Parent={10},Position=UDim2.new(0,4,0,4),Size=UDim2.new(0,16,0,16),}},
+			{11,"ImageLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Image=Main.ResolveAsset("rbxassetid://6578871732"),ImageTransparency=0.20000000298023,Name="Icon",Parent={10},Position=UDim2.new(0,4,0,4),Size=UDim2.new(0,16,0,16),}},
 			{12,"TextButton",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Font=3,Name="Information",Parent={6},Position=UDim2.new(1,-24,0,0),Size=UDim2.new(0,24,1,0),Text="",TextColor3=Color3.new(1,1,1),TextSize=14,}},
-			{13,"ImageLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Image="rbxassetid://6578933307",ImageTransparency=0.20000000298023,Name="Icon",Parent={12},Position=UDim2.new(0,4,0,4),Size=UDim2.new(0,16,0,16),}},
+			{13,"ImageLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Image=Main.ResolveAsset("rbxassetid://6578933307"),ImageTransparency=0.20000000298023,Name="Icon",Parent={12},Position=UDim2.new(0,4,0,4),Size=UDim2.new(0,16,0,16),}},
 			{14,"ScrollingFrame",{Active=true,AnchorPoint=Vector2.new(0.5,0),BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,BorderColor3=Color3.new(0.1294117718935,0.1294117718935,0.1294117718935),BorderSizePixel=0,Name="AppsFrame",Parent={4},Position=UDim2.new(0.5,0,0,0),ScrollBarImageColor3=Color3.new(0,0,0),ScrollBarThickness=4,Size=UDim2.new(0,222,1,-25),}},
 			{15,"Frame",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Name="Container",Parent={14},Position=UDim2.new(0,7,0,8),Size=UDim2.new(1,-14,0,2),}},
 			{16,"UIGridLayout",{CellSize=UDim2.new(0,66,0,74),Parent={15},SortOrder=2,}},
 			{17,"Frame",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Name="App",Parent={1},Size=UDim2.new(0,100,0,100),Visible=false,}},
 			{18,"TextButton",{AutoButtonColor=false,BackgroundColor3=Color3.new(0.2352941185236,0.2352941185236,0.2352941185236),BorderSizePixel=0,Font=3,Name="Main",Parent={17},Size=UDim2.new(1,0,0,60),Text="",TextColor3=Color3.new(0,0,0),TextSize=14,}},
-			{19,"ImageLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Image="rbxassetid://6579106223",ImageRectSize=Vector2.new(32,32),Name="Icon",Parent={18},Position=UDim2.new(0.5,-16,0,4),ScaleType=4,Size=UDim2.new(0,32,0,32),}},
+			{19,"ImageLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Image=Main.ResolveAsset("rbxassetid://6579106223"),ImageRectSize=Vector2.new(32,32),Name="Icon",Parent={18},Position=UDim2.new(0.5,-16,0,4),ScaleType=4,Size=UDim2.new(0,32,0,32),}},
 			{20,"TextLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,BorderSizePixel=0,Font=3,Name="AppName",Parent={18},Position=UDim2.new(0,2,0,38),Size=UDim2.new(1,-4,1,-40),Text="Explorer",TextColor3=Color3.new(1,1,1),TextSize=14,TextTransparency=0.10000000149012,TextTruncate=1,TextWrapped=true,TextYAlignment=0,}},
 			{21,"Frame",{BackgroundColor3=Color3.new(0,0.66666668653488,1),BorderSizePixel=0,Name="Highlight",Parent={18},Position=UDim2.new(0,0,1,-2),Size=UDim2.new(1,0,0,2),}},
 		})
@@ -1471,8 +1672,10 @@ Main = (function()
 			local duration = 1
 			local Infos = {
 				"Contributors >>",
-				"Moon (Dex)",
+				"Chillz (Dex++ Creator)",
+				"Moon (Dex OG)",
 				"Cazan (3D Preview)",
+				"ltseverydayyou (Updates)",
 			}
 			
 			if isInfoCD then return end
@@ -1524,13 +1727,23 @@ Main = (function()
 			else if cptsOnMouseClick ~= nil then cptsOnMouseClick:Disconnect() cptsOnMouseClick = nil end end
 		end})
 
-		Main.CreateApp({Name = "Notepad", IconMap = Main.LargeIcons, Icon = "Script_Viewer", Window = ScriptViewer.Window})
+		Main.CreateApp({Name = "Executor", IconMap = Main.LargeIcons, Icon = "Script_Viewer", Window = ScriptViewer.Window, OnClick = function(isOpen)
+			if isOpen and ScriptViewer and ScriptViewer.ShowExecutor then
+				ScriptViewer.ShowExecutor()
+			elseif isOpen and ScriptViewer and ScriptViewer.Window then
+				ScriptViewer.Window:SetTitle("Executor")
+			end
+		end})
 		
 		Main.CreateApp({Name = "Console", IconMap = Main.LargeIcons, Icon = "Output", Window = Console.Window})
 		
 		Main.CreateApp({Name = "Save Instance", IconMap = Main.LargeIcons, Icon = "Watcher", Window = SaveInstance.Window})
 		
 		Main.CreateApp({Name = "3D Viewer", IconMap = Explorer.LegacyClassIcons, Icon = 54, Window = ModelViewer.Window})
+		
+		if ThemeManager and ThemeManager.Window then
+			Main.CreateApp({Name = "Theme Manager", IconMap = Explorer.LegacyClassIcons, Icon = 83, Window = ThemeManager.Window})
+		end
 
 		--Main.CreateApp({Name = "Secret Service Panel", IconMap = Main.LargeIcons, Icon = "Output", Window = SecretServicePanel.Window})
 
@@ -1543,11 +1756,18 @@ Main = (function()
 
 		local writefile,makefolder = env.writefile,env.makefolder
 
-		makefolder("dex")
-		makefolder("dex/assets")
-		makefolder("dex/saved")
-		makefolder("dex/plugins")
-		makefolder("dex/ModuleCache")
+		makefolder("DexPlusPlus")
+		makefolder("DexPlusPlus/assets")
+		makefolder("DexPlusPlus/saved")
+		makefolder("DexPlusPlus/plugins")
+		makefolder("DexPlusPlus/ModuleCache")
+		makefolder("DexPlusPlus/assets")
+		if not (env.isfile and env.isfile(Main.UserSettingsFile)) then
+			Main.SaveUserSettings()
+		end
+		if not (env.isfile and env.isfile(Main.ThemeFile)) then
+			Main.SaveThemeSettings()
+		end
 	end
 
 	Main.LocalDepsUpToDate = function()
@@ -1563,6 +1783,8 @@ Main = (function()
 		
 		Main.InitEnv()
 		Main.LoadSettings()
+		Main.LoadUserSettings()
+		Main.LoadThemeSettings()
 		
 		Main.SetupFilesystem()
 
@@ -1571,8 +1793,13 @@ Main = (function()
 		Lib = Main.LoadModule("Lib")
 		Lib.FastWait()
 
+		if (env and (env.getcustomasset or getcustomasset or getsynasset)) then
+			intro.SetProgress("Loading Icons",0.3)
+			Main.EnsureAllIcons()
+		end
+
 		-- Init icons
-		Main.MiscIcons = Lib.IconMap.new("rbxassetid://6511490623",256,256,16,16)
+		Main.MiscIcons = Lib.IconMap.new(Main.ResolveAsset("rbxassetid://6511490623"),256,256,16,16)
 		Main.MiscIcons:SetDict({
 			Reference = 0,             Cut = 1,                         Cut_Disabled = 2,      Copy = 3,               Copy_Disabled = 4,    Paste = 5,                Paste_Disabled = 6,
 			Delete = 7,                Delete_Disabled = 8,             Group = 9,             Group_Disabled = 10,    Ungroup = 11,         Ungroup_Disabled = 12,    TeleportTo = 13,
@@ -1581,9 +1808,9 @@ Main = (function()
 			SelectChildren = 28,       SelectChildren_Disabled = 29,    InsertObject = 30,     ViewScript = 31,        AddStar = 32,         RemoveStar = 33,          Script_Disabled = 34,
 			LocalScript_Disabled = 35, Play = 36,                       Pause = 37,            Rename_Disabled = 38,   Empty = 1000
 		})
-		Main.LargeIcons = Lib.IconMap.new("rbxassetid://6579106223",256,256,32,32)
+		Main.LargeIcons = Lib.IconMap.new(Main.ResolveAsset("rbxassetid://6579106223"),256,256,32,32)
 		Main.LargeIcons:SetDict({
-			Explorer = 0, Properties = 1, Script_Viewer = 2, Watcher = 3, Output = 4
+			Explorer = 0, Properties = 1, Script_Viewer = 2, Watcher = 3, Output = 4, Paper = 5, Book = 6
 		})
 		
 		--[[ Loading bypasses
@@ -1596,7 +1823,7 @@ Main = (function()
 		-- Fetch version if needed
 		intro.SetProgress("Fetching Roblox Version",0.3)
 		if Main.Elevated then
-			local fileVer = Lib.ReadFile("dex/deps_version.dat")
+			local fileVer = Lib.ReadFile("DexPlusPlus/deps_version.dat")
 			Main.ClientVersion = Version()
 			if fileVer then
 				Main.DepsVersionData = string.split(fileVer,"\n")
@@ -1628,12 +1855,12 @@ Main = (function()
 
 		-- Save external deps locally if needed
 		if Main.Elevated and env.writefile and not Main.LocalDepsUpToDate() then
-			env.writefile("dex/deps_version.dat",Main.ClientVersion.."\n"..Main.RobloxVersion)
+			env.writefile("DexPlusPlus/deps_version.dat",Main.ClientVersion.."\n"..Main.RobloxVersion)
 			if Main.RawAPI then
-				env.writefile("dex/rbx_api.dat",Main.RawAPI)
+				env.writefile("DexPlusPlus/rbx_api.dat",Main.RawAPI)
 			end
 			if Main.RawRMD then
-				env.writefile("dex/rbx_rmd.dat",Main.RawRMD)
+				env.writefile("DexPlusPlus/rbx_rmd.dat",Main.RawRMD)
 			end
 		end
 
@@ -1652,6 +1879,9 @@ Main = (function()
 		Console.Init()
 		SaveInstance.Init()
 		ModelViewer.Init()
+		if ThemeManager and ThemeManager.Init then
+			ThemeManager.Init()
+		end
 		
 		--SecretServicePanel.Init()
 		

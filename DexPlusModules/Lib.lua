@@ -1866,15 +1866,26 @@ local function main()
 				Height = 18,
 			}
 		}
+
+		local function resolveMapId(id)
+			local asset = id
+			if type(id) == "number" then
+				asset = "rbxassetid://"..tostring(id)
+			end
+			if Main and Main.ResolveAsset then
+				asset = Main.ResolveAsset(asset)
+			end
+			return asset
+		end
 		if Settings.ClassIcon and IconList[Settings.ClassIcon] then
 			funcs.ExplorerIcons = {
-				["MapId"] = IconList[Settings.ClassIcon].MapId,
+				["MapId"] = resolveMapId(IconList[Settings.ClassIcon].MapId),
 				["Icons"] = IconList[Settings.ClassIcon].Icons,
 				["IconSize"] = IconList[Settings.ClassIcon].IconSize,
 				["Witdh"] = IconList[Settings.ClassIcon].Witdh,
 				["Height"] = IconList[Settings.ClassIcon].Height}
 		else
-			funcs.ExplorerIcons = { ["MapId"] = IconList.Old.MapId, ["Icons"] = IconList.Old.Icons, ["IconSize"] = IconList.Old.IconSize }
+			funcs.ExplorerIcons = { ["MapId"] = resolveMapId(IconList.Old.MapId), ["Icons"] = IconList.Old.Icons, ["IconSize"] = IconList.Old.IconSize }
 		end
 		
 		
@@ -1959,7 +1970,11 @@ local function main()
 
 				local obj = Instance.new("ImageLabel", Frame)
 				obj.BackgroundTransparency = 1
-				obj.Image = ("http://www.roblox.com/asset/?id=" .. (self.ExplorerIcons.MapId))
+				if type(self.ExplorerIcons.MapId) == "string" then
+					obj.Image = self.ExplorerIcons.MapId
+				else
+					obj.Image = ("http://www.roblox.com/asset/?id=" .. tostring(self.ExplorerIcons.MapId))
+				end
 				obj.Name = "IconMap"
 				self:GetExplorerIcon(obj, index)
 			end
@@ -1973,8 +1988,9 @@ local function main()
 		mt.__index = funcs
 
 		local function new(mapId,mapSizeX,mapSizeY,iconSizeX,iconSizeY)
+			local resolved = resolveMapId(mapId)
 			local obj = setmetatable({
-				MapId = mapId,
+				MapId = resolved,
 				MapSizeX = mapSizeX,
 				MapSizeY = mapSizeY,
 				IconSizeX = iconSizeX,
@@ -1986,8 +2002,9 @@ local function main()
 		end
 
 		local function newLinear(mapId,iconSizeX,iconSizeY)
+			local resolved = resolveMapId(mapId)
 			local obj = setmetatable({
-				MapId = mapId,
+				MapId = resolved,
 				IconSizeX = iconSizeX,
 				IconSizeY = iconSizeY,
 				IndexDict = {}

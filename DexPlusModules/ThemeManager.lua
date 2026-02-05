@@ -80,10 +80,27 @@ local function main()
 		}
 
 		local rows = {}
+		local activeKey
 
 		local function colorToText(c)
 			return string.format("%d,%d,%d", math.floor(c.R*255+0.5), math.floor(c.G*255+0.5), math.floor(c.B*255+0.5))
 		end
+
+		local colorPicker = Lib.ColorPicker.new()
+		colorPicker.OnSelect:Connect(function(col)
+			if not activeKey then return end
+			for _, row in ipairs(rows) do
+				if row.key == activeKey then
+					row.preview.BackgroundColor3 = col
+					row.box.Text = colorToText(col)
+					Settings.Theme[row.key] = col
+					break
+				end
+			end
+			Main.SaveThemeSettings()
+			Lib.RefreshTheme()
+			activeKey = nil
+		end)
 
 		local function parseColor(str)
 			if not str or str == "" then return nil end
@@ -126,6 +143,13 @@ local function main()
 			preview.BackgroundColor3 = Settings.Theme[key] or Color3.fromRGB(60,60,60)
 			preview.Parent = row
 
+			local pickBtn = Instance.new("TextButton")
+			pickBtn.BackgroundTransparency = 1
+			pickBtn.Text = ""
+			pickBtn.Size = preview.Size
+			pickBtn.Position = preview.Position
+			pickBtn.Parent = row
+
 			local box = Instance.new("TextBox")
 			box.Text = colorToText(preview.BackgroundColor3)
 			box.PlaceholderText = "r,g,b or #RRGGBB"
@@ -138,6 +162,12 @@ local function main()
 			box.Parent = row
 
 			rows[#rows+1] = {key=key, box=box, preview=preview}
+
+			pickBtn.MouseButton1Click:Connect(function()
+				activeKey = key
+				colorPicker:SetColor(preview.BackgroundColor3)
+				colorPicker:Show()
+			end)
 		end
 
 		local applyColorsBtn = makeButton("Apply Colors",0,function()

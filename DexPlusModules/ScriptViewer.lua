@@ -49,11 +49,11 @@ local function getPath(obj)
 	end
 end
 
-local function main()
-	local ScriptViewer = {}
-	local window, codeFrame
+	local function main()
+		local ScriptViewer = {}
+		local window, codeFrame
 	
-	local execute, clear, dumpbtn
+		local execute, clear, dumpbtn
 	
 	local PreviousScr = nil
 	
@@ -146,7 +146,7 @@ local function main()
 
 	ScriptViewer.Init = function()
 		window = Lib.Window.new()
-		window:SetTitle("Notepad")
+		window:SetTitle("Executor")
 		window:Resize(500,400)
 		ScriptViewer.Window = window
 
@@ -196,28 +196,6 @@ local function main()
 			Lib.SaveAsPrompt(filename,source)
 			--env.writefile(filename,source)
 		end)
-		
-		dumpbtn = Instance.new("TextButton",window.GuiElems.Content)
-		dumpbtn.BackgroundTransparency = 1
-		dumpbtn.Position = UDim2.new(0.7,0,0,0)
-		dumpbtn.Size = UDim2.new(0.3,0,0,20)
-		dumpbtn.Text = "Dump Functions"
-		dumpbtn.TextColor3 = Color3.new(0.5,0.5,0.5)
-		
-		if env.getgc then
-			dumpbtn.TextColor3 = Color3.new(1,1,1)
-			dumpbtn.Interactable = true
-		else
-			dumpbtn.TextColor3 = Color3.new(0.5,0.5,0.5)
-			dumpbtn.Interactable = false
-		end
-
-		dumpbtn.MouseButton1Click:Connect(function()
-			if PreviousScr ~= nil then
-				pcall(ScriptViewer.DumpFunctions, PreviousScr)
-			end
-		end)
-		
 		-- Buttons below the editor
 		
 		
@@ -257,6 +235,30 @@ local function main()
 		local oldtick = tick()
 		local s,source = pcall(env.decompile or function() end,scr)
 
+		if not dumpbtn then
+			dumpbtn = Instance.new("TextButton",window.GuiElems.Content)
+			dumpbtn.BackgroundTransparency = 1
+			dumpbtn.Position = UDim2.new(0.7,0,0,0)
+			dumpbtn.Size = UDim2.new(0.3,0,0,20)
+			dumpbtn.Text = "Dump Functions"
+			dumpbtn.TextColor3 = Color3.new(0.5,0.5,0.5)
+			dumpbtn.Visible = true
+
+			dumpbtn.MouseButton1Click:Connect(function()
+				if PreviousScr ~= nil then
+					pcall(ScriptViewer.DumpFunctions, PreviousScr)
+				end
+			end)
+		end
+		dumpbtn.Visible = true
+		if env.getgc then
+			dumpbtn.TextColor3 = Color3.new(1,1,1)
+			dumpbtn.Interactable = true
+		else
+			dumpbtn.TextColor3 = Color3.new(0.5,0.5,0.5)
+			dumpbtn.Interactable = false
+		end
+
 		if not s or not source then
 			PreviousScr = nil
 			dumpbtn.TextColor3 = Color3.new(0.5,0.5,0.5)
@@ -287,6 +289,7 @@ local function main()
 		end
 
 		codeFrame:SetText(source)
+		if window then window:SetTitle("Script Viewer") end
 		window:Show()
 	end
 

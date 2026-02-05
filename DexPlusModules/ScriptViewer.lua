@@ -149,6 +149,10 @@ end
 		window:SetTitle("Executor")
 		window:Resize(500,400)
 		ScriptViewer.Window = window
+		ScriptViewer.ShowExecutor = function()
+			if window then window:SetTitle("Executor") end
+			if dumpbtn then dumpbtn.Visible = false end
+		end
 
 		codeFrame = Lib.CodeFrame.new()
 		codeFrame.Frame.Position = UDim2.new(0,0,0,20)
@@ -296,9 +300,4 @@ end
 	return ScriptViewer
 end
 
--- TODO: Remove when open source
-if gethsfuncs then
-	_G.moduleData = {InitDeps = initDeps, InitAfterMain = initAfterMain, Main = main}
-else
-	return {InitDeps = initDeps, InitAfterMain = initAfterMain, Main = main}
-end
+return {InitDeps = initDeps, InitAfterMain = initAfterMain, Main = main}

@@ -1833,7 +1833,7 @@ local function main()
 	--[[
 		Headers, Setups, Predicate, ObjectDefs
 	]]
-	Explorer.SearchFilters = { -- TODO: Use data table (so we can disable some if funcs don't exist)
+	Explorer.SearchFilters = {
 		Comparison = {
 			["isa"] = function(argString)
 				local lower = string.lower
@@ -1917,6 +1917,10 @@ local function main()
 			}
 		end,
 	}
+
+	if not env.getloadedmodules then
+		Explorer.SearchFilters.Specific.loadedmodules = nil
+	end
 
 	Explorer.BuildSearchFunc = function(query)
 		local specFilterList,specMap = {},{}

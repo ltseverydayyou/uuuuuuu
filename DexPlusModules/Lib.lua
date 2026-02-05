@@ -2921,7 +2921,7 @@ local function main()
 			end)
 		end
 
-		local function renderSide(side,noTween) -- TODO: Use existing resizers
+		local function renderSide(side,noTween)
 			local currentPos = 0
 			local sideFramePos = getSideFramePos(side)
 			local template = side.WindowResizer:Clone()
@@ -3295,7 +3295,6 @@ local function main()
 				else
 					if table.find(visibleWindows,window) then return end
 
-					-- TODO: make better
 					window.GuiElems.Main.Size = UDim2.new(0,window.SizeX,0,20)
 					local ti = TweenInfo.new(0.2,Enum.EasingStyle.Quad,Enum.EasingDirection.Out)
 					window:StopTweens()
@@ -5050,7 +5049,7 @@ local function main()
 			end
 		end
 
-		funcs.GetText = function(self) -- TODO: better (use new tab format)
+		funcs.GetText = function(self)
 			local source = table.concat(self.Lines,"\n")
 			return self:ConvertText(source,false) -- Tab Convert
 		end
@@ -5593,7 +5592,7 @@ local function main()
 		return {new = new}
 	end)()
 
-	Lib.ColorPicker = (function() -- TODO: Convert to newer class model
+	Lib.ColorPicker = (function()
 		local funcs = {}
 
 		local function new()
@@ -6040,7 +6039,7 @@ local function main()
 	end)()
 
 	Lib.NumberSequenceEditor = (function()
-		local function new() -- TODO: Convert to newer class model
+		local function new()
 			local newMt = setmetatable({},{})
 			newMt.OnSelect = Lib.Signal.new()
 			newMt.OnCancel = Lib.Signal.new()
@@ -6536,7 +6535,7 @@ local function main()
 		return {new = new}
 	end)()
 
-	Lib.ColorSequenceEditor = (function() -- TODO: Convert to newer class model
+	Lib.ColorSequenceEditor = (function()
 		local function new()
 			local newMt = setmetatable({},{})
 			newMt.OnSelect = Lib.Signal.new()

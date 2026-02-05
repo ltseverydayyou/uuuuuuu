@@ -536,59 +536,73 @@ local function main()
 		return subProp
 	end
 
-	Properties.GetExpandedProps = function(prop) -- TODO: Optimize using table
+	Properties.GetExpandedProps = function(prop)
 		local result = {}
-		local typeData = prop.ValueType
-		local typeName = typeData.Name
+		local typeName = prop.ValueType.Name
 		local makeSubProp = Properties.MakeSubProp
 
-		if typeName == "Vector2" then
-			result[1] = makeSubProp(prop,".X",{Name = "float"})
-			result[2] = makeSubProp(prop,".Y",{Name = "float"})
-		elseif typeName == "Vector3" then
-			result[1] = makeSubProp(prop,".X",{Name = "float"})
-			result[2] = makeSubProp(prop,".Y",{Name = "float"})
-			result[3] = makeSubProp(prop,".Z",{Name = "float"})
-		elseif typeName == "CFrame" then
-			result[1] = makeSubProp(prop,".Position",{Name = "Vector3"})
-			result[2] = makeSubProp(prop,".RightVector",{Name = "Vector3"})
-			result[3] = makeSubProp(prop,".UpVector",{Name = "Vector3"})
-			result[4] = makeSubProp(prop,".LookVector",{Name = "Vector3"})
-		elseif typeName == "UDim" then
-			result[1] = makeSubProp(prop,".Scale",{Name = "float"})
-			result[2] = makeSubProp(prop,".Offset",{Name = "int"})
-		elseif typeName == "UDim2" then
-			result[1] = makeSubProp(prop,".X",{Name = "UDim"})
-			result[2] = makeSubProp(prop,".Y",{Name = "UDim"})
-		elseif typeName == "Rect" then
-			result[1] = makeSubProp(prop,".Min.X",{Name = "float"},"X0")
-			result[2] = makeSubProp(prop,".Min.Y",{Name = "float"},"Y0")
-			result[3] = makeSubProp(prop,".Max.X",{Name = "float"},"X1")
-			result[4] = makeSubProp(prop,".Max.Y",{Name = "float"},"Y1")
-		elseif typeName == "PhysicalProperties" then
-			result[1] = makeSubProp(prop,".Density",{Name = "float"})
-			result[2] = makeSubProp(prop,".Elasticity",{Name = "float"})
-			result[3] = makeSubProp(prop,".ElasticityWeight",{Name = "float"})
-			result[4] = makeSubProp(prop,".Friction",{Name = "float"})
-			result[5] = makeSubProp(prop,".FrictionWeight",{Name = "float"})
-		elseif typeName == "Ray" then
-			result[1] = makeSubProp(prop,".Origin",{Name = "Vector3"})
-			result[2] = makeSubProp(prop,".Direction",{Name = "Vector3"})
-		elseif typeName == "NumberRange" then
-			result[1] = makeSubProp(prop,".Min",{Name = "float"})
-			result[2] = makeSubProp(prop,".Max",{Name = "float"})
-		elseif typeName == "Faces" then
-			result[1] = makeSubProp(prop,".Back",{Name = "bool"})
-			result[2] = makeSubProp(prop,".Bottom",{Name = "bool"})
-			result[3] = makeSubProp(prop,".Front",{Name = "bool"})
-			result[4] = makeSubProp(prop,".Left",{Name = "bool"})
-			result[5] = makeSubProp(prop,".Right",{Name = "bool"})
-			result[6] = makeSubProp(prop,".Top",{Name = "bool"})
-		elseif typeName == "Axes" then
-			result[1] = makeSubProp(prop,".X",{Name = "bool"})
-			result[2] = makeSubProp(prop,".Y",{Name = "bool"})
-			result[3] = makeSubProp(prop,".Z",{Name = "bool"})
-		end
+		local handlers = {
+			Vector2 = function()
+				result[1] = makeSubProp(prop,".X",{Name = "float"})
+				result[2] = makeSubProp(prop,".Y",{Name = "float"})
+			end,
+			Vector3 = function()
+				result[1] = makeSubProp(prop,".X",{Name = "float"})
+				result[2] = makeSubProp(prop,".Y",{Name = "float"})
+				result[3] = makeSubProp(prop,".Z",{Name = "float"})
+			end,
+			CFrame = function()
+				result[1] = makeSubProp(prop,".Position",{Name = "Vector3"})
+				result[2] = makeSubProp(prop,".RightVector",{Name = "Vector3"})
+				result[3] = makeSubProp(prop,".UpVector",{Name = "Vector3"})
+				result[4] = makeSubProp(prop,".LookVector",{Name = "Vector3"})
+			end,
+			UDim = function()
+				result[1] = makeSubProp(prop,".Scale",{Name = "float"})
+				result[2] = makeSubProp(prop,".Offset",{Name = "int"})
+			end,
+			UDim2 = function()
+				result[1] = makeSubProp(prop,".X",{Name = "UDim"})
+				result[2] = makeSubProp(prop,".Y",{Name = "UDim"})
+			end,
+			Rect = function()
+				result[1] = makeSubProp(prop,".Min.X",{Name = "float"},"X0")
+				result[2] = makeSubProp(prop,".Min.Y",{Name = "float"},"Y0")
+				result[3] = makeSubProp(prop,".Max.X",{Name = "float"},"X1")
+				result[4] = makeSubProp(prop,".Max.Y",{Name = "float"},"Y1")
+			end,
+			PhysicalProperties = function()
+				result[1] = makeSubProp(prop,".Density",{Name = "float"})
+				result[2] = makeSubProp(prop,".Elasticity",{Name = "float"})
+				result[3] = makeSubProp(prop,".ElasticityWeight",{Name = "float"})
+				result[4] = makeSubProp(prop,".Friction",{Name = "float"})
+				result[5] = makeSubProp(prop,".FrictionWeight",{Name = "float"})
+			end,
+			Ray = function()
+				result[1] = makeSubProp(prop,".Origin",{Name = "Vector3"})
+				result[2] = makeSubProp(prop,".Direction",{Name = "Vector3"})
+			end,
+			NumberRange = function()
+				result[1] = makeSubProp(prop,".Min",{Name = "float"})
+				result[2] = makeSubProp(prop,".Max",{Name = "float"})
+			end,
+			Faces = function()
+				result[1] = makeSubProp(prop,".Back",{Name = "bool"})
+				result[2] = makeSubProp(prop,".Bottom",{Name = "bool"})
+				result[3] = makeSubProp(prop,".Front",{Name = "bool"})
+				result[4] = makeSubProp(prop,".Left",{Name = "bool"})
+				result[5] = makeSubProp(prop,".Right",{Name = "bool"})
+				result[6] = makeSubProp(prop,".Top",{Name = "bool"})
+			end,
+			Axes = function()
+				result[1] = makeSubProp(prop,".X",{Name = "bool"})
+				result[2] = makeSubProp(prop,".Y",{Name = "bool"})
+				result[3] = makeSubProp(prop,".Z",{Name = "bool"})
+			end
+		}
+
+		local handler = handlers[typeName]
+		if handler then handler() end
 
 		if prop.Name == "SoundId" and prop.Class == "Sound" then
 			result[1] = Properties.SoundPreviewProp
@@ -1102,16 +1116,24 @@ local function main()
 				Properties.SetProp(editor.CurrentProp,BrickColor.new(col))
 			end)
 
-			editor.OnMoreColors:Connect(function() -- TODO: Special Case BasePart.BrickColor to BasePart.Color
+			editor.OnMoreColors:Connect(function()
 				editor:Close()
-				local colProp
-				for i,v in pairs(API.Classes.BasePart.Properties) do
-					if v.Name == "Color" then
-						colProp = v
-						break
+				if editor.CurrentProp and editor.CurrentProp.Class == "BasePart" and editor.CurrentProp.Name == "BrickColor" then
+					local colorProp = Properties.MakeSubProp(editor.CurrentProp,"", {Name = "Color3"})
+					colorProp.Name = "Color"
+					colorProp.SubName = nil
+					colorProp.ValueType = {Name = "Color3", Category = "Datatype"}
+					Properties.DisplayColorEditor(colorProp,editor.SavedColor.Color)
+				else
+					local colProp
+					for i,v in pairs(API.Classes.BasePart.Properties) do
+						if v.Name == "Color" then
+							colProp = v
+							break
+						end
 					end
+					Properties.DisplayColorEditor(colProp,editor.SavedColor.Color)
 				end
-				Properties.DisplayColorEditor(colProp,editor.SavedColor.Color)
 			end)
 
 			Properties.BrickColorEditor = editor
@@ -1818,7 +1840,7 @@ local function main()
 		Properties.FullNameFrameAttach = Lib.AttachTo(fullNameFrame)
 	end
 
-	Properties.Init = function() -- TODO: MAKE BETTER
+	Properties.Init = function()
 		local guiItems = create({
 			{1,"Folder",{Name="Items",}},
 			{2,"Frame",{BackgroundColor3=Color3.new(0.20392157137394,0.20392157137394,0.20392157137394),BorderSizePixel=0,Name="ToolBar",Parent={1},Size=UDim2.new(1,0,0,22),}},
@@ -1902,12 +1924,7 @@ local function main()
 		Properties.InitSearch()
 	end
 
-	return Properties
+return Properties
 end
 
--- TODO: Remove when open source
-if gethsfuncs then
-	_G.moduleData = {InitDeps = initDeps, InitAfterMain = initAfterMain, Main = main}
-else
-	return {InitDeps = initDeps, InitAfterMain = initAfterMain, Main = main}
-end
+return {InitDeps = initDeps, InitAfterMain = initAfterMain, Main = main}

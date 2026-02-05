@@ -23,11 +23,16 @@ local function main()
 		ThemeManager.Window = window
 		
 		local content = window.GuiElems.Content
+		local padding = Instance.new("UIPadding")
+		padding.PaddingTop = UDim.new(0,8)
+		padding.PaddingLeft = UDim.new(0,8)
+		padding.PaddingRight = UDim.new(0,8)
+		padding.Parent = content
 
 		local function makeButton(text, posY, onClick)
 			local btn = Instance.new("TextButton")
-			btn.Size = UDim2.new(1,-20,0,28)
-			btn.Position = UDim2.new(0,10,0,posY)
+			btn.Size = UDim2.new(1,-16,0,28)
+			btn.Position = UDim2.new(0,8,0,posY)
 			btn.Text = text
 			btn.TextColor3 = Color3.new(1,1,1)
 			btn.BackgroundTransparency = 0.2
@@ -56,9 +61,10 @@ local function main()
 		-- Color editor
 		local scroll = Instance.new("ScrollingFrame")
 		scroll.Name = "ColorList"
-		scroll.Size = UDim2.new(1,-20,1,-120)
-		scroll.Position = UDim2.new(0,10,0,120)
-		scroll.BackgroundTransparency = 1
+		scroll.Size = UDim2.new(1,-16,1,-168)
+		scroll.Position = UDim2.new(0,8,0,120)
+		scroll.BackgroundTransparency = 0.1
+		scroll.BackgroundColor3 = Settings.Theme.Main1
 		scroll.CanvasSize = UDim2.new(0,0,0,0)
 		scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
 		scroll.ScrollBarThickness = 6
@@ -145,7 +151,7 @@ local function main()
 			Main.SaveThemeSettings()
 			Lib.RefreshTheme()
 		end)
-		applyColorsBtn.Position = UDim2.new(0,10,1,-36)
+		applyColorsBtn.Position = UDim2.new(0,8,1,-36)
 		applyColorsBtn.AnchorPoint = Vector2.new(0,1)
 	end
 

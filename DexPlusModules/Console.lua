@@ -857,6 +857,7 @@ local function main()
 		setToggle(Console.FilterWarn, filterState[Enum.MessageType.MessageWarning])
 		setToggle(Console.FilterError, filterState[Enum.MessageType.MessageError])
 		setToggle(Console.Listen, listenEnabled)
+		persistFilters()
 
 		local displayedOutput = {}
 		local OutputLimit = Console.Output.OutputLimit

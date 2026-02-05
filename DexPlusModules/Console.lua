@@ -47,16 +47,15 @@ local function main()
 
 	-- StarterGui.ScreenGui.Console
 	ConsoleFrame = Instance.new("ImageButton", window.GuiElems.Content);
-	ConsoleFrame["BorderSizePixel"] = 0;
-	ConsoleFrame["AutoButtonColor"] = false;
-	ConsoleFrame["BackgroundTransparency"] = 1;
-	ConsoleFrame["BackgroundColor3"] = Color3.fromRGB(47, 47, 47);
-	ConsoleFrame["Selectable"] = false;
-	ConsoleFrame["Size"] = UDim2.new(1,0,1,0);
-	ConsoleFrame["BorderColor3"] = Color3.fromRGB(0, 0, 0);
-	ConsoleFrame["Name"] = [[Console]];
-	ConsoleFrame["Position"] = UDim2.new(0,0,0,0);
-	function ConsoleFrame:ApplyTheme() end
+ConsoleFrame["BorderSizePixel"] = 0;
+ConsoleFrame["AutoButtonColor"] = false;
+ConsoleFrame["BackgroundTransparency"] = 1;
+ConsoleFrame["BackgroundColor3"] = Color3.fromRGB(47, 47, 47);
+ConsoleFrame["Selectable"] = false;
+ConsoleFrame["Size"] = UDim2.new(1,0,1,0);
+ConsoleFrame["BorderColor3"] = Color3.fromRGB(0, 0, 0);
+ConsoleFrame["Name"] = [[Console]];
+ConsoleFrame["Position"] = UDim2.new(0,0,0,0);
 
 
 	-- StarterGui.ScreenGui.Console.CommandLine

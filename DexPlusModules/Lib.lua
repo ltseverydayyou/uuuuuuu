@@ -2654,6 +2654,20 @@ local function main()
 			self.GuiElems.Minimize = guiTopBar.Minimize
 			self.GuiElems.ResizeControls = guiResizeControls
 			self.ContentPane = guiMain.Content
+
+			self.ApplyTheme = function(obj)
+				local t = Settings and Settings.Theme
+				if not t then return end
+				if obj.GuiElems.Main then obj.GuiElems.Main.BackgroundColor3 = t.Outline1 or obj.GuiElems.Main.BackgroundColor3 end
+				if obj.GuiElems.Content then obj.GuiElems.Content.BackgroundColor3 = t.Main1 or obj.GuiElems.Content.BackgroundColor3 end
+				if obj.GuiElems.Line then obj.GuiElems.Line.BackgroundColor3 = t.Outline2 or obj.GuiElems.Line.BackgroundColor3 end
+				if obj.GuiElems.Outlines then obj.GuiElems.Outlines.ImageColor3 = t.Outline3 or obj.GuiElems.Outlines.ImageColor3 end
+				if obj.GuiElems.TopBar then obj.GuiElems.TopBar.BackgroundColor3 = t.Main2 or obj.GuiElems.TopBar.BackgroundColor3 end
+				if obj.GuiElems.Title then obj.GuiElems.Title.TextColor3 = t.Text or obj.GuiElems.Title.TextColor3 end
+				if obj.GuiElems.Close then obj.GuiElems.Close.BackgroundColor3 = t.Button or obj.GuiElems.Close.BackgroundColor3 end
+				if obj.GuiElems.Minimize then obj.GuiElems.Minimize.BackgroundColor3 = t.Button or obj.GuiElems.Minimize.BackgroundColor3 end
+			end
+			self:ApplyTheme()
 			
 			-- dont mind this, im testing what if the frame background is blurry 
 			--blur.new(guiMain.Content, "Rectangle")

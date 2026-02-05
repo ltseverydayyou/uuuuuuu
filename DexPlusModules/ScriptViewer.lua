@@ -149,10 +149,10 @@ end
 		window:SetTitle("Executor")
 		window:Resize(500,400)
 		ScriptViewer.Window = window
-		ScriptViewer.ShowExecutor = function()
-			if window then window:SetTitle("Executor") end
-			if dumpbtn then dumpbtn.Visible = false end
-		end
+	ScriptViewer.ShowExecutor = function()
+		if window then window:SetTitle("Executor") end
+		if dumpbtn then dumpbtn.Visible = false end
+	end
 
 		codeFrame = Lib.CodeFrame.new()
 		codeFrame.Frame.Position = UDim2.new(0,0,0,20)
@@ -239,6 +239,8 @@ end
 		local oldtick = tick()
 		local s,source = pcall(env.decompile or function() end,scr)
 
+		if window then window:SetTitle("Script Viewer") end
+
 		if not dumpbtn then
 			dumpbtn = Instance.new("TextButton",window.GuiElems.Content)
 			dumpbtn.BackgroundTransparency = 1
@@ -246,7 +248,7 @@ end
 			dumpbtn.Size = UDim2.new(0.3,0,0,20)
 			dumpbtn.Text = "Dump Functions"
 			dumpbtn.TextColor3 = Color3.new(0.5,0.5,0.5)
-			dumpbtn.Visible = true
+			dumpbtn.Visible = false -- hidden until viewing a script
 
 			dumpbtn.MouseButton1Click:Connect(function()
 				if PreviousScr ~= nil then

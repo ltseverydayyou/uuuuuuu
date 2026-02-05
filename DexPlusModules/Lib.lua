@@ -121,6 +121,14 @@ local function main()
 
 		if Main and Main.AppControls then
 			for _, ctrl in pairs(Main.AppControls) do
+				if type(ctrl) == "table" then
+					if ctrl.ApplyTheme then
+						pcall(function() ctrl:ApplyTheme() end)
+					elseif ctrl.Window and ctrl.Window.ApplyTheme then
+						pcall(function() ctrl.Window:ApplyTheme() end)
+					end
+				end
+
 				local win = ctrl and ctrl.Window
 				local elems = win and win.GuiElems
 				if elems and elems.Main then

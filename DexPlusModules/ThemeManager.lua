@@ -35,7 +35,8 @@ local function main()
 			btn.Position = UDim2.new(0,8,0,posY)
 			btn.Text = text
 			btn.TextColor3 = Color3.new(1,1,1)
-			btn.BackgroundTransparency = 0.2
+			btn.AutoButtonColor = false
+			btn.BackgroundTransparency = 0
 			btn.BackgroundColor3 = Settings.Theme.Button
 			Lib.ButtonAnim(btn,{PressColor = Settings.Theme.ButtonPress})
 			btn.Parent = content
@@ -54,6 +55,7 @@ local function main()
 
 		makeButton("Reset to Default",78,function()
 			Main.ResetSettings()
+			refreshRows()
 			Main.SaveThemeSettings()
 			Lib.RefreshTheme()
 		end)
@@ -61,7 +63,7 @@ local function main()
 		-- Color editor
 		local scroll = Instance.new("ScrollingFrame")
 		scroll.Name = "ColorList"
-		scroll.Size = UDim2.new(1,-16,1,-168)
+		scroll.Size = UDim2.new(1,-16,1,-120)
 		scroll.Position = UDim2.new(0,8,0,120)
 		scroll.BackgroundTransparency = 0.1
 		scroll.BackgroundColor3 = Settings.Theme.Main1
@@ -73,62 +75,58 @@ local function main()
 		local list = Instance.new("UIListLayout", scroll)
 		list.Padding = UDim.new(0,6)
 
-		local themeKeys = {
-			"Main1","Main2","Outline1","Outline2","TextBox","Menu",
-			"ListSelection","Button","ButtonHover","ButtonPress","Highlight",
-			"Text","PlaceholderText","Important"
+		local themeEntries = {
+			{"Main1"},{"Main2"},{"Outline1"},{"Outline2"},{"Outline3"},{"TextBox"},{"Menu"},
+			{"ListSelection"},{"Button"},{"ButtonHover"},{"ButtonPress"},{"Highlight"},
+			{"Text"},{"PlaceholderText"},{"Important"},
+			{"Syntax","Text"},{"Syntax","Background"},{"Syntax","Selection"},{"Syntax","SelectionBack"},
+			{"Syntax","Operator"},{"Syntax","Number"},{"Syntax","String"},{"Syntax","Comment"},
+			{"Syntax","Keyword"},{"Syntax","Error"},{"Syntax","FindBackground"},{"Syntax","MatchingWord"},
+			{"Syntax","BuiltIn"},{"Syntax","CurrentLine"},{"Syntax","LocalMethod"},{"Syntax","LocalProperty"},
+			{"Syntax","Nil"},{"Syntax","Bool"},{"Syntax","Function"},{"Syntax","Local"},{"Syntax","Self"},
+			{"Syntax","FunctionName"},{"Syntax","Bracket"}
 		}
 
 		local rows = {}
 		local activeKey
 
-		local function colorToText(c)
-			return string.format("%d,%d,%d", math.floor(c.R*255+0.5), math.floor(c.G*255+0.5), math.floor(c.B*255+0.5))
-		end
-
 		local colorPicker = Lib.ColorPicker.new()
-		colorPicker.OnSelect:Connect(function(col)
-			if not activeKey then return end
-			for _, row in ipairs(rows) do
-				if row.key == activeKey then
-					row.preview.BackgroundColor3 = col
-					row.box.Text = colorToText(col)
-					Settings.Theme[row.key] = col
-					break
-				end
+		local function getThemeColor(path)
+			local ref = Settings.Theme
+			for i = 1,#path do
+				if type(ref) ~= "table" then return nil end
+				ref = ref[path[i]]
 			end
-			Main.SaveThemeSettings()
-			Lib.RefreshTheme()
-			activeKey = nil
-		end)
-
-		local function parseColor(str)
-			if not str or str == "" then return nil end
-			str = str:gsub("#","")
-			if #str == 6 and str:match("^[0-9a-fA-F]+$") then
-				local r = tonumber(str:sub(1,2),16)
-				local g = tonumber(str:sub(3,4),16)
-				local b = tonumber(str:sub(5,6),16)
-				if r and g and b then return Color3.fromRGB(r,g,b) end
-			end
-			local r,g,b = str:match("^(%d+)%s*,%s*(%d+)%s*,%s*(%d+)$")
-			r,g,b = tonumber(r), tonumber(g), tonumber(b)
-			if r and g and b then
-				return Color3.fromRGB(math.clamp(r,0,255), math.clamp(g,0,255), math.clamp(b,0,255))
-			end
-			return nil
+			return ref
 		end
 
-		for _, key in ipairs(themeKeys) do
+		local function setThemeColor(path, col)
+			local ref = Settings.Theme
+			for i = 1,#path-1 do
+				if type(ref[path[i]]) ~= "table" then ref[path[i]] = {} end
+				ref = ref[path[i]]
+			end
+			ref[path[#path]] = col
+		end
+
+		local function refreshRows()
+			for _, row in ipairs(rows) do
+				local col = getThemeColor(row.path) or Color3.fromRGB(60,60,60)
+				row.preview.BackgroundColor3 = col
+			end
+		end
+
+		for _, path in ipairs(themeEntries) do
+			local keyLabel = table.concat(path,".")
 			local row = Instance.new("Frame")
-			row.Name = key
+			row.Name = keyLabel
 			row.BackgroundTransparency = 1
 			row.Size = UDim2.new(1,0,0,24)
 			row.Parent = scroll
 
 			local label = Instance.new("TextLabel")
 			label.BackgroundTransparency = 1
-			label.Text = key
+			label.Text = keyLabel
 			label.TextXAlignment = Enum.TextXAlignment.Left
 			label.TextColor3 = Color3.new(1,1,1)
 			label.Font = Enum.Font.SourceSans
@@ -140,7 +138,7 @@ local function main()
 			preview.BorderSizePixel = 0
 			preview.Size = UDim2.new(0,24,0,24)
 			preview.Position = UDim2.new(0,124,0,0)
-			preview.BackgroundColor3 = Settings.Theme[key] or Color3.fromRGB(60,60,60)
+			preview.BackgroundColor3 = getThemeColor(path) or Color3.fromRGB(60,60,60)
 			preview.Parent = row
 
 			local pickBtn = Instance.new("TextButton")
@@ -149,40 +147,31 @@ local function main()
 			pickBtn.Size = preview.Size
 			pickBtn.Position = preview.Position
 			pickBtn.Parent = row
-
-			local box = Instance.new("TextBox")
-			box.Text = colorToText(preview.BackgroundColor3)
-			box.PlaceholderText = "r,g,b or #RRGGBB"
-			box.TextColor3 = Color3.new(1,1,1)
-			box.BackgroundColor3 = Settings.Theme.TextBox
-			box.BorderSizePixel = 0
-			box.Size = UDim2.new(1,-180,1,0)
-			box.Position = UDim2.new(0,154,0,0)
-			box.TextSize = 14
-			box.Parent = row
-
-			rows[#rows+1] = {key=key, box=box, preview=preview}
+			rows[#rows+1] = {key=keyLabel, path=path, preview=preview}
 
 			pickBtn.MouseButton1Click:Connect(function()
-				activeKey = key
+				activeKey = path
 				colorPicker:SetColor(preview.BackgroundColor3)
 				colorPicker:Show()
 			end)
 		end
 
-		local applyColorsBtn = makeButton("Apply Colors",0,function()
+		colorPicker.OnSelect:Connect(function(col)
+			if not activeKey then return end
+			setThemeColor(activeKey, col)
 			for _, row in ipairs(rows) do
-				local col = parseColor(row.box.Text)
-				if col then
-					Settings.Theme[row.key] = col
+				if row.path == activeKey then
 					row.preview.BackgroundColor3 = col
+					break
 				end
 			end
 			Main.SaveThemeSettings()
 			Lib.RefreshTheme()
+			activeKey = nil
+			refreshRows()
 		end)
-		applyColorsBtn.Position = UDim2.new(0,8,1,-36)
-		applyColorsBtn.AnchorPoint = Vector2.new(0,1)
+
+		refreshRows()
 	end
 
 	return ThemeManager

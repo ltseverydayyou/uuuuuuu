@@ -15,6 +15,7 @@ local function initAfterMain() end
 local function main()
 	local ThemeManager = {}
 	local window
+	local refreshRows
 
 	ThemeManager.Init = function()
 		window = Lib.Window.new()
@@ -89,7 +90,6 @@ local function main()
 
 		local rows = {}
 		local activeKey
-		local refreshRows
 
 		local colorPicker = Lib.ColorPicker.new()
 		local function getThemeColor(path)

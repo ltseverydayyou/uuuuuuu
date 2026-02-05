@@ -54,6 +54,7 @@ end
 		local window, codeFrame
 	
 		local execute, clear, dumpbtn
+		local textSizeValue, textSizeFrame, textSizeInput
 	
 	local PreviousScr = nil
 	
@@ -158,10 +159,173 @@ end
 		codeFrame.Frame.Position = UDim2.new(0,0,0,20)
 		codeFrame.Frame.Size = UDim2.new(1,0,1,-40)
 		codeFrame.Frame.Parent = window.GuiElems.Content
+
+		textSizeValue = Instance.new("NumberValue")
+		textSizeValue.Name = "CodeTextSize"
+		textSizeValue.Parent = codeFrame.Frame
+
+		local savedTextSize = Main and Main.UserSettings and tonumber(Main.UserSettings.ScriptViewerTextSize)
+		textSizeValue.Value = savedTextSize or codeFrame.FontSize or 16
+
+		textSizeFrame = Instance.new("Frame", window.GuiElems.Content)
+		textSizeFrame.Name = "TextSizeBox"
+		textSizeFrame.BorderSizePixel = 0
+		textSizeFrame.BackgroundColor3 = Color3.fromRGB(37, 37, 37)
+		textSizeFrame.ClipsDescendants = true
+		textSizeFrame.Size = UDim2.new(0.06, 0, 0, 18)
+		textSizeFrame.Position = UDim2.new(0.64, 0, 0, 1)
+
+		local textSizeStroke = Instance.new("UIStroke", textSizeFrame)
+		textSizeStroke.Transparency = 0.65
+		textSizeStroke.Thickness = 1.25
+
+		textSizeInput = Instance.new("TextBox", textSizeFrame)
+		textSizeInput.Name = "TextBox"
+		textSizeInput.PlaceholderColor3 = Color3.fromRGB(108, 108, 108)
+		textSizeInput.BorderSizePixel = 0
+		textSizeInput.TextWrapped = true
+		textSizeInput.TextSize = 15
+		textSizeInput.TextColor3 = Color3.fromRGB(211, 211, 211)
+		textSizeInput.TextScaled = true
+		textSizeInput.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+		textSizeInput.FontFace = Font.new([[rbxasset://fonts/families/Inconsolata.json]], Enum.FontWeight.Regular, Enum.FontStyle.Normal)
+		textSizeInput.PlaceholderText = [[Size]]
+		textSizeInput.Size = UDim2.new(1, 0, 1, 0)
+		textSizeInput.BorderColor3 = Color3.fromRGB(0, 0, 0)
+		textSizeInput.ClearTextOnFocus = false
+		textSizeInput.Text = tostring(textSizeValue.Value)
+		textSizeInput.BackgroundTransparency = 1
+
+		local textSizePad = Instance.new("UIPadding", textSizeInput)
+		textSizePad.PaddingTop = UDim.new(0, 2)
+		textSizePad.PaddingRight = UDim.new(0, 5)
+		textSizePad.PaddingLeft = UDim.new(0, 5)
+		textSizePad.PaddingBottom = UDim.new(0, 2)
+
+		local sizeBoxFocused = false
+		textSizeInput.Focused:Connect(function()
+			sizeBoxFocused = true
+		end)
+
+		local saveQueued = false
+		local function queueSaveUserSettings()
+			if not (Main and Main.SaveUserSettings) then return end
+			if saveQueued then return end
+			saveQueued = true
+			delay(0.35, function()
+				saveQueued = false
+				if Main and Main.SaveUserSettings then
+					Main.SaveUserSettings()
+				end
+			end)
+		end
+
+		local function applyTextSize()
+			if not (codeFrame and textSizeValue) then return end
+
+			local size = math.floor(tonumber(textSizeValue.Value) or (codeFrame.FontSize or 16))
+			size = math.clamp(size, 1, 64)
+			if size ~= textSizeValue.Value then
+				textSizeValue.Value = size
+				return
+			end
+
+			if not sizeBoxFocused and textSizeInput then
+				textSizeInput.Text = tostring(size)
+			end
+
+			codeFrame.FontSize = size
+			if codeFrame.LineFrames then
+				for i = #codeFrame.LineFrames, 1, -1 do
+					local lf = codeFrame.LineFrames[i]
+					if lf and lf.Destroy then
+						lf:Destroy()
+					end
+					codeFrame.LineFrames[i] = nil
+				end
+			end
+			codeFrame:UpdateView()
+			codeFrame:Refresh()
+
+			if Main then
+				Main.UserSettings = Main.UserSettings or {}
+				Main.UserSettings.ScriptViewerTextSize = size
+				queueSaveUserSettings()
+			end
+		end
+
+		textSizeInput.FocusLost:Connect(function()
+			sizeBoxFocused = false
+			local n = tonumber(textSizeInput.Text)
+			if n and n > 0 then
+				textSizeValue.Value = n
+			else
+				textSizeInput.Text = tostring(textSizeValue.Value)
+			end
+		end)
+		textSizeValue:GetPropertyChangedSignal("Value"):Connect(applyTextSize)
+		applyTextSize()
+
+		local UserInputService = game:GetService("UserInputService")
+		local isHoldingCTRL = false
+
+		local function setWheelScrollingEnabled(enabled)
+			if not (codeFrame and codeFrame.ScrollV) then return end
+			local scrollV = codeFrame.ScrollV
+
+			if not enabled then
+				if scrollV.ScrollUpEvent then
+					scrollV.ScrollUpEvent:Disconnect()
+					scrollV.ScrollUpEvent = nil
+				end
+				if scrollV.ScrollDownEvent then
+					scrollV.ScrollDownEvent:Disconnect()
+					scrollV.ScrollDownEvent = nil
+				end
+				return
+			end
+
+			local lines = codeFrame.Frame and (codeFrame.Frame:FindFirstChild("Lines") or codeFrame.Frame.Lines)
+			if lines then
+				scrollV:SetScrollFrame(lines)
+			end
+		end
+
+		UserInputService.InputBegan:Connect(function(input, gameproc)
+			if gameproc then return end
+			if input.KeyCode == Enum.KeyCode.LeftControl or input.KeyCode == Enum.KeyCode.RightControl then
+				isHoldingCTRL = true
+				setWheelScrollingEnabled(false)
+			end
+		end)
+		UserInputService.InputEnded:Connect(function(input, gameproc)
+			if gameproc then return end
+			if input.KeyCode == Enum.KeyCode.LeftControl or input.KeyCode == Enum.KeyCode.RightControl then
+				isHoldingCTRL = false
+				setWheelScrollingEnabled(true)
+			end
+		end)
+
+		local linesFrame = codeFrame.Frame:FindFirstChild("Lines")
+		if linesFrame then
+			linesFrame.MouseWheelForward:Connect(function()
+				if isHoldingCTRL then
+					textSizeValue.Value = textSizeValue.Value + 1
+				end
+			end)
+			linesFrame.MouseWheelBackward:Connect(function()
+				if isHoldingCTRL then
+					local newSize = textSizeValue.Value - 1
+					if newSize >= 1 then
+						textSizeValue.Value = newSize
+					end
+				end
+			end)
+		end
 		
 		local copy = Instance.new("TextButton",window.GuiElems.Content)
 		copy.BackgroundTransparency = 1
-		copy.Size = UDim2.new(0.33,0,0,20)
+		copy.Size = UDim2.new(0.32,0,0,20)
 		copy.Position = UDim2.new(0,0,0,0)
 		copy.Text = "Copy to Clipboard"
 		
@@ -180,8 +344,8 @@ end
 
 		local save = Instance.new("TextButton",window.GuiElems.Content)
 		save.BackgroundTransparency = 1
-		save.Size = UDim2.new(0.33,0,0,20)
-		save.Position = UDim2.new(0.33,0,0,0)
+		save.Size = UDim2.new(0.32,0,0,20)
+		save.Position = UDim2.new(0.32,0,0,0)
 		save.Text = "Save to File"
 		save.TextColor3 = Color3.new(1,1,1)
 		
@@ -242,6 +406,9 @@ end
 			end
 			if codeFrame and codeFrame.Frame then
 				codeFrame.Frame.BackgroundColor3 = t.TextBox or codeFrame.Frame.BackgroundColor3
+			end
+			if textSizeFrame then
+				textSizeFrame.BackgroundColor3 = t.TextBox or textSizeFrame.BackgroundColor3
 			end
 		end
 	end

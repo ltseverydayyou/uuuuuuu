@@ -19,40 +19,134 @@ local function main()
 	ThemeManager.Init = function()
 		window = Lib.Window.new()
 		window:SetTitle("Themes")
-		window:Resize(300,160)
+		window:Resize(360,360)
 		ThemeManager.Window = window
+		
+		local content = window.GuiElems.Content
 
-		local apply = Instance.new("TextButton", window.GuiElems.Content)
-		apply.Size = UDim2.new(1,-20,0,30)
-		apply.Position = UDim2.new(0,10,0,10)
-		apply.Text = "Reload Theme File"
-		apply.TextColor3 = Color3.new(1,1,1)
-		apply.BackgroundTransparency = 0.2
-		apply.BackgroundColor3 = Settings.Theme.Button
-		Lib.ButtonAnim(apply,{PressColor = Settings.Theme.ButtonPress})
+		local function makeButton(text, posY, onClick)
+			local btn = Instance.new("TextButton")
+			btn.Size = UDim2.new(1,-20,0,28)
+			btn.Position = UDim2.new(0,10,0,posY)
+			btn.Text = text
+			btn.TextColor3 = Color3.new(1,1,1)
+			btn.BackgroundTransparency = 0.2
+			btn.BackgroundColor3 = Settings.Theme.Button
+			Lib.ButtonAnim(btn,{PressColor = Settings.Theme.ButtonPress})
+			btn.Parent = content
+			btn.MouseButton1Click:Connect(onClick)
+			return btn
+		end
 
-		apply.MouseButton1Click:Connect(function()
+		makeButton("Reload Theme File",10,function()
 			Main.LoadThemeSettings()
 			Lib.RefreshTheme()
 		end)
 
-		local save = apply:Clone()
-		save.Parent = window.GuiElems.Content
-		save.Position = UDim2.new(0,10,0,50)
-		save.Text = "Save Current Theme"
-		save.MouseButton1Click:Connect(function()
+		makeButton("Save Current Theme",44,function()
 			Main.SaveThemeSettings()
 		end)
 
-		local reset = apply:Clone()
-		reset.Parent = window.GuiElems.Content
-		reset.Position = UDim2.new(0,10,0,90)
-		reset.Text = "Reset to Default"
-		reset.MouseButton1Click:Connect(function()
+		makeButton("Reset to Default",78,function()
 			Main.ResetSettings()
 			Main.SaveThemeSettings()
 			Lib.RefreshTheme()
 		end)
+
+		-- Color editor
+		local scroll = Instance.new("ScrollingFrame")
+		scroll.Name = "ColorList"
+		scroll.Size = UDim2.new(1,-20,1,-120)
+		scroll.Position = UDim2.new(0,10,0,120)
+		scroll.BackgroundTransparency = 1
+		scroll.CanvasSize = UDim2.new(0,0,0,0)
+		scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+		scroll.ScrollBarThickness = 6
+		scroll.Parent = content
+
+		local list = Instance.new("UIListLayout", scroll)
+		list.Padding = UDim.new(0,6)
+
+		local themeKeys = {
+			"Main1","Main2","Outline1","Outline2","TextBox","Menu",
+			"ListSelection","Button","ButtonHover","ButtonPress","Highlight",
+			"Text","PlaceholderText","Important"
+		}
+
+		local rows = {}
+
+		local function colorToText(c)
+			return string.format("%d,%d,%d", math.floor(c.R*255+0.5), math.floor(c.G*255+0.5), math.floor(c.B*255+0.5))
+		end
+
+		local function parseColor(str)
+			if not str or str == "" then return nil end
+			str = str:gsub("#","")
+			if #str == 6 and str:match("^[0-9a-fA-F]+$") then
+				local r = tonumber(str:sub(1,2),16)
+				local g = tonumber(str:sub(3,4),16)
+				local b = tonumber(str:sub(5,6),16)
+				if r and g and b then return Color3.fromRGB(r,g,b) end
+			end
+			local r,g,b = str:match("^(%d+)%s*,%s*(%d+)%s*,%s*(%d+)$")
+			r,g,b = tonumber(r), tonumber(g), tonumber(b)
+			if r and g and b then
+				return Color3.fromRGB(math.clamp(r,0,255), math.clamp(g,0,255), math.clamp(b,0,255))
+			end
+			return nil
+		end
+
+		for _, key in ipairs(themeKeys) do
+			local row = Instance.new("Frame")
+			row.Name = key
+			row.BackgroundTransparency = 1
+			row.Size = UDim2.new(1,0,0,24)
+			row.Parent = scroll
+
+			local label = Instance.new("TextLabel")
+			label.BackgroundTransparency = 1
+			label.Text = key
+			label.TextXAlignment = Enum.TextXAlignment.Left
+			label.TextColor3 = Color3.new(1,1,1)
+			label.Font = Enum.Font.SourceSans
+			label.TextSize = 14
+			label.Size = UDim2.new(0,120,1,0)
+			label.Parent = row
+
+			local preview = Instance.new("Frame")
+			preview.BorderSizePixel = 0
+			preview.Size = UDim2.new(0,24,0,24)
+			preview.Position = UDim2.new(0,124,0,0)
+			preview.BackgroundColor3 = Settings.Theme[key] or Color3.fromRGB(60,60,60)
+			preview.Parent = row
+
+			local box = Instance.new("TextBox")
+			box.Text = colorToText(preview.BackgroundColor3)
+			box.PlaceholderText = "r,g,b or #RRGGBB"
+			box.TextColor3 = Color3.new(1,1,1)
+			box.BackgroundColor3 = Settings.Theme.TextBox
+			box.BorderSizePixel = 0
+			box.Size = UDim2.new(1,-180,1,0)
+			box.Position = UDim2.new(0,154,0,0)
+			box.TextSize = 14
+			box.Parent = row
+
+			rows[#rows+1] = {key=key, box=box, preview=preview}
+		end
+
+		local applyColorsBtn = makeButton("Apply Colors",0,function()
+			for _, row in ipairs(rows) do
+				local col = parseColor(row.box.Text)
+				if col then
+					Settings.Theme[row.key] = col
+					row.preview.BackgroundColor3 = col
+				end
+			end
+			Main.SaveThemeSettings()
+			Lib.RefreshTheme()
+		end)
+		applyColorsBtn.Position = UDim2.new(0,10,1,-36)
+		applyColorsBtn.AnchorPoint = Vector2.new(0,1)
 	end
 
 	return ThemeManager

@@ -102,6 +102,36 @@ local function main()
 		return service.UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or service.UserInputService:IsKeyDown(Enum.KeyCode.RightControl)
 	end
 
+	Lib.RefreshTheme = function()
+		local theme = Settings and Settings.Theme
+		if not theme then return end
+
+		if Main and Main.MainGui and Main.MainGui.OpenButton then
+			local open = Main.MainGui.OpenButton
+			open.BackgroundColor3 = theme.Button or open.BackgroundColor3
+			local mf = open.MainFrame
+			if mf then
+				mf.BackgroundColor3 = theme.Button or mf.BackgroundColor3
+				local bf = mf:FindFirstChild("BottomFrame")
+				if bf then
+					bf.BackgroundColor3 = theme.Menu or bf.BackgroundColor3
+				end
+			end
+		end
+
+		if Main and Main.AppControls then
+			for _, ctrl in pairs(Main.AppControls) do
+				local win = ctrl and ctrl.Window
+				local elems = win and win.GuiElems
+				if elems and elems.Main then
+					elems.Main.BackgroundColor3 = theme.Outline1 or elems.Main.BackgroundColor3
+					if elems.TopBar then elems.TopBar.BackgroundColor3 = theme.Main2 or elems.TopBar.BackgroundColor3 end
+					if elems.Content then elems.Content.BackgroundColor3 = theme.Main1 or elems.Content.BackgroundColor3 end
+				end
+			end
+		end
+	end
+
 	Lib.CreateArrow = function(size,num,dir)
 		local max = num
 		local arrowFrame = createSimple("Frame",{

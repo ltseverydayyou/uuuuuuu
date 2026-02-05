@@ -173,7 +173,7 @@ local function main()
 		settingsButton.BackgroundTransparency = 1
 		settingsButton.Size = UDim2.new(0,15,0,15)
 		settingsButton.Position = UDim2.new(1,-3,0,3)
-		settingsButton.Image = "rbxassetid://6578871732"
+		settingsButton.Image = Main.ResolveAsset("rbxassetid://6578871732")
 		settingsButton.ImageTransparency = 0.5
 		-- mobile input check
 		if UserInputService:GetLastInputType() == Enum.UserInputType.Touch then

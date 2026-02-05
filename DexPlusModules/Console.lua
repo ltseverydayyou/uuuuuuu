@@ -56,6 +56,7 @@ local function main()
 	ConsoleFrame["BorderColor3"] = Color3.fromRGB(0, 0, 0);
 	ConsoleFrame["Name"] = [[Console]];
 	ConsoleFrame["Position"] = UDim2.new(0,0,0,0);
+	function ConsoleFrame:ApplyTheme() end
 
 
 	-- StarterGui.ScreenGui.Console.CommandLine

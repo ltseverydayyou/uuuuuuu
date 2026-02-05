@@ -19,55 +19,6 @@ local function main()
 
 	local presets = {
 		{
-			name = "Default",
-			apply = function()
-				Settings.Theme = Settings.Theme or {}
-				local t = Settings.Theme
-				local s = t.Syntax or {}
-				t.Main1 = Color3.fromRGB(52,52,52)
-				t.Main2 = Color3.fromRGB(45,45,45)
-				t.Outline1 = Color3.fromRGB(33,33,33)
-				t.Outline2 = Color3.fromRGB(55,55,55)
-				t.Outline3 = Color3.fromRGB(30,30,30)
-				t.TextBox = Color3.fromRGB(38,38,38)
-				t.Menu = Color3.fromRGB(32,32,32)
-				t.ListSelection = Color3.fromRGB(11,90,175)
-				t.Button = Color3.fromRGB(60,60,60)
-				t.ButtonHover = Color3.fromRGB(68,68,68)
-				t.ButtonPress = Color3.fromRGB(40,40,40)
-				t.Highlight = Color3.fromRGB(75,75,75)
-				t.Text = Color3.fromRGB(255,255,255)
-				t.PlaceholderText = Color3.fromRGB(100,100,100)
-				t.Important = Color3.fromRGB(255,0,0)
-
-				s.Text = Color3.fromRGB(204,204,204)
-				s.Background = Color3.fromRGB(36,36,36)
-				s.Selection = Color3.fromRGB(255,255,255)
-				s.SelectionBack = Color3.fromRGB(11,90,175)
-				s.Operator = Color3.fromRGB(204,204,204)
-				s.Number = Color3.fromRGB(255,198,0)
-				s.String = Color3.fromRGB(173,241,149)
-				s.Comment = Color3.fromRGB(102,102,102)
-				s.Keyword = Color3.fromRGB(248,109,124)
-				s.Error = Color3.fromRGB(255,0,0)
-				s.FindBackground = Color3.fromRGB(141,118,0)
-				s.MatchingWord = Color3.fromRGB(85,85,85)
-				s.BuiltIn = Color3.fromRGB(132,214,247)
-				s.CurrentLine = Color3.fromRGB(45,50,65)
-				s.LocalMethod = Color3.fromRGB(253,251,172)
-				s.LocalProperty = Color3.fromRGB(97,161,241)
-				s.Nil = Color3.fromRGB(255,198,0)
-				s.Bool = Color3.fromRGB(255,198,0)
-				s.Function = Color3.fromRGB(248,109,124)
-				s.Local = Color3.fromRGB(248,109,124)
-				s.Self = Color3.fromRGB(248,109,124)
-				s.FunctionName = Color3.fromRGB(253,251,172)
-				s.Bracket = Color3.fromRGB(204,204,204)
-
-				t.Syntax = s
-			end
-		},
-		{
 			name = "Midnight",
 			apply = function()
 				Settings.Theme = Settings.Theme or {}
@@ -117,49 +68,294 @@ local function main()
 			end
 		},
 		{
-			name = "Purple",
+			name = "Tokyo",
 			apply = function()
 				Settings.Theme = Settings.Theme or {}
 				local t = Settings.Theme
 				local s = t.Syntax or {}
-				t.Main1 = Color3.fromRGB(28,20,40)
-				t.Main2 = Color3.fromRGB(20,14,32)
-				t.Outline1 = Color3.fromRGB(16,10,28)
-				t.Outline2 = Color3.fromRGB(46,32,70)
-				t.Outline3 = Color3.fromRGB(12,8,20)
-				t.TextBox = Color3.fromRGB(30,22,50)
-				t.Menu = Color3.fromRGB(24,18,40)
-				t.ListSelection = Color3.fromRGB(190,80,255)
-				t.Button = Color3.fromRGB(40,30,70)
-				t.ButtonHover = Color3.fromRGB(54,40,90)
-				t.ButtonPress = Color3.fromRGB(26,18,44)
-				t.Highlight = Color3.fromRGB(60,44,100)
-				t.Text = Color3.fromRGB(240,230,255)
-				t.PlaceholderText = Color3.fromRGB(150,130,190)
-				t.Important = Color3.fromRGB(255,90,140)
+				t.Main1 = Color3.fromRGB(26,22,32)
+				t.Main2 = Color3.fromRGB(18,14,26)
+				t.Outline1 = Color3.fromRGB(40,24,50)
+				t.Outline2 = Color3.fromRGB(70,36,90)
+				t.Outline3 = Color3.fromRGB(16,10,24)
+				t.TextBox = Color3.fromRGB(32,24,44)
+				t.Menu = Color3.fromRGB(24,18,36)
+				t.ListSelection = Color3.fromRGB(255,105,180)
+				t.Button = Color3.fromRGB(46,32,70)
+				t.ButtonHover = Color3.fromRGB(60,40,90)
+				t.ButtonPress = Color3.fromRGB(30,20,50)
+				t.Highlight = Color3.fromRGB(80,50,100)
+				t.Text = Color3.fromRGB(245,235,255)
+				t.PlaceholderText = Color3.fromRGB(170,140,190)
+				t.Important = Color3.fromRGB(255,90,130)
 
-				s.Text = Color3.fromRGB(230,220,245)
-				s.Background = Color3.fromRGB(22,16,34)
+				s.Text = Color3.fromRGB(235,225,245)
+				s.Background = Color3.fromRGB(22,16,32)
 				s.Selection = Color3.fromRGB(255,255,255)
-				s.SelectionBack = Color3.fromRGB(190,80,255)
-				s.Operator = Color3.fromRGB(230,220,245)
-				s.Number = Color3.fromRGB(255,210,110)
+				s.SelectionBack = Color3.fromRGB(255,105,180)
+				s.Operator = Color3.fromRGB(235,225,245)
+				s.Number = Color3.fromRGB(255,210,120)
 				s.String = Color3.fromRGB(190,250,170)
-				s.Comment = Color3.fromRGB(130,110,170)
-				s.Keyword = Color3.fromRGB(255,130,190)
-				s.Error = Color3.fromRGB(255,100,150)
-				s.FindBackground = Color3.fromRGB(180,120,160)
-				s.MatchingWord = Color3.fromRGB(90,70,130)
+				s.Comment = Color3.fromRGB(130,110,160)
+				s.Keyword = Color3.fromRGB(255,150,200)
+				s.Error = Color3.fromRGB(255,110,150)
+				s.FindBackground = Color3.fromRGB(200,120,180)
+				s.MatchingWord = Color3.fromRGB(90,70,120)
 				s.BuiltIn = Color3.fromRGB(150,210,255)
-				s.CurrentLine = Color3.fromRGB(40,30,70)
+				s.CurrentLine = Color3.fromRGB(38,26,60)
 				s.LocalMethod = Color3.fromRGB(255,252,190)
+				s.LocalProperty = Color3.fromRGB(150,190,255)
+				s.Nil = Color3.fromRGB(255,210,120)
+				s.Bool = Color3.fromRGB(255,210,120)
+				s.Function = Color3.fromRGB(255,150,200)
+				s.Local = Color3.fromRGB(255,150,200)
+				s.Self = Color3.fromRGB(255,150,200)
+				s.FunctionName = Color3.fromRGB(255,252,190)
+				s.Bracket = Color3.fromRGB(235,225,245)
+
+				t.Syntax = s
+			end
+		},
+		{
+			name = "Cyberpunk",
+			apply = function()
+				Settings.Theme = Settings.Theme or {}
+				local t = Settings.Theme
+				local s = t.Syntax or {}
+				t.Main1 = Color3.fromRGB(8,8,18)
+				t.Main2 = Color3.fromRGB(4,4,10)
+				t.Outline1 = Color3.fromRGB(20,20,40)
+				t.Outline2 = Color3.fromRGB(30,16,60)
+				t.Outline3 = Color3.fromRGB(6,6,18)
+				t.TextBox = Color3.fromRGB(20,16,38)
+				t.Menu = Color3.fromRGB(14,10,30)
+				t.ListSelection = Color3.fromRGB(0,255,255)
+				t.Button = Color3.fromRGB(24,20,44)
+				t.ButtonHover = Color3.fromRGB(40,30,70)
+				t.ButtonPress = Color3.fromRGB(16,12,30)
+				t.Highlight = Color3.fromRGB(80,10,110)
+				t.Text = Color3.fromRGB(230,240,255)
+				t.PlaceholderText = Color3.fromRGB(130,150,190)
+				t.Important = Color3.fromRGB(255,40,120)
+
+				s.Text = Color3.fromRGB(220,230,250)
+				s.Background = Color3.fromRGB(6,6,16)
+				s.Selection = Color3.fromRGB(255,255,255)
+				s.SelectionBack = Color3.fromRGB(0,255,255)
+				s.Operator = Color3.fromRGB(230,240,255)
+				s.Number = Color3.fromRGB(255,220,120)
+				s.String = Color3.fromRGB(180,255,180)
+				s.Comment = Color3.fromRGB(110,120,150)
+				s.Keyword = Color3.fromRGB(255,80,190)
+				s.Error = Color3.fromRGB(255,70,110)
+				s.FindBackground = Color3.fromRGB(40,220,200)
+				s.MatchingWord = Color3.fromRGB(40,60,120)
+				s.BuiltIn = Color3.fromRGB(120,210,255)
+				s.CurrentLine = Color3.fromRGB(20,20,36)
+				s.LocalMethod = Color3.fromRGB(255,252,200)
 				s.LocalProperty = Color3.fromRGB(130,190,255)
+				s.Nil = Color3.fromRGB(255,220,120)
+				s.Bool = Color3.fromRGB(255,220,120)
+				s.Function = Color3.fromRGB(255,80,190)
+				s.Local = Color3.fromRGB(255,80,190)
+				s.Self = Color3.fromRGB(255,80,190)
+				s.FunctionName = Color3.fromRGB(255,252,200)
+				s.Bracket = Color3.fromRGB(220,230,250)
+
+				t.Syntax = s
+			end
+		},
+		{
+			name = "ULTRAKILL",
+			apply = function()
+				Settings.Theme = Settings.Theme or {}
+				local t = Settings.Theme
+				local s = t.Syntax or {}
+				t.Main1 = Color3.fromRGB(24,10,10)
+				t.Main2 = Color3.fromRGB(14,4,4)
+				t.Outline1 = Color3.fromRGB(40,10,10)
+				t.Outline2 = Color3.fromRGB(80,20,20)
+				t.Outline3 = Color3.fromRGB(14,4,4)
+				t.TextBox = Color3.fromRGB(30,10,10)
+				t.Menu = Color3.fromRGB(22,8,8)
+				t.ListSelection = Color3.fromRGB(255,40,40)
+				t.Button = Color3.fromRGB(50,18,18)
+				t.ButtonHover = Color3.fromRGB(70,24,24)
+				t.ButtonPress = Color3.fromRGB(30,10,10)
+				t.Highlight = Color3.fromRGB(110,30,30)
+				t.Text = Color3.fromRGB(250,230,230)
+				t.PlaceholderText = Color3.fromRGB(170,120,120)
+				t.Important = Color3.fromRGB(255,80,80)
+
+				s.Text = Color3.fromRGB(240,220,220)
+				s.Background = Color3.fromRGB(18,8,8)
+				s.Selection = Color3.fromRGB(255,255,255)
+				s.SelectionBack = Color3.fromRGB(255,60,60)
+				s.Operator = Color3.fromRGB(250,230,230)
+				s.Number = Color3.fromRGB(255,210,110)
+				s.String = Color3.fromRGB(220,255,190)
+				s.Comment = Color3.fromRGB(150,110,110)
+				s.Keyword = Color3.fromRGB(255,120,120)
+				s.Error = Color3.fromRGB(255,100,100)
+				s.FindBackground = Color3.fromRGB(200,60,60)
+				s.MatchingWord = Color3.fromRGB(90,40,40)
+				s.BuiltIn = Color3.fromRGB(255,210,150)
+				s.CurrentLine = Color3.fromRGB(40,16,16)
+				s.LocalMethod = Color3.fromRGB(255,250,190)
+				s.LocalProperty = Color3.fromRGB(255,200,160)
 				s.Nil = Color3.fromRGB(255,210,110)
 				s.Bool = Color3.fromRGB(255,210,110)
-				s.Function = Color3.fromRGB(255,130,190)
-				s.Local = Color3.fromRGB(255,130,190)
-				s.Self = Color3.fromRGB(255,130,190)
-				s.FunctionName = Color3.fromRGB(255,252,190)
+				s.Function = Color3.fromRGB(255,120,120)
+				s.Local = Color3.fromRGB(255,120,120)
+				s.Self = Color3.fromRGB(255,120,120)
+				s.FunctionName = Color3.fromRGB(255,250,190)
+				s.Bracket = Color3.fromRGB(240,220,220)
+
+				t.Syntax = s
+			end
+		},
+		{
+			name = "Emo",
+			apply = function()
+				Settings.Theme = Settings.Theme or {}
+				local t = Settings.Theme
+				local s = t.Syntax or {}
+				t.Main1 = Color3.fromRGB(20,20,24)
+				t.Main2 = Color3.fromRGB(12,12,16)
+				t.Outline1 = Color3.fromRGB(40,40,46)
+				t.Outline2 = Color3.fromRGB(60,60,70)
+				t.Outline3 = Color3.fromRGB(16,16,20)
+				t.TextBox = Color3.fromRGB(22,22,28)
+				t.Menu = Color3.fromRGB(18,18,22)
+				t.ListSelection = Color3.fromRGB(200,120,220)
+				t.Button = Color3.fromRGB(34,34,42)
+				t.ButtonHover = Color3.fromRGB(46,46,56)
+				t.ButtonPress = Color3.fromRGB(24,24,30)
+				t.Highlight = Color3.fromRGB(70,40,90)
+				t.Text = Color3.fromRGB(235,235,245)
+				t.PlaceholderText = Color3.fromRGB(150,150,170)
+				t.Important = Color3.fromRGB(255,90,140)
+
+				s.Text = Color3.fromRGB(225,225,240)
+				s.Background = Color3.fromRGB(14,14,18)
+				s.Selection = Color3.fromRGB(255,255,255)
+				s.SelectionBack = Color3.fromRGB(200,120,220)
+				s.Operator = Color3.fromRGB(225,225,240)
+				s.Number = Color3.fromRGB(255,210,120)
+				s.String = Color3.fromRGB(200,245,190)
+				s.Comment = Color3.fromRGB(140,140,160)
+				s.Keyword = Color3.fromRGB(255,150,210)
+				s.Error = Color3.fromRGB(255,110,160)
+				s.FindBackground = Color3.fromRGB(180,120,200)
+				s.MatchingWord = Color3.fromRGB(70,70,100)
+				s.BuiltIn = Color3.fromRGB(160,210,255)
+				s.CurrentLine = Color3.fromRGB(30,30,40)
+				s.LocalMethod = Color3.fromRGB(255,252,200)
+				s.LocalProperty = Color3.fromRGB(150,190,255)
+				s.Nil = Color3.fromRGB(255,210,120)
+				s.Bool = Color3.fromRGB(255,210,120)
+				s.Function = Color3.fromRGB(255,150,210)
+				s.Local = Color3.fromRGB(255,150,210)
+				s.Self = Color3.fromRGB(255,150,210)
+				s.FunctionName = Color3.fromRGB(255,252,200)
+				s.Bracket = Color3.fromRGB(225,225,240)
+
+				t.Syntax = s
+			end
+		},
+		{
+			name = "Ocean",
+			apply = function()
+				Settings.Theme = Settings.Theme or {}
+				local t = Settings.Theme
+				local s = t.Syntax or {}
+				t.Main1 = Color3.fromRGB(10,28,34)
+				t.Main2 = Color3.fromRGB(6,18,24)
+				t.Outline1 = Color3.fromRGB(12,40,50)
+				t.Outline2 = Color3.fromRGB(20,70,90)
+				t.Outline3 = Color3.fromRGB(6,24,30)
+				t.TextBox = Color3.fromRGB(12,32,40)
+				t.Menu = Color3.fromRGB(8,26,34)
+				t.ListSelection = Color3.fromRGB(0,180,200)
+				t.Button = Color3.fromRGB(16,40,50)
+				t.ButtonHover = Color3.fromRGB(22,60,70)
+				t.ButtonPress = Color3.fromRGB(10,30,38)
+				t.Highlight = Color3.fromRGB(30,90,110)
+				t.Text = Color3.fromRGB(220,240,245)
+				t.PlaceholderText = Color3.fromRGB(140,180,190)
+				t.Important = Color3.fromRGB(255,120,120)
+
+				s.Text = Color3.fromRGB(210,235,240)
+				s.Background = Color3.fromRGB(6,20,26)
+				s.Selection = Color3.fromRGB(255,255,255)
+				s.SelectionBack = Color3.fromRGB(0,180,200)
+				s.Operator = Color3.fromRGB(210,235,240)
+				s.Number = Color3.fromRGB(255,220,130)
+				s.String = Color3.fromRGB(190,255,210)
+				s.Comment = Color3.fromRGB(110,150,160)
+				s.Keyword = Color3.fromRGB(110,220,255)
+				s.Error = Color3.fromRGB(255,120,140)
+				s.FindBackground = Color3.fromRGB(40,160,190)
+				s.MatchingWord = Color3.fromRGB(40,80,100)
+				s.BuiltIn = Color3.fromRGB(140,220,255)
+				s.CurrentLine = Color3.fromRGB(14,34,44)
+				s.LocalMethod = Color3.fromRGB(255,252,200)
+				s.LocalProperty = Color3.fromRGB(150,210,255)
+				s.Nil = Color3.fromRGB(255,220,130)
+				s.Bool = Color3.fromRGB(255,220,130)
+				s.Function = Color3.fromRGB(110,220,255)
+				s.Local = Color3.fromRGB(110,220,255)
+				s.Self = Color3.fromRGB(110,220,255)
+				s.FunctionName = Color3.fromRGB(255,252,200)
+				s.Bracket = Color3.fromRGB(210,235,240)
+
+				t.Syntax = s
+			end
+		},
+		{
+			name = "Midnight Purple",
+			apply = function()
+				Settings.Theme = Settings.Theme or {}
+				local t = Settings.Theme
+				local s = t.Syntax or {}
+				t.Main1 = Color3.fromRGB(18,10,32)
+				t.Main2 = Color3.fromRGB(10,6,24)
+				t.Outline1 = Color3.fromRGB(30,16,54)
+				t.Outline2 = Color3.fromRGB(56,28,96)
+				t.Outline3 = Color3.fromRGB(12,8,26)
+				t.TextBox = Color3.fromRGB(22,14,40)
+				t.Menu = Color3.fromRGB(16,10,30)
+				t.ListSelection = Color3.fromRGB(200,120,255)
+				t.Button = Color3.fromRGB(32,18,60)
+				t.ButtonHover = Color3.fromRGB(46,26,80)
+				t.ButtonPress = Color3.fromRGB(22,12,44)
+				t.Highlight = Color3.fromRGB(80,40,120)
+				t.Text = Color3.fromRGB(235,225,255)
+				t.PlaceholderText = Color3.fromRGB(170,140,210)
+				t.Important = Color3.fromRGB(255,100,170)
+
+				s.Text = Color3.fromRGB(230,220,245)
+				s.Background = Color3.fromRGB(12,8,24)
+				s.Selection = Color3.fromRGB(255,255,255)
+				s.SelectionBack = Color3.fromRGB(200,120,255)
+				s.Operator = Color3.fromRGB(230,220,245)
+				s.Number = Color3.fromRGB(255,215,130)
+				s.String = Color3.fromRGB(200,250,190)
+				s.Comment = Color3.fromRGB(140,120,170)
+				s.Keyword = Color3.fromRGB(255,150,220)
+				s.Error = Color3.fromRGB(255,110,170)
+				s.FindBackground = Color3.fromRGB(190,120,220)
+				s.MatchingWord = Color3.fromRGB(80,60,120)
+				s.BuiltIn = Color3.fromRGB(160,210,255)
+				s.CurrentLine = Color3.fromRGB(26,18,50)
+				s.LocalMethod = Color3.fromRGB(255,252,200)
+				s.LocalProperty = Color3.fromRGB(160,200,255)
+				s.Nil = Color3.fromRGB(255,215,130)
+				s.Bool = Color3.fromRGB(255,215,130)
+				s.Function = Color3.fromRGB(255,150,220)
+				s.Local = Color3.fromRGB(255,150,220)
+				s.Self = Color3.fromRGB(255,150,220)
+				s.FunctionName = Color3.fromRGB(255,252,200)
 				s.Bracket = Color3.fromRGB(230,220,245)
 
 				t.Syntax = s
@@ -180,10 +376,12 @@ local function main()
 		padding.PaddingRight = UDim.new(0,8)
 		padding.Parent = content
 
-		local function makeButton(text, posY, onClick)
+		local curY = 10
+
+		local function makeButton(text, onClick)
 			local btn = Instance.new("TextButton")
 			btn.Size = UDim2.new(1,-16,0,28)
-			btn.Position = UDim2.new(0,8,0,posY)
+			btn.Position = UDim2.new(0,8,0,curY)
 			btn.Text = text
 			btn.TextColor3 = Color3.new(1,1,1)
 			btn.AutoButtonColor = false
@@ -192,21 +390,24 @@ local function main()
 			Lib.ButtonAnim(btn,{PressColor = Settings.Theme.ButtonPress})
 			btn.Parent = content
 			btn.MouseButton1Click:Connect(onClick)
+			curY = curY + 34
 			return btn
 		end
 
-		makeButton("Reload Theme File",10,function()
+		makeButton("Reload Theme File",function()
 			Main.LoadThemeSettings()
 			Lib.RefreshTheme()
 		end)
 
-		makeButton("Save Current Theme",44,function()
+		makeButton("Save Current Theme",function()
 			Main.SaveThemeSettings()
 		end)
 
-		makeButton("Reset to Default",78,function()
+		makeButton("Reset to Default",function()
 			Main.ResetSettings()
-			refreshRows()
+			if refreshRows then
+				refreshRows()
+			end
 			Main.SaveThemeSettings()
 			Lib.RefreshTheme()
 		end)
@@ -219,23 +420,14 @@ local function main()
 		pLabel.Font = Enum.Font.SourceSans
 		pLabel.TextSize = 14
 		pLabel.Size = UDim2.new(1,-16,0,18)
-		pLabel.Position = UDim2.new(0,8,0,112)
+		pLabel.Position = UDim2.new(0,8,0,curY)
 		pLabel.Parent = content
-
-		local pFrame = Instance.new("Frame")
-		pFrame.BackgroundTransparency = 1
-		pFrame.Size = UDim2.new(1,-16,0,32)
-		pFrame.Position = UDim2.new(0,8,0,136)
-		pFrame.Parent = content
-
-		local pList = Instance.new("UIListLayout")
-		pList.FillDirection = Enum.FillDirection.Horizontal
-		pList.Padding = UDim.new(0,6)
-		pList.Parent = pFrame
+		curY = curY + 22
 
 		for _, p in ipairs(presets) do
 			local b = Instance.new("TextButton")
-			b.Size = UDim2.new(0,100,1,0)
+			b.Size = UDim2.new(1,-16,0,24)
+			b.Position = UDim2.new(0,8,0,curY)
 			b.Text = p.name
 			b.TextColor3 = Color3.new(1,1,1)
 			b.BackgroundTransparency = 0
@@ -244,7 +436,7 @@ local function main()
 			b.Font = Enum.Font.SourceSans
 			b.TextSize = 14
 			Lib.ButtonAnim(b,{PressColor = Settings.Theme.ButtonPress})
-			b.Parent = pFrame
+			b.Parent = content
 			b.MouseButton1Click:Connect(function()
 				p.apply()
 				if refreshRows then
@@ -253,12 +445,15 @@ local function main()
 				Main.SaveThemeSettings()
 				Lib.RefreshTheme()
 			end)
+			curY = curY + 28
 		end
+
+		curY = curY + 8
 
 		local scroll = Instance.new("ScrollingFrame")
 		scroll.Name = "ColorList"
-		scroll.Size = UDim2.new(1,-16,1,-184)
-		scroll.Position = UDim2.new(0,8,0,176)
+		scroll.Size = UDim2.new(1,-16,1,-curY-8)
+		scroll.Position = UDim2.new(0,8,0,curY)
 		scroll.BackgroundTransparency = 0.1
 		scroll.BackgroundColor3 = Settings.Theme.Main1
 		scroll.CanvasSize = UDim2.new(0,0,0,0)

@@ -1,48 +1,37 @@
+local _g = (getgenv and getgenv()) or _G
+if _g.__DEXPP and _g.__DEXPP.Main and _g.__DEXPP.Main.Exit then
+	pcall(function()
+		if _g.__DEXPP.Main.SetMainGuiOpen then
+			_g.__DEXPP.Main.SetMainGuiOpen(true)
+		end
+	end)
+	return _g.__DEXPP
+end
+
 local oldgame = oldgame or game
 
-cloneref = cloneref or function(ref)
-	if not getreg then return ref end
-	
-	local InstanceList
-	
-	local a = Instance.new("Part")
-	for _, c in pairs(getreg()) do
-		if type(c) == "table" and #c then
-			if rawget(c, "__mode") == "kvs" then
-				for d, e in pairs(c) do
-					if e == a then
-						InstanceList = c
-						break
-					end
-				end
-			end
+local function cref(x)
+	local f = cloneref
+	if type(f) == "function" then
+		local ok, y = pcall(f, x)
+		if ok and y then
+			return y
 		end
 	end
-	local f = {}
-	function f.invalidate(g)
-		if not InstanceList then
-			return
-		end
-		for b, c in pairs(InstanceList) do
-			if c == g then
-				InstanceList[b] = nil
-				return g
-			end
-		end
-	end
-	return f.invalidate
+	return x
 end
 
 local isFsSupported = readfile and writefile and isfile and isfolder and listfiles and delfile and delfolder
 
 -- Main vars
-local Main, Explorer, Properties, ScriptViewer, Console, SaveInstance, ModelViewer, ThemeManager--[[, SecretServicePanel]], DefaultSettings, Notebook, Serializer, Lib local ggv = getgenv or nil
+local Main, Explorer, Properties, ScriptViewer, Console, SaveInstance, ModelViewer, ThemeManager--[[, SecretServicePanel]], DefaultSettings, Notebook, Serializer, Lib
+local ggv = getgenv
 local API, RMD
 
 -- Default Settings
 DefaultSettings = (function()
 	local rgb = Color3.fromRGB
-	
+
 	return {
 		Explorer = {
 			_Recurse = true,
@@ -126,7 +115,7 @@ DefaultSettings = (function()
 end)()
 
 local service = setmetatable({},{__index = function(self,name)
-	local serv = cloneref(game:GetService(name))
+	local serv = cref(game:GetService(name))
 	self[name] = serv
 	return serv
 end})
@@ -186,7 +175,7 @@ local function decodeBase64(data)
 
 	return false, "Base64 decode failed"
 end
-local plr = service.Players.LocalPlayer or service.Players.PlayerAdded:wait()
+local plr = service.Players.LocalPlayer or service.Players.PlayerAdded:Wait()
 
 local create = function(data)
 	local insts = {}
@@ -232,6 +221,19 @@ end
 
 Main = (function()
 	local Main = {}
+	Main.GuiList = Main.GuiList or {}
+	Main.ConnList = Main.ConnList or {}
+	Main.TrackGui = function(gui)
+		if gui and gui.Destroy then
+			table.insert(Main.GuiList, gui)
+		end
+	end
+	Main.TrackConn = function(c)
+		if typeof(c) == "RBXScriptConnection" then
+			table.insert(Main.ConnList, c)
+		end
+		return c
+	end
 	local Settings = deepCopy(DefaultSettings)
 	local Apps = {}
 	local env = {}
@@ -294,7 +296,7 @@ Main = (function()
 		Menu = 2147483630,
 		Core = 2147483631
 	}
-	
+
 	--[[Main.LoadAdonisBypass = function()
 		-- skidded off reddit :pensive:
 		local getinfo = getinfo or debug.getinfo
@@ -359,10 +361,16 @@ Main = (function()
 	Main.LoadGCBypass = function()
 		loadstring(game:HttpGet("https://raw.githubusercontent.com/secretisadev/Babyhamsta_Backup/refs/heads/main/Universal/Bypasses.lua", true))()
 	end]]
-	
-Main.GetRandomString = function() return '\0' end
-	
-Main.ResolveAsset = function(assetId)
+
+	Main.GetRandomString = function()
+		local hs = service.HttpService
+		if hs and hs.GenerateGUID then
+			return hs:GenerateGUID(false)
+		end
+		return tostring(math.random(1, 1e9))
+	end
+
+	Main.ResolveAsset = function(assetId)
 		local override = Main.IconOverrides and Main.IconOverrides[assetId]
 		if override then
 			local getter = (env and env.getcustomasset) or getcustomasset or getsynasset
@@ -372,36 +380,38 @@ Main.ResolveAsset = function(assetId)
 				pcall(env.makefolder,"DexPlusPlus/assets")
 			end
 
-		local function ensureFile()
-			if env and env.isfile and env.isfile(path) then
-				return true
-			end
-			if not (env and env.writefile) then
+			local function ensureFile()
+				if env and env.isfile and env.isfile(path) then
+					return true
+				end
+				if not (env and env.writefile) then
+					return false
+				end
+				local url = Main.IconSourceBaseUrl .. override
+				local ok, bytes = pcall(oldgame.HttpGet, game, url)
+				if ok and type(bytes) == "string" then
+					local okWrite = pcall(env.writefile, path, bytes)
+					return okWrite
+				end
 				return false
 			end
-			local url = Main.IconSourceBaseUrl .. override
-			local ok, bytes = pcall(oldgame.HttpGet, game, url)
-			if ok and type(bytes) == "string" then
-				local okWrite = pcall(env.writefile, path, bytes)
-				return okWrite
+
+			if ensureFile() and getter then
+				local ok, result = pcall(getter, path)
+				if ok and result then
+					return result
+				end
 			end
-			return false
+		end
+		return assetId
+	end
+
+	Main.SecureGui = function(gui)
+		gui.Name = Main.GetRandomString()
+		if Main.TrackGui then
+			Main.TrackGui(gui)
 		end
 
-		if ensureFile() and getter then
-			local ok, result = pcall(getter, path)
-			if ok and result then
-				return result
-			end
-		end
-	end
-	return assetId
-end
-	
-	Main.SecureGui = function(gui)
-		--warn("Secured: "..gui.Name)
-		gui.Name = Main.GetRandomString()
-		-- service already using cloneref
 		if gethui then
 			gui.Parent = gethui()
 		elseif syn and syn.protect_gui then
@@ -576,7 +586,7 @@ end
 		ModelViewer = Apps.ModelViewer
 		ThemeManager = Apps.ThemeManager
 		Notebook = Apps.Notebook
-		
+
 		--SecretServicePanel = Apps.SecretServicePanel
 		local appTable = {
 			Explorer = Explorer,
@@ -587,7 +597,7 @@ end
 			ModelViewer = ModelViewer,
 			ThemeManager = ThemeManager,
 			Notebook = Notebook,
-			
+
 			--SecretServicePanel = SecretServicePanel,
 		}
 
@@ -632,7 +642,7 @@ end
 			patchContextMenu(Explorer.RightClickContext)
 		end
 	end
-	
+
 	Main.EnsureAllIcons = function()
 		if not (env and env.writefile and env.makefolder and ((env.getcustomasset) or getcustomasset or getsynasset)) then
 			return false
@@ -659,14 +669,14 @@ end
 		return true
 	end
 
-Main.InitEnv = function()
+	Main.InitEnv = function()
 		setmetatable(env,{__newindex = function(self,name,func)
 			if not func then Main.MissingEnv[#Main.MissingEnv+1] = name return end
 			rawset(self,name,func)
 		end})
 
 		env.isonmobile = game:GetService("UserInputService").TouchEnabled
-		
+
 		env.loadstring = (pcall(loadstring,"local a = 1") and loadstring) or (game:GetService("RunService"):IsStudio() and script.Modules:FindFirstChild("Loadstring") and require(script.Modules:FindFirstChild("Loadstring")))
 
 		-- file
@@ -686,18 +696,18 @@ Main.InitEnv = function()
 				SSI = "saveinstance",
 			}
 			local synsaveinstance = loadstring(oldgame:HttpGet(Params.RepoURL .. Params.SSI .. ".luau", true), Params.SSI)()
-		
+
 			local function wrappedsaveinstance(obj, filepath, options)
 				options["FilePath"] = filepath
 				--options["ReadMe"] = false
 				options["Object"] = obj
 				return synsaveinstance(options)
 			end
-			
+
 			getgenv().saveinstance = wrappedsaveinstance
 			return wrappedsaveinstance
 		end)()
-		
+
 		env.parsefile = function(name)
 			return tostring(name):gsub("[*\\?:<>|]+", ""):sub(1, 175)
 		end
@@ -709,7 +719,7 @@ Main.InitEnv = function()
 		env.checkcaller = checkcaller
 		env.getreg = getreg
 		env.getgc = getgc
-		
+
 		-- hooks
 		env.hookfunction = hookfunction
 		env.hookmetamethod = hookmetamethod
@@ -722,7 +732,7 @@ Main.InitEnv = function()
 		env.setclipboard = setclipboard
 		env.getnilinstances = getnilinstances or get_nil_instances
 		env.getloadedmodules = getloadedmodules
-		
+
 		env.isViableDecompileScript = function(obj)
 			if obj:IsA("ModuleScript") then
 				return true
@@ -734,12 +744,12 @@ Main.InitEnv = function()
 			return false
 		end
 		env.request = (syn and syn.request) or (http and http.request) or http_request or (fluxus and fluxus.request) or request
-		
+
 		env.decompile = decompile or (function()
 			-- by lovrewe
 			--warn("No built-in decompiler exists, using Konstant decompiler...")
 			--assert(getscriptbytecode, "Exploit not supported.")
-			
+
 			if not env.getscriptbytecode then --[[warn('Konstant decompiler is not supported. "getscriptbytecode" is missing.')]] return end
 
 			local API = "http://api.plusgiant5.com"
@@ -783,22 +793,22 @@ Main.InitEnv = function()
 			end
 
 			getgenv().decompile = decompile
-			
-		env.decompile = decompile
-		return decompile
-	end)()
 
-	if identifyexecutor then
-		Main.Executor = identifyexecutor()
-	end
+			env.decompile = decompile
+			return decompile
+		end)()
 
-	env.getcustomasset = getcustomasset or getsynasset or env.getcustomasset
+		if identifyexecutor then
+			Main.Executor = identifyexecutor()
+		end
 
-	Main.GuiHolder = Main.Elevated and service.CoreGui or plr:FindFirstChildOfClass("PlayerGui")
+		env.getcustomasset = getcustomasset or getsynasset or env.getcustomasset
+
+		Main.GuiHolder = Main.Elevated and service.CoreGui or plr:FindFirstChildOfClass("PlayerGui")
 
 		setmetatable(env,nil)
 	end
-	
+
 	local function serialize(val)
 		if typeof(val) == "Color3" then
 			local serializedColor = {}
@@ -810,7 +820,7 @@ Main.InitEnv = function()
 			return val
 		end
 	end
-	
+
 	local function deserialize(val)
 		if typeof(val) == "table" then
 			if val.R and val.G and val.B then
@@ -822,7 +832,7 @@ Main.InitEnv = function()
 			return val
 		end
 	end
-	
+
 	Main.ExportSettings = function()
 		local rawData = Settings or DefaultSettings
 
@@ -843,7 +853,7 @@ Main.InitEnv = function()
 
 		local s, json = pcall(service.HttpService.JSONEncode, service.HttpService, serializedData)
 		if s and json then
-		return json
+			return json
 		end
 	end
 
@@ -965,8 +975,8 @@ Main.InitEnv = function()
 		end
 	end
 
-	
-	
+
+
 
 	Main.ResetSettings = function()
 		for k in pairs(Settings) do Settings[k] = nil end
@@ -1063,7 +1073,7 @@ Main.InitEnv = function()
 		end
 
 		downloaded = true
-		
+
 		Main.RawAPI = rawAPI
 		api = service.HttpService:JSONDecode(rawAPI)
 
@@ -1362,12 +1372,13 @@ Main.InitEnv = function()
 
 		applyTheme()
 
-		local renderStepped = service.RunService.RenderStepped
-		local signalWait = renderStepped.wait
-		local fastwait = function(s)
-			if not s then return signalWait(renderStepped) end
-			local start = tick()
-			while tick() - start < s do signalWait(renderStepped) end
+		local rs = service.RunService
+		local fastwait = function(t)
+			if not t then
+				return rs.RenderStepped:Wait()
+			end
+			local st = tick()
+			repeat rs.RenderStepped:Wait() until (tick() - st) >= t
 		end
 
 		statusText.Text = initStatus
@@ -1506,6 +1517,10 @@ Main.InitEnv = function()
 
 		local app = Main.AppTemplate:Clone()
 
+		if data.IconMap == Explorer.LegacyClassIcons and data.Icon == nil then
+			data.Icon = 38
+		end
+
 		local iconIndex = data.Icon
 		if data.IconMap and iconIndex then
 			if type(iconIndex) == "number" then
@@ -1556,7 +1571,7 @@ Main.InitEnv = function()
 				app.Main.BackgroundColor3 = Settings.Theme.ButtonHover
 			end
 		end)
-		
+
 
 		app.Main.InputEnded:Connect(function(input)
 			if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
@@ -1586,30 +1601,101 @@ Main.InitEnv = function()
 	end
 
 	Main.SetMainGuiOpen = function(val)
+		if not Main.MainGui or not Main.MainGui:FindFirstChild("OpenButton") then
+			return
+		end
+
+		local openButton = Main.MainGui.OpenButton
 		Main.MainGuiOpen = val
 
-		Main.MainGui.OpenButton.Text = val and "Close" or "Dex++"
-		if val then Main.MainGui.OpenButton.MainFrame.Visible = true end
-		Main.MainGui.OpenButton.MainFrame:TweenSize(val and UDim2.new(0,224,0,200) or UDim2.new(0,0,0,0),Enum.EasingDirection.Out,Enum.EasingStyle.Quad,0.2,true)
-		--Main.MainGui.OpenButton.BackgroundTransparency = val and 0 or (Lib.CheckMouseInGui(Main.MainGui.OpenButton) and 0 or 0.2)
-		service.TweenService:Create(Main.MainGui.OpenButton,TweenInfo.new(0.2,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{BackgroundTransparency = val and 0 or (Lib.CheckMouseInGui(Main.MainGui.OpenButton) and 0 or 0.2)}):Play()
+		openButton.Text = val and "Close" or "Dex++"
+		if val then openButton.MainFrame.Visible = true end
+		openButton.MainFrame:TweenSize(val and UDim2.new(0,224,0,200) or UDim2.new(0,0,0,0),Enum.EasingDirection.Out,Enum.EasingStyle.Quad,0.2,true)
+		service.TweenService:Create(openButton,TweenInfo.new(0.2,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{BackgroundTransparency = val and 0 or (Lib.CheckMouseInGui(openButton) and 0 or 0.2)}):Play()
 
-		if Main.MainGuiMouseEvent then Main.MainGuiMouseEvent:Disconnect() end
+		if Main.MainGuiMouseEvent then
+			pcall(function()
+				Main.MainGuiMouseEvent:Disconnect()
+			end)
+			Main.MainGuiMouseEvent = nil
+		end
 
 		if not val then
 			local startTime = tick()
 			Main.MainGuiCloseTime = startTime
 			coroutine.wrap(function()
 				Lib.FastWait(0.2)
-				if not Main.MainGuiOpen and startTime == Main.MainGuiCloseTime then Main.MainGui.OpenButton.MainFrame.Visible = false end
+				if not Main.MainGuiOpen and startTime == Main.MainGuiCloseTime and openButton and openButton.MainFrame then
+					openButton.MainFrame.Visible = false
+				end
 			end)()
 		else
-			Main.MainGuiMouseEvent = service.UserInputService.InputBegan:Connect(function(input)
-				if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and not Lib.CheckMouseInGui(Main.MainGui.OpenButton) and not Lib.CheckMouseInGui(Main.MainGui.OpenButton.MainFrame) then
+			Main.MainGuiMouseEvent = Main.TrackConn(service.UserInputService.InputBegan:Connect(function(input)
+				if not Main.MainGui or not openButton then
+					return
+				end
+				if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch)
+					and not Lib.CheckMouseInGui(openButton)
+					and not Lib.CheckMouseInGui(openButton.MainFrame) then
 
 					Main.SetMainGuiOpen(false)
 				end
+			end))
+		end
+	end
+
+	Main.Exit = function()
+		if Main.MainGuiMouseEvent then
+			pcall(function()
+				Main.MainGuiMouseEvent:Disconnect()
 			end)
+			Main.MainGuiMouseEvent = nil
+		end
+
+		if Main.ConnList then
+			for i,c in ipairs(Main.ConnList) do
+				pcall(function()
+					if c then
+						c:Disconnect()
+					end
+				end)
+			end
+			table.clear(Main.ConnList)
+		end
+
+		if Main.GuiList then
+			for i,g in ipairs(Main.GuiList) do
+				pcall(function()
+					if g and g.Destroy then
+						g:Destroy()
+					end
+				end)
+			end
+			table.clear(Main.GuiList)
+		end
+
+		if Main.MainGui then
+			pcall(function()
+				Main.MainGui:Destroy()
+			end)
+			Main.MainGui = nil
+		end
+
+		Main.MainGuiOpen = false
+		Main.Apps = {}
+		Main.AppControls = {}
+
+		Explorer = nil
+		Properties = nil
+		ScriptViewer = nil
+		Console = nil
+		SaveInstance = nil
+		ModelViewer = nil
+		ThemeManager = nil
+		Notebook = nil
+
+		if _g and _g.__DEXPP then
+			_g.__DEXPP = nil
 		end
 	end
 
@@ -1648,9 +1734,9 @@ Main.InitEnv = function()
 		openButton.BackgroundTransparency = 0.2
 		openButton.MainFrame.Size = UDim2.new(0,0,0,0)
 		openButton.MainFrame.Visible = false
-		openButton.MouseButton1Click:Connect(function()
+		Main.TrackConn(openButton.MouseButton1Click:Connect(function()
 			Main.SetMainGuiOpen(not Main.MainGuiOpen)
-		end)
+		end))
 
 		openButton.InputBegan:Connect(function(input)
 			if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
@@ -1663,11 +1749,11 @@ Main.InitEnv = function()
 				service.TweenService:Create(Main.MainGui.OpenButton,TweenInfo.new(0,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{BackgroundTransparency = Main.MainGuiOpen and 0 or 0.2}):Play()
 			end
 		end)
-		
+
 		local infoDexIntro, isInfoCD
-		
+
 		openButton.MainFrame.BottomFrame.Settings.Visible = false -- hide it for now
-		
+
 		openButton.MainFrame.BottomFrame.Information.MouseButton1Click:Connect(function()
 			local duration = 1
 			local Infos = {
@@ -1677,29 +1763,29 @@ Main.InitEnv = function()
 				"Cazan (3D Preview)",
 				"ltseverydayyou (Updates)",
 			}
-			
+
 			if isInfoCD then return end
 			isInfoCD = true
 			if not infoDexIntro then
 				infoDexIntro = Main.CreateIntro("Running")
-				
+
 				coroutine.wrap(function()
 					while infoDexIntro do
-						for i,text in Infos do
+						for i, text in ipairs(Infos) do
 							if not infoDexIntro then break end
 							infoDexIntro.SetProgress(text,(1 / #Infos) * i)
 							task.wait(duration)
 						end
 					end
 				end)()
-				
+
 				Lib.FastWait(1.5)
 				isInfoCD = false
 			else
 				coroutine.wrap(function()
 					infoDexIntro.Close()
 					infoDexIntro = nil
-					
+
 					Lib.FastWait(1.5)
 					isInfoCD = false
 				end)()
@@ -1715,7 +1801,7 @@ Main.InitEnv = function()
 		Main.CreateApp({Name = "Click part to select", IconMap = Main.LargeIcons, Icon = 6, OnClick = function(callback)
 			if callback then
 				local mouse = Main.Mouse
-				cptsOnMouseClick = mouse.Button1Down:Connect(function()
+				cptsOnMouseClick = Main.TrackConn(mouse.Button1Down:Connect(function()
 					pcall(function()
 						local object = mouse.Target
 						if nodes[object] then
@@ -1723,7 +1809,7 @@ Main.InitEnv = function()
 							Explorer.ViewNode(nodes[object])
 						end
 					end)
-				end)
+				end))
 			else if cptsOnMouseClick ~= nil then cptsOnMouseClick:Disconnect() cptsOnMouseClick = nil end end
 		end})
 
@@ -1734,16 +1820,22 @@ Main.InitEnv = function()
 				ScriptViewer.Window:SetTitle("Executor")
 			end
 		end})
-		
+
 		Main.CreateApp({Name = "Console", IconMap = Main.LargeIcons, Icon = "Output", Window = Console.Window})
-		
+
 		Main.CreateApp({Name = "Save Instance", IconMap = Main.LargeIcons, Icon = "Watcher", Window = SaveInstance.Window})
-		
+
 		Main.CreateApp({Name = "3D Viewer", IconMap = Explorer.LegacyClassIcons, Icon = 54, Window = ModelViewer.Window})
-		
+
 		if ThemeManager and ThemeManager.Window then
 			Main.CreateApp({Name = "Theme Manager", IconMap = Explorer.LegacyClassIcons, Icon = 83, Window = ThemeManager.Window})
 		end
+
+		Main.CreateApp({Name = "Exit Dex", IconMap = Explorer.LegacyClassIcons, Icon = 37, OnClick = function(isOpen)
+			if isOpen then
+				Main.Exit()
+			end
+		end})
 
 		--Main.CreateApp({Name = "Secret Service Panel", IconMap = Main.LargeIcons, Icon = "Output", Window = SecretServicePanel.Window})
 
@@ -1771,21 +1863,21 @@ Main.InitEnv = function()
 	end
 
 	Main.LocalDepsUpToDate = function()
-		return Main.DepsVersionData and Main.ClientVersion == Main.DepsVersionData[1]
+		return Main.DepsVersionData and tostring(Main.ClientVersion) == tostring(Main.DepsVersionData[1])
 	end
 
 	Main.Init = function()
 		Main.Elevated = pcall(function() local a = game:GetService("CoreGui"):GetFullName() end)
-		
+
 		if writefile and isfile and not isfile("DexSettings.json") then
 			writefile("DexSettings.json", Main.ExportSettings())
 		end
-		
+
 		Main.InitEnv()
 		Main.LoadSettings()
 		Main.LoadUserSettings()
 		Main.LoadThemeSettings()
-		
+
 		Main.SetupFilesystem()
 
 		-- Load Lib
@@ -1812,7 +1904,7 @@ Main.InitEnv = function()
 		Main.LargeIcons:SetDict({
 			Explorer = 0, Properties = 1, Script_Viewer = 2, Watcher = 3, Output = 4, Paper = 5, Book = 6
 		})
-		
+
 		--[[ Loading bypasses
 		intro.SetProgress("Loading Adonis Bypass",0.1)
 		pcall(Main.LoadAdonisBypass)
@@ -1824,14 +1916,14 @@ Main.InitEnv = function()
 		intro.SetProgress("Fetching Roblox Version",0.3)
 		if Main.Elevated then
 			local fileVer = Lib.ReadFile("DexPlusPlus/deps_version.dat")
-			Main.ClientVersion = Version()
+			Main.ClientVersion = (type(Version) == "function" and Version()) or (type(identifyexecutor) == "function" and identifyexecutor()) or "unknown"
 			if fileVer then
 				Main.DepsVersionData = string.split(fileVer,"\n")
 				if Main.LocalDepsUpToDate() then
 					Main.RobloxVersion = Main.DepsVersionData[2]
 				end
 			end
-			
+
 			Main.RobloxVersion = Main.RobloxVersion or oldgame:HttpGet("https://clientsettings.roblox.com/v2/client-version/WindowsStudio64/channel/LIVE"):match("(version%-[%w]+)")
 		end
 
@@ -1882,9 +1974,9 @@ Main.InitEnv = function()
 		if ThemeManager and ThemeManager.Init then
 			ThemeManager.Init()
 		end
-		
+
 		--SecretServicePanel.Init()
-		
+
 		Lib.FastWait()
 
 		-- Done
@@ -1899,7 +1991,7 @@ Main.InitEnv = function()
 		Main.CreateMainGui()
 		Explorer.Window:Show({Align = "right", Pos = 1, Size = 0.5, Silent = true})
 		Properties.Window:Show({Align = "right", Pos = 2, Size = 0.5, Silent = true})
-		
+
 		Lib.DeferFunc(function() Lib.Window.ToggleSide("right") end)
 	end
 
@@ -1907,6 +1999,9 @@ Main.InitEnv = function()
 end)()
 
 -- Start
+_g.__DEXPP = _g.__DEXPP or {}
+_g.__DEXPP.Main = Main
+
 Main.Init()
 
 --for i,v in pairs(Main.MissingEnv) do print(i,v) end

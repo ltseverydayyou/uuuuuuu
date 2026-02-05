@@ -362,6 +362,166 @@ local function main()
 	G2L["20"]["Position"] = UDim2.new(0, 110, 0, 4);
 
 
+	-- StarterGui.ScreenGui.Console.FilterOutput
+	G2L["21"] = Instance.new("ImageButton", ConsoleFrame);
+	G2L["21"]["BorderSizePixel"] = 0;
+	G2L["21"]["BackgroundColor3"] = Color3.fromRGB(57, 57, 57);
+	G2L["21"]["Size"] = UDim2.new(0, 52, 0, 15);
+	G2L["21"]["BorderColor3"] = Color3.fromRGB(0, 0, 0);
+	G2L["21"]["Name"] = [[FilterOutput]];
+	G2L["21"]["Position"] = UDim2.new(0, 174, 0, 4);
+
+
+	-- StarterGui.ScreenGui.Console.FilterOutput.TextLabel
+	G2L["22"] = Instance.new("TextLabel", G2L["21"]);
+	G2L["22"]["TextWrapped"] = true;
+	G2L["22"]["Interactable"] = false;
+	G2L["22"]["BorderSizePixel"] = 0;
+	G2L["22"]["TextSize"] = 20;
+	G2L["22"]["TextScaled"] = true;
+	G2L["22"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255);
+	G2L["22"]["FontFace"] = Font.new([[rbxasset://fonts/families/SourceSansPro.json]], Enum.FontWeight.Regular, Enum.FontStyle.Normal);
+	G2L["22"]["TextColor3"] = Color3.fromRGB(255, 255, 255);
+	G2L["22"]["BackgroundTransparency"] = 1;
+	G2L["22"]["Size"] = UDim2.new(1, 0, 1, 0);
+	G2L["22"]["BorderColor3"] = Color3.fromRGB(0, 0, 0);
+	G2L["22"]["Text"] = [[Output]];
+
+
+	-- StarterGui.ScreenGui.Console.FilterOutput.UIPadding
+	G2L["23"] = Instance.new("UIPadding", G2L["21"]);
+	G2L["23"]["PaddingTop"] = UDim.new(0, 1);
+	G2L["23"]["PaddingBottom"] = UDim.new(0, 1);
+
+
+	-- StarterGui.ScreenGui.Console.FilterInfo
+	G2L["24"] = Instance.new("ImageButton", ConsoleFrame);
+	G2L["24"]["BorderSizePixel"] = 0;
+	G2L["24"]["BackgroundColor3"] = Color3.fromRGB(57, 57, 57);
+	G2L["24"]["Size"] = UDim2.new(0, 52, 0, 15);
+	G2L["24"]["BorderColor3"] = Color3.fromRGB(0, 0, 0);
+	G2L["24"]["Name"] = [[FilterInfo]];
+	G2L["24"]["Position"] = UDim2.new(0, 228, 0, 4);
+
+
+	-- StarterGui.ScreenGui.Console.FilterInfo.TextLabel
+	G2L["25"] = Instance.new("TextLabel", G2L["24"]);
+	G2L["25"]["TextWrapped"] = true;
+	G2L["25"]["Interactable"] = false;
+	G2L["25"]["BorderSizePixel"] = 0;
+	G2L["25"]["TextSize"] = 20;
+	G2L["25"]["TextScaled"] = true;
+	G2L["25"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255);
+	G2L["25"]["FontFace"] = Font.new([[rbxasset://fonts/families/SourceSansPro.json]], Enum.FontWeight.Regular, Enum.FontStyle.Normal);
+	G2L["25"]["TextColor3"] = Color3.fromRGB(255, 255, 255);
+	G2L["25"]["BackgroundTransparency"] = 1;
+	G2L["25"]["Size"] = UDim2.new(1, 0, 1, 0);
+	G2L["25"]["BorderColor3"] = Color3.fromRGB(0, 0, 0);
+	G2L["25"]["Text"] = [[Info]];
+
+
+	-- StarterGui.ScreenGui.Console.FilterInfo.UIPadding
+	G2L["26"] = Instance.new("UIPadding", G2L["24"]);
+	G2L["26"]["PaddingTop"] = UDim.new(0, 1);
+	G2L["26"]["PaddingBottom"] = UDim.new(0, 1);
+
+
+	-- StarterGui.ScreenGui.Console.FilterWarn
+	G2L["27"] = Instance.new("ImageButton", ConsoleFrame);
+	G2L["27"]["BorderSizePixel"] = 0;
+	G2L["27"]["BackgroundColor3"] = Color3.fromRGB(57, 57, 57);
+	G2L["27"]["Size"] = UDim2.new(0, 52, 0, 15);
+	G2L["27"]["BorderColor3"] = Color3.fromRGB(0, 0, 0);
+	G2L["27"]["Name"] = [[FilterWarn]];
+	G2L["27"]["Position"] = UDim2.new(0, 282, 0, 4);
+
+
+	-- StarterGui.ScreenGui.Console.FilterWarn.TextLabel
+	G2L["28"] = Instance.new("TextLabel", G2L["27"]);
+	G2L["28"]["TextWrapped"] = true;
+	G2L["28"]["Interactable"] = false;
+	G2L["28"]["BorderSizePixel"] = 0;
+	G2L["28"]["TextSize"] = 20;
+	G2L["28"]["TextScaled"] = true;
+	G2L["28"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255);
+	G2L["28"]["FontFace"] = Font.new([[rbxasset://fonts/families/SourceSansPro.json]], Enum.FontWeight.Regular, Enum.FontStyle.Normal);
+	G2L["28"]["TextColor3"] = Color3.fromRGB(255, 255, 255);
+	G2L["28"]["BackgroundTransparency"] = 1;
+	G2L["28"]["Size"] = UDim2.new(1, 0, 1, 0);
+	G2L["28"]["BorderColor3"] = Color3.fromRGB(0, 0, 0);
+	G2L["28"]["Text"] = [[Warn]];
+
+
+	-- StarterGui.ScreenGui.Console.FilterWarn.UIPadding
+	G2L["29"] = Instance.new("UIPadding", G2L["27"]);
+	G2L["29"]["PaddingTop"] = UDim.new(0, 1);
+	G2L["29"]["PaddingBottom"] = UDim.new(0, 1);
+
+
+	-- StarterGui.ScreenGui.Console.FilterError
+	G2L["2a"] = Instance.new("ImageButton", ConsoleFrame);
+	G2L["2a"]["BorderSizePixel"] = 0;
+	G2L["2a"]["BackgroundColor3"] = Color3.fromRGB(57, 57, 57);
+	G2L["2a"]["Size"] = UDim2.new(0, 52, 0, 15);
+	G2L["2a"]["BorderColor3"] = Color3.fromRGB(0, 0, 0);
+	G2L["2a"]["Name"] = [[FilterError]];
+	G2L["2a"]["Position"] = UDim2.new(0, 336, 0, 4);
+
+
+	-- StarterGui.ScreenGui.Console.FilterError.TextLabel
+	G2L["2b"] = Instance.new("TextLabel", G2L["2a"]);
+	G2L["2b"]["TextWrapped"] = true;
+	G2L["2b"]["Interactable"] = false;
+	G2L["2b"]["BorderSizePixel"] = 0;
+	G2L["2b"]["TextSize"] = 20;
+	G2L["2b"]["TextScaled"] = true;
+	G2L["2b"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255);
+	G2L["2b"]["FontFace"] = Font.new([[rbxasset://fonts/families/SourceSansPro.json]], Enum.FontWeight.Regular, Enum.FontStyle.Normal);
+	G2L["2b"]["TextColor3"] = Color3.fromRGB(255, 255, 255);
+	G2L["2b"]["BackgroundTransparency"] = 1;
+	G2L["2b"]["Size"] = UDim2.new(1, 0, 1, 0);
+	G2L["2b"]["BorderColor3"] = Color3.fromRGB(0, 0, 0);
+	G2L["2b"]["Text"] = [[Error]];
+
+
+	-- StarterGui.ScreenGui.Console.FilterError.UIPadding
+	G2L["2c"] = Instance.new("UIPadding", G2L["2a"]);
+	G2L["2c"]["PaddingTop"] = UDim.new(0, 1);
+	G2L["2c"]["PaddingBottom"] = UDim.new(0, 1);
+
+
+	-- StarterGui.ScreenGui.Console.Listen
+	G2L["2d"] = Instance.new("ImageButton", ConsoleFrame);
+	G2L["2d"]["BorderSizePixel"] = 0;
+	G2L["2d"]["BackgroundColor3"] = Color3.fromRGB(57, 57, 57);
+	G2L["2d"]["Size"] = UDim2.new(0, 52, 0, 15);
+	G2L["2d"]["BorderColor3"] = Color3.fromRGB(0, 0, 0);
+	G2L["2d"]["Name"] = [[Listen]];
+	G2L["2d"]["Position"] = UDim2.new(0, 390, 0, 4);
+
+
+	-- StarterGui.ScreenGui.Console.Listen.TextLabel
+	G2L["2e"] = Instance.new("TextLabel", G2L["2d"]);
+	G2L["2e"]["TextWrapped"] = true;
+	G2L["2e"]["Interactable"] = false;
+	G2L["2e"]["BorderSizePixel"] = 0;
+	G2L["2e"]["TextSize"] = 20;
+	G2L["2e"]["TextScaled"] = true;
+	G2L["2e"]["BackgroundColor3"] = Color3.fromRGB(255, 255, 255);
+	G2L["2e"]["FontFace"] = Font.new([[rbxasset://fonts/families/SourceSansPro.json]], Enum.FontWeight.Regular, Enum.FontStyle.Normal);
+	G2L["2e"]["TextColor3"] = Color3.fromRGB(255, 255, 255);
+	G2L["2e"]["BackgroundTransparency"] = 1;
+	G2L["2e"]["Size"] = UDim2.new(1, 0, 1, 0);
+	G2L["2e"]["BorderColor3"] = Color3.fromRGB(0, 0, 0);
+	G2L["2e"]["Text"] = [[Listen]];
+
+
+	-- StarterGui.ScreenGui.Console.Listen.UIPadding
+	G2L["2f"] = Instance.new("UIPadding", G2L["2d"]);
+	G2L["2f"]["PaddingTop"] = UDim.new(0, 1);
+	G2L["2f"]["PaddingBottom"] = UDim.new(0, 1);
+
+
 	-- StarterGui.ScreenGui.Console.AutoScroll.TextLabel
 	G2L["1e"] = Instance.new("TextLabel", G2L["20"]);
 	G2L["1e"]["TextWrapped"] = true;
@@ -598,6 +758,14 @@ local function main()
 
 		local CtrlScroll = false
 		local AutoScroll = false
+		local listenEnabled = true
+
+		local filterState = {
+			[Enum.MessageType.MessageOutput] = true,
+			[Enum.MessageType.MessageInfo] = true,
+			[Enum.MessageType.MessageWarning] = true,
+			[Enum.MessageType.MessageError] = true
+		}
 
 		local LogService = game:GetService("LogService")
 		local Players = game:GetService("Players")
@@ -620,18 +788,19 @@ local function main()
 
 		-- MOUSE STUFFS
 
-		if CtrlScroll == true then
-			Console.CtrlScroll.BackgroundColor3 = Color3.fromRGB(11, 90, 175)
-		elseif CtrlScroll == false then
-			Console.CtrlScroll.BackgroundColor3 = Color3.fromRGB(56, 56, 56)
+		local activeColor = Color3.fromRGB(11, 90, 175)
+		local inactiveColor = Color3.fromRGB(56, 56, 56)
+
+		local function setToggle(btn, state)
+			if btn then
+				btn.BackgroundColor3 = state and activeColor or inactiveColor
+			end
 		end
+
+		setToggle(Console.CtrlScroll, CtrlScroll)
 		Console.CtrlScroll.MouseButton1Click:Connect(function()
 			CtrlScroll = not CtrlScroll
-			if CtrlScroll == true then
-				Console.CtrlScroll.BackgroundColor3 = Color3.fromRGB(11, 90, 175)
-			elseif CtrlScroll == false then
-				Console.CtrlScroll.BackgroundColor3 = Color3.fromRGB(56, 56, 56)
-			end
+			setToggle(Console.CtrlScroll, CtrlScroll)
 		end)
 
 		local IsHoldingCTRL = false
@@ -650,25 +819,63 @@ local function main()
 			end
 		end)
 
-		if AutoScroll == true then
-			Console.AutoScroll.BackgroundColor3 = Color3.fromRGB(11, 90, 175)
-		elseif AutoScroll == false then
-			Console.AutoScroll.BackgroundColor3 = Color3.fromRGB(56, 56, 56)
-		end
+		setToggle(Console.AutoScroll, AutoScroll)
 		Console.AutoScroll.MouseButton1Click:Connect(function()
 			AutoScroll = not AutoScroll
-			if AutoScroll == true then
-				Console.AutoScroll.BackgroundColor3 = Color3.fromRGB(11, 90, 175)
+			setToggle(Console.AutoScroll, AutoScroll)
+			if AutoScroll then
 				Console.Output.CanvasPosition = Vector2.new(0, 9e9)
-			elseif AutoScroll == false then
-				Console.AutoScroll.BackgroundColor3 = Color3.fromRGB(56, 56, 56)
 			end
 		end)
 
-		-- Console part
+		setToggle(Console.FilterOutput, filterState[Enum.MessageType.MessageOutput])
+		setToggle(Console.FilterInfo, filterState[Enum.MessageType.MessageInfo])
+		setToggle(Console.FilterWarn, filterState[Enum.MessageType.MessageWarning])
+		setToggle(Console.FilterError, filterState[Enum.MessageType.MessageError])
+		setToggle(Console.Listen, listenEnabled)
+
 		local displayedOutput = {}
 		local OutputLimit = Console.Output.OutputLimit
 
+		local function refreshVisibility()
+			for i = #displayedOutput, 1, -1 do
+				local inst = displayedOutput[i]
+				if not inst or not inst.Parent then
+					table.remove(displayedOutput, i)
+				else
+					local mt = inst:GetAttribute("MessageType")
+					local enumType = mt and Enum.MessageType[mt]
+					local enabled = enumType and filterState[enumType]
+					inst.Visible = enabled ~= false
+				end
+			end
+		end
+
+		local function toggleFilter(enumType, btn)
+			filterState[enumType] = not filterState[enumType]
+			setToggle(btn, filterState[enumType])
+			refreshVisibility()
+		end
+
+		Console.FilterOutput.MouseButton1Click:Connect(function()
+			toggleFilter(Enum.MessageType.MessageOutput, Console.FilterOutput)
+		end)
+		Console.FilterInfo.MouseButton1Click:Connect(function()
+			toggleFilter(Enum.MessageType.MessageInfo, Console.FilterInfo)
+		end)
+		Console.FilterWarn.MouseButton1Click:Connect(function()
+			toggleFilter(Enum.MessageType.MessageWarning, Console.FilterWarn)
+		end)
+		Console.FilterError.MouseButton1Click:Connect(function()
+			toggleFilter(Enum.MessageType.MessageError, Console.FilterError)
+		end)
+
+		Console.Listen.MouseButton1Click:Connect(function()
+			listenEnabled = not listenEnabled
+			setToggle(Console.Listen, listenEnabled)
+		end)
+
+		-- Console part
 		Console.TextSizeBox.TextBox.Text = tostring(OutputTextSize.Value)
 
 		Console.TextSizeBox.TextBox:GetPropertyChangedSignal("Text"):Connect(function()
@@ -709,11 +916,19 @@ local function main()
 					log:Destroy()
 				end
 			end
+			if table.clear then
+				table.clear(displayedOutput)
+			else
+				for i = #displayedOutput, 1, -1 do
+					displayedOutput[i] = nil
+				end
+			end
 		end)
 
 		local focussedOutput
 
-		LogService.MessageOut:Connect(function(msg, msgtype)
+		local function pushLog(msg, msgtype, timestamp)
+			msgtype = msgtype or Enum.MessageType.MessageOutput
 			local formattedText = ""
 			local unformattedText = ""
 			local newOutputText = Console.OutputTemplate:Clone()
@@ -726,18 +941,19 @@ local function main()
 				end
 			end
 
-			unformattedText = os.date("%H:%M:%S")..'   '..msg
+			local timeFmt = timestamp and os.date("%H:%M:%S", timestamp) or os.date("%H:%M:%S")
+			unformattedText = timeFmt..'   '..msg
 			if msgtype == Enum.MessageType.MessageOutput then
-				formattedText = os.date("%H:%M:%S")..'   <font color="rgb(204, 204, 204)">'..msg..'</font>'
+				formattedText = timeFmt..'   <font color="rgb(204, 204, 204)">'..msg..'</font>'
 				newOutputText.Text = formattedText
 			elseif msgtype == Enum.MessageType.MessageWarning then
-				formattedText = os.date("%H:%M:%S")..'   <b><font color="rgb(255, 142, 60)">'..msg..'</font></b>'
+				formattedText = timeFmt..'   <b><font color="rgb(255, 142, 60)">'..msg..'</font></b>'
 				newOutputText.Text = formattedText
 			elseif msgtype == Enum.MessageType.MessageError then
-				formattedText = os.date("%H:%M:%S")..'   <b><font color="rgb(255, 68, 68)">'..msg..'</font></b>'
+				formattedText = timeFmt..'   <b><font color="rgb(255, 68, 68)">'..msg..'</font></b>'
 				newOutputText.Text = formattedText
 			elseif msgtype == Enum.MessageType.MessageInfo then
-				formattedText = os.date("%H:%M:%S")..'   <font color="rgb(128, 215, 255)">'..msg..'</font>'
+				formattedText = timeFmt..'   <font color="rgb(128, 215, 255)">'..msg..'</font>'
 				newOutputText.Text = formattedText
 			end
 
@@ -745,6 +961,8 @@ local function main()
 			OutputTextSize:GetPropertyChangedSignal("Value"):Connect(function()
 				newOutputText.TextSize = OutputTextSize.Value
 			end)
+
+			newOutputText:SetAttribute("MessageType", msgtype.Name or "MessageOutput")
 
 			newOutputText.Focused:Connect(function()
 				focussedOutput = newOutputText
@@ -756,11 +974,27 @@ local function main()
 			end)
 
 			newOutputText.Parent = Console.Output
-			newOutputText.Visible = true
+			newOutputText.Visible = filterState[msgtype] ~= false
 
 			if AutoScroll then
 				Console.Output.CanvasPosition = Vector2.new(0, 9e9)
 			end
+		end
+
+		local historySuccess, history = pcall(function()
+			return LogService:GetLogHistory()
+		end)
+		if historySuccess and type(history) == "table" then
+			for _, entry in ipairs(history) do
+				pushLog(entry.message or entry.Message or "", entry.messageType or entry.MessageType, entry.timestamp or entry.time)
+			end
+		end
+
+		LogService.MessageOut:Connect(function(msg, msgtype)
+			if not listenEnabled then
+				return
+			end
+			pushLog(msg, msgtype)
 		end)
 
 		Console.Output.MouseLeave:Connect(function()

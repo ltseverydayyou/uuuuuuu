@@ -798,6 +798,7 @@ local function main()
 		local UserInputService = game:GetService("UserInputService")
 		local RunService = game:GetService("RunService")
 
+		local consoleApp = Console
 		local Console = ConsoleFrame
 		local SyntaxHighlightingModule = require(G2L["1c"].SyntaxHighlighter)
 		local OutputTextSize = Console.Output.OutputTextSize
@@ -1047,11 +1048,11 @@ local function main()
 			end
 		end)
 
-		Console.ApplyTheme = function()
+		consoleApp.ApplyTheme = function()
 			local t = Settings and Settings.Theme
 			if not t then return end
-			if Console.Window and Console.Window.ApplyTheme then
-				Console.Window:ApplyTheme()
+			if consoleApp.Window and consoleApp.Window.ApplyTheme then
+				consoleApp.Window:ApplyTheme()
 			end
 			if ConsoleFrame then
 				ConsoleFrame.BackgroundColor3 = t.Main1 or ConsoleFrame.BackgroundColor3

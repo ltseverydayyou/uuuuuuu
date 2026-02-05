@@ -376,12 +376,10 @@ local function main()
 		padding.PaddingRight = UDim.new(0,8)
 		padding.Parent = content
 
-		local curY = 10
-
-		local function makeButton(text, onClick)
+		local function makeButton(text, posY, onClick)
 			local btn = Instance.new("TextButton")
 			btn.Size = UDim2.new(1,-16,0,28)
-			btn.Position = UDim2.new(0,8,0,curY)
+			btn.Position = UDim2.new(0,8,0,posY)
 			btn.Text = text
 			btn.TextColor3 = Color3.new(1,1,1)
 			btn.AutoButtonColor = false
@@ -390,20 +388,19 @@ local function main()
 			Lib.ButtonAnim(btn,{PressColor = Settings.Theme.ButtonPress})
 			btn.Parent = content
 			btn.MouseButton1Click:Connect(onClick)
-			curY = curY + 34
 			return btn
 		end
 
-		makeButton("Reload Theme File",function()
+		makeButton("Reload Theme File",10,function()
 			Main.LoadThemeSettings()
 			Lib.RefreshTheme()
 		end)
 
-		makeButton("Save Current Theme",function()
+		makeButton("Save Current Theme",44,function()
 			Main.SaveThemeSettings()
 		end)
 
-		makeButton("Reset to Default",function()
+		makeButton("Reset to Default",78,function()
 			Main.ResetSettings()
 			if refreshRows then
 				refreshRows()
@@ -412,6 +409,27 @@ local function main()
 			Lib.RefreshTheme()
 		end)
 
+		local scroll = Instance.new("ScrollingFrame")
+		scroll.Name = "ThemeContent"
+		scroll.Size = UDim2.new(1,-16,1,-120)
+		scroll.Position = UDim2.new(0,8,0,120)
+		scroll.BackgroundTransparency = 0.1
+		scroll.BackgroundColor3 = Settings.Theme.Main1
+		scroll.CanvasSize = UDim2.new(0,0,0,0)
+		scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+		scroll.ScrollBarThickness = 6
+		scroll.Parent = content
+
+		local innerPad = Instance.new("UIPadding")
+		innerPad.PaddingTop = UDim.new(0,6)
+		innerPad.PaddingLeft = UDim.new(0,4)
+		innerPad.PaddingRight = UDim.new(0,4)
+		innerPad.Parent = scroll
+
+		local list = Instance.new("UIListLayout", scroll)
+		list.Padding = UDim.new(0,6)
+		list.SortOrder = Enum.SortOrder.LayoutOrder
+
 		local pLabel = Instance.new("TextLabel")
 		pLabel.BackgroundTransparency = 1
 		pLabel.Text = "Presets"
@@ -419,24 +437,23 @@ local function main()
 		pLabel.TextColor3 = Color3.new(1,1,1)
 		pLabel.Font = Enum.Font.SourceSans
 		pLabel.TextSize = 14
-		pLabel.Size = UDim2.new(1,-16,0,18)
-		pLabel.Position = UDim2.new(0,8,0,curY)
-		pLabel.Parent = content
-		curY = curY + 22
+		pLabel.Size = UDim2.new(1,0,0,18)
+		pLabel.LayoutOrder = 1
+		pLabel.Parent = scroll
 
-		for _, p in ipairs(presets) do
+		for i,p in ipairs(presets) do
 			local b = Instance.new("TextButton")
-			b.Size = UDim2.new(1,-16,0,24)
-			b.Position = UDim2.new(0,8,0,curY)
-			b.Text = p.name
-			b.TextColor3 = Color3.new(1,1,1)
+			b.Size = UDim2.new(1,0,0,24)
 			b.BackgroundTransparency = 0
 			b.BackgroundColor3 = Settings.Theme.Button
-			b.AutoButtonColor = false
+			b.Text = p.name
+			b.TextColor3 = Color3.new(1,1,1)
 			b.Font = Enum.Font.SourceSans
 			b.TextSize = 14
+			b.AutoButtonColor = false
+			b.LayoutOrder = 10 + i
+			b.Parent = scroll
 			Lib.ButtonAnim(b,{PressColor = Settings.Theme.ButtonPress})
-			b.Parent = content
 			b.MouseButton1Click:Connect(function()
 				p.apply()
 				if refreshRows then
@@ -445,24 +462,25 @@ local function main()
 				Main.SaveThemeSettings()
 				Lib.RefreshTheme()
 			end)
-			curY = curY + 28
 		end
 
-		curY = curY + 8
+		local sep = Instance.new("Frame")
+		sep.BackgroundColor3 = Color3.fromRGB(80,80,80)
+		sep.BorderSizePixel = 0
+		sep.Size = UDim2.new(1,0,0,1)
+		sep.LayoutOrder = 100
+		sep.Parent = scroll
 
-		local scroll = Instance.new("ScrollingFrame")
-		scroll.Name = "ColorList"
-		scroll.Size = UDim2.new(1,-16,1,-curY-8)
-		scroll.Position = UDim2.new(0,8,0,curY)
-		scroll.BackgroundTransparency = 0.1
-		scroll.BackgroundColor3 = Settings.Theme.Main1
-		scroll.CanvasSize = UDim2.new(0,0,0,0)
-		scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-		scroll.ScrollBarThickness = 6
-		scroll.Parent = content
-
-		local list = Instance.new("UIListLayout", scroll)
-		list.Padding = UDim.new(0,6)
+		local cLabel = Instance.new("TextLabel")
+		cLabel.BackgroundTransparency = 1
+		cLabel.Text = "Colors"
+		cLabel.TextXAlignment = Enum.TextXAlignment.Left
+		cLabel.TextColor3 = Color3.new(1,1,1)
+		cLabel.Font = Enum.Font.SourceSans
+		cLabel.TextSize = 14
+		cLabel.Size = UDim2.new(1,0,0,18)
+		cLabel.LayoutOrder = 101
+		cLabel.Parent = scroll
 
 		local themeEntries = {
 			{"Main1"},{"Main2"},{"Outline1"},{"Outline2"},{"Outline3"},{"TextBox"},{"Menu"},
@@ -505,12 +523,13 @@ local function main()
 			end
 		end
 
-		for _, path in ipairs(themeEntries) do
+		for i,path in ipairs(themeEntries) do
 			local keyLabel = table.concat(path,".")
 			local row = Instance.new("Frame")
 			row.Name = keyLabel
 			row.BackgroundTransparency = 1
 			row.Size = UDim2.new(1,0,0,24)
+			row.LayoutOrder = 200 + i
 			row.Parent = scroll
 
 			local label = Instance.new("TextLabel")

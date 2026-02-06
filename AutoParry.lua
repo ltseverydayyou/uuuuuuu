@@ -621,16 +621,15 @@ local rangeGui, rangeText, rangeMulti = newBillboard("Range", UDim2.new(3, 0, 3,
 
 local ballsMap = {}
 local ballList = {}
+local mainRealBall = {}
 local ballConns = {}
 local containerConns = {}
-local ballsDirty = false
 
 local function addBall(b)
 	if ballsMap[b] or not (b and b:IsA("BasePart") and b.Parent) then
 		return
 	end
 	ballsMap[b] = true
-	ballsDirty = true
 end
 
 local function removeBall(b)
@@ -638,7 +637,21 @@ local function removeBall(b)
 		return
 	end
 	ballsMap[b] = nil
-	ballsDirty = true
+	mainRealBall[b] = nil
+end
+
+local function cleanupBallVisual(ball)
+	local v = ballVis[ball]
+	if not v then
+		return
+	end
+	ballVis[ball] = nil
+	if v.gui then
+		v.gui:Destroy()
+	end
+	if v.ring then
+		v.ring:Destroy()
+	end
 end
 
 local function attachContainer(c)
@@ -734,18 +747,88 @@ local function setupBallTracking()
 	end
 end
 
+local function isVisualizerPart(p)
+	if not p or not p:IsA("BasePart") then
+		return false
+	end
+	local tr = p.Transparency or 0
+	local ltm = 0
+	pcall(function()
+		ltm = p.LocalTransparencyModifier or 0
+	end)
+	return tr < 0.95 and ltm < 0.95
+end
+
 local function getBalls()
-	if ballsDirty then
-		ballsDirty = false
-		table.clear(ballList)
-		for b in pairs(ballsMap) do
-			if b and b.Parent then
-				ballList[#ballList + 1] = b
+	table.clear(ballList)
+
+	local byName = {}
+
+	for b in pairs(ballsMap) do
+		if b and b.Parent then
+			local name = b.Name
+			local list = byName[name]
+			if not list then
+				list = {}
+				byName[name] = list
+			end
+			list[#list + 1] = b
+		else
+			ballsMap[b] = nil
+			mainRealBall[b] = nil
+			cleanupBallVisual(b)
+		end
+	end
+
+	for _, list in pairs(byName) do
+		local count = #list
+		if count == 1 then
+			local only = list[1]
+			ballList[#ballList + 1] = only
+		else
+			local invis = {}
+			local vis = {}
+			local anyMain
+
+			for i = 1, count do
+				local part = list[i]
+				if isVisualizerPart(part) then
+					vis[#vis + 1] = part
+				else
+					invis[#invis + 1] = part
+				end
+				if mainRealBall[part] then
+					anyMain = part
+				end
+			end
+
+			local winner
+
+			if #invis > 0 then
+				winner = anyMain or invis[1]
+			elseif anyMain then
+				winner = anyMain
+			elseif #vis > 0 then
+				winner = vis[1]
 			else
-				ballsMap[b] = nil
+				winner = list[1]
+			end
+
+			if winner then
+				mainRealBall[winner] = true
+				for i = 1, count do
+					local part = list[i]
+					if part ~= winner then
+						mainRealBall[part] = nil
+						ballsMap[part] = nil
+						cleanupBallVisual(part)
+					end
+				end
+				ballList[#ballList + 1] = winner
 			end
 		end
 	end
+
 	return ballList
 end
 
@@ -771,20 +854,6 @@ local function getBallVisual(ball)
 		ballVis[ball] = v
 	end
 	return v
-end
-
-local function cleanupBallVisual(ball)
-	local v = ballVis[ball]
-	if not v then
-		return
-	end
-	ballVis[ball] = nil
-	if v.gui then
-		v.gui:Destroy()
-	end
-	if v.ring then
-		v.ring:Destroy()
-	end
 end
 
 local function cleanupAllBallVisuals()
@@ -836,7 +905,7 @@ local function cleanup()
 	containerConns = {}
 	ballsMap = {}
 	ballList = {}
-	ballsDirty = false
+	mainRealBall = {}
 
 	pcall(function()
 		rangeGui.Parent = nil
@@ -1632,10 +1701,12 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 	updateRingColors()
 	applyVisualizerVisible(showViz)
 end));
-trackConnection(RunService.RenderStepped:Connect(function()
-	if spam then
-		queueParry(true);
-		queueParry(true);
-		queueParry(true);
-	end;
+trackConnection(RunService.Heartbeat:Connect(function()
+	task.defer(function()
+		if spam then
+			task.defer(DoParry)
+			task.defer(DoParry)
+			task.defer(DoParry)
+		end;
+	end);
 end));

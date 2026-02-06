@@ -1705,8 +1705,6 @@ trackConnection(RunService.Heartbeat:Connect(function()
 	task.defer(function()
 		if spam then
 			task.defer(DoParry)
-			task.defer(DoParry)
-			task.defer(DoParry)
 		end;
 	end);
 end));

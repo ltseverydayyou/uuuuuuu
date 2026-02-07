@@ -246,8 +246,10 @@ local parCd = 1.6;
 local nextPar = 0;
 local lastParryTime = 0;
 local curFrame = 0;
-local lastParryFrame = -1;
 local lastQueueTime = 0;
+local stepAcc = 0
+local stepDt = 1/120
+local maxSub = 4
 local wasInPredict = {};
 local ringLimited = false;
 local lastBallSamples = {};
@@ -1139,24 +1141,20 @@ local function DoParry()
 end;
 local function queueParry(isSpam, hasTarget)
 	if (not apEnabled) and (not isSpam) then
-		return;
-	end;
+		return
+	end
 	if not isSpam and not hasTarget then
-		return;
-	end;
-	local now = tick();
-	if curFrame == lastParryFrame then
-		return;
-	end;
-	if not isSpam and now - lastQueueTime < 0.03 then
-		return;
-	end;
-	lastParryFrame = curFrame;
-	if not isSpam then
-		lastQueueTime = now;
-	end;
-	task.defer(DoParry);
-end;
+		return
+	end
+
+	local now = tick()
+	if not isSpam and now - lastQueueTime < 0.01 then
+		return
+	end
+
+	lastQueueTime = now
+	task.defer(DoParry)
+end
 local function getHighlightColor(inst)
 	if not inst then
 		return nil, nil;
@@ -1267,7 +1265,7 @@ local function updateGuiTargets(hrp, hasBall)
 		rangeGui.Adornee = nil
 	end
 end
-trackConnection(RunService.RenderStepped:Connect(function(dt)
+local function AutoParryStep(dt)
 	curFrame = curFrame + 1
 	character = localPlayer.Character or character
 	local hrp = waitForChildFast(character, "HumanoidRootPart")
@@ -1700,11 +1698,18 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 	updateDebugMenu(#balls, anyTargeted, nowStateTime)
 	updateRingColors()
 	applyVisualizerVisible(showViz)
-end));
-trackConnection(RunService.Heartbeat:Connect(function()
-	task.defer(function()
-		if spam then
-			task.defer(DoParry)
-		end;
-	end);
-end));
+end;
+trackConnection(RunService.Heartbeat:Connect(function(dt)
+	stepAcc += dt
+	local i = 0
+
+	while stepAcc >= stepDt and i < maxSub do
+		AutoParryStep(stepDt)
+		stepAcc -= stepDt
+		i += 1
+	end
+
+	if spam then
+		task.defer(DoParry)
+	end
+end))

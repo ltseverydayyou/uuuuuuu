@@ -1204,38 +1204,74 @@ Main = (function()
 	end
 
 	Main.FetchRMD = function()
-		local rawXML
-		if Main.Elevated then
-			if Main.LocalDepsUpToDate() then
-				local localRMD = Lib.ReadFile("DexPlusPlus/rbx_rmd.dat")
-				if localRMD then 
-					rawXML = localRMD
+		local function skipRMD(reason)
+			warn("[Dex] "..tostring(reason))
+			return {
+				Classes = {},
+				Enums = {},
+				PropertyOrders = {},
+				Skipped = true,
+				Reason = reason,
+			}
+		end
+
+		local ok, rawXML = pcall(function()
+			local xml
+
+			if Main.Elevated then
+				if Main.LocalDepsUpToDate() then
+					local localRMD = Lib.ReadFile("DexPlusPlus/rbx_rmd.dat")
+					if localRMD then
+						xml = localRMD
+					else
+						if Main.DepsVersionData then
+							Main.DepsVersionData[1] = ""
+						end
+					end
+				end
+
+				if not xml then
+					local httpOk, httpBody = pcall(oldgame.HttpGet, oldgame, "https://raw.githubusercontent.com/MaximumADHD/Roblox-Client-Tracker/refs/heads/roblox/ReflectionMetadata.xml")
+					if not httpOk or type(httpBody) ~= "string" or httpBody == "" then
+						error("HTTP error while fetching RMD: "..tostring(httpBody))
+					end
+					xml = httpBody
+				end
+			else
+				if script:FindFirstChild("RMD") then
+					xml = require(script.RMD)
 				else
-					Main.DepsVersionData[1] = ""
+					error("NO RMD EXISTS")
 				end
 			end
-			rawXML = rawXML or game:HttpGet("https://raw.githubusercontent.com/CloneTrooper1019/Roblox-Client-Tracker/roblox/ReflectionMetadata.xml")
-		else
-			if script:FindFirstChild("RMD") then
-				rawXML = require(script.RMD)
-			else
-				error("NO RMD EXISTS")
-			end
+
+			return xml
+		end)
+
+		if not ok or not rawXML or rawXML == "" then
+			return skipRMD("Failed to fetch RMD: "..tostring(rawXML))
 		end
+
 		Main.RawRMD = rawXML
-		local parsed = Lib.ParseXML(rawXML)
+
+		local okParse, parsed = pcall(Lib.ParseXML, rawXML)
+		if not okParse or not parsed or not parsed.children or not parsed.children[1] then
+			return skipRMD("Failed to parse RMD XML")
+		end
+
 		local classList = parsed.children[1].children[1].children
 		local enumList = parsed.children[1].children[2].children
 		local propertyOrders = {}
 
-		local classes,enums = {},{}
-		for _,class in pairs(classList) do
+		local classes, enums = {}, {}
+
+		for _, class in pairs(classList) do
 			local className = ""
-			for _,child in pairs(class.children) do
+			for _, child in pairs(class.children) do
 				if child.tag == "Properties" then
 					local data = {Properties = {}, Functions = {}}
 					local props = child.children
-					for _,prop in pairs(props) do
+					for _, prop in pairs(props) do
 						local name = prop.attrs.name
 						name = name:sub(1,1):upper()..name:sub(2)
 						data[name] = prop.children[1].text
@@ -1244,12 +1280,12 @@ Main = (function()
 					classes[className] = data
 				elseif child.attrs.class == "ReflectionMetadataProperties" then
 					local members = child.children
-					for _,member in pairs(members) do
+					for _, member in pairs(members) do
 						if member.attrs.class == "ReflectionMetadataMember" then
 							local data = {}
 							if member.children[1].tag == "Properties" then
 								local props = member.children[1].children
-								for _,prop in pairs(props) do
+								for _, prop in pairs(props) do
 									if prop.attrs then
 										local name = prop.attrs.name
 										name = name:sub(1,1):upper()..name:sub(2)
@@ -1258,7 +1294,10 @@ Main = (function()
 								end
 								if data.PropertyOrder then
 									local orders = propertyOrders[className]
-									if not orders then orders = {} propertyOrders[className] = orders end
+									if not orders then
+										orders = {}
+										propertyOrders[className] = orders
+									end
 									orders[data.Name] = tonumber(data.PropertyOrder)
 								end
 								classes[className].Properties[data.Name] = data
@@ -1267,12 +1306,12 @@ Main = (function()
 					end
 				elseif child.attrs.class == "ReflectionMetadataFunctions" then
 					local members = child.children
-					for _,member in pairs(members) do
+					for _, member in pairs(members) do
 						if member.attrs.class == "ReflectionMetadataMember" then
 							local data = {}
 							if member.children[1].tag == "Properties" then
 								local props = member.children[1].children
-								for _,prop in pairs(props) do
+								for _, prop in pairs(props) do
 									if prop.attrs then
 										local name = prop.attrs.name
 										name = name:sub(1,1):upper()..name:sub(2)
@@ -1287,13 +1326,13 @@ Main = (function()
 			end
 		end
 
-		for _,enum in pairs(enumList) do
+		for _, enum in pairs(enumList) do
 			local enumName = ""
-			for _,child in pairs(enum.children) do
+			for _, child in pairs(enum.children) do
 				if child.tag == "Properties" then
 					local data = {Items = {}}
 					local props = child.children
-					for _,prop in pairs(props) do
+					for _, prop in pairs(props) do
 						local name = prop.attrs.name
 						name = name:sub(1,1):upper()..name:sub(2)
 						data[name] = prop.children[1].text
@@ -1304,7 +1343,7 @@ Main = (function()
 					local data = {}
 					if child.children[1].tag == "Properties" then
 						local props = child.children[1].children
-						for _,prop in pairs(props) do
+						for _, prop in pairs(props) do
 							local name = prop.attrs.name
 							name = name:sub(1,1):upper()..name:sub(2)
 							data[name] = prop.children[1].text
@@ -1315,7 +1354,11 @@ Main = (function()
 			end
 		end
 
-		return {Classes = classes, Enums = enums, PropertyOrders = propertyOrders}
+		return {
+			Classes = classes,
+			Enums = enums,
+			PropertyOrders = propertyOrders,
+		}
 	end
 
 	Main.ShowGui = Main.SecureGui
@@ -1944,6 +1987,10 @@ Main = (function()
 		intro.SetProgress("Fetching RMD",0.5)
 		RMD = Main.FetchRMD()
 		Lib.FastWait()
+		if RMD and RMD.Skipped then
+			intro.SetError("Failed to fetch RMD, continuing without.")
+			Lib.FastWait(0.75)
+		end
 
 		-- Save external deps locally if needed
 		if Main.Elevated and env.writefile and not Main.LocalDepsUpToDate() then

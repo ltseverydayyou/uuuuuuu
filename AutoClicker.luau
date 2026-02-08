@@ -452,7 +452,7 @@ local function startFastLoop()
 				updateDockStatus();
 			end;
 		end;
-		if not clicking or minimized then
+		if not clicking then
 			return;
 		end;
 		if overOwnUI() then

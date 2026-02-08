@@ -6,31 +6,41 @@ local Delay = task.delay;
 local Spawn = task.spawn;
 local Insert = table.insert;
 local Concat = table.concat;
+
 local promptPartCache = setmetatable({}, {
 	__mode = "k"
 });
+
+local glitchMarks = {
+	"̶",
+	"̷",
+	"̸",
+	"̹",
+	"̺",
+	"̻",
+	"͓",
+	"͔",
+	"͘",
+	"͜",
+	"͞",
+	"͟",
+	"͢"
+};
+
+local function hb(n)
+	for i = 1, n or 1 do
+		RunService.Heartbeat:Wait();
+	end;
+end;
+
 local isPoopSploit = identifyexecutor and ((identifyexecutor()):lower() == "solara" or (identifyexecutor()):lower() == "xeno") or typeof(firetouchinterest) ~= "function";
+
 local rStringgg = function()
 	if HttpService and HttpService.GenerateGUID then
 		return HttpService:GenerateGUID(false);
 	end;
 	local length = math.random(10, 20);
 	local result = {};
-	local glitchMarks = {
-		"̶",
-		"̷",
-		"̸",
-		"̹",
-		"̺",
-		"̻",
-		"͓",
-		"͔",
-		"͘",
-		"͜",
-		"͞",
-		"͟",
-		"͢"
-	};
 	for i = 1, length do
 		local char = string.char(math.random(32, 126));
 		Insert(result, char);
@@ -55,6 +65,7 @@ local rStringgg = function()
 	end;
 	return Concat(result);
 end;
+
 local getPromptPart = function(pp)
 	if not pp then
 		return nil;
@@ -94,12 +105,8 @@ local getPromptPart = function(pp)
 	promptPartCache[pp] = part or false;
 	return part;
 end;
+
 if isPoopSploit then
-	local function hb(n)
-		for i = 1, n or 1 do
-			RunService.Heartbeat:Wait();
-		end;
-	end;
 	local function toOpts(o)
 		if typeof(o) == "number" then
 			return {
@@ -108,9 +115,11 @@ if isPoopSploit then
 		end;
 		return typeof(o) == "table" and o or {};
 	end;
+
 	local state = setmetatable({}, {
 		__mode = "k"
 	});
+
 	local function snapshot(pp)
 		return {
 			E = pp.Enabled,
@@ -120,15 +129,16 @@ if isPoopSploit then
 			X = pp.Exclusivity
 		};
 	end;
+
 	local function begin(pp, o)
+		if not (pp and pp.Parent) then
+			return false;
+		end;
 		local s = state[pp];
 		if not s then
 			s = snapshot(pp);
 			s.ref = 0;
 			s.inFlight = false;
-			pp.Destroying:Connect(function()
-				state[pp] = nil;
-			end);
 			state[pp] = s;
 		end;
 		if s.inFlight then
@@ -157,6 +167,7 @@ if isPoopSploit then
 		end;
 		return true;
 	end;
+
 	local function finish(pp)
 		local s = state[pp];
 		if not s then
@@ -171,8 +182,11 @@ if isPoopSploit then
 			pp.MaxActivationDistance = s.D;
 			pp.Exclusivity = s.X;
 			state[pp] = nil;
+		elseif s.ref <= 0 then
+			state[pp] = nil;
 		end;
 	end;
+
 	local function fireOne(pp, o)
 		if not begin(pp, o) then
 			return;
@@ -279,6 +293,7 @@ if isPoopSploit then
 			warn(("[fireproximityprompt] %s"):format(err));
 		end;
 	end;
+
 	_env.fireproximityprompt = function(target, opts)
 		local o = toOpts(opts);
 		local list = {};
@@ -310,15 +325,12 @@ if isPoopSploit then
 		return #list > 0;
 	end;
 end;
+
 if isPoopSploit then
-	local function hb(n)
-		for i = 1, n or 1 do
-			RunService.Heartbeat:Wait();
-		end;
-	end;
 	local touchState = setmetatable({}, {
 		__mode = "k"
 	});
+
 	local function snapshot(part)
 		local vel, ang = Vector3.zero, Vector3.zero;
 		pcall(function()
@@ -349,6 +361,7 @@ if isPoopSploit then
 			MS = massless
 		};
 	end;
+
 	local function restore(part, snap)
 		if not (snap and part and part.Parent) then
 			return;
@@ -371,12 +384,14 @@ if isPoopSploit then
 			end;
 		end);
 	end;
+
 	local function getRoot(p)
 		if typeof(p) ~= "Instance" or (not p:IsA("BasePart")) then
 			return nil;
 		end;
 		return p.AssemblyRootPart or p;
 	end;
+
 	_env.firetouchinterest = function(partA, partB, state)
 		local handle = getRoot(partA);
 		local target = getRoot(partB);

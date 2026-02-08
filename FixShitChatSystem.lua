@@ -15,15 +15,14 @@ if AlreadyLoaded() then
 	return
 end
 
-local FlagValue = tick()
 pcall(function()
 	if _env then
-		_env.ltseverydayyou_chatFix = FlagValue
-		_env.chatFixLoaded = FlagValue
+		_env.ltseverydayyou_chatFix = true
+		_env.chatFixLoaded = true
 	end
 	if _shared then
-		_shared.ltseverydayyou_chatFix = FlagValue
-		_shared.chatFixLoaded = FlagValue
+		_shared.ltseverydayyou_chatFix = true
+		_shared.chatFixLoaded = true
 	end
 end)
 
@@ -46,10 +45,10 @@ local function wchild(p, n, t)
 	local st = os.clock()
 	local c = p:FindFirstChild(n)
 	while not c and (not t or os.clock() - st < t) do
-		task.wait()
 		if not p.Parent and not p:IsDescendantOf(game) then
 			return nil
 		end
+		task.wait(0.03)
 		c = p:FindFirstChild(n)
 	end
 	return c
@@ -62,7 +61,7 @@ local ec = wchild(cg, "ExperienceChat", 30)
 if not ec then return end
 
 local function isLockRow(lbl)
-	if not lbl:IsA("TextLabel") then return false end
+	if not lbl or not lbl:IsA("TextLabel") then return false end
 	if lbl.Name ~= "BodyText" then return false end
 
 	local txt = ""
@@ -84,11 +83,25 @@ local watched = setmetatable({}, { __mode = "k" })
 local function keepHidden(inst)
 	if not inst or watched[inst] then return end
 	watched[inst] = true
-	inst:GetPropertyChangedSignal("Visible"):Connect(function()
+
+	local conn
+	conn = inst:GetPropertyChangedSignal("Visible"):Connect(function()
+		if not inst or not inst.Parent then
+			if conn then
+				conn:Disconnect()
+				conn = nil
+			end
+			watched[inst] = nil
+			return
+		end
 		if inst.Visible then
 			inst.Visible = false
 		end
 	end)
+
+	if inst.Visible then
+		inst.Visible = false
+	end
 end
 
 local function hookCont(cont)
@@ -98,18 +111,21 @@ local function hookCont(cont)
 	local function getRow(body)
 		local p = body
 		while p and p ~= cont do
-			if p.Parent == cont then
+			local pr = p.Parent
+			if pr == cont then
 				return p
 			end
-			p = p.Parent
+			p = pr
 		end
 		return nil
 	end
 
 	local function handleBody(body)
 		if not isLockRow(body) then return end
+		if not body.Parent then return end
+
 		local row = getRow(body)
-		if row then
+		if row and row.Parent then
 			row.Visible = false
 			keepHidden(row)
 		else
@@ -128,7 +144,16 @@ local function hookCont(cont)
 		end
 	end
 
-	cont.DescendantAdded:Connect(function(inst)
+	local dConn
+	dConn = cont.DescendantAdded:Connect(function(inst)
+		if not cont.Parent then
+			if dConn then
+				dConn:Disconnect()
+				dConn = nil
+			end
+			hooked[cont] = nil
+			return
+		end
 		if inst:IsA("TextLabel") and inst.Name == "BodyText" then
 			handleBody(inst)
 		end
@@ -141,7 +166,15 @@ for _, inst in ipairs(ec:GetDescendants()) do
 	end
 end
 
-ec.DescendantAdded:Connect(function(inst)
+local ecConn
+ecConn = ec.DescendantAdded:Connect(function(inst)
+	if not ec.Parent then
+		if ecConn then
+			ecConn:Disconnect()
+			ecConn = nil
+		end
+		return
+	end
 	if inst.Name == "RCTScrollContentView" then
 		hookCont(inst)
 	end

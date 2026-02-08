@@ -149,7 +149,7 @@ do
 		for _, n in ipairs({
 			"Range",
 			"Distance"
-		}) do
+			}) do
 			local old = guiParent:FindFirstChild(n);
 			if old then
 				old:Destroy();
@@ -627,6 +627,20 @@ local mainRealBall = {}
 local ballConns = {}
 local containerConns = {}
 
+local function detachContainer(c)
+	local conns = ballConns[c]
+	if conns then
+		if typeof(conns) == "RBXScriptConnection" then
+			pcall(function() conns:Disconnect() end)
+		elseif type(conns) == "table" then
+			for _, conn in ipairs(conns) do
+				pcall(function() conn:Disconnect() end)
+			end
+		end
+		ballConns[c] = nil
+	end
+end
+
 local function addBall(b)
 	if ballsMap[b] or not (b and b:IsA("BasePart") and b.Parent) then
 		return
@@ -684,8 +698,11 @@ local function attachContainer(c)
 	end)
 
 	local ancestry = c.AncestryChanged:Connect(function(inst, parent)
-		if inst == c and parent == nil and c:IsA("BasePart") then
-			removeBall(c)
+		if inst == c and parent == nil then
+			if c:IsA("BasePart") then
+				removeBall(c)
+			end
+			detachContainer(c)
 		end
 	end)
 
@@ -708,12 +725,27 @@ local function trackNamedContainer(parent, name)
 	if containerConns[parent] then
 		return
 	end
-	local c = parent.DescendantAdded:Connect(function(ch)
+	local addedConn = parent.DescendantAdded:Connect(function(ch)
 		if ch.Name == name then
 			attachContainer(ch)
 		end
 	end)
-	containerConns[parent] = c
+	local ancestryConn = parent.AncestryChanged:Connect(function(inst, parentObj)
+		if inst == parent and parentObj == nil then
+			local conns = containerConns[inst]
+			if conns then
+				if typeof(conns) == "RBXScriptConnection" then
+					pcall(function() conns:Disconnect() end)
+				elseif type(conns) == "table" then
+					for _, cn in ipairs(conns) do
+						pcall(function() cn:Disconnect() end)
+					end
+				end
+				containerConns[inst] = nil
+			end
+		end
+	end)
+	containerConns[parent] = {addedConn, ancestryConn}
 end
 
 local function setupBallTracking()
@@ -900,9 +932,13 @@ local function cleanup()
 	end
 	ballConns = {}
 	for _, conn in pairs(containerConns) do
-		pcall(function()
-			conn:Disconnect()
-		end)
+		if typeof(conn) == "RBXScriptConnection" then
+			pcall(function() conn:Disconnect() end)
+		elseif type(conn) == "table" then
+			for _, cn in ipairs(conn) do
+				pcall(function() cn:Disconnect() end)
+			end
+		end
 	end
 	containerConns = {}
 	ballsMap = {}

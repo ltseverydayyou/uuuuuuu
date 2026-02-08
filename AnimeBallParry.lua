@@ -149,7 +149,7 @@ do
 		for _, n in ipairs({
 			"Range",
 			"Distance"
-		}) do
+			}) do
 			local old = guiParent:FindFirstChild(n);
 			if old then
 				old:Destroy();
@@ -283,8 +283,10 @@ local parCd = 1.6;
 local nextPar = 0;
 local lastParryTime = 0;
 local curFrame = 0;
-local lastParryFrame = -1;
 local lastQueueTime = 0;
+local stepAcc = 0
+local stepDt = 1/120
+local maxSub = 4
 local wasInPredict = {};
 local ringLimited = false;
 local lastBallSamples = {};
@@ -662,6 +664,20 @@ local mainRealBall = {}
 local ballConns = {}
 local containerConns = {}
 
+local function detachContainer(c)
+	local conns = ballConns[c]
+	if conns then
+		if typeof(conns) == "RBXScriptConnection" then
+			pcall(function() conns:Disconnect() end)
+		elseif type(conns) == "table" then
+			for _, conn in ipairs(conns) do
+				pcall(function() conn:Disconnect() end)
+			end
+		end
+		ballConns[c] = nil
+	end
+end
+
 local function addBall(b)
 	if ballsMap[b] or not (b and b:IsA("BasePart") and b.Parent) then
 		return
@@ -719,8 +735,11 @@ local function attachContainer(c)
 	end)
 
 	local ancestry = c.AncestryChanged:Connect(function(inst, parent)
-		if inst == c and parent == nil and c:IsA("BasePart") then
-			removeBall(c)
+		if inst == c and parent == nil then
+			if c:IsA("BasePart") then
+				removeBall(c)
+			end
+			detachContainer(c)
 		end
 	end)
 
@@ -743,12 +762,27 @@ local function trackNamedContainer(parent, name)
 	if containerConns[parent] then
 		return
 	end
-	local c = parent.DescendantAdded:Connect(function(ch)
+	local addedConn = parent.DescendantAdded:Connect(function(ch)
 		if ch.Name == name then
 			attachContainer(ch)
 		end
 	end)
-	containerConns[parent] = c
+	local ancestryConn = parent.AncestryChanged:Connect(function(inst, parentObj)
+		if inst == parent and parentObj == nil then
+			local conns = containerConns[inst]
+			if conns then
+				if typeof(conns) == "RBXScriptConnection" then
+					pcall(function() conns:Disconnect() end)
+				elseif type(conns) == "table" then
+					for _, cn in ipairs(conns) do
+						pcall(function() cn:Disconnect() end)
+					end
+				end
+				containerConns[inst] = nil
+			end
+		end
+	end)
+	containerConns[parent] = {addedConn, ancestryConn}
 end
 
 local function setupBallTracking()
@@ -935,9 +969,13 @@ local function cleanup()
 	end
 	ballConns = {}
 	for _, conn in pairs(containerConns) do
-		pcall(function()
-			conn:Disconnect()
-		end)
+		if typeof(conn) == "RBXScriptConnection" then
+			pcall(function() conn:Disconnect() end)
+		elseif type(conn) == "table" then
+			for _, cn in ipairs(conn) do
+				pcall(function() cn:Disconnect() end)
+			end
+		end
 	end
 	containerConns = {}
 	ballsMap = {}
@@ -1223,24 +1261,20 @@ local function DoParry()
 end;
 local function queueParry(isSpam, hasTarget)
 	if (not apEnabled) and (not isSpam) then
-		return;
-	end;
+		return
+	end
 	if not isSpam and not hasTarget then
-		return;
-	end;
-	local now = tick();
-	if curFrame == lastParryFrame then
-		return;
-	end;
-	if not isSpam and now - lastQueueTime < 0.03 then
-		return;
-	end;
-	lastParryFrame = curFrame;
-	if not isSpam then
-		lastQueueTime = now;
-	end;
-	task.defer(DoParry);
-end;
+		return
+	end
+
+	local now = tick()
+	if not isSpam and now - lastQueueTime < 0.01 then
+		return
+	end
+
+	lastQueueTime = now
+	task.defer(DoParry)
+end
 local function getHighlightColor(inst)
 	if not inst then
 		return nil, nil;
@@ -1351,7 +1385,7 @@ local function updateGuiTargets(hrp, hasBall)
 		rangeGui.Adornee = nil
 	end
 end
-trackConnection(RunService.RenderStepped:Connect(function(dt)
+local function AutoParryStep(dt)
 	curFrame = curFrame + 1
 	character = localPlayer.Character or character
 	local hrp = waitForChildFast(character, "HumanoidRootPart")
@@ -1784,13 +1818,18 @@ trackConnection(RunService.RenderStepped:Connect(function(dt)
 	updateDebugMenu(#balls, anyTargeted, nowStateTime)
 	updateRingColors()
 	applyVisualizerVisible(showViz)
-end));
-trackConnection(RunService.Heartbeat:Connect(function()
-	task.defer(function()
-		if spam then
-			task.defer(QuickParry)
-			task.defer(QuickParry)
-			task.defer(QuickParry)
-		end;
-	end);
-end));
+end;
+trackConnection(RunService.Heartbeat:Connect(function(dt)
+	stepAcc += dt
+	local i = 0
+
+	while stepAcc >= stepDt and i < maxSub do
+		AutoParryStep(stepDt)
+		stepAcc -= stepDt
+		i += 1
+	end
+
+	if spam then
+		task.defer(QuickParry)
+	end
+end))

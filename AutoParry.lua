@@ -4,142 +4,124 @@ local UserInputService = game:GetService("UserInputService");
 local VirtualInputManager = game:GetService("VirtualInputManager");
 local Stats = game:GetService("Stats");
 local GuiService = game:GetService("GuiService");
-
-local IsOnMobile=(function()
-	local platform=UserInputService:GetPlatform()
-	if platform==Enum.Platform.IOS or platform==Enum.Platform.Android or platform==Enum.Platform.AndroidTV or platform==Enum.Platform.Chromecast or platform==Enum.Platform.MetaOS then
-		return true
-	end
-	if platform==Enum.Platform.None then
-		return UserInputService.TouchEnabled and not (UserInputService.KeyboardEnabled or UserInputService.MouseEnabled)
-	end
-	return false
-end)()
-local IsOnPC=(function()
-	local platform=UserInputService:GetPlatform()
-	if platform==Enum.Platform.Windows or platform==Enum.Platform.OSX or platform==Enum.Platform.Linux or platform==Enum.Platform.SteamOS or platform==Enum.Platform.UWP or platform==Enum.Platform.DOS or platform==Enum.Platform.BeOS then
-		return true
-	end
-	if platform==Enum.Platform.None then
-		return UserInputService.KeyboardEnabled or UserInputService.MouseEnabled
-	end
-	return false
-end)()
-
-local connections = {}
-local touchOpt = nil
-local touchLock = false
-
+local IsOnMobile = (function()
+	local platform = UserInputService:GetPlatform();
+	if platform == Enum.Platform.IOS or platform == Enum.Platform.Android or platform == Enum.Platform.AndroidTV or platform == Enum.Platform.Chromecast or platform == Enum.Platform.MetaOS then
+		return true;
+	end;
+	if platform == Enum.Platform.None then
+		return UserInputService.TouchEnabled and (not (UserInputService.KeyboardEnabled or UserInputService.MouseEnabled));
+	end;
+	return false;
+end)();
+local IsOnPC = (function()
+	local platform = UserInputService:GetPlatform();
+	if platform == Enum.Platform.Windows or platform == Enum.Platform.OSX or platform == Enum.Platform.Linux or platform == Enum.Platform.SteamOS or platform == Enum.Platform.UWP or platform == Enum.Platform.DOS or platform == Enum.Platform.BeOS then
+		return true;
+	end;
+	if platform == Enum.Platform.None then
+		return UserInputService.KeyboardEnabled or UserInputService.MouseEnabled;
+	end;
+	return false;
+end)();
+local connections = {};
+local touchOpt = nil;
+local touchLock = false;
 local connect = function(name, connection)
-	connections[name] = connections[name] or {}
-	table.insert(connections[name], connection)
-	return connection
-end
-
+	connections[name] = connections[name] or {};
+	table.insert(connections[name], connection);
+	return connection;
+end;
 local disconnect = function(name)
 	if connections[name] then
 		for _, conn in ipairs(connections[name]) do
-			conn:Disconnect()
-		end
-		connections[name] = nil
-	end
-end
-
-local LastInputConns = {}
-local PreferredInputConns = {}
-local LastInputPatched = false
-
+			conn:Disconnect();
+		end;
+		connections[name] = nil;
+	end;
+end;
+local LastInputConns = {};
+local PreferredInputConns = {};
+local LastInputPatched = false;
 local ApplyLastInputPatch = function()
 	if not IsOnMobile then
-		return
-	end
-
-	if getconnections and not LastInputPatched then
-		table.clear(LastInputConns)
-		table.clear(PreferredInputConns)
-
+		return;
+	end;
+	if getconnections and (not LastInputPatched) then
+		table.clear(LastInputConns);
+		table.clear(PreferredInputConns);
 		for _, c in ipairs(getconnections(UserInputService.LastInputTypeChanged)) do
-			table.insert(LastInputConns, c)
+			table.insert(LastInputConns, c);
 			pcall(function()
 				if c.Disable then
-					c:Disable()
-				end
-			end)
-		end
-
-		local prefSignal
+					c:Disable();
+				end;
+			end);
+		end;
+		local prefSignal;
 		pcall(function()
-			prefSignal = UserInputService:GetPropertyChangedSignal("PreferredInput")
-		end)
-
+			prefSignal = UserInputService:GetPropertyChangedSignal("PreferredInput");
+		end);
 		if prefSignal then
 			for _, c in ipairs(getconnections(prefSignal)) do
-				table.insert(PreferredInputConns, c)
+				table.insert(PreferredInputConns, c);
 				pcall(function()
 					if c.Disable then
-						c:Disable()
-					end
-				end)
-			end
-		end
-	end
-
+						c:Disable();
+					end;
+				end);
+			end;
+		end;
+	end;
 	pcall(function()
-		GuiService.TouchControlsEnabled = true
-	end)
-
+		GuiService.TouchControlsEnabled = true;
+	end);
 	if connect and disconnect then
-		disconnect("_LastInputTouch")
-		connect("_LastInputTouch", GuiService:GetPropertyChangedSignal("TouchControlsEnabled"):Connect(function()
+		disconnect("_LastInputTouch");
+		connect("_LastInputTouch", (GuiService:GetPropertyChangedSignal("TouchControlsEnabled")):Connect(function()
 			if IsOnMobile then
 				pcall(function()
-					GuiService.TouchControlsEnabled = true
-				end)
-			end
-		end))
+					GuiService.TouchControlsEnabled = true;
+				end);
+			end;
+		end));
 	else
-		GuiService:GetPropertyChangedSignal("TouchControlsEnabled"):Connect(function()
+		(GuiService:GetPropertyChangedSignal("TouchControlsEnabled")):Connect(function()
 			if IsOnMobile then
 				pcall(function()
-					GuiService.TouchControlsEnabled = true
-				end)
-			end
-		end)
-	end
-
-	LastInputPatched = true
-end
-
+					GuiService.TouchControlsEnabled = true;
+				end);
+			end;
+		end);
+	end;
+	LastInputPatched = true;
+end;
 local RevertLastInputPatch = function()
 	if disconnect then
-		disconnect("_LastInputTouch")
-	end
-
+		disconnect("_LastInputTouch");
+	end;
 	if getconnections then
 		if LastInputConns and #LastInputConns > 0 then
 			for _, c in ipairs(LastInputConns) do
 				pcall(function()
 					if c.Enable then
-						c:Enable()
-					end
-				end)
-			end
-		end
-
+						c:Enable();
+					end;
+				end);
+			end;
+		end;
 		if PreferredInputConns and #PreferredInputConns > 0 then
 			for _, c in ipairs(PreferredInputConns) do
 				pcall(function()
 					if c.Enable then
-						c:Enable()
-					end
-				end)
-			end
-		end
-	end
-
-	LastInputPatched = false
-end
-
+						c:Enable();
+					end;
+				end);
+			end;
+		end;
+	end;
+	LastInputPatched = false;
+end;
 local guiCHECKINGAHHHHH = function()
 	return gethui and gethui() or (game:GetService("CoreGui")):FindFirstChildWhichIsA("ScreenGui") or game:GetService("CoreGui") or (game:GetService("Players")).LocalPlayer:FindFirstChildWhichIsA("PlayerGui");
 end;
@@ -149,7 +131,7 @@ do
 		for _, n in ipairs({
 			"Range",
 			"Distance"
-			}) do
+		}) do
 			local old = guiParent:FindFirstChild(n);
 			if old then
 				old:Destroy();
@@ -242,14 +224,14 @@ local distanceDivisor;
 local predictBase;
 local predictExtra;
 local resetToken = 0;
-local parCd = 1.6;
+local parCd = 0.7;
 local nextPar = 0;
 local lastParryTime = 0;
 local curFrame = 0;
 local lastQueueTime = 0;
-local stepAcc = 0
-local stepDt = 1/120
-local maxSub = 4
+local stepAcc = 0;
+local stepDt = 1 / 120;
+local maxSub = 4;
 local wasInPredict = {};
 local ringLimited = false;
 local lastBallSamples = {};
@@ -443,7 +425,28 @@ local function setupTopbarIcon()
 	local dropdown = icon:addMenu();
 	apOption = (dropdown:new()):setLabel("AP: ON");
 	apOption:oneClick(function()
+		local old = apEnabled;
 		apEnabled = not apEnabled;
+		if old and (not apEnabled) then
+			nextPar = 0;
+			lastParryTime = 0;
+			ringLimited = false;
+			table.clear(lastBallSamples);
+			table.clear(lastBallVel);
+			table.clear(lastBallMoveTime);
+			table.clear(smoothedSpeed);
+			table.clear(closeParryBlocked);
+			table.clear(predictEnterAt);
+			table.clear(wasInPredict);
+			table.clear(lastHighlightMatch);
+			table.clear(lastCharHighlightEnabled);
+			table.clear(targetedSince);
+			table.clear(lastAttrTargeted);
+			table.clear(lastParryPerBall);
+			table.clear(baitUntil);
+			table.clear(awaySince);
+			table.clear(lastAwayFlag);
+		end;
 		updateApLabel();
 	end);
 	visualizerOption = (dropdown:new()):setLabel("Visual: OFF");
@@ -476,22 +479,20 @@ local function setupTopbarIcon()
 			debugToggleOption:setLabel("Debug: " .. (debugEnabled and "ON" or "OFF"));
 		end;
 	end);
-
 	if IsOnMobile then
-		touchOpt = (dropdown:new()):setLabel("TouchLock: " .. (touchLock and "ON" or "OFF"))
+		touchOpt = (dropdown:new()):setLabel("TouchLock: " .. (touchLock and "ON" or "OFF"));
 		touchOpt:oneClick(function()
-			touchLock = not touchLock
+			touchLock = not touchLock;
 			if touchLock then
-				ApplyLastInputPatch()
+				ApplyLastInputPatch();
 			else
-				RevertLastInputPatch()
-			end
+				RevertLastInputPatch();
+			end;
 			if touchOpt then
-				touchOpt:setLabel("TouchLock: " .. (touchLock and "ON" or "OFF"))
-			end
-		end)
-	end
-
+				touchOpt:setLabel("TouchLock: " .. (touchLock and "ON" or "OFF"));
+			end;
+		end);
+	end;
 	local function addModeEntry(name)
 		local entry = (modeDropdown:new()):setLabel(name);
 		entry:oneClick(function()
@@ -555,15 +556,14 @@ local function newRing(name, color)
 	part.Parent = workspace;
 	return part;
 end;
-local ringPlayer = newRing("Visualizer", Color3.new(1, 0, 0))
-local ringPlayerNoUnit = ringPlayer:Clone()
-ringPlayerNoUnit.Name = "VisualizerNoUnit"
-ringPlayerNoUnit.Color = Color3.new(1, 0, 1)
-ringPlayerNoUnit.Transparency = 0.55
-ringPlayerNoUnit.Parent = workspace
-
-local ringSizeState = {}
-local ballVis = {}
+local ringPlayer = newRing("Visualizer", Color3.new(1, 0, 0));
+local ringPlayerNoUnit = ringPlayer:Clone();
+ringPlayerNoUnit.Name = "VisualizerNoUnit";
+ringPlayerNoUnit.Color = Color3.new(1, 0, 1);
+ringPlayerNoUnit.Transparency = 0.55;
+ringPlayerNoUnit.Parent = workspace;
+local ringSizeState = {};
+local ballVis = {};
 local function rescaleRing(part, diameter, overrideMax, dt)
 	local target = math.clamp(diameter or 10, minSize, overrideMax or maxSize);
 	local current = ringSizeState[part] or part and part.Size.X or target;
@@ -619,340 +619,341 @@ local function newBillboard(name, size, studsOffset, includeMulti)
 	end;
 	return gui, text, textMulti;
 end;
-local rangeGui, rangeText, rangeMulti = newBillboard("Range", UDim2.new(3, 0, 3, 0), Vector3.new(0, 5, 0), true)
-
-local ballsMap = {}
-local ballList = {}
-local mainRealBall = {}
-local ballConns = {}
-local containerConns = {}
-
+local rangeGui, rangeText, rangeMulti = newBillboard("Range", UDim2.new(3, 0, 3, 0), Vector3.new(0, 5, 0), true);
+local ballsMap = {};
+local ballList = {};
+local mainRealBall = {};
+local ballConns = {};
+local containerConns = {};
 local function detachContainer(c)
-	local conns = ballConns[c]
+	local conns = ballConns[c];
 	if conns then
 		if typeof(conns) == "RBXScriptConnection" then
-			pcall(function() conns:Disconnect() end)
+			pcall(function()
+				conns:Disconnect();
+			end);
 		elseif type(conns) == "table" then
 			for _, conn in ipairs(conns) do
-				pcall(function() conn:Disconnect() end)
-			end
-		end
-		ballConns[c] = nil
-	end
-end
-
+				pcall(function()
+					conn:Disconnect();
+				end);
+			end;
+		end;
+		ballConns[c] = nil;
+	end;
+end;
 local function addBall(b)
-	if ballsMap[b] or not (b and b:IsA("BasePart") and b.Parent) then
-		return
-	end
-	ballsMap[b] = true
-end
-
+	if ballsMap[b] or (not (b and b:IsA("BasePart") and b.Parent)) then
+		return;
+	end;
+	ballsMap[b] = true;
+end;
 local function removeBall(b)
 	if not ballsMap[b] then
-		return
-	end
-	ballsMap[b] = nil
-	mainRealBall[b] = nil
-end
-
+		return;
+	end;
+	ballsMap[b] = nil;
+	mainRealBall[b] = nil;
+end;
 local function cleanupBallVisual(ball)
-	local v = ballVis[ball]
+	local v = ballVis[ball];
 	if not v then
-		return
-	end
-	ballVis[ball] = nil
+		return;
+	end;
+	ballVis[ball] = nil;
 	if v.gui then
-		v.gui:Destroy()
-	end
+		v.gui:Destroy();
+	end;
 	if v.ring then
-		v.ring:Destroy()
-	end
-end
-
+		ringSizeState[v.ring] = nil;
+		v.ring:Destroy();
+	end;
+end;
 local function attachContainer(c)
 	if not (c and c.Parent) or ballConns[c] then
-		return
-	end
-
+		return;
+	end;
 	if c:IsA("BasePart") then
-		addBall(c)
-	end
-
+		addBall(c);
+	end;
 	for _, d in ipairs(c:GetDescendants()) do
 		if d:IsA("BasePart") then
-			addBall(d)
-		end
-	end
-
+			addBall(d);
+		end;
+	end;
 	local added = c.DescendantAdded:Connect(function(d)
 		if d:IsA("BasePart") then
-			addBall(d)
-		end
-	end)
-
+			addBall(d);
+		end;
+	end);
 	local removing = c.DescendantRemoving:Connect(function(d)
 		if d:IsA("BasePart") then
-			removeBall(d)
-		end
-	end)
-
+			removeBall(d);
+		end;
+	end);
 	local ancestry = c.AncestryChanged:Connect(function(inst, parent)
 		if inst == c and parent == nil then
 			if c:IsA("BasePart") then
-				removeBall(c)
-			end
-			detachContainer(c)
-		end
-	end)
-
-	ballConns[c] = {added, removing, ancestry}
-end
-
+				removeBall(c);
+			end;
+			detachContainer(c);
+		end;
+	end);
+	ballConns[c] = {
+		added,
+		removing,
+		ancestry
+	};
+end;
 local function trackNamedContainer(parent, name)
 	if not (typeof(parent) == "Instance" and type(name) == "string") then
-		return
-	end
+		return;
+	end;
 	for _, inst in ipairs(parent:GetDescendants()) do
 		if inst.Name == name then
-			attachContainer(inst)
-		end
-	end
-	local direct = parent:FindFirstChild(name)
+			attachContainer(inst);
+		end;
+	end;
+	local direct = parent:FindFirstChild(name);
 	if direct then
-		attachContainer(direct)
-	end
+		attachContainer(direct);
+	end;
 	if containerConns[parent] then
-		return
-	end
+		return;
+	end;
 	local addedConn = parent.DescendantAdded:Connect(function(ch)
 		if ch.Name == name then
-			attachContainer(ch)
-		end
-	end)
+			attachContainer(ch);
+		end;
+	end);
 	local ancestryConn = parent.AncestryChanged:Connect(function(inst, parentObj)
 		if inst == parent and parentObj == nil then
-			local conns = containerConns[inst]
+			local conns = containerConns[inst];
 			if conns then
 				if typeof(conns) == "RBXScriptConnection" then
-					pcall(function() conns:Disconnect() end)
+					pcall(function()
+						conns:Disconnect();
+					end);
 				elseif type(conns) == "table" then
 					for _, cn in ipairs(conns) do
-						pcall(function() cn:Disconnect() end)
-					end
-				end
-				containerConns[inst] = nil
-			end
-		end
-	end)
-	containerConns[parent] = {addedConn, ancestryConn}
-end
-
+						pcall(function()
+							cn:Disconnect();
+						end);
+					end;
+				end;
+				containerConns[inst] = nil;
+			end;
+		end;
+	end);
+	containerConns[parent] = {
+		addedConn,
+		ancestryConn
+	};
+end;
 local function setupBallTracking()
-	local p = visualizerConfig and visualizerConfig.path
-	local paths
-
+	local p = visualizerConfig and visualizerConfig.path;
+	local paths;
 	if p == nil then
-		paths = { { parent = workspace, name = "Balls" } }
+		paths = {
+			{
+				parent = workspace,
+				name = "Balls"
+			}
+		};
 	elseif typeof(p) == "table" then
 		if p[1] == nil and (p.parent or p.container or p.name) then
-			paths = { p }
+			paths = {
+				p
+			};
 		else
-			paths = p
-		end
+			paths = p;
+		end;
 	else
-		paths = { p }
-	end
-
+		paths = {
+			p
+		};
+	end;
 	for _, src in ipairs(paths) do
-		local t = typeof(src)
+		local t = typeof(src);
 		if t == "Instance" then
-			attachContainer(src)
+			attachContainer(src);
 		elseif t == "table" then
-			local par = src.parent
-			local name = src.name
-			local container = src.container
+			local par = src.parent;
+			local name = src.name;
+			local container = src.container;
 			if typeof(container) == "Instance" then
-				attachContainer(container)
+				attachContainer(container);
 			elseif typeof(par) == "Instance" and type(name) == "string" then
-				trackNamedContainer(par, name)
-			end
-		end
-	end
-end
-
+				trackNamedContainer(par, name);
+			end;
+		end;
+	end;
+end;
 local function isVisualizerPart(p)
-	if not p or not p:IsA("BasePart") then
-		return false
-	end
-	local tr = p.Transparency or 0
-	local ltm = 0
+	if not p or (not p:IsA("BasePart")) then
+		return false;
+	end;
+	local tr = p.Transparency or 0;
+	local ltm = 0;
 	pcall(function()
-		ltm = p.LocalTransparencyModifier or 0
-	end)
-	return tr < 0.95 and ltm < 0.95
-end
-
+		ltm = p.LocalTransparencyModifier or 0;
+	end);
+	return tr < 0.95 and ltm < 0.95;
+end;
 local function getBalls()
-	table.clear(ballList)
-
-	local byName = {}
-
+	table.clear(ballList);
+	local byName = {};
 	for b in pairs(ballsMap) do
 		if b and b.Parent then
-			local name = b.Name
-			local list = byName[name]
+			local name = b.Name;
+			local list = byName[name];
 			if not list then
-				list = {}
-				byName[name] = list
-			end
-			list[#list + 1] = b
+				list = {};
+				byName[name] = list;
+			end;
+			list[(#list) + 1] = b;
 		else
-			ballsMap[b] = nil
-			mainRealBall[b] = nil
-			cleanupBallVisual(b)
-		end
-	end
-
+			ballsMap[b] = nil;
+			mainRealBall[b] = nil;
+			cleanupBallVisual(b);
+		end;
+	end;
 	for _, list in pairs(byName) do
-		local count = #list
+		local count = #list;
 		if count == 1 then
-			local only = list[1]
-			ballList[#ballList + 1] = only
+			local only = list[1];
+			ballList[(#ballList) + 1] = only;
 		else
-			local invis = {}
-			local vis = {}
-			local anyMain
-
+			local invis = {};
+			local vis = {};
+			local anyMain;
 			for i = 1, count do
-				local part = list[i]
+				local part = list[i];
 				if isVisualizerPart(part) then
-					vis[#vis + 1] = part
+					vis[(#vis) + 1] = part;
 				else
-					invis[#invis + 1] = part
-				end
+					invis[(#invis) + 1] = part;
+				end;
 				if mainRealBall[part] then
-					anyMain = part
-				end
-			end
-
-			local winner
-
+					anyMain = part;
+				end;
+			end;
+			local winner;
 			if #invis > 0 then
-				winner = anyMain or invis[1]
+				winner = anyMain or invis[1];
 			elseif anyMain then
-				winner = anyMain
+				winner = anyMain;
 			elseif #vis > 0 then
-				winner = vis[1]
+				winner = vis[1];
 			else
-				winner = list[1]
-			end
-
+				winner = list[1];
+			end;
 			if winner then
-				mainRealBall[winner] = true
+				mainRealBall[winner] = true;
 				for i = 1, count do
-					local part = list[i]
+					local part = list[i];
 					if part ~= winner then
-						mainRealBall[part] = nil
-						ballsMap[part] = nil
-						cleanupBallVisual(part)
-					end
-				end
-				ballList[#ballList + 1] = winner
-			end
-		end
-	end
-
-	return ballList
-end
-
-setupBallTracking()
-
+						mainRealBall[part] = nil;
+						ballsMap[part] = nil;
+						cleanupBallVisual(part);
+					end;
+				end;
+				ballList[(#ballList) + 1] = winner;
+			end;
+		end;
+	end;
+	return ballList;
+end;
+setupBallTracking();
 local function getBallVisual(ball)
 	if not ball then
-		return nil
-	end
-	local v = ballVis[ball]
-	if v and (not v.ring or not v.ring.Parent or not v.gui or not v.gui.Parent) then
-		v = nil
-	end
+		return nil;
+	end;
+	local v = ballVis[ball];
+	if v and (not v.ring or (not v.ring.Parent) or (not v.gui) or (not v.gui.Parent)) then
+		v = nil;
+	end;
 	if not v then
-		local gui = select(1, newBillboard("Distance", UDim2.new(2, 0, 2, 0), Vector3.new(0, 5, 0), false))
-		local txt = gui:FindFirstChild("Text")
-		gui.Adornee = ball
-		local ring = ringPlayer:Clone()
-		ring.Name = "VisualizerFollowBall"
-		ring.Transparency = ringBaseTransparency
-		ring.Parent = workspace
-		v = { ring = ring, gui = gui, text = txt }
-		ballVis[ball] = v
-	end
-	return v
-end
-
+		local gui = select(1, newBillboard("Distance", UDim2.new(2, 0, 2, 0), Vector3.new(0, 5, 0), false));
+		local txt = gui:FindFirstChild("Text");
+		gui.Adornee = ball;
+		local ring = ringPlayer:Clone();
+		ring.Name = "VisualizerFollowBall";
+		ring.Transparency = ringBaseTransparency;
+		ring.Parent = workspace;
+		v = {
+			ring = ring,
+			gui = gui,
+			text = txt
+		};
+		ballVis[ball] = v;
+	end;
+	return v;
+end;
 local function cleanupAllBallVisuals()
 	for b in pairs(ballVis) do
-		cleanupBallVisual(b)
-	end
-end
-
+		cleanupBallVisual(b);
+	end;
+end;
 local function applyVisualizerVisible(show)
-	rangeGui.Enabled = show
-	ringPlayer.Transparency = show and ringBaseTransparency or 1
-	ringPlayerNoUnit.Transparency = show and ringPinkTransparency or 1
+	rangeGui.Enabled = show;
+	ringPlayer.Transparency = show and ringBaseTransparency or 1;
+	ringPlayerNoUnit.Transparency = show and ringPinkTransparency or 1;
 	for _, v in pairs(ballVis) do
 		if v.gui then
-			v.gui.Enabled = show
-		end
+			v.gui.Enabled = show;
+		end;
 		if v.ring then
-			v.ring.Transparency = show and ringBaseTransparency or 1
-		end
-	end
-end
+			v.ring.Transparency = show and ringBaseTransparency or 1;
+		end;
+	end;
+end;
 local visualizerAttached = true;
 local trackedConnections = {};
 local function trackConnection(conn)
-	trackedConnections[#trackedConnections + 1] = conn;
+	trackedConnections[(#trackedConnections) + 1] = conn;
 	return conn;
 end;
 local function cleanup()
 	for _, c in ipairs(trackedConnections) do
 		pcall(function()
-			c:Disconnect()
-		end)
-	end
-	trackedConnections = {}
-
+			c:Disconnect();
+		end);
+	end;
+	trackedConnections = {};
 	for _, conns in pairs(ballConns) do
 		for _, conn in ipairs(conns) do
 			pcall(function()
-				conn:Disconnect()
-			end)
-		end
-	end
-	ballConns = {}
+				conn:Disconnect();
+			end);
+		end;
+	end;
+	ballConns = {};
 	for _, conn in pairs(containerConns) do
 		if typeof(conn) == "RBXScriptConnection" then
-			pcall(function() conn:Disconnect() end)
+			pcall(function()
+				conn:Disconnect();
+			end);
 		elseif type(conn) == "table" then
 			for _, cn in ipairs(conn) do
-				pcall(function() cn:Disconnect() end)
-			end
-		end
-	end
-	containerConns = {}
-	ballsMap = {}
-	ballList = {}
-	mainRealBall = {}
-
+				pcall(function()
+					cn:Disconnect();
+				end);
+			end;
+		end;
+	end;
+	containerConns = {};
+	ballsMap = {};
+	ballList = {};
+	mainRealBall = {};
 	pcall(function()
-		rangeGui.Parent = nil
-	end)
+		rangeGui.Parent = nil;
+	end);
 	pcall(function()
-		cleanupAllBallVisuals()
-		ringPlayer:Destroy()
-		ringPlayerNoUnit:Destroy()
-	end)
+		cleanupAllBallVisuals();
+		ringPlayer:Destroy();
+		ringPlayerNoUnit:Destroy();
+	end);
 	pcall(function()
 		iconHide(debugIconInstance);
 		debugIconInstance = nil;
@@ -960,49 +961,47 @@ local function cleanup()
 		debugTargetOption = nil;
 		debugBallsOption = nil;
 		debugCooldownOption = nil;
-	end)
-
-	touchLock = false
-	RevertLastInputPatch()
-	table.clear(connections)
-
-	getgenv().AutoParryCleanup = nil;
+	end);
+	touchLock = false;
+	RevertLastInputPatch();
+	table.clear(connections);
+	(getgenv()).AutoParryCleanup = nil;
 end;
-getgenv().AutoParryCleanup = cleanup;
+(getgenv()).AutoParryCleanup = cleanup;
 local function attachVisualizer(hasBall)
 	if hasBall then
 		if not visualizerAttached then
-			local guiParent = guiCHECKINGAHHHHH()
-			rangeGui.Parent = guiParent
+			local guiParent = guiCHECKINGAHHHHH();
+			rangeGui.Parent = guiParent;
 			for _, v in pairs(ballVis) do
 				if v.gui then
-					v.gui.Parent = guiParent
-				end
+					v.gui.Parent = guiParent;
+				end;
 				if v.ring then
-					v.ring.Parent = workspace
-				end
-			end
-			ringPlayer.Parent = workspace
-			ringPlayerNoUnit.Parent = workspace
-			visualizerAttached = true
-		end
+					v.ring.Parent = workspace;
+				end;
+			end;
+			ringPlayer.Parent = workspace;
+			ringPlayerNoUnit.Parent = workspace;
+			visualizerAttached = true;
+		end;
 	elseif visualizerAttached then
-		rangeGui.Parent = nil
-		rangeGui.Adornee = nil
+		rangeGui.Parent = nil;
+		rangeGui.Adornee = nil;
 		for _, v in pairs(ballVis) do
 			if v.gui then
-				v.gui.Parent = nil
-				v.gui.Adornee = nil
-			end
+				v.gui.Parent = nil;
+				v.gui.Adornee = nil;
+			end;
 			if v.ring then
-				v.ring.Parent = nil
-			end
-		end
-		ringPlayer.Parent = nil
-		ringPlayerNoUnit.Parent = nil
-		visualizerAttached = false
-	end
-end
+				v.ring.Parent = nil;
+			end;
+		end;
+		ringPlayer.Parent = nil;
+		ringPlayerNoUnit.Parent = nil;
+		visualizerAttached = false;
+	end;
+end;
 local function resolveRemote()
 	local cfg = visualizerConfig;
 	local r = cfg and cfg.remote;
@@ -1031,8 +1030,7 @@ local function resolveRemote()
 		end;
 		return nil, nil;
 	end;
-
-	if typeof(r) == "Instance" or (type(r) == "table" and (r.inst or r.parent or r[1])) then
+	if typeof(r) == "Instance" or type(r) == "table" and (r.inst or r.parent or r[1]) then
 		return resolveOne(r);
 	elseif type(r) == "table" then
 		for _, v in ipairs(r) do
@@ -1053,7 +1051,9 @@ local function fireRemote(rem, args)
 		a = {};
 	end;
 	if typeof(a) ~= "table" then
-		a = { a };
+		a = {
+			a
+		};
 	end;
 	local t = rem.ClassName;
 	local ok = false;
@@ -1111,8 +1111,7 @@ local function resolveBtn()
 		end;
 		return nil;
 	end;
-
-	if typeof(b) == "Instance" or (type(b) == "table" and (b.parent or b.name)) then
+	if typeof(b) == "Instance" or type(b) == "table" and (b.parent or b.name) then
 		return resolveOne(b);
 	elseif type(b) == "table" then
 		for _, v in ipairs(b) do
@@ -1176,21 +1175,19 @@ local function DoParry()
 	VirtualInputManager:SendKeyEvent(false, "F", false, game);
 end;
 local function queueParry(isSpam, hasTarget)
-	if (not apEnabled) and (not isSpam) then
-		return
-	end
-	if not isSpam and not hasTarget then
-		return
-	end
-
-	local now = tick()
+	if not apEnabled and (not isSpam) then
+		return;
+	end;
+	if not isSpam and (not hasTarget) then
+		return;
+	end;
+	local now = tick();
 	if not isSpam and now - lastQueueTime < 0.01 then
-		return
-	end
-
-	lastQueueTime = now
-	task.defer(DoParry)
-end
+		return;
+	end;
+	lastQueueTime = now;
+	task.defer(DoParry);
+end;
 local function getHighlightColor(inst)
 	if not inst then
 		return nil, nil;
@@ -1273,7 +1270,7 @@ local function isBallTargetingYouAttr(ball, char)
 		local lower = v:lower();
 		local n1 = plr.Name and plr.Name:lower() or "";
 		local n2 = plr.DisplayName and plr.DisplayName:lower() or "";
-		if (n1 ~= "" and lower:find(n1, 1, true)) or (n2 ~= "" and lower:find(n2, 1, true)) then
+		if n1 ~= "" and lower:find(n1, 1, true) or n2 ~= "" and lower:find(n2, 1, true) then
 			return true;
 		end;
 	end;
@@ -1296,456 +1293,452 @@ end));
 updateRingColors();
 local function updateGuiTargets(hrp, hasBall)
 	if hasBall and hrp then
-		rangeGui.Adornee = hrp
+		rangeGui.Adornee = hrp;
 	else
-		rangeGui.Adornee = nil
-	end
-end
+		rangeGui.Adornee = nil;
+	end;
+end;
 local function AutoParryStep(dt)
-	curFrame = curFrame + 1
-	character = localPlayer.Character or character
-	local hrp = waitForChildFast(character, "HumanoidRootPart")
-	local balls = getBalls()
-	local hasBalls = #balls > 0
-	attachVisualizer(hasBalls)
-	local showViz = isVisualizerEnabled() and hasBalls
+	curFrame = curFrame + 1;
+	character = localPlayer.Character or character;
+	local hrp = waitForChildFast(character, "HumanoidRootPart");
+	local balls = getBalls();
+	local hasBalls = #balls > 0;
+	attachVisualizer(hasBalls);
+	local showViz = isVisualizerEnabled() and hasBalls;
 	if not (hrp and hrp.Position) then
-		return
-	end
-	local nowFrame = tick()
-	local pingItem = Stats.Network.ServerStatsItem and Stats.Network.ServerStatsItem["Data Ping"]
-	local pingFrame = pingItem and pingItem:GetValue() or 0
-	updateGuiTargets(hrp, hasBalls)
-	local anyTargeted = false
-
+		return;
+	end;
+	local nowFrame = tick();
+	local pingItem = Stats.Network.ServerStatsItem and Stats.Network.ServerStatsItem["Data Ping"];
+	local pingFrame = pingItem and pingItem:GetValue() or 0;
+	updateGuiTargets(hrp, hasBalls);
+	local anyTargeted = false;
 	if hasBalls then
-		local seen = {}
-		local focusPos = nil
-		local focusDist = math.huge
-		local focusPosTargeted = nil
-		local focusDistTargeted = math.huge
-		local focusIsTargeted = false
-		local primBaseSize, primPredictNoPing, primPredictRadius
-
+		local seen = {};
+		local focusPos = nil;
+		local focusDist = math.huge;
+		local focusPosTargeted = nil;
+		local focusDistTargeted = math.huge;
+		local focusIsTargeted = false;
+		local primBaseSize, primPredictNoPing, primPredictRadius;
 		for _, ball in ipairs(balls) do
 			if ball and ball.Position then
-				seen[ball] = true
-				local vis = getBallVisual(ball)
-				local ringBall = vis and vis.ring
-				local dGui = vis and vis.gui
-				local dText = vis and vis.text
-
-				local rawDist = (ball.Position - hrp.Position).Magnitude
-				local dist = rawDist / distanceDivisor
-				local now = nowFrame
+				seen[ball] = true;
+				local vis = getBallVisual(ball);
+				local ringBall = vis and vis.ring;
+				local dGui = vis and vis.gui;
+				local dText = vis and vis.text;
+				local rawDist = (ball.Position - hrp.Position).Magnitude;
+				local dist = rawDist / distanceDivisor;
+				local now = nowFrame;
 				if ringBall then
-					ringBall.CFrame = CFrame.new(ball.Position)
-				end
-
-				local velocity = ball.AssemblyLinearVelocity or ball.Velocity or Vector3.zero
-				local lastVel = lastBallVel[ball] or Vector3.zero
-				local sample = lastBallSamples[ball]
-				local sampleDt = sample and now - sample.t or 0
-				local posDelta = sample and ball.Position - sample.pos or Vector3.zero
+					ringBall.CFrame = CFrame.new(ball.Position);
+				end;
+				local velocity = ball.AssemblyLinearVelocity or ball.Velocity or Vector3.zero;
+				local lastVel = lastBallVel[ball] or Vector3.zero;
+				local sample = lastBallSamples[ball];
+				local sampleDt = sample and now - sample.t or 0;
+				local posDelta = sample and ball.Position - sample.pos or Vector3.zero;
 				if not sample or sampleDt > 0.4 then
-					sample = { pos = ball.Position, t = now }
-					sampleDt = 0
-					posDelta = Vector3.zero
-				end
-				local manualVel = sampleDt > 0 and posDelta / math.max(sampleDt, 0.001) or velocity
-				local chosenVel = velocity
+					sample = {
+						pos = ball.Position,
+						t = now
+					};
+					sampleDt = 0;
+					posDelta = Vector3.zero;
+				end;
+				local manualVel = sampleDt > 0 and posDelta / math.max(sampleDt, 0.001) or velocity;
+				local chosenVel = velocity;
 				if chosenVel.Magnitude < 0.001 or chosenVel.Magnitude < manualVel.Magnitude * 0.5 then
-					chosenVel = manualVel
-				end
-				local lastMoveTime = lastBallMoveTime[ball] or 0
+					chosenVel = manualVel;
+				end;
+				local lastMoveTime = lastBallMoveTime[ball] or 0;
 				if chosenVel.Magnitude >= 4 then
-					lastBallMoveTime[ball] = now
+					lastBallMoveTime[ball] = now;
 				elseif lastVel.Magnitude > 8 and now - lastMoveTime < 0.2 then
-					chosenVel = lastVel:Lerp(chosenVel, 0.15)
-				end
-				local smoothingAlpha = sampleDt > 0 and math.clamp(sampleDt / 0.04, 0.35, 0.9) or 0.45
-				lastBallSamples[ball] = { pos = ball.Position, t = now }
-				velocity = lastVel:Lerp(chosenVel, smoothingAlpha)
-
-				local speed = velocity.Magnitude
-				local prevSpeed = smoothedSpeed[ball] or speed
-				local speedLerp = math.clamp((dt or 0.016) / 0.03, 0.35, 0.95)
-				speed = prevSpeed + (speed - prevSpeed) * speedLerp
-				smoothedSpeed[ball] = speed
-				lastBallVel[ball] = velocity
-
-				local baseSize = 10 + speed * speedScale * 2
-
-				local multiplier = 0.12
+					chosenVel = lastVel:Lerp(chosenVel, 0.15);
+				end;
+				local smoothingAlpha = sampleDt > 0 and math.clamp(sampleDt / 0.04, 0.35, 0.9) or 0.45;
+				lastBallSamples[ball] = {
+					pos = ball.Position,
+					t = now
+				};
+				velocity = lastVel:Lerp(chosenVel, smoothingAlpha);
+				local speed = velocity.Magnitude;
+				local prevSpeed = smoothedSpeed[ball] or speed;
+				local speedLerp = math.clamp((dt or 0.016) / 0.03, 0.35, 0.95);
+				speed = prevSpeed + (speed - prevSpeed) * speedLerp;
+				smoothedSpeed[ball] = speed;
+				lastBallVel[ball] = velocity;
+				local baseSize = 10 + speed * speedScale * 2;
+				local multiplier = 0.12;
 				if speed < 60 then
-					multiplier = 0.06
+					multiplier = 0.06;
 				elseif speed > 120 then
-					multiplier = 0.2
+					multiplier = 0.2;
 				elseif speed > 80 then
-					multiplier = 0.16
-				end
-
-				local effectiveSpeed = math.max(speed - 5, 0)
-				local speedBoost = 0.05
+					multiplier = 0.16;
+				end;
+				local effectiveSpeed = math.max(speed - 5, 0);
+				local speedBoost = 0.05;
 				if speed > 160 then
-					speedBoost = 0.12
+					speedBoost = 0.12;
 				elseif speed > 120 then
-					speedBoost = 0.09
+					speedBoost = 0.09;
 				elseif speed > 80 then
-					speedBoost = 0.07
-				end
-
-				local ping = pingFrame
-				local baseFactor = math.clamp(predictBase / 50, 0.25, 2)
-				local predictRadiusNoPing = predictMinRadius + predictExtra * baseFactor + effectiveSpeed * (multiplier + speedBoost) * baseFactor
-				local predictRadius = predictRadiusNoPing + ping * pingPredictScale
-				local preEntryMargin = math.clamp(predictRadius * 0.12 + ping * 0.018, 3, 14)
-				local parryPredictRadius = predictRadius + preEntryMargin
-
+					speedBoost = 0.07;
+				end;
+				local ping = pingFrame;
+				local baseFactor = math.clamp(predictBase / 50, 0.25, 2);
+				local predictRadiusNoPing = predictMinRadius + predictExtra * baseFactor + effectiveSpeed * (multiplier + speedBoost) * baseFactor;
+				local predictRadius = predictRadiusNoPing + ping * pingPredictScale;
+				local preEntryMargin = math.clamp(predictRadius * 0.12 + ping * 0.018, 3, 14);
+				local parryPredictRadius = predictRadius + preEntryMargin;
 				if ringBall then
-					rescaleRing(ringBall, baseSize, nil, dt)
-				end
-
+					rescaleRing(ringBall, baseSize, nil, dt);
+				end;
 				if not focusIsTargeted and rawDist < focusDist then
-					focusDist = rawDist
-					focusPos = ball.Position
-					primBaseSize = baseSize
-					primPredictNoPing = predictRadiusNoPing
-					primPredictRadius = predictRadius
-				end
-
-				local inPredict = rawDist <= predictRadius
-				local nearPredict = rawDist <= predictRadius + preEntryMargin
-				local inParryPredict = rawDist <= parryPredictRadius
-				local displayedPredict = predictRadius
-
-				rangeText.Text = tostring(round(displayedPredict, 1))
+					focusDist = rawDist;
+					focusPos = ball.Position;
+					primBaseSize = baseSize;
+					primPredictNoPing = predictRadiusNoPing;
+					primPredictRadius = predictRadius;
+				end;
+				local inPredict = rawDist <= predictRadius;
+				local nearPredict = rawDist <= predictRadius + preEntryMargin;
+				local inParryPredict = rawDist <= parryPredictRadius;
+				local displayedPredict = predictRadius;
+				rangeText.Text = tostring(round(displayedPredict, 1));
 				if rangeMulti then
-					rangeMulti.Text = string.format("%.1fx", round(displayedPredict / 100, 1))
-				end
+					rangeMulti.Text = string.format("%.1fx", round(displayedPredict / 100, 1));
+				end;
 				if dText then
-					dText.Text = tostring(round(dist, 1))
-				end
-
-				local prevInPredict = wasInPredict[ball] or false
+					dText.Text = tostring(round(dist, 1));
+				end;
+				local prevInPredict = wasInPredict[ball] or false;
 				if nearPredict then
-					predictEnterAt[ball] = predictEnterAt[ball] or now
-					resetToken = resetToken + 1
+					predictEnterAt[ball] = predictEnterAt[ball] or now;
+					resetToken = resetToken + 1;
 				elseif prevInPredict then
-					predictEnterAt[ball] = nil
+					predictEnterAt[ball] = nil;
 				else
-					predictEnterAt[ball] = nil
-				end
-				wasInPredict[ball] = nearPredict
-
-				local settleTime = math.clamp(0.003 + ping * 0.0002, 0.002, 0.014)
-				local settledInPredict = nearPredict and predictEnterAt[ball] and now - predictEnterAt[ball] >= settleTime
-
-				local targeted, ballHighlight, charHighlight, ballColor, charColor = isBallTargetingYou(ball, character)
-				local attrNow = isBallTargetingYouAttr(ball, character)
-				local charHighlightEnabled = charHighlight and charHighlight.Enabled ~= false
+					predictEnterAt[ball] = nil;
+				end;
+				wasInPredict[ball] = nearPredict;
+				local settleTime = math.clamp(0.003 + ping * 0.0002, 0.002, 0.014);
+				local settledInPredict = nearPredict and predictEnterAt[ball] and now - predictEnterAt[ball] >= settleTime;
+				local targeted, ballHighlight, charHighlight, ballColor, charColor = isBallTargetingYou(ball, character);
+				local attrNow = isBallTargetingYouAttr(ball, character);
+				local charHighlightEnabled = charHighlight and charHighlight.Enabled ~= false;
 				if targeted or attrNow then
-					anyTargeted = true
+					anyTargeted = true;
 					if rawDist < focusDistTargeted then
-						focusDistTargeted = rawDist
-						focusPosTargeted = ball.Position
-						focusIsTargeted = true
-						primBaseSize = baseSize
-						primPredictNoPing = predictRadiusNoPing
-						primPredictRadius = predictRadius
-					end
-				end
-
-				local lastChar = lastCharHighlightEnabled[ball] or false
+						focusDistTargeted = rawDist;
+						focusPosTargeted = ball.Position;
+						focusIsTargeted = true;
+						primBaseSize = baseSize;
+						primPredictNoPing = predictRadiusNoPing;
+						primPredictRadius = predictRadius;
+					end;
+				end;
+				local lastChar = lastCharHighlightEnabled[ball] or false;
 				if charHighlightEnabled and (not lastChar) then
-					lastParryPerBall[ball] = -math.huge
-				end
-
-				local hasTargetLock = targeted and targetedSince[ball] ~= nil
-				local lastMatch = lastHighlightMatch[ball] or false
-				local highlightsMatch = targeted
+					lastParryPerBall[ball] = -math.huge;
+				end;
+				local hasTargetLock = targeted and targetedSince[ball] ~= nil;
+				local lastMatch = lastHighlightMatch[ball] or false;
+				local highlightsMatch = targeted;
 				if highlightsMatch and (not lastMatch) then
-					lastParryPerBall[ball] = -math.huge
-					targetedSince[ball] = now
+					lastParryPerBall[ball] = -math.huge;
+					targetedSince[ball] = now;
 				elseif not highlightsMatch and lastMatch then
-					lastParryPerBall[ball] = -math.huge
-					targetedSince[ball] = nil
+					lastParryPerBall[ball] = -math.huge;
+					targetedSince[ball] = nil;
 					if not attrNow then
-						closeParryBlocked[ball] = nil
-						nextPar = 0
-					end
-				end
-				lastHighlightMatch[ball] = highlightsMatch
-				lastCharHighlightEnabled[ball] = charHighlightEnabled
-
-				local approaching = false
-				local isBait = false
-				local dotNow = 0
-				if speed >= 4 then
-					local toYou = hrp.Position - ball.Position
-					local mag = toYou.Magnitude
+						closeParryBlocked[ball] = nil;
+						nextPar = 0;
+					end;
+				end;
+				lastHighlightMatch[ball] = highlightsMatch;
+				lastCharHighlightEnabled[ball] = charHighlightEnabled;
+				local approaching = false;
+				local isBait = false;
+				local dotNow = 0;
+				if speed >= 2 then
+					local toYou = hrp.Position - ball.Position;
+					local mag = toYou.Magnitude;
 					if mag > 0.001 then
-						local dirToYou = toYou / mag
-						local velDir = speed > 0.001 and velocity.Unit or dirToYou
-						dotNow = dirToYou:Dot(velDir)
-						local toward = dotNow > 0.2
-						local away = dotNow < -0.2
-
-						local wasAway = lastAwayFlag[ball]
+						local dirToYou = toYou / mag;
+						local velDir = speed > 0.001 and velocity.Unit or dirToYou;
+						dotNow = dirToYou:Dot(velDir);
+						local toward = dotNow > 0.1;
+						local away = dotNow < (-0.25);
+						local wasAway = lastAwayFlag[ball];
 						if away then
 							if not wasAway then
-								awaySince[ball] = now
-							end
-							lastAwayFlag[ball] = true
+								awaySince[ball] = now;
+							end;
+							lastAwayFlag[ball] = true;
 						else
 							if wasAway then
-								local startAway = awaySince[ball]
+								local startAway = awaySince[ball];
 								if toward and startAway and now - startAway >= 0.06 then
-									baitUntil[ball] = now + 0.14
-								end
-							end
-							lastAwayFlag[ball] = false
-						end
-
-						isBait = baitUntil[ball] and now < baitUntil[ball] and rawDist > parryPredictRadius * 0.6
-						approaching = toward and (not isBait)
-					end
+									baitUntil[ball] = now + 0.14;
+								end;
+							end;
+							lastAwayFlag[ball] = false;
+						end;
+						isBait = baitUntil[ball] and now < baitUntil[ball] and rawDist > parryPredictRadius * 0.6;
+						approaching = toward and (not isBait);
+					end;
 				else
-					lastAwayFlag[ball] = false
-					awaySince[ball] = nil
-				end
-
-				local toRingTime = approaching and speed > 1 and math.max((rawDist - parryPredictRadius), 0) / speed or math.huge
-				local closeHit = targeted and rawDist <= math.max(10, parryPredictRadius * 0.45)
-				local nearHitTime = speed > 1 and rawDist / speed or math.huge
-				local veryFastHit = targeted and nearHitTime <= 0.18 + ping * pingTimeScale
-				local closeHitSafe = closeHit and (nearHitTime <= 0.3 or speed >= 25)
-				local targetSnap = targeted and inParryPredict and settledInPredict and (nearHitTime <= 0.6 or rawDist <= math.max(10, parryPredictRadius * 0.6))
-				local innerEmergency = targeted and rawDist <= math.max(8, predictRadius * 0.4)
-				local fastApproach = targeted and approaching and (nearHitTime <= 0.22 or rawDist <= parryPredictRadius * 0.95)
-
-				local parryTriggered = false
+					lastAwayFlag[ball] = false;
+					awaySince[ball] = nil;
+				end;
+				local toRingTime = approaching and speed > 1 and math.max((rawDist - parryPredictRadius), 0) / speed or math.huge;
+				local closeHit = targeted and rawDist <= math.max(10, parryPredictRadius * 0.45);
+				local nearHitTime = speed > 1 and rawDist / speed or math.huge;
+				local veryFastHit = targeted and nearHitTime <= 0.18 + ping * pingTimeScale;
+				local closeHitSafe = closeHit and (nearHitTime <= 0.3 or speed >= 25);
+				local targetSnap = targeted and inParryPredict and settledInPredict and (nearHitTime <= 0.6 or rawDist <= math.max(10, parryPredictRadius * 0.6));
+				local innerEmergency = targeted and rawDist <= math.max(8, predictRadius * 0.4);
+				local fastApproach = targeted and approaching and (nearHitTime <= 0.22 or rawDist <= parryPredictRadius * 0.95);
+				local parryTriggered = false;
 				if innerEmergency and hasTargetLock and (not closeParryBlocked[ball]) then
-					local nowInner = tick()
-					local lastBallFire = lastParryPerBall[ball] or (-math.huge)
+					local nowInner = now;
+					local lastBallFire = lastParryPerBall[ball] or (-math.huge);
 					if nowInner >= nextPar and nowInner - lastBallFire > 0.05 then
-						nextPar = nowInner + parCd
-						lastParryPerBall[ball] = nowInner
-						closeParryBlocked[ball] = true
-						lastParryTime = nowInner
-						parryTriggered = true
-						queueParry(false, true)
-					end
-				end
-
-				local outsideRing = rawDist >= math.max(predictRadius - math.max(preEntryMargin * 1.1, 2.5), predictRadius * 0.85)
-				local ringEdgeSafe = innerEmergency or rawDist >= parryPredictRadius * 0.6 or nearHitTime <= 0.2 or veryFastHit
-				local ringTimeSoon = toRingTime <= 0.55 + ping * 0.003
-
+						nextPar = nowInner + parCd;
+						lastParryPerBall[ball] = nowInner;
+						closeParryBlocked[ball] = true;
+						lastParryTime = nowInner;
+						parryTriggered = true;
+						queueParry(false, true);
+					end;
+				end;
+				local outsideRing = rawDist >= math.max(predictRadius - math.max(preEntryMargin * 1.1, 2.5), predictRadius * 0.85);
+				local ringEdgeSafe = innerEmergency or rawDist >= parryPredictRadius * 0.6 or nearHitTime <= 0.2 or veryFastHit;
+				local ringTimeSoon = toRingTime <= 0.55 + ping * 0.003;
 				local function attemptParry()
 					if parryTriggered then
-						return
-					end
-					if isBait and not innerEmergency then
-						return
-					end
-					if closeParryBlocked[ball] and (rawDist > parryPredictRadius * 1.15 or tick() - (lastParryPerBall[ball] or 0) > 1.2) then
-						closeParryBlocked[ball] = nil
-					end
-					local inCloseBlock = closeParryBlocked[ball] and rawDist <= parryPredictRadius * 1.15
-
-					local slowClose = targeted
-						and approaching
-						and hasTargetLock
-						and rawDist <= math.max(14, parryPredictRadius * 0.55)
-						and speed >= 3
-						and nearHitTime <= 1.1
-
-					local slowVeryClose = targeted
-						and hasTargetLock
-						and rawDist <= math.max(10, parryPredictRadius * 0.45)
-						and speed > 0
-						and speed <= 4
-
-					local canPredict = approaching and nearPredict and settledInPredict and highlightsMatch and hasTargetLock and (outsideRing or fastApproach) and (speed >= 12 or nearHitTime <= 0.25 or ringTimeSoon or fastApproach) or closeHitSafe and hasTargetLock or veryFastHit and hasTargetLock or targetSnap and hasTargetLock or innerEmergency and hasTargetLock or slowClose or slowVeryClose
-					canPredict = canPredict and ringEdgeSafe
-					canPredict = canPredict and (not inCloseBlock)
+						return;
+					end;
+					if isBait and (not innerEmergency) then
+						return;
+					end;
+					if closeParryBlocked[ball] and (rawDist > parryPredictRadius * 1.15 or now - (lastParryPerBall[ball] or 0) > 1.2) then
+						closeParryBlocked[ball] = nil;
+					end;
+					local inCloseBlock = closeParryBlocked[ball] and rawDist <= parryPredictRadius * 1.15;
+					local slowClose = targeted and hasTargetLock and rawDist <= math.max(16, parryPredictRadius * 0.65) and speed >= 1.5 and nearHitTime <= 1.3;
+					local slowVeryClose = targeted and rawDist <= math.max(10, parryPredictRadius * 0.5) and speed > 0 and speed <= 6 and nearHitTime <= 1.6;
+					local slowMid = targeted and hasTargetLock and approaching and speed >= 7 and speed <= 26 and nearHitTime <= 1.15 and rawDist <= math.max(20, parryPredictRadius * 0.92);
+					local slowMid2 = targeted and hasTargetLock and speed >= 7 and speed <= 26 and nearHitTime <= 0.95 and rawDist <= math.max(18, parryPredictRadius * 0.88);
+					local canPredict = approaching and nearPredict and settledInPredict and highlightsMatch and hasTargetLock and (outsideRing or fastApproach) and (speed >= 12 or nearHitTime <= 0.25 or ringTimeSoon or fastApproach) or closeHitSafe and hasTargetLock or veryFastHit and hasTargetLock or targetSnap and hasTargetLock or innerEmergency and hasTargetLock or slowClose or slowVeryClose or slowMid or slowMid2;
+					if not canPredict and targeted and hasTargetLock and (not innerEmergency) then
+						if rawDist <= math.max(18, parryPredictRadius * 0.75) and nearHitTime <= 1.8 and speed >= 0.75 then
+							canPredict = true;
+						end;
+					end;
+					canPredict = canPredict and (not inCloseBlock);
 					if canPredict then
-						local nowTry = tick()
-						local lastBallFire = lastParryPerBall[ball] or (-math.huge)
-						local minBallCooldown = highlightsMatch and 0.7 or 0.35
+						local nowTry = now;
+						local lastBallFire = lastParryPerBall[ball] or (-math.huge);
+						local minBallCooldown = highlightsMatch and 0.7 or 0.35;
 						if nowTry >= nextPar and nowTry - lastBallFire > minBallCooldown then
-							nextPar = nowTry + parCd
-							lastParryPerBall[ball] = nowTry
+							nextPar = nowTry + parCd;
+							lastParryPerBall[ball] = nowTry;
 							if rawDist <= parryPredictRadius * 0.8 then
-								closeParryBlocked[ball] = true
-							end
-							lastParryTime = nowTry
-							parryTriggered = true
-							queueParry(false, true)
-						end
-					end
-				end
-
-				task.defer(attemptParry)
-
+								closeParryBlocked[ball] = true;
+							end;
+							lastParryTime = nowTry;
+							parryTriggered = true;
+							queueParry(false, true);
+							return;
+						end;
+					end;
+					if parryTriggered then
+						return;
+					end;
+					if parryTriggered then
+						return;
+					end;
+					local attrTargetedNow = isBallTargetingYouAttr(ball, character);
+					local stillTargeted = targeted or hasTargetLock or attrTargetedNow;
+					if not stillTargeted then
+						return;
+					end;
+					local insideZone = rawDist <= math.max(12, parryPredictRadius * 0.95);
+					local movingToward = approaching or rawDist <= math.max(6, parryPredictRadius * 0.4);
+					local slowBand = speed >= 2 and speed <= 35;
+					local timeWindow = nearHitTime <= 2.5;
+					if insideZone and movingToward and slowBand and timeWindow and (not inCloseBlock) then
+						local nowInner = now;
+						local lastBallFire = lastParryPerBall[ball] or (-math.huge);
+						if nowInner >= nextPar and nowInner - lastBallFire > 0.5 then
+							nextPar = nowInner + parCd;
+							lastParryPerBall[ball] = nowInner;
+							closeParryBlocked[ball] = true;
+							lastParryTime = nowInner;
+							parryTriggered = true;
+							queueParry(false, true);
+						end;
+					end;
+				end;
+				task.defer(attemptParry);
 				task.defer(function()
 					if parryTriggered then
-						return
-					end
+						return;
+					end;
 					if targeted then
-						return
-					end
+						return;
+					end;
 					if closeParryBlocked[ball] then
-						return
-					end
-					if isBait and not innerEmergency then
-						return
-					end
-					local nowAttr = tick()
-					local attrTargeted = isBallTargetingYouAttr(ball, character)
-					local prevAttr = lastAttrTargeted[ball]
+						return;
+					end;
+					if isBait and (not innerEmergency) then
+						return;
+					end;
+					local nowAttr = now;
+					local attrTargeted = isBallTargetingYouAttr(ball, character);
+					local prevAttr = lastAttrTargeted[ball];
 					if attrTargeted and (not prevAttr) then
-						lastParryPerBall[ball] = -math.huge
+						lastParryPerBall[ball] = -math.huge;
 						if nowAttr < nextPar then
-							nextPar = nowAttr
-						end
+							nextPar = nowAttr;
+						end;
 					elseif not attrTargeted and prevAttr then
-						lastParryPerBall[ball] = -math.huge
+						lastParryPerBall[ball] = -math.huge;
 						if not targeted then
-							nextPar = 0
-						end
-					end
-					lastAttrTargeted[ball] = attrTargeted
+							nextPar = 0;
+						end;
+					end;
+					lastAttrTargeted[ball] = attrTargeted;
 					if not attrTargeted then
-						return
-					end
-					local attrNear = rawDist <= math.max(10, parryPredictRadius * 0.9)
-					local attrFast = speed > 20 or nearHitTime <= 0.35
+						return;
+					end;
+					local attrNear = rawDist <= math.max(10, parryPredictRadius * 0.9);
+					local attrFast = speed > 20 or nearHitTime <= 0.35;
 					if not (attrNear and attrFast) then
-						return
-					end
-					local lastBallFire = lastParryPerBall[ball] or (-math.huge)
+						return;
+					end;
+					local lastBallFire = lastParryPerBall[ball] or (-math.huge);
 					if nowAttr >= nextPar and nowAttr - lastBallFire > 0.7 then
-						nextPar = nowAttr + parCd
-						lastParryPerBall[ball] = nowAttr
-						lastParryTime = nowAttr
-						parryTriggered = true
-						queueParry(false, true)
-					end
-				end)
-			end
-		end
-
-		local focus = focusPosTargeted or focusPos
+						nextPar = nowAttr + parCd;
+						lastParryPerBall[ball] = nowAttr;
+						lastParryTime = nowAttr;
+						parryTriggered = true;
+						queueParry(false, true);
+					end;
+				end);
+			end;
+		end;
+		local focus = focusPosTargeted or focusPos;
 		if focus then
-			local lookAtBall = CFrame.lookAt(hrp.Position, focus)
-			ringPlayer.CFrame = lookAtBall
-			ringPlayerNoUnit.CFrame = lookAtBall
+			local lookAtBall = CFrame.lookAt(hrp.Position, focus);
+			ringPlayer.CFrame = lookAtBall;
+			ringPlayerNoUnit.CFrame = lookAtBall;
 		else
-			ringPlayer.CFrame = CFrame.new(hrp.Position)
-			ringPlayerNoUnit.CFrame = ringPlayer.CFrame
-		end
-
+			ringPlayer.CFrame = CFrame.new(hrp.Position);
+			ringPlayerNoUnit.CFrame = ringPlayer.CFrame;
+		end;
 		if primBaseSize and primPredictNoPing and primPredictRadius then
-			local appliedPlayerPredict = rescaleRing(ringPlayer, primPredictNoPing * 2, maxSize, dt)
-			ringLimited = appliedPlayerPredict >= maxSize - 0.1
-			rescaleRing(ringPlayerNoUnit, primPredictRadius * 2, predictMaxSize, dt)
-			ringPlayerNoUnit.Transparency = ringPinkTransparency
+			local appliedPlayerPredict = rescaleRing(ringPlayer, primPredictNoPing * 2, maxSize, dt);
+			ringLimited = appliedPlayerPredict >= maxSize - 0.1;
+			rescaleRing(ringPlayerNoUnit, primPredictRadius * 2, predictMaxSize, dt);
+			ringPlayerNoUnit.Transparency = ringPinkTransparency;
 		else
-			rescaleRing(ringPlayer, 10, maxSize, dt)
-			rescaleRing(ringPlayerNoUnit, 10, predictMaxSize, dt)
-			ringLimited = false
-		end
-
+			rescaleRing(ringPlayer, 10, maxSize, dt);
+			rescaleRing(ringPlayerNoUnit, 10, predictMaxSize, dt);
+			ringLimited = false;
+		end;
 		for b in pairs(ballVis) do
-			if (not seen[b]) or (not b.Parent) then
-				cleanupBallVisual(b)
-				lastBallSamples[b] = nil
-				lastBallVel[b] = nil
-				lastBallMoveTime[b] = nil
-				smoothedSpeed[b] = nil
-				closeParryBlocked[b] = nil
-				predictEnterAt[b] = nil
-				wasInPredict[b] = nil
-				lastHighlightMatch[b] = nil
-				lastCharHighlightEnabled[b] = nil
-				targetedSince[b] = nil
-				lastAttrTargeted[b] = nil
-				lastParryPerBall[b] = nil
-				baitUntil[b] = nil
-				awaySince[b] = nil
-				lastAwayFlag[b] = nil
-			end
-		end
+			if not seen[b] or (not b.Parent) then
+				cleanupBallVisual(b);
+				lastBallSamples[b] = nil;
+				lastBallVel[b] = nil;
+				lastBallMoveTime[b] = nil;
+				smoothedSpeed[b] = nil;
+				closeParryBlocked[b] = nil;
+				predictEnterAt[b] = nil;
+				wasInPredict[b] = nil;
+				lastHighlightMatch[b] = nil;
+				lastCharHighlightEnabled[b] = nil;
+				targetedSince[b] = nil;
+				lastAttrTargeted[b] = nil;
+				lastParryPerBall[b] = nil;
+				baitUntil[b] = nil;
+				awaySince[b] = nil;
+				lastAwayFlag[b] = nil;
+			end;
+		end;
 	else
-		ringPlayer.CFrame = CFrame.new(hrp.Position)
-		ringPlayerNoUnit.CFrame = ringPlayer.CFrame
-		cleanupAllBallVisuals()
-		lastBallSamples = {}
-		lastBallVel = {}
-		lastBallMoveTime = {}
-		smoothedSpeed = {}
-		closeParryBlocked = {}
-		predictEnterAt = {}
-		wasInPredict = {}
-		lastHighlightMatch = {}
-		lastCharHighlightEnabled = {}
-		targetedSince = {}
-		lastAttrTargeted = {}
-		lastParryPerBall = {}
-		baitUntil = {}
-		awaySince = {}
-		lastAwayFlag = {}
-		nextPar = 0
-		ringLimited = false
-		resetToken = 0
-		rangeText.Text = "0"
+		ringPlayer.CFrame = CFrame.new(hrp.Position);
+		ringPlayerNoUnit.CFrame = ringPlayer.CFrame;
+		cleanupAllBallVisuals();
+		ringSizeState = {};
+		lastBallSamples = {};
+		lastBallVel = {};
+		lastBallMoveTime = {};
+		smoothedSpeed = {};
+		closeParryBlocked = {};
+		predictEnterAt = {};
+		wasInPredict = {};
+		lastHighlightMatch = {};
+		lastCharHighlightEnabled = {};
+		targetedSince = {};
+		lastAttrTargeted = {};
+		lastParryPerBall = {};
+		baitUntil = {};
+		awaySince = {};
+		lastAwayFlag = {};
+		nextPar = 0;
+		ringLimited = false;
+		resetToken = 0;
+		rangeText.Text = "0";
 		if rangeMulti then
-			rangeMulti.Text = "0x"
-		end
-	end
-
-	local nowStateTime = tick()
-	local inCooldown = nowStateTime < nextPar
-	local state
+			rangeMulti.Text = "0x";
+		end;
+	end;
+	local nowStateTime = tick();
+	local inCooldown = nowStateTime < nextPar;
+	local state;
 	if not apEnabled then
-		state = "Disabled"
+		state = "Disabled";
 	elseif lastParryTime > 0 and nowStateTime - lastParryTime <= 0.25 then
-		state = "Parried"
+		state = "Parried";
 	elseif not hasBalls then
 		if inCooldown then
-			state = "Recovering"
+			state = "Recovering";
 		else
-			state = "Idle"
-		end
+			state = "Idle";
+		end;
 	elseif inCooldown then
 		if anyTargeted then
-			state = "Cooldown"
+			state = "Cooldown";
 		else
-			state = "Recovering"
-		end
+			state = "Recovering";
+		end;
 	elseif anyTargeted then
-		state = "Targeted"
+		state = "Targeted";
 	else
-		state = "Active"
-	end
-	apState = state
-	updateDebugMenu(#balls, anyTargeted, nowStateTime)
-	updateRingColors()
-	applyVisualizerVisible(showViz)
+		state = "Active";
+	end;
+	apState = state;
+	updateDebugMenu(#balls, anyTargeted, nowStateTime);
+	updateRingColors();
+	applyVisualizerVisible(showViz);
 end;
 trackConnection(RunService.Heartbeat:Connect(function(dt)
-	stepAcc += dt
-	local i = 0
-
+	stepAcc += dt;
+	local i = 0;
 	while stepAcc >= stepDt and i < maxSub do
-		AutoParryStep(stepDt)
-		stepAcc -= stepDt
-		i += 1
-	end
-
+		AutoParryStep(stepDt);
+		stepAcc -= stepDt;
+		i += 1;
+	end;
 	if spam then
-		task.defer(DoParry)
-	end
-end))
+		task.defer(DoParry);
+	end;
+end));

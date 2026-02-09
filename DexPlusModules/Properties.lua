@@ -1737,46 +1737,51 @@ local function main()
 		Lib.ViewportTextBox.convert(inputTextBox)
 	end
 
-	Properties.SetInputProp = function(prop,entryIndex,special)
+	Properties.SetInputProp = function(prop, entryIndex, special)
 		local typeData = prop.ValueType
 		local typeName = typeData.Name
-		local fullName = prop.Class.."."..prop.Name..(prop.SubName or "")
+		local fullName = prop.Class .. "." .. prop.Name .. (prop.SubName or "")
 		local propObj = autoUpdateObjs[fullName]
-		local propVal = Properties.GetPropVal(prop,propObj)
-
+		local propVal = Properties.GetPropVal(prop, propObj)
+		
 		if prop.Tags.ReadOnly then return end
+		if typeName == "bool" or typeName == "PhysicalProperties" or typeName == "SoundPlayer" then
+			return
+		end
 
 		inputProp = prop
+
 		if special then
 			if special == "color" then
 				if typeName == "Color3" then
-					inputTextBox.Text = propVal and Properties.ValueToString(prop,propVal) or ""
-					Properties.DisplayColorEditor(prop,propVal)
+					inputTextBox.Text = propVal and Properties.ValueToString(prop, propVal) or ""
+					Properties.DisplayColorEditor(prop, propVal)
 				elseif typeName == "BrickColor" then
-					Properties.DisplayBrickColorEditor(prop,entryIndex,propVal)
+					Properties.DisplayBrickColorEditor(prop, entryIndex, propVal)
 				elseif typeName == "ColorSequence" then
-					inputTextBox.Text = propVal and Properties.ValueToString(prop,propVal) or ""
-					Properties.DisplayColorSequenceEditor(prop,propVal)
+					inputTextBox.Text = propVal and Properties.ValueToString(prop, propVal) or ""
+					Properties.DisplayColorSequenceEditor(prop, propVal)
 				end
 			elseif special == "right" then
 				if typeName == "NumberSequence" then
-					inputTextBox.Text = propVal and Properties.ValueToString(prop,propVal) or ""
-					Properties.DisplayNumberSequenceEditor(prop,propVal)
+					inputTextBox.Text = propVal and Properties.ValueToString(prop, propVal) or ""
+					Properties.DisplayNumberSequenceEditor(prop, propVal)
 				elseif typeName == "ColorSequence" then
-					inputTextBox.Text = propVal and Properties.ValueToString(prop,propVal) or ""
-					Properties.DisplayColorSequenceEditor(prop,propVal)
+					inputTextBox.Text = propVal and Properties.ValueToString(prop, propVal) or ""
+					Properties.DisplayColorSequenceEditor(prop, propVal)
 				end
 			end
 		else
 			if Properties.IsTextEditable(prop) then
-				inputTextBox.Text = propVal and Properties.ValueToString(prop,propVal) or ""
+				inputTextBox.Text = propVal and Properties.ValueToString(prop, propVal) or ""
 				inputTextBox:CaptureFocus()
 			elseif typeData.Category == "Enum" then
 				Properties.DisplayEnumDropdown(entryIndex)
 			elseif typeName == "BrickColor" then
-				Properties.DisplayBrickColorEditor(prop,entryIndex,propVal)
+				Properties.DisplayBrickColorEditor(prop, entryIndex, propVal)
 			end
 		end
+
 		Properties.Refresh()
 	end
 

@@ -692,51 +692,75 @@ local function main()
 		local newEntry = Properties.EntryTemplate:Clone()
 		local nameFrame = newEntry.NameFrame
 		local valueFrame = newEntry.ValueFrame
+
 		local newCheckbox = Lib.Checkbox.new(1)
-		newCheckbox.Gui.Position = UDim2.new(0,3,0,3)
-		newCheckbox.Gui.Parent = valueFrame
+		local cbGui = newCheckbox.Gui
+		cbGui.Name = "Checkbox"
+		cbGui.Position = UDim2.new(0, 3, 0, 3)
+		cbGui.ZIndex = newEntry.ZIndex + 1
+		for _, v in ipairs(cbGui:GetDescendants()) do
+			if v:IsA("GuiObject") then
+				v.ZIndex = cbGui.ZIndex
+			end
+		end
+		cbGui.Parent = valueFrame
+
 		newCheckbox.OnInput:Connect(function()
 			local prop = viewList[index + Properties.Index]
 			if not prop then return end
 
 			if prop.ValueType.Name == "PhysicalProperties" then
-				Properties.SetProp(prop,newCheckbox.Toggled and true or nil)
+				Properties.SetProp(prop, newCheckbox.Toggled and true or nil)
 			else
-				Properties.SetProp(prop,newCheckbox.Toggled)
+				Properties.SetProp(prop, newCheckbox.Toggled)
 			end
 		end)
 		checkboxes[index] = newCheckbox
 
 		local iconFrame = Main.MiscIcons:GetLabel()
-		iconFrame.Position = UDim2.new(0,2,0,3)
+		iconFrame.Position = UDim2.new(0, 2, 0, 3)
 		iconFrame.Parent = newEntry.ValueFrame.RightButton
 
-		newEntry.Position = UDim2.new(0,0,0,23*(index-1))
+		newEntry.Position = UDim2.new(0, 0, 0, 23 * (index - 1))
 
 		nameFrame.Expand.InputBegan:Connect(function(input)
 			local prop = viewList[index + Properties.Index]
 			if not prop or input.UserInputType ~= Enum.UserInputType.MouseMovement then return end
 
-			local fullName = (prop.CategoryName and "CAT_"..prop.CategoryName) or prop.Class.."."..prop.Name..(prop.SubName or "")
+			local fullName = (prop.CategoryName and "CAT_" .. prop.CategoryName)
+				or prop.Class .. "." .. prop.Name .. (prop.SubName or "")
 
-			Main.MiscIcons:DisplayByKey(newEntry.NameFrame.Expand.Icon, expanded[fullName] and "Collapse_Over" or "Expand_Over")
+			Main.MiscIcons:DisplayByKey(
+				newEntry.NameFrame.Expand.Icon,
+				expanded[fullName] and "Collapse_Over" or "Expand_Over"
+			)
 		end)
 
 		nameFrame.Expand.InputEnded:Connect(function(input)
 			local prop = viewList[index + Properties.Index]
 			if not prop or input.UserInputType ~= Enum.UserInputType.MouseMovement then return end
 
-			local fullName = (prop.CategoryName and "CAT_"..prop.CategoryName) or prop.Class.."."..prop.Name..(prop.SubName or "")
+			local fullName = (prop.CategoryName and "CAT_" .. prop.CategoryName)
+				or prop.Class .. "." .. prop.Name .. (prop.SubName or "")
 
-			Main.MiscIcons:DisplayByKey(newEntry.NameFrame.Expand.Icon, expanded[fullName] and "Collapse" or "Expand")
+			Main.MiscIcons:DisplayByKey(
+				newEntry.NameFrame.Expand.Icon,
+				expanded[fullName] and "Collapse" or "Expand"
+			)
 		end)
 
 		nameFrame.Expand.MouseButton1Down:Connect(function()
 			local prop = viewList[index + Properties.Index]
 			if not prop then return end
 
-			local fullName = (prop.CategoryName and "CAT_"..prop.CategoryName) or prop.Class.."."..prop.Name..(prop.SubName or "")
-			if not prop.CategoryName and not Properties.ExpandableTypes[prop.ValueType and prop.ValueType.Name] and not Properties.ExpandableProps[fullName] then return end
+			local fullName = (prop.CategoryName and "CAT_" .. prop.CategoryName)
+				or prop.Class .. "." .. prop.Name .. (prop.SubName or "")
+			if not prop.CategoryName
+				and not Properties.ExpandableTypes[prop.ValueType and prop.ValueType.Name]
+				and not Properties.ExpandableProps[fullName]
+			then
+				return
+			end
 
 			expanded[fullName] = not expanded[fullName]
 			Properties.Update()
@@ -747,23 +771,32 @@ local function main()
 			local prop = viewList[index + Properties.Index]
 			if not prop then return end
 			if input.UserInputType == Enum.UserInputType.MouseMovement and not nameFrame.PropName.TextFits then
-				local fullNameFrame = Properties.FullNameFrame	
-				local nameArr = string.split(prop.Class.."."..prop.Name..(prop.SubName or ""),".")
+				local fullNameFrame = Properties.FullNameFrame
+				local nameArr = string.split(
+					prop.Class .. "." .. prop.Name .. (prop.SubName or ""),
+					"."
+				)
 				local dispName = prop.DisplayName or nameArr[#nameArr]
-				local sizeX = service.TextService:GetTextSize(dispName,14,Enum.Font.SourceSans,Vector2.new(math.huge,20)).X
+				local sizeX = service.TextService:GetTextSize(
+					dispName,
+					14,
+					Enum.Font.SourceSans,
+					Vector2.new(math.huge, 20)
+				).X
 
 				fullNameFrame.TextLabel.Text = dispName
-				--fullNameFrame.Position = UDim2.new(0,Properties.EntryIndent*(prop.Depth or 1) + Properties.EntryOffset,0,23*(index-1))
-				fullNameFrame.Size = UDim2.new(0,sizeX + 4,0,22)
+				fullNameFrame.Size = UDim2.new(0, sizeX + 4, 0, 22)
 				fullNameFrame.Visible = true
 				Properties.FullNameFrameIndex = index
-				Properties.FullNameFrameAttach.SetData(fullNameFrame, {Target = nameFrame})
+				Properties.FullNameFrameAttach.SetData(fullNameFrame, { Target = nameFrame })
 				Properties.FullNameFrameAttach.Enable()
 			end
 		end)
 
 		nameFrame.PropName.InputEnded:Connect(function(input)
-			if input.UserInputType == Enum.UserInputType.MouseMovement and Properties.FullNameFrameIndex == index then
+			if input.UserInputType == Enum.UserInputType.MouseMovement
+				and Properties.FullNameFrameIndex == index
+			then
 				Properties.FullNameFrame.Visible = false
 				Properties.FullNameFrameAttach.Disable()
 			end
@@ -773,28 +806,29 @@ local function main()
 			local prop = viewList[index + Properties.Index]
 			if not prop then return end
 
-			Properties.SetInputProp(prop,index)
+			Properties.SetInputProp(prop, index)
 		end)
 
 		valueFrame.ColorButton.MouseButton1Down:Connect(function()
 			local prop = viewList[index + Properties.Index]
 			if not prop then return end
 
-			Properties.SetInputProp(prop,index,"color")
+			Properties.SetInputProp(prop, index, "color")
 		end)
 
 		valueFrame.RightButton.MouseButton1Click:Connect(function()
 			local prop = viewList[index + Properties.Index]
 			if not prop then return end
 
-			local fullName = prop.Class.."."..prop.Name..(prop.SubName or "")
-			local inputFullName = inputProp and (inputProp.Class.."."..inputProp.Name..(inputProp.SubName or ""))
+			local fullName = prop.Class .. "." .. prop.Name .. (prop.SubName or "")
+			local inputFullName = inputProp
+				and (inputProp.Class .. "." .. inputProp.Name .. (inputProp.SubName or ""))
 
 			if fullName == inputFullName and inputProp.ValueType.Category == "Class" then
 				inputProp = nil
-				Properties.SetProp(prop,nil)
+				Properties.SetProp(prop, nil)
 			else
-				Properties.SetInputProp(prop,index,"right")
+				Properties.SetInputProp(prop, index, "right")
 			end
 		end)
 
@@ -826,37 +860,44 @@ local function main()
 		valueFrame.SoundPreview.InputBegan:Connect(function(input)
 			if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
 
-			local releaseEvent,mouseEvent
-			releaseEvent = service.UserInputService.InputEnded:Connect(function(input)
-				if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+			local releaseEvent
+			local mouseEvent
+
+			releaseEvent = service.UserInputService.InputEnded:Connect(function(input2)
+				if input2.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
 				releaseEvent:Disconnect()
 				mouseEvent:Disconnect()
 			end)
 
 			local timeLine = newEntry.ValueFrame.SoundPreview.TimeLine
 			local soundObj = Properties.FindFirstObjWhichIsA("Sound")
-			if soundObj then Properties.SetSoundPreview(soundObj,true) end
+			if soundObj then Properties.SetSoundPreview(soundObj, true) end
 
-			local function update(input)
+			local function update(input2)
 				local sound = Properties.PreviewSound
 				if not sound or sound.TimeLength == 0 then return end
 
-				local mouseX = input.Position.X
+				local mouseX = input2.Position.X
 				local timeLineSize = timeLine.AbsoluteSize
 				local relaX = mouseX - timeLine.AbsolutePosition.X
 
 				if timeLineSize.X <= 1 then return end
-				if relaX < 0 then relaX = 0 elseif relaX >= timeLineSize.X then relaX = timeLineSize.X-1 end
+				if relaX < 0 then
+					relaX = 0
+				elseif relaX >= timeLineSize.X then
+					relaX = timeLineSize.X - 1
+				end
 
-				local perc = (relaX/(timeLineSize.X-1))
-				sound.TimePosition = perc*sound.TimeLength
-				timeLine.Slider.Position = UDim2.new(perc,-4,0,-8)
+				local perc = (relaX / (timeLineSize.X - 1))
+				sound.TimePosition = perc * sound.TimeLength
+				timeLine.Slider.Position = UDim2.new(perc, -4, 0, -8)
 			end
+
 			update(input)
 
-			mouseEvent = service.UserInputService.InputChanged:Connect(function(input)
-				if input.UserInputType == Enum.UserInputType.MouseMovement then
-					update(input)
+			mouseEvent = service.UserInputService.InputChanged:Connect(function(input2)
+				if input2.UserInputType == Enum.UserInputType.MouseMovement then
+					update(input2)
 				end
 			end)
 		end)
@@ -875,7 +916,7 @@ local function main()
 				ColorPreview = valueFrame.ColorButton.ColorPreview,
 				Gradient = valueFrame.ColorButton.ColorPreview.UIGradient,
 				EnumArrow = valueFrame.EnumArrow,
-				Checkbox = valueFrame.Checkbox,
+				Checkbox = cbGui,
 				RightButton = valueFrame.RightButton,
 				RightButtonIcon = iconFrame,
 				RowButton = newEntry.RowButton,

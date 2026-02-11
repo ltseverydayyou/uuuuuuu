@@ -5,6 +5,27 @@ local function ClonedService(name)
 	end;
 	return Reference(Service(game, name));
 end;
+local runtimeScript = rawget(getfenv(), "script");
+if not (runtimeScript and typeof(runtimeScript) == "Instance") then
+	runtimeScript = Instance.new("Folder");
+	runtimeScript.Name = "WallWalkRuntime";
+end;
+local script = runtimeScript;
+local function CleanIgnoreList(list)
+	if type(list) ~= "table" then
+		return {};
+	end;
+	local cleaned = {};
+	for _, v in pairs(list) do
+		if typeof(v) == "Instance" then
+			cleaned[(#cleaned) + 1] = v;
+		end;
+	end;
+	return cleaned;
+end;
+local function FindPartOnRayWithIgnoreListSafe(rayObj, ignoreList, terrainCubes, ignoreWater)
+	return workspace:FindPartOnRayWithIgnoreList(rayObj, CleanIgnoreList(ignoreList), terrainCubes, ignoreWater);
+end;
 local IsOnMobile = (function()
 	local platform = (ClonedService("UserInputService")):GetPlatform();
 	if platform == Enum.Platform.IOS or platform == Enum.Platform.Android or platform == Enum.Platform.AndroidTV or platform == Enum.Platform.Chromecast or platform == Enum.Platform.MetaOS then
@@ -1747,7 +1768,7 @@ function _Popper()
 	local function getCollisionPoint(origin, dir)
 		local originalSize = #blacklist;
 		repeat
-			local hitPart, hitPoint = workspace:FindPartOnRayWithIgnoreList(ray(origin, dir), blacklist, false, true);
+			local hitPart, hitPoint = FindPartOnRayWithIgnoreListSafe(ray(origin, dir), blacklist, false, true);
 			if hitPart then
 				if hitPart.CanCollide then
 					eraseFromEnd(blacklist, originalSize);
@@ -1768,7 +1789,7 @@ function _Popper()
 		local hardLimit = inf;
 		local movingOrigin = origin;
 		repeat
-			local entryPart, entryPos = workspace:FindPartOnRayWithIgnoreList(ray(movingOrigin, target - movingOrigin), blacklist, false, true);
+			local entryPart, entryPos = FindPartOnRayWithIgnoreListSafe(ray(movingOrigin, target - movingOrigin), blacklist, false, true);
 			if entryPart then
 				if canOcclude(entryPart) then
 					local wl = {
@@ -2576,7 +2597,7 @@ function _Invisicam()
 			local circlePoint = torsoPoint + cameraOrientation * offset;
 			local vp = circlePoint - self.camera.CFrame.p;
 			local ray = Ray.new(torsoPoint, circlePoint - torsoPoint);
-			local hit, hp, hitNormal = game.Workspace:FindPartOnRayWithIgnoreList(ray, {
+			local hit, hp, hitNormal = FindPartOnRayWithIgnoreListSafe(ray, {
 				self.char
 			}, false, false);
 			local castPoint = circlePoint;
@@ -2590,7 +2611,7 @@ function _Invisicam()
 					castPoint = RayIntersection(hprime, v1, circlePoint, vp);
 					if castPoint.Magnitude > 0 then
 						local ray = Ray.new(hprime, castPoint - hprime);
-						local hit, hitPoint, hitNormal = game.Workspace:FindPartOnRayWithIgnoreList(ray, {
+						local hit, hitPoint, hitNormal = FindPartOnRayWithIgnoreListSafe(ray, {
 							self.char
 						}, false, false);
 						if hit then
@@ -2604,7 +2625,7 @@ function _Invisicam()
 					castPoint = hprime;
 				end;
 				local ray = Ray.new(torsoPoint, castPoint - torsoPoint);
-				local hit, hitPoint, hitNormal = game.Workspace:FindPartOnRayWithIgnoreList(ray, {
+				local hit, hitPoint, hitNormal = FindPartOnRayWithIgnoreListSafe(ray, {
 					self.char
 				}, false, false);
 				if hit then
@@ -4097,7 +4118,7 @@ function _ClickToMoveDisplay()
 	end;
 	local function placePathWaypoint(waypointModel, position)
 		local ray = Ray.new(position + Vector3.new(0, 2.5, 0), Vector3.new(0, -10, 0));
-		local hitPart, hitPoint, hitNormal = Workspace:FindPartOnRayWithIgnoreList(ray, {
+		local hitPart, hitPoint, hitNormal = FindPartOnRayWithIgnoreListSafe(ray, {
 			Workspace.CurrentCamera,
 			LocalPlayer.Character
 		});
@@ -4183,7 +4204,7 @@ function _ClickToMoveDisplay()
 		local newDisplayModel = FailureWaypointTemplate:Clone();
 		placePathWaypoint(newDisplayModel, position);
 		local ray = Ray.new(position + Vector3.new(0, 2.5, 0), Vector3.new(0, -10, 0));
-		local hitPart, hitPoint, hitNormal = Workspace:FindPartOnRayWithIgnoreList(ray, {
+		local hitPart, hitPoint, hitNormal = FindPartOnRayWithIgnoreListSafe(ray, {
 			Workspace.CurrentCamera,
 			LocalPlayer.Character
 		});
@@ -4756,7 +4777,7 @@ function _ClickToMoveController()
 		Utility.FindCharacterAncestor = FindCharacterAncestor;
 		local function Raycast(ray, ignoreNonCollidable, ignoreList)
 			ignoreList = ignoreList or {};
-			local hitPart, hitPos, hitNorm, hitMat = Workspace:FindPartOnRayWithIgnoreList(ray, ignoreList);
+			local hitPart, hitPos, hitNorm, hitMat = FindPartOnRayWithIgnoreListSafe(ray, ignoreList);
 			if hitPart then
 				if ignoreNonCollidable and hitPart.CanCollide == false then
 					local _, humanoid = FindCharacterAncestor(hitPart);
@@ -5162,7 +5183,7 @@ function _ClickToMoveController()
 		end;
 		local offsetPoint = this.TargetPoint + this.TargetSurfaceNormal * 1.5;
 		local ray = Ray.new(offsetPoint, Vector3.new(0, (-1), 0) * 50);
-		local newHitPart, newHitPos = Workspace:FindPartOnRayWithIgnoreList(ray, getIgnoreList());
+		local newHitPart, newHitPos = FindPartOnRayWithIgnoreListSafe(ray, getIgnoreList());
 		if newHitPart then
 			this.TargetPoint = newHitPos;
 		end;
@@ -8742,7 +8763,7 @@ function _GravityController()
 	end;
 	function GravityController:OnHeartbeatStep(dt)
 		local ray = Ray.new(self.Collider.Position, (-1.1) * self.GravityUp);
-		local hit, pos, normal = workspace:FindPartOnRayWithIgnoreList(ray, self.Ignores);
+		local hit, pos, normal = FindPartOnRayWithIgnoreListSafe(ray, self.Ignores);
 		local lastPart = self.LastPart;
 		if hit and lastPart and lastPart == hit then
 			local offset = self.LastPartCFrame:ToObjectSpace(self.HRP.CFrame);
@@ -9141,7 +9162,7 @@ function GetGravityUp(self, oldGravityUp)
 	local radialVector = math.abs(hrpCF.LookVector:Dot(oldGravityUp)) < 0.999 and hrpCF.LookVector:Cross(oldGravityUp) or hrpCF.RightVector:Cross(oldGravityUp);
 	local centerRayLength = 25;
 	local centerRay = Ray.new(origin, (-centerRayLength) * oldGravityUp);
-	local centerHit, centerHitPoint, centerHitNormal = workspace:FindPartOnRayWithIgnoreList(centerRay, ignoreList);
+	local centerHit, centerHitPoint, centerHitNormal = FindPartOnRayWithIgnoreListSafe(centerRay, ignoreList);
 	local downHitCount = 0;
 	local totalHitCount = 0;
 	local centerRayHitCount = 0;
@@ -9163,7 +9184,7 @@ function GetGravityUp(self, oldGravityUp)
 		local offset = CFrame.fromAxisAngle(oldGravityUp, dtheta) * radialVector;
 		local dir = LOWER_RADIUS_OFFSET * (-oldGravityUp) + (endRadius - startRadius) * offset;
 		local ray = Ray.new(origin + startRadius * offset, downRayLength * dir.unit);
-		local hit, hitPoint, hitNormal = workspace:FindPartOnRayWithIgnoreList(ray, ignoreList);
+		local hit, hitPoint, hitNormal = FindPartOnRayWithIgnoreListSafe(ray, ignoreList);
 		if hit then
 			downRaySum = downRaySum + angleWeight * hitNormal;
 			downHitCount = downHitCount + 1;
@@ -9183,7 +9204,7 @@ function GetGravityUp(self, oldGravityUp)
 		local dir = (FEELER_RADIUS * offset + LOWER_RADIUS_OFFSET * (-oldGravityUp)).unit;
 		local feelerOrigin = origin - FEELER_APEX_OFFSET * (-oldGravityUp) + FEELER_START_OFFSET * dir;
 		local ray = Ray.new(feelerOrigin, FEELER_LENGTH * dir);
-		local hit, hitPoint, hitNormal = workspace:FindPartOnRayWithIgnoreList(ray, ignoreList);
+		local hit, hitPoint, hitNormal = FindPartOnRayWithIgnoreListSafe(ray, ignoreList);
 		if hit then
 			feelerNormalSum = feelerNormalSum + FEELER_WEIGHTING * angleWeight * hitNormal;
 			feelerHitCount = feelerHitCount + 1;

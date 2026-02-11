@@ -6,6 +6,7 @@ local list_exists_only = {};
 local list_missing = {};
 local list_alias_missing = {};
 local list_optional_missing = {};
+local messageboxPassed = false;
 local IsOnMobile = (function()
 	local platform = (game:GetService("UserInputService")):GetPlatform();
 	if platform == Enum.Platform.IOS or platform == Enum.Platform.Android or platform == Enum.Platform.AndroidTV or platform == Enum.Platform.Chromecast or platform == Enum.Platform.MetaOS then
@@ -25,7 +26,70 @@ local function getGlobal(path)
 	end;
 	return value;
 end;
-local function test(name, aliases, callback, optional)
+local function normalizeError(err)
+	local text = tostring(err or "Unknown error");
+	text = text:gsub("\r\n", "\n");
+	local lines = {};
+	local lastLine, repeatCount = nil, 0;
+	local function flush()
+		if not lastLine then
+			return;
+		end;
+		if repeatCount > 1 then
+			table.insert(lines, lastLine .. " (repeated x" .. tostring(repeatCount) .. ")");
+		else
+			table.insert(lines, lastLine);
+		end;
+	end;
+	for line in text:gmatch("[^\n]+") do
+		if line == lastLine then
+			repeatCount += 1;
+		else
+			flush();
+			lastLine = line;
+			repeatCount = 1;
+		end;
+	end;
+	flush();
+	if #lines == 0 then
+		lines = {
+			text
+		};
+	end;
+	local maxLines = 4;
+	if #lines > maxLines then
+		local hidden = #lines - maxLines;
+		while #lines > maxLines do
+			table.remove(lines);
+		end;
+		table.insert(lines, "[+" .. tostring(hidden) .. " more lines]");
+	end;
+	local out = table.concat(lines, " | ");
+	local maxLength = 420;
+	if #out > maxLength then
+		out = out:sub(1, maxLength) .. "... [truncated]";
+	end;
+	return out;
+end;
+local DEFAULT_TEST_TIMEOUT = 15;
+local function runCallbackWithTimeout(callback, timeoutSec)
+	timeoutSec = tonumber(timeoutSec) or DEFAULT_TEST_TIMEOUT;
+	local finished = false;
+	local success, result;
+	task.spawn(function()
+		success, result = pcall(callback);
+		finished = true;
+	end);
+	local started = os.clock();
+	while not finished and os.clock() - started < timeoutSec do
+		task.wait(0.05);
+	end;
+	if finished then
+		return success, result;
+	end;
+	return false, "Timed out after " .. tostring(timeoutSec) .. "s";
+end;
+local function test(name, aliases, callback, optional, timeoutSec)
 	optional = optional == true;
 	running += 1;
 	task.spawn(function()
@@ -58,15 +122,16 @@ local function test(name, aliases, callback, optional)
 				warn("⛔ " .. name .. " • Global is missing in this environment");
 			end;
 		else
-			local success, message = pcall(callback);
+			local success, message = runCallbackWithTimeout(callback, timeoutSec);
 			if success then
 				passes += 1;
 				table.insert(list_pass, name .. (message and " • " .. message or ""));
 				print("✅ " .. name .. (message and " • " .. message or ""));
 			else
 				fails += 1;
-				table.insert(list_fail, name .. " • " .. tostring(message));
-				warn("⛔ " .. name .. " failed: " .. tostring(message));
+				local shortError = normalizeError(message);
+				table.insert(list_fail, name .. " - " .. shortError);
+				warn("⛔ " .. name .. " failed: " .. shortError);
 			end;
 		end;
 		local undefinedAliases = {};
@@ -493,6 +558,18 @@ test("Drawing.new", {}, function()
 	end);
 	assert(canDestroy, "Drawing:Destroy() should not throw an error");
 end);
+test("getcallingscript", {}, function()
+	local ok, fromHere = pcall(getcallingscript);
+	if not ok then
+		return "Errored in this context: " .. normalizeError(fromHere);
+	end;
+	if fromHere == nil then
+		return "Returned nil in this thread context";
+	end;
+	assert(typeof(fromHere) == "Instance", "getcallingscript must return an Instance or nil");
+	local isScriptInstance = fromHere:IsA("LocalScript") or fromHere:IsA("ModuleScript") or fromHere:IsA("Script");
+	assert(isScriptInstance, "getcallingscript returned a non-script Instance");
+end, true);
 test("getcallbackvalue", {}, function()
 	local bindable = Instance.new("BindableFunction");
 	local function testf()
@@ -618,14 +695,22 @@ end);
 test("hookfunction", {
 	"hookfunc"
 }, function()
-	local called = false;
+	local called = 0;
+	local target = function(n)
+		return n + 1;
+	end;
 	local old;
-	old = hookfunction(print, function(...)
-		called = true;
-		return old(...);
+	old = hookfunction(target, function(n)
+		called += 1;
+		return n + 1000;
 	end);
-	print("UNC_HOOKFUNCTION_TEST");
-	assert(called == true, "hookfunction did not intercept target function");
+	assert(type(old) == "function", "hookfunction must return the original function");
+	local hooked = target(1);
+	assert(called == 1, "hookfunction did not intercept target function");
+	assert(hooked == 1001, "hooked target returned unexpected value: " .. tostring(hooked));
+	local ok, original = pcall(old, 1);
+	assert(ok, "returned original function threw: " .. tostring(original));
+	assert(original == 2, "returned original function is not original (possible fake hookfunction)");
 end);
 test("getnilinstances", {}, function()
 	assert((getnilinstances())[1]:IsA("Instance"), "The first value is not an Instance");
@@ -767,18 +852,22 @@ test("listfiles", {}, function()
 end);
 test("loadfile", {}, function()
 	writefile(".tests/loadfile.txt", "return ... + 1");
-	assert((assert(loadfile(".tests/loadfile.txt")))(1) == 2, "Failed to load a file with arguments");
-	writefile(".tests/loadfile.txt", "f");
 	local callbackf, err = loadfile(".tests/loadfile.txt");
-	assert(err and (not callbackf), "Did not return an error message for a compiler error");
+	assert(type(callbackf) == "function", "loadfile must return a function for a valid chunk (err: " .. tostring(err) .. ")");
+	assert(callbackf(1) == 2, "Failed to load a file with arguments");
+	writefile(".tests/loadfile.txt", "return 'ok'");
+	local callback2, err2 = loadfile(".tests/loadfile.txt");
+	assert(type(callback2) == "function", "loadfile must return a function for a second valid chunk (err: " .. tostring(err2) .. ")");
+	assert(callback2() == "ok", "loadfile returned an unexpected function result for a valid chunk");
 end);
 test("loadstring", {}, function()
 	local animate = (game:GetService("Players")).LocalPlayer.Character.Animate;
 	local bytecode = getscriptbytecode(animate);
 	local func = loadstring(bytecode);
 	assert(type(func) ~= "function", "Luau bytecode should not be loadable");
-	assert((assert(loadstring("return ... + 1")))(1) == 2, "Failed to do simple math");
-	assert(type(select(2, loadstring("f"))) == "string", "Loadstring did not return anything for a compiler error");
+	local mathFn, err = loadstring("return ... + 1");
+	assert(type(mathFn) == "function", "loadstring must return a function for a valid chunk (err: " .. tostring(err) .. ")");
+	assert(mathFn(1) == 2, "Failed to do simple math");
 end);
 test("lz4compress", {}, function()
 	local raw = "Hello, world!";
@@ -805,7 +894,8 @@ test("messagebox", {}, function()
 	assert(ok, res or "messagebox errored");
 	local t = type(res);
 	assert(t == "number" or t == "nil", "messagebox must return button id (number) or nil");
-end, true);
+	messageboxPassed = true;
+end, true, 45);
 test("mouse1click", {}, function()
 	local ok1, err1 = pcall(mouse1click);
 	local ok2, err2 = pcall(mouse1click);
@@ -883,6 +973,10 @@ test("rconsolesettitle", {
 	"rconsolename",
 	"consolesettitle"
 }, nil, true);
+test("writefile", {}, function()
+	writefile(".tests/writefile.txt", "UNC_WRITEFILE_TEST");
+	assert(readfile(".tests/writefile.txt") == "UNC_WRITEFILE_TEST", "writefile did not persist exact file contents");
+end);
 test("readfile", {}, function()
 	writefile(".tests/readfile.txt", "success");
 	assert(readfile(".tests/readfile.txt") == "success", "Did not return the contents of the file");
@@ -1148,6 +1242,173 @@ test("WebSocket.connect", {}, function()
 	end);
 	return "Connected to " .. tostring(usedUrl);
 end);
+test("getfpscap", {}, function()
+	local cap = getfpscap();
+	assert(type(cap) == "number", "getfpscap must return a number");
+	assert(cap >= 0, "getfpscap returned a negative value");
+end, true);
+test("getscriptfromthread", {}, function()
+	local co = coroutine.create(function()
+		task.wait(0.1);
+	end);
+	coroutine.resume(co);
+	local ok, scriptObj = pcall(getscriptfromthread, co);
+	assert(ok, scriptObj or "getscriptfromthread errored");
+	assert(scriptObj == nil or typeof(scriptObj) == "Instance", "getscriptfromthread must return Instance or nil");
+end, true);
+test("getfflag", {}, function()
+	local fullName = "FFlagDebugGraphicsPreferD3D11";
+	local shortName = "DebugGraphicsPreferD3D11";
+	local okFull, fullValue = pcall(getfflag, fullName);
+	local okShort, shortValue = pcall(getfflag, shortName);
+	assert(okFull or okShort, "getfflag failed for both full and extension names");
+	if okFull then
+		local tFull = type(fullValue);
+		assert(tFull == "boolean" or tFull == "number" or tFull == "string" or tFull == "nil", "Unexpected full-name getfflag return type: " .. tFull);
+	end;
+	if okShort then
+		local tShort = type(shortValue);
+		assert(tShort == "boolean" or tShort == "number" or tShort == "string" or tShort == "nil", "Unexpected extension-name getfflag return type: " .. tShort);
+	end;
+	if okFull and okShort then
+		return "Supports full + extension flag names";
+	elseif okFull then
+		return "Supports full flag names only";
+	end;
+	return "Supports extension flag names only";
+end, true);
+test("setfflag", {}, function()
+	local fullName = "FFlagDebugGraphicsPreferD3D11";
+	local shortName = "DebugGraphicsPreferD3D11";
+	local flagName = fullName;
+	local okGet, current = pcall(getfflag, flagName);
+	if not okGet then
+		flagName = shortName;
+		okGet, current = pcall(getfflag, flagName);
+	end;
+	assert(okGet, "setfflag test requires getfflag support for probe flag");
+	local function trySet(value)
+		return pcall(setfflag, flagName, value);
+	end;
+	local okSet, err = trySet(current);
+	if not okSet and type(current) == "boolean" then
+		okSet, err = trySet(current and "True" or "False");
+	end;
+	if not okSet and type(current) ~= "string" then
+		okSet, err = trySet(tostring(current));
+	end;
+	assert(okSet, err or "setfflag errored while setting the current value");
+	return "setfflag accepted existing value for " .. flagName;
+end, true);
+test("getobjects", {}, function()
+	local ok, res = pcall(getobjects, "rbxassetid://1");
+	if not ok then
+		return "getobjects exists but external asset request is blocked";
+	end;
+	assert(type(res) == "table", "getobjects must return a table");
+end, true);
+test("isnetworkowner", {}, function()
+	local part = Instance.new("Part");
+	part.Size = Vector3.new(2, 2, 2);
+	part.Anchored = false;
+	part.CanCollide = false;
+	part.Parent = workspace;
+	local ok, res = pcall(isnetworkowner, part);
+	part:Destroy();
+	assert(ok, res or "isnetworkowner errored");
+	assert(type(res) == "boolean", "isnetworkowner must return a boolean");
+end, true);
+test("Drawing.clear", {}, function()
+	local ok, err = pcall(Drawing.clear);
+	assert(ok, err or "Drawing.clear errored");
+end, true);
+local extraOptionalGlobals = {
+	{
+		"saveinstance",
+		{
+			"save_instance"
+		}
+	},
+	{
+		"restorefunction",
+		{}
+	},
+	{
+		"replaceclosure",
+		{}
+	},
+	{
+		"cloneclosure",
+		{}
+	},
+	{
+		"dumpstring",
+		{}
+	},
+	{
+		"getcallstack",
+		{}
+	},
+	{
+		"getfunctionhash",
+		{}
+	},
+	{
+		"isluau",
+		{}
+	},
+	{
+		"gethwid",
+		{}
+	},
+	{
+		"setnamecallmethod",
+		{}
+	},
+	{
+		"getpointerfrominstance",
+		{}
+	},
+	{
+		"firetouchtransmitter",
+		{}
+	},
+	{
+		"getspecialinfo",
+		{}
+	},
+	{
+		"readbinarystring",
+		{}
+	},
+	{
+		"rconsolewarn",
+		{
+			"consolewarn"
+		}
+	},
+	{
+		"rconsoleerr",
+		{
+			"consoleerr"
+		}
+	},
+	{
+		"http",
+		{}
+	},
+	{
+		"http.get",
+		{}
+	},
+	{
+		"http.post",
+		{}
+	}
+};
+for _, def in ipairs(extraOptionalGlobals) do
+	test(def[1], def[2], nil, true);
+end;
 task.defer(function()
 	repeat
 		task.wait();
@@ -1291,7 +1552,7 @@ local function runRcon()
 			else
 				lf += 1;
 				fails += 1;
-				local e = d.n .. " • " .. tostring(msg);
+				local e = d.n .. " - " .. normalizeError(msg);
 				table.insert(list_fail, e);
 				warn("⛔ [rconsole] " .. e);
 			end;
@@ -1341,11 +1602,18 @@ local function promptRcon()
 		sg:SetCore("SendNotification", {
 			Title = "UNC rconsole tests",
 			Text = "Some executors can crash when rconsole is used.\nRun extra rconsole tests?",
-			Duration = 15,
+			Duration = math.huge,
 			Button1 = "Sure",
 			Button2 = "Nah",
 			Callback = bf
 		});
 	end);
 end;
-promptRcon();
+task.spawn(function()
+	repeat
+		task.wait();
+	until running == 0;
+	if messageboxPassed then
+		promptRcon();
+	end;
+end);

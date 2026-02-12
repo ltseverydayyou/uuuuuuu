@@ -266,9 +266,11 @@ end;
 refreshVisualizerDerived();
 local spam = false;
 local apEnabled = true;
+local preclick = false;
 local topbarIconInstance;
 local apOption;
 local spamOption;
+local preclickOption;
 local visualizerOption;
 local modeOption;
 local modeDropdown;
@@ -301,6 +303,12 @@ local function updateSpamLabel()
 		return;
 	end;
 	spamOption:setLabel("Spam: " .. (spam and "ON" or "OFF"));
+end;
+local function updatePreclickLabel()
+	if not preclickOption then
+		return;
+	end;
+	preclickOption:setLabel("Preclick: " .. (preclick and "ON" or "OFF"));
 end;
 local function updateApLabel()
 	if not apOption then
@@ -358,6 +366,14 @@ local function toggleSpam()
 	spam = not spam;
 	updateSpamLabel();
 	updateRingColors();
+end;
+local function togglePreclick()
+	preclick = not preclick;
+	updatePreclickLabel();
+end;
+local function getPreclickLead(pingMs)
+	local pingLead = math.clamp((pingMs or 0) * 0.00015, 0, 0.02);
+	return math.clamp(0.026 + pingLead, 0.026, 0.05);
 end;
 local function toggleVisualizer()
 	visualizerConfig.enabled = not isVisualizerEnabled();
@@ -462,6 +478,10 @@ local function setupTopbarIcon()
 	spamOption:oneClick(function()
 		toggleSpam();
 	end);
+	preclickOption = (dropdown:new()):setLabel("Preclick: OFF");
+	preclickOption:oneClick(function()
+		togglePreclick();
+	end);
 	debugToggleOption = (dropdown:new()):setLabel("Debug: OFF");
 	debugToggleOption:oneClick(function()
 		debugEnabled = not debugEnabled;
@@ -504,6 +524,7 @@ local function setupTopbarIcon()
 	end;
 	updateApLabel();
 	updateSpamLabel();
+	updatePreclickLabel();
 	updateVisualizerLabel();
 	updateModeLabel();
 	updateDebugMenu(0, false, tick());
@@ -1499,11 +1520,15 @@ local function AutoParryStep(dt)
 				local toRingTime = approaching and speed > 1 and math.max((rawDist - parryPredictRadius), 0) / speed or math.huge;
 				local closeHit = targeted and rawDist <= math.max(10, parryPredictRadius * 0.45);
 				local nearHitTime = speed > 1 and rawDist / speed or math.huge;
-				local veryFastHit = targeted and nearHitTime <= 0.18 + ping * pingTimeScale;
-				local closeHitSafe = closeHit and (nearHitTime <= 0.3 or speed >= 25);
-				local targetSnap = targeted and inParryPredict and settledInPredict and (nearHitTime <= 0.6 or rawDist <= math.max(10, parryPredictRadius * 0.6));
+				local hitTime = nearHitTime;
+				if preclick and (targeted or attrNow) then
+					hitTime = math.max(nearHitTime - getPreclickLead(ping), 0);
+				end;
+				local veryFastHit = targeted and hitTime <= 0.18 + ping * pingTimeScale;
+				local closeHitSafe = closeHit and (hitTime <= 0.3 or speed >= 25);
+				local targetSnap = targeted and inParryPredict and settledInPredict and (hitTime <= 0.6 or rawDist <= math.max(10, parryPredictRadius * 0.6));
 				local innerEmergency = targeted and rawDist <= math.max(8, predictRadius * 0.4);
-				local fastApproach = targeted and approaching and (nearHitTime <= 0.22 or rawDist <= parryPredictRadius * 0.95);
+				local fastApproach = targeted and approaching and (hitTime <= 0.22 or rawDist <= parryPredictRadius * 0.95);
 				local parryTriggered = false;
 				if innerEmergency and hasTargetLock and (not closeParryBlocked[ball]) then
 					local nowInner = now;
@@ -1518,7 +1543,7 @@ local function AutoParryStep(dt)
 					end;
 				end;
 				local outsideRing = rawDist >= math.max(predictRadius - math.max(preEntryMargin * 1.1, 2.5), predictRadius * 0.85);
-				local ringEdgeSafe = innerEmergency or rawDist >= parryPredictRadius * 0.6 or nearHitTime <= 0.2 or veryFastHit;
+				local ringEdgeSafe = innerEmergency or rawDist >= parryPredictRadius * 0.6 or hitTime <= 0.2 or veryFastHit;
 				local ringTimeSoon = toRingTime <= 0.55 + ping * 0.003;
 				local function attemptParry()
 					if parryTriggered then
@@ -1531,13 +1556,13 @@ local function AutoParryStep(dt)
 						closeParryBlocked[ball] = nil;
 					end;
 					local inCloseBlock = closeParryBlocked[ball] and rawDist <= parryPredictRadius * 1.15;
-					local slowClose = targeted and hasTargetLock and rawDist <= math.max(16, parryPredictRadius * 0.65) and speed >= 1.5 and nearHitTime <= 1.3;
-					local slowVeryClose = targeted and rawDist <= math.max(10, parryPredictRadius * 0.5) and speed > 0 and speed <= 6 and nearHitTime <= 1.6;
-					local slowMid = targeted and hasTargetLock and approaching and speed >= 7 and speed <= 26 and nearHitTime <= 1.15 and rawDist <= math.max(20, parryPredictRadius * 0.92);
-					local slowMid2 = targeted and hasTargetLock and speed >= 7 and speed <= 26 and nearHitTime <= 0.95 and rawDist <= math.max(18, parryPredictRadius * 0.88);
-					local canPredict = approaching and nearPredict and settledInPredict and highlightsMatch and hasTargetLock and (outsideRing or fastApproach) and (speed >= 12 or nearHitTime <= 0.25 or ringTimeSoon or fastApproach) or closeHitSafe and hasTargetLock or veryFastHit and hasTargetLock or targetSnap and hasTargetLock or innerEmergency and hasTargetLock or slowClose or slowVeryClose or slowMid or slowMid2;
+					local slowClose = targeted and hasTargetLock and rawDist <= math.max(16, parryPredictRadius * 0.65) and speed >= 1.5 and hitTime <= 1.3;
+					local slowVeryClose = targeted and rawDist <= math.max(10, parryPredictRadius * 0.5) and speed > 0 and speed <= 6 and hitTime <= 1.6;
+					local slowMid = targeted and hasTargetLock and approaching and speed >= 7 and speed <= 26 and hitTime <= 1.15 and rawDist <= math.max(20, parryPredictRadius * 0.92);
+					local slowMid2 = targeted and hasTargetLock and speed >= 7 and speed <= 26 and hitTime <= 0.95 and rawDist <= math.max(18, parryPredictRadius * 0.88);
+					local canPredict = approaching and nearPredict and settledInPredict and highlightsMatch and hasTargetLock and (outsideRing or fastApproach) and (speed >= 12 or hitTime <= 0.25 or ringTimeSoon or fastApproach) or closeHitSafe and hasTargetLock or veryFastHit and hasTargetLock or targetSnap and hasTargetLock or innerEmergency and hasTargetLock or slowClose or slowVeryClose or slowMid or slowMid2;
 					if not canPredict and targeted and hasTargetLock and (not innerEmergency) then
-						if rawDist <= math.max(18, parryPredictRadius * 0.75) and nearHitTime <= 1.8 and speed >= 0.75 then
+						if rawDist <= math.max(18, parryPredictRadius * 0.75) and hitTime <= 1.8 and speed >= 0.75 then
 							canPredict = true;
 						end;
 					end;
@@ -1572,7 +1597,7 @@ local function AutoParryStep(dt)
 					local insideZone = rawDist <= math.max(12, parryPredictRadius * 0.95);
 					local movingToward = approaching or rawDist <= math.max(6, parryPredictRadius * 0.4);
 					local slowBand = speed >= 2 and speed <= 35;
-					local timeWindow = nearHitTime <= 2.5;
+					local timeWindow = hitTime <= 2.5;
 					if insideZone and movingToward and slowBand and timeWindow and (not inCloseBlock) then
 						local nowInner = now;
 						local lastBallFire = lastParryPerBall[ball] or (-math.huge);
@@ -1619,7 +1644,7 @@ local function AutoParryStep(dt)
 						return;
 					end;
 					local attrNear = rawDist <= math.max(10, parryPredictRadius * 0.9);
-					local attrFast = speed > 20 or nearHitTime <= 0.35;
+					local attrFast = speed > 20 or hitTime <= 0.35;
 					if not (attrNear and attrFast) then
 						return;
 					end;

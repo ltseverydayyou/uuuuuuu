@@ -244,6 +244,7 @@ local lastCharHighlightEnabled = {};
 local lastParryPerBall = {};
 local predictEnterAt = {};
 local targetedSince = {};
+local targetStartDist = {};
 local lastAttrTargeted = {};
 local baitUntil = {};
 local awaySince = {};
@@ -457,6 +458,7 @@ local function setupTopbarIcon()
 			table.clear(lastHighlightMatch);
 			table.clear(lastCharHighlightEnabled);
 			table.clear(targetedSince);
+			table.clear(targetStartDist);
 			table.clear(lastAttrTargeted);
 			table.clear(lastParryPerBall);
 			table.clear(baitUntil);
@@ -1203,11 +1205,15 @@ local function queueParry(isSpam, hasTarget)
 		return;
 	end;
 	local now = tick();
-	if not isSpam and now - lastQueueTime < 0.01 then
+	if not isSpam and now - lastQueueTime < 0.003 then
 		return;
 	end;
 	lastQueueTime = now;
-	task.defer(DoParry);
+	if isSpam then
+		task.defer(DoParry);
+	else
+		DoParry();
+	end;
 end;
 local function getHighlightColor(inst)
 	if not inst then
@@ -1370,10 +1376,12 @@ local function AutoParryStep(dt)
 					posDelta = Vector3.zero;
 				end;
 				local manualVel = sampleDt > 0 and posDelta / math.max(sampleDt, 0.001) or velocity;
-				local chosenVel = velocity;
-				if chosenVel.Magnitude < 0.001 or chosenVel.Magnitude < manualVel.Magnitude * 0.5 then
-					chosenVel = manualVel;
+				local instantVel = velocity;
+				if instantVel.Magnitude < 0.001 or instantVel.Magnitude < manualVel.Magnitude * 0.5 then
+					instantVel = manualVel;
 				end;
+				local chosenVel = instantVel;
+				local directionVelocity = instantVel;
 				local lastMoveTime = lastBallMoveTime[ball] or 0;
 				if chosenVel.Magnitude >= 4 then
 					lastBallMoveTime[ball] = now;
@@ -1467,37 +1475,46 @@ local function AutoParryStep(dt)
 				if charHighlightEnabled and (not lastChar) then
 					lastParryPerBall[ball] = -math.huge;
 				end;
-				local hasTargetLock = targeted and targetedSince[ball] ~= nil;
 				local lastMatch = lastHighlightMatch[ball] or false;
 				local highlightsMatch = targeted;
 				if highlightsMatch and (not lastMatch) then
 					lastParryPerBall[ball] = -math.huge;
 					targetedSince[ball] = now;
+					targetStartDist[ball] = rawDist;
 				elseif not highlightsMatch and lastMatch then
 					lastParryPerBall[ball] = -math.huge;
 					targetedSince[ball] = nil;
 					if not attrNow then
 						closeParryBlocked[ball] = nil;
 						nextPar = 0;
+						targetStartDist[ball] = nil;
 					end;
 				end;
 				lastHighlightMatch[ball] = highlightsMatch;
 				lastCharHighlightEnabled[ball] = charHighlightEnabled;
+				local hasTargetLock = targeted and targetedSince[ball] ~= nil;
+				local prevAttrState = lastAttrTargeted[ball];
+				if attrNow and (not prevAttrState) and (targetStartDist[ball] == nil) then
+					targetStartDist[ball] = rawDist;
+				elseif not attrNow and prevAttrState and (not targeted) then
+					targetStartDist[ball] = nil;
+				end;
 				local approaching = false;
 				local isBait = false;
 				local dotNow = 0;
 				local towardSpeed = 0;
 				local movingAway = false;
-				if speed >= 2 then
+				local directionSpeed = directionVelocity.Magnitude;
+				if directionSpeed >= 1 then
 					local toYou = hrp.Position - ball.Position;
 					local mag = toYou.Magnitude;
 					if mag > 0.001 then
 						local dirToYou = toYou / mag;
-						local velDir = speed > 0.001 and velocity.Unit or dirToYou;
+						local velDir = directionSpeed > 0.001 and directionVelocity.Unit or dirToYou;
 						dotNow = dirToYou:Dot(velDir);
-						towardSpeed = speed * dotNow;
-						local toward = dotNow > 0.1;
-						local away = dotNow < (-0.25);
+						towardSpeed = directionVelocity:Dot(dirToYou);
+						local toward = towardSpeed > math.max(1.2, directionSpeed * 0.05);
+						local away = towardSpeed < (-math.max(1.5, directionSpeed * 0.08));
 						local wasAway = lastAwayFlag[ball];
 						if away then
 							if not wasAway then
@@ -1515,15 +1532,18 @@ local function AutoParryStep(dt)
 						end;
 						isBait = baitUntil[ball] and now < baitUntil[ball] and rawDist > parryPredictRadius * 0.6;
 						approaching = toward and (not isBait);
-						movingAway = towardSpeed < (-math.max(2, speed * 0.08));
+						movingAway = towardSpeed < (-math.max(2, directionSpeed * 0.08));
 					end;
 				else
 					lastAwayFlag[ball] = false;
 					awaySince[ball] = nil;
 				end;
-				local toRingTime = approaching and speed > 1 and math.max((rawDist - parryPredictRadius), 0) / speed or math.huge;
+				local ignoreMovingAwayForClash = targetStartDist[ball] ~= nil and targetStartDist[ball] <= 50;
+				local movingAwayBlocked = movingAway and (not ignoreMovingAwayForClash);
+				local timingSpeed = math.max(speed, directionSpeed * 0.9);
+				local toRingTime = approaching and timingSpeed > 1 and math.max((rawDist - parryPredictRadius), 0) / timingSpeed or math.huge;
 				local closeHit = targeted and rawDist <= math.max(10, parryPredictRadius * 0.45);
-				local nearHitTime = speed > 1 and rawDist / speed or math.huge;
+				local nearHitTime = timingSpeed > 1 and rawDist / timingSpeed or math.huge;
 				local preclickLead = preclick and getPreclickLead(ping) or 0;
 				local preclickTooLate = preclick and nearHitTime <= math.max(preclickLead * 0.65, 0.018);
 				local hitTime = nearHitTime;
@@ -1536,7 +1556,7 @@ local function AutoParryStep(dt)
 				local innerEmergency = (not preclick) and targeted and rawDist <= math.max(8, predictRadius * 0.4);
 				local fastApproach = targeted and approaching and (hitTime <= 0.22 or rawDist <= parryPredictRadius * 0.95);
 				local parryTriggered = false;
-				if innerEmergency and hasTargetLock and (not closeParryBlocked[ball]) and (not movingAway) then
+				if innerEmergency and hasTargetLock and (not closeParryBlocked[ball]) and (not movingAwayBlocked) then
 					local nowInner = now;
 					local lastBallFire = lastParryPerBall[ball] or (-math.huge);
 					if nowInner >= nextPar and nowInner - lastBallFire > 0.05 then
@@ -1558,7 +1578,7 @@ local function AutoParryStep(dt)
 					if isBait and (not innerEmergency) then
 						return;
 					end;
-					if movingAway then
+					if movingAwayBlocked then
 						return;
 					end;
 					if preclickTooLate then
@@ -1623,8 +1643,8 @@ local function AutoParryStep(dt)
 						end;
 					end;
 				end;
-				task.defer(attemptParry);
-				task.defer(function()
+				attemptParry();
+				local function attemptAttrParry()
 					if parryTriggered then
 						return;
 					end;
@@ -1637,7 +1657,7 @@ local function AutoParryStep(dt)
 					if isBait and (not innerEmergency) then
 						return;
 					end;
-					if movingAway then
+					if movingAwayBlocked then
 						return;
 					end;
 					if preclickTooLate then
@@ -1655,6 +1675,7 @@ local function AutoParryStep(dt)
 						lastParryPerBall[ball] = -math.huge;
 						if not targeted then
 							nextPar = 0;
+							targetStartDist[ball] = nil;
 						end;
 					end;
 					lastAttrTargeted[ball] = attrTargeted;
@@ -1674,7 +1695,8 @@ local function AutoParryStep(dt)
 						parryTriggered = true;
 						queueParry(false, true);
 					end;
-				end);
+				end;
+				attemptAttrParry();
 			end;
 		end;
 		local focus = focusPosTargeted or focusPos;
@@ -1709,6 +1731,7 @@ local function AutoParryStep(dt)
 				lastHighlightMatch[b] = nil;
 				lastCharHighlightEnabled[b] = nil;
 				targetedSince[b] = nil;
+				targetStartDist[b] = nil;
 				lastAttrTargeted[b] = nil;
 				lastParryPerBall[b] = nil;
 				baitUntil[b] = nil;
@@ -1731,6 +1754,7 @@ local function AutoParryStep(dt)
 		lastHighlightMatch = {};
 		lastCharHighlightEnabled = {};
 		targetedSince = {};
+		targetStartDist = {};
 		lastAttrTargeted = {};
 		lastParryPerBall = {};
 		baitUntil = {};

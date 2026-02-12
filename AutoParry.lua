@@ -372,8 +372,8 @@ local function togglePreclick()
 	updatePreclickLabel();
 end;
 local function getPreclickLead(pingMs)
-	local pingLead = math.clamp((pingMs or 0) * 0.00015, 0, 0.02);
-	return math.clamp(0.026 + pingLead, 0.026, 0.05);
+	local pingLead = math.clamp((pingMs or 0) * 0.0002, 0, 0.04);
+	return math.clamp(0.055 + pingLead, 0.055, 0.11);
 end;
 local function toggleVisualizer()
 	visualizerConfig.enabled = not isVisualizerEnabled();
@@ -1486,6 +1486,8 @@ local function AutoParryStep(dt)
 				local approaching = false;
 				local isBait = false;
 				local dotNow = 0;
+				local towardSpeed = 0;
+				local movingAway = false;
 				if speed >= 2 then
 					local toYou = hrp.Position - ball.Position;
 					local mag = toYou.Magnitude;
@@ -1493,6 +1495,7 @@ local function AutoParryStep(dt)
 						local dirToYou = toYou / mag;
 						local velDir = speed > 0.001 and velocity.Unit or dirToYou;
 						dotNow = dirToYou:Dot(velDir);
+						towardSpeed = speed * dotNow;
 						local toward = dotNow > 0.1;
 						local away = dotNow < (-0.25);
 						local wasAway = lastAwayFlag[ball];
@@ -1512,6 +1515,7 @@ local function AutoParryStep(dt)
 						end;
 						isBait = baitUntil[ball] and now < baitUntil[ball] and rawDist > parryPredictRadius * 0.6;
 						approaching = toward and (not isBait);
+						movingAway = towardSpeed < (-math.max(2, speed * 0.08));
 					end;
 				else
 					lastAwayFlag[ball] = false;
@@ -1520,17 +1524,19 @@ local function AutoParryStep(dt)
 				local toRingTime = approaching and speed > 1 and math.max((rawDist - parryPredictRadius), 0) / speed or math.huge;
 				local closeHit = targeted and rawDist <= math.max(10, parryPredictRadius * 0.45);
 				local nearHitTime = speed > 1 and rawDist / speed or math.huge;
+				local preclickLead = preclick and getPreclickLead(ping) or 0;
+				local preclickTooLate = preclick and nearHitTime <= math.max(preclickLead * 0.65, 0.018);
 				local hitTime = nearHitTime;
 				if preclick and (targeted or attrNow) then
-					hitTime = math.max(nearHitTime - getPreclickLead(ping), 0);
+					hitTime = math.max(nearHitTime - preclickLead, 0);
 				end;
-				local veryFastHit = targeted and hitTime <= 0.18 + ping * pingTimeScale;
+				local veryFastHit = (not preclick) and targeted and hitTime <= 0.18 + ping * pingTimeScale;
 				local closeHitSafe = closeHit and (hitTime <= 0.3 or speed >= 25);
 				local targetSnap = targeted and inParryPredict and settledInPredict and (hitTime <= 0.6 or rawDist <= math.max(10, parryPredictRadius * 0.6));
-				local innerEmergency = targeted and rawDist <= math.max(8, predictRadius * 0.4);
+				local innerEmergency = (not preclick) and targeted and rawDist <= math.max(8, predictRadius * 0.4);
 				local fastApproach = targeted and approaching and (hitTime <= 0.22 or rawDist <= parryPredictRadius * 0.95);
 				local parryTriggered = false;
-				if innerEmergency and hasTargetLock and (not closeParryBlocked[ball]) then
+				if innerEmergency and hasTargetLock and (not closeParryBlocked[ball]) and (not movingAway) then
 					local nowInner = now;
 					local lastBallFire = lastParryPerBall[ball] or (-math.huge);
 					if nowInner >= nextPar and nowInner - lastBallFire > 0.05 then
@@ -1550,6 +1556,12 @@ local function AutoParryStep(dt)
 						return;
 					end;
 					if isBait and (not innerEmergency) then
+						return;
+					end;
+					if movingAway then
+						return;
+					end;
+					if preclickTooLate then
 						return;
 					end;
 					if closeParryBlocked[ball] and (rawDist > parryPredictRadius * 1.15 or now - (lastParryPerBall[ball] or 0) > 1.2) then
@@ -1623,6 +1635,12 @@ local function AutoParryStep(dt)
 						return;
 					end;
 					if isBait and (not innerEmergency) then
+						return;
+					end;
+					if movingAway then
+						return;
+					end;
+					if preclickTooLate then
 						return;
 					end;
 					local nowAttr = now;

@@ -235,6 +235,7 @@ local maxSub = 4;
 local wasInPredict = {};
 local ringLimited = false;
 local lastBallSamples = {};
+local lastDistToPlayer = {};
 local lastBallVel = {};
 local lastBallMoveTime = {};
 local closeParryBlocked = {};
@@ -449,6 +450,7 @@ local function setupTopbarIcon()
 			lastParryTime = 0;
 			ringLimited = false;
 			table.clear(lastBallSamples);
+			table.clear(lastDistToPlayer);
 			table.clear(lastBallVel);
 			table.clear(lastBallMoveTime);
 			table.clear(smoothedSpeed);
@@ -1375,6 +1377,13 @@ local function AutoParryStep(dt)
 					sampleDt = 0;
 					posDelta = Vector3.zero;
 				end;
+				local prevRawDist = lastDistToPlayer[ball];
+				local closingSpeed = 0;
+				if prevRawDist then
+					local distDt = math.max(sampleDt > 0 and sampleDt or (dt or stepDt), 0.001);
+					closingSpeed = (prevRawDist - rawDist) / distDt;
+				end;
+				lastDistToPlayer[ball] = rawDist;
 				local manualVel = sampleDt > 0 and posDelta / math.max(sampleDt, 0.001) or velocity;
 				local instantVel = velocity;
 				if instantVel.Magnitude < 0.001 or instantVel.Magnitude < manualVel.Magnitude * 0.5 then
@@ -1530,7 +1539,9 @@ local function AutoParryStep(dt)
 							end;
 							lastAwayFlag[ball] = false;
 						end;
-						isBait = baitUntil[ball] and now < baitUntil[ball] and rawDist > parryPredictRadius * 0.6;
+						local baitActive = baitUntil[ball] and now < baitUntil[ball] and rawDist > parryPredictRadius * 0.6;
+						local breakBait = towardSpeed > math.max(9, directionSpeed * 0.16) or closingSpeed > math.max(10, directionSpeed * 0.22);
+						isBait = baitActive and (not breakBait);
 						approaching = toward and (not isBait);
 						movingAway = towardSpeed < (-math.max(2, directionSpeed * 0.08));
 					end;
@@ -1538,8 +1549,19 @@ local function AutoParryStep(dt)
 					lastAwayFlag[ball] = false;
 					awaySince[ball] = nil;
 				end;
+				local forceToward = false;
+				if directionSpeed >= 8 then
+					local fastRadialToward = towardSpeed > math.max(9, directionSpeed * 0.18);
+					local fastClosing = closingSpeed > math.max(14, directionSpeed * 0.24);
+					local closeAndClosing = rawDist <= math.max(22, parryPredictRadius * 0.9) and closingSpeed > 8;
+					forceToward = fastRadialToward or fastClosing or closeAndClosing;
+				end;
+				if forceToward then
+					approaching = true;
+					movingAway = false;
+				end;
 				local ignoreMovingAwayForClash = targetStartDist[ball] ~= nil and targetStartDist[ball] <= 70;
-				local movingAwayBlocked = movingAway and (not ignoreMovingAwayForClash);
+				local movingAwayBlocked = movingAway and (not ignoreMovingAwayForClash) and (not forceToward);
 				local timingSpeed = math.max(speed, directionSpeed * 0.9);
 				local toRingTime = approaching and timingSpeed > 1 and math.max((rawDist - parryPredictRadius), 0) / timingSpeed or math.huge;
 				local closeHit = targeted and rawDist <= math.max(10, parryPredictRadius * 0.45);
@@ -1722,6 +1744,7 @@ local function AutoParryStep(dt)
 			if not seen[b] or (not b.Parent) then
 				cleanupBallVisual(b);
 				lastBallSamples[b] = nil;
+				lastDistToPlayer[b] = nil;
 				lastBallVel[b] = nil;
 				lastBallMoveTime[b] = nil;
 				smoothedSpeed[b] = nil;
@@ -1745,6 +1768,7 @@ local function AutoParryStep(dt)
 		cleanupAllBallVisuals();
 		ringSizeState = {};
 		lastBallSamples = {};
+		lastDistToPlayer = {};
 		lastBallVel = {};
 		lastBallMoveTime = {};
 		smoothedSpeed = {};

@@ -14,6 +14,8 @@ local realconfigs = {
     supersecretdevtoggle = false,
     log_FireServer = true,
     log_InvokeServer = true,
+    call_FireServer = true,
+    call_InvokeServer = true,
     log_Fire = true,
     log_Invoke = true,
     bufferDumpComments = false,
@@ -116,6 +118,7 @@ local setclipboard = setclipboard
         return ErrorPrompt('Attempted to set clipboard: ' .. (...), true)
     end
 
+local nativeHookMetamethod = hookmetamethod
 local hookmetamethod = hookmetamethod
     or (makewriteable and makereadonly and getrawmetatable)
         and function(obj: object, metamethod: string, func: Function)
@@ -341,7 +344,8 @@ end
 
 local function rawtostring(userdata)
     if type(userdata) == 'table' or typeof(userdata) == 'userdata' then
-        local rawmetatable = getrawmetatable(userdata)
+        local rawmetatable = type(getrawmetatable) == 'function'
+            and getrawmetatable(userdata)
         local cachedstring = rawmetatable and rawget(rawmetatable, '__tostring')
 
         if cachedstring then
@@ -380,36 +384,66 @@ local function jsond(str)
 end
 
 function ErrorPrompt(Message, state)
+    local shown = false
     if getrenv then
-        local ErrorPrompt = getrenv().require(
-            CoreGui:WaitForChild('RobloxGui')
-                :WaitForChild('Modules')
-                :WaitForChild('ErrorPrompt')
-        ) -- File can be located in your roblox folder (C:\Users\%Username%\AppData\Local\Roblox\Versions\whateverversionitis\ExtraContent\scripts\CoreScripts\Modules)
-        local prompt = ErrorPrompt.new('Default', { HideErrorCode = true })
-        local ErrorStoarge =
-            Create('ScreenGui', { Parent = CoreGui, ResetOnSpawn = false })
-        local thread = state and running()
-        prompt:setParent(ErrorStoarge)
-        prompt:setErrorTitle('Simple Spy V3 Error')
-        prompt:updateButtons({
-            {
-                Text = 'Proceed',
-                Callback = function()
-                    prompt:_close()
-                    ErrorStoarge:Destroy()
-                    if thread then
-                        resume(thread)
+        local env = getrenv()
+        local req = env and env.require
+        if type(req) == 'function' then
+            local okModule, ErrorPromptModule = pcall(
+                req,
+                CoreGui:WaitForChild('RobloxGui')
+                    :WaitForChild('Modules')
+                    :WaitForChild('ErrorPrompt')
+            )
+            if
+                okModule
+                and type(ErrorPromptModule) == 'table'
+                and type(ErrorPromptModule.new) == 'function'
+            then
+                local okPrompt, prompt =
+                    pcall(ErrorPromptModule.new, 'Default', { HideErrorCode = true })
+                if okPrompt and prompt then
+                    local ErrorStoarge =
+                        Create('ScreenGui', { Parent = CoreGui, ResetOnSpawn = false })
+                    local thread
+                    if state and coroutine.isyieldable then
+                        local okYieldable, isYieldable =
+                            pcall(coroutine.isyieldable)
+                        if okYieldable and isYieldable then
+                            thread = running()
+                        end
                     end
-                end,
-                Primary = true,
-            },
-        }, 'Default')
-        prompt:_open(Message)
-        if thread then
-            yield(thread)
+                    local okShow = pcall(function()
+                        prompt:setParent(ErrorStoarge)
+                        prompt:setErrorTitle('Simple Spy V3 Error')
+                        prompt:updateButtons({
+                            {
+                                Text = 'Proceed',
+                                Callback = function()
+                                    prompt:_close()
+                                    ErrorStoarge:Destroy()
+                                    if thread then
+                                        resume(thread)
+                                    end
+                                end,
+                                Primary = true,
+                            },
+                        }, 'Default')
+                        prompt:_open(Message)
+                    end)
+                    if okShow then
+                        shown = true
+                        if thread then
+                            yield(thread)
+                        end
+                    else
+                        ErrorStoarge:Destroy()
+                    end
+                end
+            end
         end
-    else
+    end
+    if not shown then
         warn(Message)
     end
 end
@@ -420,11 +454,48 @@ local Highlight = (
     and isfile('Highlight.lua')
     and loadfile('Highlight.lua')()
 )
-    or loadstring(
-        game:HttpGet(
-            'https://raw.githubusercontent.com/78n/SimpleSpy/main/Highlight.lua'
-        )
-    )()
+
+if not Highlight and type(loadstring) == 'function' then
+    local ok, loaded = pcall(function()
+        return loadstring(
+            game:HttpGet(
+                'https://raw.githubusercontent.com/78n/SimpleSpy/main/Highlight.lua'
+            )
+        )()
+    end)
+    if ok then
+        Highlight = loaded
+    end
+end
+
+if type(Highlight) ~= 'table' or type(Highlight.new) ~= 'function' then
+    Highlight = {
+        new = function(parent)
+            local textBox = Create('TextBox', {
+                Parent = parent,
+                BackgroundTransparency = 1,
+                Position = UDim2.fromOffset(4, 2),
+                Size = UDim2.new(1, -8, 1, -4),
+                Text = '',
+                TextColor3 = Color3.fromRGB(255, 255, 255),
+                TextXAlignment = Enum.TextXAlignment.Left,
+                TextYAlignment = Enum.TextYAlignment.Top,
+                TextSize = 14,
+                Font = Enum.Font.Code,
+                ClearTextOnFocus = false,
+                MultiLine = true,
+            })
+            return {
+                setRaw = function(_, text)
+                    textBox.Text = tostring(text or '')
+                end,
+                getString = function()
+                    return textBox.Text or ''
+                end,
+            }
+        end,
+    }
+end
 
 local ui = {}
 do
@@ -737,6 +808,34 @@ if syn and identifyexecutor then
     end
 end
 
+local caps = {
+    hookFunction = type(hookfunction) == 'function',
+    hookAPI = type(hook) == 'function',
+    unhookAPI = type(unhook) == 'function',
+    restoreFunction = type(restorefunction) == 'function',
+    rawMetatable = type(getrawmetatable) == 'function',
+    getNamecallMethod = type(getnamecallmethod) == 'function',
+    checkCaller = type(checkcaller) == 'function',
+    getConnections = type(getconnections) == 'function',
+    decompile = type(decompile) == 'function',
+}
+caps.anyHookMetamethod = type(nativeHookMetamethod) == 'function'
+    or (caps.hookFunction and caps.rawMetatable)
+    or (type(setreadonly) == 'function' and caps.rawMetatable)
+caps.namecallHook = caps.getNamecallMethod
+    and ((synv3 and caps.hookAPI and caps.rawMetatable) or caps.anyHookMetamethod)
+caps.sendHooks = caps.namecallHook
+    or ((synv3 and caps.hookAPI) or caps.hookFunction)
+caps.newIndexHook = caps.anyHookMetamethod and caps.checkCaller
+
+local function safeCheckCaller()
+    if not caps.checkCaller then
+        return false
+    end
+    local ok, result = pcall(checkcaller)
+    return ok and result or false
+end
+
 xpcall(function()
     if isfile and readfile and isfolder and makefolder then
         local cachedconfigs = isfile('SimpleSpy//Settings.json')
@@ -763,7 +862,12 @@ xpcall(function()
 
         configsmetatable.__newindex = function(self, index, newindex)
             realconfigs[index] = newindex
-            writefile('SimpleSpy//Settings.json', jsone(realconfigs))
+            spawn(function()
+                local okEncode, encoded = pcall(jsone, realconfigs)
+                if okEncode and type(encoded) == 'string' then
+                    pcall(writefile, 'SimpleSpy//Settings.json', encoded)
+                end
+            end)
         end
     else
         configsmetatable.__newindex = function(self, index, newindex)
@@ -2318,7 +2422,13 @@ local function logClientEvent(re: RemoteEvent)
         end
 
         local loggedAny = false
-        local connections = getconnections and getconnections(re.OnClientEvent)
+        local connections
+        if caps.getConnections then
+            local ok, current = pcall(getconnections, re.OnClientEvent)
+            if ok and type(current) == 'table' then
+                connections = current
+            end
+        end
 
         if connections then
             for _, conn in ipairs(connections) do
@@ -2616,7 +2726,7 @@ local typeofv2sfunctions = {
     end,
     userdata = function(v) -- The server doesnt recive this
         if configs.advancedinfo then
-            if getrawmetatable(v) then
+            if caps.rawMetatable and getrawmetatable(v) then
                 return 'newproxy(true)'
             end
             return 'newproxy(false)'
@@ -3608,7 +3718,7 @@ captureRemoteCall = function(options)
     if
         transferType == 'Send'
         and not configs.logcheckcaller
-        and checkcaller()
+        and safeCheckCaller()
     then
         return callOriginal(options.callOriginal, args, argsLength)
     end
@@ -3617,6 +3727,14 @@ captureRemoteCall = function(options)
     local blockcheck = false
     if transferType == 'Send' then
         blockcheck = tablecheck(blocklist, remote, id)
+        if normalizedMethod == 'fireserver' and not configs.call_FireServer then
+            blockcheck = true
+        elseif
+            normalizedMethod == 'invokeserver'
+            and not configs.call_InvokeServer
+        then
+            blockcheck = true
+        end
     end
 
     if
@@ -3638,7 +3756,7 @@ captureRemoteCall = function(options)
     local infoLine = options.infoline or safeDebugInfo(infoLevel, 'l')
     local isExec = options.isexecutor
     if isExec == nil then
-        isExec = transferType == 'Send' and checkcaller() or false
+        isExec = transferType == 'Send' and safeCheckCaller() or false
     end
 
     local blacklisted = tablecheck(blacklist, remote, id)
@@ -3655,6 +3773,7 @@ captureRemoteCall = function(options)
             isexecutor = isExec,
             metamethod = options.metaMethod or transferType,
             blockcheck = blockcheck,
+            blocked = blockcheck,
             id = id,
             returnvalue = { data = nil },
         }
@@ -3692,7 +3811,7 @@ local function call_original_namecall(method, self, ...)
 end
 
 local newnamecall = newcclosure(function(self, ...)
-    local method = getnamecallmethod()
+    local method = caps.getNamecallMethod and getnamecallmethod() or nil
     local args = { ... }
     local argsLength = select('#', ...)
     if internalRemotes[self] then
@@ -3782,105 +3901,269 @@ local newInvokeBindable = newcclosure(function(self, ...)
     })
 end)
 
+local hookState = {
+    active = false,
+    namecall = false,
+    fireServer = false,
+    invokeServer = false,
+    bindableFire = false,
+    bindableInvoke = false,
+}
+
 local function disablehooks()
-    if synv3 then
-        unhook(getrawmetatable(game).__namecall, originalnamecall)
-        unhook(Instance.new('RemoteEvent').FireServer, originalEvent)
-        unhook(Instance.new('RemoteFunction').InvokeServer, originalFunction)
-        unhook(Instance.new('BindableEvent').Fire, originalBindableEventFire)
-        unhook(
-            Instance.new('BindableFunction').Invoke,
-            originalBindableFunctionInvoke
-        )
-        restorefunction(originalnamecall)
-        restorefunction(originalEvent)
-        restorefunction(originalFunction)
-        restorefunction(originalBindableEventFire)
-        restorefunction(originalBindableFunctionInvoke)
-    else
-        if hookmetamethod then
-            hookmetamethod(game, '__namecall', originalnamecall)
-        else
-            hookfunction(getrawmetatable(game).__namecall, originalnamecall)
-        end
-        hookfunction(Instance.new('RemoteEvent').FireServer, originalEvent)
-        hookfunction(
-            Instance.new('RemoteFunction').InvokeServer,
-            originalFunction
-        )
-        hookfunction(
-            Instance.new('BindableEvent').Fire,
-            originalBindableEventFire
-        )
-        hookfunction(
-            Instance.new('BindableFunction').Invoke,
-            originalBindableFunctionInvoke
-        )
+    if not hookState.active then
+        return
     end
+    hookState.active = false
+
+    if synv3 then
+        if hookState.namecall and caps.unhookAPI and caps.rawMetatable and originalnamecall then
+            pcall(unhook, getrawmetatable(game).__namecall, originalnamecall)
+        end
+        if hookState.fireServer and caps.unhookAPI and originalEvent then
+            pcall(unhook, Instance.new('RemoteEvent').FireServer, originalEvent)
+        end
+        if hookState.invokeServer and caps.unhookAPI and originalFunction then
+            pcall(
+                unhook,
+                Instance.new('RemoteFunction').InvokeServer,
+                originalFunction
+            )
+        end
+        if hookState.bindableFire and caps.unhookAPI and originalBindableEventFire then
+            pcall(
+                unhook,
+                Instance.new('BindableEvent').Fire,
+                originalBindableEventFire
+            )
+        end
+        if
+            hookState.bindableInvoke
+            and caps.unhookAPI
+            and originalBindableFunctionInvoke
+        then
+            pcall(
+                unhook,
+                Instance.new('BindableFunction').Invoke,
+                originalBindableFunctionInvoke
+            )
+        end
+        if hookState.namecall and caps.restoreFunction and originalnamecall then
+            pcall(restorefunction, originalnamecall)
+        end
+        if hookState.fireServer and caps.restoreFunction and originalEvent then
+            pcall(restorefunction, originalEvent)
+        end
+        if hookState.invokeServer and caps.restoreFunction and originalFunction then
+            pcall(restorefunction, originalFunction)
+        end
+        if
+            hookState.bindableFire
+            and caps.restoreFunction
+            and originalBindableEventFire
+        then
+            pcall(restorefunction, originalBindableEventFire)
+        end
+        if
+            hookState.bindableInvoke
+            and caps.restoreFunction
+            and originalBindableFunctionInvoke
+        then
+            pcall(restorefunction, originalBindableFunctionInvoke)
+        end
+    else
+        if hookState.namecall and originalnamecall then
+            if type(hookmetamethod) == 'function' then
+                pcall(hookmetamethod, game, '__namecall', originalnamecall)
+            elseif caps.hookFunction and caps.rawMetatable then
+                pcall(
+                    hookfunction,
+                    getrawmetatable(game).__namecall,
+                    originalnamecall
+                )
+            end
+        end
+        if hookState.fireServer and caps.hookFunction and originalEvent then
+            pcall(hookfunction, Instance.new('RemoteEvent').FireServer, originalEvent)
+        end
+        if hookState.invokeServer and caps.hookFunction and originalFunction then
+            pcall(
+                hookfunction,
+                Instance.new('RemoteFunction').InvokeServer,
+                originalFunction
+            )
+        end
+        if hookState.bindableFire and caps.hookFunction and originalBindableEventFire then
+            pcall(
+                hookfunction,
+                Instance.new('BindableEvent').Fire,
+                originalBindableEventFire
+            )
+        end
+        if
+            hookState.bindableInvoke
+            and caps.hookFunction
+            and originalBindableFunctionInvoke
+        then
+            pcall(
+                hookfunction,
+                Instance.new('BindableFunction').Invoke,
+                originalBindableFunctionInvoke
+            )
+        end
+    end
+
+    hookState.namecall = false
+    hookState.fireServer = false
+    hookState.invokeServer = false
+    hookState.bindableFire = false
+    hookState.bindableInvoke = false
 end
 
 --- Toggles on and off the remote spy
 function toggleSpy()
+    if not caps.sendHooks then
+        return false
+    end
+
     if not toggle then
+        hookState.namecall = false
+        hookState.fireServer = false
+        hookState.invokeServer = false
+        hookState.bindableFire = false
+        hookState.bindableInvoke = false
+
         local oldnamecall
         if synv3 then
-            oldnamecall = hook(
-                getrawmetatable(game).__namecall,
-                clonefunction(newnamecall)
-            )
-            originalEvent = hook(
-                Instance.new('RemoteEvent').FireServer,
-                clonefunction(newFireServer)
-            )
-            originalFunction = hook(
-                Instance.new('RemoteFunction').InvokeServer,
-                clonefunction(newInvokeServer)
-            )
-            originalBindableEventFire = hook(
-                Instance.new('BindableEvent').Fire,
-                clonefunction(newFireBindable)
-            )
-            originalBindableFunctionInvoke = hook(
-                Instance.new('BindableFunction').Invoke,
-                clonefunction(newInvokeBindable)
-            )
-        else
-            if hookmetamethod then
-                oldnamecall = hookmetamethod(
-                    game,
-                    '__namecall',
-                    clonefunction(newnamecall)
-                )
-            else
-                oldnamecall = hookfunction(
+            if caps.namecallHook and caps.hookAPI and caps.rawMetatable then
+                local ok, previous = pcall(
+                    hook,
                     getrawmetatable(game).__namecall,
                     clonefunction(newnamecall)
                 )
+                if ok then
+                    oldnamecall = previous
+                    hookState.namecall = true
+                end
             end
-            originalEvent = hookfunction(
-                Instance.new('RemoteEvent').FireServer,
-                clonefunction(newFireServer)
-            )
-            originalFunction = hookfunction(
-                Instance.new('RemoteFunction').InvokeServer,
-                clonefunction(newInvokeServer)
-            )
-            originalBindableEventFire = hookfunction(
-                Instance.new('BindableEvent').Fire,
-                clonefunction(newFireBindable)
-            )
-            originalBindableFunctionInvoke = hookfunction(
-                Instance.new('BindableFunction').Invoke,
-                clonefunction(newInvokeBindable)
-            )
+            if caps.hookAPI then
+                local okFire, oldFire = pcall(
+                    hook,
+                    Instance.new('RemoteEvent').FireServer,
+                    clonefunction(newFireServer)
+                )
+                if okFire then
+                    originalEvent = oldFire
+                    hookState.fireServer = true
+                end
+                local okInvoke, oldInvoke = pcall(
+                    hook,
+                    Instance.new('RemoteFunction').InvokeServer,
+                    clonefunction(newInvokeServer)
+                )
+                if okInvoke then
+                    originalFunction = oldInvoke
+                    hookState.invokeServer = true
+                end
+                local okBindableFire, oldBindableFire = pcall(
+                    hook,
+                    Instance.new('BindableEvent').Fire,
+                    clonefunction(newFireBindable)
+                )
+                if okBindableFire then
+                    originalBindableEventFire = oldBindableFire
+                    hookState.bindableFire = true
+                end
+                local okBindableInvoke, oldBindableInvoke = pcall(
+                    hook,
+                    Instance.new('BindableFunction').Invoke,
+                    clonefunction(newInvokeBindable)
+                )
+                if okBindableInvoke then
+                    originalBindableFunctionInvoke = oldBindableInvoke
+                    hookState.bindableInvoke = true
+                end
+            end
+        else
+            if caps.namecallHook then
+                if type(hookmetamethod) == 'function' then
+                    local ok, previous = pcall(
+                        hookmetamethod,
+                        game,
+                        '__namecall',
+                        clonefunction(newnamecall)
+                    )
+                    if ok then
+                        oldnamecall = previous
+                        hookState.namecall = true
+                    end
+                elseif caps.hookFunction and caps.rawMetatable then
+                    local ok, previous = pcall(
+                        hookfunction,
+                        getrawmetatable(game).__namecall,
+                        clonefunction(newnamecall)
+                    )
+                    if ok then
+                        oldnamecall = previous
+                        hookState.namecall = true
+                    end
+                end
+            end
+            if caps.hookFunction then
+                local okFire, oldFire = pcall(
+                    hookfunction,
+                    Instance.new('RemoteEvent').FireServer,
+                    clonefunction(newFireServer)
+                )
+                if okFire then
+                    originalEvent = oldFire
+                    hookState.fireServer = true
+                end
+                local okInvoke, oldInvoke = pcall(
+                    hookfunction,
+                    Instance.new('RemoteFunction').InvokeServer,
+                    clonefunction(newInvokeServer)
+                )
+                if okInvoke then
+                    originalFunction = oldInvoke
+                    hookState.invokeServer = true
+                end
+                local okBindableFire, oldBindableFire = pcall(
+                    hookfunction,
+                    Instance.new('BindableEvent').Fire,
+                    clonefunction(newFireBindable)
+                )
+                if okBindableFire then
+                    originalBindableEventFire = oldBindableFire
+                    hookState.bindableFire = true
+                end
+                local okBindableInvoke, oldBindableInvoke = pcall(
+                    hookfunction,
+                    Instance.new('BindableFunction').Invoke,
+                    clonefunction(newInvokeBindable)
+                )
+                if okBindableInvoke then
+                    originalBindableFunctionInvoke = oldBindableInvoke
+                    hookState.bindableInvoke = true
+                end
+            end
         end
-        originalnamecall = originalnamecall
-            or function(...)
-                return oldnamecall(...)
-            end
+        if oldnamecall then
+            originalnamecall = originalnamecall
+                or function(...)
+                    return oldnamecall(...)
+                end
+        end
+        hookState.active = hookState.namecall
+            or hookState.fireServer
+            or hookState.invokeServer
+            or hookState.bindableFire
+            or hookState.bindableInvoke
     else
         disablehooks()
     end
+
+    return true
 end
 
 --- Toggles between the two remotespy methods (hookfunction currently = disabled)
@@ -3921,9 +4204,14 @@ if not getgenv().SimpleSpyExecuted then
         end
         getgenv().SimpleSpyShutdown = shutdown
         onToggleButtonClick()
-        if not hookmetamethod then
+        if not caps.sendHooks then
             ErrorPrompt(
-                "Simple Spy V3 will not function to it's fullest capablity due to your executor not supporting hookmetamethod.",
+                'Outbound hooks are unavailable. Falling back to OnClientEvent/OnClientInvoke logging only.',
+                true
+            )
+        elseif not caps.namecallHook then
+            ErrorPrompt(
+                'Namecall hook is unavailable. Using direct FireServer/InvokeServer hooks only.',
                 true
             )
         end
@@ -4000,18 +4288,28 @@ else
 end
 
 local oldNewIndex
-oldNewIndex = hookmetamethod(game, '__newindex', function(self, k, v)
-    if
-        not checkcaller()
-        and typeof(self) == 'Instance'
-        and self:IsA('RemoteFunction')
-        and k == 'OnClientInvoke'
-        and type(v) == 'function'
-    then
-        return oldNewIndex(self, k, setWrappedOnClientInvoke(self, v))
+if caps.newIndexHook and type(hookmetamethod) == 'function' then
+    local ok, hooked = pcall(
+        hookmetamethod,
+        game,
+        '__newindex',
+        function(self, k, v)
+            if
+                not safeCheckCaller()
+                and typeof(self) == 'Instance'
+                and self:IsA('RemoteFunction')
+                and k == 'OnClientInvoke'
+                and type(v) == 'function'
+            then
+                return oldNewIndex(self, k, setWrappedOnClientInvoke(self, v))
+            end
+            return oldNewIndex(self, k, v)
+        end
+    )
+    if ok then
+        oldNewIndex = hooked
     end
-    return oldNewIndex(self, k, v)
-end)
+end
 
 for _, inst in ipairs(game:GetDescendants()) do
     if inst:IsA("RemoteEvent") or inst:IsA("UnreliableRemoteEvent") then
@@ -4120,11 +4418,6 @@ end)
 newButton('Run Code', function()
     return 'Click to execute code'
 end, function()
-    if not loadstring then
-        ui.TextLabel.Text = 'loadstring missing'
-        return
-    end
-
     local src = codebox:getString()
     if not src or src == '' then
         ui.TextLabel.Text = 'CodeBox is empty'
@@ -4145,43 +4438,71 @@ end, function()
     end
 end)
 
-newButton('Log FireServer', function()
-    return ('[%s] FireServer'):format(configs.log_FireServer and 'ON' or 'OFF')
-end, function()
-    configs.log_FireServer = not configs.log_FireServer
-    ui.TextLabel.Text = ('FireServer: %s'):format(
-        configs.log_FireServer and 'ON' or 'OFF'
-    )
-end)
+if caps.sendHooks then
+    newButton('Log FireServer', function()
+        return ('[%s] FireServer'):format(
+            configs.log_FireServer and 'ON' or 'OFF'
+        )
+    end, function()
+        configs.log_FireServer = not configs.log_FireServer
+        ui.TextLabel.Text = ('FireServer: %s'):format(
+            configs.log_FireServer and 'ON' or 'OFF'
+        )
+    end)
 
-newButton('Log InvokeServer', function()
-    return ('[%s] InvokeServer'):format(
-        configs.log_InvokeServer and 'ON' or 'OFF'
-    )
-end, function()
-    configs.log_InvokeServer = not configs.log_InvokeServer
-    ui.TextLabel.Text = ('InvokeServer: %s'):format(
-        configs.log_InvokeServer and 'ON' or 'OFF'
-    )
-end)
+    newButton('Log InvokeServer', function()
+        return ('[%s] InvokeServer'):format(
+            configs.log_InvokeServer and 'ON' or 'OFF'
+        )
+    end, function()
+        configs.log_InvokeServer = not configs.log_InvokeServer
+        ui.TextLabel.Text = ('InvokeServer: %s'):format(
+            configs.log_InvokeServer and 'ON' or 'OFF'
+        )
+    end)
 
-newButton('Log Fire', function()
-    return ('[%s] Bindable:Fire'):format(configs.log_Fire and 'ON' or 'OFF')
-end, function()
-    configs.log_Fire = not configs.log_Fire
-    ui.TextLabel.Text = ('Bindable Fire: %s'):format(
-        configs.log_Fire and 'ON' or 'OFF'
-    )
-end)
+    newButton('Call FireServer', function()
+        return ('[%s] Allow FireServer calls'):format(
+            configs.call_FireServer and 'ON' or 'OFF'
+        )
+    end, function()
+        configs.call_FireServer = not configs.call_FireServer
+        ui.TextLabel.Text = ('FireServer calls: %s'):format(
+            configs.call_FireServer and 'ALLOWED' or 'BLOCKED'
+        )
+    end)
 
-newButton('Log Invoke', function()
-    return ('[%s] Bindable:Invoke'):format(configs.log_Invoke and 'ON' or 'OFF')
-end, function()
-    configs.log_Invoke = not configs.log_Invoke
-    ui.TextLabel.Text = ('Bindable Invoke: %s'):format(
-        configs.log_Invoke and 'ON' or 'OFF'
-    )
-end)
+    newButton('Call InvokeServer', function()
+        return ('[%s] Allow InvokeServer calls'):format(
+            configs.call_InvokeServer and 'ON' or 'OFF'
+        )
+    end, function()
+        configs.call_InvokeServer = not configs.call_InvokeServer
+        ui.TextLabel.Text = ('InvokeServer calls: %s'):format(
+            configs.call_InvokeServer and 'ALLOWED' or 'BLOCKED'
+        )
+    end)
+
+    newButton('Log Fire', function()
+        return ('[%s] Bindable:Fire'):format(configs.log_Fire and 'ON' or 'OFF')
+    end, function()
+        configs.log_Fire = not configs.log_Fire
+        ui.TextLabel.Text = ('Bindable Fire: %s'):format(
+            configs.log_Fire and 'ON' or 'OFF'
+        )
+    end)
+
+    newButton('Log Invoke', function()
+        return ('[%s] Bindable:Invoke'):format(
+            configs.log_Invoke and 'ON' or 'OFF'
+        )
+    end, function()
+        configs.log_Invoke = not configs.log_Invoke
+        ui.TextLabel.Text = ('Bindable Invoke: %s'):format(
+            configs.log_Invoke and 'ON' or 'OFF'
+        )
+    end)
+end
 
 newButton('Log Client', function()
     return ('[%s] OnClientEvent/OnClientInvoke'):format(
@@ -4268,17 +4589,26 @@ end, function()
                 }
 
                 if Remote:IsA('RemoteFunction') then
-                    info['advancedinfo']['OnClientInvoke'] = getcallbackmember
-                            and (getcallbackmember(Remote, 'OnClientInvoke') or 'N/A')
-                        or 'N/A --Missing function getcallbackmember'
-                elseif getconnections then
+                    if getcallbackmember then
+                        local ok, cb =
+                            pcall(getcallbackmember, Remote, 'OnClientInvoke')
+                        info['advancedinfo']['OnClientInvoke'] =
+                            (ok and cb) or 'N/A'
+                    else
+                        info['advancedinfo']['OnClientInvoke'] =
+                            'N/A --Missing function getcallbackmember'
+                    end
+                elseif caps.getConnections then
                     info['advancedinfo']['OnClientEvents'] = {}
-
-                    for i, v in next, getconnections(Remote.OnClientEvent) do
-                        info['advancedinfo']['OnClientEvents'][i] = {
-                            Function = v.Function or 'N/A',
-                            State = v.State or 'N/A',
-                        }
+                    local okConnections, remoteConnections =
+                        pcall(getconnections, Remote.OnClientEvent)
+                    if okConnections and type(remoteConnections) == 'table' then
+                        for i, v in next, remoteConnections do
+                            info['advancedinfo']['OnClientEvents'][i] = {
+                                Function = v.Function or 'N/A',
+                                State = v.State or 'N/A',
+                            }
+                        end
                     end
                 end
             end
@@ -4374,10 +4704,10 @@ end, function()
 end)
 
 --- Attempts to decompile the source script
-newButton('Decompile', function()
-    return 'Decompile source script'
-end, function()
-    if decompile then
+if caps.decompile then
+    newButton('Decompile', function()
+        return 'Decompile source script'
+    end, function()
         if selected and selected.Source then
             local Source = selected.Source
             if not DecompiledScripts[Source] then
@@ -4406,10 +4736,8 @@ end, function()
         else
             ui.TextLabel.Text = 'Source not found!'
         end
-    else
-        ui.TextLabel.Text = 'Missing function (decompile)'
-    end
-end)
+    end)
+end
 
 newButton('Script Path', function()
     return 'Copy path of the calling script'
@@ -4430,9 +4758,46 @@ end, function()
         ui.TextLabel.Text = 'Source not found'
         return
     end
-    local path = v2s(src)
+
+    local path
+    local pathKind = 'instance'
+    if typeof(src) == 'Instance' then
+        if src.Parent then
+            path = v2s(src)
+        else
+            local func = selected.Function
+            if type(func) == 'function' then
+                local debugSource = safeDebugInfo(func, 's')
+                if type(debugSource) == 'string' and debugSource ~= '' then
+                    path = debugSource
+                    pathKind = 'debug'
+                end
+            end
+            if not path then
+                path = v2s(src)
+                pathKind = 'nilinstance'
+            end
+        end
+    elseif type(selected.Function) == 'function' then
+        local debugSource = safeDebugInfo(selected.Function, 's')
+        if type(debugSource) == 'string' and debugSource ~= '' then
+            path = debugSource
+            pathKind = 'debug'
+        end
+    end
+
+    if not path then
+        ui.TextLabel.Text = 'Source not found'
+        return
+    end
     setclipboard(path)
-    ui.TextLabel.Text = 'Script path copied!'
+    if pathKind == 'debug' then
+        ui.TextLabel.Text = 'Copied debug source (instance path unavailable)'
+    elseif pathKind == 'nilinstance' then
+        ui.TextLabel.Text = 'Script is nil-parented; copied getNil fallback'
+    else
+        ui.TextLabel.Text = 'Script path copied!'
+    end
 end)
 
 --[[newButton(
@@ -4481,16 +4846,18 @@ end, function()
     excluding = {}
 end)
 
-newButton('Logcheckcaller', function()
-    return ('[%s] Log remotes fired by the client'):format(
-        configs.logcheckcaller and 'ENABLED' or 'DISABLED'
-    )
-end, function()
-    configs.logcheckcaller = not configs.logcheckcaller
-    ui.TextLabel.Text = ('[%s] Log remotes fired by the client'):format(
-        configs.logcheckcaller and 'ENABLED' or 'DISABLED'
-    )
-end)
+if caps.checkCaller and caps.sendHooks then
+    newButton('Logcheckcaller', function()
+        return ('[%s] Log remotes fired by the client'):format(
+            configs.logcheckcaller and 'ENABLED' or 'DISABLED'
+        )
+    end, function()
+        configs.logcheckcaller = not configs.logcheckcaller
+        ui.TextLabel.Text = ('[%s] Log remotes fired by the client'):format(
+            configs.logcheckcaller and 'ENABLED' or 'DISABLED'
+        )
+    end)
+end
 
 --[[newButton("Log returnvalues",function()
     return ("[BETA] [%s] Log RemoteFunction's return values"):format(configs.logcheckcaller and "ENABLED" or "DISABLED")

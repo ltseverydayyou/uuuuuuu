@@ -120,6 +120,8 @@ if isPoopSploit then
 		__mode = "k"
 	});
 
+	local proxyPart;
+
 	local function snapshot(pp)
 		return {
 			E = pp.Enabled,
@@ -207,30 +209,30 @@ if isPoopSploit then
 						local target = camPos + look * dist + cam.CFrame.UpVector * (-dist) * downFactor;
 						local useProxy = o.relocateProxy ~= false;
 						if useProxy then
-							local ok, proxy = pcall(function()
-								local p = Instance.new("Part");
-								p.Size = Vector3.new(0.2, 0.2, 0.2);
-								p.Anchored = true;
-								p.CanCollide = false;
-								p.CanTouch = false;
-								p.CanQuery = false;
-								p.Transparency = 1;
-								p.CFrame = CFrame.new(target, target + look);
-								p.Name = rStringgg and rStringgg() or "\000";
-								p.Parent = workspace;
-								return p;
-							end);
-							if ok and proxy then
+							if not proxyPart then
+								local ok, p = pcall(function()
+									local p = Instance.new("Part");
+									p.Size = Vector3.new(0.2, 0.2, 0.2);
+									p.Anchored = true;
+									p.CanCollide = false;
+									p.CanTouch = false;
+									p.CanQuery = false;
+									p.Transparency = 1;
+									p.Name = rStringgg and rStringgg() or "\000";
+									p.Parent = workspace;
+									return p;
+								end);
+								if ok and p then
+									proxyPart = p;
+								end;
+							end;
+							if proxyPart then
 								local origParent = pp.Parent;
-								pp.Parent = proxy;
+								pp.Parent = proxyPart;
+								proxyPart.CFrame = CFrame.new(target, target + look);
 								restorePos = function()
 									if pp then
 										pp.Parent = origParent;
-									end;
-									if proxy then
-										pcall(function()
-											proxy:Destroy();
-										end);
 									end;
 								end;
 							end;
@@ -297,11 +299,11 @@ if isPoopSploit then
 	_env.fireproximityprompt = function(target, opts)
 		local o = toOpts(opts);
 		local list = {};
-		if typeof(target) == "Instance" and target:IsA("ProximityPrompt") then
+		if typeof(target) == "Instance" and target:IsA("ProximityPrompt") and target.Enabled then
 			list[1] = target;
 		elseif typeof(target) == "table" then
 			for _, v in ipairs(target) do
-				if typeof(v) == "Instance" and v:IsA("ProximityPrompt") then
+				if typeof(v) == "Instance" and v:IsA("ProximityPrompt") and v.Enabled then
 					Insert(list, v);
 				end;
 			end;

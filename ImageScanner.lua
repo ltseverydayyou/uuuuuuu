@@ -49,9 +49,20 @@ local function off()
 	end
 end
 
+local function isMob()
+	local p = uis:GetPlatform()
+	if p == Enum.Platform.IOS or p == Enum.Platform.Android or p == Enum.Platform.AndroidTV or p == Enum.Platform.Chromecast or p == Enum.Platform.MetaOS then
+		return true
+	end
+	if p == Enum.Platform.None then
+		return uis.TouchEnabled and not (uis.KeyboardEnabled or uis.MouseEnabled)
+	end
+	return uis.TouchEnabled and not (uis.KeyboardEnabled or uis.MouseEnabled)
+end
+
 local data = {}
 local seen = {}
-local onNewAsset
+local onNew
 local statusLabel
 
 local function resetData()
@@ -59,23 +70,41 @@ local function resetData()
 	table.clear(seen)
 end
 
-local function norm(s)
-	s = tostring(s or "")
-	s = s:gsub("%s+", "")
-	return s
-end
-
 local function addRes(src, inst, prop)
+	if not src or src == "" then return end
 	if seen[src] then return end
 	seen[src] = true
 	local it = { src = src, inst = inst, prop = prop }
 	data[#data+1] = it
-	if onNewAsset then onNewAsset(it) end
+	if onNew then onNew(it) end
 end
 
 local function findIds(s, inst, prop)
-	s = tostring(s or "")
-	local n = norm(s)
+	if type(s) ~= "string" then return end
+	local lo = s:lower()
+
+	if s:match("^%d+$") then
+		addRes("rbxassetid://" .. s, inst, prop)
+		return
+	end
+
+	if lo:find("rbxthumb://", 1, true) then
+		addRes(s, inst, prop)
+		local id = lo:match("id=(%d+)")
+		if id then
+			addRes("rbxassetid://" .. id, inst, prop)
+		end
+		return
+	end
+
+	if not (lo:find("rbx", 1, true) or lo:find("http", 1, true) or lo:find("id=", 1, true)) then
+		return
+	end
+
+	local n = s
+	if n:find("%s") then
+		n = n:gsub("%s+", "")
+	end
 
 	for id in n:gmatch("rbxassetid://(%d+)") do
 		addRes("rbxassetid://" .. id, inst, prop)
@@ -86,74 +115,104 @@ local function findIds(s, inst, prop)
 	for id in n:gmatch("https?://www%.roblox%.com/asset/%?id=(%d+)") do
 		addRes("rbxassetid://" .. id, inst, prop)
 	end
+	for id in n:gmatch("https?://www%.roblox%.com/Thumbs/Asset%.ashx%?[^%s]*id=(%d+)") do
+		addRes("rbxassetid://" .. id, inst, prop)
+	end
 	for id in n:gmatch("https?://assetdelivery%.roblox%.com/v1/asset/%?id=(%d+)") do
 		addRes("rbxassetid://" .. id, inst, prop)
 	end
 	for id in n:gmatch("https?://assetdelivery%.roblox%.com/v1/assetId/(%d+)") do
 		addRes("rbxassetid://" .. id, inst, prop)
 	end
-	for id in n:gmatch("id=(%d+)") do
-		if s:find("roblox%.com") or s:find("assetdelivery%.roblox%.com") then
+	if lo:find("roblox.com", 1, true) or lo:find("assetdelivery.roblox.com", 1, true) then
+		for id in n:gmatch("id=(%d+)") do
 			addRes("rbxassetid://" .. id, inst, prop)
 		end
 	end
 end
 
-local props = {"Image","Texture","TextureId","TextureID","Graphic","Thumbnail","Icon","NormalMap","ColorMap","MetalnessMap","RoughnessMap","AmbientOcclusionMap","EmissionMap","HeightMap","AlphaMap"}
+local props = {
+	"Image","Texture","TextureId","TextureID","Graphic","Thumbnail","Icon",
+	"NormalMap","ColorMap","MetalnessMap","RoughnessMap","AmbientOcclusionMap","EmissionMap","HeightMap","AlphaMap",
+	"SkyboxBk","SkyboxDn","SkyboxFt","SkyboxLf","SkyboxRt","SkyboxUp","SunTextureId","MoonTextureId",
+	"ShirtTemplate","PantsTemplate"
+}
 
 local clsProps = {
 	ImageLabel = {"Image"}, ImageButton = {"Image"},
+	ImageHandleAdornment = {"Image"},
 	Decal = {"Texture"}, Texture = {"Texture"},
 	ParticleEmitter = {"Texture"}, Beam = {"Texture"}, Trail = {"Texture"},
 	Sky = {"SkyboxBk","SkyboxDn","SkyboxFt","SkyboxLf","SkyboxRt","SkyboxUp","SunTextureId","MoonTextureId"},
 	SurfaceAppearance = {"ColorMap","NormalMap","MetalnessMap","RoughnessMap"},
-	MeshPart = {"TextureID"}, SpecialMesh = {"TextureId","MeshId"},
+	MeshPart = {"TextureID"},
+	SpecialMesh = {"TextureId"},
 	ShirtGraphic = {"Graphic"},
 	MaterialVariant = {"ColorMap","NormalMap","MetalnessMap","RoughnessMap"},
+	Shirt = {"ShirtTemplate"},
+	Pants = {"PantsTemplate"},
+	Tool = {"TextureId"},
 }
 
-local function scanInst(inst)
+local ccache = {}
+local function getPlist(inst)
 	local cn = inst.ClassName
-	local p = clsProps[cn]
-	if p then
-		for _, nm2 in ipairs(p) do
-			local ok, v = pcall(function() return inst[nm2] end)
-			if ok and v ~= nil then findIds(v, inst, nm2) end
+	local t = ccache[cn]
+	if t then return t end
+
+	local lst = {}
+	local have = {}
+
+	local function push(p)
+		if not have[p] then
+			have[p] = true
+			lst[#lst+1] = p
 		end
 	end
-	for _, nm2 in ipairs(props) do
-		local ok, v = pcall(function() return inst[nm2] end)
-		if ok and v ~= nil then findIds(v, inst, nm2) end
-	end
-	local okA, at = pcall(function() return inst:GetAttributes() end)
-	if okA and type(at) == "table" then
-		for k, v in pairs(at) do
-			if type(v) == "string" then findIds(v, inst, "Attr:" .. tostring(k)) end
+
+	local cp = clsProps[cn]
+	if cp then
+		for i = 1, #cp do
+			push(cp[i])
 		end
 	end
+
+	for i = 1, #props do
+		local p = props[i]
+		local ok = pcall(function()
+			return inst[p]
+		end)
+		if ok then
+			push(p)
+		end
+	end
+
+	ccache[cn] = lst
+	return lst
 end
 
-local scanning = false
-
-local function scanAsync(onDone)
-	if scanning then return end
-	scanning = true
-	task.spawn(function()
-		local list = game:GetDescendants()
-		table.insert(list, 1, game)
-		local n = #list
-		for i = 1, n do
-			scanInst(list[i])
-			if i % 180 == 0 then
-				if statusLabel then statusLabel.Text = ("Scanning... %d/%d • %d images"):format(i, n, #data) end
-				task.wait()
+local scanAttr = true
+local function scanInst(inst)
+	local lst = getPlist(inst)
+	for i = 1, #lst do
+		local p = lst[i]
+		local v = inst[p]
+		if type(v) == "string" then
+			findIds(v, inst, p)
+		end
+	end
+	if scanAttr then
+		local ok, at = pcall(function()
+			return inst:GetAttributes()
+		end)
+		if ok and type(at) == "table" then
+			for k, v in pairs(at) do
+				if type(v) == "string" then
+					findIds(v, inst, "Attr:" .. tostring(k))
+				end
 			end
 		end
-		if statusLabel then statusLabel.Text = ("Done • %d images found"):format(#data) end
-		scanning = false
-		onNewAsset = nil
-		if onDone then onDone() end
-	end)
+	end
 end
 
 local gui = Instance.new("ScreenGui")
@@ -187,7 +246,7 @@ rootStroke.Transparency = 0.75
 rootStroke.Parent = root
 
 local sc = Instance.new("UIScale")
-sc.Scale = 0.85
+sc.Scale = 1
 sc.Parent = root
 
 local top = Instance.new("Frame")
@@ -437,13 +496,73 @@ cpStroke.Color = Color3.fromRGB(255,255,255)
 cpStroke.Transparency = 0.7
 cpStroke.Parent = cp
 
+local function fitUi()
+	local cam = workspace.CurrentCamera
+	if not cam then return end
+	local vp = cam.ViewportSize
+
+	local w = math.clamp(vp.X - 24, 340, 740)
+	local h = math.clamp(vp.Y - 90, 260, 520)
+	root.Size = UDim2.fromOffset(w, h)
+
+	if isMob() then
+		local s = math.clamp(math.min(vp.X / 980, vp.Y / 840), 0.40, 0.68)
+		sc.Scale = s
+		grid.CellSize = UDim2.new(0, 72, 0, 72)
+		grid.CellPadding = UDim2.new(0, 8, 0, 8)
+	else
+		sc.Scale = 1
+		grid.CellSize = UDim2.new(0, 86, 0, 86)
+		grid.CellPadding = UDim2.new(0, 10, 0, 10)
+	end
+end
+
+task.defer(function()
+	repeat task.wait() until workspace.CurrentCamera
+	fitUi()
+	local cam = workspace.CurrentCamera
+	if cam then
+		on(cam:GetPropertyChangedSignal("ViewportSize"):Connect(fitUi))
+	end
+end)
+
 local rows = {}
+local rmeta = {}
+local shown = {}
 local pick
 local curBtn
 local isCopying = false
 
+local function safeFullName(inst)
+	local ok, v = pcall(function() return inst:GetFullName() end)
+	return ok and v or tostring(inst)
+end
+
 local function mkInfoText(it)
-	return ("Instance:\n%s\n\nProperty: %s\n\nSource:\n%s"):format(it.inst:GetFullName(), it.prop, it.src)
+	return ("Instance:\n%s\n\nProperty: %s\n\nSource:\n%s"):format(safeFullName(it.inst), tostring(it.prop), tostring(it.src))
+end
+
+local function reg(fr, c)
+	local t = rmeta[fr]
+	if not t then
+		t = {}
+		rmeta[fr] = t
+	end
+	t[#t+1] = c
+	return c
+end
+
+local function killRow(fr)
+	local t = rmeta[fr]
+	rmeta[fr] = nil
+	if t then
+		for i = #t, 1, -1 do
+			local c = t[i]
+			t[i] = nil
+			pcall(function() c:Disconnect() end)
+		end
+	end
+	pcall(function() fr:Destroy() end)
 end
 
 local function mkRow(it, idx)
@@ -494,17 +613,17 @@ local function mkRow(it, idx)
 	imgScale.Scale = 1
 	imgScale.Parent = img
 
-	on(fr.MouseEnter:Connect(function()
+	reg(fr, fr.MouseEnter:Connect(function()
 		TweenService:Create(fr, TweenInfo.new(0.2), {BackgroundTransparency = 0.28, BackgroundColor3 = Color3.fromRGB(38,38,48)}):Play()
 		TweenService:Create(imgScale, TweenInfo.new(0.25, Enum.EasingStyle.Quad), {Scale = 1.09}):Play()
 	end))
-	on(fr.MouseLeave:Connect(function()
+	reg(fr, fr.MouseLeave:Connect(function()
 		local targetTrans = (curBtn == fr) and 0.22 or 0.35
 		TweenService:Create(fr, TweenInfo.new(0.2), {BackgroundTransparency = targetTrans, BackgroundColor3 = Color3.fromRGB(26,26,34)}):Play()
 		TweenService:Create(imgScale, TweenInfo.new(0.25), {Scale = 1}):Play()
 	end))
 
-	on(fr.MouseButton1Click:Connect(function()
+	reg(fr, fr.MouseButton1Click:Connect(function()
 		pick = it
 		idBox.Text = it.src
 		infoLabel.Text = mkInfoText(it)
@@ -533,59 +652,237 @@ local function clr()
 	for i = 1, #rows do
 		local r = rows[i]
 		rows[i] = nil
-		if r then r:Destroy() end
+		if r then killRow(r) end
 	end
+	table.clear(shown)
 	curBtn = nil
 	setCan()
 end
 
-local function filt()
-	clr()
-	local q = box.Text:lower()
-	local n = 0
-	for i = 1, #data do
-		local it = data[i]
-		local s = (it.src .. " " .. it.inst:GetFullName()):lower()
-		if q == "" or s:find(q, 1, true) then
-			n += 1
-			rows[#rows+1] = mkRow(it, n)
-		end
-	end
-	setCan()
+local function match(it, q)
+	if q == "" then return true end
+	local s1 = tostring(it.src):lower()
+	if s1:find(q, 1, true) then return true end
+	local ok, fn = pcall(function() return it.inst and it.inst:GetFullName() end)
+	local nm2 = (ok and fn) and fn or tostring(it.inst)
+	return tostring(nm2):lower():find(q, 1, true) ~= nil
 end
 
-local busy = false
+local qadd = {}
+local qh = 1
+local pumping = false
+local pumpTok = 0
+local building = false
+local buildTok = 0
 
-local function refData()
-	if busy then return end
-	busy = true
-	resetData()
-	clr()
-	pick = nil
-	curBtn = nil
-	previewImage.Image = ""
-	idBox.Text = ""
-	infoLabel.Text = "Scanning..."
-	updInfoCanvas()
-	statusLabel.Text = "Scanning..."
+local function enq(it)
+	qadd[#qadd+1] = it
+end
+onNew = enq
 
-	onNewAsset = function(it)
-		local q = box.Text:lower()
-		local s = (it.src .. " " .. it.inst:GetFullName()):lower()
-		if q == "" or s:find(q, 1, true) then
-			rows[#rows+1] = mkRow(it, #rows+1)
-			setCan()
+local uiBud = isMob() and 0.0034 or 0.0064
+
+local function pump()
+	pumpTok += 1
+	local tok = pumpTok
+	if pumping then return end
+	pumping = true
+
+	task.spawn(function()
+		while tok == pumpTok do
+			if building then
+				task.wait()
+			else
+				local t0 = os.clock()
+				local q = box.Text:lower()
+
+				while tok == pumpTok and not building and qh <= #qadd and (os.clock() - t0) < uiBud do
+					local it = qadd[qh]
+					qadd[qh] = nil
+					qh += 1
+					if it and not shown[it.src] and match(it, q) then
+						shown[it.src] = true
+						rows[#rows+1] = mkRow(it, #rows+1)
+					end
+				end
+
+				if qh > 9000 then
+					local n = #qadd
+					if qh > n then
+						table.clear(qadd)
+						qh = 1
+					else
+						local tmp = {}
+						local j = 1
+						for i = qh, n do
+							tmp[j] = qadd[i]
+							j += 1
+						end
+						qadd = tmp
+						qh = 1
+					end
+				end
+
+				setCan()
+				task.wait()
+			end
 		end
-		statusLabel.Text = ("Scanning... %d images"):format(#data)
-	end
-
-	scanAsync(function()
-		busy = false
-		if #data == 0 then statusLabel.Text = "No images found" end
+		pumping = false
 	end)
 end
 
-on(box:GetPropertyChangedSignal("Text"):Connect(filt))
+local function rebuild()
+	buildTok += 1
+	local tok = buildTok
+	building = true
+	pumpTok += 1
+
+	task.spawn(function()
+		clr()
+
+		local q = box.Text:lower()
+		local i = 1
+		local n = #data
+		local made = 0
+
+		while tok == buildTok and i <= n do
+			local t0 = os.clock()
+			while tok == buildTok and i <= n and (os.clock() - t0) < uiBud do
+				local it = data[i]
+				i += 1
+				if it and not shown[it.src] and match(it, q) then
+					shown[it.src] = true
+					made += 1
+					rows[#rows+1] = mkRow(it, made)
+				end
+			end
+			setCan()
+			task.wait()
+		end
+
+		building = false
+		if tok == buildTok then
+			pump()
+		end
+	end)
+end
+
+local scanTok = 0
+local scanBud = isMob() and 0.0058 or 0.0105
+local scanning = false
+local tot = 0
+local done = 0
+local addSeen = 0
+
+local din = {}
+local dh = 1
+local dRun = false
+local dTok = 0
+
+local function dPump()
+	dTok += 1
+	local tok = dTok
+	if dRun then return end
+	dRun = true
+	task.spawn(function()
+		while tok == dTok do
+			local t0 = os.clock()
+			while tok == dTok and dh <= #din and (os.clock() - t0) < scanBud do
+				local inst = din[dh]
+				din[dh] = nil
+				dh += 1
+				if inst then
+					pcall(scanInst, inst)
+					addSeen += 1
+				end
+			end
+
+			if dh > 14000 then
+				local n = #din
+				if dh > n then
+					table.clear(din)
+					dh = 1
+				else
+					local tmp = {}
+					local j = 1
+					for i = dh, n do
+						tmp[j] = din[i]
+						j += 1
+					end
+					din = tmp
+					dh = 1
+				end
+			end
+
+			task.wait()
+		end
+		dRun = false
+	end)
+end
+
+on(game.DescendantAdded:Connect(function(inst)
+	din[#din+1] = inst
+	dPump()
+end))
+
+local function scanStart()
+	scanTok += 1
+	local tok = scanTok
+	scanning = true
+	tot = 0
+	done = 0
+	addSeen = 0
+
+	task.spawn(function()
+		if statusLabel then
+			statusLabel.Text = "Indexing..."
+		end
+
+		local desc
+		local ok = pcall(function()
+			desc = game:GetDescendants()
+		end)
+		if not ok or not desc then
+			desc = {}
+		end
+		desc[#desc+1] = game
+
+		tot = #desc
+		done = 0
+		local last = 0
+
+		if statusLabel then
+			statusLabel.Text = ("Scanning... %d/%d • %d images"):format(0, tot, #data)
+		end
+
+		local i = 1
+		while tok == scanTok and i <= tot do
+			local t0 = os.clock()
+			while tok == scanTok and i <= tot and (os.clock() - t0) < scanBud do
+				local inst = desc[i]
+				i += 1
+				if inst then
+					pcall(scanInst, inst)
+				end
+			end
+
+			done = i - 1
+			local now = os.clock()
+			if statusLabel and (now - last) > 0.08 then
+				last = now
+				statusLabel.Text = ("Scanning... %d/%d • %d images • %d shown"):format(done, tot, #data, #rows)
+			end
+			task.wait()
+		end
+
+		if tok == scanTok then
+			scanning = false
+			if statusLabel then
+				statusLabel.Text = ("Done • %d/%d • %d images • %d shown"):format(done, tot, #data, #rows)
+			end
+		end
+	end)
+end
 
 on(cp.MouseButton1Click:Connect(function()
 	local it = pick
@@ -616,14 +913,58 @@ on(cp.MouseButton1Click:Connect(function()
 	end
 end))
 
-on(bRef.MouseButton1Click:Connect(refData))
-on(bX.MouseButton1Click:Connect(function() off() gui:Destroy() end))
+local ftok = 0
+on(box:GetPropertyChangedSignal("Text"):Connect(function()
+	ftok += 1
+	local t = ftok
+	task.delay(0.14, function()
+		if t ~= ftok then return end
+		rebuild()
+	end)
+end))
 
-on(box.FocusLost:Connect(function(enter) if enter then filt() end end))
+local function stopAll()
+	scanTok += 1
+	buildTok += 1
+	pumpTok += 1
+	dTok += 1
+	scanning = false
+	building = false
+	pumping = false
+	dRun = false
+end
+
+local function refData()
+	stopAll()
+	resetData()
+	table.clear(ccache)
+	clr()
+	table.clear(qadd)
+	qh = 1
+	table.clear(din)
+	dh = 1
+	pick = nil
+	curBtn = nil
+	previewImage.Image = ""
+	idBox.Text = ""
+	infoLabel.Text = "Scanning..."
+	updInfoCanvas()
+	if statusLabel then statusLabel.Text = "Indexing..." end
+	pump()
+	scanStart()
+end
+
+on(bRef.MouseButton1Click:Connect(refData))
+on(bX.MouseButton1Click:Connect(function()
+	stopAll()
+	pcall(clr)
+	off()
+	pcall(function() gui:Destroy() end)
+end))
 
 refData()
 
 task.spawn(function()
 	TweenService:Create(root, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {BackgroundTransparency = 0}):Play()
-	TweenService:Create(sc, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1}):Play()
+	TweenService:Create(sc, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = sc.Scale}):Play()
 end)

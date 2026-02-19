@@ -194,6 +194,26 @@ local function main()
 
 		return label
 	end
+
+	local function persistSettings()
+		if Main and Main.ValidateSettings then
+			pcall(Main.ValidateSettings)
+		end
+
+		if Main and Main.SaveCurrentSettings then
+			pcall(Main.SaveCurrentSettings)
+			return
+		end
+
+		local writeFn = (env and env.writefile) or writefile
+		if Main and Main.ExportSettings and type(writeFn) == "function" then
+			local ok, encoded = pcall(Main.ExportSettings)
+			if ok and encoded then
+				local settingsPath = (Main and Main.SettingsFile) or "DexPlusSettings.json"
+				pcall(writeFn, settingsPath, encoded)
+			end
+		end
+	end
 	
 	SettingsWindow.ReloadPrompt = function()		
 		local win = ScriptViewer.ReloadPromptWindow
@@ -226,7 +246,13 @@ local function main()
 			reloadButton.Position = UDim2.new(0,5,1,-5)
 			reloadButton.Size = UDim2.new(0.5,-5,0,20)
 			reloadButton.OnClick:Connect(function()
-				Main.Reinit()
+				if Main and Main.Reinit then
+					Main.Reinit()
+				elseif Main and Main.Exit and Main.Init then
+					Main.Exit()
+					task.wait()
+					Main.Init()
+				end
 			end)
 
 			win:Add(reloadButton,"reloadButton")
@@ -291,6 +317,7 @@ local function main()
 		local titleonmiddle = AddCheckbox("Window Title On Middle", Settings.Window.TitleOnMiddle)
 		titleonmiddle.OnInput:Connect(function()
 			Settings.Window.TitleOnMiddle = titleonmiddle.Toggled
+			persistSettings()
 		end)
 		
 		local bgTransparency = AddTextbox("Background Transparency", tostring(Settings.Window.Transparency), 15)
@@ -304,6 +331,7 @@ local function main()
 			input = math.clamp(input, 0, 1)
 			Settings.Window.Transparency = input
 			bgTransparency.Text = tostring(input)
+			persistSettings()
 
 			if Lib and Lib.RefreshTheme then
 				pcall(Lib.RefreshTheme)
@@ -316,6 +344,7 @@ local function main()
 		local classIcon = AddDropdown("Class Icons", {"NewDark", "Vanilla3"}, Settings.ClassIcon, false, 100)
 		classIcon.OnSelect:Connect(function()
 			Settings.ClassIcon = classIcon.Selected
+			persistSettings()
 		end)
 		
 		AddSeperator("Explorer")
@@ -323,16 +352,19 @@ local function main()
 		local clickRename = AddCheckbox("Click to Rename", Settings.Explorer.ClickToRename)
 		clickRename.OnInput:Connect(function()
 			Settings.Explorer.ClickToRename = clickRename.Toggled
+			persistSettings()
 		end)
 		
 		local partSelectionBox = AddCheckbox("Part Selection Box", Settings.Explorer.PartSelectionBox)
 		partSelectionBox.OnInput:Connect(function()
 			Settings.Explorer.PartSelectionBox = partSelectionBox.Toggled
+			persistSettings()
 		end)
 		
 		local copypathUseChildren = AddCheckbox("Use GetChildren to Copy Path", Settings.Explorer.CopyPathUseGetChildren)
 		copypathUseChildren.OnInput:Connect(function()
 			Settings.Explorer.CopyPathUseGetChildren = copypathUseChildren.Toggled
+			persistSettings()
 		end)
 		
 		AddSeperator("Properties")
@@ -340,20 +372,24 @@ local function main()
 		local showDeprecated = AddCheckbox("Show Deprecated", Settings.Properties.ShowDeprecated)
 		showDeprecated.OnInput:Connect(function()
 			Settings.Properties.ShowDeprecated = showDeprecated.Toggled
+			persistSettings()
 		end)
 		
 		local showHidden = AddCheckbox("Show Hidden", Settings.Properties.ShowHidden)
 		showHidden.OnInput:Connect(function()
 			Settings.Properties.ShowHidden = showHidden.Toggled
+			persistSettings()
 		end)
 		
 		local showAttributes = AddCheckbox("Show Attributes", Settings.Properties.ShowAttributes)
 		showAttributes.OnInput:Connect(function()
 			Settings.Properties.ShowAttributes = showAttributes.Toggled
+			persistSettings()
 		end)
 		local clearOnFocus = AddCheckbox("Clear On Focus", Settings.Properties.ClearOnFocus)
 		clearOnFocus.OnInput:Connect(function()
 			Settings.Properties.ClearOnFocus = clearOnFocus.Toggled
+			persistSettings()
 		end)
 		
 		AddSeperator("Script Viewer")
@@ -361,6 +397,7 @@ local function main()
 		local showMoreInfo = AddCheckbox("Show Decompiled Script Info", Settings.ScriptViewer.ShowMoreInfo)
 		showMoreInfo.OnInput:Connect(function()
 			Settings.ScriptViewer.ShowMoreInfo = showMoreInfo.Toggled
+			persistSettings()
 		end)
 		
 		AddSeperator("Decompiler")
@@ -370,6 +407,7 @@ local function main()
 		local decompiler = AddDropdown("Decompiler Fallback", decompilerOption, Settings.Decompiler.DecompilerFallback, false, 125)
 		decompiler.OnSelect:Connect(function()
 			Settings.Decompiler.DecompilerFallback = decompiler.Selected
+			persistSettings()
 		end)
 		
 		local ShinyPort = AddTextbox("Shiny Decompiler Port", tostring(Settings.Decompiler.ShinyDecompilerPort), 50)
@@ -380,6 +418,7 @@ local function main()
 			else
 				if portinput > 0 and portinput <= 65535 then
 					Settings.Decompiler.ShinyDecompilerPort = portinput
+					persistSettings()
 				else
 					ShinyPort.Text = Settings.Decompiler.ShinyDecompilerPort
 				end
@@ -389,6 +428,7 @@ local function main()
 		local preferFallback = AddCheckbox("Prefer Fallback Decompiler", Settings.Decompiler.PreferDecompilerFallback)
 		preferFallback.OnInput:Connect(function()
 			Settings.Decompiler.PreferDecompilerFallback = preferFallback.Toggled
+			persistSettings()
 		end)
 		
 		-- Save buttons below
@@ -413,15 +453,7 @@ local function main()
 		reloadButton.MouseButton1Click:Connect(function()
 			window:SetTitle("Settings - Saving")
 
-			if Main and Main.SaveCurrentSettings then
-				Main.SaveCurrentSettings()
-			elseif Main and Main.ExportSettings and env and env.writefile then
-				local ok, encoded = pcall(Main.ExportSettings)
-				if ok and encoded then
-					local settingsPath = (Main and Main.SettingsFile) or "DexPlusSettings.json"
-					pcall(env.writefile, settingsPath, encoded)
-				end
-			end
+			persistSettings()
 			
 			window:SetTitle("Settings - Saved")
 			SettingsWindow.ReloadPrompt()

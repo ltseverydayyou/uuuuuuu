@@ -2004,6 +2004,45 @@ local function main()
 		funcs.IconDehash = function(self, _id)
 			return math.floor(_id / 14 % 14), math.floor(_id % 14)
 		end
+
+		local explorerImageIndexCache = {}
+		local function resolveExplorerImageIndex(className)
+			if type(className) ~= "string" or className == "" then
+				return nil
+			end
+
+			local cached = explorerImageIndexCache[className]
+			if cached ~= nil then
+				if cached == false then
+					return nil
+				end
+				return cached
+			end
+
+			local checked = {}
+			local current = className
+			while type(current) == "string" and current ~= "" and not checked[current] do
+				checked[current] = true
+
+				local rmdEntry = RMD and RMD.Classes and RMD.Classes[current]
+				local idx = rmdEntry and tonumber(rmdEntry.ExplorerImageIndex)
+				if idx ~= nil then
+					explorerImageIndexCache[className] = idx
+					return idx
+				end
+
+				local apiEntry = API and API.Classes and API.Classes[current]
+				local super = apiEntry and apiEntry.Superclass
+				if type(super) == "table" then
+					current = super.Name
+				else
+					current = super
+				end
+			end
+
+			explorerImageIndexCache[className] = false
+			return nil
+		end
 		
 		funcs.GetExplorerIcon = function(self, obj, index)
 			if Settings.ClassIcon == "Vanilla3" then
@@ -2014,20 +2053,18 @@ local function main()
 				obj.ImageRectOffset = Vector2.new(funcs.ExplorerIcons.IconSize * (index % funcs.ExplorerIcons.Height), funcs.ExplorerIcons.IconSize * math.floor(index / funcs.ExplorerIcons.Height))
 				obj.ImageRectSize = Vector2.new(funcs.ExplorerIcons.IconSize, funcs.ExplorerIcons.IconSize)
 			elseif Settings.ClassIcon == "Old" then
-				local rmdEntry = RMD and RMD.Classes and RMD.Classes[index]
-				local iconIndex = rmdEntry and tonumber(rmdEntry.ExplorerImageIndex) or 0
-				iconIndex = math.max(iconIndex, 0)
+				local iconIndex = resolveExplorerImageIndex(index)
+				if iconIndex == nil then
+					local isService = type(index) == "string" and string.find(index, "Service", 1, true) ~= nil
+					iconIndex = isService and resolveExplorerImageIndex("ServiceProvider") or resolveExplorerImageIndex("Instance")
+				end
+				iconIndex = math.max(math.floor(tonumber(iconIndex) or 0), 0)
 
 				obj.Position = UDim2.fromOffset(0, 0)
 				obj.Size = UDim2.fromOffset(16, 16)
-
-				if Explorer and Explorer.ClassIcons and Explorer.ClassIcons.Display then
-					Explorer.ClassIcons:Display(obj, iconIndex)
-				else
-					local columns = 128
-					obj.ImageRectOffset = Vector2.new(funcs.ExplorerIcons.IconSize * (iconIndex % columns), funcs.ExplorerIcons.IconSize * math.floor(iconIndex / columns))
-					obj.ImageRectSize = Vector2.new(funcs.ExplorerIcons.IconSize, funcs.ExplorerIcons.IconSize)
-				end
+				obj.Image = funcs.ExplorerIcons.MapId
+				obj.ImageRectOffset = Vector2.new(funcs.ExplorerIcons.IconSize * iconIndex, 0)
+				obj.ImageRectSize = Vector2.new(funcs.ExplorerIcons.IconSize, funcs.ExplorerIcons.IconSize)
 			elseif Settings.ClassIcon == "NewLight" or Settings.ClassIcon == "NewDark" then
 				local isService = string.find(index, "Service") and game:GetService(index)
 				

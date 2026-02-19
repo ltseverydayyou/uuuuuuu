@@ -2472,7 +2472,7 @@ return search]==]
 			iconData.Icons = fixed
 			Explorer.ClassIcons:SetDict(fixed)
 		else
-			Explorer.ClassIcons = Lib.IconMap.new("rbxasset://textures/ClassImages.PNG", 2048, 256, 16, 16)
+			Explorer.ClassIcons = Lib.IconMap.newLinear("rbxasset://textures/ClassImages.PNG", 16,16)
 		end
 		
 		Explorer.MiscIcons = Main.MiscIcons

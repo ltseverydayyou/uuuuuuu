@@ -1947,7 +1947,15 @@ local function main()
 			end
 			return asset
 		end
-		if Settings.ClassIcon and IconList[Settings.ClassIcon] then
+		if Settings.ClassIcon == "Old" then
+			funcs.ExplorerIcons = {
+				["MapId"] = resolveMapId("rbxasset://textures/ClassImages.PNG"),
+				["Icons"] = IconList.Old.Icons,
+				["IconSize"] = IconList.Old.IconSize,
+				["Witdh"] = IconList.Old.Witdh,
+				["Height"] = IconList.Old.Height
+			}
+		elseif Settings.ClassIcon and IconList[Settings.ClassIcon] then
 			funcs.ExplorerIcons = {
 				["MapId"] = resolveMapId(IconList[Settings.ClassIcon].MapId),
 				["Icons"] = IconList[Settings.ClassIcon].Icons,
@@ -1997,25 +2005,33 @@ local function main()
 			return math.floor(_id / 14 % 14), math.floor(_id % 14)
 		end
 		
-		local ClassNameNoImage = {}
 		funcs.GetExplorerIcon = function(self, obj, index)
 			if Settings.ClassIcon == "Vanilla3" then
+				obj.Position = UDim2.fromOffset(0, 0)
 				obj.Size = UDim2.fromOffset(16, 16)
 
 				index = (self.ExplorerIcons.Icons[index] or 250) - 1
 				obj.ImageRectOffset = Vector2.new(funcs.ExplorerIcons.IconSize * (index % funcs.ExplorerIcons.Height), funcs.ExplorerIcons.IconSize * math.floor(index / funcs.ExplorerIcons.Height))
 				obj.ImageRectSize = Vector2.new(funcs.ExplorerIcons.IconSize, funcs.ExplorerIcons.IconSize)
 			elseif Settings.ClassIcon == "Old" then
-				index = (self.ExplorerIcons.Icons[index] or 0)
-				local row, col = self:IconDehash(index)
-				local MapSize = Vector2.new(256, 256)
-				local pad, border = 2, 1
+				local rmdEntry = RMD and RMD.Classes and RMD.Classes[index]
+				local iconIndex = rmdEntry and tonumber(rmdEntry.ExplorerImageIndex) or 0
+				iconIndex = math.max(iconIndex, 0)
 
-				obj.Position = UDim2.new(-col - (pad * (col + 1) + border) / funcs.ExplorerIcons.IconSize, 0, -row - (pad * (row + 1) + border) / funcs.ExplorerIcons.IconSize, 0)
-				obj.Size = UDim2.new(MapSize.X / funcs.ExplorerIcons.IconSize, 0, MapSize.Y / funcs.ExplorerIcons.IconSize, 0)
+				obj.Position = UDim2.fromOffset(0, 0)
+				obj.Size = UDim2.fromOffset(16, 16)
+
+				if Explorer and Explorer.ClassIcons and Explorer.ClassIcons.Display then
+					Explorer.ClassIcons:Display(obj, iconIndex)
+				else
+					local columns = 128
+					obj.ImageRectOffset = Vector2.new(funcs.ExplorerIcons.IconSize * (iconIndex % columns), funcs.ExplorerIcons.IconSize * math.floor(iconIndex / columns))
+					obj.ImageRectSize = Vector2.new(funcs.ExplorerIcons.IconSize, funcs.ExplorerIcons.IconSize)
+				end
 			elseif Settings.ClassIcon == "NewLight" or Settings.ClassIcon == "NewDark" then
 				local isService = string.find(index, "Service") and game:GetService(index)
 				
+				obj.Position = UDim2.fromOffset(0, 0)
 				obj.Size = UDim2.fromOffset(16, 16)
 				index = (self.ExplorerIcons.Icons[index] or (isService and self.ExplorerIcons.Icons.Service) or self.ExplorerIcons.Icons.Placeholder) - 1
 				obj.ImageRectOffset = Vector2.new(funcs.ExplorerIcons.IconSize * (index % funcs.ExplorerIcons.Height), funcs.ExplorerIcons.IconSize * math.floor(index / funcs.ExplorerIcons.Height))

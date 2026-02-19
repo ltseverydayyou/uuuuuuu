@@ -415,7 +415,8 @@ local function main()
 			elseif Main and Main.ExportSettings and env and env.writefile then
 				local ok, encoded = pcall(Main.ExportSettings)
 				if ok and encoded then
-					pcall(env.writefile, "DexSettings.json", encoded)
+					local settingsPath = (Main and Main.SettingsFile) or "DexPlusSettings.json"
+					pcall(env.writefile, settingsPath, encoded)
 				end
 			end
 			
@@ -430,9 +431,4 @@ local function main()
 	return SettingsWindow
 end
 
--- TODO: Remove when open source
-if gethsfuncs then
-	_G.moduleData = {InitDeps = initDeps, InitAfterMain = initAfterMain, Main = main}
-else
-	return {InitDeps = initDeps, InitAfterMain = initAfterMain, Main = main}
-end
+return {InitDeps = initDeps, InitAfterMain = initAfterMain, Main = main}

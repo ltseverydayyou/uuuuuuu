@@ -956,9 +956,21 @@ local function main()
 		end
 
 		if presentClasses["LuaSourceContainer"] then
-			context:AddRegistered("VIEW_SCRIPT", not presentClasses.isViableDecompileScript or env.decompile == nil)
+			local canDecompile = false
+			if env.isdecompile ~= nil then
+				if type(env.isdecompile) == "function" then
+					local ok, result = pcall(env.isdecompile)
+					canDecompile = ok and not not result
+				else
+					canDecompile = not not env.isdecompile
+				end
+			else
+				canDecompile = env.decompile ~= nil
+			end
+
+			context:AddRegistered("VIEW_SCRIPT", not presentClasses.isViableDecompileScript or not canDecompile)
 			context:AddRegistered("DUMP_FUNCTIONS", not presentClasses.isViableDecompileScript or env.getupvalues == nil or env.getconstants == nil)
-			context:AddRegistered("SAVE_SCRIPT", not presentClasses.isViableDecompileScript or env.decompile == nil or env.writefile == nil)
+			context:AddRegistered("SAVE_SCRIPT", not presentClasses.isViableDecompileScript or not canDecompile or env.writefile == nil)
 			context:AddRegistered("SAVE_BYTECODE", not presentClasses.isViableDecompileScript or env.getscriptbytecode == nil or env.writefile == nil)
 
 		end
@@ -1862,7 +1874,7 @@ local function main()
 			["remotes"] = function(argString)
 				return {
 					Headers = {"local isa = game.IsA"},
-					Predicate = "isa(obj,'RemoteEvent') or isa(obj,'RemoteFunction') or isa(obj,'UnreliableRemoteFunction')"
+					Predicate = "isa(obj,'RemoteEvent') or isa(obj,'RemoteFunction') or isa(obj,'UnreliableRemoteEvent')"
 				}
 			end,
 			["bindables"] = function(argString)

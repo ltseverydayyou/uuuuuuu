@@ -49,6 +49,18 @@ local function getPath(obj)
 	end
 end
 
+local function canDecompile()
+	if not env then return false end
+	if env.isdecompile ~= nil then
+		if type(env.isdecompile) == "function" then
+			local ok, result = pcall(env.isdecompile)
+			return ok and not not result
+		end
+		return not not env.isdecompile
+	end
+	return env.decompile ~= nil or env.getscriptbytecode ~= nil
+end
+
 	local function main()
 		local ScriptViewer = {}
 		local window, codeFrame
@@ -416,6 +428,7 @@ end
 	ScriptViewer.ViewScript = function(scr)
 		local oldtick = tick()
 		local s,source = pcall(env.decompile or function() end,scr)
+		local showMoreInfo = not (Settings and Settings.ScriptViewer and Settings.ScriptViewer.ShowMoreInfo == false)
 
 		if window then window:SetTitle("Script Viewer") end
 
@@ -447,15 +460,17 @@ end
 			PreviousScr = nil
 			dumpbtn.TextColor3 = Color3.new(0.5,0.5,0.5)
 			source = "-- Unable to view source.\n"
-			source = source .. "-- Script Path: "..getPath(scr).."\n"
-			if (scr.ClassName == "Script" and (scr.RunContext == Enum.RunContext.Legacy or scr.RunContext == Enum.RunContext.Server)) or not scr:IsA("LocalScript") then
-				source = source .. "-- Reason: The script is not running on client. (attempt to decompile ServerScript or 'Script' with RunContext Server)\n"
-			elseif not env.decompile then
-				source = source .. "-- Reason: Your executor does not support decompiler. (missing 'decompile' function)\n"
-			else
-				source = source .. "-- Reason: Unknown\n"
+			if showMoreInfo then
+				source = source .. "-- Script Path: "..getPath(scr).."\n"
+				if (scr.ClassName == "Script" and (scr.RunContext == Enum.RunContext.Legacy or scr.RunContext == Enum.RunContext.Server)) or not scr:IsA("LocalScript") then
+					source = source .. "-- Reason: The script is not running on client. (attempt to decompile ServerScript or 'Script' with RunContext Server)\n"
+				elseif not canDecompile() then
+					source = source .. "-- Reason: Your executor does not support decompiler. (missing 'decompile' function and 'getscriptbytecode' function as fallback)\n"
+				else
+					source = source .. "-- Reason: Unknown Error.\n"
+				end
+				source = source .. "-- Executor: "..executorName.." ("..executorVersion..")"
 			end
-			source = source .. "-- Executor: "..executorName.." ("..executorVersion..")"
 		else
 			PreviousScr = scr
 			dumpbtn.TextColor3 = Color3.new(1,1,1)
@@ -463,8 +478,10 @@ end
 			local decompiled = source
 
 			source = "-- Script Path: "..getPath(scr).."\n"
-			source = source .. "-- Took "..tostring(math.floor( (tick() - oldtick) * 100) / 100).."s to decompile.\n"
-			source = source .. "-- Executor: "..executorName.." ("..executorVersion..")\n\n"
+			if showMoreInfo then
+				source = source .. "-- Took "..tostring(math.floor( (tick() - oldtick) * 100) / 100).."s to decompile.\n"
+				source = source .. "-- Executor: "..executorName.." ("..executorVersion..")\n\n"
+			end
 
 			source = source .. decompiled
 

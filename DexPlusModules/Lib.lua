@@ -105,6 +105,23 @@ local function main()
 	Lib.RefreshTheme = function()
 		local theme = Settings and Settings.Theme
 		if not theme then return end
+		local winTransparency = tonumber(Settings and Settings.Window and Settings.Window.Transparency)
+		if winTransparency == nil then
+			winTransparency = 0
+		end
+		winTransparency = math.clamp(winTransparency, 0, 1)
+
+		local function applyWindow(win)
+			local elems = win and win.GuiElems
+			if elems and elems.Main then
+				elems.Main.BackgroundColor3 = theme.Outline1 or elems.Main.BackgroundColor3
+				if elems.TopBar then elems.TopBar.BackgroundColor3 = theme.Main2 or elems.TopBar.BackgroundColor3 end
+				if elems.Content then
+					elems.Content.BackgroundColor3 = theme.Main1 or elems.Content.BackgroundColor3
+					elems.Content.BackgroundTransparency = winTransparency
+				end
+			end
+		end
 
 		if Main and Main.MainGui and Main.MainGui.OpenButton then
 			local open = Main.MainGui.OpenButton
@@ -134,12 +151,7 @@ local function main()
 				end
 
 				local win = (type(ctrl) == "table" and ctrl.Window) or nil
-				local elems = win and win.GuiElems
-				if elems and elems.Main then
-					elems.Main.BackgroundColor3 = theme.Outline1 or elems.Main.BackgroundColor3
-					if elems.TopBar then elems.TopBar.BackgroundColor3 = theme.Main2 or elems.TopBar.BackgroundColor3 end
-					if elems.Content then elems.Content.BackgroundColor3 = theme.Main1 or elems.Content.BackgroundColor3 end
-				end
+				applyWindow(win)
 			end
 		end
 
@@ -153,6 +165,9 @@ local function main()
 						pcall(function() app.Window:ApplyTheme() end)
 					end
 				end
+
+				local win = (type(app) == "table" and app.Window) or nil
+				applyWindow(win)
 			end
 		end
 	end

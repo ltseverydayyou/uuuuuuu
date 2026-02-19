@@ -295,7 +295,19 @@ local function main()
 		
 		local bgTransparency = AddTextbox("Background Transparency", tostring(Settings.Window.Transparency), 15)
 		bgTransparency.FocusLost:Connect(function()
-			Settings.Window.Transparency = tonumber(bgTransparency.Text)
+			local input = tonumber(bgTransparency.Text)
+			if input == nil then
+				bgTransparency.Text = tostring(Settings.Window.Transparency)
+				return
+			end
+
+			input = math.clamp(input, 0, 1)
+			Settings.Window.Transparency = input
+			bgTransparency.Text = tostring(input)
+
+			if Lib and Lib.RefreshTheme then
+				pcall(Lib.RefreshTheme)
+			end
 		end)
 		
 		local classIcon = AddDropdown("Class Icons", {"Old", "NewDark", "Vanilla3"}, Settings.ClassIcon, false, 100)
@@ -397,8 +409,15 @@ local function main()
 		
 		reloadButton.MouseButton1Click:Connect(function()
 			window:SetTitle("Settings - Saving")
-			
-			Main.SaveCurrentSettings()
+
+			if Main and Main.SaveCurrentSettings then
+				Main.SaveCurrentSettings()
+			elseif Main and Main.ExportSettings and env and env.writefile then
+				local ok, encoded = pcall(Main.ExportSettings)
+				if ok and encoded then
+					pcall(env.writefile, "DexSettings.json", encoded)
+				end
+			end
 			
 			window:SetTitle("Settings - Saved")
 			SettingsWindow.ReloadPrompt()

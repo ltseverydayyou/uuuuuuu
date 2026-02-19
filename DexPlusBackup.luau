@@ -24,7 +24,7 @@ end
 local isFsSupported = readfile and writefile and isfile and isfolder and listfiles and delfile and delfolder
 
 -- Main vars
-local Main, Explorer, Properties, ScriptViewer, Console, SaveInstance, ModelViewer, ThemeManager--[[, SecretServicePanel]], DefaultSettings, Notebook, Serializer, Lib
+local Main, Explorer, Properties, ScriptViewer, Console, SaveInstance, ModelViewer, SettingsWindow, ThemeManager--[[, SecretServicePanel]], DefaultSettings, Notebook, Serializer, Lib
 local ggv = getgenv
 local API, RMD
 
@@ -42,7 +42,8 @@ DefaultSettings = (function()
 			AutoUpdateMode = 0, -- 0 Default, 1 no tree update, 2 no descendant events, 3 frozen
 			PartSelectionBox = true,
 			GuiSelectionBox = true,
-			CopyPathUseGetChildren = true
+			CopyPathUseGetChildren = true,
+			UseNameWidth = false
 		},
 		Properties = {
 			_Recurse = true,
@@ -101,9 +102,17 @@ DefaultSettings = (function()
 				Bracket = rgb(204,204,204)
 			},
 		},
+		ScriptViewer = {
+			ShowMoreInfo = true
+		},
 		Window = {
 			TitleOnMiddle = false,
 			Transparency = .2
+		},
+		Decompiler = {
+			DecompilerFallback = "Konstant", -- Konstant, Shiny, AdvancedDecompiler
+			PreferDecompilerFallback = false,
+			ShinyDecompilerPort = 3000,
 		},
 		RemoteBlockWriteAttribute = false, -- writes attribute to remote instance if remote is blocked/unblocked
 		ClassIcon = "NewDark",
@@ -250,7 +259,7 @@ Main = (function()
 	}
 	Main.ThemeSettings = {}
 
-	Main.ModuleList = {"Explorer","Properties","ScriptViewer","Console","SaveInstance","ModelViewer","ThemeManager"}
+	Main.ModuleList = {"Explorer","Properties","ScriptViewer","Console","SaveInstance","ModelViewer","SettingsWindow","ThemeManager"}
 	Main.Elevated = false
 	Main.AllowDraggableOnMobile = true
 	Main.MissingEnv = {}
@@ -259,15 +268,17 @@ Main = (function()
 	Main.AppControls = {}
 	Main.Apps = Apps
 	Main.MenuApps = {}
+	Main.Plugins = {}
 	Main.GitRepoName = "ltseverydayyou/uuuuuuu"
 	Main.GitRepoBranch = "main"
 	Main.GitModulesPath = "DexPlusModules"
 	Main.ModuleHashData = {} -- prevent remote hash fetch; prefer local modules
-	Main.UserSettingsFile = "DexPlusSettings.json"
+	Main.SettingsFile = "DexPlusSettings.json"
+	Main.UserSettingsFile = "DexPlusUserSettings.json"
 	Main.ThemeFile = "DexPlusTheme.json"
 	Main.IconOverrides = {
 		["rbxassetid://6511490623"] = "NewestIcons.png",
-		["rbxassetid://6579106223"] = "icons.png",
+		["rbxassetid://129589545519436"] = "icons.png",
 		["rbxassetid://6578933307"] = "info.png",
 		["rbxassetid://6578871732"] = "settings.png",
 		["rbxassetid://1427967925"] = "borders.png",
@@ -287,6 +298,7 @@ Main = (function()
 		["rbxassetid://1072518406"] = "colors.png",
 		["rbxassetid://1072518502"] = "colorstrip.png",
 		["rbxassetid://135148380892747"] = "Texture.png",
+		["rbxassetid://114851699900089"] = "Vanilla3.png",
 	}
 	Main.IconSourceBaseUrl = "https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/main/DexPlusIcons/"
 
@@ -569,6 +581,68 @@ Main = (function()
 		end
 	end
 
+	Main.LoadPluginFile = function(pluginPath)
+		if not (env and env.readfile) then
+			return nil, "readfile is unavailable"
+		end
+
+		local isfileFn = (env and env.isfile) or isfile
+		if type(isfileFn) ~= "function" then
+			return nil, "isfile is unavailable"
+		end
+
+		local okIsFile, exists = pcall(isfileFn, pluginPath)
+		if not okIsFile or not exists then
+			return nil, "plugin file not found"
+		end
+
+		local chunkLoader
+		if type(loadfile) == "function" then
+			local okLoad, loader = pcall(loadfile, pluginPath)
+			if okLoad and type(loader) == "function" then
+				chunkLoader = loader
+			end
+		end
+
+		if not chunkLoader then
+			local okRead, src = pcall(env.readfile, pluginPath)
+			if not okRead or type(src) ~= "string" then
+				return nil, "failed to read plugin file"
+			end
+			local okChunk, loader = pcall(loadstring, src)
+			if not okChunk or type(loader) ~= "function" then
+				return nil, "failed to compile plugin file"
+			end
+			chunkLoader = loader
+		end
+
+		local okControl, control = pcall(chunkLoader)
+		if not okControl or type(control) ~= "table" then
+			return nil, "plugin entry returned invalid control object"
+		end
+
+		if type(control.InitDeps) == "function" then
+			local okDeps, depsErr = pcall(control.InitDeps, Main.GetInitDeps())
+			if not okDeps then
+				return nil, "plugin InitDeps() failed: "..tostring(depsErr)
+			end
+		end
+		if type(control.Main) ~= "function" then
+			return nil, "plugin control missing Main()"
+		end
+
+		local okMain, moduleData = pcall(control.Main)
+		if not okMain or type(moduleData) ~= "table" then
+			return nil, "plugin Main() failed"
+		end
+
+		Apps[pluginPath] = moduleData
+		Main.AppControls[pluginPath] = control
+		moduleData.PluginData = control.PluginData or moduleData.PluginData
+
+		return moduleData
+	end
+
 	Main.LoadModules = function()
 		for i,v in pairs(Main.ModuleList) do
 			local s,e = pcall(Main.LoadModule,v)
@@ -584,6 +658,7 @@ Main = (function()
 		Console = Apps.Console
 		SaveInstance = Apps.SaveInstance
 		ModelViewer = Apps.ModelViewer
+		SettingsWindow = Apps.SettingsWindow
 		ThemeManager = Apps.ThemeManager
 		Notebook = Apps.Notebook
 
@@ -595,6 +670,7 @@ Main = (function()
 			Console = Console,
 			SaveInstance = SaveInstance,
 			ModelViewer = ModelViewer,
+			SettingsWindow = SettingsWindow,
 			ThemeManager = ThemeManager,
 			Notebook = Notebook,
 
@@ -643,21 +719,36 @@ Main = (function()
 		end
 	end
 
-	Main.EnsureAllIcons = function()
+	Main.EnsureAllIcons = function(forceRefresh)
 		if not (env and env.writefile and env.makefolder and ((env.getcustomasset) or getcustomasset or getsynasset)) then
 			return false
 		end
+		local force = forceRefresh == true
+		local deleteFn = (env and env.delfile) or delfile
+		local processed = {}
 		pcall(env.makefolder,"DexPlusPlus")
 		pcall(env.makefolder,"DexPlusPlus/assets")
 		for _, fileName in pairs(Main.IconOverrides) do
+			if processed[fileName] then
+				continue
+			end
+			processed[fileName] = true
+
 			local path = "DexPlusPlus/assets/"..fileName
-			local needDownload = true
-			if env.isfile then
-				local ok, exists = pcall(env.isfile, path)
-				if ok and exists then
-					needDownload = false
+			local needDownload = force
+
+			if force and env.isfile and deleteFn then
+				local okExists, exists = pcall(env.isfile, path)
+				if okExists and exists then
+					pcall(deleteFn, path)
 				end
 			end
+
+			if not needDownload and env.isfile then
+				local ok, exists = pcall(env.isfile, path)
+				needDownload = not (ok and exists)
+			end
+
 			if needDownload then
 				local url = Main.IconSourceBaseUrl .. fileName
 				local ok, data = pcall(oldgame.HttpGet, game, url)
@@ -686,6 +777,8 @@ Main = (function()
 		env.writefile = writefile
 		env.appendfile = appendfile
 		env.makefolder = makefolder
+		env.delfile = delfile
+		env.delfolder = delfolder
 		env.listfiles = listfiles
 		env.loadfile = loadfile
 		env.saveinstance = saveinstance or (function()
@@ -745,11 +838,37 @@ Main = (function()
 		end
 		env.request = (syn and syn.request) or (http and http.request) or http_request or (fluxus and fluxus.request) or request
 
-		env.decompile = decompile or (function()
-			-- by lovrewe
-			--warn("No built-in decompiler exists, using Konstant decompiler...")
-			--assert(getscriptbytecode, "Exploit not supported.")
+		env.isdecompile = function()
+			return type(decompile) == "function" or type(getscriptbytecode) == "function"
+		end
 
+		env.isdecompilefallback = function()
+			return type(decompile) ~= "function" and type(getscriptbytecode) == "function"
+		end
+
+		local advancedDecCache
+		local advancedDecTried = false
+		local function getAdvancedDecompiler()
+			if advancedDecTried then
+				return advancedDecCache
+			end
+			advancedDecTried = true
+			local ok, dec = pcall(function()
+				local src = oldgame:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/refs/heads/main/AdvancedDecompV3.lua")
+				local loader = loadstring(src)
+				if type(loader) ~= "function" then
+					return nil
+				end
+				return loader()
+			end)
+			if ok and type(dec) == "function" then
+				advancedDecCache = dec
+			end
+			return advancedDecCache
+		end
+
+		local fallbackDecompile = (function()
+			-- by lovrewe
 			if not env.getscriptbytecode then --[[warn('Konstant decompiler is not supported. "getscriptbytecode" is missing.')]] return end
 
 			local API = "http://api.plusgiant5.com"
@@ -788,15 +907,71 @@ Main = (function()
 				end
 			end
 
-			local function decompile(scriptPath)
+			local function decompileFallback(scriptPath)
 				return call("/konstant/decompile", scriptPath)
 			end
 
-			getgenv().decompile = decompile
-
-			env.decompile = decompile
-			return decompile
+			return decompileFallback
 		end)()
+
+		local function shinyDecompile(scriptInstance)
+			if not env.request then
+				return "-- Shiny fallback unavailable: request function is missing."
+			end
+			if type(crypt) ~= "table" or type(crypt.base64encode) ~= "function" then
+				return "-- Shiny fallback unavailable: crypt.base64encode is missing."
+			end
+			local bytecode = env.getscriptbytecode(scriptInstance)
+			local encoded = crypt.base64encode(bytecode)
+			local port = (Settings and Settings.Decompiler and Settings.Decompiler.ShinyDecompilerPort) or DefaultSettings.Decompiler.ShinyDecompilerPort
+			local response = env.request({
+				Url = "http://127.0.0.1:"..tostring(port).."/luau/decompile",
+				Method = "POST",
+				Body = encoded
+			})
+			return response and response.Body
+		end
+
+		env.decompile = function(...)
+			local preferFallback = Settings and Settings.Decompiler and Settings.Decompiler.PreferDecompilerFallback
+			local builtInDecompiler = (type(decompile) == "function" and decompile) or nil
+			local fallbackMode = (Settings and Settings.Decompiler and Settings.Decompiler.DecompilerFallback) or "Konstant"
+
+			if builtInDecompiler and not preferFallback then
+				return builtInDecompiler(...)
+			end
+
+			if type(getscriptbytecode) == "function" then
+				if fallbackMode == "Shiny" then
+					local ok, result = pcall(shinyDecompile, ...)
+					if ok and result then
+						return result
+					end
+				elseif fallbackMode == "AdvancedDecompiler" then
+					local adv = getAdvancedDecompiler()
+					if type(adv) == "function" then
+						local ok, result = pcall(adv, ...)
+						if ok and result then
+							return result
+						end
+					end
+				end
+
+				if fallbackDecompile then
+					return fallbackDecompile(...)
+				end
+			end
+
+			if builtInDecompiler then
+				return builtInDecompiler(...)
+			end
+		end
+
+		if ggv then
+			pcall(function()
+				ggv().decompile = env.decompile
+			end)
+		end
 
 		if identifyexecutor then
 			Main.Executor = identifyexecutor()
@@ -816,6 +991,13 @@ Main = (function()
 			serializedColor.G = val.G
 			serializedColor.B = val.B
 			return serializedColor
+		elseif typeof(val) == "Vector3" then
+			return {
+				__type = "Vector3",
+				X = val.X,
+				Y = val.Y,
+				Z = val.Z
+			}
 		else
 			return val
 		end
@@ -823,7 +1005,9 @@ Main = (function()
 
 	local function deserialize(val)
 		if typeof(val) == "table" then
-			if val.R and val.G and val.B then
+			if val.__type == "Vector3" then
+				return Vector3.new(val.X or 0, val.Y or 0, val.Z or 0)
+			elseif val.R and val.G and val.B then
 				return Color3.new(val.R, val.G, val.B)
 			else
 				return val
@@ -855,6 +1039,9 @@ Main = (function()
 		if s and json then
 			return json
 		end
+		if not s then
+			warn("[Dex] Failed to encode settings JSON: "..tostring(json))
+		end
 	end
 
 	Main.SaveUserSettings = function()
@@ -885,7 +1072,22 @@ Main = (function()
 
 	Main.SaveThemeSettings = function()
 		if not (env and env.writefile) then return end
-		local ok, encoded = pcall(Main.ExportSettings)
+		local function recur(tbl)
+			local newTbl = {}
+			for i, v in pairs(tbl) do
+				if typeof(v) == "table" then
+					newTbl[i] = recur(v)
+				else
+					newTbl[i] = serialize(v)
+				end
+			end
+			return newTbl
+		end
+
+		local themePayload = recur({
+			Theme = Settings and Settings.Theme or {}
+		})
+		local ok, encoded = pcall(service.HttpService.JSONEncode, service.HttpService, themePayload)
 		if ok and encoded then
 			pcall(env.writefile, Main.ThemeFile, encoded)
 		end
@@ -923,6 +1125,25 @@ Main = (function()
 		end
 	end
 
+	Main.SaveCurrentSettings = function()
+		if not (env and env.writefile) then
+			return false
+		end
+		local ok, encoded = pcall(Main.ExportSettings)
+		if ok and encoded then
+			local wrote = pcall(env.writefile, Main.SettingsFile, encoded)
+			if not wrote then
+				warn("[Dex] Failed writing settings file: "..tostring(Main.SettingsFile))
+			end
+			return wrote
+		elseif not ok then
+			warn("[Dex] SaveCurrentSettings failed: "..tostring(encoded))
+		else
+			warn("[Dex] SaveCurrentSettings failed: encoded settings were empty")
+		end
+		return false
+	end
+
 
 	--warn(Main.ExportSettings())
 
@@ -933,18 +1154,116 @@ Main = (function()
 			Settings.Explorer = explorer
 		end
 
-		local defaultOffset = DefaultSettings
-			and DefaultSettings.Explorer
-			and DefaultSettings.Explorer.TeleportToOffset
-			or Vector3.new()
+		local defaultExplorer = DefaultSettings and DefaultSettings.Explorer or {}
+		local defaultOffset = defaultExplorer.TeleportToOffset or Vector3.new()
 
 		if typeof(explorer.TeleportToOffset) ~= "Vector3" then
 			explorer.TeleportToOffset = defaultOffset
 		end
+		if type(explorer.Sorting) ~= "boolean" then
+			explorer.Sorting = defaultExplorer.Sorting
+		end
+		if type(explorer.ClickToRename) ~= "boolean" then
+			explorer.ClickToRename = defaultExplorer.ClickToRename
+		end
+		if type(explorer.AutoUpdateSearch) ~= "boolean" then
+			explorer.AutoUpdateSearch = defaultExplorer.AutoUpdateSearch
+		end
+		if type(explorer.PartSelectionBox) ~= "boolean" then
+			explorer.PartSelectionBox = defaultExplorer.PartSelectionBox
+		end
+		if type(explorer.GuiSelectionBox) ~= "boolean" then
+			explorer.GuiSelectionBox = defaultExplorer.GuiSelectionBox
+		end
+		if type(explorer.CopyPathUseGetChildren) ~= "boolean" then
+			explorer.CopyPathUseGetChildren = defaultExplorer.CopyPathUseGetChildren
+		end
+		if type(explorer.UseNameWidth) ~= "boolean" then
+			explorer.UseNameWidth = defaultExplorer.UseNameWidth
+		end
+		local autoUpdateMode = math.floor(tonumber(explorer.AutoUpdateMode) or defaultExplorer.AutoUpdateMode or 0)
+		explorer.AutoUpdateMode = math.clamp(autoUpdateMode, 0, 3)
+
+		if type(Settings.Properties) ~= "table" then
+			Settings.Properties = {}
+		end
+		local properties = Settings.Properties
+		local defaultProperties = DefaultSettings and DefaultSettings.Properties or {}
+		if type(properties.ShowDeprecated) ~= "boolean" then
+			properties.ShowDeprecated = defaultProperties.ShowDeprecated
+		end
+		if type(properties.ShowHidden) ~= "boolean" then
+			properties.ShowHidden = defaultProperties.ShowHidden
+		end
+		if type(properties.ClearOnFocus) ~= "boolean" then
+			properties.ClearOnFocus = defaultProperties.ClearOnFocus
+		end
+		if type(properties.LoadstringInput) ~= "boolean" then
+			properties.LoadstringInput = defaultProperties.LoadstringInput
+		end
+		if type(properties.ShowAttributes) ~= "boolean" then
+			properties.ShowAttributes = defaultProperties.ShowAttributes
+		end
+		local maxConflict = math.floor(tonumber(properties.MaxConflictCheck) or defaultProperties.MaxConflictCheck or 50)
+		properties.MaxConflictCheck = math.clamp(maxConflict, 1, 5000)
+		local maxAttrs = math.floor(tonumber(properties.MaxAttributes) or defaultProperties.MaxAttributes or 50)
+		properties.MaxAttributes = math.clamp(maxAttrs, 0, 1000)
+		local roundNum = math.floor(tonumber(properties.NumberRounding) or defaultProperties.NumberRounding or 3)
+		properties.NumberRounding = math.clamp(roundNum, 0, 10)
+		local scaleType = tonumber(properties.ScaleType)
+		if scaleType ~= 0 and scaleType ~= 1 then
+			scaleType = defaultProperties.ScaleType
+		end
+		properties.ScaleType = (scaleType == 1) and 1 or 0
+
+		if type(Settings.Window) ~= "table" then
+			Settings.Window = {}
+		end
+		if type(Settings.Window.TitleOnMiddle) ~= "boolean" then
+			Settings.Window.TitleOnMiddle = DefaultSettings.Window.TitleOnMiddle
+		end
+		local transp = tonumber(Settings.Window.Transparency)
+		if transp == nil then
+			transp = DefaultSettings.Window.Transparency
+		end
+		Settings.Window.Transparency = math.clamp(transp, 0, 1)
+
+		if type(Settings.ScriptViewer) ~= "table" then
+			Settings.ScriptViewer = {}
+		end
+		if type(Settings.ScriptViewer.ShowMoreInfo) ~= "boolean" then
+			Settings.ScriptViewer.ShowMoreInfo = DefaultSettings.ScriptViewer.ShowMoreInfo
+		end
+
+		if type(Settings.RemoteBlockWriteAttribute) ~= "boolean" then
+			Settings.RemoteBlockWriteAttribute = DefaultSettings.RemoteBlockWriteAttribute
+		end
+
+		if type(Settings.Decompiler) ~= "table" then
+			Settings.Decompiler = {}
+		end
+		local fallbackMode = Settings.Decompiler.DecompilerFallback
+		if fallbackMode ~= "Konstant" and fallbackMode ~= "Shiny" and fallbackMode ~= "AdvancedDecompiler" then
+			Settings.Decompiler.DecompilerFallback = DefaultSettings.Decompiler.DecompilerFallback
+		end
+		if type(Settings.Decompiler.PreferDecompilerFallback) ~= "boolean" then
+			Settings.Decompiler.PreferDecompilerFallback = DefaultSettings.Decompiler.PreferDecompilerFallback
+		end
+		local shinyPort = tonumber(Settings.Decompiler.ShinyDecompilerPort)
+		if shinyPort == nil then
+			shinyPort = DefaultSettings.Decompiler.ShinyDecompilerPort
+		end
+		Settings.Decompiler.ShinyDecompilerPort = math.clamp(math.floor(shinyPort), 1, 65535)
+		if Settings.ClassIcon == "Old" then
+			Settings.ClassIcon = "NewDark"
+		end
+		if Settings.ClassIcon ~= "NewDark" and Settings.ClassIcon ~= "Vanilla3" then
+			Settings.ClassIcon = DefaultSettings.ClassIcon
+		end
 	end
 
 	Main.LoadSettings = function()
-		local s, data = pcall(env.readfile or error, "DexSettings.json")
+		local s, data = pcall(env.readfile or error, Main.SettingsFile)
 		if s and data and data ~= "" then
 			local s, decoded = pcall(service.HttpService.JSONDecode, service.HttpService, data)
 			if s and decoded then
@@ -1727,6 +2046,8 @@ Main = (function()
 		Main.MainGuiOpen = false
 		Main.Apps = {}
 		Main.AppControls = {}
+		Main.Plugins = {}
+		Main.MenuApps = {}
 
 		Explorer = nil
 		Properties = nil
@@ -1734,12 +2055,19 @@ Main = (function()
 		Console = nil
 		SaveInstance = nil
 		ModelViewer = nil
+		SettingsWindow = nil
 		ThemeManager = nil
 		Notebook = nil
 
 		if _g and _g.__DEXPP then
 			_g.__DEXPP = nil
 		end
+	end
+
+	Main.Reinit = function()
+		Main.Exit()
+		task.wait()
+		Main.Init()
 	end
 
 	Main.CreateMainGui = function()
@@ -1762,7 +2090,7 @@ Main = (function()
 			{16,"UIGridLayout",{CellSize=UDim2.new(0,66,0,74),Parent={15},SortOrder=2,}},
 			{17,"Frame",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Name="App",Parent={1},Size=UDim2.new(0,100,0,100),Visible=false,}},
 			{18,"TextButton",{AutoButtonColor=false,BackgroundColor3=Color3.new(0.2352941185236,0.2352941185236,0.2352941185236),BorderSizePixel=0,Font=3,Name="Main",Parent={17},Size=UDim2.new(1,0,0,60),Text="",TextColor3=Color3.new(0,0,0),TextSize=14,}},
-			{19,"ImageLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Image=Main.ResolveAsset("rbxassetid://6579106223"),ImageRectSize=Vector2.new(32,32),Name="Icon",Parent={18},Position=UDim2.new(0.5,-16,0,4),ScaleType=4,Size=UDim2.new(0,32,0,32),}},
+			{19,"ImageLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Image=Main.ResolveAsset("rbxassetid://129589545519436"),ImageRectSize=Vector2.new(32,32),Name="Icon",Parent={18},Position=UDim2.new(0.5,-16,0,4),ScaleType=4,Size=UDim2.new(0,32,0,32),}},
 			{20,"TextLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,BorderSizePixel=0,Font=3,Name="AppName",Parent={18},Position=UDim2.new(0,2,0,38),Size=UDim2.new(1,-4,1,-40),Text="Explorer",TextColor3=Color3.new(1,1,1),TextSize=14,TextTransparency=0.10000000149012,TextTruncate=1,TextWrapped=true,TextYAlignment=0,}},
 			{21,"Frame",{BackgroundColor3=Color3.new(0,0.66666668653488,1),BorderSizePixel=0,Name="Highlight",Parent={18},Position=UDim2.new(0,0,1,-2),Size=UDim2.new(1,0,0,2),}},
 		})
@@ -1795,7 +2123,18 @@ Main = (function()
 
 		local infoDexIntro, isInfoCD
 
-		openButton.MainFrame.BottomFrame.Settings.Visible = false -- hide it for now
+		if SettingsWindow and SettingsWindow.Window then
+			openButton.MainFrame.BottomFrame.Settings.Visible = true
+			openButton.MainFrame.BottomFrame.Settings.MouseButton1Click:Connect(function()
+				if not SettingsWindow.Window.Closed then
+					SettingsWindow.Window:Hide()
+				else
+					SettingsWindow.Window:Show()
+				end
+			end)
+		else
+			openButton.MainFrame.BottomFrame.Settings.Visible = false
+		end
 
 		openButton.MainFrame.BottomFrame.Information.MouseButton1Click:Connect(function()
 			local duration = 1
@@ -1874,6 +2213,20 @@ Main = (function()
 			Main.CreateApp({Name = "Theme Manager", IconMap = Explorer.LegacyClassIcons, Icon = 83, Window = ThemeManager.Window})
 		end
 
+		for _, loadedPlugin in pairs(Main.Plugins) do
+			if loadedPlugin and loadedPlugin.Window then
+				local pluginData = loadedPlugin.PluginData or {}
+				local windowTitle = loadedPlugin.Window.GuiElems and loadedPlugin.Window.GuiElems.Title and loadedPlugin.Window.GuiElems.Title.Text
+				local friendlyName = pluginData.FriendlyName or pluginData.Name or windowTitle or "Plugin"
+				Main.CreateApp({
+					Name = friendlyName,
+					IconMap = (Explorer and Explorer.ClassIcons) or (Explorer and Explorer.LegacyClassIcons),
+					Icon = "Attachment",
+					Window = loadedPlugin.Window
+				})
+			end
+		end
+
 		Main.CreateApp({Name = "Exit Dex", IconMap = Explorer.LegacyClassIcons, Icon = 37, OnClick = function(isOpen)
 			if isOpen then
 				Main.Exit()
@@ -1910,10 +2263,15 @@ Main = (function()
 	end
 
 	Main.Init = function()
+		Main.MenuApps = {}
+		Main.Apps = {}
+		Main.AppControls = {}
+		Main.Plugins = {}
+
 		Main.Elevated = pcall(function() local a = game:GetService("CoreGui"):GetFullName() end)
 
-		if writefile and isfile and not isfile("DexSettings.json") then
-			writefile("DexSettings.json", Main.ExportSettings())
+		if writefile and isfile and Main.SettingsFile and not isfile(Main.SettingsFile) then
+			writefile(Main.SettingsFile, Main.ExportSettings())
 		end
 
 		Main.InitEnv()
@@ -1930,7 +2288,7 @@ Main = (function()
 
 		if (env and (env.getcustomasset or getcustomasset or getsynasset)) then
 			intro.SetProgress("Loading Icons",0.3)
-			Main.EnsureAllIcons()
+			Main.EnsureAllIcons(true)
 		end
 
 		-- Init icons
@@ -1943,7 +2301,7 @@ Main = (function()
 			SelectChildren = 28,       SelectChildren_Disabled = 29,    InsertObject = 30,     ViewScript = 31,        AddStar = 32,         RemoveStar = 33,          Script_Disabled = 34,
 			LocalScript_Disabled = 35, Play = 36,                       Pause = 37,            Rename_Disabled = 38,   Empty = 1000
 		})
-		Main.LargeIcons = Lib.IconMap.new(Main.ResolveAsset("rbxassetid://6579106223"),256,256,32,32)
+		Main.LargeIcons = Lib.IconMap.new(Main.ResolveAsset("rbxassetid://129589545519436"),256,256,32,32)
 		Main.LargeIcons:SetDict({
 			Explorer = 0, Properties = 1, Script_Viewer = 2, Watcher = 3, Output = 4, Paper = 5, Book = 6
 		})
@@ -2018,8 +2376,50 @@ Main = (function()
 		Console.Init()
 		SaveInstance.Init()
 		ModelViewer.Init()
+		if SettingsWindow and SettingsWindow.Init then
+			SettingsWindow.Init()
+		end
 		if ThemeManager and ThemeManager.Init then
 			ThemeManager.Init()
+		end
+
+		local listfilesFn = (env and env.listfiles) or listfiles
+		if env and env.readfile and type(listfilesFn) == "function" then
+			local okList, pluginFiles = pcall(listfilesFn, "DexPlusPlus/plugins")
+			if okList and type(pluginFiles) == "table" and #pluginFiles > 0 then
+				intro.SetProgress("Loading Plugin Files",0.92)
+				for _, pluginPath in pairs(pluginFiles) do
+					local pathStr = tostring(pluginPath)
+					local lowerPath = string.lower(pathStr)
+					if lowerPath:sub(-4) == ".lua" or lowerPath:sub(-5) == ".luau" then
+						local moduleData, loadErr = Main.LoadPluginFile(pathStr)
+						if moduleData then
+							moduleData.PluginData = moduleData.PluginData or {}
+							local titleText = moduleData.Window and moduleData.Window.GuiElems and moduleData.Window.GuiElems.Title and moduleData.Window.GuiElems.Title.Text
+							local pluginFriendlyName = moduleData.PluginData.FriendlyName or titleText or "Unnamed Plugin"
+							local pluginName = moduleData.PluginData.Name or tostring(pluginFriendlyName):gsub("%s+", "") or "unnamedPlugin"
+
+							intro.SetProgress("Initializing Plugin: "..pluginFriendlyName,0.95)
+
+							moduleData.PluginData.Name = pluginName
+							moduleData.PluginData.FriendlyName = pluginFriendlyName
+
+							if type(moduleData.Init) == "function" then
+								local okInit, initErr = pcall(moduleData.Init)
+								if not okInit then
+									warn("[Dex] Failed initializing plugin '"..pluginFriendlyName.."': "..tostring(initErr))
+								else
+									table.insert(Main.Plugins, moduleData)
+								end
+							else
+								table.insert(Main.Plugins, moduleData)
+							end
+						else
+							warn("[Dex] Failed loading plugin '"..pathStr.."': "..tostring(loadErr))
+						end
+					end
+				end
+			end
 		end
 
 		--SecretServicePanel.Init()

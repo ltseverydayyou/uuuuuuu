@@ -167,6 +167,21 @@ end
 		if dumpbtn then dumpbtn.Visible = false end
 	end
 
+	ScriptViewer.SetTextSize = function(size)
+		local n = math.floor(tonumber(size) or 16)
+		n = math.clamp(n, 1, 64)
+		if textSizeValue then
+			textSizeValue.Value = n
+		end
+		if Main then
+			Main.UserSettings = Main.UserSettings or {}
+			Main.UserSettings.ScriptViewerTextSize = n
+			if Main.SaveUserSettings then
+				Main.SaveUserSettings()
+			end
+		end
+	end
+
 		codeFrame = Lib.CodeFrame.new()
 		codeFrame.Frame.Position = UDim2.new(0,0,0,20)
 		codeFrame.Frame.Size = UDim2.new(1,0,1,-40)

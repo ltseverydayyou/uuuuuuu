@@ -308,6 +308,12 @@ local function main()
 		Settings.Explorer.Sorting = val
 	end
 
+	Explorer.SetAutoUpdateSearch = function(val)
+		local enabled = (val ~= false)
+		autoUpdateSearch = enabled
+		Settings.Explorer.AutoUpdateSearch = enabled
+	end
+
 	Explorer.UpdateView = function()
 		local maxNodes = math.ceil(treeFrame.AbsoluteSize.Y / 20)
 		local maxX = treeFrame.AbsoluteSize.X

@@ -200,9 +200,13 @@ local function main()
 			pcall(Main.ValidateSettings)
 		end
 
+		local saved = false
 		if Main and Main.SaveCurrentSettings then
-			pcall(Main.SaveCurrentSettings)
-			return
+			local okSave, result = pcall(Main.SaveCurrentSettings)
+			saved = okSave and result == true
+			if saved then
+				return true
+			end
 		end
 
 		local writeFn = (env and env.writefile) or writefile
@@ -210,7 +214,26 @@ local function main()
 			local ok, encoded = pcall(Main.ExportSettings)
 			if ok and encoded then
 				local settingsPath = (Main and Main.SettingsFile) or "DexPlusSettings.json"
-				pcall(writeFn, settingsPath, encoded)
+				local okWrite = pcall(writeFn, settingsPath, encoded)
+				saved = okWrite
+			end
+		end
+
+		return saved
+	end
+
+	local function persistUserSettings()
+		if Main and Main.SaveUserSettings then
+			pcall(Main.SaveUserSettings)
+			return
+		end
+
+		local writeFn = (env and env.writefile) or writefile
+		if type(writeFn) == "function" and Main and Main.UserSettings and service and service.HttpService then
+			local ok, encoded = pcall(service.HttpService.JSONEncode, service.HttpService, Main.UserSettings)
+			if ok and encoded then
+				local fileName = (Main and Main.UserSettingsFile) or "DexPlusUserSettings.json"
+				pcall(writeFn, fileName, encoded)
 			end
 		end
 	end
@@ -309,6 +332,33 @@ local function main()
 		Padding.PaddingLeft = UDim.new(0, 10)
 		Padding.PaddingRight = UDim.new(0, 10)
 		Padding.PaddingTop = UDim.new(0, 5)
+
+		local function applyExplorerRefresh(alsoReconnect)
+			if not Explorer then return end
+			if alsoReconnect and Explorer.SetupConnections then
+				pcall(Explorer.SetupConnections)
+			end
+			if Explorer.Update then
+				pcall(Explorer.Update)
+			end
+			if Explorer.Refresh then
+				pcall(Explorer.Refresh)
+			end
+			if Explorer.UpdateView then
+				pcall(Explorer.UpdateView)
+			end
+		end
+
+		local function applyPropertiesRefresh(rebuildList)
+			if not Properties then return end
+			if rebuildList and Properties.ShowExplorerProps then
+				pcall(Properties.ShowExplorerProps)
+				return
+			end
+			if Properties.Refresh then
+				pcall(Properties.Refresh)
+			end
+		end
 		
 		-- Options
 		
@@ -346,12 +396,32 @@ local function main()
 			Settings.ClassIcon = classIcon.Selected
 			persistSettings()
 		end)
+		AddText("Changing class icons requires restart.")
 		
 		AddSeperator("Explorer")
+
+		local sorting = AddCheckbox("Sorting", Settings.Explorer.Sorting)
+		sorting.OnInput:Connect(function()
+			Settings.Explorer.Sorting = sorting.Toggled
+			if Explorer and Explorer.SetSortingEnabled then
+				pcall(Explorer.SetSortingEnabled, sorting.Toggled)
+			end
+			persistSettings()
+			applyExplorerRefresh()
+		end)
 		
 		local clickRename = AddCheckbox("Click to Rename", Settings.Explorer.ClickToRename)
 		clickRename.OnInput:Connect(function()
 			Settings.Explorer.ClickToRename = clickRename.Toggled
+			persistSettings()
+		end)
+
+		local autoUpdateSearch = AddCheckbox("Auto Update Search", Settings.Explorer.AutoUpdateSearch)
+		autoUpdateSearch.OnInput:Connect(function()
+			Settings.Explorer.AutoUpdateSearch = autoUpdateSearch.Toggled
+			if Explorer and Explorer.SetAutoUpdateSearch then
+				pcall(Explorer.SetAutoUpdateSearch, autoUpdateSearch.Toggled)
+			end
 			persistSettings()
 		end)
 		
@@ -359,6 +429,18 @@ local function main()
 		partSelectionBox.OnInput:Connect(function()
 			Settings.Explorer.PartSelectionBox = partSelectionBox.Toggled
 			persistSettings()
+			if Explorer and Explorer.UpdateSelectionVisuals then
+				pcall(Explorer.UpdateSelectionVisuals)
+			end
+		end)
+
+		local guiSelectionBox = AddCheckbox("GUI Selection Box", Settings.Explorer.GuiSelectionBox)
+		guiSelectionBox.OnInput:Connect(function()
+			Settings.Explorer.GuiSelectionBox = guiSelectionBox.Toggled
+			persistSettings()
+			if Explorer and Explorer.UpdateSelectionVisuals then
+				pcall(Explorer.UpdateSelectionVisuals)
+			end
 		end)
 		
 		local copypathUseChildren = AddCheckbox("Use GetChildren to Copy Path", Settings.Explorer.CopyPathUseGetChildren)
@@ -366,6 +448,49 @@ local function main()
 			Settings.Explorer.CopyPathUseGetChildren = copypathUseChildren.Toggled
 			persistSettings()
 		end)
+
+		local useNameWidth = AddCheckbox("Use Name Width", Settings.Explorer.UseNameWidth)
+		useNameWidth.OnInput:Connect(function()
+			Settings.Explorer.UseNameWidth = useNameWidth.Toggled
+			persistSettings()
+			applyExplorerRefresh(true)
+		end)
+
+		local writeRemoteAttr = AddCheckbox("Write Remote Block Attr", Settings.RemoteBlockWriteAttribute)
+		writeRemoteAttr.OnInput:Connect(function()
+			Settings.RemoteBlockWriteAttribute = writeRemoteAttr.Toggled
+			persistSettings()
+		end)
+
+		local function bindOffsetTextbox(label, axis)
+			local curOffset = Settings.Explorer.TeleportToOffset
+			local curValue = (axis == "X" and curOffset.X) or (axis == "Y" and curOffset.Y) or curOffset.Z
+			local tb = AddTextbox(label, tostring(curValue), 70)
+			tb.FocusLost:Connect(function()
+				local n = tonumber(tb.Text)
+				if n == nil then
+					local offset = Settings.Explorer.TeleportToOffset
+					local axisValue = (axis == "X" and offset.X) or (axis == "Y" and offset.Y) or offset.Z
+					tb.Text = tostring(axisValue)
+					return
+				end
+				local offset = Settings.Explorer.TeleportToOffset
+				local x, y, z = offset.X, offset.Y, offset.Z
+				if axis == "X" then
+					x = n
+				elseif axis == "Y" then
+					y = n
+				elseif axis == "Z" then
+					z = n
+				end
+				Settings.Explorer.TeleportToOffset = Vector3.new(x, y, z)
+				tb.Text = tostring(n)
+				persistSettings()
+			end)
+		end
+		bindOffsetTextbox("Teleport Offset X", "X")
+		bindOffsetTextbox("Teleport Offset Y", "Y")
+		bindOffsetTextbox("Teleport Offset Z", "Z")
 		
 		AddSeperator("Properties")
 
@@ -373,23 +498,83 @@ local function main()
 		showDeprecated.OnInput:Connect(function()
 			Settings.Properties.ShowDeprecated = showDeprecated.Toggled
 			persistSettings()
+			applyPropertiesRefresh(true)
 		end)
 		
 		local showHidden = AddCheckbox("Show Hidden", Settings.Properties.ShowHidden)
 		showHidden.OnInput:Connect(function()
 			Settings.Properties.ShowHidden = showHidden.Toggled
 			persistSettings()
+			applyPropertiesRefresh(true)
 		end)
 		
 		local showAttributes = AddCheckbox("Show Attributes", Settings.Properties.ShowAttributes)
 		showAttributes.OnInput:Connect(function()
 			Settings.Properties.ShowAttributes = showAttributes.Toggled
 			persistSettings()
+			applyPropertiesRefresh(true)
 		end)
+
 		local clearOnFocus = AddCheckbox("Clear On Focus", Settings.Properties.ClearOnFocus)
 		clearOnFocus.OnInput:Connect(function()
 			Settings.Properties.ClearOnFocus = clearOnFocus.Toggled
 			persistSettings()
+		end)
+
+		local loadstringInput = AddCheckbox("Loadstring Input", Settings.Properties.LoadstringInput)
+		loadstringInput.OnInput:Connect(function()
+			Settings.Properties.LoadstringInput = loadstringInput.Toggled
+			persistSettings()
+		end)
+
+		local maxConflictCheck = AddTextbox("Max Conflict Check", tostring(Settings.Properties.MaxConflictCheck), 70)
+		maxConflictCheck.FocusLost:Connect(function()
+			local n = tonumber(maxConflictCheck.Text)
+			if not n then
+				maxConflictCheck.Text = tostring(Settings.Properties.MaxConflictCheck)
+				return
+			end
+			n = math.clamp(math.floor(n), 1, 5000)
+			Settings.Properties.MaxConflictCheck = n
+			maxConflictCheck.Text = tostring(n)
+			persistSettings()
+			applyPropertiesRefresh(true)
+		end)
+
+		local maxAttributes = AddTextbox("Max Attributes", tostring(Settings.Properties.MaxAttributes), 70)
+		maxAttributes.FocusLost:Connect(function()
+			local n = tonumber(maxAttributes.Text)
+			if not n then
+				maxAttributes.Text = tostring(Settings.Properties.MaxAttributes)
+				return
+			end
+			n = math.clamp(math.floor(n), 0, 1000)
+			Settings.Properties.MaxAttributes = n
+			maxAttributes.Text = tostring(n)
+			persistSettings()
+			applyPropertiesRefresh(true)
+		end)
+
+		local numberRounding = AddTextbox("Number Rounding", tostring(Settings.Properties.NumberRounding), 70)
+		numberRounding.FocusLost:Connect(function()
+			local n = tonumber(numberRounding.Text)
+			if not n then
+				numberRounding.Text = tostring(Settings.Properties.NumberRounding)
+				return
+			end
+			n = math.clamp(math.floor(n), 0, 10)
+			Settings.Properties.NumberRounding = n
+			numberRounding.Text = tostring(n)
+			persistSettings()
+			applyPropertiesRefresh()
+		end)
+
+		local scaleTypeLabel = (tonumber(Settings.Properties.ScaleType) == 1) and "Equal Halves" or "Full Name"
+		local scaleType = AddDropdown("Scale Type", {"Full Name", "Equal Halves"}, scaleTypeLabel, false, 100)
+		scaleType.OnSelect:Connect(function()
+			Settings.Properties.ScaleType = (scaleType.Selected == "Equal Halves") and 1 or 0
+			persistSettings()
+			applyPropertiesRefresh()
 		end)
 		
 		AddSeperator("Script Viewer")
@@ -399,6 +584,50 @@ local function main()
 			Settings.ScriptViewer.ShowMoreInfo = showMoreInfo.Toggled
 			persistSettings()
 		end)
+
+		local defaultTextSize = (Main and Main.UserSettings and Main.UserSettings.ScriptViewerTextSize) or 16
+		local scriptTextSize = AddTextbox("Editor Text Size", tostring(defaultTextSize), 60)
+		scriptTextSize.FocusLost:Connect(function()
+			local n = tonumber(scriptTextSize.Text)
+			if not n then
+				n = (Main and Main.UserSettings and Main.UserSettings.ScriptViewerTextSize) or 16
+				scriptTextSize.Text = tostring(n)
+				return
+			end
+			n = math.clamp(math.floor(n), 1, 64)
+			Main.UserSettings = Main.UserSettings or {}
+			Main.UserSettings.ScriptViewerTextSize = n
+			scriptTextSize.Text = tostring(n)
+			if ScriptViewer and ScriptViewer.SetTextSize then
+				pcall(ScriptViewer.SetTextSize, n)
+			else
+				persistUserSettings()
+			end
+		end)
+
+		AddSeperator("Console")
+		Main.UserSettings = Main.UserSettings or {}
+		Main.UserSettings.ConsoleFilters = Main.UserSettings.ConsoleFilters or {
+			Output = true,
+			Info = true,
+			Warn = true,
+			Error = true,
+			Listen = true,
+		}
+
+		local function bindConsoleFilter(filterName, label)
+			local checkbox = AddCheckbox(label, Main.UserSettings.ConsoleFilters[filterName] ~= false)
+			checkbox.OnInput:Connect(function()
+				Main.UserSettings.ConsoleFilters[filterName] = checkbox.Toggled
+				persistUserSettings()
+			end)
+		end
+		bindConsoleFilter("Output", "Output Messages")
+		bindConsoleFilter("Info", "Info Messages")
+		bindConsoleFilter("Warn", "Warning Messages")
+		bindConsoleFilter("Error", "Error Messages")
+		bindConsoleFilter("Listen", "Remote Listener")
+		AddText("Console filters apply fully after reloading Dex.")
 		
 		AddSeperator("Decompiler")
 		AddText("If executor does not support decompile, it will use the fallback option.")
@@ -414,13 +643,14 @@ local function main()
 		ShinyPort.FocusLost:Connect(function()
 			local portinput = tonumber(ShinyPort.Text)
 			if not portinput then
-				ShinyPort.Text = Settings.Decompiler.ShinyDecompilerPort
+				ShinyPort.Text = tostring(Settings.Decompiler.ShinyDecompilerPort)
 			else
 				if portinput > 0 and portinput <= 65535 then
-					Settings.Decompiler.ShinyDecompilerPort = portinput
+					Settings.Decompiler.ShinyDecompilerPort = math.floor(portinput)
+					ShinyPort.Text = tostring(Settings.Decompiler.ShinyDecompilerPort)
 					persistSettings()
 				else
-					ShinyPort.Text = Settings.Decompiler.ShinyDecompilerPort
+					ShinyPort.Text = tostring(Settings.Decompiler.ShinyDecompilerPort)
 				end
 			end
 		end)
@@ -453,7 +683,13 @@ local function main()
 		reloadButton.MouseButton1Click:Connect(function()
 			window:SetTitle("Settings - Saving")
 
-			persistSettings()
+			local saved = persistSettings()
+			if not saved then
+				window:SetTitle("Settings - Save Failed")
+				task.wait(2)
+				window:SetTitle("Settings")
+				return
+			end
 			
 			window:SetTitle("Settings - Saved")
 			SettingsWindow.ReloadPrompt()

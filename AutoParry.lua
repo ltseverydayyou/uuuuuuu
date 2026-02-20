@@ -1,9 +1,49 @@
 local Players = game:GetService("Players");
 local RunService = game:GetService("RunService");
 local UserInputService = game:GetService("UserInputService");
-local VirtualInputManager = game:GetService("VirtualInputManager");
 local Stats = game:GetService("Stats");
 local GuiService = game:GetService("GuiService");
+local VK_F = 0x46;
+local VK_RALT = 0xA5;
+local function getExec()
+	if type(identifyexecutor) ~= "function" then
+		return nil;
+	end;
+	local ok, name = pcall(identifyexecutor);
+	if not ok or type(name) ~= "string" then
+		return nil;
+	end;
+	return string.lower(name);
+end;
+local execNm = getExec();
+local useVim = execNm == "solara" or execNm == "xeno";
+local vim;
+local function fireVim()
+	if not vim then
+		vim = game:GetService("VirtualInputManager");
+	end;
+	vim:SendKeyEvent(true, "F", false, game);
+	vim:SendKeyEvent(false, "F", false, game);
+end;
+local function testKeys()
+	if type(keypress) ~= "function" or type(keyrelease) ~= "function" then
+		return false;
+	end;
+	local okD, retD = pcall(keypress, VK_RALT);
+	local okU, retU = pcall(keyrelease, VK_RALT);
+	return okD and okU and retD == true and retU == true;
+end;
+local useKeys = (not useVim) and testKeys();
+local function sendFKey()
+	if useKeys then
+		local okD = pcall(keypress, VK_F);
+		local okU = pcall(keyrelease, VK_F);
+		if okD and okU then
+			return;
+		end;
+	end;
+	fireVim();
+end;
 local IsOnMobile = (function()
 	local platform = UserInputService:GetPlatform();
 	if platform == Enum.Platform.IOS or platform == Enum.Platform.Android or platform == Enum.Platform.AndroidTV or platform == Enum.Platform.Chromecast or platform == Enum.Platform.MetaOS then
@@ -1196,8 +1236,7 @@ local function DoParry()
 	if btn and pressBtn(btn) then
 		return;
 	end;
-	VirtualInputManager:SendKeyEvent(true, "F", false, game);
-	VirtualInputManager:SendKeyEvent(false, "F", false, game);
+	sendFKey();
 end;
 local function queueParry(isSpam, hasTarget)
 	if not apEnabled and (not isSpam) then

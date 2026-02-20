@@ -2234,7 +2234,7 @@ return search]==]
 
 		Lib.ViewportTextBox.convert(searchBox)
 
-		(searchBox:GetPropertyChangedSignal("Text")):Connect(function()
+		searchBox:GetPropertyChangedSignal("Text"):Connect(function()
 			if autoUpdateSearch then
 				Explorer.DoSearch(searchBox.Text)
 			end

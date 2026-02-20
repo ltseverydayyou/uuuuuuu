@@ -517,6 +517,24 @@ Main = (function()
 	Main.LoadModule = function(name)
 		if Main.Elevated then -- If you don't have filesystem api then ur outta luck tbh
 			local control
+			local lastModuleLoadError
+			local function loadControlFromSource(source, sourceName)
+				if type(source) ~= "string" then
+					return nil, sourceName .. " source is not a string"
+				end
+				local chunk, compileErr = loadstring(source)
+				if type(chunk) ~= "function" then
+					return nil, sourceName .. " compile failed: " .. tostring(compileErr)
+				end
+				local okRun, result = pcall(chunk)
+				if not okRun then
+					return nil, sourceName .. " runtime failed: " .. tostring(result)
+				end
+				if type(result) ~= "table" then
+					return nil, sourceName .. " returned " .. type(result) .. " (expected table)"
+				end
+				return result
+			end
 
 			if EmbeddedModules then -- Offline Modules
 				control = EmbeddedModules[name]()
@@ -526,14 +544,29 @@ Main = (function()
 				local model = Main.DebugModel
 				if not model then model = oldgame:GetObjects(getsynasset("AfterModules.rbxm"))[1] end
 
-				control = loadstring(model.Modules[name].Source)()
+				local loadedControl, loadErr = loadControlFromSource(model.Modules[name].Source, "Debug model module "..name)
+				if loadedControl then
+					control = loadedControl
+				else
+					Main.Error(loadErr)
+				end
 				print("Locally Loaded Module",name,control)
 			else
 				local modulePathLocal = (Main.GitModulesPath or "Modules").."/"..name..".lua"
-				if env and env.readfile and env.isfile and pcall(env.isfile, modulePathLocal) then
+				local hasLocalModule = false
+				if env and env.isfile then
+					local okExists, exists = pcall(env.isfile, modulePathLocal)
+					hasLocalModule = okExists and exists
+				end
+				if env and env.readfile and hasLocalModule then
 					local okLocal, moduleStrLocal = pcall(env.readfile, modulePathLocal)
 					if okLocal and type(moduleStrLocal) == "string" then
-						control = loadstring(moduleStrLocal)()
+						local loadedControl, loadErr = loadControlFromSource(moduleStrLocal, "Local module "..modulePathLocal)
+						if loadedControl then
+							control = loadedControl
+						else
+							lastModuleLoadError = loadErr
+						end
 					end
 				end
 
@@ -541,10 +574,15 @@ Main = (function()
 					local modulePath = (Main.GitModulesPath or "Modules").."/"..name..".lua"
 					local okRemote, moduleStr = Main.FetchRepoFile(modulePath)
 					if okRemote and type(moduleStr) == "string" then
-						if env.writefile then
-							pcall(env.writefile, "DexPlusPlus/ModuleCache/"..name..".lua", moduleStr)
+						local loadedControl, loadErr = loadControlFromSource(moduleStr, "Remote module "..modulePath)
+						if loadedControl then
+							control = loadedControl
+							if env.writefile then
+								pcall(env.writefile, "DexPlusPlus/ModuleCache/"..name..".lua", moduleStr)
+							end
+						else
+							lastModuleLoadError = loadErr
 						end
-						control = loadstring(moduleStr)()
 					end
 				end
 
@@ -552,12 +590,18 @@ Main = (function()
 					local filePath = "DexPlusPlus/ModuleCache/"..name..".lua"
 					local readSuccess, readResult = pcall(env.readfile, filePath)
 					if readSuccess and type(readResult) == "string" then
-						control = loadstring(readResult)()
+						local loadedControl, loadErr = loadControlFromSource(readResult, "Cached module "..filePath)
+						if loadedControl then
+							control = loadedControl
+						else
+							lastModuleLoadError = loadErr
+						end
 					end
 				end
 
 				if not control then
-					Main.Error("Failed to get external module data of "..name.." (no local, remote, or cached copy)")
+					local suffix = lastModuleLoadError and (" | " .. tostring(lastModuleLoadError)) or ""
+					Main.Error("Failed to get external module data of "..name.." (no valid local, remote, or cached copy)" .. suffix)
 				end
 			end
 

@@ -15,8 +15,30 @@ local function getExec()
 	end;
 	return string.lower(name);
 end;
+local function getMode()
+	if type(getgenv) ~= "function" then
+		return nil;
+	end;
+	local ok, gv = pcall(getgenv);
+	if not ok or type(gv) ~= "table" then
+		return nil;
+	end;
+	local vz = gv.visualizer;
+	if type(vz) ~= "table" or type(vz.mode) ~= "string" then
+		return nil;
+	end;
+	local md = string.lower(vz.mode);
+	if md == "keyapi" then
+		return "keyapi";
+	end;
+	if md == "vim" then
+		return "vim";
+	end;
+	return nil;
+end;
 local execNm = getExec();
-local useVim = execNm == "solara" or execNm == "xeno";
+local inpMd = getMode();
+local useVim = inpMd == "vim" or (inpMd ~= "keyapi" and (execNm == "solara" or execNm == "xeno"));
 local vim;
 local function fireVim()
 	if not vim then
@@ -29,16 +51,34 @@ local function testKeys()
 	if type(keypress) ~= "function" or type(keyrelease) ~= "function" then
 		return false;
 	end;
-	local sawDn = false;
-	local sawUp = false;
+	if UserInputService:IsKeyDown(Enum.KeyCode.RightAlt) then
+		return false;
+	end;
+	local st = 0;
+	local bad = false;
 	local conA;
 	local conB;
+	local function stopTest()
+		if conA then
+			conA:Disconnect();
+			conA = nil;
+		end;
+		if conB then
+			conB:Disconnect();
+			conB = nil;
+		end;
+	end;
 	conA = UserInputService.InputBegan:Connect(function(io, gpe)
 		if gpe then
 			return;
 		end;
 		if io.KeyCode == Enum.KeyCode.RightAlt then
-			sawDn = true;
+			if st ~= 1 then
+				bad = true;
+				stopTest();
+				return;
+			end;
+			st = 2;
 		end;
 	end);
 	conB = UserInputService.InputEnded:Connect(function(io, gpe)
@@ -46,26 +86,40 @@ local function testKeys()
 			return;
 		end;
 		if io.KeyCode == Enum.KeyCode.RightAlt then
-			sawUp = true;
+			if st ~= 2 then
+				bad = true;
+				stopTest();
+				return;
+			end;
+			st = 3;
 		end;
 	end);
+	st = 1;
 	local okD = pcall(keypress, VK_RALT);
-	task.wait(0.03);
-	local okU = pcall(keyrelease, VK_RALT);
+	if not okD then
+		stopTest();
+		return false;
+	end;
 	local t0 = tick();
-	while tick() - t0 < 0.2 do
-		if sawDn and sawUp then
-			break;
-		end;
+	while (not bad) and st < 2 and tick() - t0 < 0.12 do
 		task.wait();
 	end;
-	if conA then
-		conA:Disconnect();
+	if bad or st < 2 then
+		pcall(keyrelease, VK_RALT);
+		stopTest();
+		return false;
 	end;
-	if conB then
-		conB:Disconnect();
+	local okU = pcall(keyrelease, VK_RALT);
+	if not okU then
+		stopTest();
+		return false;
 	end;
-	return okD and okU and sawDn and sawUp;
+	local t1 = tick();
+	while (not bad) and st < 3 and tick() - t1 < 0.12 do
+		task.wait();
+	end;
+	stopTest();
+	return (not bad) and st == 3;
 end;
 local useKeys = (not useVim) and testKeys();
 local function sendFKey()
@@ -1229,37 +1283,41 @@ local function pressBtn(btn)
 	if not (btn and btn:IsA("GuiButton") and btn.Parent) then
 		return false;
 	end;
-	local fired = false;
-	local ev;
-	ev = btn.MouseButton1Down;
-	if ev then
-		pcall(function()
-			firesignal(ev);
+	local function getSig(name)
+		local ok, sig = pcall(function()
+			return btn[name];
 		end);
-		fired = true;
+		if not ok or typeof(sig) ~= "RBXScriptSignal" then
+			return nil;
+		end;
+		return sig;
 	end;
-	ev = btn.MouseButton1Up;
-	if ev then
-		pcall(function()
-			firesignal(ev);
+	local function fireSig(sig)
+		if typeof(sig) ~= "RBXScriptSignal" then
+			return false;
+		end;
+		local hit = false;
+		local con = sig:Connect(function()
+			hit = true;
 		end);
-		fired = true;
-	end;
-	ev = btn.MouseButton1Click;
-	if ev then
-		pcall(function()
-			firesignal(ev);
+		local ok = pcall(function()
+			firesignal(sig);
 		end);
-		fired = true;
+		task.wait();
+		if con then
+			con:Disconnect();
+		end;
+		return ok and hit;
 	end;
-	ev = btn.Activated;
-	if ev then
-		pcall(function()
-			firesignal(ev);
-		end);
-		fired = true;
+	local sig = getSig("Activated");
+	if sig and fireSig(sig) then
+		return true;
 	end;
-	return fired;
+	sig = getSig("MouseButton1Click");
+	if sig and fireSig(sig) then
+		return true;
+	end;
+	return false;
 end;
 local function DoParry()
 	local rem, rargs = resolveRemote();

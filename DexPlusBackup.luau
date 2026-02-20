@@ -838,12 +838,25 @@ Main = (function()
 		end
 		env.request = (syn and syn.request) or (http and http.request) or http_request or (fluxus and fluxus.request) or request
 
+		local function getNativeDecompiler()
+			if type(decompile) == "function" then
+				return decompile
+			end
+			if type(decompile_script) == "function" then
+				return decompile_script
+			end
+			if type(decompilescript) == "function" then
+				return decompilescript
+			end
+			return nil
+		end
+
 		env.isdecompile = function()
-			return type(decompile) == "function" or type(getscriptbytecode) == "function"
+			return type(getNativeDecompiler()) == "function" or type(getscriptbytecode) == "function"
 		end
 
 		env.isdecompilefallback = function()
-			return type(decompile) ~= "function" and type(getscriptbytecode) == "function"
+			return type(getNativeDecompiler()) ~= "function" and type(getscriptbytecode) == "function"
 		end
 
 		local advancedDecCache
@@ -876,12 +889,18 @@ Main = (function()
 			local last_call = 0
 
 			local request = env.request
+			if type(request) ~= "function" then
+				return
+			end
 
 			local function call(konstantType, scriptPath)
 				local success, bytecode = pcall(env.getscriptbytecode, scriptPath)
 
 				if (not success) then
-					return `-- Failed to get script bytecode, error:\n\n--[[\n{bytecode}\n--]]`
+					return nil, "Failed to get script bytecode: "..tostring(bytecode)
+				end
+				if type(bytecode) ~= "string" or bytecode == "" then
+					return nil, "Script bytecode is empty."
 				end
 
 				local time_elapsed = os.clock() - last_call
@@ -900,11 +919,16 @@ Main = (function()
 
 				last_call = os.clock()
 
-				if (httpResult.StatusCode ~= 200) then
-					return `-- Error occurred while requesting Konstant API, error:\n\n--[[\n{httpResult.Body}\n--]]`
-				else
-					return httpResult.Body
+				if type(httpResult) ~= "table" then
+					return nil, "Invalid response from Konstant API request."
 				end
+				if (httpResult.StatusCode ~= 200) then
+					return nil, "Konstant API error ("..tostring(httpResult.StatusCode).."): "..tostring(httpResult.Body)
+				end
+				if type(httpResult.Body) ~= "string" or httpResult.Body == "" then
+					return nil, "Konstant API returned an empty response body."
+				end
+				return httpResult.Body
 			end
 
 			local function decompileFallback(scriptPath)
@@ -916,12 +940,18 @@ Main = (function()
 
 		local function shinyDecompile(scriptInstance)
 			if not env.request then
-				return "-- Shiny fallback unavailable: request function is missing."
+				return nil, "Shiny fallback unavailable: request function is missing."
 			end
 			if type(crypt) ~= "table" or type(crypt.base64encode) ~= "function" then
-				return "-- Shiny fallback unavailable: crypt.base64encode is missing."
+				return nil, "Shiny fallback unavailable: crypt.base64encode is missing."
 			end
-			local bytecode = env.getscriptbytecode(scriptInstance)
+			local okBytecode, bytecode = pcall(env.getscriptbytecode, scriptInstance)
+			if not okBytecode then
+				return nil, "Shiny fallback failed to get bytecode: "..tostring(bytecode)
+			end
+			if type(bytecode) ~= "string" or bytecode == "" then
+				return nil, "Shiny fallback bytecode is empty."
+			end
 			local encoded = crypt.base64encode(bytecode)
 			local port = (Settings and Settings.Decompiler and Settings.Decompiler.ShinyDecompilerPort) or DefaultSettings.Decompiler.ShinyDecompilerPort
 			local response = env.request({
@@ -929,42 +959,73 @@ Main = (function()
 				Method = "POST",
 				Body = encoded
 			})
-			return response and response.Body
+			if type(response) ~= "table" then
+				return nil, "Shiny fallback returned an invalid HTTP response."
+			end
+			if response.StatusCode and response.StatusCode ~= 200 then
+				return nil, "Shiny fallback HTTP error ("..tostring(response.StatusCode).."): "..tostring(response.Body)
+			end
+			if type(response.Body) ~= "string" or response.Body == "" then
+				return nil, "Shiny fallback returned an empty response body."
+			end
+			return response.Body
 		end
 
 		env.decompile = function(...)
 			local preferFallback = Settings and Settings.Decompiler and Settings.Decompiler.PreferDecompilerFallback
-			local builtInDecompiler = (type(decompile) == "function" and decompile) or nil
+			local builtInDecompiler = getNativeDecompiler()
 			local fallbackMode = (Settings and Settings.Decompiler and Settings.Decompiler.DecompilerFallback) or "Konstant"
+			local attempts = {}
+			local included = {}
+			local lastError
 
-			if builtInDecompiler and not preferFallback then
-				return builtInDecompiler(...)
+			local function queueAttempt(name, fn)
+				if type(fn) ~= "function" or included[name] then
+					return
+				end
+				included[name] = true
+				table.insert(attempts, {Name = name, Fn = fn})
 			end
 
-			if type(getscriptbytecode) == "function" then
-				if fallbackMode == "Shiny" then
-					local ok, result = pcall(shinyDecompile, ...)
-					if ok and result then
-						return result
-					end
-				elseif fallbackMode == "AdvancedDecompiler" then
-					local adv = getAdvancedDecompiler()
-					if type(adv) == "function" then
-						local ok, result = pcall(adv, ...)
-						if ok and result then
-							return result
+			local function queueFallback(mode)
+				if mode == "Konstant" then
+					queueAttempt("Konstant", fallbackDecompile)
+				elseif mode == "Shiny" then
+					queueAttempt("Shiny", shinyDecompile)
+				elseif mode == "AdvancedDecompiler" then
+					queueAttempt("AdvancedDecompiler", function(...)
+						local adv = getAdvancedDecompiler()
+						if type(adv) ~= "function" then
+							return nil, "AdvancedDecompiler could not be loaded."
 						end
-					end
-				end
-
-				if fallbackDecompile then
-					return fallbackDecompile(...)
+						return adv(...)
+					end)
 				end
 			end
 
-			if builtInDecompiler then
-				return builtInDecompiler(...)
+			if preferFallback then
+				queueFallback(fallbackMode)
+				queueAttempt("Built-in", builtInDecompiler)
+			else
+				queueAttempt("Built-in", builtInDecompiler)
+				queueFallback(fallbackMode)
 			end
+
+			queueFallback("Konstant")
+			queueFallback("Shiny")
+			queueFallback("AdvancedDecompiler")
+			queueAttempt("Built-in", builtInDecompiler)
+
+			for _, attempt in ipairs(attempts) do
+				local ok, result, err = pcall(attempt.Fn, ...)
+				if ok and result ~= nil and result ~= false then
+					return result
+				end
+				local reason = ok and (err or "No output returned.") or result
+				lastError = "["..attempt.Name.."] "..tostring(reason)
+			end
+
+			return nil, (lastError or "No compatible decompiler is available.")
 		end
 
 		if ggv then

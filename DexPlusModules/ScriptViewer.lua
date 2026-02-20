@@ -442,7 +442,7 @@ end
 	
 	ScriptViewer.ViewScript = function(scr)
 		local oldtick = tick()
-		local s,source = pcall(env.decompile or function() end,scr)
+		local s,source,decompileErr = pcall(env.decompile or function() end,scr)
 		local showMoreInfo = not (Settings and Settings.ScriptViewer and Settings.ScriptViewer.ShowMoreInfo == false)
 
 		if window then window:SetTitle("Script Viewer") end
@@ -474,13 +474,22 @@ end
 		if not s or not source then
 			PreviousScr = nil
 			dumpbtn.TextColor3 = Color3.new(0.5,0.5,0.5)
+			local decompileFailReason
+			if not s then
+				decompileFailReason = tostring(source)
+			elseif decompileErr then
+				decompileFailReason = tostring(decompileErr)
+			end
 			source = "-- Unable to view source.\n"
 			if showMoreInfo then
 				source = source .. "-- Script Path: "..getPath(scr).."\n"
-				if (scr.ClassName == "Script" and (scr.RunContext == Enum.RunContext.Legacy or scr.RunContext == Enum.RunContext.Server)) or not scr:IsA("LocalScript") then
+				local isViableScript = env.isViableDecompileScript and env.isViableDecompileScript(scr)
+				if not isViableScript then
 					source = source .. "-- Reason: The script is not running on client. (attempt to decompile ServerScript or 'Script' with RunContext Server)\n"
 				elseif not canDecompile() then
 					source = source .. "-- Reason: Your executor does not support decompiler. (missing 'decompile' function and 'getscriptbytecode' function as fallback)\n"
+				elseif decompileFailReason and decompileFailReason ~= "" then
+					source = source .. "-- Reason: "..decompileFailReason.."\n"
 				else
 					source = source .. "-- Reason: Unknown Error.\n"
 				end

@@ -971,7 +971,7 @@ local function main()
 					canDecompile = not not env.isdecompile
 				end
 			else
-				canDecompile = env.decompile ~= nil
+				canDecompile = env.decompile ~= nil or env.getscriptbytecode ~= nil
 			end
 
 			context:AddRegistered("VIEW_SCRIPT", not presentClasses.isViableDecompileScript or not canDecompile)
@@ -1522,8 +1522,12 @@ local function main()
 		context:Register("SAVE_SCRIPT",{Name = "Save Script", IconMap = Explorer.MiscIcons, Icon = "Save", DisabledIcon = "Empty", OnClick = function()
 			for _, v in next, selection.List do
 				if v.Obj:IsA("LuaSourceContainer") and env.isViableDecompileScript(v.Obj) then
-					local success, source = pcall(env.decompile, v.Obj)
-					if not success or not source then source = ("-- DEX - %s failed to decompile %s"):format(env.executor, v.Obj.ClassName) end
+					local success, source, decompileErr = pcall(env.decompile, v.Obj)
+					if not success then
+						source = ("-- DEX - %s failed to decompile %s\n-- Reason: %s"):format(env.executor, v.Obj.ClassName, tostring(source))
+					elseif not source then
+						source = ("-- DEX - %s failed to decompile %s\n-- Reason: %s"):format(env.executor, v.Obj.ClassName, tostring(decompileErr or "Unknown Error"))
+					end
 					local fileName = ("%s_%s_%i_Source.txt"):format(env.parsefile(v.Obj.Name), v.Obj.ClassName, game.PlaceId)
 					--env.writefile(fileName, source)
 					Lib.SaveAsPrompt(fileName, source)

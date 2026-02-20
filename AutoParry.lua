@@ -29,9 +29,43 @@ local function testKeys()
 	if type(keypress) ~= "function" or type(keyrelease) ~= "function" then
 		return false;
 	end;
-	local okD, retD = pcall(keypress, VK_RALT);
-	local okU, retU = pcall(keyrelease, VK_RALT);
-	return okD and okU and retD == true and retU == true;
+	local sawDn = false;
+	local sawUp = false;
+	local conA;
+	local conB;
+	conA = UserInputService.InputBegan:Connect(function(io, gpe)
+		if gpe then
+			return;
+		end;
+		if io.KeyCode == Enum.KeyCode.RightAlt then
+			sawDn = true;
+		end;
+	end);
+	conB = UserInputService.InputEnded:Connect(function(io, gpe)
+		if gpe then
+			return;
+		end;
+		if io.KeyCode == Enum.KeyCode.RightAlt then
+			sawUp = true;
+		end;
+	end);
+	local okD = pcall(keypress, VK_RALT);
+	task.wait(0.03);
+	local okU = pcall(keyrelease, VK_RALT);
+	local t0 = tick();
+	while tick() - t0 < 0.2 do
+		if sawDn and sawUp then
+			break;
+		end;
+		task.wait();
+	end;
+	if conA then
+		conA:Disconnect();
+	end;
+	if conB then
+		conB:Disconnect();
+	end;
+	return okD and okU and sawDn and sawUp;
 end;
 local useKeys = (not useVim) and testKeys();
 local function sendFKey()

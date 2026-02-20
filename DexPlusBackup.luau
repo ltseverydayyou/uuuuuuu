@@ -838,14 +838,27 @@ Main = (function()
 		end
 		env.request = (syn and syn.request) or (http and http.request) or http_request or (fluxus and fluxus.request) or request
 
+		local nativeDecompile = (type(decompile) == "function" and decompile) or nil
+		local nativeDecompileScript = (type(decompile_script) == "function" and decompile_script) or nil
+		local nativeDecompileScriptAlt = (type(decompilescript) == "function" and decompilescript) or nil
+
 		local function getNativeDecompiler()
-			if type(decompile) == "function" then
+			if type(nativeDecompile) == "function" and nativeDecompile ~= env.decompile then
+				return nativeDecompile
+			end
+			if type(nativeDecompileScript) == "function" and nativeDecompileScript ~= env.decompile then
+				return nativeDecompileScript
+			end
+			if type(nativeDecompileScriptAlt) == "function" and nativeDecompileScriptAlt ~= env.decompile then
+				return nativeDecompileScriptAlt
+			end
+			if type(decompile) == "function" and decompile ~= env.decompile then
 				return decompile
 			end
-			if type(decompile_script) == "function" then
+			if type(decompile_script) == "function" and decompile_script ~= env.decompile then
 				return decompile_script
 			end
-			if type(decompilescript) == "function" then
+			if type(decompilescript) == "function" and decompilescript ~= env.decompile then
 				return decompilescript
 			end
 			return nil
@@ -972,7 +985,6 @@ Main = (function()
 		end
 
 		env.decompile = function(...)
-			local preferFallback = Settings and Settings.Decompiler and Settings.Decompiler.PreferDecompilerFallback
 			local builtInDecompiler = getNativeDecompiler()
 			local fallbackMode = (Settings and Settings.Decompiler and Settings.Decompiler.DecompilerFallback) or "Konstant"
 			local attempts = {}
@@ -1003,13 +1015,8 @@ Main = (function()
 				end
 			end
 
-			if preferFallback then
-				queueFallback(fallbackMode)
-				queueAttempt("Built-in", builtInDecompiler)
-			else
-				queueAttempt("Built-in", builtInDecompiler)
-				queueFallback(fallbackMode)
-			end
+			queueAttempt("Built-in", builtInDecompiler)
+			queueFallback(fallbackMode)
 
 			queueFallback("Konstant")
 			queueFallback("Shiny")
@@ -1030,7 +1037,10 @@ Main = (function()
 
 		if ggv then
 			pcall(function()
-				ggv().decompile = env.decompile
+				local genv = ggv()
+				if type(genv.decompile) ~= "function" then
+					genv.decompile = env.decompile
+				end
 			end)
 		end
 

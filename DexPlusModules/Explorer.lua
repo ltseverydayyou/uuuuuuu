@@ -312,6 +312,9 @@ local function main()
 		local enabled = (val ~= false)
 		autoUpdateSearch = enabled
 		Settings.Explorer.AutoUpdateSearch = enabled
+		if enabled and Explorer.GuiElems and Explorer.GuiElems.SearchBar then
+			Explorer.DoSearch(Explorer.GuiElems.SearchBar.Text or "")
+		end
 	end
 
 	Explorer.UpdateView = function()
@@ -2230,6 +2233,12 @@ return search]==]
 		Explorer.GuiElems.SearchBar = searchBox
 
 		Lib.ViewportTextBox.convert(searchBox)
+
+		(searchBox:GetPropertyChangedSignal("Text")):Connect(function()
+			if autoUpdateSearch then
+				Explorer.DoSearch(searchBox.Text)
+			end
+		end)
 
 		searchBox.FocusLost:Connect(function()
 			Explorer.DoSearch(searchBox.Text)

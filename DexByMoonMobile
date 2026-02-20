@@ -321,6 +321,14 @@ local EmbeddedModules = {
 				sortingEnabled = val;
 				Settings.Explorer.Sorting = val;
 			end;
+			Explorer.SetAutoUpdateSearch = function(val)
+				local enabled = val ~= false;
+				autoUpdateSearch = enabled;
+				Settings.Explorer.AutoUpdateSearch = enabled;
+				if enabled and Explorer.GuiElems and Explorer.GuiElems.SearchBar then
+					Explorer.DoSearch(Explorer.GuiElems.SearchBar.Text or "");
+				end;
+			end;
 			Explorer.UpdateView = function()
 				local maxNodes = math.ceil(treeFrame.AbsoluteSize.Y / 20);
 				local maxX = treeFrame.AbsoluteSize.X;
@@ -1987,6 +1995,11 @@ local EmbeddedModules = {
 					Tweens.Start:Play();
 				end);
 				Lib.ViewportTextBox.convert(searchBox);
+				(searchBox:GetPropertyChangedSignal("Text")):Connect(function()
+					if autoUpdateSearch then
+						Explorer.DoSearch(searchBox.Text);
+					end;
+				end);
 				searchBox.FocusLost:Connect(function()
 					Explorer.DoSearch(searchBox.Text);
 				end);
@@ -5336,17 +5349,90 @@ local EmbeddedModules = {
 		end;
 		local function main()
 			local ScriptViewer = {};
-			local window, codeFrame;
+			local window, codeFrame, rawSourceBox;
 			local PreviousScr = nil;
+			local lastSource = "";
+			local useRawView = false;
+			local function sanitizeSource(source)
+				source = tostring(source or "");
+				source = source:gsub("\r\n", "\n"):gsub("\r", "\n");
+				source = source:gsub("\t", "    ");
+				source = source:gsub("\000", "\\0");
+				source = source:gsub("[\001-\008\011\012\014-\031\127]", function(ch)
+					return ("\\x%02X"):format(string.byte(ch));
+				end);
+				return source;
+			end;
+			local function getDecompiler()
+				if env and type(env.decompile) == "function" then
+					return env.decompile;
+				end;
+				if type(decompile) == "function" then
+					return decompile;
+				end;
+				if type(decompile_script) == "function" then
+					return decompile_script;
+				end;
+				if type(decompilescript) == "function" then
+					return decompilescript;
+				end;
+				return nil;
+			end;
+			local function setSourceText(source)
+				lastSource = sanitizeSource(source);
+				if codeFrame then
+					codeFrame:SetText(lastSource);
+				end;
+				if rawSourceBox then
+					rawSourceBox.Text = lastSource;
+				end;
+			end;
+			local function setRawView(enabled)
+				useRawView = enabled and true or false;
+				if rawSourceBox then
+					rawSourceBox.Visible = useRawView;
+				end;
+				if codeFrame and codeFrame.Frame then
+					codeFrame.Frame.Visible = not useRawView;
+				end;
+			end;
+			local function getRawSelection(textBox)
+				if not textBox then
+					return nil;
+				end;
+				local cursorPosition = tonumber(textBox.CursorPosition) or -1;
+				local selectionStart = tonumber(textBox.SelectionStart) or -1;
+				if cursorPosition < 1 or selectionStart < 1 or cursorPosition == selectionStart then
+					return nil;
+				end;
+				local left = math.min(cursorPosition, selectionStart);
+				local right = math.max(cursorPosition, selectionStart);
+				if right <= left then
+					return nil;
+				end;
+				return textBox.Text:sub(left, right - 1);
+			end;
 			ScriptViewer.ViewScript = function(scr)
-				local success, source = pcall(decompile or function()
-				end, scr);
-				if not success or (not source) then
-					source, PreviousScr = "-- DEX - Source failed to decompile", nil;
+				local decompileFn = getDecompiler();
+				local success, source, decompileErr = false, nil, nil;
+				if decompileFn then
+					success, source, decompileErr = pcall(decompileFn, scr);
+				end;
+				if not success or type(source) ~= "string" or source == "" then
+					local reason;
+					if not decompileFn then
+						reason = "No decompiler function found.";
+					elseif not success then
+						reason = tostring(source);
+					else
+						reason = tostring(decompileErr or "Decompiler returned empty output.");
+					end;
+					source = ("-- DEX - Source failed to decompile\n-- Reason: %s"):format(reason);
+					PreviousScr = nil;
 				else
 					PreviousScr = scr;
 				end;
-				codeFrame:SetText(source:gsub("\000", "\\0"));
+				setSourceText(source);
 				window:Show();
 			end;
 			ScriptViewer.Init = function()
@@ -5358,34 +5444,100 @@ local EmbeddedModules = {
 				codeFrame.Frame.Position = UDim2.new(0, 0, 0, 20);
 				codeFrame.Frame.Size = UDim2.new(1, 0, 1, -20);
 				codeFrame.Frame.Parent = window.GuiElems.Content;
+				rawSourceBox = Instance.new("TextBox", window.GuiElems.Content);
+				rawSourceBox.BackgroundColor3 = Settings and Settings.Theme and Settings.Theme.Syntax and Settings.Theme.Syntax.Background or Color3.fromRGB(36, 36, 36);
+				rawSourceBox.TextColor3 = Settings and Settings.Theme and Settings.Theme.Syntax and Settings.Theme.Syntax.Text or Color3.fromRGB(204, 204, 204);
+				rawSourceBox.BorderSizePixel = 0;
+				rawSourceBox.Position = UDim2.new(0, 0, 0, 20);
+				rawSourceBox.Size = UDim2.new(1, 0, 1, -20);
+				rawSourceBox.Font = Enum.Font.Code;
+				rawSourceBox.TextSize = 15;
+				rawSourceBox.TextXAlignment = Enum.TextXAlignment.Left;
+				rawSourceBox.TextYAlignment = Enum.TextYAlignment.Top;
+				rawSourceBox.TextWrapped = false;
+				rawSourceBox.MultiLine = true;
+				rawSourceBox.ClearTextOnFocus = false;
+				pcall(function()
+					rawSourceBox.RichText = false;
+				end);
+				rawSourceBox.Text = "";
+				rawSourceBox.Visible = false;
 				local copy = Instance.new("TextButton", window.GuiElems.Content);
 				copy.BackgroundTransparency = 1;
-				copy.Size = UDim2.new(0.5, 0, 0, 20);
-				copy.Text = "Copy to Clipboard";
+				copy.Size = UDim2.new(0.2, 0, 0, 20);
+				copy.Text = "Copy All";
 				copy.TextColor3 = Color3.new(1, 1, 1);
 				copy.MouseButton1Click:Connect(function()
-					local source = codeFrame:GetText();
+					if not env.setclipboard then
+						return;
+					end;
+					local source = useRawView and rawSourceBox.Text or codeFrame:GetText();
 					env.setclipboard(source);
+				end);
+				local copySelection = Instance.new("TextButton", window.GuiElems.Content);
+				copySelection.BackgroundTransparency = 1;
+				copySelection.Position = UDim2.new(0.2, 0, 0, 0);
+				copySelection.Size = UDim2.new(0.2, 0, 0, 20);
+				copySelection.Text = "Copy Sel";
+				copySelection.TextColor3 = Color3.new(1, 1, 1);
+				copySelection.MouseButton1Click:Connect(function()
+					if not env.setclipboard then
+						return;
+					end;
+					local selected = "";
+					if useRawView then
+						selected = getRawSelection(rawSourceBox) or "";
+					else
+						local ok, txt = pcall(function()
+							return codeFrame:GetSelectionText();
+						end);
+						if ok and type(txt) == "string" then
+							selected = txt;
+						end;
+					end;
+					if selected == "" then
+						selected = useRawView and rawSourceBox.Text or codeFrame:GetText();
+					end;
+					env.setclipboard(selected);
 				end);
 				local save = Instance.new("TextButton", window.GuiElems.Content);
 				save.BackgroundTransparency = 1;
-				save.Position = UDim2.new(0.35, 0, 0, 0);
-				save.Size = UDim2.new(0.3, 0, 0, 20);
-				save.Text = "Save to File";
+				save.Position = UDim2.new(0.4, 0, 0, 0);
+				save.Size = UDim2.new(0.2, 0, 0, 20);
+				save.Text = "Save";
 				save.TextColor3 = Color3.new(1, 1, 1);
 				save.MouseButton1Click:Connect(function()
-					local source = codeFrame:GetText();
+					if not env.writefile then
+						return;
+					end;
+					local source = useRawView and rawSourceBox.Text or codeFrame:GetText();
 					local filename = "Place_" .. game.PlaceId .. "_Script_" .. os.time() .. ".txt";
 					env.writefile(filename, source);
 					if env.movefileas then
 						env.movefileas(filename, ".txt");
 					end;
 				end);
+				local viewMode = Instance.new("TextButton", window.GuiElems.Content);
+				viewMode.BackgroundTransparency = 1;
+				viewMode.Position = UDim2.new(0.6, 0, 0, 0);
+				viewMode.Size = UDim2.new(0.2, 0, 0, 20);
+				viewMode.Text = "Select Text";
+				viewMode.TextColor3 = Color3.new(1, 1, 1);
+				viewMode.MouseButton1Click:Connect(function()
+					setRawView(not useRawView);
+					viewMode.Text = useRawView and "Syntax View" or "Select Text";
+					if useRawView and rawSourceBox then
+						pcall(function()
+							rawSourceBox:CaptureFocus();
+							rawSourceBox.CursorPosition = 1;
+						end);
+					end;
+				end);
 				local dumpbtn = Instance.new("TextButton", window.GuiElems.Content);
 				dumpbtn.BackgroundTransparency = 1;
-				dumpbtn.Position = UDim2.new(0.7, 0, 0, 0);
-				dumpbtn.Size = UDim2.new(0.3, 0, 0, 20);
-				dumpbtn.Text = "Dump Functions";
+				dumpbtn.Position = UDim2.new(0.8, 0, 0, 0);
+				dumpbtn.Size = UDim2.new(0.2, 0, 0, 20);
+				dumpbtn.Text = "Dump";
 				dumpbtn.TextColor3 = Color3.new(1, 1, 1);
 				dumpbtn.MouseButton1Click:Connect(function()
 					if PreviousScr ~= nil then
@@ -5467,14 +5619,16 @@ local EmbeddedModules = {
 									functions:add_to_dump("\n" .. ("="):rep(100), 0, false);
 								end;
 							end;
-							local source = codeFrame:GetText();
+							local source = useRawView and rawSourceBox.Text or codeFrame:GetText();
 							if dump ~= original then
 								source = source .. dump .. "]]";
 							end;
-							codeFrame:SetText(source);
+							setSourceText(source);
 						end);
 					end;
 				end);
+				setRawView(false);
+				setSourceText(lastSource);
 			end;
 			return ScriptViewer;
 		end;
@@ -7819,6 +7973,7 @@ local EmbeddedModules = {
 					if not silent then
 						side.Hidden = false;
 					end;
+					updateWindows();
 				end;
 				funcs.Close = function(self)
 					self.Closed = true;
@@ -16152,6 +16307,7 @@ Main = (function()
 		Main.AppTemplate = gui.App;
 		Main.MainGuiOpen = false;
 		local openButton = gui.OpenButton;
+		local settingsButton = openButton.MainFrame.BottomFrame.Settings;
 		openButton.BackgroundTransparency = 0.2;
 		openButton.MainFrame.Size = UDim2.new(0, 0, 0, 0);
 		openButton.MainFrame.Visible = false;
@@ -16172,6 +16328,92 @@ Main = (function()
 				})):Play();
 			end;
 		end);
+		local settingsMenu = Lib.ContextMenu.new();
+		settingsMenu.Iconless = true;
+		settingsMenu.Width = 210;
+		local function applySettingChanges()
+			if Explorer and Explorer.SetSortingEnabled then
+				pcall(Explorer.SetSortingEnabled, Settings.Explorer.Sorting);
+			end;
+			if Explorer and Explorer.SetAutoUpdateSearch then
+				pcall(Explorer.SetAutoUpdateSearch, Settings.Explorer.AutoUpdateSearch);
+			end;
+			if Explorer and Explorer.ForceUpdate then
+				pcall(Explorer.ForceUpdate);
+			end;
+			if Explorer and Explorer.Refresh then
+				pcall(Explorer.Refresh);
+			end;
+			if Properties and Properties.ShowExplorerProps then
+				pcall(Properties.ShowExplorerProps);
+			end;
+		end;
+		local function makeToggleLabel(name, value)
+			return (value and "[ON] " or "[OFF] ") .. name;
+		end;
+		local function showSettingsMenu()
+			settingsMenu:Clear();
+			settingsMenu:AddDivider("Settings");
+			settingsMenu:Add({
+				Name = makeToggleLabel("Explorer Sorting", Settings.Explorer.Sorting),
+				OnClick = function()
+					Settings.Explorer.Sorting = not Settings.Explorer.Sorting;
+					applySettingChanges();
+					task.defer(showSettingsMenu);
+				end
+			});
+			settingsMenu:Add({
+				Name = makeToggleLabel("Use Name Width", Settings.Explorer.UseNameWidth),
+				OnClick = function()
+					Settings.Explorer.UseNameWidth = not Settings.Explorer.UseNameWidth;
+					applySettingChanges();
+					task.defer(showSettingsMenu);
+				end
+			});
+			settingsMenu:Add({
+				Name = makeToggleLabel("Search Auto Update", Settings.Explorer.AutoUpdateSearch),
+				OnClick = function()
+					Settings.Explorer.AutoUpdateSearch = not Settings.Explorer.AutoUpdateSearch;
+					applySettingChanges();
+					task.defer(showSettingsMenu);
+				end
+			});
+			settingsMenu:Add({
+				Name = makeToggleLabel("Properties Hidden", Settings.Properties.ShowHidden),
+				OnClick = function()
+					Settings.Properties.ShowHidden = not Settings.Properties.ShowHidden;
+					applySettingChanges();
+					task.defer(showSettingsMenu);
+				end
+			});
+			settingsMenu:Add({
+				Name = makeToggleLabel("Properties Deprecated", Settings.Properties.ShowDeprecated),
+				OnClick = function()
+					Settings.Properties.ShowDeprecated = not Settings.Properties.ShowDeprecated;
+					applySettingChanges();
+					task.defer(showSettingsMenu);
+				end
+			});
+			settingsMenu:AddDivider();
+			settingsMenu:Add({
+				Name = "Reset To Defaults",
+				OnClick = function()
+					Main.ResetSettings();
+					applySettingChanges();
+				end
+			});
+			settingsMenu:Add({
+				Name = "Reload Settings File",
+				OnClick = function()
+					Main.LoadSettings();
+					applySettingChanges();
+				end
+			});
+			local btnPos = settingsButton.AbsolutePosition;
+			local btnSize = settingsButton.AbsoluteSize;
+			settingsMenu:Show(btnPos.X - 180 + btnSize.X, btnPos.Y + btnSize.Y + 2);
+		end;
+		settingsButton.MouseButton1Click:Connect(showSettingsMenu);
 		if Explorer and Explorer.Window and (not isStubModule(Explorer)) then
 			Main.CreateApp({
 				Name = "Explorer",

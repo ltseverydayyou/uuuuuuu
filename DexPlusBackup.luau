@@ -2442,6 +2442,9 @@ Main = (function()
 		-- Init other modules
 		intro.SetProgress("Initializing Modules",0.9)
 		Explorer.Init()
+		if Explorer.SetAutoUpdateSearch then
+			pcall(Explorer.SetAutoUpdateSearch, Settings.Explorer.AutoUpdateSearch)
+		end
 		Properties.Init()
 		ScriptViewer.Init()
 		Console.Init()

@@ -200,96 +200,97 @@ local function protectUI(sGui)
     end
 end
 
-local adonisThreads = {}
+local function resolveAdonisEnv()
+    local gc = getgc or (debug and debug.getgc)
+    local hookf = hookfunction
+    local env = getrenv
+    local dbgInfo = (env and env().debug and env().debug.info) or (debug and debug.info)
+    local newcc = newcclosure or function(fn)
+        return fn
+    end
+    local typeOf = typeof or function(value)
+        return type(value)
+    end
+    return gc, hookf, env, dbgInfo, newcc, typeOf
+end
+
 local function detectAdonis()
-    if not getreg or not getgc then
+    local gc, hookf, env, dbgInfo, _, typeOf = resolveAdonisEnv()
+    if not (gc and hookf and env and dbgInfo) then
         return false
     end
 
-    local detected = false
-    for _, thread in getreg() do
-        if type(thread) ~= 'thread' then
-            continue
-        end
-        local src = safeDebugInfo(thread, 's')
-        if src and (src:find('.Core.Anti') or src:find('.Plugins.Anti_Cheat')) then
-            detected = true
-            table.insert(adonisThreads, thread)
-        end
-    end
-    return detected
-end
+    for _, value in gc(true) do
+        if typeOf(value) == 'table' then
+            local hasDetected = typeOf(rawget(value, 'Detected')) == 'function'
+            local hasKill = typeOf(rawget(value, 'Kill')) == 'function'
+            local hasVars = rawget(value, 'Variables') ~= nil
+            local hasProcess = rawget(value, 'Process') ~= nil
 
-local function hookAdonisDetections(adonisTables)
-    for _, t in ipairs(adonisTables) do
-        for _, fn in pairs(t) do
-            if type(fn) ~= 'function' then
-                continue
-            end
-            if isfunctionhooked and isfunctionhooked(fn) then
-                continue
-            end
-
-            local function blocker(...)
-                coroutine.yield(coroutine.running())
-                return task.wait(9e9)
-            end
-
-            if hookfunction then
-                pcall(hookfunction, fn, blocker)
-            elseif hook then
-                pcall(hook, fn, clonefunction and clonefunction(blocker) or blocker)
+            if hasDetected or (hasKill and hasVars and hasProcess) then
+                return true
             end
         end
     end
+
+    return false
 end
 
 local function bypassAdonis()
-    for _, thread in ipairs(adonisThreads) do
-        pcall(close, thread)
+    local gc, hookf, env, dbgInfo, newcc, typeOf = resolveAdonisEnv()
+    if not (gc and hookf and env and dbgInfo) then
+        return false
     end
 
-    local adonisTables = {}
-    if filtergc then
-        local ok, cont = pcall(
-            filtergc,
-            'table',
-            { Keys = { 'Detected', 'RLocked' } },
-            false
-        )
-        if ok and type(cont) == 'table' then
-            for _, tbl in ipairs(cont) do
-                if typeof(rawget(tbl, 'Detected')) == 'function' then
-                    table.insert(adonisTables, tbl)
-                end
+    local DetectedMeth, KillMeth
+
+    for _, value in gc(true) do
+        if typeOf(value) == 'table' then
+            local detected = rawget(value, 'Detected')
+            local kill = rawget(value, 'Kill')
+
+            if typeOf(detected) == 'function' and not DetectedMeth then
+                DetectedMeth = detected
+                local old
+                old = hookf(DetectedMeth, function(methodName, methodFunc)
+                    if methodName ~= '_' then end
+                    return true
+                end)
+            end
+
+            if rawget(value, 'Variables') and rawget(value, 'Process') and typeOf(kill) == 'function' and not KillMeth then
+                KillMeth = kill
+                local old
+                old = hookf(KillMeth, function(killFunc) end)
+            end
+
+            if DetectedMeth and KillMeth then
+                break
             end
         end
     end
 
-    if #adonisTables == 0 and getgc then
-        for _, tbl in ipairs(getgc(true)) do
-            if type(tbl) ~= 'table' then
-                continue
+    if DetectedMeth and dbgInfo then
+        local old
+        old = hookf(dbgInfo, newcc(function(...)
+            local functionName = ...
+            if functionName == DetectedMeth then
+                return coroutine.yield(coroutine.running())
             end
-            local detectFn = rawget(tbl, 'Detected')
-            if typeof(detectFn) == 'function' and rawget(tbl, 'RLocked') then
-                table.insert(adonisTables, tbl)
-            end
-        end
+            return old(...)
+        end))
     end
 
-    hookAdonisDetections(adonisTables)
+    return DetectedMeth ~= nil
 end
 
 local function runAdonisBypass()
     if not configs.adonisBypass or getgenv().SimpleSpyAdonisBypassed then
         return
     end
-    local detected = false
-    local ok, res = pcall(detectAdonis)
-    detected = ok and res or false
-    if detected then
-        bypassAdonis()
+
+    local ok, detected = pcall(detectAdonis)
+    if ok and detected and bypassAdonis() then
         getgenv().SimpleSpyAdonisBypassed = true
     end
 end

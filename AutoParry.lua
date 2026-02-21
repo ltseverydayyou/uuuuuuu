@@ -1691,7 +1691,7 @@ local function AutoParryStep(dt)
 					approaching = true;
 					movingAway = false;
 				end;
-				local ignoreMovingAwayForClash = targetStartDist[ball] ~= nil and targetStartDist[ball] <= 70;
+				local ignoreMovingAwayForClash = targetStartDist[ball] ~= nil and targetStartDist[ball] <= 50;
 				local movingAwayBlocked = movingAway and (not ignoreMovingAwayForClash) and (not forceToward);
 				local timingSpeed = math.max(speed, directionSpeed * 0.9);
 				local toRingTime = approaching and timingSpeed > 1 and math.max((rawDist - parryPredictRadius), 0) / timingSpeed or math.huge;

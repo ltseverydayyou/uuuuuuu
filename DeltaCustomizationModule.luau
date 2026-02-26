@@ -999,7 +999,7 @@ task.defer(function()
 			f.Name = isCustom and "Section_Customization" or "Section_Delta";
 			f.Parent = settingsHolder;
 			f.LayoutOrder = order;
-			for _, d in ipairs(f:GetDescendants()) do
+			for _, d in ipairs(f:QueryDescendants("Instance")) do
 				if d:IsA("LocalScript") then
 					d:Destroy();
 				end;
@@ -1240,7 +1240,7 @@ task.defer(function()
 		fr.Parent = settingsHolder;
 		fr.Visible = true;
 		fr.LayoutOrder = -2;
-		for _, d in ipairs(fr:GetDescendants()) do
+		for _, d in ipairs(fr:QueryDescendants("Instance")) do
 			if d:IsA("LocalScript") then
 				d:Destroy();
 			end;
@@ -1675,7 +1675,7 @@ task.defer(function()
 		frame.Parent = settingsHolder;
 		frame.Visible = true;
 		frame.LayoutOrder = -2;
-		for _, d in ipairs(frame:GetDescendants()) do
+		for _, d in ipairs(frame:QueryDescendants("Instance")) do
 			if d:IsA("LocalScript") then
 				d:Destroy();
 			end;
@@ -1778,7 +1778,7 @@ task.defer(function()
 		frame.Parent = settingsHolder;
 		frame.Visible = true;
 		frame.LayoutOrder = -2;
-		for _, d in ipairs(frame:GetDescendants()) do
+		for _, d in ipairs(frame:QueryDescendants("Instance")) do
 			if d:IsA("LocalScript") then
 				d:Destroy();
 			end;
@@ -1847,7 +1847,7 @@ task.defer(function()
 		frame.Parent = settingsHolder;
 		frame.Visible = true;
 		frame.LayoutOrder = -2;
-		for _, d in ipairs(frame:GetDescendants()) do
+		for _, d in ipairs(frame:QueryDescendants("Instance")) do
 			if d:IsA("LocalScript") then
 				d:Destroy();
 			end;
@@ -1914,7 +1914,7 @@ task.defer(function()
 		frame.Parent = settingsHolder;
 		frame.Visible = true;
 		frame.LayoutOrder = -2;
-		for _, d in ipairs(frame:GetDescendants()) do
+		for _, d in ipairs(frame:QueryDescendants("Instance")) do
 			if d:IsA("LocalScript") then
 				d:Destroy();
 			end;
@@ -1972,7 +1972,7 @@ task.defer(function()
 		frame.Parent = settingsHolder;
 		frame.Visible = true;
 		frame.LayoutOrder = -2;
-		for _, d in ipairs(frame:GetDescendants()) do
+		for _, d in ipairs(frame:QueryDescendants("Instance")) do
 			if d:IsA("LocalScript") then
 				d:Destroy();
 			end;
@@ -2039,7 +2039,7 @@ task.defer(function()
 		frame.Parent = settingsHolder;
 		frame.Visible = true;
 		frame.LayoutOrder = -2;
-		for _, d in ipairs(frame:GetDescendants()) do
+		for _, d in ipairs(frame:QueryDescendants("Instance")) do
 			if d:IsA("LocalScript") then
 				d:Destroy();
 			end;
@@ -2178,7 +2178,7 @@ task.defer(function()
 		frame.Parent = settingsHolder;
 		frame.Visible = true;
 		frame.LayoutOrder = -2;
-		for _, d in ipairs(frame:GetDescendants()) do
+		for _, d in ipairs(frame:QueryDescendants("Instance")) do
 			if d:IsA("LocalScript") then
 				d:Destroy();
 			end;
@@ -2550,7 +2550,7 @@ task.defer(function()
 		frame.Parent = settingsHolder;
 		frame.Visible = true;
 		frame.LayoutOrder = -2;
-		for _, d in ipairs(frame:GetDescendants()) do
+		for _, d in ipairs(frame:QueryDescendants("Instance")) do
 			if d:IsA("LocalScript") then
 				d:Destroy();
 			end;
@@ -2615,7 +2615,7 @@ task.defer(function()
 		frame.Parent = settingsHolder;
 		frame.Visible = true;
 		frame.LayoutOrder = -2;
-		for _, d in ipairs(frame:GetDescendants()) do
+		for _, d in ipairs(frame:QueryDescendants("Instance")) do
 			if d:IsA("LocalScript") then
 				d:Destroy();
 			end;
@@ -2671,7 +2671,7 @@ task.defer(function()
 		frame.Parent = settingsHolder;
 		frame.Visible = true;
 		frame.LayoutOrder = -2;
-		for _, d in ipairs(frame:GetDescendants()) do
+		for _, d in ipairs(frame:QueryDescendants("Instance")) do
 			if d:IsA("LocalScript") then
 				d:Destroy();
 			end;
@@ -2978,7 +2978,7 @@ task.defer(function()
 			newCard.Parent = parent;
 			newCard.Name = "Script";
 			local labs = {};
-			for _, d in ipairs(newCard:GetDescendants()) do
+			for _, d in ipairs(newCard:QueryDescendants("Instance")) do
 				if d:IsA("TextLabel") then
 					table.insert(labs, d);
 				end;
@@ -3001,7 +3001,7 @@ task.defer(function()
 				end;
 			end;
 			local clickable = nil;
-			for _, d in ipairs(newCard:GetDescendants()) do
+			for _, d in ipairs(newCard:QueryDescendants("Instance")) do
 				if d:IsA("LocalScript") then
 					d:Destroy();
 				elseif d:IsA("TextButton") then
@@ -3115,7 +3115,7 @@ task.defer(function()
 					return;
 				end;
 				local cur;
-				for _, tb in ipairs(codeSf:GetDescendants()) do
+				for _, tb in ipairs(codeSf:QueryDescendants("Instance")) do
 					if tb:IsA("TextBox") and tb.Visible then
 						cur = tb;
 						break;
@@ -3162,7 +3162,7 @@ task.defer(function()
 	end;
 	local function getCodeBoxes()
 		local t = {};
-		for _, c in ipairs(codeSf:GetDescendants()) do
+		for _, c in ipairs(codeSf:QueryDescendants("Instance")) do
 			if c:IsA("TextBox") and isScriptName(c.Name) then
 				table.insert(t, c);
 			end;

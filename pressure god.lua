@@ -91,10 +91,10 @@ end;
 local function perform()
 	local oldPivot = (ClonedService("Players")).LocalPlayer.Character:GetPivot();
 	local enterFunction = nil;
-	for _, v in ipairs((ClonedService("Workspace")):GetDescendants()) do
+	for _, v in ipairs((ClonedService("Workspace")):QueryDescendants("Instance")) do
 		if v.Name:lower() == "locker" and (v:IsA("Model") or v:IsA("BasePart")) then
 			local success, errorMsg = pcall(function()
-				for _, rem in ipairs(v:GetDescendants()) do
+				for _, rem in ipairs(v:QueryDescendants("Instance")) do
 					if rem.Name:lower() == "enter" and rem:IsA("RemoteFunction") then
 						enterFunction = rem;
 					end;
@@ -131,7 +131,7 @@ local function perform()
 			end;
 		end);
 	end;
-	for _, g in ipairs((ClonedService("Workspace")):GetDescendants()) do
+	for _, g in ipairs((ClonedService("Workspace")):QueryDescendants("Instance")) do
 		removeKillables(g);
 	end;
 	if not isRan then

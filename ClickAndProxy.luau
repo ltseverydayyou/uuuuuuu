@@ -43,7 +43,7 @@ local function onRemoved(o)
 		end;
 	end;
 end;
-for _, o in ipairs(workspace:GetDescendants()) do
+for _, o in ipairs(workspace:QueryDescendants("Instance")) do
 	onAdded(o);
 end;
 workspace.DescendantAdded:Connect(onAdded);

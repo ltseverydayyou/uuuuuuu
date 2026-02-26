@@ -150,7 +150,7 @@ if game.GameId == 5205364928 then
 				if (getgenv()).walkto == true then
 					local char = (getgenv()).Char;
 					local circle;
-					for i, v in pairs(game.Workspace:GetDescendants()) do
+					for i, v in pairs(game.Workspace:QueryDescendants("Instance")) do
 						if v.Name == "Detect" then
 							circle = v;
 						end;
@@ -168,7 +168,7 @@ if game.GameId == 5205364928 then
 		if (getgenv()).tween == true then
 			local char = (getgenv()).Char;
 			local circle;
-			for i, v in pairs(game.Workspace:GetDescendants()) do
+			for i, v in pairs(game.Workspace:QueryDescendants("Instance")) do
 				if v.Name == "Detect" then
 					circle = v;
 				end;
@@ -185,7 +185,7 @@ if game.GameId == 5205364928 then
 		if (getgenv()).tele == true then
 			local char = (getgenv()).Char;
 			local circle;
-			for i, v in pairs(game.Workspace:GetDescendants()) do
+			for i, v in pairs(game.Workspace:QueryDescendants("Instance")) do
 				if v.Name == "Detect" then
 					circle = v;
 				end;

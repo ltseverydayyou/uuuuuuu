@@ -255,7 +255,7 @@ copyBtn.MouseButton1Click:Connect(function()
 	})):Play();
 end);
 task.spawn(function()
-	local D, tot = game:GetDescendants(), #game:GetDescendants();
+	local D, tot = game:QueryDescendants("Instance"), #game:QueryDescendants("Instance");
 	for i, inst in ipairs(D) do
 		local aid;
 		if inst:IsA("Animation") then

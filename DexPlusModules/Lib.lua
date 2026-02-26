@@ -2942,7 +2942,7 @@ local function main()
 			guiMain.Size = UDim2.new(0,self.SizeX,0,self.SizeY)
 
 			gui.DescendantAdded:Connect(function(obj) focusInput(self,obj) end)
-			local descs = gui:GetDescendants()
+			local descs = gui:QueryDescendants("Instance")
 			for i = 1,#descs do
 				focusInput(self,descs[i])
 			end

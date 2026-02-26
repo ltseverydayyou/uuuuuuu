@@ -732,7 +732,7 @@ local tests = {
 			local plrs = game:GetService("Players");
 			return effect_test("Can preload all UIs, which can be abused for weird behavior.", function()
 				local list = {};
-				for _, v in ipairs(plrs:GetDescendants()) do
+				for _, v in ipairs(plrs:QueryDescendants("Instance")) do
 					if v:IsA("ScreenGui") then
 						table.insert(list, v);
 					end;

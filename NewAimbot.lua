@@ -470,7 +470,7 @@ local NA_GRAB_BODY = (function()
 		return nil;
 	end;
 	local function firstPart(model)
-		for _, d in ipairs(model:GetDescendants()) do
+		for _, d in ipairs(model:QueryDescendants("Instance")) do
 			if d:IsA("BasePart") then
 				return d;
 			end;
@@ -482,7 +482,7 @@ local NA_GRAB_BODY = (function()
 		rec.root = nil;
 		rec.torso = nil;
 		rec.humanoid = nil;
-		for _, inst in ipairs(model:GetDescendants()) do
+		for _, inst in ipairs(model:QueryDescendants("Instance")) do
 			if inst:IsA("Humanoid") or inst:IsA("AnimationController") then
 				rec.humanoid = rec.humanoid or inst;
 			elseif inst:IsA("BasePart") then

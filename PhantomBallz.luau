@@ -469,7 +469,7 @@ do
 			end;
 		end;
 	end;
-	for _, d in ipairs(workspace:GetDescendants()) do
+	for _, d in ipairs(workspace:QueryDescendants("Instance")) do
 		task.defer(chk, d);
 	end;
 	workspace.DescendantAdded:Connect(function(inst)

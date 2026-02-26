@@ -160,7 +160,7 @@ local function hookCont(cont)
 	end)
 end
 
-for _, inst in ipairs(ec:GetDescendants()) do
+for _, inst in ipairs(ec:QueryDescendants("Instance")) do
 	if inst.Name == "RCTScrollContentView" then
 		hookCont(inst)
 	end

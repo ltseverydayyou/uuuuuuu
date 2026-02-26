@@ -34,7 +34,7 @@ local function removeRemote(v)
 		end;
 	end;
 end;
-for _, d in ipairs(ReplicatedStorage:GetDescendants()) do
+for _, d in ipairs(ReplicatedStorage:QueryDescendants("Instance")) do
 	addRemote(d);
 end;
 ReplicatedStorage.DescendantAdded:Connect(addRemote);

@@ -1409,7 +1409,7 @@ local function createColor(option, parent, holder)
 			(tweenService:Create(option.satval, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
 				BackgroundTransparency = 0
 			})):Play();
-			for _, object in next, option.mainHolder:GetDescendants() do
+			for _, object in next, option.mainHolder:QueryDescendants("Instance") do
 				if object:IsA("TextLabel") then
 					(tweenService:Create(object, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 						TextTransparency = 0
@@ -1464,7 +1464,7 @@ local function createColor(option, parent, holder)
 		(tweenService:Create(self.satval, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
 			BackgroundTransparency = 1
 		})):Play();
-		for _, object in next, self.mainHolder:GetDescendants() do
+		for _, object in next, self.mainHolder:QueryDescendants("Instance") do
 			if object:IsA("TextLabel") then
 				(tweenService:Create(object, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 					TextTransparency = 1

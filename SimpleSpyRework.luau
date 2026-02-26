@@ -1246,7 +1246,7 @@ function toggleMinimize(override)
             toggleSideTray(true)
         end
         ui.LeftPanel.Visible = true
-        remotesFadeIn = fadeOut(ui.LeftPanel:GetDescendants())
+        remotesFadeIn = fadeOut(ui.LeftPanel:QueryDescendants("Instance"))
         TweenService:Create(
             ui.LeftPanel,
             TweenInfo.new(0.5),
@@ -1277,7 +1277,7 @@ function toggleSideTray(override)
     sideClosing = true
     sideClosed = not sideClosed
     if sideClosed then
-        rightFadeIn = fadeOut(ui.RightPanel:GetDescendants())
+        rightFadeIn = fadeOut(ui.RightPanel:QueryDescendants("Instance"))
         wait(0.5)
         minimizeSize(0.5)
         wait(0.5)
@@ -4312,7 +4312,7 @@ if caps.newIndexHook and type(hookmetamethod) == 'function' then
     end
 end
 
-for _, inst in ipairs(game:GetDescendants()) do
+for _, inst in ipairs(game:QueryDescendants("Instance")) do
     if inst:IsA("RemoteEvent") or inst:IsA("UnreliableRemoteEvent") then
         logClientEvent(inst)
     end

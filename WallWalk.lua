@@ -8679,9 +8679,9 @@ function _GravityController()
 			return self.GravityUp;
 		end;
 		self.Humanoid.PlatformStand = true;
-		self.CharacterMass = getMass(self.Character:GetDescendants());
+		self.CharacterMass = getMass(self.Character:QueryDescendants("Instance"));
 		self.Character.AncestryChanged:Connect(function()
-			self.CharacterMass = getMass(self.Character:GetDescendants());
+			self.CharacterMass = getMass(self.Character:QueryDescendants("Instance"));
 		end);
 		self.JumpCon = RUNSERVICE.RenderStepped:Connect(function(dt)
 			if self.Controls:IsJumping() then

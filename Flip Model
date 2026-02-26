@@ -1,7 +1,7 @@
 function ooo(model)
 	local totalPos = Vector3.new(0, 0, 0);
 	local numParts = 0;
-	for _, part in ipairs(model:GetDescendants()) do
+	for _, part in ipairs(model:QueryDescendants("Instance")) do
 		if part:IsA("BasePart") then
 			totalPos = totalPos + part.Position;
 			numParts = numParts + 1;
@@ -37,7 +37,7 @@ function flip(part, cen, axis)
 			part.Orientation = rOrient + Vector3.new(0, 180, 0);
 		end;
 	end;
-	for _, child in ipairs(part:GetDescendants()) do
+	for _, child in ipairs(part:QueryDescendants("Instance")) do
 		if child:IsA("Texture") or child:IsA("Decal") or child:IsA("SurfaceGui") then
 			flipv1(child, axis);
 		elseif child:IsA("Attachment") then
@@ -120,7 +120,7 @@ function flipTxt(txt, axis)
 end;
 function flipModel(zeMap)
 	local cen = ooo(zeMap);
-	for _, part in ipairs(zeMap:GetDescendants()) do
+	for _, part in ipairs(zeMap:QueryDescendants("Instance")) do
 		if part:IsA("BasePart") or part:IsA("CornerWedgePart") then
 			flip(part, cen, "X");
 		end;

@@ -172,7 +172,7 @@ if game.GameId == 847722000 then
 				end
 			end
 		elseif tostring(mode) == "Disable" then
-			for i,v in pairs(ClonedService("Workspace").Debris.SupplyCrates:GetDescendants()) do
+			for i,v in pairs(ClonedService("Workspace").Debris.SupplyCrates:QueryDescendants("Instance")) do
 				if v.Name == "SleepyDropChams" then
 					v:Remove()
 				end
@@ -203,7 +203,7 @@ if game.GameId == 847722000 then
 
 	local function disablerakechams()
 		if ClonedService("Workspace"):FindFirstChild("Rake") then
-			for i,v in pairs(ClonedService("Workspace"):FindFirstChild("Rake"):GetDescendants()) do
+			for i,v in pairs(ClonedService("Workspace"):FindFirstChild("Rake"):QueryDescendants("Instance")) do
 				if v.Name == "SleepyRakeChams" then
 					v:Destroy()
 				end
@@ -516,7 +516,7 @@ if game.GameId == 847722000 then
 	ExploitsTab:CreateButton({
 		Name = "Bring Scraps",
 		Callback = function()
-			for i,v in pairs(ClonedService("Workspace").Filter.ScrapSpawns:GetDescendants()) do
+			for i,v in pairs(ClonedService("Workspace").Filter.ScrapSpawns:QueryDescendants("Instance")) do
 				if v.Name:lower() == "scrap" then
 					v:PivotTo(ClonedService("Players").LocalPlayer.Character:GetPivot())
 				end
@@ -919,7 +919,7 @@ if game.GameId == 847722000 then
 	ClonedService("RunService").Heartbeat:Connect(function()
 		if AllowRunService == true then
 			if _G.ScrapESP == true then
-				for i,v in pairs(ClonedService("Workspace").Filter.ScrapSpawns:GetDescendants()) do
+				for i,v in pairs(ClonedService("Workspace").Filter.ScrapSpawns:QueryDescendants("Instance")) do
 					if v.Name == "Scrap" then
 						if v:GetAttribute("ScrapESP") == true then
 						else
@@ -958,7 +958,7 @@ if game.GameId == 847722000 then
 						end
 					end
 				end
-				for i,v in pairs(ClonedService("Workspace").Filter.ScrapSpawns:GetDescendants()) do
+				for i,v in pairs(ClonedService("Workspace").Filter.ScrapSpawns:QueryDescendants("Instance")) do
 					if v.Name == "Scrap" then
 						if v:FindFirstChild("ScrapChams") then
 							v.ScrapChams.Enabled = true
@@ -988,7 +988,7 @@ if game.GameId == 847722000 then
 				repeat wait()
 
 				until _G.ScrapESP == false
-				for i,v in pairs(ClonedService("Workspace").Filter.ScrapSpawns:GetDescendants()) do
+				for i,v in pairs(ClonedService("Workspace").Filter.ScrapSpawns:QueryDescendants("Instance")) do
 					pcall(function()
 						if v.Name == "ScrapChams" then
 							v:Remove()
@@ -999,7 +999,7 @@ if game.GameId == 847722000 then
 					end)
 				end
 			elseif _G.ScrapESP == false then
-				for i,v in pairs(ClonedService("Workspace").Filter.ScrapSpawns:GetDescendants()) do
+				for i,v in pairs(ClonedService("Workspace").Filter.ScrapSpawns:QueryDescendants("Instance")) do
 					pcall(function()
 						if v.Name == "ScrapChams" then
 							v:Remove()
@@ -1007,7 +1007,7 @@ if game.GameId == 847722000 then
 						end
 					end)
 				end
-				for i,v in pairs(ClonedService("Workspace").Filter.ScrapSpawns:GetDescendants()) do
+				for i,v in pairs(ClonedService("Workspace").Filter.ScrapSpawns:QueryDescendants("Instance")) do
 					pcall(function()
 						if v:GetAttribute("ScrapESP") == true then
 							v:SetAttribute("ScrapESP",false)
@@ -1188,7 +1188,7 @@ if game.GameId == 847722000 then
 	function DestroyUI()
 		AllowRunService = false
 		FreeCamPart:Remove()
-		for i,v in pairs(ClonedService("Workspace").Filter.ScrapSpawns:GetDescendants()) do
+		for i,v in pairs(ClonedService("Workspace").Filter.ScrapSpawns:QueryDescendants("Instance")) do
 			pcall(function()
 				if v:GetAttribute("ScrapESP") == true then
 					v:SetAttribute("ScrapESP",false)

@@ -102,7 +102,7 @@ local function main()
 				-- fallback
 				if not model.PrimaryPart then
 					local found = false
-					for _, child in model:GetDescendants() do
+					for _, child in model:QueryDescendants("Instance") do
 						if child:IsA("BasePart") then
 							model.PrimaryPart = child
 							model:SetPrimaryPartCFrame(CFrame.new(0, 0, 0))

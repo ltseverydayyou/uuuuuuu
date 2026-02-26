@@ -289,7 +289,7 @@ local function rescan()
 		if not target then
 			return;
 		end;
-		local desc = target:GetDescendants();
+		local desc = target:QueryDescendants("Instance");
 		for i = 1, #desc do
 			qAdd(desc[i]);
 			if i % 200 == 0 then
@@ -302,7 +302,7 @@ end;
 local function onDescAdded(o)
 	task.spawn(function()
 		qAdd(o);
-		local desc = o:GetDescendants();
+		local desc = o:QueryDescendants("Instance");
 		for i = 1, #desc do
 			qAdd(desc[i]);
 			if i % 100 == 0 then

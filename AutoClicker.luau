@@ -401,7 +401,7 @@ local function pointInGui(obj, px, py)
 end;
 local function overOwnUI()
 	local pos = lastPos or UserInputService:GetMouseLocation();
-	for _, o in ipairs(ui:GetDescendants()) do
+	for _, o in ipairs(ui:QueryDescendants("Instance")) do
 		if o:IsA("GuiObject") and pointInGui(o, pos.X, pos.Y) then
 			return true;
 		end;

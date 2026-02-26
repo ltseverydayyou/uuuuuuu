@@ -574,7 +574,7 @@ local NA_GRAB_BODY = (function()
 		return nil;
 	end;
 	local function firstPart(m)
-		for _, d in ipairs(m:GetDescendants()) do
+		for _, d in ipairs(m:QueryDescendants("Instance")) do
 			if d:IsA("BasePart") then
 				return d;
 			end;
@@ -918,7 +918,7 @@ local function isCharInSafeZone(ch)
 	if not ch then
 		return false;
 	end;
-	for _, part in ipairs(ch:GetDescendants()) do
+	for _, part in ipairs(ch:QueryDescendants("Instance")) do
 		if part:IsA("BasePart") then
 			local p = part.Position;
 			for i = 1, #safeZoneParts do
@@ -935,7 +935,7 @@ local function getCharSafeZoneContact(ch)
 	if not ch then
 		return nil, nil, nil;
 	end;
-	for _, part in ipairs(ch:GetDescendants()) do
+	for _, part in ipairs(ch:QueryDescendants("Instance")) do
 		if part:IsA("BasePart") then
 			local p = part.Position;
 			for i = 1, #safeZoneParts do
@@ -963,9 +963,9 @@ local function refreshSafeZones()
 	if not gFolder then
 		return;
 	end;
-	for _, inst in ipairs(gFolder:GetDescendants()) do
+	for _, inst in ipairs(gFolder:QueryDescendants("Instance")) do
 		if inst:IsA("Model") and inst.Name == "SafeZones" then
-			for _, ch in ipairs(inst:GetDescendants()) do
+			for _, ch in ipairs(inst:QueryDescendants("Instance")) do
 				if ch:IsA("BasePart") then
 					safeZoneParts[(#safeZoneParts) + 1] = ch;
 					if szEsp then
@@ -1039,7 +1039,7 @@ local function markTouchDamage(tt)
 		addDamageFlag(part);
 	end;
 end;
-for _, inst in ipairs(ws:GetDescendants()) do
+for _, inst in ipairs(ws:QueryDescendants("Instance")) do
 	if inst:IsA("TouchTransmitter") then
 		markTouchDamage(inst);
 	end;
@@ -1062,7 +1062,7 @@ local function isCharOnDamage(ch)
 	if not ch then
 		return false;
 	end;
-	for _, part in ipairs(ch:GetDescendants()) do
+	for _, part in ipairs(ch:QueryDescendants("Instance")) do
 		if part:IsA("BasePart") then
 			if isPointInDamage(part.Position) then
 				return true;

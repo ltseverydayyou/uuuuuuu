@@ -829,7 +829,7 @@ local function attachContainer(c)
 	if c:IsA("BasePart") then
 		addBall(c);
 	end;
-	for _, d in ipairs(c:GetDescendants()) do
+	for _, d in ipairs(c:QueryDescendants("Instance")) do
 		if d:IsA("BasePart") then
 			addBall(d);
 		end;
@@ -862,7 +862,7 @@ local function trackNamedContainer(parent, name)
 	if not (typeof(parent) == "Instance" and type(name) == "string") then
 		return;
 	end;
-	for _, inst in ipairs(parent:GetDescendants()) do
+	for _, inst in ipairs(parent:QueryDescendants("Instance")) do
 		if inst.Name == name then
 			attachContainer(inst);
 		end;

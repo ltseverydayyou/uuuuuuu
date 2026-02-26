@@ -245,7 +245,7 @@ task.spawn(function()
 				r:FireServer(false);
 				task.wait(6);
 				local exitPart;
-				for _, desc in ipairs(workspace:GetDescendants()) do
+				for _, desc in ipairs(workspace:QueryDescendants("Instance")) do
 					if desc:IsA("BasePart") and desc.Name == "ExitPart" then
 						exitPart = desc;
 						break;

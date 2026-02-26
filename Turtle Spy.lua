@@ -1335,7 +1335,7 @@ end
 local function setClientEventLogging(on)
 	logClientEvents = on;
 	if on then
-		for _, v in ipairs(game:GetDescendants()) do
+		for _, v in ipairs(game:QueryDescendants("Instance")) do
 			if isRemoteEvent(v) then
 				attachClientLogger(v);
 			end;
@@ -1359,7 +1359,7 @@ local function setClientEventLogging(on)
 end;
 
 local function initClientInvokeLogging()
-	for _, v in ipairs(game:GetDescendants()) do
+	for _, v in ipairs(game:QueryDescendants("Instance")) do
 		if isA(v, "RemoteFunction") then
 			wrapClientInvoke(v)
 		end
@@ -1843,7 +1843,7 @@ ImageButton.MouseButton1Click:Connect(function()
 		return;
 	end;
 	browseRemotes = {};
-	for _, v in ipairs(game:GetDescendants()) do
+	for _, v in ipairs(game:QueryDescendants("Instance")) do
 		if isRemoteEvent(v) or isA(v, "RemoteFunction") then
 			table.insert(browseRemotes, v);
 		end;

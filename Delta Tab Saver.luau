@@ -290,7 +290,7 @@ task.defer(function()
 			newBtn.Parent = parent;
 			newBtn.Name = "Script";
 			local labs = {};
-			for _, d in ipairs(newBtn:GetDescendants()) do
+			for _, d in ipairs(newBtn:QueryDescendants("Instance")) do
 				if d:IsA("TextLabel") then
 					table.insert(labs, d);
 				end;
@@ -312,7 +312,7 @@ task.defer(function()
 					desc.Text = "continuation of Nameless Admin with advanced features, fixed commands and lots of customization.";
 				end;
 			end;
-			for _, d in ipairs(newBtn:GetDescendants()) do
+			for _, d in ipairs(newBtn:QueryDescendants("Instance")) do
 				if d:IsA("LocalScript") then
 					d:Destroy();
 				end;
@@ -387,7 +387,7 @@ task.defer(function()
 					return;
 				end;
 				local cur;
-				for _, tb in ipairs(codeSf:GetDescendants()) do
+				for _, tb in ipairs(codeSf:QueryDescendants("Instance")) do
 					if tb:IsA("TextBox") and tb.Visible then
 						cur = tb;
 						break;
@@ -428,7 +428,7 @@ task.defer(function()
 	end;
 	local function getCodeBoxes()
 		local t = {};
-		for _, c in ipairs(codeSf:GetDescendants()) do
+		for _, c in ipairs(codeSf:QueryDescendants("Instance")) do
 			if c:IsA("TextBox") and isScriptName(c.Name) then
 				table.insert(t, c);
 			end;

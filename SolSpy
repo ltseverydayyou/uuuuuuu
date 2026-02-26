@@ -438,7 +438,7 @@ local function handleRemote(remote)
 	end;
 end;
 local function wrapRemotes(folder)
-	for _, obj in ipairs(folder:GetDescendants()) do
+	for _, obj in ipairs(folder:QueryDescendants("Instance")) do
 		if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
 			handleRemote(obj);
 		end;

@@ -101,7 +101,7 @@ do
 			if not c then
 				return;
 			end;
-			for _, part in ipairs(c:GetDescendants()) do
+			for _, part in ipairs(c:QueryDescendants("Instance")) do
 				if part:IsA("BasePart") then
 					part.CanCollide = false;
 				end;
@@ -224,7 +224,7 @@ local function antiVoidStart(getMap)
 	end);
 end;
 local function findLower(map, target)
-	for _, inst in ipairs(map:GetDescendants()) do
+	for _, inst in ipairs(map:QueryDescendants("Instance")) do
 		local n = inst.Name;
 		if typeof(n) == "string" and n:lower() == target then
 			return inst;
@@ -239,7 +239,7 @@ local function anyPart(inst)
 		if inst.PrimaryPart then
 			return inst.PrimaryPart;
 		end;
-		for _, d in ipairs(inst:GetDescendants()) do
+		for _, d in ipairs(inst:QueryDescendants("Instance")) do
 			if d:IsA("BasePart") then
 				return d;
 			end;
@@ -263,7 +263,7 @@ local function bringToPlayer(inst, r)
 end;
 local function scanButtons(map)
 	local buttons = {};
-	for _, o in pairs(map:GetDescendants()) do
+	for _, o in pairs(map:QueryDescendants("Instance")) do
 		if o.ClassName == "Model" and isRand(o.Name) then
 			local hit;
 			for _, ch in pairs(o:GetChildren()) do
@@ -314,7 +314,7 @@ local function onRespawn(char)
 			if not c then
 				return;
 			end;
-			for _, part in ipairs(c:GetDescendants()) do
+			for _, part in ipairs(c:QueryDescendants("Instance")) do
 				if part:IsA("BasePart") then
 					part.CanCollide = false;
 				end;

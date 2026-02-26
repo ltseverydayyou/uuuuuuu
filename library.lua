@@ -3252,7 +3252,7 @@ function Library:CreateWindow(...)
 				InputService.MouseIconEnabled = State;
 			end);
 		end;
-		for _, Desc in next, Outer:GetDescendants() do
+		for _, Desc in next, Outer:QueryDescendants("Instance") do
 			local Properties = {};
 			if Desc:IsA("ImageLabel") then
 				table.insert(Properties, "ImageTransparency");

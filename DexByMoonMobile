@@ -7592,7 +7592,7 @@ local EmbeddedModules = {
 					gui.DescendantAdded:Connect(function(obj)
 						focusInput(self, obj);
 					end);
-					local descs = gui:GetDescendants();
+					local descs = gui:QueryDescendants("Instance");
 					for i = 1, #descs do
 						focusInput(self, descs[i]);
 					end;

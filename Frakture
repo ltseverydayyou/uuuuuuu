@@ -96,7 +96,7 @@ local function scanGame()
 		return;
 	end;
 	do
-		local DescendantsList = game:GetDescendants();
+		local DescendantsList = game:QueryDescendants("Instance");
 		for index = 1, #DescendantsList do
 			if attached() then
 				break;

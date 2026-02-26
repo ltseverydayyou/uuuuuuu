@@ -513,8 +513,8 @@ end
 
 function getScriptsOfParent(p)
 	local list = {}
-	local objs = (p == nil and getnilinstances and getnilinstances()) or p:GetDescendants()
-	if p == game then objs = (getscripts and getscripts()) or game:GetDescendants() end
+	local objs = (p == nil and getnilinstances and getnilinstances()) or p:QueryDescendants("Instance")
+	if p == game then objs = (getscripts and getscripts()) or game:QueryDescendants("Instance") end
 	
 	for i = 1, #objs do
 		local v = objs[i]

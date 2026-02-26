@@ -1287,7 +1287,7 @@ local function UBACA_fake_script()
 		end;
 	end;
 	function ClearESP()
-		for _, v in pairs((ClonedService("Workspace")):GetDescendants()) do
+		for _, v in pairs((ClonedService("Workspace")):QueryDescendants("Instance")) do
 			if v.Name == "EGUI" then
 				v:Remove();
 			end;

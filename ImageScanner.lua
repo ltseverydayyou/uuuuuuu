@@ -840,7 +840,7 @@ local function scanStart()
 
 		local desc
 		local ok = pcall(function()
-			desc = game:GetDescendants()
+			desc = game:QueryDescendants("Instance")
 		end)
 		if not ok or not desc then
 			desc = {}

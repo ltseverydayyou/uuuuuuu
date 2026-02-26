@@ -60,7 +60,7 @@ local npcList = {};
 task.spawn(function()
 	while true do
 		local newList = {};
-		for _, inst in ipairs(Workspace:GetDescendants()) do
+		for _, inst in ipairs(Workspace:QueryDescendants("Instance")) do
 			if inst:IsA("Model") then
 				local h = inst:FindFirstChildOfClass("Humanoid");
 				if h and h.Health > 0 and (not Players:GetPlayerFromCharacter(inst)) and (not inst:FindFirstChildOfClass("ForceField")) then
@@ -361,7 +361,7 @@ RunService.RenderStepped:Connect(function()
 	local handle = tool and tool:FindFirstChild("Handle");
 	if handle and (root.Position - trRoot.Position).Magnitude <= 8 then
 		tool:Activate();
-		for _, p in ipairs(trChar:GetDescendants()) do
+		for _, p in ipairs(trChar:QueryDescendants("Instance")) do
 			if p:IsA("BasePart") then
 				firetouchinterest(handle, p, 0);
 				firetouchinterest(handle, p, 1);

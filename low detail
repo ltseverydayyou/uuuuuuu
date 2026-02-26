@@ -352,7 +352,7 @@ game.DescendantAdded:Connect(function(value)
 	wait(_G.LoadedWait or 1);
 	CheckIfBad(value);
 end);
-local Descendants = game:GetDescendants();
+local Descendants = game:QueryDescendants("Instance");
 local StartNumber = _G.WaitPerAmount or 500;
 local WaitNumber = _G.WaitPerAmount or 500;
 if _G.SendNotifications then

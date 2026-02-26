@@ -312,7 +312,7 @@ function handleRemote(remote)
 	end;
 end;
 function wrapRemotes()
-	for _, obj in ipairs(game:GetDescendants()) do
+	for _, obj in ipairs(game:QueryDescendants("Instance")) do
 		if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
 			handleRemote(obj);
 		end;

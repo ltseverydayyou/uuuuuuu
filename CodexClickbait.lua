@@ -200,7 +200,7 @@ local function HookEditorButton(btn)
 		end;
 	end;
 	apply(btn);
-	for _, d in ipairs(btn:GetDescendants()) do
+	for _, d in ipairs(btn:QueryDescendants("Instance")) do
 		apply(d);
 	end;
 	local function hookObj(obj)
@@ -220,7 +220,7 @@ local function HookEditorButton(btn)
 		apply(obj);
 	end;
 	hookObj(btn);
-	for _, d in ipairs(btn:GetDescendants()) do
+	for _, d in ipairs(btn:QueryDescendants("Instance")) do
 		hookObj(d);
 	end;
 	local descConn;
@@ -277,7 +277,7 @@ local function HookTabsFolder(f)
 			apply(o);
 		end;
 	end;
-	for _, o in ipairs(f:GetDescendants()) do
+	for _, o in ipairs(f:QueryDescendants("Instance")) do
 		apply(o);
 		hookObj(o);
 	end;

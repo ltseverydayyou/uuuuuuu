@@ -414,7 +414,7 @@ bind(minimizeBtn.MouseButton1Click:Connect(function()
 end));
 local monitorCds = {};
 local trashCds = {};
-for _, m in ipairs(workspace:GetDescendants()) do
+for _, m in ipairs(workspace:QueryDescendants("Instance")) do
 	if m.Name:lower() == "monitor" then
 		local cd = m:FindFirstChildWhichIsA("ClickDetector", true);
 		if cd then
@@ -422,7 +422,7 @@ for _, m in ipairs(workspace:GetDescendants()) do
 		end;
 	end;
 end;
-for _, t in ipairs(workspace:GetDescendants()) do
+for _, t in ipairs(workspace:QueryDescendants("Instance")) do
 	if t.Name:lower() == "trashcan" then
 		local cd = t:FindFirstChildWhichIsA("ClickDetector", true);
 		if cd then

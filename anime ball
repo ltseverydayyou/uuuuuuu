@@ -156,7 +156,7 @@ if game.GameId == 5120885191 then
 		if not (antiKb and char) then
 			return
 		end
-		for _, desc in ipairs(char:GetDescendants()) do
+		for _, desc in ipairs(char:QueryDescendants("Instance")) do
 			if isVelocityInstance(desc) then
 				desc:Destroy()
 			end
@@ -178,7 +178,7 @@ if game.GameId == 5120885191 then
 	end
 
 	local function purgeEffects()
-		for _, desc in ipairs(wk:GetDescendants()) do
+		for _, desc in ipairs(wk:QueryDescendants("Instance")) do
 			if isEffectInstance(desc) then
 				desc:Destroy()
 			end
@@ -636,7 +636,7 @@ if game.GameId == 5120885191 then
 		if not ball or not ball.Parent then
 			return
 		end
-		for _, v in ipairs(ball:GetDescendants()) do
+		for _, v in ipairs(ball:QueryDescendants("Instance")) do
 			if v:IsA("ParticleEmitter") or v:IsA("Beam") or v:IsA("Trail") or v:IsA("Attachment") then
 				v:Destroy()
 			end

@@ -1369,10 +1369,7 @@ Main = (function()
 			shinyPort = DefaultSettings.Decompiler.ShinyDecompilerPort
 		end
 		Settings.Decompiler.ShinyDecompilerPort = math.clamp(math.floor(shinyPort), 1, 65535)
-		if Settings.ClassIcon == "Old" then
-			Settings.ClassIcon = "NewDark"
-		end
-		if Settings.ClassIcon ~= "NewDark" and Settings.ClassIcon ~= "Vanilla3" then
+		if Settings.ClassIcon ~= "NewDark" and Settings.ClassIcon ~= "Vanilla3" and Settings.ClassIcon ~= "Old" then
 			Settings.ClassIcon = DefaultSettings.ClassIcon
 		end
 	end

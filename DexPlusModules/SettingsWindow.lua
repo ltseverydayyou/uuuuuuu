@@ -388,10 +388,7 @@ local function main()
 			end
 		end)
 		
-		if Settings.ClassIcon == "Old" then
-			Settings.ClassIcon = "NewDark"
-		end
-		local classIcon = AddDropdown("Class Icons", {"NewDark", "Vanilla3"}, Settings.ClassIcon, false, 100)
+		local classIcon = AddDropdown("Class Icons", {"NewDark", "Vanilla3", "Old"}, Settings.ClassIcon, false, 100)
 		classIcon.OnSelect:Connect(function()
 			Settings.ClassIcon = classIcon.Selected
 			persistSettings()

@@ -55,6 +55,7 @@ local EmbeddedModules = {
 			local idCounter = 0;
 			local scrollV, scrollH, clipboard;
 			local renameBox, renamingNode, searchFunc;
+			local lastContextOpenTime, lastContextOpenPos = 0, nil;
 			local sortingEnabled, autoUpdateSearch;
 			local table, math = table, math;
 			local nilMap, nilCons = {}, {};
@@ -923,6 +924,12 @@ local EmbeddedModules = {
 			end;
 			Explorer.ShowRightClick = function(MousePos)
 				local Mouse = MousePos or Main.Mouse;
+				local mouseX, mouseY = Mouse.X, Mouse.Y;
+				if lastContextOpenPos and tick() - lastContextOpenTime < 0.2 and math.abs(lastContextOpenPos.X - mouseX) <= 6 and math.abs(lastContextOpenPos.Y - mouseY) <= 6 then
+					return;
+				end;
+				lastContextOpenTime = tick();
+				lastContextOpenPos = Vector2.new(mouseX, mouseY);
 				local context = Explorer.RightClickContext;
 				local absoluteSize = context.Gui.AbsoluteSize;
 				context.MaxHeight = absoluteSize.Y <= 600 and absoluteSize.Y - 40 or nil;
@@ -1007,8 +1014,8 @@ local EmbeddedModules = {
 					context:AddRegistered("REFRESH_NIL");
 					context:AddRegistered("HIDE_NIL");
 				end;
-				Explorer.LastRightClickX, Explorer.LastRightClickY = Mouse.X, Mouse.Y;
-				context:Show(Mouse.X, Mouse.Y);
+				Explorer.LastRightClickX, Explorer.LastRightClickY = mouseX, mouseY;
+				context:Show(mouseX, mouseY);
 			end;
 			Explorer.InitRightClick = function()
 				local context = Lib.ContextMenu.new();
@@ -8756,6 +8763,7 @@ local EmbeddedModules = {
 						OnClick = item.OnClick,
 						OnHover = item.OnHover,
 						Disabled = item.Disabled or false,
+						NoHide = item.NoHide or false,
 						DisabledIcon = item.DisabledIcon or "",
 						IconMap = item.IconMap,
 						OnRightClick = item.OnRightClick
@@ -14603,24 +14611,30 @@ local EmbeddedModules = {
 						end;
 						self.Combo = self.Combo + 1;
 						self.ClickId = tick();
-						task.spawn(function()
-							if self.InputDown then
-								self.InputDown = false;
-							else
-								self.InputDown = tick();
-								local Connection = item.MouseButton1Up:Once(function()
+						if button == 1 then
+							task.spawn(function()
+								if self.InputDown then
 									self.InputDown = false;
-								end);
-								while self.InputDown and (not Explorer.Dragging) do
-									if tick() - self.InputDown >= 0.4 then
+								else
+									self.InputDown = tick();
+									item.MouseButton1Up:Once(function()
 										self.InputDown = false;
-										self.OnRelease:Fire(item, self.Combo, 2, Vector2.new(X, Y));
-										break;
+									end);
+									while self.InputDown and (not Explorer.Dragging) do
+										if tick() - self.InputDown >= 0.4 then
+											self.InputDown = false;
+											local holdX, holdY = X, Y;
+											if Main and Main.Mouse then
+												holdX, holdY = Main.Mouse.X, Main.Mouse.Y;
+											end;
+											self.OnRelease:Fire(item, self.Combo, 2, Vector2.new(holdX, holdY));
+											break;
+										end;
+										task.wait();
 									end;
-									task.wait();
 								end;
-							end;
-						end);
+							end);
+						end;
 						local release;
 						release = service.UserInputService.InputEnded:Connect(function(input)
 							if input.UserInputType == Enum.UserInputType["MouseButton" .. button] then
@@ -15978,7 +15992,8 @@ Main = (function()
 			end))();
 		else
 			Main.MainGuiMouseEvent = service.UserInputService.InputBegan:Connect(function(input)
-				if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and (not Lib.CheckMouseInGui(Main.MainGui.OpenButton)) and (not Lib.CheckMouseInGui(Main.MainGui.OpenButton.MainFrame)) then
+				local clickedSettingsMenu = Main.SettingsMenuContext and Main.SettingsMenuContext.GuiElems and Main.SettingsMenuContext.GuiElems.Main and Lib.CheckMouseInGui(Main.SettingsMenuContext.GuiElems.Main);
+				if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and (not Lib.CheckMouseInGui(Main.MainGui.OpenButton)) and (not Lib.CheckMouseInGui(Main.MainGui.OpenButton.MainFrame)) and (not clickedSettingsMenu) then
 					Main.SetMainGuiOpen(false);
 				end;
 			end);
@@ -16331,6 +16346,7 @@ Main = (function()
 		local settingsMenu = Lib.ContextMenu.new();
 		settingsMenu.Iconless = true;
 		settingsMenu.Width = 210;
+		Main.SettingsMenuContext = settingsMenu;
 		local function applySettingChanges()
 			if Explorer and Explorer.SetSortingEnabled then
 				pcall(Explorer.SetSortingEnabled, Settings.Explorer.Sorting);
@@ -16351,47 +16367,57 @@ Main = (function()
 		local function makeToggleLabel(name, value)
 			return (value and "[ON] " or "[OFF] ") .. name;
 		end;
-		local function showSettingsMenu()
+		local function rebuildSettingsMenu()
 			settingsMenu:Clear();
 			settingsMenu:AddDivider("Settings");
 			settingsMenu:Add({
 				Name = makeToggleLabel("Explorer Sorting", Settings.Explorer.Sorting),
+				NoHide = true,
 				OnClick = function()
 					Settings.Explorer.Sorting = not Settings.Explorer.Sorting;
 					applySettingChanges();
-					task.defer(showSettingsMenu);
+					rebuildSettingsMenu();
+					settingsMenu:Refresh();
 				end
 			});
 			settingsMenu:Add({
 				Name = makeToggleLabel("Use Name Width", Settings.Explorer.UseNameWidth),
+				NoHide = true,
 				OnClick = function()
 					Settings.Explorer.UseNameWidth = not Settings.Explorer.UseNameWidth;
 					applySettingChanges();
-					task.defer(showSettingsMenu);
+					rebuildSettingsMenu();
+					settingsMenu:Refresh();
 				end
 			});
 			settingsMenu:Add({
 				Name = makeToggleLabel("Search Auto Update", Settings.Explorer.AutoUpdateSearch),
+				NoHide = true,
 				OnClick = function()
 					Settings.Explorer.AutoUpdateSearch = not Settings.Explorer.AutoUpdateSearch;
 					applySettingChanges();
-					task.defer(showSettingsMenu);
+					rebuildSettingsMenu();
+					settingsMenu:Refresh();
 				end
 			});
 			settingsMenu:Add({
 				Name = makeToggleLabel("Properties Hidden", Settings.Properties.ShowHidden),
+				NoHide = true,
 				OnClick = function()
 					Settings.Properties.ShowHidden = not Settings.Properties.ShowHidden;
 					applySettingChanges();
-					task.defer(showSettingsMenu);
+					rebuildSettingsMenu();
+					settingsMenu:Refresh();
 				end
 			});
 			settingsMenu:Add({
 				Name = makeToggleLabel("Properties Deprecated", Settings.Properties.ShowDeprecated),
+				NoHide = true,
 				OnClick = function()
 					Settings.Properties.ShowDeprecated = not Settings.Properties.ShowDeprecated;
 					applySettingChanges();
-					task.defer(showSettingsMenu);
+					rebuildSettingsMenu();
+					settingsMenu:Refresh();
 				end
 			});
 			settingsMenu:AddDivider();
@@ -16409,6 +16435,9 @@ Main = (function()
 					applySettingChanges();
 				end
 			});
+		end;
+		local function showSettingsMenu()
+			rebuildSettingsMenu();
 			local btnPos = settingsButton.AbsolutePosition;
 			local btnSize = settingsButton.AbsoluteSize;
 			settingsMenu:Show(btnPos.X - 180 + btnSize.X, btnPos.Y + btnSize.Y + 2);

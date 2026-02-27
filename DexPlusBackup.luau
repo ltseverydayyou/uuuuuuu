@@ -472,6 +472,7 @@ Main = (function()
 		local branch = Main.GitRepoBranch or "main"
 		local apiUrl = ("https://api.github.com/repos/%s/contents/%s?ref=%s"):format(Main.GitRepoName, path, branch)
 		local base64Error
+		local apiError
 		local success, body = pcall(oldgame.HttpGet, game, apiUrl)
 		if success then
 			local ok, payload = pcall(service.HttpService.JSONDecode, service.HttpService, body)
@@ -491,18 +492,18 @@ Main = (function()
 					if rawSuccess then
 						return true, rawBody
 					else
-						return false, rawBody
+						apiError = tostring(rawBody)
 					end
 				end
 
 				if payload.message then
-					return false, payload.message
+					apiError = tostring(payload.message)
 				end
 			else
-				return false, "Failed to decode GitHub metadata: "..tostring(payload)
+				apiError = "Failed to decode GitHub metadata: "..tostring(payload)
 			end
 		else
-			return false, body
+			apiError = tostring(body)
 		end
 
 		local rawUrl = ("https://raw.githubusercontent.com/%s/%s/%s"):format(Main.GitRepoName, branch, path)
@@ -511,7 +512,7 @@ Main = (function()
 			return true, rawBody
 		end
 
-		return false, rawBody or base64Error or body or "Unknown error fetching "..path
+		return false, tostring(rawBody or apiError or base64Error or body or ("Unknown error fetching "..path))
 	end
 
 	Main.LoadModule = function(name)

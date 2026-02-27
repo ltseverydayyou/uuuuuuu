@@ -2112,11 +2112,21 @@ local function main()
 				obj.ImageRectOffset = Vector2.new(funcs.ExplorerIcons.IconSize * iconIndex, 0)
 				obj.ImageRectSize = Vector2.new(funcs.ExplorerIcons.IconSize, funcs.ExplorerIcons.IconSize)
 			elseif Settings.ClassIcon == "NewLight" or Settings.ClassIcon == "NewDark" then
-				local isService = string.find(index, "Service") and game:GetService(index)
+				local isService = false
+				if type(index) == "string" and string.find(index, "Service", 1, true) then
+					isService = pcall(game.GetService, game, index)
+				end
 				
 				obj.Position = UDim2.fromOffset(0, 0)
 				obj.Size = UDim2.fromOffset(16, 16)
-				index = (self.ExplorerIcons.Icons[index] or (isService and self.ExplorerIcons.Icons.Service) or self.ExplorerIcons.Icons.Placeholder) - 1
+				local iconId = self.ExplorerIcons.Icons[index]
+				if iconId == nil and isService then
+					iconId = self.ExplorerIcons.Icons.Service
+				end
+				if iconId == nil then
+					iconId = self.ExplorerIcons.Icons.Placeholder
+				end
+				index = (tonumber(iconId) or 1) - 1
 				obj.ImageRectOffset = Vector2.new(funcs.ExplorerIcons.IconSize * (index % funcs.ExplorerIcons.Height), funcs.ExplorerIcons.IconSize * math.floor(index / funcs.ExplorerIcons.Height))
 				obj.ImageRectSize = Vector2.new(funcs.ExplorerIcons.IconSize, funcs.ExplorerIcons.IconSize)
 			else

@@ -1947,15 +1947,7 @@ local function main()
 			end
 			return asset
 		end
-		if Settings.ClassIcon == "Old" then
-			funcs.ExplorerIcons = {
-				["MapId"] = resolveMapId("rbxasset://textures/ClassImages.PNG"),
-				["Icons"] = IconList.Old.Icons,
-				["IconSize"] = IconList.Old.IconSize,
-				["Witdh"] = IconList.Old.Witdh,
-				["Height"] = IconList.Old.Height
-			}
-		elseif Settings.ClassIcon and IconList[Settings.ClassIcon] then
+		if Settings.ClassIcon and IconList[Settings.ClassIcon] then
 			funcs.ExplorerIcons = {
 				["MapId"] = resolveMapId(IconList[Settings.ClassIcon].MapId),
 				["Icons"] = IconList[Settings.ClassIcon].Icons,
@@ -2005,84 +1997,6 @@ local function main()
 			return math.floor(_id / 14 % 14), math.floor(_id % 14)
 		end
 
-		local mappedOldIconCache = {}
-		local function resolveMappedOldIconIndex(className)
-			if type(className) ~= "string" or className == "" then
-				return nil
-			end
-
-			local cached = mappedOldIconCache[className]
-			if cached ~= nil then
-				if cached == false then
-					return nil
-				end
-				return cached
-			end
-
-			local checked = {}
-			local current = className
-			while type(current) == "string" and current ~= "" and not checked[current] do
-				checked[current] = true
-
-				local icons = funcs.ExplorerIcons and funcs.ExplorerIcons.Icons
-				local idx = icons and tonumber(icons[current])
-				if idx ~= nil then
-					mappedOldIconCache[className] = idx
-					return idx
-				end
-
-				local apiEntry = API and API.Classes and API.Classes[current]
-				local super = apiEntry and apiEntry.Superclass
-				if type(super) == "table" then
-					current = super.Name
-				else
-					current = super
-				end
-			end
-
-			mappedOldIconCache[className] = false
-			return nil
-		end
-
-		local explorerImageIndexCache = {}
-		local function resolveExplorerImageIndex(className)
-			if type(className) ~= "string" or className == "" then
-				return nil
-			end
-
-			local cached = explorerImageIndexCache[className]
-			if cached ~= nil then
-				if cached == false then
-					return nil
-				end
-				return cached
-			end
-
-			local checked = {}
-			local current = className
-			while type(current) == "string" and current ~= "" and not checked[current] do
-				checked[current] = true
-
-				local rmdEntry = RMD and RMD.Classes and RMD.Classes[current]
-				local idx = rmdEntry and tonumber(rmdEntry.ExplorerImageIndex)
-				if idx ~= nil then
-					explorerImageIndexCache[className] = idx
-					return idx
-				end
-
-				local apiEntry = API and API.Classes and API.Classes[current]
-				local super = apiEntry and apiEntry.Superclass
-				if type(super) == "table" then
-					current = super.Name
-				else
-					current = super
-				end
-			end
-
-			explorerImageIndexCache[className] = false
-			return nil
-		end
-		
 		funcs.GetExplorerIcon = function(self, obj, index)
 			if Settings.ClassIcon == "Vanilla3" then
 				obj.Position = UDim2.fromOffset(0, 0)
@@ -2092,25 +2006,13 @@ local function main()
 				obj.ImageRectOffset = Vector2.new(funcs.ExplorerIcons.IconSize * (index % funcs.ExplorerIcons.Height), funcs.ExplorerIcons.IconSize * math.floor(index / funcs.ExplorerIcons.Height))
 				obj.ImageRectSize = Vector2.new(funcs.ExplorerIcons.IconSize, funcs.ExplorerIcons.IconSize)
 			elseif Settings.ClassIcon == "Old" then
-				local iconIndex = resolveMappedOldIconIndex(index)
-				if iconIndex == nil then
-					iconIndex = resolveExplorerImageIndex(index)
-				end
-				if iconIndex == nil then
-					local isService = type(index) == "string" and string.find(index, "Service", 1, true) ~= nil
-					if isService then
-						iconIndex = resolveMappedOldIconIndex("CollectionService") or resolveExplorerImageIndex("ServiceProvider")
-					else
-						iconIndex = resolveMappedOldIconIndex("Folder") or resolveExplorerImageIndex("Instance")
-					end
-				end
-				iconIndex = math.max(math.floor(tonumber(iconIndex) or 0), 0)
+				index = (self.ExplorerIcons.Icons[index] or 0)
+				local row, col = self:IconDehash(index)
+				local MapSize = Vector2.new(256, 256)
+				local pad, border = 2, 1
 
-				obj.Position = UDim2.fromOffset(0, 0)
-				obj.Size = UDim2.fromOffset(16, 16)
-				obj.Image = funcs.ExplorerIcons.MapId
-				obj.ImageRectOffset = Vector2.new(funcs.ExplorerIcons.IconSize * iconIndex, 0)
-				obj.ImageRectSize = Vector2.new(funcs.ExplorerIcons.IconSize, funcs.ExplorerIcons.IconSize)
+				obj.Position = UDim2.new(-col - (pad * (col + 1) + border) / funcs.ExplorerIcons.IconSize, 0, -row - (pad * (row + 1) + border) / funcs.ExplorerIcons.IconSize, 0)
+				obj.Size = UDim2.new(MapSize.X / funcs.ExplorerIcons.IconSize, 0, MapSize.Y / funcs.ExplorerIcons.IconSize, 0)
 			elseif Settings.ClassIcon == "NewLight" or Settings.ClassIcon == "NewDark" then
 				local isService = false
 				if type(index) == "string" and string.find(index, "Service", 1, true) then

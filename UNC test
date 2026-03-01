@@ -324,6 +324,12 @@ test("clonefunction", {}, function()
 	local copy = clonefunction(testf);
 	assert(testf() == copy(), "The clone should return the same value as the original");
 	assert(testf ~= copy, "The clone should not be equal to the original");
+	local old = hookfunction(testf, function()
+		return "hooked";
+	end);
+	assert(testf() == "hooked", "hookfunction setup failed on original closure");
+	assert(copy() == "success", "clonefunction should not inherit hooks applied to the original closure");
+	assert(old() == "success", "hookfunction should return the original pre-hook behavior");
 end);
 test("cloneref", {}, function()
 	local part = Instance.new("Part");
@@ -781,7 +787,8 @@ test("identifyexecutor", {
 }, function()
 	local name, version = identifyexecutor();
 	assert(type(name) == "string", "Did not return a string for the name");
-	return type(version) == "string" and "Returns version as a string" or "Does not return version";
+	assert(type(version) == "string", "Did not return a string for the version");
+	return name .. " " .. version;
 end);
 test("isfile", {}, function()
 	writefile(".tests/isfile.txt", "success");
@@ -992,7 +999,12 @@ test("request", {
 			Method = "GET"
 		});
 		assert(type(res) == "table", "Response must be a table");
+		assert(type(res.Success) == "boolean", "Response.Success must be a boolean");
+		assert(res.Success == true, "Response.Success should be true for a 200 response");
 		assert(res.StatusCode == 200, "Did not return a 200 status code");
+		assert(type(res.StatusMessage) == "string", "Response.StatusMessage must be a string");
+		assert(type(res.Headers) == "table", "Response.Headers must be a table");
+		assert(type(res.Body) == "string", "Response.Body must be a string");
 		local data = hs:JSONDecode(res.Body);
 		assert(type(data) == "table" and data["user-agent"] ~= nil, "Did not return a table with a user-agent key (can be empty string)");
 		return data["user-agent"];
@@ -1008,6 +1020,10 @@ test("request", {
 	if not okCustom or type(res2) ~= "table" or res2.StatusCode ~= 200 then
 		return "Basic request OK; custom User-Agent unsupported or blocked";
 	end;
+	assert(type(res2.Success) == "boolean", "Custom request Response.Success must be a boolean");
+	assert(type(res2.StatusMessage) == "string", "Custom request Response.StatusMessage must be a string");
+	assert(type(res2.Headers) == "table", "Custom request Response.Headers must be a table");
+	assert(type(res2.Body) == "string", "Custom request Response.Body must be a string");
 	local data2 = hs:JSONDecode(res2.Body);
 	if type(data2) ~= "table" or type(data2["user-agent"]) ~= "string" then
 		return "Basic request OK; custom User-Agent behavior unknown";
@@ -1322,93 +1338,323 @@ test("Drawing.clear", {}, function()
 	local ok, err = pcall(Drawing.clear);
 	assert(ok, err or "Drawing.clear errored");
 end, true);
-local extraOptionalGlobals = {
-	{
-		"saveinstance",
-		{
-			"save_instance"
-		}
-	},
-	{
-		"restorefunction",
-		{}
-	},
-	{
-		"replaceclosure",
-		{}
-	},
-	{
-		"cloneclosure",
-		{}
-	},
-	{
-		"dumpstring",
-		{}
-	},
-	{
-		"getcallstack",
-		{}
-	},
-	{
-		"getfunctionhash",
-		{}
-	},
-	{
-		"isluau",
-		{}
-	},
-	{
-		"gethwid",
-		{}
-	},
-	{
-		"setnamecallmethod",
-		{}
-	},
-	{
-		"getpointerfrominstance",
-		{}
-	},
-	{
-		"firetouchtransmitter",
-		{}
-	},
-	{
-		"getspecialinfo",
-		{}
-	},
-	{
-		"readbinarystring",
-		{}
-	},
-	{
-		"rconsolewarn",
-		{
-			"consolewarn"
-		}
-	},
-	{
-		"rconsoleerr",
-		{
-			"consoleerr"
-		}
-	},
-	{
-		"http",
-		{}
-	},
-	{
-		"http.get",
-		{}
-	},
-	{
-		"http.post",
-		{}
-	}
-};
-for _, def in ipairs(extraOptionalGlobals) do
-	test(def[1], def[2], nil, true);
+local function testResolved(name, aliases, callback, optional, timeoutSec)
+	optional = optional == true;
+	running += 1;
+	task.spawn(function()
+		local resolvedName = name;
+		local resolvedValue = getGlobal(name);
+		if resolvedValue == nil then
+			for _, alias in ipairs(aliases) do
+				local aliasValue = getGlobal(alias);
+				if aliasValue ~= nil then
+					resolvedName = alias;
+					resolvedValue = aliasValue;
+					break;
+				end;
+			end;
+		end;
+		local label = resolvedName == name and name or (name .. " [" .. resolvedName .. "]");
+		if resolvedValue == nil then
+			if optional then
+				optionalMissing += 1;
+				table.insert(list_optional_missing, name);
+				print("⏺️ " .. name .. " • Optional feature not provided");
+			else
+				fails += 1;
+				missing += 1;
+				table.insert(list_missing, name);
+				warn("⛔ " .. label .. " • Global is missing in this environment");
+			end;
+		else
+			local success, message = runCallbackWithTimeout(function()
+				return callback(resolvedValue, resolvedName);
+			end, timeoutSec);
+			if success then
+				passes += 1;
+				table.insert(list_pass, label .. (message and " • " .. message or ""));
+				print("✅ " .. label .. (message and " • " .. message or ""));
+			else
+				fails += 1;
+				local shortError = normalizeError(message);
+				table.insert(list_fail, label .. " - " .. shortError);
+				warn("⛔ " .. label .. " failed: " .. shortError);
+			end;
+		end;
+		local undefinedAliases = {};
+		for _, alias in ipairs(aliases) do
+			if getGlobal(alias) == nil then
+				table.insert(undefinedAliases, alias);
+			end;
+		end;
+		if #undefinedAliases > 0 then
+			undefined += 1;
+			table.insert(list_alias_missing, name .. " -> " .. table.concat(undefinedAliases, ", "));
+			warn("⚠️ Missing alias(es) for " .. name .. ": " .. table.concat(undefinedAliases, ", "));
+		end;
+		running -= 1;
+	end);
 end;
+local function getHttpBody(result)
+	if type(result) == "string" then
+		return result;
+	end;
+	if type(result) == "table" then
+		if type(result.Body) == "string" then
+			return result.Body;
+		end;
+		if type(result.body) == "string" then
+			return result.body;
+		end;
+	end;
+	return nil;
+end;
+local function assertHttpBody(result, label)
+	local body = getHttpBody(result);
+	assert(type(body) == "string" and #body > 0, label .. " did not return a non-empty response body");
+	return body;
+end;
+test("saveinstance", {
+	"save_instance"
+}, nil, true);
+testResolved("restorefunction", {}, function(fn)
+	assert(type(fn) == "function", "restorefunction must be a function");
+	local target = function(n)
+		return n + 1;
+	end;
+	local old = hookfunction(target, function(n)
+		return n + 50;
+	end);
+	assert(target(1) == 51, "hookfunction setup failed for restorefunction");
+	local ok, err = pcall(fn, target);
+	assert(ok, err or "restorefunction errored");
+	assert(target(1) == 2, "restorefunction did not restore the hooked function");
+	assert(old(1) == 2, "hookfunction's returned original function behaved unexpectedly after restore");
+end, true);
+testResolved("replaceclosure", {}, function(fn)
+	assert(type(fn) == "function", "replaceclosure must be a function");
+	local target = function(n)
+		return n + 1;
+	end;
+	local replacement = function(n)
+		return n + 200;
+	end;
+	local ok, result = pcall(fn, target, replacement);
+	assert(ok, result or "replaceclosure errored");
+	if target(1) == 201 then
+		return "Replaced in-place";
+	end;
+	if type(result) == "function" then
+		assert(result(1) == 201, "replaceclosure returned a function with unexpected behavior");
+		return "Returned replacement closure";
+	end;
+	error("replaceclosure did not replace the closure");
+end, true);
+testResolved("cloneclosure", {}, function(fn)
+	assert(type(fn) == "function", "cloneclosure must be a function");
+	local value = 41;
+	local original = function()
+		return value;
+	end;
+	local copy = fn(original);
+	assert(type(copy) == "function", "cloneclosure did not return a function");
+	assert(copy ~= original, "cloneclosure returned the original function");
+	assert(copy() == 41, "cloneclosure copy returned unexpected data");
+end, true);
+testResolved("dumpstring", {}, function(fn)
+	assert(type(fn) == "function", "dumpstring must be a function");
+	local ok, dumped = pcall(fn, "return 123");
+	if not ok then
+		ok, dumped = pcall(fn, function()
+			return 123;
+		end);
+	end;
+	assert(ok, dumped or "dumpstring errored");
+	assert(type(dumped) == "string", "dumpstring must return a string");
+	assert(#dumped > 0, "dumpstring returned an empty string");
+end, true);
+testResolved("getcallstack", {}, function(fn)
+	assert(type(fn) == "function", "getcallstack must be a function");
+	local ok, stack = pcall(fn);
+	if not ok then
+		ok, stack = pcall(fn, 0);
+	end;
+	assert(ok, stack or "getcallstack errored");
+	local stackType = type(stack);
+	assert(stackType == "table" or stackType == "string", "getcallstack returned unexpected type: " .. stackType);
+	return "Returned " .. stackType;
+end, true);
+testResolved("getfunctionhash", {}, function(fn)
+	assert(type(fn) == "function", "getfunctionhash must be a function");
+	local ok, hash = pcall(fn, function()
+		return "UNC_HASH";
+	end);
+	assert(ok, hash or "getfunctionhash errored");
+	assert(type(hash) == "string", "getfunctionhash must return a string");
+	assert(#hash == 96, "getfunctionhash must return a 96-character SHA-384 hex digest");
+	assert(hash:match("^[a-fA-F0-9]+$") ~= nil, "getfunctionhash must return a hex digest");
+end, true);
+testResolved("isluau", {}, function(fn)
+	assert(type(fn) == "function", "isluau must be a function");
+	local result = fn();
+	assert(type(result) == "boolean", "isluau must return a boolean");
+	assert(result == true, "isluau should report true inside Luau");
+end, true);
+testResolved("gethwid", {}, function(fn)
+	assert(type(fn) == "function", "gethwid must be a function");
+	local hwid = fn();
+	assert(type(hwid) == "string", "gethwid must return a string");
+	assert(#hwid > 0, "gethwid returned an empty string");
+end, true);
+testResolved("setnamecallmethod", {}, function(fn)
+	assert(type(fn) == "function", "setnamecallmethod must be a function");
+	local changed = false;
+	local old;
+	old = hookmetamethod(game, "__namecall", function(self, ...)
+		if self == game and (not changed) and getnamecallmethod() == "GetService" then
+			changed = true;
+			local ok, err = pcall(fn, "IsA");
+			assert(ok, err or "setnamecallmethod errored");
+			return old(self, "DataModel");
+		end;
+		return old(self, ...);
+	end);
+	local result = game:GetService("Lighting");
+	assert(result == true, "setnamecallmethod did not rewrite the active namecall");
+end, true);
+testResolved("getpointerfrominstance", {}, function(fn)
+	assert(type(fn) == "function", "getpointerfrominstance must be a function");
+	local part = Instance.new("Part");
+	local ok, pointer = pcall(fn, part);
+	part:Destroy();
+	assert(ok, pointer or "getpointerfrominstance errored");
+	local pointerType = type(pointer);
+	assert(pointer ~= nil, "getpointerfrominstance returned nil");
+	assert(pointerType == "number" or pointerType == "string" or pointerType == "userdata", "Unexpected pointer type: " .. pointerType);
+end, true);
+testResolved("firetouchtransmitter", {}, function(fn)
+	assert(type(fn) == "function", "firetouchtransmitter must be a function");
+	local plrs = game:GetService("Players");
+	local lp = plrs.LocalPlayer;
+	if not lp then
+		return "LocalPlayer missing; cannot test firetouchtransmitter";
+	end;
+	local char = lp.Character or lp.CharacterAdded:Wait();
+	local root = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChildWhichIsA("BasePart");
+	if not root then
+		return "No character root part; cannot test firetouchtransmitter";
+	end;
+	local part = Instance.new("Part");
+	part.Size = Vector3.new(4, 4, 4);
+	part.Anchored = true;
+	part.CanCollide = true;
+	part.Position = root.Position + Vector3.new(0, 5000, 0);
+	part.Parent = workspace;
+	local touched = false;
+	part.Touched:Connect(function(hit)
+		if hit == root then
+			touched = true;
+		end;
+	end);
+	local transmitter = part:FindFirstChildOfClass("TouchTransmitter");
+	if transmitter then
+		local ok, err = pcall(fn, transmitter, 0);
+		if not ok then
+			part:Destroy();
+			error(err or "firetouchtransmitter errored when given TouchTransmitter");
+		end;
+		task.wait(0.05);
+		if touched then
+			part:Destroy();
+			return "Triggered via TouchTransmitter";
+		end;
+	end;
+	local ok, err = pcall(fn, root, part, 0);
+	if not ok then
+		part:Destroy();
+		error(err or "firetouchtransmitter errored when given part arguments");
+	end;
+	task.wait(0.05);
+	local ok2, err2 = pcall(fn, root, part, 1);
+	part:Destroy();
+	assert(ok2, err2 or "firetouchtransmitter release errored");
+	if touched then
+		return "Triggered via part arguments";
+	end;
+	return "Call succeeded; touch event was not observed";
+end, true);
+testResolved("getspecialinfo", {}, function(fn)
+	assert(type(fn) == "function", "getspecialinfo must be a function");
+	local mesh = Instance.new("SpecialMesh");
+	local info = fn(mesh);
+	assert(type(info) == "table", "getspecialinfo must return a table");
+end, true);
+testResolved("readbinarystring", {}, function(fn)
+	assert(type(fn) == "function", "readbinarystring must be a function");
+	local part = Instance.new("Part");
+	part:SetAttribute("UNCBinaryProbe", true);
+	local ok, value = pcall(fn, part, "AttributesSerialize");
+	if not ok then
+		ok, value = pcall(fn, part, "Tags");
+	end;
+	part:Destroy();
+	assert(ok, value or "readbinarystring errored");
+	assert(type(value) == "string", "readbinarystring must return a string");
+end, true);
+testResolved("gethostenv", {}, function(fn)
+	assert(type(fn) == "function", "gethostenv must be a function");
+	local env = fn();
+	assert(type(env) == "table", "gethostenv must return a table");
+	assert(env ~= nil, "gethostenv returned nil");
+	if env.game ~= nil then
+		assert(env.game == game, "gethostenv().game did not match the global game");
+	end;
+end, true);
+testResolved("http", {}, function(value)
+	assert(type(value) == "table", "http must be a table");
+	local requestFn = value.request or value.Request;
+	if type(requestFn) == "function" then
+		local ok, result = pcall(requestFn, {
+			Url = "https://httpbin.org/get",
+			Method = "GET"
+		});
+		if not ok then
+			ok, result = pcall(requestFn, value, {
+				Url = "https://httpbin.org/get",
+				Method = "GET"
+			});
+		end;
+		assert(ok, result or "http.request errored");
+		assertHttpBody(result, "http.request");
+		return "Used http.request";
+	end;
+	local getFn = value.get or value.Get;
+	assert(type(getFn) == "function", "http table does not expose request/get");
+	local ok, result = pcall(getFn, "https://httpbin.org/get");
+	if not ok then
+		ok, result = pcall(getFn, value, "https://httpbin.org/get");
+	end;
+	assert(ok, result or "http.get errored");
+	assertHttpBody(result, "http.get");
+	return "Used http.get";
+end, true);
+testResolved("http.get", {}, function(fn)
+	assert(type(fn) == "function", "http.get must be a function");
+	local ok, result = pcall(fn, "https://httpbin.org/get");
+	assert(ok, result or "http.get errored");
+	local body = assertHttpBody(result, "http.get");
+	assert(body:find("httpbin", 1, true) ~= nil or body:find("\"url\"", 1, true) ~= nil, "http.get response body did not look like a real HTTP response");
+end, true);
+testResolved("http.post", {}, function(fn)
+	assert(type(fn) == "function", "http.post must be a function");
+	local ok, result = pcall(fn, "https://httpbin.org/post", "UNC_TEST=1", "application/x-www-form-urlencoded");
+	if not ok then
+		ok, result = pcall(fn, "https://httpbin.org/post", "UNC_TEST=1");
+	end;
+	assert(ok, result or "http.post errored");
+	local body = assertHttpBody(result, "http.post");
+	assert(body:find("UNC_TEST", 1, true) ~= nil or body:find("\"form\"", 1, true) ~= nil, "http.post response body did not include posted data");
+end, true);
 task.defer(function()
 	repeat
 		task.wait();
@@ -1522,6 +1768,26 @@ local function runRcon()
 			f = function(fn)
 				local ok, err = pcall(fn);
 				assert(ok, err or "rconsoledestroy errored");
+			end
+		},
+		{
+			n = "rconsolewarn",
+			a = {
+				"consolewarn"
+			},
+			f = function(fn)
+				local ok, err = pcall(fn, "UNC rconsolewarn test\n");
+				assert(ok, err or "rconsolewarn errored");
+			end
+		},
+		{
+			n = "rconsoleerr",
+			a = {
+				"consoleerr"
+			},
+			f = function(fn)
+				local ok, err = pcall(fn, "UNC rconsoleerr test\n");
+				assert(ok, err or "rconsoleerr errored");
 			end
 		}
 	};

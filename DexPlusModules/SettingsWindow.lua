@@ -554,6 +554,37 @@ local function main()
 			persistUserSettings()
 		end)
 		AddText("Changing class icons requires restart.")
+
+		sectionAnchors.Startup = AddSeperator("Startup")
+		AddText("These options apply the next time Dex starts or restarts.")
+
+		Settings.Startup = Settings.Startup or {}
+
+		local explorerStartupSide = AddDropdown("Explorer Window Side", {"Left", "Right"}, Settings.Startup.ExplorerSide or "Right", false, 90)
+		explorerStartupSide.OnSelect:Connect(function()
+			Settings.Startup.ExplorerSide = explorerStartupSide.Selected
+			persistSettings()
+		end)
+
+		local propertiesStartupSide = AddDropdown("Properties Window Side", {"Left", "Right"}, Settings.Startup.PropertiesSide or "Right", false, 90)
+		propertiesStartupSide.OnSelect:Connect(function()
+			Settings.Startup.PropertiesSide = propertiesStartupSide.Selected
+			persistSettings()
+		end)
+
+		local openExplorerOnStartup = AddCheckbox("Open Explorer On Startup", Settings.Startup.OpenExplorer ~= false)
+		openExplorerOnStartup.OnInput:Connect(function()
+			Settings.Startup.OpenExplorer = openExplorerOnStartup.Toggled
+			persistSettings()
+		end)
+
+		local openPropertiesOnStartup = AddCheckbox("Open Properties On Startup", Settings.Startup.OpenProperties ~= false)
+		openPropertiesOnStartup.OnInput:Connect(function()
+			Settings.Startup.OpenProperties = openPropertiesOnStartup.Toggled
+			persistSettings()
+		end)
+
+		AddText("You can start with both, one, or neither window open.")
 		
 		sectionAnchors.Explorer = AddSeperator("Explorer")
 
@@ -964,7 +995,7 @@ local function main()
 			setWindowTitleSuffix("User Prefs Saved")
 		end)
 
-		for _, sectionName in ipairs({"UI", "Explorer", "Properties", "Viewer", "Console", "Decompiler", "Themes", "Files"}) do
+		for _, sectionName in ipairs({"UI", "Startup", "Explorer", "Properties", "Viewer", "Console", "Decompiler", "Themes", "Files"}) do
 			createQuickTab(sectionName)
 		end
 

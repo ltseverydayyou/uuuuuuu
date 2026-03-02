@@ -213,6 +213,13 @@ DefaultSettings = (function()
 			SettingsWidth = 250,
 			SettingsHeight = 375
 		},
+		Startup = {
+			_Recurse = true,
+			ExplorerSide = "Right",
+			PropertiesSide = "Right",
+			OpenExplorer = true,
+			OpenProperties = true
+		},
 		Decompiler = {
 			DecompilerFallback = "Konstant", -- Konstant, Shiny, AdvancedDecompiler
 			PreferDecompilerFallback = false,
@@ -1545,6 +1552,28 @@ Main = (function()
 		local settingsHeight = math.floor(tonumber(Settings.Window.SettingsHeight) or DefaultSettings.Window.SettingsHeight or 375)
 		Settings.Window.SettingsHeight = math.clamp(settingsHeight, 280, 700)
 
+		if type(Settings.Startup) ~= "table" then
+			Settings.Startup = {}
+		end
+		local startup = Settings.Startup
+		local defaultStartup = DefaultSettings and DefaultSettings.Startup or {}
+		local explorerSide = startup.ExplorerSide
+		if explorerSide ~= "Left" and explorerSide ~= "Right" then
+			explorerSide = defaultStartup.ExplorerSide
+		end
+		startup.ExplorerSide = (explorerSide == "Left") and "Left" or "Right"
+		local propertiesSide = startup.PropertiesSide
+		if propertiesSide ~= "Left" and propertiesSide ~= "Right" then
+			propertiesSide = defaultStartup.PropertiesSide
+		end
+		startup.PropertiesSide = (propertiesSide == "Left") and "Left" or "Right"
+		if type(startup.OpenExplorer) ~= "boolean" then
+			startup.OpenExplorer = defaultStartup.OpenExplorer
+		end
+		if type(startup.OpenProperties) ~= "boolean" then
+			startup.OpenProperties = defaultStartup.OpenProperties
+		end
+
 		if type(Settings.ScriptViewer) ~= "table" then
 			Settings.ScriptViewer = {}
 		end
@@ -2541,9 +2570,13 @@ Main = (function()
 		end)
 
 		-- Create Main Apps
-		Main.CreateApp({Name = "Explorer", IconMap = Main.LargeIcons, Icon = "Explorer", Open = true, Window = Explorer.Window})
+		local startupSettings = (Settings and Settings.Startup) or (DefaultSettings and DefaultSettings.Startup) or {}
+		local openExplorerByDefault = startupSettings.OpenExplorer ~= false
+		local openPropertiesByDefault = startupSettings.OpenProperties ~= false
 
-		Main.CreateApp({Name = "Properties", IconMap = Main.LargeIcons, Icon = "Properties", Open = true, Window = Properties.Window})
+		Main.CreateApp({Name = "Explorer", IconMap = Main.LargeIcons, Icon = "Explorer", Open = openExplorerByDefault, Window = Explorer.Window})
+
+		Main.CreateApp({Name = "Properties", IconMap = Main.LargeIcons, Icon = "Properties", Open = openPropertiesByDefault, Window = Properties.Window})
 
 		local cptsOnMouseClick = nil
 		Main.CreateApp({Name = "Click part to select", IconMap = Main.LargeIcons, Icon = 6, OnClick = function(callback)
@@ -2805,10 +2838,39 @@ Main = (function()
 		-- Init window system, create main menu, show explorer and properties
 		Lib.Window.Init()
 		Main.CreateMainGui()
-		Explorer.Window:Show({Align = "right", Pos = 1, Size = 0.5, Silent = true})
-		Properties.Window:Show({Align = "right", Pos = 2, Size = 0.5, Silent = true})
+		local startupSettings = (Settings and Settings.Startup) or (DefaultSettings and DefaultSettings.Startup) or {}
+		local startupWindows = {}
 
-		Lib.DeferFunc(function() Lib.Window.ToggleSide("right") end)
+		local function queueStartupWindow(windowRef, isOpen, sideName)
+			if not windowRef or not isOpen then
+				return
+			end
+
+			local align = (sideName == "Left") and "left" or "right"
+			startupWindows[align] = startupWindows[align] or {}
+			table.insert(startupWindows[align], windowRef)
+		end
+
+		queueStartupWindow(Explorer.Window, startupSettings.OpenExplorer ~= false, startupSettings.ExplorerSide)
+		queueStartupWindow(Properties.Window, startupSettings.OpenProperties ~= false, startupSettings.PropertiesSide)
+
+		for _, align in ipairs({"left", "right"}) do
+			local windowsOnSide = startupWindows[align]
+			if windowsOnSide then
+				local windowSize = (#windowsOnSide > 1) and 0.5 or 1
+				for index, startupWindow in ipairs(windowsOnSide) do
+					startupWindow:Show({Align = align, Pos = index, Size = windowSize, Silent = true})
+				end
+			end
+		end
+
+		Lib.DeferFunc(function()
+			for _, align in ipairs({"left", "right"}) do
+				if startupWindows[align] and #startupWindows[align] > 0 then
+					Lib.Window.SetSideVisible(align, true)
+				end
+			end
+		end)
 	end
 
 	return Main

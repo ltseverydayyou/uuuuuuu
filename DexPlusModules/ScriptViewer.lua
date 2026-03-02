@@ -439,8 +439,17 @@ end
 			end
 		end
 	end
+
+	ScriptViewer.RefreshCurrentView = function()
+		if ScriptViewer.CurrentScript then
+			ScriptViewer.ViewScript(ScriptViewer.CurrentScript)
+		elseif ScriptViewer.ApplyTheme then
+			ScriptViewer.ApplyTheme()
+		end
+	end
 	
 	ScriptViewer.ViewScript = function(scr)
+		ScriptViewer.CurrentScript = scr
 		local oldtick = tick()
 		local s,source,decompileErr = pcall(env.decompile or function() end,scr)
 		local showMoreInfo = not (Settings and Settings.ScriptViewer and Settings.ScriptViewer.ShowMoreInfo == false)

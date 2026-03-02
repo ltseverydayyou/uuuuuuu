@@ -39,6 +39,8 @@ local function main()
 	local window, ListFrame
 	local fileName = "Place_"..game.PlaceId.."_"..game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name.."_{TIMESTAMP}"
 	local Saving = false
+	local applyLiveSettings = function() end
+	local windowSizePersistToken = 0
 
 	local function setWindowTitleSuffix(text, duration)
 		if not window then
@@ -241,6 +243,7 @@ local function main()
 		if Main and Main.ValidateSettings then
 			pcall(Main.ValidateSettings)
 		end
+		pcall(applyLiveSettings)
 
 		local saved = false
 		if Main and Main.SaveCurrentSettings then
@@ -333,6 +336,29 @@ local function main()
 		window:Resize(Settings.Window.SettingsWidth or 250, Settings.Window.SettingsHeight or 375)
 		SettingsWindow.Window = window
 
+		window.GuiElems.Main:GetPropertyChangedSignal("Size"):Connect(function()
+			if not window or window.Closed then
+				return
+			end
+
+			local sizeX = math.floor(tonumber(window.SizeX) or window.GuiElems.Main.AbsoluteSize.X or Settings.Window.SettingsWidth or 250)
+			local sizeY = math.floor(tonumber(window.SizeY) or window.GuiElems.Main.AbsoluteSize.Y or Settings.Window.SettingsHeight or 375)
+			sizeX = math.clamp(sizeX, 220, 550)
+			sizeY = math.clamp(sizeY, 280, 700)
+
+			Settings.Window.SettingsWidth = sizeX
+			Settings.Window.SettingsHeight = sizeY
+
+			windowSizePersistToken = windowSizePersistToken + 1
+			local token = windowSizePersistToken
+			task.delay(0.35, function()
+				if token ~= windowSizePersistToken or not window or window.Closed then
+					return
+				end
+				persistSettings()
+			end)
+		end)
+
 		local sectionAnchors = {}
 		local quickTabButtons = {}
 		local currentSectionName = "UI"
@@ -423,6 +449,15 @@ local function main()
 			end
 		end
 
+		applyLiveSettings = function()
+			if Lib and Lib.RefreshTheme then
+				pcall(Lib.RefreshTheme)
+			end
+			if Properties and Properties.ApplySettings then
+				pcall(Properties.ApplySettings)
+			end
+		end
+
 		local function updateQuickTabState(selectedName)
 			currentSectionName = selectedName
 			for name, button in pairs(quickTabButtons) do
@@ -507,36 +542,7 @@ local function main()
 			Settings.ClassIcon = classIcon.Selected
 			persistSettings()
 		end)
-
-		local settingsWidth = AddTextbox("Settings Window Width", tostring(Settings.Window.SettingsWidth), 50)
-		settingsWidth.FocusLost:Connect(function()
-			local input = tonumber(settingsWidth.Text)
-			if input == nil then
-				settingsWidth.Text = tostring(Settings.Window.SettingsWidth)
-				return
-			end
-
-			input = math.clamp(math.floor(input), 220, 550)
-			Settings.Window.SettingsWidth = input
-			settingsWidth.Text = tostring(input)
-			window:Resize(Settings.Window.SettingsWidth, Settings.Window.SettingsHeight)
-			persistSettings()
-		end)
-
-		local settingsHeight = AddTextbox("Settings Window Height", tostring(Settings.Window.SettingsHeight), 50)
-		settingsHeight.FocusLost:Connect(function()
-			local input = tonumber(settingsHeight.Text)
-			if input == nil then
-				settingsHeight.Text = tostring(Settings.Window.SettingsHeight)
-				return
-			end
-
-			input = math.clamp(math.floor(input), 280, 700)
-			Settings.Window.SettingsHeight = input
-			settingsHeight.Text = tostring(input)
-			window:Resize(Settings.Window.SettingsWidth, Settings.Window.SettingsHeight)
-			persistSettings()
-		end)
+		AddText("Resize this window directly; the size is saved automatically.")
 
 		Main.UserSettings = Main.UserSettings or {}
 		local rememberLastTab = AddCheckbox("Remember Last Settings Tab", Main.UserSettings.RememberLastSettingsTab ~= false)
@@ -772,6 +778,9 @@ local function main()
 		showMoreInfo.OnInput:Connect(function()
 			Settings.ScriptViewer.ShowMoreInfo = showMoreInfo.Toggled
 			persistSettings()
+			if ScriptViewer and ScriptViewer.RefreshCurrentView then
+				pcall(ScriptViewer.RefreshCurrentView)
+			end
 		end)
 
 		local defaultTextSize = (Main and Main.UserSettings and Main.UserSettings.ScriptViewerTextSize) or 16

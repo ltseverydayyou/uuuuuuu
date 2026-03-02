@@ -2292,7 +2292,7 @@ return search]==]
 					return
 				end
 
-				sys.IsRenaming = selection.Map[node]
+				sys.IsRenaming = selection.Map[node] and Settings.Explorer.ClickToRename == true
 
 				if Lib.IsShiftDown() then
 					if not selection.Piviot then return end
@@ -2362,7 +2362,7 @@ return search]==]
 
 				local id = sys.ClickId
 				Lib.FastWait(sys.ComboTime)
-				if combo == 1 and id == sys.ClickId and sys.IsRenaming and selection.Map[node] then
+				if combo == 1 and id == sys.ClickId and sys.IsRenaming and selection.Map[node] and Settings.Explorer.ClickToRename == true then
 					Explorer.SetRenamingNode(node)
 				end
 			elseif button == 2 then

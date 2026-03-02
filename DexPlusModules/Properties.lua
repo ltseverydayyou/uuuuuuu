@@ -366,6 +366,31 @@ local function main()
             end
         end
 
+        if Settings.Properties.LoadstringInput then
+            local loadFn = (env and env.loadstring) or loadstring
+            if type(loadFn) == "function" then
+                for _, source in ipairs({"return " .. str, str}) do
+                    local okLoad, chunk = pcall(loadFn, source)
+                    if okLoad and type(chunk) == "function" then
+                        local okExec, result = pcall(chunk)
+                        if okExec and result ~= nil then
+                            local resultType = typeof(result)
+                            local convertedType = Properties.TypeNameConvert[resultType] or resultType
+                            if typeData.Category == "Enum" and resultType == "EnumItem" then
+                                return result
+                            end
+                            if convertedType == typeName then
+                                return result
+                            end
+                            if (typeName == "string" or typeName == "Content") and type(result) == "string" then
+                                return result
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
         return nil
     end
 
@@ -2475,6 +2500,16 @@ local function main()
         Lib.ViewportTextBox.convert(inputTextBox)
     end
 
+    Properties.ApplySettings = function()
+        local clearOnFocus = Settings and Settings.Properties and Settings.Properties.ClearOnFocus == true
+        if inputTextBox then
+            inputTextBox.ClearTextOnFocus = clearOnFocus
+        end
+        if toolBar and toolBar:FindFirstChild("SearchFrame") and toolBar.SearchFrame:FindFirstChild("SearchBox") then
+            toolBar.SearchFrame.SearchBox.ClearTextOnFocus = clearOnFocus
+        end
+    end
+
     Properties.SetInputProp = function(prop, entryIndex, special)
         local typeData = prop.ValueType
         local typeName = typeData.Name
@@ -3152,6 +3187,7 @@ local function main()
         scrollV.Gui.Parent = window.GuiElems.Content
         scrollH.Gui.Parent = window.GuiElems.Content
         Properties.InitInputBox()
+        Properties.ApplySettings()
         Properties.InitSearch()
 
         Properties.ApplyTheme = function()

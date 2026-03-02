@@ -120,6 +120,15 @@ local function main()
 					elems.Content.BackgroundColor3 = theme.Main1 or elems.Content.BackgroundColor3
 					elems.Content.BackgroundTransparency = winTransparency
 				end
+				if elems.Title then
+					if Settings and Settings.Window and Settings.Window.TitleOnMiddle then
+						elems.Title.TextXAlignment = Enum.TextXAlignment.Center
+						elems.Title.Size = UDim2.new(1,-20,0,20)
+					else
+						elems.Title.TextXAlignment = Enum.TextXAlignment.Left
+						elems.Title.Size = UDim2.new(1,-10,0,20)
+					end
+				end
 			end
 		end
 

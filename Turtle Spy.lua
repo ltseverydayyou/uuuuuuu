@@ -1979,14 +1979,20 @@ tstate.cleanup = function()
 		descAddedConn = nil
 	end
 	if tstate.old then
-		pcall(function()
+		local restored = pcall(function()
 			hookmetamethod(game, "__namecall", tstate.old)
 		end)
+		if restored then
+			tstate.hooked = false
+		end
 	end
 	if tstate.oldNewIndex then
-		pcall(function()
+		local restored = pcall(function()
 			hookmetamethod(game, "__newindex", tstate.oldNewIndex)
 		end)
+		if restored then
+			tstate.newIndexHooked = false
+		end
 	end
 	connections = {}
 	clientEventConns = {}

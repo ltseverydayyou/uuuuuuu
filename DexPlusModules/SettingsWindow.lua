@@ -385,21 +385,6 @@ local function main()
 		ListFrame.ZIndex = 2
 		ListFrame.BorderSizePixel = 0
 		
-		local scrollbar = Lib.ScrollBar.new()
-		scrollbar.Gui.Parent = window.GuiElems.Content
-		scrollbar.Gui.Position = UDim2.new(0, 0, 0, 28)
-		scrollbar.Gui.Size = UDim2.new(1, 0,1, -68)
-		scrollbar.Gui.Up.ZIndex = 3
-		scrollbar.Gui.Down.ZIndex = 3
-		
-		ListFrame:GetPropertyChangedSignal("AbsoluteWindowSize"):Connect(function()
-			if ListFrame.AbsoluteCanvasSize ~= ListFrame.AbsoluteWindowSize then
-				scrollbar.Gui.Visible = true
-			else
-				scrollbar.Gui.Visible = false
-			end
-		end)
-		
 		local ListLayout = Instance.new("UIListLayout")
 		ListLayout.Parent = ListFrame
 		ListLayout.Padding = UDim.new(0, 5)

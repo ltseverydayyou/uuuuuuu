@@ -2320,9 +2320,9 @@ Main = (function()
 		end
 	end
 
-	Main.Exit = function()
+	Main.Exit = function(keepDexState)
 		Main.__DexLoaded = false
-		Main.__DexInitStarted = false
+		Main.__DexInitStarted = keepDexState == true
 
 		if Main.MainGuiMouseEvent then
 			pcall(function()
@@ -2377,16 +2377,57 @@ Main = (function()
 		Notebook = nil
 
 		if Main.__DexState then
-			Main.__DexState.State = "dead"
-			clearDexState(Main.__DexState)
-			Main.__DexState = nil
+			if keepDexState == true then
+				Main.__DexState.Main = Main
+				Main.__DexState.State = "reloading"
+				Main.__DexState.StartedAt = os.clock()
+				if Main.SessionId then
+					Main.__DexState.SessionId = Main.SessionId
+				end
+				syncDexStateReferences(Main.__DexState)
+			else
+				Main.__DexState.State = "dead"
+				clearDexState(Main.__DexState)
+				Main.__DexState = nil
+			end
 		end
 	end
 
 	Main.Reinit = function()
-		Main.Exit()
+		local dexState = Main.__DexState or getDexState(true)
+		Main.__DexState = dexState
+		Main.__DexLoaded = false
+		Main.__DexInitStarted = true
+
+		dexState.Main = Main
+		dexState.State = "reloading"
+		dexState.StartedAt = os.clock()
+		if Main.SessionId then
+			dexState.SessionId = Main.SessionId
+		end
+		syncDexStateReferences(dexState)
+
+		Main.Exit(true)
 		task.wait()
-		Main.Init()
+		local okInit, initErr = pcall(Main.Init)
+		if okInit then
+			Main.__DexLoaded = true
+			Main.__DexInitStarted = false
+			dexState.Main = Main
+			dexState.State = "ready"
+			dexState.StartedAt = os.clock()
+			if Main.SessionId then
+				dexState.SessionId = Main.SessionId
+			end
+			syncDexStateReferences(dexState)
+		else
+			Main.__DexLoaded = false
+			Main.__DexInitStarted = false
+			dexState.State = "dead"
+			clearDexState(dexState)
+			Main.__DexState = nil
+			error(initErr)
+		end
 	end
 
 	Main.CreateMainGui = function()

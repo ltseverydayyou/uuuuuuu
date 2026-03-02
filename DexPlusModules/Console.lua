@@ -771,6 +771,22 @@ local function main()
 			return val
 		end
 
+		local function getUserBool(name, default)
+			local val = Main.UserSettings[name]
+			if type(val) ~= "boolean" then
+				Main.UserSettings[name] = default
+				return default
+			end
+			return val
+		end
+
+		local function getUserNumber(name, default, minValue, maxValue)
+			local val = math.floor(tonumber(Main.UserSettings[name]) or default)
+			val = math.clamp(val, minValue, maxValue)
+			Main.UserSettings[name] = val
+			return val
+		end
+
 		local listenEnabled = getFlag("Listen", true)
 
 		local filterState = {
@@ -779,17 +795,6 @@ local function main()
 			[Enum.MessageType.MessageWarning] = getFlag("Warn", true),
 			[Enum.MessageType.MessageError] = getFlag("Error", true)
 		}
-
-		local function persistFilters()
-			userFilters.Output = filterState[Enum.MessageType.MessageOutput] ~= false
-			userFilters.Info = filterState[Enum.MessageType.MessageInfo] ~= false
-			userFilters.Warn = filterState[Enum.MessageType.MessageWarning] ~= false
-			userFilters.Error = filterState[Enum.MessageType.MessageError] ~= false
-			userFilters.Listen = listenEnabled
-			if Main.SaveUserSettings then
-				Main.SaveUserSettings()
-			end
-		end
 
 		local LogService = game:GetService("LogService")
 		local Players = game:GetService("Players")
@@ -802,6 +807,13 @@ local function main()
 		local Console = ConsoleFrame
 		local SyntaxHighlightingModule = require(G2L["1c"].SyntaxHighlighter)
 		local OutputTextSize = Console.Output.OutputTextSize
+		local OutputLimit = Console.Output.OutputLimit
+		local displayedOutput = {}
+
+		CtrlScroll = getUserBool("ConsoleCtrlScroll", false)
+		AutoScroll = getUserBool("ConsoleAutoScroll", false)
+		OutputTextSize.Value = getUserNumber("ConsoleTextSize", OutputTextSize.Value, 1, 64)
+		OutputLimit.Value = getUserNumber("ConsoleOutputLimit", OutputLimit.Value, 10, 5000)
 
 		local function Tween(obj, info, prop)
 			local tween = game:GetService("TweenService"):Create(obj, info, prop)
@@ -822,10 +834,35 @@ local function main()
 			end
 		end
 
+		local function trimOutputToLimit()
+			while #displayedOutput > OutputLimit.Value do
+				local oldest = table.remove(displayedOutput, 1)
+				if oldest and typeof(oldest) == "Instance" then
+					oldest:Destroy()
+				end
+			end
+		end
+
+		local function persistPreferences()
+			userFilters.Output = filterState[Enum.MessageType.MessageOutput] ~= false
+			userFilters.Info = filterState[Enum.MessageType.MessageInfo] ~= false
+			userFilters.Warn = filterState[Enum.MessageType.MessageWarning] ~= false
+			userFilters.Error = filterState[Enum.MessageType.MessageError] ~= false
+			userFilters.Listen = listenEnabled
+			Main.UserSettings.ConsoleCtrlScroll = CtrlScroll
+			Main.UserSettings.ConsoleAutoScroll = AutoScroll
+			Main.UserSettings.ConsoleOutputLimit = OutputLimit.Value
+			Main.UserSettings.ConsoleTextSize = OutputTextSize.Value
+			if Main.SaveUserSettings then
+				Main.SaveUserSettings()
+			end
+		end
+
 		setToggle(Console.CtrlScroll, CtrlScroll)
 		Console.CtrlScroll.MouseButton1Click:Connect(function()
 			CtrlScroll = not CtrlScroll
 			setToggle(Console.CtrlScroll, CtrlScroll)
+			persistPreferences()
 		end)
 
 		local IsHoldingCTRL = false
@@ -851,6 +888,7 @@ local function main()
 			if AutoScroll then
 				Console.Output.CanvasPosition = Vector2.new(0, 9e9)
 			end
+			persistPreferences()
 		end)
 
 		setToggle(Console.FilterOutput, filterState[Enum.MessageType.MessageOutput])
@@ -858,10 +896,7 @@ local function main()
 		setToggle(Console.FilterWarn, filterState[Enum.MessageType.MessageWarning])
 		setToggle(Console.FilterError, filterState[Enum.MessageType.MessageError])
 		setToggle(Console.Listen, listenEnabled)
-		persistFilters()
-
-		local displayedOutput = {}
-		local OutputLimit = Console.Output.OutputLimit
+		persistPreferences()
 
 		local function refreshVisibility()
 			for i = #displayedOutput, 1, -1 do
@@ -881,7 +916,7 @@ local function main()
 			filterState[enumType] = not filterState[enumType]
 			setToggle(btn, filterState[enumType])
 			refreshVisibility()
-			persistFilters()
+			persistPreferences()
 		end
 
 		Console.FilterOutput.MouseButton1Click:Connect(function()
@@ -900,8 +935,35 @@ local function main()
 		Console.Listen.MouseButton1Click:Connect(function()
 			listenEnabled = not listenEnabled
 			setToggle(Console.Listen, listenEnabled)
-			persistFilters()
+			persistPreferences()
 		end)
+
+		consoleApp.SetTextSize = function(size)
+			local n = math.clamp(math.floor(tonumber(size) or OutputTextSize.Value), 1, 64)
+			OutputTextSize.Value = n
+		end
+
+		consoleApp.SetOutputLimit = function(limit)
+			local n = math.clamp(math.floor(tonumber(limit) or OutputLimit.Value), 10, 5000)
+			OutputLimit.Value = n
+			trimOutputToLimit()
+			persistPreferences()
+		end
+
+		consoleApp.SetCtrlScrollEnabled = function(state)
+			CtrlScroll = state == true
+			setToggle(Console.CtrlScroll, CtrlScroll)
+			persistPreferences()
+		end
+
+		consoleApp.SetAutoScrollEnabled = function(state)
+			AutoScroll = state == true
+			setToggle(Console.AutoScroll, AutoScroll)
+			if AutoScroll then
+				Console.Output.CanvasPosition = Vector2.new(0, 9e9)
+			end
+			persistPreferences()
+		end
 
 		-- Console part
 		Console.TextSizeBox.TextBox.Text = tostring(OutputTextSize.Value)
@@ -909,11 +971,17 @@ local function main()
 		Console.TextSizeBox.TextBox:GetPropertyChangedSignal("Text"):Connect(function()
 			local tonum = tonumber(Console.TextSizeBox.TextBox.Text)
 			if tonum then
-				OutputTextSize.Value = tonum
+				OutputTextSize.Value = math.clamp(math.floor(tonum), 1, 64)
 			end
 		end)
 		OutputTextSize:GetPropertyChangedSignal("Value"):Connect(function()
+			local clamped = math.clamp(math.floor(OutputTextSize.Value), 1, 64)
+			if OutputTextSize.Value ~= clamped then
+				OutputTextSize.Value = clamped
+				return
+			end
 			Console.TextSizeBox.TextBox.Text = tostring(OutputTextSize.Value)
+			persistPreferences()
 		end)
 
 		local scrollConsoleInput

@@ -144,7 +144,8 @@ local function main()
 			searchFunc({newNode})
 		end
 
-		if not updateDebounce and Explorer.IsNodeVisible(par) then
+		local autoUpdateMode = tonumber(Settings.Explorer.AutoUpdateMode) or 0
+		if autoUpdateMode < 1 and not updateDebounce and Explorer.IsNodeVisible(par) then
 			if expanded[par] then
 				Explorer.PerformUpdate()
 			elseif not refreshDebounce then
@@ -181,7 +182,8 @@ local function main()
 		node.Del = true
 		nodes[root] = nil
 
-		if par and not updateDebounce and Explorer.IsNodeVisible(par) then
+		local autoUpdateMode = tonumber(Settings.Explorer.AutoUpdateMode) or 0
+		if autoUpdateMode < 1 and par and not updateDebounce and Explorer.IsNodeVisible(par) then
 			if expanded[par] then
 				Explorer.PerformUpdate()
 			elseif not refreshDebounce then
@@ -262,7 +264,8 @@ local function main()
 			end
 		end
 
-		if not updateDebounce and (Explorer.IsNodeVisible(newPar) or Explorer.IsNodeVisible(oldPar)) then
+		local autoUpdateMode = tonumber(Settings.Explorer.AutoUpdateMode) or 0
+		if autoUpdateMode < 1 and not updateDebounce and (Explorer.IsNodeVisible(newPar) or Explorer.IsNodeVisible(oldPar)) then
 			if expanded[newPar] or expanded[oldPar] then
 				Explorer.PerformUpdate()
 			elseif not refreshDebounce then
@@ -788,29 +791,38 @@ local function main()
 		if descendantAddedCon then descendantAddedCon:Disconnect() end
 		if descendantRemovingCon then descendantRemovingCon:Disconnect() end
 		if itemChangedCon then itemChangedCon:Disconnect() end
+		descendantAddedCon = nil
+		descendantRemovingCon = nil
+		itemChangedCon = nil
 
-		if Main.Elevated then
-			descendantAddedCon = game.DescendantAdded:Connect(addObject)
-			descendantRemovingCon = game.DescendantRemoving:Connect(removeObject)
-		else
-			descendantAddedCon = game.DescendantAdded:Connect(function(obj) pcall(addObject,obj) end)
-			descendantRemovingCon = game.DescendantRemoving:Connect(function(obj) pcall(removeObject,obj) end)
+		local autoUpdateMode = math.floor(tonumber(Settings.Explorer.AutoUpdateMode) or 0)
+
+		if autoUpdateMode < 2 then
+			if Main.Elevated then
+				descendantAddedCon = game.DescendantAdded:Connect(addObject)
+				descendantRemovingCon = game.DescendantRemoving:Connect(removeObject)
+			else
+				descendantAddedCon = game.DescendantAdded:Connect(function(obj) pcall(addObject,obj) end)
+				descendantRemovingCon = game.DescendantRemoving:Connect(function(obj) pcall(removeObject,obj) end)
+			end
 		end
 
-		if Settings.Explorer.UseNameWidth then
-			itemChangedCon = game.ItemChanged:Connect(function(obj,prop)
-				if prop == "Parent" and nodes[obj] then
-					moveObject(obj)
-				elseif prop == "Name" and nodes[obj] then
-					nodes[obj].NameWidth = nil
-				end
-			end)
-		else
-			itemChangedCon = game.ItemChanged:Connect(function(obj,prop)
-				if prop == "Parent" and nodes[obj] then
-					moveObject(obj)
-				end
-			end)
+		if autoUpdateMode < 3 then
+			if Settings.Explorer.UseNameWidth then
+				itemChangedCon = game.ItemChanged:Connect(function(obj,prop)
+					if prop == "Parent" and nodes[obj] then
+						moveObject(obj)
+					elseif prop == "Name" and nodes[obj] then
+						nodes[obj].NameWidth = nil
+					end
+				end)
+			else
+				itemChangedCon = game.ItemChanged:Connect(function(obj,prop)
+					if prop == "Parent" and nodes[obj] then
+						moveObject(obj)
+					end
+				end)
+			end
 		end
 	end
 
@@ -2444,6 +2456,7 @@ return search]==]
 
 		local partEnabled = Settings.Explorer.PartSelectionBox
 		local guiEnabled = Settings.Explorer.GuiSelectionBox
+		local selectionCap = math.max(0, tonumber(Settings.Explorer.MaxSelectionBoxes) or 1000)
 		if not partEnabled and not guiEnabled then return end
 
 		local svg = Explorer.SelectionVisualGui
@@ -2454,7 +2467,7 @@ return search]==]
 		local boxCount = 0
 		local workspaceNode = nodes[workspace]
 		for i = 1,#sList do
-			if boxCount > 1000 then break end
+			if selectionCap > 0 and boxCount >= selectionCap then break end
 			local node = sList[i]
 			local obj = node.Obj
 

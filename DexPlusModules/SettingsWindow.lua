@@ -6,7 +6,7 @@
 
 -- Common Locals
 local Main,Lib,Apps,Settings -- Main Containers
-local Explorer, Properties, ScriptViewer, SettingsWindow, Notebook -- Major Apps
+local Explorer, Properties, ScriptViewer, Console, SettingsWindow, ThemeManager, Notebook -- Major Apps
 local API,RMD,env,service,plr,create,createSimple -- Main Locals
 
 local function initDeps(data)
@@ -28,7 +28,9 @@ local function initAfterMain()
 	Explorer = Apps.Explorer
 	Properties = Apps.Properties
 	ScriptViewer = Apps.ScriptViewer
+	Console = Apps.Console
 	SettingsWindow = Apps.SettingsWindow
+	ThemeManager = Apps.ThemeManager
 	Notebook = Apps.Notebook
 end
 
@@ -37,6 +39,19 @@ local function main()
 	local window, ListFrame
 	local fileName = "Place_"..game.PlaceId.."_"..game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name.."_{TIMESTAMP}"
 	local Saving = false
+
+	local function setWindowTitleSuffix(text, duration)
+		if not window then
+			return
+		end
+
+		window:SetTitle("Settings - "..text)
+		task.delay(duration or 1.5, function()
+			if window and not window.Closed then
+				window:SetTitle("Settings")
+			end
+		end)
+	end
 	
 	local function AddCheckbox(title, default)
 		local frame = Lib.Frame.new()
@@ -152,6 +167,33 @@ local function main()
 		
 		return dropdown
 	end
+
+	local function AddButton(title, buttonText, sizeX)
+		local frame = Lib.Frame.new()
+		frame.Gui.Parent = ListFrame
+		frame.Gui.Transparency = 1
+		frame.Gui.Size = UDim2.new(1,0,0,24)
+
+		local listlayout = Instance.new("UIListLayout")
+		listlayout.Parent = frame.Gui
+		listlayout.FillDirection = Enum.FillDirection.Horizontal
+		listlayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+		listlayout.VerticalAlignment = Enum.VerticalAlignment.Center
+		listlayout.Padding = UDim.new(0, 10)
+
+		local button = Lib.Button.new()
+		button.Gui.Parent = frame.Gui
+		button.Size = UDim2.new(0,sizeX or 70,0,20)
+		button.Text = buttonText or "Run"
+
+		local label = Lib.Label.new()
+		label.Gui.Parent = frame.Gui
+		label.Gui.Size = UDim2.new(1, 0,1, -20)
+		label.Gui.Text = title
+		label.TextTruncate = Enum.TextTruncate.AtEnd
+
+		return button
+	end
 	
 	local function AddSeperator(title)
 
@@ -171,7 +213,7 @@ local function main()
 		label.TextSize = 16
 		label.TextTruncate = Enum.TextTruncate.AtEnd
 
-		return label
+		return frame
 	end
 	
 	local function AddText(text)
@@ -288,16 +330,51 @@ local function main()
 	SettingsWindow.Init = function()
 		window = Lib.Window.new()
 		window:SetTitle("Settings")
-		window:Resize(250,375)
+		window:Resize(Settings.Window.SettingsWidth or 250, Settings.Window.SettingsHeight or 375)
 		SettingsWindow.Window = window
-		
+
+		local sectionAnchors = {}
+		local quickTabButtons = {}
+		local currentSectionName = "UI"
+
+		local tabsFrame = Instance.new("Frame")
+		tabsFrame.Parent = window.GuiElems.Content
+		tabsFrame.BackgroundTransparency = 1
+		tabsFrame.Size = UDim2.new(1, 0, 0, 28)
+		tabsFrame.ZIndex = 3
+
+		local tabsScroller = Instance.new("ScrollingFrame")
+		tabsScroller.Parent = tabsFrame
+		tabsScroller.Active = true
+		tabsScroller.BackgroundTransparency = 1
+		tabsScroller.BorderSizePixel = 0
+		tabsScroller.CanvasSize = UDim2.new(0, 0, 0, 0)
+		tabsScroller.AutomaticCanvasSize = Enum.AutomaticSize.X
+		tabsScroller.ScrollingDirection = Enum.ScrollingDirection.X
+		tabsScroller.ScrollBarThickness = 0
+		tabsScroller.Size = UDim2.new(1, 0, 1, 0)
+		tabsScroller.ZIndex = 3
+
+		local tabsPadding = Instance.new("UIPadding")
+		tabsPadding.Parent = tabsScroller
+		tabsPadding.PaddingLeft = UDim.new(0, 6)
+		tabsPadding.PaddingRight = UDim.new(0, 6)
+		tabsPadding.PaddingTop = UDim.new(0, 4)
+		tabsPadding.PaddingBottom = UDim.new(0, 4)
+
+		local tabsLayout = Instance.new("UIListLayout")
+		tabsLayout.Parent = tabsScroller
+		tabsLayout.FillDirection = Enum.FillDirection.Horizontal
+		tabsLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+		tabsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+		tabsLayout.Padding = UDim.new(0, 4)
+
 		-- ListFrame
-		
 		ListFrame = Instance.new("ScrollingFrame")
 		ListFrame.Parent = window.GuiElems.Content
-		ListFrame.Size = UDim2.new(1, 0,1, -20)
-		ListFrame.Position = UDim2.new(0, 0, 0, 0)
-		ListFrame.Transparency = 1
+		ListFrame.Size = UDim2.new(1, 0,1, -48)
+		ListFrame.Position = UDim2.new(0, 0, 0, 28)
+		ListFrame.BackgroundTransparency = 1
 		ListFrame.CanvasSize = UDim2.new(0,0,0,0)
 		ListFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
 		ListFrame.ScrollBarThickness = 16
@@ -310,7 +387,8 @@ local function main()
 		
 		local scrollbar = Lib.ScrollBar.new()
 		scrollbar.Gui.Parent = window.GuiElems.Content
-		scrollbar.Gui.Size = UDim2.new(1, 0,1, -40)
+		scrollbar.Gui.Position = UDim2.new(0, 0, 0, 28)
+		scrollbar.Gui.Size = UDim2.new(1, 0,1, -68)
 		scrollbar.Gui.Up.ZIndex = 3
 		scrollbar.Gui.Down.ZIndex = 3
 		
@@ -359,10 +437,61 @@ local function main()
 				pcall(Properties.Refresh)
 			end
 		end
+
+		local function updateQuickTabState(selectedName)
+			currentSectionName = selectedName
+			for name, button in pairs(quickTabButtons) do
+				if name == selectedName then
+					button.BackgroundColor3 = Settings.Theme.ListSelection
+				else
+					button.BackgroundColor3 = Settings.Theme.Button
+				end
+			end
+		end
+
+		local function scrollToSection(sectionName)
+			local anchor = sectionAnchors[sectionName]
+			if not anchor then
+				return
+			end
+
+			updateQuickTabState(sectionName)
+
+			Main.UserSettings = Main.UserSettings or {}
+			if Main.UserSettings.RememberLastSettingsTab ~= false and Main.UserSettings.SettingsLastTab ~= sectionName then
+				Main.UserSettings.SettingsLastTab = sectionName
+				persistUserSettings()
+			end
+
+			local anchorGui = anchor.Gui or anchor
+			local maxY = math.max(0, ListFrame.AbsoluteCanvasSize.Y - ListFrame.AbsoluteWindowSize.Y)
+			local targetY = ListFrame.CanvasPosition.Y + (anchorGui.AbsolutePosition.Y - ListFrame.AbsolutePosition.Y) - 4
+			ListFrame.CanvasPosition = Vector2.new(ListFrame.CanvasPosition.X, math.clamp(targetY, 0, maxY))
+		end
+
+		local function createQuickTab(sectionName)
+			local button = Instance.new("TextButton")
+			button.Parent = tabsScroller
+			button.AutoButtonColor = false
+			button.BackgroundColor3 = Settings.Theme.Button
+			button.BorderColor3 = Settings.Theme.Outline2
+			button.BorderSizePixel = 0
+			button.Size = UDim2.new(0, 78, 1, -8)
+			button.Font = Enum.Font.SourceSans
+			button.Text = sectionName
+			button.TextColor3 = Settings.Theme.Text
+			button.TextSize = 14
+			button.ZIndex = 4
+			button.MouseButton1Click:Connect(function()
+				scrollToSection(sectionName)
+			end)
+			quickTabButtons[sectionName] = button
+		end
 		
 		-- Options
 		
-		AddSeperator("UI")
+		sectionAnchors.UI = AddSeperator("UI")
+		AddText("Use the tabs above to jump between sections.")
 		
 		local titleonmiddle = AddCheckbox("Window Title On Middle", Settings.Window.TitleOnMiddle)
 		titleonmiddle.OnInput:Connect(function()
@@ -393,9 +522,49 @@ local function main()
 			Settings.ClassIcon = classIcon.Selected
 			persistSettings()
 		end)
+
+		local settingsWidth = AddTextbox("Settings Window Width", tostring(Settings.Window.SettingsWidth), 50)
+		settingsWidth.FocusLost:Connect(function()
+			local input = tonumber(settingsWidth.Text)
+			if input == nil then
+				settingsWidth.Text = tostring(Settings.Window.SettingsWidth)
+				return
+			end
+
+			input = math.clamp(math.floor(input), 220, 550)
+			Settings.Window.SettingsWidth = input
+			settingsWidth.Text = tostring(input)
+			window:Resize(Settings.Window.SettingsWidth, Settings.Window.SettingsHeight)
+			persistSettings()
+		end)
+
+		local settingsHeight = AddTextbox("Settings Window Height", tostring(Settings.Window.SettingsHeight), 50)
+		settingsHeight.FocusLost:Connect(function()
+			local input = tonumber(settingsHeight.Text)
+			if input == nil then
+				settingsHeight.Text = tostring(Settings.Window.SettingsHeight)
+				return
+			end
+
+			input = math.clamp(math.floor(input), 280, 700)
+			Settings.Window.SettingsHeight = input
+			settingsHeight.Text = tostring(input)
+			window:Resize(Settings.Window.SettingsWidth, Settings.Window.SettingsHeight)
+			persistSettings()
+		end)
+
+		Main.UserSettings = Main.UserSettings or {}
+		local rememberLastTab = AddCheckbox("Remember Last Settings Tab", Main.UserSettings.RememberLastSettingsTab ~= false)
+		rememberLastTab.OnInput:Connect(function()
+			Main.UserSettings.RememberLastSettingsTab = rememberLastTab.Toggled
+			if rememberLastTab.Toggled then
+				Main.UserSettings.SettingsLastTab = currentSectionName
+			end
+			persistUserSettings()
+		end)
 		AddText("Changing class icons requires restart.")
 		
-		AddSeperator("Explorer")
+		sectionAnchors.Explorer = AddSeperator("Explorer")
 
 		local sorting = AddCheckbox("Sorting", Settings.Explorer.Sorting)
 		sorting.OnInput:Connect(function()
@@ -421,6 +590,28 @@ local function main()
 			end
 			persistSettings()
 		end)
+
+		local autoUpdateModeLabels = {
+			[0] = "Default",
+			[1] = "Quiet Refresh",
+			[2] = "Manual Tree",
+			[3] = "Frozen",
+		}
+		local autoUpdateMode = AddDropdown("Auto Update Mode", {"Default", "Quiet Refresh", "Manual Tree", "Frozen"}, autoUpdateModeLabels[tonumber(Settings.Explorer.AutoUpdateMode) or 0] or "Default", false, 110)
+		autoUpdateMode.OnSelect:Connect(function()
+			local mapped = 0
+			if autoUpdateMode.Selected == "Quiet Refresh" then
+				mapped = 1
+			elseif autoUpdateMode.Selected == "Manual Tree" then
+				mapped = 2
+			elseif autoUpdateMode.Selected == "Frozen" then
+				mapped = 3
+			end
+			Settings.Explorer.AutoUpdateMode = mapped
+			persistSettings()
+			applyExplorerRefresh(true)
+		end)
+		AddText("Quiet Refresh keeps data fresh but stops auto-redrawing the tree.")
 		
 		local partSelectionBox = AddCheckbox("Part Selection Box", Settings.Explorer.PartSelectionBox)
 		partSelectionBox.OnInput:Connect(function()
@@ -451,6 +642,22 @@ local function main()
 			Settings.Explorer.UseNameWidth = useNameWidth.Toggled
 			persistSettings()
 			applyExplorerRefresh(true)
+		end)
+
+		local maxSelectionBoxes = AddTextbox("Max Selection Boxes", tostring(Settings.Explorer.MaxSelectionBoxes), 70)
+		maxSelectionBoxes.FocusLost:Connect(function()
+			local n = tonumber(maxSelectionBoxes.Text)
+			if not n then
+				maxSelectionBoxes.Text = tostring(Settings.Explorer.MaxSelectionBoxes)
+				return
+			end
+			n = math.clamp(math.floor(n), 0, 5000)
+			Settings.Explorer.MaxSelectionBoxes = n
+			maxSelectionBoxes.Text = tostring(n)
+			persistSettings()
+			if Explorer and Explorer.UpdateSelectionVisuals then
+				pcall(Explorer.UpdateSelectionVisuals)
+			end
 		end)
 
 		local writeRemoteAttr = AddCheckbox("Write Remote Block Attr", Settings.RemoteBlockWriteAttribute)
@@ -489,7 +696,7 @@ local function main()
 		bindOffsetTextbox("Teleport Offset Y", "Y")
 		bindOffsetTextbox("Teleport Offset Z", "Z")
 		
-		AddSeperator("Properties")
+		sectionAnchors.Properties = AddSeperator("Properties")
 
 		local showDeprecated = AddCheckbox("Show Deprecated", Settings.Properties.ShowDeprecated)
 		showDeprecated.OnInput:Connect(function()
@@ -574,7 +781,7 @@ local function main()
 			applyPropertiesRefresh()
 		end)
 		
-		AddSeperator("Script Viewer")
+		sectionAnchors.Viewer = AddSeperator("Script Viewer")
 		
 		local showMoreInfo = AddCheckbox("Show Decompiled Script Info", Settings.ScriptViewer.ShowMoreInfo)
 		showMoreInfo.OnInput:Connect(function()
@@ -601,8 +808,9 @@ local function main()
 				persistUserSettings()
 			end
 		end)
+		AddText("Editor text size updates live.")
 
-		AddSeperator("Console")
+		sectionAnchors.Console = AddSeperator("Console")
 		Main.UserSettings = Main.UserSettings or {}
 		Main.UserSettings.ConsoleFilters = Main.UserSettings.ConsoleFilters or {
 			Output = true,
@@ -624,9 +832,64 @@ local function main()
 		bindConsoleFilter("Warn", "Warning Messages")
 		bindConsoleFilter("Error", "Error Messages")
 		bindConsoleFilter("Listen", "Remote Listener")
+
+		local consoleTextSize = AddTextbox("Console Text Size", tostring(Main.UserSettings.ConsoleTextSize or 15), 60)
+		consoleTextSize.FocusLost:Connect(function()
+			local n = tonumber(consoleTextSize.Text)
+			if not n then
+				consoleTextSize.Text = tostring(Main.UserSettings.ConsoleTextSize or 15)
+				return
+			end
+			n = math.clamp(math.floor(n), 1, 64)
+			Main.UserSettings.ConsoleTextSize = n
+			consoleTextSize.Text = tostring(n)
+			if Console and Console.SetTextSize then
+				pcall(Console.SetTextSize, n)
+			else
+				persistUserSettings()
+			end
+		end)
+
+		local consoleOutputLimit = AddTextbox("Console Output Limit", tostring(Main.UserSettings.ConsoleOutputLimit or 500), 60)
+		consoleOutputLimit.FocusLost:Connect(function()
+			local n = tonumber(consoleOutputLimit.Text)
+			if not n then
+				consoleOutputLimit.Text = tostring(Main.UserSettings.ConsoleOutputLimit or 500)
+				return
+			end
+			n = math.clamp(math.floor(n), 10, 5000)
+			Main.UserSettings.ConsoleOutputLimit = n
+			consoleOutputLimit.Text = tostring(n)
+			if Console and Console.SetOutputLimit then
+				pcall(Console.SetOutputLimit, n)
+			else
+				persistUserSettings()
+			end
+		end)
+
+		local consoleCtrlScroll = AddCheckbox("Ctrl + Wheel Resizes Output", Main.UserSettings.ConsoleCtrlScroll == true)
+		consoleCtrlScroll.OnInput:Connect(function()
+			Main.UserSettings.ConsoleCtrlScroll = consoleCtrlScroll.Toggled
+			if Console and Console.SetCtrlScrollEnabled then
+				pcall(Console.SetCtrlScrollEnabled, consoleCtrlScroll.Toggled)
+			else
+				persistUserSettings()
+			end
+		end)
+
+		local consoleAutoScroll = AddCheckbox("Auto Scroll New Output", Main.UserSettings.ConsoleAutoScroll == true)
+		consoleAutoScroll.OnInput:Connect(function()
+			Main.UserSettings.ConsoleAutoScroll = consoleAutoScroll.Toggled
+			if Console and Console.SetAutoScrollEnabled then
+				pcall(Console.SetAutoScrollEnabled, consoleAutoScroll.Toggled)
+			else
+				persistUserSettings()
+			end
+		end)
+
 		AddText("Console filters apply fully after reloading Dex.")
 		
-		AddSeperator("Decompiler")
+		sectionAnchors.Decompiler = AddSeperator("Decompiler")
 		AddText("If executor does not support decompile, it will use the fallback option.")
 		AddText("'getbytecode' is mandatory to use fallback decompilers.")
 		local decompilerOption = {"Konstant", "AdvancedDecompiler", "Shiny"}
@@ -657,6 +920,70 @@ local function main()
 			Settings.Decompiler.PreferDecompilerFallback = preferFallback.Toggled
 			persistSettings()
 		end)
+
+		sectionAnchors.Themes = AddSeperator("Themes")
+		AddText("Use Theme Manager for color-by-color customization.")
+
+		local openThemeManagerButton = AddButton("Theme Manager", "Open", 70)
+		openThemeManagerButton.OnClick:Connect(function()
+			if ThemeManager and ThemeManager.Window then
+				ThemeManager.Window:Show()
+			else
+				setWindowTitleSuffix("Theme Manager Missing", 2)
+			end
+		end)
+
+		local saveThemeButton = AddButton("Save Current Theme", "Save", 70)
+		saveThemeButton.OnClick:Connect(function()
+			if Main and Main.SaveThemeSettings then
+				pcall(Main.SaveThemeSettings)
+				setWindowTitleSuffix("Theme Saved")
+			end
+		end)
+
+		local reloadThemeButton = AddButton("Reload Theme File", "Load", 70)
+		reloadThemeButton.OnClick:Connect(function()
+			if Main and Main.LoadThemeSettings then
+				pcall(Main.LoadThemeSettings)
+				if Lib and Lib.RefreshTheme then
+					pcall(Lib.RefreshTheme)
+				end
+				setWindowTitleSuffix("Theme Reloaded")
+			end
+		end)
+
+		sectionAnchors.Files = AddSeperator("Files")
+		AddText("The restart button below saves settings, then reloads Dex.")
+
+		local saveSettingsButton = AddButton("Write Settings File", "Save", 70)
+		saveSettingsButton.OnClick:Connect(function()
+			if persistSettings() then
+				setWindowTitleSuffix("Settings Saved")
+			else
+				setWindowTitleSuffix("Save Failed", 2)
+			end
+		end)
+
+		local saveUserButton = AddButton("Write User Prefs", "Save", 70)
+		saveUserButton.OnClick:Connect(function()
+			persistUserSettings()
+			setWindowTitleSuffix("User Prefs Saved")
+		end)
+
+		for _, sectionName in ipairs({"UI", "Explorer", "Properties", "Viewer", "Console", "Decompiler", "Themes", "Files"}) do
+			createQuickTab(sectionName)
+		end
+
+		task.defer(function()
+			local lastTab = "UI"
+			if Main.UserSettings and Main.UserSettings.RememberLastSettingsTab ~= false then
+				lastTab = Main.UserSettings.SettingsLastTab or "UI"
+			end
+			if not sectionAnchors[lastTab] then
+				lastTab = "UI"
+			end
+			scrollToSection(lastTab)
+		end)
 		
 		-- Save buttons below
 		local BackgroundreloadButton = Lib.Frame.new()
@@ -675,10 +1002,15 @@ local function main()
 		reloadButton.Parent = BackgroundreloadButton.Gui
 		reloadButton.Size = UDim2.new(1,0, 1,0)
 		reloadButton.Position = UDim2.new(0,0, 0,0)
-		reloadButton.Transparency = 1
+		reloadButton.BackgroundTransparency = 1
 		
 		reloadButton.MouseButton1Click:Connect(function()
 			window:SetTitle("Settings - Saving")
+
+			persistUserSettings()
+			if Main and Main.SaveThemeSettings then
+				pcall(Main.SaveThemeSettings)
+			end
 
 			local saved = persistSettings()
 			if not saved then

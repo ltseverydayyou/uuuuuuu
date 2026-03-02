@@ -1,11 +1,112 @@
-local _g = (getgenv and getgenv()) or _G
-if _g.__DEXPP and _g.__DEXPP.Main and _g.__DEXPP.Main.Exit then
-	pcall(function()
-		if _g.__DEXPP.Main.SetMainGuiOpen then
-			_g.__DEXPP.Main.SetMainGuiOpen(true)
+local DEXPP_STATE_KEY = "__DEXPP_STATE"
+local DEXPP_LEGACY_KEY = "__DEXPP"
+local globalStores = {}
+
+do
+	local seen = {}
+	local function addStore(store)
+		if type(store) == "table" and not seen[store] then
+			seen[store] = true
+			table.insert(globalStores, store)
 		end
+	end
+
+	local okGenv, genv = pcall(function()
+		return (getgenv and getgenv()) or nil
 	end)
-	return _g.__DEXPP
+	if okGenv then
+		addStore(genv)
+	end
+	addStore(_G)
+end
+
+local function syncDexStateReferences(state)
+	for _, store in ipairs(globalStores) do
+		rawset(store, DEXPP_STATE_KEY, state)
+		rawset(store, DEXPP_LEGACY_KEY, state)
+	end
+	return state
+end
+
+local function getDexState(create)
+	for _, store in ipairs(globalStores) do
+		local state = rawget(store, DEXPP_STATE_KEY)
+		if type(state) == "table" then
+			return syncDexStateReferences(state)
+		end
+
+		local legacyState = rawget(store, DEXPP_LEGACY_KEY)
+		if type(legacyState) == "table" then
+			return syncDexStateReferences(legacyState)
+		end
+	end
+
+	if not create then
+		return nil
+	end
+
+	return syncDexStateReferences({})
+end
+
+local function clearDexState(state)
+	for _, store in ipairs(globalStores) do
+		if rawget(store, DEXPP_STATE_KEY) == state then
+			rawset(store, DEXPP_STATE_KEY, nil)
+		end
+		if rawget(store, DEXPP_LEGACY_KEY) == state then
+			rawset(store, DEXPP_LEGACY_KEY, nil)
+		end
+	end
+end
+
+local function isLiveDexState(state)
+	if type(state) ~= "table" then
+		return false
+	end
+
+	local main = rawget(state, "Main")
+	if type(main) ~= "table" or type(main.Exit) ~= "function" then
+		return false
+	end
+
+	local gui = rawget(main, "MainGui")
+	if typeof(gui) == "Instance" then
+		local okParent, parent = pcall(function()
+			return gui.Parent
+		end)
+		if okParent and parent then
+			local okOpenButton, openButton = pcall(function()
+				return gui:FindFirstChild("OpenButton")
+			end)
+			if okOpenButton and openButton then
+				return true
+			end
+		end
+	end
+
+	if rawget(main, "__DexInitStarted") == true then
+		local startedAt = tonumber(rawget(state, "StartedAt"))
+		if startedAt and (os.clock() - startedAt) <= 30 then
+			return true
+		end
+	end
+
+	return false
+end
+
+do
+	local existingState = getDexState(false)
+	if existingState and isLiveDexState(existingState) then
+		pcall(function()
+			local existingMain = existingState.Main
+			if existingMain and existingMain.__DexLoaded and existingMain.SetMainGuiOpen then
+				existingMain.SetMainGuiOpen(true)
+			end
+		end)
+		return existingState
+	elseif existingState then
+		clearDexState(existingState)
+	end
 end
 
 local oldgame = oldgame or game
@@ -43,7 +144,8 @@ DefaultSettings = (function()
 			PartSelectionBox = true,
 			GuiSelectionBox = true,
 			CopyPathUseGetChildren = true,
-			UseNameWidth = false
+			UseNameWidth = false,
+			MaxSelectionBoxes = 1000
 		},
 		Properties = {
 			_Recurse = true,
@@ -107,7 +209,9 @@ DefaultSettings = (function()
 		},
 		Window = {
 			TitleOnMiddle = false,
-			Transparency = .2
+			Transparency = .2,
+			SettingsWidth = 250,
+			SettingsHeight = 375
 		},
 		Decompiler = {
 			DecompilerFallback = "Konstant", -- Konstant, Shiny, AdvancedDecompiler
@@ -255,7 +359,13 @@ Main = (function()
 			Warn = true,
 			Error = true,
 			Listen = true,
-		}
+		},
+		ConsoleCtrlScroll = false,
+		ConsoleAutoScroll = false,
+		ConsoleOutputLimit = 500,
+		ConsoleTextSize = 15,
+		RememberLastSettingsTab = true,
+		SettingsLastTab = "UI"
 	}
 	Main.ThemeSettings = {}
 
@@ -301,6 +411,9 @@ Main = (function()
 		["rbxassetid://114851699900089"] = "Vanilla3.png",
 	}
 	Main.IconSourceBaseUrl = "https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/main/DexPlusIcons/"
+	Main.ResolvedAssetCache = {}
+	Main.IconFileReady = {}
+	Main.IconFoldersReady = false
 
 	Main.DisplayOrders = {
 		SideWindow = 2147483628,
@@ -387,14 +500,27 @@ Main = (function()
 		if override then
 			local getter = (env and env.getcustomasset) or getcustomasset or getsynasset
 			local path = "DexPlusPlus/assets/"..override
-			if env and env.makefolder then
+			local cached = Main.ResolvedAssetCache and Main.ResolvedAssetCache[path]
+			if cached then
+				return cached
+			end
+
+			if env and env.makefolder and not Main.IconFoldersReady then
 				pcall(env.makefolder,"DexPlusPlus")
 				pcall(env.makefolder,"DexPlusPlus/assets")
+				Main.IconFoldersReady = true
 			end
 
 			local function ensureFile()
-				if env and env.isfile and env.isfile(path) then
+				if Main.IconFileReady[path] then
 					return true
+				end
+				if env and env.isfile then
+					local okExists, exists = pcall(env.isfile, path)
+					if okExists and exists then
+						Main.IconFileReady[path] = true
+						return true
+					end
 				end
 				if not (env and env.writefile) then
 					return false
@@ -403,7 +529,10 @@ Main = (function()
 				local ok, bytes = pcall(oldgame.HttpGet, game, url)
 				if ok and type(bytes) == "string" then
 					local okWrite = pcall(env.writefile, path, bytes)
-					return okWrite
+					if okWrite then
+						Main.IconFileReady[path] = true
+						return true
+					end
 				end
 				return false
 			end
@@ -411,6 +540,7 @@ Main = (function()
 			if ensureFile() and getter then
 				local ok, result = pcall(getter, path)
 				if ok and result then
+					Main.ResolvedAssetCache[path] = result
 					return result
 				end
 			end
@@ -773,6 +903,16 @@ Main = (function()
 		local processed = {}
 		pcall(env.makefolder,"DexPlusPlus")
 		pcall(env.makefolder,"DexPlusPlus/assets")
+		Main.IconFoldersReady = true
+		if force then
+			if table.clear then
+				table.clear(Main.ResolvedAssetCache)
+			else
+				Main.ResolvedAssetCache = {}
+			end
+		else
+			Main.ResolvedAssetCache = Main.ResolvedAssetCache or {}
+		end
 		for _, fileName in pairs(Main.IconOverrides) do
 			if processed[fileName] then
 				continue
@@ -787,18 +927,26 @@ Main = (function()
 				if okExists and exists then
 					pcall(deleteFn, path)
 				end
+				Main.IconFileReady[path] = nil
 			end
 
 			if not needDownload and env.isfile then
 				local ok, exists = pcall(env.isfile, path)
-				needDownload = not (ok and exists)
+				local fileExists = ok and exists
+				if fileExists then
+					Main.IconFileReady[path] = true
+				end
+				needDownload = not fileExists
 			end
 
 			if needDownload then
 				local url = Main.IconSourceBaseUrl .. fileName
 				local ok, data = pcall(oldgame.HttpGet, game, url)
 				if ok and type(data) == "string" then
-					pcall(env.writefile, path, data)
+					local okWrite = pcall(env.writefile, path, data)
+					if okWrite then
+						Main.IconFileReady[path] = true
+					end
 				end
 			end
 		end
@@ -1184,6 +1332,53 @@ Main = (function()
 				end
 			end
 		end
+		if Main.ValidateUserSettings then
+			Main.ValidateUserSettings()
+		end
+	end
+
+	Main.ValidateUserSettings = function()
+		Main.UserSettings = Main.UserSettings or {}
+		local userSettings = Main.UserSettings
+		local filters = userSettings.ConsoleFilters
+		if type(filters) ~= "table" then
+			filters = {}
+			userSettings.ConsoleFilters = filters
+		end
+
+		local filterDefaults = {
+			Output = true,
+			Info = true,
+			Warn = true,
+			Error = true,
+			Listen = true,
+		}
+
+		for key, defaultValue in pairs(filterDefaults) do
+			if type(filters[key]) ~= "boolean" then
+				filters[key] = defaultValue
+			end
+		end
+
+		if type(userSettings.ConsoleCtrlScroll) ~= "boolean" then
+			userSettings.ConsoleCtrlScroll = false
+		end
+		if type(userSettings.ConsoleAutoScroll) ~= "boolean" then
+			userSettings.ConsoleAutoScroll = false
+		end
+
+		local outputLimit = math.floor(tonumber(userSettings.ConsoleOutputLimit) or 500)
+		userSettings.ConsoleOutputLimit = math.clamp(outputLimit, 10, 5000)
+
+		local textSize = math.floor(tonumber(userSettings.ConsoleTextSize) or 15)
+		userSettings.ConsoleTextSize = math.clamp(textSize, 1, 64)
+
+		if type(userSettings.RememberLastSettingsTab) ~= "boolean" then
+			userSettings.RememberLastSettingsTab = true
+		end
+		if type(userSettings.SettingsLastTab) ~= "string" or userSettings.SettingsLastTab == "" then
+			userSettings.SettingsLastTab = "UI"
+		end
 	end
 
 	Main.SaveThemeSettings = function()
@@ -1297,6 +1492,8 @@ Main = (function()
 		if type(explorer.UseNameWidth) ~= "boolean" then
 			explorer.UseNameWidth = defaultExplorer.UseNameWidth
 		end
+		local maxSelectionBoxes = math.floor(tonumber(explorer.MaxSelectionBoxes) or defaultExplorer.MaxSelectionBoxes or 1000)
+		explorer.MaxSelectionBoxes = math.clamp(maxSelectionBoxes, 0, 5000)
 		local autoUpdateMode = math.floor(tonumber(explorer.AutoUpdateMode) or defaultExplorer.AutoUpdateMode or 0)
 		explorer.AutoUpdateMode = math.clamp(autoUpdateMode, 0, 3)
 
@@ -1343,6 +1540,10 @@ Main = (function()
 			transp = DefaultSettings.Window.Transparency
 		end
 		Settings.Window.Transparency = math.clamp(transp, 0, 1)
+		local settingsWidth = math.floor(tonumber(Settings.Window.SettingsWidth) or DefaultSettings.Window.SettingsWidth or 250)
+		Settings.Window.SettingsWidth = math.clamp(settingsWidth, 220, 550)
+		local settingsHeight = math.floor(tonumber(Settings.Window.SettingsHeight) or DefaultSettings.Window.SettingsHeight or 375)
+		Settings.Window.SettingsHeight = math.clamp(settingsHeight, 280, 700)
 
 		if type(Settings.ScriptViewer) ~= "table" then
 			Settings.ScriptViewer = {}
@@ -2120,6 +2321,9 @@ Main = (function()
 	end
 
 	Main.Exit = function()
+		Main.__DexLoaded = false
+		Main.__DexInitStarted = false
+
 		if Main.MainGuiMouseEvent then
 			pcall(function()
 				Main.MainGuiMouseEvent:Disconnect()
@@ -2172,8 +2376,10 @@ Main = (function()
 		ThemeManager = nil
 		Notebook = nil
 
-		if _g and _g.__DEXPP then
-			_g.__DEXPP = nil
+		if Main.__DexState then
+			Main.__DexState.State = "dead"
+			clearDexState(Main.__DexState)
+			Main.__DexState = nil
 		end
 	end
 
@@ -2207,6 +2413,12 @@ Main = (function()
 			{20,"TextLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,BorderSizePixel=0,Font=3,Name="AppName",Parent={18},Position=UDim2.new(0,2,0,38),Size=UDim2.new(1,-4,1,-40),Text="Explorer",TextColor3=Color3.new(1,1,1),TextSize=14,TextTransparency=0.10000000149012,TextTruncate=1,TextWrapped=true,TextYAlignment=0,}},
 			{21,"Frame",{BackgroundColor3=Color3.new(0,0.66666668653488,1),BorderSizePixel=0,Name="Highlight",Parent={18},Position=UDim2.new(0,0,1,-2),Size=UDim2.new(1,0,0,2),}},
 		})
+		pcall(function()
+			gui:SetAttribute("DexPlusLoaded", true)
+			if Main.SessionId then
+				gui:SetAttribute("DexPlusSessionId", Main.SessionId)
+			end
+		end)
 		Main.MainGui = gui
 		Main.AppsFrame = gui.OpenButton.MainFrame.AppsFrame
 		Main.AppsContainer = Main.AppsFrame.Container
@@ -2401,7 +2613,7 @@ Main = (function()
 
 		if (env and (env.getcustomasset or getcustomasset or getsynasset)) then
 			intro.SetProgress("Loading Icons",0.3)
-			Main.EnsureAllIcons(true)
+			Main.EnsureAllIcons()
 		end
 
 		-- Init icons
@@ -2562,9 +2774,28 @@ Main = (function()
 end)()
 
 -- Start
-_g.__DEXPP = _g.__DEXPP or {}
-_g.__DEXPP.Main = Main
+local dexState = getDexState(true)
+Main.__DexState = dexState
+Main.__DexLoaded = false
+Main.__DexInitStarted = true
+Main.SessionId = Main.SessionId or ((Main.GetRandomString and Main.GetRandomString()) or tostring(math.random(1, 1e9)))
 
-Main.Init()
+dexState.Main = Main
+dexState.State = "loading"
+dexState.StartedAt = os.clock()
+dexState.SessionId = Main.SessionId
+
+local okInit, initErr = pcall(Main.Init)
+if okInit then
+	Main.__DexLoaded = true
+	Main.__DexInitStarted = false
+	dexState.State = "ready"
+else
+	Main.__DexLoaded = false
+	Main.__DexInitStarted = false
+	dexState.State = "dead"
+	clearDexState(dexState)
+	error(initErr)
+end
 
 --for i,v in pairs(Main.MissingEnv) do print(i,v) end

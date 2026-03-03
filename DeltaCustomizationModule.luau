@@ -8,13 +8,11 @@ if type(deltaEnv) == "table" then
 	end;
 	deltaEnv.__DeltaCustomizationModuleLoaded = true;
 end;
+local _ref = cloneref and type(cloneref) == "function" and cloneref or function(v) return v; end;
 local SRV = setmetatable({}, {
 	__index = function(self, n)
-		local ref = cloneref and type(cloneref) == "function" and cloneref or function(v)
-			return v;
-		end;
 		local ok, s = pcall(function()
-			return ref(game:GetService(n));
+			return _ref(game:GetService(n));
 		end);
 		if ok and s then
 			rawset(self, n, s);
@@ -462,9 +460,7 @@ local function scanIcons()
 	for _, full in ipairs(items) do
 		local n = getName(full);
 		if n then
-			list[(#list) + 1] = {
-				file = n
-			};
+			list[#list + 1] = { file = n };
 		end;
 	end;
 	dIcons.entries = list;
@@ -538,9 +534,7 @@ local function iconSaveFromUrl(url)
 		end;
 	end;
 	if not idx then
-		list[(#list) + 1] = {
-			file = safe
-		};
+		list[#list + 1] = { file = safe };
 		idx = #list;
 	end;
 	dIcons.entries = list;
@@ -560,14 +554,13 @@ local function applyIcon()
 	elseif type(dIcons.defaultImage) == "string" and dIcons.defaultImage ~= "" then
 		img = dIcons.defaultImage;
 	end;
-	local ok = false;
 	if img and img ~= "" then
 		iconBtn.Image = img;
-		ok = true;
+		return true;
 	else
 		iconBtn.Image = "";
 	end;
-	return ok;
+	return false;
 end;
 local function setIconEnabled(flag)
 	if not iconFsOk() then
@@ -626,10 +619,10 @@ local function cycleIcon(delta)
 	end;
 	delta = delta or 1;
 	local idx = dIcons.index or 1;
-	if idx < 1 or idx > (#list) then
+	if idx < 1 or idx > #list then
 		idx = 1;
 	end;
-	idx = (idx - 1 + delta) % (#list) + 1;
+	idx = (idx - 1 + delta) % #list + 1;
 	local e = list[idx];
 	if not e or (not e.file) then
 		return;
@@ -818,9 +811,9 @@ task.defer(function()
 	end;
 	if darkOverlay then
 		darkOverlay.Visible = false;
-		(darkOverlay:GetPropertyChangedSignal("Visible")):Connect(function()
+		NAlib.connect("DarkOverlay_Hide", darkOverlay:GetPropertyChangedSignal("Visible"):Connect(function()
 			darkOverlay.Visible = false;
-		end);
+		end));
 	end;
 	local settingsFrame;
 	do
@@ -999,7 +992,7 @@ task.defer(function()
 			f.Name = isCustom and "Section_Customization" or "Section_Delta";
 			f.Parent = settingsHolder;
 			f.LayoutOrder = order;
-			for _, d in ipairs(f:QueryDescendants("Instance")) do
+			for _, d in ipairs(f:GetDescendants()) do
 				if d:IsA("LocalScript") then
 					d:Destroy();
 				end;
@@ -1033,7 +1026,7 @@ task.defer(function()
 		if existingGrad then
 			local kps = existingGrad.Color.Keypoints;
 			c1 = kps[1] and kps[1].Value or Color3.fromRGB(79, 164, 242);
-			c2 = kps[#kps] and kps[(#kps)].Value or Color3.fromRGB(28, 34, 46);
+			c2 = kps[#kps] and kps[#kps].Value or Color3.fromRGB(28, 34, 46);
 			sidebarGradient = existingGrad;
 		else
 			c1 = Color3.fromRGB(79, 164, 242);
@@ -1053,9 +1046,11 @@ task.defer(function()
 		sidebarGrad2 = Instance.new("Color3Value");
 		sidebarGrad2.Name = "SidebarGradientColor2";
 		sidebarGrad2.Value = c2;
+		local sidebarSnapPending = false;
 		(sidebar:GetPropertyChangedSignal("Position")):Connect(function()
 			local p = sidebar.Position;
-			if p.X.Scale > sidebarOpenPos.X.Scale then
+			if p.X.Scale > sidebarOpenPos.X.Scale and not sidebarSnapPending then
+				sidebarSnapPending = true;
 				task.spawn(function()
 					local last = p;
 					local stable = 0;
@@ -1067,9 +1062,10 @@ task.defer(function()
 							last = cur;
 							stable = 0;
 						else
-							stable = stable + step;
+							stable += step;
 						end;
 					end;
+					sidebarSnapPending = false;
 					if sidebar.Parent and sidebar.Position.X.Scale > sidebarOpenPos.X.Scale then
 						local cur = sidebar.Position;
 						sidebar.Position = UDim2.new(sidebarClosedPos.X.Scale, 0, cur.Y.Scale, cur.Y.Offset);
@@ -1083,14 +1079,14 @@ task.defer(function()
 		iconColorValue = Instance.new("Color3Value");
 		iconColorValue.Name = "IconColorValue";
 		iconColorValue.Value = iconBaseColor or iconStroke.Color;
-		iconColorValue.Changed:Connect(function()
+		NAlib.connect("IconColorValue_Changed", iconColorValue.Changed:Connect(function()
 			if not iconColorUseCustom then
 				return;
 			end;
 			pcall(function()
 				iconStroke.Color = iconColorValue.Value;
 			end);
-		end);
+		end));
 	end;
 	local iconSizeValue;
 	if iconBtn and iconBaseSize then
@@ -1107,15 +1103,14 @@ task.defer(function()
 				return;
 			end;
 			iconSzLock = true;
-			local sx = iconBaseSize.X.Scale * v;
-			local so = iconBaseSize.X.Offset * v;
-			local sy = iconBaseSize.Y.Scale * v;
-			local syo = iconBaseSize.Y.Offset * v;
-			iconBtn.Size = UDim2.new(sx, so, sy, syo);
+			iconBtn.Size = UDim2.new(
+				iconBaseSize.X.Scale * v, iconBaseSize.X.Offset * v,
+				iconBaseSize.Y.Scale * v, iconBaseSize.Y.Offset * v
+			);
 			iconSzLock = false;
 		end;
 		if iconBtn and iconBtn.GetPropertyChangedSignal and mainGui and mainGui.GetPropertyChangedSignal then
-			(mainGui:GetPropertyChangedSignal("AbsoluteSize")):Connect(function()
+			NAlib.connect("IconSizeRebase", (mainGui:GetPropertyChangedSignal("AbsoluteSize")):Connect(function()
 				task.defer(function()
 					if iconBtn and iconSizeValue and (not iconSzLock) then
 						local v = math.clamp(iconSizeValue.Value, 0.5, 5);
@@ -1124,14 +1119,12 @@ task.defer(function()
 						applyIconSize(v);
 					end;
 				end);
-			end);
+			end));
 		end;
-		iconSizeValue.Changed:Connect(function()
+		NAlib.connect("IconSizeValue_Changed", iconSizeValue.Changed:Connect(function()
 			applyIconSize(iconSizeValue.Value);
 			if HS and type(writefile) == "function" then
-				settingsConfig.IconSize = {
-					value = math.clamp(iconSizeValue.Value, 0.5, 5)
-				};
+				settingsConfig.IconSize = { value = math.clamp(iconSizeValue.Value, 0.5, 5) };
 				local ok, encoded = pcall(function()
 					return HS:JSONEncode(settingsConfig);
 				end);
@@ -1139,7 +1132,7 @@ task.defer(function()
 					pcall(writefile, settingsPath, encoded);
 				end;
 			end;
-		end);
+		end));
 		applyIconSize(iconSizeValue.Value);
 	end;
 	local iconRgbSpeedValue;
@@ -1235,12 +1228,13 @@ task.defer(function()
 			return;
 		end;
 		local key = id or tt or "Color_" .. tostring(math.random(1, 1000000000));
+		local slId = "ColorSlider_" .. key;
 		local isIc = id == "IconColor" and iconStroke ~= nil;
 		local fr = settingTemplate:Clone();
 		fr.Parent = settingsHolder;
 		fr.Visible = true;
 		fr.LayoutOrder = -2;
-		for _, d in ipairs(fr:QueryDescendants("Instance")) do
+		for _, d in ipairs(fr:GetDescendants()) do
 			if d:IsA("LocalScript") then
 				d:Destroy();
 			end;
@@ -1365,10 +1359,11 @@ task.defer(function()
 		end;
 		local h, s, v = Color3.toHSV(lastC);
 		local function boxC(c)
-			local r = math.floor(c.R * 255 + 0.5);
-			local g = math.floor(c.G * 255 + 0.5);
-			local b = math.floor(c.B * 255 + 0.5);
-			vb.Text = string.format("%d,%d,%d", r, g, b);
+			vb.Text = string.format("%d,%d,%d",
+				math.floor(c.R * 255 + 0.5),
+				math.floor(c.G * 255 + 0.5),
+				math.floor(c.B * 255 + 0.5)
+			);
 		end;
 		local function save()
 			if not (HS and type(writefile) == "function") then
@@ -1376,11 +1371,7 @@ task.defer(function()
 			end;
 			colorConfig[key] = {
 				useCustom = cOn,
-				customColor = {
-					lastC.R,
-					lastC.G,
-					lastC.B
-				}
+				customColor = { lastC.R, lastC.G, lastC.B }
 			};
 			local ok, enc = pcall(function()
 				return HS:JSONEncode(colorConfig);
@@ -1390,17 +1381,13 @@ task.defer(function()
 			end;
 		end;
 		local function updGrad()
-			local c0 = Color3.fromHSV(h, 0, v);
-			local c1 = Color3.fromHSV(h, 1, v);
 			gS.Color = ColorSequence.new({
-				ColorSequenceKeypoint.new(0, c0),
-				ColorSequenceKeypoint.new(1, c1)
+				ColorSequenceKeypoint.new(0, Color3.fromHSV(h, 0, v)),
+				ColorSequenceKeypoint.new(1, Color3.fromHSV(h, 1, v))
 			});
-			local cv0 = Color3.fromHSV(h, s, 0);
-			local cv1 = Color3.fromHSV(h, s, 1);
 			gV.Color = ColorSequence.new({
-				ColorSequenceKeypoint.new(0, cv0),
-				ColorSequenceKeypoint.new(1, cv1)
+				ColorSequenceKeypoint.new(0, Color3.fromHSV(h, s, 0)),
+				ColorSequenceKeypoint.new(1, Color3.fromHSV(h, s, 1))
 			});
 		end;
 		local function setVis()
@@ -1423,9 +1410,8 @@ task.defer(function()
 			h = math.clamp(nh, 0, 1);
 			s = math.clamp(ns, 0, 1);
 			v = math.clamp(nv, 0, 1);
-			local col = Color3.fromHSV(h, s, v);
 			setVis();
-			applyC(col, st);
+			applyC(Color3.fromHSV(h, s, v), st);
 		end;
 		local function syncFromC(col)
 			h, s, v = Color3.toHSV(col);
@@ -1491,37 +1477,34 @@ task.defer(function()
 			drag = bar;
 			useDrag(inp);
 		end;
-		bH.InputBegan:Connect(function(i)
-			beg(bH, i);
-		end);
-		bS.InputBegan:Connect(function(i)
-			beg(bS, i);
-		end);
-		bV.InputBegan:Connect(function(i)
-			beg(bV, i);
-		end);
-		UIS.InputChanged:Connect(function(i)
-			if not drag then
-				return;
-			end;
+		bH.InputBegan:Connect(function(i) beg(bH, i); end);
+		bS.InputBegan:Connect(function(i) beg(bS, i); end);
+		bV.InputBegan:Connect(function(i) beg(bV, i); end);
+		NAlib.disconnect(slId);
+		NAlib.connect(slId, UIS.InputChanged:Connect(function(i)
+			if not drag then return; end;
 			if i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch then
 				useDrag(i);
 			end;
-		end);
-		UIS.InputEnded:Connect(function(i)
+		end));
+		NAlib.connect(slId, UIS.InputEnded:Connect(function(i)
 			if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
 				drag = nil;
 			end;
+		end));
+		fr.Destroying:Connect(function()
+			NAlib.disconnect(slId);
 		end);
 		vb.FocusLost:Connect(function()
 			local txt = vb.Text or "";
 			local r, g, b = txt:match("(%d+)%s*,%s*(%d+)%s*,%s*(%d+)");
 			r, g, b = tonumber(r), tonumber(g), tonumber(b);
 			if r and g and b then
-				r = math.clamp(r, 0, 255) / 255;
-				g = math.clamp(g, 0, 255) / 255;
-				b = math.clamp(b, 0, 255) / 255;
-				local col = Color3.new(r, g, b);
+				local col = Color3.new(
+					math.clamp(r, 0, 255) / 255,
+					math.clamp(g, 0, 255) / 255,
+					math.clamp(b, 0, 255) / 255
+				);
 				cOn = true;
 				tg.Text = "C";
 				if isIc then
@@ -1564,6 +1547,7 @@ task.defer(function()
 			return;
 		end;
 		local key = id or titleText or "Size_" .. tostring(math.random(1, 1000000000));
+		local slId = "SizeSlider_" .. key;
 		minV = minV or 0.5;
 		maxV = maxV or 5;
 		local fr = settingTemplate:Clone();
@@ -1593,9 +1577,7 @@ task.defer(function()
 			if not (HS and type(writefile) == "function") then
 				return;
 			end;
-			settingsConfig[key] = {
-				value = v
-			};
+			settingsConfig[key] = { value = v };
 			local ok, enc = pcall(function()
 				return HS:JSONEncode(settingsConfig);
 			end);
@@ -1624,8 +1606,7 @@ task.defer(function()
 				rel = (input.Position.X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X;
 			end);
 			rel = math.clamp(rel, 0, 1);
-			local v = minV + (maxV - minV) * rel;
-			apply(v);
+			apply(minV + (maxV - minV) * rel);
 		end;
 		bar.InputBegan:Connect(function(input)
 			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -1633,18 +1614,20 @@ task.defer(function()
 				fromIn(input);
 			end;
 		end);
-		UIS.InputChanged:Connect(function(input)
-			if not drag then
-				return;
-			end;
+		NAlib.disconnect(slId);
+		NAlib.connect(slId, UIS.InputChanged:Connect(function(input)
+			if not drag then return; end;
 			if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 				fromIn(input);
 			end;
-		end);
-		UIS.InputEnded:Connect(function(input)
+		end));
+		NAlib.connect(slId, UIS.InputEnded:Connect(function(input)
 			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 				drag = false;
 			end;
+		end));
+		fr.Destroying:Connect(function()
+			NAlib.disconnect(slId);
 		end);
 		vb.FocusLost:Connect(function()
 			local v = tonumber(vb.Text or "");
@@ -1657,8 +1640,7 @@ task.defer(function()
 		local function updDock()
 			local w = math.clamp(math.floor(fr.AbsoluteSize.X * 0.46), 240, 380);
 			dock.Size = UDim2.new(0, w, 0, 18);
-			local sw = w - (70 + 8);
-			sw = math.clamp(sw, 140, 280);
+			local sw = math.clamp(w - 78, 140, 280);
 			sl.Size = UDim2.new(0, sw, 0, 18);
 		end;
 		updDock();
@@ -1675,7 +1657,7 @@ task.defer(function()
 		frame.Parent = settingsHolder;
 		frame.Visible = true;
 		frame.LayoutOrder = -2;
-		for _, d in ipairs(frame:QueryDescendants("Instance")) do
+		for _, d in ipairs(frame:GetDescendants()) do
 			if d:IsA("LocalScript") then
 				d:Destroy();
 			end;
@@ -1707,9 +1689,7 @@ task.defer(function()
 			if not (HS and type(writefile) == "function") then
 				return;
 			end;
-			settingsConfig[key] = {
-				enabled = enabled
-			};
+			settingsConfig[key] = { enabled = enabled };
 			local ok, encoded = pcall(function()
 				return HS:JSONEncode(settingsConfig);
 			end);
@@ -1718,20 +1698,15 @@ task.defer(function()
 			end;
 		end;
 		local function setVisualToggle()
-			if enabled then
-				btnFrame.BackgroundColor3 = Color3.fromRGB(79, 164, 242);
-			else
-				btnFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30);
-			end;
+			btnFrame.BackgroundColor3 = enabled and Color3.fromRGB(79, 164, 242) or Color3.fromRGB(30, 30, 30);
 		end;
 		local function startLoop()
 			NAlib.disconnect("IconRGB_Loop");
 			NAlib.connect("IconRGB_Loop", RS.Heartbeat:Connect(function(dt)
 				local spd = iconRgbSpeedValue and math.clamp(iconRgbSpeedValue.Value, 0.05, 2) or 0.2;
 				hue = (hue + dt * spd) % 1;
-				local c = Color3.fromHSV(hue, 1, 1);
 				pcall(function()
-					iconStroke.Color = c;
+					iconStroke.Color = Color3.fromHSV(hue, 1, 1);
 				end);
 			end));
 		end;
@@ -1778,7 +1753,7 @@ task.defer(function()
 		frame.Parent = settingsHolder;
 		frame.Visible = true;
 		frame.LayoutOrder = -2;
-		for _, d in ipairs(frame:QueryDescendants("Instance")) do
+		for _, d in ipairs(frame:GetDescendants()) do
 			if d:IsA("LocalScript") then
 				d:Destroy();
 			end;
@@ -1804,9 +1779,7 @@ task.defer(function()
 			if not (HS and type(writefile) == "function") then
 				return;
 			end;
-			settingsConfig[key] = {
-				enabled = iconVisible
-			};
+			settingsConfig[key] = { enabled = iconVisible };
 			local ok, encoded = pcall(function()
 				return HS:JSONEncode(settingsConfig);
 			end);
@@ -1815,11 +1788,7 @@ task.defer(function()
 			end;
 		end;
 		local function setVisual()
-			if iconVisible then
-				btnFrame.BackgroundColor3 = Color3.fromRGB(79, 164, 242);
-			else
-				btnFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30);
-			end;
+			btnFrame.BackgroundColor3 = iconVisible and Color3.fromRGB(79, 164, 242) or Color3.fromRGB(30, 30, 30);
 		end;
 		setVisual();
 		local function toggleClick()
@@ -1847,7 +1816,7 @@ task.defer(function()
 		frame.Parent = settingsHolder;
 		frame.Visible = true;
 		frame.LayoutOrder = -2;
-		for _, d in ipairs(frame:QueryDescendants("Instance")) do
+		for _, d in ipairs(frame:GetDescendants()) do
 			if d:IsA("LocalScript") then
 				d:Destroy();
 			end;
@@ -1873,9 +1842,7 @@ task.defer(function()
 			if not (HS and type(writefile) == "function") then
 				return;
 			end;
-			settingsConfig[key] = {
-				enabled = tabNotifEnabled
-			};
+			settingsConfig[key] = { enabled = tabNotifEnabled };
 			local ok, encoded = pcall(function()
 				return HS:JSONEncode(settingsConfig);
 			end);
@@ -1884,11 +1851,7 @@ task.defer(function()
 			end;
 		end;
 		local function setVisual()
-			if tabNotifEnabled then
-				btnFrame.BackgroundColor3 = Color3.fromRGB(79, 164, 242);
-			else
-				btnFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30);
-			end;
+			btnFrame.BackgroundColor3 = tabNotifEnabled and Color3.fromRGB(79, 164, 242) or Color3.fromRGB(30, 30, 30);
 		end;
 		setVisual();
 		local function toggleClick()
@@ -1914,7 +1877,7 @@ task.defer(function()
 		frame.Parent = settingsHolder;
 		frame.Visible = true;
 		frame.LayoutOrder = -2;
-		for _, d in ipairs(frame:QueryDescendants("Instance")) do
+		for _, d in ipairs(frame:GetDescendants()) do
 			if d:IsA("LocalScript") then
 				d:Destroy();
 			end;
@@ -1972,7 +1935,7 @@ task.defer(function()
 		frame.Parent = settingsHolder;
 		frame.Visible = true;
 		frame.LayoutOrder = -2;
-		for _, d in ipairs(frame:QueryDescendants("Instance")) do
+		for _, d in ipairs(frame:GetDescendants()) do
 			if d:IsA("LocalScript") then
 				d:Destroy();
 			end;
@@ -1983,11 +1946,7 @@ task.defer(function()
 			tLabel.Text = "Use custom icon";
 		end;
 		if dLabel then
-			if iconFsOk() then
-				dLabel.Text = "Toggle between default and custom Delta icon";
-			else
-				dLabel.Text = "Requires file system + getcustomasset support";
-			end;
+			dLabel.Text = iconFsOk() and "Toggle between default and custom Delta icon" or "Requires file system + getcustomasset support";
 		end;
 		local btnFrame = frame:FindFirstChild("Button", true);
 		if not btnFrame then
@@ -2000,11 +1959,7 @@ task.defer(function()
 		local clickable = btnFrame:FindFirstChildWhichIsA("GuiButton") or btnFrame;
 		local enabled = dIcons.enabled and true or false;
 		local function setVisual()
-			if enabled then
-				btnFrame.BackgroundColor3 = Color3.fromRGB(79, 164, 242);
-			else
-				btnFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30);
-			end;
+			btnFrame.BackgroundColor3 = enabled and Color3.fromRGB(79, 164, 242) or Color3.fromRGB(30, 30, 30);
 		end;
 		setVisual();
 		local function toggleClick()
@@ -2039,7 +1994,7 @@ task.defer(function()
 		frame.Parent = settingsHolder;
 		frame.Visible = true;
 		frame.LayoutOrder = -2;
-		for _, d in ipairs(frame:QueryDescendants("Instance")) do
+		for _, d in ipairs(frame:GetDescendants()) do
 			if d:IsA("LocalScript") then
 				d:Destroy();
 			end;
@@ -2053,14 +2008,12 @@ task.defer(function()
 			dLabel.Text = "Asset id or image URL (GitHub/External supported)";
 		end;
 		local oldBtn = frame:FindFirstChild("Button", true);
-		local size, pos, order;
+		local pos;
 		if oldBtn then
-			size = oldBtn.Size;
 			pos = oldBtn.Position;
-			order = oldBtn.LayoutOrder;
 			oldBtn:Destroy();
 		end;
-		local basePos = pos or UDim2.new(1, (-160), 0.5, 0);
+		local basePos = pos or UDim2.new(1, -160, 0.5, 0);
 		local bx, bo = basePos.X.Scale, basePos.X.Offset;
 		local by, byo = basePos.Y.Scale, basePos.Y.Offset;
 		local box = Instance.new("TextBox");
@@ -2126,9 +2079,7 @@ task.defer(function()
 				});
 				return;
 			end;
-			local ok, msg = setIconAsset(txt, {
-				autoEnable = dIcons.enabled
-			});
+			local ok, msg = setIconAsset(txt, { autoEnable = dIcons.enabled });
 			if not ok then
 				notify({
 					Title = "Delta Icon",
@@ -2178,7 +2129,7 @@ task.defer(function()
 		frame.Parent = settingsHolder;
 		frame.Visible = true;
 		frame.LayoutOrder = -2;
-		for _, d in ipairs(frame:QueryDescendants("Instance")) do
+		for _, d in ipairs(frame:GetDescendants()) do
 			if d:IsA("LocalScript") then
 				d:Destroy();
 			end;
@@ -2189,83 +2140,40 @@ task.defer(function()
 			tLabel.Text = "Icon manager";
 		end;
 		if dLabel then
-			if iconFsOk() then
-				dLabel.Text = formatIconStatus();
-			else
-				dLabel.Text = "File system/getcustomasset not supported.";
-			end;
+			dLabel.Text = iconFsOk() and formatIconStatus() or "File system/getcustomasset not supported.";
 		end;
 		local oldBtn = frame:FindFirstChild("Button", true);
-		local size, pos, order;
+		local pos;
 		if oldBtn then
-			size = oldBtn.Size;
 			pos = oldBtn.Position;
-			order = oldBtn.LayoutOrder;
 			oldBtn:Destroy();
 		end;
-		local basePos = pos or UDim2.new(1, (-160), 0.5, 0);
+		local basePos = pos or UDim2.new(1, -160, 0.5, 0);
 		local bx, bo = basePos.X.Scale, basePos.X.Offset;
 		local by, byo = basePos.Y.Scale, basePos.Y.Offset;
-		local prevBtn = Instance.new("TextButton");
-		prevBtn.Name = "Prev";
-		prevBtn.Size = UDim2.new(0, 24, 0, 18);
-		prevBtn.AnchorPoint = Vector2.new(1, 0.5);
-		prevBtn.Position = UDim2.new(bx, bo - 210, by, byo);
-		prevBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30);
-		prevBtn.BorderSizePixel = 0;
-		prevBtn.Font = Enum.Font.GothamBold;
-		prevBtn.TextSize = 11;
-		prevBtn.TextColor3 = Color3.new(1, 1, 1);
-		prevBtn.Text = "<";
-		prevBtn.Parent = frame;
-		local prevCorner = Instance.new("UICorner");
-		prevCorner.CornerRadius = UDim.new(0, 4);
-		prevCorner.Parent = prevBtn;
-		local nextBtn = Instance.new("TextButton");
-		nextBtn.Name = "Next";
-		nextBtn.Size = UDim2.new(0, 24, 0, 18);
-		nextBtn.AnchorPoint = Vector2.new(1, 0.5);
-		nextBtn.Position = UDim2.new(bx, bo - 180, by, byo);
-		nextBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30);
-		nextBtn.BorderSizePixel = 0;
-		nextBtn.Font = Enum.Font.GothamBold;
-		nextBtn.TextSize = 11;
-		nextBtn.TextColor3 = Color3.new(1, 1, 1);
-		nextBtn.Text = ">";
-		nextBtn.Parent = frame;
-		local nextCorner = Instance.new("UICorner");
-		nextCorner.CornerRadius = UDim.new(0, 4);
-		nextCorner.Parent = nextBtn;
-		local delBtn = Instance.new("TextButton");
-		delBtn.Name = "Del";
-		delBtn.Size = UDim2.new(0, 32, 0, 18);
-		delBtn.AnchorPoint = Vector2.new(1, 0.5);
-		delBtn.Position = UDim2.new(bx, bo - 140, by, byo);
-		delBtn.BackgroundColor3 = Color3.fromRGB(80, 40, 40);
-		delBtn.BorderSizePixel = 0;
-		delBtn.Font = Enum.Font.GothamBold;
-		delBtn.TextSize = 11;
-		delBtn.TextColor3 = Color3.new(1, 1, 1);
-		delBtn.Text = "DEL";
-		delBtn.Parent = frame;
-		local delCorner = Instance.new("UICorner");
-		delCorner.CornerRadius = UDim.new(0, 4);
-		delCorner.Parent = delBtn;
-		local clrBtn = Instance.new("TextButton");
-		clrBtn.Name = "Clr";
-		clrBtn.Size = UDim2.new(0, 36, 0, 18);
-		clrBtn.AnchorPoint = Vector2.new(1, 0.5);
-		clrBtn.Position = UDim2.new(bx, bo - 95, by, byo);
-		clrBtn.BackgroundColor3 = Color3.fromRGB(60, 30, 30);
-		clrBtn.BorderSizePixel = 0;
-		clrBtn.Font = Enum.Font.GothamBold;
-		clrBtn.TextSize = 11;
-		clrBtn.TextColor3 = Color3.new(1, 1, 1);
-		clrBtn.Text = "CLR";
-		clrBtn.Parent = frame;
-		local clrCorner = Instance.new("UICorner");
-		clrCorner.CornerRadius = UDim.new(0, 4);
-		clrCorner.Parent = clrBtn;
+		local function mkMgrBtn(nm, w, xOff, bgColor, txt)
+			local b = Instance.new("TextButton");
+			b.Name = nm;
+			b.Size = UDim2.new(0, w, 0, 18);
+			b.AnchorPoint = Vector2.new(1, 0.5);
+			b.Position = UDim2.new(bx, bo + xOff, by, byo);
+			b.BackgroundColor3 = bgColor;
+			b.BorderSizePixel = 0;
+			b.Font = Enum.Font.GothamBold;
+			b.TextSize = 11;
+			b.TextColor3 = Color3.new(1, 1, 1);
+			b.Text = txt;
+			b.Parent = frame;
+			local c = Instance.new("UICorner");
+			c.CornerRadius = UDim.new(0, 4);
+			c.Parent = b;
+			return b;
+		end;
+		local gray = Color3.fromRGB(30, 30, 30);
+		local prevBtn = mkMgrBtn("Prev", 24, -210, gray, "<");
+		local nextBtn = mkMgrBtn("Next", 24, -180, gray, ">");
+		local delBtn  = mkMgrBtn("Del",  32, -140, Color3.fromRGB(80, 40, 40), "DEL");
+		local clrBtn  = mkMgrBtn("Clr",  36, -95,  Color3.fromRGB(60, 30, 30), "CLR");
 		local statusLabel = Instance.new("TextLabel");
 		statusLabel.Name = "Status";
 		statusLabel.Size = UDim2.new(0, 60, 0, 18);
@@ -2279,32 +2187,22 @@ task.defer(function()
 		statusLabel.Text = "-/-";
 		statusLabel.Parent = frame;
 		function updateIconStatusUI()
-			if not statusLabel then
-				return;
-			end;
+			if not statusLabel then return; end;
 			local n = #dIcons.entries;
 			local idx = dIcons.index;
 			if dLabel then
-				if iconFsOk() then
-					dLabel.Text = formatIconStatus();
-				else
-					dLabel.Text = "File system/getcustomasset not supported.";
-				end;
+				dLabel.Text = iconFsOk() and formatIconStatus() or "File system/getcustomasset not supported.";
 			end;
 			if n <= 0 then
 				statusLabel.Text = "-/-";
 			else
-				if idx < 1 or idx > n then
-					idx = 1;
-				end;
+				if idx < 1 or idx > n then idx = 1; end;
 				statusLabel.Text = tostring(idx) .. "/" .. tostring(n);
 			end;
 		end;
 		updateIconStatusUI();
 		local function chkFs()
-			if iconFsOk() then
-				return true;
-			end;
+			if iconFsOk() then return true; end;
 			notify({
 				Title = "Delta Icon",
 				Description = "Custom icon manager requires file system + getcustomasset.",
@@ -2313,77 +2211,43 @@ task.defer(function()
 			return false;
 		end;
 		prevBtn.MouseButton1Click:Connect(function()
-			if not chkFs() then
-				return;
-			end;
+			if not chkFs() then return; end;
 			if #dIcons.entries == 0 then
-				notify({
-					Title = "Delta Icon",
-					Description = "No custom icons to cycle.",
-					Duration = 4
-				});
+				notify({ Title = "Delta Icon", Description = "No custom icons to cycle.", Duration = 4 });
 				return;
 			end;
 			cycleIcon(-1);
 		end);
 		nextBtn.MouseButton1Click:Connect(function()
-			if not chkFs() then
-				return;
-			end;
+			if not chkFs() then return; end;
 			if #dIcons.entries == 0 then
-				notify({
-					Title = "Delta Icon",
-					Description = "No custom icons to cycle.",
-					Duration = 4
-				});
+				notify({ Title = "Delta Icon", Description = "No custom icons to cycle.", Duration = 4 });
 				return;
 			end;
 			cycleIcon(1);
 		end);
 		delBtn.MouseButton1Click:Connect(function()
-			if not chkFs() then
-				return;
-			end;
+			if not chkFs() then return; end;
 			local list = dIcons.entries;
 			local idx = dIcons.index;
-			if #list == 0 or idx < 1 or idx > (#list) then
-				notify({
-					Title = "Delta Icon",
-					Description = "No icon selected to delete.",
-					Duration = 4
-				});
+			if #list == 0 or idx < 1 or idx > #list then
+				notify({ Title = "Delta Icon", Description = "No icon selected to delete.", Duration = 4 });
 				return;
 			end;
 			local e = list[idx];
-			if not e or (not e.file) then
-				return;
-			end;
+			if not e or (not e.file) then return; end;
 			removeIconEntry(e);
-			if updateIconStatusUI then
-				updateIconStatusUI();
-			end;
+			if updateIconStatusUI then updateIconStatusUI(); end;
 		end);
 		clrBtn.MouseButton1Click:Connect(function()
-			if not chkFs() then
-				return;
-			end;
+			if not chkFs() then return; end;
 			if #dIcons.entries == 0 then
-				notify({
-					Title = "Delta Icon",
-					Description = "No custom icons to clear.",
-					Duration = 4
-				});
+				notify({ Title = "Delta Icon", Description = "No custom icons to clear.", Duration = 4 });
 				return;
 			end;
 			removeAllIcons();
-			if updateIconStatusUI then
-				updateIconStatusUI();
-			end;
-			notify({
-				Title = "Delta Icon",
-				Description = "Cleared all custom icons.",
-				Duration = 4
-			});
+			if updateIconStatusUI then updateIconStatusUI(); end;
+			notify({ Title = "Delta Icon", Description = "Cleared all custom icons.", Duration = 4 });
 		end);
 	end;
 	local sidebarGestureEnabled = false;
@@ -2397,13 +2261,7 @@ task.defer(function()
 	local sidebarDragAlpha = 0;
 	local sidebarCurrentSection = nil;
 	local autoCloseOnLoad = true;
-	local sectionsList = {
-		"Executor",
-		"Home",
-		"Scripthub",
-		"Settings",
-		"Console"
-	};
+	local sectionsList = { "Executor", "Home", "Scripthub", "Settings", "Console" };
 	local gestureWidthValue = Instance.new("NumberValue");
 	gestureWidthValue.Name = "GestureWidthValue";
 	gestureWidthValue.Value = sidebarGestureWidth;
@@ -2440,7 +2298,7 @@ task.defer(function()
 			autoCloseOnLoad = cfg.enabled and true or false;
 		end;
 	end;
-	local gestCol = gestCol or Instance.new("Color3Value");
+	local gestCol = Instance.new("Color3Value");
 	gestCol.Name = "GestureColorValue";
 	gestCol.Value = Color3.fromRGB(255, 255, 255);
 	gestCol.Changed:Connect(function()
@@ -2466,32 +2324,16 @@ task.defer(function()
 		setIconForcedHidden(false);
 	end;
 	local function saveSidebarGesture()
-		if not (HS and type(writefile) == "function") then
-			return;
-		end;
-		settingsConfig.SidebarGesture = {
-			enabled = sidebarGestureEnabled
-		};
-		local ok, encoded = pcall(function()
-			return HS:JSONEncode(settingsConfig);
-		end);
-		if ok and encoded then
-			pcall(writefile, settingsPath, encoded);
-		end;
+		if not (HS and type(writefile) == "function") then return; end;
+		settingsConfig.SidebarGesture = { enabled = sidebarGestureEnabled };
+		local ok, encoded = pcall(function() return HS:JSONEncode(settingsConfig); end);
+		if ok and encoded then pcall(writefile, settingsPath, encoded); end;
 	end;
 	local function saveSidebarGestureVisible()
-		if not (HS and type(writefile) == "function") then
-			return;
-		end;
-		settingsConfig.SidebarGestureVisible = {
-			enabled = sidebarGestureVisible
-		};
-		local ok, encoded = pcall(function()
-			return HS:JSONEncode(settingsConfig);
-		end);
-		if ok and encoded then
-			pcall(writefile, settingsPath, encoded);
-		end;
+		if not (HS and type(writefile) == "function") then return; end;
+		settingsConfig.SidebarGestureVisible = { enabled = sidebarGestureVisible };
+		local ok, encoded = pcall(function() return HS:JSONEncode(settingsConfig); end);
+		if ok and encoded then pcall(writefile, settingsPath, encoded); end;
 	end;
 	local function applyGestureVisual()
 		if sidebarGestureFrame then
@@ -2499,32 +2341,22 @@ task.defer(function()
 		end;
 	end;
 	local function applyGestureSize()
-		if not sidebarGestureFrame then
-			return;
-		end;
-		local h = gestureHeightValue and gestureHeightValue.Value or sidebarGestureHeight;
-		h = math.clamp(h, 60, 400);
-		local w = gestureWidthValue and gestureWidthValue.Value or sidebarGestureWidth;
-		w = math.clamp(w, 6, 80);
+		if not sidebarGestureFrame then return; end;
+		local h = math.clamp(gestureHeightValue and gestureHeightValue.Value or sidebarGestureHeight, 60, 400);
+		local w = math.clamp(gestureWidthValue and gestureWidthValue.Value or sidebarGestureWidth, 6, 80);
 		if UIS and UIS.TouchEnabled then
 			w = math.floor(w * 1.6);
 		end;
 		sidebarGestureFrame.Size = UDim2.new(0, w, 0, h);
 	end;
 	gestureWidthValue.Changed:Connect(function()
-		if sidebarGestureFrame then
-			applyGestureSize();
-		end;
+		if sidebarGestureFrame then applyGestureSize(); end;
 	end);
 	gestureHeightValue.Changed:Connect(function()
-		if sidebarGestureFrame then
-			applyGestureSize();
-		end;
+		if sidebarGestureFrame then applyGestureSize(); end;
 	end);
 	local function ensureSidebarGestureFrame()
-		if sidebarGestureFrame or (not (sidebar and mainGui)) then
-			return;
-		end;
+		if sidebarGestureFrame or (not (sidebar and mainGui)) then return; end;
 		local f = Instance.new("Frame");
 		sidebarGestureFrame = f;
 		f.Name = "SidebarGestureZone";
@@ -2542,42 +2374,25 @@ task.defer(function()
 		applyGestureVisual();
 	end;
 	local function makeSidebarGestureToggle()
-		if not (settingsHolder and settingTemplate and sidebar) then
-			return;
-		end;
-		local key = "SidebarGesture";
+		if not (settingsHolder and settingTemplate and sidebar) then return; end;
 		local frame = settingTemplate:Clone();
 		frame.Parent = settingsHolder;
 		frame.Visible = true;
 		frame.LayoutOrder = -2;
-		for _, d in ipairs(frame:QueryDescendants("Instance")) do
-			if d:IsA("LocalScript") then
-				d:Destroy();
-			end;
+		for _, d in ipairs(frame:GetDescendants()) do
+			if d:IsA("LocalScript") then d:Destroy(); end;
 		end;
 		local tLabel = frame:FindFirstChild("Title", true);
 		local dLabel = frame:FindFirstChild("Desc", true);
-		if tLabel then
-			tLabel.Text = "Sidebar gesture";
-		end;
-		if dLabel then
-			dLabel.Text = "Drag from the right edge to open/close the sidebar";
-		end;
+		if tLabel then tLabel.Text = "Sidebar gesture"; end;
+		if dLabel then dLabel.Text = "Drag from the right edge to open/close the sidebar"; end;
 		local btnFrame = frame:FindFirstChild("Button", true);
-		if not btnFrame then
-			return;
-		end;
+		if not btnFrame then return; end;
 		local btnLabel = btnFrame:FindFirstChildWhichIsA("TextLabel");
-		if btnLabel then
-			btnLabel.Text = "Toggle";
-		end;
+		if btnLabel then btnLabel.Text = "Toggle"; end;
 		local clickable = btnFrame:FindFirstChildWhichIsA("GuiButton") or btnFrame;
 		local function setVisual()
-			if sidebarGestureEnabled then
-				btnFrame.BackgroundColor3 = Color3.fromRGB(79, 164, 242);
-			else
-				btnFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30);
-			end;
+			btnFrame.BackgroundColor3 = sidebarGestureEnabled and Color3.fromRGB(79, 164, 242) or Color3.fromRGB(30, 30, 30);
 		end;
 		setVisual();
 		local function toggleClick()
@@ -2585,9 +2400,7 @@ task.defer(function()
 			setVisual();
 			saveSidebarGesture();
 			if not sidebarGestureEnabled then
-				if iconGui then
-					iconGui.Enabled = true;
-				end;
+				if iconGui then iconGui.Enabled = true; end;
 				setIconForcedHidden(false);
 			end;
 			task.defer(function()
@@ -2607,42 +2420,25 @@ task.defer(function()
 		end;
 	end;
 	local function makeSidebarGestureBarVisibilityToggle()
-		if not (settingsHolder and settingTemplate) then
-			return;
-		end;
-		local key = "SidebarGestureVisible";
+		if not (settingsHolder and settingTemplate) then return; end;
 		local frame = settingTemplate:Clone();
 		frame.Parent = settingsHolder;
 		frame.Visible = true;
 		frame.LayoutOrder = -2;
-		for _, d in ipairs(frame:QueryDescendants("Instance")) do
-			if d:IsA("LocalScript") then
-				d:Destroy();
-			end;
+		for _, d in ipairs(frame:GetDescendants()) do
+			if d:IsA("LocalScript") then d:Destroy(); end;
 		end;
 		local tLabel = frame:FindFirstChild("Title", true);
 		local dLabel = frame:FindFirstChild("Desc", true);
-		if tLabel then
-			tLabel.Text = "Gesture bar visible";
-		end;
-		if dLabel then
-			dLabel.Text = "Hide the sidebar gesture bar but keep it usable";
-		end;
+		if tLabel then tLabel.Text = "Gesture bar visible"; end;
+		if dLabel then dLabel.Text = "Hide the sidebar gesture bar but keep it usable"; end;
 		local btnFrame = frame:FindFirstChild("Button", true);
-		if not btnFrame then
-			return;
-		end;
+		if not btnFrame then return; end;
 		local btnLabel = btnFrame:FindFirstChildWhichIsA("TextLabel");
-		if btnLabel then
-			btnLabel.Text = "Toggle";
-		end;
+		if btnLabel then btnLabel.Text = "Toggle"; end;
 		local clickable = btnFrame:FindFirstChildWhichIsA("GuiButton") or btnFrame;
 		local function setVisual()
-			if sidebarGestureVisible then
-				btnFrame.BackgroundColor3 = Color3.fromRGB(79, 164, 242);
-			else
-				btnFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30);
-			end;
+			btnFrame.BackgroundColor3 = sidebarGestureVisible and Color3.fromRGB(79, 164, 242) or Color3.fromRGB(30, 30, 30);
 		end;
 		setVisual();
 		applyGestureVisual();
@@ -2663,56 +2459,32 @@ task.defer(function()
 		end;
 	end;
 	local function makeAutoCloseToggle()
-		if not (settingsHolder and settingTemplate and sidebar) then
-			return;
-		end;
+		if not (settingsHolder and settingTemplate and sidebar) then return; end;
 		local key = "AutoCloseOnLoad";
 		local frame = settingTemplate:Clone();
 		frame.Parent = settingsHolder;
 		frame.Visible = true;
 		frame.LayoutOrder = -2;
-		for _, d in ipairs(frame:QueryDescendants("Instance")) do
-			if d:IsA("LocalScript") then
-				d:Destroy();
-			end;
+		for _, d in ipairs(frame:GetDescendants()) do
+			if d:IsA("LocalScript") then d:Destroy(); end;
 		end;
 		local tLabel = frame:FindFirstChild("Title", true);
 		local dLabel = frame:FindFirstChild("Desc", true);
-		if tLabel then
-			tLabel.Text = "Auto-close on load";
-		end;
-		if dLabel then
-			dLabel.Text = "Close the Delta sidebar right after it loads";
-		end;
+		if tLabel then tLabel.Text = "Auto-close on load"; end;
+		if dLabel then dLabel.Text = "Close the Delta sidebar right after it loads"; end;
 		local btnFrame = frame:FindFirstChild("Button", true);
-		if not btnFrame then
-			return;
-		end;
+		if not btnFrame then return; end;
 		local btnLabel = btnFrame:FindFirstChildWhichIsA("TextLabel");
-		if btnLabel then
-			btnLabel.Text = "Toggle";
-		end;
+		if btnLabel then btnLabel.Text = "Toggle"; end;
 		local clickable = btnFrame:FindFirstChildWhichIsA("GuiButton") or btnFrame;
 		local function saveState()
-			if not (HS and type(writefile) == "function") then
-				return;
-			end;
-			settingsConfig[key] = {
-				enabled = autoCloseOnLoad
-			};
-			local ok, encoded = pcall(function()
-				return HS:JSONEncode(settingsConfig);
-			end);
-			if ok and encoded then
-				pcall(writefile, settingsPath, encoded);
-			end;
+			if not (HS and type(writefile) == "function") then return; end;
+			settingsConfig[key] = { enabled = autoCloseOnLoad };
+			local ok, encoded = pcall(function() return HS:JSONEncode(settingsConfig); end);
+			if ok and encoded then pcall(writefile, settingsPath, encoded); end;
 		end;
 		local function setVisual()
-			if autoCloseOnLoad then
-				btnFrame.BackgroundColor3 = Color3.fromRGB(79, 164, 242);
-			else
-				btnFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30);
-			end;
+			btnFrame.BackgroundColor3 = autoCloseOnLoad and Color3.fromRGB(79, 164, 242) or Color3.fromRGB(30, 30, 30);
 		end;
 		setVisual();
 		local function toggleClick()
@@ -2731,9 +2503,7 @@ task.defer(function()
 		end;
 	end;
 	local function getCurrentSectionName()
-		if not mainGui then
-			return nil;
-		end;
+		if not mainGui then return nil; end;
 		local cur;
 		for _, name in ipairs(sectionsList) do
 			local fr = mainGui:FindFirstChild(name);
@@ -2773,33 +2543,21 @@ task.defer(function()
 		applyGestureSize();
 		local id = "SidebarGesture";
 		local function recalcGesturePosition()
-			if not (mainGui and sidebar and sidebarGestureFrame) then
-				return;
-			end;
+			if not (mainGui and sidebar and sidebarGestureFrame) then return; end;
 			local sgSize = mainGui.AbsoluteSize;
-			if sgSize.X <= 0 or sgSize.Y <= 0 then
-				return;
-			end;
+			if sgSize.X <= 0 or sgSize.Y <= 0 then return; end;
 			local sbPos = sidebar.AbsolutePosition;
 			local sbSize = sidebar.AbsoluteSize;
-			local offset = 8;
-			local px = sbPos.X - offset;
+			local px = sbPos.X - 8;
 			local py = sbPos.Y + sbSize.Y * 0.5;
-			local sx = px / sgSize.X;
-			local sy = py / sgSize.Y;
-			sidebarGestureFrame.Position = UDim2.new(sx, 0, sy, 0);
+			sidebarGestureFrame.Position = UDim2.new(px / sgSize.X, 0, py / sgSize.Y, 0);
 		end;
 		local function getSidebarAlpha()
-			if not sidebar then
-				return 0;
-			end;
+			if not sidebar then return 0; end;
 			local sx = sidebar.Position.X.Scale;
 			local denom = sidebarClosedPos.X.Scale - sidebarOpenPos.X.Scale;
-			if denom == 0 then
-				return 0;
-			end;
-			local a = (sidebarClosedPos.X.Scale - sx) / denom;
-			return math.clamp(a, 0, 1);
+			if denom == 0 then return 0; end;
+			return math.clamp((sidebarClosedPos.X.Scale - sx) / denom, 0, 1);
 		end;
 		recalcGesturePosition();
 		NAlib.connect(id, (sidebar:GetPropertyChangedSignal("Position")):Connect(recalcGesturePosition));
@@ -2810,61 +2568,41 @@ task.defer(function()
 			NAlib.connect(id, (mainGui:GetPropertyChangedSignal("AbsoluteSize")):Connect(recalcGesturePosition));
 		end;
 		local function updateSidebarFromInput(input)
-			if not sidebar or (not mainGui) then
-				return;
-			end;
+			if not sidebar or (not mainGui) then return; end;
 			local dx = input.Position.X - sidebarDragStartX;
 			local guiSize = mainGui.AbsoluteSize;
-			local dist = guiSize.X * math.abs((sidebarClosedPos.X.Scale - sidebarOpenPos.X.Scale));
-			if dist <= 0 then
-				dist = 100;
-			end;
-			local alpha = sidebarDragStartAlpha - dx / dist;
-			alpha = math.clamp(alpha, 0, 1);
+			local dist = guiSize.X * math.abs(sidebarClosedPos.X.Scale - sidebarOpenPos.X.Scale);
+			if dist <= 0 then dist = 100; end;
+			local alpha = math.clamp(sidebarDragStartAlpha - dx / dist, 0, 1);
 			sidebarDragAlpha = alpha;
-			local sx = sidebarClosedPos.X.Scale + (sidebarOpenPos.X.Scale - sidebarClosedPos.X.Scale) * alpha;
-			sidebar.Position = UDim2.new(sx, 0, sidebarClosedPos.Y.Scale, sidebarClosedPos.Y.Offset);
+			sidebar.Position = UDim2.new(
+				sidebarClosedPos.X.Scale + (sidebarOpenPos.X.Scale - sidebarClosedPos.X.Scale) * alpha,
+				0, sidebarClosedPos.Y.Scale, sidebarClosedPos.Y.Offset
+			);
 		end;
 		NAlib.connect(id, sidebarGestureFrame.InputBegan:Connect(function(input)
-			if not sidebarGestureEnabled then
-				return;
-			end;
-			if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then
-				return;
-			end;
+			if not sidebarGestureEnabled then return; end;
+			if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return; end;
 			sidebarDragAlpha = getSidebarAlpha();
 			sidebarDragStartAlpha = sidebarDragAlpha;
 			sidebarDragStartX = input.Position.X;
 			sidebarDragActive = true;
 		end));
 		NAlib.connect(id, UIS.InputChanged:Connect(function(input)
-			if not sidebarDragActive or (not sidebarGestureEnabled) then
-				return;
-			end;
+			if not sidebarDragActive or (not sidebarGestureEnabled) then return; end;
 			if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 				updateSidebarFromInput(input);
 			end;
 		end));
 		NAlib.connect(id, UIS.InputEnded:Connect(function(input)
-			if not sidebarDragActive or (not sidebarGestureEnabled) then
-				return;
-			end;
-			if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then
-				return;
-			end;
+			if not sidebarDragActive or (not sidebarGestureEnabled) then return; end;
+			if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return; end;
 			sidebarDragActive = false;
 			local curSec = getCurrentSectionName();
-			if curSec then
-				sidebarCurrentSection = curSec;
-			end;
-			local targetPos = sidebarClosedPos;
-			if sidebarDragAlpha > 0.5 then
-				targetPos = sidebarOpenPos;
-			end;
+			if curSec then sidebarCurrentSection = curSec; end;
+			local targetPos = sidebarDragAlpha > 0.5 and sidebarOpenPos or sidebarClosedPos;
 			if TS and sidebar then
-				local tw = TS:Create(sidebar, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-					Position = targetPos
-				});
+				local tw = TS:Create(sidebar, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Position = targetPos });
 				tw:Play();
 			elseif sidebar then
 				sidebar.Position = targetPos;
@@ -2873,9 +2611,7 @@ task.defer(function()
 				if not sidebarCurrentSection then
 					sidebarCurrentSection = getCurrentSectionName();
 				end;
-				if iconGui then
-					iconGui.Enabled = false;
-				end;
+				if iconGui then iconGui.Enabled = false; end;
 				setIconForcedHidden(true);
 				if mainGui and sidebarCurrentSection then
 					for _, n in ipairs(sectionsList) do
@@ -2887,19 +2623,13 @@ task.defer(function()
 				end;
 			else
 				if mainGui then
-					if curSec then
-						sidebarCurrentSection = curSec;
-					end;
+					if curSec then sidebarCurrentSection = curSec; end;
 					for _, n in ipairs(sectionsList) do
 						local fr = mainGui:FindFirstChild(n);
-						if fr and fr:IsA("GuiObject") then
-							fr.Visible = false;
-						end;
+						if fr and fr:IsA("GuiObject") then fr.Visible = false; end;
 					end;
 				end;
-				if iconGui then
-					iconGui.Enabled = true;
-				end;
+				if iconGui then iconGui.Enabled = true; end;
 				setIconForcedHidden(false);
 			end;
 		end));
@@ -2907,9 +2637,7 @@ task.defer(function()
 	end;
 	if toggleUIBtn and toggleUIBtn:IsA("GuiButton") then
 		toggleUIBtn.MouseButton1Click:Connect(function()
-			if iconGui then
-				iconGui.Enabled = true;
-			end;
+			if iconGui then iconGui.Enabled = true; end;
 			setIconForcedHidden(false);
 		end);
 	end;
@@ -2961,11 +2689,8 @@ task.defer(function()
 	applySidebarGestureState();
 	if autoCloseOnLoad and sidebar then
 		task.defer(function()
-			local t0 = tick();
-			while tick() - t0 < 1.5 do
-				closeDeltaSidebar();
-				task.wait(0.1);
-			end;
+			task.wait(1.5);
+			closeDeltaSidebar();
 		end);
 	end;
 	local sidemenu = execFrame:FindFirstChild("Sidemenu", true);
@@ -2978,7 +2703,7 @@ task.defer(function()
 			newCard.Parent = parent;
 			newCard.Name = "Script";
 			local labs = {};
-			for _, d in ipairs(newCard:QueryDescendants("Instance")) do
+			for _, d in ipairs(newCard:GetDescendants()) do
 				if d:IsA("TextLabel") then
 					table.insert(labs, d);
 				end;
@@ -2990,18 +2715,12 @@ task.defer(function()
 				local bigHeader = labs[1];
 				local subTitle = labs[2];
 				local desc = labs[3];
-				if bigHeader then
-					bigHeader.Text = "Featured";
-				end;
-				if subTitle then
-					subTitle.Text = "Nameless Admin";
-				end;
-				if desc then
-					desc.Text = "continuation of Nameless Admin with advanced features, fixed commands and lots of customization.";
-				end;
+				if bigHeader then bigHeader.Text = "Featured"; end;
+				if subTitle then subTitle.Text = "Nameless Admin"; end;
+				if desc then desc.Text = "continuation of Nameless Admin with advanced features, fixed commands and lots of customization."; end;
 			end;
 			local clickable = nil;
-			for _, d in ipairs(newCard:QueryDescendants("Instance")) do
+			for _, d in ipairs(newCard:GetDescendants()) do
 				if d:IsA("LocalScript") then
 					d:Destroy();
 				elseif d:IsA("TextButton") then
@@ -3042,8 +2761,8 @@ task.defer(function()
 		local item = net and net.ServerStatsItem and net.ServerStatsItem["Data Ping"];
 		if item then
 			pingLabel.RichText = true;
-			local id = "DeltaCustom_Ping";
-			NAlib.disconnect(id);
+			local pingId = "DeltaCustom_Ping";
+			NAlib.disconnect(pingId);
 			local function updatePing()
 				local v = 0;
 				pcall(function()
@@ -3053,11 +2772,14 @@ task.defer(function()
 						v = item.Value;
 					end;
 				end);
-				v = math.floor(tonumber(v) or 0);
-				pingLabel.Text = string.format("<font color=\"#4FA4F2\">%d</font> MS Ping", v);
+				pingLabel.Text = string.format("<font color=\"#4FA4F2\">%d</font> MS Ping", math.floor(tonumber(v) or 0));
 			end;
 			updatePing();
-			NAlib.connect(id, RS.Heartbeat:Connect(function()
+			local pingAccum = 0;
+			NAlib.connect(pingId, RS.Heartbeat:Connect(function(dt)
+				pingAccum += dt;
+				if pingAccum < 0.5 then return; end;
+				pingAccum = 0;
 				updatePing();
 			end));
 		end;
@@ -3065,19 +2787,11 @@ task.defer(function()
 	local tabs = overlay:FindFirstChild("Tabs", true);
 	local codeSf = overlay:FindFirstChild("Code", true);
 	if not tabs then
-		notify({
-			Title = "Delta Customization",
-			Description = "Tabs frame not found.",
-			Duration = 4
-		});
+		notify({ Title = "Delta Customization", Description = "Tabs frame not found.", Duration = 4 });
 		return;
 	end;
 	if not codeSf then
-		notify({
-			Title = "Delta Customization",
-			Description = "Code frame not found.",
-			Duration = 4
-		});
+		notify({ Title = "Delta Customization", Description = "Code frame not found.", Duration = 4 });
 		return;
 	end;
 	local btns = overlay:FindFirstChild("Buttons", true);
@@ -3093,29 +2807,20 @@ task.defer(function()
 			local cp = tpl:Clone();
 			cp.Name = "CopyCode";
 			local tl = cp:FindFirstChild("Title", true) or cp:FindFirstChildWhichIsA("TextLabel");
-			if tl then
-				tl.Text = "COPY CODE";
-			end;
+			if tl then tl.Text = "COPY CODE"; end;
 			cp.Parent = btns;
 			table.insert(bl, cp);
 			local cnt = #bl;
 			if cnt > 0 then
-				local w;
-				if cnt == 4 then
-					w = 0.22;
-				else
-					w = 1 / cnt;
-				end;
+				local w = cnt == 4 and 0.22 or (1 / cnt);
 				for _, b in ipairs(bl) do
 					b.Size = UDim2.new(w, 0, 1, 0);
 				end;
 			end;
 			cp.MouseButton1Click:Connect(function()
-				if type(setclipboard) ~= "function" then
-					return;
-				end;
+				if type(setclipboard) ~= "function" then return; end;
 				local cur;
-				for _, tb in ipairs(codeSf:QueryDescendants("Instance")) do
+				for _, tb in ipairs(codeSf:GetDescendants()) do
 					if tb:IsA("TextBox") and tb.Visible then
 						cur = tb;
 						break;
@@ -3123,46 +2828,34 @@ task.defer(function()
 				end;
 				if cur then
 					setclipboard(cur.Text or "");
-					notify({
-						Title = "Delta Customization",
-						Description = "Copied code from the selected tab.",
-						Duration = 4
-					});
+					notify({ Title = "Delta Customization", Description = "Copied code from the selected tab.", Duration = 4 });
 				end;
 			end);
 		end;
 	end;
-	local hasFS = type(isfolder) == "function" and type(makefolder) == "function" and type(isfile) == "function" and type(writefile) == "function" and type(readfile) == "function" and type(listfiles) == "function";
+	local hasFS = type(isfolder) == "function" and type(makefolder) == "function" and type(isfile) == "function"
+		and type(writefile) == "function" and type(readfile) == "function" and type(listfiles) == "function";
 	if not hasFS then
-		notify({
-			Title = "Delta Customization",
-			Description = "Your executor does not support saving tabs.",
-			Duration = 5
-		});
+		notify({ Title = "Delta Customization", Description = "Your executor does not support saving tabs.", Duration = 5 });
 		return;
 	end;
 	local rootDir = "DeltaCustom";
 	local tabsDir = rootDir .. "/DeltaTabs";
 	if not isfolder(rootDir) then
-		pcall(function()
-			makefolder(rootDir);
-		end);
+		pcall(makefolder, rootDir);
 	end;
 	if not isfolder(tabsDir) then
-		pcall(function()
-			makefolder(tabsDir);
-		end);
+		pcall(makefolder, tabsDir);
 	end;
 	local function parseIndex(nm)
-		local n = nm:match("^script(%d+)%.lua$");
-		return tonumber(n);
+		return tonumber(nm:match("^script(%d+)%.lua$"));
 	end;
 	local function isScriptName(nm)
 		return parseIndex(nm) ~= nil;
 	end;
 	local function getCodeBoxes()
 		local t = {};
-		for _, c in ipairs(codeSf:QueryDescendants("Instance")) do
+		for _, c in ipairs(codeSf:GetDescendants()) do
 			if c:IsA("TextBox") and isScriptName(c.Name) then
 				table.insert(t, c);
 			end;
@@ -3190,41 +2883,26 @@ task.defer(function()
 	if tabNotifEnabled then
 		if #saved > 0 then
 			local desc;
-			if #saved > (#boxes) then
+			if #saved > #boxes then
 				desc = "Saved tabs: " .. tostring(#saved) .. "\nCreate your tabs in Delta and the saved code will load automatically.";
 			else
 				desc = "Saved tabs: " .. tostring(#saved) .. "\nYour saved code will load into matching tabs automatically.";
 			end;
-			notify({
-				Title = "Delta Customization",
-				Description = desc,
-				Duration = 8
-			});
+			notify({ Title = "Delta Customization", Description = desc, Duration = 8 });
 		else
-			notify({
-				Title = "Delta Customization",
-				Description = "No saved tabs yet. Anything you type will be saved automatically.",
-				Duration = 6
-			});
+			notify({ Title = "Delta Customization", Description = "No saved tabs yet. Anything you type will be saved automatically.", Duration = 6 });
 		end;
 	end;
-	local hooked = {};
+	local hooked = setmetatable({}, { __mode = "k" });
 	local function hookBox(box)
-		if not box or hooked[box] then
-			return;
-		end;
+		if not box or hooked[box] then return; end;
 		hooked[box] = true;
 		local ready = false;
 		local function setupForName(nm)
-			if ready then
-				return;
-			end;
-			if not isScriptName(nm) then
-				return;
-			end;
+			if ready then return; end;
+			if not isScriptName(nm) then return; end;
 			ready = true;
-			local nameForFile = nm;
-			local path = tabsDir .. "/" .. nameForFile;
+			local path = tabsDir .. "/" .. nm;
 			if isfile(path) then
 				local ok, data = pcall(readfile, path);
 				if ok and type(data) == "string" then
@@ -3236,13 +2914,9 @@ task.defer(function()
 				last = tick();
 				local id = last;
 				task.delay(0.4, function()
-					if id ~= last then
-						return;
-					end;
+					if id ~= last then return; end;
 					local txt = box.Text;
-					pcall(function()
-						writefile(path, txt);
-					end);
+					pcall(writefile, path, txt);
 				end);
 			end);
 		end;
@@ -3265,15 +2939,11 @@ task.defer(function()
 			return;
 		end;
 		local txt = "";
-		pcall(function()
-			txt = obj.Text;
-		end);
+		pcall(function() txt = obj.Text; end);
 		if type(txt) ~= "string" or txt:match("^%s*$") then
 			local path = tabsDir .. "/" .. obj.Name;
 			if isfile(path) then
-				pcall(function()
-					delfile(path);
-				end);
+				pcall(delfile, path);
 			end;
 		end;
 	end);

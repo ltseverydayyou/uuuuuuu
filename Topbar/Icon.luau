@@ -19,14 +19,7 @@ local Reference = Import(iconModule.Reference)
 local referenceObject = Reference.getObject()
 local leadPackage = referenceObject and referenceObject.Value
 if leadPackage and leadPackage ~= iconModule then
-	if typeof(leadPackage) == "Instance" then
-		if leadPackage:IsA("ModuleScript") then
-			local ok, mod = pcall(require, leadPackage)
-			if ok and mod then
-				return mod :: Types.StaticIcon
-			end
-		end
-	elseif type(leadPackage) == "table" and rawget(leadPackage, "__path") then
+	if type(leadPackage) == "table" and rawget(leadPackage, "__path") then
 		return Import(leadPackage) :: Types.StaticIcon
 	elseif type(leadPackage) == "string" then
 		return Import(leadPackage) :: Types.StaticIcon

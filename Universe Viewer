@@ -775,7 +775,7 @@ local function getSrvData(placeId, allowSame)
 	for _, base in ipairs(srvBases) do
 		local url = base .. "/v1/games/" .. pid .. "/servers/Public" .. query;
 		local ok, resp = pcall(function()
-			return game:HttpGetAsync(url);
+			return game:HttpGet(url);
 		end);
 		if ok and type(resp) == "string" and #resp > 0 then
 			local decOk, js = pcall(function()
@@ -790,7 +790,7 @@ local function getSrvData(placeId, allowSame)
 	if not resTable then
 		local wurl = srvWorker .. "/servers?placeId=" .. HS:UrlEncode(pid);
 		local ok, resp = pcall(function()
-			return game:HttpGetAsync(wurl);
+			return game:HttpGet(wurl);
 		end);
 		if ok and type(resp) == "string" and #resp > 0 then
 			local decOk, js = pcall(function()

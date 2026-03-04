@@ -86,7 +86,7 @@ local function httpRequest(url)
 			Url = url
 		})).Body;
 	else
-		return game:HttpGetAsync(url);
+		return game:HttpGet(url);
 	end;
 end;
 local function scanGame()

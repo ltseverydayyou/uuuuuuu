@@ -2519,8 +2519,8 @@ return search]==]
 		Explorer.InitRightClick()
 		Explorer.InitInsertObject()
 		Explorer.SetSortingEnabled(Settings.Explorer.Sorting)
-		Explorer.Expanded = setmetatable({},{__mode = "k"})
-		Explorer.SearchExpanded = setmetatable({},{__mode = "k"})
+		Explorer.Expanded = {}
+		Explorer.SearchExpanded = {}
 		expanded = Explorer.Expanded
 
 		nilNode.Obj.Name = "Nil Instances"

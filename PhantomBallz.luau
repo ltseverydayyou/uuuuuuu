@@ -94,9 +94,7 @@ do
 			end);
 			return ok and v or false;
 		end;
-		local tws = setmetatable({}, {
-			__mode = "k"
-		});
+		local tws = {};
 		local function twVol(s, v, t)
 			if not (s and s.Parent) then
 				return;

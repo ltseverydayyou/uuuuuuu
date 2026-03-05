@@ -5717,7 +5717,7 @@ local function main()
 		local funcs = {}
 
 		local function new()
-			local newMt = setmetatable({},{})
+			local newMt = {}
 
 			newMt.OnSelect = Lib.Signal.new()
 			newMt.OnCancel = Lib.Signal.new()
@@ -6161,7 +6161,7 @@ local function main()
 
 	Lib.NumberSequenceEditor = (function()
 		local function new()
-			local newMt = setmetatable({},{})
+			local newMt = {}
 			newMt.OnSelect = Lib.Signal.new()
 			newMt.OnCancel = Lib.Signal.new()
 			newMt.OnPreview = Lib.Signal.new()
@@ -6658,7 +6658,7 @@ local function main()
 
 	Lib.ColorSequenceEditor = (function()
 		local function new()
-			local newMt = setmetatable({},{})
+			local newMt = {}
 			newMt.OnSelect = Lib.Signal.new()
 			newMt.OnCancel = Lib.Signal.new()
 			newMt.OnPreview = Lib.Signal.new()

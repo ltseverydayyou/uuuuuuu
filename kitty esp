@@ -4,8 +4,8 @@ local plrs = game:GetService("Players")
 local rs = game:GetService("RunService")
 local lp = plrs.LocalPlayer
 
-local map = setmetatable({}, { __mode = "k" })
-local hooked = setmetatable({}, { __mode = "k" })
+local map = {}
+local hooked = {}
 
 local colTools = Color3.new(1, 1, 1)
 local colInteracts = Color3.new(1, 0, 0)

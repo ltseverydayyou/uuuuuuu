@@ -175,8 +175,8 @@ local clientEventConns = {}
 tstate.clientEventConns = clientEventConns
 
 local wrappedClientInvoke = {}
-local wrappedInvokeCallbacks = setmetatable({}, { __mode = "k" })
-local _origClientInvoke = setmetatable({}, { __mode = "k" })
+local wrappedInvokeCallbacks = {}
+local _origClientInvoke = {}
 tstate.wrappedClientInvoke = wrappedClientInvoke
 
 local logClientEvents = false
@@ -1997,8 +1997,8 @@ tstate.cleanup = function()
 	connections = {}
 	clientEventConns = {}
 	wrappedClientInvoke = {}
-	wrappedInvokeCallbacks = setmetatable({}, { __mode = "k" })
-	_origClientInvoke = setmetatable({}, { __mode = "k" })
+	wrappedInvokeCallbacks = {}
+	_origClientInvoke = {}
 	if TurtleSpyGUI and TurtleSpyGUI.Parent then
 		pcall(function()
 			TurtleSpyGUI:Destroy()

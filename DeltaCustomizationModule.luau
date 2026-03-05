@@ -2893,7 +2893,7 @@ task.defer(function()
 			notify({ Title = "Delta Customization", Description = "No saved tabs yet. Anything you type will be saved automatically.", Duration = 6 });
 		end;
 	end;
-	local hooked = setmetatable({}, { __mode = "k" });
+	local hooked = {};
 	local function hookBox(box)
 		if not box or hooked[box] then return; end;
 		hooked[box] = true;

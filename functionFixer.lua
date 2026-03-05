@@ -7,9 +7,7 @@ local Spawn = task.spawn;
 local Insert = table.insert;
 local Concat = table.concat;
 
-local promptPartCache = setmetatable({}, {
-	__mode = "k"
-});
+local promptPartCache = {};
 
 local glitchMarks = {
 	"̶",
@@ -27,7 +25,7 @@ local glitchMarks = {
 	"͢"
 };
 
-local hparts = setmetatable({}, { __mode = "k" })
+local hparts = {}
 local hconn
 
 local function hb(n)
@@ -146,9 +144,7 @@ if isPoopSploit then
 		return typeof(o) == "table" and o or {};
 	end;
 
-	local state = setmetatable({}, {
-		__mode = "k"
-	});
+	local state = {};
 
 	local function snapshot(pp)
 		return {
@@ -383,9 +379,7 @@ if isPoopSploit then
 end;
 
 if isPoopSploit then
-	local touchState = setmetatable({}, {
-		__mode = "k"
-	});
+	local touchState = {};
 
 	local function snapshot(part)
 		local vel, ang = Vector3.zero, Vector3.zero;

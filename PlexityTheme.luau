@@ -121,9 +121,7 @@ local PT = {
 	path = cfgPath,
 	default = defData,
 	cg = cg,
-	images = setmetatable({}, {
-		__mode = "k"
-	}),
+	images = {},
 	queue = {},
 	queueSet = {},
 	processing = false,

@@ -9087,9 +9087,7 @@ function _DrawClass()
 	local Draw2DModule = _Draw2D();
 	local Draw3DModule = _Draw3D();
 	local DrawClass = {};
-	local DrawClassStorage = setmetatable({}, {
-		__mode = "k"
-	});
+	local DrawClassStorage = {};
 	DrawClass.__index = DrawClass;
 	function DrawClass.new(parent)
 		local self = setmetatable({}, DrawClass);

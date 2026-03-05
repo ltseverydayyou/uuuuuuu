@@ -77,8 +77,8 @@ local function isLockRow(lbl)
 	return txt:match("^🔒%s*:") ~= nil
 end
 
-local hooked = setmetatable({}, { __mode = "k" })
-local watched = setmetatable({}, { __mode = "k" })
+local hooked = {}
+local watched = {}
 
 local function keepHidden(inst)
 	if not inst or watched[inst] then return end

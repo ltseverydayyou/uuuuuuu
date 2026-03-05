@@ -454,9 +454,7 @@ local function hookCamera()
 end;
 hookCamera();
 local NA_GRAB_BODY = (function()
-	local _cache = setmetatable({}, {
-		__mode = "k"
-	});
+	local _cache = {};
 	local function asChar(obj)
 		if not obj or typeof(obj) ~= "Instance" then
 			return nil;

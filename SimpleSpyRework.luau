@@ -748,13 +748,14 @@ local NamecallHandler = Instance.new('BindableEvent', ui.Storage)
 local IndexHandler = Instance.new('BindableEvent', ui.Storage)
 local GetDebugIdHandler = Instance.new('BindableFunction', ui.Storage) --Thanks engo for the idea of using BindableFunctions
 local loggedClientEvent, wrappedClientInvoke = {}, {}
-local _origClientInvoke = setmetatable({}, { __mode = 'k' })
-local wrappedInvokeCallbacks = setmetatable({}, { __mode = 'k' })
+local logConnectionFunctions = {}
+local _origClientInvoke = {}
+local wrappedInvokeCallbacks = {}
 
 local originalEvent = remoteEvent.FireServer
 local originalFunction = remoteFunction.InvokeServer
 local GetDebugIDInvoke = GetDebugIdHandler.Invoke
-local internalRemotes = setmetatable({}, { __mode = 'k' })
+local internalRemotes = {}
 local preferIndexPaths = false
 local preferIndexOverride = rawget(getgenv(), 'SimpleSpyPreferIndexPaths')
 if preferIndexOverride ~= nil then
@@ -791,6 +792,53 @@ markInternal(remoteFunction)
 markInternal(NamecallHandler)
 markInternal(IndexHandler)
 markInternal(GetDebugIdHandler)
+
+local weakReplacementPruneCounter = 0
+local function isDeadTrackedInstance(inst)
+    return typeof(inst) ~= 'Instance' or inst.Parent == nil
+end
+
+local function pruneTrackedRemoteMaps(force)
+    weakReplacementPruneCounter += 1
+    if not force and weakReplacementPruneCounter < 256 then
+        return
+    end
+    weakReplacementPruneCounter = 0
+
+    for remote, callback in pairs(_origClientInvoke) do
+        if isDeadTrackedInstance(remote) then
+            _origClientInvoke[remote] = nil
+            wrappedClientInvoke[remote] = nil
+            if type(callback) == 'function' and wrappedInvokeCallbacks[callback] == remote then
+                wrappedInvokeCallbacks[callback] = nil
+            end
+        end
+    end
+
+    for callback, remote in pairs(wrappedInvokeCallbacks) do
+        if type(callback) ~= 'function' or isDeadTrackedInstance(remote) then
+            wrappedInvokeCallbacks[callback] = nil
+        end
+    end
+
+    for callback, remote in pairs(logConnectionFunctions) do
+        if type(callback) ~= 'function' or isDeadTrackedInstance(remote) then
+            logConnectionFunctions[callback] = nil
+        end
+    end
+
+    for remote in pairs(loggedClientEvent) do
+        if isDeadTrackedInstance(remote) then
+            loggedClientEvent[remote] = nil
+        end
+    end
+
+    for remote in pairs(wrappedClientInvoke) do
+        if isDeadTrackedInstance(remote) then
+            wrappedClientInvoke[remote] = nil
+        end
+    end
+end
 
 function GetDebugIdHandler.OnInvoke(obj: Instance) -- To avoid having to set thread identity and ect
     return OldDebugId(obj)
@@ -2382,7 +2430,7 @@ end
 
 local captureRemoteCall
 
-local logConnectionFunctions = setmetatable({}, { __mode = 'k' })
+logConnectionFunctions = logConnectionFunctions or {}
 
 local function getConnectionFunction(conn)
     local func = conn and conn.Function
@@ -2408,6 +2456,7 @@ local function getConnectionScript(conn, fallbackFunc)
 end
 
 local function logClientEvent(re: RemoteEvent)
+    pruneTrackedRemoteMaps(false)
     if internalRemotes[re] then
         return
     end
@@ -2474,7 +2523,7 @@ local function logClientEvent(re: RemoteEvent)
         end
     end
 
-    logConnectionFunctions[logConnection] = true
+    logConnectionFunctions[logConnection] = re
     re.OnClientEvent:Connect(logConnection)
 end
 
@@ -2538,13 +2587,14 @@ local function setWrappedOnClientInvoke(rf, callback)
     if wrappedInvokeCallbacks[callback] then
         return callback
     end
-    wrappedInvokeCallbacks[callback] = true
+    wrappedInvokeCallbacks[callback] = rf
     _origClientInvoke[rf] = callback
     local wrapped = wrapOnClientInvokeCallback(rf, callback)
     return wrapped
 end
 
 local function wrapClientInvoke(rf)
+    pruneTrackedRemoteMaps(false)
     if internalRemotes[rf] then
         return
     end
@@ -3691,6 +3741,7 @@ if not table_pack then
 end
 
 captureRemoteCall = function(options)
+    pruneTrackedRemoteMaps(false)
     local args = options.args or {}
     local argsLength = options.argsLength
     if not argsLength then

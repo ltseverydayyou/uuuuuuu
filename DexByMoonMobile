@@ -2410,12 +2410,8 @@ local EmbeddedModules = {
 				Explorer.InitRightClick();
 				Explorer.InitInsertObject();
 				Explorer.SetSortingEnabled(Settings.Explorer.Sorting);
-				Explorer.Expanded = setmetatable({}, {
-					__mode = "k"
-				});
-				Explorer.SearchExpanded = setmetatable({}, {
-					__mode = "k"
-				});
+				Explorer.Expanded = {};
+				Explorer.SearchExpanded = {};
 				expanded = Explorer.Expanded;
 				nilNode.Obj.Name = "Nil Instances";
 				nilNode.Locked = true;
@@ -10896,7 +10892,7 @@ local EmbeddedModules = {
 			Lib.ColorPicker = (function()
 				local funcs = {};
 				local function new()
-					local newMt = setmetatable({}, {});
+					local newMt = {};
 					newMt.OnSelect = Lib.Signal.new();
 					newMt.OnCancel = Lib.Signal.new();
 					newMt.OnPreview = Lib.Signal.new();
@@ -12840,7 +12836,7 @@ local EmbeddedModules = {
 			end)();
 			Lib.NumberSequenceEditor = (function()
 				local function new()
-					local newMt = setmetatable({}, {});
+					local newMt = {};
 					newMt.OnSelect = Lib.Signal.new();
 					newMt.OnCancel = Lib.Signal.new();
 					newMt.OnPreview = Lib.Signal.new();
@@ -13593,7 +13589,7 @@ local EmbeddedModules = {
 			end)();
 			Lib.ColorSequenceEditor = (function()
 				local function new()
-					local newMt = setmetatable({}, {});
+					local newMt = {};
 					newMt.OnSelect = Lib.Signal.new();
 					newMt.OnCancel = Lib.Signal.new();
 					newMt.OnPreview = Lib.Signal.new();

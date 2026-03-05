@@ -558,9 +558,7 @@ Tog.UIWatermark:OnChanged(function(v)
 end);
 local NA_GRAB_BODY = (function()
 	local T = {};
-	local cache = _rp_cache or setmetatable({}, {
-		__mode = "k"
-	});
+	local cache = _rp_cache or {};
 	local function asChar(o)
 		if not o or typeof(o) ~= "Instance" then
 			return nil;

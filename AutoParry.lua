@@ -396,7 +396,7 @@ end;
 refreshVisualizerDerived();
 local spam = false;
 local apEnabled = true;
-local preclick = false;
+local preclick = true;
 local topbarIconInstance;
 local apOption;
 local spamOption;
@@ -610,7 +610,7 @@ local function setupTopbarIcon()
 	spamOption:oneClick(function()
 		toggleSpam();
 	end);
-	preclickOption = (dropdown:new()):setLabel("Preclick: OFF");
+	preclickOption = (dropdown:new()):setLabel("Preclick: ON");
 	preclickOption:oneClick(function()
 		togglePreclick();
 	end);

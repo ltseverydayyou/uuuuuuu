@@ -7,7 +7,7 @@ local rf = fw:WaitForChild("RemoteFunction");
 local re = fw:WaitForChild("RemoteEvent");
 local plrs = cloneref(game:GetService("Players"));
 local lp = plrs.LocalPlayer;
-local gs = cloneref(game:GetService("GroupService"));
+local gs = game:GetService("GroupService");
 local aAFK = {
 	"MatchService",
 	"SetAFK",

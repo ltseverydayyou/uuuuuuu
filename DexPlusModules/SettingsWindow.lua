@@ -37,8 +37,6 @@ end
 local function main()
 	local SettingsWindow = {}
 	local window, ListFrame
-	local fileName = "Place_"..game.PlaceId.."_"..game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name.."_{TIMESTAMP}"
-	local Saving = false
 	local applyLiveSettings = function() end
 	local windowSizePersistToken = 0
 

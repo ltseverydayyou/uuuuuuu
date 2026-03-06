@@ -35,8 +35,33 @@ end
 local function main()
 	local SaveInstance = {}
 	local window, ListFrame
-	local fileName = "Place_"..game.PlaceId.."_"..game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name.."_{TIMESTAMP}"
-	local Saving = false
+	local function sanitizeFileNamePart(value)
+		value = tostring(value or "")
+		value = value:gsub("[%c\\/:*?\"<>|]", "_")
+		value = value:gsub("%s+", " ")
+		value = value:gsub("^%s+", ""):gsub("%s+$", "")
+
+		if value == "" then
+			return "UnknownPlace"
+		end
+
+		return value
+	end
+
+	local function getDefaultFileName()
+		local placeName = "UnknownPlace"
+		local marketplaceService = game:GetService("MarketplaceService")
+		local okInfo, info = pcall(marketplaceService.GetProductInfo, marketplaceService, game.PlaceId)
+
+		if okInfo and type(info) == "table" and type(info.Name) == "string" and info.Name ~= "" then
+			placeName = info.Name
+		end
+
+		placeName = sanitizeFileNamePart(placeName)
+		return "Place_"..tostring(game.PlaceId).."_"..placeName.."_{TIMESTAMP}"
+	end
+
+	local fileName = getDefaultFileName()
 	
 	local SaveInstanceArgs = {
 		Decompile = true,

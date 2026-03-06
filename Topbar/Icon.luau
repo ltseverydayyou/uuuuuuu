@@ -1,7 +1,7 @@
-local UserInputService = game:GetService("UserInputService")
-local ContentProvider = game:GetService("ContentProvider")
-local StarterGui = game:GetService("StarterGui")
-local Players = game:GetService("Players")
+local UserInputService = cloneref(game:GetService("UserInputService"))
+local ContentProvider = cloneref(game:GetService("ContentProvider"))
+local StarterGui = cloneref(game:GetService("StarterGui"))
+local Players = cloneref(game:GetService("Players"))
 local Types = Import(script.Types)
 
 
@@ -149,7 +149,7 @@ task.defer(function()
 			g.ResetOnSpawn = false
 			g.IgnoreGuiInset = true
 		end
-		local coreGui = game:GetService("CoreGui")
+		local coreGui = cloneref(game:GetService("CoreGui"))
 		local lp = Players.LocalPlayer
 		local function nap(obj, prop)
 			if obj then

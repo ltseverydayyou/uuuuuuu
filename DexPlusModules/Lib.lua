@@ -4250,7 +4250,7 @@ local function main()
 						end
 					end)
 
-					scrollEvent = game:GetService("RunService").RenderStepped:Connect(function()
+					scrollEvent = cloneref(game:GetService("RunService")).RenderStepped:Connect(function()
 						if scrollPowerV ~= 0 or scrollPowerH ~= 0 then
 							obj:ScrollDelta(scrollPowerH,scrollPowerV)
 							updateSelection()

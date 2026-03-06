@@ -17,6 +17,9 @@ local c = {
 
 local function CS(name)
 	local ref = cloneref or function(r) return r end
+	if name == "Stats" or name == "VirtualInputManager" or name == "LogService" or name == "VoiceChatService" then
+		return game:GetService(name)
+	end
 	return ref(game:GetService(name))
 end
 

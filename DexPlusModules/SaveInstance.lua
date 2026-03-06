@@ -50,7 +50,7 @@ local function main()
 
 	local function getDefaultFileName()
 		local placeName = "UnknownPlace"
-		local marketplaceService = game:GetService("MarketplaceService")
+		local marketplaceService = cloneref(game:GetService("MarketplaceService"))
 		local okInfo, info = pcall(marketplaceService.GetProductInfo, marketplaceService, game.PlaceId)
 
 		if okInfo and type(info) == "table" and type(info.Name) == "string" and info.Name ~= "" then

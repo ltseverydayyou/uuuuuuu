@@ -3060,7 +3060,7 @@ function i2p(i, customgen)
         return 'nil'
     end
 
-    local Players = game:GetService('Players')
+    local Players = cloneref(game:GetService('Players'))
     local function isIdent(s)
         return type(s) == 'string' and s:match('^[%a_][%w_]*$') ~= nil
     end
@@ -3134,7 +3134,7 @@ function i2p(i, customgen)
     end
 
     if i == Players.LocalPlayer then
-        return 'game:GetService("Players").LocalPlayer'
+        return 'cloneref(game:GetService("Players")).LocalPlayer'
     end
     if
         i == workspace
@@ -3159,9 +3159,9 @@ function i2p(i, customgen)
             cur = cur.Parent
         end
         if plr == Players.LocalPlayer then
-            return 'game:GetService("Players").LocalPlayer.Character' .. out
+            return 'cloneref(game:GetService("Players")).LocalPlayer.Character' .. out
         else
-            return ('game:GetService("Players"):GetPlayerByUserId(%d).Character'):format(
+            return ('cloneref(game:GetService("Players")):GetPlayerByUserId(%d).Character'):format(
                 plr.UserId
             ) .. out
         end
@@ -3177,7 +3177,7 @@ function i2p(i, customgen)
     while cur and cur.Parent and cur.Parent ~= game do
         out = stepFromParentToChild(cur.Parent, cur) .. out
         if Players.LocalPlayer and cur:IsDescendantOf(Players.LocalPlayer) then
-            return 'game:GetService("Players").LocalPlayer' .. out
+            return 'cloneref(game:GetService("Players")).LocalPlayer' .. out
         end
         cur = cur.Parent
     end
@@ -3219,7 +3219,7 @@ function i2p(i, customgen)
     end
 
     if Players.LocalPlayer and i:IsDescendantOf(Players.LocalPlayer) then
-        base = 'game:GetService("Players").LocalPlayer'
+        base = 'cloneref(game:GetService("Players")).LocalPlayer'
         descend = ''
         node = i
         while node and node ~= Players.LocalPlayer do
@@ -4320,8 +4320,8 @@ if not getgenv().SimpleSpyExecuted then
                 or Players:GetPropertyChangedSignal('LocalPlayer'):Wait()
                 or Players.LocalPlayer
             generation = {
-                [OldDebugId(lp)] = 'game:GetService("Players").LocalPlayer',
-                [OldDebugId(lp:GetMouse())] = 'game:GetService("Players").LocalPlayer:GetMouse',
+                [OldDebugId(lp)] = 'cloneref(game:GetService("Players")).LocalPlayer',
+                [OldDebugId(lp:GetMouse())] = 'cloneref(game:GetService("Players")).LocalPlayer:GetMouse',
                 [OldDebugId(game)] = 'game',
                 [OldDebugId(SafeGetService('Workspace'))] = 'workspace',
             }

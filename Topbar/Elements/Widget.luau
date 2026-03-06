@@ -15,7 +15,7 @@ return function(icon, Icon)
 	button.Parent = widget;
 	button.ClipsDescendants = false;
 	button.Active = false;
-	local GuiService = game:GetService("GuiService");
+	local GuiService = cloneref(game:GetService("GuiService"));
 	icon:setBehaviour("IconButton", "BackgroundTransparency", function(value)
 		local preference = GuiService.PreferredTransparency;
 		local newValue = value * preference;
@@ -155,7 +155,7 @@ return function(icon, Icon)
 	iconImageCorner.CornerRadius = UDim.new(0, 0);
 	iconImageCorner.Name = "IconImageCorner";
 	iconImageCorner.Parent = iconImage;
-	local TweenService = game:GetService("TweenService");
+	local TweenService = cloneref(game:GetService("TweenService"));
 	local resizingCount = 0;
 	local function handleLabelAndImageChangesUnstaggered(forceUpdateString)
 		task.defer(function()
@@ -338,7 +338,7 @@ return function(icon, Icon)
 		menuUIListLayout.HorizontalAlignment = Enum.HorizontalAlignment[newAlignment];
 		updateBorderSize();
 	end);
-	local Players = game:GetService("Players");
+	local Players = cloneref(game:GetService("Players"));
 	local localPlayer = Players.LocalPlayer;
 	local lastLocaleId = localPlayer.LocaleId;
 	icon.janitor:add((localPlayer:GetPropertyChangedSignal("LocaleId")):Connect(function()

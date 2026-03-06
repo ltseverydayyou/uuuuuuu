@@ -1,6 +1,6 @@
-local GamepadService = game:GetService("GamepadService")
-local UserInputService = game:GetService("UserInputService")
-local GuiService = game:GetService("GuiService")
+local GamepadService = cloneref(game:GetService("GamepadService"))
+local UserInputService = cloneref(game:GetService("UserInputService"))
+local GuiService = cloneref(game:GetService("GuiService"))
 
 
 

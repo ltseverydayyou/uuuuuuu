@@ -797,11 +797,11 @@ local function main()
 		}
 
 		local LogService = game:GetService("LogService")
-		local Players = game:GetService("Players")
+		local Players = cloneref(game:GetService("Players"))
 		local LocalPlayer = Players.LocalPlayer
 		local Mouse = LocalPlayer:GetMouse()
-		local UserInputService = game:GetService("UserInputService")
-		local RunService = game:GetService("RunService")
+		local UserInputService = cloneref(game:GetService("UserInputService"))
+		local RunService = cloneref(game:GetService("RunService"))
 
 		local consoleApp = Console
 		local Console = ConsoleFrame
@@ -816,7 +816,7 @@ local function main()
 		OutputLimit.Value = getUserNumber("ConsoleOutputLimit", OutputLimit.Value, 10, 5000)
 
 		local function Tween(obj, info, prop)
-			local tween = game:GetService("TweenService"):Create(obj, info, prop)
+			local tween = cloneref(game:GetService("TweenService")):Create(obj, info, prop)
 			tween:Play()
 			return tween
 		end

@@ -235,7 +235,12 @@ DefaultSettings = (function()
 end)()
 
 local service = setmetatable({},{__index = function(self,name)
-	local serv = cref(game:GetService(name))
+	local serv
+	if name == "Stats" or name == "VirtualInputManager" or name == "LogService" or name == "VoiceChatService" then
+		serv = game:GetService(name)
+	else
+		serv = cref(game:GetService(name))
+	end
 	self[name] = serv
 	return serv
 end})
@@ -966,9 +971,9 @@ Main = (function()
 			rawset(self,name,func)
 		end})
 
-		env.isonmobile = game:GetService("UserInputService").TouchEnabled
+		env.isonmobile = cloneref(game:GetService("UserInputService")).TouchEnabled
 
-		env.loadstring = (pcall(loadstring,"local a = 1") and loadstring) or (game:GetService("RunService"):IsStudio() and script.Modules:FindFirstChild("Loadstring") and require(script.Modules:FindFirstChild("Loadstring")))
+		env.loadstring = (pcall(loadstring,"local a = 1") and loadstring) or (cloneref(game:GetService("RunService")):IsStudio() and script.Modules:FindFirstChild("Loadstring") and require(script.Modules:FindFirstChild("Loadstring")))
 
 		-- file
 		env.isfile = isfile
@@ -983,7 +988,7 @@ Main = (function()
 		env.loadfile = loadfile
 		env.saveinstance = saveinstance or (function()
 			--warn("No built-in saveinstance exists, using SynSaveInstance and wrapper...")
-			if game:GetService("RunService"):IsStudio() then return function() error("Cannot run in Roblox Studio!") end end
+			if cloneref(game:GetService("RunService")):IsStudio() then return function() error("Cannot run in Roblox Studio!") end end
 			local Params = {
 				RepoURL = "https://raw.githubusercontent.com/luau/SynSaveInstance/main/",
 				SSI = "saveinstance",
@@ -2667,7 +2672,7 @@ Main = (function()
 		Main.AppControls = {}
 		Main.Plugins = {}
 
-		Main.Elevated = pcall(function() local a = game:GetService("CoreGui"):GetFullName() end)
+		Main.Elevated = pcall(function() local a = cloneref(game:GetService("CoreGui")):GetFullName() end)
 
 		if writefile and isfile and Main.SettingsFile and not isfile(Main.SettingsFile) then
 			writefile(Main.SettingsFile, Main.ExportSettings())

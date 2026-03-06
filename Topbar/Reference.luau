@@ -1,4 +1,4 @@
-local replicatedStorage = game:GetService("ReplicatedStorage");
+local replicatedStorage = cloneref(game:GetService("ReplicatedStorage"));
 local Reference = {};
 Reference.objectName = "TopbarPlusReference_LTS";
 function Reference.addToReplicatedStorage()

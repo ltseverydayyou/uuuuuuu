@@ -17,9 +17,9 @@ if game.GameId == 5170973975 then
 					[1] = {
 						CF = CFrame.new(4.875078201293945, 24.025789260864258, 11.118204116821289) * CFrame.Angles(0.01760457269847393, (-0.02762647345662117), 0.00048634063568897545),
 						Part = v.Head,
-						Owner = (game:GetService("Players")).LocalPlayer,
+						Owner = (cloneref(game:GetService("Players"))).LocalPlayer,
 						TargetHead = false,
-						Character = (game:GetService("Players")).LocalPlayer.Character,
+						Character = (cloneref(game:GetService("Players"))).LocalPlayer.Character,
 						Hit = v.Head,
 						Target = v,
 						position = Vector3.new(5.695760726928711, 24.54859733581543, -18.57601547241211),
@@ -27,7 +27,7 @@ if game.GameId == 5170973975 then
 						Damage = 99
 					}
 				};
-				(game:GetService("ReplicatedStorage")).Remote.CastRemote:FireServer(unpack(args));
+				(cloneref(game:GetService("ReplicatedStorage"))).Remote.CastRemote:FireServer(unpack(args));
 			end;
 			for _, j in pairs((ClonedService("Workspace")).Temp_Item:GetChildren()) do
 				spawn(function()

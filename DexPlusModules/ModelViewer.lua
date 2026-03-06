@@ -40,8 +40,8 @@ local function getPath(obj)
 end
 
 local function main()
-	local RunService = game:GetService("RunService")
-	local UserInputService = game:GetService("UserInputService")
+	local RunService = cloneref(game:GetService("RunService"))
+	local UserInputService = cloneref(game:GetService("UserInputService"))
 	
 	local ModelViewer = {
 		EnableInputCamera = true,

@@ -4,9 +4,9 @@ return function(Icon)
 
 
 
-	local GuiService = game:GetService("GuiService")
-	local Players =  game:GetService("Players")
-	local UserInputService = game:GetService("UserInputService")
+	local GuiService = cloneref(game:GetService("GuiService"))
+	local Players =  cloneref(game:GetService("Players"))
+	local UserInputService = cloneref(game:GetService("UserInputService"))
 	local container = {}
 	local Signal = Import(script.Parent.Parent.Packages.GoodSignal)
 	local insetChanged = Signal.new()

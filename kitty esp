@@ -1,7 +1,7 @@
 local MK = "__ESP"
 
-local plrs = game:GetService("Players")
-local rs = game:GetService("RunService")
+local plrs = cloneref(game:GetService("Players"))
+local rs = cloneref(game:GetService("RunService"))
 local lp = plrs.LocalPlayer
 
 local map = {}

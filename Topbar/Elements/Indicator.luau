@@ -19,8 +19,8 @@ return function(icon, Icon)
 	indicatorButton.BorderSizePixel = 0;
 	indicatorButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0);
 	indicatorButton.Parent = indicator;
-	local GuiService = game:GetService("GuiService");
-	local GamepadService = game:GetService("GamepadService");
+	local GuiService = cloneref(game:GetService("GuiService"));
+	local GamepadService = cloneref(game:GetService("GamepadService"));
 	local ourClickRegion = icon:getInstance("ClickRegion");
 	local function selectionChanged()
 		local selectedClickRegion = GuiService.SelectedObject;
@@ -48,7 +48,7 @@ return function(icon, Icon)
 	local UICorner = Instance.new("UICorner");
 	UICorner.CornerRadius = UDim.new(1, 0);
 	UICorner.Parent = indicatorButton;
-	local UserInputService = game:GetService("UserInputService");
+	local UserInputService = cloneref(game:GetService("UserInputService"));
 	local function setIndicatorVisible(visibility)
 		if visibility == nil then
 			visibility = indicator.Visible;

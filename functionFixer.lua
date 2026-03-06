@@ -1,6 +1,6 @@
 local _env = getgenv and getgenv() or _G or {};
-local RunService = game:GetService("RunService");
-local HttpService = game:GetService("HttpService");
+local RunService = cloneref(game:GetService("RunService"));
+local HttpService = cloneref(game:GetService("HttpService"));
 local Wait = task.wait;
 local Delay = task.delay;
 local Spawn = task.spawn;

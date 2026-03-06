@@ -1,5 +1,5 @@
 local Utility = {}
-local Players = game:GetService("Players")
+local Players = cloneref(game:GetService("Players"))
 local localPlayer = Players.LocalPlayer
 
 
@@ -148,7 +148,7 @@ function Utility.getClippedContainer(screenGui)
 end
 
 local Janitor = Import(script.Parent.Packages.Janitor)
-local GuiService = game:GetService("GuiService")
+local GuiService = cloneref(game:GetService("GuiService"))
 function Utility.clipOutside(icon, instance)
 	local cloneJanitor = icon.janitor:add(Janitor.new())
 	instance.Destroying:Once(function()

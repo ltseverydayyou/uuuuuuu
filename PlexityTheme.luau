@@ -2,6 +2,9 @@ local cloneref = cloneref or function(x)
 	return x;
 end;
 local function ClonedService(n)
+	if n == "Stats" or n == "VirtualInputManager" or n == "LogService" or n == "VoiceChatService" then
+		return game:GetService(n);
+	end;
 	return cloneref(game:GetService(n));
 end;
 local cg = ClonedService("CoreGui");

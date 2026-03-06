@@ -1,7 +1,12 @@
 local srv = setmetatable({}, {
 	__index = function(self, n)
 		local ref = cloneref and type(cloneref) == "function" and cloneref or function(x) return x; end;
-		local ok, s = pcall(function() return ref(game:GetService(n)); end);
+		local ok, s = pcall(function()
+			if n == "Stats" or n == "VirtualInputManager" or n == "LogService" or n == "VoiceChatService" then
+				return game:GetService(n);
+			end;
+			return ref(game:GetService(n));
+		end);
 		if ok and s then rawset(self, n, s); return s; end;
 	end
 });

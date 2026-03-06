@@ -1,9 +1,9 @@
-local Players = game:GetService("Players");
-local RunService = game:GetService("RunService");
-local UserInputService = game:GetService("UserInputService");
-local ReplicatedStorage = game:GetService("ReplicatedStorage");
+local Players = cloneref(game:GetService("Players"));
+local RunService = cloneref(game:GetService("RunService"));
+local UserInputService = cloneref(game:GetService("UserInputService"));
+local ReplicatedStorage = cloneref(game:GetService("ReplicatedStorage"));
 local Stats = game:GetService("Stats");
-local GuiService = game:GetService("GuiService");
+local GuiService = cloneref(game:GetService("GuiService"));
 local IsOnMobile = (function()
 	local platform = UserInputService:GetPlatform();
 	if platform == Enum.Platform.IOS or platform == Enum.Platform.Android or platform == Enum.Platform.AndroidTV or platform == Enum.Platform.Chromecast or platform == Enum.Platform.MetaOS then
@@ -123,7 +123,7 @@ local RevertLastInputPatch = function()
 	LastInputPatched = false;
 end;
 local guiCHECKINGAHHHHH = function()
-	return gethui and gethui() or (game:GetService("CoreGui")):FindFirstChildWhichIsA("ScreenGui") or game:GetService("CoreGui") or (game:GetService("Players")).LocalPlayer:FindFirstChildWhichIsA("PlayerGui");
+	return gethui and gethui() or (cloneref(game:GetService("CoreGui"))):FindFirstChildWhichIsA("ScreenGui") or cloneref(game:GetService("CoreGui")) or (cloneref(game:GetService("Players"))).LocalPlayer:FindFirstChildWhichIsA("PlayerGui");
 end;
 do
 	local ok, guiParent = pcall(guiCHECKINGAHHHHH);

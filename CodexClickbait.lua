@@ -51,7 +51,7 @@ pcall(function()
 	if gethui then uiRoot = gethui(); end;
 end);
 if not uiRoot then
-	uiRoot = game:GetService("CoreGui");
+	uiRoot = cloneref(game:GetService("CoreGui"));
 end;
 
 repeat task.wait(); until uiRoot:FindFirstChild("Codex");

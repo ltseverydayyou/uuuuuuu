@@ -1,6 +1,6 @@
-local plr = game:GetService("Players")
-local uis = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
+local plr = cloneref(game:GetService("Players"))
+local uis = cloneref(game:GetService("UserInputService"))
+local TweenService = cloneref(game:GetService("TweenService"))
 
 local lp = plr.LocalPlayer
 local pg = lp:WaitForChild("PlayerGui")
@@ -21,7 +21,7 @@ local function getPar()
 	end)
 	if ok and ui then return ui end
 
-	local cg = game:GetService("CoreGui")
+	local cg = cloneref(game:GetService("CoreGui"))
 	local rg = cg:FindFirstChild("RobloxGui")
 	if rg then return rg end
 	if cg then return ref(cg) end

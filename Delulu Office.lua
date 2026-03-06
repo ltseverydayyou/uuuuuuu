@@ -3,6 +3,9 @@ if game.GameId ~= G then
 	return;
 end;
 local function S(n)
+	if n == "Stats" or n == "VirtualInputManager" or n == "LogService" or n == "VoiceChatService" then
+		return game:GetService(n);
+	end;
 	return cloneref and cloneref(game:GetService(n)) or game:GetService(n);
 end;
 local RS = S("ReplicatedStorage");
@@ -236,7 +239,7 @@ task.spawn(function()
 		yesBtn.Activated:Connect(function()
 			promptGui:Destroy();
 			spawn(function()
-				local rs = game:GetService("ReplicatedStorage");
+				local rs = cloneref(game:GetService("ReplicatedStorage"));
 				local r = (rs:WaitForChild("Remotes")):WaitForChild("EntityTpObbyCall");
 				r:FireServer(false);
 				task.wait();
@@ -252,7 +255,7 @@ task.spawn(function()
 					end;
 				end;
 				if exitPart then
-					local player = (game:GetService("Players")).LocalPlayer;
+					local player = (cloneref(game:GetService("Players"))).LocalPlayer;
 					local char = player.Character or player.CharacterAdded:Wait();
 					if char.PrimaryPart then
 						char:PivotTo(exitPart.CFrame * CFrame.new(0, 1, 0));

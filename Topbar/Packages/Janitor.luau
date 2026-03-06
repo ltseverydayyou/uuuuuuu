@@ -1,4 +1,4 @@
-local RunService = game:GetService("RunService")
+local RunService = cloneref(game:GetService("RunService"))
 local Heartbeat = RunService.Heartbeat
 local function getPromiseReference()
 	return false

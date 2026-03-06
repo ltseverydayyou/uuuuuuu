@@ -1,11 +1,11 @@
 if game.GameId ~= 3168615253 then
 	return;
 end;
-local Players = game:GetService("Players");
-local ReplicatedStorage = game:GetService("ReplicatedStorage");
-local RunService = game:GetService("RunService");
-local TweenService = game:GetService("TweenService");
-local UserInputService = game:GetService("UserInputService");
+local Players = cloneref(game:GetService("Players"));
+local ReplicatedStorage = cloneref(game:GetService("ReplicatedStorage"));
+local RunService = cloneref(game:GetService("RunService"));
+local TweenService = cloneref(game:GetService("TweenService"));
+local UserInputService = cloneref(game:GetService("UserInputService"));
 local localPlayer = Players.LocalPlayer;
 local punchRemote = (ReplicatedStorage:WaitForChild("Remote Events")):WaitForChild("Punch");
 local PUNCH_ID = 314159265359;
@@ -55,7 +55,7 @@ localPlayer.CharacterRemoving:Connect(onCharacterRemoving);
 if localPlayer.Character then
 	onCharacterAdded(localPlayer.Character);
 end;
-local guiParent = type(gethui) == "function" and gethui() or game:GetService("CoreGui") or localPlayer:WaitForChild("PlayerGui");
+local guiParent = type(gethui) == "function" and gethui() or cloneref(game:GetService("CoreGui")) or localPlayer:WaitForChild("PlayerGui");
 local screenGui = Instance.new("ScreenGui", guiParent);
 screenGui.ResetOnSpawn = false;
 local mainFrame = Instance.new("Frame", screenGui);

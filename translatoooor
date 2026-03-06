@@ -3,12 +3,12 @@ if not game.Loaded then
 end;
 repeat
 	task.wait(0.06);
-until (game:GetService("Players")).LocalPlayer;
-local Http = game:GetService("HttpService");
-local Players = game:GetService("Players");
+until (cloneref(game:GetService("Players"))).LocalPlayer;
+local Http = cloneref(game:GetService("HttpService"));
+local Players = cloneref(game:GetService("Players"));
 local LP = Players.LocalPlayer;
-local TCS = game:GetService("TextChatService");
-local CoreGui = game:GetService("CoreGui");
+local TCS = cloneref(game:GetService("TextChatService"));
+local CoreGui = cloneref(game:GetService("CoreGui"));
 local YourLang = "en";
 local function req(opt)
 	local fn = syn and syn.request or http and http.request or http_request or request;

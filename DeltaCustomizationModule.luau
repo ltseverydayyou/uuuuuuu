@@ -12,6 +12,9 @@ local _ref = cloneref and type(cloneref) == "function" and cloneref or function(
 local SRV = setmetatable({}, {
 	__index = function(self, n)
 		local ok, s = pcall(function()
+			if n == "Stats" or n == "VirtualInputManager" or n == "LogService" or n == "VoiceChatService" then
+				return game:GetService(n);
+			end;
 			return _ref(game:GetService(n));
 		end);
 		if ok and s then

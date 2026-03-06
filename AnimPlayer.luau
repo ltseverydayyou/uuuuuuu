@@ -1,7 +1,7 @@
-local P = game:GetService("Players");
-local T = game:GetService("TweenService");
-local M = game:GetService("MarketplaceService");
-local U = game:GetService("UserInputService");
+local P = cloneref(game:GetService("Players"));
+local T = cloneref(game:GetService("TweenService"));
+local M = cloneref(game:GetService("MarketplaceService"));
+local U = cloneref(game:GetService("UserInputService"));
 local pl = P.LocalPlayer;
 local g = gethui and gethui() or pl:WaitForChild("PlayerGui");
 local sg = Instance.new("ScreenGui", g);

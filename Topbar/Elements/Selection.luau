@@ -23,8 +23,8 @@ return function(Icon)
 	UICorner.Name = "UICorner";
 	UICorner.CornerRadius = UDim.new(1, 0);
 	UICorner.Parent = selection;
-	local RunService = game:GetService("RunService");
-	local GuiService = game:GetService("GuiService");
+	local RunService = cloneref(game:GetService("RunService"));
+	local GuiService = cloneref(game:GetService("GuiService"));
 	local rotationSpeed = 1;
 	(selection:GetAttributeChangedSignal("RotationSpeed")):Connect(function()
 		rotationSpeed = selection:GetAttribute("RotationSpeed");

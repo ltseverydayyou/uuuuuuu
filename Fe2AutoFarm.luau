@@ -1,8 +1,8 @@
-local Players = game:GetService("Players");
-local Workspace = game:GetService("Workspace");
-local ReplicatedStorage = game:GetService("ReplicatedStorage");
-local RunService = game:GetService("RunService");
-local UserInputService = game:GetService("UserInputService");
+local Players = cloneref(game:GetService("Players"));
+local Workspace = cloneref(game:GetService("Workspace"));
+local ReplicatedStorage = cloneref(game:GetService("ReplicatedStorage"));
+local RunService = cloneref(game:GetService("RunService"));
+local UserInputService = cloneref(game:GetService("UserInputService"));
 local LP = Players.LocalPlayer;
 local MP = Workspace:WaitForChild("Multiplayer");
 local TP_DELAY = 0.05;
@@ -35,7 +35,7 @@ local function uiParent()
 	if ok and typeof(ui) == "Instance" then
 		return ui;
 	end;
-	local cg = game:GetService("CoreGui");
+	local cg = cloneref(game:GetService("CoreGui"));
 	if pcall(function()
 		return cg:FindFirstChildOfClass("ScreenGui");
 	end) then

@@ -4,10 +4,10 @@ end;
 local Players = cloneref(game:GetService("Players"));
 local RunService = cloneref(game:GetService("RunService"));
 local UserInputService = cloneref(game:GetService("UserInputService"));
-local VirtualInputManager = cloneref(game:GetService("VirtualInputManager"));
+local VirtualInputManager = game:GetService("VirtualInputManager");
 local TweenService = cloneref(game:GetService("TweenService"));
 local LocalPlayer = Players.LocalPlayer;
-local CoreGui = game:GetService("CoreGui");
+local CoreGui = cloneref(game:GetService("CoreGui"));
 local GuiService = cloneref(game:GetService("GuiService"))
 local parentUI = gethui and gethui() or CoreGui or LocalPlayer:WaitForChild("PlayerGui");
 local ui = Instance.new("ScreenGui");

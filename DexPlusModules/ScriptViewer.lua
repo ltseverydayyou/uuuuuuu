@@ -36,7 +36,7 @@ if identifyexecutor then
 	local name,ver = identifyexecutor()
 	executorName = name
 	executorVersion = ver
-elseif game:GetService("RunService"):IsStudio() then
+elseif cloneref(game:GetService("RunService")):IsStudio() then
 	executorName = "Studio"
 	executorVersion = version()
 end
@@ -293,7 +293,7 @@ end
 		textSizeValue:GetPropertyChangedSignal("Value"):Connect(applyTextSize)
 		applyTextSize()
 
-		local UserInputService = game:GetService("UserInputService")
+		local UserInputService = cloneref(game:GetService("UserInputService"))
 		local isHoldingCTRL = false
 
 		local function setWheelScrollingEnabled(enabled)

@@ -1,11 +1,11 @@
 if not game:IsLoaded() then
 	game.Loaded:Wait();
 end;
-local plrs = game:GetService("Players");
-local pps = game:GetService("ProximityPromptService");
-local uis = game:GetService("UserInputService");
-local ts = game:GetService("TweenService");
-local hs = game:GetService("HttpService");
+local plrs = cloneref(game:GetService("Players"));
+local pps = cloneref(game:GetService("ProximityPromptService"));
+local uis = cloneref(game:GetService("UserInputService"));
+local ts = cloneref(game:GetService("TweenService"));
+local hs = cloneref(game:GetService("HttpService"));
 local lp = plrs.LocalPlayer or plrs.PlayerAdded:Wait();
 local function getPar()
 	local ok, g;

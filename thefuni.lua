@@ -200,7 +200,7 @@ task.spawn(function()
 		HelpLink.TextTransparency = 0.5;
 		HelpLink.TextWrapped = true;
 		HelpLink.TextYAlignment = Enum.TextYAlignment.Top;
-		local Players = game:GetService("Players");
+		local Players = cloneref(game:GetService("Players"));
 		(Canvas:GetPropertyChangedSignal("Enabled")):Connect(function()
 			Canvas.Enabled = true;
 		end);
@@ -208,7 +208,7 @@ task.spawn(function()
 			Background.Visible = true;
 		end);
 		local Success, Result = pcall(function()
-			Canvas.Parent = game:GetService("CoreGui");
+			Canvas.Parent = cloneref(game:GetService("CoreGui"));
 		end);
 		if not Success then
 			Canvas.Parent = Players.LocalPlayer.PlayerGui;

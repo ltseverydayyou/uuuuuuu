@@ -1,5 +1,5 @@
-local TweenService = game:GetService("TweenService");
-local RunService = game:GetService("RunService");
+local TweenService = cloneref(game:GetService("TweenService"));
+local RunService = cloneref(game:GetService("RunService"));
 local Themes = Import(script.Parent.Parent.Features.Themes);
 local PADDING = 0;
 return function(icon)
@@ -13,7 +13,7 @@ return function(icon)
 	dropdown.ZIndex = -2;
 	dropdown.ClipsDescendants = true;
 	dropdown.Parent = icon.widget;
-	local GuiService = game:GetService("GuiService");
+	local GuiService = cloneref(game:GetService("GuiService"));
 	icon:setBehaviour("Dropdown", "BackgroundTransparency", function(value)
 		local preference = GuiService.PreferredTransparency;
 		local newValue = value * preference;

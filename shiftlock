@@ -2,6 +2,9 @@ local ref = cloneref or function(x)
 	return x;
 end;
 local S = function(n)
+	if n == "Stats" or n == "VirtualInputManager" or n == "LogService" or n == "VoiceChatService" then
+		return game:GetService(n);
+	end;
 	return ref(game:GetService(n));
 end;
 local Plrs, Tw, UIS, RS, Wk, CG = S("Players"), S("TweenService"), S("UserInputService"), S("RunService"), S("Workspace"), S("CoreGui");

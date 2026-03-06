@@ -13,8 +13,8 @@ for _, k in ipairs({ "_conn", "_charConn", "_childConn" }) do
 	end
 end
 
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
+local Players = cloneref(game:GetService("Players"))
+local RunService = cloneref(game:GetService("RunService"))
 local lp = Players.LocalPlayer
 
 local function isTailAccessory(acc)

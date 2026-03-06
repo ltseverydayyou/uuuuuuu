@@ -1,13 +1,13 @@
 if game.GameId ~= 5120885191 then
 	return;
 end;
-local rs = game:GetService("ReplicatedStorage");
+local rs = cloneref(game:GetService("ReplicatedStorage"));
 local fw = rs:WaitForChild("Framework");
 local rf = fw:WaitForChild("RemoteFunction");
 local re = fw:WaitForChild("RemoteEvent");
-local plrs = game:GetService("Players");
+local plrs = cloneref(game:GetService("Players"));
 local lp = plrs.LocalPlayer;
-local gs = game:GetService("GroupService");
+local gs = cloneref(game:GetService("GroupService"));
 local aAFK = {
 	"MatchService",
 	"SetAFK",

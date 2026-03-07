@@ -1,3 +1,35 @@
+local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
+local function __lt_clone_service_value(value)
+	if __lt_oldcloneref and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt_oldcloneref, value);
+		if ok and cloned ~= nil then
+			return cloned;
+		end;
+	end;
+	return value;
+end;
+local function __lt_clone_service(name, refFn)
+	if type(refFn) ~= "function" then
+		return game:GetService(name);
+	end;
+	local ok, ref = pcall(function()
+		return refFn(game:GetService(name));
+	end);
+	if ok and ref ~= nil then
+		return ref;
+	end;
+	return game:GetService(name);
+end;
+local function __lt_call_service_method(name, method, ...)
+	local service = game:GetService(name);
+	local fn = service[method];
+	if type(fn) ~= "function" then
+		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
+	end;
+	return fn(service, ...);
+end;
+
+
 if (getgenv()).__na_aex then
 	return;
 end;
@@ -5,16 +37,16 @@ end;
 if game.GameId ~= 4538598064 then
 	return;
 end;
-local Plrs = cloneref(game:GetService("Players"));
-local RS = cloneref(game:GetService("RunService"));
-local SS = cloneref(game:GetService("SoundService"));
-local TS = cloneref(game:GetService("TweenService"));
-local RSrv = cloneref(game:GetService("ReplicatedStorage"));
+local Plrs = __lt_clone_service("Players", cloneref);
+local RS = __lt_clone_service("RunService", cloneref);
+local SS = __lt_clone_service("SoundService", cloneref);
+local TS = __lt_clone_service("TweenService", cloneref);
+local RSrv = __lt_clone_service("ReplicatedStorage", cloneref);
 local WS = workspace;
-local UIS = cloneref(game:GetService("UserInputService"));
+local UIS = __lt_clone_service("UserInputService", cloneref);
 local Net = (require(RSrv.TS.Network.Network)).Network;
 local Def = (require(RSrv.TS.Abilities.DeflectAbility)).DeflectAbility;
-local PNotif = RSrv:WaitForChild("PromptNotification");
+local PNotif = __lt_call_service_method("ReplicatedStorage", "WaitForChild", "PromptNotification");
 task.spawn(function()
 	PNotif:Fire("super scuffed autoparry loaded 💀💀💀", true);
 end);
@@ -36,7 +68,7 @@ local function sendParry()
 	Net:CSendEvent(46848415795802784000000000000000000000000000000000000000000000000000000000000, 6846744283873508500000000000000000000000000000000000000000000000000000000000);
 end;
 do
-	local mas = SS:FindFirstChild("Master");
+	local mas = __lt_call_service_method("SoundService", "FindFirstChild", "Master");
 	local mus = mas and mas:FindFirstChild("Music");
 	local gam = mus and mus:FindFirstChild("Game");
 	local lob = mus and mus:FindFirstChild("Lobby");
@@ -105,7 +137,7 @@ do
 				end);
 			end;
 			local ok, tw = pcall(function()
-				return TS:Create(s, TweenInfo.new(t, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+				return __lt_call_service_method("TweenService", "Create", s, TweenInfo.new(t, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
 					Volume = v
 				});
 			end);
@@ -223,7 +255,7 @@ do
 	local gi;
 	do
 		local ok, mod = pcall(function()
-			return require((RSrv:WaitForChild("TS")):WaitForChild("GameInfo"));
+			return require((__lt_call_service_method("ReplicatedStorage", "WaitForChild", "TS")):WaitForChild("GameInfo"));
 		end);
 		if ok and mod and mod.GameInfo then
 			gi = mod.GameInfo;
@@ -232,7 +264,7 @@ do
 	local br;
 	do
 		local ok, mod = pcall(function()
-			return require(((RSrv:WaitForChild("TS")):WaitForChild("BallReplicator")):WaitForChild("BallReplicator"));
+			return require(((__lt_call_service_method("ReplicatedStorage", "WaitForChild", "TS")):WaitForChild("BallReplicator")):WaitForChild("BallReplicator"));
 		end);
 		if ok and mod and mod.BallReplicator then
 			br = mod.BallReplicator;

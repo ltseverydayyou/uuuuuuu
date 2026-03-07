@@ -1,3 +1,35 @@
+local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
+local function __lt_clone_service_value(value)
+	if __lt_oldcloneref and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt_oldcloneref, value);
+		if ok and cloned ~= nil then
+			return cloned;
+		end;
+	end;
+	return value;
+end;
+local function __lt_clone_service(name, refFn)
+	if type(refFn) ~= "function" then
+		return game:GetService(name);
+	end;
+	local ok, ref = pcall(function()
+		return refFn(game:GetService(name));
+	end);
+	if ok and ref ~= nil then
+		return ref;
+	end;
+	return game:GetService(name);
+end;
+local function __lt_call_service_method(name, method, ...)
+	local service = game:GetService(name);
+	local fn = service[method];
+	if type(fn) ~= "function" then
+		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
+	end;
+	return fn(service, ...);
+end;
+
+
 local c = {
 	bg = Color3.fromRGB(12, 12, 18),
 	sf = Color3.fromRGB(18, 18, 26),
@@ -17,10 +49,8 @@ local c = {
 
 local function CS(name)
 	local ref = cloneref or function(r) return r end
-	if name == "Stats" or name == "VirtualInputManager" or name == "LogService" or name == "VoiceChatService" then
-		return game:GetService(name)
-	end
-	return ref(game:GetService(name))
+
+	return __lt_clone_service(name, ref)
 end
 
 local TS = CS("TweenService")
@@ -34,7 +64,7 @@ local function lerp(a, b, t)
 end
 
 local function tw(obj, dur, props, style, dir)
-	local t = TS:Create(obj, TweenInfo.new(dur, style or Enum.EasingStyle.Quint, dir or Enum.EasingDirection.Out), props)
+	local t = __lt_call_service_method("TweenService", "Create", obj, TweenInfo.new(dur, style or Enum.EasingStyle.Quint, dir or Enum.EasingDirection.Out), props)
 	t:Play()
 	return t
 end
@@ -54,7 +84,7 @@ local function protectUI(sg)
 	local lp = CS("Players").LocalPlayer
 	local function h(i) if i then i.Name = "\000" i.Archivable = false end end
 	if gethui then h(sg) sg.Parent = gethui() return sg
-	elseif cg and cg:FindFirstChild("RobloxGui") then h(sg) sg.Parent = cg:FindFirstChild("RobloxGui") return sg
+	elseif cg and __lt_call_service_method("CoreGui", "FindFirstChild", "RobloxGui") then h(sg) sg.Parent = __lt_call_service_method("CoreGui", "FindFirstChild", "RobloxGui") return sg
 	elseif cg then h(sg) sg.Parent = cg return sg
 	elseif lp and lp:FindFirstChildWhichIsA("PlayerGui") then h(sg) sg.Parent = lp:FindFirstChildWhichIsA("PlayerGui") sg.ResetOnSpawn = false return sg
 	end
@@ -432,8 +462,8 @@ local function autoH(row, kL, vL, ls)
 	if w <= 0 then return end
 	local lw = math.floor(w * ls)
 	local rw = w - lw - 10
-	local kh = TXS:GetTextSize(kL.Text, kL.TextSize, kL.Font, Vector2.new(lw, 1e6)).Y
-	local vh = TXS:GetTextSize(vL.Text, vL.TextSize, vL.Font, Vector2.new(rw, 1e6)).Y
+	local kh = __lt_call_service_method("TextService", "GetTextSize", kL.Text, kL.TextSize, kL.Font, Vector2.new(lw, 1e6)).Y
+	local vh = __lt_call_service_method("TextService", "GetTextSize", vL.Text, vL.TextSize, vL.Font, Vector2.new(rw, 1e6)).Y
 	row.Size = UDim2.new(1, 0, 0, math.max(kh, vh) + 14)
 end
 
@@ -473,7 +503,7 @@ local function addRow(k, v, order)
 	vL.BackgroundTransparency = 1
 	vL.Size = UDim2.new(0.7, 0, 1, 0)
 	vL.Font = Enum.Font.Gotham
-	vL.Text = typeof(v) == "table" and HS:JSONEncode(v) or tostring(v)
+	vL.Text = typeof(v) == "table" and __lt_call_service_method("HttpService", "JSONEncode", v) or tostring(v)
 	vL.TextSize = 12
 	vL.TextColor3 = c.tx
 	vL.TextXAlignment = Enum.TextXAlignment.Left
@@ -596,7 +626,7 @@ local function addDropdown(titleText, tbl, order)
 				local p = {} for i = 1, #v do p[i] = tostring(v[i]) end
 				vL.Text = table.concat(p, ", ")
 			else
-				vL.Text = HS:JSONEncode(v)
+				vL.Text = __lt_call_service_method("HttpService", "JSONEncode", v)
 			end
 		else
 			vL.Text = tostring(v)
@@ -751,7 +781,7 @@ local function displayGameInfo()
 				local p = {} for i = 1, #v do p[i] = tostring(v[i]) end
 				return table.concat(p, ", ")
 			end
-			return HS:JSONEncode(v)
+			return __lt_call_service_method("HttpService", "JSONEncode", v)
 		end
 		return v
 	end

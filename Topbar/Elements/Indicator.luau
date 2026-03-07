@@ -1,3 +1,35 @@
+local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
+local function __lt_clone_service_value(value)
+	if __lt_oldcloneref and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt_oldcloneref, value);
+		if ok and cloned ~= nil then
+			return cloned;
+		end;
+	end;
+	return value;
+end;
+local function __lt_clone_service(name, refFn)
+	if type(refFn) ~= "function" then
+		return game:GetService(name);
+	end;
+	local ok, ref = pcall(function()
+		return refFn(game:GetService(name));
+	end);
+	if ok and ref ~= nil then
+		return ref;
+	end;
+	return game:GetService(name);
+end;
+local function __lt_call_service_method(name, method, ...)
+	local service = game:GetService(name);
+	local fn = service[method];
+	if type(fn) ~= "function" then
+		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
+	end;
+	return fn(service, ...);
+end;
+
+
 return function(icon, Icon)
 	local widget = icon.widget;
 	local contents = icon:getInstance("Contents");
@@ -19,8 +51,8 @@ return function(icon, Icon)
 	indicatorButton.BorderSizePixel = 0;
 	indicatorButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0);
 	indicatorButton.Parent = indicator;
-	local GuiService = cloneref(game:GetService("GuiService"));
-	local GamepadService = cloneref(game:GetService("GamepadService"));
+	local GuiService = __lt_clone_service("GuiService", cloneref);
+	local GamepadService = __lt_clone_service("GamepadService", cloneref);
 	local ourClickRegion = icon:getInstance("ClickRegion");
 	local function selectionChanged()
 		local selectedClickRegion = GuiService.SelectedObject;
@@ -34,7 +66,7 @@ return function(icon, Icon)
 			indicatorButton.Size = UDim2.fromScale(1, 1);
 		end;
 	end;
-	icon.janitor:add((GuiService:GetPropertyChangedSignal("SelectedObject")):Connect(selectionChanged));
+	icon.janitor:add((__lt_call_service_method("GuiService", "GetPropertyChangedSignal", "SelectedObject")):Connect(selectionChanged));
 	selectionChanged();
 	local imageLabel = Instance.new("ImageLabel");
 	imageLabel.LayoutOrder = 2;
@@ -48,7 +80,7 @@ return function(icon, Icon)
 	local UICorner = Instance.new("UICorner");
 	UICorner.CornerRadius = UDim.new(1, 0);
 	UICorner.Parent = indicatorButton;
-	local UserInputService = cloneref(game:GetService("UserInputService"));
+	local UserInputService = __lt_clone_service("UserInputService", cloneref);
 	local function setIndicatorVisible(visibility)
 		if visibility == nil then
 			visibility = indicator.Visible;
@@ -72,12 +104,12 @@ return function(icon, Icon)
 		});
 		icon.updateSize:Fire();
 	end;
-	icon.janitor:add((GamepadService:GetPropertyChangedSignal("GamepadCursorEnabled")):Connect(setIndicatorVisible));
+	icon.janitor:add((__lt_call_service_method("GamepadService", "GetPropertyChangedSignal", "GamepadCursorEnabled")):Connect(setIndicatorVisible));
 	icon.indicatorSet:Connect(function(keyCode)
 		local visibility = false;
 		if keyCode then
 			if typeof(keyCode) == "EnumItem" then
-				imageLabel.Image = UserInputService:GetImageForKeyCode(keyCode);
+				imageLabel.Image = __lt_call_service_method("UserInputService", "GetImageForKeyCode", keyCode);
 				visibility = true;
 			else
 				local id = tostring(keyCode);

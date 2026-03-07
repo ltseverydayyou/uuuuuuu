@@ -1,3 +1,35 @@
+local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
+local function __lt_clone_service_value(value)
+	if __lt_oldcloneref and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt_oldcloneref, value);
+		if ok and cloned ~= nil then
+			return cloned;
+		end;
+	end;
+	return value;
+end;
+local function __lt_clone_service(name, refFn)
+	if type(refFn) ~= "function" then
+		return game:GetService(name);
+	end;
+	local ok, ref = pcall(function()
+		return refFn(game:GetService(name));
+	end);
+	if ok and ref ~= nil then
+		return ref;
+	end;
+	return game:GetService(name);
+end;
+local function __lt_call_service_method(name, method, ...)
+	local service = game:GetService(name);
+	local fn = service[method];
+	if type(fn) ~= "function" then
+		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
+	end;
+	return fn(service, ...);
+end;
+
+
 --[[
 	Console Module
 ]]
@@ -796,12 +828,12 @@ local function main()
 			[Enum.MessageType.MessageError] = getFlag("Error", true)
 		}
 
-		local LogService = game:GetService("LogService")
-		local Players = cloneref(game:GetService("Players"))
+		local LogService = __lt_clone_service("LogService", cloneref)
+		local Players = __lt_clone_service("Players", cloneref)
 		local LocalPlayer = Players.LocalPlayer
 		local Mouse = LocalPlayer:GetMouse()
-		local UserInputService = cloneref(game:GetService("UserInputService"))
-		local RunService = cloneref(game:GetService("RunService"))
+		local UserInputService = __lt_clone_service("UserInputService", cloneref)
+		local RunService = __lt_clone_service("RunService", cloneref)
 
 		local consoleApp = Console
 		local Console = ConsoleFrame
@@ -816,8 +848,8 @@ local function main()
 		OutputLimit.Value = getUserNumber("ConsoleOutputLimit", OutputLimit.Value, 10, 5000)
 
 		local function Tween(obj, info, prop)
-			local tween = cloneref(game:GetService("TweenService")):Create(obj, info, prop)
-			tween:Play()
+			local tween = __lt_clone_service("TweenService", cloneref):Create(obj, info, prop)
+			__lt_call_service_method("TweenService", "Play")
 			return tween
 		end
 
@@ -1078,7 +1110,7 @@ local function main()
 		end
 
 		local historySuccess, history = pcall(function()
-			return LogService:GetLogHistory()
+			return __lt_call_service_method("LogService", "GetLogHistory")
 		end)
 		if historySuccess and type(history) == "table" then
 			for _, entry in ipairs(history) do

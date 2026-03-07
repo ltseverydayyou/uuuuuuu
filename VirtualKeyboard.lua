@@ -1,13 +1,45 @@
+local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
+local function __lt_clone_service_value(value)
+	if __lt_oldcloneref and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt_oldcloneref, value);
+		if ok and cloned ~= nil then
+			return cloned;
+		end;
+	end;
+	return value;
+end;
+local function __lt_clone_service(name, refFn)
+	if type(refFn) ~= "function" then
+		return game:GetService(name);
+	end;
+	local ok, ref = pcall(function()
+		return refFn(game:GetService(name));
+	end);
+	if ok and ref ~= nil then
+		return ref;
+	end;
+	return game:GetService(name);
+end;
+local function __lt_call_service_method(name, method, ...)
+	local service = game:GetService(name);
+	local fn = service[method];
+	if type(fn) ~= "function" then
+		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
+	end;
+	return fn(service, ...);
+end;
+
+
 local function ClonedService(n)
 	local S = game.GetService
 	local R = cloneref or function(x)
 		return x
 	end
-	return R(S(game, n))
+	return __lt_clone_service(n, R)
 end
 
 local uis = ClonedService("UserInputService")
-local vim = ClonedService("VirtualInputManager")
+local vim = __lt_clone_service("VirtualInputManager", cloneref)
 local rs = ClonedService("RunService")
 
 local function protectUI(g)
@@ -34,7 +66,7 @@ local function protectUI(g)
 		NA(g)
 		g.Parent = gethui()
 		return g
-	elseif cg and cg:FindFirstChild("RobloxGui") then
+	elseif cg and __lt_call_service_method("CoreGui", "FindFirstChild", "RobloxGui") then
 		NA(g)
 		g.Parent = cg.RobloxGui
 		return g
@@ -495,7 +527,7 @@ local function pressConn(btn, kc)
 		btn.BackgroundColor3 = shade(base, -0.25)
 		down = true
 		if kc and (not selectMode) and vim and vim.SendKeyEvent then
-			vim:SendKeyEvent(true, kc, sendProcessed, game)
+			__lt_call_service_method("VirtualInputManager", "SendKeyEvent", true, kc, sendProcessed, game)
 		end
 	end)
 	btn.MouseButton1Up:Connect(function()
@@ -503,7 +535,7 @@ local function pressConn(btn, kc)
 		local base = btn:GetAttribute("BaseColor") or themes[curTheme].Btn
 		btn.BackgroundColor3 = base
 		if kc and (not selectMode) and vim and vim.SendKeyEvent then
-			vim:SendKeyEvent(false, kc, sendProcessed, game)
+			__lt_call_service_method("VirtualInputManager", "SendKeyEvent", false, kc, sendProcessed, game)
 		end
 	end)
 	btn.MouseLeave:Connect(function()
@@ -512,7 +544,7 @@ local function pressConn(btn, kc)
 			local base = btn:GetAttribute("BaseColor") or themes[curTheme].Btn
 			btn.BackgroundColor3 = base
 			if kc and (not selectMode) and vim and vim.SendKeyEvent then
-				vim:SendKeyEvent(false, kc, sendProcessed, game)
+				__lt_call_service_method("VirtualInputManager", "SendKeyEvent", false, kc, sendProcessed, game)
 			end
 		end
 	end)

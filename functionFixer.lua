@@ -1,6 +1,38 @@
+local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
+local function __lt_clone_service_value(value)
+	if __lt_oldcloneref and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt_oldcloneref, value);
+		if ok and cloned ~= nil then
+			return cloned;
+		end;
+	end;
+	return value;
+end;
+local function __lt_clone_service(name, refFn)
+	if type(refFn) ~= "function" then
+		return game:GetService(name);
+	end;
+	local ok, ref = pcall(function()
+		return refFn(game:GetService(name));
+	end);
+	if ok and ref ~= nil then
+		return ref;
+	end;
+	return game:GetService(name);
+end;
+local function __lt_call_service_method(name, method, ...)
+	local service = game:GetService(name);
+	local fn = service[method];
+	if type(fn) ~= "function" then
+		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
+	end;
+	return fn(service, ...);
+end;
+
+
 local _env = getgenv and getgenv() or _G or {};
-local RunService = cloneref(game:GetService("RunService"));
-local HttpService = cloneref(game:GetService("HttpService"));
+local RunService = __lt_clone_service("RunService", cloneref);
+local HttpService = __lt_clone_service("HttpService", cloneref);
 local Wait = task.wait;
 local Delay = task.delay;
 local Spawn = task.spawn;
@@ -65,7 +97,7 @@ local isPoopSploit = identifyexecutor and ((identifyexecutor()):lower() == "sola
 
 local rStringgg = function()
 	if HttpService and HttpService.GenerateGUID then
-		return HttpService:GenerateGUID(false);
+		return __lt_call_service_method("HttpService", "GenerateGUID", false);
 	end;
 	local length = math.random(10, 20);
 	local result = {};

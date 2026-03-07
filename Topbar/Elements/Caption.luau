@@ -1,3 +1,35 @@
+local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
+local function __lt_clone_service_value(value)
+	if __lt_oldcloneref and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt_oldcloneref, value);
+		if ok and cloned ~= nil then
+			return cloned;
+		end;
+	end;
+	return value;
+end;
+local function __lt_clone_service(name, refFn)
+	if type(refFn) ~= "function" then
+		return game:GetService(name);
+	end;
+	local ok, ref = pcall(function()
+		return refFn(game:GetService(name));
+	end);
+	if ok and ref ~= nil then
+		return ref;
+	end;
+	return game:GetService(name);
+end;
+local function __lt_call_service_method(name, method, ...)
+	local service = game:GetService(name);
+	local fn = service[method];
+	if type(fn) ~= "function" then
+		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
+	end;
+	return fn(service, ...);
+end;
+
+
 local CAPTION_COLOR = Color3.fromRGB(39, 41, 48)
 local TEXT_SIZE = 15
 return function(icon)
@@ -153,7 +185,7 @@ return function(icon)
 
 	local isCompletelyEnabled = false
 	local captionHeader = caption.Box.Header
-	local UserInputService = cloneref(game:GetService("UserInputService"))
+	local UserInputService = __lt_clone_service("UserInputService", cloneref)
 	local function updateHotkey(keyCodeEnum)
 		local hasKeyboard = UserInputService.KeyboardEnabled
 		local text = caption:GetAttribute("CaptionText") or ""
@@ -178,8 +210,8 @@ return function(icon)
 	local TWEEN_SPEED = 0.2
 	local TWEEN_INFO_IN = TweenInfo.new(TWEEN_SPEED, EASING_STYLE, Enum.EasingDirection.In)
 	local TWEEN_INFO_OUT = TweenInfo.new(TWEEN_SPEED, EASING_STYLE, Enum.EasingDirection.Out)
-	local TweenService = cloneref(game:GetService("TweenService"))
-	local RunService = cloneref(game:GetService("RunService"))
+	local TweenService = __lt_clone_service("TweenService", cloneref)
+	local RunService = __lt_clone_service("RunService", cloneref)
 	local function getCaptionPosition(customEnabled)
 		local enabled = if customEnabled ~= nil then customEnabled else isCompletelyEnabled
 		local yOut = 2
@@ -236,7 +268,7 @@ return function(icon)
 
 
 		local tweenInfo = (enabled and TWEEN_INFO_IN) or TWEEN_INFO_OUT
-		local tween = TweenService:Create(captionClone, tweenInfo, {Position = endPosition})
+		local tween = __lt_call_service_method("TweenService", "Create", captionClone, tweenInfo, {Position = endPosition})
 		local updateCaretConnection = RunService.Heartbeat:Connect(updateCaret)
 		tween:Play()
 		tween.Completed:Once(function()
@@ -271,7 +303,7 @@ return function(icon)
 		isCompletelyEnabled = enabled
 		local newTransparency = (enabled and 0) or 1
 		local tweenInfo = (enabled and TWEEN_INFO_IN) or TWEEN_INFO_OUT
-		local tweenTransparency = TweenService:Create(caption, tweenInfo, {
+		local tweenTransparency = __lt_call_service_method("TweenService", "Create", caption, tweenInfo, {
 			GroupTransparency = newTransparency
 		})
 		tweenTransparency:Play()

@@ -1,3 +1,35 @@
+local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
+local function __lt_clone_service_value(value)
+	if __lt_oldcloneref and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt_oldcloneref, value);
+		if ok and cloned ~= nil then
+			return cloned;
+		end;
+	end;
+	return value;
+end;
+local function __lt_clone_service(name, refFn)
+	if type(refFn) ~= "function" then
+		return game:GetService(name);
+	end;
+	local ok, ref = pcall(function()
+		return refFn(game:GetService(name));
+	end);
+	if ok and ref ~= nil then
+		return ref;
+	end;
+	return game:GetService(name);
+end;
+local function __lt_call_service_method(name, method, ...)
+	local service = game:GetService(name);
+	local fn = service[method];
+	if type(fn) ~= "function" then
+		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
+	end;
+	return fn(service, ...);
+end;
+
+
 -- Press the "Home" or "Right shift" key to toggle it
 -- Sadly never made an editor, maybe someone can improve this
 -- An api (not mine) was used to make syntax highlighting work since my way was stupid
@@ -5,7 +37,7 @@
 local function ClonedService(name)
     local Service = (game.GetService);
 	local Reference = (cloneref) or function(reference) return reference end
-	return Reference(Service(game, name));
+	return __lt_clone_service(name, Reference);
 end
 
 
@@ -35,9 +67,9 @@ local function protectUI(sGui)
 		NAProtection(sGui)
 		sGui.Parent = gethui()
 		return sGui
-	elseif cGUI and cGUI:FindFirstChild("RobloxGui") then
+	elseif cGUI and __lt_call_service_method("CoreGui", "FindFirstChild", "RobloxGui") then
 		NAProtection(sGui)
-		sGui.Parent = cGUI:FindFirstChild("RobloxGui")
+		sGui.Parent = __lt_call_service_method("CoreGui", "FindFirstChild", "RobloxGui")
 		return sGui
 	elseif cGUI then
 		NAProtection(sGui)
@@ -131,7 +163,7 @@ backdrop.Size = UDim2.new(0.25, 0, 0.25, 0)
 
 --// for new users
 local StarterGui = ClonedService("StarterGui")
-StarterGui:SetCore("SendNotification", {
+__lt_call_service_method("StarterGui", "SetCore", "SendNotification", {
 	Title = "ScriptView loaded",
 	Text = "Press the Home button or Right Shift to open!",
 })
@@ -261,7 +293,7 @@ end
 
 function getTextSize(label)
 	local service = ClonedService("TextService")
-	local vec2 = service:GetTextSize(label.Text, label.TextSize, label.Font, Vector2.new(10000, 25))
+	local vec2 = __lt_call_service_method("TextService", "GetTextSize", label.Text, label.TextSize, label.Font, Vector2.new(10000, 25))
 	return vec2
 end
 
@@ -482,7 +514,7 @@ function Tween(Obj, Dir, Style, Duration, Goal)
 		Enum.EasingStyle[Style],
 		Enum.EasingDirection[Dir]
 	)
-	local tween = tweenService:Create(Obj,tweenInfo,Goal)
+	local tween = __lt_call_service_method("TweenService", "Create", Obj,tweenInfo,Goal)
 	tween:Play()
 	return tween
 end

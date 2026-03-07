@@ -1,3 +1,35 @@
+local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
+local function __lt_clone_service_value(value)
+	if __lt_oldcloneref and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt_oldcloneref, value);
+		if ok and cloned ~= nil then
+			return cloned;
+		end;
+	end;
+	return value;
+end;
+local function __lt_clone_service(name, refFn)
+	if type(refFn) ~= "function" then
+		return game:GetService(name);
+	end;
+	local ok, ref = pcall(function()
+		return refFn(game:GetService(name));
+	end);
+	if ok and ref ~= nil then
+		return ref;
+	end;
+	return game:GetService(name);
+end;
+local function __lt_call_service_method(name, method, ...)
+	local service = game:GetService(name);
+	local fn = service[method];
+	if type(fn) ~= "function" then
+		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
+	end;
+	return fn(service, ...);
+end;
+
+
 --[[
 	Script Viewer App Module
 	
@@ -36,7 +68,7 @@ if identifyexecutor then
 	local name,ver = identifyexecutor()
 	executorName = name
 	executorVersion = ver
-elseif cloneref(game:GetService("RunService")):IsStudio() then
+elseif __lt_clone_service("RunService", cloneref):IsStudio() then
 	executorName = "Studio"
 	executorVersion = version()
 end
@@ -293,7 +325,7 @@ end
 		textSizeValue:GetPropertyChangedSignal("Value"):Connect(applyTextSize)
 		applyTextSize()
 
-		local UserInputService = cloneref(game:GetService("UserInputService"))
+		local UserInputService = __lt_clone_service("UserInputService", cloneref)
 		local isHoldingCTRL = false
 
 		local function setWheelScrollingEnabled(enabled)

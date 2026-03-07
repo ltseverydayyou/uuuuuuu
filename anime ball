@@ -1,10 +1,55 @@
+local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil
+local function __lt_clone_service_value(value)
+	if __lt_oldcloneref and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt_oldcloneref, value)
+		if ok and cloned ~= nil then
+			return cloned
+		end
+	end
+	return value
+end
+local function __lt_clone_service(name, refFn)
+	if type(refFn) ~= "function" then
+		return game:GetService(name)
+	end
+	local ok, ref = pcall(function()
+		return refFn(game:GetService(name))
+	end)
+	if ok and ref ~= nil then
+		return ref
+	end
+	return game:GetService(name)
+end
+local function __lt_call_service_method(name, method, ...)
+	local service = game:GetService(name)
+	local fn = service[method]
+	if type(fn) ~= "function" then
+		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)))
+	end
+	return fn(service, ...)
+end
+
+					return table.unpack(results, 1, results.n)
+				end
+			end
+			return __lt_clone_service_value(value)
+		end,
+		__newindex = function(_, key, value)
+			game:GetService(name)[key] = value
+		end,
+		__tostring = function()
+			return tostring(ref)
+		end
+	})
+end
+
 if game.GameId == 5120885191 then
 	local function ClonedService(name)
 		local Service = game.GetService
 		local Reference = cloneref or function(reference)
 			return reference
 		end
-		return Reference(Service(game, name))
+		return __lt_clone_service(name, Reference)
 	end
 
 	local UIS = ClonedService("UserInputService")
@@ -61,9 +106,9 @@ if game.GameId == 5120885191 then
 			NAProtection(sGui)
 			sGui.Parent = gethui()
 			return sGui
-		elseif cGUI and cGUI:FindFirstChild("RobloxGui") then
+		elseif cGUI and __lt_call_service_method("CoreGui", "FindFirstChild", "RobloxGui") then
 			NAProtection(sGui)
-			sGui.Parent = cGUI:FindFirstChild("RobloxGui")
+			sGui.Parent = __lt_call_service_method("CoreGui", "FindFirstChild", "RobloxGui")
 			return sGui
 		elseif cGUI then
 			NAProtection(sGui)
@@ -178,7 +223,7 @@ if game.GameId == 5120885191 then
 	end
 
 	local function purgeEffects()
-		for _, desc in ipairs(wk:QueryDescendants("Instance")) do
+		for _, desc in ipairs(__lt_call_service_method("Workspace", "QueryDescendants", "Instance")) do
 			if isEffectInstance(desc) then
 				desc:Destroy()
 			end
@@ -369,14 +414,14 @@ if game.GameId == 5120885191 then
 		end
 		local bg = btn.BackgroundColor3
 		local tc = btn.TextColor3
-		local tweenIn = TweenService:Create(btn, TweenInfo.new(0.06, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		local tweenIn = __lt_call_service_method("TweenService", "Create", btn, TweenInfo.new(0.06, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 			BackgroundColor3 = Color3.fromRGB(255, 255, 255),
 			TextColor3 = Color3.fromRGB(0, 0, 0)
 		})
 		tweenIn:Play()
 		task.delay(0.1, function()
 			if btn and btn.Parent then
-				TweenService:Create(btn, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				__lt_call_service_method("TweenService", "Create", btn, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 					BackgroundColor3 = bg,
 					TextColor3 = tc
 				}):Play()
@@ -443,7 +488,7 @@ if game.GameId == 5120885191 then
 	end
 
 	local function tween(obj, t, goal)
-		local tw = TweenService:Create(obj, TweenInfo.new(t, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), goal)
+		local tw = __lt_call_service_method("TweenService", "Create", obj, TweenInfo.new(t, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), goal)
 		tw:Play()
 		return tw
 	end
@@ -654,7 +699,7 @@ if game.GameId == 5120885191 then
 			if ball1 and ball.Color == ball1.Color then
 				highlight.Color3 = Color3.fromRGB(255, 255, 255)
 				highlight.Name = "ball1"
-				ClonedService("StarterGui"):SetCore("SendNotification", {
+				__lt_call_service_method("StarterGui", "SetCore", "SendNotification", {
 					Title = "Ball Spawned",
 					Text = ball.Name,
 					Duration = 0.64
@@ -663,7 +708,7 @@ if game.GameId == 5120885191 then
 				ball.Parent = wk
 				highlight.Color3 = Color3.fromRGB(255, 255, 255)
 				highlight.Name = "ultimateball1"
-				ClonedService("StarterGui"):SetCore("SendNotification", {
+				__lt_call_service_method("StarterGui", "SetCore", "SendNotification", {
 					Title = "Ultimate Ball Spawned",
 					Text = ball.Name,
 					Duration = 1

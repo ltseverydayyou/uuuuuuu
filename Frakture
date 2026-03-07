@@ -1,13 +1,45 @@
+local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
+local function __lt_clone_service_value(value)
+	if __lt_oldcloneref and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt_oldcloneref, value);
+		if ok and cloned ~= nil then
+			return cloned;
+		end;
+	end;
+	return value;
+end;
+local function __lt_clone_service(name, refFn)
+	if type(refFn) ~= "function" then
+		return game:GetService(name);
+	end;
+	local ok, ref = pcall(function()
+		return refFn(game:GetService(name));
+	end);
+	if ok and ref ~= nil then
+		return ref;
+	end;
+	return game:GetService(name);
+end;
+local function __lt_call_service_method(name, method, ...)
+	local service = game:GetService(name);
+	local fn = service[method];
+	if type(fn) ~= "function" then
+		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
+	end;
+	return fn(service, ...);
+end;
+
+
 local dateTimeNow = DateTime.now;
 local tableFind = table.find;
 local taskSpawn = task.spawn;
 local taskWait = task.wait;
 local stringRep = string.rep;
-local RobloxReplicatedStorage = cloneref(game:GetService("RobloxReplicatedStorage"));
-local ReplicatedStorage = cloneref(game:GetService("ReplicatedStorage"));
-local JointsService = cloneref(game:GetService("JointsService"));
-local StarterGui = cloneref(game:GetService("StarterGui"));
-local LocalPlayer = (cloneref(game:GetService("Players"))).LocalPlayer;
+local RobloxReplicatedStorage = __lt_clone_service("RobloxReplicatedStorage", cloneref);
+local ReplicatedStorage = __lt_clone_service("ReplicatedStorage", cloneref);
+local JointsService = __lt_clone_service("JointsService", cloneref);
+local StarterGui = __lt_clone_service("StarterGui", cloneref);
+local LocalPlayer = (__lt_clone_service("Players", cloneref)).LocalPlayer;
 local requireScript = ("require(8913865946).frakture('%s', %s) -- "):format(LocalPlayer.Name, "true", string.rep("!", 2400));
 local invCode = "w8SkzPz9qQ";
 local alternativeSS = {
@@ -27,7 +59,7 @@ local alternativeSS = {
 	harked = "https://raw.githubusercontent.com/L1ghtingBolt/FraktureSS/master/harkedSS.lua"
 };
 local function notify(text)
-	StarterGui:SetCore("SendNotification", {
+	__lt_call_service_method("StarterGui", "SetCore", "SendNotification", {
 		Title = "FraktureSS",
 		Duration = 3,
 		Text = text

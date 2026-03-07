@@ -1,11 +1,41 @@
+local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
+local function __lt_clone_service_value(value)
+	if __lt_oldcloneref and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt_oldcloneref, value);
+		if ok and cloned ~= nil then
+			return cloned;
+		end;
+	end;
+	return value;
+end;
+local function __lt_clone_service(name, refFn)
+	if type(refFn) ~= "function" then
+		return game:GetService(name);
+	end;
+	local ok, ref = pcall(function()
+		return refFn(game:GetService(name));
+	end);
+	if ok and ref ~= nil then
+		return ref;
+	end;
+	return game:GetService(name);
+end;
+local function __lt_call_service_method(name, method, ...)
+	local service = game:GetService(name);
+	local fn = service[method];
+	if type(fn) ~= "function" then
+		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
+	end;
+	return fn(service, ...);
+end;
+
+
 local srv = setmetatable({}, {
 	__index = function(self, n)
 		local ref = cloneref and type(cloneref) == "function" and cloneref or function(x) return x; end;
 		local ok, s = pcall(function()
-			if n == "Stats" or n == "VirtualInputManager" or n == "LogService" or n == "VoiceChatService" then
-				return game:GetService(n);
-			end;
-			return ref(game:GetService(n));
+
+			return __lt_clone_service(n, ref);
 		end);
 		if ok and s then rawset(self, n, s); return s; end;
 	end
@@ -27,7 +57,7 @@ local function protectUI(g)
 	end;
 	if gethui then
 		npt(g); g.Parent = gethui();
-	elseif cg and cg:FindFirstChild("RobloxGui") then
+	elseif cg and __lt_call_service_method("CoreGui", "FindFirstChild", "RobloxGui") then
 		npt(g); g.Parent = cg.RobloxGui;
 	elseif cg then
 		npt(g); g.Parent = cg;
@@ -109,8 +139,8 @@ close.Position = UDim2.new(1, -32, 0, 4);
 close.Image = "rbxassetid://56290972";
 close.ImageColor3 = Color3.fromRGB(255, 90, 90);
 close.ZIndex = 14;
-close.MouseEnter:Connect(function() tw:Create(close, TweenInfo.new(0.1), {ImageColor3 = Color3.fromRGB(255, 120, 120)}):Play(); end);
-close.MouseLeave:Connect(function() tw:Create(close, TweenInfo.new(0.1), {ImageColor3 = Color3.fromRGB(255, 90, 90)}):Play(); end);
+close.MouseEnter:Connect(function() __lt_call_service_method("TweenService", "Create", close, TweenInfo.new(0.1), {ImageColor3 = Color3.fromRGB(255, 120, 120)}):Play(); end);
+close.MouseLeave:Connect(function() __lt_call_service_method("TweenService", "Create", close, TweenInfo.new(0.1), {ImageColor3 = Color3.fromRGB(255, 90, 90)}):Play(); end);
 local row1 = Instance.new("Frame");
 row1.Parent = win;
 row1.BackgroundTransparency = 1;
@@ -326,7 +356,7 @@ local pillScale = Instance.new("UIScale");
 pillScale.Parent = pill;
 pillScale.Scale = 1;
 local function tbg(b, c)
-	(tw:Create(b, TweenInfo.new(0.13, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = c})):Play();
+	(__lt_call_service_method("TweenService", "Create", b, TweenInfo.new(0.13, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = c})):Play();
 end;
 refBtn.MouseEnter:Connect(function() tbg(refBtn, Color3.fromRGB(250, 250, 250)); end);
 refBtn.MouseLeave:Connect(function() tbg(refBtn, Color3.fromRGB(235, 235, 235)); end);
@@ -338,11 +368,11 @@ autoBtn.MouseEnter:Connect(function() tbg(autoBtn, Color3.fromRGB(26, 26, 30)); 
 autoBtn.MouseLeave:Connect(function() tbg(autoBtn, Color3.fromRGB(18, 18, 22)); end);
 pill.MouseEnter:Connect(function()
 	tbg(pill, Color3.fromRGB(16, 16, 20));
-	tw:Create(pillScale, TweenInfo.new(0.16, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1.07}):Play();
+	__lt_call_service_method("TweenService", "Create", pillScale, TweenInfo.new(0.16, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1.07}):Play();
 end);
 pill.MouseLeave:Connect(function()
 	tbg(pill, Color3.fromRGB(10, 10, 12));
-	tw:Create(pillScale, TweenInfo.new(0.16, Enum.EasingStyle.Quad), {Scale = 1}):Play();
+	__lt_call_service_method("TweenService", "Create", pillScale, TweenInfo.new(0.16, Enum.EasingStyle.Quad), {Scale = 1}):Play();
 end);
 local open = true;
 local hideFull = false;
@@ -365,11 +395,11 @@ local function setOpen(v)
 		win.Visible = true;
 		scl.Scale = 0.88;
 		win.BackgroundTransparency = 1;
-		(tw:Create(scl, TweenInfo.new(0.19, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Scale = 1})):Play();
-		(tw:Create(win, TweenInfo.new(0.19, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.04})):Play();
+		(__lt_call_service_method("TweenService", "Create", scl, TweenInfo.new(0.19, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Scale = 1})):Play();
+		(__lt_call_service_method("TweenService", "Create", win, TweenInfo.new(0.19, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.04})):Play();
 	else
-		local t1 = tw:Create(scl, TweenInfo.new(0.17, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Scale = 0.88});
-		local t2 = tw:Create(win, TweenInfo.new(0.17, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1});
+		local t1 = __lt_call_service_method("TweenService", "Create", scl, TweenInfo.new(0.17, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Scale = 0.88});
+		local t2 = __lt_call_service_method("TweenService", "Create", win, TweenInfo.new(0.17, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1});
 		t1:Play(); t2:Play();
 		t2.Completed:Connect(function() if not open then win.Visible = false; end; end);
 	end;
@@ -519,17 +549,17 @@ local function mkRow(t)
 	fps.ZIndex = 15;
 	btn.MouseEnter:Connect(function()
 		tbg(btn, Color3.fromRGB(255, 255, 255));
-		tw:Create(btnScale, TweenInfo.new(0.13, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Scale = 1.07}):Play();
+		__lt_call_service_method("TweenService", "Create", btnScale, TweenInfo.new(0.13, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Scale = 1.07}):Play();
 	end);
 	btn.MouseLeave:Connect(function()
 		tbg(btn, Color3.fromRGB(235, 235, 235));
-		tw:Create(btnScale, TweenInfo.new(0.13, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Scale = 1}):Play();
+		__lt_call_service_method("TweenService", "Create", btnScale, TweenInfo.new(0.13, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Scale = 1}):Play();
 	end);
 	btn.MouseButton1Down:Connect(function()
-		tw:Create(btnScale, TweenInfo.new(0.06, Enum.EasingStyle.Quad), {Scale = 0.93}):Play();
+		__lt_call_service_method("TweenService", "Create", btnScale, TweenInfo.new(0.06, Enum.EasingStyle.Quad), {Scale = 0.93}):Play();
 	end);
 	btn.MouseButton1Up:Connect(function()
-		tw:Create(btnScale, TweenInfo.new(0.1, Enum.EasingStyle.Quad), {Scale = 1}):Play();
+		__lt_call_service_method("TweenService", "Create", btnScale, TweenInfo.new(0.1, Enum.EasingStyle.Quad), {Scale = 1}):Play();
 	end);
 	btn.MouseButton1Down:Connect(function()
 		local pl = (S("Players")).LocalPlayer;
@@ -538,16 +568,16 @@ local function mkRow(t)
 		(S("TeleportService")):TeleportToPlaceInstance(pid, job, pl);
 	end);
 	row.MouseEnter:Connect(function()
-		tw:Create(row, TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.02}):Play();
-		tw:Create(rowScale, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1.018}):Play();
+		__lt_call_service_method("TweenService", "Create", row, TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.02}):Play();
+		__lt_call_service_method("TweenService", "Create", rowScale, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1.018}):Play();
 	end);
 	row.MouseLeave:Connect(function()
-		tw:Create(row, TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.08}):Play();
-		tw:Create(rowScale, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Scale = 1}):Play();
+		__lt_call_service_method("TweenService", "Create", row, TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.08}):Play();
+		__lt_call_service_method("TweenService", "Create", rowScale, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Scale = 1}):Play();
 	end);
 	row.BackgroundTransparency = 1;
-	tw:Create(row, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.08}):Play();
-	tw:Create(rowScale, TweenInfo.new(0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1}):Play();
+	__lt_call_service_method("TweenService", "Create", row, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.08}):Play();
+	__lt_call_service_method("TweenService", "Create", rowScale, TweenInfo.new(0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1}):Play();
 end;
 local function pull(url)
 	local r = req({Url = url, Method = "GET"});
@@ -555,7 +585,7 @@ local function pull(url)
 	if typeof(r.StatusCode) == "number" and (r.StatusCode < 200 or r.StatusCode >= 300) then return nil; end;
 	local body = r.Body;
 	if type(body) ~= "string" or #body == 0 then return nil; end;
-	local ok, d = pcall(function() return hs:JSONDecode(body); end);
+	local ok, d = pcall(function() return __lt_call_service_method("HttpService", "JSONDecode", body); end);
 	if not ok or type(d) ~= "table" then return nil; end;
 	return d;
 end;
@@ -564,7 +594,7 @@ local cur = nil;
 local function scrapePage(first)
 	local pid = tostring(idBox.Text);
 	local q = "?sortOrder=Asc&limit=100";
-	if not first and cur then q = q .. "&cursor=" .. hs:UrlEncode(tostring(cur)); end;
+	if not first and cur then q = q .. "&cursor=" .. __lt_call_service_method("HttpService", "UrlEncode", tostring(cur)); end;
 	local d = nil;
 	for _, b in ipairs(srvBases) do
 		local url = b .. "/v1/games/" .. pid .. "/servers/Public" .. q;
@@ -573,7 +603,7 @@ local function scrapePage(first)
 	end;
 	if not d or type(d.data) ~= "table" then
 		local wq = "placeId=" .. pid;
-		if not first and cur then wq = wq .. "&cursor=" .. hs:UrlEncode(tostring(cur)); end;
+		if not first and cur then wq = wq .. "&cursor=" .. __lt_call_service_method("HttpService", "UrlEncode", tostring(cur)); end;
 		local wurl = srvWorker .. "/servers?" .. wq;
 		d = pull(wurl);
 	end;

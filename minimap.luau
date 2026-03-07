@@ -1,8 +1,40 @@
-local Players = cloneref(game:GetService("Players"));
-local Workspace = cloneref(game:GetService("Workspace"));
-local RunService = cloneref(game:GetService("RunService"));
-local TweenService = cloneref(game:GetService("TweenService"));
-local UserInputService = cloneref(game:GetService("UserInputService"));
+local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
+local function __lt_clone_service_value(value)
+	if __lt_oldcloneref and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt_oldcloneref, value);
+		if ok and cloned ~= nil then
+			return cloned;
+		end;
+	end;
+	return value;
+end;
+local function __lt_clone_service(name, refFn)
+	if type(refFn) ~= "function" then
+		return game:GetService(name);
+	end;
+	local ok, ref = pcall(function()
+		return refFn(game:GetService(name));
+	end);
+	if ok and ref ~= nil then
+		return ref;
+	end;
+	return game:GetService(name);
+end;
+local function __lt_call_service_method(name, method, ...)
+	local service = game:GetService(name);
+	local fn = service[method];
+	if type(fn) ~= "function" then
+		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
+	end;
+	return fn(service, ...);
+end;
+
+
+local Players = __lt_clone_service("Players", cloneref);
+local Workspace = __lt_clone_service("Workspace", cloneref);
+local RunService = __lt_clone_service("RunService", cloneref);
+local TweenService = __lt_clone_service("TweenService", cloneref);
+local UserInputService = __lt_clone_service("UserInputService", cloneref);
 local player = Players.LocalPlayer;
 local radius = 150;
 local CLONE_RATE = 0.2;
@@ -150,7 +182,7 @@ local function refreshClones()
 		return;
 	end;
 	local rootPos = root.Position;
-	local nearbyParts = Workspace:GetPartBoundsInRadius(rootPos, radius, overlapParams);
+	local nearbyParts = __lt_call_service_method("Workspace", "GetPartBoundsInRadius", rootPos, radius, overlapParams);
 	local valid = {};
 	for _, part in ipairs(nearbyParts) do
 		if part:IsA("BasePart") and part.Parent then
@@ -267,7 +299,7 @@ local specs = {
 		function()
 			local size = container.Size;
 			local target = UDim2.new(size.X.Scale, size.X.Offset + 40, size.Y.Scale, size.Y.Offset + 40);
-			(TweenService:Create(container, TweenInfo.new(0.15), {
+			(__lt_call_service_method("TweenService", "Create", container, TweenInfo.new(0.15), {
 				Size = target
 			})):Play();
 		end
@@ -279,7 +311,7 @@ local specs = {
 			local w = math.max(120, size.X.Offset - 40);
 			local h = math.max(120, size.Y.Offset - 40);
 			local target = UDim2.new(size.X.Scale, w, size.Y.Scale, h);
-			(TweenService:Create(container, TweenInfo.new(0.15), {
+			(__lt_call_service_method("TweenService", "Create", container, TweenInfo.new(0.15), {
 				Size = target
 			})):Play();
 		end
@@ -362,12 +394,12 @@ local function setButtonsVisible(state)
 			b.Visible = true;
 			b.TextTransparency = 1;
 			b.BackgroundTransparency = 1;
-			(TweenService:Create(b, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			(__lt_call_service_method("TweenService", "Create", b, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 				TextTransparency = 0,
 				BackgroundTransparency = 0
 			})):Play();
 		else
-			local t = TweenService:Create(b, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+			local t = __lt_call_service_method("TweenService", "Create", b, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
 				TextTransparency = 1,
 				BackgroundTransparency = 1
 			});
@@ -504,7 +536,7 @@ RunService.RenderStepped:Connect(function(dt)
 		local desired = focus - dir * zoomDist + Vector3.new(0, zoomHeight, 0);
 		local camPos = desired;
 		if rayEnabled then
-			local result = Workspace:Raycast(focus, desired - focus, rayParams);
+			local result = __lt_call_service_method("Workspace", "Raycast", focus, desired - focus, rayParams);
 			if result then
 				camPos = result.Position + result.Normal * 0.5;
 			end;

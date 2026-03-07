@@ -1,8 +1,41 @@
-local Players = cloneref(game:GetService("Players"));
-local RunService = cloneref(game:GetService("RunService"));
-local UserInputService = cloneref(game:GetService("UserInputService"));
-local Stats = game:GetService("Stats");
-local GuiService = cloneref(game:GetService("GuiService"));
+local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
+local function __lt_clone_service_value(value)
+	if __lt_oldcloneref and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt_oldcloneref, value);
+		if ok and cloned ~= nil then
+			return cloned;
+		end;
+	end;
+	return value;
+end;
+local function __lt_clone_service(name, refFn)
+	if type(refFn) ~= "function" then
+		return game:GetService(name);
+	end;
+	local ok, ref = pcall(function()
+		return refFn(game:GetService(name));
+	end);
+	if ok and ref ~= nil then
+		return ref;
+	end;
+	return game:GetService(name);
+end;
+local function __lt_call_service_method(name, method, ...)
+	local service = game:GetService(name);
+	local fn = service[method];
+	if type(fn) ~= "function" then
+		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
+	end;
+	return fn(service, ...);
+end;
+
+
+local Players = __lt_clone_service("Players", cloneref);
+local RunService = __lt_clone_service("RunService", cloneref);
+local UserInputService = __lt_clone_service("UserInputService", cloneref);
+local Stats = __lt_clone_service("Stats", cloneref);
+local GuiService = __lt_clone_service("GuiService", cloneref);
+local HttpService = __lt_clone_service("HttpService", cloneref);
 local VK_F = 0x46;
 local VK_RALT = 0xA5;
 local function getExec()
@@ -42,7 +75,7 @@ local useVim = inpMd == "vim" or (inpMd ~= "keyapi" and (execNm == "solara" or e
 local vim;
 local function fireVim()
 	if not vim then
-		vim = game:GetService("VirtualInputManager");
+		vim = __lt_clone_service("VirtualInputManager", cloneref);
 	end;
 	vim:SendKeyEvent(true, "F", false, game);
 	vim:SendKeyEvent(false, "F", false, game);
@@ -51,7 +84,7 @@ local function testKeys()
 	if type(keypress) ~= "function" or type(keyrelease) ~= "function" then
 		return false;
 	end;
-	if UserInputService:IsKeyDown(Enum.KeyCode.RightAlt) then
+	if __lt_call_service_method("UserInputService", "IsKeyDown", Enum.KeyCode.RightAlt) then
 		return false;
 	end;
 	local st = 0;
@@ -133,7 +166,7 @@ local function sendFKey()
 	fireVim();
 end;
 local IsOnMobile = (function()
-	local platform = UserInputService:GetPlatform();
+	local platform = __lt_call_service_method("UserInputService", "GetPlatform");
 	if platform == Enum.Platform.IOS or platform == Enum.Platform.Android or platform == Enum.Platform.AndroidTV or platform == Enum.Platform.Chromecast or platform == Enum.Platform.MetaOS then
 		return true;
 	end;
@@ -143,7 +176,7 @@ local IsOnMobile = (function()
 	return false;
 end)();
 local IsOnPC = (function()
-	local platform = UserInputService:GetPlatform();
+	local platform = __lt_call_service_method("UserInputService", "GetPlatform");
 	if platform == Enum.Platform.Windows or platform == Enum.Platform.OSX or platform == Enum.Platform.Linux or platform == Enum.Platform.SteamOS or platform == Enum.Platform.UWP or platform == Enum.Platform.DOS or platform == Enum.Platform.BeOS then
 		return true;
 	end;
@@ -152,6 +185,20 @@ local IsOnPC = (function()
 	end;
 	return false;
 end)();
+local AUTO_PARRY_CONFIG_DIR = "AutoParryConfigs";
+local AUTO_PARRY_CONFIG_KEY = tostring(game.GameId);
+local AUTO_PARRY_CONFIG_PATH = AUTO_PARRY_CONFIG_DIR .. "/" .. AUTO_PARRY_CONFIG_KEY .. ".json";
+local function getTopbarConfigStore()
+	if type(getgenv) ~= "function" then
+		return nil;
+	end;
+	local ok, env = pcall(getgenv);
+	if not ok or type(env) ~= "table" then
+		return nil;
+	end;
+	env.AutoParryTopbarConfigs = env.AutoParryTopbarConfigs or {};
+	return env.AutoParryTopbarConfigs;
+end;
 local connections = {};
 local touchOpt = nil;
 local touchLock = false;
@@ -188,7 +235,7 @@ local ApplyLastInputPatch = function()
 		end;
 		local prefSignal;
 		pcall(function()
-			prefSignal = UserInputService:GetPropertyChangedSignal("PreferredInput");
+			prefSignal = __lt_call_service_method("UserInputService", "GetPropertyChangedSignal", "PreferredInput");
 		end);
 		if prefSignal then
 			for _, c in ipairs(getconnections(prefSignal)) do
@@ -206,7 +253,7 @@ local ApplyLastInputPatch = function()
 	end);
 	if connect and disconnect then
 		disconnect("_LastInputTouch");
-		connect("_LastInputTouch", (GuiService:GetPropertyChangedSignal("TouchControlsEnabled")):Connect(function()
+		connect("_LastInputTouch", (__lt_call_service_method("GuiService", "GetPropertyChangedSignal", "TouchControlsEnabled")):Connect(function()
 			if IsOnMobile then
 				pcall(function()
 					GuiService.TouchControlsEnabled = true;
@@ -214,7 +261,7 @@ local ApplyLastInputPatch = function()
 			end;
 		end));
 	else
-		(GuiService:GetPropertyChangedSignal("TouchControlsEnabled")):Connect(function()
+		(__lt_call_service_method("GuiService", "GetPropertyChangedSignal", "TouchControlsEnabled")):Connect(function()
 			if IsOnMobile then
 				pcall(function()
 					GuiService.TouchControlsEnabled = true;
@@ -251,7 +298,7 @@ local RevertLastInputPatch = function()
 	LastInputPatched = false;
 end;
 local guiCHECKINGAHHHHH = function()
-	return gethui and gethui() or (cloneref(game:GetService("CoreGui"))):FindFirstChildWhichIsA("ScreenGui") or cloneref(game:GetService("CoreGui")) or (cloneref(game:GetService("Players"))).LocalPlayer:FindFirstChildWhichIsA("PlayerGui");
+	return gethui and gethui() or (__lt_clone_service("CoreGui", cloneref)):FindFirstChildWhichIsA("ScreenGui") or __lt_clone_service("CoreGui", cloneref) or (__lt_clone_service("Players", cloneref)).LocalPlayer:FindFirstChildWhichIsA("PlayerGui");
 end;
 do
 	local ok, guiParent = pcall(guiCHECKINGAHHHHH);
@@ -359,6 +406,21 @@ local curFrame = 0;
 local lastQueueTime = 0;
 local spamAccumulator = 0;
 local spamClickRate = 350;
+local spamClickRateMin = 25;
+local spamClickRateMax = 500;
+local spamClickRateStep = 25;
+local spamRatePresets = {
+	50,
+	100,
+	150,
+	200,
+	250,
+	300,
+	350,
+	400,
+	450,
+	500
+};
 local spamBufferedWindow = 0.05;
 local spamMaxBurst = 512;
 local stepAcc = 0;
@@ -404,6 +466,8 @@ local preclick = true;
 local topbarIconInstance;
 local apOption;
 local spamOption;
+local spamRateOption;
+local spamRateDropdown;
 local preclickOption;
 local visualizerOption;
 local modeOption;
@@ -437,6 +501,139 @@ local function updateSpamLabel()
 		return;
 	end;
 	spamOption:setLabel("Spam: " .. (spam and "ON" or "OFF"));
+end;
+local function clampSpamClickRate(value)
+	local num = tonumber(value);
+	if not num then
+		return spamClickRate;
+	end;
+	num = math.floor(num + 0.5);
+	return math.clamp(num, spamClickRateMin, spamClickRateMax);
+end;
+local function applyVisualizerProfileValues(name)
+	local profile = VisualizerProfiles[name];
+	if not profile then
+		return false;
+	end;
+	for key, value in pairs(profile) do
+		visualizerConfig[key] = value;
+	end;
+	visualizerConfig.profile = name;
+	refreshVisualizerDerived();
+	return true;
+end;
+local function buildTopbarConfigSnapshot()
+	return {
+		apEnabled = apEnabled,
+		spam = spam,
+		spamClickRate = spamClickRate,
+		preclick = preclick,
+		visualizerEnabled = isVisualizerEnabled(),
+		visualizerProfile = visualizerConfig.profile or VisualizerDefaults.profile,
+		debugEnabled = debugEnabled,
+		touchLock = touchLock
+	};
+end;
+local function normalizeTopbarConfig(raw)
+	raw = type(raw) == "table" and raw or {};
+	local visualizerEnabled = raw.visualizerEnabled;
+	if type(visualizerEnabled) ~= "boolean" then
+		visualizerEnabled = isVisualizerEnabled();
+	end;
+	local visualizerProfile = raw.visualizerProfile;
+	if type(visualizerProfile) ~= "string" or (not VisualizerProfiles[visualizerProfile]) then
+		visualizerProfile = visualizerConfig.profile or VisualizerDefaults.profile;
+	end;
+	return {
+		apEnabled = raw.apEnabled ~= false,
+		spam = raw.spam == true,
+		spamClickRate = clampSpamClickRate(raw.spamClickRate),
+		preclick = raw.preclick ~= false,
+		visualizerEnabled = visualizerEnabled,
+		visualizerProfile = visualizerProfile,
+		debugEnabled = raw.debugEnabled == true,
+		touchLock = raw.touchLock == true
+	};
+end;
+local function loadTopbarConfig()
+	local raw;
+	local store = getTopbarConfigStore();
+	if type(readfile) == "function" and type(isfile) == "function" and isfile(AUTO_PARRY_CONFIG_PATH) then
+		local ok, content = pcall(readfile, AUTO_PARRY_CONFIG_PATH);
+		if ok and type(content) == "string" and content ~= "" then
+			local decodedOk, decoded = pcall(function()
+				return __lt_call_service_method("HttpService", "JSONDecode", content);
+			end);
+			if decodedOk and type(decoded) == "table" then
+				raw = decoded;
+			end;
+		end;
+	end;
+	if raw == nil and store then
+		raw = store[AUTO_PARRY_CONFIG_KEY];
+	end;
+	return normalizeTopbarConfig(raw);
+end;
+local function saveTopbarConfig()
+	local payload = buildTopbarConfigSnapshot();
+	local store = getTopbarConfigStore();
+	if store then
+		store[AUTO_PARRY_CONFIG_KEY] = payload;
+	end;
+	if type(writefile) ~= "function" then
+		return;
+	end;
+	if type(makefolder) == "function" then
+		pcall(makefolder, AUTO_PARRY_CONFIG_DIR);
+	end;
+	local ok, encoded = pcall(function()
+		return __lt_call_service_method("HttpService", "JSONEncode", payload);
+	end);
+	if ok and type(encoded) == "string" then
+		pcall(writefile, AUTO_PARRY_CONFIG_PATH, encoded);
+	end;
+end;
+local loadedTopbarConfig = loadTopbarConfig();
+apEnabled = loadedTopbarConfig.apEnabled;
+spam = loadedTopbarConfig.spam;
+spamClickRate = loadedTopbarConfig.spamClickRate;
+preclick = loadedTopbarConfig.preclick;
+debugEnabled = loadedTopbarConfig.debugEnabled;
+touchLock = loadedTopbarConfig.touchLock;
+applyVisualizerProfileValues(loadedTopbarConfig.visualizerProfile);
+visualizerConfig.enabled = loadedTopbarConfig.visualizerEnabled;
+(getgenv()).visualizer = visualizerConfig;
+if touchLock then
+	ApplyLastInputPatch();
+end;
+local function updateSpamRateLabel()
+	if not spamRateOption then
+		return;
+	end;
+	spamRateOption:setLabel("Spam CPS: " .. tostring(spamClickRate));
+end;
+local function setSpamClickRate(value)
+	spamClickRate = clampSpamClickRate(value);
+	spamAccumulator = math.min(spamAccumulator, spamClickRate * spamBufferedWindow);
+	updateSpamRateLabel();
+	saveTopbarConfig();
+end;
+local function shiftSpamClickRate(delta)
+	setSpamClickRate(spamClickRate + delta);
+end;
+local function cycleSpamClickRate()
+	for index, preset in ipairs(spamRatePresets) do
+		if spamClickRate < preset then
+			setSpamClickRate(preset);
+			return;
+		end;
+		if spamClickRate == preset then
+			local nextIndex = index % (#spamRatePresets) + 1;
+			setSpamClickRate(spamRatePresets[nextIndex]);
+			return;
+		end;
+	end;
+	setSpamClickRate(spamRatePresets[1]);
 end;
 local function updatePreclickLabel()
 	if not preclickOption then
@@ -496,15 +693,45 @@ local function iconShow(ico)
 		ico:setEnabled(true);
 	end;
 end;
+local function setApEnabled(value)
+	local old = apEnabled;
+	apEnabled = value == true;
+	if old and (not apEnabled) then
+		nextPar = 0;
+		lastParryTime = 0;
+		ringLimited = false;
+		table.clear(lastBallSamples);
+		table.clear(lastDistToPlayer);
+		table.clear(lastBallVel);
+		table.clear(lastBallMoveTime);
+		table.clear(smoothedSpeed);
+		table.clear(closeParryBlocked);
+		table.clear(predictEnterAt);
+		table.clear(wasInPredict);
+		table.clear(lastHighlightMatch);
+		table.clear(lastCharHighlightEnabled);
+		table.clear(targetedSince);
+		table.clear(targetStartDist);
+		table.clear(lastAttrTargeted);
+		table.clear(lastParryPerBall);
+		table.clear(baitUntil);
+		table.clear(awaySince);
+		table.clear(lastAwayFlag);
+	end;
+	updateApLabel();
+	saveTopbarConfig();
+end;
 local function toggleSpam()
 	spam = not spam;
 	spamAccumulator = 0;
 	updateSpamLabel();
 	updateRingColors();
+	saveTopbarConfig();
 end;
 local function togglePreclick()
 	preclick = not preclick;
 	updatePreclickLabel();
+	saveTopbarConfig();
 end;
 local function getPreclickLead(pingMs)
 	local pingLead = math.clamp((pingMs or 0) * 0.0002, 0, 0.04);
@@ -514,18 +741,15 @@ local function toggleVisualizer()
 	visualizerConfig.enabled = not isVisualizerEnabled();
 	(getgenv()).visualizer = visualizerConfig;
 	updateVisualizerLabel();
+	saveTopbarConfig();
 end;
 local function applyProfile(name)
-	local profile = VisualizerProfiles[name];
-	if not profile then
+	if not applyVisualizerProfileValues(name) then
 		return;
 	end;
-	for key, value in pairs(profile) do
-		visualizerConfig[key] = value;
-	end;
-	visualizerConfig.profile = name;
-	refreshVisualizerDerived();
+	(getgenv()).visualizer = visualizerConfig;
 	updateModeLabel();
+	saveTopbarConfig();
 end;
 local function findProfileIndex(name)
 	for idx, profileName in ipairs(profileOrder) do
@@ -559,6 +783,35 @@ local function setupDebugIcon(IconModule)
 		icon:setCaption(apState);
 	end;
 end;
+local function setDebugEnabled(value, IconModule)
+	debugEnabled = value == true;
+	if debugEnabled then
+		if debugIconInstance then
+			iconShow(debugIconInstance);
+		elseif IconModule then
+			setupDebugIcon(IconModule);
+		end;
+		updateDebugMenu(0, false, tick());
+	else
+		iconHide(debugIconInstance);
+	end;
+	if debugToggleOption then
+		debugToggleOption:setLabel("Debug: " .. (debugEnabled and "ON" or "OFF"));
+	end;
+	saveTopbarConfig();
+end;
+local function setTouchLockEnabled(value)
+	touchLock = value == true;
+	if touchLock then
+		ApplyLastInputPatch();
+	else
+		RevertLastInputPatch();
+	end;
+	if touchOpt then
+		touchOpt:setLabel("TouchLock: " .. (touchLock and "ON" or "OFF"));
+	end;
+	saveTopbarConfig();
+end;
 local function setupTopbarIcon()
 	local ok, IconModule = pcall(function()
 		return (loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/refs/heads/main/Icon.luau")))();
@@ -576,31 +829,7 @@ local function setupTopbarIcon()
 	local dropdown = icon:addMenu();
 	apOption = (dropdown:new()):setLabel("AP: ON");
 	apOption:oneClick(function()
-		local old = apEnabled;
-		apEnabled = not apEnabled;
-		if old and (not apEnabled) then
-			nextPar = 0;
-			lastParryTime = 0;
-			ringLimited = false;
-			table.clear(lastBallSamples);
-			table.clear(lastDistToPlayer);
-			table.clear(lastBallVel);
-			table.clear(lastBallMoveTime);
-			table.clear(smoothedSpeed);
-			table.clear(closeParryBlocked);
-			table.clear(predictEnterAt);
-			table.clear(wasInPredict);
-			table.clear(lastHighlightMatch);
-			table.clear(lastCharHighlightEnabled);
-			table.clear(targetedSince);
-			table.clear(targetStartDist);
-			table.clear(lastAttrTargeted);
-			table.clear(lastParryPerBall);
-			table.clear(baitUntil);
-			table.clear(awaySince);
-			table.clear(lastAwayFlag);
-		end;
-		updateApLabel();
+		setApEnabled(not apEnabled);
 	end);
 	visualizerOption = (dropdown:new()):setLabel("Visual: OFF");
 	visualizerOption:oneClick(function()
@@ -615,39 +844,37 @@ local function setupTopbarIcon()
 	spamOption:oneClick(function()
 		toggleSpam();
 	end);
+	spamRateOption = (dropdown:new()):setLabel("Spam CPS: " .. tostring(spamClickRate));
+	spamRateOption:oneClick(function()
+		cycleSpamClickRate();
+	end);
+	spamRateDropdown = spamRateOption:addMenu();
+	local slowerSpamOption = (spamRateDropdown:new()):setLabel("-" .. tostring(spamClickRateStep) .. " CPS");
+	slowerSpamOption:oneClick(function()
+		shiftSpamClickRate(-spamClickRateStep);
+	end);
+	local fasterSpamOption = (spamRateDropdown:new()):setLabel("+" .. tostring(spamClickRateStep) .. " CPS");
+	fasterSpamOption:oneClick(function()
+		shiftSpamClickRate(spamClickRateStep);
+	end);
+	for _, preset in ipairs(spamRatePresets) do
+		local presetOption = (spamRateDropdown:new()):setLabel(tostring(preset) .. " CPS");
+		presetOption:oneClick(function()
+			setSpamClickRate(preset);
+		end);
+	end;
 	preclickOption = (dropdown:new()):setLabel("Preclick: ON");
 	preclickOption:oneClick(function()
 		togglePreclick();
 	end);
 	debugToggleOption = (dropdown:new()):setLabel("Debug: OFF");
 	debugToggleOption:oneClick(function()
-		debugEnabled = not debugEnabled;
-		if debugEnabled then
-			if debugIconInstance then
-				iconShow(debugIconInstance);
-			else
-				setupDebugIcon(IconModule);
-			end;
-			updateDebugMenu(0, false, tick());
-		else
-			iconHide(debugIconInstance);
-		end;
-		if debugToggleOption then
-			debugToggleOption:setLabel("Debug: " .. (debugEnabled and "ON" or "OFF"));
-		end;
+		setDebugEnabled(not debugEnabled, IconModule);
 	end);
 	if IsOnMobile then
 		touchOpt = (dropdown:new()):setLabel("TouchLock: " .. (touchLock and "ON" or "OFF"));
 		touchOpt:oneClick(function()
-			touchLock = not touchLock;
-			if touchLock then
-				ApplyLastInputPatch();
-			else
-				RevertLastInputPatch();
-			end;
-			if touchOpt then
-				touchOpt:setLabel("TouchLock: " .. (touchLock and "ON" or "OFF"));
-			end;
+			setTouchLockEnabled(not touchLock);
 		end);
 	end;
 	local function addModeEntry(name)
@@ -661,10 +888,14 @@ local function setupTopbarIcon()
 	end;
 	updateApLabel();
 	updateSpamLabel();
+	updateSpamRateLabel();
 	updatePreclickLabel();
 	updateVisualizerLabel();
 	updateModeLabel();
 	updateDebugMenu(0, false, tick());
+	if debugEnabled then
+		setDebugEnabled(true, IconModule);
+	end;
 end;
 setupTopbarIcon();
 local function ensureIdentity()
@@ -683,6 +914,9 @@ local function ensureIdentity()
 end;
 if getgenv().AutoParryCleanup then
 	getgenv().AutoParryCleanup();
+end;
+if touchLock then
+	ApplyLastInputPatch();
 end;
 local function colorsClose(a, b, tol)
 	if not (a and b) then
@@ -1424,7 +1658,7 @@ local function isBallTargetingYouAttr(ball, char)
 			return true;
 		end;
 	elseif typeof(v) == "string" then
-		local plr = Players:GetPlayerFromCharacter(char) or localPlayer;
+		local plr = __lt_call_service_method("Players", "GetPlayerFromCharacter", char) or localPlayer;
 		if not plr then
 			return false;
 		end;

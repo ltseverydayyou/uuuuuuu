@@ -1,3 +1,35 @@
+local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
+local function __lt_clone_service_value(value)
+	if __lt_oldcloneref and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt_oldcloneref, value);
+		if ok and cloned ~= nil then
+			return cloned;
+		end;
+	end;
+	return value;
+end;
+local function __lt_clone_service(name, refFn)
+	if type(refFn) ~= "function" then
+		return game:GetService(name);
+	end;
+	local ok, ref = pcall(function()
+		return refFn(game:GetService(name));
+	end);
+	if ok and ref ~= nil then
+		return ref;
+	end;
+	return game:GetService(name);
+end;
+local function __lt_call_service_method(name, method, ...)
+	local service = game:GetService(name);
+	local fn = service[method];
+	if type(fn) ~= "function" then
+		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
+	end;
+	return fn(service, ...);
+end;
+
+
 ---@diagnostic disable: undefined-global
 if game.GameId == 847722000 then
 	if getgenv().RakeGui then
@@ -7,17 +39,17 @@ if game.GameId == 847722000 then
 	local function ClonedService(name)
 		local Service = (game.GetService);
 		local Reference = (cloneref) or function(reference) return reference end
-		return Reference(Service(game, name));
+		return __lt_clone_service(name, Reference);
 	end
 
 	if syn then
-		ClonedService("StarterGui"):SetCore("SendNotification", {
+		__lt_call_service_method("StarterGui", "SetCore", "SendNotification", {
 			Title = "Info",
 			Text = "You are a synapse x user! This script will 100% work",
 			Duration = 5
 		})
 	else
-		ClonedService("StarterGui"):SetCore("SendNotification", {
+		__lt_call_service_method("StarterGui", "SetCore", "SendNotification", {
 			Title = "Info",
 			Text = "You are not a synapse x user. This script is likely not to work",
 			Duration = 5
@@ -113,7 +145,7 @@ if game.GameId == 847722000 then
 		local tweenInfo = TweenInfo.new(1, Enum.EasingStyle.Linear, Enum.EasingDirection.In, 0, false, 0)
 		local part = ClonedService("Players").LocalPlayer.Character:WaitForChild("HumanoidRootPart")
 		local goal = {CFrame = CFrame.new(mouse.Hit.Position)}
-		local tween = tweenService:Create(part, tweenInfo, goal)
+		local tween = __lt_call_service_method("TweenService", "Create", part, tweenInfo, goal)
 		tween:Play()
 	end
 
@@ -125,7 +157,7 @@ if game.GameId == 847722000 then
 	end
 
 	local function aigoto(pos : Vector3)
-		local path = ClonedService("PathfindingService"):CreatePath()
+		local path = __lt_call_service_method("PathfindingService", "CreatePath")
 
 		path:ComputeAsync(ClonedService("Players").LocalPlayer.Character:WaitForChild("HumanoidRootPart").Position,pos)
 
@@ -182,7 +214,7 @@ if game.GameId == 847722000 then
 	end
 
 	local function rakechams()
-		if ClonedService("Workspace"):FindFirstChild("Rake") then
+		if __lt_call_service_method("Workspace", "FindFirstChild", "Rake") then
 			if ClonedService("Workspace").Rake:FindFirstChild("SleepyRakeChams") then
 
 			else
@@ -202,8 +234,8 @@ if game.GameId == 847722000 then
 	end
 
 	local function disablerakechams()
-		if ClonedService("Workspace"):FindFirstChild("Rake") then
-			for i,v in pairs(ClonedService("Workspace"):FindFirstChild("Rake"):QueryDescendants("Instance")) do
+		if __lt_call_service_method("Workspace", "FindFirstChild", "Rake") then
+			for i,v in pairs(__lt_call_service_method("Workspace", "FindFirstChild", "Rake"):QueryDescendants("Instance")) do
 				if v.Name == "SleepyRakeChams" then
 					v:Destroy()
 				end
@@ -269,7 +301,7 @@ if game.GameId == 847722000 then
 							local part = partto
 							local goal = {}
 							goal.CFrame = TSCF
-							local tween = tweenService:Create(part, tweenInfo, goal)
+							local tween = __lt_call_service_method("TweenService", "Create", part, tweenInfo, goal)
 							tween:Play()
 						end
 						ClonedService("Workspace").CurrentCamera.CameraType = Enum.CameraType.Scriptable
@@ -278,18 +310,18 @@ if game.GameId == 847722000 then
 						ClonedService("Workspace").CurrentCamera.CameraSubject = FreeCamPart
 
 						FreeCamPart.CFrame = CFrame.new(FreeCamPart.Position,mouse.Hit.Position)
-						if InputService:IsKeyDown(Enum.KeyCode.Space) then
+						if __lt_call_service_method("UserInputService", "IsKeyDown", Enum.KeyCode.Space) then
 							tweenPart(0.04,FreeCamPart,FreeCamPart.CFrame + Vector3.new(0,_G.FreeCamSpeed,0))
 							--FreeCamPart.CFrame = FreeCamPart.CFrame + Vector3.new(0,_G.FreeCamSpeed,0)
-						elseif InputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+						elseif __lt_call_service_method("UserInputService", "IsKeyDown", Enum.KeyCode.LeftShift) then
 							tweenPart(0.04,FreeCamPart,FreeCamPart.CFrame + Vector3.new(0,-_G.FreeCamSpeed,0))
 							--FreeCamPart.CFrame = FreeCamPart.CFrame + Vector3.new(0,-_G.FreeCamSpeed,0)
 						end
 						if true then
-							if InputService:IsKeyDown(Enum.KeyCode.W) then
+							if __lt_call_service_method("UserInputService", "IsKeyDown", Enum.KeyCode.W) then
 								tweenPart(0.04,FreeCamPart,FreeCamPart.CFrame+FreeCamPart.CFrame.LookVector * _G.FreeCamSpeed)
 								-- FreeCamPart.CFrame = FreeCamPart.CFrame+FreeCamPart.CFrame.LookVector * _G.FreeCamSpeed
-							elseif InputService:IsKeyDown(Enum.KeyCode.S) then
+							elseif __lt_call_service_method("UserInputService", "IsKeyDown", Enum.KeyCode.S) then
 								tweenPart(0.04,FreeCamPart,FreeCamPart.CFrame+FreeCamPart.CFrame.LookVector * -_G.FreeCamSpeed)
 								-- FreeCamPart.CFrame = FreeCamPart.CFrame+FreeCamPart.CFrame.LookVector * -_G.FreeCamSpeed
 							end
@@ -404,8 +436,8 @@ if game.GameId == 847722000 then
 			if _G.RakeKillAura == true then
 				repeat wait()
 					pcall(function()
-						for i,v in pairs(ClonedService("Workspace"):GetChildren()) do
-							if ClonedService("Workspace"):FindFirstChild("Rake") then
+						for i,v in pairs(__lt_call_service_method("Workspace", "GetChildren")) do
+							if __lt_call_service_method("Workspace", "FindFirstChild", "Rake") then
 								if (ClonedService("Workspace").Rake.HumanoidRootPart.Position - ClonedService("Players").LocalPlayer.Character.HumanoidRootPart.Position).Magnitude < 200 then
 									ClonedService("Players").LocalPlayer.Character.StunStick.Event:FireServer("S")
 									wait()
@@ -425,8 +457,8 @@ if game.GameId == 847722000 then
 		if AllowRunService == true then
 			if _G.RakeKillAura == true then
 				pcall(function()
-					if ClonedService("Workspace"):FindFirstChild("Rake") then
-						ClonedService("Players").LocalPlayer.Character.StunStick.HitPart.Position = ClonedService("Workspace"):FindFirstChild("Rake").HumanoidRootPart.Position
+					if __lt_call_service_method("Workspace", "FindFirstChild", "Rake") then
+						ClonedService("Players").LocalPlayer.Character.StunStick.HitPart.Position = __lt_call_service_method("Workspace", "FindFirstChild", "Rake").HumanoidRootPart.Position
 					end
 				end)
 			end
@@ -457,7 +489,7 @@ if game.GameId == 847722000 then
 		Flag = "RakeChams",
 		Callback = function(state)
 			_G.RakeChams = state
-			for i,v in pairs(ClonedService("Workspace"):GetChildren()) do
+			for i,v in pairs(__lt_call_service_method("Workspace", "GetChildren")) do
 				if v.Name == "Rake" then
 					v:SetAttribute("hasESP",false)
 				end
@@ -467,9 +499,9 @@ if game.GameId == 847722000 then
 
 				until _G.RakeChams == false
 			elseif _G.RakeChams == false then
-				if ClonedService("Workspace"):FindFirstChild("Rake") then
-					if ClonedService("Workspace"):FindFirstChild("Rake"):FindFirstChild("RakeChams") then
-						ClonedService("Workspace"):FindFirstChild("Rake"):FindFirstChild("RakeChams"):Remove()
+				if __lt_call_service_method("Workspace", "FindFirstChild", "Rake") then
+					if __lt_call_service_method("Workspace", "FindFirstChild", "Rake"):FindFirstChild("RakeChams") then
+						__lt_call_service_method("Workspace", "FindFirstChild", "Rake"):FindFirstChild("RakeChams"):Remove()
 					end
 				end
 			end
@@ -486,7 +518,7 @@ if game.GameId == 847722000 then
 				repeat wait()
 
 				until _G.PlayerESP == false
-				for i,v in pairs(ClonedService("Players"):GetPlayers()) do
+				for i,v in pairs(__lt_call_service_method("Players", "GetPlayers")) do
 					pcall(function()
 						if not v.Character then
 						else
@@ -531,10 +563,10 @@ if game.GameId == 847722000 then
 		Callback = function(state)
 			_G.FlareGunESP = state
 			if _G.FlareGunESP == false then
-				if ClonedService("Workspace"):FindFirstChild("FlareGunPickUp") then
-					ClonedService("Workspace"):FindFirstChild("FlareGunPickUp"):SetAttribute("FlareGunESP",false)
+				if __lt_call_service_method("Workspace", "FindFirstChild", "FlareGunPickUp") then
+					__lt_call_service_method("Workspace", "FindFirstChild", "FlareGunPickUp"):SetAttribute("FlareGunESP",false)
 				end
-				for i,v in pairs(ClonedService("Workspace"):GetChildren()) do
+				for i,v in pairs(__lt_call_service_method("Workspace", "GetChildren")) do
 					if v.Name == "FlareGunPickUp" then
 						if v:FindFirstChild("FlareGunChams") then
 							v.FlareGunChams:Remove()
@@ -564,11 +596,11 @@ if game.GameId == 847722000 then
 	ClonedService("RunService").Heartbeat:Connect(function(deltaTime)
 		if AllowRunService == true then
 			if _G.FlareGunESP == true then
-				if ClonedService("Workspace"):FindFirstChild("FlareGunPickUp") then
-					if ClonedService("Workspace"):FindFirstChild("FlareGunPickUp"):GetAttribute("FlareGunESP") == true then
+				if __lt_call_service_method("Workspace", "FindFirstChild", "FlareGunPickUp") then
+					if __lt_call_service_method("Workspace", "FindFirstChild", "FlareGunPickUp"):GetAttribute("FlareGunESP") == true then
 
 					else
-						ClonedService("Workspace"):FindFirstChild("FlareGunPickUp"):SetAttribute("FlareGunESP",true)
+						__lt_call_service_method("Workspace", "FindFirstChild", "FlareGunPickUp"):SetAttribute("FlareGunESP",true)
 						local esp = Drawing.new("Text")
 						esp.Text = "Flare Gun"
 						esp.Color = Color3.fromRGB(0, 225, 255)
@@ -580,7 +612,7 @@ if game.GameId == 847722000 then
 						ClonedService("RunService").Heartbeat:Connect(function()
 							if AllowRunService == true then
 								if _G.FlareGunESP == true then
-									if ClonedService("Workspace"):FindFirstChild("FlareGunPickUp") then
+									if __lt_call_service_method("Workspace", "FindFirstChild", "FlareGunPickUp") then
 										local cam = workspace.CurrentCamera
 										local Pos,OnScreen = cam:WorldToViewportPoint(ClonedService("Workspace").FlareGunPickUp.FlareGun.Position)
 										if OnScreen then
@@ -600,7 +632,7 @@ if game.GameId == 847722000 then
 							end
 						end)
 					end
-					for i,v in pairs(ClonedService("Workspace"):GetChildren()) do
+					for i,v in pairs(__lt_call_service_method("Workspace", "GetChildren")) do
 						if v.Name == "FlareGunPickUp" then
 							if v:FindFirstChild("FlareGunChams") then
 								v.FlareGunChams.Enabled = true
@@ -629,7 +661,7 @@ if game.GameId == 847722000 then
 	ClonedService("RunService").Heartbeat:Connect(function()
 		if AllowRunService == true then
 			if _G.RakeChams == true then
-				for i,v in pairs(ClonedService("Workspace"):GetChildren()) do
+				for i,v in pairs(__lt_call_service_method("Workspace", "GetChildren")) do
 					if v.Name == "Rake" then
 						if v:FindFirstChild("RakeChams") then
 							v.RakeChams.Enabled = true
@@ -645,7 +677,7 @@ if game.GameId == 847722000 then
 						end
 					end
 				end
-				for i,v in pairs(ClonedService("Workspace"):GetChildren()) do
+				for i,v in pairs(__lt_call_service_method("Workspace", "GetChildren")) do
 					if v.Name == "Rake" then
 						if v:GetAttribute("hasESP") == true then
 
@@ -663,7 +695,7 @@ if game.GameId == 847722000 then
 									pcall(function()
 										if AllowRunService == true then
 											if _G.RakeChams == true then
-												if ClonedService("Workspace"):FindFirstChild(v.Name) then
+												if __lt_call_service_method("Workspace", "FindFirstChild", v.Name) then
 													local cam = workspace.CurrentCamera
 													local Pos,OnScreen = cam:WorldToViewportPoint(v.Head.Position)
 													if OnScreen then
@@ -698,7 +730,7 @@ if game.GameId == 847722000 then
 	ClonedService("RunService").Heartbeat:Connect(function()
 		if AllowRunService == true then
 			if _G.PlayerESP == true then
-				for i,v in pairs(ClonedService("Players"):GetPlayers()) do
+				for i,v in pairs(__lt_call_service_method("Players", "GetPlayers")) do
 					if v.Name ~= ClonedService("Players").LocalPlayer.Name then
 						if not v.Character then
 
@@ -721,7 +753,7 @@ if game.GameId == 847722000 then
 										pcall(function()
 											if AllowRunService == true then
 												if _G.PlayerESP == true then
-													if ClonedService("Players"):FindFirstChild(tostring(v.Name)) then
+													if __lt_call_service_method("Players", "FindFirstChild", tostring(v.Name)) then
 														local cam = workspace.CurrentCamera
 														local Pos,OnScreen = cam:WorldToViewportPoint(v.Character.Head.Position)
 														if OnScreen then
@@ -752,7 +784,7 @@ if game.GameId == 847722000 then
 						end
 					end
 				end      
-				for i,v in pairs(ClonedService("Players"):GetPlayers()) do
+				for i,v in pairs(__lt_call_service_method("Players", "GetPlayers")) do
 					if not v.Character then 
 					else
 						if v.Name ~= ClonedService("Players").LocalPlayer.Name then
@@ -1170,7 +1202,7 @@ if game.GameId == 847722000 then
 		if AllowRunService then
 			if _G.enableFOV == true then
 				local num = _G.FieldOfView
-				local hh=ClonedService("TweenService"):Create(workspace.CurrentCamera, TweenInfo.new(0, Enum.EasingStyle.Linear), {FieldOfView=tonumber(num)})
+				local hh=__lt_call_service_method("TweenService", "Create", workspace.CurrentCamera, TweenInfo.new(0, Enum.EasingStyle.Linear), {FieldOfView=tonumber(num)})
 				hh:Play()
 			end
 		end
@@ -1222,7 +1254,7 @@ if game.GameId == 847722000 then
 	ClonedService("RunService").Heartbeat:Connect(function()
 		if AllowRunService == true then
 			pcall(function()
-				if ClonedService("Workspace"):FindFirstChild("Rake") then
+				if __lt_call_service_method("Workspace", "FindFirstChild", "Rake") then
 					if ClonedService("Workspace").Rake.TargetVal.Value == nil then
 
 					else

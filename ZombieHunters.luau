@@ -1,10 +1,42 @@
+local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
+local function __lt_clone_service_value(value)
+	if __lt_oldcloneref and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt_oldcloneref, value);
+		if ok and cloned ~= nil then
+			return cloned;
+		end;
+	end;
+	return value;
+end;
+local function __lt_clone_service(name, refFn)
+	if type(refFn) ~= "function" then
+		return game:GetService(name);
+	end;
+	local ok, ref = pcall(function()
+		return refFn(game:GetService(name));
+	end);
+	if ok and ref ~= nil then
+		return ref;
+	end;
+	return game:GetService(name);
+end;
+local function __lt_call_service_method(name, method, ...)
+	local service = game:GetService(name);
+	local fn = service[method];
+	if type(fn) ~= "function" then
+		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
+	end;
+	return fn(service, ...);
+end;
+
+
 if game.GameId == 5170973975 then
 	local function ClonedService(name)
 		local Service = game.GetService;
 		local Reference = cloneref or function(reference)
 			return reference;
 		end;
-		return Reference(Service(game, name));
+		return __lt_clone_service(name, Reference);
 	end;
 	repeat
 		wait();
@@ -17,9 +49,9 @@ if game.GameId == 5170973975 then
 					[1] = {
 						CF = CFrame.new(4.875078201293945, 24.025789260864258, 11.118204116821289) * CFrame.Angles(0.01760457269847393, (-0.02762647345662117), 0.00048634063568897545),
 						Part = v.Head,
-						Owner = (cloneref(game:GetService("Players"))).LocalPlayer,
+						Owner = (__lt_clone_service("Players", cloneref)).LocalPlayer,
 						TargetHead = false,
-						Character = (cloneref(game:GetService("Players"))).LocalPlayer.Character,
+						Character = (__lt_clone_service("Players", cloneref)).LocalPlayer.Character,
 						Hit = v.Head,
 						Target = v,
 						position = Vector3.new(5.695760726928711, 24.54859733581543, -18.57601547241211),
@@ -27,7 +59,7 @@ if game.GameId == 5170973975 then
 						Damage = 99
 					}
 				};
-				(cloneref(game:GetService("ReplicatedStorage"))).Remote.CastRemote:FireServer(unpack(args));
+				(__lt_clone_service("ReplicatedStorage", cloneref)).Remote.CastRemote:FireServer(unpack(args));
 			end;
 			for _, j in pairs((ClonedService("Workspace")).Temp_Item:GetChildren()) do
 				spawn(function()

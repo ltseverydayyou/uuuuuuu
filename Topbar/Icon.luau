@@ -1,7 +1,39 @@
-local UserInputService = cloneref(game:GetService("UserInputService"))
-local ContentProvider = cloneref(game:GetService("ContentProvider"))
-local StarterGui = cloneref(game:GetService("StarterGui"))
-local Players = cloneref(game:GetService("Players"))
+local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
+local function __lt_clone_service_value(value)
+	if __lt_oldcloneref and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt_oldcloneref, value);
+		if ok and cloned ~= nil then
+			return cloned;
+		end;
+	end;
+	return value;
+end;
+local function __lt_clone_service(name, refFn)
+	if type(refFn) ~= "function" then
+		return game:GetService(name);
+	end;
+	local ok, ref = pcall(function()
+		return refFn(game:GetService(name));
+	end);
+	if ok and ref ~= nil then
+		return ref;
+	end;
+	return game:GetService(name);
+end;
+local function __lt_call_service_method(name, method, ...)
+	local service = game:GetService(name);
+	local fn = service[method];
+	if type(fn) ~= "function" then
+		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
+	end;
+	return fn(service, ...);
+end;
+
+
+local UserInputService = __lt_clone_service("UserInputService", cloneref)
+local ContentProvider = __lt_clone_service("ContentProvider", cloneref)
+local StarterGui = __lt_clone_service("StarterGui", cloneref)
+local Players = __lt_clone_service("Players", cloneref)
 local Types = Import(script.Types)
 
 
@@ -149,7 +181,7 @@ task.defer(function()
 			g.ResetOnSpawn = false
 			g.IgnoreGuiInset = true
 		end
-		local coreGui = cloneref(game:GetService("CoreGui"))
+		local coreGui = __lt_clone_service("CoreGui", cloneref)
 		local lp = Players.LocalPlayer
 		local function nap(obj, prop)
 			if obj then
@@ -168,7 +200,7 @@ task.defer(function()
 		end
 		if coreGui then
 			nap(g)
-			local robloxGui = coreGui:FindFirstChild("RobloxGui")
+			local robloxGui = __lt_call_service_method("CoreGui", "FindFirstChild", "RobloxGui")
 			if robloxGui then
 				g.Parent = robloxGui
 			else
@@ -454,24 +486,24 @@ function Icon.new()
 	self.selected:Connect(function()
 		local isDropdown = #self.dropdownIcons > 0
 		if isDropdown then
-			if StarterGui:GetCore("ChatActive") and self.alignment ~= "Right" then
+			if __lt_call_service_method("StarterGui", "GetCore", "ChatActive") and self.alignment ~= "Right" then
 				self.chatWasPreviouslyActive = true
-				StarterGui:SetCore("ChatActive", false)
+				__lt_call_service_method("StarterGui", "SetCore", "ChatActive", false)
 			end
-			if StarterGui:GetCoreGuiEnabled("PlayerList") and self.alignment ~= "Left" then
+			if __lt_call_service_method("StarterGui", "GetCoreGuiEnabled", "PlayerList") and self.alignment ~= "Left" then
 				self.playerlistWasPreviouslyActive = true
-				StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.PlayerList, false)
+				__lt_call_service_method("StarterGui", "SetCoreGuiEnabled", Enum.CoreGuiType.PlayerList, false)
 			end
 		end
 	end)
 	self.deselected:Connect(function()
 		if self.chatWasPreviouslyActive then
 			self.chatWasPreviouslyActive = nil
-			StarterGui:SetCore("ChatActive", true)
+			__lt_call_service_method("StarterGui", "SetCore", "ChatActive", true)
 		end
 		if self.playerlistWasPreviouslyActive then
 			self.playerlistWasPreviouslyActive = nil
-			StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.PlayerList, true)
+			__lt_call_service_method("StarterGui", "SetCoreGuiEnabled", Enum.CoreGuiType.PlayerList, true)
 		end
 	end)
 
@@ -764,7 +796,7 @@ function Icon:setImage(imageId, iconState)
 
 		task.spawn(function()
 			local newIdContent = if tonumber(imageId) then `rbxassetid://{imageId}` else imageId
-			local initialAssetFetchStatus = ContentProvider:GetAssetFetchStatus(newIdContent)
+			local initialAssetFetchStatus = __lt_call_service_method("ContentProvider", "GetAssetFetchStatus", newIdContent)
 			if initialAssetFetchStatus ~= Enum.AssetFetchStatus.Success then
 				pcall(ContentProvider.PreloadAsync, ContentProvider, { newIdContent })
 			end

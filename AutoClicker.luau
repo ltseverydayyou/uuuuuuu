@@ -1,15 +1,47 @@
+local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
+local function __lt_clone_service_value(value)
+	if __lt_oldcloneref and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt_oldcloneref, value);
+		if ok and cloned ~= nil then
+			return cloned;
+		end;
+	end;
+	return value;
+end;
+local function __lt_clone_service(name, refFn)
+	if type(refFn) ~= "function" then
+		return game:GetService(name);
+	end;
+	local ok, ref = pcall(function()
+		return refFn(game:GetService(name));
+	end);
+	if ok and ref ~= nil then
+		return ref;
+	end;
+	return game:GetService(name);
+end;
+local function __lt_call_service_method(name, method, ...)
+	local service = game:GetService(name);
+	local fn = service[method];
+	if type(fn) ~= "function" then
+		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
+	end;
+	return fn(service, ...);
+end;
+
+
 cloneref = cloneref or function(value)
 	return value
 end
 
 local sharedEnv = type(getgenv) == "function" and getgenv() or _G
 
-local Players = cloneref(game:GetService("Players"))
-local RunService = cloneref(game:GetService("RunService"))
-local UserInputService = cloneref(game:GetService("UserInputService"))
-local VirtualInputManager = game:GetService("VirtualInputManager")
-local HttpService = cloneref(game:GetService("HttpService"))
-local CoreGui = cloneref(game:GetService("CoreGui"))
+local Players = __lt_clone_service("Players", cloneref)
+local RunService = __lt_clone_service("RunService", cloneref)
+local UserInputService = __lt_clone_service("UserInputService", cloneref)
+local VirtualInputManager = __lt_clone_service("VirtualInputManager", cloneref)
+local HttpService = __lt_clone_service("HttpService", cloneref)
+local CoreGui = __lt_clone_service("CoreGui", cloneref)
 
 local LocalPlayer = Players.LocalPlayer
 local parentUI = gethui and gethui() or CoreGui or LocalPlayer:WaitForChild("PlayerGui")
@@ -153,7 +185,7 @@ local function loadConfig()
 		return cloneTable(DEFAULTS)
 	end
 	local decodedOk, decoded = pcall(function()
-		return HttpService:JSONDecode(content)
+		return __lt_call_service_method("HttpService", "JSONDecode", content)
 	end)
 	if not decodedOk or type(decoded) ~= "table" then
 		return cloneTable(DEFAULTS)
@@ -166,7 +198,7 @@ local function saveConfig(config)
 		return
 	end
 	local ok, encoded = pcall(function()
-		return HttpService:JSONEncode(config)
+		return __lt_call_service_method("HttpService", "JSONEncode", config)
 	end)
 	if ok then
 		pcall(writefile, CONFIG_PATH, encoded)
@@ -197,7 +229,7 @@ local function new(className, parent, properties)
 	local randomName = "\0"
 	if HttpService and HttpService.GenerateGUID then
 		local ok, guid = pcall(function()
-			return HttpService:GenerateGUID(false)
+			return __lt_call_service_method("HttpService", "GenerateGUID", false)
 		end)
 		if ok and type(guid) == "string" and guid ~= "" then
 			randomName = guid:gsub("%-", "")
@@ -946,7 +978,7 @@ local function getMousePosition()
 	local pos = lastPointerPosition
 	if pos.X == 0 and pos.Y == 0 then
 		local ok, current = pcall(function()
-			return UserInputService:GetMouseLocation()
+			return __lt_call_service_method("UserInputService", "GetMouseLocation")
 		end)
 		if ok and current then
 			pos = current
@@ -976,7 +1008,7 @@ local function pointerOverOwnUI()
 end
 
 local function shouldPauseClicks()
-	if config.ignoreFocusedTextBox and UserInputService:GetFocusedTextBox() then
+	if config.ignoreFocusedTextBox and __lt_call_service_method("UserInputService", "GetFocusedTextBox") then
 		return true
 	end
 	if pointerOverOwnUI() then
@@ -991,7 +1023,7 @@ local function sendButtonState(isDown)
 	local ok = false
 	if VirtualInputManager and VirtualInputManager.SendMouseButtonEvent then
 		ok = pcall(function()
-			VirtualInputManager:SendMouseButtonEvent(point.X, point.Y, buttonIndex, isDown, game, 0)
+			__lt_call_service_method("VirtualInputManager", "SendMouseButtonEvent", point.X, point.Y, buttonIndex, isDown, game, 0)
 		end)
 	end
 	return ok
@@ -1002,8 +1034,8 @@ local function clickNow()
 	if VirtualInputManager and VirtualInputManager.SendMouseButtonEvent then
 		local ok = pcall(function()
 			local buttonIndex = BUTTONS[config.clickButton].index
-			VirtualInputManager:SendMouseButtonEvent(point.X, point.Y, buttonIndex, true, game, 0)
-			VirtualInputManager:SendMouseButtonEvent(point.X, point.Y, buttonIndex, false, game, 0)
+			__lt_call_service_method("VirtualInputManager", "SendMouseButtonEvent", point.X, point.Y, buttonIndex, true, game, 0)
+			__lt_call_service_method("VirtualInputManager", "SendMouseButtonEvent", point.X, point.Y, buttonIndex, false, game, 0)
 		end)
 		if ok then
 			return
@@ -1082,7 +1114,7 @@ bind(RunService.Heartbeat, function(dt)
 	updateRootScale()
 
 	local ok, point = pcall(function()
-		return UserInputService:GetMouseLocation()
+		return __lt_call_service_method("UserInputService", "GetMouseLocation")
 	end)
 	if ok and point then
 		lastPointerPosition = Vector2.new(point.X, point.Y)
@@ -1373,7 +1405,7 @@ bind(UserInputService.InputBegan, function(input, processed)
 	if input.KeyCode ~= getActivationKey() then
 		return
 	end
-	if config.ignoreFocusedTextBox and UserInputService:GetFocusedTextBox() then
+	if config.ignoreFocusedTextBox and __lt_call_service_method("UserInputService", "GetFocusedTextBox") then
 		return
 	end
 

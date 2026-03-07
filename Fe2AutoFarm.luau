@@ -1,10 +1,42 @@
-local Players = cloneref(game:GetService("Players"));
-local Workspace = cloneref(game:GetService("Workspace"));
-local ReplicatedStorage = cloneref(game:GetService("ReplicatedStorage"));
-local RunService = cloneref(game:GetService("RunService"));
-local UserInputService = cloneref(game:GetService("UserInputService"));
+local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
+local function __lt_clone_service_value(value)
+	if __lt_oldcloneref and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt_oldcloneref, value);
+		if ok and cloned ~= nil then
+			return cloned;
+		end;
+	end;
+	return value;
+end;
+local function __lt_clone_service(name, refFn)
+	if type(refFn) ~= "function" then
+		return game:GetService(name);
+	end;
+	local ok, ref = pcall(function()
+		return refFn(game:GetService(name));
+	end);
+	if ok and ref ~= nil then
+		return ref;
+	end;
+	return game:GetService(name);
+end;
+local function __lt_call_service_method(name, method, ...)
+	local service = game:GetService(name);
+	local fn = service[method];
+	if type(fn) ~= "function" then
+		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
+	end;
+	return fn(service, ...);
+end;
+
+
+local Players = __lt_clone_service("Players", cloneref);
+local Workspace = __lt_clone_service("Workspace", cloneref);
+local ReplicatedStorage = __lt_clone_service("ReplicatedStorage", cloneref);
+local RunService = __lt_clone_service("RunService", cloneref);
+local UserInputService = __lt_clone_service("UserInputService", cloneref);
 local LP = Players.LocalPlayer;
-local MP = Workspace:WaitForChild("Multiplayer");
+local MP = __lt_call_service_method("Workspace", "WaitForChild", "Multiplayer");
 local TP_DELAY = 0.05;
 local BTN_DELAY = 0.05;
 local SCAN_INT = 0.05;
@@ -35,9 +67,9 @@ local function uiParent()
 	if ok and typeof(ui) == "Instance" then
 		return ui;
 	end;
-	local cg = cloneref(game:GetService("CoreGui"));
+	local cg = __lt_clone_service("CoreGui", cloneref);
 	if pcall(function()
-		return cg:FindFirstChildOfClass("ScreenGui");
+		return __lt_call_service_method("CoreGui", "FindFirstChildOfClass", "ScreenGui");
 	end) then
 		return cg;
 	end;
@@ -46,7 +78,7 @@ end;
 local LiftRemote;
 do
 	local ok, r = pcall(function()
-		return (ReplicatedStorage:FindFirstChild("Remote")):FindFirstChild("dKgyIXnLdhwvSyEorkEWJJAkgUslGCtR") or (ReplicatedStorage:FindFirstChild("Remote")):FindFirstChild("AddedWaiting");
+		return (__lt_call_service_method("ReplicatedStorage", "FindFirstChild", "Remote")):FindFirstChild("dKgyIXnLdhwvSyEorkEWJJAkgUslGCtR") or (__lt_call_service_method("ReplicatedStorage", "FindFirstChild", "Remote")):FindFirstChild("AddedWaiting");
 	end);
 	LiftRemote = ok and r or nil;
 end;

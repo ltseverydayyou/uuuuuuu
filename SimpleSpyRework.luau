@@ -1,3 +1,35 @@
+local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
+local function __lt_clone_service_value(value)
+	if __lt_oldcloneref and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt_oldcloneref, value);
+		if ok and cloned ~= nil then
+			return cloned;
+		end;
+	end;
+	return value;
+end;
+local function __lt_clone_service(name, refFn)
+	if type(refFn) ~= "function" then
+		return game:GetService(name);
+	end;
+	local ok, ref = pcall(function()
+		return refFn(game:GetService(name));
+	end);
+	if ok and ref ~= nil then
+		return ref;
+	end;
+	return game:GetService(name);
+end;
+local function __lt_call_service_method(name, method, ...)
+	local service = game:GetService(name);
+	local fn = service[method];
+	if type(fn) ~= "function" then
+		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
+	end;
+	return fn(service, ...);
+end;
+
+
 if
     getgenv().SimpleSpyExecuted
     and type(getgenv().SimpleSpyShutdown) == 'function'
@@ -153,7 +185,7 @@ local function SafeGetService(name)
         or function(reference)
             return reference
         end
-    return Reference(Service(game, name))
+    return __lt_clone_service(name, Reference)
 end
 
 local function protectUI(sGui)
@@ -3134,7 +3166,7 @@ function i2p(i, customgen)
     end
 
     if i == Players.LocalPlayer then
-        return 'cloneref(game:GetService("Players")).LocalPlayer'
+        return '__lt_clone_service("Players", cloneref).LocalPlayer'
     end
     if
         i == workspace
@@ -3159,9 +3191,9 @@ function i2p(i, customgen)
             cur = cur.Parent
         end
         if plr == Players.LocalPlayer then
-            return 'cloneref(game:GetService("Players")).LocalPlayer.Character' .. out
+            return '__lt_clone_service("Players", cloneref).LocalPlayer.Character' .. out
         else
-            return ('cloneref(game:GetService("Players")):GetPlayerByUserId(%d).Character'):format(
+            return ('__lt_clone_service("Players", cloneref):GetPlayerByUserId(%d).Character'):format(
                 plr.UserId
             ) .. out
         end
@@ -3177,7 +3209,7 @@ function i2p(i, customgen)
     while cur and cur.Parent and cur.Parent ~= game do
         out = stepFromParentToChild(cur.Parent, cur) .. out
         if Players.LocalPlayer and cur:IsDescendantOf(Players.LocalPlayer) then
-            return 'cloneref(game:GetService("Players")).LocalPlayer' .. out
+            return '__lt_clone_service("Players", cloneref).LocalPlayer' .. out
         end
         cur = cur.Parent
     end
@@ -3219,7 +3251,7 @@ function i2p(i, customgen)
     end
 
     if Players.LocalPlayer and i:IsDescendantOf(Players.LocalPlayer) then
-        base = 'cloneref(game:GetService("Players")).LocalPlayer'
+        base = '__lt_clone_service("Players", cloneref).LocalPlayer'
         descend = ''
         node = i
         while node and node ~= Players.LocalPlayer do
@@ -4320,8 +4352,8 @@ if not getgenv().SimpleSpyExecuted then
                 or Players:GetPropertyChangedSignal('LocalPlayer'):Wait()
                 or Players.LocalPlayer
             generation = {
-                [OldDebugId(lp)] = 'cloneref(game:GetService("Players")).LocalPlayer',
-                [OldDebugId(lp:GetMouse())] = 'cloneref(game:GetService("Players")).LocalPlayer:GetMouse',
+                [OldDebugId(lp)] = '__lt_clone_service("Players", cloneref).LocalPlayer',
+                [OldDebugId(lp:GetMouse())] = '__lt_clone_service("Players", cloneref).LocalPlayer:GetMouse',
                 [OldDebugId(game)] = 'game',
                 [OldDebugId(SafeGetService('Workspace'))] = 'workspace',
             }

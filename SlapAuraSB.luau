@@ -1,11 +1,43 @@
+local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
+local function __lt_clone_service_value(value)
+	if __lt_oldcloneref and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt_oldcloneref, value);
+		if ok and cloned ~= nil then
+			return cloned;
+		end;
+	end;
+	return value;
+end;
+local function __lt_clone_service(name, refFn)
+	if type(refFn) ~= "function" then
+		return game:GetService(name);
+	end;
+	local ok, ref = pcall(function()
+		return refFn(game:GetService(name));
+	end);
+	if ok and ref ~= nil then
+		return ref;
+	end;
+	return game:GetService(name);
+end;
+local function __lt_call_service_method(name, method, ...)
+	local service = game:GetService(name);
+	local fn = service[method];
+	if type(fn) ~= "function" then
+		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
+	end;
+	return fn(service, ...);
+end;
+
+
 if game.GameId ~= 2380077519 then
 	return;
 end;
-local Players = cloneref(game:GetService("Players"));
-local ReplicatedStorage = cloneref(game:GetService("ReplicatedStorage"));
-local RunService = cloneref(game:GetService("RunService"));
-local TweenService = cloneref(game:GetService("TweenService"));
-local UserInputService = cloneref(game:GetService("UserInputService"));
+local Players = __lt_clone_service("Players", cloneref);
+local ReplicatedStorage = __lt_clone_service("ReplicatedStorage", cloneref);
+local RunService = __lt_clone_service("RunService", cloneref);
+local TweenService = __lt_clone_service("TweenService", cloneref);
+local UserInputService = __lt_clone_service("UserInputService", cloneref);
 local localPlayer = Players.LocalPlayer;
 local attackRemotes, attackRemoteSet = {}, {};
 local forbiddenNames = {
@@ -34,12 +66,12 @@ local function removeRemote(v)
 		end;
 	end;
 end;
-for _, d in ipairs(ReplicatedStorage:QueryDescendants("Instance")) do
+for _, d in ipairs(__lt_call_service_method("ReplicatedStorage", "QueryDescendants", "Instance")) do
 	addRemote(d);
 end;
 ReplicatedStorage.DescendantAdded:Connect(addRemote);
 ReplicatedStorage.DescendantRemoving:Connect(removeRemote);
-local ghostRemote = ReplicatedStorage:WaitForChild("Ghostinvisibilityactivated");
+local ghostRemote = __lt_call_service_method("ReplicatedStorage", "WaitForChild", "Ghostinvisibilityactivated");
 local radius, delay = 17.5, 0.85;
 local rootPart, aura;
 local ignoreFriends = false;
@@ -99,7 +131,7 @@ local function initPlayer(p)
 		setFlag(f);
 	end;
 end;
-for _, p in ipairs(Players:GetPlayers()) do
+for _, p in ipairs(__lt_call_service_method("Players", "GetPlayers")) do
 	initPlayer(p);
 end;
 Players.PlayerAdded:Connect(initPlayer);
@@ -149,7 +181,7 @@ localPlayer.CharacterRemoving:Connect(onCharacterRemoving);
 if localPlayer.Character then
 	onCharacterAdded(localPlayer.Character);
 end;
-local guiParent = type(gethui) == "function" and gethui() or cloneref(game:GetService("CoreGui")) or localPlayer:WaitForChild("PlayerGui");
+local guiParent = type(gethui) == "function" and gethui() or __lt_clone_service("CoreGui", cloneref) or localPlayer:WaitForChild("PlayerGui");
 local screenGui = Instance.new("ScreenGui");
 screenGui.Name = "Sex Hub";
 screenGui.IgnoreGuiInset = true;
@@ -199,25 +231,25 @@ local function showToast(text, dur)
 	f.BackgroundTransparency = 1;
 	l.TextTransparency = 1;
 	s.Transparency = 1;
-	(TweenService:Create(f, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+	(__lt_call_service_method("TweenService", "Create", f, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 		Position = UDim2.new(0.5, 0, 1, 0),
 		BackgroundTransparency = 0.15
 	})):Play();
-	(TweenService:Create(l, TweenInfo.new(0.18), {
+	(__lt_call_service_method("TweenService", "Create", l, TweenInfo.new(0.18), {
 		TextTransparency = 0
 	})):Play();
-	(TweenService:Create(s, TweenInfo.new(0.18), {
+	(__lt_call_service_method("TweenService", "Create", s, TweenInfo.new(0.18), {
 		Transparency = 0.5
 	})):Play();
 	task.delay(dur or 2.5, function()
-		local t1 = TweenService:Create(f, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+		local t1 = __lt_call_service_method("TweenService", "Create", f, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
 			Position = UDim2.new(0.5, 0, 1, 20),
 			BackgroundTransparency = 1
 		});
-		local t2 = TweenService:Create(l, TweenInfo.new(0.16), {
+		local t2 = __lt_call_service_method("TweenService", "Create", l, TweenInfo.new(0.16), {
 			TextTransparency = 1
 		});
-		local t3 = TweenService:Create(s, TweenInfo.new(0.16), {
+		local t3 = __lt_call_service_method("TweenService", "Create", s, TweenInfo.new(0.16), {
 			Transparency = 1
 		});
 		t1:Play();
@@ -295,7 +327,7 @@ local rgbStrokes = {
 	stroke
 };
 local function ripple(parent)
-	local m = UserInputService:GetMouseLocation();
+	local m = __lt_call_service_method("UserInputService", "GetMouseLocation");
 	local rx = m.X - parent.AbsolutePosition.X;
 	local ry = m.Y - parent.AbsolutePosition.Y;
 	local r = Instance.new("Frame");
@@ -310,7 +342,7 @@ local function ripple(parent)
 	rc.CornerRadius = UDim.new(1, 0);
 	rc.Parent = r;
 	local maxd = math.max(parent.AbsoluteSize.X, parent.AbsoluteSize.Y) * 1.6;
-	(TweenService:Create(r, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+	(__lt_call_service_method("TweenService", "Create", r, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 		Size = UDim2.fromOffset(maxd, maxd),
 		BackgroundTransparency = 1
 	})):Play();
@@ -342,18 +374,18 @@ local function button(text, parent, w, h)
 	bs.Parent = b;
 	table.insert(rgbStrokes, bs);
 	b.MouseEnter:Connect(function()
-		(TweenService:Create(b, TweenInfo.new(0.14), {
+		(__lt_call_service_method("TweenService", "Create", b, TweenInfo.new(0.14), {
 			BackgroundColor3 = Color3.fromRGB(40, 40, 55)
 		})):Play();
-		(TweenService:Create(b, TweenInfo.new(0.14), {
+		(__lt_call_service_method("TweenService", "Create", b, TweenInfo.new(0.14), {
 			Size = UDim2.new(0, (w or 160) + 2, 0, h or 36)
 		})):Play();
 	end);
 	b.MouseLeave:Connect(function()
-		(TweenService:Create(b, TweenInfo.new(0.16), {
+		(__lt_call_service_method("TweenService", "Create", b, TweenInfo.new(0.16), {
 			BackgroundColor3 = Color3.fromRGB(32, 32, 42)
 		})):Play();
-		(TweenService:Create(b, TweenInfo.new(0.16), {
+		(__lt_call_service_method("TweenService", "Create", b, TweenInfo.new(0.16), {
 			Size = UDim2.new(0, w or 160, 0, h or 36)
 		})):Play();
 	end);
@@ -442,7 +474,7 @@ local function moveTabSelector(toBtn, animate)
 	local relX = toBtn.AbsolutePosition.X - tabBg.AbsolutePosition.X;
 	local w = toBtn.AbsoluteSize.X;
 	if animate then
-		(TweenService:Create(tabSelector, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		(__lt_call_service_method("TweenService", "Create", tabSelector, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 			Position = UDim2.new(0, relX, 0, 0),
 			Size = UDim2.new(0, w, 1, 0)
 		})):Play();
@@ -455,7 +487,7 @@ local function moveTabSelector(toBtn, animate)
 		tabSettings,
 		tabCombat
 	}) do
-		(TweenService:Create(b, TweenInfo.new(0.12), {
+		(__lt_call_service_method("TweenService", "Create", b, TweenInfo.new(0.12), {
 			TextColor3 = b == toBtn and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(220, 220, 235)
 		})):Play();
 	end;
@@ -543,10 +575,10 @@ local function toggleControl(parent, labelText, initial)
 		state = v;
 		local goalBg = v and Color3.fromRGB(72, 128, 255) or Color3.fromRGB(50, 50, 60);
 		local goalPos = v and UDim2.new(1, (-28), 0.5, (-13)) or UDim2.new(0, 2, 0.5, (-13));
-		(TweenService:Create(t, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		(__lt_call_service_method("TweenService", "Create", t, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 			BackgroundColor3 = goalBg
 		})):Play();
-		(TweenService:Create(knob, TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+		(__lt_call_service_method("TweenService", "Create", knob, TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
 			Position = goalPos
 		})):Play();
 	end;
@@ -641,10 +673,10 @@ local function slider(parent, labelText, minV, maxV, startV, decimals)
 		valueLabel.Text = tostring(value);
 		local ti = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
 		if tween then
-			(TweenService:Create(fill, ti, {
+			(__lt_call_service_method("TweenService", "Create", fill, ti, {
 				Size = UDim2.new(a, 0, 1, 0)
 			})):Play();
-			(TweenService:Create(thumb, ti, {
+			(__lt_call_service_method("TweenService", "Create", thumb, ti, {
 				Position = UDim2.new(a, 0, 0.5, 0)
 			})):Play();
 		else
@@ -744,7 +776,7 @@ local function moveModeSelector(toBtn, animate)
 	local relX = toBtn.AbsolutePosition.X - seg.AbsolutePosition.X;
 	local w = toBtn.AbsoluteSize.X;
 	if animate then
-		(TweenService:Create(selector, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		(__lt_call_service_method("TweenService", "Create", selector, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 			Position = UDim2.new(0, relX, 0, 0),
 			Size = UDim2.new(0, w, 1, 0)
 		})):Play();
@@ -756,7 +788,7 @@ local function moveModeSelector(toBtn, animate)
 		enterBtn,
 		allBtn
 	}) do
-		(TweenService:Create(b, TweenInfo.new(0.12), {
+		(__lt_call_service_method("TweenService", "Create", b, TweenInfo.new(0.12), {
 			TextColor3 = b == toBtn and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(220, 220, 235)
 		})):Play();
 	end;
@@ -826,22 +858,22 @@ local function minimizeToCircle()
 	dockButton.Position = container.Position;
 	dockButton.Visible = true;
 	dockButton.ImageTransparency = 1;
-	(TweenService:Create(panel, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+	(__lt_call_service_method("TweenService", "Create", panel, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
 		BackgroundTransparency = 1
 	})):Play();
-	(TweenService:Create(panelShadow, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+	(__lt_call_service_method("TweenService", "Create", panelShadow, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
 		ImageTransparency = 1
 	})):Play();
-	(TweenService:Create(container, TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+	(__lt_call_service_method("TweenService", "Create", container, TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
 		Size = UDim2.new(0, 64, 0, 64)
 	})):Play();
 	task.delay(0.22, function()
 		panel.Visible = false;
 		panelShadow.Visible = false;
-		(TweenService:Create(miniCircle, TweenInfo.new(0.24, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+		(__lt_call_service_method("TweenService", "Create", miniCircle, TweenInfo.new(0.24, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
 			Size = UDim2.new(0, 56, 0, 56)
 		})):Play();
-		(TweenService:Create(dockButton, TweenInfo.new(0.24), {
+		(__lt_call_service_method("TweenService", "Create", dockButton, TweenInfo.new(0.24), {
 			ImageTransparency = 0.5
 		})):Play();
 	end);
@@ -851,16 +883,16 @@ local function restoreFromCircle()
 	panel.Visible = true;
 	panelShadow.Visible = true;
 	container.Position = dockButton.Position;
-	(TweenService:Create(dockButton, TweenInfo.new(0.16), {
+	(__lt_call_service_method("TweenService", "Create", dockButton, TweenInfo.new(0.16), {
 		ImageTransparency = 1
 	})):Play();
-	(TweenService:Create(container, TweenInfo.new(0.26, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+	(__lt_call_service_method("TweenService", "Create", container, TweenInfo.new(0.26, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
 		Size = UDim2.new(0, 520, 0, 380)
 	})):Play();
-	(TweenService:Create(panel, TweenInfo.new(0.26, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+	(__lt_call_service_method("TweenService", "Create", panel, TweenInfo.new(0.26, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 		BackgroundTransparency = 0.04
 	})):Play();
-	(TweenService:Create(panelShadow, TweenInfo.new(0.26, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+	(__lt_call_service_method("TweenService", "Create", panelShadow, TweenInfo.new(0.26, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 		ImageTransparency = 0.5
 	})):Play();
 	task.delay(0.26, function()
@@ -895,7 +927,7 @@ do
 		if dragging and inp == dragInput then
 			local delta = inp.Position - dragStart;
 			local target = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y);
-			(TweenService:Create(container, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			(__lt_call_service_method("TweenService", "Create", container, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 				Position = target
 			})):Play();
 			if minimized then
@@ -936,13 +968,13 @@ end;
 panel.BackgroundTransparency = 1;
 panelShadow.ImageTransparency = 1;
 container.Size = UDim2.new(0, 500, 0, 360);
-(TweenService:Create(panel, TweenInfo.new(0.26, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+(__lt_call_service_method("TweenService", "Create", panel, TweenInfo.new(0.26, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 	BackgroundTransparency = 0.04
 })):Play();
-(TweenService:Create(panelShadow, TweenInfo.new(0.26, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+(__lt_call_service_method("TweenService", "Create", panelShadow, TweenInfo.new(0.26, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 	ImageTransparency = 0.5
 })):Play();
-(TweenService:Create(container, TweenInfo.new(0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+(__lt_call_service_method("TweenService", "Create", container, TweenInfo.new(0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
 	Size = UDim2.new(0, 520, 0, 380)
 })):Play();
 local hue = 0;
@@ -1056,7 +1088,7 @@ RunService.Heartbeat:Connect(function(dt)
 	if auraEnabled and aura then
 		local goal = Vector3.new(radius * 2, radius * 2, radius * 2);
 		if (aura.Size - goal).Magnitude > 0.01 then
-			(TweenService:Create(aura, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			(__lt_call_service_method("TweenService", "Create", aura, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 				Size = goal
 			})):Play();
 		end;

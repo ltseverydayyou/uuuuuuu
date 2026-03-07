@@ -1,9 +1,41 @@
+local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
+local function __lt_clone_service_value(value)
+	if __lt_oldcloneref and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt_oldcloneref, value);
+		if ok and cloned ~= nil then
+			return cloned;
+		end;
+	end;
+	return value;
+end;
+local function __lt_clone_service(name, refFn)
+	if type(refFn) ~= "function" then
+		return game:GetService(name);
+	end;
+	local ok, ref = pcall(function()
+		return refFn(game:GetService(name));
+	end);
+	if ok and ref ~= nil then
+		return ref;
+	end;
+	return game:GetService(name);
+end;
+local function __lt_call_service_method(name, method, ...)
+	local service = game:GetService(name);
+	local fn = service[method];
+	if type(fn) ~= "function" then
+		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
+	end;
+	return fn(service, ...);
+end;
+
+
 local function ClonedService(name)
 	local Service = game.GetService;
 	local Reference = cloneref or function(reference)
 		return reference;
 	end;
-	return Reference(Service(game, name));
+	return __lt_clone_service(name, Reference);
 end;
 local TweenService = ClonedService("TweenService");
 local RunService = ClonedService("RunService");
@@ -24,7 +56,7 @@ local function NAdragSmooth(ui, dragui)
 		if dragTween then
 			dragTween:Cancel();
 		end;
-		dragTween = TweenService:Create(ui, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		dragTween = __lt_call_service_method("TweenService", "Create", ui, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 			Position = pos
 		});
 		dragTween:Play();
@@ -84,9 +116,9 @@ local function protectUI(sGui)
 		NAProtection(sGui);
 		sGui.Parent = gethui();
 		return sGui;
-	elseif cGUI and cGUI:FindFirstChild("RobloxGui") then
+	elseif cGUI and __lt_call_service_method("CoreGui", "FindFirstChild", "RobloxGui") then
 		NAProtection(sGui);
-		sGui.Parent = cGUI:FindFirstChild("RobloxGui");
+		sGui.Parent = __lt_call_service_method("CoreGui", "FindFirstChild", "RobloxGui");
 		return sGui;
 	elseif cGUI then
 		NAProtection(sGui);
@@ -164,12 +196,12 @@ title.TextSize = 18;
 local titleScale = Instance.new("UIScale");
 titleScale.Parent = title;
 bind(title.MouseEnter:Connect(function()
-	(TweenService:Create(titleScale, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+	(__lt_call_service_method("TweenService", "Create", titleScale, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 		Scale = 1.02
 	})):Play();
 end));
 bind(title.MouseLeave:Connect(function()
-	(TweenService:Create(titleScale, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+	(__lt_call_service_method("TweenService", "Create", titleScale, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 		Scale = 1
 	})):Play();
 end));
@@ -209,12 +241,12 @@ local function headerBtn(txt)
 	newStroke(b, 1);
 	local s = Instance.new("UIScale", b);
 	bind(b.MouseEnter:Connect(function()
-		(TweenService:Create(s, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		(__lt_call_service_method("TweenService", "Create", s, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 			Scale = 1.05
 		})):Play();
 	end));
 	bind(b.MouseLeave:Connect(function()
-		(TweenService:Create(s, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		(__lt_call_service_method("TweenService", "Create", s, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 			Scale = 1
 		})):Play();
 	end));
@@ -245,7 +277,7 @@ local function ripple(target)
 	local rc = Instance.new("UICorner");
 	rc.CornerRadius = UDim.new(1, 0);
 	rc.Parent = r;
-	(TweenService:Create(r, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+	(__lt_call_service_method("TweenService", "Create", r, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 		Size = UDim2.fromOffset(target.AbsoluteSize.X + 10, target.AbsoluteSize.Y + 10),
 		BackgroundTransparency = 1
 	})):Play();
@@ -267,12 +299,12 @@ local function toggleRow(text)
 	local rowScale = Instance.new("UIScale");
 	rowScale.Parent = row;
 	bind(row.MouseEnter:Connect(function()
-		(TweenService:Create(rowScale, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		(__lt_call_service_method("TweenService", "Create", rowScale, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 			Scale = 1.02
 		})):Play();
 	end));
 	bind(row.MouseLeave:Connect(function()
-		(TweenService:Create(rowScale, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		(__lt_call_service_method("TweenService", "Create", rowScale, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 			Scale = 1
 		})):Play();
 	end));
@@ -326,18 +358,18 @@ local function toggleRow(text)
 		local colorOnB = Color3.fromRGB(134, 96, 255);
 		local colorOffA = Color3.fromRGB(52, 52, 58);
 		local colorOffB = Color3.fromRGB(38, 38, 44);
-		(TweenService:Create(knob, ti, {
+		(__lt_call_service_method("TweenService", "Create", knob, ti, {
 			Position = UDim2.new(0, destX, 0.5, -13)
 		})):Play();
-		(TweenService:Create(knobScale, TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+		(__lt_call_service_method("TweenService", "Create", knobScale, TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
 			Scale = 1.08
 		})):Play();
 		task.delay(0.12, function()
-			(TweenService:Create(knobScale, TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+			(__lt_call_service_method("TweenService", "Create", knobScale, TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
 				Scale = 1
 			})):Play();
 		end);
-		(TweenService:Create(track, ti, {
+		(__lt_call_service_method("TweenService", "Create", track, ti, {
 			BackgroundColor3 = on and Color3.fromRGB(55, 60, 75) or Color3.fromRGB(45, 45, 50)
 		})):Play();
 		trackGrad.Color = ColorSequence.new(on and colorOnA or colorOffA, on and colorOnB or colorOffB);
@@ -381,10 +413,10 @@ local function openUI()
 	launcherIcon.Visible = false;
 	header.Visible = true;
 	body.Visible = true;
-	(TweenService:Create(rootCorner, TweenInfo.new(0.28, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+	(__lt_call_service_method("TweenService", "Create", rootCorner, TweenInfo.new(0.28, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 		CornerRadius = UDim.new(0, 14)
 	})):Play();
-	(TweenService:Create(root, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+	(__lt_call_service_method("TweenService", "Create", root, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
 		Size = UDim2.fromOffset(openSize.X, openSize.Y)
 	})):Play();
 end;
@@ -392,10 +424,10 @@ local function minimizeUI()
 	isOpen = false;
 	header.Visible = false;
 	body.Visible = false;
-	(TweenService:Create(rootCorner, TweenInfo.new(0.26, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+	(__lt_call_service_method("TweenService", "Create", rootCorner, TweenInfo.new(0.26, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 		CornerRadius = UDim.new(1, 0)
 	})):Play();
-	(TweenService:Create(root, TweenInfo.new(0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+	(__lt_call_service_method("TweenService", "Create", root, TweenInfo.new(0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
 		Size = UDim2.fromOffset(miniSize.X, miniSize.Y)
 	})):Play();
 	task.delay(0.08, function()
@@ -465,10 +497,10 @@ task.spawn(function()
 			local mh = (ClonedService("Workspace")).Buildings.DeadBurger.DumpsterMoneyMaker:FindFirstChild("MoneyHitbox");
 			if hrp and mh then
 				local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut);
-				local tween1 = TweenService:Create(mh, tweenInfo, {
+				local tween1 = __lt_call_service_method("TweenService", "Create", mh, tweenInfo, {
 					CFrame = hrp.CFrame
 				});
-				local tween2 = TweenService:Create(mh, tweenInfo, {
+				local tween2 = __lt_call_service_method("TweenService", "Create", mh, tweenInfo, {
 					CFrame = hrp.CFrame + Vector3.new(0, 20, 0)
 				});
 				tween1:Play();
@@ -515,7 +547,7 @@ bind(closeBtn.MouseButton1Click:Connect(function()
 	end;
 	monitorCds = {};
 	trashCds = {};
-	(TweenService:Create(root, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+	(__lt_call_service_method("TweenService", "Create", root, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 		BackgroundTransparency = 1,
 		Size = UDim2.fromOffset(0, 0)
 	})):Play();

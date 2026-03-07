@@ -1,11 +1,43 @@
+local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
+local function __lt_clone_service_value(value)
+	if __lt_oldcloneref and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt_oldcloneref, value);
+		if ok and cloned ~= nil then
+			return cloned;
+		end;
+	end;
+	return value;
+end;
+local function __lt_clone_service(name, refFn)
+	if type(refFn) ~= "function" then
+		return game:GetService(name);
+	end;
+	local ok, ref = pcall(function()
+		return refFn(game:GetService(name));
+	end);
+	if ok and ref ~= nil then
+		return ref;
+	end;
+	return game:GetService(name);
+end;
+local function __lt_call_service_method(name, method, ...)
+	local service = game:GetService(name);
+	local fn = service[method];
+	if type(fn) ~= "function" then
+		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
+	end;
+	return fn(service, ...);
+end;
+
+
 if not game:IsLoaded() then
 	game.Loaded:Wait();
 end;
-local plrs = cloneref(game:GetService("Players"));
-local pps = cloneref(game:GetService("ProximityPromptService"));
-local uis = cloneref(game:GetService("UserInputService"));
-local ts = cloneref(game:GetService("TweenService"));
-local hs = cloneref(game:GetService("HttpService"));
+local plrs = __lt_clone_service("Players", cloneref);
+local pps = __lt_clone_service("ProximityPromptService", cloneref);
+local uis = __lt_clone_service("UserInputService", cloneref);
+local ts = __lt_clone_service("TweenService", cloneref);
+local hs = __lt_clone_service("HttpService", cloneref);
 local lp = plrs.LocalPlayer or plrs.PlayerAdded:Wait();
 local function getPar()
 	local ok, g;
@@ -58,7 +90,7 @@ if hasFS() then
 		if isfile(cfgFile) then
 			local s = readfile(cfgFile);
 			if s and s ~= "" then
-				local t = hs:JSONDecode(s);
+				local t = __lt_call_service_method("HttpService", "JSONDecode", s);
 				if type(t) == "table" then
 					for k, v in pairs(t) do
 						if k == "bgColor" and type(v) == "table" then
@@ -77,7 +109,7 @@ if hasFS() then
 		if isfile(keyFile) then
 			local s = readfile(keyFile);
 			if s and s ~= "" then
-				local t = hs:JSONDecode(s);
+				local t = __lt_call_service_method("HttpService", "JSONDecode", s);
 				if type(t) == "table" then
 					loadedKeyState = t;
 				end;
@@ -371,7 +403,7 @@ ico.TextSize = 18;
 ico.TextColor3 = Color3.fromRGB(255, 255, 255);
 ico.Text = "K";
 ico.Parent = tog;
-(ts:Create(tog, TweenInfo.new(1.4, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut, -1, true), {
+(__lt_call_service_method("TweenService", "Create", tog, TweenInfo.new(1.4, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut, -1, true), {
 	BackgroundTransparency = 0.12
 })):Play();
 local map = {};
@@ -401,7 +433,7 @@ local function saveCfg()
 		return;
 	end;
 	local ok, s = pcall(function()
-		return hs:JSONEncode(encodeCfg());
+		return __lt_call_service_method("HttpService", "JSONEncode", encodeCfg());
 	end);
 	if ok then
 		pcall(function()
@@ -420,7 +452,7 @@ local function saveKeys()
 		end;
 	end;
 	local ok, s = pcall(function()
-		return hs:JSONEncode(t);
+		return __lt_call_service_method("HttpService", "JSONEncode", t);
 	end);
 	if ok then
 		pcall(function()
@@ -429,7 +461,7 @@ local function saveKeys()
 	end;
 end;
 local function tw(obj, t, props)
-	(ts:Create(obj, TweenInfo.new(t, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), props)):Play();
+	(__lt_call_service_method("TweenService", "Create", obj, TweenInfo.new(t, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), props)):Play();
 end;
 local function low(s)
 	return (s or ""):lower();
@@ -932,23 +964,23 @@ local function firePrompt(pr, hd)
 		end;
 	elseif hd > 0 then
 		pcall(function()
-			pps:InputHoldBegin(pr);
+			__lt_call_service_method("ProximityPromptService", "InputHoldBegin", pr);
 		end);
 		task.delay(hd, function()
 			if pr and pr:IsDescendantOf(game) then
 				pcall(function()
-					pps:InputHoldEnd(pr);
+					__lt_call_service_method("ProximityPromptService", "InputHoldEnd", pr);
 				end);
 			end;
 		end);
 	else
 		pcall(function()
-			pps:InputHoldBegin(pr);
+			__lt_call_service_method("ProximityPromptService", "InputHoldBegin", pr);
 		end);
 		task.delay(0.05, function()
 			if pr and pr:IsDescendantOf(game) then
 				pcall(function()
-					pps:InputHoldEnd(pr);
+					__lt_call_service_method("ProximityPromptService", "InputHoldEnd", pr);
 				end);
 			end;
 		end);

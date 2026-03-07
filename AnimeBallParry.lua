@@ -1,11 +1,43 @@
-local Players = cloneref(game:GetService("Players"));
-local RunService = cloneref(game:GetService("RunService"));
-local UserInputService = cloneref(game:GetService("UserInputService"));
-local ReplicatedStorage = cloneref(game:GetService("ReplicatedStorage"));
+local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
+local function __lt_clone_service_value(value)
+	if __lt_oldcloneref and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt_oldcloneref, value);
+		if ok and cloned ~= nil then
+			return cloned;
+		end;
+	end;
+	return value;
+end;
+local function __lt_clone_service(name, refFn)
+	if type(refFn) ~= "function" then
+		return game:GetService(name);
+	end;
+	local ok, ref = pcall(function()
+		return refFn(game:GetService(name));
+	end);
+	if ok and ref ~= nil then
+		return ref;
+	end;
+	return game:GetService(name);
+end;
+local function __lt_call_service_method(name, method, ...)
+	local service = game:GetService(name);
+	local fn = service[method];
+	if type(fn) ~= "function" then
+		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
+	end;
+	return fn(service, ...);
+end;
+
+
+local Players = __lt_clone_service("Players", cloneref);
+local RunService = __lt_clone_service("RunService", cloneref);
+local UserInputService = __lt_clone_service("UserInputService", cloneref);
+local ReplicatedStorage = __lt_clone_service("ReplicatedStorage", cloneref);
 local Stats = game:GetService("Stats");
-local GuiService = cloneref(game:GetService("GuiService"));
+local GuiService = __lt_clone_service("GuiService", cloneref);
 local IsOnMobile = (function()
-	local platform = UserInputService:GetPlatform();
+	local platform = __lt_call_service_method("UserInputService", "GetPlatform");
 	if platform == Enum.Platform.IOS or platform == Enum.Platform.Android or platform == Enum.Platform.AndroidTV or platform == Enum.Platform.Chromecast or platform == Enum.Platform.MetaOS then
 		return true;
 	end;
@@ -15,7 +47,7 @@ local IsOnMobile = (function()
 	return false;
 end)();
 local IsOnPC = (function()
-	local platform = UserInputService:GetPlatform();
+	local platform = __lt_call_service_method("UserInputService", "GetPlatform");
 	if platform == Enum.Platform.Windows or platform == Enum.Platform.OSX or platform == Enum.Platform.Linux or platform == Enum.Platform.SteamOS or platform == Enum.Platform.UWP or platform == Enum.Platform.DOS or platform == Enum.Platform.BeOS then
 		return true;
 	end;
@@ -60,7 +92,7 @@ local ApplyLastInputPatch = function()
 		end;
 		local prefSignal;
 		pcall(function()
-			prefSignal = UserInputService:GetPropertyChangedSignal("PreferredInput");
+			prefSignal = __lt_call_service_method("UserInputService", "GetPropertyChangedSignal", "PreferredInput");
 		end);
 		if prefSignal then
 			for _, c in ipairs(getconnections(prefSignal)) do
@@ -78,7 +110,7 @@ local ApplyLastInputPatch = function()
 	end);
 	if connect and disconnect then
 		disconnect("_LastInputTouch");
-		connect("_LastInputTouch", (GuiService:GetPropertyChangedSignal("TouchControlsEnabled")):Connect(function()
+		connect("_LastInputTouch", (__lt_call_service_method("GuiService", "GetPropertyChangedSignal", "TouchControlsEnabled")):Connect(function()
 			if IsOnMobile then
 				pcall(function()
 					GuiService.TouchControlsEnabled = true;
@@ -86,7 +118,7 @@ local ApplyLastInputPatch = function()
 			end;
 		end));
 	else
-		(GuiService:GetPropertyChangedSignal("TouchControlsEnabled")):Connect(function()
+		(__lt_call_service_method("GuiService", "GetPropertyChangedSignal", "TouchControlsEnabled")):Connect(function()
 			if IsOnMobile then
 				pcall(function()
 					GuiService.TouchControlsEnabled = true;
@@ -123,7 +155,7 @@ local RevertLastInputPatch = function()
 	LastInputPatched = false;
 end;
 local guiCHECKINGAHHHHH = function()
-	return gethui and gethui() or (cloneref(game:GetService("CoreGui"))):FindFirstChildWhichIsA("ScreenGui") or cloneref(game:GetService("CoreGui")) or (cloneref(game:GetService("Players"))).LocalPlayer:FindFirstChildWhichIsA("PlayerGui");
+	return gethui and gethui() or (__lt_clone_service("CoreGui", cloneref)):FindFirstChildWhichIsA("ScreenGui") or __lt_clone_service("CoreGui", cloneref) or (__lt_clone_service("Players", cloneref)).LocalPlayer:FindFirstChildWhichIsA("PlayerGui");
 end;
 do
 	local ok, guiParent = pcall(guiCHECKINGAHHHHH);
@@ -148,7 +180,7 @@ local SoundController;
 local FRemote;
 do
 	local okFW, fw = pcall(function()
-		return require(ReplicatedStorage:WaitForChild("Framework"));
+		return require(__lt_call_service_method("ReplicatedStorage", "WaitForChild", "Framework"));
 	end);
 	if okFW and fw then
 		Framework = fw;
@@ -172,7 +204,7 @@ do
 		end;
 	end;
 	local okRf, rf = pcall(function()
-		return (ReplicatedStorage:WaitForChild("Framework")):WaitForChild("RemoteFunction");
+		return (__lt_call_service_method("ReplicatedStorage", "WaitForChild", "Framework")):WaitForChild("RemoteFunction");
 	end);
 	if okRf then
 		FRemote = rf;
@@ -1347,7 +1379,7 @@ local function isBallTargetingYouAttr(ball, char)
 			return true;
 		end;
 	elseif typeof(v) == "string" then
-		local plr = Players:GetPlayerFromCharacter(char) or localPlayer;
+		local plr = __lt_call_service_method("Players", "GetPlayerFromCharacter", char) or localPlayer;
 		if not plr then
 			return false;
 		end;

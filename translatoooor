@@ -1,21 +1,53 @@
+local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
+local function __lt_clone_service_value(value)
+	if __lt_oldcloneref and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt_oldcloneref, value);
+		if ok and cloned ~= nil then
+			return cloned;
+		end;
+	end;
+	return value;
+end;
+local function __lt_clone_service(name, refFn)
+	if type(refFn) ~= "function" then
+		return game:GetService(name);
+	end;
+	local ok, ref = pcall(function()
+		return refFn(game:GetService(name));
+	end);
+	if ok and ref ~= nil then
+		return ref;
+	end;
+	return game:GetService(name);
+end;
+local function __lt_call_service_method(name, method, ...)
+	local service = game:GetService(name);
+	local fn = service[method];
+	if type(fn) ~= "function" then
+		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
+	end;
+	return fn(service, ...);
+end;
+
+
 if not game.Loaded then
 	game.Loaded:Wait();
 end;
 repeat
 	task.wait(0.06);
-until (cloneref(game:GetService("Players"))).LocalPlayer;
-local Http = cloneref(game:GetService("HttpService"));
-local Players = cloneref(game:GetService("Players"));
+until (__lt_clone_service("Players", cloneref)).LocalPlayer;
+local Http = __lt_clone_service("HttpService", cloneref);
+local Players = __lt_clone_service("Players", cloneref);
 local LP = Players.LocalPlayer;
-local TCS = cloneref(game:GetService("TextChatService"));
-local CoreGui = cloneref(game:GetService("CoreGui"));
+local TCS = __lt_clone_service("TextChatService", cloneref);
+local CoreGui = __lt_clone_service("CoreGui", cloneref);
 local YourLang = "en";
 local function req(opt)
 	local fn = syn and syn.request or http and http.request or http_request or request;
 	if fn then
 		return fn(opt);
 	end;
-	return Http:RequestAsync(opt);
+	return __lt_call_service_method("HttpService", "RequestAsync", opt);
 end;
 local gv = isfile and isfile("googlev.txt") and readfile("googlev.txt") or "";
 local function consent(body)
@@ -177,19 +209,19 @@ local function q(data)
 	for k, v in pairs(data) do
 		if type(v) == "table" then
 			for _, vv in pairs(v) do
-				s ..= "&" .. Http:UrlEncode(k) .. "=" .. Http:UrlEncode(vv);
+				s ..= "&" .. __lt_call_service_method("HttpService", "UrlEncode", k) .. "=" .. __lt_call_service_method("HttpService", "UrlEncode", vv);
 			end;
 		else
-			s ..= "&" .. Http:UrlEncode(k) .. "=" .. Http:UrlEncode(v);
+			s ..= "&" .. __lt_call_service_method("HttpService", "UrlEncode", k) .. "=" .. __lt_call_service_method("HttpService", "UrlEncode", v);
 		end;
 	end;
 	return s:sub(2);
 end;
 local jE = function(x)
-	return Http:JSONEncode(x);
+	return __lt_call_service_method("HttpService", "JSONEncode", x);
 end;
 local jD = function(x)
-	return Http:JSONDecode(x);
+	return __lt_call_service_method("HttpService", "JSONDecode", x);
 end;
 local rpc = "MkEWBc";
 local root = "https://translate.google.com/";
@@ -293,7 +325,7 @@ local function translateInfo(txt, tgt, src)
 	return out[2][1][1][6][1][1], out[3];
 end;
 local function sys(msg)
-	local chans = TCS:WaitForChild("TextChannels");
+	local chans = __lt_call_service_method("TextChatService", "WaitForChild", "TextChannels");
 	local c = chans:FindFirstChild("RBXSystem") or chans:FindFirstChild("RBXGeneral") or (chans:GetChildren())[1];
 	if c and c.DisplaySystemMessage then
 		c:DisplaySystemMessage(msg);
@@ -318,7 +350,7 @@ local function resolveRecipient(chip)
 		local who = string.match(txt, "^%[To%s+(.+)%]$");
 		if who and who ~= "" then
 			local d = string.lower(who);
-			for _, plr in ipairs(Players:GetPlayers()) do
+			for _, plr in ipairs(__lt_call_service_method("Players", "GetPlayers")) do
 				if string.lower(plr.DisplayName) == d then
 					return plr.Name;
 				end;
@@ -416,8 +448,8 @@ end;
 task.spawn(function()
 	repeat
 		task.wait();
-	until CoreGui:FindFirstChild("ExperienceChat");
-	local ec = CoreGui:WaitForChild("ExperienceChat");
+	until __lt_call_service_method("CoreGui", "FindFirstChild", "ExperienceChat");
+	local ec = __lt_call_service_method("CoreGui", "WaitForChild", "ExperienceChat");
 	local al = ec:WaitForChild("appLayout");
 	local cb = al:WaitForChild("chatInputBar");
 	local bg = cb:WaitForChild("Background");
@@ -450,7 +482,7 @@ TCS.MessageReceived:Connect(function(msg)
 		return;
 	end;
 	local uid = msg.TextSource.UserId;
-	local p = Players:GetPlayerByUserId(uid);
+	local p = __lt_call_service_method("Players", "GetPlayerByUserId", uid);
 	local disp = p and p.DisplayName or tostring(uid);
 	local user = p and p.Name or tostring(uid);
 	local nameStr = disp == user and "@" .. user or disp .. " (@" .. user .. ")";

@@ -1,12 +1,42 @@
+local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
+local function __lt_clone_service_value(value)
+	if __lt_oldcloneref and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt_oldcloneref, value);
+		if ok and cloned ~= nil then
+			return cloned;
+		end;
+	end;
+	return value;
+end;
+local function __lt_clone_service(name, refFn)
+	if type(refFn) ~= "function" then
+		return game:GetService(name);
+	end;
+	local ok, ref = pcall(function()
+		return refFn(game:GetService(name));
+	end);
+	if ok and ref ~= nil then
+		return ref;
+	end;
+	return game:GetService(name);
+end;
+local function __lt_call_service_method(name, method, ...)
+	local service = game:GetService(name);
+	local fn = service[method];
+	if type(fn) ~= "function" then
+		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
+	end;
+	return fn(service, ...);
+end;
+
+
 local G = 6352299542;
 if game.GameId ~= G then
 	return;
 end;
 local function S(n)
-	if n == "Stats" or n == "VirtualInputManager" or n == "LogService" or n == "VoiceChatService" then
-		return game:GetService(n);
-	end;
-	return cloneref and cloneref(game:GetService(n)) or game:GetService(n);
+
+	return __lt_clone_service(n, cloneref);
 end;
 local RS = S("ReplicatedStorage");
 local PS = S("Players");
@@ -29,7 +59,7 @@ end;
 local C = P.Character or P.CharacterAdded:Wait();
 local H = C:FindFirstChild("HealthManager") or C:WaitForChild("HealthManager", 5);
 if H then
-	local RF = RS:FindFirstChild("Remotes");
+	local RF = __lt_call_service_method("ReplicatedStorage", "FindFirstChild", "Remotes");
 	local D = RF and RF:FindFirstChild("DamageCall");
 	local E = RF and RF:FindFirstChild("EditValueCall");
 	local I = -99999999999;
@@ -51,11 +81,11 @@ if H then
 	end;
 	RV.Stepped:Connect(function()
 		if not E then
-			local r = RS:FindFirstChild("Remotes");
+			local r = __lt_call_service_method("ReplicatedStorage", "FindFirstChild", "Remotes");
 			E = r and r:FindFirstChild("EditValueCall") or E;
 		end;
 		if not D then
-			local r = RS:FindFirstChild("Remotes");
+			local r = __lt_call_service_method("ReplicatedStorage", "FindFirstChild", "Remotes");
 			D = r and r:FindFirstChild("DamageCall") or D;
 		end;
 		if E then
@@ -239,8 +269,8 @@ task.spawn(function()
 		yesBtn.Activated:Connect(function()
 			promptGui:Destroy();
 			spawn(function()
-				local rs = cloneref(game:GetService("ReplicatedStorage"));
-				local r = (rs:WaitForChild("Remotes")):WaitForChild("EntityTpObbyCall");
+				local rs = __lt_clone_service("ReplicatedStorage", cloneref);
+				local r = (__lt_call_service_method("ReplicatedStorage", "WaitForChild", "Remotes")):WaitForChild("EntityTpObbyCall");
 				r:FireServer(false);
 				task.wait();
 				r:FireServer(true);
@@ -255,7 +285,7 @@ task.spawn(function()
 					end;
 				end;
 				if exitPart then
-					local player = (cloneref(game:GetService("Players"))).LocalPlayer;
+					local player = (__lt_clone_service("Players", cloneref)).LocalPlayer;
 					local char = player.Character or player.CharacterAdded:Wait();
 					if char.PrimaryPart then
 						char:PivotTo(exitPart.CFrame * CFrame.new(0, 1, 0));

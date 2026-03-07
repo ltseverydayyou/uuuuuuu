@@ -1,14 +1,14 @@
-local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
-local function __lt_clone_service_value(value)
-	if __lt_oldcloneref and typeof(value) == "Instance" then
-		local ok, cloned = pcall(__lt_oldcloneref, value);
+local __lt = { cr = type(cloneref) == "function" and cloneref or nil };
+function __lt.cv(value)
+	if __lt.cr and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt.cr, value);
 		if ok and cloned ~= nil then
 			return cloned;
 		end;
 	end;
 	return value;
 end;
-local function __lt_clone_service(name, refFn)
+function __lt.cs(name, refFn)
 	if type(refFn) ~= "function" then
 		return game:GetService(name);
 	end;
@@ -20,8 +20,22 @@ local function __lt_clone_service(name, refFn)
 	end;
 	return game:GetService(name);
 end;
-local function __lt_call_service_method(name, method, ...)
-	local service = game:GetService(name);
+function __lt.ig(method)
+	return method == "FindFirstChild"
+		or method == "WaitForChild"
+		or method == "FindFirstChildOfClass"
+		or method == "FindFirstChildWhichIsA"
+		or method == "FindFirstAncestor"
+		or method == "FindFirstAncestorOfClass"
+		or method == "FindFirstAncestorWhichIsA"
+		or method == "GetChildren"
+		or method == "GetDescendants"
+		or method == "QueryDescendants";
+end;
+function __lt.cm(name, method, ...)
+	local service = __lt.ig(method)
+		and __lt.cs(name, __lt.cr)
+		or game:GetService(name);
 	local fn = service[method];
 	if type(fn) ~= "function" then
 		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
@@ -36,13 +50,13 @@ return function(Icon)
 
 
 
-	local GuiService = __lt_clone_service("GuiService", cloneref)
-	local Players =  __lt_clone_service("Players", cloneref)
-	local UserInputService = __lt_clone_service("UserInputService", cloneref)
+	local GuiService = __lt.cs("GuiService", cloneref)
+	local Players =  __lt.cs("Players", cloneref)
+	local UserInputService = __lt.cs("UserInputService", cloneref)
 	local container = {}
 	local Signal = Import(script.Parent.Parent.Packages.GoodSignal)
 	local insetChanged = Signal.new()
-	local guiInset = __lt_call_service_method("GuiService", "GetGuiInset")
+	local guiInset = __lt.cm("GuiService", "GetGuiInset")
 	local startInset = 0
 	local yDownOffset = 0
 	local ySizeOffset = 0
@@ -57,7 +71,7 @@ return function(Icon)
 
 
 
-		isConsoleScreen = __lt_call_service_method("GuiService", "IsTenFootInterface")
+		isConsoleScreen = __lt.cm("GuiService", "IsTenFootInterface")
 		isUsingVR = UserInputService.VREnabled
 		Icon.isOldTopbar = isOldTopbar
 		checkCount += 1
@@ -93,13 +107,13 @@ return function(Icon)
 						Icon.setTopbarEnabled()
 					end
 				end
-				__lt_call_service_method("GuiService", "GetPropertyChangedSignal", "MenuIsOpen"):Connect(decideToHideTopbar)
+				__lt.cm("GuiService", "GetPropertyChangedSignal", "MenuIsOpen"):Connect(decideToHideTopbar)
 				decideToHideTopbar()
 			end)
 		end
 
 
-		guiInset = __lt_call_service_method("GuiService", "GetGuiInset")
+		guiInset = __lt.cm("GuiService", "GetGuiInset")
 		startInset = if isOldTopbar then 12 else guiInset.Y - 50
 		yDownOffset = if isOldTopbar then 2 else 0
 		ySizeOffset = -2
@@ -123,7 +137,7 @@ return function(Icon)
 		end
 
 	end
-	__lt_call_service_method("GuiService", "GetPropertyChangedSignal", "TopbarInset"):Connect(checkInset)
+	__lt.cm("GuiService", "GetPropertyChangedSignal", "TopbarInset"):Connect(checkInset)
 	checkInset("FirstTime")
 
 	local screenGui = Instance.new("ScreenGui")

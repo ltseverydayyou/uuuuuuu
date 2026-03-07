@@ -1,14 +1,14 @@
-local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
-local function __lt_clone_service_value(value)
-	if __lt_oldcloneref and typeof(value) == "Instance" then
-		local ok, cloned = pcall(__lt_oldcloneref, value);
+local __lt = { cr = type(cloneref) == "function" and cloneref or nil };
+function __lt.cv(value)
+	if __lt.cr and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt.cr, value);
 		if ok and cloned ~= nil then
 			return cloned;
 		end;
 	end;
 	return value;
 end;
-local function __lt_clone_service(name, refFn)
+function __lt.cs(name, refFn)
 	if type(refFn) ~= "function" then
 		return game:GetService(name);
 	end;
@@ -20,8 +20,22 @@ local function __lt_clone_service(name, refFn)
 	end;
 	return game:GetService(name);
 end;
-local function __lt_call_service_method(name, method, ...)
-	local service = game:GetService(name);
+function __lt.ig(method)
+	return method == "FindFirstChild"
+		or method == "WaitForChild"
+		or method == "FindFirstChildOfClass"
+		or method == "FindFirstChildWhichIsA"
+		or method == "FindFirstAncestor"
+		or method == "FindFirstAncestorOfClass"
+		or method == "FindFirstAncestorWhichIsA"
+		or method == "GetChildren"
+		or method == "GetDescendants"
+		or method == "QueryDescendants";
+end;
+function __lt.cm(name, method, ...)
+	local service = __lt.ig(method)
+		and __lt.cs(name, __lt.cr)
+		or game:GetService(name);
 	local fn = service[method];
 	if type(fn) ~= "function" then
 		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
@@ -45,7 +59,7 @@ local SRV = setmetatable({}, {
 	__index = function(self, n)
 		local ok, s = pcall(function()
 
-			return __lt_clone_service(n, _ref);
+			return __lt.cs(n, _ref);
 		end);
 		if ok and s then
 			rawset(self, n, s);
@@ -72,7 +86,7 @@ do
 			local ok, data = pcall(readfile, colorsPath);
 			if ok and data then
 				local ok2, decoded = pcall(function()
-					return __lt_call_service_method("HttpService", "JSONDecode", data);
+					return __lt.cm("HttpService", "JSONDecode", data);
 				end);
 				if ok2 and type(decoded) == "table" then
 					colorConfig = decoded;
@@ -89,7 +103,7 @@ do
 			local ok, data = pcall(readfile, settingsPath);
 			if ok and data then
 				local ok2, decoded = pcall(function()
-					return __lt_call_service_method("HttpService", "JSONDecode", data);
+					return __lt.cm("HttpService", "JSONDecode", data);
 				end);
 				if ok2 and type(decoded) == "table" then
 					settingsConfig = decoded;
@@ -429,7 +443,7 @@ local function loadIconCfg()
 	end;
 	if type(isfile) == "function" and type(writefile) == "function" then
 		if not isfile(cfgPath) then
-			pcall(writefile, cfgPath, __lt_call_service_method("HttpService", "JSONEncode", {
+			pcall(writefile, cfgPath, __lt.cm("HttpService", "JSONEncode", {
 				enabled = false,
 				assetId = "",
 				localPath = "",
@@ -474,7 +488,7 @@ local function saveIconCfg()
 		localPath = type(dIcons.localPath) == "string" and dIcons.localPath or "",
 		index = tonumber(dIcons.index) or 0
 	};
-	pcall(writefile, cfgPath, __lt_call_service_method("HttpService", "JSONEncode", payload));
+	pcall(writefile, cfgPath, __lt.cm("HttpService", "JSONEncode", payload));
 end;
 local function scanIcons()
 	dIcons.entries = {};
@@ -1159,7 +1173,7 @@ task.defer(function()
 			if HS and type(writefile) == "function" then
 				settingsConfig.IconSize = { value = math.clamp(iconSizeValue.Value, 0.5, 5) };
 				local ok, encoded = pcall(function()
-					return __lt_call_service_method("HttpService", "JSONEncode", settingsConfig);
+					return __lt.cm("HttpService", "JSONEncode", settingsConfig);
 				end);
 				if ok and encoded then
 					pcall(writefile, settingsPath, encoded);
@@ -1199,7 +1213,7 @@ task.defer(function()
 		end;
 		if TS and (not instant) then
 			pcall(function()
-				(__lt_call_service_method("TweenService", "Create", iconBtn, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				(__lt.cm("TweenService", "Create", iconBtn, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 					ImageTransparency = imgT,
 					BackgroundTransparency = bgT
 				})):Play();
@@ -1407,7 +1421,7 @@ task.defer(function()
 				customColor = { lastC.R, lastC.G, lastC.B }
 			};
 			local ok, enc = pcall(function()
-				return __lt_call_service_method("HttpService", "JSONEncode", colorConfig);
+				return __lt.cm("HttpService", "JSONEncode", colorConfig);
 			end);
 			if ok and enc then
 				pcall(writefile, colorsPath, enc);
@@ -1612,7 +1626,7 @@ task.defer(function()
 			end;
 			settingsConfig[key] = { value = v };
 			local ok, enc = pcall(function()
-				return __lt_call_service_method("HttpService", "JSONEncode", settingsConfig);
+				return __lt.cm("HttpService", "JSONEncode", settingsConfig);
 			end);
 			if ok and enc then
 				pcall(writefile, settingsPath, enc);
@@ -1724,7 +1738,7 @@ task.defer(function()
 			end;
 			settingsConfig[key] = { enabled = enabled };
 			local ok, encoded = pcall(function()
-				return __lt_call_service_method("HttpService", "JSONEncode", settingsConfig);
+				return __lt.cm("HttpService", "JSONEncode", settingsConfig);
 			end);
 			if ok and encoded then
 				pcall(writefile, settingsPath, encoded);
@@ -1814,7 +1828,7 @@ task.defer(function()
 			end;
 			settingsConfig[key] = { enabled = iconVisible };
 			local ok, encoded = pcall(function()
-				return __lt_call_service_method("HttpService", "JSONEncode", settingsConfig);
+				return __lt.cm("HttpService", "JSONEncode", settingsConfig);
 			end);
 			if ok and encoded then
 				pcall(writefile, settingsPath, encoded);
@@ -1877,7 +1891,7 @@ task.defer(function()
 			end;
 			settingsConfig[key] = { enabled = tabNotifEnabled };
 			local ok, encoded = pcall(function()
-				return __lt_call_service_method("HttpService", "JSONEncode", settingsConfig);
+				return __lt.cm("HttpService", "JSONEncode", settingsConfig);
 			end);
 			if ok and encoded then
 				pcall(writefile, settingsPath, encoded);
@@ -2359,13 +2373,13 @@ task.defer(function()
 	local function saveSidebarGesture()
 		if not (HS and type(writefile) == "function") then return; end;
 		settingsConfig.SidebarGesture = { enabled = sidebarGestureEnabled };
-		local ok, encoded = pcall(function() return __lt_call_service_method("HttpService", "JSONEncode", settingsConfig); end);
+		local ok, encoded = pcall(function() return __lt.cm("HttpService", "JSONEncode", settingsConfig); end);
 		if ok and encoded then pcall(writefile, settingsPath, encoded); end;
 	end;
 	local function saveSidebarGestureVisible()
 		if not (HS and type(writefile) == "function") then return; end;
 		settingsConfig.SidebarGestureVisible = { enabled = sidebarGestureVisible };
-		local ok, encoded = pcall(function() return __lt_call_service_method("HttpService", "JSONEncode", settingsConfig); end);
+		local ok, encoded = pcall(function() return __lt.cm("HttpService", "JSONEncode", settingsConfig); end);
 		if ok and encoded then pcall(writefile, settingsPath, encoded); end;
 	end;
 	local function applyGestureVisual()
@@ -2513,7 +2527,7 @@ task.defer(function()
 		local function saveState()
 			if not (HS and type(writefile) == "function") then return; end;
 			settingsConfig[key] = { enabled = autoCloseOnLoad };
-			local ok, encoded = pcall(function() return __lt_call_service_method("HttpService", "JSONEncode", settingsConfig); end);
+			local ok, encoded = pcall(function() return __lt.cm("HttpService", "JSONEncode", settingsConfig); end);
 			if ok and encoded then pcall(writefile, settingsPath, encoded); end;
 		end;
 		local function setVisual()
@@ -2635,7 +2649,7 @@ task.defer(function()
 			if curSec then sidebarCurrentSection = curSec; end;
 			local targetPos = sidebarDragAlpha > 0.5 and sidebarOpenPos or sidebarClosedPos;
 			if TS and sidebar then
-				local tw = __lt_call_service_method("TweenService", "Create", sidebar, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Position = targetPos });
+				local tw = __lt.cm("TweenService", "Create", sidebar, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Position = targetPos });
 				tw:Play();
 			elseif sidebar then
 				sidebar.Position = targetPos;

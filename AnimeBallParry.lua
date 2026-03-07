@@ -1,14 +1,14 @@
-local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
-local function __lt_clone_service_value(value)
-	if __lt_oldcloneref and typeof(value) == "Instance" then
-		local ok, cloned = pcall(__lt_oldcloneref, value);
+local __lt = { cr = type(cloneref) == "function" and cloneref or nil };
+function __lt.cv(value)
+	if __lt.cr and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt.cr, value);
 		if ok and cloned ~= nil then
 			return cloned;
 		end;
 	end;
 	return value;
 end;
-local function __lt_clone_service(name, refFn)
+function __lt.cs(name, refFn)
 	if type(refFn) ~= "function" then
 		return game:GetService(name);
 	end;
@@ -20,8 +20,22 @@ local function __lt_clone_service(name, refFn)
 	end;
 	return game:GetService(name);
 end;
-local function __lt_call_service_method(name, method, ...)
-	local service = game:GetService(name);
+function __lt.ig(method)
+	return method == "FindFirstChild"
+		or method == "WaitForChild"
+		or method == "FindFirstChildOfClass"
+		or method == "FindFirstChildWhichIsA"
+		or method == "FindFirstAncestor"
+		or method == "FindFirstAncestorOfClass"
+		or method == "FindFirstAncestorWhichIsA"
+		or method == "GetChildren"
+		or method == "GetDescendants"
+		or method == "QueryDescendants";
+end;
+function __lt.cm(name, method, ...)
+	local service = __lt.ig(method)
+		and __lt.cs(name, __lt.cr)
+		or game:GetService(name);
 	local fn = service[method];
 	if type(fn) ~= "function" then
 		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
@@ -30,14 +44,14 @@ local function __lt_call_service_method(name, method, ...)
 end;
 
 
-local Players = __lt_clone_service("Players", cloneref);
-local RunService = __lt_clone_service("RunService", cloneref);
-local UserInputService = __lt_clone_service("UserInputService", cloneref);
-local ReplicatedStorage = __lt_clone_service("ReplicatedStorage", cloneref);
+local Players = __lt.cs("Players", cloneref);
+local RunService = __lt.cs("RunService", cloneref);
+local UserInputService = __lt.cs("UserInputService", cloneref);
+local ReplicatedStorage = __lt.cs("ReplicatedStorage", cloneref);
 local Stats = game:GetService("Stats");
-local GuiService = __lt_clone_service("GuiService", cloneref);
+local GuiService = __lt.cs("GuiService", cloneref);
 local IsOnMobile = (function()
-	local platform = __lt_call_service_method("UserInputService", "GetPlatform");
+	local platform = __lt.cm("UserInputService", "GetPlatform");
 	if platform == Enum.Platform.IOS or platform == Enum.Platform.Android or platform == Enum.Platform.AndroidTV or platform == Enum.Platform.Chromecast or platform == Enum.Platform.MetaOS then
 		return true;
 	end;
@@ -47,7 +61,7 @@ local IsOnMobile = (function()
 	return false;
 end)();
 local IsOnPC = (function()
-	local platform = __lt_call_service_method("UserInputService", "GetPlatform");
+	local platform = __lt.cm("UserInputService", "GetPlatform");
 	if platform == Enum.Platform.Windows or platform == Enum.Platform.OSX or platform == Enum.Platform.Linux or platform == Enum.Platform.SteamOS or platform == Enum.Platform.UWP or platform == Enum.Platform.DOS or platform == Enum.Platform.BeOS then
 		return true;
 	end;
@@ -92,7 +106,7 @@ local ApplyLastInputPatch = function()
 		end;
 		local prefSignal;
 		pcall(function()
-			prefSignal = __lt_call_service_method("UserInputService", "GetPropertyChangedSignal", "PreferredInput");
+			prefSignal = __lt.cm("UserInputService", "GetPropertyChangedSignal", "PreferredInput");
 		end);
 		if prefSignal then
 			for _, c in ipairs(getconnections(prefSignal)) do
@@ -110,7 +124,7 @@ local ApplyLastInputPatch = function()
 	end);
 	if connect and disconnect then
 		disconnect("_LastInputTouch");
-		connect("_LastInputTouch", (__lt_call_service_method("GuiService", "GetPropertyChangedSignal", "TouchControlsEnabled")):Connect(function()
+		connect("_LastInputTouch", (__lt.cm("GuiService", "GetPropertyChangedSignal", "TouchControlsEnabled")):Connect(function()
 			if IsOnMobile then
 				pcall(function()
 					GuiService.TouchControlsEnabled = true;
@@ -118,7 +132,7 @@ local ApplyLastInputPatch = function()
 			end;
 		end));
 	else
-		(__lt_call_service_method("GuiService", "GetPropertyChangedSignal", "TouchControlsEnabled")):Connect(function()
+		(__lt.cm("GuiService", "GetPropertyChangedSignal", "TouchControlsEnabled")):Connect(function()
 			if IsOnMobile then
 				pcall(function()
 					GuiService.TouchControlsEnabled = true;
@@ -155,7 +169,7 @@ local RevertLastInputPatch = function()
 	LastInputPatched = false;
 end;
 local guiCHECKINGAHHHHH = function()
-	return gethui and gethui() or (__lt_clone_service("CoreGui", cloneref)):FindFirstChildWhichIsA("ScreenGui") or __lt_clone_service("CoreGui", cloneref) or (__lt_clone_service("Players", cloneref)).LocalPlayer:FindFirstChildWhichIsA("PlayerGui");
+	return gethui and gethui() or (__lt.cs("CoreGui", cloneref)):FindFirstChildWhichIsA("ScreenGui") or __lt.cs("CoreGui", cloneref) or (__lt.cs("Players", cloneref)).LocalPlayer:FindFirstChildWhichIsA("PlayerGui");
 end;
 do
 	local ok, guiParent = pcall(guiCHECKINGAHHHHH);
@@ -180,7 +194,7 @@ local SoundController;
 local FRemote;
 do
 	local okFW, fw = pcall(function()
-		return require(__lt_call_service_method("ReplicatedStorage", "WaitForChild", "Framework"));
+		return require(__lt.cm("ReplicatedStorage", "WaitForChild", "Framework"));
 	end);
 	if okFW and fw then
 		Framework = fw;
@@ -204,7 +218,7 @@ do
 		end;
 	end;
 	local okRf, rf = pcall(function()
-		return (__lt_call_service_method("ReplicatedStorage", "WaitForChild", "Framework")):WaitForChild("RemoteFunction");
+		return (__lt.cm("ReplicatedStorage", "WaitForChild", "Framework")):WaitForChild("RemoteFunction");
 	end);
 	if okRf then
 		FRemote = rf;
@@ -1379,7 +1393,7 @@ local function isBallTargetingYouAttr(ball, char)
 			return true;
 		end;
 	elseif typeof(v) == "string" then
-		local plr = __lt_call_service_method("Players", "GetPlayerFromCharacter", char) or localPlayer;
+		local plr = __lt.cm("Players", "GetPlayerFromCharacter", char) or localPlayer;
 		if not plr then
 			return false;
 		end;

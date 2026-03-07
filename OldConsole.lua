@@ -1,14 +1,14 @@
-local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
-local function __lt_clone_service_value(value)
-	if __lt_oldcloneref and typeof(value) == "Instance" then
-		local ok, cloned = pcall(__lt_oldcloneref, value);
+local __lt = { cr = type(cloneref) == "function" and cloneref or nil };
+function __lt.cv(value)
+	if __lt.cr and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt.cr, value);
 		if ok and cloned ~= nil then
 			return cloned;
 		end;
 	end;
 	return value;
 end;
-local function __lt_clone_service(name, refFn)
+function __lt.cs(name, refFn)
 	if type(refFn) ~= "function" then
 		return game:GetService(name);
 	end;
@@ -20,8 +20,22 @@ local function __lt_clone_service(name, refFn)
 	end;
 	return game:GetService(name);
 end;
-local function __lt_call_service_method(name, method, ...)
-	local service = game:GetService(name);
+function __lt.ig(method)
+	return method == "FindFirstChild"
+		or method == "WaitForChild"
+		or method == "FindFirstChildOfClass"
+		or method == "FindFirstChildWhichIsA"
+		or method == "FindFirstAncestor"
+		or method == "FindFirstAncestorOfClass"
+		or method == "FindFirstAncestorWhichIsA"
+		or method == "GetChildren"
+		or method == "GetDescendants"
+		or method == "QueryDescendants";
+end;
+function __lt.cm(name, method, ...)
+	local service = __lt.ig(method)
+		and __lt.cs(name, __lt.cr)
+		or game:GetService(name);
 	local fn = service[method];
 	if type(fn) ~= "function" then
 		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
@@ -45,15 +59,15 @@ local AnalyticsCategory_Game = "Game"
 local AnalyticsAction_InitialOpenTab = "DeveloperConsole_InitialOpenTab"
 local AnalyticsAction_ClickToOpenOpenTab = "DeveloperConsole_ClickToOpenOpenTab"
 
-local CoreGui = __lt_clone_service("CoreGui", cloneref)
-local RobloxGui = __lt_call_service_method("CoreGui", "FindFirstChild", "RobloxGui")
+local CoreGui = __lt.cs("CoreGui", cloneref)
+local RobloxGui = __lt.cm("CoreGui", "FindFirstChild", "RobloxGui")
 local Modules = RobloxGui and RobloxGui:FindFirstChild("Modules")
 
-local ContextActionService = __lt_clone_service("ContextActionService", cloneref)
-local TextService = __lt_clone_service("TextService", cloneref)
-local GuiService = __lt_clone_service("GuiService", cloneref)
-local VRService = __lt_clone_service("VRService", cloneref)
-local isTenFootInterface = __lt_call_service_method("GuiService", "IsTenFootInterface")
+local ContextActionService = __lt.cs("ContextActionService", cloneref)
+local TextService = __lt.cs("TextService", cloneref)
+local GuiService = __lt.cs("GuiService", cloneref)
+local VRService = __lt.cs("VRService", cloneref)
+local isTenFootInterface = __lt.cm("GuiService", "IsTenFootInterface")
 
 local ClientMemoryAnalyzerClass
 local ServerMemoryAnalyzerClass
@@ -66,7 +80,7 @@ local Style; do
 	local optionsFrameColor = Color3.new(1, 1, 1)
 	
 	pcall(function() -- Fun window colors for cool people
-		local Players = __lt_clone_service("Players", cloneref)
+		local Players = __lt.cs("Players", cloneref)
 		if not Players or not Players.LocalPlayer then
 			return
 		end
@@ -375,7 +389,7 @@ local function connectPropertyChanged(object, property, callback)
 end
 
 function Methods.ResetFrameDimensions(devConsole)
-	local uis = __lt_clone_service("UserInputService", cloneref)
+	local uis = __lt.cs("UserInputService", cloneref)
 	local isMobile = uis.TouchEnabled and not uis.KeyboardEnabled
 
 	local cam = workspace.CurrentCamera
@@ -471,7 +485,7 @@ function DeveloperConsole.new(screenGui, permissions, messagesAndStats)
 		frame.Modal = VRService.VREnabled
 	end
 	onVREnabled()
-	__lt_call_service_method("VRService", "GetPropertyChangedSignal", "VREnabled"):connect(onVREnabled)
+	__lt.cm("VRService", "GetPropertyChangedSignal", "VREnabled"):connect(onVREnabled)
 
 	devConsole.Frame = frame
 	devConsole:ResetFrameDimensions()
@@ -1007,7 +1021,7 @@ do -- This doesn't support multiple windows very well
 		
 		local enabled = false
 		
-		local mouse = __lt_clone_service("Players", cloneref).LocalPlayer:GetMouse()
+		local mouse = __lt.cs("Players", cloneref).LocalPlayer:GetMouse()
 		
 		local function Refresh()
 			local enabledNew = devConsole.Visible and not UserInputService.MouseIconEnabled
@@ -1444,7 +1458,7 @@ function Methods.AddTab(devConsole, text, body, openCallback, visibleCallback)
 		Body = body;
 	}
 
-	local nominalSize = __lt_call_service_method("TextService", "GetTextSize", text, TAB_TEXT_SIZE, Enum.Font.SourceSans, Vector2.new(1e3, 1e3))
+	local nominalSize = __lt.cm("TextService", "GetTextSize", text, TAB_TEXT_SIZE, Enum.Font.SourceSans, Vector2.new(1e3, 1e3))
 	local width = nominalSize.x + (TAB_TEXT_PADDING * 2)
 	
 	local buttonFrame = Primitives.InvisibleButton(devConsole.Frame.Interior.Tabs, 'Tab_' .. text)
@@ -1943,7 +1957,7 @@ function Methods.ConnectButtonDragging(devConsole, button, dragCallback, mouseIn
 		[Enum.UserInputType.Touch] = true; -- I'm not sure if touch actually works here
 	}
 	
-	local mouse = __lt_clone_service("Players", cloneref).LocalPlayer:GetMouse()
+	local mouse = __lt.cs("Players", cloneref).LocalPlayer:GetMouse()
 
 	local function startDragging(startP)
 		if dragging then
@@ -2039,7 +2053,7 @@ do
 		permissions.IsCreator = false
 
 		local success, result = pcall(function()
-			local url = string.format("/users/%d/canmanage/%d", __lt_clone_service("Players", cloneref).LocalPlayer.UserId, game.PlaceId)
+			local url = string.format("/users/%d/canmanage/%d", __lt.cs("Players", cloneref).LocalPlayer.UserId, game.PlaceId)
 			return cloneref(game:GetService('HttpRbxApiService')):GetAsync(url, Enum.ThrottlingPriority.Default, Enum.HttpRequestType.Default, true)
 		end)
 		if success and type(result) == "string" then
@@ -2172,9 +2186,9 @@ do
 			outputMessageSyncLocal = NewOutputMessageSync(function(this)
 				local messages = {}
 				
-				local LogService = __lt_clone_service("LogService", cloneref)
+				local LogService = __lt.cs("LogService", cloneref)
 				do -- This do block keeps history from sticking around in memory
-					local history = __lt_call_service_method("LogService", "GetLogHistory")
+					local history = __lt.cm("LogService", "GetLogHistory")
 					for i = 1, #history do
 						local msg = history[i]
 						local message = {
@@ -2209,7 +2223,7 @@ do
 			outputMessageSyncServer = NewOutputMessageSync(function(this)
 				local messages = {}
 				
-				local LogService = __lt_clone_service("LogService", cloneref)
+				local LogService = __lt.cs("LogService", cloneref)
 				
 				LogService.ServerMessageOut:connect(function(text, messageType, timestamp)
 					local message = {
@@ -2222,7 +2236,7 @@ do
 						this.MessageAdded:fire(message)
 					end
 				end)
-				__lt_call_service_method("LogService", "RequestServerOutput")
+				__lt.cm("LogService", "RequestServerOutput")
 				
 				return messages
 			end)
@@ -2289,19 +2303,19 @@ local function onDevConsoleVisibilityChanged(isVisible)
 
 	if isVisible then
 		-- block menu open input while dev console is open
-		__lt_call_service_method("ContextActionService", "BindCoreAction", blockMenuActionName, function() end, false, Enum.KeyCode.ButtonStart)
+		__lt.cm("ContextActionService", "BindCoreAction", blockMenuActionName, function() end, false, Enum.KeyCode.ButtonStart)
 
 		local menuModule = require(Modules.Settings.SettingsHub)
 		menuModule:SetVisibility(false, true)
-		__lt_call_service_method("ContextActionService", "BindCoreAction", closeDevConsoleActionName, closeDevConsole, false, Enum.KeyCode.ButtonB)
+		__lt.cm("ContextActionService", "BindCoreAction", closeDevConsoleActionName, closeDevConsole, false, Enum.KeyCode.ButtonB)
 
-		__lt_call_service_method("GuiService", "AddSelectionParent", selectionParentName, myDeveloperConsole.Frame)
+		__lt.cm("GuiService", "AddSelectionParent", selectionParentName, myDeveloperConsole.Frame)
 		GuiService.SelectedCoreObject = myDeveloperConsole.CurrentOpenedTab
 	else
-		__lt_call_service_method("ContextActionService", "UnbindCoreAction", closeDevConsoleActionName)
-		__lt_call_service_method("ContextActionService", "UnbindCoreAction", blockMenuActionName)
+		__lt.cm("ContextActionService", "UnbindCoreAction", closeDevConsoleActionName)
+		__lt.cm("ContextActionService", "UnbindCoreAction", blockMenuActionName)
 
-		__lt_call_service_method("GuiService", "RemoveSelectionGroup", selectionParentName)
+		__lt.cm("GuiService", "RemoveSelectionGroup", selectionParentName)
 		GuiService.SelectedCoreObject = nil
 	end
 end
@@ -2358,7 +2372,7 @@ local function SetCoreConsoleCreation()
 	end)
 end
 
-local StarterGui = __lt_clone_service("StarterGui", cloneref)
+local StarterGui = __lt.cs("StarterGui", cloneref)
 local function GetDeveloperConsoleVisible()
 	if (not myDeveloperConsole) then
 		SetCoreConsoleCreation()
@@ -2388,7 +2402,7 @@ local StarterGui    = game:GetService'StarterGui'
 InputService.InputBegan:connect(function(a)
    if a.UserInputType == Enum.UserInputType.Keyboard and a.KeyCode == Enum.KeyCode.F9 then
        local b = GetDeveloperConsoleVisible();
-       __lt_call_service_method("StarterGui", "SetCore", 'DevConsoleVisible', false)
+       __lt.cm("StarterGui", "SetCore", 'DevConsoleVisible', false)
        DeveloperConsoleVisible(not b)
    end
 end)

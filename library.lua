@@ -1,14 +1,14 @@
-local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
-local function __lt_clone_service_value(value)
-	if __lt_oldcloneref and typeof(value) == "Instance" then
-		local ok, cloned = pcall(__lt_oldcloneref, value);
+local __lt = { cr = type(cloneref) == "function" and cloneref or nil };
+function __lt.cv(value)
+	if __lt.cr and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt.cr, value);
 		if ok and cloned ~= nil then
 			return cloned;
 		end;
 	end;
 	return value;
 end;
-local function __lt_clone_service(name, refFn)
+function __lt.cs(name, refFn)
 	if type(refFn) ~= "function" then
 		return game:GetService(name);
 	end;
@@ -20,8 +20,22 @@ local function __lt_clone_service(name, refFn)
 	end;
 	return game:GetService(name);
 end;
-local function __lt_call_service_method(name, method, ...)
-	local service = game:GetService(name);
+function __lt.ig(method)
+	return method == "FindFirstChild"
+		or method == "WaitForChild"
+		or method == "FindFirstChildOfClass"
+		or method == "FindFirstChildWhichIsA"
+		or method == "FindFirstAncestor"
+		or method == "FindFirstAncestorOfClass"
+		or method == "FindFirstAncestorWhichIsA"
+		or method == "GetChildren"
+		or method == "GetDescendants"
+		or method == "QueryDescendants";
+end;
+function __lt.cm(name, method, ...)
+	local service = __lt.ig(method)
+		and __lt.cs(name, __lt.cr)
+		or game:GetService(name);
 	local fn = service[method];
 	if type(fn) ~= "function" then
 		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
@@ -35,7 +49,7 @@ local function ClonedService(name)
 	local Reference = cloneref or function(reference)
 		return reference;
 	end;
-	return __lt_clone_service(name, Reference);
+	return __lt.cs(name, Reference);
 end;
 local InputService = ClonedService("UserInputService");
 local TextService = ClonedService("TextService");
@@ -70,9 +84,9 @@ local function protectUI(sGui)
 		NAProtection(sGui);
 		sGui.Parent = gethui();
 		return sGui;
-	elseif cGUI and __lt_call_service_method("CoreGui", "FindFirstChild", "RobloxGui") then
+	elseif cGUI and __lt.cm("CoreGui", "FindFirstChild", "RobloxGui") then
 		NAProtection(sGui);
-		sGui.Parent = __lt_call_service_method("CoreGui", "FindFirstChild", "RobloxGui");
+		sGui.Parent = __lt.cm("CoreGui", "FindFirstChild", "RobloxGui");
 		return sGui;
 	elseif cGUI then
 		NAProtection(sGui);
@@ -126,7 +140,7 @@ local Library = {
 	TotalTabs = 0
 };
 pcall(function()
-	Library.DevicePlatform = __lt_call_service_method("UserInputService", "GetPlatform");
+	Library.DevicePlatform = __lt.cm("UserInputService", "GetPlatform");
 end);
 Library.IsMobile = Library.DevicePlatform == Enum.Platform.Android or Library.DevicePlatform == Enum.Platform.IOS;
 if Library.IsMobile then
@@ -147,7 +161,7 @@ table.insert(Library.Signals, RenderStepped:Connect(function(Delta)
 	end;
 end));
 local function GetPlayersString()
-	local PlayerList = __lt_call_service_method("Players", "GetPlayers");
+	local PlayerList = __lt.cm("Players", "GetPlayers");
 	for i = 1, #PlayerList do
 		PlayerList[i] = PlayerList[i].Name;
 	end;
@@ -157,7 +171,7 @@ local function GetPlayersString()
 	return PlayerList;
 end;
 local function GetTeamsString()
-	local TeamList = __lt_call_service_method("Teams", "GetTeams");
+	local TeamList = __lt.cm("Teams", "GetTeams");
 	for i = 1, #TeamList do
 		TeamList[i] = TeamList[i].Name;
 	end;
@@ -228,7 +242,7 @@ function Library:MakeDraggable(Instance, Cutoff)
 			if ObjPos.Y > (Cutoff or 40) then
 				return;
 			end;
-			while __lt_call_service_method("UserInputService", "IsMouseButtonPressed", Enum.UserInputType.MouseButton1) do
+			while __lt.cm("UserInputService", "IsMouseButtonPressed", Enum.UserInputType.MouseButton1) do
 				Instance.Position = UDim2.new(0, Mouse.X - ObjPos.X + Instance.Size.X.Offset * Instance.AnchorPoint.X, 0, Mouse.Y - ObjPos.Y + Instance.Size.Y.Offset * Instance.AnchorPoint.Y);
 				RenderStepped:Wait();
 			end;
@@ -449,7 +463,7 @@ function Library:MapValue(Value, MinA, MaxA, MinB, MaxB)
 	return (1 - (Value - MinA) / (MaxA - MinA)) * MinB + (Value - MinA) / (MaxA - MinA) * MaxB;
 end;
 function Library:GetTextBounds(Text, Font, Size, Resolution)
-	local Bounds = __lt_call_service_method("TextService", "GetTextSize", Text, Size, Font, Resolution or Vector2.new(1920, 1080));
+	local Bounds = __lt.cm("TextService", "GetTextSize", Text, Size, Font, Resolution or Vector2.new(1920, 1080));
 	return Bounds.X, Bounds.Y;
 end;
 function Library:GetDarkerColor(Color)
@@ -954,7 +968,7 @@ do
 		end;
 		SatVibMap.InputBegan:Connect(function(Input)
 			if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
-				while __lt_call_service_method("UserInputService", "IsMouseButtonPressed", Enum.UserInputType.MouseButton1 or Enum.UserInputType.Touch) do
+				while __lt.cm("UserInputService", "IsMouseButtonPressed", Enum.UserInputType.MouseButton1 or Enum.UserInputType.Touch) do
 					local MinX = SatVibMap.AbsolutePosition.X;
 					local MaxX = MinX + SatVibMap.AbsoluteSize.X;
 					local MouseX = math.clamp(Mouse.X, MinX, MaxX);
@@ -971,7 +985,7 @@ do
 		end);
 		HueSelectorInner.InputBegan:Connect(function(Input)
 			if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
-				while __lt_call_service_method("UserInputService", "IsMouseButtonPressed", Enum.UserInputType.MouseButton1 or Enum.UserInputType.Touch) do
+				while __lt.cm("UserInputService", "IsMouseButtonPressed", Enum.UserInputType.MouseButton1 or Enum.UserInputType.Touch) do
 					local MinY = HueSelectorInner.AbsolutePosition.Y;
 					local MaxY = MinY + HueSelectorInner.AbsoluteSize.Y;
 					local MouseY = math.clamp(Mouse.Y, MinY, MaxY);
@@ -1001,7 +1015,7 @@ do
 		if TransparencyBoxInner then
 			TransparencyBoxInner.InputBegan:Connect(function(Input)
 				if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
-					while __lt_call_service_method("UserInputService", "IsMouseButtonPressed", Enum.UserInputType.MouseButton1 or Enum.UserInputType.Touch) do
+					while __lt.cm("UserInputService", "IsMouseButtonPressed", Enum.UserInputType.MouseButton1 or Enum.UserInputType.Touch) do
 						local MinX = TransparencyBoxInner.AbsolutePosition.X;
 						local MaxX = MinX + TransparencyBoxInner.AbsoluteSize.X;
 						local MouseX = math.clamp(Mouse.X, MinX, MaxX);
@@ -1190,9 +1204,9 @@ do
 				end;
 				local Key = KeyPicker.Value;
 				if Key == "MB1" or Key == "MB2" then
-					return Key == "MB1" and __lt_call_service_method("UserInputService", "IsMouseButtonPressed", Enum.UserInputType.MouseButton1) or Key == "MB2" and __lt_call_service_method("UserInputService", "IsMouseButtonPressed", Enum.UserInputType.MouseButton2);
+					return Key == "MB1" and __lt.cm("UserInputService", "IsMouseButtonPressed", Enum.UserInputType.MouseButton1) or Key == "MB2" and __lt.cm("UserInputService", "IsMouseButtonPressed", Enum.UserInputType.MouseButton2);
 				else
-					return __lt_call_service_method("UserInputService", "IsKeyDown", Enum.KeyCode[KeyPicker.Value]);
+					return __lt.cm("UserInputService", "IsKeyDown", Enum.KeyCode[KeyPicker.Value]);
 				end;
 			else
 				return KeyPicker.Toggled;
@@ -1264,7 +1278,7 @@ do
 			end;
 		end);
 		Library:GiveSignal(InputService.InputBegan:Connect(function(Input)
-			if not Picking and (not __lt_call_service_method("UserInputService", "GetFocusedTextBox")) then
+			if not Picking and (not __lt.cm("UserInputService", "GetFocusedTextBox")) then
 				if KeyPicker.Mode == "Toggle" then
 					local Key = KeyPicker.Value;
 					if Key == "MB1" or Key == "MB2" then
@@ -1664,7 +1678,7 @@ do
 				local cursor = Box.CursorPosition;
 				if cursor ~= (-1) then
 					local subtext = string.sub(Box.Text, 1, cursor - 1);
-					local width = (__lt_call_service_method("TextService", "GetTextSize", subtext, Box.TextSize, Box.Font, Vector2.new(math.huge, math.huge))).X;
+					local width = (__lt.cm("TextService", "GetTextSize", subtext, Box.TextSize, Box.Font, Vector2.new(math.huge, math.huge))).X;
 					local currentCursorPos = Box.Position.X.Offset + width;
 					if currentCursorPos < PADDING then
 						Box.Position = UDim2.fromOffset(PADDING - width, 0);
@@ -1969,7 +1983,7 @@ do
 				local mPos = Mouse.X;
 				local gPos = Fill.AbsoluteSize.X;
 				local Diff = mPos - (Fill.AbsolutePosition.X + gPos);
-				while __lt_call_service_method("UserInputService", "IsMouseButtonPressed", Enum.UserInputType.MouseButton1 or Enum.UserInputType.Touch) do
+				while __lt.cm("UserInputService", "IsMouseButtonPressed", Enum.UserInputType.MouseButton1 or Enum.UserInputType.Touch) do
 					local nMPos = Mouse.X;
 					local nXOffset = math.clamp(gPos + (nMPos - mPos) + Diff, 0, Slider.MaxSize);
 					local nXScale = Library:MapValue(nXOffset, 0, Slider.MaxSize, 0, 1);
@@ -3263,7 +3277,7 @@ function Library:CreateWindow(...)
 						CursorOutline.Visible = true;
 						while Toggled and ScreenGui.Parent and Library.ShowCustomCursor do
 							InputService.MouseIconEnabled = false;
-							local mPos = __lt_call_service_method("UserInputService", "GetMouseLocation");
+							local mPos = __lt.cm("UserInputService", "GetMouseLocation");
 							Cursor.Color = Library.AccentColor;
 							Cursor.PointA = Vector2.new(mPos.X, mPos.Y);
 							Cursor.PointB = Vector2.new(mPos.X + 16, mPos.Y + 6);
@@ -3308,7 +3322,7 @@ function Library:CreateWindow(...)
 				if Cache[Prop] == 1 then
 					continue;
 				end;
-				(__lt_call_service_method("TweenService", "Create", Desc, TweenInfo.new(FadeTime, Enum.EasingStyle.Linear), {
+				(__lt.cm("TweenService", "Create", Desc, TweenInfo.new(FadeTime, Enum.EasingStyle.Linear), {
 					[Prop] = Toggled and Cache[Prop] or 1
 				})):Play();
 			end;

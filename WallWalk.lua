@@ -1,14 +1,14 @@
-local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
-local function __lt_clone_service_value(value)
-	if __lt_oldcloneref and typeof(value) == "Instance" then
-		local ok, cloned = pcall(__lt_oldcloneref, value);
+local __lt = { cr = type(cloneref) == "function" and cloneref or nil };
+function __lt.cv(value)
+	if __lt.cr and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt.cr, value);
 		if ok and cloned ~= nil then
 			return cloned;
 		end;
 	end;
 	return value;
 end;
-local function __lt_clone_service(name, refFn)
+function __lt.cs(name, refFn)
 	if type(refFn) ~= "function" then
 		return game:GetService(name);
 	end;
@@ -20,8 +20,22 @@ local function __lt_clone_service(name, refFn)
 	end;
 	return game:GetService(name);
 end;
-local function __lt_call_service_method(name, method, ...)
-	local service = game:GetService(name);
+function __lt.ig(method)
+	return method == "FindFirstChild"
+		or method == "WaitForChild"
+		or method == "FindFirstChildOfClass"
+		or method == "FindFirstChildWhichIsA"
+		or method == "FindFirstAncestor"
+		or method == "FindFirstAncestorOfClass"
+		or method == "FindFirstAncestorWhichIsA"
+		or method == "GetChildren"
+		or method == "GetDescendants"
+		or method == "QueryDescendants";
+end;
+function __lt.cm(name, method, ...)
+	local service = __lt.ig(method)
+		and __lt.cs(name, __lt.cr)
+		or game:GetService(name);
 	local fn = service[method];
 	if type(fn) ~= "function" then
 		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
@@ -35,7 +49,7 @@ local function ClonedService(name)
 	local Reference = cloneref or function(reference)
 		return reference;
 	end;
-	return __lt_clone_service(name, Reference);
+	return __lt.cs(name, Reference);
 end;
 local runtimeScript = rawget(getfenv(), "script");
 if not (runtimeScript and typeof(runtimeScript) == "Instance") then
@@ -91,7 +105,7 @@ function _CameraUI()
 	local TweenService = ClonedService("TweenService");
 	local LocalPlayer = Players.LocalPlayer;
 	if not LocalPlayer then
-		(__lt_call_service_method("Players", "GetPropertyChangedSignal", "LocalPlayer")):Wait();
+		(__lt.cm("Players", "GetPropertyChangedSignal", "LocalPlayer")):Wait();
 		LocalPlayer = Players.LocalPlayer;
 	end;
 	local function waitForChildOfClass(parent, class)
@@ -235,17 +249,17 @@ function _CameraUI()
 		local tweenInfo = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
 		function CameraUI.setCameraModeToastOpen(open)
 			assert(initialized);
-			(__lt_call_service_method("TweenService", "Create", toast, tweenInfo, {
+			(__lt.cm("TweenService", "Create", toast, tweenInfo, {
 				Size = open and TOAST_OPEN_SIZE or TOAST_CLOSED_SIZE,
 				ImageTransparency = open and TOAST_BACKGROUND_TRANS or 1
 			})):Play();
-			(__lt_call_service_method("TweenService", "Create", toastIcon, tweenInfo, {
+			(__lt.cm("TweenService", "Create", toastIcon, tweenInfo, {
 				ImageTransparency = open and TOAST_FOREGROUND_TRANS or 1
 			})):Play();
-			(__lt_call_service_method("TweenService", "Create", toastUpperText, tweenInfo, {
+			(__lt.cm("TweenService", "Create", toastUpperText, tweenInfo, {
 				TextTransparency = open and TOAST_FOREGROUND_TRANS or 1
 			})):Play();
-			(__lt_call_service_method("TweenService", "Create", toastLowerText, tweenInfo, {
+			(__lt.cm("TweenService", "Create", toastLowerText, tweenInfo, {
 				TextTransparency = open and TOAST_FOREGROUND_TRANS or 1
 			})):Play();
 		end;
@@ -258,7 +272,7 @@ function _CameraToggleStateController()
 	local GameSettings = (UserSettings()):GetService("UserGameSettings");
 	local LocalPlayer = Players.LocalPlayer;
 	if not LocalPlayer then
-		(__lt_call_service_method("Players", "GetPropertyChangedSignal", "LocalPlayer")):Wait();
+		(__lt.cm("Players", "GetPropertyChangedSignal", "LocalPlayer")):Wait();
 		LocalPlayer = Players.LocalPlayer;
 	end;
 	local Mouse = LocalPlayer:GetMouse();
@@ -376,7 +390,7 @@ function _CameraInput()
 		end);
 		rmbUpConnection = rmbUp:Connect(function()
 			holdPan = false;
-			if tick() - lastRmbDown < MB_TAP_LENGTH and (togglePan or (__lt_call_service_method("UserInputService", "GetMouseDelta")).Magnitude < 2) then
+			if tick() - lastRmbDown < MB_TAP_LENGTH and (togglePan or (__lt.cm("UserInputService", "GetMouseDelta")).Magnitude < 2) then
 				togglePan = not togglePan;
 			end;
 		end);
@@ -899,7 +913,7 @@ function _BaseCamera()
 		self:BindKeyboardInputActions();
 	end;
 	function BaseCamera:AssignActivateGamepad()
-		local connectedGamepads = __lt_call_service_method("UserInputService", "GetConnectedGamepads");
+		local connectedGamepads = __lt.cm("UserInputService", "GetConnectedGamepads");
 		if #connectedGamepads > 0 then
 			for i = 1, #connectedGamepads do
 				if self.activeGamepad == nil then
@@ -929,7 +943,7 @@ function _BaseCamera()
 	end;
 	function BaseCamera:UnbindContextActions()
 		for i = 1, #self.boundContextActions do
-			__lt_call_service_method("ContextActionService", "UnbindAction", self.boundContextActions[i]);
+			__lt.cm("ContextActionService", "UnbindAction", self.boundContextActions[i]);
 		end;
 		self.boundContextActions = {};
 	end;
@@ -1098,7 +1112,7 @@ function _BaseCamera()
 	end;
 	function BaseCamera:BindAction(actionName, actionFunc, createTouchButton, ...)
 		table.insert(self.boundContextActions, actionName);
-		__lt_call_service_method("ContextActionService", "BindActionAtPriority", actionName, actionFunc, createTouchButton, CAMERA_ACTION_PRIORITY, ...);
+		__lt.cm("ContextActionService", "BindActionAtPriority", actionName, actionFunc, createTouchButton, CAMERA_ACTION_PRIORITY, ...);
 	end;
 	function BaseCamera:BindGamepadInputActions()
 		self:BindAction("BaseCameraGamepadPan", function(name, state, input)
@@ -1507,7 +1521,7 @@ function _BaseCamera()
 		local cameraSubject = game.Workspace.CurrentCamera.CameraSubject;
 		local isInVehicle = cameraSubject and cameraSubject:IsA("VehicleSeat");
 		if self.inFirstPerson and (not isInVehicle) then
-			local vrFrame = __lt_call_service_method("VRService", "GetUserCFrame", Enum.UserCFrame.Head);
+			local vrFrame = __lt.cm("VRService", "GetUserCFrame", Enum.UserCFrame.Head);
 			local vrRotation = vrFrame - vrFrame.p;
 			rootJoint.C0 = CFrame.new(vrRotation:vectorToObjectSpace(vrFrame.p)) * CFrame.new(0, 0, 0, (-1), 0, 0, 0, 0, 1, 0, 1, 0);
 		else
@@ -1525,7 +1539,7 @@ function _BaseCamera()
 			return false;
 		end;
 		local success, vrRotationIntensity = pcall(function()
-			return __lt_call_service_method("StarterGui", "GetCore", "VRRotationIntensity");
+			return __lt.cm("StarterGui", "GetCore", "VRRotationIntensity");
 		end);
 		self.VRRotationIntensityAvailable = success and vrRotationIntensity ~= nil;
 		self.lastVRRotationIntensityCheckTime = tick();
@@ -1535,7 +1549,7 @@ function _BaseCamera()
 	function BaseCamera:GetVRRotationInput()
 		local vrRotateSum = ZERO_VECTOR2;
 		local success, vrRotationIntensity = pcall(function()
-			return __lt_call_service_method("StarterGui", "GetCore", "VRRotationIntensity");
+			return __lt.cm("StarterGui", "GetCore", "VRRotationIntensity");
 		end);
 		if not success then
 			return;
@@ -1633,7 +1647,7 @@ function _BaseCamera()
 		return newFocus;
 	end;
 	function BaseCamera:GetRotateAmountValue(vrRotationIntensity)
-		vrRotationIntensity = vrRotationIntensity or __lt_call_service_method("StarterGui", "GetCore", "VRRotationIntensity");
+		vrRotationIntensity = vrRotationIntensity or __lt.cm("StarterGui", "GetCore", "VRRotationIntensity");
 		if vrRotationIntensity then
 			if vrRotationIntensity == "Low" then
 				return VR_LOW_INTENSITY_ROTATION;
@@ -1644,7 +1658,7 @@ function _BaseCamera()
 		return ZERO_VECTOR2;
 	end;
 	function BaseCamera:GetRepeatDelayValue(vrRotationIntensity)
-		vrRotationIntensity = vrRotationIntensity or __lt_call_service_method("StarterGui", "GetCore", "VRRotationIntensity");
+		vrRotationIntensity = vrRotationIntensity or __lt.cm("StarterGui", "GetCore", "VRRotationIntensity");
 		if vrRotationIntensity then
 			if vrRotationIntensity == "Low" then
 				return VR_LOW_INTENSITY_REPEAT;
@@ -1770,7 +1784,7 @@ function _Popper()
 		end;
 		Players.PlayerAdded:Connect(playerAdded);
 		Players.PlayerRemoving:Connect(playerRemoving);
-		for _, player in ipairs(__lt_call_service_method("Players", "GetPlayers")) do
+		for _, player in ipairs(__lt.cm("Players", "GetPlayers")) do
 			playerAdded(player);
 		end;
 		refreshIgnoreList();
@@ -2147,12 +2161,12 @@ function _MouseLockController()
 		return Enum.ContextActionResult.Pass;
 	end;
 	function MouseLockController:BindContextActions()
-		__lt_call_service_method("ContextActionService", "BindActionAtPriority", CONTEXT_ACTION_NAME, function(name, state, input)
+		__lt.cm("ContextActionService", "BindActionAtPriority", CONTEXT_ACTION_NAME, function(name, state, input)
 			return self:DoMouseLockSwitch(name, state, input);
 		end, false, MOUSELOCK_ACTION_PRIORITY, unpack(self.boundKeys));
 	end;
 	function MouseLockController:UnbindContextActions()
-		__lt_call_service_method("ContextActionService", "UnbindAction", CONTEXT_ACTION_NAME);
+		__lt.cm("ContextActionService", "UnbindAction", CONTEXT_ACTION_NAME);
 	end;
 	function MouseLockController:IsMouseLocked()
 		return self.enabled and self.isMouseLocked;
@@ -2603,7 +2617,7 @@ function _Invisicam()
 			local offset = cframe * (3 * Vector3.new(math.cos(angle), math.sin(angle), 0));
 			offset = Vector3.new(offset.X, math.max(offset.Y, -2.25), offset.Z);
 			local ray = Ray.new(centerPoint + offset, (-3) * offset);
-			local hit, hitPoint = game.__lt_call_service_method("Workspace", "FindPartOnRayWithWhitelist", ray, partsWhitelist, false, false);
+			local hit, hitPoint = game.__lt.cm("Workspace", "FindPartOnRayWithWhitelist", ray, partsWhitelist, false, false);
 			if hit then
 				castPoints[(#castPoints) + 1] = hitPoint + 0.2 * ((centerPoint - hitPoint)).unit;
 			end;
@@ -3639,7 +3653,7 @@ function _CameraModule()
 		self.currentComputerCameraMovementMode = nil;
 		self.cameraSubjectChangedConn = nil;
 		self.cameraTypeChangedConn = nil;
-		for _, player in pairs(__lt_call_service_method("Players", "GetPlayers")) do
+		for _, player in pairs(__lt.cm("Players", "GetPlayers")) do
 			self:OnPlayerAdded(player);
 		end;
 		Players.PlayerAdded:Connect(function(player)
@@ -3659,7 +3673,7 @@ function _CameraModule()
 		self:ActivateCameraController(self:GetCameraControlChoice());
 		self:ActivateOcclusionModule(Players.LocalPlayer.DevCameraOcclusionMode);
 		self:OnCurrentCameraChanged();
-		__lt_call_service_method("RunService", "BindToRenderStep", "cameraRenderUpdate", Enum.RenderPriority.Camera.Value, function(dt)
+		__lt.cm("RunService", "BindToRenderStep", "cameraRenderUpdate", Enum.RenderPriority.Camera.Value, function(dt)
 			self:Update(dt);
 		end);
 		for _, propertyName in pairs(PLAYER_CAMERA_PROPERTIES) do
@@ -3672,10 +3686,10 @@ function _CameraModule()
 				self:OnUserGameSettingsPropertyChanged(propertyName);
 			end);
 		end;
-		(game.__lt_call_service_method("Workspace", "GetPropertyChangedSignal", "CurrentCamera")):Connect(function()
+		(game.__lt.cm("Workspace", "GetPropertyChangedSignal", "CurrentCamera")):Connect(function()
 			self:OnCurrentCameraChanged();
 		end);
-		self.lastInputType = __lt_call_service_method("UserInputService", "GetLastInputType");
+		self.lastInputType = __lt.cm("UserInputService", "GetLastInputType");
 		UserInputService.LastInputTypeChanged:Connect(function(newLastInputType)
 			self.lastInputType = newLastInputType;
 		end);
@@ -3740,7 +3754,7 @@ function _CameraModule()
 					self.activeOcclusionModule:CharacterAdded(Players.LocalPlayer.Character, Players.LocalPlayer);
 				end;
 			else
-				for _, player in pairs(__lt_call_service_method("Players", "GetPlayers")) do
+				for _, player in pairs(__lt.cm("Players", "GetPlayers")) do
 					if player and player.Character then
 						self.activeOcclusionModule:CharacterAdded(player.Character, player);
 					end;
@@ -4189,7 +4203,7 @@ function _ClickToMoveDisplay()
 	end;
 	function EndWaypoint:CreateTween()
 		local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.Out, -1, true);
-		local tween = __lt_call_service_method("TweenService", "Create", self.DisplayModel.EndWaypointBillboard, tweenInfo, {
+		local tween = __lt.cm("TweenService", "Create", self.DisplayModel.EndWaypointBillboard, tweenInfo, {
 			SizeOffset = ENDWAYPOINT_SIZE_OFFSET_MAX
 		});
 		tween:Play();
@@ -4200,7 +4214,7 @@ function _ClickToMoveDisplay()
 		local studsOffset = originalPosition - currentPositon;
 		self.DisplayModel.EndWaypointBillboard.StudsOffset = Vector3.new(0, studsOffset.Y, 0);
 		local tweenInfo = TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.Out);
-		local tween = __lt_call_service_method("TweenService", "Create", self.DisplayModel.EndWaypointBillboard, tweenInfo, {
+		local tween = __lt.cm("TweenService", "Create", self.DisplayModel.EndWaypointBillboard, tweenInfo, {
 			StudsOffset = Vector3.new(0, 0, 0)
 		});
 		tween:Play();
@@ -4249,36 +4263,36 @@ function _ClickToMoveDisplay()
 	function FailureWaypoint:RunFailureTween()
 		wait(FAILURE_TWEEN_LENGTH);
 		local tweenInfo = TweenInfo.new(FAILURE_TWEEN_LENGTH / 2, Enum.EasingStyle.Sine, Enum.EasingDirection.Out);
-		local tweenLeft = __lt_call_service_method("TweenService", "Create", self.DisplayModel.FailureWaypointBillboard, tweenInfo, {
+		local tweenLeft = __lt.cm("TweenService", "Create", self.DisplayModel.FailureWaypointBillboard, tweenInfo, {
 			SizeOffset = FAIL_WAYPOINT_SIZE_OFFSET_LEFT
 		});
 		tweenLeft:Play();
-		local tweenLeftRoation = __lt_call_service_method("TweenService", "Create", self.DisplayModel.FailureWaypointBillboard.Frame, tweenInfo, {
+		local tweenLeftRoation = __lt.cm("TweenService", "Create", self.DisplayModel.FailureWaypointBillboard.Frame, tweenInfo, {
 			Rotation = 10
 		});
 		tweenLeftRoation:Play();
 		tweenLeft.Completed:wait();
 		tweenInfo = TweenInfo.new(FAILURE_TWEEN_LENGTH, Enum.EasingStyle.Sine, Enum.EasingDirection.Out, FAILURE_TWEEN_COUNT - 1, true);
-		local tweenSideToSide = __lt_call_service_method("TweenService", "Create", self.DisplayModel.FailureWaypointBillboard, tweenInfo, {
+		local tweenSideToSide = __lt.cm("TweenService", "Create", self.DisplayModel.FailureWaypointBillboard, tweenInfo, {
 			SizeOffset = FAIL_WAYPOINT_SIZE_OFFSET_RIGHT
 		});
 		tweenSideToSide:Play();
 		tweenInfo = TweenInfo.new(FAILURE_TWEEN_LENGTH, Enum.EasingStyle.Sine, Enum.EasingDirection.Out, FAILURE_TWEEN_COUNT - 1, true);
-		local tweenFlash = __lt_call_service_method("TweenService", "Create", self.DisplayModel.FailureWaypointBillboard.Frame.ImageLabel, tweenInfo, {
+		local tweenFlash = __lt.cm("TweenService", "Create", self.DisplayModel.FailureWaypointBillboard.Frame.ImageLabel, tweenInfo, {
 			ImageColor3 = Color3.new(0.75, 0.75, 0.75)
 		});
 		tweenFlash:Play();
-		local tweenRotate = __lt_call_service_method("TweenService", "Create", self.DisplayModel.FailureWaypointBillboard.Frame, tweenInfo, {
+		local tweenRotate = __lt.cm("TweenService", "Create", self.DisplayModel.FailureWaypointBillboard.Frame, tweenInfo, {
 			Rotation = -10
 		});
 		tweenRotate:Play();
 		tweenSideToSide.Completed:wait();
 		tweenInfo = TweenInfo.new(FAILURE_TWEEN_LENGTH / 2, Enum.EasingStyle.Sine, Enum.EasingDirection.Out);
-		local tweenCenter = __lt_call_service_method("TweenService", "Create", self.DisplayModel.FailureWaypointBillboard, tweenInfo, {
+		local tweenCenter = __lt.cm("TweenService", "Create", self.DisplayModel.FailureWaypointBillboard, tweenInfo, {
 			SizeOffset = FAIL_WAYPOINT_SIZE_OFFSET_CENTER
 		});
 		tweenCenter:Play();
-		local tweenRoation = __lt_call_service_method("TweenService", "Create", self.DisplayModel.FailureWaypointBillboard.Frame, tweenInfo, {
+		local tweenRoation = __lt.cm("TweenService", "Create", self.DisplayModel.FailureWaypointBillboard.Frame, tweenInfo, {
 			Rotation = 0
 		});
 		tweenRoation:Play();
@@ -4355,7 +4369,7 @@ function _ClickToMoveDisplay()
 		local reiszeTrailDotsUpdateName = "ClickToMoveResizeTrail" .. createPathCount;
 		local function resizeTrailDots()
 			if #trailDots == 0 then
-				__lt_call_service_method("RunService", "UnbindFromRenderStep", reiszeTrailDotsUpdateName);
+				__lt.cm("RunService", "UnbindFromRenderStep", reiszeTrailDotsUpdateName);
 				return;
 			end;
 			local cameraPos = Workspace.CurrentCamera.CFrame.p;
@@ -4367,7 +4381,7 @@ function _ClickToMoveDisplay()
 				end;
 			end;
 		end;
-		__lt_call_service_method("RunService", "BindToRenderStep", reiszeTrailDotsUpdateName, Enum.RenderPriority.Camera.Value - 1, resizeTrailDots);
+		__lt.cm("RunService", "BindToRenderStep", reiszeTrailDotsUpdateName, Enum.RenderPriority.Camera.Value - 1, resizeTrailDots);
 		local function removePath()
 			removePathBeforePoint(#wayPoints);
 		end;
@@ -4487,20 +4501,20 @@ function _VehicleController()
 	end;
 	function VehicleController:BindContextActions()
 		if useTriggersForThrottle then
-			__lt_call_service_method("ContextActionService", "BindActionAtPriority", "throttleAccel", function(actionName, inputState, inputObject)
+			__lt.cm("ContextActionService", "BindActionAtPriority", "throttleAccel", function(actionName, inputState, inputObject)
 				self:OnThrottleAccel(actionName, inputState, inputObject);
 				return Enum.ContextActionResult.Pass;
 			end, false, self.CONTROL_ACTION_PRIORITY, Enum.KeyCode.ButtonR2);
-			__lt_call_service_method("ContextActionService", "BindActionAtPriority", "throttleDeccel", function(actionName, inputState, inputObject)
+			__lt.cm("ContextActionService", "BindActionAtPriority", "throttleDeccel", function(actionName, inputState, inputObject)
 				self:OnThrottleDeccel(actionName, inputState, inputObject);
 				return Enum.ContextActionResult.Pass;
 			end, false, self.CONTROL_ACTION_PRIORITY, Enum.KeyCode.ButtonL2);
 		end;
-		__lt_call_service_method("ContextActionService", "BindActionAtPriority", "arrowSteerRight", function(actionName, inputState, inputObject)
+		__lt.cm("ContextActionService", "BindActionAtPriority", "arrowSteerRight", function(actionName, inputState, inputObject)
 			self:OnSteerRight(actionName, inputState, inputObject);
 			return Enum.ContextActionResult.Pass;
 		end, false, self.CONTROL_ACTION_PRIORITY, Enum.KeyCode.Right);
-		__lt_call_service_method("ContextActionService", "BindActionAtPriority", "arrowSteerLeft", function(actionName, inputState, inputObject)
+		__lt.cm("ContextActionService", "BindActionAtPriority", "arrowSteerLeft", function(actionName, inputState, inputObject)
 			self:OnSteerLeft(actionName, inputState, inputObject);
 			return Enum.ContextActionResult.Pass;
 		end, false, self.CONTROL_ACTION_PRIORITY, Enum.KeyCode.Left);
@@ -4519,11 +4533,11 @@ function _VehicleController()
 			end;
 		else
 			if useTriggersForThrottle then
-				__lt_call_service_method("ContextActionService", "UnbindAction", "throttleAccel");
-				__lt_call_service_method("ContextActionService", "UnbindAction", "throttleDeccel");
+				__lt.cm("ContextActionService", "UnbindAction", "throttleAccel");
+				__lt.cm("ContextActionService", "UnbindAction", "throttleDeccel");
 			end;
-			__lt_call_service_method("ContextActionService", "UnbindAction", "arrowSteerRight");
-			__lt_call_service_method("ContextActionService", "UnbindAction", "arrowSteerLeft");
+			__lt.cm("ContextActionService", "UnbindAction", "arrowSteerRight");
+			__lt.cm("ContextActionService", "UnbindAction", "arrowSteerLeft");
 			self.vehicleSeat = nil;
 		end;
 	end;
@@ -4865,14 +4879,14 @@ function _ClickToMoveController()
 			GetCharacter()
 		};
 		if CurrentIgnoreTag ~= nil then
-			local ignoreParts = __lt_call_service_method("CollectionService", "GetTagged", CurrentIgnoreTag);
+			local ignoreParts = __lt.cm("CollectionService", "GetTagged", CurrentIgnoreTag);
 			for _, ignorePart in ipairs(ignoreParts) do
 				table.insert(CurrentIgnoreList, ignorePart);
 			end;
-			TaggedInstanceAddedConnection = (__lt_call_service_method("CollectionService", "GetInstanceAddedSignal", CurrentIgnoreTag)):Connect(function(ignorePart)
+			TaggedInstanceAddedConnection = (__lt.cm("CollectionService", "GetInstanceAddedSignal", CurrentIgnoreTag)):Connect(function(ignorePart)
 				table.insert(CurrentIgnoreList, ignorePart);
 			end);
-			TaggedInstanceRemovedConnection = (__lt_call_service_method("CollectionService", "GetInstanceRemovedSignal", CurrentIgnoreTag)):Connect(function(ignorePart)
+			TaggedInstanceRemovedConnection = (__lt.cm("CollectionService", "GetInstanceRemovedSignal", CurrentIgnoreTag)):Connect(function(ignorePart)
 				for i = 1, #CurrentIgnoreList do
 					if CurrentIgnoreList[i] == ignorePart then
 						CurrentIgnoreList[i] = CurrentIgnoreList[#CurrentIgnoreList];
@@ -4962,7 +4976,7 @@ function _ClickToMoveController()
 				this.DirectPath = directPathForHumanoid;
 				this.DirectPathRiseFirst = this.Humanoid.Sit;
 			end;
-			this.pathResult = __lt_call_service_method("PathfindingService", "CreatePath", {
+			this.pathResult = __lt.cm("PathfindingService", "CreatePath", {
 				AgentRadius = agentRadius,
 				AgentHeight = agentHeight,
 				AgentCanJump = agentCanJump
@@ -5304,8 +5318,8 @@ function _ClickToMoveController()
 				local myHumanoid = findPlayerHumanoid(Player);
 				local hitPart, hitPt, hitNormal = Utility.Raycast(ray, true, getIgnoreList());
 				local hitChar, hitHumanoid = Utility.FindCharacterAncestor(hitPart);
-				if wasTouchTap and hitHumanoid and __lt_call_service_method("StarterGui", "GetCore", "AvatarContextMenuEnabled") then
-					local clickedPlayer = __lt_call_service_method("Players", "GetPlayerFromCharacter", hitHumanoid.Parent);
+				if wasTouchTap and hitHumanoid and __lt.cm("StarterGui", "GetCore", "AvatarContextMenuEnabled") then
+					local clickedPlayer = __lt.cm("Players", "GetPlayerFromCharacter", hitHumanoid.Parent);
 					if clickedPlayer then
 						CleanupPath();
 						return;
@@ -5457,7 +5471,7 @@ function _ClickToMoveController()
 				DisconnectEvent(self.humanoidDiedConn);
 				self.humanoidDiedConn = child.Died:Connect(function()
 					if ExistingIndicator then
-						__lt_call_service_method("Debris", "AddItem", ExistingIndicator.Model, 1);
+						__lt.cm("Debris", "AddItem", ExistingIndicator.Model, 1);
 					end;
 				end);
 			end;
@@ -5830,7 +5844,7 @@ function _DynamicThumbstick()
 	local TweenService = ClonedService("TweenService");
 	local LocalPlayer = Players.LocalPlayer;
 	if not LocalPlayer then
-		(__lt_call_service_method("Players", "GetPropertyChangedSignal", "LocalPlayer")):Wait();
+		(__lt.cm("Players", "GetPropertyChangedSignal", "LocalPlayer")):Wait();
 		LocalPlayer = Players.LocalPlayer;
 	end;
 	local BaseCharacterController = _BaseCharacterController();
@@ -5878,7 +5892,7 @@ function _DynamicThumbstick()
 			end;
 			self:BindContextActions();
 		else
-			__lt_call_service_method("ContextActionService", "UnbindAction", DYNAMIC_THUMBSTICK_ACTION_NAME);
+			__lt.cm("ContextActionService", "UnbindAction", DYNAMIC_THUMBSTICK_ACTION_NAME);
 			self:OnInputEnded();
 		end;
 		self.enabled = enable;
@@ -5908,31 +5922,31 @@ function _DynamicThumbstick()
 			end;
 		end;
 		if visible then
-			self.startImageFadeTween = __lt_call_service_method("TweenService", "Create", self.startImage, ThumbstickFadeTweenInfo, {
+			self.startImageFadeTween = __lt.cm("TweenService", "Create", self.startImage, ThumbstickFadeTweenInfo, {
 				ImageTransparency = 0
 			});
 			self.startImageFadeTween:Play();
-			self.endImageFadeTween = __lt_call_service_method("TweenService", "Create", self.endImage, ThumbstickFadeTweenInfo, {
+			self.endImageFadeTween = __lt.cm("TweenService", "Create", self.endImage, ThumbstickFadeTweenInfo, {
 				ImageTransparency = 0.2
 			});
 			self.endImageFadeTween:Play();
 			for i = 1, #self.middleImages do
-				self.middleImageFadeTweens[i] = __lt_call_service_method("TweenService", "Create", self.middleImages[i], ThumbstickFadeTweenInfo, {
+				self.middleImageFadeTweens[i] = __lt.cm("TweenService", "Create", self.middleImages[i], ThumbstickFadeTweenInfo, {
 					ImageTransparency = MIDDLE_TRANSPARENCIES[i]
 				});
 				self.middleImageFadeTweens[i]:Play();
 			end;
 		else
-			self.startImageFadeTween = __lt_call_service_method("TweenService", "Create", self.startImage, ThumbstickFadeTweenInfo, {
+			self.startImageFadeTween = __lt.cm("TweenService", "Create", self.startImage, ThumbstickFadeTweenInfo, {
 				ImageTransparency = 1
 			});
 			self.startImageFadeTween:Play();
-			self.endImageFadeTween = __lt_call_service_method("TweenService", "Create", self.endImage, ThumbstickFadeTweenInfo, {
+			self.endImageFadeTween = __lt.cm("TweenService", "Create", self.endImage, ThumbstickFadeTweenInfo, {
 				ImageTransparency = 1
 			});
 			self.endImageFadeTween:Play();
 			for i = 1, #self.middleImages do
-				self.middleImageFadeTweens[i] = __lt_call_service_method("TweenService", "Create", self.middleImages[i], ThumbstickFadeTweenInfo, {
+				self.middleImageFadeTweens[i] = __lt.cm("TweenService", "Create", self.middleImages[i], ThumbstickFadeTweenInfo, {
 					ImageTransparency = 1
 				});
 				self.middleImageFadeTweens[i]:Play();
@@ -6027,10 +6041,10 @@ function _DynamicThumbstick()
 			if self.isFirstTouch then
 				self.isFirstTouch = false;
 				local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, 0);
-				(__lt_call_service_method("TweenService", "Create", self.startImage, tweenInfo, {
+				(__lt.cm("TweenService", "Create", self.startImage, tweenInfo, {
 					Size = UDim2.new(0, 0, 0, 0)
 				})):Play();
-				(__lt_call_service_method("TweenService", "Create", self.endImage, tweenInfo, {
+				(__lt.cm("TweenService", "Create", self.endImage, tweenInfo, {
 					Size = UDim2.new(0, self.thumbstickSize, 0, self.thumbstickSize),
 					ImageColor3 = Color3.new(0, 0, 0)
 				})):Play();
@@ -6086,7 +6100,7 @@ function _DynamicThumbstick()
 				self:OnInputEnded();
 			end;
 		end;
-		__lt_call_service_method("ContextActionService", "BindActionAtPriority", DYNAMIC_THUMBSTICK_ACTION_NAME, handleInput, false, DYNAMIC_THUMBSTICK_ACTION_PRIORITY, Enum.UserInputType.Touch);
+		__lt.cm("ContextActionService", "BindActionAtPriority", DYNAMIC_THUMBSTICK_ACTION_NAME, handleInput, false, DYNAMIC_THUMBSTICK_ACTION_PRIORITY, Enum.UserInputType.Touch);
 	end;
 	function DynamicThumbstick:Create(parentFrame)
 		if self.thumbstickFrame then
@@ -6307,7 +6321,7 @@ function _Gamepad()
 		return true;
 	end;
 	function Gamepad:GetHighestPriorityGamepad()
-		local connectedGamepads = __lt_call_service_method("UserInputService", "GetConnectedGamepads");
+		local connectedGamepads = __lt.cm("UserInputService", "GetConnectedGamepads");
 		local bestGamepad = NONE;
 		for _, gamepad in pairs(connectedGamepads) do
 			if gamepad.Value < bestGamepad.Value then
@@ -6342,17 +6356,17 @@ function _Gamepad()
 			end;
 			return Enum.ContextActionResult.Sink;
 		end;
-		__lt_call_service_method("ContextActionService", "BindActivate", self.activeGamepad, Enum.KeyCode.ButtonR2);
-		__lt_call_service_method("ContextActionService", "BindActionAtPriority", "jumpAction", handleJumpAction, false, self.CONTROL_ACTION_PRIORITY, Enum.KeyCode.ButtonA);
-		__lt_call_service_method("ContextActionService", "BindActionAtPriority", "moveThumbstick", handleThumbstickInput, false, self.CONTROL_ACTION_PRIORITY, Enum.KeyCode.Thumbstick1);
+		__lt.cm("ContextActionService", "BindActivate", self.activeGamepad, Enum.KeyCode.ButtonR2);
+		__lt.cm("ContextActionService", "BindActionAtPriority", "jumpAction", handleJumpAction, false, self.CONTROL_ACTION_PRIORITY, Enum.KeyCode.ButtonA);
+		__lt.cm("ContextActionService", "BindActionAtPriority", "moveThumbstick", handleThumbstickInput, false, self.CONTROL_ACTION_PRIORITY, Enum.KeyCode.Thumbstick1);
 		return true;
 	end;
 	function Gamepad:UnbindContextActions()
 		if self.activeGamepad ~= NONE then
-			__lt_call_service_method("ContextActionService", "UnbindActivate", self.activeGamepad, Enum.KeyCode.ButtonR2);
+			__lt.cm("ContextActionService", "UnbindActivate", self.activeGamepad, Enum.KeyCode.ButtonR2);
 		end;
-		__lt_call_service_method("ContextActionService", "UnbindAction", "moveThumbstick");
-		__lt_call_service_method("ContextActionService", "UnbindAction", "jumpAction");
+		__lt.cm("ContextActionService", "UnbindAction", "moveThumbstick");
+		__lt.cm("ContextActionService", "UnbindAction", "jumpAction");
 	end;
 	function Gamepad:OnNewGamepadConnected()
 		local bestGamepad = self:GetHighestPriorityGamepad();
@@ -6372,7 +6386,7 @@ function _Gamepad()
 	end;
 	function Gamepad:OnCurrentGamepadDisconnected()
 		if self.activeGamepad ~= NONE then
-			__lt_call_service_method("ContextActionService", "UnbindActivate", self.activeGamepad, Enum.KeyCode.ButtonR2);
+			__lt.cm("ContextActionService", "UnbindActivate", self.activeGamepad, Enum.KeyCode.ButtonR2);
 		end;
 		local bestGamepad = self:GetHighestPriorityGamepad();
 		if self.activeGamepad ~= NONE and bestGamepad == self.activeGamepad then
@@ -6386,7 +6400,7 @@ function _Gamepad()
 			self.activeGamepad = NONE;
 		else
 			self.activeGamepad = bestGamepad;
-			__lt_call_service_method("ContextActionService", "BindActivate", self.activeGamepad, Enum.KeyCode.ButtonR2);
+			__lt.cm("ContextActionService", "BindActivate", self.activeGamepad, Enum.KeyCode.ButtonR2);
 		end;
 	end;
 	function Gamepad:ConnectGamepadConnectionListeners()
@@ -6491,18 +6505,18 @@ function _Keyboard()
 			self:UpdateJump();
 			return Enum.ContextActionResult.Pass;
 		end;
-		__lt_call_service_method("ContextActionService", "BindActionAtPriority", "moveForwardAction", handleMoveForward, false, self.CONTROL_ACTION_PRIORITY, Enum.PlayerActions.CharacterForward);
-		__lt_call_service_method("ContextActionService", "BindActionAtPriority", "moveBackwardAction", handleMoveBackward, false, self.CONTROL_ACTION_PRIORITY, Enum.PlayerActions.CharacterBackward);
-		__lt_call_service_method("ContextActionService", "BindActionAtPriority", "moveLeftAction", handleMoveLeft, false, self.CONTROL_ACTION_PRIORITY, Enum.PlayerActions.CharacterLeft);
-		__lt_call_service_method("ContextActionService", "BindActionAtPriority", "moveRightAction", handleMoveRight, false, self.CONTROL_ACTION_PRIORITY, Enum.PlayerActions.CharacterRight);
-		__lt_call_service_method("ContextActionService", "BindActionAtPriority", "jumpAction", handleJumpAction, false, self.CONTROL_ACTION_PRIORITY, Enum.PlayerActions.CharacterJump);
+		__lt.cm("ContextActionService", "BindActionAtPriority", "moveForwardAction", handleMoveForward, false, self.CONTROL_ACTION_PRIORITY, Enum.PlayerActions.CharacterForward);
+		__lt.cm("ContextActionService", "BindActionAtPriority", "moveBackwardAction", handleMoveBackward, false, self.CONTROL_ACTION_PRIORITY, Enum.PlayerActions.CharacterBackward);
+		__lt.cm("ContextActionService", "BindActionAtPriority", "moveLeftAction", handleMoveLeft, false, self.CONTROL_ACTION_PRIORITY, Enum.PlayerActions.CharacterLeft);
+		__lt.cm("ContextActionService", "BindActionAtPriority", "moveRightAction", handleMoveRight, false, self.CONTROL_ACTION_PRIORITY, Enum.PlayerActions.CharacterRight);
+		__lt.cm("ContextActionService", "BindActionAtPriority", "jumpAction", handleJumpAction, false, self.CONTROL_ACTION_PRIORITY, Enum.PlayerActions.CharacterJump);
 	end;
 	function Keyboard:UnbindContextActions()
-		__lt_call_service_method("ContextActionService", "UnbindAction", "moveForwardAction");
-		__lt_call_service_method("ContextActionService", "UnbindAction", "moveBackwardAction");
-		__lt_call_service_method("ContextActionService", "UnbindAction", "moveLeftAction");
-		__lt_call_service_method("ContextActionService", "UnbindAction", "moveRightAction");
-		__lt_call_service_method("ContextActionService", "UnbindAction", "jumpAction");
+		__lt.cm("ContextActionService", "UnbindAction", "moveForwardAction");
+		__lt.cm("ContextActionService", "UnbindAction", "moveBackwardAction");
+		__lt.cm("ContextActionService", "UnbindAction", "moveLeftAction");
+		__lt.cm("ContextActionService", "UnbindAction", "moveRightAction");
+		__lt.cm("ContextActionService", "UnbindAction", "jumpAction");
 	end;
 	function Keyboard:ConnectFocusEventListeners()
 		local function onFocusReleased()
@@ -6615,7 +6629,7 @@ function _ControlModule()
 		if Players.LocalPlayer.Character then
 			self:OnCharacterAdded(Players.LocalPlayer.Character);
 		end;
-		__lt_call_service_method("RunService", "BindToRenderStep", "ControlScriptRenderstep", Enum.RenderPriority.Input.Value, function(dt)
+		__lt.cm("RunService", "BindToRenderStep", "ControlScriptRenderstep", Enum.RenderPriority.Input.Value, function(dt)
 			self:OnRenderStepped(dt);
 		end);
 		UserInputService.LastInputTypeChanged:Connect(function(newLastInputType)
@@ -6640,7 +6654,7 @@ function _ControlModule()
 			self.playerGui = Players.LocalPlayer:FindFirstChildOfClass("PlayerGui");
 			if self.playerGui then
 				self:CreateTouchGuiContainer();
-				self:OnLastInputTypeChanged(__lt_call_service_method("UserInputService", "GetLastInputType"));
+				self:OnLastInputTypeChanged(__lt.cm("UserInputService", "GetLastInputType"));
 			else
 				self.playerGuiAddedConn = Players.LocalPlayer.ChildAdded:Connect(function(child)
 					if child:IsA("PlayerGui") then
@@ -6648,12 +6662,12 @@ function _ControlModule()
 						self:CreateTouchGuiContainer();
 						self.playerGuiAddedConn:Disconnect();
 						self.playerGuiAddedConn = nil;
-						self:OnLastInputTypeChanged(__lt_call_service_method("UserInputService", "GetLastInputType"));
+						self:OnLastInputTypeChanged(__lt.cm("UserInputService", "GetLastInputType"));
 					end;
 				end);
 			end;
 		else
-			self:OnLastInputTypeChanged(__lt_call_service_method("UserInputService", "GetLastInputType"));
+			self:OnLastInputTypeChanged(__lt.cm("UserInputService", "GetLastInputType"));
 		end;
 		return self;
 	end;
@@ -7189,7 +7203,7 @@ function _sounds()
 		player.CharacterAdded:Connect(characterAdded);
 	end;
 	Players.PlayerAdded:Connect(playerAdded);
-	for _, player in ipairs(__lt_call_service_method("Players", "GetPlayers")) do
+	for _, player in ipairs(__lt.cm("Players", "GetPlayers")) do
 		playerAdded(player);
 	end;
 	return SetState;
@@ -8731,7 +8745,7 @@ function _GravityController()
 		self.HeartCon = RUNSERVICE.Heartbeat:Connect(function(dt)
 			self:OnHeartbeatStep(dt);
 		end);
-		__lt_call_service_method("RunService", "BindToRenderStep", "GravityStep", Enum.RenderPriority.Input.Value + 1, function(dt)
+		__lt.cm("RunService", "BindToRenderStep", "GravityStep", Enum.RenderPriority.Input.Value + 1, function(dt)
 			self:OnGravityStep(dt);
 		end);
 		return self;
@@ -8741,7 +8755,7 @@ function _GravityController()
 		self.DeathCon:Disconnect();
 		self.SeatCon:Disconnect();
 		self.HeartCon:Disconnect();
-		__lt_call_service_method("RunService", "UnbindFromRenderStep", "GravityStep");
+		__lt.cm("RunService", "UnbindFromRenderStep", "GravityStep");
 		self.Collider:Destroy();
 		self.VForce:Destroy();
 		self.Gyro:Destroy();
@@ -9183,7 +9197,7 @@ local FEELER_APEX_OFFSET = 1;
 local FEELER_WEIGHTING = 8;
 function GetGravityUp(self, oldGravityUp)
 	local ignoreList = {};
-	for i, player in next, __lt_call_service_method("Players", "GetPlayers") do
+	for i, player in next, __lt.cm("Players", "GetPlayers") do
 		ignoreList[i] = player.Character;
 	end;
 	local hrpCF = self.HRP.CFrame;

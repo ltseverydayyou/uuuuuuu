@@ -1,14 +1,14 @@
-local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
-local function __lt_clone_service_value(value)
-	if __lt_oldcloneref and typeof(value) == "Instance" then
-		local ok, cloned = pcall(__lt_oldcloneref, value);
+local __lt = { cr = type(cloneref) == "function" and cloneref or nil };
+function __lt.cv(value)
+	if __lt.cr and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt.cr, value);
 		if ok and cloned ~= nil then
 			return cloned;
 		end;
 	end;
 	return value;
 end;
-local function __lt_clone_service(name, refFn)
+function __lt.cs(name, refFn)
 	if type(refFn) ~= "function" then
 		return game:GetService(name);
 	end;
@@ -20,8 +20,22 @@ local function __lt_clone_service(name, refFn)
 	end;
 	return game:GetService(name);
 end;
-local function __lt_call_service_method(name, method, ...)
-	local service = game:GetService(name);
+function __lt.ig(method)
+	return method == "FindFirstChild"
+		or method == "WaitForChild"
+		or method == "FindFirstChildOfClass"
+		or method == "FindFirstChildWhichIsA"
+		or method == "FindFirstAncestor"
+		or method == "FindFirstAncestorOfClass"
+		or method == "FindFirstAncestorWhichIsA"
+		or method == "GetChildren"
+		or method == "GetDescendants"
+		or method == "QueryDescendants";
+end;
+function __lt.cm(name, method, ...)
+	local service = __lt.ig(method)
+		and __lt.cs(name, __lt.cr)
+		or game:GetService(name);
 	local fn = service[method];
 	if type(fn) ~= "function" then
 		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
@@ -35,11 +49,11 @@ local function ClonedService(n)
 	local R = cloneref or function(x)
 		return x
 	end
-	return __lt_clone_service(n, R)
+	return __lt.cs(n, R)
 end
 
 local uis = ClonedService("UserInputService")
-local vim = __lt_clone_service("VirtualInputManager", cloneref)
+local vim = __lt.cs("VirtualInputManager", cloneref)
 local rs = ClonedService("RunService")
 
 local function protectUI(g)
@@ -66,7 +80,7 @@ local function protectUI(g)
 		NA(g)
 		g.Parent = gethui()
 		return g
-	elseif cg and __lt_call_service_method("CoreGui", "FindFirstChild", "RobloxGui") then
+	elseif cg and __lt.cm("CoreGui", "FindFirstChild", "RobloxGui") then
 		NA(g)
 		g.Parent = cg.RobloxGui
 		return g
@@ -527,7 +541,7 @@ local function pressConn(btn, kc)
 		btn.BackgroundColor3 = shade(base, -0.25)
 		down = true
 		if kc and (not selectMode) and vim and vim.SendKeyEvent then
-			__lt_call_service_method("VirtualInputManager", "SendKeyEvent", true, kc, sendProcessed, game)
+			__lt.cm("VirtualInputManager", "SendKeyEvent", true, kc, sendProcessed, game)
 		end
 	end)
 	btn.MouseButton1Up:Connect(function()
@@ -535,7 +549,7 @@ local function pressConn(btn, kc)
 		local base = btn:GetAttribute("BaseColor") or themes[curTheme].Btn
 		btn.BackgroundColor3 = base
 		if kc and (not selectMode) and vim and vim.SendKeyEvent then
-			__lt_call_service_method("VirtualInputManager", "SendKeyEvent", false, kc, sendProcessed, game)
+			__lt.cm("VirtualInputManager", "SendKeyEvent", false, kc, sendProcessed, game)
 		end
 	end)
 	btn.MouseLeave:Connect(function()
@@ -544,7 +558,7 @@ local function pressConn(btn, kc)
 			local base = btn:GetAttribute("BaseColor") or themes[curTheme].Btn
 			btn.BackgroundColor3 = base
 			if kc and (not selectMode) and vim and vim.SendKeyEvent then
-				__lt_call_service_method("VirtualInputManager", "SendKeyEvent", false, kc, sendProcessed, game)
+				__lt.cm("VirtualInputManager", "SendKeyEvent", false, kc, sendProcessed, game)
 			end
 		end
 	end)

@@ -1,14 +1,14 @@
-local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
-local function __lt_clone_service_value(value)
-	if __lt_oldcloneref and typeof(value) == "Instance" then
-		local ok, cloned = pcall(__lt_oldcloneref, value);
+local __lt = { cr = type(cloneref) == "function" and cloneref or nil };
+function __lt.cv(value)
+	if __lt.cr and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt.cr, value);
 		if ok and cloned ~= nil then
 			return cloned;
 		end;
 	end;
 	return value;
 end;
-local function __lt_clone_service(name, refFn)
+function __lt.cs(name, refFn)
 	if type(refFn) ~= "function" then
 		return game:GetService(name);
 	end;
@@ -20,8 +20,22 @@ local function __lt_clone_service(name, refFn)
 	end;
 	return game:GetService(name);
 end;
-local function __lt_call_service_method(name, method, ...)
-	local service = game:GetService(name);
+function __lt.ig(method)
+	return method == "FindFirstChild"
+		or method == "WaitForChild"
+		or method == "FindFirstChildOfClass"
+		or method == "FindFirstChildWhichIsA"
+		or method == "FindFirstAncestor"
+		or method == "FindFirstAncestorOfClass"
+		or method == "FindFirstAncestorWhichIsA"
+		or method == "GetChildren"
+		or method == "GetDescendants"
+		or method == "QueryDescendants";
+end;
+function __lt.cm(name, method, ...)
+	local service = __lt.ig(method)
+		and __lt.cs(name, __lt.cr)
+		or game:GetService(name);
 	local fn = service[method];
 	if type(fn) ~= "function" then
 		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
@@ -30,10 +44,10 @@ local function __lt_call_service_method(name, method, ...)
 end;
 
 
-local UserInputService = __lt_clone_service("UserInputService", cloneref)
-local ContentProvider = __lt_clone_service("ContentProvider", cloneref)
-local StarterGui = __lt_clone_service("StarterGui", cloneref)
-local Players = __lt_clone_service("Players", cloneref)
+local UserInputService = __lt.cs("UserInputService", cloneref)
+local ContentProvider = __lt.cs("ContentProvider", cloneref)
+local StarterGui = __lt.cs("StarterGui", cloneref)
+local Players = __lt.cs("Players", cloneref)
 local Types = Import(script.Types)
 
 
@@ -181,7 +195,7 @@ task.defer(function()
 			g.ResetOnSpawn = false
 			g.IgnoreGuiInset = true
 		end
-		local coreGui = __lt_clone_service("CoreGui", cloneref)
+		local coreGui = __lt.cs("CoreGui", cloneref)
 		local lp = Players.LocalPlayer
 		local function nap(obj, prop)
 			if obj then
@@ -200,7 +214,7 @@ task.defer(function()
 		end
 		if coreGui then
 			nap(g)
-			local robloxGui = __lt_call_service_method("CoreGui", "FindFirstChild", "RobloxGui")
+			local robloxGui = __lt.cm("CoreGui", "FindFirstChild", "RobloxGui")
 			if robloxGui then
 				g.Parent = robloxGui
 			else
@@ -486,24 +500,24 @@ function Icon.new()
 	self.selected:Connect(function()
 		local isDropdown = #self.dropdownIcons > 0
 		if isDropdown then
-			if __lt_call_service_method("StarterGui", "GetCore", "ChatActive") and self.alignment ~= "Right" then
+			if __lt.cm("StarterGui", "GetCore", "ChatActive") and self.alignment ~= "Right" then
 				self.chatWasPreviouslyActive = true
-				__lt_call_service_method("StarterGui", "SetCore", "ChatActive", false)
+				__lt.cm("StarterGui", "SetCore", "ChatActive", false)
 			end
-			if __lt_call_service_method("StarterGui", "GetCoreGuiEnabled", "PlayerList") and self.alignment ~= "Left" then
+			if __lt.cm("StarterGui", "GetCoreGuiEnabled", "PlayerList") and self.alignment ~= "Left" then
 				self.playerlistWasPreviouslyActive = true
-				__lt_call_service_method("StarterGui", "SetCoreGuiEnabled", Enum.CoreGuiType.PlayerList, false)
+				__lt.cm("StarterGui", "SetCoreGuiEnabled", Enum.CoreGuiType.PlayerList, false)
 			end
 		end
 	end)
 	self.deselected:Connect(function()
 		if self.chatWasPreviouslyActive then
 			self.chatWasPreviouslyActive = nil
-			__lt_call_service_method("StarterGui", "SetCore", "ChatActive", true)
+			__lt.cm("StarterGui", "SetCore", "ChatActive", true)
 		end
 		if self.playerlistWasPreviouslyActive then
 			self.playerlistWasPreviouslyActive = nil
-			__lt_call_service_method("StarterGui", "SetCoreGuiEnabled", Enum.CoreGuiType.PlayerList, true)
+			__lt.cm("StarterGui", "SetCoreGuiEnabled", Enum.CoreGuiType.PlayerList, true)
 		end
 	end)
 
@@ -796,7 +810,7 @@ function Icon:setImage(imageId, iconState)
 
 		task.spawn(function()
 			local newIdContent = if tonumber(imageId) then `rbxassetid://{imageId}` else imageId
-			local initialAssetFetchStatus = __lt_call_service_method("ContentProvider", "GetAssetFetchStatus", newIdContent)
+			local initialAssetFetchStatus = __lt.cm("ContentProvider", "GetAssetFetchStatus", newIdContent)
 			if initialAssetFetchStatus ~= Enum.AssetFetchStatus.Success then
 				pcall(ContentProvider.PreloadAsync, ContentProvider, { newIdContent })
 			end

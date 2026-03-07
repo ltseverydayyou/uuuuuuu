@@ -1,14 +1,14 @@
-local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
-local function __lt_clone_service_value(value)
-	if __lt_oldcloneref and typeof(value) == "Instance" then
-		local ok, cloned = pcall(__lt_oldcloneref, value);
+local __lt = { cr = type(cloneref) == "function" and cloneref or nil };
+function __lt.cv(value)
+	if __lt.cr and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt.cr, value);
 		if ok and cloned ~= nil then
 			return cloned;
 		end;
 	end;
 	return value;
 end;
-local function __lt_clone_service(name, refFn)
+function __lt.cs(name, refFn)
 	if type(refFn) ~= "function" then
 		return game:GetService(name);
 	end;
@@ -20,8 +20,22 @@ local function __lt_clone_service(name, refFn)
 	end;
 	return game:GetService(name);
 end;
-local function __lt_call_service_method(name, method, ...)
-	local service = game:GetService(name);
+function __lt.ig(method)
+	return method == "FindFirstChild"
+		or method == "WaitForChild"
+		or method == "FindFirstChildOfClass"
+		or method == "FindFirstChildWhichIsA"
+		or method == "FindFirstAncestor"
+		or method == "FindFirstAncestorOfClass"
+		or method == "FindFirstAncestorWhichIsA"
+		or method == "GetChildren"
+		or method == "GetDescendants"
+		or method == "QueryDescendants";
+end;
+function __lt.cm(name, method, ...)
+	local service = __lt.ig(method)
+		and __lt.cs(name, __lt.cr)
+		or game:GetService(name);
 	local fn = service[method];
 	if type(fn) ~= "function" then
 		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
@@ -30,10 +44,10 @@ local function __lt_call_service_method(name, method, ...)
 end;
 
 
-local P = __lt_clone_service("Players", cloneref);
-local T = __lt_clone_service("TweenService", cloneref);
-local M = __lt_clone_service("MarketplaceService", cloneref);
-local U = __lt_clone_service("UserInputService", cloneref);
+local P = __lt.cs("Players", cloneref);
+local T = __lt.cs("TweenService", cloneref);
+local M = __lt.cs("MarketplaceService", cloneref);
+local U = __lt.cs("UserInputService", cloneref);
 local pl = P.LocalPlayer;
 local g = gethui and gethui() or pl:WaitForChild("PlayerGui");
 local sg = Instance.new("ScreenGui", g);
@@ -201,15 +215,15 @@ tb.MouseButton1Click:Connect(function()
 	exp = not exp;
 	tb.Text = exp and "Animations ▲" or "Animations ▼";
 	local H = math.clamp(ly.AbsoluteContentSize.Y, 0, 176);
-	(__lt_call_service_method("TweenService", "Create", sf, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+	(__lt.cm("TweenService", "Create", sf, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
 		Size = exp and UDim2.new(1, 0, 0, H) or UDim2.new(1, 0, 0, 0)
 	})):Play();
-	(__lt_call_service_method("TweenService", "Create", f, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+	(__lt.cm("TweenService", "Create", f, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
 		Size = exp and UDim2.new(0, 260, 0, 60 + H) or UDim2.new(0, 260, 0, 60)
 	})):Play();
 	if not exp then
 		of.Visible = false;
-		(__lt_call_service_method("TweenService", "Create", of, TweenInfo.new(0.2), {
+		(__lt.cm("TweenService", "Create", of, TweenInfo.new(0.2), {
 			Size = UDim2.new(0, 0, 0, 0)
 		})):Play();
 	end;
@@ -224,14 +238,14 @@ cancelBtn.MouseButton1Click:Connect(function()
 	if exp then
 		exp = false;
 		tb.Text = "Animations ▼";
-		(__lt_call_service_method("TweenService", "Create", sf, TweenInfo.new(0.3), {
+		(__lt.cm("TweenService", "Create", sf, TweenInfo.new(0.3), {
 			Size = UDim2.new(1, 0, 0, 0)
 		})):Play();
-		(__lt_call_service_method("TweenService", "Create", f, TweenInfo.new(0.3), {
+		(__lt.cm("TweenService", "Create", f, TweenInfo.new(0.3), {
 			Size = UDim2.new(0, 260, 0, 60)
 		})):Play();
 		of.Visible = false;
-		(__lt_call_service_method("TweenService", "Create", of, TweenInfo.new(0.2), {
+		(__lt.cm("TweenService", "Create", of, TweenInfo.new(0.2), {
 			Size = UDim2.new(0, 0, 0, 0)
 		})):Play();
 	end;
@@ -252,14 +266,14 @@ playBtn.MouseButton1Click:Connect(function()
 	end;
 	exp = false;
 	tb.Text = "Animations ▼";
-	(__lt_call_service_method("TweenService", "Create", sf, TweenInfo.new(0.3), {
+	(__lt.cm("TweenService", "Create", sf, TweenInfo.new(0.3), {
 		Size = UDim2.new(1, 0, 0, 0)
 	})):Play();
-	(__lt_call_service_method("TweenService", "Create", f, TweenInfo.new(0.3), {
+	(__lt.cm("TweenService", "Create", f, TweenInfo.new(0.3), {
 		Size = UDim2.new(0, 260, 0, 60)
 	})):Play();
 	of.Visible = false;
-	(__lt_call_service_method("TweenService", "Create", of, TweenInfo.new(0.2), {
+	(__lt.cm("TweenService", "Create", of, TweenInfo.new(0.2), {
 		Size = UDim2.new(0, 0, 0, 0)
 	})):Play();
 end);
@@ -275,14 +289,14 @@ copyBtn.MouseButton1Click:Connect(function()
 	end;
 	exp = false;
 	tb.Text = "Animations ▼";
-	(__lt_call_service_method("TweenService", "Create", sf, TweenInfo.new(0.3), {
+	(__lt.cm("TweenService", "Create", sf, TweenInfo.new(0.3), {
 		Size = UDim2.new(1, 0, 0, 0)
 	})):Play();
-	(__lt_call_service_method("TweenService", "Create", f, TweenInfo.new(0.3), {
+	(__lt.cm("TweenService", "Create", f, TweenInfo.new(0.3), {
 		Size = UDim2.new(0, 260, 0, 60)
 	})):Play();
 	of.Visible = false;
-	(__lt_call_service_method("TweenService", "Create", of, TweenInfo.new(0.2), {
+	(__lt.cm("TweenService", "Create", of, TweenInfo.new(0.2), {
 		Size = UDim2.new(0, 0, 0, 0)
 	})):Play();
 end);
@@ -307,7 +321,7 @@ task.spawn(function()
 				});
 			else
 				local ok, info = pcall(function()
-					return __lt_call_service_method("MarketplaceService", "GetProductInfo", aid, Enum.InfoType.Asset);
+					return __lt.cm("MarketplaceService", "GetProductInfo", aid, Enum.InfoType.Asset);
 				end);
 				if ok and info.AssetTypeId == Enum.AssetType.Animation.Value then
 					local a = Instance.new("Animation");
@@ -338,7 +352,7 @@ task.spawn(function()
 		b.MouseButton1Click:Connect(function()
 			sel = d;
 			of.Visible = true;
-			(__lt_call_service_method("TweenService", "Create", of, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+			(__lt.cm("TweenService", "Create", of, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
 				Size = UDim2.new(0, 120, 0, 90)
 			})):Play();
 		end);

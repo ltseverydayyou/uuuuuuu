@@ -1,14 +1,14 @@
-local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
-local function __lt_clone_service_value(value)
-	if __lt_oldcloneref and typeof(value) == "Instance" then
-		local ok, cloned = pcall(__lt_oldcloneref, value);
+local __lt = { cr = type(cloneref) == "function" and cloneref or nil };
+function __lt.cv(value)
+	if __lt.cr and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt.cr, value);
 		if ok and cloned ~= nil then
 			return cloned;
 		end;
 	end;
 	return value;
 end;
-local function __lt_clone_service(name, refFn)
+function __lt.cs(name, refFn)
 	if type(refFn) ~= "function" then
 		return game:GetService(name);
 	end;
@@ -20,8 +20,22 @@ local function __lt_clone_service(name, refFn)
 	end;
 	return game:GetService(name);
 end;
-local function __lt_call_service_method(name, method, ...)
-	local service = game:GetService(name);
+function __lt.ig(method)
+	return method == "FindFirstChild"
+		or method == "WaitForChild"
+		or method == "FindFirstChildOfClass"
+		or method == "FindFirstChildWhichIsA"
+		or method == "FindFirstAncestor"
+		or method == "FindFirstAncestorOfClass"
+		or method == "FindFirstAncestorWhichIsA"
+		or method == "GetChildren"
+		or method == "GetDescendants"
+		or method == "QueryDescendants";
+end;
+function __lt.cm(name, method, ...)
+	local service = __lt.ig(method)
+		and __lt.cs(name, __lt.cr)
+		or game:GetService(name);
 	local fn = service[method];
 	if type(fn) ~= "function" then
 		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
@@ -30,9 +44,9 @@ local function __lt_call_service_method(name, method, ...)
 end;
 
 
-local plr = __lt_clone_service("Players", cloneref)
-local uis = __lt_clone_service("UserInputService", cloneref)
-local TweenService = __lt_clone_service("TweenService", cloneref)
+local plr = __lt.cs("Players", cloneref)
+local uis = __lt.cs("UserInputService", cloneref)
+local TweenService = __lt.cs("TweenService", cloneref)
 
 local lp = plr.LocalPlayer
 local pg = lp:WaitForChild("PlayerGui")
@@ -53,8 +67,8 @@ local function getPar()
 	end)
 	if ok and ui then return ui end
 
-	local cg = __lt_clone_service("CoreGui", cloneref)
-	local rg = __lt_call_service_method("CoreGui", "FindFirstChild", "RobloxGui")
+	local cg = __lt.cs("CoreGui", cloneref)
+	local rg = __lt.cm("CoreGui", "FindFirstChild", "RobloxGui")
 	if rg then return rg end
 	if cg then return ref(cg) end
 
@@ -82,7 +96,7 @@ local function off()
 end
 
 local function isMob()
-	local p = __lt_call_service_method("UserInputService", "GetPlatform")
+	local p = __lt.cm("UserInputService", "GetPlatform")
 	if p == Enum.Platform.IOS or p == Enum.Platform.Android or p == Enum.Platform.AndroidTV or p == Enum.Platform.Chromecast or p == Enum.Platform.MetaOS then
 		return true
 	end
@@ -334,10 +348,10 @@ local function mkBtn(txt, x, accent)
 
 	local normal = b.BackgroundColor3
 	on(b.MouseEnter:Connect(function()
-		__lt_call_service_method("TweenService", "Create", b, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {BackgroundColor3 = accent and Color3.fromRGB(255,70,70) or Color3.fromRGB(50,50,62)}):Play()
+		__lt.cm("TweenService", "Create", b, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {BackgroundColor3 = accent and Color3.fromRGB(255,70,70) or Color3.fromRGB(50,50,62)}):Play()
 	end))
 	on(b.MouseLeave:Connect(function()
-		__lt_call_service_method("TweenService", "Create", b, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {BackgroundColor3 = normal}):Play()
+		__lt.cm("TweenService", "Create", b, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {BackgroundColor3 = normal}):Play()
 	end))
 
 	return b
@@ -646,13 +660,13 @@ local function mkRow(it, idx)
 	imgScale.Parent = img
 
 	reg(fr, fr.MouseEnter:Connect(function()
-		__lt_call_service_method("TweenService", "Create", fr, TweenInfo.new(0.2), {BackgroundTransparency = 0.28, BackgroundColor3 = Color3.fromRGB(38,38,48)}):Play()
-		__lt_call_service_method("TweenService", "Create", imgScale, TweenInfo.new(0.25, Enum.EasingStyle.Quad), {Scale = 1.09}):Play()
+		__lt.cm("TweenService", "Create", fr, TweenInfo.new(0.2), {BackgroundTransparency = 0.28, BackgroundColor3 = Color3.fromRGB(38,38,48)}):Play()
+		__lt.cm("TweenService", "Create", imgScale, TweenInfo.new(0.25, Enum.EasingStyle.Quad), {Scale = 1.09}):Play()
 	end))
 	reg(fr, fr.MouseLeave:Connect(function()
 		local targetTrans = (curBtn == fr) and 0.22 or 0.35
-		__lt_call_service_method("TweenService", "Create", fr, TweenInfo.new(0.2), {BackgroundTransparency = targetTrans, BackgroundColor3 = Color3.fromRGB(26,26,34)}):Play()
-		__lt_call_service_method("TweenService", "Create", imgScale, TweenInfo.new(0.25), {Scale = 1}):Play()
+		__lt.cm("TweenService", "Create", fr, TweenInfo.new(0.2), {BackgroundTransparency = targetTrans, BackgroundColor3 = Color3.fromRGB(26,26,34)}):Play()
+		__lt.cm("TweenService", "Create", imgScale, TweenInfo.new(0.25), {Scale = 1}):Play()
 	end))
 
 	reg(fr, fr.MouseButton1Click:Connect(function()
@@ -663,7 +677,7 @@ local function mkRow(it, idx)
 
 		previewImage.ImageTransparency = 1
 		previewImage.Image = it.src
-		__lt_call_service_method("TweenService", "Create", previewImage, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {ImageTransparency = 0}):Play()
+		__lt.cm("TweenService", "Create", previewImage, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {ImageTransparency = 0}):Play()
 
 		if curBtn and curBtn ~= fr then
 			curBtn.BackgroundTransparency = 0.35
@@ -674,8 +688,8 @@ local function mkRow(it, idx)
 		fr.BackgroundColor3 = Color3.fromRGB(44, 48, 68)
 	end))
 
-	__lt_call_service_method("TweenService", "Create", fr, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {BackgroundTransparency = 0.35}):Play()
-	__lt_call_service_method("TweenService", "Create", img, TweenInfo.new(0.35, Enum.EasingStyle.Quad), {ImageTransparency = 0}):Play()
+	__lt.cm("TweenService", "Create", fr, TweenInfo.new(0.3, Enum.EasingStyle.Quad), {BackgroundTransparency = 0.35}):Play()
+	__lt.cm("TweenService", "Create", img, TweenInfo.new(0.35, Enum.EasingStyle.Quad), {ImageTransparency = 0}):Play()
 
 	return fr
 end
@@ -926,10 +940,10 @@ on(cp.MouseButton1Click:Connect(function()
 		pcall(setclipboard, s)
 		local origColor = cp.BackgroundColor3
 		cp.Text = "Copied ✓"
-		local tween1 = __lt_call_service_method("TweenService", "Create", cp, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = Color3.fromRGB(70, 190, 110)})
+		local tween1 = __lt.cm("TweenService", "Create", cp, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = Color3.fromRGB(70, 190, 110)})
 		tween1:Play()
 		tween1.Completed:Wait()
-		local tween2 = __lt_call_service_method("TweenService", "Create", cp, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = origColor})
+		local tween2 = __lt.cm("TweenService", "Create", cp, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = origColor})
 		tween2:Play()
 		tween2.Completed:Wait()
 		task.delay(1.1, function()
@@ -997,6 +1011,6 @@ end))
 refData()
 
 task.spawn(function()
-	__lt_call_service_method("TweenService", "Create", root, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {BackgroundTransparency = 0}):Play()
-	__lt_call_service_method("TweenService", "Create", sc, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = sc.Scale}):Play()
+	__lt.cm("TweenService", "Create", root, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {BackgroundTransparency = 0}):Play()
+	__lt.cm("TweenService", "Create", sc, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = sc.Scale}):Play()
 end)

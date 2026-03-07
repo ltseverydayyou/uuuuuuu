@@ -1,14 +1,14 @@
-local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
-local function __lt_clone_service_value(value)
-	if __lt_oldcloneref and typeof(value) == "Instance" then
-		local ok, cloned = pcall(__lt_oldcloneref, value);
+local __lt = { cr = type(cloneref) == "function" and cloneref or nil };
+function __lt.cv(value)
+	if __lt.cr and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt.cr, value);
 		if ok and cloned ~= nil then
 			return cloned;
 		end;
 	end;
 	return value;
 end;
-local function __lt_clone_service(name, refFn)
+function __lt.cs(name, refFn)
 	if type(refFn) ~= "function" then
 		return game:GetService(name);
 	end;
@@ -20,8 +20,22 @@ local function __lt_clone_service(name, refFn)
 	end;
 	return game:GetService(name);
 end;
-local function __lt_call_service_method(name, method, ...)
-	local service = game:GetService(name);
+function __lt.ig(method)
+	return method == "FindFirstChild"
+		or method == "WaitForChild"
+		or method == "FindFirstChildOfClass"
+		or method == "FindFirstChildWhichIsA"
+		or method == "FindFirstAncestor"
+		or method == "FindFirstAncestorOfClass"
+		or method == "FindFirstAncestorWhichIsA"
+		or method == "GetChildren"
+		or method == "GetDescendants"
+		or method == "QueryDescendants";
+end;
+function __lt.cm(name, method, ...)
+	local service = __lt.ig(method)
+		and __lt.cs(name, __lt.cr)
+		or game:GetService(name);
 	local fn = service[method];
 	if type(fn) ~= "function" then
 		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
@@ -40,7 +54,7 @@ local function ClonedService(name)
 	local Reference = cloneref or function(reference)
 		return reference;
 	end;
-	return __lt_clone_service(name, Reference);
+	return __lt.cs(name, Reference);
 end;
 local runService = ClonedService("RunService");
 local tweenService = ClonedService("TweenService");
@@ -203,16 +217,16 @@ local function createOptionHolder(holderTitle, parent, parentTable, subHolder)
 	closeHolder.InputBegan:connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
 			parentTable.open = not parentTable.open;
-			(__lt_call_service_method("TweenService", "Create", close, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			(__lt.cm("TweenService", "Create", close, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 				Rotation = parentTable.open and 90 or 180,
 				ImageColor3 = parentTable.open and Color3.fromRGB(50, 50, 50) or Color3.fromRGB(30, 30, 30)
 			})):Play();
 			if subHolder then
-				(__lt_call_service_method("TweenService", "Create", title, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				(__lt.cm("TweenService", "Create", title, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 					BackgroundColor3 = parentTable.open and Color3.fromRGB(16, 16, 16) or Color3.fromRGB(10, 10, 10)
 				})):Play();
 			else
-				(__lt_call_service_method("TweenService", "Create", round, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				(__lt.cm("TweenService", "Create", round, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 					ImageColor3 = parentTable.open and Color3.fromRGB(10, 10, 10) or Color3.fromRGB(6, 6, 6)
 				})):Play();
 			end;
@@ -302,7 +316,7 @@ function createToggle(option, parent)
 		if input.UserInputType == Enum.UserInputType.MouseMovement then
 			inContact = true;
 			if not option.state then
-				(__lt_call_service_method("TweenService", "Create", tickboxOutline, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				(__lt.cm("TweenService", "Create", tickboxOutline, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 					ImageColor3 = Color3.fromRGB(140, 140, 140)
 				})):Play();
 			end;
@@ -312,7 +326,7 @@ function createToggle(option, parent)
 		if input.UserInputType == Enum.UserInputType.MouseMovement then
 			inContact = true;
 			if not option.state then
-				(__lt_call_service_method("TweenService", "Create", tickboxOutline, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				(__lt.cm("TweenService", "Create", tickboxOutline, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 					ImageColor3 = Color3.fromRGB(100, 100, 100)
 				})):Play();
 			end;
@@ -322,19 +336,19 @@ function createToggle(option, parent)
 		library.flags[self.flag] = state;
 		self.state = state;
 		checkmarkHolder:TweenSize(option.state and UDim2.new(1, (-8), 1, (-8)) or UDim2.new(0, 0, 1, (-8)), "Out", "Quad", 0.2, true);
-		(__lt_call_service_method("TweenService", "Create", tickboxInner, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		(__lt.cm("TweenService", "Create", tickboxInner, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 			ImageColor3 = state and Color3.fromRGB(255, 65, 65) or Color3.fromRGB(20, 20, 20)
 		})):Play();
 		if state then
-			(__lt_call_service_method("TweenService", "Create", tickboxOutline, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			(__lt.cm("TweenService", "Create", tickboxOutline, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 				ImageColor3 = Color3.fromRGB(255, 65, 65)
 			})):Play();
 		elseif inContact then
-			(__lt_call_service_method("TweenService", "Create", tickboxOutline, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			(__lt.cm("TweenService", "Create", tickboxOutline, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 				ImageColor3 = Color3.fromRGB(140, 140, 140)
 			})):Play();
 		else
-			(__lt_call_service_method("TweenService", "Create", tickboxOutline, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			(__lt.cm("TweenService", "Create", tickboxOutline, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 				ImageColor3 = Color3.fromRGB(100, 100, 100)
 			})):Play();
 		end;
@@ -383,14 +397,14 @@ function createButton(option, parent)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
 			library.flags[option.flag] = true;
 			clicking = true;
-			(__lt_call_service_method("TweenService", "Create", round, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			(__lt.cm("TweenService", "Create", round, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 				ImageColor3 = Color3.fromRGB(255, 65, 65)
 			})):Play();
 			option.callback();
 		end;
 		if input.UserInputType == Enum.UserInputType.MouseMovement then
 			inContact = true;
-			(__lt_call_service_method("TweenService", "Create", round, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			(__lt.cm("TweenService", "Create", round, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 				ImageColor3 = Color3.fromRGB(60, 60, 60)
 			})):Play();
 		end;
@@ -399,11 +413,11 @@ function createButton(option, parent)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
 			clicking = false;
 			if inContact then
-				(__lt_call_service_method("TweenService", "Create", round, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				(__lt.cm("TweenService", "Create", round, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 					ImageColor3 = Color3.fromRGB(60, 60, 60)
 				})):Play();
 			else
-				(__lt_call_service_method("TweenService", "Create", round, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				(__lt.cm("TweenService", "Create", round, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 					ImageColor3 = Color3.fromRGB(40, 40, 40)
 				})):Play();
 			end;
@@ -411,7 +425,7 @@ function createButton(option, parent)
 		if input.UserInputType == Enum.UserInputType.MouseMovement then
 			inContact = false;
 			if not clicking then
-				(__lt_call_service_method("TweenService", "Create", round, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				(__lt.cm("TweenService", "Create", round, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 					ImageColor3 = Color3.fromRGB(40, 40, 40)
 				})):Play();
 			end;
@@ -436,7 +450,7 @@ local function createBind(option, parent)
 	});
 	local round = library:Create("ImageLabel", {
 		Position = UDim2.new(1, -6, 0, 4),
-		Size = UDim2.new(0, (-(__lt_call_service_method("TextService", "GetTextSize", text, 16, Enum.Font.Gotham, Vector2.new(9000000000, 9000000000))).X) - 16, 1, -10),
+		Size = UDim2.new(0, (-(__lt.cm("TextService", "GetTextSize", text, 16, Enum.Font.Gotham, Vector2.new(9000000000, 9000000000))).X) - 16, 1, -10),
 		SizeConstraint = Enum.SizeConstraint.RelativeYY,
 		BackgroundTransparency = 1,
 		Image = "rbxassetid://3570695787",
@@ -460,7 +474,7 @@ local function createBind(option, parent)
 		if input.UserInputType == Enum.UserInputType.MouseMovement then
 			inContact = true;
 			if not binding then
-				(__lt_call_service_method("TweenService", "Create", round, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				(__lt.cm("TweenService", "Create", round, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 					ImageColor3 = Color3.fromRGB(60, 60, 60)
 				})):Play();
 			end;
@@ -470,21 +484,21 @@ local function createBind(option, parent)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
 			binding = true;
 			bindinput.Text = "...";
-			(__lt_call_service_method("TweenService", "Create", round, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			(__lt.cm("TweenService", "Create", round, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 				ImageColor3 = Color3.fromRGB(255, 65, 65)
 			})):Play();
 		end;
 		if input.UserInputType == Enum.UserInputType.MouseMovement then
 			inContact = false;
 			if not binding then
-				(__lt_call_service_method("TweenService", "Create", round, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				(__lt.cm("TweenService", "Create", round, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 					ImageColor3 = Color3.fromRGB(40, 40, 40)
 				})):Play();
 			end;
 		end;
 	end);
 	inputService.InputBegan:connect(function(input)
-		if __lt_call_service_method("UserInputService", "GetFocusedTextBox") then
+		if __lt.cm("UserInputService", "GetFocusedTextBox") then
 			return;
 		end;
 		if (input.KeyCode.Name == option.key or input.UserInputType.Name == option.key) and (not binding) then
@@ -540,10 +554,10 @@ local function createBind(option, parent)
 		else
 			bindinput.Text = self.key;
 		end;
-		(__lt_call_service_method("TweenService", "Create", round, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		(__lt.cm("TweenService", "Create", round, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 			ImageColor3 = inContact and Color3.fromRGB(60, 60, 60) or Color3.fromRGB(40, 40, 40)
 		})):Play();
-		round.Size = UDim2.new(0, (-(__lt_call_service_method("TextService", "GetTextSize", bindinput.Text, 15, Enum.Font.Gotham, Vector2.new(9000000000, 9000000000))).X) - 16, 1, -10);
+		round.Size = UDim2.new(0, (-(__lt.cm("TextService", "GetTextSize", bindinput.Text, 15, Enum.Font.Gotham, Vector2.new(9000000000, 9000000000))).X) - 16, 1, -10);
 	end;
 end;
 local function createSlider(option, parent)
@@ -627,10 +641,10 @@ local function createSlider(option, parent)
 	local inContact;
 	main.InputBegan:connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
-			(__lt_call_service_method("TweenService", "Create", fill, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			(__lt.cm("TweenService", "Create", fill, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 				ImageColor3 = Color3.fromRGB(255, 65, 65)
 			})):Play();
-			(__lt_call_service_method("TweenService", "Create", circle, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			(__lt.cm("TweenService", "Create", circle, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 				Size = UDim2.new(3.5, 0, 3.5, 0),
 				ImageColor3 = Color3.fromRGB(255, 65, 65)
 			})):Play();
@@ -640,10 +654,10 @@ local function createSlider(option, parent)
 		if input.UserInputType == Enum.UserInputType.MouseMovement then
 			inContact = true;
 			if not sliding then
-				(__lt_call_service_method("TweenService", "Create", fill, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				(__lt.cm("TweenService", "Create", fill, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 					ImageColor3 = Color3.fromRGB(100, 100, 100)
 				})):Play();
-				(__lt_call_service_method("TweenService", "Create", circle, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				(__lt.cm("TweenService", "Create", circle, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 					Size = UDim2.new(2.8, 0, 2.8, 0),
 					ImageColor3 = Color3.fromRGB(100, 100, 100)
 				})):Play();
@@ -659,18 +673,18 @@ local function createSlider(option, parent)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
 			sliding = false;
 			if inContact then
-				(__lt_call_service_method("TweenService", "Create", fill, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				(__lt.cm("TweenService", "Create", fill, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 					ImageColor3 = Color3.fromRGB(100, 100, 100)
 				})):Play();
-				(__lt_call_service_method("TweenService", "Create", circle, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				(__lt.cm("TweenService", "Create", circle, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 					Size = UDim2.new(2.8, 0, 2.8, 0),
 					ImageColor3 = Color3.fromRGB(100, 100, 100)
 				})):Play();
 			else
-				(__lt_call_service_method("TweenService", "Create", fill, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				(__lt.cm("TweenService", "Create", fill, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 					ImageColor3 = Color3.fromRGB(60, 60, 60)
 				})):Play();
-				(__lt_call_service_method("TweenService", "Create", circle, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				(__lt.cm("TweenService", "Create", circle, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 					Size = UDim2.new(0, 0, 0, 0),
 					ImageColor3 = Color3.fromRGB(60, 60, 60)
 				})):Play();
@@ -680,10 +694,10 @@ local function createSlider(option, parent)
 			inContact = false;
 			inputvalue:ReleaseFocus();
 			if not sliding then
-				(__lt_call_service_method("TweenService", "Create", fill, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				(__lt.cm("TweenService", "Create", fill, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 					ImageColor3 = Color3.fromRGB(60, 60, 60)
 				})):Play();
-				(__lt_call_service_method("TweenService", "Create", circle, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				(__lt.cm("TweenService", "Create", circle, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 					Size = UDim2.new(0, 0, 0, 0),
 					ImageColor3 = Color3.fromRGB(60, 60, 60)
 				})):Play();
@@ -691,7 +705,7 @@ local function createSlider(option, parent)
 		end;
 	end);
 	inputvalue.FocusLost:connect(function()
-		(__lt_call_service_method("TweenService", "Create", circle, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		(__lt.cm("TweenService", "Create", circle, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 			Size = UDim2.new(0, 0, 0, 0),
 			ImageColor3 = Color3.fromRGB(60, 60, 60)
 		})):Play();
@@ -811,16 +825,16 @@ local function createList(option, parent, holder)
 			option.mainHolder.Visible = true;
 			library.activePopup = option;
 			content.ScrollBarThickness = 6;
-			(__lt_call_service_method("TweenService", "Create", option.mainHolder, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+			(__lt.cm("TweenService", "Create", option.mainHolder, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
 				ImageTransparency = 0,
 				Position = UDim2.new(0, position.X - 5, 0, position.Y - 4)
 			})):Play();
-			(__lt_call_service_method("TweenService", "Create", option.mainHolder, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, 0.1), {
+			(__lt.cm("TweenService", "Create", option.mainHolder, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, 0.1), {
 				Position = UDim2.new(0, position.X - 5, 0, position.Y + 1)
 			})):Play();
 			for _, label in next, content:GetChildren() do
 				if label:IsA("TextLabel") then
-					(__lt_call_service_method("TweenService", "Create", label, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+					(__lt.cm("TweenService", "Create", label, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 						BackgroundTransparency = 0,
 						TextTransparency = 0
 					})):Play();
@@ -830,7 +844,7 @@ local function createList(option, parent, holder)
 		if input.UserInputType == Enum.UserInputType.MouseMovement then
 			inContact = true;
 			if not option.open then
-				(__lt_call_service_method("TweenService", "Create", round, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				(__lt.cm("TweenService", "Create", round, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 					ImageColor3 = Color3.fromRGB(60, 60, 60)
 				})):Play();
 			end;
@@ -840,7 +854,7 @@ local function createList(option, parent, holder)
 		if input.UserInputType == Enum.UserInputType.MouseMovement then
 			inContact = false;
 			if not option.open then
-				(__lt_call_service_method("TweenService", "Create", round, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				(__lt.cm("TweenService", "Create", round, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 					ImageColor3 = Color3.fromRGB(40, 40, 40)
 				})):Play();
 			end;
@@ -866,7 +880,7 @@ local function createList(option, parent, holder)
 		label.InputBegan:connect(function(input)
 			if input.UserInputType == Enum.UserInputType.MouseButton1 then
 				clicking = true;
-				(__lt_call_service_method("TweenService", "Create", label, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				(__lt.cm("TweenService", "Create", label, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 					BackgroundColor3 = Color3.fromRGB(10, 10, 10)
 				})):Play();
 				self:SetValue(value);
@@ -874,7 +888,7 @@ local function createList(option, parent, holder)
 			if input.UserInputType == Enum.UserInputType.MouseMovement then
 				inContact = true;
 				if not clicking then
-					(__lt_call_service_method("TweenService", "Create", label, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+					(__lt.cm("TweenService", "Create", label, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 						BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 					})):Play();
 				end;
@@ -883,14 +897,14 @@ local function createList(option, parent, holder)
 		label.InputEnded:connect(function(input)
 			if input.UserInputType == Enum.UserInputType.MouseButton1 then
 				clicking = false;
-				(__lt_call_service_method("TweenService", "Create", label, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				(__lt.cm("TweenService", "Create", label, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 					BackgroundColor3 = inContact and Color3.fromRGB(20, 20, 20) or Color3.fromRGB(30, 30, 30)
 				})):Play();
 			end;
 			if input.UserInputType == Enum.UserInputType.MouseMovement then
 				inContact = false;
 				if not clicking then
-					(__lt_call_service_method("TweenService", "Create", label, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+					(__lt.cm("TweenService", "Create", label, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 						BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 					})):Play();
 				end;
@@ -926,16 +940,16 @@ local function createList(option, parent, holder)
 		self.open = false;
 		content.ScrollBarThickness = 0;
 		local position = main.AbsolutePosition;
-		(__lt_call_service_method("TweenService", "Create", round, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		(__lt.cm("TweenService", "Create", round, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 			ImageColor3 = inContact and Color3.fromRGB(60, 60, 60) or Color3.fromRGB(40, 40, 40)
 		})):Play();
-		(__lt_call_service_method("TweenService", "Create", self.mainHolder, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		(__lt.cm("TweenService", "Create", self.mainHolder, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 			ImageTransparency = 1,
 			Position = UDim2.new(0, position.X - 5, 0, position.Y - 10)
 		})):Play();
 		for _, label in next, content:GetChildren() do
 			if label:IsA("TextLabel") then
-				(__lt_call_service_method("TweenService", "Create", label, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				(__lt.cm("TweenService", "Create", label, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 					BackgroundTransparency = 1,
 					TextTransparency = 1
 				})):Play();
@@ -1011,7 +1025,7 @@ local function createBox(option, parent)
 		if input.UserInputType == Enum.UserInputType.MouseMovement then
 			inContact = true;
 			if not focused then
-				(__lt_call_service_method("TweenService", "Create", outline, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				(__lt.cm("TweenService", "Create", outline, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 					ImageColor3 = Color3.fromRGB(100, 100, 100)
 				})):Play();
 			end;
@@ -1021,7 +1035,7 @@ local function createBox(option, parent)
 		if input.UserInputType == Enum.UserInputType.MouseMovement then
 			inContact = false;
 			if not focused then
-				(__lt_call_service_method("TweenService", "Create", outline, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				(__lt.cm("TweenService", "Create", outline, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 					ImageColor3 = Color3.fromRGB(60, 60, 60)
 				})):Play();
 			end;
@@ -1029,13 +1043,13 @@ local function createBox(option, parent)
 	end);
 	inputvalue.Focused:connect(function()
 		focused = true;
-		(__lt_call_service_method("TweenService", "Create", outline, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		(__lt.cm("TweenService", "Create", outline, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 			ImageColor3 = Color3.fromRGB(255, 65, 65)
 		})):Play();
 	end);
 	inputvalue.FocusLost:connect(function(enter)
 		focused = false;
-		(__lt_call_service_method("TweenService", "Create", outline, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		(__lt.cm("TweenService", "Create", outline, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 			ImageColor3 = Color3.fromRGB(60, 60, 60)
 		})):Play();
 		option:SetValue(inputvalue.Text, enter);
@@ -1230,14 +1244,14 @@ local function createColorPickerWindow(option)
 			option:SetColor(originalColor);
 		end;
 		if Input.UserInputType == Enum.UserInputType.MouseMovement and (not dragging) then
-			(__lt_call_service_method("TweenService", "Create", option.resetColor, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			(__lt.cm("TweenService", "Create", option.resetColor, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 				ImageColor3 = Color3.fromRGB(10, 10, 10)
 			})):Play();
 		end;
 	end);
 	option.resetColor.InputEnded:connect(function(Input)
 		if Input.UserInputType == Enum.UserInputType.MouseMovement and (not dragging) then
-			(__lt_call_service_method("TweenService", "Create", option.resetColor, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			(__lt.cm("TweenService", "Create", option.resetColor, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 				ImageColor3 = Color3.fromRGB(20, 20, 20)
 			})):Play();
 		end;
@@ -1275,14 +1289,14 @@ local function createColorPickerWindow(option)
 			end;
 		end;
 		if Input.UserInputType == Enum.UserInputType.MouseMovement and (not dragging) then
-			(__lt_call_service_method("TweenService", "Create", option.undoColor, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			(__lt.cm("TweenService", "Create", option.undoColor, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 				ImageColor3 = Color3.fromRGB(10, 10, 10)
 			})):Play();
 		end;
 	end);
 	option.undoColor.InputEnded:connect(function(Input)
 		if Input.UserInputType == Enum.UserInputType.MouseMovement and (not dragging) then
-			(__lt_call_service_method("TweenService", "Create", option.undoColor, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			(__lt.cm("TweenService", "Create", option.undoColor, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 				ImageColor3 = Color3.fromRGB(20, 20, 20)
 			})):Play();
 		end;
@@ -1317,14 +1331,14 @@ local function createColorPickerWindow(option)
 			option:SetColor(currentColor);
 		end;
 		if Input.UserInputType == Enum.UserInputType.MouseMovement and (not dragging) then
-			(__lt_call_service_method("TweenService", "Create", option.setColor, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			(__lt.cm("TweenService", "Create", option.setColor, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 				ImageColor3 = Color3.fromRGB(10, 10, 10)
 			})):Play();
 		end;
 	end);
 	option.setColor.InputEnded:connect(function(Input)
 		if Input.UserInputType == Enum.UserInputType.MouseMovement and (not dragging) then
-			(__lt_call_service_method("TweenService", "Create", option.setColor, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			(__lt.cm("TweenService", "Create", option.setColor, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 				ImageColor3 = Color3.fromRGB(20, 20, 20)
 			})):Play();
 		end;
@@ -1368,14 +1382,14 @@ local function createColorPickerWindow(option)
 			end;
 		end;
 		if Input.UserInputType == Enum.UserInputType.MouseMovement and (not dragging) then
-			(__lt_call_service_method("TweenService", "Create", option.rainbow, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			(__lt.cm("TweenService", "Create", option.rainbow, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 				ImageColor3 = Color3.fromRGB(10, 10, 10)
 			})):Play();
 		end;
 	end);
 	option.rainbow.InputEnded:connect(function(Input)
 		if Input.UserInputType == Enum.UserInputType.MouseMovement and (not dragging) then
-			(__lt_call_service_method("TweenService", "Create", option.rainbow, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			(__lt.cm("TweenService", "Create", option.rainbow, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 				ImageColor3 = Color3.fromRGB(20, 20, 20)
 			})):Play();
 		end;
@@ -1431,27 +1445,27 @@ local function createColor(option, parent, holder)
 			option.open = true;
 			option.mainHolder.Visible = true;
 			library.activePopup = option;
-			(__lt_call_service_method("TweenService", "Create", option.mainHolder, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+			(__lt.cm("TweenService", "Create", option.mainHolder, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
 				ImageTransparency = 0,
 				Position = UDim2.new(0, position.X - 5, 0, position.Y - 4)
 			})):Play();
-			(__lt_call_service_method("TweenService", "Create", option.mainHolder, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, 0.1), {
+			(__lt.cm("TweenService", "Create", option.mainHolder, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, 0.1), {
 				Position = UDim2.new(0, position.X - 5, 0, position.Y + 1)
 			})):Play();
-			(__lt_call_service_method("TweenService", "Create", option.satval, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+			(__lt.cm("TweenService", "Create", option.satval, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
 				BackgroundTransparency = 0
 			})):Play();
 			for _, object in next, option.mainHolder:QueryDescendants("Instance") do
 				if object:IsA("TextLabel") then
-					(__lt_call_service_method("TweenService", "Create", object, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+					(__lt.cm("TweenService", "Create", object, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 						TextTransparency = 0
 					})):Play();
 				elseif object:IsA("ImageLabel") then
-					(__lt_call_service_method("TweenService", "Create", object, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+					(__lt.cm("TweenService", "Create", object, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 						ImageTransparency = 0
 					})):Play();
 				elseif object:IsA("Frame") then
-					(__lt_call_service_method("TweenService", "Create", object, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+					(__lt.cm("TweenService", "Create", object, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 						BackgroundTransparency = 0
 					})):Play();
 				end;
@@ -1460,7 +1474,7 @@ local function createColor(option, parent, holder)
 		if input.UserInputType == Enum.UserInputType.MouseMovement then
 			inContact = true;
 			if not option.open then
-				(__lt_call_service_method("TweenService", "Create", colorBoxOutline, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				(__lt.cm("TweenService", "Create", colorBoxOutline, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 					ImageColor3 = Color3.fromRGB(140, 140, 140)
 				})):Play();
 			end;
@@ -1470,7 +1484,7 @@ local function createColor(option, parent, holder)
 		if input.UserInputType == Enum.UserInputType.MouseMovement then
 			inContact = true;
 			if not option.open then
-				(__lt_call_service_method("TweenService", "Create", colorBoxOutline, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				(__lt.cm("TweenService", "Create", colorBoxOutline, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 					ImageColor3 = Color3.fromRGB(100, 100, 100)
 				})):Play();
 			end;
@@ -1489,24 +1503,24 @@ local function createColor(option, parent, holder)
 		library.activePopup = nil;
 		self.open = false;
 		local position = self.main.AbsolutePosition;
-		(__lt_call_service_method("TweenService", "Create", self.mainHolder, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		(__lt.cm("TweenService", "Create", self.mainHolder, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 			ImageTransparency = 1,
 			Position = UDim2.new(0, position.X - 5, 0, position.Y - 10)
 		})):Play();
-		(__lt_call_service_method("TweenService", "Create", self.satval, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+		(__lt.cm("TweenService", "Create", self.satval, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
 			BackgroundTransparency = 1
 		})):Play();
 		for _, object in next, self.mainHolder:QueryDescendants("Instance") do
 			if object:IsA("TextLabel") then
-				(__lt_call_service_method("TweenService", "Create", object, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				(__lt.cm("TweenService", "Create", object, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 					TextTransparency = 1
 				})):Play();
 			elseif object:IsA("ImageLabel") then
-				(__lt_call_service_method("TweenService", "Create", object, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				(__lt.cm("TweenService", "Create", object, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 					ImageTransparency = 1
 				})):Play();
 			elseif object:IsA("Frame") then
-				(__lt_call_service_method("TweenService", "Create", object, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				(__lt.cm("TweenService", "Create", object, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 					BackgroundTransparency = 1
 				})):Play();
 			end;
@@ -1761,7 +1775,7 @@ inputService.InputBegan:connect(function(input)
 end);
 inputService.InputChanged:connect(function(input)
 	if input.UserInputType == Enum.UserInputType.MouseMovement and library.cursor then
-		local mouse = __lt_call_service_method("UserInputService", "GetMouseLocation") + Vector2.new(0, (-36));
+		local mouse = __lt.cm("UserInputService", "GetMouseLocation") + Vector2.new(0, (-36));
 		library.cursor.Position = UDim2.new(0, mouse.X - 2, 0, mouse.Y - 2);
 	end;
 	if input == dragInput and dragging then

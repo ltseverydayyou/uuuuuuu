@@ -1,14 +1,14 @@
-local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
-local function __lt_clone_service_value(value)
-	if __lt_oldcloneref and typeof(value) == "Instance" then
-		local ok, cloned = pcall(__lt_oldcloneref, value);
+local __lt = { cr = type(cloneref) == "function" and cloneref or nil };
+function __lt.cv(value)
+	if __lt.cr and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt.cr, value);
 		if ok and cloned ~= nil then
 			return cloned;
 		end;
 	end;
 	return value;
 end;
-local function __lt_clone_service(name, refFn)
+function __lt.cs(name, refFn)
 	if type(refFn) ~= "function" then
 		return game:GetService(name);
 	end;
@@ -20,8 +20,22 @@ local function __lt_clone_service(name, refFn)
 	end;
 	return game:GetService(name);
 end;
-local function __lt_call_service_method(name, method, ...)
-	local service = game:GetService(name);
+function __lt.ig(method)
+	return method == "FindFirstChild"
+		or method == "WaitForChild"
+		or method == "FindFirstChildOfClass"
+		or method == "FindFirstChildWhichIsA"
+		or method == "FindFirstAncestor"
+		or method == "FindFirstAncestorOfClass"
+		or method == "FindFirstAncestorWhichIsA"
+		or method == "GetChildren"
+		or method == "GetDescendants"
+		or method == "QueryDescendants";
+end;
+function __lt.cm(name, method, ...)
+	local service = __lt.ig(method)
+		and __lt.cs(name, __lt.cr)
+		or game:GetService(name);
 	local fn = service[method];
 	if type(fn) ~= "function" then
 		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
@@ -30,13 +44,13 @@ local function __lt_call_service_method(name, method, ...)
 end;
 
 
-local Players = __lt_clone_service("Players", cloneref);
-local Workspace = __lt_clone_service("Workspace", cloneref);
-local ReplicatedStorage = __lt_clone_service("ReplicatedStorage", cloneref);
-local RunService = __lt_clone_service("RunService", cloneref);
-local UserInputService = __lt_clone_service("UserInputService", cloneref);
+local Players = __lt.cs("Players", cloneref);
+local Workspace = __lt.cs("Workspace", cloneref);
+local ReplicatedStorage = __lt.cs("ReplicatedStorage", cloneref);
+local RunService = __lt.cs("RunService", cloneref);
+local UserInputService = __lt.cs("UserInputService", cloneref);
 local LP = Players.LocalPlayer;
-local MP = __lt_call_service_method("Workspace", "WaitForChild", "Multiplayer");
+local MP = __lt.cm("Workspace", "WaitForChild", "Multiplayer");
 local TP_DELAY = 0.05;
 local BTN_DELAY = 0.05;
 local SCAN_INT = 0.05;
@@ -67,9 +81,9 @@ local function uiParent()
 	if ok and typeof(ui) == "Instance" then
 		return ui;
 	end;
-	local cg = __lt_clone_service("CoreGui", cloneref);
+	local cg = __lt.cs("CoreGui", cloneref);
 	if pcall(function()
-		return __lt_call_service_method("CoreGui", "FindFirstChildOfClass", "ScreenGui");
+		return __lt.cm("CoreGui", "FindFirstChildOfClass", "ScreenGui");
 	end) then
 		return cg;
 	end;
@@ -78,7 +92,7 @@ end;
 local LiftRemote;
 do
 	local ok, r = pcall(function()
-		return (__lt_call_service_method("ReplicatedStorage", "FindFirstChild", "Remote")):FindFirstChild("dKgyIXnLdhwvSyEorkEWJJAkgUslGCtR") or (__lt_call_service_method("ReplicatedStorage", "FindFirstChild", "Remote")):FindFirstChild("AddedWaiting");
+		return (__lt.cm("ReplicatedStorage", "FindFirstChild", "Remote")):FindFirstChild("dKgyIXnLdhwvSyEorkEWJJAkgUslGCtR") or (__lt.cm("ReplicatedStorage", "FindFirstChild", "Remote")):FindFirstChild("AddedWaiting");
 	end);
 	LiftRemote = ok and r or nil;
 end;

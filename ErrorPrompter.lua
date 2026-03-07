@@ -1,14 +1,14 @@
-local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
-local function __lt_clone_service_value(value)
-	if __lt_oldcloneref and typeof(value) == "Instance" then
-		local ok, cloned = pcall(__lt_oldcloneref, value);
+local __lt = { cr = type(cloneref) == "function" and cloneref or nil };
+function __lt.cv(value)
+	if __lt.cr and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt.cr, value);
 		if ok and cloned ~= nil then
 			return cloned;
 		end;
 	end;
 	return value;
 end;
-local function __lt_clone_service(name, refFn)
+function __lt.cs(name, refFn)
 	if type(refFn) ~= "function" then
 		return game:GetService(name);
 	end;
@@ -20,8 +20,22 @@ local function __lt_clone_service(name, refFn)
 	end;
 	return game:GetService(name);
 end;
-local function __lt_call_service_method(name, method, ...)
-	local service = game:GetService(name);
+function __lt.ig(method)
+	return method == "FindFirstChild"
+		or method == "WaitForChild"
+		or method == "FindFirstChildOfClass"
+		or method == "FindFirstChildWhichIsA"
+		or method == "FindFirstAncestor"
+		or method == "FindFirstAncestorOfClass"
+		or method == "FindFirstAncestorWhichIsA"
+		or method == "GetChildren"
+		or method == "GetDescendants"
+		or method == "QueryDescendants";
+end;
+function __lt.cm(name, method, ...)
+	local service = __lt.ig(method)
+		and __lt.cs(name, __lt.cr)
+		or game:GetService(name);
 	local fn = service[method];
 	if type(fn) ~= "function" then
 		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
@@ -30,12 +44,12 @@ local function __lt_call_service_method(name, method, ...)
 end;
 
 
-local Players = __lt_clone_service("Players", cloneref)
-local TweenService = __lt_clone_service("TweenService", cloneref)
-local ContextActionService = __lt_clone_service("ContextActionService", cloneref)
-local GuiService = __lt_clone_service("GuiService", cloneref)
-local UserInputService = __lt_clone_service("UserInputService", cloneref)
-local TextService = __lt_clone_service("TextService", cloneref)
+local Players = __lt.cs("Players", cloneref)
+local TweenService = __lt.cs("TweenService", cloneref)
+local ContextActionService = __lt.cs("ContextActionService", cloneref)
+local GuiService = __lt.cs("GuiService", cloneref)
+local UserInputService = __lt.cs("UserInputService", cloneref)
+local TextService = __lt.cs("TextService", cloneref)
 
 local function Create(className)
 	return function(props)
@@ -294,11 +308,11 @@ function TrollErrorPrompt.new(styleName, options)
 		frame.MessageArea.ErrorFrame.ErrorMessage.TextScaled = options.MessageTextScaled or false
 	end
 
-	self._openAnimation = __lt_call_service_method("TweenService", "Create", frame.PromptScale, TweenInfo_, { Scale = 1 })
-	self._closeAnimation = __lt_call_service_method("TweenService", "Create", frame.PromptScale, TweenInfo_, { Scale = 0 })
+	self._openAnimation = __lt.cm("TweenService", "Create", frame.PromptScale, TweenInfo_, { Scale = 1 })
+	self._closeAnimation = __lt.cm("TweenService", "Create", frame.PromptScale, TweenInfo_, { Scale = 0 })
 
 	if not UserInputService.VREnabled and UserInputService.GamepadEnabled then
-		__lt_call_service_method("GuiService", "GetPropertyChangedSignal", "SelectedObject"):Connect(function()
+		__lt.cm("GuiService", "GetPropertyChangedSignal", "SelectedObject"):Connect(function()
 			if self._isOpen and GuiService.SelectedObject == nil then
 				GuiService.SelectedObject = self._frame.MessageArea.ErrorFrame.ButtonArea
 			end
@@ -343,7 +357,7 @@ end
 function TrollErrorPrompt:_resizeHeight(screenHeight)
 	local msg = self._frame.MessageArea.ErrorFrame.ErrorMessage
 	local width = self._frame.Size.X.Offset - 2 * Constants.SIDE_PADDING
-	local textSize = __lt_call_service_method("TextService", "GetTextSize", msg.Text, msg.TextSize, msg.Font, Vector2.new(width, 1000))
+	local textSize = __lt.cm("TextService", "GetTextSize", msg.Text, msg.TextSize, msg.Font, Vector2.new(width, 1000))
 	local total = Constants.ERROR_TITLE_FRAME_HEIGHT.Default
 	total = total + textSize.Y
 	total = total + Constants.SPLIT_LINE_THICKNESS
@@ -451,7 +465,7 @@ function TrollErrorPrompt:_open(message, errorCode, extra)
 	if self._isOpen and (UserInputService.VREnabled or UserInputService.GamepadEnabled) then
 		GuiService.SelectedObject = self._frame.MessageArea.ErrorFrame.ButtonArea
 	end
-	__lt_call_service_method("ContextActionService", "BindAction", "TrollErrorPromptSink", sinkInput, false, Enum.KeyCode.ButtonA, Enum.KeyCode.ButtonB, Enum.KeyCode.ButtonStart)
+	__lt.cm("ContextActionService", "BindAction", "TrollErrorPromptSink", sinkInput, false, Enum.KeyCode.ButtonA, Enum.KeyCode.ButtonB, Enum.KeyCode.ButtonStart)
 end
 
 function TrollErrorPrompt:_close()
@@ -466,7 +480,7 @@ function TrollErrorPrompt:_close()
 		self._frame.PromptScale.Scale = 0
 	end
 	self._frame.Visible = false
-	__lt_call_service_method("ContextActionService", "UnbindAction", "TrollErrorPromptSink")
+	__lt.cm("ContextActionService", "UnbindAction", "TrollErrorPromptSink")
 end
 
 function TrollErrorPrompt:onErrorChanged(message, errorCode, extra)

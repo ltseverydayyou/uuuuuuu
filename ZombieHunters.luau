@@ -1,14 +1,14 @@
-local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
-local function __lt_clone_service_value(value)
-	if __lt_oldcloneref and typeof(value) == "Instance" then
-		local ok, cloned = pcall(__lt_oldcloneref, value);
+local __lt = { cr = type(cloneref) == "function" and cloneref or nil };
+function __lt.cv(value)
+	if __lt.cr and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt.cr, value);
 		if ok and cloned ~= nil then
 			return cloned;
 		end;
 	end;
 	return value;
 end;
-local function __lt_clone_service(name, refFn)
+function __lt.cs(name, refFn)
 	if type(refFn) ~= "function" then
 		return game:GetService(name);
 	end;
@@ -20,8 +20,22 @@ local function __lt_clone_service(name, refFn)
 	end;
 	return game:GetService(name);
 end;
-local function __lt_call_service_method(name, method, ...)
-	local service = game:GetService(name);
+function __lt.ig(method)
+	return method == "FindFirstChild"
+		or method == "WaitForChild"
+		or method == "FindFirstChildOfClass"
+		or method == "FindFirstChildWhichIsA"
+		or method == "FindFirstAncestor"
+		or method == "FindFirstAncestorOfClass"
+		or method == "FindFirstAncestorWhichIsA"
+		or method == "GetChildren"
+		or method == "GetDescendants"
+		or method == "QueryDescendants";
+end;
+function __lt.cm(name, method, ...)
+	local service = __lt.ig(method)
+		and __lt.cs(name, __lt.cr)
+		or game:GetService(name);
 	local fn = service[method];
 	if type(fn) ~= "function" then
 		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
@@ -36,7 +50,7 @@ if game.GameId == 5170973975 then
 		local Reference = cloneref or function(reference)
 			return reference;
 		end;
-		return __lt_clone_service(name, Reference);
+		return __lt.cs(name, Reference);
 	end;
 	repeat
 		wait();
@@ -49,9 +63,9 @@ if game.GameId == 5170973975 then
 					[1] = {
 						CF = CFrame.new(4.875078201293945, 24.025789260864258, 11.118204116821289) * CFrame.Angles(0.01760457269847393, (-0.02762647345662117), 0.00048634063568897545),
 						Part = v.Head,
-						Owner = (__lt_clone_service("Players", cloneref)).LocalPlayer,
+						Owner = (__lt.cs("Players", cloneref)).LocalPlayer,
 						TargetHead = false,
-						Character = (__lt_clone_service("Players", cloneref)).LocalPlayer.Character,
+						Character = (__lt.cs("Players", cloneref)).LocalPlayer.Character,
 						Hit = v.Head,
 						Target = v,
 						position = Vector3.new(5.695760726928711, 24.54859733581543, -18.57601547241211),
@@ -59,7 +73,7 @@ if game.GameId == 5170973975 then
 						Damage = 99
 					}
 				};
-				(__lt_clone_service("ReplicatedStorage", cloneref)).Remote.CastRemote:FireServer(unpack(args));
+				(__lt.cs("ReplicatedStorage", cloneref)).Remote.CastRemote:FireServer(unpack(args));
 			end;
 			for _, j in pairs((ClonedService("Workspace")).Temp_Item:GetChildren()) do
 				spawn(function()

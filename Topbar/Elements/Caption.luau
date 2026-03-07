@@ -1,14 +1,14 @@
-local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
-local function __lt_clone_service_value(value)
-	if __lt_oldcloneref and typeof(value) == "Instance" then
-		local ok, cloned = pcall(__lt_oldcloneref, value);
+local __lt = { cr = type(cloneref) == "function" and cloneref or nil };
+function __lt.cv(value)
+	if __lt.cr and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt.cr, value);
 		if ok and cloned ~= nil then
 			return cloned;
 		end;
 	end;
 	return value;
 end;
-local function __lt_clone_service(name, refFn)
+function __lt.cs(name, refFn)
 	if type(refFn) ~= "function" then
 		return game:GetService(name);
 	end;
@@ -20,8 +20,22 @@ local function __lt_clone_service(name, refFn)
 	end;
 	return game:GetService(name);
 end;
-local function __lt_call_service_method(name, method, ...)
-	local service = game:GetService(name);
+function __lt.ig(method)
+	return method == "FindFirstChild"
+		or method == "WaitForChild"
+		or method == "FindFirstChildOfClass"
+		or method == "FindFirstChildWhichIsA"
+		or method == "FindFirstAncestor"
+		or method == "FindFirstAncestorOfClass"
+		or method == "FindFirstAncestorWhichIsA"
+		or method == "GetChildren"
+		or method == "GetDescendants"
+		or method == "QueryDescendants";
+end;
+function __lt.cm(name, method, ...)
+	local service = __lt.ig(method)
+		and __lt.cs(name, __lt.cr)
+		or game:GetService(name);
 	local fn = service[method];
 	if type(fn) ~= "function" then
 		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
@@ -185,7 +199,7 @@ return function(icon)
 
 	local isCompletelyEnabled = false
 	local captionHeader = caption.Box.Header
-	local UserInputService = __lt_clone_service("UserInputService", cloneref)
+	local UserInputService = __lt.cs("UserInputService", cloneref)
 	local function updateHotkey(keyCodeEnum)
 		local hasKeyboard = UserInputService.KeyboardEnabled
 		local text = caption:GetAttribute("CaptionText") or ""
@@ -210,8 +224,8 @@ return function(icon)
 	local TWEEN_SPEED = 0.2
 	local TWEEN_INFO_IN = TweenInfo.new(TWEEN_SPEED, EASING_STYLE, Enum.EasingDirection.In)
 	local TWEEN_INFO_OUT = TweenInfo.new(TWEEN_SPEED, EASING_STYLE, Enum.EasingDirection.Out)
-	local TweenService = __lt_clone_service("TweenService", cloneref)
-	local RunService = __lt_clone_service("RunService", cloneref)
+	local TweenService = __lt.cs("TweenService", cloneref)
+	local RunService = __lt.cs("RunService", cloneref)
 	local function getCaptionPosition(customEnabled)
 		local enabled = if customEnabled ~= nil then customEnabled else isCompletelyEnabled
 		local yOut = 2
@@ -268,7 +282,7 @@ return function(icon)
 
 
 		local tweenInfo = (enabled and TWEEN_INFO_IN) or TWEEN_INFO_OUT
-		local tween = __lt_call_service_method("TweenService", "Create", captionClone, tweenInfo, {Position = endPosition})
+		local tween = __lt.cm("TweenService", "Create", captionClone, tweenInfo, {Position = endPosition})
 		local updateCaretConnection = RunService.Heartbeat:Connect(updateCaret)
 		tween:Play()
 		tween.Completed:Once(function()
@@ -303,7 +317,7 @@ return function(icon)
 		isCompletelyEnabled = enabled
 		local newTransparency = (enabled and 0) or 1
 		local tweenInfo = (enabled and TWEEN_INFO_IN) or TWEEN_INFO_OUT
-		local tweenTransparency = __lt_call_service_method("TweenService", "Create", caption, tweenInfo, {
+		local tweenTransparency = __lt.cm("TweenService", "Create", caption, tweenInfo, {
 			GroupTransparency = newTransparency
 		})
 		tweenTransparency:Play()

@@ -1,14 +1,14 @@
-local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
-local function __lt_clone_service_value(value)
-	if __lt_oldcloneref and typeof(value) == "Instance" then
-		local ok, cloned = pcall(__lt_oldcloneref, value);
+local __lt = { cr = type(cloneref) == "function" and cloneref or nil };
+function __lt.cv(value)
+	if __lt.cr and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt.cr, value);
 		if ok and cloned ~= nil then
 			return cloned;
 		end;
 	end;
 	return value;
 end;
-local function __lt_clone_service(name, refFn)
+function __lt.cs(name, refFn)
 	if type(refFn) ~= "function" then
 		return game:GetService(name);
 	end;
@@ -20,8 +20,22 @@ local function __lt_clone_service(name, refFn)
 	end;
 	return game:GetService(name);
 end;
-local function __lt_call_service_method(name, method, ...)
-	local service = game:GetService(name);
+function __lt.ig(method)
+	return method == "FindFirstChild"
+		or method == "WaitForChild"
+		or method == "FindFirstChildOfClass"
+		or method == "FindFirstChildWhichIsA"
+		or method == "FindFirstAncestor"
+		or method == "FindFirstAncestorOfClass"
+		or method == "FindFirstAncestorWhichIsA"
+		or method == "GetChildren"
+		or method == "GetDescendants"
+		or method == "QueryDescendants";
+end;
+function __lt.cm(name, method, ...)
+	local service = __lt.ig(method)
+		and __lt.cs(name, __lt.cr)
+		or game:GetService(name);
 	local fn = service[method];
 	if type(fn) ~= "function" then
 		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
@@ -43,7 +57,7 @@ local srv = setmetatable({}, {
 		end;
 		local ok, s = pcall(function()
 
-			return __lt_clone_service(n, ref);
+			return __lt.cs(n, ref);
 		end);
 		if ok and s then
 			rawset(self, n, s);
@@ -184,7 +198,7 @@ gbCore:AddButton("Respawn", function()
 	if not rep then
 		return;
 	end;
-	local ev = ((__lt_call_service_method("ReplicatedStorage", "WaitForChild", "Events")):WaitForChild("Player")):WaitForChild("ChangePlayerMode");
+	local ev = ((__lt.cm("ReplicatedStorage", "WaitForChild", "Events")):WaitForChild("Player")):WaitForChild("ChangePlayerMode");
 	ev:FireServer(true);
 end);
 gbESP:AddToggle("ESPPlayers", {
@@ -461,7 +475,7 @@ local function dbg(msg)
 		local sg = S("StarterGui");
 		if sg then
 			pcall(function()
-				__lt_call_service_method("StarterGui", "SetCore", "SendNotification", {
+				__lt.cm("StarterGui", "SetCore", "SendNotification", {
 					Title = "Evader Debug",
 					Text = msg,
 					Duration = 4
@@ -763,7 +777,7 @@ local function getPing()
 		if not st then
 			return 0;
 		end;
-		local net = __lt_call_service_method("Stats", "WaitForChild", "Network");
+		local net = __lt.cm("Stats", "WaitForChild", "Network");
 		local serverItem = net:WaitForChild("ServerStatsItem");
 		local pingItem = serverItem:WaitForChild("Data Ping");
 		local s = pingItem:GetValueString();
@@ -809,7 +823,7 @@ task.spawn(function()
 end);
 local gameStats;
 pcall(function()
-	local gFolder = __lt_call_service_method("Workspace", "WaitForChild", "Game", 5);
+	local gFolder = __lt.cm("Workspace", "WaitForChild", "Game", 5);
 	if gFolder then
 		gameStats = gFolder:WaitForChild("Stats", 5);
 	end;
@@ -829,9 +843,9 @@ task.spawn(function()
 		task.wait(1);
 	end;
 end);
-local evt = ((__lt_call_service_method("ReplicatedStorage", "WaitForChild", "Events")):WaitForChild("Character")):WaitForChild("Interact");
-local respEvt = ((__lt_call_service_method("ReplicatedStorage", "WaitForChild", "Events")):WaitForChild("Player")):WaitForChild("ChangePlayerMode");
-local botFolder = (__lt_call_service_method("Workspace", "WaitForChild", "Game")):WaitForChild("Players");
+local evt = ((__lt.cm("ReplicatedStorage", "WaitForChild", "Events")):WaitForChild("Character")):WaitForChild("Interact");
+local respEvt = ((__lt.cm("ReplicatedStorage", "WaitForChild", "Events")):WaitForChild("Player")):WaitForChild("ChangePlayerMode");
+local botFolder = (__lt.cm("Workspace", "WaitForChild", "Game")):WaitForChild("Players");
 plrGUI = lp:FindFirstChildOfClass("PlayerGui") or lp:FindFirstChild("PlayerGui") or lp:WaitForChild("PlayerGui");
 startMenuRespawnLoop = function()
 	if menuRespawnLoopRunning then
@@ -881,7 +895,7 @@ end;
 local others = {};
 local function updOthers()
 	table.clear(others);
-	for _, p in ipairs(__lt_call_service_method("Players", "GetPlayers")) do
+	for _, p in ipairs(__lt.cm("Players", "GetPlayers")) do
 		if p ~= lp then
 			others[(#others) + 1] = p;
 		end;
@@ -990,7 +1004,7 @@ local function refreshSafeZones()
 		end;
 	end;
 	table.clear(safeZoneParts);
-	local gFolder = __lt_call_service_method("Workspace", "FindFirstChild", "Game");
+	local gFolder = __lt.cm("Workspace", "FindFirstChild", "Game");
 	if not gFolder then
 		return;
 	end;
@@ -1070,7 +1084,7 @@ local function markTouchDamage(tt)
 		addDamageFlag(part);
 	end;
 end;
-for _, inst in ipairs(__lt_call_service_method("Workspace", "QueryDescendants", "Instance")) do
+for _, inst in ipairs(__lt.cm("Workspace", "QueryDescendants", "Instance")) do
 	if inst:IsA("TouchTransmitter") then
 		markTouchDamage(inst);
 	end;
@@ -1201,7 +1215,7 @@ hasClearPath = function(fromPos, toPos, ch, botModel)
 		list[(#list) + 1] = botModel;
 	end;
 	losParams.FilterDescendantsInstances = list;
-	local res = __lt_call_service_method("Workspace", "Raycast", fromPos, dir * mag, losParams);
+	local res = __lt.cm("Workspace", "Raycast", fromPos, dir * mag, losParams);
 	return res == nil;
 end;
 task.spawn(function()
@@ -1220,7 +1234,7 @@ task.spawn(function()
 					for j = 1, #kids do
 						local m = kids[j];
 						if m:IsA("Model") then
-							local pl = __lt_call_service_method("Players", "GetPlayerFromCharacter", m);
+							local pl = __lt.cm("Players", "GetPlayerFromCharacter", m);
 							if not pl then
 								local rootB = getBotRootPart(m);
 								if rootB then
@@ -1272,7 +1286,7 @@ local function getBot(pos)
 	for i = 1, #kids do
 		local m = kids[i];
 		if m:IsA("Model") then
-			local pl = __lt_call_service_method("Players", "GetPlayerFromCharacter", m);
+			local pl = __lt.cm("Players", "GetPlayerFromCharacter", m);
 			if not pl then
 				local root = getBotRootPart(m);
 				if root then
@@ -1300,7 +1314,7 @@ local function isNearAnyBot(pos, minDist)
 	for i = 1, #kids do
 		local m = kids[i];
 		if m:IsA("Model") then
-			local pl = __lt_call_service_method("Players", "GetPlayerFromCharacter", m);
+			local pl = __lt.cm("Players", "GetPlayerFromCharacter", m);
 			if not pl then
 				local br = getBotRootPart(m);
 				if br and (br.Position - pos).Magnitude < minDist then
@@ -1341,7 +1355,7 @@ local function getSafePos(curPos, ch, botPos, dist, botRoot, botModel)
 		local dmag = dir.Magnitude;
 		if dmag > 0.001 then
 			dir = dir / dmag;
-			local res = __lt_call_service_method("Workspace", "Raycast", origin, dir * dist, rayParams);
+			local res = __lt.cm("Workspace", "Raycast", origin, dir * dist, rayParams);
 			local useDist = dist;
 			if res then
 				useDist = res.Distance - 2;
@@ -1384,7 +1398,7 @@ end;
 local function attachToGround(pos, ch)
 	rayParams.FilterDescendantsInstances = buildFilter(ch);
 	local origin = pos + Vector3.new(0, 50, 0);
-	local res = __lt_call_service_method("Workspace", "Raycast", origin, Vector3.new(0, -500, 0), rayParams);
+	local res = __lt.cm("Workspace", "Raycast", origin, Vector3.new(0, -500, 0), rayParams);
 	if res then
 		local p = Vector3.new(pos.X, res.Position.Y + 3, pos.Z);
 		if not isInSafeZone(p) and (not isPointInDamage(p)) then
@@ -1442,7 +1456,7 @@ local function getCoverPos(curPos, ch, botRoot, botModel, dist)
 		local dmag = dir.Magnitude;
 		if dmag > 0.001 then
 			dir = dir / dmag;
-			local res = __lt_call_service_method("Workspace", "Raycast", origin, dir * dist, rayParams);
+			local res = __lt.cm("Workspace", "Raycast", origin, dir * dist, rayParams);
 			local useDist = dist;
 			if res then
 				useDist = res.Distance - 2;
@@ -1577,7 +1591,7 @@ task.spawn(function()
 			local hum = rec and rec.humanoid;
 			if ch and r and hum and hum.Health > 0 and ch:GetAttribute("Downed") ~= true and (not saveActive) then
 				local homePos = getHomePos(r.Position);
-				local gFolder = __lt_call_service_method("Workspace", "FindFirstChild", "Game");
+				local gFolder = __lt.cm("Workspace", "FindFirstChild", "Game");
 				local eff = gFolder and gFolder:FindFirstChild("Effects");
 				local tFolder = eff and eff:FindFirstChild("Tickets");
 				if tFolder then
@@ -1709,7 +1723,7 @@ local function updESP()
 		for i = 1, #kids do
 			local m = kids[i];
 			if m:IsA("Model") then
-				local pl = __lt_call_service_method("Players", "GetPlayerFromCharacter", m);
+				local pl = __lt.cm("Players", "GetPlayerFromCharacter", m);
 				if not pl then
 					local hit = m:FindFirstChild("Hitbox");
 					local root;
@@ -1748,7 +1762,7 @@ local function updESP()
 		end;
 	end;
 	if espColl and selfPos then
-		local gFolder = __lt_call_service_method("Workspace", "FindFirstChild", "Game");
+		local gFolder = __lt.cm("Workspace", "FindFirstChild", "Game");
 		local eff = gFolder and gFolder:FindFirstChild("Effects");
 		if eff then
 			local effKids = eff:GetChildren();
@@ -1827,7 +1841,7 @@ addConn(rs.Heartbeat, function()
 	end;
 	if voidFS and hum and (not saveActive) then
 		rayParams.FilterDescendantsInstances = buildFilter(ch);
-		local groundHit = __lt_call_service_method("Workspace", "Raycast", pos + Vector3.new(0, 5, 0), Vector3.new(0, -1000, 0), rayParams);
+		local groundHit = __lt.cm("Workspace", "Raycast", pos + Vector3.new(0, 5, 0), Vector3.new(0, -1000, 0), rayParams);
 		if groundHit and (not isCharInSafeZone(ch)) and (not isCharOnDamage(ch)) then
 			lastSafePos = groundHit.Position + Vector3.new(0, 3, 0);
 		elseif not groundHit and lastSafePos then

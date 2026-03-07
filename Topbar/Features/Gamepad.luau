@@ -1,14 +1,14 @@
-local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
-local function __lt_clone_service_value(value)
-	if __lt_oldcloneref and typeof(value) == "Instance" then
-		local ok, cloned = pcall(__lt_oldcloneref, value);
+local __lt = { cr = type(cloneref) == "function" and cloneref or nil };
+function __lt.cv(value)
+	if __lt.cr and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt.cr, value);
 		if ok and cloned ~= nil then
 			return cloned;
 		end;
 	end;
 	return value;
 end;
-local function __lt_clone_service(name, refFn)
+function __lt.cs(name, refFn)
 	if type(refFn) ~= "function" then
 		return game:GetService(name);
 	end;
@@ -20,8 +20,22 @@ local function __lt_clone_service(name, refFn)
 	end;
 	return game:GetService(name);
 end;
-local function __lt_call_service_method(name, method, ...)
-	local service = game:GetService(name);
+function __lt.ig(method)
+	return method == "FindFirstChild"
+		or method == "WaitForChild"
+		or method == "FindFirstChildOfClass"
+		or method == "FindFirstChildWhichIsA"
+		or method == "FindFirstAncestor"
+		or method == "FindFirstAncestorOfClass"
+		or method == "FindFirstAncestorWhichIsA"
+		or method == "GetChildren"
+		or method == "GetDescendants"
+		or method == "QueryDescendants";
+end;
+function __lt.cm(name, method, ...)
+	local service = __lt.ig(method)
+		and __lt.cs(name, __lt.cr)
+		or game:GetService(name);
 	local fn = service[method];
 	if type(fn) ~= "function" then
 		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
@@ -30,9 +44,9 @@ local function __lt_call_service_method(name, method, ...)
 end;
 
 
-local GamepadService = __lt_clone_service("GamepadService", cloneref)
-local UserInputService = __lt_clone_service("UserInputService", cloneref)
-local GuiService = __lt_clone_service("GuiService", cloneref)
+local GamepadService = __lt.cs("GamepadService", cloneref)
+local UserInputService = __lt.cs("UserInputService", cloneref)
+local GuiService = __lt.cs("GuiService", cloneref)
 
 
 
@@ -110,7 +124,7 @@ function Gamepad.start(incomingIcon)
 				end
 			end
 		end
-		__lt_call_service_method("GuiService", "GetPropertyChangedSignal", "SelectedObject"):Connect(updateSelectedObject)
+		__lt.cm("GuiService", "GetPropertyChangedSignal", "SelectedObject"):Connect(updateSelectedObject)
 
 
 		local function preferredInputChanged()
@@ -123,7 +137,7 @@ function Gamepad.start(incomingIcon)
 			end
 			updateSelectedObject()
 		end
-		__lt_call_service_method("UserInputService", "GetPropertyChangedSignal", "PreferredInput"):Connect(preferredInputChanged)
+		__lt.cm("UserInputService", "GetPropertyChangedSignal", "PreferredInput"):Connect(preferredInputChanged)
 		preferredInputChanged()
 
 
@@ -147,7 +161,7 @@ function Gamepad.start(incomingIcon)
 			if iconToHighlight then
 				if GamepadService.GamepadCursorEnabled then
 					task.wait(0.2)
-					__lt_call_service_method("GamepadService", "DisableGamepadCursor")
+					__lt.cm("GamepadService", "DisableGamepadCursor")
 				end
 				local clickRegion = iconToHighlight:getInstance("ClickRegion")
 				GuiService.SelectedObject = clickRegion
@@ -198,7 +212,7 @@ function Gamepad.registerButton(buttonInstance)
 		if input.KeyCode == Enum.KeyCode.ButtonA and inputBegan then
 
 			task.wait(0.2)
-			__lt_call_service_method("GamepadService", "DisableGamepadCursor")
+			__lt.cm("GamepadService", "DisableGamepadCursor")
 			GuiService.SelectedObject = buttonInstance
 			return
 		end

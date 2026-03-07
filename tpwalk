@@ -21,8 +21,8 @@ local function protectUI(gui)
 	local target;
 	if gethui then
 		target = gethui();
-	elseif CoreGui and __lt_call_service_method("CoreGui", "FindFirstChild", "RobloxGui") then
-		target = __lt_call_service_method("CoreGui", "FindFirstChild", "RobloxGui");
+	elseif CoreGui and __lt.cm("CoreGui", "FindFirstChild", "RobloxGui") then
+		target = __lt.cm("CoreGui", "FindFirstChild", "RobloxGui");
 	elseif CoreGui then
 		target = CoreGui;
 	elseif player then
@@ -37,7 +37,7 @@ local function protectUI(gui)
 	return gui;
 end;
 local function t(i, time, style, dir, props)
-	(__lt_call_service_method("TweenService", "Create", i, TweenInfo.new(time, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out), props)):Play();
+	(__lt.cm("TweenService", "Create", i, TweenInfo.new(time, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out), props)):Play();
 end;
 local screenGui = Instance.new("ScreenGui");
 if not protectUI(screenGui) then
@@ -268,7 +268,7 @@ local function applySlider(v, animate)
 	end;
 end;
 local function setSliderFromInput(input)
-	local xPos = input and input.Position and input.Position.X or (__lt_call_service_method("UserInputService", "GetMouseLocation")).X;
+	local xPos = input and input.Position and input.Position.X or (__lt.cm("UserInputService", "GetMouseLocation")).X;
 	local left = slider.AbsolutePosition.X;
 	local width = math.max(1, slider.AbsoluteSize.X);
 	local p = math.clamp((xPos - left) / width, 0, 1);

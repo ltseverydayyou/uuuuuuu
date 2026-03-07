@@ -1,14 +1,14 @@
-local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
-local function __lt_clone_service_value(value)
-	if __lt_oldcloneref and typeof(value) == "Instance" then
-		local ok, cloned = pcall(__lt_oldcloneref, value);
+local __lt = { cr = type(cloneref) == "function" and cloneref or nil };
+function __lt.cv(value)
+	if __lt.cr and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt.cr, value);
 		if ok and cloned ~= nil then
 			return cloned;
 		end;
 	end;
 	return value;
 end;
-local function __lt_clone_service(name, refFn)
+function __lt.cs(name, refFn)
 	if type(refFn) ~= "function" then
 		return game:GetService(name);
 	end;
@@ -20,8 +20,22 @@ local function __lt_clone_service(name, refFn)
 	end;
 	return game:GetService(name);
 end;
-local function __lt_call_service_method(name, method, ...)
-	local service = game:GetService(name);
+function __lt.ig(method)
+	return method == "FindFirstChild"
+		or method == "WaitForChild"
+		or method == "FindFirstChildOfClass"
+		or method == "FindFirstChildWhichIsA"
+		or method == "FindFirstAncestor"
+		or method == "FindFirstAncestorOfClass"
+		or method == "FindFirstAncestorWhichIsA"
+		or method == "GetChildren"
+		or method == "GetDescendants"
+		or method == "QueryDescendants";
+end;
+function __lt.cm(name, method, ...)
+	local service = __lt.ig(method)
+		and __lt.cs(name, __lt.cr)
+		or game:GetService(name);
 	local fn = service[method];
 	if type(fn) ~= "function" then
 		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
@@ -268,7 +282,7 @@ end)()
 
 local service = setmetatable({},{__index = function(self,name)
 	local serv
-	serv = __lt_clone_service(name, cref)
+	serv = __lt.cs(name, cref)
 	self[name] = serv
 	return serv
 end})
@@ -999,9 +1013,9 @@ Main = (function()
 			rawset(self,name,func)
 		end})
 
-		env.isonmobile = __lt_clone_service("UserInputService", cloneref).TouchEnabled
+		env.isonmobile = __lt.cs("UserInputService", cloneref).TouchEnabled
 
-		env.loadstring = (pcall(loadstring,"local a = 1") and loadstring) or (__lt_clone_service("RunService", cloneref):IsStudio() and script.Modules:FindFirstChild("Loadstring") and require(script.Modules:FindFirstChild("Loadstring")))
+		env.loadstring = (pcall(loadstring,"local a = 1") and loadstring) or (__lt.cs("RunService", cloneref):IsStudio() and script.Modules:FindFirstChild("Loadstring") and require(script.Modules:FindFirstChild("Loadstring")))
 
 		-- file
 		env.isfile = isfile
@@ -1016,7 +1030,7 @@ Main = (function()
 		env.loadfile = loadfile
 		env.saveinstance = saveinstance or (function()
 			--warn("No built-in saveinstance exists, using SynSaveInstance and wrapper...")
-			if __lt_clone_service("RunService", cloneref):IsStudio() then return function() error("Cannot run in Roblox Studio!") end end
+			if __lt.cs("RunService", cloneref):IsStudio() then return function() error("Cannot run in Roblox Studio!") end end
 			local Params = {
 				RepoURL = "https://raw.githubusercontent.com/luau/SynSaveInstance/main/",
 				SSI = "saveinstance",
@@ -2700,7 +2714,7 @@ Main = (function()
 		Main.AppControls = {}
 		Main.Plugins = {}
 
-		Main.Elevated = pcall(function() local a = __lt_clone_service("CoreGui", cloneref):GetFullName() end)
+		Main.Elevated = pcall(function() local a = __lt.cs("CoreGui", cloneref):GetFullName() end)
 
 		if writefile and isfile and Main.SettingsFile and not isfile(Main.SettingsFile) then
 			writefile(Main.SettingsFile, Main.ExportSettings())

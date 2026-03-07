@@ -1,14 +1,14 @@
-local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
-local function __lt_clone_service_value(value)
-	if __lt_oldcloneref and typeof(value) == "Instance" then
-		local ok, cloned = pcall(__lt_oldcloneref, value);
+local __lt = { cr = type(cloneref) == "function" and cloneref or nil };
+function __lt.cv(value)
+	if __lt.cr and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt.cr, value);
 		if ok and cloned ~= nil then
 			return cloned;
 		end;
 	end;
 	return value;
 end;
-local function __lt_clone_service(name, refFn)
+function __lt.cs(name, refFn)
 	if type(refFn) ~= "function" then
 		return game:GetService(name);
 	end;
@@ -20,8 +20,22 @@ local function __lt_clone_service(name, refFn)
 	end;
 	return game:GetService(name);
 end;
-local function __lt_call_service_method(name, method, ...)
-	local service = game:GetService(name);
+function __lt.ig(method)
+	return method == "FindFirstChild"
+		or method == "WaitForChild"
+		or method == "FindFirstChildOfClass"
+		or method == "FindFirstChildWhichIsA"
+		or method == "FindFirstAncestor"
+		or method == "FindFirstAncestorOfClass"
+		or method == "FindFirstAncestorWhichIsA"
+		or method == "GetChildren"
+		or method == "GetDescendants"
+		or method == "QueryDescendants";
+end;
+function __lt.cm(name, method, ...)
+	local service = __lt.ig(method)
+		and __lt.cs(name, __lt.cr)
+		or game:GetService(name);
 	local fn = service[method];
 	if type(fn) ~= "function" then
 		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
@@ -35,7 +49,7 @@ if getgenv().AimbotLoaded then return end
 local function ClonedService(name)
     local Service = (game.GetService);
 	local Reference = (cloneref) or function(reference) return reference end
-	return __lt_clone_service(name, Reference);
+	return __lt.cs(name, Reference);
 end
 
 local Rayfield = loadstring(game:HttpGet('https://raw.githubusercontent.com/ltseverydayyou/Rayfield-backup/main/Rayfield'))()
@@ -143,7 +157,7 @@ local function checkWall(targetCharacter)
     raycastParams.FilterDescendantsInstances = {plr.Character, targetCharacter}
     raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
 
-    local raycastResult = __lt_call_service_method("Workspace", "Raycast", origin, direction, raycastParams)
+    local raycastResult = __lt.cm("Workspace", "Raycast", origin, direction, raycastParams)
     return raycastResult and raycastResult.Instance ~= nil
 end
 
@@ -174,7 +188,7 @@ local function getTarget()
     local closestPart = nil
     local shortestCursorDistance = aimFov
 
-    for _, player in ipairs(__lt_call_service_method("Players", "GetPlayers")) do
+    for _, player in ipairs(__lt.cm("Players", "GetPlayers")) do
         if player ~= plr and player.Character and not checkTeam(player) then
             if player.Character.Humanoid.Health >= minHealth or not healthCheck then
                 local targetPart = getClosestPart(player.Character)
@@ -573,7 +587,7 @@ local ServerHop = Misc:CreateButton({
 		if httprequest then
             local servers = {}
             local req = httprequest({Url = string.format("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Desc&limit=100&excludeFullGames=true", game.PlaceId)})
-            local body = __lt_call_service_method("HttpService", "JSONDecode", req.Body)
+            local body = __lt.cm("HttpService", "JSONDecode", req.Body)
         
             if body and body.data then
                 for i, v in next, body.data do
@@ -584,7 +598,7 @@ local ServerHop = Misc:CreateButton({
             end
         
             if #servers > 0 then
-                __lt_call_service_method("TeleportService", "TeleportToPlaceInstance", game.PlaceId, servers[math.random(1, #servers)], plr)
+                __lt.cm("TeleportService", "TeleportToPlaceInstance", game.PlaceId, servers[math.random(1, #servers)], plr)
             else
                 Rayfield:Notify({Title = "Server Hop", Content = "Couldn't find a valid server!!!", Duration = 1, Image = 4483362458,})
             end

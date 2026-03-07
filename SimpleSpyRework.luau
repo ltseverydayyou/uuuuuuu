@@ -1,14 +1,14 @@
-local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
-local function __lt_clone_service_value(value)
-	if __lt_oldcloneref and typeof(value) == "Instance" then
-		local ok, cloned = pcall(__lt_oldcloneref, value);
+local __lt = { cr = type(cloneref) == "function" and cloneref or nil };
+function __lt.cv(value)
+	if __lt.cr and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt.cr, value);
 		if ok and cloned ~= nil then
 			return cloned;
 		end;
 	end;
 	return value;
 end;
-local function __lt_clone_service(name, refFn)
+function __lt.cs(name, refFn)
 	if type(refFn) ~= "function" then
 		return game:GetService(name);
 	end;
@@ -20,8 +20,22 @@ local function __lt_clone_service(name, refFn)
 	end;
 	return game:GetService(name);
 end;
-local function __lt_call_service_method(name, method, ...)
-	local service = game:GetService(name);
+function __lt.ig(method)
+	return method == "FindFirstChild"
+		or method == "WaitForChild"
+		or method == "FindFirstChildOfClass"
+		or method == "FindFirstChildWhichIsA"
+		or method == "FindFirstAncestor"
+		or method == "FindFirstAncestorOfClass"
+		or method == "FindFirstAncestorWhichIsA"
+		or method == "GetChildren"
+		or method == "GetDescendants"
+		or method == "QueryDescendants";
+end;
+function __lt.cm(name, method, ...)
+	local service = __lt.ig(method)
+		and __lt.cs(name, __lt.cr)
+		or game:GetService(name);
 	local fn = service[method];
 	if type(fn) ~= "function" then
 		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
@@ -185,7 +199,7 @@ local function SafeGetService(name)
         or function(reference)
             return reference
         end
-    return __lt_clone_service(name, Reference)
+    return __lt.cs(name, Reference)
 end
 
 local function protectUI(sGui)
@@ -3166,7 +3180,7 @@ function i2p(i, customgen)
     end
 
     if i == Players.LocalPlayer then
-        return '__lt_clone_service("Players", cloneref).LocalPlayer'
+        return '__lt.cs("Players", cloneref).LocalPlayer'
     end
     if
         i == workspace
@@ -3191,9 +3205,9 @@ function i2p(i, customgen)
             cur = cur.Parent
         end
         if plr == Players.LocalPlayer then
-            return '__lt_clone_service("Players", cloneref).LocalPlayer.Character' .. out
+            return '__lt.cs("Players", cloneref).LocalPlayer.Character' .. out
         else
-            return ('__lt_clone_service("Players", cloneref):GetPlayerByUserId(%d).Character'):format(
+            return ('__lt.cs("Players", cloneref):GetPlayerByUserId(%d).Character'):format(
                 plr.UserId
             ) .. out
         end
@@ -3209,7 +3223,7 @@ function i2p(i, customgen)
     while cur and cur.Parent and cur.Parent ~= game do
         out = stepFromParentToChild(cur.Parent, cur) .. out
         if Players.LocalPlayer and cur:IsDescendantOf(Players.LocalPlayer) then
-            return '__lt_clone_service("Players", cloneref).LocalPlayer' .. out
+            return '__lt.cs("Players", cloneref).LocalPlayer' .. out
         end
         cur = cur.Parent
     end
@@ -3251,7 +3265,7 @@ function i2p(i, customgen)
     end
 
     if Players.LocalPlayer and i:IsDescendantOf(Players.LocalPlayer) then
-        base = '__lt_clone_service("Players", cloneref).LocalPlayer'
+        base = '__lt.cs("Players", cloneref).LocalPlayer'
         descend = ''
         node = i
         while node and node ~= Players.LocalPlayer do
@@ -4352,8 +4366,8 @@ if not getgenv().SimpleSpyExecuted then
                 or Players:GetPropertyChangedSignal('LocalPlayer'):Wait()
                 or Players.LocalPlayer
             generation = {
-                [OldDebugId(lp)] = '__lt_clone_service("Players", cloneref).LocalPlayer',
-                [OldDebugId(lp:GetMouse())] = '__lt_clone_service("Players", cloneref).LocalPlayer:GetMouse',
+                [OldDebugId(lp)] = '__lt.cs("Players", cloneref).LocalPlayer',
+                [OldDebugId(lp:GetMouse())] = '__lt.cs("Players", cloneref).LocalPlayer:GetMouse',
                 [OldDebugId(game)] = 'game',
                 [OldDebugId(SafeGetService('Workspace'))] = 'workspace',
             }

@@ -1,14 +1,14 @@
-local __lt_oldcloneref = type(cloneref) == "function" and cloneref or nil;
-local function __lt_clone_service_value(value)
-	if __lt_oldcloneref and typeof(value) == "Instance" then
-		local ok, cloned = pcall(__lt_oldcloneref, value);
+local __lt = { cr = type(cloneref) == "function" and cloneref or nil };
+function __lt.cv(value)
+	if __lt.cr and typeof(value) == "Instance" then
+		local ok, cloned = pcall(__lt.cr, value);
 		if ok and cloned ~= nil then
 			return cloned;
 		end;
 	end;
 	return value;
 end;
-local function __lt_clone_service(name, refFn)
+function __lt.cs(name, refFn)
 	if type(refFn) ~= "function" then
 		return game:GetService(name);
 	end;
@@ -20,8 +20,22 @@ local function __lt_clone_service(name, refFn)
 	end;
 	return game:GetService(name);
 end;
-local function __lt_call_service_method(name, method, ...)
-	local service = game:GetService(name);
+function __lt.ig(method)
+	return method == "FindFirstChild"
+		or method == "WaitForChild"
+		or method == "FindFirstChildOfClass"
+		or method == "FindFirstChildWhichIsA"
+		or method == "FindFirstAncestor"
+		or method == "FindFirstAncestorOfClass"
+		or method == "FindFirstAncestorWhichIsA"
+		or method == "GetChildren"
+		or method == "GetDescendants"
+		or method == "QueryDescendants";
+end;
+function __lt.cm(name, method, ...)
+	local service = __lt.ig(method)
+		and __lt.cs(name, __lt.cr)
+		or game:GetService(name);
 	local fn = service[method];
 	if type(fn) ~= "function" then
 		error(string.format("Service method %s.%s is not callable", tostring(name), tostring(method)));
@@ -136,7 +150,7 @@ local function ClonedService(name)
 	local Reference = cloneref or function(reference)
 		return reference;
 	end;
-	return __lt_clone_service(name, Reference);
+	return __lt.cs(name, Reference);
 end;
 local function protectUI(sGui)
 	if sGui:IsA("ScreenGui") then
@@ -162,9 +176,9 @@ local function protectUI(sGui)
 		NAProtection(sGui);
 		sGui.Parent = gethui();
 		return sGui;
-	elseif cGUI and __lt_call_service_method("CoreGui", "FindFirstChild", "RobloxGui") then
+	elseif cGUI and __lt.cm("CoreGui", "FindFirstChild", "RobloxGui") then
 		NAProtection(sGui);
-		sGui.Parent = __lt_call_service_method("CoreGui", "FindFirstChild", "RobloxGui");
+		sGui.Parent = __lt.cm("CoreGui", "FindFirstChild", "RobloxGui");
 		return sGui;
 	elseif cGUI then
 		NAProtection(sGui);
@@ -845,16 +859,16 @@ local function DIPONU_fake_script()
 	Mouse = lplayer:GetMouse();
 	local TweenService = ClonedService("TweenService");
 	local time = 0.5;
-	local SwitchButtonFade = __lt_call_service_method("TweenService", "Create", script.Parent.SwitchButton, TweenInfo.new(time), {
+	local SwitchButtonFade = __lt.cm("TweenService", "Create", script.Parent.SwitchButton, TweenInfo.new(time), {
 		BackgroundTransparency = 0
 	});
-	local SwitchButtonFadeOut = __lt_call_service_method("TweenService", "Create", script.Parent.SwitchButton, TweenInfo.new(time), {
+	local SwitchButtonFadeOut = __lt.cm("TweenService", "Create", script.Parent.SwitchButton, TweenInfo.new(time), {
 		BackgroundTransparency = 1
 	});
-	local SwitchButtonLitFade = __lt_call_service_method("TweenService", "Create", script.Parent.SwitchButton.SwitchButtonLit, TweenInfo.new(time), {
+	local SwitchButtonLitFade = __lt.cm("TweenService", "Create", script.Parent.SwitchButton.SwitchButtonLit, TweenInfo.new(time), {
 		BackgroundTransparency = 0
 	});
-	local SwitchButtonLitFadeOut = __lt_call_service_method("TweenService", "Create", script.Parent.SwitchButton.SwitchButtonLit, TweenInfo.new(time), {
+	local SwitchButtonLitFadeOut = __lt.cm("TweenService", "Create", script.Parent.SwitchButton.SwitchButtonLit, TweenInfo.new(time), {
 		BackgroundTransparency = 1
 	});
 	local Toggle = false;
@@ -974,16 +988,16 @@ local function UOOREXU_fake_script()
 	local InfiniteJump = false;
 	local TweenService = ClonedService("TweenService");
 	local time = 0.5;
-	local SwitchButtonFade = __lt_call_service_method("TweenService", "Create", script.Parent.SwitchButton, TweenInfo.new(time), {
+	local SwitchButtonFade = __lt.cm("TweenService", "Create", script.Parent.SwitchButton, TweenInfo.new(time), {
 		BackgroundTransparency = 0
 	});
-	local SwitchButtonFadeOut = __lt_call_service_method("TweenService", "Create", script.Parent.SwitchButton, TweenInfo.new(time), {
+	local SwitchButtonFadeOut = __lt.cm("TweenService", "Create", script.Parent.SwitchButton, TweenInfo.new(time), {
 		BackgroundTransparency = 1
 	});
-	local SwitchButtonLitFade = __lt_call_service_method("TweenService", "Create", script.Parent.SwitchButton.SwitchButtonLit, TweenInfo.new(time), {
+	local SwitchButtonLitFade = __lt.cm("TweenService", "Create", script.Parent.SwitchButton.SwitchButtonLit, TweenInfo.new(time), {
 		BackgroundTransparency = 0
 	});
-	local SwitchButtonLitFadeOut = __lt_call_service_method("TweenService", "Create", script.Parent.SwitchButton.SwitchButtonLit, TweenInfo.new(time), {
+	local SwitchButtonLitFadeOut = __lt.cm("TweenService", "Create", script.Parent.SwitchButton.SwitchButtonLit, TweenInfo.new(time), {
 		BackgroundTransparency = 1
 	});
 	script.Parent.SwitchButtonActivator.MouseButton1Click:connect(function()
@@ -1054,7 +1068,7 @@ local function EGFWXE_fake_script()
 					return;
 				end;
 			end;
-		elseif a == Aim_Assist_Key[2] and __lt_call_service_method("UserInputService", "IsKeyDown", Aim_Assist_Key[1]) then
+		elseif a == Aim_Assist_Key[2] and __lt.cm("UserInputService", "IsKeyDown", Aim_Assist_Key[1]) then
 			if Aim_Assist == true then
 				Aim_Assist = false;
 			else
@@ -1086,7 +1100,7 @@ local function EGFWXE_fake_script()
 		elseif a == aimkey then
 			if not aimatpart then
 				local maxangle = math.rad(20);
-				for i, plr in pairs(__lt_call_service_method("Players", "GetChildren")) do
+				for i, plr in pairs(__lt.cm("Players", "GetChildren")) do
 					if plr.Name ~= lplr.Name and plr.Character and plr.Character.Head and plr.Character.Humanoid and plr.Character.Humanoid.Health > 1 then
 						if TeamBased == true then
 							if plr.Team.Name ~= lplr.Team.Name then
@@ -1149,7 +1163,7 @@ local function EGFWXE_fake_script()
 		delay(0, function()
 			while wait(0.4) do
 				if Aim_Assist and (not aimatpart) and canaimat and lplr.Character and lplr.Character.Humanoid and lplr.Character.Humanoid.Health > 0 then
-					for i, plr in pairs(__lt_call_service_method("Players", "GetChildren")) do
+					for i, plr in pairs(__lt.cm("Players", "GetChildren")) do
 						local minangle = math.rad(5.5);
 						local lastpart = nil;
 						local function gg(plr)
@@ -1241,16 +1255,16 @@ local function UBACA_fake_script()
 	local script = Instance.new("LocalScript", SwitchFrame_4);
 	local TweenService = ClonedService("TweenService");
 	local time = 0.5;
-	local SwitchButtonFade = __lt_call_service_method("TweenService", "Create", script.Parent.SwitchButton, TweenInfo.new(time), {
+	local SwitchButtonFade = __lt.cm("TweenService", "Create", script.Parent.SwitchButton, TweenInfo.new(time), {
 		BackgroundTransparency = 0
 	});
-	local SwitchButtonFadeOut = __lt_call_service_method("TweenService", "Create", script.Parent.SwitchButton, TweenInfo.new(time), {
+	local SwitchButtonFadeOut = __lt.cm("TweenService", "Create", script.Parent.SwitchButton, TweenInfo.new(time), {
 		BackgroundTransparency = 1
 	});
-	local SwitchButtonLitFade = __lt_call_service_method("TweenService", "Create", script.Parent.SwitchButton.SwitchButtonLit, TweenInfo.new(time), {
+	local SwitchButtonLitFade = __lt.cm("TweenService", "Create", script.Parent.SwitchButton.SwitchButtonLit, TweenInfo.new(time), {
 		BackgroundTransparency = 0
 	});
-	local SwitchButtonLitFadeOut = __lt_call_service_method("TweenService", "Create", script.Parent.SwitchButton.SwitchButtonLit, TweenInfo.new(time), {
+	local SwitchButtonLitFadeOut = __lt.cm("TweenService", "Create", script.Parent.SwitchButton.SwitchButtonLit, TweenInfo.new(time), {
 		BackgroundTransparency = 1
 	});
 	local Toggle = false;

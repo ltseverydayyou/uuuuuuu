@@ -357,6 +357,10 @@ local nextPar = 0;
 local lastParryTime = 0;
 local curFrame = 0;
 local lastQueueTime = 0;
+local spamAccumulator = 0;
+local spamClickRate = 2500;
+local spamBufferedWindow = 0.05;
+local spamMaxBurst = 512;
 local stepAcc = 0;
 local stepDt = 1 / 120;
 local maxSub = 4;
@@ -494,6 +498,7 @@ local function iconShow(ico)
 end;
 local function toggleSpam()
 	spam = not spam;
+	spamAccumulator = 0;
 	updateSpamLabel();
 	updateRingColors();
 end;
@@ -1342,11 +1347,7 @@ local function queueParry(isSpam, hasTarget)
 		return;
 	end;
 	lastQueueTime = now;
-	if isSpam then
-		task.defer(DoParry);
-	else
-		DoParry();
-	end;
+	DoParry();
 end;
 local function getHighlightColor(inst)
 	if not inst then
@@ -1961,6 +1962,18 @@ trackConnection(RunService.Heartbeat:Connect(function(dt)
 		i += 1;
 	end;
 	if spam then
-		task.defer(DoParry);
+		spamAccumulator = math.min(spamAccumulator + dt * spamClickRate, spamClickRate * spamBufferedWindow);
+		local spamShots = math.floor(spamAccumulator);
+		if spamShots > spamMaxBurst then
+			spamAccumulator = math.min(spamAccumulator - spamMaxBurst, spamClickRate * spamBufferedWindow);
+			spamShots = spamMaxBurst;
+		else
+			spamAccumulator -= spamShots;
+		end;
+		for _ = 1, spamShots do
+			queueParry(true, true);
+		end;
+	else
+		spamAccumulator = 0;
 	end;
 end));

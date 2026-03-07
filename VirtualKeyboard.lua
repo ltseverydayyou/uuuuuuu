@@ -54,34 +54,34 @@ end
 
 local themes = {
 	Dark = {
-		Bg = Color3.fromRGB(28, 30, 34),
-		Btn = Color3.fromRGB(50, 52, 60),
-		Acc = Color3.fromRGB(80, 180, 120),
-		Txt = Color3.fromRGB(255, 255, 255)
+		Bg = Color3.fromRGB(11, 13, 18),
+		Btn = Color3.fromRGB(18, 22, 30),
+		Acc = Color3.fromRGB(88, 148, 255),
+		Txt = Color3.fromRGB(240, 244, 252)
 	},
 	Light = {
-		Bg = Color3.fromRGB(245, 245, 245),
-		Btn = Color3.fromRGB(220, 220, 220),
-		Acc = Color3.fromRGB(80, 160, 250),
-		Txt = Color3.fromRGB(0, 0, 0)
+		Bg = Color3.fromRGB(239, 231, 249),
+		Btn = Color3.fromRGB(247, 242, 252),
+		Acc = Color3.fromRGB(164, 78, 255),
+		Txt = Color3.fromRGB(25, 18, 36)
 	},
 	Blue = {
-		Bg = Color3.fromRGB(18, 24, 48),
-		Btn = Color3.fromRGB(36, 48, 96),
-		Acc = Color3.fromRGB(90, 130, 255),
-		Txt = Color3.fromRGB(255, 255, 255)
+		Bg = Color3.fromRGB(8, 13, 28),
+		Btn = Color3.fromRGB(10, 18, 36),
+		Acc = Color3.fromRGB(85, 139, 255),
+		Txt = Color3.fromRGB(238, 244, 255)
 	},
 	Purple = {
-		Bg = Color3.fromRGB(36, 24, 44),
-		Btn = Color3.fromRGB(58, 36, 76),
-		Acc = Color3.fromRGB(180, 100, 255),
-		Txt = Color3.fromRGB(255, 255, 255)
+		Bg = Color3.fromRGB(16, 8, 28),
+		Btn = Color3.fromRGB(20, 10, 34),
+		Acc = Color3.fromRGB(214, 71, 255),
+		Txt = Color3.fromRGB(249, 241, 255)
 	},
 	Green = {
-		Bg = Color3.fromRGB(18, 36, 24),
-		Btn = Color3.fromRGB(28, 56, 36),
-		Acc = Color3.fromRGB(60, 200, 120),
-		Txt = Color3.fromRGB(255, 255, 255)
+		Bg = Color3.fromRGB(8, 18, 16),
+		Btn = Color3.fromRGB(10, 22, 19),
+		Acc = Color3.fromRGB(78, 232, 152),
+		Txt = Color3.fromRGB(237, 255, 246)
 	}
 }
 
@@ -91,6 +91,28 @@ end
 
 local function lum(c)
 	return 0.2126 * c.R + 0.7152 * c.G + 0.0722 * c.B
+end
+
+local function makeOutline(obj, thickness, transparency)
+	local stroke = Instance.new("UIStroke")
+	stroke.Name = "Outline"
+	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	stroke.LineJoinMode = Enum.LineJoinMode.Round
+	stroke.Thickness = thickness or 1.5
+	stroke.Transparency = transparency or 0
+	stroke.Parent = obj
+	return stroke
+end
+
+local function setOutlineColor(obj, color)
+	local stroke = obj and obj:FindFirstChild("Outline")
+	if stroke and stroke:IsA("UIStroke") then
+		stroke.Color = color
+	end
+end
+
+local function keyFill(col)
+	return shade(col, -0.18)
 end
 
 local players = ClonedService("Players")
@@ -127,6 +149,7 @@ local mainFrm = Instance.new("Frame")
 mainFrm.Name = "Main"
 mainFrm.AnchorPoint = Vector2.new(0.5, 0.5)
 mainFrm.BackgroundColor3 = themes.Dark.Bg
+mainFrm.BackgroundTransparency = 0.08
 mainFrm.BorderSizePixel = 0
 mainFrm.Parent = ui
 
@@ -134,9 +157,12 @@ local c1 = Instance.new("UICorner")
 c1.CornerRadius = UDim.new(0, 12)
 c1.Parent = mainFrm
 
+makeOutline(mainFrm, 2)
+
 local titleBar = Instance.new("Frame")
 titleBar.Size = UDim2.new(1, 0, 0, 30)
-titleBar.BackgroundColor3 = themes.Dark.Btn
+titleBar.BackgroundColor3 = shade(themes.Dark.Bg, 0.03)
+titleBar.BackgroundTransparency = 0.06
 titleBar.BorderSizePixel = 0
 titleBar.Parent = mainFrm
 
@@ -149,13 +175,15 @@ local c2 = Instance.new("UICorner")
 c2.CornerRadius = UDim.new(0, 12)
 c2.Parent = titleBar
 
+makeOutline(titleBar, 1.2, 0.15)
+
 local titleLbl = Instance.new("TextLabel")
 titleLbl.BackgroundTransparency = 1
 titleLbl.Position = UDim2.new(0, 0, 0, 0)
-titleLbl.Size = UDim2.new(1, 0, 1, 0)
+titleLbl.Size = UDim2.new(1, -360, 1, 0)
 titleLbl.TextColor3 = themes.Dark.Txt
 titleLbl.Text = "Virtual Keyboard"
-titleLbl.Font = Enum.Font.SourceSansBold
+titleLbl.Font = Enum.Font.GothamBold
 titleLbl.TextScaled = true
 titleLbl.TextXAlignment = Enum.TextXAlignment.Left
 titleLbl.Parent = titleBar
@@ -168,7 +196,7 @@ tlc.Parent = titleLbl
 local topRight = Instance.new("Frame")
 topRight.BackgroundTransparency = 1
 topRight.AnchorPoint = Vector2.new(1, 0)
-topRight.Position = UDim2.new(1, 0, 0, 3)
+topRight.Position = UDim2.new(1, -6, 0, 3)
 topRight.Size = UDim2.new(0, 0, 0, 24)
 topRight.AutomaticSize = Enum.AutomaticSize.X
 topRight.Parent = titleBar
@@ -186,9 +214,10 @@ local function newTopBtn(name, w, text, bg)
 	b.Name = name
 	b.Size = UDim2.new(0, w, 1, 0)
 	b.BackgroundColor3 = bg
+	b.BackgroundTransparency = 0.04
 	b.TextColor3 = themes.Dark.Txt
 	b.Text = text
-	b.Font = Enum.Font.SourceSansBold
+	b.Font = Enum.Font.GothamBold
 	b.TextScaled = true
 	b.AutoButtonColor = true
 	b.Parent = topRight
@@ -199,6 +228,7 @@ local function newTopBtn(name, w, text, bg)
 	local r = Instance.new("UICorner")
 	r.CornerRadius = UDim.new(0, 8)
 	r.Parent = b
+	makeOutline(b, 1.4)
 	return b
 end
 
@@ -219,11 +249,12 @@ keysScroll.Position = UDim2.new(0, 6, 0, 34)
 keysScroll.Size = UDim2.new(1, -12, 1, -44)
 keysScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 keysScroll.ScrollBarThickness = 6
+keysScroll.ScrollBarImageColor3 = themes.Dark.Acc
 keysScroll.Parent = mainFrm
 
 local vlist = Instance.new("UIListLayout")
 vlist.FillDirection = Enum.FillDirection.Vertical
-vlist.Padding = UDim.new(0, 8)
+vlist.Padding = UDim.new(0, 6)
 vlist.SortOrder = Enum.SortOrder.LayoutOrder
 vlist.Parent = keysScroll
 
@@ -235,9 +266,10 @@ local toggleBtn = Instance.new("TextButton")
 toggleBtn.Name = "Toggle"
 toggleBtn.AnchorPoint = Vector2.new(0.5, 0)
 toggleBtn.BackgroundColor3 = themes.Dark.Btn
+toggleBtn.BackgroundTransparency = 0.04
 toggleBtn.TextColor3 = themes.Dark.Txt
 toggleBtn.Text = "⌨"
-toggleBtn.Font = Enum.Font.SourceSansBold
+toggleBtn.Font = Enum.Font.GothamBold
 toggleBtn.TextScaled = true
 toggleBtn.Parent = ui
 
@@ -249,6 +281,8 @@ tc.Parent = toggleBtn
 local c6 = Instance.new("UICorner")
 c6.CornerRadius = UDim.new(0, 12)
 c6.Parent = toggleBtn
+
+makeOutline(toggleBtn, 1.6)
 
 local function labelFromKC(kc)
 	local name = (tostring(kc)):gsub("^Enum%.KeyCode%.", "")
@@ -408,14 +442,22 @@ local activeKeys = {}
 local sendProcessed = false
 local sizeMode = "Comfort"
 local rowScale = 1
+local mainDragged = false
+local toggleDragged = false
+local layoutInitialized = false
 
 local function setBase(btn, col)
-	btn:SetAttribute("BaseColor", col)
-	btn.BackgroundColor3 = col
-	btn.TextColor3 = lum(col) > 0.6 and Color3.new(0, 0, 0) or Color3.new(1, 1, 1)
+	local fill = keyFill(col)
+	local theme = themes[curTheme] or themes.Dark
+	local outline = curTheme == "Dark" and Color3.fromRGB(245, 245, 245) or shade(theme.Acc, 0.05)
+	btn:SetAttribute("BaseColor", fill)
+	btn.BackgroundColor3 = fill
+	btn.BackgroundTransparency = 0.04
+	btn.TextColor3 = lum(fill) > 0.72 and Color3.new(0, 0, 0) or Color3.fromRGB(248, 243, 255)
+	setOutlineColor(btn, outline)
 end
 
-local function makeDrag(obj, handle)
+local function makeDrag(obj, handle, onDragStart)
 	local dragging, dInput, start, startPos = false, nil, nil, nil
 	handle.Active = true
 	handle.InputBegan:Connect(function(input)
@@ -423,6 +465,9 @@ local function makeDrag(obj, handle)
 			dragging = true
 			start = input.Position
 			startPos = obj.Position
+			if onDragStart then
+				onDragStart()
+			end
 			input.Changed:Connect(function()
 				if input.UserInputState == Enum.UserInputState.End then
 					dragging = false
@@ -488,7 +533,7 @@ local function makeFloatKey(lbl, kc)
 	keyBtn.Position = UDim2.new(0, 0, 0, 0)
 	keyBtn.Text = lbl
 	keyBtn.TextScaled = true
-	keyBtn.Font = Enum.Font.SourceSansBold
+	keyBtn.Font = Enum.Font.GothamBold
 	keyBtn.BorderSizePixel = 0
 	keyBtn.ZIndex = 101
 	keyBtn.Parent = wrap
@@ -499,6 +544,7 @@ local function makeFloatKey(lbl, kc)
 	local ic = Instance.new("UICorner")
 	ic.CornerRadius = UDim.new(0.4, 0)
 	ic.Parent = keyBtn
+	makeOutline(keyBtn, 1.6)
 	local st = Instance.new("UIStroke")
 	st.Thickness = 2
 	st.Color = Color3.fromRGB(0, 0, 0)
@@ -518,7 +564,7 @@ local function makeFloatKey(lbl, kc)
 	close.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
 	close.Text = "X"
 	close.TextScaled = true
-	close.Font = Enum.Font.SourceSansBold
+	close.Font = Enum.Font.GothamBold
 	close.TextColor3 = Color3.fromRGB(255, 255, 255)
 	close.ZIndex = 103
 	close.Parent = wrap
@@ -529,6 +575,7 @@ local function makeFloatKey(lbl, kc)
 	local cc = Instance.new("UICorner")
 	cc.CornerRadius = UDim.new(0, 10)
 	cc.Parent = close
+	makeOutline(close, 1.2)
 	makeDrag(wrap, dragOverlay)
 	makeDrag(wrap, keyBtn)
 	close.MouseButton1Click:Connect(function()
@@ -544,7 +591,7 @@ local function makeKey(t)
 	b.Name = "Key_" .. t
 	b.Text = t
 	b.TextScaled = true
-	b.Font = Enum.Font.SourceSans
+	b.Font = Enum.Font.GothamMedium
 	b.AutoButtonColor = true
 	b.BorderSizePixel = 0
 	local cst = Instance.new("UITextSizeConstraint")
@@ -554,6 +601,7 @@ local function makeKey(t)
 	local cor = Instance.new("UICorner")
 	cor.CornerRadius = UDim.new(0, 8)
 	cor.Parent = b
+	makeOutline(b, 1.4)
 	setBase(b, themes[curTheme].Btn)
 	pressConn(b, kc)
 	b.MouseButton1Click:Connect(function()
@@ -590,7 +638,7 @@ local function newRow(h, order)
 	r.Parent = keysScroll
 	local hl = Instance.new("UIListLayout")
 	hl.FillDirection = Enum.FillDirection.Horizontal
-	hl.Padding = UDim.new(0, 8)
+	hl.Padding = UDim.new(0, 6)
 	hl.SortOrder = Enum.SortOrder.LayoutOrder
 	hl.HorizontalAlignment = Enum.HorizontalAlignment.Left
 	hl.Parent = r
@@ -861,29 +909,47 @@ local sections = {
 }
 
 local curSection = "QWERTY"
+local palette
 
 local function applyScheme(s)
+	local outline = curTheme == "Dark" and Color3.fromRGB(245, 245, 245) or shade(s.Acc, 0.05)
+	local panel = keyFill(s.Bg)
+	local buttonFill = keyFill(s.Btn)
 	mainFrm.BackgroundColor3 = s.Bg
-	titleBar.BackgroundColor3 = s.Btn
+	titleBar.BackgroundColor3 = panel
+	palette.BackgroundColor3 = panel
+	keysScroll.ScrollBarImageColor3 = outline
 	titleLbl.TextColor3 = s.Txt
-	toggleBtn.BackgroundColor3 = s.Btn
+	toggleBtn.BackgroundColor3 = buttonFill
 	toggleBtn.TextColor3 = s.Txt
-	themeBtn.BackgroundColor3 = s.Btn
+	themeBtn.BackgroundColor3 = buttonFill
 	themeBtn.TextColor3 = s.Txt
-	modeBtn.BackgroundColor3 = s.Btn
+	modeBtn.BackgroundColor3 = buttonFill
 	modeBtn.TextColor3 = s.Txt
-	sizeBtn.BackgroundColor3 = s.Btn
+	sizeBtn.BackgroundColor3 = buttonFill
 	sizeBtn.TextColor3 = s.Txt
-	colorBtn.BackgroundColor3 = s.Btn
+	colorBtn.BackgroundColor3 = buttonFill
 	colorBtn.TextColor3 = s.Txt
-	rgbBtn.BackgroundColor3 = shade(s.Acc, 0.2)
+	rgbBtn.BackgroundColor3 = keyFill(s.Acc)
 	rgbBtn.TextColor3 = s.Txt
-	addBtn.BackgroundColor3 = selectMode and Color3.fromRGB(180, 60, 60) or s.Acc
+	addBtn.BackgroundColor3 = selectMode and keyFill(Color3.fromRGB(180, 60, 60)) or buttonFill
 	addBtn.TextColor3 = s.Txt
-	closeBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+	closeBtn.BackgroundColor3 = keyFill(Color3.fromRGB(70, 18, 24))
 	closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	procBtn.BackgroundColor3 = sendProcessed and s.Acc or s.Btn
+	procBtn.BackgroundColor3 = sendProcessed and keyFill(s.Acc) or buttonFill
 	procBtn.TextColor3 = s.Txt
+	setOutlineColor(mainFrm, outline)
+	setOutlineColor(titleBar, shade(outline, -0.1))
+	setOutlineColor(toggleBtn, outline)
+	setOutlineColor(themeBtn, outline)
+	setOutlineColor(modeBtn, outline)
+	setOutlineColor(sizeBtn, outline)
+	setOutlineColor(colorBtn, outline)
+	setOutlineColor(rgbBtn, outline)
+	setOutlineColor(addBtn, selectMode and Color3.fromRGB(255, 120, 120) or outline)
+	setOutlineColor(closeBtn, Color3.fromRGB(255, 120, 140))
+	setOutlineColor(procBtn, outline)
+	setOutlineColor(palette, outline)
 	for _, k in ipairs(activeKeys) do
 		setBase(k, s.Btn)
 	end
@@ -1001,8 +1067,12 @@ sizeBtn.MouseButton1Click:Connect(function()
 	setSizeMode(order[i % (#order) + 1])
 end)
 
-makeDrag(mainFrm, titleBar)
-makeDrag(toggleBtn, toggleBtn)
+makeDrag(mainFrm, titleBar, function()
+	mainDragged = true
+end)
+makeDrag(toggleBtn, toggleBtn, function()
+	toggleDragged = true
+end)
 
 addBtn.MouseButton1Click:Connect(function()
 	selectMode = not selectMode
@@ -1023,17 +1093,20 @@ toggleBtn.MouseButton1Click:Connect(function()
 	toggleBtn.BackgroundColor3 = mainFrm.Visible and shade(acc, 0.1) or (themes[curTheme] and themes[curTheme].Btn or themes.Dark.Btn)
 end)
 
-local palette = Instance.new("Frame")
+palette = Instance.new("Frame")
 palette.Name = "Palette"
 palette.Size = UDim2.new(0, 280, 0, 180)
 palette.Position = UDim2.new(1, -292, 0, 34)
 palette.BackgroundColor3 = themes.Dark.Bg
+palette.BackgroundTransparency = 0.04
 palette.Visible = false
 palette.Parent = mainFrm
 
 local pc = Instance.new("UICorner")
 pc.CornerRadius = UDim.new(0, 10)
 pc.Parent = palette
+
+makeOutline(palette, 1.5)
 
 local pg = Instance.new("UIGridLayout")
 pg.CellPadding = UDim2.new(0, 6, 0, 6)
@@ -1088,7 +1161,7 @@ for _, pair in ipairs(namedColors) do
 	local sw = Instance.new("TextButton")
 	sw.Text = n
 	sw.TextScaled = true
-	sw.Font = Enum.Font.SourceSansBold
+	sw.Font = Enum.Font.GothamBold
 	sw.BackgroundColor3 = c
 	sw.TextColor3 = lum(c) > 0.6 and Color3.new(0, 0, 0) or Color3.new(1, 1, 1)
 	sw.Parent = palette
@@ -1099,6 +1172,7 @@ for _, pair in ipairs(namedColors) do
 	local sc = Instance.new("UICorner")
 	sc.CornerRadius = UDim.new(0, 6)
 	sc.Parent = sw
+	makeOutline(sw, 1)
 	sw.MouseButton1Click:Connect(function()
 		applyBaseColor(c)
 		palette.Visible = false
@@ -1115,15 +1189,25 @@ local function updateLayout()
 
 	if IsOnMobile or vs.X < 900 then
 		mainFrm.Size = UDim2.new(0.9, 0, 0.55, 0)
-		mainFrm.Position = UDim2.new(0.5, 0, 0.6, 0)
 		toggleBtn.Size = UDim2.new(0, 56, 0, 56)
-		toggleBtn.Position = UDim2.new(0.5, 0, 0, 70)
+		if not layoutInitialized or not mainDragged then
+			mainFrm.Position = UDim2.new(0.5, 0, 0.6, 0)
+		end
+		if not layoutInitialized or not toggleDragged then
+			toggleBtn.Position = UDim2.new(0.5, 0, 0, 70)
+		end
 	else
-		mainFrm.Size = UDim2.new(0.6, 0, 0.36, 0)
-		mainFrm.Position = UDim2.new(0.5, 0, 0.6, 0)
+		mainFrm.Size = UDim2.new(0.68, 0, 0.34, 0)
 		toggleBtn.Size = UDim2.new(0, 48, 0, 48)
-		toggleBtn.Position = UDim2.new(0.5, 0, 0, 60)
+		if not layoutInitialized or not mainDragged then
+			mainFrm.Position = UDim2.new(0.5, 0, 0.6, 0)
+		end
+		if not layoutInitialized or not toggleDragged then
+			toggleBtn.Position = UDim2.new(0.5, 0, 0, 60)
+		end
 	end
+
+	layoutInitialized = true
 end
 
 local cam = workspace.CurrentCamera

@@ -56,8 +56,18 @@ local UserInputService = __lt.cs("UserInputService", cloneref)
 local VirtualInputManager = __lt.cs("VirtualInputManager", cloneref)
 local HttpService = __lt.cs("HttpService", cloneref)
 local CoreGui = __lt.cs("CoreGui", cloneref)
+local GuiService = __lt.cs("GuiService", cloneref)
 
 local LocalPlayer = Players.LocalPlayer
+local PlayerMouse = nil
+if LocalPlayer and LocalPlayer.GetMouse then
+	local ok, mouse = pcall(function()
+		return LocalPlayer:GetMouse()
+	end)
+	if ok and mouse then
+		PlayerMouse = mouse
+	end
+end
 local parentUI = gethui and gethui() or CoreGui or LocalPlayer:WaitForChild("PlayerGui")
 local CONFIG_PATH = "AutoClickerSettings.json"
 local INSTANCE_MARKER = "__ltseverydayyou_autoclicker"
@@ -295,14 +305,6 @@ local rootScale = new("UIScale", root, {
 	Scale = 1
 })
 
-local function updateRootScale()
-	local camera = workspace.CurrentCamera
-	local viewport = camera and camera.ViewportSize or Vector2.new(1920, 1080)
-	rootScale.Scale = math.max(math.min(viewport.X / 620, viewport.Y / 680, 1), 0.7)
-end
-
-updateRootScale()
-
 local header = new("Frame", root, {
 	Size = UDim2.new(1, 0, 0, 34),
 	BackgroundColor3 = Color3.fromRGB(30, 33, 40),
@@ -385,8 +387,8 @@ local rateSection = createSection(root, "Click rate", UDim2.fromOffset(12, 326),
 local limitSection = createSection(root, "Click limit", UDim2.fromOffset(280, 326), UDim2.fromOffset(256, 136))
 
 local statusLabel = new("TextLabel", root, {
-	Position = UDim2.fromOffset(16, 502),
-	Size = UDim2.fromOffset(150, 24),
+	Position = UDim2.fromOffset(16, 472),
+	Size = UDim2.fromOffset(360, 24),
 	BackgroundTransparency = 1,
 	Text = "Status: Idle",
 	TextColor3 = THEME.muted,
@@ -394,6 +396,18 @@ local statusLabel = new("TextLabel", root, {
 	Font = Enum.Font.SourceSansSemibold,
 	TextSize = 18
 })
+
+local toggleButton = new("TextButton", root, {
+	Position = UDim2.fromOffset(12, 496),
+	Size = UDim2.fromOffset(108, 32),
+	BackgroundColor3 = THEME.green,
+	Text = "START",
+	TextColor3 = THEME.white,
+	Font = Enum.Font.SourceSansBold,
+	TextSize = 22,
+	AutoButtonColor = false
+})
+makeCorner(toggleButton, 4)
 
 local exitButton = new("TextButton", root, {
 	Position = UDim2.fromOffset(420, 496),
@@ -420,9 +434,9 @@ makeStroke(dockBar, THEME.border, 1)
 
 local dockTitle = new("TextLabel", dockBar, {
 	Position = UDim2.fromOffset(12, 0),
-	Size = UDim2.fromOffset(250, 40),
+	Size = UDim2.fromOffset(168, 40),
 	BackgroundTransparency = 1,
-	Text = "ltseverydayyou - AutoClicker",
+	Text = "AutoClicker",
 	TextXAlignment = Enum.TextXAlignment.Left,
 	TextColor3 = THEME.text,
 	Font = Enum.Font.SourceSansBold,
@@ -430,8 +444,8 @@ local dockTitle = new("TextLabel", dockBar, {
 })
 
 local dockState = new("TextLabel", dockBar, {
-	Position = UDim2.fromOffset(260, 0),
-	Size = UDim2.fromOffset(138, 40),
+	Position = UDim2.fromOffset(200, 0),
+	Size = UDim2.fromOffset(196, 40),
 	BackgroundTransparency = 1,
 	Text = "Idle",
 	TextXAlignment = Enum.TextXAlignment.Left,
@@ -453,7 +467,7 @@ local dockOpen = new("TextButton", dockBar, {
 makeCorner(dockOpen, 4)
 
 local dockExit = new("TextButton", dockBar, {
-	Position = UDim2.fromOffset(462, 6),
+	Position = UDim2.fromOffset(460, 6),
 	Size = UDim2.fromOffset(28, 28),
 	BackgroundColor3 = Color3.fromRGB(210, 132, 132),
 	Text = "X",
@@ -463,6 +477,18 @@ local dockExit = new("TextButton", dockBar, {
 	AutoButtonColor = false
 })
 makeCorner(dockExit, 4)
+
+local function updateViewportLayout()
+	local camera = workspace.CurrentCamera
+	local viewport = camera and camera.ViewportSize or Vector2.new(1920, 1080)
+	local margin = math.clamp(math.floor(math.min(viewport.X, viewport.Y) * 0.04), 10, 28)
+	local usableWidth = math.max(viewport.X - (margin * 2), 160)
+	local usableHeight = math.max(viewport.Y - (margin * 2), 160)
+	rootScale.Scale = math.clamp(math.min(usableWidth / 548, usableHeight / 548, 1), 0.32, 1)
+	dockBar.Size = UDim2.fromOffset(math.max(math.min(viewport.X - (margin * 2), 500), 220), 40)
+end
+
+updateViewportLayout()
 
 local overlay = new("Frame", root, {
 	Visible = false,
@@ -840,7 +866,7 @@ local timingLabel = new("TextLabel", limitSection, {
 })
 
 local resetButton = new("TextButton", root, {
-	Position = UDim2.fromOffset(232, 496),
+	Position = UDim2.fromOffset(128, 496),
 	Size = UDim2.fromOffset(180, 32),
 	BackgroundColor3 = THEME.blue,
 	Text = "RESET SETTINGS",
@@ -857,6 +883,17 @@ local function bind(signal, callback)
 	local connection = signal:Connect(callback)
 	table.insert(connections, connection)
 	return connection
+end
+
+if PlayerMouse and PlayerMouse.Move then
+	bind(PlayerMouse.Move, function()
+		if not UserInputService.TouchEnabled then
+			local point = getMousePosition()
+			if point then
+				lastPointerPosition = point
+			end
+		end
+	end)
 end
 
 local function setToggleVisual(toggle, enabled)
@@ -878,6 +915,7 @@ local releaseAt = 0
 local clickAccumulator = 0
 local totalClicks = 0
 local lastPointerPosition = Vector2.new(0, 0)
+local activeTouchInput = nil
 local cleaningUp = false
 local MAX_BURST_PER_FRAME = 4096
 
@@ -894,6 +932,8 @@ local function setStatus(text, color)
 	statusLabel.TextColor3 = color or THEME.muted
 	dockState.Text = buildDockState(text)
 	dockState.TextColor3 = color or THEME.muted
+	toggleButton.Text = active and "STOP" or "START"
+	toggleButton.BackgroundColor3 = active and THEME.red or THEME.green
 end
 
 local function getClickInterval()
@@ -980,6 +1020,8 @@ local function updateUI()
 	dockState.Text = buildDockState(active and (config.activationMode == "hold" and "Holding" or "Active") or "Idle")
 	updateTimingLabel()
 	updateLimitVisual()
+	toggleButton.Text = active and "STOP" or "START"
+	toggleButton.BackgroundColor3 = active and THEME.red or THEME.green
 end
 
 local function persistAndRefresh()
@@ -989,16 +1031,23 @@ local function persistAndRefresh()
 end
 
 local function getMousePosition()
-	local pos = lastPointerPosition
-	if pos.X == 0 and pos.Y == 0 then
+	if UserInputService.TouchEnabled then
+		return lastPointerPosition
+	end
+	if PlayerMouse and type(PlayerMouse.X) == "number" and type(PlayerMouse.Y) == "number" then
+		if PlayerMouse.X > 0 or PlayerMouse.Y > 0 then
+			return Vector2.new(PlayerMouse.X, PlayerMouse.Y)
+		end
+	end
+	if UserInputService.MouseEnabled then
 		local ok, current = pcall(function()
 			return __lt.cm("UserInputService", "GetMouseLocation")
 		end)
 		if ok and current then
-			pos = current
+			return current
 		end
 	end
-	return pos
+	return lastPointerPosition
 end
 
 local function pointInside(guiObject, point)
@@ -1007,22 +1056,72 @@ local function pointInside(guiObject, point)
 	return point.X >= position.X and point.X <= position.X + size.X and point.Y >= position.Y and point.Y <= position.Y + size.Y
 end
 
+local function pointOverOwnUI(point)
+	return (root.Visible and pointInside(root, point)) or (dockBar.Visible and pointInside(dockBar, point))
+end
+
+local function getOwnUIPoint(point)
+	local insetOk, topLeftInset = pcall(function()
+		return __lt.cm("GuiService", "GetGuiInset")
+	end)
+	if insetOk and topLeftInset then
+		return Vector2.new(point.X - topLeftInset.X, point.Y - topLeftInset.Y)
+	end
+	return point
+end
+
+local function getDispatchPoint()
+	if UserInputService.TouchEnabled then
+		local point = getMousePosition()
+		local insetOk, topLeftInset = pcall(function()
+			return __lt.cm("GuiService", "GetGuiInset")
+		end)
+		if insetOk and topLeftInset then
+			return Vector2.new(point.X + topLeftInset.X, point.Y + topLeftInset.Y)
+		end
+		return point
+	end
+	if UserInputService.MouseEnabled then
+		local ok, current = pcall(function()
+			return __lt.cm("UserInputService", "GetMouseLocation")
+		end)
+		if ok and current then
+			return current
+		end
+	end
+	if PlayerMouse and type(PlayerMouse.X) == "number" and type(PlayerMouse.Y) == "number" then
+		local insetOk, topLeftInset = pcall(function()
+			return __lt.cm("GuiService", "GetGuiInset")
+		end)
+		if insetOk and topLeftInset then
+			return Vector2.new(PlayerMouse.X + topLeftInset.X, PlayerMouse.Y + topLeftInset.Y)
+		end
+		return Vector2.new(PlayerMouse.X, PlayerMouse.Y)
+	end
+	return getMousePosition()
+end
+
+local function updatePointerTarget(point)
+	if point == nil then
+		return
+	end
+	if not pointOverOwnUI(getOwnUIPoint(point)) then
+		lastPointerPosition = point
+	end
+end
+
 local function pointerOverOwnUI()
 	if not config.ignoreOwnUI then
 		return false
 	end
-	local point = getMousePosition()
-	if root.Visible and pointInside(root, point) then
-		return true
-	end
-	if dockBar.Visible and pointInside(dockBar, point) then
-		return true
-	end
-	return false
+	return pointOverOwnUI(getOwnUIPoint(getMousePosition()))
 end
 
 local function shouldPauseClicks()
 	if config.ignoreFocusedTextBox and __lt.cm("UserInputService", "GetFocusedTextBox") then
+		return true
+	end
+	if not UserInputService.MouseEnabled and lastPointerPosition.X <= 0 and lastPointerPosition.Y <= 0 then
 		return true
 	end
 	if pointerOverOwnUI() then
@@ -1032,7 +1131,7 @@ local function shouldPauseClicks()
 end
 
 local function sendButtonState(isDown)
-	local point = getMousePosition()
+	local point = getDispatchPoint()
 	local buttonIndex = BUTTONS[config.clickButton].index
 	local ok = false
 	if VirtualInputManager and VirtualInputManager.SendMouseButtonEvent then
@@ -1044,7 +1143,7 @@ local function sendButtonState(isDown)
 end
 
 local function clickNow()
-	local point = getMousePosition()
+	local point = getDispatchPoint()
 	if VirtualInputManager and VirtualInputManager.SendMouseButtonEvent then
 		local ok = pcall(function()
 			local buttonIndex = BUTTONS[config.clickButton].index
@@ -1070,10 +1169,18 @@ local function releaseHeldButton()
 	end
 end
 
+local function clearRuntimeState()
+	dragging = false
+	dragStartMouse = nil
+	dragStartPos = nil
+	activeTouchInput = nil
+	clickAccumulator = 0
+	releaseHeldButton()
+end
+
 local function stopClicking(statusText)
 	active = false
-	releaseHeldButton()
-	clickAccumulator = 0
+	clearRuntimeState()
 	if statusText == "Click limit reached" then
 		setStatus(statusText, THEME.red)
 	else
@@ -1125,13 +1232,46 @@ local function performConfiguredClick(now, interval)
 end
 
 bind(RunService.Heartbeat, function(dt)
-	updateRootScale()
+	updateViewportLayout()
 
-	local ok, point = pcall(function()
-		return __lt.cm("UserInputService", "GetMouseLocation")
-	end)
-	if ok and point then
-		lastPointerPosition = Vector2.new(point.X, point.Y)
+	if UserInputService.TouchEnabled then
+		local ok, touches = pcall(function()
+			return __lt.cm("UserInputService", "GetTouches")
+		end)
+		if ok and type(touches) == "table" then
+			local matchedTouch = nil
+			if activeTouchInput ~= nil then
+				for _, touch in ipairs(touches) do
+					if touch == activeTouchInput then
+						matchedTouch = touch
+						break
+					end
+				end
+			end
+
+			if matchedTouch and matchedTouch.Position then
+				updatePointerTarget(Vector2.new(matchedTouch.Position.X, matchedTouch.Position.Y))
+			else
+				activeTouchInput = nil
+				for _, touch in ipairs(touches) do
+					if touch and touch.Position then
+						local point = Vector2.new(touch.Position.X, touch.Position.Y)
+						if not pointOverOwnUI(getOwnUIPoint(point)) then
+							activeTouchInput = touch
+							lastPointerPosition = point
+							break
+						end
+					end
+				end
+			end
+		else
+			activeTouchInput = nil
+		end
+	elseif (PlayerMouse and type(PlayerMouse.X) == "number" and type(PlayerMouse.Y) == "number" and (PlayerMouse.X > 0 or PlayerMouse.Y > 0)) or UserInputService.MouseEnabled then
+		local point = getMousePosition()
+		if point then
+			lastPointerPosition = point
+		end
 	end
 
 	if buttonHeld and os.clock() >= releaseAt then
@@ -1206,7 +1346,7 @@ bind(appsClose.MouseButton1Click, function()
 end)
 
 bind(overlay.InputBegan, function(input)
-	if input.UserInputType ~= Enum.UserInputType.MouseButton1 then
+	if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then
 		return
 	end
 	local point = Vector2.new(input.Position.X, input.Position.Y)
@@ -1288,6 +1428,8 @@ bind(resetButton.MouseButton1Click, function()
 	persistAndRefresh()
 end)
 
+bind(toggleButton.MouseButton1Click, toggleClicking)
+
 local function parseNumberBox(text, fallback)
 	local numeric = tonumber(text)
 	if numeric == nil then
@@ -1338,6 +1480,7 @@ local function cleanup()
 	end
 	cleaningUp = true
 	stopClicking("Closed")
+	activeTouchInput = nil
 	for _, connection in ipairs(connections) do
 		pcall(function()
 			connection:Disconnect()
@@ -1378,8 +1521,15 @@ bind(titleLabel.InputBegan, function(input)
 end)
 
 bind(UserInputService.InputChanged, function(input)
-	if input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then
+	if UserInputService.TouchEnabled then
+		if input.UserInputType ~= Enum.UserInputType.Touch then
+			return
+		end
+	elseif input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then
 		return
+	end
+	if input.Position then
+		updatePointerTarget(Vector2.new(input.Position.X, input.Position.Y))
 	end
 	if dragging and dragStartPos and dragStartMouse then
 		local current = Vector2.new(input.Position.X, input.Position.Y)
@@ -1394,12 +1544,18 @@ bind(UserInputService.InputChanged, function(input)
 end)
 
 bind(UserInputService.InputEnded, function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+	if (not UserInputService.TouchEnabled and input.UserInputType == Enum.UserInputType.MouseButton1) or input.UserInputType == Enum.UserInputType.Touch then
 		dragging = false
 	end
 end)
 
 bind(UserInputService.InputBegan, function(input, processed)
+	if input.Position then
+		if ((not UserInputService.TouchEnabled and input.UserInputType == Enum.UserInputType.MouseButton1) or input.UserInputType == Enum.UserInputType.Touch) then
+			updatePointerTarget(Vector2.new(input.Position.X, input.Position.Y))
+		end
+	end
+
 	if listeningForKey then
 		if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode ~= Enum.KeyCode.Unknown then
 			config.activationKey = input.KeyCode.Name
@@ -1441,6 +1597,34 @@ bind(UserInputService.InputEnded, function(input)
 		stopClicking("Idle")
 	end
 end)
+
+if UserInputService.TouchStarted then
+	bind(UserInputService.TouchStarted, function(input)
+		if input and input.Position then
+			activeTouchInput = input
+			updatePointerTarget(Vector2.new(input.Position.X, input.Position.Y))
+		end
+	end)
+end
+
+if UserInputService.TouchMoved then
+	bind(UserInputService.TouchMoved, function(input)
+		if input and input.Position then
+			if activeTouchInput == nil or input == activeTouchInput then
+				activeTouchInput = input
+			end
+			updatePointerTarget(Vector2.new(input.Position.X, input.Position.Y))
+		end
+	end)
+end
+
+if UserInputService.TouchEnded then
+	bind(UserInputService.TouchEnded, function(input)
+		if input == activeTouchInput then
+			activeTouchInput = nil
+		end
+	end)
+end
 
 sharedEnv.AutoClickerCleanup = cleanup
 sharedState.loaded = true

@@ -9771,6 +9771,36 @@ local EmbeddedModules = {
 					self:JumpToCursor();
 				end;
 				funcs.JumpToCursor = function(self)
+					local linesFrame = self.GuiElems and self.GuiElems.LinesFrame;
+					if linesFrame then
+						local fontWidth = math.ceil(self.FontSize / 2);
+						local visibleLines = math.max(1, math.floor(linesFrame.AbsoluteSize.Y / self.FontSize));
+						local visibleCols = math.max(1, math.floor(linesFrame.AbsoluteSize.X / fontWidth));
+						local marginY = math.max(1, math.floor(visibleLines * 0.2));
+						local marginX = math.max(2, math.floor(visibleCols * 0.12));
+						local nextViewY = self.ViewY;
+						local nextViewX = self.ViewX;
+						if self.CursorY < nextViewY + marginY then
+							nextViewY = math.max(0, self.CursorY - marginY);
+						elseif self.CursorY > nextViewY + visibleLines - 1 - marginY then
+							nextViewY = math.max(0, self.CursorY - (visibleLines - 1 - marginY));
+						end;
+						if self.CursorX < nextViewX + marginX then
+							nextViewX = math.max(0, self.CursorX - marginX);
+						elseif self.CursorX > nextViewX + visibleCols - 1 - marginX then
+							nextViewX = math.max(0, self.CursorX - (visibleCols - 1 - marginX));
+						end;
+						if nextViewY ~= self.ViewY then
+							self.ViewY = nextViewY;
+							self.ScrollV:ScrollTo(nextViewY, true);
+							self.ViewY = self.ScrollV.Index;
+						end;
+						if nextViewX ~= self.ViewX then
+							self.ViewX = nextViewX;
+							self.ScrollH:ScrollTo(nextViewX, true);
+							self.ViewX = self.ScrollH.Index;
+						end;
+					end;
 					self:Refresh();
 				end;
 				funcs.UpdateCursor = function(self, input)

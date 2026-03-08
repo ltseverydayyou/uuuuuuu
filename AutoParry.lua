@@ -456,6 +456,7 @@ local parryState = {
 	activeParryBall = nil,
 	activeParryReleaseAt = 0,
 	clearActiveParryLock = nil,
+	pendingHandoffBall = nil,
 	spam = false,
 	apEnabled = true,
 	preclick = true,
@@ -1798,6 +1799,37 @@ local function setActiveParryLock(ball, now, hitTime)
 	local holdFor = math.clamp((hitTime or 0.2) + 0.12, 0.18, 0.9);
 	parryState.activeParryReleaseAt = (now or tick()) + holdFor;
 end;
+local function deferHandoffParry(ball, hitTime)
+	if parryState.pendingHandoffBall == ball then
+		return;
+	end;
+	parryState.pendingHandoffBall = ball;
+	task.defer(function()
+		if parryState.pendingHandoffBall ~= ball then
+			return;
+		end;
+		parryState.pendingHandoffBall = nil;
+		if not parryState.apEnabled then
+			return;
+		end;
+		if not (ball and ball.Parent) then
+			return;
+		end;
+		local currentChar = localPlayer.Character or character;
+		local stillTargeted = select(1, isBallTargetingYou(ball, currentChar)) or isBallTargetingYouAttr(ball, currentChar);
+		if not stillTargeted then
+			return;
+		end;
+		local now = tick();
+		parryState.lastQueueTime = now;
+		parryState.nextPar = now + parryState.parCd;
+		parryState.lastParryTime = now;
+		ballState.lastParryPerBall[ball] = now;
+		ballState.closeParryBlocked[ball] = true;
+		setActiveParryLock(ball, now, hitTime);
+		DoParry();
+	end);
+end;
 local function AutoParryStep(dt)
 	local ps = parryState;
 	local vs = visualizerState;
@@ -1811,6 +1843,16 @@ local function AutoParryStep(dt)
 	local showViz = isVisualizerEnabled() and hasBalls;
 	if not (hrp and hrp.Position) then
 		return;
+	end;
+	if ps.activeParryBall and ps.activeParryBall.Parent then
+		local activeTargeted = select(1, isBallTargetingYou(ps.activeParryBall, character)) or isBallTargetingYouAttr(ps.activeParryBall, character);
+		if not activeTargeted then
+			bs.closeParryBlocked[ps.activeParryBall] = nil;
+			bs.targetedSince[ps.activeParryBall] = nil;
+			bs.targetStartDist[ps.activeParryBall] = nil;
+			ps.nextPar = 0;
+			ps.clearActiveParryLock(ps.activeParryBall);
+		end;
 	end;
 	local nowFrame = tick();
 	local pingItem = Stats.Network.ServerStatsItem and Stats.Network.ServerStatsItem["Data Ping"];
@@ -2034,8 +2076,14 @@ local function AutoParryStep(dt)
 					approaching = true;
 					movingAway = false;
 				end;
-				if ps.activeParryBall == ball and (now >= ps.activeParryReleaseAt or ((not targeted) and (not attrNow) and rawDist > math.max(12, parryPredictRadius * 0.65)) or (movingAway and rawDist > math.max(10, parryPredictRadius * 0.55))) then
-					ps.clearActiveParryLock(ball);
+				if ps.activeParryBall == ball then
+					if (not targeted) and (not attrNow) then
+						bs.closeParryBlocked[ball] = nil;
+						ps.nextPar = 0;
+						ps.clearActiveParryLock(ball);
+					elseif now >= ps.activeParryReleaseAt or (movingAway and rawDist > math.max(10, parryPredictRadius * 0.55)) then
+						ps.clearActiveParryLock(ball);
+					end;
 				end;
 				local ignoreMovingAwayForClash = bs.targetStartDist[ball] ~= nil and bs.targetStartDist[ball] <= 50;
 				local movingAwayBlocked = movingAway and (not ignoreMovingAwayForClash) and (not forceToward);
@@ -2054,6 +2102,13 @@ local function AutoParryStep(dt)
 				local targetSnap = targeted and inParryPredict and settledInPredict and (hitTime <= 0.6 or rawDist <= math.max(10, parryPredictRadius * 0.6));
 				local innerEmergency = (not ps.preclick) and targeted and rawDist <= math.max(8, predictRadius * 0.4);
 				local fastApproach = targeted and approaching and (hitTime <= 0.22 or rawDist <= parryPredictRadius * 0.95);
+				local handoffZone = rawDist <= math.max(12, parryPredictRadius * 0.95);
+				if ps.activeParryBall ~= nil and ps.activeParryBall ~= ball and (targeted or attrNow) and handoffZone then
+					bs.closeParryBlocked[ps.activeParryBall] = nil;
+					ps.nextPar = 0;
+					ps.clearActiveParryLock(ps.activeParryBall);
+					deferHandoffParry(ball, hitTime);
+				end;
 				local parryTriggered = false;
 				if (ps.activeParryBall == nil or ps.activeParryBall == ball or now >= ps.activeParryReleaseAt) and innerEmergency and hasTargetLock and (not bs.closeParryBlocked[ball]) and (not movingAwayBlocked) then
 					local nowInner = now;

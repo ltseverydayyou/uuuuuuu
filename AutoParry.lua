@@ -89,10 +89,23 @@ local useVim = inpMd == "vim" or (inpMd ~= "keyapi" and (execNm == "solara" or e
 local vim;
 local function fireVim()
 	if not vim then
-		vim = __lt.cs("VirtualInputManager", cloneref);
+		local ok, svc = pcall(function()
+			return __lt.cs("VirtualInputManager", cloneref);
+		end);
+		if not ok or not svc then
+			return;
+		end;
+		vim = svc;
 	end;
-	vim:SendKeyEvent(true, "F", false, game);
-	vim:SendKeyEvent(false, "F", false, game);
+	local ok1 = pcall(function()
+		vim:SendKeyEvent(true, "F", false, game);
+	end);
+	local ok2 = pcall(function()
+		vim:SendKeyEvent(false, "F", false, game);
+	end);
+	if not ok1 or not ok2 then
+		vim = nil;
+	end;
 end;
 local function testKeys()
 	if type(keypress) ~= "function" or type(keyrelease) ~= "function" then
@@ -169,15 +182,33 @@ local function testKeys()
 	return (not bad) and st == 3;
 end;
 local useKeys = (not useVim) and testKeys();
+local _apErr = {
+	msg = nil,
+	t = 0
+};
+local function apWarn(err)
+	local s = tostring(err);
+	local now = tick();
+	if _apErr.msg ~= s or now - _apErr.t >= 1 then
+		warn(s);
+		_apErr.msg = s;
+		_apErr.t = now;
+	end;
+end;
 local function sendFKey()
 	if useKeys then
 		local okD = pcall(keypress, VK_F);
 		local okU = pcall(keyrelease, VK_F);
 		if okD and okU then
-			return;
+			return true;
 		end;
 	end;
-	fireVim();
+	local ok, err = pcall(fireVim);
+	if not ok then
+		apWarn(err);
+		return false;
+	end;
+	return true;
 end;
 local IsOnMobile = (function()
 	local platform = __lt.cm("UserInputService", "GetPlatform");
@@ -353,6 +384,24 @@ local function waitForChildFast(parent, name)
 		return nil;
 	end;
 	return parent:FindFirstChild(name) or parent:WaitForChild(name, 5);
+end;
+local function getPing()
+	local ok, value = pcall(function()
+		local net = Stats and Stats.Network;
+		local item = net and net.ServerStatsItem and net.ServerStatsItem["Data Ping"];
+		if not item then
+			return 0;
+		end;
+		local fn = item.GetValue;
+		if type(fn) == "function" then
+			return fn(item);
+		end;
+		return 0;
+	end);
+	if not ok or type(value) ~= "number" then
+		return 0;
+	end;
+	return value;
 end;
 local VisualizerDefaults = {
 	enabled = false,
@@ -1661,13 +1710,13 @@ end;
 local function DoParry()
 	local rem, rargs = resolveRemote();
 	if rem and fireRemote(rem, rargs) then
-		return;
+		return true;
 	end;
 	local btn = resolveBtn();
 	if btn and pressBtn(btn) then
-		return;
+		return true;
 	end;
-	sendFKey();
+	return sendFKey();
 end;
 local function queueParry(isSpam, hasTarget)
 	if not parryState.apEnabled and (not isSpam) then
@@ -1681,7 +1730,10 @@ local function queueParry(isSpam, hasTarget)
 		return;
 	end;
 	parryState.lastQueueTime = now;
-	DoParry();
+	local ok, err = pcall(DoParry);
+	if not ok then
+		apWarn(err);
+	end;
 end;
 local function getHighlightColor(inst)
 	if not inst then
@@ -1869,22 +1921,35 @@ local function flushPendingParries(char, hrp)
 					parryState.pendingSet[ball] = nil;
 					table.remove(list, i);
 				else
-					local targeted = select(1, isBallTargetingYou(ball, char)) or isBallTargetingYouAttr(ball, char);
+					local targeted = false;
+					local okT, resT = pcall(function()
+						return select(1, isBallTargetingYou(ball, char)) or isBallTargetingYouAttr(ball, char);
+					end);
+					if okT then
+						targeted = resT == true;
+					end;
 					if not targeted then
 						if now - (item.t or 0) > 0.2 then
 							parryState.pendingSet[ball] = nil;
 							table.remove(list, i);
 						end;
 					else
-						local rawDist = (ball.Position - hrp.Position).Magnitude;
-						local speed = math.max(ballState.smoothedSpeed[ball] or 0, getTrackedBallVelocity(ball).Magnitude);
-						local hitTime = math.min(item.hitTime or math.huge, speed > 0 and (rawDist / math.max(speed, 1)) or math.huge);
-						local danger = hitTime <= 0.35 or rawDist <= math.max(12, 18 + speed * 0.04);
-						if danger and (hitTime < bestHit or (math.abs(hitTime - bestHit) <= 0.02 and rawDist < bestDist)) then
-							bestIndex = i;
-							bestItem = item;
-							bestHit = hitTime;
-							bestDist = rawDist;
+						local okD, rawDist = pcall(function()
+							return (ball.Position - hrp.Position).Magnitude;
+						end);
+						if not okD or type(rawDist) ~= "number" then
+							parryState.pendingSet[ball] = nil;
+							table.remove(list, i);
+						else
+							local speed = math.max(ballState.smoothedSpeed[ball] or 0, getTrackedBallVelocity(ball).Magnitude);
+							local hitTime = math.min(item.hitTime or math.huge, speed > 0 and (rawDist / math.max(speed, 1)) or math.huge);
+							local danger = hitTime <= 0.35 or rawDist <= math.max(12, 18 + speed * 0.04);
+							if danger and (hitTime < bestHit or (math.abs(hitTime - bestHit) <= 0.02 and rawDist < bestDist)) then
+								bestIndex = i;
+								bestItem = item;
+								bestHit = hitTime;
+								bestDist = rawDist;
+							end;
 						end;
 					end;
 				end;
@@ -1911,9 +1976,19 @@ local function flushPendingParries(char, hrp)
 			ballState.lastParryPerBall[ball] = nowFire;
 			ballState.closeParryBlocked[ball] = true;
 			setActiveParryLock(ball, nowFire, bestItem.hitTime);
-			DoParry();
+			local okP, errP = pcall(DoParry);
+			if not okP then
+				apWarn(errP);
+			end;
 			shots += 1;
 		end;
+	end;
+end;
+
+local function safeFlush(char, hrp)
+	local ok, err = pcall(flushPendingParries, char, hrp);
+	if not ok then
+		apWarn(err);
 	end;
 end;
 local function AutoParryStep(dt)
@@ -1940,12 +2015,11 @@ local function AutoParryStep(dt)
 			clearPendingBall(old);
 			ps.nextPar = 0;
 			ps.clearActiveParryLock(old);
-			flushPendingParries(character, hrp);
+			safeFlush(character, hrp);
 		end;
 	end;
 	local nowFrame = tick();
-	local pingItem = Stats.Network.ServerStatsItem and Stats.Network.ServerStatsItem["Data Ping"];
-	local pingFrame = pingItem and pingItem:GetValue() or 0;
+	local pingFrame = getPing();
 	updateGuiTargets(hrp, hasBalls);
 	local anyTargeted = false;
 	if hasBalls then
@@ -2171,10 +2245,10 @@ local function AutoParryStep(dt)
 						bs.closeParryBlocked[ball] = nil;
 						ps.nextPar = 0;
 						ps.clearActiveParryLock(ball);
-						flushPendingParries(character, hrp);
+						safeFlush(character, hrp);
 					elseif now >= ps.activeParryReleaseAt or (movingAway and rawDist > math.max(10, parryPredictRadius * 0.55)) then
 						ps.clearActiveParryLock(ball);
-						flushPendingParries(character, hrp);
+						safeFlush(character, hrp);
 					end;
 				end;
 				local ignoreMovingAwayForClash = bs.targetStartDist[ball] ~= nil and bs.targetStartDist[ball] <= 50;
@@ -2367,7 +2441,7 @@ local function AutoParryStep(dt)
 			clearPendingBall(old);
 			ps.nextPar = 0;
 			ps.clearActiveParryLock(old);
-			flushPendingParries(character, hrp);
+			safeFlush(character, hrp);
 		end;
 		local focus = focusPosTargeted or focusPos;
 		if focus then
@@ -2472,40 +2546,45 @@ local function AutoParryStep(dt)
 	applyVisualizerVisible(showViz);
 end;
 trackConnection(RunService.Heartbeat:Connect(function(dt)
-	dt = math.clamp(dt or 0, 0, 0.25);
-	local step = parryState.stepDt;
-	local catch = math.max(parryState.maxSub, 12);
-	if dt >= step * catch then
-		parryState.stepAcc = 0;
-		AutoParryStep(dt);
-	else
-		parryState.stepAcc = math.min(parryState.stepAcc + dt, step * catch);
-		local ran = 0;
-		while parryState.stepAcc >= step and ran < catch do
-			AutoParryStep(step);
-			parryState.stepAcc -= step;
-			ran += 1;
-		end;
-		if ran == 0 then
-			AutoParryStep(dt);
-		elseif parryState.stepAcc > step * 0.5 then
-			AutoParryStep(parryState.stepAcc);
+	local ok, err = xpcall(function()
+		dt = math.clamp(dt or 0, 0, 0.25);
+		local step = parryState.stepDt;
+		local catch = math.max(parryState.maxSub, 12);
+		if dt >= step * catch then
 			parryState.stepAcc = 0;
-		end;
-	end;
-	if parryState.spam then
-		parryState.spamAccumulator = math.min(parryState.spamAccumulator + dt * parryState.spamClickRate, parryState.spamClickRate * parryState.spamBufferedWindow);
-		local spamShots = math.floor(parryState.spamAccumulator);
-		if spamShots > parryState.spamMaxBurst then
-			parryState.spamAccumulator = math.min(parryState.spamAccumulator - parryState.spamMaxBurst, parryState.spamClickRate * parryState.spamBufferedWindow);
-			spamShots = parryState.spamMaxBurst;
+			AutoParryStep(dt);
 		else
-			parryState.spamAccumulator -= spamShots;
+			parryState.stepAcc = math.min(parryState.stepAcc + dt, step * catch);
+			local ran = 0;
+			while parryState.stepAcc >= step and ran < catch do
+				AutoParryStep(step);
+				parryState.stepAcc -= step;
+				ran += 1;
+			end;
+			if ran == 0 then
+				AutoParryStep(dt);
+			elseif parryState.stepAcc > step * 0.5 then
+				AutoParryStep(parryState.stepAcc);
+				parryState.stepAcc = 0;
+			end;
 		end;
-		for _ = 1, spamShots do
-			queueParry(true, true);
+		if parryState.spam then
+			parryState.spamAccumulator = math.min(parryState.spamAccumulator + dt * parryState.spamClickRate, parryState.spamClickRate * parryState.spamBufferedWindow);
+			local spamShots = math.floor(parryState.spamAccumulator);
+			if spamShots > parryState.spamMaxBurst then
+				parryState.spamAccumulator = math.min(parryState.spamAccumulator - parryState.spamMaxBurst, parryState.spamClickRate * parryState.spamBufferedWindow);
+				spamShots = parryState.spamMaxBurst;
+			else
+				parryState.spamAccumulator -= spamShots;
+			end;
+			for _ = 1, spamShots do
+				queueParry(true, true);
+			end;
+		else
+			parryState.spamAccumulator = 0;
 		end;
-	else
-		parryState.spamAccumulator = 0;
+	end, debug.traceback);
+	if not ok then
+		apWarn(err);
 	end;
 end));

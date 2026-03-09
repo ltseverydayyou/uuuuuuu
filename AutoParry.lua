@@ -1931,13 +1931,16 @@ local function AutoParryStep(dt)
 		return;
 	end;
 	if ps.activeParryBall and ps.activeParryBall.Parent then
-		local activeTargeted = select(1, isBallTargetingYou(ps.activeParryBall, character)) or isBallTargetingYouAttr(ps.activeParryBall, character);
+		local old = ps.activeParryBall;
+		local activeTargeted = select(1, isBallTargetingYou(old, character)) or isBallTargetingYouAttr(old, character);
 		if not activeTargeted then
-			bs.closeParryBlocked[ps.activeParryBall] = nil;
-			bs.targetedSince[ps.activeParryBall] = nil;
-			bs.targetStartDist[ps.activeParryBall] = nil;
+			bs.closeParryBlocked[old] = nil;
+			bs.targetedSince[old] = nil;
+			bs.targetStartDist[old] = nil;
+			clearPendingBall(old);
 			ps.nextPar = 0;
-			ps.clearActiveParryLock(ps.activeParryBall);
+			ps.clearActiveParryLock(old);
+			flushPendingParries(character, hrp);
 		end;
 	end;
 	local nowFrame = tick();
@@ -2168,8 +2171,10 @@ local function AutoParryStep(dt)
 						bs.closeParryBlocked[ball] = nil;
 						ps.nextPar = 0;
 						ps.clearActiveParryLock(ball);
+						flushPendingParries(character, hrp);
 					elseif now >= ps.activeParryReleaseAt or (movingAway and rawDist > math.max(10, parryPredictRadius * 0.55)) then
 						ps.clearActiveParryLock(ball);
+						flushPendingParries(character, hrp);
 					end;
 				end;
 				local ignoreMovingAwayForClash = bs.targetStartDist[ball] ~= nil and bs.targetStartDist[ball] <= 50;
@@ -2355,9 +2360,15 @@ local function AutoParryStep(dt)
 			end;
 		end;
 		if ps.activeParryBall and (not seen[ps.activeParryBall]) then
-			ps.clearActiveParryLock(ps.activeParryBall);
+			local old = ps.activeParryBall;
+			bs.closeParryBlocked[old] = nil;
+			bs.targetedSince[old] = nil;
+			bs.targetStartDist[old] = nil;
+			clearPendingBall(old);
+			ps.nextPar = 0;
+			ps.clearActiveParryLock(old);
+			flushPendingParries(character, hrp);
 		end;
-		flushPendingParries(character, hrp);
 		local focus = focusPosTargeted or focusPos;
 		if focus then
 			local lookAtBall = CFrame.lookAt(hrp.Position, focus);

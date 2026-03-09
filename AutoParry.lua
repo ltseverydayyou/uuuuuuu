@@ -452,11 +452,12 @@ local parryState = {
 	spamMaxBurst = 512,
 	stepAcc = 0,
 	stepDt = 1 / 120,
-	maxSub = 4,
+	maxSub = 12,
 	activeParryBall = nil,
 	activeParryReleaseAt = 0,
 	clearActiveParryLock = nil,
-	pendingHandoffBall = nil,
+	pendingBalls = {},
+	pendingSet = {},
 	spam = false,
 	apEnabled = true,
 	preclick = true,
@@ -755,6 +756,8 @@ local function setApEnabled(value)
 		table.clear(ballState.baitUntil);
 		table.clear(ballState.awaySince);
 		table.clear(ballState.lastAwayFlag);
+		table.clear(parryState.pendingBalls);
+		table.clear(parryState.pendingSet);
 	end;
 	updateApLabel();
 	saveTopbarConfig();
@@ -1452,6 +1455,8 @@ local function cleanup()
 	topbarState.touchLock = false;
 	RevertLastInputPatch();
 	table.clear(connections);
+	table.clear(parryState.pendingBalls);
+	table.clear(parryState.pendingSet);
 	(getgenv()).AutoParryCleanup = nil;
 end;
 (getgenv()).AutoParryCleanup = cleanup;
@@ -1799,36 +1804,112 @@ local function setActiveParryLock(ball, now, hitTime)
 	local holdFor = math.clamp((hitTime or 0.2) + 0.12, 0.18, 0.9);
 	parryState.activeParryReleaseAt = (now or tick()) + holdFor;
 end;
-local function deferHandoffParry(ball, hitTime)
-	if parryState.pendingHandoffBall == ball then
+local function clearPendingBall(ball)
+	if ball == nil then
 		return;
 	end;
-	parryState.pendingHandoffBall = ball;
-	task.defer(function()
-		if parryState.pendingHandoffBall ~= ball then
-			return;
+	parryState.pendingSet[ball] = nil;
+	for i = #parryState.pendingBalls, 1, -1 do
+		if parryState.pendingBalls[i].ball == ball then
+			table.remove(parryState.pendingBalls, i);
 		end;
-		parryState.pendingHandoffBall = nil;
-		if not parryState.apEnabled then
-			return;
-		end;
-		if not (ball and ball.Parent) then
-			return;
-		end;
-		local currentChar = localPlayer.Character or character;
-		local stillTargeted = select(1, isBallTargetingYou(ball, currentChar)) or isBallTargetingYouAttr(ball, currentChar);
-		if not stillTargeted then
-			return;
-		end;
+	end;
+end;
+
+local function clearPendingBalls()
+	table.clear(parryState.pendingBalls);
+	table.clear(parryState.pendingSet);
+end;
+
+local function queuePendingBall(ball, hitTime, rawDist)
+	if not (ball and ball.Parent) then
+		return;
+	end;
+	local now = tick();
+	local item = parryState.pendingSet[ball];
+	if item then
+		item.hitTime = math.min(item.hitTime or math.huge, hitTime or math.huge);
+		item.rawDist = math.min(item.rawDist or math.huge, rawDist or math.huge);
+		item.t = now;
+		return;
+	end;
+	item = {
+		ball = ball,
+		hitTime = hitTime or math.huge,
+		rawDist = rawDist or math.huge,
+		t = now
+	};
+	parryState.pendingSet[ball] = item;
+	parryState.pendingBalls[(#parryState.pendingBalls) + 1] = item;
+end;
+
+local function flushPendingParries(char, hrp)
+	if not (char and hrp) then
+		return;
+	end;
+	local list = parryState.pendingBalls;
+	local shots = 0;
+	local maxShots = 2;
+	while shots < maxShots do
 		local now = tick();
-		parryState.lastQueueTime = now;
-		parryState.nextPar = now + parryState.parCd;
-		parryState.lastParryTime = now;
-		ballState.lastParryPerBall[ball] = now;
-		ballState.closeParryBlocked[ball] = true;
-		setActiveParryLock(ball, now, hitTime);
-		DoParry();
-	end);
+		local bestIndex;
+		local bestItem;
+		local bestHit = math.huge;
+		local bestDist = math.huge;
+		for i = #list, 1, -1 do
+			local item = list[i];
+			local ball = item and item.ball;
+			if not (ball and ball.Parent) then
+				if ball ~= nil then
+					parryState.pendingSet[ball] = nil;
+				end;
+				table.remove(list, i);
+			else
+				local targeted = select(1, isBallTargetingYou(ball, char)) or isBallTargetingYouAttr(ball, char);
+				if not targeted then
+					if now - (item.t or 0) > 0.2 then
+						parryState.pendingSet[ball] = nil;
+						table.remove(list, i);
+					end;
+				else
+					local rawDist = (ball.Position - hrp.Position).Magnitude;
+					local speed = math.max(ballState.smoothedSpeed[ball] or 0, getTrackedBallVelocity(ball).Magnitude);
+					local hitTime = math.min(item.hitTime or math.huge, speed > 0 and (rawDist / math.max(speed, 1)) or math.huge);
+					local danger = hitTime <= 0.35 or rawDist <= math.max(12, 18 + speed * 0.04);
+					if danger and (hitTime < bestHit or (math.abs(hitTime - bestHit) <= 0.02 and rawDist < bestDist)) then
+						bestIndex = i;
+						bestItem = item;
+						bestHit = hitTime;
+						bestDist = rawDist;
+					end;
+				end;
+			end;
+		end;
+		if not bestIndex or not bestItem then
+			break;
+		end;
+		local ball = bestItem.ball;
+		table.remove(list, bestIndex);
+		if ball ~= nil then
+			parryState.pendingSet[ball] = nil;
+		end;
+		local nowFire = tick();
+		local lastBallFire = ballState.lastParryPerBall[ball] or (-math.huge);
+		if nowFire - lastBallFire > 0.035 then
+			if parryState.activeParryBall and parryState.activeParryBall ~= ball then
+				ballState.closeParryBlocked[parryState.activeParryBall] = nil;
+				parryState.clearActiveParryLock(parryState.activeParryBall);
+			end;
+			parryState.lastQueueTime = nowFire;
+			parryState.nextPar = nowFire + parryState.parCd;
+			parryState.lastParryTime = nowFire;
+			ballState.lastParryPerBall[ball] = nowFire;
+			ballState.closeParryBlocked[ball] = true;
+			setActiveParryLock(ball, nowFire, bestItem.hitTime);
+			DoParry();
+			shots += 1;
+		end;
+	end;
 end;
 local function AutoParryStep(dt)
 	local ps = parryState;
@@ -2103,11 +2184,10 @@ local function AutoParryStep(dt)
 				local innerEmergency = (not ps.preclick) and targeted and rawDist <= math.max(8, predictRadius * 0.4);
 				local fastApproach = targeted and approaching and (hitTime <= 0.22 or rawDist <= parryPredictRadius * 0.95);
 				local handoffZone = rawDist <= math.max(12, parryPredictRadius * 0.95);
-				if ps.activeParryBall ~= nil and ps.activeParryBall ~= ball and (targeted or attrNow) and handoffZone then
-					bs.closeParryBlocked[ps.activeParryBall] = nil;
-					ps.nextPar = 0;
-					ps.clearActiveParryLock(ps.activeParryBall);
-					deferHandoffParry(ball, hitTime);
+				if (targeted or attrNow) and handoffZone then
+					queuePendingBall(ball, hitTime, rawDist);
+				elseif (not ball.Parent) or rawDist > math.max(22, parryPredictRadius * 1.35) then
+					clearPendingBall(ball);
 				end;
 				local parryTriggered = false;
 				if (ps.activeParryBall == nil or ps.activeParryBall == ball or now >= ps.activeParryReleaseAt) and innerEmergency and hasTargetLock and (not bs.closeParryBlocked[ball]) and (not movingAwayBlocked) then
@@ -2120,6 +2200,7 @@ local function AutoParryStep(dt)
 						ps.lastParryTime = nowInner;
 						parryTriggered = true;
 						setActiveParryLock(ball, nowInner, hitTime);
+						clearPendingBall(ball);
 						queueParry(false, true);
 					end;
 				end;
@@ -2170,6 +2251,7 @@ local function AutoParryStep(dt)
 							ps.lastParryTime = nowTry;
 							parryTriggered = true;
 							setActiveParryLock(ball, nowTry, hitTime);
+							clearPendingBall(ball);
 							queueParry(false, true);
 							return;
 						end;
@@ -2199,6 +2281,7 @@ local function AutoParryStep(dt)
 							ps.lastParryTime = nowInner;
 							parryTriggered = true;
 							setActiveParryLock(ball, nowInner, hitTime);
+							clearPendingBall(ball);
 							queueParry(false, true);
 						end;
 					end;
@@ -2257,6 +2340,7 @@ local function AutoParryStep(dt)
 						ps.lastParryTime = nowAttr;
 						parryTriggered = true;
 						setActiveParryLock(ball, nowAttr, hitTime);
+						clearPendingBall(ball);
 						queueParry(false, true);
 					end;
 				end;
@@ -2266,6 +2350,7 @@ local function AutoParryStep(dt)
 		if ps.activeParryBall and (not seen[ps.activeParryBall]) then
 			ps.clearActiveParryLock(ps.activeParryBall);
 		end;
+		flushPendingParries(character, hrp);
 		local focus = focusPosTargeted or focusPos;
 		if focus then
 			local lookAtBall = CFrame.lookAt(hrp.Position, focus);
@@ -2331,6 +2416,7 @@ local function AutoParryStep(dt)
 		bs.lastAwayFlag = {};
 		ps.nextPar = 0;
 		ps.clearActiveParryLock(nil);
+		clearPendingBalls();
 		vs.ringLimited = false;
 		ps.resetToken = 0;
 		rangeText.Text = "0";
@@ -2368,12 +2454,26 @@ local function AutoParryStep(dt)
 	applyVisualizerVisible(showViz);
 end;
 trackConnection(RunService.Heartbeat:Connect(function(dt)
-	parryState.stepAcc += dt;
-	local i = 0;
-	while parryState.stepAcc >= parryState.stepDt and i < parryState.maxSub do
-		AutoParryStep(parryState.stepDt);
-		parryState.stepAcc -= parryState.stepDt;
-		i += 1;
+	dt = math.clamp(dt or 0, 0, 0.25);
+	local step = parryState.stepDt;
+	local catch = math.max(parryState.maxSub, 12);
+	if dt >= step * catch then
+		parryState.stepAcc = 0;
+		AutoParryStep(dt);
+	else
+		parryState.stepAcc = math.min(parryState.stepAcc + dt, step * catch);
+		local ran = 0;
+		while parryState.stepAcc >= step and ran < catch do
+			AutoParryStep(step);
+			parryState.stepAcc -= step;
+			ran += 1;
+		end;
+		if ran == 0 then
+			AutoParryStep(dt);
+		elseif parryState.stepAcc > step * 0.5 then
+			AutoParryStep(parryState.stepAcc);
+			parryState.stepAcc = 0;
+		end;
 	end;
 	if parryState.spam then
 		parryState.spamAccumulator = math.min(parryState.spamAccumulator + dt * parryState.spamClickRate, parryState.spamClickRate * parryState.spamBufferedWindow);

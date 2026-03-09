@@ -1865,22 +1865,27 @@ local function flushPendingParries(char, hrp)
 				end;
 				table.remove(list, i);
 			else
-				local targeted = select(1, isBallTargetingYou(ball, char)) or isBallTargetingYouAttr(ball, char);
-				if not targeted then
-					if now - (item.t or 0) > 0.2 then
-						parryState.pendingSet[ball] = nil;
-						table.remove(list, i);
-					end;
+				if ball == parryState.activeParryBall or ballState.closeParryBlocked[ball] then
+					parryState.pendingSet[ball] = nil;
+					table.remove(list, i);
 				else
-					local rawDist = (ball.Position - hrp.Position).Magnitude;
-					local speed = math.max(ballState.smoothedSpeed[ball] or 0, getTrackedBallVelocity(ball).Magnitude);
-					local hitTime = math.min(item.hitTime or math.huge, speed > 0 and (rawDist / math.max(speed, 1)) or math.huge);
-					local danger = hitTime <= 0.35 or rawDist <= math.max(12, 18 + speed * 0.04);
-					if danger and (hitTime < bestHit or (math.abs(hitTime - bestHit) <= 0.02 and rawDist < bestDist)) then
-						bestIndex = i;
-						bestItem = item;
-						bestHit = hitTime;
-						bestDist = rawDist;
+					local targeted = select(1, isBallTargetingYou(ball, char)) or isBallTargetingYouAttr(ball, char);
+					if not targeted then
+						if now - (item.t or 0) > 0.2 then
+							parryState.pendingSet[ball] = nil;
+							table.remove(list, i);
+						end;
+					else
+						local rawDist = (ball.Position - hrp.Position).Magnitude;
+						local speed = math.max(ballState.smoothedSpeed[ball] or 0, getTrackedBallVelocity(ball).Magnitude);
+						local hitTime = math.min(item.hitTime or math.huge, speed > 0 and (rawDist / math.max(speed, 1)) or math.huge);
+						local danger = hitTime <= 0.35 or rawDist <= math.max(12, 18 + speed * 0.04);
+						if danger and (hitTime < bestHit or (math.abs(hitTime - bestHit) <= 0.02 and rawDist < bestDist)) then
+							bestIndex = i;
+							bestItem = item;
+							bestHit = hitTime;
+							bestDist = rawDist;
+						end;
 					end;
 				end;
 			end;
@@ -2158,6 +2163,7 @@ local function AutoParryStep(dt)
 					movingAway = false;
 				end;
 				if ps.activeParryBall == ball then
+					clearPendingBall(ball);
 					if (not targeted) and (not attrNow) then
 						bs.closeParryBlocked[ball] = nil;
 						ps.nextPar = 0;
@@ -2184,9 +2190,10 @@ local function AutoParryStep(dt)
 				local innerEmergency = (not ps.preclick) and targeted and rawDist <= math.max(8, predictRadius * 0.4);
 				local fastApproach = targeted and approaching and (hitTime <= 0.22 or rawDist <= parryPredictRadius * 0.95);
 				local handoffZone = rawDist <= math.max(12, parryPredictRadius * 0.95);
-				if (targeted or attrNow) and handoffZone then
+				local isOtherBall = ps.activeParryBall ~= nil and ps.activeParryBall ~= ball;
+				if isOtherBall and (targeted or attrNow) and handoffZone and (not bs.closeParryBlocked[ball]) then
 					queuePendingBall(ball, hitTime, rawDist);
-				elseif (not ball.Parent) or rawDist > math.max(22, parryPredictRadius * 1.35) then
+				elseif ps.pendingSet[ball] and (((not targeted) and (not attrNow) and ps.activeParryBall == nil) or (not ball.Parent) or rawDist > math.max(22, parryPredictRadius * 1.35)) then
 					clearPendingBall(ball);
 				end;
 				local parryTriggered = false;

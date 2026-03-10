@@ -1281,6 +1281,32 @@ local function getTrackedBallVelocity(part)
 	end;
 	return part.AssemblyLinearVelocity or part.Velocity or Vector3.zero;
 end;
+local function hasTargetMarker(ball)
+	if not (ball and ball.Parent) then
+		return false;
+	end;
+	local okA, attrs = pcall(function()
+		return ball:GetAttributes();
+	end);
+	if okA and type(attrs) == "table" then
+		for k, v in pairs(attrs) do
+			if typeof(k) == "string" and k:lower() == "target" and v ~= nil then
+				return true;
+			end;
+		end;
+	end;
+	local okH, kids = pcall(function()
+		return ball:GetChildren();
+	end);
+	if okH and type(kids) == "table" then
+		for _, ch in ipairs(kids) do
+			if ch:IsA("Highlight") and ch.Enabled ~= false and (ch.FillTransparency or 1) < 0.9 then
+				return true;
+			end;
+		end;
+	end;
+	return false;
+end;
 local function isSameBallCluster(a, b)
 	if a == b then
 		return true;
@@ -1288,18 +1314,22 @@ local function isSameBallCluster(a, b)
 	if not (a and b and a.Parent and b.Parent and a:IsA("BasePart") and b:IsA("BasePart")) then
 		return false;
 	end;
+	if hasTargetMarker(a) or hasTargetMarker(b) then
+		return false;
+	end;
+	local posGap = (a.Position - b.Position).Magnitude;
 	local maxSize = math.max(a.Size.Magnitude, b.Size.Magnitude);
-	local posThreshold = math.max(1.75, math.min(maxSize * 0.25, 3));
-	if (a.Position - b.Position).Magnitude > posThreshold then
+	local posThreshold = math.max(0.08, math.min(maxSize * 0.04, 0.35));
+	if posGap > posThreshold then
 		return false;
 	end;
 	local velA = getTrackedBallVelocity(a);
 	local velB = getTrackedBallVelocity(b);
 	local maxSpeed = math.max(velA.Magnitude, velB.Magnitude);
-	if maxSpeed < 4 then
-		return true;
+	if maxSpeed < 2 then
+		return posGap <= math.max(0.08, math.min(maxSize * 0.03, 0.22));
 	end;
-	local velThreshold = math.max(6, maxSpeed * 0.22);
+	local velThreshold = math.max(1.25, maxSpeed * 0.08);
 	return (velA - velB).Magnitude <= velThreshold;
 end;
 local function splitBallClusters(list)
@@ -1364,15 +1394,20 @@ local function appendPrimaryBall(list)
 	end;
 	if winner then
 		ballState.mainRealBall[winner] = true;
+		ballState.ballList[(#ballState.ballList) + 1] = winner;
 		for i = 1, count do
 			local part = list[i];
 			if part ~= winner then
-				ballState.mainRealBall[part] = nil;
-				ballState.ballsMap[part] = nil;
-				cleanupBallVisual(part);
+				if hasTargetMarker(part) then
+					ballState.mainRealBall[part] = true;
+					ballState.ballList[(#ballState.ballList) + 1] = part;
+				else
+					ballState.mainRealBall[part] = nil;
+					ballState.ballsMap[part] = nil;
+					cleanupBallVisual(part);
+				end;
 			end;
 		end;
-		ballState.ballList[(#ballState.ballList) + 1] = winner;
 	end;
 end;
 local function getBalls()

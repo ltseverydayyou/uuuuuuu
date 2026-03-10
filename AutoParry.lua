@@ -2126,20 +2126,21 @@ local function flushPendingParries(char, hrp)
 
 		if (not ballHot(ball, nowFire)) and nowFire - lastBallFire > 0.035 and (nowFire >= parryState.nextPar or emergency) then
 			if parryState.activeParryBall and parryState.activeParryBall ~= ball then
-			ballState.closeParryBlocked[parryState.activeParryBall] = nil;
-			parryState.clearActiveParryLock(parryState.activeParryBall);
+				ballState.closeParryBlocked[parryState.activeParryBall] = nil;
+				parryState.clearActiveParryLock(parryState.activeParryBall);
+			end;
+			parryState.lastQueueTime = nowFire;
+			parryState.nextPar = nowFire + parryState.parCd;
+			parryState.lastParryTime = nowFire;
+			markParry(ball, nowFire, fireHit, spd);
+			ballState.closeParryBlocked[ball] = true;
+			setActiveParryLock(ball, nowFire, fireHit);
+			local okP, errP = pcall(DoParry);
+			if not okP then
+				apWarn(errP);
+			end;
+			shots += 1;
 		end;
-		parryState.lastQueueTime = nowFire;
-		parryState.nextPar = nowFire + parryState.parCd;
-		parryState.lastParryTime = nowFire;
-		markParry(ball, nowFire, fireHit, spd);
-		ballState.closeParryBlocked[ball] = true;
-		setActiveParryLock(ball, nowFire, fireHit);
-		local okP, errP = pcall(DoParry);
-		if not okP then
-			apWarn(errP);
-		end;
-		shots += 1;
 	end;
 end;
 

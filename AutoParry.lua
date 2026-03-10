@@ -2120,23 +2120,26 @@ local function flushPendingParries(char, hrp)
 		local nowFire = tick();
 		local lastBallFire = ballState.lastParryPerBall[ball] or (-math.huge);
 		local spd = math.max(ballState.smoothedSpeed[ball] or 0, getTrackedBallVelocity(ball).Magnitude);
-		if (not ballHot(ball, nowFire)) and nowFire - lastBallFire > 0.035 then
+		local fireHit = bestHit or bestItem.hitTime or math.huge;
+		local fireDist = bestDist or bestItem.rawDist or math.huge;
+		local emergency = fireHit <= 0.55 or fireDist <= math.max(16, 20 + spd * 0.04);
+
+		if (not ballHot(ball, nowFire)) and nowFire - lastBallFire > 0.035 and (nowFire >= parryState.nextPar or emergency) then
 			if parryState.activeParryBall and parryState.activeParryBall ~= ball then
-				ballState.closeParryBlocked[parryState.activeParryBall] = nil;
-				parryState.clearActiveParryLock(parryState.activeParryBall);
-			end;
-			parryState.lastQueueTime = nowFire;
-			parryState.nextPar = nowFire + parryState.parCd;
-			parryState.lastParryTime = nowFire;
-			markParry(ball, nowFire, bestItem.hitTime, spd);
-			ballState.closeParryBlocked[ball] = true;
-			setActiveParryLock(ball, nowFire, bestItem.hitTime);
-			local okP, errP = pcall(DoParry);
-			if not okP then
-				apWarn(errP);
-			end;
-			shots += 1;
+			ballState.closeParryBlocked[parryState.activeParryBall] = nil;
+			parryState.clearActiveParryLock(parryState.activeParryBall);
 		end;
+		parryState.lastQueueTime = nowFire;
+		parryState.nextPar = nowFire + parryState.parCd;
+		parryState.lastParryTime = nowFire;
+		markParry(ball, nowFire, fireHit, spd);
+		ballState.closeParryBlocked[ball] = true;
+		setActiveParryLock(ball, nowFire, fireHit);
+		local okP, errP = pcall(DoParry);
+		if not okP then
+			apWarn(errP);
+		end;
+		shots += 1;
 	end;
 end;
 
@@ -2439,11 +2442,16 @@ local function AutoParryStep(dt)
 				local targetSnap = targeted and inParryPredict and settledInPredict and (hitTime <= 0.6 or rawDist <= math.max(10, parryPredictRadius * 0.6));
 				local innerEmergency = (not ps.preclick) and targeted and rawDist <= math.max(8, predictRadius * 0.4);
 				local fastApproach = targeted and approaching and (hitTime <= 0.22 or rawDist <= parryPredictRadius * 0.95);
-				local handoffZone = rawDist <= math.max(12, parryPredictRadius * 0.95);
 				local isOtherBall = ps.activeParryBall ~= nil and ps.activeParryBall ~= ball;
-				if isOtherBall and (targeted or attrNow) and handoffZone and (not bs.closeParryBlocked[ball]) and (not hot) then
+				local handoffFar = rawDist <= math.max(40, parryPredictRadius * 2.25);
+				local handoffSoon = hitTime <= math.clamp(1.45 - math.min(speed, 35) * 0.01, 0.85, 1.45);
+				if isOtherBall and (targeted or attrNow) and handoffFar and handoffSoon and (not bs.closeParryBlocked[ball]) and (not hot) then
 					queuePendingBall(ball, hitTime, rawDist);
-				elseif ps.pendingSet[ball] and (((not targeted) and (not attrNow) and ps.activeParryBall == nil) or (not ball.Parent) or rawDist > math.max(22, parryPredictRadius * 1.35)) then
+					local relaxCd = now + math.clamp(hitTime * 0.3, 0.05, 0.2);
+					if ps.nextPar > relaxCd then
+						ps.nextPar = relaxCd;
+					end;
+				elseif ps.pendingSet[ball] and (((not targeted) and (not attrNow) and ps.activeParryBall == nil) or (not ball.Parent) or rawDist > math.max(52, parryPredictRadius * 2.8)) then
 					clearPendingBall(ball);
 				end;
 				local parryTriggered = false;
@@ -2491,7 +2499,8 @@ local function AutoParryStep(dt)
 					local slowVeryClose = targeted and rawDist <= math.max(10, parryPredictRadius * 0.5) and speed > 0 and speed <= 6 and hitTime <= 1.6;
 					local slowMid = targeted and hasTargetLock and approaching and speed >= 7 and speed <= 26 and hitTime <= 1.15 and rawDist <= math.max(20, parryPredictRadius * 0.92);
 					local slowMid2 = targeted and hasTargetLock and speed >= 7 and speed <= 26 and hitTime <= 0.95 and rawDist <= math.max(18, parryPredictRadius * 0.88);
-					local canPredict = approaching and nearPredict and settledInPredict and highlightsMatch and hasTargetLock and (outsideRing or fastApproach) and (speed >= 12 or hitTime <= 0.25 or ringTimeSoon or fastApproach) or closeHitSafe and hasTargetLock or veryFastHit and hasTargetLock or targetSnap and hasTargetLock or innerEmergency and hasTargetLock or slowClose or slowVeryClose or slowMid or slowMid2;
+					local handoffSlow = isOtherBall and targeted and hasTargetLock and speed >= 2 and speed <= 35 and rawDist <= math.max(30, parryPredictRadius * 1.5) and hitTime <= 1.55;
+					local canPredict = approaching and nearPredict and settledInPredict and highlightsMatch and hasTargetLock and (outsideRing or fastApproach) and (speed >= 12 or hitTime <= 0.25 or ringTimeSoon or fastApproach) or closeHitSafe and hasTargetLock or veryFastHit and hasTargetLock or targetSnap and hasTargetLock or innerEmergency and hasTargetLock or slowClose or slowVeryClose or slowMid or slowMid2 or handoffSlow;
 					if not canPredict and targeted and hasTargetLock and (not innerEmergency) then
 						if rawDist <= math.max(18, parryPredictRadius * 0.75) and hitTime <= 1.8 and speed >= 0.75 then
 							canPredict = true;

@@ -3190,7 +3190,7 @@ function i2p(i, customgen)
     end
 
     if i == Players.LocalPlayer then
-        return '__lt.cs("Players", cloneref).LocalPlayer'
+        return 'game:GetService("Players").LocalPlayer'
     end
     if
         i == workspace
@@ -3215,9 +3215,9 @@ function i2p(i, customgen)
             cur = cur.Parent
         end
         if plr == Players.LocalPlayer then
-            return '__lt.cs("Players", cloneref).LocalPlayer.Character' .. out
+            return 'game:GetService("Players").LocalPlayer.Character' .. out
         else
-            return ('__lt.cs("Players", cloneref):GetPlayerByUserId(%d).Character'):format(
+            return ('game:GetService("Players"):GetPlayerByUserId(%d).Character'):format(
                 plr.UserId
             ) .. out
         end
@@ -3233,7 +3233,7 @@ function i2p(i, customgen)
     while cur and cur.Parent and cur.Parent ~= game do
         out = stepFromParentToChild(cur.Parent, cur) .. out
         if Players.LocalPlayer and cur:IsDescendantOf(Players.LocalPlayer) then
-            return '__lt.cs("Players", cloneref).LocalPlayer' .. out
+            return 'game:GetService("Players").LocalPlayer' .. out
         end
         cur = cur.Parent
     end
@@ -3275,7 +3275,7 @@ function i2p(i, customgen)
     end
 
     if Players.LocalPlayer and i:IsDescendantOf(Players.LocalPlayer) then
-        base = '__lt.cs("Players", cloneref).LocalPlayer'
+        base = 'game:GetService("Players").LocalPlayer'
         descend = ''
         node = i
         while node and node ~= Players.LocalPlayer do
@@ -4292,8 +4292,8 @@ if not getgenv().SimpleSpyExecuted then
                 or Players:GetPropertyChangedSignal('LocalPlayer'):Wait()
                 or Players.LocalPlayer
             generation = {
-                [OldDebugId(lp)] = '__lt.cs("Players", cloneref).LocalPlayer',
-                [OldDebugId(lp:GetMouse())] = '__lt.cs("Players", cloneref).LocalPlayer:GetMouse',
+                [OldDebugId(lp)] = 'game:GetService("Players").LocalPlayer',
+                [OldDebugId(lp:GetMouse())] = 'game:GetService("Players").LocalPlayer:GetMouse',
                 [OldDebugId(game)] = 'game',
                 [OldDebugId(SafeGetService('Workspace'))] = 'workspace',
             }

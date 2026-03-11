@@ -363,7 +363,27 @@ end;
 local guiCHECKINGAHHHHH = function()
 	return gethui and gethui() or (__lt.cs("CoreGui", cloneref)):FindFirstChildWhichIsA("ScreenGui") or __lt.cs("CoreGui", cloneref) or (__lt.cs("Players", cloneref)).LocalPlayer:FindFirstChildWhichIsA("PlayerGui");
 end;
+local function purgeOldAutoParryArtifacts()
+	local ok, guiParent = pcall(guiCHECKINGAHHHHH);
+	if ok and guiParent then
+		for _, old in ipairs(guiParent:GetDescendants()) do
+			if old.Name == "Range" or old.Name == "Distance" then
+				pcall(function()
+					old:Destroy();
+				end);
+			end;
+		end;
+	end;
+	for _, old in ipairs(workspace:GetDescendants()) do
+		if old:IsA("BasePart") and (old.Name == "Visualizer" or old.Name == "VisualizerNoUnit" or old.Name == "VisualizerFollowBall") then
+			pcall(function()
+				old:Destroy();
+			end);
+		end;
+	end;
+end;
 do
+	purgeOldAutoParryArtifacts();
 	local ok, guiParent = pcall(guiCHECKINGAHHHHH);
 	if ok and guiParent then
 		for _, n in ipairs({
@@ -1494,13 +1514,31 @@ local function cleanup()
 	ballState.ballsMap = {};
 	ballState.ballList = {};
 	ballState.mainRealBall = {};
+	visualizerState.visualizerAttached = false;
+	visualizerState.ringLimited = false;
+	visualizerState.ringSizeState = {};
 	pcall(function()
-		rangeGui.Parent = nil;
+		rangeGui.Adornee = nil;
+		rangeGui:Destroy();
 	end);
 	pcall(function()
 		cleanupAllBallVisuals();
+		visualizerState.ballVis = {};
 		ringPlayer:Destroy();
 		ringPlayerNoUnit:Destroy();
+	end);
+	pcall(function()
+		iconHide(topbarState.topbarIconInstance);
+		topbarState.topbarIconInstance = nil;
+		topbarState.apOption = nil;
+		topbarState.spamOption = nil;
+		topbarState.spamRateOption = nil;
+		topbarState.spamRateDropdown = nil;
+		topbarState.preclickOption = nil;
+		topbarState.visualizerOption = nil;
+		topbarState.modeOption = nil;
+		topbarState.modeDropdown = nil;
+		topbarState.touchOpt = nil;
 	end);
 	pcall(function()
 		iconHide(topbarState.debugIconInstance);
@@ -1512,6 +1550,7 @@ local function cleanup()
 	end);
 	topbarState.touchLock = false;
 	RevertLastInputPatch();
+	purgeOldAutoParryArtifacts();
 	table.clear(connections);
 	table.clear(parryState.pendingBalls);
 	table.clear(parryState.pendingSet);
@@ -1839,7 +1878,40 @@ local function getCachedBallTargetState(ball, char)
 	end;
 	return nil;
 end;
-local function queueBallTargetStateCheck(ball, char, frameId)
+local queueBallTargetStateCheck;
+local function refreshBallTargetState(ball, char, frameId)
+	if not (ball and ball.Parent and char and char.Parent) then
+		ballState.targetStateCache[ball] = nil;
+		return nil;
+	end;
+	local okTarget, targeted, ballHighlight, charHighlight, ballColor, charColor = pcall(isBallTargetingYou, ball, char);
+	local okAttr, attrNow = pcall(isBallTargetingYouAttr, ball, char);
+	if not (ball and ball.Parent and char and char.Parent) then
+		ballState.targetStateCache[ball] = nil;
+		return nil;
+	end;
+	local state = {
+		char = char,
+		targeted = okTarget and targeted == true or false,
+		attrNow = okAttr and attrNow == true or false,
+		ballHighlight = okTarget and ballHighlight or nil,
+		charHighlight = okTarget and charHighlight or nil,
+		ballColor = okTarget and ballColor or nil,
+		charColor = okTarget and charColor or nil,
+		frameId = frameId,
+		t = tick()
+	};
+	ballState.targetStateCache[ball] = state;
+	return state;
+end;
+local function getBallTargetState(ball, char, frameId, forceSync)
+	if forceSync then
+		return refreshBallTargetState(ball, char, frameId);
+	end;
+	queueBallTargetStateCheck(ball, char, frameId);
+	return getCachedBallTargetState(ball, char);
+end;
+queueBallTargetStateCheck = function(ball, char, frameId)
 	if not (ball and ball.Parent and char and char.Parent) then
 		ballState.targetStateCache[ball] = nil;
 		ballState.targetStateDirty[ball] = nil;
@@ -1863,25 +1935,7 @@ local function queueBallTargetStateCheck(ball, char, frameId)
 			end;
 			ballState.targetStateDirty[ball] = nil;
 			local reqChar = request.char;
-			if not (ball and ball.Parent and reqChar and reqChar.Parent) then
-				ballState.targetStateCache[ball] = nil;
-			else
-				local okTarget, targeted, ballHighlight, charHighlight, ballColor, charColor = pcall(isBallTargetingYou, ball, reqChar);
-				local okAttr, attrNow = pcall(isBallTargetingYouAttr, ball, reqChar);
-				if ball and ball.Parent and reqChar and reqChar.Parent then
-					ballState.targetStateCache[ball] = {
-						char = reqChar,
-						targeted = okTarget and targeted == true or false,
-						attrNow = okAttr and attrNow == true or false,
-						ballHighlight = okTarget and ballHighlight or nil,
-						charHighlight = okTarget and charHighlight or nil,
-						ballColor = okTarget and ballColor or nil,
-						charColor = okTarget and charColor or nil,
-						frameId = request.frameId,
-						t = tick()
-					};
-				end;
-			end;
+			refreshBallTargetState(ball, reqChar, request.frameId);
 		end;
 	end);
 end;
@@ -1983,8 +2037,7 @@ local function flushPendingParries(char, hrp)
 					parryState.pendingSet[ball] = nil;
 					table.remove(list, i);
 				else
-					queueBallTargetStateCheck(ball, char, parryState.curFrame);
-					local targetState = getCachedBallTargetState(ball, char);
+					local targetState = getBallTargetState(ball, char, parryState.curFrame, true);
 					local targetKnown = targetState ~= nil;
 					local targeted = targetKnown and (targetState.targeted or targetState.attrNow) or false;
 					if not targeted then
@@ -2066,8 +2119,7 @@ local function AutoParryStep(dt)
 	end;
 	if ps.activeParryBall and ps.activeParryBall.Parent then
 		local old = ps.activeParryBall;
-		queueBallTargetStateCheck(old, character, ps.curFrame);
-		local activeState = getCachedBallTargetState(old, character);
+		local activeState = getBallTargetState(old, character, ps.curFrame, true);
 		local activeTargeted = activeState and (activeState.targeted or activeState.attrNow);
 		if activeState and (not activeTargeted) then
 			bs.closeParryBlocked[old] = nil;
@@ -2085,6 +2137,7 @@ local function AutoParryStep(dt)
 	local anyTargeted = false;
 	if hasBalls then
 		local seen = {};
+		local pendingImmediate = false;
 		local focusPos = nil;
 		local focusDist = math.huge;
 		local focusPosTargeted = nil;
@@ -2206,8 +2259,8 @@ local function AutoParryStep(dt)
 				bs.wasInPredict[ball] = nearPredict;
 				local settleTime = math.clamp(0.003 + ping * 0.0002, 0.002, 0.014);
 				local settledInPredict = nearPredict and bs.predictEnterAt[ball] and now - bs.predictEnterAt[ball] >= settleTime;
-				queueBallTargetStateCheck(ball, character, ps.curFrame);
-				local targetState = getCachedBallTargetState(ball, character);
+				local forceTargetRefresh = rawDist <= math.max(20, parryPredictRadius * 1.2) or ps.activeParryBall == ball or ps.pendingSet[ball] ~= nil;
+				local targetState = getBallTargetState(ball, character, ps.curFrame, forceTargetRefresh);
 				local targetKnown = targetState ~= nil;
 				local targeted = targetKnown and targetState.targeted or false;
 				local ballHighlight = targetKnown and targetState.ballHighlight or nil;
@@ -2236,6 +2289,10 @@ local function AutoParryStep(dt)
 					local highlightsMatchNow = targeted;
 					if highlightsMatchNow and (not lastMatch) then
 						bs.lastParryPerBall[ball] = -math.huge;
+						bs.closeParryBlocked[ball] = nil;
+						if now < ps.nextPar then
+							ps.nextPar = now;
+						end;
 						bs.targetedSince[ball] = now;
 						bs.targetStartDist[ball] = rawDist;
 					elseif not highlightsMatchNow and lastMatch then
@@ -2250,9 +2307,18 @@ local function AutoParryStep(dt)
 					bs.lastHighlightMatch[ball] = highlightsMatchNow;
 					bs.lastCharHighlightEnabled[ball] = charHighlightEnabled;
 					local prevAttrState = bs.lastAttrTargeted[ball];
-					if attrNow and (not prevAttrState) and (bs.targetStartDist[ball] == nil) then
+					if attrNow and (not prevAttrState) then
+						bs.lastParryPerBall[ball] = -math.huge;
+						bs.closeParryBlocked[ball] = nil;
+						if now < ps.nextPar then
+							ps.nextPar = now;
+						end;
+					end;
+					if attrNow and (bs.targetStartDist[ball] == nil) then
 						bs.targetStartDist[ball] = rawDist;
 					elseif not attrNow and prevAttrState and (not targeted) then
+						bs.lastParryPerBall[ball] = -math.huge;
+						ps.nextPar = 0;
 						bs.targetStartDist[ball] = nil;
 					end;
 					bs.lastAttrTargeted[ball] = attrNow;
@@ -2344,6 +2410,13 @@ local function AutoParryStep(dt)
 				local isOtherBall = ps.activeParryBall ~= nil and ps.activeParryBall ~= ball;
 				if targetKnown and isOtherBall and (targeted or attrNow) and handoffZone and (not bs.closeParryBlocked[ball]) then
 					queuePendingBall(ball, hitTime, rawDist);
+					local urgentHandoff = rawDist <= math.max(8, parryPredictRadius * 0.55) or hitTime <= 0.12;
+					if urgentHandoff then
+						pendingImmediate = true;
+						ps.activeParryReleaseAt = math.min(ps.activeParryReleaseAt, now);
+					else
+						ps.activeParryReleaseAt = math.min(ps.activeParryReleaseAt, now + 0.035);
+					end;
 				elseif ps.pendingSet[ball] and (((targetKnown and (not targeted) and (not attrNow) and ps.activeParryBall == nil)) or (not ball.Parent) or rawDist > math.max(22, parryPredictRadius * 1.35)) then
 					clearPendingBall(ball);
 				end;
@@ -2493,6 +2566,9 @@ local function AutoParryStep(dt)
 				end;
 				attemptAttrParry();
 			end;
+		end;
+		if #ps.pendingBalls > 0 and (pendingImmediate or ps.activeParryBall == nil or nowFrame >= ps.activeParryReleaseAt) then
+			safeFlush(character, hrp);
 		end;
 		if ps.activeParryBall and (not seen[ps.activeParryBall]) then
 			local old = ps.activeParryBall;

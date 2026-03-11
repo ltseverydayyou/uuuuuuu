@@ -251,8 +251,6 @@ local topbarState = {
 	topbarIconInstance = nil,
 	apOption = nil,
 	spamOption = nil,
-	spamRateOption = nil,
-	spamRateDropdown = nil,
 	preclickOption = nil,
 	visualizerOption = nil,
 	modeOption = nil,
@@ -512,13 +510,6 @@ local parryState = {
 	lastParryTime = 0,
 	curFrame = 0,
 	lastQueueTime = 0,
-	spamAccumulator = 0,
-	spamClickRate = 350,
-	spamClickRateMin = 25,
-	spamClickRateMax = 500,
-	spamClickRateStep = 25,
-	spamBufferedWindow = 0.05,
-	spamMaxBurst = 512,
 	stepAcc = 0,
 	stepDt = 1 / 120,
 	maxSub = 12,
@@ -531,18 +522,6 @@ local parryState = {
 	apEnabled = true,
 	preclick = true,
 	apState = "Idle"
-};
-local spamRatePresets = {
-	50,
-	100,
-	150,
-	200,
-	250,
-	300,
-	350,
-	400,
-	450,
-	500
 };
 local ballState = {
 	wasInPredict = {},
@@ -610,14 +589,6 @@ local function updateSpamLabel()
 	end;
 	topbarState.spamOption:setLabel("Spam: " .. (parryState.spam and "ON" or "OFF"));
 end;
-local function clampSpamClickRate(value)
-	local num = tonumber(value);
-	if not num then
-		return parryState.spamClickRate;
-	end;
-	num = math.floor(num + 0.5);
-	return math.clamp(num, parryState.spamClickRateMin, parryState.spamClickRateMax);
-end;
 local function applyVisualizerProfileValues(name)
 	local profile = VisualizerProfiles[name];
 	if not profile then
@@ -634,7 +605,6 @@ local function buildTopbarConfigSnapshot()
 	return {
 		apEnabled = parryState.apEnabled,
 		spam = parryState.spam,
-		spamClickRate = parryState.spamClickRate,
 		preclick = parryState.preclick,
 		visualizerEnabled = isVisualizerEnabled(),
 		visualizerProfile = visualizerConfig.profile or VisualizerDefaults.profile,
@@ -655,7 +625,6 @@ local function normalizeTopbarConfig(raw)
 	return {
 		apEnabled = raw.apEnabled ~= false,
 		spam = raw.spam == true,
-		spamClickRate = clampSpamClickRate(raw.spamClickRate),
 		preclick = raw.preclick ~= false,
 		visualizerEnabled = visualizerEnabled,
 		visualizerProfile = visualizerProfile,
@@ -704,7 +673,6 @@ end;
 local loadedTopbarConfig = loadTopbarConfig();
 parryState.apEnabled = loadedTopbarConfig.apEnabled;
 parryState.spam = loadedTopbarConfig.spam;
-parryState.spamClickRate = loadedTopbarConfig.spamClickRate;
 parryState.preclick = loadedTopbarConfig.preclick;
 topbarState.debugEnabled = loadedTopbarConfig.debugEnabled;
 topbarState.touchLock = loadedTopbarConfig.touchLock;
@@ -713,35 +681,6 @@ visualizerConfig.enabled = loadedTopbarConfig.visualizerEnabled;
 (getgenv()).visualizer = visualizerConfig;
 if topbarState.touchLock then
 	ApplyLastInputPatch();
-end;
-local function updateSpamRateLabel()
-	if not topbarState.spamRateOption then
-		return;
-	end;
-	topbarState.spamRateOption:setLabel("Spam CPS: " .. tostring(parryState.spamClickRate));
-end;
-local function setSpamClickRate(value)
-	parryState.spamClickRate = clampSpamClickRate(value);
-	parryState.spamAccumulator = math.min(parryState.spamAccumulator, parryState.spamClickRate * parryState.spamBufferedWindow);
-	updateSpamRateLabel();
-	saveTopbarConfig();
-end;
-local function shiftSpamClickRate(delta)
-	setSpamClickRate(parryState.spamClickRate + delta);
-end;
-local function cycleSpamClickRate()
-	for index, preset in ipairs(spamRatePresets) do
-		if parryState.spamClickRate < preset then
-			setSpamClickRate(preset);
-			return;
-		end;
-		if parryState.spamClickRate == preset then
-			local nextIndex = index % (#spamRatePresets) + 1;
-			setSpamClickRate(spamRatePresets[nextIndex]);
-			return;
-		end;
-	end;
-	setSpamClickRate(spamRatePresets[1]);
 end;
 local function updatePreclickLabel()
 	if not topbarState.preclickOption then
@@ -839,7 +778,6 @@ local function setApEnabled(value)
 end;
 local function toggleSpam()
 	parryState.spam = not parryState.spam;
-	parryState.spamAccumulator = 0;
 	updateSpamLabel();
 	updateRingColors();
 	saveTopbarConfig();
@@ -960,25 +898,6 @@ local function setupTopbarIcon()
 	topbarState.spamOption:oneClick(function()
 		toggleSpam();
 	end);
-	topbarState.spamRateOption = (dropdown:new()):setLabel("Spam CPS: " .. tostring(parryState.spamClickRate));
-	topbarState.spamRateOption:oneClick(function()
-		cycleSpamClickRate();
-	end);
-	topbarState.spamRateDropdown = topbarState.spamRateOption:addMenu();
-	local slowerSpamOption = (topbarState.spamRateDropdown:new()):setLabel("-" .. tostring(parryState.spamClickRateStep) .. " CPS");
-	slowerSpamOption:oneClick(function()
-		shiftSpamClickRate(-parryState.spamClickRateStep);
-	end);
-	local fasterSpamOption = (topbarState.spamRateDropdown:new()):setLabel("+" .. tostring(parryState.spamClickRateStep) .. " CPS");
-	fasterSpamOption:oneClick(function()
-		shiftSpamClickRate(parryState.spamClickRateStep);
-	end);
-	for _, preset in ipairs(spamRatePresets) do
-		local presetOption = (topbarState.spamRateDropdown:new()):setLabel(tostring(preset) .. " CPS");
-		presetOption:oneClick(function()
-			setSpamClickRate(preset);
-		end);
-	end;
 	topbarState.preclickOption = (dropdown:new()):setLabel("Preclick: ON");
 	topbarState.preclickOption:oneClick(function()
 		togglePreclick();
@@ -1004,7 +923,6 @@ local function setupTopbarIcon()
 	end;
 	updateApLabel();
 	updateSpamLabel();
-	updateSpamRateLabel();
 	updatePreclickLabel();
 	updateVisualizerLabel();
 	updateModeLabel();
@@ -1532,8 +1450,6 @@ local function cleanup()
 		topbarState.topbarIconInstance = nil;
 		topbarState.apOption = nil;
 		topbarState.spamOption = nil;
-		topbarState.spamRateOption = nil;
-		topbarState.spamRateDropdown = nil;
 		topbarState.preclickOption = nil;
 		topbarState.visualizerOption = nil;
 		topbarState.modeOption = nil;
@@ -2688,8 +2604,8 @@ local function AutoParryStep(dt)
 	updateRingColors();
 	applyVisualizerVisible(showViz);
 end;
-local parryStepSignal = RunService.PreSimulation or RunService.Heartbeat;
-trackConnection(parryStepSignal:Connect(function(dt)
+local StepSignal = RunService.PreSimulation or RunService.Heartbeat;
+trackConnection(StepSignal:Connect(function(dt)
 	local ok, err = xpcall(function()
 		dt = math.clamp(dt or 0, 0, 0.25);
 		local step = parryState.stepDt;
@@ -2712,23 +2628,11 @@ trackConnection(parryStepSignal:Connect(function(dt)
 				parryState.stepAcc = 0;
 			end;
 		end;
-		if parryState.spam then
-			parryState.spamAccumulator = math.min(parryState.spamAccumulator + dt * parryState.spamClickRate, parryState.spamClickRate * parryState.spamBufferedWindow);
-			local spamShots = math.floor(parryState.spamAccumulator);
-			if spamShots > parryState.spamMaxBurst then
-				parryState.spamAccumulator = math.min(parryState.spamAccumulator - parryState.spamMaxBurst, parryState.spamClickRate * parryState.spamBufferedWindow);
-				spamShots = parryState.spamMaxBurst;
-			else
-				parryState.spamAccumulator -= spamShots;
-			end;
-			for _ = 1, spamShots do
-				queueParry(true, true);
-			end;
-		else
-			parryState.spamAccumulator = 0;
-		end;
 	end, debug.traceback);
 	if not ok then
 		apWarn(err);
 	end;
+end));
+trackConnection(StepSignal:Connect(function()
+	task.defer(DoParry);
 end));

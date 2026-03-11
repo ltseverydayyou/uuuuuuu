@@ -2634,5 +2634,7 @@ trackConnection(StepSignal:Connect(function(dt)
 	end;
 end));
 trackConnection(StepSignal:Connect(function()
-	task.defer(DoParry);
+	if parryState.spam then
+		task.defer(DoParry);
+	end;
 end));

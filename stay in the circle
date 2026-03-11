@@ -152,7 +152,7 @@ if game.GameId == 5205364928 then
 			(getgenv()).aura = val;
 		end
 	});
-	rs.Stepped:Connect(function()
+	rs.PreSimulation:Connect(function()
 		if (getgenv()).kill_aura == true then
 			for _, v in ipairs(GetPlrs()) do
 				local char = (getgenv()).Char;
@@ -173,7 +173,7 @@ if game.GameId == 5205364928 then
 			end;
 		end;
 	end);
-	rs.Stepped:Connect(function()
+	rs.PreSimulation:Connect(function()
 		if (getgenv()).plrtween == true then
 			local char = (getgenv()).Char;
 			for _, v in ipairs(GetPlrs()) do
@@ -210,7 +210,7 @@ if game.GameId == 5205364928 then
 			end);
 		end;
 	end);
-	rs.Stepped:Connect(function()
+	rs.PreSimulation:Connect(function()
 		if (getgenv()).tween == true then
 			local char = (getgenv()).Char;
 			local circle;
@@ -227,7 +227,7 @@ if game.GameId == 5205364928 then
 		end;
 		wait(0.5);
 	end);
-	rs.Stepped:Connect(function()
+	rs.PreSimulation:Connect(function()
 		if (getgenv()).tele == true then
 			local char = (getgenv()).Char;
 			local circle;
@@ -242,7 +242,7 @@ if game.GameId == 5205364928 then
 		end;
 		wait(0.5);
 	end);
-	rs.Stepped:Connect(function()
+	rs.PreSimulation:Connect(function()
 		if (getgenv()).ragdoll == true then
 			local plr = plrs.LocalPlayer;
 			local char = plr.Character or plr.CharacterAdded:Wait();

@@ -1550,7 +1550,7 @@ local function canvas()
 	if _G._uv_canvas and _G._uv_canvas.Disconnect then
 		_G._uv_canvas:Disconnect();
 	end;
-	_G._uv_canvas = RS.Stepped:Connect(function()
+	_G._uv_canvas = RS.PreSimulation:Connect(function()
 		local ly = LST:FindFirstChildOfClass("UIListLayout");
 		if ly then
 			LST.CanvasSize = UDim2.new(0, 0, 0, ly.AbsoluteContentSize.Y);

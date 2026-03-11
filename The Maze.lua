@@ -184,7 +184,7 @@ if game.GameId == 319401355 then
 		end);
 	end;
 	local function mainScript()
-		runservice.Stepped:Connect(function()
+		runservice.PreSimulation:Connect(function()
 			if scriptEnabled then
 				fireclickdetector(tpp);
 			end;
@@ -235,14 +235,14 @@ if game.GameId == 319401355 then
 		end);
 		lp.Backpack.ChildAdded:Connect(function(hh)
 			if scriptEnabled and hh:IsA("Tool") and hh.Name == "Axe" then
-				runservice.Stepped:Wait();
+				runservice.PreSimulation:Wait();
 				hh.Parent = (ClonedService("Players")).LocalPlayer.Character;
 			end;
 		end);
 		lp.CharacterAdded:Connect(function(hb)
 			lp.Backpack.ChildAdded:Connect(function(hh)
 				if scriptEnabled and hh:IsA("Tool") and hh.Name == "Axe" then
-					runservice.Stepped:Wait();
+					runservice.PreSimulation:Wait();
 					hh.Parent = (ClonedService("Players")).LocalPlayer.Character;
 				end;
 			end);

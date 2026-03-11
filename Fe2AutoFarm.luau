@@ -142,7 +142,7 @@ do
 		if not on then
 			return;
 		end;
-		NoClipConn = RunService.Stepped:Connect(function()
+		NoClipConn = RunService.PreSimulation:Connect(function()
 			local c = LP.Character;
 			if not c then
 				return;
@@ -355,7 +355,7 @@ local function onRespawn(char)
 		if NoClipConn then
 			NoClipConn:Disconnect();
 		end;
-		NoClipConn = RunService.Stepped:Connect(function()
+		NoClipConn = RunService.PreSimulation:Connect(function()
 			local c = LP.Character;
 			if not c then
 				return;

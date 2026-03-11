@@ -24,7 +24,7 @@ local WS = sgs("Workspace");
 local TSvc = sgs("TextService");
 local RS = sgs("RunService");
 pcall(function()
-	RS.Stepped:Connect(function()
+	RS.PreSimulation:Connect(function()
 		SG:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false);
 	end);
 end);

@@ -330,7 +330,7 @@ do
 		spamOn = v;
 		if spamOn then
 			if not spamConn and Net then
-				spamConn = RS.Stepped:Connect(function()
+				spamConn = RS.PreSimulation:Connect(function()
 					sendParry();
 				end);
 			end;

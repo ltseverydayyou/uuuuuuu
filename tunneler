@@ -264,7 +264,7 @@ if game.GameId == 1524368576 then
 		end);
 	end;
 	local function updatePortalLvl()
-		rs.Stepped:Connect(function()
+		rs.PreSimulation:Connect(function()
 			if checkUI("PortalLevel") then
 				ui.PortalLevel.Value = (getgenv()).gunLevel;
 			end;

@@ -374,7 +374,7 @@ menustuff(SRSFrame);
 SRSFrame.Position = UDim2.new(0.5, (-283) / 2 + 5, 0.5, (-260) / 2 + 5);
 con1 = (SRStxt:GetPropertyChangedSignal("Text")):Connect(updTxtScale);
 spawn(updTxtScale);
-connect = (ClonedService("RunService")).Stepped:Connect(function()
+connect = (ClonedService("RunService")).PreSimulation:Connect(function()
 	SRSList.CanvasSize = UDim2.new(0, 0, 0, (SRSList:FindFirstChildOfClass("UIListLayout")).AbsoluteContentSize.Y);
 	SRSresult.CanvasSize = UDim2.new(0, 0, 0, (SRSresult:FindFirstChildOfClass("UIListLayout")).AbsoluteContentSize.Y);
 end);

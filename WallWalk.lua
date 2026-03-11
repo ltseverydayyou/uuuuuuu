@@ -7141,7 +7141,7 @@ function _sounds()
 				activeState = state;
 			end;
 		end);
-		local steppedConn = RunService.Stepped:Connect(function(_, worldDt)
+		local steppedConn = RunService.PreSimulation:Connect(function(_, worldDt)
 			for sound in pairs(playingLoopedSounds) do
 				local updater = loopedSoundUpdaters[sound];
 				if updater then

@@ -93,7 +93,7 @@ if H then
 			return O(self, ...);
 		end);
 	end;
-	RV.Stepped:Connect(function()
+	RV.PreSimulation:Connect(function()
 		if not E then
 			local r = __lt.cm("ReplicatedStorage", "FindFirstChild", "Remotes");
 			E = r and r:FindFirstChild("EditValueCall") or E;

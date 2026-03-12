@@ -186,6 +186,7 @@ DefaultSettings = (function()
 			TeleportToOffset = Vector3.new(0,0,0),
 			ClickToRename = true,
 			AutoUpdateSearch = true,
+			KeyboardShortcuts = true,
 			AutoUpdateMode = 0, -- 0 Default, 1 no tree update, 2 no descendant events, 3 frozen
 			PartSelectionBox = true,
 			GuiSelectionBox = true,
@@ -1533,6 +1534,9 @@ Main = (function()
 		end
 		if type(explorer.AutoUpdateSearch) ~= "boolean" then
 			explorer.AutoUpdateSearch = defaultExplorer.AutoUpdateSearch
+		end
+		if type(explorer.KeyboardShortcuts) ~= "boolean" then
+			explorer.KeyboardShortcuts = defaultExplorer.KeyboardShortcuts
 		end
 		if type(explorer.PartSelectionBox) ~= "boolean" then
 			explorer.PartSelectionBox = defaultExplorer.PartSelectionBox

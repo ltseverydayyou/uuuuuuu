@@ -44,7 +44,7 @@ local function main()
 	local nilNode = {Obj = Instance.new("Folder")}
 	local idCounter = 0
 	local scrollV,scrollH,clipboard
-	local renameBox,renamingNode,searchFunc
+	local renameBox,renamingNode,searchFunc,shortcutInputCon
 	local sortingEnabled,autoUpdateSearch
 	local table,math = table,math
 	local nilMap,nilCons = {},{}
@@ -874,13 +874,65 @@ local function main()
 		end
 	end
 
-	Explorer.ShowRightClick = function(MousePos)
-		local Mouse = MousePos or Main.Mouse
-		local context = Explorer.RightClickContext
-		local absoluteSize = context.Gui.AbsoluteSize
-		context.MaxHeight = (absoluteSize.Y <= 600 and (absoluteSize.Y - 40)) or nil
-		context:Clear()
+	local shortcutCache = {}
+	local function isAltDown()
+		local userInput = service.UserInputService
+		return userInput:IsKeyDown(Enum.KeyCode.LeftAlt) or userInput:IsKeyDown(Enum.KeyCode.RightAlt)
+	end
 
+	local function parseShortcut(shortcut)
+		local cached = shortcutCache[shortcut]
+		if cached ~= nil then
+			return cached or nil
+		end
+		if type(shortcut) ~= "string" or #shortcut == 0 then
+			shortcutCache[shortcut] = false
+			return nil
+		end
+
+		local parsed = {
+			Ctrl = false,
+			Shift = false,
+			Alt = false,
+			KeyCode = nil
+		}
+		for token in shortcut:gmatch("[^%+]+") do
+			local lowerToken = token:lower():gsub("%s+", "")
+			if lowerToken == "ctrl" or lowerToken == "control" then
+				parsed.Ctrl = true
+			elseif lowerToken == "shift" then
+				parsed.Shift = true
+			elseif lowerToken == "alt" then
+				parsed.Alt = true
+			elseif lowerToken == "del" or lowerToken == "delete" then
+				parsed.KeyCode = Enum.KeyCode.Delete
+			elseif lowerToken == "f2" then
+				parsed.KeyCode = Enum.KeyCode.F2
+			elseif #lowerToken == 1 then
+				parsed.KeyCode = Enum.KeyCode[lowerToken:upper()]
+			end
+		end
+
+		if not parsed.KeyCode then
+			shortcutCache[shortcut] = false
+			return nil
+		end
+
+		shortcutCache[shortcut] = parsed
+		return parsed
+	end
+
+	local function shortcutMatchesInput(input, shortcut)
+		local parsed = parseShortcut(shortcut)
+		if not parsed or input.KeyCode ~= parsed.KeyCode then
+			return false
+		end
+
+		return Lib.IsCtrlDown() == parsed.Ctrl and Lib.IsShiftDown() == parsed.Shift and isAltDown() == parsed.Alt
+	end
+
+	Explorer.PopulateRightClickContext = function(context)
+		context:Clear()
 		local sList = selection.List
 		local sMap = selection.Map
 		local emptyClipboard = #clipboard == 0
@@ -1000,7 +1052,44 @@ local function main()
 			context:AddRegistered("REFRESH_NIL")
 			context:AddRegistered("HIDE_NIL")
 		end
+	end
 
+	Explorer.TryHandleShortcut = function(input)
+		if Settings.Explorer.KeyboardShortcuts == false or input.UserInputType ~= Enum.UserInputType.Keyboard then
+			return false
+		end
+		if service.UserInputService:GetFocusedTextBox() or not Explorer.Active or #selection.List == 0 then
+			return false
+		end
+
+		local context = Explorer.RightClickContext
+		if not context then
+			return false
+		end
+
+		Explorer.PopulateRightClickContext(context)
+		for i = 1,#context.Items do
+			local item = context.Items[i]
+			if not item.Divider and not item.Disabled and shortcutMatchesInput(input, item.Shortcut) then
+				if context.Gui.Parent then
+					context:Hide()
+				end
+				if item.OnClick then
+					item.OnClick(item.Name)
+					return true
+				end
+			end
+		end
+
+		return false
+	end
+
+	Explorer.ShowRightClick = function(MousePos)
+		local Mouse = MousePos or Main.Mouse
+		local context = Explorer.RightClickContext
+		local absoluteSize = context.Gui.AbsoluteSize
+		context.MaxHeight = (absoluteSize.Y <= 600 and (absoluteSize.Y - 40)) or nil
+		Explorer.PopulateRightClickContext(context)
 		Explorer.LastRightClickX, Explorer.LastRightClickY = Mouse.X, Mouse.Y
 		context:Show(Mouse.X, Mouse.Y)
 	end
@@ -1636,6 +1725,13 @@ local function main()
 		end})
 
 		Explorer.RightClickContext = context
+		if shortcutInputCon then
+			shortcutInputCon:Disconnect()
+		end
+		shortcutInputCon = service.UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
+			if gameProcessedEvent then return end
+			Explorer.TryHandleShortcut(input)
+		end)
 	end
 
 	Explorer.HideNilInstances = function()
@@ -1870,32 +1966,107 @@ local function main()
 	--[[
 		Headers, Setups, Predicate, ObjectDefs
 	]]
+	local resolvedSearchClassNames = {}
+	local function getSearchNameQuery(argString)
+		if type(argString) ~= "string" then return "" end
+		local match = string.match
+		return (match(argString, "^%s*%S+%s+(.+)$") or ""):match("^%s*(.-)%s*$") or ""
+	end
+
+	local function appendNameSearchPredicate(filterData, nameQuery)
+		nameQuery = tostring(nameQuery or "")
+		if #nameQuery == 0 then
+			return filterData
+		end
+
+		local cleanString = nameQuery:gsub("\"","\\\""):gsub("\n","\\n"):lower()
+		local headers = {}
+		local objectDefs = {}
+		local setups = {}
+
+		if filterData.Headers then
+			for i = 1,#filterData.Headers do
+				headers[#headers + 1] = filterData.Headers[i]
+			end
+		end
+		if filterData.ObjectDefs then
+			for i = 1,#filterData.ObjectDefs do
+				objectDefs[#objectDefs + 1] = filterData.ObjectDefs[i]
+			end
+		end
+		if filterData.Setups then
+			for i = 1,#filterData.Setups do
+				setups[#setups + 1] = filterData.Setups[i]
+			end
+		end
+
+		headers[#headers + 1] = "local lower = string.lower"
+		headers[#headers + 1] = "local find = string.find"
+		headers[#headers + 1] = "local tostring = tostring"
+		objectDefs[#objectDefs + 1] = "local lowerName = lower(tostring(obj))"
+
+		return {
+			Headers = headers,
+			ObjectDefs = objectDefs,
+			Setups = setups,
+			Predicate = "(" .. filterData.Predicate .. ") and find(lowerName,\"" .. cleanString .. "\",1,true)"
+		}
+	end
+
+	local function resolveSearchClassName(argString, allowPartial)
+		if type(argString) ~= "string" then return end
+
+		local lower = string.lower
+		local find = string.find
+		local match = string.match
+		local classQuery = match(argString, "^%s*(%S+)")
+		if not classQuery then return end
+		classQuery = lower(classQuery)
+		local cacheKey = (allowPartial and "partial:" or "exact:") .. classQuery
+		local cached = resolvedSearchClassNames[cacheKey]
+		if cached ~= nil then
+			return cached or nil
+		end
+
+		local partialClassName
+		for class,_ in pairs(API.Classes) do
+			local cName = lower(class)
+			if cName == classQuery then
+				resolvedSearchClassNames[cacheKey] = class
+				return class
+			elseif allowPartial and find(cName,classQuery,1,true) then
+				partialClassName = class
+			end
+		end
+
+		resolvedSearchClassNames[cacheKey] = partialClassName or false
+		return partialClassName
+	end
+
+	local function buildIsAComparison(argString)
+		local className = resolveSearchClassName(argString, true)
+		if not className then return end
+
+		return appendNameSearchPredicate({
+			Headers = {"local isa = game.IsA"},
+			Predicate = "isa(obj,'" .. className .. "')"
+		}, getSearchNameQuery(argString))
+	end
+
+	local function buildClassNameComparison(argString)
+		local className = resolveSearchClassName(argString, true)
+		if not className then return end
+
+		return appendNameSearchPredicate({
+			Predicate = "obj.ClassName == '" .. className .. "'"
+		}, getSearchNameQuery(argString))
+	end
+
 	Explorer.SearchFilters = {
 		Comparison = {
-			["isa"] = function(argString)
-				local lower = string.lower
-				local find = string.find
-				local classQuery = string.split(argString)[1]
-				if not classQuery then return end
-				classQuery = lower(classQuery)
-
-				local className
-				for class,_ in pairs(API.Classes) do
-					local cName = lower(class)
-					if cName == classQuery then
-						className = class
-						break
-					elseif find(cName,classQuery,1,true) then
-						className = class
-					end
-				end
-				if not className then return end
-
-				return {
-					Headers = {"local isa = game.IsA"},
-					Predicate = "isa(obj,'"..className.."')"
-				}
-			end,
+			["isa"] = buildIsAComparison,
+			["is"] = buildIsAComparison,
+			["classname"] = buildClassNameComparison,
 			["remotes"] = function(argString)
 				return {
 					Headers = {"local isa = game.IsA"},
@@ -1953,6 +2124,11 @@ local function main()
 				Predicate = "isSpec"..n
 			}
 		end,
+		ColonComparison = {
+			["classname"] = buildClassNameComparison,
+			["is"] = buildIsAComparison,
+			["isa"] = buildIsAComparison,
+		},
 	}
 
 	if not env.getloadedmodules then
@@ -1979,6 +2155,7 @@ local function main()
 		}
 		local filterCount = 0
 		local compFilters = Explorer.SearchFilters.Comparison
+		local colonCompFilters = Explorer.SearchFilters.ColonComparison
 		local specFilters = Explorer.SearchFilters.Specific
 		local init = 1
 		local lastOp = nil
@@ -2059,35 +2236,46 @@ local function main()
 				if qTerm then
 					processFilter(Explorer.SearchFilters.Default(qTerm,true))
 				else
-					local x,y = find(term,"%S+")
-					if x then
-						local first = sub(term,x,y)
-						local specifier = sub(first,1,1) == "/" and lower(sub(first,2))
-						local compFunc = specifier and compFilters[specifier]
-						local specFunc = specifier and specFilters[specifier]
-
-						if compFunc then
-							local argStr = sub(term,y+2)
-							local ret = compFunc(inQuotes(argStr) or argStr)
-							if ret then
-								processFilter(ret)
-							else
-								finalPredicate = finalPredicate.."false"
-							end
-						elseif specFunc then
-							local argStr = sub(term,y+2)
-							local ret = specFunc(inQuotes(argStr) or argStr)
-							if ret then
-								if not specMap[term] then
-									specFilterList[#specFilterList + 1] = ret
-									specMap[term] = #specFilterList
-								end
-								processFilter(Explorer.SearchFilters.SpecificDefault(specMap[term]))
-							else
-								finalPredicate = finalPredicate.."false"
-							end
+					local colonSpecifier, colonArg = match(term,"^([%w_]+)%s*:%s*(.-)$")
+					local colonCompFunc = colonSpecifier and colonCompFilters[lower(colonSpecifier)]
+					if colonCompFunc then
+						local ret = colonCompFunc(inQuotes(colonArg) or colonArg)
+						if ret then
+							processFilter(ret)
 						else
-							processFilter(Explorer.SearchFilters.Default(term))
+							finalPredicate = finalPredicate.."false"
+						end
+					else
+						local x,y = find(term,"%S+")
+						if x then
+							local first = sub(term,x,y)
+							local specifier = sub(first,1,1) == "/" and lower(sub(first,2))
+							local compFunc = specifier and compFilters[specifier]
+							local specFunc = specifier and specFilters[specifier]
+
+							if compFunc then
+								local argStr = sub(term,y+2)
+								local ret = compFunc(inQuotes(argStr) or argStr)
+								if ret then
+									processFilter(ret)
+								else
+									finalPredicate = finalPredicate.."false"
+								end
+							elseif specFunc then
+								local argStr = sub(term,y+2)
+								local ret = specFunc(inQuotes(argStr) or argStr)
+								if ret then
+									if not specMap[term] then
+										specFilterList[#specFilterList + 1] = ret
+										specMap[term] = #specFilterList
+									end
+									processFilter(Explorer.SearchFilters.SpecificDefault(specMap[term]))
+								else
+									finalPredicate = finalPredicate.."false"
+								end
+							else
+								processFilter(Explorer.SearchFilters.Default(term))
+							end
 						end
 					end
 				end				
@@ -2241,19 +2429,259 @@ return search]==]
 	end
 
 	Explorer.InitSearch = function()
-		local searchBox = Explorer.GuiElems.ToolBar.SearchFrame.SearchBox
+		local SearchFrame = Explorer.GuiElems.ToolBar.SearchFrame
+		local searchBox = SearchFrame.SearchBox
 		Explorer.GuiElems.SearchBar = searchBox
+		local suggestionEntries = {}
+		local suggestionButtons = {}
+		local suggestionHover = false
+		local suggestionPicking = false
+		local searchFocused = false
+		local classSuggestions = {}
+		if API and type(API.Classes) == "table" then
+			for className in pairs(API.Classes) do
+				classSuggestions[#classSuggestions + 1] = {
+					Name = className,
+					Lower = className:lower()
+				}
+			end
+			table.sort(classSuggestions, function(a,b)
+				return a.Name < b.Name
+			end)
+		end
+
+		local suggestionFrame = createSimple("Frame", {
+			Name = "Suggestions",
+			BackgroundColor3 = Color3.fromRGB(18, 20, 28),
+			BorderSizePixel = 0,
+			ClipsDescendants = true,
+			Parent = SearchFrame,
+			Position = UDim2.new(0,0,1,4),
+			Size = UDim2.new(1,0,0,0),
+			Visible = false,
+			ZIndex = 25
+		})
+		createSimple("UICorner", {
+			CornerRadius = UDim.new(0,6),
+			Parent = suggestionFrame
+		})
+		createSimple("UIStroke", {
+			Color = Color3.fromRGB(49, 52, 67),
+			Parent = suggestionFrame,
+			Thickness = 1
+		})
+		suggestionFrame.MouseEnter:Connect(function()
+			suggestionHover = true
+		end)
+		suggestionFrame.MouseLeave:Connect(function()
+			suggestionHover = false
+		end)
+
+		local function setSuggestionButtonStyle(button, index, hovering)
+			local isPrimary = index == 1
+			if hovering then
+				button.BackgroundColor3 = Color3.fromRGB(52, 56, 76)
+				button.BackgroundTransparency = 0
+			elseif isPrimary then
+				button.BackgroundColor3 = Color3.fromRGB(41, 44, 58)
+				button.BackgroundTransparency = 0
+			else
+				button.BackgroundColor3 = Color3.fromRGB(18, 20, 28)
+				button.BackgroundTransparency = 1
+			end
+		end
+
+		local function hideSuggestions()
+			suggestionEntries = {}
+			suggestionFrame.Visible = false
+			suggestionFrame.Size = UDim2.new(1,0,0,0)
+			for _, button in ipairs(suggestionButtons) do
+				button.Visible = false
+			end
+		end
+
+		local function getActiveClassSearch(text)
+			local commaIndex
+			for i = #text, 1, -1 do
+				if text:sub(i,i) == "," then
+					commaIndex = i
+					break
+				end
+			end
+
+			local prefixText = commaIndex and text:sub(1, commaIndex) or ""
+			local segmentText = commaIndex and text:sub(commaIndex + 1) or text
+			local leadingWhitespace = segmentText:match("^(%s*)") or ""
+			local trimmedSegment = segmentText:match("^%s*(.-)%s*$") or ""
+			local filterName, filterQuery = trimmedSegment:match("^([%a_]+)%s*:%s*(.-)$")
+			filterName = filterName and filterName:lower()
+			if filterName == "class" or filterName == "classname" or filterName == "is" or filterName == "isa" then
+				return {
+					Before = prefixText,
+					LeadingWhitespace = leadingWhitespace,
+					Filter = filterName,
+					Query = filterQuery or ""
+				}
+			end
+		end
+
+		local function collectClassSuggestions(filterQuery)
+			local lowerQuery = tostring(filterQuery or ""):lower()
+			if #lowerQuery == 0 then
+				return {}
+			end
+
+			local prefixMatches = {}
+			local containsMatches = {}
+			for _, entry in ipairs(classSuggestions) do
+				local position = entry.Lower:find(lowerQuery, 1, true)
+				if position then
+					if position == 1 then
+						prefixMatches[#prefixMatches + 1] = entry.Name
+					else
+						containsMatches[#containsMatches + 1] = entry.Name
+					end
+				end
+			end
+
+			local results = {}
+			for _, name in ipairs(prefixMatches) do
+				results[#results + 1] = name
+				if #results >= 6 then
+					return results
+				end
+			end
+			for _, name in ipairs(containsMatches) do
+				results[#results + 1] = name
+				if #results >= 6 then
+					break
+				end
+			end
+
+			return results
+		end
+
+		local function applySuggestion(className)
+			local activeSearch = getActiveClassSearch(searchBox.Text or "")
+			if not activeSearch then
+				hideSuggestions()
+				return
+			end
+
+			local newText = activeSearch.Before .. activeSearch.LeadingWhitespace .. activeSearch.Filter .. ":" .. className
+			suggestionPicking = false
+			searchBox.Text = newText
+			hideSuggestions()
+			Explorer.DoSearch(newText)
+			task.defer(function()
+				pcall(function()
+					searchBox:CaptureFocus()
+				end)
+			end)
+		end
+
+		local function ensureSuggestionButton(index)
+			local button = suggestionButtons[index]
+			if button then
+				return button
+			end
+
+			button = createSimple("TextButton", {
+				AutoButtonColor = false,
+				BackgroundColor3 = Color3.fromRGB(18, 20, 28),
+				BorderSizePixel = 0,
+				Font = Enum.Font.SourceSans,
+				Name = "Suggestion" .. index,
+				Parent = suggestionFrame,
+				Position = UDim2.new(0,6,0,5 + (index - 1) * 24),
+				Size = UDim2.new(1,-12,0,22),
+				Text = "",
+				TextColor3 = Color3.fromRGB(235, 235, 235),
+				TextSize = 14,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				ZIndex = 26
+			})
+			createSimple("UICorner", {
+				CornerRadius = UDim.new(0,6),
+				Parent = button
+			})
+			button.MouseEnter:Connect(function()
+				suggestionHover = true
+				setSuggestionButtonStyle(button, index, true)
+			end)
+			button.MouseLeave:Connect(function()
+				suggestionHover = false
+				setSuggestionButtonStyle(button, index, false)
+			end)
+			button.MouseButton1Down:Connect(function()
+				suggestionPicking = true
+			end)
+			button.MouseButton1Click:Connect(function()
+				local selected = suggestionEntries[index]
+				if selected then
+					applySuggestion(selected)
+				end
+			end)
+			suggestionButtons[index] = button
+			return button
+		end
+
+		local function updateSuggestions()
+			if not searchFocused then
+				hideSuggestions()
+				return
+			end
+
+			local activeSearch = getActiveClassSearch(searchBox.Text or "")
+			if not activeSearch then
+				hideSuggestions()
+				return
+			end
+
+			local results = collectClassSuggestions(activeSearch.Query)
+			if #results == 0 then
+				hideSuggestions()
+				return
+			end
+
+			suggestionEntries = results
+			suggestionFrame.Visible = true
+			suggestionFrame.Size = UDim2.new(1,0,0,10 + #results * 24)
+			for index = 1, #results do
+				local button = ensureSuggestionButton(index)
+				button.Text = results[index]
+				button.Visible = true
+				button.Position = UDim2.new(0,6,0,5 + (index - 1) * 24)
+				setSuggestionButtonStyle(button, index, false)
+			end
+			for index = #results + 1, #suggestionButtons do
+				suggestionButtons[index].Visible = false
+			end
+		end
 
 		Lib.ViewportTextBox.convert(searchBox)
 
 		searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+			updateSuggestions()
 			if autoUpdateSearch then
 				Explorer.DoSearch(searchBox.Text)
 			end
 		end)
 
+		searchBox.Focused:Connect(function()
+			searchFocused = true
+			updateSuggestions()
+		end)
+
 		searchBox.FocusLost:Connect(function()
+			searchFocused = false
 			Explorer.DoSearch(searchBox.Text)
+			task.delay(0.1, function()
+				if (not searchFocused) and (not suggestionHover) and (not suggestionPicking) then
+					hideSuggestions()
+				end
+				suggestionPicking = false
+			end)
 		end)
 	end
 

@@ -611,6 +611,12 @@ local function main()
 			persistSettings()
 		end)
 
+		local keyboardShortcuts = AddCheckbox("Keyboard Shortcuts", Settings.Explorer.KeyboardShortcuts ~= false)
+		keyboardShortcuts.OnInput:Connect(function()
+			Settings.Explorer.KeyboardShortcuts = keyboardShortcuts.Toggled
+			persistSettings()
+		end)
+
 		local autoUpdateModeLabels = {
 			[0] = "Default",
 			[1] = "Quiet Refresh",

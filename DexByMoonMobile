@@ -100,7 +100,7 @@ local EmbeddedModules = {
 			};
 			local idCounter = 0;
 			local scrollV, scrollH, clipboard;
-			local renameBox, renamingNode, searchFunc;
+			local renameBox, renamingNode, searchFunc, shortcutInputCon;
 			local lastContextOpenTime, lastContextOpenPos = 0, nil;
 			local sortingEnabled, autoUpdateSearch;
 			local table, math = table, math;
@@ -968,17 +968,60 @@ local EmbeddedModules = {
 					(coroutine.wrap(Explorer.PerformUpdate))(true);
 				end;
 			end;
-			Explorer.ShowRightClick = function(MousePos)
-				local Mouse = MousePos or Main.Mouse;
-				local mouseX, mouseY = Mouse.X, Mouse.Y;
-				if lastContextOpenPos and tick() - lastContextOpenTime < 0.2 and math.abs(lastContextOpenPos.X - mouseX) <= 6 and math.abs(lastContextOpenPos.Y - mouseY) <= 6 then
-					return;
+			local shortcutCache = {};
+			local function IsAltDown()
+				local userInput = service.UserInputService;
+				return userInput:IsKeyDown(Enum.KeyCode.LeftAlt) or userInput:IsKeyDown(Enum.KeyCode.RightAlt);
+			end;
+			local function ParseShortcut(shortcut)
+				local cached = shortcutCache[shortcut];
+				if cached ~= nil then
+					return cached;
 				end;
-				lastContextOpenTime = tick();
-				lastContextOpenPos = Vector2.new(mouseX, mouseY);
-				local context = Explorer.RightClickContext;
-				local absoluteSize = context.Gui.AbsoluteSize;
-				context.MaxHeight = absoluteSize.Y <= 600 and absoluteSize.Y - 40 or nil;
+				if type(shortcut) ~= "string" or #shortcut == 0 then
+					shortcutCache[shortcut] = false;
+					return nil;
+				end;
+				local parsed = {
+					Ctrl = false,
+					Shift = false,
+					Alt = false,
+					KeyCode = nil
+				};
+				for token in shortcut:gmatch("[^%+]+") do
+					local lowerToken = token:lower():gsub("%s+", "");
+					if lowerToken == "ctrl" or lowerToken == "control" then
+						parsed.Ctrl = true;
+					elseif lowerToken == "shift" then
+						parsed.Shift = true;
+					elseif lowerToken == "alt" then
+						parsed.Alt = true;
+					elseif lowerToken == "del" or lowerToken == "delete" then
+						parsed.KeyCode = Enum.KeyCode.Delete;
+					elseif lowerToken == "f2" then
+						parsed.KeyCode = Enum.KeyCode.F2;
+					elseif #lowerToken == 1 then
+						parsed.KeyCode = Enum.KeyCode[lowerToken:upper()];
+					end;
+				end;
+				if not parsed.KeyCode then
+					shortcutCache[shortcut] = false;
+					return nil;
+				end;
+				shortcutCache[shortcut] = parsed;
+				return parsed;
+			end;
+			local function ShortcutMatchesInput(input, shortcut)
+				local parsed = ParseShortcut(shortcut);
+				if not parsed or input.KeyCode ~= parsed.KeyCode then
+					return false;
+				end;
+				local ctrlDown = Lib.IsCtrlDown();
+				local shiftDown = Lib.IsShiftDown();
+				local altDown = IsAltDown();
+				return ctrlDown == parsed.Ctrl and shiftDown == parsed.Shift and altDown == parsed.Alt;
+			end;
+			Explorer.PopulateRightClickContext = function(context)
 				context:Clear();
 				local sList = selection.List;
 				local sMap = selection.Map;
@@ -1060,6 +1103,45 @@ local EmbeddedModules = {
 					context:AddRegistered("REFRESH_NIL");
 					context:AddRegistered("HIDE_NIL");
 				end;
+			end;
+			Explorer.TryHandleShortcut = function(input)
+				if Settings.Explorer.KeyboardShortcuts == false or input.UserInputType ~= Enum.UserInputType.Keyboard then
+					return false;
+				end;
+				if service.UserInputService:GetFocusedTextBox() or (not Explorer.Active) or #selection.List == 0 then
+					return false;
+				end;
+				local context = Explorer.RightClickContext;
+				if not context then
+					return false;
+				end;
+				Explorer.PopulateRightClickContext(context);
+				for i = 1, #context.Items do
+					local item = context.Items[i];
+					if (not item.Divider) and (not item.Disabled) and ShortcutMatchesInput(input, item.Shortcut) then
+						if context.Gui.Parent then
+							context:Hide();
+						end;
+						if item.OnClick then
+							item.OnClick(item.Name);
+							return true;
+						end;
+					end;
+				end;
+				return false;
+			end;
+			Explorer.ShowRightClick = function(MousePos)
+				local Mouse = MousePos or Main.Mouse;
+				local mouseX, mouseY = Mouse.X, Mouse.Y;
+				if lastContextOpenPos and tick() - lastContextOpenTime < 0.2 and math.abs(lastContextOpenPos.X - mouseX) <= 6 and math.abs(lastContextOpenPos.Y - mouseY) <= 6 then
+					return;
+				end;
+				lastContextOpenTime = tick();
+				lastContextOpenPos = Vector2.new(mouseX, mouseY);
+				local context = Explorer.RightClickContext;
+				local absoluteSize = context.Gui.AbsoluteSize;
+				context.MaxHeight = absoluteSize.Y <= 600 and absoluteSize.Y - 40 or nil;
+				Explorer.PopulateRightClickContext(context);
 				Explorer.LastRightClickX, Explorer.LastRightClickY = mouseX, mouseY;
 				context:Show(mouseX, mouseY);
 			end;
@@ -1743,6 +1825,15 @@ local EmbeddedModules = {
 					end
 				});
 				Explorer.RightClickContext = context;
+				if shortcutInputCon then
+					shortcutInputCon:Disconnect();
+				end;
+				shortcutInputCon = service.UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
+					if gameProcessedEvent then
+						return;
+					end;
+					Explorer.TryHandleShortcut(input);
+				end);
 			end;
 			Explorer.HideNilInstances = function()
 				table.clear(nilMap);
@@ -1927,6 +2018,53 @@ local EmbeddedModules = {
 						Filters[v:lower() .. ":"] = func;
 					end;
 				end;
+				local classNameCache = {};
+				local classFilterValueCache = {};
+				local function ResolveClassFilterValue(str)
+					local rawValue = tostring(str or "");
+					local cached = classFilterValueCache[rawValue];
+					if cached then
+						return cached.ClassQuery, cached.NameQuery;
+					end;
+					local trimmedValue = rawValue:match("^%s*(.-)%s*$") or "";
+					local classQuery = trimmedValue:match("^(%S+)") or "";
+					local nameQuery = trimmedValue:match("^%S+%s+(.+)$") or "";
+					nameQuery = (nameQuery:match("^%s*(.-)%s*$") or ""):lower();
+					classFilterValueCache[rawValue] = {
+						ClassQuery = classQuery,
+						NameQuery = nameQuery
+					};
+					return classQuery, nameQuery;
+				end;
+				local function NameMatchesQuery(obj, nameQuery)
+					return #nameQuery == 0 or obj.Name:lower():find(nameQuery, 1, true);
+				end;
+				local function ResolveClassName(str, exactMatch, fallbackToQuery)
+					local query = tostring(str or ""):lower();
+					if #query == 0 then
+						return nil;
+					end;
+					local cacheKey = (exactMatch and "exact:" or "partial:") .. query;
+					local cached = classNameCache[cacheKey];
+					if cached ~= nil then
+						return cached == false and (fallbackToQuery and str or nil) or cached;
+					end;
+					local classes = API and API.Classes;
+					local partialMatch;
+					if type(classes) == "table" then
+						for className in pairs(classes) do
+							local lowerClassName = className:lower();
+							if lowerClassName == query then
+								classNameCache[cacheKey] = className;
+								return className;
+							elseif (not exactMatch) and lowerClassName:find(query, 1, true) then
+								partialMatch = className;
+							end;
+						end;
+					end;
+					classNameCache[cacheKey] = partialMatch or false;
+					return partialMatch or (fallbackToQuery and str or nil);
+				end;
 				local Only = {
 					remotes = {
 						"RemoteEvent",
@@ -1953,13 +2091,25 @@ local EmbeddedModules = {
 					"class",
 					"c"
 				}, function(Obj, str)
-					return (Obj.ClassName:lower()):find(str);
+					local classQuery, nameQuery = ResolveClassFilterValue(str);
+					local className = ResolveClassName(classQuery, false, true);
+					return (Obj.ClassName:lower()):find((className or classQuery):lower(), 1, true) and NameMatchesQuery(Obj, nameQuery);
+				end);
+				NewFilter({
+					"classname"
+				}, function(Obj, str)
+					local classQuery, nameQuery = ResolveClassFilterValue(str);
+					local className = ResolveClassName(classQuery, true, false);
+					return className and Obj.ClassName == className and NameMatchesQuery(Obj, nameQuery);
 				end);
 				NewFilter({
 					"isa",
-					"i"
+					"i",
+					"is"
 				}, function(Obj, str)
-					return Obj:IsA(str);
+					local classQuery, nameQuery = ResolveClassFilterValue(str);
+					local className = ResolveClassName(classQuery, false, false);
+					return className and Obj:IsA(className) and NameMatchesQuery(Obj, nameQuery);
 				end);
 				NewFilter({
 					"only",
@@ -2032,6 +2182,216 @@ local EmbeddedModules = {
 				local SearchFrame = Explorer.GuiElems.ToolBar.SearchFrame;
 				local searchBox = SearchFrame.SearchBox;
 				Explorer.GuiElems.SearchBar = searchBox;
+				local suggestionEntries = {};
+				local suggestionButtons = {};
+				local suggestionHover = false;
+				local suggestionPicking = false;
+				local searchFocused = false;
+				local classSuggestions = {};
+				if API and type(API.Classes) == "table" then
+					for className in pairs(API.Classes) do
+						classSuggestions[#classSuggestions + 1] = {
+							Name = className,
+							Lower = className:lower()
+						};
+					end;
+					table.sort(classSuggestions, function(a, b)
+						return a.Name < b.Name;
+					end);
+				end;
+				local suggestionFrame = createSimple("Frame", {
+					Name = "Suggestions",
+					AnchorPoint = Vector2.new(0, 0),
+					BackgroundColor3 = Color3.fromRGB(18, 20, 28),
+					BorderSizePixel = 0,
+					ClipsDescendants = true,
+					Parent = SearchFrame,
+					Position = UDim2.new(0, 0, 1, 4),
+					Size = UDim2.new(1, 0, 0, 0),
+					Visible = false,
+					ZIndex = 25
+				});
+				createSimple("UICorner", {
+					CornerRadius = UDim.new(0, 6),
+					Parent = suggestionFrame
+				});
+				createSimple("UIStroke", {
+					Color = Color3.fromRGB(49, 52, 67),
+					Parent = suggestionFrame,
+					Thickness = 1
+				});
+				suggestionFrame.MouseEnter:Connect(function()
+					suggestionHover = true;
+				end);
+				suggestionFrame.MouseLeave:Connect(function()
+					suggestionHover = false;
+				end);
+				local function setSuggestionButtonStyle(button, index, hovering)
+					local isPrimary = index == 1;
+					if hovering then
+						button.BackgroundColor3 = Color3.fromRGB(52, 56, 76);
+						button.BackgroundTransparency = 0;
+					elseif isPrimary then
+						button.BackgroundColor3 = Color3.fromRGB(41, 44, 58);
+						button.BackgroundTransparency = 0;
+					else
+						button.BackgroundColor3 = Color3.fromRGB(18, 20, 28);
+						button.BackgroundTransparency = 1;
+					end;
+				end;
+				local function hideSuggestions()
+					suggestionEntries = {};
+					suggestionFrame.Visible = false;
+					suggestionFrame.Size = UDim2.new(1, 0, 0, 0);
+					for _, button in ipairs(suggestionButtons) do
+						button.Visible = false;
+					end;
+				end;
+				local function getActiveClassSearch(text)
+					local commaIndex;
+					for i = #text, 1, -1 do
+						if text:sub(i, i) == "," then
+							commaIndex = i;
+							break;
+						end;
+					end;
+					local prefixText = commaIndex and text:sub(1, commaIndex) or "";
+					local segmentText = commaIndex and text:sub(commaIndex + 1) or text;
+					local leadingWhitespace = segmentText:match("^(%s*)") or "";
+					local trimmedSegment = segmentText:match("^%s*(.-)%s*$") or "";
+					local filterName, filterQuery = trimmedSegment:match("^([%a_]+)%s*:%s*(.-)$");
+					filterName = filterName and filterName:lower();
+					if filterName == "class" or filterName == "classname" or filterName == "is" or filterName == "isa" then
+						return {
+							Before = prefixText,
+							LeadingWhitespace = leadingWhitespace,
+							Filter = filterName,
+							Query = filterQuery or ""
+						};
+					end;
+				end;
+				local function collectClassSuggestions(filterQuery)
+					local lowerQuery = tostring(filterQuery or ""):lower();
+					if #lowerQuery == 0 then
+						return {};
+					end;
+					local prefixMatches = {};
+					local containsMatches = {};
+					for _, entry in ipairs(classSuggestions) do
+						local position = entry.Lower:find(lowerQuery, 1, true);
+						if position then
+							if position == 1 then
+								prefixMatches[#prefixMatches + 1] = entry.Name;
+							else
+								containsMatches[#containsMatches + 1] = entry.Name;
+							end;
+						end;
+					end;
+					local results = {};
+					for _, name in ipairs(prefixMatches) do
+						results[#results + 1] = name;
+						if #results >= 6 then
+							return results;
+						end;
+					end;
+					for _, name in ipairs(containsMatches) do
+						results[#results + 1] = name;
+						if #results >= 6 then
+							break;
+						end;
+					end;
+					return results;
+				end;
+				local function applySuggestion(className)
+					local activeSearch = getActiveClassSearch(searchBox.Text or "");
+					if not activeSearch then
+						hideSuggestions();
+						return;
+					end;
+					local newText = activeSearch.Before .. activeSearch.LeadingWhitespace .. activeSearch.Filter .. ":" .. className;
+					suggestionPicking = false;
+					searchBox.Text = newText;
+					hideSuggestions();
+					Explorer.DoSearch(newText);
+					task.defer(function()
+						pcall(function()
+							searchBox:CaptureFocus();
+						end);
+					end);
+				end;
+				local function ensureSuggestionButton(index)
+					local button = suggestionButtons[index];
+					if button then
+						return button;
+					end;
+					button = createSimple("TextButton", {
+						AutoButtonColor = false,
+						BackgroundColor3 = Color3.fromRGB(18, 20, 28),
+						BorderSizePixel = 0,
+						Font = Enum.Font.SourceSans,
+						Name = "Suggestion" .. index,
+						Parent = suggestionFrame,
+						Position = UDim2.new(0, 6, 0, 5 + (index - 1) * 24),
+						Size = UDim2.new(1, -12, 0, 22),
+						Text = "",
+						TextColor3 = Color3.fromRGB(235, 235, 235),
+						TextSize = 14,
+						TextXAlignment = Enum.TextXAlignment.Left,
+						ZIndex = 26
+					});
+					createSimple("UICorner", {
+						CornerRadius = UDim.new(0, 6),
+						Parent = button
+					});
+					button.MouseEnter:Connect(function()
+						suggestionHover = true;
+						setSuggestionButtonStyle(button, index, true);
+					end);
+					button.MouseLeave:Connect(function()
+						suggestionHover = false;
+						setSuggestionButtonStyle(button, index, false);
+					end);
+					button.MouseButton1Down:Connect(function()
+						suggestionPicking = true;
+					end);
+					button.MouseButton1Click:Connect(function()
+						local selected = suggestionEntries[index];
+						if selected then
+							applySuggestion(selected);
+						end;
+					end);
+					suggestionButtons[index] = button;
+					return button;
+				end;
+				local function updateSuggestions()
+					if not searchFocused then
+						hideSuggestions();
+						return;
+					end;
+					local activeSearch = getActiveClassSearch(searchBox.Text or "");
+					if not activeSearch then
+						hideSuggestions();
+						return;
+					end;
+					local results = collectClassSuggestions(activeSearch.Query);
+					if #results == 0 then
+						hideSuggestions();
+						return;
+					end;
+					suggestionEntries = results;
+					suggestionFrame.Visible = true;
+					suggestionFrame.Size = UDim2.new(1, 0, 0, 10 + #results * 24);
+					for index = 1, #results do
+						local button = ensureSuggestionButton(index);
+						button.Text = results[index];
+						button.Visible = true;
+						button.Position = UDim2.new(0, 6, 0, 5 + (index - 1) * 24);
+						setSuggestionButtonStyle(button, index, false);
+					end;
+					for index = #results + 1, #suggestionButtons do
+						suggestionButtons[index].Visible = false;
+					end;
+				end;
 				local TweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quint);
 				local Tweens = {
 					Start = TweenService:Create(SearchFrame.UIStroke, TweenInfo, {
@@ -2042,13 +2402,23 @@ local EmbeddedModules = {
 					})
 				};
 				searchBox.FocusLost:Connect(function()
+					searchFocused = false;
 					Tweens.End:Play();
+					task.delay(0.1, function()
+						if (not searchFocused) and (not suggestionHover) and (not suggestionPicking) then
+							hideSuggestions();
+						end;
+						suggestionPicking = false;
+					end);
 				end);
 				searchBox.Focused:Connect(function()
+					searchFocused = true;
 					Tweens.Start:Play();
+					updateSuggestions();
 				end);
 				Lib.ViewportTextBox.convert(searchBox);
 				searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+					updateSuggestions();
 					if autoUpdateSearch then
 						Explorer.DoSearch(searchBox.Text);
 					end;
@@ -6993,6 +7363,13 @@ local EmbeddedModules = {
 					MinWidth = 200,
 					FreeWidth = 200
 				};
+				local function getWindowTransparency()
+					local transparency = tonumber(Settings and Settings.Window and Settings.Window.Transparency);
+					if transparency == nil then
+						transparency = 0;
+					end;
+					return math.clamp(transparency, 0, 1);
+				end;
 				local mouse = plr:GetMouse();
 				local sidesGui, alignIndicator;
 				local visibleWindows = {};
@@ -7161,6 +7538,7 @@ local EmbeddedModules = {
 							"Frame",
 							{
 								BackgroundColor3 = Color3.new(0.17647059261799, 0.17647059261799, 0.17647059261799),
+								BackgroundTransparency = getWindowTransparency(),
 								BorderSizePixel = 0,
 								Name = "Content",
 								Parent = {
@@ -7883,6 +8261,26 @@ local EmbeddedModules = {
 						count = count + 1;
 					end;
 				end;
+				funcs.ApplyTheme = function(self)
+					local guiElems = self.GuiElems;
+					local themeSettings = Settings and Settings.Theme;
+					if not guiElems or not themeSettings then
+						return;
+					end;
+					if guiElems.TopBar then
+						guiElems.TopBar.BackgroundColor3 = themeSettings.Main2 or guiElems.TopBar.BackgroundColor3;
+					end;
+					if guiElems.Content then
+						guiElems.Content.BackgroundColor3 = themeSettings.Main1 or guiElems.Content.BackgroundColor3;
+						guiElems.Content.BackgroundTransparency = getWindowTransparency();
+					end;
+					if guiElems.Line then
+						guiElems.Line.BackgroundColor3 = themeSettings.Outline1 or guiElems.Line.BackgroundColor3;
+					end;
+					if guiElems.Title then
+						guiElems.Title.TextColor3 = themeSettings.Text or guiElems.Title.TextColor3;
+					end;
+				end;
 				funcs.SetMinimized = function(self, set, mode)
 					local oldVal = self.Minimized;
 					local newVal;
@@ -8438,7 +8836,46 @@ local EmbeddedModules = {
 						OnRestore = Lib.Signal.new()
 					}, mt);
 					obj.Gui = createGui(obj);
+					obj:ApplyTheme();
 					return obj;
+				end;
+				Lib.RefreshTheme = function()
+					local winTransparency = getWindowTransparency();
+					local themeSettings = Settings and Settings.Theme;
+					if leftSide and leftSide.Frame then
+						leftSide.Frame.BackgroundTransparency = winTransparency;
+					end;
+					if rightSide and rightSide.Frame then
+						rightSide.Frame.BackgroundTransparency = winTransparency;
+					end;
+					if themeSettings then
+						if leftSide and leftSide.Frame then
+							leftSide.Frame.BackgroundColor3 = themeSettings.Main1 or leftSide.Frame.BackgroundColor3;
+						end;
+						if rightSide and rightSide.Frame then
+							rightSide.Frame.BackgroundColor3 = themeSettings.Main1 or rightSide.Frame.BackgroundColor3;
+						end;
+					end;
+					for i = 1, #visibleWindows do
+						local window = visibleWindows[i];
+						if window and window.ApplyTheme then
+							pcall(window.ApplyTheme, window);
+						end;
+					end;
+					local sideWindows = {
+						leftSide and leftSide.Windows or nil,
+						rightSide and rightSide.Windows or nil
+					};
+					for _, windowList in ipairs(sideWindows) do
+						if windowList then
+							for i = 1, #windowList do
+								local window = windowList[i];
+								if window and window.ApplyTheme then
+									pcall(window.ApplyTheme, window);
+								end;
+							end;
+						end;
+					end;
 				end;
 				return static;
 			end)();
@@ -14769,22 +15206,28 @@ local API, RM;
 DefaultSettings = (function()
 	local rgb = Color3.fromRGB;
 	return {
+		Window = {
+			_Recurse = true,
+			Transparency = 0.2
+		},
 		Explorer = {
 			_Recurse = true,
 			Sorting = true,
 			TeleportToOffset = Vector3.new(0, 0, 0),
 			ClickToRename = true,
-			AutoUpdateSearch = true,
+			AutoUpdateSearch = false,
+			KeyboardShortcuts = true,
 			AutoUpdateMode = 0,
 			PartSelectionBox = true,
 			GuiSelectionBox = true,
-			CopyPathUseGetChildren = true
+			CopyPathUseGetChildren = true,
+			UseNameWidth = false
 		},
 		Properties = {
 			_Recurse = true,
 			MaxConflictCheck = 50,
-			ShowDeprecated = false,
-			ShowHidden = false,
+			ShowDeprecated = true,
+			ShowHidden = true,
 			ClearOnFocus = false,
 			LoadstringInput = true,
 			NumberRounding = 3,
@@ -14879,6 +15322,7 @@ Main = (function()
 	Main.Mouse = plr:GetMouse();
 	Main.AppControls = {};
 	Main.Apps = Apps;
+	Main.SettingsFile = "DexSettings.json";
 	Main.MenuApps = {};
 	Main.ModuleErrors = {};
 	Main.StubbedApps = {};
@@ -15097,10 +15541,32 @@ Main = (function()
 				end;
 			end;
 		end;
+		local function toVector3(value)
+			if typeof(value) == "Vector3" then
+				return value;
+			end;
+			local function toNumber(component)
+				if type(component) == "number" then
+					return component;
+				elseif type(component) == "string" then
+					return tonumber(component);
+				end;
+			end;
+			if type(value) == "table" then
+				local x = toNumber(value.X or value.x or value[1]);
+				local y = toNumber(value.Y or value.y or value[2]);
+				local z = toNumber(value.Z or value.z or value[3]);
+				if x and y and z then
+					return Vector3.new(x, y, z);
+				end;
+			end;
+		end;
 		local function coerceByTemplate(value, templateValue, fallback)
 			if templateValue ~= nil then
 				if typeof(templateValue) == "Color3" then
 					return toColor3(value) or fallback or templateValue;
+				elseif typeof(templateValue) == "Vector3" then
+					return toVector3(value) or fallback or templateValue;
 				elseif type(templateValue) == "table" then
 					if type(value) == "table" then
 						local fallbackTable = type(fallback) == "table" and fallback or nil;
@@ -15133,15 +15599,25 @@ Main = (function()
 			end;
 		end;
 		Main.ResetSettings();
-		local s, data = pcall(env.readfile or error, "DexSettings.json");
+		local s, data = pcall(env.readfile or error, Main.SettingsFile);
 		if s and data and data ~= "" then
 			local success, decoded = pcall(service.HttpService.JSONDecode, service.HttpService, data);
 			if success and type(decoded) == "table" then
 				apply(decoded, Settings, DefaultSettings);
 			else
-				Main.Warn("Failed to decode DexSettings.json: " .. tostring(decoded));
+				Main.Warn("Failed to decode " .. Main.SettingsFile .. ": " .. tostring(decoded));
 			end;
 		end;
+		if type(Settings.Window) ~= "table" then
+			Settings.Window = {};
+		end;
+		local windowSettings = Settings.Window;
+		local defaultWindow = DefaultSettings.Window or {};
+		local transparency = tonumber(windowSettings.Transparency);
+		if transparency == nil then
+			transparency = defaultWindow.Transparency or 0;
+		end;
+		windowSettings.Transparency = math.clamp(transparency, 0, 1);
 	end;
 	Main.ResetSettings = function()
 		local function recur(t, res)
@@ -15158,6 +15634,51 @@ Main = (function()
 			return res;
 		end;
 		recur(DefaultSettings, Settings);
+	end;
+	Main.ExportSettings = function()
+		local function serialize(val)
+			local valType = typeof(val);
+			if valType == "Color3" then
+				return {
+					R = val.R,
+					G = val.G,
+					B = val.B
+				};
+			elseif valType == "Vector3" then
+				return {
+					__type = "Vector3",
+					X = val.X,
+					Y = val.Y,
+					Z = val.Z
+				};
+			elseif valType == "table" then
+				local newTbl = {};
+				for key, value in pairs(val) do
+					newTbl[key] = serialize(value);
+				end;
+				return newTbl;
+			end;
+			return val;
+		end;
+		local ok, encoded = pcall(service.HttpService.JSONEncode, service.HttpService, serialize(Settings));
+		if ok then
+			return encoded;
+		end;
+		Main.Warn("Failed to encode Dex settings: " .. tostring(encoded));
+	end;
+	Main.SaveCurrentSettings = function()
+		if not (env and env.writefile) then
+			return false;
+		end;
+		local encoded = Main.ExportSettings();
+		if not encoded then
+			return false;
+		end;
+		local ok, err = pcall(env.writefile, Main.SettingsFile, encoded);
+		if not ok then
+			Main.Warn("Failed writing " .. Main.SettingsFile .. ": " .. tostring(err));
+		end;
+		return ok;
 	end;
 	Main.FetchAPI = function()
 		local api, rawAPI;
@@ -16040,12 +16561,15 @@ Main = (function()
 		Main.MenuApps[data.Name] = control;
 		return control;
 	end;
-	Main.SetMainGuiOpen = function(val)
-		Main.MainGuiOpen = val;
-		Main.MainGui.OpenButton.Text = val and "X" or "Dex";
-		if val then
-			Main.MainGui.OpenButton.MainFrame.Visible = true;
-		end;
+		Main.SetMainGuiOpen = function(val)
+			Main.MainGuiOpen = val;
+			Main.MainGui.OpenButton.Text = val and "X" or "Dex";
+			if (not val) and Main.SettingsTransparencySlider then
+				Main.SettingsTransparencySlider.Visible = false;
+			end;
+			if val then
+				Main.MainGui.OpenButton.MainFrame.Visible = true;
+			end;
 		Main.MainGui.OpenButton.MainFrame:TweenSize(val and UDim2.new(0, 224, 0, 200) or UDim2.new(0, 0, 0, 0), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.2, true);
 		(service.TweenService:Create(Main.MainGui.OpenButton, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 			BackgroundTransparency = val and 0 or (Lib.CheckMouseInGui(Main.MainGui.OpenButton) and 0 or 0.2)
@@ -16054,6 +16578,15 @@ Main = (function()
 			Main.MainGuiMouseEvent:Disconnect();
 		end;
 		if not val then
+			if Main.SettingsMenuContext and Main.SettingsMenuContext.Gui and Main.SettingsMenuContext.Gui.Parent then
+				Main.SettingsMenuContext:Hide();
+			end;
+			if Main.InfoMenuContext and Main.InfoMenuContext.Gui and Main.InfoMenuContext.Gui.Parent then
+				Main.InfoMenuContext:Hide();
+			end;
+			if Main.SettingsTransparencySlider then
+				Main.SettingsTransparencySlider.Visible = false;
+			end;
 			local startTime = tick();
 			Main.MainGuiCloseTime = startTime;
 			(coroutine.wrap(function()
@@ -16065,7 +16598,12 @@ Main = (function()
 		else
 			Main.MainGuiMouseEvent = service.UserInputService.InputBegan:Connect(function(input)
 				local clickedSettingsMenu = Main.SettingsMenuContext and Main.SettingsMenuContext.GuiElems and Main.SettingsMenuContext.GuiElems.Main and Lib.CheckMouseInGui(Main.SettingsMenuContext.GuiElems.Main);
-				if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and (not Lib.CheckMouseInGui(Main.MainGui.OpenButton)) and (not Lib.CheckMouseInGui(Main.MainGui.OpenButton.MainFrame)) and (not clickedSettingsMenu) then
+				local clickedInfoMenu = Main.InfoMenuContext and Main.InfoMenuContext.GuiElems and Main.InfoMenuContext.GuiElems.Main and Lib.CheckMouseInGui(Main.InfoMenuContext.GuiElems.Main);
+				local clickedTransparencySlider = Main.SettingsTransparencySlider and Main.SettingsTransparencySlider.Visible and Lib.CheckMouseInGui(Main.SettingsTransparencySlider);
+				if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and (not Lib.CheckMouseInGui(Main.MainGui.OpenButton)) and (not Lib.CheckMouseInGui(Main.MainGui.OpenButton.MainFrame)) and (not clickedSettingsMenu) and (not clickedInfoMenu) and (not clickedTransparencySlider) then
+					if Main.SettingsTransparencySlider then
+						Main.SettingsTransparencySlider.Visible = false;
+					end;
 					Main.SetMainGuiOpen(false);
 				end;
 			end);
@@ -16395,6 +16933,7 @@ Main = (function()
 		Main.MainGuiOpen = false;
 		local openButton = gui.OpenButton;
 		local settingsButton = openButton.MainFrame.BottomFrame.Settings;
+		local infoButton = openButton.MainFrame.BottomFrame.Information;
 		openButton.BackgroundTransparency = 0.2;
 		openButton.MainFrame.Size = UDim2.new(0, 0, 0, 0);
 		openButton.MainFrame.Visible = false;
@@ -16419,6 +16958,10 @@ Main = (function()
 		settingsMenu.Iconless = true;
 		settingsMenu.Width = 210;
 		Main.SettingsMenuContext = settingsMenu;
+		local infoMenu = Lib.ContextMenu.new();
+		infoMenu.Iconless = true;
+		infoMenu.Width = 260;
+		Main.InfoMenuContext = infoMenu;
 		local function applySettingChanges()
 			if Explorer and Explorer.SetSortingEnabled then
 				pcall(Explorer.SetSortingEnabled, Settings.Explorer.Sorting);
@@ -16435,11 +16978,209 @@ Main = (function()
 			if Properties and Properties.ShowExplorerProps then
 				pcall(Properties.ShowExplorerProps);
 			end;
+			if Lib and Lib.RefreshTheme then
+				pcall(Lib.RefreshTheme);
+			end;
 		end;
+		local function persistCurrentSettings()
+			if Main and Main.SaveCurrentSettings then
+				pcall(Main.SaveCurrentSettings);
+			end;
+		end;
+		local rebuildSettingsMenu;
+		local function getWindowTransparency()
+			return math.clamp(tonumber(Settings.Window and Settings.Window.Transparency) or 0, 0, 1);
+		end;
+		local transparencySlider = createSimple("Frame", {
+			AnchorPoint = Vector2.new(1, 0),
+			BackgroundColor3 = Settings.Theme.Main2,
+			BorderColor3 = Settings.Theme.Outline1,
+			BorderSizePixel = 1,
+			Name = "TransparencySlider",
+			Parent = gui,
+			Position = UDim2.new(0, 0, 0, 0),
+			Size = UDim2.new(0, 210, 0, 78),
+			Visible = false,
+			ZIndex = 1000001
+		});
+		createSimple("UICorner", {
+			CornerRadius = UDim.new(0, 6),
+			Parent = transparencySlider
+		});
+		local transparencyLabel = createSimple("TextLabel", {
+			BackgroundTransparency = 1,
+			Font = Enum.Font.SourceSans,
+			Name = "Title",
+			Parent = transparencySlider,
+			Position = UDim2.new(0, 10, 0, 8),
+			Size = UDim2.new(1, -20, 0, 18),
+			Text = "UI Transparency",
+			TextColor3 = Settings.Theme.Text,
+			TextSize = 16,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			ZIndex = 1000002
+		});
+		local transparencyValue = createSimple("TextLabel", {
+			BackgroundTransparency = 1,
+			Font = Enum.Font.SourceSans,
+			Name = "Value",
+			Parent = transparencySlider,
+			Position = UDim2.new(1, -56, 0, 8),
+			Size = UDim2.new(0, 46, 0, 18),
+			Text = "20%",
+			TextColor3 = Settings.Theme.PlaceholderText,
+			TextSize = 15,
+			TextXAlignment = Enum.TextXAlignment.Right,
+			ZIndex = 1000002
+		});
+		local transparencyTrack = createSimple("TextButton", {
+			AutoButtonColor = false,
+			BackgroundColor3 = Settings.Theme.TextBox,
+			BorderColor3 = Settings.Theme.Outline3,
+			BorderSizePixel = 1,
+			Name = "Track",
+			Parent = transparencySlider,
+			Position = UDim2.new(0, 10, 0, 40),
+			Size = UDim2.new(1, -20, 0, 18),
+			Text = "",
+			ZIndex = 1000002
+		});
+		createSimple("UICorner", {
+			CornerRadius = UDim.new(0, 9),
+			Parent = transparencyTrack
+		});
+		local transparencyFill = createSimple("Frame", {
+			BackgroundColor3 = Settings.Theme.ListSelection,
+			BorderSizePixel = 0,
+			Name = "Fill",
+			Parent = transparencyTrack,
+			Size = UDim2.new(0.2, 0, 1, 0),
+			ZIndex = 1000003
+		});
+		createSimple("UICorner", {
+			CornerRadius = UDim.new(0, 9),
+			Parent = transparencyFill
+		});
+		local transparencyKnob = createSimple("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundColor3 = Settings.Theme.Text,
+			BorderSizePixel = 0,
+			Name = "Knob",
+			Parent = transparencyTrack,
+			Position = UDim2.new(0.2, 0, 0.5, 0),
+			Size = UDim2.new(0, 14, 0, 14),
+			ZIndex = 1000004
+		});
+		createSimple("UICorner", {
+			CornerRadius = UDim.new(1, 0),
+			Parent = transparencyKnob
+		});
+		local transparencyHint = createSimple("TextLabel", {
+			BackgroundTransparency = 1,
+			Font = Enum.Font.SourceSans,
+			Name = "Hint",
+			Parent = transparencySlider,
+			Position = UDim2.new(0, 10, 0, 59),
+			Size = UDim2.new(1, -20, 0, 14),
+			Text = "Drag to adjust window background transparency",
+			TextColor3 = Settings.Theme.PlaceholderText,
+			TextSize = 12,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			ZIndex = 1000002
+		});
+		Main.SettingsTransparencySlider = transparencySlider;
+		local transparencyDragging = false;
+		local function updateTransparencySliderVisual()
+			local transparency = getWindowTransparency();
+			transparencyFill.Size = UDim2.new(transparency, 0, 1, 0);
+			transparencyKnob.Position = UDim2.new(transparency, 0, 0.5, 0);
+			transparencyValue.Text = ("%d%%"):format(math.floor(transparency * 100 + 0.5));
+			transparencySlider.BackgroundColor3 = Settings.Theme.Main2;
+			transparencySlider.BorderColor3 = Settings.Theme.Outline1;
+			transparencyLabel.TextColor3 = Settings.Theme.Text;
+			transparencyValue.TextColor3 = Settings.Theme.PlaceholderText;
+			transparencyTrack.BackgroundColor3 = Settings.Theme.TextBox;
+			transparencyTrack.BorderColor3 = Settings.Theme.Outline3;
+			transparencyFill.BackgroundColor3 = Settings.Theme.ListSelection;
+			transparencyKnob.BackgroundColor3 = Settings.Theme.Text;
+			transparencyHint.TextColor3 = Settings.Theme.PlaceholderText;
+		end;
+		local function setTransparencyValue(value)
+			value = math.clamp(math.floor(value * 100 + 0.5) / 100, 0, 1);
+			Settings.Window.Transparency = value;
+			updateTransparencySliderVisual();
+			if Lib and Lib.RefreshTheme then
+				pcall(Lib.RefreshTheme);
+			end;
+			persistCurrentSettings();
+			rebuildSettingsMenu();
+			if settingsMenu.Gui.Parent then
+				settingsMenu:Refresh();
+			end;
+		end;
+		local function setTransparencyFromPosition(positionX)
+			local absolutePosition = transparencyTrack.AbsolutePosition.X;
+			local absoluteSize = math.max(1, transparencyTrack.AbsoluteSize.X);
+			setTransparencyValue((positionX - absolutePosition) / absoluteSize);
+		end;
+		local function showTransparencySlider()
+			updateTransparencySliderVisual();
+			local menuMain = settingsMenu.GuiElems and settingsMenu.GuiElems.Main;
+			if settingsMenu.Gui.Parent and menuMain then
+				local menuPos = menuMain.AbsolutePosition;
+				local menuSize = menuMain.AbsoluteSize;
+				transparencySlider.Position = UDim2.new(0, menuPos.X + menuSize.X, 0, menuPos.Y + menuSize.Y + 6);
+			else
+				local btnPos = settingsButton.AbsolutePosition;
+				local btnSize = settingsButton.AbsoluteSize;
+				transparencySlider.Position = UDim2.new(0, btnPos.X + btnSize.X, 0, btnPos.Y + btnSize.Y + 6);
+			end;
+			transparencySlider.Visible = true;
+		end;
+		local function hideTransparencySlider()
+			transparencyDragging = false;
+			transparencySlider.Visible = false;
+		end;
+		local function rebuildInfoMenu()
+			infoMenu:Clear();
+			infoMenu:AddDivider("Credits");
+			infoMenu:Add({
+				Name = "Dex created by Moon"
+			});
+			infoMenu:Add({
+				Name = "Fixed, updated, and reworked by ltseverydayyou"
+			});
+		end;
+		transparencyTrack.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				transparencyDragging = true;
+				setTransparencyFromPosition(input.Position.X);
+			end;
+		end);
+		transparencyTrack.InputChanged:Connect(function(input)
+			if transparencyDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+				setTransparencyFromPosition(input.Position.X);
+			end;
+		end);
+		transparencyTrack.InputEnded:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				transparencyDragging = false;
+			end;
+		end);
+		service.UserInputService.InputChanged:Connect(function(input)
+			if transparencyDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+				setTransparencyFromPosition(input.Position.X);
+			end;
+		end);
+		service.UserInputService.InputEnded:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				transparencyDragging = false;
+			end;
+		end);
 		local function makeToggleLabel(name, value)
 			return (value and "[ON] " or "[OFF] ") .. name;
 		end;
-		local function rebuildSettingsMenu()
+		rebuildSettingsMenu = function()
 			settingsMenu:Clear();
 			settingsMenu:AddDivider("Settings");
 			settingsMenu:Add({
@@ -16448,6 +17189,7 @@ Main = (function()
 				OnClick = function()
 					Settings.Explorer.Sorting = not Settings.Explorer.Sorting;
 					applySettingChanges();
+					persistCurrentSettings();
 					rebuildSettingsMenu();
 					settingsMenu:Refresh();
 				end
@@ -16458,6 +17200,7 @@ Main = (function()
 				OnClick = function()
 					Settings.Explorer.UseNameWidth = not Settings.Explorer.UseNameWidth;
 					applySettingChanges();
+					persistCurrentSettings();
 					rebuildSettingsMenu();
 					settingsMenu:Refresh();
 				end
@@ -16468,8 +17211,25 @@ Main = (function()
 				OnClick = function()
 					Settings.Explorer.AutoUpdateSearch = not Settings.Explorer.AutoUpdateSearch;
 					applySettingChanges();
+					persistCurrentSettings();
 					rebuildSettingsMenu();
 					settingsMenu:Refresh();
+				end
+			});
+			settingsMenu:Add({
+				Name = makeToggleLabel("Keyboard Shortcuts", Settings.Explorer.KeyboardShortcuts ~= false),
+				NoHide = true,
+				OnClick = function()
+					Settings.Explorer.KeyboardShortcuts = Settings.Explorer.KeyboardShortcuts == false;
+					persistCurrentSettings();
+					rebuildSettingsMenu();
+					settingsMenu:Refresh();
+				end
+			});
+			settingsMenu:Add({
+				Name = ("UI Transparency: %d%%"):format(math.floor(getWindowTransparency() * 100 + 0.5)),
+				OnClick = function()
+					showTransparencySlider();
 				end
 			});
 			settingsMenu:Add({
@@ -16478,6 +17238,7 @@ Main = (function()
 				OnClick = function()
 					Settings.Properties.ShowHidden = not Settings.Properties.ShowHidden;
 					applySettingChanges();
+					persistCurrentSettings();
 					rebuildSettingsMenu();
 					settingsMenu:Refresh();
 				end
@@ -16488,6 +17249,7 @@ Main = (function()
 				OnClick = function()
 					Settings.Properties.ShowDeprecated = not Settings.Properties.ShowDeprecated;
 					applySettingChanges();
+					persistCurrentSettings();
 					rebuildSettingsMenu();
 					settingsMenu:Refresh();
 				end
@@ -16498,6 +17260,10 @@ Main = (function()
 				OnClick = function()
 					Main.ResetSettings();
 					applySettingChanges();
+					persistCurrentSettings();
+					updateTransparencySliderVisual();
+					rebuildSettingsMenu();
+					settingsMenu:Refresh();
 				end
 			});
 			settingsMenu:Add({
@@ -16505,16 +17271,32 @@ Main = (function()
 				OnClick = function()
 					Main.LoadSettings();
 					applySettingChanges();
+					updateTransparencySliderVisual();
 				end
 			});
 		end;
 		local function showSettingsMenu()
+			hideTransparencySlider();
+			if infoMenu.Gui.Parent then
+				infoMenu:Hide();
+			end;
 			rebuildSettingsMenu();
 			local btnPos = settingsButton.AbsolutePosition;
 			local btnSize = settingsButton.AbsoluteSize;
 			settingsMenu:Show(btnPos.X - 180 + btnSize.X, btnPos.Y + btnSize.Y + 2);
 		end;
+		local function showInfoMenu()
+			hideTransparencySlider();
+			if settingsMenu.Gui.Parent then
+				settingsMenu:Hide();
+			end;
+			rebuildInfoMenu();
+			local btnPos = infoButton.AbsolutePosition;
+			local btnSize = infoButton.AbsoluteSize;
+			infoMenu:Show(btnPos.X - 236 + btnSize.X, btnPos.Y + btnSize.Y + 2);
+		end;
 		settingsButton.MouseButton1Click:Connect(showSettingsMenu);
+		infoButton.MouseButton1Click:Connect(showInfoMenu);
 		if Explorer and Explorer.Window and (not isStubModule(Explorer)) then
 			Main.CreateApp({
 				Name = "Explorer",
@@ -16589,6 +17371,12 @@ Main = (function()
 		Main.InitEnv();
 		Main.LoadSettings();
 		Main.SetupFilesystem();
+		if env.writefile and env.readfile then
+			local hasSettingsFile, existingSettings = pcall(env.readfile, Main.SettingsFile);
+			if (not hasSettingsFile) or existingSettings == "" then
+				pcall(Main.SaveCurrentSettings);
+			end;
+		end;
 		local intro = Main.CreateIntro("Initializing Library");
 		Lib = Main.LoadModule("Lib");
 		Lib.FastWait();

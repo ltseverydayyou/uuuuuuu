@@ -519,6 +519,9 @@ local parryState = {
 	pendingBalls = {},
 	pendingSet = {},
 	spam = false,
+	spamWindowUntil = 0,
+	spamFastUntil = 0,
+	spamNextAt = 0,
 	apEnabled = true,
 	preclick = true,
 	apState = "Idle"
@@ -2092,6 +2095,8 @@ local function AutoParryStep(dt)
 	end;
 	local nowFrame = tick();
 	local pingFrame = getPing();
+	local spamWindowUntil = hasBalls and (nowFrame + 0.06) or 0;
+	local spamFastUntil = 0;
 	updateGuiTargets(hrp, hasBalls);
 	local anyTargeted = false;
 	if hasBalls then
@@ -2291,10 +2296,19 @@ local function AutoParryStep(dt)
 				local hasTargetLock = targeted and bs.targetedSince[ball] ~= nil;
 				local approaching = false;
 				local isBait = false;
+				local lobBlocked = false;
 				local dotNow = 0;
 				local towardSpeed = 0;
 				local movingAway = false;
 				local directionSpeed = directionVelocity.Magnitude;
+				local flatDirection = Vector3.new(directionVelocity.X, 0, directionVelocity.Z);
+				local flatSpeed = flatDirection.Magnitude;
+				local upwardSpeed = math.max(directionVelocity.Y, 0);
+				local heightDelta = ball.Position.Y - hrp.Position.Y;
+				local strongRisingLob = upwardSpeed > math.max(16, flatSpeed * 0.85) and heightDelta > math.max(6, predictRadius * 0.18);
+				if strongRisingLob and rawDist > math.max(12, parryPredictRadius * 0.72) then
+					lobBlocked = true;
+				end;
 				if directionSpeed >= 1 then
 					local toYou = hrp.Position - ball.Position;
 					local mag = toYou.Magnitude;
@@ -2341,6 +2355,10 @@ local function AutoParryStep(dt)
 					approaching = true;
 					movingAway = false;
 				end;
+				if lobBlocked then
+					approaching = false;
+					forceToward = false;
+				end;
 				if ps.activeParryBall == ball then
 					clearPendingBall(ball);
 					if targetKnown and (not targeted) and (not attrNow) then
@@ -2376,6 +2394,20 @@ local function AutoParryStep(dt)
 				local retargetOverrideMovingAway = instantRetarget and rawDist <= math.max(14, parryPredictRadius * 0.9);
 				local handoffZone = rawDist <= math.max(12, parryPredictRadius * 0.95);
 				local isOtherBall = ps.activeParryBall ~= nil and ps.activeParryBall ~= ball;
+				spamWindowUntil = math.max(spamWindowUntil, now + 0.08);
+				if nearPredict or hitTime <= 0.5 or rawDist <= math.max(24, parryPredictRadius * 1.35) then
+					spamWindowUntil = math.max(spamWindowUntil, now + 0.16);
+				end;
+				if inParryPredict then
+					spamWindowUntil = math.max(spamWindowUntil, now + 0.2);
+				end;
+				if rawDist <= math.max(10, parryPredictRadius * 0.75) or instantRetarget or innerEmergency then
+					spamFastUntil = math.max(spamFastUntil, now + 0.18);
+				elseif nearPredict and hitTime <= 0.25 then
+					spamFastUntil = math.max(spamFastUntil, now + 0.12);
+				elseif rawDist <= math.max(18, parryPredictRadius) and hitTime <= 0.45 then
+					spamFastUntil = math.max(spamFastUntil, now + 0.08);
+				end;
 				local overlapHandoff = false;
 				if isOtherBall then
 					local overlapDist = getBallSeparation(ps.activeParryBall, ball);
@@ -2433,6 +2465,9 @@ local function AutoParryStep(dt)
 					if not currentTargetConfirmed then
 						return;
 					end;
+					if lobBlocked and (not inParryPredict) and (not instantRetarget) and (not innerEmergency) then
+						return;
+					end;
 					if ps.activeParryBall ~= nil and ps.activeParryBall ~= ball and now < ps.activeParryReleaseAt then
 						return;
 					end;
@@ -2461,6 +2496,7 @@ local function AutoParryStep(dt)
 					end;
 					canPredict = canPredict and (not inCloseBlock);
 					canPredict = canPredict and inParryPredict;
+					canPredict = canPredict and ((not lobBlocked) or instantRetarget or innerEmergency);
 					if canPredict then
 						local nowTry = now;
 						local lastBallFire = bs.lastParryPerBall[ball] or (-math.huge);
@@ -2513,6 +2549,9 @@ local function AutoParryStep(dt)
 					if parryTriggered then
 						return;
 					end;
+					if lobBlocked and (not inParryPredict) then
+						return;
+					end;
 					if ps.activeParryBall ~= nil and ps.activeParryBall ~= ball and now < ps.activeParryReleaseAt then
 						return;
 					end;
@@ -2559,6 +2598,10 @@ local function AutoParryStep(dt)
 			end;
 		end;
 		if #ps.pendingBalls > 0 and (pendingImmediate or ps.activeParryBall == nil or nowFrame >= ps.activeParryReleaseAt) then
+			spamWindowUntil = math.max(spamWindowUntil, nowFrame + 0.18);
+			if pendingImmediate then
+				spamFastUntil = math.max(spamFastUntil, nowFrame + 0.18);
+			end;
 			safeFlush(character, hrp);
 		end;
 		if ps.activeParryBall and (not seen[ps.activeParryBall]) then
@@ -2615,6 +2658,8 @@ local function AutoParryStep(dt)
 				bs.lastAwayFlag[b] = nil;
 			end;
 		end;
+		ps.spamWindowUntil = math.max(ps.spamWindowUntil or 0, spamWindowUntil);
+		ps.spamFastUntil = math.max(ps.spamFastUntil or 0, spamFastUntil);
 	else
 		ringPlayer.CFrame = CFrame.new(hrp.Position);
 		ringPlayerNoUnit.CFrame = ringPlayer.CFrame;
@@ -2641,6 +2686,9 @@ local function AutoParryStep(dt)
 		bs.awaySince = {};
 		bs.lastAwayFlag = {};
 		ps.nextPar = 0;
+		ps.spamWindowUntil = 0;
+		ps.spamFastUntil = 0;
+		ps.spamNextAt = 0;
 		ps.clearActiveParryLock(nil);
 		clearPendingBalls();
 		vs.ringLimited = false;
@@ -2710,6 +2758,21 @@ trackConnection(StepSignal:Connect(function(dt)
 end));
 trackConnection(StepSignal:Connect(function()
 	if parryState.spam then
-		task.defer(DoParry);
+		local now = tick();
+		local windowUntil = parryState.spamWindowUntil or 0;
+		local fastUntil = parryState.spamFastUntil or 0;
+		if now > windowUntil then
+			return;
+		end;
+		local fastSpam = now <= fastUntil;
+		local interval = fastSpam and 0.008 or 0.016;
+		if now < (parryState.spamNextAt or 0) then
+			return;
+		end;
+		parryState.spamNextAt = now + interval;
+		local shots = fastSpam and 3 or 2;
+		for _ = 1, shots do
+			task.defer(DoParry);
+		end;
 	end;
 end));

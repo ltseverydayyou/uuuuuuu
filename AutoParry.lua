@@ -541,6 +541,7 @@ local ballState = {
 	targetedSince = {},
 	targetStartDist = {},
 	lastAttrTargeted = {},
+	targetConfirmActive = {},
 	targetStateCache = {},
 	targetStateQueued = {},
 	targetStateDirty = {},
@@ -766,6 +767,7 @@ local function setApEnabled(value)
 		table.clear(ballState.targetedSince);
 		table.clear(ballState.targetStartDist);
 		table.clear(ballState.lastAttrTargeted);
+		table.clear(ballState.targetConfirmActive);
 		table.clear(ballState.targetStateCache);
 		table.clear(ballState.targetStateQueued);
 		table.clear(ballState.targetStateDirty);
@@ -1079,6 +1081,7 @@ local function removeBall(b)
 	ballState.targetStateCache[b] = nil;
 	ballState.targetStateQueued[b] = nil;
 	ballState.targetStateDirty[b] = nil;
+	ballState.targetConfirmActive[b] = nil;
 end;
 local function cleanupBallVisual(ball)
 	local v = visualizerState.ballVis[ball];
@@ -2236,6 +2239,21 @@ local function AutoParryStep(dt)
 				local currentTargetConfirmed = targeted or attrNow;
 				local targetJustAcquired = false;
 				local attrJustAcquired = false;
+				local combinedTargetJustAcquired = false;
+				local prevTargetConfirmed = bs.targetConfirmActive[ball] == true;
+				if currentTargetConfirmed and (not prevTargetConfirmed) then
+					combinedTargetJustAcquired = true;
+					bs.lastParryPerBall[ball] = -math.huge;
+					bs.closeParryBlocked[ball] = nil;
+					if now < ps.nextPar then
+						ps.nextPar = now;
+					end;
+					bs.targetedSince[ball] = now;
+					bs.targetStartDist[ball] = rawDist;
+				elseif (not currentTargetConfirmed) and prevTargetConfirmed then
+					bs.closeParryBlocked[ball] = nil;
+				end;
+				bs.targetConfirmActive[ball] = currentTargetConfirmed;
 				if targetKnown and currentTargetConfirmed then
 					anyTargeted = true;
 					if rawDist < focusDistTargeted then
@@ -2390,7 +2408,7 @@ local function AutoParryStep(dt)
 				local fastApproach = targeted and approaching and (hitTime <= 0.22 or rawDist <= parryPredictRadius * 0.95);
 				local retargetInsideZone = rawDist <= math.max(14, parryPredictRadius * 0.98);
 				local retargetTimeOk = hitTime <= 0.6 or rawDist <= math.max(10, parryPredictRadius * 0.75);
-				local instantRetarget = (targetJustAcquired or attrJustAcquired) and currentTargetConfirmed and retargetInsideZone and retargetTimeOk;
+				local instantRetarget = (targetJustAcquired or attrJustAcquired or combinedTargetJustAcquired) and currentTargetConfirmed and retargetInsideZone and retargetTimeOk;
 				local retargetOverrideMovingAway = instantRetarget and rawDist <= math.max(14, parryPredictRadius * 0.9);
 				local handoffZone = rawDist <= math.max(12, parryPredictRadius * 0.95);
 				local isOtherBall = ps.activeParryBall ~= nil and ps.activeParryBall ~= ball;
@@ -2409,14 +2427,16 @@ local function AutoParryStep(dt)
 					spamFastUntil = math.max(spamFastUntil, now + 0.08);
 				end;
 				local overlapHandoff = false;
+				local overlapDist = math.huge;
 				if isOtherBall then
-					local overlapDist = getBallSeparation(ps.activeParryBall, ball);
+					overlapDist = getBallSeparation(ps.activeParryBall, ball);
 					-- Treat nearly-stacked balls as an immediate handoff threat.
-					overlapHandoff = overlapDist <= math.max(6, parryPredictRadius * 0.35);
+					overlapHandoff = overlapDist <= math.max(14, parryPredictRadius * 0.6);
 				end;
 				if targetKnown and isOtherBall and currentTargetConfirmed and handoffZone and (not bs.closeParryBlocked[ball]) then
-					queuePendingBall(ball, hitTime, rawDist, parryPredictRadius, rawDist <= parryPredictRadius);
-					local urgentHandoff = overlapHandoff or rawDist <= math.max(8, parryPredictRadius * 0.55) or hitTime <= 0.12;
+					local immediateQueuedHandoff = rawDist <= parryPredictRadius or overlapHandoff or overlapDist <= math.max(18, parryPredictRadius * 0.8);
+					queuePendingBall(ball, hitTime, rawDist, parryPredictRadius, immediateQueuedHandoff);
+					local urgentHandoff = immediateQueuedHandoff or hitTime <= 0.18;
 					if urgentHandoff then
 						pendingImmediate = true;
 						ps.activeParryReleaseAt = math.min(ps.activeParryReleaseAt, now);
@@ -2649,6 +2669,7 @@ local function AutoParryStep(dt)
 				bs.targetedSince[b] = nil;
 				bs.targetStartDist[b] = nil;
 				bs.lastAttrTargeted[b] = nil;
+				bs.targetConfirmActive[b] = nil;
 				bs.targetStateCache[b] = nil;
 				bs.targetStateQueued[b] = nil;
 				bs.targetStateDirty[b] = nil;
@@ -2678,6 +2699,7 @@ local function AutoParryStep(dt)
 		bs.targetedSince = {};
 		bs.targetStartDist = {};
 		bs.lastAttrTargeted = {};
+		bs.targetConfirmActive = {};
 		bs.targetStateCache = {};
 		bs.targetStateQueued = {};
 		bs.targetStateDirty = {};

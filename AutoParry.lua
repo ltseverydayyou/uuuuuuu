@@ -1761,6 +1761,19 @@ local function getBallTargetAttr(ball)
 	end;
 	return nil;
 end;
+
+local function normalizeTargetString(v)
+	if typeof(v) ~= "string" then
+		return "", "";
+	end;
+	local raw = v:lower():gsub("^%s+", ""):gsub("%s+$", "");
+	raw = raw:gsub("^target%s*[:=%-]?%s*", "");
+	raw = raw:gsub("^player%s*[:=%-]?%s*", "");
+	raw = raw:gsub("^@", "");
+	local compact = raw:gsub("[^%w]", "");
+	return raw, compact;
+end;
+
 local function isBallTargetingYouAttr(ball, char)
 	local v = getBallTargetAttr(ball);
 	if not v then
@@ -1778,10 +1791,18 @@ local function isBallTargetingYouAttr(ball, char)
 		if not plr then
 			return false;
 		end;
-		local lower = v:lower();
+		local raw, compact = normalizeTargetString(v);
 		local n1 = plr.Name and plr.Name:lower() or "";
 		local n2 = plr.DisplayName and plr.DisplayName:lower() or "";
-		if n1 ~= "" and lower:find(n1, 1, true) or n2 ~= "" and lower:find(n2, 1, true) then
+		local n3 = char and char.Name and char.Name:lower() or "";
+		local c1 = n1 ~= "" and n1:gsub("[^%w]", "") or "";
+		local c2 = n2 ~= "" and n2:gsub("[^%w]", "") or "";
+		local c3 = n3 ~= "" and n3:gsub("[^%w]", "") or "";
+		local uid = plr.UserId and tostring(plr.UserId) or "";
+		if raw == n1 or raw == n2 or raw == n3 or raw == uid then
+			return true;
+		end;
+		if compact ~= "" and (compact == c1 or compact == c2 or compact == c3 or compact == uid) then
 			return true;
 		end;
 	end;
@@ -1905,7 +1926,7 @@ local function clearPendingBalls()
 	table.clear(parryState.pendingSet);
 end;
 
-local function queuePendingBall(ball, hitTime, rawDist)
+local function queuePendingBall(ball, hitTime, rawDist, zoneRadius, immediate)
 	if not (ball and ball.Parent) then
 		return;
 	end;
@@ -1914,6 +1935,8 @@ local function queuePendingBall(ball, hitTime, rawDist)
 	if item then
 		item.hitTime = math.min(item.hitTime or math.huge, hitTime or math.huge);
 		item.rawDist = math.min(item.rawDist or math.huge, rawDist or math.huge);
+		item.zoneRadius = math.max(item.zoneRadius or 0, zoneRadius or 0);
+		item.immediate = item.immediate or immediate == true;
 		item.t = now;
 		return;
 	end;
@@ -1921,10 +1944,25 @@ local function queuePendingBall(ball, hitTime, rawDist)
 		ball = ball,
 		hitTime = hitTime or math.huge,
 		rawDist = rawDist or math.huge,
+		zoneRadius = zoneRadius or 0,
+		immediate = immediate == true,
 		t = now
 	};
 	parryState.pendingSet[ball] = item;
 	parryState.pendingBalls[(#parryState.pendingBalls) + 1] = item;
+end;
+
+local function getBallSeparation(a, b)
+	if not (a and b and a.Parent and b.Parent) then
+		return math.huge;
+	end;
+	local ok, dist = pcall(function()
+		return (a.Position - b.Position).Magnitude;
+	end);
+	if ok and type(dist) == "number" then
+		return dist;
+	end;
+	return math.huge;
 end;
 
 local function flushPendingParries(char, hrp)
@@ -1971,8 +2009,13 @@ local function flushPendingParries(char, hrp)
 						else
 							local speed = math.max(ballState.smoothedSpeed[ball] or 0, getTrackedBallVelocity(ball).Magnitude);
 							local hitTime = math.min(item.hitTime or math.huge, speed > 0 and (rawDist / math.max(speed, 1)) or math.huge);
-							local danger = hitTime <= 0.35 or rawDist <= math.max(12, 18 + speed * 0.04);
+							local queuedZone = math.max(item.zoneRadius or 0, 12);
+							local insideQueuedZone = rawDist <= queuedZone * 1.02;
+							local danger = insideQueuedZone or item.immediate or hitTime <= 0.35 or rawDist <= math.max(12, 18 + speed * 0.04);
 							if danger and (hitTime < bestHit or (math.abs(hitTime - bestHit) <= 0.02 and rawDist < bestDist)) then
+								if insideQueuedZone or item.immediate then
+									hitTime = -1;
+								end;
 								bestIndex = i;
 								bestItem = item;
 								bestHit = hitTime;
@@ -2185,7 +2228,10 @@ local function AutoParryStep(dt)
 				local charColor = targetKnown and targetState.charColor or nil;
 				local attrNow = targetKnown and targetState.attrNow or false;
 				local charHighlightEnabled = targetKnown and charHighlight and charHighlight.Enabled ~= false or false;
-				if targetKnown and (targeted or attrNow) then
+				local currentTargetConfirmed = targeted or attrNow;
+				local targetJustAcquired = false;
+				local attrJustAcquired = false;
+				if targetKnown and currentTargetConfirmed then
 					anyTargeted = true;
 					if rawDist < focusDistTargeted then
 						focusDistTargeted = rawDist;
@@ -2204,6 +2250,7 @@ local function AutoParryStep(dt)
 					local lastMatch = bs.lastHighlightMatch[ball] or false;
 					local highlightsMatchNow = targeted;
 					if highlightsMatchNow and (not lastMatch) then
+						targetJustAcquired = true;
 						bs.lastParryPerBall[ball] = -math.huge;
 						bs.closeParryBlocked[ball] = nil;
 						if now < ps.nextPar then
@@ -2224,6 +2271,7 @@ local function AutoParryStep(dt)
 					bs.lastCharHighlightEnabled[ball] = charHighlightEnabled;
 					local prevAttrState = bs.lastAttrTargeted[ball];
 					if attrNow and (not prevAttrState) then
+						attrJustAcquired = true;
 						bs.lastParryPerBall[ball] = -math.huge;
 						bs.closeParryBlocked[ball] = nil;
 						if now < ps.nextPar then
@@ -2322,11 +2370,21 @@ local function AutoParryStep(dt)
 				local targetSnap = targeted and inParryPredict and settledInPredict and (hitTime <= 0.6 or rawDist <= math.max(10, parryPredictRadius * 0.6));
 				local innerEmergency = (not ps.preclick) and targeted and rawDist <= math.max(8, predictRadius * 0.4);
 				local fastApproach = targeted and approaching and (hitTime <= 0.22 or rawDist <= parryPredictRadius * 0.95);
+				local retargetInsideZone = rawDist <= math.max(14, parryPredictRadius * 0.98);
+				local retargetTimeOk = hitTime <= 0.6 or rawDist <= math.max(10, parryPredictRadius * 0.75);
+				local instantRetarget = (targetJustAcquired or attrJustAcquired) and currentTargetConfirmed and retargetInsideZone and retargetTimeOk;
+				local retargetOverrideMovingAway = instantRetarget and rawDist <= math.max(14, parryPredictRadius * 0.9);
 				local handoffZone = rawDist <= math.max(12, parryPredictRadius * 0.95);
 				local isOtherBall = ps.activeParryBall ~= nil and ps.activeParryBall ~= ball;
-				if targetKnown and isOtherBall and (targeted or attrNow) and handoffZone and (not bs.closeParryBlocked[ball]) then
-					queuePendingBall(ball, hitTime, rawDist);
-					local urgentHandoff = rawDist <= math.max(8, parryPredictRadius * 0.55) or hitTime <= 0.12;
+				local overlapHandoff = false;
+				if isOtherBall then
+					local overlapDist = getBallSeparation(ps.activeParryBall, ball);
+					-- Treat nearly-stacked balls as an immediate handoff threat.
+					overlapHandoff = overlapDist <= math.max(6, parryPredictRadius * 0.35);
+				end;
+				if targetKnown and isOtherBall and currentTargetConfirmed and handoffZone and (not bs.closeParryBlocked[ball]) then
+					queuePendingBall(ball, hitTime, rawDist, parryPredictRadius, rawDist <= parryPredictRadius);
+					local urgentHandoff = overlapHandoff or rawDist <= math.max(8, parryPredictRadius * 0.55) or hitTime <= 0.12;
 					if urgentHandoff then
 						pendingImmediate = true;
 						ps.activeParryReleaseAt = math.min(ps.activeParryReleaseAt, now);
@@ -2337,6 +2395,20 @@ local function AutoParryStep(dt)
 					clearPendingBall(ball);
 				end;
 				local parryTriggered = false;
+				if (ps.activeParryBall == nil or ps.activeParryBall == ball or now >= ps.activeParryReleaseAt) and instantRetarget and (not bs.closeParryBlocked[ball]) and ((not movingAwayBlocked) or retargetOverrideMovingAway) then
+					local nowRetarget = now;
+					local lastBallFire = bs.lastParryPerBall[ball] or (-math.huge);
+					if nowRetarget >= ps.nextPar and nowRetarget - lastBallFire > 0.05 then
+						ps.nextPar = nowRetarget + ps.parCd;
+						bs.lastParryPerBall[ball] = nowRetarget;
+						bs.closeParryBlocked[ball] = true;
+						ps.lastParryTime = nowRetarget;
+						parryTriggered = true;
+						setActiveParryLock(ball, nowRetarget, hitTime);
+						clearPendingBall(ball);
+						queueParry(false, true);
+					end;
+				end;
 				if (ps.activeParryBall == nil or ps.activeParryBall == ball or now >= ps.activeParryReleaseAt) and innerEmergency and hasTargetLock and (not bs.closeParryBlocked[ball]) and (not movingAwayBlocked) then
 					local nowInner = now;
 					local lastBallFire = bs.lastParryPerBall[ball] or (-math.huge);
@@ -2356,6 +2428,9 @@ local function AutoParryStep(dt)
 				local ringTimeSoon = toRingTime <= 0.55 + ping * 0.003;
 				local function attemptParry()
 					if parryTriggered then
+						return;
+					end;
+					if not currentTargetConfirmed then
 						return;
 					end;
 					if ps.activeParryBall ~= nil and ps.activeParryBall ~= ball and now < ps.activeParryReleaseAt then
@@ -2385,6 +2460,7 @@ local function AutoParryStep(dt)
 						end;
 					end;
 					canPredict = canPredict and (not inCloseBlock);
+					canPredict = canPredict and inParryPredict;
 					if canPredict then
 						local nowTry = now;
 						local lastBallFire = bs.lastParryPerBall[ball] or (-math.huge);
@@ -2409,8 +2485,7 @@ local function AutoParryStep(dt)
 					if parryTriggered then
 						return;
 					end;
-					local attrTargetedNow = attrNow or bs.lastAttrTargeted[ball] == true;
-					local stillTargeted = targeted or hasTargetLock or attrTargetedNow;
+					local stillTargeted = currentTargetConfirmed;
 					if not stillTargeted then
 						return;
 					end;

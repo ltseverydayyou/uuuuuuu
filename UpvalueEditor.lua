@@ -28,6 +28,8 @@ local pg = plr and plr:FindFirstChildOfClass("PlayerGui")
 if not pg and plr then
 	pg = plr:WaitForChild("PlayerGui")
 end
+local playerModule = pg and pg:FindFirstChild("PlayerModule", true) or nil
+local chatScript = nil
 
 local dbg = debug
 local rawGetGc = getgc or get_gc_objects
@@ -144,16 +146,19 @@ local dead = false
 local dragged = false
 local minimized = false
 local sid = 0
+local pmb
 
 local closures = {}
 local selectedClosure
 local selectedUpvalue
 local deepSearch = false
+local showps = false
 local showAllUpvalues = false
 local showAllElements = false
 local mode = "closures"
 local statusText = ""
 local lastScanQuery = ""
+local lastSkippedPS = 0
 local loopLocks = {}
 local closureScript
 
@@ -924,8 +929,43 @@ local function compareQuery(query, value, ignoreNumber)
 	return has(tostring(value), query)
 end
 
+local function isfilteredclosure(closure)
+	if showps then
+		return false
+	end
+
+	if not playerModule then
+		local ps = plr and plr:FindFirstChild("PlayerScripts")
+		if ps then
+			playerModule = ps:FindFirstChild("PlayerModule", true)
+			chatScript = chatScript or ps:FindFirstChild("ChatScript", true)
+		end
+	end
+
+	if not chatScript then
+		local ps = plr and plr:FindFirstChild("PlayerScripts")
+		if ps then
+			chatScript = ps:FindFirstChild("ChatScript", true)
+		end
+	end
+
+	local script = closureScript and closureScript(closure)
+	if typeof(script) ~= "Instance" then
+		return false
+	end
+	if playerModule and script:IsDescendantOf(playerModule) then
+		return true
+	end
+	if chatScript and script:IsDescendantOf(chatScript) then
+		return true
+	end
+	return false
+end
+
 local function scanUpvalues(query, deep)
 	local found = {}
+	local blocked = {}
+	local skipped = 0
 
 	for _, closureData in pairs(rawGetGc()) do
 		if type(closureData) == "function"
@@ -937,19 +977,35 @@ local function scanUpvalues(query, deep)
 					local valueType = type(value)
 					if valueType ~= "table" and compareQuery(query, value) then
 						local closure = found[closureData]
-						if not closure then
+						if not closure and not blocked[closureData] then
 							closure = Closure.new(closureData)
-							found[closureData] = closure
+							if isfilteredclosure(closure) then
+								blocked[closureData] = true
+								skipped += 1
+							else
+								found[closureData] = closure
+							end
 						end
-						closure.Upvalues[index] = Upvalue.new(closure, index, value)
+						if found[closureData] then
+							closure.Upvalues[index] = Upvalue.new(closure, index, value)
+						end
 					elseif deep and valueType == "table" then
 						local closure = found[closureData]
 						local tableUpvalue
 						for i, v in pairs(value) do
 							if (i ~= value and v ~= value) and (compareQuery(query, i, true) or compareQuery(query, v)) then
-								if not closure then
+								if not closure and not blocked[closureData] then
 									closure = Closure.new(closureData)
-									found[closureData] = closure
+									if isfilteredclosure(closure) then
+										blocked[closureData] = true
+										skipped += 1
+										break
+									else
+										found[closureData] = closure
+									end
+								end
+								if not found[closureData] then
+									break
 								end
 								if not tableUpvalue then
 									tableUpvalue = Upvalue.new(closure, index, value)
@@ -977,7 +1033,7 @@ local function scanUpvalues(query, deep)
 		return a.Name < b.Name
 	end)
 
-	return list
+	return list, skipped
 end
 
 local function ensureAllUpvalues(closure)
@@ -1526,6 +1582,22 @@ mk("UICorner", {
 	CornerRadius = UDim.new(0, 8),
 })
 
+pmb = mk("TextButton", {
+	Parent = top,
+	AutoButtonColor = false,
+	BackgroundColor3 = Color3.fromRGB(28, 28, 28),
+	BorderSizePixel = 0,
+	Font = Enum.Font.GothamBold,
+	Text = "PS Off",
+	TextColor3 = Color3.new(1, 1, 1),
+	TextSize = 13,
+})
+
+mk("UICorner", {
+	Parent = pmb,
+	CornerRadius = UDim.new(0, 8),
+})
+
 local deepb = mk("TextButton", {
 	Parent = top,
 	AutoButtonColor = false,
@@ -1839,6 +1911,7 @@ local function fit()
 	local bw = math.max(52, math.floor(w * 0.08))
 	local cw = math.max(42, math.floor(w * 0.06))
 	local tw = math.max(74, math.floor(w * 0.09))
+	local pw = math.max(72, math.floor(w * 0.1))
 
 	cls.Size = UDim2.fromOffset(cw, 26)
 	cls.Position = UDim2.new(1, -cw - 10, 0.5, -13)
@@ -1846,19 +1919,22 @@ local function fit()
 	minb.Size = UDim2.fromOffset(cw, 26)
 	minb.Position = UDim2.new(1, -cw * 2 - 18, 0.5, -13)
 
+	pmb.Size = UDim2.fromOffset(pw, 26)
+	pmb.Position = UDim2.new(1, -(cw * 2 + pw + 26), 0.5, -13)
+
 	deepb.Size = UDim2.fromOffset(tw, 26)
-	deepb.Position = UDim2.new(1, -(cw * 2 + tw + 26), 0.5, -13)
+	deepb.Position = UDim2.new(1, -(cw * 2 + pw + tw + 34), 0.5, -13)
 
 	allb.Size = UDim2.fromOffset(tw, 26)
-	allb.Position = UDim2.new(1, -(cw * 2 + tw * 2 + 34), 0.5, -13)
+	allb.Position = UDim2.new(1, -(cw * 2 + pw + tw * 2 + 42), 0.5, -13)
 
 	scanb.Size = UDim2.fromOffset(math.max(56, bw), 26)
-	scanb.Position = UDim2.new(1, -(cw * 2 + tw * 2 + bw + 42), 0.5, -13)
+	scanb.Position = UDim2.new(1, -(cw * 2 + pw + tw * 2 + bw + 50), 0.5, -13)
 
 	back.Size = UDim2.fromOffset(math.max(56, bw), 26)
-	back.Position = UDim2.new(1, -(cw * 2 + tw * 2 + bw * 2 + 50), 0.5, -13)
+	back.Position = UDim2.new(1, -(cw * 2 + pw + tw * 2 + bw * 2 + 58), 0.5, -13)
 
-	ttl.Size = UDim2.new(1, -(back.Size.X.Offset + scanb.Size.X.Offset + allb.Size.X.Offset + deepb.Size.X.Offset + minb.Size.X.Offset + cls.Size.X.Offset + 70), 1, 0)
+	ttl.Size = UDim2.new(1, -(back.Size.X.Offset + scanb.Size.X.Offset + allb.Size.X.Offset + deepb.Size.X.Offset + pmb.Size.X.Offset + minb.Size.X.Offset + cls.Size.X.Offset + 78), 1, 0)
 
 	srh.Visible = not minimized
 	tabf.Visible = not minimized
@@ -1952,6 +2028,9 @@ local draw
 local function updateButtons()
 	back.BackgroundColor3 = mode == "closures" and Color3.fromRGB(20, 20, 20) or Color3.fromRGB(28, 28, 28)
 	back.TextColor3 = mode == "closures" and Color3.fromRGB(120, 120, 120) or Color3.new(1, 1, 1)
+
+	pmb.Text = showps and "PS On" or "PS Off"
+	pmb.BackgroundColor3 = showps and Color3.fromRGB(36, 62, 92) or Color3.fromRGB(28, 28, 28)
 
 	deepb.Text = deepSearch and "Deep On" or "Deep Off"
 	deepb.BackgroundColor3 = deepSearch and Color3.fromRGB(36, 62, 92) or Color3.fromRGB(28, 28, 28)
@@ -2644,8 +2723,11 @@ local function goBack()
 	draw()
 end
 
-local function runScan()
-	local query = trim(srh.Text)
+local function runScan(queryOverride)
+	local query = trim(queryOverride or srh.Text)
+	if query == "" and lastScanQuery ~= "" then
+		query = lastScanQuery
+	end
 	if query:gsub("%s+", "") == "" then
 		statusText = "query is empty"
 		draw()
@@ -2660,6 +2742,7 @@ local function runScan()
 	local token = sid + 1
 	sid = token
 	lastScanQuery = query
+	lastSkippedPS = 0
 	statusText = "scanning..."
 	mode = "closures"
 	selectedClosure = nil
@@ -2669,24 +2752,35 @@ local function runScan()
 	draw()
 
 	task.spawn(function()
-		local ok, result = pcall(scanUpvalues, query, deepSearch)
+		local ok, result, skipped = pcall(scanUpvalues, query, deepSearch)
 		if dead or sid ~= token then
 			return
 		end
 		if not ok then
 			closures = {}
+			lastSkippedPS = 0
 			statusText = "scan failed: " .. tostring(result)
 			draw()
 			return
 		end
 		closures = result
-		statusText = "scan finished"
+		lastSkippedPS = skipped or 0
+		if lastSkippedPS > 0 and not showps then
+			statusText = "scan finished | hid " .. lastSkippedPS .. " PlayerScripts"
+		else
+			statusText = "scan finished"
+		end
 		draw()
 	end)
 end
 
 bind(back.Activated, goBack)
 bind(scanb.Activated, runScan)
+bind(pmb.Activated, function()
+	showps = not showps
+	statusText = ""
+	runScan(lastScanQuery)
+end)
 bind(cls.Activated, kill)
 bind(minb.Activated, function()
 	minimized = not minimized

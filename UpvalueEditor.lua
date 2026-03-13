@@ -1283,6 +1283,7 @@ local function buildCopyCode(loopTarget, newValue, forceLoop)
 
 	local scriptObj = closureScript(closure)
 	local scriptPath = scriptObj and getCopiedInstancePath(scriptObj) or nil
+	local scriptPathExpr = scriptPath or "nil"
 	local constantsCode = next(currentConstants) and tablecodelit(currentConstants) or "nil"
 	local loopEnabled = forceLoop
 	if loopEnabled == nil then
@@ -1308,7 +1309,6 @@ local function buildCopyCode(loopTarget, newValue, forceLoop)
 		"assert(type(setUpvalue) == \"function\", \"missing debug.setupvalue\")",
 		"assert(type(isXClosure) == \"function\", \"missing xclosure detector\")",
 		"",
-		"local scriptPath = " .. (scriptPath or "nil"),
 		"local closureName = " .. string.format("%q", closure.Name),
 		"local upvalueIndex = " .. tostring(loopTarget.upvalue.Index),
 		"local closureConstants = " .. constantsCode,
@@ -1320,6 +1320,14 @@ local function buildCopyCode(loopTarget, newValue, forceLoop)
 		generated[#generated + 1] = "local elementIndex = " .. keyCode
 	end
 
+	generated[#generated + 1] = ""
+	generated[#generated + 1] = "local function getTargetScript()"
+	if scriptPath then
+		generated[#generated + 1] = "\treturn " .. scriptPathExpr
+	else
+		generated[#generated + 1] = "\treturn nil"
+	end
+	generated[#generated + 1] = "end"
 	generated[#generated + 1] = ""
 	generated[#generated + 1] = "local function matchConstants(func, list)"
 	generated[#generated + 1] = "\tif not list then"
@@ -1334,12 +1342,12 @@ local function buildCopyCode(loopTarget, newValue, forceLoop)
 	generated[#generated + 1] = "\treturn true"
 	generated[#generated + 1] = "end"
 	generated[#generated + 1] = ""
-	generated[#generated + 1] = "local function searchClosure()"
+	generated[#generated + 1] = "local function searchClosure(targetScript)"
 	generated[#generated + 1] = "\tfor _, func in pairs(rawGetGc()) do"
 	generated[#generated + 1] = "\t\tif type(func) == \"function\" and (not isLClosure or isLClosure(func)) and not isXClosure(func) then"
 	generated[#generated + 1] = "\t\t\tlocal okEnv, env = pcall(getfenv, func)"
 	generated[#generated + 1] = "\t\t\tlocal parentScript = okEnv and env and rawget(env, \"script\") or nil"
-	generated[#generated + 1] = "\t\t\tlocal validScript = (scriptPath == nil and (typeof(parentScript) ~= \"Instance\" or parentScript.Parent == nil)) or parentScript == scriptPath"
+	generated[#generated + 1] = "\t\t\tlocal validScript = (targetScript == nil and (typeof(parentScript) ~= \"Instance\" or parentScript.Parent == nil)) or parentScript == targetScript"
 	generated[#generated + 1] = "\t\t\tif validScript and pcall(getUpvalue, func, upvalueIndex) then"
 	generated[#generated + 1] = "\t\t\t\tlocal info = getInfo(func)"
 	generated[#generated + 1] = "\t\t\t\tif (((closureName and closureName ~= \"Unnamed function\") and info.name == closureName) or (not closureName or closureName == \"Unnamed function\")) and matchConstants(func, closureConstants) then"
@@ -1350,9 +1358,21 @@ local function buildCopyCode(loopTarget, newValue, forceLoop)
 	generated[#generated + 1] = "\tend"
 	generated[#generated + 1] = "end"
 	generated[#generated + 1] = ""
-	generated[#generated + 1] = "local closure = assert(searchClosure(), \"target closure not found\")"
+	generated[#generated + 1] = "local cachedScript"
+	generated[#generated + 1] = "local cachedClosure"
+	generated[#generated + 1] = ""
+	generated[#generated + 1] = "local function resolveClosure()"
+	generated[#generated + 1] = "\tlocal targetScript = getTargetScript()"
+	generated[#generated + 1] = "\tif cachedClosure and cachedScript == targetScript and pcall(getUpvalue, cachedClosure, upvalueIndex) then"
+	generated[#generated + 1] = "\t\treturn cachedClosure"
+	generated[#generated + 1] = "\tend"
+	generated[#generated + 1] = "\tcachedScript = targetScript"
+	generated[#generated + 1] = "\tcachedClosure = searchClosure(targetScript)"
+	generated[#generated + 1] = "\treturn assert(cachedClosure, \"target closure not found\")"
+	generated[#generated + 1] = "end"
 	generated[#generated + 1] = ""
 	generated[#generated + 1] = "local function apply()"
+	generated[#generated + 1] = "\tlocal closure = resolveClosure()"
 
 	if keyCode then
 		generated[#generated + 1] = "\tgetUpvalue(closure, upvalueIndex)[elementIndex] = value"

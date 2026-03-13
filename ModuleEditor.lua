@@ -887,15 +887,12 @@ mk("UIPadding", {
 	PaddingRight = UDim.new(0, 8)
 })
 
-local lay = mk("UIListLayout", {
+local listc = mk("Frame", {
 	Parent = body,
-	Padding = UDim.new(0, 8),
-	SortOrder = Enum.SortOrder.LayoutOrder
+	BackgroundTransparency = 1,
+	BorderSizePixel = 0,
+	Size = UDim2.new(1, 0, 0, 0)
 })
-
-bind(lay:GetPropertyChangedSignal("AbsoluteContentSize"), function()
-	body.CanvasSize = UDim2.fromOffset(0, lay.AbsoluteContentSize.Y + 16)
-end)
 
 local function dragger(ui, dragui)
 	dragui = dragui or ui
@@ -1123,18 +1120,19 @@ updatepmb()
 bind(cam:GetPropertyChangedSignal("ViewportSize"), fit)
 
 local function clear()
-	for _, v in ipairs(body:GetChildren()) do
-		if not v:IsA("UIPadding") and not v:IsA("UIListLayout") then
+	for _, v in ipairs(listc:GetChildren()) do
+		if not v:IsA("UICorner") then
 			v:Destroy()
 		end
 	end
 end
 
-local function card(h)
+local function card(parent, y, h)
 	local f = mk("Frame", {
-		Parent = body,
+		Parent = parent,
 		BackgroundColor3 = Color3.fromRGB(24, 24, 24),
 		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(0, y),
 		Size = UDim2.new(1, 0, 0, h)
 	})
 	mk("UICorner", {
@@ -1517,8 +1515,8 @@ local function loadm(ent)
 	return ent.st == "ok"
 end
 
-local function modrow(ent)
-	local f = card(68)
+local function modrow(parent, y, ent)
+	local f = card(parent, y, 68)
 
 	local b = mk("TextButton", {
 		Parent = f,
@@ -1608,8 +1606,8 @@ local function modrow(ent)
 	end)
 end
 
-local function entrow(baseDepth, k, v)
-	local f = card(62)
+local function entrow(parent, y, baseDepth, k, v)
+	local f = card(parent, y, 62)
 
 	local b = mk("TextButton", {
 		Parent = f,
@@ -1674,8 +1672,8 @@ local function otherpreview(v)
 	return cut(fmt(v), 100)
 end
 
-local function otherrow(k, v)
-	local f = card(62)
+local function otherrow(parent, y, k, v)
+	local f = card(parent, y, 62)
 
 	mk("TextLabel", {
 		Parent = f,
@@ -1714,11 +1712,11 @@ local function otherrow(k, v)
 	})
 end
 
-local function valrow(k, v)
+local function valrow(parent, y, k, v)
 	local raw = editvalue(v)
 	local ty = edittype(v)
 	local h = typeof(raw) == "boolean" and 72 or 78
-	local f = card(h)
+	local f = card(parent, y, h)
 
 	mk("TextLabel", {
 		Parent = f,
@@ -1839,8 +1837,8 @@ local function valrow(k, v)
 	end
 end
 
-local function showmsg(a, b)
-	local f = card(70)
+local function showmsg(parent, y, a, b)
+	local f = card(parent, y, 70)
 
 	mk("TextLabel", {
 		Parent = f,
@@ -1867,12 +1865,111 @@ local function showmsg(a, b)
 	})
 end
 
+local renderitems = {}
+local rowgap = 8
+local renderlist
+
+local function rowh(kind, v)
+	if kind == "mod" then
+		return 68
+	end
+	if kind == "ent" or kind == "other" then
+		return 62
+	end
+	if kind == "msg" then
+		return 70
+	end
+	if kind == "val" then
+		return typeof(editvalue(v)) == "boolean" and 72 or 78
+	end
+	return 62
+end
+
+local function setitems(items)
+	renderitems = items or {}
+	local y = 0
+	for i = 1, #renderitems do
+		local item = renderitems[i]
+		item.y = y
+		y += item.h + rowgap
+	end
+	local total = y > 0 and (y - rowgap) or 0
+	listc.Size = UDim2.new(1, 0, 0, total)
+	body.CanvasSize = UDim2.fromOffset(0, total + 16)
+	if body.CanvasPosition.Y > math.max(0, total - body.AbsoluteSize.Y) then
+		body.CanvasPosition = Vector2.new(0, math.max(0, total - body.AbsoluteSize.Y))
+	end
+	if renderlist then
+		renderlist()
+	end
+end
+
+local function renderitem(item)
+	if item.kind == "mod" then
+		modrow(listc, item.y, item.ent)
+	elseif item.kind == "ent" then
+		entrow(listc, item.y, item.baseDepth, item.key, item.val)
+	elseif item.kind == "other" then
+		otherrow(listc, item.y, item.key, item.val)
+	elseif item.kind == "val" then
+		valrow(listc, item.y, item.key, item.val)
+	elseif item.kind == "msg" then
+		showmsg(listc, item.y, item.a, item.b)
+	end
+end
+
+local function findfirstvisible(topY)
+	local lo = 1
+	local hi = #renderitems
+	local ans = #renderitems + 1
+	while lo <= hi do
+		local mid = math.floor((lo + hi) * 0.5)
+		local item = renderitems[mid]
+		if item.y + item.h >= topY then
+			ans = mid
+			hi = mid - 1
+		else
+			lo = mid + 1
+		end
+	end
+	return ans
+end
+
+renderlist = function()
+	clear()
+	if minimized or not body.Visible or #renderitems == 0 then
+		return
+	end
+	local overscan = 120
+	local topY = math.max(0, body.CanvasPosition.Y - overscan)
+	local botY = body.CanvasPosition.Y + body.AbsoluteSize.Y + overscan
+	local i = findfirstvisible(topY)
+	while i <= #renderitems do
+		local item = renderitems[i]
+		if item.y > botY then
+			break
+		end
+		renderitem(item)
+		i += 1
+	end
+end
+
+bind(body:GetPropertyChangedSignal("CanvasPosition"), function()
+	if #renderitems > 0 then
+		renderlist()
+	end
+end)
+
+bind(body:GetPropertyChangedSignal("AbsoluteSize"), function()
+	if #renderitems > 0 then
+		renderlist()
+	end
+end)
+
 draw = function()
 	if dead then
 		return
 	end
-
-	clear()
 
 	for k, b in pairs(tabs) do
 		local on = k == mode
@@ -1885,22 +1982,40 @@ draw = function()
 	if mode == "mods" then
 		local q = low(qry)
 		local cnt = 0
+		local items = {}
 		for _, ent in ipairs(mods) do
 			if q == "" or has(ent.n, q) or has(ent.p, q) or has(ent.root, q) then
-				modrow(ent)
+				items[#items + 1] = {
+					kind = "mod",
+					h = rowh("mod"),
+					ent = ent,
+				}
 				cnt += 1
 			end
 		end
 		infof("Modules", cnt .. " shown / " .. #mods .. " total")
 		if cnt == 0 then
-			showmsg("No modules found", "Try a different search or press Scan.")
+			items[#items + 1] = {
+				kind = "msg",
+				h = rowh("msg"),
+				a = "No modules found",
+				b = "Try a different search or press Scan.",
+			}
 		end
+		setitems(items)
 		return
 	end
 
 	if not curm then
 		infof("No module selected", "")
-		showmsg("Pick a module first", "Open the Modules tab and select a ModuleScript.")
+		setitems({
+			{
+				kind = "msg",
+				h = rowh("msg"),
+				a = "Pick a module first",
+				b = "Open the Modules tab and select a ModuleScript.",
+			},
+		})
 		return
 	end
 
@@ -1910,38 +2025,80 @@ draw = function()
 
 	if curm.st == "load" then
 		infof(curp(), "loading")
-		showmsg("Loading...", "This module is being required now.")
+		setitems({
+			{
+				kind = "msg",
+				h = rowh("msg"),
+				a = "Loading...",
+				b = "This module is being required now.",
+			},
+		})
 		return
 	end
 
 	if curm.st == "bad" then
 		infof(curp(), "error")
-		showmsg("Require failed", curm.err or "unknown error")
+		setitems({
+			{
+				kind = "msg",
+				h = rowh("msg"),
+				a = "Require failed",
+				b = curm.err or "unknown error",
+			},
+		})
 		return
 	end
 
 	if curm.st == "noreq" then
 		infof(curp(), "unsupported")
-		showmsg("Executor cannot require modules", curm.err or "This executor does not support require(ModuleScript).")
+		setitems({
+			{
+				kind = "msg",
+				h = rowh("msg"),
+				a = "Executor cannot require modules",
+				b = curm.err or "This executor does not support require(ModuleScript).",
+			},
+		})
 		return
 	end
 
 	if curm.st == "time" then
 		infof(curp(), "timeout")
-		showmsg("Require timed out", "This module probably yields forever or takes too long to return.")
+		setitems({
+			{
+				kind = "msg",
+				h = rowh("msg"),
+				a = "Require timed out",
+				b = "This module probably yields forever or takes too long to return.",
+			},
+		})
 		return
 	end
 
 	if curm.st == "type" then
 		infof(curp(), curm.err or "value")
-		showmsg("Module did not return a table", "Returned type: " .. tostring(curm.err))
+		setitems({
+			{
+				kind = "msg",
+				h = rowh("msg"),
+				a = "Module did not return a table",
+				b = "Returned type: " .. tostring(curm.err),
+			},
+		})
 		return
 	end
 
 	local t = gettbl()
 	if not t then
 		infof(curp(), "invalid")
-		showmsg("Path is no longer valid", "The selected nested table path could not be resolved.")
+		setitems({
+			{
+				kind = "msg",
+				h = rowh("msg"),
+				a = "Path is no longer valid",
+				b = "The selected nested table path could not be resolved.",
+			},
+		})
 		return
 	end
 
@@ -1950,7 +2107,14 @@ draw = function()
 		local depth, entt, entp = entctx()
 		if not entt then
 			infof(curp(), "invalid")
-			showmsg("Path is no longer valid", "The selected nested table path could not be resolved.")
+			setitems({
+				{
+					kind = "msg",
+					h = rowh("msg"),
+					a = "Path is no longer valid",
+					b = "The selected nested table path could not be resolved.",
+				},
+			})
 			return
 		end
 		local pathhit = q == "" or has(entp, q)
@@ -1969,22 +2133,47 @@ draw = function()
 
 		local a, b, c = tcnt(entt)
 		infof(entp, a .. " tables / " .. b .. " values / " .. c .. " other")
+		local items = {}
 
 		if #ks == 0 then
 			if #oks > 0 then
-				showmsg("No nested tables here", "Showing read-only members from this level.")
+				items[#items + 1] = {
+					kind = "msg",
+					h = rowh("msg"),
+					a = "No nested tables here",
+					b = "Showing read-only members from this level.",
+				}
 				for _, k in ipairs(oks) do
-					otherrow(k, entt[k])
+					items[#items + 1] = {
+						kind = "other",
+						h = rowh("other"),
+						key = k,
+						val = entt[k],
+					}
 				end
+				setitems(items)
 				return
 			end
-			showmsg("No nested tables here", "Switch to Fields to edit supported values.")
+			items[#items + 1] = {
+				kind = "msg",
+				h = rowh("msg"),
+				a = "No nested tables here",
+				b = "Switch to Fields to edit supported values.",
+			}
+			setitems(items)
 			return
 		end
 
 		for _, k in ipairs(ks) do
-			entrow(depth, k, entt[k])
+			items[#items + 1] = {
+				kind = "ent",
+				h = rowh("ent"),
+				baseDepth = depth,
+				key = k,
+				val = entt[k],
+			}
 		end
+		setitems(items)
 		return
 	end
 
@@ -1997,15 +2186,28 @@ draw = function()
 
 		local a, b, c = tcnt(t)
 		infof(curp(), a .. " tables / " .. b .. " values / " .. c .. " other")
+		local items = {}
 
 		if #ks == 0 then
-			showmsg("No editable fields", "This table has no supported editable values.")
+			items[#items + 1] = {
+				kind = "msg",
+				h = rowh("msg"),
+				a = "No editable fields",
+				b = "This table has no supported editable values.",
+			}
+			setitems(items)
 			return
 		end
 
 		for _, k in ipairs(ks) do
-			valrow(k, t[k])
+			items[#items + 1] = {
+				kind = "val",
+				h = rowh("val", t[k]),
+				key = k,
+				val = t[k],
+			}
 		end
+		setitems(items)
 	end
 end
 

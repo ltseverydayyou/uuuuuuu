@@ -23,6 +23,7 @@ local gs = __lt.cs("GuiService", __lt.cr)
 local cg = __lt.cs("CoreGui", __lt.cr)
 local starterGui = __lt.cs("StarterGui", __lt.cr)
 local http = __lt.cs("HttpService", __lt.cr)
+local scriptContext = __lt.cs("ScriptContext", __lt.cr)
 
 local plr = players.LocalPlayer
 local cam = workspaceRef.CurrentCamera
@@ -1505,6 +1506,53 @@ end
 
 local draw
 
+local function yieldboundary(err)
+	local s = string.lower(tostring(err))
+	return string.find(s, "yield across metamethod", 1, true) ~= nil
+		or string.find(s, "yield across c-call boundary", 1, true) ~= nil
+end
+
+local function requireraw(mod, timeout)
+	local done = false
+	local ok = false
+	local res
+	local ec
+
+	if typeof(scriptContext) == "Instance" then
+		ec = scriptContext.Error:Connect(function(msg, _, src)
+			if done then
+				return
+			end
+			if src == mod then
+				ok = false
+				res = tostring(msg)
+				done = true
+			end
+		end)
+	end
+
+	task.spawn(function()
+		local out = require(mod)
+		if done then
+			return
+		end
+		ok = true
+		res = out
+		done = true
+	end)
+
+	local t0 = os.clock()
+	while not dead and not done and os.clock() - t0 < timeout do
+		task.wait()
+	end
+
+	if ec then
+		ec:Disconnect()
+	end
+
+	return done, ok, res
+end
+
 local function loadm(ent)
 	if not ent then
 		return false
@@ -1546,6 +1594,25 @@ local function loadm(ent)
 		ent.err = "require timeout"
 		draw()
 		return false
+	end
+
+	if not ok then
+		local err = tostring(res)
+		if yieldboundary(err) then
+			local rawDone, rawOk, rawRes = requireraw(ent.m, 2.5)
+			if not rawDone then
+				ent.st = "time"
+				ent.err = "require timeout"
+				draw()
+				return false
+			end
+			if rawOk then
+				ok = true
+				res = rawRes
+			else
+				err = tostring(rawRes)
+			end
+		end
 	end
 
 	if not ok then

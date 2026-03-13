@@ -148,23 +148,27 @@ local function notifyunsupported(msg)
 	end)
 end
 
+local function findplayersprobe()
+	local all = players:GetDescendants()
+	for i = 1, #all do
+		local v = all[i]
+		if v:IsA("ModuleScript") then
+			return v
+		end
+	end
+	return nil
+end
+
 local function bootstraprequire()
 	if type(require) ~= "function" then
 		return false
 	end
-
-	local probe = Instance.new("ModuleScript")
-	local okSource = pcall(function()
-		probe.Source = "return true"
-	end)
-	if not okSource then
-		probe:Destroy()
+	local probe = findplayersprobe()
+	if not probe then
 		return true
 	end
-
 	local ok, res = pcall(require, probe)
-	probe:Destroy()
-	if ok and res == true then
+	if ok then
 		return true
 	end
 	if prenoreq(res) then
@@ -511,15 +515,47 @@ local function setvalue(t, k, nv)
 	local cur = t[k]
 	if typeof(cur) == "Instance" then
 		if cur:IsA("Animation") then
-			cur.AnimationId = nv
-			return
+			local ok, err = pcall(function()
+				cur.AnimationId = nv
+			end)
+			return ok, err
 		end
 		if cur:IsA("ValueBase") then
-			cur.Value = nv
-			return
+			local ok, err = pcall(function()
+				cur.Value = nv
+			end)
+			return ok, err
 		end
 	end
-	t[k] = nv
+	local ok, err = pcall(function()
+		t[k] = nv
+	end)
+	return ok, err
+end
+
+local function isreadonlyerr(err)
+	local s = string.lower(tostring(err))
+	return string.find(s, "readonly", 1, true) ~= nil
+		or string.find(s, "read-only", 1, true) ~= nil
+		or string.find(s, "frozen", 1, true) ~= nil
+end
+
+local function cloneplain(t)
+	if type(table.clone) == "function" then
+		local ok, cp = pcall(table.clone, t)
+		if ok and type(cp) == "table" then
+			return cp
+		end
+	end
+	local cp = {}
+	for k, v in pairs(t) do
+		cp[k] = v
+	end
+	local mt = getmetatable(t)
+	if mt ~= nil then
+		setmetatable(cp, mt)
+	end
+	return cp
 end
 
 local function low(s)
@@ -1274,6 +1310,87 @@ local function gettbl(depth)
 	return t
 end
 
+local function gettablechain()
+	if not curm or curm.st ~= "ok" or type(curm.val) ~= "table" then
+		return nil
+	end
+	local chain = {curm.val}
+	local t = curm.val
+	for i = 1, #stk do
+		local k = stk[i]
+		if type(t) ~= "table" then
+			return nil
+		end
+		local v = rawget(t, k)
+		if v == nil then
+			local ok, res = pcall(function()
+				return t[k]
+			end)
+			if not ok then
+				return nil
+			end
+			v = res
+			pcall(rawset, t, k, res)
+		end
+		chain[#chain + 1] = v
+		t = v
+	end
+	return chain
+end
+
+local function setpathvalue(k, nv)
+	local t = gettbl()
+	if not t then
+		return false, "path is no longer valid"
+	end
+
+	local ok, err = setvalue(t, k, nv)
+	if ok then
+		return true
+	end
+	if not isreadonlyerr(err) then
+		return false, err
+	end
+	if #stk <= 0 or type(t) ~= "table" then
+		return false, err
+	end
+
+	local chain = gettablechain()
+	if not chain or chain[#chain] ~= t then
+		return false, err
+	end
+
+	local child = cloneplain(t)
+	local wrote, writeErr = setvalue(child, k, nv)
+	if not wrote then
+		return false, writeErr or err
+	end
+
+	for depth = #stk, 1, -1 do
+		local parent = chain[depth]
+		local parentKey = stk[depth]
+		local assignOk, assignErr = pcall(function()
+			parent[parentKey] = child
+		end)
+		if assignOk then
+			return true
+		end
+		if not isreadonlyerr(assignErr) then
+			return false, assignErr
+		end
+		local parentClone = cloneplain(parent)
+		local linkOk, linkErr = pcall(function()
+			parentClone[parentKey] = child
+		end)
+		if not linkOk then
+			return false, linkErr
+		end
+		child = parentClone
+	end
+
+	return false, err
+end
+
 local function iscycletable(v, depth)
 	if type(v) ~= "table" or not curm or type(curm.val) ~= "table" then
 		return false
@@ -1900,7 +2017,11 @@ local function valrow(parent, y, k, v)
 			if not t then
 				return
 			end
-			setvalue(t, k, not editvalue(t[k]))
+			local ok, err = setpathvalue(k, not editvalue(t[k]))
+			if not ok then
+				stat.Text = "failed to set " .. tostring(k) .. ": " .. tostring(err)
+				return
+			end
 			draw()
 		end)
 	else
@@ -1957,7 +2078,12 @@ local function valrow(parent, y, k, v)
 				box.Text = fmt(t[k])
 				return
 			end
-			setvalue(t, k, nv)
+			local wrote, err = setpathvalue(k, nv)
+			if not wrote then
+				stat.Text = "failed to set " .. tostring(k) .. ": " .. tostring(err)
+				box.Text = fmt(t[k])
+				return
+			end
 			stat.Text = tostring(k) .. " = " .. fmt(t[k])
 			box.Text = fmt(t[k])
 		end

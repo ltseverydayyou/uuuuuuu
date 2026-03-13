@@ -920,7 +920,8 @@ local function main()
 		
 		sectionAnchors.Decompiler = AddSeperator("Decompiler")
 		AddText("If executor does not support decompile, it will use the fallback option.")
-		AddText("'getbytecode' is mandatory to use fallback decompilers.")
+		AddText("Enable 'Prefer Fallback Decompiler' to force fallback first even when built-in decompile exists.")
+		AddText("'getscriptbytecode' is mandatory to use fallback decompilers.")
 		local decompilerOption = {"Konstant", "AdvancedDecompiler", "Shiny"}
 		local decompiler = AddDropdown("Decompiler Fallback", decompilerOption, Settings.Decompiler.DecompilerFallback, false, 125)
 		decompiler.OnSelect:Connect(function()

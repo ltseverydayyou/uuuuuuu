@@ -43,13 +43,25 @@ function __lt.cm(name, method, ...)
 	return fn(service, ...);
 end;
 
-
 local Players = __lt.cs("Players", cloneref);
 local RunService = __lt.cs("RunService", cloneref);
 local UserInputService = __lt.cs("UserInputService", cloneref);
-local ReplicatedStorage = __lt.cs("ReplicatedStorage", cloneref);
-local Stats = game:GetService("Stats");
+local Stats = __lt.cs("Stats", cloneref);
 local GuiService = __lt.cs("GuiService", cloneref);
+
+local _apErr = {
+	msg = nil,
+	t = 0
+};
+local function apWarn(err)
+	local s = tostring(err);
+	local now = tick();
+	if _apErr.msg ~= s or now - _apErr.t >= 1 then
+		warn(s);
+		_apErr.msg = s;
+		_apErr.t = now;
+	end;
+end;
 local IsOnMobile = (function()
 	local platform = __lt.cm("UserInputService", "GetPlatform");
 	if platform == Enum.Platform.IOS or platform == Enum.Platform.Android or platform == Enum.Platform.AndroidTV or platform == Enum.Platform.Chromecast or platform == Enum.Platform.MetaOS then
@@ -70,9 +82,39 @@ local IsOnPC = (function()
 	end;
 	return false;
 end)();
+local AUTO_PARRY_CONFIG_DIR = "AutoParryConfigs";
+local AUTO_PARRY_CONFIG_KEY = tostring(game.GameId);
+local AUTO_PARRY_CONFIG_PATH = AUTO_PARRY_CONFIG_DIR .. "/" .. AUTO_PARRY_CONFIG_KEY .. ".json";
+local function getTopbarConfigStore()
+	if type(getgenv) ~= "function" then
+		return nil;
+	end;
+	local ok, env = pcall(getgenv);
+	if not ok or type(env) ~= "table" then
+		return nil;
+	end;
+	env.AutoParryTopbarConfigs = env.AutoParryTopbarConfigs or {};
+	return env.AutoParryTopbarConfigs;
+end;
 local connections = {};
-local touchOpt = nil;
-local touchLock = false;
+local topbarState = {
+	touchOpt = nil,
+	touchLock = false,
+	topbarIconInstance = nil,
+	apOption = nil,
+	spamOption = nil,
+	preclickOption = nil,
+	visualizerOption = nil,
+	modeOption = nil,
+	modeDropdown = nil,
+	debugEnabled = false,
+	debugIconInstance = nil,
+	debugToggleOption = nil,
+	debugStateOption = nil,
+	debugTargetOption = nil,
+	debugBallsOption = nil,
+	debugCooldownOption = nil
+};
 local connect = function(name, connection)
 	connections[name] = connections[name] or {};
 	table.insert(connections[name], connection);
@@ -171,7 +213,27 @@ end;
 local guiCHECKINGAHHHHH = function()
 	return gethui and gethui() or (__lt.cs("CoreGui", cloneref)):FindFirstChildWhichIsA("ScreenGui") or __lt.cs("CoreGui", cloneref) or (__lt.cs("Players", cloneref)).LocalPlayer:FindFirstChildWhichIsA("PlayerGui");
 end;
+local function purgeOldAutoParryArtifacts()
+	local ok, guiParent = pcall(guiCHECKINGAHHHHH);
+	if ok and guiParent then
+		for _, old in ipairs(guiParent:GetDescendants()) do
+			if old.Name == "Range" or old.Name == "Distance" then
+				pcall(function()
+					old:Destroy();
+				end);
+			end;
+		end;
+	end;
+	for _, old in ipairs(workspace:GetDescendants()) do
+		if old:IsA("BasePart") and (old.Name == "Visualizer" or old.Name == "VisualizerNoUnit" or old.Name == "VisualizerFollowBall") then
+			pcall(function()
+				old:Destroy();
+			end);
+		end;
+	end;
+end;
 do
+	purgeOldAutoParryArtifacts();
 	local ok, guiParent = pcall(guiCHECKINGAHHHHH);
 	if ok and guiParent then
 		for _, n in ipairs({
@@ -229,6 +291,24 @@ local function waitForChildFast(parent, name)
 		return nil;
 	end;
 	return parent:FindFirstChild(name) or parent:WaitForChild(name, 5);
+end;
+local function getPing()
+	local ok, value = pcall(function()
+		local net = Stats and Stats.Network;
+		local item = net and net.ServerStatsItem and net.ServerStatsItem["Data Ping"];
+		if not item then
+			return 0;
+		end;
+		local fn = item.GetValue;
+		if type(fn) == "function" then
+			return fn(item);
+		end;
+		return 0;
+	end);
+	if not ok or type(value) ~= "number" then
+		return 0;
+	end;
+	return value;
 end;
 local VisualizerDefaults = {
 	enabled = false,
@@ -294,83 +374,101 @@ local function normalizeVisualizerConfig()
 end;
 local visualizerConfig = normalizeVisualizerConfig();
 visualizerConfig.profile = visualizerConfig.profile or VisualizerDefaults.profile;
-local speedScale;
-local minSize;
-local maxSize;
-local predictMaxSize;
-local predictMinRadius;
-local pingPredictScale;
-local pingTimeScale;
-local ringBaseTransparency;
-local ringPinkTransparency;
-local distanceDivisor;
-local predictBase;
-local predictExtra;
-local resetToken = 0;
-local parCd = 0.7;
-local nextPar = 0;
-local lastParryTime = 0;
-local curFrame = 0;
-local lastQueueTime = 0;
-local stepAcc = 0;
-local stepDt = 1 / 120;
-local maxSub = 4;
-local wasInPredict = {};
-local ringLimited = false;
-local lastBallSamples = {};
-local lastBallVel = {};
-local lastBallMoveTime = {};
-local closeParryBlocked = {};
-local smoothedSpeed = {};
-local lastHighlightMatch = {};
-local lastCharHighlightEnabled = {};
-local lastParryPerBall = {};
-local predictEnterAt = {};
-local targetedSince = {};
-local lastAttrTargeted = {};
-local baitUntil = {};
-local awaySince = {};
-local lastAwayFlag = {};
+local visualizerState = {
+	speedScale = VisualizerDefaults.speedScale,
+	minSize = VisualizerDefaults.minSize,
+	maxSize = VisualizerDefaults.maxSize,
+	predictMaxSize = VisualizerDefaults.predictMaxSize,
+	predictMinRadius = VisualizerDefaults.predictMinRadius,
+	pingPredictScale = VisualizerDefaults.pingPredictScale,
+	pingTimeScale = VisualizerDefaults.pingTimeScale,
+	ringBaseTransparency = VisualizerDefaults.transparency,
+	ringPinkTransparency = VisualizerDefaults.pinkTransparency,
+	distanceDivisor = VisualizerDefaults.distanceDivisor,
+	predictBase = VisualizerDefaults.predictBase,
+	predictExtra = VisualizerDefaults.predictExtra,
+	ringSizeState = {},
+	ballVis = {},
+	visualizerAttached = true,
+	ringLimited = false
+};
+local parryState = {
+	resetToken = 0,
+	parCd = 0.7,
+	nextPar = 0,
+	lastParryTime = 0,
+	curFrame = 0,
+	lastQueueTime = 0,
+	stepAcc = 0,
+	stepDt = 1 / 120,
+	maxSub = 12,
+	activeParryBall = nil,
+	activeParryReleaseAt = 0,
+	clearActiveParryLock = nil,
+	pendingBalls = {},
+	pendingSet = {},
+	spam = false,
+	spamWindowUntil = 0,
+	spamFastUntil = 0,
+	spamBurstUntil = 0,
+	spamNextAt = 0,
+	apEnabled = true,
+	preclick = true,
+	apState = "Idle"
+};
+local ballState = {
+	wasInPredict = {},
+	lastBallSamples = {},
+	lastDistToPlayer = {},
+	lastBallVel = {},
+	lastBallMoveTime = {},
+	closeParryBlocked = {},
+	smoothedSpeed = {},
+	lastHighlightMatch = {},
+	lastCharHighlightEnabled = {},
+	lastParryPerBall = {},
+	predictEnterAt = {},
+	targetedSince = {},
+	targetStartDist = {},
+	lastAttrTargeted = {},
+	targetConfirmActive = {},
+	targetStateCache = {},
+	targetStateQueued = {},
+	targetStateDirty = {},
+	baitUntil = {},
+	awaySince = {},
+	lastAwayFlag = {},
+	ballsMap = {},
+	ballList = {},
+	mainRealBall = {},
+	ballConns = {},
+	containerConns = {},
+	trackedConnections = {}
+};
 local function refreshVisualizerDerived()
 	local cfg = visualizerConfig;
-	speedScale = cfg.speedScale or VisualizerDefaults.speedScale;
-	minSize = cfg.minSize or VisualizerDefaults.minSize;
-	maxSize = cfg.maxSize or VisualizerDefaults.maxSize;
-	predictMaxSize = cfg.predictMaxSize or VisualizerDefaults.predictMaxSize;
-	predictMinRadius = cfg.predictMinRadius or VisualizerDefaults.predictMinRadius;
-	pingPredictScale = cfg.pingPredictScale or VisualizerDefaults.pingPredictScale;
-	pingTimeScale = cfg.pingTimeScale or VisualizerDefaults.pingTimeScale;
-	ringBaseTransparency = cfg.transparency or VisualizerDefaults.transparency;
-	ringPinkTransparency = cfg.pinkTransparency or VisualizerDefaults.pinkTransparency;
-	distanceDivisor = cfg.distanceDivisor or VisualizerDefaults.distanceDivisor;
-	predictBase = cfg.predictBase or VisualizerDefaults.predictBase;
-	predictExtra = cfg.predictExtra or VisualizerDefaults.predictExtra;
+	visualizerState.speedScale = cfg.speedScale or VisualizerDefaults.speedScale;
+	visualizerState.minSize = cfg.minSize or VisualizerDefaults.minSize;
+	visualizerState.maxSize = cfg.maxSize or VisualizerDefaults.maxSize;
+	visualizerState.predictMaxSize = cfg.predictMaxSize or VisualizerDefaults.predictMaxSize;
+	visualizerState.predictMinRadius = cfg.predictMinRadius or VisualizerDefaults.predictMinRadius;
+	visualizerState.pingPredictScale = cfg.pingPredictScale or VisualizerDefaults.pingPredictScale;
+	visualizerState.pingTimeScale = cfg.pingTimeScale or VisualizerDefaults.pingTimeScale;
+	visualizerState.ringBaseTransparency = cfg.transparency or VisualizerDefaults.transparency;
+	visualizerState.ringPinkTransparency = cfg.pinkTransparency or VisualizerDefaults.pinkTransparency;
+	visualizerState.distanceDivisor = cfg.distanceDivisor or VisualizerDefaults.distanceDivisor;
+	visualizerState.predictBase = cfg.predictBase or VisualizerDefaults.predictBase;
+	visualizerState.predictExtra = cfg.predictExtra or VisualizerDefaults.predictExtra;
 end;
 refreshVisualizerDerived();
-local spam = false;
-local apEnabled = true;
-local topbarIconInstance;
-local apOption;
-local spamOption;
-local visualizerOption;
-local modeOption;
-local modeDropdown;
-local apState = "Idle";
-local debugEnabled = false;
-local debugIconInstance;
-local debugToggleOption;
-local debugStateOption;
-local debugTargetOption;
-local debugBallsOption;
-local debugCooldownOption;
 local updateRingColors = function()
 end;
 local function updateTopbarCaption()
-	if not topbarIconInstance then
+	if not topbarState.topbarIconInstance then
 		return;
 	end;
 	local profileName = visualizerConfig.profile or VisualizerDefaults.profile;
-	topbarIconInstance:setCaption("Mode: " .. profileName);
+	topbarState.topbarIconInstance:setCaption("Mode: " .. profileName);
 end;
 local function isVisualizerEnabled()
 	local cfg = visualizerConfig;
@@ -380,51 +478,148 @@ local function isVisualizerEnabled()
 	return false;
 end;
 local function updateSpamLabel()
-	if not spamOption then
+	if not topbarState.spamOption then
 		return;
 	end;
-	spamOption:setLabel("Spam: " .. (spam and "ON" or "OFF"));
+	topbarState.spamOption:setLabel("Spam: " .. (parryState.spam and "ON" or "OFF"));
+end;
+local function applyVisualizerProfileValues(name)
+	local profile = VisualizerProfiles[name];
+	if not profile then
+		return false;
+	end;
+	for key, value in pairs(profile) do
+		visualizerConfig[key] = value;
+	end;
+	visualizerConfig.profile = name;
+	refreshVisualizerDerived();
+	return true;
+end;
+local function buildTopbarConfigSnapshot()
+	return {
+		apEnabled = parryState.apEnabled,
+		preclick = parryState.preclick,
+		visualizerEnabled = isVisualizerEnabled(),
+		visualizerProfile = visualizerConfig.profile or VisualizerDefaults.profile,
+		debugEnabled = topbarState.debugEnabled,
+		touchLock = topbarState.touchLock
+	};
+end;
+local function normalizeTopbarConfig(raw)
+	raw = type(raw) == "table" and raw or {};
+	local visualizerEnabled = raw.visualizerEnabled;
+	if type(visualizerEnabled) ~= "boolean" then
+		visualizerEnabled = isVisualizerEnabled();
+	end;
+	local visualizerProfile = raw.visualizerProfile;
+	if type(visualizerProfile) ~= "string" or (not VisualizerProfiles[visualizerProfile]) then
+		visualizerProfile = visualizerConfig.profile or VisualizerDefaults.profile;
+	end;
+	return {
+		apEnabled = raw.apEnabled ~= false,
+		preclick = raw.preclick ~= false,
+		visualizerEnabled = visualizerEnabled,
+		visualizerProfile = visualizerProfile,
+		debugEnabled = raw.debugEnabled == true,
+		touchLock = raw.touchLock == true
+	};
+end;
+local function loadTopbarConfig()
+	local raw;
+	local store = getTopbarConfigStore();
+	if type(readfile) == "function" and type(isfile) == "function" and isfile(AUTO_PARRY_CONFIG_PATH) then
+		local ok, content = pcall(readfile, AUTO_PARRY_CONFIG_PATH);
+		if ok and type(content) == "string" and content ~= "" then
+			local decodedOk, decoded = pcall(function()
+				return __lt.cm("HttpService", "JSONDecode", content);
+			end);
+			if decodedOk and type(decoded) == "table" then
+				raw = decoded;
+			end;
+		end;
+	end;
+	if raw == nil and store then
+		raw = store[AUTO_PARRY_CONFIG_KEY];
+	end;
+	return normalizeTopbarConfig(raw);
+end;
+local function saveTopbarConfig()
+	local payload = buildTopbarConfigSnapshot();
+	local store = getTopbarConfigStore();
+	if store then
+		store[AUTO_PARRY_CONFIG_KEY] = payload;
+	end;
+	if type(writefile) ~= "function" then
+		return;
+	end;
+	if type(makefolder) == "function" then
+		pcall(makefolder, AUTO_PARRY_CONFIG_DIR);
+	end;
+	local ok, encoded = pcall(function()
+		return __lt.cm("HttpService", "JSONEncode", payload);
+	end);
+	if ok and type(encoded) == "string" then
+		pcall(writefile, AUTO_PARRY_CONFIG_PATH, encoded);
+	end;
+end;
+local loadedTopbarConfig = loadTopbarConfig();
+parryState.apEnabled = loadedTopbarConfig.apEnabled;
+parryState.spam = false;
+parryState.preclick = loadedTopbarConfig.preclick;
+topbarState.debugEnabled = loadedTopbarConfig.debugEnabled;
+topbarState.touchLock = loadedTopbarConfig.touchLock;
+applyVisualizerProfileValues(loadedTopbarConfig.visualizerProfile);
+visualizerConfig.enabled = loadedTopbarConfig.visualizerEnabled;
+(getgenv()).visualizer = visualizerConfig;
+if topbarState.touchLock then
+	ApplyLastInputPatch();
+end;
+local function updatePreclickLabel()
+	if not topbarState.preclickOption then
+		return;
+	end;
+	topbarState.preclickOption:setLabel("Preclick: " .. (parryState.preclick and "ON" or "OFF"));
 end;
 local function updateApLabel()
-	if not apOption then
+	if not topbarState.apOption then
 		return;
 	end;
-	apOption:setLabel("AP: " .. (apEnabled and "ON" or "OFF"));
+	topbarState.apOption:setLabel("AP: " .. (parryState.apEnabled and "ON" or "OFF"));
 end;
 local function updateVisualizerLabel()
-	if not visualizerOption then
+	if not topbarState.visualizerOption then
 		return;
 	end;
-	visualizerOption:setLabel("Visual: " .. (isVisualizerEnabled() and "ON" or "OFF"));
+	topbarState.visualizerOption:setLabel("Visual: " .. (isVisualizerEnabled() and "ON" or "OFF"));
 end;
 local function updateModeLabel()
-	if not modeOption then
+	if not topbarState.modeOption then
 		return;
 	end;
 	local profileName = visualizerConfig.profile or VisualizerDefaults.profile;
-	modeOption:setLabel("Mode: " .. profileName);
+	topbarState.modeOption:setLabel("Mode: " .. profileName);
 	updateTopbarCaption();
 end;
 local function updateDebugMenu(numBalls, anyTargeted, nowTime)
-	if not debugIconInstance then
+	if not topbarState.debugIconInstance then
 		return;
 	end;
-	if debugStateOption then
-		debugStateOption:setLabel("State: " .. apState);
+	if topbarState.debugStateOption then
+		topbarState.debugStateOption:setLabel("State: " .. parryState.apState);
 	end;
-	if debugTargetOption then
-		debugTargetOption:setLabel("Targeted: " .. (anyTargeted and "Yes" or "No"));
+	if topbarState.debugTargetOption then
+		topbarState.debugTargetOption:setLabel("Targeted: " .. (anyTargeted and "Yes" or "No"));
 	end;
-	if debugBallsOption then
-		debugBallsOption:setLabel("Balls: " .. tostring((numBalls or 0)));
+	if topbarState.debugBallsOption then
+		topbarState.debugBallsOption:setLabel("Balls: " .. tostring((numBalls or 0)));
 	end;
-	if debugCooldownOption then
+	if topbarState.debugCooldownOption then
 		local nowT = nowTime or tick();
-		local cd = math.max((nextPar or 0) - nowT, 0);
-		debugCooldownOption:setLabel(string.format("CD: %.2fs", cd));
+		local cd = math.max((parryState.nextPar or 0) - nowT, 0);
+		topbarState.debugCooldownOption:setLabel(string.format("CD: %.2fs", cd));
 	end;
-	if debugIconInstance.setCaption then
-		debugIconInstance:setCaption(apState);
+	if topbarState.debugIconInstance.setCaption then
+		topbarState.debugIconInstance:setCaption(parryState.apState);
 	end;
 end;
 local function iconHide(ico)
@@ -437,27 +632,75 @@ local function iconShow(ico)
 		ico:setEnabled(true);
 	end;
 end;
+local function setApEnabled(value)
+	local old = parryState.apEnabled;
+	parryState.apEnabled = value == true;
+	if old and (not parryState.apEnabled) then
+		parryState.nextPar = 0;
+		parryState.lastParryTime = 0;
+		parryState.spamWindowUntil = 0;
+		parryState.spamFastUntil = 0;
+		parryState.spamBurstUntil = 0;
+		parryState.spamNextAt = 0;
+		if parryState.clearActiveParryLock then
+			parryState.clearActiveParryLock(nil);
+		end;
+		visualizerState.ringLimited = false;
+		table.clear(ballState.lastBallSamples);
+		table.clear(ballState.lastDistToPlayer);
+		table.clear(ballState.lastBallVel);
+		table.clear(ballState.lastBallMoveTime);
+		table.clear(ballState.smoothedSpeed);
+		table.clear(ballState.closeParryBlocked);
+		table.clear(ballState.predictEnterAt);
+		table.clear(ballState.wasInPredict);
+		table.clear(ballState.lastHighlightMatch);
+		table.clear(ballState.lastCharHighlightEnabled);
+		table.clear(ballState.targetedSince);
+		table.clear(ballState.targetStartDist);
+		table.clear(ballState.lastAttrTargeted);
+		table.clear(ballState.targetConfirmActive);
+		table.clear(ballState.targetStateCache);
+		table.clear(ballState.targetStateQueued);
+		table.clear(ballState.targetStateDirty);
+		table.clear(ballState.lastParryPerBall);
+		table.clear(ballState.baitUntil);
+		table.clear(ballState.awaySince);
+		table.clear(ballState.lastAwayFlag);
+		table.clear(parryState.pendingBalls);
+		table.clear(parryState.pendingSet);
+	end;
+	updateApLabel();
+	saveTopbarConfig();
+end;
 local function toggleSpam()
-	spam = not spam;
+	parryState.spam = not parryState.spam;
 	updateSpamLabel();
 	updateRingColors();
+	saveTopbarConfig();
+end;
+local function togglePreclick()
+	parryState.preclick = not parryState.preclick;
+	updatePreclickLabel();
+	saveTopbarConfig();
+end;
+local function getPreclickLead(pingMs)
+	local pingLead = math.clamp((pingMs or 0) * 0.0002, 0, 0.04);
+	return math.clamp(0.055 + pingLead, 0.055, 0.11);
 end;
 local function toggleVisualizer()
 	visualizerConfig.enabled = not isVisualizerEnabled();
 	(getgenv()).visualizer = visualizerConfig;
 	updateVisualizerLabel();
+	saveTopbarConfig();
 end;
 local function applyProfile(name)
-	local profile = VisualizerProfiles[name];
-	if not profile then
+	if not applyVisualizerProfileValues(name) then
 		return;
 	end;
-	for key, value in pairs(profile) do
-		visualizerConfig[key] = value;
-	end;
-	visualizerConfig.profile = name;
-	refreshVisualizerDerived();
+	(getgenv()).visualizer = visualizerConfig;
 	updateModeLabel();
+	saveTopbarConfig();
 end;
 local function findProfileIndex(name)
 	for idx, profileName in ipairs(profileOrder) do
@@ -481,15 +724,44 @@ local function setupDebugIcon(IconModule)
 	local icon = IconModule.new();
 	icon:disableOverlay(true);
 	((icon:setName("APDebug")):setImage("rbxassetid://11348555035")):align("Right");
-	debugIconInstance = icon;
+	topbarState.debugIconInstance = icon;
 	local menu = icon:addMenu();
-	debugStateOption = (menu:new()):setLabel("State: " .. apState);
-	debugTargetOption = (menu:new()):setLabel("Targeted: No");
-	debugBallsOption = (menu:new()):setLabel("Balls: 0");
-	debugCooldownOption = (menu:new()):setLabel("CD: 0.00s");
+	topbarState.debugStateOption = (menu:new()):setLabel("State: " .. parryState.apState);
+	topbarState.debugTargetOption = (menu:new()):setLabel("Targeted: No");
+	topbarState.debugBallsOption = (menu:new()):setLabel("Balls: 0");
+	topbarState.debugCooldownOption = (menu:new()):setLabel("CD: 0.00s");
 	if icon.setCaption then
-		icon:setCaption(apState);
+		icon:setCaption(parryState.apState);
 	end;
+end;
+local function setDebugEnabled(value, IconModule)
+	topbarState.debugEnabled = value == true;
+	if topbarState.debugEnabled then
+		if topbarState.debugIconInstance then
+			iconShow(topbarState.debugIconInstance);
+		elseif IconModule then
+			setupDebugIcon(IconModule);
+		end;
+		updateDebugMenu(0, false, tick());
+	else
+		iconHide(topbarState.debugIconInstance);
+	end;
+	if topbarState.debugToggleOption then
+		topbarState.debugToggleOption:setLabel("Debug: " .. (topbarState.debugEnabled and "ON" or "OFF"));
+	end;
+	saveTopbarConfig();
+end;
+local function setTouchLockEnabled(value)
+	topbarState.touchLock = value == true;
+	if topbarState.touchLock then
+		ApplyLastInputPatch();
+	else
+		RevertLastInputPatch();
+	end;
+	if topbarState.touchOpt then
+		topbarState.touchOpt:setLabel("TouchLock: " .. (topbarState.touchLock and "ON" or "OFF"));
+	end;
+	saveTopbarConfig();
 end;
 local function setupTopbarIcon()
 	local ok, IconModule = pcall(function()
@@ -504,80 +776,41 @@ local function setupTopbarIcon()
 	end;
 	local icon = IconModule.new();
 	(((icon:setName("AutoParry")):setLabel("Auto Parry")):setImage("rbxassetid://11322093465")):align("Center");
-	topbarIconInstance = icon;
+	topbarState.topbarIconInstance = icon;
 	local dropdown = icon:addMenu();
-	apOption = (dropdown:new()):setLabel("AP: ON");
-	apOption:oneClick(function()
-		local old = apEnabled;
-		apEnabled = not apEnabled;
-		if old and (not apEnabled) then
-			nextPar = 0;
-			lastParryTime = 0;
-			ringLimited = false;
-			table.clear(lastBallSamples);
-			table.clear(lastBallVel);
-			table.clear(lastBallMoveTime);
-			table.clear(smoothedSpeed);
-			table.clear(closeParryBlocked);
-			table.clear(predictEnterAt);
-			table.clear(wasInPredict);
-			table.clear(lastHighlightMatch);
-			table.clear(lastCharHighlightEnabled);
-			table.clear(targetedSince);
-			table.clear(lastAttrTargeted);
-			table.clear(lastParryPerBall);
-			table.clear(baitUntil);
-			table.clear(awaySince);
-			table.clear(lastAwayFlag);
-		end;
-		updateApLabel();
-	end);
-	visualizerOption = (dropdown:new()):setLabel("Visual: OFF");
-	visualizerOption:oneClick(function()
+	topbarState.visualizerOption = (dropdown:new()):setLabel("Visual: OFF");
+	topbarState.visualizerOption:oneClick(function()
 		toggleVisualizer();
 	end);
-	modeOption = (dropdown:new()):setLabel("Mode: " .. (visualizerConfig.profile or VisualizerDefaults.profile));
-	modeOption:oneClick(function()
+	topbarState.apOption = (dropdown:new()):setLabel("AP: ON");
+	topbarState.apOption:oneClick(function()
+		setApEnabled(not parryState.apEnabled);
+	end);
+	topbarState.modeOption = (dropdown:new()):setLabel("Mode: " .. (visualizerConfig.profile or VisualizerDefaults.profile));
+	topbarState.modeOption:oneClick(function()
 		cycleProfile();
 	end);
-	modeDropdown = modeOption:addMenu();
-	spamOption = (dropdown:new()):setLabel("Spam: OFF");
-	spamOption:oneClick(function()
+	topbarState.modeDropdown = topbarState.modeOption:addMenu();
+	topbarState.spamOption = (dropdown:new()):setLabel("Spam: OFF");
+	topbarState.spamOption:oneClick(function()
 		toggleSpam();
 	end);
-	debugToggleOption = (dropdown:new()):setLabel("Debug: OFF");
-	debugToggleOption:oneClick(function()
-		debugEnabled = not debugEnabled;
-		if debugEnabled then
-			if debugIconInstance then
-				iconShow(debugIconInstance);
-			else
-				setupDebugIcon(IconModule);
-			end;
-			updateDebugMenu(0, false, tick());
-		else
-			iconHide(debugIconInstance);
-		end;
-		if debugToggleOption then
-			debugToggleOption:setLabel("Debug: " .. (debugEnabled and "ON" or "OFF"));
-		end;
+	topbarState.preclickOption = (dropdown:new()):setLabel("Preclick: ON");
+	topbarState.preclickOption:oneClick(function()
+		togglePreclick();
+	end);
+	topbarState.debugToggleOption = (dropdown:new()):setLabel("Debug: OFF");
+	topbarState.debugToggleOption:oneClick(function()
+		setDebugEnabled(not topbarState.debugEnabled, IconModule);
 	end);
 	if IsOnMobile then
-		touchOpt = (dropdown:new()):setLabel("TouchLock: " .. (touchLock and "ON" or "OFF"));
-		touchOpt:oneClick(function()
-			touchLock = not touchLock;
-			if touchLock then
-				ApplyLastInputPatch();
-			else
-				RevertLastInputPatch();
-			end;
-			if touchOpt then
-				touchOpt:setLabel("TouchLock: " .. (touchLock and "ON" or "OFF"));
-			end;
+		topbarState.touchOpt = (dropdown:new()):setLabel("TouchLock: " .. (topbarState.touchLock and "ON" or "OFF"));
+		topbarState.touchOpt:oneClick(function()
+			setTouchLockEnabled(not topbarState.touchLock);
 		end);
 	end;
 	local function addModeEntry(name)
-		local entry = (modeDropdown:new()):setLabel(name);
+		local entry = (topbarState.modeDropdown:new()):setLabel(name);
 		entry:oneClick(function()
 			applyProfile(name);
 		end);
@@ -587,9 +820,13 @@ local function setupTopbarIcon()
 	end;
 	updateApLabel();
 	updateSpamLabel();
+	updatePreclickLabel();
 	updateVisualizerLabel();
 	updateModeLabel();
 	updateDebugMenu(0, false, tick());
+	if topbarState.debugEnabled then
+		setDebugEnabled(true, IconModule);
+	end;
 end;
 setupTopbarIcon();
 local function ensureIdentity()
@@ -608,6 +845,9 @@ local function ensureIdentity()
 end;
 if getgenv().AutoParryCleanup then
 	getgenv().AutoParryCleanup();
+end;
+if topbarState.touchLock then
+	ApplyLastInputPatch();
 end;
 local function colorsClose(a, b, tol)
 	if not (a and b) then
@@ -630,7 +870,7 @@ local function newRing(name, color)
 	part.CanCollide = false;
 	part.CastShadow = false;
 	part.CanQuery = false;
-	part.Transparency = ringBaseTransparency;
+	part.Transparency = visualizerState.ringBaseTransparency;
 	local mesh = Instance.new("SpecialMesh");
 	mesh.MeshType = Enum.MeshType.FileMesh;
 	mesh.MeshId = "rbxassetid://471124075";
@@ -645,14 +885,12 @@ ringPlayerNoUnit.Name = "VisualizerNoUnit";
 ringPlayerNoUnit.Color = Color3.new(1, 0, 1);
 ringPlayerNoUnit.Transparency = 0.55;
 ringPlayerNoUnit.Parent = workspace;
-local ringSizeState = {};
-local ballVis = {};
 local function rescaleRing(part, diameter, overrideMax, dt)
-	local target = math.clamp(diameter or 10, minSize, overrideMax or maxSize);
-	local current = ringSizeState[part] or part and part.Size.X or target;
+	local target = math.clamp(diameter or 10, visualizerState.minSize, overrideMax or visualizerState.maxSize);
+	local current = visualizerState.ringSizeState[part] or part and part.Size.X or target;
 	local alpha = dt and math.clamp(dt / 0.05, 0.08, 0.6) or 0.35;
 	local size = current + (target - current) * alpha;
-	ringSizeState[part] = size;
+	visualizerState.ringSizeState[part] = size;
 	part.Size = Vector3.new(size, 0.4, size);
 	local mesh = part:FindFirstChildOfClass("SpecialMesh");
 	if mesh then
@@ -703,13 +941,8 @@ local function newBillboard(name, size, studsOffset, includeMulti)
 	return gui, text, textMulti;
 end;
 local rangeGui, rangeText, rangeMulti = newBillboard("Range", UDim2.new(3, 0, 3, 0), Vector3.new(0, 5, 0), true);
-local ballsMap = {};
-local ballList = {};
-local mainRealBall = {};
-local ballConns = {};
-local containerConns = {};
 local function detachContainer(c)
-	local conns = ballConns[c];
+	local conns = ballState.ballConns[c];
 	if conns then
 		if typeof(conns) == "RBXScriptConnection" then
 			pcall(function()
@@ -722,38 +955,42 @@ local function detachContainer(c)
 				end);
 			end;
 		end;
-		ballConns[c] = nil;
+		ballState.ballConns[c] = nil;
 	end;
 end;
 local function addBall(b)
-	if ballsMap[b] or (not (b and b:IsA("BasePart") and b.Parent)) then
+	if ballState.ballsMap[b] or (not (b and b:IsA("BasePart") and b.Parent)) then
 		return;
 	end;
-	ballsMap[b] = true;
+	ballState.ballsMap[b] = true;
 end;
 local function removeBall(b)
-	if not ballsMap[b] then
+	if not ballState.ballsMap[b] then
 		return;
 	end;
-	ballsMap[b] = nil;
-	mainRealBall[b] = nil;
+	ballState.ballsMap[b] = nil;
+	ballState.mainRealBall[b] = nil;
+	ballState.targetStateCache[b] = nil;
+	ballState.targetStateQueued[b] = nil;
+	ballState.targetStateDirty[b] = nil;
+	ballState.targetConfirmActive[b] = nil;
 end;
 local function cleanupBallVisual(ball)
-	local v = ballVis[ball];
+	local v = visualizerState.ballVis[ball];
 	if not v then
 		return;
 	end;
-	ballVis[ball] = nil;
+	visualizerState.ballVis[ball] = nil;
 	if v.gui then
 		v.gui:Destroy();
 	end;
 	if v.ring then
-		ringSizeState[v.ring] = nil;
+		visualizerState.ringSizeState[v.ring] = nil;
 		v.ring:Destroy();
 	end;
 end;
 local function attachContainer(c)
-	if not (c and c.Parent) or ballConns[c] then
+	if not (c and c.Parent) or ballState.ballConns[c] then
 		return;
 	end;
 	if c:IsA("BasePart") then
@@ -782,7 +1019,7 @@ local function attachContainer(c)
 			detachContainer(c);
 		end;
 	end);
-	ballConns[c] = {
+	ballState.ballConns[c] = {
 		added,
 		removing,
 		ancestry
@@ -801,7 +1038,7 @@ local function trackNamedContainer(parent, name)
 	if direct then
 		attachContainer(direct);
 	end;
-	if containerConns[parent] then
+	if ballState.containerConns[parent] then
 		return;
 	end;
 	local addedConn = parent.DescendantAdded:Connect(function(ch)
@@ -811,7 +1048,7 @@ local function trackNamedContainer(parent, name)
 	end);
 	local ancestryConn = parent.AncestryChanged:Connect(function(inst, parentObj)
 		if inst == parent and parentObj == nil then
-			local conns = containerConns[inst];
+			local conns = ballState.containerConns[inst];
 			if conns then
 				if typeof(conns) == "RBXScriptConnection" then
 					pcall(function()
@@ -824,11 +1061,11 @@ local function trackNamedContainer(parent, name)
 						end);
 					end;
 				end;
-				containerConns[inst] = nil;
+				ballState.containerConns[inst] = nil;
 			end;
 		end;
 	end);
-	containerConns[parent] = {
+	ballState.containerConns[parent] = {
 		addedConn,
 		ancestryConn
 	};
@@ -883,10 +1120,110 @@ local function isVisualizerPart(p)
 	end);
 	return tr < 0.95 and ltm < 0.95;
 end;
+local function getTrackedBallVelocity(part)
+	if not (part and part:IsA("BasePart")) then
+		return Vector3.zero;
+	end;
+	return part.AssemblyLinearVelocity or part.Velocity or Vector3.zero;
+end;
+local function isSameBallCluster(a, b)
+	if a == b then
+		return true;
+	end;
+	if not (a and b and a.Parent and b.Parent and a:IsA("BasePart") and b:IsA("BasePart")) then
+		return false;
+	end;
+	local maxSize = math.max(a.Size.Magnitude, b.Size.Magnitude);
+	local posThreshold = math.max(1.75, math.min(maxSize * 0.25, 3));
+	if (a.Position - b.Position).Magnitude > posThreshold then
+		return false;
+	end;
+	local velA = getTrackedBallVelocity(a);
+	local velB = getTrackedBallVelocity(b);
+	local maxSpeed = math.max(velA.Magnitude, velB.Magnitude);
+	if maxSpeed < 4 then
+		return true;
+	end;
+	local velThreshold = math.max(6, maxSpeed * 0.22);
+	return (velA - velB).Magnitude <= velThreshold;
+end;
+local function splitBallClusters(list)
+	local groups = {};
+	for i = 1, #list do
+		local part = list[i];
+		local placed = false;
+		for g = 1, #groups do
+			local group = groups[g];
+			if isSameBallCluster(part, group.anchor) then
+				group.parts[(#group.parts) + 1] = part;
+				if ballState.mainRealBall[part] then
+					group.anchor = part;
+				end;
+				placed = true;
+				break;
+			end;
+		end;
+		if not placed then
+			groups[(#groups) + 1] = {
+				anchor = part,
+				parts = {
+					part
+				}
+			};
+		end;
+	end;
+	return groups;
+end;
+local function appendPrimaryBall(list)
+	local count = #list;
+	if count == 0 then
+		return;
+	end;
+	if count == 1 then
+		ballState.ballList[(#ballState.ballList) + 1] = list[1];
+		return;
+	end;
+	local invis = {};
+	local vis = {};
+	local anyMain;
+	for i = 1, count do
+		local part = list[i];
+		if isVisualizerPart(part) then
+			vis[(#vis) + 1] = part;
+		else
+			invis[(#invis) + 1] = part;
+		end;
+		if ballState.mainRealBall[part] then
+			anyMain = part;
+		end;
+	end;
+	local winner;
+	if #invis > 0 then
+		winner = anyMain or invis[1];
+	elseif anyMain then
+		winner = anyMain;
+	elseif #vis > 0 then
+		winner = vis[1];
+	else
+		winner = list[1];
+	end;
+	if winner then
+		ballState.mainRealBall[winner] = true;
+		for i = 1, count do
+			local part = list[i];
+			if part ~= winner then
+				ballState.mainRealBall[part] = nil;
+				ballState.ballsMap[part] = nil;
+				cleanupBallVisual(part);
+			end;
+		end;
+		ballState.ballList[(#ballState.ballList) + 1] = winner;
+	end;
+end;
 local function getBalls()
-	table.clear(ballList);
+	table.clear(ballState.ballList);
 	local byName = {};
-	for b in pairs(ballsMap) do
+	for b in pairs(ballState.ballsMap) do
 		if b and b.Parent then
 			local name = b.Name;
 			local list = byName[name];
@@ -896,63 +1233,29 @@ local function getBalls()
 			end;
 			list[(#list) + 1] = b;
 		else
-			ballsMap[b] = nil;
-			mainRealBall[b] = nil;
+			ballState.ballsMap[b] = nil;
+			ballState.mainRealBall[b] = nil;
 			cleanupBallVisual(b);
 		end;
 	end;
 	for _, list in pairs(byName) do
-		local count = #list;
-		if count == 1 then
-			local only = list[1];
-			ballList[(#ballList) + 1] = only;
+		if #list == 1 then
+			appendPrimaryBall(list);
 		else
-			local invis = {};
-			local vis = {};
-			local anyMain;
-			for i = 1, count do
-				local part = list[i];
-				if isVisualizerPart(part) then
-					vis[(#vis) + 1] = part;
-				else
-					invis[(#invis) + 1] = part;
-				end;
-				if mainRealBall[part] then
-					anyMain = part;
-				end;
-			end;
-			local winner;
-			if #invis > 0 then
-				winner = anyMain or invis[1];
-			elseif anyMain then
-				winner = anyMain;
-			elseif #vis > 0 then
-				winner = vis[1];
-			else
-				winner = list[1];
-			end;
-			if winner then
-				mainRealBall[winner] = true;
-				for i = 1, count do
-					local part = list[i];
-					if part ~= winner then
-						mainRealBall[part] = nil;
-						ballsMap[part] = nil;
-						cleanupBallVisual(part);
-					end;
-				end;
-				ballList[(#ballList) + 1] = winner;
+			local groups = splitBallClusters(list);
+			for i = 1, #groups do
+				appendPrimaryBall(groups[i].parts);
 			end;
 		end;
 	end;
-	return ballList;
+	return ballState.ballList;
 end;
 setupBallTracking();
 local function getBallVisual(ball)
 	if not ball then
 		return nil;
 	end;
-	local v = ballVis[ball];
+	local v = visualizerState.ballVis[ball];
 	if v and (not v.ring or (not v.ring.Parent) or (not v.gui) or (not v.gui.Parent)) then
 		v = nil;
 	end;
@@ -962,57 +1265,55 @@ local function getBallVisual(ball)
 		gui.Adornee = ball;
 		local ring = ringPlayer:Clone();
 		ring.Name = "VisualizerFollowBall";
-		ring.Transparency = ringBaseTransparency;
+		ring.Transparency = visualizerState.ringBaseTransparency;
 		ring.Parent = workspace;
 		v = {
 			ring = ring,
 			gui = gui,
 			text = txt
 		};
-		ballVis[ball] = v;
+		visualizerState.ballVis[ball] = v;
 	end;
 	return v;
 end;
 local function cleanupAllBallVisuals()
-	for b in pairs(ballVis) do
+	for b in pairs(visualizerState.ballVis) do
 		cleanupBallVisual(b);
 	end;
 end;
 local function applyVisualizerVisible(show)
 	rangeGui.Enabled = show;
-	ringPlayer.Transparency = show and ringBaseTransparency or 1;
-	ringPlayerNoUnit.Transparency = show and ringPinkTransparency or 1;
-	for _, v in pairs(ballVis) do
+	ringPlayer.Transparency = show and visualizerState.ringBaseTransparency or 1;
+	ringPlayerNoUnit.Transparency = show and visualizerState.ringPinkTransparency or 1;
+	for _, v in pairs(visualizerState.ballVis) do
 		if v.gui then
 			v.gui.Enabled = show;
 		end;
 		if v.ring then
-			v.ring.Transparency = show and ringBaseTransparency or 1;
+			v.ring.Transparency = show and visualizerState.ringBaseTransparency or 1;
 		end;
 	end;
 end;
-local visualizerAttached = true;
-local trackedConnections = {};
 local function trackConnection(conn)
-	trackedConnections[(#trackedConnections) + 1] = conn;
+	ballState.trackedConnections[(#ballState.trackedConnections) + 1] = conn;
 	return conn;
 end;
 local function cleanup()
-	for _, c in ipairs(trackedConnections) do
+	for _, c in ipairs(ballState.trackedConnections) do
 		pcall(function()
 			c:Disconnect();
 		end);
 	end;
-	trackedConnections = {};
-	for _, conns in pairs(ballConns) do
+	ballState.trackedConnections = {};
+	for _, conns in pairs(ballState.ballConns) do
 		for _, conn in ipairs(conns) do
 			pcall(function()
 				conn:Disconnect();
 			end);
 		end;
 	end;
-	ballConns = {};
-	for _, conn in pairs(containerConns) do
+	ballState.ballConns = {};
+	for _, conn in pairs(ballState.containerConns) do
 		if typeof(conn) == "RBXScriptConnection" then
 			pcall(function()
 				conn:Disconnect();
@@ -1025,38 +1326,57 @@ local function cleanup()
 			end;
 		end;
 	end;
-	containerConns = {};
-	ballsMap = {};
-	ballList = {};
-	mainRealBall = {};
+	ballState.containerConns = {};
+	ballState.ballsMap = {};
+	ballState.ballList = {};
+	ballState.mainRealBall = {};
+	visualizerState.visualizerAttached = false;
+	visualizerState.ringLimited = false;
+	visualizerState.ringSizeState = {};
 	pcall(function()
-		rangeGui.Parent = nil;
+		rangeGui.Adornee = nil;
+		rangeGui:Destroy();
 	end);
 	pcall(function()
 		cleanupAllBallVisuals();
+		visualizerState.ballVis = {};
 		ringPlayer:Destroy();
 		ringPlayerNoUnit:Destroy();
 	end);
 	pcall(function()
-		iconHide(debugIconInstance);
-		debugIconInstance = nil;
-		debugStateOption = nil;
-		debugTargetOption = nil;
-		debugBallsOption = nil;
-		debugCooldownOption = nil;
+		iconHide(topbarState.topbarIconInstance);
+		topbarState.topbarIconInstance = nil;
+		topbarState.apOption = nil;
+		topbarState.spamOption = nil;
+		topbarState.preclickOption = nil;
+		topbarState.visualizerOption = nil;
+		topbarState.modeOption = nil;
+		topbarState.modeDropdown = nil;
+		topbarState.touchOpt = nil;
 	end);
-	touchLock = false;
+	pcall(function()
+		iconHide(topbarState.debugIconInstance);
+		topbarState.debugIconInstance = nil;
+		topbarState.debugStateOption = nil;
+		topbarState.debugTargetOption = nil;
+		topbarState.debugBallsOption = nil;
+		topbarState.debugCooldownOption = nil;
+	end);
+	topbarState.touchLock = false;
 	RevertLastInputPatch();
+	purgeOldAutoParryArtifacts();
 	table.clear(connections);
+	table.clear(parryState.pendingBalls);
+	table.clear(parryState.pendingSet);
 	(getgenv()).AutoParryCleanup = nil;
 end;
 (getgenv()).AutoParryCleanup = cleanup;
 local function attachVisualizer(hasBall)
 	if hasBall then
-		if not visualizerAttached then
+		if not visualizerState.visualizerAttached then
 			local guiParent = guiCHECKINGAHHHHH();
 			rangeGui.Parent = guiParent;
-			for _, v in pairs(ballVis) do
+			for _, v in pairs(visualizerState.ballVis) do
 				if v.gui then
 					v.gui.Parent = guiParent;
 				end;
@@ -1066,12 +1386,12 @@ local function attachVisualizer(hasBall)
 			end;
 			ringPlayer.Parent = workspace;
 			ringPlayerNoUnit.Parent = workspace;
-			visualizerAttached = true;
+			visualizerState.visualizerAttached = true;
 		end;
-	elseif visualizerAttached then
+	elseif visualizerState.visualizerAttached then
 		rangeGui.Parent = nil;
 		rangeGui.Adornee = nil;
-		for _, v in pairs(ballVis) do
+		for _, v in pairs(visualizerState.ballVis) do
 			if v.gui then
 				v.gui.Parent = nil;
 				v.gui.Adornee = nil;
@@ -1082,7 +1402,7 @@ local function attachVisualizer(hasBall)
 		end;
 		ringPlayer.Parent = nil;
 		ringPlayerNoUnit.Parent = nil;
-		visualizerAttached = false;
+		visualizerState.visualizerAttached = false;
 	end;
 end;
 local function resolveRemote()
@@ -1213,37 +1533,41 @@ local function pressBtn(btn)
 	if not (btn and btn:IsA("GuiButton") and btn.Parent) then
 		return false;
 	end;
-	local fired = false;
-	local ev;
-	ev = btn.MouseButton1Down;
-	if ev then
-		pcall(function()
-			firesignal(ev);
+	local function getSig(name)
+		local ok, sig = pcall(function()
+			return btn[name];
 		end);
-		fired = true;
+		if not ok or typeof(sig) ~= "RBXScriptSignal" then
+			return nil;
+		end;
+		return sig;
 	end;
-	ev = btn.MouseButton1Up;
-	if ev then
-		pcall(function()
-			firesignal(ev);
+	local function fireSig(sig)
+		if typeof(sig) ~= "RBXScriptSignal" then
+			return false;
+		end;
+		local hit = false;
+		local con = sig:Connect(function()
+			hit = true;
 		end);
-		fired = true;
-	end;
-	ev = btn.MouseButton1Click;
-	if ev then
-		pcall(function()
-			firesignal(ev);
+		local ok = pcall(function()
+			firesignal(sig);
 		end);
-		fired = true;
+		task.wait();
+		if con then
+			con:Disconnect();
+		end;
+		return ok and hit;
 	end;
-	ev = btn.Activated;
-	if ev then
-		pcall(function()
-			firesignal(ev);
-		end);
-		fired = true;
+	local sig = getSig("Activated");
+	if sig and fireSig(sig) then
+		return true;
 	end;
-	return fired;
+	sig = getSig("MouseButton1Click");
+	if sig and fireSig(sig) then
+		return true;
+	end;
+	return false;
 end;
 local function QuickParry()
 	local cam = workspace.CurrentCamera;
@@ -1265,11 +1589,11 @@ end;
 local function DoParry()
 	local rem, rargs = resolveRemote();
 	if rem and fireRemote(rem, rargs) then
-		return;
+		return true;
 	end;
 	local btn = resolveBtn();
 	if btn and pressBtn(btn) then
-		return;
+		return true;
 	end;
 	local cam = workspace.CurrentCamera;
 	local y = cam and cam.CFrame.LookVector.Y or 0;
@@ -1305,18 +1629,21 @@ local function DoParry()
 	return success;
 end;
 local function queueParry(isSpam, hasTarget)
-	if not apEnabled and (not isSpam) then
+	if not parryState.apEnabled and (not isSpam) then
 		return;
 	end;
 	if not isSpam and (not hasTarget) then
 		return;
 	end;
 	local now = tick();
-	if not isSpam and now - lastQueueTime < 0.01 then
+	if not isSpam and now - parryState.lastQueueTime < 0.003 then
 		return;
 	end;
-	lastQueueTime = now;
-	task.defer(DoParry);
+	parryState.lastQueueTime = now;
+	local ok, err = pcall(DoParry);
+	if not ok then
+		apWarn(err);
+	end;
 end;
 local function getHighlightColor(inst)
 	if not inst then
@@ -1380,6 +1707,19 @@ local function getBallTargetAttr(ball)
 	end;
 	return nil;
 end;
+
+local function normalizeTargetString(v)
+	if typeof(v) ~= "string" then
+		return "", "";
+	end;
+	local raw = v:lower():gsub("^%s+", ""):gsub("%s+$", "");
+	raw = raw:gsub("^target%s*[:=%-]?%s*", "");
+	raw = raw:gsub("^player%s*[:=%-]?%s*", "");
+	raw = raw:gsub("^@", "");
+	local compact = raw:gsub("[^%w]", "");
+	return raw, compact;
+end;
+
 local function isBallTargetingYouAttr(ball, char)
 	local v = getBallTargetAttr(ball);
 	if not v then
@@ -1397,19 +1737,95 @@ local function isBallTargetingYouAttr(ball, char)
 		if not plr then
 			return false;
 		end;
-		local lower = v:lower();
+		local raw, compact = normalizeTargetString(v);
 		local n1 = plr.Name and plr.Name:lower() or "";
 		local n2 = plr.DisplayName and plr.DisplayName:lower() or "";
-		if n1 ~= "" and lower:find(n1, 1, true) or n2 ~= "" and lower:find(n2, 1, true) then
+		local n3 = char and char.Name and char.Name:lower() or "";
+		local c1 = n1 ~= "" and n1:gsub("[^%w]", "") or "";
+		local c2 = n2 ~= "" and n2:gsub("[^%w]", "") or "";
+		local c3 = n3 ~= "" and n3:gsub("[^%w]", "") or "";
+		local uid = plr.UserId and tostring(plr.UserId) or "";
+		if raw == n1 or raw == n2 or raw == n3 or raw == uid then
+			return true;
+		end;
+		if compact ~= "" and (compact == c1 or compact == c2 or compact == c3 or compact == uid) then
 			return true;
 		end;
 	end;
 	return false;
 end;
+local function getCachedBallTargetState(ball, char)
+	local cached = ballState.targetStateCache[ball];
+	if cached and cached.char == char then
+		return cached;
+	end;
+	return nil;
+end;
+local queueBallTargetStateCheck;
+local function refreshBallTargetState(ball, char, frameId)
+	if not (ball and ball.Parent and char and char.Parent) then
+		ballState.targetStateCache[ball] = nil;
+		return nil;
+	end;
+	local okTarget, targeted, ballHighlight, charHighlight, ballColor, charColor = pcall(isBallTargetingYou, ball, char);
+	local okAttr, attrNow = pcall(isBallTargetingYouAttr, ball, char);
+	if not (ball and ball.Parent and char and char.Parent) then
+		ballState.targetStateCache[ball] = nil;
+		return nil;
+	end;
+	local state = {
+		char = char,
+		targeted = okTarget and targeted == true or false,
+		attrNow = okAttr and attrNow == true or false,
+		ballHighlight = okTarget and ballHighlight or nil,
+		charHighlight = okTarget and charHighlight or nil,
+		ballColor = okTarget and ballColor or nil,
+		charColor = okTarget and charColor or nil,
+		frameId = frameId,
+		t = tick()
+	};
+	ballState.targetStateCache[ball] = state;
+	return state;
+end;
+local function getBallTargetState(ball, char, frameId, forceSync)
+	if forceSync then
+		return refreshBallTargetState(ball, char, frameId);
+	end;
+	queueBallTargetStateCheck(ball, char, frameId);
+	return getCachedBallTargetState(ball, char);
+end;
+queueBallTargetStateCheck = function(ball, char, frameId)
+	if not (ball and ball.Parent and char and char.Parent) then
+		ballState.targetStateCache[ball] = nil;
+		ballState.targetStateDirty[ball] = nil;
+		ballState.targetStateQueued[ball] = nil;
+		return;
+	end;
+	ballState.targetStateDirty[ball] = {
+		char = char,
+		frameId = frameId
+	};
+	if ballState.targetStateQueued[ball] then
+		return;
+	end;
+	ballState.targetStateQueued[ball] = true;
+	task.defer(function()
+		while true do
+			local request = ballState.targetStateDirty[ball];
+			if not request then
+				ballState.targetStateQueued[ball] = nil;
+				return;
+			end;
+			ballState.targetStateDirty[ball] = nil;
+			local reqChar = request.char;
+			refreshBallTargetState(ball, reqChar, request.frameId);
+		end;
+	end);
+end;
 updateRingColors = function()
-	if ringLimited then
+	if visualizerState.ringLimited then
 		ringPlayer.Color = Color3.new(0, 1, 0);
-	elseif spam then
+	elseif parryState.spam then
 		ringPlayer.Color = Color3.new(1, 0.7, 0);
 	else
 		ringPlayer.Color = Color3.new(1, 0, 0);
@@ -1428,24 +1844,287 @@ local function updateGuiTargets(hrp, hasBall)
 		rangeGui.Adornee = nil;
 	end;
 end;
+parryState.clearActiveParryLock = function(ball)
+	if ball == nil or parryState.activeParryBall == ball then
+		parryState.activeParryBall = nil;
+		parryState.activeParryReleaseAt = 0;
+	end;
+end;
+local function setActiveParryLock(ball, now, hitTime)
+	parryState.activeParryBall = ball;
+	local holdFor = math.clamp((hitTime or 0.2) + 0.12, 0.18, 0.9);
+	parryState.activeParryReleaseAt = (now or tick()) + holdFor;
+end;
+local function clearPendingBall(ball)
+	if ball == nil then
+		return;
+	end;
+	parryState.pendingSet[ball] = nil;
+	for i = #parryState.pendingBalls, 1, -1 do
+		if parryState.pendingBalls[i].ball == ball then
+			table.remove(parryState.pendingBalls, i);
+		end;
+	end;
+end;
+
+local function clearPendingBalls()
+	table.clear(parryState.pendingBalls);
+	table.clear(parryState.pendingSet);
+end;
+
+local function queuePendingBall(ball, hitTime, rawDist, zoneRadius, immediate)
+	if not (ball and ball.Parent) then
+		return;
+	end;
+	local now = tick();
+	local item = parryState.pendingSet[ball];
+	if item then
+		item.hitTime = math.min(item.hitTime or math.huge, hitTime or math.huge);
+		item.rawDist = math.min(item.rawDist or math.huge, rawDist or math.huge);
+		item.zoneRadius = math.max(item.zoneRadius or 0, zoneRadius or 0);
+		item.immediate = item.immediate or immediate == true;
+		item.t = now;
+		return;
+	end;
+	item = {
+		ball = ball,
+		hitTime = hitTime or math.huge,
+		rawDist = rawDist or math.huge,
+		zoneRadius = zoneRadius or 0,
+		immediate = immediate == true,
+		t = now
+	};
+	parryState.pendingSet[ball] = item;
+	parryState.pendingBalls[(#parryState.pendingBalls) + 1] = item;
+end;
+
+local function getBallSeparation(a, b)
+	if not (a and b and a.Parent and b.Parent) then
+		return math.huge;
+	end;
+	local ok, dist = pcall(function()
+		return (a.Position - b.Position).Magnitude;
+	end);
+	if ok and type(dist) == "number" then
+		return dist;
+	end;
+	return math.huge;
+end;
+
+local function flushPendingParries(char, hrp, forceImmediate)
+	if not (char and hrp) then
+		return false;
+	end;
+	local list = parryState.pendingBalls;
+	local shots = 0;
+	local maxShots = 2;
+	while shots < maxShots do
+		local now = tick();
+		local bestIndex;
+		local bestItem;
+		local bestHit = math.huge;
+		local bestDist = math.huge;
+		for i = #list, 1, -1 do
+			local item = list[i];
+			local ball = item and item.ball;
+			if not (ball and ball.Parent) then
+				if ball ~= nil then
+					parryState.pendingSet[ball] = nil;
+				end;
+				table.remove(list, i);
+			else
+				if ball == parryState.activeParryBall or ballState.closeParryBlocked[ball] then
+					parryState.pendingSet[ball] = nil;
+					table.remove(list, i);
+				else
+					local targetState = getBallTargetState(ball, char, parryState.curFrame, true);
+					local targetKnown = targetState ~= nil;
+					local targeted = targetKnown and (targetState.targeted or targetState.attrNow) or false;
+					local okD, rawDist = pcall(function()
+						return (ball.Position - hrp.Position).Magnitude;
+					end);
+					if not okD or type(rawDist) ~= "number" then
+						parryState.pendingSet[ball] = nil;
+						table.remove(list, i);
+					else
+						local queuedZone = math.max(item.zoneRadius or 0, 12);
+						local insideQueuedZone = rawDist <= queuedZone * 1.02;
+						local forcedQueued = forceImmediate and insideQueuedZone;
+						if (not targeted) and (not forcedQueued) then
+							if targetKnown and now - (item.t or 0) > 0.2 then
+								parryState.pendingSet[ball] = nil;
+								table.remove(list, i);
+							end;
+						else
+							local speed = math.max(ballState.smoothedSpeed[ball] or 0, getTrackedBallVelocity(ball).Magnitude);
+							local hitTime = math.min(item.hitTime or math.huge, speed > 0 and (rawDist / math.max(speed, 1)) or math.huge);
+							local danger = forcedQueued or insideQueuedZone or item.immediate or hitTime <= 0.35 or rawDist <= math.max(12, 18 + speed * 0.04);
+							if danger and (hitTime < bestHit or (math.abs(hitTime - bestHit) <= 0.02 and rawDist < bestDist)) then
+								if forcedQueued then
+									hitTime = -2;
+								elseif insideQueuedZone or item.immediate then
+									hitTime = -1;
+								end;
+								bestIndex = i;
+								bestItem = item;
+								bestHit = hitTime;
+								bestDist = rawDist;
+							end;
+						end;
+					end;
+				end;
+			end;
+		end;
+		if not bestIndex or not bestItem then
+			break;
+		end;
+		local ball = bestItem.ball;
+		table.remove(list, bestIndex);
+		if ball ~= nil then
+			parryState.pendingSet[ball] = nil;
+		end;
+		local nowFire = tick();
+		local lastBallFire = ballState.lastParryPerBall[ball] or (-math.huge);
+		if forceImmediate or nowFire - lastBallFire > 0.035 then
+			if parryState.activeParryBall and parryState.activeParryBall ~= ball then
+				ballState.closeParryBlocked[parryState.activeParryBall] = nil;
+				parryState.clearActiveParryLock(parryState.activeParryBall);
+			end;
+			parryState.lastQueueTime = nowFire;
+			parryState.nextPar = nowFire + parryState.parCd;
+			parryState.lastParryTime = nowFire;
+			ballState.lastParryPerBall[ball] = nowFire;
+			ballState.closeParryBlocked[ball] = true;
+			setActiveParryLock(ball, nowFire, bestItem.hitTime);
+			local okP, errP = pcall(DoParry);
+			if not okP then
+				apWarn(errP);
+			end;
+			shots += 1;
+		end;
+	end;
+	return shots > 0;
+end;
+
+local function safeFlush(char, hrp, forceImmediate)
+	local ok, result = pcall(flushPendingParries, char, hrp, forceImmediate);
+	if not ok then
+		apWarn(result);
+		return false;
+	end;
+	return result == true;
+end;
+
+local function tryPromoteImmediateBall(balls, char, hrp, excludeBall, pingValue)
+	if not (balls and char and hrp) then
+		return false;
+	end;
+	local vs = visualizerState;
+	local bestBall;
+	local bestHit = math.huge;
+	local bestDist = math.huge;
+	for _, ball in ipairs(balls) do
+		if ball and ball.Parent and ball ~= excludeBall and ball ~= parryState.activeParryBall then
+			local targetState = getBallTargetState(ball, char, parryState.curFrame, true);
+			local currentTargetConfirmed = targetState and (targetState.targeted or targetState.attrNow) or false;
+			if currentTargetConfirmed then
+				local okD, rawDist = pcall(function()
+					return (ball.Position - hrp.Position).Magnitude;
+				end);
+				if okD and type(rawDist) == "number" then
+					local speed = math.max(ballState.smoothedSpeed[ball] or 0, getTrackedBallVelocity(ball).Magnitude);
+					local multiplier = 0.12;
+					if speed < 60 then
+						multiplier = 0.06;
+					elseif speed > 120 then
+						multiplier = 0.2;
+					elseif speed > 80 then
+						multiplier = 0.16;
+					end;
+					local effectiveSpeed = math.max(speed - 5, 0);
+					local speedBoost = 0.05;
+					if speed > 160 then
+						speedBoost = 0.12;
+					elseif speed > 120 then
+						speedBoost = 0.09;
+					elseif speed > 80 then
+						speedBoost = 0.07;
+					end;
+					local baseFactor = math.clamp(vs.predictBase / 50, 0.25, 2);
+					local predictRadiusNoPing = vs.predictMinRadius + vs.predictExtra * baseFactor + effectiveSpeed * (multiplier + speedBoost) * baseFactor;
+					local predictRadius = predictRadiusNoPing + (pingValue or 0) * vs.pingPredictScale;
+					local preEntryMargin = math.clamp(predictRadius * 0.12 + (pingValue or 0) * 0.018, 3, 14);
+					local parryPredictRadius = predictRadius + preEntryMargin;
+					if rawDist <= parryPredictRadius * 1.02 then
+						local hitTime = speed > 0 and (rawDist / math.max(speed, 1)) or math.huge;
+						if hitTime < bestHit or (math.abs(hitTime - bestHit) <= 0.02 and rawDist < bestDist) then
+							bestBall = ball;
+							bestHit = hitTime;
+							bestDist = rawDist;
+						end;
+					end;
+				end;
+			end;
+		end;
+	end;
+	if not bestBall then
+		return false;
+	end;
+	local nowFire = tick();
+	parryState.lastQueueTime = nowFire;
+	parryState.nextPar = nowFire + parryState.parCd;
+	parryState.lastParryTime = nowFire;
+	ballState.lastParryPerBall[bestBall] = nowFire;
+	ballState.closeParryBlocked[bestBall] = true;
+	setActiveParryLock(bestBall, nowFire, bestHit);
+	clearPendingBall(bestBall);
+	local okP, errP = pcall(DoParry);
+	if not okP then
+		apWarn(errP);
+	end;
+	return okP == true;
+end;
+
 local function AutoParryStep(dt)
-	curFrame = curFrame + 1;
+	local ps = parryState;
+	local vs = visualizerState;
+	local bs = ballState;
+	ps.curFrame = ps.curFrame + 1;
 	character = localPlayer.Character or character;
 	local hrp = waitForChildFast(character, "HumanoidRootPart");
 	local balls = getBalls();
 	local hasBalls = #balls > 0;
 	attachVisualizer(hasBalls);
 	local showViz = isVisualizerEnabled() and hasBalls;
+	local nowFrame = tick();
+	local pingFrame = getPing();
 	if not (hrp and hrp.Position) then
 		return;
 	end;
-	local nowFrame = tick();
-	local pingItem = Stats.Network.ServerStatsItem and Stats.Network.ServerStatsItem["Data Ping"];
-	local pingFrame = pingItem and pingItem:GetValue() or 0;
+	if ps.activeParryBall and ps.activeParryBall.Parent then
+		local old = ps.activeParryBall;
+		local activeState = getBallTargetState(old, character, ps.curFrame, true);
+		local activeTargeted = activeState and (activeState.targeted or activeState.attrNow);
+		if activeState and (not activeTargeted) then
+			bs.closeParryBlocked[old] = nil;
+			bs.targetedSince[old] = nil;
+			bs.targetStartDist[old] = nil;
+			clearPendingBall(old);
+			ps.nextPar = 0;
+			ps.clearActiveParryLock(old);
+			if not tryPromoteImmediateBall(balls, character, hrp, old, pingFrame) then
+				safeFlush(character, hrp, true);
+			end;
+		end;
+	end;
+	local spamWindowUntil = hasBalls and (nowFrame + 0.06) or 0;
+	local spamFastUntil = 0;
+	local spamBurstUntil = 0;
 	updateGuiTargets(hrp, hasBalls);
 	local anyTargeted = false;
 	if hasBalls then
 		local seen = {};
+		local pendingImmediate = false;
 		local focusPos = nil;
 		local focusDist = math.huge;
 		local focusPosTargeted = nil;
@@ -1460,14 +2139,14 @@ local function AutoParryStep(dt)
 				local dGui = vis and vis.gui;
 				local dText = vis and vis.text;
 				local rawDist = (ball.Position - hrp.Position).Magnitude;
-				local dist = rawDist / distanceDivisor;
+				local dist = rawDist / vs.distanceDivisor;
 				local now = nowFrame;
 				if ringBall then
 					ringBall.CFrame = CFrame.new(ball.Position);
 				end;
 				local velocity = ball.AssemblyLinearVelocity or ball.Velocity or Vector3.zero;
-				local lastVel = lastBallVel[ball] or Vector3.zero;
-				local sample = lastBallSamples[ball];
+				local lastVel = bs.lastBallVel[ball] or Vector3.zero;
+				local sample = bs.lastBallSamples[ball];
 				local sampleDt = sample and now - sample.t or 0;
 				local posDelta = sample and ball.Position - sample.pos or Vector3.zero;
 				if not sample or sampleDt > 0.4 then
@@ -1478,30 +2157,39 @@ local function AutoParryStep(dt)
 					sampleDt = 0;
 					posDelta = Vector3.zero;
 				end;
-				local manualVel = sampleDt > 0 and posDelta / math.max(sampleDt, 0.001) or velocity;
-				local chosenVel = velocity;
-				if chosenVel.Magnitude < 0.001 or chosenVel.Magnitude < manualVel.Magnitude * 0.5 then
-					chosenVel = manualVel;
+				local prevRawDist = bs.lastDistToPlayer[ball];
+				local closingSpeed = 0;
+				if prevRawDist then
+					local distDt = math.max(sampleDt > 0 and sampleDt or (dt or ps.stepDt), 0.001);
+					closingSpeed = (prevRawDist - rawDist) / distDt;
 				end;
-				local lastMoveTime = lastBallMoveTime[ball] or 0;
+				bs.lastDistToPlayer[ball] = rawDist;
+				local manualVel = sampleDt > 0 and posDelta / math.max(sampleDt, 0.001) or velocity;
+				local instantVel = velocity;
+				if instantVel.Magnitude < 0.001 or instantVel.Magnitude < manualVel.Magnitude * 0.5 then
+					instantVel = manualVel;
+				end;
+				local chosenVel = instantVel;
+				local directionVelocity = instantVel;
+				local lastMoveTime = bs.lastBallMoveTime[ball] or 0;
 				if chosenVel.Magnitude >= 4 then
-					lastBallMoveTime[ball] = now;
+					bs.lastBallMoveTime[ball] = now;
 				elseif lastVel.Magnitude > 8 and now - lastMoveTime < 0.2 then
 					chosenVel = lastVel:Lerp(chosenVel, 0.15);
 				end;
 				local smoothingAlpha = sampleDt > 0 and math.clamp(sampleDt / 0.04, 0.35, 0.9) or 0.45;
-				lastBallSamples[ball] = {
+				bs.lastBallSamples[ball] = {
 					pos = ball.Position,
 					t = now
 				};
 				velocity = lastVel:Lerp(chosenVel, smoothingAlpha);
 				local speed = velocity.Magnitude;
-				local prevSpeed = smoothedSpeed[ball] or speed;
+				local prevSpeed = bs.smoothedSpeed[ball] or speed;
 				local speedLerp = math.clamp((dt or 0.016) / 0.03, 0.35, 0.95);
 				speed = prevSpeed + (speed - prevSpeed) * speedLerp;
-				smoothedSpeed[ball] = speed;
-				lastBallVel[ball] = velocity;
-				local baseSize = 10 + speed * speedScale * 2;
+				bs.smoothedSpeed[ball] = speed;
+				bs.lastBallVel[ball] = velocity;
+				local baseSize = 10 + speed * vs.speedScale * 2;
 				local multiplier = 0.12;
 				if speed < 60 then
 					multiplier = 0.06;
@@ -1520,9 +2208,9 @@ local function AutoParryStep(dt)
 					speedBoost = 0.07;
 				end;
 				local ping = pingFrame;
-				local baseFactor = math.clamp(predictBase / 50, 0.25, 2);
-				local predictRadiusNoPing = predictMinRadius + predictExtra * baseFactor + effectiveSpeed * (multiplier + speedBoost) * baseFactor;
-				local predictRadius = predictRadiusNoPing + ping * pingPredictScale;
+				local baseFactor = math.clamp(vs.predictBase / 50, 0.25, 2);
+				local predictRadiusNoPing = vs.predictMinRadius + vs.predictExtra * baseFactor + effectiveSpeed * (multiplier + speedBoost) * baseFactor;
+				local predictRadius = predictRadiusNoPing + ping * vs.pingPredictScale;
 				local preEntryMargin = math.clamp(predictRadius * 0.12 + ping * 0.018, 3, 14);
 				local parryPredictRadius = predictRadius + preEntryMargin;
 				if ringBall then
@@ -1546,22 +2234,47 @@ local function AutoParryStep(dt)
 				if dText then
 					dText.Text = tostring(round(dist, 1));
 				end;
-				local prevInPredict = wasInPredict[ball] or false;
+				local prevInPredict = bs.wasInPredict[ball] or false;
 				if nearPredict then
-					predictEnterAt[ball] = predictEnterAt[ball] or now;
-					resetToken = resetToken + 1;
+					bs.predictEnterAt[ball] = bs.predictEnterAt[ball] or now;
+					ps.resetToken = ps.resetToken + 1;
 				elseif prevInPredict then
-					predictEnterAt[ball] = nil;
+					bs.predictEnterAt[ball] = nil;
 				else
-					predictEnterAt[ball] = nil;
+					bs.predictEnterAt[ball] = nil;
 				end;
-				wasInPredict[ball] = nearPredict;
+				bs.wasInPredict[ball] = nearPredict;
 				local settleTime = math.clamp(0.003 + ping * 0.0002, 0.002, 0.014);
-				local settledInPredict = nearPredict and predictEnterAt[ball] and now - predictEnterAt[ball] >= settleTime;
-				local targeted, ballHighlight, charHighlight, ballColor, charColor = isBallTargetingYou(ball, character);
-				local attrNow = isBallTargetingYouAttr(ball, character);
-				local charHighlightEnabled = charHighlight and charHighlight.Enabled ~= false;
-				if targeted or attrNow then
+				local settledInPredict = nearPredict and bs.predictEnterAt[ball] and now - bs.predictEnterAt[ball] >= settleTime;
+				local forceTargetRefresh = rawDist <= math.max(20, parryPredictRadius * 1.2) or ps.activeParryBall == ball or ps.pendingSet[ball] ~= nil;
+				local targetState = getBallTargetState(ball, character, ps.curFrame, forceTargetRefresh);
+				local targetKnown = targetState ~= nil;
+				local targeted = targetKnown and targetState.targeted or false;
+				local ballHighlight = targetKnown and targetState.ballHighlight or nil;
+				local charHighlight = targetKnown and targetState.charHighlight or nil;
+				local ballColor = targetKnown and targetState.ballColor or nil;
+				local charColor = targetKnown and targetState.charColor or nil;
+				local attrNow = targetKnown and targetState.attrNow or false;
+				local charHighlightEnabled = targetKnown and charHighlight and charHighlight.Enabled ~= false or false;
+				local currentTargetConfirmed = targeted or attrNow;
+				local targetJustAcquired = false;
+				local attrJustAcquired = false;
+				local combinedTargetJustAcquired = false;
+				local prevTargetConfirmed = bs.targetConfirmActive[ball] == true;
+				if currentTargetConfirmed and (not prevTargetConfirmed) then
+					combinedTargetJustAcquired = true;
+					bs.lastParryPerBall[ball] = -math.huge;
+					bs.closeParryBlocked[ball] = nil;
+					if now < ps.nextPar then
+						ps.nextPar = now;
+					end;
+					bs.targetedSince[ball] = now;
+					bs.targetStartDist[ball] = rawDist;
+				elseif (not currentTargetConfirmed) and prevTargetConfirmed then
+					bs.closeParryBlocked[ball] = nil;
+				end;
+				bs.targetConfirmActive[ball] = currentTargetConfirmed;
+				if targetKnown and currentTargetConfirmed then
 					anyTargeted = true;
 					if rawDist < focusDistTargeted then
 						focusDistTargeted = rawDist;
@@ -1572,118 +2285,285 @@ local function AutoParryStep(dt)
 						primPredictRadius = predictRadius;
 					end;
 				end;
-				local lastChar = lastCharHighlightEnabled[ball] or false;
-				if charHighlightEnabled and (not lastChar) then
-					lastParryPerBall[ball] = -math.huge;
-				end;
-				local hasTargetLock = targeted and targetedSince[ball] ~= nil;
-				local lastMatch = lastHighlightMatch[ball] or false;
-				local highlightsMatch = targeted;
-				if highlightsMatch and (not lastMatch) then
-					lastParryPerBall[ball] = -math.huge;
-					targetedSince[ball] = now;
-				elseif not highlightsMatch and lastMatch then
-					lastParryPerBall[ball] = -math.huge;
-					targetedSince[ball] = nil;
-					if not attrNow then
-						closeParryBlocked[ball] = nil;
-						nextPar = 0;
+				if targetKnown then
+					local lastChar = bs.lastCharHighlightEnabled[ball] or false;
+					if charHighlightEnabled and (not lastChar) then
+						bs.lastParryPerBall[ball] = -math.huge;
 					end;
+					local lastMatch = bs.lastHighlightMatch[ball] or false;
+					local highlightsMatchNow = targeted;
+					if highlightsMatchNow and (not lastMatch) then
+						targetJustAcquired = true;
+						bs.lastParryPerBall[ball] = -math.huge;
+						bs.closeParryBlocked[ball] = nil;
+						if now < ps.nextPar then
+							ps.nextPar = now;
+						end;
+						bs.targetedSince[ball] = now;
+						bs.targetStartDist[ball] = rawDist;
+					elseif not highlightsMatchNow and lastMatch then
+						bs.lastParryPerBall[ball] = -math.huge;
+						bs.targetedSince[ball] = nil;
+						if not attrNow then
+							bs.closeParryBlocked[ball] = nil;
+							ps.nextPar = 0;
+							bs.targetStartDist[ball] = nil;
+						end;
+					end;
+					bs.lastHighlightMatch[ball] = highlightsMatchNow;
+					bs.lastCharHighlightEnabled[ball] = charHighlightEnabled;
+					local prevAttrState = bs.lastAttrTargeted[ball];
+					if attrNow and (not prevAttrState) then
+						attrJustAcquired = true;
+						bs.lastParryPerBall[ball] = -math.huge;
+						bs.closeParryBlocked[ball] = nil;
+						if now < ps.nextPar then
+							ps.nextPar = now;
+						end;
+					end;
+					if attrNow and (bs.targetStartDist[ball] == nil) then
+						bs.targetStartDist[ball] = rawDist;
+					elseif not attrNow and prevAttrState and (not targeted) then
+						bs.lastParryPerBall[ball] = -math.huge;
+						ps.nextPar = 0;
+						bs.targetStartDist[ball] = nil;
+					end;
+					bs.lastAttrTargeted[ball] = attrNow;
 				end;
-				lastHighlightMatch[ball] = highlightsMatch;
-				lastCharHighlightEnabled[ball] = charHighlightEnabled;
+				local highlightsMatch = bs.lastHighlightMatch[ball] == true;
+				local hasTargetLock = targeted and bs.targetedSince[ball] ~= nil;
 				local approaching = false;
 				local isBait = false;
+				local lobBlocked = false;
 				local dotNow = 0;
-				if speed >= 2 then
+				local towardSpeed = 0;
+				local movingAway = false;
+				local directionSpeed = directionVelocity.Magnitude;
+				local flatDirection = Vector3.new(directionVelocity.X, 0, directionVelocity.Z);
+				local flatSpeed = flatDirection.Magnitude;
+				local upwardSpeed = math.max(directionVelocity.Y, 0);
+				local heightDelta = ball.Position.Y - hrp.Position.Y;
+				local strongRisingLob = upwardSpeed > math.max(16, flatSpeed * 0.85) and heightDelta > math.max(6, predictRadius * 0.18);
+				if strongRisingLob and rawDist > math.max(12, parryPredictRadius * 0.72) then
+					lobBlocked = true;
+				end;
+				if directionSpeed >= 1 then
 					local toYou = hrp.Position - ball.Position;
 					local mag = toYou.Magnitude;
 					if mag > 0.001 then
 						local dirToYou = toYou / mag;
-						local velDir = speed > 0.001 and velocity.Unit or dirToYou;
+						local velDir = directionSpeed > 0.001 and directionVelocity.Unit or dirToYou;
 						dotNow = dirToYou:Dot(velDir);
-						local toward = dotNow > 0.1;
-						local away = dotNow < (-0.25);
-						local wasAway = lastAwayFlag[ball];
+						towardSpeed = directionVelocity:Dot(dirToYou);
+						local toward = towardSpeed > math.max(1.2, directionSpeed * 0.05);
+						local away = towardSpeed < (-math.max(1.5, directionSpeed * 0.08));
+						local wasAway = bs.lastAwayFlag[ball];
 						if away then
 							if not wasAway then
-								awaySince[ball] = now;
+								bs.awaySince[ball] = now;
 							end;
-							lastAwayFlag[ball] = true;
+							bs.lastAwayFlag[ball] = true;
 						else
 							if wasAway then
-								local startAway = awaySince[ball];
+								local startAway = bs.awaySince[ball];
 								if toward and startAway and now - startAway >= 0.06 then
-									baitUntil[ball] = now + 0.14;
+									bs.baitUntil[ball] = now + 0.14;
 								end;
 							end;
-							lastAwayFlag[ball] = false;
+							bs.lastAwayFlag[ball] = false;
 						end;
-						isBait = baitUntil[ball] and now < baitUntil[ball] and rawDist > parryPredictRadius * 0.6;
+						local baitActive = bs.baitUntil[ball] and now < bs.baitUntil[ball] and rawDist > parryPredictRadius * 0.6;
+						local breakBait = towardSpeed > math.max(9, directionSpeed * 0.16) or closingSpeed > math.max(10, directionSpeed * 0.22);
+						isBait = baitActive and (not breakBait);
 						approaching = toward and (not isBait);
+						movingAway = towardSpeed < (-math.max(2, directionSpeed * 0.08));
 					end;
 				else
-					lastAwayFlag[ball] = false;
-					awaySince[ball] = nil;
+					bs.lastAwayFlag[ball] = false;
+					bs.awaySince[ball] = nil;
 				end;
-				local toRingTime = approaching and speed > 1 and math.max((rawDist - parryPredictRadius), 0) / speed or math.huge;
+				local forceToward = false;
+				if directionSpeed >= 8 then
+					local fastRadialToward = towardSpeed > math.max(9, directionSpeed * 0.18);
+					local fastClosing = closingSpeed > math.max(14, directionSpeed * 0.24);
+					local closeAndClosing = rawDist <= math.max(22, parryPredictRadius * 0.9) and closingSpeed > 8;
+					forceToward = fastRadialToward or fastClosing or closeAndClosing;
+				end;
+				if forceToward then
+					approaching = true;
+					movingAway = false;
+				end;
+				if lobBlocked then
+					approaching = false;
+					forceToward = false;
+				end;
+				if ps.activeParryBall == ball then
+					clearPendingBall(ball);
+					if targetKnown and (not targeted) and (not attrNow) then
+						bs.closeParryBlocked[ball] = nil;
+						ps.nextPar = 0;
+						ps.clearActiveParryLock(ball);
+						safeFlush(character, hrp);
+					elseif now >= ps.activeParryReleaseAt or (movingAway and rawDist > math.max(10, parryPredictRadius * 0.55)) then
+						ps.clearActiveParryLock(ball);
+						safeFlush(character, hrp);
+					end;
+				end;
+				local ignoreMovingAwayForClash = bs.targetStartDist[ball] ~= nil and bs.targetStartDist[ball] <= 50;
+				local movingAwayBlocked = movingAway and (not ignoreMovingAwayForClash) and (not forceToward);
+				local timingSpeed = math.max(speed, directionSpeed * 0.9);
+				local toRingTime = approaching and timingSpeed > 1 and math.max((rawDist - parryPredictRadius), 0) / timingSpeed or math.huge;
 				local closeHit = targeted and rawDist <= math.max(10, parryPredictRadius * 0.45);
-				local nearHitTime = speed > 1 and rawDist / speed or math.huge;
-				local veryFastHit = targeted and nearHitTime <= 0.18 + ping * pingTimeScale;
-				local closeHitSafe = closeHit and (nearHitTime <= 0.3 or speed >= 25);
-				local targetSnap = targeted and inParryPredict and settledInPredict and (nearHitTime <= 0.6 or rawDist <= math.max(10, parryPredictRadius * 0.6));
-				local innerEmergency = targeted and rawDist <= math.max(8, predictRadius * 0.4);
-				local fastApproach = targeted and approaching and (nearHitTime <= 0.22 or rawDist <= parryPredictRadius * 0.95);
+				local nearHitTime = timingSpeed > 1 and rawDist / timingSpeed or math.huge;
+				local preclickLead = ps.preclick and getPreclickLead(ping) or 0;
+				local preclickTooLate = ps.preclick and nearHitTime <= math.max(preclickLead * 0.65, 0.018);
+				local hitTime = nearHitTime;
+				if ps.preclick and (targeted or attrNow) then
+					hitTime = math.max(nearHitTime - preclickLead, 0);
+				end;
+				local veryFastHit = (not ps.preclick) and targeted and hitTime <= 0.18 + ping * vs.pingTimeScale;
+				local closeHitSafe = closeHit and (hitTime <= 0.3 or speed >= 25);
+				local targetSnap = targeted and inParryPredict and settledInPredict and (hitTime <= 0.6 or rawDist <= math.max(10, parryPredictRadius * 0.6));
+				local innerEmergency = (not ps.preclick) and targeted and rawDist <= math.max(8, predictRadius * 0.4);
+				local fastApproach = targeted and approaching and (hitTime <= 0.22 or rawDist <= parryPredictRadius * 0.95);
+				local retargetInsideZone = rawDist <= math.max(14, parryPredictRadius * 0.98);
+				local retargetTimeOk = hitTime <= 0.6 or rawDist <= math.max(10, parryPredictRadius * 0.75);
+				local instantRetarget = (targetJustAcquired or attrJustAcquired or combinedTargetJustAcquired) and currentTargetConfirmed and retargetInsideZone and retargetTimeOk;
+				local retargetOverrideMovingAway = instantRetarget and rawDist <= math.max(14, parryPredictRadius * 0.9);
+				local handoffZone = rawDist <= math.max(12, parryPredictRadius * 0.95);
+				local isOtherBall = ps.activeParryBall ~= nil and ps.activeParryBall ~= ball;
+				spamWindowUntil = math.max(spamWindowUntil, now + 0.08);
+				if nearPredict or hitTime <= 0.5 or rawDist <= math.max(24, parryPredictRadius * 1.35) then
+					spamWindowUntil = math.max(spamWindowUntil, now + 0.16);
+				end;
+				if inParryPredict then
+					spamWindowUntil = math.max(spamWindowUntil, now + 0.22);
+				end;
+				if rawDist <= math.max(10, parryPredictRadius * 0.75) or instantRetarget or innerEmergency then
+					spamFastUntil = math.max(spamFastUntil, now + 0.2);
+				elseif nearPredict and hitTime <= 0.25 then
+					spamFastUntil = math.max(spamFastUntil, now + 0.14);
+				elseif rawDist <= math.max(18, parryPredictRadius) and hitTime <= 0.45 then
+					spamFastUntil = math.max(spamFastUntil, now + 0.1);
+				end;
+				if rawDist <= math.max(12, parryPredictRadius * 0.85) or instantRetarget or innerEmergency or veryFastHit then
+					spamBurstUntil = math.max(spamBurstUntil, now + 0.16);
+				elseif currentTargetConfirmed and inParryPredict and hitTime <= 0.24 then
+					spamBurstUntil = math.max(spamBurstUntil, now + 0.12);
+				end;
+				local overlapHandoff = false;
+				local overlapDist = math.huge;
+				if isOtherBall then
+					overlapDist = getBallSeparation(ps.activeParryBall, ball);
+					-- Treat nearly-stacked balls as an immediate handoff threat.
+					overlapHandoff = overlapDist <= math.max(14, parryPredictRadius * 0.6);
+				end;
 				local parryTriggered = false;
-				if innerEmergency and hasTargetLock and (not closeParryBlocked[ball]) then
-					local nowInner = now;
-					local lastBallFire = lastParryPerBall[ball] or (-math.huge);
-					if nowInner >= nextPar and nowInner - lastBallFire > 0.05 then
-						nextPar = nowInner + parCd;
-						lastParryPerBall[ball] = nowInner;
-						closeParryBlocked[ball] = true;
-						lastParryTime = nowInner;
+				if targetKnown and isOtherBall and currentTargetConfirmed and handoffZone and (not bs.closeParryBlocked[ball]) then
+					local immediateQueuedHandoff = rawDist <= parryPredictRadius or overlapHandoff or overlapDist <= math.max(18, parryPredictRadius * 0.8);
+					queuePendingBall(ball, hitTime, rawDist, parryPredictRadius, immediateQueuedHandoff);
+					local urgentHandoff = immediateQueuedHandoff or hitTime <= 0.18;
+					if urgentHandoff then
+						pendingImmediate = true;
+						spamBurstUntil = math.max(spamBurstUntil, now + 0.18);
+						ps.activeParryReleaseAt = math.min(ps.activeParryReleaseAt, now);
+						if ps.activeParryBall and ps.activeParryBall ~= ball then
+							bs.closeParryBlocked[ps.activeParryBall] = nil;
+							ps.clearActiveParryLock(ps.activeParryBall);
+						end;
+						if safeFlush(character, hrp, true) then
+							parryTriggered = true;
+						end;
+					else
+						ps.activeParryReleaseAt = math.min(ps.activeParryReleaseAt, now + 0.035);
+					end;
+				elseif ps.pendingSet[ball] and (((targetKnown and (not targeted) and (not attrNow) and ps.activeParryBall == nil)) or (not ball.Parent) or rawDist > math.max(22, parryPredictRadius * 1.35)) then
+					clearPendingBall(ball);
+				end;
+				if (ps.activeParryBall == nil or ps.activeParryBall == ball or now >= ps.activeParryReleaseAt) and instantRetarget and (not bs.closeParryBlocked[ball]) and ((not movingAwayBlocked) or retargetOverrideMovingAway) then
+					local nowRetarget = now;
+					local lastBallFire = bs.lastParryPerBall[ball] or (-math.huge);
+					if nowRetarget >= ps.nextPar and nowRetarget - lastBallFire > 0.05 then
+						ps.nextPar = nowRetarget + ps.parCd;
+						bs.lastParryPerBall[ball] = nowRetarget;
+						bs.closeParryBlocked[ball] = true;
+						ps.lastParryTime = nowRetarget;
 						parryTriggered = true;
+						setActiveParryLock(ball, nowRetarget, hitTime);
+						clearPendingBall(ball);
+						queueParry(false, true);
+					end;
+				end;
+				if (ps.activeParryBall == nil or ps.activeParryBall == ball or now >= ps.activeParryReleaseAt) and innerEmergency and hasTargetLock and (not bs.closeParryBlocked[ball]) and (not movingAwayBlocked) then
+					local nowInner = now;
+					local lastBallFire = bs.lastParryPerBall[ball] or (-math.huge);
+					if nowInner >= ps.nextPar and nowInner - lastBallFire > 0.05 then
+						ps.nextPar = nowInner + ps.parCd;
+						bs.lastParryPerBall[ball] = nowInner;
+						bs.closeParryBlocked[ball] = true;
+						ps.lastParryTime = nowInner;
+						parryTriggered = true;
+						setActiveParryLock(ball, nowInner, hitTime);
+						clearPendingBall(ball);
 						queueParry(false, true);
 					end;
 				end;
 				local outsideRing = rawDist >= math.max(predictRadius - math.max(preEntryMargin * 1.1, 2.5), predictRadius * 0.85);
-				local ringEdgeSafe = innerEmergency or rawDist >= parryPredictRadius * 0.6 or nearHitTime <= 0.2 or veryFastHit;
+				local ringEdgeSafe = innerEmergency or rawDist >= parryPredictRadius * 0.6 or hitTime <= 0.2 or veryFastHit;
 				local ringTimeSoon = toRingTime <= 0.55 + ping * 0.003;
 				local function attemptParry()
 					if parryTriggered then
 						return;
 					end;
+					if not currentTargetConfirmed then
+						return;
+					end;
+					if lobBlocked and (not inParryPredict) and (not instantRetarget) and (not innerEmergency) then
+						return;
+					end;
+					if ps.activeParryBall ~= nil and ps.activeParryBall ~= ball and now < ps.activeParryReleaseAt then
+						return;
+					end;
 					if isBait and (not innerEmergency) then
 						return;
 					end;
-					if closeParryBlocked[ball] and (rawDist > parryPredictRadius * 1.15 or now - (lastParryPerBall[ball] or 0) > 1.2) then
-						closeParryBlocked[ball] = nil;
+					if movingAwayBlocked then
+						return;
 					end;
-					local inCloseBlock = closeParryBlocked[ball] and rawDist <= parryPredictRadius * 1.15;
-					local slowClose = targeted and hasTargetLock and rawDist <= math.max(16, parryPredictRadius * 0.65) and speed >= 1.5 and nearHitTime <= 1.3;
-					local slowVeryClose = targeted and rawDist <= math.max(10, parryPredictRadius * 0.5) and speed > 0 and speed <= 6 and nearHitTime <= 1.6;
-					local slowMid = targeted and hasTargetLock and approaching and speed >= 7 and speed <= 26 and nearHitTime <= 1.15 and rawDist <= math.max(20, parryPredictRadius * 0.92);
-					local slowMid2 = targeted and hasTargetLock and speed >= 7 and speed <= 26 and nearHitTime <= 0.95 and rawDist <= math.max(18, parryPredictRadius * 0.88);
-					local canPredict = approaching and nearPredict and settledInPredict and highlightsMatch and hasTargetLock and (outsideRing or fastApproach) and (speed >= 12 or nearHitTime <= 0.25 or ringTimeSoon or fastApproach) or closeHitSafe and hasTargetLock or veryFastHit and hasTargetLock or targetSnap and hasTargetLock or innerEmergency and hasTargetLock or slowClose or slowVeryClose or slowMid or slowMid2;
+					if preclickTooLate then
+						return;
+					end;
+					if bs.closeParryBlocked[ball] and (rawDist > parryPredictRadius * 1.15 or now - (bs.lastParryPerBall[ball] or 0) > 1.2) then
+						bs.closeParryBlocked[ball] = nil;
+					end;
+					local inCloseBlock = bs.closeParryBlocked[ball] and rawDist <= parryPredictRadius * 1.15;
+					local slowClose = targeted and hasTargetLock and rawDist <= math.max(16, parryPredictRadius * 0.65) and speed >= 1.5 and hitTime <= 1.3;
+					local slowVeryClose = targeted and rawDist <= math.max(10, parryPredictRadius * 0.5) and speed > 0 and speed <= 6 and hitTime <= 1.6;
+					local slowMid = targeted and hasTargetLock and approaching and speed >= 7 and speed <= 26 and hitTime <= 1.15 and rawDist <= math.max(20, parryPredictRadius * 0.92);
+					local slowMid2 = targeted and hasTargetLock and speed >= 7 and speed <= 26 and hitTime <= 0.95 and rawDist <= math.max(18, parryPredictRadius * 0.88);
+					local canPredict = approaching and nearPredict and settledInPredict and highlightsMatch and hasTargetLock and (outsideRing or fastApproach) and (speed >= 12 or hitTime <= 0.25 or ringTimeSoon or fastApproach) or closeHitSafe and hasTargetLock or veryFastHit and hasTargetLock or targetSnap and hasTargetLock or innerEmergency and hasTargetLock or slowClose or slowVeryClose or slowMid or slowMid2;
 					if not canPredict and targeted and hasTargetLock and (not innerEmergency) then
-						if rawDist <= math.max(18, parryPredictRadius * 0.75) and nearHitTime <= 1.8 and speed >= 0.75 then
+						if rawDist <= math.max(18, parryPredictRadius * 0.75) and hitTime <= 1.8 and speed >= 0.75 then
 							canPredict = true;
 						end;
 					end;
 					canPredict = canPredict and (not inCloseBlock);
+					canPredict = canPredict and inParryPredict;
+					canPredict = canPredict and ((not lobBlocked) or instantRetarget or innerEmergency);
 					if canPredict then
 						local nowTry = now;
-						local lastBallFire = lastParryPerBall[ball] or (-math.huge);
+						local lastBallFire = bs.lastParryPerBall[ball] or (-math.huge);
 						local minBallCooldown = highlightsMatch and 0.7 or 0.35;
-						if nowTry >= nextPar and nowTry - lastBallFire > minBallCooldown then
-							nextPar = nowTry + parCd;
-							lastParryPerBall[ball] = nowTry;
+						if nowTry >= ps.nextPar and nowTry - lastBallFire > minBallCooldown then
+							ps.nextPar = nowTry + ps.parCd;
+							bs.lastParryPerBall[ball] = nowTry;
 							if rawDist <= parryPredictRadius * 0.8 then
-								closeParryBlocked[ball] = true;
+								bs.closeParryBlocked[ball] = true;
 							end;
-							lastParryTime = nowTry;
+							ps.lastParryTime = nowTry;
 							parryTriggered = true;
+							setActiveParryLock(ball, nowTry, hitTime);
+							clearPendingBall(ball);
 							queueParry(false, true);
 							return;
 						end;
@@ -1694,75 +2574,99 @@ local function AutoParryStep(dt)
 					if parryTriggered then
 						return;
 					end;
-					local attrTargetedNow = isBallTargetingYouAttr(ball, character);
-					local stillTargeted = targeted or hasTargetLock or attrTargetedNow;
+					local stillTargeted = currentTargetConfirmed;
 					if not stillTargeted then
 						return;
 					end;
 					local insideZone = rawDist <= math.max(12, parryPredictRadius * 0.95);
 					local movingToward = approaching or rawDist <= math.max(6, parryPredictRadius * 0.4);
 					local slowBand = speed >= 2 and speed <= 35;
-					local timeWindow = nearHitTime <= 2.5;
+					local timeWindow = hitTime <= 2.5;
 					if insideZone and movingToward and slowBand and timeWindow and (not inCloseBlock) then
 						local nowInner = now;
-						local lastBallFire = lastParryPerBall[ball] or (-math.huge);
-						if nowInner >= nextPar and nowInner - lastBallFire > 0.5 then
-							nextPar = nowInner + parCd;
-							lastParryPerBall[ball] = nowInner;
-							closeParryBlocked[ball] = true;
-							lastParryTime = nowInner;
+						local lastBallFire = bs.lastParryPerBall[ball] or (-math.huge);
+						if nowInner >= ps.nextPar and nowInner - lastBallFire > 0.5 then
+							ps.nextPar = nowInner + ps.parCd;
+							bs.lastParryPerBall[ball] = nowInner;
+							bs.closeParryBlocked[ball] = true;
+							ps.lastParryTime = nowInner;
 							parryTriggered = true;
+							setActiveParryLock(ball, nowInner, hitTime);
+							clearPendingBall(ball);
 							queueParry(false, true);
 						end;
 					end;
 				end;
-				task.defer(attemptParry);
-				task.defer(function()
+				attemptParry();
+				local function attemptAttrParry()
 					if parryTriggered then
+						return;
+					end;
+					if lobBlocked and (not inParryPredict) then
+						return;
+					end;
+					if ps.activeParryBall ~= nil and ps.activeParryBall ~= ball and now < ps.activeParryReleaseAt then
 						return;
 					end;
 					if targeted then
 						return;
 					end;
-					if closeParryBlocked[ball] then
+					if bs.closeParryBlocked[ball] then
 						return;
 					end;
 					if isBait and (not innerEmergency) then
 						return;
 					end;
-					local nowAttr = now;
-					local attrTargeted = isBallTargetingYouAttr(ball, character);
-					local prevAttr = lastAttrTargeted[ball];
-					if attrTargeted and (not prevAttr) then
-						lastParryPerBall[ball] = -math.huge;
-						if nowAttr < nextPar then
-							nextPar = nowAttr;
-						end;
-					elseif not attrTargeted and prevAttr then
-						lastParryPerBall[ball] = -math.huge;
-						if not targeted then
-							nextPar = 0;
-						end;
+					if movingAwayBlocked then
+						return;
 					end;
-					lastAttrTargeted[ball] = attrTargeted;
+					if preclickTooLate then
+						return;
+					end;
+					if not targetKnown then
+						return;
+					end;
+					local nowAttr = now;
+					local attrTargeted = attrNow;
 					if not attrTargeted then
 						return;
 					end;
 					local attrNear = rawDist <= math.max(10, parryPredictRadius * 0.9);
-					local attrFast = speed > 20 or nearHitTime <= 0.35;
+					local attrFast = speed > 20 or hitTime <= 0.35;
 					if not (attrNear and attrFast) then
 						return;
 					end;
-					local lastBallFire = lastParryPerBall[ball] or (-math.huge);
-					if nowAttr >= nextPar and nowAttr - lastBallFire > 0.7 then
-						nextPar = nowAttr + parCd;
-						lastParryPerBall[ball] = nowAttr;
-						lastParryTime = nowAttr;
+					local lastBallFire = bs.lastParryPerBall[ball] or (-math.huge);
+					if nowAttr >= ps.nextPar and nowAttr - lastBallFire > 0.7 then
+						ps.nextPar = nowAttr + ps.parCd;
+						bs.lastParryPerBall[ball] = nowAttr;
+						ps.lastParryTime = nowAttr;
 						parryTriggered = true;
+						setActiveParryLock(ball, nowAttr, hitTime);
+						clearPendingBall(ball);
 						queueParry(false, true);
 					end;
-				end);
+				end;
+				attemptAttrParry();
 			end;
+		end;
+		if #ps.pendingBalls > 0 and (pendingImmediate or ps.activeParryBall == nil or nowFrame >= ps.activeParryReleaseAt) then
+			spamWindowUntil = math.max(spamWindowUntil, nowFrame + 0.18);
+			if pendingImmediate then
+				spamFastUntil = math.max(spamFastUntil, nowFrame + 0.18);
+				spamBurstUntil = math.max(spamBurstUntil, nowFrame + 0.16);
+			end;
+			safeFlush(character, hrp);
+		end;
+		if ps.activeParryBall and (not seen[ps.activeParryBall]) then
+			local old = ps.activeParryBall;
+			bs.closeParryBlocked[old] = nil;
+			bs.targetedSince[old] = nil;
+			bs.targetStartDist[old] = nil;
+			clearPendingBall(old);
+			ps.nextPar = 0;
+			ps.clearActiveParryLock(old);
+			safeFlush(character, hrp);
 		end;
 		local focus = focusPosTargeted or focusPos;
 		if focus then
@@ -1774,69 +2678,90 @@ local function AutoParryStep(dt)
 			ringPlayerNoUnit.CFrame = ringPlayer.CFrame;
 		end;
 		if primBaseSize and primPredictNoPing and primPredictRadius then
-			local appliedPlayerPredict = rescaleRing(ringPlayer, primPredictNoPing * 2, maxSize, dt);
-			ringLimited = appliedPlayerPredict >= maxSize - 0.1;
-			rescaleRing(ringPlayerNoUnit, primPredictRadius * 2, predictMaxSize, dt);
-			ringPlayerNoUnit.Transparency = ringPinkTransparency;
+			local appliedPlayerPredict = rescaleRing(ringPlayer, primPredictNoPing * 2, vs.maxSize, dt);
+			vs.ringLimited = appliedPlayerPredict >= vs.maxSize - 0.1;
+			rescaleRing(ringPlayerNoUnit, primPredictRadius * 2, vs.predictMaxSize, dt);
+			ringPlayerNoUnit.Transparency = vs.ringPinkTransparency;
 		else
-			rescaleRing(ringPlayer, 10, maxSize, dt);
-			rescaleRing(ringPlayerNoUnit, 10, predictMaxSize, dt);
-			ringLimited = false;
+			rescaleRing(ringPlayer, 10, vs.maxSize, dt);
+			rescaleRing(ringPlayerNoUnit, 10, vs.predictMaxSize, dt);
+			vs.ringLimited = false;
 		end;
-		for b in pairs(ballVis) do
+		for b in pairs(vs.ballVis) do
 			if not seen[b] or (not b.Parent) then
 				cleanupBallVisual(b);
-				lastBallSamples[b] = nil;
-				lastBallVel[b] = nil;
-				lastBallMoveTime[b] = nil;
-				smoothedSpeed[b] = nil;
-				closeParryBlocked[b] = nil;
-				predictEnterAt[b] = nil;
-				wasInPredict[b] = nil;
-				lastHighlightMatch[b] = nil;
-				lastCharHighlightEnabled[b] = nil;
-				targetedSince[b] = nil;
-				lastAttrTargeted[b] = nil;
-				lastParryPerBall[b] = nil;
-				baitUntil[b] = nil;
-				awaySince[b] = nil;
-				lastAwayFlag[b] = nil;
+				bs.lastBallSamples[b] = nil;
+				bs.lastDistToPlayer[b] = nil;
+				bs.lastBallVel[b] = nil;
+				bs.lastBallMoveTime[b] = nil;
+				bs.smoothedSpeed[b] = nil;
+				bs.closeParryBlocked[b] = nil;
+				bs.predictEnterAt[b] = nil;
+				bs.wasInPredict[b] = nil;
+				bs.lastHighlightMatch[b] = nil;
+				bs.lastCharHighlightEnabled[b] = nil;
+				bs.targetedSince[b] = nil;
+				bs.targetStartDist[b] = nil;
+				bs.lastAttrTargeted[b] = nil;
+				bs.targetConfirmActive[b] = nil;
+				bs.targetStateCache[b] = nil;
+				bs.targetStateQueued[b] = nil;
+				bs.targetStateDirty[b] = nil;
+				bs.lastParryPerBall[b] = nil;
+				bs.baitUntil[b] = nil;
+				bs.awaySince[b] = nil;
+				bs.lastAwayFlag[b] = nil;
 			end;
 		end;
+		ps.spamWindowUntil = math.max(ps.spamWindowUntil or 0, spamWindowUntil);
+		ps.spamFastUntil = math.max(ps.spamFastUntil or 0, spamFastUntil);
+		ps.spamBurstUntil = math.max(ps.spamBurstUntil or 0, spamBurstUntil);
 	else
 		ringPlayer.CFrame = CFrame.new(hrp.Position);
 		ringPlayerNoUnit.CFrame = ringPlayer.CFrame;
 		cleanupAllBallVisuals();
-		ringSizeState = {};
-		lastBallSamples = {};
-		lastBallVel = {};
-		lastBallMoveTime = {};
-		smoothedSpeed = {};
-		closeParryBlocked = {};
-		predictEnterAt = {};
-		wasInPredict = {};
-		lastHighlightMatch = {};
-		lastCharHighlightEnabled = {};
-		targetedSince = {};
-		lastAttrTargeted = {};
-		lastParryPerBall = {};
-		baitUntil = {};
-		awaySince = {};
-		lastAwayFlag = {};
-		nextPar = 0;
-		ringLimited = false;
-		resetToken = 0;
+		vs.ringSizeState = {};
+		bs.lastBallSamples = {};
+		bs.lastDistToPlayer = {};
+		bs.lastBallVel = {};
+		bs.lastBallMoveTime = {};
+		bs.smoothedSpeed = {};
+		bs.closeParryBlocked = {};
+		bs.predictEnterAt = {};
+		bs.wasInPredict = {};
+		bs.lastHighlightMatch = {};
+		bs.lastCharHighlightEnabled = {};
+		bs.targetedSince = {};
+		bs.targetStartDist = {};
+		bs.lastAttrTargeted = {};
+		bs.targetConfirmActive = {};
+		bs.targetStateCache = {};
+		bs.targetStateQueued = {};
+		bs.targetStateDirty = {};
+		bs.lastParryPerBall = {};
+		bs.baitUntil = {};
+		bs.awaySince = {};
+		bs.lastAwayFlag = {};
+		ps.nextPar = 0;
+		ps.spamWindowUntil = 0;
+		ps.spamFastUntil = 0;
+		ps.spamBurstUntil = 0;
+		ps.spamNextAt = 0;
+		ps.clearActiveParryLock(nil);
+		clearPendingBalls();
+		vs.ringLimited = false;
+		ps.resetToken = 0;
 		rangeText.Text = "0";
 		if rangeMulti then
 			rangeMulti.Text = "0x";
 		end;
 	end;
 	local nowStateTime = tick();
-	local inCooldown = nowStateTime < nextPar;
+	local inCooldown = nowStateTime < ps.nextPar;
 	local state;
-	if not apEnabled then
+	if not ps.apEnabled then
 		state = "Disabled";
-	elseif lastParryTime > 0 and nowStateTime - lastParryTime <= 0.25 then
+	elseif ps.lastParryTime > 0 and nowStateTime - ps.lastParryTime <= 0.25 then
 		state = "Parried";
 	elseif not hasBalls then
 		if inCooldown then
@@ -1855,20 +2780,59 @@ local function AutoParryStep(dt)
 	else
 		state = "Active";
 	end;
-	apState = state;
+	ps.apState = state;
 	updateDebugMenu(#balls, anyTargeted, nowStateTime);
 	updateRingColors();
 	applyVisualizerVisible(showViz);
 end;
-trackConnection(RunService.Heartbeat:Connect(function(dt)
-	stepAcc += dt;
-	local i = 0;
-	while stepAcc >= stepDt and i < maxSub do
-		AutoParryStep(stepDt);
-		stepAcc -= stepDt;
-		i += 1;
+local StepSignal = RunService.PreSimulation or RunService.Heartbeat;
+trackConnection(StepSignal:Connect(function(dt)
+	local ok, err = xpcall(function()
+		dt = math.clamp(dt or 0, 0, 0.25);
+		local step = parryState.stepDt;
+		local catch = math.max(parryState.maxSub, 12);
+		if dt >= step * catch then
+			parryState.stepAcc = 0;
+			AutoParryStep(dt);
+		else
+			parryState.stepAcc = math.min(parryState.stepAcc + dt, step * catch);
+			local ran = 0;
+			while parryState.stepAcc >= step and ran < catch do
+				AutoParryStep(step);
+				parryState.stepAcc -= step;
+				ran += 1;
+			end;
+			if ran == 0 then
+				AutoParryStep(dt);
+			elseif parryState.stepAcc > step * 0.5 then
+				AutoParryStep(parryState.stepAcc);
+				parryState.stepAcc = 0;
+			end;
+		end;
+	end, debug.traceback);
+	if not ok then
+		apWarn(err);
 	end;
-	if spam then
-		task.defer(QuickParry);
+end));
+trackConnection(StepSignal:Connect(function()
+	if parryState.spam and parryState.apEnabled then
+		local now = tick();
+		local windowUntil = parryState.spamWindowUntil or 0;
+		local fastUntil = parryState.spamFastUntil or 0;
+		local burstUntil = parryState.spamBurstUntil or 0;
+		if now > windowUntil then
+			return;
+		end;
+		local burstSpam = now <= burstUntil;
+		local fastSpam = burstSpam or now <= fastUntil;
+		local interval = burstSpam and 0.004 or (fastSpam and 0.007 or 0.013);
+		if now < (parryState.spamNextAt or 0) then
+			return;
+		end;
+		parryState.spamNextAt = now + interval;
+		local shots = burstSpam and 4 or (fastSpam and 3 or 2);
+		for _ = 1, shots do
+			task.defer(QuickParry);
+		end;
 	end;
 end));

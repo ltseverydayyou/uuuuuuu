@@ -608,7 +608,6 @@ end;
 local function buildTopbarConfigSnapshot()
 	return {
 		apEnabled = parryState.apEnabled,
-		spam = parryState.spam,
 		preclick = parryState.preclick,
 		visualizerEnabled = isVisualizerEnabled(),
 		visualizerProfile = visualizerConfig.profile or VisualizerDefaults.profile,
@@ -628,7 +627,6 @@ local function normalizeTopbarConfig(raw)
 	end;
 	return {
 		apEnabled = raw.apEnabled ~= false,
-		spam = raw.spam == true,
 		preclick = raw.preclick ~= false,
 		visualizerEnabled = visualizerEnabled,
 		visualizerProfile = visualizerProfile,
@@ -676,7 +674,7 @@ local function saveTopbarConfig()
 end;
 local loadedTopbarConfig = loadTopbarConfig();
 parryState.apEnabled = loadedTopbarConfig.apEnabled;
-parryState.spam = loadedTopbarConfig.spam;
+parryState.spam = false;
 parryState.preclick = loadedTopbarConfig.preclick;
 topbarState.debugEnabled = loadedTopbarConfig.debugEnabled;
 topbarState.touchLock = loadedTopbarConfig.touchLock;
@@ -1971,9 +1969,9 @@ local function getBallSeparation(a, b)
 	return math.huge;
 end;
 
-local function flushPendingParries(char, hrp)
+local function flushPendingParries(char, hrp, forceImmediate)
 	if not (char and hrp) then
-		return;
+		return false;
 	end;
 	local list = parryState.pendingBalls;
 	local shots = 0;
@@ -2000,26 +1998,29 @@ local function flushPendingParries(char, hrp)
 					local targetState = getBallTargetState(ball, char, parryState.curFrame, true);
 					local targetKnown = targetState ~= nil;
 					local targeted = targetKnown and (targetState.targeted or targetState.attrNow) or false;
-					if not targeted then
-						if targetKnown and now - (item.t or 0) > 0.2 then
-							parryState.pendingSet[ball] = nil;
-							table.remove(list, i);
-						end;
+					local okD, rawDist = pcall(function()
+						return (ball.Position - hrp.Position).Magnitude;
+					end);
+					if not okD or type(rawDist) ~= "number" then
+						parryState.pendingSet[ball] = nil;
+						table.remove(list, i);
 					else
-						local okD, rawDist = pcall(function()
-							return (ball.Position - hrp.Position).Magnitude;
-						end);
-						if not okD or type(rawDist) ~= "number" then
-							parryState.pendingSet[ball] = nil;
-							table.remove(list, i);
+						local queuedZone = math.max(item.zoneRadius or 0, 12);
+						local insideQueuedZone = rawDist <= queuedZone * 1.02;
+						local forcedQueued = forceImmediate and insideQueuedZone;
+						if (not targeted) and (not forcedQueued) then
+							if targetKnown and now - (item.t or 0) > 0.2 then
+								parryState.pendingSet[ball] = nil;
+								table.remove(list, i);
+							end;
 						else
 							local speed = math.max(ballState.smoothedSpeed[ball] or 0, getTrackedBallVelocity(ball).Magnitude);
 							local hitTime = math.min(item.hitTime or math.huge, speed > 0 and (rawDist / math.max(speed, 1)) or math.huge);
-							local queuedZone = math.max(item.zoneRadius or 0, 12);
-							local insideQueuedZone = rawDist <= queuedZone * 1.02;
-							local danger = insideQueuedZone or item.immediate or hitTime <= 0.35 or rawDist <= math.max(12, 18 + speed * 0.04);
+							local danger = forcedQueued or insideQueuedZone or item.immediate or hitTime <= 0.35 or rawDist <= math.max(12, 18 + speed * 0.04);
 							if danger and (hitTime < bestHit or (math.abs(hitTime - bestHit) <= 0.02 and rawDist < bestDist)) then
-								if insideQueuedZone or item.immediate then
+								if forcedQueued then
+									hitTime = -2;
+								elseif insideQueuedZone or item.immediate then
 									hitTime = -1;
 								end;
 								bestIndex = i;
@@ -2042,7 +2043,7 @@ local function flushPendingParries(char, hrp)
 		end;
 		local nowFire = tick();
 		local lastBallFire = ballState.lastParryPerBall[ball] or (-math.huge);
-		if nowFire - lastBallFire > 0.035 then
+		if forceImmediate or nowFire - lastBallFire > 0.035 then
 			if parryState.activeParryBall and parryState.activeParryBall ~= ball then
 				ballState.closeParryBlocked[parryState.activeParryBall] = nil;
 				parryState.clearActiveParryLock(parryState.activeParryBall);
@@ -2060,14 +2061,88 @@ local function flushPendingParries(char, hrp)
 			shots += 1;
 		end;
 	end;
+	return shots > 0;
 end;
 
-local function safeFlush(char, hrp)
-	local ok, err = pcall(flushPendingParries, char, hrp);
+local function safeFlush(char, hrp, forceImmediate)
+	local ok, result = pcall(flushPendingParries, char, hrp, forceImmediate);
 	if not ok then
-		apWarn(err);
+		apWarn(result);
+		return false;
 	end;
+	return result == true;
 end;
+
+local function tryPromoteImmediateBall(balls, char, hrp, excludeBall, pingValue)
+	if not (balls and char and hrp) then
+		return false;
+	end;
+	local vs = visualizerState;
+	local bestBall;
+	local bestHit = math.huge;
+	local bestDist = math.huge;
+	for _, ball in ipairs(balls) do
+		if ball and ball.Parent and ball ~= excludeBall and ball ~= parryState.activeParryBall then
+			local targetState = getBallTargetState(ball, char, parryState.curFrame, true);
+			local currentTargetConfirmed = targetState and (targetState.targeted or targetState.attrNow) or false;
+			if currentTargetConfirmed then
+				local okD, rawDist = pcall(function()
+					return (ball.Position - hrp.Position).Magnitude;
+				end);
+				if okD and type(rawDist) == "number" then
+					local speed = math.max(ballState.smoothedSpeed[ball] or 0, getTrackedBallVelocity(ball).Magnitude);
+					local multiplier = 0.12;
+					if speed < 60 then
+						multiplier = 0.06;
+					elseif speed > 120 then
+						multiplier = 0.2;
+					elseif speed > 80 then
+						multiplier = 0.16;
+					end;
+					local effectiveSpeed = math.max(speed - 5, 0);
+					local speedBoost = 0.05;
+					if speed > 160 then
+						speedBoost = 0.12;
+					elseif speed > 120 then
+						speedBoost = 0.09;
+					elseif speed > 80 then
+						speedBoost = 0.07;
+					end;
+					local baseFactor = math.clamp(vs.predictBase / 50, 0.25, 2);
+					local predictRadiusNoPing = vs.predictMinRadius + vs.predictExtra * baseFactor + effectiveSpeed * (multiplier + speedBoost) * baseFactor;
+					local predictRadius = predictRadiusNoPing + (pingValue or 0) * vs.pingPredictScale;
+					local preEntryMargin = math.clamp(predictRadius * 0.12 + (pingValue or 0) * 0.018, 3, 14);
+					local parryPredictRadius = predictRadius + preEntryMargin;
+					if rawDist <= parryPredictRadius * 1.02 then
+						local hitTime = speed > 0 and (rawDist / math.max(speed, 1)) or math.huge;
+						if hitTime < bestHit or (math.abs(hitTime - bestHit) <= 0.02 and rawDist < bestDist) then
+							bestBall = ball;
+							bestHit = hitTime;
+							bestDist = rawDist;
+						end;
+					end;
+				end;
+			end;
+		end;
+	end;
+	if not bestBall then
+		return false;
+	end;
+	local nowFire = tick();
+	parryState.lastQueueTime = nowFire;
+	parryState.nextPar = nowFire + parryState.parCd;
+	parryState.lastParryTime = nowFire;
+	ballState.lastParryPerBall[bestBall] = nowFire;
+	ballState.closeParryBlocked[bestBall] = true;
+	setActiveParryLock(bestBall, nowFire, bestHit);
+	clearPendingBall(bestBall);
+	local okP, errP = pcall(DoParry);
+	if not okP then
+		apWarn(errP);
+	end;
+	return okP == true;
+end;
+
 local function AutoParryStep(dt)
 	local ps = parryState;
 	local vs = visualizerState;
@@ -2079,6 +2154,8 @@ local function AutoParryStep(dt)
 	local hasBalls = #balls > 0;
 	attachVisualizer(hasBalls);
 	local showViz = isVisualizerEnabled() and hasBalls;
+	local nowFrame = tick();
+	local pingFrame = getPing();
 	if not (hrp and hrp.Position) then
 		return;
 	end;
@@ -2093,11 +2170,11 @@ local function AutoParryStep(dt)
 			clearPendingBall(old);
 			ps.nextPar = 0;
 			ps.clearActiveParryLock(old);
-			safeFlush(character, hrp);
+			if not tryPromoteImmediateBall(balls, character, hrp, old, pingFrame) then
+				safeFlush(character, hrp, true);
+			end;
 		end;
 	end;
-	local nowFrame = tick();
-	local pingFrame = getPing();
 	local spamWindowUntil = hasBalls and (nowFrame + 0.06) or 0;
 	local spamFastUntil = 0;
 	updateGuiTargets(hrp, hasBalls);
@@ -2433,6 +2510,7 @@ local function AutoParryStep(dt)
 					-- Treat nearly-stacked balls as an immediate handoff threat.
 					overlapHandoff = overlapDist <= math.max(14, parryPredictRadius * 0.6);
 				end;
+				local parryTriggered = false;
 				if targetKnown and isOtherBall and currentTargetConfirmed and handoffZone and (not bs.closeParryBlocked[ball]) then
 					local immediateQueuedHandoff = rawDist <= parryPredictRadius or overlapHandoff or overlapDist <= math.max(18, parryPredictRadius * 0.8);
 					queuePendingBall(ball, hitTime, rawDist, parryPredictRadius, immediateQueuedHandoff);
@@ -2440,13 +2518,19 @@ local function AutoParryStep(dt)
 					if urgentHandoff then
 						pendingImmediate = true;
 						ps.activeParryReleaseAt = math.min(ps.activeParryReleaseAt, now);
+						if ps.activeParryBall and ps.activeParryBall ~= ball then
+							bs.closeParryBlocked[ps.activeParryBall] = nil;
+							ps.clearActiveParryLock(ps.activeParryBall);
+						end;
+						if safeFlush(character, hrp, true) then
+							parryTriggered = true;
+						end;
 					else
 						ps.activeParryReleaseAt = math.min(ps.activeParryReleaseAt, now + 0.035);
 					end;
 				elseif ps.pendingSet[ball] and (((targetKnown and (not targeted) and (not attrNow) and ps.activeParryBall == nil)) or (not ball.Parent) or rawDist > math.max(22, parryPredictRadius * 1.35)) then
 					clearPendingBall(ball);
 				end;
-				local parryTriggered = false;
 				if (ps.activeParryBall == nil or ps.activeParryBall == ball or now >= ps.activeParryReleaseAt) and instantRetarget and (not bs.closeParryBlocked[ball]) and ((not movingAwayBlocked) or retargetOverrideMovingAway) then
 					local nowRetarget = now;
 					local lastBallFire = bs.lastParryPerBall[ball] or (-math.huge);

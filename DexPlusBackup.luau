@@ -1235,6 +1235,7 @@ Main = (function()
 		env.decompile = function(...)
 			local builtInDecompiler = getNativeDecompiler()
 			local fallbackMode = (Settings and Settings.Decompiler and Settings.Decompiler.DecompilerFallback) or "Konstant"
+			local preferFallback = (Settings and Settings.Decompiler and Settings.Decompiler.PreferDecompilerFallback) == true
 			local attempts = {}
 			local included = {}
 			local lastError
@@ -1263,13 +1264,25 @@ Main = (function()
 				end
 			end
 
-			queueAttempt("Built-in", builtInDecompiler)
-			queueFallback(fallbackMode)
+			if preferFallback then
+				queueFallback(fallbackMode)
+				queueAttempt("Built-in", builtInDecompiler)
+			else
+				queueAttempt("Built-in", builtInDecompiler)
+				queueFallback(fallbackMode)
+			end
 
-			queueFallback("Konstant")
-			queueFallback("Shiny")
-			queueFallback("AdvancedDecompiler")
-			queueAttempt("Built-in", builtInDecompiler)
+			for _, mode in ipairs({"Konstant", "Shiny", "AdvancedDecompiler"}) do
+				if mode ~= fallbackMode then
+					queueFallback(mode)
+				end
+			end
+
+			if preferFallback then
+				queueFallback(fallbackMode)
+			else
+				queueAttempt("Built-in", builtInDecompiler)
+			end
 
 			for _, attempt in ipairs(attempts) do
 				local ok, result, err = pcall(attempt.Fn, ...)

@@ -1665,6 +1665,8 @@ local function modrow(parent, y, ent)
 		end
 		draw()
 	end)
+
+	return f
 end
 
 local function entrow(parent, y, baseDepth, k, v)
@@ -1717,6 +1719,8 @@ local function entrow(parent, y, baseDepth, k, v)
 		mode = pickmode(v)
 		draw()
 	end)
+
+	return f
 end
 
 local function otherpreview(v)
@@ -1771,6 +1775,8 @@ local function otherrow(parent, y, k, v)
 		TextSize = 11,
 		TextXAlignment = Enum.TextXAlignment.Left
 	})
+
+	return f
 end
 
 local function valrow(parent, y, k, v)
@@ -1896,6 +1902,8 @@ local function valrow(parent, y, k, v)
 			end
 		end)
 	end
+
+	return f
 end
 
 local function showmsg(parent, y, a, b)
@@ -1924,11 +1932,18 @@ local function showmsg(parent, y, a, b)
 		TextSize = 12,
 		TextXAlignment = Enum.TextXAlignment.Left
 	})
+
+	return f
 end
 
 local renderitems = {}
 local rowgap = 8
 local renderlist
+local renderqueued = false
+local pendingrenderforce = false
+local firstrendered = 0
+local lastrendered = 0
+local renderedrows = {}
 
 local function rowh(kind, v)
 	if kind == "mod" then
@@ -1946,6 +1961,15 @@ local function rowh(kind, v)
 	return 62
 end
 
+local function clearrows()
+	for idx, row in pairs(renderedrows) do
+		if row then
+			row:Destroy()
+		end
+		renderedrows[idx] = nil
+	end
+end
+
 local function setitems(items)
 	renderitems = items or {}
 	local y = 0
@@ -1960,22 +1984,25 @@ local function setitems(items)
 	if body.CanvasPosition.Y > math.max(0, total - body.AbsoluteSize.Y) then
 		body.CanvasPosition = Vector2.new(0, math.max(0, total - body.AbsoluteSize.Y))
 	end
+	firstrendered = 0
+	lastrendered = 0
+	clearrows()
 	if renderlist then
-		renderlist()
+		renderlist(true)
 	end
 end
 
 local function renderitem(item)
 	if item.kind == "mod" then
-		modrow(listc, item.y, item.ent)
+		return modrow(listc, item.y, item.ent)
 	elseif item.kind == "ent" then
-		entrow(listc, item.y, item.baseDepth, item.key, item.val)
+		return entrow(listc, item.y, item.baseDepth, item.key, item.val)
 	elseif item.kind == "other" then
-		otherrow(listc, item.y, item.key, item.val)
+		return otherrow(listc, item.y, item.key, item.val)
 	elseif item.kind == "val" then
-		valrow(listc, item.y, item.key, item.val)
+		return valrow(listc, item.y, item.key, item.val)
 	elseif item.kind == "msg" then
-		showmsg(listc, item.y, item.a, item.b)
+		return showmsg(listc, item.y, item.a, item.b)
 	end
 end
 
@@ -1996,34 +2023,71 @@ local function findfirstvisible(topY)
 	return ans
 end
 
-renderlist = function()
-	clear()
+renderlist = function(force)
 	if minimized or not body.Visible or #renderitems == 0 then
+		firstrendered = 0
+		lastrendered = 0
+		clearrows()
 		return
 	end
 	local overscan = 120
 	local topY = math.max(0, body.CanvasPosition.Y - overscan)
 	local botY = body.CanvasPosition.Y + body.AbsoluteSize.Y + overscan
-	local i = findfirstvisible(topY)
+	local first = findfirstvisible(topY)
+	local last = first - 1
+	local i = first
 	while i <= #renderitems do
 		local item = renderitems[i]
 		if item.y > botY then
 			break
 		end
-		renderitem(item)
+		last = i
 		i += 1
 	end
+	if not force and first == firstrendered and last == lastrendered then
+		return
+	end
+	firstrendered = first
+	lastrendered = last
+	for idx, row in pairs(renderedrows) do
+		if idx < first or idx > last then
+			row:Destroy()
+			renderedrows[idx] = nil
+		end
+	end
+	for idx = first, last do
+		if not renderedrows[idx] then
+			renderedrows[idx] = renderitem(renderitems[idx])
+		end
+	end
+end
+
+local function queuerender(force)
+	pendingrenderforce = pendingrenderforce or force or false
+	if renderqueued then
+		return
+	end
+	renderqueued = true
+	task.defer(function()
+		renderqueued = false
+		local forceNow = pendingrenderforce
+		pendingrenderforce = false
+		if dead or not renderlist or #renderitems <= 0 then
+			return
+		end
+		renderlist(forceNow)
+	end)
 end
 
 bind(body:GetPropertyChangedSignal("CanvasPosition"), function()
 	if #renderitems > 0 then
-		renderlist()
+		queuerender(false)
 	end
 end)
 
 bind(body:GetPropertyChangedSignal("AbsoluteSize"), function()
 	if #renderitems > 0 then
-		renderlist()
+		queuerender(true)
 	end
 end)
 

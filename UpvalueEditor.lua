@@ -35,7 +35,13 @@ local rawGetInfo = (dbg and dbg.getinfo) or getinfo
 local rawGetUpvalue = (dbg and dbg.getupvalue) or getupvalue or getupval
 local rawSetUpvalue = (dbg and dbg.setupvalue) or setupvalue or setupval
 local rawGetUpvalues = (dbg and dbg.getupvalues) or getupvalues or getupvals
-local setClipboard = setclipboard or writeclipboard
+local rawGetConstants = (dbg and dbg.getconstants) or getconstants or getconsts
+local setClipboard = setclipboard
+	or writeclipboard
+	or toclipboard
+	or set_clipboard
+	or (Clipboard and Clipboard.set)
+	or (clipboard and clipboard.set)
 local isXClosure = is_synapse_function
 	or issentinelclosure
 	or is_protosmasher_closure
@@ -147,6 +153,9 @@ local showAllUpvalues = false
 local showAllElements = false
 local mode = "closures"
 local statusText = ""
+local lastScanQuery = ""
+local loopLocks = {}
+local closureScript
 
 local tempColors = {
 	card = Color3.fromRGB(34, 20, 20),
@@ -731,6 +740,83 @@ local function getInstancePath(instance)
 	return table.concat(parts)
 end
 
+local function normalizeCopyPath(path)
+	if type(path) ~= "string" then
+		return path
+	end
+
+	if string.sub(path, 1, 28) == "game:GetService(\"Workspace\")" then
+		path = string.gsub(path, "game:GetService%(\"Workspace\"%)", "workspace", 1)
+	end
+
+	if plr and string.sub(path, 1, 10 + #plr.Name) == "workspace." .. plr.Name then
+		path = string.gsub(
+			path,
+			"workspace%." .. plr.Name,
+			"game:GetService(\"Players\").LocalPlayer.Character",
+			1
+		)
+	end
+
+	if plr and string.sub(path, 1, 27 + #plr.Name) == "game:GetService(\"Players\")." .. plr.Name then
+		path = string.gsub(
+			path,
+			"game:GetService%(\"Players\"%)." .. plr.Name,
+			"game:GetService(\"Players\").LocalPlayer",
+			1
+		)
+	end
+
+	return path
+end
+
+local function getCopiedInstancePath(obj)
+	if typeof(obj) ~= "Instance" then
+		return "nil"
+	end
+
+	local path = ""
+	local current = obj
+
+	while current do
+		if current == game then
+			path = "game" .. path
+			break
+		end
+
+		local className = current.ClassName
+		local currentName = tostring(current)
+		local indexName
+
+		if string.match(currentName, "^[%a_][%w_]*$") then
+			indexName = "." .. currentName
+		else
+			indexName = "[" .. string.format("%q", currentName) .. "]"
+		end
+
+		local parent = current.Parent
+		if parent then
+			local firstChild = parent:FindFirstChild(currentName)
+			if firstChild and firstChild ~= current then
+				local siblings = parent:GetChildren()
+				local childIndex = table.find(siblings, current)
+				if childIndex then
+					indexName = ":GetChildren()[" .. childIndex .. "]"
+				end
+			elseif parent == game then
+				indexName = ":GetService(\"" .. className .. "\")"
+			end
+		else
+			indexName = ("local getNil = function(name, class) for _, v in next, getnilinstances() do if v.ClassName == class and v.Name == name then return v end end end\n\ngetNil(%q, %q)"):format(current.Name, className)
+		end
+
+		path = indexName .. path
+		current = parent
+	end
+
+	return normalizeCopyPath(path)
+end
+
 local function valuepreview(v)
 	local ty = typeof(v)
 	if ty == "function" then
@@ -983,6 +1069,347 @@ local function setElementValue(upvalue, key, newValue)
 		upvalue.TemporaryElements[key] = clone[key]
 	end
 	return true
+end
+
+local function closureRef(closure)
+	if type(closure) == "table" and closure.Data then
+		return closure.Data
+	end
+	return closure
+end
+
+local function sameUpvalueRef(a, b)
+	return a ~= nil
+		and b ~= nil
+		and a.Index == b.Index
+		and closureRef(a.Closure) == closureRef(b.Closure)
+end
+
+local function findLoopLock(target)
+	if not target or not target.upvalue then
+		return nil
+	end
+
+	for index, lock in ipairs(loopLocks) do
+		if lock.kind == target.kind and sameUpvalueRef(lock.upvalue, target.upvalue) then
+			if lock.kind ~= "element" or lock.key == target.key then
+				lock.upvalue = target.upvalue
+				return lock, index
+			end
+		end
+	end
+	return nil
+end
+
+local function setLoopLock(target, value, labelText)
+	local lock = findLoopLock(target)
+	if not lock then
+		lock = {
+			kind = target.kind,
+			upvalue = target.upvalue,
+			key = target.key,
+		}
+		loopLocks[#loopLocks + 1] = lock
+	end
+
+	lock.value = value
+	lock.label = labelText
+	lock.upvalue = target.upvalue
+end
+
+local function clearLoopLock(target)
+	local _, index = findLoopLock(target)
+	if index then
+		table.remove(loopLocks, index)
+		return true
+	end
+	return false
+end
+
+local function codelit(v)
+	local t = typeof(v)
+	if t == "string" then
+		return string.format("%q", v)
+	end
+	if t == "number" then
+		if v ~= v then
+			return "0/0"
+		end
+		if v == math.huge then
+			return "math.huge"
+		end
+		if v == -math.huge then
+			return "-math.huge"
+		end
+		return string.format("%.17g", v)
+	end
+	if t == "boolean" then
+		return v and "true" or "false"
+	end
+	if t == "nil" then
+		return "nil"
+	end
+	if t == "Vector2" then
+		return string.format("Vector2.new(%.17g, %.17g)", v.X, v.Y)
+	end
+	if t == "Vector3" then
+		return string.format("Vector3.new(%.17g, %.17g, %.17g)", v.X, v.Y, v.Z)
+	end
+	if t == "Color3" then
+		return string.format(
+			"Color3.fromRGB(%d, %d, %d)",
+			math.clamp(math.floor(v.R * 255 + 0.5), 0, 255),
+			math.clamp(math.floor(v.G * 255 + 0.5), 0, 255),
+			math.clamp(math.floor(v.B * 255 + 0.5), 0, 255)
+		)
+	end
+	if t == "UDim" then
+		return string.format("UDim.new(%.17g, %.17g)", v.Scale, v.Offset)
+	end
+	if t == "UDim2" then
+		return string.format("UDim2.new(%.17g, %.17g, %.17g, %.17g)", v.X.Scale, v.X.Offset, v.Y.Scale, v.Y.Offset)
+	end
+	if t == "BrickColor" then
+		return string.format("BrickColor.new(%q)", v.Name)
+	end
+	if t == "NumberRange" then
+		return string.format("NumberRange.new(%.17g, %.17g)", v.Min, v.Max)
+	end
+	if t == "Rect" then
+		return string.format("Rect.new(%.17g, %.17g, %.17g, %.17g)", v.Min.X, v.Min.Y, v.Max.X, v.Max.Y)
+	end
+	if t == "CFrame" then
+		local c = {v:GetComponents()}
+		for i = 1, #c do
+			c[i] = string.format("%.17g", c[i])
+		end
+		return "CFrame.new(" .. table.concat(c, ", ") .. ")"
+	end
+	if t == "EnumItem" then
+		return tostring(v)
+	end
+	if t == "Instance" then
+		if v.Parent == nil and v ~= game then
+			return nil, "cannot serialize detached Instance"
+		end
+		return getCopiedInstancePath(v)
+	end
+	return nil, "unsupported value type: " .. t
+end
+
+local function tablecodelit(data, root, indent)
+	local dataType = type(data)
+
+	if dataType == "string" or dataType == "number" or dataType == "boolean" or data == nil then
+		return codelit(data)
+	end
+	if dataType == "userdata" then
+		if typeof(data) == "Instance" then
+			return getCopiedInstancePath(data)
+		end
+		return "placeholderUserdataConstant"
+	end
+	if dataType ~= "table" then
+		return tostring(data)
+	end
+
+	indent = indent or 1
+	root = root or data
+
+	local lines = {"{"}
+	local prefix = string.rep("\t", indent)
+	local hadAny = false
+
+	for k, v in pairs(data) do
+		hadAny = true
+		local keyCode
+		local valueCode
+
+		if k == root or v == root then
+			keyCode = "\"OH_CYCLIC_PROTECTION\""
+			valueCode = "\"OH_CYCLIC_PROTECTION\""
+		else
+			keyCode = tablecodelit(k, root, indent + 1)
+			valueCode = tablecodelit(v, root, indent + 1)
+		end
+
+		lines[#lines + 1] = ("%s[%s] = %s,"):format(prefix, keyCode, valueCode)
+	end
+
+	if not hadAny then
+		return "{}"
+	end
+
+	lines[#lines + 1] = string.rep("\t", indent - 1) .. "}"
+	return table.concat(lines, "\n")
+end
+
+local function buildCopyCode(loopTarget, newValue, forceLoop)
+	if not loopTarget or not loopTarget.upvalue then
+		return nil, "missing target"
+	end
+
+	local closure = loopTarget.upvalue.Closure
+	local closureData = closure and closure.Data
+	if type(closureData) ~= "function" then
+		return nil, "invalid closure"
+	end
+
+	local valueCode, valueErr = codelit(newValue)
+	if not valueCode then
+		return nil, valueErr
+	end
+
+	local keyCode = loopTarget.kind == "element" and codelit(loopTarget.key) or nil
+	if loopTarget.kind == "element" and not keyCode then
+		return nil, "unsupported table key type"
+	end
+
+	local currentConstants = {}
+	local currentIndex = 0
+	if type(rawGetConstants) == "function" then
+		local ok, constants = pcall(rawGetConstants, closureData)
+		if ok and type(constants) == "table" then
+			for idx, constant in pairs(constants) do
+				if currentIndex > 5 then
+					break
+				elseif type(constant) ~= "function" then
+					currentConstants[idx] = constant
+					currentIndex += 1
+				end
+			end
+		end
+	end
+
+	local scriptObj = closureScript(closure)
+	local scriptPath = scriptObj and getCopiedInstancePath(scriptObj) or nil
+	local constantsCode = next(currentConstants) and tablecodelit(currentConstants) or "nil"
+	local loopEnabled = forceLoop
+	if loopEnabled == nil then
+		loopEnabled = findLoopLock(loopTarget) ~= nil
+	end
+
+	local generated = {
+		"-- Generated by Upvalue Editor",
+		"local dbg = debug",
+		"local runService = game:GetService(\"RunService\")",
+		"local rawGetGc = getgc or get_gc_objects",
+		"local getInfo = (dbg and dbg.getinfo) or getinfo",
+		"local getUpvalue = (dbg and dbg.getupvalue) or getupvalue or getupval",
+		"local getConstants = (dbg and dbg.getconstants) or getconstants or getconsts",
+		"local setUpvalue = (dbg and dbg.setupvalue) or setupvalue or setupval",
+		"local isXClosure = is_synapse_function or issentinelclosure or is_protosmasher_closure or is_sirhurt_closure or istempleclosure or checkclosure",
+		"local isLClosure = islclosure or is_l_closure or (iscclosure and function(f) return not iscclosure(f) end)",
+		"local placeholderUserdataConstant = newproxy(false)",
+		"assert(type(rawGetGc) == \"function\", \"missing getgc\")",
+		"assert(type(getInfo) == \"function\", \"missing debug.getinfo\")",
+		"assert(type(getUpvalue) == \"function\", \"missing debug.getupvalue\")",
+		"assert(type(getConstants) == \"function\", \"missing debug.getconstants\")",
+		"assert(type(setUpvalue) == \"function\", \"missing debug.setupvalue\")",
+		"assert(type(isXClosure) == \"function\", \"missing xclosure detector\")",
+		"",
+		"local scriptPath = " .. (scriptPath or "nil"),
+		"local closureName = " .. string.format("%q", closure.Name),
+		"local upvalueIndex = " .. tostring(loopTarget.upvalue.Index),
+		"local closureConstants = " .. constantsCode,
+		"local value = " .. valueCode,
+		"local loopValue = " .. tostring(loopEnabled),
+	}
+
+	if keyCode then
+		generated[#generated + 1] = "local elementIndex = " .. keyCode
+	end
+
+	generated[#generated + 1] = ""
+	generated[#generated + 1] = "local function matchConstants(func, list)"
+	generated[#generated + 1] = "\tif not list then"
+	generated[#generated + 1] = "\t\treturn true"
+	generated[#generated + 1] = "\tend"
+	generated[#generated + 1] = "\tlocal constants = getConstants(func)"
+	generated[#generated + 1] = "\tfor index, constant in pairs(list) do"
+	generated[#generated + 1] = "\t\tif constants[index] ~= constant and constant ~= placeholderUserdataConstant then"
+	generated[#generated + 1] = "\t\t\treturn false"
+	generated[#generated + 1] = "\t\tend"
+	generated[#generated + 1] = "\tend"
+	generated[#generated + 1] = "\treturn true"
+	generated[#generated + 1] = "end"
+	generated[#generated + 1] = ""
+	generated[#generated + 1] = "local function searchClosure()"
+	generated[#generated + 1] = "\tfor _, func in pairs(rawGetGc()) do"
+	generated[#generated + 1] = "\t\tif type(func) == \"function\" and (not isLClosure or isLClosure(func)) and not isXClosure(func) then"
+	generated[#generated + 1] = "\t\t\tlocal okEnv, env = pcall(getfenv, func)"
+	generated[#generated + 1] = "\t\t\tlocal parentScript = okEnv and env and rawget(env, \"script\") or nil"
+	generated[#generated + 1] = "\t\t\tlocal validScript = (scriptPath == nil and (typeof(parentScript) ~= \"Instance\" or parentScript.Parent == nil)) or parentScript == scriptPath"
+	generated[#generated + 1] = "\t\t\tif validScript and pcall(getUpvalue, func, upvalueIndex) then"
+	generated[#generated + 1] = "\t\t\t\tlocal info = getInfo(func)"
+	generated[#generated + 1] = "\t\t\t\tif (((closureName and closureName ~= \"Unnamed function\") and info.name == closureName) or (not closureName or closureName == \"Unnamed function\")) and matchConstants(func, closureConstants) then"
+	generated[#generated + 1] = "\t\t\t\t\treturn func"
+	generated[#generated + 1] = "\t\t\t\tend"
+	generated[#generated + 1] = "\t\t\tend"
+	generated[#generated + 1] = "\t\tend"
+	generated[#generated + 1] = "\tend"
+	generated[#generated + 1] = "end"
+	generated[#generated + 1] = ""
+	generated[#generated + 1] = "local closure = assert(searchClosure(), \"target closure not found\")"
+	generated[#generated + 1] = ""
+	generated[#generated + 1] = "local function apply()"
+
+	if keyCode then
+		generated[#generated + 1] = "\tgetUpvalue(closure, upvalueIndex)[elementIndex] = value"
+	else
+		generated[#generated + 1] = "\tsetUpvalue(closure, upvalueIndex, value)"
+	end
+
+	generated[#generated + 1] = "end"
+	generated[#generated + 1] = ""
+	generated[#generated + 1] = "apply()"
+
+	if loopEnabled then
+		generated[#generated + 1] = ""
+		generated[#generated + 1] = "runService.PreSimulation:Connect(function()"
+		generated[#generated + 1] = "\tpcall(apply)"
+		generated[#generated + 1] = "end)"
+	end
+
+	return table.concat(generated, "\n")
+end
+
+local function applyLoopLock(lock)
+	if lock.kind == "element" then
+		return setElementValue(lock.upvalue, lock.key, lock.value)
+	end
+
+	local ok, err = pcall(function()
+		lock.upvalue:Set(lock.value)
+	end)
+	if ok then
+		return true
+	end
+	return false, err
+end
+
+local function enforceLoopLocks()
+	if dead or #loopLocks == 0 then
+		return
+	end
+
+	local removedStatus
+
+	for index = #loopLocks, 1, -1 do
+		local lock = loopLocks[index]
+		local ok, wrote, err = pcall(applyLoopLock, lock)
+		if not ok then
+			table.remove(loopLocks, index)
+			removedStatus = "loop removed: " .. tostring(lock.label) .. " (" .. tostring(wrote) .. ")"
+		elseif not wrote then
+			table.remove(loopLocks, index)
+			removedStatus = "loop removed: " .. tostring(lock.label) .. " (" .. tostring(err) .. ")"
+		end
+	end
+
+	if removedStatus then
+		statusText = removedStatus
+	end
 end
 
 local bg = mk("Frame", {
@@ -1476,7 +1903,7 @@ local function clear()
 	end
 end
 
-local function closureScript(closure)
+closureScript = function(closure)
 	local env = closure and closure.Environment
 	local scr = env and rawget(env, "script")
 	if typeof(scr) == "Instance" and scr.Parent ~= nil then
@@ -1679,10 +2106,10 @@ local function openUpvalue(upvalue)
 	draw()
 end
 
-local function valueRow(y, labelText, value, applyFn, temporary)
+local function valueRow(y, labelText, value, applyFn, temporary, loopTarget)
 	local raw = editvalue(value)
 	local ty = edittype(value)
-	local h = typeof(raw) == "boolean" and 72 or 78
+	local h = typeof(raw) == "boolean" and 72 or 146
 	local f = card(listc, y, h, temporary)
 
 	mk("TextLabel", {
@@ -1734,15 +2161,16 @@ local function valueRow(y, labelText, value, applyFn, temporary)
 			draw()
 		end)
 	else
+		local loopLock = loopTarget and findLoopLock(loopTarget) or nil
 		local box = mk("TextBox", {
 			Parent = f,
 			BackgroundColor3 = Color3.fromRGB(30, 30, 30),
 			BorderSizePixel = 0,
 			ClearTextOnFocus = false,
 			Position = UDim2.fromOffset(10, 32),
-			Size = UDim2.new(1, -92, 0, 34),
+			Size = UDim2.new(1, -20, 0, 34),
 			Font = Enum.Font.Code,
-			Text = fmt(value),
+			Text = fmt(loopLock and loopLock.value or value),
 			TextColor3 = Color3.new(1, 1, 1),
 			TextSize = 13,
 			TextXAlignment = Enum.TextXAlignment.Left,
@@ -1752,7 +2180,7 @@ local function valueRow(y, labelText, value, applyFn, temporary)
 			CornerRadius = UDim.new(0, 8),
 		})
 
-		local function apply()
+		local function parseInput()
 			local newValue, ok = parse(box.Text, value)
 			if not ok then
 				local msg = "bad value"
@@ -1761,21 +2189,147 @@ local function valueRow(y, labelText, value, applyFn, temporary)
 					msg ..= " (" .. hx .. ")"
 				end
 				statusText = msg
-				box.Text = fmt(value)
+				box.Text = fmt(loopLock and loopLock.value or value)
+				return nil
+			end
+			return newValue
+		end
+
+		local function apply()
+			local newValue = parseInput()
+			if newValue == nil then
 				return
 			end
 			local wrote, err = applyFn(newValue)
 			if not wrote then
 				statusText = "failed: " .. tostring(err)
-				box.Text = fmt(value)
+				box.Text = fmt(loopLock and loopLock.value or value)
 				return
+			end
+			if loopTarget then
+				local activeLock = findLoopLock(loopTarget)
+				if activeLock then
+					activeLock.value = newValue
+				end
 			end
 			statusText = labelText .. " = " .. cut(fmt(newValue), 80)
 			draw()
 		end
 
-		local applyButton = actionButton(f, "Apply", 0, 32, 64, apply)
-		applyButton.Position = UDim2.new(1, -74, 0, 32)
+		local function toggleLoop()
+			if not loopTarget then
+				return
+			end
+
+			local activeLock = findLoopLock(loopTarget)
+			if activeLock then
+				clearLoopLock(loopTarget)
+				statusText = "loop off: " .. labelText
+				draw()
+				return
+			end
+
+			local newValue = parseInput()
+			if newValue == nil then
+				return
+			end
+
+			local wrote, err = applyFn(newValue)
+			if not wrote then
+				statusText = "failed: " .. tostring(err)
+				box.Text = fmt(loopLock and loopLock.value or value)
+				return
+			end
+
+			setLoopLock(loopTarget, newValue, labelText)
+			statusText = "loop on: " .. labelText .. " = " .. cut(fmt(newValue), 80)
+			draw()
+		end
+
+		local function copyCode(forceLoop)
+			local ok, success, err = pcall(function()
+				local newValue = parseInput()
+				if newValue == nil then
+					return false, "bad value"
+				end
+
+				local code, err = buildCopyCode(loopTarget, newValue, forceLoop)
+				if not code then
+					return false, err
+				end
+				if not setClipboard then
+					return false, "clipboard unavailable"
+				end
+
+				local copied, clipErr = pcall(setClipboard, code)
+				if not copied then
+					return false, clipErr
+				end
+				return true
+			end)
+
+			if not ok then
+				statusText = "copy failed: " .. tostring(success)
+				notify(statusText)
+				draw()
+				return
+			end
+
+			if not success then
+				if tostring(err) ~= "bad value" then
+					statusText = "copy failed: " .. tostring(err)
+					notify(statusText)
+					draw()
+				end
+				return
+			end
+
+			statusText = (forceLoop and "copied loop code for " or "copied code for ") .. labelText
+			notify((forceLoop and "Copied loop code for " or "Copied code for ") .. labelText)
+			draw()
+		end
+
+		local copyButton = actionButton(
+			f,
+			"Copy Code",
+			10,
+			74,
+			64,
+			function()
+				copyCode(false)
+			end,
+			Color3.fromRGB(54, 46, 30)
+		)
+		copyButton.Size = UDim2.new(0.5, -15, 0, 28)
+
+		local copyLoopButton = actionButton(
+			f,
+			"Copy Code Loop",
+			0,
+			74,
+			64,
+			function()
+				copyCode(true)
+			end,
+			Color3.fromRGB(62, 52, 34)
+		)
+		copyLoopButton.Position = UDim2.new(0.5, 5, 0, 74)
+		copyLoopButton.Size = UDim2.new(0.5, -15, 0, 28)
+
+		local loopButton = actionButton(
+			f,
+			loopLock and "Loop On" or "Loop Off",
+			10,
+			108,
+			64,
+			toggleLoop,
+			loopLock and Color3.fromRGB(48, 78, 42) or Color3.fromRGB(40, 40, 40)
+		)
+		loopButton.Size = UDim2.new(0.5, -15, 0, 28)
+
+		local applyButton = actionButton(f, "Apply", 0, 108, 64, apply)
+		applyButton.Position = UDim2.new(0.5, 5, 0, 108)
+		applyButton.Size = UDim2.new(0.5, -15, 0, 28)
 		bind(box.FocusLost, function(enterPressed)
 			if enterPressed then
 				apply()
@@ -1848,11 +2402,13 @@ local function collectRows()
 			stat.Text = statusText ~= "" and statusText or "0 results"
 			return items
 		end
+
+		local applyNameFilter = q ~= "" and q ~= lastScanQuery
 		local shown = 0
 		for _, closure in ipairs(closures) do
 			local script = closureScript(closure)
 			local scriptPath = script and getInstancePath(script) or "detached"
-			if filtered(closure.Name, q) or filtered(scriptPath, q) then
+			if not applyNameFilter or filtered(closure.Name, q) or filtered(scriptPath, q) then
 				items[#items + 1] = {kind = "closure", closure = closure}
 				shown += 1
 			end
@@ -1908,6 +2464,10 @@ local function collectRows()
 						label = labelText,
 						value = value,
 						temporary = temp,
+						loopTarget = {
+							kind = "upvalue",
+							upvalue = upvalue,
+						},
 						apply = function(newValue)
 							local ok, err = pcall(function()
 								upvalue:Set(newValue)
@@ -1973,13 +2533,19 @@ local function collectRows()
 						temporary = data.temporary,
 					}
 				elseif isedit(value) then
+					local parentUpvalue = selectedUpvalue
 					items[#items + 1] = {
 						kind = "editable",
 						label = labelText,
 						value = value,
 						temporary = data.temporary,
+						loopTarget = {
+							kind = "element",
+							upvalue = parentUpvalue,
+							key = index,
+						},
 						apply = function(newValue)
-							return setElementValue(selectedUpvalue, index, newValue)
+							return setElementValue(parentUpvalue, index, newValue)
 						end,
 					}
 				else
@@ -2031,7 +2597,7 @@ draw = function()
 		elseif item.kind == "closure" then
 			h = closureRow(y, item.closure)
 		elseif item.kind == "editable" then
-			h = valueRow(y, item.label, item.value, item.apply, item.temporary)
+			h = valueRow(y, item.label, item.value, item.apply, item.temporary, item.loopTarget)
 		elseif item.kind == "other" then
 			h = otherRow(y, item.label, item.value, item.temporary)
 		elseif item.kind == "table" then
@@ -2073,6 +2639,7 @@ local function runScan()
 
 	local token = sid + 1
 	sid = token
+	lastScanQuery = query
 	statusText = "scanning..."
 	mode = "closures"
 	selectedClosure = nil
@@ -2183,6 +2750,9 @@ end)
 
 dragger(frm, top)
 bind(cam:GetPropertyChangedSignal("ViewportSize"), fit)
+bind(run.PreSimulation, function()
+	enforceLoopLocks()
+end)
 
 local refreshClock = 0
 bind(run.Heartbeat, function(dt)

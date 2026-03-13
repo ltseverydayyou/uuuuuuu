@@ -5,9 +5,15 @@ if oh then
 end
 
 local web = true
-local user = "Upbolt" -- change if you're using a fork
-local branch = "revision"
+local user = "ltseverydayyou" -- change if you're using a fork
+local repo = "uuuuuuu"
+local repoPath = "Hydroxide"
+local branch = "main"
 local importCache = {}
+
+local function getAssetUrl(asset)
+    return ("https://raw.githubusercontent.com/%s/%s/%s/%s/%s.lua"):format(user, repo, branch, repoPath, asset)
+end
 
 local function hasMethods(methods)
     for name in pairs(methods) do
@@ -185,7 +191,16 @@ end
 useMethods(globalMethods)
 
 local HttpService = game:GetService("HttpService")
-local releaseInfo = HttpService:JSONDecode(game:HttpGetAsync("https://api.github.com/repos/" .. user .. "/Hydroxide/releases"))[1]
+local releaseInfo = { tag_name = branch }
+do
+    local ran, response = pcall(game.HttpGetAsync, game, ("https://api.github.com/repos/%s/%s/releases"):format(user, repo))
+    if ran then
+        local decoded = HttpService:JSONDecode(response)
+        if type(decoded) == "table" and decoded[1] and decoded[1].tag_name then
+            releaseInfo = decoded[1]
+        end
+    end
+end
 
 if readFile and writeFile then
     local hasFolderFunctions = (isFolder and makeFolder) ~= nil
@@ -225,13 +240,13 @@ if readFile and writeFile then
                     local content
 
                     if (isFile and not isFile(file)) or not importCache[asset] then
-                        content = game:HttpGetAsync("https://raw.githubusercontent.com/" .. user .. "/Hydroxide/" .. branch .. '/' .. asset .. ".lua")
+                        content = game:HttpGetAsync(getAssetUrl(asset))
                         writeFile(file, content)
                     else
                         local ran, result = pcall(readFile, file)
 
                         if (not ran) or not importCache[asset] then
-                            content = game:HttpGetAsync("https://raw.githubusercontent.com/" .. user .. "/Hydroxide/" .. branch .. '/' .. asset .. ".lua")
+                            content = game:HttpGetAsync(getAssetUrl(asset))
                             writeFile(file, content)
                         else
                             content = result
@@ -240,7 +255,7 @@ if readFile and writeFile then
 
                     assets = { loadstring(content, asset .. '.lua')() }
                 else
-                    assets = { loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/" .. user .. "/Hydroxide/" .. branch .. '/' .. asset .. ".lua"), asset .. '.lua')() }
+                    assets = { loadstring(game:HttpGetAsync(getAssetUrl(asset)), asset .. '.lua')() }
                 end
             else
                 assets = { loadstring(readFile("hydroxide/" .. asset .. ".lua"), asset .. '.lua')() }
@@ -265,7 +280,7 @@ if readFile and writeFile then
                 local content
 
                 if not ran then
-                    content = game:HttpGetAsync("https://raw.githubusercontent.com/" .. user .. "/Hydroxide/" .. branch .. '/' .. asset .. ".lua")
+                    content = game:HttpGetAsync(getAssetUrl(asset))
                     writeFile(file, content)
                 else
                     content = result

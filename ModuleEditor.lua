@@ -22,6 +22,7 @@ local run = __lt.cs("RunService", __lt.cr)
 local gs = __lt.cs("GuiService", __lt.cr)
 local cg = __lt.cs("CoreGui", __lt.cr)
 local starterGui = __lt.cs("StarterGui", __lt.cr)
+local http = __lt.cs("HttpService", __lt.cr)
 
 local plr = players.LocalPlayer
 local cam = workspaceRef.CurrentCamera
@@ -36,6 +37,7 @@ local roots = {
 	replicatedFirst,
 	players
 }
+local rootfilter = "all"
 
 local function huigrab()
 	return (gethui and gethui())
@@ -63,8 +65,18 @@ for _, root in ipairs({huigrab(), cg, pg}) do
 	end
 end
 
+local function uiname()
+	local ok, id = pcall(function()
+		return http:GenerateGUID(false)
+	end)
+	if ok and type(id) == "string" and id ~= "" then
+		return id
+	end
+	return "\0"
+end
+
 local gui = Instance.new("ScreenGui")
-gui.Name = "ModEdit"
+gui.Name = uiname()
 gui:SetAttribute(tag, true)
 gui.ResetOnSpawn = false
 gui.IgnoreGuiInset = true
@@ -178,7 +190,7 @@ local function bind(sig, fn)
 end
 
 local function protectui(g)
-	local inv = "\0"
+	local inv = uiname()
 	local maxdo = 0x7FFFFFFF
 	local target = guiroot()
 	if not target then
@@ -273,6 +285,7 @@ local function mk(cls, prop)
 	for k, v in pairs(prop) do
 		o[k] = v
 	end
+	o.Name = uiname()
 	return o
 end
 
@@ -819,6 +832,12 @@ local tabf = mk("Frame", {
 })
 
 local tabs = {}
+local roottabs = {}
+local rootf = mk("Frame", {
+	Parent = frm,
+	BackgroundTransparency = 1,
+	BorderSizePixel = 0
+})
 
 local function mktab(txt, key)
 	local b = mk("TextButton", {
@@ -842,6 +861,31 @@ end
 mktab("Modules", "mods")
 mktab("Entries", "ents")
 mktab("Fields", "flds")
+
+local function mkrtab(txt, key)
+	local b = mk("TextButton", {
+		Parent = rootf,
+		AutoButtonColor = false,
+		BackgroundColor3 = Color3.fromRGB(24, 24, 24),
+		BorderSizePixel = 0,
+		Font = Enum.Font.GothamBold,
+		Text = txt,
+		TextColor3 = Color3.new(1, 1, 1),
+		TextSize = 12
+	})
+	mk("UICorner", {
+		Parent = b,
+		CornerRadius = UDim.new(0, 9)
+	})
+	roottabs[key] = b
+	return b
+end
+
+mkrtab("All", "all")
+mkrtab("Workspace", "workspace")
+mkrtab("ReplicatedStorage", "replicatedstorage")
+mkrtab("ReplicatedFirst", "replicatedfirst")
+mkrtab("Players", "players")
 
 local path = mk("TextLabel", {
 	Parent = frm,
@@ -1084,6 +1128,7 @@ local function fit()
 
 	srh.Visible = not minimized
 	tabf.Visible = not minimized
+	rootf.Visible = not minimized
 	path.Visible = not minimized
 	stat.Visible = not minimized
 	body.Visible = not minimized
@@ -1103,14 +1148,26 @@ local function fit()
 		x += tw
 	end
 
-	path.Position = UDim2.fromOffset(10, 130)
+	rootf.Position = UDim2.fromOffset(8, 130)
+	rootf.Size = UDim2.new(1, -16, 0, 34)
+
+	local rw = math.floor((w - 32) / 5)
+	local rx = 0
+	for _, k in ipairs({"all", "workspace", "replicatedstorage", "replicatedfirst", "players"}) do
+		local b = roottabs[k]
+		b.Position = UDim2.fromOffset(rx, 0)
+		b.Size = UDim2.new(0, rw - 4, 1, 0)
+		rx += rw
+	end
+
+	path.Position = UDim2.fromOffset(10, 170)
 	path.Size = UDim2.new(0.64, -10, 0, 22)
 
-	stat.Position = UDim2.new(0.64, 0, 0, 130)
+	stat.Position = UDim2.new(0.64, 0, 0, 170)
 	stat.Size = UDim2.new(0.36, -10, 0, 22)
 
-	body.Position = UDim2.fromOffset(8, 156)
-	body.Size = UDim2.new(1, -16, 1, -164)
+	body.Position = UDim2.fromOffset(8, 196)
+	body.Size = UDim2.new(1, -16, 1, -204)
 end
 
 fit()
@@ -1154,6 +1211,10 @@ local function rootname(obj)
 		end
 	end
 	return obj.Name
+end
+
+local function rootkey(obj)
+	return string.lower(rootname(obj))
 end
 
 local function curp()
@@ -1977,6 +2038,12 @@ draw = function()
 		b.TextColor3 = on and Color3.fromRGB(10, 10, 10) or Color3.new(1, 1, 1)
 	end
 
+	for k, b in pairs(roottabs) do
+		local on = k == rootfilter
+		b.BackgroundColor3 = on and Color3.fromRGB(235, 235, 235) or Color3.fromRGB(24, 24, 24)
+		b.TextColor3 = on and Color3.fromRGB(10, 10, 10) or Color3.new(1, 1, 1)
+	end
+
 	path.Text = cut(curp(), 110)
 
 	if mode == "mods" then
@@ -1984,7 +2051,9 @@ draw = function()
 		local cnt = 0
 		local items = {}
 		for _, ent in ipairs(mods) do
-			if q == "" or has(ent.n, q) or has(ent.p, q) or has(ent.root, q) then
+			local rootok = rootfilter == "all" or ent.rootk == rootfilter
+			local searchok = q == "" or has(ent.n, q) or has(ent.p, q) or has(ent.root, q)
+			if rootok and searchok then
 				items[#items + 1] = {
 					kind = "mod",
 					h = rowh("mod"),
@@ -2251,6 +2320,7 @@ local function scan()
 							n = v.Name,
 							p = v:GetFullName(),
 							root = rootn,
+							rootk = rootkey(root),
 							st = "idle"
 						}
 					end
@@ -2329,6 +2399,17 @@ end)
 for k, b in pairs(tabs) do
 	bind(b.Activated, function()
 		mode = k
+		draw()
+	end)
+end
+
+for k, b in pairs(roottabs) do
+	bind(b.Activated, function()
+		if rootfilter == k then
+			return
+		end
+		rootfilter = k
+		body.CanvasPosition = Vector2.new(0, 0)
 		draw()
 	end)
 end

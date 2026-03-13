@@ -521,6 +521,7 @@ local parryState = {
 	spam = false,
 	spamWindowUntil = 0,
 	spamFastUntil = 0,
+	spamBurstUntil = 0,
 	spamNextAt = 0,
 	apEnabled = true,
 	preclick = true,
@@ -748,6 +749,10 @@ local function setApEnabled(value)
 	if old and (not parryState.apEnabled) then
 		parryState.nextPar = 0;
 		parryState.lastParryTime = 0;
+		parryState.spamWindowUntil = 0;
+		parryState.spamFastUntil = 0;
+		parryState.spamBurstUntil = 0;
+		parryState.spamNextAt = 0;
 		if parryState.clearActiveParryLock then
 			parryState.clearActiveParryLock(nil);
 		end;
@@ -2177,6 +2182,7 @@ local function AutoParryStep(dt)
 	end;
 	local spamWindowUntil = hasBalls and (nowFrame + 0.06) or 0;
 	local spamFastUntil = 0;
+	local spamBurstUntil = 0;
 	updateGuiTargets(hrp, hasBalls);
 	local anyTargeted = false;
 	if hasBalls then
@@ -2494,14 +2500,19 @@ local function AutoParryStep(dt)
 					spamWindowUntil = math.max(spamWindowUntil, now + 0.16);
 				end;
 				if inParryPredict then
-					spamWindowUntil = math.max(spamWindowUntil, now + 0.2);
+					spamWindowUntil = math.max(spamWindowUntil, now + 0.22);
 				end;
 				if rawDist <= math.max(10, parryPredictRadius * 0.75) or instantRetarget or innerEmergency then
-					spamFastUntil = math.max(spamFastUntil, now + 0.18);
+					spamFastUntil = math.max(spamFastUntil, now + 0.2);
 				elseif nearPredict and hitTime <= 0.25 then
-					spamFastUntil = math.max(spamFastUntil, now + 0.12);
+					spamFastUntil = math.max(spamFastUntil, now + 0.14);
 				elseif rawDist <= math.max(18, parryPredictRadius) and hitTime <= 0.45 then
-					spamFastUntil = math.max(spamFastUntil, now + 0.08);
+					spamFastUntil = math.max(spamFastUntil, now + 0.1);
+				end;
+				if rawDist <= math.max(12, parryPredictRadius * 0.85) or instantRetarget or innerEmergency or veryFastHit then
+					spamBurstUntil = math.max(spamBurstUntil, now + 0.16);
+				elseif currentTargetConfirmed and inParryPredict and hitTime <= 0.24 then
+					spamBurstUntil = math.max(spamBurstUntil, now + 0.12);
 				end;
 				local overlapHandoff = false;
 				local overlapDist = math.huge;
@@ -2517,6 +2528,7 @@ local function AutoParryStep(dt)
 					local urgentHandoff = immediateQueuedHandoff or hitTime <= 0.18;
 					if urgentHandoff then
 						pendingImmediate = true;
+						spamBurstUntil = math.max(spamBurstUntil, now + 0.18);
 						ps.activeParryReleaseAt = math.min(ps.activeParryReleaseAt, now);
 						if ps.activeParryBall and ps.activeParryBall ~= ball then
 							bs.closeParryBlocked[ps.activeParryBall] = nil;
@@ -2705,6 +2717,7 @@ local function AutoParryStep(dt)
 			spamWindowUntil = math.max(spamWindowUntil, nowFrame + 0.18);
 			if pendingImmediate then
 				spamFastUntil = math.max(spamFastUntil, nowFrame + 0.18);
+				spamBurstUntil = math.max(spamBurstUntil, nowFrame + 0.16);
 			end;
 			safeFlush(character, hrp);
 		end;
@@ -2765,6 +2778,7 @@ local function AutoParryStep(dt)
 		end;
 		ps.spamWindowUntil = math.max(ps.spamWindowUntil or 0, spamWindowUntil);
 		ps.spamFastUntil = math.max(ps.spamFastUntil or 0, spamFastUntil);
+		ps.spamBurstUntil = math.max(ps.spamBurstUntil or 0, spamBurstUntil);
 	else
 		ringPlayer.CFrame = CFrame.new(hrp.Position);
 		ringPlayerNoUnit.CFrame = ringPlayer.CFrame;
@@ -2794,6 +2808,7 @@ local function AutoParryStep(dt)
 		ps.nextPar = 0;
 		ps.spamWindowUntil = 0;
 		ps.spamFastUntil = 0;
+		ps.spamBurstUntil = 0;
 		ps.spamNextAt = 0;
 		ps.clearActiveParryLock(nil);
 		clearPendingBalls();
@@ -2863,20 +2878,22 @@ trackConnection(StepSignal:Connect(function(dt)
 	end;
 end));
 trackConnection(StepSignal:Connect(function()
-	if parryState.spam then
+	if parryState.spam and parryState.apEnabled then
 		local now = tick();
 		local windowUntil = parryState.spamWindowUntil or 0;
 		local fastUntil = parryState.spamFastUntil or 0;
+		local burstUntil = parryState.spamBurstUntil or 0;
 		if now > windowUntil then
 			return;
 		end;
-		local fastSpam = now <= fastUntil;
-		local interval = fastSpam and 0.008 or 0.016;
+		local burstSpam = now <= burstUntil;
+		local fastSpam = burstSpam or now <= fastUntil;
+		local interval = burstSpam and 0.004 or (fastSpam and 0.007 or 0.013);
 		if now < (parryState.spamNextAt or 0) then
 			return;
 		end;
 		parryState.spamNextAt = now + interval;
-		local shots = fastSpam and 3 or 2;
+		local shots = burstSpam and 4 or (fastSpam and 3 or 2);
 		for _ = 1, shots do
 			task.defer(DoParry);
 		end;

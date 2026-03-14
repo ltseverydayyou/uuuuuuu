@@ -468,8 +468,6 @@ local parryState = {
 	spamFastUntil = 0,
 	spamBurstUntil = 0,
 	spamNextAt = 0,
-	directParryWindowAt = 0,
-	directParryWindowCount = 0,
 	apEnabled = true,
 	preclick = true,
 	apState = "Idle"
@@ -700,8 +698,6 @@ local function setApEnabled(value)
 		parryState.spamFastUntil = 0;
 		parryState.spamBurstUntil = 0;
 		parryState.spamNextAt = 0;
-		parryState.directParryWindowAt = 0;
-		parryState.directParryWindowCount = 0;
 		if parryState.clearActiveParryLock then
 			parryState.clearActiveParryLock(nil);
 		end;
@@ -1633,28 +1629,6 @@ local function DoParry(isSpam)
 	if not parryState.apEnabled and (not isSpam) then
 		return false;
 	end;
-	if not isSpam then
-		local now = tick();
-		local windowAt = parryState.directParryWindowAt or 0;
-		local windowCount = parryState.directParryWindowCount or 0;
-		if now - windowAt > 0.045 then
-			windowAt = now;
-			windowCount = 0;
-		elseif windowCount >= 2 then
-			return false;
-		end;
-		parryState.directParryWindowAt = windowAt;
-		parryState.directParryWindowCount = windowCount + 1;
-	end;
-	local function rollbackWindow()
-		if isSpam then
-			return;
-		end;
-		local count = parryState.directParryWindowCount or 0;
-		if count > 0 then
-			parryState.directParryWindowCount = count - 1;
-		end;
-	end;
 	local rem, rargs = resolveRemote();
 	if rem and fireRemote(rem, rargs) then
 		return true;
@@ -1663,12 +1637,7 @@ local function DoParry(isSpam)
 	if btn and pressBtn(btn) then
 		return true;
 	end;
-	local ok = sendFKey();
-	if ok then
-		return true;
-	end;
-	rollbackWindow();
-	return false;
+	return sendFKey();
 end;
 local function queueParry(isSpam, hasTarget)
 	if not parryState.apEnabled and (not isSpam) then
@@ -2796,8 +2765,6 @@ local function AutoParryStep(dt)
 		ps.spamFastUntil = 0;
 		ps.spamBurstUntil = 0;
 		ps.spamNextAt = 0;
-		ps.directParryWindowAt = 0;
-		ps.directParryWindowCount = 0;
 		ps.clearActiveParryLock(nil);
 		clearPendingBalls();
 		vs.ringLimited = false;

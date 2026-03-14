@@ -1,4 +1,15 @@
-local client = game:GetService("Players").LocalPlayer
+local function __betterGetService(name)
+	local service = game:FindService(name)
+	if service then
+		return service
+	end
+	local ok, inst = pcall(Instance.new, name)
+	if ok and inst and typeof(inst) == "Instance" then
+		return inst
+	end
+	return nil
+end
+local client = __betterGetService("Players").LocalPlayer
 local control = client.PlayerScripts:FindFirstChild("Control Script")
 
 local methods = {}

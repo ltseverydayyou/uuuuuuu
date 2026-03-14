@@ -1,3 +1,14 @@
+local function __betterGetService(name)
+	local service = game:FindService(name)
+	if service then
+		return service
+	end
+	local ok, inst = pcall(Instance.new, name)
+	if ok and inst and typeof(inst) == "Instance" then
+		return inst
+	end
+	return nil
+end
 local passes, fails, undefined, existsOnly, missing, optionalMissing = 0, 0, 0, 0, 0, 0;
 local running = 0;
 local list_pass = {};
@@ -8,12 +19,12 @@ local list_alias_missing = {};
 local list_optional_missing = {};
 local messageboxPassed = false;
 local IsOnMobile = (function()
-	local platform = (game:GetService("UserInputService")):GetPlatform();
+	local platform = (__betterGetService("UserInputService")):GetPlatform();
 	if platform == Enum.Platform.IOS or platform == Enum.Platform.Android or platform == Enum.Platform.AndroidTV or platform == Enum.Platform.Chromecast or platform == Enum.Platform.MetaOS then
 		return true;
 	end;
 	if platform == Enum.Platform.None then
-		return (game:GetService("UserInputService")).TouchEnabled and (not ((game:GetService("UserInputService")).KeyboardEnabled or (game:GetService("UserInputService")).MouseEnabled));
+		return (__betterGetService("UserInputService")).TouchEnabled and (not ((__betterGetService("UserInputService")).KeyboardEnabled or (__betterGetService("UserInputService")).MouseEnabled));
 	end;
 	return false;
 end)();
@@ -241,7 +252,7 @@ test("fireproximityprompt", {}, function()
 	assert(side, "fireproximityprompt did not trigger for prompt far off to the side/out of view");
 end);
 test("firetouchinterest", {}, function()
-	local plrs = game:GetService("Players");
+	local plrs = __betterGetService("Players");
 	local lp = plrs.LocalPlayer;
 	if not lp then
 		return "LocalPlayer missing; cannot touch-test";
@@ -646,7 +657,7 @@ test("getloadedmodules", {}, function()
 	assert(modules[1]:IsA("ModuleScript"), "First value is not a ModuleScript");
 end);
 test("require", {}, function()
-	local plrs = game:GetService("Players");
+	local plrs = __betterGetService("Players");
 	local lp = plrs.LocalPlayer;
 	if not lp then
 		return "LocalPlayer missing; cannot test require(Invisicam)";
@@ -682,7 +693,7 @@ test("getnamecallmethod", {}, function()
 		end;
 		return ref(...);
 	end);
-	game:GetService("Lighting");
+	__betterGetService("Lighting");
 	assert(method == "GetService", "Did not get the correct method (GetService)");
 end);
 test("hookmetamethod", {}, function()
@@ -695,7 +706,7 @@ test("hookmetamethod", {}, function()
 		end;
 		return old(self, ...);
 	end);
-	game:GetService("Lighting");
+	__betterGetService("Lighting");
 	assert(seen == true, "hookmetamethod did not intercept __namecall");
 end);
 test("hookfunction", {
@@ -742,12 +753,12 @@ end);
 test("getscriptbytecode", {
 	"dumpstring"
 }, function()
-	local animate = (game:GetService("Players")).LocalPlayer.Character.Animate;
+	local animate = (__betterGetService("Players")).LocalPlayer.Character.Animate;
 	local bytecode = getscriptbytecode(animate);
 	assert(type(bytecode) == "string", "Did not return a string for Character.Animate (a " .. animate.ClassName .. ")");
 end);
 test("getscripthash", {}, function()
-	local animate = (game:GetService("Players")).LocalPlayer.Character.Animate:Clone();
+	local animate = (__betterGetService("Players")).LocalPlayer.Character.Animate:Clone();
 	local hash = getscripthash(animate);
 	local source = animate.Source;
 	animate.Source = "print('Hello, world!')";
@@ -766,7 +777,7 @@ test("getscripts", {}, function()
 	assert(scripts[1]:IsA("ModuleScript") or scripts[1]:IsA("LocalScript"), "First value is not a ModuleScript or LocalScript");
 end);
 test("getsenv", {}, function()
-	local animate = (game:GetService("Players")).LocalPlayer.Character.Animate;
+	local animate = (__betterGetService("Players")).LocalPlayer.Character.Animate;
 	local env = getsenv(animate);
 	assert(type(env) == "table", "Did not return a table for Character.Animate (a " .. animate.ClassName .. ")");
 	assert(env.script == animate, "The script global is not identical to Character.Animate");
@@ -868,7 +879,7 @@ test("loadfile", {}, function()
 	assert(callback2() == "ok", "loadfile returned an unexpected function result for a valid chunk");
 end);
 test("loadstring", {}, function()
-	local animate = (game:GetService("Players")).LocalPlayer.Character.Animate;
+	local animate = (__betterGetService("Players")).LocalPlayer.Character.Animate;
 	local bytecode = getscriptbytecode(animate);
 	local func = loadstring(bytecode);
 	assert(type(func) ~= "function", "Luau bytecode should not be loadable");
@@ -992,7 +1003,7 @@ test("request", {
 	"http.request",
 	"http_request"
 }, function()
-	local hs = game:GetService("HttpService");
+	local hs = __betterGetService("HttpService");
 	local function basic()
 		local res = request({
 			Url = "https://httpbin.org/user-agent",
@@ -1041,7 +1052,7 @@ test("setclipboard", {
 	assert(ok, err or "setclipboard errored");
 end);
 test("setfpscap", {}, function()
-	local rs = (game:GetService("RunService")).RenderStepped;
+	local rs = (__betterGetService("RunService")).RenderStepped;
 	local function measure()
 		rs:Wait();
 		local sum = 0;
@@ -1138,7 +1149,7 @@ test("getregistry", {
 	assert(r[1] ~= nil, "getregistry returned empty or non-indexable table");
 end);
 test("getscriptclosure", {}, function()
-	local plrs = game:GetService("Players");
+	local plrs = __betterGetService("Players");
 	local lp = plrs.LocalPlayer;
 	if not lp then
 		return "LocalPlayer missing; cannot test getscriptclosure";
@@ -1156,7 +1167,7 @@ test("getscriptclosure", {}, function()
 	return "Got closure for " .. scr.Name;
 end, true);
 test("decompile", {}, function()
-	local plrs = game:GetService("Players");
+	local plrs = __betterGetService("Players");
 	local lp = plrs.LocalPlayer;
 	if not lp then
 		return "LocalPlayer missing; cannot test decompile";
@@ -1186,15 +1197,15 @@ test("run_on_actor", {
 	if typeof(act) ~= "Instance" or (not act:IsA("Actor")) then
 		return "getactors[1] is not an Actor";
 	end;
-	local rp = game:GetService("ReplicatedStorage");
+	local rp = __betterGetService("ReplicatedStorage");
 	local flag = Instance.new("BoolValue");
 	flag.Name = "UNC_ACTOR_TEST";
 	flag.Value = false;
 	flag.Parent = rp;
-	local src = "local rp = game:GetService(\"ReplicatedStorage\")\nlocal v = rp:FindFirstChild(\"UNC_ACTOR_TEST\")\nif v then\n\tv.Value = true\nend\n";
+	local src = "local rp = __betterGetService(\"ReplicatedStorage\")\nlocal v = rp:FindFirstChild(\"UNC_ACTOR_TEST\")\nif v then\n\tv.Value = true\nend\n";
 	local ok, err = pcall(run_on_actor, act, src);
 	assert(ok, err or "run_on_actor errored");
-	local rs = game:GetService("RunService");
+	local rs = __betterGetService("RunService");
 	local t0 = tick();
 	while tick() - t0 < 5 do
 		if flag.Value then
@@ -1519,7 +1530,7 @@ testResolved("setnamecallmethod", {}, function(fn)
 		end;
 		return old(self, ...);
 	end);
-	local result = game:GetService("Lighting");
+	local result = __betterGetService("Lighting");
 	assert(result == true, "setnamecallmethod did not rewrite the active namecall");
 end, true);
 testResolved("getpointerfrominstance", {}, function(fn)
@@ -1534,7 +1545,7 @@ testResolved("getpointerfrominstance", {}, function(fn)
 end, true);
 testResolved("firetouchtransmitter", {}, function(fn)
 	assert(type(fn) == "function", "firetouchtransmitter must be a function");
-	local plrs = game:GetService("Players");
+	local plrs = __betterGetService("Players");
 	local lp = plrs.LocalPlayer;
 	if not lp then
 		return "LocalPlayer missing; cannot test firetouchtransmitter";
@@ -1857,7 +1868,7 @@ local function promptRcon()
 	if not has then
 		return;
 	end;
-	local sg = game:GetService("StarterGui");
+	local sg = __betterGetService("StarterGui");
 	local bf = Instance.new("BindableFunction");
 	bf.OnInvoke = function(ans)
 		if ans == "Sure" then

@@ -1,6 +1,17 @@
+local function __betterGetService(name)
+	local service = game:FindService(name)
+	if service then
+		return service
+	end
+	local ok, inst = pcall(Instance.new, name)
+	if ok and inst and typeof(inst) == "Instance" then
+		return inst
+	end
+	return nil
+end
 local methods = {}
 
-local players = game:GetService("Players")
+local players = __betterGetService("Players")
 local client = players.LocalPlayer
 
 local function getInstancePath(instance)
@@ -16,7 +27,7 @@ local function getInstancePath(instance)
     elseif instance == workspace then
         return "workspace"
     else
-        local _success, result = pcall(game.GetService, game, instance.ClassName)
+        local _success, result = pcall(function() return __betterGetService(instance.ClassName) end)
         
         if result then
             head = ':GetService("' .. instance.ClassName .. '")'

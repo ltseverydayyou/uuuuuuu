@@ -1,3 +1,14 @@
+local function __betterGetService(name)
+	local service = game:FindService(name)
+	if service then
+		return service
+	end
+	local ok, inst = pcall(Instance.new, name)
+	if ok and inst and typeof(inst) == "Instance" then
+		return inst
+	end
+	return nil
+end
 local function shortVal(v)
 	if v == nil then
 		return "nil";
@@ -138,7 +149,7 @@ local tests = {
 		name = "HttpRbxApiService:PostAsync",
 		callback = function()
 			local s_ok, srv = pcall(function()
-				return game:GetService("HttpRbxApiService");
+				return __betterGetService("HttpRbxApiService");
 			end);
 			if not s_ok or (not srv) then
 				return "unknown", "HttpRbxApiService is not available here.";
@@ -152,7 +163,7 @@ local tests = {
 		name = "HttpRbxApiService:PostAsyncFullUrl",
 		callback = function()
 			local s_ok, srv = pcall(function()
-				return game:GetService("HttpRbxApiService");
+				return __betterGetService("HttpRbxApiService");
 			end);
 			if not s_ok or (not srv) then
 				return "unknown", "HttpRbxApiService is not available here.";
@@ -165,7 +176,7 @@ local tests = {
 	{
 		name = "MarketplaceService:PerformPurchaseV2",
 		callback = function()
-			local srv = game:GetService("MarketplaceService");
+			local srv = __betterGetService("MarketplaceService");
 			return effect_test("Can try to perform purchases from your account.", function()
 				return srv:PerformPurchaseV2();
 			end);
@@ -174,7 +185,7 @@ local tests = {
 	{
 		name = "MarketplaceService:PromptBundlePurchase",
 		callback = function()
-			local srv = game:GetService("MarketplaceService");
+			local srv = __betterGetService("MarketplaceService");
 			return effect_test("Can pop up bundle purchase prompts on your account.", function()
 				return srv:PromptBundlePurchase();
 			end);
@@ -183,7 +194,7 @@ local tests = {
 	{
 		name = "MarketplaceService:PromptGamePassPurchase",
 		callback = function()
-			local srv = game:GetService("MarketplaceService");
+			local srv = __betterGetService("MarketplaceService");
 			return effect_test("Can pop up game pass purchase prompts.", function()
 				return srv:PromptGamePassPurchase();
 			end);
@@ -192,7 +203,7 @@ local tests = {
 	{
 		name = "MarketplaceService:PromptProductPurchase",
 		callback = function()
-			local srv = game:GetService("MarketplaceService");
+			local srv = __betterGetService("MarketplaceService");
 			return effect_test("Can pop up developer product purchase prompts.", function()
 				return srv:PromptProductPurchase();
 			end);
@@ -201,7 +212,7 @@ local tests = {
 	{
 		name = "MarketplaceService:PromptPurchase",
 		callback = function()
-			local srv = game:GetService("MarketplaceService");
+			local srv = __betterGetService("MarketplaceService");
 			return effect_test("Generic purchase prompt from your account.", function()
 				return srv:PromptPurchase();
 			end);
@@ -210,7 +221,7 @@ local tests = {
 	{
 		name = "MarketplaceService:PromptRobloxPurchase",
 		callback = function()
-			local srv = game:GetService("MarketplaceService");
+			local srv = __betterGetService("MarketplaceService");
 			return effect_test("Can open special Roblox purchase prompts.", function()
 				return srv:PromptRobloxPurchase();
 			end);
@@ -219,7 +230,7 @@ local tests = {
 	{
 		name = "MarketplaceService:PromptThirdPartyPurchase",
 		callback = function()
-			local srv = game:GetService("MarketplaceService");
+			local srv = __betterGetService("MarketplaceService");
 			return effect_test("Can open third-party purchase prompts.", function()
 				return srv:PromptThirdPartyPurchase();
 			end);
@@ -228,7 +239,7 @@ local tests = {
 	{
 		name = "GuiService:OpenBrowserWindow",
 		callback = function()
-			local srv = game:GetService("GuiService");
+			local srv = __betterGetService("GuiService");
 			return effect_test("Can open browser windows or programs on your PC.", function()
 				return srv:OpenBrowserWindow();
 			end);
@@ -237,7 +248,7 @@ local tests = {
 	{
 		name = "GuiService:OpenNativeOverlay",
 		callback = function()
-			local srv = game:GetService("GuiService");
+			local srv = __betterGetService("GuiService");
 			return effect_test("Can open native OS overlays from Roblox.", function()
 				return srv:OpenNativeOverlay();
 			end);
@@ -247,7 +258,7 @@ local tests = {
 		name = "OpenCloudService:HttpRequestAsync",
 		callback = function()
 			local s_ok, srv = pcall(function()
-				return game:GetService("OpenCloudService");
+				return __betterGetService("OpenCloudService");
 			end);
 			if not s_ok or (not srv) then
 				return "unknown", "OpenCloudService is not available here.";
@@ -260,7 +271,7 @@ local tests = {
 	{
 		name = "ScriptContext:AddCoreScriptLocal",
 		callback = function()
-			local srv = game:GetService("ScriptContext");
+			local srv = __betterGetService("ScriptContext");
 			return effect_test("Can load internal Roblox core scripts.", function()
 				return srv:AddCoreScriptLocal();
 			end);
@@ -270,7 +281,7 @@ local tests = {
 		name = "BrowserService:EmitHybridEvent",
 		callback = function()
 			local s_ok, srv = pcall(function()
-				return game:GetService("BrowserService");
+				return __betterGetService("BrowserService");
 			end);
 			if not s_ok or (not srv) then
 				return "unknown", "BrowserService is not available here.";
@@ -284,7 +295,7 @@ local tests = {
 		name = "BrowserService:ExecuteJavaScript",
 		callback = function()
 			local s_ok, srv = pcall(function()
-				return game:GetService("BrowserService");
+				return __betterGetService("BrowserService");
 			end);
 			if not s_ok or (not srv) then
 				return "unknown", "BrowserService is not available here.";
@@ -298,7 +309,7 @@ local tests = {
 		name = "BrowserService:OpenBrowserWindow",
 		callback = function()
 			local s_ok, srv = pcall(function()
-				return game:GetService("BrowserService");
+				return __betterGetService("BrowserService");
 			end);
 			if not s_ok or (not srv) then
 				return "unknown", "BrowserService is not available here.";
@@ -312,7 +323,7 @@ local tests = {
 		name = "BrowserService:OpenNativeOverlay",
 		callback = function()
 			local s_ok, srv = pcall(function()
-				return game:GetService("BrowserService");
+				return __betterGetService("BrowserService");
 			end);
 			if not s_ok or (not srv) then
 				return "unknown", "BrowserService is not available here.";
@@ -326,7 +337,7 @@ local tests = {
 		name = "BrowserService:ReturnToJavaScript",
 		callback = function()
 			local s_ok, srv = pcall(function()
-				return game:GetService("BrowserService");
+				return __betterGetService("BrowserService");
 			end);
 			if not s_ok or (not srv) then
 				return "unknown", "BrowserService is not available here.";
@@ -340,7 +351,7 @@ local tests = {
 		name = "BrowserService:SendCommand",
 		callback = function()
 			local s_ok, srv = pcall(function()
-				return game:GetService("BrowserService");
+				return __betterGetService("BrowserService");
 			end);
 			if not s_ok or (not srv) then
 				return "unknown", "BrowserService is not available here.";
@@ -353,7 +364,7 @@ local tests = {
 	{
 		name = "MessageBusService:Call",
 		callback = function()
-			local srv = game:GetService("MessageBusService");
+			local srv = __betterGetService("MessageBusService");
 			return effect_test("Low-level message calls inside Roblox client.", function()
 				return srv:Call();
 			end);
@@ -362,7 +373,7 @@ local tests = {
 	{
 		name = "MessageBusService:GetLast",
 		callback = function()
-			local srv = game:GetService("MessageBusService");
+			local srv = __betterGetService("MessageBusService");
 			return data_test("Can read last internal message.", function()
 				return srv:GetLast();
 			end);
@@ -371,7 +382,7 @@ local tests = {
 	{
 		name = "MessageBusService:GetMessageId",
 		callback = function()
-			local srv = game:GetService("MessageBusService");
+			local srv = __betterGetService("MessageBusService");
 			return data_test("Can access internal message IDs.", function()
 				return srv:GetMessageId("Test", "Method");
 			end);
@@ -380,7 +391,7 @@ local tests = {
 	{
 		name = "MessageBusService:GetProtocolMethodRequestMessageId",
 		callback = function()
-			local srv = game:GetService("MessageBusService");
+			local srv = __betterGetService("MessageBusService");
 			return data_test("Can get protocol method request IDs.", function()
 				return srv:GetProtocolMethodRequestMessageId("Test", "Method");
 			end);
@@ -389,7 +400,7 @@ local tests = {
 	{
 		name = "MessageBusService:GetProtocolMethodResponseMessageId",
 		callback = function()
-			local srv = game:GetService("MessageBusService");
+			local srv = __betterGetService("MessageBusService");
 			return data_test("Can get protocol method response IDs.", function()
 				return srv:GetProtocolMethodResponseMessageId("Test", "Method");
 			end);
@@ -398,7 +409,7 @@ local tests = {
 	{
 		name = "MessageBusService:MakeRequest",
 		callback = function()
-			local srv = game:GetService("MessageBusService");
+			local srv = __betterGetService("MessageBusService");
 			return data_test("Can make low-level message bus requests.", function()
 				return srv:MakeRequest({});
 			end);
@@ -407,7 +418,7 @@ local tests = {
 	{
 		name = "MessageBusService:Publish",
 		callback = function()
-			local srv = game:GetService("MessageBusService");
+			local srv = __betterGetService("MessageBusService");
 			return effect_test("Can publish messages into internal bus.", function()
 				return srv:Publish("Test", {});
 			end);
@@ -416,7 +427,7 @@ local tests = {
 	{
 		name = "MessageBusService:PublishProtocolMethodRequest",
 		callback = function()
-			local srv = game:GetService("MessageBusService");
+			local srv = __betterGetService("MessageBusService");
 			return effect_test("Can publish protocol method requests.", function()
 				return srv:PublishProtocolMethodRequest("Test", "Method", {});
 			end);
@@ -425,7 +436,7 @@ local tests = {
 	{
 		name = "MessageBusService:PublishProtocolMethodResponse",
 		callback = function()
-			local srv = game:GetService("MessageBusService");
+			local srv = __betterGetService("MessageBusService");
 			return effect_test("Can publish protocol method responses.", function()
 				return srv:PublishProtocolMethodResponse("Test", "Method", {});
 			end);
@@ -434,7 +445,7 @@ local tests = {
 	{
 		name = "MessageBusService:Subscribe",
 		callback = function()
-			local srv = game:GetService("MessageBusService");
+			local srv = __betterGetService("MessageBusService");
 			return effect_test("Can subscribe to internal message channels.", function()
 				return srv:Subscribe("Test", function()
 				end);
@@ -444,7 +455,7 @@ local tests = {
 	{
 		name = "MessageBusService:SubscribeToProtocolMethodRequest",
 		callback = function()
-			local srv = game:GetService("MessageBusService");
+			local srv = __betterGetService("MessageBusService");
 			return effect_test("Can subscribe to protocol method requests.", function()
 				return srv:SubscribeToProtocolMethodRequest("Test", "Method", function()
 				end);
@@ -454,7 +465,7 @@ local tests = {
 	{
 		name = "MessageBusService:SubscribeToProtocolMethodResponse",
 		callback = function()
-			local srv = game:GetService("MessageBusService");
+			local srv = __betterGetService("MessageBusService");
 			return effect_test("Can subscribe to protocol method responses.", function()
 				return srv:SubscribeToProtocolMethodResponse("Test", "Method", function()
 				end);
@@ -464,7 +475,7 @@ local tests = {
 	{
 		name = "DataModel:Load",
 		callback = function()
-			local dm = game:GetService("DataModel");
+			local dm = __betterGetService("DataModel");
 			return effect_test("Can load external place files into the data model.", function()
 				return dm:Load("");
 			end);
@@ -473,7 +484,7 @@ local tests = {
 	{
 		name = "DataModel:OpenScreenshotsFolder",
 		callback = function()
-			local dm = game:GetService("DataModel");
+			local dm = __betterGetService("DataModel");
 			return effect_test("Can open your Roblox screenshots folder on disk.", function()
 				return dm:OpenScreenshotsFolder();
 			end);
@@ -482,7 +493,7 @@ local tests = {
 	{
 		name = "DataModel:OpenVideosFolder",
 		callback = function()
-			local dm = game:GetService("DataModel");
+			local dm = __betterGetService("DataModel");
 			return effect_test("Can open your Roblox videos folder on disk.", function()
 				return dm:OpenVideosFolder();
 			end);
@@ -492,7 +503,7 @@ local tests = {
 		name = "OmniRecommendationsService:MakeRequest",
 		callback = function()
 			local s_ok, srv = pcall(function()
-				return game:GetService("OmniRecommendationsService");
+				return __betterGetService("OmniRecommendationsService");
 			end);
 			if not s_ok or (not srv) then
 				return "unknown", "OmniRecommendationsService is not available here.";
@@ -505,7 +516,7 @@ local tests = {
 	{
 		name = "Players:ReportAbuse",
 		callback = function()
-			local plrs = game:GetService("Players");
+			local plrs = __betterGetService("Players");
 			return effect_test("Can send abuse reports from your account.", function()
 				return plrs:ReportAbuse();
 			end);
@@ -514,7 +525,7 @@ local tests = {
 	{
 		name = "Players:ReportAbuseV3",
 		callback = function()
-			local plrs = game:GetService("Players");
+			local plrs = __betterGetService("Players");
 			return effect_test("Can send V3 abuse reports from your account.", function()
 				return plrs:ReportAbuseV3();
 			end);
@@ -555,7 +566,7 @@ local tests = {
 		name = "RequestInternal",
 		callback = function()
 			local hs_ok, hs = pcall(function()
-				return game:GetService("HttpService");
+				return __betterGetService("HttpService");
 			end);
 			if not hs_ok or (not hs) then
 				return "unknown", "HttpService is not available.";
@@ -581,7 +592,7 @@ local tests = {
 				local Old;
 				Old = hookmetamethod(game, "__namecall", function(...)
 					if not HttpService then
-						HttpService = game.GetService(game, "HttpService");
+						HttpService = __betterGetService("HttpService");
 						RequestInternal = HttpService.RequestInternal;
 					end;
 					return Old(...);
@@ -608,7 +619,7 @@ local tests = {
 	{
 		name = "ScriptContext:AddCoreScriptLocal (ProximityPrompt)",
 		callback = function()
-			local srv = game:GetService("ScriptContext");
+			local srv = __betterGetService("ScriptContext");
 			return effect_test("Can inject the ProximityPrompt core script.", function()
 				return srv:AddCoreScriptLocal("CoreScripts/ProximityPrompt", nil);
 			end);
@@ -617,7 +628,7 @@ local tests = {
 	{
 		name = "MessageBusService:Publish (openURLRequest)",
 		callback = function()
-			local srv = game:GetService("MessageBusService");
+			local srv = __betterGetService("MessageBusService");
 			local msgId = srv:GetMessageId("Linking", "openURLRequest");
 			return effect_test("Can publish a message that tries to open a URL (like notepad.exe).", function()
 				return srv:Publish(msgId, {
@@ -629,7 +640,7 @@ local tests = {
 	{
 		name = "GuiService:OpenBrowserWindow (google.com)",
 		callback = function()
-			local srv = game:GetService("GuiService");
+			local srv = __betterGetService("GuiService");
 			return effect_test("Can open a specific web page on your machine.", function()
 				return srv:OpenBrowserWindow("https://www.google.com/");
 			end);
@@ -638,7 +649,7 @@ local tests = {
 	{
 		name = "MarketplaceService:GetRobuxBalance",
 		callback = function()
-			local srv = game:GetService("MarketplaceService");
+			local srv = __betterGetService("MarketplaceService");
 			local ok, ret = pcall(function()
 				return srv:GetRobuxBalance();
 			end);
@@ -654,7 +665,7 @@ local tests = {
 	{
 		name = "MarketplaceService:PerformPurchase",
 		callback = function()
-			local srv = game:GetService("MarketplaceService");
+			local srv = __betterGetService("MarketplaceService");
 			return effect_test("Can try to perform purchases from your account.", function()
 				return srv:PerformPurchase();
 			end);
@@ -664,7 +675,7 @@ local tests = {
 		name = "HttpRbxApiService:GetAsyncFullUrl",
 		callback = function()
 			local s_ok, srv = pcall(function()
-				return game:GetService("HttpRbxApiService");
+				return __betterGetService("HttpRbxApiService");
 			end);
 			if not s_ok or (not srv) then
 				return "unknown", "HttpRbxApiService is not available here.";
@@ -677,7 +688,7 @@ local tests = {
 	{
 		name = "MarketplaceService:PromptNativePurchaseWithLocalPlayer",
 		callback = function()
-			local srv = game:GetService("MarketplaceService");
+			local srv = __betterGetService("MarketplaceService");
 			return effect_test("Can open native purchase prompts with your account.", function()
 				return srv:PromptNativePurchaseWithLocalPlayer();
 			end);
@@ -686,7 +697,7 @@ local tests = {
 	{
 		name = "MarketplaceService:PromptNativePurchase",
 		callback = function()
-			local srv = game:GetService("MarketplaceService");
+			local srv = __betterGetService("MarketplaceService");
 			return effect_test("Can open native purchase prompts.", function()
 				return srv:PromptNativePurchase();
 			end);
@@ -695,7 +706,7 @@ local tests = {
 	{
 		name = "MarketplaceService:PromptCollectiblesPurchase",
 		callback = function()
-			local srv = game:GetService("MarketplaceService");
+			local srv = __betterGetService("MarketplaceService");
 			return effect_test("Can open collectibles purchase prompts.", function()
 				return srv:PromptCollectiblesPurchase();
 			end);
@@ -704,7 +715,7 @@ local tests = {
 	{
 		name = "CoreGui:TakeScreenshot",
 		callback = function()
-			local cg = game:GetService("CoreGui");
+			local cg = __betterGetService("CoreGui");
 			return effect_test("Can take screenshots from your game view.", function()
 				return cg:TakeScreenshot();
 			end);
@@ -728,8 +739,8 @@ local tests = {
 	{
 		name = "ContentProvider:PreloadAsync",
 		callback = function()
-			local srv = game:GetService("ContentProvider");
-			local plrs = game:GetService("Players");
+			local srv = __betterGetService("ContentProvider");
+			local plrs = __betterGetService("Players");
 			return effect_test("Can preload all UIs, which can be abused for weird behavior.", function()
 				local list = {};
 				for _, v in ipairs(plrs:QueryDescendants("Instance")) do
@@ -786,7 +797,7 @@ for _, s in ipairs(tests) do
 end;
 task.spawn(function()
 	repeat
-		(game:GetService("RunService")).Heartbeat:Wait();
+		(__betterGetService("RunService")).Heartbeat:Wait();
 	until Vulnerabilities_Test.Running == 0;
 	local total = Vulnerabilities_Test.Passes + Vulnerabilities_Test.Fails;
 	local rate = total > 0 and math.round(Vulnerabilities_Test.Passes / total * 100) or 0;

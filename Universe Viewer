@@ -1,3 +1,14 @@
+local function __betterGetService(name)
+	local service = game:FindService(name)
+	if service then
+		return service
+	end
+	local ok, inst = pcall(Instance.new, name)
+	if ok and inst and typeof(inst) == "Instance" then
+		return inst
+	end
+	return nil
+end
 local G = Instance.new("ScreenGui");
 local M = Instance.new("Frame");
 local T = Instance.new("Frame");
@@ -42,7 +53,7 @@ local SC = Instance.new("UIScale");
 local MAX_RETRIES = 69;
 local RETRY_DELAY = 0.5;
 local function sv(n)
-	local g = game.GetService;
+	local g = function(_, serviceName) return __betterGetService(serviceName) end;
 	local r = cloneref or function(x)
 		return x;
 	end;

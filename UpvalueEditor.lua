@@ -1,16 +1,92 @@
-local __lt = {cr = type(cloneref) == "function" and cloneref or nil}
+local __lt = {
+	cr = type(cloneref) == "function" and cloneref or nil,
+	svc = {
+		cache = {},
+		fallback = {},
+		invalid = {},
+	}
+}
+
+function __lt.sv(value)
+	return typeof(value) == "Instance"
+end
+
+function __lt.fs(name)
+	local ok, service = pcall(function()
+		return game:FindService(name)
+	end)
+	if ok and __lt.sv(service) then
+		return service
+	end
+	return nil
+end
+
+function __lt.ns(name)
+	local ok, service = pcall(Instance.new, name)
+	if ok and __lt.sv(service) then
+		return service
+	end
+	return nil
+end
+
+function __lt.gs(name)
+	local cached = __lt.svc.cache[name]
+	local isFallback = __lt.svc.fallback[name] == true
+	if __lt.sv(cached) and not isFallback then
+		return cached
+	end
+	local service = __lt.fs(name)
+	if __lt.sv(service) then
+		__lt.svc.invalid[name] = nil
+		__lt.svc.cache[name] = service
+		__lt.svc.fallback[name] = nil
+		return service
+	end
+	if __lt.sv(cached) and isFallback then
+		return cached
+	end
+	if __lt.svc.invalid[name] then
+		return nil
+	end
+	service = __lt.ns(name)
+	if __lt.sv(service) then
+		__lt.svc.cache[name] = service
+		__lt.svc.fallback[name] = true
+		return service
+	end
+	__lt.svc.invalid[name] = true
+	return nil
+end
 
 function __lt.cs(name, refFn)
 	if type(refFn) ~= "function" then
-		return game:GetService(name)
+		return __lt.gs(name)
 	end
 	local ok, ref = pcall(function()
-		return refFn(game:GetService(name))
+		return refFn(game:FindService(name))
 	end)
-	if ok and ref ~= nil then
+	if ok and __lt.sv(ref) then
 		return ref
 	end
-	return game:GetService(name)
+	local service = __lt.fs(name)
+	if __lt.sv(service) then
+		return service
+	end
+	if __lt.svc.invalid[name] then
+		return nil
+	end
+	local fallbackOk, fallbackRef = pcall(function()
+		return refFn(Instance.new(name))
+	end)
+	if fallbackOk and __lt.sv(fallbackRef) then
+		return fallbackRef
+	end
+	service = __lt.ns(name)
+	if __lt.sv(service) then
+		return service
+	end
+	__lt.svc.invalid[name] = true
+	return nil
 end
 
 local players = __lt.cs("Players", __lt.cr)

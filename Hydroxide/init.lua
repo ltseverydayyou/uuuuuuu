@@ -1,3 +1,14 @@
+local function __betterGetService(name)
+	local service = game:FindService(name)
+	if service then
+		return service
+	end
+	local ok, inst = pcall(Instance.new, name)
+	if ok and inst and typeof(inst) == "Instance" then
+		return inst
+	end
+	return nil
+end
 local environment = assert(getgenv, "<OH> ~ Your exploit is not supported")()
 
 if oh then
@@ -162,7 +173,7 @@ environment.oh = {
 }
 
 if getConnections then 
-    for __, connection in pairs(getConnections(game:GetService("ScriptContext").Error)) do
+    for __, connection in pairs(getConnections(__betterGetService("ScriptContext").Error)) do
 
         local conn = getrawmetatable(connection)
         local old = conn and conn.__index
@@ -190,7 +201,7 @@ end
 
 useMethods(globalMethods)
 
-local HttpService = game:GetService("HttpService")
+local HttpService = __betterGetService("HttpService")
 local releaseInfo = { tag_name = branch }
 do
     local ran, response = pcall(game.HttpGetAsync, game, ("https://api.github.com/repos/%s/%s/releases"):format(user, repo))

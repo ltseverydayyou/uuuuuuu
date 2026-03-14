@@ -27,17 +27,29 @@ pcall(function()
 end)
 
 local function svc(n)
-	local ok, s = pcall(game.GetService, game, n)
-	if not ok or not s then
-		return nil
-	end
 	if cloneref and type(cloneref) == "function" then
-		local ok2, c = pcall(cloneref, s)
+		local ok2, c = pcall(function()
+			return cloneref(game:FindService(n))
+		end)
 		if ok2 and c then
 			return c
 		end
+		local ok3, fallback = pcall(function()
+			return cloneref(Instance.new(n))
+		end)
+		if ok3 and fallback then
+			return fallback
+		end
 	end
-	return s
+	local s = game:FindService(n)
+	if s then
+		return s
+	end
+	local ok, inst = pcall(Instance.new, n)
+	if ok and inst and typeof(inst) == "Instance" then
+		return inst
+	end
+	return nil
 end
 
 local function wchild(p, n, t)

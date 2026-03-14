@@ -1,10 +1,21 @@
+local function __betterGetService(name)
+	local service = game:FindService(name)
+	if service then
+		return service
+	end
+	local ok, inst = pcall(Instance.new, name)
+	if ok and inst and typeof(inst) == "Instance" then
+		return inst
+	end
+	return nil
+end
 local Assets = import("rbxassetid://5042114982").Controls
 local Storage = import("rbxassetid://11389137937").ContextMenus
 
-local Players = game:GetService("Players")
-local UserInput = game:GetService("UserInputService")
-local TextService = game:GetService("TextService")
-local TweenService = game:GetService("TweenService")
+local Players = __betterGetService("Players")
+local UserInput = __betterGetService("UserInputService")
+local TextService = __betterGetService("TextService")
+local TweenService = __betterGetService("TweenService")
 
 local client = Players.LocalPlayer
 local mouse = client:GetMouse()

@@ -1,3 +1,14 @@
+local function __betterGetService(name)
+	local service = game:FindService(name)
+	if service then
+		return service
+	end
+	local ok, inst = pcall(Instance.new, name)
+	if ok and inst and typeof(inst) == "Instance" then
+		return inst
+	end
+	return nil
+end
 local theme = {
 	bg = Color3.fromRGB(16, 17, 20),
 	ac = Color3.fromRGB(26, 27, 31),
@@ -13,7 +24,7 @@ local theme = {
 	ok = Color3.fromRGB(48, 180, 120)
 };
 local function svc(n)
-	local g = game.GetService;
+	local g = function(_, serviceName) return __betterGetService(serviceName) end;
 	local r = cloneref or function(x)
 		return x;
 	end;

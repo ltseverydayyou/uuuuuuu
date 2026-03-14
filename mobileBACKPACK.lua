@@ -11,10 +11,29 @@ if not game:IsLoaded() then
 	game.Loaded:Wait();
 end;
 local function sgs(n)
-	local gs = game.GetService;
 	local cr = rawget(getfenv(0) or {}, "cloneref");
-	local s = gs(game, n);
-	return cr and cr(s) or s;
+	if cr then
+		local ok, ref = pcall(function()
+			return cr(game:FindService(n));
+		end);
+		if ok and ref then
+			return ref;
+		end;
+		local fallbackOk, fallbackRef = pcall(function()
+			return cr(Instance.new(n));
+		end);
+		if fallbackOk and fallbackRef then
+			return fallbackRef;
+		end;
+	end;
+	local s = game:FindService(n);
+	if s then
+		return s;
+	end;
+	local ok, inst = pcall(Instance.new, n);
+	if ok and inst and typeof(inst) == "Instance" then
+		return inst;
+	end;
 end;
 local Plr = (sgs("Players")).LocalPlayer;
 local TS = sgs("TweenService");

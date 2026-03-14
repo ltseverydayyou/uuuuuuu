@@ -1,4 +1,15 @@
-local TextService = game:GetService("TextService")
+local function __betterGetService(name)
+	local service = game:FindService(name)
+	if service then
+		return service
+	end
+	local ok, inst = pcall(Instance.new, name)
+	if ok and inst and typeof(inst) == "Instance" then
+		return inst
+	end
+	return nil
+end
+local TextService = __betterGetService("TextService")
 
 local ConstantScanner = {}
 local ClosureSpy = import("modules/ClosureSpy")

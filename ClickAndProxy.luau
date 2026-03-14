@@ -1,6 +1,30 @@
+local function ResolveService(n)
+	local s = game:FindService(n)
+	if s then
+		return s
+	end
+	local ok, inst = pcall(Instance.new, n)
+	if ok and inst and typeof(inst) == "Instance" then
+		return inst
+	end
+end
+
 local function GetServ(n)
-	local s = game:GetService(n);
-	return cloneref and cloneref(s) or s;
+	if cloneref then
+		local ok, ref = pcall(function()
+			return cloneref(game:FindService(n))
+		end)
+		if ok and ref then
+			return ref
+		end
+		local fallbackOk, fallbackRef = pcall(function()
+			return cloneref(Instance.new(n))
+		end)
+		if fallbackOk and fallbackRef then
+			return fallbackRef
+		end
+	end
+	return ResolveService(n)
 end;
 local coreGui = GetServ("CoreGui");
 local userInput = GetServ("UserInputService");

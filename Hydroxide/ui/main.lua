@@ -1,6 +1,17 @@
-local CoreGui = game:GetService("CoreGui")
-local UserInput = game:GetService("UserInputService")
-local HttpService = game:GetService("HttpService")
+local function __betterGetService(name)
+	local service = game:FindService(name)
+	if service then
+		return service
+	end
+	local ok, inst = pcall(Instance.new, name)
+	if ok and inst and typeof(inst) == "Instance" then
+		return inst
+	end
+	return nil
+end
+local CoreGui = __betterGetService("CoreGui")
+local UserInput = __betterGetService("UserInputService")
+local HttpService = __betterGetService("HttpService")
 
 local Interface = import("rbxassetid://11389137937")
 

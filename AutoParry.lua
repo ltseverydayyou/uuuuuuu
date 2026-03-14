@@ -2822,7 +2822,7 @@ local function AutoParryStep(dt)
 	local nowStateTime = tick();
 	local inCooldown = nowStateTime < ps.nextPar;
 	local state;
-	if not ps.apEnabled then
+	if not ps.apEnabled and not ps.spam then
 		state = "Disabled";
 	elseif ps.lastParryTime > 0 and nowStateTime - ps.lastParryTime <= 0.25 then
 		state = "Parried";
@@ -2878,7 +2878,7 @@ trackConnection(StepSignal:Connect(function(dt)
 	end;
 end));
 trackConnection(StepSignal:Connect(function()
-	if parryState.spam and parryState.apEnabled then
+	if parryState.spam then
 		local now = tick();
 		local windowUntil = parryState.spamWindowUntil or 0;
 		local fastUntil = parryState.spamFastUntil or 0;

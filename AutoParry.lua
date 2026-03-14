@@ -523,6 +523,8 @@ local parryState = {
 	spamFastUntil = 0,
 	spamBurstUntil = 0,
 	spamNextAt = 0,
+	directParryWindowAt = 0,
+	directParryWindowCount = 0,
 	apEnabled = true,
 	preclick = true,
 	apState = "Idle"
@@ -753,6 +755,8 @@ local function setApEnabled(value)
 		parryState.spamFastUntil = 0;
 		parryState.spamBurstUntil = 0;
 		parryState.spamNextAt = 0;
+		parryState.directParryWindowAt = 0;
+		parryState.directParryWindowCount = 0;
 		if parryState.clearActiveParryLock then
 			parryState.clearActiveParryLock(nil);
 		end;
@@ -1680,7 +1684,32 @@ local function pressBtn(btn)
 	end;
 	return false;
 end;
-local function DoParry()
+local function DoParry(isSpam)
+	if not parryState.apEnabled and (not isSpam) then
+		return false;
+	end;
+	if not isSpam then
+		local now = tick();
+		local windowAt = parryState.directParryWindowAt or 0;
+		local windowCount = parryState.directParryWindowCount or 0;
+		if now - windowAt > 0.045 then
+			windowAt = now;
+			windowCount = 0;
+		elseif windowCount >= 2 then
+			return false;
+		end;
+		parryState.directParryWindowAt = windowAt;
+		parryState.directParryWindowCount = windowCount + 1;
+	end;
+	local function rollbackWindow()
+		if isSpam then
+			return;
+		end;
+		local count = parryState.directParryWindowCount or 0;
+		if count > 0 then
+			parryState.directParryWindowCount = count - 1;
+		end;
+	end;
 	local rem, rargs = resolveRemote();
 	if rem and fireRemote(rem, rargs) then
 		return true;
@@ -1689,7 +1718,12 @@ local function DoParry()
 	if btn and pressBtn(btn) then
 		return true;
 	end;
-	return sendFKey();
+	local ok = sendFKey();
+	if ok then
+		return true;
+	end;
+	rollbackWindow();
+	return false;
 end;
 local function queueParry(isSpam, hasTarget)
 	if not parryState.apEnabled and (not isSpam) then
@@ -1703,7 +1737,7 @@ local function queueParry(isSpam, hasTarget)
 		return;
 	end;
 	parryState.lastQueueTime = now;
-	local ok, err = pcall(DoParry);
+	local ok, err = pcall(DoParry, isSpam);
 	if not ok then
 		apWarn(err);
 	end;
@@ -1975,6 +2009,9 @@ local function getBallSeparation(a, b)
 end;
 
 local function flushPendingParries(char, hrp, forceImmediate)
+	if not parryState.apEnabled then
+		return false;
+	end;
 	if not (char and hrp) then
 		return false;
 	end;
@@ -2059,11 +2096,12 @@ local function flushPendingParries(char, hrp, forceImmediate)
 			ballState.lastParryPerBall[ball] = nowFire;
 			ballState.closeParryBlocked[ball] = true;
 			setActiveParryLock(ball, nowFire, bestItem.hitTime);
-			local okP, errP = pcall(DoParry);
+			local okP, fired = pcall(DoParry, false);
 			if not okP then
-				apWarn(errP);
+				apWarn(fired);
+			elseif fired then
+				shots += 1;
 			end;
-			shots += 1;
 		end;
 	end;
 	return shots > 0;
@@ -2079,6 +2117,9 @@ local function safeFlush(char, hrp, forceImmediate)
 end;
 
 local function tryPromoteImmediateBall(balls, char, hrp, excludeBall, pingValue)
+	if not parryState.apEnabled then
+		return false;
+	end;
 	if not (balls and char and hrp) then
 		return false;
 	end;
@@ -2141,11 +2182,11 @@ local function tryPromoteImmediateBall(balls, char, hrp, excludeBall, pingValue)
 	ballState.closeParryBlocked[bestBall] = true;
 	setActiveParryLock(bestBall, nowFire, bestHit);
 	clearPendingBall(bestBall);
-	local okP, errP = pcall(DoParry);
+	local okP, fired = pcall(DoParry, false);
 	if not okP then
-		apWarn(errP);
+		apWarn(fired);
 	end;
-	return okP == true;
+	return okP and fired == true;
 end;
 
 local function AutoParryStep(dt)
@@ -2810,6 +2851,8 @@ local function AutoParryStep(dt)
 		ps.spamFastUntil = 0;
 		ps.spamBurstUntil = 0;
 		ps.spamNextAt = 0;
+		ps.directParryWindowAt = 0;
+		ps.directParryWindowCount = 0;
 		ps.clearActiveParryLock(nil);
 		clearPendingBalls();
 		vs.ringLimited = false;
@@ -2895,7 +2938,7 @@ trackConnection(StepSignal:Connect(function()
 		parryState.spamNextAt = now + interval;
 		local shots = burstSpam and 4 or (fastSpam and 3 or 2);
 		for _ = 1, shots do
-			task.defer(DoParry);
+			task.defer(DoParry, true);
 		end;
 	end;
 end));

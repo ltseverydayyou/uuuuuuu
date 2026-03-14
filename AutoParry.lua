@@ -122,138 +122,18 @@ local UserInputService = __lt.cs("UserInputService", cloneref);
 local Stats = __lt.cs("Stats", cloneref);
 local GuiService = __lt.cs("GuiService", cloneref);
 local HttpService = __lt.cs("HttpService", cloneref);
-local VK_F = 0x46;
-local VK_RALT = 0xA5;
-local function getExec()
-	if type(identifyexecutor) ~= "function" then
-		return nil;
-	end;
-	local ok, name = pcall(identifyexecutor);
-	if not ok or type(name) ~= "string" then
-		return nil;
-	end;
-	return string.lower(name);
-end;
-local function getMode()
-	if type(getgenv) ~= "function" then
-		return nil;
-	end;
-	local ok, gv = pcall(getgenv);
-	if not ok or type(gv) ~= "table" then
-		return nil;
-	end;
-	local vz = gv.visualizer;
-	if type(vz) ~= "table" or type(vz.mode) ~= "string" then
-		return nil;
-	end;
-	local md = string.lower(vz.mode);
-	if md == "keyapi" then
-		return "keyapi";
-	end;
-	if md == "vim" then
-		return "vim";
-	end;
-	return nil;
-end;
-local execNm = getExec();
-local inpMd = getMode();
-local useVim = inpMd == "vim" or (inpMd ~= "keyapi" and (execNm == "solara" or execNm == "xeno"));
-local vim;
+local VirtualInputManager = __lt.cs("VirtualInputManager", cloneref);
 local function fireVim()
-	if not vim then
-		local ok, svc = pcall(function()
-			return __lt.cs("VirtualInputManager", cloneref);
-		end);
-		if not ok or not svc then
-			return;
-		end;
-		vim = svc;
-	end;
 	local ok1 = pcall(function()
-		vim:SendKeyEvent(true, "F", false, game);
+		VirtualInputManager:SendKeyEvent(true, "F", false, game);
 	end);
 	local ok2 = pcall(function()
-		vim:SendKeyEvent(false, "F", false, game);
+		VirtualInputManager:SendKeyEvent(false, "F", false, game);
 	end);
 	if not ok1 or not ok2 then
-		vim = nil;
+		return;
 	end;
 end;
-local function testKeys()
-	if type(keypress) ~= "function" or type(keyrelease) ~= "function" then
-		return false;
-	end;
-	if __lt.cm("UserInputService", "IsKeyDown", Enum.KeyCode.RightAlt) then
-		return false;
-	end;
-	local st = 0;
-	local bad = false;
-	local conA;
-	local conB;
-	local function stopTest()
-		if conA then
-			conA:Disconnect();
-			conA = nil;
-		end;
-		if conB then
-			conB:Disconnect();
-			conB = nil;
-		end;
-	end;
-	conA = UserInputService.InputBegan:Connect(function(io, gpe)
-		if gpe then
-			return;
-		end;
-		if io.KeyCode == Enum.KeyCode.RightAlt then
-			if st ~= 1 then
-				bad = true;
-				stopTest();
-				return;
-			end;
-			st = 2;
-		end;
-	end);
-	conB = UserInputService.InputEnded:Connect(function(io, gpe)
-		if gpe then
-			return;
-		end;
-		if io.KeyCode == Enum.KeyCode.RightAlt then
-			if st ~= 2 then
-				bad = true;
-				stopTest();
-				return;
-			end;
-			st = 3;
-		end;
-	end);
-	st = 1;
-	local okD = pcall(keypress, VK_RALT);
-	if not okD then
-		stopTest();
-		return false;
-	end;
-	local t0 = tick();
-	while (not bad) and st < 2 and tick() - t0 < 0.12 do
-		task.wait();
-	end;
-	if bad or st < 2 then
-		pcall(keyrelease, VK_RALT);
-		stopTest();
-		return false;
-	end;
-	local okU = pcall(keyrelease, VK_RALT);
-	if not okU then
-		stopTest();
-		return false;
-	end;
-	local t1 = tick();
-	while (not bad) and st < 3 and tick() - t1 < 0.12 do
-		task.wait();
-	end;
-	stopTest();
-	return (not bad) and st == 3;
-end;
-local useKeys = (not useVim) and testKeys();
 local _apErr = {
 	msg = nil,
 	t = 0
@@ -268,13 +148,6 @@ local function apWarn(err)
 	end;
 end;
 local function sendFKey()
-	if useKeys then
-		local okD = pcall(keypress, VK_F);
-		local okU = pcall(keyrelease, VK_F);
-		if okD and okU then
-			return true;
-		end;
-	end;
 	local ok, err = pcall(fireVim);
 	if not ok then
 		apWarn(err);
@@ -716,7 +589,7 @@ local function loadTopbarConfig()
 		local ok, content = pcall(readfile, AUTO_PARRY_CONFIG_PATH);
 		if ok and type(content) == "string" and content ~= "" then
 			local decodedOk, decoded = pcall(function()
-				return __lt.cm("HttpService", "JSONDecode", content);
+				return HttpService:JSONDecode(content);
 			end);
 			if decodedOk and type(decoded) == "table" then
 				raw = decoded;
@@ -741,7 +614,7 @@ local function saveTopbarConfig()
 		pcall(makefolder, AUTO_PARRY_CONFIG_DIR);
 	end;
 	local ok, encoded = pcall(function()
-		return __lt.cm("HttpService", "JSONEncode", payload);
+		return HttpService:JSONEncode(payload);
 	end);
 	if ok and type(encoded) == "string" then
 		pcall(writefile, AUTO_PARRY_CONFIG_PATH, encoded);

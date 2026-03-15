@@ -56,6 +56,24 @@ local function isPointInGui(gui, pos)
         and pos.Y >= absPos.Y and pos.Y <= (absPos.Y + absSize.Y)
 end
 
+local function findTabFromGuiObjects(pos)
+    if not (GuiService and GuiService.GetGuiObjectsAtPosition) then
+        return nil
+    end
+
+    local objects = GuiService:GetGuiObjectsAtPosition(pos.X, pos.Y)
+    for _, obj in ipairs(objects) do
+        local cur = obj
+        while cur and cur ~= Tabs do
+            if cur:IsA("ImageButton") and cur.Parent == Tabs and Tabs:FindFirstChild(cur.Name) then
+                return cur
+            end
+            cur = cur.Parent
+        end
+    end
+    return nil
+end
+
 local function methodsCheck(methods)
     local globalMethods = oh.Methods
     local missingMethods = ""
@@ -154,6 +172,13 @@ if UserInput then
                     pos = pos - inset
                 end
             end
+
+            local hitTab = findTabFromGuiObjects(pos)
+            if hitTab and hitTab ~= selectedTab then
+                selectTab(hitTab.Name)
+                return
+            end
+
             for _, tab in pairs(Tabs:GetChildren()) do
                 if tab:IsA("ImageButton") and tab.Visible and selectedTab ~= tab and isPointInGui(tab, pos) then
                     selectTab(tab.Name)

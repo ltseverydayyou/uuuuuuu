@@ -90,8 +90,45 @@ local elementTypeDropdown = Dropdown.new(modifyElementType)
 local constants = {
     tempElementColor = Color3.fromRGB(30, 10, 10),
     tempUpvalueColor = Color3.fromRGB(40, 20, 20),
-    tempBorderColor = Color3.fromRGB(20, 0, 0)
+    tempBorderColor = Color3.fromRGB(20, 0, 0),
+    longPressTime = 0.45,
+    longPressMoveThreshold = 12
 }
+
+local function bindLongPress(instance, callback)
+    local delayFn = (task and task.delay) or delay
+    local touchActive = false
+    local touchStart
+    local touchInput
+
+    instance.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch then
+            touchActive = true
+            touchStart = input.Position
+            touchInput = input
+
+            delayFn(constants.longPressTime, function()
+                if touchActive and touchInput and touchInput.UserInputState ~= Enum.UserInputState.End then
+                    callback()
+                end
+            end)
+        end
+    end)
+
+    instance.InputChanged:Connect(function(input)
+        if touchActive and input == touchInput then
+            if (input.Position - touchStart).Magnitude > constants.longPressMoveThreshold then
+                touchActive = false
+            end
+        end
+    end)
+
+    instance.InputEnded:Connect(function(input)
+        if input == touchInput then
+            touchActive = false
+        end
+    end)
+end
 
 local function typeMismatchMessage()
     MessageBox.Show("Error", 
@@ -118,13 +155,16 @@ local function addElement(upvalueLog, upvalue, index, value, temporary)
     elementLog.Value.Label.TextColor3 = oh.Constants.Syntax[elementValueType]
     elementLog.Value.Icon.Image = oh.Constants.Types[elementValueType]
 
-    elementLog.MouseButton2Click:Connect(function()
+    local function showElementContext()
         selectedUpvalue = upvalue
         selectedUpvalueLog = upvalueLog
         selectedElement = index
         elementTypeDropdown:SetSelected(typeof(value))
         elementContextMenu:Show()
-    end)
+    end
+
+    elementLog.MouseButton2Click:Connect(showElementContext)
+    bindLongPress(elementLog, showElementContext)
 
     return elementLog
 end
@@ -190,7 +230,7 @@ local function addUpvalue(upvalue, temporary)
     upvalueLog.Value.TextColor3 = oh.Constants.Syntax[valueType]
     upvalueLog.Icon.Image = oh.Constants.Types[valueType]
 
-    upvalueLog.MouseButton2Click:Connect(function()
+    local function showUpvalueContext()
         selectedUpvalue = upvalue
         selectedUpvalueLog = upvalueLog
         upvalueTypeDropdown:SetSelected(typeof(upvalue.Value))
@@ -200,7 +240,10 @@ local function addUpvalue(upvalue, temporary)
         else
             upvalueContextMenu:Show()
         end
-    end)
+    end
+
+    upvalueLog.MouseButton2Click:Connect(showUpvalueContext)
+    bindLongPress(upvalueLog, showUpvalueContext)
 
     return upvalueLog
 end
@@ -330,7 +373,7 @@ deepSearch:SetCallback(function(enabled)
     end
 end)
 
-Search.MouseButton1Click:Connect(addUpvalues)
+Search.Activated:Connect(addUpvalues)
 SearchBox.FocusLost:Connect(function(returned)
     if returned then
         addUpvalues()
@@ -386,7 +429,7 @@ local function typeDropdownAdjust(dropdown, button)
     instance.Icon.Image = icon
 end
 
-modifyUpvalueButtons.Set.MouseButton1Click:Connect(function()
+modifyUpvalueButtons.Set.Activated:Connect(function()
     local newValue = setValue(
         modifyUpvalueValue.Text, 
         selectedUpvalue.Value, 
@@ -400,12 +443,12 @@ modifyUpvalueButtons.Set.MouseButton1Click:Connect(function()
     end
 end)
 
-modifyUpvalueButtons.Cancel.MouseButton1Click:Connect(function()
+modifyUpvalueButtons.Cancel.Activated:Connect(function()
     modifyUpvalueValue.Text = ""
     modifyUpvalue:Hide()
 end)
 
-modifyElementButtons.Set.MouseButton1Click:Connect(function()
+modifyElementButtons.Set.Activated:Connect(function()
     local upvalueValue = selectedUpvalue.Value
     
     local newValue = setValue(
@@ -421,7 +464,7 @@ modifyElementButtons.Set.MouseButton1Click:Connect(function()
     end
 end)
 
-modifyElementButtons.Cancel.MouseButton1Click:Connect(function()
+modifyElementButtons.Cancel.Activated:Connect(function()
     modifyElementValue.Text = ""
     modifyElement:Hide()
 end)

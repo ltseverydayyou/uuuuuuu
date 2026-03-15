@@ -506,16 +506,16 @@ ListSearch.FocusLost:Connect(function(returned)
     end
 end)
 
-ListRefresh.MouseButton1Click:Connect(function()
+ListRefresh.Activated:Connect(function()
     closureList:Recalculate()
 end)
 
-LogsBack.MouseButton1Click:Connect(function()
+LogsBack.Activated:Connect(function()
     ClosureLogs.Visible = false
     ClosureList.Visible = true
 end)
 
-LogsButtons.Ignore.MouseButton1Click:Connect(function()
+LogsButtons.Ignore.Activated:Connect(function()
     local selectedLog = selected.hookLog
     local hook = selectedLog.Hook
 
@@ -532,7 +532,7 @@ LogsButtons.Ignore.MouseButton1Click:Connect(function()
     end
 end)
 
-LogsButtons.Block.MouseButton1Click:Connect(function()
+LogsButtons.Block.Activated:Connect(function()
     local selectedLog = selected.hookLog
     local hook = selectedLog.Hook
 
@@ -549,17 +549,17 @@ LogsButtons.Block.MouseButton1Click:Connect(function()
     end
 end)
 
-LogsButtons.Clear.MouseButton1Click:Connect(function()
+LogsButtons.Clear.Activated:Connect(function()
     selected.hookLog:Clear()
 end)
 
-LogsButtons.Conditions.MouseButton1Click:Connect(function()
+LogsButtons.Conditions.Activated:Connect(function()
     selected.conditionLog = selected.logContext or selected.hookLog
 
     createConditions(selected.conditionLog.Hook)
 end)
 
-ConditionsBack.MouseButton1Click:Connect(function()
+ConditionsBack.Activated:Connect(function()
     ClosureConditions.Visible = false
 
     if selected.hookLog then
@@ -569,11 +569,11 @@ ConditionsBack.MouseButton1Click:Connect(function()
     end
 end)
 
-ConditionsButtons.New.MouseButton1Click:Connect(function()
+ConditionsButtons.New.Activated:Connect(function()
     newClosureCondition:Show()
 end)
 
-NewConditionButtons.Add.MouseButton1Click:Connect(function()
+NewConditionButtons.Add.Activated:Connect(function()
     if not conditionStatus.Selected then
         return MessageBox.Show("Error", "Invalid condition status", MessageType.OK)
     end
@@ -642,16 +642,16 @@ NewConditionButtons.Add.MouseButton1Click:Connect(function()
     newClosureCondition:Hide()
 end)
 
-NewConditionButtons.Cancel.MouseButton1Click:Connect(function()
+NewConditionButtons.Cancel.Activated:Connect(function()
     newClosureCondition:Hide()
 end)
 
-NewConditionIndex.Add.MouseButton1Click:Connect(function()
+NewConditionIndex.Add.Activated:Connect(function()
     local newIndex = tonumber(NewConditionIndex.Value.Input.Text) + 1
     NewConditionIndex.Value.Input.Text = newIndex
 end)
 
-NewConditionIndex.Sub.MouseButton1Click:Connect(function()
+NewConditionIndex.Sub.Activated:Connect(function()
     local newIndex = tonumber(NewConditionIndex.Value.Input.Text) - 1
     NewConditionIndex.Value.Input.Text = (newIndex <= 0 and 1) or newIndex
 end)

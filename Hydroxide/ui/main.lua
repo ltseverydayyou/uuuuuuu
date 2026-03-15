@@ -73,14 +73,21 @@ end
 local dragging
 local dragStart
 local startPos
+local dragInput
+
+local function updateDrag(input)
+	local delta = input.Position - dragStart
+	Base.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
 
 Drag.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 		local dragEnded 
 
 		dragging = true
 		dragStart = input.Position
 		startPos = Base.Position
+		dragInput = input
 
 		dragEnded = input.Changed:Connect(function()
 			if input.UserInputState == Enum.UserInputState.End then
@@ -91,19 +98,24 @@ Drag.InputBegan:Connect(function(input)
 	end
 end)
 
-oh.Events.Drag = UserInput.InputChanged:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseMovement and dragging then
-		local delta = input.Position - dragStart
-		Base.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+Drag.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+		dragInput = input
 	end
 end)
 
-Open.MouseButton1Click:Connect(function()
+oh.Events.Drag = UserInput.InputChanged:Connect(function(input)
+	if dragging and input == dragInput then
+		updateDrag(input)
+	end
+end)
+
+Open.Activated:Connect(function()
 	Open:TweenPosition(constants.conceal, "Out", "Quad", 0.15)
 	Base:TweenPosition(constants.opened, "Out", "Quad", 0.15)
 end)
 
-Collapse.MouseButton1Click:Connect(function()
+Collapse.Activated:Connect(function()
 	Base:TweenPosition(constants.closed, "Out", "Quad", 0.15)
 	Open:TweenPosition(constants.reveal, "Out", "Quad", 0.15)
 end)

@@ -20,8 +20,45 @@ local ctrlHeld = false
 local constants = {
     tweenTime = TweenInfo.new(0.15),
     selected = Color3.fromRGB(55, 35, 35),
-    deselected = Color3.fromRGB(35, 35, 35)
+    deselected = Color3.fromRGB(35, 35, 35),
+    longPressTime = 0.45,
+    longPressMoveThreshold = 12
 }
+
+local function bindLongPress(instance, callback)
+    local delayFn = (task and task.delay) or delay
+    local touchActive = false
+    local touchStart
+    local touchInput
+
+    instance.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch then
+            touchActive = true
+            touchStart = input.Position
+            touchInput = input
+
+            delayFn(constants.longPressTime, function()
+                if touchActive and touchInput and touchInput.UserInputState ~= Enum.UserInputState.End then
+                    callback()
+                end
+            end)
+        end
+    end)
+
+    instance.InputChanged:Connect(function(input)
+        if touchActive and input == touchInput then
+            if (input.Position - touchStart).Magnitude > constants.longPressMoveThreshold then
+                touchActive = false
+            end
+        end
+    end)
+
+    instance.InputEnded:Connect(function(input)
+        if input == touchInput then
+            touchActive = false
+        end
+    end)
+end
 
 function List.new(instance, multiClick)
     local list = {}
@@ -44,6 +81,7 @@ end
 function ListButton.new(instance, list)
     local listButton = {}
     local listInstance = list.Instance
+    local suppressActivate = false
 
     list.Buttons[instance] = listButton
 
@@ -52,7 +90,12 @@ function ListButton.new(instance, list)
     end
 
     instance.Parent = listInstance
-    instance.MouseButton1Click:Connect(function()
+    instance.Activated:Connect(function()
+        if suppressActivate then
+            suppressActivate = false
+            return
+        end
+
         if not ctrlHeld and listButton.Callback then
             listButton.Callback()
         elseif list.MultiClickEnabled and ctrlHeld then
@@ -79,6 +122,25 @@ function ListButton.new(instance, list)
     instance.MouseButton2Click:Connect(function()
         if not ctrlHeld and listButton.RightCallback then
             listButton.RightCallback()
+        end
+    end)
+
+    bindLongPress(instance, function()
+        suppressActivate = true
+
+        if listButton.RightCallback then
+            listButton.RightCallback()
+        end
+
+        local contextMenu
+        if list.Selected and list.BoundContextMenuSelected then
+            contextMenu = list.BoundContextMenuSelected
+        elseif list.BoundContextMenu then
+            contextMenu = list.BoundContextMenu
+        end
+
+        if contextMenu then
+            contextMenu:Show()
         end
     end)
 
@@ -176,7 +238,7 @@ end
 oh.Events.ListInputBegan = UserInput.InputBegan:Connect(function(input)
     if input.KeyCode == Enum.KeyCode.LeftControl then
         ctrlHeld = true
-    elseif not ctrlHeld and input.UserInputType == Enum.UserInputType.MouseButton1 then
+    elseif not ctrlHeld and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
         for _i, list in pairs(lists) do
             if list.Selected then
                 for _k, listButton in pairs(list.Selected) do

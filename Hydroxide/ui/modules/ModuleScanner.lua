@@ -77,7 +77,7 @@ Search.FocusLost:Connect(function(returned)
     end
 end)
 
-Refresh.MouseButton1Click:Connect(function()
+Refresh.Activated:Connect(function()
     addModules()
 end)
 

@@ -12,13 +12,9 @@ end
 local Assets = import("rbxassetid://5042114982").Controls
 local Storage = import("rbxassetid://11389137937").ContextMenus
 
-local Players = __betterGetService("Players")
 local UserInput = __betterGetService("UserInputService")
 local TextService = __betterGetService("TextService")
 local TweenService = __betterGetService("TweenService")
-
-local client = Players.LocalPlayer
-local mouse = client:GetMouse()
 
 local ContextMenuButton = {}
 local ContextMenu = {}
@@ -40,7 +36,7 @@ function ContextMenuButton.new(icon, text)
     label.Text = text
     instance.Icon.Image = icon
 
-    instance.MouseButton1Click:Connect(function()
+    instance.Activated:Connect(function()
         if contextMenuButton.Callback then
             contextMenuButton.Callback()
         end
@@ -122,7 +118,8 @@ function ContextMenu.show(contextMenu)
     local instance = contextMenu.Instance
 
     instance.Visible = true
-    instance.Position = UDim2.new(0, mouse.X, 0, mouse.Y)
+    local pos = UserInput:GetMouseLocation()
+    instance.Position = UDim2.new(0, pos.X, 0, pos.Y)
     
     contextMenu.Visible = true
     currentContextMenu = contextMenu
@@ -134,7 +131,7 @@ function ContextMenu.hide(contextMenu)
 end
 
 UserInput.InputEnded:Connect(function(input)
-    if currentContextMenu and input.UserInputType == Enum.UserInputType.MouseButton1 then
+    if currentContextMenu and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
         currentContextMenu:Hide()
         currentContextMenu = nil
     end

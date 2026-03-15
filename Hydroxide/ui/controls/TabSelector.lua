@@ -100,7 +100,7 @@ for _i, tab in pairs(Tabs:GetChildren()) do
             iconUnselected = iconUnselected
         }
 
-        tab.MouseButton1Click:Connect(function()
+        tab.Activated:Connect(function()
             if selectedTab ~= tab and Tabs:FindFirstChild(tab.Name) then
                 selectTab(tab.Name)
             end

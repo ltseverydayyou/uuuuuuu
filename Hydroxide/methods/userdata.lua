@@ -14,38 +14,66 @@ local methods = {}
 local players = __betterGetService("Players")
 local client = players.LocalPlayer
 
+local function formatLuaString(value)
+    return tostring(value)
+        :gsub("\\", "\\\\")
+        :gsub("\"", "\\\"")
+        :gsub("\n", "\\n")
+        :gsub("\r", "\\r")
+        :gsub("\t", "\\t")
+end
+
 local function getInstancePath(instance)
-    local name = instance.Name
-    local head = (#name > 0 and '.' .. name) or "['']"
-    
-    if not instance.Parent and instance ~= game then
-        return head .. " --[[ PARENTED TO NIL OR DESTROYED ]]"
-    end
-    
-    if instance == game then
-        return "game"
-    elseif instance == workspace then
-        return "workspace"
-    else
-        local _success, result = pcall(function() return __betterGetService(instance.ClassName) end)
-        
-        if result then
-            head = ':GetService("' .. instance.ClassName .. '")'
-        elseif instance == client then
-            head = '.LocalPlayer' 
-        else
-            local nonAlphaNum = name:gsub('[%w_]', '')
-            local noPunct = nonAlphaNum:gsub('[%s%p]', '')
-            
-            if tonumber(name:sub(1, 1)) or (#nonAlphaNum ~= 0 and #noPunct == 0) then
-                head = '["' .. name:gsub('"', '\\"'):gsub('\\', '\\\\') .. '"]'
-            elseif #nonAlphaNum ~= 0 and #noPunct > 0 then
-                head = '[' .. toUnicode(name) .. ']'
-            end
+    local path = ""
+    local cur = instance
+
+    while cur do
+        if cur == game then
+            path = "game" .. path
+            break
         end
+
+        local className = cur.ClassName
+        local curName = tostring(cur)
+        local indexName
+
+        if curName:match("^[%a_][%w_]*$") then
+            indexName = "." .. curName
+        else
+            indexName = "[\"" .. formatLuaString(curName) .. "\"]"
+        end
+
+        if cur == client then
+            indexName = ".LocalPlayer"
+        end
+
+        local parent = cur.Parent
+        if parent then
+            if parent == game then
+                local service = game:FindService(className)
+                if service and service == cur then
+                    indexName = ':GetService("' .. className .. '")'
+                end
+            else
+                local first = parent:FindFirstChild(curName)
+                if first and first ~= cur then
+                    local children = parent:GetChildren()
+                    local idx = table.find(children, cur)
+                    if idx then
+                        indexName = ":GetChildren()[" .. idx .. "]"
+                    end
+                end
+            end
+        else
+            local getnil = "local getNil = function(name, class) for _, v in next, getnilinstances() do if v.ClassName == class and v.Name == name then return v end end end"
+            indexName = getnil .. ("\n\ngetNil(\"%s\", \"%s\")"):format(formatLuaString(cur.Name), className)
+        end
+
+        path = indexName .. path
+        cur = parent
     end
-    
-    return getInstancePath(instance.Parent) .. head
+
+    return path
 end
 
 local function userdataValue(data)

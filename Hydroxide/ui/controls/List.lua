@@ -21,54 +21,41 @@ local constants = {
     tweenTime = TweenInfo.new(0.15),
     selected = Color3.fromRGB(55, 35, 35),
     deselected = Color3.fromRGB(35, 35, 35),
-    doubleTapTime = 0.35,
-    doubleTapMoveThreshold = 12
+    longPressTime = 0.45,
+    longPressMoveThreshold = 12
 }
 
-local function bindDoubleTap(instance, callback)
-    local lastTapTime = 0
-    local lastTapPosition
+local function bindLongPress(instance, callback)
+    local delayFn = (task and task.delay) or delay
+    local touchActive = false
     local touchStart
     local touchInput
-    local touchMoved = false
 
     instance.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.Touch then
+            touchActive = true
             touchStart = input.Position
             touchInput = input
-            touchMoved = false
+
+            delayFn(constants.longPressTime, function()
+                if touchActive and touchInput and touchInput.UserInputState ~= Enum.UserInputState.End then
+                    callback()
+                end
+            end)
         end
     end)
 
     instance.InputChanged:Connect(function(input)
-        if input == touchInput and touchStart then
-            if (input.Position - touchStart).Magnitude > constants.doubleTapMoveThreshold then
-                touchMoved = true
+        if touchActive and input == touchInput then
+            if (input.Position - touchStart).Magnitude > constants.longPressMoveThreshold then
+                touchActive = false
             end
         end
     end)
 
     instance.InputEnded:Connect(function(input)
         if input == touchInput then
-            if not touchMoved then
-                local now = os.clock()
-                local isDoubleTap = lastTapPosition
-                    and (now - lastTapTime) <= constants.doubleTapTime
-                    and (input.Position - lastTapPosition).Magnitude <= constants.doubleTapMoveThreshold
-
-                lastTapTime = now
-                lastTapPosition = input.Position
-
-                if isDoubleTap then
-                    lastTapTime = 0
-                    lastTapPosition = nil
-                    callback()
-                end
-            end
-
-            touchStart = nil
-            touchInput = nil
-            touchMoved = false
+            touchActive = false
         end
     end)
 end
@@ -138,7 +125,7 @@ function ListButton.new(instance, list)
         end
     end)
 
-    bindDoubleTap(instance, function()
+    bindLongPress(instance, function()
         suppressActivate = true
 
         if listButton.RightCallback then

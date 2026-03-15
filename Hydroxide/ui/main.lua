@@ -63,10 +63,14 @@ local Base = Interface.Base
 local Drag = Base.Drag
 local Status = Base.Status
 local Collapse = Drag.Collapse
+local Prompts = Base.Prompts
+local ContextMenus = Interface.ContextMenus
 
 Base.Active = true
 Drag.Active = true
 Open.Visible = false
+Prompts.Visible = false
+ContextMenus.Visible = false
 
 function oh.setStatus(text)
 	Status.Text = '• Status: ' .. text

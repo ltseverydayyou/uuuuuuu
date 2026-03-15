@@ -16,6 +16,7 @@ end
 function Prompt.show(prompt)
     currentPrompt = prompt
 
+    Prompts.Visible = true
     Prompts.PromptShadow.Visible = true
     prompt.Instance.Visible = true
 end
@@ -23,6 +24,7 @@ end
 function Prompt.hide(prompt)
     Prompts.PromptShadow.Visible = false
     prompt.Instance.Visible = false
+    Prompts.Visible = false
 
     currentPrompt = nil
 end

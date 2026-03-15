@@ -143,7 +143,6 @@ for _i, tab in pairs(Tabs:GetChildren()) do
         end
 
         tab.MouseButton1Click:Connect(onTabActivated)
-        tab.MouseButton1Click:Connect(onTabActivated)
 
         tab.MouseEnter:Connect(function()
             if selectedPage ~= Pages:FindFirstChild(tab.Name) then

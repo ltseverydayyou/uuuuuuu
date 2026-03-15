@@ -137,6 +137,7 @@ function ContextMenu.show(contextMenu)
 
     local instance = contextMenu.Instance
 
+    Storage.Visible = true
     instance.Visible = true
     local lastType = UserInput and UserInput.GetLastInputType and UserInput:GetLastInputType()
     local pos = UserInput:GetMouseLocation()
@@ -164,6 +165,7 @@ end
 function ContextMenu.hide(contextMenu)
     contextMenu.Visible = false
     contextMenu.Instance.Visible = false
+    Storage.Visible = false
 end
 
 UserInput.InputEnded:Connect(function(input)

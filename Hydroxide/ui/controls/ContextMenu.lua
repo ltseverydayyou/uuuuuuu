@@ -21,8 +21,7 @@ local ContextMenuButton = {}
 local ContextMenu = {}
 
 local currentContextMenu
-local lastShowTime = 0
-local lastShowWasTouch = false
+local ignoreNextTouchEnd = false
 local constants = {
     fadeLength = TweenInfo.new(0.15),
     textWidth = Vector2.new(1337420, 20)
@@ -157,8 +156,7 @@ function ContextMenu.show(contextMenu)
     contextMenu.Visible = true
     currentContextMenu = contextMenu
 
-    lastShowTime = os.clock()
-    lastShowWasTouch = lastType == Enum.UserInputType.Touch
+    ignoreNextTouchEnd = lastType == Enum.UserInputType.Touch
 end
 
 function ContextMenu.hide(contextMenu)
@@ -168,11 +166,12 @@ end
 
 UserInput.InputEnded:Connect(function(input)
     if currentContextMenu and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
-        if input.UserInputType == Enum.UserInputType.Touch and lastShowWasTouch then
-            if (os.clock() - lastShowTime) <= 0.35 then
-                return
-            end
+        if input.UserInputType == Enum.UserInputType.Touch and ignoreNextTouchEnd then
+            ignoreNextTouchEnd = false
+            return
         end
+
+        ignoreNextTouchEnd = false
         currentContextMenu:Hide()
         currentContextMenu = nil
     end

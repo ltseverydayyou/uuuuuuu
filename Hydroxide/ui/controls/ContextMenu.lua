@@ -13,7 +13,6 @@ local Assets = import("rbxassetid://5042114982").Controls
 local Storage = import("rbxassetid://11389137937").ContextMenus
 
 local GuiService = __betterGetService("GuiService")
-local Players = __betterGetService("Players")
 local UserInput = __betterGetService("UserInputService")
 local TextService = __betterGetService("TextService")
 local TweenService = __betterGetService("TweenService")
@@ -22,7 +21,6 @@ local ContextMenuButton = {}
 local ContextMenu = {}
 
 local currentContextMenu
-local mouse = Players and Players.LocalPlayer and Players.LocalPlayer:GetMouse()
 local lastShowTime = 0
 local lastShowWasTouch = false
 local constants = {
@@ -116,6 +114,12 @@ function ContextMenu.add(contextMenu, contextMenuButton)
 end
 
 local function getRootGui(inst)
+    if inst and inst.FindFirstAncestorOfClass then
+        local root = inst:FindFirstAncestorOfClass("ScreenGui")
+        if root then
+            return root
+        end
+    end
     local cur = inst
     while cur do
         if cur:IsA("ScreenGui") then
@@ -135,19 +139,13 @@ function ContextMenu.show(contextMenu)
 
     instance.Visible = true
     local lastType = UserInput and UserInput.GetLastInputType and UserInput:GetLastInputType()
-    local pos
-
-    if lastType == Enum.UserInputType.Touch or not mouse then
-        pos = UserInput:GetMouseLocation()
-        local root = getRootGui(instance)
-        if root and not root.IgnoreGuiInset then
-            local inset = GuiService and GuiService.GetGuiInset and GuiService:GetGuiInset()
-            if inset then
-                pos = pos - inset
-            end
+    local pos = UserInput:GetMouseLocation()
+    local root = getRootGui(instance)
+    if not root or not root.IgnoreGuiInset then
+        local inset = GuiService and GuiService.GetGuiInset and GuiService:GetGuiInset()
+        if inset then
+            pos = pos - inset
         end
-    else
-        pos = Vector2.new(mouse.X, mouse.Y)
     end
 
     local parent = instance.Parent

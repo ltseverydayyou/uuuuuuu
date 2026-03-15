@@ -62,6 +62,7 @@ local Collapse = Drag.Collapse
 
 Base.Active = true
 Drag.Active = true
+Open.Visible = false
 
 function oh.setStatus(text)
 	Status.Text = '• Status: ' .. text

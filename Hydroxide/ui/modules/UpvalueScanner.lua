@@ -155,16 +155,18 @@ local function addElement(upvalueLog, upvalue, index, value, temporary)
     elementLog.Value.Label.TextColor3 = oh.Constants.Syntax[elementValueType]
     elementLog.Value.Icon.Image = oh.Constants.Types[elementValueType]
 
-    local function showElementContext()
+    local function showElementContext(openedWithTouch)
         selectedUpvalue = upvalue
         selectedUpvalueLog = upvalueLog
         selectedElement = index
         elementTypeDropdown:SetSelected(typeof(value))
-        elementContextMenu:Show()
+        elementContextMenu:Show(openedWithTouch)
     end
 
     elementLog.MouseButton2Click:Connect(showElementContext)
-    bindLongPress(elementLog, showElementContext)
+    bindLongPress(elementLog, function()
+        showElementContext(true)
+    end)
 
     return elementLog
 end
@@ -230,20 +232,22 @@ local function addUpvalue(upvalue, temporary)
     upvalueLog.Value.TextColor3 = oh.Constants.Syntax[valueType]
     upvalueLog.Icon.Image = oh.Constants.Types[valueType]
 
-    local function showUpvalueContext()
+    local function showUpvalueContext(openedWithTouch)
         selectedUpvalue = upvalue
         selectedUpvalueLog = upvalueLog
         upvalueTypeDropdown:SetSelected(typeof(upvalue.Value))
 
         if upvalue.Scanned then
-            tableContextMenu:Show()
+            tableContextMenu:Show(openedWithTouch)
         else
-            upvalueContextMenu:Show()
+            upvalueContextMenu:Show(openedWithTouch)
         end
     end
 
     upvalueLog.MouseButton2Click:Connect(showUpvalueContext)
-    bindLongPress(upvalueLog, showUpvalueContext)
+    bindLongPress(upvalueLog, function()
+        showUpvalueContext(true)
+    end)
 
     return upvalueLog
 end

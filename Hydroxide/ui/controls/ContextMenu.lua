@@ -129,7 +129,7 @@ local function getRootGui(inst)
     return nil
 end
 
-function ContextMenu.show(contextMenu)
+function ContextMenu.show(contextMenu, openedWithTouch)
     if currentContextMenu then
         currentContextMenu:Hide()
     end
@@ -137,7 +137,6 @@ function ContextMenu.show(contextMenu)
     local instance = contextMenu.Instance
 
     instance.Visible = true
-    local lastType = UserInput and UserInput.GetLastInputType and UserInput:GetLastInputType()
     local pos = UserInput:GetMouseLocation()
     local root = getRootGui(instance)
     if not root or not root.IgnoreGuiInset then
@@ -156,7 +155,12 @@ function ContextMenu.show(contextMenu)
     contextMenu.Visible = true
     currentContextMenu = contextMenu
 
-    ignoreNextTouchEnd = lastType == Enum.UserInputType.Touch
+    if openedWithTouch == nil then
+        local lastType = UserInput and UserInput.GetLastInputType and UserInput:GetLastInputType()
+        ignoreNextTouchEnd = lastType == Enum.UserInputType.Touch
+    else
+        ignoreNextTouchEnd = openedWithTouch == true
+    end
 end
 
 function ContextMenu.hide(contextMenu)

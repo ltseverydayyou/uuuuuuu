@@ -140,7 +140,7 @@ function ListButton.new(instance, list)
         end
 
         if contextMenu then
-            contextMenu:Show()
+            contextMenu:Show(true)
         end
     end)
 

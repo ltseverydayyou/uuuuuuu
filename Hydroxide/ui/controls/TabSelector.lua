@@ -11,12 +11,21 @@ local function __betterGetService(name)
 end
 local TweenService = __betterGetService("TweenService")
 local UserInput = __betterGetService("UserInputService")
+local GuiService = __betterGetService("GuiService")
 
 local TabSelector = {}
 
 local Base = import("ui/MainUI").Base
 local Tabs = Base.Tabs.Container
 local Pages = Base.Body.Pages
+
+if Tabs and Tabs.IsA and Tabs:IsA("GuiObject") then
+    Tabs.Active = true
+    local tabsParent = Tabs.Parent
+    if tabsParent and tabsParent.IsA and tabsParent:IsA("GuiObject") then
+        tabsParent.Active = true
+    end
+end
 
 local MessageBox, MessageType = import("ui/controls/MessageBox")
 
@@ -137,7 +146,14 @@ end
 if UserInput then
     UserInput.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            local pos = Vector2.new(input.Position.X, input.Position.Y)
+            local pos = UserInput:GetMouseLocation()
+            local root = Base:FindFirstAncestorOfClass("ScreenGui")
+            if root and not root.IgnoreGuiInset then
+                local inset = GuiService and GuiService.GetGuiInset and GuiService:GetGuiInset()
+                if inset then
+                    pos = pos - inset
+                end
+            end
             for _, tab in pairs(Tabs:GetChildren()) do
                 if tab:IsA("ImageButton") and tab.Visible and selectedTab ~= tab and isPointInGui(tab, pos) then
                     selectTab(tab.Name)

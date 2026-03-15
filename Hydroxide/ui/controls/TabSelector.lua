@@ -13,7 +13,7 @@ local TweenService = __betterGetService("TweenService")
 
 local TabSelector = {}
 
-local Base = import("rbxassetid://11389137937").Base
+local Base = import("ui/MainUI").Base
 local Tabs = Base.Tabs.Container
 local Pages = Base.Body.Pages
 
@@ -124,3 +124,4 @@ end
 
 TabSelector.SelectTab = selectTab
 return TabSelector
+

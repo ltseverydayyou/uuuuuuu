@@ -9,8 +9,8 @@ local function __betterGetService(name)
 	end
 	return nil
 end
-local Assets = import("rbxassetid://5042114982").Controls
-local Storage = import("rbxassetid://11389137937").ContextMenus
+local Assets = import("ui/MainAssets").Controls
+local Storage = import("ui/MainUI").ContextMenus
 
 local GuiService = __betterGetService("GuiService")
 local UserInput = __betterGetService("UserInputService")
@@ -179,3 +179,4 @@ UserInput.InputEnded:Connect(function(input)
 end)
 
 return ContextMenu, ContextMenuButton
+

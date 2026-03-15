@@ -13,7 +13,10 @@ local CoreGui = __betterGetService("CoreGui")
 local UserInput = __betterGetService("UserInputService")
 local HttpService = __betterGetService("HttpService")
 
-local Interface = import("rbxassetid://11389137937")
+local Interface = import("ui/MainUI")
+if Interface and Interface.IsA and Interface:IsA("ScreenGui") then
+	Interface.IgnoreGuiInset = true
+end
 
 if oh.Cache["ui/main"] then
 	return Interface
@@ -165,3 +168,4 @@ else
 end
 
 return Interface
+

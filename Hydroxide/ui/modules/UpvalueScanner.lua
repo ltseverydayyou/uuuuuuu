@@ -30,8 +30,8 @@ local TabSelector = import("ui/controls/TabSelector")
 local MessageBox, MessageType = import("ui/controls/MessageBox")
 local ContextMenu, ContextMenuButton = import("ui/controls/ContextMenu")
 
-local Base = import("rbxassetid://11389137937").Base
-local Assets = import("rbxassetid://5042114982").UpvalueScanner
+local Base = import("ui/MainUI").Base
+local Assets = import("ui/MainAssets").UpvalueScanner
 
 local Prompts = Base.Prompts
 local Page = Base.Body.Pages.UpvalueScanner
@@ -692,3 +692,4 @@ oh.Events.UpdateUpvalues = RunService.Heartbeat:Connect(function()
 end)
 
 return UpvalueScanner 
+

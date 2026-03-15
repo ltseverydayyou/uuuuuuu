@@ -1,4 +1,4 @@
-local Prompts = import("rbxassetid://11389137937").Base.Prompts
+local Prompts = import("ui/MainUI").Base.Prompts
 
 local Prompt = {}
 local currentPrompt
@@ -28,3 +28,4 @@ function Prompt.hide(prompt)
 end
 
 return Prompt
+

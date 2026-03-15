@@ -159,8 +159,8 @@ environment.oh = {
             end
         end
 
-        local ui = importCache["rbxassetid://11389137937"]
-        local assets = importCache["rbxassetid://5042114982"]
+        local ui = importCache["ui/MainUI"]
+        local assets = importCache["ui/MainAssets"]
 
         if ui then
             unpack(ui):Destroy()
@@ -317,3 +317,4 @@ useMethods(import("methods/userdata"))
 useMethods(import("methods/environment"))
 
 --import("ui/main")
+

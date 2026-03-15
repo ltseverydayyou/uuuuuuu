@@ -11,7 +11,7 @@ local function __betterGetService(name)
 end
 local TextService = __betterGetService("TextService")
 
-local Interface = import("rbxassetid://11389137937")
+local Interface = import("ui/MainUI")
 local Base = Interface.Base
 local Object = Base.MessageBox
 local Shadow = Base.MessageBoxShadow
@@ -115,3 +115,4 @@ function MessageBox.Hide()
 end
 
 return MessageBox, MessageType
+

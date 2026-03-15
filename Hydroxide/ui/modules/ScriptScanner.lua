@@ -23,8 +23,8 @@ local List, ListButton = import("ui/controls/List")
 local MessageBox, MessageType = import("ui/controls/MessageBox")
 local ContextMenu, ContextMenuButton = import("ui/controls/ContextMenu")
 
-local Page = import("rbxassetid://11389137937").Base.Body.Pages.ScriptScanner
-local Assets = import("rbxassetid://5042114982").ScriptScanner
+local Page = import("ui/MainUI").Base.Body.Pages.ScriptScanner
+local Assets = import("ui/MainAssets").ScriptScanner
 
 local ScriptList = Page.List
 local ScriptInfo = Page.Info
@@ -267,3 +267,4 @@ for _i, sectionButton in pairs(InfoOptions:GetChildren()) do
 end
 
 return ScriptScanner
+

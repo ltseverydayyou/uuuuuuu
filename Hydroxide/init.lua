@@ -26,6 +26,15 @@ local function getAssetUrl(asset)
     return ("https://raw.githubusercontent.com/%s/%s/%s/%s/%s.lua"):format(user, repo, branch, repoPath, asset)
 end
 
+local function fetchAsset(asset)
+    local url = getAssetUrl(asset)
+    local ok, response = pcall(game.HttpGetAsync, game, url)
+    if not ok or type(response) ~= "string" or response == "" then
+        error("<OH> ~ Failed to fetch asset: " .. tostring(asset) .. " from " .. tostring(url))
+    end
+    return response
+end
+
 local function hasMethods(methods)
     for name in pairs(methods) do
         if not environment[name] then
@@ -251,13 +260,13 @@ if readFile and writeFile then
                     local content
 
                     if (isFile and not isFile(file)) or not importCache[asset] then
-                        content = game:HttpGetAsync(getAssetUrl(asset))
+                        content = fetchAsset(asset)
                         writeFile(file, content)
                     else
                         local ran, result = pcall(readFile, file)
 
                         if (not ran) or not importCache[asset] or type(result) ~= "string" or result == "" then
-                            content = game:HttpGetAsync(getAssetUrl(asset))
+                            content = fetchAsset(asset)
                             writeFile(file, content)
                         else
                             content = result
@@ -266,7 +275,7 @@ if readFile and writeFile then
 
                     assets = { loadstring(content, asset .. '.lua')() }
                 else
-                    assets = { loadstring(game:HttpGetAsync(getAssetUrl(asset)), asset .. '.lua')() }
+                    assets = { loadstring(fetchAsset(asset), asset .. '.lua')() }
                 end
             else
                 assets = { loadstring(readFile("hydroxide/" .. asset .. ".lua"), asset .. '.lua')() }
@@ -291,7 +300,7 @@ if readFile and writeFile then
                 local content
 
                 if (not ran) or type(result) ~= "string" or result == "" then
-                    content = game:HttpGetAsync(getAssetUrl(asset))
+                    content = fetchAsset(asset)
                     writeFile(file, content)
                 else
                     content = result

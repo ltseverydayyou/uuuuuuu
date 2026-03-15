@@ -256,7 +256,7 @@ if readFile and writeFile then
                     else
                         local ran, result = pcall(readFile, file)
 
-                        if (not ran) or not importCache[asset] then
+                        if (not ran) or not importCache[asset] or type(result) ~= "string" or result == "" then
                             content = game:HttpGetAsync(getAssetUrl(asset))
                             writeFile(file, content)
                         else
@@ -290,7 +290,7 @@ if readFile and writeFile then
                 local ran, result = pcall(readFile, file)
                 local content
 
-                if not ran then
+                if (not ran) or type(result) ~= "string" or result == "" then
                     content = game:HttpGetAsync(getAssetUrl(asset))
                     writeFile(file, content)
                 else

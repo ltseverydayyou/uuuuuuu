@@ -26,9 +26,27 @@ local function getAssetUrl(asset)
     return ("https://raw.githubusercontent.com/%s/%s/%s/%s/%s.lua"):format(user, repo, branch, repoPath, asset)
 end
 
+local function httpGet(url)
+    local ok, response
+
+    if game.HttpGet then
+        ok, response = pcall(game.HttpGet, game, url)
+        if ok and type(response) == "string" and response ~= "" then
+            return response
+        end
+    end
+
+    ok, response = pcall(game.HttpGetAsync, game, url)
+    if ok and type(response) == "string" and response ~= "" then
+        return response
+    end
+
+    error("<OH> ~ Failed to fetch url: " .. tostring(url))
+end
+
 local function fetchAsset(asset)
     local url = getAssetUrl(asset)
-    local ok, response = pcall(game.HttpGetAsync, game, url)
+    local ok, response = pcall(httpGet, url)
     if not ok or type(response) ~= "string" or response == "" then
         error("<OH> ~ Failed to fetch asset: " .. tostring(asset) .. " from " .. tostring(url))
     end
@@ -213,10 +231,10 @@ useMethods(globalMethods)
 local HttpService = __betterGetService("HttpService")
 local releaseInfo = { tag_name = branch }
 do
-    local ran, response = pcall(game.HttpGetAsync, game, ("https://api.github.com/repos/%s/%s/releases"):format(user, repo))
+    local ran, response = pcall(httpGet, ("https://api.github.com/repos/%s/%s/releases"):format(user, repo))
     if ran then
-        local decoded = HttpService:JSONDecode(response)
-        if type(decoded) == "table" and decoded[1] and decoded[1].tag_name then
+        local decodedRan, decoded = pcall(HttpService.JSONDecode, HttpService, response)
+        if decodedRan and type(decoded) == "table" and decoded[1] and decoded[1].tag_name then
             releaseInfo = decoded[1]
         end
     end

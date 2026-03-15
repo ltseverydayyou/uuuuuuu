@@ -16,6 +16,7 @@ local HttpService = __betterGetService("HttpService")
 local Interface = import("ui/MainUI")
 if Interface and Interface.IsA and Interface:IsA("ScreenGui") then
 	Interface.IgnoreGuiInset = true
+	Interface.ZIndexBehavior = Enum.ZIndexBehavior.Global
 end
 
 if oh.Cache["ui/main"] then

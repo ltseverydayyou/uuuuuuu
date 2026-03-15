@@ -133,10 +133,16 @@ Open.Activated:Connect(function()
 	Base.Visible = true
 	Open:TweenPosition(constants.conceal, "Out", "Quad", 0.15)
 	Base:TweenPosition(getOpenedPos(), "Out", "Quad", 0.15)
+	Delay(0.18, function()
+		if not collapsed then
+			Open.Visible = false
+		end
+	end)
 end)
 
 Collapse.Activated:Connect(function()
 	collapsed = true
+	Open.Visible = true
 	Base:TweenPosition(getClosedPos(), "Out", "Quad", 0.15)
 	Open:TweenPosition(constants.reveal, "Out", "Quad", 0.15)
 	Delay(0.18, function()

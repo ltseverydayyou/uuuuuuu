@@ -10,6 +10,7 @@ local function __betterGetService(name)
 	return nil
 end
 local TweenService = __betterGetService("TweenService")
+local UserInput = __betterGetService("UserInputService")
 
 local TabSelector = {}
 
@@ -38,6 +39,13 @@ local constants = {
 
 local selectedTab 
 local selectedPage = Pages.Home
+
+local function isPointInGui(gui, pos)
+    local absPos = gui.AbsolutePosition
+    local absSize = gui.AbsoluteSize
+    return pos.X >= absPos.X and pos.X <= (absPos.X + absSize.X)
+        and pos.Y >= absPos.Y and pos.Y <= (absPos.Y + absSize.Y)
+end
 
 local function methodsCheck(methods)
     local globalMethods = oh.Methods
@@ -88,6 +96,7 @@ end
 
 for _i, tab in pairs(Tabs:GetChildren()) do
     if tab:IsA("ImageButton") then
+        tab.Active = true
         local selected = TweenService:Create(tab, constants.fadeLength, { ImageColor3 = constants.tabSelected })
         local unselected = TweenService:Create(tab, constants.fadeLength, { ImageColor3 = constants.tabUnselected })
         local iconSelected = TweenService:Create(tab.Icon, constants.fadeLength, { ImageColor3 = constants.iconSelected })
@@ -100,11 +109,14 @@ for _i, tab in pairs(Tabs:GetChildren()) do
             iconUnselected = iconUnselected
         }
 
-        tab.Activated:Connect(function()
+        local function onTabActivated()
             if selectedTab ~= tab and Tabs:FindFirstChild(tab.Name) then
                 selectTab(tab.Name)
             end
-        end)
+        end
+
+        tab.Activated:Connect(onTabActivated)
+        tab.MouseButton1Click:Connect(onTabActivated)
 
         tab.MouseEnter:Connect(function()
             if selectedPage ~= Pages:FindFirstChild(tab.Name) then
@@ -120,6 +132,20 @@ for _i, tab in pairs(Tabs:GetChildren()) do
             end
         end)
     end
+end
+
+if UserInput then
+    UserInput.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            local pos = Vector2.new(input.Position.X, input.Position.Y)
+            for _, tab in pairs(Tabs:GetChildren()) do
+                if tab:IsA("ImageButton") and tab.Visible and selectedTab ~= tab and isPointInGui(tab, pos) then
+                    selectTab(tab.Name)
+                    break
+                end
+            end
+        end
+    end)
 end
 
 TabSelector.SelectTab = selectTab

@@ -124,6 +124,10 @@ function ContextMenu.show(contextMenu)
     if inset then
         pos = pos - inset
     end
+    local parent = instance.Parent
+    if parent and parent:IsA("GuiObject") then
+        pos = pos - parent.AbsolutePosition
+    end
     instance.Position = UDim2.new(0, pos.X, 0, pos.Y)
     
     contextMenu.Visible = true

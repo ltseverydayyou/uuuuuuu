@@ -72,6 +72,7 @@ local dragging
 local dragStart
 local startPos
 local dragInput
+local collapsed = false
 
 local function updateDrag(input)
 	local delta = input.Position - dragStart
@@ -125,13 +126,21 @@ local function getClosedPos()
 end
 
 Open.Activated:Connect(function()
+	collapsed = false
+	Base.Visible = true
 	Open:TweenPosition(constants.conceal, "Out", "Quad", 0.15)
 	Base:TweenPosition(getOpenedPos(), "Out", "Quad", 0.15)
 end)
 
 Collapse.Activated:Connect(function()
+	collapsed = true
 	Base:TweenPosition(getClosedPos(), "Out", "Quad", 0.15)
 	Open:TweenPosition(constants.reveal, "Out", "Quad", 0.15)
+	Delay(0.18, function()
+		if collapsed then
+			Base.Visible = false
+		end
+	end)
 end)
 
 Interface.Name = HttpService:GenerateGUID(false)

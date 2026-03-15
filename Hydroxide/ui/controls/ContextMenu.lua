@@ -12,6 +12,7 @@ end
 local Assets = import("rbxassetid://5042114982").Controls
 local Storage = import("rbxassetid://11389137937").ContextMenus
 
+local GuiService = __betterGetService("GuiService")
 local UserInput = __betterGetService("UserInputService")
 local TextService = __betterGetService("TextService")
 local TweenService = __betterGetService("TweenService")
@@ -119,6 +120,10 @@ function ContextMenu.show(contextMenu)
 
     instance.Visible = true
     local pos = UserInput:GetMouseLocation()
+    local inset = GuiService and GuiService.GetGuiInset and GuiService:GetGuiInset()
+    if inset then
+        pos = pos - inset
+    end
     instance.Position = UDim2.new(0, pos.X, 0, pos.Y)
     
     contextMenu.Visible = true

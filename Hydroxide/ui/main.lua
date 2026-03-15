@@ -50,8 +50,6 @@ end, function(err)
 end)
 
 local constants = {
-	opened = UDim2.new(0.5, -325, 0.5, -175),
-	closed = UDim2.new(0.5, -325, 0, -400),
 	reveal = UDim2.new(0.5, -15, 0, 20),
 	conceal = UDim2.new(0.5, -15, 0, -75)
 }
@@ -110,13 +108,29 @@ oh.Events.Drag = UserInput.InputChanged:Connect(function(input)
 	end
 end)
 
+local function getOpenedPos()
+	local height = Base.AbsoluteSize.Y
+	if not height or height <= 0 then
+		height = 350
+	end
+	return UDim2.new(0.5, -325, 0.5, -math.floor(height / 2))
+end
+
+local function getClosedPos()
+	local height = Base.AbsoluteSize.Y
+	if not height or height <= 0 then
+		height = 350
+	end
+	return UDim2.new(0.5, -325, 0, -height - 20)
+end
+
 Open.Activated:Connect(function()
 	Open:TweenPosition(constants.conceal, "Out", "Quad", 0.15)
-	Base:TweenPosition(constants.opened, "Out", "Quad", 0.15)
+	Base:TweenPosition(getOpenedPos(), "Out", "Quad", 0.15)
 end)
 
 Collapse.Activated:Connect(function()
-	Base:TweenPosition(constants.closed, "Out", "Quad", 0.15)
+	Base:TweenPosition(getClosedPos(), "Out", "Quad", 0.15)
 	Open:TweenPosition(constants.reveal, "Out", "Quad", 0.15)
 end)
 

@@ -21,36 +21,14 @@ local repo = "uuuuuuu"
 local repoPath = "Hydroxide"
 local branch = "main"
 local importCache = {}
-local assetAliases = {
-    ["ui/MainUI"] = "rbxassetid://11389137937",
-    ["ui/MainAssets"] = "rbxassetid://5042114982"
-}
 
 local function getAssetUrl(asset)
     return ("https://raw.githubusercontent.com/%s/%s/%s/%s/%s.lua"):format(user, repo, branch, repoPath, asset)
 end
 
-local function httpGet(url)
-    local ok, response
-
-    if game.HttpGet then
-        ok, response = pcall(game.HttpGet, game, url)
-        if ok and type(response) == "string" and response ~= "" then
-            return response
-        end
-    end
-
-    ok, response = pcall(game.HttpGetAsync, game, url)
-    if ok and type(response) == "string" and response ~= "" then
-        return response
-    end
-
-    error("<OH> ~ Failed to fetch url: " .. tostring(url))
-end
-
 local function fetchAsset(asset)
     local url = getAssetUrl(asset)
-    local ok, response = pcall(httpGet, url)
+    local ok, response = pcall(game.HttpGetAsync, game, url)
     if not ok or type(response) ~= "string" or response == "" then
         error("<OH> ~ Failed to fetch asset: " .. tostring(asset) .. " from " .. tostring(url))
     end
@@ -190,8 +168,8 @@ environment.oh = {
             end
         end
 
-        local ui = importCache["ui/MainUI"]
-        local assets = importCache["ui/MainAssets"]
+        local ui = importCache["rbxassetid://11389137937"]
+        local assets = importCache["rbxassetid://5042114982"]
 
         if ui then
             unpack(ui):Destroy()
@@ -235,10 +213,10 @@ useMethods(globalMethods)
 local HttpService = __betterGetService("HttpService")
 local releaseInfo = { tag_name = branch }
 do
-    local ran, response = pcall(httpGet, ("https://api.github.com/repos/%s/%s/releases"):format(user, repo))
+    local ran, response = pcall(game.HttpGetAsync, game, ("https://api.github.com/repos/%s/%s/releases"):format(user, repo))
     if ran then
-        local decodedRan, decoded = pcall(HttpService.JSONDecode, HttpService, response)
-        if decodedRan and type(decoded) == "table" and decoded[1] and decoded[1].tag_name then
+        local decoded = HttpService:JSONDecode(response)
+        if type(decoded) == "table" and decoded[1] and decoded[1].tag_name then
             releaseInfo = decoded[1]
         end
     end
@@ -273,10 +251,9 @@ if readFile and writeFile then
             end
 
             local assets
-            local resolvedAsset = assetAliases[asset] or asset
 
-            if resolvedAsset:find("rbxassetid://") then
-                assets = { game:GetObjects(resolvedAsset)[1] }
+            if asset:find("rbxassetid://") then
+                assets = { game:GetObjects(asset)[1] }
             elseif web then
                 if readFile and writeFile then
                     local file = (hasFolderFunctions and "hydroxide/user/" .. user .. '/' .. asset .. ".lua") or ("hydroxide-" .. user .. '-' .. asset:gsub('/', '-') .. ".lua")
@@ -316,10 +293,9 @@ if readFile and writeFile then
             end
 
             local assets
-            local resolvedAsset = assetAliases[asset] or asset
 
-            if resolvedAsset:find("rbxassetid://") then
-                assets = { game:GetObjects(resolvedAsset)[1] }
+            if asset:find("rbxassetid://") then
+                assets = { game:GetObjects(asset)[1] }
             elseif web then
                 local file = (hasFolderFunctions and "hydroxide/user/" .. user .. '/' .. asset .. ".lua") or ("hydroxide-" .. user .. '-' .. asset:gsub('/', '-') .. ".lua")
                 local ran, result = pcall(readFile, file)

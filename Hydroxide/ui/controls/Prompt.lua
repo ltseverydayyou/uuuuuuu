@@ -1,4 +1,4 @@
-local Prompts = import("ui/MainUI").Base.Prompts
+local Prompts = import("rbxassetid://11389137937").Base.Prompts
 
 local Prompt = {}
 local currentPrompt
@@ -16,7 +16,6 @@ end
 function Prompt.show(prompt)
     currentPrompt = prompt
 
-    Prompts.Visible = true
     Prompts.PromptShadow.Visible = true
     prompt.Instance.Visible = true
 end
@@ -24,7 +23,6 @@ end
 function Prompt.hide(prompt)
     Prompts.PromptShadow.Visible = false
     prompt.Instance.Visible = false
-    Prompts.Visible = false
 
     currentPrompt = nil
 end

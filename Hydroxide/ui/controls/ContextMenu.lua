@@ -9,8 +9,8 @@ local function __betterGetService(name)
 	end
 	return nil
 end
-local Assets = import("ui/MainAssets").Controls
-local Storage = import("ui/MainUI").ContextMenus
+local Assets = import("rbxassetid://5042114982").Controls
+local Storage = import("rbxassetid://11389137937").ContextMenus
 
 local GuiService = __betterGetService("GuiService")
 local UserInput = __betterGetService("UserInputService")
@@ -39,7 +39,7 @@ function ContextMenuButton.new(icon, text)
     label.Text = text
     instance.Icon.Image = icon
 
-    instance.MouseButton1Click:Connect(function()
+    instance.Activated:Connect(function()
         if contextMenuButton.Callback then
             contextMenuButton.Callback()
         end
@@ -137,7 +137,6 @@ function ContextMenu.show(contextMenu)
 
     local instance = contextMenu.Instance
 
-    Storage.Visible = true
     instance.Visible = true
     local lastType = UserInput and UserInput.GetLastInputType and UserInput:GetLastInputType()
     local pos = UserInput:GetMouseLocation()
@@ -165,7 +164,6 @@ end
 function ContextMenu.hide(contextMenu)
     contextMenu.Visible = false
     contextMenu.Instance.Visible = false
-    Storage.Visible = false
 end
 
 UserInput.InputEnded:Connect(function(input)
@@ -181,4 +179,5 @@ UserInput.InputEnded:Connect(function(input)
 end)
 
 return ContextMenu, ContextMenuButton
+
 

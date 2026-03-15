@@ -90,7 +90,7 @@ function ListButton.new(instance, list)
     end
 
     instance.Parent = listInstance
-    instance.MouseButton1Click:Connect(function()
+    instance.Activated:Connect(function()
         if suppressActivate then
             suppressActivate = false
             return
@@ -258,3 +258,4 @@ oh.Events.ListInputEnded = UserInput.InputEnded:Connect(function(input)
 end)
 
 return List, ListButton
+

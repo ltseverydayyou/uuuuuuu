@@ -26,8 +26,8 @@ local MessageBox, MessageType = import("ui/controls/MessageBox")
 local ContextMenu, ContextMenuButton = import("ui/controls/ContextMenu")
 local TabSelector = import("ui/controls/TabSelector")
 
-local Page = import("ui/MainUI").Base.Body.Pages.ConstantScanner
-local Assets = import("ui/MainAssets").ConstantScanner
+local Page = import("rbxassetid://11389137937").Base.Body.Pages.ConstantScanner
+local Assets = import("rbxassetid://5042114982").ConstantScanner
 
 local Query = Page.Query
 local Search = Query.Search
@@ -72,7 +72,7 @@ local function addConstant(constant, temporary)
     constantLog.Value.TextColor3 = oh.Constants.Syntax[valueType]
     constantLog.Icon.Image = oh.Constants.Types[valueType]
 
-    -- constantLog.MouseButton1Click:Connect(function()
+    -- constantLog.Activated:Connect(function()
     --     selectedConstant = constant
     --     selectedConstantLog = constantLog
     -- end)
@@ -209,7 +209,7 @@ getScriptContext:SetCallback(function()
     end
 end)
 
-Search.MouseButton1Click:Connect(addConstants)
+Search.Activated:Connect(addConstants)
 SearchBox.FocusLost:Connect(function(returned)
     if returned then
         addConstants()
@@ -217,4 +217,5 @@ SearchBox.FocusLost:Connect(function(returned)
 end)
 
 return ConstantScanner
+
 

@@ -10,12 +10,10 @@ local function __betterGetService(name)
 	return nil
 end
 local TweenService = __betterGetService("TweenService")
-local UserInput = __betterGetService("UserInputService")
-local GuiService = __betterGetService("GuiService")
 
 local TabSelector = {}
 
-local Base = import("ui/MainUI").Base
+local Base = import("rbxassetid://11389137937").Base
 local Tabs = Base.Tabs.Container
 local Pages = Base.Body.Pages
 
@@ -48,31 +46,6 @@ local constants = {
 
 local selectedTab 
 local selectedPage = Pages.Home
-
-local function isPointInGui(gui, pos)
-    local absPos = gui.AbsolutePosition
-    local absSize = gui.AbsoluteSize
-    return pos.X >= absPos.X and pos.X <= (absPos.X + absSize.X)
-        and pos.Y >= absPos.Y and pos.Y <= (absPos.Y + absSize.Y)
-end
-
-local function findTabFromGuiObjects(pos)
-    if not (GuiService and GuiService.GetGuiObjectsAtPosition) then
-        return nil
-    end
-
-    local objects = GuiService:GetGuiObjectsAtPosition(pos.X, pos.Y)
-    for _, obj in ipairs(objects) do
-        local cur = obj
-        while cur and cur ~= Tabs do
-            if cur:IsA("ImageButton") and cur.Parent == Tabs and Tabs:FindFirstChild(cur.Name) then
-                return cur
-            end
-            cur = cur.Parent
-        end
-    end
-    return nil
-end
 
 local function methodsCheck(methods)
     local globalMethods = oh.Methods
@@ -142,7 +115,7 @@ for _i, tab in pairs(Tabs:GetChildren()) do
             end
         end
 
-        tab.MouseButton1Click:Connect(onTabActivated)
+        tab.Activated:Connect(onTabActivated)
 
         tab.MouseEnter:Connect(function()
             if selectedPage ~= Pages:FindFirstChild(tab.Name) then
@@ -160,34 +133,7 @@ for _i, tab in pairs(Tabs:GetChildren()) do
     end
 end
 
-if UserInput then
-    UserInput.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            local pos = UserInput:GetMouseLocation()
-            local root = Base:FindFirstAncestorOfClass("ScreenGui")
-            if root and not root.IgnoreGuiInset then
-                local inset = GuiService and GuiService.GetGuiInset and GuiService:GetGuiInset()
-                if inset then
-                    pos = pos - inset
-                end
-            end
-
-            local hitTab = findTabFromGuiObjects(pos)
-            if hitTab and hitTab ~= selectedTab then
-                selectTab(hitTab.Name)
-                return
-            end
-
-            for _, tab in pairs(Tabs:GetChildren()) do
-                if tab:IsA("ImageButton") and tab.Visible and selectedTab ~= tab and isPointInGui(tab, pos) then
-                    selectTab(tab.Name)
-                    break
-                end
-            end
-        end
-    end)
-end
-
 TabSelector.SelectTab = selectTab
 return TabSelector
+
 

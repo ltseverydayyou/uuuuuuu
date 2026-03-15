@@ -18,7 +18,7 @@ function Dropdown.new(instance)
     local dropdown = {}
     local selection = instance.Selection
 
-    instance.Collapse.MouseButton1Click:Connect(function()
+    instance.Collapse.Activated:Connect(function()
         local collapsed = not dropdown.Collapsed
 
         selection.Visible = not collapsed
@@ -27,7 +27,7 @@ function Dropdown.new(instance)
 
     for _i, v in pairs(instance.Selection.Clip.List:GetChildren()) do
         if v:IsA("TextButton") then
-            v.MouseButton1Click:Connect(function()
+            v.Activated:Connect(function()
 
                 dropdown:Collapse(v.Name)
             end)
@@ -93,3 +93,4 @@ end
 -- end)
 
 return Dropdown
+

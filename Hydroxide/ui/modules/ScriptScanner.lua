@@ -23,8 +23,8 @@ local List, ListButton = import("ui/controls/List")
 local MessageBox, MessageType = import("ui/controls/MessageBox")
 local ContextMenu, ContextMenuButton = import("ui/controls/ContextMenu")
 
-local Page = import("ui/MainUI").Base.Body.Pages.ScriptScanner
-local Assets = import("ui/MainAssets").ScriptScanner
+local Page = import("rbxassetid://11389137937").Base.Body.Pages.ScriptScanner
+local Assets = import("rbxassetid://5042114982").ScriptScanner
 
 local ScriptList = Page.List
 local ScriptInfo = Page.Info
@@ -214,13 +214,13 @@ ListSearch.FocusLost:Connect(function(returned)
     end
 end)
 
-ListRefresh.MouseButton1Click:Connect(function()
+ListRefresh.Activated:Connect(function()
     addScripts()
 end)
 
 addScripts()
 
-InfoBack.MouseButton1Click:Connect(function()
+InfoBack.Activated:Connect(function()
     ScriptInfo.Visible = false
     ScriptList.Visible = true
 end)
@@ -235,7 +235,7 @@ for _i, sectionButton in pairs(InfoOptions:GetChildren()) do
         local enterAnimation = TweenService:Create(label, constants.fadeLength, { TextTransparency = 0 })
         local leaveAnimation = TweenService:Create(label, constants.fadeLength, { TextTransparency = 0.2 })
 
-        sectionButton.MouseButton1Click:Connect(function()
+        sectionButton.Activated:Connect(function()
             local section = InfoSections:FindFirstChild(sectionButton.Name)
             animationCache[selectedSectionButton].leave:Play()
             
@@ -267,4 +267,5 @@ for _i, sectionButton in pairs(InfoOptions:GetChildren()) do
 end
 
 return ScriptScanner
+
 

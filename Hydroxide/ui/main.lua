@@ -13,7 +13,7 @@ local CoreGui = __betterGetService("CoreGui")
 local UserInput = __betterGetService("UserInputService")
 local HttpService = __betterGetService("HttpService")
 
-local Interface = import("ui/MainUI")
+local Interface = import("rbxassetid://11389137937")
 if Interface and Interface.IsA and Interface:IsA("ScreenGui") then
 	Interface.IgnoreGuiInset = true
 	Interface.ZIndexBehavior = Enum.ZIndexBehavior.Global
@@ -63,14 +63,10 @@ local Base = Interface.Base
 local Drag = Base.Drag
 local Status = Base.Status
 local Collapse = Drag.Collapse
-local Prompts = Base.Prompts
-local ContextMenus = Interface.ContextMenus
 
 Base.Active = true
 Drag.Active = true
 Open.Visible = false
-Prompts.Visible = false
-ContextMenus.Visible = false
 
 function oh.setStatus(text)
 	Status.Text = '• Status: ' .. text
@@ -137,7 +133,7 @@ local function getClosedPos()
 	return UDim2.new(0.5, -325, 0, -height - 20)
 end
 
-Open.MouseButton1Click:Connect(function()
+Open.Activated:Connect(function()
 	collapsed = false
 	Base.Visible = true
 	Open:TweenPosition(constants.conceal, "Out", "Quad", 0.15)
@@ -149,7 +145,7 @@ Open.MouseButton1Click:Connect(function()
 	end)
 end)
 
-Collapse.MouseButton1Click:Connect(function()
+Collapse.Activated:Connect(function()
 	collapsed = true
 	Open.Visible = true
 	Base:TweenPosition(getClosedPos(), "Out", "Quad", 0.15)
@@ -173,4 +169,5 @@ else
 end
 
 return Interface
+
 

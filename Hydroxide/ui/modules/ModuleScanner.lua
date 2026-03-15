@@ -9,8 +9,8 @@ local List, ListButton = import("ui/controls/List")
 local MessageBox, MessageType = import("ui/controls/MessageBox")
 local ContextMenu, ContextMenuButton = import("ui/controls/ContextMenu")
 
-local Page = import("ui/MainUI").Base.Body.Pages.ModuleScanner
-local Assets = import("ui/MainAssets").ModuleScanner
+local Page = import("rbxassetid://11389137937").Base.Body.Pages.ModuleScanner
+local Assets = import("rbxassetid://5042114982").ModuleScanner
 
 local Query = Page.Query
 local Search = Query.Search
@@ -77,11 +77,12 @@ Search.FocusLost:Connect(function(returned)
     end
 end)
 
-Refresh.MouseButton1Click:Connect(function()
+Refresh.Activated:Connect(function()
     addModules()
 end)
 
 addModules()
 
 return ModuleScanner
+
 

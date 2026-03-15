@@ -29,8 +29,8 @@ local MessageBox, MessageType = import("ui/controls/MessageBox")
 local ContextMenu, ContextMenuButton = import("ui/controls/ContextMenu")
 local TabSelector = import("ui/controls/TabSelector")
 
-local Base = import("ui/MainUI").Base
-local Assets = import("ui/MainAssets").RemoteSpy
+local Base = import("rbxassetid://11389137937").Base
+local Assets = import("rbxassetid://5042114982").RemoteSpy
 
 local Prompts = Base.Prompts
 local Page = Base.Body.Pages.RemoteSpy
@@ -533,16 +533,16 @@ ListSearch.FocusLost:Connect(function(returned)
     end
 end)
 
-ListRefresh.MouseButton1Click:Connect(function()
+ListRefresh.Activated:Connect(function()
     refreshLogs()
 end)
 
-LogsBack.MouseButton1Click:Connect(function()
+LogsBack.Activated:Connect(function()
     RemoteLogs.Visible = false
     RemoteList.Visible = true
 end)
 
-LogsButtons.Ignore.MouseButton1Click:Connect(function()
+LogsButtons.Ignore.Activated:Connect(function()
     local selectedRemote = selected.remoteLog.Remote
 
     selectedRemote:Ignore()
@@ -558,7 +558,7 @@ LogsButtons.Ignore.MouseButton1Click:Connect(function()
     end
 end)
 
-LogsButtons.Block.MouseButton1Click:Connect(function()
+LogsButtons.Block.Activated:Connect(function()
     local selectedRemote = selected.remoteLog.Remote
 
     selectedRemote:Block()
@@ -574,17 +574,17 @@ LogsButtons.Block.MouseButton1Click:Connect(function()
     end
 end)
 
-LogsButtons.Clear.MouseButton1Click:Connect(function()
+LogsButtons.Clear.Activated:Connect(function()
     selected.remoteLog:Clear()
 end)
 
-LogsButtons.Conditions.MouseButton1Click:Connect(function()
+LogsButtons.Conditions.Activated:Connect(function()
     selected.conditionLog = selected.logContext or selected.remoteLog
 
     createConditions(selected.conditionLog.Remote)
 end)
 
-ConditionsBack.MouseButton1Click:Connect(function()
+ConditionsBack.Activated:Connect(function()
     RemoteConditions.Visible = false
 
     if selected.remoteLog then
@@ -594,11 +594,11 @@ ConditionsBack.MouseButton1Click:Connect(function()
     end
 end)
 
-ConditionsButtons.New.MouseButton1Click:Connect(function()
+ConditionsButtons.New.Activated:Connect(function()
     newRemoteCondition:Show()
 end)
 
-NewConditionButtons.Add.MouseButton1Click:Connect(function()
+NewConditionButtons.Add.Activated:Connect(function()
     if not conditionStatus.Selected then
         return MessageBox.Show("Error", "Invalid condition status", MessageType.OK)
     end
@@ -667,16 +667,16 @@ NewConditionButtons.Add.MouseButton1Click:Connect(function()
     newRemoteCondition:Hide()
 end)
 
-NewConditionButtons.Cancel.MouseButton1Click:Connect(function()
+NewConditionButtons.Cancel.Activated:Connect(function()
     newRemoteCondition:Hide()
 end)
 
-NewConditionIndex.Add.MouseButton1Click:Connect(function()
+NewConditionIndex.Add.Activated:Connect(function()
     local newIndex = tonumber(NewConditionIndex.Value.Input.Text) + 1
     NewConditionIndex.Value.Input.Text = newIndex
 end)
 
-NewConditionIndex.Sub.MouseButton1Click:Connect(function()
+NewConditionIndex.Sub.Activated:Connect(function()
     local newIndex = tonumber(NewConditionIndex.Value.Input.Text) - 1
     NewConditionIndex.Value.Input.Text = (newIndex <= 0 and 1) or newIndex
 end)
@@ -1013,4 +1013,5 @@ Methods.ConnectEvent(function(remoteInstance, callInfo)
 end)
 
 return RemoteSpy
+
 

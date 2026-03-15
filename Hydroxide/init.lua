@@ -21,6 +21,10 @@ local repo = "uuuuuuu"
 local repoPath = "Hydroxide"
 local branch = "main"
 local importCache = {}
+local assetAliases = {
+    ["ui/MainUI"] = "rbxassetid://11389137937",
+    ["ui/MainAssets"] = "rbxassetid://5042114982"
+}
 
 local function getAssetUrl(asset)
     return ("https://raw.githubusercontent.com/%s/%s/%s/%s/%s.lua"):format(user, repo, branch, repoPath, asset)
@@ -269,9 +273,10 @@ if readFile and writeFile then
             end
 
             local assets
+            local resolvedAsset = assetAliases[asset] or asset
 
-            if asset:find("rbxassetid://") then
-                assets = { game:GetObjects(asset)[1] }
+            if resolvedAsset:find("rbxassetid://") then
+                assets = { game:GetObjects(resolvedAsset)[1] }
             elseif web then
                 if readFile and writeFile then
                     local file = (hasFolderFunctions and "hydroxide/user/" .. user .. '/' .. asset .. ".lua") or ("hydroxide-" .. user .. '-' .. asset:gsub('/', '-') .. ".lua")
@@ -310,8 +315,11 @@ if readFile and writeFile then
                 return unpack(importCache[asset])
             end
 
-            if asset:find("rbxassetid://") then
-                assets = { game:GetObjects(asset)[1] }
+            local assets
+            local resolvedAsset = assetAliases[asset] or asset
+
+            if resolvedAsset:find("rbxassetid://") then
+                assets = { game:GetObjects(resolvedAsset)[1] }
             elseif web then
                 local file = (hasFolderFunctions and "hydroxide/user/" .. user .. '/' .. asset .. ".lua") or ("hydroxide-" .. user .. '-' .. asset:gsub('/', '-') .. ".lua")
                 local ran, result = pcall(readFile, file)

@@ -39,7 +39,7 @@ function ContextMenuButton.new(icon, text)
     label.Text = text
     instance.Icon.Image = icon
 
-    instance.Activated:Connect(function()
+    instance.MouseButton1Click:Connect(function()
         if contextMenuButton.Callback then
             contextMenuButton.Callback()
         end

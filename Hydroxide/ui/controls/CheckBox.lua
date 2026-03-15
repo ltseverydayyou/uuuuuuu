@@ -5,7 +5,7 @@ function CheckBox.new(instance)
     local toggle = instance:FindFirstChild("Toggle") or instance
     local label = toggle.Label
 
-    toggle.Activated:Connect(function()
+    toggle.MouseButton1Click:Connect(function()
         checkBox.Enabled = not checkBox.Enabled
 
         if checkBox.Callback then

@@ -73,7 +73,7 @@ function MessageBox.Show(title, message, messageType, firstCallback, secondCallb
     Object.Size = UDim2.new(0, messageWidth, 0, messageHeight)
     Object.Position = UDim2.new(0.5, -(messageWidth / 2), 0.5, -(messageHeight / 2))
 
-    firstClickEvent = first.Activated:Connect(function()
+    firstClickEvent = first.MouseButton1Click:Connect(function()
         if firstCallback then
             firstCallback()
         end
@@ -82,7 +82,7 @@ function MessageBox.Show(title, message, messageType, firstCallback, secondCallb
     end)
 
     if second then
-        secondClickEvent = second.Activated:Connect(function()
+        secondClickEvent = second.MouseButton1Click:Connect(function()
             if secondCallback then
                 secondCallback()
             end

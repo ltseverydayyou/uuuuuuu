@@ -209,7 +209,7 @@ getScriptContext:SetCallback(function()
     end
 end)
 
-Search.Activated:Connect(addConstants)
+Search.MouseButton1Click:Connect(addConstants)
 SearchBox.FocusLost:Connect(function(returned)
     if returned then
         addConstants()

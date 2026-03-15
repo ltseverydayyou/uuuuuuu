@@ -214,13 +214,13 @@ ListSearch.FocusLost:Connect(function(returned)
     end
 end)
 
-ListRefresh.Activated:Connect(function()
+ListRefresh.MouseButton1Click:Connect(function()
     addScripts()
 end)
 
 addScripts()
 
-InfoBack.Activated:Connect(function()
+InfoBack.MouseButton1Click:Connect(function()
     ScriptInfo.Visible = false
     ScriptList.Visible = true
 end)
@@ -235,7 +235,7 @@ for _i, sectionButton in pairs(InfoOptions:GetChildren()) do
         local enterAnimation = TweenService:Create(label, constants.fadeLength, { TextTransparency = 0 })
         local leaveAnimation = TweenService:Create(label, constants.fadeLength, { TextTransparency = 0.2 })
 
-        sectionButton.Activated:Connect(function()
+        sectionButton.MouseButton1Click:Connect(function()
             local section = InfoSections:FindFirstChild(sectionButton.Name)
             animationCache[selectedSectionButton].leave:Play()
             

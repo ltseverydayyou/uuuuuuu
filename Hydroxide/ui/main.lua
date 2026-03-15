@@ -133,7 +133,7 @@ local function getClosedPos()
 	return UDim2.new(0.5, -325, 0, -height - 20)
 end
 
-Open.Activated:Connect(function()
+Open.MouseButton1Click:Connect(function()
 	collapsed = false
 	Base.Visible = true
 	Open:TweenPosition(constants.conceal, "Out", "Quad", 0.15)
@@ -145,7 +145,7 @@ Open.Activated:Connect(function()
 	end)
 end)
 
-Collapse.Activated:Connect(function()
+Collapse.MouseButton1Click:Connect(function()
 	collapsed = true
 	Open.Visible = true
 	Base:TweenPosition(getClosedPos(), "Out", "Quad", 0.15)

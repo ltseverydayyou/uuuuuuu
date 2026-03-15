@@ -373,7 +373,7 @@ deepSearch:SetCallback(function(enabled)
     end
 end)
 
-Search.Activated:Connect(addUpvalues)
+Search.MouseButton1Click:Connect(addUpvalues)
 SearchBox.FocusLost:Connect(function(returned)
     if returned then
         addUpvalues()
@@ -429,7 +429,7 @@ local function typeDropdownAdjust(dropdown, button)
     instance.Icon.Image = icon
 end
 
-modifyUpvalueButtons.Set.Activated:Connect(function()
+modifyUpvalueButtons.Set.MouseButton1Click:Connect(function()
     local newValue = setValue(
         modifyUpvalueValue.Text, 
         selectedUpvalue.Value, 
@@ -443,12 +443,12 @@ modifyUpvalueButtons.Set.Activated:Connect(function()
     end
 end)
 
-modifyUpvalueButtons.Cancel.Activated:Connect(function()
+modifyUpvalueButtons.Cancel.MouseButton1Click:Connect(function()
     modifyUpvalueValue.Text = ""
     modifyUpvalue:Hide()
 end)
 
-modifyElementButtons.Set.Activated:Connect(function()
+modifyElementButtons.Set.MouseButton1Click:Connect(function()
     local upvalueValue = selectedUpvalue.Value
     
     local newValue = setValue(
@@ -464,7 +464,7 @@ modifyElementButtons.Set.Activated:Connect(function()
     end
 end)
 
-modifyElementButtons.Cancel.Activated:Connect(function()
+modifyElementButtons.Cancel.MouseButton1Click:Connect(function()
     modifyElementValue.Text = ""
     modifyElement:Hide()
 end)

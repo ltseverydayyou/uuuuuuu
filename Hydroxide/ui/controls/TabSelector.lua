@@ -142,7 +142,7 @@ for _i, tab in pairs(Tabs:GetChildren()) do
             end
         end
 
-        tab.Activated:Connect(onTabActivated)
+        tab.MouseButton1Click:Connect(onTabActivated)
         tab.MouseButton1Click:Connect(onTabActivated)
 
         tab.MouseEnter:Connect(function()

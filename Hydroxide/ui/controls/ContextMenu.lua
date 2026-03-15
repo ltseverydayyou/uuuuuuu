@@ -13,6 +13,7 @@ local Assets = import("rbxassetid://5042114982").Controls
 local Storage = import("rbxassetid://11389137937").ContextMenus
 
 local GuiService = __betterGetService("GuiService")
+local Players = __betterGetService("Players")
 local UserInput = __betterGetService("UserInputService")
 local TextService = __betterGetService("TextService")
 local TweenService = __betterGetService("TweenService")
@@ -21,6 +22,7 @@ local ContextMenuButton = {}
 local ContextMenu = {}
 
 local currentContextMenu
+local mouse = Players and Players.LocalPlayer and Players.LocalPlayer:GetMouse()
 local lastShowTime = 0
 local lastShowWasTouch = false
 local constants = {
@@ -113,6 +115,17 @@ function ContextMenu.add(contextMenu, contextMenuButton)
     table.insert(contextMenu.Buttons, contextMenuButton)
 end
 
+local function getRootGui(inst)
+    local cur = inst
+    while cur do
+        if cur:IsA("ScreenGui") then
+            return cur
+        end
+        cur = cur.Parent
+    end
+    return nil
+end
+
 function ContextMenu.show(contextMenu)
     if currentContextMenu then
         currentContextMenu:Hide()
@@ -121,11 +134,22 @@ function ContextMenu.show(contextMenu)
     local instance = contextMenu.Instance
 
     instance.Visible = true
-    local pos = UserInput:GetMouseLocation()
-    local inset = GuiService and GuiService.GetGuiInset and GuiService:GetGuiInset()
-    if inset then
-        pos = pos - inset
+    local lastType = UserInput and UserInput.GetLastInputType and UserInput:GetLastInputType()
+    local pos
+
+    if lastType == Enum.UserInputType.Touch or not mouse then
+        pos = UserInput:GetMouseLocation()
+        local root = getRootGui(instance)
+        if root and not root.IgnoreGuiInset then
+            local inset = GuiService and GuiService.GetGuiInset and GuiService:GetGuiInset()
+            if inset then
+                pos = pos - inset
+            end
+        end
+    else
+        pos = Vector2.new(mouse.X, mouse.Y)
     end
+
     local parent = instance.Parent
     if parent and parent:IsA("GuiObject") then
         pos = pos - parent.AbsolutePosition
@@ -136,7 +160,6 @@ function ContextMenu.show(contextMenu)
     currentContextMenu = contextMenu
 
     lastShowTime = os.clock()
-    local lastType = UserInput and UserInput.GetLastInputType and UserInput:GetLastInputType()
     lastShowWasTouch = lastType == Enum.UserInputType.Touch
 end
 

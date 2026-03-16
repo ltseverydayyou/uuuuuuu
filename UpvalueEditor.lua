@@ -856,43 +856,63 @@ local function getCopiedInstancePath(obj)
 		return "nil"
 	end
 
-	local path = ""
+	local function dupchildpath(parentExpr, childName, className, occurrence)
+		return string.format(
+			"(function(parent)\n\tlocal seen = 0\n\tfor _, child in ipairs(parent:GetChildren()) do\n\t\tif child.Name == %q and child.ClassName == %q then\n\t\t\tseen += 1\n\t\t\tif seen == %d then\n\t\t\t\treturn child\n\t\t\tend\n\t\tend\n\tend\nend)(%s)",
+			childName,
+			className,
+			occurrence,
+			parentExpr
+		)
+	end
+
+	if obj ~= game and obj.Parent == nil then
+		return ("local getNil = function(name, class) for _, v in next, getnilinstances() do if v.ClassName == class and v.Name == name then return v end end end\n\ngetNil(%q, %q)"):format(
+			obj.Name,
+			obj.ClassName
+		)
+	end
+
+	local chain = {}
 	local current = obj
+	while current and current ~= game do
+		table.insert(chain, 1, current)
+		current = current.Parent
+	end
 
-	while current do
-		if current == game then
-			path = "game" .. path
-			break
-		end
+	local path = "game"
+	for _, item in ipairs(chain) do
+		local parent = item.Parent
+		local className = item.ClassName
+		local currentName = tostring(item)
 
-		local className = current.ClassName
-		local currentName = tostring(current)
-		local indexName
-
-		if string.match(currentName, "^[%a_][%w_]*$") then
-			indexName = "." .. currentName
+		if parent == game then
+			path = path .. ":GetService(\"" .. className .. "\")"
 		else
-			indexName = "[" .. string.format("%q", currentName) .. "]"
-		end
-
-		local parent = current.Parent
-		if parent then
-			local firstChild = parent:FindFirstChild(currentName)
-			if firstChild and firstChild ~= current then
-				local siblings = parent:GetChildren()
-				local childIndex = table.find(siblings, current)
-				if childIndex then
-					indexName = ":GetChildren()[" .. childIndex .. "]"
+			local duplicateByName = false
+			local occurrence = 0
+			for _, sibling in ipairs(parent:GetChildren()) do
+				if sibling.Name == currentName then
+					if sibling.ClassName == className then
+						occurrence += 1
+					end
+					if sibling ~= item then
+						duplicateByName = true
+					end
+					if sibling == item then
+						break
+					end
 				end
-			elseif parent == game then
-				indexName = ":GetService(\"" .. className .. "\")"
 			end
-		else
-			indexName = ("local getNil = function(name, class) for _, v in next, getnilinstances() do if v.ClassName == class and v.Name == name then return v end end end\n\ngetNil(%q, %q)"):format(current.Name, className)
-		end
 
-		path = indexName .. path
-		current = parent
+			if duplicateByName and occurrence > 0 then
+				path = dupchildpath(path, currentName, className, occurrence)
+			elseif string.match(currentName, "^[%a_][%w_]*$") then
+				path = path .. "." .. currentName
+			else
+				path = path .. "[" .. string.format("%q", currentName) .. "]"
+			end
+		end
 	end
 
 	return normalizeCopyPath(path)

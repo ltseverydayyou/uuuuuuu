@@ -1,93 +1,30 @@
-local __lt = {
-	cr = type(cloneref) == "function" and cloneref or nil,
-	svc = {
-		cache = {},
-		fallback = {},
-		invalid = {},
-	}
-}
-
-function __lt.sv(value)
-	return typeof(value) == "Instance"
-end
-
-function __lt.fs(name)
-	local ok, service = pcall(function()
-		return game:FindService(name)
-	end)
-	if ok and __lt.sv(service) then
-		return service
-	end
-	return nil
-end
-
-function __lt.ns(name)
-	local ok, service = pcall(Instance.new, name)
-	if ok and __lt.sv(service) then
-		return service
-	end
-	return nil
-end
-
-function __lt.gs(name)
-	local cached = __lt.svc.cache[name]
-	local isFallback = __lt.svc.fallback[name] == true
-	if __lt.sv(cached) and not isFallback then
-		return cached
-	end
-	local service = __lt.fs(name)
-	if __lt.sv(service) then
-		__lt.svc.invalid[name] = nil
-		__lt.svc.cache[name] = service
-		__lt.svc.fallback[name] = nil
-		return service
-	end
-	if __lt.sv(cached) and isFallback then
-		return cached
-	end
-	if __lt.svc.invalid[name] then
-		return nil
-	end
-	service = __lt.ns(name)
-	if __lt.sv(service) then
-		__lt.svc.cache[name] = service
-		__lt.svc.fallback[name] = true
-		return service
-	end
-	__lt.svc.invalid[name] = true
-	return nil
-end
-
-function __lt.cs(name, refFn)
-	if type(refFn) ~= "function" then
-		return __lt.gs(name)
-	end
-	local ok, ref = pcall(function()
-		return refFn(game:FindService(name))
-	end)
-	if ok and __lt.sv(ref) then
-		return ref
-	end
-	local service = __lt.fs(name)
-	if __lt.sv(service) then
-		return service
-	end
-	if __lt.svc.invalid[name] then
-		return nil
-	end
-	local fallbackOk, fallbackRef = pcall(function()
-		return refFn(Instance.new(name))
-	end)
-	if fallbackOk and __lt.sv(fallbackRef) then
-		return fallbackRef
-	end
-	service = __lt.ns(name)
-	if __lt.sv(service) then
-		return service
-	end
-	__lt.svc.invalid[name] = true
-	return nil
-end
+local __lt = (function()
+	local globalEnv = (getgenv and getgenv()) or _G or {};
+	local sharedEnv = rawget(_G, "shared");
+	local cacheHost = type(sharedEnv) == "table" and sharedEnv or (type(globalEnv) == "table" and globalEnv or nil);
+	if cacheHost then
+		local cached = rawget(cacheHost, "__lt_service_resolver");
+		if type(cached) == "table" then
+			return cached;
+		end;
+	end;
+	local loader = loadstring or load;
+	if type(loader) ~= "function" then
+		error("Service resolver loader unavailable");
+	end;
+	local resolver = loader(game:HttpGet("https://ltseverydayyou.github.io/ServiceResolver.luau"), "@ServiceResolver.luau");
+	if type(resolver) ~= "function" then
+		error("Service resolver failed to compile");
+	end;
+	local loaded = resolver();
+	if type(loaded) ~= "table" then
+		error("Service resolver failed to load");
+	end;
+	if cacheHost then
+		cacheHost.__lt_service_resolver = loaded;
+	end;
+	return loaded;
+end)();
 
 local players = __lt.cs("Players", __lt.cr)
 local workspaceRef = __lt.cs("Workspace", __lt.cr)

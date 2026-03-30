@@ -40,7 +40,6 @@ local _ref = cloneref and type(cloneref) == "function" and cloneref or function(
 local SRV = setmetatable({}, {
 	__index = function(self, n)
 		local ok, s = pcall(function()
-
 			return __lt.cs(n, _ref);
 		end);
 		if ok and s then
@@ -523,7 +522,7 @@ local function formatIconStatus()
 	if n == 1 then
 		return "1 custom icon installed";
 	end;
-	return tostring(n) .. " custom icons installed";
+	return tostring(n) .. " custom icon installed";
 end;
 local function iconSaveFromUrl(url)
 	if not iconFsOk() then
@@ -2714,6 +2713,350 @@ task.defer(function()
 		makeSizeSlider("GestureHeight", "Gesture height", "Height of the sidebar gesture area", gestureHeightValue, 60, 400);
 	end;
 	makeAutoCloseToggle();
+
+	local LG = Svc("Lighting");
+	local dimFr = darkOverlay;
+	NAlib.disconnect("DarkOverlay_Hide");
+	if not dimFr then
+		dimFr = Instance.new("Frame");
+		dimFr.Name = "DarkOverlay";
+		dimFr.BackgroundColor3 = Color3.new(0, 0, 0);
+		dimFr.BorderSizePixel = 0;
+		dimFr.Position = UDim2.fromScale(0, 0);
+		dimFr.Size = UDim2.fromScale(1, 1);
+		dimFr.ZIndex = 0;
+		dimFr.Visible = false;
+		dimFr.Parent = mainGui;
+	end;
+	pcall(function()
+		dimFr.BackgroundColor3 = Color3.new(0, 0, 0);
+		dimFr.BorderSizePixel = 0;
+		dimFr.Position = UDim2.fromScale(0, 0);
+		dimFr.Size = UDim2.fromScale(1, 1);
+	end);
+
+	local blurFx;
+	if LG then
+		blurFx = LG:FindFirstChild("DeltaBlur");
+		if not blurFx then
+			blurFx = Instance.new("BlurEffect");
+			blurFx.Name = "DeltaBlur";
+			blurFx.Size = 0;
+			blurFx.Enabled = false;
+			blurFx.Parent = LG;
+		end;
+	end;
+
+	local base = {
+		cor = {},
+		pan = {},
+		str = {},
+		got = false
+	};
+
+	local okNm = {
+		Sidebar = true,
+		Overlay = true,
+		Popup = true,
+		Searchbar = true,
+		Script = true,
+		Network = true,
+		Information = true,
+		RobloxConsole = true,
+		RConsole = true,
+		Source = true,
+		Title = true,
+		Executor = true,
+		Console = true,
+		Home = true,
+		Scripthub = true,
+		Settings = true,
+		Dropdown = true,
+		SettingDropdown = true,
+		SettingTextbox = true,
+		SettingSwitch = true,
+		SettingSwitchOn = true,
+		Button = true,
+		InputText = true
+	};
+
+	local skip = {
+		Knob = true,
+		Hue = true,
+		Sat = true,
+		Val = true,
+		Fill = true,
+		DarkOverlay = true,
+		SidebarGestureZone = true
+	};
+
+	local function svCfg(k, t)
+		if not (HS and type(writefile) == "function") then
+			return;
+		end;
+		settingsConfig[k] = t;
+		local ok, enc = pcall(function()
+			return __lt.cm("HttpService", "JSONEncode", settingsConfig);
+		end);
+		if ok and enc then
+			pcall(writefile, settingsPath, enc);
+		end;
+	end;
+
+	local function capUi()
+		if base.got or not mainGui then
+			return;
+		end;
+		for _, o in ipairs(mainGui:GetDescendants()) do
+			if o:IsA("UICorner") then
+				local p = o.Parent;
+				if p and p:IsA("GuiObject") and not skip[p.Name] then
+					local s = p.AbsoluteSize;
+					if okNm[p.Name] or (s.X >= 44 and s.Y >= 18) then
+						base.cor[o] = o.CornerRadius;
+					end;
+				end;
+			elseif o:IsA("UIStroke") then
+				base.str[o] = o.Thickness;
+			elseif o:IsA("Frame") or o:IsA("ImageLabel") or o:IsA("TextBox") then
+				if not skip[o.Name] then
+					local s = o.AbsoluteSize;
+					if okNm[o.Name] or s.X >= 120 or s.Y >= 36 then
+						local pr = o:IsA("ImageLabel") and "ImageTransparency" or "BackgroundTransparency";
+						base.pan[o] = { pr, o[pr] };
+					end;
+				end;
+			end;
+		end;
+		base.got = true;
+	end;
+
+	local radVal = Instance.new("NumberValue");
+	radVal.Name = "UiRoundValue";
+	radVal.Value = 0;
+
+	local panVal = Instance.new("NumberValue");
+	panVal.Name = "UiAlphaValue";
+	panVal.Value = 0;
+
+	local stkVal = Instance.new("NumberValue");
+	stkVal.Name = "UiStrokeValue";
+	stkVal.Value = 1;
+
+	local dimVal = Instance.new("NumberValue");
+	dimVal.Name = "UiDimValue";
+	dimVal.Value = 0.28;
+
+	local blrVal = Instance.new("NumberValue");
+	blrVal.Name = "UiBlurValue";
+	blrVal.Value = 18;
+
+	local blrOn = false;
+
+	do
+		local c = settingsConfig.UiRound;
+		if type(c) == "table" and type(c.value) == "number" then
+			radVal.Value = math.clamp(c.value, 0, 18);
+		end;
+	end;
+
+	do
+		local c = settingsConfig.UiAlpha;
+		if type(c) == "table" and type(c.value) == "number" then
+			panVal.Value = math.clamp(c.value, 0, 0.35);
+		end;
+	end;
+
+	do
+		local c = settingsConfig.UiStroke;
+		if type(c) == "table" and type(c.value) == "number" then
+			stkVal.Value = math.clamp(c.value, 0, 2.5);
+		end;
+	end;
+
+	do
+		local c = settingsConfig.UiDim;
+		if type(c) == "table" and type(c.value) == "number" then
+			dimVal.Value = math.clamp(c.value, 0, 0.65);
+		end;
+	end;
+
+	do
+		local c = settingsConfig.UiBlurSize;
+		if type(c) == "table" and type(c.value) == "number" then
+			blrVal.Value = math.clamp(c.value, 0, 40);
+		end;
+	end;
+
+	do
+		local c = settingsConfig.UiBlur;
+		if type(c) == "table" and c.enabled ~= nil then
+			blrOn = c.enabled and true or false;
+		end;
+	end;
+
+	local function apRad()
+		capUi();
+		local v = math.floor(math.clamp(radVal.Value, 0, 18) + 0.5);
+		for o, b in pairs(base.cor) do
+			if o and o.Parent then
+				pcall(function()
+					o.CornerRadius = UDim.new(b.Scale, math.max(b.Offset, v));
+				end);
+			end;
+		end;
+	end;
+
+	local function apPan()
+		capUi();
+		local a = math.clamp(panVal.Value, 0, 0.35);
+		for o, b in pairs(base.pan) do
+			if o and o.Parent then
+				local pr = b[1];
+				local bv = b[2];
+				pcall(function()
+					o[pr] = math.clamp(bv + a, 0, 1);
+				end);
+			end;
+		end;
+	end;
+
+	local function apStk()
+		capUi();
+		local m = math.clamp(stkVal.Value, 0, 2.5);
+		for o, b in pairs(base.str) do
+			if o and o.Parent then
+				pcall(function()
+					o.Thickness = b * m;
+				end);
+			end;
+		end;
+	end;
+
+	local function uiOpen()
+		if not mainGui then
+			return false;
+		end;
+		for _, n in ipairs(sectionsList) do
+			local fr = mainGui:FindFirstChild(n);
+			if fr and fr:IsA("GuiObject") and fr.Visible then
+				return true;
+			end;
+		end;
+		return false;
+	end;
+
+	local function fxSync()
+		local on = uiOpen();
+		if blurFx then
+			blurFx.Enabled = blrOn and on and blrVal.Value > 0.05;
+			blurFx.Size = blurFx.Enabled and math.clamp(blrVal.Value, 0, 40) or 0;
+		end;
+		if dimFr then
+			pcall(function()
+				dimFr.Visible = on and dimVal.Value > 0.01;
+				dimFr.BackgroundTransparency = 1 - math.clamp(dimVal.Value, 0, 0.85);
+			end);
+		end;
+	end;
+
+	local function makeBlurToggle()
+		if not (settingsHolder and settingTemplate and blurFx) then
+			return;
+		end;
+		local fr = settingTemplate:Clone();
+		fr.Parent = settingsHolder;
+		fr.Visible = true;
+		fr.LayoutOrder = -2;
+		for _, d in ipairs(fr:GetDescendants()) do
+			if d:IsA("LocalScript") then
+				d:Destroy();
+			end;
+		end;
+		local tl = fr:FindFirstChild("Title", true);
+		local dl = fr:FindFirstChild("Desc", true);
+		if tl then
+			tl.Text = "UI blur";
+		end;
+		if dl then
+			dl.Text = "Blur the game behind Delta while it is open";
+		end;
+		local btn = fr:FindFirstChild("Button", true);
+		if not btn then
+			return;
+		end;
+		local lb = btn:FindFirstChildWhichIsA("TextLabel");
+		if lb then
+			lb.Text = "Toggle";
+		end;
+		local click = btn:FindFirstChildWhichIsA("GuiButton") or btn;
+		local function vis()
+			btn.BackgroundColor3 = blrOn and Color3.fromRGB(79, 164, 242) or Color3.fromRGB(30, 30, 30);
+		end;
+		vis();
+		local function flip()
+			blrOn = not blrOn;
+			vis();
+			svCfg("UiBlur", { enabled = blrOn });
+			fxSync();
+		end;
+		if click:IsA("GuiButton") then
+			click.MouseButton1Click:Connect(flip);
+		else
+			click.InputBegan:Connect(function(input)
+				if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+					flip();
+				end;
+			end);
+		end;
+	end;
+
+	radVal.Changed:Connect(function()
+		apRad();
+		svCfg("UiRound", { value = math.clamp(radVal.Value, 0, 18) });
+	end);
+	panVal.Changed:Connect(function()
+		apPan();
+		svCfg("UiAlpha", { value = math.clamp(panVal.Value, 0, 0.35) });
+	end);
+	stkVal.Changed:Connect(function()
+		apStk();
+		svCfg("UiStroke", { value = math.clamp(stkVal.Value, 0, 2.5) });
+	end);
+	dimVal.Changed:Connect(function()
+		fxSync();
+		svCfg("UiDim", { value = math.clamp(dimVal.Value, 0, 0.65) });
+	end);
+	blrVal.Changed:Connect(function()
+		fxSync();
+		svCfg("UiBlurSize", { value = math.clamp(blrVal.Value, 0, 40) });
+	end);
+
+	for _, n in ipairs(sectionsList) do
+		local fr = mainGui:FindFirstChild(n);
+		if fr and fr.GetPropertyChangedSignal then
+			fr:GetPropertyChangedSignal("Visible"):Connect(function()
+				task.defer(fxSync);
+			end);
+		end;
+	end;
+
+	makeSizeSlider("UiRound", "UI roundness", "Adds extra roundness to panels and cards", radVal, 0, 18);
+	makeSizeSlider("UiAlpha", "Panel transparency", "Makes the heavy panels cleaner and less chunky", panVal, 0, 0.35);
+	makeSizeSlider("UiStroke", "Stroke scale", "Scales borders and outlines across Delta", stkVal, 0, 2.5);
+	makeSizeSlider("UiDim", "Open dim", "Darkens the game behind Delta while it is open", dimVal, 0, 0.65);
+	if blurFx then
+		makeBlurToggle();
+		makeSizeSlider("UiBlurSize", "Blur strength", "Blur amount while Delta is open", blrVal, 0, 40);
+	end;
+	task.defer(function()
+		capUi();
+		apRad();
+		apPan();
+		apStk();
+		fxSync();
+	end);
+
 	makeDestroyUIButton();
 	applySidebarGestureState();
 	if autoCloseOnLoad and sidebar then
@@ -2779,7 +3122,7 @@ task.defer(function()
 	do
 		local nFrame = sidemenu and sidemenu:FindFirstChild("Network", true);
 		if nFrame then
-			local overlayNet = nFrame:FindFirstChild("Overlay", true);
+			local overlayNet = nFrame and nFrame:FindFirstChild("Overlay", true);
 			local holderNet = overlayNet and overlayNet:FindFirstChild("Holder", true);
 			local infoNet = holderNet and holderNet:FindFirstChild("Information", true);
 			pingLabel = infoNet and infoNet:FindFirstChild("Ping");

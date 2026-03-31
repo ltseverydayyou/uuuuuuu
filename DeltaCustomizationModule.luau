@@ -4611,37 +4611,35 @@ local function imgOf(btn)
 	return btn:FindFirstChildWhichIsA("ImageLabel")
 end
 
-local function sidebarTapTarget(btn)
-	if not (btn and btn:IsA("GuiButton")) then
-		return nil
-	end
-	if not (UIS and UIS.TouchEnabled) then
+local function improveSidebarTouch(btn)
+	if not (btn and btn:IsA("GuiButton") and UIS and UIS.TouchEnabled) then
 		return btn
 	end
-	local hit = btn:FindFirstChild("LT_TouchHitbox")
-	if hit and hit:IsA("GuiButton") then
-		return hit
+	if btn:GetAttribute("LT_TouchSized") then
+		return btn
 	end
+	btn:SetAttribute("LT_TouchSized", true)
 	pcall(function()
-		btn.ClipsDescendants = false
+		btn.Size = UDim2.new(
+			btn.Size.X.Scale,
+			btn.Size.X.Offset + 8,
+			btn.Size.Y.Scale,
+			btn.Size.Y.Offset + 14
+		)
 	end)
-	hit = Instance.new("TextButton")
-	hit.Name = "LT_TouchHitbox"
-	hit.BackgroundTransparency = 1
-	hit.BorderSizePixel = 0
-	hit.AutoButtonColor = false
-	hit.Text = ""
-	hit.AnchorPoint = Vector2.new(0.5, 0.5)
-	hit.Position = UDim2.new(0.5, 0, 0.5, 0)
-	hit.Size = UDim2.new(1, 18, 1, 18)
-	hit.ZIndex = (btn.ZIndex or 1) + 4
-	hit.Parent = btn
-	return hit
+	return btn
 end
 
 local offBg = shBtn and shBtn.BackgroundColor3 or Color3.fromRGB(41, 45, 58)
 local offImg = imgOf(shBtn) and imgOf(shBtn).ImageColor3 or Color3.fromRGB(138, 145, 164)
 local onImg = Color3.new(1, 1, 1)
+
+improveSidebarTouch(homeBtn)
+improveSidebarTouch(shBtn)
+improveSidebarTouch(setBtn)
+improveSidebarTouch(exBtn)
+improveSidebarTouch(conBtn)
+improveSidebarTouch(togBtn)
 
 local function bgOn()
 	return acv and acv.Value or col.ac
@@ -6632,9 +6630,9 @@ end
 placeMusicBtn()
 
 local function bindHide(b, nm)
-	local tap = sidebarTapTarget(b)
-	if tap and tap:IsA("GuiButton") then
-		con(tap.MouseButton1Click:Connect(function()
+	improveSidebarTouch(b)
+	if b and b:IsA("GuiButton") then
+		con(b.MouseButton1Click:Connect(function()
 			closeMusic(true)
 			task.defer(function()
 				syncTabColors(nm or b.Name)
@@ -6649,9 +6647,9 @@ bindHide(setBtn, "Settings")
 bindHide(exBtn, "Executor")
 bindHide(conBtn, "Console")
 
-local musTap = sidebarTapTarget(musb)
-if musTap and musTap:IsA("GuiButton") then
-	con(musTap.MouseButton1Click:Connect(function()
+improveSidebarTouch(musb)
+if musb and musb:IsA("GuiButton") then
+	con(musb.MouseButton1Click:Connect(function()
 		openMusic()
 		task.defer(function()
 			syncTabColors("Music")

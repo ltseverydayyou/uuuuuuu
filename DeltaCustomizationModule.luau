@@ -1067,6 +1067,9 @@ task.defer(function()
 	end
 	if darkOverlay then
 		darkOverlay.Visible = false
+		pcall(function()
+			darkOverlay.Active = false
+		end)
 		NAlib.connect(
 			"DarkOverlay_Hide",
 			darkOverlay:GetPropertyChangedSignal("Visible"):Connect(function()
@@ -3777,7 +3780,7 @@ if type(_dvp) == "table" and not _dvp.__DeltaVisualPatchLoaded then
 			dimFr.Size = UDim2.fromScale(1, 1)
 			dimFr.ZIndex = 1
 			dimFr.Visible = false
-			dimFr.Active = true
+			dimFr.Active = false
 			dimFr.Parent = mainGui
 		end
 		pcall(function()
@@ -3786,7 +3789,7 @@ if type(_dvp) == "table" and not _dvp.__DeltaVisualPatchLoaded then
 			dimFr.Position = UDim2.fromScale(0, 0)
 			dimFr.Size = UDim2.fromScale(1, 1)
 			dimFr.ZIndex = 1
-			dimFr.Active = true
+			dimFr.Active = false
 		end)
 		local blurFx
 		if LG then
@@ -3921,9 +3924,7 @@ if type(_dvp) == "table" and not _dvp.__DeltaVisualPatchLoaded then
 				if force or math.abs(dimFr.BackgroundTransparency - dimDesiredTransparency) > 0.001 then
 					dimFr.BackgroundTransparency = dimDesiredTransparency
 				end
-				if force or dimFr.Active ~= true then
-					dimFr.Active = true
-				end
+				dimFr.Active = false
 				if force or dimFr.BackgroundColor3 ~= Color3.new(0, 0, 0) then
 					dimFr.BackgroundColor3 = Color3.new(0, 0, 0)
 				end

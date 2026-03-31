@@ -1086,13 +1086,16 @@ task.defer(function()
 	end
 	local settingsHolder = settingsFrame and settingsFrame:FindFirstChild("Holder")
 	local settingTemplate
-	local function setupAutoScroll(sf, fixRows)
+	local function setupAutoScroll(sf, fixRows, verticalOnly)
 		if not (sf and sf:IsA("ScrollingFrame")) then
 			return
 		end
 		pcall(function()
 			sf.AutomaticCanvasSize = Enum.AutomaticSize.None
 			sf.CanvasSize = UDim2.new(0, 0, 0, 0)
+			if verticalOnly then
+				sf.ScrollingDirection = Enum.ScrollingDirection.Y
+			end
 		end)
 		local lay = sf:FindFirstChildWhichIsA("UIListLayout") or sf:FindFirstChildWhichIsA("UIGridLayout")
 		if not lay then
@@ -1149,7 +1152,11 @@ task.defer(function()
 			local x = math.max(0, math.floor(math.max(size.X, descX) + 0.5))
 			local y = math.max(0, math.floor(math.max(size.Y + 12.5, descY + 12.5) + 0.5))
 			pcall(function()
-				sf.CanvasSize = UDim2.new(0, x, 0, y)
+				if verticalOnly then
+					sf.CanvasSize = UDim2.new(0, 0, 0, y)
+				else
+					sf.CanvasSize = UDim2.new(0, x, 0, y)
+				end
 			end)
 		end
 		local function bindGui(gui)
@@ -1677,9 +1684,9 @@ task.defer(function()
 			homeHolder = ho:FindFirstChild("Holder")
 		end
 	end
-	setupAutoScroll(settingsHolder, true)
-	setupAutoScroll(scriptHubHolder, false)
-	setupAutoScroll(homeHolder, true)
+	setupAutoScroll(settingsHolder, true, true)
+	setupAutoScroll(scriptHubHolder, false, false)
+	setupAutoScroll(homeHolder, true, true)
 	local function makeColorSlider(id, tt, dt, cVal)
 		if not (settingsHolder and settingTemplate and cVal) then
 			return
@@ -4570,12 +4577,7 @@ local function improveSidebarTouch(btn)
 	end
 	btn:SetAttribute("LT_TouchSized", true)
 	pcall(function()
-		btn.Size = UDim2.new(
-			btn.Size.X.Scale,
-			btn.Size.X.Offset + 8,
-			btn.Size.Y.Scale,
-			btn.Size.Y.Offset + 14
-		)
+		btn.Size = UDim2.new(btn.Size.X.Scale, btn.Size.X.Offset + 8, btn.Size.Y.Scale, btn.Size.Y.Offset + 14)
 	end)
 	return btn
 end
@@ -7381,6 +7383,21 @@ if type(_dta) == "table" and not _dta.__DeltaThemeMenuPatchLoaded then
 			return dd, out
 		end
 
+		local function detectCurrentTheme()
+			local ex = mainGui:FindFirstChild("Executor", true)
+			local over = ex and ex:FindFirstChild("Overlay", true)
+			local menu = over and over:FindFirstChild("Menu", true)
+			local dd = menu and menu:FindFirstChild("Dropdown", true)
+			local map = { Option1 = "Default", Option2 = "Light", Option3 = "Amoled" }
+			for key, name in pairs(map) do
+				local opt = dd and dd:FindFirstChild(key)
+				local chk = opt and opt:FindFirstChild("Checked", true)
+				if chk and chk:IsA("GuiObject") and chk.Visible then
+					return name
+				end
+			end
+		end
+
 		local dd, opts = findThemeButtons()
 		if not dd or not opts or #opts == 0 then
 			return
@@ -7406,6 +7423,10 @@ if type(_dta) == "table" and not _dta.__DeltaThemeMenuPatchLoaded then
 			task.defer(function()
 				if not (o and o.Parent) then
 					return
+				end
+				local detected = detectCurrentTheme()
+				if detected and detected ~= "" then
+					curTheme = detected
 				end
 				if o:IsA("ImageButton") and o.Name:match("^Option%d+$") then
 					local p = o.Parent
@@ -7440,6 +7461,10 @@ if type(_dta) == "table" and not _dta.__DeltaThemeMenuPatchLoaded then
 			curTheme = cfg.DeltaTheme.name
 		end
 		task.defer(function()
+			local detected = detectCurrentTheme()
+			if detected and detected ~= "" then
+				curTheme = detected
+			end
 			applyTheme(curTheme)
 		end)
 	end)

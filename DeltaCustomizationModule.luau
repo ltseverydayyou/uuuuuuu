@@ -4611,6 +4611,34 @@ local function imgOf(btn)
 	return btn:FindFirstChildWhichIsA("ImageLabel")
 end
 
+local function sidebarTapTarget(btn)
+	if not (btn and btn:IsA("GuiButton")) then
+		return nil
+	end
+	if not (UIS and UIS.TouchEnabled) then
+		return btn
+	end
+	local hit = btn:FindFirstChild("LT_TouchHitbox")
+	if hit and hit:IsA("GuiButton") then
+		return hit
+	end
+	pcall(function()
+		btn.ClipsDescendants = false
+	end)
+	hit = Instance.new("TextButton")
+	hit.Name = "LT_TouchHitbox"
+	hit.BackgroundTransparency = 1
+	hit.BorderSizePixel = 0
+	hit.AutoButtonColor = false
+	hit.Text = ""
+	hit.AnchorPoint = Vector2.new(0.5, 0.5)
+	hit.Position = UDim2.new(0.5, 0, 0.5, 0)
+	hit.Size = UDim2.new(1, 18, 1, 18)
+	hit.ZIndex = (btn.ZIndex or 1) + 4
+	hit.Parent = btn
+	return hit
+end
+
 local offBg = shBtn and shBtn.BackgroundColor3 or Color3.fromRGB(41, 45, 58)
 local offImg = imgOf(shBtn) and imgOf(shBtn).ImageColor3 or Color3.fromRGB(138, 145, 164)
 local onImg = Color3.new(1, 1, 1)
@@ -5811,9 +5839,21 @@ local function buildMusicTab()
 
 	st.pg.music = music
 
-	local mr = mk("Frame", {
+	local mr = mk("ScrollingFrame", {
 		Name = "LT_Music",
+		AutomaticCanvasSize = Enum.AutomaticSize.None,
 		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		CanvasSize = UDim2.new(0, 0, 0, 550),
+		ElasticBehavior = Enum.ElasticBehavior.Never,
+		HorizontalScrollBarInset = Enum.ScrollBarInset.ScrollBar,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		ScrollBarImageColor3 = col.st,
+		ScrollBarThickness = 4,
+		TopImage = "",
+		MidImage = "",
+		BottomImage = "",
+		VerticalScrollBarInset = Enum.ScrollBarInset.ScrollBar,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(0.5, 0, 0.5, 0),
 		Size = UDim2.new(0.94, 0, 0.88, 0),
@@ -6592,8 +6632,9 @@ end
 placeMusicBtn()
 
 local function bindHide(b, nm)
-	if b and b:IsA("GuiButton") then
-		con(b.MouseButton1Click:Connect(function()
+	local tap = sidebarTapTarget(b)
+	if tap and tap:IsA("GuiButton") then
+		con(tap.MouseButton1Click:Connect(function()
 			closeMusic(true)
 			task.defer(function()
 				syncTabColors(nm or b.Name)
@@ -6608,8 +6649,9 @@ bindHide(setBtn, "Settings")
 bindHide(exBtn, "Executor")
 bindHide(conBtn, "Console")
 
-if musb and musb:IsA("GuiButton") then
-	con(musb.MouseButton1Click:Connect(function()
+local musTap = sidebarTapTarget(musb)
+if musTap and musTap:IsA("GuiButton") then
+	con(musTap.MouseButton1Click:Connect(function()
 		openMusic()
 		task.defer(function()
 			syncTabColors("Music")

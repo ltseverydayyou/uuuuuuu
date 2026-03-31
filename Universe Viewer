@@ -125,6 +125,7 @@ local sortButtonHeight = IsOnMobile and 28 or 26;
 local buttonMinWidth = IsOnMobile and 44 or 40;
 local buttonRefWidth = IsOnMobile and 52 or 48;
 local buttonXWidth = IsOnMobile and 44 or 40;
+local buttonCfgWidth = IsOnMobile and 52 or 46;
 local buttonTpWidth = IsOnMobile and 110 or 104;
 local buttonCpWidth = IsOnMobile and 90 or 84;
 local buttonSrvWidth = IsOnMobile and 110 or 104;
@@ -229,6 +230,19 @@ BTN_AUTO.TextSize = fontSizeSecondary;
 BTN_AUTO.LayoutOrder = 3;
 BTN_AUTO_C.CornerRadius = UDim.new(0, 8);
 BTN_AUTO_C.Parent = BTN_AUTO;
+local BTN_CFG = Instance.new("TextButton");
+local BTN_CFG_C = Instance.new("UICorner");
+BTN_CFG.Name = "BTN_CFG";
+BTN_CFG.Parent = BH;
+BTN_CFG.BackgroundColor3 = Color3.fromRGB(40, 34, 76);
+BTN_CFG.Size = UDim2.new(0, buttonCfgWidth, 0, buttonHeight);
+BTN_CFG.Font = Enum.Font.SourceSans;
+BTN_CFG.Text = "Cfg";
+BTN_CFG.TextColor3 = Color3.fromRGB(230, 225, 255);
+BTN_CFG.TextSize = fontSizeSecondary;
+BTN_CFG.LayoutOrder = 4;
+BTN_CFG_C.CornerRadius = UDim.new(0, 8);
+BTN_CFG_C.Parent = BTN_CFG;
 BTN_X.Name = "BTN_X";
 BTN_X.Parent = BH;
 BTN_X.BackgroundColor3 = Color3.fromRGB(196, 60, 90);
@@ -237,7 +251,7 @@ BTN_X.Font = Enum.Font.SourceSansBold;
 BTN_X.Text = "X";
 BTN_X.TextColor3 = Color3.fromRGB(255, 255, 255);
 BTN_X.TextSize = fontSizeSecondary;
-BTN_X.LayoutOrder = 4;
+BTN_X.LayoutOrder = 5;
 BTN_X_C.CornerRadius = UDim.new(0, 8);
 BTN_X_C.Parent = BTN_X;
 BTN_X.BackgroundColor3 = Color3.fromRGB(196, 60, 90);
@@ -246,7 +260,7 @@ BTN_X.Font = Enum.Font.SourceSansBold;
 BTN_X.Text = "X";
 BTN_X.TextColor3 = Color3.fromRGB(255, 255, 255);
 BTN_X.TextSize = fontSizeSecondary;
-BTN_X.LayoutOrder = 4;
+BTN_X.LayoutOrder = 5;
 BTN_X_C.CornerRadius = UDim.new(0, 8);
 BTN_X_C.Parent = BTN_X;
 SB.Name = "SB";
@@ -391,12 +405,69 @@ EMP.TextColor3 = Color3.fromRGB(210, 205, 230);
 EMP.AnchorPoint = Vector2.new(0.5, 1);
 EMP.Position = UDim2.new(0.5, 0, 1, -innerPadding);
 EMP.Visible = false;
+local CFG = Instance.new("ScrollingFrame");
+CFG.Name = "CFG";
+CFG.Parent = M;
+CFG.AnchorPoint = Vector2.new(1, 0);
+CFG.Position = UDim2.new(1, -paddingBase, 0, titleBarHeight + innerPadding);
+CFG.Size = UDim2.new(0, IsOnMobile and 280 or 250, 0, IsOnMobile and 320 or 280);
+CFG.AutomaticCanvasSize = Enum.AutomaticSize.None;
+CFG.CanvasSize = UDim2.new(0, 0, 0, 0);
+CFG.ScrollBarThickness = IsOnMobile and 8 or 6;
+CFG.ScrollBarImageColor3 = Color3.fromRGB(120, 100, 200);
+CFG.ScrollingDirection = Enum.ScrollingDirection.Y;
+CFG.ScrollingEnabled = true;
+CFG.Active = true;
+CFG.BorderSizePixel = 0;
+CFG.ClipsDescendants = true;
+CFG.BackgroundColor3 = Color3.fromRGB(14, 11, 26);
+CFG.BackgroundTransparency = 0.02;
+CFG.Visible = false;
+CFG.ZIndex = 20;
+local CFG_C = Instance.new("UICorner", CFG);
+CFG_C.CornerRadius = UDim.new(0, 12);
+local CFG_S = Instance.new("UIStroke", CFG);
+CFG_S.Color = Color3.fromRGB(120, 100, 200);
+CFG_S.Transparency = 0.3;
+local CFG_P = Instance.new("UIPadding", CFG);
+CFG_P.PaddingLeft = UDim.new(0, innerPadding);
+CFG_P.PaddingRight = UDim.new(0, innerPadding + 6);
+CFG_P.PaddingTop = UDim.new(0, innerPadding);
+CFG_P.PaddingBottom = UDim.new(0, innerPadding);
+local CFG_L = Instance.new("UIListLayout", CFG);
+CFG_L.Padding = UDim.new(0, innerPadding / 2);
+CFG_L.SortOrder = Enum.SortOrder.LayoutOrder;
+local function updCfgCanvas()
+	CFG.CanvasSize = UDim2.new(0, 0, 0, CFG_L.AbsoluteContentSize.Y + innerPadding * 2 + 4);
+end
+CFG_L:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updCfgCanvas);
+local CFG_T = Instance.new("TextLabel");
+CFG_T.Parent = CFG;
+CFG_T.BackgroundTransparency = 1;
+CFG_T.Size = UDim2.new(1, 0, 0, fontSizeMain + 4);
+CFG_T.Font = Enum.Font.SourceSansSemibold;
+CFG_T.Text = "Settings";
+CFG_T.TextColor3 = Color3.fromRGB(242, 238, 255);
+CFG_T.TextSize = fontSizeMain;
+CFG_T.TextXAlignment = Enum.TextXAlignment.Left;
+CFG_T.ZIndex = 21;
+local CFG_D = Instance.new("TextLabel");
+CFG_D.Parent = CFG;
+CFG_D.BackgroundTransparency = 1;
+CFG_D.Size = UDim2.new(1, 0, 0, fontSizeSecondary + 2);
+CFG_D.Font = Enum.Font.SourceSans;
+CFG_D.Text = "Customize the place list";
+CFG_D.TextColor3 = Color3.fromRGB(210, 205, 230);
+CFG_D.TextSize = fontSizeSecondary;
+CFG_D.TextXAlignment = Enum.TextXAlignment.Left;
+CFG_D.ZIndex = 21;
 local TS = sv("TweenService");
 local UIS = sv("UserInputService");
 local RS = sv("RunService");
 local TPX = sv("TeleportService");
 local P = sv("Players");
 local AS = sv("AssetService");
+local CP = sv("ContentProvider");
 local HS = sv("HttpService");
 local ST = sv("Stats");
 local LP = P.LocalPlayer;
@@ -412,7 +483,60 @@ local autoPingLimit = 280;
 local autoCooldown = 15;
 local lastHopTime = 0;
 local favFile = "uv_favs.json";
+local cfgFile = "uv_cfg.json";
 local favs = {};
+local cfg = {
+	showIcons = true,
+	showIds = true,
+	compact = false,
+	singleOpen = true,
+	favFirst = true,
+	curFirst = true,
+	showToasts = true
+};
+local icoCache = {};
+local function mergeCfg(src)
+	if type(src) ~= "table" then
+		return;
+	end;
+	for k, v in pairs(src) do
+		if cfg[k] ~= nil and type(v) == type(cfg[k]) then
+			cfg[k] = v;
+		end;
+	end;
+end;
+local function loadCfg()
+	if not (isfile and readfile) then
+		return;
+	end;
+	local ok, data = pcall(readfile, cfgFile);
+	if not ok or (not data) or data == "" then
+		return;
+	end;
+	local ok2, dec = pcall(function()
+		return HS:JSONDecode(data);
+	end);
+	if ok2 then
+		mergeCfg(dec);
+	end;
+end;
+local function saveCfg()
+	if not writefile then
+		return;
+	end;
+	local ok, data = pcall(function()
+		return HS:JSONEncode(cfg);
+	end);
+	if ok and data then
+		pcall(writefile, cfgFile, data);
+	end;
+end;
+local function getRowH()
+	return cfg.compact and math.max(buttonHeight * 2 + innerPadding + 4, rowHeight - (IsOnMobile and 8 or 12)) or rowHeight;
+end;
+local function getExpH()
+	return cfg.compact and math.max(expListHeight - (IsOnMobile and 56 or 44), IsOnMobile and 140 or 122) or expListHeight;
+end;
 local function loadFavs()
 	if not (isfile and readfile) then
 		return;
@@ -503,9 +627,29 @@ local function hv(b, base, light, lock)
 	end);
 	press(b);
 end;
+local function mkCfgBtn(txt)
+	local b = Instance.new("TextButton");
+	b.Parent = CFG;
+	b.Size = UDim2.new(1, 0, 0, buttonHeight + 4);
+	b.BackgroundColor3 = Color3.fromRGB(42, 34, 74);
+	b.Font = Enum.Font.SourceSans;
+	b.Text = txt;
+	b.TextColor3 = Color3.fromRGB(235, 230, 255);
+	b.TextSize = fontSizeSecondary;
+	b.TextXAlignment = Enum.TextXAlignment.Left;
+	b.AutoButtonColor = true;
+	b.ZIndex = 21;
+	local bc = Instance.new("UICorner", b);
+	bc.CornerRadius = UDim.new(0, 8);
+	local bp = Instance.new("UIPadding", b);
+	bp.PaddingLeft = UDim.new(0, innerPadding);
+	bp.PaddingRight = UDim.new(0, innerPadding);
+	return b;
+end;
 hv(BTN_MIN, BTN_MIN.BackgroundColor3, Color3.fromRGB(50, 42, 90));
 hv(BTN_REF, BTN_REF.BackgroundColor3, Color3.fromRGB(58, 48, 112));
 hv(BTN_AUTO, BTN_AUTO.BackgroundColor3, Color3.fromRGB(70, 60, 118));
+hv(BTN_CFG, BTN_CFG.BackgroundColor3, Color3.fromRGB(58, 50, 108));
 hv(BTN_X, BTN_X.BackgroundColor3, Color3.fromRGB(214, 78, 102));
 hv(SORT, SORT.BackgroundColor3, Color3.fromRGB(54, 46, 96));
 hv(BTN_TP, BTN_TP.BackgroundColor3, Color3.fromRGB(92, 146, 242));
@@ -555,6 +699,28 @@ end;
 local sortMode = "NAME";
 local minimized = false;
 local normSize = szDesktop;
+local function fitCfg()
+	local cam = workspace.CurrentCamera;
+	local vs = cam and cam.ViewportSize or Vector2.new(1280, 720);
+	local mw = M.AbsoluteSize.X > 0 and M.AbsoluteSize.X or (IsOnMobile and 420 or 640);
+	local mh = M.AbsoluteSize.Y > 0 and M.AbsoluteSize.Y or (IsOnMobile and 560 or 480);
+	local maxW = math.max(IsOnMobile and 220 or 210, math.min(vs.X - paddingBase * 2, mw - paddingBase * 2));
+	local maxH = math.max(IsOnMobile and 150 or 150, math.min(vs.Y - paddingBase * 2, mh - titleBarHeight - innerPadding * 2 - 8));
+	local w = math.max(IsOnMobile and 220 or 210, math.min(maxW, IsOnMobile and math.floor(mw * 0.86) or 250));
+	local h = math.max(IsOnMobile and 150 or 160, math.min(maxH, IsOnMobile and math.floor(mh * 0.62) or 320));
+	CFG.Size = UDim2.new(0, w, 0, h);
+	if IsOnMobile or vs.X < 720 then
+		CFG.AnchorPoint = Vector2.new(0.5, 0);
+		CFG.Position = UDim2.new(0.5, 0, 0, titleBarHeight + innerPadding);
+	else
+		CFG.AnchorPoint = Vector2.new(1, 0);
+		CFG.Position = UDim2.new(1, -paddingBase, 0, titleBarHeight + innerPadding);
+	end;
+	updCfgCanvas();
+	if CFG.Visible then
+		CFG.CanvasPosition = Vector2.new(0, 0);
+	end;
+end;
 local function pickSize()
 	local cam = workspace.CurrentCamera;
 	local vs = cam and cam.ViewportSize or Vector2.new(1280, 720);
@@ -566,9 +732,11 @@ local function pickSize()
 end;
 local function applySize(force)
 	if minimized and (not force) then
+		fitCfg();
 		return;
 	end;
 	M.Size = minimized and UDim2.new(normSize.X.Scale, normSize.X.Offset, 0, titleBarHeight) or normSize;
+	task.defer(fitCfg);
 end;
 (workspace:GetPropertyChangedSignal("CurrentCamera")):Connect(function()
 	local cam = workspace.CurrentCamera;
@@ -716,11 +884,49 @@ local function toast(ti, tx, dur)
 	end);
 end;
 local function note(t, d, nm)
+	if not cfg.showToasts then
+		return;
+	end;
 	toast(nm or "Notice", t, d);
+end;
+local function imgLoaded(img)
+	local ok, v = pcall(function()
+		return img.IsLoaded;
+	end);
+	return ok and v == true and img.Image ~= "";
+end;
+local function getIconUrl(pid, force)
+	pid = tostring(pid);
+	if not force and icoCache[pid] ~= nil then
+		return icoCache[pid] or nil;
+	end;
+	local urls = {
+		"https://thumbnails.roblox.com/v1/places/gameicons?placeIds=" .. HS:UrlEncode(pid) .. "&returnPolicy=PlaceHolder&size=256x256&format=Png&isCircular=false",
+		"https://thumbnails.roblox.com/v1/places/gameicons?placeIds=" .. HS:UrlEncode(pid) .. "&returnPolicy=PlaceHolder&size=150x150&format=Png&isCircular=false",
+		"https://thumbnails.roblox.com/v1/places/gameicons?placeIds=" .. HS:UrlEncode(pid) .. "&returnPolicy=PlaceHolder&size=128x128&format=Png&isCircular=false"
+	};
+	for _, url in ipairs(urls) do
+		local ok, resp = pcall(function()
+			return game:HttpGet(url);
+		end);
+		if ok and type(resp) == "string" and #resp > 0 then
+			local ok2, js = pcall(function()
+				return HS:JSONDecode(resp);
+			end);
+			if ok2 and type(js) == "table" and type(js.data) == "table" and type(js.data[1]) == "table" and type(js.data[1].imageUrl) == "string" and js.data[1].imageUrl ~= "" then
+				icoCache[pid] = js.data[1].imageUrl;
+				return icoCache[pid];
+			end;
+		end;
+	end;
+	icoCache[pid] = false;
+	return nil;
 end;
 local rows = {};
 local fetching = false;
 local openRow = nil;
+local refreshRows;
+loadCfg();
 loadFavs();
 local function clr()
 	for _, it in ipairs(rows) do
@@ -742,10 +948,10 @@ local function apply()
 		end;
 	end;
 	table.sort(a, function(x, y)
-		if x.pinned ~= y.pinned then
+		if cfg.favFirst and x.pinned ~= y.pinned then
 			return x.pinned and true or false;
 		end;
-		if x.cur ~= y.cur then
+		if cfg.curFirst and x.cur ~= y.cur then
 			return x.cur;
 		end;
 		if sortMode == "NAME" then
@@ -765,7 +971,7 @@ local function closeRow(r)
 	end;
 	r.expOpen = false;
 	(tw(r.f, 0.16, nil, Enum.EasingDirection.In, {
-		Size = UDim2.new(1, -4, 0, rowHeight)
+		Size = UDim2.new(1, -4, 0, getRowH())
 	})):Play();
 	(tw(r.exp, 0.16, nil, Enum.EasingDirection.In, {
 		Size = UDim2.new(1, (-innerPadding) * 2, 0, 0),
@@ -1034,15 +1240,82 @@ local function mk(pl, idx)
 	local isCurrent = pl.PlaceId == game.PlaceId
 	local pinned = isFav(pl.PlaceId)
 
-	txt.Text = pl.Name
-	txt.TextYAlignment = Enum.TextYAlignment.Center
-	txt.ZIndex = 5
+	txt.Visible = false
 	bar.ZIndex = 5
 	for _, ch in ipairs(bar:GetChildren()) do
 		if ch:IsA("GuiObject") then
 			ch.ZIndex = 5
 		end
 	end
+
+	local left = Instance.new("Frame")
+	left.Name = "LEFT"
+	left.Parent = f
+	left.BackgroundTransparency = 1
+	left.Position = UDim2.new(0, innerPadding, 0, 0)
+	left.ZIndex = 5
+
+	local icoBg = Instance.new("Frame")
+	icoBg.Name = "ICO_BG"
+	icoBg.Parent = left
+	icoBg.BackgroundColor3 = Color3.fromRGB(34, 28, 58)
+	icoBg.AnchorPoint = Vector2.new(0, 0.5)
+	icoBg.Position = UDim2.new(0, 0, 0.5, 0)
+	icoBg.ZIndex = 5
+	local icoBgC = Instance.new("UICorner", icoBg)
+	icoBgC.CornerRadius = UDim.new(0, 8)
+	local icoBgS = Instance.new("UIStroke", icoBg)
+	icoBgS.Color = Color3.fromRGB(118, 102, 196)
+	icoBgS.Transparency = 0.42
+
+	local icoPh = Instance.new("TextLabel")
+	icoPh.Name = "ICO_PH"
+	icoPh.Parent = icoBg
+	icoPh.BackgroundTransparency = 1
+	icoPh.Size = UDim2.new(1, 0, 1, 0)
+	icoPh.Font = Enum.Font.SourceSansBold
+	icoPh.Text = string.upper(string.sub(pl.Name ~= "" and pl.Name or "?", 1, 1))
+	icoPh.TextColor3 = Color3.fromRGB(232, 228, 255)
+	icoPh.TextSize = cfg.compact and fontSizeSecondary or fontSizeMain
+	icoPh.ZIndex = 6
+
+	local ico = Instance.new("ImageLabel")
+	ico.Name = "ICO"
+	ico.Parent = icoBg
+	ico.BackgroundTransparency = 1
+	ico.Size = UDim2.new(1, -4, 1, -4)
+	ico.Position = UDim2.new(0, 2, 0, 2)
+	ico.Image = ""
+	ico.ImageTransparency = 1
+	ico.ScaleType = Enum.ScaleType.Crop
+	ico.ZIndex = 7
+	local icoC = Instance.new("UICorner", ico)
+	icoC.CornerRadius = UDim.new(0, 7)
+
+	local title = Instance.new("TextLabel")
+	title.Name = "TITLE"
+	title.Parent = left
+	title.BackgroundTransparency = 1
+	title.Font = Enum.Font.SourceSansSemibold
+	title.Text = pl.Name
+	title.TextColor3 = Color3.fromRGB(245, 240, 255)
+	title.TextSize = fontSizeMain
+	title.TextWrapped = false
+	title.TextTruncate = Enum.TextTruncate.AtEnd
+	title.TextXAlignment = Enum.TextXAlignment.Left
+	title.ZIndex = 6
+
+	local sub = Instance.new("TextLabel")
+	sub.Name = "SUB"
+	sub.Parent = left
+	sub.BackgroundTransparency = 1
+	sub.Font = Enum.Font.SourceSans
+	sub.TextColor3 = Color3.fromRGB(188, 182, 220)
+	sub.TextSize = math.max(fontSizeSecondary - 1, 12)
+	sub.TextWrapped = false
+	sub.TextTruncate = Enum.TextTruncate.AtEnd
+	sub.TextXAlignment = Enum.TextXAlignment.Left
+	sub.ZIndex = 6
 
 	local rowTop = Instance.new("Frame")
 	rowTop.Name = "ROW_TOP"
@@ -1115,8 +1388,6 @@ local function mk(pl, idx)
 	hdr.Name = "EXP_HDR"
 	hdr.Parent = f
 	hdr.BackgroundTransparency = 1
-	hdr.Position = UDim2.new(0, innerPadding, 0, rowHeight + innerPadding / 2)
-	hdr.Size = UDim2.new(1, (-innerPadding) * 2, 0, expHeaderHeight)
 	hdr.Visible = false
 	hdr.ZIndex = 7
 
@@ -1150,8 +1421,6 @@ local function mk(pl, idx)
 	exp.Name = "EXP"
 	exp.Parent = f
 	exp.BackgroundColor3 = Color3.fromRGB(16, 12, 30)
-	exp.Position = UDim2.new(0, innerPadding, 0, rowHeight + expHeaderHeight + innerPadding)
-	exp.Size = UDim2.new(1, (-innerPadding) * 2, 0, 0)
 	exp.BackgroundTransparency = 1
 	exp.Visible = false
 	exp.ZIndex = 6
@@ -1306,6 +1575,73 @@ local function mk(pl, idx)
 		end)
 	end
 
+	local iconBusy = false
+	local iconLoaded = false
+	local function setIconState(ok)
+		iconLoaded = ok and true or false
+		ico.ImageTransparency = ok and 0 or 1
+		icoPh.Visible = not ok
+	end
+	local function loadIcon(force)
+		if not cfg.showIcons then
+			setIconState(false)
+			return
+		end
+		if iconBusy then
+			return
+		end
+		if iconLoaded and not force then
+			return
+		end
+		iconBusy = true
+		setIconState(false)
+		task.spawn(function()
+			local pid = tostring(pl.PlaceId)
+			local real = getIconUrl(pid, force)
+			local urls = {}
+			if type(real) == "string" and real ~= "" then
+				table.insert(urls, real)
+			end
+			table.insert(urls, "rbxthumb://type=GameIcon&id=" .. pid .. "&w=150&h=150")
+			table.insert(urls, "rbxthumb://type=GameIcon&id=" .. pid .. "&w=256&h=256")
+			table.insert(urls, "rbxthumb://type=GameIcon&id=" .. pid .. "&w=512&h=512")
+			local okLoad = false
+			for _, url in ipairs(urls) do
+				ico.Image = url
+				if CP and CP.PreloadAsync then
+					pcall(function()
+						CP:PreloadAsync({ico})
+					end)
+				end
+				for _ = 1, 12 do
+					if imgLoaded(ico) then
+						okLoad = true
+						break
+					end
+					task.wait(0.12)
+				end
+				if okLoad then
+					break
+				end
+			end
+			iconBusy = false
+			setIconState(okLoad)
+		end)
+	end
+	pcall(function()
+		ico:GetPropertyChangedSignal("IsLoaded"):Connect(function()
+			if imgLoaded(ico) then
+				setIconState(true)
+			end
+		end)
+	end)
+	icoBg.Active = true
+	icoBg.InputBegan:Connect(function(inp)
+		if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+			loadIcon(true)
+		end
+	end)
+
 	local it = {
 		f = f,
 		n = pl.Name,
@@ -1322,6 +1658,47 @@ local function mk(pl, idx)
 		pinBtn = bpin
 	}
 	table.insert(rows, it)
+
+	local function syncRow()
+		local rh = getRowH()
+		local eh = getExpH()
+		local iconSize = cfg.compact and (IsOnMobile and 30 or 26) or (IsOnMobile and 42 or 38)
+		local leftPad = cfg.showIcons and (iconSize + innerPadding) or 0
+		left.Size = UDim2.new(0.6, -innerPadding, 0, rh)
+		bar.Size = UDim2.new(0.4, (-innerPadding) * 2, 0, rh)
+		rowTop.Size = UDim2.new(1, 0, 0, buttonHeight)
+		rowBot.Size = UDim2.new(1, 0, 0, buttonHeight)
+		icoBg.Visible = cfg.showIcons
+		icoBg.Size = UDim2.new(0, iconSize, 0, iconSize)
+		icoBg.Position = UDim2.new(0, 0, 0.5, 0)
+		icoPh.TextSize = cfg.compact and fontSizeSecondary or fontSizeMain
+		title.Position = UDim2.new(0, leftPad, 0, cfg.showIds and 4 or 0)
+		title.Size = UDim2.new(1, -leftPad, 0, cfg.showIds and math.floor(rh * 0.56) or rh)
+		title.TextYAlignment = cfg.showIds and Enum.TextYAlignment.Bottom or Enum.TextYAlignment.Center
+		title.Text = pl.Name
+		sub.Visible = cfg.showIds
+		sub.Position = UDim2.new(0, leftPad, 0, math.max(18, math.floor(rh * 0.5)))
+		sub.Size = UDim2.new(1, -leftPad, 0, math.max(16, rh - math.max(18, math.floor(rh * 0.5)) - 2))
+		local subTxt = "Place ID: " .. tostring(pl.PlaceId)
+		if isCurrent then
+			subTxt = subTxt .. " • Current"
+		end
+		sub.Text = subTxt
+		if cfg.showIcons and (not iconLoaded) and (not iconBusy) then
+			loadIcon(false)
+		end
+		hdr.Position = UDim2.new(0, innerPadding, 0, rh + innerPadding / 2)
+		hdr.Size = UDim2.new(1, (-innerPadding) * 2, 0, expHeaderHeight)
+		exp.Position = UDim2.new(0, innerPadding, 0, rh + expHeaderHeight + innerPadding)
+		if it.expOpen then
+			f.Size = UDim2.new(1, -4, 0, rh + expHeaderHeight + eh + innerPadding * 2)
+			exp.Size = UDim2.new(1, (-innerPadding) * 2, 0, eh)
+		else
+			f.Size = UDim2.new(1, -4, 0, rh)
+		end
+	end
+	it.refresh = syncRow
+	syncRow()
 
 	bpin.MouseButton1Click:Connect(function()
 		pinned = not pinned
@@ -1409,20 +1786,22 @@ local function mk(pl, idx)
 	end)
 
 	bsrv.MouseButton1Click:Connect(function()
+		local eh = getExpH()
+		local rh = getRowH()
 		if it.expOpen then
 			closeRow(it)
 			if openRow == it then
 				openRow = nil
 			end
 		else
-			if openRow and openRow ~= it then
+			if cfg.singleOpen and openRow and openRow ~= it then
 				closeRow(openRow)
 			end
 			it.hdr.Visible = true
 			it.exp.Visible = true
 			it.expOpen = true
-			tw(it.f, 0.16, nil, nil, {Size = UDim2.new(1, -4, 0, rowHeight + expHeaderHeight + expListHeight + innerPadding * 2)}):Play()
-			tw(it.exp, 0.16, nil, nil, {Size = UDim2.new(1, (-innerPadding) * 2, 0, expListHeight), BackgroundTransparency = 0.05}):Play()
+			tw(it.f, 0.16, nil, nil, {Size = UDim2.new(1, -4, 0, rh + expHeaderHeight + eh + innerPadding * 2)}):Play()
+			tw(it.exp, 0.16, nil, nil, {Size = UDim2.new(1, (-innerPadding) * 2, 0, eh), BackgroundTransparency = 0.05}):Play()
 			it.btnSRV.Text = "Servers (close)"
 			openRow = it
 			srvFetch(pl.PlaceId, it)
@@ -1436,6 +1815,7 @@ local function mk(pl, idx)
 		end
 	end)
 
+	loadIcon(false)
 	task.delay(idx * 0.012, function()
 		f.Visible = true
 		f.BackgroundTransparency = 0.24
@@ -1443,12 +1823,20 @@ local function mk(pl, idx)
 			s.Transparency = isCurrent and 0.45 or 0.8
 		end
 		f.Size = UDim2.new(1, -4, 0, 0)
-		tw(f, 0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, {Size = UDim2.new(1, -4, 0, rowHeight), BackgroundTransparency = 0.18}):Play()
+		tw(f, 0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, {Size = UDim2.new(1, -4, 0, getRowH()), BackgroundTransparency = 0.18}):Play()
 		if s then
 			tw(s, 0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, {Transparency = isCurrent and 0.35 or 0.6}):Play()
 		end
 	end)
 end
+refreshRows = function()
+	for _, it in ipairs(rows) do
+		if it.refresh then
+			it.refresh()
+		end
+	end
+	apply()
+end;
 local function updateStats(total, curName, curId)
 	if STATS then
 		local t = "Places: " .. tostring(total);
@@ -1557,6 +1945,45 @@ BTN_AUTO.MouseButton1Click:Connect(function()
 	BTN_AUTO.BackgroundColor3 = autoGuard and Color3.fromRGB(94, 78, 188) or Color3.fromRGB(52, 44, 96);
 	startGuard();
 end);
+local cfgBtns = {};
+local function syncCfgBtns()
+	for _, fn in ipairs(cfgBtns) do
+		fn();
+	end
+	if refreshRows then
+		refreshRows();
+	end
+end;
+local function addCfg(key, label)
+	local b = mkCfgBtn(label);
+	local function sync()
+		b.Text = label .. ": " .. (cfg[key] and "On" or "Off");
+		b.BackgroundColor3 = cfg[key] and Color3.fromRGB(76, 62, 136) or Color3.fromRGB(42, 34, 74);
+	end;
+	table.insert(cfgBtns, sync);
+	sync();
+	b.MouseButton1Click:Connect(function()
+		cfg[key] = not cfg[key];
+		saveCfg();
+		syncCfgBtns();
+	end);
+end;
+addCfg("showIcons", "Show place icons");
+addCfg("showIds", "Show place IDs");
+addCfg("compact", "Compact rows");
+addCfg("singleOpen", "One server panel");
+addCfg("favFirst", "Favorites first");
+addCfg("curFirst", "Current place first");
+addCfg("showToasts", "Show toasts");
+updCfgCanvas();
+BTN_CFG.MouseButton1Click:Connect(function()
+	CFG.Visible = not CFG.Visible;
+	if CFG.Visible then
+		CFG.CanvasPosition = Vector2.new(0, 0);
+	end;
+	fitCfg();
+	BTN_CFG.BackgroundColor3 = CFG.Visible and Color3.fromRGB(76, 62, 136) or Color3.fromRGB(40, 34, 76);
+end);
 local function canvas()
 	if _G._uv_canvas and _G._uv_canvas.Disconnect then
 		_G._uv_canvas:Disconnect();
@@ -1569,6 +1996,7 @@ local function canvas()
 	end);
 end;
 pickSize();
+fitCfg();
 applySize(true);
 M.Position = UDim2.new(0.5, 0, 0.5 - normSize.Y.Scale / 2, 0);
 inFX();

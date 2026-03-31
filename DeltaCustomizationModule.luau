@@ -341,54 +341,6 @@ local function refreshIconRefs()
 	end
 	return changed
 end
-local function shouldForceGuiActive(obj)
-	if not (obj and obj:IsA("GuiObject")) then
-		return false
-	end
-	if obj.Name == "SidebarGestureZone" then
-		return false
-	end
-	return obj:IsA("Frame")
-		or obj:IsA("ScrollingFrame")
-		or obj:IsA("TextBox")
-		or obj:IsA("TextButton")
-		or obj:IsA("ImageButton")
-		or obj:IsA("ImageLabel")
-		or obj:IsA("TextLabel")
-end
-local function forceGuiActive(rootObj)
-	if not rootObj then
-		return
-	end
-	local function apply(obj)
-		if shouldForceGuiActive(obj) then
-			pcall(function()
-				obj.Active = true
-			end)
-		end
-	end
-	apply(rootObj)
-	for _, desc in ipairs(rootObj:GetDescendants()) do
-		apply(desc)
-	end
-end
-if mainGui then
-	forceGuiActive(mainGui)
-	NAlib.disconnect("ForceActive_MainGui")
-	NAlib.connect(
-		"ForceActive_MainGui",
-		mainGui.DescendantAdded:Connect(function(desc)
-			task.defer(function()
-				if desc and desc.Parent then
-					forceGuiActive(desc)
-				end
-			end)
-		end)
-	)
-end
-if iconGui then
-	forceGuiActive(iconGui)
-end
 local function fsOk()
 	return type(isfile) == "function" and type(writefile) == "function"
 end
@@ -972,9 +924,6 @@ local function bindIconButtonWatcher()
 end
 local function refreshIconButtonState()
 	local changed = refreshIconRefs()
-	if iconGui then
-		forceGuiActive(iconGui)
-	end
 	if iconBtn and type(iconBtn.Image) == "string" and iconBtn.Image ~= "" then
 		if
 			not (
@@ -4761,11 +4710,6 @@ local function mk(class, props, kids)
 	local o = Instance.new(class)
 	for k, v in pairs(props or {}) do
 		o[k] = v
-	end
-	if o:IsA("GuiObject") and (props == nil or props.Active == nil) and o.Name ~= "SidebarGestureZone" then
-		pcall(function()
-			o.Active = true
-		end)
 	end
 	for _, c in ipairs(kids or {}) do
 		c.Parent = o

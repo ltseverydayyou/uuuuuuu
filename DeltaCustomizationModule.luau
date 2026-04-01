@@ -315,28 +315,142 @@ local function getIconGui()
 	end
 end
 local mainGui = getMain()
-local iconGui, iconBtn = getIconGui()
-local iconStroke = iconBtn
-	and (iconBtn:FindFirstChildOfClass("UIStroke") or iconBtn:FindFirstChildWhichIsA("UIStroke", true))
+local _iconGui0, _iconBtn0 = getIconGui()
+local managedIcon = {
+	deltaGui = _iconGui0,
+	deltaBtn = _iconBtn0,
+	customGui = nil,
+	customBtn = nil,
+}
+managedIcon.deltaStroke = managedIcon.deltaBtn
+	and (
+		managedIcon.deltaBtn:FindFirstChildOfClass("UIStroke")
+		or managedIcon.deltaBtn:FindFirstChildWhichIsA("UIStroke", true)
+	)
+managedIcon.deltaCorner = managedIcon.deltaBtn
+	and (
+		managedIcon.deltaBtn:FindFirstChildOfClass("UICorner")
+		or managedIcon.deltaBtn:FindFirstChildWhichIsA("UICorner", true)
+	)
+managedIcon.customStroke = nil
+managedIcon.customCorner = nil
+local iconGui, iconBtn = managedIcon.deltaGui, managedIcon.deltaBtn
+local iconStroke = managedIcon.deltaStroke
+local iconCorner = managedIcon.deltaCorner
 local iconBaseColor = iconStroke and iconStroke.Color
 local iconBaseSize = iconBtn and iconBtn.Size
+local iconBaseCorner = iconCorner and iconCorner.CornerRadius
 local iconSzLock = false
 local iconColorUseCustom = false
 local iconApplyBusy = false
 local updateIconStatusUI
+local applyIconStrokeState
+local applyIconShapeChoice
+local applySavedManagedIconPosition
+local bindManagedIconPositionSaver
+local bindManagedIconToggle
+local ensureManagedIcon
+local function hideOriginalDeltaIcon()
+	if managedIcon.deltaGui then
+		pcall(function()
+			managedIcon.deltaGui.Enabled = false
+		end)
+	end
+	if managedIcon.deltaBtn then
+		pcall(function()
+			managedIcon.deltaBtn.Visible = false
+			managedIcon.deltaBtn.Active = false
+			managedIcon.deltaBtn.ImageTransparency = 1
+			managedIcon.deltaBtn.BackgroundTransparency = 1
+		end)
+	end
+	if managedIcon.deltaStroke then
+		pcall(function()
+			managedIcon.deltaStroke.Enabled = false
+		end)
+	end
+end
 local function refreshIconRefs()
+	local prevIconGui = iconGui
+	local prevIconBtn = iconBtn
 	local ig, ib = getIconGui()
-	local changed = ig ~= iconGui or ib ~= iconBtn
-	iconGui = ig
-	iconBtn = ib
-	iconStroke = iconBtn
-		and (iconBtn:FindFirstChildOfClass("UIStroke") or iconBtn:FindFirstChildWhichIsA("UIStroke", true))
+	local deltaChanged = ig ~= managedIcon.deltaGui or ib ~= managedIcon.deltaBtn
+	managedIcon.deltaGui = ig
+	managedIcon.deltaBtn = ib
+	managedIcon.deltaStroke = managedIcon.deltaBtn
+		and (
+			managedIcon.deltaBtn:FindFirstChildOfClass("UIStroke")
+			or managedIcon.deltaBtn:FindFirstChildWhichIsA("UIStroke", true)
+		)
+	managedIcon.deltaCorner = managedIcon.deltaBtn
+		and (
+			managedIcon.deltaBtn:FindFirstChildOfClass("UICorner")
+			or managedIcon.deltaBtn:FindFirstChildWhichIsA("UICorner", true)
+		)
+	if managedIcon.deltaGui or managedIcon.deltaBtn then
+		hideOriginalDeltaIcon()
+		NAlib.disconnect("DeltaIcon_OriginalHideGui")
+		if managedIcon.deltaGui then
+			NAlib.connect(
+				"DeltaIcon_OriginalHideGui",
+				managedIcon.deltaGui:GetPropertyChangedSignal("Enabled"):Connect(function()
+					if managedIcon.deltaGui.Enabled then
+						hideOriginalDeltaIcon()
+					end
+				end)
+			)
+		end
+		NAlib.disconnect("DeltaIcon_OriginalHideBtn")
+		if managedIcon.deltaBtn then
+			NAlib.connect(
+				"DeltaIcon_OriginalHideBtn",
+				managedIcon.deltaBtn:GetPropertyChangedSignal("Visible"):Connect(function()
+					if managedIcon.deltaBtn.Visible then
+						hideOriginalDeltaIcon()
+					end
+				end)
+			)
+		end
+	end
+	if ensureManagedIcon then
+		ensureManagedIcon()
+	end
+	if managedIcon.customBtn and managedIcon.customBtn.Parent then
+		iconGui = managedIcon.customGui
+		iconBtn = managedIcon.customBtn
+		iconStroke = managedIcon.customStroke
+		iconCorner = managedIcon.customCorner
+	else
+		iconGui = managedIcon.deltaGui
+		iconBtn = managedIcon.deltaBtn
+		iconStroke = managedIcon.deltaStroke
+		iconCorner = managedIcon.deltaCorner
+	end
+	local changed = deltaChanged or iconGui ~= prevIconGui or iconBtn ~= prevIconBtn
 	if iconBtn then
 		if changed or not iconBaseSize then
 			iconBaseSize = iconBtn.Size
 		end
 		if iconStroke and not iconColorUseCustom and (changed or not iconBaseColor) then
 			iconBaseColor = iconStroke.Color
+		end
+		if iconCorner and (changed or not iconBaseCorner) then
+			iconBaseCorner = iconCorner.CornerRadius
+		end
+		if changed and applyIconStrokeState then
+			task.defer(applyIconStrokeState)
+		end
+		if changed and applyIconShapeChoice then
+			task.defer(applyIconShapeChoice)
+		end
+		if changed and applySavedManagedIconPosition then
+			task.defer(applySavedManagedIconPosition)
+		end
+		if changed and bindManagedIconPositionSaver then
+			task.defer(bindManagedIconPositionSaver)
+		end
+		if changed and bindManagedIconToggle then
+			task.defer(bindManagedIconToggle)
 		end
 	end
 	return changed
@@ -864,6 +978,55 @@ local function removeAllIcons()
 	saveIconCfg()
 	scanIcons()
 end
+ensureManagedIcon = function()
+	if
+		managedIcon.customGui
+		and managedIcon.customBtn
+		and managedIcon.customGui.Parent
+		and managedIcon.customBtn.Parent == managedIcon.customGui
+	then
+		managedIcon.customStroke = managedIcon.customBtn
+			and (
+				managedIcon.customBtn:FindFirstChildOfClass("UIStroke")
+				or managedIcon.customBtn:FindFirstChildWhichIsA("UIStroke", true)
+			)
+		managedIcon.customCorner = managedIcon.customBtn
+			and (
+				managedIcon.customBtn:FindFirstChildOfClass("UICorner")
+				or managedIcon.customBtn:FindFirstChildWhichIsA("UICorner", true)
+			)
+		return true
+	end
+	if not (managedIcon.deltaGui and managedIcon.deltaBtn) then
+		return false
+	end
+	hideOriginalDeltaIcon()
+	local gui = Instance.new("ScreenGui")
+	gui.Name = "LTIconGui"
+	gui.ResetOnSpawn = false
+	gui.IgnoreGuiInset = true
+	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	gui.DisplayOrder = managedIcon.deltaGui.DisplayOrder
+	gui.Enabled = true
+	local btn = managedIcon.deltaBtn:Clone()
+	btn.Name = "LTIcon"
+	btn.Visible = true
+	btn.Active = true
+	btn.ImageTransparency = managedIcon.deltaBtn.ImageTransparency
+	btn.BackgroundTransparency = managedIcon.deltaBtn.BackgroundTransparency
+	btn.Parent = gui
+	gui.Parent = root
+	managedIcon.customGui = gui
+	managedIcon.customBtn = btn
+	managedIcon.customStroke = btn:FindFirstChildOfClass("UIStroke") or btn:FindFirstChildWhichIsA("UIStroke", true)
+	managedIcon.customCorner = btn:FindFirstChildOfClass("UICorner") or btn:FindFirstChildWhichIsA("UICorner", true)
+	iconGui = managedIcon.customGui
+	iconBtn = managedIcon.customBtn
+	iconStroke = managedIcon.customStroke
+	iconCorner = managedIcon.customCorner
+	return true
+end
+ensureManagedIcon()
 refreshIconRefs()
 if iconBtn and type(iconBtn.Image) == "string" and iconBtn.Image ~= "" then
 	dIcons.defaultImage = iconBtn.Image
@@ -1086,6 +1249,18 @@ task.defer(function()
 	end
 	local settingsHolder = settingsFrame and settingsFrame:FindFirstChild("Holder")
 	local settingTemplate
+	local function saveSettingsEntry(key, payload)
+		if not (HS and type(writefile) == "function") then
+			return
+		end
+		settingsConfig[key] = payload
+		local ok, enc = pcall(function()
+			return __lt.cm("HttpService", "JSONEncode", settingsConfig)
+		end)
+		if ok and enc then
+			pcall(writefile, settingsPath, enc)
+		end
+	end
 	local function setupAutoScroll(sf, fixRows, verticalOnly)
 		if not (sf and sf:IsA("ScrollingFrame")) then
 			return
@@ -1103,6 +1278,7 @@ task.defer(function()
 		end
 		local id = "CanvasAuto_" .. sf:GetDebugId()
 		NAlib.disconnect(id)
+		local boundVerticalGuis = setmetatable({}, { __mode = "k" })
 		local function isVisibleInScroll(gui)
 			local cur = gui
 			while cur and cur ~= sf do
@@ -1117,12 +1293,27 @@ task.defer(function()
 			local maxX = 0
 			local maxY = 0
 			local canvasPos = sf.CanvasPosition
-			for _, desc in ipairs(sf:GetDescendants()) do
-				if desc:IsA("GuiObject") and isVisibleInScroll(desc) then
-					local relX = (desc.AbsolutePosition.X - sf.AbsolutePosition.X) + canvasPos.X
-					local relY = (desc.AbsolutePosition.Y - sf.AbsolutePosition.Y) + canvasPos.Y
-					maxX = math.max(maxX, relX + desc.AbsoluteSize.X)
-					maxY = math.max(maxY, relY + desc.AbsoluteSize.Y)
+			if verticalOnly then
+				for _, child in ipairs(sf:GetChildren()) do
+					if child:IsA("GuiObject") and isVisibleInScroll(child) then
+						local relY = (child.AbsolutePosition.Y - sf.AbsolutePosition.Y) + canvasPos.Y
+						maxY = math.max(maxY, relY + child.AbsoluteSize.Y)
+						for _, desc in ipairs(child:GetDescendants()) do
+							if desc:IsA("GuiObject") and desc.Name == "Dropdown" and isVisibleInScroll(desc) then
+								local dRelY = (desc.AbsolutePosition.Y - sf.AbsolutePosition.Y) + canvasPos.Y
+								maxY = math.max(maxY, dRelY + desc.AbsoluteSize.Y)
+							end
+						end
+					end
+				end
+			else
+				for _, desc in ipairs(sf:GetDescendants()) do
+					if desc:IsA("GuiObject") and isVisibleInScroll(desc) then
+						local relX = (desc.AbsolutePosition.X - sf.AbsolutePosition.X) + canvasPos.X
+						local relY = (desc.AbsolutePosition.Y - sf.AbsolutePosition.Y) + canvasPos.Y
+						maxX = math.max(maxX, relX + desc.AbsoluteSize.X)
+						maxY = math.max(maxY, relY + desc.AbsoluteSize.Y)
+					end
 				end
 			end
 			return maxX, maxY
@@ -1134,9 +1325,11 @@ task.defer(function()
 			for _, ch in ipairs(sf:GetChildren()) do
 				if
 					ch:IsA("GuiObject")
+					and ch.Visible
 					and not ch:IsA("UIListLayout")
 					and not ch:IsA("UIGridLayout")
 					and not ch:IsA("UIPadding")
+					and ch.Name ~= "LT_SettingDropdown"
 				then
 					local s = ch.Size
 					if s.Y.Scale ~= 0 or s.Y.Offset ~= 50 then
@@ -1148,9 +1341,17 @@ task.defer(function()
 		local function upd()
 			applyRows()
 			local size = lay.AbsoluteContentSize
-			local descX, descY = descendantBounds()
-			local x = math.max(0, math.floor(math.max(size.X, descX) + 0.5))
-			local y = math.max(0, math.floor(math.max(size.Y + 12.5, descY + 12.5) + 0.5))
+			local x
+			local y
+			if verticalOnly then
+				local _, descY = descendantBounds()
+				x = 0
+				y = math.max(0, math.floor(math.max(size.Y + 12.5, descY + 12.5) + 0.5))
+			else
+				local descX, descY = descendantBounds()
+				x = math.max(0, math.floor(math.max(size.X, descX) + 0.5))
+				y = math.max(0, math.floor(math.max(size.Y + 12.5, descY + 12.5) + 0.5))
+			end
 			pcall(function()
 				if verticalOnly then
 					sf.CanvasSize = UDim2.new(0, 0, 0, y)
@@ -1158,6 +1359,98 @@ task.defer(function()
 					sf.CanvasSize = UDim2.new(0, x, 0, y)
 				end
 			end)
+		end
+		if verticalOnly then
+			local function bindVerticalGui(gui)
+				if not (gui and gui:IsA("GuiObject")) or boundVerticalGuis[gui] then
+					return
+				end
+				local isDirectChild = gui.Parent == sf
+				local isDropdownGui = gui.Name == "Dropdown" or gui.Name == "LT_SettingDropdown"
+				if not (isDirectChild or isDropdownGui) then
+					return
+				end
+				boundVerticalGuis[gui] = true
+				NAlib.connect(
+					id,
+					gui:GetPropertyChangedSignal("Visible"):Connect(function()
+						task.defer(upd)
+					end)
+				)
+				NAlib.connect(
+					id,
+					gui:GetPropertyChangedSignal("Size"):Connect(function()
+						task.defer(upd)
+					end)
+				)
+				NAlib.connect(
+					id,
+					gui:GetPropertyChangedSignal("Position"):Connect(function()
+						task.defer(upd)
+					end)
+				)
+				NAlib.connect(
+					id,
+					gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+						task.defer(upd)
+					end)
+				)
+			end
+			local function bindVerticalRow(row)
+				if not (row and row:IsA("GuiObject")) then
+					return
+				end
+				bindVerticalGui(row)
+				for _, desc in ipairs(row:GetDescendants()) do
+					if desc:IsA("GuiObject") and desc.Name == "Dropdown" then
+						bindVerticalGui(desc)
+					end
+				end
+				NAlib.connect(
+					id,
+					row.DescendantAdded:Connect(function(desc)
+						if desc:IsA("GuiObject") and desc.Name == "Dropdown" then
+							bindVerticalGui(desc)
+							task.defer(upd)
+						end
+					end)
+				)
+				NAlib.connect(
+					id,
+					row.DescendantRemoving:Connect(function(desc)
+						if desc:IsA("GuiObject") and desc.Name == "Dropdown" then
+							task.defer(upd)
+						end
+					end)
+				)
+			end
+			for _, child in ipairs(sf:GetChildren()) do
+				bindVerticalRow(child)
+			end
+			upd()
+			NAlib.connect(id, lay:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(upd))
+			NAlib.connect(
+				id,
+				sf.DescendantAdded:Connect(function(desc)
+					if desc.Parent == sf then
+						bindVerticalRow(desc)
+						task.defer(upd)
+					end
+				end)
+			)
+			NAlib.connect(
+				id,
+				sf.DescendantRemoving:Connect(function()
+					task.defer(upd)
+				end)
+			)
+			NAlib.connect(
+				id,
+				sf:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+					task.defer(upd)
+				end)
+			)
+			return
 		end
 		local function bindGui(gui)
 			if not (gui and gui:IsA("GuiObject")) then
@@ -1298,6 +1591,33 @@ task.defer(function()
 		kc.Parent = kb
 		return s, bar, fill, kb
 	end
+	local customDropdownMenus = {}
+	local function closeCustomDropdowns(exceptMenu)
+		for i = #customDropdownMenus, 1, -1 do
+			local entry = customDropdownMenus[i]
+			local menu = type(entry) == "table" and entry.menu or entry
+			if not (menu and menu.Parent) then
+				table.remove(customDropdownMenus, i)
+			elseif menu ~= exceptMenu then
+				if type(entry) == "table" then
+					if type(entry.collapse) == "function" then
+						pcall(entry.collapse)
+					elseif entry.row and entry.row.Parent then
+						pcall(function()
+							menu.Visible = false
+						end)
+						local baseHeight = tonumber(entry.baseHeight) or 50
+						local s = entry.row.Size
+						entry.row.Size = UDim2.new(s.X.Scale, s.X.Offset, 0, baseHeight)
+					end
+				else
+					pcall(function()
+						menu.Visible = false
+					end)
+				end
+			end
+		end
+	end
 	if settingsHolder then
 		for _, c in ipairs(settingsHolder:GetChildren()) do
 			if c:IsA("Frame") and c.Name == "Button" then
@@ -1305,6 +1625,80 @@ task.defer(function()
 				break
 			end
 		end
+	end
+	local hiddenStockDropdownTitles = {
+		["fps cap"] = true,
+		["icon size"] = true,
+		["icon color"] = true,
+		["icon shape"] = true,
+	}
+	local hiddenStockDropdownBound = setmetatable({}, { __mode = "k" })
+	local function enforceHiddenStockDropdownRow(child)
+		if not (child and child.Parent and child:IsA("Frame")) then
+			return
+		end
+		pcall(function()
+			child.Visible = false
+			child.Size = UDim2.new(child.Size.X.Scale, child.Size.X.Offset, 0, 0)
+		end)
+	end
+	local function bindHiddenStockDropdownRow(child)
+		if not (child and child:IsA("Frame") and child.Name == "SettingDropdown") then
+			return
+		end
+		local title = child:FindFirstChild("Title", true)
+		local titleText = title and title:IsA("TextLabel") and string.lower(title.Text or "") or ""
+		if not hiddenStockDropdownTitles[titleText] then
+			return
+		end
+		enforceHiddenStockDropdownRow(child)
+		if not hiddenStockDropdownBound[child] then
+			hiddenStockDropdownBound[child] = true
+			local guardId = "HideManagedStockDropdownRows_" .. child:GetDebugId()
+			NAlib.disconnect(guardId)
+			NAlib.connect(
+				guardId,
+				child:GetPropertyChangedSignal("Visible"):Connect(function()
+					if child.Visible then
+						enforceHiddenStockDropdownRow(child)
+					end
+				end)
+			)
+			NAlib.connect(
+				guardId,
+				child:GetPropertyChangedSignal("Size"):Connect(function()
+					if child.Visible or child.Size.Y.Offset ~= 0 or child.Size.Y.Scale ~= 0 then
+						enforceHiddenStockDropdownRow(child)
+					end
+				end)
+			)
+			child.Destroying:Connect(function()
+				hiddenStockDropdownBound[child] = nil
+				NAlib.disconnect(guardId)
+			end)
+		end
+	end
+	local function hideManagedStockDropdownRows()
+		if not settingsHolder then
+			return
+		end
+		for _, child in ipairs(settingsHolder:GetChildren()) do
+			if child:IsA("Frame") then
+				bindHiddenStockDropdownRow(child)
+			end
+		end
+	end
+	if settingsHolder then
+		task.defer(hideManagedStockDropdownRows)
+		NAlib.disconnect("HideManagedStockDropdownRows")
+		NAlib.connect(
+			"HideManagedStockDropdownRows",
+			settingsHolder.ChildAdded:Connect(function(child)
+				task.defer(function()
+					bindHiddenStockDropdownRow(child)
+				end)
+			end)
+		)
 	end
 	if settingsHolder and settingTemplate then
 		local function makeSectionTitle(text, order, isCustom)
@@ -1593,6 +1987,55 @@ task.defer(function()
 		)
 		applyIconSize(iconSizeValue.Value)
 	end
+	local function ensureIconCorner()
+		refreshIconRefs()
+		if not iconBtn then
+			return nil
+		end
+		if not iconCorner then
+			iconCorner = Instance.new("UICorner")
+			iconCorner.Name = "DeltaIconCorner"
+			iconCorner.Parent = iconBtn
+		end
+		if not iconBaseCorner then
+			iconBaseCorner = iconCorner.CornerRadius
+		end
+		return iconCorner
+	end
+	local iconShapeName = "Squircle"
+	do
+		local cfg = settingsConfig.IconShape
+		if type(cfg) == "table" and type(cfg.name) == "string" and cfg.name ~= "" then
+			iconShapeName = cfg.name
+		end
+	end
+	if iconShapeName == "Default" then
+		iconShapeName = "Squircle"
+	elseif iconShapeName == "Pill" then
+		iconShapeName = "Circle"
+	end
+	local function getIconShapeCorner(shapeName)
+		if shapeName == "Square" then
+			return UDim.new(0, 0)
+		elseif shapeName == "Rounded" then
+			return UDim.new(0, 8)
+		elseif shapeName == "Squircle" then
+			return UDim.new(0, 12)
+		elseif shapeName == "Circle" then
+			return UDim.new(1, 0)
+		end
+		return UDim.new(0, 12)
+	end
+	applyIconShapeChoice = function()
+		local corner = ensureIconCorner()
+		if not corner then
+			return
+		end
+		pcall(function()
+			corner.CornerRadius = getIconShapeCorner(iconShapeName)
+		end)
+	end
+	task.defer(applyIconShapeChoice)
 	local iconRgbSpeedValue
 	if iconStroke then
 		iconRgbSpeedValue = Instance.new("NumberValue")
@@ -1611,6 +2054,21 @@ task.defer(function()
 			iconVisible = cfg.enabled and true or false
 		end
 	end
+	local iconPositionSaveEnabled = false
+	do
+		local cfg = settingsConfig.IconPositionSave
+		if type(cfg) == "table" and cfg.enabled ~= nil then
+			iconPositionSaveEnabled = cfg.enabled and true or false
+		end
+	end
+	local iconStrokeUserEnabled = true
+	do
+		local cfg = settingsConfig.IconStrokeEnabled
+		if type(cfg) == "table" and cfg.enabled ~= nil then
+			iconStrokeUserEnabled = cfg.enabled and true or false
+		end
+	end
+	local iconForcedHidden = false
 	local tabNotifEnabled = true
 	do
 		local cfg = settingsConfig.TabNotifications
@@ -1642,35 +2100,92 @@ task.defer(function()
 			end)
 		end
 	end
+	applyIconStrokeState = function()
+		if not iconStroke then
+			return
+		end
+		pcall(function()
+			iconStroke.Enabled = iconVisible and iconStrokeUserEnabled and not iconForcedHidden
+		end)
+	end
+	local function saveManagedIconPosition()
+		if not (iconPositionSaveEnabled and iconBtn and iconBtn.Parent) then
+			return
+		end
+		saveSettingsEntry("IconPosition", {
+			xScale = iconBtn.Position.X.Scale,
+			xOffset = iconBtn.Position.X.Offset,
+			yScale = iconBtn.Position.Y.Scale,
+			yOffset = iconBtn.Position.Y.Offset,
+		})
+	end
+	applySavedManagedIconPosition = function()
+		if not (iconPositionSaveEnabled and iconBtn and iconBtn.Parent) then
+			return
+		end
+		local cfg = settingsConfig.IconPosition
+		if type(cfg) ~= "table" then
+			return
+		end
+		local xs = tonumber(cfg.xScale)
+		local xo = tonumber(cfg.xOffset)
+		local ys = tonumber(cfg.yScale)
+		local yo = tonumber(cfg.yOffset)
+		if xs and xo and ys and yo then
+			pcall(function()
+				iconBtn.Position = UDim2.new(xs, xo, ys, yo)
+			end)
+		end
+	end
+	bindManagedIconPositionSaver = function()
+		NAlib.disconnect("ManagedIcon_PositionSave")
+		if not (iconBtn and iconBtn.Parent) then
+			return
+		end
+		local stamp = 0
+		NAlib.connect(
+			"ManagedIcon_PositionSave",
+			iconBtn:GetPropertyChangedSignal("Position"):Connect(function()
+				if not iconPositionSaveEnabled then
+					return
+				end
+				stamp += 1
+				local cur = stamp
+				task.delay(0.2, function()
+					if cur == stamp then
+						saveManagedIconPosition()
+					end
+				end)
+			end)
+		)
+	end
 	local function applyIconUserVisibility(instant)
 		if not iconBtn then
 			return
 		end
 		if iconVisible then
 			tweenIconVisual(0, 0, instant)
-			if iconStroke then
-				iconStroke.Enabled = true
-			end
 		else
 			tweenIconVisual(1, 1, instant)
-			if iconStroke then
-				iconStroke.Enabled = false
-			end
 		end
+		applyIconStrokeState()
 	end
 	local function setIconForcedHidden(hidden)
 		if not iconBtn then
 			return
 		end
+		iconForcedHidden = hidden and true or false
 		if hidden then
 			tweenIconVisual(1, 1, false)
-			if iconStroke then
-				iconStroke.Enabled = false
-			end
+			applyIconStrokeState()
 		else
 			applyIconUserVisibility(false)
 		end
 	end
+	task.defer(function()
+		applySavedManagedIconPosition()
+		bindManagedIconPositionSaver()
+	end)
 	applyIconUserVisibility(true)
 	local scriptHubHolder
 	local homeHolder
@@ -2027,10 +2542,11 @@ task.defer(function()
 			save()
 		end)
 	end
-	local function makeSizeSlider(id, titleText, descText, numValue, minV, maxV)
+	local function makeSizeSlider(id, titleText, descText, numValue, minV, maxV, opts)
 		if not (settingsHolder and settingTemplate and numValue) then
 			return
 		end
+		opts = type(opts) == "table" and opts or {}
 		local key = id or titleText or "Size_" .. tostring(math.random(1, 1000000000))
 		local slId = "SizeSlider_" .. key
 		minV = minV or 0.5
@@ -2059,6 +2575,9 @@ task.defer(function()
 			numValue.Value = math.clamp(sv.value, minV, maxV)
 		end
 		local function save(v)
+			if opts.persist == false then
+				return
+			end
 			if not (HS and type(writefile) == "function") then
 				return
 			end
@@ -2071,17 +2590,27 @@ task.defer(function()
 			end
 		end
 		local function setVis(v)
+			if opts.integer then
+				v = math.floor((tonumber(v) or minV) + 0.5)
+			end
 			v = math.clamp(v, minV, maxV)
-			local a = (v - minV) / (maxV - minV)
+			local denom = maxV - minV
+			local a = denom ~= 0 and ((v - minV) / denom) or 0
 			fill.Size = UDim2.new(a, 0, 1, 0)
 			kb.Position = UDim2.new(a, 0, 0.5, 0)
-			vb.Text = string.format("%.2f", v)
+			vb.Text = opts.integer and tostring(v) or string.format("%.2f", v)
 		end
 		local function apply(v)
+			if opts.integer then
+				v = math.floor((tonumber(v) or minV) + 0.5)
+			end
 			v = math.clamp(v, minV, maxV)
 			numValue.Value = v
 			setVis(v)
 			save(v)
+			if type(opts.apply) == "function" then
+				pcall(opts.apply, v)
+			end
 		end
 		setVis(numValue.Value)
 		local drag = false
@@ -2091,7 +2620,11 @@ task.defer(function()
 				rel = (input.Position.X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X
 			end)
 			rel = math.clamp(rel, 0, 1)
-			apply(minV + (maxV - minV) * rel)
+			local nextV = minV + (maxV - minV) * rel
+			if opts.integer then
+				nextV = math.floor(nextV + 0.5)
+			end
+			apply(nextV)
 		end
 		bar.InputBegan:Connect(function(input)
 			if
@@ -2145,10 +2678,290 @@ task.defer(function()
 			local sw = math.clamp(w - 78, 140, 280)
 			sl.Size = UDim2.new(0, sw, 0, 18)
 		end
-		updDock();
-		(fr:GetPropertyChangedSignal("AbsoluteSize")):Connect(function()
+		updDock()
+		fr:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
 			task.defer(updDock)
 		end)
+	end
+	local function makeEnumDropdown(id, titleText, descText, enumItems, getCurrentName, setSelectedName, opts)
+		if not (settingsHolder and settingTemplate and type(setSelectedName) == "function") then
+			return
+		end
+		opts = type(opts) == "table" and opts or {}
+		local names = {}
+		for _, item in ipairs(enumItems or {}) do
+			if typeof(item) == "EnumItem" then
+				names[#names + 1] = item.Name
+			elseif type(item) == "string" and item ~= "" then
+				names[#names + 1] = item
+			end
+		end
+		if #names == 0 then
+			return
+		end
+		local baseHeight = 50
+		local fr = Instance.new("Frame")
+		fr.Name = "LT_SettingDropdown"
+		fr.Parent = settingsHolder
+		fr.Visible = true
+		fr.LayoutOrder = -2
+		fr.BackgroundTransparency = 1
+		fr.BorderSizePixel = 0
+		fr.ClipsDescendants = false
+		fr.Size = UDim2.new(1, 0, 0, baseHeight)
+		local card = settingTemplate:Clone()
+		card.Name = "Card"
+		card.Parent = fr
+		card.Visible = true
+		card.Size = UDim2.new(1, 0, 0, baseHeight)
+		card.Position = UDim2.new(0, 0, 0, 0)
+		for _, d in ipairs(card:GetDescendants()) do
+			if d:IsA("LocalScript") then
+				d:Destroy()
+			end
+		end
+		local tl = card:FindFirstChild("Title", true)
+		local dl = card:FindFirstChild("Desc", true)
+		if tl then
+			tl.Text = titleText
+			tl.TextScaled = false
+			tl.TextWrapped = false
+			tl.TextTruncate = Enum.TextTruncate.AtEnd
+			tl.TextYAlignment = Enum.TextYAlignment.Center
+		end
+		if dl then
+			dl.Text = descText
+			dl.TextScaled = false
+			dl.TextWrapped = false
+			dl.TextTruncate = Enum.TextTruncate.AtEnd
+			dl.TextYAlignment = Enum.TextYAlignment.Center
+		end
+		local ob = card:FindFirstChild("Button", true)
+		if ob then
+			ob:Destroy()
+		end
+		local dock = mkDock(card)
+		local dockLayout = dock:FindFirstChildWhichIsA("UIListLayout")
+		if dockLayout then
+			dockLayout:Destroy()
+		end
+		dock.Size = UDim2.new(0, 168, 0, 30)
+		local openBg = Instance.new("Frame")
+		openBg.Name = "DropdownBackground"
+		openBg.AnchorPoint = Vector2.new(1, 0.5)
+		openBg.Position = UDim2.new(1, 0, 0.5, 0)
+		openBg.Size = UDim2.new(1, 0, 1, 0)
+		openBg.BackgroundColor3 = Color3.fromRGB(39, 42, 52)
+		openBg.BorderSizePixel = 0
+		openBg.ZIndex = 25
+		openBg.Parent = dock
+		local openBgCorner = Instance.new("UICorner")
+		openBgCorner.CornerRadius = UDim.new(0, 12)
+		openBgCorner.Parent = openBg
+		local openBtn = Instance.new("TextButton")
+		openBtn.Name = "DropdownButton"
+		openBtn.Size = UDim2.new(1, 0, 1, 0)
+		openBtn.BackgroundTransparency = 1
+		openBtn.BorderSizePixel = 0
+		openBtn.AutoButtonColor = false
+		openBtn.Font = Enum.Font.GothamBold
+		openBtn.TextSize = 12
+		openBtn.TextColor3 = Color3.fromRGB(164, 169, 182)
+		openBtn.TextXAlignment = Enum.TextXAlignment.Right
+		openBtn.ZIndex = 27
+		openBtn.Parent = dock
+		local openPad = Instance.new("UIPadding")
+		openPad.PaddingLeft = UDim.new(0, 8)
+		openPad.PaddingRight = UDim.new(0, 30)
+		openPad.Parent = openBtn
+		local arrow = Instance.new("Frame")
+		arrow.Name = "Arrow"
+		arrow.BackgroundTransparency = 1
+		arrow.AnchorPoint = Vector2.new(1, 0.5)
+		arrow.Position = UDim2.new(1, -8, 0.5, 0)
+		arrow.Size = UDim2.new(0, 12, 0, 18)
+		arrow.ZIndex = 28
+		arrow.Parent = dock
+		local arrowLayout = Instance.new("UIListLayout")
+		arrowLayout.FillDirection = Enum.FillDirection.Vertical
+		arrowLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+		arrowLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+		arrowLayout.Padding = UDim.new(0, 0)
+		arrowLayout.Parent = arrow
+		local upArrow = Instance.new("TextLabel")
+		upArrow.Name = "Up"
+		upArrow.BackgroundTransparency = 1
+		upArrow.Size = UDim2.new(1, 0, 0, 9)
+		upArrow.Font = Enum.Font.GothamBold
+		upArrow.TextSize = 9
+		upArrow.TextColor3 = Color3.fromRGB(104, 110, 124)
+		upArrow.Text = "^"
+		upArrow.ZIndex = 28
+		upArrow.Parent = arrow
+		local downArrow = Instance.new("TextLabel")
+		downArrow.Name = "Down"
+		downArrow.BackgroundTransparency = 1
+		downArrow.Size = UDim2.new(1, 0, 0, 9)
+		downArrow.Font = Enum.Font.GothamBold
+		downArrow.TextSize = 9
+		downArrow.TextColor3 = Color3.fromRGB(160, 166, 180)
+		downArrow.Text = "v"
+		downArrow.ZIndex = 28
+		downArrow.Parent = arrow
+		local menu = Instance.new("ScrollingFrame")
+		menu.Name = "Dropdown"
+		menu.AnchorPoint = Vector2.new(1, 0)
+		menu.Position = UDim2.new(1, -14, 0, baseHeight + 6)
+		menu.Size = UDim2.new(0, 168, 0, math.min(132, #names * 30 + 8))
+		menu.Visible = false
+		menu.BackgroundColor3 = Color3.fromRGB(43, 47, 58)
+		menu.BorderSizePixel = 0
+		menu.ScrollBarThickness = 3
+		menu.ScrollingDirection = Enum.ScrollingDirection.Y
+		menu.CanvasSize = UDim2.new(0, 0, 0, 0)
+		menu.AutomaticCanvasSize = Enum.AutomaticSize.Y
+		menu.ZIndex = 26
+		menu.Parent = fr
+		local menuCorner = Instance.new("UICorner")
+		menuCorner.CornerRadius = UDim.new(0, 10)
+		menuCorner.Parent = menu
+		local menuPad = Instance.new("UIPadding")
+		menuPad.PaddingTop = UDim.new(0, 4)
+		menuPad.PaddingBottom = UDim.new(0, 4)
+		menuPad.PaddingLeft = UDim.new(0, 12)
+		menuPad.PaddingRight = UDim.new(0, 12)
+		menuPad.Parent = menu
+		local menuLayout = Instance.new("UIListLayout")
+		menuLayout.Padding = UDim.new(0, 0)
+		menuLayout.SortOrder = Enum.SortOrder.LayoutOrder
+		menuLayout.Parent = menu
+		local dropdownEntry = {
+			menu = menu,
+			row = fr,
+			baseHeight = baseHeight,
+		}
+		table.insert(customDropdownMenus, dropdownEntry)
+		local selectedName
+		local optionButtons = {}
+		local hover = false
+		local function setExpanded(open)
+			menu.Visible = open and true or false
+			upArrow.TextColor3 = open and Color3.fromRGB(160, 166, 180) or Color3.fromRGB(104, 110, 124)
+			downArrow.TextColor3 = open and Color3.fromRGB(104, 110, 124) or Color3.fromRGB(160, 166, 180)
+			local s = fr.Size
+			local expandedHeight = baseHeight + menu.Size.Y.Offset + 6
+			fr.Size = UDim2.new(s.X.Scale, s.X.Offset, 0, open and expandedHeight or baseHeight)
+			openBg.BackgroundColor3 = open and Color3.fromRGB(48, 52, 64)
+				or (hover and Color3.fromRGB(45, 49, 60) or Color3.fromRGB(39, 42, 52))
+		end
+		dropdownEntry.collapse = function()
+			setExpanded(false)
+		end
+		local function refreshOptions()
+			for name, btn in pairs(optionButtons) do
+				if btn and btn.Parent then
+					btn.TextColor3 = name == selectedName and Color3.fromRGB(255, 255, 255)
+						or Color3.fromRGB(245, 247, 252)
+					local check = btn:FindFirstChild("Check")
+					if check and check:IsA("TextLabel") then
+						check.Visible = name == selectedName
+					end
+				end
+			end
+			openBtn.Text = selectedName or "Select"
+		end
+		local function applySelection(name)
+			if not table.find(names, name) then
+				return
+			end
+			selectedName = name
+			pcall(function()
+				setSelectedName(name)
+			end)
+			if opts.persist and id then
+				saveSettingsEntry(id, { name = name })
+			end
+			refreshOptions()
+		end
+		for idx, name in ipairs(names) do
+			local option = Instance.new("TextButton")
+			option.Name = name
+			option.Size = UDim2.new(1, 0, 0, 30)
+			option.BackgroundTransparency = 1
+			option.BorderSizePixel = 0
+			option.AutoButtonColor = false
+			option.Font = Enum.Font.GothamMedium
+			option.TextSize = 12
+			option.TextColor3 = Color3.new(1, 1, 1)
+			option.TextXAlignment = Enum.TextXAlignment.Left
+			option.Text = name
+			option.LayoutOrder = idx
+			option.ZIndex = 27
+			option.Parent = menu
+			local optionPad = Instance.new("UIPadding")
+			optionPad.PaddingRight = UDim.new(0, 24)
+			optionPad.Parent = option
+			local divider = Instance.new("Frame")
+			divider.Name = "Divider"
+			divider.AnchorPoint = Vector2.new(0, 1)
+			divider.Position = UDim2.new(0, 0, 1, 0)
+			divider.Size = UDim2.new(1, 0, 0, idx < #names and 1 or 0)
+			divider.BackgroundColor3 = Color3.fromRGB(66, 96, 128)
+			divider.BorderSizePixel = 0
+			divider.ZIndex = 27
+			divider.Parent = option
+			local check = Instance.new("TextLabel")
+			check.Name = "Check"
+			check.BackgroundTransparency = 1
+			check.AnchorPoint = Vector2.new(1, 0.5)
+			check.Position = UDim2.new(1, 0, 0.5, 0)
+			check.Size = UDim2.new(0, 16, 0, 16)
+			check.Font = Enum.Font.GothamBold
+			check.TextSize = 15
+			check.TextColor3 = Color3.fromRGB(79, 164, 242)
+			check.Text = "✓"
+			check.Visible = false
+			check.ZIndex = 28
+			check.Parent = option
+			optionButtons[name] = option
+			option.MouseButton1Click:Connect(function()
+				closeCustomDropdowns(menu)
+				setExpanded(false)
+				applySelection(name)
+			end)
+		end
+		openBtn.MouseEnter:Connect(function()
+			hover = true
+			if not menu.Visible then
+				openBg.BackgroundColor3 = Color3.fromRGB(45, 49, 60)
+			end
+		end)
+		openBtn.MouseLeave:Connect(function()
+			hover = false
+			if not menu.Visible then
+				openBg.BackgroundColor3 = Color3.fromRGB(39, 42, 52)
+			end
+		end)
+		openBtn.MouseButton1Click:Connect(function()
+			local willOpen = not menu.Visible
+			closeCustomDropdowns(menu)
+			setExpanded(willOpen)
+		end)
+		local initialName
+		if opts.persist and id then
+			local saved = settingsConfig[id]
+			if type(saved) == "table" and type(saved.name) == "string" then
+				initialName = saved.name
+			end
+		end
+		if type(getCurrentName) == "function" then
+			initialName = initialName or getCurrentName()
+		end
+		if not table.find(names, initialName) then
+			initialName = names[1]
+		end
+		setExpanded(false)
+		applySelection(initialName)
 	end
 	local function makeIconRgbToggle()
 		if not (settingsHolder and settingTemplate and iconBtn and iconStroke) then
@@ -2302,6 +3115,127 @@ task.defer(function()
 		local function toggleClick()
 			iconVisible = not iconVisible
 			applyIconUserVisibility(false)
+			setVisual()
+			saveState()
+		end
+		if clickable:IsA("GuiButton") then
+			clickable.MouseButton1Click:Connect(toggleClick)
+		else
+			clickable.InputBegan:Connect(function(input)
+				if
+					input.UserInputType == Enum.UserInputType.MouseButton1
+					or input.UserInputType == Enum.UserInputType.Touch
+				then
+					toggleClick()
+				end
+			end)
+		end
+	end
+	local function makeIconStrokeToggle()
+		if not (settingsHolder and settingTemplate and iconStroke) then
+			return
+		end
+		local key = "IconStrokeEnabled"
+		local frame = settingTemplate:Clone()
+		frame.Parent = settingsHolder
+		frame.Visible = true
+		frame.LayoutOrder = -2
+		for _, d in ipairs(frame:GetDescendants()) do
+			if d:IsA("LocalScript") then
+				d:Destroy()
+			end
+		end
+		local tLabel = frame:FindFirstChild("Title", true)
+		local dLabel = frame:FindFirstChild("Desc", true)
+		if tLabel then
+			tLabel.Text = "Icon stroke"
+		end
+		if dLabel then
+			dLabel.Text = "Toggle the Delta icon outline"
+		end
+		local btnFrame = frame:FindFirstChild("Button", true)
+		if not btnFrame then
+			return
+		end
+		local btnLabel = btnFrame:FindFirstChildWhichIsA("TextLabel")
+		if btnLabel then
+			btnLabel.Text = "Toggle"
+		end
+		local clickable = btnFrame:FindFirstChildWhichIsA("GuiButton") or btnFrame
+		local function saveState()
+			saveSettingsEntry(key, { enabled = iconStrokeUserEnabled })
+		end
+		local function setVisual()
+			btnFrame.BackgroundColor3 = iconStrokeUserEnabled and Color3.fromRGB(79, 164, 242)
+				or Color3.fromRGB(30, 30, 30)
+		end
+		setVisual()
+		local function toggleClick()
+			iconStrokeUserEnabled = not iconStrokeUserEnabled
+			applyIconStrokeState()
+			setVisual()
+			saveState()
+		end
+		if clickable:IsA("GuiButton") then
+			clickable.MouseButton1Click:Connect(toggleClick)
+		else
+			clickable.InputBegan:Connect(function(input)
+				if
+					input.UserInputType == Enum.UserInputType.MouseButton1
+					or input.UserInputType == Enum.UserInputType.Touch
+				then
+					toggleClick()
+				end
+			end)
+		end
+	end
+	local function makeIconPositionSaveToggle()
+		if not (settingsHolder and settingTemplate and iconBtn) then
+			return
+		end
+		local key = "IconPositionSave"
+		local frame = settingTemplate:Clone()
+		frame.Parent = settingsHolder
+		frame.Visible = true
+		frame.LayoutOrder = -2
+		for _, d in ipairs(frame:GetDescendants()) do
+			if d:IsA("LocalScript") then
+				d:Destroy()
+			end
+		end
+		local tLabel = frame:FindFirstChild("Title", true)
+		local dLabel = frame:FindFirstChild("Desc", true)
+		if tLabel then
+			tLabel.Text = "Save icon position"
+		end
+		if dLabel then
+			dLabel.Text = "Load your dragged icon position on execute"
+		end
+		local btnFrame = frame:FindFirstChild("Button", true)
+		if not btnFrame then
+			return
+		end
+		local btnLabel = btnFrame:FindFirstChildWhichIsA("TextLabel")
+		if btnLabel then
+			btnLabel.Text = "Toggle"
+		end
+		local clickable = btnFrame:FindFirstChildWhichIsA("GuiButton") or btnFrame
+		local function saveState()
+			saveSettingsEntry(key, { enabled = iconPositionSaveEnabled })
+			if iconPositionSaveEnabled then
+				saveManagedIconPosition()
+			end
+		end
+		local function setVisual()
+			btnFrame.BackgroundColor3 = iconPositionSaveEnabled and Color3.fromRGB(79, 164, 242)
+				or Color3.fromRGB(30, 30, 30)
+		end
+		setVisual()
+		local function toggleClick()
+			iconPositionSaveEnabled = not iconPositionSaveEnabled
+			if iconPositionSaveEnabled then
+				applySavedManagedIconPosition()
+			end
 			setVisual()
 			saveState()
 		end
@@ -2800,9 +3734,10 @@ task.defer(function()
 	local sidebarDragStartX = 0
 	local sidebarDragStartAlpha = 0
 	local sidebarDragAlpha = 0
+	local getCurrentSectionName
 	local sidebarCurrentSection = nil
 	local autoCloseOnLoad = true
-	local sectionsList = { "Executor", "Home", "Scripthub", "Settings", "Console" }
+	local sectionsList = { "Executor", "Home", "Scripthub", "Settings", "Console", "Music" }
 	local gestureWidthValue = Instance.new("NumberValue")
 	gestureWidthValue.Name = "GestureWidthValue"
 	gestureWidthValue.Value = sidebarGestureWidth
@@ -2865,6 +3800,66 @@ task.defer(function()
 		end
 		setIconForcedHidden(false)
 	end
+	local function openDeltaFromIcon()
+		if not sidebar then
+			return
+		end
+		local curSec = getCurrentSectionName()
+		if curSec then
+			sidebarCurrentSection = curSec
+		end
+		if not sidebarCurrentSection then
+			sidebarCurrentSection = sectionsList[1]
+		end
+		if TS and sidebar then
+			local tw = __lt.cm(
+				"TweenService",
+				"Create",
+				sidebar,
+				TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+				{
+					Position = UDim2.new(sidebarOpenPos.X.Scale, sidebarOpenPos.X.Offset, 0.5, 0),
+				}
+			)
+			tw:Play()
+		else
+			setSidebarPosition(sidebarOpenPos)
+		end
+		normalizeSidebarGeometry()
+		if iconGui then
+			iconGui.Enabled = false
+		end
+		setIconForcedHidden(true)
+		if mainGui and sidebarCurrentSection then
+			for _, n in ipairs(sectionsList) do
+				local fr = mainGui:FindFirstChild(n)
+				if fr and fr:IsA("GuiObject") then
+					fr.Visible = n == sidebarCurrentSection
+				end
+			end
+		end
+	end
+	bindManagedIconToggle = function()
+		NAlib.disconnect("ManagedIcon_Toggle")
+		if not (iconBtn and iconBtn:IsA("GuiButton")) then
+			return
+		end
+		NAlib.connect(
+			"ManagedIcon_Toggle",
+			iconBtn.MouseButton1Click:Connect(function()
+				if not sidebar then
+					return
+				end
+				local isOpen = math.abs(sidebar.Position.X.Scale - sidebarOpenPos.X.Scale) <= 0.001
+				if isOpen then
+					closeDeltaSidebar()
+				else
+					openDeltaFromIcon()
+				end
+			end)
+		)
+	end
+	bindManagedIconToggle()
 	local function saveSidebarGesture()
 		if not (HS and type(writefile) == "function") then
 			return
@@ -3120,7 +4115,7 @@ task.defer(function()
 			end)
 		end
 	end
-	local function getCurrentSectionName()
+	function getCurrentSectionName()
 		if not mainGui then
 			return nil
 		end
@@ -3133,6 +4128,30 @@ task.defer(function()
 		end
 		return cur
 	end
+	local function bindSidebarSectionMemory()
+		NAlib.disconnect("SidebarSectionMemory")
+		if not mainGui then
+			return
+		end
+		local current = getCurrentSectionName()
+		if current then
+			sidebarCurrentSection = current
+		end
+		for _, name in ipairs(sectionsList) do
+			local fr = mainGui:FindFirstChild(name)
+			if fr and fr:IsA("GuiObject") then
+				NAlib.connect(
+					"SidebarSectionMemory",
+					fr:GetPropertyChangedSignal("Visible"):Connect(function()
+						if fr.Visible then
+							sidebarCurrentSection = name
+						end
+					end)
+				)
+			end
+		end
+	end
+	bindSidebarSectionMemory()
 	function applySidebarGestureState()
 		if not sidebar then
 			sidebarGestureEnabled = false
@@ -3336,8 +4355,106 @@ task.defer(function()
 	if iconSizeValue then
 		makeSizeSlider("IconSize", "Icon Size", "Scale the Delta icon size", iconSizeValue, 0.5, 5)
 	end
+	makeEnumDropdown(
+		"IconShape",
+		"Icon Shape",
+		"Choose the shape of the Delta icon",
+		{ "Squircle", "Rounded", "Square", "Circle" },
+		function()
+			return iconShapeName
+		end,
+		function(name)
+			iconShapeName = name
+			applyIconShapeChoice()
+		end,
+		{ persist = true }
+	)
 	if iconRgbSpeedValue then
 		makeSizeSlider("IconRgbSpeed", "RGB Speed", "Speed of the RGB icon effect", iconRgbSpeedValue, 0.05, 2)
+	end
+	do
+		local lighting = game:GetService("Lighting")
+		local techItems = Enum.Technology:GetEnumItems()
+		makeEnumDropdown(
+			"LightingTechnology",
+			"Lighting Technology",
+			"Set Lighting.Technology from Delta settings",
+			techItems,
+			function()
+				return lighting and lighting.Technology and lighting.Technology.Name
+					or techItems[1] and techItems[1].Name
+			end,
+			function(name)
+				local enumItem = Enum.Technology[name]
+				if lighting and enumItem then
+					pcall(function()
+						lighting.Technology = enumItem
+					end)
+				end
+			end
+		)
+	end
+	do
+		local selectedCameraType
+		local camItems = Enum.CameraType:GetEnumItems()
+		local function applyCameraType(name)
+			local enumItem = Enum.CameraType[name]
+			if not enumItem then
+				return
+			end
+			selectedCameraType = name
+			local cam = workspace.CurrentCamera
+			if cam then
+				pcall(function()
+					cam.CameraType = enumItem
+				end)
+			end
+		end
+		makeEnumDropdown(
+			"CameraType",
+			"Camera Type",
+			"Set CurrentCamera.CameraType from Delta settings",
+			camItems,
+			function()
+				local cam = workspace.CurrentCamera
+				return cam and cam.CameraType and cam.CameraType.Name or camItems[1] and camItems[1].Name
+			end,
+			applyCameraType
+		)
+		NAlib.disconnect("CameraType_Reapply")
+		NAlib.connect(
+			"CameraType_Reapply",
+			workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+				task.defer(function()
+					if selectedCameraType then
+						applyCameraType(selectedCameraType)
+					end
+				end)
+			end)
+		)
+	end
+	if type(setfpscap) == "function" then
+		local fpsCapValue = Instance.new("NumberValue")
+		fpsCapValue.Name = "FpsCapValue"
+		local fpsSaved = settingsConfig.FpsCap
+		local fpsHasSaved = type(fpsSaved) == "table" and type(fpsSaved.value) == "number"
+		fpsCapValue.Value = fpsHasSaved and math.clamp(math.floor(fpsSaved.value + 0.5), 30, 999) or 60
+		local function applyFpsCap(v)
+			local n = math.clamp(math.floor((tonumber(v) or 60) + 0.5), 30, 999)
+			if fpsCapValue.Value ~= n then
+				fpsCapValue.Value = n
+			end
+			pcall(setfpscap, n)
+		end
+		makeSizeSlider("FpsCap", "FPS cap", "set your FPS cap to anything you like", fpsCapValue, 30, 999, {
+			integer = true,
+			apply = applyFpsCap,
+		})
+		if fpsHasSaved then
+			task.defer(function()
+				applyFpsCap(fpsCapValue.Value)
+			end)
+		end
 	end
 	if sidebarGrad1 and sidebarGrad2 and sidebarGradient then
 		makeColorSlider("SidebarGradient1", "Sidebar Gradient 1", "First sidebar gradient color", sidebarGrad1)
@@ -3353,6 +4470,8 @@ task.defer(function()
 		(sidebarGrad2:GetPropertyChangedSignal("Value")):Connect(updateSidebarGradient)
 	end
 	makeIconVisibilityToggle()
+	makeIconPositionSaveToggle()
+	makeIconStrokeToggle()
 	makeIconRgbToggle()
 	makeTabNotifToggle()
 	makeIconEnableToggle()
@@ -3723,7 +4842,6 @@ if type(_dvp) == "table" and not _dvp.__DeltaVisualPatchLoaded then
 		end
 		local HS = S("HttpService")
 		local TS = S("TweenService")
-		local LG = S("Lighting")
 		local CG = S("CoreGui")
 		local root = gethui and gethui() or CG
 		local function isGib(n)
@@ -3798,17 +4916,6 @@ if type(_dvp) == "table" and not _dvp.__DeltaVisualPatchLoaded then
 			dimFr.ZIndex = 1
 			dimFr.Active = false
 		end)
-		local blurFx
-		if LG then
-			blurFx = LG:FindFirstChild("DeltaBlur")
-			if not blurFx then
-				blurFx = Instance.new("BlurEffect")
-				blurFx.Name = "DeltaBlur"
-				blurFx.Size = 0
-				blurFx.Enabled = false
-				blurFx.Parent = LG
-			end
-		end
 		local base = { cor = {}, pan = {}, str = {}, got = false }
 		local okNm = {
 			Sidebar = true,
@@ -3906,14 +5013,6 @@ if type(_dvp) == "table" and not _dvp.__DeltaVisualPatchLoaded then
 		local dimVal = Instance.new("NumberValue")
 		dimVal.Value = type(settingsConfig.UiDim) == "table" and math.clamp(settingsConfig.UiDim.value or 0.28, 0, 0.65)
 			or 0.28
-		local blrVal = Instance.new("NumberValue")
-		blrVal.Value = type(settingsConfig.UiBlurSize) == "table"
-				and math.clamp(settingsConfig.UiBlurSize.value or 18, 0, 40)
-			or 18
-		local blrOn = type(settingsConfig.UiBlur) == "table"
-				and settingsConfig.UiBlur.enabled ~= nil
-				and settingsConfig.UiBlur.enabled
-			or false
 		local dimDesiredVisible = false
 		local dimDesiredTransparency = 1
 		local dimEnforceConn
@@ -3992,10 +5091,6 @@ if type(_dvp) == "table" and not _dvp.__DeltaVisualPatchLoaded then
 		end
 		local function fxSync()
 			local on = uiOpen()
-			if blurFx then
-				blurFx.Enabled = blrOn and on and blrVal.Value > 0.05
-				blurFx.Size = blurFx.Enabled and math.clamp(blrVal.Value, 0, 40) or 0
-			end
 			dimDesiredVisible = on and dimVal.Value > 0.01
 			dimDesiredTransparency = 1 - math.clamp(dimVal.Value, 0, 0.85)
 			applyDimState(true)
@@ -4021,10 +5116,6 @@ if type(_dvp) == "table" and not _dvp.__DeltaVisualPatchLoaded then
 		dimVal.Changed:Connect(function()
 			fxSync()
 			saveCfg("UiDim", { value = math.clamp(dimVal.Value, 0, 0.65) })
-		end)
-		blrVal.Changed:Connect(function()
-			fxSync()
-			saveCfg("UiBlurSize", { value = math.clamp(blrVal.Value, 0, 40) })
 		end)
 		for _, n in ipairs(sectionsList) do
 			local fr = mainGui:FindFirstChild(n)
@@ -4219,41 +5310,6 @@ if type(_dvp) == "table" and not _dvp.__DeltaVisualPatchLoaded then
 			)
 			makeSizeSlider("UiStroke", "Stroke scale", "Scales borders and outlines across Delta", stkVal, 0, 2.5)
 			makeSizeSlider("UiDim", "Open dim", "Darkens the game behind Delta while it is open", dimVal, 0, 0.65)
-			if blurFx then
-				local fr = template:Clone()
-				fr.Parent = holder
-				fr.Visible = true
-				fr.LayoutOrder = -2
-				local tl = fr:FindFirstChild("Title", true)
-				local dl = fr:FindFirstChild("Desc", true)
-				if tl then
-					tl.Text = "UI blur"
-				end
-				if dl then
-					dl.Text = "Blur the game behind Delta while it is open"
-				end
-				local btn = fr:FindFirstChild("Button", true)
-				local lb = btn and btn:FindFirstChildWhichIsA("TextLabel")
-				if lb then
-					lb.Text = "Toggle"
-				end
-				local click = btn and (btn:FindFirstChildWhichIsA("GuiButton") or btn)
-				local function vis()
-					btn.BackgroundColor3 = blrOn and Color3.fromRGB(79, 164, 242) or Color3.fromRGB(30, 30, 30)
-				end
-				vis()
-				if click then
-					if click:IsA("GuiButton") then
-						click.MouseButton1Click:Connect(function()
-							blrOn = not blrOn
-							vis()
-							saveCfg("UiBlur", { enabled = blrOn })
-							fxSync()
-						end)
-					end
-				end
-				makeSizeSlider("UiBlurSize", "Blur strength", "Blur amount while Delta is open", blrVal, 0, 40)
-			end
 		end
 	end)
 end
@@ -4444,86 +5500,97 @@ local sec = {
 	"Music",
 }
 
-local musOpenPos = UDim2.new(0.476246715, 0, 0.508232415, 0)
-local musClosedPos = UDim2.new(0.400000006, 0, 0.508232415, 0)
-local musTw
-local music
+local musicState = {
+	openPos = UDim2.new(0.476246715, 0, 0.508232415, 0),
+	closedPos = UDim2.new(0.400000006, 0, 0.508232415, 0),
+	frame = nil,
+	button = nil,
+	tween = nil,
+	activeTab = nil,
+	icon = {
+		sheetUrl = "https://raw.githubusercontent.com/ltseverydayyou/Nameless-Admin/main/NAimages/sheet.png",
+		sheetAsset = nil,
+		rectOffset = Vector2.new(371, 806),
+		rectSize = Vector2.new(23, 33),
+	},
+}
 local syncTabColors
 local function tweenMusic(toPos, show, hideAfter)
-	if not music then
+	if not musicState.frame then
 		return
 	end
-	if musTw then
+	if musicState.tween then
 		pcall(function()
-			musTw:Cancel()
+			musicState.tween:Cancel()
 		end)
-		musTw = nil
+		musicState.tween = nil
 	end
 	if show then
-		music.Visible = true
+		musicState.frame.Visible = true
 	end
 	if TS then
-		music.Position = music.Position
-		musTw = TS:Create(music, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-			Position = toPos,
-		})
+		musicState.frame.Position = musicState.frame.Position
+		musicState.tween =
+			TS:Create(musicState.frame, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				Position = toPos,
+			})
 		if hideAfter then
-			con(musTw.Completed:Connect(function()
-				if music then
-					music.Visible = false
+			con(musicState.tween.Completed:Connect(function()
+				if musicState.frame then
+					musicState.frame.Visible = false
 				end
 			end))
 		end
-		musTw:Play()
+		musicState.tween:Play()
 	else
-		music.Position = toPos
+		musicState.frame.Position = toPos
 		if hideAfter then
-			music.Visible = false
+			musicState.frame.Visible = false
 		end
 	end
 end
 
 local function openMusic()
-	if not music then
+	if not musicState.frame then
 		return
 	end
-	activeTab = "Music"
+	musicState.activeTab = "Music"
 	for _, n in ipairs(sec) do
 		local p = gui:FindFirstChild(n)
-		if p and p:IsA("GuiObject") and p ~= music then
+		if p and p:IsA("GuiObject") and p ~= musicState.frame then
 			p.Visible = false
 		end
 	end
-	music.Position = musClosedPos
-	tweenMusic(musOpenPos, true, false)
+	musicState.frame.Position = musicState.closedPos
+	tweenMusic(musicState.openPos, true, false)
 	task.defer(function()
 		syncTabColors("Music")
 	end)
 end
 
 local function closeMusic(anim)
-	if not music then
+	if not musicState.frame then
 		return
 	end
-	if not music.Visible then
-		music.Position = musClosedPos
+	if not musicState.frame.Visible then
+		musicState.frame.Position = musicState.closedPos
 		return
 	end
 	if anim then
-		tweenMusic(musClosedPos, false, true)
+		tweenMusic(musicState.closedPos, false, true)
 	else
-		music.Position = musClosedPos
-		music.Visible = false
+		musicState.frame.Position = musicState.closedPos
+		musicState.frame.Visible = false
 	end
 end
 
 local function hideAll(exn)
 	if exn == "Music" then
-		activeTab = "Music"
+		musicState.activeTab = "Music"
 		openMusic()
 		return
 	end
-	activeTab = exn
+	musicState.activeTab = exn
 	closeMusic(true)
 	for _, n in ipairs(sec) do
 		local p = gui:FindFirstChild(n)
@@ -4552,14 +5619,16 @@ local function gbtn(nm)
 	end
 end
 
-local homeBtn = gbtn("Home")
-local shBtn = gbtn("Scripthub")
-local setBtn = gbtn("Settings")
-local exBtn = gbtn("Executor")
-local conBtn = gbtn("Console")
-local togBtn = gbtn("ToggleUI")
-local acv = sb:FindFirstChild("ActiveColor")
-local icv = sb:FindFirstChild("InactiveColor")
+local sidebarRefs = {
+	home = gbtn("Home"),
+	scripthub = gbtn("Scripthub"),
+	settings = gbtn("Settings"),
+	executor = gbtn("Executor"),
+	console = gbtn("Console"),
+	toggle = gbtn("ToggleUI"),
+	activeColor = sb:FindFirstChild("ActiveColor"),
+	inactiveColor = sb:FindFirstChild("InactiveColor"),
+}
 
 local function imgOf(btn)
 	if not btn then
@@ -4582,23 +5651,24 @@ local function improveSidebarTouch(btn)
 	return btn
 end
 
-local offBg = shBtn and shBtn.BackgroundColor3 or Color3.fromRGB(41, 45, 58)
-local offImg = imgOf(shBtn) and imgOf(shBtn).ImageColor3 or Color3.fromRGB(138, 145, 164)
+local offBg = sidebarRefs.scripthub and sidebarRefs.scripthub.BackgroundColor3 or Color3.fromRGB(41, 45, 58)
+local offImg = imgOf(sidebarRefs.scripthub) and imgOf(sidebarRefs.scripthub).ImageColor3
+	or Color3.fromRGB(138, 145, 164)
 local onImg = Color3.new(1, 1, 1)
 
-improveSidebarTouch(homeBtn)
-improveSidebarTouch(shBtn)
-improveSidebarTouch(setBtn)
-improveSidebarTouch(exBtn)
-improveSidebarTouch(conBtn)
-improveSidebarTouch(togBtn)
+improveSidebarTouch(sidebarRefs.home)
+improveSidebarTouch(sidebarRefs.scripthub)
+improveSidebarTouch(sidebarRefs.settings)
+improveSidebarTouch(sidebarRefs.executor)
+improveSidebarTouch(sidebarRefs.console)
+improveSidebarTouch(sidebarRefs.toggle)
 
 local function bgOn()
-	return acv and acv.Value or col.ac
+	return sidebarRefs.activeColor and sidebarRefs.activeColor.Value or col.ac
 end
 
 local function bgOff()
-	return icv and icv.Value or offBg
+	return sidebarRefs.inactiveColor and sidebarRefs.inactiveColor.Value or offBg
 end
 
 local function applyBtnState(btn, on)
@@ -4633,8 +5703,6 @@ local function applyBtnState(btn, on)
 	end
 end
 
-local musb
-local activeTab
 local function visibleTab()
 	for _, n in ipairs(sec) do
 		local p = gui:FindFirstChild(n)
@@ -4647,12 +5715,12 @@ end
 function syncTabColors(forceTab)
 	local curTab = forceTab or visibleTab()
 	local map = {
-		Home = homeBtn,
-		Executor = exBtn,
-		Scripthub = shBtn,
-		Settings = setBtn,
-		Console = conBtn,
-		Music = musb,
+		Home = sidebarRefs.home,
+		Executor = sidebarRefs.executor,
+		Scripthub = sidebarRefs.scripthub,
+		Settings = sidebarRefs.settings,
+		Console = sidebarRefs.console,
+		Music = musicState.button,
 	}
 	for n, b in pairs(map) do
 		applyBtnState(b, curTab == n)
@@ -4757,6 +5825,15 @@ end
 local SCRIPTBLOX_BASE = "https://scriptblox.com"
 local RSCRIPTS_BASE = "https://rscripts.net"
 local IMAGE_CACHE_DIR = "DeltaCustom/ScriptHubImages"
+local MUSIC_CACHE_DIR = "DeltaCustom/DeltaMusic"
+local MUSIC_CFG_PATH = MUSIC_CACHE_DIR .. "/_config.json"
+local MUSIC_EXTS = {
+	mp3 = true,
+	ogg = true,
+	flac = true,
+	wav = true,
+}
+local musicCfg = {}
 
 local function sanitizeFileName(str)
 	return tostring(str or ""):gsub("[^%w%._%-]", "_")
@@ -4806,6 +5883,426 @@ local function ensureImageFolder()
 	return pcall(makefolder, IMAGE_CACHE_DIR) == true
 end
 
+local function ensureMusicFolder()
+	if type(isfolder) ~= "function" or type(makefolder) ~= "function" then
+		return false
+	end
+	local ok, ex = pcall(isfolder, MUSIC_CACHE_DIR)
+	if ok and ex then
+		return true
+	end
+	return pcall(makefolder, MUSIC_CACHE_DIR) == true
+end
+
+local function getAudioExt(path)
+	if type(path) ~= "string" then
+		return nil
+	end
+	local clean = path:match("([^?#]+)") or path
+	local ext = clean:match("%.([%w]+)$")
+	if not ext then
+		return nil
+	end
+	ext = ext:lower()
+	return MUSIC_EXTS[ext] and ext or nil
+end
+
+local function normalizeAudioUrl(url)
+	if type(url) ~= "string" then
+		return nil
+	end
+	local t = trim(url)
+	if t == "" then
+		return nil
+	end
+	t = t:gsub(" ", "%%20")
+	t = t:gsub(
+		"^https://github%.com/([^/]+)/([^/]+)/blob/([^/]+)/(.+)$",
+		"https://raw.githubusercontent.com/%1/%2/%3/%4"
+	)
+	return t
+end
+
+local function deriveAudioFileName(url, ext)
+	local name = url:match("/([^/%?#]+)") or "track"
+	name = name:match("([^?#]+)") or name
+	local base = sanitizeFileName(name:gsub("%.[^%.]+$", ""))
+	base = base ~= "" and base or "track"
+	return string.format("%s_%s.%s", base, hashString(url), ext)
+end
+
+local function resolveMusicAsset(full)
+	if type(full) ~= "string" or full == "" or type(getcustomasset) ~= "function" or type(isfile) ~= "function" then
+		return nil
+	end
+	local okEx, ex = pcall(isfile, full)
+	if not (okEx and ex) then
+		return nil
+	end
+	local okAsset, asset = pcall(getcustomasset, full)
+	if okAsset and type(asset) == "string" and asset ~= "" then
+		return asset
+	end
+	return nil
+end
+
+local function loadMusicCfg()
+	if HS and type(isfile) == "function" and type(readfile) == "function" and isfile(MUSIC_CFG_PATH) then
+		local ok, data = pcall(readfile, MUSIC_CFG_PATH)
+		if ok and type(data) == "string" and data ~= "" then
+			local okDec, dec = pcall(function()
+				return __lt.cm("HttpService", "JSONDecode", data)
+			end)
+			if okDec and type(dec) == "table" then
+				musicCfg = dec
+				return
+			end
+		end
+	end
+	musicCfg = {}
+end
+
+local function saveMusicCfg()
+	if not (HS and type(writefile) == "function" and ensureMusicFolder()) then
+		return false
+	end
+	local okEnc, enc = pcall(function()
+		return __lt.cm("HttpService", "JSONEncode", musicCfg)
+	end)
+	if okEnc and type(enc) == "string" then
+		return pcall(writefile, MUSIC_CFG_PATH, enc)
+	end
+	return false
+end
+
+local function scanMusicFiles()
+	local list = {}
+	if type(listfiles) ~= "function" or not ensureMusicFolder() then
+		return list
+	end
+	local okList, files = pcall(listfiles, MUSIC_CACHE_DIR)
+	if not okList or type(files) ~= "table" then
+		return list
+	end
+	for _, path in ipairs(files) do
+		if type(path) == "string" then
+			local ext = getAudioExt(path)
+			if ext then
+				local name = path:match("([^/\\]+)$") or path
+				list[#list + 1] = {
+					path = path,
+					name = name,
+					asset = resolveMusicAsset(path),
+				}
+			end
+		end
+	end
+	table.sort(list, function(a, b)
+		return (a.name or ""):lower() < (b.name or ""):lower()
+	end)
+	return list
+end
+
+local function makeMusicFolderDropdown(par, y, z, onPick, onToggle)
+	local state = {
+		open = false,
+		menuHeight = 0,
+	}
+
+	local hoverBg = mk("Frame", {
+		Name = "LocalTrackHover",
+		BackgroundColor3 = Color3.fromRGB(41, 45, 56),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Position = UDim2.new(0, 16, 0, y),
+		Size = UDim2.new(1, -32, 0, 32),
+		Parent = par,
+		ZIndex = z,
+	}, {
+		mk("UICorner", {
+			CornerRadius = UDim.new(0, 10),
+		}),
+	})
+
+	local btn = mk("TextButton", {
+		Name = "LocalTrackButton",
+		BackgroundColor3 = col.bg,
+		BorderSizePixel = 0,
+		Position = UDim2.new(0, 16, 0, y),
+		Size = UDim2.new(1, -32, 0, 32),
+		Text = "",
+		AutoButtonColor = false,
+		Parent = par,
+		ZIndex = z + 1,
+	}, {
+		mk("UICorner", {
+			CornerRadius = UDim.new(0, 10),
+		}),
+		mk("UIStroke", {
+			Color = col.st,
+			Transparency = 0.3,
+		}),
+	})
+
+	local value = mk("TextLabel", {
+		Name = "Value",
+		BackgroundTransparency = 1,
+		Position = UDim2.new(0, 12, 0, 0),
+		Size = UDim2.new(1, -38, 1, 0),
+		Text = "Pick local audio from DeltaMusic",
+		TextColor3 = col.tx,
+		Font = Enum.Font.GothamSemibold,
+		TextSize = 13,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = btn,
+		ZIndex = z + 2,
+	})
+
+	local arrow = mk("TextLabel", {
+		Name = "Arrow",
+		BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -12, 0.5, 0),
+		Size = UDim2.new(0, 18, 0, 18),
+		Text = "v",
+		TextColor3 = col.td,
+		Font = Enum.Font.GothamBold,
+		TextSize = 12,
+		Parent = btn,
+		ZIndex = z + 2,
+	})
+
+	local menu = mk("Frame", {
+		Name = "LocalTrackMenu",
+		BackgroundColor3 = Color3.fromRGB(37, 41, 52),
+		BorderSizePixel = 0,
+		Position = UDim2.new(0, 16, 0, y + 38),
+		Size = UDim2.new(1, -32, 0, 0),
+		Visible = false,
+		Parent = par,
+		ZIndex = z + 3,
+	}, {
+		mk("UICorner", {
+			CornerRadius = UDim.new(0, 12),
+		}),
+		mk("UIStroke", {
+			Color = Color3.fromRGB(71, 79, 97),
+			Transparency = 0.22,
+		}),
+	})
+
+	local menuList = mk("ScrollingFrame", {
+		Name = "List",
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		CanvasSize = UDim2.new(0, 0, 0, 0),
+		ElasticBehavior = Enum.ElasticBehavior.Never,
+		ScrollBarThickness = 3,
+		ScrollBarImageColor3 = col.st,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		TopImage = "",
+		MidImage = "",
+		BottomImage = "",
+		Size = UDim2.new(1, 0, 1, 0),
+		Parent = menu,
+		ZIndex = z + 4,
+	}, {
+		mk("UIPadding", {
+			PaddingTop = UDim.new(0, 8),
+			PaddingBottom = UDim.new(0, 8),
+			PaddingLeft = UDim.new(0, 10),
+			PaddingRight = UDim.new(0, 10),
+		}),
+		mk("UIListLayout", {
+			Padding = UDim.new(0, 6),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		}),
+	})
+
+	local function setHover(on)
+		hoverBg.BackgroundTransparency = on and 0 or 1
+	end
+
+	local function setMenuOpen(open)
+		if state.open == open then
+			return
+		end
+		state.open = open
+		menu.Visible = open
+		arrow.Text = open and "^" or "v"
+		if TS then
+			pcall(function()
+				TS:Create(btn, TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+					BackgroundColor3 = open and Color3.fromRGB(34, 38, 49) or col.bg,
+				}):Play()
+			end)
+		else
+			btn.BackgroundColor3 = open and Color3.fromRGB(34, 38, 49) or col.bg
+		end
+		if onToggle then
+			onToggle(open, state.menuHeight)
+		end
+	end
+
+	local function setValueText(text)
+		value.Text = trim(text or "") ~= "" and tostring(text) or "Pick local audio from DeltaMusic"
+	end
+
+	local function rebuild()
+		for _, child in ipairs(menuList:GetChildren()) do
+			if not child:IsA("UIListLayout") and not child:IsA("UIPadding") then
+				child:Destroy()
+			end
+		end
+		local items = scanMusicFiles()
+		if #items == 0 then
+			mk("TextLabel", {
+				Name = "Empty",
+				BackgroundTransparency = 1,
+				Size = UDim2.new(1, 0, 0, 28),
+				Text = "No local audio files found",
+				TextColor3 = col.td,
+				Font = Enum.Font.Gotham,
+				TextSize = 12,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				Parent = menuList,
+				ZIndex = z + 5,
+			})
+		else
+			for i, item in ipairs(items) do
+				local row = mk("TextButton", {
+					Name = "Track_" .. i,
+					BackgroundColor3 = Color3.fromRGB(43, 47, 58),
+					BorderSizePixel = 0,
+					Size = UDim2.new(1, 0, 0, 30),
+					Text = item.name or "",
+					TextColor3 = col.tx,
+					Font = Enum.Font.GothamSemibold,
+					TextSize = 12,
+					TextTruncate = Enum.TextTruncate.AtEnd,
+					TextXAlignment = Enum.TextXAlignment.Left,
+					AutoButtonColor = false,
+					Parent = menuList,
+					ZIndex = z + 5,
+				}, {
+					mk("UIPadding", {
+						PaddingLeft = UDim.new(0, 10),
+						PaddingRight = UDim.new(0, 10),
+					}),
+					mk("UICorner", {
+						CornerRadius = UDim.new(0, 8),
+					}),
+				})
+				con(row.MouseEnter:Connect(function()
+					row.BackgroundColor3 = Color3.fromRGB(51, 56, 68)
+				end))
+				con(row.MouseLeave:Connect(function()
+					row.BackgroundColor3 = Color3.fromRGB(43, 47, 58)
+				end))
+				con(row.MouseButton1Click:Connect(function()
+					setValueText(item.name)
+					setMenuOpen(false)
+					if onPick then
+						onPick(item)
+					end
+				end))
+			end
+		end
+		local count = math.max(#items, 1)
+		local fullHeight = count * 30 + math.max(count - 1, 0) * 6 + 16
+		local visibleHeight = math.min(fullHeight, 172)
+		state.menuHeight = visibleHeight
+		menu.Size = UDim2.new(1, -32, 0, visibleHeight)
+		menuList.CanvasSize = UDim2.new(0, 0, 0, fullHeight)
+		if state.open and onToggle then
+			onToggle(true, state.menuHeight)
+		end
+	end
+
+	con(btn.MouseButton1Click:Connect(function()
+		if not state.open then
+			rebuild()
+		end
+		setMenuOpen(not state.open)
+	end))
+
+	con(btn.MouseEnter:Connect(function()
+		setHover(true)
+	end))
+
+	con(btn.MouseLeave:Connect(function()
+		setHover(false)
+	end))
+
+	return {
+		button = btn,
+		menu = menu,
+		rebuild = rebuild,
+		close = function()
+			setMenuOpen(false)
+		end,
+		setText = setValueText,
+	}
+end
+
+local function findLocalMusicEntry(query)
+	query = trim(query)
+	if query == "" then
+		return nil
+	end
+	local lower = query:lower()
+	for _, item in ipairs(scanMusicFiles()) do
+		local nm = (item.name or ""):lower()
+		local base = nm:gsub("%.[^%.]+$", "")
+		if lower == nm or lower == base then
+			return item
+		end
+	end
+	return nil
+end
+
+local httpGetBinary
+local function downloadMusicAsset(url)
+	if
+		type(getcustomasset) ~= "function"
+		or type(writefile) ~= "function"
+		or type(isfile) ~= "function"
+		or not ensureMusicFolder()
+	then
+		return nil, "Custom music requires file support and getcustomasset."
+	end
+	local norm = normalizeAudioUrl(url)
+	local ext = getAudioExt(norm)
+	if not norm or not ext then
+		return nil, "Unsupported audio format. Use mp3, ogg, flac, or wav."
+	end
+	local full = MUSIC_CACHE_DIR .. "/" .. deriveAudioFileName(norm, ext)
+	local okEx, ex = pcall(isfile, full)
+	if not (okEx and ex) then
+		local data = httpGetBinary(norm)
+		if not (type(data) == "string" and data ~= "") then
+			return nil, "Failed to download audio."
+		end
+		local okW = pcall(writefile, full, data)
+		if not okW then
+			return nil, "Failed to save audio."
+		end
+	end
+	local asset = resolveMusicAsset(full)
+	if not asset then
+		return nil, "Failed to load audio asset."
+	end
+	return {
+		asset = asset,
+		name = full:match("([^/\\]+)$") or full,
+		path = full,
+	}, nil
+end
+
+ensureMusicFolder()
+loadMusicCfg()
+
 local function deriveImageFileName(url)
 	local name = url:match("/([^/%?#]+)") or "image"
 	name = name:match("([^?#]+)") or name
@@ -4845,7 +6342,7 @@ local function isMeaningfulImageUrl(url)
 	return not url:lower():find("no%-script")
 end
 
-local function httpGetBinary(url, headers)
+function httpGetBinary(url, headers)
 	if type(url) ~= "string" or url == "" then
 		return nil
 	end
@@ -5741,40 +7238,40 @@ con(sh.DescendantAdded:Connect(function(d)
 end))
 
 local function buildMusicTab()
-	music = gui:FindFirstChild("Music")
-	if music then
+	musicState.frame = gui:FindFirstChild("Music")
+	if musicState.frame then
 		pcall(function()
-			music:Destroy()
+			musicState.frame:Destroy()
 		end)
 	end
 
 	local tpl = sh or hm or se or ex or co
 	if tpl and tpl:IsA("GuiObject") then
-		music = tpl:Clone()
-		music.Name = "Music"
-		music.Visible = false
-		music.Parent = gui
+		musicState.frame = tpl:Clone()
+		musicState.frame.Name = "Music"
+		musicState.frame.Visible = false
+		musicState.frame.Parent = gui
 		pcall(function()
-			music.AnchorPoint = Vector2.new(0.5, 0.5)
-			music.Position = musClosedPos
-			music.Size = sh.Size
-			music.ZIndex = sh.ZIndex
+			musicState.frame.AnchorPoint = Vector2.new(0.5, 0.5)
+			musicState.frame.Position = musicState.closedPos
+			musicState.frame.Size = sh.Size
+			musicState.frame.ZIndex = sh.ZIndex
 		end)
-		for _, d in ipairs(music:GetDescendants()) do
+		for _, d in ipairs(musicState.frame:GetDescendants()) do
 			if d:IsA("LocalScript") then
 				d:Destroy()
-			elseif d:IsA("GuiObject") and d ~= music then
+			elseif d:IsA("GuiObject") and d ~= musicState.frame then
 				pcall(function()
 					d.Visible = false
 				end)
 			end
 		end
 	else
-		music = mk("Frame", {
+		musicState.frame = mk("Frame", {
 			Name = "Music",
 			BackgroundTransparency = 1,
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = musClosedPos,
+			Position = musicState.closedPos,
 			Size = sh and sh.Size or UDim2.new(0.848344803, 0, 0.892481446, 0),
 			Visible = false,
 			Parent = gui,
@@ -5782,14 +7279,14 @@ local function buildMusicTab()
 		})
 	end
 
-	st.pg.music = music
+	st.pg.music = musicState.frame
 
 	local mr = mk("ScrollingFrame", {
 		Name = "LT_Music",
 		AutomaticCanvasSize = Enum.AutomaticSize.None,
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		CanvasSize = UDim2.new(0, 0, 0, 550),
+		CanvasSize = UDim2.new(0, 0, 0, 590),
 		ElasticBehavior = Enum.ElasticBehavior.Never,
 		HorizontalScrollBarInset = Enum.ScrollBarInset.ScrollBar,
 		ScrollingDirection = Enum.ScrollingDirection.Y,
@@ -5804,7 +7301,7 @@ local function buildMusicTab()
 		Size = UDim2.new(0.94, 0, 0.88, 0),
 		Visible = true,
 		ZIndex = 50,
-		Parent = music,
+		Parent = musicState.frame,
 	})
 
 	local function mkPanel(name, pos, size, fill, stroke, z)
@@ -6019,7 +7516,14 @@ local function buildMusicTab()
 		mk("UICorner", { CornerRadius = UDim.new(0, 999) }),
 	})
 
-	local inputCard = mkPanel("InputCard", UDim2.new(0, 0, 0, 132), UDim2.new(1, 0, 0, 78), col.bg2, col.st, 51)
+	local inputBaseY = 132
+	local inputBaseHeight = 118
+	local controlBaseY = 264
+	local mixBaseY = 436
+	local canvasBaseHeight = 590
+
+	local inputCard =
+		mkPanel("InputCard", UDim2.new(0, 0, 0, inputBaseY), UDim2.new(1, 0, 0, inputBaseHeight), col.bg2, col.st, 51)
 	local inputTitle = mk("TextLabel", {
 		BackgroundTransparency = 1,
 		Position = UDim2.new(0, 16, 0, 10),
@@ -6041,7 +7545,7 @@ local function buildMusicTab()
 		Position = UDim2.new(0, 16, 0, 28),
 		ClearTextOnFocus = false,
 		Text = "",
-		PlaceholderText = "Asset id, full URL, or rbxassetid://id",
+		PlaceholderText = "Asset id, local filename, or direct audio URL",
 		TextColor3 = col.tx,
 		PlaceholderColor3 = col.td,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -6067,7 +7571,8 @@ local function buildMusicTab()
 	loadb.Position = UDim2.new(1, -140, 0, 28)
 	loadb.ZIndex = 53
 
-	local controlCard = mkPanel("ControlCard", UDim2.new(0, 0, 0, 224), UDim2.new(1, 0, 0, 158), col.bg2, col.st, 51)
+	local controlCard =
+		mkPanel("ControlCard", UDim2.new(0, 0, 0, controlBaseY), UDim2.new(1, 0, 0, 158), col.bg2, col.st, 51)
 	local controlLabel = mk("TextLabel", {
 		BackgroundTransparency = 1,
 		Position = UDim2.new(0, 16, 0, 12),
@@ -6122,10 +7627,11 @@ local function buildMusicTab()
 		}),
 	})
 
-	local playb = mkCtl(row, "Play", "Play", 92, col.su, Color3.fromRGB(103, 233, 186))
-	local pauseb = mkCtl(row, "Pause", "Pause", 92, Color3.fromRGB(57, 63, 75), Color3.fromRGB(105, 115, 133))
-	local stopb = mkCtl(row, "Stop", "Stop", 92, Color3.fromRGB(80, 40, 40), Color3.fromRGB(132, 74, 74))
-	local loopb = mkCtl(row, "Loop", "Loop Off", 112, Color3.fromRGB(45, 50, 61), Color3.fromRGB(94, 105, 121))
+	local playb = mkCtl(row, "Play", "Play", 74, col.su, Color3.fromRGB(103, 233, 186))
+	local pauseb = mkCtl(row, "Pause", "Pause", 74, Color3.fromRGB(57, 63, 75), Color3.fromRGB(105, 115, 133))
+	local resumeb = mkCtl(row, "Resume", "Resume", 82, Color3.fromRGB(42, 68, 88), Color3.fromRGB(96, 164, 216))
+	local stopb = mkCtl(row, "Stop", "Stop", 74, Color3.fromRGB(80, 40, 40), Color3.fromRGB(132, 74, 74))
+	local loopb = mkCtl(row, "Loop", "Loop Off", 96, Color3.fromRGB(45, 50, 61), Color3.fromRGB(94, 105, 121))
 
 	local progressInfo = mk("TextLabel", {
 		BackgroundTransparency = 1,
@@ -6177,7 +7683,7 @@ local function buildMusicTab()
 		}),
 	})
 
-	local mixCard = mkPanel("MixCard", UDim2.new(0, 0, 0, 396), UDim2.new(1, 0, 0, 138), col.bg2, col.st, 51)
+	local mixCard = mkPanel("MixCard", UDim2.new(0, 0, 0, mixBaseY), UDim2.new(1, 0, 0, 138), col.bg2, col.st, 51)
 	local mixTitle = mk("TextLabel", {
 		BackgroundTransparency = 1,
 		Position = UDim2.new(0, 16, 0, 12),
@@ -6207,8 +7713,46 @@ local function buildMusicTab()
 		ZIndex = 53,
 	})
 
-	local vl = 0.5
-	local spd = 1
+	local localPicker
+	local function relayoutMusic(extra)
+		extra = math.max(0, tonumber(extra) or 0)
+		inputCard.Size = UDim2.new(1, 0, 0, inputBaseHeight + extra)
+		controlCard.Position = UDim2.new(0, 0, 0, controlBaseY + extra)
+		mixCard.Position = UDim2.new(0, 0, 0, mixBaseY + extra)
+		mr.CanvasSize = UDim2.new(0, 0, 0, canvasBaseHeight + extra)
+	end
+
+	local function syncLocalPicker(raw)
+		if not localPicker then
+			return
+		end
+		local entry = raw and findLocalMusicEntry(raw) or nil
+		if entry and entry.name then
+			localPicker.setText(entry.name)
+		else
+			localPicker.setText("")
+		end
+	end
+
+	local vl = math.clamp(tonumber(musicCfg.volume) or 0.5, 0, 1)
+	local spd = math.clamp(tonumber(musicCfg.playbackSpeed) or 1, 0.5, 2)
+	local mixSaveStamp = 0
+	local mixReady = false
+	local function queueMixSave()
+		if not mixReady then
+			return
+		end
+		mixSaveStamp += 1
+		local cur = mixSaveStamp
+		task.delay(0.15, function()
+			if cur ~= mixSaveStamp then
+				return
+			end
+			musicCfg.volume = vl
+			musicCfg.playbackSpeed = spd
+			saveMusicCfg()
+		end)
+	end
 	local function formatTime(sec)
 		sec = tonumber(sec) or 0
 		if sec < 0 or sec ~= sec or sec == math.huge then
@@ -6253,6 +7797,7 @@ local function buildMusicTab()
 		if st.snd then
 			st.snd.Volume = vl
 		end
+		queueMixSave()
 	end
 
 	local function apSpeed(v)
@@ -6264,12 +7809,15 @@ local function buildMusicTab()
 		if st.snd then
 			st.snd.PlaybackSpeed = spd
 		end
+		queueMixSave()
 	end
 
-	apVol(0.5)
-	apSpeed(1)
+	apVol(vl)
+	apSpeed(spd)
+	mixReady = true
 	setStatusText("Stopped")
 	setProgress(0, 0, 0)
+	relayoutMusic(0)
 
 	local dragging = false
 	local speedDragging = false
@@ -6376,7 +7924,7 @@ local function buildMusicTab()
 		if n then
 			return "rbxassetid://" .. n, n
 		end
-		return t, t
+		return nil
 	end
 
 	local function mkSnd(id, raw)
@@ -6417,13 +7965,55 @@ local function buildMusicTab()
 		end))
 	end
 
-	local function loadCurrentTrack()
-		local sid, raw = getId(mb.Text)
+	local function resolveTrackInput(text)
+		local q = trim(text)
+		if q == "" then
+			return nil, nil, "Enter a valid asset id, filename, or audio URL."
+		end
+		local localEntry = findLocalMusicEntry(q)
+		if localEntry and localEntry.asset then
+			return localEntry.asset, localEntry.name
+		end
+		local sid, raw = getId(q)
+		if sid then
+			return sid, raw
+		end
+		if q:match("^https?://") or q:match("^www%.") then
+			local entry, err = downloadMusicAsset(q:match("^www%.") and ("https://" .. q) or q)
+			if not entry then
+				return nil, nil, err or "Failed to download audio."
+			end
+			return entry.asset, entry.name
+		end
+		if getAudioExt(q) then
+			return nil, nil, "Local track not found in DeltaCustom/DeltaMusic."
+		end
+		return nil, nil, "Enter a valid asset id, filename, or audio URL."
+	end
+
+	local loadCurrentTrack
+	localPicker = makeMusicFolderDropdown(inputCard, 74, 53, function(item)
+		mb.Text = item.name or ""
+		task.defer(function()
+			if loadCurrentTrack then
+				loadCurrentTrack()
+			end
+		end)
+	end, function(open, menuHeight)
+		relayoutMusic(open and (menuHeight + 10) or 0)
+	end)
+
+	function loadCurrentTrack()
+		if localPicker then
+			localPicker.close()
+		end
+		local sid, raw, err = resolveTrackInput(mb.Text)
 		if not sid then
-			toast("Music", "Enter a valid asset id.")
+			toast("Music", err or "Enter a valid track.")
 			return false
 		end
 		mkSnd(sid, raw)
+		syncLocalPicker(raw)
 		toast("Music", "Loaded audio.")
 		return true
 	end
@@ -6452,6 +8042,19 @@ local function buildMusicTab()
 		end
 	end))
 
+	con(resumeb.MouseButton1Click:Connect(function()
+		if st.snd then
+			local ok = pcall(function()
+				st.snd:Resume()
+			end)
+			if not ok then
+				pcall(function()
+					st.snd:Play()
+				end)
+			end
+		end
+	end))
+
 	con(stopb.MouseButton1Click:Connect(function()
 		if st.snd then
 			pcall(function()
@@ -6471,89 +8074,90 @@ end
 
 buildMusicTab()
 
-local MUSIC_BTN_SHEET_URL = "https://raw.githubusercontent.com/ltseverydayyou/Nameless-Admin/main/NAimages/sheet.png"
-local MUSIC_BTN_SHEET_ASSET = downloadImageAsset(MUSIC_BTN_SHEET_URL)
-local MUSIC_BTN_RECT_OFFSET = Vector2.new(371, 806)
-local MUSIC_BTN_RECT_SIZE = Vector2.new(23, 33)
+musicState.icon.sheetAsset = downloadImageAsset(musicState.icon.sheetUrl)
 
-musb = gbtn("Music")
-if musb then
+musicState.button = gbtn("Music")
+if musicState.button then
 	pcall(function()
-		musb:Destroy()
+		musicState.button:Destroy()
 	end)
 end
 
-local src = conBtn or shBtn or homeBtn or setBtn or exBtn
+local src = sidebarRefs.console
+	or sidebarRefs.scripthub
+	or sidebarRefs.home
+	or sidebarRefs.settings
+	or sidebarRefs.executor
 if src then
-	musb = src:Clone()
-	musb.Name = "Music"
-	musb.Parent = src.Parent
-	local tl = txtOf(musb)
+	musicState.button = src:Clone()
+	musicState.button.Name = "Music"
+	musicState.button.Parent = src.Parent
+	local tl = txtOf(musicState.button)
 	if tl then
 		tl.Text = "Music"
 	end
 	pcall(function()
-		if togBtn and togBtn:IsA("GuiButton") then
-			local to = togBtn.LayoutOrder or 999
+		if sidebarRefs.toggle and sidebarRefs.toggle:IsA("GuiButton") then
+			local to = sidebarRefs.toggle.LayoutOrder or 999
 			for _, d in ipairs(sb:GetChildren()) do
-				if d:IsA("GuiButton") and d ~= musb and d.LayoutOrder and d.LayoutOrder >= to then
+				if d:IsA("GuiButton") and d ~= musicState.button and d.LayoutOrder and d.LayoutOrder >= to then
 					d.LayoutOrder += 1
 				end
 			end
-			musb.LayoutOrder = to
+			musicState.button.LayoutOrder = to
 		else
 			local lo = 0
 			for _, d in ipairs(sb:GetChildren()) do
-				if d:IsA("GuiButton") and d ~= musb then
+				if d:IsA("GuiButton") and d ~= musicState.button then
 					lo = math.max(lo, d.LayoutOrder or 0)
 				end
 			end
-			musb.LayoutOrder = lo + 1
+			musicState.button.LayoutOrder = lo + 1
 		end
 	end)
-	local img = imgOf(musb)
+	local img = imgOf(musicState.button)
 	if img then
 		pcall(function()
-			if MUSIC_BTN_SHEET_ASSET then
-				img.Image = MUSIC_BTN_SHEET_ASSET
-				img.ImageRectOffset = MUSIC_BTN_RECT_OFFSET
-				img.ImageRectSize = MUSIC_BTN_RECT_SIZE
+			if musicState.icon.sheetAsset then
+				img.Image = musicState.icon.sheetAsset
+				img.ImageRectOffset = musicState.icon.rectOffset
+				img.ImageRectSize = musicState.icon.rectSize
 				img.ScaleType = Enum.ScaleType.Fit
 			end
 			img.ImageColor3 = offImg
 		end)
 	end
 	pcall(function()
-		musb.BackgroundColor3 = bgOff()
+		musicState.button.BackgroundColor3 = bgOff()
 	end)
 end
 
 local function placeMusicBtn()
-	if not (musb and togBtn and musb.Parent == togBtn.Parent) then
+	if not (musicState.button and sidebarRefs.toggle and musicState.button.Parent == sidebarRefs.toggle.Parent) then
 		return
 	end
 	pcall(function()
-		if togBtn:GetAttribute("LT_OrigPosXS") == nil then
-			togBtn:SetAttribute("LT_OrigPosXS", togBtn.Position.X.Scale)
-			togBtn:SetAttribute("LT_OrigPosXO", togBtn.Position.X.Offset)
-			togBtn:SetAttribute("LT_OrigPosYS", togBtn.Position.Y.Scale)
-			togBtn:SetAttribute("LT_OrigPosYO", togBtn.Position.Y.Offset)
-			togBtn:SetAttribute("LT_OrigLay", togBtn.LayoutOrder or 0)
+		if sidebarRefs.toggle:GetAttribute("LT_OrigPosXS") == nil then
+			sidebarRefs.toggle:SetAttribute("LT_OrigPosXS", sidebarRefs.toggle.Position.X.Scale)
+			sidebarRefs.toggle:SetAttribute("LT_OrigPosXO", sidebarRefs.toggle.Position.X.Offset)
+			sidebarRefs.toggle:SetAttribute("LT_OrigPosYS", sidebarRefs.toggle.Position.Y.Scale)
+			sidebarRefs.toggle:SetAttribute("LT_OrigPosYO", sidebarRefs.toggle.Position.Y.Offset)
+			sidebarRefs.toggle:SetAttribute("LT_OrigLay", sidebarRefs.toggle.LayoutOrder or 0)
 		end
 		local op = UDim2.new(
-			togBtn:GetAttribute("LT_OrigPosXS") or togBtn.Position.X.Scale,
-			togBtn:GetAttribute("LT_OrigPosXO") or togBtn.Position.X.Offset,
-			togBtn:GetAttribute("LT_OrigPosYS") or togBtn.Position.Y.Scale,
-			togBtn:GetAttribute("LT_OrigPosYO") or togBtn.Position.Y.Offset
+			sidebarRefs.toggle:GetAttribute("LT_OrigPosXS") or sidebarRefs.toggle.Position.X.Scale,
+			sidebarRefs.toggle:GetAttribute("LT_OrigPosXO") or sidebarRefs.toggle.Position.X.Offset,
+			sidebarRefs.toggle:GetAttribute("LT_OrigPosYS") or sidebarRefs.toggle.Position.Y.Scale,
+			sidebarRefs.toggle:GetAttribute("LT_OrigPosYO") or sidebarRefs.toggle.Position.Y.Offset
 		)
-		togBtn.Position = op
-		local togLo = togBtn:GetAttribute("LT_OrigLay") or togBtn.LayoutOrder or 0
-		togBtn.LayoutOrder = togLo
+		sidebarRefs.toggle.Position = op
+		local togLo = sidebarRefs.toggle:GetAttribute("LT_OrigLay") or sidebarRefs.toggle.LayoutOrder or 0
+		sidebarRefs.toggle.LayoutOrder = togLo
 		local above
 		local ay = -math.huge
 		local ty = op.Y.Scale + op.Y.Offset / 100000
-		for _, d in ipairs(togBtn.Parent:GetChildren()) do
-			if d:IsA("GuiButton") and d ~= togBtn and d ~= musb then
+		for _, d in ipairs(sidebarRefs.toggle.Parent:GetChildren()) do
+			if d:IsA("GuiButton") and d ~= sidebarRefs.toggle and d ~= musicState.button then
 				local py = d.Position.Y.Scale + d.Position.Y.Offset / 100000
 				if py < ty and py > ay then
 					ay = py
@@ -6567,10 +8171,10 @@ local function placeMusicBtn()
 			gapS = op.Y.Scale - above.Position.Y.Scale
 			gapO = op.Y.Offset - above.Position.Y.Offset
 		end
-		musb.Position = op
-		musb.LayoutOrder = togLo - 1
-		togBtn.Position = UDim2.new(op.X.Scale, op.X.Offset, op.Y.Scale + gapS, op.Y.Offset + gapO)
-		togBtn.LayoutOrder = togLo + 1
+		musicState.button.Position = op
+		musicState.button.LayoutOrder = togLo - 1
+		sidebarRefs.toggle.Position = UDim2.new(op.X.Scale, op.X.Offset, op.Y.Scale + gapS, op.Y.Offset + gapO)
+		sidebarRefs.toggle.LayoutOrder = togLo + 1
 	end)
 end
 
@@ -6588,15 +8192,15 @@ local function bindHide(b, nm)
 	end
 end
 
-bindHide(homeBtn, "Home")
-bindHide(shBtn, "Scripthub")
-bindHide(setBtn, "Settings")
-bindHide(exBtn, "Executor")
-bindHide(conBtn, "Console")
+bindHide(sidebarRefs.home, "Home")
+bindHide(sidebarRefs.scripthub, "Scripthub")
+bindHide(sidebarRefs.settings, "Settings")
+bindHide(sidebarRefs.executor, "Executor")
+bindHide(sidebarRefs.console, "Console")
 
-improveSidebarTouch(musb)
-if musb and musb:IsA("GuiButton") then
-	con(musb.MouseButton1Click:Connect(function()
+improveSidebarTouch(musicState.button)
+if musicState.button and musicState.button:IsA("GuiButton") then
+	con(musicState.button.MouseButton1Click:Connect(function()
 		openMusic()
 		task.defer(function()
 			syncTabColors("Music")
@@ -6613,14 +8217,14 @@ for _, n in ipairs(sec) do
 	end
 end
 
-if acv and acv.Changed then
-	con(acv.Changed:Connect(function()
+if sidebarRefs.activeColor and sidebarRefs.activeColor.Changed then
+	con(sidebarRefs.activeColor.Changed:Connect(function()
 		task.defer(syncTabColors)
 	end))
 end
 
-if icv and icv.Changed then
-	con(icv.Changed:Connect(function()
+if sidebarRefs.inactiveColor and sidebarRefs.inactiveColor.Changed then
+	con(sidebarRefs.inactiveColor.Changed:Connect(function()
 		task.defer(syncTabColors)
 	end))
 end

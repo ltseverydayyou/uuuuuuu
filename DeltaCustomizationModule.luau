@@ -1391,17 +1391,8 @@ task.defer(function()
 	end
 	local function suggestInterfaceScale()
 		local vp = getInterfaceViewport()
-		if not (UIS and UIS.TouchEnabled) then
+		if not vp then
 			return 1
-		end
-		if vp.X <= 720 or vp.Y <= 540 then
-			return 1.35
-		end
-		if vp.X <= 900 or vp.Y <= 680 then
-			return 1.22
-		end
-		if vp.X <= 1100 or vp.Y <= 820 then
-			return 1.1
 		end
 		return 1
 	end
@@ -1965,10 +1956,11 @@ task.defer(function()
 			end
 			if tLabel then
 				tLabel.Text = isCustom and "Customization" or "Delta settings"
-				tLabel.AnchorPoint = Vector2.new(0, 0.5)
-				tLabel.Position = UDim2.new(0, 16, 0.5, 0)
+				tLabel.AnchorPoint = Vector2.new(0.5, 0.5)
+				tLabel.Position = UDim2.new(0.5, 0, 0.5, 0)
 				tLabel.Size = UDim2.new(1, -32, 0, 18)
 				tLabel.TextColor3 = Color3.fromRGB(236, 240, 247)
+				tLabel.TextXAlignment = Enum.TextXAlignment.Center
 				tLabel.TextYAlignment = Enum.TextYAlignment.Center
 				if isCustom then
 					local textGrad = tLabel:FindFirstChildOfClass("UIGradient") or Instance.new("UIGradient")
@@ -4664,7 +4656,8 @@ task.defer(function()
 						lighting.Technology = enumItem
 					end)
 				end
-			end
+			end,
+			{ persist = false }
 		)
 	end
 	do
@@ -4692,7 +4685,8 @@ task.defer(function()
 				local cam = workspace.CurrentCamera
 				return cam and cam.CameraType and cam.CameraType.Name or camItems[1] and camItems[1].Name
 			end,
-			applyCameraType
+			applyCameraType,
+			{ persist = false }
 		)
 		NAlib.disconnect("CameraType_Reapply")
 		NAlib.connect(
@@ -4706,18 +4700,54 @@ task.defer(function()
 			end)
 		)
 	end
+	do
+		local soundService = game:GetService("SoundService")
+		local reverbItems = Enum.ReverbType:GetEnumItems()
+		makeEnumDropdown(
+			"SoundReverb",
+			"Sound Reverb",
+			"Set SoundService.AmbientReverb from Delta settings",
+			reverbItems,
+			function()
+				return soundService and soundService.AmbientReverb and soundService.AmbientReverb.Name
+					or reverbItems[1] and reverbItems[1].Name
+			end,
+			function(name)
+				local enumItem = Enum.ReverbType[name]
+				if soundService and enumItem then
+					pcall(function()
+						soundService.AmbientReverb = enumItem
+					end)
+				end
+			end,
+			{ persist = false }
+		)
+	end
 	if type(setfpscap) == "function" then
 		local fpsCapValue = Instance.new("NumberValue")
 		fpsCapValue.Name = "FpsCapValue"
 		local fpsSaved = settingsConfig.FpsCap
 		local fpsHasSaved = type(fpsSaved) == "table" and type(fpsSaved.value) == "number"
 		fpsCapValue.Value = fpsHasSaved and math.clamp(math.floor(fpsSaved.value + 0.5), 30, 999) or 60
+		local fpsCapTarget = fpsCapValue.Value
 		local function applyFpsCap(v)
 			local n = math.clamp(math.floor((tonumber(v) or 60) + 0.5), 30, 999)
 			if fpsCapValue.Value ~= n then
 				fpsCapValue.Value = n
 			end
+			fpsCapTarget = n
 			pcall(setfpscap, n)
+		end
+		NAlib.disconnect("FpsCap_Enforce")
+		if RS and RS.RenderStepped then
+			NAlib.connect(
+				"FpsCap_Enforce",
+				RS.RenderStepped:Connect(function()
+					if fpsCapTarget then
+						pcall(setfpscap, fpsCapTarget)
+					end
+				end)
+			)
 		end
 		makeSizeSlider("FpsCap", "FPS cap", "set your FPS cap to anything you like", fpsCapValue, 30, 999, {
 			integer = true,
@@ -7862,7 +7892,7 @@ local function buildMusicTab()
 	local controlLabel = mk("TextLabel", {
 		BackgroundTransparency = 1,
 		Position = UDim2.new(0, 16, 0, 12),
-		Size = UDim2.new(1, -32, 0, 14),
+		Size = UDim2.new(1, -156, 0, 14),
 		Text = "Playback",
 		TextColor3 = col.tx,
 		Font = Enum.Font.GothamSemibold,
@@ -7871,6 +7901,17 @@ local function buildMusicTab()
 		Parent = controlCard,
 		ZIndex = 53,
 	})
+	local cycleb = mkCtl(
+		controlCard,
+		"Cycle",
+		"Cycle Off",
+		112,
+		Color3.fromRGB(45, 50, 61),
+		Color3.fromRGB(94, 105, 121)
+	)
+	cycleb.AnchorPoint = Vector2.new(1, 0)
+	cycleb.Position = UDim2.new(1, -16, 0, 10)
+	cycleb.ZIndex = 53
 
 	local now = mk("TextLabel", {
 		BackgroundTransparency = 1,
@@ -7914,10 +7955,34 @@ local function buildMusicTab()
 	})
 
 	local playb = mkCtl(row, "Play", "Play", 74, col.su, Color3.fromRGB(103, 233, 186))
-	local pauseb = mkCtl(row, "Pause", "Pause", 74, Color3.fromRGB(57, 63, 75), Color3.fromRGB(105, 115, 133))
-	local resumeb = mkCtl(row, "Resume", "Resume", 82, Color3.fromRGB(42, 68, 88), Color3.fromRGB(96, 164, 216))
+	local pauseSlot = mk("Frame", {
+		Name = "PauseSlot",
+		BackgroundTransparency = 1,
+		Size = UDim2.new(0, 82, 0, 34),
+		Parent = row,
+		ZIndex = 53,
+	})
+	local pauseb = mkCtl(
+		pauseSlot,
+		"Pause",
+		"Pause",
+		82,
+		Color3.fromRGB(57, 63, 75),
+		Color3.fromRGB(105, 115, 133)
+	)
+	pauseb.Position = UDim2.new(0, 0, 0, 0)
+	local resumeb = mkCtl(
+		pauseSlot,
+		"Resume",
+		"Resume",
+		82,
+		Color3.fromRGB(42, 68, 88),
+		Color3.fromRGB(96, 164, 216)
+	)
+	resumeb.Position = UDim2.new(0, 0, 0, 0)
 	local stopb = mkCtl(row, "Stop", "Stop", 74, Color3.fromRGB(80, 40, 40), Color3.fromRGB(132, 74, 74))
 	local loopb = mkCtl(row, "Loop", "Loop Off", 96, Color3.fromRGB(45, 50, 61), Color3.fromRGB(94, 105, 121))
+	resumeb.Visible = false
 
 	local progressInfo = mk("TextLabel", {
 		BackgroundTransparency = 1,
@@ -8020,7 +8085,11 @@ local function buildMusicTab()
 		end
 	end
 
-	local vl = math.clamp(tonumber(musicCfg.volume) or 0.5, 0, 1)
+	local savedVol = tonumber(musicCfg.volume)
+	if savedVol and savedVol >= 0 and savedVol <= 1 then
+		savedVol *= 10
+	end
+	local vl = math.clamp(savedVol or 5, 0, 10)
 	local spd = math.clamp(tonumber(musicCfg.playbackSpeed) or 1, 0.5, 2)
 	local mixSaveStamp = 0
 	local mixReady = false
@@ -8074,11 +8143,74 @@ local function buildMusicTab()
 		loopb.Text = on and "Loop On" or "Loop Off"
 		loopb.BackgroundColor3 = on and Color3.fromRGB(45, 93, 73) or Color3.fromRGB(45, 50, 61)
 	end
+	local function syncPauseButtons()
+		local paused = st.musicPaused and st.snd ~= nil
+		pauseb.Visible = not paused
+		resumeb.Visible = paused
+	end
+	local function syncCycleButton()
+		local mode = st.musicCycleMode
+		if mode == "order" then
+			cycleb.Text = "Cycle Order"
+			cycleb.BackgroundColor3 = Color3.fromRGB(45, 93, 73)
+		elseif mode == "random" then
+			cycleb.Text = "Cycle Random"
+			cycleb.BackgroundColor3 = Color3.fromRGB(52, 74, 112)
+		else
+			cycleb.Text = "Cycle Off"
+			cycleb.BackgroundColor3 = Color3.fromRGB(45, 50, 61)
+		end
+	end
+	local function getNextCycleTrack()
+		local mode = st.musicCycleMode
+		if mode ~= "order" and mode ~= "random" then
+			return nil
+		end
+		local items = scanMusicFiles()
+		if #items == 0 then
+			return nil
+		end
+		local currentRaw = trim(st.musicRaw or "")
+		if currentRaw == "" then
+			return nil
+		end
+		local currentLower = currentRaw:lower()
+		local currentIndex
+		for i, item in ipairs(items) do
+			local nm = (item.name or ""):lower()
+			local base = nm:gsub("%.[^%.]+$", "")
+			if currentLower == nm or currentLower == base then
+				currentIndex = i
+				break
+			end
+		end
+		if not currentIndex then
+			return nil
+		end
+		if mode == "random" then
+			if #items == 1 then
+				return items[1]
+			end
+			local idx = currentIndex
+			for _ = 1, 8 do
+				idx = math.random(1, #items)
+				if idx ~= currentIndex then
+					break
+				end
+			end
+			if idx == currentIndex then
+				idx = (currentIndex % #items) + 1
+			end
+			return items[idx]
+		end
+		return items[(currentIndex % #items) + 1]
+	end
 
 	local function apVol(v)
-		vl = math.clamp(v, 0, 1)
-		vfill.Size = UDim2.new(vl, 0, 1, 0)
-		vkn.Position = UDim2.new(vl, 0, 0.5, 0)
+		vl = math.clamp(v, 0, 10)
+		local alpha = vl / 10
+		vfill.Size = UDim2.new(alpha, 0, 1, 0)
+		vkn.Position = UDim2.new(alpha, 0, 0.5, 0)
 		vt.Text = string.format("Volume  %.2f", vl)
 		if st.snd then
 			st.snd.Volume = vl
@@ -8100,10 +8232,14 @@ local function buildMusicTab()
 
 	apVol(vl)
 	apSpeed(spd)
+	st.musicPaused = false
+	st.musicCycleMode = st.musicCycleMode or "off"
 	mixReady = true
 	setStatusText("Stopped")
 	setProgress(0, 0, 0)
 	relayoutMusic(0)
+	syncPauseButtons()
+	syncCycleButton()
 
 	local dragging = false
 	local speedDragging = false
@@ -8111,7 +8247,7 @@ local function buildMusicTab()
 
 	local function setBar(inp)
 		local x = (inp.Position.X - vbar.AbsolutePosition.X) / math.max(vbar.AbsoluteSize.X, 1)
-		apVol(x)
+		apVol(math.clamp(x, 0, 1) * 10)
 	end
 
 	local function setSpeedBar(inp)
@@ -8225,29 +8361,87 @@ local function buildMusicTab()
 		s.Volume = vl
 		s.Looped = false
 		s.PlaybackSpeed = spd
-		s.Parent = SS or workspace
+		s.Parent = gui
+		local function clearSoundGroup()
+			if not (s and s.Parent) then
+				return
+			end
+			pcall(function()
+				if s.SoundGroup ~= nil then
+					s.SoundGroup = nil
+				end
+			end)
+		end
+		clearSoundGroup()
 		st.snd = s
+		st.musicPaused = false
+		st.musicRaw = tostring(raw)
 		now.Text = tostring(raw)
 		assetChip.Text = tostring(raw)
 		setStatusText("Loaded", Color3.fromRGB(53, 83, 125))
 		setProgress(0, 0, 0)
 		syncLoopButton()
+		syncPauseButtons()
 		con(s.Loaded:Connect(function()
+			if st.snd ~= s then
+				return
+			end
+			st.musicPaused = false
 			setStatusText("Loaded", Color3.fromRGB(53, 83, 125))
 			setProgress(0, s.TimePosition or 0, s.TimeLength or 0)
+			syncPauseButtons()
 		end))
 		con(s.Ended:Connect(function()
+			if st.snd ~= s then
+				return
+			end
+			st.musicPaused = false
 			setStatusText("Ended", Color3.fromRGB(88, 64, 48))
+			syncPauseButtons()
+			local nextTrack = getNextCycleTrack()
+			if nextTrack and nextTrack.asset then
+				task.defer(function()
+					if st.snd ~= s then
+						return
+					end
+					mb.Text = nextTrack.name or ""
+					mkSnd(nextTrack.asset, nextTrack.name)
+					syncLocalPicker(nextTrack.name)
+					if st.snd then
+						pcall(function()
+							st.snd:Play()
+						end)
+					end
+				end)
+			end
 		end))
 		con(s.Played:Connect(function()
+			if st.snd ~= s then
+				return
+			end
+			st.musicPaused = false
 			setStatusText("Playing", Color3.fromRGB(52, 211, 153))
+			syncPauseButtons()
 		end))
 		con(s.Paused:Connect(function()
+			if st.snd ~= s then
+				return
+			end
+			st.musicPaused = true
 			setStatusText("Paused", Color3.fromRGB(92, 105, 123))
+			syncPauseButtons()
 		end))
 		con(s.Stopped:Connect(function()
+			if st.snd ~= s then
+				return
+			end
+			st.musicPaused = false
 			setStatusText("Stopped")
 			setProgress(0, 0, s.TimeLength or 0)
+			syncPauseButtons()
+		end))
+		con(s:GetPropertyChangedSignal("SoundGroup"):Connect(function()
+			task.defer(clearSoundGroup)
 		end))
 	end
 
@@ -8314,6 +8508,8 @@ local function buildMusicTab()
 
 	con(playb.MouseButton1Click:Connect(function()
 		if st.snd then
+			st.musicPaused = false
+			syncPauseButtons()
 			pcall(function()
 				st.snd:Play()
 			end)
@@ -8322,6 +8518,8 @@ local function buildMusicTab()
 
 	con(pauseb.MouseButton1Click:Connect(function()
 		if st.snd then
+			st.musicPaused = true
+			syncPauseButtons()
 			pcall(function()
 				st.snd:Pause()
 			end)
@@ -8330,6 +8528,8 @@ local function buildMusicTab()
 
 	con(resumeb.MouseButton1Click:Connect(function()
 		if st.snd then
+			st.musicPaused = false
+			syncPauseButtons()
 			local ok = pcall(function()
 				st.snd:Resume()
 			end)
@@ -8343,6 +8543,8 @@ local function buildMusicTab()
 
 	con(stopb.MouseButton1Click:Connect(function()
 		if st.snd then
+			st.musicPaused = false
+			syncPauseButtons()
 			pcall(function()
 				st.snd:Stop()
 			end)
@@ -8355,6 +8557,17 @@ local function buildMusicTab()
 		end
 		st.snd.Looped = not st.snd.Looped
 		syncLoopButton()
+	end))
+	con(cycleb.MouseButton1Click:Connect(function()
+		local mode = st.musicCycleMode
+		if mode == "off" then
+			st.musicCycleMode = "order"
+		elseif mode == "order" then
+			st.musicCycleMode = "random"
+		else
+			st.musicCycleMode = "off"
+		end
+		syncCycleButton()
 	end))
 end
 

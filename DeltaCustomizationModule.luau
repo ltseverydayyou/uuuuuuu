@@ -350,6 +350,130 @@ local applySavedManagedIconPosition
 local bindManagedIconPositionSaver
 local bindManagedIconToggle
 local ensureManagedIcon
+local function MouseButtonFix(button, clickCallback)
+	if not button or type(clickCallback) ~= "function" then
+		return { Disconnect = function() end }
+	end
+	local clickTimeThreshold = 0.45
+	local moveThreshold = 10
+	local mouseDownTime = 0
+	local isPointerDown = false
+	local startPosition = nil
+	local maxMoveDistance = 0
+	local connections = {}
+	local function getSignal(obj, signalName)
+		local ok, signal = pcall(function()
+			return obj[signalName]
+		end)
+		if ok and signal then
+			return signal
+		end
+		return nil
+	end
+	local function connectSignal(signal, fn)
+		if not signal then
+			return false
+		end
+		local ok, conn = pcall(function()
+			return signal:Connect(fn)
+		end)
+		if ok and conn then
+			connections[#connections + 1] = conn
+			return true
+		end
+		return false
+	end
+	local function isPressInput(inputType)
+		return inputType == Enum.UserInputType.MouseButton1 or inputType == Enum.UserInputType.Touch
+	end
+	local function resetState()
+		mouseDownTime = 0
+		isPointerDown = false
+		startPosition = nil
+		maxMoveDistance = 0
+	end
+	local function beginPointer(input)
+		isPointerDown = true
+		mouseDownTime = tick()
+		maxMoveDistance = 0
+		local pos = input and input.Position
+		startPosition = pos and Vector2.new(pos.X, pos.Y) or nil
+	end
+	local function endPointer()
+		if not isPointerDown or mouseDownTime == 0 then
+			resetState()
+			return
+		end
+		local holdDuration = tick() - mouseDownTime
+		local isClick = holdDuration < clickTimeThreshold and maxMoveDistance <= moveThreshold
+		resetState()
+		if isClick then
+			clickCallback()
+		end
+	end
+	local boundPress = false
+	local isGuiButton = type(button.IsA) == "function" and button:IsA("GuiButton")
+	if isGuiButton then
+		local downSignal = getSignal(button, "MouseButton1Down")
+		local upSignal = getSignal(button, "MouseButton1Up")
+		local downBound = connectSignal(downSignal, function()
+			beginPointer(nil)
+		end)
+		local upBound = connectSignal(upSignal, function()
+			endPointer()
+		end)
+		boundPress = downBound and upBound
+	end
+	if not boundPress then
+		local beganSignal = getSignal(button, "InputBegan")
+		local endedSignal = getSignal(button, "InputEnded")
+		local beganBound = connectSignal(beganSignal, function(input)
+			if input and isPressInput(input.UserInputType) then
+				beginPointer(input)
+			end
+		end)
+		local endedBound = connectSignal(endedSignal, function(input)
+			if input and isPressInput(input.UserInputType) then
+				endPointer()
+			end
+		end)
+		boundPress = beganBound and endedBound
+	end
+	local changedSignal = getSignal(button, "InputChanged")
+	connectSignal(changedSignal, function(input)
+		if not isPointerDown then
+			return
+		end
+		if input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then
+			return
+		end
+		local pos = input.Position
+		if not pos then
+			return
+		end
+		if not startPosition then
+			startPosition = Vector2.new(pos.X, pos.Y)
+			return
+		end
+		local currentPos = Vector2.new(pos.X, pos.Y)
+		local delta = (currentPos - startPosition).Magnitude
+		if delta > maxMoveDistance then
+			maxMoveDistance = delta
+		end
+	end)
+	if not boundPress then
+		return { Disconnect = function() end }
+	end
+	return {
+		Disconnect = function()
+			for _, conn in ipairs(connections) do
+				if conn and conn.Disconnect then
+					conn:Disconnect()
+				end
+			end
+		end,
+	}
+end
 local function hideOriginalDeltaIcon()
 	if managedIcon.deltaGui then
 		pcall(function()
@@ -980,11 +1104,11 @@ local function removeAllIcons()
 end
 ensureManagedIcon = function()
 	if
-		managedIcon.customGui
+		mainGui
 		and managedIcon.customBtn
-		and managedIcon.customGui.Parent
-		and managedIcon.customBtn.Parent == managedIcon.customGui
+		and managedIcon.customBtn.Parent == mainGui
 	then
+		managedIcon.customGui = mainGui
 		managedIcon.customStroke = managedIcon.customBtn
 			and (
 				managedIcon.customBtn:FindFirstChildOfClass("UIStroke")
@@ -997,26 +1121,18 @@ ensureManagedIcon = function()
 			)
 		return true
 	end
-	if not (managedIcon.deltaGui and managedIcon.deltaBtn) then
+	if not (mainGui and managedIcon.deltaGui and managedIcon.deltaBtn) then
 		return false
 	end
 	hideOriginalDeltaIcon()
-	local gui = Instance.new("ScreenGui")
-	gui.Name = "LTIconGui"
-	gui.ResetOnSpawn = false
-	gui.IgnoreGuiInset = true
-	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	gui.DisplayOrder = managedIcon.deltaGui.DisplayOrder
-	gui.Enabled = true
 	local btn = managedIcon.deltaBtn:Clone()
 	btn.Name = "LTIcon"
 	btn.Visible = true
 	btn.Active = true
 	btn.ImageTransparency = managedIcon.deltaBtn.ImageTransparency
 	btn.BackgroundTransparency = managedIcon.deltaBtn.BackgroundTransparency
-	btn.Parent = gui
-	gui.Parent = root
-	managedIcon.customGui = gui
+	btn.Parent = mainGui
+	managedIcon.customGui = mainGui
 	managedIcon.customBtn = btn
 	managedIcon.customStroke = btn:FindFirstChildOfClass("UIStroke") or btn:FindFirstChildWhichIsA("UIStroke", true)
 	managedIcon.customCorner = btn:FindFirstChildOfClass("UICorner") or btn:FindFirstChildWhichIsA("UICorner", true)
@@ -2080,6 +2196,11 @@ task.defer(function()
 		if not iconBtn then
 			return
 		end
+		if imgT < 1 or bgT < 1 then
+			pcall(function()
+				iconBtn.Visible = true
+			end)
+		end
 		if TS and not instant then
 			pcall(function()
 				(__lt.cm(
@@ -2099,6 +2220,36 @@ task.defer(function()
 				iconBtn.BackgroundTransparency = bgT
 			end)
 		end
+	end
+	local function updateManagedIconDisplay(instant)
+		if not iconBtn then
+			return
+		end
+		local shouldShow = iconVisible and not iconForcedHidden
+		pcall(function()
+			iconBtn.Active = shouldShow
+		end)
+		if shouldShow then
+			pcall(function()
+				iconBtn.Visible = true
+			end)
+			tweenIconVisual(0, 0, instant)
+		else
+			tweenIconVisual(1, 1, instant)
+			local stamp = tick()
+			task.delay(instant and 0 or 0.2, function()
+				if not iconBtn or not iconBtn.Parent then
+					return
+				end
+				if stamp and (iconVisible and not iconForcedHidden) then
+					return
+				end
+				pcall(function()
+					iconBtn.Visible = false
+				end)
+			end)
+		end
+		applyIconStrokeState()
 	end
 	applyIconStrokeState = function()
 		if not iconStroke then
@@ -2160,27 +2311,14 @@ task.defer(function()
 		)
 	end
 	local function applyIconUserVisibility(instant)
-		if not iconBtn then
-			return
-		end
-		if iconVisible then
-			tweenIconVisual(0, 0, instant)
-		else
-			tweenIconVisual(1, 1, instant)
-		end
-		applyIconStrokeState()
+		updateManagedIconDisplay(instant)
 	end
 	local function setIconForcedHidden(hidden)
 		if not iconBtn then
 			return
 		end
 		iconForcedHidden = hidden and true or false
-		if hidden then
-			tweenIconVisual(1, 1, false)
-			applyIconStrokeState()
-		else
-			applyIconUserVisibility(false)
-		end
+		updateManagedIconDisplay(false)
 	end
 	task.defer(function()
 		applySavedManagedIconPosition()
@@ -3351,7 +3489,7 @@ task.defer(function()
 		btnFrame.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
 		local clickable = btnFrame:FindFirstChildWhichIsA("GuiButton") or btnFrame
 		local function click()
-			if iconGui then
+			if iconGui and iconGui ~= mainGui then
 				pcall(function()
 					iconGui:Destroy()
 				end)
@@ -3795,10 +3933,7 @@ task.defer(function()
 				end
 			end
 		end
-		if iconGui then
-			iconGui.Enabled = true
-		end
-		setIconForcedHidden(false)
+		setIconForcedHidden(sidebarGestureEnabled)
 	end
 	local function openDeltaFromIcon()
 		if not sidebar then
@@ -3826,9 +3961,6 @@ task.defer(function()
 			setSidebarPosition(sidebarOpenPos)
 		end
 		normalizeSidebarGeometry()
-		if iconGui then
-			iconGui.Enabled = false
-		end
 		setIconForcedHidden(true)
 		if mainGui and sidebarCurrentSection then
 			for _, n in ipairs(sectionsList) do
@@ -3844,20 +3976,17 @@ task.defer(function()
 		if not (iconBtn and iconBtn:IsA("GuiButton")) then
 			return
 		end
-		NAlib.connect(
-			"ManagedIcon_Toggle",
-			iconBtn.MouseButton1Click:Connect(function()
-				if not sidebar then
-					return
-				end
-				local isOpen = math.abs(sidebar.Position.X.Scale - sidebarOpenPos.X.Scale) <= 0.001
-				if isOpen then
-					closeDeltaSidebar()
-				else
-					openDeltaFromIcon()
-				end
-			end)
-		)
+		NAlib.connect("ManagedIcon_Toggle", MouseButtonFix(iconBtn, function()
+			if not sidebar then
+				return
+			end
+			local isOpen = math.abs(sidebar.Position.X.Scale - sidebarOpenPos.X.Scale) <= 0.001
+			if isOpen then
+				closeDeltaSidebar()
+			else
+				openDeltaFromIcon()
+			end
+		end))
 	end
 	bindManagedIconToggle()
 	local function saveSidebarGesture()
@@ -3970,12 +4099,7 @@ task.defer(function()
 			sidebarGestureEnabled = not sidebarGestureEnabled
 			setVisual()
 			saveSidebarGesture()
-			if not sidebarGestureEnabled then
-				if iconGui then
-					iconGui.Enabled = true
-				end
-				setIconForcedHidden(false)
-			end
+			setIconForcedHidden(sidebarGestureEnabled)
 			task.defer(function()
 				if applySidebarGestureState then
 					applySidebarGestureState()
@@ -4173,9 +4297,11 @@ task.defer(function()
 		sidebarGestureFrame.Active = false
 		sidebarGestureFrame.Visible = false
 		if not sidebarGestureEnabled then
+			setIconForcedHidden(false)
 			saveSidebarGesture()
 			return
 		end
+		setIconForcedHidden(true)
 		sidebarGestureFrame.Active = true
 		sidebarGestureFrame.Visible = true
 		applyGestureVisual()
@@ -4302,9 +4428,6 @@ task.defer(function()
 					if not sidebarCurrentSection then
 						sidebarCurrentSection = getCurrentSectionName()
 					end
-					if iconGui then
-						iconGui.Enabled = false
-					end
 					setIconForcedHidden(true)
 					if mainGui and sidebarCurrentSection then
 						for _, n in ipairs(sectionsList) do
@@ -4326,10 +4449,7 @@ task.defer(function()
 							end
 						end
 					end
-					if iconGui then
-						iconGui.Enabled = true
-					end
-					setIconForcedHidden(false)
+					setIconForcedHidden(sidebarGestureEnabled)
 				end
 			end)
 		)
@@ -4337,10 +4457,7 @@ task.defer(function()
 	end
 	if toggleUIBtn and toggleUIBtn:IsA("GuiButton") then
 		toggleUIBtn.MouseButton1Click:Connect(function()
-			if iconGui then
-				iconGui.Enabled = true
-			end
-			setIconForcedHidden(false)
+			setIconForcedHidden(sidebarGestureEnabled)
 		end)
 	end
 	if activeColorValue then
@@ -7545,7 +7662,7 @@ local function buildMusicTab()
 		Position = UDim2.new(0, 16, 0, 28),
 		ClearTextOnFocus = false,
 		Text = "",
-		PlaceholderText = "Asset id, local filename, or direct audio URL",
+		PlaceholderText = "Asset id or direct audio URL",
 		TextColor3 = col.tx,
 		PlaceholderColor3 = col.td,
 		TextXAlignment = Enum.TextXAlignment.Left,

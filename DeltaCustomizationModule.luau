@@ -1377,6 +1377,81 @@ task.defer(function()
 			pcall(writefile, settingsPath, enc)
 		end
 	end
+	local uiScaleState = {
+		object = nil,
+		value = nil,
+		refreshers = setmetatable({}, { __mode = "k" }),
+	}
+	local function getInterfaceViewport()
+		local cam = workspace.CurrentCamera
+		if cam and cam.ViewportSize.X > 0 and cam.ViewportSize.Y > 0 then
+			return cam.ViewportSize
+		end
+		return mainGui.AbsoluteSize
+	end
+	local function suggestInterfaceScale()
+		local vp = getInterfaceViewport()
+		if not (UIS and UIS.TouchEnabled) then
+			return 1
+		end
+		if vp.X <= 720 or vp.Y <= 540 then
+			return 1.35
+		end
+		if vp.X <= 900 or vp.Y <= 680 then
+			return 1.22
+		end
+		if vp.X <= 1100 or vp.Y <= 820 then
+			return 1.1
+		end
+		return 1
+	end
+	local function ensureInterfaceScale()
+		if uiScaleState.object and uiScaleState.object.Parent == mainGui then
+			return uiScaleState.object
+		end
+		local sc = mainGui:FindFirstChild("LT_InterfaceScale")
+		if not (sc and sc:IsA("UIScale")) then
+			sc = Instance.new("UIScale")
+			sc.Name = "LT_InterfaceScale"
+			sc.Parent = mainGui
+		end
+		uiScaleState.object = sc
+		return sc
+	end
+	local function applyInterfaceScale(v)
+		local sc = ensureInterfaceScale()
+		if not sc then
+			return
+		end
+		pcall(function()
+			sc.Scale = math.clamp(tonumber(v) or 1, 0.5, 1.65)
+		end)
+		task.defer(function()
+			for _, delayTime in ipairs({ 0, 0.03, 0.1 }) do
+				if delayTime > 0 then
+					task.wait(delayTime)
+				end
+				for sf, refresh in pairs(uiScaleState.refreshers) do
+					if sf and sf.Parent and type(refresh) == "function" then
+						pcall(refresh)
+					else
+						uiScaleState.refreshers[sf] = nil
+					end
+				end
+			end
+		end)
+	end
+	uiScaleState.value = Instance.new("NumberValue")
+	uiScaleState.value.Name = "InterfaceScaleValue"
+	do
+		local cfg = settingsConfig.InterfaceScale
+		local def = suggestInterfaceScale()
+		if type(cfg) == "table" and type(cfg.value) == "number" then
+			def = math.clamp(cfg.value, 0.5, 1.65)
+		end
+		uiScaleState.value.Value = def
+	end
+	applyInterfaceScale(uiScaleState.value.Value)
 	local function setupAutoScroll(sf, fixRows, verticalOnly)
 		if not (sf and sf:IsA("ScrollingFrame")) then
 			return
@@ -1395,6 +1470,14 @@ task.defer(function()
 		local id = "CanvasAuto_" .. sf:GetDebugId()
 		NAlib.disconnect(id)
 		local boundVerticalGuis = setmetatable({}, { __mode = "k" })
+		local function getUiScaleFactor()
+			local sc = uiScaleState and uiScaleState.object
+			local factor = sc and tonumber(sc.Scale) or 1
+			if not factor or factor <= 0 then
+				factor = 1
+			end
+			return factor
+		end
 		local function isVisibleInScroll(gui)
 			local cur = gui
 			while cur and cur ~= sf do
@@ -1409,15 +1492,16 @@ task.defer(function()
 			local maxX = 0
 			local maxY = 0
 			local canvasPos = sf.CanvasPosition
+			local uiScaleFactor = getUiScaleFactor()
 			if verticalOnly then
 				for _, child in ipairs(sf:GetChildren()) do
 					if child:IsA("GuiObject") and isVisibleInScroll(child) then
-						local relY = (child.AbsolutePosition.Y - sf.AbsolutePosition.Y) + canvasPos.Y
-						maxY = math.max(maxY, relY + child.AbsoluteSize.Y)
+						local relY = ((child.AbsolutePosition.Y - sf.AbsolutePosition.Y) / uiScaleFactor) + canvasPos.Y
+						maxY = math.max(maxY, relY + (child.AbsoluteSize.Y / uiScaleFactor))
 						for _, desc in ipairs(child:GetDescendants()) do
 							if desc:IsA("GuiObject") and desc.Name == "Dropdown" and isVisibleInScroll(desc) then
-								local dRelY = (desc.AbsolutePosition.Y - sf.AbsolutePosition.Y) + canvasPos.Y
-								maxY = math.max(maxY, dRelY + desc.AbsoluteSize.Y)
+								local dRelY = ((desc.AbsolutePosition.Y - sf.AbsolutePosition.Y) / uiScaleFactor) + canvasPos.Y
+								maxY = math.max(maxY, dRelY + (desc.AbsoluteSize.Y / uiScaleFactor))
 							end
 						end
 					end
@@ -1425,10 +1509,10 @@ task.defer(function()
 			else
 				for _, desc in ipairs(sf:GetDescendants()) do
 					if desc:IsA("GuiObject") and isVisibleInScroll(desc) then
-						local relX = (desc.AbsolutePosition.X - sf.AbsolutePosition.X) + canvasPos.X
-						local relY = (desc.AbsolutePosition.Y - sf.AbsolutePosition.Y) + canvasPos.Y
-						maxX = math.max(maxX, relX + desc.AbsoluteSize.X)
-						maxY = math.max(maxY, relY + desc.AbsoluteSize.Y)
+						local relX = ((desc.AbsolutePosition.X - sf.AbsolutePosition.X) / uiScaleFactor) + canvasPos.X
+						local relY = ((desc.AbsolutePosition.Y - sf.AbsolutePosition.Y) / uiScaleFactor) + canvasPos.Y
+						maxX = math.max(maxX, relX + (desc.AbsoluteSize.X / uiScaleFactor))
+						maxY = math.max(maxY, relY + (desc.AbsoluteSize.Y / uiScaleFactor))
 					end
 				end
 			end
@@ -1456,17 +1540,20 @@ task.defer(function()
 		end
 		local function upd()
 			applyRows()
+			local uiScaleFactor = getUiScaleFactor()
 			local size = lay.AbsoluteContentSize
+			local sizeX = size.X / uiScaleFactor
+			local sizeY = size.Y / uiScaleFactor
 			local x
 			local y
 			if verticalOnly then
 				local _, descY = descendantBounds()
 				x = 0
-				y = math.max(0, math.floor(math.max(size.Y + 12.5, descY + 12.5) + 0.5))
+				y = math.max(0, math.floor(math.max(sizeY + 12.5, descY + 12.5) + 0.5))
 			else
 				local descX, descY = descendantBounds()
-				x = math.max(0, math.floor(math.max(size.X, descX) + 0.5))
-				y = math.max(0, math.floor(math.max(size.Y + 12.5, descY + 12.5) + 0.5))
+				x = math.max(0, math.floor(math.max(sizeX, descX) + 0.5))
+				y = math.max(0, math.floor(math.max(sizeY + 12.5, descY + 12.5) + 0.5))
 			end
 			pcall(function()
 				if verticalOnly then
@@ -1476,6 +1563,7 @@ task.defer(function()
 				end
 			end)
 		end
+		uiScaleState.refreshers[sf] = upd
 		if verticalOnly then
 			local function bindVerticalGui(gui)
 				if not (gui and gui:IsA("GuiObject")) or boundVerticalGuis[gui] then
@@ -1566,6 +1654,14 @@ task.defer(function()
 					task.defer(upd)
 				end)
 			)
+			if uiScaleState and uiScaleState.object and uiScaleState.object.GetPropertyChangedSignal then
+				NAlib.connect(
+					id,
+					uiScaleState.object:GetPropertyChangedSignal("Scale"):Connect(function()
+						task.defer(upd)
+					end)
+				)
+			end
 			return
 		end
 		local function bindGui(gui)
@@ -1621,6 +1717,14 @@ task.defer(function()
 				task.defer(upd)
 			end)
 		)
+		if uiScaleState and uiScaleState.object and uiScaleState.object.GetPropertyChangedSignal then
+			NAlib.connect(
+				id,
+				uiScaleState.object:GetPropertyChangedSignal("Scale"):Connect(function()
+					task.defer(upd)
+				end)
+			)
+		end
 	end
 	local function mkDock(fr)
 		local d = Instance.new("Frame")
@@ -2738,7 +2842,7 @@ task.defer(function()
 			kb.Position = UDim2.new(a, 0, 0.5, 0)
 			vb.Text = opts.integer and tostring(v) or string.format("%.2f", v)
 		end
-		local function apply(v)
+		local function commit(v)
 			if opts.integer then
 				v = math.floor((tonumber(v) or minV) + 0.5)
 			end
@@ -2752,6 +2856,7 @@ task.defer(function()
 		end
 		setVis(numValue.Value)
 		local drag = false
+		local pendingValue = numValue.Value
 		local function fromIn(input)
 			local rel = 0
 			pcall(function()
@@ -2762,7 +2867,12 @@ task.defer(function()
 			if opts.integer then
 				nextV = math.floor(nextV + 0.5)
 			end
-			apply(nextV)
+			if opts.applyOnRelease then
+				pendingValue = nextV
+				setVis(nextV)
+			else
+				commit(nextV)
+			end
 		end
 		bar.InputBegan:Connect(function(input)
 			if
@@ -2795,6 +2905,9 @@ task.defer(function()
 					input.UserInputType == Enum.UserInputType.MouseButton1
 					or input.UserInputType == Enum.UserInputType.Touch
 				then
+					if drag and opts.applyOnRelease then
+						commit(pendingValue)
+					end
 					drag = false
 				end
 			end)
@@ -2805,7 +2918,7 @@ task.defer(function()
 		vb.FocusLost:Connect(function()
 			local v = tonumber(vb.Text or "")
 			if v then
-				apply(v)
+				commit(v)
 			else
 				setVis(numValue.Value)
 			end
@@ -2982,13 +3095,31 @@ task.defer(function()
 		local selectedName
 		local optionButtons = {}
 		local hover = false
+		local dropdownOpen = false
+		local function getDropdownScale()
+			local sc = uiScaleState and uiScaleState.object
+			local factor = sc and tonumber(sc.Scale) or 1
+			if not factor or factor <= 0 then
+				factor = 1
+			end
+			return factor
+		end
+		local function syncExpandedHeight()
+			local s = fr.Size
+			local menuLogicalHeight = menu.Size.Y.Offset
+			local uiScaleFactor = getDropdownScale()
+			if menu.AbsoluteSize.Y > 0 then
+				menuLogicalHeight = math.max(menuLogicalHeight, math.floor((menu.AbsoluteSize.Y / uiScaleFactor) + 0.5))
+			end
+			local expandedHeight = baseHeight + menuLogicalHeight + 6
+			fr.Size = UDim2.new(s.X.Scale, s.X.Offset, 0, dropdownOpen and expandedHeight or baseHeight)
+		end
 		local function setExpanded(open)
-			menu.Visible = open and true or false
+			dropdownOpen = open and true or false
+			menu.Visible = dropdownOpen
 			upArrow.TextColor3 = open and Color3.fromRGB(160, 166, 180) or Color3.fromRGB(104, 110, 124)
 			downArrow.TextColor3 = open and Color3.fromRGB(104, 110, 124) or Color3.fromRGB(160, 166, 180)
-			local s = fr.Size
-			local expandedHeight = baseHeight + menu.Size.Y.Offset + 6
-			fr.Size = UDim2.new(s.X.Scale, s.X.Offset, 0, open and expandedHeight or baseHeight)
+			syncExpandedHeight()
 			openBg.BackgroundColor3 = open and Color3.fromRGB(48, 52, 64)
 				or (hover and Color3.fromRGB(45, 49, 60) or Color3.fromRGB(39, 42, 52))
 		end
@@ -3085,6 +3216,17 @@ task.defer(function()
 			closeCustomDropdowns(menu)
 			setExpanded(willOpen)
 		end)
+		menu:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+			task.defer(syncExpandedHeight)
+		end)
+		menu:GetPropertyChangedSignal("Size"):Connect(function()
+			task.defer(syncExpandedHeight)
+		end)
+		if uiScaleState and uiScaleState.object and uiScaleState.object.GetPropertyChangedSignal then
+			uiScaleState.object:GetPropertyChangedSignal("Scale"):Connect(function()
+				task.defer(syncExpandedHeight)
+			end)
+		end
 		local initialName
 		if opts.persist and id then
 			local saved = settingsConfig[id]
@@ -4469,6 +4611,20 @@ task.defer(function()
 	if iconColorValue then
 		makeColorSlider("IconColor", "Icon Color", "Custom color for the Delta icon", iconColorValue)
 	end
+	if uiScaleState.value then
+		makeSizeSlider(
+			"InterfaceScale",
+			"Interface size",
+			"Adjust Delta's interface size",
+			uiScaleState.value,
+			0.5,
+			1.65,
+			{
+				apply = applyInterfaceScale,
+				applyOnRelease = true,
+			}
+		)
+	end
 	if iconSizeValue then
 		makeSizeSlider("IconSize", "Icon Size", "Scale the Delta icon size", iconSizeValue, 0.5, 5)
 	end
@@ -4983,6 +5139,19 @@ if type(_dvp) == "table" and not _dvp.__DeltaVisualPatchLoaded then
 		local mainGui = getMain()
 		if not mainGui then
 			return
+		end
+		do
+			local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or mainGui.AbsoluteSize
+			if UIS and UIS.TouchEnabled and (vp.X <= 1100 or vp.Y <= 820) then
+				local darkOverlay = mainGui:FindFirstChild("DarkOverlay")
+				if darkOverlay then
+					pcall(function()
+						darkOverlay.Visible = false
+						darkOverlay.Active = false
+					end)
+				end
+				return
+			end
 		end
 		local sectionsList = { "Executor", "Home", "Scripthub", "Settings", "Console", "Music" }
 		local settingsPath = "DeltaCustom/Settings.json"
@@ -8398,6 +8567,12 @@ if type(_dta) == "table" and not _dta.__DeltaThemeMenuPatchLoaded then
 		local mainGui = getMain()
 		if not mainGui then
 			return
+		end
+		do
+			local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or mainGui.AbsoluteSize
+			if UIS and UIS.TouchEnabled and (vp.X <= 1100 or vp.Y <= 820) then
+				return
+			end
 		end
 
 		local settingsPath = "DeltaCustom/Settings.json"

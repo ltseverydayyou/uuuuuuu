@@ -663,6 +663,7 @@ task.spawn(function()
 	local root = Icon.new()
 		:setName("AEXRoot")
 		:setLabel("Auto Parry")
+		:align("Right")
 		:autoDeselect(false)
 
 	local spam = Icon.new()
@@ -680,48 +681,48 @@ task.spawn(function()
 		:setLabel("FX Clean: ON")
 		:autoDeselect(false)
 
-	root:setDropdown({
+	root:setMenu({
 		spam,
 		vis,
 		fx
 	})
 
-	spam.selected:Connect(function()
+	local c1 = spam.selected:Connect(function()
 		if syncIcon then
 			return
 		end
 		setSpam(true)
 	end)
 
-	spam.deselected:Connect(function()
+	local c2 = spam.deselected:Connect(function()
 		if syncIcon then
 			return
 		end
 		setSpam(false)
 	end)
 
-	vis.selected:Connect(function()
+	local c3 = vis.selected:Connect(function()
 		if syncIcon then
 			return
 		end
 		setVis(true)
 	end)
 
-	vis.deselected:Connect(function()
+	local c4 = vis.deselected:Connect(function()
 		if syncIcon then
 			return
 		end
 		setVis(false)
 	end)
 
-	fx.selected:Connect(function()
+	local c5 = fx.selected:Connect(function()
 		if syncIcon then
 			return
 		end
 		setFx(true)
 	end)
 
-	fx.deselected:Connect(function()
+	local c6 = fx.deselected:Connect(function()
 		if syncIcon then
 			return
 		end
@@ -729,6 +730,13 @@ task.spawn(function()
 	end)
 
 	if root.addToJanitor then
+		root:addToJanitor(c1)
+		root:addToJanitor(c2)
+		root:addToJanitor(c3)
+		root:addToJanitor(c4)
+		root:addToJanitor(c5)
+		root:addToJanitor(c6)
+
 		root:addToJanitor(function()
 			dead = true
 			clearBind()

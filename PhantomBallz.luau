@@ -329,7 +329,7 @@ end
 local br
 do
 	local ok, mod = pcall(function()
-		return require((((__lt.cm("ReplicatedStorage", "WaitForChild", "TS")):WaitForChild("BallReplicator")):WaitForChild("BallReplicator"))
+		return require(((__lt.cm("ReplicatedStorage", "WaitForChild", "TS")):WaitForChild("BallReplicator")):WaitForChild("BallReplicator"))
 	end)
 	if ok and mod and mod.BallReplicator then
 		br = mod.BallReplicator

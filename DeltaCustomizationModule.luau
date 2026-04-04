@@ -677,6 +677,35 @@ local function ensureDir(path)
 	end
 	return true
 end
+local function ensureParentDir(path)
+	if type(path) ~= "string" or path == "" then
+		return false
+	end
+	local dir = path:gsub("\\", "/"):match("^(.*)/[^/]+$")
+	if not dir or dir == "" then
+		return true
+	end
+	return ensureDir(dir)
+end
+local function writeJsonFile(path, payload)
+	if not (HS and fsOk()) then
+		return false
+	end
+	if not ensureParentDir(path) then
+		return false
+	end
+	local okEnc, enc = pcall(function()
+		return __lt.cm("HttpService", "JSONEncode", payload)
+	end)
+	if not (okEnc and type(enc) == "string") then
+		return false
+	end
+	local okW = pcall(writefile, path, enc)
+	if okW then
+		return true
+	end
+	return pcall(writefile, path, enc)
+end
 local baseDir = "DeltaCustom"
 local iconDir = baseDir .. "/DeltaIcons"
 local cfgPath = baseDir .. "/delta_icon.json"
@@ -756,7 +785,7 @@ local function saveIconCfg()
 		localPath = type(dIcons.localPath) == "string" and dIcons.localPath or "",
 		index = tonumber(dIcons.index) or 0,
 	}
-	pcall(writefile, cfgPath, __lt.cm("HttpService", "JSONEncode", payload))
+	writeJsonFile(cfgPath, payload)
 end
 local function scanIcons()
 	dIcons.entries = {}
@@ -1370,12 +1399,7 @@ task.defer(function()
 			return
 		end
 		settingsConfig[key] = payload
-		local ok, enc = pcall(function()
-			return __lt.cm("HttpService", "JSONEncode", settingsConfig)
-		end)
-		if ok and enc then
-			pcall(writefile, settingsPath, enc)
-		end
+		writeJsonFile(settingsPath, settingsConfig)
 	end
 	local uiScaleState = {
 		object = nil,
@@ -2188,12 +2212,7 @@ task.defer(function()
 				applyIconSize(iconSizeValue.Value)
 				if HS and type(writefile) == "function" then
 					settingsConfig.IconSize = { value = math.clamp(iconSizeValue.Value, 0.5, 5) }
-					local ok, encoded = pcall(function()
-						return __lt.cm("HttpService", "JSONEncode", settingsConfig)
-					end)
-					if ok and encoded then
-						pcall(writefile, settingsPath, encoded)
-					end
+						writeJsonFile(settingsPath, settingsConfig)
 				end
 			end)
 		)
@@ -2587,12 +2606,7 @@ task.defer(function()
 				useCustom = cOn,
 				customColor = { lastC.R, lastC.G, lastC.B },
 			}
-			local ok, enc = pcall(function()
-				return __lt.cm("HttpService", "JSONEncode", colorConfig)
-			end)
-			if ok and enc then
-				pcall(writefile, colorsPath, enc)
-			end
+			writeJsonFile(colorsPath, colorConfig)
 		end
 		local function updGrad()
 			gS.Color = ColorSequence.new({
@@ -2816,12 +2830,7 @@ task.defer(function()
 				return
 			end
 			settingsConfig[key] = { value = v }
-			local ok, enc = pcall(function()
-				return __lt.cm("HttpService", "JSONEncode", settingsConfig)
-			end)
-			if ok and enc then
-				pcall(writefile, settingsPath, enc)
-			end
+			writeJsonFile(settingsPath, settingsConfig)
 		end
 		local function setVis(v)
 			if opts.integer then
@@ -3277,12 +3286,7 @@ task.defer(function()
 				return
 			end
 			settingsConfig[key] = { enabled = enabled }
-			local ok, encoded = pcall(function()
-				return __lt.cm("HttpService", "JSONEncode", settingsConfig)
-			end)
-			if ok and encoded then
-				pcall(writefile, settingsPath, encoded)
-			end
+			writeJsonFile(settingsPath, settingsConfig)
 		end
 		local function setVisualToggle()
 			btnFrame.BackgroundColor3 = enabled and Color3.fromRGB(79, 164, 242) or Color3.fromRGB(30, 30, 30)
@@ -3373,12 +3377,7 @@ task.defer(function()
 				return
 			end
 			settingsConfig[key] = { enabled = iconVisible }
-			local ok, encoded = pcall(function()
-				return __lt.cm("HttpService", "JSONEncode", settingsConfig)
-			end)
-			if ok and encoded then
-				pcall(writefile, settingsPath, encoded)
-			end
+			writeJsonFile(settingsPath, settingsConfig)
 		end
 		local function setVisual()
 			btnFrame.BackgroundColor3 = iconVisible and Color3.fromRGB(79, 164, 242) or Color3.fromRGB(30, 30, 30)
@@ -3560,12 +3559,7 @@ task.defer(function()
 				return
 			end
 			settingsConfig[key] = { enabled = tabNotifEnabled }
-			local ok, encoded = pcall(function()
-				return __lt.cm("HttpService", "JSONEncode", settingsConfig)
-			end)
-			if ok and encoded then
-				pcall(writefile, settingsPath, encoded)
-			end
+			writeJsonFile(settingsPath, settingsConfig)
 		end
 		local function setVisual()
 			btnFrame.BackgroundColor3 = tabNotifEnabled and Color3.fromRGB(79, 164, 242) or Color3.fromRGB(30, 30, 30)
@@ -4128,24 +4122,14 @@ task.defer(function()
 			return
 		end
 		settingsConfig.SidebarGesture = { enabled = sidebarGestureEnabled }
-		local ok, encoded = pcall(function()
-			return __lt.cm("HttpService", "JSONEncode", settingsConfig)
-		end)
-		if ok and encoded then
-			pcall(writefile, settingsPath, encoded)
-		end
+		writeJsonFile(settingsPath, settingsConfig)
 	end
 	local function saveSidebarGestureVisible()
 		if not (HS and type(writefile) == "function") then
 			return
 		end
 		settingsConfig.SidebarGestureVisible = { enabled = sidebarGestureVisible }
-		local ok, encoded = pcall(function()
-			return __lt.cm("HttpService", "JSONEncode", settingsConfig)
-		end)
-		if ok and encoded then
-			pcall(writefile, settingsPath, encoded)
-		end
+		writeJsonFile(settingsPath, settingsConfig)
 	end
 	local function applyGestureVisual()
 		if sidebarGestureFrame then
@@ -4344,12 +4328,7 @@ task.defer(function()
 				return
 			end
 			settingsConfig[key] = { enabled = autoCloseOnLoad }
-			local ok, encoded = pcall(function()
-				return __lt.cm("HttpService", "JSONEncode", settingsConfig)
-			end)
-			if ok and encoded then
-				pcall(writefile, settingsPath, encoded)
-			end
+			writeJsonFile(settingsPath, settingsConfig)
 		end
 		local function setVisual()
 			btnFrame.BackgroundColor3 = autoCloseOnLoad and Color3.fromRGB(79, 164, 242) or Color3.fromRGB(30, 30, 30)
@@ -5126,9 +5105,10 @@ end)
 
 -- visual upgrade patch
 
-local _dvp = (getgenv and getgenv()) or _G
-if type(_dvp) == "table" and not _dvp.__DeltaVisualPatchLoaded then
-	_dvp.__DeltaVisualPatchLoaded = true
+__lt.deltaPatchState = __lt.deltaPatchState or {}
+__lt.deltaPatchState.visualEnv = (getgenv and getgenv()) or _G
+if type(__lt.deltaPatchState.visualEnv) == "table" and not __lt.deltaPatchState.visualEnv.__DeltaVisualPatchLoaded then
+	__lt.deltaPatchState.visualEnv.__DeltaVisualPatchLoaded = true
 	task.defer(function()
 		if (identifyexecutor and identifyexecutor() or ""):lower() ~= "delta" then
 			return
@@ -5202,12 +5182,7 @@ if type(_dvp) == "table" and not _dvp.__DeltaVisualPatchLoaded then
 				return
 			end
 			settingsConfig[k] = t
-			local ok, enc = pcall(function()
-				return __lt.cm("HttpService", "JSONEncode", settingsConfig)
-			end)
-			if ok and enc then
-				pcall(writefile, settingsPath, enc)
-			end
+			writeJsonFile(settingsPath, settingsConfig)
 		end
 		local darkOverlay = mainGui:FindFirstChild("DarkOverlay")
 		NAlib.disconnect("DarkOverlay_Hide")
@@ -5709,6 +5684,7 @@ local st = {
 	snd = nil,
 	muted = {},
 	gui = nil,
+	fn = {},
 }
 
 local function con(c)
@@ -6080,6 +6056,8 @@ local function muteSh()
 	end
 end
 
+st.fn.setupHubMusic = function()
+
 local col = {
 	bg = Color3.fromRGB(20, 22, 26),
 	bg2 = Color3.fromRGB(30, 33, 40),
@@ -6282,13 +6260,7 @@ local function saveMusicCfg()
 	if not (HS and type(writefile) == "function" and ensureMusicFolder()) then
 		return false
 	end
-	local okEnc, enc = pcall(function()
-		return __lt.cm("HttpService", "JSONEncode", musicCfg)
-	end)
-	if okEnc and type(enc) == "string" then
-		return pcall(writefile, MUSIC_CFG_PATH, enc)
-	end
-	return false
+	return writeJsonFile(MUSIC_CFG_PATH, musicCfg)
 end
 
 local function scanMusicFiles()
@@ -8089,7 +8061,7 @@ local function buildMusicTab()
 	if savedVol and savedVol >= 0 and savedVol <= 1 then
 		savedVol *= 10
 	end
-	local vl = math.clamp(savedVol or 5, 0, 10)
+	local vl = math.clamp(savedVol or 1, 0, 10)
 	local spd = math.clamp(tonumber(musicCfg.playbackSpeed) or 1, 0.5, 2)
 	local mixSaveStamp = 0
 	local mixReady = false
@@ -8573,167 +8545,176 @@ end
 
 buildMusicTab()
 
-musicState.icon.sheetAsset = downloadImageAsset(musicState.icon.sheetUrl)
+musicState.setupSidebar = function()
+	musicState.icon.sheetAsset = downloadImageAsset(musicState.icon.sheetUrl)
 
-musicState.button = gbtn("Music")
-if musicState.button then
-	pcall(function()
-		musicState.button:Destroy()
-	end)
-end
-
-local src = sidebarRefs.console
-	or sidebarRefs.scripthub
-	or sidebarRefs.home
-	or sidebarRefs.settings
-	or sidebarRefs.executor
-if src then
-	musicState.button = src:Clone()
-	musicState.button.Name = "Music"
-	musicState.button.Parent = src.Parent
-	local tl = txtOf(musicState.button)
-	if tl then
-		tl.Text = "Music"
-	end
-	pcall(function()
-		if sidebarRefs.toggle and sidebarRefs.toggle:IsA("GuiButton") then
-			local to = sidebarRefs.toggle.LayoutOrder or 999
-			for _, d in ipairs(sb:GetChildren()) do
-				if d:IsA("GuiButton") and d ~= musicState.button and d.LayoutOrder and d.LayoutOrder >= to then
-					d.LayoutOrder += 1
-				end
-			end
-			musicState.button.LayoutOrder = to
-		else
-			local lo = 0
-			for _, d in ipairs(sb:GetChildren()) do
-				if d:IsA("GuiButton") and d ~= musicState.button then
-					lo = math.max(lo, d.LayoutOrder or 0)
-				end
-			end
-			musicState.button.LayoutOrder = lo + 1
-		end
-	end)
-	local img = imgOf(musicState.button)
-	if img then
+	musicState.button = gbtn("Music")
+	if musicState.button then
 		pcall(function()
-			if musicState.icon.sheetAsset then
-				img.Image = musicState.icon.sheetAsset
-				img.ImageRectOffset = musicState.icon.rectOffset
-				img.ImageRectSize = musicState.icon.rectSize
-				img.ScaleType = Enum.ScaleType.Fit
-			end
-			img.ImageColor3 = offImg
+			musicState.button:Destroy()
 		end)
 	end
-	pcall(function()
-		musicState.button.BackgroundColor3 = bgOff()
-	end)
-end
 
-local function placeMusicBtn()
-	if not (musicState.button and sidebarRefs.toggle and musicState.button.Parent == sidebarRefs.toggle.Parent) then
-		return
-	end
-	pcall(function()
-		if sidebarRefs.toggle:GetAttribute("LT_OrigPosXS") == nil then
-			sidebarRefs.toggle:SetAttribute("LT_OrigPosXS", sidebarRefs.toggle.Position.X.Scale)
-			sidebarRefs.toggle:SetAttribute("LT_OrigPosXO", sidebarRefs.toggle.Position.X.Offset)
-			sidebarRefs.toggle:SetAttribute("LT_OrigPosYS", sidebarRefs.toggle.Position.Y.Scale)
-			sidebarRefs.toggle:SetAttribute("LT_OrigPosYO", sidebarRefs.toggle.Position.Y.Offset)
-			sidebarRefs.toggle:SetAttribute("LT_OrigLay", sidebarRefs.toggle.LayoutOrder or 0)
+	musicState.sourceButton = sidebarRefs.console
+		or sidebarRefs.scripthub
+		or sidebarRefs.home
+		or sidebarRefs.settings
+		or sidebarRefs.executor
+	if musicState.sourceButton then
+		musicState.button = musicState.sourceButton:Clone()
+		musicState.button.Name = "Music"
+		musicState.button.Parent = musicState.sourceButton.Parent
+		musicState.textLabel = txtOf(musicState.button)
+		if musicState.textLabel then
+			musicState.textLabel.Text = "Music"
 		end
-		local op = UDim2.new(
-			sidebarRefs.toggle:GetAttribute("LT_OrigPosXS") or sidebarRefs.toggle.Position.X.Scale,
-			sidebarRefs.toggle:GetAttribute("LT_OrigPosXO") or sidebarRefs.toggle.Position.X.Offset,
-			sidebarRefs.toggle:GetAttribute("LT_OrigPosYS") or sidebarRefs.toggle.Position.Y.Scale,
-			sidebarRefs.toggle:GetAttribute("LT_OrigPosYO") or sidebarRefs.toggle.Position.Y.Offset
-		)
-		sidebarRefs.toggle.Position = op
-		local togLo = sidebarRefs.toggle:GetAttribute("LT_OrigLay") or sidebarRefs.toggle.LayoutOrder or 0
-		sidebarRefs.toggle.LayoutOrder = togLo
-		local above
-		local ay = -math.huge
-		local ty = op.Y.Scale + op.Y.Offset / 100000
-		for _, d in ipairs(sidebarRefs.toggle.Parent:GetChildren()) do
-			if d:IsA("GuiButton") and d ~= sidebarRefs.toggle and d ~= musicState.button then
-				local py = d.Position.Y.Scale + d.Position.Y.Offset / 100000
-				if py < ty and py > ay then
-					ay = py
-					above = d
+		pcall(function()
+			if sidebarRefs.toggle and sidebarRefs.toggle:IsA("GuiButton") then
+				local to = sidebarRefs.toggle.LayoutOrder or 999
+				for _, d in ipairs(sb:GetChildren()) do
+					if d:IsA("GuiButton") and d ~= musicState.button and d.LayoutOrder and d.LayoutOrder >= to then
+						d.LayoutOrder += 1
+					end
+				end
+				musicState.button.LayoutOrder = to
+			else
+				local lo = 0
+				for _, d in ipairs(sb:GetChildren()) do
+					if d:IsA("GuiButton") and d ~= musicState.button then
+						lo = math.max(lo, d.LayoutOrder or 0)
+					end
+				end
+				musicState.button.LayoutOrder = lo + 1
+			end
+		end)
+		musicState.imageLabel = imgOf(musicState.button)
+		if musicState.imageLabel then
+			pcall(function()
+				if musicState.icon.sheetAsset then
+					musicState.imageLabel.Image = musicState.icon.sheetAsset
+					musicState.imageLabel.ImageRectOffset = musicState.icon.rectOffset
+					musicState.imageLabel.ImageRectSize = musicState.icon.rectSize
+					musicState.imageLabel.ScaleType = Enum.ScaleType.Fit
+				end
+				musicState.imageLabel.ImageColor3 = offImg
+			end)
+		end
+		pcall(function()
+			musicState.button.BackgroundColor3 = bgOff()
+		end)
+	end
+
+	musicState.placeButton = function()
+		if not (musicState.button and sidebarRefs.toggle and musicState.button.Parent == sidebarRefs.toggle.Parent) then
+			return
+		end
+		pcall(function()
+			if sidebarRefs.toggle:GetAttribute("LT_OrigPosXS") == nil then
+				sidebarRefs.toggle:SetAttribute("LT_OrigPosXS", sidebarRefs.toggle.Position.X.Scale)
+				sidebarRefs.toggle:SetAttribute("LT_OrigPosXO", sidebarRefs.toggle.Position.X.Offset)
+				sidebarRefs.toggle:SetAttribute("LT_OrigPosYS", sidebarRefs.toggle.Position.Y.Scale)
+				sidebarRefs.toggle:SetAttribute("LT_OrigPosYO", sidebarRefs.toggle.Position.Y.Offset)
+				sidebarRefs.toggle:SetAttribute("LT_OrigLay", sidebarRefs.toggle.LayoutOrder or 0)
+			end
+			local op = UDim2.new(
+				sidebarRefs.toggle:GetAttribute("LT_OrigPosXS") or sidebarRefs.toggle.Position.X.Scale,
+				sidebarRefs.toggle:GetAttribute("LT_OrigPosXO") or sidebarRefs.toggle.Position.X.Offset,
+				sidebarRefs.toggle:GetAttribute("LT_OrigPosYS") or sidebarRefs.toggle.Position.Y.Scale,
+				sidebarRefs.toggle:GetAttribute("LT_OrigPosYO") or sidebarRefs.toggle.Position.Y.Offset
+			)
+			sidebarRefs.toggle.Position = op
+			local togLo = sidebarRefs.toggle:GetAttribute("LT_OrigLay") or sidebarRefs.toggle.LayoutOrder or 0
+			sidebarRefs.toggle.LayoutOrder = togLo
+			local above
+			local ay = -math.huge
+			local ty = op.Y.Scale + op.Y.Offset / 100000
+			for _, d in ipairs(sidebarRefs.toggle.Parent:GetChildren()) do
+				if d:IsA("GuiButton") and d ~= sidebarRefs.toggle and d ~= musicState.button then
+					local py = d.Position.Y.Scale + d.Position.Y.Offset / 100000
+					if py < ty and py > ay then
+						ay = py
+						above = d
+					end
 				end
 			end
-		end
-		local gapS = 0.11
-		local gapO = 0
-		if above then
-			gapS = op.Y.Scale - above.Position.Y.Scale
-			gapO = op.Y.Offset - above.Position.Y.Offset
-		end
-		musicState.button.Position = op
-		musicState.button.LayoutOrder = togLo - 1
-		sidebarRefs.toggle.Position = UDim2.new(op.X.Scale, op.X.Offset, op.Y.Scale + gapS, op.Y.Offset + gapO)
-		sidebarRefs.toggle.LayoutOrder = togLo + 1
-	end)
-end
+			local gapS = 0.11
+			local gapO = 0
+			if above then
+				gapS = op.Y.Scale - above.Position.Y.Scale
+				gapO = op.Y.Offset - above.Position.Y.Offset
+			end
+			musicState.button.Position = op
+			musicState.button.LayoutOrder = togLo - 1
+			sidebarRefs.toggle.Position = UDim2.new(op.X.Scale, op.X.Offset, op.Y.Scale + gapS, op.Y.Offset + gapO)
+			sidebarRefs.toggle.LayoutOrder = togLo + 1
+		end)
+	end
 
-placeMusicBtn()
+	musicState.placeButton()
 
-local function bindHide(b, nm)
-	improveSidebarTouch(b)
-	if b and b:IsA("GuiButton") then
-		con(b.MouseButton1Click:Connect(function()
-			closeMusic(true)
+	musicState.bindHide = function(b, nm)
+		improveSidebarTouch(b)
+		if b and b:IsA("GuiButton") then
+			con(b.MouseButton1Click:Connect(function()
+				closeMusic(true)
+				task.defer(function()
+					syncTabColors(nm or b.Name)
+				end)
+			end))
+		end
+	end
+
+	musicState.bindHide(sidebarRefs.home, "Home")
+	musicState.bindHide(sidebarRefs.scripthub, "Scripthub")
+	musicState.bindHide(sidebarRefs.settings, "Settings")
+	musicState.bindHide(sidebarRefs.executor, "Executor")
+	musicState.bindHide(sidebarRefs.console, "Console")
+
+	improveSidebarTouch(musicState.button)
+	if musicState.button and musicState.button:IsA("GuiButton") then
+		con(musicState.button.MouseButton1Click:Connect(function()
+			openMusic()
 			task.defer(function()
-				syncTabColors(nm or b.Name)
+				syncTabColors("Music")
 			end)
 		end))
 	end
-end
 
-bindHide(sidebarRefs.home, "Home")
-bindHide(sidebarRefs.scripthub, "Scripthub")
-bindHide(sidebarRefs.settings, "Settings")
-bindHide(sidebarRefs.executor, "Executor")
-bindHide(sidebarRefs.console, "Console")
+	for _, n in ipairs(sec) do
+		local p = gui:FindFirstChild(n)
+		if p and p:IsA("GuiObject") and p.GetPropertyChangedSignal then
+			con(p:GetPropertyChangedSignal("Visible"):Connect(function()
+				task.defer(syncTabColors)
+			end))
+		end
+	end
 
-improveSidebarTouch(musicState.button)
-if musicState.button and musicState.button:IsA("GuiButton") then
-	con(musicState.button.MouseButton1Click:Connect(function()
-		openMusic()
-		task.defer(function()
-			syncTabColors("Music")
-		end)
-	end))
-end
-
-for _, n in ipairs(sec) do
-	local p = gui:FindFirstChild(n)
-	if p and p:IsA("GuiObject") and p.GetPropertyChangedSignal then
-		con(p:GetPropertyChangedSignal("Visible"):Connect(function()
+	if sidebarRefs.activeColor and sidebarRefs.activeColor.Changed then
+		con(sidebarRefs.activeColor.Changed:Connect(function()
 			task.defer(syncTabColors)
 		end))
 	end
+
+	if sidebarRefs.inactiveColor and sidebarRefs.inactiveColor.Changed then
+		con(sidebarRefs.inactiveColor.Changed:Connect(function()
+			task.defer(syncTabColors)
+		end))
+	end
+
+	task.defer(syncTabColors)
 end
 
-if sidebarRefs.activeColor and sidebarRefs.activeColor.Changed then
-	con(sidebarRefs.activeColor.Changed:Connect(function()
-		task.defer(syncTabColors)
-	end))
+musicState.setupSidebar()
 end
 
-if sidebarRefs.inactiveColor and sidebarRefs.inactiveColor.Changed then
-	con(sidebarRefs.inactiveColor.Changed:Connect(function()
-		task.defer(syncTabColors)
-	end))
-end
+st.fn.setupHubMusic();
 
-task.defer(syncTabColors)
-
-local _dta = (getgenv and getgenv()) or _G
-if type(_dta) == "table" and not _dta.__DeltaThemeMenuPatchLoaded then
-	_dta.__DeltaThemeMenuPatchLoaded = true
-	task.defer(function()
+(function()
+	__lt.deltaPatchState = __lt.deltaPatchState or {}
+	__lt.deltaPatchState.themeEnv = (getgenv and getgenv()) or _G
+	if type(__lt.deltaPatchState.themeEnv) == "table" and not __lt.deltaPatchState.themeEnv.__DeltaThemeMenuPatchLoaded then
+		__lt.deltaPatchState.themeEnv.__DeltaThemeMenuPatchLoaded = true
+		task.defer(function()
 		if (identifyexecutor and identifyexecutor() or ""):lower() ~= "delta" then
 			return
 		end
@@ -8807,12 +8788,7 @@ if type(_dta) == "table" and not _dta.__DeltaThemeMenuPatchLoaded then
 				return
 			end
 			cfg[k] = v
-			local ok, enc = pcall(function()
-				return __lt.cm("HttpService", "JSONEncode", cfg)
-			end)
-			if ok and enc then
-				pcall(writefile, settingsPath, enc)
-			end
+			writeJsonFile(settingsPath, cfg)
 		end
 
 		local base = {
@@ -9576,5 +9552,6 @@ if type(_dta) == "table" and not _dta.__DeltaThemeMenuPatchLoaded then
 			end
 			applyTheme(curTheme)
 		end)
-	end)
-end
+		end)
+	end
+end)()

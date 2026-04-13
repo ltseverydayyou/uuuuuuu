@@ -47,7 +47,7 @@ local realconfigs = {
     log_Fire = true,
     log_Invoke = true,
     bufferDumpComments = false,
-    log_Receive = true,
+    log_Receive = false,
     adonisBypass = true,
     pathMode = 1,
     blockIncoming = false,
@@ -746,28 +746,27 @@ getgenv().SIMPLESPYCONFIG_MaxRemotes = 300
 getgenv().SIMPLESPYCONFIG_SchedulerBurst = 12
 local indent = 4
 local scheduled = {}
-local schedulerconnect
 local SimpleSpy = {}
 local topstr = ''
 local bottomstr = ''
-local remotesFadeIn
-local rightFadeIn
-local codebox
-local p
 local getnilrequired = false
 
 -- autoblock variables
-local history = {}
-local excluding = {}
-
--- if mouse inside gui
-local mouseInGui = false
-
-local connections = {}
-local DecompiledScripts = {}
-local generation = {}
-local running_threads = {}
-local originalnamecall
+local RuntimeState = {
+    schedulerconnect = nil,
+    remotesFadeIn = nil,
+    rightFadeIn = nil,
+    codebox = nil,
+    p = nil,
+    history = {},
+    excluding = {},
+    mouseInGui = false,
+    connections = {},
+    DecompiledScripts = {},
+    generation = {},
+    running_threads = {},
+    originalnamecall = nil,
+}
 
 local remoteEvent = Instance.new('RemoteEvent', ui.Storage)
 local remoteFunction = Instance.new('RemoteFunction', ui.Storage)
@@ -778,6 +777,11 @@ local loggedClientEvent, wrappedClientInvoke = {}, {}
 local logConnectionFunctions = {}
 local _origClientInvoke = {}
 local wrappedInvokeCallbacks = {}
+local incomingClientConns = {}
+local descAddedConn
+local descAddedInvokeConn
+local oldIncomingNewIndex
+local incomingHooksEnabled = false
 
 local originalEvent = remoteEvent.FireServer
 local originalFunction = remoteFunction.InvokeServer
@@ -965,7 +969,7 @@ end, function(err)
 end)
 
 local function logthread(thread: thread)
-    table.insert(running_threads, thread)
+    table.insert(RuntimeState.running_threads, thread)
 end
 
 --- Prevents remote spam from causing lag (clears logs after `getgenv().SIMPLESPYCONFIG_MaxRemotes` or 500 remotes)
@@ -1159,8 +1163,8 @@ function onBarInput(input)
         local mainPos = ui.Background.AbsolutePosition
         local offset = mainPos - lastPos
         local currentPos = offset + lastPos
-        if not connections['drag'] then
-            connections['drag'] = RunService.RenderStepped:Connect(function()
+        if not RuntimeState.connections['drag'] then
+            RuntimeState.connections['drag'] = RunService.RenderStepped:Connect(function()
                 local newPos = UserInputService:GetMouseLocation()
                 if newPos ~= lastPos then
                     local currentX = (offset + newPos).X
@@ -1218,12 +1222,12 @@ function onBarInput(input)
             end)
         end
         table.insert(
-            connections,
+            RuntimeState.connections,
             UserInputService.InputEnded:Connect(function(inputE)
                 if input == inputE then
-                    if connections['drag'] then
-                        connections['drag']:Disconnect()
-                        connections['drag'] = nil
+                    if RuntimeState.connections['drag'] then
+                        RuntimeState.connections['drag']:Disconnect()
+                        RuntimeState.connections['drag'] = nil
                     end
                 end
             end)
@@ -1331,7 +1335,7 @@ function toggleMinimize(override)
             toggleSideTray(true)
         end
         ui.LeftPanel.Visible = true
-        remotesFadeIn = fadeOut(ui.LeftPanel:QueryDescendants("Instance"))
+        RuntimeState.remotesFadeIn = fadeOut(ui.LeftPanel:QueryDescendants("Instance"))
         TweenService:Create(
             ui.LeftPanel,
             TweenInfo.new(0.5),
@@ -1345,9 +1349,9 @@ function toggleMinimize(override)
             { Size = UDim2.new(0, 131, 0, 249) }
         ):Play()
         wait(0.5)
-        if remotesFadeIn then
-            remotesFadeIn()
-            remotesFadeIn = nil
+        if RuntimeState.remotesFadeIn then
+            RuntimeState.remotesFadeIn()
+            RuntimeState.remotesFadeIn = nil
         end
         bringBackOnResize()
     end
@@ -1362,7 +1366,7 @@ function toggleSideTray(override)
     sideClosing = true
     sideClosed = not sideClosed
     if sideClosed then
-        rightFadeIn = fadeOut(ui.RightPanel:QueryDescendants("Instance"))
+        RuntimeState.rightFadeIn = fadeOut(ui.RightPanel:QueryDescendants("Instance"))
         wait(0.5)
         minimizeSize(0.5)
         wait(0.5)
@@ -1374,8 +1378,8 @@ function toggleSideTray(override)
         ui.RightPanel.Visible = true
         maximizeSize(0.5)
         wait(0.5)
-        if rightFadeIn then
-            rightFadeIn()
+        if RuntimeState.rightFadeIn then
+            RuntimeState.rightFadeIn()
         end
         bringBackOnResize()
     end
@@ -1498,16 +1502,16 @@ local customCursor = Create('ImageLabel', {
     Parent = ui.SimpleSpy3,
 })
 function mouseEntered()
-    local con = connections['SIMPLESPY_CURSOR']
+    local con = RuntimeState.connections['SIMPLESPY_CURSOR']
     if con then
         con:Disconnect()
-        connections['SIMPLESPY_CURSOR'] = nil
+        RuntimeState.connections['SIMPLESPY_CURSOR'] = nil
     end
-    connections['SIMPLESPY_CURSOR'] = RunService.RenderStepped:Connect(
+    RuntimeState.connections['SIMPLESPY_CURSOR'] = RunService.RenderStepped:Connect(
         function()
-            UserInputService.MouseIconEnabled = not mouseInGui
-            customCursor.Visible = mouseInGui
-            if mouseInGui and getgenv().SimpleSpyExecuted then
+            UserInputService.MouseIconEnabled = not RuntimeState.mouseInGui
+            customCursor.Visible = RuntimeState.mouseInGui
+            if RuntimeState.mouseInGui and getgenv().SimpleSpyExecuted then
                 local mouseLocation = UserInputService:GetMouseLocation()
                     - GuiInset
                 customCursor.Position = UDim2.fromOffset(
@@ -1528,7 +1532,7 @@ function mouseEntered()
                     customCursor.Image = 'rbxassetid://6065775281'
                 end
             else
-                connections['SIMPLESPY_CURSOR']:Disconnect()
+                RuntimeState.connections['SIMPLESPY_CURSOR']:Disconnect()
             end
         end
     )
@@ -1545,12 +1549,12 @@ function mouseMoved()
         and mousePos.Y
             <= ui.Background.AbsolutePosition.Y + ui.Background.AbsoluteSize.Y
     then
-        if not mouseInGui then
-            mouseInGui = true
+        if not RuntimeState.mouseInGui then
+            RuntimeState.mouseInGui = true
             mouseEntered()
         end
     else
-        mouseInGui = false
+        RuntimeState.mouseInGui = false
     end
 end
 
@@ -1673,8 +1677,8 @@ function backgroundUserInput(input)
         local lastPos = UserInputService:GetMouseLocation()
         local offset = ui.Background.AbsoluteSize - lastPos
         local currentPos = lastPos + offset
-        if not connections['SIMPLESPY_RESIZE'] then
-            connections['SIMPLESPY_RESIZE'] = RunService.RenderStepped:Connect(
+        if not RuntimeState.connections['SIMPLESPY_RESIZE'] then
+            RuntimeState.connections['SIMPLESPY_RESIZE'] = RunService.RenderStepped:Connect(
                 function()
                     local newPos = UserInputService:GetMouseLocation()
                     if newPos ~= lastPos then
@@ -1711,12 +1715,12 @@ function backgroundUserInput(input)
             )
         end
         table.insert(
-            connections,
+            RuntimeState.connections,
             UserInputService.InputEnded:Connect(function(inputE)
                 if input == inputE then
-                    if connections['SIMPLESPY_RESIZE'] then
-                        connections['SIMPLESPY_RESIZE']:Disconnect()
-                        connections['SIMPLESPY_RESIZE'] = nil
+                    if RuntimeState.connections['SIMPLESPY_RESIZE'] then
+                        RuntimeState.connections['SIMPLESPY_RESIZE']:Disconnect()
+                        RuntimeState.connections['SIMPLESPY_RESIZE'] = nil
                     end
                 end
             end)
@@ -1770,7 +1774,7 @@ function eventSelect(frame)
                 { BackgroundColor3 = Color3.fromRGB(92, 126, 229) }
             ):Play()
         end)
-        codebox:setRaw(selected.GenScript)
+        RuntimeState.codebox:setRaw(selected.GenScript)
     end
     if sideClosed then
         toggleSideTray()
@@ -1800,13 +1804,13 @@ function makeToolTip(enable, text)
     if enable and text then
         if ui.ToolTip.Visible then
             ui.ToolTip.Visible = false
-            local tooltip = connections['ToolTip']
+            local tooltip = RuntimeState.connections['ToolTip']
             if tooltip then
                 tooltip:Disconnect()
             end
         end
         local first = true
-        connections['ToolTip'] = RunService.RenderStepped:Connect(function()
+        RuntimeState.connections['ToolTip'] = RunService.RenderStepped:Connect(function()
             local MousePos = UserInputService:GetMouseLocation()
             local topLeft = MousePos + Vector2.new(20, -15)
             local bottomRight = topLeft + ui.ToolTip.AbsoluteSize
@@ -1856,7 +1860,7 @@ function makeToolTip(enable, text)
     else
         if ui.ToolTip.Visible then
             ui.ToolTip.Visible = false
-            local tooltip = connections['ToolTip']
+            local tooltip = RuntimeState.connections['ToolTip']
             if tooltip then
                 tooltip:Disconnect()
             end
@@ -2067,7 +2071,7 @@ local function selectCall(log, idx)
     end
 
     log.GenScript = g
-    codebox:setRaw(g)
+    RuntimeState.codebox:setRaw(g)
 end
 
 function newRemote(type, data)
@@ -2561,7 +2565,8 @@ local function logClientEvent(re: RemoteEvent)
     end
 
     logConnectionFunctions[logConnection] = re
-    re.OnClientEvent:Connect(logConnection)
+    local conn = re.OnClientEvent:Connect(logConnection)
+    incomingClientConns[re] = conn
 end
 
 local function wrapOnClientInvokeCallback(rf, callback)
@@ -2664,6 +2669,135 @@ local function wrapClientInvoke(rf)
     then
         rf.OnClientInvoke = setWrappedOnClientInvoke(rf, current)
     end
+end
+
+local function disableIncomingHooks()
+    incomingHooksEnabled = false
+    configs.log_Receive = false
+
+    for remote, conn in pairs(incomingClientConns) do
+        pcall(function()
+            conn:Disconnect()
+        end)
+        incomingClientConns[remote] = nil
+    end
+
+    for remote, callback in pairs(_origClientInvoke) do
+        if typeof(remote) == 'Instance' and type(callback) == 'function' then
+            pcall(function()
+                remote.OnClientInvoke = callback
+            end)
+        end
+    end
+
+    if descAddedConn then
+        pcall(function()
+            descAddedConn:Disconnect()
+        end)
+        descAddedConn = nil
+    end
+    if descAddedInvokeConn then
+        pcall(function()
+            descAddedInvokeConn:Disconnect()
+        end)
+        descAddedInvokeConn = nil
+    end
+    if oldIncomingNewIndex and caps.newIndexHook and type(hookmetamethod) == 'function' then
+        pcall(hookmetamethod, game, '__newindex', oldIncomingNewIndex)
+        oldIncomingNewIndex = nil
+    end
+
+    clear(loggedClientEvent)
+    clear(logConnectionFunctions)
+    clear(_origClientInvoke)
+    clear(wrappedClientInvoke)
+    clear(wrappedInvokeCallbacks)
+end
+
+local function trackIncomingRemote(inst)
+    if inst:IsA('RemoteEvent') or inst:IsA('UnreliableRemoteEvent') then
+        logClientEvent(inst)
+    elseif inst:IsA('RemoteFunction') then
+        wrapClientInvoke(inst)
+    end
+end
+
+local function scanIncomingRemotes()
+    local queue = game:GetChildren()
+    local index = 1
+    local processed = 0
+
+    while incomingHooksEnabled and index <= #queue do
+        local inst = queue[index]
+        index += 1
+
+        trackIncomingRemote(inst)
+
+        local ok, children = pcall(inst.GetChildren, inst)
+        if ok and children then
+            local count = #children
+            local offset = #queue
+            for childIndex = 1, count do
+                queue[offset + childIndex] = children[childIndex]
+            end
+        end
+
+        processed += 1
+        if processed % realconfigs.remoteScanBatchSize == 0 then
+            task.wait()
+        end
+    end
+end
+
+local function enableIncomingHooks()
+    if incomingHooksEnabled then
+        configs.log_Receive = true
+        return
+    end
+
+    incomingHooksEnabled = true
+    configs.log_Receive = true
+
+    if caps.newIndexHook and type(hookmetamethod) == 'function' and not oldIncomingNewIndex then
+        local ok, hooked = pcall(
+            hookmetamethod,
+            game,
+            '__newindex',
+            function(self, k, v)
+                if
+                    incomingHooksEnabled
+                    and not safeCheckCaller()
+                    and typeof(self) == 'Instance'
+                    and self:IsA('RemoteFunction')
+                    and k == 'OnClientInvoke'
+                    and type(v) == 'function'
+                then
+                    return oldIncomingNewIndex(self, k, setWrappedOnClientInvoke(self, v))
+                end
+                return oldIncomingNewIndex(self, k, v)
+            end
+        )
+        if ok then
+            oldIncomingNewIndex = hooked
+        end
+    end
+
+    if not descAddedConn then
+        descAddedConn = game.DescendantAdded:Connect(function(inst)
+            if incomingHooksEnabled and (inst:IsA('RemoteEvent') or inst:IsA('UnreliableRemoteEvent')) then
+                logClientEvent(inst)
+            end
+        end)
+    end
+    if not descAddedInvokeConn then
+        descAddedInvokeConn = game.DescendantAdded:Connect(function(inst)
+            if incomingHooksEnabled and inst:IsA('RemoteFunction') then
+                wrapClientInvoke(inst)
+            end
+        end)
+    end
+
+    logthread(spawn(scanIncomingRemotes))
 end
 
 --- value-to-string: value, string (out), level (indentation), parent table, var name, is from tovar
@@ -2811,7 +2945,7 @@ local typeofv2sfunctions = {
     end,
     Instance = function(v)
         local DebugId = OldDebugId(v)
-        return i2p(v, generation[DebugId])
+        return i2p(v, RuntimeState.generation[DebugId])
     end,
     userdata = function(v) -- The server doesnt recive this
         if configs.advancedinfo then
@@ -3653,22 +3787,22 @@ function remoteHandler(data)
 
     if configs.autoblock then
         local id = data.id
-        if excluding[id] then
+        if RuntimeState.excluding[id] then
             return
         end
 
         local now = tick()
-        local h = history[id]
+        local h = RuntimeState.history[id]
 
         if not h then
             h = { badOccurances = 0, lastCall = now }
-            history[id] = h
+            RuntimeState.history[id] = h
         else
             if now - h.lastCall < 1 then
                 h.badOccurances += 1
                 h.lastCall = now
                 if h.badOccurances >= 3 then
-                    excluding[id] = true
+                    RuntimeState.excluding[id] = true
                     return
                 end
             else
@@ -3926,7 +4060,24 @@ local function call_original_namecall(method, self, ...)
     if setnamecallmethod then
         setnamecallmethod(method)
     end
-    return originalnamecall(self, ...)
+    return RuntimeState.originalnamecall(self, ...)
+end
+
+local function getCallingInfo(what)
+    local baseLevel = synv3 and 2 or 4
+
+    for level = baseLevel, 10 do
+        local result = safeDebugInfo(level, what)
+        if result == nil then
+            break
+        end
+        if what == 's' and result == '[C]' then
+            continue
+        end
+        return result
+    end
+
+    return safeDebugInfo(baseLevel, what)
 end
 
 local newnamecall = newcclosure(function(self, ...)
@@ -3951,6 +4102,11 @@ local newnamecall = newcclosure(function(self, ...)
         args = args,
         argsLength = argsLength,
         metaMethod = '__namecall',
+        callingscript = getcallingscript(),
+        infofunc = getCallingInfo('f'),
+        infoline = getCallingInfo('l'),
+        infosource = getCallingInfo('s'),
+        isexecutor = safeCheckCaller(),
         callOriginal = function(...)
             return call_original_namecall(method, self, ...)
         end,
@@ -3969,6 +4125,11 @@ local newFireServer = newcclosure(function(self, ...)
         args = args,
         argsLength = argsLength,
         metaMethod = '__index',
+        callingscript = getcallingscript(),
+        infofunc = getCallingInfo('f'),
+        infoline = getCallingInfo('l'),
+        infosource = getCallingInfo('s'),
+        isexecutor = safeCheckCaller(),
         callOriginal = function(...)
             return originalEvent(self, ...)
         end,
@@ -3987,6 +4148,11 @@ local newInvokeServer = newcclosure(function(self, ...)
         args = args,
         argsLength = argsLength,
         metaMethod = '__index',
+        callingscript = getcallingscript(),
+        infofunc = getCallingInfo('f'),
+        infoline = getCallingInfo('l'),
+        infosource = getCallingInfo('s'),
+        isexecutor = safeCheckCaller(),
         callOriginal = function(...)
             return originalFunction(self, ...)
         end,
@@ -4008,8 +4174,8 @@ local function disablehooks()
 
     SimpleSpy._withThreadIdentity(8, function()
         if synv3 then
-            if hookState.namecall and caps.unhookAPI and caps.rawMetatable and originalnamecall then
-                pcall(unhook, getrawmetatable(game).__namecall, originalnamecall)
+            if hookState.namecall and caps.unhookAPI and caps.rawMetatable and RuntimeState.originalnamecall then
+                pcall(unhook, getrawmetatable(game).__namecall, RuntimeState.originalnamecall)
             end
             if hookState.fireServer and caps.unhookAPI and originalEvent then
                 pcall(unhook, Instance.new('RemoteEvent').FireServer, originalEvent)
@@ -4021,8 +4187,8 @@ local function disablehooks()
                     originalFunction
                 )
             end
-            if hookState.namecall and caps.restoreFunction and originalnamecall then
-                pcall(restorefunction, originalnamecall)
+            if hookState.namecall and caps.restoreFunction and RuntimeState.originalnamecall then
+                pcall(restorefunction, RuntimeState.originalnamecall)
             end
             if hookState.fireServer and caps.restoreFunction and originalEvent then
                 pcall(restorefunction, originalEvent)
@@ -4031,14 +4197,14 @@ local function disablehooks()
                 pcall(restorefunction, originalFunction)
             end
         else
-            if hookState.namecall and originalnamecall then
+            if hookState.namecall and RuntimeState.originalnamecall then
                 if type(hookmetamethod) == 'function' then
-                    pcall(hookmetamethod, game, '__namecall', originalnamecall)
+                    pcall(hookmetamethod, game, '__namecall', RuntimeState.originalnamecall)
                 elseif caps.hookFunction and caps.rawMetatable then
                     pcall(
                         hookfunction,
                         getrawmetatable(game).__namecall,
-                        originalnamecall
+                        RuntimeState.originalnamecall
                     )
                 end
             end
@@ -4085,7 +4251,7 @@ function toggleSpy()
                         hookState.namecall = true
                     end
                 end
-                if not hookState.namecall and caps.hookAPI then
+                if caps.hookAPI then
                     local okFire, oldFire = pcall(
                         hook,
                         Instance.new('RemoteEvent').FireServer,
@@ -4130,7 +4296,7 @@ function toggleSpy()
                         end
                     end
                 end
-                if not hookState.namecall and caps.hookFunction then
+                if caps.hookFunction then
                     local okFire, oldFire = pcall(
                         hookfunction,
                         Instance.new('RemoteEvent').FireServer,
@@ -4152,7 +4318,7 @@ function toggleSpy()
                 end
             end
             if oldnamecall then
-                originalnamecall = originalnamecall
+                RuntimeState.originalnamecall = RuntimeState.originalnamecall
                     or function(...)
                         return oldnamecall(...)
                     end
@@ -4176,21 +4342,55 @@ end
 
 --- Shuts down the remote spy
 local function shutdown()
-    if schedulerconnect then
-        schedulerconnect:Disconnect()
+    if RuntimeState.schedulerconnect then
+        RuntimeState.schedulerconnect:Disconnect()
     end
-    for _, connection in next, connections do
+    for _, connection in next, RuntimeState.connections do
         connection:Disconnect()
     end
-    for i, v in next, running_threads do
+    for i, v in next, RuntimeState.running_threads do
         if ThreadIsNotDead(v) then
             close(v)
         end
     end
-    clear(running_threads)
-    clear(connections)
+    clear(RuntimeState.running_threads)
+    clear(RuntimeState.connections)
     clear(logs)
     clear(remoteLogs)
+    for remote, callback in pairs(_origClientInvoke) do
+        if typeof(remote) == 'Instance' and type(callback) == 'function' then
+            pcall(function()
+                remote.OnClientInvoke = callback
+            end)
+        end
+    end
+    if descAddedConn then
+        pcall(function()
+            descAddedConn:Disconnect()
+        end)
+        descAddedConn = nil
+    end
+    if descAddedInvokeConn then
+        pcall(function()
+            descAddedInvokeConn:Disconnect()
+        end)
+        descAddedInvokeConn = nil
+    end
+    for remote, conn in pairs(incomingClientConns) do
+        pcall(function()
+            conn:Disconnect()
+        end)
+        incomingClientConns[remote] = nil
+    end
+    if oldIncomingNewIndex and caps.newIndexHook and type(hookmetamethod) == 'function' then
+        pcall(hookmetamethod, game, '__newindex', oldIncomingNewIndex)
+        oldIncomingNewIndex = nil
+    end
+    clear(_origClientInvoke)
+    clear(wrappedClientInvoke)
+    clear(wrappedInvokeCallbacks)
+    clear(loggedClientEvent)
+    clear(logConnectionFunctions)
     disablehooks()
     ui.SimpleSpy3:Destroy()
     ui.Storage:Destroy()
@@ -4198,162 +4398,101 @@ local function shutdown()
     getgenv().SimpleSpyExecuted = false
 end
 
--- main
-if not getgenv().SimpleSpyExecuted then
-    local succeeded, err = pcall(function()
-        if not RunService:IsClient() then
-            error('SimpleSpy cannot run on the server!')
-        end
-        getgenv().SimpleSpyShutdown = shutdown
-        if realconfigs.autoStartSpy then
-            onToggleButtonClick()
-        else
-            ui.Simple.TextColor3 = Color3.fromRGB(252, 51, 51)
-        end
-        if not caps.sendHooks then
-            ErrorPrompt(
-                'Outbound hooks are unavailable. Falling back to OnClientEvent/OnClientInvoke logging only.',
-                true
-            )
-        elseif not caps.namecallHook then
-            ErrorPrompt(
-                'Namecall hook is unavailable. Using direct FireServer/InvokeServer hooks only.',
-                true
-            )
-        end
-        codebox = Highlight.new(ui.CodeBox)
-        logthread(spawn(function()
-            local suc, err = pcall(
-                game.HttpGet,
-                game,
-                'https://raw.githubusercontent.com/78n/SimpleSpy/main/UpdateLog.lua'
-            )
-            codebox:setRaw((suc and err) or '')
-        end))
-        getgenv().SimpleSpy = SimpleSpy
-        logthread(spawn(runAdonisBypass))
-        getgenv().getNil = function(name, class)
-            for _, v in next, getnilinstances() do
-                if v.ClassName == class and v.Name == name then
-                    return v
-                end
+local function initializeSimpleSpy()
+    if not RunService:IsClient() then
+        error('SimpleSpy cannot run on the server!')
+    end
+    getgenv().SimpleSpyShutdown = shutdown
+    if realconfigs.autoStartSpy then
+        onToggleButtonClick()
+    else
+        ui.Simple.TextColor3 = Color3.fromRGB(252, 51, 51)
+    end
+    if not caps.sendHooks then
+        ErrorPrompt(
+            'Outbound hooks are unavailable.',
+            true
+        )
+    elseif not caps.namecallHook then
+        ErrorPrompt(
+            'Namecall hook is unavailable. Using direct FireServer/InvokeServer hooks only.',
+            true
+        )
+    end
+    RuntimeState.codebox = Highlight.new(ui.CodeBox)
+    logthread(spawn(function()
+        local suc, err = pcall(
+            game.HttpGet,
+            game,
+            'https://raw.githubusercontent.com/78n/SimpleSpy/main/UpdateLog.lua'
+        )
+        RuntimeState.codebox:setRaw((suc and err) or '')
+    end))
+    getgenv().SimpleSpy = SimpleSpy
+    logthread(spawn(runAdonisBypass))
+    getgenv().getNil = function(name, class)
+        for _, v in next, getnilinstances() do
+            if v.ClassName == class and v.Name == name then
+                return v
             end
         end
-        ui.Background.MouseEnter:Connect(function(...)
-            mouseInGui = true
-            mouseEntered()
-        end)
-        ui.Background.MouseLeave:Connect(function(...)
-            mouseInGui = false
-            mouseEntered()
-        end)
-        ui.TextLabel:GetPropertyChangedSignal('Text'):Connect(scaleToolTip)
-        -- ui.TopBar.InputBegan:Connect(onBarInput)
-        ui.MinimizeButton.MouseButton1Click:Connect(toggleMinimize)
-        ui.MaximizeButton.MouseButton1Click:Connect(toggleSideTray)
-        ui.Simple.MouseButton1Click:Connect(onToggleButtonClick)
-        ui.CloseButton.MouseEnter:Connect(onXButtonHover)
-        ui.CloseButton.MouseLeave:Connect(onXButtonUnhover)
-        ui.Simple.MouseEnter:Connect(onToggleButtonHover)
-        ui.Simple.MouseLeave:Connect(onToggleButtonUnhover)
-        ui.CloseButton.MouseButton1Click:Connect(shutdown)
-        table.insert(
-            connections,
-            UserInputService.InputBegan:Connect(backgroundUserInput)
-        )
-        connectResize()
-        ui.SimpleSpy3.Enabled = true
-        logthread(spawn(function()
-            delay(1, onToggleButtonUnhover)
-        end))
-        schedulerconnect = RunService.Heartbeat:Connect(taskscheduler)
-        bringBackOnResize()
-        protectUI(ui.SimpleSpy3)
-        logthread(spawn(function()
-            local lp = Players.LocalPlayer
-                or Players:GetPropertyChangedSignal('LocalPlayer'):Wait()
-                or Players.LocalPlayer
-            generation = {
-                [OldDebugId(lp)] = 'game:GetService("Players").LocalPlayer',
-                [OldDebugId(lp:GetMouse())] = 'game:GetService("Players").LocalPlayer:GetMouse',
-                [OldDebugId(game)] = 'game',
-                [OldDebugId(SafeGetService('Workspace'))] = 'workspace',
-            }
-        end))
+    end
+    ui.Background.MouseEnter:Connect(function(...)
+        RuntimeState.mouseInGui = true
+        mouseEntered()
     end)
-    if succeeded then
+    ui.Background.MouseLeave:Connect(function(...)
+        RuntimeState.mouseInGui = false
+        mouseEntered()
+    end)
+    ui.TextLabel:GetPropertyChangedSignal('Text'):Connect(scaleToolTip)
+    ui.MinimizeButton.MouseButton1Click:Connect(toggleMinimize)
+    ui.MaximizeButton.MouseButton1Click:Connect(toggleSideTray)
+    ui.Simple.MouseButton1Click:Connect(onToggleButtonClick)
+    ui.CloseButton.MouseEnter:Connect(onXButtonHover)
+    ui.CloseButton.MouseLeave:Connect(onXButtonUnhover)
+    ui.Simple.MouseEnter:Connect(onToggleButtonHover)
+    ui.Simple.MouseLeave:Connect(onToggleButtonUnhover)
+    ui.CloseButton.MouseButton1Click:Connect(shutdown)
+    table.insert(
+        RuntimeState.connections,
+        UserInputService.InputBegan:Connect(backgroundUserInput)
+    )
+    connectResize()
+    ui.SimpleSpy3.Enabled = true
+    logthread(spawn(function()
+        delay(1, onToggleButtonUnhover)
+    end))
+    RuntimeState.schedulerconnect = RunService.Heartbeat:Connect(taskscheduler)
+    bringBackOnResize()
+    protectUI(ui.SimpleSpy3)
+    logthread(spawn(function()
+        local lp = Players.LocalPlayer
+            or Players:GetPropertyChangedSignal('LocalPlayer'):Wait()
+            or Players.LocalPlayer
+        RuntimeState.generation = {
+            [OldDebugId(lp)] = 'game:GetService("Players").LocalPlayer',
+            [OldDebugId(lp:GetMouse())] = 'game:GetService("Players").LocalPlayer:GetMouse',
+            [OldDebugId(game)] = 'game',
+            [OldDebugId(SafeGetService('Workspace'))] = 'workspace',
+        }
+    end))
+end
+
+-- main
+if not getgenv().SimpleSpyExecuted then
+    local initResult = table_pack(pcall(initializeSimpleSpy))
+    if initResult[1] then
         getgenv().SimpleSpyExecuted = true
     else
         shutdown()
-        ErrorPrompt('An error has occured:\n' .. rawtostring(err))
+        ErrorPrompt('An error has occured:\n' .. rawtostring(initResult[2]))
         return
     end
 else
     ui.SimpleSpy3:Destroy()
     return
 end
-
-local oldNewIndex
-if caps.newIndexHook and type(hookmetamethod) == 'function' then
-    local ok, hooked = pcall(
-        hookmetamethod,
-        game,
-        '__newindex',
-        function(self, k, v)
-            if
-                not safeCheckCaller()
-                and typeof(self) == 'Instance'
-                and self:IsA('RemoteFunction')
-                and k == 'OnClientInvoke'
-                and type(v) == 'function'
-            then
-                return oldNewIndex(self, k, setWrappedOnClientInvoke(self, v))
-            end
-            return oldNewIndex(self, k, v)
-        end
-    )
-    if ok then
-        oldNewIndex = hooked
-    end
-end
-
-local function trackRemoteInstance(inst)
-    if inst:IsA("RemoteEvent") or inst:IsA("UnreliableRemoteEvent") then
-        logClientEvent(inst)
-    elseif inst:IsA("RemoteFunction") then
-        wrapClientInvoke(inst)
-    end
-end
-
-local function scanExistingRemotes()
-    local queue = game:GetChildren()
-    local index = 1
-    local processed = 0
-
-    while index <= #queue do
-        local inst = queue[index]
-        index += 1
-
-        trackRemoteInstance(inst)
-
-        local ok, children = pcall(inst.GetChildren, inst)
-        if ok and children then
-            local count = #children
-            local offset = #queue
-            for childIndex = 1, count do
-                queue[offset + childIndex] = children[childIndex]
-            end
-        end
-
-        processed += 1
-        if processed % realconfigs.remoteScanBatchSize == 0 then
-            task.wait()
-        end
-    end
-end
-
-game.DescendantAdded:Connect(trackRemoteInstance)
-logthread(spawn(scanExistingRemotes))
 
 function SimpleSpy:newButton(name, description, onClick)
     return newButton(name, description, onClick)
@@ -4394,8 +4533,8 @@ do
         then
             local lastPos = UserInputService:GetMouseLocation()
             local startPos = ui.NextButton.AbsolutePosition
-            if not connections['dragNextb'] then
-                connections['dragNextb'] = RunService.RenderStepped:Connect(
+            if not RuntimeState.connections['dragNextb'] then
+                RuntimeState.connections['dragNextb'] = RunService.RenderStepped:Connect(
                     function()
                         local newPos = UserInputService:GetMouseLocation()
                         if newPos ~= lastPos then
@@ -4410,11 +4549,11 @@ do
                 )
             end
             table.insert(
-                connections,
+                RuntimeState.connections,
                 UserInputService.InputEnded:Connect(function(e)
-                    if e == input and connections['dragNextb'] then
-                        connections['dragNextb']:Disconnect()
-                        connections['dragNextb'] = nil
+                    if e == input and RuntimeState.connections['dragNextb'] then
+                        RuntimeState.connections['dragNextb']:Disconnect()
+                        RuntimeState.connections['dragNextb'] = nil
                     end
                 end)
             )
@@ -4426,7 +4565,7 @@ end
 newButton('Copy Code', function()
     return 'Click to copy code'
 end, function()
-    setclipboard(codebox:getString())
+    setclipboard(RuntimeState.codebox:getString())
     ui.TextLabel.Text = 'Copied successfully!'
 end)
 
@@ -4444,7 +4583,7 @@ end)
 newButton('Run Code', function()
     return 'Click to execute code'
 end, function()
-    local src = codebox:getString()
+    local src = RuntimeState.codebox:getString()
     if not src or src == '' then
         ui.TextLabel.Text = 'CodeBox is empty'
         return
@@ -4536,10 +4675,13 @@ newButton('Log Client', function()
         configs.log_Receive and 'ON' or 'OFF'
     )
 end, function()
-    configs.log_Receive = not configs.log_Receive
-    ui.TextLabel.Text = ('Client events: %s'):format(
-        configs.log_Receive and 'ON' or 'OFF'
-    )
+    if configs.log_Receive then
+        disableIncomingHooks()
+        ui.TextLabel.Text = 'Incoming remote logging disabled'
+    else
+        enableIncomingHooks()
+        ui.TextLabel.Text = 'Incoming remote logging enabled'
+    end
 end)
 
 newButton('Adonis Bypass', function()
@@ -4577,7 +4719,7 @@ end, function()
         local typeoffunc = typeof(func)
 
         if typeoffunc ~= 'string' then
-            codebox:setRaw('--[[Generating Function Info please wait]]')
+            RuntimeState.codebox:setRaw('--[[Generating Function Info please wait]]')
             RunService.Heartbeat:Wait()
             local lclosure = islclosure(func)
             local SourceScript = rawget(getfenv(func), 'script')
@@ -4639,10 +4781,10 @@ end, function()
                     end
                 end
             end
-            codebox:setRaw('--[[Converting table to string please wait]]')
+            RuntimeState.codebox:setRaw('--[[Converting table to string please wait]]')
             selected.Function = v2v({ functionInfo = info })
         end
-        codebox:setRaw(
+        RuntimeState.codebox:setRaw(
             '-- Calling function info\n-- Generated by the SimpleSpy V3 serializer\n\n'
                 .. selected.Function
         )
@@ -4669,7 +4811,7 @@ end, function()
         end
     end
 
-    codebox:setRaw('')
+    RuntimeState.codebox:setRaw('')
     selected = nil
     ui.TextLabel.Text = 'Logs cleared!'
 end)
@@ -4737,8 +4879,8 @@ if caps.decompile then
     end, function()
         if selected and selected.Source then
             local Source = selected.Source
-            if not DecompiledScripts[Source] then
-                codebox:setRaw('--[[Decompiling]]')
+            if not RuntimeState.DecompiledScripts[Source] then
+                RuntimeState.codebox:setRaw('--[[Decompiling]]')
 
                 xpcall(function()
                     local decompiledsource = decompile(Source):gsub(
@@ -4747,18 +4889,18 @@ if caps.decompile then
                     )
                     local Sourcev2s = v2s(Source)
                     if (decompiledsource):find('script') and Sourcev2s then
-                        DecompiledScripts[Source] = ('local script = %s\n%s'):format(
+                        RuntimeState.DecompiledScripts[Source] = ('local script = %s\n%s'):format(
                             Sourcev2s,
                             decompiledsource
                         )
                     end
                 end, function(err)
-                    return codebox:setRaw(
+                    return RuntimeState.codebox:setRaw(
                         ('--[[\nAn error has occured\n%s\n]]'):format(err)
                     )
                 end)
             end
-            codebox:setRaw(DecompiledScripts[Source] or '--No Source Found')
+            RuntimeState.codebox:setRaw(RuntimeState.DecompiledScripts[Source] or '--No Source Found')
             ui.TextLabel.Text = 'Done!'
         else
             ui.TextLabel.Text = 'Source not found!'
@@ -4835,11 +4977,11 @@ end)
                 local Remote = selected.Remote
                 if Remote and Remote:IsA("RemoteFunction") then
                     if selected.returnvalue and selected.returnvalue.data then
-                        return codebox:setRaw(v2s(selected.returnvalue.data))
+                        return RuntimeState.codebox:setRaw(v2s(selected.returnvalue.data))
                     end
-                    return codebox:setRaw("No data was returned")
+                    return RuntimeState.codebox:setRaw("No data was returned")
                 else
-                    codebox:setRaw("RemoteFunction expected got "..(Remote and Remote.ClassName))
+                    RuntimeState.codebox:setRaw("RemoteFunction expected got "..(Remote and Remote.ClassName))
                 end
             end
         end
@@ -4869,8 +5011,8 @@ end, function()
         '[%s] [BETA] Intelligently detects and excludes spammy remote calls from logs',
         configs.autoblock and 'ENABLED' or 'DISABLED'
     )
-    history = {}
-    excluding = {}
+    RuntimeState.history = {}
+    RuntimeState.excluding = {}
 end)
 
 if caps.checkCaller and caps.sendHooks then

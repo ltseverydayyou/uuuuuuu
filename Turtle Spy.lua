@@ -104,6 +104,9 @@ local function toUnicode(stringValue)
 end;
 local isA = game.IsA;
 local clone = game.Clone;
+local hookClone = clonefunction or function(fn)
+	return fn
+end;
 local function MeasureText(text, size, font, bounds)
 	local ts = ClonedService("TextService");
 	local ok, v = pcall(function()
@@ -219,6 +222,21 @@ tstate.descAddedConn = descAddedConn
 local descAddedInvokeConn = nil
 tstate.descAddedInvokeConn = descAddedInvokeConn
 tstate.adonisBypassed = tstate.adonisBypassed or false
+local restoreFunction = restorefunction
+local hookFunction = hookfunction
+local hookMetaMethod = hookmetamethod
+local directHookState = {
+	fireServer = false,
+	invokeServer = false
+}
+tstate.directHookState = directHookState
+
+local _tmpRemoteEvent = Instance.new("RemoteEvent")
+local _tmpRemoteFunction = Instance.new("RemoteFunction")
+local baseFireServer = _tmpRemoteEvent.FireServer
+local baseInvokeServer = _tmpRemoteFunction.InvokeServer
+_tmpRemoteEvent:Destroy()
+_tmpRemoteFunction:Destroy()
 
 local function resolveAdonisEnv()
 	local gc = getgc or (debug and debug.getgc)
@@ -1359,7 +1377,6 @@ local function wrapClientInvoke(rf)
 			rf.OnClientInvoke = wrapOnClientInvokeCallback(rf, current)
 		end)
 		if not ok then
-			-- failed to set, undo bookkeeping so we can retry later
 			wrappedClientInvoke[rf] = nil
 		end
 	end
@@ -1374,19 +1391,19 @@ local function setClientEventLogging(on)
 		end;
 		if not descAddedConn then
 			descAddedConn = game.DescendantAdded:Connect(function(o)
-				if isRemoteEvent(o) then
+				if logClientEvents and isRemoteEvent(o) then
 					attachClientLogger(o);
 				end;
 			end);
 			table.insert(connections, descAddedConn);
 		end;
 	else
-		for _, c in pairs(clientEventConns) do
+		for remote, c in pairs(clientEventConns) do
 			pcall(function()
 				c:Disconnect();
 			end);
+			clientEventConns[remote] = nil
 		end;
-		clientEventConns = {};
 	end;
 end;
 
@@ -1403,6 +1420,50 @@ local function initClientInvokeLogging()
 			end
 		end)
 		table.insert(connections, descAddedInvokeConn)
+	end
+end
+local function disableIncomingHooks()
+	setClientEventLogging(false)
+	if descAddedInvokeConn then
+		pcall(function()
+			descAddedInvokeConn:Disconnect()
+		end)
+		descAddedInvokeConn = nil
+	end
+	if tstate.oldNewIndex then
+		local restored = pcall(function()
+			hookMetaMethod(game, "__newindex", tstate.oldNewIndex)
+		end)
+		if restored then
+			tstate.newIndexHooked = false
+			tstate.oldNewIndex = nil
+		end
+	end
+	for remote, callback in pairs(_origClientInvoke) do
+		pcall(function()
+			remote.OnClientInvoke = callback
+		end)
+		_origClientInvoke[remote] = nil
+	end
+	wrappedClientInvoke = {}
+	wrappedInvokeCallbacks = {}
+	tstate.wrappedClientInvoke = wrappedClientInvoke
+end
+
+local function enableIncomingHooks()
+	setClientEventLogging(true)
+	initClientInvokeLogging()
+	if not tstate.newIndexHooked and hookMetaMethod then
+		local oldNewIndex
+		oldNewIndex = hookMetaMethod(game, "__newindex", function(self, k, v)
+			if tstate.enabled and logClientEvents and not checkcaller() and typeof(self) == "Instance" and self:IsA("RemoteFunction") and k == "OnClientInvoke" and type(v) == "function" then
+				wrapClientInvoke(self)
+				return oldNewIndex(self, k, wrapOnClientInvokeCallback(self, v))
+			end
+			return oldNewIndex(self, k, v)
+		end)
+		tstate.newIndexHooked = true
+		tstate.oldNewIndex = tstate.oldNewIndex or oldNewIndex
 	end
 end
 CopyCode.MouseButton1Click:Connect(function()
@@ -1813,13 +1874,14 @@ local pathModeList = {
 	"find"
 };
 ClientEventToggle.MouseButton1Click:Connect(function()
-	setClientEventLogging(not logClientEvents);
 	if logClientEvents then
-		ClientEventToggle.Text = "Log OnClientEvent: ON";
-		ClientEventToggle.TextColor3 = Color3.fromRGB(76, 209, 55);
-	else
+		disableIncomingHooks();
 		ClientEventToggle.Text = "Log OnClientEvent: OFF";
 		ClientEventToggle.TextColor3 = Color3.fromRGB(250, 251, 255);
+	else
+		enableIncomingHooks();
+		ClientEventToggle.Text = "Log OnClientEvent: ON";
+		ClientEventToggle.TextColor3 = Color3.fromRGB(76, 209, 55);
 	end;
 end);
 PathModeBtn.MouseButton1Click:Connect(function()
@@ -1892,7 +1954,7 @@ table.insert(connections, mouse.KeyDown:Connect(function(key)
 end));
 if not tstate.hooked then
 	local old
-	old = hookmetamethod(game, "__namecall", function(self, ...)
+	old = hookMetaMethod(game, "__namecall", function(self, ...)
 		local method = ((getnamecallmethod and getnamecallmethod()) or ""):lower()
 		if tstate.enabled then
 			if not checkcaller() and (method == "fireserver" or method == "invokeserver") then
@@ -1918,6 +1980,56 @@ if not tstate.hooked then
 	tstate.hooked = true
 	tstate.old = tstate.old or old
 end
+if not directHookState.fireServer and hookFunction then
+	local oldFireServer
+	local hookedFireServer = hookClone(function(self, ...)
+		if tstate.enabled and typeof(self) == "Instance" and isRemoteEvent(self) and not checkcaller() then
+			if table.find(BlockList, self) then
+				return
+			end
+			local args = table.pack(...)
+			local results = table.pack(oldFireServer(self, ...))
+			if tstate.handler then
+				task.spawn(function()
+					pcall(tstate.handler, self, "fireserver", args, results)
+				end)
+			end
+			return table.unpack(results, 1, results.n)
+		end
+		return oldFireServer(self, ...)
+	end)
+	local ok, previous = pcall(hookFunction, baseFireServer, hookedFireServer)
+	if ok and previous then
+		oldFireServer = previous
+		tstate.oldFireServer = tstate.oldFireServer or previous
+		directHookState.fireServer = true
+	end
+end
+if not directHookState.invokeServer and hookFunction then
+	local oldInvokeServer
+	local hookedInvokeServer = hookClone(function(self, ...)
+		if tstate.enabled and typeof(self) == "Instance" and isA(self, "RemoteFunction") and not checkcaller() then
+			if table.find(BlockList, self) then
+				return nil
+			end
+			local args = table.pack(...)
+			local results = table.pack(oldInvokeServer(self, ...))
+			if tstate.handler then
+				task.spawn(function()
+					pcall(tstate.handler, self, "invokeserver", args, results)
+				end)
+			end
+			return table.unpack(results, 1, results.n)
+		end
+		return oldInvokeServer(self, ...)
+	end)
+	local ok, previous = pcall(hookFunction, baseInvokeServer, hookedInvokeServer)
+	if ok and previous then
+		oldInvokeServer = previous
+		tstate.oldInvokeServer = tstate.oldInvokeServer or previous
+		directHookState.invokeServer = true
+	end
+end
 tstate.handler = function(self, method, args, results)
 	if method == "fireserver" and isRemoteEvent(self) then
 		if not table.find(BlockList, self) and not table.find(IgnoreList, self) then
@@ -1930,19 +2042,6 @@ tstate.handler = function(self, method, args, results)
 	end
 end
 runAdonisBypass()
-if not tstate.newIndexHooked and hookmetamethod then
-	local oldNewIndex
-	oldNewIndex = hookmetamethod(game, "__newindex", function(self, k, v)
-		if tstate.enabled and not checkcaller() and typeof(self) == "Instance" and self:IsA("RemoteFunction") and k == "OnClientInvoke" and type(v) == "function" then
-			wrapClientInvoke(self)
-			return oldNewIndex(self, k, wrapOnClientInvokeCallback(self, v))
-		end
-		return oldNewIndex(self, k, v)
-	end)
-	tstate.newIndexHooked = true
-	tstate.oldNewIndex = tstate.oldNewIndex or oldNewIndex
-end
-initClientInvokeLogging()
 tstate.cleanup = function()
 	tstate.enabled = false;
 	for _, c in ipairs(connections) do
@@ -1969,15 +2068,47 @@ tstate.cleanup = function()
 	end
 	if tstate.old then
 		local restored = pcall(function()
-			hookmetamethod(game, "__namecall", tstate.old)
+			hookMetaMethod(game, "__namecall", tstate.old)
 		end)
 		if restored then
 			tstate.hooked = false
 		end
 	end
+	if directHookState.fireServer and tstate.oldFireServer then
+		local restored = false
+		if type(restoreFunction) == "function" then
+			restored = pcall(function()
+				restoreFunction(baseFireServer)
+			end)
+		end
+		if not restored then
+			restored = pcall(function()
+				hookFunction(baseFireServer, tstate.oldFireServer)
+			end)
+		end
+		if restored then
+			directHookState.fireServer = false
+		end
+	end
+	if directHookState.invokeServer and tstate.oldInvokeServer then
+		local restored = false
+		if type(restoreFunction) == "function" then
+			restored = pcall(function()
+				restoreFunction(baseInvokeServer)
+			end)
+		end
+		if not restored then
+			restored = pcall(function()
+				hookFunction(baseInvokeServer, tstate.oldInvokeServer)
+			end)
+		end
+		if restored then
+			directHookState.invokeServer = false
+		end
+	end
 	if tstate.oldNewIndex then
 		local restored = pcall(function()
-			hookmetamethod(game, "__newindex", tstate.oldNewIndex)
+			hookMetaMethod(game, "__newindex", tstate.oldNewIndex)
 		end)
 		if restored then
 			tstate.newIndexHooked = false

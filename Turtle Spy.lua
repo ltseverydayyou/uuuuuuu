@@ -218,12 +218,6 @@ local descAddedConn = nil
 tstate.descAddedConn = descAddedConn
 local descAddedInvokeConn = nil
 tstate.descAddedInvokeConn = descAddedInvokeConn
-
-local BlockedSignals = {}
-tstate.BlockedSignals = BlockedSignals
-
-local BlockedEventSaved = {}
-tstate.BlockedEventSaved = BlockedEventSaved
 tstate.adonisBypassed = tstate.adonisBypassed or false
 
 local function resolveAdonisEnv()
@@ -1316,19 +1310,25 @@ local function wrapOnClientInvokeCallback(rf, callback)
 	if wrappedInvokeCallbacks[callback] then
 		return callback
 	end
-wrappedInvokeCallbacks[callback] = true
-return function(...)
-	local args = table.pack(...)
-	local ok, results = pcall(function()
-		return table.pack(callback(table.unpack(args, 1, args.n or #args)))
-	end)
-	if not ok then
-		addToList(false, rf, args, { results }, "OnClientInvoke")
-		error(results)
+	wrappedInvokeCallbacks[callback] = rf
+	local invoking = false
+	return function(...)
+		if invoking then
+			return callback(...)
+		end
+		invoking = true
+		local args = table.pack(...)
+		local ok, results = pcall(function()
+			return table.pack(callback(table.unpack(args, 1, args.n or #args)))
+		end)
+		invoking = false
+		if not ok then
+			addToList(false, rf, args, { results }, "OnClientInvoke")
+			error(results)
+		end
+		addToList(false, rf, args, results, "OnClientInvoke")
+		return table.unpack(results, 1, results.n or #results)
 	end
-	addToList(false, rf, args, results, "OnClientInvoke")
-	return table.unpack(results, 1, results.n or #results)
-end
 end
 
 local function wrapClientInvoke(rf)
@@ -1527,24 +1527,6 @@ BlockRemote.MouseButton1Click:Connect(function()
 				end
 			end
 		end
-		if isRemoteEvent(lookingAt) then
-			BlockedSignals[lookingAt.OnClientEvent] = true
-			if typeof(getconnections) == "function" then
-				local saved = {}
-				for _, c in ipairs(getconnections(lookingAt.OnClientEvent)) do
-					local ok, f = pcall(function()
-						return c.Function
-					end)
-					if ok and type(f) == "function" then
-						table.insert(saved, f)
-					end
-					pcall(function()
-						c:Disconnect()
-					end)
-				end
-				BlockedEventSaved[lookingAt] = saved
-			end
-		end
 	elseif lookingAt and idx then
 		table.remove(BlockList, idx)
 		BlockRemote.Text = "Block remote from firing"
@@ -1558,18 +1540,6 @@ BlockRemote.MouseButton1Click:Connect(function()
 					rn.TextColor3 = Color3.fromRGB(245, 246, 250)
 				end
 			end
-		end
-		if isRemoteEvent(lookingAt) then
-			BlockedSignals[lookingAt.OnClientEvent] = nil
-			local saved = BlockedEventSaved[lookingAt]
-			if saved then
-				for _, f in ipairs(saved) do
-					pcall(function()
-						lookingAt.OnClientEvent:Connect(f)
-					end)
-				end
-			end
-			BlockedEventSaved[lookingAt] = nil
 		end
 	end
 end)
@@ -1634,8 +1604,6 @@ Clear.MouseButton1Click:Connect(function()
 	BlockList = {};
 	unstacked = {};
 	connections = {};
-	BlockedSignals = {}
-	BlockedEventSaved = {}
 	RemoteScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 287);
 	ButtonEffect(Clear, "Cleared!");
 end);
@@ -1925,7 +1893,7 @@ end));
 if not tstate.hooked then
 	local old
 	old = hookmetamethod(game, "__namecall", function(self, ...)
-		local method = getnamecallmethod():lower()
+		local method = ((getnamecallmethod and getnamecallmethod()) or ""):lower()
 		if tstate.enabled then
 			if not checkcaller() and (method == "fireserver" or method == "invokeserver") then
 				if table.find(BlockList, self) then
@@ -1936,24 +1904,13 @@ if not tstate.hooked then
 					end
 				end
 				local args = table.pack(...)
-				local results = { old(self, ...) }
+				local results = table.pack(old(self, ...))
 				if tstate.handler then
 					task.spawn(function()
 						pcall(tstate.handler, self, method, args, results)
 					end)
 				end
-				return table.unpack(results)
-			end
-			if BlockedSignals[self] then
-				if method == "connect" or method == "once" then
-					local conn = old(self, function() end)
-					pcall(function()
-						conn:Disconnect()
-					end)
-					return conn
-				elseif method == "wait" then
-					return nil
-				end
+				return table.unpack(results, 1, results.n)
 			end
 		end
 		return old(self, ...)

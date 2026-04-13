@@ -50,7 +50,7 @@ local realconfigs = {
     log_Receive = true,
     adonisBypass = true,
     pathMode = 1,
-    blockIncoming = true,
+    blockIncoming = false,
     ignorePlayerModule = false,
 }
 
@@ -2584,6 +2584,7 @@ local function wrapOnClientInvokeCallback(rf, callback)
         local args = { ... }
         local argsLength = select('#', ...)
         if not captureRemoteCall then
+            invoking = false
             return callback(...)
         end
         local origin = safeGetScriptFromThread(coroutine.running and coroutine.running())

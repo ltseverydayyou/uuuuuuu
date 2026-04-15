@@ -27,6 +27,12 @@ local function shortVal(v)
 		return t .. " (" .. tostring(v) .. ")";
 	end;
 end;
+local function hasMember(obj, member)
+	local ok, value = pcall(function()
+		return obj and obj[member];
+	end);
+	return ok and value ~= nil;
+end;
 local function check(t, m)
 	local g = getgenv and getgenv() or _G;
 	if t == "loadstring" then
@@ -35,75 +41,15 @@ local function check(t, m)
 	if t ~= "Request" then
 		return false;
 	end;
+	local h = rawget(g, "http");
+	local rq = rawget(g, "request") or h and rawget(h, "request") or rawget(g, "http_request");
 	if m == "" then
-		local h = rawget(g, "http");
-		local rq = rawget(g, "request") or h and rawget(h, "request") or rawget(g, "http_request");
-		if not rq then
-			return false;
-		end;
-		local ok, res = pcall(rq, {
-			Url = "https://www.google.com",
-			Method = "GET"
-		});
-		if not ok or res == nil then
-			return false;
-		end;
-		return true;
-	end;
-	local ls = check("loadstring");
-	local function try_ls(src)
-		if not ls then
-			return nil;
-		end;
-		local fn = ls(src);
-		if not fn then
-			return nil;
-		end;
-		local ok, ret = pcall(fn);
-		if not ok then
-			return nil;
-		end;
-		return ret;
-	end;
-	local function try_direct(fn)
-		local ok, ret = pcall(fn);
-		if not ok then
-			return nil;
-		end;
-		return ret;
+		return type(rq) == "function";
 	end;
 	if m == "Get" then
-		local r = try_ls("return game:HttpGet('https://www.google.com')");
-		if r == nil then
-			r = try_ls("return httpget('https://www.google.com')");
-		end;
-		if r == nil then
-			r = try_direct(function()
-				return game:HttpGet("https://www.google.com");
-			end);
-		end;
-		if r == nil then
-			r = try_direct(function()
-				return httpget("https://www.google.com");
-			end);
-		end;
-		return r ~= nil;
+		return type(rawget(g, "httpget")) == "function" or hasMember(game, "HttpGet");
 	elseif m == "Post" then
-		local r = try_ls("return game:HttpPost('https://www.google.com','{}')");
-		if r == nil then
-			r = try_ls("return httppost('https://www.google.com','{}')");
-		end;
-		if r == nil then
-			r = try_direct(function()
-				return game:HttpPost("https://www.google.com", "{}");
-			end);
-		end;
-		if r == nil then
-			r = try_direct(function()
-				return httppost("https://www.google.com", "{}");
-			end);
-		end;
-		return r ~= nil;
+		return type(rawget(g, "httppost")) == "function" or hasMember(game, "HttpPost");
 	end;
 	return false;
 end;
@@ -122,7 +68,84 @@ local Vulnerabilities_Test = {
 local ICON_SAFE = "✅";
 local ICON_UNSAFE = "⛔";
 local ICON_UNKNOWN = "⏺️";
-print("Executor Vulnerability Check - Executor: " .. tostring(Vulnerabilities_Test.identifyexecutor()));
+local TEST_TIMEOUT = 7;
+local FS_PROBE_DIR = "VulnTestProbe";
+local FS_PROBE_FILE = FS_PROBE_DIR .. "/probe.txt";
+local FS_PROBE_SCRIPT = FS_PROBE_DIR .. "/probe.lua";
+local function formatExecutor()
+	local ok, name, version = pcall(Vulnerabilities_Test.identifyexecutor);
+	if not ok then
+		return "Unknown";
+	end;
+	if version ~= nil and tostring(version) ~= "" and tostring(version) ~= tostring(name) then
+		return tostring(name) .. " " .. tostring(version);
+	end;
+	return tostring(name);
+end;
+local function classify_error(desc, err)
+	local msg = tostring(err or "");
+	local lower = string.lower(msg);
+	if lower == "" then
+		return "unknown", desc .. " Call failed without a useful error message.";
+	end;
+	if lower:find("lacking permission", 1, true)
+		or lower:find("current identity", 1, true)
+		or lower:find("permission", 1, true)
+		or lower:find("not permitted", 1, true)
+		or lower:find("cannot access", 1, true)
+		or lower:find("http requests are not enabled", 1, true)
+		or lower:find("blocked", 1, true) then
+		return "safe", desc .. " Call was blocked by Roblox/executor permissions (" .. msg .. ").";
+	end;
+	if lower:find("attempt to call a nil value", 1, true)
+		or lower:find("is not a valid member", 1, true)
+		or lower:find("unknown global", 1, true)
+		or lower:find("not available", 1, true)
+		or lower:find("not supported", 1, true) then
+		return "unknown", desc .. " API is not exposed here (" .. msg .. ").";
+	end;
+	if lower:find("argument", 1, true)
+		or lower:find("expected", 1, true)
+		or lower:find("unable to cast", 1, true)
+		or lower:find("missing", 1, true)
+		or lower:find("enumitem", 1, true)
+		or lower:find("instance", 1, true)
+		or lower:find("table expected", 1, true) then
+		return "unknown", desc .. " API responded, but this test used invalid or incomplete arguments (" .. msg .. ").";
+	end;
+	return "unknown", desc .. " Call failed, but the reason was inconclusive (" .. msg .. ").";
+end;
+local function run_with_timeout(fn, timeoutSeconds)
+	local finished = false;
+	local ok, a, b;
+	task.spawn(function()
+		ok, a, b = pcall(fn);
+		finished = true;
+	end);
+	local deadline = os.clock() + (timeoutSeconds or TEST_TIMEOUT);
+	local runService = __betterGetService("RunService");
+	while not finished and os.clock() < deadline do
+		if runService and runService.Heartbeat then
+			runService.Heartbeat:Wait();
+		else
+			task.wait(0.05);
+		end;
+	end;
+	if not finished then
+		return false, "timeout", "Timed out after " .. tostring(timeoutSeconds or TEST_TIMEOUT) .. "s. The call likely hung or waited forever.";
+	end;
+	return true, ok, a, b;
+end;
+local function cleanup_fs_probe()
+	if type(delfile) == "function" then
+		pcall(delfile, FS_PROBE_FILE);
+		pcall(delfile, FS_PROBE_SCRIPT);
+	end;
+	if type(delfolder) == "function" then
+		pcall(delfolder, FS_PROBE_DIR);
+	end;
+end;
+print("Executor Vulnerability Check - Executor: " .. formatExecutor());
 print("This script checks if dangerous functions are BLOCKED, STUBBED, or OPEN.");
 print(ICON_SAFE .. " Safe  = blocked or returns nil");
 print(ICON_UNSAFE .. " Unsafe = runs fine / returns data");
@@ -130,7 +153,7 @@ print(ICON_UNKNOWN .. " Not tested / not supported");
 local function data_test(desc, fn)
 	local ok, ret = pcall(fn);
 	if not ok then
-		return "safe", desc .. " Call was blocked with an error.";
+		return classify_error(desc, ret);
 	end;
 	if ret == nil then
 		return "safe", desc .. " Function returned nil (probably stubbed/disabled by the executor).";
@@ -140,9 +163,22 @@ end;
 local function effect_test(desc, fn)
 	local ok, ret = pcall(fn);
 	if not ok then
-		return "safe", desc .. " Call was blocked with an error.";
+		return classify_error(desc, ret);
+	end;
+	if ret == nil then
+		return "safe", desc .. " Call returned nil with no observable data. Treating this as stubbed/safe.";
 	end;
 	return "unsafe", desc .. " Call ran without error (return: " .. shortVal(ret) .. "). If this is not stubbed, scripts can use it.";
+end;
+local function bool_test(desc, fn, trueMessage, falseMessage)
+	local ok, ret = pcall(fn);
+	if not ok then
+		return classify_error(desc, ret);
+	end;
+	if ret then
+		return "unsafe", trueMessage or (desc .. " Returned true.");
+	end;
+	return "safe", falseMessage or (desc .. " Returned false/nil.");
 end;
 local tests = {
 	{
@@ -571,49 +607,25 @@ local tests = {
 			if not hs_ok or (not hs) then
 				return "unknown", "HttpService is not available.";
 			end;
-			local any_ok = false;
-			local ok0 = pcall(function()
-				hs:RequestInternal({});
+			local ok0, req0 = pcall(function()
+				return hs:RequestInternal({
+					Url = "https://users.roblox.com/v1/users/authenticated",
+					Method = "GET"
+				});
 			end);
-			any_ok = any_ok or ok0;
-			local ok1 = pcall(function()
+			local ok1, req1 = pcall(function()
 				local httpService = cloneref and cloneref(hs) or hs;
-				local RequestInternal = clonefunction and clonefunction(httpService.requestInternal) or httpService.requestInternal;
-				RequestInternal(httpService, {
-					Url = "https://auth.roblox.com"
-				}, function()
-					return "RequestInternal Function Bypassed";
-				end);
-			end);
-			any_ok = any_ok or ok1;
-			local ok2 = pcall(function()
-				local HttpService;
-				local RequestInternal;
-				local Old;
-				Old = hookmetamethod(game, "__namecall", function(...)
-					if not HttpService then
-						HttpService = __betterGetService("HttpService");
-						RequestInternal = HttpService.RequestInternal;
-					end;
-					return Old(...);
-				end);
-				task.wait(1);
-				(RequestInternal(HttpService, {
-					Url = "https://auth.roblox.com/v1/logoutfromallsessionsandreauthenticate/",
+				local requestInternal = clonefunction and clonefunction(httpService.RequestInternal) or httpService.RequestInternal;
+				return requestInternal(httpService, {
+					Url = "https://auth.roblox.com/v1/logout",
 					Method = "POST",
 					Body = ""
-				})):Start(function(a, b)
-					if b and b.Headers and b.Headers["set-cookie"] then
-						local cookie = (b.Headers["set-cookie"]:split(";"))[1];
-						warn("Executor is able to grab Roblox cookies:", cookie);
-					end;
-				end);
+				});
 			end);
-			any_ok = any_ok or ok2;
-			if any_ok then
-				return "unsafe", "RequestInternal calls succeeded; low-level HTTP is reachable.";
+			if ok0 or ok1 then
+				return "unsafe", "RequestInternal returned a request object (" .. shortVal(req0 or req1) .. "). Low-level Roblox HTTP is exposed.";
 			end;
-			return "safe", "All RequestInternal attempts failed with errors.";
+			return classify_error("Low-level Roblox HTTP (RequestInternal).", req0 or req1);
 		end
 	},
 	{
@@ -630,10 +642,8 @@ local tests = {
 		callback = function()
 			local srv = __betterGetService("MessageBusService");
 			local msgId = srv:GetMessageId("Linking", "openURLRequest");
-			return effect_test("Can publish a message that tries to open a URL (like notepad.exe).", function()
-				return srv:Publish(msgId, {
-					url = "notepad.exe"
-				});
+			return effect_test("Can publish a message that asks the client to open URLs.", function()
+				return srv:Publish(msgId, {});
 			end);
 		end
 	},
@@ -641,8 +651,8 @@ local tests = {
 		name = "GuiService:OpenBrowserWindow (google.com)",
 		callback = function()
 			local srv = __betterGetService("GuiService");
-			return effect_test("Can open a specific web page on your machine.", function()
-				return srv:OpenBrowserWindow("https://www.google.com/");
+			return effect_test("Can open a browser window on your machine.", function()
+				return srv:OpenBrowserWindow();
 			end);
 		end
 	},
@@ -755,6 +765,142 @@ local tests = {
 		end
 	},
 	{
+		name = "isfolder (C:\\)",
+		callback = function()
+			if type(isfolder) ~= "function" then
+				return "unknown", "isfolder is not available in this executor.";
+			end;
+			return bool_test("Checks whether scripts can probe absolute Windows paths.", function()
+				return isfolder("C:\\");
+			end, "isfolder('C:\\') returned true. Absolute drive paths are visible to scripts.", "isfolder('C:\\') returned false/nil.");
+		end
+	},
+	{
+		name = "writefile/readfile",
+		callback = function()
+			if type(writefile) ~= "function" or type(readfile) ~= "function" then
+				return "unknown", "writefile/readfile are not both available in this executor.";
+			end;
+			cleanup_fs_probe();
+			if type(makefolder) == "function" then
+				pcall(makefolder, FS_PROBE_DIR);
+			end;
+			local okWrite, errWrite = pcall(writefile, FS_PROBE_FILE, "VULNTEST_FS_CHECK");
+			if not okWrite then
+				cleanup_fs_probe();
+				return classify_error("Local file write access.", errWrite);
+			end;
+			local okRead, contents = pcall(readfile, FS_PROBE_FILE);
+			cleanup_fs_probe();
+			if not okRead then
+				return classify_error("Local file read access.", contents);
+			end;
+			if contents == "VULNTEST_FS_CHECK" then
+				return "unsafe", "writefile/readfile successfully created and read a local file. Scripts can access executor storage.";
+			end;
+			return "unsafe", "writefile succeeded and readfile returned data (" .. shortVal(contents) .. "). Local file access is exposed.";
+		end
+	},
+	{
+		name = "appendfile",
+		callback = function()
+			if type(appendfile) ~= "function" or type(writefile) ~= "function" or type(readfile) ~= "function" then
+				return "unknown", "appendfile/writefile/readfile are not all available in this executor.";
+			end;
+			cleanup_fs_probe();
+			if type(makefolder) == "function" then
+				pcall(makefolder, FS_PROBE_DIR);
+			end;
+			local okWrite, errWrite = pcall(writefile, FS_PROBE_FILE, "A");
+			if not okWrite then
+				cleanup_fs_probe();
+				return classify_error("Seed file creation for appendfile.", errWrite);
+			end;
+			local okAppend, errAppend = pcall(appendfile, FS_PROBE_FILE, "B");
+			if not okAppend then
+				cleanup_fs_probe();
+				return classify_error("Local file append access.", errAppend);
+			end;
+			local okRead, contents = pcall(readfile, FS_PROBE_FILE);
+			cleanup_fs_probe();
+			if okRead and contents == "AB" then
+				return "unsafe", "appendfile modified a local file successfully. Scripts can alter executor files.";
+			end;
+			if okRead then
+				return "unsafe", "appendfile ran and the file contents changed (" .. shortVal(contents) .. ").";
+			end;
+			return classify_error("Verification read after appendfile.", contents);
+		end
+	},
+	{
+		name = "loadfile",
+		callback = function()
+			if type(loadfile) ~= "function" or type(writefile) ~= "function" then
+				return "unknown", "loadfile/writefile are not both available in this executor.";
+			end;
+			cleanup_fs_probe();
+			if type(makefolder) == "function" then
+				pcall(makefolder, FS_PROBE_DIR);
+			end;
+			local okWrite, errWrite = pcall(writefile, FS_PROBE_SCRIPT, "return 'VULNTEST_LOADFILE'");
+			if not okWrite then
+				cleanup_fs_probe();
+				return classify_error("Seed script creation for loadfile.", errWrite);
+			end;
+			local okLoad, chunkOrErr = pcall(loadfile, FS_PROBE_SCRIPT);
+			if not okLoad then
+				cleanup_fs_probe();
+				return classify_error("Loading local files as code.", chunkOrErr);
+			end;
+			local okRun, ret = pcall(chunkOrErr);
+			cleanup_fs_probe();
+			if okRun and ret == "VULNTEST_LOADFILE" then
+				return "unsafe", "loadfile executed code from a local disk file. Local code execution is exposed.";
+			end;
+			if okRun then
+				return "unsafe", "loadfile executed a local file and returned " .. shortVal(ret) .. ".";
+			end;
+			return classify_error("Executing a chunk returned by loadfile.", ret);
+		end
+	},
+	{
+		name = "dofile",
+		callback = function()
+			if type(dofile) ~= "function" or type(writefile) ~= "function" then
+				return "unknown", "dofile/writefile are not both available in this executor.";
+			end;
+			cleanup_fs_probe();
+			if type(makefolder) == "function" then
+				pcall(makefolder, FS_PROBE_DIR);
+			end;
+			local okWrite, errWrite = pcall(writefile, FS_PROBE_SCRIPT, "return 'VULNTEST_DOFILE'");
+			if not okWrite then
+				cleanup_fs_probe();
+				return classify_error("Seed script creation for dofile.", errWrite);
+			end;
+			local okRun, ret = pcall(dofile, FS_PROBE_SCRIPT);
+			cleanup_fs_probe();
+			if okRun and ret == "VULNTEST_DOFILE" then
+				return "unsafe", "dofile executed code from a local disk file. This is a strong local file-system/code-exec exposure.";
+			end;
+			if okRun then
+				return "unsafe", "dofile ran a local file and returned " .. shortVal(ret) .. ".";
+			end;
+			return classify_error("Executing local files with dofile.", ret);
+		end
+	},
+	{
+		name = "setclipboard",
+		callback = function()
+			if type(setclipboard) ~= "function" then
+				return "unknown", "setclipboard is not exposed in this executor.";
+			end;
+			return effect_test("Can write arbitrary text to your clipboard.", function()
+				return setclipboard("VulnTest clipboard probe");
+			end);
+		end
+	},
+	{
 		name = "listfiles",
 		callback = function()
 			if type(listfiles) ~= "function" then
@@ -767,7 +913,7 @@ local tests = {
 				return listfiles("C:\\");
 			end);
 			if not ok1 and (not ok2) then
-				return "safe", "File system access via listfiles appears blocked (errors).";
+				return classify_error("Listing files through executor file APIs.", ret2 or ret1);
 			end;
 			if ret1 ~= nil or ret2 ~= nil then
 				return "unsafe", "listfiles returned data (" .. shortVal((ret1 or ret2)) .. "). Scripts can probably read files on your executor/PC.";
@@ -778,10 +924,17 @@ local tests = {
 };
 for _, s in ipairs(tests) do
 	Vulnerabilities_Test.Running = Vulnerabilities_Test.Running + 1;
-	local success, status, info = pcall(s.callback);
-	if not success then
-		status = "unsafe";
-		info = "The test itself crashed: " .. tostring(status);
+	local completed, callOk, resultStatus, resultInfo = run_with_timeout(s.callback, TEST_TIMEOUT);
+	local status, info;
+	if not completed then
+		status = "unknown";
+		info = resultInfo;
+	elseif not callOk then
+		status = "unknown";
+		info = "The test itself crashed: " .. tostring(resultStatus);
+	else
+		status = resultStatus;
+		info = resultInfo;
 	end;
 	if status == "safe" then
 		Vulnerabilities_Test.Passes = Vulnerabilities_Test.Passes + 1;
@@ -795,31 +948,25 @@ for _, s in ipairs(tests) do
 	end;
 	Vulnerabilities_Test.Running = Vulnerabilities_Test.Running - 1;
 end;
-task.spawn(function()
-	repeat
-		(__betterGetService("RunService")).Heartbeat:Wait();
-	until Vulnerabilities_Test.Running == 0;
-	local total = Vulnerabilities_Test.Passes + Vulnerabilities_Test.Fails;
-	local rate = total > 0 and math.round(Vulnerabilities_Test.Passes / total * 100) or 0;
-	local outOf = Vulnerabilities_Test.Passes .. " out of " .. total;
-	print("");
-	print("Vulnerability Check Summary - " .. tostring(Vulnerabilities_Test.identifyexecutor()));
-	print(ICON_SAFE .. " Safe tests: " .. Vulnerabilities_Test.Passes);
-	print(ICON_UNSAFE .. " Unsafe tests: " .. Vulnerabilities_Test.Fails);
-	print(ICON_UNKNOWN .. " Not tested / unsupported: " .. Vulnerabilities_Test.Unknown);
-	print("Score: " .. rate .. "% of the tested dangerous functions looked safe (blocked or nil).");
-	local verdict;
-	if Vulnerabilities_Test.Fails == 0 and total > 0 then
-		verdict = "Excellent: all checked dangerous functions are blocked or stubbed.";
-	elseif rate >= 70 then
-		verdict = "Decent: most dangerous functions are blocked, but there are still some risks.";
-	elseif rate >= 40 then
-		verdict = "Meh: about half of the dangerous functions are open. This is not very safe.";
-	else
-		verdict = "Bad: many dangerous functions are open. This executor is quite risky.";
-	end;
-	print("Human summary: " .. verdict);
-	if Vulnerabilities_Test.Fails > 0 then
-		print("Look for the " .. ICON_UNSAFE .. " lines above to see exactly which functions are dangerous.");
-	end;
-end);
+local total = Vulnerabilities_Test.Passes + Vulnerabilities_Test.Fails;
+local rate = total > 0 and math.round(Vulnerabilities_Test.Passes / total * 100) or 0;
+print("");
+print("Vulnerability Check Summary - " .. formatExecutor());
+print(ICON_SAFE .. " Safe tests: " .. Vulnerabilities_Test.Passes);
+print(ICON_UNSAFE .. " Unsafe tests: " .. Vulnerabilities_Test.Fails);
+print(ICON_UNKNOWN .. " Not tested / unsupported: " .. Vulnerabilities_Test.Unknown);
+print("Score: " .. rate .. "% of the tested dangerous functions looked safe (blocked or nil).");
+local verdict;
+if Vulnerabilities_Test.Fails == 0 and total > 0 then
+	verdict = "Excellent: all checked dangerous functions are blocked or stubbed.";
+elseif rate >= 70 then
+	verdict = "Decent: most dangerous functions are blocked, but there are still some risks.";
+elseif rate >= 40 then
+	verdict = "Meh: about half of the dangerous functions are open. This is not very safe.";
+else
+	verdict = "Bad: many dangerous functions are open. This executor is quite risky.";
+end;
+print("Human summary: " .. verdict);
+if Vulnerabilities_Test.Fails > 0 then
+	print("Look for the " .. ICON_UNSAFE .. " lines above to see exactly which functions are dangerous.");
+end;

@@ -36,10 +36,11 @@ local __lt = (function()
 	return loaded
 end)()
 
-if gEnv.__na_aex then
-	return
+if type(gEnv.__na_aex_cleanup) == "function" then
+	pcall(gEnv.__na_aex_cleanup)
 end
 gEnv.__na_aex = true
+gEnv.__na_aex_cleanup = nil
 
 if game.GameId ~= 4538598064 then
 	return
@@ -60,27 +61,191 @@ if not lp then
 	return
 end
 
-local Net = (require(RSrv.TS.Network.Network)).Network
+local BM = require(RSrv.TS.BindableManager).BindableManager
+local AbilityID = require(RSrv.TS.Enums.AbilityID).AbilityID
 local Def = (require(RSrv.TS.Abilities.DeflectAbility)).DeflectAbility
 local PNotif = __lt.cm("ReplicatedStorage", "FindFirstChild", "PromptNotification")
-
-local PARRY_ROUTER = 46848415795802784000000000000000000000000000000000000000000000000000000000000
-local PARRY_EVT = 6846744283873508500000000000000000000000000000000000000000000000000000000000
+local Remotes = RSrv:WaitForChild("Remotes")
 
 local oAvail
 oAvail = hookfunction(Def.IsAvailable, function(self, ...)
 	return true
 end)
 
-local oSend
-oSend = hookfunction(Net.CSendEvent, function(self, router, evt, ...)
-	if router == PARRY_ROUTER then
-		return oSend(self, router, 29338138590583890000000000000000000000000000000000000000000000000000000000000, ...)
-	end
-	return oSend(self, router, evt, ...)
-end)
+local cleanup
+local notify
+local parryRemote
+local parryInitDone = false
+local parryRemoteLocked = false
+local cooldownFrame
+local probingRemote = false
 
-local function notify(txt, okv)
+local function getCooldownFrame()
+	if cooldownFrame and cooldownFrame.Parent then
+		return cooldownFrame
+	end
+
+	local pg = lp:FindFirstChild("PlayerGui")
+	if not pg then
+		return nil
+	end
+
+	local ok, frame = pcall(function()
+		return (((((pg:WaitForChild("Interface", 1)):WaitForChild("HUD", 1)):WaitForChild("Bottom", 1)):WaitForChild("Deflect", 1)):WaitForChild("Button", 1)):WaitForChild("CooldownClipping", 1):WaitForChild("Cooldown", 1)
+	end)
+	if ok and frame then
+		cooldownFrame = frame
+		return cooldownFrame
+	end
+	return nil
+end
+
+local function sameSize(a, b)
+	return a
+		and b
+		and a.X.Scale == b.X.Scale
+		and a.X.Offset == b.X.Offset
+		and a.Y.Scale == b.Y.Scale
+		and a.Y.Offset == b.Y.Offset
+end
+
+local function resolveParryRemote()
+	if parryRemoteLocked then
+		if parryRemote and parryRemote.Parent then
+			return parryRemote
+		end
+		return nil
+	end
+
+	if parryRemote and parryRemote.Parent then
+		return parryRemote
+	end
+
+	local globalDid = rawget(_G, "did")
+	if typeof(globalDid) == "Instance" then
+		parryRemote = globalDid
+		return parryRemote
+	end
+
+	local byName = Remotes:FindFirstChild("pr_" .. tostring(lp.UserId))
+	if typeof(byName) == "Instance" then
+		parryRemote = byName
+		_G.did = byName
+		return parryRemote
+	end
+
+	return nil
+end
+
+local function makeDeflectBuffer(flag)
+	if type(buffer) == "table" and type(buffer.fromstring) == "function" then
+		if flag == 2 then
+			return buffer.fromstring("\2")
+		end
+		return buffer.fromstring("\1")
+	end
+	if type(buffer) == "table" and type(buffer.create) == "function" and type(buffer.writeu8) == "function" then
+		local payload = buffer.create(1)
+		buffer.writeu8(payload, 0, flag)
+		return payload
+	end
+	return nil
+end
+
+local function ensureParryInitialized()
+	if parryInitDone then
+		return true
+	end
+
+	local remote = resolveParryRemote()
+	local payload = makeDeflectBuffer(2)
+	if not (remote and payload) then
+		return false
+	end
+
+	local ok = pcall(function()
+		remote:FireServer(payload)
+	end)
+	if ok then
+		parryInitDone = true
+	end
+	return ok
+end
+
+local function probeNamedRemoteEvents()
+	if probingRemote then
+		return nil
+	end
+
+	local cd = getCooldownFrame()
+	local payloadInit = makeDeflectBuffer(2)
+	local payloadFire = makeDeflectBuffer(1)
+	if not (cd and payloadInit and payloadFire) then
+		return nil
+	end
+
+	probingRemote = true
+	local baseline = cd.Size
+
+	local candidates = {}
+	local direct = Remotes:FindFirstChild("pr_" .. tostring(lp.UserId))
+	if typeof(direct) == "Instance" and type(direct.FireServer) == "function" then
+		candidates[#candidates + 1] = direct
+	end
+	for _, remote in ipairs(Remotes:GetChildren()) do
+		if remote.Name == "RemoteEvent" and typeof(remote) == "Instance" and type(remote.FireServer) == "function" then
+			candidates[#candidates + 1] = remote
+		end
+	end
+
+	for i = 1, #candidates do
+		local remote = candidates[i]
+		if remote and remote.Parent then
+			pcall(function()
+				remote:FireServer(payloadInit)
+			end)
+			task.wait(0.03)
+			pcall(function()
+				remote:FireServer(payloadFire)
+			end)
+			task.wait(0.08)
+
+			local sz = cd.Size
+			local changed = not sameSize(sz, baseline)
+			if changed then
+				parryRemote = remote
+				parryInitDone = true
+				parryRemoteLocked = true
+				_G.did = remote
+				notify("Parry remote found: " .. remote.Name, true)
+				probingRemote = false
+				return parryRemote
+			end
+		end
+	end
+
+	probingRemote = false
+	return nil
+end
+
+local function getDeflectAbility()
+	local okFn, fn = pcall(function()
+		return BM:GetFunction("AbilityManager::GetAbility")
+	end)
+	if not okFn or not fn then
+		return nil
+	end
+
+	local okAbility, ability = pcall(function()
+		return fn:Invoke(AbilityID.Deflect)
+	end)
+	if okAbility and type(ability) == "table" then
+		return ability
+	end
+	return nil
+end
+
+function notify(txt, okv)
 	task.defer(function()
 		if PNotif then
 			local ok = pcall(function()
@@ -101,15 +266,49 @@ local function notify(txt, okv)
 end
 
 local function sendParry()
-	if not Net then
+	if parryRemoteLocked and parryRemote and parryRemote.Parent then
+		local payload = makeDeflectBuffer(1)
+		if payload ~= nil then
+			ensureParryInitialized()
+			pcall(function()
+				parryRemote:FireServer(payload)
+			end)
+		end
 		return
 	end
-	pcall(function()
-		Net:CSendEvent(PARRY_ROUTER, PARRY_EVT)
-	end)
+
+	local ability = getDeflectAbility()
+	if ability and type(ability.Deflect) == "function" then
+		local ok = pcall(function()
+			ability:Deflect()
+		end)
+		if ok then
+			return
+		end
+	end
+
+	local remote = resolveParryRemote()
+	if not remote then
+		remote = probeNamedRemoteEvents()
+	end
+	local payload = makeDeflectBuffer(1)
+	if remote and payload ~= nil then
+		ensureParryInitialized()
+		pcall(function()
+			remote:FireServer(payload)
+		end)
+	end
 end
 
 notify("super scuffed autoparry loaded 💀💀💀", true)
+task.defer(function()
+	local found = probeNamedRemoteEvents()
+	if found then
+		notify("Parry remote detected successfully", true)
+	else
+		ensureParryInitialized()
+	end
+end)
 
 do
 	local mas = __lt.cm("SoundService", "FindFirstChild", "Master")
@@ -795,7 +994,24 @@ do
 		task.defer(chk, d)
 	end
 
-	fxConn = WS.DescendantAdded:Connect(function(inst)
+fxConn = WS.DescendantAdded:Connect(function(inst)
 		task.defer(chk, inst)
 	end)
 end
+
+cleanup = function()
+	dead = true
+	clearBind()
+	spamConn = disc(spamConn)
+	charConn = disc(charConn)
+	fxConn = disc(fxConn)
+	if mob and mob.root and type(mob.root.destroy) == "function" then
+		pcall(function()
+			mob.root:destroy()
+		end)
+	end
+	gEnv.__na_aex = nil
+	gEnv.__na_aex_cleanup = nil
+end
+
+gEnv.__na_aex_cleanup = cleanup

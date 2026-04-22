@@ -1,14 +1,13 @@
-local env = getgenv and getgenv()
-local old = env and rawget(env, "__chatLockFix")
+local root = (getgenv and getgenv()) or _G
+local old = rawget(root, "__chatLockFix") or rawget(_G, "__chatLockFix")
 
 if type(old) == "table" and type(old.stop) == "function" then
 	pcall(old.stop)
 end
 
 local st = {}
-if env then
-	env.__chatLockFix = st
-end
+root.__chatLockFix = st
+_G.__chatLockFix = st
 
 local function getCg()
 	local s = game:GetService("CoreGui")
@@ -47,6 +46,9 @@ local cont
 local tok = 0
 
 local qset = setmetatable({}, { __mode = "k" })
+local hid = setmetatable({}, { __mode = "k" })
+local wmap = setmetatable({}, { __mode = "k" })
+
 local qh = 1
 local qn = 0
 local qrow = {}
@@ -72,13 +74,41 @@ local function drop(t)
 	end
 end
 
+local function unwatch(row)
+	local t = wmap[row]
+	if not t then
+		return
+	end
+	for i = #t, 1, -1 do
+		local c = t[i]
+		if c then
+			c:Disconnect()
+		end
+		t[i] = nil
+	end
+	wmap[row] = nil
+	hid[row] = nil
+end
+
 local function stop()
 	if not live then
 		return
 	end
 	live = false
+
 	drop(cbag)
 	drop(cons)
+
+	for row in next, wmap do
+		unwatch(row)
+	end
+
+	if rawget(root, "__chatLockFix") == st then
+		root.__chatLockFix = nil
+	end
+	if rawget(_G, "__chatLockFix") == st then
+		_G.__chatLockFix = nil
+	end
 end
 
 st.stop = stop
@@ -131,7 +161,7 @@ local function ctext(lbl)
 	return ""
 end
 
-local function badRow(pre, body)
+local function shouldHide(pre, body)
 	local p = pre and pre.Text or ""
 	if p == "🔒 :" or p == "🔒:" then
 		return true
@@ -160,8 +190,64 @@ local function badRow(pre, body)
 	return false
 end
 
+local function keepHidden(row, body)
+	if not live or not row or not row.Parent then
+		return
+	end
+
+	if row.Visible then
+		row.Visible = false
+	end
+
+	if body and body.Parent and body:IsA("GuiObject") and body.Visible then
+		body.Visible = false
+	end
+
+	if hid[row] then
+		return
+	end
+
+	hid[row] = true
+
+	local bag = {}
+	wmap[row] = bag
+
+	bag[#bag + 1] = row:GetPropertyChangedSignal("Visible"):Connect(function()
+		if not live or not row or not row.Parent then
+			return
+		end
+		if row.Visible then
+			row.Visible = false
+		end
+	end)
+
+	if body and body:IsA("GuiObject") then
+		bag[#bag + 1] = body:GetPropertyChangedSignal("Visible"):Connect(function()
+			if not live or not body or not body.Parent then
+				return
+			end
+			if body.Visible then
+				body.Visible = false
+			end
+		end)
+	end
+
+	bag[#bag + 1] = row.AncestryChanged:Connect(function(_, par)
+		if par == nil then
+			unwatch(row)
+		end
+	end)
+end
+
 local function scan(row)
 	if not live or not row or not row.Parent then
+		return true
+	end
+
+	if hid[row] then
+		if row.Visible then
+			row.Visible = false
+		end
 		return true
 	end
 
@@ -176,15 +262,13 @@ local function scan(row)
 		return false
 	end
 
-	local bad = badRow(pre, body)
+	local bad = shouldHide(pre, body)
 	if bad == nil then
 		return false
 	end
 
 	if bad then
-		pcall(function()
-			row:Destroy()
-		end)
+		keepHidden(row, body)
 	end
 
 	return true

@@ -1,193 +1,158 @@
-local _env = (getgenv and getgenv()) or _G or {}
-local _shared = rawget(_G, "shared")
+local env = (getgenv and getgenv()) or _G or {}
+local sh = rawget(_G, "shared")
 
-local function AlreadyLoaded()
-	if _env and (_env.ltseverydayyou_chatFix or _env.chatFixLoaded) then
+local function loaded()
+	if env and (env.ltseverydayyou_chatFix or env.chatFixLoaded) then
 		return true
 	end
-	if _shared and (_shared.ltseverydayyou_chatFix or _shared.chatFixLoaded) then
+	if sh and (sh.ltseverydayyou_chatFix or sh.chatFixLoaded) then
 		return true
 	end
 	return false
 end
 
-if AlreadyLoaded() then
+if loaded() then
 	return
 end
 
 pcall(function()
-	if _env then
-		_env.ltseverydayyou_chatFix = true
-		_env.chatFixLoaded = true
+	if env then
+		env.ltseverydayyou_chatFix = true
+		env.chatFixLoaded = true
 	end
-	if _shared then
-		_shared.ltseverydayyou_chatFix = true
-		_shared.chatFixLoaded = true
+	if sh then
+		sh.ltseverydayyou_chatFix = true
+		sh.chatFixLoaded = true
 	end
 end)
 
-local function svc(n)
-	if cloneref and type(cloneref) == "function" then
-		local ok2, c = pcall(function()
-			return cloneref(game:FindService(n))
-		end)
-		if ok2 and c then
-			return c
-		end
-		local ok3, fallback = pcall(function()
-			return cloneref(Instance.new(n))
-		end)
-		if ok3 and fallback then
-			return fallback
-		end
-	end
-	local s = game:FindService(n)
-	if s then
-		return s
-	end
-	local ok, inst = pcall(Instance.new, n)
-	if ok and inst and typeof(inst) == "Instance" then
-		return inst
-	end
-	return nil
+local cg = cloneref and cloneref(game:GetService("CoreGui")) or game:GetService("CoreGui")
+if not cg then
+	return
 end
 
-local function wchild(p, n, t)
-	if not p then return nil end
-	local st = os.clock()
-	local c = p:FindFirstChild(n)
-	while not c and (not t or os.clock() - st < t) do
-		if not p.Parent and not p:IsDescendantOf(game) then
-			return nil
-		end
-		task.wait(0.03)
-		c = p:FindFirstChild(n)
-	end
+local ec = cg:FindFirstChild("ExperienceChat") or cg:WaitForChild("ExperienceChat", 30)
+if not ec then
+	return
+end
+
+local live = true
+local cons = {}
+local done = setmetatable({}, { __mode = "k" })
+
+local function bind(sig, fn)
+	local c = sig:Connect(fn)
+	cons[#cons + 1] = c
 	return c
 end
 
-local cg = svc("CoreGui")
-if not cg then return end
-
-local ec = wchild(cg, "ExperienceChat", 30)
-if not ec then return end
-
-local function isLockRow(lbl)
-	if not lbl or not lbl:IsA("TextLabel") then return false end
-	if lbl.Name ~= "BodyText" then return false end
-
-	local txt = ""
-	pcall(function()
-		txt = lbl.ContentText
-	end)
-	if txt == "" then
-		txt = lbl.Text or ""
-	end
-	if txt == "" then return false end
-
-	txt = txt:gsub("^%s+", "")
-	return txt:match("^🔒%s*:") ~= nil
-end
-
-local hooked = {}
-local watched = {}
-
-local function keepHidden(inst)
-	if not inst or watched[inst] then return end
-	watched[inst] = true
-
-	local conn
-	conn = inst:GetPropertyChangedSignal("Visible"):Connect(function()
-		if not inst or not inst.Parent then
-			if conn then
-				conn:Disconnect()
-				conn = nil
-			end
-			watched[inst] = nil
-			return
-		end
-		if inst.Visible then
-			inst.Visible = false
-		end
-	end)
-
-	if inst.Visible then
-		inst.Visible = false
-	end
-end
-
-local function hookCont(cont)
-	if not cont or hooked[cont] then return end
-	hooked[cont] = true
-
-	local function getRow(body)
-		local p = body
-		while p and p ~= cont do
-			local pr = p.Parent
-			if pr == cont then
-				return p
-			end
-			p = pr
-		end
-		return nil
-	end
-
-	local function handleBody(body)
-		if not isLockRow(body) then return end
-		if not body.Parent then return end
-
-		local row = getRow(body)
-		if row and row.Parent then
-			row.Visible = false
-			keepHidden(row)
-		else
-			body.Visible = false
-			keepHidden(body)
-		end
-	end
-
-	for _, row in ipairs(cont:GetChildren()) do
-		local tm = row:FindFirstChild("TextMessage")
-		if tm then
-			local body = tm:FindFirstChild("BodyText")
-			if body then
-				handleBody(body)
-			end
-		end
-	end
-
-	local dConn
-	dConn = cont.DescendantAdded:Connect(function(inst)
-		if not cont.Parent then
-			if dConn then
-				dConn:Disconnect()
-				dConn = nil
-			end
-			hooked[cont] = nil
-			return
-		end
-		if inst:IsA("TextLabel") and inst.Name == "BodyText" then
-			handleBody(inst)
-		end
-	end)
-end
-
-for _, inst in ipairs(ec:QueryDescendants("Instance")) do
-	if inst.Name == "RCTScrollContentView" then
-		hookCont(inst)
-	end
-end
-
-local ecConn
-ecConn = ec.DescendantAdded:Connect(function(inst)
-	if not ec.Parent then
-		if ecConn then
-			ecConn:Disconnect()
-			ecConn = nil
-		end
+local function wipe()
+	if not live then
 		return
 	end
-	if inst.Name == "RCTScrollContentView" then
-		hookCont(inst)
+	live = false
+	for i = #cons, 1, -1 do
+		local c = cons[i]
+		if c then
+			c:Disconnect()
+		end
+		cons[i] = nil
 	end
+	table.clear(done)
+end
+
+local function txtOf(lbl)
+	local ok, v = pcall(function()
+		return lbl.ContentText
+	end)
+	if ok and type(v) == "string" and v ~= "" then
+		return v
+	end
+	v = lbl.Text
+	if type(v) == "string" then
+		return v
+	end
+	return ""
+end
+
+local function lockTxt(s)
+	if s == "" then
+		return false
+	end
+	s = s:match("^%s*(.-)$") or s
+	if s == "" then
+		return false
+	end
+	local a = s:byte(1)
+	if a ~= 240 and s:sub(1, 1) ~= "🔒" then
+		return false
+	end
+	return s:match("^🔒%s*:") ~= nil
+end
+
+local function hideRow(body)
+	if not live or not body or done[body] then
+		return
+	end
+	if not body:IsA("TextLabel") or body.Name ~= "BodyText" then
+		return
+	end
+	if not body:IsDescendantOf(ec) then
+		return
+	end
+	if not lockTxt(txtOf(body)) then
+		return
+	end
+
+	local row = body
+	for _ = 1, 4 do
+		local p = row.Parent
+		if not p or p == ec then
+			break
+		end
+		if p.Name == "TextMessage" then
+			row = p.Parent or body
+			break
+		end
+		row = p
+	end
+
+	if row and row:IsA("GuiObject") and row.Parent then
+		row.Visible = false
+		done[row] = true
+		done[body] = true
+	else
+		body.Visible = false
+		done[body] = true
+	end
+end
+
+local function scan(root)
+	for _, inst in ipairs(root:GetDescendants()) do
+		if inst.Name == "BodyText" and inst:IsA("TextLabel") then
+			hideRow(inst)
+		end
+	end
+end
+
+scan(ec)
+
+bind(ec.DescendantAdded, function(inst)
+	if not live then
+		return
+	end
+	if inst.Name ~= "BodyText" or not inst:IsA("TextLabel") then
+		return
+	end
+	task.defer(hideRow, inst)
+end)
+
+bind(ec.AncestryChanged, function(_, par)
+	if par == nil then
+		wipe()
+	end
+end)
+
+bind(game:GetService("Players").LocalPlayer.CharacterRemoving, function()
+	table.clear(done)
 end)

@@ -1,14 +1,14 @@
 local env = (getgenv and getgenv()) or _G or {}
-local old = env.__ecfix
+local old = env.__ecfix2
 
 if type(old) == "table" and type(old.stop) == "function" then
 	pcall(old.stop)
 end
 
 local st = {}
-env.__ecfix = st
+env.__ecfix2 = st
 
-local function getCg()
+local function cg()
 	local ok, s = pcall(function()
 		return game:GetService("CoreGui")
 	end)
@@ -24,12 +24,12 @@ local function getCg()
 	return s
 end
 
-local cg = getCg()
-if not cg then
+local gui = cg()
+if not gui then
 	return
 end
 
-local ec = cg:FindFirstChild("ExperienceChat") or cg:WaitForChild("ExperienceChat", 30)
+local ec = gui:FindFirstChild("ExperienceChat") or gui:WaitForChild("ExperienceChat", 30)
 if not ec then
 	return
 end
@@ -43,7 +43,7 @@ local run = game:GetService("RunService")
 
 local live = true
 local cons = {}
-local ccons = {}
+local cbag = {}
 
 local win
 local cont
@@ -83,13 +83,13 @@ local function stop()
 		return
 	end
 	live = false
-	drop(ccons)
+	drop(cbag)
 	drop(cons)
 end
 
 st.stop = stop
 
-local function packQ()
+local function pack()
 	local nrow = {}
 	local ntry = {}
 	local nat = {}
@@ -112,33 +112,35 @@ local function packQ()
 	qn = n
 end
 
-local function mark(a, b)
+local function mark(a, b, c)
 	seen[a] = gen
 	if b then
 		seen[b] = gen
 	end
+	if c then
+		seen[c] = gen
+	end
 end
 
-local function rawTxt(lbl)
-	local s = lbl.Text
+local function txt(obj)
+	local s = obj and obj.Text
 	if type(s) == "string" then
 		return s
 	end
 	return ""
 end
 
-local function richTxt(lbl)
+local function ctx(obj)
+	if not obj then
+		return ""
+	end
 	local ok, s = pcall(function()
-		return lbl.ContentText
+		return obj.ContentText
 	end)
 	if ok and type(s) == "string" then
 		return s
 	end
 	return ""
-end
-
-local function isLock(s)
-	return s:match("^%s*🔒%s*:") ~= nil
 end
 
 local function push(row, tries, delay)
@@ -152,7 +154,39 @@ local function push(row, tries, delay)
 	qset[row] = true
 end
 
-local function scanRow(row)
+local function shouldHide(pre, body)
+	local p = txt(pre)
+	if p == "🔒 :" or p:find("🔒", 1, true) then
+		return true
+	end
+
+	local raw = txt(body)
+	if raw == "" then
+		return nil
+	end
+
+	if raw:find("Only people in similar age groups", 1, true) or raw:find("trusted friends can chat with you", 1, true) then
+		return true
+	end
+
+	if raw:find("🔒 :", 1, true) then
+		return true
+	end
+
+	if raw:find("•••", 1, true) or raw:find("&bull;", 1, true) then
+		local s = ctx(body)
+		if s == "" then
+			return nil
+		end
+		if s:match("^%s*🔒%s*:") then
+			return true
+		end
+	end
+
+	return false
+end
+
+local function scan(row)
 	if not live or not row or not row.Parent then
 		return true
 	end
@@ -168,43 +202,36 @@ local function scanRow(row)
 		return false
 	end
 
+	local pre = msg:FindFirstChild("PrefixText")
 	local body = msg:FindFirstChild("BodyText")
 	if not body or not body:IsA("TextLabel") then
 		return false
 	end
 
 	if seen[body] == gen then
-		mark(row, body)
+		mark(row, pre, body)
 		return true
 	end
 
-	local raw = rawTxt(body)
-	if raw == "" then
+	local ok = shouldHide(pre, body)
+	if ok == nil then
 		return false
 	end
 
-	if not raw:find("🔒", 1, true) then
-		mark(row, body)
-		return true
-	end
-
-	local txt = richTxt(body)
-	if txt == "" then
-		return false
-	end
-
-	if isLock(txt) then
+	if ok then
 		if row.Visible then
 			row.Visible = false
+		elseif body.Visible then
+			body.Visible = false
 		end
 	end
 
-	mark(row, body)
+	mark(row, pre, body)
 	return true
 end
 
 local function clearCont()
-	drop(ccons)
+	drop(cbag)
 	cont = nil
 end
 
@@ -226,13 +253,13 @@ local function hookCont(newCont)
 			return
 		end
 		push(ch, 0, 0)
-	end, ccons)
+	end, cbag)
 
 	bind(newCont.AncestryChanged, function(_, par)
 		if par == nil and cont == newCont then
 			clearCont()
 		end
-	end, ccons)
+	end, cbag)
 end
 
 local function walkWin(newWin, myTok)
@@ -326,7 +353,7 @@ bind(run.Heartbeat, function()
 			if at > now then
 				push(row, tries, at - now)
 			else
-				local ok = scanRow(row)
+				local ok = scan(row)
 				if not ok and tries < #dly then
 					push(row, tries + 1, dly[tries + 1])
 				end
@@ -335,7 +362,7 @@ bind(run.Heartbeat, function()
 	end
 
 	if qi > 128 and qi > qn / 2 then
-		packQ()
+		pack()
 	end
 end))
 
@@ -346,5 +373,9 @@ task.spawn(function()
 			break
 		end
 		gen = gen + 1
+		if gen > 2048 then
+			gen = 1
+			seen = setmetatable({}, { __mode = "k" })
+		end
 	end
 end)

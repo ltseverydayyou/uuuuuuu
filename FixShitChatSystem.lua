@@ -1,30 +1,12 @@
 local env = (getgenv and getgenv()) or _G or {}
-local sh = rawget(_G, "shared")
+local old = env.__ecfix
 
-local function loaded()
-	if env and (env.ltseverydayyou_chatFix or env.chatFixLoaded) then
-		return true
-	end
-	if sh and (sh.ltseverydayyou_chatFix or sh.chatFixLoaded) then
-		return true
-	end
-	return false
+if type(old) == "table" and type(old.stop) == "function" then
+	pcall(old.stop)
 end
 
-if loaded() then
-	return
-end
-
-pcall(function()
-	if env then
-		env.ltseverydayyou_chatFix = true
-		env.chatFixLoaded = true
-	end
-	if sh then
-		sh.ltseverydayyou_chatFix = true
-		sh.chatFixLoaded = true
-	end
-end)
+local st = {}
+env.__ecfix = st
 
 local function getCg()
 	local ok, s = pcall(function()
@@ -57,36 +39,36 @@ if not app then
 	return
 end
 
-local Run = game:GetService("RunService")
+local run = game:GetService("RunService")
 
 local live = true
 local cons = {}
-local contCons = {}
+local ccons = {}
 
-local curWin
-local curCont
+local win
+local cont
 local tok = 0
 
 local gen = 1
 local seen = setmetatable({}, { __mode = "k" })
-local queued = setmetatable({}, { __mode = "k" })
+local qset = setmetatable({}, { __mode = "k" })
 
 local qi = 1
 local qn = 0
-local qRow = {}
-local qTry = {}
-local qAt = {}
+local qrow = {}
+local qtry = {}
+local qat = {}
 
-local dly = {0.04, 0.12, 0.3, 0.7}
+local dly = {0.03, 0.08, 0.18, 0.4}
 
-local function bind(sig, fn, bucket)
+local function bind(sig, fn, bag)
 	local c = sig:Connect(fn)
-	local t = bucket or cons
+	local t = bag or cons
 	t[#t + 1] = c
 	return c
 end
 
-local function clearBucket(t)
+local function drop(t)
 	for i = #t, 1, -1 do
 		local c = t[i]
 		if c then
@@ -101,20 +83,56 @@ local function stop()
 		return
 	end
 	live = false
-	clearBucket(contCons)
-	clearBucket(cons)
+	drop(ccons)
+	drop(cons)
 end
 
-local function txt(lbl)
-	local ok, v = pcall(function()
+st.stop = stop
+
+local function packQ()
+	local nrow = {}
+	local ntry = {}
+	local nat = {}
+	local n = 0
+
+	for i = qi, qn do
+		local row = qrow[i]
+		if row ~= nil then
+			n = n + 1
+			nrow[n] = row
+			ntry[n] = qtry[i]
+			nat[n] = qat[i]
+		end
+	end
+
+	qrow = nrow
+	qtry = ntry
+	qat = nat
+	qi = 1
+	qn = n
+end
+
+local function mark(a, b)
+	seen[a] = gen
+	if b then
+		seen[b] = gen
+	end
+end
+
+local function rawTxt(lbl)
+	local s = lbl.Text
+	if type(s) == "string" then
+		return s
+	end
+	return ""
+end
+
+local function richTxt(lbl)
+	local ok, s = pcall(function()
 		return lbl.ContentText
 	end)
-	if ok and type(v) == "string" and v ~= "" then
-		return v
-	end
-	v = lbl.Text
-	if type(v) == "string" then
-		return v
+	if ok and type(s) == "string" then
+		return s
 	end
 	return ""
 end
@@ -123,175 +141,119 @@ local function isLock(s)
 	return s:match("^%s*🔒%s*:") ~= nil
 end
 
-local function markSeen(a, b)
-	seen[a] = gen
-	if b then
-		seen[b] = gen
-	end
-end
-
-local function enqueue(row, tries, delay)
-	if not live or not row or queued[row] then
+local function push(row, tries, delay)
+	if not live or not row or qset[row] then
 		return
 	end
 	qn = qn + 1
-	qRow[qn] = row
-	qTry[qn] = tries or 0
-	qAt[qn] = os.clock() + (delay or 0)
-	queued[row] = true
+	qrow[qn] = row
+	qtry[qn] = tries or 0
+	qat[qn] = os.clock() + (delay or 0)
+	qset[row] = true
 end
 
-local function packQ()
-	local nr = {}
-	local nt = {}
-	local na = {}
-	local n = 0
-	for i = qi, qn do
-		local row = qRow[i]
-		if row ~= nil then
-			n = n + 1
-			nr[n] = row
-			nt[n] = qTry[i]
-			na[n] = qAt[i]
-		end
-	end
-	qRow = nr
-	qTry = nt
-	qAt = na
-	qi = 1
-	qn = n
-end
-
-local function hideRow(row)
+local function scanRow(row)
 	if not live or not row or not row.Parent then
 		return true
 	end
 	if seen[row] == gen then
 		return true
 	end
+	if not row:IsA("GuiObject") then
+		return true
+	end
 
-	local tm = row:FindFirstChild("TextMessage")
-	if not tm then
+	local msg = row:FindFirstChild("TextMessage")
+	if not msg then
 		return false
 	end
 
-	local body = tm:FindFirstChild("BodyText")
+	local body = msg:FindFirstChild("BodyText")
 	if not body or not body:IsA("TextLabel") then
 		return false
 	end
 
 	if seen[body] == gen then
-		markSeen(row, body)
+		mark(row, body)
 		return true
 	end
 
-	local s = txt(body)
-	if s == "" then
+	local raw = rawTxt(body)
+	if raw == "" then
 		return false
 	end
 
-	if isLock(s) then
-		if row:IsA("GuiObject") and row.Visible then
+	if not raw:find("🔒", 1, true) then
+		mark(row, body)
+		return true
+	end
+
+	local txt = richTxt(body)
+	if txt == "" then
+		return false
+	end
+
+	if isLock(txt) then
+		if row.Visible then
 			row.Visible = false
-		elseif body.Visible then
-			body.Visible = false
 		end
 	end
 
-	markSeen(row, body)
+	mark(row, body)
 	return true
 end
 
 local function clearCont()
-	clearBucket(contCons)
-	curCont = nil
+	drop(ccons)
+	cont = nil
 end
 
-local function hookCont(cont)
-	if not live or not cont or curCont == cont then
+local function hookCont(newCont)
+	if not live or not newCont or cont == newCont then
 		return
 	end
 
 	clearCont()
-	curCont = cont
+	cont = newCont
 
-	for _, ch in ipairs(cont:GetChildren()) do
-		enqueue(ch, 0, 0)
+	local kids = newCont:GetChildren()
+	for i = 1, #kids do
+		push(kids[i], 0, 0)
 	end
 
-	bind(cont.ChildAdded, function(ch)
-		if not live or curCont ~= cont then
+	bind(newCont.ChildAdded, function(ch)
+		if not live or cont ~= newCont then
 			return
 		end
-		enqueue(ch, 0, 0)
-	end, contCons)
+		push(ch, 0, 0)
+	end, ccons)
 
-	bind(cont.AncestryChanged, function(_, par)
-		if par == nil and curCont == cont then
+	bind(newCont.AncestryChanged, function(_, par)
+		if par == nil and cont == newCont then
 			clearCont()
-			if curWin and curWin.Parent then
-				tok = tok + 1
-				local myTok = tok
-				task.spawn(function()
-					local win = curWin
-					if not win or not win.Parent then
-						return
-					end
-
-					local a = win:FindFirstChild("scrollingView") or win:WaitForChild("scrollingView", 10)
-					if not a or myTok ~= tok or curWin ~= win or not live then
-						return
-					end
-
-					local b = a:FindFirstChild("bottomLockedScrollView") or a:WaitForChild("bottomLockedScrollView", 10)
-					if not b or myTok ~= tok or curWin ~= win or not live then
-						return
-					end
-
-					local c = b:FindFirstChild("RCTScrollView") or b:WaitForChild("RCTScrollView", 10)
-					if not c or myTok ~= tok or curWin ~= win or not live then
-						return
-					end
-
-					local d = c:FindFirstChild("RCTScrollContentView") or c:WaitForChild("RCTScrollContentView", 10)
-					if not d or myTok ~= tok or curWin ~= win or not live then
-						return
-					end
-
-					hookCont(d)
-				end)
-			end
 		end
-	end, contCons)
+	end, ccons)
 end
 
-local function useWin(win)
-	if not live or not win then
-		return
-	end
-
-	curWin = win
-	tok = tok + 1
-	local myTok = tok
-
+local function walkWin(newWin, myTok)
 	task.spawn(function()
-		local a = win:FindFirstChild("scrollingView") or win:WaitForChild("scrollingView", 10)
-		if not a or myTok ~= tok or curWin ~= win or not live then
+		local a = newWin:FindFirstChild("scrollingView") or newWin:WaitForChild("scrollingView", 10)
+		if not a or not live or tok ~= myTok or win ~= newWin then
 			return
 		end
 
 		local b = a:FindFirstChild("bottomLockedScrollView") or a:WaitForChild("bottomLockedScrollView", 10)
-		if not b or myTok ~= tok or curWin ~= win or not live then
+		if not b or not live or tok ~= myTok or win ~= newWin then
 			return
 		end
 
 		local c = b:FindFirstChild("RCTScrollView") or b:WaitForChild("RCTScrollView", 10)
-		if not c or myTok ~= tok or curWin ~= win or not live then
+		if not c or not live or tok ~= myTok or win ~= newWin then
 			return
 		end
 
 		local d = c:FindFirstChild("RCTScrollContentView") or c:WaitForChild("RCTScrollContentView", 10)
-		if not d or myTok ~= tok or curWin ~= win or not live then
+		if not d or not live or tok ~= myTok or win ~= newWin then
 			return
 		end
 
@@ -299,9 +261,18 @@ local function useWin(win)
 	end)
 end
 
-local win = app:FindFirstChild("chatWindow")
-if win then
-	useWin(win)
+local function useWin(newWin)
+	if not live or not newWin then
+		return
+	end
+	win = newWin
+	tok = tok + 1
+	walkWin(newWin, tok)
+end
+
+local cur = app:FindFirstChild("chatWindow")
+if cur then
+	useWin(cur)
 end
 
 bind(app.ChildAdded, function(ch)
@@ -314,8 +285,8 @@ bind(app.ChildAdded, function(ch)
 end)
 
 bind(app.ChildRemoved, function(ch)
-	if ch == curWin then
-		curWin = nil
+	if ch == win then
+		win = nil
 		tok = tok + 1
 		clearCont()
 	end
@@ -327,7 +298,7 @@ bind(ec.AncestryChanged, function(_, par)
 	end
 end)
 
-bind(Run.Heartbeat, function()
+bind(run.Heartbeat, function()
 	if not live then
 		return
 	end
@@ -336,28 +307,28 @@ bind(Run.Heartbeat, function()
 	local now = t0
 	local n = 0
 
-	while qi <= qn and n < 14 and os.clock() - t0 < 0.0015 do
-		local row = qRow[qi]
-		local tries = qTry[qi]
-		local at = qAt[qi]
+	while qi <= qn and n < 10 and os.clock() - t0 < 0.0012 do
+		local row = qrow[qi]
+		local tries = qtry[qi]
+		local at = qat[qi]
 
-		qRow[qi] = nil
-		qTry[qi] = nil
-		qAt[qi] = nil
+		qrow[qi] = nil
+		qtry[qi] = nil
+		qat[qi] = nil
 		qi = qi + 1
 		n = n + 1
 
 		if row then
-			queued[row] = nil
+			qset[row] = nil
 		end
 
 		if row and row.Parent then
 			if at > now then
-				enqueue(row, tries, at - now)
+				push(row, tries, at - now)
 			else
-				local ok = hideRow(row)
+				local ok = scanRow(row)
 				if not ok and tries < #dly then
-					enqueue(row, tries + 1, dly[tries + 1])
+					push(row, tries + 1, dly[tries + 1])
 				end
 			end
 		end
@@ -375,9 +346,5 @@ task.spawn(function()
 			break
 		end
 		gen = gen + 1
-		if gen > 2048 then
-			gen = 1
-			seen = setmetatable({}, { __mode = "k" })
-		end
 	end
 end)

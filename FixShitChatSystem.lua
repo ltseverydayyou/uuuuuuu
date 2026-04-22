@@ -52,15 +52,48 @@ if not ec then
 	return
 end
 
+local app = ec:FindFirstChild("appLayout") or ec:WaitForChild("appLayout", 30)
+if not app then
+	return
+end
+
+local Run = game:GetService("RunService")
+
 local live = true
 local cons = {}
-local done = setmetatable({}, { __mode = "k" })
-local pend = setmetatable({}, { __mode = "k" })
+local contCons = {}
 
-local function bind(sig, fn)
+local curWin
+local curCont
+local tok = 0
+
+local gen = 1
+local seen = setmetatable({}, { __mode = "k" })
+local queued = setmetatable({}, { __mode = "k" })
+
+local qi = 1
+local qn = 0
+local qRow = {}
+local qTry = {}
+local qAt = {}
+
+local dly = {0.04, 0.12, 0.3, 0.7}
+
+local function bind(sig, fn, bucket)
 	local c = sig:Connect(fn)
-	cons[#cons + 1] = c
+	local t = bucket or cons
+	t[#t + 1] = c
 	return c
+end
+
+local function clearBucket(t)
+	for i = #t, 1, -1 do
+		local c = t[i]
+		if c then
+			c:Disconnect()
+		end
+		t[i] = nil
+	end
 end
 
 local function stop()
@@ -68,18 +101,11 @@ local function stop()
 		return
 	end
 	live = false
-	for i = #cons, 1, -1 do
-		local c = cons[i]
-		if c then
-			c:Disconnect()
-		end
-		cons[i] = nil
-	end
-	table.clear(done)
-	table.clear(pend)
+	clearBucket(contCons)
+	clearBucket(cons)
 end
 
-local function txtOf(lbl)
+local function txt(lbl)
 	local ok, v = pcall(function()
 		return lbl.ContentText
 	end)
@@ -93,109 +119,205 @@ local function txtOf(lbl)
 	return ""
 end
 
-local function isLockTxt(s)
+local function isLock(s)
 	return s:match("^%s*🔒%s*:") ~= nil
 end
 
-local function getRow(body)
-	local p = body
-	for _ = 1, 8 do
-		if not p or p == ec then
-			break
-		end
-
-		local pr = p.Parent
-		if not pr then
-			break
-		end
-
-		if pr.Name == "RCTScrollContentView" and p:IsA("GuiObject") then
-			return p
-		end
-
-		if pr.Name == "TextMessage" then
-			local row = pr.Parent
-			if row and row:IsA("GuiObject") then
-				return row
-			end
-		end
-
-		p = pr
+local function markSeen(a, b)
+	seen[a] = gen
+	if b then
+		seen[b] = gen
 	end
-	return body
 end
 
-local function hide(body)
-	if not live or not body or not body.Parent then
+local function enqueue(row, tries, delay)
+	if not live or not row or queued[row] then
+		return
+	end
+	qn = qn + 1
+	qRow[qn] = row
+	qTry[qn] = tries or 0
+	qAt[qn] = os.clock() + (delay or 0)
+	queued[row] = true
+end
+
+local function packQ()
+	local nr = {}
+	local nt = {}
+	local na = {}
+	local n = 0
+	for i = qi, qn do
+		local row = qRow[i]
+		if row ~= nil then
+			n = n + 1
+			nr[n] = row
+			nt[n] = qTry[i]
+			na[n] = qAt[i]
+		end
+	end
+	qRow = nr
+	qTry = nt
+	qAt = na
+	qi = 1
+	qn = n
+end
+
+local function hideRow(row)
+	if not live or not row or not row.Parent then
 		return true
 	end
-	if not body:IsA("TextLabel") or body.Name ~= "BodyText" then
-		return true
-	end
-	if done[body] then
-		return true
-	end
-	if not body:IsDescendantOf(ec) then
+	if seen[row] == gen then
 		return true
 	end
 
-	local s = txtOf(body)
-	if s == "" or not isLockTxt(s) then
+	local tm = row:FindFirstChild("TextMessage")
+	if not tm then
 		return false
 	end
 
-	local row = getRow(body)
-	if row and row:IsA("GuiObject") and row.Parent then
-		row.Visible = false
-		done[row] = true
-	else
-		body.Visible = false
+	local body = tm:FindFirstChild("BodyText")
+	if not body or not body:IsA("TextLabel") then
+		return false
 	end
 
-	done[body] = true
+	if seen[body] == gen then
+		markSeen(row, body)
+		return true
+	end
+
+	local s = txt(body)
+	if s == "" then
+		return false
+	end
+
+	if isLock(s) then
+		if row:IsA("GuiObject") and row.Visible then
+			row.Visible = false
+		elseif body.Visible then
+			body.Visible = false
+		end
+	end
+
+	markSeen(row, body)
 	return true
 end
 
-local function sched(body)
-	if not live or not body or pend[body] or done[body] then
-		return
-	end
-	if not body:IsA("TextLabel") or body.Name ~= "BodyText" then
+local function clearCont()
+	clearBucket(contCons)
+	curCont = nil
+end
+
+local function hookCont(cont)
+	if not live or not cont or curCont == cont then
 		return
 	end
 
-	pend[body] = true
+	clearCont()
+	curCont = cont
 
-	task.spawn(function()
-		local waits = {0, 0.05, 0.15, 0.35, 0.75}
-		for i = 1, #waits do
-			local dt = waits[i]
-			if dt > 0 then
-				task.wait(dt)
-			end
-			if not live or not body or not body.Parent or done[body] then
-				break
-			end
-			if hide(body) then
-				break
+	for _, ch in ipairs(cont:GetChildren()) do
+		enqueue(ch, 0, 0)
+	end
+
+	bind(cont.ChildAdded, function(ch)
+		if not live or curCont ~= cont then
+			return
+		end
+		enqueue(ch, 0, 0)
+	end, contCons)
+
+	bind(cont.AncestryChanged, function(_, par)
+		if par == nil and curCont == cont then
+			clearCont()
+			if curWin and curWin.Parent then
+				tok = tok + 1
+				local myTok = tok
+				task.spawn(function()
+					local win = curWin
+					if not win or not win.Parent then
+						return
+					end
+
+					local a = win:FindFirstChild("scrollingView") or win:WaitForChild("scrollingView", 10)
+					if not a or myTok ~= tok or curWin ~= win or not live then
+						return
+					end
+
+					local b = a:FindFirstChild("bottomLockedScrollView") or a:WaitForChild("bottomLockedScrollView", 10)
+					if not b or myTok ~= tok or curWin ~= win or not live then
+						return
+					end
+
+					local c = b:FindFirstChild("RCTScrollView") or b:WaitForChild("RCTScrollView", 10)
+					if not c or myTok ~= tok or curWin ~= win or not live then
+						return
+					end
+
+					local d = c:FindFirstChild("RCTScrollContentView") or c:WaitForChild("RCTScrollContentView", 10)
+					if not d or myTok ~= tok or curWin ~= win or not live then
+						return
+					end
+
+					hookCont(d)
+				end)
 			end
 		end
-		pend[body] = nil
+	end, contCons)
+end
+
+local function useWin(win)
+	if not live or not win then
+		return
+	end
+
+	curWin = win
+	tok = tok + 1
+	local myTok = tok
+
+	task.spawn(function()
+		local a = win:FindFirstChild("scrollingView") or win:WaitForChild("scrollingView", 10)
+		if not a or myTok ~= tok or curWin ~= win or not live then
+			return
+		end
+
+		local b = a:FindFirstChild("bottomLockedScrollView") or a:WaitForChild("bottomLockedScrollView", 10)
+		if not b or myTok ~= tok or curWin ~= win or not live then
+			return
+		end
+
+		local c = b:FindFirstChild("RCTScrollView") or b:WaitForChild("RCTScrollView", 10)
+		if not c or myTok ~= tok or curWin ~= win or not live then
+			return
+		end
+
+		local d = c:FindFirstChild("RCTScrollContentView") or c:WaitForChild("RCTScrollContentView", 10)
+		if not d or myTok ~= tok or curWin ~= win or not live then
+			return
+		end
+
+		hookCont(d)
 	end)
 end
 
-for _, inst in ipairs(ec:GetDescendants()) do
-	if inst.Name == "BodyText" and inst:IsA("TextLabel") then
-		sched(inst)
-	end
+local win = app:FindFirstChild("chatWindow")
+if win then
+	useWin(win)
 end
 
-bind(ec.DescendantAdded, function(inst)
+bind(app.ChildAdded, function(ch)
 	if not live then
 		return
 	end
-	if inst.Name == "BodyText" and inst:IsA("TextLabel") then
-		sched(inst)
+	if ch.Name == "chatWindow" then
+		useWin(ch)
+	end
+end)
+
+bind(app.ChildRemoved, function(ch)
+	if ch == curWin then
+		curWin = nil
+		tok = tok + 1
+		clearCont()
 	end
 end)
 
@@ -205,12 +327,57 @@ bind(ec.AncestryChanged, function(_, par)
 	end
 end)
 
+bind(Run.Heartbeat, function()
+	if not live then
+		return
+	end
+
+	local t0 = os.clock()
+	local now = t0
+	local n = 0
+
+	while qi <= qn and n < 14 and os.clock() - t0 < 0.0015 do
+		local row = qRow[qi]
+		local tries = qTry[qi]
+		local at = qAt[qi]
+
+		qRow[qi] = nil
+		qTry[qi] = nil
+		qAt[qi] = nil
+		qi = qi + 1
+		n = n + 1
+
+		if row then
+			queued[row] = nil
+		end
+
+		if row and row.Parent then
+			if at > now then
+				enqueue(row, tries, at - now)
+			else
+				local ok = hideRow(row)
+				if not ok and tries < #dly then
+					enqueue(row, tries + 1, dly[tries + 1])
+				end
+			end
+		end
+	end
+
+	if qi > 128 and qi > qn / 2 then
+		packQ()
+	end
+end))
+
 task.spawn(function()
 	while live do
 		task.wait(300)
 		if not live then
 			break
 		end
-		table.clear(done)
+		gen = gen + 1
+		if gen > 2048 then
+			gen = 1
+			seen = setmetatable({}, { __mode = "k" })
+		end
 	end
 end)

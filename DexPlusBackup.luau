@@ -1139,23 +1139,38 @@ Main = (function()
 		env.delfolder = delfolder
 		env.listfiles = listfiles
 		env.loadfile = loadfile
-		env.saveinstance = saveinstance or (function()
-			--warn("No built-in saveinstance exists, using SynSaveInstance and wrapper...")
+		env.native_saveinstance = saveinstance
+		env.saveinstance = (function()
 			if __lt.cs("RunService", cloneref):IsStudio() then return function() error("Cannot run in Roblox Studio!") end end
+
+			local cacheHost = (getgenv and getgenv()) or _G
+			local cached = type(cacheHost) == "table" and rawget(cacheHost, "__dex_ussi_saveinstance")
+			if type(cached) == "function" then
+				return cached
+			end
+
 			local Params = {
-				RepoURL = "https://raw.githubusercontent.com/luau/SynSaveInstance/main/",
+				RepoURL = "https://raw.githubusercontent.com/luau/UniversalSynSaveInstance/main/",
 				SSI = "saveinstance",
 			}
 			local synsaveinstance = loadstring(oldgame:HttpGet(Params.RepoURL .. Params.SSI .. ".luau", true), Params.SSI)()
 
 			local function wrappedsaveinstance(obj, filepath, options)
-				options["FilePath"] = filepath
-				--options["ReadMe"] = false
-				options["Object"] = obj
-				return synsaveinstance(options)
+				local finalOptions = {}
+				if type(options) == "table" then
+					for key, value in pairs(options) do
+						finalOptions[key] = value
+					end
+				end
+				finalOptions.FilePath = filepath
+				finalOptions.Object = obj
+				return synsaveinstance(finalOptions)
 			end
 
-			getgenv().saveinstance = wrappedsaveinstance
+			if type(cacheHost) == "table" then
+				rawset(cacheHost, "__dex_ussi_saveinstance", wrappedsaveinstance)
+				rawset(cacheHost, "saveinstance", wrappedsaveinstance)
+			end
 			return wrappedsaveinstance
 		end)()
 

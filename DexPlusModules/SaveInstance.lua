@@ -117,6 +117,39 @@ local function main()
 		NotCreatableFixes = {"Player", "PlayerScripts", "PlayerGui", "TouchTransmitter"}
 	}
 	local ExtraOptionsJson = ""
+	local cloneOptions
+
+	local function loadPersistedConfig()
+		local savedState = Settings and Settings.SaveInstance
+		if type(savedState) ~= "table" then
+			return
+		end
+
+		local savedOptions = savedState.Options
+		if type(savedOptions) == "table" then
+			for key, value in pairs(savedOptions) do
+				if SaveInstanceArgs[key] ~= nil then
+					SaveInstanceArgs[key] = value
+				end
+			end
+		end
+
+		if type(savedState.ExtraOptionsJson) == "string" then
+			ExtraOptionsJson = savedState.ExtraOptionsJson
+		end
+	end
+
+	local function persistSaveConfig()
+		Settings.SaveInstance = Settings.SaveInstance or {}
+		Settings.SaveInstance.Options = cloneOptions(SaveInstanceArgs)
+		Settings.SaveInstance.ExtraOptionsJson = ExtraOptionsJson
+
+		if Main and Main.SaveCurrentSettings then
+			pcall(Main.SaveCurrentSettings)
+		end
+	end
+
+	loadPersistedConfig()
 	
 	local function AddCheckbox(title, default)
 		local frame = Lib.Frame.new()
@@ -277,7 +310,7 @@ local function main()
 		return result
 	end
 
-	local function cloneOptions(options)
+	cloneOptions = function(options)
 		local cloned = {}
 		for key, value in pairs(options) do
 			if type(value) == "table" then
@@ -377,46 +410,55 @@ local function main()
 		local SafeMode = AddCheckbox("Safe Mode", SaveInstanceArgs.SafeMode)
 		SafeMode.OnInput:Connect(function()
 			SaveInstanceArgs.SafeMode = SafeMode.Toggled
+			persistSaveConfig()
 		end)
 
 		local KillAllScripts = AddCheckbox("Kill All Scripts", SaveInstanceArgs.KillAllScripts)
 		KillAllScripts.OnInput:Connect(function()
 			SaveInstanceArgs.KillAllScripts = KillAllScripts.Toggled
+			persistSaveConfig()
 		end)
 
 		local BoostFPS = AddCheckbox("Boost FPS", SaveInstanceArgs.BoostFPS)
 		BoostFPS.OnInput:Connect(function()
 			SaveInstanceArgs.BoostFPS = BoostFPS.Toggled
+			persistSaveConfig()
 		end)
 
 		local AntiIdle = AddCheckbox("Anti Idle", SaveInstanceArgs.AntiIdle)
 		AntiIdle.OnInput:Connect(function()
 			SaveInstanceArgs.AntiIdle = AntiIdle.Toggled
+			persistSaveConfig()
 		end)
 
 		local ShutdownWhenDone = AddCheckbox("Shutdown When Done", SaveInstanceArgs.ShutdownWhenDone)
 		ShutdownWhenDone.OnInput:Connect(function()
 			SaveInstanceArgs.ShutdownWhenDone = ShutdownWhenDone.Toggled
+			persistSaveConfig()
 		end)
 
 		local ShowStat = AddCheckbox("Show Status", SaveInstanceArgs.ShowStatus)
 		ShowStat.OnInput:Connect(function()
 			SaveInstanceArgs.ShowStatus = ShowStat.Toggled
+			persistSaveConfig()
 		end)
 
 		local ReadMe = AddCheckbox("Write ReadMe", SaveInstanceArgs.ReadMe)
 		ReadMe.OnInput:Connect(function()
 			SaveInstanceArgs.ReadMe = ReadMe.Toggled
+			persistSaveConfig()
 		end)
 
 		local DebugMode = AddCheckbox("Debug Mode", SaveInstanceArgs.__DEBUG_MODE)
 		DebugMode.OnInput:Connect(function()
 			SaveInstanceArgs.__DEBUG_MODE = DebugMode.Toggled
+			persistSaveConfig()
 		end)
 
 		local Anonymous = AddCheckbox("Anonymous", SaveInstanceArgs.Anonymous)
 		Anonymous.OnInput:Connect(function()
 			SaveInstanceArgs.Anonymous = Anonymous.Toggled
+			persistSaveConfig()
 		end)
 
 		AddSeperator("Decompile")
@@ -424,46 +466,55 @@ local function main()
 		local Mode = AddDropdown("Save Mode", {"optimized", "full", "scripts"}, SaveInstanceArgs.mode, false, 90)
 		Mode.OnSelect:Connect(function()
 			SaveInstanceArgs.mode = Mode.Selected or "optimized"
+			persistSaveConfig()
 		end)
 
 		local Decompile = AddCheckbox("Decompile Scripts (LocalScript and ModuleScript)", SaveInstanceArgs.Decompile)
 		Decompile.OnInput:Connect(function()
 			SaveInstanceArgs.Decompile = Decompile.Toggled
+			persistSaveConfig()
 		end)
 
 		local ScriptCache = AddCheckbox("Use Script Cache", SaveInstanceArgs.scriptcache)
 		ScriptCache.OnInput:Connect(function()
 			SaveInstanceArgs.scriptcache = ScriptCache.Toggled
+			persistSaveConfig()
 		end)
 		
 		local decompileTimeout = AddTextbox("Decompile Timeout (s)", SaveInstanceArgs.DecompileTimeout, 15)
 		decompileTimeout.TextBox.FocusLost:Connect(function()
 			SaveInstanceArgs.DecompileTimeout = tonumber(decompileTimeout.TextBox.Text)
+			persistSaveConfig()
 		end)
 
 		local DecompileJobless = AddCheckbox("Decompile Jobless", SaveInstanceArgs.DecompileJobless)
 		DecompileJobless.OnInput:Connect(function()
 			SaveInstanceArgs.DecompileJobless = DecompileJobless.Toggled
+			persistSaveConfig()
 		end)
 
 		local SaveBytecode = AddCheckbox("Save Bytecode", SaveInstanceArgs.SaveBytecode)
 		SaveBytecode.OnInput:Connect(function()
 			SaveInstanceArgs.SaveBytecode = SaveBytecode.Toggled
+			persistSaveConfig()
 		end)
 		
 		local decompileIgnore = AddTextbox("Decompile Ignore", table.concat(SaveInstanceArgs.DecompileIgnore, ","), 50)
 		decompileIgnore.TextBox.FocusLost:Connect(function()
 			SaveInstanceArgs.DecompileIgnore = parseSimpleList(decompileIgnore.TextBox.Text)
+			persistSaveConfig()
 		end)
 
 		local IgnoreList = AddTextbox("Ignore List", table.concat(SaveInstanceArgs.IgnoreList, ","), 50)
 		IgnoreList.TextBox.FocusLost:Connect(function()
 			SaveInstanceArgs.IgnoreList = parseSimpleList(IgnoreList.TextBox.Text)
+			persistSaveConfig()
 		end)
 
 		local IgnoreProperties = AddTextbox("Ignore Properties", table.concat(SaveInstanceArgs.IgnoreProperties, ","), 70)
 		IgnoreProperties.TextBox.FocusLost:Connect(function()
 			SaveInstanceArgs.IgnoreProperties = parseSimpleList(IgnoreProperties.TextBox.Text)
+			persistSaveConfig()
 		end)
 
 		AddSeperator("Instances")
@@ -471,96 +522,115 @@ local function main()
 		local saveCacheInterval = AddTextbox("Save Cache Interval", SaveInstanceArgs.SaveCacheInterval, 55)
 		saveCacheInterval.TextBox.FocusLost:Connect(function()
 			SaveInstanceArgs.SaveCacheInterval = tonumber(saveCacheInterval.TextBox.Text)
+			persistSaveConfig()
 		end)
 
 		local AvoidFileOverwrite = AddCheckbox("Avoid File Overwrite", SaveInstanceArgs.AvoidFileOverwrite)
 		AvoidFileOverwrite.OnInput:Connect(function()
 			SaveInstanceArgs.AvoidFileOverwrite = AvoidFileOverwrite.Toggled
+			persistSaveConfig()
 		end)
 
 		local NilObj = AddCheckbox("Save Nil Instances", SaveInstanceArgs.NilInstances)
 		NilObj.OnInput:Connect(function()
 			SaveInstanceArgs.NilInstances = NilObj.Toggled
+			persistSaveConfig()
 		end)
 
 		local IgnoreDefaultProperties = AddCheckbox("Ignore Default Properties", SaveInstanceArgs.IgnoreDefaultProperties)
 		IgnoreDefaultProperties.OnInput:Connect(function()
 			SaveInstanceArgs.IgnoreDefaultProperties = IgnoreDefaultProperties.Toggled
+			persistSaveConfig()
 		end)
 
 		local IgnoreNotArchivable = AddCheckbox("Ignore Not Archivable", SaveInstanceArgs.IgnoreNotArchivable)
 		IgnoreNotArchivable.OnInput:Connect(function()
 			SaveInstanceArgs.IgnoreNotArchivable = IgnoreNotArchivable.Toggled
+			persistSaveConfig()
 		end)
 
 		local IgnorePropsScriptsMode = AddCheckbox("Ignore Non-Script Props In Scripts Mode", SaveInstanceArgs.IgnorePropertiesOfNotScriptsOnScriptsMode)
 		IgnorePropsScriptsMode.OnInput:Connect(function()
 			SaveInstanceArgs.IgnorePropertiesOfNotScriptsOnScriptsMode = IgnorePropsScriptsMode.Toggled
+			persistSaveConfig()
 		end)
 
 		local IgnoreSpecialProperties = AddCheckbox("Ignore Special Properties", SaveInstanceArgs.IgnoreSpecialProperties)
 		IgnoreSpecialProperties.OnInput:Connect(function()
 			SaveInstanceArgs.IgnoreSpecialProperties = IgnoreSpecialProperties.Toggled
+			persistSaveConfig()
 		end)
 
 		local IsolateStarterPlr = AddCheckbox("Isolate StarterPlayer", SaveInstanceArgs.IsolateStarterPlayer)
 		IsolateStarterPlr.OnInput:Connect(function()
 			SaveInstanceArgs.IsolateStarterPlayer = IsolateStarterPlr.Toggled
+			persistSaveConfig()
 		end)
 
 		local IsolatePlayers = AddCheckbox("Isolate Players", SaveInstanceArgs.IsolatePlayers)
 		IsolatePlayers.OnInput:Connect(function()
 			SaveInstanceArgs.IsolatePlayers = IsolatePlayers.Toggled
+			persistSaveConfig()
 		end)
 
 		local IsolateLocalPlayer = AddCheckbox("Isolate Local Player", SaveInstanceArgs.IsolateLocalPlayer)
 		IsolateLocalPlayer.OnInput:Connect(function()
 			SaveInstanceArgs.IsolateLocalPlayer = IsolateLocalPlayer.Toggled
+			persistSaveConfig()
 		end)
 
 		local IsolateLocalPlayerCharacter = AddCheckbox("Isolate Local Player Character", SaveInstanceArgs.IsolateLocalPlayerCharacter)
 		IsolateLocalPlayerCharacter.OnInput:Connect(function()
 			SaveInstanceArgs.IsolateLocalPlayerCharacter = IsolateLocalPlayerCharacter.Toggled
+			persistSaveConfig()
 		end)
 
 		local SavePlayerCharacters = AddCheckbox("Save Player Characters", SaveInstanceArgs.SavePlayerCharacters)
 		SavePlayerCharacters.OnInput:Connect(function()
 			SaveInstanceArgs.SavePlayerCharacters = SavePlayerCharacters.Toggled
+			persistSaveConfig()
 		end)
 
 		local SaveNotCreatable = AddCheckbox("Save Not Creatable", SaveInstanceArgs.SaveNotCreatable)
 		SaveNotCreatable.OnInput:Connect(function()
 			SaveInstanceArgs.SaveNotCreatable = SaveNotCreatable.Toggled
+			persistSaveConfig()
 		end)
 
 		local AlternativeWritefile = AddCheckbox("Alternative Writefile", SaveInstanceArgs.AlternativeWritefile)
 		AlternativeWritefile.OnInput:Connect(function()
 			SaveInstanceArgs.AlternativeWritefile = AlternativeWritefile.Toggled
+			persistSaveConfig()
 		end)
 
 		local IgnoreDefaultPlayerScripts = AddCheckbox("Ignore Default PlayerScripts", SaveInstanceArgs.IgnoreDefaultPlayerScripts)
 		IgnoreDefaultPlayerScripts.OnInput:Connect(function()
 			SaveInstanceArgs.IgnoreDefaultPlayerScripts = IgnoreDefaultPlayerScripts.Toggled
+			persistSaveConfig()
 		end)
 
 		local IgnoreSharedStrings = AddCheckbox("Ignore SharedStrings", SaveInstanceArgs.IgnoreSharedStrings)
 		IgnoreSharedStrings.OnInput:Connect(function()
 			SaveInstanceArgs.IgnoreSharedStrings = IgnoreSharedStrings.Toggled
+			persistSaveConfig()
 		end)
 
 		local SharedStringOverwrite = AddCheckbox("SharedString Overwrite", SaveInstanceArgs.SharedStringOverwrite)
 		SharedStringOverwrite.OnInput:Connect(function()
 			SaveInstanceArgs.SharedStringOverwrite = SharedStringOverwrite.Toggled
+			persistSaveConfig()
 		end)
 
 		local TreatUnionsAsParts = AddCheckbox("Treat Unions As Parts", SaveInstanceArgs.TreatUnionsAsParts)
 		TreatUnionsAsParts.OnInput:Connect(function()
 			SaveInstanceArgs.TreatUnionsAsParts = TreatUnionsAsParts.Toggled
+			persistSaveConfig()
 		end)
 
 		local NotCreatableFixes = AddTextbox("Not Creatable Fixes", table.concat(SaveInstanceArgs.NotCreatableFixes, ","), 90)
 		NotCreatableFixes.TextBox.FocusLost:Connect(function()
 			SaveInstanceArgs.NotCreatableFixes = parseSimpleList(NotCreatableFixes.TextBox.Text)
+			persistSaveConfig()
 		end)
 
 		AddSeperator("File")
@@ -589,6 +659,7 @@ local function main()
 		local ExtraOptions = AddTextbox("Extra Options JSON", ExtraOptionsJson, 180)
 		ExtraOptions.TextBox.FocusLost:Connect(function()
 			ExtraOptionsJson = tostring(ExtraOptions.TextBox.Text or ""):gsub("^%s+", ""):gsub("%s+$", "")
+			persistSaveConfig()
 		end)
 		
 		
@@ -627,6 +698,7 @@ local function main()
 		end)
 		Button.MouseButton1Click:Connect(function()
 			local fileName = Main.FormatFileName(FilenameTextBox.TextBox.Text)
+			persistSaveConfig()
 			local saveOptions, optionsErr = buildSaveOptions()
 			if not saveOptions then
 				window:SetTitle("Save Instance - "..tostring(optionsErr))

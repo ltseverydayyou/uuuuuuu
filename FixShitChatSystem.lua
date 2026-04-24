@@ -54,6 +54,7 @@ local qn = 0
 local qrow = {}
 local qtry = {}
 local qdue = {}
+local fullScanAt = 0
 
 local dly = {0.03, 0.08, 0.18, 0.4}
 
@@ -102,6 +103,16 @@ local function stop()
 	for row in next, wmap do
 		unwatch(row)
 	end
+
+	win = nil
+	cont = nil
+	tok = tok + 1
+	qrow = {}
+	qtry = {}
+	qdue = {}
+	qh = 1
+	qn = 0
+	fullScanAt = 0
 
 	if rawget(root, "__chatLockFix") == st then
 		root.__chatLockFix = nil
@@ -161,33 +172,141 @@ local function ctext(lbl)
 	return ""
 end
 
-local function shouldHide(pre, body)
-	local p = pre and pre.Text or ""
-	if p == "🔒 :" or p == "🔒:" then
+local function plain(s)
+	if type(s) ~= "string" or s == "" then
+		return ""
+	end
+
+	s = s:gsub("<br%s*/?>", " ")
+	s = s:gsub("</?[^>]->", "")
+	s = s:gsub("&lt;", "<")
+	s = s:gsub("&gt;", ">")
+	s = s:gsub("&amp;", "&")
+	s = s:gsub("&quot;", "\"")
+	s = s:gsub("&#39;", "'")
+	s = s:gsub("[%z\1-\31\127]", " ")
+	s = s:gsub("%s+", " ")
+	s = s:gsub("^%s+", "")
+	s = s:gsub("%s+$", "")
+	return s
+end
+
+local function isTextNode(inst)
+	return inst
+		and (inst:IsA("TextLabel") or inst:IsA("TextButton") or inst:IsA("TextBox"))
+end
+
+local function fontFamily(inst)
+	local ok, family = pcall(function()
+		local ff = inst.FontFace
+		return ff and ff.Family
+	end)
+	if ok and type(family) == "string" then
+		return family
+	end
+	return ""
+end
+
+local function isLockTextNode(inst)
+	if not isTextNode(inst) then
+		return false
+	end
+
+	local text = plain(inst.Text)
+	local content = plain(ctext(inst))
+	if text:find("🔒", 1, true) or content:find("🔒", 1, true) then
 		return true
 	end
 
-	local b = body.Text or ""
-	if b == "" then
-		b = ctext(body)
-		if b == "" then
-			return nil
+	local lowerText = text:lower()
+	local lowerContent = content:lower()
+	if lowerText ~= "lock" and lowerContent ~= "lock" then
+		return false
+	end
+
+	local family = fontFamily(inst)
+	return family:find("BuilderIcons", 1, true) ~= nil
+end
+
+local function shouldHide(row)
+	if not row then
+		return nil
+	end
+
+	if isLockTextNode(row) then
+		return true
+	end
+
+	for _, inst in ipairs(row:GetDescendants()) do
+		if isLockTextNode(inst) then
+			return true
 		end
 	end
 
-	if b:find("Only people in similar age groups", 1, true) then
-		return true
-	end
-
-	if b:find("trusted friends can chat with you", 1, true) then
-		return true
-	end
-
-	if b:find("🔒 :", 1, true) or b:find("🔒:", 1, true) then
-		return true
-	end
-
 	return false
+end
+
+local function rowFromInst(inst)
+	local node = inst
+	local lastGui
+
+	while node and node ~= ec do
+		if node:IsA("GuiObject") then
+			lastGui = node
+		end
+
+		local par = node.Parent
+		if not par then
+			break
+		end
+
+		if par == cont or par.Name == "RCTScrollContentView" then
+			if node:IsA("GuiObject") then
+				return node
+			end
+			return lastGui
+		end
+
+		if node.Name == "TextMessage" and par:IsA("GuiObject") then
+			return par
+		end
+
+		node = par
+	end
+
+	return lastGui
+end
+
+local function queueInst(inst)
+	if not live or not inst then
+		return
+	end
+
+	local row = rowFromInst(inst)
+	if row then
+		push(row, 0, 0)
+	end
+end
+
+local function shouldQueue(inst)
+	if not inst then
+		return false
+	end
+
+	if isTextNode(inst) then
+		return true
+	end
+
+	if not inst:IsA("GuiObject") then
+		return false
+	end
+
+	if inst.Name == "TextMessage" then
+		return true
+	end
+
+	local par = inst.Parent
+	return par and (par == cont or par.Name == "RCTScrollContentView")
 end
 
 local function keepHidden(row, body)
@@ -252,17 +371,8 @@ local function scan(row)
 	end
 
 	local msg = row:FindFirstChild("TextMessage")
-	if not msg then
-		return false
-	end
-
-	local pre = msg:FindFirstChild("PrefixText")
-	local body = msg:FindFirstChild("BodyText")
-	if not body or not body:IsA("TextLabel") then
-		return false
-	end
-
-	local bad = shouldHide(pre, body)
+	local body = msg and msg:FindFirstChild("BodyText")
+	local bad = shouldHide(row)
 	if bad == nil then
 		return false
 	end
@@ -299,11 +409,26 @@ local function hookCont(nc)
 		push(ch, 0, 0)
 	end, cbag)
 
+	bind(nc.DescendantAdded, function(inst)
+		if not live or cont ~= nc then
+			return
+		end
+		if shouldQueue(inst) then
+			queueInst(inst)
+		end
+	end, cbag)
+
 	bind(nc.AncestryChanged, function(_, par)
 		if par == nil and cont == nc then
 			clearCont()
 		end
 	end, cbag)
+
+	for _, inst in ipairs(nc:GetDescendants()) do
+		if shouldQueue(inst) then
+			queueInst(inst)
+		end
+	end
 end
 
 local function walkWin(nw, id)
@@ -318,12 +443,15 @@ local function walkWin(nw, id)
 			return
 		end
 
-		local c = b:FindFirstChild("RCTScrollView") or b:WaitForChild("RCTScrollView", 10)
-		if not c or not live or tok ~= id or win ~= nw then
-			return
+		local d = b:FindFirstChild("scrollView")
+		if not d then
+			local c = b:FindFirstChild("RCTScrollView") or b:WaitForChild("RCTScrollView", 10)
+			if not c or not live or tok ~= id or win ~= nw then
+				return
+			end
+			d = c:FindFirstChild("RCTScrollContentView") or c:WaitForChild("RCTScrollContentView", 10)
 		end
 
-		local d = c:FindFirstChild("RCTScrollContentView") or c:WaitForChild("RCTScrollContentView", 10)
 		if not d or not live or tok ~= id or win ~= nw then
 			return
 		end
@@ -374,8 +502,18 @@ bind(run.Heartbeat, function()
 		return
 	end
 
+	local now = os.clock()
+	if cont and now >= fullScanAt then
+		fullScanAt = now + 0.2
+		for _, row in ipairs(cont:GetChildren()) do
+			if row and row:IsA("GuiObject") then
+				scan(row)
+			end
+		end
+	end
+
 	local t0 = os.clock()
-	local now = t0
+	now = t0
 	local n = 0
 
 	while qh <= qn and n < 10 and os.clock() - t0 < 0.0012 do

@@ -1486,7 +1486,13 @@ local function main()
 		context:Register("SAVE_INST",{Name = "Save to File", IconMap = Explorer.MiscIcons, Icon = "Save", OnClick = function()
 			local sList = selection.List
 			if #sList == 1 then
-				Lib.SaveAsPrompt("Place_"..game.PlaceId.."_"..sList[1].Obj.ClassName.."_"..sList[1].Obj.Name.."_"..os.time(), function(filename)
+				local saveName = Main.FormatFileName(Settings.Files.ObjectSaveNameFormat, {
+					name = sList[1].Obj.Name,
+					className = sList[1].Obj.ClassName,
+					index = 1,
+					count = 1
+				})
+				Lib.SaveAsPrompt(saveName, function(filename)
 					env.saveinstance(sList[1].Obj, filename, {
 						Decompile = true,
 						RemovePlayerCharacters = false
@@ -1494,9 +1500,13 @@ local function main()
 				end)
 			elseif #sList > 1 then
 				for i = 1,#sList do
-					-- sList[i].Obj.Name.." ("..sList[1].Obj.ClassName..")"
-					-- "Place_"..game.PlaceId.."_"..sList[1].Obj.ClassName.."_"..sList[i].Obj.Name.."_"..os.time()
-					Lib.SaveAsPrompt("Place_"..game.PlaceId.."_"..sList[i].Obj.ClassName.."_"..sList[i].Obj.Name.."_"..os.time(), function(filename)
+					local saveName = Main.FormatFileName(Settings.Files.ObjectSaveNameFormat, {
+						name = sList[i].Obj.Name,
+						className = sList[i].Obj.ClassName,
+						index = i,
+						count = #sList
+					})
+					Lib.SaveAsPrompt(saveName, function(filename)
 						env.saveinstance(sList[i].Obj, filename, {
 							Decompile = true,
 							RemovePlayerCharacters = false

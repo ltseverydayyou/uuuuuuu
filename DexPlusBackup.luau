@@ -254,6 +254,11 @@ DefaultSettings = (function()
 			PreferDecompilerFallback = false,
 			ShinyDecompilerPort = 3000,
 		},
+		Files = {
+			_Recurse = true,
+			SaveInstanceNameFormat = "{placeName}_{timestamp}",
+			ObjectSaveNameFormat = "{className}_{name}_{timestamp}"
+		},
 		RemoteBlockWriteAttribute = false, -- writes attribute to remote instance if remote is blocked/unblocked
 		ClassIcon = "NewDark",
 		-- What available icons:
@@ -406,6 +411,8 @@ Main = (function()
 	}
 	Main.ThemeSettings = {}
 
+	Main.StartupModuleList = {"Explorer","Properties","ScriptViewer","Console","SaveInstance","ModelViewer"}
+	Main.DeferredModuleList = {"ThemeManager","SettingsWindow"}
 	Main.ModuleList = {"Explorer","Properties","ScriptViewer","Console","SaveInstance","ModelViewer","SettingsWindow","ThemeManager"}
 	Main.Elevated = false
 	Main.AllowDraggableOnMobile = true
@@ -635,6 +642,100 @@ Main = (function()
 		error(str)
 	end
 
+	Main.SanitizeFileNamePart = function(value, fallback)
+		value = tostring(value or "")
+		value = value:gsub("[%c\\/:*?\"<>|]", "_")
+		value = value:gsub("%s+", " ")
+		value = value:gsub("^%s+", ""):gsub("%s+$", "")
+
+		if value == "" then
+			return fallback or "Unnamed"
+		end
+
+		return value
+	end
+
+	Main.GetPlaceDisplayName = function()
+		if type(Main.PlaceDisplayName) == "string" and Main.PlaceDisplayName ~= "" then
+			return Main.PlaceDisplayName
+		end
+
+		local placeName = "UnknownPlace"
+		local marketplaceService = __lt.cs("MarketplaceService", cloneref)
+		local okInfo, info = pcall(marketplaceService.GetProductInfo, marketplaceService, game.PlaceId)
+		if okInfo and type(info) == "table" and type(info.Name) == "string" and info.Name ~= "" then
+			placeName = info.Name
+		end
+
+		Main.PlaceDisplayName = Main.SanitizeFileNamePart(placeName, "UnknownPlace")
+		return Main.PlaceDisplayName
+	end
+
+	Main.FormatFileName = function(template, extraTokens)
+		local formatText = tostring(template or "")
+		if formatText == "" then
+			formatText = "{placeName}_{timestamp}"
+		end
+
+		local tokens = {}
+		if type(extraTokens) == "table" then
+			for key, value in pairs(extraTokens) do
+				tokens[key] = value
+			end
+		end
+
+		if tokens.timestamp == nil then
+			tokens.timestamp = os.date("%d-%m-%Y_%H-%M-%S")
+		end
+		if tokens.date == nil then
+			tokens.date = os.date("%d-%m-%Y")
+		end
+		if tokens.time == nil then
+			tokens.time = os.date("%H-%M-%S")
+		end
+		if tokens.unix == nil then
+			tokens.unix = tostring(os.time())
+		end
+		if tokens.placeId == nil then
+			tokens.placeId = tostring(game.PlaceId)
+		end
+		if tokens.placeName == nil and formatText:find("{placeName}", 1, true) then
+			tokens.placeName = Main.GetPlaceDisplayName()
+		end
+		if tokens.name == nil and formatText:find("{name}", 1, true) then
+			tokens.name = "Instance"
+		end
+		if tokens.className == nil and formatText:find("{className}", 1, true) then
+			tokens.className = "Instance"
+		end
+		if tokens.index == nil and formatText:find("{index}", 1, true) then
+			tokens.index = 1
+		end
+		if tokens.count == nil and formatText:find("{count}", 1, true) then
+			tokens.count = 1
+		end
+		tokens.TIMESTAMP = tokens.TIMESTAMP or tokens.timestamp
+		tokens.DATE = tokens.DATE or tokens.date
+		tokens.TIME = tokens.TIME or tokens.time
+		tokens.UNIX = tokens.UNIX or tokens.unix
+		tokens.PLACEID = tokens.PLACEID or tokens.placeId
+		tokens.PLACENAME = tokens.PLACENAME or tokens.placeName
+		tokens.NAME = tokens.NAME or tokens.name
+		tokens.CLASSNAME = tokens.CLASSNAME or tokens.className
+		tokens.INDEX = tokens.INDEX or tokens.index
+		tokens.COUNT = tokens.COUNT or tokens.count
+
+		local resolved = formatText:gsub("{([%w_]+)}", function(token)
+			local value = tokens[token]
+			if value == nil then
+				return "{"..token.."}"
+			end
+			return Main.SanitizeFileNamePart(value, "Unnamed")
+		end)
+
+		return Main.SanitizeFileNamePart(resolved, "File_"..tostring(tokens.timestamp or os.time()))
+	end
+
 	Main.FetchRepoFile = function(path)
 		local branch = Main.GitRepoBranch or "main"
 		local apiUrl = ("https://api.github.com/repos/%s/contents/%s?ref=%s"):format(Main.GitRepoName, path, branch)
@@ -855,15 +956,7 @@ Main = (function()
 		return moduleData
 	end
 
-	Main.LoadModules = function()
-		for i,v in pairs(Main.ModuleList) do
-			local s,e = pcall(Main.LoadModule,v)
-			if not s then
-				Main.Error("FAILED LOADING " .. v .. " CAUSE " .. e)
-			end
-		end
-
-		-- Init Major Apps and define them in modules
+	Main.RefreshLoadedAppRefs = function()
 		Explorer = Apps.Explorer
 		Properties = Apps.Properties
 		ScriptViewer = Apps.ScriptViewer
@@ -874,8 +967,7 @@ Main = (function()
 		ThemeManager = Apps.ThemeManager
 		Notebook = Apps.Notebook
 
-		--SecretServicePanel = Apps.SecretServicePanel
-		local appTable = {
+		return {
 			Explorer = Explorer,
 			Properties = Properties,
 			ScriptViewer = ScriptViewer,
@@ -885,17 +977,53 @@ Main = (function()
 			SettingsWindow = SettingsWindow,
 			ThemeManager = ThemeManager,
 			Notebook = Notebook,
-
-			--SecretServicePanel = SecretServicePanel,
 		}
+	end
 
-		Main.AppControls.Lib.InitAfterMain(appTable)
-		for i,v in pairs(Main.ModuleList) do
-			local control = Main.AppControls[v]
-			if control then
-				control.InitAfterMain(appTable)
+	Main.SyncModuleDependencies = function()
+		local appTable = Main.RefreshLoadedAppRefs()
+
+		if Main.AppControls.Lib and type(Main.AppControls.Lib.InitAfterMain) == "function" then
+			Main.AppControls.Lib.InitAfterMain(appTable)
+		end
+
+		for _, control in pairs(Main.AppControls) do
+			if control and type(control.InitAfterMain) == "function" then
+				if control ~= Main.AppControls.Lib then
+					control.InitAfterMain(appTable)
+				end
 			end
 		end
+
+		return appTable
+	end
+
+	Main.LoadModules = function(moduleList)
+		local modulesToLoad = moduleList or Main.ModuleList
+		for _, v in ipairs(modulesToLoad) do
+			local s,e = pcall(Main.LoadModule,v)
+			if not s then
+				Main.Error("FAILED LOADING " .. v .. " CAUSE " .. e)
+			end
+		end
+
+		return Main.SyncModuleDependencies()
+	end
+
+	Main.InitAppModule = function(moduleData, moduleName)
+		if type(moduleData) ~= "table" or moduleData.__DexInitDone then
+			return moduleData
+		end
+
+		if type(moduleData.Init) == "function" then
+			local okInit, initErr = pcall(moduleData.Init)
+			if not okInit then
+				Main.Error("FAILED INITIALIZING " .. tostring(moduleName or "MODULE") .. " CAUSE " .. tostring(initErr))
+			end
+		end
+
+		moduleData.__DexInitDone = true
+		return moduleData
 	end
 
 	local function patchContextMenu(context)
@@ -1627,6 +1755,18 @@ Main = (function()
 			Settings.ScriptViewer.ShowMoreInfo = DefaultSettings.ScriptViewer.ShowMoreInfo
 		end
 
+		if type(Settings.Files) ~= "table" then
+			Settings.Files = {}
+		end
+		local files = Settings.Files
+		local defaultFiles = DefaultSettings and DefaultSettings.Files or {}
+		if type(files.SaveInstanceNameFormat) ~= "string" or files.SaveInstanceNameFormat == "" then
+			files.SaveInstanceNameFormat = defaultFiles.SaveInstanceNameFormat or "{placeName}_{timestamp}"
+		end
+		if type(files.ObjectSaveNameFormat) ~= "string" or files.ObjectSaveNameFormat == "" then
+			files.ObjectSaveNameFormat = defaultFiles.ObjectSaveNameFormat or "{className}_{name}_{timestamp}"
+		end
+
 		if type(Settings.RemoteBlockWriteAttribute) ~= "boolean" then
 			Settings.RemoteBlockWriteAttribute = DefaultSettings.RemoteBlockWriteAttribute
 		end
@@ -2351,6 +2491,74 @@ Main = (function()
 		return control
 	end
 
+	Main.UpdateSettingsButton = function()
+		local mainGui = Main.MainGui
+		if not mainGui or not mainGui:FindFirstChild("OpenButton") then
+			return
+		end
+
+		local settingsButton = mainGui.OpenButton.MainFrame.BottomFrame.Settings
+		local settingsWindow = SettingsWindow and SettingsWindow.Window
+		settingsButton.Visible = settingsWindow ~= nil
+
+		if settingsWindow and not Main.SettingsButtonBound then
+			Main.SettingsButtonBound = true
+			settingsButton.MouseButton1Click:Connect(function()
+				local activeWindow = SettingsWindow and SettingsWindow.Window
+				if not activeWindow then
+					return
+				end
+
+				if not activeWindow.Closed then
+					activeWindow:Hide()
+				else
+					activeWindow:Show()
+				end
+			end)
+		end
+	end
+
+	Main.RegisterDeferredApps = function()
+		Main.UpdateSettingsButton()
+
+		if ThemeManager and ThemeManager.Window and not Main.MenuApps["Theme Manager"] then
+			Main.CreateApp({Name = "Theme Manager", IconMap = Explorer and Explorer.LegacyClassIcons, Icon = 83, Window = ThemeManager.Window})
+		end
+	end
+
+	Main.LoadDeferredModules = function()
+		if Main.DeferredModulesStarted then
+			return
+		end
+		if not Main.MainGui then
+			return
+		end
+		Main.DeferredModulesStarted = true
+
+		for _, moduleName in ipairs(Main.DeferredModuleList or {}) do
+			if not Main.MainGui then
+				return
+			end
+
+			if not Apps[moduleName] then
+				local okLoad, loadErr = pcall(Main.LoadModules, {moduleName})
+				if not okLoad then
+					warn("[Dex] Failed loading deferred module '"..tostring(moduleName).."': "..tostring(loadErr))
+				end
+			end
+
+			local moduleData = Apps[moduleName]
+			if moduleData then
+				local okInit, initErr = pcall(Main.InitAppModule, moduleData, moduleName)
+				if not okInit then
+					warn("[Dex] Failed initializing deferred module '"..tostring(moduleName).."': "..tostring(initErr))
+				end
+			end
+		end
+
+		Main.RegisterDeferredApps()
+	end
+
 	Main.SetMainGuiOpen = function(val)
 		if not Main.MainGui or not Main.MainGui:FindFirstChild("OpenButton") then
 			return
@@ -2440,6 +2648,8 @@ Main = (function()
 		Main.AppControls = {}
 		Main.Plugins = {}
 		Main.MenuApps = {}
+		Main.SettingsButtonBound = false
+		Main.DeferredModulesStarted = false
 
 		Explorer = nil
 		Properties = nil
@@ -2564,18 +2774,8 @@ Main = (function()
 
 		local infoDexIntro, isInfoCD
 
-		if SettingsWindow and SettingsWindow.Window then
-			openButton.MainFrame.BottomFrame.Settings.Visible = true
-			openButton.MainFrame.BottomFrame.Settings.MouseButton1Click:Connect(function()
-				if not SettingsWindow.Window.Closed then
-					SettingsWindow.Window:Hide()
-				else
-					SettingsWindow.Window:Show()
-				end
-			end)
-		else
-			openButton.MainFrame.BottomFrame.Settings.Visible = false
-		end
+		openButton.MainFrame.BottomFrame.Settings.Visible = false
+		Main.UpdateSettingsButton()
 
 		openButton.MainFrame.BottomFrame.Information.MouseButton1Click:Connect(function()
 			local duration = 1
@@ -2654,9 +2854,7 @@ Main = (function()
 
 		Main.CreateApp({Name = "3D Viewer", IconMap = Explorer.LegacyClassIcons, Icon = 54, Window = ModelViewer.Window})
 
-		if ThemeManager and ThemeManager.Window then
-			Main.CreateApp({Name = "Theme Manager", IconMap = Explorer.LegacyClassIcons, Icon = 83, Window = ThemeManager.Window})
-		end
+		Main.RegisterDeferredApps()
 
 		for _, loadedPlugin in pairs(Main.Plugins) do
 			if loadedPlugin and loadedPlugin.Window then
@@ -2809,27 +3007,21 @@ Main = (function()
 		-- Load other modules
 		intro.SetProgress("Loading Modules",0.75)
 		Main.AppControls.Lib.InitDeps(Main.GetInitDeps()) -- Missing deps now available
-		Main.LoadModules()
+		Main.LoadModules(Main.StartupModuleList)
 		Main.ApplyPatches()
 		Lib.FastWait()
 
 		-- Init other modules
 		intro.SetProgress("Initializing Modules",0.9)
-		Explorer.Init()
+		Main.InitAppModule(Explorer, "Explorer")
 		if Explorer.SetAutoUpdateSearch then
 			pcall(Explorer.SetAutoUpdateSearch, Settings.Explorer.AutoUpdateSearch)
 		end
-		Properties.Init()
-		ScriptViewer.Init()
-		Console.Init()
-		SaveInstance.Init()
-		ModelViewer.Init()
-		if SettingsWindow and SettingsWindow.Init then
-			SettingsWindow.Init()
-		end
-		if ThemeManager and ThemeManager.Init then
-			ThemeManager.Init()
-		end
+		Main.InitAppModule(Properties, "Properties")
+		Main.InitAppModule(ScriptViewer, "ScriptViewer")
+		Main.InitAppModule(Console, "Console")
+		Main.InitAppModule(SaveInstance, "SaveInstance")
+		Main.InitAppModule(ModelViewer, "ModelViewer")
 
 		local listfilesFn = (env and env.listfiles) or listfiles
 		if env and env.readfile and type(listfilesFn) == "function" then
@@ -2916,6 +3108,10 @@ Main = (function()
 					Lib.Window.SetSideVisible(align, true)
 				end
 			end
+		end)
+
+		task.defer(function()
+			Main.LoadDeferredModules()
 		end)
 	end
 

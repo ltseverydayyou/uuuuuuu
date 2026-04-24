@@ -983,6 +983,31 @@ local function main()
 		end)
 
 		sectionAnchors.Files = AddSeperator("Files")
+		AddText("Filename tokens: {placeName} {placeId} {className} {name} {timestamp} {date} {time} {unix} {index} {count}")
+		AddText("Save Instance uses the place format. Explorer and Model Viewer 'Save to File' use the object format.")
+
+		local saveInstanceFormat = AddTextbox("Save Instance Name", Settings.Files.SaveInstanceNameFormat, 180)
+		saveInstanceFormat.FocusLost:Connect(function()
+			local value = tostring(saveInstanceFormat.Text or "")
+			if value == "" then
+				value = DefaultSettings.Files.SaveInstanceNameFormat
+			end
+			Settings.Files.SaveInstanceNameFormat = value
+			saveInstanceFormat.Text = value
+			persistSettings()
+		end)
+
+		local objectSaveFormat = AddTextbox("Object Save Name", Settings.Files.ObjectSaveNameFormat, 180)
+		objectSaveFormat.FocusLost:Connect(function()
+			local value = tostring(objectSaveFormat.Text or "")
+			if value == "" then
+				value = DefaultSettings.Files.ObjectSaveNameFormat
+			end
+			Settings.Files.ObjectSaveNameFormat = value
+			objectSaveFormat.Text = value
+			persistSettings()
+		end)
+
 		AddText("The restart button below saves settings, then reloads Dex.")
 
 		local saveSettingsButton = AddButton("Write Settings File", "Save", 70)

@@ -867,17 +867,6 @@ local function bind(signal, callback)
 	return connection
 end
 
-if PlayerMouse and PlayerMouse.Move then
-	bind(PlayerMouse.Move, function()
-		if not UserInputService.TouchEnabled then
-			local point = getMousePosition()
-			if point then
-				lastPointerPosition = point
-			end
-		end
-	end)
-end
-
 local function setToggleVisual(toggle, enabled)
 	toggle.fill.Visible = enabled
 	if toggle.circular then
@@ -1030,6 +1019,17 @@ local function getMousePosition()
 		end
 	end
 	return lastPointerPosition
+end
+
+if PlayerMouse and PlayerMouse.Move then
+	bind(PlayerMouse.Move, function()
+		if not UserInputService.TouchEnabled then
+			local point = getMousePosition()
+			if point then
+				lastPointerPosition = point
+			end
+		end
+	end)
 end
 
 local function pointInside(guiObject, point)

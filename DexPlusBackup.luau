@@ -1155,8 +1155,47 @@ Main = (function()
 			}
 			local synsaveinstance = loadstring(oldgame:HttpGet(Params.RepoURL .. Params.SSI .. ".luau", true), Params.SSI)()
 
+			local function applySavedSaveInstanceOptions(finalOptions)
+				local saveState = Settings and Settings.SaveInstance
+				if type(saveState) ~= "table" then
+					return finalOptions
+				end
+
+				local savedOptions = saveState.Options
+				if type(savedOptions) == "table" then
+					for key, value in pairs(savedOptions) do
+						if finalOptions[key] == nil then
+							if type(value) == "table" then
+								local copy = {}
+								for subKey, subValue in pairs(value) do
+									copy[subKey] = subValue
+								end
+								finalOptions[key] = copy
+							else
+								finalOptions[key] = value
+							end
+						end
+					end
+				end
+
+				local extraOptionsJson = saveState.ExtraOptionsJson
+				if type(extraOptionsJson) == "string" and extraOptionsJson:match("%S") then
+					local okDecode, decoded = pcall(service.HttpService.JSONDecode, service.HttpService, extraOptionsJson)
+					if okDecode and type(decoded) == "table" then
+						for key, value in pairs(decoded) do
+							if finalOptions[key] == nil then
+								finalOptions[key] = value
+							end
+						end
+					end
+				end
+
+				return finalOptions
+			end
+
 			local function wrappedsaveinstance(obj, filepath, options)
 				local finalOptions = {}
+				applySavedSaveInstanceOptions(finalOptions)
 				if type(options) == "table" then
 					for key, value in pairs(options) do
 						finalOptions[key] = value

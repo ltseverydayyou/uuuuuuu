@@ -31,7 +31,18 @@ end)();
 local Instance_new = Instance.new
 local UDim2_new = UDim2.new
 local Color3_new = Color3.new
+local Vector2_new = Vector2.new
 local math_max = math.max
+local math_min = math.min
+local math_floor = math.floor
+local math_clamp = math.clamp or function(v, mn, mx)
+	if v < mn then
+		return mn
+	elseif v > mx then
+		return mx
+	end
+	return v
+end
 local tick = tick
 local pairs = pairs
 local os_time = os.time
@@ -135,6 +146,36 @@ local Style; do
 	}
 	
 	Style.ChartHeight = Style.ChartTitleHeight + Style.ChartGraphHeight + Style.ChartDataHeight + Style.BorderSize
+end
+
+local function safeClamp(v, mn, mx)
+	if mx < mn then
+		return mn
+	end
+	return math_clamp(v, mn, mx)
+end
+
+local function getViewportSize()
+	local cam = workspace.CurrentCamera
+	return cam and cam.ViewportSize or Vector2_new(800, 600)
+end
+
+local function setGuiTreeZ(root, z)
+	if not root then
+		return
+	end
+	pcall(function()
+		if root:IsA("GuiObject") then
+			root.ZIndex = z
+		end
+	end)
+	for _, child in pairs(root:GetDescendants()) do
+		pcall(function()
+			if child:IsA("GuiObject") then
+				child.ZIndex = z
+			end
+		end)
+	end
 end
 
 local Primitives = {}; do
@@ -333,7 +374,35 @@ end
 -- Services
 local UserInputService = __lt.cs('UserInputService', cloneref)
 local RunService = __lt.cs('RunService', cloneref)
+local TweenService = __lt.cs('TweenService', cloneref)
 local TouchEnabled = UserInputService.TouchEnabled
+
+local function tweenObject(obj, props, time, style, dir, done)
+	local ok, tw = pcall(function()
+		return TweenService:Create(obj, TweenInfo.new(time or 0.18, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out), props)
+	end)
+	if ok and tw then
+		if done then
+			local cn
+			cn = tw.Completed:Connect(function(...)
+				if cn then
+					cn:Disconnect()
+					cn = nil
+				end
+				done(...)
+			end)
+		end
+		tw:Play()
+	else
+		for k, v in pairs(props) do
+			pcall(function() obj[k] = v end)
+		end
+		if done then
+			done()
+		end
+	end
+	return tw
+end
 
 local DeveloperConsole = {}
 
@@ -374,9 +443,7 @@ function Methods.ResetFrameDimensions(devConsole)
 	local uis = __lt.cs("UserInputService", cloneref)
 	local isMobile = uis.TouchEnabled and not uis.KeyboardEnabled
 
-	local cam = workspace.CurrentCamera
-	local vp = cam and cam.ViewportSize or Vector2.new(800, 600)
-
+	local vp = getViewportSize()
 	local w, h
 	if isMobile then
 		w = vp.X - 20
@@ -386,21 +453,34 @@ function Methods.ResetFrameDimensions(devConsole)
 		h = vp.Y * 0.5
 	end
 
-	devConsole:SetFrameSize(w, h)
-	local sz = devConsole.Frame.Size
-	devConsole.Frame.Position = UDim2_new(0.5, -sz.X.Offset / 2, 0.5, -sz.Y.Offset / 2)
+	w, h = devConsole:BoundFrameSize(w, h)
+	devConsole.Frame.Size = UDim2_new(0, w, 0, h)
+	devConsole:SetFramePosition(math_floor((vp.X - w) / 2), math_floor((vp.Y - h) / 2))
 end
 function Methods.BoundFrameSize(devConsole, x, y)
-	-- Minimum frame size
-	return math_max(x, 400), math_max(y, 200)
+	local vp = getViewportSize()
+	local pad = 10
+	local maxW = math_max(160, math_floor(vp.X - pad * 2))
+	local maxH = math_max(140, math_floor(vp.Y - pad * 2))
+	local minW = math_min(400, maxW)
+	local minH = math_min(200, maxH)
+	return safeClamp(math_floor(x or minW), minW, maxW), safeClamp(math_floor(y or minH), minH, maxH)
 end
 function Methods.SetFrameSize(devConsole, x, y)
 	x, y = devConsole:BoundFrameSize(x, y)
 	devConsole.Frame.Size = UDim2_new(0, x, 0, y)
+	local pos = devConsole.Frame.Position
+	devConsole:SetFramePosition(pos.X.Offset, pos.Y.Offset)
 end
 function Methods.BoundFramePosition(devConsole, x, y)
-	-- Make sure the frame doesn't go somewhere where the bar can't be clicked
-	return x, math_max(y, 0)
+	local vp = getViewportSize()
+	local frame = devConsole.Frame
+	local sx = frame.AbsoluteSize.X > 0 and frame.AbsoluteSize.X or frame.Size.X.Offset
+	local sy = frame.AbsoluteSize.Y > 0 and frame.AbsoluteSize.Y or frame.Size.Y.Offset
+	local pad = 0
+	local maxX = math_max(pad, math_floor(vp.X - sx - pad))
+	local maxY = math_max(pad, math_floor(vp.Y - sy - pad))
+	return safeClamp(math_floor(x or pad), pad, maxX), safeClamp(math_floor(y or pad), pad, maxY)
 end
 function Methods.SetFramePosition(devConsole, x, y)
 	x, y = devConsole:BoundFramePosition(x, y)
@@ -468,6 +548,16 @@ function DeveloperConsole.new(screenGui, permissions, messagesAndStats)
 	end
 	onVREnabled()
 	__lt.cm("VRService", "GetPropertyChangedSignal", "VREnabled"):connect(onVREnabled)
+	local cam = workspace.CurrentCamera
+	if cam then
+		connectPropertyChanged(cam, "ViewportSize", function()
+			if devConsole.Visible then
+				local sx = frame.AbsoluteSize.X > 0 and frame.AbsoluteSize.X or frame.Size.X.Offset
+				local sy = frame.AbsoluteSize.Y > 0 and frame.AbsoluteSize.Y or frame.Size.Y.Offset
+				devConsole:SetFrameSize(sx, sy)
+			end
+		end)
+	end
 
 	devConsole.Frame = frame
 	devConsole:ResetFrameDimensions()
@@ -615,7 +705,10 @@ function DeveloperConsole.new(screenGui, permissions, messagesAndStats)
 	local optionsFrame = Primitives.FolderFrame(optionsClippingFrame, 'OptionsFrame')
 	optionsFrame.Size = UDim2_new(1, 0, 0, Style.OptionAreaHeight)
 	optionsFrame.Position = UDim2_new(0, 0, 0, Style.OptionAreaHeight)
-	--optionsFrame.BackgroundColor3 = Style.OptionsFrameColor
+	optionsFrame.BackgroundColor3 = Style.FrameColor
+	optionsFrame.BackgroundTransparency = Style.FrameTransparency
+	optionsClippingFrame.ZIndex = Style.ZINDEX + 20
+	optionsFrame.ZIndex = Style.ZINDEX + 21
 	do -- Options animation
 		
 		local gearSize = Style.GearSize
@@ -641,7 +734,10 @@ function DeveloperConsole.new(screenGui, permissions, messagesAndStats)
 	local textFilterChanged, scriptStatFilterChanged;
 	
 	local messageFilter;
-	local messageFilterChanged, messageTextWrappedChanged;
+	local messageFilterChanged, messageTextWrappedChanged, messagePausedChanged, maxLogLinesChanged, autoScrollChanged;
+	local messagePaused = false
+	local maxLogLines = 1024
+	local autoScrollEnabled = true
 	do -- Options contents/filters
 		
 		local function createCheckbox(color, callback)
@@ -720,6 +816,9 @@ function DeveloperConsole.new(screenGui, permissions, messagesAndStats)
 		
 		messageFilterChanged = CreateSignal()
 		messageTextWrappedChanged = CreateSignal()
+		messagePausedChanged = CreateSignal()
+		maxLogLinesChanged = CreateSignal()
+		autoScrollChanged = CreateSignal()
 		
 		local optionTypeContainers = {
 			--[OptionType] = Frame
@@ -774,6 +873,63 @@ function DeveloperConsole.new(screenGui, permissions, messagesAndStats)
 					checkbox:SetValue(false)
 					checkbox.Frame.Parent = container
 					checkbox.Frame.Position = UDim2_new(0, x + label.Size.X.Offset, 0, 4)
+					x = x + label.Size.X.Offset + Style.CheckboxSize + 12
+				end
+
+				do
+					local label = Primitives.InvisibleTextLabel(container, 'PauseLabel', "Pause")
+					label.FontSize = 'Size18'
+					label.TextXAlignment = 'Left'
+					label.Size = UDim2_new(0, 42, 0, Style.CheckboxSize)
+					label.Position = UDim2_new(0, x, 0, 2)
+					local checkbox = createCheckbox(Color3.new(0.8, 0.8, 0.8), function(value)
+						messagePaused = value
+						messagePausedChanged:fire(value)
+					end)
+					checkbox:SetValue(false)
+					checkbox.Frame.Parent = container
+					checkbox.Frame.Position = UDim2_new(0, x + label.Size.X.Offset, 0, 4)
+					x = x + label.Size.X.Offset + Style.CheckboxSize + 12
+				end
+
+				do
+					local label = Primitives.InvisibleTextLabel(container, 'AutoScrollLabel', "Auto Scroll")
+					label.FontSize = 'Size18'
+					label.TextXAlignment = 'Left'
+					label.Size = UDim2_new(0, 78, 0, Style.CheckboxSize)
+					label.Position = UDim2_new(0, x, 0, 2)
+					local checkbox = createCheckbox(Color3.new(0.8, 0.8, 0.8), function(value)
+						autoScrollEnabled = value
+						autoScrollChanged:fire(value)
+					end)
+					checkbox.Frame.Parent = container
+					checkbox.Frame.Position = UDim2_new(0, x + label.Size.X.Offset, 0, 4)
+					x = x + label.Size.X.Offset + Style.CheckboxSize + 12
+				end
+
+				do
+					local label = Primitives.InvisibleTextLabel(container, 'MaxLinesLabel', "Max")
+					label.FontSize = 'Size18'
+					label.TextXAlignment = 'Left'
+					label.Size = UDim2_new(0, 32, 0, Style.CheckboxSize)
+					label.Position = UDim2_new(0, x, 0, 2)
+					local box = Primitives.TextBox(container, 'MaxLines')
+					box.ClearTextOnFocus = false
+					box.FontSize = 'Size18'
+					box.TextXAlignment = 'Left'
+					box.Size = UDim2_new(0, 48, 0, Style.CheckboxSize)
+					box.Position = UDim2_new(0, x + label.Size.X.Offset, 0, 4)
+					box.Text = tostring(maxLogLines)
+					local function applyMax()
+						local n = tonumber(box.Text) or maxLogLines
+						n = safeClamp(math_floor(n), 128, 4096)
+						box.Text = tostring(n)
+						if n ~= maxLogLines then
+							maxLogLines = n
+							maxLogLinesChanged:fire(n)
+						end
+					end
+					box.FocusLost:connect(applyMax)
 				end
 			end
 		end
@@ -867,6 +1023,8 @@ function DeveloperConsole.new(screenGui, permissions, messagesAndStats)
 				textBox.Size = UDim2_new(0, math.max(textBounds.X, 150), 0, Style.CheckboxSize)
 			end)
 		end
+
+		setGuiTreeZ(optionsFrame, Style.ZINDEX + 21)
 	end
 	
 	----------
@@ -925,6 +1083,8 @@ function DeveloperConsole.new(screenGui, permissions, messagesAndStats)
 
 					
 					local messages = outputMessageSync:GetMessages()
+					output:SetMaxLines(maxLogLines)
+					output:SetPaused(messagePaused)
 					
 					local height = output:RefreshMessages()
 					body.Size = UDim2_new(1, 0, 0, height)
@@ -935,14 +1095,31 @@ function DeveloperConsole.new(screenGui, permissions, messagesAndStats)
 					body.Size = UDim2_new(1, 0, 0, output.Height)
 					
 					disconnector:connect(outputMessageSync.MessageAdded:connect(function(message)
-						output:RefreshMessages(#messages)
+						output:TrimMessages()
+						if not messagePaused then
+							output:RefreshMessages(#messages)
+							if autoScrollEnabled then
+								devConsole.WindowScrollbar:SetValue(1)
+							end
+						end
 					end))
 					
 					disconnector:connect(messageFilterChanged:connect(function()
-						output:RefreshMessages()
+						output:RefreshMessagesNow()
 					end))
 					disconnector:connect(messageTextWrappedChanged:connect(function(enabled)
 						output:SetTextWrappedEnabled(enabled)
+					end))
+					disconnector:connect(messagePausedChanged:connect(function(enabled)
+						output:SetPaused(enabled)
+					end))
+					disconnector:connect(maxLogLinesChanged:connect(function(n)
+						output:SetMaxLines(n)
+					end))
+					disconnector:connect(autoScrollChanged:connect(function(enabled)
+						if enabled then
+							devConsole.WindowScrollbar:SetValue(1)
+						end
 					end))
 				else
 					if output then
@@ -1224,6 +1401,8 @@ do
 			HeightChanged = heightChanged;
             MessagesDirty = false;
             MessagesDirtyPosition = 1;
+			MaxLines = 1024;
+			Paused = false;
 		}
 		
 		local function setHeight(height)
@@ -1272,8 +1451,6 @@ do
 			end
 			setHeight(y)
 		end
-		local MAX_LINES = 2048
-
 		local function RefreshMessagesForReal(messageStartPosition)
 			if not output.Visible then
 				return
@@ -1286,7 +1463,7 @@ do
 			messageStartPosition = nil
 			if messageStartPosition then
 				local labelPositionLast;
-				for i = messageStartPosition, math_max(1, #messages - MAX_LINES), -1 do
+				for i = messageStartPosition, math_max(1, #messages - output.MaxLines), -1 do
 					if labelPositions[i] then
 						labelPositionLast = labelPositions[i]
 						break
@@ -1301,7 +1478,7 @@ do
 				end
 			end
 
-			for i = messageStartPosition or math_max(1, #messages - MAX_LINES), #messages do
+			for i = messageStartPosition or math_max(1, #messages - output.MaxLines), #messages do
 				local message = messages[i]
 				if messageFilter(message) then
 					labelPosition = labelPosition + 1
@@ -1354,17 +1531,68 @@ do
         end
 
 		local refreshHandle;
+		function output.RefreshMessagesNow(output)
+			if not output.Visible or output.Paused then
+				return output.Height
+			end
+			refreshHandle = false
+			RefreshMessagesForReal()
+			return output.Height
+		end
+
 		function output.RefreshMessages(output, messageStartPosition)
-			if not output.Visible then
-				return
+			if not output.Visible or output.Paused then
+				return output.Height
 			end
 			if not refreshHandle then
 				refreshHandle = true
-				coroutine.wrap(function() -- Not ideal
+				coroutine.wrap(function()
 					wait()
 					refreshHandle = false
-					RefreshMessagesForReal()
+					RefreshMessagesForReal(messageStartPosition)
 				end)()
+			end
+			return output.Height
+		end
+
+		function output.TrimMessages(output)
+			local maxLines = output.MaxLines or 1024
+			local count = #messages
+			if count <= maxLines then
+				return
+			end
+			local drop = count - maxLines
+			for i = 1, maxLines do
+				messages[i] = messages[i + drop]
+			end
+			for i = maxLines + 1, count do
+				messages[i] = nil
+			end
+			labelPositions = {}
+		end
+
+		function output.SetMaxLines(output, maxLines)
+			maxLines = safeClamp(math_floor(tonumber(maxLines) or 1024), 128, 4096)
+			if output.MaxLines == maxLines then
+				output:TrimMessages()
+				return
+			end
+			output.MaxLines = maxLines
+			output:TrimMessages()
+			if output.Visible and not output.Paused then
+				RefreshMessagesForReal()
+			end
+		end
+
+		function output.SetPaused(output, paused)
+			paused = paused and true or false
+			if output.Paused == paused then
+				return
+			end
+			output.Paused = paused
+			if not paused and output.Visible then
+				output:TrimMessages()
+				RefreshMessagesForReal()
 			end
 		end
 		
@@ -1382,7 +1610,10 @@ do
 			end
 			output.Visible = visible
 			if visible then
-				RefreshMessagesForReal()
+				output:TrimMessages()
+				if not output.Paused then
+					RefreshMessagesForReal()
+				end
 			else
 				for i = #labels, 1, -1 do
 					labels[i]:Destroy()
@@ -1563,7 +1794,7 @@ function Methods.ApplyScrollbarToFrame(devConsole,
 
 		if bodyHeight ~= bodyHeightNew or windowHeight ~= windowHeightNew then
 			bodyHeight, windowHeight = bodyHeightNew, windowHeightNew
-			height = windowHeight / bodyHeight
+			height = bodyHeight > 0 and (windowHeight / bodyHeight) or 1
 			scrollbar:SetHeight(height)
 			
 			local yOffset = (bodyHeight - windowHeight) * value
@@ -1586,6 +1817,10 @@ function Methods.ApplyScrollbarToFrame(devConsole,
 	local function setValue(valueNew)
 		value = valueNew
 		refreshDimension()
+		if not bodyHeight or bodyHeight <= windowHeight then
+			body.Position = UDim2_new(body.Position.X.Scale, body.Position.X.Offset, body.Position.Y.Scale, 0)
+			return
+		end
 		local yOffset = (bodyHeight - windowHeight) * value
 		local x = body.Position.X
 		local y = body.Position.Y
@@ -1609,7 +1844,7 @@ function Methods.ApplyScrollbarToFrame(devConsole,
 	connectPropertyChanged(body, 'AbsoluteSize', function()
 		local windowHeight, bodyHeight = getHeights()
 		local value = scrollbar:GetValue()
-		if value ~= 1 and value ~= 0 then
+		if value ~= 1 and value ~= 0 and bodyHeight > windowHeight then
 			local value = -body.Position.Y.Offset / (bodyHeight - windowHeight)
 			scrollbar:SetValue(value)
 		end
@@ -1704,11 +1939,7 @@ function Methods.CreateScrollbar(devConsole, rotation)
 	refresh()
 	
 	function scrollbar.SetValue(scrollbar, valueNew)
-		if valueNew < 0 then
-			valueNew = 0
-		elseif valueNew > 1 then
-			valueNew = 1
-		end
+		valueNew = safeClamp(tonumber(valueNew) or 0, 0, 1)
 		if valueNew ~= value then
 			value = valueNew
 			refresh()
@@ -1720,16 +1951,16 @@ function Methods.CreateScrollbar(devConsole, rotation)
 	end
 	
 	function scrollbar.Scroll(scrollbar, direction, windowHeight, bodyHeight)
-		scrollbar:SetValue(value + direction / bodyHeight) -- needs to be adjusted
+		bodyHeight = tonumber(bodyHeight) or 0
+		if bodyHeight <= 0 then
+			return
+		end
+		scrollbar:SetValue(value + direction / bodyHeight)
 	end
 	
 	function scrollbar.SetHeight(scrollbar, heightNew)
-		if heightNew < 0 then
-			heightNew = 0 -- this is still an awkward case of divide-by-zero that shouldn't happen
-		elseif heightNew > 1 then
-			heightNew = 1
-		end
-		heightNew = math.max(heightNew, 0.1) -- Minimum scroll bar size, from that point on it is not the actual ratio
+		heightNew = safeClamp(tonumber(heightNew) or 1, 0, 1)
+		heightNew = math.max(heightNew, 0.1)
 		if heightNew ~= height then
 			height = heightNew
 			scrollbar:SetVisible(heightNew < 1)
@@ -1745,7 +1976,8 @@ function Methods.CreateScrollbar(devConsole, rotation)
 		local value0 = value -- starting value
 		return function(dx, dy)
 			local dposition = dy -- net position change relative to the bar's axis (could support rotated scroll bars)
-			local dvalue = (dposition / frame.AbsoluteSize.Y) / (1 - height) -- net value change
+			local den = math_max(0.001, 1 - height)
+			local dvalue = (dposition / math_max(1, frame.AbsoluteSize.Y)) / den
 			scrollbar:SetValue(value0 + dvalue)
 		end
 	end, buttonEffectFunction)
@@ -1808,55 +2040,67 @@ else
 end
 
 function Methods.GenerateOptionButtonAnimationToggle(devConsole, interior, button, gear, tabContainer, optionsClippingFrame, optionsFrame)
-	
 	local tabContainerSize0 = tabContainer.Size
 	local tabContainerSize1 = UDim2_new(
 		tabContainerSize0.X.Scale, tabContainerSize0.X.Offset + (Style.GearSize + 2) + Style.BorderSize,
-		tabContainerSize0.Y.Scale, tabContainerSize0.Y.Offset)
-		
+		tabContainerSize0.Y.Scale, tabContainerSize0.Y.Offset
+	)
+
 	local gearRotation0 = gear.Rotation
 	local gearRotation1 = gear.Rotation - 90
 	local interiorSize0 = interior.Size
-	local interiorSize1 = UDim2_new(interiorSize0.X.Scale, interiorSize0.X.Offset, interiorSize0.Y.Scale, interiorSize0.Y.Offset - Style.OptionAreaHeight)
+	local interiorSize1 = UDim2_new(
+		interiorSize0.X.Scale, interiorSize0.X.Offset,
+		interiorSize0.Y.Scale, interiorSize0.Y.Offset - Style.OptionAreaHeight
+	)
 	local interiorPosition0 = interior.Position
-	local interiorPosition1 = UDim2_new(interiorPosition0.X.Scale, interiorPosition0.X.Offset, interiorPosition0.Y.Scale, interiorPosition0.Y.Offset + Style.OptionAreaHeight)
-	
-	local length = 0.5
+	local interiorPosition1 = UDim2_new(
+		interiorPosition0.X.Scale, interiorPosition0.X.Offset,
+		interiorPosition0.Y.Scale, interiorPosition0.Y.Offset + Style.OptionAreaHeight
+	)
+
+	local length = 0.35
 	local disconnector = CreateDisconnectSignal()
+	optionsClippingFrame.ZIndex = Style.ZINDEX + 20
+	optionsFrame.ZIndex = Style.ZINDEX + 21
+	optionsClippingFrame.Visible = false
+
 	return function(open)
+		disconnector:fire()
+		setGuiTreeZ(optionsFrame, Style.ZINDEX + 21)
+
 		if open then
-			interior:TweenSizeAndPosition(interiorSize1, interiorPosition1, 'Out', 'Sine', length, true)
-			tabContainer:TweenSize(tabContainerSize1, 'Out', 'Sine', length, true)
-			optionsClippingFrame:TweenSizeAndPosition(
-				UDim2_new(1, 0, 0, Style.OptionAreaHeight),
-				UDim2_new(0, 0, 0, -Style.OptionAreaHeight),
-				'Out', 'Sine', length, true
-			)
-			optionsFrame:TweenPosition(
-				UDim2_new(0, 0, 0, 0),-- -Style.OptionAreaHeight),
-				'Out', 'Sine', length, true
-			)
+			optionsClippingFrame.Visible = true
+			tweenObject(interior, {Size = interiorSize1, Position = interiorPosition1}, length, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+			tweenObject(tabContainer, {Size = tabContainerSize1}, length, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+			tweenObject(optionsClippingFrame, {
+				Size = UDim2_new(1, 0, 0, Style.OptionAreaHeight),
+				Position = UDim2_new(0, 0, 0, -Style.OptionAreaHeight)
+			}, length, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+			tweenObject(optionsFrame, {Position = UDim2_new(0, 0, 0, 0)}, length, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+
 			local gearRotation = gear.Rotation
 			RenderLerpAnimation(disconnector, length, function(t)
 				gear.Rotation = gearRotation1 * t + gearRotation * (1 - t)
 			end)
 		else
-			interior:TweenSizeAndPosition(interiorSize0, interiorPosition0, 'Out', 'Sine', length, true)
-			tabContainer:TweenSize(tabContainerSize0, 'Out', 'Sine', length, true)
-			optionsClippingFrame:TweenSizeAndPosition(
-				UDim2_new(1, 0, 0, 0),
-				UDim2_new(0, 0, 0, 0),
-				'Out', 'Sine', length, true
-			)
-			optionsFrame:TweenPosition(
-				UDim2_new(0, 0, 0, Style.OptionAreaHeight),
-				'Out', 'Sine', length, true
-			)
+			tweenObject(interior, {Size = interiorSize0, Position = interiorPosition0}, length, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+			tweenObject(tabContainer, {Size = tabContainerSize0}, length, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+			tweenObject(optionsClippingFrame, {
+				Size = UDim2_new(1, 0, 0, 0),
+				Position = UDim2_new(0, 0, 0, 0)
+			}, length, Enum.EasingStyle.Sine, Enum.EasingDirection.Out, function()
+				if optionsClippingFrame.AbsoluteSize.Y <= 1 then
+					optionsClippingFrame.Visible = false
+				end
+			end)
+			tweenObject(optionsFrame, {Position = UDim2_new(0, 0, 0, Style.OptionAreaHeight)}, length, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+
 			local gearRotation = gear.Rotation
 			RenderLerpAnimation(disconnector, length, function(t)
 				gear.Rotation = gearRotation0 * t + gearRotation * (1 - t)
 			end)
-		end	
+		end
 	end
 end
 
@@ -2147,6 +2391,20 @@ do
 		end
 		
 		local warningsToFilter = {"ClassDescriptor failed to learn", "EventDescriptor failed to learn", "Type failed to learn"}
+		local LOG_HISTORY_LIMIT = 4096
+		local function trimMessageArray(messages)
+			local count = #messages
+			if count <= LOG_HISTORY_LIMIT then
+				return
+			end
+			local drop = count - LOG_HISTORY_LIMIT
+			for i = 1, LOG_HISTORY_LIMIT do
+				messages[i] = messages[i + drop]
+			end
+			for i = LOG_HISTORY_LIMIT + 1, count do
+				messages[i] = nil
+			end
+		end
 		
 		-- Filter "ClassDescriptor failed to learn" errors
 		local function filterMessageOnAdd(message)
@@ -2183,6 +2441,7 @@ do
 						end
 					end
 				end
+				trimMessageArray(messages)
 				
 				LogService.MessageOut:connect(function(text, messageType)
 					local message = {
@@ -2192,6 +2451,7 @@ do
 					}
 					if not filterMessageOnAdd(message) then
 						messages[#messages + 1] = message
+						trimMessageArray(messages)
 						this.MessageAdded:fire(message)
 					end
 				end)
@@ -2215,6 +2475,7 @@ do
 					}
 					if not filterMessageOnAdd(message) then
 						messages[#messages + 1] = message
+						trimMessageArray(messages)
 						this.MessageAdded:fire(message)
 					end
 				end)

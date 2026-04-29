@@ -121,6 +121,7 @@ local espMap = {};
 local startUnix = (DateTime.now()).UnixTimestamp;
 local openDropdown = nil;
 local aimCamTween = nil;
+local lockCamLoop = nil;
 local rng = Random.new();
 local function newRandomAimCache()
 	return setmetatable({}, {
@@ -205,6 +206,7 @@ _G.stickyTarget = _G.stickyTarget ~= nil and _G.stickyTarget or true;
 _G.targetMaxDistance = _G.targetMaxDistance or 2500;
 local lastTargetName = "none";
 local lastLockedCharacter = nil;
+local lastLockedPart = nil;
 local topClickBlock = 0;
 _G.toggleKeys = _G.toggleKeys or {
 	"RightAlt",
@@ -1816,6 +1818,53 @@ local function topAimPart(m)
 	end;
 	return getTorsoLikePart(m) or getPart(m, "Head");
 end;
+local function getScanAimPart(ch)
+	local aimMode = normalizeAimMode(_G.aimTargetMode);
+	local candidates = {};
+	local function add(part)
+		if part and usableAimPart(part, ch) then
+			table.insert(candidates, part);
+		end;
+	end;
+	if aimMode == "Head" then
+		add(getPart(ch, "Head"));
+		add(getTorsoLikePart(ch));
+	elseif aimMode == "Root" then
+		add(getPart(ch, "HumanoidRootPart"));
+		add(getTorsoLikePart(ch));
+		add(getPart(ch, "Head"));
+	elseif aimMode == "Upper Torso" then
+		add(getPart(ch, "UpperTorso") or getPart(ch, "Torso"));
+		add(getPart(ch, "HumanoidRootPart"));
+		add(getPart(ch, "Head"));
+	elseif aimMode == "Lower Torso" then
+		add(getPart(ch, "LowerTorso") or getPart(ch, "Torso"));
+		add(getPart(ch, "HumanoidRootPart"));
+		add(getPart(ch, "Head"));
+	else
+		add(getPart(ch, "HumanoidRootPart"));
+		add(getPart(ch, "UpperTorso") or getPart(ch, "Torso"));
+		add(getPart(ch, "Head"));
+	end;
+	for _, part in ipairs(candidates) do
+		if not _G.wallCheck or clearLOS(part) then
+			return part;
+		end;
+	end;
+	if _G.wallCheck then
+		return nil;
+	end;
+	return candidates[1];
+end;
+local function isTrackedAimPartUsable(ch, part, requireLOS)
+	if not usableAimPart(part, ch) then
+		return false;
+	end;
+	if requireLOS and _G.wallCheck and (not clearLOS(part)) then
+		return false;
+	end;
+	return true;
+end;
 local function isEnemy(op)
 	if not _G.teamCheck then
 		return true;
@@ -1840,45 +1889,48 @@ local function getTargetPriorityMode()
 	_G.targetPriorityMode = normChoice(_G.targetPriorityMode, TARGET_PRIORITY_OPTIONS, "Crosshair");
 	return _G.targetPriorityMode;
 end;
-local function isCharacterStillTargetable(ch)
+local function isCharacterStillTargetable(ch, preferredPart)
 	if not ch or not ch.Parent then
-		return false;
+		return false, nil;
 	end;
 	local op = Players:GetPlayerFromCharacter(ch);
 	if not op or op == plr or (not isEnemy(op)) or (not isAlive(ch)) then
-		return false;
+		return false, nil;
 	end;
-	local part = topAimPart(ch);
+	local part = isTrackedAimPartUsable(ch, preferredPart, _G.wallCheck == true) and preferredPart or getScanAimPart(ch);
 	local hum = getHumanoid(ch);
 	if not part or not hum or hum.Health <= 0 then
-		return false;
+		return false, nil;
 	end;
 	local scr, on = cam:WorldToViewportPoint(part.Position);
 	if not on then
-		return false;
-	end;
-	if _G.wallCheck and (not clearLOS(part)) then
-		return false;
+		return false, nil;
 	end;
 	local dist = (part.Position - cam.CFrame.Position).Magnitude;
 	if dist > math.clamp(tonumber(_G.targetMaxDistance) or 2500, 100, 5000) then
-		return false;
+		return false, nil;
 	end;
 	if getTargetPriorityMode() == "Crosshair" then
 		local mp = getAimPoint();
 		local sdist = (Vector2.new(scr.X, scr.Y) - mp).Magnitude;
 		if sdist > (_G.aimRadius or 150) then
-			return false;
+			return false, nil;
 		end;
 	end;
-	return true;
+	return true, part;
 end;
 local function findTarget()
-	if _G.stickyTarget and isCharacterStillTargetable(lastLockedCharacter) then
+	local stickyOk, stickyPart = false, nil;
+	if _G.stickyTarget then
+		stickyOk, stickyPart = isCharacterStillTargetable(lastLockedCharacter, lastLockedPart);
+	end;
+	if stickyOk then
 		lastTargetName = lastLockedCharacter.Name;
-		return lastLockedCharacter;
+		lastLockedPart = stickyPart;
+		return lastLockedCharacter, stickyPart;
 	end;
 	local near = nil;
+	local nearPart = nil;
 	local bestPrimary = math.huge;
 	local bestSecondary = math.huge;
 	local modeName = getTargetPriorityMode();
@@ -1891,14 +1943,11 @@ local function findTarget()
 			if not isAlive(ch) then
 				continue;
 			end;
-			local part = topAimPart(ch);
+			local part = getScanAimPart(ch);
 			local hum = getHumanoid(ch);
 			if part and hum and hum.Health > 0 then
 				local scr, on = cam:WorldToViewportPoint(part.Position);
 				if on then
-					if _G.wallCheck and (not clearLOS(part)) then
-						continue;
-					end;
 					local dist = (part.Position - cam.CFrame.Position).Magnitude;
 					if dist > maxDistance then
 						continue;
@@ -1920,6 +1969,7 @@ local function findTarget()
 						bestPrimary = primary;
 						bestSecondary = secondary;
 						near = ch;
+						nearPart = part;
 					end;
 				end;
 			end;
@@ -1927,7 +1977,18 @@ local function findTarget()
 	end;
 	lastTargetName = near and near.Name or "none";
 	lastLockedCharacter = near;
-	return near;
+	lastLockedPart = nearPart;
+	return near, nearPart;
+end;
+local function getLockRefreshInterval()
+	local interval = 0.05;
+	if _G.wallCheck then
+		interval += 0.02;
+	end;
+	if normalizeAimMode(_G.aimTargetMode) == "Random" then
+		interval += 0.03;
+	end;
+	return math.clamp(interval, 0.04, 0.12);
 end;
 local function updateESPText(p)
 	local rec = espMap[p];
@@ -4244,6 +4305,11 @@ local function createUI()
 		randomAimCache = newRandomAimCache();
 		randomAimSeq = randomAimSeq + 1;
 		lastLockedCharacter = nil;
+		lastLockedPart = nil;
+		if lockCamLoop and lockCamLoop.Connected then
+			lockCamLoop:Disconnect();
+			lockCamLoop = nil;
+		end;
 		clearFOVHooks();
 		for p, _ in pairs(espMap) do
 			espDetach(p);
@@ -4455,51 +4521,76 @@ local function binds()
 	table.insert(conns, bKeys);
 end;
 function lockCamera()
-	local loop;
+	if lockCamLoop and lockCamLoop.Connected then
+		return;
+	end;
 	local lastCh = nil;
-	loop = RunService.RenderStepped:Connect(function()
+	local trackedCh = nil;
+	local trackedPart = nil;
+	local reacquireClock = math.huge;
+	lockCamLoop = RunService.RenderStepped:Connect(function(dt)
 		if not isLock or (not _G.isEnabled) then
+			if aimCamTween then
+				aimCamTween:Cancel();
+				aimCamTween = nil;
+			end;
+			trackedCh = nil;
+			trackedPart = nil;
+			if lockCamLoop then
+				lockCamLoop:Disconnect();
+				lockCamLoop = nil;
+			end;
+			return;
+		end;
+		reacquireClock += dt or 0.016;
+		local aimMode = normalizeAimMode(_G.aimTargetMode);
+		local needsRefresh = reacquireClock >= getLockRefreshInterval();
+		if trackedCh and (not isTrackedAimPartUsable(trackedCh, trackedPart, false)) then
+			needsRefresh = true;
+		end;
+		if (not trackedCh) or needsRefresh then
+			reacquireClock = 0;
+			local ch, scanPart = findTarget();
+			if ch ~= lastCh then
+				if aimMode == "Random" and ch then
+					bumpRandomAim(ch);
+				end;
+				lastCh = ch;
+			end;
+			trackedCh = ch;
+			if ch then
+				if aimMode ~= "Random" and isTrackedAimPartUsable(ch, lastLockedPart, _G.wallCheck == true) then
+					trackedPart = lastLockedPart;
+				else
+					trackedPart = topAimPart(ch) or scanPart;
+					lastLockedPart = trackedPart;
+				end;
+			else
+				trackedPart = nil;
+				lastLockedPart = nil;
+			end;
+		end;
+		if trackedCh and trackedPart then
+			local tgtPos = _G.aimPredict and getPredictedAimPos(trackedPart) or trackedPart.Position;
+			local cf = CFrame.new(cam.CFrame.Position, tgtPos);
+			local doTween = _G.aimTween == true;
+			if doTween then
 				if aimCamTween then
 					aimCamTween:Cancel();
 					aimCamTween = nil;
 				end;
-				loop:Disconnect();
-				return;
-		end;
-		local aimMode = normalizeAimMode(_G.aimTargetMode);
-		local ch = findTarget();
-		if ch ~= lastCh then
-			if aimMode == "Random" and ch then
-				bumpRandomAim(ch);
-			end;
-			lastCh = ch;
-		end;
-		if ch then
-			local part = topAimPart(ch);
-			if part then
-				local tgtPos = _G.aimPredict and getPredictedAimPos(part) or part.Position;
-				local cf = CFrame.new(cam.CFrame.Position, tgtPos);
-				local doTween = _G.aimTween == true;
-					if doTween then
-						if aimCamTween then
-							aimCamTween:Cancel();
-						end;
-						local dur = getAimTweenDuration();
-						aimCamTween = TS:Create(cam, TweenInfo.new(dur), {
-							CFrame = cf
-						});
-						aimCamTween:Play();
-					else
-						if aimCamTween then
-							aimCamTween:Cancel();
-							aimCamTween = nil;
-						end;
-						cam.CFrame = cf;
-					end;
+				local alpha = math.clamp(getAimTweenDuration() * 8, 0.08, 0.9);
+				cam.CFrame = cam.CFrame:Lerp(cf, alpha);
+			else
+				if aimCamTween then
+					aimCamTween:Cancel();
+					aimCamTween = nil;
+				end;
+				cam.CFrame = cf;
 			end;
 		end;
 	end);
-	table.insert(conns, loop);
+	table.insert(conns, lockCamLoop);
 end;
 local function setupPlayerMonitoring()
 	local function hook(pp)
@@ -4574,6 +4665,10 @@ table.insert(conns, teamCon);
 return function()
 	for _, c in pairs(conns) do
 		disconnectConn(c);
+	end;
+	if lockCamLoop and lockCamLoop.Connected then
+		lockCamLoop:Disconnect();
+		lockCamLoop = nil;
 	end;
 	for p, _ in pairs(espMap) do
 		espDetach(p);

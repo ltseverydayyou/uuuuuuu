@@ -12,8 +12,13 @@ local __lt = (function()
 	if type(loader) ~= "function" then
 		error("Service resolver loader unavailable")
 	end
-	local resolver =
-		loader(game:HttpGet("https://ltseverydayyou.github.io/ServiceResolver.luau"), "@ServiceResolver.luau")
+	local okSrc, src = pcall(function()
+		return game:HttpGet("https://ltseverydayyou.github.io/ServiceResolver.luau")
+	end)
+	if not (okSrc and type(src) == "string" and src ~= "") then
+		error("Service resolver HTTP failed: " .. tostring(typeof and typeof(src) or type(src)))
+	end
+	local resolver = loader(src, "@ServiceResolver.luau")
 	if type(resolver) ~= "function" then
 		error("Service resolver failed to compile")
 	end
@@ -54,6 +59,59 @@ local SRV = setmetatable({}, {
 local function Svc(n)
 	return SRV[n]
 end
+local function httpTxt(u, hdr)
+	if type(u) ~= "string" or u == "" then
+		return nil, "bad url"
+	end
+	local rq = (syn and syn.request) or request or http_request or (http and http.request)
+	if type(rq) == "function" then
+		local h = {
+			["User-Agent"] = "Roblox/Http/1.1",
+			["Accept"] = "*/*",
+		}
+		if type(hdr) == "table" then
+			for k, v in pairs(hdr) do
+				h[k] = v
+			end
+		end
+		local ok, res = pcall(rq, {
+			Url = u,
+			Method = "GET",
+			Headers = h,
+		})
+		if ok and type(res) == "table" then
+			local code = tonumber(res.StatusCode or res.Status or res.status_code) or 0
+			local body = res.Body or res.body
+			if (code == 0 or code >= 200 and code < 300) and type(body) == "string" and body ~= "" then
+				return body
+			end
+		end
+	end
+	local ok, body = pcall(function()
+		return game:HttpGet(u)
+	end)
+	if ok and type(body) == "string" and body ~= "" then
+		return body
+	end
+	return nil, "HttpGet returned " .. tostring(typeof and typeof(body) or type(body))
+end
+
+local function runUrl(u, name, hdr)
+	local ld = loadstring or load
+	if type(ld) ~= "function" then
+		return false, "loadstring unavailable"
+	end
+	local src, er = httpTxt(u, hdr)
+	if type(src) ~= "string" or src == "" then
+		return false, er or "empty source"
+	end
+	local fn, er2 = ld(src, name or ("@" .. u))
+	if type(fn) ~= "function" then
+		return false, er2 or "compile failed"
+	end
+	return pcall(fn)
+end
+
 local UIS = Svc("UserInputService")
 local CG = Svc("CoreGui")
 local HS = Svc("HttpService")
@@ -101,13 +159,10 @@ do
 	local tries = 0
 	repeat
 		tries += 1
-		local s, r = pcall(function()
-			return (loadstring(
-				game:HttpGet(
-					"https://raw.githubusercontent.com/ltseverydayyou/Nameless-Admin/main/NamelessAdminNotifications.lua"
-				)
-			))()
-		end)
+		local s, r = runUrl(
+			"https://raw.githubusercontent.com/ltseverydayyou/Nameless-Admin/main/NamelessAdminNotifications.lua",
+			"@NamelessAdminNotifications.lua"
+		)
 		if s and type(r) == "table" and type(r.Notify) == "function" then
 			n = r
 			notifMod = r
@@ -287,6 +342,36 @@ local function getMain()
 		end
 	end
 end
+local function fixNet(rootGui)
+	if not rootGui then
+		return
+	end
+	local side = rootGui:FindFirstChild("Sidemenu", true) or rootGui
+	local net = side and side:FindFirstChild("Network", true)
+	if not (net and net:IsA("GuiObject")) then
+		return
+	end
+	local over = net:FindFirstChild("Overlay")
+	if not (over and over:IsA("GuiObject")) then
+		over = Instance.new("Frame")
+		over.Name = "Overlay"
+		over.BackgroundTransparency = 1
+		over.BorderSizePixel = 0
+		over.Position = UDim2.fromScale(0, 0)
+		over.Size = UDim2.fromScale(1, 1)
+		over.ClipsDescendants = false
+		over.ZIndex = net.ZIndex + 1
+		over.Parent = net
+	end
+	for _, name in ipairs({ "Holder", "Information" }) do
+		local ch = net:FindFirstChild(name)
+		if ch and ch ~= over and ch.Parent == net and not over:FindFirstChild(name) then
+			ch.Parent = over
+		end
+	end
+	return over
+end
+
 local function getIconGui()
 	local function chk(g)
 		if not (g:IsA("ScreenGui") and isGib(g.Name)) then
@@ -1287,6 +1372,15 @@ task.defer(function()
 	pcall(function()
 		mainGui.IgnoreGuiInset = true
 	end)
+	fixNet(mainGui)
+	NAlib.disconnect("DeltaCustom_NetworkOverlayFix")
+	NAlib.connect("DeltaCustom_NetworkOverlayFix", mainGui.DescendantAdded:Connect(function(d)
+		if d and d.Name == "Network" then
+			task.defer(function()
+				fixNet(mainGui)
+			end)
+		end
+	end))
 	local execFrame = mainGui:FindFirstChild("Executor")
 	if not (execFrame and execFrame:IsA("Frame")) then
 		notify({
@@ -4841,11 +4935,13 @@ task.defer(function()
 					or newCard
 			end
 			local function runNA()
-				pcall(function()
-					(loadstring(
-						game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/Nameless-Admin/main/Source.lua")
-					))()
-				end)
+				local ok, er = runUrl(
+					"https://raw.githubusercontent.com/ltseverydayyou/Nameless-Admin/main/Source.lua",
+					"@NamelessAdminSource.lua"
+				)
+				if not ok then
+					toast("ScriptHub", tostring(er))
+				end
 			end
 			if clickable:IsA("GuiButton") then
 				clickable.MouseButton1Click:Connect(runNA)
@@ -5621,7 +5717,11 @@ local __lt = (function()
 	if type(ld) ~= "function" then
 		error("resolver loader unavailable")
 	end
-	local rs = ld(game:HttpGet("https://ltseverydayyou.github.io/ServiceResolver.luau"), "@ServiceResolver.luau")
+	local src, srcEr = httpTxt("https://ltseverydayyou.github.io/ServiceResolver.luau")
+	if type(src) ~= "string" or src == "" then
+		error("resolver HTTP failed: " .. tostring(srcEr))
+	end
+	local rs = ld(src, "@ServiceResolver.luau")
 	if type(rs) ~= "function" then
 		error("resolver failed to compile")
 	end
@@ -7296,11 +7396,26 @@ local function mkCard(par, i, d)
 
 	con(run.MouseButton1Click:Connect(function()
 		local ok, er = pcall(function()
-			if eng == "ScriptBlox" then
-				(loadstring(rw))()
-			else
-				(loadstring(game:HttpGet(rw)))()
+			local ld = loadstring or load
+			if type(ld) ~= "function" then
+				error("loadstring unavailable")
 			end
+			local src = rw
+			if eng ~= "ScriptBlox" then
+				local got, gotEr = httpTxt(rw, eng == "RScripts" and { Referer = RSCRIPTS_BASE } or nil)
+				if type(got) ~= "string" or got == "" then
+					error(gotEr or "empty script source")
+				end
+				src = got
+			end
+			if type(src) ~= "string" or src == "" then
+				error("script source must be a string, got " .. tostring(typeof and typeof(src) or type(src)))
+			end
+			local fn, cer = ld(src, "@ScriptHubEntry")
+			if type(fn) ~= "function" then
+				error(cer or "compile failed")
+			end
+			fn()
 		end)
 		if ok then
 			toast("ScriptHub", "Executed script.")

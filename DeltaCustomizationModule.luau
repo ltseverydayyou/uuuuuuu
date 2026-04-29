@@ -59,6 +59,7 @@ local SRV = setmetatable({}, {
 local function Svc(n)
 	return SRV[n]
 end
+
 local function httpTxt(u, hdr)
 	if type(u) ~= "string" or u == "" then
 		return nil, "bad url"
@@ -111,7 +112,6 @@ local function runUrl(u, name, hdr)
 	end
 	return pcall(fn)
 end
-
 local UIS = Svc("UserInputService")
 local CG = Svc("CoreGui")
 local HS = Svc("HttpService")
@@ -342,6 +342,7 @@ local function getMain()
 		end
 	end
 end
+
 local function fixNet(rootGui)
 	if not rootGui then
 		return
@@ -371,7 +372,6 @@ local function fixNet(rootGui)
 	end
 	return over
 end
-
 local function getIconGui()
 	local function chk(g)
 		if not (g:IsA("ScreenGui") and isGib(g.Name)) then
@@ -4935,6 +4935,7 @@ task.defer(function()
 					or newCard
 			end
 			local function runNA()
+				fixNet(mainGui)
 				local ok, er = runUrl(
 					"https://raw.githubusercontent.com/ltseverydayyou/Nameless-Admin/main/Source.lua",
 					"@NamelessAdminSource.lua"
@@ -7430,7 +7431,10 @@ local function mkCard(par, i, d)
 				if eng == "ScriptBlox" then
 					setclipboard(rw)
 				else
-					setclipboard(game:HttpGet(rw))
+					local src = httpTxt(rw, eng == "RScripts" and { Referer = RSCRIPTS_BASE } or nil)
+					if type(src) == "string" and src ~= "" then
+						setclipboard(src)
+					end
 				end
 			end)
 			cp.Text = "Copied"

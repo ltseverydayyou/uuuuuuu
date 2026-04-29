@@ -2136,7 +2136,10 @@ local function updateESP()
 		espMap = {};
 		return;
 	end;
-	for _, p in ipairs(Players:GetPlayers()) do
+	local playerList = Players:GetPlayers();
+	local livePlayers = {};
+	for _, p in ipairs(playerList) do
+		livePlayers[p] = true;
 		if p ~= plr then
 			if _G.teamCheck and (not isEnemy(p)) then
 				espDetach(p);
@@ -2146,7 +2149,7 @@ local function updateESP()
 		end;
 	end;
 	for p, _ in pairs(espMap) do
-		if not table.find(Players:GetPlayers(), p) then
+		if not livePlayers[p] then
 			espDetach(p);
 		end;
 	end;
@@ -3175,11 +3178,13 @@ local function createUI()
 			return;
 		end;
 		espPulse += dt or 0.016;
-		if espPulse < 0.12 then
+		if espPulse < 0.25 then
 			return;
 		end;
 		espPulse = 0;
-		updateESP();
+		if _G.espRenderMode == "BoxHandleAdornment" or _G.espShowDistance or ((_G.espMaxDistance or 2500) < 5000) then
+			updateESP();
+		end;
 	end);
 	table.insert(conns, espLoop);
 	topToggleHolder = newUi("Frame", gui);
@@ -3921,7 +3926,21 @@ local function createUI()
 		end);
 	end;
 	table.insert(conns, clrCon);
+	local statusPulse = 0;
+	local fpsAccum = 0;
+	local fpsFrames = 0;
 	local statusLoop = RunService.Heartbeat:Connect(function(dt)
+		local step = dt or 0.016;
+		fpsAccum += step;
+		fpsFrames += 1;
+		statusPulse += step;
+		if statusPulse < 0.25 then
+			return;
+		end;
+		local avgDt = fpsFrames > 0 and (fpsAccum / fpsFrames) or step;
+		fpsAccum = 0;
+		fpsFrames = 0;
+		statusPulse = 0;
 		local num = Players.NumPlayers or (#Players:GetPlayers());
 		local max = Players.MaxPlayers or 0;
 		vPlayers.Text = tostring(num) .. " / " .. tostring(max);
@@ -3945,7 +3964,7 @@ local function createUI()
 		vThemeState.Text = tostring(_G.uiTheme or "Midnight Purple");
 		vAnimState.Text = _G.uiAnimations == false and "off" or ("on / " .. tostring(_G.uiAnimSpeed or 1) .. "x");
 		vMobileState.Text = isMobilePlatform() and "yes" or "no";
-		vFrameRate.Text = tostring(math.floor(1 / math.max(dt or 0.016, 0.001) + 0.5));
+		vFrameRate.Text = tostring(math.floor(1 / math.max(avgDt, 0.001) + 0.5));
 	end);
 	table.insert(conns, statusLoop);
 	local centerDot = newUi("Frame", gui);
@@ -4542,7 +4561,13 @@ local function chkMode()
 		updateESP();
 	end;
 end;
-local teamCon = RunService.RenderStepped:Connect(function()
+local teamPulse = 0;
+local teamCon = RunService.Heartbeat:Connect(function(dt)
+	teamPulse += dt or 0.016;
+	if teamPulse < 0.5 then
+		return;
+	end;
+	teamPulse = 0;
 	chkMode();
 end);
 table.insert(conns, teamCon);

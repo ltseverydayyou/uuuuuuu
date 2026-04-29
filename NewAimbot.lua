@@ -123,6 +123,10 @@ local openDropdown = nil;
 local aimCamTween = nil;
 local lockCamLoop = nil;
 local rng = Random.new();
+local trackedPlayers = {};
+local trackedPlayerIndex = {};
+local trackedPlayerCharacter = {};
+local trackedCharacterOwner = {};
 local function newRandomAimCache()
 	return setmetatable({}, {
 		__mode = "k"
@@ -130,6 +134,60 @@ local function newRandomAimCache()
 end;
 local randomAimCache = newRandomAimCache();
 local randomAimSeq = 0;
+local function setTrackedCharacter(pp, ch)
+	local old = trackedPlayerCharacter[pp];
+	if old and trackedCharacterOwner[old] == pp then
+		trackedCharacterOwner[old] = nil;
+	end;
+	trackedPlayerCharacter[pp] = ch;
+	if ch then
+		trackedCharacterOwner[ch] = pp;
+	end;
+end;
+local function trackPlayer(pp)
+	if not pp or trackedPlayerIndex[pp] then
+		return;
+	end;
+	trackedPlayers[#trackedPlayers + 1] = pp;
+	trackedPlayerIndex[pp] = #trackedPlayers;
+	setTrackedCharacter(pp, pp.Character);
+end;
+local function untrackPlayer(pp)
+	if not pp then
+		return;
+	end;
+	setTrackedCharacter(pp, nil);
+	local idx = trackedPlayerIndex[pp];
+	if not idx then
+		return;
+	end;
+	local last = trackedPlayers[#trackedPlayers];
+	trackedPlayers[idx] = last;
+	trackedPlayers[#trackedPlayers] = nil;
+	trackedPlayerIndex[pp] = nil;
+	if last and last ~= pp then
+		trackedPlayerIndex[last] = idx;
+	end;
+end;
+local function rebuildTrackedPlayers()
+	table.clear(trackedPlayers);
+	table.clear(trackedPlayerIndex);
+	table.clear(trackedPlayerCharacter);
+	table.clear(trackedCharacterOwner);
+	for _, pp in ipairs(Players:GetPlayers()) do
+		trackPlayer(pp);
+	end;
+end;
+local function getTrackedPlayers()
+	return trackedPlayers;
+end;
+local function getTrackedPlayerCount()
+	return #trackedPlayers;
+end;
+local function getTrackedPlayerFromCharacter(ch)
+	return trackedCharacterOwner[ch] or Players:GetPlayerFromCharacter(ch);
+end;
+rebuildTrackedPlayers();
 local function platformName()
 	local ok, p = pcall(function()
 		return UIS:GetPlatform();
@@ -204,6 +262,13 @@ _G.espOutlineTransparency = _G.espOutlineTransparency ~= nil and _G.espOutlineTr
 _G.targetPriorityMode = _G.targetPriorityMode or (_G.lockToNearest and "Distance") or "Crosshair";
 _G.stickyTarget = _G.stickyTarget ~= nil and _G.stickyTarget or true;
 _G.targetMaxDistance = _G.targetMaxDistance or 2500;
+_G.randomTargetWeightsEnabled = _G.randomTargetWeightsEnabled ~= nil and _G.randomTargetWeightsEnabled or false;
+_G.randomWeightHead = _G.randomWeightHead or 40;
+_G.randomWeightRoot = _G.randomWeightRoot or 20;
+_G.randomWeightUpperTorso = _G.randomWeightUpperTorso or 18;
+_G.randomWeightLowerTorso = _G.randomWeightLowerTorso or 10;
+_G.randomWeightTorso = _G.randomWeightTorso or 12;
+_G.randomWeightOther = _G.randomWeightOther or 5;
 local lastTargetName = "none";
 local lastLockedCharacter = nil;
 local lastLockedPart = nil;
@@ -230,6 +295,14 @@ local TARGET_PRIORITY_OPTIONS = {
 	"Crosshair",
 	"Distance",
 	"Lowest Health"
+};
+local RANDOM_WEIGHT_VARS = {
+	"randomWeightHead",
+	"randomWeightRoot",
+	"randomWeightUpperTorso",
+	"randomWeightLowerTorso",
+	"randomWeightTorso",
+	"randomWeightOther"
 };
 local ESP_RENDER_OPTIONS = {
 	"Highlight",
@@ -425,6 +498,18 @@ local function normChoice(v, opts, def)
 		end;
 	end;
 	return def or (opts and opts[1]);
+end;
+local function clampRandomWeightValue(v, defaultValue)
+	return math.clamp(tonumber(v) or defaultValue or 0, 0, 100);
+end;
+local function normalizeRandomWeights()
+	_G.randomTargetWeightsEnabled = _G.randomTargetWeightsEnabled == true;
+	_G.randomWeightHead = clampRandomWeightValue(_G.randomWeightHead, 40);
+	_G.randomWeightRoot = clampRandomWeightValue(_G.randomWeightRoot, 20);
+	_G.randomWeightUpperTorso = clampRandomWeightValue(_G.randomWeightUpperTorso, 18);
+	_G.randomWeightLowerTorso = clampRandomWeightValue(_G.randomWeightLowerTorso, 10);
+	_G.randomWeightTorso = clampRandomWeightValue(_G.randomWeightTorso, 12);
+	_G.randomWeightOther = clampRandomWeightValue(_G.randomWeightOther, 5);
 end;
 local function applyToastPos()
 	local h = uiRefs.toastHolder or toastHolder;
@@ -1355,7 +1440,14 @@ local function saveCfg()
 		espOutlineTransparency = _G.espOutlineTransparency,
 		targetPriorityMode = _G.targetPriorityMode,
 		stickyTarget = _G.stickyTarget,
-		targetMaxDistance = _G.targetMaxDistance
+		targetMaxDistance = _G.targetMaxDistance,
+		randomTargetWeightsEnabled = _G.randomTargetWeightsEnabled,
+		randomWeightHead = _G.randomWeightHead,
+		randomWeightRoot = _G.randomWeightRoot,
+		randomWeightUpperTorso = _G.randomWeightUpperTorso,
+		randomWeightLowerTorso = _G.randomWeightLowerTorso,
+		randomWeightTorso = _G.randomWeightTorso,
+		randomWeightOther = _G.randomWeightOther
 	};
 	local ok, enc = pcall(function()
 		return HS:JSONEncode(data);
@@ -1438,6 +1530,11 @@ local function loadCfg()
 	if obj.targetMaxDistance ~= nil then
 		obj.targetMaxDistance = math.clamp(tonumber(obj.targetMaxDistance) or 2500, 100, 5000);
 	end;
+	for _, key in ipairs(RANDOM_WEIGHT_VARS) do
+		if obj[key] ~= nil then
+			obj[key] = clampRandomWeightValue(obj[key], _G[key]);
+		end;
+	end;
 	for k, v in pairs(obj) do
 		if _G[k] ~= nil then
 			_G[k] = v;
@@ -1456,6 +1553,7 @@ _G.espTextSize = math.clamp(tonumber(_G.espTextSize) or 14, 10, 24);
 _G.espMaxDistance = math.clamp(tonumber(_G.espMaxDistance) or 2500, 100, 5000);
 _G.espOutlineTransparency = math.clamp(tonumber(_G.espOutlineTransparency) or 0.12, 0, 1);
 _G.targetMaxDistance = math.clamp(tonumber(_G.targetMaxDistance) or 2500, 100, 5000);
+normalizeRandomWeights();
 applyTheme(_G.uiTheme);
 local camFOVCon, camSwapCon;
 local function bindFOV()
@@ -1523,6 +1621,8 @@ local NA_GRAB_BODY = (function()
 		rec.head = nil;
 		rec.root = nil;
 		rec.torso = nil;
+		rec.upperTorso = nil;
+		rec.lowerTorso = nil;
 		rec.humanoid = nil;
 		rec.parts = {};
 		for _, inst in ipairs(model:QueryDescendants("Instance")) do
@@ -1533,6 +1633,12 @@ local NA_GRAB_BODY = (function()
 				local ln = inst.Name:lower();
 				if ln:find("root") then
 					rec.root = rec.root or inst;
+				elseif ln == "uppertorso" or ln == "upper_torso" or ln == "upper torso" then
+					rec.upperTorso = rec.upperTorso or inst;
+					rec.torso = rec.torso or inst;
+				elseif ln == "lowertorso" or ln == "lower_torso" or ln == "lower torso" then
+					rec.lowerTorso = rec.lowerTorso or inst;
+					rec.torso = rec.torso or inst;
 				elseif ln:find("torso") then
 					rec.torso = rec.torso or inst;
 				elseif ln:find("head") then
@@ -1602,7 +1708,13 @@ local function getPart(m, name)
 	if (lname == "humanoidrootpart" or lname == "rootpart") and rec.root then
 		return rec.root;
 	end;
-	if (lname == "upper torso" or lname == "upper_torso" or lname == "upper" or lname == "lower torso" or lname == "torso") and rec.torso then
+	if (lname == "upper torso" or lname == "upper_torso" or lname == "uppertorso" or lname == "upper") and rec.upperTorso then
+		return rec.upperTorso;
+	end;
+	if (lname == "lower torso" or lname == "lower_torso" or lname == "lowertorso" or lname == "lower") and rec.lowerTorso then
+		return rec.lowerTorso;
+	end;
+	if lname == "torso" and rec.torso then
 		return rec.torso;
 	end;
 	local direct = model:FindFirstChild(name, true);
@@ -1613,6 +1725,15 @@ local function getPart(m, name)
 end;
 local function getTorsoLikePart(m)
 	return getPart(m, "HumanoidRootPart") or getPart(m, "UpperTorso") or getPart(m, "LowerTorso") or getPart(m, "Torso");
+end;
+local function getRoot(m)
+	return getPart(m, "HumanoidRootPart") or getTorsoLikePart(m);
+end;
+local function getTorso(m)
+	return getPart(m, "UpperTorso") or getPart(m, "LowerTorso") or getPart(m, "Torso") or getRoot(m);
+end;
+local function getHead(m)
+	return getPart(m, "Head") or getRoot(m);
 end;
 local function usableAimPart(part, model)
 	if not part or (not part:IsA("BasePart")) then
@@ -1651,11 +1772,11 @@ local function aimPartPool(m, needLOS)
 			table.insert(pool, part);
 		end;
 	end;
-	add(getPart(model, "Head"), 4);
-	add(getPart(model, "HumanoidRootPart"), 2);
+	add(getHead(model), 4);
+	add(getRoot(model), 2);
 	add(getPart(model, "UpperTorso"), 2);
 	add(getPart(model, "LowerTorso"), 1);
-	add(getPart(model, "Torso"), 1);
+	add(getTorso(model), 1);
 	if rec.parts then
 		for _, part in ipairs(rec.parts) do
 			add(part, 1);
@@ -1680,12 +1801,89 @@ local function chooseAimPart(pool, avoid)
 	end;
 	return nil;
 end;
+local function resetAimCaches(resetTrackedTarget)
+	randomAimCache = newRandomAimCache();
+	randomAimSeq = randomAimSeq + 1;
+	if resetTrackedTarget then
+		lastLockedCharacter = nil;
+		lastLockedPart = nil;
+		lastTargetName = "none";
+	end;
+end;
+local function invalidateTargetState(ch)
+	resetAimCaches(lastLockedCharacter ~= nil and (ch == nil or lastLockedCharacter == ch));
+end;
+local function buildWeightedPartEntries(m, needLOS, avoid)
+	local rec, model = NA_GRAB_BODY.ensure(m);
+	if not rec or (not model) then
+		return {};
+	end;
+	local entries = {};
+	local seen = {};
+	local function add(part, weight)
+		weight = clampRandomWeightValue(weight, 0);
+		if weight <= 0 or not usableAimPart(part, model) or seen[part] then
+			return;
+		end;
+		if needLOS and (not clearLOS(part)) then
+			return;
+		end;
+		seen[part] = true;
+		table.insert(entries, {
+			part = part,
+			weight = weight
+		});
+	end;
+	add(getHead(model), _G.randomWeightHead);
+	add(getRoot(model), _G.randomWeightRoot);
+	add(getPart(model, "UpperTorso"), _G.randomWeightUpperTorso);
+	add(getPart(model, "LowerTorso"), _G.randomWeightLowerTorso);
+	add(getTorso(model), _G.randomWeightTorso);
+	local otherWeight = clampRandomWeightValue(_G.randomWeightOther, 0);
+	if otherWeight > 0 and rec.parts then
+		for _, part in ipairs(rec.parts) do
+			if part ~= avoid then
+				add(part, otherWeight);
+			end;
+		end;
+	end;
+	if avoid then
+		local alt = {};
+		for _, entry in ipairs(entries) do
+			if entry.part ~= avoid then
+				table.insert(alt, entry);
+			end;
+		end;
+		if #alt > 0 then
+			entries = alt;
+		end;
+	end;
+	return entries;
+end;
+local function chooseWeightedEntry(entries)
+	local total = 0;
+	for _, entry in ipairs(entries) do
+		total += entry.weight;
+	end;
+	if total <= 0 then
+		return nil;
+	end;
+	local roll = rng:NextNumber(0, total);
+	local acc = 0;
+	for _, entry in ipairs(entries) do
+		acc += entry.weight;
+		if roll <= acc then
+			return entry.part;
+		end;
+	end;
+	return entries[#entries] and entries[#entries].part or nil;
+end;
 local function randomVisibleAimPart(m, avoid)
 	return chooseAimPart(aimPartPool(m, true), avoid);
 end;
 local function pickPreferredPart(m, prefer)
-	local head = getPart(m, "Head");
-	local torso = getTorsoLikePart(m);
+	local head = getHead(m);
+	local torso = getTorso(m);
 	local order = {};
 	if prefer == "Head" then
 		table.insert(order, head);
@@ -1709,6 +1907,13 @@ local function pickPreferredPart(m, prefer)
 	return fallback;
 end;
 local function getRandomAimPart(m, avoid)
+	if _G.randomTargetWeightsEnabled then
+		local weighted = buildWeightedPartEntries(m, _G.wallCheck == true, avoid);
+		local picked = chooseWeightedEntry(weighted);
+		if picked then
+			return picked;
+		end;
+	end;
 	return chooseAimPart(aimPartPool(m, _G.wallCheck == true), avoid);
 end;
 local function bumpRandomAim(ch)
@@ -1784,7 +1989,7 @@ local function topAimPart(m)
 			return p;
 		end;
 	elseif aimMode == "Root" then
-		local p = getPart(m, "HumanoidRootPart");
+		local p = getRoot(m);
 		if p and ((not _G.wallCheck) or clearLOS(p)) then
 			return p;
 		end;
@@ -1792,7 +1997,7 @@ local function topAimPart(m)
 			return randomVisibleAimPart(m, p);
 		end;
 	elseif aimMode == "Upper Torso" then
-		local p = getPart(m, "UpperTorso") or getPart(m, "Torso");
+		local p = getPart(m, "UpperTorso") or getTorso(m);
 		if p and ((not _G.wallCheck) or clearLOS(p)) then
 			return p;
 		end;
@@ -1800,7 +2005,7 @@ local function topAimPart(m)
 			return randomVisibleAimPart(m, p);
 		end;
 	elseif aimMode == "Lower Torso" then
-		local p = getPart(m, "LowerTorso") or getPart(m, "Torso");
+		local p = getPart(m, "LowerTorso") or getTorso(m);
 		if p and ((not _G.wallCheck) or clearLOS(p)) then
 			return p;
 		end;
@@ -1816,7 +2021,7 @@ local function topAimPart(m)
 	if _G.wallCheck then
 		return randomVisibleAimPart(m);
 	end;
-	return getTorsoLikePart(m) or getPart(m, "Head");
+	return getTorso(m) or getHead(m);
 end;
 local function getScanAimPart(ch)
 	local aimMode = normalizeAimMode(_G.aimTargetMode);
@@ -1827,24 +2032,38 @@ local function getScanAimPart(ch)
 		end;
 	end;
 	if aimMode == "Head" then
-		add(getPart(ch, "Head"));
-		add(getTorsoLikePart(ch));
+		add(getHead(ch));
+		add(getTorso(ch));
 	elseif aimMode == "Root" then
-		add(getPart(ch, "HumanoidRootPart"));
-		add(getTorsoLikePart(ch));
-		add(getPart(ch, "Head"));
+		add(getRoot(ch));
+		add(getTorso(ch));
+		add(getHead(ch));
 	elseif aimMode == "Upper Torso" then
-		add(getPart(ch, "UpperTorso") or getPart(ch, "Torso"));
-		add(getPart(ch, "HumanoidRootPart"));
-		add(getPart(ch, "Head"));
+		add(getPart(ch, "UpperTorso") or getTorso(ch));
+		add(getRoot(ch));
+		add(getHead(ch));
 	elseif aimMode == "Lower Torso" then
-		add(getPart(ch, "LowerTorso") or getPart(ch, "Torso"));
-		add(getPart(ch, "HumanoidRootPart"));
-		add(getPart(ch, "Head"));
+		add(getPart(ch, "LowerTorso") or getTorso(ch));
+		add(getRoot(ch));
+		add(getHead(ch));
+	elseif aimMode == "Random" and _G.randomTargetWeightsEnabled then
+		local weighted = buildWeightedPartEntries(ch, false);
+		table.sort(weighted, function(a, b)
+			if a.weight == b.weight then
+				return tostring(a.part.Name) < tostring(b.part.Name);
+			end;
+			return a.weight > b.weight;
+		end);
+		for _, entry in ipairs(weighted) do
+			add(entry.part);
+		end;
+		add(getRoot(ch));
+		add(getTorso(ch));
+		add(getHead(ch));
 	else
-		add(getPart(ch, "HumanoidRootPart"));
-		add(getPart(ch, "UpperTorso") or getPart(ch, "Torso"));
-		add(getPart(ch, "Head"));
+		add(getRoot(ch));
+		add(getTorso(ch));
+		add(getHead(ch));
 	end;
 	for _, part in ipairs(candidates) do
 		if not _G.wallCheck or clearLOS(part) then
@@ -1893,7 +2112,7 @@ local function isCharacterStillTargetable(ch, preferredPart)
 	if not ch or not ch.Parent then
 		return false, nil;
 	end;
-	local op = Players:GetPlayerFromCharacter(ch);
+	local op = getTrackedPlayerFromCharacter(ch);
 	if not op or op == plr or (not isEnemy(op)) or (not isAlive(ch)) then
 		return false, nil;
 	end;
@@ -1929,6 +2148,10 @@ local function findTarget()
 		lastLockedPart = stickyPart;
 		return lastLockedCharacter, stickyPart;
 	end;
+	if lastLockedCharacter and (not stickyOk) then
+		lastLockedCharacter = nil;
+		lastLockedPart = nil;
+	end;
 	local near = nil;
 	local nearPart = nil;
 	local bestPrimary = math.huge;
@@ -1937,7 +2160,7 @@ local function findTarget()
 	local maxR = _G.aimRadius or 150;
 	local maxDistance = math.clamp(tonumber(_G.targetMaxDistance) or 2500, 100, 5000);
 	local mp = getAimPoint();
-	for _, op in ipairs(Players:GetPlayers()) do
+	for _, op in ipairs(getTrackedPlayers()) do
 		if op ~= plr and op.Character and isEnemy(op) then
 			local ch = op.Character;
 			if not isAlive(ch) then
@@ -2116,7 +2339,7 @@ local function ensureESPVisual(rec, p, ch)
 		rec.hi:Destroy();
 		rec.hi = nil;
 	end;
-	local root = getPart(ch, "HumanoidRootPart") or getPart(ch, "UpperTorso") or getPart(ch, "Torso") or getPart(ch, "Head");
+	local root = getRoot(ch) or getTorso(ch) or getHead(ch);
 	if not root then
 		return;
 	end;
@@ -2197,10 +2420,7 @@ local function updateESP()
 		espMap = {};
 		return;
 	end;
-	local playerList = Players:GetPlayers();
-	local livePlayers = {};
-	for _, p in ipairs(playerList) do
-		livePlayers[p] = true;
+	for _, p in ipairs(getTrackedPlayers()) do
 		if p ~= plr then
 			if _G.teamCheck and (not isEnemy(p)) then
 				espDetach(p);
@@ -2210,7 +2430,7 @@ local function updateESP()
 		end;
 	end;
 	for p, _ in pairs(espMap) do
-		if not livePlayers[p] then
+		if not trackedPlayerIndex[p] then
 			espDetach(p);
 		end;
 	end;
@@ -2388,6 +2608,9 @@ local function addRowToggle(parent, labelText, var, desc)
 			end;
 			applyCustomUI();
 			updateFOVCircle();
+		elseif var == "randomTargetWeightsEnabled" then
+			normalizeRandomWeights();
+			resetAimCaches(false);
 		end;
 		saveCfg();
 	end);
@@ -3408,6 +3631,32 @@ local function createUI()
 	end);
 	addRowToggle(pgTarget, "sticky target", "stickyTarget", "keep the current target while it stays valid");
 	addRowSlider(pgTarget, "max target distance", "targetMaxDistance", 100, 5000, 0, "ignore targets farther than this");
+	addSection(pgTarget, "random target weights");
+	addRowToggle(pgTarget, "use weighted random", "randomTargetWeightsEnabled", "use the sliders below when aim target is set to Random");
+	addRowSlider(pgTarget, "random head %", "randomWeightHead", 0, 100, 0, "chance weight for Head", function()
+		normalizeRandomWeights();
+		resetAimCaches(false);
+	end);
+	addRowSlider(pgTarget, "random root %", "randomWeightRoot", 0, 100, 0, "chance weight for HumanoidRootPart", function()
+		normalizeRandomWeights();
+		resetAimCaches(false);
+	end);
+	addRowSlider(pgTarget, "random upper torso %", "randomWeightUpperTorso", 0, 100, 0, "chance weight for UpperTorso", function()
+		normalizeRandomWeights();
+		resetAimCaches(false);
+	end);
+	addRowSlider(pgTarget, "random lower torso %", "randomWeightLowerTorso", 0, 100, 0, "chance weight for LowerTorso", function()
+		normalizeRandomWeights();
+		resetAimCaches(false);
+	end);
+	addRowSlider(pgTarget, "random torso %", "randomWeightTorso", 0, 100, 0, "chance weight for Torso fallback rigs", function()
+		normalizeRandomWeights();
+		resetAimCaches(false);
+	end);
+	addRowSlider(pgTarget, "random other %", "randomWeightOther", 0, 100, 0, "chance weight for other visible body parts", function()
+		normalizeRandomWeights();
+		resetAimCaches(false);
+	end);
 	addSection(pgESP, "render");
 	addRowDropdown(pgESP, "esp mode", "espRenderMode", ESP_RENDER_OPTIONS, "swap between highlight and boxhandleadornment", function(v)
 		_G.espRenderMode = normChoice(v, ESP_RENDER_OPTIONS, "Highlight");
@@ -4002,7 +4251,7 @@ local function createUI()
 		fpsAccum = 0;
 		fpsFrames = 0;
 		statusPulse = 0;
-		local num = Players.NumPlayers or (#Players:GetPlayers());
+		local num = Players.NumPlayers or getTrackedPlayerCount();
 		local max = Players.MaxPlayers or 0;
 		vPlayers.Text = tostring(num) .. " / " .. tostring(max);
 		local elapsed = (DateTime.now()).UnixTimestamp - startUnix;
@@ -4594,20 +4843,34 @@ function lockCamera()
 end;
 local function setupPlayerMonitoring()
 	local function hook(pp)
-		local ca = pp.CharacterAdded:Connect(function()
+		trackPlayer(pp);
+		setTrackedCharacter(pp, pp.Character);
+		local ca = pp.CharacterAdded:Connect(function(char)
+			setTrackedCharacter(pp, char);
+			resetAimCaches(false);
 			task.wait(0.1);
 			if _G.espEnabled then
 				espAttach(pp);
 			end;
 		end);
 		table.insert(conns, ca);
+		local cr = pp.CharacterRemoving:Connect(function(ch)
+			if trackedPlayerCharacter[pp] == ch then
+				setTrackedCharacter(pp, nil);
+			end;
+			invalidateTargetState(ch);
+		end);
+		table.insert(conns, cr);
 	end;
-	for _, pp in ipairs(Players:GetPlayers()) do
+	rebuildTrackedPlayers();
+	for _, pp in ipairs(getTrackedPlayers()) do
 		if pp ~= plr then
 			hook(pp);
 		end;
 	end;
 	local a = Players.PlayerAdded:Connect(function(pp)
+		trackPlayer(pp);
+		resetAimCaches(false);
 		hook(pp);
 		if _G.espEnabled then
 			task.defer(function()
@@ -4617,10 +4880,18 @@ local function setupPlayerMonitoring()
 	end);
 	table.insert(conns, a);
 	local r = Players.PlayerRemoving:Connect(function(pp)
+		untrackPlayer(pp);
+		if pp.Character and lastLockedCharacter == pp.Character then
+			invalidateTargetState(pp.Character);
+		else
+			resetAimCaches(false);
+		end;
 		espDetach(pp);
 	end);
 	table.insert(conns, r);
-	local c = plr.CharacterAdded:Connect(function()
+	local c = plr.CharacterAdded:Connect(function(char)
+		setTrackedCharacter(plr, char);
+		invalidateTargetState();
 		if not gui or (not gui.Parent) then
 			frm = createUI();
 			binds();
@@ -4641,7 +4912,7 @@ toast("Aimbot loaded");
 saveCfg();
 local function chkMode()
 	local newMode;
-	if #Players:GetPlayers() > 0 and Players.LocalPlayer.Team == nil then
+	if getTrackedPlayerCount() > 0 and Players.LocalPlayer.Team == nil then
 		newMode = "FFA";
 	else
 		newMode = "Team";

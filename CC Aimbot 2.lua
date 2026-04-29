@@ -74,6 +74,11 @@ local function mk(c, p, parn)
 	for k, v in pairs(p or {}) do
 		o[k] = v
 	end
+	if o:IsA("GuiObject") then
+		pcall(function()
+			o.Active = true
+		end)
+	end
 	o.Parent = parn
 	return o
 end

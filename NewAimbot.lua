@@ -2661,6 +2661,7 @@ local function findTarget()
 	local mp = getAimPoint();
 	local camPos = cam.CFrame.Position;
 	local coarseR = maxR + 48;
+	local coarse = {};
 	local function considerCharacter(ch, isNpc)
 		if not isAlive(ch) then
 			return;
@@ -2685,47 +2686,21 @@ local function findTarget()
 		if modeName == "Crosshair" and anchorSdist > coarseR then
 			return;
 		end;
-		local part = getScanAimPart(ch);
-		if part then
-			local scr, on = cam:WorldToViewportPoint(part.Position);
-			if not on then
-				return;
-			end;
-			local dist = (part.Position - camPos).Magnitude;
-			if dist > maxDistance then
-				return;
-			end;
-			local sdist = (Vector2.new(scr.X, scr.Y) - mp).Magnitude;
-			if modeName == "Crosshair" and sdist > maxR then
-				return;
-			end;
-			local primary = sdist;
-			local secondary = dist;
-			if modeName == "Distance" or _G.lockToNearest then
-				primary = dist;
-				secondary = sdist;
-			elseif modeName == "Lowest Health" then
-				primary = hum.Health;
-				secondary = sdist;
-			end;
-			local better = false;
-			if primary < bestPrimary then
-				better = true;
-			elseif math.abs(primary - bestPrimary) < 0.001 then
-				if secondary < bestSecondary then
-					better = true;
-				elseif entityMode == "Player/NPC" and near ~= nil and nearIsNpc and (not isNpc) and math.abs(secondary - bestSecondary) < 0.001 then
-					better = true;
-				end;
-			end;
-			if better then
-				bestPrimary = primary;
-				bestSecondary = secondary;
-				near = ch;
-				nearPart = part;
-				nearIsNpc = isNpc == true;
-			end;
+		local primary = anchorSdist;
+		local secondary = anchorDist;
+		if modeName == "Distance" or _G.lockToNearest then
+			primary = anchorDist;
+			secondary = anchorSdist;
+		elseif modeName == "Lowest Health" then
+			primary = hum.Health;
+			secondary = anchorSdist;
 		end;
+		coarse[#coarse + 1] = {
+			ch = ch,
+			isNpc = isNpc == true,
+			primary = primary,
+			secondary = secondary
+		};
 	end;
 	if allowPlayers then
 		for _, op in ipairs(getPlrs()) do
@@ -2739,23 +2714,83 @@ local function findTarget()
 			considerCharacter(npc, true);
 		end;
 	end;
+	table.sort(coarse, function(a, b)
+		if math.abs(a.primary - b.primary) >= 0.001 then
+			return a.primary < b.primary;
+		end;
+		if math.abs(a.secondary - b.secondary) >= 0.001 then
+			return a.secondary < b.secondary;
+		end;
+		if entityMode == "Player/NPC" and a.isNpc ~= b.isNpc then
+			return b.isNpc;
+		end;
+		return tostring(a.ch.Name) < tostring(b.ch.Name);
+	end);
+	local scanLimit = math.min(#coarse, 8);
+	if #coarse > 8 and normChoice(_G.entMode, OPT.TARGET_ENTITY_OPTIONS, "Player") ~= "Player" then
+		scanLimit = math.min(#coarse, 12);
+	end;
+	for i = 1, scanLimit do
+		local cand = coarse[i];
+		local part = getScanAimPart(cand.ch);
+		if part then
+			local scr, on = cam:WorldToViewportPoint(part.Position);
+			if on then
+				local dist = (part.Position - camPos).Magnitude;
+				if dist <= maxDistance then
+					local sdist = (Vector2.new(scr.X, scr.Y) - mp).Magnitude;
+					if modeName ~= "Crosshair" or sdist <= maxR then
+						local primary = sdist;
+						local secondary = dist;
+						if modeName == "Distance" or _G.lockToNearest then
+							primary = dist;
+							secondary = sdist;
+						else
+							local hum = getHumanoid(cand.ch);
+							if modeName == "Lowest Health" and hum then
+								primary = hum.Health;
+								secondary = sdist;
+							end;
+						end;
+						local better = false;
+						if primary < bestPrimary then
+							better = true;
+						elseif math.abs(primary - bestPrimary) < 0.001 then
+							if secondary < bestSecondary then
+								better = true;
+							elseif entityMode == "Player/NPC" and near ~= nil and nearIsNpc and (not cand.isNpc) and math.abs(secondary - bestSecondary) < 0.001 then
+								better = true;
+							end;
+						end;
+						if better then
+							bestPrimary = primary;
+							bestSecondary = secondary;
+							near = cand.ch;
+							nearPart = part;
+							nearIsNpc = cand.isNpc;
+						end;
+					end;
+				end;
+			end;
+		end;
+	end;
 	lastTargetName = near and near.Name or "none";
 	lastLockedCharacter = near;
 	lastLockedPart = nearPart;
 	return near, nearPart;
 end;
 local function getLockRefreshInterval()
-	local interval = 0.08;
+	local interval = 0.11;
 	if _G.wallCheck then
-		interval += 0.03;
+		interval += 0.04;
 	end;
 	if normalizeAimMode(_G.aimTargetMode) == "Random" then
 		interval += 0.03;
 	end;
 	if normChoice(_G.entMode, OPT.TARGET_ENTITY_OPTIONS, "Player") ~= "Player" then
-		interval += 0.03;
+		interval += 0.04;
 	end;
-	return math.clamp(interval, 0.07, 0.18);
+	return math.clamp(interval, 0.09, 0.24);
 end;
 local function updateESPText(p)
 	local rec = espMap[p];
@@ -5727,6 +5762,7 @@ function lockCamera()
 	local trackedCh = nil;
 	local trackedPart = nil;
 	local reacquireClock = math.huge;
+	local partRefreshClock = math.huge;
 	lockCamLoop = RunService.RenderStepped:Connect(function(dt)
 		if not isLock or (not _G.isEnabled) then
 			if aimCamTween then
@@ -5741,9 +5777,11 @@ function lockCamera()
 			end;
 			return;
 		end;
-		reacquireClock += dt or 0.016;
+		local step = dt or 0.016;
+		reacquireClock += step;
+		partRefreshClock += step;
 		local aimMode = normalizeAimMode(_G.aimTargetMode);
-		local needsRefresh = reacquireClock >= getLockRefreshInterval();
+		local needsRefresh = trackedCh == nil;
 		if trackedCh and _G.aliveCheck and (not uiRefs.liveHum(trackedCh)) then
 			trackedCh = nil;
 			trackedPart = nil;
@@ -5752,10 +5790,15 @@ function lockCamera()
 			needsRefresh = true;
 		end;
 		if trackedCh and (not isTrackedAimPartUsable(trackedCh, trackedPart, false)) then
+			trackedPart = nil;
 			needsRefresh = true;
 		end;
-		if (not trackedCh) or needsRefresh then
+		if (not needsRefresh) and (not _G.stickyTarget) and reacquireClock >= math.max(getLockRefreshInterval(), 0.3) then
+			needsRefresh = true;
+		end;
+		if needsRefresh then
 			reacquireClock = 0;
+			partRefreshClock = 0;
 			local ch, scanPart = findTarget();
 			if ch ~= lastCh then
 				if aimMode == "Random" and ch then
@@ -5782,6 +5825,18 @@ function lockCamera()
 			else
 				trackedPart = nil;
 				lastLockedPart = nil;
+			end;
+		elseif trackedCh and partRefreshClock >= 0.18 then
+			partRefreshClock = 0;
+			if aimMode ~= "Random" then
+				local prefPart = topAimPart(trackedCh);
+				if isTrackedAimPartUsable(trackedCh, prefPart, _G.wallCheck == true) then
+					trackedPart = prefPart;
+					lastLockedPart = trackedPart;
+				end;
+			elseif not isTrackedAimPartUsable(trackedCh, trackedPart, _G.wallCheck == true) then
+				trackedPart = topAimPart(trackedCh) or trackedPart;
+				lastLockedPart = trackedPart;
 			end;
 		end;
 		if trackedCh and trackedPart then

@@ -4720,11 +4720,9 @@ handleOptionBind = function(action)
 	return true;
 end;
 local function binds()
-	-- Unbind first so re-calling binds() (e.g. on CharacterAdded) never stacks duplicates.
 	CAS:UnbindAction("VyperiaBot");
 	CAS:UnbindAction("VyperiaBotBlock");
 
-	-- Resolve the current lock key to an EnumItem (UserInputType or KeyCode).
 	local function resolveLockEnum()
 		local key = _G.lockKey or "MouseButton2";
 		local ok1, utype = pcall(function() return Enum.UserInputType[key]; end);
@@ -4738,7 +4736,6 @@ local function binds()
 		return Enum.UserInputType.MouseButton2;
 	end;
 
-	-- Strong lock-key binding: High priority CAS sinks the input so the game never sees it.
 	CAS:BindActionAtPriority("VyperiaBot", function(_, state, _)
 		if state == Enum.UserInputState.Begin then
 			startLockAction();
@@ -4748,7 +4745,6 @@ local function binds()
 		return Enum.ContextActionResult.Sink;
 	end, false, Enum.ContextActionPriority.High.Value, resolveLockEnum());
 
-	-- Collect all KeyCode enums needed for toggle keys + option binds.
 	local function collectKeyEnums()
 		local seen = {};
 		local result = {};
@@ -4767,16 +4763,13 @@ local function binds()
 				table.insert(result, kc);
 			end;
 		end;
-		-- CAS requires at least one input — fall back to Unknown if the lists are empty.
 		if #result == 0 then
 			table.insert(result, Enum.KeyCode.Unknown);
 		end;
 		return result;
 	end;
 
-	-- Strong keyboard toggle + option-bind binding: High priority, sinks matched keys.
 	CAS:BindActionAtPriority("VyperiaBotBlock", function(_, state, input)
-		-- Only act on key-release so toggle behaviour matches the original.
 		if state ~= Enum.UserInputState.End then
 			return Enum.ContextActionResult.Pass;
 		end;
@@ -4787,7 +4780,6 @@ local function binds()
 			return Enum.ContextActionResult.Pass;
 		end;
 		local name = input.KeyCode.Name;
-		-- Read optionBinds fresh each call so runtime changes are always respected.
 		local bm = type(_G.optionBinds) == "table" and _G.optionBinds or {};
 		local action = bm[name];
 		if action and handleOptionBind(action) then

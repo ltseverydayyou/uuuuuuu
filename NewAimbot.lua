@@ -4720,83 +4720,54 @@ handleOptionBind = function(action)
 	return true;
 end;
 local function binds()
-	CAS:UnbindAction("VyperiaBot");
-	CAS:UnbindAction("VyperiaBotBlock");
-
-	local function resolveLockEnum()
-		local key = _G.lockKey or "MouseButton2";
-		local ok1, utype = pcall(function() return Enum.UserInputType[key]; end);
-		if ok1 and utype and typeof(utype) == "EnumItem" then
-			return utype;
+	local bMouse = UIS.InputBegan:Connect(function(i, gp)
+		if gp then
+			return;
 		end;
-		local ok2, kcode = pcall(function() return Enum.KeyCode[key]; end);
-		if ok2 and kcode and typeof(kcode) == "EnumItem" then
-			return kcode;
+		if not isLockInput(i) then
+			return;
 		end;
-		return Enum.UserInputType.MouseButton2;
-	end;
-
-	CAS:BindActionAtPriority("VyperiaBot", function(_, state, _)
-		if state == Enum.UserInputState.Begin then
-			startLockAction();
-		elseif state == Enum.UserInputState.End then
-			endLockAction();
+		startLockAction();
+	end);
+	table.insert(conns, bMouse);
+	local bMouseEnd = UIS.InputEnded:Connect(function(i)
+		if not isLockInput(i) then
+			return;
 		end;
-		return Enum.ContextActionResult.Sink;
-	end, false, Enum.ContextActionPriority.High.Value, resolveLockEnum());
-
-	local function collectKeyEnums()
-		local seen = {};
-		local result = {};
-		local bm = type(_G.optionBinds) == "table" and _G.optionBinds or {};
-		for keyName in pairs(bm) do
-			local ok, kc = pcall(function() return Enum.KeyCode[keyName]; end);
-			if ok and kc and typeof(kc) == "EnumItem" and not seen[kc] then
-				seen[kc] = true;
-				table.insert(result, kc);
-			end;
-		end;
-		for _, keyName in ipairs(_G.toggleKeys or {}) do
-			local ok, kc = pcall(function() return Enum.KeyCode[keyName]; end);
-			if ok and kc and typeof(kc) == "EnumItem" and not seen[kc] then
-				seen[kc] = true;
-				table.insert(result, kc);
-			end;
-		end;
-		if #result == 0 then
-			table.insert(result, Enum.KeyCode.Unknown);
-		end;
-		return result;
-	end;
-
-	CAS:BindActionAtPriority("VyperiaBotBlock", function(_, state, input)
-		if state ~= Enum.UserInputState.End then
-			return Enum.ContextActionResult.Pass;
+		endLockAction();
+	end);
+	table.insert(conns, bMouseEnd);
+	local bKeys = UIS.InputEnded:Connect(function(i, gp)
+		if gp then
+			return;
 		end;
 		if UIS:GetFocusedTextBox() then
-			return Enum.ContextActionResult.Pass;
+			return;
 		end;
 		if capMode or time() < capCooldownUntil then
-			return Enum.ContextActionResult.Pass;
+			return;
 		end;
-		local name = input.KeyCode.Name;
-		local bm = type(_G.optionBinds) == "table" and _G.optionBinds or {};
-		local action = bm[name];
+		if i.UserInputType ~= Enum.UserInputType.Keyboard then
+			return;
+		end;
+		local name = i.KeyCode.Name;
+		local bindsMap = type(_G.optionBinds) == "table" and _G.optionBinds or {};
+		local action = bindsMap[name];
 		if action and handleOptionBind(action) then
-			return Enum.ContextActionResult.Sink;
+			return;
 		end;
 		if table.find(_G.toggleKeys, name) then
-			if frm and frm.Parent then
-				if uiMin then
-					openUI();
-				else
-					closeUI();
-				end;
+			if not frm or (not frm.Parent) then
+				return;
 			end;
-			return Enum.ContextActionResult.Sink;
+			if uiMin then
+				openUI();
+			else
+				closeUI();
+			end;
 		end;
-		return Enum.ContextActionResult.Pass;
-	end, false, Enum.ContextActionPriority.High.Value, table.unpack(collectKeyEnums()));
+	end);
+	table.insert(conns, bKeys);
 end;
 function lockCamera()
 	if lockCamLoop and lockCamLoop.Connected then

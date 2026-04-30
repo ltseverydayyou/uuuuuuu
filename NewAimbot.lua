@@ -467,11 +467,11 @@ local refreshMobileUI = function() end;
 local rebuildMobileHelper = function() end;
 local clampMobileHelperToScreen = function() end;
 local updateFOVCircle = function() end;
-local handleOptionBind = function()
+handleOptionBind = function()
 	return false;
 end;
-local refreshStrongBinds = function() end;
-local startStrongCapture = function()
+refreshStrongBinds = function() end;
+startStrongCapture = function()
 	return function() end;
 end;
 local function applyTheme(name)
@@ -4666,11 +4666,11 @@ local function cursorInsideModel(m, pad)
 	local p = pad or 2;
 	return x >= a - p and x <= c + p and y >= b - p and y <= d + p;
 end;
-local STRONG_KEY_ACTION = "VyperiaBotStrongKeys";
-local STRONG_CAP_ACTION = "VyperiaBotStrongCapture";
-local STRONG_PRIORITY = 1000000;
-local unpackFn = table.unpack or unpack;
-local function inputEnum(name)
+STRONG_KEY_ACTION = "VyperiaBotStrongKeys";
+STRONG_CAP_ACTION = "VyperiaBotStrongCapture";
+STRONG_PRIORITY = 1000000;
+unpackFn = table.unpack or unpack;
+function inputEnum(name)
 	if type(name) ~= "string" or name == "" then
 		return nil;
 	end;
@@ -4690,7 +4690,7 @@ local function inputEnum(name)
 	end;
 	return nil;
 end;
-local function addInput(list, seen, name)
+function addInput(list, seen, name)
 	local item = inputEnum(name);
 	if not item then
 		return;
@@ -4702,7 +4702,7 @@ local function addInput(list, seen, name)
 	seen[key] = true;
 	list[#list + 1] = item;
 end;
-local function collectStrongInputs()
+function collectStrongInputs()
 	local list = {};
 	local seen = {};
 	addInput(list, seen, _G.lockKey or "MouseButton2");
@@ -4720,7 +4720,7 @@ local function collectStrongInputs()
 	end;
 	return list;
 end;
-local function collectCaptureInputs(allowMouse)
+function collectCaptureInputs(allowMouse)
 	local list = {};
 	for _, item in ipairs(Enum.KeyCode:GetEnumItems()) do
 		if item ~= Enum.KeyCode.Unknown then
@@ -4852,7 +4852,7 @@ handleOptionBind = function(action)
 	toast(action .. (_G[var] and " enabled" or " disabled"));
 	return true;
 end;
-local function runStrongKey(input, state)
+function runStrongKey(input, state)
 	if not input then
 		return false;
 	end;
@@ -4915,9 +4915,6 @@ refreshStrongBinds = function()
 			return handled and Enum.ContextActionResult.Sink or Enum.ContextActionResult.Pass;
 		end, false, STRONG_PRIORITY, unpackFn(inputs));
 	end);
-end;
-local function binds()
-	refreshStrongBinds();
 end;
 function lockCamera()
 	if lockCamLoop and lockCamLoop.Connected then
@@ -4991,7 +4988,7 @@ function lockCamera()
 	end);
 	table.insert(conns, lockCamLoop);
 end;
-local function setupPlayerMonitoring()
+function setupPlayerMonitoring()
 	local function hook(pp)
 		trackPlayer(pp);
 		setTrackedCharacter(pp, pp.Character);
@@ -5044,7 +5041,7 @@ local function setupPlayerMonitoring()
 		invalidateTargetState();
 		if not gui or (not gui.Parent) then
 			frm = createUI();
-			binds();
+			refreshStrongBinds();
 		end;
 		if _G.espEnabled then
 			updateESP();
@@ -5053,14 +5050,14 @@ local function setupPlayerMonitoring()
 	table.insert(conns, c);
 end;
 frm = createUI();
-binds();
+refreshStrongBinds();
 setupPlayerMonitoring();
 if _G.espEnabled then
 	updateESP();
 end;
 toast("Aimbot loaded");
 saveCfg();
-local function chkMode()
+function chkMode()
 	local newMode;
 	if getTrackedPlayerCount() > 0 and Players.LocalPlayer.Team == nil then
 		newMode = "FFA";
@@ -5073,8 +5070,8 @@ local function chkMode()
 		updateESP();
 	end;
 end;
-local teamPulse = 0;
-local teamCon = RunService.Heartbeat:Connect(function(dt)
+teamPulse = 0;
+teamCon = RunService.Heartbeat:Connect(function(dt)
 	teamPulse += dt or 0.016;
 	if teamPulse < 0.5 then
 		return;

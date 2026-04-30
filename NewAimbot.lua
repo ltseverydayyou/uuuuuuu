@@ -28,6 +28,10 @@ local __lt = (function()
 end)();
 
 local _G = (getgenv and getgenv()) or _G or {};
+if type(_G.__vyperiaAimbotCleanup) == "function" then
+	pcall(_G.__vyperiaAimbotCleanup);
+end;
+_G.__vyperiaAimbotCleanup = nil;
 
 local conns = {};
 local function svc(n)
@@ -122,6 +126,13 @@ local startUnix = (DateTime.now()).UnixTimestamp;
 local openDropdown = nil;
 local aimCamTween = nil;
 local lockCamLoop = nil;
+_G.__vyperiaLockOpt = type(_G.__vyperiaLockOpt) == "table" and _G.__vyperiaLockOpt or {};
+VLO = _G.__vyperiaLockOpt;
+VLO.deathWatch = type(VLO.deathWatch) == "table" and VLO.deathWatch or {};
+VLO.scanGap = 0;
+VLO.partGap = 0;
+VLO.aliveGap = 0;
+VLO.seq = 0;
 local rng = Random.new();
 local trackedPlayers = {};
 local plrIdx = {};
@@ -3252,6 +3263,73 @@ local function getLockRefreshInterval()
 	end;
 	return math.clamp(interval, 0.09, 0.24);
 end;
+
+function VLO.clearTarget()
+	VLO.trackedCh = nil;
+	VLO.trackedPart = nil;
+	lastLockedCharacter = nil;
+	lastLockedPart = nil;
+	lastTargetName = "none";
+end;
+function VLO.stop()
+	if aimCamTween then
+		pcall(function()
+			aimCamTween:Cancel();
+		end);
+		aimCamTween = nil;
+	end;
+	if uiRefs and uiRefs.clearAimDeathWatch then
+		uiRefs.clearAimDeathWatch(VLO.deathWatch);
+	end;
+	VLO.trackedCh = nil;
+	VLO.trackedPart = nil;
+	VLO.lastCh = nil;
+	VLO.scanGap = 0;
+	VLO.partGap = 0;
+	VLO.aliveGap = 0;
+	if lockCamLoop and lockCamLoop.Connected then
+		lockCamLoop:Disconnect();
+	end;
+	lockCamLoop = nil;
+end;
+function VLO.acquire(aimMode)
+	VLO.ch, VLO.scanPart = findTarget();
+	if VLO.ch ~= VLO.lastCh then
+		if aimMode == "Random" and VLO.ch then
+			bumpRandomAim(VLO.ch);
+		end;
+		VLO.lastCh = VLO.ch;
+	end;
+	VLO.trackedCh = VLO.ch;
+	if _G.aliveCheck then
+		uiRefs.watchAimDeath(VLO.deathWatch, VLO.ch, function()
+			VLO.clearTarget();
+			VLO.scanGap = math.huge;
+			VLO.partGap = math.huge;
+			VLO.aliveGap = math.huge;
+		end);
+	else
+		uiRefs.clearAimDeathWatch(VLO.deathWatch);
+	end;
+	if VLO.ch then
+		if aimMode ~= "Random" then
+			VLO.prefPart = topAimPart(VLO.ch);
+			if isTrackedAimPartUsable(VLO.ch, VLO.prefPart, _G.wallCheck == true) then
+				VLO.trackedPart = VLO.prefPart;
+			elseif isTrackedAimPartUsable(VLO.ch, lastLockedPart, _G.wallCheck == true) then
+				VLO.trackedPart = lastLockedPart;
+			else
+				VLO.trackedPart = isTrackedAimPartUsable(VLO.ch, VLO.scanPart, _G.wallCheck == true) and VLO.scanPart or VLO.prefPart;
+			end;
+		else
+			VLO.trackedPart = isTrackedAimPartUsable(VLO.ch, VLO.scanPart, _G.wallCheck == true) and VLO.scanPart or topAimPart(VLO.ch);
+		end;
+		lastLockedPart = VLO.trackedPart;
+	else
+		VLO.trackedPart = nil;
+		lastLockedPart = nil;
+	end;
+end;
 local function updateESPText(p)
 	local rec = espMap[p];
 	if not rec or (not rec.tx) then
@@ -5894,10 +5972,7 @@ local function createUI()
 		randomAimSeq = randomAimSeq + 1;
 		lastLockedCharacter = nil;
 		lastLockedPart = nil;
-		if lockCamLoop and lockCamLoop.Connected then
-			lockCamLoop:Disconnect();
-			lockCamLoop = nil;
-		end;
+		VLO.stop();
 		clearFOVHooks();
 		for p, _ in pairs(espMap) do
 			espDetach(p);
@@ -6060,6 +6135,8 @@ function startLockAction()
 				cam.FieldOfView = _G.fovValue;
 			end;
 			lockCamera();
+		else
+			VLO.stop();
 		end;
 	else
 		isLock = true;
@@ -6079,6 +6156,7 @@ function endLockAction()
 	end;
 	isLock = false;
 	uiRefs.updateLockUi();
+	VLO.stop();
 end;
 handleOptionBind = function(action)
 	local var = OPT.BIND_ACTION_VARS[action];
@@ -6230,143 +6308,87 @@ function lockCamera()
 	if lockCamLoop and lockCamLoop.Connected then
 		return;
 	end;
-	local lastCh = nil;
-	local trackedCh = nil;
-	local trackedPart = nil;
-	local reacquireClock = math.huge;
-	local partRefreshClock = math.huge;
-	local deathWatch = {};
+	VLO.seq += 1;
+	VLO.trackedCh = nil;
+	VLO.trackedPart = nil;
+	VLO.lastCh = nil;
+	VLO.scanGap = math.huge;
+	VLO.partGap = math.huge;
+	VLO.aliveGap = math.huge;
+	uiRefs.clearAimDeathWatch(VLO.deathWatch);
 	lockCamLoop = RunService.RenderStepped:Connect(function(dt)
-		if not isLock or (not _G.isEnabled) then
-			if aimCamTween then
-				aimCamTween:Cancel();
-				aimCamTween = nil;
-			end;
-			uiRefs.clearAimDeathWatch(deathWatch);
-			trackedCh = nil;
-			trackedPart = nil;
-			if lockCamLoop then
-				lockCamLoop:Disconnect();
-				lockCamLoop = nil;
-			end;
+		VLO.dt = dt or 0.016;
+		if VLO.dt <= 0 then
+			VLO.dt = 0.016;
+		end;
+		if not isLock or not _G.isEnabled then
+			VLO.stop();
 			return;
 		end;
-		local step = dt or 0.016;
-		reacquireClock += step;
-		partRefreshClock += step;
-		local aimMode = normalizeAimMode(_G.aimTargetMode);
-		local needsRefresh = trackedCh == nil;
-		if trackedCh and _G.aliveCheck and (not uiRefs.liveHum(trackedCh)) then
-			uiRefs.clearAimDeathWatch(deathWatch);
-			trackedCh = nil;
-			trackedPart = nil;
-			lastLockedCharacter = nil;
-			lastLockedPart = nil;
-			lastTargetName = "none";
-			needsRefresh = true;
+		VLO.scanGap += VLO.dt;
+		VLO.partGap += VLO.dt;
+		VLO.aliveGap += VLO.dt;
+		VLO.aimMode = normalizeAimMode(_G.aimTargetMode);
+		VLO.refreshWait = getLockRefreshInterval();
+		VLO.needScan = false;
+		if not VLO.trackedCh then
+			VLO.needScan = VLO.scanGap >= VLO.refreshWait;
+		elseif not _G.stickyTarget and VLO.scanGap >= math.max(VLO.refreshWait, 0.3) then
+			VLO.needScan = true;
 		end;
-		if trackedCh and (not isTrackedAimPartUsable(trackedCh, trackedPart, false)) then
-			trackedPart = nil;
-			needsRefresh = true;
-		end;
-		if (not needsRefresh) and (not _G.stickyTarget) and reacquireClock >= math.max(getLockRefreshInterval(), 0.3) then
-			needsRefresh = true;
-		end;
-		if needsRefresh then
-			reacquireClock = 0;
-			partRefreshClock = 0;
-			local ch, scanPart = findTarget();
-			if ch ~= lastCh then
-				if aimMode == "Random" and ch then
-					bumpRandomAim(ch);
-				end;
-				lastCh = ch;
-			end;
-			trackedCh = ch;
-			if _G.aliveCheck then
-				uiRefs.watchAimDeath(deathWatch, ch, function()
-					trackedCh = nil;
-					trackedPart = nil;
-					lastLockedCharacter = nil;
-					lastLockedPart = nil;
-					lastTargetName = "none";
-					reacquireClock = math.huge;
-					partRefreshClock = math.huge;
-				end);
-			else
-				uiRefs.clearAimDeathWatch(deathWatch);
-			end;
-			if ch then
-				if aimMode ~= "Random" then
-					local prefPart = topAimPart(ch);
-					if isTrackedAimPartUsable(ch, prefPart, _G.wallCheck == true) then
-						trackedPart = prefPart;
-					elseif isTrackedAimPartUsable(ch, lastLockedPart, _G.wallCheck == true) then
-						trackedPart = lastLockedPart;
-					else
-						trackedPart = isTrackedAimPartUsable(ch, scanPart, _G.wallCheck == true) and scanPart or prefPart;
-					end;
-					lastLockedPart = trackedPart;
-				else
-					trackedPart = isTrackedAimPartUsable(ch, scanPart, _G.wallCheck == true) and scanPart or topAimPart(ch);
-					lastLockedPart = trackedPart;
-				end;
-			else
-				trackedPart = nil;
+		if VLO.trackedCh and VLO.aliveGap >= 0.07 then
+			VLO.aliveGap = 0;
+			if _G.aliveCheck and not uiRefs.liveHum(VLO.trackedCh) then
+				uiRefs.clearAimDeathWatch(VLO.deathWatch);
+				VLO.clearTarget();
+				VLO.needScan = VLO.scanGap >= VLO.refreshWait;
+			elseif not isTrackedAimPartUsable(VLO.trackedCh, VLO.trackedPart, false) then
+				VLO.trackedPart = nil;
 				lastLockedPart = nil;
+				VLO.needScan = VLO.scanGap >= VLO.refreshWait;
 			end;
-		elseif trackedCh and partRefreshClock >= 0.18 then
-			partRefreshClock = 0;
-			if aimMode ~= "Random" then
-				local prefPart = topAimPart(trackedCh);
-				if isTrackedAimPartUsable(trackedCh, prefPart, _G.wallCheck == true) then
-					trackedPart = prefPart;
-					lastLockedPart = trackedPart;
+		end;
+		if VLO.needScan then
+			VLO.scanGap = 0;
+			VLO.partGap = 0;
+			VLO.acquire(VLO.aimMode);
+		elseif VLO.trackedCh and VLO.partGap >= 0.2 then
+			VLO.partGap = 0;
+			if VLO.aimMode ~= "Random" then
+				VLO.prefPart = topAimPart(VLO.trackedCh);
+				if isTrackedAimPartUsable(VLO.trackedCh, VLO.prefPart, _G.wallCheck == true) then
+					VLO.trackedPart = VLO.prefPart;
+					lastLockedPart = VLO.trackedPart;
 				end;
-			elseif not isTrackedAimPartUsable(trackedCh, trackedPart, _G.wallCheck == true) then
-				trackedPart = topAimPart(trackedCh) or trackedPart;
-				lastLockedPart = trackedPart;
+			elseif not isTrackedAimPartUsable(VLO.trackedCh, VLO.trackedPart, _G.wallCheck == true) then
+				VLO.trackedPart = topAimPart(VLO.trackedCh) or VLO.trackedPart;
+				lastLockedPart = VLO.trackedPart;
 			end;
 		end;
-		if trackedCh and _G.aliveCheck and (not uiRefs.liveHum(trackedCh)) then
-			uiRefs.clearAimDeathWatch(deathWatch);
-			trackedCh = nil;
-			trackedPart = nil;
-			lastLockedCharacter = nil;
-			lastLockedPart = nil;
-			lastTargetName = "none";
+		if VLO.trackedCh and VLO.trackedPart and _G.aliveCheck and VLO.aliveGap == 0 and not uiRefs.hardAlive(VLO.trackedCh, VLO.trackedPart) then
+			uiRefs.clearAimDeathWatch(VLO.deathWatch);
+			VLO.clearTarget();
+			VLO.scanGap = math.huge;
+			VLO.partGap = math.huge;
+			VLO.aliveGap = math.huge;
 		end;
-		if trackedCh and trackedPart and _G.aliveCheck and (not uiRefs.hardAlive(trackedCh, trackedPart)) then
-			uiRefs.clearAimDeathWatch(deathWatch);
-			trackedCh = nil;
-			trackedPart = nil;
-			lastLockedCharacter = nil;
-			lastLockedPart = nil;
-			lastTargetName = "none";
-			reacquireClock = math.huge;
-			partRefreshClock = math.huge;
-		end;
-		if trackedCh and trackedPart then
-			local tgtPos = getAimPos(trackedPart);
-			local cf = CFrame.new(cam.CFrame.Position, tgtPos);
-			local doTween = _G.aimTween == true;
-			if doTween then
-				if aimCamTween then
+		if VLO.trackedCh and VLO.trackedPart then
+			VLO.tgtPos = getAimPos(VLO.trackedPart);
+			VLO.cf = CFrame.new(cam.CFrame.Position, VLO.tgtPos);
+			if aimCamTween then
+				pcall(function()
 					aimCamTween:Cancel();
-					aimCamTween = nil;
-				end;
-				local alpha = math.clamp(getAimTweenDuration(), 0.01, 1);
-				cam.CFrame = cam.CFrame:Lerp(cf, alpha);
+				end);
+				aimCamTween = nil;
+			end;
+			if _G.aimTween == true then
+				VLO.alpha = math.clamp(getAimTweenDuration(), 0.01, 1);
+				cam.CFrame = cam.CFrame:Lerp(VLO.cf, VLO.alpha);
 			else
-				if aimCamTween then
-					aimCamTween:Cancel();
-					aimCamTween = nil;
-				end;
-				cam.CFrame = cf;
+				cam.CFrame = VLO.cf;
 			end;
 		end;
 	end);
-	table.insert(conns, lockCamLoop);
 end;
 uiRefs.setupPlayerMonitoring = function()
 	local function hook(pp)
@@ -6466,15 +6488,13 @@ table.insert(conns, RunService.Heartbeat:Connect(function(dt)
 	uiRefs.teamPulse = 0;
 	uiRefs.chkMode();
 end));
-return function()
+_G.__vyperiaAimbotCleanup = function()
 	npc.dispose(false);
 	for _, c in pairs(conns) do
 		disconnectConn(c);
 	end;
-	if lockCamLoop and lockCamLoop.Connected then
-		lockCamLoop:Disconnect();
-		lockCamLoop = nil;
-	end;
+	table.clear(conns);
+	VLO.stop();
 	for p, _ in pairs(espMap) do
 		espDetach(p);
 	end;
@@ -6483,4 +6503,8 @@ return function()
 	if gui and gui.Parent then
 		gui:Destroy();
 	end;
+	gui = nil;
+	frm = nil;
+	_G.__vyperiaAimbotCleanup = nil;
 end;
+return _G.__vyperiaAimbotCleanup;

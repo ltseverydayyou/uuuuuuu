@@ -4737,7 +4737,7 @@ local function binds()
 		endLockAction();
 	end);
 	table.insert(conns, bMouseEnd);
-	local bKeys = UIS.InputEnded:Connect(function(i, gp)
+    local bKeys = UIS.InputBegan:Connect(function(i, gp)
 		if gp then
 			return;
 		end;

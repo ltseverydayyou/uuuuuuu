@@ -467,12 +467,8 @@ local refreshMobileUI = function() end;
 local rebuildMobileHelper = function() end;
 local clampMobileHelperToScreen = function() end;
 local updateFOVCircle = function() end;
-handleOptionBind = function()
+local handleOptionBind = function()
 	return false;
-end;
-refreshStrongBinds = function() end;
-startStrongCapture = function()
-	return function() end;
 end;
 local function applyTheme(name)
 	local themes = {
@@ -3838,7 +3834,6 @@ local function createUI()
 				end;
 				_G.toggleKeys = list;
 				saveCfg();
-				refreshStrongBinds();
 			end);
 		end;
 	end;
@@ -3873,16 +3868,10 @@ local function createUI()
 	stroke(clrKey, 1, UI.stroke2, 0.15);
 	local capConn;
 	local lockCapConn;
-	local capStop;
-	local lockCapStop;
 	local lockCapMode = false;
 	local function stopCap()
 		capMode = false;
 		capCooldownUntil = time() + 0.3;
-		if capStop then
-			capStop();
-		end;
-		capStop = nil;
 		if capConn and capConn.Connected then
 			capConn:Disconnect();
 		end;
@@ -3891,10 +3880,6 @@ local function createUI()
 	local function stopLockCap()
 		lockCapMode = false;
 		capCooldownUntil = time() + 0.3;
-		if lockCapStop then
-			lockCapStop();
-		end;
-		lockCapStop = nil;
 		if lockCapConn and lockCapConn.Connected then
 			lockCapConn:Disconnect();
 		end;
@@ -3906,14 +3891,17 @@ local function createUI()
 		end;
 		capMode = true;
 		toast("press a key");
-		capStop = startStrongCapture(function(i)
+		capConn = UIS.InputBegan:Connect(function(i, gp)
+			if gp then
+				return;
+			end;
 			if i.UserInputType ~= Enum.UserInputType.Keyboard then
-				return false;
+				return;
 			end;
 			local kc = i.KeyCode;
 			if kc == Enum.KeyCode.Unknown then
 				stopCap();
-				return true;
+				return;
 			end;
 			local name = kc.Name;
 			if not keysSet[name] then
@@ -3925,18 +3913,15 @@ local function createUI()
 				_G.toggleKeys = list;
 				rebuildChips();
 				saveCfg();
-				refreshStrongBinds();
 			end;
 			stopCap();
-			return true;
-		end, false);
+		end);
 	end);
 	local clrCon = bindClick(clrKey, function()
 		keysSet = {};
 		_G.toggleKeys = {};
 		rebuildChips();
 		saveCfg();
-		refreshStrongBinds();
 	end);
 	local lockLbl = newUi("TextLabel", pgSettings);
 	lockLbl.BackgroundTransparency = 1;
@@ -3965,29 +3950,28 @@ local function createUI()
 		end;
 		lockCapMode = true;
 		toast("press key or mouse for lock");
-		lockCapStop = startStrongCapture(function(i)
+		lockCapConn = UIS.InputBegan:Connect(function(i, gp)
 			if not lockCapMode then
-				return true;
+				return;
 			end;
 			local name;
 			if i.UserInputType == Enum.UserInputType.Keyboard then
 				if i.KeyCode == Enum.KeyCode.Unknown then
 					stopLockCap();
-					return true;
+					return;
 				end;
 				name = i.KeyCode.Name;
 			elseif i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.MouseButton2 or i.UserInputType == Enum.UserInputType.MouseButton3 then
 				name = i.UserInputType.Name;
 			else
-				return false;
+				return;
 			end;
 			_G.lockKey = name;
 			lockBtn.Text = name;
 			saveCfg();
-			refreshStrongBinds();
 			stopLockCap();
-			return true;
-		end, true);
+		end);
+		table.insert(conns, lockCapConn);
 	end);
 	local lockReset = newUi("TextButton", pgSettings);
 	lockReset.Text = "reset lock key";
@@ -4003,7 +3987,6 @@ local function createUI()
 		_G.lockKey = "MouseButton2";
 		lockBtn.Text = "MouseButton2";
 		saveCfg();
-		refreshStrongBinds();
 		toast("lock key reset to MouseButton2");
 	end);
 	addSection(pgSettings, "option binds");
@@ -4085,7 +4068,6 @@ local function createUI()
 				_G.optionBinds[keyName] = nil;
 				rebuildOptionBindRows();
 				saveCfg();
-				refreshStrongBinds();
 			end);
 		end;
 		if not any then
@@ -4110,28 +4092,28 @@ local function createUI()
 		capMode = true;
 		local action = normChoice(_G.pendingBindAction, BIND_ACTION_OPTIONS, "Aimbot");
 		toast("press key for " .. action);
-		capStop = startStrongCapture(function(i)
+		capConn = UIS.InputBegan:Connect(function(i, gp)
+			if gp then
+				return;
+			end;
 			if i.UserInputType ~= Enum.UserInputType.Keyboard then
-				return false;
+				return;
 			end;
 			if i.KeyCode == Enum.KeyCode.Unknown then
 				stopCap();
-				return true;
+				return;
 			end;
 			_G.optionBinds = type(_G.optionBinds) == "table" and _G.optionBinds or {};
 			_G.optionBinds[i.KeyCode.Name] = action;
 			rebuildOptionBindRows();
 			saveCfg();
-			refreshStrongBinds();
 			stopCap();
-			return true;
-		end, false);
+		end);
 	end);
 	local clrBindCon = bindClick(clrBind, function()
 		_G.optionBinds = {};
 		rebuildOptionBindRows();
 		saveCfg();
-		refreshStrongBinds();
 	end);
 	if isMobilePlatform() then
 		addSection(pgSettings, "mobile helper");
@@ -4584,8 +4566,6 @@ local function createUI()
 		espMap = {};
 		CAS:UnbindAction("VyperiaBot");
 		CAS:UnbindAction("VyperiaBotBlock");
-		CAS:UnbindAction("VyperiaBotStrongKeys");
-		CAS:UnbindAction("VyperiaBotStrongCapture");
 		toast("Aimbot unloaded");
 		task.delay(0.5, function()
 			if gui and gui.Parent then
@@ -4666,119 +4646,6 @@ local function cursorInsideModel(m, pad)
 	local p = pad or 2;
 	return x >= a - p and x <= c + p and y >= b - p and y <= d + p;
 end;
-STRONG_KEY_ACTION = "VyperiaBotStrongKeys";
-STRONG_CAP_ACTION = "VyperiaBotStrongCapture";
-STRONG_PRIORITY = 1000000;
-unpackFn = table.unpack or unpack;
-function inputEnum(name)
-	if type(name) ~= "string" or name == "" then
-		return nil;
-	end;
-	local ok, item = pcall(function()
-		return Enum.KeyCode[name];
-	end);
-	if ok and typeof(item) == "EnumItem" and item ~= Enum.KeyCode.Unknown then
-		return item;
-	end;
-	ok, item = pcall(function()
-		return Enum.UserInputType[name];
-	end);
-	if ok and typeof(item) == "EnumItem" then
-		if item == Enum.UserInputType.MouseButton1 or item == Enum.UserInputType.MouseButton2 or item == Enum.UserInputType.MouseButton3 then
-			return item;
-		end;
-	end;
-	return nil;
-end;
-function addInput(list, seen, name)
-	local item = inputEnum(name);
-	if not item then
-		return;
-	end;
-	local key = tostring(item);
-	if seen[key] then
-		return;
-	end;
-	seen[key] = true;
-	list[#list + 1] = item;
-end;
-function collectStrongInputs()
-	local list = {};
-	local seen = {};
-	addInput(list, seen, _G.lockKey or "MouseButton2");
-	if type(_G.toggleKeys) == "table" then
-		for _, name in pairs(_G.toggleKeys) do
-			addInput(list, seen, tostring(name));
-		end;
-	end;
-	if type(_G.optionBinds) == "table" then
-		for name, action in pairs(_G.optionBinds) do
-			if BIND_ACTION_VARS[action] then
-				addInput(list, seen, tostring(name));
-			end;
-		end;
-	end;
-	return list;
-end;
-function collectCaptureInputs(allowMouse)
-	local list = {};
-	for _, item in ipairs(Enum.KeyCode:GetEnumItems()) do
-		if item ~= Enum.KeyCode.Unknown then
-			list[#list + 1] = item;
-		end;
-	end;
-	if allowMouse then
-		list[#list + 1] = Enum.UserInputType.MouseButton1;
-		list[#list + 1] = Enum.UserInputType.MouseButton2;
-		list[#list + 1] = Enum.UserInputType.MouseButton3;
-	end;
-	return list;
-end;
-startStrongCapture = function(fn, allowMouse)
-	pcall(function()
-		CAS:UnbindAction(STRONG_CAP_ACTION);
-	end);
-	local alive = true;
-	local fallback;
-	local function stop()
-		if not alive then
-			return;
-		end;
-		alive = false;
-		pcall(function()
-			CAS:UnbindAction(STRONG_CAP_ACTION);
-		end);
-		if fallback and fallback.Connected then
-			fallback:Disconnect();
-		end;
-	end;
-	local function run(input)
-		if not alive then
-			return true;
-		end;
-		if fn(input) ~= false then
-			stop();
-			return true;
-		end;
-		return false;
-	end;
-	local inputs = collectCaptureInputs(allowMouse);
-	local ok = pcall(function()
-		CAS:BindActionAtPriority(STRONG_CAP_ACTION, function(_, state, input)
-			if state ~= Enum.UserInputState.Begin then
-				return Enum.ContextActionResult.Sink;
-			end;
-			run(input);
-			return Enum.ContextActionResult.Sink;
-		end, false, STRONG_PRIORITY + 1, unpackFn(inputs));
-	end);
-	if not ok then
-		fallback = UIS.InputBegan:Connect(function(input)
-			run(input);
-		end);
-	end;
-	return stop;
-end;
 local function isLockInput(i)
 	local key = _G.lockKey or "MouseButton2";
 	if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.MouseButton2 or i.UserInputType == Enum.UserInputType.MouseButton3 then
@@ -4852,69 +4719,92 @@ handleOptionBind = function(action)
 	toast(action .. (_G[var] and " enabled" or " disabled"));
 	return true;
 end;
-function runStrongKey(input, state)
-	if not input then
-		return false;
-	end;
-	local handled = false;
-	local name;
-	local action;
-	local isToggle = false;
-	if input.UserInputType == Enum.UserInputType.Keyboard then
-		name = input.KeyCode.Name;
-		local bindsMap = type(_G.optionBinds) == "table" and _G.optionBinds or {};
-		action = bindsMap[name];
-		isToggle = type(_G.toggleKeys) == "table" and table.find(_G.toggleKeys, name) ~= nil;
-	end;
-	if state == Enum.UserInputState.Begin and isLockInput(input) then
-		startLockAction();
-		handled = true;
-	elseif state == Enum.UserInputState.End and isLockInput(input) then
-		endLockAction();
-		handled = true;
-	end;
-	if UIS:GetFocusedTextBox() then
-		return handled;
-	end;
-	if capMode or time() < capCooldownUntil then
-		return true;
-	end;
-	if state ~= Enum.UserInputState.End then
-		return handled or action ~= nil or isToggle;
-	end;
-	if input.UserInputType ~= Enum.UserInputType.Keyboard then
-		return handled;
-	end;
-	if action and handleOptionBind(action) then
-		return true;
-	end;
-	if isToggle then
-		if not frm or (not frm.Parent) then
-			return true;
+local function binds()
+	-- Unbind first so re-calling binds() (e.g. on CharacterAdded) never stacks duplicates.
+	CAS:UnbindAction("VyperiaBot");
+	CAS:UnbindAction("VyperiaBotBlock");
+
+	-- Resolve the current lock key to an EnumItem (UserInputType or KeyCode).
+	local function resolveLockEnum()
+		local key = _G.lockKey or "MouseButton2";
+		local ok1, utype = pcall(function() return Enum.UserInputType[key]; end);
+		if ok1 and utype and typeof(utype) == "EnumItem" then
+			return utype;
 		end;
-		if uiMin then
-			openUI();
-		else
-			closeUI();
+		local ok2, kcode = pcall(function() return Enum.KeyCode[key]; end);
+		if ok2 and kcode and typeof(kcode) == "EnumItem" then
+			return kcode;
 		end;
-		return true;
+		return Enum.UserInputType.MouseButton2;
 	end;
-	return handled;
-end;
-refreshStrongBinds = function()
-	pcall(function()
-		CAS:UnbindAction(STRONG_KEY_ACTION);
-	end);
-	local inputs = collectStrongInputs();
-	if #inputs == 0 then
-		return;
+
+	-- Strong lock-key binding: High priority CAS sinks the input so the game never sees it.
+	CAS:BindActionAtPriority("VyperiaBot", function(_, state, _)
+		if state == Enum.UserInputState.Begin then
+			startLockAction();
+		elseif state == Enum.UserInputState.End then
+			endLockAction();
+		end;
+		return Enum.ContextActionResult.Sink;
+	end, false, Enum.ContextActionPriority.High.Value, resolveLockEnum());
+
+	-- Collect all KeyCode enums needed for toggle keys + option binds.
+	local function collectKeyEnums()
+		local seen = {};
+		local result = {};
+		local bm = type(_G.optionBinds) == "table" and _G.optionBinds or {};
+		for keyName in pairs(bm) do
+			local ok, kc = pcall(function() return Enum.KeyCode[keyName]; end);
+			if ok and kc and typeof(kc) == "EnumItem" and not seen[kc] then
+				seen[kc] = true;
+				table.insert(result, kc);
+			end;
+		end;
+		for _, keyName in ipairs(_G.toggleKeys or {}) do
+			local ok, kc = pcall(function() return Enum.KeyCode[keyName]; end);
+			if ok and kc and typeof(kc) == "EnumItem" and not seen[kc] then
+				seen[kc] = true;
+				table.insert(result, kc);
+			end;
+		end;
+		-- CAS requires at least one input — fall back to Unknown if the lists are empty.
+		if #result == 0 then
+			table.insert(result, Enum.KeyCode.Unknown);
+		end;
+		return result;
 	end;
-	pcall(function()
-		CAS:BindActionAtPriority(STRONG_KEY_ACTION, function(_, state, input)
-			local handled = runStrongKey(input, state);
-			return handled and Enum.ContextActionResult.Sink or Enum.ContextActionResult.Pass;
-		end, false, STRONG_PRIORITY, unpackFn(inputs));
-	end);
+
+	-- Strong keyboard toggle + option-bind binding: High priority, sinks matched keys.
+	CAS:BindActionAtPriority("VyperiaBotBlock", function(_, state, input)
+		-- Only act on key-release so toggle behaviour matches the original.
+		if state ~= Enum.UserInputState.End then
+			return Enum.ContextActionResult.Pass;
+		end;
+		if UIS:GetFocusedTextBox() then
+			return Enum.ContextActionResult.Pass;
+		end;
+		if capMode or time() < capCooldownUntil then
+			return Enum.ContextActionResult.Pass;
+		end;
+		local name = input.KeyCode.Name;
+		-- Read optionBinds fresh each call so runtime changes are always respected.
+		local bm = type(_G.optionBinds) == "table" and _G.optionBinds or {};
+		local action = bm[name];
+		if action and handleOptionBind(action) then
+			return Enum.ContextActionResult.Sink;
+		end;
+		if table.find(_G.toggleKeys, name) then
+			if frm and frm.Parent then
+				if uiMin then
+					openUI();
+				else
+					closeUI();
+				end;
+			end;
+			return Enum.ContextActionResult.Sink;
+		end;
+		return Enum.ContextActionResult.Pass;
+	end, false, Enum.ContextActionPriority.High.Value, table.unpack(collectKeyEnums()));
 end;
 function lockCamera()
 	if lockCamLoop and lockCamLoop.Connected then
@@ -4988,7 +4878,7 @@ function lockCamera()
 	end);
 	table.insert(conns, lockCamLoop);
 end;
-function setupPlayerMonitoring()
+local function setupPlayerMonitoring()
 	local function hook(pp)
 		trackPlayer(pp);
 		setTrackedCharacter(pp, pp.Character);
@@ -5041,7 +4931,7 @@ function setupPlayerMonitoring()
 		invalidateTargetState();
 		if not gui or (not gui.Parent) then
 			frm = createUI();
-			refreshStrongBinds();
+			binds();
 		end;
 		if _G.espEnabled then
 			updateESP();
@@ -5050,14 +4940,14 @@ function setupPlayerMonitoring()
 	table.insert(conns, c);
 end;
 frm = createUI();
-refreshStrongBinds();
+binds();
 setupPlayerMonitoring();
 if _G.espEnabled then
 	updateESP();
 end;
 toast("Aimbot loaded");
 saveCfg();
-function chkMode()
+local function chkMode()
 	local newMode;
 	if getTrackedPlayerCount() > 0 and Players.LocalPlayer.Team == nil then
 		newMode = "FFA";
@@ -5070,8 +4960,8 @@ function chkMode()
 		updateESP();
 	end;
 end;
-teamPulse = 0;
-teamCon = RunService.Heartbeat:Connect(function(dt)
+local teamPulse = 0;
+local teamCon = RunService.Heartbeat:Connect(function(dt)
 	teamPulse += dt or 0.016;
 	if teamPulse < 0.5 then
 		return;
@@ -5093,8 +4983,6 @@ return function()
 	end;
 	CAS:UnbindAction("VyperiaBot");
 	CAS:UnbindAction("VyperiaBotBlock");
-	CAS:UnbindAction("VyperiaBotStrongKeys");
-	CAS:UnbindAction("VyperiaBotStrongCapture");
 	clearFOVHooks();
 	if gui and gui.Parent then
 		gui:Destroy();

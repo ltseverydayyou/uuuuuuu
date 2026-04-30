@@ -127,6 +127,7 @@ local trackedPlayers = {};
 local plrIdx = {};
 local plrChars = {};
 local charOwner = {};
+local plrModelMark = setmetatable({}, { __mode = "k" });
 local function newRandomAimCache()
 	return setmetatable({}, {
 		__mode = "k"
@@ -142,6 +143,7 @@ local function setTrackedCharacter(pp, ch)
 	plrChars[pp] = ch;
 	if ch then
 		charOwner[ch] = pp;
+		plrModelMark[ch] = pp;
 	end;
 end;
 local function trackPlayer(pp)
@@ -174,6 +176,7 @@ local function rebuildPlrs()
 	table.clear(plrIdx);
 	table.clear(plrChars);
 	table.clear(charOwner);
+	table.clear(plrModelMark);
 	for _, pp in ipairs(Players:GetPlayers()) do
 		trackPlayer(pp);
 	end;
@@ -185,9 +188,50 @@ local function getPlrCount()
 	return #trackedPlayers;
 end;
 local function getPlrFromCh(ch)
-	return charOwner[ch] or Players:GetPlayerFromCharacter(ch);
+	return charOwner[ch] or plrModelMark[ch] or Players:GetPlayerFromCharacter(ch);
 end;
-local function isNPCCand(model)
+local npc = {
+	owner = tostring(os.clock()) .. ":" .. tostring(math.random(1, 1000000000)),
+	roots = {
+		"HumanoidRootPart",
+		"UpperTorso",
+		"LowerTorso",
+		"Torso",
+		"Head"
+	}
+};
+function npc.safe(c)
+	if c then
+		pcall(function()
+			c:Disconnect();
+		end);
+	end;
+end;
+function npc.player(model)
+	if not model or (not model:IsA("Model")) then
+		return false;
+	end;
+	if plrModelMark[model] then
+		return true;
+	end;
+	if getPlrFromCh(model) then
+		return true;
+	end;
+	local ok, owner = pcall(function()
+		return Players:GetPlayerFromCharacter(model);
+	end);
+	if ok and owner then
+		return true;
+	end;
+	for _, pp in ipairs(getPlrs()) do
+		local ch = pp.Character;
+		if ch and (model == ch or model:IsDescendantOf(ch) or ch:IsDescendantOf(model)) then
+			return true;
+		end;
+	end;
+	return false;
+end;
+function npc.cand(model)
 	if not model or (not model:IsA("Model")) then
 		return false;
 	end;
@@ -195,22 +239,66 @@ local function isNPCCand(model)
 		return false;
 	end;
 	local hum = model:FindFirstChildOfClass("Humanoid");
-	if not hum then
+	if not hum or hum.Parent == nil then
 		return false;
 	end;
-	if getPlrFromCh(model) then
+	if npc.player(model) then
 		return false;
-	end;
-	for _, pp in ipairs(getPlrs()) do
-		local ch = pp.Character;
-		if ch and (model == ch or model:IsDescendantOf(ch) or ch:IsDescendantOf(model)) then
-			return false;
-		end;
 	end;
 	return true;
 end;
-local function isNPCModel(model)
-	if not isNPCCand(model) then
+function npc.hum(model, rec)
+	if rec and rec.hum and rec.hum.Parent == model and rec.hum:IsA("Humanoid") then
+		return rec.hum;
+	end;
+	local hum = model and model:FindFirstChildOfClass("Humanoid");
+	if rec then
+		rec.hum = hum;
+	end;
+	return hum;
+end;
+function npc.root(model, rec)
+	if rec and rec.root and rec.root.Parent and rec.root:IsA("BasePart") and rec.root:IsDescendantOf(model) then
+		return rec.root;
+	end;
+	for i = 1, #npc.roots do
+		local p = model:FindFirstChild(npc.roots[i]);
+		if p and p:IsA("BasePart") then
+			if rec then
+				rec.root = p;
+			end;
+			return p;
+		end;
+	end;
+	local pp = model.PrimaryPart;
+	if pp and pp:IsA("BasePart") then
+		if rec then
+			rec.root = pp;
+		end;
+		return pp;
+	end;
+	for _, ch in ipairs(model:GetChildren()) do
+		if ch:IsA("BasePart") then
+			if rec then
+				rec.root = ch;
+			end;
+			return ch;
+		end;
+	end;
+	if rec and rec.deepRootTried ~= true then
+		rec.deepRootTried = true;
+		for i = 1, #npc.roots do
+			local p = model:FindFirstChild(npc.roots[i], true);
+			if p and p:IsA("BasePart") then
+				rec.root = p;
+				return p;
+			end;
+		end;
+	end;
+	return nil;
+end;
+function npc.is(model)
+	if not npc.cand(model) then
 		return false;
 	end;
 	local hum = model:FindFirstChildOfClass("Humanoid");
@@ -223,119 +311,376 @@ local function isNPCModel(model)
 	if ok and (state == Enum.HumanoidStateType.Dead or state == Enum.HumanoidStateType.None) then
 		return false;
 	end;
-	local anchor = model:FindFirstChild("HumanoidRootPart", true) or model:FindFirstChild("UpperTorso", true) or model:FindFirstChild("LowerTorso", true) or model:FindFirstChild("Torso", true) or model:FindFirstChild("Head", true) or model.PrimaryPart;
+	local rec = {};
+	local anchor = npc.root(model, rec);
 	if not anchor or (not anchor:IsA("BasePart")) then
 		return false;
 	end;
 	return true;
 end;
-local function getNpcs()
+function npc.dispose(force)
 	local cache = _G.__vyperiaNpcTargetCache;
-	if type(cache) ~= "table" or cache.init ~= true then
-		cache = {
-			init = true,
-			stamp = 0,
-			cands = {},
-			live = {},
-			list = {}
-		};
-		local function addNpc(inst)
-			if inst and inst:IsA("Model") and isNPCCand(inst) then
-				cache.cands[inst] = true;
-			end;
+	if type(cache) ~= "table" then
+		return;
+	end;
+	if not force and cache.owner ~= npc.owner then
+		return;
+	end;
+	npc.safe(cache.addConn);
+	npc.safe(cache.remConn);
+	cache.addConn = nil;
+	cache.remConn = nil;
+	cache.dead = true;
+	if type(cache.cands) == "table" then
+		table.clear(cache.cands);
+	end;
+	if type(cache.idx) == "table" then
+		table.clear(cache.idx);
+	end;
+	if type(cache.order) == "table" then
+		table.clear(cache.order);
+	end;
+	if type(cache.meta) == "table" then
+		table.clear(cache.meta);
+	end;
+	if type(cache.list) == "table" then
+		table.clear(cache.list);
+	end;
+	if type(cache.live) == "table" then
+		table.clear(cache.live);
+	end;
+	if type(cache.nextPicks) == "table" then
+		table.clear(cache.nextPicks);
+	end;
+	if _G.__vyperiaNpcTargetCache == cache then
+		_G.__vyperiaNpcTargetCache = nil;
+	end;
+end;
+function npc.rem(cache, model)
+	if not model or not cache.cands[model] then
+		return;
+	end;
+	local rec = cache.meta[model];
+	if rec then
+		npc.safe(rec.hpConn);
+		npc.safe(rec.diedConn);
+		rec.hpConn = nil;
+		rec.diedConn = nil;
+	end;
+	cache.cands[model] = nil;
+	cache.live[model] = nil;
+	cache.meta[model] = nil;
+	local i = cache.idx[model];
+	if i then
+		local n = #cache.order;
+		local last = cache.order[n];
+		cache.order[n] = nil;
+		cache.idx[model] = nil;
+		if last and last ~= model then
+			cache.order[i] = last;
+			cache.idx[last] = i;
 		end;
-		local function remNpc(inst)
-			if not inst then
-				return;
-			end;
-			local model = inst:IsA("Model") and inst or inst:FindFirstAncestorOfClass("Model");
-			if model then
-				cache.cands[model] = nil;
-				cache.live[model] = nil;
-			end;
+		if cache.cursor > n then
+			cache.cursor = 1;
+		elseif i < cache.cursor then
+			cache.cursor = math.max(1, cache.cursor - 1);
 		end;
-		cache.addConn = workspace.DescendantAdded:Connect(function(inst)
-			if inst:IsA("Model") then
-				addNpc(inst);
-			elseif inst:IsA("Humanoid") then
-				local parent = inst.Parent;
-				if parent and parent:IsA("Model") then
-					addNpc(parent);
-				end;
-			end;
-		end);
-		cache.remConn = workspace.DescendantRemoving:Connect(function(inst)
-			if inst:IsA("Model") then
-				remNpc(inst);
-			elseif inst:IsA("Humanoid") then
-				local parent = inst.Parent;
-				if parent and parent:IsA("Model") then
-					remNpc(parent);
-				end;
-			end;
-		end);
-		local queue = {
-			workspace
-		};
+	end;
+end;
+function npc.add(cache, model)
+	if cache.dead or not model or cache.cands[model] then
+		return;
+	end;
+	if not npc.cand(model) then
+		return;
+	end;
+	cache.meta[model] = cache.meta[model] or {};
+	local rec = cache.meta[model];
+	local hum = npc.hum(model, rec);
+	if not hum or hum.Parent == nil or hum.Health <= 0 then
+		cache.meta[model] = nil;
+		return;
+	end;
+	cache.cands[model] = true;
+	cache.order[#cache.order + 1] = model;
+	cache.idx[model] = #cache.order;
+	rec.hpConn = hum.HealthChanged:Connect(function(hp)
+		if tonumber(hp) and hp <= 0 then
+			npc.rem(cache, model);
+		end;
+	end);
+	rec.diedConn = hum.Died:Connect(function()
+		npc.rem(cache, model);
+	end);
+end;
+function npc.model(inst)
+	if not inst then
+		return nil;
+	end;
+	if inst:IsA("Model") then
+		return inst;
+	end;
+	if inst:IsA("Humanoid") then
+		local par = inst.Parent;
+		if par and par:IsA("Model") then
+			return par;
+		end;
+	end;
+	return inst:FindFirstAncestorOfClass("Model");
+end;
+function npc.seed(cache)
+	if cache.seeding or cache.seeded or cache.dead then
+		return;
+	end;
+	cache.seeding = true;
+	task.spawn(function()
+		local q = { workspace };
 		local qi = 1;
-		while qi <= #queue do
-			local inst = queue[qi];
+		local steps = 0;
+		while (not cache.dead) and qi <= #q do
+			local inst = q[qi];
+			q[qi] = nil;
 			qi += 1;
-			if inst:IsA("Model") then
-				addNpc(inst);
-			end;
-			for _, child in ipairs(inst:GetChildren()) do
-				table.insert(queue, child);
-			end;
-		end;
-		_G.__vyperiaNpcTargetCache = cache;
-	end;
-	cache.cands = type(cache.cands) == "table" and cache.cands or {};
-	cache.live = type(cache.live) == "table" and cache.live or {};
-	cache.list = type(cache.list) == "table" and cache.list or {};
-	cache.stamp = tonumber(cache.stamp) or 0;
-	local now = os.clock();
-	if now - cache.stamp < 0.6 then
-		return cache.list or {};
-	end;
-	cache.stamp = now;
-	local list = {};
-	local live = {};
-	local char = plr and plr.Character;
-	local root = char and (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("UpperTorso") or char:FindFirstChild("LowerTorso") or char:FindFirstChild("Torso") or char:FindFirstChild("Head"));
-	local maxDist = math.clamp(tonumber(_G.targetMaxDistance) or 2500, 100, 5000);
-	local maxCnt = 200;
-	local picks = {};
-	for inst in pairs(cache.cands) do
-		if inst and inst.Parent and isNPCCand(inst) then
-			local anchor = inst:FindFirstChild("HumanoidRootPart", true) or inst:FindFirstChild("UpperTorso", true) or inst:FindFirstChild("LowerTorso", true) or inst:FindFirstChild("Torso", true) or inst:FindFirstChild("Head", true) or inst.PrimaryPart;
-			if anchor and anchor:IsA("BasePart") then
-				local dist = root and (anchor.Position - root.Position).Magnitude or 0;
-				if isNPCModel(inst) and ((not root) or dist <= maxDist) then
-					picks[#picks + 1] = {
-						model = inst,
-						dist = dist
-					};
+			if inst and inst.Parent then
+				if inst:IsA("Model") then
+					npc.add(cache, inst);
+				elseif inst:IsA("Humanoid") then
+					local par = inst.Parent;
+					if par and par:IsA("Model") then
+						npc.add(cache, par);
+					end;
+				end;
+				local ok, children = pcall(function()
+					return inst:GetChildren();
+				end);
+				if ok and type(children) == "table" then
+					for i = 1, #children do
+						q[#q + 1] = children[i];
+					end;
 				end;
 			end;
-		else
-			cache.cands[inst] = nil;
+			steps += 1;
+			if steps % 900 == 0 then
+				task.wait();
+			end;
 		end;
+		cache.seeded = true;
+		cache.seeding = false;
+	end);
+end;
+function npc.make()
+	local old = _G.__vyperiaNpcTargetCache;
+	if type(old) == "table" and old.owner ~= npc.owner then
+		npc.dispose(true);
 	end;
+	local cache = _G.__vyperiaNpcTargetCache;
+	if type(cache) == "table" and cache.init == true and cache.owner == npc.owner and cache.dead ~= true then
+		return cache;
+	end;
+	cache = {
+		init = true,
+		ver = 6,
+		owner = npc.owner,
+		dead = false,
+		stamp = 0,
+		seeded = false,
+		seeding = false,
+		cursor = 1,
+		cands = {},
+		idx = {},
+		order = {},
+		meta = setmetatable({}, { __mode = "k" }),
+		live = {},
+		list = {},
+		nextPicks = {}
+	};
+	cache.add = function(model)
+		return npc.add(cache, model);
+	end;
+	cache.remove = function(model)
+		return npc.rem(cache, model);
+	end;
+	cache.seed = function()
+		return npc.seed(cache);
+	end;
+	cache.addConn = workspace.DescendantAdded:Connect(function(inst)
+		if cache.dead then
+			return;
+		end;
+		if inst:IsA("Model") or inst:IsA("Humanoid") then
+			local model = npc.model(inst);
+			if model then
+				npc.add(cache, model);
+			end;
+		elseif inst:IsA("BasePart") then
+			local model = inst:FindFirstAncestorOfClass("Model");
+			local rec = model and cache.meta[model];
+			if rec then
+				rec.deepRootTried = false;
+				if not rec.root then
+					local ln = inst.Name;
+					if ln == "HumanoidRootPart" or ln == "UpperTorso" or ln == "LowerTorso" or ln == "Torso" or ln == "Head" then
+						rec.root = inst;
+					end;
+				end;
+			end;
+		end;
+	end);
+	cache.remConn = workspace.DescendantRemoving:Connect(function(inst)
+		if cache.dead then
+			return;
+		end;
+		if inst:IsA("Model") then
+			npc.rem(cache, inst);
+		elseif inst:IsA("Humanoid") then
+			local par = inst.Parent;
+			if par and par:IsA("Model") then
+				npc.rem(cache, par);
+			end;
+		elseif inst:IsA("BasePart") then
+			local model = inst:FindFirstAncestorOfClass("Model");
+			local rec = model and cache.meta[model];
+			if rec and rec.root == inst then
+				rec.root = nil;
+				rec.deepRootTried = false;
+			end;
+		end;
+	end);
+	_G.__vyperiaNpcTargetCache = cache;
+	npc.seed(cache);
+	return cache;
+end;
+function npc.ok(model, rec)
+	if not model or not model.Parent or not model:IsDescendantOf(workspace) then
+		return false, nil, true;
+	end;
+	if npc.player(model) then
+		return false, nil, true;
+	end;
+	local hum = npc.hum(model, rec);
+	if not hum or hum.Parent == nil then
+		return false, nil, true;
+	end;
+	if hum.Health <= 0 then
+		return false, nil, true;
+	end;
+	local ok, state = pcall(function()
+		return hum:GetState();
+	end);
+	if ok and (state == Enum.HumanoidStateType.Dead or state == Enum.HumanoidStateType.None) then
+		return false, nil, true;
+	end;
+	local root = npc.root(model, rec);
+	if not root or root.Parent == nil then
+		return false, nil, false;
+	end;
+	return true, root, false;
+end;
+function npc.finish(cache)
+	local picks = cache.nextPicks;
 	table.sort(picks, function(a, b)
 		if math.abs((a.dist or 0) - (b.dist or 0)) < 0.001 then
 			return tostring(a.model.Name) < tostring(b.model.Name);
 		end;
 		return (a.dist or 0) < (b.dist or 0);
 	end);
+	local list = {};
+	local live = {};
+	local maxCnt = math.clamp(tonumber(_G.npcTargetMaxCount) or 200, 16, 500);
 	for i = 1, math.min(#picks, maxCnt) do
-		local inst = picks[i].model;
-		list[#list + 1] = inst;
-		live[inst] = true;
+		local model = picks[i].model;
+		if model and model.Parent then
+			list[#list + 1] = model;
+			live[model] = true;
+		end;
 	end;
-	cache.live = live;
 	cache.list = list;
-	return list;
+	cache.live = live;
+	table.clear(picks);
+end;
+function npc.step(cache)
+	if cache.dead then
+		return;
+	end;
+	if type(cache.seed) == "function" then
+		cache.seed();
+	end;
+	local now = os.clock();
+	local int = math.clamp(tonumber(_G.npcTargetScanInterval) or 0.12, 0.05, 1);
+	if now - (tonumber(cache.stamp) or 0) < int then
+		return;
+	end;
+	cache.stamp = now;
+	cache.cursor = tonumber(cache.cursor) or 1;
+	local order = cache.order;
+	local n = #order;
+	if n == 0 then
+		cache.cursor = 1;
+		if #cache.list > 0 then
+			cache.list = {};
+		end;
+		return;
+	end;
+	if cache.cursor < 1 or cache.cursor > n then
+		cache.cursor = 1;
+	end;
+	if cache.cursor == 1 then
+		table.clear(cache.nextPicks);
+	end;
+	local char = plr and plr.Character;
+	local root = char and (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("UpperTorso") or char:FindFirstChild("LowerTorso") or char:FindFirstChild("Torso") or char:FindFirstChild("Head"));
+	local maxDist = math.clamp(tonumber(_G.targetMaxDistance) or 2500, 100, 5000);
+	local budget = math.clamp(tonumber(_G.npcTargetScanBudget) or 96, 16, 512);
+	local scanned = 0;
+	while scanned < budget and n > 0 do
+		local i = cache.cursor;
+		local model = order[i];
+		scanned += 1;
+		if not model then
+			cache.cursor = i + 1;
+		elseif not cache.cands[model] then
+			cache.cursor = i + 1;
+		else
+			local rec = cache.meta[model];
+			if not rec then
+				rec = {};
+				cache.meta[model] = rec;
+			end;
+			local ok, anchor, drop = npc.ok(model, rec);
+			if drop then
+				npc.rem(cache, model);
+				n = #order;
+				if i > n then
+					cache.cursor = 1;
+					npc.finish(cache);
+					break;
+				else
+					cache.cursor = i;
+				end;
+			elseif ok and anchor then
+				local dist = root and (anchor.Position - root.Position).Magnitude or 0;
+				if (not root) or dist <= maxDist then
+					cache.nextPicks[#cache.nextPicks + 1] = {
+						model = model,
+						dist = dist
+					};
+				end;
+				cache.cursor = i + 1;
+			else
+				cache.cursor = i + 1;
+			end;
+		end;
+		if cache.cursor > n then
+			cache.cursor = 1;
+			npc.finish(cache);
+			break;
+		end;
+	end;
+end;
+function npc.get()
+	local cache = npc.make();
+	npc.step(cache);
+	return cache.list or {};
 end;
 rebuildPlrs();
 local function platformName()
@@ -2110,41 +2455,109 @@ local NA_GRAB_BODY = (function()
 	};
 end)();
 local function getHumanoid(m)
-	local rec = NA_GRAB_BODY.ensure(m);
-	if rec and rec.humanoid and rec.humanoid:IsA("Humanoid") then
-		return rec.humanoid;
-	end;
-	local model = NA_GRAB_BODY.asChar(m) or m;
+	local rec, model = NA_GRAB_BODY.ensure(m);
+	model = model or NA_GRAB_BODY.asChar(m) or m;
 	if model and model:IsA("Model") then
 		local hum = model:FindFirstChildOfClass("Humanoid");
-		if hum then
-			if rec then
-				rec.humanoid = hum;
-			end;
-			return hum;
+		if rec then
+			rec.humanoid = hum;
 		end;
+		return hum;
 	end;
-	return rec and rec.humanoid or nil;
+	return nil;
 end;
-uiRefs.liveHum = function(ch)
-	if not ch then
-		return nil;
+uiRefs.humAlive = function(hum, ch)
+	if not hum or (not hum:IsA("Humanoid")) or hum.Parent ~= ch or (not hum:IsDescendantOf(workspace)) then
+		return false;
 	end;
-	local hum = getHumanoid(ch);
-	if not hum or (not hum:IsA("Humanoid")) or hum.Parent == nil or hum.Health <= 0 then
-		return nil;
+	if hum.Health <= 0 then
+		return false;
 	end;
 	local ok, state = pcall(function()
 		return hum:GetState();
 	end);
 	if ok and (state == Enum.HumanoidStateType.Dead or state == Enum.HumanoidStateType.None) then
+		return false;
+	end;
+	return true;
+end;
+uiRefs.liveHum = function(ch)
+	if not ch or (not ch:IsA("Model")) or ch.Parent == nil or (not ch:IsDescendantOf(workspace)) then
 		return nil;
 	end;
-	local anchor = ch:IsA("Model") and (ch:FindFirstChild("HumanoidRootPart", true) or ch:FindFirstChild("UpperTorso", true) or ch:FindFirstChild("LowerTorso", true) or ch:FindFirstChild("Torso", true) or ch:FindFirstChild("Head", true) or ch.PrimaryPart) or nil;
-	if not anchor or anchor.Parent == nil then
+	local hum = ch:FindFirstChildOfClass("Humanoid");
+	if not uiRefs.humAlive(hum, ch) then
+		local rec = NA_GRAB_BODY.ensure(ch);
+		if rec then
+			rec.humanoid = hum;
+		end;
+		return nil;
+	end;
+	local rec = NA_GRAB_BODY.ensure(ch);
+	if rec then
+		rec.humanoid = hum;
+	end;
+	local anchor = rec and (rec.root or rec.torso or rec.head or NA_GRAB_BODY.firstPart(ch)) or nil;
+	if not anchor or anchor.Parent == nil or (not anchor:IsDescendantOf(ch)) then
 		return nil;
 	end;
 	return hum;
+end;
+uiRefs.hardAlive = function(ch, part)
+	local hum = uiRefs.liveHum(ch);
+	if not hum then
+		return false;
+	end;
+	if part then
+		if not part:IsA("BasePart") or part.Parent == nil or (not part:IsDescendantOf(ch)) then
+			return false;
+		end;
+		if part.Transparency >= 1 or part:FindFirstAncestorOfClass("Accessory") then
+			return false;
+		end;
+	end;
+	return true;
+end;
+uiRefs.clearAimDeathWatch = function(w)
+	if type(w) ~= "table" then
+		return;
+	end;
+	disconnectConn(w.hpConn);
+	disconnectConn(w.diedConn);
+	w.hpConn = nil;
+	w.diedConn = nil;
+	w.ch = nil;
+	w.hum = nil;
+end;
+uiRefs.watchAimDeath = function(w, ch, onDead)
+	if type(w) ~= "table" then
+		return;
+	end;
+	local hum = ch and uiRefs.liveHum(ch) or nil;
+	if not ch or not hum then
+		uiRefs.clearAimDeathWatch(w);
+		return;
+	end;
+	if w.ch == ch and w.hum == hum then
+		return;
+	end;
+	uiRefs.clearAimDeathWatch(w);
+	w.ch = ch;
+	w.hum = hum;
+	w.hpConn = hum.HealthChanged:Connect(function(hp)
+		if tonumber(hp) and hp <= 0 then
+			if type(onDead) == "function" then
+				onDead();
+			end;
+			uiRefs.clearAimDeathWatch(w);
+		end;
+	end);
+	w.diedConn = hum.Died:Connect(function()
+		if type(onDead) == "function" then
+			onDead();
+		end;
+		uiRefs.clearAimDeathWatch(w);
+	end);
 end;
 local function getPart(m, name)
 	local rec, model = NA_GRAB_BODY.ensure(m);
@@ -2255,18 +2668,29 @@ local function resetAimCaches(resetTrackedTarget)
 	randomAimCache = newRandomAimCache();
 	randomAimSeq = randomAimSeq + 1;
 	local npcCache = _G.__vyperiaNpcTargetCache;
-	if type(npcCache) == "table" and npcCache.init == true then
+	if type(npcCache) == "table" and npcCache.init == true and npcCache.owner == npc.owner then
 		npcCache.stamp = 0;
-		npcCache.cands = type(npcCache.cands) == "table" and npcCache.cands or {};
-		npcCache.list = {};
-		npcCache.live = {};
+		npcCache.cursor = 1;
+		if type(npcCache.list) == "table" then
+			table.clear(npcCache.list);
+		end;
+		if type(npcCache.live) == "table" then
+			table.clear(npcCache.live);
+		end;
+		if type(npcCache.nextPicks) == "table" then
+			table.clear(npcCache.nextPicks);
+		end;
 		for model in pairs(npcCache.cands or {}) do
-			if not model or not model.Parent then
-				npcCache.cands[model] = nil;
+			if not model or not model.Parent or npc.player(model) then
+				if type(npcCache.remove) == "function" then
+					npcCache.remove(model);
+				else
+					npcCache.cands[model] = nil;
+				end;
 			end;
 		end;
 	else
-		_G.__vyperiaNpcTargetCache = nil;
+		npc.dispose(true);
 	end;
 	if resetTrackedTarget then
 		lastLockedCharacter = nil;
@@ -2603,7 +3027,7 @@ local function isCharacterStillTargetable(ch, preferredPart)
 		if not allowNpcs then
 			return false, nil;
 		end;
-		validNpc = isNPCModel(ch);
+		validNpc = npc.is(ch);
 		if (not validNpc) or (not isAlive(ch)) then
 			return false, nil;
 		end;
@@ -2612,8 +3036,7 @@ local function isCharacterStillTargetable(ch, preferredPart)
 		return false, nil;
 	end;
 	local part = isTrackedAimPartUsable(ch, preferredPart, _G.wallCheck == true) and preferredPart or getScanAimPart(ch);
-	local hum = getHumanoid(ch);
-	if not part or not hum or hum.Health <= 0 then
+	if not part or not uiRefs.hardAlive(ch, part) then
 		return false, nil;
 	end;
 	local scr, on = cam:WorldToViewportPoint(part.Position);
@@ -2663,11 +3086,14 @@ local function findTarget()
 	local coarseR = maxR + 48;
 	local coarse = {};
 	local function considerCharacter(ch, isNpc)
+		if isNpc and npc.player(ch) then
+			return;
+		end;
 		if not isAlive(ch) then
 			return;
 		end;
-		local hum = getHumanoid(ch);
-		if not hum or hum.Health <= 0 then
+		local hum = uiRefs.liveHum(ch);
+		if not hum then
 			return;
 		end;
 		local anchor = getRoot(ch) or getTorso(ch) or getHead(ch);
@@ -2710,8 +3136,8 @@ local function findTarget()
 		end;
 	end;
 	if allowNpcs then
-		for _, npc in ipairs(getNpcs()) do
-			considerCharacter(npc, true);
+		for _, np in ipairs(npc.get()) do
+			considerCharacter(np, true);
 		end;
 	end;
 	table.sort(coarse, function(a, b)
@@ -2726,12 +3152,46 @@ local function findTarget()
 		end;
 		return tostring(a.ch.Name) < tostring(b.ch.Name);
 	end);
+	local scan = {};
+	local seen = {};
 	local scanLimit = math.min(#coarse, 8);
-	if #coarse > 8 and normChoice(_G.entMode, OPT.TARGET_ENTITY_OPTIONS, "Player") ~= "Player" then
+	if #coarse > 8 and entityMode ~= "Player" then
 		scanLimit = math.min(#coarse, 12);
 	end;
 	for i = 1, scanLimit do
 		local cand = coarse[i];
+		if cand and cand.ch and not seen[cand.ch] then
+			seen[cand.ch] = true;
+			scan[#scan + 1] = cand;
+		end;
+	end;
+	if entityMode == "Player/NPC" then
+		local addPlayer = 0;
+		local addNpc = 0;
+		for i = 1, #coarse do
+			local cand = coarse[i];
+			if cand and cand.ch and not seen[cand.ch] then
+				if cand.isNpc then
+					if addNpc < 8 then
+						addNpc += 1;
+						seen[cand.ch] = true;
+						scan[#scan + 1] = cand;
+					end;
+				else
+					if addPlayer < 8 then
+						addPlayer += 1;
+						seen[cand.ch] = true;
+						scan[#scan + 1] = cand;
+					end;
+				end;
+			end;
+			if addPlayer >= 8 and addNpc >= 8 then
+				break;
+			end;
+		end;
+	end;
+	for i = 1, #scan do
+		local cand = scan[i];
 		local part = getScanAimPart(cand.ch);
 		if part then
 			local scr, on = cam:WorldToViewportPoint(part.Position);
@@ -5352,7 +5812,13 @@ local function createUI()
 			camVpCon = (cam:GetPropertyChangedSignal("ViewportSize")):Connect(function()
 				local w, h = frameSizeForViewport();
 				frame.Size = UDim2.new(0, w, 0, h);
-				clampFrameToScreen(frame);
+				if uiMin then
+					frame.Position = UDim2.new(0.5, 0, -0.65, 0);
+					frame.BackgroundTransparency = math.clamp((_G.uiWindowAlpha or 0.08) + 0.08, 0, 0.6);
+					showTopBtn(true);
+				else
+					clampFrameToScreen(frame);
+				end;
 				rebuildMobileHelper();
 				refreshMobileUI();
 			end);
@@ -5367,7 +5833,13 @@ local function createUI()
 			local w, h = frameSizeForViewport();
 			if frame and frame.Parent then
 				frame.Size = UDim2.new(0, w, 0, h);
-				clampFrameToScreen(frame);
+				if uiMin then
+					frame.Position = UDim2.new(0.5, 0, -0.65, 0);
+					frame.BackgroundTransparency = math.clamp((_G.uiWindowAlpha or 0.08) + 0.08, 0, 0.6);
+					showTopBtn(true);
+				else
+					clampFrameToScreen(frame);
+				end;
 			end;
 			rebuildMobileHelper();
 			refreshMobileUI();
@@ -5763,12 +6235,14 @@ function lockCamera()
 	local trackedPart = nil;
 	local reacquireClock = math.huge;
 	local partRefreshClock = math.huge;
+	local deathWatch = {};
 	lockCamLoop = RunService.RenderStepped:Connect(function(dt)
 		if not isLock or (not _G.isEnabled) then
 			if aimCamTween then
 				aimCamTween:Cancel();
 				aimCamTween = nil;
 			end;
+			uiRefs.clearAimDeathWatch(deathWatch);
 			trackedCh = nil;
 			trackedPart = nil;
 			if lockCamLoop then
@@ -5783,10 +6257,12 @@ function lockCamera()
 		local aimMode = normalizeAimMode(_G.aimTargetMode);
 		local needsRefresh = trackedCh == nil;
 		if trackedCh and _G.aliveCheck and (not uiRefs.liveHum(trackedCh)) then
+			uiRefs.clearAimDeathWatch(deathWatch);
 			trackedCh = nil;
 			trackedPart = nil;
 			lastLockedCharacter = nil;
 			lastLockedPart = nil;
+			lastTargetName = "none";
 			needsRefresh = true;
 		end;
 		if trackedCh and (not isTrackedAimPartUsable(trackedCh, trackedPart, false)) then
@@ -5807,6 +6283,19 @@ function lockCamera()
 				lastCh = ch;
 			end;
 			trackedCh = ch;
+			if _G.aliveCheck then
+				uiRefs.watchAimDeath(deathWatch, ch, function()
+					trackedCh = nil;
+					trackedPart = nil;
+					lastLockedCharacter = nil;
+					lastLockedPart = nil;
+					lastTargetName = "none";
+					reacquireClock = math.huge;
+					partRefreshClock = math.huge;
+				end);
+			else
+				uiRefs.clearAimDeathWatch(deathWatch);
+			end;
 			if ch then
 				if aimMode ~= "Random" then
 					local prefPart = topAimPart(ch);
@@ -5838,6 +6327,24 @@ function lockCamera()
 				trackedPart = topAimPart(trackedCh) or trackedPart;
 				lastLockedPart = trackedPart;
 			end;
+		end;
+		if trackedCh and _G.aliveCheck and (not uiRefs.liveHum(trackedCh)) then
+			uiRefs.clearAimDeathWatch(deathWatch);
+			trackedCh = nil;
+			trackedPart = nil;
+			lastLockedCharacter = nil;
+			lastLockedPart = nil;
+			lastTargetName = "none";
+		end;
+		if trackedCh and trackedPart and _G.aliveCheck and (not uiRefs.hardAlive(trackedCh, trackedPart)) then
+			uiRefs.clearAimDeathWatch(deathWatch);
+			trackedCh = nil;
+			trackedPart = nil;
+			lastLockedCharacter = nil;
+			lastLockedPart = nil;
+			lastTargetName = "none";
+			reacquireClock = math.huge;
+			partRefreshClock = math.huge;
 		end;
 		if trackedCh and trackedPart then
 			local tgtPos = getAimPos(trackedPart);
@@ -5875,6 +6382,13 @@ uiRefs.setupPlayerMonitoring = function()
 		end);
 		table.insert(conns, ca);
 		local cr = pp.CharacterRemoving:Connect(function(ch)
+			if ch then
+				plrModelMark[ch] = pp;
+				local cache = _G.__vyperiaNpcTargetCache;
+				if type(cache) == "table" and type(cache.remove) == "function" then
+					cache.remove(ch);
+				end;
+			end;
 			if plrChars[pp] == ch then
 				setTrackedCharacter(pp, nil);
 			end;
@@ -5953,6 +6467,7 @@ table.insert(conns, RunService.Heartbeat:Connect(function(dt)
 	uiRefs.chkMode();
 end));
 return function()
+	npc.dispose(false);
 	for _, c in pairs(conns) do
 		disconnectConn(c);
 	end;

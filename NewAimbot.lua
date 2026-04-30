@@ -124,9 +124,9 @@ local aimCamTween = nil;
 local lockCamLoop = nil;
 local rng = Random.new();
 local trackedPlayers = {};
-local trackedPlayerIndex = {};
-local trackedPlayerCharacter = {};
-local trackedCharacterOwner = {};
+local plrIdx = {};
+local plrChars = {};
+local charOwner = {};
 local function newRandomAimCache()
 	return setmetatable({}, {
 		__mode = "k"
@@ -135,21 +135,21 @@ end;
 local randomAimCache = newRandomAimCache();
 local randomAimSeq = 0;
 local function setTrackedCharacter(pp, ch)
-	local old = trackedPlayerCharacter[pp];
-	if old and trackedCharacterOwner[old] == pp then
-		trackedCharacterOwner[old] = nil;
+	local old = plrChars[pp];
+	if old and charOwner[old] == pp then
+		charOwner[old] = nil;
 	end;
-	trackedPlayerCharacter[pp] = ch;
+	plrChars[pp] = ch;
 	if ch then
-		trackedCharacterOwner[ch] = pp;
+		charOwner[ch] = pp;
 	end;
 end;
 local function trackPlayer(pp)
-	if not pp or trackedPlayerIndex[pp] then
+	if not pp or plrIdx[pp] then
 		return;
 	end;
 	trackedPlayers[#trackedPlayers + 1] = pp;
-	trackedPlayerIndex[pp] = #trackedPlayers;
+	plrIdx[pp] = #trackedPlayers;
 	setTrackedCharacter(pp, pp.Character);
 end;
 local function untrackPlayer(pp)
@@ -157,37 +157,187 @@ local function untrackPlayer(pp)
 		return;
 	end;
 	setTrackedCharacter(pp, nil);
-	local idx = trackedPlayerIndex[pp];
+	local idx = plrIdx[pp];
 	if not idx then
 		return;
 	end;
 	local last = trackedPlayers[#trackedPlayers];
 	trackedPlayers[idx] = last;
 	trackedPlayers[#trackedPlayers] = nil;
-	trackedPlayerIndex[pp] = nil;
+	plrIdx[pp] = nil;
 	if last and last ~= pp then
-		trackedPlayerIndex[last] = idx;
+		plrIdx[last] = idx;
 	end;
 end;
-local function rebuildTrackedPlayers()
+local function rebuildPlrs()
 	table.clear(trackedPlayers);
-	table.clear(trackedPlayerIndex);
-	table.clear(trackedPlayerCharacter);
-	table.clear(trackedCharacterOwner);
+	table.clear(plrIdx);
+	table.clear(plrChars);
+	table.clear(charOwner);
 	for _, pp in ipairs(Players:GetPlayers()) do
 		trackPlayer(pp);
 	end;
 end;
-local function getTrackedPlayers()
+local function getPlrs()
 	return trackedPlayers;
 end;
-local function getTrackedPlayerCount()
+local function getPlrCount()
 	return #trackedPlayers;
 end;
-local function getTrackedPlayerFromCharacter(ch)
-	return trackedCharacterOwner[ch] or Players:GetPlayerFromCharacter(ch);
+local function getPlrFromCh(ch)
+	return charOwner[ch] or Players:GetPlayerFromCharacter(ch);
 end;
-rebuildTrackedPlayers();
+local function isNPCCand(model)
+	if not model or (not model:IsA("Model")) then
+		return false;
+	end;
+	if not model.Parent or (not model:IsDescendantOf(workspace)) then
+		return false;
+	end;
+	local hum = model:FindFirstChildOfClass("Humanoid");
+	if not hum then
+		return false;
+	end;
+	if getPlrFromCh(model) then
+		return false;
+	end;
+	for _, pp in ipairs(getPlrs()) do
+		local ch = pp.Character;
+		if ch and (model == ch or model:IsDescendantOf(ch) or ch:IsDescendantOf(model)) then
+			return false;
+		end;
+	end;
+	return true;
+end;
+local function isNPCModel(model)
+	if not isNPCCand(model) then
+		return false;
+	end;
+	local hum = model:FindFirstChildOfClass("Humanoid");
+	if not hum or hum.Parent == nil or hum.Health <= 0 then
+		return false;
+	end;
+	local ok, state = pcall(function()
+		return hum:GetState();
+	end);
+	if ok and (state == Enum.HumanoidStateType.Dead or state == Enum.HumanoidStateType.None) then
+		return false;
+	end;
+	local anchor = model:FindFirstChild("HumanoidRootPart", true) or model:FindFirstChild("UpperTorso", true) or model:FindFirstChild("LowerTorso", true) or model:FindFirstChild("Torso", true) or model:FindFirstChild("Head", true) or model.PrimaryPart;
+	if not anchor or (not anchor:IsA("BasePart")) then
+		return false;
+	end;
+	return true;
+end;
+local function getNpcs()
+	local cache = _G.__vyperiaNpcTargetCache;
+	if type(cache) ~= "table" or cache.init ~= true then
+		cache = {
+			init = true,
+			stamp = 0,
+			cands = {},
+			live = {},
+			list = {}
+		};
+		local function addNpc(inst)
+			if inst and inst:IsA("Model") and isNPCCand(inst) then
+				cache.cands[inst] = true;
+			end;
+		end;
+		local function remNpc(inst)
+			if not inst then
+				return;
+			end;
+			local model = inst:IsA("Model") and inst or inst:FindFirstAncestorOfClass("Model");
+			if model then
+				cache.cands[model] = nil;
+				cache.live[model] = nil;
+			end;
+		end;
+		cache.addConn = workspace.DescendantAdded:Connect(function(inst)
+			if inst:IsA("Model") then
+				addNpc(inst);
+			elseif inst:IsA("Humanoid") then
+				local parent = inst.Parent;
+				if parent and parent:IsA("Model") then
+					addNpc(parent);
+				end;
+			end;
+		end);
+		cache.remConn = workspace.DescendantRemoving:Connect(function(inst)
+			if inst:IsA("Model") then
+				remNpc(inst);
+			elseif inst:IsA("Humanoid") then
+				local parent = inst.Parent;
+				if parent and parent:IsA("Model") then
+					remNpc(parent);
+				end;
+			end;
+		end);
+		local queue = {
+			workspace
+		};
+		local qi = 1;
+		while qi <= #queue do
+			local inst = queue[qi];
+			qi += 1;
+			if inst:IsA("Model") then
+				addNpc(inst);
+			end;
+			for _, child in ipairs(inst:GetChildren()) do
+				table.insert(queue, child);
+			end;
+		end;
+		_G.__vyperiaNpcTargetCache = cache;
+	end;
+	cache.cands = type(cache.cands) == "table" and cache.cands or {};
+	cache.live = type(cache.live) == "table" and cache.live or {};
+	cache.list = type(cache.list) == "table" and cache.list or {};
+	cache.stamp = tonumber(cache.stamp) or 0;
+	local now = os.clock();
+	if now - cache.stamp < 0.6 then
+		return cache.list or {};
+	end;
+	cache.stamp = now;
+	local list = {};
+	local live = {};
+	local char = plr and plr.Character;
+	local root = char and (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("UpperTorso") or char:FindFirstChild("LowerTorso") or char:FindFirstChild("Torso") or char:FindFirstChild("Head"));
+	local maxDist = math.clamp(tonumber(_G.targetMaxDistance) or 2500, 100, 5000);
+	local maxCnt = 200;
+	local picks = {};
+	for inst in pairs(cache.cands) do
+		if inst and inst.Parent and isNPCCand(inst) then
+			local anchor = inst:FindFirstChild("HumanoidRootPart", true) or inst:FindFirstChild("UpperTorso", true) or inst:FindFirstChild("LowerTorso", true) or inst:FindFirstChild("Torso", true) or inst:FindFirstChild("Head", true) or inst.PrimaryPart;
+			if anchor and anchor:IsA("BasePart") then
+				local dist = root and (anchor.Position - root.Position).Magnitude or 0;
+				if isNPCModel(inst) and ((not root) or dist <= maxDist) then
+					picks[#picks + 1] = {
+						model = inst,
+						dist = dist
+					};
+				end;
+			end;
+		else
+			cache.cands[inst] = nil;
+		end;
+	end;
+	table.sort(picks, function(a, b)
+		if math.abs((a.dist or 0) - (b.dist or 0)) < 0.001 then
+			return tostring(a.model.Name) < tostring(b.model.Name);
+		end;
+		return (a.dist or 0) < (b.dist or 0);
+	end);
+	for i = 1, math.min(#picks, maxCnt) do
+		local inst = picks[i].model;
+		list[#list + 1] = inst;
+		live[inst] = true;
+	end;
+	cache.live = live;
+	cache.list = list;
+	return list;
+end;
+rebuildPlrs();
 local function platformName()
 	local ok, p = pcall(function()
 		return UIS:GetPlatform();
@@ -262,13 +412,16 @@ _G.espOutlineTransparency = _G.espOutlineTransparency ~= nil and _G.espOutlineTr
 _G.targetPriorityMode = _G.targetPriorityMode or (_G.lockToNearest and "Distance") or "Crosshair";
 _G.stickyTarget = _G.stickyTarget ~= nil and _G.stickyTarget or true;
 _G.targetMaxDistance = _G.targetMaxDistance or 2500;
-_G.randomTargetWeightsEnabled = _G.randomTargetWeightsEnabled ~= nil and _G.randomTargetWeightsEnabled or false;
+_G.entMode = _G.entMode or _G.targetEntityMode or ((_G.targetNPCs == true) and "Player/NPC" or "Player");
+_G.randWtOn = _G.randWtOn ~= nil and _G.randWtOn or (_G.randomTargetWeightsEnabled == true);
 _G.randomWeightHead = _G.randomWeightHead or 40;
 _G.randomWeightRoot = _G.randomWeightRoot or 20;
 _G.randomWeightUpperTorso = _G.randomWeightUpperTorso or 18;
 _G.randomWeightLowerTorso = _G.randomWeightLowerTorso or 10;
 _G.randomWeightTorso = _G.randomWeightTorso or 12;
 _G.randomWeightOther = _G.randomWeightOther or 5;
+_G.autoSaveConfigs = _G.autoSaveConfigs ~= nil and _G.autoSaveConfigs or true;
+_G.selectedConfigName = _G.selectedConfigName or "default";
 local lastTargetName = "none";
 local lastLockedCharacter = nil;
 local lastLockedPart = nil;
@@ -279,105 +432,112 @@ _G.toggleKeys = _G.toggleKeys or {
 	"P",
 	"RightControl"
 };
-local AIM_TARGET_OPTIONS = {
-	"Head",
-	"Torso",
-	"Root",
-	"Upper Torso",
-	"Lower Torso",
-	"Random"
-};
-local TARGET_POINT_OPTIONS = {
-	"Cursor",
-	"Center"
-};
-local TARGET_PRIORITY_OPTIONS = {
-	"Crosshair",
-	"Distance",
-	"Lowest Health"
-};
-local RANDOM_WEIGHT_VARS = {
-	"randomWeightHead",
-	"randomWeightRoot",
-	"randomWeightUpperTorso",
-	"randomWeightLowerTorso",
-	"randomWeightTorso",
-	"randomWeightOther"
-};
-local ESP_RENDER_OPTIONS = {
-	"Highlight",
-	"BoxHandleAdornment"
-};
-local THEME_OPTIONS = {
-	"Midnight Purple",
-	"Cyan",
-	"Purple",
-	"Pink",
-	"Green",
-	"Gold",
-	"Red"
-};
-local BIND_ACTION_OPTIONS = {
-	"Aimbot",
-	"Aim Lock",
-	"ESP",
-	"Wall Check",
-	"Team Check",
-	"Alive Check",
-	"Lock FOV",
-	"Tween Aim",
-	"Prediction",
-	"FOV Circle",
-	"Lock Nearest",
-	"Mobile Buttons",
-	"Mobile Center Aim",
-	"Center Dot"
-};
-local BIND_ACTION_VARS = {
-	["Aimbot"] = "isEnabled",
-	["Aim Lock"] = "aimLock",
-	["ESP"] = "espEnabled",
-	["Wall Check"] = "wallCheck",
-	["Team Check"] = "teamCheck",
-	["Alive Check"] = "aliveCheck",
-	["Lock FOV"] = "fovEnabled",
-	["Tween Aim"] = "aimTween",
-	["Prediction"] = "aimPredict",
-	["FOV Circle"] = "fovCircleEnabled",
-	["Lock Nearest"] = "lockToNearest",
-	["Mobile Buttons"] = "mobileButtons",
-	["Mobile Center Aim"] = "mobileCenterAim",
-	["Center Dot"] = "centerDotVisible"
-};
-local MOBILE_ACTION_OPTIONS = {
-	"Lock",
-	"Menu",
-	"Aimbot",
-	"Aim Lock",
-	"ESP",
-	"Wall Check",
-	"Team Check",
-	"Alive Check",
-	"Lock FOV",
-	"Prediction",
-	"FOV Circle",
-	"Lock Nearest",
-	"Center Dot"
-};
-local TOAST_POS_OPTIONS = {
-	"Top Right",
-	"Top Left",
-	"Bottom Right",
-	"Bottom Left"
-};
-local MOBILE_HELPER_DEFAULTS = {
-	"Lock",
-	"Menu",
-	"Center Dot"
+local OPT = {
+	AIM_TARGET_OPTIONS = {
+		"Head",
+		"Torso",
+		"Root",
+		"Upper Torso",
+		"Lower Torso",
+		"Random"
+	},
+	TARGET_POINT_OPTIONS = {
+		"Cursor",
+		"Center"
+	},
+	TARGET_PRIORITY_OPTIONS = {
+		"Crosshair",
+		"Distance",
+		"Lowest Health"
+	},
+	TARGET_ENTITY_OPTIONS = {
+		"Player",
+		"NPC",
+		"Player/NPC"
+	},
+	RANDOM_WEIGHT_VARS = {
+		"randomWeightHead",
+		"randomWeightRoot",
+		"randomWeightUpperTorso",
+		"randomWeightLowerTorso",
+		"randomWeightTorso",
+		"randomWeightOther"
+	},
+	ESP_RENDER_OPTIONS = {
+		"Highlight",
+		"BoxHandleAdornment"
+	},
+	THEME_OPTIONS = {
+		"Midnight Purple",
+		"Cyan",
+		"Purple",
+		"Pink",
+		"Green",
+		"Gold",
+		"Red"
+	},
+	BIND_ACTION_OPTIONS = {
+		"Aimbot",
+		"Aim Lock",
+		"ESP",
+		"Wall Check",
+		"Team Check",
+		"Alive Check",
+		"Lock FOV",
+		"Smooth Aim",
+		"Prediction",
+		"FOV Circle",
+		"Lock Nearest",
+		"Mobile Buttons",
+		"Mobile Center Aim",
+		"Center Dot"
+	},
+	BIND_ACTION_VARS = {
+		["Aimbot"] = "isEnabled",
+		["Aim Lock"] = "aimLock",
+		["ESP"] = "espEnabled",
+		["Wall Check"] = "wallCheck",
+		["Team Check"] = "teamCheck",
+		["Alive Check"] = "aliveCheck",
+		["Lock FOV"] = "fovEnabled",
+		["Smooth Aim"] = "aimTween",
+		["Prediction"] = "aimPredict",
+		["FOV Circle"] = "fovCircleEnabled",
+		["Lock Nearest"] = "lockToNearest",
+		["Mobile Buttons"] = "mobileButtons",
+		["Mobile Center Aim"] = "mobileCenterAim",
+		["Center Dot"] = "centerDotVisible"
+	},
+	MOBILE_ACTION_OPTIONS = {
+		"Lock",
+		"Menu",
+		"Aimbot",
+		"Aim Lock",
+		"ESP",
+		"Wall Check",
+		"Team Check",
+		"Alive Check",
+		"Lock FOV",
+		"Prediction",
+		"FOV Circle",
+		"Lock Nearest",
+		"Center Dot"
+	},
+	TOAST_POS_OPTIONS = {
+		"Top Right",
+		"Top Left",
+		"Bottom Right",
+		"Bottom Left"
+	},
+	MOBILE_HELPER_DEFAULTS = {
+		"Lock",
+		"Menu",
+		"Center Dot"
+	}
 };
 local function normalizeAimMode(mode)
 	local lower = (tostring(mode or "")):lower();
-	for _, opt in ipairs(AIM_TARGET_OPTIONS) do
+	for _, opt in ipairs(OPT.AIM_TARGET_OPTIONS) do
 		if lower == opt:lower() then
 			return opt;
 		end;
@@ -434,10 +594,178 @@ local function unpackUDim2(tbl, fallback)
 	return UDim2.new(tonumber(tbl.XScale) or 0, tonumber(tbl.XOffset) or 0, tonumber(tbl.YScale) or 0, tonumber(tbl.YOffset) or 0);
 end;
 local function getAimTweenDuration()
-	return math.clamp(_G.aimSmooth or 0.15, 0.05, 0.2);
+	return math.clamp(_G.aimSmooth or 0.28, 0.03, 1);
 end;
-local cfgDir = "ltseverydayyou-Aimbot";
-local cfgFile = cfgDir .. "/config.json";
+local cfgFile = "ltseverydayyou-Aimbot/config.json";
+local function cleanCfgName(name)
+	local clean = tostring(name or "default");
+	clean = clean:gsub("[^%w%-%_ ]", ""):gsub("^%s+", ""):gsub("%s+$", "");
+	if clean == "" then
+		clean = "default";
+	end;
+	return clean;
+end;
+local function copyCfgVal(v)
+	if type(v) ~= "table" then
+		return v;
+	end;
+	local out = {};
+	for k, vv in pairs(v) do
+		out[k] = copyCfgVal(vv);
+	end;
+	return out;
+end;
+local DEFAULT_CONFIG = {
+	isEnabled = false,
+	aimTargetMode = "Head",
+	espEnabled = false,
+	lockToNearest = false,
+	aliveCheck = false,
+	teamCheck = false,
+	wallCheck = false,
+	aimTween = false,
+	aimSmooth = 0.28,
+	fovEnabled = false,
+	fovValue = 70,
+	espShowName = true,
+	espShowHP = true,
+	espShowTeam = true,
+	espTeamColor = true,
+	espTransparency = 0.3,
+	tbCPS = 8,
+	aimPredict = false,
+	aimLead = 0.12,
+	aimRadius = 150,
+	targetPointMode = "Cursor",
+	fovCircleEnabled = false,
+	fovCircleAlpha = 0.25,
+	fovCircleThickness = 2,
+	aimLock = false,
+	lockKey = "MouseButton2",
+	mobileCenterAim = isMobilePlatform(),
+	mobileButtons = isMobilePlatform(),
+	uiScale = 1,
+	uiWindowAlpha = 0.08,
+	uiContentAlpha = 0.02,
+	uiTheme = "Midnight Purple",
+	uiAnimations = true,
+	uiAnimSpeed = 1,
+	uiCompact = false,
+	uiRounded = 24,
+	toastDuration = 3,
+	toastMax = 4,
+	toastCompact = false,
+	toastPosition = "Top Right",
+	centerDotVisible = true,
+	centerDotSize = 12,
+	centerDotAlpha = 0.35,
+	mobileButtonScale = 1,
+	mobileButtonAlpha = 0.06,
+	mobileHelperButtons = {
+		"Lock",
+		"Menu",
+		"Center Dot"
+	},
+	mobileHelperPos = nil,
+	pendingMobileAction = "Aimbot",
+	topTogglePos = {
+		XScale = 0.5,
+		XOffset = -76,
+		YScale = 0,
+		YOffset = 8
+	},
+	optionBinds = {},
+	pendingBindAction = "Aimbot",
+	toggleKeys = {
+		"RightAlt",
+		"LeftAlt",
+		"P",
+		"RightControl"
+	},
+	espRenderMode = "Highlight",
+	espAlwaysOnTop = true,
+	espShowDistance = false,
+	espTextSize = 14,
+	espMaxDistance = 2500,
+	espOutlineTransparency = 0.12,
+	targetPriorityMode = "Crosshair",
+	stickyTarget = true,
+	targetMaxDistance = 2500,
+	entMode = "Player",
+	randWtOn = false,
+	randomWeightHead = 40,
+	randomWeightRoot = 20,
+	randomWeightUpperTorso = 18,
+	randomWeightLowerTorso = 10,
+	randomWeightTorso = 12,
+	randomWeightOther = 5,
+	autoSaveConfigs = true,
+	selectedConfigName = "default"
+};
+local function resetCfg()
+	for k, v in pairs(DEFAULT_CONFIG) do
+		_G[k] = copyCfgVal(v);
+	end;
+end;
+local function getCfgPath(name)
+	return "ltseverydayyou-Aimbot/configs/" .. cleanCfgName(name) .. ".json";
+end;
+local function saveMeta()
+	if not writefile or (not HS) then
+		return;
+	end;
+	if isfolder and (not isfolder("ltseverydayyou-Aimbot")) then
+		if makefolder then
+			pcall(makefolder, "ltseverydayyou-Aimbot");
+		else
+			return;
+		end;
+	end;
+	local ok, enc = pcall(function()
+		return HS:JSONEncode({
+			selectedConfigName = cleanCfgName(_G.selectedConfigName),
+			autoSaveConfigs = _G.autoSaveConfigs == true
+		});
+	end);
+	if ok and enc then
+		pcall(writefile, cfgFile, enc);
+	end;
+end;
+local function getConfigNames()
+	local picked = cleanCfgName(_G.selectedConfigName);
+	local names = {
+		"default"
+	};
+	local seen = {
+		["default"] = true
+	};
+	if picked ~= "default" then
+		seen[picked] = true;
+		table.insert(names, picked);
+	end;
+	if listfiles and isfolder and isfolder("ltseverydayyou-Aimbot/configs") then
+		for _, path in ipairs(listfiles("ltseverydayyou-Aimbot/configs")) do
+			local name = tostring(path):match("([^/\\]+)%.json$");
+			if name then
+				name = cleanCfgName(name);
+				if not seen[name] then
+					seen[name] = true;
+					table.insert(names, name);
+				end;
+			end;
+		end;
+	end;
+	table.sort(names, function(a, b)
+		if a == "default" then
+			return true;
+		end;
+		if b == "default" then
+			return false;
+		end;
+		return tostring(a):lower() < tostring(b):lower();
+	end);
+	return names;
+end;
 local UI = {
 	bg1 = Color3.fromRGB(5, 8, 15),
 	bg2 = Color3.fromRGB(9, 14, 24),
@@ -503,7 +831,7 @@ local function clampRandomWeightValue(v, defaultValue)
 	return math.clamp(tonumber(v) or defaultValue or 0, 0, 100);
 end;
 local function normalizeRandomWeights()
-	_G.randomTargetWeightsEnabled = _G.randomTargetWeightsEnabled == true;
+	_G.randWtOn = _G.randWtOn == true or _G.randomTargetWeightsEnabled == true;
 	_G.randomWeightHead = clampRandomWeightValue(_G.randomWeightHead, 40);
 	_G.randomWeightRoot = clampRandomWeightValue(_G.randomWeightRoot, 20);
 	_G.randomWeightUpperTorso = clampRandomWeightValue(_G.randomWeightUpperTorso, 18);
@@ -516,7 +844,7 @@ local function applyToastPos()
 	if not h then
 		return;
 	end;
-	local pos = normChoice(_G.toastPosition, TOAST_POS_OPTIONS, "Top Right");
+	local pos = normChoice(_G.toastPosition, OPT.TOAST_POS_OPTIONS, "Top Right");
 	_G.toastPosition = pos;
 	local bottom = pos:find("Bottom") ~= nil;
 	local right = pos:find("Right") ~= nil;
@@ -716,6 +1044,7 @@ local function styleWin(frame, bar, title, btnX, btnMin)
 end;
 refreshMobileUI = function() end;
 local startLockAction, endLockAction;
+local unbindStrongInputs, rebindStrongInputs;
 local function isMobileDevice()
 	return isMobilePlatform() and _G.mobileCenterAim == true;
 end;
@@ -890,7 +1219,7 @@ local function MouseButtonFix(button, clickCallback)
 		local holdDuration = tick() - mouseDownTime;
 		local isClick = (holdDuration < clickTimeThreshold) and (maxMoveDistance <= moveThreshold);
 		resetState();
-		if isClick then
+		if isClick and type(clickCallback) == "function" then
 			clickCallback();
 		end;
 	end;
@@ -1366,14 +1695,17 @@ local function toast(msg)
 		end);
 	end);
 end;
-local function saveCfg()
+local function saveCfg(forceSave, nameOverride)
 	if not writefile or (not HS) then
 		return;
 	end;
+	if (not forceSave) and _G.autoSaveConfigs == false then
+		return;
+	end;
 	local okFolder = true;
-	if isfolder and (not isfolder(cfgDir)) then
+	if isfolder and (not isfolder("ltseverydayyou-Aimbot")) then
 		if makefolder then
-			local s, e = pcall(makefolder, cfgDir);
+			local s, e = pcall(makefolder, "ltseverydayyou-Aimbot");
 			okFolder = s and e == nil or s;
 		else
 			okFolder = false;
@@ -1382,8 +1714,19 @@ local function saveCfg()
 	if not okFolder then
 		return;
 	end;
+	if isfolder and (not isfolder("ltseverydayyou-Aimbot/configs")) then
+		if makefolder then
+			local s = pcall(makefolder, "ltseverydayyou-Aimbot/configs");
+			if not s then
+				return;
+			end;
+		else
+			return;
+		end;
+	end;
 	local aimMode = normalizeAimMode(_G.aimTargetMode);
 	_G.aimTargetMode = aimMode;
+	_G.selectedConfigName = cleanCfgName(nameOverride or _G.selectedConfigName);
 	local data = {
 		isEnabled = _G.isEnabled,
 		aimTargetMode = aimMode,
@@ -1405,6 +1748,10 @@ local function saveCfg()
 		aimPredict = _G.aimPredict,
 		aimLead = _G.aimLead,
 		aimRadius = _G.aimRadius,
+		targetPointMode = _G.targetPointMode,
+		fovCircleEnabled = _G.fovCircleEnabled,
+		fovCircleAlpha = _G.fovCircleAlpha,
+		fovCircleThickness = _G.fovCircleThickness,
 		aimLock = _G.aimLock,
 		lockKey = _G.lockKey,
 		mobileCenterAim = _G.mobileCenterAim,
@@ -1429,6 +1776,7 @@ local function saveCfg()
 		mobileHelperButtons = _G.mobileHelperButtons,
 		mobileHelperPos = _G.mobileHelperPos,
 		pendingMobileAction = _G.pendingMobileAction,
+		pendingBindAction = _G.pendingBindAction,
 		topTogglePos = _G.topTogglePos,
 		optionBinds = _G.optionBinds,
 		toggleKeys = _G.toggleKeys,
@@ -1441,37 +1789,28 @@ local function saveCfg()
 		targetPriorityMode = _G.targetPriorityMode,
 		stickyTarget = _G.stickyTarget,
 		targetMaxDistance = _G.targetMaxDistance,
-		randomTargetWeightsEnabled = _G.randomTargetWeightsEnabled,
+		entMode = _G.entMode,
+		randWtOn = _G.randWtOn,
 		randomWeightHead = _G.randomWeightHead,
 		randomWeightRoot = _G.randomWeightRoot,
 		randomWeightUpperTorso = _G.randomWeightUpperTorso,
 		randomWeightLowerTorso = _G.randomWeightLowerTorso,
 		randomWeightTorso = _G.randomWeightTorso,
-		randomWeightOther = _G.randomWeightOther
+		randomWeightOther = _G.randomWeightOther,
+		autoSaveConfigs = _G.autoSaveConfigs == true,
+		selectedConfigName = _G.selectedConfigName
 	};
 	local ok, enc = pcall(function()
 		return HS:JSONEncode(data);
 	end);
 	if ok and enc then
-		pcall(writefile, cfgFile, enc);
+		pcall(writefile, getCfgPath(_G.selectedConfigName), enc);
+		saveMeta();
 	end;
 end;
-local function loadCfg()
-	if not readfile or (not isfile) or (not HS) then
-		return;
-	end;
-	if not isfile(cfgFile) then
-		return;
-	end;
-	local ok, txt = pcall(readfile, cfgFile);
-	if not ok or (not txt) or txt == "" then
-		return;
-	end;
-	local ok2, obj = pcall(function()
-		return HS:JSONDecode(txt);
-	end);
-	if not ok2 or type(obj) ~= "table" then
-		return;
+local function applyCfg(obj)
+	if type(obj) ~= "table" then
+		return false;
 	end;
 	if obj.lockToHead ~= nil and obj.aimTargetMode == nil then
 		obj.aimTargetMode = obj.lockToHead and "Head" or "Torso";
@@ -1480,22 +1819,38 @@ local function loadCfg()
 		obj.aimTargetMode = normalizeAimMode(obj.aimTargetMode);
 	end;
 	if obj.uiTheme then
-		obj.uiTheme = normChoice(obj.uiTheme, THEME_OPTIONS, "Midnight Purple");
+		obj.uiTheme = normChoice(obj.uiTheme, OPT.THEME_OPTIONS, "Midnight Purple");
 	end;
 	if obj.toastPosition then
-		obj.toastPosition = normChoice(obj.toastPosition, TOAST_POS_OPTIONS, "Top Right");
+		obj.toastPosition = normChoice(obj.toastPosition, OPT.TOAST_POS_OPTIONS, "Top Right");
 	end;
 	if obj.targetPriorityMode then
-		obj.targetPriorityMode = normChoice(obj.targetPriorityMode, TARGET_PRIORITY_OPTIONS, "Crosshair");
+		obj.targetPriorityMode = normChoice(obj.targetPriorityMode, OPT.TARGET_PRIORITY_OPTIONS, "Crosshair");
+	end;
+	if obj.entMode then
+		obj.entMode = normChoice(obj.entMode, OPT.TARGET_ENTITY_OPTIONS, "Player");
+	elseif obj.targetEntityMode then
+		obj.entMode = normChoice(obj.targetEntityMode, OPT.TARGET_ENTITY_OPTIONS, "Player");
+	elseif obj.targetNPCs ~= nil then
+		obj.entMode = obj.targetNPCs == true and "Player/NPC" or "Player";
+	end;
+	if obj.randWtOn == nil and obj.randomTargetWeightsEnabled ~= nil then
+		obj.randWtOn = obj.randomTargetWeightsEnabled == true;
 	end;
 	if obj.espRenderMode then
-		obj.espRenderMode = normChoice(obj.espRenderMode, ESP_RENDER_OPTIONS, "Highlight");
+		obj.espRenderMode = normChoice(obj.espRenderMode, OPT.ESP_RENDER_OPTIONS, "Highlight");
 	end;
 	if obj.pendingMobileAction then
-		obj.pendingMobileAction = normChoice(obj.pendingMobileAction, MOBILE_ACTION_OPTIONS, "Aimbot");
+		obj.pendingMobileAction = normChoice(obj.pendingMobileAction, OPT.MOBILE_ACTION_OPTIONS, "Aimbot");
+	end;
+	if obj.pendingBindAction then
+		obj.pendingBindAction = normChoice(obj.pendingBindAction, OPT.BIND_ACTION_OPTIONS, "Aimbot");
 	end;
 	if obj.targetPointMode then
-		obj.targetPointMode = normChoice(obj.targetPointMode, TARGET_POINT_OPTIONS, "Cursor");
+		obj.targetPointMode = normChoice(obj.targetPointMode, OPT.TARGET_POINT_OPTIONS, "Cursor");
+	end;
+	if obj.selectedConfigName then
+		obj.selectedConfigName = cleanCfgName(obj.selectedConfigName);
 	end;
 	if obj.fovCircleAlpha ~= nil then
 		obj.fovCircleAlpha = math.clamp(tonumber(obj.fovCircleAlpha) or 0.25, 0, 1);
@@ -1515,6 +1870,9 @@ local function loadCfg()
 	if type(obj.mobileHelperButtons) ~= "table" then
 		obj.mobileHelperButtons = nil;
 	end;
+	if type(obj.toggleKeys) ~= "table" then
+		obj.toggleKeys = copyCfgVal(DEFAULT_CONFIG.toggleKeys);
+	end;
 	if obj.espTransparency ~= nil then
 		obj.espTransparency = math.clamp(obj.espTransparency, 0, 1);
 	end;
@@ -1530,25 +1888,82 @@ local function loadCfg()
 	if obj.targetMaxDistance ~= nil then
 		obj.targetMaxDistance = math.clamp(tonumber(obj.targetMaxDistance) or 2500, 100, 5000);
 	end;
-	for _, key in ipairs(RANDOM_WEIGHT_VARS) do
+	for _, key in ipairs(OPT.RANDOM_WEIGHT_VARS) do
 		if obj[key] ~= nil then
 			obj[key] = clampRandomWeightValue(obj[key], _G[key]);
 		end;
 	end;
 	for k, v in pairs(obj) do
 		if _G[k] ~= nil then
-			_G[k] = v;
+			_G[k] = copyCfgVal(v);
 		end;
 	end;
+	return true;
+end;
+local function loadNameCfg(name)
+	if not readfile or (not isfile) or (not HS) then
+		return false;
+	end;
+	local picked = cleanCfgName(name or _G.selectedConfigName);
+	local path = getCfgPath(picked);
+	if not isfile(path) then
+		return false;
+	end;
+	local ok, txt = pcall(readfile, path);
+	if not ok or type(txt) ~= "string" or txt == "" then
+		return false;
+	end;
+	local ok2, obj = pcall(function()
+		return HS:JSONDecode(txt);
+	end);
+	if not ok2 or type(obj) ~= "table" then
+		return false;
+	end;
+	_G.selectedConfigName = picked;
+	saveMeta();
+	return applyCfg(obj);
+end;
+local function loadCfg()
+	if not readfile or (not isfile) or (not HS) then
+		return;
+	end;
+	if not isfile(cfgFile) then
+		return;
+	end;
+	local ok, txt = pcall(readfile, cfgFile);
+	if not ok or (not txt) or txt == "" then
+		return;
+	end;
+	local ok2, obj = pcall(function()
+		return HS:JSONDecode(txt);
+	end);
+	if not ok2 or type(obj) ~= "table" then
+		return;
+	end;
+	if obj.selectedConfigName ~= nil or obj.autoSaveConfigs ~= nil then
+		_G.selectedConfigName = cleanCfgName(obj.selectedConfigName or _G.selectedConfigName);
+		if obj.autoSaveConfigs ~= nil then
+			_G.autoSaveConfigs = obj.autoSaveConfigs == true;
+		end;
+		if not loadNameCfg(_G.selectedConfigName) and next(obj) ~= nil then
+			applyCfg(obj);
+		end;
+		return;
+	end;
+	applyCfg(obj);
 end;
 loadCfg();
-_G.targetPointMode = normChoice(_G.targetPointMode, TARGET_POINT_OPTIONS, "Cursor");
+_G.selectedConfigName = cleanCfgName(_G.selectedConfigName);
+_G.autoSaveConfigs = _G.autoSaveConfigs == true;
+_G.targetPointMode = normChoice(_G.targetPointMode, OPT.TARGET_POINT_OPTIONS, "Cursor");
 _G.fovCircleAlpha = math.clamp(tonumber(_G.fovCircleAlpha) or 0.25, 0, 1);
 _G.fovCircleThickness = math.clamp(tonumber(_G.fovCircleThickness) or 2, 1, 8);
-_G.espRenderMode = normChoice(_G.espRenderMode, ESP_RENDER_OPTIONS, "Highlight");
-_G.pendingMobileAction = normChoice(_G.pendingMobileAction, MOBILE_ACTION_OPTIONS, "Aimbot");
-_G.targetPriorityMode = normChoice(_G.targetPriorityMode, TARGET_PRIORITY_OPTIONS, "Crosshair");
-_G.mobileHelperButtons = normalizeActionList(_G.mobileHelperButtons, MOBILE_ACTION_OPTIONS, MOBILE_HELPER_DEFAULTS);
+_G.espRenderMode = normChoice(_G.espRenderMode, OPT.ESP_RENDER_OPTIONS, "Highlight");
+_G.pendingMobileAction = normChoice(_G.pendingMobileAction, OPT.MOBILE_ACTION_OPTIONS, "Aimbot");
+_G.targetPriorityMode = normChoice(_G.targetPriorityMode, OPT.TARGET_PRIORITY_OPTIONS, "Crosshair");
+_G.entMode = normChoice(_G.entMode, OPT.TARGET_ENTITY_OPTIONS, "Player");
+_G.mobileHelperButtons = normalizeActionList(_G.mobileHelperButtons, OPT.MOBILE_ACTION_OPTIONS, OPT.MOBILE_HELPER_DEFAULTS);
+_G.randWtOn = _G.randWtOn == true;
 _G.espTextSize = math.clamp(tonumber(_G.espTextSize) or 14, 10, 24);
 _G.espMaxDistance = math.clamp(tonumber(_G.espMaxDistance) or 2500, 100, 5000);
 _G.espOutlineTransparency = math.clamp(tonumber(_G.espOutlineTransparency) or 0.12, 0, 1);
@@ -1626,7 +2041,9 @@ local NA_GRAB_BODY = (function()
 		rec.humanoid = nil;
 		rec.parts = {};
 		for _, inst in ipairs(model:QueryDescendants("Instance")) do
-			if inst:IsA("Humanoid") or inst:IsA("AnimationController") then
+			if inst:IsA("Humanoid") then
+				rec.humanoid = inst;
+			elseif inst:IsA("AnimationController") then
 				rec.humanoid = rec.humanoid or inst;
 			elseif inst:IsA("BasePart") then
 				table.insert(rec.parts, inst);
@@ -1694,7 +2111,40 @@ local NA_GRAB_BODY = (function()
 end)();
 local function getHumanoid(m)
 	local rec = NA_GRAB_BODY.ensure(m);
+	if rec and rec.humanoid and rec.humanoid:IsA("Humanoid") then
+		return rec.humanoid;
+	end;
+	local model = NA_GRAB_BODY.asChar(m) or m;
+	if model and model:IsA("Model") then
+		local hum = model:FindFirstChildOfClass("Humanoid");
+		if hum then
+			if rec then
+				rec.humanoid = hum;
+			end;
+			return hum;
+		end;
+	end;
 	return rec and rec.humanoid or nil;
+end;
+uiRefs.liveHum = function(ch)
+	if not ch then
+		return nil;
+	end;
+	local hum = getHumanoid(ch);
+	if not hum or (not hum:IsA("Humanoid")) or hum.Parent == nil or hum.Health <= 0 then
+		return nil;
+	end;
+	local ok, state = pcall(function()
+		return hum:GetState();
+	end);
+	if ok and (state == Enum.HumanoidStateType.Dead or state == Enum.HumanoidStateType.None) then
+		return nil;
+	end;
+	local anchor = ch:IsA("Model") and (ch:FindFirstChild("HumanoidRootPart", true) or ch:FindFirstChild("UpperTorso", true) or ch:FindFirstChild("LowerTorso", true) or ch:FindFirstChild("Torso", true) or ch:FindFirstChild("Head", true) or ch.PrimaryPart) or nil;
+	if not anchor or anchor.Parent == nil then
+		return nil;
+	end;
+	return hum;
 end;
 local function getPart(m, name)
 	local rec, model = NA_GRAB_BODY.ensure(m);
@@ -1804,6 +2254,20 @@ end;
 local function resetAimCaches(resetTrackedTarget)
 	randomAimCache = newRandomAimCache();
 	randomAimSeq = randomAimSeq + 1;
+	local npcCache = _G.__vyperiaNpcTargetCache;
+	if type(npcCache) == "table" and npcCache.init == true then
+		npcCache.stamp = 0;
+		npcCache.cands = type(npcCache.cands) == "table" and npcCache.cands or {};
+		npcCache.list = {};
+		npcCache.live = {};
+		for model in pairs(npcCache.cands or {}) do
+			if not model or not model.Parent then
+				npcCache.cands[model] = nil;
+			end;
+		end;
+	else
+		_G.__vyperiaNpcTargetCache = nil;
+	end;
 	if resetTrackedTarget then
 		lastLockedCharacter = nil;
 		lastLockedPart = nil;
@@ -1907,7 +2371,7 @@ local function pickPreferredPart(m, prefer)
 	return fallback;
 end;
 local function getRandomAimPart(m, avoid)
-	if _G.randomTargetWeightsEnabled then
+	if _G.randWtOn then
 		local weighted = buildWeightedPartEntries(m, _G.wallCheck == true, avoid);
 		local picked = chooseWeightedEntry(weighted);
 		if picked then
@@ -1974,6 +2438,15 @@ local function getPredictedAimPos(part)
 		off = off.Unit * maxOff;
 	end;
 	return base + off;
+end;
+local function getAimPos(part)
+	local pos = _G.aimPredict and getPredictedAimPos(part) or part.Position;
+	local aimMode = normalizeAimMode(_G.aimTargetMode);
+	if aimMode == "Head" and tostring(part.Name):lower():find("head") then
+		local yOff = math.clamp((part.Size.Y or 1) * 0.18, 0.08, 0.35);
+		pos += Vector3.new(0, yOff, 0);
+	end;
+	return pos;
 end;
 local function topAimPart(m)
 	local aimMode = normalizeAimMode(_G.aimTargetMode);
@@ -2046,16 +2519,19 @@ local function getScanAimPart(ch)
 		add(getPart(ch, "LowerTorso") or getTorso(ch));
 		add(getRoot(ch));
 		add(getHead(ch));
-	elseif aimMode == "Random" and _G.randomTargetWeightsEnabled then
-		local weighted = buildWeightedPartEntries(ch, false);
-		table.sort(weighted, function(a, b)
-			if a.weight == b.weight then
-				return tostring(a.part.Name) < tostring(b.part.Name);
+	elseif aimMode == "Random" then
+		add(randomTargetFor(ch));
+		if _G.randWtOn then
+			local weighted = buildWeightedPartEntries(ch, false);
+			table.sort(weighted, function(a, b)
+				if a.weight == b.weight then
+					return tostring(a.part.Name) < tostring(b.part.Name);
+				end;
+				return a.weight > b.weight;
+			end);
+			for _, entry in ipairs(weighted) do
+				add(entry.part);
 			end;
-			return a.weight > b.weight;
-		end);
-		for _, entry in ipairs(weighted) do
-			add(entry.part);
 		end;
 		add(getRoot(ch));
 		add(getTorso(ch));
@@ -2076,6 +2552,9 @@ local function getScanAimPart(ch)
 	return candidates[1];
 end;
 local function isTrackedAimPartUsable(ch, part, requireLOS)
+	if _G.aliveCheck and (not uiRefs.liveHum(ch)) then
+		return false;
+	end;
 	if not usableAimPart(part, ch) then
 		return false;
 	end;
@@ -2098,22 +2577,38 @@ local function isAlive(ch)
 	if not _G.aliveCheck then
 		return true;
 	end;
-	if not ch then
-		return false;
-	end;
-	local hum = getHumanoid(ch);
-	return hum and hum.Health > 0;
+	return uiRefs.liveHum(ch) ~= nil;
 end;
 local function getTargetPriorityMode()
-	_G.targetPriorityMode = normChoice(_G.targetPriorityMode, TARGET_PRIORITY_OPTIONS, "Crosshair");
+	_G.targetPriorityMode = normChoice(_G.targetPriorityMode, OPT.TARGET_PRIORITY_OPTIONS, "Crosshair");
 	return _G.targetPriorityMode;
 end;
 local function isCharacterStillTargetable(ch, preferredPart)
 	if not ch or not ch.Parent then
 		return false, nil;
 	end;
-	local op = getTrackedPlayerFromCharacter(ch);
-	if not op or op == plr or (not isEnemy(op)) or (not isAlive(ch)) then
+	local entityMode = normChoice(_G.entMode, OPT.TARGET_ENTITY_OPTIONS, "Player");
+	local allowPlayers = entityMode == "Player" or entityMode == "Player/NPC";
+	local allowNpcs = entityMode == "NPC" or entityMode == "Player/NPC";
+	local op = getPlrFromCh(ch);
+	local validNpc = false;
+	if op then
+		if not allowPlayers then
+			return false, nil;
+		end;
+		if op == plr or (not isEnemy(op)) or (not isAlive(ch)) then
+			return false, nil;
+		end;
+	else
+		if not allowNpcs then
+			return false, nil;
+		end;
+		validNpc = isNPCModel(ch);
+		if (not validNpc) or (not isAlive(ch)) then
+			return false, nil;
+		end;
+	end;
+	if (not op) and (not validNpc) then
 		return false, nil;
 	end;
 	local part = isTrackedAimPartUsable(ch, preferredPart, _G.wallCheck == true) and preferredPart or getScanAimPart(ch);
@@ -2139,6 +2634,9 @@ local function isCharacterStillTargetable(ch, preferredPart)
 	return true, part;
 end;
 local function findTarget()
+	local entityMode = normChoice(_G.entMode, OPT.TARGET_ENTITY_OPTIONS, "Player");
+	local allowPlayers = entityMode == "Player" or entityMode == "Player/NPC";
+	local allowNpcs = entityMode == "NPC" or entityMode == "Player/NPC";
 	local stickyOk, stickyPart = false, nil;
 	if _G.stickyTarget then
 		stickyOk, stickyPart = isCharacterStillTargetable(lastLockedCharacter, lastLockedPart);
@@ -2154,48 +2652,91 @@ local function findTarget()
 	end;
 	local near = nil;
 	local nearPart = nil;
+	local nearIsNpc = false;
 	local bestPrimary = math.huge;
 	local bestSecondary = math.huge;
 	local modeName = getTargetPriorityMode();
 	local maxR = _G.aimRadius or 150;
 	local maxDistance = math.clamp(tonumber(_G.targetMaxDistance) or 2500, 100, 5000);
 	local mp = getAimPoint();
-	for _, op in ipairs(getTrackedPlayers()) do
-		if op ~= plr and op.Character and isEnemy(op) then
-			local ch = op.Character;
-			if not isAlive(ch) then
-				continue;
+	local camPos = cam.CFrame.Position;
+	local coarseR = maxR + 48;
+	local function considerCharacter(ch, isNpc)
+		if not isAlive(ch) then
+			return;
+		end;
+		local hum = getHumanoid(ch);
+		if not hum or hum.Health <= 0 then
+			return;
+		end;
+		local anchor = getRoot(ch) or getTorso(ch) or getHead(ch);
+		if not anchor then
+			return;
+		end;
+		local anchorDist = (anchor.Position - camPos).Magnitude;
+		if anchorDist > maxDistance then
+			return;
+		end;
+		local anchorScr, anchorOn = cam:WorldToViewportPoint(anchor.Position);
+		if not anchorOn then
+			return;
+		end;
+		local anchorSdist = (Vector2.new(anchorScr.X, anchorScr.Y) - mp).Magnitude;
+		if modeName == "Crosshair" and anchorSdist > coarseR then
+			return;
+		end;
+		local part = getScanAimPart(ch);
+		if part then
+			local scr, on = cam:WorldToViewportPoint(part.Position);
+			if not on then
+				return;
 			end;
-			local part = getScanAimPart(ch);
-			local hum = getHumanoid(ch);
-			if part and hum and hum.Health > 0 then
-				local scr, on = cam:WorldToViewportPoint(part.Position);
-				if on then
-					local dist = (part.Position - cam.CFrame.Position).Magnitude;
-					if dist > maxDistance then
-						continue;
-					end;
-					local sdist = (Vector2.new(scr.X, scr.Y) - mp).Magnitude;
-					if modeName == "Crosshair" and sdist > maxR then
-						continue;
-					end;
-					local primary = sdist;
-					local secondary = dist;
-					if modeName == "Distance" or _G.lockToNearest then
-						primary = dist;
-						secondary = sdist;
-					elseif modeName == "Lowest Health" then
-						primary = hum.Health;
-						secondary = sdist;
-					end;
-					if primary < bestPrimary or (math.abs(primary - bestPrimary) < 0.001 and secondary < bestSecondary) then
-						bestPrimary = primary;
-						bestSecondary = secondary;
-						near = ch;
-						nearPart = part;
-					end;
+			local dist = (part.Position - camPos).Magnitude;
+			if dist > maxDistance then
+				return;
+			end;
+			local sdist = (Vector2.new(scr.X, scr.Y) - mp).Magnitude;
+			if modeName == "Crosshair" and sdist > maxR then
+				return;
+			end;
+			local primary = sdist;
+			local secondary = dist;
+			if modeName == "Distance" or _G.lockToNearest then
+				primary = dist;
+				secondary = sdist;
+			elseif modeName == "Lowest Health" then
+				primary = hum.Health;
+				secondary = sdist;
+			end;
+			local better = false;
+			if primary < bestPrimary then
+				better = true;
+			elseif math.abs(primary - bestPrimary) < 0.001 then
+				if secondary < bestSecondary then
+					better = true;
+				elseif entityMode == "Player/NPC" and near ~= nil and nearIsNpc and (not isNpc) and math.abs(secondary - bestSecondary) < 0.001 then
+					better = true;
 				end;
 			end;
+			if better then
+				bestPrimary = primary;
+				bestSecondary = secondary;
+				near = ch;
+				nearPart = part;
+				nearIsNpc = isNpc == true;
+			end;
+		end;
+	end;
+	if allowPlayers then
+		for _, op in ipairs(getPlrs()) do
+			if op ~= plr and op.Character and isEnemy(op) then
+				considerCharacter(op.Character, false);
+			end;
+		end;
+	end;
+	if allowNpcs then
+		for _, npc in ipairs(getNpcs()) do
+			considerCharacter(npc, true);
 		end;
 	end;
 	lastTargetName = near and near.Name or "none";
@@ -2204,14 +2745,17 @@ local function findTarget()
 	return near, nearPart;
 end;
 local function getLockRefreshInterval()
-	local interval = 0.05;
+	local interval = 0.08;
 	if _G.wallCheck then
-		interval += 0.02;
+		interval += 0.03;
 	end;
 	if normalizeAimMode(_G.aimTargetMode) == "Random" then
 		interval += 0.03;
 	end;
-	return math.clamp(interval, 0.04, 0.12);
+	if normChoice(_G.entMode, OPT.TARGET_ENTITY_OPTIONS, "Player") ~= "Player" then
+		interval += 0.03;
+	end;
+	return math.clamp(interval, 0.07, 0.18);
 end;
 local function updateESPText(p)
 	local rec = espMap[p];
@@ -2316,7 +2860,7 @@ end;
 local function ensureESPVisual(rec, p, ch)
 	local col = getTeamColorSafe(p);
 	local tr = math.clamp(_G.espTransparency or 0.3, 0, 1);
-	local modeName = normChoice(_G.espRenderMode, ESP_RENDER_OPTIONS, "Highlight");
+	local modeName = normChoice(_G.espRenderMode, OPT.ESP_RENDER_OPTIONS, "Highlight");
 	_G.espRenderMode = modeName;
 	if modeName == "Highlight" then
 		if rec.box and rec.box.Parent then
@@ -2420,7 +2964,7 @@ local function updateESP()
 		espMap = {};
 		return;
 	end;
-	for _, p in ipairs(getTrackedPlayers()) do
+	for _, p in ipairs(getPlrs()) do
 		if p ~= plr then
 			if _G.teamCheck and (not isEnemy(p)) then
 				espDetach(p);
@@ -2430,7 +2974,7 @@ local function updateESP()
 		end;
 	end;
 	for p, _ in pairs(espMap) do
-		if not trackedPlayerIndex[p] then
+		if not plrIdx[p] then
 			espDetach(p);
 		end;
 	end;
@@ -2608,9 +3152,13 @@ local function addRowToggle(parent, labelText, var, desc)
 			end;
 			applyCustomUI();
 			updateFOVCircle();
-		elseif var == "randomTargetWeightsEnabled" then
+		elseif var == "randWtOn" then
 			normalizeRandomWeights();
 			resetAimCaches(false);
+		end;
+		if var == "autoSaveConfigs" then
+			saveCfg(true);
+			return;
 		end;
 		saveCfg();
 	end);
@@ -3358,6 +3906,21 @@ local function showTopBtn(state)
 		});
 	end;
 end;
+uiRefs.updateLockUi = function()
+	if not topBtn then
+		return;
+	end;
+	topBtn.Text = isLock and "OPEN AIMBOT [LOCK ON]" or "OPEN AIMBOT [LOCK OFF]";
+	topBtn.BackgroundColor3 = isLock and UI.ok or UI.bar1;
+	topBtn.BackgroundTransparency = isLock and 0.08 or 0.2;
+	topBtn.TextStrokeColor3 = Color3.new(0, 0, 0);
+	topBtn.TextStrokeTransparency = 0;
+	local st = topBtn:FindFirstChildOfClass("UIStroke");
+	if st then
+		st.Color = isLock and UI.acc2 or UI.stroke2;
+		st.Transparency = isLock and 0.08 or 0.25;
+	end;
+end;
 local function openUI()
 	if not frm or (not frm.Parent) then
 		return;
@@ -3473,7 +4036,7 @@ local function createUI()
 	table.insert(conns, espLoop);
 	topToggleHolder = newUi("Frame", gui);
 	setUiTag(topToggleHolder, "TopToggleHolder");
-	topToggleHolder.Size = UDim2.new(0, 152, 0, 30);
+	topToggleHolder.Size = UDim2.new(0, 196, 0, 30);
 	topToggleHolder.Position = topToggleUDim(true);
 	topToggleHolder.BackgroundTransparency = 1;
 	topToggleHolder.Visible = false;
@@ -3486,14 +4049,17 @@ local function createUI()
 	topBtn.BackgroundColor3 = UI.bar1;
 	topBtn.BackgroundTransparency = 0.2;
 	topBtn.TextColor3 = UI.text;
-	topBtn.Text = "OPEN AIMBOT";
+	topBtn.Text = "OPEN AIMBOT [LOCK OFF]";
 	topBtn.Font = Enum.Font.GothamBlack;
-	topBtn.TextSize = 14;
+	topBtn.TextSize = 12;
+	topBtn.TextStrokeColor3 = Color3.new(0, 0, 0);
+	topBtn.TextStrokeTransparency = 0;
 	topBtn.AutoButtonColor = false;
 	topBtn.ZIndex = 20;
 	uiRefs.topToggle = topBtn;
 	round(topBtn, UDim.new(0.3, 0));
 	stroke(topBtn, 1, UI.stroke2, 0.25);
+	uiRefs.updateLockUi();
 	local fw, fh = frameSizeForViewport();
 	local frame = newUi("Frame", gui);
 	setUiTag(frame, "Root");
@@ -3565,14 +4131,14 @@ local function createUI()
 	local pgCustom = tabObjs.customize.page;
 	addRowToggle(pgAim, "Aimbot", "isEnabled");
 	addRowToggle(pgAim, "Aim Lock", "aimLock", "tap lock key to toggle, off = hold key");
-	addRowDropdown(pgAim, "aim target", "aimTargetMode", AIM_TARGET_OPTIONS, "Body part used for camera locking", function(v)
+	addRowDropdown(pgAim, "aim target", "aimTargetMode", OPT.AIM_TARGET_OPTIONS, "Body part used for camera locking", function(v)
 		if normalizeAimMode(v) == "Random" then
 			bumpRandomAim();
 		end;
 	end);
 	if not isMobilePlatform() then
-		addRowDropdown(pgAim, "target point", "targetPointMode", TARGET_POINT_OPTIONS, "PC only: use cursor or screen center", function()
-			_G.targetPointMode = normChoice(_G.targetPointMode, TARGET_POINT_OPTIONS, "Cursor");
+		addRowDropdown(pgAim, "target point", "targetPointMode", OPT.TARGET_POINT_OPTIONS, "PC only: use cursor or screen center", function()
+			_G.targetPointMode = normChoice(_G.targetPointMode, OPT.TARGET_POINT_OPTIONS, "Cursor");
 			updateFOVCircle();
 		end);
 	end;
@@ -3588,7 +4154,7 @@ local function createUI()
 		updateFOVCircle();
 	end);
 	addRowToggle(pgAim, "wall check", "wallCheck");
-	addRowToggleSlider(pgAim, "tween aim", "aimTween", "aimSmooth", 0.05, 0.2, 2, "smoothly rotate camera to target");
+	addRowToggleSlider(pgAim, "smooth aim", "aimTween", "aimSmooth", 0.03, 1, 2, "smooth camera aim");
 	addRowToggleSlider(pgAim, "aim prediction", "aimPredict", "aimLead", 0.01, 1, 2, "adaptive prediction, dampens close targets");
 	addRowToggleSlider(pgAim, "lock fov", "fovEnabled", "fovValue", 1, 120, 0, "changes camera FOV");
 	addRowToggle(pgTarget, "team check", "teamCheck");
@@ -3624,15 +4190,19 @@ local function createUI()
 		return row;
 	end;
 	addSection(pgTarget, "selection");
-	addRowDropdown(pgTarget, "target priority", "targetPriorityMode", TARGET_PRIORITY_OPTIONS, "choose how targets are sorted", function(v)
-		_G.targetPriorityMode = normChoice(v, TARGET_PRIORITY_OPTIONS, "Crosshair");
+	addRowDropdown(pgTarget, "target priority", "targetPriorityMode", OPT.TARGET_PRIORITY_OPTIONS, "choose how targets are sorted", function(v)
+		_G.targetPriorityMode = normChoice(v, OPT.TARGET_PRIORITY_OPTIONS, "Crosshair");
 		_G.lockToNearest = _G.targetPriorityMode == "Distance";
 		saveCfg();
 	end);
 	addRowToggle(pgTarget, "sticky target", "stickyTarget", "keep the current target while it stays valid");
 	addRowSlider(pgTarget, "max target distance", "targetMaxDistance", 100, 5000, 0, "ignore targets farther than this");
+	addRowDropdown(pgTarget, "target mode", "entMode", OPT.TARGET_ENTITY_OPTIONS, "choose whether the aimbot targets players, NPCs, or both", function(v)
+		_G.entMode = normChoice(v, OPT.TARGET_ENTITY_OPTIONS, "Player");
+		resetAimCaches(true);
+	end);
 	addSection(pgTarget, "random target weights");
-	addRowToggle(pgTarget, "use weighted random", "randomTargetWeightsEnabled", "use the sliders below when aim target is set to Random");
+	addRowToggle(pgTarget, "use weighted random", "randWtOn", "use the sliders below when aim target is set to Random");
 	addRowSlider(pgTarget, "random head %", "randomWeightHead", 0, 100, 0, "chance weight for Head", function()
 		normalizeRandomWeights();
 		resetAimCaches(false);
@@ -3658,8 +4228,8 @@ local function createUI()
 		resetAimCaches(false);
 	end);
 	addSection(pgESP, "render");
-	addRowDropdown(pgESP, "esp mode", "espRenderMode", ESP_RENDER_OPTIONS, "swap between highlight and boxhandleadornment", function(v)
-		_G.espRenderMode = normChoice(v, ESP_RENDER_OPTIONS, "Highlight");
+	addRowDropdown(pgESP, "esp mode", "espRenderMode", OPT.ESP_RENDER_OPTIONS, "swap between highlight and boxhandleadornment", function(v)
+		_G.espRenderMode = normChoice(v, OPT.ESP_RENDER_OPTIONS, "Highlight");
 		updateESP();
 	end);
 	addRowToggle(pgESP, "always on top", "espAlwaysOnTop", "draw esp over walls when possible");
@@ -3689,7 +4259,7 @@ local function createUI()
 	end);
 	addRowToggle(pgCustom, "compact rows", "uiCompact", "smaller rows on next UI rebuild");
 	addSection(pgCustom, "theme");
-	addRowDropdown(pgCustom, "accent theme", "uiTheme", THEME_OPTIONS, "changes accent colors", function(v)
+	addRowDropdown(pgCustom, "accent theme", "uiTheme", OPT.THEME_OPTIONS, "changes accent colors", function(v)
 		applyTheme(v);
 		applyCustomUI();
 	end);
@@ -3698,7 +4268,7 @@ local function createUI()
 		applyCustomUI();
 	end);
 	addSection(pgCustom, "notifications");
-	addRowDropdown(pgCustom, "toast position", "toastPosition", TOAST_POS_OPTIONS, "where notifications appear", function()
+	addRowDropdown(pgCustom, "toast position", "toastPosition", OPT.TOAST_POS_OPTIONS, "where notifications appear", function()
 		applyCustomUI();
 	end);
 	addRowSlider(pgCustom, "toast duration", "toastDuration", 1, 8, 1, "how long notifications stay", function()
@@ -3788,7 +4358,7 @@ local function createUI()
 	local vExec = addRow(pgStatus, "executor", identifyexecutor and identifyexecutor() or identifyexec and identifyexec() or "Unknown");
 	local vAimState = addRow(pgStatus, "aimbot state", "");
 	local vLockState = addRow(pgStatus, "lock state", "");
-	local vTargetMode = addRow(pgStatus, "target mode", "");
+	local vTargetMode = addRow(pgStatus, "aim target", "");
 	local vTargetNow = addRow(pgStatus, "current target", "");
 	local vEspState = addRow(pgStatus, "esp state", "");
 	local vThemeState = addRow(pgStatus, "theme", "");
@@ -3833,6 +4403,7 @@ local function createUI()
 					table.insert(list, n);
 				end;
 				_G.toggleKeys = list;
+				rebindStrongInputs();
 				saveCfg();
 			end);
 		end;
@@ -3879,6 +4450,7 @@ local function createUI()
 	end;
 	local function stopLockCap()
 		lockCapMode = false;
+		capMode = false;
 		capCooldownUntil = time() + 0.3;
 		if lockCapConn and lockCapConn.Connected then
 			lockCapConn:Disconnect();
@@ -3912,6 +4484,7 @@ local function createUI()
 				end;
 				_G.toggleKeys = list;
 				rebuildChips();
+				rebindStrongInputs();
 				saveCfg();
 			end;
 			stopCap();
@@ -3921,6 +4494,7 @@ local function createUI()
 		keysSet = {};
 		_G.toggleKeys = {};
 		rebuildChips();
+		rebindStrongInputs();
 		saveCfg();
 	end);
 	local lockLbl = newUi("TextLabel", pgSettings);
@@ -3949,6 +4523,7 @@ local function createUI()
 			return;
 		end;
 		lockCapMode = true;
+		capMode = true;
 		toast("press key or mouse for lock");
 		lockCapConn = UIS.InputBegan:Connect(function(i, gp)
 			if not lockCapMode then
@@ -3968,6 +4543,7 @@ local function createUI()
 			end;
 			_G.lockKey = name;
 			lockBtn.Text = name;
+			rebindStrongInputs();
 			saveCfg();
 			stopLockCap();
 		end);
@@ -3986,12 +4562,264 @@ local function createUI()
 	local lockResetCon = bindClick(lockReset, function()
 		_G.lockKey = "MouseButton2";
 		lockBtn.Text = "MouseButton2";
+		rebindStrongInputs();
 		saveCfg();
 		toast("lock key reset to MouseButton2");
 	end);
+	addSection(pgSettings, "configs");
+	addRowToggle(pgSettings, "auto save configs", "autoSaveConfigs", "save changes instantly or only when you press save");
+	local function refreshLoadedConfigRuntime()
+		_G.selectedConfigName = cleanCfgName(_G.selectedConfigName);
+		_G.targetPointMode = normChoice(_G.targetPointMode, OPT.TARGET_POINT_OPTIONS, "Cursor");
+		_G.pendingBindAction = normChoice(_G.pendingBindAction, OPT.BIND_ACTION_OPTIONS, "Aimbot");
+		_G.pendingMobileAction = normChoice(_G.pendingMobileAction, OPT.MOBILE_ACTION_OPTIONS, "Aimbot");
+		_G.targetPriorityMode = normChoice(_G.targetPriorityMode, OPT.TARGET_PRIORITY_OPTIONS, "Crosshair");
+		_G.entMode = normChoice(_G.entMode, OPT.TARGET_ENTITY_OPTIONS, "Player");
+		_G.randWtOn = _G.randWtOn == true;
+		_G.espRenderMode = normChoice(_G.espRenderMode, OPT.ESP_RENDER_OPTIONS, "Highlight");
+		_G.mobileHelperButtons = normalizeActionList(_G.mobileHelperButtons, OPT.MOBILE_ACTION_OPTIONS, OPT.MOBILE_HELPER_DEFAULTS);
+		normalizeRandomWeights();
+		applyTheme(_G.uiTheme);
+		applyToastPos();
+		applyCustomUI();
+		updateFOVCircle();
+		refreshESPTransparency();
+		updateESP();
+		rebindStrongInputs();
+		rebuildMobileHelper();
+		refreshMobileUI();
+		if _G.fovEnabled and cam then
+			cam.FieldOfView = _G.fovValue;
+		end;
+		if lockBtn and lockBtn.Parent then
+			lockBtn.Text = tostring(_G.lockKey or "MouseButton2");
+		end;
+	end;
+	local cfgNameRow = newUi("Frame", pgSettings);
+	cfgNameRow.BackgroundTransparency = 1;
+	cfgNameRow.Size = UDim2.new(1, -20, 0, 48);
+	local cfgNameLbl = newUi("TextLabel", cfgNameRow);
+	cfgNameLbl.BackgroundTransparency = 1;
+	cfgNameLbl.Size = UDim2.new(0.42, 0, 0, 20);
+	cfgNameLbl.Position = UDim2.new(0, 0, 0, 2);
+	cfgNameLbl.Font = Enum.Font.GothamSemibold;
+	cfgNameLbl.TextSize = 14;
+	cfgNameLbl.TextXAlignment = Enum.TextXAlignment.Left;
+	cfgNameLbl.TextColor3 = UI.text;
+	cfgNameLbl.Text = "config name";
+	local cfgNameHint = newUi("TextLabel", cfgNameRow);
+	cfgNameHint.BackgroundTransparency = 1;
+	cfgNameHint.Size = UDim2.new(0.42, 0, 0, 18);
+	cfgNameHint.Position = UDim2.new(0, 0, 0, 24);
+	cfgNameHint.Font = Enum.Font.Gotham;
+	cfgNameHint.TextSize = 12;
+	cfgNameHint.TextXAlignment = Enum.TextXAlignment.Left;
+	cfgNameHint.TextColor3 = UI.sub;
+	cfgNameHint.Text = "type a name to save or select";
+	local cfgNameBox = newUi("TextBox", cfgNameRow);
+	cfgNameBox.Size = UDim2.new(0.54, 0, 0, 34);
+	cfgNameBox.Position = UDim2.new(0.46, 0, 0.5, -17);
+	cfgNameBox.BackgroundColor3 = UI.bar2;
+	cfgNameBox.BorderSizePixel = 0;
+	cfgNameBox.TextColor3 = UI.text;
+	cfgNameBox.PlaceholderColor3 = UI.sub;
+	cfgNameBox.PlaceholderText = "default";
+	cfgNameBox.Text = cleanCfgName(_G.selectedConfigName);
+	cfgNameBox.ClearTextOnFocus = false;
+	cfgNameBox.Font = Enum.Font.GothamSemibold;
+	cfgNameBox.TextSize = 13;
+	cfgNameBox.TextXAlignment = Enum.TextXAlignment.Left;
+	round(cfgNameBox, UDim.new(0, 12));
+	stroke(cfgNameBox, 1, UI.stroke2, 0.2);
+	local cfgNamePad = newUi("UIPadding", cfgNameBox);
+	cfgNamePad.PaddingLeft = UDim.new(0, 10);
+	cfgNamePad.PaddingRight = UDim.new(0, 10);
+	local cfgPickRow = newUi("Frame", pgSettings);
+	cfgPickRow.BackgroundTransparency = 1;
+	cfgPickRow.Size = UDim2.new(1, -20, 0, 44);
+	local cfgPickLbl = newUi("TextLabel", cfgPickRow);
+	cfgPickLbl.BackgroundTransparency = 1;
+	cfgPickLbl.Size = UDim2.new(0.42, 0, 0, 20);
+	cfgPickLbl.Position = UDim2.new(0, 0, 0, 12);
+	cfgPickLbl.Font = Enum.Font.GothamSemibold;
+	cfgPickLbl.TextSize = 14;
+	cfgPickLbl.TextXAlignment = Enum.TextXAlignment.Left;
+	cfgPickLbl.TextColor3 = UI.text;
+	cfgPickLbl.Text = "saved configs";
+	local cfgPickBtn = newUi("TextButton", cfgPickRow);
+	cfgPickBtn.Size = UDim2.new(0.54, 0, 0, 34);
+	cfgPickBtn.Position = UDim2.new(0.46, 0, 0.5, -17);
+	cfgPickBtn.BackgroundColor3 = UI.bar2;
+	cfgPickBtn.BorderSizePixel = 0;
+	cfgPickBtn.Text = "";
+	cfgPickBtn.AutoButtonColor = false;
+	round(cfgPickBtn, UDim.new(0, 12));
+	stroke(cfgPickBtn, 1, UI.stroke2, 0.2);
+	local cfgPickTxt = newUi("TextLabel", cfgPickBtn);
+	cfgPickTxt.BackgroundTransparency = 1;
+	cfgPickTxt.Size = UDim2.new(1, -42, 1, 0);
+	cfgPickTxt.Position = UDim2.new(0, 12, 0, 0);
+	cfgPickTxt.Font = Enum.Font.GothamBold;
+	cfgPickTxt.TextSize = 13;
+	cfgPickTxt.TextXAlignment = Enum.TextXAlignment.Left;
+	cfgPickTxt.TextColor3 = UI.text;
+	local cfgPickArrow = newUi("TextLabel", cfgPickBtn);
+	cfgPickArrow.BackgroundTransparency = 1;
+	cfgPickArrow.Size = UDim2.new(0, 24, 1, 0);
+	cfgPickArrow.Position = UDim2.new(1, -28, 0, 0);
+	cfgPickArrow.Font = Enum.Font.GothamBlack;
+	cfgPickArrow.TextSize = 14;
+	cfgPickArrow.TextColor3 = UI.acc2;
+	cfgPickArrow.Text = "v";
+	local cfgPickList = newUi("Frame", cfgPickRow);
+	cfgPickList.Visible = false;
+	cfgPickList.ClipsDescendants = true;
+	cfgPickList.Size = UDim2.new(0.54, 0, 0, 0);
+	cfgPickList.Position = UDim2.new(0.46, 0, 1, 4);
+	cfgPickList.BackgroundColor3 = UI.bar1;
+	cfgPickList.BorderSizePixel = 0;
+	cfgPickList.ZIndex = 40;
+	round(cfgPickList, UDim.new(0, 14));
+	stroke(cfgPickList, 1, UI.acc2, 0.2);
+	local cfgPickPad = newUi("UIPadding", cfgPickList);
+	cfgPickPad.PaddingTop = UDim.new(0, 6);
+	cfgPickPad.PaddingBottom = UDim.new(0, 6);
+	cfgPickPad.PaddingLeft = UDim.new(0, 6);
+	cfgPickPad.PaddingRight = UDim.new(0, 6);
+	local cfgPickLay = newUi("UIListLayout", cfgPickList);
+	cfgPickLay.Padding = UDim.new(0, 5);
+	cfgPickLay.SortOrder = Enum.SortOrder.LayoutOrder;
+	local configNames = getConfigNames();
+	local function syncConfigNameBox()
+		local picked = cleanCfgName(cfgNameBox.Text);
+		cfgNameBox.Text = picked;
+		_G.selectedConfigName = picked;
+		saveMeta();
+	end;
+	local function refreshConfigPicker()
+		configNames = getConfigNames();
+		cfgPickTxt.Text = cleanCfgName(_G.selectedConfigName);
+		for _, c in ipairs(cfgPickList:GetChildren()) do
+			if c:IsA("TextButton") then
+				c:Destroy();
+			end;
+		end;
+		for i, name in ipairs(configNames) do
+			local opt = newUi("TextButton", cfgPickList);
+			opt.LayoutOrder = i;
+			opt.Size = UDim2.new(1, 0, 0, _G.uiCompact and 29 or 33);
+			opt.BackgroundColor3 = cleanCfgName(_G.selectedConfigName) == name and UI.tabActive or UI.bar2;
+			opt.BorderSizePixel = 0;
+			opt.AutoButtonColor = false;
+			opt.Text = name;
+			opt.Font = Enum.Font.GothamSemibold;
+			opt.TextSize = 13;
+			opt.TextColor3 = UI.text;
+			opt.TextXAlignment = Enum.TextXAlignment.Left;
+			opt.ZIndex = 41;
+			round(opt, UDim.new(0, 10));
+			local pad = newUi("UIPadding", opt);
+			pad.PaddingLeft = UDim.new(0, 10);
+			pad.PaddingRight = UDim.new(0, 10);
+			bindClick(opt, function()
+				_G.selectedConfigName = name;
+				cfgNameBox.Text = name;
+				saveMeta();
+				refreshConfigPicker();
+				cfgPickList.Visible = false;
+				cfgPickList.Size = UDim2.new(0.54, 0, 0, 0);
+				cfgPickArrow.Text = "v";
+			end);
+		end;
+	end;
+	refreshConfigPicker();
+	cfgNameBox.FocusLost:Connect(function()
+		syncConfigNameBox();
+		refreshConfigPicker();
+	end);
+	bindClick(cfgPickBtn, function()
+		if cfgPickList.Visible then
+			cfgPickList.Visible = false;
+			cfgPickList.Size = UDim2.new(0.54, 0, 0, 0);
+			cfgPickArrow.Text = "v";
+			return;
+		end;
+		refreshConfigPicker();
+		cfgPickList.Visible = true;
+		cfgPickArrow.Text = "^";
+		cfgPickList.Size = UDim2.new(0.54, 0, 0, (#configNames * ((_G.uiCompact and 29 or 33) + 5)) + 12);
+	end);
+	local cfgBtnRow = newUi("Frame", pgSettings);
+	cfgBtnRow.BackgroundTransparency = 1;
+	cfgBtnRow.Size = UDim2.new(1, -20, 0, 30);
+	local cfgBtnLay = newUi("UIListLayout", cfgBtnRow);
+	cfgBtnLay.FillDirection = Enum.FillDirection.Horizontal;
+	cfgBtnLay.Padding = UDim.new(0, 8);
+	cfgBtnLay.SortOrder = Enum.SortOrder.LayoutOrder;
+	local saveCfgBtn = newUi("TextButton", cfgBtnRow);
+	saveCfgBtn.Text = "save config";
+	saveCfgBtn.Font = Enum.Font.GothamSemibold;
+	saveCfgBtn.TextSize = 13;
+	saveCfgBtn.TextColor3 = UI.text;
+	saveCfgBtn.AutoButtonColor = false;
+	saveCfgBtn.BackgroundColor3 = UI.ok;
+	saveCfgBtn.Size = UDim2.new(0, 106, 0, 26);
+	round(saveCfgBtn, UDim.new(0.2, 0));
+	stroke(saveCfgBtn, 1, UI.stroke2, 0.15);
+	local loadCfgBtn = newUi("TextButton", cfgBtnRow);
+	loadCfgBtn.Text = "load config";
+	loadCfgBtn.Font = Enum.Font.GothamSemibold;
+	loadCfgBtn.TextSize = 13;
+	loadCfgBtn.TextColor3 = UI.text;
+	loadCfgBtn.AutoButtonColor = false;
+	loadCfgBtn.BackgroundColor3 = UI.bar2;
+	loadCfgBtn.Size = UDim2.new(0, 106, 0, 26);
+	round(loadCfgBtn, UDim.new(0.2, 0));
+	stroke(loadCfgBtn, 1, UI.stroke2, 0.25);
+	local delCfgBtn = newUi("TextButton", cfgBtnRow);
+	delCfgBtn.Text = "delete config";
+	delCfgBtn.Font = Enum.Font.GothamSemibold;
+	delCfgBtn.TextSize = 13;
+	delCfgBtn.TextColor3 = UI.text;
+	delCfgBtn.AutoButtonColor = false;
+	delCfgBtn.BackgroundColor3 = UI.danger;
+	delCfgBtn.Size = UDim2.new(0, 112, 0, 26);
+	round(delCfgBtn, UDim.new(0.2, 0));
+	stroke(delCfgBtn, 1, UI.stroke2, 0.15);
+	bindClick(saveCfgBtn, function()
+		syncConfigNameBox();
+		saveCfg(true, _G.selectedConfigName);
+		refreshConfigPicker();
+		toast("config saved");
+	end);
+	bindClick(loadCfgBtn, function()
+		syncConfigNameBox();
+		if not loadNameCfg(_G.selectedConfigName) then
+			toast("config not found");
+			return;
+		end;
+		cfgNameBox.Text = cleanCfgName(_G.selectedConfigName);
+		refreshLoadedConfigRuntime();
+		refreshConfigPicker();
+		toast("config loaded");
+	end);
+	bindClick(delCfgBtn, function()
+		syncConfigNameBox();
+		local path = getCfgPath(_G.selectedConfigName);
+		if delfile and isfile and isfile(path) then
+			pcall(delfile, path);
+		end;
+		resetCfg();
+		_G.selectedConfigName = "default";
+		cfgNameBox.Text = "default";
+		saveMeta();
+		refreshLoadedConfigRuntime();
+		refreshConfigPicker();
+		toast("config reset to default");
+	end);
 	addSection(pgSettings, "option binds");
-	_G.pendingBindAction = normChoice(_G.pendingBindAction, BIND_ACTION_OPTIONS, "Aimbot");
-	addRowDropdown(pgSettings, "bind option", "pendingBindAction", BIND_ACTION_OPTIONS, "pick what the next key should toggle");
+	_G.pendingBindAction = normChoice(_G.pendingBindAction, OPT.BIND_ACTION_OPTIONS, "Aimbot");
+	addRowDropdown(pgSettings, "bind option", "pendingBindAction", OPT.BIND_ACTION_OPTIONS, "pick what the next key should toggle");
 	local bindBox = newUi("Frame", pgSettings);
 	bindBox.BackgroundTransparency = 1;
 	bindBox.Size = UDim2.new(1, -20, 0, 30);
@@ -4067,6 +4895,7 @@ local function createUI()
 			local rc = bindClick(rm, function()
 				_G.optionBinds[keyName] = nil;
 				rebuildOptionBindRows();
+				rebindStrongInputs();
 				saveCfg();
 			end);
 		end;
@@ -4090,7 +4919,7 @@ local function createUI()
 			return;
 		end;
 		capMode = true;
-		local action = normChoice(_G.pendingBindAction, BIND_ACTION_OPTIONS, "Aimbot");
+		local action = normChoice(_G.pendingBindAction, OPT.BIND_ACTION_OPTIONS, "Aimbot");
 		toast("press key for " .. action);
 		capConn = UIS.InputBegan:Connect(function(i, gp)
 			if gp then
@@ -4106,6 +4935,7 @@ local function createUI()
 			_G.optionBinds = type(_G.optionBinds) == "table" and _G.optionBinds or {};
 			_G.optionBinds[i.KeyCode.Name] = action;
 			rebuildOptionBindRows();
+			rebindStrongInputs();
 			saveCfg();
 			stopCap();
 		end);
@@ -4113,6 +4943,7 @@ local function createUI()
 	local clrBindCon = bindClick(clrBind, function()
 		_G.optionBinds = {};
 		rebuildOptionBindRows();
+		rebindStrongInputs();
 		saveCfg();
 	end);
 	if isMobilePlatform() then
@@ -4120,7 +4951,7 @@ local function createUI()
 		addRowToggle(pgSettings, "mobile center aim", "mobileCenterAim", "touch devices use the exact screen center instead of cursor");
 		addRowToggle(pgSettings, "mobile buttons", "mobileButtons", "floating lock and menu buttons for touch devices");
 		addRowToggle(pgSettings, "center dot visible", "centerDotVisible", "show or hide the mobile center marker");
-		addRowDropdown(pgSettings, "helper button", "pendingMobileAction", MOBILE_ACTION_OPTIONS, "pick what the add helper button action inserts");
+		addRowDropdown(pgSettings, "helper button", "pendingMobileAction", OPT.MOBILE_ACTION_OPTIONS, "pick what the add helper button action inserts");
 		local helperBox = newUi("Frame", pgSettings);
 		helperBox.BackgroundTransparency = 1;
 		helperBox.Size = UDim2.new(1, -20, 0, 30);
@@ -4207,7 +5038,7 @@ local function createUI()
 		round(resetHelperPos, UDim.new(0.2, 0));
 		stroke(resetHelperPos, 1, UI.stroke2, 0.25);
 		bindClick(addHelper, function()
-			local picked = normChoice(_G.pendingMobileAction, MOBILE_ACTION_OPTIONS, "Aimbot");
+			local picked = normChoice(_G.pendingMobileAction, OPT.MOBILE_ACTION_OPTIONS, "Aimbot");
 			for _, existing in ipairs(_G.mobileHelperButtons) do
 				if existing == picked then
 					toast("helper button already added");
@@ -4220,7 +5051,7 @@ local function createUI()
 			saveCfg();
 		end);
 		bindClick(resetHelper, function()
-			_G.mobileHelperButtons = normalizeActionList(nil, MOBILE_ACTION_OPTIONS, MOBILE_HELPER_DEFAULTS);
+			_G.mobileHelperButtons = normalizeActionList(nil, OPT.MOBILE_ACTION_OPTIONS, OPT.MOBILE_HELPER_DEFAULTS);
 			rebuildMobileHelperRows();
 			rebuildMobileHelper();
 			saveCfg();
@@ -4251,7 +5082,7 @@ local function createUI()
 		fpsAccum = 0;
 		fpsFrames = 0;
 		statusPulse = 0;
-		local num = Players.NumPlayers or getTrackedPlayerCount();
+		local num = Players.NumPlayers or getPlrCount();
 		local max = Players.MaxPlayers or 0;
 		vPlayers.Text = tostring(num) .. " / " .. tostring(max);
 		local elapsed = (DateTime.now()).UnixTimestamp - startUnix;
@@ -4409,7 +5240,7 @@ local function createUI()
 				child:Destroy();
 			end;
 		end;
-		local actions = normalizeActionList(_G.mobileHelperButtons, MOBILE_ACTION_OPTIONS, MOBILE_HELPER_DEFAULTS);
+		local actions = normalizeActionList(_G.mobileHelperButtons, OPT.MOBILE_ACTION_OPTIONS, OPT.MOBILE_HELPER_DEFAULTS);
 		_G.mobileHelperButtons = actions;
 		local scale = math.clamp(tonumber(_G.mobileButtonScale) or 1, 0.7, 1.45);
 		local btnW = math.floor(82 * scale);
@@ -4539,6 +5370,7 @@ local function createUI()
 		end;
 		conns = {};
 		isLock = false;
+		uiRefs.updateLockUi();
 		_G.isEnabled = false;
 		_G.aimTargetMode = "Head";
 		_G.espEnabled = false;
@@ -4564,8 +5396,7 @@ local function createUI()
 			espDetach(p);
 		end;
 		espMap = {};
-		CAS:UnbindAction("VyperiaBot");
-		CAS:UnbindAction("VyperiaBotBlock");
+		unbindStrongInputs();
 		toast("Aimbot unloaded");
 		task.delay(0.5, function()
 			if gui and gui.Parent then
@@ -4646,15 +5477,63 @@ local function cursorInsideModel(m, pad)
 	local p = pad or 2;
 	return x >= a - p and x <= c + p and y >= b - p and y <= d + p;
 end;
-local function isLockInput(i)
-	local key = _G.lockKey or "MouseButton2";
-	if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.MouseButton2 or i.UserInputType == Enum.UserInputType.MouseButton3 then
-		return i.UserInputType.Name == key;
+local function getBindInputEnum(name)
+	local raw = tostring(name or "");
+	if raw == "" then
+		return nil;
 	end;
-	if i.UserInputType == Enum.UserInputType.Keyboard then
-		return i.KeyCode.Name == key;
+	if raw == "MouseButton1" then
+		return Enum.UserInputType.MouseButton1;
 	end;
-	return false;
+	if raw == "MouseButton2" then
+		return Enum.UserInputType.MouseButton2;
+	end;
+	if raw == "MouseButton3" then
+		return Enum.UserInputType.MouseButton3;
+	end;
+	local okKey, keyCode = pcall(function()
+		return Enum.KeyCode[raw];
+	end);
+	if okKey and keyCode and keyCode ~= Enum.KeyCode.Unknown then
+		return keyCode;
+	end;
+	local okInput, inputType = pcall(function()
+		return Enum.UserInputType[raw];
+	end);
+	if okInput and inputType and (inputType == Enum.UserInputType.MouseButton1 or inputType == Enum.UserInputType.MouseButton2 or inputType == Enum.UserInputType.MouseButton3) then
+		return inputType;
+	end;
+	return nil;
+end;
+local function collectHotkeyInputs()
+	local out = {};
+	local seen = {};
+	local function push(name)
+		local enumItem = getBindInputEnum(name);
+		if enumItem and (not seen[enumItem]) then
+			seen[enumItem] = true;
+			out[#out + 1] = enumItem;
+		end;
+	end;
+	for _, name in ipairs(type(_G.toggleKeys) == "table" and _G.toggleKeys or {}) do
+		push(name);
+	end;
+	for keyName, _ in pairs(type(_G.optionBinds) == "table" and _G.optionBinds or {}) do
+		push(keyName);
+	end;
+	return out;
+end;
+unbindStrongInputs = function()
+	pcall(function()
+		CAS:UnbindAction("VyperiaBotLock");
+	end);
+	pcall(function()
+		CAS:UnbindAction("VyperiaBotHotkeys");
+	end);
+	if uiRefs.hotkeyRawCon and uiRefs.hotkeyRawCon.Connected then
+		uiRefs.hotkeyRawCon:Disconnect();
+	end;
+	uiRefs.hotkeyRawCon = nil;
 end;
 function startLockAction()
 	if UIS:GetFocusedTextBox() then
@@ -4665,6 +5544,7 @@ function startLockAction()
 	end;
 	if _G.aimLock then
 		isLock = not isLock;
+		uiRefs.updateLockUi();
 		if isLock then
 			if normalizeAimMode(_G.aimTargetMode) == "Random" then
 				bumpRandomAim();
@@ -4676,6 +5556,7 @@ function startLockAction()
 		end;
 	else
 		isLock = true;
+		uiRefs.updateLockUi();
 		if normalizeAimMode(_G.aimTargetMode) == "Random" then
 			bumpRandomAim();
 		end;
@@ -4690,9 +5571,10 @@ function endLockAction()
 		return;
 	end;
 	isLock = false;
+	uiRefs.updateLockUi();
 end;
 handleOptionBind = function(action)
-	local var = BIND_ACTION_VARS[action];
+	local var = OPT.BIND_ACTION_VARS[action];
 	if not var then
 		return false;
 	end;
@@ -4720,54 +5602,122 @@ handleOptionBind = function(action)
 	return true;
 end;
 local function binds()
-	local bMouse = UIS.InputBegan:Connect(function(i, gp)
-		if gp then
-			return;
+	rebindStrongInputs();
+end;
+rebindStrongInputs = function()
+	unbindStrongInputs();
+	local lockInput = getBindInputEnum(_G.lockKey or "MouseButton2");
+	if lockInput then
+		local ok = pcall(function()
+			CAS:BindActionAtPriority("VyperiaBotLock", function(_, inputState)
+				if capMode or UIS:GetFocusedTextBox() then
+					return Enum.ContextActionResult.Pass;
+				end;
+				if inputState == Enum.UserInputState.Begin then
+					if not _G.isEnabled then
+						return Enum.ContextActionResult.Pass;
+					end;
+					startLockAction();
+					return Enum.ContextActionResult.Sink;
+				end;
+				if inputState == Enum.UserInputState.End or inputState == Enum.UserInputState.Cancel then
+					if not _G.isEnabled and (not isLock) then
+						return Enum.ContextActionResult.Pass;
+					end;
+					endLockAction();
+					return Enum.ContextActionResult.Sink;
+				end;
+				return Enum.ContextActionResult.Pass;
+			end, false, Enum.ContextActionPriority.High.Value + 1000, lockInput);
+		end);
+		if not ok then
+			pcall(function()
+				CAS:BindAction("VyperiaBotLock", function(_, inputState)
+					if capMode or UIS:GetFocusedTextBox() then
+						return Enum.ContextActionResult.Pass;
+					end;
+					if inputState == Enum.UserInputState.Begin then
+						if not _G.isEnabled then
+							return Enum.ContextActionResult.Pass;
+						end;
+						startLockAction();
+						return Enum.ContextActionResult.Sink;
+					end;
+					if inputState == Enum.UserInputState.End or inputState == Enum.UserInputState.Cancel then
+						if not _G.isEnabled and (not isLock) then
+							return Enum.ContextActionResult.Pass;
+						end;
+						endLockAction();
+						return Enum.ContextActionResult.Sink;
+					end;
+					return Enum.ContextActionResult.Pass;
+				end, false, lockInput);
+			end);
 		end;
-		if not isLockInput(i) then
-			return;
+	end;
+	local hotkeyInputs = collectHotkeyInputs();
+	if #hotkeyInputs > 0 then
+		uiRefs.runHotkey = function(name)
+			local now = os.clock();
+			if uiRefs.hotkeyName == name and (now - (uiRefs.hotkeyAt or 0)) < 0.12 then
+				return false;
+			end;
+			uiRefs.hotkeyName = name;
+			uiRefs.hotkeyAt = now;
+			local bindsMap = type(_G.optionBinds) == "table" and _G.optionBinds or {};
+			local action = bindsMap[name];
+			if action and handleOptionBind(action) then
+				return true;
+			end;
+			if table.find(_G.toggleKeys, name) then
+				if frm and frm.Parent then
+					if uiMin then
+						openUI();
+					else
+						closeUI();
+					end;
+				end;
+				return true;
+			end;
+			return false;
 		end;
-		startLockAction();
-	end);
-	table.insert(conns, bMouse);
-	local bMouseEnd = UIS.InputEnded:Connect(function(i)
-		if not isLockInput(i) then
-			return;
+		uiRefs.hotkeyAct = function(_, inputState, inputObject)
+			if inputState ~= Enum.UserInputState.Begin then
+				return Enum.ContextActionResult.Pass;
+			end;
+			if capMode or UIS:GetFocusedTextBox() or time() < capCooldownUntil then
+				return Enum.ContextActionResult.Pass;
+			end;
+			local keyCode = inputObject and inputObject.KeyCode or Enum.KeyCode.Unknown;
+			local name = keyCode ~= Enum.KeyCode.Unknown and keyCode.Name or (inputObject and inputObject.UserInputType and inputObject.UserInputType.Name or "");
+			if name == "" then
+				return Enum.ContextActionResult.Pass;
+			end;
+			if uiRefs.runHotkey(name) then
+				return Enum.ContextActionResult.Sink;
+			end;
+			return Enum.ContextActionResult.Pass;
 		end;
-		endLockAction();
-	end);
-	table.insert(conns, bMouseEnd);
-    local bKeys = UIS.InputBegan:Connect(function(i, gp)
-		if gp then
-			return;
+		local ok = pcall(function()
+			CAS:BindActionAtPriority("VyperiaBotHotkeys", uiRefs.hotkeyAct, false, Enum.ContextActionPriority.High.Value + 1000, unpack(hotkeyInputs));
+		end);
+		if not ok then
+			pcall(function()
+				CAS:BindAction("VyperiaBotHotkeys", uiRefs.hotkeyAct, false, unpack(hotkeyInputs));
+			end);
 		end;
-		if UIS:GetFocusedTextBox() then
-			return;
-		end;
-		if capMode or time() < capCooldownUntil then
-			return;
-		end;
-		if i.UserInputType ~= Enum.UserInputType.Keyboard then
-			return;
-		end;
-		local name = i.KeyCode.Name;
-		local bindsMap = type(_G.optionBinds) == "table" and _G.optionBinds or {};
-		local action = bindsMap[name];
-		if action and handleOptionBind(action) then
-			return;
-		end;
-		if table.find(_G.toggleKeys, name) then
-			if not frm or (not frm.Parent) then
+		uiRefs.hotkeyRawCon = UIS.InputBegan:Connect(function(inputObject, _)
+			if capMode or UIS:GetFocusedTextBox() or time() < capCooldownUntil then
 				return;
 			end;
-			if uiMin then
-				openUI();
-			else
-				closeUI();
+			local keyCode = inputObject and inputObject.KeyCode or Enum.KeyCode.Unknown;
+			local name = keyCode ~= Enum.KeyCode.Unknown and keyCode.Name or (inputObject and inputObject.UserInputType and inputObject.UserInputType.Name or "");
+			if name == "" then
+				return;
 			end;
-		end;
-	end);
-	table.insert(conns, bKeys);
+			uiRefs.runHotkey(name);
+		end);
+	end;
 end;
 function lockCamera()
 	if lockCamLoop and lockCamLoop.Connected then
@@ -4794,6 +5744,13 @@ function lockCamera()
 		reacquireClock += dt or 0.016;
 		local aimMode = normalizeAimMode(_G.aimTargetMode);
 		local needsRefresh = reacquireClock >= getLockRefreshInterval();
+		if trackedCh and _G.aliveCheck and (not uiRefs.liveHum(trackedCh)) then
+			trackedCh = nil;
+			trackedPart = nil;
+			lastLockedCharacter = nil;
+			lastLockedPart = nil;
+			needsRefresh = true;
+		end;
 		if trackedCh and (not isTrackedAimPartUsable(trackedCh, trackedPart, false)) then
 			needsRefresh = true;
 		end;
@@ -4808,10 +5765,18 @@ function lockCamera()
 			end;
 			trackedCh = ch;
 			if ch then
-				if aimMode ~= "Random" and isTrackedAimPartUsable(ch, lastLockedPart, _G.wallCheck == true) then
-					trackedPart = lastLockedPart;
+				if aimMode ~= "Random" then
+					local prefPart = topAimPart(ch);
+					if isTrackedAimPartUsable(ch, prefPart, _G.wallCheck == true) then
+						trackedPart = prefPart;
+					elseif isTrackedAimPartUsable(ch, lastLockedPart, _G.wallCheck == true) then
+						trackedPart = lastLockedPart;
+					else
+						trackedPart = isTrackedAimPartUsable(ch, scanPart, _G.wallCheck == true) and scanPart or prefPart;
+					end;
+					lastLockedPart = trackedPart;
 				else
-					trackedPart = topAimPart(ch) or scanPart;
+					trackedPart = isTrackedAimPartUsable(ch, scanPart, _G.wallCheck == true) and scanPart or topAimPart(ch);
 					lastLockedPart = trackedPart;
 				end;
 			else
@@ -4820,7 +5785,7 @@ function lockCamera()
 			end;
 		end;
 		if trackedCh and trackedPart then
-			local tgtPos = _G.aimPredict and getPredictedAimPos(trackedPart) or trackedPart.Position;
+			local tgtPos = getAimPos(trackedPart);
 			local cf = CFrame.new(cam.CFrame.Position, tgtPos);
 			local doTween = _G.aimTween == true;
 			if doTween then
@@ -4828,7 +5793,7 @@ function lockCamera()
 					aimCamTween:Cancel();
 					aimCamTween = nil;
 				end;
-				local alpha = math.clamp(getAimTweenDuration() * 8, 0.08, 0.9);
+				local alpha = math.clamp(getAimTweenDuration(), 0.01, 1);
 				cam.CFrame = cam.CFrame:Lerp(cf, alpha);
 			else
 				if aimCamTween then
@@ -4841,7 +5806,7 @@ function lockCamera()
 	end);
 	table.insert(conns, lockCamLoop);
 end;
-local function setupPlayerMonitoring()
+uiRefs.setupPlayerMonitoring = function()
 	local function hook(pp)
 		trackPlayer(pp);
 		setTrackedCharacter(pp, pp.Character);
@@ -4855,15 +5820,15 @@ local function setupPlayerMonitoring()
 		end);
 		table.insert(conns, ca);
 		local cr = pp.CharacterRemoving:Connect(function(ch)
-			if trackedPlayerCharacter[pp] == ch then
+			if plrChars[pp] == ch then
 				setTrackedCharacter(pp, nil);
 			end;
 			invalidateTargetState(ch);
 		end);
 		table.insert(conns, cr);
 	end;
-	rebuildTrackedPlayers();
-	for _, pp in ipairs(getTrackedPlayers()) do
+	rebuildPlrs();
+	for _, pp in ipairs(getPlrs()) do
 		if pp ~= plr then
 			hook(pp);
 		end;
@@ -4904,15 +5869,15 @@ local function setupPlayerMonitoring()
 end;
 frm = createUI();
 binds();
-setupPlayerMonitoring();
+uiRefs.setupPlayerMonitoring();
 if _G.espEnabled then
 	updateESP();
 end;
 toast("Aimbot loaded");
 saveCfg();
-local function chkMode()
+uiRefs.chkMode = function()
 	local newMode;
-	if getTrackedPlayerCount() > 0 and Players.LocalPlayer.Team == nil then
+	if getPlrCount() > 0 and Players.LocalPlayer.Team == nil then
 		newMode = "FFA";
 	else
 		newMode = "Team";
@@ -4923,16 +5888,15 @@ local function chkMode()
 		updateESP();
 	end;
 end;
-local teamPulse = 0;
-local teamCon = RunService.Heartbeat:Connect(function(dt)
-	teamPulse += dt or 0.016;
-	if teamPulse < 0.5 then
+uiRefs.teamPulse = 0;
+table.insert(conns, RunService.Heartbeat:Connect(function(dt)
+	uiRefs.teamPulse += dt or 0.016;
+	if uiRefs.teamPulse < 0.5 then
 		return;
 	end;
-	teamPulse = 0;
-	chkMode();
-end);
-table.insert(conns, teamCon);
+	uiRefs.teamPulse = 0;
+	uiRefs.chkMode();
+end));
 return function()
 	for _, c in pairs(conns) do
 		disconnectConn(c);
@@ -4944,8 +5908,7 @@ return function()
 	for p, _ in pairs(espMap) do
 		espDetach(p);
 	end;
-	CAS:UnbindAction("VyperiaBot");
-	CAS:UnbindAction("VyperiaBotBlock");
+	unbindStrongInputs();
 	clearFOVHooks();
 	if gui and gui.Parent then
 		gui:Destroy();

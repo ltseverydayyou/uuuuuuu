@@ -1,12 +1,41 @@
+local codexPrivate = {
+	hostEnv = (getgenv and getgenv()) or _G or {},
+}
+codexPrivate.debug = rawget(codexPrivate.hostEnv, "debug") or debug
+codexPrivate.ensureTable = function(host, key)
+	local value = type(host) == "table" and rawget(host, key) or nil
+	if type(value) ~= "table" then
+		value = {}
+		if type(host) == "table" then
+			rawset(host, key, value)
+		end
+	end
+	return value
+end
+codexPrivate.registry = (function()
+	local registry
+	if type(getreg) == "function" then
+		pcall(function()
+			registry = getreg()
+		end)
+	end
+	if type(registry) ~= "table" and type(codexPrivate.debug) == "table" and type(codexPrivate.debug.getregistry) == "function" then
+		pcall(function()
+			registry = codexPrivate.debug.getregistry()
+		end)
+	end
+	if type(registry) ~= "table" then
+		registry = codexPrivate.hostEnv
+	end
+	return registry
+end)()
+codexPrivate.root = codexPrivate.ensureTable(codexPrivate.registry, "__nameless_admin_private")
+codexPrivate.scope = codexPrivate.ensureTable(codexPrivate.root, "codex_clickbait")
+
 local __lt = (function()
-	local globalEnv = (getgenv and getgenv()) or _G or {};
-	local sharedEnv = rawget(_G, "shared");
-	local cacheHost = type(sharedEnv) == "table" and sharedEnv or (type(globalEnv) == "table" and globalEnv or nil);
-	if cacheHost then
-		local cached = rawget(cacheHost, "__lt_service_resolver");
-		if type(cached) == "table" then
-			return cached;
-		end;
+	local cached = rawget(codexPrivate.root, "serviceResolver");
+	if type(cached) == "table" then
+		return cached;
 	end;
 	local loader = loadstring or load;
 	if type(loader) ~= "function" then
@@ -20,14 +49,12 @@ local __lt = (function()
 	if type(loaded) ~= "table" then
 		error("Service resolver failed to load");
 	end;
-	if cacheHost then
-		cacheHost.__lt_service_resolver = loaded;
-	end;
+	codexPrivate.root.serviceResolver = loaded;
 	return loaded;
 end)();
 
-if type(_G.CodexUiCustomSettings) ~= "table" then
-	_G.CodexUiCustomSettings = {
+if type(codexPrivate.scope.settings) ~= "table" then
+	codexPrivate.scope.settings = {
 		CodexSpooferImage = 17120020964,
 		CodexSpooferText = "ScriptWare",
 		CodexSpooferPoweredBy = "Powered by Vyperia",
@@ -39,7 +66,7 @@ if type(_G.CodexUiCustomSettings) ~= "table" then
 	};
 end;
 
-local settings = _G.CodexUiCustomSettings;
+local settings = codexPrivate.scope.settings;
 
 local defaultFloating  = Color3.fromRGB(0, 51, 102);
 local defaultMainBg    = Color3.fromRGB(0, 51, 102);
@@ -69,8 +96,8 @@ local function isNearRed(col)
 	return dr*dr + dg*dg + db*db <= 35*35;
 end;
 
-_G.LoadedCodexSwitcher = { settings, tick(), math.random(0, 10000) };
-local patch = _G.LoadedCodexSwitcher;
+codexPrivate.scope.patch = { settings, tick(), math.random(0, 10000) };
+local patch = codexPrivate.scope.patch;
 
 local iconConnections = {};
 
@@ -89,20 +116,20 @@ if not CodexFolder then return warn("Codex folder not found"); end;
 
 local curUi = CodexFolder:FindFirstChild("gui");
 local gui   = nil;
-if _G.Codex_gui_Object and typeof(_G.Codex_gui_Object) == "Instance" and _G.Codex_gui_Object.Parent then
-	gui = _G.Codex_gui_Object;
+if codexPrivate.scope.guiObject and typeof(codexPrivate.scope.guiObject) == "Instance" and codexPrivate.scope.guiObject.Parent then
+	gui = codexPrivate.scope.guiObject;
 elseif curUi and typeof(curUi) == "Instance" then
 	gui = curUi;
 end;
 if not gui then return warn("unable to find codex gui"); end;
-_G.Codex_gui_Object = gui;
+codexPrivate.scope.guiObject = gui;
 
 local function HideForever(object)
 	if not (object and object:IsA("GuiObject")) then return; end;
 	object.Visible = false;
 	local conn;
 	conn = (object:GetPropertyChangedSignal("Visible")):Connect(function()
-		if conn and _G.LoadedCodexSwitcher ~= patch then
+		if conn and codexPrivate.scope.patch ~= patch then
 			conn:Disconnect();
 			conn = nil;
 			return;
@@ -127,8 +154,8 @@ if tabs and tabs:FindFirstChild("editor") and tabs.editor:FindFirstChild("conten
 	end;
 end;
 
-if _G.LoadedCodexSwitcherHooks and type(_G.LoadedCodexSwitcherHooks) == "table" then
-	for _, v in pairs(_G.LoadedCodexSwitcherHooks) do
+if codexPrivate.scope.hooks and type(codexPrivate.scope.hooks) == "table" then
+	for _, v in pairs(codexPrivate.scope.hooks) do
 		if typeof(v) == "RBXScriptConnection" then
 			pcall(function() v:Disconnect(); end);
 		elseif type(v) == "table" then
@@ -139,7 +166,7 @@ if _G.LoadedCodexSwitcherHooks and type(_G.LoadedCodexSwitcherHooks) == "table" 
 			end;
 		end;
 	end;
-	_G.LoadedCodexSwitcherHooks = {};
+	codexPrivate.scope.hooks = {};
 end;
 
 if navbar then
@@ -153,7 +180,7 @@ if navbar then
 			codexIcon2.Image = targetAssetId;
 			local codexConn;
 			codexConn = (codexIcon2:GetPropertyChangedSignal("Image")):Connect(function()
-				if codexConn and _G.LoadedCodexSwitcher ~= patch then
+				if codexConn and codexPrivate.scope.patch ~= patch then
 					codexConn:Disconnect();
 					codexConn = nil;
 					return;
@@ -189,7 +216,7 @@ local function ChangeIcon(object)
 	if not (icon and icon:IsA("ImageLabel")) then return; end;
 	local iconConnection;
 	iconConnection = (icon:GetPropertyChangedSignal("ImageColor3")):Connect(function()
-		if _G.LoadedCodexSwitcher ~= patch then
+		if codexPrivate.scope.patch ~= patch then
 			if iconConnection then
 				iconConnection:Disconnect();
 				iconConnection = nil;
@@ -221,7 +248,7 @@ local function HookEditorButton(btn)
 		if not (obj:IsA("TextButton") or obj:IsA("Frame")) then return; end;
 		local conn;
 		conn = (obj:GetPropertyChangedSignal("BackgroundColor3")):Connect(function()
-			if conn and _G.LoadedCodexSwitcher ~= patch then
+			if conn and codexPrivate.scope.patch ~= patch then
 				conn:Disconnect();
 				conn = nil;
 				return;
@@ -238,7 +265,7 @@ local function HookEditorButton(btn)
 	end;
 	local descConn;
 	descConn = btn.DescendantAdded:Connect(function(ch)
-		if descConn and _G.LoadedCodexSwitcher ~= patch then
+		if descConn and codexPrivate.scope.patch ~= patch then
 			descConn:Disconnect();
 			descConn = nil;
 			return;
@@ -266,7 +293,7 @@ local function HookTabsFolder(f)
 		if o:IsA("Frame") or o:IsA("TextButton") then
 			local c1;
 			c1 = (o:GetPropertyChangedSignal("BackgroundColor3")):Connect(function()
-				if c1 and _G.LoadedCodexSwitcher ~= patch then
+				if c1 and codexPrivate.scope.patch ~= patch then
 					c1:Disconnect();
 					c1 = nil;
 					return;
@@ -278,7 +305,7 @@ local function HookTabsFolder(f)
 		elseif o:IsA("UIStroke") then
 			local c2;
 			c2 = (o:GetPropertyChangedSignal("Color")):Connect(function()
-				if c2 and _G.LoadedCodexSwitcher ~= patch then
+				if c2 and codexPrivate.scope.patch ~= patch then
 					c2:Disconnect();
 					c2 = nil;
 					return;
@@ -295,7 +322,7 @@ local function HookTabsFolder(f)
 	end;
 	local dConn;
 	dConn = f.DescendantAdded:Connect(function(o)
-		if dConn and _G.LoadedCodexSwitcher ~= patch then
+		if dConn and codexPrivate.scope.patch ~= patch then
 			dConn:Disconnect();
 			dConn = nil;
 			return;
@@ -326,7 +353,7 @@ if navbar then
 		if titleLabel and titleLabel:IsA("TextLabel") then
 			local titleConn;
 			titleConn = (titleLabel:GetPropertyChangedSignal("Text")):Connect(function()
-				if titleConn and _G.LoadedCodexSwitcher ~= patch then
+				if titleConn and codexPrivate.scope.patch ~= patch then
 					titleConn:Disconnect();
 					titleConn = nil;
 					return;
@@ -339,7 +366,7 @@ if navbar then
 		if poweredByLabel and poweredByLabel:IsA("TextLabel") then
 			local poweredConn;
 			poweredConn = (poweredByLabel:GetPropertyChangedSignal("Text")):Connect(function()
-				if poweredConn and _G.LoadedCodexSwitcher ~= patch then
+				if poweredConn and codexPrivate.scope.patch ~= patch then
 					poweredConn:Disconnect();
 					poweredConn = nil;
 					return;
@@ -406,4 +433,4 @@ if tabs then
 	end;
 end;
 
-_G.LoadedCodexSwitcherHooks = { Icons = iconConnections };
+codexPrivate.scope.hooks = { Icons = iconConnections };

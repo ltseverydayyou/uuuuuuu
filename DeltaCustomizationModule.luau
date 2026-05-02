@@ -225,6 +225,9 @@ local function runUrl(u, name, hdr)
 	if type(fn) ~= "function" then
 		return false, er2 or "compile failed"
 	end
+	if type(__dcm_boot.hostSetfenv) == "function" then
+		pcall(__dcm_boot.hostSetfenv, fn, __dcm_boot.runtimeEnv)
+	end
 	return pcall(fn)
 end
 local UIS = Svc("UserInputService")
@@ -295,7 +298,7 @@ local function notify(info)
 		nt(info)
 	end)
 end
-local _naConns = _naConns or {}
+local _naConns = {}
 local NAlib = {}
 function NAlib.disconnect(n)
 	local t = _naConns[n]
@@ -7502,6 +7505,9 @@ local function mkCard(par, i, d)
 			local fn, cer = ld(src, "@ScriptHubEntry")
 			if type(fn) ~= "function" then
 				error(cer or "compile failed")
+			end
+			if type(__dcm_boot.hostSetfenv) == "function" then
+				pcall(__dcm_boot.hostSetfenv, fn, __dcm_boot.runtimeEnv)
 			end
 			fn()
 		end)

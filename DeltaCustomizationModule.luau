@@ -1,12 +1,117 @@
-local __lt = (function()
-	local globalEnv = (getgenv and getgenv()) or _G or {}
-	local sharedEnv = rawget(_G, "shared")
-	local cacheHost = type(sharedEnv) == "table" and sharedEnv or (type(globalEnv) == "table" and globalEnv or nil)
-	if cacheHost then
-		local cached = rawget(cacheHost, "__lt_service_resolver")
-		if type(cached) == "table" then
-			return cached
+local __dcm_boot = {
+	hostEnv = (getgenv and getgenv()) or _G or {},
+}
+__dcm_boot.hostGetfenv = type(__dcm_boot.hostEnv.getfenv) == "function" and __dcm_boot.hostEnv.getfenv or getfenv
+__dcm_boot.hostSetfenv = type(__dcm_boot.hostEnv.setfenv) == "function" and __dcm_boot.hostEnv.setfenv or setfenv
+__dcm_boot.debug = rawget(__dcm_boot.hostEnv, "debug") or debug
+__dcm_boot.getPrivateRegistry = function()
+	local registry
+	if type(getreg) == "function" then
+		pcall(function()
+			registry = getreg()
+		end)
+	end
+	if type(registry) ~= "table" and type(__dcm_boot.debug) == "table" and type(__dcm_boot.debug.getregistry) == "function" then
+		pcall(function()
+			registry = __dcm_boot.debug.getregistry()
+		end)
+	end
+	if type(registry) ~= "table" then
+		registry = __dcm_boot.hostEnv
+	end
+	return registry
+end
+__dcm_boot.ensureTable = function(host, key)
+	local value = type(host) == "table" and rawget(host, key) or nil
+	if type(value) ~= "table" then
+		value = {}
+		if type(host) == "table" then
+			pcall(rawset, host, key, value)
+			if rawget(host, key) ~= value then
+				host[key] = value
+			end
 		end
+	end
+	return value
+end
+__dcm_boot.clearHostKey = function(host, key)
+	if type(host) == "table" then
+		pcall(rawset, host, key, nil)
+		pcall(function()
+			host[key] = nil
+		end)
+	end
+end
+__dcm_boot.clearLegacyGlobals = function(host)
+	local keys = {
+		"__DeltaCustomizationModuleLoaded",
+		"__DeltaVisualPatchLoaded",
+		"__DeltaThemeMenuPatchLoaded",
+		"__DeltaHubMusicPatch",
+		"DeltaIcon",
+	}
+	for i = 1, #keys do
+		__dcm_boot.clearHostKey(host, keys[i])
+	end
+	local sh = type(host) == "table" and rawget(host, "shared") or nil
+	if type(sh) == "table" and sh ~= host then
+		for i = 1, #keys do
+			__dcm_boot.clearHostKey(sh, keys[i])
+		end
+	end
+end
+__dcm_boot.privateRegistry = __dcm_boot.getPrivateRegistry()
+__dcm_boot.privateRoot = __dcm_boot.ensureTable(__dcm_boot.privateRegistry, "__nameless_admin_private")
+local __dcm_env = __dcm_boot.ensureTable(__dcm_boot.privateRoot, "delta_customization")
+local __dcm_shared = __dcm_boot.ensureTable(__dcm_env, "shared")
+__dcm_boot.runtimeEnv = __dcm_boot.ensureTable(__dcm_env, "runtime")
+
+__dcm_boot.clearLegacyGlobals(__dcm_boot.hostEnv)
+if type(_G) == "table" and _G ~= __dcm_boot.hostEnv then
+	__dcm_boot.clearLegacyGlobals(_G)
+end
+if type(shared) == "table" and shared ~= __dcm_boot.hostEnv and shared ~= _G then
+	__dcm_boot.clearLegacyGlobals(shared)
+end
+
+__dcm_boot.runtimeEnv.shared = __dcm_shared
+__dcm_boot.runtimeEnv._G = __dcm_boot.runtimeEnv
+__dcm_boot.runtimeEnv.getgenv = function()
+	return __dcm_boot.runtimeEnv
+end
+__dcm_boot.runtimeEnv.getfenv = function(target)
+	if target == nil or target == 0 then
+		return __dcm_boot.runtimeEnv
+	end
+	if type(__dcm_boot.hostGetfenv) == "function" then
+		return __dcm_boot.hostGetfenv(target)
+	end
+	return __dcm_boot.runtimeEnv
+end
+
+setmetatable(__dcm_boot.runtimeEnv, {
+	__index = function(_, key)
+		if key == "_G" then
+			return __dcm_boot.runtimeEnv
+		elseif key == "shared" then
+			return __dcm_shared
+		elseif key == "getgenv" then
+			return __dcm_boot.runtimeEnv.getgenv
+		elseif key == "getfenv" then
+			return __dcm_boot.runtimeEnv.getfenv
+		end
+		return __dcm_boot.hostEnv[key]
+	end,
+})
+
+if type(__dcm_boot.hostSetfenv) == "function" then
+	pcall(__dcm_boot.hostSetfenv, 1, __dcm_boot.runtimeEnv)
+end
+
+local __lt = (function()
+	local cached = rawget(__dcm_boot.privateRoot, "serviceResolver")
+	if type(cached) == "table" then
+		return cached
 	end
 	local loader = loadstring or load
 	if type(loader) ~= "function" then
@@ -26,22 +131,32 @@ local __lt = (function()
 	if type(loaded) ~= "table" then
 		error("Service resolver failed to load")
 	end
-	if cacheHost then
-		cacheHost.__lt_service_resolver = loaded
-	end
+	__dcm_boot.privateRoot.serviceResolver = loaded
 	return loaded
 end)()
 
 if (identifyexecutor()):lower() ~= "delta" then
 	return
 end
-local deltaEnv = type(getgenv) == "function" and getgenv() or _G
-if type(deltaEnv) == "table" then
-	if deltaEnv.__DeltaCustomizationModuleLoaded then
-		return
+
+local function dcmAlreadyLoaded()
+	if __dcm_env and __dcm_env.__DeltaCustomizationModuleLoaded then
+		return true
 	end
-	deltaEnv.__DeltaCustomizationModuleLoaded = true
+	if __dcm_shared and __dcm_shared.__DeltaCustomizationModuleLoaded then
+		return true
+	end
+	return false
 end
+
+if dcmAlreadyLoaded() then
+	return
+end
+
+local __dcm_flag = tick()
+__dcm_env.__DeltaCustomizationModuleLoaded = __dcm_flag
+__dcm_shared.__DeltaCustomizationModuleLoaded = __dcm_flag
+local deltaEnv = __dcm_boot.runtimeEnv
 local _ref = cloneref and type(cloneref) == "function" and cloneref or function(v)
 	return v
 end
@@ -1353,6 +1468,8 @@ local deltaIconApi = {
 	data = dIcons,
 }
 deltaEnv.DeltaIcon = deltaIconApi
+__dcm_env.DeltaIcon = deltaIconApi
+__dcm_shared.DeltaIcon = deltaIconApi
 task.defer(function()
 	while not mainGui do
 		mainGui = getMain()
@@ -5203,7 +5320,7 @@ end)
 -- visual upgrade patch
 
 __lt.deltaPatchState = __lt.deltaPatchState or {}
-__lt.deltaPatchState.visualEnv = (getgenv and getgenv()) or _G
+__lt.deltaPatchState.visualEnv = __dcm_env
 if type(__lt.deltaPatchState.visualEnv) == "table" and not __lt.deltaPatchState.visualEnv.__DeltaVisualPatchLoaded then
 	__lt.deltaPatchState.visualEnv.__DeltaVisualPatchLoaded = true
 	task.defer(function()
@@ -5704,43 +5821,13 @@ end
 
 -- scripthub + music patch
 
-local __lt = (function()
-	local g = (getgenv and getgenv()) or _G or {}
-	local s = rawget(_G, "shared")
-	local h = type(s) == "table" and s or (type(g) == "table" and g or nil)
-	if h then
-		local c = rawget(h, "__lt_service_resolver")
-		if type(c) == "table" then
-			return c
-		end
-	end
-	local ld = loadstring or load
-	if type(ld) ~= "function" then
-		error("resolver loader unavailable")
-	end
-	local src, srcEr = httpTxt("https://ltseverydayyou.github.io/ServiceResolver.luau")
-	if type(src) ~= "string" or src == "" then
-		error("resolver HTTP failed: " .. tostring(srcEr))
-	end
-	local rs = ld(src, "@ServiceResolver.luau")
-	if type(rs) ~= "function" then
-		error("resolver failed to compile")
-	end
-	local ok = rs()
-	if type(ok) ~= "table" then
-		error("resolver failed to load")
-	end
-	if h then
-		h.__lt_service_resolver = ok
-	end
-	return ok
-end)()
+local __lt = __lt
 
 if (identifyexecutor and identifyexecutor() or ""):lower() ~= "delta" then
 	return
 end
 
-local env = type(getgenv) == "function" and getgenv() or _G
+local env = __dcm_env
 if type(env) ~= "table" then
 	return
 end
@@ -8830,7 +8917,7 @@ st.fn.setupHubMusic();
 
 (function()
 	__lt.deltaPatchState = __lt.deltaPatchState or {}
-	__lt.deltaPatchState.themeEnv = (getgenv and getgenv()) or _G
+	__lt.deltaPatchState.themeEnv = __dcm_env
 	if type(__lt.deltaPatchState.themeEnv) == "table" and not __lt.deltaPatchState.themeEnv.__DeltaThemeMenuPatchLoaded then
 		__lt.deltaPatchState.themeEnv.__DeltaThemeMenuPatchLoaded = true
 		task.defer(function()

@@ -154,6 +154,9 @@ local LFG = Vector3.new(0, 0, 100)
 local RRP = 5
 local RRG = 0.3
 local EXM = 50
+local FGM = 2
+local LHW = 8
+local PCD = 0.15
 
 local on = false
 local cur = nil
@@ -170,9 +173,19 @@ local drag = false
 local dPos
 local bPos
 local cTab = {}
+local locBtns = {}
+local locSeq = 0
+local roundCur = nil
+local roundTotal = nil
+local roundState = nil
+local rh
+
+local function current()
+	return ctx.live and (not host or host.__lt_af_ctx == ctx)
+end
 
 local function alive()
-	return ctx.live and LP and LP.Parent and Run ~= nil
+	return current() and LP and LP.Parent and Run ~= nil
 end
 
 local function killPlat()
@@ -184,12 +197,27 @@ local function killPlat()
 	plt = nil
 end
 
+local function releaseRoot()
+	if type(rh) ~= "function" then
+		return
+	end
+	local r = select(1, rh(false))
+	if r then
+		pcall(function()
+			r.Anchored = false
+		end)
+	end
+end
+
 local function stop()
 	if not ctx.live then
 		return
 	end
 	ctx.live = false
 	on = false
+	tok += 1
+	cur = nil
+	drag = false
 	cut(aVc)
 	cut(nCc)
 	cut(nCd1)
@@ -205,7 +233,13 @@ local function stop()
 	end
 	ctx.con = {}
 	cTab = {}
+	locBtns = {}
+	locSeq += 1
+	roundCur = nil
+	roundTotal = nil
+	roundState = nil
 	killPlat()
+	releaseRoot()
 	if gui and gui.Parent then
 		pcall(function()
 			gui:Destroy()
@@ -308,15 +342,33 @@ local function note(msg)
 end
 
 local Lift = nil
+local PressRemotes = {}
+local LocatorRemotes = {}
+local RoundStatsRemotes = {}
 do
 	local ok, r = pcall(function()
 		local rem = Rsp and Rsp:FindFirstChild("Remote")
 		if not rem then
 			return nil
 		end
-		return rem:FindFirstChild("dKgyIXnLdhwvSyEorkEWJJAkgUslGCtR") or rem:FindFirstChild("AddedWaiting")
+		return rem:FindFirstChild("dKgyIXnLdhwvSyEorkEWJJAkgUslGCtR") or rem:FindFirstChild("sTYfsJjxNdIpKgbXIuymAQiYcmAaORRN") or rem:FindFirstChild("AddedWaiting")
 	end)
 	Lift = ok and r or nil
+
+	local rem = Rsp and Rsp:FindFirstChild("Remote")
+	local function addRemote(list, name)
+		local obj = rem and rem:FindFirstChild(name)
+		if obj and obj:IsA("RemoteEvent") then
+			list[#list + 1] = obj
+		end
+	end
+
+	addRemote(PressRemotes, "PressedMapButton")
+	addRemote(PressRemotes, "igzyswprgEbMOxwZWHUxvFWNJhDtaODb")
+	addRemote(LocatorRemotes, "UpdGoalLocator")
+	addRemote(LocatorRemotes, "FiIxfRCqDOTWRKHqFMoRjSaAxXOutMzD")
+	addRemote(RoundStatsRemotes, "UpdIngameStats")
+	addRemote(RoundStatsRemotes, "flDEUOrLddFXZVDiezUpxyiHWduVnlEC")
 end
 
 local function chr(w)
@@ -338,7 +390,7 @@ local function chr(w)
 	return nil
 end
 
-local function rh(w)
+function rh(w)
 	local c = chr(w)
 	if not c then
 		return nil, nil, nil
@@ -356,6 +408,37 @@ local function rh(w)
 	return r, h, c
 end
 
+local function pivotRootTo(cf, r, c)
+	if typeof(cf) ~= "CFrame" then
+		return
+	end
+	if not r or not r.Parent then
+		r = select(1, rh(false))
+	end
+	if not c or not c.Parent then
+		c = chr(false)
+	end
+	if c and c.Parent and r and r.Parent then
+		local ok, pivot = pcall(function()
+			return c:GetPivot()
+		end)
+		if ok and pivot then
+			local ok2, rel = pcall(function()
+				return r.CFrame:ToObjectSpace(pivot)
+			end)
+			pcall(function()
+				c:PivotTo(ok2 and (cf * rel) or cf)
+			end)
+			return
+		end
+	end
+	if r and r.Parent then
+		pcall(function()
+			r:PivotTo(cf)
+		end)
+	end
+end
+
 local function inState(nm)
 	local r = select(1, rh(false))
 	if not r then
@@ -365,6 +448,35 @@ local function inState(nm)
 		return r.Position.X < 50 and r.Position.Z > 70
 	elseif nm == "InGame" then
 		return r.Position.X > 50
+	end
+	return false
+end
+
+local function activeRun(map, id)
+	return alive() and on and cur == map and map and map.Parent and tok == id
+end
+
+local function updateRoundStats(stats)
+	if type(stats) ~= "table" then
+		return
+	end
+	if type(stats.currentButton) == "number" then
+		roundCur = stats.currentButton
+	end
+	if type(stats.totalButtons) == "number" then
+		roundTotal = stats.totalButtons
+	end
+	if type(stats.gameStatus) == "string" then
+		roundState = stats.gameStatus
+	end
+end
+
+local function buttonsDone()
+	if roundState and roundState ~= "ingame" then
+		return false
+	end
+	if type(roundCur) == "number" and type(roundTotal) == "number" then
+		return roundCur >= roundTotal
 	end
 	return false
 end
@@ -399,11 +511,11 @@ local function mkPlat(r)
 		p.Anchored = true
 		p.CanCollide = true
 		p.Transparency = 1
-		p.CFrame = CFrame.new(r.Position.X, y - PSZ.Y / 2 - 0.05, r.Position.Z)
+		p:PivotTo(CFrame.new(r.Position.X, y - PSZ.Y / 2 - 0.05, r.Position.Z))
 		p.Parent = Wsp
 		plt = p
 	else
-		plt.CFrame = CFrame.new(r.Position.X, y - PSZ.Y / 2 - 0.05, r.Position.Z)
+		plt:PivotTo(CFrame.new(r.Position.X, y - PSZ.Y / 2 - 0.05, r.Position.Z))
 	end
 end
 
@@ -437,14 +549,10 @@ local function moveTo(obj, r)
 	end
 	if obj:IsA("Model") then
 		pcall(function()
-			if obj.PrimaryPart then
-				obj:SetPrimaryPartCFrame(r.CFrame)
-			else
-				obj:PivotTo(r.CFrame)
-			end
+			obj:PivotTo(r.CFrame)
 		end)
 	else
-		p.CFrame = r.CFrame
+		p:PivotTo(r.CFrame)
 	end
 end
 
@@ -459,24 +567,191 @@ local function findLow(map, name)
 	return nil
 end
 
+local function addBtnEntry(t, src, hit, loc)
+	if not hit or not hit:IsA("BasePart") then
+		return
+	end
+	t[#t + 1] = {
+		src = src or hit,
+		hit = hit,
+		loc = loc and true or false,
+	}
+end
+
 local function scanBtns(map)
 	local t = {}
 	for _, obj in ipairs(descOf(map)) do
-		if obj.ClassName == "Model" and isRand(obj.Name) then
+		if obj.ClassName == "Model" then
 			local hit = nil
+			local hasUi = obj:FindFirstChildWhichIsA("BillboardGui", true) ~= nil
+			local hasFuse = ffc(obj, "Fuse", true) ~= nil
 			for _, ch in ipairs(obj:GetChildren()) do
 				if ch:IsA("BasePart") and tostring(ch.BrickColor) ~= "Medium stone grey" then
 					hit = ch
 					break
 				end
 			end
-			if hit and isRand(hit.Name) then
-				hit.Name = "Hitbox"
-				t[#t + 1] = obj
+			local hasTouch = hit and ffc(hit, "TouchInterest", true) ~= nil
+			if hit and (isRand(obj.Name) or hasUi or hasFuse or hasTouch) then
+				if isRand(hit.Name) then
+					hit.Name = "Hitbox"
+				end
+				addBtnEntry(t, obj, hit, false)
 			end
 		end
 	end
 	return t
+end
+
+local function asPart(v)
+	if typeof(v) == "Instance" and v:IsA("BasePart") then
+		return v
+	end
+	if type(v) ~= "table" then
+		return nil
+	end
+	local r = select(1, rh(false))
+	local best = nil
+	local bestDist = math.huge
+	for _, obj in pairs(v) do
+		if typeof(obj) == "Instance" and obj:IsA("BasePart") then
+			local dist = r and (r.Position - obj.Position).Magnitude or 0
+			if dist < bestDist then
+				best = obj
+				bestDist = dist
+			end
+		end
+	end
+	return best
+end
+
+local function addLocatorBtn(hit, nextHit)
+	locSeq += 1
+	locBtns = {}
+	hit = asPart(hit)
+	nextHit = asPart(nextHit)
+	if not hit then
+		return
+	end
+	local src = hit.Parent or hit
+	locBtns[hit] = {
+		src = src,
+		hit = hit,
+		loc = true,
+		next = nextHit,
+		seq = locSeq,
+	}
+end
+
+local function mergeLocatorBtns(t, map)
+	local seen = {}
+	for _, entry in ipairs(t) do
+		if entry.hit and (not entry.loc or locBtns[entry.hit] == entry) then
+			seen[entry.hit] = true
+		end
+	end
+	for hit, entry in pairs(locBtns) do
+		if not (hit and hit.Parent) then
+			locBtns[hit] = nil
+		elseif not seen[hit] and (not map or hit:IsDescendantOf(map)) then
+			t[#t + 1] = entry
+			seen[hit] = true
+		end
+	end
+	return t
+end
+
+local function isFuseBtn(src)
+	local f = ffc(src, "Fuse", true)
+	if not f and src and src.Parent then
+		f = ffc(src.Parent, "Fuse", true)
+	end
+	return f and f:IsA("ValueBase")
+end
+
+local function fuseRange(src, hit)
+	local best = nil
+	local bestSize = 0
+	local root = src
+	if hit and hit.Parent and (not root or root == hit) then
+		root = hit.Parent
+	end
+	for _, obj in ipairs(descOf(root)) do
+		if obj:IsA("Part") and obj ~= hit and obj.Shape == Enum.PartType.Ball then
+			local sz = math.max(obj.Size.X, obj.Size.Y, obj.Size.Z)
+			local red = obj.Color.R > 0.75 and obj.Color.G < 0.15 and obj.Color.B < 0.15
+			if sz >= 10 and red and sz > bestSize then
+				best = obj
+				bestSize = sz
+			end
+		end
+	end
+	return best
+end
+
+local function waitFuseRange(src, hit, keepGoing)
+	for _ = 1, 8 do
+		if keepGoing and not keepGoing() then
+			return nil
+		end
+		local p = fuseRange(src, hit)
+		if p then
+			return p
+		end
+		task.wait(0.05)
+	end
+	return nil
+end
+
+local function moveFuseSafe(src, hit, r, keepGoing)
+	local function place(cen, rad)
+		local flat = Vector3.new(r.Position.X - cen.X, 0, r.Position.Z - cen.Z)
+		if flat.Magnitude < 0.1 then
+			flat = Vector3.new(1, 0, 0)
+		end
+		local safe = cen + flat.Unit * (rad + FGM) + Vector3.new(0, ESY, 0)
+		pcall(function()
+			pivotRootTo(CFrame.new(safe), r)
+			r.Anchored = true
+		end)
+	end
+
+	place(hit.Position, 10)
+
+	local range = waitFuseRange(src, hit, keepGoing)
+	if range and r.Parent and (not keepGoing or keepGoing()) then
+		place(range.Position, math.max(range.Size.X, range.Size.Y, range.Size.Z) / 2)
+	end
+end
+
+local function pressMapButton(hit)
+	if not hit or not hit.Parent then
+		return
+	end
+	for _, rem in ipairs(PressRemotes) do
+		if rem and rem.Parent then
+			pcall(function()
+				rem:FireServer(hit)
+			end)
+		end
+	end
+end
+
+for _, rem in ipairs(LocatorRemotes) do
+	if rem and rem.Parent then
+		bind(rem.OnClientEvent:Connect(function(goal, hit, _, nextHit)
+			addLocatorBtn(hit or goal, nextHit)
+		end))
+	end
+end
+
+for _, rem in ipairs(RoundStatsRemotes) do
+	if rem and rem.Parent then
+		bind(rem.OnClientEvent:Connect(updateRoundStats))
+		pcall(function()
+			rem:FireServer()
+		end)
+	end
 end
 
 local function addNc(obj)
@@ -538,7 +813,7 @@ local function pushLift()
 		return
 	end
 	pcall(function()
-		r.CFrame = r.CFrame + Vector3.new(0, 5, 0)
+		pivotRootTo(r.CFrame + Vector3.new(0, 5, 0), r)
 	end)
 	while alive() and on and not inState("InLift") do
 		task.wait(0.1)
@@ -592,7 +867,7 @@ local function antiVoid(getMap)
 			local ok2, cf, sz = pcall(map.GetBoundingBox, map)
 			if ok2 and cf and sz then
 				pcall(function()
-					r.CFrame = CFrame.new(cf.Position + Vector3.new(0, sz.Y / 2 + 8, 0))
+					pivotRootTo(CFrame.new(cf.Position + Vector3.new(0, sz.Y / 2 + 8, 0)), r)
 				end)
 				mkPlat(r)
 				note("Recovered from void")
@@ -611,22 +886,23 @@ end
 
 local function toggle(v)
 	on = v and true or false
+	tok += 1
+	cur = nil
 	setBtn()
 	note(on and "Enabled" or "Disabled")
 	setNc(on)
 
 	if not on then
-		local r = select(1, rh(false))
-		if r then
-			pcall(function()
-				r.Anchored = false
-			end)
-		end
+		releaseRoot()
 		killPlat()
 		return
 	end
 
-	doLift()
+	if inState("InGame") then
+		note("Resuming current map")
+	else
+		doLift()
+	end
 end
 
 local function onChar(c)
@@ -683,6 +959,7 @@ local function onMap(map, id)
 
 		if not inState("InGame") then
 			note("Skipping due to InGame == false.")
+			cur = nil
 			return
 		end
 
@@ -691,6 +968,7 @@ local function onMap(map, id)
 		if ok2 and type(res) == "table" then
 			btns = res
 		end
+		mergeLocatorBtns(btns, map)
 
 		local pg = findLow(map, "_lostpage")
 		if pg then
@@ -722,10 +1000,27 @@ local function onMap(map, id)
 			end)
 		end)
 
+		roundCur = nil
+		roundTotal = nil
+		roundState = nil
+		for _, rem in ipairs(RoundStatsRemotes) do
+			if rem and rem.Parent then
+				pcall(function()
+					rem:FireServer()
+				end)
+			end
+		end
 		local tr = 0
+		local sent = {}
+		local lastPress = {}
+		local waitLocSeq = nil
+		local waitLocAt = 0
 
-		while alive() and on and cur == map and map.Parent and inState("InGame") and tok == id do
+		while activeRun(map, id) and inState("InGame") do
 			task.wait(SCI)
+			if not (activeRun(map, id) and inState("InGame")) then
+				break
+			end
 
 			r, h = rh(false)
 			if not r or not h then
@@ -737,50 +1032,116 @@ local function onMap(map, id)
 			end)
 
 			local ex = ffc(map, "ExitRegion", true)
+			mergeLocatorBtns(btns, map)
+			local statsExpected = #RoundStatsRemotes > 0
+			local exitReady = ex and (buttonsDone() or (not statsExpected and roundCur == nil and roundTotal == nil))
 
-			if not ex then
-				for _, b in ipairs(btns) do
-					if not (alive() and on and cur == map and map.Parent and tok == id) then
+			if waitLocSeq and locSeq ~= waitLocSeq then
+				waitLocSeq = nil
+			end
+
+			local pressFirst = not exitReady
+			if exitReady then
+				for _, entry in ipairs(btns) do
+					if entry.loc and entry.hit and entry.hit.Parent and locBtns[entry.hit] == entry then
+						pressFirst = true
+						break
+					end
+				end
+			end
+
+			if exitReady and not pressFirst and waitLocSeq and os.clock() - waitLocAt < LHW then
+				mkPlat(r)
+				continue
+			end
+
+			if pressFirst then
+				for _, entry in ipairs(btns) do
+					if not activeRun(map, id) then
 						break
 					end
 
-					local hit = ffc(b, "Hitbox", false)
-					if hit then
-						local ti = ffc(b, "TouchInterest", true)
-						local gg = b:FindFirstChildWhichIsA("BillboardGui", true)
-						if ti and gg then
+					local b = entry.src
+					local hit = entry.hit
+					local key = entry.loc and entry or hit
+					local currentLoc = not entry.loc or locBtns[hit] == entry
+					local canPress = entry.loc or not (exitReady and sent[key])
+					if currentLoc and canPress and (not exitReady or entry.loc) and hit and hit.Parent then
+						local ti = ffc(hit, "TouchInterest", true) or ffc(b, "TouchInterest", true)
+						local gg = nil
+						pcall(function()
+							gg = (b and b:FindFirstChildWhichIsA("BillboardGui", true)) or hit:FindFirstChildWhichIsA("BillboardGui", true)
+						end)
+						if entry.loc or (ti and gg) then
 							r, h = rh(false)
 							if not r or not h then
 								break
 							end
+							if not activeRun(map, id) then
+								break
+							end
+							local fuse = isFuseBtn(b)
 							pcall(function()
 								r.Anchored = false
-								r.CFrame = CFrame.new(hit.Position)
+								pivotRootTo(CFrame.new(hit.Position), r)
 								h:ChangeState(Enum.HumanoidStateType.Jumping)
 								r.Velocity = JMP
 							end)
 							task.wait(TPD)
-							pcall(function()
-								r.CFrame = CFrame.new(hit.Position + Vector3.new(0, ESY, 0))
-								r.Anchored = true
-							end)
+							if not activeRun(map, id) then
+								releaseRoot()
+								break
+							end
+							local now = os.clock()
+							if entry.loc then
+								if not lastPress[key] or now - lastPress[key] >= PCD then
+									lastPress[key] = now
+									pressMapButton(hit)
+									waitLocSeq = entry.seq
+									waitLocAt = now
+								end
+							elseif not sent[key] then
+								sent[key] = true
+								pressMapButton(hit)
+							end
+							if fuse then
+								moveFuseSafe(b, hit, r, function()
+									return activeRun(map, id)
+								end)
+							else
+								pcall(function()
+									pivotRootTo(CFrame.new(hit.Position + Vector3.new(0, ESY, 0)), r)
+									r.Anchored = true
+								end)
+							end
 							task.wait(BTD)
+							if not activeRun(map, id) then
+								releaseRoot()
+								break
+							end
 						end
 					end
 				end
 			else
+				if not activeRun(map, id) then
+					break
+				end
 				pcall(function()
 					r.Anchored = false
 				end)
 				if tr < EXM then
 					tr += 1
 					pcall(function()
-						r.CFrame = ex.CFrame
+						pivotRootTo(ex.CFrame, r)
 						h:ChangeState(Enum.HumanoidStateType.Landed)
 						r.Velocity = EXP
 					end)
 					mkPlat(r)
 					task.wait(TPD)
+					if not activeRun(map, id) then
+						releaseRoot()
+						break
+					end
 					if (r.Position - ex.Position).Magnitude <= 5 then
 						tr += 1
 					end
@@ -788,6 +1149,10 @@ local function onMap(map, id)
 					tr = 0
 					mkPlat(r)
 					task.wait(TPD)
+					if not activeRun(map, id) then
+						releaseRoot()
+						break
+					end
 				end
 			end
 		end
@@ -798,6 +1163,11 @@ local function onMap(map, id)
 	if not ok then
 		warn(err)
 		note("Map handler error; continuing")
+	end
+
+	if not activeRun(map, id) then
+		releaseRoot()
+		return
 	end
 
 	local r = select(1, rh(false))
@@ -918,13 +1288,14 @@ task.spawn(function()
 				return
 			end
 			local m = curMap()
-			if m and m ~= cur then
+			local ig = inState("InGame")
+			if m and ig and m ~= cur then
 				cur = m
 				tok += 1
 				local id = tok
 				note("New Map")
 				onMap(m, id)
-			elseif not m then
+			elseif not m or not ig then
 				cur = nil
 			end
 		end, debug.traceback)

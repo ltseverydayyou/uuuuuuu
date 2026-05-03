@@ -478,53 +478,333 @@ function ErrorPrompt(Message, state)
     end
 end
 
-local Highlight = (
-    isfile
-    and loadfile
-    and isfile('Highlight.lua')
-    and loadfile('Highlight.lua')()
-)
-
-if not Highlight and type(loadstring) == 'function' then
-    local ok, loaded = pcall(function()
-        return loadstring(
-            game:HttpGet(
-                'https://raw.githubusercontent.com/78n/SimpleSpy/main/Highlight.lua'
-            )
-        )()
-    end)
-    if ok then
-        Highlight = loaded
-    end
-end
-
-if type(Highlight) ~= 'table' or type(Highlight.new) ~= 'function' then
-    Highlight = {
-        new = function(parent)
-            local textBox = Create('TextBox', {
-                Parent = parent,
-                BackgroundTransparency = 1,
-                Position = UDim2.fromOffset(4, 2),
-                Size = UDim2.new(1, -8, 1, -4),
-                Text = '',
-                TextColor3 = Color3.fromRGB(255, 255, 255),
-                TextXAlignment = Enum.TextXAlignment.Left,
-                TextYAlignment = Enum.TextYAlignment.Top,
-                TextSize = 14,
-                Font = Enum.Font.Code,
-                ClearTextOnFocus = false,
-                MultiLine = true,
-            })
-            return {
-                setRaw = function(_, text)
-                    textBox.Text = tostring(text or '')
-                end,
-                getString = function()
-                    return textBox.Text or ''
-                end,
-            }
-        end,
+local Highlight = {}
+do
+    local syntaxMaxChars = math.max(0, tonumber(rawget(getgenv(), 'SimpleSpySyntaxMaxChars')) or 20000)
+    local displayMaxChars = math.max(1000, tonumber(rawget(getgenv(), 'SimpleSpyCodeDisplayMaxChars')) or 40000)
+    local colors = {
+        plain = Color3.fromRGB(235, 235, 235),
+        keyword = Color3.fromRGB(255, 120, 160),
+        global = Color3.fromRGB(132, 203, 255),
+        string = Color3.fromRGB(166, 226, 128),
+        comment = Color3.fromRGB(112, 122, 132),
+        number = Color3.fromRGB(255, 214, 112),
+        func = Color3.fromRGB(130, 230, 210),
+        method = Color3.fromRGB(118, 194, 255),
+        property = Color3.fromRGB(205, 194, 255),
+        operator = Color3.fromRGB(255, 155, 190),
+        bracket = Color3.fromRGB(210, 210, 225),
+        muted = Color3.fromRGB(170, 170, 175),
     }
+    local keywordSet = {
+        ['and'] = true, ['break'] = true, ['continue'] = true, ['do'] = true, ['else'] = true, ['elseif'] = true,
+        ['end'] = true, ['export'] = true, ['false'] = true, ['for'] = true, ['function'] = true, ['if'] = true,
+        ['in'] = true, ['local'] = true, ['nil'] = true, ['not'] = true, ['or'] = true, ['repeat'] = true,
+        ['return'] = true, ['then'] = true, ['true'] = true, ['type'] = true, ['typeof'] = true, ['until'] = true,
+        ['while'] = true, ['as'] = true,
+    }
+    local typeSet = {
+        ['any'] = true, ['boolean'] = true, ['buffer'] = true, ['nil'] = true, ['number'] = true, ['string'] = true,
+        ['thread'] = true, ['unknown'] = true, ['never'] = true, ['userdata'] = true,
+    }
+    local globalSet = {
+        game = true, workspace = true, script = true, shared = true, plugin = true, Enum = true,
+        Color3 = true, Vector2 = true, Vector3 = true, CFrame = true, UDim = true, UDim2 = true,
+        Instance = true, TweenInfo = true, Ray = true, Rect = true, Region3 = true, Random = true,
+        DateTime = true, NumberRange = true, NumberSequence = true, ColorSequence = true,
+        BrickColor = true, Axes = true, Faces = true, Font = true, math = true, string = true,
+        table = true, task = true, debug = true, coroutine = true, os = true, utf8 = true, vector = true,
+        pairs = true, ipairs = true, next = true, print = true, warn = true, error = true, assert = true,
+        pcall = true, xpcall = true, select = true, rawequal = true, rawget = true, rawset = true, rawlen = true,
+        setmetatable = true, getmetatable = true, loadstring = true, load = true, require = true,
+        tonumber = true, tostring = true, type = true, typeof = true, unpack = true, wait = true,
+        delay = true, spawn = true, tick = true, time = true, elapsedTime = true, gcinfo = true,
+        collectgarbage = true, getfenv = true, setfenv = true, newproxy = true, settings = true, UserSettings = true,
+    }
+
+    local function blankFor(ch)
+        return (ch == '\n' or ch == '\r' or ch == '\t') and ch or ' '
+    end
+
+    local function buildHighlightLayers(source)
+        local buffers = {
+            keywords = {}, globals = {}, strings = {}, comments = {}, numbers = {},
+            funcs = {}, methods = {}, properties = {}, operators = {}, brackets = {},
+        }
+        local function appendToLayer(layerName, text)
+            for i = 1, #text do
+                local ch = text:sub(i, i)
+                for key, arr in pairs(buffers) do
+                    arr[#arr + 1] = (key == layerName) and ch or blankFor(ch)
+                end
+            end
+        end
+        local function appendPlain(text)
+            for i = 1, #text do
+                local ch = blankFor(text:sub(i, i))
+                for _, arr in pairs(buffers) do
+                    arr[#arr + 1] = ch
+                end
+            end
+        end
+        local function findLongBracket(pos)
+            local eq = source:match('^%[(=*)%[', pos)
+            if not eq then
+                return nil
+            end
+            local closePattern = ']' .. eq .. ']'
+            local closeStart, closeEnd = source:find(closePattern, pos + 2 + #eq, true)
+            return closeStart, closeEnd
+        end
+        local n = #source
+        local function nextNonSpace(pos)
+            local j = pos
+            while j <= n and source:sub(j, j):match('%s') do
+                j += 1
+            end
+            return source:sub(j, j)
+        end
+        local function prevNonSpace(pos)
+            local j = pos
+            while j >= 1 and source:sub(j, j):match('%s') do
+                j -= 1
+            end
+            return source:sub(j, j)
+        end
+
+        local i = 1
+        while i <= n do
+            local ch = source:sub(i, i)
+            local two = source:sub(i, i + 1)
+            local three = source:sub(i, i + 2)
+            if two == '--' and source:sub(i + 2, i + 2) == '[' then
+                local _, closeEnd = findLongBracket(i + 2)
+                local endIndex = closeEnd or n
+                appendToLayer('comments', source:sub(i, endIndex))
+                i = endIndex + 1
+            elseif two == '--' then
+                local newlineIndex = source:find('\n', i + 2, true)
+                local endIndex = newlineIndex and (newlineIndex - 1) or n
+                appendToLayer('comments', source:sub(i, endIndex))
+                i = endIndex + 1
+            elseif ch == '"' or ch == "'" or ch == '`' then
+                local quote = ch
+                local j = i + 1
+                local escaped = false
+                while j <= n do
+                    local cur = source:sub(j, j)
+                    if escaped then
+                        escaped = false
+                    elseif cur == '\\' then
+                        escaped = true
+                    elseif cur == quote then
+                        break
+                    end
+                    j += 1
+                end
+                if j > n then
+                    j = n
+                end
+                appendToLayer('strings', source:sub(i, j))
+                i = j + 1
+            elseif ch == '[' and findLongBracket(i) then
+                local _, closeEnd = findLongBracket(i)
+                local endIndex = closeEnd or n
+                appendToLayer('strings', source:sub(i, endIndex))
+                i = endIndex + 1
+            elseif ch:match('[%a_]') then
+                local j = i
+                while j <= n and source:sub(j, j):match('[%w_]') do
+                    j += 1
+                end
+                local token = source:sub(i, j - 1)
+                local prevChar = prevNonSpace(i - 1)
+                local nextChar = nextNonSpace(j)
+                if keywordSet[token] or typeSet[token] then
+                    appendToLayer('keywords', token)
+                elseif prevChar == ':' and nextChar == '(' then
+                    appendToLayer('methods', token)
+                elseif prevChar == '.' then
+                    appendToLayer('properties', token)
+                elseif nextChar == '(' then
+                    appendToLayer(globalSet[token] and 'globals' or 'funcs', token)
+                elseif globalSet[token] then
+                    appendToLayer('globals', token)
+                else
+                    appendPlain(token)
+                end
+                i = j
+            elseif ch:match('%d') then
+                local j = i
+                while j <= n and source:sub(j, j):match('[%w_%.]') do
+                    j += 1
+                end
+                appendToLayer('numbers', source:sub(i, j - 1))
+                i = j
+            elseif ch:match('[%[%]%(%){}]') then
+                appendToLayer('brackets', ch)
+                i += 1
+            elseif three == '...' then
+                appendToLayer('operators', three)
+                i += 3
+            elseif three == '//=' or three == '..=' then
+                appendToLayer('operators', three)
+                i += 3
+            elseif two == '..' or two == '==' or two == '~=' or two == '<=' or two == '>=' or two == '::' or two == '//' or two == '->' then
+                appendToLayer('operators', two)
+                i += 2
+            elseif ch:match('[%+%-%*/%%%^#=<>~:;,%.,|&%?]') then
+                appendToLayer('operators', ch)
+                i += 1
+            else
+                appendPlain(ch)
+                i += 1
+            end
+        end
+        return buffers
+    end
+
+    local function makeLayer(parent, name, color)
+        return Create('TextLabel', {
+            Parent = parent,
+            Name = name,
+            BackgroundTransparency = 1,
+            Position = UDim2.fromOffset(4, 2),
+            Size = UDim2.new(1, -8, 1, -4),
+            Font = Enum.Font.Code,
+            Text = '',
+            TextColor3 = color,
+            TextSize = 14,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            TextYAlignment = Enum.TextYAlignment.Top,
+            TextWrapped = false,
+            RichText = false,
+        })
+    end
+
+    Highlight.new = function(parent)
+        local rawString = ''
+        local scroll = Create('ScrollingFrame', {
+            Parent = parent,
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            Size = UDim2.fromScale(1, 1),
+            CanvasSize = UDim2.fromOffset(0, 0),
+            ScrollBarThickness = 4,
+        })
+        local content = Create('Frame', {
+            Parent = scroll,
+            BackgroundTransparency = 1,
+            Size = UDim2.fromScale(1, 1),
+        })
+        local layers = {
+            keywords = makeLayer(content, 'Keywords', colors.keyword),
+            globals = makeLayer(content, 'Globals', colors.global),
+            strings = makeLayer(content, 'Strings', colors.string),
+            comments = makeLayer(content, 'Comments', colors.comment),
+            numbers = makeLayer(content, 'Numbers', colors.number),
+            funcs = makeLayer(content, 'Functions', colors.func),
+            methods = makeLayer(content, 'Methods', colors.method),
+            properties = makeLayer(content, 'Properties', colors.property),
+            operators = makeLayer(content, 'Operators', colors.operator),
+            brackets = makeLayer(content, 'Brackets', colors.bracket),
+        }
+        local textBox = Create('TextBox', {
+            Parent = content,
+            BackgroundTransparency = 1,
+            Position = UDim2.fromOffset(4, 2),
+            Size = UDim2.new(1, -8, 1, -4),
+            Text = '',
+            TextColor3 = colors.plain,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            TextYAlignment = Enum.TextYAlignment.Top,
+            TextSize = 14,
+            Font = Enum.Font.Code,
+            ClearTextOnFocus = false,
+            MultiLine = true,
+            TextWrapped = false,
+            ZIndex = 2,
+        })
+
+        local renderingText = false
+        local function measure(text)
+            local lines = 0
+            local longest = 0
+            for line in (text .. '\n'):gmatch('(.-)\n') do
+                lines += 1
+                if #line > longest then
+                    longest = #line
+                end
+            end
+            if lines <= 0 then
+                lines = 1
+            end
+            local lineHeight = TextService:GetTextSize('M', textBox.TextSize, textBox.Font, Vector2.new(1000, 1000)).Y + 2
+            local width = math.max(parent.AbsoluteSize.X, math.min(longest, 2500) * 8 + 32)
+            local height = math.max(parent.AbsoluteSize.Y, lines * lineHeight + 8)
+            return width, height
+        end
+
+        local function syncSize(text)
+            local width, height = measure(text)
+            content.Size = UDim2.fromOffset(width, height)
+            textBox.Size = UDim2.fromOffset(width - 8, height - 4)
+            for _, layer in pairs(layers) do
+                layer.Size = textBox.Size
+            end
+            scroll.CanvasSize = UDim2.fromOffset(width, height)
+        end
+
+        local function setLayerVisible(visible)
+            for _, layer in pairs(layers) do
+                layer.Visible = visible
+                if not visible then
+                    layer.Text = ''
+                end
+            end
+            textBox.TextTransparency = visible and 1 or 0
+        end
+
+        local function render(text)
+            syncSize(text)
+            if #text > syntaxMaxChars then
+                setLayerVisible(false)
+                return
+            end
+            setLayerVisible(true)
+            local buffers = buildHighlightLayers(text)
+            for name, layer in pairs(layers) do
+                layer.Text = table.concat(buffers[name])
+            end
+        end
+
+        textBox:GetPropertyChangedSignal('Text'):Connect(function()
+            if not renderingText then
+                rawString = textBox.Text or ''
+            end
+        end)
+        parent:GetPropertyChangedSignal('AbsoluteSize'):Connect(function()
+            syncSize(textBox.Text or '')
+        end)
+
+        return {
+            setRaw = function(_, text)
+                rawString = tostring(text or '')
+                local display = rawString
+                if #rawString > displayMaxChars then
+                    display = rawString:sub(1, displayMaxChars)
+                        .. ('\n\n--[[ SimpleSpy kept the full %d character script for copy/execute, but stopped rendering here to avoid FPS drops. ]]'):format(#rawString)
+                end
+                renderingText = true
+                textBox.Text = display
+                renderingText = false
+                render(display)
+            end,
+            getString = function()
+                return rawString
+            end,
+        }
+    end
 end
 
 local ui = {}

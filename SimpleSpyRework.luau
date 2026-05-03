@@ -522,8 +522,12 @@ do
         collectgarbage = true, getfenv = true, setfenv = true, newproxy = true, settings = true, UserSettings = true,
     }
 
+    local function normalizeDisplayText(text)
+        return tostring(text or ''):gsub('\r\n', '\n'):gsub('\r', '\n'):gsub('\t', '    ')
+    end
+
     local function blankFor(ch)
-        return (ch == '\n' or ch == '\r' or ch == '\t') and ch or ' '
+        return (ch == '\n' or ch == '\r') and ch or ' '
     end
 
     local function buildHighlightLayers(source)
@@ -790,9 +794,9 @@ do
         return {
             setRaw = function(_, text)
                 rawString = tostring(text or '')
-                local display = rawString
+                local display = normalizeDisplayText(rawString)
                 if #rawString > displayMaxChars then
-                    display = rawString:sub(1, displayMaxChars)
+                    display = normalizeDisplayText(rawString:sub(1, displayMaxChars))
                         .. ('\n\n--[[ SimpleSpy kept the full %d character script for copy/execute, but stopped rendering here to avoid FPS drops. ]]'):format(#rawString)
                 end
                 renderingText = true

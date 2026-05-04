@@ -167,6 +167,7 @@ if game.GameId == 847722000 then
 	st.dropEsp = cfgBool("dropEsp", false)
 	st.locEsp = cfgBool("locEsp", false)
 	st.scrapEsp = cfgBool("scrapEsp", false)
+	st.trapEsp = cfgBool("trapEsp", false)
 	st.hide = false
 	st.noFall = cfgBool("noFall", false)
 	st.instaDrop = cfgBool("instaDrop", false)
@@ -210,6 +211,7 @@ if game.GameId == 847722000 then
 	_G.SupplyDropESP = st.dropEsp
 	_G.LocationESP = st.locEsp
 	_G.ScrapESP = st.scrapEsp
+	_G.RakeTrapESP = st.trapEsp
 	_G.NoFallDMG = st.noFall
 	_G.InstaOpenSupplyDrop = st.instaDrop
 	if genv.RakeGui then
@@ -251,6 +253,7 @@ if game.GameId == 847722000 then
 	local Ws = ClonedService("Workspace")
 	local Plrs = ClonedService("Players")
 	local Rep = ClonedService("ReplicatedStorage")
+	local Lit = ClonedService("Lighting")
 	local Tws = ClonedService("TweenService")
 	local conns = {}
 	local cleanupEsp
@@ -338,6 +341,20 @@ if game.GameId == 847722000 then
 			return res
 		end
 		return def
+	end
+
+	local function eachGc(fn)
+		if type(getgc) ~= "function" then
+			return false
+		end
+		local ok, res = pcall(getgc, true)
+		if not ok or type(res) ~= "table" then
+			return false
+		end
+		for _, v in pairs(res) do
+			pcall(fn, v)
+		end
+		return true
 	end
 
 	-- Stamina Table
@@ -926,9 +943,21 @@ if game.GameId == 847722000 then
 	local infoRoot
 	local infoTgt = "Rake's Target : ?"
 	local infoTime = "Time Until Day : ?"
+	local infoPlayed = "Time Played : ?"
+
+	local function fmtTime(v)
+		v = math.max(0, math.floor(tonumber(v) or 0))
+		local h = math.floor(v / 3600)
+		local m = math.floor((v % 3600) / 60)
+		local s = v % 60
+		if h > 0 then
+			return string.format("%d:%02d:%02d", h, m, s)
+		end
+		return string.format("%d:%02d", m, s)
+	end
 
 	local function infoText()
-		return infoTgt .. "\n" .. infoTime
+		return infoTgt .. "\n" .. infoTime .. "\n" .. infoPlayed
 	end
 
 	local function findBubble()
@@ -942,7 +971,7 @@ if game.GameId == 847722000 then
 		for _, v in ipairs(gui:GetDescendants()) do
 			if v:IsA("TextLabel") or v:IsA("TextButton") or v:IsA("TextBox") then
 				local tx = tostring(v.Text or "")
-				if tx:find("Rake's Target", 1, true) or tx:find("Time Until", 1, true) then
+				if tx:find("Rake's Target", 1, true) or tx:find("Time Until", 1, true) or tx:find("Time Played", 1, true) then
 					infoLbl = v
 					local root = v
 					while root.Parent and root.Parent:IsA("GuiObject") and root.Parent ~= gui do
@@ -1014,6 +1043,11 @@ if game.GameId == 847722000 then
 
 	local function setInfoTime(txt)
 		infoTime = tostring(txt or "Time Until Day : ?")
+		syncBubble()
+	end
+
+	local function setInfoPlayed(txt)
+		infoPlayed = tostring(txt or "Time Played : ?")
 		syncBubble()
 	end
 
@@ -1413,6 +1447,7 @@ if game.GameId == 847722000 then
 				cleanupEsp("rake")
 				cleanupEsp("players")
 				cleanupEsp("scraps")
+				cleanupEsp("traps")
 			end
 		end,
 	})
@@ -1466,20 +1501,6 @@ if game.GameId == 847722000 then
 		end
 	end
 
-	local function getFogValue()
-		local ok, obj = pcall(function()
-			local props = Rep:FindFirstChild("CurrentLightingProperties")
-			return props and props:FindFirstChild("FogEnd")
-		end)
-		local has = ok and obj and pcall(function()
-			local _ = obj.Value
-		end)
-		if ok and has and obj.GetPropertyChangedSignal then
-			return obj
-		end
-		return nil
-	end
-
 	local function bindFog(sig, fn)
 		local c = sig:Connect(fn)
 		fogCons[#fogCons + 1] = c
@@ -1487,44 +1508,27 @@ if game.GameId == 847722000 then
 		return c
 	end
 
-	local function setFogOff(obj)
-		obj = obj or getFogValue()
-		if not obj then
+	local function setFogOff()
+		if not Lit then
 			return
 		end
 		if fogLast == nil then
-			fogLast = tonumber(obj.Value) or 75
+			fogLast = tonumber(Lit.FogEnd) or 75
 		end
-		if obj.Value ~= 9e9 then
-			obj.Value = 9e9
+		if Lit.FogEnd ~= 9e9 then
+			Lit.FogEnd = 9e9
 		end
 	end
 
 	local function watchFog()
 		wipeFog()
-		if _G.NoFog ~= true then
+		if _G.NoFog ~= true or not Lit then
 			return
 		end
-		local obj = getFogValue()
-		if obj then
-			setFogOff(obj)
-			bindFog(obj:GetPropertyChangedSignal("Value"), function()
-				if _G.NoFog == true then
-					setFogOff(obj)
-				end
-			end)
-		end
-		local props = Rep:FindFirstChild("CurrentLightingProperties")
-		if props then
-			bindFog(props.ChildAdded, function(ch)
-				if _G.NoFog == true and ch.Name == "FogEnd" then
-					task.defer(watchFog)
-				end
-			end)
-		end
-		bindFog(Rep.ChildAdded, function(ch)
-			if _G.NoFog == true and ch.Name == "CurrentLightingProperties" then
-				task.defer(watchFog)
+		setFogOff()
+		bindFog(Lit:GetPropertyChangedSignal("FogEnd"), function()
+			if _G.NoFog == true then
+				setFogOff()
 			end
 		end)
 	end
@@ -1541,9 +1545,8 @@ if game.GameId == 847722000 then
 				watchFog()
 			else
 				wipeFog()
-				local obj = getFogValue()
-				if obj then
-					obj.Value = fogLast or 75
+				if Lit then
+					Lit.FogEnd = fogLast or 75
 				end
 			end
 		end,
@@ -1570,17 +1573,15 @@ if game.GameId == 847722000 then
 			st.infStamina = _G.InfStamina
 			cfgSet("infStamina", st.infStamina)
 			if _G.InfStamina == true then
-				for i,v in pairs(getgc(true)) do
-					if type(v) == "table" then
-						if rawget(v,"STAMINA_REGEN") then
-							v.STAMINA_REGEN = 100
-							v.JUMP_STAMINA = 0
-							v.JUMP_COOLDOWN = 0
-							v.STAMINA_TAKE = 0
-							v.stamina = 100
-						end
+				eachGc(function(v)
+					if type(v) == "table" and rawget(v, "STAMINA_REGEN") then
+						v.STAMINA_REGEN = 100
+						v.JUMP_STAMINA = 0
+						v.JUMP_COOLDOWN = 0
+						v.STAMINA_TAKE = 0
+						v.stamina = 100
 					end
-				end
+				end)
 			end
 		end,
 	})
@@ -1594,14 +1595,12 @@ if game.GameId == 847722000 then
 			st.infNight = _G.InfNightVision
 			cfgSet("infNight", st.infNight)
 			if _G.InfNightVision == true then
-				for i,v in pairs(getgc(true)) do
-					if type(v) == "table" then
-						if rawget(v,"NVG_TAKE") then
-							v.NVG_TAKE = 0
-							v.NVG_REGEN = 100
-						end
+				eachGc(function(v)
+					if type(v) == "table" and rawget(v, "NVG_TAKE") then
+						v.NVG_TAKE = 0
+						v.NVG_REGEN = 100
 					end
-				end                
+				end)
 			end
 		end,
 	})
@@ -1768,6 +1767,7 @@ if game.GameId == 847722000 then
 		locs = {},
 		players = {},
 		scraps = {},
+		traps = {},
 	}
 
 	local function getLocFolder()
@@ -1976,6 +1976,11 @@ if game.GameId == 847722000 then
 				clearOne(esp.scraps, k)
 			end
 		end
+		if not kind or kind == "traps" then
+			for k in pairs(esp.traps) do
+				clearOne(esp.traps, k)
+			end
+		end
 	end
 
 	ClientTab:CreateToggle({
@@ -2002,6 +2007,20 @@ if game.GameId == 847722000 then
 			cfgSet("scrapEsp", st.scrapEsp)
 			if not state and cleanupEsp then
 				cleanupEsp("scraps")
+			end
+		end,
+	})
+
+	ClientTab:CreateToggle({
+		Name = "Rake Trap ESP",
+		CurrentValue = st.trapEsp,
+		Flag = "RakeTrapESP",
+		Callback = function(state)
+			_G.RakeTrapESP = state == true
+			st.trapEsp = _G.RakeTrapESP
+			cfgSet("trapEsp", st.trapEsp)
+			if not state and cleanupEsp then
+				cleanupEsp("traps")
 			end
 		end,
 	})
@@ -2110,6 +2129,29 @@ if game.GameId == 847722000 then
 		else
 			cleanupEsp("scraps")
 		end
+
+		if _G.RakeTrapESP == true then
+			local debris = ffc(ClonedService("Workspace"), "Debris")
+			local root = debris and ffc(debris, "Traps")
+			if root then
+				for _, v in pairs(kids(root)) do
+					if v.Name == "RakeTrapModel" and v:IsA("Model") and not esp.traps[v] then
+						esp.traps[v] = {
+							o = v,
+							d = drawTxt("Rake Trap", Color3.fromRGB(255, 85, 0)),
+							h = cham(v, "RakeTrapChams", Color3.fromRGB(255, 85, 0), Color3.fromRGB(255, 255, 255), 0.3),
+						}
+					end
+				end
+			end
+			for v in pairs(esp.traps) do
+				if not v.Parent or v.Parent ~= root then
+					clearOne(esp.traps, v)
+				end
+			end
+		else
+			cleanupEsp("traps")
+		end
 	end
 
 	bind(ClonedService("RunService").Heartbeat, function(dt)
@@ -2191,6 +2233,10 @@ if game.GameId == 847722000 then
 
 		for v, it in pairs(esp.scraps) do
 			show(it.d, _G.ScrapESP and posOf(v), scrapTxt(v))
+		end
+
+		for v, it in pairs(esp.traps) do
+			show(it.d, _G.RakeTrapESP and posOf(v), "Rake Trap")
 		end
 	end)
 
@@ -2479,17 +2525,27 @@ if game.GameId == 847722000 then
 			setInfoTime(txt)
 		end,
 	}
+	local TimePlayedCounter = {
+		Set = function(_, txt)
+			setInfoPlayed(txt)
+		end,
+	}
 
 	-- update time until day label
 
 	bind(ClonedService("RunService").Heartbeat, function()
 		if AllowRunService == true then
-			if ClonedService("ReplicatedStorage").Night.Value == true then
-				TimeUntilDayCounter:Set("Time Until Day : "..ClonedService("ReplicatedStorage").Timer.Value)
-			end
-			if ClonedService("ReplicatedStorage").Night.Value == false then
-				TimeUntilDayCounter:Set("Time Until Night : "..ClonedService("ReplicatedStorage").Timer.Value)
-			end
+			pcall(function()
+				local sec = fmtTime(valOf(ffc(Rep, "Timer"), 0))
+				if valOf(ffc(Rep, "Night"), false) == true then
+					TimeUntilDayCounter:Set("Time Until Day : "..sec)
+				else
+					TimeUntilDayCounter:Set("Time Until Night : "..sec)
+				end
+				local lp = Plrs.LocalPlayer
+				local tp = lp and ffc(lp, "TimePlayed")
+				TimePlayedCounter:Set("Time Played : "..fmtTime(valOf(tp, 0)))
+			end)
 		end
 	end)
 

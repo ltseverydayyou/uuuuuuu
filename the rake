@@ -120,12 +120,42 @@ if game.GameId == 847722000 then
 		return n
 	end
 
+	local function uiKeyCode(v, def)
+		if typeof(v) == "EnumItem" then
+			return v
+		end
+		local s = tostring(v or "")
+		s = s:gsub("^Enum%%.KeyCode%%.", ""):gsub("^KeyCode%%.", "")
+		local ok, key = pcall(function()
+			return Enum.KeyCode[s]
+		end)
+		if ok and key then
+			return key
+		end
+		return def or Enum.KeyCode.RightControl
+	end
+
+	local function uiKeyName(v, def)
+		if typeof(v) == "EnumItem" then
+			return v.Name
+		end
+		local key = uiKeyCode(v, nil)
+		if key then
+			return key.Name
+		end
+		return tostring(def or "RightControl")
+	end
+
+	local function uiBoolSet(k, v)
+		cfgSet(k, v == true)
+	end
+
 	st.fov = cfgNum("fov", tonumber(_G.FieldOfView) or 70, 1, 120)
 	st.fovOn = cfgBool("fovOn", _G.enableFOV == true)
 	st.spd = cfgNum("spd", tonumber(_G.WalkSpeedd) or 16, 0, 30)
 	st.spdOn = cfgBool("spdOn", _G.enableSpeed == true)
-	st.freeCam = cfgBool("freeCam", false)
-	st.freeCamSpeed = cfgNum("freeCamSpeed", 0.2, 0.01, 20)
+	st.freeCam = false
+	st.freeCamSpeed = 0.2
 	st.noFog = cfgBool("noFog", false)
 	st.infStamina = cfgBool("infStamina", false)
 	st.infNight = cfgBool("infNight", false)
@@ -137,20 +167,37 @@ if game.GameId == 847722000 then
 	st.dropEsp = cfgBool("dropEsp", false)
 	st.locEsp = cfgBool("locEsp", false)
 	st.scrapEsp = cfgBool("scrapEsp", false)
-	st.hide = cfgBool("hide", false)
+	st.hide = false
 	st.noFall = cfgBool("noFall", false)
 	st.instaDrop = cfgBool("instaDrop", false)
 	st.espSize = cfgNum("espSize", 12, 8, 24)
 	st.espScan = cfgNum("espScan", 0.75, 0.2, 3)
 	st.espMax = cfgNum("espMax", 0, 0, 5000)
-	st.espOutline = cfgBool("espOutline", true)
+	st.espOutline = false
 	st.espChams = cfgBool("espChams", true)
 	st.espDist = cfgBool("espDist", false)
+	st.uiBind = uiKeyName(cfgGet("uiBind", "RightControl"), "RightControl")
+	st.uiCursor = cfgBool("uiCursor", true)
+	st.uiDragLock = cfgBool("uiDragLock", false)
+	st.uiCompact = cfgBool("uiCompact", false)
+	st.uiResizable = cfgBool("uiResizable", true)
+	st.uiMobileButtons = cfgBool("uiMobileButtons", true)
+	st.uiMobileRight = cfgBool("uiMobileRight", false)
+	st.uiUnlockMouse = cfgBool("uiUnlockMouse", true)
+	st.uiSearchBar = cfgBool("uiSearchBar", true)
+	st.uiGlobalSearch = cfgBool("uiGlobalSearch", false)
+	st.uiSidebarResize = cfgBool("uiSidebarResize", true)
+	st.uiCompacting = cfgBool("uiCompacting", true)
+	st.uiNoSnap = cfgBool("uiNoSnap", false)
+	st.uiToggleFrames = cfgBool("uiToggleFrames", true)
+	st.uiCorner = cfgNum("uiCorner", 4, 0, 20)
+	st.uiDpi = cfgNum("uiDpi", 100, 50, 200)
+	st.infoBubble = cfgBool("infoBubble", true)
 	_G.FieldOfView = st.fov
 	_G.enableFOV = st.fovOn
 	_G.WalkSpeedd = st.spd
 	_G.enableSpeed = st.spdOn
-	_G.FreeCam = st.freeCam
+	_G.FreeCam = false
 	_G.FreeCamSpeed = st.freeCamSpeed
 	_G.NoFog = st.noFog
 	_G.InfStamina = st.infStamina
@@ -304,19 +351,8 @@ if game.GameId == 847722000 then
     end
     ]]
 
-	local HidePart = Instance.new("Part")
-	HidePart.Size = Vector3.new(20,1000,20)
-	HidePart.Parent = ClonedService("Workspace")
-	HidePart.Position = Vector3.new(0,10000,0)
-	HidePart.Anchored = true
-
-	local HidePartHightLight = Instance.new("Highlight")
-	HidePartHightLight.Name = "HidePartHightLight"
-	HidePartHightLight.FillColor = Color3.fromRGB(255,255,255)
-	HidePartHightLight.OutlineColor = Color3.fromRGB(170,0,0)
-	HidePartHightLight.FillTransparency = .8
-	HidePartHightLight.OutlineTransparency = .8
-	HidePartHightLight.Parent = HidePart
+	local HidePart
+	local HidePartHightLight
 
 	
 	local curChar
@@ -513,13 +549,7 @@ if game.GameId == 847722000 then
 
 	local RunService = ClonedService("RunService")
 	local InputService = ClonedService("UserInputService")
-	local FreeCamPart = Instance.new("Part")
-	FreeCamPart.Anchored = true
-	FreeCamPart.Size = Vector3.new(1,1,1)
-	FreeCamPart.Parent = ClonedService("Workspace")
-	FreeCamPart.CFrame = CFrame.new(0,10000,0)
-	FreeCamPart.Transparency = 1
-	FreeCamPart.Name = "FreeCamPart"
+	local FreeCamPart
 
 
 
@@ -528,27 +558,334 @@ if game.GameId == 847722000 then
 	pcall(function() genv.RakeGui = true end)
 
 
-	local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-
-
+	local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
+	local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
+	local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
+	Library.ShowCustomCursor = st.uiCursor == true
+	Library.ShowToggleFrameInKeybinds = st.uiToggleFrames == true
+	Library.CantDragForced = st.uiDragLock == true
+	local Options = Library.Options
+	local Toggles = Library.Toggles
 	local canCfg = fileApi
+	local Obsidian = {}
+	local uiNum = 0
 
-	local Window = Rayfield:CreateWindow({
-		Name = "Project [The Rake]",
-		LoadingTitle = "Project [The Rake]",
-		LoadingSubtitle = "Sleepy Hub",
-		ConfigurationSaving = {
-			Enabled = canCfg,
-			FolderName = folderApi and "ProjectTheRake" or nil,
-			FileName = "Project"
+	local function uiKey(flag, name)
+		uiNum += 1
+		local key = tostring(flag or name or ("Item" .. uiNum)):gsub("%s+", "_"):gsub("[^%w_]", "")
+		if key == "" then
+			key = "Item" .. uiNum
+		end
+		return "Rake_" .. key .. "_" .. tostring(uiNum)
+	end
+
+	local function uiPrec(v)
+		local n = tonumber(v) or 0
+		if n <= 0 then
+			return 0
+		end
+		local s = tostring(n)
+		local p = s:find(".", 1, true)
+		if not p then
+			return 0
+		end
+		return math.clamp(#s - p, 0, 4)
+	end
+
+
+	local function uiWrap(obj)
+		return setmetatable({ _obj = obj }, {
+			__index = function(t, k)
+				if k == "Set" then
+					return function(_, v)
+						local o = rawget(t, "_obj")
+						pcall(function()
+							if o and o.SetValue then
+								o:SetValue(v)
+							elseif o and o.Set then
+								o:Set(v)
+							elseif o and o.SetText then
+								o:SetText(tostring(v))
+							end
+						end)
+					end
+				end
+				if k == "SetText" then
+					return function(_, v)
+						local o = rawget(t, "_obj")
+						pcall(function()
+							if o and o.SetText then
+								o:SetText(tostring(v))
+							elseif o and o.Set then
+								o:Set(tostring(v))
+							end
+						end)
+					end
+				end
+				local o = rawget(t, "_obj")
+				local v = o and o[k]
+				if type(v) == "function" then
+					return function(_, ...)
+						return v(o, ...)
+					end
+				end
+				return v
+			end
+		})
+	end
+
+	local function makeUiTab(tab, group)
+		local t = { __tab = tab, __group = group }
+
+		function t:CreateLabel(text)
+			local id = uiKey(nil, text)
+			local ok, obj = pcall(function()
+				return group:AddLabel(tostring(text or ""), true, id)
+			end)
+			return uiWrap((ok and obj) or Options[id])
+		end
+
+		function t:CreateDivider()
+			pcall(function()
+				group:AddDivider()
+			end)
+			return uiWrap(nil)
+		end
+
+		function t:CreateButton(info)
+			info = type(info) == "table" and info or { Name = tostring(info or "Button") }
+			local text = tostring(info.Name or info.Text or "Button")
+			local cb = info.Callback or info.Func
+			local ok, obj = pcall(function()
+				return group:AddButton({
+					Text = text,
+					Func = function()
+						if cb then
+							cb()
+						end
+					end,
+					DoubleClick = false,
+				})
+			end)
+			if not ok then
+				pcall(function()
+					obj = group:AddButton(text, function()
+						if cb then
+							cb()
+						end
+					end)
+				end)
+			end
+			return uiWrap(obj)
+		end
+
+		function t:CreateToggle(info)
+			info = type(info) == "table" and info or {}
+			local id = uiKey(info.Flag, info.Name)
+			local cb = info.Callback
+			pcall(function()
+				group:AddToggle(id, {
+					Text = tostring(info.Name or info.Text or "Toggle"),
+					Default = info.CurrentValue == true or info.Default == true,
+					Callback = function(v)
+						if cb then
+							cb(v)
+						end
+					end,
+				})
+			end)
+			return uiWrap(Toggles[id] or Options[id])
+		end
+
+		function t:CreateSlider(info)
+			info = type(info) == "table" and info or {}
+			local range = type(info.Range) == "table" and info.Range or { 0, 100 }
+			local min = tonumber(range[1]) or 0
+			local max = tonumber(range[2]) or 100
+			local id = uiKey(info.Flag, info.Name)
+			local cb = info.Callback
+			pcall(function()
+				group:AddSlider(id, {
+					Text = tostring(info.Name or info.Text or "Slider"),
+					Default = tonumber(info.CurrentValue or info.Default) or min,
+					Min = min,
+					Max = max,
+					Rounding = uiPrec(info.Increment),
+					Callback = function(v)
+						if cb then
+							cb(v)
+						end
+					end,
+				})
+			end)
+			return uiWrap(Options[id])
+		end
+
+		function t:CreateDropdown(info)
+			info = type(info) == "table" and info or {}
+			local vals = type(info.Values) == "table" and info.Values or {}
+			local id = uiKey(info.Flag, info.Name)
+			local cb = info.Callback
+			local def = info.CurrentOption or info.CurrentValue or info.Default or vals[1]
+			pcall(function()
+				group:AddDropdown(id, {
+					Values = vals,
+					Default = def,
+					Multi = info.Multi == true,
+					Text = tostring(info.Name or info.Text or "Dropdown"),
+					Searchable = info.Searchable == true,
+					Callback = function(v)
+						if cb then
+							cb(v)
+						end
+					end,
+				})
+			end)
+			return uiWrap(Options[id])
+		end
+
+		function t:CreateKeybind(info)
+			info = type(info) == "table" and info or {}
+			local id = uiKey(info.Flag, info.Name)
+			local cb = info.Callback
+			local label
+			pcall(function()
+				label = group:AddLabel(tostring(info.Name or "Keybind"))
+			end)
+			local obj
+			pcall(function()
+				obj = label:AddKeyPicker(id, {
+					Default = tostring(info.CurrentKeybind or info.Default or "None"),
+					Mode = tostring(info.Mode or (info.HoldToInteract and "Hold" or "Press")),
+					Text = tostring(info.Name or "Keybind"),
+					NoUI = info.NoUI == true,
+					Callback = function(v)
+						if cb then
+							cb(v)
+						end
+					end,
+				})
+			end)
+			local wrapped = uiWrap(Options[id] or obj)
+			wrapped.__id = id
+			return wrapped
+		end
+
+		return t
+	end
+
+	function Obsidian:Notify(info)
+		info = type(info) == "table" and info or {}
+		pcall(function()
+			Library:Notify({
+				Title = tostring(info.Title or "Notification"),
+				Description = tostring(info.Content or info.Description or info.Text or ""),
+				Time = tonumber(info.Duration or info.Time) or 3,
+			})
+		end)
+	end
+
+	function Obsidian:Destroy()
+		pcall(function()
+			Library:Unload()
+		end)
+	end
+
+	function Obsidian:LoadConfiguration()
+		return nil
+	end
+
+	function Obsidian:CreateWindow(info)
+		info = type(info) == "table" and info or {}
+		local raw = Library:CreateWindow({
+			Title = tostring(info.Name or info.Title or "Project [The Rake]"),
+			Footer = tostring(info.LoadingSubtitle or "Sleepy Hub"),
+			NotifySide = "Right",
+			ShowCustomCursor = st.uiCursor == true,
+			AutoShow = true,
+			Center = true,
+			Resizable = st.uiResizable == true,
+			ToggleKeybind = uiKeyCode(st.uiBind, Enum.KeyCode.RightControl),
+			ShowMobileButtons = st.uiMobileButtons == true,
+			MobileButtonsSide = st.uiMobileRight == true and "Right" or "Left",
+			UnlockMouseWhileOpen = st.uiUnlockMouse == true,
+			DisableSearch = st.uiSearchBar ~= true,
+			GlobalSearch = st.uiGlobalSearch == true,
+			EnableSidebarResize = st.uiSidebarResize == true,
+			EnableCompacting = st.uiCompacting == true,
+			DisableCompactingSnap = st.uiNoSnap == true,
+			SidebarCompacted = st.uiCompact == true,
+			CornerRadius = st.uiCorner or 4,
+		})
+		Obsidian.RawWindow = raw
+		local icons = {
+			Main = "user",
+			Settings = "settings",
 		}
+		local w = { __window = raw }
+		function w:CreateTab(name, icon, noGroup)
+			local iconName = icons[tostring(name)] or "circle"
+			local rawTab = raw:AddTab(tostring(name or "Tab"), iconName)
+			if noGroup == true then
+				return { __tab = rawTab }
+			end
+			local group = rawTab:AddLeftGroupbox(tostring(name or "Tab"), iconName)
+			return makeUiTab(rawTab, group)
+		end
+		return w
+	end
+
+	local Window = Obsidian:CreateWindow({
+		Name = "Project [The Rake]",
+		LoadingSubtitle = "Sleepy Hub",
 	})
 
+	pcall(function()
+		Library:SetDPIScale(st.uiDpi or 100)
+	end)
+
 	--Tabs
-	local PlayerTab = Window:CreateTab("Player", 11252440515)
-	local ClientTab = Window:CreateTab("Client", 4483345998)
-	local ExploitsTab = Window:CreateTab("Exploits", 11252440817)
+	local MainTab = Window:CreateTab("Main", 11252440515, true)
 	local SettingsTab = Window:CreateTab("Settings", 11252440305)
+	local PlayerTab = MainTab
+	local ClientTab = MainTab
+	local ExploitsTab = MainTab
+
+	if MainTab and MainTab.__tab then
+		local rawMain = MainTab.__tab
+		local okPlayer, playerGroup = pcall(function()
+			return rawMain:AddLeftGroupbox("Player", "user")
+		end)
+		local okClient, clientGroup = pcall(function()
+			return rawMain:AddRightGroupbox("Client", "monitor")
+		end)
+		local okExploits, exploitsGroup = pcall(function()
+			return rawMain:AddLeftGroupbox("Exploits", "skull")
+		end)
+
+		if okPlayer and playerGroup then
+			PlayerTab = makeUiTab(rawMain, playerGroup)
+		end
+		if okClient and clientGroup then
+			ClientTab = makeUiTab(rawMain, clientGroup)
+		end
+		if okExploits and exploitsGroup then
+			ExploitsTab = makeUiTab(rawMain, exploitsGroup)
+		end
+	end
+
+	local ObsidianSettingsTab
+
+	pcall(function()
+		ThemeManager:SetLibrary(Library)
+		ThemeManager:SetFolder("ProjectTheRake")
+		if SettingsTab and SettingsTab.__tab then
+			ThemeManager:ApplyToTab(SettingsTab.__tab)
+			ObsidianSettingsTab = makeUiTab(SettingsTab.__tab, SettingsTab.__tab:AddRightGroupbox("Obsidian UI", "settings"))
+		end
+	end)
+
+	ObsidianSettingsTab = ObsidianSettingsTab or SettingsTab
 
 	local function blankObj()
 		return setmetatable({}, {
@@ -577,10 +914,117 @@ if game.GameId == 847722000 then
 		})
 	end
 
+	MainTab = safeTab(MainTab, "Main")
 	PlayerTab = safeTab(PlayerTab, "Player")
 	ClientTab = safeTab(ClientTab, "Client")
 	ExploitsTab = safeTab(ExploitsTab, "Exploits")
 	SettingsTab = safeTab(SettingsTab, "Settings")
+	ObsidianSettingsTab = safeTab(ObsidianSettingsTab, "ObsidianSettings")
+
+	local infoBubble
+	local infoLbl
+	local infoRoot
+	local infoTgt = "Rake's Target : ?"
+	local infoTime = "Time Until Day : ?"
+
+	local function infoText()
+		return infoTgt .. "\n" .. infoTime
+	end
+
+	local function findBubble()
+		if infoLbl and infoLbl.Parent then
+			return infoLbl
+		end
+		local gui = Library.ScreenGui
+		if typeof(gui) ~= "Instance" then
+			return nil
+		end
+		for _, v in ipairs(gui:GetDescendants()) do
+			if v:IsA("TextLabel") or v:IsA("TextButton") or v:IsA("TextBox") then
+				local tx = tostring(v.Text or "")
+				if tx:find("Rake's Target", 1, true) or tx:find("Time Until", 1, true) then
+					infoLbl = v
+					local root = v
+					while root.Parent and root.Parent:IsA("GuiObject") and root.Parent ~= gui do
+						root = root.Parent
+					end
+					infoRoot = root
+					return v
+				end
+			end
+		end
+		return nil
+	end
+
+	local function setBubbleVisible(v)
+		local on = v == true
+		pcall(function()
+			if type(infoBubble) == "table" and type(infoBubble.SetVisible) == "function" then
+				infoBubble:SetVisible(on)
+			elseif type(infoBubble) == "table" and type(infoBubble.SetVisibility) == "function" then
+				infoBubble:SetVisibility(on)
+			end
+		end)
+		pcall(function()
+			if typeof(infoBubble) == "Instance" and infoBubble:IsA("GuiObject") then
+				infoBubble.Visible = on
+			end
+		end)
+		findBubble()
+		pcall(function()
+			if infoRoot and infoRoot.Parent then
+				infoRoot.Visible = on
+			elseif infoLbl and infoLbl.Parent then
+				infoLbl.Visible = on
+			end
+		end)
+	end
+
+	local function syncBubble()
+		local txt = infoText()
+		pcall(function()
+			if type(infoBubble) == "table" and type(infoBubble.SetText) == "function" then
+				infoBubble:SetText(txt)
+			elseif typeof(infoBubble) == "Instance" then
+				if infoBubble:IsA("TextLabel") or infoBubble:IsA("TextButton") or infoBubble:IsA("TextBox") then
+					infoBubble.Text = txt
+				else
+					for _, v in ipairs(infoBubble:GetDescendants()) do
+						if v:IsA("TextLabel") or v:IsA("TextButton") or v:IsA("TextBox") then
+							v.Text = txt
+							break
+						end
+					end
+				end
+			end
+		end)
+		findBubble()
+		pcall(function()
+			if infoLbl and infoLbl.Parent then
+				infoLbl.Text = txt
+			end
+		end)
+		setBubbleVisible(st.infoBubble)
+	end
+
+	local function setInfoTarget(txt)
+		infoTgt = tostring(txt or "Rake's Target : ?")
+		syncBubble()
+	end
+
+	local function setInfoTime(txt)
+		infoTime = tostring(txt or "Time Until Day : ?")
+		syncBubble()
+	end
+
+	pcall(function()
+		if type(Library.AddDraggableLabel) == "function" then
+			infoBubble = Library:AddDraggableLabel(infoText())
+		end
+	end)
+	task.defer(function()
+		syncBubble()
+	end)
 
 	local function saveNow()
 		return saveCfg(saved)
@@ -612,9 +1056,271 @@ if game.GameId == 847722000 then
 	local function refreshEspStyle()
 		eachEspDraw(function(d)
 			d.Size = st.espSize
-			d.Outline = st.espOutline == true
+			d.Outline = false
 		end)
 	end
+
+	local function rawWin()
+		return Window and Window.__window or Obsidian.RawWindow
+	end
+
+	local function applyLayout()
+		local w = rawWin()
+		pcall(function()
+			if w and w.ApplyLayout then
+				w:ApplyLayout()
+			end
+		end)
+	end
+
+	local menuBind = ObsidianSettingsTab:CreateKeybind({
+		Name = "UI Toggle Keybind",
+		CurrentKeybind = st.uiBind,
+		Flag = "Obsidian_MenuToggle",
+		Mode = "Toggle",
+		NoUI = true,
+	})
+
+	pcall(function()
+		local opt = Options[menuBind.__id]
+		if opt then
+			Library.ToggleKeybind = opt
+			opt:OnChanged(function()
+				st.uiBind = uiKeyName(opt.Value, st.uiBind)
+				cfgSet("uiBind", st.uiBind)
+			end)
+		end
+	end)
+
+	ObsidianSettingsTab:CreateToggle({
+		Name = "Custom Cursor",
+		CurrentValue = st.uiCursor,
+		Flag = "Obsidian_CustomCursor",
+		Callback = function(v)
+			st.uiCursor = v == true
+			uiBoolSet("uiCursor", st.uiCursor)
+			Library.ShowCustomCursor = st.uiCursor
+		end,
+	})
+
+	ObsidianSettingsTab:CreateToggle({
+		Name = "Lock Window Dragging",
+		CurrentValue = st.uiDragLock,
+		Flag = "Obsidian_DragLock",
+		Callback = function(v)
+			st.uiDragLock = v == true
+			uiBoolSet("uiDragLock", st.uiDragLock)
+			Library.CantDragForced = st.uiDragLock
+		end,
+	})
+
+	ObsidianSettingsTab:CreateToggle({
+		Name = "Compact Sidebar",
+		CurrentValue = st.uiCompact,
+		Flag = "Obsidian_CompactSidebar",
+		Callback = function(v)
+			st.uiCompact = v == true
+			uiBoolSet("uiCompact", st.uiCompact)
+			pcall(function()
+				local w = rawWin()
+				if w and w.SetCompact then
+					w:SetCompact(st.uiCompact)
+				end
+			end)
+		end,
+	})
+
+	ObsidianSettingsTab:CreateToggle({
+		Name = "Sidebar Resize Handle",
+		CurrentValue = st.uiSidebarResize,
+		Flag = "Obsidian_SidebarResize",
+		Callback = function(v)
+			st.uiSidebarResize = v == true
+			uiBoolSet("uiSidebarResize", st.uiSidebarResize)
+			local w = rawWin()
+			pcall(function()
+				if w then
+					w.EnableSidebarResize = st.uiSidebarResize
+				end
+			end)
+			applyLayout()
+		end,
+	})
+
+	ObsidianSettingsTab:CreateToggle({
+		Name = "Sidebar Compacting",
+		CurrentValue = st.uiCompacting,
+		Flag = "Obsidian_SidebarCompacting",
+		Callback = function(v)
+			st.uiCompacting = v == true
+			uiBoolSet("uiCompacting", st.uiCompacting)
+			local w = rawWin()
+			pcall(function()
+				if w then
+					w.EnableCompacting = st.uiCompacting
+				end
+			end)
+			applyLayout()
+		end,
+	})
+
+	ObsidianSettingsTab:CreateToggle({
+		Name = "Disable Compact Snap",
+		CurrentValue = st.uiNoSnap,
+		Flag = "Obsidian_NoCompactSnap",
+		Callback = function(v)
+			st.uiNoSnap = v == true
+			uiBoolSet("uiNoSnap", st.uiNoSnap)
+			local w = rawWin()
+			pcall(function()
+				if w then
+					w.DisableCompactingSnap = st.uiNoSnap
+				end
+			end)
+		end,
+	})
+
+	ObsidianSettingsTab:CreateToggle({
+		Name = "Resizable Window",
+		CurrentValue = st.uiResizable,
+		Flag = "Obsidian_ResizableWindow",
+		Callback = function(v)
+			st.uiResizable = v == true
+			uiBoolSet("uiResizable", st.uiResizable)
+		end,
+	})
+
+	ObsidianSettingsTab:CreateToggle({
+		Name = "Mobile Toggle/Lock Buttons",
+		CurrentValue = st.uiMobileButtons,
+		Flag = "Obsidian_MobileButtons",
+		Callback = function(v)
+			st.uiMobileButtons = v == true
+			uiBoolSet("uiMobileButtons", st.uiMobileButtons)
+		end,
+	})
+
+	ObsidianSettingsTab:CreateToggle({
+		Name = "Mobile Buttons On Right",
+		CurrentValue = st.uiMobileRight,
+		Flag = "Obsidian_MobileRight",
+		Callback = function(v)
+			st.uiMobileRight = v == true
+			uiBoolSet("uiMobileRight", st.uiMobileRight)
+		end,
+	})
+
+	ObsidianSettingsTab:CreateToggle({
+		Name = "Unlock Mouse While Open",
+		CurrentValue = st.uiUnlockMouse,
+		Flag = "Obsidian_UnlockMouse",
+		Callback = function(v)
+			st.uiUnlockMouse = v == true
+			uiBoolSet("uiUnlockMouse", st.uiUnlockMouse)
+		end,
+	})
+
+	ObsidianSettingsTab:CreateToggle({
+		Name = "Search Bar",
+		CurrentValue = st.uiSearchBar,
+		Flag = "Obsidian_SearchBar",
+		Callback = function(v)
+			st.uiSearchBar = v == true
+			uiBoolSet("uiSearchBar", st.uiSearchBar)
+		end,
+	})
+
+	ObsidianSettingsTab:CreateToggle({
+		Name = "Global Search",
+		CurrentValue = st.uiGlobalSearch,
+		Flag = "Obsidian_GlobalSearch",
+		Callback = function(v)
+			st.uiGlobalSearch = v == true
+			uiBoolSet("uiGlobalSearch", st.uiGlobalSearch)
+			Library.GlobalSearch = st.uiGlobalSearch
+		end,
+	})
+
+	ObsidianSettingsTab:CreateToggle({
+		Name = "Toggle Frames In Keybinds",
+		CurrentValue = st.uiToggleFrames,
+		Flag = "Obsidian_ToggleFrames",
+		Callback = function(v)
+			st.uiToggleFrames = v == true
+			uiBoolSet("uiToggleFrames", st.uiToggleFrames)
+			Library.ShowToggleFrameInKeybinds = st.uiToggleFrames
+		end,
+	})
+
+	local dpiVals = { "50%", "75%", "100%", "125%", "150%", "175%", "200%" }
+	local dpiNums = { 50, 75, 100, 125, 150, 175, 200 }
+
+	local function dpiNum(v)
+		if type(v) == "table" then
+			local tv = v[1] or v.Value or v.Option
+			if tv == nil then
+				for k, on in next, v do
+					if on then
+						tv = k
+						break
+					end
+				end
+			end
+			v = tv
+		end
+
+		local s = tostring(v or "")
+		s = s:gsub("%%", "")
+		s = s:match("[-%d%.]+") or ""
+		return math.clamp(tonumber(s) or 100, 50, 200)
+	end
+
+	local function dpiOpt(v)
+		local n = dpiNum(v)
+		local best = 100
+		local dist = math.huge
+		for _, x in ipairs(dpiNums) do
+			local d = math.abs(n - x)
+			if d < dist then
+				dist = d
+				best = x
+			end
+		end
+		return tostring(best) .. "%"
+	end
+
+	ObsidianSettingsTab:CreateDropdown({
+		Name = "DPI Scale",
+		Values = dpiVals,
+		CurrentOption = dpiOpt(st.uiDpi),
+		Flag = "Obsidian_DpiScale",
+		Callback = function(v)
+			local n = dpiNum(v)
+			st.uiDpi = n
+			cfgSet("uiDpi", n)
+			pcall(function()
+				Library:SetDPIScale(n)
+			end)
+		end,
+	})
+
+	ObsidianSettingsTab:CreateSlider({
+		Name = "Corner Radius",
+		Range = {0, 20},
+		Increment = 1,
+		CurrentValue = st.uiCorner,
+		Flag = "Obsidian_CornerRadius",
+		Callback = function(v)
+			st.uiCorner = math.clamp(tonumber(v) or 4, 0, 20)
+			cfgSet("uiCorner", st.uiCorner)
+			pcall(function()
+				local w = rawWin()
+				if w and w.SetCornerRadius then
+					w:SetCornerRadius(st.uiCorner)
+				end
+			end)
+		end,
+	})
 
 	SettingsTab:CreateLabel("Config Saving : " .. (fileApi and "Enabled" or "Unavailable"))
 
@@ -623,7 +1329,7 @@ if game.GameId == 847722000 then
 		Callback = function()
 			local ok = saveNow()
 			pcall(function()
-				Rayfield:Notify({
+				Obsidian:Notify({
 					Title = "Settings",
 					Content = ok and "Saved settings." or "Executor file API is missing, settings cannot be saved.",
 					Duration = 3,
@@ -646,7 +1352,7 @@ if game.GameId == 847722000 then
 				end
 			end)
 			pcall(function()
-				Rayfield:Notify({
+				Obsidian:Notify({
 					Title = "Settings",
 					Content = "Reset saved settings. Reload the script to apply defaults.",
 					Duration = 3,
@@ -696,17 +1402,6 @@ if game.GameId == 847722000 then
 	})
 
 	SettingsTab:CreateToggle({
-		Name = "ESP Text Outline",
-		CurrentValue = st.espOutline,
-		Flag = "Settings_ESPTextOutline",
-		Callback = function(v)
-			st.espOutline = v == true
-			cfgSet("espOutline", st.espOutline)
-			refreshEspStyle()
-		end,
-	})
-
-	SettingsTab:CreateToggle({
 		Name = "ESP Highlights",
 		CurrentValue = st.espChams,
 		Flag = "Settings_ESPHighlights",
@@ -735,7 +1430,7 @@ if game.GameId == 847722000 then
 	SettingsTab:CreateDivider()
 
 	SettingsTab:CreateButton({
-		Name = "Unload Gui",
+		Name = "Unload Script",
 		Callback = function()
 			if typeof(DestroyUI) == "function" then
 				DestroyUI()
@@ -752,79 +1447,87 @@ if game.GameId == 847722000 then
 			safeDestroy(HidePartHightLight)
 			safeDestroy(HidePart)
 			pcall(function() genv.RakeGui = false end)
-			pcall(function() Rayfield:Destroy() end)
+			pcall(function() Obsidian:Destroy() end)
 		end,
 	})
 
-	ClientTab:CreateToggle({
-		Name = "FreeCam",
-		CurrentValue = st.freeCam,
-		Flag = "freeCam",
-		Callback = function(state)
-			_G.FreeCam = state == true
-			st.freeCam = _G.FreeCam
-			cfgSet("freeCam", st.freeCam)
-			if _G.FreeCam == true then
-				pcall(function()
+	local fogCons = {}
+	local fogLast = nil
 
-					FreeCamPart.CFrame = ClonedService("Players").LocalPlayer.Character.Head.CFrame
-				end)
-				repeat wait()
-					pcall(function()
-						function tweenPart(time,partto,TSCF)
-							local tweenService = ClonedService("TweenService")
-							local tweenInfo = TweenInfo.new(time, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, 0, false, 0)
-							local part = partto
-							local goal = {}
-							goal.CFrame = TSCF
-							local tween = __lt.cm("TweenService", "Create", part, tweenInfo, goal)
-							tween:Play()
-						end
-						ClonedService("Workspace").CurrentCamera.CameraType = Enum.CameraType.Scriptable
-						local mouse = ClonedService("Players").LocalPlayer:GetMouse()
-						ClonedService("Players").LocalPlayer.Character:WaitForChild("HumanoidRootPart").Anchored = true
-						ClonedService("Workspace").CurrentCamera.CameraSubject = FreeCamPart
-
-						FreeCamPart.CFrame = CFrame.new(FreeCamPart.Position,mouse.Hit.Position)
-						if __lt.cm("UserInputService", "IsKeyDown", Enum.KeyCode.Space) then
-							tweenPart(0.04,FreeCamPart,FreeCamPart.CFrame + Vector3.new(0,_G.FreeCamSpeed,0))
-							--FreeCamPart.CFrame = FreeCamPart.CFrame + Vector3.new(0,_G.FreeCamSpeed,0)
-						elseif __lt.cm("UserInputService", "IsKeyDown", Enum.KeyCode.LeftShift) then
-							tweenPart(0.04,FreeCamPart,FreeCamPart.CFrame + Vector3.new(0,-_G.FreeCamSpeed,0))
-							--FreeCamPart.CFrame = FreeCamPart.CFrame + Vector3.new(0,-_G.FreeCamSpeed,0)
-						end
-						if true then
-							if __lt.cm("UserInputService", "IsKeyDown", Enum.KeyCode.W) then
-								tweenPart(0.04,FreeCamPart,FreeCamPart.CFrame+FreeCamPart.CFrame.LookVector * _G.FreeCamSpeed)
-								-- FreeCamPart.CFrame = FreeCamPart.CFrame+FreeCamPart.CFrame.LookVector * _G.FreeCamSpeed
-							elseif __lt.cm("UserInputService", "IsKeyDown", Enum.KeyCode.S) then
-								tweenPart(0.04,FreeCamPart,FreeCamPart.CFrame+FreeCamPart.CFrame.LookVector * -_G.FreeCamSpeed)
-								-- FreeCamPart.CFrame = FreeCamPart.CFrame+FreeCamPart.CFrame.LookVector * -_G.FreeCamSpeed
-							end
-						end
-					end)
-				until _G.FreeCam == false
+	local function wipeFog()
+		for i = #fogCons, 1, -1 do
+			local c = fogCons[i]
+			if c then
 				pcall(function()
-					ClonedService("Players").LocalPlayer.Character.HumanoidRootPart.Anchored = false
-					ClonedService("Workspace").CurrentCamera.CameraType = Enum.CameraType.Custom
-					ClonedService("Workspace").CurrentCamera.CameraSubject = ClonedService("Players").LocalPlayer.Character.Head
+					c:Disconnect()
 				end)
 			end
-		end,
-	})
+			fogCons[i] = nil
+		end
+	end
 
-	ClientTab:CreateSlider({
-		Name = "FreeCam Speed",
-		Range = {0.01, 20},
-		Increment = 0.01,
-		CurrentValue = st.freeCamSpeed,
-		Flag = "Speed",
-		Callback = function(Value)
-			_G.FreeCamSpeed = tonumber(Value) or _G.FreeCamSpeed or 0.2
-			st.freeCamSpeed = _G.FreeCamSpeed
-			cfgSet("freeCamSpeed", st.freeCamSpeed)
-		end,
-	})
+	local function getFogValue()
+		local ok, obj = pcall(function()
+			local props = Rep:FindFirstChild("CurrentLightingProperties")
+			return props and props:FindFirstChild("FogEnd")
+		end)
+		local has = ok and obj and pcall(function()
+			local _ = obj.Value
+		end)
+		if ok and has and obj.GetPropertyChangedSignal then
+			return obj
+		end
+		return nil
+	end
+
+	local function bindFog(sig, fn)
+		local c = sig:Connect(fn)
+		fogCons[#fogCons + 1] = c
+		conns[#conns + 1] = c
+		return c
+	end
+
+	local function setFogOff(obj)
+		obj = obj or getFogValue()
+		if not obj then
+			return
+		end
+		if fogLast == nil then
+			fogLast = tonumber(obj.Value) or 75
+		end
+		if obj.Value ~= 9e9 then
+			obj.Value = 9e9
+		end
+	end
+
+	local function watchFog()
+		wipeFog()
+		if _G.NoFog ~= true then
+			return
+		end
+		local obj = getFogValue()
+		if obj then
+			setFogOff(obj)
+			bindFog(obj:GetPropertyChangedSignal("Value"), function()
+				if _G.NoFog == true then
+					setFogOff(obj)
+				end
+			end)
+		end
+		local props = Rep:FindFirstChild("CurrentLightingProperties")
+		if props then
+			bindFog(props.ChildAdded, function(ch)
+				if _G.NoFog == true and ch.Name == "FogEnd" then
+					task.defer(watchFog)
+				end
+			end)
+		end
+		bindFog(Rep.ChildAdded, function(ch)
+			if _G.NoFog == true and ch.Name == "CurrentLightingProperties" then
+				task.defer(watchFog)
+			end
+		end)
+	end
 
 	ClientTab:CreateToggle({
 		Name = "No Fog",
@@ -834,21 +1537,19 @@ if game.GameId == 847722000 then
 			_G.NoFog = state == true
 			st.noFog = _G.NoFog
 			cfgSet("noFog", st.noFog)
-			if state == false then
-				ClonedService("ReplicatedStorage").CurrentLightingProperties.FogEnd.Value = 75
+			if _G.NoFog == true then
+				watchFog()
+			else
+				wipeFog()
+				local obj = getFogValue()
+				if obj then
+					obj.Value = fogLast or 75
+				end
 			end
 		end,
 	})
 
-	-- no fog
-
-	bind(ClonedService("RunService").Heartbeat, function()
-		if AllowRunService == true then
-			if _G.NoFog == true then
-				ClonedService("ReplicatedStorage").CurrentLightingProperties.FogEnd.Value = 9e9
-			end
-		end
-	end)
+	watchFog()
 
 	ClientTab:CreateButton({
 		Name = "Third Person",
@@ -913,7 +1614,7 @@ if game.GameId == 847722000 then
 			_G.RakeKillAura = state == true
 			st.rakeAura = _G.RakeKillAura
 			cfgSet("rakeAura", st.rakeAura)
-			Rayfield:Notify({
+			Obsidian:Notify({
 				Title = "Rake Killaura",
 				Content = "Rake Killaura : "..tostring(_G.RakeKillAura),
 				Duration = 1,
@@ -980,6 +1681,17 @@ if game.GameId == 847722000 then
 			if not state and cleanupEsp then
 				cleanupEsp("rake")
 			end
+		end,
+	})
+
+	ClientTab:CreateToggle({
+		Name = "Rake Info Bubble",
+		CurrentValue = st.infoBubble,
+		Flag = "RakeInfoBubble",
+		Callback = function(state)
+			st.infoBubble = state == true
+			cfgSet("infoBubble", st.infoBubble)
+			setBubbleVisible(st.infoBubble)
 		end,
 	})
 
@@ -1058,12 +1770,40 @@ if game.GameId == 847722000 then
 		scraps = {},
 	}
 
-	local Locations = {
-		["Power_Station"] = Vector3.new(-281.6848449707031, 21.50823974609375, -212.7472686767578),
-		["Safe_House"] = Vector3.new(-363.491, 16.8744, 70.3037),
-		["Base_Camp"] = Vector3.new(-70.7132568359375, 17.61418914794922, 209.00674438476562),
-		["Shop"] = Vector3.new(-25.1567, 17.2076, -258.362),
-	}
+	local function getLocFolder()
+		local filter = ffc(ClonedService("Workspace"), "Filter")
+		return filter and ffc(filter, "LocationPoints") or nil
+	end
+
+	local function locName(obj)
+		local n = tostring(obj and obj.Name or "Location")
+		n = n:gsub("MSG$", "")
+		n = n:gsub("_", " ")
+		n = n:gsub("(%l)(%u)", "%1 %2")
+		return n
+	end
+
+	local function locPos(obj)
+		if not obj then
+			return nil
+		end
+		if obj:IsA("BasePart") then
+			return obj.Position
+		end
+		if obj:IsA("Model") then
+			local ok, cf = pcall(function()
+				return obj:GetPivot()
+			end)
+			return ok and cf and cf.Position or nil
+		end
+		if obj:IsA("CFrameValue") then
+			return obj.Value.Position
+		end
+		if obj:IsA("Vector3Value") then
+			return obj.Value
+		end
+		return nil
+	end
 
 	local function drawTxt(txt, col)
 		if not Drawing or not Drawing.new then
@@ -1077,7 +1817,7 @@ if game.GameId == 847722000 then
 		end
 		d.Text = txt or ""
 		d.Color = col or Color3.fromRGB(255, 255, 255)
-		d.Outline = st.espOutline == true
+		d.Outline = false
 		d.Center = true
 		d.Font = 2
 		d.Size = st.espSize or 12
@@ -1154,7 +1894,7 @@ if game.GameId == 847722000 then
 			end
 			d.Text = text
 			d.Size = st.espSize or d.Size
-			d.Outline = st.espOutline == true
+			d.Outline = false
 			d.Position = Vector2.new(p.X, p.Y)
 			d.Visible = true
 		else
@@ -1392,13 +2132,28 @@ if game.GameId == 847722000 then
 		updT = 0
 
 		if _G.LocationESP == true then
-			for name, pos in pairs(Locations) do
-				local d = esp.locs[name]
-				if not d then
-					d = drawTxt("[LOCATION] "..name, Color3.fromRGB(255, 136, 0))
-					esp.locs[name] = d
+			local root = getLocFolder()
+			local alive = {}
+			if root then
+				for _, obj in pairs(kids(root)) do
+					local pos = locPos(obj)
+					if pos then
+						alive[obj] = true
+						local name = locName(obj)
+						local d = esp.locs[obj]
+						if not d then
+							d = drawTxt("[LOCATION] "..name, Color3.fromRGB(255, 136, 0))
+							esp.locs[obj] = d
+						end
+						show(d, pos, "[LOCATION] "..name)
+					end
 				end
-				show(d, pos, "[LOCATION] "..name)
+			end
+			for obj, d in pairs(esp.locs) do
+				if not alive[obj] or not obj.Parent then
+					safeDrawRemove(d)
+					esp.locs[obj] = nil
+				end
 			end
 		else
 			cleanupEsp("locs")
@@ -1438,51 +2193,6 @@ if game.GameId == 847722000 then
 			show(it.d, _G.ScrapESP and posOf(v), scrapTxt(v))
 		end
 	end)
-
-	ExploitsTab:CreateToggle({
-		Name = "Hide",
-		CurrentValue = st.hide,
-		Flag = "Hide",
-		Callback = function(state)
-			st.hide = state == true
-			cfgSet("hide", st.hide)
-			if state == true then
-				if GET_HRP() ~= nil then
-					GET_HRP().Anchored = false
-					for i = 1,10 do
-						local lastY = GET_HRP().Position.Y
-
-						GET_HRP().CFrame = CFrame.new(GET_HRP().Position) + Vector3.new(0,5,0)
-						wait()
-						GET_HRP().CFrame = CFrame.new(ClonedService("Players").LocalPlayer.Character.HumanoidRootPart.Position) + Vector3.new(0,-5,0)
-					end
-					GET_HRP().CFrame = CFrame.new(ClonedService("Players").LocalPlayer.Character.HumanoidRootPart.Position) + Vector3.new(0,-15,0)
-					wait()
-					GET_HRP().Anchored = true
-					HidePart.Position = ClonedService("Players").LocalPlayer.Character.HumanoidRootPart.Position + Vector3.new(0,-505,0)
-					HidePartHightLight.Adornee = HidePart	
-					HidePartHightLight.Parent = HidePart	
-				end
-			elseif state == false then
-				if GET_HRP() ~= nil then
-					GET_HRP().Anchored = false
-					for i = 1,10 do
-						local lastY = GET_HRP().Position.Y
-
-						GET_HRP().CFrame = CFrame.new(ClonedService("Players").LocalPlayer.Character.HumanoidRootPart.Position) + Vector3.new(0,5,0)
-						wait()
-						GET_HRP().CFrame = CFrame.new(ClonedService("Players").LocalPlayer.Character.HumanoidRootPart.Position) + Vector3.new(0,-5,0)
-					end
-					GET_HRP().CFrame = CFrame.new(ClonedService("Players").LocalPlayer.Character.HumanoidRootPart.Position) + Vector3.new(0,15,0)
-					wait()
-
-					GET_HRP().Anchored = false
-					HidePartHightLight.Adornee = nil	
-					HidePartHightLight.Parent = nil		 
-				end	
-			end
-		end,
-	})
 
 	PlayerTab:CreateToggle({
 		Name = "No Fall Damage",
@@ -1648,24 +2358,57 @@ if game.GameId == 847722000 then
 		end,
 	})
 
-	-- no fall damage hook
-
-	local mt = getrawmetatable(game)
-	local namecall = mt.__namecall
-	setreadonly(mt, false)
-
-	mt.__namecall = function(self,...)
-		if _G.NoFallDMG == true then
-			local args = {...}
-			local method = getnamecallmethod()
-
-			if tostring(self) == "FD_Event" then
-				args[1] = 0
-				args[2] = 0
-				return self.FireServer(self,unpack(args))
-			end 
+	do
+		local env = getgenv and getgenv() or _G
+		local unpackFn = (table and table.unpack) or unpack
+		local function callArgs(fn, self, args)
+			if type(unpackFn) == "function" then
+				return fn(self, unpackFn(args))
+			end
+			return fn(self, args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10])
 		end
-		return namecall(self,...)
+
+		if not env.__rakeNoFallHook then
+			env.__rakeNoFallHook = true
+
+			if type(hookmetamethod) == "function" and type(getnamecallmethod) == "function" then
+				local hook
+				hook = hookmetamethod(game, "__namecall", function(self, ...)
+					if (not checkcaller or not checkcaller()) and _G.NoFallDMG == true then
+						local method = tostring(getnamecallmethod() or ""):lower()
+						if method == "fireserver" and tostring(self) == "FD_Event" then
+							local args = {...}
+							args[1] = 0
+							args[2] = 0
+							return callArgs(hook, self, args)
+						end
+					end
+					return hook(self, ...)
+				end)
+			elseif type(getrawmetatable) == "function" and type(setreadonly) == "function" and type(getnamecallmethod) == "function" then
+				local ok, mt = pcall(getrawmetatable, game)
+				if ok and type(mt) == "table" and mt.__namecall then
+					local namecall = mt.__namecall
+					setreadonly(mt, false)
+
+					local fn = function(self, ...)
+						if (not checkcaller or not checkcaller()) and _G.NoFallDMG == true then
+							local method = tostring(getnamecallmethod() or ""):lower()
+							if method == "fireserver" and tostring(self) == "FD_Event" then
+								local args = {...}
+								args[1] = 0
+								args[2] = 0
+								return callArgs(namecall, self, args)
+							end
+						end
+						return namecall(self, ...)
+					end
+
+					mt.__namecall = type(newcclosure) == "function" and newcclosure(fn) or fn
+					setreadonly(mt, true)
+				end
+			end
+		end
 	end
 
 	ExploitsTab:CreateToggle({
@@ -1722,12 +2465,20 @@ if game.GameId == 847722000 then
 		safeDestroy(HidePart)
 		genv.RakeGui = false
 		pcall(function()
-			Rayfield:Destroy()
+			Obsidian:Destroy()
 		end)
 	end
 
-	local RakeTargetCounter = ExploitsTab:CreateLabel("Rake's Target : ")
-	local TimeUntilDayCounter = ExploitsTab:CreateLabel("Time Until Day : ")
+	local RakeTargetCounter = {
+		Set = function(_, txt)
+			setInfoTarget(txt)
+		end,
+	}
+	local TimeUntilDayCounter = {
+		Set = function(_, txt)
+			setInfoTime(txt)
+		end,
+	}
 
 	-- update time until day label
 
@@ -1748,15 +2499,13 @@ if game.GameId == 847722000 then
 	bind(ClonedService("RunService").Heartbeat, function()
 		if AllowRunService == true then
 			pcall(function()
-				if __lt.cm("Workspace", "FindFirstChild", "Rake") then
-					if ClonedService("Workspace").Rake.TargetVal.Value == nil then
-
-					else
-						pcall(function()
-							RakeTargetCounter:Set("Rake's Target : "..tostring(ClonedService("Workspace").Rake.TargetVal.Value.Parent))
-						end)
-					end
-
+				local rk = __lt.cm("Workspace", "FindFirstChild", "Rake")
+				local tv = rk and rk:FindFirstChild("TargetVal")
+				local val = tv and tv.Value
+				if val and val.Parent then
+					RakeTargetCounter:Set("Rake's Target : " .. tostring(val.Parent))
+				else
+					RakeTargetCounter:Set("Rake's Target : none")
 				end
 			end)
 		end
@@ -1768,7 +2517,7 @@ if game.GameId == 847722000 then
 	bind(ClonedService("RunService").Heartbeat, function()
 		if AllowRunService == true then
 			if ClonedService("ReplicatedStorage").InitiateBloodHour.Value == true then
-				Rayfield:Notify({
+				Obsidian:Notify({
 					Title = "ALERT",
 					Content = "HOLY JESUS BLOOD HOUR IS COMING NOW",
 					Duration = 5,
@@ -1781,7 +2530,7 @@ if game.GameId == 847722000 then
 
 	if canCfg then
 		pcall(function()
-			Rayfield:LoadConfiguration()
+			Obsidian:LoadConfiguration()
 		end)
 	end
 end

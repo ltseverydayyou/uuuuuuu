@@ -107,6 +107,65 @@ local clone = game.Clone;
 local hookClone = clonefunction or function(fn)
 	return fn
 end;
+local function setMetatableReadonly(mt, readonly)
+	if type(setreadonly) == "function" then
+		setreadonly(mt, readonly)
+		return true
+	end
+	if readonly then
+		if type(make_readonly) == "function" then
+			make_readonly(mt)
+			return true
+		elseif type(makereadonly) == "function" then
+			makereadonly(mt)
+			return true
+		end
+	else
+		if type(make_writeable) == "function" then
+			make_writeable(mt)
+			return true
+		elseif type(makewritable) == "function" then
+			makewritable(mt)
+			return true
+		elseif type(makewriteable) == "function" then
+			makewriteable(mt)
+			return true
+		end
+	end
+	return false
+end
+
+local function safeCheckCaller()
+	if type(checkcaller) ~= "function" then
+		return false
+	end
+	local ok, result = pcall(checkcaller)
+	return ok and result or false
+end
+
+local function buildHookMetaMethodFallback()
+	if type(getrawmetatable) ~= "function" then
+		return nil
+	end
+	if type(hookfunction) ~= "function" and type(setreadonly) ~= "function" and type(make_writeable) ~= "function" and type(makewritable) ~= "function" and type(makewriteable) ~= "function" then
+		return nil
+	end
+	return function(obj, metamethod, func)
+		local mt = getrawmetatable(obj)
+		if type(mt) ~= "table" then
+			return nil
+		end
+		local old = mt[metamethod]
+		if type(hookfunction) == "function" and type(old) == "function" then
+			return hookfunction(old, func)
+		end
+		setMetatableReadonly(mt, false)
+		mt[metamethod] = func
+		setMetatableReadonly(mt, true)
+		return old
+	end
+end
+
 local function MeasureText(text, size, font, bounds)
 	local ts = ClonedService("TextService");
 	local ok, v = pcall(function()
@@ -224,7 +283,7 @@ tstate.descAddedInvokeConn = descAddedInvokeConn
 tstate.adonisBypassed = tstate.adonisBypassed or false
 local restoreFunction = restorefunction
 local hookFunction = hookfunction
-local hookMetaMethod = hookmetamethod
+local hookMetaMethod = hookmetamethod or buildHookMetaMethodFallback()
 local directHookState = {
 	fireServer = false,
 	invokeServer = false
@@ -1431,7 +1490,7 @@ local function disableIncomingHooks()
 		descAddedInvokeConn = nil
 	end
 	if tstate.oldNewIndex then
-		local restored = pcall(function()
+		local restored = hookMetaMethod and pcall(function()
 			hookMetaMethod(game, "__newindex", tstate.oldNewIndex)
 		end)
 		if restored then
@@ -1455,15 +1514,18 @@ local function enableIncomingHooks()
 	initClientInvokeLogging()
 	if not tstate.newIndexHooked and hookMetaMethod then
 		local oldNewIndex
-		oldNewIndex = hookMetaMethod(game, "__newindex", function(self, k, v)
-			if tstate.enabled and logClientEvents and not checkcaller() and typeof(self) == "Instance" and self:IsA("RemoteFunction") and k == "OnClientInvoke" and type(v) == "function" then
+		local ok, previous = pcall(hookMetaMethod, game, "__newindex", function(self, k, v)
+			if tstate.enabled and logClientEvents and not safeCheckCaller() and typeof(self) == "Instance" and self:IsA("RemoteFunction") and k == "OnClientInvoke" and type(v) == "function" then
 				wrapClientInvoke(self)
 				return oldNewIndex(self, k, wrapOnClientInvokeCallback(self, v))
 			end
 			return oldNewIndex(self, k, v)
 		end)
-		tstate.newIndexHooked = true
-		tstate.oldNewIndex = tstate.oldNewIndex or oldNewIndex
+		if ok and previous then
+			oldNewIndex = previous
+			tstate.newIndexHooked = true
+			tstate.oldNewIndex = tstate.oldNewIndex or previous
+		end
 	end
 end
 CopyCode.MouseButton1Click:Connect(function()
@@ -1952,12 +2014,12 @@ table.insert(connections, mouse.KeyDown:Connect(function(key)
 		TurtleSpyGUI.Enabled = not TurtleSpyGUI.Enabled;
 	end;
 end));
-if not tstate.hooked then
+if not tstate.hooked and hookMetaMethod then
 	local old
-	old = hookMetaMethod(game, "__namecall", function(self, ...)
+	local ok, previous = pcall(hookMetaMethod, game, "__namecall", function(self, ...)
 		local method = ((getnamecallmethod and getnamecallmethod()) or ""):lower()
 		if tstate.enabled then
-			if not checkcaller() and (method == "fireserver" or method == "invokeserver") then
+			if not safeCheckCaller() and (method == "fireserver" or method == "invokeserver") then
 				if table.find(BlockList, self) then
 					if method == "invokeserver" then
 						return nil
@@ -1977,13 +2039,16 @@ if not tstate.hooked then
 		end
 		return old(self, ...)
 	end)
-	tstate.hooked = true
-	tstate.old = tstate.old or old
+	if ok and previous then
+		old = previous
+		tstate.hooked = true
+		tstate.old = tstate.old or previous
+	end
 end
 if not directHookState.fireServer and hookFunction then
 	local oldFireServer
 	local hookedFireServer = hookClone(function(self, ...)
-		if tstate.enabled and typeof(self) == "Instance" and isRemoteEvent(self) and not checkcaller() then
+		if tstate.enabled and typeof(self) == "Instance" and isRemoteEvent(self) and not safeCheckCaller() then
 			if table.find(BlockList, self) then
 				return
 			end
@@ -2008,7 +2073,7 @@ end
 if not directHookState.invokeServer and hookFunction then
 	local oldInvokeServer
 	local hookedInvokeServer = hookClone(function(self, ...)
-		if tstate.enabled and typeof(self) == "Instance" and isA(self, "RemoteFunction") and not checkcaller() then
+		if tstate.enabled and typeof(self) == "Instance" and isA(self, "RemoteFunction") and not safeCheckCaller() then
 			if table.find(BlockList, self) then
 				return nil
 			end
@@ -2066,7 +2131,7 @@ tstate.cleanup = function()
 		end)
 		descAddedConn = nil
 	end
-	if tstate.old then
+	if tstate.old and hookMetaMethod then
 		local restored = pcall(function()
 			hookMetaMethod(game, "__namecall", tstate.old)
 		end)
@@ -2106,7 +2171,7 @@ tstate.cleanup = function()
 			directHookState.invokeServer = false
 		end
 	end
-	if tstate.oldNewIndex then
+	if tstate.oldNewIndex and hookMetaMethod then
 		local restored = pcall(function()
 			hookMetaMethod(game, "__newindex", tstate.oldNewIndex)
 		end)

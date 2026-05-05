@@ -130,13 +130,23 @@ local clonefunction = clonefunction or blankfunction
 local cloneref = cloneref or blankfunction
 local request = request or syn and syn.request
 local isfunctionhooked = isfunctionhooked
-local makewritable = makewriteable
+local rawMakeWritable = makewritable
+    or makewriteable
+    or make_writeable
+local rawMakeReadonly = makereadonly or make_readonly
+local canToggleReadonly = type(setreadonly) == 'function'
+    or type(rawMakeWritable) == 'function'
+local makewritable = rawMakeWritable
     or function(tbl)
-        setreadonly(tbl, false)
+        if type(setreadonly) == 'function' then
+            setreadonly(tbl, false)
+        end
     end
-local makereadonly = makereadonly
+local makereadonly = rawMakeReadonly
     or function(tbl)
-        setreadonly(tbl, true)
+        if type(setreadonly) == 'function' then
+            setreadonly(tbl, true)
+        end
     end
 local isreadonly = isreadonly or table.isfrozen
 
@@ -150,7 +160,10 @@ local setclipboard = setclipboard
 
 local nativeHookMetamethod = hookmetamethod
 local hookmetamethod = hookmetamethod
-    or (makewriteable and makereadonly and getrawmetatable)
+    or (
+        getrawmetatable
+        and (type(hookfunction) == 'function' or canToggleReadonly)
+    )
         and function(obj: object, metamethod: string, func: Function)
             local old = getrawmetatable(obj)
 
@@ -158,7 +171,7 @@ local hookmetamethod = hookmetamethod
                 return hookfunction(old[metamethod], func)
             else
                 local oldmetamethod = old[metamethod]
-                makewriteable(old)
+                makewritable(old)
                 old[metamethod] = func
                 makereadonly(old)
                 return oldmetamethod
@@ -1069,6 +1082,12 @@ local incomingHooksEnabled = false
 
 local originalEvent = remoteEvent.FireServer
 local originalFunction = remoteFunction.InvokeServer
+local baseRemoteEvent = Instance.new('RemoteEvent')
+local baseRemoteFunction = Instance.new('RemoteFunction')
+local baseFireServer = baseRemoteEvent.FireServer
+local baseInvokeServer = baseRemoteFunction.InvokeServer
+baseRemoteEvent:Destroy()
+baseRemoteFunction:Destroy()
 local GetDebugIDInvoke = GetDebugIdHandler.Invoke
 local internalRemotes = {}
 local preferIndexPaths = false
@@ -1193,14 +1212,15 @@ local caps = {
     getConnections = type(getconnections) == 'function',
     decompile = type(decompile) == 'function',
 }
-caps.anyHookMetamethod = type(nativeHookMetamethod) == 'function'
+caps.anyHookMetamethod = type(hookmetamethod) == 'function'
+    or type(nativeHookMetamethod) == 'function'
     or (caps.hookFunction and caps.rawMetatable)
     or (type(setreadonly) == 'function' and caps.rawMetatable)
 caps.namecallHook = caps.getNamecallMethod
     and ((synv3 and caps.hookAPI and caps.rawMetatable) or caps.anyHookMetamethod)
 caps.sendHooks = caps.namecallHook
     or ((synv3 and caps.hookAPI) or caps.hookFunction)
-caps.newIndexHook = caps.anyHookMetamethod and caps.checkCaller
+caps.newIndexHook = caps.anyHookMetamethod
 
 local function safeCheckCaller()
     if not caps.checkCaller then
@@ -2336,13 +2356,23 @@ local function selectCall(log, idx)
                 or ("%s:InvokeServer()"):format(r)
         end
     elseif rem:IsA("BindableEvent") then
-        g ..= argsLen > 0
-            and ("%s:Fire(unpack(args))"):format(r)
-            or ("%s:Fire()"):format(r)
+        if m == "event" and firesignal then
+            g ..= argsLen > 0
+                and ("firesignal(%s.Event, unpack(args))"):format(r)
+                or ("firesignal(%s.Event)"):format(r)
+        else
+            g ..= argsLen > 0
+                and ("%s:Fire(unpack(args))"):format(r)
+                or ("%s:Fire()"):format(r)
+        end
     elseif rem:IsA("BindableFunction") then
-        g ..= argsLen > 0
-            and ("%s:Invoke(unpack(args))"):format(r)
-            or ("%s:Invoke()"):format(r)
+        if m == "oninvoke" then
+            g ..= ("%s.OnInvoke = function(...)\n\treturn nil\nend"):format(r)
+        else
+            g ..= argsLen > 0
+                and ("%s:Invoke(unpack(args))"):format(r)
+                or ("%s:Invoke()"):format(r)
+        end
     end
 
     local retPrev = formatReturnValues and formatReturnValues(c.returns)
@@ -2643,9 +2673,17 @@ function genScript(remote, args, method)
                 gen ..= ("%s:InvokeServer(unpack(args))"):format(r)
             end
         elseif remote:IsA("BindableEvent") then
-            gen ..= ("%s:Fire(unpack(args))"):format(r)
+            if method == "event" and firesignal then
+                gen ..= ("firesignal(%s.Event, unpack(args))"):format(r)
+            else
+                gen ..= ("%s:Fire(unpack(args))"):format(r)
+            end
         elseif remote:IsA("BindableFunction") then
-            gen ..= ("%s:Invoke(unpack(args))"):format(r)
+            if method == "oninvoke" then
+                gen ..= ("%s.OnInvoke = function(...)\n\treturn nil\nend"):format(r)
+            else
+                gen ..= ("%s:Invoke(unpack(args))"):format(r)
+            end
         end
     else
         if remote:IsA("RemoteEvent") then
@@ -2665,9 +2703,17 @@ function genScript(remote, args, method)
                 gen ..= ("%s:InvokeServer()"):format(r)
             end
         elseif remote:IsA("BindableEvent") then
-            gen ..= ("%s:Fire()"):format(r)
+            if method == "event" and firesignal then
+                gen ..= ("firesignal(%s.Event)"):format(r)
+            else
+                gen ..= ("%s:Fire()"):format(r)
+            end
         elseif remote:IsA("BindableFunction") then
-            gen ..= ("%s:Invoke()"):format(r)
+            if method == "oninvoke" then
+                gen ..= ("%s.OnInvoke = function(...)\n\treturn nil\nend"):format(r)
+            else
+                gen ..= ("%s:Invoke()"):format(r)
+            end
         end
     end
     prevTables = {}
@@ -2780,12 +2826,32 @@ local function getConnectionScript(conn, fallbackFunc)
     end
 end
 
-local function logClientEvent(re: RemoteEvent)
+local function getIncomingSignal(inst)
+    if inst:IsA('RemoteEvent') or inst:IsA('UnreliableRemoteEvent') then
+        return inst.OnClientEvent, 'OnClientEvent'
+    elseif inst:IsA('BindableEvent') then
+        return inst.Event, 'Event'
+    end
+end
+
+local function getInvokeCallbackMember(inst)
+    if inst:IsA('RemoteFunction') then
+        return 'OnClientInvoke'
+    elseif inst:IsA('BindableFunction') then
+        return 'OnInvoke'
+    end
+end
+
+local function logClientEvent(re: Instance)
     pruneTrackedRemoteMaps(false)
     if internalRemotes[re] then
         return
     end
     if loggedClientEvent[re] then
+        return
+    end
+    local signal, methodName = getIncomingSignal(re)
+    if not signal then
         return
     end
     loggedClientEvent[re] = true
@@ -2799,7 +2865,7 @@ local function logClientEvent(re: RemoteEvent)
         local loggedAny = false
         local connections
         if caps.getConnections then
-            local ok, current = pcall(getconnections, re.OnClientEvent)
+            local ok, current = pcall(getconnections, signal)
             if ok and type(current) == 'table' then
                 connections = current
             end
@@ -2821,7 +2887,7 @@ local function logClientEvent(re: RemoteEvent)
 
                 captureRemoteCall({
                     remote = cloneref(re),
-                    method = 'OnClientEvent',
+                    method = methodName,
                     args = args,
                     argsLength = argsLength,
                     metaMethod = 'signal',
@@ -2839,7 +2905,7 @@ local function logClientEvent(re: RemoteEvent)
         if not loggedAny then
             captureRemoteCall({
                 remote = cloneref(re),
-                method = 'OnClientEvent',
+                method = methodName,
                 args = args,
                 argsLength = argsLength,
                 metaMethod = 'signal',
@@ -2849,7 +2915,7 @@ local function logClientEvent(re: RemoteEvent)
     end
 
     logConnectionFunctions[logConnection] = re
-    local conn = re.OnClientEvent:Connect(logConnection)
+    local conn = signal:Connect(logConnection)
     incomingClientConns[re] = conn
 end
 
@@ -2881,10 +2947,11 @@ local function wrapOnClientInvokeCallback(rf, callback)
         local callSource = safeDebugInfo(callback, 's')
         local callLine = safeDebugInfo(callback, 'l')
         local isExec = isexecutorclosure and callback and isexecutorclosure(callback)
+        local methodName = getInvokeCallbackMember(rf)
         local ok, results = pcall(function()
             return table_pack(captureRemoteCall({
                 remote = remoteRef,
-                method = 'OnClientInvoke',
+                method = methodName,
                 args = args,
                 argsLength = argsLength,
                 metaMethod = 'callback',
@@ -2929,16 +2996,20 @@ local function wrapClientInvoke(rf)
         return
     end
     wrappedClientInvoke[rf] = true
+    local callbackMember = getInvokeCallbackMember(rf)
+    if not callbackMember then
+        return
+    end
 
     local function getExistingInvokeCallback()
         if getcallbackmember then
-            local ok, cb = pcall(getcallbackmember, rf, 'OnClientInvoke')
+            local ok, cb = pcall(getcallbackmember, rf, callbackMember)
             if ok and type(cb) == 'function' then
                 return cb
             end
         end
         local ok, cb = pcall(function()
-            return rf.OnClientInvoke
+            return rf[callbackMember]
         end)
         if ok and type(cb) == 'function' then
             return cb
@@ -2951,7 +3022,7 @@ local function wrapClientInvoke(rf)
         and _origClientInvoke[rf] ~= current
         and not wrappedInvokeCallbacks[current]
     then
-        rf.OnClientInvoke = setWrappedOnClientInvoke(rf, current)
+        rf[callbackMember] = setWrappedOnClientInvoke(rf, current)
     end
 end
 
@@ -2969,7 +3040,10 @@ local function disableIncomingHooks()
     for remote, callback in pairs(_origClientInvoke) do
         if typeof(remote) == 'Instance' and type(callback) == 'function' then
             pcall(function()
-                remote.OnClientInvoke = callback
+                local callbackMember = getInvokeCallbackMember(remote)
+                if callbackMember then
+                    remote[callbackMember] = callback
+                end
             end)
         end
     end
@@ -2999,9 +3073,13 @@ local function disableIncomingHooks()
 end
 
 local function trackIncomingRemote(inst)
-    if inst:IsA('RemoteEvent') or inst:IsA('UnreliableRemoteEvent') then
+    if
+        inst:IsA('RemoteEvent')
+        or inst:IsA('UnreliableRemoteEvent')
+        or inst:IsA('BindableEvent')
+    then
         logClientEvent(inst)
-    elseif inst:IsA('RemoteFunction') then
+    elseif inst:IsA('RemoteFunction') or inst:IsA('BindableFunction') then
         wrapClientInvoke(inst)
     end
 end
@@ -3052,8 +3130,10 @@ local function enableIncomingHooks()
                     incomingHooksEnabled
                     and not safeCheckCaller()
                     and typeof(self) == 'Instance'
-                    and self:IsA('RemoteFunction')
-                    and k == 'OnClientInvoke'
+                    and (
+                        (self:IsA('RemoteFunction') and k == 'OnClientInvoke')
+                        or (self:IsA('BindableFunction') and k == 'OnInvoke')
+                    )
                     and type(v) == 'function'
                 then
                     return oldIncomingNewIndex(self, k, setWrappedOnClientInvoke(self, v))
@@ -3068,14 +3148,24 @@ local function enableIncomingHooks()
 
     if not descAddedConn then
         descAddedConn = game.DescendantAdded:Connect(function(inst)
-            if incomingHooksEnabled and (inst:IsA('RemoteEvent') or inst:IsA('UnreliableRemoteEvent')) then
+            if
+                incomingHooksEnabled
+                and (
+                    inst:IsA('RemoteEvent')
+                    or inst:IsA('UnreliableRemoteEvent')
+                    or inst:IsA('BindableEvent')
+                )
+            then
                 logClientEvent(inst)
             end
         end)
     end
     if not descAddedInvokeConn then
         descAddedInvokeConn = game.DescendantAdded:Connect(function(inst)
-            if incomingHooksEnabled and inst:IsA('RemoteFunction') then
+            if
+                incomingHooksEnabled
+                and (inst:IsA('RemoteFunction') or inst:IsA('BindableFunction'))
+            then
                 wrapClientInvoke(inst)
             end
         end)
@@ -4462,14 +4552,10 @@ local function disablehooks()
                 pcall(unhook, getrawmetatable(game).__namecall, RuntimeState.originalnamecall)
             end
             if hookState.fireServer and caps.unhookAPI and originalEvent then
-                pcall(unhook, Instance.new('RemoteEvent').FireServer, originalEvent)
+                pcall(unhook, baseFireServer, originalEvent)
             end
             if hookState.invokeServer and caps.unhookAPI and originalFunction then
-                pcall(
-                    unhook,
-                    Instance.new('RemoteFunction').InvokeServer,
-                    originalFunction
-                )
+                pcall(unhook, baseInvokeServer, originalFunction)
             end
             if hookState.namecall and caps.restoreFunction and RuntimeState.originalnamecall then
                 pcall(restorefunction, RuntimeState.originalnamecall)
@@ -4493,14 +4579,10 @@ local function disablehooks()
                 end
             end
             if hookState.fireServer and caps.hookFunction and originalEvent then
-                pcall(hookfunction, Instance.new('RemoteEvent').FireServer, originalEvent)
+                pcall(hookfunction, baseFireServer, originalEvent)
             end
             if hookState.invokeServer and caps.hookFunction and originalFunction then
-                pcall(
-                    hookfunction,
-                    Instance.new('RemoteFunction').InvokeServer,
-                    originalFunction
-                )
+                pcall(hookfunction, baseInvokeServer, originalFunction)
             end
         end
     end)
@@ -4538,19 +4620,19 @@ function toggleSpy()
                 if caps.hookAPI then
                     local okFire, oldFire = pcall(
                         hook,
-                        Instance.new('RemoteEvent').FireServer,
+                        baseFireServer,
                         clonefunction(newFireServer)
                     )
-                    if okFire then
+                    if okFire and oldFire then
                         originalEvent = oldFire
                         hookState.fireServer = true
                     end
                     local okInvoke, oldInvoke = pcall(
                         hook,
-                        Instance.new('RemoteFunction').InvokeServer,
+                        baseInvokeServer,
                         clonefunction(newInvokeServer)
                     )
-                    if okInvoke then
+                    if okInvoke and oldInvoke then
                         originalFunction = oldInvoke
                         hookState.invokeServer = true
                     end
@@ -4583,19 +4665,19 @@ function toggleSpy()
                 if caps.hookFunction then
                     local okFire, oldFire = pcall(
                         hookfunction,
-                        Instance.new('RemoteEvent').FireServer,
+                        baseFireServer,
                         clonefunction(newFireServer)
                     )
-                    if okFire then
+                    if okFire and oldFire then
                         originalEvent = oldFire
                         hookState.fireServer = true
                     end
                     local okInvoke, oldInvoke = pcall(
                         hookfunction,
-                        Instance.new('RemoteFunction').InvokeServer,
+                        baseInvokeServer,
                         clonefunction(newInvokeServer)
                     )
-                    if okInvoke then
+                    if okInvoke and oldInvoke then
                         originalFunction = oldInvoke
                         hookState.invokeServer = true
                     end
@@ -4644,7 +4726,10 @@ local function shutdown()
     for remote, callback in pairs(_origClientInvoke) do
         if typeof(remote) == 'Instance' and type(callback) == 'function' then
             pcall(function()
-                remote.OnClientInvoke = callback
+                local callbackMember = getInvokeCallbackMember(remote)
+                if callbackMember then
+                    remote[callbackMember] = callback
+                end
             end)
         end
     end
@@ -4955,7 +5040,7 @@ if caps.sendHooks then
 end
 
 newButton('Log Client', function()
-    return ('[%s] OnClientEvent/OnClientInvoke'):format(
+    return ('[%s] Incoming events/invokes'):format(
         configs.log_Receive and 'ON' or 'OFF'
     )
 end, function()

@@ -157,6 +157,9 @@ local EXM = 50
 local FGM = 2
 local LHW = 8
 local PCD = 0.15
+local FDM = 160
+local VLM = 20
+local RCH = 12
 
 local on = false
 local cur = nil
@@ -178,6 +181,9 @@ local locSeq = 0
 local roundCur = nil
 local roundTotal = nil
 local roundState = nil
+local safeCf = nil
+local safeAt = 0
+local voidAt = 0
 local rh
 
 local function current()
@@ -238,6 +244,9 @@ local function stop()
 	roundCur = nil
 	roundTotal = nil
 	roundState = nil
+	safeCf = nil
+	safeAt = 0
+	voidAt = 0
 	killPlat()
 	releaseRoot()
 	if gui and gui.Parent then
@@ -437,6 +446,73 @@ local function pivotRootTo(cf, r, c)
 			r:PivotTo(cf)
 		end)
 	end
+end
+
+local function voidY()
+	local y = -500
+	if Wsp then
+		pcall(function()
+			local v = Wsp.FallenPartsDestroyHeight
+			if type(v) == "number" and v == v then
+				y = v
+			end
+		end)
+	end
+	return y
+end
+
+local function limVel(r, hard)
+	if not r or not r.Parent then
+		return
+	end
+	pcall(function()
+		local v = r.AssemblyLinearVelocity
+		local x = math.clamp(v.X, -VLM, VLM)
+		local y = v.Y
+		if hard then
+			y = math.clamp(y, -VLM, VLM)
+		elseif y < -VLM then
+			y = -VLM
+		end
+		local z = math.clamp(v.Z, -VLM, VLM)
+		r.AssemblyLinearVelocity = Vector3.new(x, y, z)
+		local a = r.AssemblyAngularVelocity
+		if a.Magnitude > VLM then
+			r.AssemblyAngularVelocity = a.Unit * VLM
+		end
+	end)
+end
+
+local function saveSafe(r)
+	if not r or not r.Parent then
+		return
+	end
+	local y = voidY()
+	local pos = r.Position
+	if pos.Y > y + FDM then
+		safeCf = r.CFrame
+		safeAt = os.clock()
+	end
+end
+
+local function safeMapCf(map, r)
+	local y = voidY()
+	if safeCf and safeCf.Position.Y > y + FDM then
+		return safeCf + Vector3.new(0, RCH, 0)
+	end
+	if map and map.Parent then
+		local ok, cf, sz = pcall(map.GetBoundingBox, map)
+		if ok and cf and sz then
+			local pos = cf.Position + Vector3.new(0, sz.Y / 2 + RCH, 0)
+			if pos.Y > y + FDM then
+				return CFrame.new(pos)
+			end
+		end
+	end
+	if r and r.Parent then
+		return CFrame.new(r.Position.X, y + FDM + RCH, r.Position.Z)
+	end
+	return CFrame.new(0, y + FDM + RCH, 0)
 end
 
 local function inState(nm)
@@ -690,38 +766,33 @@ local function fuseRange(src, hit)
 end
 
 local function waitFuseRange(src, hit, keepGoing)
-	for _ = 1, 8 do
-		if keepGoing and not keepGoing() then
-			return nil
-		end
-		local p = fuseRange(src, hit)
-		if p then
-			return p
-		end
-		task.wait(0.05)
+	if keepGoing and not keepGoing() then
+		return nil
 	end
-	return nil
+	return fuseRange(src, hit)
 end
 
 local function moveFuseSafe(src, hit, r, keepGoing)
-	local function place(cen, rad)
-		local flat = Vector3.new(r.Position.X - cen.X, 0, r.Position.Z - cen.Z)
-		if flat.Magnitude < 0.1 then
-			flat = Vector3.new(1, 0, 0)
-		end
-		local safe = cen + flat.Unit * (rad + FGM) + Vector3.new(0, ESY, 0)
-		pcall(function()
-			pivotRootTo(CFrame.new(safe), r)
-			r.Anchored = true
-		end)
+	if keepGoing and not keepGoing() then
+		return
 	end
-
-	place(hit.Position, 10)
-
-	local range = waitFuseRange(src, hit, keepGoing)
-	if range and r.Parent and (not keepGoing or keepGoing()) then
-		place(range.Position, math.max(range.Size.X, range.Size.Y, range.Size.Z) / 2)
+	if not hit or not hit.Parent then
+		return
 	end
+	if not r or not r.Parent then
+		r = select(1, rh(false))
+	end
+	if not r or not r.Parent then
+		return
+	end
+	local sp = fuseRange(src, hit)
+	local pos = sp and sp.Parent and sp.Position or (hit.Position + Vector3.new(0, ESY, 0))
+	pcall(function()
+		pivotRootTo(CFrame.new(pos), r)
+		r.AssemblyLinearVelocity = Vector3.zero
+		r.AssemblyAngularVelocity = Vector3.zero
+		r.Anchored = true
+	end)
 end
 
 local function pressMapButton(hit)
@@ -855,23 +926,42 @@ local function antiVoid(getMap)
 		if not r then
 			return
 		end
-		if r.Position.Y >= VDY then
+
+		local fy = voidY()
+		local pos = r.Position
+		local vel = Vector3.zero
+		pcall(function()
+			vel = r.AssemblyLinearVelocity
+		end)
+
+		local nearVoid = pos.Y <= fy + FDM
+		local badFall = vel.Y < -VLM and pos.Y <= fy + FDM * 2
+
+		if not nearVoid and not badFall then
+			saveSafe(r)
 			return
 		end
+
+		if nearVoid or badFall then
+			limVel(r, nearVoid)
+		end
+
 		local map = nil
 		local ok, res = pcall(getMap)
 		if ok then
 			map = res
 		end
-		if map and map.Parent then
-			local ok2, cf, sz = pcall(map.GetBoundingBox, map)
-			if ok2 and cf and sz then
-				pcall(function()
-					pivotRootTo(CFrame.new(cf.Position + Vector3.new(0, sz.Y / 2 + 8, 0)), r)
-				end)
-				mkPlat(r)
-				note("Recovered from void")
-			end
+
+		local cf = safeMapCf(map, r)
+		pcall(function()
+			pivotRootTo(cf, r)
+		end)
+		limVel(r, true)
+		mkPlat(r)
+
+		if os.clock() - voidAt > 1 then
+			voidAt = os.clock()
+			note("Recovered from void")
 		end
 	end)
 end
@@ -940,6 +1030,8 @@ local function onMap(map, id)
 		if not r or not h or not map or not map.Parent then
 			return
 		end
+		safeCf = r.CFrame
+		safeAt = os.clock()
 
 		local st = ffc(map, "Settings", false)
 		local nm = nil

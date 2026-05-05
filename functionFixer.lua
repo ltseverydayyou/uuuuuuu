@@ -407,7 +407,10 @@ if isPoopSploit then
 end;
 
 if isPoopSploit then
-	local touchState = {};
+	local Players = __lt.cs("Players", cloneref);
+	local touchState = setmetatable({}, {
+		__mode = "k"
+	});
 
 	local function snapshot(part)
 		local vel, ang = Vector3.zero, Vector3.zero;
@@ -463,68 +466,155 @@ if isPoopSploit then
 		end);
 	end;
 
-	local function getRoot(p)
+	local function restoreTouchProps(part, snap)
+		if not (snap and part and part.Parent) then
+			return;
+		end;
+		pcall(function()
+			part.CanTouch = snap.CT;
+			part.CanQuery = snap.CQ;
+		end);
+	end;
+
+	local function getPart(p)
 		if typeof(p) ~= "Instance" or (not p:IsA("BasePart")) then
 			return nil;
 		end;
-		return p.AssemblyRootPart or p;
+		return p;
+	end;
+
+	local function getRoot(p)
+		if not p then
+			return nil;
+		end;
+		local root = nil;
+		pcall(function()
+			root = p.AssemblyRootPart;
+		end);
+		return root or p;
+	end;
+
+	local function getPair(partA, partB, create)
+		local map = touchState[partA];
+		if not map and create then
+			map = setmetatable({}, {
+				__mode = "k"
+			});
+			touchState[partA] = map;
+		end;
+		return map and map[partB], map;
+	end;
+
+	local function isLocalCharacterPart(part)
+		local lp = Players and Players.LocalPlayer;
+		local char = lp and lp.Character;
+		return char and part:IsDescendantOf(char);
+	end;
+
+	local function chooseMover(partA, partB)
+		local aLocal = isLocalCharacterPart(partA);
+		local bLocal = isLocalCharacterPart(partB);
+		if aLocal and not bLocal then
+			return partB, partA;
+		end;
+		if bLocal and not aLocal then
+			return partA, partB;
+		end;
+		return partA, partB;
+	end;
+
+	local function setTouchProps(part)
+		pcall(function()
+			if part.CanTouch == false then
+				part.CanTouch = true;
+			end;
+			if part.CanQuery == false then
+				part.CanQuery = true;
+			end;
+		end);
+	end;
+
+	local function moveIntoTouch(mover, target)
+		local root = getRoot(mover);
+		if not root then
+			return nil;
+		end;
+		local rootSnap = snapshot(root);
+		local moverSnap = mover == root and rootSnap or snapshot(mover);
+		local targetSnap = snapshot(target);
+		local offset = root.CFrame:ToObjectSpace(mover.CFrame);
+		pcall(function()
+			root.AssemblyLinearVelocity = Vector3.zero;
+			root.AssemblyAngularVelocity = Vector3.zero;
+		end);
+		pcall(function()
+			root.CanCollide = false;
+		end);
+		pcall(function()
+			mover.CanCollide = false;
+		end);
+		setTouchProps(root);
+		setTouchProps(mover);
+		setTouchProps(target);
+		pcall(function()
+			root.CFrame = target.CFrame * offset:Inverse();
+		end);
+		return {
+			root = root,
+			mover = mover,
+			target = target,
+			rootSnap = rootSnap,
+			moverSnap = moverSnap,
+			targetSnap = targetSnap
+		};
 	end;
 
 	_env.firetouchinterest = function(partA, partB, state)
-		local handle = getRoot(partA);
-		local target = getRoot(partB);
-		if not handle or (not target) then
+		partA = getPart(partA);
+		partB = getPart(partB);
+		if not partA or (not partB) then
 			return false;
 		end;
 		state = tonumber(state) or 0;
 		state = state == 1 and 1 or 0;
-		local st = touchState[target];
+		local st, map = getPair(partA, partB, state == 0);
 		if state == 0 then
 			if not st then
-				st = {
-					ref = 0,
-					handle = handle,
-					handleCT = handle.CanTouch,
-					snap = snapshot(target)
-				};
-				touchState[target] = st;
+				local mover, target = chooseMover(partA, partB);
+				st = moveIntoTouch(mover, target);
+				if not st then
+					return false;
+				end;
+				st.partA = partA;
+				st.partB = partB;
+				st.ref = 0;
+				map[partB] = st;
 			end;
 			st.ref += 1;
-			if handle.CanTouch == false then
-				handle.CanTouch = true;
-			end;
-			if target.CanTouch == false then
-				target.CanTouch = true;
-			end;
-			if target.CanQuery == false then
-				target.CanQuery = true;
-			end;
-			pcall(function()
-				target.CanCollide = false;
-			end);
-			pcall(function()
-				target.Massless = true;
-			end);
-			pcall(function()
-				target.CollisionGroupId = handle.CollisionGroupId;
-			end);
-			pcall(function()
-				target.AssemblyLinearVelocity = Vector3.zero;
-				target.AssemblyAngularVelocity = Vector3.zero;
-				target.CFrame = handle.CFrame;
-			end);
 			hb(1);
 		else
 			if st then
-				restore(target, st.snap);
-				if st.handle and st.handle.Parent and st.handleCT ~= nil then
-					pcall(function()
-						st.handle.CanTouch = st.handleCT;
-					end);
-				end;
 				st.ref -= 1;
 				if st.ref <= 0 then
-					touchState[target] = nil;
+					restore(st.root, st.rootSnap);
+					if st.mover ~= st.root then
+						restore(st.mover, st.moverSnap);
+					end;
+					restoreTouchProps(st.target, st.targetSnap);
+					map[partB] = nil;
+				end;
+			else
+				local reverse, reverseMap = getPair(partB, partA, false);
+				if reverse then
+					reverse.ref -= 1;
+					if reverse.ref <= 0 then
+						restore(reverse.root, reverse.rootSnap);
+						if reverse.mover ~= reverse.root then
+							restore(reverse.mover, reverse.moverSnap);
+						end;
+						restoreTouchProps(reverse.target, reverse.targetSnap);
+						reverseMap[partA] = nil;
+					end;
 				end;
 			end;
 			hb(1);

@@ -194,6 +194,7 @@ if game.GameId == 847722000 then
 	st.uiCorner = cfgNum("uiCorner", 4, 0, 20)
 	st.uiDpi = cfgNum("uiDpi", 100, 50, 200)
 	st.infoBubble = cfgBool("infoBubble", true)
+	st.adonisBypass = cfgBool("adonisBypass", true)
 	_G.FieldOfView = st.fov
 	_G.enableFOV = st.fovOn
 	_G.WalkSpeedd = st.spd
@@ -223,6 +224,128 @@ if game.GameId == 847722000 then
 		local Reference = (cloneref) or function(reference) return reference end
 		return __lt.cs(name, Reference);
 	end
+
+	local function resolveAdonisEnv()
+		local gc = getgc or (debug and debug.getgc)
+		local hookf = hookfunction
+		local env = getrenv
+		local renv = nil
+		if type(env) == "function" then
+			pcall(function()
+				renv = env()
+			end)
+		end
+		local dbgInfo = (type(renv) == "table" and renv.debug and renv.debug.info) or (debug and debug.info)
+		local newcc = newcclosure or function(fn)
+			return fn
+		end
+		local typeOf = typeof or function(value)
+			return type(value)
+		end
+		return gc, hookf, env, dbgInfo, newcc, typeOf
+	end
+
+	local function eachAdonisGc(fn)
+		local gc = getgc or (debug and debug.getgc)
+		if type(gc) ~= "function" then
+			return false
+		end
+		local ok, list = pcall(gc, true)
+		if not ok or type(list) ~= "table" then
+			return false
+		end
+		for _, value in next, list do
+			local stop = fn(value)
+			if stop then
+				return true
+			end
+		end
+		return true
+	end
+
+	local function detectAdonis()
+		local gc, hookf, env, dbgInfo, _, typeOf = resolveAdonisEnv()
+		if not (type(gc) == "function" and type(hookf) == "function" and type(env) == "function" and type(dbgInfo) == "function") then
+			return false
+		end
+		local found = false
+		eachAdonisGc(function(value)
+			if typeOf(value) == "table" then
+				local hasDetected = typeOf(rawget(value, "Detected")) == "function"
+				local hasKill = typeOf(rawget(value, "Kill")) == "function"
+				local hasVars = rawget(value, "Variables") ~= nil
+				local hasProcess = rawget(value, "Process") ~= nil
+				if hasDetected or (hasKill and hasVars and hasProcess) then
+					found = true
+					return true
+				end
+			end
+		end)
+		return found
+	end
+
+	local function bypassAdonis()
+		local gc, hookf, env, dbgInfo, newcc, typeOf = resolveAdonisEnv()
+		if not (type(gc) == "function" and type(hookf) == "function" and type(env) == "function" and type(dbgInfo) == "function") then
+			return false
+		end
+		local DetectedMeth, KillMeth
+		eachAdonisGc(function(value)
+			if typeOf(value) == "table" then
+				local detected = rawget(value, "Detected")
+				local kill = rawget(value, "Kill")
+				if typeOf(detected) == "function" and not DetectedMeth then
+					DetectedMeth = detected
+					pcall(function()
+						hookf(DetectedMeth, function(methodName, methodFunc)
+							if methodName ~= "_" then end
+							return true
+						end)
+					end)
+				end
+				if rawget(value, "Variables") and rawget(value, "Process") and typeOf(kill) == "function" and not KillMeth then
+					KillMeth = kill
+					pcall(function()
+						hookf(KillMeth, function(killFunc) end)
+					end)
+				end
+				if DetectedMeth and KillMeth then
+					return true
+				end
+			end
+		end)
+		if DetectedMeth and dbgInfo then
+			local old
+			pcall(function()
+				old = hookf(dbgInfo, newcc(function(...)
+					local functionName = ...
+					if functionName == DetectedMeth then
+						return coroutine.yield(coroutine.running())
+					end
+					return old(...)
+				end))
+			end)
+		end
+		return DetectedMeth ~= nil
+	end
+
+	local function runAdonisBypass(force)
+		if st.adonisBypass ~= true and force ~= true then
+			return false
+		end
+		if genv.RakeAdonisBypassed then
+			return true
+		end
+		local ok, detected = pcall(detectAdonis)
+		if ok and detected and bypassAdonis() then
+			genv.RakeAdonisBypassed = true
+			return true
+		end
+		return false
+	end
+
+	_G.RakeAdonisBypass = st.adonisBypass
+	task.spawn(runAdonisBypass)
 
 	if syn then
 		__lt.cm("StarterGui", "SetCore", "SendNotification", {
@@ -1397,6 +1520,22 @@ if game.GameId == 847722000 then
 	})
 
 	SettingsTab:CreateDivider()
+
+	SettingsTab:CreateToggle({
+		Name = "Adonis Bypass",
+		CurrentValue = st.adonisBypass,
+		Flag = "Settings_AdonisBypass",
+		Callback = function(v)
+			st.adonisBypass = v == true
+			_G.RakeAdonisBypass = st.adonisBypass
+			cfgSet("adonisBypass", st.adonisBypass)
+			if st.adonisBypass then
+				task.spawn(function()
+					runAdonisBypass(true)
+				end)
+			end
+		end,
+	})
 
 	SettingsTab:CreateSlider({
 		Name = "ESP Text Size",

@@ -25,6 +25,64 @@ local __lt = (function()
 	end;
 	return loaded;
 end)();
+local __NAUIProtector = (function()
+	local globalEnv = (getgenv and getgenv()) or _G or {};
+	local sharedEnv = rawget(_G, "shared");
+	local cacheHost = type(sharedEnv) == "table" and sharedEnv or (type(globalEnv) == "table" and globalEnv or nil);
+	if cacheHost then
+		local cached = rawget(cacheHost, "__lt_ui_protector");
+		if type(cached) == "table" then
+			return cached;
+		end;
+	end;
+	local loader = loadstring or load;
+	if type(loader) ~= "function" then
+		return nil;
+	end;
+	local okSource, source = pcall(function()
+		return game:HttpGet("https://ltseverydayyou.github.io/UIprotector.luau");
+	end);
+	if not okSource or type(source) ~= "string" or source == "" then
+		return nil;
+	end;
+	local chunk = loader(source, "@UIprotector.luau");
+	if type(chunk) ~= "function" then
+		return nil;
+	end;
+	local okLoaded, loaded = pcall(chunk);
+	if okLoaded and type(loaded) == "table" then
+		if cacheHost then
+			cacheHost.__lt_ui_protector = loaded;
+		end;
+		return loaded;
+	end;
+	return nil;
+end)();
+local __NAOriginalGetHui = gethui;
+local gethui = function()
+	if __NAUIProtector and type(__NAUIProtector.huiGrabber) == "function" then
+		local ok, ui = pcall(__NAUIProtector.huiGrabber);
+		if ok and typeof(ui) == "Instance" then
+			return ui;
+		end;
+	end;
+	if type(__NAOriginalGetHui) == "function" then
+		local ok, ui = pcall(__NAOriginalGetHui);
+		if ok then
+			return ui;
+		end;
+	end;
+	return nil;
+end;
+local function __NAProtectUI(gui, options)
+	if __NAUIProtector and type(__NAUIProtector.protectUI) == "function" then
+		local ok, protected = pcall(__NAUIProtector.protectUI, gui, options);
+		if ok and protected then
+			return protected;
+		end;
+	end;
+	return nil;
+end;
 
 if
     getgenv().SimpleSpyExecuted
@@ -199,6 +257,10 @@ local function SafeGetService(name)
 end
 
 local function protectUI(sGui)
+	local protected = __NAProtectUI(sGui)
+	if protected then
+		return protected
+	end
     if sGui:IsA('ScreenGui') then
         sGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
         sGui.DisplayOrder = 999999999
@@ -416,7 +478,16 @@ local TweenService = SafeGetService('TweenService')
 local ContentProvider = SafeGetService('ContentProvider')
 local TextService = SafeGetService('TextService')
 local http = SafeGetService('HttpService')
-local GuiInset = SafeGetService('GuiService'):GetGuiInset() :: Vector2 -- pulled from rewrite
+local GuiService = SafeGetService('GuiService')
+local GuiInset = Vector2.zero
+
+local function getInset()
+    local ok, inset = pcall(GuiService.GetGuiInset, GuiService)
+    if ok and typeof(inset) == 'Vector2' then
+        GuiInset = inset
+    end
+    return GuiInset
+end
 
 local function jsone(str)
     return http:JSONEncode(str)
@@ -496,11 +567,11 @@ do
     local syntaxMaxChars = math.max(0, tonumber(rawget(getgenv(), 'SimpleSpySyntaxMaxChars')) or 20000)
     local displayMaxChars = math.max(1000, tonumber(rawget(getgenv(), 'SimpleSpyCodeDisplayMaxChars')) or 40000)
     local colors = {
-        plain = Color3.fromRGB(235, 235, 235),
+        plain = Color3.fromRGB(248, 248, 248),
         keyword = Color3.fromRGB(255, 120, 160),
         global = Color3.fromRGB(132, 203, 255),
         string = Color3.fromRGB(166, 226, 128),
-        comment = Color3.fromRGB(112, 122, 132),
+        comment = Color3.fromRGB(150, 158, 168),
         number = Color3.fromRGB(255, 214, 112),
         func = Color3.fromRGB(130, 230, 210),
         method = Color3.fromRGB(118, 194, 255),
@@ -545,6 +616,7 @@ do
 
     local function buildHighlightLayers(source)
         local buffers = {
+            plains = {},
             keywords = {}, globals = {}, strings = {}, comments = {}, numbers = {},
             funcs = {}, methods = {}, properties = {}, operators = {}, brackets = {},
         }
@@ -558,9 +630,10 @@ do
         end
         local function appendPlain(text)
             for i = 1, #text do
-                local ch = blankFor(text:sub(i, i))
-                for _, arr in pairs(buffers) do
-                    arr[#arr + 1] = ch
+                local rawCh = text:sub(i, i)
+                local blankCh = blankFor(rawCh)
+                for key, arr in pairs(buffers) do
+                    arr[#arr + 1] = (key == 'plains') and rawCh or blankCh
                 end
             end
         end
@@ -715,6 +788,7 @@ do
             Size = UDim2.fromScale(1, 1),
         })
         local layers = {
+            plains = makeLayer(content, 'Plain', colors.plain),
             keywords = makeLayer(content, 'Keywords', colors.keyword),
             globals = makeLayer(content, 'Globals', colors.global),
             strings = makeLayer(content, 'Strings', colors.string),
@@ -965,6 +1039,50 @@ do
         Size = UDim2.new(0, 9, 0, 9),
         Image = 'http://www.roblox.com/asset/?id=5597105827',
     })
+    ui.ResizeRight = Create('TextButton', {
+        Parent = ui.Background,
+        Active = true,
+        AutoButtonColor = false,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Position = UDim2.new(1, -10, 0, 19),
+        Size = UDim2.new(0, 10, 1, -19),
+        Text = '',
+        ZIndex = 100000000,
+    })
+    ui.ResizeBottom = Create('TextButton', {
+        Parent = ui.Background,
+        Active = true,
+        AutoButtonColor = false,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0, 0, 1, -10),
+        Size = UDim2.new(1, 0, 0, 10),
+        Text = '',
+        ZIndex = 100000000,
+    })
+    ui.ResizeBottomRight = Create('TextButton', {
+        Parent = ui.Background,
+        Active = true,
+        AutoButtonColor = false,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Position = UDim2.new(1, -16, 1, -16),
+        Size = UDim2.new(0, 16, 0, 16),
+        Text = '',
+        ZIndex = 100000001,
+    })
+    ui.ResizeBottomLeft = Create('TextButton', {
+        Parent = ui.Background,
+        Active = true,
+        AutoButtonColor = false,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Position = UDim2.new(0, 0, 1, -16),
+        Size = UDim2.new(0, 16, 0, 16),
+        Text = '',
+        ZIndex = 100000001,
+    })
     ui.NextButton = Create('TextButton', {
         Parent = ui.SimpleSpy3,
         Position = UDim2.new(0, 100, 0, 60),
@@ -1064,6 +1182,50 @@ local RuntimeState = {
     running_threads = {},
     originalnamecall = nil,
 }
+
+local function isIg()
+    return ui.SimpleSpy3.IgnoreGuiInset == true
+end
+
+local function getMP()
+    local p = UserInputService:GetMouseLocation()
+    if isIg() then
+        return p
+    end
+    return p - getInset()
+end
+
+local function getIY()
+    if isIg() then
+        return 0
+    end
+    return getInset().Y
+end
+
+RuntimeState.ptr = function(input)
+    if input and input.UserInputType == Enum.UserInputType.Touch and typeof(input.Position) == 'Vector3' then
+        return Vector2.new(input.Position.X, input.Position.Y)
+    end
+    local p = UserInputService:GetMouseLocation()
+    return Vector2.new(p.X, p.Y)
+end
+
+RuntimeState.dragHit = function(input)
+    local p = RuntimeState.ptr(input)
+    if isInDragRange and isInDragRange(p) then
+        return true
+    end
+    local inset = getInset()
+    if inset.X ~= 0 or inset.Y ~= 0 then
+        if isInDragRange and isInDragRange(p - inset) then
+            return true
+        end
+        if isInDragRange and isInDragRange(p + inset) then
+            return true
+        end
+    end
+    return false
+end
 
 local remoteEvent = Instance.new('RemoteEvent', ui.Storage)
 local remoteFunction = Instance.new('RemoteFunction', ui.Storage)
@@ -1436,7 +1598,7 @@ function bringBackOnResize()
             > (
                 viewportSize.Y
                 - (closed and 19 or ui.Background.AbsoluteSize.Y)
-                - GuiInset.Y
+                - getIY()
             )
         )
     then
@@ -1445,7 +1607,7 @@ function bringBackOnResize()
         else
             currentY = viewportSize.Y
                 - (closed and 19 or ui.Background.AbsoluteSize.Y)
-                - GuiInset.Y
+                - getIY()
         end
     end
     TweenService.Create(
@@ -1463,51 +1625,31 @@ function onBarInput(input)
         input.UserInputType == Enum.UserInputType.MouseButton1
         or input.UserInputType == Enum.UserInputType.Touch
     then
-        local lastPos = UserInputService:GetMouseLocation()
-        local mainPos = ui.Background.AbsolutePosition
-        local offset = mainPos - lastPos
-        local currentPos = offset + lastPos
+        local startPos = RuntimeState.ptr(input)
+        local mainPos = ui.Background.Position
+        local mainX = mainPos.X.Offset
+        local mainY = mainPos.Y.Offset
+        local currentPos = Vector2.new(mainX, mainY)
         if not RuntimeState.connections['drag'] then
             RuntimeState.connections['drag'] = RunService.RenderStepped:Connect(function()
-                local newPos = UserInputService:GetMouseLocation()
-                if newPos ~= lastPos then
-                    local currentX = (offset + newPos).X
-                    local currentY = (offset + newPos).Y
+                local newPos = RuntimeState.ptr(input)
+                if newPos ~= startPos then
+                    local delta = newPos - startPos
+                    local currentX = mainX + delta.X
+                    local currentY = mainY + delta.Y
                     local viewportSize =
                         SafeGetService('Workspace').CurrentCamera.ViewportSize
-                    if
-                        (currentX < 0 and currentX < currentPos.X)
-                        or (
-                            currentX
-                                > (viewportSize.X - (sideClosed and 131 or ui.TopBar.AbsoluteSize.X))
-                            and currentX > currentPos.X
-                        )
-                    then
-                        if currentX < 0 then
-                            currentX = 0
-                        else
-                            currentX = viewportSize.X
-                                - (sideClosed and 131 or ui.TopBar.AbsoluteSize.X)
-                        end
+                    if currentX < 0 then
+                        currentX = 0
+                    elseif currentX > viewportSize.X - (sideClosed and 131 or ui.TopBar.AbsoluteSize.X) then
+                        currentX = viewportSize.X - (sideClosed and 131 or ui.TopBar.AbsoluteSize.X)
                     end
-                    if
-                        (currentY < 0 and currentY < currentPos.Y)
-                        or (
-                            currentY
-                                > (viewportSize.Y - (closed and 19 or ui.Background.AbsoluteSize.Y) - GuiInset.Y)
-                            and currentY > currentPos.Y
-                        )
-                    then
-                        if currentY < 0 then
-                            currentY = 0
-                        else
-                            currentY = viewportSize.Y
-                                - (closed and 19 or ui.Background.AbsoluteSize.Y)
-                                - GuiInset.Y
-                        end
+                    if currentY < 0 then
+                        currentY = 0
+                    elseif currentY > viewportSize.Y - (closed and 19 or ui.Background.AbsoluteSize.Y) - getIY() then
+                        currentY = viewportSize.Y - (closed and 19 or ui.Background.AbsoluteSize.Y) - getIY()
                     end
                     currentPos = Vector2.new(currentX, currentY)
-                    lastPos = newPos
                     TweenService.Create(
                         TweenService,
                         ui.Background,
@@ -1725,13 +1867,12 @@ function toggleMaximize()
             )
             :Play()
         disable.MouseButton1Click:Connect(function()
+            local p = getMP()
             if
-                UserInputService:GetMouseLocation().Y + GuiInset.Y
-                    >= ui.CodeBox.AbsolutePosition.Y
-                and UserInputService:GetMouseLocation().Y + GuiInset.Y <= ui.CodeBox.AbsolutePosition.Y + ui.CodeBox.AbsoluteSize.Y
-                and UserInputService:GetMouseLocation().X >= ui.CodeBox.AbsolutePosition.X
-                and UserInputService:GetMouseLocation().X
-                    <= ui.CodeBox.AbsolutePosition.X + ui.CodeBox.AbsoluteSize.X
+                p.Y >= ui.CodeBox.AbsolutePosition.Y
+                and p.Y <= ui.CodeBox.AbsolutePosition.Y + ui.CodeBox.AbsoluteSize.Y
+                and p.X >= ui.CodeBox.AbsolutePosition.X
+                and p.X <= ui.CodeBox.AbsolutePosition.X + ui.CodeBox.AbsoluteSize.X
             then
                 return
             end
@@ -1761,24 +1902,23 @@ end
 --- @param p Vector2
 function isInResizeRange(p)
     local relativeP = p - ui.Background.AbsolutePosition
-    local range = 5
-    if
-        relativeP.X >= ui.TopBar.AbsoluteSize.X - range
-        and relativeP.Y >= ui.Background.AbsoluteSize.Y - range
-        and relativeP.X <= ui.TopBar.AbsoluteSize.X
-        and relativeP.Y <= ui.Background.AbsoluteSize.Y
-    then
-        return true, 'B'
-    elseif
-        relativeP.X >= ui.TopBar.AbsoluteSize.X - range
-        and relativeP.X <= ui.Background.AbsoluteSize.X
-    then
-        return true, 'X'
-    elseif
-        relativeP.Y >= ui.Background.AbsoluteSize.Y - range
-        and relativeP.Y <= ui.Background.AbsoluteSize.Y
-    then
+    local range = 10
+    local size = ui.Background.AbsoluteSize
+    if relativeP.X < -range or relativeP.Y < -range then
+        return false
+    end
+    if relativeP.X > size.X + range or relativeP.Y > size.Y + range then
+        return false
+    end
+    if relativeP.Y >= size.Y - range and relativeP.Y <= size.Y + range then
+        if relativeP.X <= range then
+            return true, 'BL'
+        elseif relativeP.X >= size.X - range then
+            return true, 'B'
+        end
         return true, 'Y'
+    elseif relativeP.X >= size.X - range and relativeP.X <= size.X + range then
+        return true, 'X'
     end
     return false
 end
@@ -1816,8 +1956,7 @@ function mouseEntered()
             UserInputService.MouseIconEnabled = not RuntimeState.mouseInGui
             customCursor.Visible = RuntimeState.mouseInGui
             if RuntimeState.mouseInGui and getgenv().SimpleSpyExecuted then
-                local mouseLocation = UserInputService:GetMouseLocation()
-                    - GuiInset
+                local mouseLocation = getMP()
                 customCursor.Position = UDim2.fromOffset(
                     mouseLocation.X - customCursor.AbsoluteSize.X / 2,
                     mouseLocation.Y - customCursor.AbsoluteSize.Y / 2
@@ -1825,11 +1964,11 @@ function mouseEntered()
                 local inRange, type = isInResizeRange(mouseLocation)
                 if inRange and not closed then
                     if not sideClosed then
-                        customCursor.Image = type == 'B'
+                        customCursor.Image = (type == 'B' or type == 'BL')
                                 and 'rbxassetid://6065821980'
                             or type == 'X' and 'rbxassetid://6065821086'
                             or type == 'Y' and 'rbxassetid://6065821596'
-                    elseif type == 'Y' or type == 'B' then
+                    elseif type == 'Y' or type == 'B' or type == 'BL' then
                         customCursor.Image = 'rbxassetid://6065821596'
                     end
                 elseif customCursor.Image ~= 'rbxassetid://6065775281' then
@@ -1844,7 +1983,7 @@ end
 
 --- Called when mouse moves
 function mouseMoved()
-    local mousePos = UserInputService:GetMouseLocation() - GuiInset
+    local mousePos = getMP()
     if
         not closed
         and mousePos.X >= ui.TopBar.AbsolutePosition.X
@@ -1953,15 +2092,17 @@ end
 function validateSize()
     local x, y = ui.Background.AbsoluteSize.X, ui.Background.AbsoluteSize.Y
     local screenSize = SafeGetService('Workspace').CurrentCamera.ViewportSize
+    local maxY = screenSize.Y - getIY()
     if x + ui.Background.AbsolutePosition.X > screenSize.X then
         if screenSize.X - ui.Background.AbsolutePosition.X >= 450 then
             x = screenSize.X - ui.Background.AbsolutePosition.X
         else
             x = 450
         end
-    elseif y + ui.Background.AbsolutePosition.Y > screenSize.Y then
-        if screenSize.X - ui.Background.AbsolutePosition.Y >= 268 then
-            y = screenSize.Y - ui.Background.AbsolutePosition.Y
+    end
+    if y + ui.Background.AbsolutePosition.Y > maxY then
+        if maxY - ui.Background.AbsolutePosition.Y >= 268 then
+            y = maxY - ui.Background.AbsolutePosition.Y
         else
             y = 268
         end
@@ -1969,67 +2110,97 @@ function validateSize()
     ui.Background.Size = UDim2.fromOffset(x, y)
 end
 
+function startResize(input, mode)
+    if
+        input.UserInputType ~= Enum.UserInputType.MouseButton1
+        and input.UserInputType ~= Enum.UserInputType.Touch
+    then
+        return
+    end
+    if closed or RuntimeState.connections['SIMPLESPY_RESIZE'] then
+        return
+    end
+    local startPos = RuntimeState.ptr(input)
+    local startSize = ui.Background.AbsoluteSize
+    local startFrame = ui.Background.Position
+    local startX = startFrame.X.Offset
+    local startY = startFrame.Y.Offset
+    local startRight = startX + startSize.X
+    RuntimeState.connections['SIMPLESPY_RESIZE'] = RunService.RenderStepped:Connect(function()
+        local newPos = RuntimeState.ptr(input)
+        if newPos == startPos then
+            return
+        end
+        local delta = newPos - startPos
+        local curX = startX
+        local curW = startSize.X
+        local curH = startSize.Y
+        local canW = not sideClosed and not closed
+        local canH = not closed
+        if canW and (mode == 'X' or mode == 'B') then
+            curW = startSize.X + delta.X
+        elseif canW and mode == 'BL' then
+            curX = startX + delta.X
+            curW = startSize.X - delta.X
+            if curX < 0 then
+                curX = 0
+                curW = startRight
+            end
+        end
+        if canH and (mode == 'Y' or mode == 'B' or mode == 'BL') then
+            curH = startSize.Y + delta.Y
+        end
+        if curW < 450 then
+            curW = 450
+            if mode == 'BL' then
+                curX = startRight - curW
+                if curX < 0 then
+                    curX = 0
+                end
+            end
+        end
+        if curH < 268 then
+            curH = 268
+        end
+        ui.Background.Position = UDim2.new(0, curX, 0, startY)
+        ui.Background.Size = UDim2.fromOffset(curW, curH)
+        validateSize()
+        if sideClosed then
+            minimizeSize()
+        else
+            maximizeSize()
+        end
+    end)
+    table.insert(
+        RuntimeState.connections,
+        UserInputService.InputEnded:Connect(function(inputE)
+            if input == inputE then
+                if RuntimeState.connections['SIMPLESPY_RESIZE'] then
+                    RuntimeState.connections['SIMPLESPY_RESIZE']:Disconnect()
+                    RuntimeState.connections['SIMPLESPY_RESIZE'] = nil
+                end
+            end
+        end)
+    )
+end
+
 --- Called on user input while mouse in 'ui.Background' frame
 --- @param input InputObject
 function backgroundUserInput(input)
-    local mousePos = UserInputService:GetMouseLocation() - GuiInset
-    local inResizeRange, type = isInResizeRange(mousePos)
-    if
-        input.UserInputType == Enum.UserInputType.MouseButton1
-        and inResizeRange
-    then
-        local lastPos = UserInputService:GetMouseLocation()
-        local offset = ui.Background.AbsoluteSize - lastPos
-        local currentPos = lastPos + offset
-        if not RuntimeState.connections['SIMPLESPY_RESIZE'] then
-            RuntimeState.connections['SIMPLESPY_RESIZE'] = RunService.RenderStepped:Connect(
-                function()
-                    local newPos = UserInputService:GetMouseLocation()
-                    if newPos ~= lastPos then
-                        local currentX = (newPos + offset).X
-                        local currentY = (newPos + offset).Y
-                        if currentX < 450 then
-                            currentX = 450
-                        end
-                        if currentY < 268 then
-                            currentY = 268
-                        end
-                        currentPos = Vector2.new(currentX, currentY)
-                        ui.Background.Size = UDim2.fromOffset(
-                            (
-                                not sideClosed
-                                and not closed
-                                and (type == 'X' or type == 'B')
-                            )
-                                    and currentPos.X
-                                or ui.Background.AbsoluteSize.X,
-                            (--[[(not sideClosed or currentPos.X <= ui.LeftPanel.AbsolutePosition.X + ui.LeftPanel.AbsoluteSize.X) and]]not closed and (type == 'Y' or type == 'B'))
-                                    and currentPos.Y
-                                or ui.Background.AbsoluteSize.Y
-                        )
-                        validateSize()
-                        if sideClosed then
-                            minimizeSize()
-                        else
-                            maximizeSize()
-                        end
-                        lastPos = newPos
-                    end
-                end
-            )
+    local mousePos = RuntimeState.ptr(input)
+    local inResizeRange, mode = isInResizeRange(mousePos)
+    if not inResizeRange then
+        local inset = getInset()
+        if inset.X ~= 0 or inset.Y ~= 0 then
+            inResizeRange, mode = isInResizeRange(mousePos - inset)
+            if not inResizeRange then
+                inResizeRange, mode = isInResizeRange(mousePos + inset)
+            end
         end
-        table.insert(
-            RuntimeState.connections,
-            UserInputService.InputEnded:Connect(function(inputE)
-                if input == inputE then
-                    if RuntimeState.connections['SIMPLESPY_RESIZE'] then
-                        RuntimeState.connections['SIMPLESPY_RESIZE']:Disconnect()
-                        RuntimeState.connections['SIMPLESPY_RESIZE'] = nil
-                    end
-                end
-            end)
-        )
-    elseif isInDragRange(mousePos) then
+    end
+    if inResizeRange then
+        startResize(input, mode)
+    elseif RuntimeState.dragHit(input) then
         onBarInput(input)
     end
 end
@@ -2115,13 +2286,13 @@ function makeToolTip(enable, text)
         end
         local first = true
         RuntimeState.connections['ToolTip'] = RunService.RenderStepped:Connect(function()
-            local MousePos = UserInputService:GetMouseLocation()
+            local MousePos = getMP()
             local topLeft = MousePos + Vector2.new(20, -15)
             local bottomRight = topLeft + ui.ToolTip.AbsoluteSize
             local ViewportSize =
                 SafeGetService('Workspace').CurrentCamera.ViewportSize
             local ViewportSizeX = ViewportSize.X
-            local ViewportSizeY = ViewportSize.Y
+            local ViewportSizeY = ViewportSize.Y - getIY()
 
             if topLeft.X < 0 then
                 topLeft = Vector2.new(0, topLeft.Y)
@@ -2773,7 +2944,7 @@ local function packedLength(values)
     if type(values.n) == 'number' and values.n >= 0 then
         return values.n
     end
-    return table_maxn(values)
+    return RuntimeState.table_maxn(values)
 end
 
 formatReturnValues = function(values)
@@ -2949,7 +3120,7 @@ local function wrapOnClientInvokeCallback(rf, callback)
         local isExec = isexecutorclosure and callback and isexecutorclosure(callback)
         local methodName = getInvokeCallbackMember(rf)
         local ok, results = pcall(function()
-            return table_pack(captureRemoteCall({
+            return RuntimeState.table_pack(captureRemoteCall({
                 remote = remoteRef,
                 method = methodName,
                 args = args,
@@ -2970,7 +3141,7 @@ local function wrapOnClientInvokeCallback(rf, callback)
         if not ok then
             error(results)
         end
-        return unpack(results, 1, results.n or table_maxn(results))
+        return unpack(results, 1, results.n or RuntimeState.table_maxn(results))
     end
 end
 
@@ -3836,7 +4007,7 @@ function v2p(x, t, path, prev)
 end
 
 --- format s: string, byte encrypt (for weird symbols)
-local function formatstr_with_status(s, indentation)
+RuntimeState.formatstr_with_status = function(s, indentation)
     if not indentation then
         indentation = 0
     end
@@ -3853,13 +4024,13 @@ local function formatstr_with_status(s, indentation)
 end
 
 function formatstr(s, indentation)
-    local literal = formatstr_with_status(s, indentation)
+    local literal = RuntimeState.formatstr_with_status(s, indentation)
     return literal
 end
 
 --- Adds \'s to the text as a replacement to whitespace chars and other things because string.format can't yayeet
 
-local function isFinished(coroutines: table)
+RuntimeState.isFinished = function(coroutines: table)
     for _, v in next, coroutines do
         if status(v) == 'running' then
             return false
@@ -3868,7 +4039,7 @@ local function isFinished(coroutines: table)
     return true
 end
 
-local specialstrings = {
+RuntimeState.specialstrings = {
     ['\n'] = function(thread, index)
         resume(thread, index, '\\n')
     end,
@@ -3903,7 +4074,7 @@ function handlespecials(s, indentation)
             timeout += 1
             local c = create(coroutineFunc)
             table.insert(coroutines, c)
-            local specialfunc = specialstrings[char]
+            local specialfunc = RuntimeState.specialstrings[char]
 
             if specialfunc then
                 specialfunc(c, i)
@@ -3924,7 +4095,7 @@ function handlespecials(s, indentation)
             end
         end
     until char == '' or i > (getgenv().SimpleSpyMaxStringSize or 10000)
-    while not isFinished(coroutines) do
+    while not RuntimeState.isFinished(coroutines) do
         RunService.Heartbeat:Wait()
     end
     clear(coroutines)
@@ -3948,7 +4119,7 @@ function is_buffer(u)
     return false
 end
 
-local function _buf_bytes(b)
+RuntimeState._buf_bytes = function(b)
     local n = buffer.len(b)
     local t = table.create(n)
     for i = 0, n - 1 do
@@ -3957,7 +4128,7 @@ local function _buf_bytes(b)
     return t
 end
 
-local function buffer_hex_preview(bytes, limit)
+RuntimeState.buffer_hex_preview = function(bytes, limit)
     local hexdumpLines = {}
     local lineBytes = {}
     local shown = math.min(limit, #bytes)
@@ -3977,7 +4148,7 @@ local function buffer_hex_preview(bytes, limit)
     return nil, 0
 end
 
-local function buffer_string_literal(bytes, maxLiteralBytes, indentation)
+RuntimeState.buffer_string_literal = function(bytes, maxLiteralBytes, indentation)
     local count = #bytes
     if count == 0 or count > maxLiteralBytes then
         return nil
@@ -3987,14 +4158,14 @@ local function buffer_string_literal(bytes, maxLiteralBytes, indentation)
         chars[i] = string.char(bytes[i])
     end
     local literal, reachedMax =
-        formatstr_with_status(table.concat(chars), indentation or 0)
+        RuntimeState.formatstr_with_status(table.concat(chars), indentation or 0)
     if reachedMax then
         return nil
     end
     return ('buffer.fromstring(%s)'):format(literal)
 end
 
-local function buffer_char_literal(bytes)
+RuntimeState.buffer_char_literal = function(bytes)
     local count = #bytes
     if count == 0 then
         return 'buffer.fromstring("")'
@@ -4031,20 +4202,20 @@ function buffer_literal(u, indentation)
     if not ok_len or type(n) ~= 'number' or n <= 0 then
         return 'buffer.fromstring("")'
     end
-    local bytes = _buf_bytes(u)
+    local bytes = RuntimeState._buf_bytes(u)
     local previewLimit =
         math.min(n, math.max(1, getgenv().SimpleSpyMaxBufferPreview or 256))
     local hexdump, shown = nil, 0
     if bufferDumpEnabled and previewLimit > 0 then
-        hexdump, shown = buffer_hex_preview(bytes, previewLimit)
+        hexdump, shown = RuntimeState.buffer_hex_preview(bytes, previewLimit)
     end
     local maxLiteralBytes = getgenv().SimpleSpyMaxStringSize
     if type(maxLiteralBytes) ~= 'number' or maxLiteralBytes <= 0 then
         maxLiteralBytes = 10000
     end
-    local literal = buffer_string_literal(bytes, maxLiteralBytes, indentation)
+    local literal = RuntimeState.buffer_string_literal(bytes, maxLiteralBytes, indentation)
     if not literal then
-        literal = buffer_char_literal(bytes)
+        literal = RuntimeState.buffer_char_literal(bytes)
     end
     if hexdump then
         literal = ('--[[buffer dump (%d bytes, showing %d)\n%s\n]]%s'):format(
@@ -4111,7 +4282,7 @@ end
 
 --- schedules the provided function (and calls it with any args after)
 
-local function scheduleUrgent(f, ...)
+RuntimeState.scheduleUrgent = function(f, ...)
     table.insert(scheduled, 1, { f, ... })
 end
 
@@ -4129,7 +4300,7 @@ function scheduleWait()
 end
 
 --- the big (well tbh small now) boi task scheduler himself, handles p much anything as quicc as possible
-local function taskscheduler()
+RuntimeState.taskscheduler = function()
     if not toggle then
         scheduled = {}
         return
@@ -4144,7 +4315,7 @@ local function taskscheduler()
     end
 end
 
-local function tablecheck(tabletocheck, instance, id)
+RuntimeState.tablecheck = function(tabletocheck, instance, id)
     return tabletocheck[id] or tabletocheck[instance.Name]
 end
 
@@ -4196,7 +4367,7 @@ function remoteHandler(data)
     )
 end
 
-local RemoteClassData = {
+RuntimeState.RemoteClassData = {
     RemoteEvent = {
         Send = { 'fireserver' },
         Receive = { 'onclientevent' },
@@ -4221,9 +4392,9 @@ local RemoteClassData = {
     },
 }
 
-local table_maxn = table.maxn
-if not table_maxn then
-    table_maxn = function(t)
+RuntimeState.table_maxn = table.maxn
+if not RuntimeState.table_maxn then
+    RuntimeState.table_maxn = function(t)
         local max = 0
         for k in next, t do
             if type(k) == 'number' and k > max then
@@ -4234,13 +4405,13 @@ if not table_maxn then
     end
 end
 
-local function normalizeMethod(method)
+RuntimeState.normalizeMethod = function(method)
     if typeof(method) == 'string' then
         return lower(method)
     end
 end
 
-local function methodAllowed(classData, transferType, method)
+RuntimeState.methodAllowed = function(classData, transferType, method)
     if not classData or not method or method == '' then
         return false
     end
@@ -4260,7 +4431,7 @@ local function methodAllowed(classData, transferType, method)
     return false
 end
 
-local function callOriginal(callback, args, length)
+RuntimeState.callOriginal = function(callback, args, length)
     if not callback then
         return
     end
@@ -4268,7 +4439,7 @@ local function callOriginal(callback, args, length)
     local callArgs = args or {}
     local callLength = length
     if not callLength then
-        callLength = table_maxn(callArgs)
+        callLength = RuntimeState.table_maxn(callArgs)
     end
 
     if callLength and callLength > 0 then
@@ -4277,9 +4448,9 @@ local function callOriginal(callback, args, length)
     return callback()
 end
 
-local table_pack = table.pack
-if not table_pack then
-    table_pack = function(...)
+RuntimeState.table_pack = table.pack
+if not RuntimeState.table_pack then
+    RuntimeState.table_pack = function(...)
         local packed = { ... }
         packed.n = select('#', ...)
         return packed
@@ -4302,7 +4473,7 @@ SimpleSpy._withThreadIdentity = function(level, callback, ...)
 
     pcall(set_thread_identity, (level or 8) :: number)
 
-    local results = table_pack(pcall(callback, ...))
+    local results = RuntimeState.table_pack(pcall(callback, ...))
 
     if hasIdentity then
         pcall(set_thread_identity, previousIdentity)
@@ -4320,26 +4491,26 @@ captureRemoteCall = function(options)
     local args = options.args or {}
     local argsLength = options.argsLength
     if not argsLength then
-        argsLength = table_maxn(args)
+        argsLength = RuntimeState.table_maxn(args)
     end
     local remote = options.remote
     local transferType = options.transferType == 'Receive' and 'Receive'
         or 'Send'
     if internalRemotes[remote] then
-        return callOriginal(options.callOriginal, args, argsLength)
+        return RuntimeState.callOriginal(options.callOriginal, args, argsLength)
     end
     if typeof(remote) ~= 'Instance' then
-        return callOriginal(options.callOriginal, args, argsLength)
+        return RuntimeState.callOriginal(options.callOriginal, args, argsLength)
     end
 
-    local classData = RemoteClassData[remote.ClassName]
-    local normalizedMethod = normalizeMethod(options.method)
-    if not methodAllowed(classData, transferType, normalizedMethod) then
-        return callOriginal(options.callOriginal, args, argsLength)
+    local classData = RuntimeState.RemoteClassData[remote.ClassName]
+    local normalizedMethod = RuntimeState.normalizeMethod(options.method)
+    if not RuntimeState.methodAllowed(classData, transferType, normalizedMethod) then
+        return RuntimeState.callOriginal(options.callOriginal, args, argsLength)
     end
 
     if transferType == 'Receive' and not configs.log_Receive then
-        return callOriginal(options.callOriginal, args, argsLength)
+        return RuntimeState.callOriginal(options.callOriginal, args, argsLength)
     end
 
     if
@@ -4347,13 +4518,13 @@ captureRemoteCall = function(options)
         and not configs.logcheckcaller
         and safeCheckCaller()
     then
-        return callOriginal(options.callOriginal, args, argsLength)
+        return RuntimeState.callOriginal(options.callOriginal, args, argsLength)
     end
 
     local id = ThreadGetDebugId(remote)
     local blockcheck = false
     if transferType == 'Send' then
-        blockcheck = tablecheck(blocklist, remote, id)
+        blockcheck = RuntimeState.tablecheck(blocklist, remote, id)
         if normalizedMethod == 'fireserver' and not configs.call_FireServer then
             blockcheck = true
         elseif
@@ -4367,7 +4538,7 @@ captureRemoteCall = function(options)
     if
         transferType == 'Receive'
         and configs.blockIncoming
-        and tablecheck(blocklist, remote, id)
+        and RuntimeState.tablecheck(blocklist, remote, id)
     then
         return
     end
@@ -4386,7 +4557,7 @@ captureRemoteCall = function(options)
         isExec = transferType == 'Send' and safeCheckCaller() or false
     end
 
-    local blacklisted = tablecheck(blacklist, remote, id)
+    local blacklisted = RuntimeState.tablecheck(blacklist, remote, id)
     local entry
     if not blacklisted and not IsCyclicTable(args) then
         entry = {
@@ -4417,11 +4588,11 @@ captureRemoteCall = function(options)
 
     local results
     if argsLength and argsLength > 0 then
-        results = table_pack(options.callOriginal(unpack(args, 1, argsLength)))
+        results = RuntimeState.table_pack(options.callOriginal(unpack(args, 1, argsLength)))
     else
-        results = table_pack(options.callOriginal())
+        results = RuntimeState.table_pack(options.callOriginal())
     end
-    local resultLength = (results and results.n) or table_maxn(results)
+    local resultLength = (results and results.n) or RuntimeState.table_maxn(results)
     if entry and entry.returnvalue then
         local ok, cloned = pcall(deepclone, results)
         entry.returnvalue.data = ok and cloned or results
@@ -4430,14 +4601,14 @@ captureRemoteCall = function(options)
     return unpack(results, 1, resultLength)
 end
 
-local function call_original_namecall(method, self, ...)
+RuntimeState.call_original_namecall = function(method, self, ...)
     if setnamecallmethod then
         setnamecallmethod(method)
     end
     return RuntimeState.originalnamecall(self, ...)
 end
 
-local function getCallingInfo(what)
+RuntimeState.getCallingInfo = function(what)
     local baseLevel = synv3 and 2 or 4
 
     for level = baseLevel, 10 do
@@ -4454,21 +4625,37 @@ local function getCallingInfo(what)
     return safeDebugInfo(baseLevel, what)
 end
 
-local newnamecall = newcclosure(function(self, ...)
+RuntimeState.cloneHook = function(fn)
+    local ok, cloned = pcall(clonefunction, fn)
+    if ok and type(cloned) == 'function' then
+        return cloned
+    end
+    return fn
+end
+
+RuntimeState.wrapHook = function(fn)
+    local ok, wrapped = pcall(newcclosure, fn)
+    if ok and type(wrapped) == 'function' then
+        return wrapped
+    end
+    return fn
+end
+
+RuntimeState.newnamecall = function(self, ...)
     local method = caps.getNamecallMethod and getnamecallmethod() or nil
-    local normalizedMethod = normalizeMethod(method)
+    local normalizedMethod = RuntimeState.normalizeMethod(method)
     if
         normalizedMethod ~= 'fireserver'
         and normalizedMethod ~= 'invokeserver'
         and normalizedMethod ~= 'fire'
         and normalizedMethod ~= 'invoke'
     then
-        return call_original_namecall(method, self, ...)
+        return RuntimeState.call_original_namecall(method, self, ...)
     end
     local args = { ... }
     local argsLength = select('#', ...)
     if internalRemotes[self] then
-        return call_original_namecall(method, self, ...)
+        return RuntimeState.call_original_namecall(method, self, ...)
     end
     return captureRemoteCall({
         remote = cloneref(self),
@@ -4477,17 +4664,17 @@ local newnamecall = newcclosure(function(self, ...)
         argsLength = argsLength,
         metaMethod = '__namecall',
         callingscript = getcallingscript(),
-        infofunc = getCallingInfo('f'),
-        infoline = getCallingInfo('l'),
-        infosource = getCallingInfo('s'),
+        infofunc = RuntimeState.getCallingInfo('f'),
+        infoline = RuntimeState.getCallingInfo('l'),
+        infosource = RuntimeState.getCallingInfo('s'),
         isexecutor = safeCheckCaller(),
         callOriginal = function(...)
-            return call_original_namecall(method, self, ...)
+            return RuntimeState.call_original_namecall(method, self, ...)
         end,
     })
-end)
+end
 
-local newFireServer = newcclosure(function(self, ...)
+RuntimeState.newFire = RuntimeState.wrapHook(function(self, ...)
     local args = { ... }
     local argsLength = select('#', ...)
     if internalRemotes[self] then
@@ -4500,9 +4687,9 @@ local newFireServer = newcclosure(function(self, ...)
         argsLength = argsLength,
         metaMethod = '__index',
         callingscript = getcallingscript(),
-        infofunc = getCallingInfo('f'),
-        infoline = getCallingInfo('l'),
-        infosource = getCallingInfo('s'),
+        infofunc = RuntimeState.getCallingInfo('f'),
+        infoline = RuntimeState.getCallingInfo('l'),
+        infosource = RuntimeState.getCallingInfo('s'),
         isexecutor = safeCheckCaller(),
         callOriginal = function(...)
             return originalEvent(self, ...)
@@ -4510,7 +4697,7 @@ local newFireServer = newcclosure(function(self, ...)
     })
 end)
 
-local newInvokeServer = newcclosure(function(self, ...)
+RuntimeState.newInvoke = function(self, ...)
     local args = { ... }
     local argsLength = select('#', ...)
     if internalRemotes[self] then
@@ -4523,51 +4710,51 @@ local newInvokeServer = newcclosure(function(self, ...)
         argsLength = argsLength,
         metaMethod = '__index',
         callingscript = getcallingscript(),
-        infofunc = getCallingInfo('f'),
-        infoline = getCallingInfo('l'),
-        infosource = getCallingInfo('s'),
+        infofunc = RuntimeState.getCallingInfo('f'),
+        infoline = RuntimeState.getCallingInfo('l'),
+        infosource = RuntimeState.getCallingInfo('s'),
         isexecutor = safeCheckCaller(),
         callOriginal = function(...)
             return originalFunction(self, ...)
         end,
     })
-end)
+end
 
-local hookState = {
+RuntimeState.hookState = {
     active = false,
     namecall = false,
     fireServer = false,
     invokeServer = false,
 }
 
-local function disablehooks()
-    if not hookState.active then
+RuntimeState.disablehooks = function()
+    if not RuntimeState.hookState.active then
         return
     end
-    hookState.active = false
+    RuntimeState.hookState.active = false
 
     SimpleSpy._withThreadIdentity(8, function()
         if synv3 then
-            if hookState.namecall and caps.unhookAPI and caps.rawMetatable and RuntimeState.originalnamecall then
+            if RuntimeState.hookState.namecall and caps.unhookAPI and caps.rawMetatable and RuntimeState.originalnamecall then
                 pcall(unhook, getrawmetatable(game).__namecall, RuntimeState.originalnamecall)
             end
-            if hookState.fireServer and caps.unhookAPI and originalEvent then
+            if RuntimeState.hookState.fireServer and caps.unhookAPI and originalEvent then
                 pcall(unhook, baseFireServer, originalEvent)
             end
-            if hookState.invokeServer and caps.unhookAPI and originalFunction then
+            if RuntimeState.hookState.invokeServer and caps.unhookAPI and originalFunction then
                 pcall(unhook, baseInvokeServer, originalFunction)
             end
-            if hookState.namecall and caps.restoreFunction and RuntimeState.originalnamecall then
+            if RuntimeState.hookState.namecall and caps.restoreFunction and RuntimeState.originalnamecall then
                 pcall(restorefunction, RuntimeState.originalnamecall)
             end
-            if hookState.fireServer and caps.restoreFunction and originalEvent then
+            if RuntimeState.hookState.fireServer and caps.restoreFunction and originalEvent then
                 pcall(restorefunction, originalEvent)
             end
-            if hookState.invokeServer and caps.restoreFunction and originalFunction then
+            if RuntimeState.hookState.invokeServer and caps.restoreFunction and originalFunction then
                 pcall(restorefunction, originalFunction)
             end
         else
-            if hookState.namecall and RuntimeState.originalnamecall then
+            if RuntimeState.hookState.namecall and RuntimeState.originalnamecall then
                 if type(hookmetamethod) == 'function' then
                     pcall(hookmetamethod, game, '__namecall', RuntimeState.originalnamecall)
                 elseif caps.hookFunction and caps.rawMetatable then
@@ -4578,18 +4765,18 @@ local function disablehooks()
                     )
                 end
             end
-            if hookState.fireServer and caps.hookFunction and originalEvent then
+            if RuntimeState.hookState.fireServer and caps.hookFunction and originalEvent then
                 pcall(hookfunction, baseFireServer, originalEvent)
             end
-            if hookState.invokeServer and caps.hookFunction and originalFunction then
+            if RuntimeState.hookState.invokeServer and caps.hookFunction and originalFunction then
                 pcall(hookfunction, baseInvokeServer, originalFunction)
             end
         end
     end)
 
-    hookState.namecall = false
-    hookState.fireServer = false
-    hookState.invokeServer = false
+    RuntimeState.hookState.namecall = false
+    RuntimeState.hookState.fireServer = false
+    RuntimeState.hookState.invokeServer = false
 end
 
 --- Toggles on and off the remote spy
@@ -4600,9 +4787,9 @@ function toggleSpy()
 
     if not toggle then
         SimpleSpy._withThreadIdentity(8, function()
-            hookState.namecall = false
-            hookState.fireServer = false
-            hookState.invokeServer = false
+            RuntimeState.hookState.namecall = false
+            RuntimeState.hookState.fireServer = false
+            RuntimeState.hookState.invokeServer = false
 
             local oldnamecall
             if synv3 then
@@ -4610,31 +4797,31 @@ function toggleSpy()
                     local ok, previous = pcall(
                         hook,
                         getrawmetatable(game).__namecall,
-                        clonefunction(newnamecall)
+                        RuntimeState.cloneHook(RuntimeState.newnamecall)
                     )
                     if ok then
                         oldnamecall = previous
-                        hookState.namecall = true
+                        RuntimeState.hookState.namecall = true
                     end
                 end
                 if caps.hookAPI then
                     local okFire, oldFire = pcall(
                         hook,
                         baseFireServer,
-                        clonefunction(newFireServer)
+                        RuntimeState.cloneHook(RuntimeState.newFire)
                     )
                     if okFire and oldFire then
                         originalEvent = oldFire
-                        hookState.fireServer = true
+                        RuntimeState.hookState.fireServer = true
                     end
                     local okInvoke, oldInvoke = pcall(
                         hook,
                         baseInvokeServer,
-                        clonefunction(newInvokeServer)
+                        RuntimeState.cloneHook(RuntimeState.newInvoke)
                     )
                     if okInvoke and oldInvoke then
                         originalFunction = oldInvoke
-                        hookState.invokeServer = true
+                        RuntimeState.hookState.invokeServer = true
                     end
                 end
             else
@@ -4644,21 +4831,21 @@ function toggleSpy()
                             hookmetamethod,
                             game,
                             '__namecall',
-                            clonefunction(newnamecall)
+                            RuntimeState.cloneHook(RuntimeState.newnamecall)
                         )
                         if ok then
                             oldnamecall = previous
-                            hookState.namecall = true
+                            RuntimeState.hookState.namecall = true
                         end
                     elseif caps.hookFunction and caps.rawMetatable then
                         local ok, previous = pcall(
                             hookfunction,
                             getrawmetatable(game).__namecall,
-                            clonefunction(newnamecall)
+                            RuntimeState.cloneHook(RuntimeState.newnamecall)
                         )
                         if ok then
                             oldnamecall = previous
-                            hookState.namecall = true
+                            RuntimeState.hookState.namecall = true
                         end
                     end
                 end
@@ -4666,20 +4853,20 @@ function toggleSpy()
                     local okFire, oldFire = pcall(
                         hookfunction,
                         baseFireServer,
-                        clonefunction(newFireServer)
+                        RuntimeState.cloneHook(RuntimeState.newFire)
                     )
                     if okFire and oldFire then
                         originalEvent = oldFire
-                        hookState.fireServer = true
+                        RuntimeState.hookState.fireServer = true
                     end
                     local okInvoke, oldInvoke = pcall(
                         hookfunction,
                         baseInvokeServer,
-                        clonefunction(newInvokeServer)
+                        RuntimeState.cloneHook(RuntimeState.newInvoke)
                     )
                     if okInvoke and oldInvoke then
                         originalFunction = oldInvoke
-                        hookState.invokeServer = true
+                        RuntimeState.hookState.invokeServer = true
                     end
                 end
             end
@@ -4689,12 +4876,12 @@ function toggleSpy()
                         return oldnamecall(...)
                     end
             end
-            hookState.active = hookState.namecall
-                or hookState.fireServer
-                or hookState.invokeServer
+            RuntimeState.hookState.active = RuntimeState.hookState.namecall
+                or RuntimeState.hookState.fireServer
+                or RuntimeState.hookState.invokeServer
         end)
     else
-        disablehooks()
+        RuntimeState.disablehooks()
     end
 
     return true
@@ -4707,7 +4894,7 @@ function toggleSpyMethod()
 end
 
 --- Shuts down the remote spy
-local function shutdown()
+RuntimeState.shutdown = function()
     if RuntimeState.schedulerconnect then
         RuntimeState.schedulerconnect:Disconnect()
     end
@@ -4760,18 +4947,18 @@ local function shutdown()
     clear(wrappedInvokeCallbacks)
     clear(loggedClientEvent)
     clear(logConnectionFunctions)
-    disablehooks()
+    RuntimeState.disablehooks()
     ui.SimpleSpy3:Destroy()
     ui.Storage:Destroy()
     UserInputService.MouseIconEnabled = true
     getgenv().SimpleSpyExecuted = false
 end
 
-local function initializeSimpleSpy()
+RuntimeState.initializeSimpleSpy = function()
     if not RunService:IsClient() then
         error('SimpleSpy cannot run on the server!')
     end
-    getgenv().SimpleSpyShutdown = shutdown
+    getgenv().SimpleSpyShutdown = RuntimeState.shutdown
     if realconfigs.autoStartSpy then
         onToggleButtonClick()
     else
@@ -4818,11 +5005,33 @@ local function initializeSimpleSpy()
     ui.MinimizeButton.MouseButton1Click:Connect(toggleMinimize)
     ui.MaximizeButton.MouseButton1Click:Connect(toggleSideTray)
     ui.Simple.MouseButton1Click:Connect(onToggleButtonClick)
+    ui.TopBar.InputBegan:Connect(function(input)
+        if RuntimeState.dragHit(input) then
+            onBarInput(input)
+        end
+    end)
+    ui.Simple.InputBegan:Connect(function(input)
+        if RuntimeState.dragHit(input) then
+            onBarInput(input)
+        end
+    end)
+    ui.ResizeRight.InputBegan:Connect(function(input)
+        startResize(input, 'X')
+    end)
+    ui.ResizeBottom.InputBegan:Connect(function(input)
+        startResize(input, 'Y')
+    end)
+    ui.ResizeBottomRight.InputBegan:Connect(function(input)
+        startResize(input, 'B')
+    end)
+    ui.ResizeBottomLeft.InputBegan:Connect(function(input)
+        startResize(input, 'BL')
+    end)
     ui.CloseButton.MouseEnter:Connect(onXButtonHover)
     ui.CloseButton.MouseLeave:Connect(onXButtonUnhover)
     ui.Simple.MouseEnter:Connect(onToggleButtonHover)
     ui.Simple.MouseLeave:Connect(onToggleButtonUnhover)
-    ui.CloseButton.MouseButton1Click:Connect(shutdown)
+    ui.CloseButton.MouseButton1Click:Connect(RuntimeState.shutdown)
     table.insert(
         RuntimeState.connections,
         UserInputService.InputBegan:Connect(backgroundUserInput)
@@ -4832,9 +5041,13 @@ local function initializeSimpleSpy()
     logthread(spawn(function()
         delay(1, onToggleButtonUnhover)
     end))
-    RuntimeState.schedulerconnect = RunService.Heartbeat:Connect(taskscheduler)
-    bringBackOnResize()
+    RuntimeState.schedulerconnect = RunService.Heartbeat:Connect(RuntimeState.taskscheduler)
     protectUI(ui.SimpleSpy3)
+    bringBackOnResize()
+    table.insert(
+        RuntimeState.connections,
+        ui.SimpleSpy3:GetPropertyChangedSignal('IgnoreGuiInset'):Connect(bringBackOnResize)
+    )
     logthread(spawn(function()
         local lp = Players.LocalPlayer
             or Players:GetPropertyChangedSignal('LocalPlayer'):Wait()
@@ -4850,12 +5063,12 @@ end
 
 -- main
 if not getgenv().SimpleSpyExecuted then
-    local initResult = table_pack(pcall(initializeSimpleSpy))
-    if initResult[1] then
+    RuntimeState.initResult = RuntimeState.table_pack(pcall(RuntimeState.initializeSimpleSpy))
+    if RuntimeState.initResult[1] then
         getgenv().SimpleSpyExecuted = true
     else
-        shutdown()
-        ErrorPrompt('An error has occured:\n' .. rawtostring(initResult[2]))
+        RuntimeState.shutdown()
+        ErrorPrompt('An error has occured:\n' .. rawtostring(RuntimeState.initResult[2]))
         return
     end
 else
@@ -4900,19 +5113,20 @@ do
             input.UserInputType == Enum.UserInputType.MouseButton1
             or input.UserInputType == Enum.UserInputType.Touch
         then
-            local lastPos = UserInputService:GetMouseLocation()
-            local startPos = ui.NextButton.AbsolutePosition
+            local startMouse = RuntimeState.ptr(input)
+            local startPos = ui.NextButton.Position
             if not RuntimeState.connections['dragNextb'] then
                 RuntimeState.connections['dragNextb'] = RunService.RenderStepped:Connect(
                     function()
-                        local newPos = UserInputService:GetMouseLocation()
-                        if newPos ~= lastPos then
-                            local dx, dy =
-                                newPos.X - lastPos.X, newPos.Y - lastPos.Y
-                            startPos = startPos + Vector2.new(dx, dy)
-                            ui.NextButton.Position =
-                                UDim2.fromOffset(startPos.X, startPos.Y)
-                            lastPos = newPos
+                        local newPos = RuntimeState.ptr(input)
+                        if newPos ~= startMouse then
+                            local delta = newPos - startMouse
+                            ui.NextButton.Position = UDim2.new(
+                                startPos.X.Scale,
+                                startPos.X.Offset + delta.X,
+                                startPos.Y.Scale,
+                                startPos.Y.Offset + delta.Y
+                            )
                         end
                     end
                 )
@@ -5465,14 +5679,14 @@ if configs.supersecretdevtoggle then
             )
         )()
     end)
-    local SuperSecretFolder = Create('Folder', { Parent = ui.SimpleSpy3 })
+    RuntimeState.SuperSecretFolder = Create('Folder', { Parent = ui.SimpleSpy3 })
     newButton('SUPER SECRET BUTTON', function()
         return 'You dont need a discription you already know what it does'
     end, function()
-        SuperSecretFolder:ClearAllChildren()
+        RuntimeState.SuperSecretFolder:ClearAllChildren()
         local random = listfiles('Music')
         local NotSound = Create('Sound', {
-            Parent = SuperSecretFolder,
+            Parent = RuntimeState.SuperSecretFolder,
             Looped = false,
             Volume = math.random(1, 5),
             SoundId = getcustomasset(random[math.random(1, #random)]),

@@ -25,6 +25,64 @@ local __lt = (function()
 	end;
 	return loaded;
 end)();
+local __NAUIProtector = (function()
+	local globalEnv = (getgenv and getgenv()) or _G or {};
+	local sharedEnv = rawget(_G, "shared");
+	local cacheHost = type(sharedEnv) == "table" and sharedEnv or (type(globalEnv) == "table" and globalEnv or nil);
+	if cacheHost then
+		local cached = rawget(cacheHost, "__lt_ui_protector");
+		if type(cached) == "table" then
+			return cached;
+		end;
+	end;
+	local loader = loadstring or load;
+	if type(loader) ~= "function" then
+		return nil;
+	end;
+	local okSource, source = pcall(function()
+		return game:HttpGet("https://ltseverydayyou.github.io/UIprotector.luau");
+	end);
+	if not okSource or type(source) ~= "string" or source == "" then
+		return nil;
+	end;
+	local chunk = loader(source, "@UIprotector.luau");
+	if type(chunk) ~= "function" then
+		return nil;
+	end;
+	local okLoaded, loaded = pcall(chunk);
+	if okLoaded and type(loaded) == "table" then
+		if cacheHost then
+			cacheHost.__lt_ui_protector = loaded;
+		end;
+		return loaded;
+	end;
+	return nil;
+end)();
+local __NAOriginalGetHui = gethui;
+local gethui = function()
+	if __NAUIProtector and type(__NAUIProtector.huiGrabber) == "function" then
+		local ok, ui = pcall(__NAUIProtector.huiGrabber);
+		if ok and typeof(ui) == "Instance" then
+			return ui;
+		end;
+	end;
+	if type(__NAOriginalGetHui) == "function" then
+		local ok, ui = pcall(__NAOriginalGetHui);
+		if ok then
+			return ui;
+		end;
+	end;
+	return nil;
+end;
+local function __NAProtectUI(gui, options)
+	if __NAUIProtector and type(__NAUIProtector.protectUI) == "function" then
+		local ok, protected = pcall(__NAUIProtector.protectUI, gui, options);
+		if ok and protected then
+			return protected;
+		end;
+	end;
+	return nil;
+end;
 
 local colorSettings = {
 	Main = {
@@ -231,8 +289,9 @@ local function GetFullPathOfAnInstance(instance)
 	end;
 	return formatChild(parentPath, instance);
 end;
-if (ClonedService("CoreGui")):FindFirstChild("TurtleSpyGUI") then
-	(ClonedService("CoreGui")).TurtleSpyGUI:Destroy();
+local __NATurtleParent = gethui() or ClonedService("CoreGui");
+if __NATurtleParent and __NATurtleParent:FindFirstChild("TurtleSpyGUI") then
+	__NATurtleParent.TurtleSpyGUI:Destroy();
 end;
 local buttonOffset = -25;
 local scrollSizeOffset = 287;
@@ -405,7 +464,7 @@ local InfoFrame = Instance.new("Frame");
 local InfoFrameHeader = Instance.new("Frame");
 local InfoTitleShading = Instance.new("Frame");
 local CodeFrame = Instance.new("ScrollingFrame");
-local Code = Instance.new("TextLabel");
+local Code = Instance.new("TextBox");
 local InfoHeaderText = Instance.new("TextLabel");
 local InfoButtonsScroll = Instance.new("ScrollingFrame");
 local CopyCode = Instance.new("TextButton");
@@ -447,7 +506,7 @@ local CallButton = Instance.new("TextButton");
 local ClientEventToggle = Instance.new("TextButton");
 local PathModeBtn = Instance.new("TextButton");
 TurtleSpyGUI.Name = "TurtleSpyGUI";
-TurtleSpyGUI.Parent = ClonedService("CoreGui");
+TurtleSpyGUI.Parent = __NATurtleParent or ClonedService("CoreGui");
 TurtleSpyGUI.ResetOnSpawn = false;
 TurtleSpyGUI.IgnoreGuiInset = true;
 TurtleSpyGUI.DisplayOrder = 999999;
@@ -914,52 +973,55 @@ InfoFrame.Name = "InfoFrame";
 InfoFrame.Parent = mainFrame;
 InfoFrame.BackgroundColor3 = colorSettings.Main.MainBackgroundColor;
 InfoFrame.BorderColor3 = colorSettings.Main.MainBackgroundColor;
-InfoFrame.Position = UDim2.new(0.3681, 0, 0, 0);
-InfoFrame.Size = UDim2.new(0, 357, 0, 322);
+InfoFrame.Position = UDim2.new(0, 207, 0, 0);
+InfoFrame.Size = UDim2.new(0, 553, 0, 322);
 InfoFrame.Visible = false;
 InfoFrame.ZIndex = 6;
 InfoFrameHeader.Name = "InfoFrameHeader";
 InfoFrameHeader.Parent = InfoFrame;
 InfoFrameHeader.BackgroundColor3 = colorSettings.Main.HeaderColor;
 InfoFrameHeader.BorderColor3 = colorSettings.Main.HeaderColor;
-InfoFrameHeader.Size = UDim2.new(0, 357, 0, 26);
+InfoFrameHeader.Size = UDim2.new(0, 553, 0, 26);
 InfoFrameHeader.ZIndex = 14;
 InfoTitleShading.Name = "InfoTitleShading";
 InfoTitleShading.Parent = InfoFrame;
 InfoTitleShading.BackgroundColor3 = colorSettings.Main.HeaderShadingColor;
 InfoTitleShading.BorderColor3 = colorSettings.Main.HeaderShadingColor;
 InfoTitleShading.Position = UDim2.new(-0.0028, 0, 0, 0);
-InfoTitleShading.Size = UDim2.new(0, 358, 0, 34);
+InfoTitleShading.Size = UDim2.new(0, 554, 0, 34);
 InfoTitleShading.ZIndex = 13;
 CodeFrame.Name = "CodeFrame";
 CodeFrame.Parent = InfoFrame;
 CodeFrame.Active = true;
 CodeFrame.BackgroundColor3 = colorSettings.Code.BackgroundColor;
 CodeFrame.BorderColor3 = colorSettings.Code.BackgroundColor;
-CodeFrame.Position = UDim2.new(0.0391, 0, 0.141, 0);
-CodeFrame.Size = UDim2.new(0, 329, 0, 63);
+CodeFrame.Position = UDim2.new(0, 14, 0, 43);
+CodeFrame.Size = UDim2.new(0, 525, 0, 154);
 CodeFrame.ZIndex = 16;
-CodeFrame.CanvasSize = UDim2.new(0, 670, 0, 63);
-CodeFrame.ScrollBarThickness = 8;
+CodeFrame.CanvasSize = UDim2.new(0, 525, 0, 154);
+CodeFrame.ScrollBarThickness = 6;
 CodeFrame.ScrollingDirection = Enum.ScrollingDirection.XY;
 CodeFrame.ScrollBarImageColor3 = colorSettings.Main.ScrollBarImageColor;
 Code.Name = "Code";
 Code.Parent = CodeFrame;
 Code.BackgroundTransparency = 1;
-Code.Position = UDim2.new(0.0089, 0, 0.039, 0);
-Code.Size = UDim2.new(0, 100000, 0, 25);
+Code.ClearTextOnFocus = false;
+Code.MultiLine = true;
+Code.Position = UDim2.new(0, 8, 0, 6);
+Code.Size = UDim2.new(0, 509, 0, 138);
 Code.ZIndex = 18;
-Code.Font = Enum.Font.SourceSans;
+Code.Font = Enum.Font.Code;
 Code.Text = "Thanks for using Turtle Spy! :D";
 Code.TextColor3 = colorSettings.Code.TextColor;
 Code.TextSize = 14;
 Code.TextWrapped = false;
 Code.TextXAlignment = Enum.TextXAlignment.Left;
+Code.TextYAlignment = Enum.TextYAlignment.Top;
 InfoHeaderText.Name = "InfoHeaderText";
 InfoHeaderText.Parent = InfoFrame;
 InfoHeaderText.BackgroundTransparency = 1;
-InfoHeaderText.Position = UDim2.new(0.0391, 0, -0.002, 0);
-InfoHeaderText.Size = UDim2.new(0, 342, 0, 35);
+InfoHeaderText.Position = UDim2.new(0, 14, 0, -1);
+InfoHeaderText.Size = UDim2.new(0, 520, 0, 35);
 InfoHeaderText.ZIndex = 18;
 InfoHeaderText.Font = Enum.Font.SourceSans;
 InfoHeaderText.Text = "Info: RemoteFunction";
@@ -970,135 +1032,135 @@ InfoButtonsScroll.Parent = InfoFrame;
 InfoButtonsScroll.Active = true;
 InfoButtonsScroll.BackgroundColor3 = colorSettings.Main.MainBackgroundColor;
 InfoButtonsScroll.BorderColor3 = colorSettings.Main.MainBackgroundColor;
-InfoButtonsScroll.Position = UDim2.new(0.0391, 0, 0.3558, 0);
-InfoButtonsScroll.Size = UDim2.new(0, 329, 0, 199);
+InfoButtonsScroll.Position = UDim2.new(0, 14, 0, 205);
+InfoButtonsScroll.Size = UDim2.new(0, 525, 0, 105);
 InfoButtonsScroll.ZIndex = 11;
-InfoButtonsScroll.CanvasSize = UDim2.new(0, 0, 2.5, 0);
-InfoButtonsScroll.ScrollBarThickness = 8;
+InfoButtonsScroll.CanvasSize = UDim2.new(0, 0, 0, 137);
+InfoButtonsScroll.ScrollBarThickness = 6;
 InfoButtonsScroll.VerticalScrollBarPosition = Enum.VerticalScrollBarPosition.Left;
 InfoButtonsScroll.ScrollBarImageColor3 = colorSettings.Main.ScrollBarImageColor;
 CopyCode.Name = "CopyCode";
 CopyCode.Parent = InfoButtonsScroll;
 CopyCode.BackgroundColor3 = colorSettings.MainButtons.BackgroundColor;
 CopyCode.BorderColor3 = colorSettings.MainButtons.BorderColor;
-CopyCode.Position = UDim2.new(0.0645, 0, 0, 10);
-CopyCode.Size = UDim2.new(0, 294, 0, 26);
+CopyCode.Position = UDim2.new(0, 10, 0, 6);
+CopyCode.Size = UDim2.new(0, 248, 0, 22);
 CopyCode.ZIndex = 15;
 CopyCode.Font = Enum.Font.SourceSans;
 CopyCode.Text = "Copy code";
 CopyCode.TextColor3 = Color3.fromRGB(250, 251, 255);
-CopyCode.TextSize = 16;
+CopyCode.TextSize = 14;
 RunCode.Name = "RunCode";
 RunCode.Parent = InfoButtonsScroll;
 RunCode.BackgroundColor3 = colorSettings.MainButtons.BackgroundColor;
 RunCode.BorderColor3 = colorSettings.MainButtons.BorderColor;
-RunCode.Position = UDim2.new(0.0645, 0, 0, 45);
-RunCode.Size = UDim2.new(0, 294, 0, 26);
+RunCode.Position = UDim2.new(0, 267, 0, 6);
+RunCode.Size = UDim2.new(0, 248, 0, 22);
 RunCode.ZIndex = 15;
 RunCode.Font = Enum.Font.SourceSans;
 RunCode.Text = "Execute";
 RunCode.TextColor3 = Color3.fromRGB(250, 251, 255);
-RunCode.TextSize = 16;
+RunCode.TextSize = 14;
 CopyScriptPath.Name = "CopyScriptPath";
 CopyScriptPath.Parent = InfoButtonsScroll;
 CopyScriptPath.BackgroundColor3 = colorSettings.MainButtons.BackgroundColor;
 CopyScriptPath.BorderColor3 = colorSettings.MainButtons.BorderColor;
-CopyScriptPath.Position = UDim2.new(0.0645, 0, 0, 80);
-CopyScriptPath.Size = UDim2.new(0, 294, 0, 26);
+CopyScriptPath.Position = UDim2.new(0, 10, 0, 32);
+CopyScriptPath.Size = UDim2.new(0, 248, 0, 22);
 CopyScriptPath.ZIndex = 15;
 CopyScriptPath.Font = Enum.Font.SourceSans;
 CopyScriptPath.Text = "Copy script path";
 CopyScriptPath.TextColor3 = Color3.fromRGB(250, 251, 255);
-CopyScriptPath.TextSize = 16;
+CopyScriptPath.TextSize = 14;
 CopyDecompiled.Name = "CopyDecompiled";
 CopyDecompiled.Parent = InfoButtonsScroll;
 CopyDecompiled.BackgroundColor3 = colorSettings.MainButtons.BackgroundColor;
 CopyDecompiled.BorderColor3 = colorSettings.MainButtons.BorderColor;
-CopyDecompiled.Position = UDim2.new(0.0645, 0, 0, 115);
-CopyDecompiled.Size = UDim2.new(0, 294, 0, 26);
+CopyDecompiled.Position = UDim2.new(0, 267, 0, 32);
+CopyDecompiled.Size = UDim2.new(0, 248, 0, 22);
 CopyDecompiled.ZIndex = 15;
 CopyDecompiled.Font = Enum.Font.SourceSans;
 CopyDecompiled.Text = "Copy decompiled script";
 CopyDecompiled.TextColor3 = Color3.fromRGB(250, 251, 255);
-CopyDecompiled.TextSize = 16;
+CopyDecompiled.TextSize = 14;
 IgnoreRemote.Name = "IgnoreRemote";
 IgnoreRemote.Parent = InfoButtonsScroll;
 IgnoreRemote.BackgroundColor3 = colorSettings.MainButtons.BackgroundColor;
 IgnoreRemote.BorderColor3 = colorSettings.MainButtons.BorderColor;
-IgnoreRemote.Position = UDim2.new(0.0645, 0, 0, 185);
-IgnoreRemote.Size = UDim2.new(0, 294, 0, 26);
+IgnoreRemote.Position = UDim2.new(0, 267, 0, 58);
+IgnoreRemote.Size = UDim2.new(0, 248, 0, 22);
 IgnoreRemote.ZIndex = 15;
 IgnoreRemote.Font = Enum.Font.SourceSans;
 IgnoreRemote.Text = "Ignore remote";
 IgnoreRemote.TextColor3 = Color3.fromRGB(250, 251, 255);
-IgnoreRemote.TextSize = 16;
+IgnoreRemote.TextSize = 14;
 BlockRemote.Name = "Block Remote";
 BlockRemote.Parent = InfoButtonsScroll;
 BlockRemote.BackgroundColor3 = colorSettings.MainButtons.BackgroundColor;
 BlockRemote.BorderColor3 = colorSettings.MainButtons.BorderColor;
-BlockRemote.Position = UDim2.new(0.0645, 0, 0, 220);
-BlockRemote.Size = UDim2.new(0, 294, 0, 26);
+BlockRemote.Position = UDim2.new(0, 10, 0, 84);
+BlockRemote.Size = UDim2.new(0, 248, 0, 22);
 BlockRemote.ZIndex = 15;
 BlockRemote.Font = Enum.Font.SourceSans;
 BlockRemote.Text = "Block remote from firing";
 BlockRemote.TextColor3 = Color3.fromRGB(250, 251, 255);
-BlockRemote.TextSize = 16;
-DoNotStack.Name = "CopyReturn";
+BlockRemote.TextSize = 14;
+DoNotStack.Name = "DoNotStack";
 DoNotStack.Parent = InfoButtonsScroll;
 DoNotStack.BackgroundColor3 = colorSettings.MainButtons.BackgroundColor;
 DoNotStack.BorderColor3 = colorSettings.MainButtons.BorderColor;
-DoNotStack.Position = UDim2.new(0.0645, 0, 0, 150);
-DoNotStack.Size = UDim2.new(0, 294, 0, 26);
+DoNotStack.Position = UDim2.new(0, 10, 0, 58);
+DoNotStack.Size = UDim2.new(0, 248, 0, 22);
 DoNotStack.ZIndex = 15;
 DoNotStack.Font = Enum.Font.SourceSans;
-DoNotStack.Text = "Unstack remote when fired with new args";
+DoNotStack.Text = "Unstack new args";
 DoNotStack.TextColor3 = Color3.fromRGB(250, 251, 255);
-DoNotStack.TextSize = 16;
+DoNotStack.TextSize = 14;
 Clear.Name = "Clear";
 Clear.Parent = InfoButtonsScroll;
 Clear.BackgroundColor3 = colorSettings.MainButtons.BackgroundColor;
 Clear.BorderColor3 = colorSettings.MainButtons.BorderColor;
-Clear.Position = UDim2.new(0.0645, 0, 0, 255);
-Clear.Size = UDim2.new(0, 294, 0, 26);
+Clear.Position = UDim2.new(0, 267, 0, 84);
+Clear.Size = UDim2.new(0, 248, 0, 22);
 Clear.ZIndex = 15;
 Clear.Font = Enum.Font.SourceSans;
 Clear.Text = "Clear logs";
 Clear.TextColor3 = Color3.fromRGB(250, 251, 255);
-Clear.TextSize = 16;
+Clear.TextSize = 14;
 CopyReturn.Name = "CopyReturn";
 CopyReturn.Parent = InfoButtonsScroll;
 CopyReturn.BackgroundColor3 = colorSettings.MainButtons.BackgroundColor;
 CopyReturn.BorderColor3 = colorSettings.MainButtons.BorderColor;
-CopyReturn.Position = UDim2.new(0.0645, 0, 0, 325);
-CopyReturn.Size = UDim2.new(0, 294, 0, 26);
+CopyReturn.Position = UDim2.new(0, 10, 0, 136);
+CopyReturn.Size = UDim2.new(0, 248, 0, 22);
 CopyReturn.ZIndex = 15;
 CopyReturn.Font = Enum.Font.SourceSans;
 CopyReturn.Text = "Execute and copy return value";
 CopyReturn.TextColor3 = Color3.fromRGB(250, 251, 255);
-CopyReturn.TextSize = 16;
+CopyReturn.TextSize = 14;
 CopyReturn.Visible = false
 ClientEventToggle.Name = "ClientEventToggle";
 ClientEventToggle.Parent = InfoButtonsScroll;
 ClientEventToggle.BackgroundColor3 = colorSettings.MainButtons.BackgroundColor;
 ClientEventToggle.BorderColor3 = colorSettings.MainButtons.BorderColor;
-ClientEventToggle.Position = UDim2.new(0.0645, 0, 0, 360);
-ClientEventToggle.Size = UDim2.new(0, 294, 0, 26);
+ClientEventToggle.Position = UDim2.new(0, 10, 0, 110);
+ClientEventToggle.Size = UDim2.new(0, 248, 0, 22);
 ClientEventToggle.ZIndex = 15;
 ClientEventToggle.Font = Enum.Font.SourceSans;
 ClientEventToggle.Text = "Log OnClientEvent: OFF";
 ClientEventToggle.TextColor3 = Color3.fromRGB(250, 251, 255);
-ClientEventToggle.TextSize = 16;
+ClientEventToggle.TextSize = 14;
 PathModeBtn.Name = "PathModeBtn";
 PathModeBtn.Parent = InfoButtonsScroll;
 PathModeBtn.BackgroundColor3 = colorSettings.MainButtons.BackgroundColor;
 PathModeBtn.BorderColor3 = colorSettings.MainButtons.BorderColor;
-PathModeBtn.Position = UDim2.new(0.0645, 0, 0, 395);
-PathModeBtn.Size = UDim2.new(0, 294, 0, 26);
+PathModeBtn.Position = UDim2.new(0, 267, 0, 110);
+PathModeBtn.Size = UDim2.new(0, 248, 0, 22);
 PathModeBtn.ZIndex = 15;
 PathModeBtn.Font = Enum.Font.SourceSans;
 PathModeBtn.Text = "Path: .";
 PathModeBtn.TextColor3 = Color3.fromRGB(250, 251, 255);
-PathModeBtn.TextSize = 16;
+PathModeBtn.TextSize = 14;
 FrameDivider.Name = "FrameDivider";
 FrameDivider.Parent = InfoFrame;
 FrameDivider.BackgroundColor3 = Color3.fromRGB(53, 59, 72);
@@ -1111,7 +1173,7 @@ CloseInfoFrame.Name = "CloseInfoFrame";
 CloseInfoFrame.Parent = InfoFrame;
 CloseInfoFrame.BackgroundColor3 = colorSettings.Main.HeaderColor;
 CloseInfoFrame.BorderColor3 = colorSettings.Main.HeaderColor;
-CloseInfoFrame.Position = UDim2.new(0, 333, 0, 2);
+CloseInfoFrame.Position = UDim2.new(0, 529, 0, 2);
 CloseInfoFrame.Size = UDim2.new(0, 22, 0, 22);
 CloseInfoFrame.ZIndex = 18;
 CloseInfoFrame.Font = Enum.Font.SourceSansLight;
@@ -1149,7 +1211,7 @@ CallsScroll.Position = InfoButtonsScroll.Position;
 CallsScroll.Size = InfoButtonsScroll.Size;
 CallsScroll.ZIndex = 30;
 CallsScroll.CanvasSize = UDim2.new(0, 0, 0, 0);
-CallsScroll.ScrollBarThickness = 8;
+CallsScroll.ScrollBarThickness = 6;
 CallsScroll.VerticalScrollBarPosition = Enum.VerticalScrollBarPosition.Left;
 CallsScroll.ScrollBarImageColor3 = colorSettings.Main.ScrollBarImageColor;
 CallsScroll.Visible = false;
@@ -1158,13 +1220,14 @@ CallButton.Parent = CallsScroll;
 CallButton.BackgroundColor3 = colorSettings.MainButtons.BackgroundColor;
 CallButton.BorderColor3 = colorSettings.MainButtons.BorderColor;
 CallButton.Position = UDim2.new(0, 10, 0, 10);
-CallButton.Size = UDim2.new(0, 309, 0, 26);
+CallButton.Size = UDim2.new(0, 505, 0, 24);
 CallButton.ZIndex = 31;
 CallButton.Font = Enum.Font.SourceSans;
 CallButton.Text = "Call #1";
 CallButton.TextColor3 = Color3.fromRGB(250, 251, 255);
-CallButton.TextSize = 16;
+CallButton.TextSize = 14;
 CallButton.Visible = false;
+__NAProtectUI(TurtleSpyGUI);
 local defaultButtonState = {}
 local function ButtonEffect(textlabel, text)
 	if not textlabel then
@@ -1323,6 +1386,31 @@ end;
 local function buildResultTable(results)
 	return buildNamedListTable("result", results or {});
 end;
+local function codeSize(text)
+	text = tostring(text or ""):gsub("\r\n", "\n"):gsub("\r", "\n"):gsub("\t", "    ")
+	local char = MeasureText("M", Code.TextSize, Code.Font, Vector2.new(1000, 1000))
+	local cw = math.max(char.X, 8)
+	local lh = math.max(char.Y + 2, 16)
+	local lines = 0
+	local longest = 0
+	for line in (text .. "\n"):gmatch("(.-)\n") do
+		lines = lines + 1
+		if #line > longest then
+			longest = #line
+		end
+	end
+	if lines < 1 then
+		lines = 1
+	end
+	local minW = math.max(CodeFrame.AbsoluteSize.X - 16, 509)
+	local minH = math.max(CodeFrame.AbsoluteSize.Y - 16, 138)
+	return math.max(longest * cw + 20, minW), math.max(lines * lh + 12, minH)
+end
+local function fitCode()
+	local w, h = codeSize(Code.Text)
+	Code.Size = UDim2.new(0, w, 0, h)
+	CodeFrame.CanvasSize = UDim2.new(0, w + 16, 0, h + 12)
+end
 local function updateCodeDisplay(remote, args, isClientEvent, callType)
 	if not remote then
 		return
@@ -1353,12 +1441,10 @@ local function updateCodeDisplay(remote, args, isClientEvent, callType)
 	end
 	Code.TextWrapped = false
 	Code.Text = codeText
-	local ts = MeasureText(Code.Text, Code.TextSize, Code.Font, Vector2.new(1000000, 1000000))
-	local w = math.max(ts.X, 329)
-	local h = math.max(ts.Y, 63)
-	Code.Size = UDim2.new(0, w, 0, h)
-	CodeFrame.CanvasSize = UDim2.new(0, w + 10, 0, h + 10)
+	fitCode()
 end
+Code:GetPropertyChangedSignal("Text"):Connect(fitCode)
+CodeFrame:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitCode)
 local function isRemoteEvent(obj)
 	return isA(obj, "RemoteEvent") or isA(obj, "UnreliableRemoteEvent");
 end;
@@ -1735,7 +1821,7 @@ DoNotStack.MouseButton1Click:Connect(function()
 		local isUnstacked = table.find(unstacked, lookingAt);
 		if isUnstacked then
 			table.remove(unstacked, isUnstacked);
-			DoNotStack.Text = "Unstack remote when fired with new args";
+			DoNotStack.Text = "Unstack new args";
 			DoNotStack.TextColor3 = Color3.fromRGB(245, 246, 250);
 		else
 			table.insert(unstacked, lookingAt);
@@ -1799,8 +1885,8 @@ RemoteScrollFrame.ChildAdded:Connect(function(child)
 	end
 	local connection = child.MouseButton1Click:Connect(function()
 		InfoHeaderText.Text = "Info: " .. remote.Name
-		mainFrame.Size = UDim2.new(0, 565, 0, 35)
-		OpenInfoFrame.Text = ">"
+		mainFrame.Size = UDim2.new(0, 760, 0, 35)
+		OpenInfoFrame.Text = "<"
 		InfoFrame.Visible = true
 		local list = remoteLogs[idx]
 		local last = list and list[#list] or nil
@@ -1984,7 +2070,7 @@ CloseInfoFrame.MouseButton1Click:Connect(function()
 end);
 OpenInfoFrame.MouseButton1Click:Connect(function()
 	if not InfoFrame.Visible then
-		mainFrame.Size = UDim2.new(0, 565, 0, 35);
+		mainFrame.Size = UDim2.new(0, 760, 0, 35);
 		OpenInfoFrame.Text = "<";
 	elseif RemoteScrollFrame.Visible then
 		mainFrame.Size = UDim2.new(0, 207, 0, 35);
@@ -1999,7 +2085,7 @@ Minimize.MouseButton1Click:Connect(function()
 		OpenInfoFrame.Text = "<";
 		InfoFrame.Visible = false;
 	elseif InfoFrameOpen then
-		mainFrame.Size = UDim2.new(0, 565, 0, 35);
+		mainFrame.Size = UDim2.new(0, 760, 0, 35);
 		OpenInfoFrame.Text = "<";
 		InfoFrame.Visible = true;
 	else

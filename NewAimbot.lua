@@ -6052,7 +6052,7 @@ local function createUI()
 	});
 	return frame;
 end;
-local function modelAABBOnScreen(m)
+uiRefs.modelAABBOnScreen = function(m)
 	local cf, sz = m:GetBoundingBox();
 	local hx, hy, hz = sz.X / 2, sz.Y / 2, sz.Z / 2;
 	local pts = {
@@ -6107,8 +6107,8 @@ local function modelAABBOnScreen(m)
 	end;
 	return minX, minY, maxX, maxY;
 end;
-local function cursorInsideModel(m, pad)
-	local a, b, c, d = modelAABBOnScreen(m);
+uiRefs.cursorInsideModel = function(m, pad)
+	local a, b, c, d = uiRefs.modelAABBOnScreen(m);
 	if not a then
 		return false;
 	end;
@@ -6117,7 +6117,7 @@ local function cursorInsideModel(m, pad)
 	local p = pad or 2;
 	return x >= a - p and x <= c + p and y >= b - p and y <= d + p;
 end;
-local function getBindInputEnum(name)
+uiRefs.getBindInputEnum = function(name)
 	local raw = tostring(name or "");
 	if raw == "" then
 		return nil;
@@ -6145,11 +6145,11 @@ local function getBindInputEnum(name)
 	end;
 	return nil;
 end;
-local function collectHotkeyInputs()
+uiRefs.collectHotkeyInputs = function()
 	local out = {};
 	local seen = {};
 	local function push(name)
-		local enumItem = getBindInputEnum(name);
+		local enumItem = uiRefs.getBindInputEnum(name);
 		if enumItem and (not seen[enumItem]) then
 			seen[enumItem] = true;
 			out[#out + 1] = enumItem;
@@ -6244,12 +6244,12 @@ handleOptionBind = function(action)
 	toast(action .. (_G[var] and " enabled" or " disabled"));
 	return true;
 end;
-local function binds()
+uiRefs.binds = function()
 	rebindStrongInputs();
 end;
 rebindStrongInputs = function()
 	unbindStrongInputs();
-	local lockInput = getBindInputEnum(_G.lockKey or "MouseButton2");
+	local lockInput = uiRefs.getBindInputEnum(_G.lockKey or "MouseButton2");
 	if lockInput then
 		local ok = pcall(function()
 			CAS:BindActionAtPriority("VyperiaBotLock", function(_, inputState)
@@ -6298,7 +6298,7 @@ rebindStrongInputs = function()
 			end);
 		end;
 	end;
-	local hotkeyInputs = collectHotkeyInputs();
+	local hotkeyInputs = uiRefs.collectHotkeyInputs();
 	if #hotkeyInputs > 0 then
 		uiRefs.runHotkey = function(name)
 			local now = os.clock();
@@ -6508,7 +6508,7 @@ uiRefs.setupPlayerMonitoring = function()
 		invalidateTargetState();
 		if not gui or (not gui.Parent) then
 			frm = createUI();
-			binds();
+			uiRefs.binds();
 		end;
 		if _G.espEnabled then
 			updateESP();
@@ -6517,7 +6517,7 @@ uiRefs.setupPlayerMonitoring = function()
 	table.insert(conns, c);
 end;
 frm = createUI();
-binds();
+uiRefs.binds();
 uiRefs.setupPlayerMonitoring();
 if _G.espEnabled then
 	updateESP();

@@ -488,32 +488,52 @@ con(optList:GetPropertyChangedSignal("AbsoluteContentSize"), function()
 	qsz(optList, optScroll, 8)
 end)
 
+local function robloxApiUrls(url)
+	local subdomain, path = tostring(url):match("^https?://([%w%-]+)%.roblox%.com(/.*)$")
+	if not subdomain then
+		subdomain, path = tostring(url):match("^https?://([%w%-]+)%.roproxy%.com(/.*)$")
+	end
+	if not subdomain then
+		subdomain, path = tostring(url):match("^https?://([%w%-]+)%.rotunnel%.com(/.*)$")
+	end
+	if not subdomain or not path then
+		return {url}
+	end
+	return {
+		"https://" .. subdomain .. ".roproxy.com" .. path,
+		"https://" .. subdomain .. ".rotunnel.com" .. path,
+		"https://" .. subdomain .. ".roblox.com" .. path
+	}
+end
+
 local function jreq(m, u, b, tries)
 	if not req then
 		return nil
 	end
 	local body = b and Hs:JSONEncode(b) or nil
 	for _ = 1, tries or 3 do
-		local ok, r = pcall(function()
-			return req({
-				Url = u,
-				Method = m,
-				Headers = {
-					Accept = "application/json",
-					["Content-Type"] = body and "application/json" or nil,
-					["Cache-Control"] = "no-cache",
-					Pragma = "no-cache",
-					["User-Agent"] = "Roblox-Client"
-				},
-				Body = body
-			})
-		end)
-		if ok and r and type(r.Body) == "string" then
-			local ok2, data = pcall(function()
-				return Hs:JSONDecode(r.Body)
+		for _, apiUrl in ipairs(robloxApiUrls(u)) do
+			local ok, r = pcall(function()
+				return req({
+					Url = apiUrl,
+					Method = m,
+					Headers = {
+						Accept = "application/json",
+						["Content-Type"] = body and "application/json" or nil,
+						["Cache-Control"] = "no-cache",
+						Pragma = "no-cache",
+						["User-Agent"] = "Roblox-Client"
+					},
+					Body = body
+				})
 			end)
-			if ok2 then
-				return data
+			if ok and r and type(r.Body) == "string" then
+				local ok2, data = pcall(function()
+					return Hs:JSONDecode(r.Body)
+				end)
+				if ok2 then
+					return data
+				end
 			end
 		end
 		task.wait(0.25)

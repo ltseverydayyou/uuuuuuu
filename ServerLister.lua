@@ -129,7 +129,7 @@ end;
 local tw = S("TweenService");
 local uis = S("UserInputService");
 local hs = S("HttpService");
-local srvBases = {"https://games.roblox.com", "https://games.roproxy.com", "https://roxytheproxy.com/games.roblox.com"};
+local srvBases = {"https://games.roproxy.com", "https://games.rotunnel.com", "https://games.roblox.com"};
 local srvWorker = "https://solaraserverhop.ltseverydayyou.workers.dev";
 local cam = workspace.CurrentCamera or workspace:FindFirstChildOfClass("Camera");
 local req = request or http_request or syn and syn.request or function() end;

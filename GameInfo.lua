@@ -207,20 +207,42 @@ local function pulseOnce(obj, prop, val1, val2, dur)
 end
 
 local req = syn and syn.request or request or http_request or (http and http.request) or (fluxus and fluxus.request) or (krnl and krnl.request) or krnl_request
-local function jget(url)
-	if req then
-		local ok, r = pcall(function()
-			return req({Url = url, Method = "GET", Headers = {Accept = "application/json", ["Cache-Control"] = "no-cache", ["User-Agent"] = "Roblox-Client"}})
-		end)
-		if not ok or not r or (r.StatusCode ~= 200 and r.StatusCode ~= 201) then return nil end
-		local ok2, data = pcall(HS.JSONDecode, HS, r.Body)
-		return ok2 and data or nil
-	else
-		local ok, res = pcall(HS.GetAsync, HS, url, true)
-		if not ok or type(res) ~= "string" then return nil end
-		local ok2, data = pcall(HS.JSONDecode, HS, res)
-		return ok2 and data or nil
+local function robloxApiUrls(url)
+	local subdomain, path = tostring(url):match("^https?://([%w%-]+)%.roblox%.com(/.*)$")
+	if not subdomain then
+		subdomain, path = tostring(url):match("^https?://([%w%-]+)%.roproxy%.com(/.*)$")
 	end
+	if not subdomain then
+		subdomain, path = tostring(url):match("^https?://([%w%-]+)%.rotunnel%.com(/.*)$")
+	end
+	if not subdomain or not path then
+		return {url}
+	end
+	return {
+		"https://" .. subdomain .. ".roproxy.com" .. path,
+		"https://" .. subdomain .. ".rotunnel.com" .. path,
+		"https://" .. subdomain .. ".roblox.com" .. path
+	}
+end
+local function jget(url)
+	for _, apiUrl in ipairs(robloxApiUrls(url)) do
+		if req then
+			local ok, r = pcall(function()
+				return req({Url = apiUrl, Method = "GET", Headers = {Accept = "application/json", ["Cache-Control"] = "no-cache", ["User-Agent"] = "Roblox-Client"}})
+			end)
+			if ok and r and (r.StatusCode == 200 or r.StatusCode == 201) and type(r.Body) == "string" then
+				local ok2, data = pcall(HS.JSONDecode, HS, r.Body)
+				if ok2 then return data end
+			end
+		else
+			local ok, res = pcall(HS.GetAsync, HS, apiUrl, true)
+			if ok and type(res) == "string" then
+				local ok2, data = pcall(HS.JSONDecode, HS, res)
+				if ok2 then return data end
+			end
+		end
+	end
+	return nil
 end
 
 local sg = Instance.new("ScreenGui")

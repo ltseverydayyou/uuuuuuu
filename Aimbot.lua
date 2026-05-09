@@ -568,8 +568,37 @@ local ServerHop = Misc:CreateButton({
 	Callback = function()
 		if httprequest then
             local servers = {}
-            local req = httprequest({Url = string.format("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Desc&limit=100&excludeFullGames=true", game.PlaceId)})
-            local body = __lt.cm("HttpService", "JSONDecode", req.Body)
+            local function robloxApiUrls(url)
+                local subdomain, path = tostring(url):match("^https?://([%w%-]+)%.roblox%.com(/.*)$")
+                if not subdomain then
+                    subdomain, path = tostring(url):match("^https?://([%w%-]+)%.roproxy%.com(/.*)$")
+                end
+                if not subdomain then
+                    subdomain, path = tostring(url):match("^https?://([%w%-]+)%.rotunnel%.com(/.*)$")
+                end
+                if not subdomain or not path then
+                    return {url}
+                end
+                return {
+                    "https://" .. subdomain .. ".roproxy.com" .. path,
+                    "https://" .. subdomain .. ".rotunnel.com" .. path,
+                    "https://" .. subdomain .. ".roblox.com" .. path
+                }
+            end
+            local body
+            local serverUrl = string.format("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Desc&limit=100&excludeFullGames=true", game.PlaceId)
+            for _, apiUrl in ipairs(robloxApiUrls(serverUrl)) do
+                local ok, req = pcall(httprequest, {Url = apiUrl, Method = "GET", Headers = {Accept = "application/json"}})
+                if ok and req and type(req.Body) == "string" and (not req.StatusCode or (req.StatusCode >= 200 and req.StatusCode < 300)) then
+                    local ok2, decoded = pcall(function()
+                        return __lt.cm("HttpService", "JSONDecode", req.Body)
+                    end)
+                    if ok2 and type(decoded) == "table" then
+                        body = decoded
+                        break
+                    end
+                end
+            end
         
             if body and body.data then
                 for i, v in next, body.data do

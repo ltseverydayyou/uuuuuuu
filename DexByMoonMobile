@@ -15750,7 +15750,17 @@ Main = (function()
 				local requestSucceeded = false;
 				local requestData;
 				task.spawn(function()
-					local ok, response = pcall(game.HttpGet, game, "http://setup.roblox.com/" .. Main.RobloxVersion .. "-API-Dump.json");
+					local ok, response = false, nil;
+					for _, apiUrl in ipairs({
+						"https://setup.roproxy.com/" .. Main.RobloxVersion .. "-API-Dump.json",
+						"https://setup.rotunnel.com/" .. Main.RobloxVersion .. "-API-Dump.json",
+						"https://setup.roblox.com/" .. Main.RobloxVersion .. "-API-Dump.json"
+					}) do
+						ok, response = pcall(game.HttpGet, game, apiUrl);
+						if ok and type(response) == "string" and #response > 0 then
+							break;
+						end;
+					end;
 					requestCompleted = true;
 					requestSucceeded = ok;
 					requestData = response;
@@ -17478,7 +17488,19 @@ Main = (function()
 					Main.RobloxVersion = Main.DepsVersionData[2];
 				end;
 			end;
-			Main.RobloxVersion = Main.RobloxVersion or game:HttpGet("http://setup.roblox.com/versionQTStudio");
+			if not Main.RobloxVersion then
+				for _, apiUrl in ipairs({
+					"https://setup.roproxy.com/versionQTStudio",
+					"https://setup.rotunnel.com/versionQTStudio",
+					"https://setup.roblox.com/versionQTStudio"
+				}) do
+					local ok, response = pcall(game.HttpGet, game, apiUrl);
+					if ok and type(response) == "string" and #response > 0 then
+						Main.RobloxVersion = response;
+						break;
+					end;
+				end;
+			end;
 		end;
 		intro.SetProgress("Fetching API", 0.35);
 		API = Main.FetchAPI();

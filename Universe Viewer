@@ -572,9 +572,9 @@ local HS = sv("HttpService");
 local ST = sv("Stats");
 local LP = P.LocalPlayer;
 local srvBases = {
-	"https://games.roblox.com",
 	"https://games.roproxy.com",
-	"https://roxytheproxy.com/games.roblox.com"
+	"https://games.rotunnel.com",
+	"https://games.roblox.com"
 };
 local srvWorker = "https://solaraserverhop.ltseverydayyou.workers.dev";
 local autoGuard = false;
@@ -1292,6 +1292,39 @@ local function pushUrl(t, v)
 	end;
 	table.insert(t, v);
 end;
+local function robloxApiUrls(url)
+	local subdomain, path = tostring(url):match("^https?://([%w%-]+)%.roblox%.com(/.*)$");
+	if not subdomain then
+		subdomain, path = tostring(url):match("^https?://([%w%-]+)%.roproxy%.com(/.*)$");
+	end;
+	if not subdomain then
+		subdomain, path = tostring(url):match("^https?://([%w%-]+)%.rotunnel%.com(/.*)$");
+	end;
+	if not subdomain or not path then
+		return {url};
+	end;
+	return {
+		"https://" .. subdomain .. ".roproxy.com" .. path,
+		"https://" .. subdomain .. ".rotunnel.com" .. path,
+		"https://" .. subdomain .. ".roblox.com" .. path
+	};
+end;
+local function getRobloxJson(url)
+	for _, apiUrl in ipairs(robloxApiUrls(url)) do
+		local ok, resp = pcall(function()
+			return game:HttpGet(apiUrl);
+		end);
+		if ok and type(resp) == "string" and #resp > 0 then
+			local ok2, js = pcall(function()
+				return HS:JSONDecode(resp);
+			end);
+			if ok2 and type(js) == "table" then
+				return js;
+			end;
+		end;
+	end;
+	return nil;
+end;
 local function getPlaceInfo(pid, force)
 	pid = tostring(pid);
 	if not force and placeInfoCache[pid] ~= nil then
@@ -1330,16 +1363,9 @@ local function getIconUrls(pid, force)
 	end;
 	for _, size in ipairs({"150x150", "256x256", "512x512"}) do
 		local url = "https://thumbnails.roblox.com/v1/places/gameicons?placeIds=" .. HS:UrlEncode(pid) .. "&returnPolicy=PlaceHolder&size=" .. size .. "&format=Png&isCircular=false";
-		local ok, resp = pcall(function()
-			return game:HttpGet(url);
-		end);
-		if ok and type(resp) == "string" and #resp > 0 then
-			local ok2, js = pcall(function()
-				return HS:JSONDecode(resp);
-			end);
-			if ok2 and type(js) == "table" and type(js.data) == "table" and type(js.data[1]) == "table" then
-				pushUrl(urls, js.data[1].imageUrl);
-			end;
+		local js = getRobloxJson(url);
+		if type(js) == "table" and type(js.data) == "table" and type(js.data[1]) == "table" then
+			pushUrl(urls, js.data[1].imageUrl);
 		end;
 	end;
 	pushUrl(urls, "https://www.roblox.com/asset-thumbnail/image?assetId=" .. pid .. "&width=150&height=150&format=png");

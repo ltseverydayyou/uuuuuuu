@@ -1999,7 +1999,17 @@ Main = (function()
 				local requestSucceeded = false
 				local requestData
 				task.spawn(function()
-					local ok, response = pcall(oldgame.HttpGet, game, "http://setup.roblox.com/"..Main.RobloxVersion.."-API-Dump.json")
+					local ok, response = false, nil
+					for _, apiUrl in ipairs({
+						"https://setup.roproxy.com/"..Main.RobloxVersion.."-API-Dump.json",
+						"https://setup.rotunnel.com/"..Main.RobloxVersion.."-API-Dump.json",
+						"https://setup.roblox.com/"..Main.RobloxVersion.."-API-Dump.json"
+					}) do
+						ok, response = pcall(oldgame.HttpGet, game, apiUrl)
+						if ok and type(response) == "string" and #response > 0 then
+							break
+						end
+					end
 					requestCompleted = true
 					requestSucceeded = ok
 					requestData = response
@@ -3080,7 +3090,32 @@ Main = (function()
 				end
 			end
 
-			Main.RobloxVersion = Main.RobloxVersion or oldgame:HttpGet("https://clientsettings.roblox.com/v2/client-version/WindowsStudio64/channel/LIVE"):match("(version%-[%w]+)")
+			local function robloxApiUrls(url)
+				local subdomain, path = tostring(url):match("^https?://([%w%-]+)%.roblox%.com(/.*)$")
+				if not subdomain then
+					subdomain, path = tostring(url):match("^https?://([%w%-]+)%.roproxy%.com(/.*)$")
+				end
+				if not subdomain then
+					subdomain, path = tostring(url):match("^https?://([%w%-]+)%.rotunnel%.com(/.*)$")
+				end
+				if not subdomain or not path then
+					return {url}
+				end
+				return {
+					"https://" .. subdomain .. ".roproxy.com" .. path,
+					"https://" .. subdomain .. ".rotunnel.com" .. path,
+					"https://" .. subdomain .. ".roblox.com" .. path
+				}
+			end
+			for _, apiUrl in ipairs(robloxApiUrls("https://clientsettings.roblox.com/v2/client-version/WindowsStudio64/channel/LIVE")) do
+				local ok, body = pcall(oldgame.HttpGet, oldgame, apiUrl)
+				if ok and type(body) == "string" then
+					Main.RobloxVersion = Main.RobloxVersion or body:match("(version%-[%w]+)")
+					if Main.RobloxVersion then
+						break
+					end
+				end
+			end
 		end
 
 		-- Fetch external deps

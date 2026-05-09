@@ -85,6 +85,33 @@ if game.GameId == 847722000 then
 		return ok
 	end
 
+	local saveQueued = false
+	local saveDirty = false
+
+	local function saveLater()
+		if not fileApi then
+			return
+		end
+		saveDirty = true
+		if saveQueued then
+			return
+		end
+		saveQueued = true
+		if type(task) ~= "table" or type(task.delay) ~= "function" then
+			saveQueued = false
+			saveDirty = false
+			saveCfg(saved)
+			return
+		end
+		task.delay(0.6, function()
+			saveQueued = false
+			if saveDirty then
+				saveDirty = false
+				saveCfg(saved)
+			end
+		end)
+	end
+
 	saved = loadCfg()
 	local st = genv.RakeGuiState
 	if type(st) ~= "table" then
@@ -105,7 +132,7 @@ if game.GameId == 847722000 then
 	local function cfgSet(k, v)
 		st[k] = v
 		saved[k] = v
-		saveCfg(saved)
+		saveLater()
 	end
 
 	local function cfgBool(k, def)
@@ -171,6 +198,7 @@ if game.GameId == 847722000 then
 	st.hide = false
 	st.noFall = cfgBool("noFall", false)
 	st.instaDrop = cfgBool("instaDrop", false)
+	st.instaTrap = cfgBool("instaTrap", false)
 	st.espSize = cfgNum("espSize", 12, 8, 24)
 	st.espScan = cfgNum("espScan", 0.75, 0.2, 3)
 	st.espMax = cfgNum("espMax", 0, 0, 5000)
@@ -215,14 +243,30 @@ if game.GameId == 847722000 then
 	_G.RakeTrapESP = st.trapEsp
 	_G.NoFallDMG = st.noFall
 	_G.InstaOpenSupplyDrop = st.instaDrop
+	_G.InstaCloseRakeTrap = st.instaTrap
 	if genv.RakeGui then
 		return
 	end
 
+	local svc = {}
+	local ref = cloneref or function(v) return v end
+
 	local function ClonedService(name)
-		local Service = function(_, serviceName) return __lt.gs(serviceName); end;
-		local Reference = (cloneref) or function(reference) return reference end
-		return __lt.cs(name, Reference);
+		local c = svc[name]
+		if c then
+			return c
+		end
+		local ok, res = pcall(function()
+			return __lt.cs(name, ref)
+		end)
+		if ok and res then
+			svc[name] = res
+			return res
+		end
+		local raw = __lt.gs(name)
+		local out = raw and ref(raw) or raw
+		svc[name] = out
+		return out
 	end
 
 	local function resolveAdonisEnv()
@@ -347,19 +391,6 @@ if game.GameId == 847722000 then
 	_G.RakeAdonisBypass = st.adonisBypass
 	task.spawn(runAdonisBypass)
 
-	if syn then
-		__lt.cm("StarterGui", "SetCore", "SendNotification", {
-			Title = "Info",
-			Text = "You are a synapse x user! This script will 100% work",
-			Duration = 5
-		})
-	else
-		__lt.cm("StarterGui", "SetCore", "SendNotification", {
-			Title = "Info",
-			Text = "You are not a synapse x user. This script is likely not to work",
-			Duration = 5
-		})
-	end
 
 
 	local Me = {
@@ -378,14 +409,25 @@ if game.GameId == 847722000 then
 	local Rep = ClonedService("ReplicatedStorage")
 	local Lit = ClonedService("Lighting")
 	local Tws = ClonedService("TweenService")
+	local wait = task and task.wait or wait
 	local conns = {}
+	local wipeFog
+	local wipeFovConns
 	local cleanupEsp
 	local esp
 
 	local function bind(sig, fn)
-		local c = sig:Connect(fn)
-		conns[#conns + 1] = c
-		return c
+		if not sig or type(fn) ~= "function" then
+			return nil
+		end
+		local ok, c = pcall(function()
+			return sig:Connect(fn)
+		end)
+		if ok and c then
+			conns[#conns + 1] = c
+			return c
+		end
+		return nil
 	end
 
 	local function wipeConns()
@@ -412,7 +454,11 @@ if game.GameId == 847722000 then
 		if v then
 			pcall(function()
 				v.Visible = false
-				v:Remove()
+				if type(v.Remove) == "function" then
+					v:Remove()
+				elseif type(v.Destroy) == "function" then
+					v:Destroy()
+				end
 			end)
 		end
 	end
@@ -449,6 +495,26 @@ if game.GameId == 847722000 then
 		end
 		local ok, res = pcall(function()
 			return v:FindFirstChild(name)
+		end)
+		return ok and res or nil
+	end
+
+	local function ffcr(v, name)
+		if not v then
+			return nil
+		end
+		local ok, res = pcall(function()
+			return v:FindFirstChild(name, true)
+		end)
+		return ok and res or nil
+	end
+
+	local function ffca(v, class)
+		if not v then
+			return nil
+		end
+		local ok, res = pcall(function()
+			return v:FindFirstChildWhichIsA(class, true)
 		end)
 		return ok and res or nil
 	end
@@ -497,6 +563,7 @@ if game.GameId == 847722000 then
 	
 	local curChar
 	local curHum
+	local curHrp
 	local charConns = {}
 
 	local function wipeCharConns()
@@ -512,10 +579,17 @@ if game.GameId == 847722000 then
 	end
 
 	local function bindChar(sig, fn)
-		local c = sig:Connect(fn)
-		charConns[#charConns + 1] = c
-		conns[#conns + 1] = c
-		return c
+		if not sig or type(fn) ~= "function" then
+			return nil
+		end
+		local ok, c = pcall(function()
+			return sig:Connect(fn)
+		end)
+		if ok and c then
+			charConns[#charConns + 1] = c
+			return c
+		end
+		return nil
 	end
 
 	local function getChar()
@@ -535,7 +609,7 @@ if game.GameId == 847722000 then
 		if not ch then
 			return nil
 		end
-		local hum = ch:FindFirstChildOfClass("Humanoid")
+		local hum = ffca(ch, "Humanoid")
 		if hum then
 			curHum = hum
 			return hum
@@ -544,18 +618,36 @@ if game.GameId == 847722000 then
 	end
 	
 	local function GET_HRP()
-		if not ClonedService("Players").LocalPlayer.Character then
-
-		else
-			if ClonedService("Players").LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-				return ClonedService("Players").LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-			end
+		local ch = getChar()
+		if not ch then
+			return nil
 		end
-		return nil
+		if curHrp and curHrp.Parent == ch then
+			return curHrp
+		end
+		local r = ffcr(ch, "HumanoidRootPart")
+		if r then
+			curHrp = r
+		end
+		return r
 	end
 
 	local function SET_HRP_CFRAME(cframer : CFrame)
-		GET_HRP().CFrame = cframer	
+		local r = GET_HRP()
+		if r then
+			r.CFrame = cframer
+			return true
+		end
+		return false
+	end
+
+	local function SET_HRP_ANCHORED(v)
+		local r = GET_HRP()
+		if r then
+			r.Anchored = v == true
+			return true
+		end
+		return false
 	end
 
 
@@ -563,11 +655,11 @@ if game.GameId == 847722000 then
 
 	local function openhousedoor()
 		for i = 1,1 do
-			local lastpos = ClonedService("Players").LocalPlayer.Character:WaitForChild("HumanoidRootPart").CFrame
+			local lastpos = Plrs.LocalPlayer.Character:WaitForChild("HumanoidRootPart").CFrame
 
-			SET_HRP_CFRAME(ClonedService("Workspace").Map.SafeHouse.Door.Door.CFrame+Vector3.new(0,-7,0))
+			SET_HRP_CFRAME(Ws.Map.SafeHouse.Door.Door.CFrame+Vector3.new(0,-7,0))
 			wait()
-			GET_HRP().Anchored = true
+			SET_HRP_ANCHORED(true)
 			wait(.4)
 			local ohString1 = "Door"
 
@@ -575,17 +667,17 @@ if game.GameId == 847722000 then
 			wait(.4)
 			SET_HRP_CFRAME(lastpos)
 			wait()
-			GET_HRP().Anchored = false
+			SET_HRP_ANCHORED(false)
 			wait(.4)
 		end
 	end
 
 	local function MOUSETP()
-		local mouse = ClonedService("Players").LocalPlayer:GetMouse()
+		local mouse = Plrs.LocalPlayer:GetMouse()
 
-		local tweenService = ClonedService("TweenService")
+		local tweenService = Tws
 		local tweenInfo = TweenInfo.new(1, Enum.EasingStyle.Linear, Enum.EasingDirection.In, 0, false, 0)
-		local part = ClonedService("Players").LocalPlayer.Character:WaitForChild("HumanoidRootPart")
+		local part = Plrs.LocalPlayer.Character:WaitForChild("HumanoidRootPart")
 		local goal = {CFrame = CFrame.new(mouse.Hit.Position)}
 		local tween = __lt.cm("TweenService", "Create", part, tweenInfo, goal)
 		tween:Play()
@@ -595,13 +687,136 @@ if game.GameId == 847722000 then
 		local ohString1 = "Open"
 		local ohBoolean2 = true
 
-		ClonedService("ReplicatedStorage").SupplyClientEvent:FireServer(ohString1, ohBoolean2)
+		Rep.SupplyClientEvent:FireServer(ohString1, ohBoolean2)
+	end
+
+	local function dropRoot()
+		local debris = ffc(Ws, "Debris")
+		if not debris then
+			return nil
+		end
+		return ffc(debris, "SupplyCrates") or ffc(debris, "SupplyCreates")
+	end
+
+	local function isDropBox(v)
+		return v and v.Name == "Box" and v:IsA("Model")
+	end
+
+	local function eachDrop(fn)
+		local root = dropRoot()
+		if not root or type(fn) ~= "function" then
+			return 0
+		end
+		local n = 0
+		local hit = {}
+		local function run(box)
+			if box and not hit[box] and isDropBox(box) then
+				hit[box] = true
+				n += 1
+				pcall(fn, box)
+			end
+		end
+		run(ffc(root, "Box"))
+		for _, box in pairs(kids(root)) do
+			run(box)
+		end
+		if n <= 0 then
+			for _, box in pairs(desc(root)) do
+				run(box)
+			end
+		end
+		return n
+	end
+
+	local function eachTrap(fn)
+		local debris = ffc(Ws, "Debris")
+		local traps = debris and ffc(debris, "Traps")
+		if not traps or type(fn) ~= "function" then
+			return 0
+		end
+		local n = 0
+		for _, trap in pairs(kids(traps)) do
+			if trap and trap.Name == "RakeTrapModel" then
+				n += 1
+				pcall(fn, trap)
+			end
+		end
+		return n
+	end
+
+	local function fastPrompt(prompt, attrs)
+		if not prompt then
+			return false
+		end
+		local ok = pcall(function()
+			if not prompt:IsA("ProximityPrompt") then
+				error("bad prompt")
+			end
+			prompt.HoldDuration = 0
+			prompt.RequiresLineOfSight = false
+		end)
+		if ok and attrs == true then
+			pcall(function()
+				for k in pairs(prompt:GetAttributes()) do
+					prompt:SetAttribute(tostring(k), false)
+				end
+			end)
+		end
+		return ok
+	end
+
+	local function fastDrop(box)
+		local gui = ffc(box, "GUIPart")
+		local ok = fastPrompt(gui and ffca(gui, "ProximityPrompt"), true)
+		if not ok then
+			fastPrompt(ffca(box, "ProximityPrompt"), true)
+		end
+		local unlock = ffc(box, "UnlockValue")
+		if unlock then
+			unlock.Value = 100
+		end
+	end
+
+	local function trapPrompt(prompt)
+		if fastPrompt(prompt, false) then
+			pcall(function()
+				prompt.ActionText = "Close"
+				prompt.ObjectText = "Rake Trap"
+			end)
+			return true
+		end
+		return false
+	end
+
+	local function fastTrap(trap)
+		local hit = ffcr(trap, "HitBox")
+		local att = hit and ffcr(hit, "Attachment")
+		local prompt = att and ffca(att, "ProximityPrompt")
+		if not prompt and trap then
+			prompt = ffca(trap, "ProximityPrompt")
+		end
+		trapPrompt(prompt)
+	end
+
+	local function fastDoorLever()
+		local map = ffc(Ws, "Map")
+		local safe = map and ffc(map, "SafeHouse")
+		local door = safe and ffc(safe, "Door")
+		local lever = door and ffc(door, "DoorLever")
+		local gui = lever and ffcr(lever, "DoorGUIPart")
+		local prompt = gui and ffca(gui, "ProximityPrompt") or ffca(lever, "ProximityPrompt")
+		if prompt then
+			pcall(function()
+				prompt.RequiresLineOfSight = false
+				prompt.MaxActivationDistance = 10
+			end)
+		end
 	end
 
 	local function aigoto(pos : Vector3)
 		local path = __lt.cm("PathfindingService", "CreatePath")
 
-		path:ComputeAsync(ClonedService("Players").LocalPlayer.Character:WaitForChild("HumanoidRootPart").Position,pos)
+		path:ComputeAsync(Plrs.LocalPlayer.Character:WaitForChild("HumanoidRootPart").Position,pos)
 
 		local waypoints = path:GetWaypoints()
 
@@ -612,59 +827,59 @@ if game.GameId == 847722000 then
 
 
 	local function restorepower()
-		local lastpos = ClonedService("Players").LocalPlayer.Character:WaitForChild("HumanoidRootPart").CFrame
+		local lastpos = Plrs.LocalPlayer.Character:WaitForChild("HumanoidRootPart").CFrame
 		wait()
 		for i = 1,1000 do
 			SET_HRP_CFRAME(CFrame.new(-280.808014, 20.3924561, -212.159821, -0.10549771, -1.16743761e-08, -0.994419575, 9.45945828e-08, 1, -2.17754046e-08, 0.994419575, -9.63639621e-08, -0.10549771))
 		end
-		GET_HRP().Anchored = true
+		SET_HRP_ANCHORED(true)
 		wait()
 		local ohString1 = "StationStart"
 
 		workspace.Map.PowerStation.StationFolder.RemoteEvent:FireServer(ohString1)
 		wait(20)
-		GET_HRP().Anchored = false
+		SET_HRP_ANCHORED(false)
 	end
 
 
 
 	local function airdropchams(mode)
 		if tostring(mode) == "Enable" then
-			if ClonedService("Workspace").Debris.SupplyCrates:FindFirstChild("Box") then
-				if ClonedService("Workspace").Debris.SupplyCrates.Box:FindFirstChild("SleepyDropChams") then
-
-				else
+			eachDrop(function(box)
+				if not ffc(box, "SleepyDropChams") then
 					local chams = Instance.new("Highlight")
 					chams.FillColor = Color3.new(0.317647, 1, 0)
 					chams.OutlineColor = Color3.new(0, 1, 0.250980)
-					chams.Parent = ClonedService("Workspace").Debris.SupplyCrates.Box
-					chams.Adornee = ClonedService("Workspace").Debris.SupplyCrates.Box
+					chams.Parent = box
+					chams.Adornee = box
 					chams.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
 					chams.OutlineTransparency = 0
 					chams.FillTransparency = 1
 					chams.Name = "SleepyDropChams"
 				end
-			end
+			end)
 		elseif tostring(mode) == "Disable" then
-			for i,v in pairs(ClonedService("Workspace").Debris.SupplyCrates:QueryDescendants("Instance")) do
+			local root = dropRoot()
+			for _, v in pairs(desc(root)) do
 				if v.Name == "SleepyDropChams" then
 					v:Destroy()
 				end
-			end		
+			end
 		end
 
 	end
 
 	local function rakechams()
-		if __lt.cm("Workspace", "FindFirstChild", "Rake") then
-			if ClonedService("Workspace").Rake:FindFirstChild("SleepyRakeChams") then
+		local rk = ffcr(Ws, "Rake")
+		if rk then
+			if ffcr(rk, "SleepyRakeChams") then
 
 			else
 				local chams = Instance.new("Highlight")
 				chams.FillColor = Color3.new(170, 0, 0)
 				chams.OutlineColor = Color3.fromRGB(255,255,255)
-				chams.Parent = ClonedService("Workspace").Rake
-				chams.Adornee = ClonedService("Workspace").Rake
+				chams.Parent = rk
+				chams.Adornee = rk
 				chams.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
 				chams.OutlineTransparency = .9
 				chams.FillTransparency = 0.5
@@ -676,13 +891,9 @@ if game.GameId == 847722000 then
 	end
 
 	local function disablerakechams()
-		if __lt.cm("Workspace", "FindFirstChild", "Rake") then
-			for i,v in pairs(__lt.cm("Workspace", "FindFirstChild", "Rake"):QueryDescendants("Instance")) do
-				if v.Name == "SleepyRakeChams" then
-					v:Destroy()
-				end
-			end
-		end
+		local rk = ffcr(Ws, "Rake")
+		local chams = ffcr(rk, "SleepyRakeChams")
+		safeDestroy(chams)
 	end
 
 
@@ -1160,17 +1371,29 @@ if game.GameId == 847722000 then
 	end
 
 	local function setInfoTarget(txt)
-		infoTgt = tostring(txt or "Rake's Target : ?")
+		local v = tostring(txt or "Rake's Target : ?")
+		if v == infoTgt then
+			return
+		end
+		infoTgt = v
 		syncBubble()
 	end
 
 	local function setInfoTime(txt)
-		infoTime = tostring(txt or "Time Until Day : ?")
+		local v = tostring(txt or "Time Until Day : ?")
+		if v == infoTime then
+			return
+		end
+		infoTime = v
 		syncBubble()
 	end
 
 	local function setInfoPlayed(txt)
-		infoPlayed = tostring(txt or "Time Played : ?")
+		local v = tostring(txt or "Time Played : ?")
+		if v == infoPlayed then
+			return
+		end
+		infoPlayed = v
 		syncBubble()
 	end
 
@@ -1184,6 +1407,7 @@ if game.GameId == 847722000 then
 	end)
 
 	local function saveNow()
+		saveDirty = false
 		return saveCfg(saved)
 	end
 
@@ -1611,11 +1835,19 @@ if game.GameId == 847722000 then
 				return
 			end
 			AllowRunService = false
+			saveNow()
 			pcall(function()
 				if cleanupEsp then
 					cleanupEsp()
 				end
 			end)
+			wipeCharConns()
+			if wipeFovConns then
+				wipeFovConns()
+			end
+			if wipeFog then
+				wipeFog()
+			end
 			wipeConns()
 			safeDestroy(FreeCamPart)
 			safeDestroy(HidePartHightLight)
@@ -1628,7 +1860,7 @@ if game.GameId == 847722000 then
 	local fogCons = {}
 	local fogLast = nil
 
-	local function wipeFog()
+	wipeFog = function()
 		for i = #fogCons, 1, -1 do
 			local c = fogCons[i]
 			if c then
@@ -1641,10 +1873,17 @@ if game.GameId == 847722000 then
 	end
 
 	local function bindFog(sig, fn)
-		local c = sig:Connect(fn)
-		fogCons[#fogCons + 1] = c
-		conns[#conns + 1] = c
-		return c
+		if not sig or type(fn) ~= "function" then
+			return nil
+		end
+		local ok, c = pcall(function()
+			return sig:Connect(fn)
+		end)
+		if ok and c then
+			fogCons[#fogCons + 1] = c
+			return c
+		end
+		return nil
 	end
 
 	local function setFogOff()
@@ -1696,8 +1935,8 @@ if game.GameId == 847722000 then
 	ClientTab:CreateButton({
 		Name = "Third Person",
 		Callback = function()
-			ClonedService("Players").LocalPlayer.Character.RagdollTime.RagdollSwitch.Value = true
-			ClonedService("Players").LocalPlayer.Character.RagdollTime.RagdollSwitch.Value = false
+			Plrs.LocalPlayer.Character.RagdollTime.RagdollSwitch.Value = true
+			Plrs.LocalPlayer.Character.RagdollTime.RagdollSwitch.Value = false
 		end,
 	})
 
@@ -1758,36 +1997,34 @@ if game.GameId == 847722000 then
 				Duration = 1,
 				Image = 4483362458,
 			})
-			if _G.RakeKillAura == true then
-				repeat wait()
-					pcall(function()
-						for i,v in pairs(__lt.cm("Workspace", "GetChildren")) do
-							if __lt.cm("Workspace", "FindFirstChild", "Rake") then
-								if (ClonedService("Workspace").Rake.HumanoidRootPart.Position - ClonedService("Players").LocalPlayer.Character.HumanoidRootPart.Position).Magnitude < 200 then
-									ClonedService("Players").LocalPlayer.Character.StunStick.Event:FireServer("S")
-									wait()
-									ClonedService("Players").LocalPlayer.Character.StunStick.Event:FireServer("H", workspace.Rake.HumanoidRootPart)	
-								end
-							end
-						end
-						wait(.1)
-					end)
-				until _G.RakeKillAura == false
-			end
 		end,
 	})
 
 	-- rake killaura hitpart 
-	bind(ClonedService("RunService").Heartbeat, function()
-		if AllowRunService == true then
-			if _G.RakeKillAura == true then
-				pcall(function()
-					if __lt.cm("Workspace", "FindFirstChild", "Rake") then
-						ClonedService("Players").LocalPlayer.Character.StunStick.HitPart.Position = __lt.cm("Workspace", "FindFirstChild", "Rake").HumanoidRootPart.Position
-					end
-				end)
-			end
+	local auraT = 0
+
+	bind(Run.Heartbeat, function(dt)
+		if AllowRunService ~= true or _G.RakeKillAura ~= true then
+			return
 		end
+		auraT += dt
+		pcall(function()
+			local ch = getChar()
+			local root = GET_HRP()
+			local rk = ffcr(Ws, "Rake")
+			local rr = ffcr(rk, "HumanoidRootPart")
+			local stick = ch and ffcr(ch, "StunStick")
+			local hp = stick and ffcr(stick, "HitPart")
+			local ev = stick and ffcr(stick, "Event")
+			if hp and rr then
+				hp.Position = rr.Position
+			end
+			if auraT >= 0.12 and root and rr and ev and (rr.Position - root.Position).Magnitude < 200 then
+				auraT = 0
+				ev:FireServer("S")
+				ev:FireServer("H", rr)
+			end
+		end)
 	end)
 
 
@@ -1861,9 +2098,9 @@ if game.GameId == 847722000 then
 	ExploitsTab:CreateButton({
 		Name = "Bring Scraps",
 		Callback = function()
-			for i,v in pairs(ClonedService("Workspace").Filter.ScrapSpawns:QueryDescendants("Instance")) do
+			for i,v in pairs(Ws.Filter.ScrapSpawns:QueryDescendants("Instance")) do
 				if v.Name:lower() == "scrap" then
-					v:PivotTo(ClonedService("Players").LocalPlayer.Character:GetPivot())
+					v:PivotTo(Plrs.LocalPlayer.Character:GetPivot())
 				end
 			end
 		end,
@@ -1910,7 +2147,7 @@ if game.GameId == 847722000 then
 	}
 
 	local function getLocFolder()
-		local filter = ffc(ClonedService("Workspace"), "Filter")
+		local filter = ffc(Ws, "Filter")
 		return filter and ffc(filter, "LocationPoints") or nil
 	end
 
@@ -1992,7 +2229,7 @@ if game.GameId == 847722000 then
 			return obj.Position
 		end
 		if obj:IsA("Model") then
-			local pp = obj.PrimaryPart or ffc(obj, "HumanoidRootPart") or ffc(obj, "Head") or ffc(obj, "HitBox") or ffc(obj, "Scrap")
+			local pp = obj.PrimaryPart or ffcr(obj, "HumanoidRootPart") or ffcr(obj, "Head") or ffcr(obj, "HitBox") or ffcr(obj, "Scrap")
 			if pp and pp:IsA("BasePart") then
 				return pp.Position
 			end
@@ -2031,13 +2268,27 @@ if game.GameId == 847722000 then
 			if st.espDist == true and dist then
 				text = tostring(text) .. " [" .. tostring(math.floor(dist + 0.5)) .. "m]"
 			end
-			d.Text = text
-			d.Size = st.espSize or d.Size
-			d.Outline = false
-			d.Position = Vector2.new(p.X, p.Y)
-			d.Visible = true
+			if d.Text ~= text then
+				d.Text = text
+			end
+			local size = st.espSize or d.Size
+			if d.Size ~= size then
+				d.Size = size
+			end
+			if d.Outline ~= false then
+				d.Outline = false
+			end
+			local pos2 = Vector2.new(p.X, p.Y)
+			if d.Position ~= pos2 then
+				d.Position = pos2
+			end
+			if d.Visible ~= true then
+				d.Visible = true
+			end
 		else
-			d.Visible = false
+			if d.Visible ~= false then
+				d.Visible = false
+			end
 		end
 	end
 
@@ -2167,9 +2418,13 @@ if game.GameId == 847722000 then
 	local scanT = 1
 	local updT = 0
 
+	local function espAny()
+		return _G.FlareGunESP == true or _G.RakeChams == true or _G.PlayerESP == true or _G.SupplyDropESP == true or _G.LocationESP == true or _G.ScrapESP == true or _G.RakeTrapESP == true
+	end
+
 	local function scanEsp()
 		if _G.FlareGunESP == true then
-			local fl = __lt.cm("Workspace", "FindFirstChild", "FlareGunPickUp")
+			local fl = ffcr(Ws, "FlareGunPickUp")
 			if fl then
 				if not esp.flare or esp.flare.o ~= fl then
 					cleanupEsp("flare")
@@ -2187,7 +2442,7 @@ if game.GameId == 847722000 then
 		end
 
 		if _G.RakeChams == true then
-			local rk = __lt.cm("Workspace", "FindFirstChild", "Rake")
+			local rk = ffcr(Ws, "Rake")
 			if rk then
 				if not esp.rake or esp.rake.o ~= rk then
 					cleanupEsp("rake")
@@ -2205,8 +2460,8 @@ if game.GameId == 847722000 then
 		end
 
 		if _G.PlayerESP == true then
-			for _, p in pairs(__lt.cm("Players", "GetPlayers")) do
-				if p ~= ClonedService("Players").LocalPlayer and p.Character then
+			for _, p in pairs(Plrs:GetPlayers()) do
+				if p ~= Plrs.LocalPlayer and p.Character then
 					local ch = p.Character
 					if not esp.players[p] or esp.players[p].o ~= ch then
 						clearOne(esp.players, p)
@@ -2228,17 +2483,15 @@ if game.GameId == 847722000 then
 		end
 
 		if _G.SupplyDropESP == true then
-			local debris = ffc(ClonedService("Workspace"), "Debris")
-			local crates = debris and ffc(debris, "SupplyCrates")
-			for _, box in pairs(kids(crates)) do
-				if box.Name == "Box" and not esp.drops[box] then
+			eachDrop(function(box)
+				if not esp.drops[box] then
 					esp.drops[box] = {
 						o = box,
 						d = drawTxt("Supply Drop", Color3.fromRGB(251, 255, 0)),
 						h = nil,
 					}
 				end
-			end
+			end)
 			for box in pairs(esp.drops) do
 				if not box.Parent then
 					clearOne(esp.drops, box)
@@ -2249,7 +2502,7 @@ if game.GameId == 847722000 then
 		end
 
 		if _G.ScrapESP == true then
-			local filter = ffc(ClonedService("Workspace"), "Filter")
+			local filter = ffc(Ws, "Filter")
 			local root = filter and ffc(filter, "ScrapSpawns")
 			for _, v in pairs(desc(root)) do
 				if v.Name == "Scrap" and v:IsA("BasePart") and not esp.scraps[v] then
@@ -2270,7 +2523,7 @@ if game.GameId == 847722000 then
 		end
 
 		if _G.RakeTrapESP == true then
-			local debris = ffc(ClonedService("Workspace"), "Debris")
+			local debris = ffc(Ws, "Debris")
 			local root = debris and ffc(debris, "Traps")
 			if root then
 				for _, v in pairs(kids(root)) do
@@ -2293,9 +2546,13 @@ if game.GameId == 847722000 then
 		end
 	end
 
-	bind(ClonedService("RunService").Heartbeat, function(dt)
+	bind(Run.Heartbeat, function(dt)
 		if AllowRunService ~= true then
 			cleanupEsp()
+			return
+		end
+
+		if not espAny() then
 			return
 		end
 
@@ -2307,7 +2564,7 @@ if game.GameId == 847722000 then
 			scanEsp()
 		end
 
-		if updT < 0.033 then
+		if updT < 0.08 then
 			return
 		end
 		updT = 0
@@ -2342,23 +2599,24 @@ if game.GameId == 847722000 then
 
 		if esp.flare then
 			local fl = esp.flare.o
-			local part = fl and (ffc(fl, "FlareGun") or fl)
+			local part = fl and (ffcr(fl, "FlareGun") or fl)
 			show(esp.flare.d, _G.FlareGunESP and posOf(part), "Flare Gun")
 		end
 
 		if esp.rake then
 			local rk = esp.rake.o
-			local mons = rk and ffc(rk, "Monster")
-			local hp = valOf(mons and ffc(mons, "Health"), nil)
-			if hp == nil and rk and rk:FindFirstChildOfClass("Humanoid") then
-				hp = rk:FindFirstChildOfClass("Humanoid").Health
+			local mons = rk and ffcr(rk, "Monster")
+			local hp = valOf(mons and ffcr(mons, "Health"), nil)
+			if hp == nil and rk then
+				local hum = ffca(rk, "Humanoid")
+				hp = hum and hum.Health or hp
 			end
-			show(esp.rake.d, _G.RakeChams and posOf(ffc(rk, "Head") or rk), "Rake, Health : "..tostring(hp or "?"))
+			show(esp.rake.d, _G.RakeChams and posOf(ffcr(rk, "Head") or rk), "Rake, Health : "..tostring(hp or "?"))
 		end
 
 		for p, it in pairs(esp.players) do
 			local ch = it.o
-			local head = ch and ffc(ch, "Head")
+			local head = ch and ffcr(ch, "Head")
 			local txt = p.Name
 			if _G.PlayerESPShowDistance == true then
 				txt = p.Name.." [Distance Travelled : "..tostring(valOf(ffc(p, "DistanceTravelled"), "?")).."]"
@@ -2367,7 +2625,7 @@ if game.GameId == 847722000 then
 		end
 
 		for box, it in pairs(esp.drops) do
-			show(it.d, _G.SupplyDropESP and posOf(ffc(box, "HitBox") or box), "Supply Drop")
+			show(it.d, _G.SupplyDropESP and posOf(ffcr(box, "HitBox") or box), "Supply Drop")
 		end
 
 		for v, it in pairs(esp.scraps) do
@@ -2394,7 +2652,7 @@ if game.GameId == 847722000 then
 	local lastFov
 	local fovConns = {}
 
-	local function wipeFovConns()
+	wipeFovConns = function()
 		for i = #fovConns, 1, -1 do
 			local c = fovConns[i]
 			if c then
@@ -2441,7 +2699,6 @@ if game.GameId == 847722000 then
 		end)
 		if ok and c then
 			fovConns[#fovConns + 1] = c
-			conns[#conns + 1] = c
 		end
 		applyFov(true)
 	end
@@ -2466,11 +2723,12 @@ if game.GameId == 847722000 then
 		wipeCharConns()
 		curChar = ch
 		curHum = nil
+		curHrp = nil
 		if not ch then
 			return
 		end
 		task.spawn(function()
-			local hum = ch:FindFirstChildOfClass("Humanoid") or ch:WaitForChild("Humanoid", 10)
+			local hum = ffca(ch, "Humanoid") or ch:WaitForChild("Humanoid", 10)
 			if hum then
 				curHum = hum
 				applySpeed(true)
@@ -2607,20 +2865,37 @@ if game.GameId == 847722000 then
 		end,
 	})
 
-	bind(ClonedService("RunService").Heartbeat, function()
-		if AllowRunService == true then
-			if _G.InstaOpenSupplyDrop == true then
-				pcall(function()
-					for i,v in pairs(ClonedService("Workspace").Debris.SupplyCrates.Box.GUIPart.ProximityPrompt:GetAttributes()) do
+	ExploitsTab:CreateToggle({
+		Name = "Insta Close RakeTrap",
+		CurrentValue = st.instaTrap,
+		Flag = "InstaCloseRakeTrap",
+		Callback = function(state)
+			_G.InstaCloseRakeTrap = state == true
+			st.instaTrap = _G.InstaCloseRakeTrap
+			cfgSet("instaTrap", st.instaTrap)
+		end,
+	})
 
+	local promptT = 1
 
-						ClonedService("Workspace").Debris.SupplyCrates.Box.GUIPart.ProximityPrompt:SetAttribute(tostring(i),false)
-
-					end
-					ClonedService("Workspace").Debris.SupplyCrates.Box.UnlockValue.Value = 100
-				end)
-			end
+	bind(Run.Heartbeat, function(dt)
+		if AllowRunService ~= true then
+			return
 		end
+		promptT += dt
+		if promptT < 0.35 then
+			return
+		end
+		promptT = 0
+		pcall(function()
+			fastDoorLever()
+			if _G.InstaOpenSupplyDrop == true then
+				eachDrop(fastDrop)
+			end
+			if _G.InstaCloseRakeTrap == true then
+				eachTrap(fastTrap)
+			end
+		end)
 	end)
 
 	bindFovCam(Ws.CurrentCamera or workspace.CurrentCamera)
@@ -2633,14 +2908,25 @@ if game.GameId == 847722000 then
 		end)
 	end)
 	
-	bind(ClonedService("RunService").Heartbeat, function()
-		applySpeed(false)
+	local spdT = 0
+
+	bind(Run.Heartbeat, function(dt)
+		if AllowRunService ~= true or st.spdOn ~= true then
+			return
+		end
+		spdT += dt
+		if spdT >= 0.5 then
+			spdT = 0
+			applySpeed(false)
+		end
 	end)
 
 	function DestroyUI()
 		AllowRunService = false
+		saveNow()
 		wipeCharConns()
 		wipeFovConns()
+		wipeFog()
 		if cleanupEsp then
 			cleanupEsp()
 		end
@@ -2672,54 +2958,79 @@ if game.GameId == 847722000 then
 
 	-- update time until day label
 
-	bind(ClonedService("RunService").Heartbeat, function()
-		if AllowRunService == true then
-			pcall(function()
-				local sec = fmtTime(valOf(ffc(Rep, "Timer"), 0))
-				if valOf(ffc(Rep, "Night"), false) == true then
-					TimeUntilDayCounter:Set("Time Until Day : "..sec)
-				else
-					TimeUntilDayCounter:Set("Time Until Night : "..sec)
-				end
-				local lp = Plrs.LocalPlayer
-				local tp = lp and ffc(lp, "TimePlayed")
-				TimePlayedCounter:Set("Time Played : "..fmtTime(valOf(tp, 0)))
-			end)
+	local infoT = 1
+
+	bind(Run.Heartbeat, function(dt)
+		if AllowRunService ~= true then
+			return
 		end
+		infoT += dt
+		if infoT < 1 then
+			return
+		end
+		infoT = 0
+		pcall(function()
+			local sec = fmtTime(valOf(ffc(Rep, "Timer"), 0))
+			if valOf(ffc(Rep, "Night"), false) == true then
+				TimeUntilDayCounter:Set("Time Until Day : "..sec)
+			else
+				TimeUntilDayCounter:Set("Time Until Night : "..sec)
+			end
+			local me = Plrs.LocalPlayer
+			local tp = me and ffc(me, "TimePlayed")
+			TimePlayedCounter:Set("Time Played : "..fmtTime(valOf(tp, 0)))
+		end)
 	end)
 
 	-- update rakes targetlabel
 
 
-	bind(ClonedService("RunService").Heartbeat, function()
-		if AllowRunService == true then
-			pcall(function()
-				local rk = __lt.cm("Workspace", "FindFirstChild", "Rake")
-				local tv = rk and rk:FindFirstChild("TargetVal")
-				local val = tv and tv.Value
-				if val and val.Parent then
-					RakeTargetCounter:Set("Rake's Target : " .. tostring(val.Parent))
-				else
-					RakeTargetCounter:Set("Rake's Target : none")
-				end
-			end)
+	local tarT = 0.25
+
+	bind(Run.Heartbeat, function(dt)
+		if AllowRunService ~= true then
+			return
 		end
+		tarT += dt
+		if tarT < 0.25 then
+			return
+		end
+		tarT = 0
+		pcall(function()
+			local rk = ffcr(Ws, "Rake")
+			local tv = ffcr(rk, "TargetVal")
+			local val = tv and tv.Value
+			if val and val.Parent then
+				RakeTargetCounter:Set("Rake's Target : " .. tostring(val.Parent))
+			else
+				RakeTargetCounter:Set("Rake's Target : none")
+			end
+		end)
 	end)
 
 
 	-- alert if blood hour
 
-	bind(ClonedService("RunService").Heartbeat, function()
-		if AllowRunService == true then
-			if ClonedService("ReplicatedStorage").InitiateBloodHour.Value == true then
-				Obsidian:Notify({
-					Title = "ALERT",
-					Content = "HOLY JESUS BLOOD HOUR IS COMING NOW",
-					Duration = 5,
-					Image = 4483362458,
-				})
-				ClonedService("ReplicatedStorage").InitiateBloodHour.Value = false
-			end
+	local bhT = 1
+
+	bind(Run.Heartbeat, function(dt)
+		if AllowRunService ~= true then
+			return
+		end
+		bhT += dt
+		if bhT < 1 then
+			return
+		end
+		bhT = 0
+		local bh = ffc(Rep, "InitiateBloodHour")
+		if bh and bh.Value == true then
+			Obsidian:Notify({
+				Title = "ALERT",
+				Content = "HOLY JESUS BLOOD HOUR IS COMING NOW",
+				Duration = 5,
+				Image = 4483362458,
+			})
+			bh.Value = false
 		end
 	end)
 

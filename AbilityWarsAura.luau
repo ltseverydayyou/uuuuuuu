@@ -92,6 +92,21 @@ local ReplicatedStorage = __lt.cs("ReplicatedStorage", cloneref);
 local RunService = __lt.cs("RunService", cloneref);
 local TweenService = __lt.cs("TweenService", cloneref);
 local UserInputService = __lt.cs("UserInputService", cloneref);
+local runtimeEnv = (getgenv and getgenv()) or _G;
+if type(runtimeEnv.__AbilityWarsAuraRuntime) == "table" and type(runtimeEnv.__AbilityWarsAuraRuntime.cleanup) == "function" then
+	pcall(runtimeEnv.__AbilityWarsAuraRuntime.cleanup);
+end;
+local runtimeState = {
+	alive = true,
+	connections = {}
+};
+runtimeEnv.__AbilityWarsAuraRuntime = runtimeState;
+local function track(conn)
+	if conn then
+		runtimeState.connections[#runtimeState.connections + 1] = conn;
+	end;
+	return conn;
+end;
 local localPlayer = Players.LocalPlayer;
 local punchRemote = (__lt.cm("ReplicatedStorage", "WaitForChild", "Remote Events")):WaitForChild("Punch");
 local PUNCH_ID = 314159265359;
@@ -136,14 +151,40 @@ local function onCharacterRemoving()
 	rootPart, aura = nil, nil;
 	loops = {};
 end;
-localPlayer.CharacterAdded:Connect(onCharacterAdded);
-localPlayer.CharacterRemoving:Connect(onCharacterRemoving);
+track(localPlayer.CharacterAdded:Connect(onCharacterAdded));
+track(localPlayer.CharacterRemoving:Connect(onCharacterRemoving));
 if localPlayer.Character then
 	onCharacterAdded(localPlayer.Character);
 end;
 local guiParent = type(gethui) == "function" and gethui() or __lt.cs("CoreGui", cloneref) or localPlayer:WaitForChild("PlayerGui");
 local screenGui = Instance.new("ScreenGui", guiParent);
 screenGui.ResetOnSpawn = false;
+runtimeState.cleanup = function()
+	if not runtimeState.alive then
+		return;
+	end;
+	runtimeState.alive = false;
+	auraEnabled = false;
+	for _, conn in ipairs(runtimeState.connections) do
+		pcall(function()
+			conn:Disconnect();
+		end);
+	end;
+	runtimeState.connections = {};
+	if aura then
+		pcall(function()
+			aura:Destroy();
+		end);
+	end;
+	if screenGui then
+		pcall(function()
+			screenGui:Destroy();
+		end);
+	end;
+	if runtimeEnv.__AbilityWarsAuraRuntime == runtimeState then
+		runtimeEnv.__AbilityWarsAuraRuntime = nil;
+	end;
+end;
 local mainFrame = Instance.new("Frame", screenGui);
 mainFrame.Size = UDim2.new(0, 600, 0, 40);
 mainFrame.Position = UDim2.new(0.5, -300, 0, 50);
@@ -231,21 +272,21 @@ do
 			di = inp;
 		end;
 	end);
-	UserInputService.InputChanged:Connect(function(inp)
+	track(UserInputService.InputChanged:Connect(function(inp)
 		if dragging and inp == di then
 			local delta = inp.Position - ds;
 			mainFrame.Position = UDim2.new(sp.X.Scale, sp.X.Offset + delta.X, sp.Y.Scale, sp.Y.Offset + delta.Y);
 		end;
-	end);
+	end));
 end;
-RunService.RenderStepped:Connect(function()
+track(RunService.RenderStepped:Connect(function()
 	if rootPart and aura then
 		aura.CFrame = rootPart.CFrame;
 	end;
-end);
+end));
 do
 	local acc, ci = 0, 0.1;
-	RunService.Heartbeat:Connect(function(dt)
+	track(RunService.Heartbeat:Connect(function(dt)
 		acc = acc + dt;
 		if acc < ci or (not auraEnabled) or (not rootPart) then
 			return;
@@ -295,5 +336,5 @@ do
 				loops[other] = nil;
 			end;
 		end;
-	end);
+	end));
 end;

@@ -92,6 +92,21 @@ local ReplicatedStorage = __lt.cs("ReplicatedStorage", cloneref);
 local RunService = __lt.cs("RunService", cloneref);
 local TweenService = __lt.cs("TweenService", cloneref);
 local UserInputService = __lt.cs("UserInputService", cloneref);
+local runtimeEnv = (getgenv and getgenv()) or _G;
+if type(runtimeEnv.__SlapAuraSBRuntime) == "table" and type(runtimeEnv.__SlapAuraSBRuntime.cleanup) == "function" then
+	pcall(runtimeEnv.__SlapAuraSBRuntime.cleanup);
+end;
+local runtimeState = {
+	alive = true,
+	connections = {}
+};
+runtimeEnv.__SlapAuraSBRuntime = runtimeState;
+local function trackConn(conn)
+	if conn then
+		runtimeState.connections[#runtimeState.connections + 1] = conn;
+	end;
+	return conn;
+end;
 local localPlayer = Players.LocalPlayer;
 local attackRemotes, attackRemoteSet = {}, {};
 local forbiddenNames = {
@@ -123,8 +138,8 @@ end;
 for _, d in ipairs(__lt.cm("ReplicatedStorage", "QueryDescendants", "Instance")) do
 	addRemote(d);
 end;
-ReplicatedStorage.DescendantAdded:Connect(addRemote);
-ReplicatedStorage.DescendantRemoving:Connect(removeRemote);
+trackConn(ReplicatedStorage.DescendantAdded:Connect(addRemote));
+trackConn(ReplicatedStorage.DescendantRemoving:Connect(removeRemote));
 local ghostRemote = __lt.cm("ReplicatedStorage", "WaitForChild", "Ghostinvisibilityactivated");
 local radius, delay = 17.5, 0.85;
 local rootPart, aura;
@@ -165,19 +180,19 @@ local function initPlayer(p)
 	local function setFlag(f)
 		playersData[p].inArena = f and f.Value or false;
 		if f then
-			f.Changed:Connect(function()
+			trackConn(f.Changed:Connect(function()
 				playersData[p].inArena = f.Value;
-			end);
+			end));
 		end;
 	end;
-	p.CharacterAdded:Connect(function(ch)
+	trackConn(p.CharacterAdded:Connect(function(ch)
 		rootCache[ch] = nil;
 		local f = ch:FindFirstChild("isInArena") or ch:FindFirstChild("IsInDefaultArena");
 		setFlag(f);
-	end);
-	p.CharacterRemoving:Connect(function(ch)
+	end));
+	trackConn(p.CharacterRemoving:Connect(function(ch)
 		rootCache[ch] = nil;
-	end);
+	end));
 	if p.Character then
 		local ch = p.Character;
 		rootCache[ch] = nil;
@@ -188,8 +203,8 @@ end;
 for _, p in ipairs(__lt.cm("Players", "GetPlayers")) do
 	initPlayer(p);
 end;
-Players.PlayerAdded:Connect(initPlayer);
-Players.PlayerRemoving:Connect(function(p)
+trackConn(Players.PlayerAdded:Connect(initPlayer));
+trackConn(Players.PlayerRemoving:Connect(function(p)
 	for i = #trackedPlayers, 1, -1 do
 		if trackedPlayers[i] == p then
 			table.remove(trackedPlayers, i);
@@ -197,7 +212,7 @@ Players.PlayerRemoving:Connect(function(p)
 	end;
 	playersData[p] = nil;
 	loops[p] = nil;
-end);
+end));
 local function createAura()
 	if aura then
 		aura:Destroy();
@@ -230,8 +245,8 @@ local function onCharacterRemoving()
 	rootPart, aura = nil, nil;
 	loops = {};
 end;
-localPlayer.CharacterAdded:Connect(onCharacterAdded);
-localPlayer.CharacterRemoving:Connect(onCharacterRemoving);
+trackConn(localPlayer.CharacterAdded:Connect(onCharacterAdded));
+trackConn(localPlayer.CharacterRemoving:Connect(onCharacterRemoving));
 if localPlayer.Character then
 	onCharacterAdded(localPlayer.Character);
 end;
@@ -242,6 +257,32 @@ screenGui.IgnoreGuiInset = true;
 screenGui.ResetOnSpawn = false;
 screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling;
 screenGui.Parent = guiParent;
+runtimeState.cleanup = function()
+	if not runtimeState.alive then
+		return;
+	end;
+	runtimeState.alive = false;
+	auraEnabled = false;
+	for _, conn in ipairs(runtimeState.connections) do
+		pcall(function()
+			conn:Disconnect();
+		end);
+	end;
+	runtimeState.connections = {};
+	if aura then
+		pcall(function()
+			aura:Destroy();
+		end);
+	end;
+	if screenGui then
+		pcall(function()
+			screenGui:Destroy();
+		end);
+	end;
+	if runtimeEnv.__SlapAuraSBRuntime == runtimeState then
+		runtimeEnv.__SlapAuraSBRuntime = nil;
+	end;
+end;
 local toastRoot = Instance.new("Frame");
 toastRoot.AnchorPoint = Vector2.new(0.5, 1);
 toastRoot.Position = UDim2.new(0.5, 0, 1, -12);
@@ -571,12 +612,12 @@ task.defer(function()
 	moveTabSelector(tabActions, false);
 	showPage(pageActions);
 end);
-RunService.RenderStepped:Connect(function()
+trackConn(RunService.RenderStepped:Connect(function()
 	if activeTab and tabSelector.Parent == tabBg then
 		tabSelector.Position = UDim2.new(0, activeTab.AbsolutePosition.X - tabBg.AbsolutePosition.X, 0, 0);
 		tabSelector.Size = UDim2.new(0, activeTab.AbsoluteSize.X, 1, 0);
 	end;
-end);
+end));
 local actionsList = Instance.new("UIListLayout");
 actionsList.FillDirection = Enum.FillDirection.Vertical;
 actionsList.Padding = UDim.new(0, 12);
@@ -758,11 +799,11 @@ local function slider(parent, labelText, minV, maxV, startV, decimals)
 			dragging = false;
 		end;
 	end);
-	UserInputService.InputChanged:Connect(function(inp)
+	trackConn(UserInputService.InputChanged:Connect(function(inp)
 		if dragging and (inp.UserInputType == Enum.UserInputType.MouseMovement or inp.UserInputType == Enum.UserInputType.Touch) then
 			setFromAlpha(alphaFromInput(inp.Position.X), false);
 		end;
-	end);
+	end));
 	return {
 		Get = function()
 			return value;
@@ -850,12 +891,12 @@ end;
 task.defer(function()
 	moveModeSelector(enterBtn, false);
 end);
-RunService.RenderStepped:Connect(function()
+trackConn(RunService.RenderStepped:Connect(function()
 	if selectedModeBtn and selector.Parent == seg then
 		selector.Position = UDim2.new(0, selectedModeBtn.AbsolutePosition.X - seg.AbsolutePosition.X, 0, 0);
 		selector.Size = UDim2.new(0, selectedModeBtn.AbsoluteSize.X, 1, 0);
 	end;
-end);
+end));
 enterBtn.MouseButton1Click:Connect(function()
 	ripple(seg);
 	mode = "Enter";
@@ -977,7 +1018,7 @@ do
 			dragInput = inp;
 		end;
 	end);
-	UserInputService.InputChanged:Connect(function(inp)
+	trackConn(UserInputService.InputChanged:Connect(function(inp)
 		if dragging and inp == dragInput then
 			local delta = inp.Position - dragStart;
 			local target = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y);
@@ -988,7 +1029,7 @@ do
 				dockButton.Position = target;
 			end;
 		end;
-	end);
+	end));
 end;
 do
 	local dragging = false;
@@ -1012,12 +1053,12 @@ do
 			dragInput = inp;
 		end;
 	end);
-	UserInputService.InputChanged:Connect(function(inp)
+	trackConn(UserInputService.InputChanged:Connect(function(inp)
 		if dragging and inp == dragInput then
 			local delta = inp.Position - dragStart;
 			dockButton.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y);
 		end;
-	end);
+	end));
 end;
 panel.BackgroundTransparency = 1;
 panelShadow.ImageTransparency = 1;
@@ -1032,7 +1073,7 @@ container.Size = UDim2.new(0, 500, 0, 360);
 	Size = UDim2.new(0, 520, 0, 380)
 })):Play();
 local hue = 0;
-RunService.RenderStepped:Connect(function(dt)
+trackConn(RunService.RenderStepped:Connect(function(dt)
 	hue = (hue + dt * 0.25) % 1;
 	local c = Color3.fromHSV(hue, 0.8, 1);
 	for i = #rgbStrokes, 1, -1 do
@@ -1043,12 +1084,12 @@ RunService.RenderStepped:Connect(function(dt)
 			table.remove(rgbStrokes, i);
 		end;
 	end;
-end);
-RunService.RenderStepped:Connect(function()
+end));
+trackConn(RunService.RenderStepped:Connect(function()
 	if rootPart and aura then
 		aura.CFrame = rootPart.CFrame;
 	end;
-end);
+end));
 local function validTarget(p)
 	if not rootPart then
 		return false;
@@ -1131,7 +1172,7 @@ ignoreToggle.Button.MouseButton1Click:Connect(function()
 	ignoreFriends = not ignoreFriends;
 end);
 local accumulator, checkInterval = 0, 0.1;
-RunService.Heartbeat:Connect(function(dt)
+trackConn(RunService.Heartbeat:Connect(function(dt)
 	accumulator += dt;
 	if accumulator < checkInterval or (not rootPart) then
 		return;
@@ -1191,4 +1232,4 @@ RunService.Heartbeat:Connect(function(dt)
 			end);
 		end;
 	end;
-end);
+end));

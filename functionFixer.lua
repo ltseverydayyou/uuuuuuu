@@ -27,6 +27,13 @@ local __lt = (function()
 end)();
 
 local _env = getgenv and getgenv() or _G or {};
+if type(_env.__NAFunctionFixerRuntime) == "table" and type(_env.__NAFunctionFixerRuntime.cleanup) == "function" then
+	pcall(_env.__NAFunctionFixerRuntime.cleanup);
+end;
+local _runtime = {
+	alive = true
+};
+_env.__NAFunctionFixerRuntime = _runtime;
 local RunService = __lt.cs("RunService", cloneref);
 local HttpService = __lt.cs("HttpService", cloneref);
 local Wait = task.wait;
@@ -55,6 +62,22 @@ local glitchMarks = {
 
 local hparts = {}
 local hconn
+_runtime.cleanup = function()
+	if not _runtime.alive then
+		return;
+	end;
+	_runtime.alive = false;
+	if hconn then
+		pcall(function()
+			hconn:Disconnect();
+		end);
+		hconn = nil;
+	end;
+	hparts = {};
+	if _env.__NAFunctionFixerRuntime == _runtime then
+		_env.__NAFunctionFixerRuntime = nil;
+	end;
+end;
 
 local function hb(n)
 	for i = 1, n or 1 do

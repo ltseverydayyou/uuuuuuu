@@ -1029,8 +1029,8 @@ local function collectMapBonuses(map, r, notify)
 			bc.ct = ct
 		end
 	end
-	moved = takeBonus(bc.pg, r, notify, "Got Lost Page.") or moved
-	moved = takeBonus(bc.ct, r, notify, "Got Escapee.") or moved
+	moved = takeBonus(bc.pg, r, nil, "Got Lost Page.") or moved
+	moved = takeBonus(bc.ct, r, nil, "Got Escapee.") or moved
 	return moved
 end
 

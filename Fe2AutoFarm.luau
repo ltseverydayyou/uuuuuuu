@@ -242,6 +242,7 @@ local roundState = nil
 local safeCf = nil
 local safeAt = 0
 local voidAt = 0
+local farmTok = 0
 local rh
 
 local function current()
@@ -305,6 +306,7 @@ local function stop()
 	safeCf = nil
 	safeAt = 0
 	voidAt = 0
+	farmTok += 1
 	killPlat()
 	releaseRoot()
 	if gui and gui.Parent then
@@ -412,6 +414,10 @@ local Lift = nil
 local PressRemotes = {}
 local LocatorRemotes = {}
 local RoundStatsRemotes = {}
+local LoadedMapRemotes = {}
+local SurvivedRemotes = {}
+local PasskeyRemote = nil
+local passKey = nil
 do
 	local ok, r = pcall(function()
 		local rem = Rsp and Rsp:FindFirstChild("Remote")
@@ -430,12 +436,19 @@ do
 		end
 	end
 
+	local pk = rem and rem:FindFirstChild("ReqPasskey")
+	if pk and pk:IsA("RemoteFunction") then
+		PasskeyRemote = pk
+	end
+
 	addRemote(PressRemotes, "PressedMapButton")
 	addRemote(PressRemotes, "igzyswprgEbMOxwZWHUxvFWNJhDtaODb")
 	addRemote(LocatorRemotes, "UpdGoalLocator")
 	addRemote(LocatorRemotes, "FiIxfRCqDOTWRKHqFMoRjSaAxXOutMzD")
 	addRemote(RoundStatsRemotes, "UpdIngameStats")
 	addRemote(RoundStatsRemotes, "flDEUOrLddFXZVDiezUpxyiHWduVnlEC")
+	addRemote(LoadedMapRemotes, "LoadedMap")
+	addRemote(SurvivedRemotes, "Survived")
 end
 
 local function chr(w)
@@ -866,6 +879,59 @@ local function pressMapButton(hit)
 	end
 end
 
+local function getPassArg(force)
+	if force then
+		passKey = nil
+	end
+	if passKey ~= nil then
+		return type(passKey) == "number" and -passKey or passKey
+	end
+	if not (PasskeyRemote and PasskeyRemote.Parent) then
+		return nil
+	end
+	local ok, res = pcall(function()
+		return PasskeyRemote:InvokeServer()
+	end)
+	if not ok or res == nil then
+		return nil
+	end
+	passKey = res
+	return type(res) == "number" and -res or res
+end
+
+local function fireFarmRemotes()
+	local key = getPassArg(false)
+	if key == nil then
+		return
+	end
+	for _, rem in ipairs(LoadedMapRemotes) do
+		if rem and rem.Parent then
+			pcall(function()
+				rem:FireServer(key)
+			end)
+		end
+	end
+	for _, rem in ipairs(SurvivedRemotes) do
+		if rem and rem.Parent then
+			pcall(function()
+				rem:FireServer(key, 100)
+			end)
+		end
+	end
+end
+
+local function startFarmRemotes()
+	farmTok += 1
+	local id = farmTok
+	task.spawn(function()
+		getPassArg(true)
+		while alive() and on and farmTok == id do
+			fireFarmRemotes()
+			task.wait(0.15)
+		end
+	end)
+end
+
 for _, rem in ipairs(LocatorRemotes) do
 	if rem and rem.Parent then
 		bind(rem.OnClientEvent:Connect(function(goal, hit, _, nextHit)
@@ -1039,12 +1105,15 @@ local function toggle(v)
 	setBtn()
 	note(on and "Enabled" or "Disabled")
 	setNc(on)
+	farmTok += 1
 
 	if not on then
 		releaseRoot()
 		killPlat()
 		return
 	end
+
+	startFarmRemotes()
 
 	if inState("InGame") then
 		note("Resuming current map")

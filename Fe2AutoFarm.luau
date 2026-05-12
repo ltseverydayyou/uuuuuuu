@@ -283,6 +283,12 @@ local cTab = {}
 local locBtns = {}
 local pressTimes = setmetatable({}, { __mode = "k" })
 local bonusSeen = setmetatable({}, { __mode = "k" })
+local bMap = nil
+local bCache = nil
+local bCons = {}
+local bDirty = true
+local bScanAt = 0
+local clearBonuses
 local locSeq = 0
 local roundCur = nil
 local roundTotal = nil
@@ -351,6 +357,17 @@ local function releaseRoot()
 	end
 end
 
+clearBonuses = function()
+	for i = 1, #bCons do
+		cut(bCons[i])
+		bCons[i] = nil
+	end
+	bMap = nil
+	bCache = nil
+	bDirty = true
+	bScanAt = 0
+end
+
 local function stop()
 	if not ctx.live then
 		return
@@ -382,6 +399,9 @@ local function stop()
 	cTab = {}
 	pressTimes = setmetatable({}, { __mode = "k" })
 	bonusSeen = setmetatable({}, { __mode = "k" })
+	if clearBonuses then
+		clearBonuses()
+	end
 	clearLocators()
 	auraList = {}
 	auraMap = nil
@@ -844,15 +864,138 @@ local function moveTo(obj, r)
 	return moved
 end
 
-local function findLow(map, name)
-	name = tostring(name):lower()
-	for _, obj in ipairs(descOf(map)) do
-		local nm = obj.Name
-		if type(nm) == "string" and nm:lower() == name then
-			return obj
-		end
+local function bKind(obj)
+	if not obj then
+		return nil
+	end
+	local nm = obj.Name
+	if type(nm) ~= "string" then
+		return nil
+	end
+	nm = nm:lower()
+	if nm == "_lostpage" then
+		return "pg"
+	end
+	if nm == "contact" then
+		return "ct"
+	end
+	if nm == "npc" then
+		return "npc"
 	end
 	return nil
+end
+
+local function addBonus(obj)
+	if not bCache or not obj then
+		return
+	end
+	local k = bKind(obj)
+	if k == "pg" then
+		if not (bCache.pg and bCache.pg.Parent) then
+			bCache.pg = obj
+		end
+	elseif k == "ct" then
+		if not (bCache.ct and bCache.ct.Parent) then
+			bCache.ct = obj
+		end
+	elseif k == "npc" then
+		if not (bCache.npc and bCache.npc.Parent) then
+			bCache.npc = obj
+		end
+		if not (bCache.ct and bCache.ct.Parent) and obj.Parent then
+			local ok, ct = pcall(function()
+				return obj.Parent:FindFirstChild("Contact")
+			end)
+			if ok and ct then
+				bCache.ct = ct
+			end
+		end
+	end
+end
+
+local function scanBonuses(map)
+	if not bCache then
+		bCache = {}
+	end
+	bCache.pg = nil
+	bCache.ct = nil
+	bCache.npc = nil
+	for _, obj in ipairs(descOf(map)) do
+		addBonus(obj)
+		if bCache.pg and bCache.ct then
+			break
+		end
+	end
+	if not bCache.ct and bCache.npc and bCache.npc.Parent then
+		local ok, ct = pcall(function()
+			return bCache.npc.Parent:FindFirstChild("Contact")
+		end)
+		if ok and ct then
+			bCache.ct = ct
+		end
+	end
+	bDirty = false
+end
+
+local function getBonuses(map)
+	if not (map and map.Parent) then
+		clearBonuses()
+		return nil
+	end
+	if map ~= bMap then
+		clearBonuses()
+		bMap = map
+		bCache = {}
+		bDirty = true
+		bCons[#bCons + 1] = map.DescendantAdded:Connect(function(obj)
+			if not bCache then
+				return
+			end
+			local k = bKind(obj)
+			if k then
+				addBonus(obj)
+			end
+		end)
+		bCons[#bCons + 1] = map.DescendantRemoving:Connect(function(obj)
+			if bCache and (obj == bCache.pg or obj == bCache.ct or obj == bCache.npc) then
+				if obj == bCache.pg then
+					bCache.pg = nil
+				end
+				if obj == bCache.ct then
+					bCache.ct = nil
+				end
+				if obj == bCache.npc then
+					bCache.npc = nil
+				end
+				bDirty = true
+			end
+		end)
+	end
+	local now = os.clock()
+	if bDirty and now >= bScanAt then
+		bScanAt = now + 2
+		scanBonuses(map)
+	end
+	return bCache
+end
+
+local function takeBonus(obj, r, notify, msg)
+	if not (obj and obj.Parent) then
+		return false
+	end
+	local now = os.clock()
+	if bonusSeen[obj] and now - bonusSeen[obj] <= 2 then
+		return false
+	end
+	bonusSeen[obj] = now
+	local ok = moveTo(obj, r)
+	if ok then
+		if notify then
+			note(msg)
+		end
+		task.wait(TPD)
+	end
+	return ok
 end
 
 local function collectMapBonuses(map, r, notify)
@@ -865,35 +1008,29 @@ local function collectMapBonuses(map, r, notify)
 	if not (r and r.Parent) then
 		return false
 	end
-	local now = os.clock()
+	local bc = getBonuses(map)
+	if not bc then
+		return false
+	end
 	local moved = false
-	local pg = findLow(map, "_lostpage")
-	if pg and pg.Parent and (not bonusSeen[pg] or now - bonusSeen[pg] > 2) then
-		bonusSeen[pg] = now
-		local ok = moveTo(pg, r)
-		moved = ok or moved
-		if ok and notify then
-			note("Got Lost Page.")
-		end
-		task.wait(TPD)
+	if bc.pg and not bc.pg.Parent then
+		bc.pg = nil
+		bDirty = true
 	end
-
-	local ct = findLow(map, "contact")
-	if not ct then
-		local npc = findLow(map, "npc")
-		if npc and npc.Parent then
-			ct = npc.Parent:FindFirstChild("Contact") or findLow(map, "contact")
+	if bc.ct and not bc.ct.Parent then
+		bc.ct = nil
+		bDirty = true
+	end
+	if not bc.ct and bc.npc and bc.npc.Parent then
+		local ok, ct = pcall(function()
+			return bc.npc.Parent:FindFirstChild("Contact")
+		end)
+		if ok and ct then
+			bc.ct = ct
 		end
 	end
-	if ct and ct.Parent and (not bonusSeen[ct] or now - bonusSeen[ct] > 2) then
-		bonusSeen[ct] = now
-		local ok = moveTo(ct, r)
-		moved = ok or moved
-		if ok and notify then
-			note("Got Escapee.")
-		end
-		task.wait(TPD)
-	end
+	moved = takeBonus(bc.pg, r, notify, "Got Lost Page.") or moved
+	moved = takeBonus(bc.ct, r, notify, "Got Escapee.") or moved
 	return moved
 end
 
@@ -2769,7 +2906,7 @@ if MP then
 	end))
 end
 
-local function mkUi()
+ctx.mkUi = function()
 	local par = uiPar()
 	if not par then
 		return
@@ -2931,7 +3068,7 @@ local function mkUi()
 	setBonusBtn()
 end
 
-mkUi()
+ctx.mkUi()
 startPassiveRemotes()
 startButtonAura()
 startBonusCollector()

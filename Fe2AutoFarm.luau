@@ -901,20 +901,25 @@ end
 
 local function fireFarmRemotes()
 	local key = getPassArg(false)
-	if key == nil then
-		return
-	end
 	for _, rem in ipairs(LoadedMapRemotes) do
 		if rem and rem.Parent then
 			pcall(function()
-				rem:FireServer(key)
+				if key ~= nil then
+					rem:FireServer(key)
+				else
+					rem:FireServer()
+				end
 			end)
 		end
 	end
 	for _, rem in ipairs(SurvivedRemotes) do
 		if rem and rem.Parent then
 			pcall(function()
-				rem:FireServer(key, 100)
+				if key ~= nil then
+					rem:FireServer(key, 100)
+				else
+					rem:FireServer(100)
+				end
 			end)
 		end
 	end
@@ -924,10 +929,20 @@ local function startFarmRemotes()
 	farmTok += 1
 	local id = farmTok
 	task.spawn(function()
-		getPassArg(true)
+		local ka = 0
 		while alive() and on and farmTok == id do
-			fireFarmRemotes()
-			task.wait(0.15)
+			local ok, err = xpcall(function()
+				local now = os.clock()
+				if now >= ka then
+					getPassArg(true)
+					ka = now + 2
+				end
+				fireFarmRemotes()
+			end, debug.traceback)
+			if not ok then
+				warn(err)
+			end
+			task.wait(0.1)
 		end
 	end)
 end

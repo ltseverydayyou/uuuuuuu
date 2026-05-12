@@ -111,32 +111,6 @@ local __NAUIProtector = (function()
 	end;
 	return nil;
 end)();
-local __NAOriginalGetHui = gethui;
-local gethui = function()
-	if __NAUIProtector and type(__NAUIProtector.huiGrabber) == "function" then
-		local ok, ui = pcall(__NAUIProtector.huiGrabber);
-		if ok and typeof(ui) == "Instance" then
-			return ui;
-		end;
-	end;
-	if type(__NAOriginalGetHui) == "function" then
-		local ok, ui = pcall(__NAOriginalGetHui);
-		if ok then
-			return ui;
-		end;
-	end;
-	return nil;
-end;
-local function __NAProtectUI(gui, options)
-	if __NAUIProtector and type(__NAUIProtector.protectUI) == "function" then
-		local ok, protected = pcall(__NAUIProtector.protectUI, gui, options);
-		if ok and protected then
-			return protected;
-		end;
-	end;
-	return nil;
-end;
-
 local g = (getgenv and getgenv()) or _G or {}
 local sh = rawget(_G, "shared")
 local host = type(sh) == "table" and sh or (type(g) == "table" and g or nil)
@@ -168,14 +142,40 @@ if host then
 	host.__lt_af_ctx = ctx
 end
 
-local function bind(c)
+local __NAOriginalGetHui = gethui;
+ctx.gethui = function()
+	if __NAUIProtector and type(__NAUIProtector.huiGrabber) == "function" then
+		local ok, ui = pcall(__NAUIProtector.huiGrabber);
+		if ok and typeof(ui) == "Instance" then
+			return ui;
+		end;
+	end;
+	if type(__NAOriginalGetHui) == "function" then
+		local ok, ui = pcall(__NAOriginalGetHui);
+		if ok then
+			return ui;
+		end;
+	end;
+	return nil;
+end;
+ctx.__NAProtectUI = function(gui, options)
+	if __NAUIProtector and type(__NAUIProtector.protectUI) == "function" then
+		local ok, protected = pcall(__NAUIProtector.protectUI, gui, options);
+		if ok and protected then
+			return protected;
+		end;
+	end;
+	return nil;
+end;
+
+ctx.bind = function(c)
 	if c then
 		ctx.con[#ctx.con + 1] = c
 	end
 	return c
 end
 
-local function spawnLoop(fn)
+ctx.spawnLoop = function(fn)
 	local th = task.spawn(function()
 		local ok, err = xpcall(fn, debug.traceback)
 		if not ok then
@@ -186,7 +186,7 @@ local function spawnLoop(fn)
 	return th
 end
 
-local function cut(c)
+ctx.cut = function(c)
 	if c then
 		pcall(function()
 			c:Disconnect()
@@ -194,7 +194,7 @@ local function cut(c)
 	end
 end
 
-local function gt(n)
+ctx.gt = function(n)
 	local ok, svc = pcall(function()
 		return __lt.cs(n, cloneref)
 	end)
@@ -214,14 +214,14 @@ local function gt(n)
 	return nil
 end
 
-local Plr = gt("Players")
-local Wsp = gt("Workspace")
-local Rsp = gt("ReplicatedStorage")
-local Run = gt("RunService")
-local Uis = gt("UserInputService")
-local Sgui = gt("StarterGui")
-local Guis = gt("GuiService")
-local Cgui = gt("CoreGui")
+local Plr = ctx.gt("Players")
+local Wsp = ctx.gt("Workspace")
+local Rsp = ctx.gt("ReplicatedStorage")
+local Run = ctx.gt("RunService")
+local Uis = ctx.gt("UserInputService")
+local Sgui = ctx.gt("StarterGui")
+local Guis = ctx.gt("GuiService")
+local Cgui = ctx.gt("CoreGui")
 local LP = Plr and Plr.LocalPlayer or nil
 local MP = Wsp and (Wsp:FindFirstChild("Multiplayer") or Wsp:WaitForChild("Multiplayer", 10)) or nil
 
@@ -288,7 +288,6 @@ local bCache = nil
 local bCons = {}
 local bDirty = true
 local bScanAt = 0
-local clearBonuses
 local locSeq = 0
 local roundCur = nil
 local roundTotal = nil
@@ -317,21 +316,16 @@ local auraMap = nil
 local auraAt = 0
 local autoCollectBonuses = true
 local optionsOpen = false
-local rh
-local markSurvived
-local pressMapButton
-local rootPart
-local locatorEntries
 
-local function current()
+ctx.current = function()
 	return ctx.live and (not host or host.__lt_af_ctx == ctx)
 end
 
-local function alive()
-	return current() and LP and LP.Parent and Run ~= nil
+ctx.alive = function()
+	return ctx.current() and LP and LP.Parent and Run ~= nil
 end
 
-local function killPlat()
+ctx.killPlat = function()
 	if plt and plt.Parent then
 		pcall(function()
 			plt:Destroy()
@@ -340,16 +334,16 @@ local function killPlat()
 	plt = nil
 end
 
-local function clearLocators()
+ctx.clearLocators = function()
 	locBtns = {}
 	locSeq += 1
 end
 
-local function releaseRoot()
-	if type(rh) ~= "function" then
+ctx.releaseRoot = function()
+	if type(ctx.rh) ~= "function" then
 		return
 	end
-	local r = select(1, rh(false))
+	local r = select(1, ctx.rh(false))
 	if r then
 		pcall(function()
 			r.Anchored = false
@@ -357,9 +351,9 @@ local function releaseRoot()
 	end
 end
 
-clearBonuses = function()
+ctx.clearBonuses = function()
 	for i = 1, #bCons do
-		cut(bCons[i])
+		ctx.cut(bCons[i])
 		bCons[i] = nil
 	end
 	bMap = nil
@@ -368,7 +362,7 @@ clearBonuses = function()
 	bScanAt = 0
 end
 
-local function stop()
+ctx.stop = function()
 	if not ctx.live then
 		return
 	end
@@ -376,11 +370,11 @@ local function stop()
 	on = false
 	tok += 1
 	cur = nil
-	cut(aVc)
-	cut(nCc)
-	cut(nCd1)
-	cut(nCd2)
-	cut(chC)
+	ctx.cut(aVc)
+	ctx.cut(nCc)
+	ctx.cut(nCd1)
+	ctx.cut(nCd2)
+	ctx.cut(chC)
 	for _, th in ipairs(ctx.threads) do
 		if type(task.cancel) == "function" then
 			pcall(task.cancel, th)
@@ -393,16 +387,16 @@ local function stop()
 	nCd2 = nil
 	chC = nil
 	for _, c in ipairs(ctx.con) do
-		cut(c)
+		ctx.cut(c)
 	end
 	ctx.con = {}
 	cTab = {}
 	pressTimes = setmetatable({}, { __mode = "k" })
 	bonusSeen = setmetatable({}, { __mode = "k" })
-	if clearBonuses then
-		clearBonuses()
+	if ctx.clearBonuses then
+		ctx.clearBonuses()
 	end
-	clearLocators()
+	ctx.clearLocators()
 	auraList = {}
 	auraMap = nil
 	auraAt = 0
@@ -416,8 +410,8 @@ local function stop()
 	auraTok += 1
 	saveFlushTok += 1
 	pendingSaveSig = nil
-	killPlat()
-	releaseRoot()
+	ctx.killPlat()
+	ctx.releaseRoot()
 	if gui and gui.Parent then
 		pcall(function()
 			gui:Destroy()
@@ -436,9 +430,7 @@ local function stop()
 	bonusBtn = nil
 end
 
-ctx.stop = stop
-
-local function descOf(obj)
+ctx.descOf = function(obj)
 	if not obj then
 		return {}
 	end
@@ -456,7 +448,7 @@ local function descOf(obj)
 	return {}
 end
 
-local function ffc(obj, n, rec)
+ctx.ffc = function(obj, n, rec)
 	if not obj then
 		return nil
 	end
@@ -467,9 +459,9 @@ local function ffc(obj, n, rec)
 	return nil
 end
 
-local function uiPar()
-	if type(gethui) == "function" then
-		local ok, ui = pcall(gethui)
+ctx.uiPar = function()
+	if type(ctx.gethui) == "function" then
+		local ok, ui = pcall(ctx.gethui)
 		if ok and typeof(ui) == "Instance" then
 			return ui
 		end
@@ -490,7 +482,7 @@ end
 
 local alert = cenv and cenv.newAlert or nil
 
-local function note(msg)
+ctx.note = function(msg)
 	msg = tostring(msg)
 
 	if type(alert) == "function" then
@@ -594,7 +586,7 @@ do
 	addRemote(GameStateRemotes, "UpdateGameState")
 end
 
-local function chr(w)
+ctx.chr = function(w)
 	if not LP then
 		return nil
 	end
@@ -613,8 +605,8 @@ local function chr(w)
 	return nil
 end
 
-function rh(w)
-	local c = chr(w)
+ctx.rh = function(w)
+	local c = ctx.chr(w)
 	if not c then
 		return nil, nil, nil
 	end
@@ -631,15 +623,15 @@ function rh(w)
 	return r, h, c
 end
 
-local function pivotRootTo(cf, r, c)
+ctx.pivotRootTo = function(cf, r, c)
 	if typeof(cf) ~= "CFrame" then
 		return
 	end
 	if not r or not r.Parent then
-		r = select(1, rh(false))
+		r = select(1, ctx.rh(false))
 	end
 	if not c or not c.Parent then
-		c = chr(false)
+		c = ctx.chr(false)
 	end
 	if c and c.Parent and r and r.Parent then
 		local ok, pivot = pcall(function()
@@ -662,7 +654,7 @@ local function pivotRootTo(cf, r, c)
 	end
 end
 
-local function voidY()
+ctx.voidY = function()
 	local y = -500
 	if Wsp then
 		pcall(function()
@@ -675,7 +667,7 @@ local function voidY()
 	return y
 end
 
-local function limVel(r, hard)
+ctx.limVel = function(r, hard)
 	if not r or not r.Parent then
 		return
 	end
@@ -697,11 +689,11 @@ local function limVel(r, hard)
 	end)
 end
 
-local function saveSafe(r)
+ctx.saveSafe = function(r)
 	if not r or not r.Parent then
 		return
 	end
-	local y = voidY()
+	local y = ctx.voidY()
 	local pos = r.Position
 	if pos.Y > y + FDM then
 		safeCf = r.CFrame
@@ -709,8 +701,8 @@ local function saveSafe(r)
 	end
 end
 
-local function safeMapCf(map, r)
-	local y = voidY()
+ctx.safeMapCf = function(map, r)
+	local y = ctx.voidY()
 	if safeCf and safeCf.Position.Y > y + FDM then
 		return safeCf + Vector3.new(0, RCH, 0)
 	end
@@ -729,8 +721,8 @@ local function safeMapCf(map, r)
 	return CFrame.new(0, y + FDM + RCH, 0)
 end
 
-local function inState(nm)
-	local r = select(1, rh(false))
+ctx.inState = function(nm)
+	local r = select(1, ctx.rh(false))
 	if not r then
 		return false
 	end
@@ -742,11 +734,11 @@ local function inState(nm)
 	return false
 end
 
-local function activeRun(map, id)
-	return alive() and on and cur == map and map and map.Parent and tok == id
+ctx.activeRun = function(map, id)
+	return ctx.alive() and on and cur == map and map and map.Parent and tok == id
 end
 
-local function updateRoundStats(stats)
+ctx.updateRoundStats = function(stats)
 	if type(stats) ~= "table" then
 		return
 	end
@@ -762,12 +754,12 @@ local function updateRoundStats(stats)
 		if st == "ingame" then
 			survivedSeen = false
 		elseif st == "survived" then
-			markSurvived("round")
+			ctx.markSurvived("round")
 		end
 	end
 end
 
-local function buttonsDone()
+ctx.buttonsDone = function()
 	if roundState and roundState ~= "ingame" then
 		return false
 	end
@@ -777,15 +769,15 @@ local function buttonsDone()
 	return false
 end
 
-local function isRoundIngame()
-	local physical = inState("InGame")
+ctx.isRoundIngame = function()
+	local physical = ctx.inState("InGame")
 	if type(roundState) == "string" then
 		return roundState:lower() == "ingame" or physical
 	end
 	return physical
 end
 
-local function isRand(s)
+ctx.isRand = function(s)
 	if type(s) ~= "string" or #s == 0 then
 		return false
 	end
@@ -798,8 +790,8 @@ local function isRand(s)
 	return true
 end
 
-local function mkPlat(r)
-	local c = chr(false)
+ctx.mkPlat = function(r)
+	local c = ctx.chr(false)
 	if not c or not r or not r.Parent then
 		return
 	end
@@ -823,7 +815,7 @@ local function mkPlat(r)
 	end
 end
 
-local function anyPart(obj)
+ctx.anyPart = function(obj)
 	if not obj then
 		return nil
 	end
@@ -834,7 +826,7 @@ local function anyPart(obj)
 		if obj.PrimaryPart then
 			return obj.PrimaryPart
 		end
-		for _, d in ipairs(descOf(obj)) do
+		for _, d in ipairs(ctx.descOf(obj)) do
 			if d:IsA("BasePart") then
 				return d
 			end
@@ -843,11 +835,11 @@ local function anyPart(obj)
 	return nil
 end
 
-local function moveTo(obj, r)
+ctx.moveTo = function(obj, r)
 	if not obj or not r or not r.Parent then
 		return false
 	end
-	local p = anyPart(obj)
+	local p = ctx.anyPart(obj)
 	if not p then
 		return false
 	end
@@ -864,7 +856,7 @@ local function moveTo(obj, r)
 	return moved
 end
 
-local function bKind(obj)
+ctx.bKind = function(obj)
 	if not obj then
 		return nil
 	end
@@ -885,11 +877,11 @@ local function bKind(obj)
 	return nil
 end
 
-local function addBonus(obj)
+ctx.addBonus = function(obj)
 	if not bCache or not obj then
 		return
 	end
-	local k = bKind(obj)
+	local k = ctx.bKind(obj)
 	if k == "pg" then
 		if not (bCache.pg and bCache.pg.Parent) then
 			bCache.pg = obj
@@ -913,15 +905,15 @@ local function addBonus(obj)
 	end
 end
 
-local function scanBonuses(map)
+ctx.scanBonuses = function(map)
 	if not bCache then
 		bCache = {}
 	end
 	bCache.pg = nil
 	bCache.ct = nil
 	bCache.npc = nil
-	for _, obj in ipairs(descOf(map)) do
-		addBonus(obj)
+	for _, obj in ipairs(ctx.descOf(map)) do
+		ctx.addBonus(obj)
 		if bCache.pg and bCache.ct then
 			break
 		end
@@ -937,13 +929,13 @@ local function scanBonuses(map)
 	bDirty = false
 end
 
-local function getBonuses(map)
+ctx.getBonuses = function(map)
 	if not (map and map.Parent) then
-		clearBonuses()
+		ctx.clearBonuses()
 		return nil
 	end
 	if map ~= bMap then
-		clearBonuses()
+		ctx.clearBonuses()
 		bMap = map
 		bCache = {}
 		bDirty = true
@@ -951,9 +943,9 @@ local function getBonuses(map)
 			if not bCache then
 				return
 			end
-			local k = bKind(obj)
+			local k = ctx.bKind(obj)
 			if k then
-				addBonus(obj)
+				ctx.addBonus(obj)
 			end
 		end)
 		bCons[#bCons + 1] = map.DescendantRemoving:Connect(function(obj)
@@ -974,12 +966,12 @@ local function getBonuses(map)
 	local now = os.clock()
 	if bDirty and now >= bScanAt then
 		bScanAt = now + 2
-		scanBonuses(map)
+		ctx.scanBonuses(map)
 	end
 	return bCache
 end
 
-local function takeBonus(obj, r, notify, msg)
+ctx.takeBonus = function(obj, r, notify, msg)
 	if not (obj and obj.Parent) then
 		return false
 	end
@@ -988,27 +980,27 @@ local function takeBonus(obj, r, notify, msg)
 		return false
 	end
 	bonusSeen[obj] = now
-	local ok = moveTo(obj, r)
+	local ok = ctx.moveTo(obj, r)
 	if ok then
 		if notify then
-			note(msg)
+			ctx.note(msg)
 		end
 		task.wait(TPD)
 	end
 	return ok
 end
 
-local function collectMapBonuses(map, r, notify)
+ctx.collectMapBonuses = function(map, r, notify)
 	if not (map and map.Parent) then
 		return false
 	end
 	if not (r and r.Parent) then
-		r = select(1, rh(false))
+		r = select(1, ctx.rh(false))
 	end
 	if not (r and r.Parent) then
 		return false
 	end
-	local bc = getBonuses(map)
+	local bc = ctx.getBonuses(map)
 	if not bc then
 		return false
 	end
@@ -1029,12 +1021,12 @@ local function collectMapBonuses(map, r, notify)
 			bc.ct = ct
 		end
 	end
-	moved = takeBonus(bc.pg, r, nil, "Got Lost Page.") or moved
-	moved = takeBonus(bc.ct, r, nil, "Got Escapee.") or moved
+	moved = ctx.takeBonus(bc.pg, r, nil, "Got Lost Page.") or moved
+	moved = ctx.takeBonus(bc.ct, r, nil, "Got Escapee.") or moved
 	return moved
 end
 
-local function addBtnEntry(t, src, hit, loc)
+ctx.addBtnEntry = function(t, src, hit, loc)
 	if not hit or not hit:IsA("BasePart") then
 		return
 	end
@@ -1045,32 +1037,32 @@ local function addBtnEntry(t, src, hit, loc)
 	}
 end
 
-local function scanBtns(map)
+ctx.scanBtns = function(map)
 	local t = {}
-	for _, obj in ipairs(descOf(map)) do
+	for _, obj in ipairs(ctx.descOf(map)) do
 		if obj.ClassName == "Model" then
 			local hit = nil
 			local hasUi = obj:FindFirstChildWhichIsA("BillboardGui", true) ~= nil
-			local hasFuse = ffc(obj, "Fuse", true) ~= nil
+			local hasFuse = ctx.ffc(obj, "Fuse", true) ~= nil
 			for _, ch in ipairs(obj:GetChildren()) do
 				if ch:IsA("BasePart") and tostring(ch.BrickColor) ~= "Medium stone grey" then
 					hit = ch
 					break
 				end
 			end
-			local hasTouch = hit and ffc(hit, "TouchInterest", true) ~= nil
-			if hit and (isRand(obj.Name) or hasUi or hasFuse or hasTouch) then
-				if isRand(hit.Name) then
+			local hasTouch = hit and ctx.ffc(hit, "TouchInterest", true) ~= nil
+			if hit and (ctx.isRand(obj.Name) or hasUi or hasFuse or hasTouch) then
+				if ctx.isRand(hit.Name) then
 					hit.Name = "Hitbox"
 				end
-				addBtnEntry(t, obj, hit, false)
+				ctx.addBtnEntry(t, obj, hit, false)
 			end
 		end
 	end
 	return t
 end
 
-local function valOf(obj, names)
+ctx.valOf = function(obj, names)
 	if not obj then
 		return nil
 	end
@@ -1082,7 +1074,7 @@ local function valOf(obj, names)
 			return v
 		end
 	end
-	for _, d in ipairs(descOf(obj)) do
+	for _, d in ipairs(ctx.descOf(obj)) do
 		if d:IsA("ValueBase") then
 			local nm = d.Name:lower():gsub("[^%w]", "")
 			for _, n in ipairs(names) do
@@ -1095,8 +1087,8 @@ local function valOf(obj, names)
 	return nil
 end
 
-local function numOf(obj)
-	local v = valOf(obj, { "ButtonID", "ButtonId", "ButtonIndex", "ButtonNumber", "ButtonNum", "Number", "ID", "Index", "Order" })
+ctx.numOf = function(obj)
+	local v = ctx.valOf(obj, { "ButtonID", "ButtonId", "ButtonIndex", "ButtonNumber", "ButtonNum", "Number", "ID", "Index", "Order" })
 	v = tonumber(v)
 	if v then
 		return v
@@ -1106,11 +1098,11 @@ local function numOf(obj)
 	return tonumber(a)
 end
 
-local function guiOn(obj)
+ctx.guiOn = function(obj)
 	if not obj then
 		return false
 	end
-	for _, d in ipairs(descOf(obj)) do
+	for _, d in ipairs(ctx.descOf(obj)) do
 		if d:IsA("BillboardGui") and d.Enabled then
 			return true
 		end
@@ -1118,7 +1110,7 @@ local function guiOn(obj)
 	return false
 end
 
-local function auraReady(entry)
+ctx.auraReady = function(entry)
 	local hit = entry and entry.hit
 	local src = entry and entry.src
 	if not (hit and hit.Parent) then
@@ -1127,24 +1119,24 @@ local function auraReady(entry)
 	if entry.loc then
 		return true
 	end
-	local av = valOf(src, { "Active", "IsActive", "Enabled", "Pressable", "CanPress", "Current", "Selected" })
+	local av = ctx.valOf(src, { "Active", "IsActive", "Enabled", "Pressable", "CanPress", "Current", "Selected" })
 	if av ~= nil then
 		return av == true or av == 1 or tostring(av):lower() == "true"
 	end
 	if type(roundCur) == "number" then
-		local n = numOf(src) or numOf(hit)
+		local n = ctx.numOf(src) or ctx.numOf(hit)
 		if n then
 			return n == roundCur or n == roundCur + 1
 		end
 	end
-	if guiOn(src) or guiOn(hit) then
+	if ctx.guiOn(src) or ctx.guiOn(hit) then
 		return true
 	end
-	return ffc(hit, "TouchInterest", true) ~= nil
+	return ctx.ffc(hit, "TouchInterest", true) ~= nil
 end
 
-local function auraEntries(map)
-	local t = locatorEntries(map)
+ctx.auraEntries = function(map)
+	local t = ctx.locatorEntries(map)
 	if #t > 0 then
 		return t, true
 	end
@@ -1153,10 +1145,10 @@ local function auraEntries(map)
 		auraMap = map
 		auraAt = now
 		auraList = {}
-		local ok, res = pcall(scanBtns, map)
+		local ok, res = pcall(ctx.scanBtns, map)
 		if ok and type(res) == "table" then
 			for _, entry in ipairs(res) do
-				if auraReady(entry) then
+				if ctx.auraReady(entry) then
 					auraList[#auraList + 1] = entry
 				end
 			end
@@ -1165,21 +1157,21 @@ local function auraEntries(map)
 	for i = #auraList, 1, -1 do
 		local entry = auraList[i]
 		local hit = entry and entry.hit
-		if not (hit and hit.Parent and hit:IsDescendantOf(map) and auraReady(entry)) then
+		if not (hit and hit.Parent and hit:IsDescendantOf(map) and ctx.auraReady(entry)) then
 			table.remove(auraList, i)
 		end
 	end
 	return auraList, false
 end
 
-local function asPart(v)
+ctx.asPart = function(v)
 	if typeof(v) == "Instance" and v:IsA("BasePart") then
 		return v
 	end
 	if type(v) ~= "table" then
 		return nil
 	end
-	local r = select(1, rh(false))
+	local r = select(1, ctx.rh(false))
 	local best = nil
 	local bestDist = math.huge
 	for _, obj in pairs(v) do
@@ -1194,10 +1186,10 @@ local function asPart(v)
 	return best
 end
 
-local function addLocatorBtn(hit, nextHit)
-	clearLocators()
-	hit = asPart(hit)
-	nextHit = asPart(nextHit)
+ctx.addLocatorBtn = function(hit, nextHit)
+	ctx.clearLocators()
+	hit = ctx.asPart(hit)
+	nextHit = ctx.asPart(nextHit)
 	if not hit then
 		return
 	end
@@ -1211,16 +1203,16 @@ local function addLocatorBtn(hit, nextHit)
 	}
 	local id = locSeq
 	task.spawn(function()
-		while alive() and locSeq == id and hit and hit.Parent do
+		while ctx.alive() and locSeq == id and hit and hit.Parent do
 			if not auraOn then
 				task.wait(0.1)
 				continue
 			end
-			if type(pressMapButton) == "function" and isRoundIngame() then
-				local hb = auraUseDistance and type(rootPart) == "function" and rootPart() or nil
+			if type(ctx.pressMapButton) == "function" and ctx.isRoundIngame() then
+				local hb = auraUseDistance and type(ctx.rootPart) == "function" and ctx.rootPart() or nil
 				local maxDist = math.max(0, tonumber(auraDist) or 7)
 				if not auraUseDistance or (hb and hb.Parent and (hb.Position - hit.Position).Magnitude <= maxDist) then
-					pressMapButton(hit)
+					ctx.pressMapButton(hit)
 				end
 			end
 			task.wait(BSI)
@@ -1228,7 +1220,7 @@ local function addLocatorBtn(hit, nextHit)
 	end)
 end
 
-locatorEntries = function(map)
+ctx.locatorEntries = function(map)
 	local t = {}
 	for hit, entry in pairs(locBtns) do
 		if hit and hit.Parent and (not map or hit:IsDescendantOf(map)) then
@@ -1240,7 +1232,7 @@ locatorEntries = function(map)
 	return t
 end
 
-local function nearestEntry(entries, pos)
+ctx.nearestEntry = function(entries, pos)
 	local best = nil
 	local bestDist = math.huge
 	if not pos then
@@ -1259,8 +1251,8 @@ local function nearestEntry(entries, pos)
 	return best
 end
 
-local function pressAuraEntries(entries, map, allowNearestFallback)
-	local hb = type(rootPart) == "function" and rootPart() or nil
+ctx.pressAuraEntries = function(entries, map, allowNearestFallback)
+	local hb = type(ctx.rootPart) == "function" and ctx.rootPart() or nil
 	local maxDist = math.max(0, tonumber(auraDist) or 7)
 	local pressed = false
 	if not hb and auraUseDistance then
@@ -1271,10 +1263,10 @@ local function pressAuraEntries(entries, map, allowNearestFallback)
 		if not (hb and hb.Parent) then
 			return false
 		end
-		local entry = nearestEntry(entries, hb and hb.Position or nil)
+		local entry = ctx.nearestEntry(entries, hb and hb.Position or nil)
 		local hit = entry and entry.hit
 		if hit and hit.Parent and (not map or hit:IsDescendantOf(map)) then
-			pressMapButton(hit)
+			ctx.pressMapButton(hit)
 			return true
 		end
 		return false
@@ -1287,15 +1279,15 @@ local function pressAuraEntries(entries, map, allowNearestFallback)
 			table.remove(entries, i)
 		elseif not auraUseDistance or (hb and hb.Parent and (hb.Position - hit.Position).Magnitude <= maxDist) then
 			pressed = true
-			if type(pressMapButton) == "function" then
-				pressMapButton(hit)
+			if type(ctx.pressMapButton) == "function" then
+				ctx.pressMapButton(hit)
 			end
 		end
 	end
 	return pressed
 end
 
-local function mergeLocatorBtns(t, map)
+ctx.mergeLocatorBtns = function(t, map)
 	local seen = {}
 	for _, entry in ipairs(t) do
 		if entry.hit and (not entry.loc or locBtns[entry.hit] == entry) then
@@ -1313,22 +1305,22 @@ local function mergeLocatorBtns(t, map)
 	return t
 end
 
-local function isFuseBtn(src)
-	local f = ffc(src, "Fuse", true)
+ctx.isFuseBtn = function(src)
+	local f = ctx.ffc(src, "Fuse", true)
 	if not f and src and src.Parent then
-		f = ffc(src.Parent, "Fuse", true)
+		f = ctx.ffc(src.Parent, "Fuse", true)
 	end
 	return f and f:IsA("ValueBase")
 end
 
-local function fuseRange(src, hit)
+ctx.fuseRange = function(src, hit)
 	local best = nil
 	local bestSize = 0
 	local root = src
 	if hit and hit.Parent and (not root or root == hit) then
 		root = hit.Parent
 	end
-	for _, obj in ipairs(descOf(root)) do
+	for _, obj in ipairs(ctx.descOf(root)) do
 		if obj:IsA("Part") and obj ~= hit and obj.Shape == Enum.PartType.Ball then
 			local sz = math.max(obj.Size.X, obj.Size.Y, obj.Size.Z)
 			local red = obj.Color.R > 0.75 and obj.Color.G < 0.15 and obj.Color.B < 0.15
@@ -1341,14 +1333,14 @@ local function fuseRange(src, hit)
 	return best
 end
 
-local function waitFuseRange(src, hit, keepGoing)
+ctx.waitFuseRange = function(src, hit, keepGoing)
 	if keepGoing and not keepGoing() then
 		return nil
 	end
-	return fuseRange(src, hit)
+	return ctx.fuseRange(src, hit)
 end
 
-local function moveFuseSafe(src, hit, r, keepGoing)
+ctx.moveFuseSafe = function(src, hit, r, keepGoing)
 	if keepGoing and not keepGoing() then
 		return
 	end
@@ -1356,22 +1348,22 @@ local function moveFuseSafe(src, hit, r, keepGoing)
 		return
 	end
 	if not r or not r.Parent then
-		r = select(1, rh(false))
+		r = select(1, ctx.rh(false))
 	end
 	if not r or not r.Parent then
 		return
 	end
-	local sp = fuseRange(src, hit)
+	local sp = ctx.fuseRange(src, hit)
 	local pos = sp and sp.Parent and sp.Position or (hit.Position + Vector3.new(0, ESY, 0))
 	pcall(function()
-		pivotRootTo(CFrame.new(pos), r)
+		ctx.pivotRootTo(CFrame.new(pos), r)
 		r.AssemblyLinearVelocity = Vector3.zero
 		r.AssemblyAngularVelocity = Vector3.zero
 		r.Anchored = true
 	end)
 end
 
-pressMapButton = function(hit)
+ctx.pressMapButton = function(hit)
 	if not hit or not hit.Parent then
 		return
 	end
@@ -1390,35 +1382,35 @@ pressMapButton = function(hit)
 	end
 end
 
-local function startPressLoop(hit, runId, keepGoing)
+ctx.startPressLoop = function(hit, runId, keepGoing)
 	if not hit or not hit.Parent then
 		return
 	end
 	task.spawn(function()
-		while alive() and on and tok == runId and hit and hit.Parent do
+		while ctx.alive() and on and tok == runId and hit and hit.Parent do
 			if type(keepGoing) == "function" and not keepGoing() then
 				break
 			end
-			pressMapButton(hit)
+			ctx.pressMapButton(hit)
 			task.wait(BSI)
 		end
 	end)
 end
 
-local function startAutoFarmButtonSpam(map, runId, entries)
+ctx.startAutoFarmButtonSpam = function(map, runId, entries)
 	if not map or not map.Parent then
 		return
 	end
 	entries = type(entries) == "table" and entries or {}
-	spawnLoop(function()
-		while activeRun(map, runId) and inState("InGame") do
-			mergeLocatorBtns(entries, map)
-			if not buttonsDone() then
+	ctx.spawnLoop(function()
+		while ctx.activeRun(map, runId) and ctx.inState("InGame") do
+			ctx.mergeLocatorBtns(entries, map)
+			if not ctx.buttonsDone() then
 				for i = #entries, 1, -1 do
 					local entry = entries[i]
 					local hit = entry and entry.hit
 					if hit and hit.Parent and hit:IsDescendantOf(map) then
-						pressMapButton(hit)
+						ctx.pressMapButton(hit)
 					else
 						table.remove(entries, i)
 					end
@@ -1429,7 +1421,7 @@ local function startAutoFarmButtonSpam(map, runId, entries)
 	end)
 end
 
-local function getPassArg(force)
+ctx.getPassArg = function(force)
 	if force then
 		passKey = nil
 	end
@@ -1449,9 +1441,8 @@ local function getPassArg(force)
 	return type(res) == "number" and -res or res
 end
 
-local paintStats
 
-local function dataSig(data)
+ctx.dataSig = function(data)
 	local st = data and data.stats
 	if type(st) ~= "table" then
 		return nil
@@ -1466,9 +1457,9 @@ local function dataSig(data)
 	return table.concat(parts, "|")
 end
 
-local function cacheData(data)
+ctx.cacheData = function(data)
 	if type(data) == "table" and type(data.stats) == "table" then
-		local sig = dataSig(data)
+		local sig = ctx.dataSig(data)
 		pdata = data
 		if sig then
 			if sig ~= statsSig then
@@ -1479,13 +1470,13 @@ local function cacheData(data)
 			end
 			statsSig = sig
 		end
-		if type(paintStats) == "function" then
-			paintStats()
+		if type(ctx.paintStats) == "function" then
+			ctx.paintStats()
 		end
 	end
 end
 
-local function needXp(lv, rb)
+ctx.needXp = function(lv, rb)
 	lv = tonumber(lv) or 0
 	rb = tonumber(rb) or 0
 	if FE2CalcLevelXP then
@@ -1501,7 +1492,7 @@ local function needXp(lv, rb)
 	return base + base * (math.clamp(rb, 0, 30) * 0.05)
 end
 
-paintStats = function()
+ctx.paintStats = function()
 	local st = pdata and pdata.stats
 	if type(st) ~= "table" or not LP then
 		return
@@ -1518,14 +1509,14 @@ paintStats = function()
 	local lv = tonumber(st.level) or 0
 	local rb = tonumber(st.rebirth) or 0
 	local xp = tonumber(st.xp) or 0
-	local req = needXp(lv, rb)
+	local req = ctx.needXp(lv, rb)
 	if req <= 0 then
 		req = 1
 	end
 	local rdy = lv >= 100 and rb < 30 and xp >= req
 	local xs = ui:FindFirstChild("XPStats")
 	if xs then
-		local ic = ffc(xs, "Icon", false)
+		local ic = ctx.ffc(xs, "Icon", false)
 		local inf = ic and ic:FindFirstChild("Info")
 		if inf then
 			inf.Text = tostring(lv)
@@ -1534,7 +1525,7 @@ paintStats = function()
 		if xt then
 			xt.Text = tostring(xp) .. "/" .. tostring(req) .. " XP"
 		end
-		local pb = ffc(xs, "Percentage", true)
+		local pb = ctx.ffc(xs, "Percentage", true)
 		if pb then
 			pb.Size = UDim2.new(math.clamp(xp / req, 0, 1), 0, 1, 0)
 		end
@@ -1565,20 +1556,20 @@ paintStats = function()
 	end
 	local cur = ui:FindFirstChild("Currency")
 	if cur then
-		local ca = ffc(cur, "CoinAmt", true)
-		local ga = ffc(cur, "GemAmt", true)
-		local ct = ca and ffc(ca, "Amount", true)
-		local gt = ga and ffc(ga, "Amount", true)
+		local ca = ctx.ffc(cur, "CoinAmt", true)
+		local ga = ctx.ffc(cur, "GemAmt", true)
+		local ct = ca and ctx.ffc(ca, "Amount", true)
+		local gx = ga and ctx.ffc(ga, "Amount", true)
 		if ct then
 			ct.Text = tostring(st.coins or 0)
 		end
-		if gt then
-			gt.Text = tostring(st.gems or 0)
+		if gx then
+			gx.Text = tostring(st.gems or 0)
 		end
 	end
 end
 
-local function canRebirth()
+ctx.canRebirth = function()
 	local st = pdata and pdata.stats
 	if type(st) ~= "table" then
 		return nil
@@ -1586,14 +1577,14 @@ local function canRebirth()
 	local lv = tonumber(st.level) or 0
 	local rb = tonumber(st.rebirth) or 0
 	local xp = tonumber(st.xp) or 0
-	local req = needXp(lv, rb)
+	local req = ctx.needXp(lv, rb)
 	if rb >= 30 or lv < 100 then
 		return false
 	end
 	return req <= 0 or xp >= req
 end
 
-local function fireLoaded(key)
+ctx.fireLoaded = function(key)
 	for _, rem in ipairs(LoadedMapRemotes) do
 		if rem and rem.Parent then
 			pcall(function()
@@ -1607,7 +1598,7 @@ local function fireLoaded(key)
 	end
 end
 
-local function fireSurvived(key, tm)
+ctx.fireSurvived = function(key, tm)
 	tm = tonumber(tm) or 100
 	for _, rem in ipairs(SurvivedRemotes) do
 		if rem and rem.Parent then
@@ -1622,7 +1613,7 @@ local function fireSurvived(key, tm)
 	end
 end
 
-local function requestRoundStats()
+ctx.requestRoundStats = function()
 	for _, rem in ipairs(RoundStatsRemotes) do
 		if rem and rem.Parent then
 			pcall(function()
@@ -1632,13 +1623,13 @@ local function requestRoundStats()
 	end
 end
 
-local function requestPlayerData(force)
+ctx.requestPlayerData = function(force)
 	local now = os.clock()
 	if not force and now - lastData < DRI then
 		return
 	end
 	lastData = now
-	local key = getPassArg(false)
+	local key = ctx.getPassArg(false)
 	for _, rem in ipairs(ItemDataRemotes) do
 		if rem and rem.Parent then
 			pcall(function()
@@ -1659,12 +1650,12 @@ local function requestPlayerData(force)
 	end
 end
 
-local function tryRebirth(force)
+ctx.tryRebirth = function(force)
 	if not (RebirthRemote and RebirthRemote.Parent) then
 		return
 	end
 	local now = os.clock()
-	local okRb = canRebirth()
+	local okRb = ctx.canRebirth()
 	if okRb ~= true then
 		return
 	end
@@ -1673,7 +1664,7 @@ local function tryRebirth(force)
 		return
 	end
 	lastRb = now
-	local key = getPassArg(false)
+	local key = ctx.getPassArg(false)
 	pcall(function()
 		if key ~= nil then
 			RebirthRemote:FireServer(key)
@@ -1683,23 +1674,23 @@ local function tryRebirth(force)
 	end)
 end
 
-local function statPulse(force)
+ctx.statPulse = function(force)
 	local now = os.clock()
 	if not force and now - lastStat < SRI then
 		return
 	end
 	lastStat = now
-	requestRoundStats()
-	requestPlayerData(true)
+	ctx.requestRoundStats()
+	ctx.requestPlayerData(true)
 	task.delay(0.5, function()
-		if alive() and on then
-			requestPlayerData(true)
-			tryRebirth(true)
+		if ctx.alive() and on then
+			ctx.requestPlayerData(true)
+			ctx.tryRebirth(true)
 		end
 	end)
 end
 
-local function statBurst()
+ctx.statBurst = function()
 	local now = os.clock()
 	if now - lastBurst < 0.5 then
 		return
@@ -1707,39 +1698,39 @@ local function statBurst()
 	lastBurst = now
 	for _, d in ipairs(RFD) do
 		task.delay(d, function()
-			if alive() and on then
-				requestRoundStats()
-				requestPlayerData(true)
-				tryRebirth(true)
+			if ctx.alive() and on then
+				ctx.requestRoundStats()
+				ctx.requestPlayerData(true)
+				ctx.tryRebirth(true)
 			end
 		end)
 	end
 end
 
-local function flushStatsAfterSurvival()
+ctx.flushStatsAfterSurvival = function()
 	saveFlushTok += 1
 	local id = saveFlushTok
 	pendingSaveSig = statsSig or ""
 	local started = os.clock()
 	task.spawn(function()
-		while alive() and on and saveFlushTok == id and os.clock() - started < SFT do
-			requestRoundStats()
-			requestPlayerData(true)
-			tryRebirth(true)
+		while ctx.alive() and on and saveFlushTok == id and os.clock() - started < SFT do
+			ctx.requestRoundStats()
+			ctx.requestPlayerData(true)
+			ctx.tryRebirth(true)
 			if pendingSaveSig == nil and lastFreshData >= started then
 				break
 			end
 			task.wait(SFI)
 		end
-		if alive() and on and saveFlushTok == id then
-			requestRoundStats()
-			requestPlayerData(true)
-			tryRebirth(true)
+		if ctx.alive() and on and saveFlushTok == id then
+			ctx.requestRoundStats()
+			ctx.requestPlayerData(true)
+			ctx.tryRebirth(true)
 		end
 	end)
 end
 
-markSurvived = function(src)
+ctx.markSurvived = function(src)
 	if survivedSeen then
 		return
 	end
@@ -1748,44 +1739,44 @@ markSurvived = function(src)
 	survivedAt = now
 	roundState = "survived"
 	tok += 1
-	releaseRoot()
-	statPulse(true)
-	statBurst()
-	flushStatsAfterSurvival()
+	ctx.releaseRoot()
+	ctx.statPulse(true)
+	ctx.statBurst()
+	ctx.flushStatsAfterSurvival()
 	if src then
-		note("Survived; refreshing stats")
+		ctx.note("Survived; refreshing stats")
 	end
 end
 
-local function burstLoaded()
-	local key = getPassArg(false)
+ctx.burstLoaded = function()
+	local key = ctx.getPassArg(false)
 	for _ = 1, LDB do
-		if not (alive() and on) then
+		if not (ctx.alive() and on) then
 			return
 		end
-		fireLoaded(key)
-		requestRoundStats()
+		ctx.fireLoaded(key)
+		ctx.requestRoundStats()
 		task.wait(LDI)
 	end
 end
 
-local function startFarmRemotes()
+ctx.startFarmRemotes = function()
 	farmTok += 1
 	local id = farmTok
 	task.spawn(function()
 		local ka = 0
 		local ra = 0
-		while alive() and on and farmTok == id do
+		while ctx.alive() and on and farmTok == id do
 			local ok, err = xpcall(function()
 				local now = os.clock()
 				if now >= ka then
-					getPassArg(true)
-					requestPlayerData(false)
-					tryRebirth(false)
+					ctx.getPassArg(true)
+					ctx.requestPlayerData(false)
+					ctx.tryRebirth(false)
 					ka = now + 2
 				end
 				if now >= ra then
-					requestRoundStats()
+					ctx.requestRoundStats()
 					ra = now + RSI
 				end
 			end, debug.traceback)
@@ -1797,23 +1788,23 @@ local function startFarmRemotes()
 	end)
 end
 
-local function startPassiveRemotes()
-	spawnLoop(function()
+ctx.startPassiveRemotes = function()
+	ctx.spawnLoop(function()
 		local ra = 0
 		local la = 0
 		local sa = 0
-		while alive() do
+		while ctx.alive() do
 			local now = os.clock()
 			if now >= la then
-				fireLoaded(getPassArg(false))
+				ctx.fireLoaded(ctx.getPassArg(false))
 				la = now + PLI
 			end
-			if isRoundIngame() and now >= sa then
-				fireSurvived(getPassArg(false), 100)
+			if ctx.isRoundIngame() and now >= sa then
+				ctx.fireSurvived(ctx.getPassArg(false), 100)
 				sa = now + PSI
 			end
 			if now >= ra then
-				requestRoundStats()
+				ctx.requestRoundStats()
 				ra = now + RSI
 			end
 			task.wait(PMW)
@@ -1823,15 +1814,15 @@ end
 
 for _, rem in ipairs(LocatorRemotes) do
 	if rem and rem.Parent then
-		bind(rem.OnClientEvent:Connect(function(goal, hit, _, nextHit)
-			addLocatorBtn(hit or goal, nextHit)
+		ctx.bind(rem.OnClientEvent:Connect(function(goal, hit, _, nextHit)
+			ctx.addLocatorBtn(hit or goal, nextHit)
 		end))
 	end
 end
 
 for _, rem in ipairs(RoundStatsRemotes) do
 	if rem and rem.Parent then
-		bind(rem.OnClientEvent:Connect(updateRoundStats))
+		ctx.bind(rem.OnClientEvent:Connect(ctx.updateRoundStats))
 		pcall(function()
 			rem:FireServer()
 		end)
@@ -1840,23 +1831,23 @@ end
 
 for _, rem in ipairs(PlayerDataRemotes) do
 	if rem and rem.Parent then
-		bind(rem.OnClientEvent:Connect(cacheData))
+		ctx.bind(rem.OnClientEvent:Connect(ctx.cacheData))
 	end
 end
 
 for _, rem in ipairs(ItemDataRemotes) do
 	if rem and rem.Parent then
-		bind(rem.OnClientEvent:Connect(function(data)
-			cacheData(data)
+		ctx.bind(rem.OnClientEvent:Connect(function(data)
+			ctx.cacheData(data)
 		end))
 	end
 end
 
 for _, rem in ipairs(SurvivedRemotes) do
 	if rem and rem.Parent then
-		bind(rem.OnClientEvent:Connect(function(ok)
+		ctx.bind(rem.OnClientEvent:Connect(function(ok)
 			if ok == true or tostring(ok):lower() == "survived" then
-				markSurvived("remote")
+				ctx.markSurvived("remote")
 			end
 		end))
 	end
@@ -1864,7 +1855,7 @@ end
 
 for _, rem in ipairs(GameStateRemotes) do
 	if rem and rem.Parent then
-		bind(rem.OnClientEvent:Connect(function(st)
+		ctx.bind(rem.OnClientEvent:Connect(function(st)
 			local state = tostring(st):lower()
 			if state ~= "" and state ~= "nil" then
 				roundState = state
@@ -1872,53 +1863,53 @@ for _, rem in ipairs(GameStateRemotes) do
 			if state == "ingame" then
 				survivedSeen = false
 			elseif state == "survived" then
-				markSurvived("state")
+				ctx.markSurvived("state")
 			end
 		end))
 	end
 end
 
-requestPlayerData(true)
+ctx.requestPlayerData(true)
 
-local function addNc(obj)
+ctx.addNc = function(obj)
 	if obj and obj:IsA("BasePart") then
 		cTab[obj] = true
 	end
 end
 
-local function clrNc()
+ctx.clrNc = function()
 	cTab = {}
-	cut(nCd1)
-	cut(nCd2)
+	ctx.cut(nCd1)
+	ctx.cut(nCd2)
 	nCd1 = nil
 	nCd2 = nil
 end
 
-local function bindNc(c)
-	clrNc()
+ctx.bindNc = function(c)
+	ctx.clrNc()
 	if not c then
 		return
 	end
-	addNc(c)
-	for _, d in ipairs(descOf(c)) do
-		addNc(d)
+	ctx.addNc(c)
+	for _, d in ipairs(ctx.descOf(c)) do
+		ctx.addNc(d)
 	end
 	nCd1 = c.DescendantAdded:Connect(function(d)
-		addNc(d)
+		ctx.addNc(d)
 	end)
 	nCd2 = c.DescendantRemoving:Connect(function(d)
 		cTab[d] = nil
 	end)
 end
 
-local function setNc(v)
-	cut(nCc)
+ctx.setNc = function(v)
+	ctx.cut(nCc)
 	nCc = nil
-	clrNc()
+	ctx.clrNc()
 	if not v or not Run or not LP then
 		return
 	end
-	bindNc(LP.Character)
+	ctx.bindNc(LP.Character)
 	nCc = Run.PreSimulation:Connect(function()
 		if not on then
 			return
@@ -1933,26 +1924,26 @@ local function setNc(v)
 	end)
 end
 
-local function pushLift()
-	local r = select(1, rh(true))
+ctx.pushLift = function()
+	local r = select(1, ctx.rh(true))
 	if not r then
 		return
 	end
 	pcall(function()
-		pivotRootTo(r.CFrame + Vector3.new(0, 5, 0), r)
+		ctx.pivotRootTo(r.CFrame + Vector3.new(0, 5, 0), r)
 	end)
-	while alive() and on and not inState("InLift") do
+	while ctx.alive() and on and not ctx.inState("InLift") do
 		task.wait(0.1)
-		local rr = select(1, rh(false))
+		local rr = select(1, ctx.rh(false))
 		if not rr then
 			continue
 		end
 		rr.AssemblyLinearVelocity = LFG
-		mkPlat(rr)
+		ctx.mkPlat(rr)
 	end
 end
 
-local function doLift()
+ctx.doLift = function()
 	if not (on and Lift) then
 		return
 	end
@@ -1960,15 +1951,15 @@ local function doLift()
 		Lift:FireServer()
 	end)
 	task.spawn(function()
-		local ok, err = xpcall(pushLift, debug.traceback)
+		local ok, err = xpcall(ctx.pushLift, debug.traceback)
 		if not ok then
 			warn(err)
 		end
 	end)
 end
 
-local function antiVoid(getMap)
-	cut(aVc)
+ctx.antiVoid = function(getMap)
+	ctx.cut(aVc)
 	aVc = nil
 	if not Run then
 		return
@@ -1977,12 +1968,12 @@ local function antiVoid(getMap)
 		if not on then
 			return
 		end
-		local r = select(1, rh(false))
+		local r = select(1, ctx.rh(false))
 		if not r then
 			return
 		end
 
-		local fy = voidY()
+		local fy = ctx.voidY()
 		local pos = r.Position
 		local vel = Vector3.zero
 		pcall(function()
@@ -1993,12 +1984,12 @@ local function antiVoid(getMap)
 		local badFall = vel.Y < -VLM and pos.Y <= fy + FDM * 2
 
 		if not nearVoid and not badFall then
-			saveSafe(r)
+			ctx.saveSafe(r)
 			return
 		end
 
 		if nearVoid or badFall then
-			limVel(r, nearVoid)
+			ctx.limVel(r, nearVoid)
 		end
 
 		local map = nil
@@ -2007,21 +1998,21 @@ local function antiVoid(getMap)
 			map = res
 		end
 
-		local cf = safeMapCf(map, r)
+		local cf = ctx.safeMapCf(map, r)
 		pcall(function()
-			pivotRootTo(cf, r)
+			ctx.pivotRootTo(cf, r)
 		end)
-		limVel(r, true)
-		mkPlat(r)
+		ctx.limVel(r, true)
+		ctx.mkPlat(r)
 
 		if os.clock() - voidAt > 1 then
 			voidAt = os.clock()
-			note("Recovered from void")
+			ctx.note("Recovered from void")
 		end
 	end)
 end
 
-local function setBtn()
+ctx.setBtn = function()
 	if not btn then
 		return
 	end
@@ -2029,7 +2020,7 @@ local function setBtn()
 	btn.BackgroundColor3 = on and Color3.fromRGB(180, 60, 60) or Color3.fromRGB(60, 180, 60)
 end
 
-local function setAuraBtn()
+ctx.setAuraBtn = function()
 	if not auraBtn then
 		return
 	end
@@ -2037,7 +2028,7 @@ local function setAuraBtn()
 	auraBtn.BackgroundColor3 = auraOn and Color3.fromRGB(60, 130, 210) or Color3.fromRGB(70, 70, 70)
 end
 
-local function setDistModeBtn()
+ctx.setDistModeBtn = function()
 	if not distModeBtn then
 		return
 	end
@@ -2045,14 +2036,14 @@ local function setDistModeBtn()
 	distModeBtn.BackgroundColor3 = auraUseDistance and Color3.fromRGB(60, 130, 210) or Color3.fromRGB(70, 70, 70)
 end
 
-local function setDistBtn()
+ctx.setDistBtn = function()
 	if not distBtn then
 		return
 	end
 	distBtn.Text = tostring(auraDist)
 end
 
-local function setBonusBtn()
+ctx.setBonusBtn = function()
 	if not bonusBtn then
 		return
 	end
@@ -2060,7 +2051,7 @@ local function setBonusBtn()
 	bonusBtn.BackgroundColor3 = autoCollectBonuses and Color3.fromRGB(60, 130, 210) or Color3.fromRGB(70, 70, 70)
 end
 
-local function setOptionsOpen(open)
+ctx.setOptionsOpen = function(open)
 	optionsOpen = open and true or false
 	if optBtn then
 		optBtn.Text = optionsOpen and "Options ^" or "Options v"
@@ -2075,7 +2066,7 @@ end
 
 local mouseButtonFixHooks = setmetatable({}, { __mode = "k" })
 
-local function tryDisconnect(conn)
+ctx.tryDisconnect = function(conn)
 	if conn and type(conn.Disconnect) == "function" then
 		pcall(function()
 			conn:Disconnect()
@@ -2083,7 +2074,7 @@ local function tryDisconnect(conn)
 	end
 end
 
-local function MouseButtonFix(button, clickCallback, pressInput)
+ctx.MouseButtonFix = function(button, clickCallback, pressInput)
 	if not button or type(clickCallback) ~= "function" then
 		return { Connected = false, Disconnect = function() end }
 	end
@@ -2105,7 +2096,7 @@ local function MouseButtonFix(button, clickCallback, pressInput)
 	end
 	local existing = hooks[hookKey]
 	if existing then
-		tryDisconnect(existing)
+		ctx.tryDisconnect(existing)
 	end
 
 	local state = {
@@ -2119,7 +2110,7 @@ local function MouseButtonFix(button, clickCallback, pressInput)
 		disconnected = true
 		state.Connected = false
 		for i = 1, #connections do
-			tryDisconnect(connections[i])
+			ctx.tryDisconnect(connections[i])
 			connections[i] = nil
 		end
 		if hooks[hookKey] == state then
@@ -2267,7 +2258,7 @@ local NAgui = {
 	_draggerCleanups = {},
 }
 
-function NAgui.dragger(ui, dragui)
+ctx.NAgui_dragger = function(ui, dragui)
 	if not ui then
 		return { Connected = false, Disconnect = function() end }
 	end
@@ -2303,9 +2294,9 @@ function NAgui.dragger(ui, dragui)
 	end
 
 	local function disconnectLiveInput()
-		tryDisconnect(moveConn)
-		tryDisconnect(endConn)
-		tryDisconnect(stepConn)
+		ctx.tryDisconnect(moveConn)
+		ctx.tryDisconnect(endConn)
+		ctx.tryDisconnect(stepConn)
 		moveConn = nil
 		endConn = nil
 		stepConn = nil
@@ -2331,7 +2322,7 @@ function NAgui.dragger(ui, dragui)
 		state.Connected = false
 		stopDrag()
 		for i = 1, #connections do
-			tryDisconnect(connections[i])
+			ctx.tryDisconnect(connections[i])
 			connections[i] = nil
 		end
 		if NAgui._draggerCleanups[draggerId] == cleanupDragger then
@@ -2501,48 +2492,48 @@ function NAgui.dragger(ui, dragui)
 	return state
 end
 
-local function toggle(v)
+ctx.toggle = function(v)
 	on = v and true or false
 	tok += 1
 	cur = nil
-	clearLocators()
+	ctx.clearLocators()
 	survivedSeen = false
-	setBtn()
-	note(on and "Enabled" or "Disabled")
-	setNc(on)
+	ctx.setBtn()
+	ctx.note(on and "Enabled" or "Disabled")
+	ctx.setNc(on)
 	farmTok += 1
 
 	if not on then
 		saveFlushTok += 1
 		pendingSaveSig = nil
-		releaseRoot()
-		killPlat()
+		ctx.releaseRoot()
+		ctx.killPlat()
 		return
 	end
 
-	startFarmRemotes()
-	task.spawn(burstLoaded)
-	requestPlayerData(true)
+	ctx.startFarmRemotes()
+	task.spawn(ctx.burstLoaded)
+	ctx.requestPlayerData(true)
 
-	if inState("InGame") then
-		note("Resuming current map")
+	if ctx.inState("InGame") then
+		ctx.note("Resuming current map")
 	else
-		doLift()
+		ctx.doLift()
 	end
 end
 
-local function onChar(c)
-	if not alive() then
+ctx.onChar = function(c)
+	if not ctx.alive() then
 		return
 	end
-	bindNc(c)
+	ctx.bindNc(c)
 	if on then
 		task.spawn(function()
 			if not Lift then
 				return
 			end
 			for _ = 1, RRP do
-				if not (alive() and on) then
+				if not (ctx.alive() and on) then
 					return
 				end
 				pcall(function()
@@ -2552,7 +2543,7 @@ local function onChar(c)
 			end
 		end)
 		task.spawn(function()
-			local ok, err = xpcall(pushLift, debug.traceback)
+			local ok, err = xpcall(ctx.pushLift, debug.traceback)
 			if not ok then
 				warn(err)
 			end
@@ -2560,17 +2551,17 @@ local function onChar(c)
 	end
 end
 
-local function onMap(map, id)
+ctx.onMap = function(map, id)
 	local hp
 	local ok, err = xpcall(function()
-		local r, h = rh(true)
+		local r, h = ctx.rh(true)
 		if not r or not h or not map or not map.Parent then
 			return
 		end
 		safeCf = r.CFrame
 		safeAt = os.clock()
 
-		local st = ffc(map, "Settings", false)
+		local st = ctx.ffc(map, "Settings", false)
 		local nm = nil
 		if st then
 			local ok2, v = pcall(function()
@@ -2585,26 +2576,26 @@ local function onMap(map, id)
 		end
 
 		survivedSeen = false
-		note("Map Loaded! " .. tostring(nm))
-		task.spawn(burstLoaded)
+		ctx.note("Map Loaded! " .. tostring(nm))
+		task.spawn(ctx.burstLoaded)
 
-		if not inState("InGame") then
-			note("Skipping due to InGame == false.")
+		if not ctx.inState("InGame") then
+			ctx.note("Skipping due to InGame == false.")
 			cur = nil
 			return
 		end
 
 		local btns = {}
-		local ok2, res = pcall(scanBtns, map)
+		local ok2, res = pcall(ctx.scanBtns, map)
 		if ok2 and type(res) == "table" then
 			btns = res
 		end
-		mergeLocatorBtns(btns, map)
-		startAutoFarmButtonSpam(map, id, btns)
+		ctx.mergeLocatorBtns(btns, map)
+		ctx.startAutoFarmButtonSpam(map, id, btns)
 
-		collectMapBonuses(map, r, true)
+		ctx.collectMapBonuses(map, r, true)
 
-		note("Commencing Auto Farm")
+		ctx.note("Commencing Auto Farm")
 
 		hp = h:GetPropertyChangedSignal("Health"):Connect(function()
 			pcall(function()
@@ -2632,13 +2623,13 @@ local function onMap(map, id)
 		local waitLocSeq = nil
 		local waitLocAt = 0
 
-		while activeRun(map, id) and inState("InGame") do
+		while ctx.activeRun(map, id) and ctx.inState("InGame") do
 			task.wait(SCI)
-			if not (activeRun(map, id) and inState("InGame")) then
+			if not (ctx.activeRun(map, id) and ctx.inState("InGame")) then
 				break
 			end
 
-			r, h = rh(false)
+			r, h = ctx.rh(false)
 			if not r or not h then
 				continue
 			end
@@ -2647,10 +2638,10 @@ local function onMap(map, id)
 				h.Jump = true
 			end)
 
-			local ex = ffc(map, "ExitRegion", true)
-			mergeLocatorBtns(btns, map)
+			local ex = ctx.ffc(map, "ExitRegion", true)
+			ctx.mergeLocatorBtns(btns, map)
 			local statsExpected = #RoundStatsRemotes > 0
-			local exitReady = ex and (buttonsDone() or (not statsExpected and roundCur == nil and roundTotal == nil))
+			local exitReady = ex and (ctx.buttonsDone() or (not statsExpected and roundCur == nil and roundTotal == nil))
 
 			if waitLocSeq and locSeq ~= waitLocSeq then
 				waitLocSeq = nil
@@ -2667,13 +2658,13 @@ local function onMap(map, id)
 			end
 
 			if exitReady and not pressFirst and waitLocSeq and os.clock() - waitLocAt < LHW then
-				mkPlat(r)
+				ctx.mkPlat(r)
 				continue
 			end
 
 			if pressFirst then
 				for _, entry in ipairs(btns) do
-					if not activeRun(map, id) then
+					if not ctx.activeRun(map, id) then
 						break
 					end
 
@@ -2683,36 +2674,36 @@ local function onMap(map, id)
 					local currentLoc = not entry.loc or locBtns[hit] == entry
 					local canPress = entry.loc or not (exitReady and sent[key])
 					if currentLoc and canPress and (not exitReady or entry.loc) and hit and hit.Parent then
-						local ti = ffc(hit, "TouchInterest", true) or ffc(b, "TouchInterest", true)
+						local ti = ctx.ffc(hit, "TouchInterest", true) or ctx.ffc(b, "TouchInterest", true)
 						local gg = nil
 						pcall(function()
 							gg = (b and b:FindFirstChildWhichIsA("BillboardGui", true)) or hit:FindFirstChildWhichIsA("BillboardGui", true)
 						end)
 						if entry.loc or (ti and gg) then
-							r, h = rh(false)
+							r, h = ctx.rh(false)
 							if not r or not h then
 								break
 							end
-							if not activeRun(map, id) then
+							if not ctx.activeRun(map, id) then
 								break
 							end
-							local fuse = isFuseBtn(b)
+							local fuse = ctx.isFuseBtn(b)
 							pcall(function()
 								r.Anchored = false
-								pivotRootTo(CFrame.new(hit.Position), r)
+								ctx.pivotRootTo(CFrame.new(hit.Position), r)
 								h:ChangeState(Enum.HumanoidStateType.Jumping)
 								r.Velocity = JMP
 							end)
 							task.wait(TPD)
-							if not activeRun(map, id) then
-								releaseRoot()
+							if not ctx.activeRun(map, id) then
+								ctx.releaseRoot()
 								break
 							end
 							local now = os.clock()
 							if entry.loc then
 								if not lastPress[key] or now - lastPress[key] >= PCD then
 									lastPress[key] = now
-									pressMapButton(hit)
+									ctx.pressMapButton(hit)
 									waitLocSeq = entry.seq
 									waitLocAt = now
 								end
@@ -2720,32 +2711,32 @@ local function onMap(map, id)
 								sent[key] = true
 								if not pressLoops[key] then
 									pressLoops[key] = true
-									startPressLoop(hit, id, function()
-										return activeRun(map, id) and inState("InGame") and not buttonsDone()
+									ctx.startPressLoop(hit, id, function()
+										return ctx.activeRun(map, id) and ctx.inState("InGame") and not ctx.buttonsDone()
 									end)
 								end
-								pressMapButton(hit)
+								ctx.pressMapButton(hit)
 							end
 							if fuse then
-								moveFuseSafe(b, hit, r, function()
-									return activeRun(map, id)
+								ctx.moveFuseSafe(b, hit, r, function()
+									return ctx.activeRun(map, id)
 								end)
 							else
 								pcall(function()
-									pivotRootTo(CFrame.new(hit.Position + Vector3.new(0, ESY, 0)), r)
+									ctx.pivotRootTo(CFrame.new(hit.Position + Vector3.new(0, ESY, 0)), r)
 									r.Anchored = true
 								end)
 							end
 							task.wait(BTD)
-							if not activeRun(map, id) then
-								releaseRoot()
+							if not ctx.activeRun(map, id) then
+								ctx.releaseRoot()
 								break
 							end
 						end
 					end
 				end
 			else
-				if not activeRun(map, id) then
+				if not ctx.activeRun(map, id) then
 					break
 				end
 				pcall(function()
@@ -2754,35 +2745,35 @@ local function onMap(map, id)
 				if tr < EXM then
 					tr += 1
 					pcall(function()
-						pivotRootTo(ex.CFrame, r)
+						ctx.pivotRootTo(ex.CFrame, r)
 						h:ChangeState(Enum.HumanoidStateType.Landed)
 						r.Velocity = EXP
 					end)
-					mkPlat(r)
+					ctx.mkPlat(r)
 					task.wait(TPD)
-					if not activeRun(map, id) then
-						releaseRoot()
+					if not ctx.activeRun(map, id) then
+						ctx.releaseRoot()
 						break
 					end
 					if (r.Position - ex.Position).Magnitude <= 5 then
 						tr += 1
-						fireSurvived(getPassArg(false), 100)
+						ctx.fireSurvived(ctx.getPassArg(false), 100)
 						local now = os.clock()
 						if now - lastExitPulse >= 0.5 then
 							lastExitPulse = now
-							statPulse(false)
-							statBurst()
+							ctx.statPulse(false)
+							ctx.statBurst()
 							if pendingSaveSig == nil then
-								flushStatsAfterSurvival()
+								ctx.flushStatsAfterSurvival()
 							end
 						end
 					end
 				else
 					tr = 0
-					mkPlat(r)
+					ctx.mkPlat(r)
 					task.wait(TPD)
-					if not activeRun(map, id) then
-						releaseRoot()
+					if not ctx.activeRun(map, id) then
+						ctx.releaseRoot()
 						break
 					end
 				end
@@ -2790,66 +2781,66 @@ local function onMap(map, id)
 		end
 	end, debug.traceback)
 
-	cut(hp)
+	ctx.cut(hp)
 
 	if not ok then
 		warn(err)
-		note("Map handler error; continuing")
+		ctx.note("Map handler error; continuing")
 	end
 
-	if not activeRun(map, id) then
-		clearLocators()
-		releaseRoot()
+	if not ctx.activeRun(map, id) then
+		ctx.clearLocators()
+		ctx.releaseRoot()
 		return
 	end
 
-	local r = select(1, rh(false))
+	local r = select(1, ctx.rh(false))
 	if r then
-		mkPlat(r)
+		ctx.mkPlat(r)
 	end
 
-	if not (alive() and on) then
+	if not (ctx.alive() and on) then
 		return
 	end
 
-	note("Complete. Waiting for next map..")
+	ctx.note("Complete. Waiting for next map..")
 
-	while alive() and on do
+	while ctx.alive() and on do
 		task.wait(0.2)
 		local m = MP and MP:FindFirstChild("Map") or nil
-		local rr = select(1, rh(false))
+		local rr = select(1, ctx.rh(false))
 		if rr then
-			mkPlat(rr)
+			ctx.mkPlat(rr)
 		end
 		if m and m ~= map then
-			clearLocators()
+			ctx.clearLocators()
 			break
 		end
 	end
 end
 
-local function curMap()
+ctx.curMap = function()
 	if not MP or not MP.Parent then
 		MP = Wsp and (Wsp:FindFirstChild("Multiplayer") or Wsp:WaitForChild("Multiplayer", 3)) or nil
 	end
 	return MP and MP:FindFirstChild("Map") or nil
 end
 
-rootPart = function()
-	local c = chr(false)
+ctx.rootPart = function()
+	local c = ctx.chr(false)
 	if not c then
 		return nil
 	end
 	return c:FindFirstChild("HumanoidRootPart", true)
 end
 
-local function startButtonAura()
+ctx.startButtonAura = function()
 	auraTok += 1
 	local id = auraTok
-	spawnLoop(function()
+	ctx.spawnLoop(function()
 		local map = nil
 		local req = 0
-		while alive() and auraTok == id do
+		while ctx.alive() and auraTok == id do
 			if not auraOn then
 				task.wait(0.1)
 				map = nil
@@ -2858,7 +2849,7 @@ local function startButtonAura()
 				continue
 			end
 
-			local m = curMap()
+			local m = ctx.curMap()
 			if m ~= map then
 				map = m
 				auraList = {}
@@ -2867,14 +2858,14 @@ local function startButtonAura()
 
 			local now = os.clock()
 			if now >= req then
-				requestRoundStats()
+				ctx.requestRoundStats()
 				req = now + 0.25
 			end
 
-			if map and isRoundIngame() and type(pressMapButton) == "function" then
-				local entries, hasLoc = auraEntries(map)
+			if map and ctx.isRoundIngame() and type(ctx.pressMapButton) == "function" then
+				local entries, hasLoc = ctx.auraEntries(map)
 				if #entries > 0 then
-					pressAuraEntries(entries, map, not hasLoc)
+					ctx.pressAuraEntries(entries, map, not hasLoc)
 				end
 			end
 
@@ -2883,14 +2874,14 @@ local function startButtonAura()
 	end)
 end
 
-local function startBonusCollector()
-	spawnLoop(function()
-		while alive() do
-			if autoCollectBonuses and isRoundIngame() then
-				local map = curMap()
+ctx.startBonusCollector = function()
+	ctx.spawnLoop(function()
+		while ctx.alive() do
+			if autoCollectBonuses and ctx.isRoundIngame() then
+				local map = ctx.curMap()
 				if map then
-					local r = select(1, rh(false))
-					collectMapBonuses(map, r, true)
+					local r = select(1, ctx.rh(false))
+					ctx.collectMapBonuses(map, r, true)
 				end
 			end
 			task.wait(0.35)
@@ -2899,20 +2890,20 @@ local function startBonusCollector()
 end
 
 if MP then
-	bind(MP.ChildAdded:Connect(function(ch)
+	ctx.bind(MP.ChildAdded:Connect(function(ch)
 		if ch.Name == "Map" and on then
-			task.spawn(burstLoaded)
+			task.spawn(ctx.burstLoaded)
 		end
 	end))
 end
 
 ctx.mkUi = function()
-	local par = uiPar()
+	local par = ctx.uiPar()
 	if not par then
 		return
 	end
 
-	local old = ffc(par, "AF_Toggle", false)
+	local old = ctx.ffc(par, "AF_Toggle", false)
 	if old then
 		pcall(function()
 			old:Destroy()
@@ -3027,77 +3018,77 @@ ctx.mkUi = function()
 	bonusBtn.Active = true
 	bonusBtn.Parent = optionsFrame
 
-	bind(NAgui.dragger(panel))
+	ctx.bind(ctx.NAgui_dragger(panel))
 
-	bind(MouseButtonFix(btn, function()
-		toggle(not on)
+	ctx.bind(ctx.MouseButtonFix(btn, function()
+		ctx.toggle(not on)
 	end))
 
-	bind(MouseButtonFix(optBtn, function()
-		setOptionsOpen(not optionsOpen)
+	ctx.bind(ctx.MouseButtonFix(optBtn, function()
+		ctx.setOptionsOpen(not optionsOpen)
 	end))
 
-	bind(MouseButtonFix(auraBtn, function()
+	ctx.bind(ctx.MouseButtonFix(auraBtn, function()
 		auraOn = not auraOn
-		setAuraBtn()
+		ctx.setAuraBtn()
 	end))
 
-	bind(MouseButtonFix(distModeBtn, function()
+	ctx.bind(ctx.MouseButtonFix(distModeBtn, function()
 		auraUseDistance = not auraUseDistance
-		setDistModeBtn()
+		ctx.setDistModeBtn()
 	end))
 
-	bind(distBtn.FocusLost:Connect(function()
+	ctx.bind(distBtn.FocusLost:Connect(function()
 		local n = tonumber(distBtn.Text)
 		if n then
 			auraDist = math.clamp(math.floor(n + 0.5), 1, 100)
 		end
-		setDistBtn()
+		ctx.setDistBtn()
 	end))
 
-	bind(MouseButtonFix(bonusBtn, function()
+	ctx.bind(ctx.MouseButtonFix(bonusBtn, function()
 		autoCollectBonuses = not autoCollectBonuses
-		setBonusBtn()
+		ctx.setBonusBtn()
 	end))
 
-	setBtn()
-	setOptionsOpen(false)
-	setAuraBtn()
-	setDistModeBtn()
-	setDistBtn()
-	setBonusBtn()
+	ctx.setBtn()
+	ctx.setOptionsOpen(false)
+	ctx.setAuraBtn()
+	ctx.setDistModeBtn()
+	ctx.setDistBtn()
+	ctx.setBonusBtn()
 end
 
 ctx.mkUi()
-startPassiveRemotes()
-startButtonAura()
-startBonusCollector()
+ctx.startPassiveRemotes()
+ctx.startButtonAura()
+ctx.startBonusCollector()
 
 if LP then
-	chC = LP.CharacterAdded:Connect(onChar)
+	chC = LP.CharacterAdded:Connect(ctx.onChar)
 	if LP.Character then
-		task.spawn(onChar, LP.Character)
+		task.spawn(ctx.onChar, LP.Character)
 	end
 end
 
-antiVoid(curMap)
-note("Ready")
+ctx.antiVoid(ctx.curMap)
+ctx.note("Ready")
 
 task.spawn(function()
-	while alive() do
+	while ctx.alive() do
 		local ok, err = xpcall(function()
 			task.wait(SCI)
 			if not on then
 				return
 			end
-			local m = curMap()
-			local ig = inState("InGame")
+			local m = ctx.curMap()
+			local ig = ctx.inState("InGame")
 			if m and ig and m ~= cur then
 				cur = m
 				tok += 1
 				local id = tok
-				note("New Map")
-				onMap(m, id)
+				ctx.note("New Map")
+				ctx.onMap(m, id)
 			elseif not m or not ig then
 				cur = nil
 			end
@@ -3105,7 +3096,7 @@ task.spawn(function()
 
 		if not ok then
 			warn(err)
-			note("Loop error; continuing")
+			ctx.note("Loop error; continuing")
 			task.wait(0.25)
 		end
 	end

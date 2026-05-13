@@ -13,8 +13,8 @@ local function initDeps(data)
     Apps = data.Apps
     Settings = data.Settings
 
-    API = data.API
-    RMD = data.RMD
+    API = data.API or {Classes = {}, Enums = {}, CategoryOrder = {Unscriptable = 1, Attributes = 2}, GetMember = function() return {} end}
+    RMD = data.RMD or {Classes = {}, Enums = {}, PropertyOrders = {}}
     env = data.env
     service = data.service
     plr = data.plr
@@ -603,10 +603,12 @@ local function main()
         local propCount = 1
         local elevated = Main.Elevated
         local showDeprecated, showHidden = Settings.Properties.ShowDeprecated, Settings.Properties.ShowHidden
-        local Classes = API.Classes
+        API = API or {Classes = {}, Enums = {}, CategoryOrder = {Unscriptable = 1, Attributes = 2}, GetMember = function() return {} end}
+        RMD = RMD or {Classes = {}, Enums = {}, PropertyOrders = {}}
+        local Classes = API.Classes or {}
         local classLists = {}
         local lower = string.lower
-        local RMDCustomOrders = RMD.PropertyOrders
+        local RMDCustomOrders = RMD.PropertyOrders or {}
         local getAttributes = game.GetAttributes
         local maxAttrs = Settings.Properties.MaxAttributes
         local showingAttrs = Settings.Properties.ShowAttributes
@@ -3106,7 +3108,9 @@ local function main()
             }
         )
 
-        categoryOrder = API.CategoryOrder
+        API = API or {Classes = {}, Enums = {}, CategoryOrder = {Unscriptable = 1, Attributes = 2}, GetMember = function() return {} end}
+        RMD = RMD or {Classes = {}, Enums = {}, PropertyOrders = {}}
+        categoryOrder = API.CategoryOrder or {Unscriptable = 1, Attributes = 2}
         for category, _ in next, categoryOrder do
             if not Properties.CollapsedCategories[category] then
                 expanded["CAT_" .. category] = true

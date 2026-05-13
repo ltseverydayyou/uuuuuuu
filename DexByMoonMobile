@@ -15752,8 +15752,6 @@ Main = (function()
 				task.spawn(function()
 					local ok, response = false, nil;
 					for _, apiUrl in ipairs({
-						"https://setup.roproxy.com/" .. Main.RobloxVersion .. "-API-Dump.json",
-						"https://setup.rotunnel.com/" .. Main.RobloxVersion .. "-API-Dump.json",
 						"https://setup.roblox.com/" .. Main.RobloxVersion .. "-API-Dump.json"
 					}) do
 						ok, response = pcall(game.HttpGet, game, apiUrl);
@@ -17490,10 +17488,8 @@ Main = (function()
 			end;
 			if not Main.RobloxVersion then
 				for _, apiUrl in ipairs({
-					"https://setup.roproxy.com/versionQTStudio",
-					"https://setup.rotunnel.com/versionQTStudio",
-					"https://setup.roblox.com/versionQTStudio"
-				}) do
+						"https://setup.roblox.com/versionQTStudio"
+					}) do
 					local ok, response = pcall(game.HttpGet, game, apiUrl);
 					if ok and type(response) == "string" and #response > 0 then
 						Main.RobloxVersion = response;

@@ -1960,14 +1960,19 @@ Main = (function()
 	Main.FetchAPI = function(callbackiflong, callbackiftoolong, XD)
 		local downloaded = false
 		local api, rawAPI
-		local timeoutSeconds = 30
+		local timeoutSeconds = 60
 		local httpErrs = {}
 
 		local function emptyAPI(reason)
+			downloaded = true
+			warn("[Dex] "..tostring(reason))
 			return {
 				Classes = {},
 				Enums = {},
-				CategoryOrder = {Unscriptable = 1, Attributes = 2},
+				CategoryOrder = {
+					Unscriptable = 1,
+					Attributes = 2
+				},
 				GetMember = function()
 					return {}
 				end,
@@ -1977,53 +1982,63 @@ Main = (function()
 		end
 
 		local function skipAPI(reason)
-			downloaded = true
-			warn("[Dex] " .. tostring(reason))
 			return emptyAPI(reason)
 		end
 
-		local function isAPI(str)
-			if type(str) ~= "string" or #str < 100 then
-				return false, "empty response"
+		local function getTypeName(t)
+			if type(t) == "table" then
+				return t.Name or t.name or t.Type or t.type or tostring(t)
 			end
-			if not str:find('"Classes"', 1, true) or not str:find('"Enums"', 1, true) then
-				return false, "not an API dump"
+			return t
+		end
+
+		local function isAPI(str)
+			if type(str) ~= "string" or #str < 1000 then
+				return false, "empty API body"
 			end
 			local ok, decoded = pcall(service.HttpService.JSONDecode, service.HttpService, str)
-			if not ok or type(decoded) ~= "table" or type(decoded.Classes) ~= "table" or type(decoded.Enums) ~= "table" then
+			if not ok or type(decoded) ~= "table" then
 				return false, tostring(decoded)
+			end
+			if type(decoded.Classes) ~= "table" or type(decoded.Enums) ~= "table" then
+				return false, "missing Classes or Enums"
 			end
 			return true, decoded
 		end
 
-		local function addUrl(list, url)
-			if type(url) == "string" and url ~= "" then
-				list[#list + 1] = url
+		local function httpGet(url)
+			local ok, body = pcall(oldgame.HttpGet, oldgame, url)
+			if not ok then
+				ok, body = pcall(oldgame.HttpGet, game, url)
 			end
+			if ok and type(body) == "string" and #body > 0 then
+				return body
+			end
+			httpErrs[#httpErrs + 1] = tostring(url).." -> "..tostring(body)
+		end
+
+		local function fetchVersion()
+			if Main.RobloxVersion and Main.RobloxVersion ~= "" then
+				return Main.RobloxVersion
+			end
+			local body = httpGet("https://setup.roblox.com/versionQTStudio")
+			if type(body) == "string" then
+				Main.RobloxVersion = body:match("(version%-[%w]+)") or body
+			end
+			return Main.RobloxVersion
 		end
 
 		local function fetchRawAPI()
-			local urls = {}
-			if Main.RobloxVersion and Main.RobloxVersion ~= "" then
-				addUrl(urls, "https://setup.roproxy.com/" .. Main.RobloxVersion .. "-API-Dump.json")
-				addUrl(urls, "https://setup.rotunnel.com/" .. Main.RobloxVersion .. "-API-Dump.json")
-				addUrl(urls, "https://setup.roblox.com/" .. Main.RobloxVersion .. "-API-Dump.json")
+			local version = fetchVersion()
+			if not version or version == "" then
+				return nil
 			end
-			addUrl(urls, "https://raw.githubusercontent.com/MaximumADHD/Roblox-Client-Tracker/roblox/API-Dump.json")
-			addUrl(urls, "https://raw.githubusercontent.com/CloneTrooper1019/Roblox-Client-Tracker/roblox/API-Dump.json")
-
-			for _, apiUrl in ipairs(urls) do
-				local ok, response = pcall(oldgame.HttpGet, oldgame, apiUrl)
-				if not ok then
-					httpErrs[#httpErrs + 1] = tostring(apiUrl) .. " -> " .. tostring(response)
-				else
-					local valid = isAPI(response)
-					if valid then
-						return response
-					end
-					httpErrs[#httpErrs + 1] = tostring(apiUrl) .. " -> invalid response"
-				end
+			local body = httpGet("https://setup.roblox.com/"..version.."-API-Dump.json")
+			local valid = isAPI(body)
+			if valid then
+				return body
 			end
+			httpErrs[#httpErrs + 1] = "setup.roblox.com API dump returned invalid data"
 		end
 
 		if Main.Elevated then
@@ -2043,8 +2058,10 @@ Main = (function()
 			task.spawn(function()
 				task.wait(10)
 				if not downloaded and callbackiflong then callbackiflong() end
+
 				task.wait(20)
 				if not downloaded and callbackiftoolong then callbackiftoolong() end
+
 				task.wait(30)
 				if not downloaded and XD then XD() end
 			end)
@@ -2066,7 +2083,7 @@ Main = (function()
 				end
 
 				if not requestData then
-					return skipAPI("API request failed: " .. table.concat(httpErrs, " | "))
+					return skipAPI("API request failed: "..table.concat(httpErrs, " | "))
 				end
 
 				rawAPI = requestData
@@ -2083,13 +2100,12 @@ Main = (function()
 			return skipAPI("API data unavailable; continuing without API data.")
 		end
 
-		downloaded = true
-
 		local okDecode, decodedAPI = pcall(service.HttpService.JSONDecode, service.HttpService, rawAPI)
 		if not okDecode or type(decodedAPI) ~= "table" or type(decodedAPI.Classes) ~= "table" or type(decodedAPI.Enums) ~= "table" then
-			return skipAPI("API decode failed: " .. tostring(decodedAPI))
+			return skipAPI("API decode failed: "..tostring(decodedAPI))
 		end
 
+		downloaded = true
 		Main.RawAPI = rawAPI
 		api = decodedAPI
 
@@ -2107,63 +2123,53 @@ Main = (function()
 		end
 
 		for _,class in pairs(api.Classes) do
-			if type(class) == "table" and type(class.Name) == "string" then
-				local newClass = {}
-				newClass.Name = class.Name
-				newClass.Superclass = class.Superclass
-				newClass.Properties = {}
-				newClass.Functions = {}
-				newClass.Events = {}
-				newClass.Callbacks = {}
-				newClass.Tags = {}
+			local newClass = {}
+			newClass.Name = class.Name
+			newClass.Superclass = class.Superclass
+			newClass.Properties = {}
+			newClass.Functions = {}
+			newClass.Events = {}
+			newClass.Callbacks = {}
+			newClass.Tags = {}
 
-				if class.Tags then for c,tag in pairs(class.Tags) do newClass.Tags[tag] = true end end
-				if type(class.Members) == "table" then
-					for __,member in pairs(class.Members) do
-						if type(member) == "table" then
-							local newMember = {}
-							newMember.Name = member.Name
-							newMember.Class = class.Name
-							newMember.Security = member.Security
-							newMember.Tags ={}
-							if member.Tags then for c,tag in pairs(member.Tags) do newMember.Tags[tag] = true end end
+			if class.Tags then for c,tag in pairs(class.Tags) do newClass.Tags[tag] = true end end
+			for __,member in pairs(class.Members or {}) do
+				local newMember = {}
+				newMember.Name = member.Name
+				newMember.Class = class.Name
+				newMember.Security = member.Security
+				newMember.Tags ={}
+				if member.Tags then for c,tag in pairs(member.Tags) do newMember.Tags[tag] = true end end
 
-							local mType = member.MemberType
-							if mType == "Property" then
-								local propCategory = member.Category or "Other"
-								propCategory = propCategory:match("^%s*(.-)%s*$")
-								if not seenCategories[propCategory] then
-									categoryOrder[#categoryOrder+1] = propCategory
-									seenCategories[propCategory] = true
-								end
-								newMember.ValueType = member.ValueType or {Name = "string"}
-								newMember.Category = propCategory
-								newMember.Serialization = member.Serialization
-								table.insert(newClass.Properties,newMember)
-							elseif mType == "Function" then
-								newMember.Parameters = {}
-								newMember.ReturnType = member.ReturnType and member.ReturnType.Name or "void"
-								if type(member.Parameters) == "table" then
-									for c,param in pairs(member.Parameters) do
-										table.insert(newMember.Parameters,{Name = param.Name, Type = param.Type and param.Type.Name or "Variant"})
-									end
-								end
-								table.insert(newClass.Functions,newMember)
-							elseif mType == "Event" then
-								newMember.Parameters = {}
-								if type(member.Parameters) == "table" then
-									for c,param in pairs(member.Parameters) do
-										table.insert(newMember.Parameters,{Name = param.Name, Type = param.Type and param.Type.Name or "Variant"})
-									end
-								end
-								table.insert(newClass.Events,newMember)
-							end
-						end
+				local mType = member.MemberType
+				if mType == "Property" then
+					local propCategory = member.Category or "Other"
+					propCategory = propCategory:match("^%s*(.-)%s*$")
+					if not seenCategories[propCategory] then
+						categoryOrder[#categoryOrder+1] = propCategory
+						seenCategories[propCategory] = true
 					end
+					newMember.ValueType = member.ValueType
+					newMember.Category = propCategory
+					newMember.Serialization = member.Serialization
+					table.insert(newClass.Properties,newMember)
+				elseif mType == "Function" then
+					newMember.Parameters = {}
+					newMember.ReturnType = getTypeName(member.ReturnType)
+					for c,param in pairs(member.Parameters or {}) do
+						table.insert(newMember.Parameters,{Name = param.Name, Type = getTypeName(param.Type)})
+					end
+					table.insert(newClass.Functions,newMember)
+				elseif mType == "Event" then
+					newMember.Parameters = {}
+					for c,param in pairs(member.Parameters or {}) do
+						table.insert(newMember.Parameters,{Name = param.Name, Type = getTypeName(param.Type)})
+					end
+					table.insert(newClass.Events,newMember)
 				end
-
-				classes[class.Name] = newClass
 			end
+
+			classes[class.Name] = newClass
 		end
 
 		for _,class in pairs(classes) do
@@ -2171,28 +2177,24 @@ Main = (function()
 		end
 
 		for _,enum in pairs(api.Enums) do
-			if type(enum) == "table" and type(enum.Name) == "string" then
-				local newEnum = {}
-				newEnum.Name = enum.Name
-				newEnum.Items = {}
-				newEnum.Tags = {}
+			local newEnum = {}
+			newEnum.Name = enum.Name
+			newEnum.Items = {}
+			newEnum.Tags = {}
 
-				if enum.Tags then for c,tag in pairs(enum.Tags) do newEnum.Tags[tag] = true end end
-				if type(enum.Items) == "table" then
-					for __,item in pairs(enum.Items) do
-						local newItem = {}
-						newItem.Name = item.Name
-						newItem.Value = item.Value
-						table.insert(newEnum.Items,newItem)
-					end
-				end
-
-				enums[enum.Name] = newEnum
+			if enum.Tags then for c,tag in pairs(enum.Tags) do newEnum.Tags[tag] = true end end
+			for __,item in pairs(enum.Items or {}) do
+				local newItem = {}
+				newItem.Name = item.Name
+				newItem.Value = item.Value
+				table.insert(newEnum.Items,newItem)
 			end
+
+			enums[enum.Name] = newEnum
 		end
 
 		local function getMember(class,member)
-			if not classes[class] or not classes[class][member] then return {} end
+			if not classes[class] or not classes[class][member] then return end
 			local result = {}
 
 			local currentClass = classes[class]
@@ -3150,63 +3152,13 @@ Main = (function()
 				end
 			end
 
-			local function robloxApiUrls(url)
-				local subdomain, path = tostring(url):match("^https?://([%w%-]+)%.roblox%.com(/.*)$")
-				if not subdomain then
-					subdomain, path = tostring(url):match("^https?://([%w%-]+)%.roproxy%.com(/.*)$")
-				end
-				if not subdomain then
-					subdomain, path = tostring(url):match("^https?://([%w%-]+)%.rotunnel%.com(/.*)$")
-				end
-				if not subdomain or not path then
-					return {url}
-				end
-				return {
-					"https://" .. subdomain .. ".roproxy.com" .. path,
-					"https://" .. subdomain .. ".rotunnel.com" .. path,
-					"https://" .. subdomain .. ".roblox.com" .. path
-				}
-			end
-
-			local function pickVersion(body)
-				if type(body) ~= "string" or body == "" then
-					return
-				end
-				local ver = body:match("(version%-[%w]+)")
-				if ver then
-					return ver
-				end
-				local ok, data = pcall(service.HttpService.JSONDecode, service.HttpService, body)
-				if ok and type(data) == "table" then
-					return data.version or data.clientVersionUpload or data.clientVersion
-				end
-			end
-
 			if not Main.RobloxVersion then
-				for _, apiUrl in ipairs(robloxApiUrls("https://clientsettings.roblox.com/v2/client-version/WindowsStudio64/channel/LIVE")) do
-					local ok, body = pcall(oldgame.HttpGet, oldgame, apiUrl)
-					if ok then
-						Main.RobloxVersion = pickVersion(body)
-						if Main.RobloxVersion then
-							break
-						end
-					end
+				local ok, body = pcall(oldgame.HttpGet, oldgame, "https://setup.roblox.com/versionQTStudio")
+				if not ok then
+					ok, body = pcall(oldgame.HttpGet, game, "https://setup.roblox.com/versionQTStudio")
 				end
-			end
-
-			if not Main.RobloxVersion then
-				for _, apiUrl in ipairs({
-					"https://setup.roproxy.com/versionQTStudio",
-					"https://setup.rotunnel.com/versionQTStudio",
-					"https://setup.roblox.com/versionQTStudio"
-				}) do
-					local ok, body = pcall(oldgame.HttpGet, oldgame, apiUrl)
-					if ok then
-						Main.RobloxVersion = pickVersion(body)
-						if Main.RobloxVersion then
-							break
-						end
-					end
+				if ok and type(body) == "string" then
+					Main.RobloxVersion = body:match("(version%-[%w]+)") or body
 				end
 			end
 		end
@@ -3235,7 +3187,7 @@ Main = (function()
 
 		-- Save external deps locally if needed
 		if Main.Elevated and env.writefile and not Main.LocalDepsUpToDate() then
-			env.writefile("DexPlusPlus/deps_version.dat",tostring(Main.ClientVersion or "unknown").."\n"..tostring(Main.RobloxVersion or ""))
+			env.writefile("DexPlusPlus/deps_version.dat",Main.ClientVersion.."\n"..Main.RobloxVersion)
 			if Main.RawAPI then
 				env.writefile("DexPlusPlus/rbx_api.dat",Main.RawAPI)
 			end

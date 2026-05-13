@@ -1959,20 +1959,15 @@ Main = (function()
 
 	Main.FetchAPI = function(callbackiflong, callbackiftoolong, XD)
 		local downloaded = false
-		local api, rawAPI
-		local timeoutSeconds = 60
-		local httpErrs = {}
-
-		local function emptyAPI(reason)
+		local api,rawAPI
+		local timeoutSeconds = 30
+		local function skipAPI(reason)
 			downloaded = true
-			warn("[Dex] "..tostring(reason))
+			warn("[Dex] "..reason)
 			return {
 				Classes = {},
 				Enums = {},
-				CategoryOrder = {
-					Unscriptable = 1,
-					Attributes = 2
-				},
+				CategoryOrder = {},
 				GetMember = function()
 					return {}
 				end,
@@ -1980,77 +1975,11 @@ Main = (function()
 				Reason = reason
 			}
 		end
-
-		local function skipAPI(reason)
-			return emptyAPI(reason)
-		end
-
-		local function getTypeName(t)
-			if type(t) == "table" then
-				return t.Name or t.name or t.Type or t.type or tostring(t)
-			end
-			return t
-		end
-
-		local function isAPI(str)
-			if type(str) ~= "string" or #str < 1000 then
-				return false, "empty API body"
-			end
-			local ok, decoded = pcall(service.HttpService.JSONDecode, service.HttpService, str)
-			if not ok or type(decoded) ~= "table" then
-				return false, tostring(decoded)
-			end
-			if type(decoded.Classes) ~= "table" or type(decoded.Enums) ~= "table" then
-				return false, "missing Classes or Enums"
-			end
-			return true, decoded
-		end
-
-		local function httpGet(url)
-			local ok, body = pcall(oldgame.HttpGet, oldgame, url)
-			if not ok then
-				ok, body = pcall(oldgame.HttpGet, game, url)
-			end
-			if ok and type(body) == "string" and #body > 0 then
-				return body
-			end
-			httpErrs[#httpErrs + 1] = tostring(url).." -> "..tostring(body)
-		end
-
-		local function fetchVersion()
-			if Main.RobloxVersion and Main.RobloxVersion ~= "" then
-				return Main.RobloxVersion
-			end
-			local body = httpGet("https://setup.roblox.com/versionQTStudio")
-			if type(body) == "string" then
-				Main.RobloxVersion = body:match("(version%-[%w]+)") or body
-			end
-			return Main.RobloxVersion
-		end
-
-		local function fetchRawAPI()
-			local version = fetchVersion()
-			if not version or version == "" then
-				return nil
-			end
-			local body = httpGet("https://setup.roblox.com/"..version.."-API-Dump.json")
-			local valid = isAPI(body)
-			if valid then
-				return body
-			end
-			httpErrs[#httpErrs + 1] = "setup.roblox.com API dump returned invalid data"
-		end
-
 		if Main.Elevated then
 			if Main.LocalDepsUpToDate() then
 				local localAPI = Lib.ReadFile("DexPlusPlus/rbx_api.dat")
-				if localAPI then
-					local valid = isAPI(localAPI)
-					if valid then
-						rawAPI = localAPI
-					else
-						Main.DepsVersionData[1] = ""
-					end
+				if localAPI then 
+					rawAPI = localAPI
 				else
 					Main.DepsVersionData[1] = ""
 				end
@@ -2059,18 +1988,21 @@ Main = (function()
 				task.wait(10)
 				if not downloaded and callbackiflong then callbackiflong() end
 
-				task.wait(20)
+				task.wait(20) -- 30
 				if not downloaded and callbackiftoolong then callbackiftoolong() end
 
-				task.wait(30)
+				task.wait(30) -- 60
 				if not downloaded and XD then XD() end
 			end)
 			if not rawAPI then
 				local requestCompleted = false
+				local requestSucceeded = false
 				local requestData
 				task.spawn(function()
-					requestData = fetchRawAPI()
+					local ok, response = pcall(oldgame.HttpGet, game, "http://setup.roblox.com/"..Main.RobloxVersion.."-API-Dump.json")
 					requestCompleted = true
+					requestSucceeded = ok
+					requestData = response
 				end)
 
 				local start = os.clock()
@@ -2082,8 +2014,8 @@ Main = (function()
 					return skipAPI(("API request timed out after %d seconds; continuing without API data."):format(timeoutSeconds))
 				end
 
-				if not requestData then
-					return skipAPI("API request failed: "..table.concat(httpErrs, " | "))
+				if not requestSucceeded then
+					return skipAPI("API request failed: "..tostring(requestData))
 				end
 
 				rawAPI = requestData
@@ -2100,14 +2032,10 @@ Main = (function()
 			return skipAPI("API data unavailable; continuing without API data.")
 		end
 
-		local okDecode, decodedAPI = pcall(service.HttpService.JSONDecode, service.HttpService, rawAPI)
-		if not okDecode or type(decodedAPI) ~= "table" or type(decodedAPI.Classes) ~= "table" or type(decodedAPI.Enums) ~= "table" then
-			return skipAPI("API decode failed: "..tostring(decodedAPI))
-		end
-
 		downloaded = true
+
 		Main.RawAPI = rawAPI
-		api = decodedAPI
+		api = service.HttpService:JSONDecode(rawAPI)
 
 		local classes,enums = {},{}
 		local categoryOrder,seenCategories = {},{}
@@ -2133,7 +2061,7 @@ Main = (function()
 			newClass.Tags = {}
 
 			if class.Tags then for c,tag in pairs(class.Tags) do newClass.Tags[tag] = true end end
-			for __,member in pairs(class.Members or {}) do
+			for __,member in pairs(class.Members) do
 				local newMember = {}
 				newMember.Name = member.Name
 				newMember.Class = class.Name
@@ -2155,15 +2083,15 @@ Main = (function()
 					table.insert(newClass.Properties,newMember)
 				elseif mType == "Function" then
 					newMember.Parameters = {}
-					newMember.ReturnType = getTypeName(member.ReturnType)
-					for c,param in pairs(member.Parameters or {}) do
-						table.insert(newMember.Parameters,{Name = param.Name, Type = getTypeName(param.Type)})
+					newMember.ReturnType = member.ReturnType.Name
+					for c,param in pairs(member.Parameters) do
+						table.insert(newMember.Parameters,{Name = param.Name, Type = param.Type.Name})
 					end
 					table.insert(newClass.Functions,newMember)
 				elseif mType == "Event" then
 					newMember.Parameters = {}
-					for c,param in pairs(member.Parameters or {}) do
-						table.insert(newMember.Parameters,{Name = param.Name, Type = getTypeName(param.Type)})
+					for c,param in pairs(member.Parameters) do
+						table.insert(newMember.Parameters,{Name = param.Name, Type = param.Type.Name})
 					end
 					table.insert(newClass.Events,newMember)
 				end
@@ -2183,7 +2111,7 @@ Main = (function()
 			newEnum.Tags = {}
 
 			if enum.Tags then for c,tag in pairs(enum.Tags) do newEnum.Tags[tag] = true end end
-			for __,item in pairs(enum.Items or {}) do
+			for __,item in pairs(enum.Items) do
 				local newItem = {}
 				newItem.Name = item.Name
 				newItem.Value = item.Value
@@ -3152,15 +3080,7 @@ Main = (function()
 				end
 			end
 
-			if not Main.RobloxVersion then
-				local ok, body = pcall(oldgame.HttpGet, oldgame, "https://setup.roblox.com/versionQTStudio")
-				if not ok then
-					ok, body = pcall(oldgame.HttpGet, game, "https://setup.roblox.com/versionQTStudio")
-				end
-				if ok and type(body) == "string" then
-					Main.RobloxVersion = body:match("(version%-[%w]+)") or body
-				end
-			end
+			Main.RobloxVersion = Main.RobloxVersion or oldgame:HttpGet("https://clientsettings.roblox.com/v2/client-version/WindowsStudio64/channel/LIVE"):match("(version%-[%w]+)")
 		end
 
 		-- Fetch external deps

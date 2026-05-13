@@ -14,7 +14,7 @@ local function initDeps(data)
     Settings = data.Settings
 
     API = data.API or {Classes = {}, Enums = {}, CategoryOrder = {Unscriptable = 1, Attributes = 2}, GetMember = function() return {} end}
-    RMD = data.RMD or {Classes = {}, Enums = {}, PropertyOrders = {}}
+    RMD = data.RMD
     env = data.env
     service = data.service
     plr = data.plr
@@ -604,11 +604,10 @@ local function main()
         local elevated = Main.Elevated
         local showDeprecated, showHidden = Settings.Properties.ShowDeprecated, Settings.Properties.ShowHidden
         API = API or {Classes = {}, Enums = {}, CategoryOrder = {Unscriptable = 1, Attributes = 2}, GetMember = function() return {} end}
-        RMD = RMD or {Classes = {}, Enums = {}, PropertyOrders = {}}
         local Classes = API.Classes or {}
         local classLists = {}
         local lower = string.lower
-        local RMDCustomOrders = RMD.PropertyOrders or {}
+        local RMDCustomOrders = RMD.PropertyOrders
         local getAttributes = game.GetAttributes
         local maxAttrs = Settings.Properties.MaxAttributes
         local showingAttrs = Settings.Properties.ShowAttributes
@@ -1629,11 +1628,17 @@ local function main()
                         Properties.DisplayColorEditor(colorProp, editor.SavedColor.Color)
                     else
                         local colProp
-                        for i, v in pairs(API.Classes.BasePart.Properties) do
-                            if v.Name == "Color" then
-                                colProp = v
-                                break
+                        local basePart = API and API.Classes and API.Classes.BasePart
+                        if basePart and basePart.Properties then
+                            for i, v in pairs(basePart.Properties) do
+                                if v.Name == "Color" then
+                                    colProp = v
+                                    break
+                                end
                             end
+                        end
+                        if not colProp then
+                            colProp = {Name = "Color", Class = "BasePart", ValueType = {Name = "Color3", Category = "Datatype"}, Category = "Appearance", Tags = {}}
                         end
                         Properties.DisplayColorEditor(colProp, editor.SavedColor.Color)
                     end
@@ -3109,7 +3114,6 @@ local function main()
         )
 
         API = API or {Classes = {}, Enums = {}, CategoryOrder = {Unscriptable = 1, Attributes = 2}, GetMember = function() return {} end}
-        RMD = RMD or {Classes = {}, Enums = {}, PropertyOrders = {}}
         categoryOrder = API.CategoryOrder or {Unscriptable = 1, Attributes = 2}
         for category, _ in next, categoryOrder do
             if not Properties.CollapsedCategories[category] then

@@ -1277,7 +1277,7 @@ if game.GameId == 847722000 then
 	local infoRoot
 	local infoTgt = "Rake's Target : ?"
 	local infoTime = "Time Until Day : ?"
-	local infoPlayed = "Time Played : ?"
+	local infoPower = "Power : ?"
 
 	local function fmtTime(v)
 		v = math.max(0, math.floor(tonumber(v) or 0))
@@ -1290,8 +1290,16 @@ if game.GameId == 847722000 then
 		return string.format("%d:%02d", m, s)
 	end
 
+	local function fmtPower(v)
+		local pct = math.max(0, (tonumber(v) or 1000) / 10)
+		if pct % 1 == 0 then
+			return tostring(math.floor(pct))
+		end
+		return string.format("%.1f", pct)
+	end
+
 	local function infoText()
-		return infoTgt .. "\n" .. infoTime .. "\n" .. infoPlayed
+		return infoTgt .. "\n" .. infoTime .. "\n" .. infoPower
 	end
 
 	local function findBubble()
@@ -1305,7 +1313,7 @@ if game.GameId == 847722000 then
 		for _, v in ipairs(gui:GetDescendants()) do
 			if v:IsA("TextLabel") or v:IsA("TextButton") or v:IsA("TextBox") then
 				local tx = tostring(v.Text or "")
-				if tx:find("Rake's Target", 1, true) or tx:find("Time Until", 1, true) or tx:find("Time Played", 1, true) then
+				if tx:find("Rake's Target", 1, true) or tx:find("Time Until", 1, true) or tx:find("Power", 1, true) then
 					infoLbl = v
 					local root = v
 					while root.Parent and root.Parent:IsA("GuiObject") and root.Parent ~= gui do
@@ -1388,12 +1396,12 @@ if game.GameId == 847722000 then
 		syncBubble()
 	end
 
-	local function setInfoPlayed(txt)
-		local v = tostring(txt or "Time Played : ?")
-		if v == infoPlayed then
+	local function setInfoPower(txt)
+		local v = tostring(txt or "Power : ?")
+		if v == infoPower then
 			return
 		end
-		infoPlayed = v
+		infoPower = v
 		syncBubble()
 	end
 
@@ -2998,9 +3006,9 @@ if game.GameId == 847722000 then
 			setInfoTime(txt)
 		end,
 	}
-	local TimePlayedCounter = {
+	local PowerCounter = {
 		Set = function(_, txt)
-			setInfoPlayed(txt)
+			setInfoPower(txt)
 		end,
 	}
 
@@ -3024,9 +3032,10 @@ if game.GameId == 847722000 then
 			else
 				TimeUntilDayCounter:Set("Time Until Night : "..sec)
 			end
-			local me = Plrs.LocalPlayer
-			local tp = me and ffc(me, "TimePlayed")
-			TimePlayedCounter:Set("Time Played : "..fmtTime(valOf(tp, 0)))
+			local powerValues = ffc(Rep, "PowerValues")
+			local powerLevel = valOf(powerValues and ffc(powerValues, "PowerLevel"), 1000)
+
+			PowerCounter:Set("Power : "..fmtPower(powerLevel).."%")
 		end)
 	end)
 

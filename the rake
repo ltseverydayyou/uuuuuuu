@@ -2637,6 +2637,49 @@ if game.GameId == 847722000 then
 		end
 	end)
 
+	local noFall = {
+		haystackSize = Vector3.new(100000, 200, 100000),
+		applyToken = 0,
+		env = getgenv and getgenv() or _G,
+	}
+
+	noFall.getHaystack = function()
+		local ws = game:GetService("Workspace")
+		local filter = ffc(ws, "Filter")
+		return filter and ffc(filter, "Haystack") or nil
+	end
+
+	noFall.applyHaystack = function(enabled)
+		noFall.applyToken = noFall.applyToken + 1
+		local token = noFall.applyToken
+
+		task.spawn(function()
+			for _ = 1, 40 do
+				if token ~= noFall.applyToken then
+					return
+				end
+
+				local haystack = noFall.getHaystack()
+				if haystack then
+					pcall(function()
+						if noFall.env.__rakeHaystackOriginalSize == nil and haystack.Size ~= noFall.haystackSize then
+							noFall.env.__rakeHaystackOriginalSize = haystack.Size
+						end
+
+						if enabled == true then
+							haystack.Size = noFall.haystackSize
+						elseif noFall.env.__rakeHaystackOriginalSize then
+							haystack.Size = noFall.env.__rakeHaystackOriginalSize
+						end
+					end)
+					return
+				end
+
+				task.wait(0.25)
+			end
+		end)
+	end
+
 	PlayerTab:CreateToggle({
 		Name = "No Fall Damage",
 		CurrentValue = st.noFall,
@@ -2645,8 +2688,11 @@ if game.GameId == 847722000 then
 			_G.NoFallDMG = state == true
 			st.noFall = _G.NoFallDMG
 			cfgSet("noFall", st.noFall)
+			noFall.applyHaystack(_G.NoFallDMG)
 		end,
 	})
+
+	noFall.applyHaystack(st.noFall)
 
 	local lastCam
 	local lastFov
@@ -2801,6 +2847,7 @@ if game.GameId == 847722000 then
 		end,
 	})
 
+--[[
 	do
 		local env = getgenv and getgenv() or _G
 		local unpackFn = (table and table.unpack) or unpack
@@ -2853,6 +2900,7 @@ if game.GameId == 847722000 then
 			end
 		end
 	end
+]]
 
 	ExploitsTab:CreateToggle({
 		Name = "Insta Open SupplyDrop",

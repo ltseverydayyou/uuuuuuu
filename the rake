@@ -222,6 +222,8 @@ if game.GameId == 847722000 then
 	st.uiCorner = cfgNum("uiCorner", 4, 0, 20)
 	st.uiDpi = cfgNum("uiDpi", 100, 50, 200)
 	st.infoBubble = cfgBool("infoBubble", true)
+	st.radioSounds = cfgBool("radioSounds", true)
+	st.radioNotifications = cfgBool("radioNotifications", false)
 	st.adonisBypass = cfgBool("adonisBypass", true)
 	_G.FieldOfView = st.fov
 	_G.enableFOV = st.fovOn
@@ -517,6 +519,57 @@ if game.GameId == 847722000 then
 			return v:FindFirstChildWhichIsA(class, true)
 		end)
 		return ok and res or nil
+	end
+
+	local zeroVelocity = Vector3.new(0, 0, 0)
+
+	local function isPlayerCharacterPart(part)
+		local model = part and part:FindFirstAncestorOfClass("Model")
+		while model do
+			local ok, player = pcall(function()
+				return Plrs:GetPlayerFromCharacter(model)
+			end)
+			if ok and player then
+				return true
+			end
+			local parent = model.Parent
+			model = parent and parent:FindFirstAncestorOfClass("Model") or nil
+		end
+		return false
+	end
+
+	local function zeroBasePartVelocity(obj)
+		if not obj or not obj:IsA("BasePart") or isPlayerCharacterPart(obj) then
+			return
+		end
+		pcall(function()
+			if obj.AssemblyLinearVelocity ~= zeroVelocity then
+				obj.AssemblyLinearVelocity = zeroVelocity
+			end
+		end)
+	end
+
+	local function zeroWorkspaceBasePartVelocities()
+		local ok, objects = pcall(function()
+			return Ws:GetDescendants()
+		end)
+		for _, obj in pairs(ok and objects or {}) do
+			zeroBasePartVelocity(obj)
+		end
+	end
+
+	bind(Ws.DescendantAdded, function(obj)
+		zeroBasePartVelocity(obj)
+	end)
+
+	bind(Ws.DescendantRemoving, function(obj)
+		zeroBasePartVelocity(obj)
+	end)
+
+	if type(task) == "table" and type(task.defer) == "function" then
+		task.defer(zeroWorkspaceBasePartVelocities)
+	else
+		zeroWorkspaceBasePartVelocities()
 	end
 
 	local function valOf(v, def)
@@ -1172,10 +1225,11 @@ if game.GameId == 847722000 then
 		local icons = {
 			Main = "user",
 			Settings = "settings",
+			Radio = "radio",
 		}
 		local w = { __window = raw }
 		function w:CreateTab(name, icon, noGroup)
-			local iconName = icons[tostring(name)] or "circle"
+			local iconName = icons[tostring(name)] or (type(icon) == "string" and icon) or "circle"
 			local rawTab = raw:AddTab(tostring(name or "Tab"), iconName)
 			if noGroup == true then
 				return { __tab = rawTab }
@@ -1197,6 +1251,7 @@ if game.GameId == 847722000 then
 
 	--Tabs
 	local MainTab = Window:CreateTab("Main", 11252440515, true)
+	local RadioTab = Window:CreateTab("Radio", "radio", true)
 	local SettingsTab = Window:CreateTab("Settings", 11252440305)
 	local PlayerTab = MainTab
 	local ClientTab = MainTab
@@ -1271,6 +1326,327 @@ if game.GameId == 847722000 then
 	ExploitsTab = safeTab(ExploitsTab, "Exploits")
 	SettingsTab = safeTab(SettingsTab, "Settings")
 	ObsidianSettingsTab = safeTab(ObsidianSettingsTab, "ObsidianSettings")
+
+	local radioRows = {}
+	local radioList
+	local radioLayout
+	local radioEmpty
+	local radioEmptyText = "Waiting for radio messages..."
+	local radioMaxRows = 200
+	local radioSounds = {
+		"rbxassetid://103856279160788",
+		"rbxassetid://88017109520003",
+		"rbxassetid://131718170793766",
+		"rbxassetid://103338553714052",
+	}
+
+	local function richEscape(v)
+		local s = tostring(v or "")
+		s = s:gsub("&", "&amp;")
+		s = s:gsub("<", "&lt;")
+		s = s:gsub(">", "&gt;")
+		return s
+	end
+
+	local function radioName(sender)
+		if typeof(sender) == "Instance" and sender:IsA("Player") then
+			local username = tostring(sender.Name or "Unknown")
+			local display = tostring(sender.DisplayName or username)
+			if display == username then
+				return "@" .. username
+			end
+			return display .. " (@" .. username .. ")"
+		end
+		return tostring(sender or "Unknown")
+	end
+
+	local function radioStoredName(name)
+		local username = tostring(name or "")
+		username = username:gsub("%s*:+%s*$", "")
+		if username == "" then
+			return ""
+		end
+		local player = ffc(Plrs, username)
+		if player and player:IsA("Player") then
+			return radioName(player)
+		end
+		return username
+	end
+
+	local function updateRadioCanvas()
+		if not radioList or not radioLayout then
+			return
+		end
+		local function apply()
+			if not radioList or not radioLayout then
+				return
+			end
+			local h = radioLayout.AbsoluteContentSize.Y + 8
+			radioList.CanvasSize = UDim2.new(0, 0, 0, h)
+			radioList.CanvasPosition = Vector2.new(0, math.max(0, h - radioList.AbsoluteWindowSize.Y))
+		end
+		if type(task) == "table" and type(task.defer) == "function" then
+			task.defer(apply)
+		else
+			apply()
+		end
+	end
+
+	local function clearRadioMessages()
+		for i = #radioRows, 1, -1 do
+			safeDestroy(radioRows[i])
+			radioRows[i] = nil
+		end
+		if radioList and not radioEmpty then
+			radioEmpty = Instance.new("TextLabel")
+			radioEmpty.Name = "Empty"
+			radioEmpty.BackgroundTransparency = 1
+			radioEmpty.Font = Enum.Font.SourceSans
+			radioEmpty.Text = radioEmptyText
+			radioEmpty.TextColor3 = Color3.fromRGB(180, 180, 180)
+			radioEmpty.TextSize = 18
+			radioEmpty.Size = UDim2.new(1, -8, 0, 32)
+			radioEmpty.Position = UDim2.new(0, 4, 0, 8)
+			radioEmpty.Parent = radioList
+		end
+		updateRadioCanvas()
+	end
+
+	local function pushRadioLine(name, message)
+		if not radioList then
+			return
+		end
+		if radioEmpty then
+			safeDestroy(radioEmpty)
+			radioEmpty = nil
+		end
+		name = tostring(name or "")
+		message = tostring(message or "")
+		if name == "" and message == "" then
+			return
+		end
+
+		local row = Instance.new("Frame")
+		row.Name = "RadioMessage"
+		row.BackgroundColor3 = Color3.fromRGB(5, 5, 5)
+		row.BackgroundTransparency = 0.12
+		row.BorderColor3 = Color3.fromRGB(28, 28, 28)
+		row.Size = UDim2.new(1, -8, 0, 36)
+		row.Parent = radioList
+
+		local text = Instance.new("TextLabel")
+		text.Name = "Text"
+		text.BackgroundTransparency = 1
+		text.Font = Enum.Font.SourceSans
+		text.RichText = true
+		text.TextColor3 = Color3.fromRGB(245, 245, 245)
+		text.TextSize = 24
+		text.TextXAlignment = Enum.TextXAlignment.Left
+		text.TextYAlignment = Enum.TextYAlignment.Center
+		text.TextTruncate = Enum.TextTruncate.AtEnd
+		text.Size = UDim2.new(1, -10, 1, 0)
+		text.Position = UDim2.new(0, 6, 0, 0)
+		text.Text = "<b>" .. richEscape(name) .. ":</b> " .. richEscape(message)
+		text.Parent = row
+
+		radioRows[#radioRows + 1] = row
+		while #radioRows > radioMaxRows do
+			local old = table.remove(radioRows, 1)
+			safeDestroy(old)
+		end
+		updateRadioCanvas()
+	end
+
+	local function pushRadioMessage(sender, message)
+		pushRadioLine(radioName(sender), message)
+	end
+
+	local function notifyRadioMessage(sender, message)
+		if st.radioNotifications ~= true then
+			return
+		end
+		Obsidian:Notify({
+			Title = "Radio",
+			Content = radioName(sender) .. ": " .. tostring(message or ""),
+			Duration = 4,
+		})
+	end
+
+	local function playRadioSound()
+		if st.radioSounds ~= true or #radioSounds <= 0 then
+			return
+		end
+		local sound = Instance.new("Sound")
+		sound.Name = "RakeRadioMessageSound"
+		sound.SoundId = radioSounds[math.random(1, #radioSounds)]
+		sound.Volume = 1
+		sound.Parent = Ws
+		sound.Ended:Connect(function()
+			safeDestroy(sound)
+		end)
+		pcall(function()
+			sound:Play()
+		end)
+		if type(task) == "table" and type(task.delay) == "function" then
+			task.delay(8, function()
+				safeDestroy(sound)
+			end)
+		end
+	end
+
+	local function getRadioValue(line, valueName)
+		local value = line and ffc(line, valueName)
+		return tostring(valOf(value, "") or "")
+	end
+
+	local function hydrateRadioChannel()
+		local channel = ffc(Rep, "RadioChannel")
+		if not channel then
+			return
+		end
+		clearRadioMessages()
+		for i = 1, 7 do
+			local line = ffc(channel, "Line" .. tostring(i))
+			local name = getRadioValue(line, "Name")
+			local msg = getRadioValue(line, "Msg")
+			if name ~= "" or msg ~= "" then
+				pushRadioLine(radioStoredName(name), msg)
+			end
+		end
+	end
+
+	local function makeRadioPanel()
+		local root = Instance.new("Frame")
+		root.Name = "RadioPanel"
+		root.BackgroundColor3 = Color3.fromRGB(8, 8, 8)
+		root.BackgroundTransparency = 0.05
+		root.BorderColor3 = Color3.fromRGB(24, 24, 24)
+		root.Size = UDim2.new(1, 0, 0, 390)
+
+		local header = Instance.new("TextLabel")
+		header.Name = "Header"
+		header.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+		header.BackgroundTransparency = 0.15
+		header.BorderColor3 = Color3.fromRGB(16, 16, 16)
+		header.Font = Enum.Font.SourceSansBold
+		header.Text = "RADIO"
+		header.TextColor3 = Color3.fromRGB(255, 255, 255)
+		header.TextSize = 30
+		header.Size = UDim2.new(1, -8, 0, 40)
+		header.Position = UDim2.new(0, 4, 0, 4)
+		header.Parent = root
+
+		radioList = Instance.new("ScrollingFrame")
+		radioList.Name = "Messages"
+		radioList.Active = true
+		radioList.BackgroundTransparency = 1
+		radioList.BorderSizePixel = 0
+		radioList.BottomImage = ""
+		radioList.CanvasSize = UDim2.new(0, 0, 0, 0)
+		radioList.MidImage = ""
+		radioList.ScrollBarThickness = 5
+		radioList.Size = UDim2.new(1, -8, 1, -52)
+		radioList.Position = UDim2.new(0, 4, 0, 48)
+		radioList.TopImage = ""
+		radioList.Parent = root
+
+		radioLayout = Instance.new("UIListLayout")
+		radioLayout.Padding = UDim.new(0, 6)
+		radioLayout.SortOrder = Enum.SortOrder.LayoutOrder
+		radioLayout.Parent = radioList
+
+		radioEmpty = Instance.new("TextLabel")
+		radioEmpty.Name = "Empty"
+		radioEmpty.BackgroundTransparency = 1
+		radioEmpty.Font = Enum.Font.SourceSans
+		radioEmpty.Text = radioEmptyText
+		radioEmpty.TextColor3 = Color3.fromRGB(180, 180, 180)
+		radioEmpty.TextSize = 18
+		radioEmpty.Size = UDim2.new(1, -8, 0, 32)
+		radioEmpty.Position = UDim2.new(0, 4, 0, 8)
+		radioEmpty.Parent = radioList
+
+		return root
+	end
+
+	local function applyRadioFullWidth()
+		local tab = RadioTab and RadioTab.__tab
+		local sides = tab and tab.Sides
+		local left = sides and sides[1]
+		local right = sides and sides[2]
+		if left then
+			left.Visible = true
+			left.Size = UDim2.new(1, 0, 1, 0)
+		end
+		if right then
+			right.Visible = false
+			right.Size = UDim2.new(0, 0, 1, 0)
+		end
+	end
+
+	pcall(function()
+		if RadioTab and RadioTab.__tab then
+			local refreshSides = RadioTab.__tab.RefreshSides
+			if type(refreshSides) == "function" then
+				RadioTab.__tab.RefreshSides = function(tab, ...)
+					local result = refreshSides(tab, ...)
+					applyRadioFullWidth()
+					return result
+				end
+			end
+			applyRadioFullWidth()
+			local group = RadioTab.__tab:AddLeftGroupbox("Radio", "radio")
+			local panel = makeRadioPanel()
+			group:AddUIPassthrough("RadioLog", {
+				Instance = panel,
+				Height = 400,
+				Visible = true,
+			})
+			group:AddToggle("Rake_RadioSounds", {
+				Text = "Message sounds",
+				Default = st.radioSounds == true,
+				Callback = function(v)
+					st.radioSounds = v == true
+					cfgSet("radioSounds", st.radioSounds)
+				end,
+			})
+			group:AddToggle("Rake_RadioNotifications", {
+				Text = "Message notifications",
+				Default = st.radioNotifications == true,
+				Callback = function(v)
+					st.radioNotifications = v == true
+					cfgSet("radioNotifications", st.radioNotifications)
+				end,
+			})
+			applyRadioFullWidth()
+		end
+	end)
+
+	local radioRemote
+	local function attachRadioRemote(remote)
+		if radioRemote == remote or not remote or not remote:IsA("RemoteEvent") then
+			return
+		end
+		radioRemote = remote
+		bind(remote.OnClientEvent, function(sender, message)
+			pushRadioMessage(sender, message)
+			playRadioSound()
+			notifyRadioMessage(sender, message)
+		end)
+	end
+
+	attachRadioRemote(ffc(Rep, "RadioChatEvent"))
+	bind(Rep.ChildAdded, function(child)
+		if child.Name == "RadioChatEvent" then
+			attachRadioRemote(child)
+		end
+	end)
+	hydrateRadioChannel()
+	bind(Rep.ChildAdded, function(child)
+		if child.Name == "RadioChannel" then
+			hydrateRadioChannel()
+		end
+	end)
 
 	local infoBubble
 	local infoLbl

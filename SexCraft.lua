@@ -5,15 +5,20 @@ ctx.rs = game:GetService("ReplicatedStorage")
 ctx.uis = game:GetService("UserInputService")
 ctx.run = game:GetService("RunService")
 ctx.lp = ctx.plrs.LocalPlayer
-ctx.rng = Random.new()
 ctx.name = "killaura"
 ctx.max = 32
 ctx.on = false
 ctx.idx = 1
-ctx.cd = 0
-ctx.busy = false
 ctx.dead = false
 ctx.cons = {}
+ctx.rate = 0.035
+ctx.scanRate = 0.045
+ctx.burst = 6
+ctx.maxFly = 3
+ctx.fly = 0
+ctx.nextHit = os.clock()
+ctx.nextScan = 0
+ctx.tar = nil
 
 ctx.par = (function()
 	local ok, res
@@ -138,7 +143,9 @@ ctx.bc.Parent = ctx.b
 
 ctx.set = function(v)
 	ctx.on = v == true
-	ctx.cd = 0
+	ctx.nextHit = os.clock()
+	ctx.nextScan = 0
+	ctx.tar = nil
 
 	if ctx.b then
 		ctx.b.Text = ctx.on and "ON" or "K"
@@ -184,8 +191,10 @@ ctx.near = function()
 	local pos = root.Position
 	local best = nil
 	local bdist = ctx.max * ctx.max
+	local list = ctx.plrs:GetPlayers()
 
-	for _, p in ctx.plrs:GetPlayers() do
+	for i = 1, #list do
+		local p = list[i]
 		if p ~= ctx.lp then
 			local t = p.Character
 			local _, r = ctx.valid(t)
@@ -202,7 +211,9 @@ ctx.near = function()
 
 	local fold = workspace:FindFirstChild("Entities")
 	if fold then
-		for _, e in fold:GetChildren() do
+		local ents = fold:GetChildren()
+		for i = 1, #ents do
+			local e = ents[i]
 			local _, r = ctx.valid(e)
 
 			if r then
@@ -218,8 +229,24 @@ ctx.near = function()
 	return best
 end
 
+ctx.goodtar = function(t)
+	if not t then
+		return false
+	end
+
+	local ch = ctx.lp.Character
+	local _, root = ctx.valid(ch)
+	local _, tr = ctx.valid(t)
+
+	if not root or not tr then
+		return false
+	end
+
+	return ctx.dist(root.Position, tr.Position) <= ctx.max * ctx.max
+end
+
 ctx.hit = function(t)
-	if ctx.busy or not t then
+	if not t or ctx.fly >= ctx.maxFly then
 		return
 	end
 
@@ -242,36 +269,51 @@ ctx.hit = function(t)
 
 	local idx = ctx.idx
 	ctx.idx = ctx.idx == 1 and 2 or 1
-	ctx.busy = true
+
+	if isEvent then
+		pcall(function()
+			r:FireServer(t, idx)
+		end)
+		return
+	end
+
+	ctx.fly += 1
 
 	task.spawn(function()
 		pcall(function()
-			if isFunc then
-				r:InvokeServer(t, idx)
-			else
-				r:FireServer(t, idx)
-			end
+			r:InvokeServer(t, idx)
 		end)
 
-		ctx.busy = false
+		ctx.fly = math.max(ctx.fly - 1, 0)
 	end)
 end
 
-ctx.step = function(dt)
-	if not ctx.on or ctx.dead then
-		return
+ctx.pulse = function()
+	local now = os.clock()
+
+	if now >= ctx.nextScan or not ctx.goodtar(ctx.tar) then
+		ctx.nextScan = now + ctx.scanRate
+		ctx.tar = ctx.near()
 	end
 
-	ctx.cd = ctx.cd - dt
-	if ctx.cd > 0 then
-		return
+	local n = 0
+
+	while ctx.on and not ctx.dead and now >= ctx.nextHit and n < ctx.burst do
+		if ctx.goodtar(ctx.tar) then
+			ctx.hit(ctx.tar)
+		else
+			ctx.tar = ctx.near()
+			if ctx.goodtar(ctx.tar) then
+				ctx.hit(ctx.tar)
+			end
+		end
+
+		ctx.nextHit += ctx.rate
+		n += 1
 	end
 
-	ctx.cd = ctx.rng:NextNumber(0.09, 0.17)
-
-	local t = ctx.near()
-	if t then
-		ctx.hit(t)
+	if now - ctx.nextHit > 1 then
+		ctx.nextHit = now
 	end
 end
 
@@ -342,6 +384,12 @@ ctx.bind(ctx.uis.InputChanged, function(i)
 	ctx.f.Position = UDim2.new(ctx.sp.X.Scale, ctx.sp.X.Offset + d.X, ctx.sp.Y.Scale, ctx.sp.Y.Offset + d.Y)
 end)
 
-ctx.bind(ctx.run.Heartbeat, ctx.step)
+ctx.bind(ctx.run.PreSimulation, function()
+	if not ctx.on or ctx.dead then
+		return
+	end
+
+	ctx.pulse()
+end)
 
 ctx.set(false)

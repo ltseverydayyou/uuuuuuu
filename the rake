@@ -3022,7 +3022,7 @@ if game.GameId == 847722000 then
 	end)
 
 	local noFall = {
-		haystackSize = Vector3.new(100000, 200, 100000),
+		haystackSize = Vector3.new(100000, 100000, 100000),
 		applyToken = 0,
 		env = getgenv and getgenv() or _G,
 	}

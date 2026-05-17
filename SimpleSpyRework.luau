@@ -2410,6 +2410,60 @@ function newButton(name, description, onClick)
         onClick(FunctionTemplate, ...)
     end)
     updateFunctionCanvas()
+    return FunctionTemplate, Text, Button
+end
+
+function newTextBox(name, description, defaultText, onFocusLost)
+    local FunctionTemplate = Create('Frame', {
+        Name = name,
+        Parent = ui.ScrollingFrame,
+        BackgroundColor3 = Color3.new(1, 1, 1),
+        BackgroundTransparency = 1,
+        Size = UDim2.new(0, 117, 0, 23),
+    })
+    local ColorBar = Create('Frame', {
+        Name = 'ColorBar',
+        Parent = FunctionTemplate,
+        BackgroundColor3 = Color3.fromRGB(120, 200, 255),
+        BorderSizePixel = 0,
+        Position = UDim2.new(0, 7, 0, 10),
+        Size = UDim2.new(0, 7, 0, 18),
+        ZIndex = 3,
+    })
+    local Box = Create('TextBox', {
+        Name = 'TextBox',
+        Parent = FunctionTemplate,
+        BackgroundColor3 = Color3.new(0, 0, 0),
+        BackgroundTransparency = 0.69999998807907,
+        BorderColor3 = Color3.new(1, 1, 1),
+        Position = UDim2.new(0, 16, 0, 10),
+        Size = UDim2.new(0, 71, 0, 18),
+        ClearTextOnFocus = false,
+        Font = Enum.Font.SourceSans,
+        PlaceholderText = name,
+        Text = tostring(defaultText or ''),
+        TextColor3 = Color3.new(1, 1, 1),
+        TextScaled = true,
+        TextStrokeColor3 = Color3.new(0.145098, 0.141176, 0.14902),
+        TextXAlignment = Enum.TextXAlignment.Center,
+        ZIndex = 2,
+    })
+
+    Box.MouseEnter:Connect(function()
+        makeToolTip(true, description())
+    end)
+    Box.MouseLeave:Connect(function()
+        makeToolTip(false)
+    end)
+    FunctionTemplate.AncestryChanged:Connect(function()
+        makeToolTip(false)
+    end)
+    Box.FocusLost:Connect(function(...)
+        logthread(running())
+        onFocusLost(Box, ...)
+    end)
+    updateFunctionCanvas()
+    return FunctionTemplate, Box
 end
 
 local COLOR_RE_FIRE_SERVER = Color3.fromRGB(255, 242, 0)
@@ -5185,6 +5239,160 @@ end, function()
         ui.TextLabel.Text = 'Code executed'
     end
 end)
+
+RuntimeState.spamRemote = {
+    modes = { 'RenderStepped', 'PreSimulation', 'Heartbeat' },
+    modeIndex = 2,
+    enabled = false,
+    delay = 0,
+    elapsed = 0,
+}
+
+RuntimeState.spamRemote.selectedBlocked = function(remote)
+    if not selected or not remote then
+        return false
+    end
+    return blocklist[OldDebugId(remote)] == true or blocklist[selected.Name] == true
+end
+
+RuntimeState.spamRemote.runSelected = function()
+    if not selected or not selected.Remote then
+        ui.TextLabel.Text = 'No remote selected'
+        return false
+    end
+
+    local remote = selected.Remote
+    if RuntimeState.spamRemote.selectedBlocked(remote) then
+        ui.TextLabel.Text = 'Selected remote is blocked'
+        return false
+    end
+
+    local args = selected.args or {}
+    local n = args.n or #args
+    local method = tostring(selected.method or ''):lower()
+
+    local ok, err = pcall(function()
+        if remote:IsA('RemoteEvent') or remote:IsA('UnreliableRemoteEvent') then
+            if method == 'onclientevent' then
+                if firesignal then
+                    firesignal(remote.OnClientEvent, unpack(args, 1, n))
+                end
+            else
+                remote:FireServer(unpack(args, 1, n))
+            end
+        elseif remote:IsA('RemoteFunction') then
+            if method ~= 'onclientinvoke' then
+                remote:InvokeServer(unpack(args, 1, n))
+            end
+        elseif remote:IsA('BindableEvent') then
+            if method == 'event' and firesignal then
+                firesignal(remote.Event, unpack(args, 1, n))
+            else
+                remote:Fire(unpack(args, 1, n))
+            end
+        elseif remote:IsA('BindableFunction') and method ~= 'oninvoke' then
+            remote:Invoke(unpack(args, 1, n))
+        end
+    end)
+
+    if not ok then
+        ui.TextLabel.Text = 'Spam error: ' .. tostring(err)
+        return false
+    end
+    return true
+end
+
+RuntimeState.spamRemote.refreshLabels = function()
+    if RuntimeState.spamRemote.label then
+        RuntimeState.spamRemote.label.Text = ('Spam Remote: %s'):format(RuntimeState.spamRemote.enabled and 'ON' or 'OFF')
+    end
+    if RuntimeState.spamRemote.modeLabel then
+        RuntimeState.spamRemote.modeLabel.Text = ('Spam Mode: %s'):format(RuntimeState.spamRemote.modes[RuntimeState.spamRemote.modeIndex])
+    end
+    if RuntimeState.spamRemote.delayBox then
+        RuntimeState.spamRemote.delayBox.Text = ('%g'):format(RuntimeState.spamRemote.delay)
+    end
+end
+
+RuntimeState.spamRemote.disconnect = function()
+    local connection = RuntimeState.connections['SpamRemote']
+    if connection then
+        connection:Disconnect()
+        RuntimeState.connections['SpamRemote'] = nil
+    end
+end
+
+RuntimeState.spamRemote.connect = function()
+    RuntimeState.spamRemote.disconnect()
+    RuntimeState.spamRemote.elapsed = 0
+
+    local mode = RuntimeState.spamRemote.modes[RuntimeState.spamRemote.modeIndex]
+    local signal = RunService[mode] or RunService.Heartbeat
+    RuntimeState.connections['SpamRemote'] = signal:Connect(function(dt)
+        if not RuntimeState.spamRemote.enabled then
+            return
+        end
+
+        if RuntimeState.spamRemote.delay <= 0 then
+            RuntimeState.spamRemote.runSelected()
+            return
+        end
+
+        RuntimeState.spamRemote.elapsed = RuntimeState.spamRemote.elapsed + (dt or 0)
+        if RuntimeState.spamRemote.elapsed >= RuntimeState.spamRemote.delay then
+            RuntimeState.spamRemote.elapsed = 0
+            RuntimeState.spamRemote.runSelected()
+        end
+    end)
+end
+
+RuntimeState.spamRemote.setEnabled = function(enabled)
+    RuntimeState.spamRemote.enabled = enabled == true
+    if RuntimeState.spamRemote.enabled then
+        RuntimeState.spamRemote.connect()
+    else
+        RuntimeState.spamRemote.disconnect()
+    end
+    RuntimeState.spamRemote.refreshLabels()
+    ui.TextLabel.Text = ('Spam Remote: %s'):format(RuntimeState.spamRemote.enabled and 'ON' or 'OFF')
+end
+
+RuntimeState.spamRemote.label = select(2, newButton('Spam Remote: OFF', function()
+    return ('[%s] Run the selected remote repeatedly on %s'):format(
+        RuntimeState.spamRemote.enabled and 'ON' or 'OFF',
+        RuntimeState.spamRemote.modes[RuntimeState.spamRemote.modeIndex]
+    )
+end, function()
+    RuntimeState.spamRemote.setEnabled(not RuntimeState.spamRemote.enabled)
+end))
+
+RuntimeState.spamRemote.delayBox = select(2, newTextBox('Spam Delay', function()
+    return 'Delay between spam calls, in seconds. Use 0 to run every signal step.'
+end, '0', function(box)
+    local value = tonumber(box.Text) or 0
+    if value < 0 then
+        value = 0
+    end
+    RuntimeState.spamRemote.delay = value
+    RuntimeState.spamRemote.elapsed = 0
+    RuntimeState.spamRemote.refreshLabels()
+    ui.TextLabel.Text = ('Spam delay: %g seconds'):format(RuntimeState.spamRemote.delay)
+end))
+
+RuntimeState.spamRemote.modeLabel = select(2, newButton('Spam Mode: PreSimulation', function()
+    return 'Click to cycle spam mode: RenderStepped, PreSimulation, Heartbeat'
+end, function()
+    RuntimeState.spamRemote.modeIndex += 1
+    if RuntimeState.spamRemote.modeIndex > #RuntimeState.spamRemote.modes then
+        RuntimeState.spamRemote.modeIndex = 1
+    end
+    if RuntimeState.spamRemote.enabled then
+        RuntimeState.spamRemote.connect()
+    end
+    RuntimeState.spamRemote.refreshLabels()
+    ui.TextLabel.Text = ('Spam mode: %s'):format(RuntimeState.spamRemote.modes[RuntimeState.spamRemote.modeIndex])
+end))
+RuntimeState.spamRemote.refreshLabels()
 
 if caps.sendHooks then
     newButton('Log FireServer', function()

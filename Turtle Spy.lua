@@ -148,6 +148,7 @@ local client = (ClonedService("Players")).LocalPlayer;
 local G = getgenv and getgenv() or _G;
 G.__tspy = G.__tspy or {};
 local tstate = G.__tspy;
+tstate.RunService = ClonedService("RunService");
 if tstate.cleanup then
 	pcall(tstate.cleanup);
 end;
@@ -475,6 +476,9 @@ local IgnoreRemote = Instance.new("TextButton");
 local BlockRemote = Instance.new("TextButton");
 local WhileLoop = Instance.new("TextButton");
 local CopyReturn = Instance.new("TextButton");
+tstate.SpamRemote = Instance.new("TextButton");
+tstate.SpamDelayBox = Instance.new("TextBox");
+tstate.SpamMode = Instance.new("TextButton");
 local Clear = Instance.new("TextButton");
 local FrameDivider = Instance.new("Frame");
 local CloseInfoFrame = Instance.new("TextButton");
@@ -1035,7 +1039,7 @@ InfoButtonsScroll.BorderColor3 = colorSettings.Main.MainBackgroundColor;
 InfoButtonsScroll.Position = UDim2.new(0, 14, 0, 205);
 InfoButtonsScroll.Size = UDim2.new(0, 525, 0, 105);
 InfoButtonsScroll.ZIndex = 11;
-InfoButtonsScroll.CanvasSize = UDim2.new(0, 0, 0, 137);
+InfoButtonsScroll.CanvasSize = UDim2.new(0, 0, 0, 190);
 InfoButtonsScroll.ScrollBarThickness = 6;
 InfoButtonsScroll.VerticalScrollBarPosition = Enum.VerticalScrollBarPosition.Left;
 InfoButtonsScroll.ScrollBarImageColor3 = colorSettings.Main.ScrollBarImageColor;
@@ -1139,6 +1143,41 @@ CopyReturn.Text = "Execute and copy return value";
 CopyReturn.TextColor3 = Color3.fromRGB(250, 251, 255);
 CopyReturn.TextSize = 14;
 CopyReturn.Visible = false
+tstate.SpamRemote.Name = "SpamRemote";
+tstate.SpamRemote.Parent = InfoButtonsScroll;
+tstate.SpamRemote.BackgroundColor3 = colorSettings.MainButtons.BackgroundColor;
+tstate.SpamRemote.BorderColor3 = colorSettings.MainButtons.BorderColor;
+tstate.SpamRemote.Position = UDim2.new(0, 10, 0, 136);
+tstate.SpamRemote.Size = UDim2.new(0, 248, 0, 22);
+tstate.SpamRemote.ZIndex = 15;
+tstate.SpamRemote.Font = Enum.Font.SourceSans;
+tstate.SpamRemote.Text = "Spam Remote: OFF";
+tstate.SpamRemote.TextColor3 = Color3.fromRGB(250, 251, 255);
+tstate.SpamRemote.TextSize = 14;
+tstate.SpamDelayBox.Name = "SpamDelayBox";
+tstate.SpamDelayBox.Parent = InfoButtonsScroll;
+tstate.SpamDelayBox.BackgroundColor3 = colorSettings.MainButtons.BackgroundColor;
+tstate.SpamDelayBox.BorderColor3 = colorSettings.MainButtons.BorderColor;
+tstate.SpamDelayBox.Position = UDim2.new(0, 267, 0, 136);
+tstate.SpamDelayBox.Size = UDim2.new(0, 248, 0, 22);
+tstate.SpamDelayBox.ZIndex = 15;
+tstate.SpamDelayBox.Font = Enum.Font.SourceSans;
+tstate.SpamDelayBox.PlaceholderText = "Spam delay seconds";
+tstate.SpamDelayBox.Text = "0";
+tstate.SpamDelayBox.TextColor3 = Color3.fromRGB(250, 251, 255);
+tstate.SpamDelayBox.TextSize = 14;
+tstate.SpamDelayBox.ClearTextOnFocus = false;
+tstate.SpamMode.Name = "SpamMode";
+tstate.SpamMode.Parent = InfoButtonsScroll;
+tstate.SpamMode.BackgroundColor3 = colorSettings.MainButtons.BackgroundColor;
+tstate.SpamMode.BorderColor3 = colorSettings.MainButtons.BorderColor;
+tstate.SpamMode.Position = UDim2.new(0, 10, 0, 162);
+tstate.SpamMode.Size = UDim2.new(0, 505, 0, 22);
+tstate.SpamMode.ZIndex = 15;
+tstate.SpamMode.Font = Enum.Font.SourceSans;
+tstate.SpamMode.Text = "Spam Mode: PreSimulation";
+tstate.SpamMode.TextColor3 = Color3.fromRGB(250, 251, 255);
+tstate.SpamMode.TextSize = 14;
 ClientEventToggle.Name = "ClientEventToggle";
 ClientEventToggle.Parent = InfoButtonsScroll;
 ClientEventToggle.BackgroundColor3 = colorSettings.MainButtons.BackgroundColor;
@@ -1453,6 +1492,85 @@ local lookingAtArgs
 local lookingAtButton
 local lookingAtIsClientEvent
 local callLocked = false
+tstate.spamRemote = {
+	modes = { "RenderStepped", "PreSimulation", "Heartbeat" },
+	modeIndex = 2,
+	enabled = false,
+	delay = 0,
+	elapsed = 0
+}
+
+tstate.spamRemote.refreshControls = function()
+	tstate.SpamRemote.Text = "Spam Remote: " .. (tstate.spamRemote.enabled and "ON" or "OFF")
+	tstate.SpamRemote.TextColor3 = tstate.spamRemote.enabled and Color3.fromRGB(76, 209, 55) or Color3.fromRGB(250, 251, 255)
+	tstate.SpamMode.Text = "Spam Mode: " .. tstate.spamRemote.modes[tstate.spamRemote.modeIndex]
+	tstate.SpamDelayBox.Text = ("%g"):format(tstate.spamRemote.delay)
+end
+
+tstate.spamRemote.disconnect = function()
+	if tstate.spamRemote.connection then
+		pcall(function()
+			tstate.spamRemote.connection:Disconnect()
+		end)
+		tstate.spamRemote.connection = nil
+	end
+end
+
+tstate.spamRemote.runLookingAt = function()
+	if not lookingAt or table.find(BlockList, lookingAt) then
+		return false
+	end
+
+	local args = lookingAtArgs or {}
+	local ok = pcall(function()
+		if lookingAtIsClientEvent and isRemoteEvent(lookingAt) then
+			if firesignal then
+				firesignal(lookingAt.OnClientEvent, unpack(args))
+			end
+		elseif isA(lookingAt, "RemoteFunction") then
+			lookingAt:InvokeServer(unpack(args))
+		elseif isRemoteEvent(lookingAt) then
+			lookingAt:FireServer(unpack(args))
+		end
+	end)
+
+	return ok
+end
+
+tstate.spamRemote.connect = function()
+	tstate.spamRemote.disconnect()
+	tstate.spamRemote.elapsed = 0
+
+	local mode = tstate.spamRemote.modes[tstate.spamRemote.modeIndex]
+	local signal = tstate.RunService[mode] or tstate.RunService.Heartbeat
+	tstate.spamRemote.connection = signal:Connect(function(dt)
+		if not tstate.spamRemote.enabled then
+			return
+		end
+
+		if tstate.spamRemote.delay <= 0 then
+			tstate.spamRemote.runLookingAt()
+			return
+		end
+
+		tstate.spamRemote.elapsed = tstate.spamRemote.elapsed + (dt or 0)
+		if tstate.spamRemote.elapsed >= tstate.spamRemote.delay then
+			tstate.spamRemote.elapsed = 0
+			tstate.spamRemote.runLookingAt()
+		end
+	end)
+end
+
+tstate.spamRemote.setEnabled = function(enabled)
+	tstate.spamRemote.enabled = enabled == true
+	if tstate.spamRemote.enabled then
+		tstate.spamRemote.connect()
+	else
+		tstate.spamRemote.disconnect()
+	end
+	tstate.spamRemote.refreshControls()
+end
+
 local function attachClientLogger(re)
 	if clientEventConns[re] then
 		return
@@ -1641,6 +1759,32 @@ RunCode.MouseButton1Click:Connect(function()
 		end
 	end
 end)
+tstate.SpamRemote.MouseButton1Click:Connect(function()
+	if not lookingAt then
+		return
+	end
+	tstate.spamRemote.setEnabled(not tstate.spamRemote.enabled)
+end)
+tstate.SpamDelayBox.FocusLost:Connect(function()
+	local value = tonumber(tstate.SpamDelayBox.Text) or 0
+	if value < 0 then
+		value = 0
+	end
+	tstate.spamRemote.delay = value
+	tstate.spamRemote.elapsed = 0
+	tstate.spamRemote.refreshControls()
+end)
+tstate.SpamMode.MouseButton1Click:Connect(function()
+	tstate.spamRemote.modeIndex = tstate.spamRemote.modeIndex + 1
+	if tstate.spamRemote.modeIndex > #tstate.spamRemote.modes then
+		tstate.spamRemote.modeIndex = 1
+	end
+	if tstate.spamRemote.enabled then
+		tstate.spamRemote.connect()
+	end
+	tstate.spamRemote.refreshControls()
+end)
+tstate.spamRemote.refreshControls()
 CopyScriptPath.MouseButton1Click:Connect(function()
 	local remoteIdx = nil;
 	if lookingAt then
@@ -2195,6 +2339,7 @@ end
 runAdonisBypass()
 tstate.cleanup = function()
 	tstate.enabled = false;
+	tstate.spamRemote.disconnect()
 	for _, c in ipairs(connections) do
 		pcall(function()
 			c:Disconnect()

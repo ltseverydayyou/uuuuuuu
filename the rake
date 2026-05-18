@@ -29,6 +29,10 @@ end)();
 ---@diagnostic disable: undefined-global
 if game.GameId == 847722000 then
 	local genv = (getgenv and getgenv()) or _G
+	local fenv = (getfenv and getfenv()) or _G
+	if type(fenv) ~= "table" then
+		fenv = _G
+	end
 	local Http = game:GetService("HttpService")
 	local cfgFolder = "ProjectTheRake"
 	local fileApi = type(readfile) == "function" and type(writefile) == "function"
@@ -224,6 +228,32 @@ if game.GameId == 847722000 then
 	st.infoBubble = cfgBool("infoBubble", true)
 	st.radioSounds = cfgBool("radioSounds", true)
 	st.radioNotifications = cfgBool("radioNotifications", false)
+	st.disableDeathFx = cfgBool("disableDeathFx", false)
+	st.disableMotionBlur = cfgBool("disableMotionBlur", false)
+	st.disableMenuFx = cfgBool("disableMenuFx", false)
+	st.introBypass = cfgBool("introBypass", false)
+	st.promptBypass = cfgBool("promptBypass", false)
+	st.promptDistance = cfgNum("promptDistance", 25, 5, 100)
+	st.disableShadows = cfgBool("disableShadows", false)
+	st.forceChat = cfgBool("forceChat", false)
+	st.muteGameMusic = cfgBool("muteGameMusic", false)
+	st.muteChaseMusic = cfgBool("muteChaseMusic", false)
+	st.enableNametags = cfgBool("enableNametags", false)
+	st.enableSixthSense = cfgBool("enableSixthSense", false)
+	st.muteMovementSounds = cfgBool("muteMovementSounds", false)
+	st.muteFootsteps = cfgBool("muteFootsteps", false)
+	st.muteJumpLand = cfgBool("muteJumpLand", false)
+	st.muteWaterFall = cfgBool("muteWaterFall", false)
+	st.muteDeathSounds = cfgBool("muteDeathSounds", false)
+	st.hidePromptUi = cfgBool("hidePromptUi", false)
+	st.freezeLookAngles = cfgBool("freezeLookAngles", false)
+	st.hideDeathMessages = cfgBool("hideDeathMessages", false)
+	st.blockFavoritePrompts = cfgBool("blockFavoritePrompts", false)
+	st.blockGroupPrompts = cfgBool("blockGroupPrompts", false)
+	st.forcePcDevice = cfgBool("forcePcDevice", false)
+	st.flashlightNoShadows = cfgBool("flashlightNoShadows", false)
+	st.flashlightBoost = cfgBool("flashlightBoost", false)
+	st.disableMenuReopen = cfgBool("disableMenuReopen", false)
 	st.adonisBypass = cfgBool("adonisBypass", true)
 	_G.FieldOfView = st.fov
 	_G.enableFOV = st.fovOn
@@ -246,6 +276,28 @@ if game.GameId == 847722000 then
 	_G.NoFallDMG = st.noFall
 	_G.InstaOpenSupplyDrop = st.instaDrop
 	_G.InstaCloseRakeTrap = st.instaTrap
+	_G.RakeDisableDeathFx = st.disableDeathFx
+	_G.RakeDisableMotionBlur = st.disableMotionBlur
+	_G.RakeDisableMenuFx = st.disableMenuFx
+	_G.RakeIntroBypass = st.introBypass
+	_G.RakePromptBypass = st.promptBypass
+	_G.RakeDisableShadows = st.disableShadows
+	_G.RakeForceChat = st.forceChat
+	_G.RakeForceNametags = st.enableNametags
+	_G.RakeForceSixthSense = st.enableSixthSense
+	_G.RakeMuteMovementSounds = st.muteMovementSounds
+	_G.RakeMuteFootsteps = st.muteFootsteps
+	_G.RakeMuteJumpLand = st.muteJumpLand
+	_G.RakeMuteWaterFall = st.muteWaterFall
+	_G.RakeMuteDeathSounds = st.muteDeathSounds
+	_G.RakeHidePromptUi = st.hidePromptUi
+	_G.RakeFreezeLookAngles = st.freezeLookAngles
+	_G.RakeHideDeathMessages = st.hideDeathMessages
+	_G.RakeBlockFavoritePrompts = st.blockFavoritePrompts
+	_G.RakeBlockGroupPrompts = st.blockGroupPrompts
+	_G.RakeFlashlightNoShadows = st.flashlightNoShadows
+	_G.RakeFlashlightBoost = st.flashlightBoost
+	_G.RakeDisableMenuReopen = st.disableMenuReopen
 	if genv.RakeGui then
 		return
 	end
@@ -768,6 +820,525 @@ if game.GameId == 847722000 then
 		end
 		return false
 	end
+
+	local clientBypass = {}
+	clientBypass.originals = {}
+
+	function clientBypass.getCamera()
+		return Ws.CurrentCamera or workspace.CurrentCamera
+	end
+
+	function clientBypass.getPlayerGui()
+		local lp = Plrs.LocalPlayer
+		return lp and ffc(lp, "PlayerGui") or nil
+	end
+
+	function clientBypass.getGSettings()
+		local gs = rawget(fenv, "GSettings")
+		if type(gs) ~= "table" then
+			gs = {}
+			fenv.GSettings = gs
+		end
+		return gs
+	end
+
+	function clientBypass.setCoreGuiEnabled(kind, enabled)
+		local starter = ClonedService("StarterGui")
+		pcall(function()
+			starter:SetCoreGuiEnabled(kind, enabled == true)
+		end)
+	end
+
+	function clientBypass.restoreCoreGui()
+		local starter = ClonedService("StarterGui")
+		pcall(function()
+			starter:SetCore("TopbarEnabled", true)
+		end)
+		pcall(function()
+			starter:SetCore("ResetButtonCallback", true)
+		end)
+		clientBypass.setCoreGuiEnabled(Enum.CoreGuiType.Health, true)
+		clientBypass.setCoreGuiEnabled(Enum.CoreGuiType.Backpack, true)
+		clientBypass.setCoreGuiEnabled(Enum.CoreGuiType.PlayerList, true)
+		clientBypass.setCoreGuiEnabled(Enum.CoreGuiType.Chat, true)
+		pcall(function()
+			ClonedService("UserInputService").MouseIconEnabled = true
+		end)
+	end
+
+	function clientBypass.destroyCameraEffects(match)
+		local cam = clientBypass.getCamera()
+		if not cam then
+			return 0
+		end
+		local removed = 0
+		for _, v in pairs(kids(cam)) do
+			if match(v) then
+				removed += 1
+				safeDestroy(v)
+			end
+		end
+		return removed
+	end
+
+	function clientBypass.applyMotionBlurBypass()
+		if st.disableMotionBlur ~= true then
+			return 0
+		end
+		local gs = clientBypass.getGSettings()
+		gs.MotionBlur = false
+		fenv.GSettings = gs
+		return clientBypass.destroyCameraEffects(function(v)
+			return (v:IsA("BlurEffect") and (v.Name == "MotionBlur" or v.Name == "ESCB"))
+				or (v:IsA("ColorCorrectionEffect") and v.Name == "ESCC")
+		end)
+	end
+
+	function clientBypass.applyMenuFxBypass()
+		if st.disableMenuFx ~= true then
+			return 0
+		end
+		return clientBypass.destroyCameraEffects(function(v)
+			return (v:IsA("BlurEffect") and v.Name == "ESCB")
+				or (v:IsA("ColorCorrectionEffect") and v.Name == "ESCC")
+		end)
+	end
+
+	function clientBypass.fireSettingsChanged(name, value)
+		pcall(function()
+			local ev = ffc(Rep, "SettingsChangedEvent")
+			if ev and ev.Fire then
+				ev:Fire(name, value)
+			end
+		end)
+	end
+
+	function clientBypass.defaultOriginal(key, value)
+		if clientBypass.originals[key] == nil then
+			clientBypass.originals[key] = value
+		end
+		return clientBypass.originals[key]
+	end
+
+	function clientBypass.setSoundVolume(name, muted)
+		local ss = ClonedService("SoundService")
+		local snd = ss and ffc(ss, name)
+		if not snd then
+			return false
+		end
+		local key = "SoundVolume_" .. tostring(name)
+		local original = clientBypass.defaultOriginal(key, snd.Volume)
+		pcall(function()
+			snd.Volume = muted == true and 0 or original
+		end)
+		return true
+	end
+
+	function clientBypass.ensureLocalPlayerMarker(name, enabled, className)
+		local lp = Plrs.LocalPlayer
+		if not lp then
+			return nil
+		end
+		local marker = ffc(lp, name)
+		if enabled ~= true then
+			if marker and marker:GetAttribute("RakeAdminMarker") == true then
+				safeDestroy(marker)
+			end
+			return nil
+		end
+		if not marker then
+			local ok, obj = pcall(function()
+				return Instance.new(className or "BoolValue")
+			end)
+			if not ok or not obj then
+				return nil
+			end
+			obj.Name = name
+			obj:SetAttribute("RakeAdminMarker", true)
+			obj.Parent = lp
+			marker = obj
+		end
+		pcall(function()
+			if marker:IsA("BoolValue") then
+				marker.Value = true
+			end
+		end)
+		return marker
+	end
+
+	function clientBypass.applyGameSettingOverrides()
+		local gs = clientBypass.getGSettings()
+		gs.MotionBlur = st.disableMotionBlur == true and false or clientBypass.defaultOriginal("GSettings_MotionBlur", gs.MotionBlur ~= false)
+		gs.Shadows = st.disableShadows == true and false or clientBypass.defaultOriginal("GSettings_Shadows", gs.Shadows ~= false)
+		gs.Chat = st.forceChat == true and true or clientBypass.defaultOriginal("GSettings_Chat", gs.Chat ~= false)
+		gs.GameMusic = st.muteGameMusic == true and false or clientBypass.defaultOriginal("GSettings_GameMusic", gs.GameMusic ~= false)
+		gs.ChaseMusic = st.muteChaseMusic == true and false or clientBypass.defaultOriginal("GSettings_ChaseMusic", gs.ChaseMusic ~= false)
+		gs.Nametags = st.enableNametags == true and true or clientBypass.defaultOriginal("GSettings_Nametags", gs.Nametags ~= false)
+		pcall(function()
+			local original = clientBypass.defaultOriginal("Lighting_GlobalShadows", Lit.GlobalShadows)
+			Lit.GlobalShadows = st.disableShadows == true and false or original
+		end)
+		pcall(function()
+			ClonedService("Chat").BubbleChatEnabled = gs.Chat == true
+		end)
+		clientBypass.setCoreGuiEnabled(Enum.CoreGuiType.Chat, gs.Chat == true)
+		clientBypass.setSoundVolume("GameMusic", st.muteGameMusic == true)
+		clientBypass.setSoundVolume("ChaseMusic", st.muteChaseMusic == true)
+		if st.enableSixthSense == true then
+			clientBypass.ensureLocalPlayerMarker("SixthSenseGamepass", true, "BoolValue")
+			gs.SixthSense = true
+		else
+			clientBypass.ensureLocalPlayerMarker("SixthSenseGamepass", false, "BoolValue")
+			gs.SixthSense = clientBypass.defaultOriginal("GSettings_SixthSense", gs.SixthSense == true)
+		end
+		fenv.GSettings = gs
+	end
+
+	function clientBypass.applyDeathFxBypass()
+		if st.disableDeathFx ~= true then
+			return 0
+		end
+		pcall(function()
+			local died = ffc(Rep, "DiedEvent")
+			if died and died.Fire then
+				died:Fire(false, true)
+			end
+		end)
+		return clientBypass.destroyCameraEffects(function(v)
+			return (v:IsA("BlurEffect") and (v.Name == "Blur" or v.Name == "BlurEffect"))
+				or (v:IsA("ColorCorrectionEffect") and (v.Name == "ColorCorrection" or v.Name == "ColorCorrectionEffect"))
+		end)
+	end
+
+	function clientBypass.removeIntroGui()
+		local pg = clientBypass.getPlayerGui()
+		if not pg then
+			return 0
+		end
+		local removed = 0
+		for _, gui in pairs(kids(pg)) do
+			if gui:IsA("ScreenGui") and (gui.Name == "IntroGUI" or (ffc(gui, "LoadingFrame") and ffc(gui, "MenuFrame"))) then
+				removed += 1
+				safeDestroy(gui)
+			end
+		end
+		return removed
+	end
+
+	function clientBypass.applyIntroBypass()
+		if st.introBypass ~= true then
+			return 0
+		end
+		fenv.IsLoading = nil
+		fenv.SLoaded = true
+		local lp = Plrs.LocalPlayer
+		pcall(function()
+			if lp then
+				lp:SetAttribute("Started", true)
+			end
+		end)
+		clientBypass.restoreCoreGui()
+		local removed = clientBypass.removeIntroGui()
+		pcall(function()
+			local died = ffc(Rep, "DiedEvent")
+			if died and died.Fire then
+				died:Fire(false, true)
+			end
+		end)
+		return removed
+	end
+
+	function clientBypass.invokeStartRemote(mode)
+		local remote = ffc(Rep, "StartRemote")
+		if not remote or not remote.InvokeServer then
+			return false
+		end
+		local ok, res = pcall(function()
+			return remote:InvokeServer(mode)
+		end)
+		return ok, res
+	end
+
+	function clientBypass.unlockPrompt(prompt)
+		if not prompt or not prompt:IsA("ProximityPrompt") then
+			return false
+		end
+		pcall(function()
+			prompt.Enabled = true
+			prompt.HoldDuration = 0
+			prompt.RequiresLineOfSight = false
+			prompt.ClickablePrompt = true
+			prompt.MaxActivationDistance = math.clamp(tonumber(st.promptDistance) or 25, 5, 100)
+		end)
+		pcall(function()
+			prompt:SetAttribute("Busy", false)
+			prompt:SetAttribute("Busy2", false)
+			prompt:SetAttribute("Unavailable", false)
+			prompt:SetAttribute("Unavailable2", false)
+		end)
+		return true
+	end
+
+	function clientBypass.applyPromptBypass()
+		if st.promptBypass ~= true then
+			return 0
+		end
+		local n = 0
+		for _, obj in pairs(desc(Ws)) do
+			if clientBypass.unlockPrompt(obj) then
+				n += 1
+			end
+		end
+		return n
+	end
+
+	function clientBypass.muteSound(sound)
+		if not sound or not sound:IsA("Sound") then
+			return false
+		end
+		pcall(function()
+			if sound:GetAttribute("RakeAdminOriginalVolume") == nil then
+				sound:SetAttribute("RakeAdminOriginalVolume", sound.Volume)
+			end
+			sound:SetAttribute("RakeAdminMuted", true)
+			sound.Volume = 0
+			sound.Playing = false
+			sound.TimePosition = 0
+		end)
+		return true
+	end
+
+	function clientBypass.restoreMutedSounds()
+		local n = 0
+		for _, root in pairs({ Ws, clientBypass.getCamera() }) do
+			for _, obj in pairs(desc(root)) do
+				if obj:IsA("Sound") and obj:GetAttribute("RakeAdminMuted") == true and not clientBypass.shouldMuteSound(obj) then
+					pcall(function()
+						local original = obj:GetAttribute("RakeAdminOriginalVolume")
+						if type(original) == "number" then
+							obj.Volume = original
+						end
+						obj:SetAttribute("RakeAdminMuted", false)
+						n += 1
+					end)
+				end
+			end
+		end
+		return n
+	end
+
+	function clientBypass.soundKind(sound)
+		local name = tostring(sound and sound.Name or ""):lower()
+		if name == "running" or name == "climbing" or name == "swimming" or name == "freefalling" then
+			return "movement"
+		end
+		if name == "jumping" or name == "landhard" or name:find("land", 1, true) or name:find("jump", 1, true) then
+			return "jumpLand"
+		end
+		if name:find("splash", 1, true) or name:find("swim", 1, true) or name:find("freefall", 1, true) then
+			return "waterFall"
+		end
+		if name:find("death", 1, true) or name:find("died", 1, true) then
+			return "death"
+		end
+		local parent = sound and sound.Parent
+		if parent and (parent.Name == "HumanoidRootPart" or parent == clientBypass.getCamera()) then
+			return "footstep"
+		end
+		return "other"
+	end
+
+	function clientBypass.shouldMuteSound(sound)
+		local kind = clientBypass.soundKind(sound)
+		return (st.muteMovementSounds == true and kind == "movement")
+			or (st.muteFootsteps == true and kind == "footstep")
+			or (st.muteJumpLand == true and kind == "jumpLand")
+			or (st.muteWaterFall == true and kind == "waterFall")
+			or (st.muteDeathSounds == true and kind == "death")
+	end
+
+	function clientBypass.scanSoundContainer(root)
+		if not root then
+			return 0
+		end
+		local n = 0
+		for _, obj in pairs(desc(root)) do
+			if obj:IsA("Sound") and clientBypass.shouldMuteSound(obj) then
+				if clientBypass.muteSound(obj) then
+					n += 1
+				end
+			end
+		end
+		return n
+	end
+
+	function clientBypass.applySoundBypasses()
+		if not (st.muteMovementSounds or st.muteFootsteps or st.muteJumpLand or st.muteWaterFall or st.muteDeathSounds) then
+			clientBypass.restoreMutedSounds()
+			return 0
+		end
+		local n = 0
+		local cam = clientBypass.getCamera()
+		n += clientBypass.scanSoundContainer(cam)
+		local lp = Plrs.LocalPlayer
+		for _, p in pairs(kids(Plrs)) do
+			n += clientBypass.scanSoundContainer(p.Character)
+		end
+		if lp and lp.Character then
+			n += clientBypass.scanSoundContainer(lp.Character)
+		end
+		n += clientBypass.scanSoundContainer(ffcr(Ws, "Rake"))
+		clientBypass.restoreMutedSounds()
+		return n
+	end
+
+	function clientBypass.applyPromptUiBypass()
+		local pg = clientBypass.getPlayerGui()
+		local gui = pg and ffc(pg, "ProximityPrompts")
+		if gui and gui:IsA("ScreenGui") then
+			gui.Enabled = st.hidePromptUi ~= true
+		end
+		return gui ~= nil
+	end
+
+	function clientBypass.applyLookFreeze()
+		if st.freezeLookAngles ~= true then
+			return false
+		end
+		pcall(function()
+			local remote = ffc(Rep, "SetLookAngles")
+			if remote and remote.FireServer then
+				remote:FireServer(0, 0)
+			end
+		end)
+		return true
+	end
+
+	function clientBypass.applyDeathMessageBypass()
+		local pg = clientBypass.getPlayerGui()
+		if not pg then
+			return 0
+		end
+		local n = 0
+		for _, obj in pairs(desc(pg)) do
+			if obj.Name == "DeathMsg" and (obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox")) then
+				obj.Visible = st.hideDeathMessages ~= true
+				if st.hideDeathMessages == true then
+					obj.TextTransparency = 1
+					obj.TextStrokeTransparency = 1
+					n += 1
+				end
+			elseif obj:IsA("Sound") and obj.Name == "Boom" and st.muteDeathSounds == true then
+				if clientBypass.muteSound(obj) then
+					n += 1
+				end
+			end
+		end
+		return n
+	end
+
+	function clientBypass.cleanupPromptModals()
+		local pg = clientBypass.getPlayerGui()
+		if not pg then
+			return 0
+		end
+		local n = 0
+		for _, gui in pairs(kids(pg)) do
+			if gui:IsA("ScreenGui") and ((st.blockFavoritePrompts == true and gui.Name == "_fav") or (st.blockGroupPrompts == true and gui.Name == "_fav2")) then
+				n += 1
+				safeDestroy(gui)
+			end
+		end
+		return n
+	end
+
+	function clientBypass.applyDeviceSpoof()
+		if st.forcePcDevice ~= true then
+			return false
+		end
+		fenv.deviceType = "PC"
+		fenv.deviceType2 = nil
+		fenv.inputType = "PC"
+		pcall(function()
+			local ev = rawget(fenv, "InputTypeChangeEvent")
+			if ev and ev.Fire then
+				ev:Fire("PC")
+			end
+		end)
+		return true
+	end
+
+	function clientBypass.applyLightToolBypasses()
+		if not (st.flashlightNoShadows == true or st.flashlightBoost == true) then
+			return 0
+		end
+		local n = 0
+		for _, obj in pairs(desc(Ws)) do
+			if obj:IsA("Light") then
+				if st.flashlightNoShadows == true then
+					pcall(function()
+						obj.Shadows = false
+					end)
+				end
+				if st.flashlightBoost == true and not obj:GetAttribute("RakeAdminBoosted") then
+					pcall(function()
+						obj:SetAttribute("RakeAdminBoosted", true)
+						obj:SetAttribute("RakeAdminBrightness", obj.Brightness)
+						obj.Brightness = math.clamp((tonumber(obj.Brightness) or 1) * 2, 0, 20)
+						if obj:IsA("SpotLight") then
+							obj.Angle = math.clamp((tonumber(obj.Angle) or 45) * 1.1, 0, 180)
+						end
+					end)
+				end
+				n += 1
+			elseif obj:IsA("BasePart") and st.flashlightNoShadows == true and (obj.Name == "LShadow1" or obj.Name == "LShadow2") then
+				pcall(function()
+					obj.Transparency = 1
+				end)
+				n += 1
+			end
+		end
+		return n
+	end
+
+	function clientBypass.removeIntroClones()
+		if st.disableMenuReopen ~= true then
+			return 0
+		end
+		local lp = Plrs.LocalPlayer
+		local ps = lp and ffc(lp, "PlayerScripts")
+		if not ps then
+			return 0
+		end
+		local n = 0
+		for _, obj in pairs(kids(ps)) do
+			if obj.Name == "IntroHandler" then
+				n += 1
+				safeDestroy(obj)
+			end
+		end
+		return n
+	end
+
+	bind(Ws.DescendantAdded, function(obj)
+		if st.promptBypass == true and obj:IsA("ProximityPrompt") then
+			task.defer(clientBypass.unlockPrompt, obj)
+		end
+		if obj:IsA("Sound") and clientBypass.shouldMuteSound(obj) then
+			task.defer(clientBypass.muteSound, obj)
+		end
+		if (obj:IsA("Light") or obj:IsA("BasePart")) and (st.flashlightNoShadows == true or st.flashlightBoost == true) then
+			task.defer(clientBypass.applyLightToolBypasses)
+		end
+	end)
+
+	bind(Ws:GetPropertyChangedSignal("CurrentCamera"), function()
+		task.defer(function()
+			clientBypass.applyMotionBlurBypass()
+			clientBypass.applyMenuFxBypass()
+			clientBypass.applyDeathFxBypass()
+		end)
+	end)
 
 
 
@@ -2382,6 +2953,348 @@ if game.GameId == 847722000 then
 
 	watchFog()
 
+	ClientTab:CreateToggle({
+		Name = "Bypass Death / Intro FX",
+		CurrentValue = st.disableDeathFx,
+		Flag = "BypassDeathIntroFx",
+		Callback = function(state)
+			st.disableDeathFx = state == true
+			_G.RakeDisableDeathFx = st.disableDeathFx
+			cfgSet("disableDeathFx", st.disableDeathFx)
+			if st.disableDeathFx then
+				clientBypass.applyDeathFxBypass()
+			end
+		end,
+	})
+
+	ClientTab:CreateToggle({
+		Name = "Disable Motion Blur",
+		CurrentValue = st.disableMotionBlur,
+		Flag = "DisableMotionBlur",
+		Callback = function(state)
+			st.disableMotionBlur = state == true
+			_G.RakeDisableMotionBlur = st.disableMotionBlur
+			cfgSet("disableMotionBlur", st.disableMotionBlur)
+			if st.disableMotionBlur then
+				clientBypass.applyMotionBlurBypass()
+			end
+		end,
+	})
+
+	ClientTab:CreateToggle({
+		Name = "Disable Esc/Menu FX",
+		CurrentValue = st.disableMenuFx,
+		Flag = "DisableEscMenuFx",
+		Callback = function(state)
+			st.disableMenuFx = state == true
+			_G.RakeDisableMenuFx = st.disableMenuFx
+			cfgSet("disableMenuFx", st.disableMenuFx)
+			if st.disableMenuFx then
+				clientBypass.applyMenuFxBypass()
+			end
+		end,
+	})
+
+	ClientTab:CreateToggle({
+		Name = "Intro Bypass / Restore UI",
+		CurrentValue = st.introBypass,
+		Flag = "IntroBypassRestoreUi",
+		Callback = function(state)
+			st.introBypass = state == true
+			_G.RakeIntroBypass = st.introBypass
+			cfgSet("introBypass", st.introBypass)
+			if st.introBypass then
+				clientBypass.applyIntroBypass()
+			else
+				_G.RakeIntroBypass = false
+			end
+		end,
+	})
+
+	ClientTab:CreateButton({
+		Name = "Restore CoreGui",
+		Callback = function()
+			clientBypass.restoreCoreGui()
+			Obsidian:Notify({
+				Title = "Client",
+				Content = "Topbar, reset, backpack, player list, chat, and mouse icon restored.",
+				Duration = 3,
+				Image = 4483362458,
+			})
+		end,
+	})
+
+	ClientTab:CreateButton({
+		Name = "Remove Intro GUI",
+		Callback = function()
+			local removed = clientBypass.removeIntroGui()
+			fenv.IsLoading = nil
+			fenv.SLoaded = true
+			clientBypass.restoreCoreGui()
+			Obsidian:Notify({
+				Title = "Intro",
+				Content = "Removed intro GUI count: " .. tostring(removed),
+				Duration = 3,
+				Image = 4483362458,
+			})
+		end,
+	})
+
+	ClientTab:CreateToggle({
+		Name = "Disable Shadows",
+		CurrentValue = st.disableShadows,
+		Flag = "DisableShadows",
+		Callback = function(state)
+			st.disableShadows = state == true
+			_G.RakeDisableShadows = st.disableShadows
+			cfgSet("disableShadows", st.disableShadows)
+			clientBypass.fireSettingsChanged("Shadows", not st.disableShadows)
+			clientBypass.applyGameSettingOverrides()
+		end,
+	})
+
+	ClientTab:CreateToggle({
+		Name = "Force Chat Enabled",
+		CurrentValue = st.forceChat,
+		Flag = "ForceChatEnabled",
+		Callback = function(state)
+			st.forceChat = state == true
+			_G.RakeForceChat = st.forceChat
+			cfgSet("forceChat", st.forceChat)
+			clientBypass.fireSettingsChanged("Chat", st.forceChat)
+			clientBypass.applyGameSettingOverrides()
+		end,
+	})
+
+	ClientTab:CreateToggle({
+		Name = "Mute Game Music",
+		CurrentValue = st.muteGameMusic,
+		Flag = "MuteGameMusic",
+		Callback = function(state)
+			st.muteGameMusic = state == true
+			cfgSet("muteGameMusic", st.muteGameMusic)
+			clientBypass.fireSettingsChanged("GameMusic", not st.muteGameMusic)
+			clientBypass.applyGameSettingOverrides()
+		end,
+	})
+
+	ClientTab:CreateToggle({
+		Name = "Mute Chase Music",
+		CurrentValue = st.muteChaseMusic,
+		Flag = "MuteChaseMusic",
+		Callback = function(state)
+			st.muteChaseMusic = state == true
+			cfgSet("muteChaseMusic", st.muteChaseMusic)
+			clientBypass.fireSettingsChanged("ChaseMusic", not st.muteChaseMusic)
+			clientBypass.applyGameSettingOverrides()
+		end,
+	})
+
+	ClientTab:CreateToggle({
+		Name = "Force Nametags",
+		CurrentValue = st.enableNametags,
+		Flag = "ForceNametags",
+		Callback = function(state)
+			st.enableNametags = state == true
+			_G.RakeForceNametags = st.enableNametags
+			cfgSet("enableNametags", st.enableNametags)
+			clientBypass.fireSettingsChanged("Nametags", st.enableNametags)
+			clientBypass.applyGameSettingOverrides()
+		end,
+	})
+
+	ClientTab:CreateToggle({
+		Name = "Force Sixth Sense",
+		CurrentValue = st.enableSixthSense,
+		Flag = "ForceSixthSense",
+		Callback = function(state)
+			st.enableSixthSense = state == true
+			_G.RakeForceSixthSense = st.enableSixthSense
+			cfgSet("enableSixthSense", st.enableSixthSense)
+			clientBypass.fireSettingsChanged("SixthSense", st.enableSixthSense)
+			clientBypass.applyGameSettingOverrides()
+		end,
+	})
+
+	ClientTab:CreateToggle({
+		Name = "Mute Movement Loops",
+		CurrentValue = st.muteMovementSounds,
+		Flag = "MuteMovementSounds",
+		Callback = function(state)
+			st.muteMovementSounds = state == true
+			_G.RakeMuteMovementSounds = st.muteMovementSounds
+			cfgSet("muteMovementSounds", st.muteMovementSounds)
+			if st.muteMovementSounds then
+				clientBypass.applySoundBypasses()
+			end
+		end,
+	})
+
+	ClientTab:CreateToggle({
+		Name = "Mute Footsteps",
+		CurrentValue = st.muteFootsteps,
+		Flag = "MuteFootsteps",
+		Callback = function(state)
+			st.muteFootsteps = state == true
+			_G.RakeMuteFootsteps = st.muteFootsteps
+			cfgSet("muteFootsteps", st.muteFootsteps)
+			if st.muteFootsteps then
+				clientBypass.applySoundBypasses()
+			end
+		end,
+	})
+
+	ClientTab:CreateToggle({
+		Name = "Mute Jump/Land Sounds",
+		CurrentValue = st.muteJumpLand,
+		Flag = "MuteJumpLandSounds",
+		Callback = function(state)
+			st.muteJumpLand = state == true
+			_G.RakeMuteJumpLand = st.muteJumpLand
+			cfgSet("muteJumpLand", st.muteJumpLand)
+			if st.muteJumpLand then
+				clientBypass.applySoundBypasses()
+			end
+		end,
+	})
+
+	ClientTab:CreateToggle({
+		Name = "Mute Water/Freefall Sounds",
+		CurrentValue = st.muteWaterFall,
+		Flag = "MuteWaterFreefallSounds",
+		Callback = function(state)
+			st.muteWaterFall = state == true
+			_G.RakeMuteWaterFall = st.muteWaterFall
+			cfgSet("muteWaterFall", st.muteWaterFall)
+			if st.muteWaterFall then
+				clientBypass.applySoundBypasses()
+			end
+		end,
+	})
+
+	ClientTab:CreateToggle({
+		Name = "Mute Death Sounds",
+		CurrentValue = st.muteDeathSounds,
+		Flag = "MuteDeathSounds",
+		Callback = function(state)
+			st.muteDeathSounds = state == true
+			_G.RakeMuteDeathSounds = st.muteDeathSounds
+			cfgSet("muteDeathSounds", st.muteDeathSounds)
+			if st.muteDeathSounds then
+				clientBypass.applySoundBypasses()
+			end
+		end,
+	})
+
+	ClientTab:CreateToggle({
+		Name = "Hide Prompt UI",
+		CurrentValue = st.hidePromptUi,
+		Flag = "HidePromptUi",
+		Callback = function(state)
+			st.hidePromptUi = state == true
+			_G.RakeHidePromptUi = st.hidePromptUi
+			cfgSet("hidePromptUi", st.hidePromptUi)
+			clientBypass.applyPromptUiBypass()
+		end,
+	})
+
+	ClientTab:CreateToggle({
+		Name = "Freeze Look Angles",
+		CurrentValue = st.freezeLookAngles,
+		Flag = "FreezeLookAngles",
+		Callback = function(state)
+			st.freezeLookAngles = state == true
+			_G.RakeFreezeLookAngles = st.freezeLookAngles
+			cfgSet("freezeLookAngles", st.freezeLookAngles)
+			if st.freezeLookAngles then
+				clientBypass.applyLookFreeze()
+			end
+		end,
+	})
+
+	ClientTab:CreateToggle({
+		Name = "Hide Death Messages",
+		CurrentValue = st.hideDeathMessages,
+		Flag = "HideDeathMessages",
+		Callback = function(state)
+			st.hideDeathMessages = state == true
+			_G.RakeHideDeathMessages = st.hideDeathMessages
+			cfgSet("hideDeathMessages", st.hideDeathMessages)
+			clientBypass.applyDeathMessageBypass()
+		end,
+	})
+
+	ClientTab:CreateToggle({
+		Name = "Block Favorite Prompts",
+		CurrentValue = st.blockFavoritePrompts,
+		Flag = "BlockFavoritePrompts",
+		Callback = function(state)
+			st.blockFavoritePrompts = state == true
+			_G.RakeBlockFavoritePrompts = st.blockFavoritePrompts
+			cfgSet("blockFavoritePrompts", st.blockFavoritePrompts)
+			clientBypass.cleanupPromptModals()
+		end,
+	})
+
+	ClientTab:CreateToggle({
+		Name = "Block Group Prompts",
+		CurrentValue = st.blockGroupPrompts,
+		Flag = "BlockGroupPrompts",
+		Callback = function(state)
+			st.blockGroupPrompts = state == true
+			_G.RakeBlockGroupPrompts = st.blockGroupPrompts
+			cfgSet("blockGroupPrompts", st.blockGroupPrompts)
+			clientBypass.cleanupPromptModals()
+		end,
+	})
+
+	ClientTab:CreateToggle({
+		Name = "Force PC Device",
+		CurrentValue = st.forcePcDevice,
+		Flag = "ForcePcDevice",
+		Callback = function(state)
+			st.forcePcDevice = state == true
+			cfgSet("forcePcDevice", st.forcePcDevice)
+			clientBypass.applyDeviceSpoof()
+		end,
+	})
+
+	ClientTab:CreateToggle({
+		Name = "Flashlight No Shadows",
+		CurrentValue = st.flashlightNoShadows,
+		Flag = "FlashlightNoShadows",
+		Callback = function(state)
+			st.flashlightNoShadows = state == true
+			_G.RakeFlashlightNoShadows = st.flashlightNoShadows
+			cfgSet("flashlightNoShadows", st.flashlightNoShadows)
+			clientBypass.applyLightToolBypasses()
+		end,
+	})
+
+	ClientTab:CreateToggle({
+		Name = "Flashlight Boost",
+		CurrentValue = st.flashlightBoost,
+		Flag = "FlashlightBoost",
+		Callback = function(state)
+			st.flashlightBoost = state == true
+			_G.RakeFlashlightBoost = st.flashlightBoost
+			cfgSet("flashlightBoost", st.flashlightBoost)
+			clientBypass.applyLightToolBypasses()
+		end,
+	})
+
+	ClientTab:CreateToggle({
+		Name = "Block Menu Reopen",
+		CurrentValue = st.disableMenuReopen,
+		Flag = "BlockMenuReopen",
+		Callback = function(state)
+			st.disableMenuReopen = state == true
+			_G.RakeDisableMenuReopen = st.disableMenuReopen
+			cfgSet("disableMenuReopen", st.disableMenuReopen)
+			clientBypass.removeIntroClones()
+		end,
+	})
+
 	ClientTab:CreateButton({
 		Name = "Third Person",
 		Callback = function()
@@ -3133,19 +4046,19 @@ if game.GameId == 847722000 then
 
 	noFall.applyHaystack(st.noFall)
 
-	local lastCam
-	local lastFov
-	local fovConns = {}
+	clientBypass.lastCam = nil
+	clientBypass.lastFov = nil
+	clientBypass.fovConns = {}
 
 	wipeFovConns = function()
-		for i = #fovConns, 1, -1 do
-			local c = fovConns[i]
+		for i = #clientBypass.fovConns, 1, -1 do
+			local c = clientBypass.fovConns[i]
 			if c then
 				pcall(function()
 					c:Disconnect()
 				end)
 			end
-			fovConns[i] = nil
+			clientBypass.fovConns[i] = nil
 		end
 	end
 
@@ -3158,9 +4071,9 @@ if game.GameId == 847722000 then
 			return
 		end
 		local num = math.clamp(tonumber(st.fov) or 70, 1, 120)
-		if force or lastCam ~= cam or lastFov ~= num or cam.FieldOfView ~= num then
-			lastCam = cam
-			lastFov = num
+		if force or clientBypass.lastCam ~= cam or clientBypass.lastFov ~= num or cam.FieldOfView ~= num then
+			clientBypass.lastCam = cam
+			clientBypass.lastFov = num
 			pcall(function()
 				cam.FieldOfView = num
 			end)
@@ -3172,7 +4085,7 @@ if game.GameId == 847722000 then
 		if not cam then
 			return
 		end
-		lastCam = nil
+		clientBypass.lastCam = nil
 		local ok, c = pcall(function()
 			return cam:GetPropertyChangedSignal("FieldOfView"):Connect(function()
 				if AllowRunService == true and st.fovOn == true then
@@ -3183,7 +4096,7 @@ if game.GameId == 847722000 then
 			end)
 		end)
 		if ok and c then
-			fovConns[#fovConns + 1] = c
+			clientBypass.fovConns[#clientBypass.fovConns + 1] = c
 		end
 		applyFov(true)
 	end
@@ -3260,7 +4173,7 @@ if game.GameId == 847722000 then
 			st.fovOn = state == true
 			_G.enableFOV = st.fovOn
 			cfgSet("fovOn", st.fovOn)
-			lastCam = nil
+			clientBypass.lastCam = nil
 			bindFovCam(Ws.CurrentCamera or workspace.CurrentCamera)
 			applyFov(true)
 		end,
@@ -3303,8 +4216,8 @@ if game.GameId == 847722000 then
 			return fn(self, args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10])
 		end
 
-		if not env.__rakeNoFallHook then
-			env.__rakeNoFallHook = true
+		if not _G.__rakeNoFallHook then
+			_G.__rakeNoFallHook = true
 
 			if type(hookmetamethod) == "function" and type(getnamecallmethod) == "function" then
 				local hook
@@ -3369,17 +4282,115 @@ if game.GameId == 847722000 then
 		end,
 	})
 
-	local promptT = 1
+	ExploitsTab:CreateToggle({
+		Name = "Prompt Bypass",
+		CurrentValue = st.promptBypass,
+		Flag = "PromptBypass",
+		Callback = function(state)
+			st.promptBypass = state == true
+			_G.RakePromptBypass = st.promptBypass
+			cfgSet("promptBypass", st.promptBypass)
+			if st.promptBypass then
+				local n = clientBypass.applyPromptBypass()
+				Obsidian:Notify({
+					Title = "Prompt Bypass",
+					Content = "Unlocked prompts: " .. tostring(n),
+					Duration = 2,
+					Image = 4483362458,
+				})
+			end
+		end,
+	})
+
+	ExploitsTab:CreateSlider({
+		Name = "Prompt Distance",
+		Range = {5, 100},
+		Increment = 1,
+		CurrentValue = st.promptDistance,
+		Flag = "PromptBypassDistance",
+		Callback = function(v)
+			st.promptDistance = math.clamp(tonumber(v) or 25, 5, 100)
+			cfgSet("promptDistance", st.promptDistance)
+			if st.promptBypass then
+				clientBypass.applyPromptBypass()
+			end
+		end,
+	})
+
+	ExploitsTab:CreateButton({
+		Name = "Unlock Prompts Once",
+		Callback = function()
+			local old = st.promptBypass
+			st.promptBypass = true
+			local n = clientBypass.applyPromptBypass()
+			st.promptBypass = old
+			Obsidian:Notify({
+				Title = "Prompts",
+				Content = "Unlocked prompts: " .. tostring(n),
+				Duration = 2,
+				Image = 4483362458,
+			})
+		end,
+	})
+
+	ExploitsTab:CreateButton({
+		Name = "StartRemote Play",
+		Callback = function()
+			local ok, res = clientBypass.invokeStartRemote("Play")
+			if ok then
+				fenv.IsLoading = nil
+				fenv.SLoaded = true
+				clientBypass.restoreCoreGui()
+			end
+			Obsidian:Notify({
+				Title = "StartRemote",
+				Content = ok and ("Play returned: " .. tostring(res)) or "StartRemote was not available.",
+				Duration = 3,
+				Image = 4483362458,
+			})
+		end,
+	})
+
+	ExploitsTab:CreateButton({
+		Name = "StartRemote LoadData",
+		Callback = function()
+			local ok, res = clientBypass.invokeStartRemote("LoadData")
+			Obsidian:Notify({
+				Title = "StartRemote",
+				Content = ok and ("LoadData returned: " .. tostring(res)) or "StartRemote was not available.",
+				Duration = 3,
+				Image = 4483362458,
+			})
+		end,
+	})
+
+	ExploitsTab:CreateButton({
+		Name = "StartRemote JoinOld",
+		Callback = function()
+			local ok, res = clientBypass.invokeStartRemote("JoinOld")
+			Obsidian:Notify({
+				Title = "StartRemote",
+				Content = ok and ("JoinOld returned: " .. tostring(res)) or "StartRemote was not available.",
+				Duration = 3,
+				Image = 4483362458,
+			})
+		end,
+	})
+
+	clientBypass.promptT = 1
+	clientBypass.promptBypassT = 1
+	clientBypass.clientBypassT = 1
+	clientBypass.soundT = 1
 
 	bind(Run.Heartbeat, function(dt)
 		if AllowRunService ~= true then
 			return
 		end
-		promptT += dt
-		if promptT < 0.35 then
+		clientBypass.promptT += dt
+		if clientBypass.promptT < 0.35 then
 			return
 		end
-		promptT = 0
+		clientBypass.promptT = 0
 		pcall(function()
 			fastDoorLever()
 			if _G.InstaOpenSupplyDrop == true then
@@ -3389,6 +4400,38 @@ if game.GameId == 847722000 then
 				eachTrap(fastTrap)
 			end
 		end)
+	end)
+
+	bind(Run.Heartbeat, function(dt)
+		if AllowRunService ~= true then
+			return
+		end
+		clientBypass.promptBypassT += dt
+		clientBypass.clientBypassT += dt
+		clientBypass.soundT += dt
+		if clientBypass.promptBypassT >= 1 then
+			clientBypass.promptBypassT = 0
+			pcall(clientBypass.applyPromptBypass)
+		end
+		if clientBypass.clientBypassT >= 0.35 then
+			clientBypass.clientBypassT = 0
+			pcall(clientBypass.applyMotionBlurBypass)
+			pcall(clientBypass.applyMenuFxBypass)
+			pcall(clientBypass.applyDeathFxBypass)
+			pcall(clientBypass.applyIntroBypass)
+			pcall(clientBypass.applyGameSettingOverrides)
+			pcall(clientBypass.applyPromptUiBypass)
+			pcall(clientBypass.applyLookFreeze)
+			pcall(clientBypass.applyDeathMessageBypass)
+			pcall(clientBypass.cleanupPromptModals)
+			pcall(clientBypass.applyDeviceSpoof)
+			pcall(clientBypass.applyLightToolBypasses)
+			pcall(clientBypass.removeIntroClones)
+		end
+		if clientBypass.soundT >= 1 then
+			clientBypass.soundT = 0
+			pcall(clientBypass.applySoundBypasses)
+		end
 	end)
 
 	bindFovCam(Ws.CurrentCamera or workspace.CurrentCamera)
@@ -3401,15 +4444,15 @@ if game.GameId == 847722000 then
 		end)
 	end)
 	
-	local spdT = 0
+	clientBypass.spdT = 0
 
 	bind(Run.Heartbeat, function(dt)
 		if AllowRunService ~= true or st.spdOn ~= true then
 			return
 		end
-		spdT += dt
-		if spdT >= 0.5 then
-			spdT = 0
+		clientBypass.spdT += dt
+		if clientBypass.spdT >= 0.5 then
+			clientBypass.spdT = 0
 			applySpeed(false)
 		end
 	end)
@@ -3453,17 +4496,17 @@ if game.GameId == 847722000 then
 		end)
 	end
 
-	local RakeTargetCounter = {
+	clientBypass.RakeTargetCounter = {
 		Set = function(_, txt)
 			setInfoTarget(txt)
 		end,
 	}
-	local TimeUntilDayCounter = {
+	clientBypass.TimeUntilDayCounter = {
 		Set = function(_, txt)
 			setInfoTime(txt)
 		end,
 	}
-	local PowerCounter = {
+	clientBypass.PowerCounter = {
 		Set = function(_, txt)
 			setInfoPower(txt)
 		end,
@@ -3471,53 +4514,53 @@ if game.GameId == 847722000 then
 
 	-- update time until day label
 
-	local infoT = 1
+	clientBypass.infoT = 1
 
 	bind(Run.Heartbeat, function(dt)
 		if AllowRunService ~= true then
 			return
 		end
-		infoT += dt
-		if infoT < 1 then
+		clientBypass.infoT += dt
+		if clientBypass.infoT < 1 then
 			return
 		end
-		infoT = 0
+		clientBypass.infoT = 0
 		pcall(function()
 			local sec = fmtTime(valOf(ffc(Rep, "Timer"), 0))
 			if valOf(ffc(Rep, "Night"), false) == true then
-				TimeUntilDayCounter:Set("Time Until Day : "..sec)
+				clientBypass.TimeUntilDayCounter:Set("Time Until Day : "..sec)
 			else
-				TimeUntilDayCounter:Set("Time Until Night : "..sec)
+				clientBypass.TimeUntilDayCounter:Set("Time Until Night : "..sec)
 			end
 			local powerValues = ffc(Rep, "PowerValues")
 			local powerLevel = valOf(powerValues and ffc(powerValues, "PowerLevel"), 1000)
 
-			PowerCounter:Set("Power : "..fmtPower(powerLevel).."%")
+			clientBypass.PowerCounter:Set("Power : "..fmtPower(powerLevel).."%")
 		end)
 	end)
 
 	-- update rakes targetlabel
 
 
-	local tarT = 0.25
+	clientBypass.tarT = 0.25
 
 	bind(Run.Heartbeat, function(dt)
 		if AllowRunService ~= true then
 			return
 		end
-		tarT += dt
-		if tarT < 0.25 then
+		clientBypass.tarT += dt
+		if clientBypass.tarT < 0.25 then
 			return
 		end
-		tarT = 0
+		clientBypass.tarT = 0
 		pcall(function()
 			local rk = ffcr(Ws, "Rake")
 			local tv = ffcr(rk, "TargetVal")
 			local val = tv and tv.Value
 			if val and val.Parent then
-				RakeTargetCounter:Set("Rake's Target : " .. tostring(val.Parent))
+				clientBypass.RakeTargetCounter:Set("Rake's Target : " .. tostring(val.Parent))
 			else
-				RakeTargetCounter:Set("Rake's Target : none")
+				clientBypass.RakeTargetCounter:Set("Rake's Target : none")
 			end
 		end)
 	end)
@@ -3525,17 +4568,17 @@ if game.GameId == 847722000 then
 
 	-- alert if blood hour
 
-	local bhT = 1
+	clientBypass.bhT = 1
 
 	bind(Run.Heartbeat, function(dt)
 		if AllowRunService ~= true then
 			return
 		end
-		bhT += dt
-		if bhT < 1 then
+		clientBypass.bhT += dt
+		if clientBypass.bhT < 1 then
 			return
 		end
-		bhT = 0
+		clientBypass.bhT = 0
 		local bh = ffc(Rep, "InitiateBloodHour")
 		if bh and bh.Value == true then
 			Obsidian:Notify({

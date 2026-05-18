@@ -58,22 +58,6 @@ local __NAUIProtector = (function()
 	end;
 	return nil;
 end)();
-local __NAOriginalGetHui = gethui;
-local gethui = function()
-	if __NAUIProtector and type(__NAUIProtector.huiGrabber) == "function" then
-		local ok, ui = pcall(__NAUIProtector.huiGrabber);
-		if ok and typeof(ui) == "Instance" then
-			return ui;
-		end;
-	end;
-	if type(__NAOriginalGetHui) == "function" then
-		local ok, ui = pcall(__NAOriginalGetHui);
-		if ok then
-			return ui;
-		end;
-	end;
-	return nil;
-end;
 local function __NAProtectUI(gui, options)
 	if __NAUIProtector and type(__NAUIProtector.protectUI) == "function" then
 		local ok, protected = pcall(__NAUIProtector.protectUI, gui, options);
@@ -89,10 +73,15 @@ local T = __lt.cs("TweenService", cloneref);
 local M = __lt.cs("MarketplaceService", cloneref);
 local U = __lt.cs("UserInputService", cloneref);
 local pl = P.LocalPlayer;
-local g = gethui and gethui() or pl:WaitForChild("PlayerGui");
-local sg = Instance.new("ScreenGui", g);
+local pg = pl:WaitForChild("PlayerGui");
+local sg = Instance.new("ScreenGui");
+sg.ResetOnSpawn = false;
+sg.IgnoreGuiInset = true;
 sg.ZIndexBehavior = Enum.ZIndexBehavior.Global;
 sg.DisplayOrder = 1000;
+if not __NAProtectUI(sg, { keepName = false }) then
+	sg.Parent = pg;
+end;
 local function NAdrag(ui, dragui)
 	if not dragui then
 		dragui = ui;

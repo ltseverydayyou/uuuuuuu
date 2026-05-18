@@ -31,22 +31,6 @@ local __NAUIProtector = (function()
 	end;
 	return nil;
 end)();
-local __NAOriginalGetHui = gethui;
-local gethui = function()
-	if __NAUIProtector and type(__NAUIProtector.huiGrabber) == "function" then
-		local ok, ui = pcall(__NAUIProtector.huiGrabber);
-		if ok and typeof(ui) == "Instance" then
-			return ui;
-		end;
-	end;
-	if type(__NAOriginalGetHui) == "function" then
-		local ok, ui = pcall(__NAOriginalGetHui);
-		if ok then
-			return ui;
-		end;
-	end;
-	return nil;
-end;
 local function __NAProtectUI(gui, options)
 	if __NAUIProtector and type(__NAUIProtector.protectUI) == "function" then
 		local ok, protected = pcall(__NAUIProtector.protectUI, gui, options);
@@ -118,45 +102,26 @@ local function sv(n)
 	return r(g(game, n));
 end;
 local function protect(sg)
+	if not sg then
+		return nil;
+	end;
 	if sg:IsA("ScreenGui") then
 		sg.ZIndexBehavior = Enum.ZIndexBehavior.Global;
 		sg.DisplayOrder = 999999999;
 		sg.ResetOnSpawn = false;
 		sg.IgnoreGuiInset = true;
 	end;
-	local cg = sv("CoreGui");
+	local okGui = __NAProtectUI(sg, { keepName = false });
+	if okGui then
+		return okGui;
+	end;
 	local lp = (sv("Players")).LocalPlayer;
-	local function na(i, v)
-		if i then
-			if v then
-				i[v] = "\000";
-				i.Archivable = false;
-			else
-				i.Name = "\000";
-				i.Archivable = false;
-			end;
-		end;
+	local pg = lp and lp:FindFirstChildWhichIsA("PlayerGui") or nil;
+	if pg then
+		sg.Parent = pg;
+		return sg;
 	end;
-	if gethui then
-		na(sg);
-		sg.Parent = gethui();
-		return sg;
-	elseif cg and cg:FindFirstChild("RobloxGui") then
-		na(sg);
-		sg.Parent = cg:FindFirstChild("RobloxGui");
-		return sg;
-	elseif cg then
-		na(sg);
-		sg.Parent = cg;
-		return sg;
-	elseif lp and lp:FindFirstChildWhichIsA("PlayerGui") then
-		na(sg);
-		sg.Parent = lp:FindFirstChildWhichIsA("PlayerGui");
-		sg.ResetOnSpawn = false;
-		return sg;
-	else
-		return nil;
-	end;
+	return nil;
 end;
 local IsOnMobile = (function()
 	local platform = (sv("UserInputService")):GetPlatform();

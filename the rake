@@ -599,6 +599,72 @@ if game.GameId == 847722000 then
 		return true
 	end
 
+	local infSys = {
+		tabs = setmetatable({}, { __mode = "k" }),
+		token = 0,
+		fast = 1,
+		scan = 2.5,
+	}
+
+	local function patchInfTab(v)
+		if type(v) ~= "table" then
+			return false
+		end
+
+		local hit = false
+		if st.infStamina == true and rawget(v, "STAMINA_REGEN") ~= nil then
+			v.STAMINA_REGEN = 100
+			v.JUMP_STAMINA = 0
+			v.JUMP_COOLDOWN = 0
+			v.STAMINA_TAKE = 0
+			v.stamina = 100
+			hit = true
+		end
+
+		if st.infNight == true and rawget(v, "NVG_TAKE") ~= nil then
+			v.NVG_TAKE = 0
+			v.NVG_REGEN = 100
+			hit = true
+		end
+
+		if hit then
+			infSys.tabs[v] = true
+		end
+		return hit
+	end
+
+	local function applyInfTabs(scan)
+		if st.infStamina ~= true and st.infNight ~= true then
+			return
+		end
+
+		for v in pairs(infSys.tabs) do
+			pcall(patchInfTab, v)
+		end
+
+		if scan == true then
+			eachGc(patchInfTab)
+		end
+	end
+
+	local function queueInfTabs(loops)
+		if st.infStamina ~= true and st.infNight ~= true then
+			return
+		end
+
+		infSys.token += 1
+		local token = infSys.token
+		task.spawn(function()
+			for i = 1, loops or 12 do
+				if token ~= infSys.token or AllowRunService ~= true then
+					return
+				end
+				applyInfTabs(true)
+				task.wait(i <= 4 and 0.25 or 0.75)
+			end
+		end)
+	end
+
 	-- Stamina Table
     --[[
     for i,v in pairs(getgc(true)) do
@@ -2334,16 +2400,9 @@ if game.GameId == 847722000 then
 			_G.InfStamina = state == true
 			st.infStamina = _G.InfStamina
 			cfgSet("infStamina", st.infStamina)
-			if _G.InfStamina == true then
-				eachGc(function(v)
-					if type(v) == "table" and rawget(v, "STAMINA_REGEN") then
-						v.STAMINA_REGEN = 100
-						v.JUMP_STAMINA = 0
-						v.JUMP_COOLDOWN = 0
-						v.STAMINA_TAKE = 0
-						v.stamina = 100
-					end
-				end)
+			if st.infStamina == true then
+				applyInfTabs(true)
+				queueInfTabs(12)
 			end
 		end,
 	})
@@ -2356,13 +2415,9 @@ if game.GameId == 847722000 then
 			_G.InfNightVision = state == true
 			st.infNight = _G.InfNightVision
 			cfgSet("infNight", st.infNight)
-			if _G.InfNightVision == true then
-				eachGc(function(v)
-					if type(v) == "table" and rawget(v, "NVG_TAKE") then
-						v.NVG_TAKE = 0
-						v.NVG_REGEN = 100
-					end
-				end)
+			if st.infNight == true then
+				applyInfTabs(true)
+				queueInfTabs(12)
 			end
 		end,
 	})
@@ -3157,11 +3212,17 @@ if game.GameId == 847722000 then
 		if not ch then
 			return
 		end
+		if st.infStamina == true or st.infNight == true then
+			queueInfTabs(14)
+		end
 		task.spawn(function()
 			local hum = ffca(ch, "Humanoid") or ch:WaitForChild("Humanoid", 10)
 			if hum then
 				curHum = hum
 				applySpeed(true)
+				if st.infStamina == true or st.infNight == true then
+					applyInfTabs(true)
+				end
 				bindChar(hum:GetPropertyChangedSignal("WalkSpeed"), function()
 					applySpeed(true)
 				end)
@@ -3351,6 +3412,26 @@ if game.GameId == 847722000 then
 			spdT = 0
 			applySpeed(false)
 		end
+	end)
+
+	bind(Run.Heartbeat, function(dt)
+		if AllowRunService ~= true or (st.infStamina ~= true and st.infNight ~= true) then
+			return
+		end
+
+		infSys.fast += dt
+		infSys.scan += dt
+		if infSys.fast < 0.5 then
+			return
+		end
+
+		local scan = infSys.scan >= 2.5
+		infSys.fast = 0
+		if scan then
+			infSys.scan = 0
+		end
+
+		applyInfTabs(scan)
 	end)
 
 	function DestroyUI()

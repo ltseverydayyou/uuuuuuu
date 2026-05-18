@@ -823,6 +823,7 @@ if game.GameId == 847722000 then
 
 	local clientBypass = {}
 	clientBypass.originals = {}
+	clientBypass.mutedSounds = setmetatable({}, { __mode = "k" })
 
 	function clientBypass.getCamera()
 		return Ws.CurrentCamera or workspace.CurrentCamera
@@ -928,6 +929,10 @@ if game.GameId == 847722000 then
 		end
 		local key = "SoundVolume_" .. tostring(name)
 		local original = clientBypass.defaultOriginal(key, snd.Volume)
+		if muted ~= true and (tonumber(original) or 0) <= 0 and (name == "GameMusic" or name == "ChaseMusic") then
+			original = 1
+			clientBypass.originals[key] = original
+		end
 		pcall(function()
 			snd.Volume = muted == true and 0 or original
 		end)
@@ -1104,24 +1109,26 @@ if game.GameId == 847722000 then
 			sound.Volume = 0
 			sound.Playing = false
 			sound.TimePosition = 0
+			clientBypass.mutedSounds[sound] = true
 		end)
 		return true
 	end
 
 	function clientBypass.restoreMutedSounds()
 		local n = 0
-		for _, root in pairs({ Ws, clientBypass.getCamera() }) do
-			for _, obj in pairs(desc(root)) do
-				if obj:IsA("Sound") and obj:GetAttribute("RakeAdminMuted") == true and not clientBypass.shouldMuteSound(obj) then
-					pcall(function()
-						local original = obj:GetAttribute("RakeAdminOriginalVolume")
-						if type(original) == "number" then
-							obj.Volume = original
-						end
-						obj:SetAttribute("RakeAdminMuted", false)
-						n += 1
-					end)
-				end
+		for obj in pairs(clientBypass.mutedSounds) do
+			if not obj or not obj.Parent then
+				clientBypass.mutedSounds[obj] = nil
+			elseif obj:IsA("Sound") and obj:GetAttribute("RakeAdminMuted") == true and not clientBypass.shouldMuteSound(obj) then
+				pcall(function()
+					local original = obj:GetAttribute("RakeAdminOriginalVolume")
+					if type(original) == "number" then
+						obj.Volume = original
+					end
+					obj:SetAttribute("RakeAdminMuted", false)
+					clientBypass.mutedSounds[obj] = nil
+					n += 1
+				end)
 			end
 		end
 		return n
@@ -1215,6 +1222,10 @@ if game.GameId == 847722000 then
 	end
 
 	function clientBypass.applyDeathMessageBypass()
+		local active = st.hideDeathMessages == true or st.muteDeathSounds == true
+		if not active and clientBypass.deathMsgApplied ~= true then
+			return 0
+		end
 		local pg = clientBypass.getPlayerGui()
 		if not pg then
 			return 0
@@ -1226,6 +1237,7 @@ if game.GameId == 847722000 then
 				if st.hideDeathMessages == true then
 					obj.TextTransparency = 1
 					obj.TextStrokeTransparency = 1
+					clientBypass.deathMsgApplied = true
 					n += 1
 				end
 			elseif obj:IsA("Sound") and obj.Name == "Boom" and st.muteDeathSounds == true then
@@ -1233,6 +1245,9 @@ if game.GameId == 847722000 then
 					n += 1
 				end
 			end
+		end
+		if not active then
+			clientBypass.deathMsgApplied = false
 		end
 		return n
 	end
@@ -1273,31 +1288,40 @@ if game.GameId == 847722000 then
 			return 0
 		end
 		local n = 0
-		for _, obj in pairs(desc(Ws)) do
-			if obj:IsA("Light") then
-				if st.flashlightNoShadows == true then
+		local function scan(root)
+			if not root then
+				return
+			end
+			for _, obj in pairs(desc(root)) do
+				if obj:IsA("Light") then
+					if st.flashlightNoShadows == true then
+						pcall(function()
+							obj.Shadows = false
+						end)
+					end
+					if st.flashlightBoost == true and not obj:GetAttribute("RakeAdminBoosted") then
+						pcall(function()
+							obj:SetAttribute("RakeAdminBoosted", true)
+							obj:SetAttribute("RakeAdminBrightness", obj.Brightness)
+							obj.Brightness = math.clamp((tonumber(obj.Brightness) or 1) * 2, 0, 20)
+							if obj:IsA("SpotLight") then
+								obj.Angle = math.clamp((tonumber(obj.Angle) or 45) * 1.1, 0, 180)
+							end
+						end)
+					end
+					n += 1
+				elseif obj:IsA("BasePart") and st.flashlightNoShadows == true and (obj.Name == "LShadow1" or obj.Name == "LShadow2") then
 					pcall(function()
-						obj.Shadows = false
+						obj.Transparency = 1
 					end)
+					n += 1
 				end
-				if st.flashlightBoost == true and not obj:GetAttribute("RakeAdminBoosted") then
-					pcall(function()
-						obj:SetAttribute("RakeAdminBoosted", true)
-						obj:SetAttribute("RakeAdminBrightness", obj.Brightness)
-						obj.Brightness = math.clamp((tonumber(obj.Brightness) or 1) * 2, 0, 20)
-						if obj:IsA("SpotLight") then
-							obj.Angle = math.clamp((tonumber(obj.Angle) or 45) * 1.1, 0, 180)
-						end
-					end)
-				end
-				n += 1
-			elseif obj:IsA("BasePart") and st.flashlightNoShadows == true and (obj.Name == "LShadow1" or obj.Name == "LShadow2") then
-				pcall(function()
-					obj.Transparency = 1
-				end)
-				n += 1
 			end
 		end
+		for _, p in pairs(kids(Plrs)) do
+			scan(p.Character)
+		end
+		scan(ffcr(Ws, "Rake"))
 		return n
 	end
 
@@ -4381,6 +4405,8 @@ if game.GameId == 847722000 then
 	clientBypass.promptBypassT = 1
 	clientBypass.clientBypassT = 1
 	clientBypass.soundT = 1
+	clientBypass.lightT = 5
+	clientBypass.deathMsgT = 2
 
 	bind(Run.Heartbeat, function(dt)
 		if AllowRunService ~= true then
@@ -4409,11 +4435,13 @@ if game.GameId == 847722000 then
 		clientBypass.promptBypassT += dt
 		clientBypass.clientBypassT += dt
 		clientBypass.soundT += dt
-		if clientBypass.promptBypassT >= 1 then
+		clientBypass.lightT += dt
+		clientBypass.deathMsgT += dt
+		if st.promptBypass == true and clientBypass.promptBypassT >= 5 then
 			clientBypass.promptBypassT = 0
 			pcall(clientBypass.applyPromptBypass)
 		end
-		if clientBypass.clientBypassT >= 0.35 then
+		if clientBypass.clientBypassT >= 0.75 then
 			clientBypass.clientBypassT = 0
 			pcall(clientBypass.applyMotionBlurBypass)
 			pcall(clientBypass.applyMenuFxBypass)
@@ -4422,13 +4450,19 @@ if game.GameId == 847722000 then
 			pcall(clientBypass.applyGameSettingOverrides)
 			pcall(clientBypass.applyPromptUiBypass)
 			pcall(clientBypass.applyLookFreeze)
-			pcall(clientBypass.applyDeathMessageBypass)
 			pcall(clientBypass.cleanupPromptModals)
 			pcall(clientBypass.applyDeviceSpoof)
-			pcall(clientBypass.applyLightToolBypasses)
 			pcall(clientBypass.removeIntroClones)
 		end
-		if clientBypass.soundT >= 1 then
+		if clientBypass.deathMsgT >= 2 then
+			clientBypass.deathMsgT = 0
+			pcall(clientBypass.applyDeathMessageBypass)
+		end
+		if clientBypass.lightT >= 5 then
+			clientBypass.lightT = 0
+			pcall(clientBypass.applyLightToolBypasses)
+		end
+		if clientBypass.soundT >= 2.5 then
 			clientBypass.soundT = 0
 			pcall(clientBypass.applySoundBypasses)
 		end

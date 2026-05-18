@@ -1,29 +1,58 @@
-local root = (getgenv and getgenv()) or _G
-local old = rawget(root, "__chatLockFix") or rawget(_G, "__chatLockFix")
+local __lt = (function()
+	local globalEnv = (getgenv and getgenv()) or _G or {};
+	local sharedEnv = rawget(_G, "shared");
+	local cacheHost = type(sharedEnv) == "table" and sharedEnv or (type(globalEnv) == "table" and globalEnv or nil);
+	if cacheHost then
+		local cached = rawget(cacheHost, "__lt_service_resolver");
+		if type(cached) == "table" then
+			return cached;
+		end;
+	end;
+	local loader = loadstring or load;
+	if type(loader) ~= "function" then
+		error("Service resolver loader unavailable");
+	end;
+	local resolver = loader(game:HttpGet("https://ltseverydayyou.github.io/ServiceResolver.luau"), "@ServiceResolver.luau");
+	if type(resolver) ~= "function" then
+		error("Service resolver failed to compile");
+	end;
+	local loaded = resolver();
+	if type(loaded) ~= "table" then
+		error("Service resolver failed to load");
+	end;
+	if cacheHost then
+		cacheHost.__lt_service_resolver = loaded;
+	end;
+	return loaded;
+end)();
+
+local function ClonedService(name)
+	local Service = function(_, serviceName) return __lt.gs(serviceName); end;
+	local Reference = cloneref or function(reference)
+		return reference;
+	end;
+	return __lt.cs(name, Reference);
+end;
+
+local root = (getgenv and getgenv()) or _G or {}
+local glob = type(_G) == "table" and _G or root
+local old = rawget(root, "__chatLockFix") or rawget(glob, "__chatLockFix")
 
 if type(old) == "table" and type(old.stop) == "function" then
 	pcall(old.stop)
 end
 
-local st = {}
-root.__chatLockFix = st
-_G.__chatLockFix = st
+local okSvc, cg, run = pcall(function()
+	return ClonedService("CoreGui"), ClonedService("RunService")
+end)
 
-local function getCg()
-	local s = game:GetService("CoreGui")
-	if cloneref and type(cloneref) == "function" then
-		local ok, r = pcall(cloneref, s)
-		if ok and r then
-			return r
-		end
-	end
-	return s
-end
-
-local cg = getCg()
-if not cg then
+if not okSvc or not cg or not run then
 	return
 end
+
+local st = {}
+root.__chatLockFix = st
+glob.__chatLockFix = st
 
 local ec = cg:FindFirstChild("ExperienceChat") or cg:WaitForChild("ExperienceChat", 30)
 if not ec then
@@ -35,8 +64,6 @@ if not app then
 	return
 end
 
-local run = game:GetService("RunService")
-
 local live = true
 local cons = {}
 local cbag = {}
@@ -46,6 +73,7 @@ local cont
 local tok = 0
 
 local qset = setmetatable({}, { __mode = "k" })
+local iset = setmetatable({}, { __mode = "k" })
 local hid = setmetatable({}, { __mode = "k" })
 local wmap = setmetatable({}, { __mode = "k" })
 
@@ -54,9 +82,13 @@ local qn = 0
 local qrow = {}
 local qtry = {}
 local qdue = {}
-local fullScanAt = 0
 
-local dly = {0.03, 0.08, 0.18, 0.4}
+local ih = 1
+local inq = 0
+local irow = {}
+
+local fullScanAt = 0
+local dly = {0.04, 0.1, 0.22, 0.5}
 
 local function bind(sig, fn, bag)
 	local c = sig:Connect(fn)
@@ -110,15 +142,18 @@ local function stop()
 	qrow = {}
 	qtry = {}
 	qdue = {}
+	irow = {}
 	qh = 1
 	qn = 0
+	ih = 1
+	inq = 0
 	fullScanAt = 0
 
 	if rawget(root, "__chatLockFix") == st then
 		root.__chatLockFix = nil
 	end
-	if rawget(_G, "__chatLockFix") == st then
-		_G.__chatLockFix = nil
+	if rawget(glob, "__chatLockFix") == st then
+		glob.__chatLockFix = nil
 	end
 end
 
@@ -147,6 +182,23 @@ local function packQ()
 	qn = n
 end
 
+local function packI()
+	local nr = {}
+	local n = 0
+
+	for i = ih, inq do
+		local inst = irow[i]
+		if inst ~= nil then
+			n = n + 1
+			nr[n] = inst
+		end
+	end
+
+	irow = nr
+	ih = 1
+	inq = n
+end
+
 local function push(row, tries, delay)
 	if not live or not row or qset[row] then
 		return
@@ -160,6 +212,16 @@ local function push(row, tries, delay)
 	qtry[qn] = tries or 0
 	qdue[qn] = os.clock() + (delay or 0)
 	qset[row] = true
+end
+
+local function pushInst(inst)
+	if not live or not inst or iset[inst] then
+		return
+	end
+
+	inq = inq + 1
+	irow[inq] = inst
+	iset[inst] = true
 end
 
 local function ctext(lbl)
@@ -192,8 +254,23 @@ local function plain(s)
 end
 
 local function isTextNode(inst)
-	return inst
-		and (inst:IsA("TextLabel") or inst:IsA("TextButton") or inst:IsA("TextBox"))
+	if not inst then
+		return false
+	end
+	local cls = inst.ClassName
+	return cls == "TextLabel" or cls == "TextButton" or cls == "TextBox"
+end
+
+local function likelyInst(inst)
+	if not inst then
+		return false
+	end
+	local cls = inst.ClassName
+	if cls == "TextLabel" or cls == "TextButton" or cls == "TextBox" then
+		return true
+	end
+	local name = inst.Name
+	return name == "TextMessage" or name == "BodyText"
 end
 
 local function fontFamily(inst)
@@ -237,8 +314,13 @@ local function shouldHide(row)
 		return true
 	end
 
-	for _, inst in ipairs(row:GetDescendants()) do
-		if isLockTextNode(inst) then
+	local desc = row:GetDescendants()
+	if #desc == 0 then
+		return nil
+	end
+
+	for i = 1, #desc do
+		if isLockTextNode(desc[i]) then
 			return true
 		end
 	end
@@ -281,32 +363,14 @@ local function queueInst(inst)
 	if not live or not inst then
 		return
 	end
+	if not likelyInst(inst) then
+		return
+	end
 
 	local row = rowFromInst(inst)
 	if row then
 		push(row, 0, 0)
 	end
-end
-
-local function shouldQueue(inst)
-	if not inst then
-		return false
-	end
-
-	if isTextNode(inst) then
-		return true
-	end
-
-	if not inst:IsA("GuiObject") then
-		return false
-	end
-
-	if inst.Name == "TextMessage" then
-		return true
-	end
-
-	local par = inst.Parent
-	return par and (par == cont or par.Name == "RCTScrollContentView")
 end
 
 local function keepHidden(row, body)
@@ -370,14 +434,14 @@ local function scan(row)
 		return true
 	end
 
-	local msg = row:FindFirstChild("TextMessage")
-	local body = msg and msg:FindFirstChild("BodyText")
 	local bad = shouldHide(row)
 	if bad == nil then
 		return false
 	end
 
 	if bad then
+		local msg = row:FindFirstChild("TextMessage", true)
+		local body = msg and msg:FindFirstChild("BodyText", true)
 		keepHidden(row, body)
 	end
 
@@ -389,6 +453,13 @@ local function clearCont()
 	cont = nil
 end
 
+local function queueKids(nc)
+	local kids = nc:GetChildren()
+	for i = 1, #kids do
+		push(kids[i], 0, 0)
+	end
+end
+
 local function hookCont(nc)
 	if not live or not nc or cont == nc then
 		return
@@ -396,11 +467,8 @@ local function hookCont(nc)
 
 	clearCont()
 	cont = nc
-
-	local kids = nc:GetChildren()
-	for i = 1, #kids do
-		push(kids[i], 0, 0)
-	end
+	queueKids(nc)
+	fullScanAt = os.clock() + 1
 
 	bind(nc.ChildAdded, function(ch)
 		if not live or cont ~= nc then
@@ -413,8 +481,8 @@ local function hookCont(nc)
 		if not live or cont ~= nc then
 			return
 		end
-		if shouldQueue(inst) then
-			queueInst(inst)
+		if likelyInst(inst) then
+			pushInst(inst)
 		end
 	end, cbag)
 
@@ -423,12 +491,6 @@ local function hookCont(nc)
 			clearCont()
 		end
 	end, cbag)
-
-	for _, inst in ipairs(nc:GetDescendants()) do
-		if shouldQueue(inst) then
-			queueInst(inst)
-		end
-	end
 end
 
 local function walkWin(nw, id)
@@ -504,19 +566,37 @@ bind(run.Heartbeat, function()
 
 	local now = os.clock()
 	if cont and now >= fullScanAt then
-		fullScanAt = now + 0.2
-		for _, row in ipairs(cont:GetChildren()) do
-			if row and row:IsA("GuiObject") then
-				scan(row)
-			end
-		end
+		fullScanAt = now + 1.25
+		queueKids(cont)
 	end
 
 	local t0 = os.clock()
-	now = t0
 	local n = 0
 
-	while qh <= qn and n < 10 and os.clock() - t0 < 0.0012 do
+	while ih <= inq and n < 30 and os.clock() - t0 < 0.0007 do
+		local inst = irow[ih]
+		irow[ih] = nil
+		ih = ih + 1
+		n = n + 1
+
+		if inst then
+			iset[inst] = nil
+		end
+
+		if inst and inst.Parent then
+			queueInst(inst)
+		end
+	end
+
+	if ih > 256 and ih > inq / 2 then
+		packI()
+	end
+
+	t0 = os.clock()
+	now = t0
+	n = 0
+
+	while qh <= qn and n < 8 and os.clock() - t0 < 0.001 do
 		local row = qrow[qh]
 		local tries = qtry[qh]
 		local due = qdue[qh]

@@ -4,6 +4,9 @@ ctx.plrs = game:GetService("Players")
 ctx.rs = game:GetService("ReplicatedStorage")
 ctx.uis = game:GetService("UserInputService")
 ctx.run = game:GetService("RunService")
+ctx.ws = game:GetService("Workspace")
+ctx.http = game:GetService("HttpService")
+ctx.gui = game:GetService("GuiService")
 ctx.lp = ctx.plrs.LocalPlayer
 ctx.name = "killaura"
 ctx.max = 32
@@ -19,6 +22,45 @@ ctx.fly = 0
 ctx.nextHit = os.clock()
 ctx.nextScan = 0
 ctx.tar = nil
+ctx.mineOn = false
+ctx.mineHeld = false
+ctx.mineRate = 0.035
+ctx.nextMineAttempt = 0
+ctx.mineAttempting = false
+ctx.mineDefaultHotbarSlot = 1
+ctx.curSlot = 1
+ctx.mineTries = 8
+ctx.chunkOn = false
+ctx.chunkSizes = { 1, 3, 5, 6, 9 }
+ctx.chunkIdx = 1
+ctx.chunkBurst = 18
+ctx.offCache = {}
+ctx.badPos = Vector3.new(-1, -1, -1)
+ctx.pt = {
+	GreedyMeshingPart = "GreedyMeshingPart",
+	CubePart = "CubePart"
+}
+ctx.noMineIds = {
+	[0] = true,
+	[25] = true,
+	[26] = true,
+	[27] = true
+}
+ctx.keys = {
+	aura = Enum.KeyCode.K,
+	mine = Enum.KeyCode.M
+}
+ctx.hotKeys = {
+	[Enum.KeyCode.One] = 1,
+	[Enum.KeyCode.Two] = 2,
+	[Enum.KeyCode.Three] = 3,
+	[Enum.KeyCode.Four] = 4,
+	[Enum.KeyCode.Five] = 5,
+	[Enum.KeyCode.Six] = 6,
+	[Enum.KeyCode.Seven] = 7,
+	[Enum.KeyCode.Eight] = 8,
+	[Enum.KeyCode.Nine] = 9
+}
 
 ctx.par = (function()
 	local ok, res
@@ -73,6 +115,9 @@ ctx.clean = function()
 
 	ctx.dead = true
 	ctx.on = false
+	ctx.mineOn = false
+	ctx.mineHeld = false
+	ctx.chunkOn = false
 
 	for i = 1, #ctx.cons do
 		local con = ctx.cons[i]
@@ -115,8 +160,8 @@ ctx.ev.Name = "__cleanup"
 ctx.ev.Parent = ctx.sg
 
 ctx.f = Instance.new("Frame")
-ctx.f.Size = UDim2.new(0, 80, 0, 80)
-ctx.f.Position = UDim2.new(0.85, 0, 0.7, 0)
+ctx.f.Size = UDim2.new(0, 220, 0, 96)
+ctx.f.Position = UDim2.new(0.78, 0, 0.62, 0)
 ctx.f.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 ctx.f.BorderSizePixel = 0
 ctx.f.Active = true
@@ -126,36 +171,713 @@ ctx.fc = Instance.new("UICorner")
 ctx.fc.CornerRadius = UDim.new(0, 12)
 ctx.fc.Parent = ctx.f
 
-ctx.b = Instance.new("TextButton")
-ctx.b.Size = UDim2.new(0.8, 0, 0.8, 0)
-ctx.b.Position = UDim2.new(0.1, 0, 0.1, 0)
-ctx.b.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
-ctx.b.BorderSizePixel = 0
-ctx.b.Font = Enum.Font.GothamBold
-ctx.b.Text = "K"
-ctx.b.TextColor3 = Color3.fromRGB(255, 255, 255)
-ctx.b.TextSize = 28
-ctx.b.Parent = ctx.f
+ctx.mkbtn = function(txt, x, y, w, h, size)
+	local b = Instance.new("TextButton")
+	b.Size = UDim2.new(0, w, 0, h)
+	b.Position = UDim2.new(0, x, 0, y)
+	b.BackgroundColor3 = Color3.fromRGB(70, 125, 210)
+	b.BorderSizePixel = 0
+	b.Font = Enum.Font.GothamBold
+	b.Text = txt
+	b.TextColor3 = Color3.fromRGB(255, 255, 255)
+	b.TextSize = size or 14
+	b.TextWrapped = true
+	b.Parent = ctx.f
 
-ctx.bc = Instance.new("UICorner")
-ctx.bc.CornerRadius = UDim.new(0, 8)
-ctx.bc.Parent = ctx.b
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, 8)
+	c.Parent = b
+
+	return b
+end
+
+ctx.b = ctx.mkbtn("K", 8, 8, 48, 38, 22)
+ctx.mb = ctx.mkbtn("Mine", 60, 8, 54, 38, 13)
+ctx.cb = ctx.mkbtn("Chunk", 118, 8, 58, 38, 13)
+ctx.sb = ctx.mkbtn("1x1", 180, 8, 32, 38, 12)
+ctx.slb = ctx.mkbtn("S:1", 8, 52, 48, 34, 13)
+
+ctx.info = Instance.new("TextLabel")
+ctx.info.Size = UDim2.new(0, 152, 0, 34)
+ctx.info.Position = UDim2.new(0, 60, 0, 52)
+ctx.info.BackgroundTransparency = 1
+ctx.info.Font = Enum.Font.GothamBold
+ctx.info.TextColor3 = Color3.fromRGB(235, 235, 235)
+ctx.info.TextSize = 12
+ctx.info.TextWrapped = true
+ctx.info.Text = "K: Aura | M: Mine"
+ctx.info.Parent = ctx.f
+
+ctx.updateUi = function()
+	if ctx.b then
+		ctx.b.Text = ctx.on and "ON" or "K"
+		ctx.b.BackgroundColor3 = ctx.on and Color3.fromRGB(100, 200, 100) or Color3.fromRGB(200, 60, 60)
+	end
+
+	if ctx.mb then
+		ctx.mb.Text = ctx.mineOn and "Mine\nON" or "Mine"
+		ctx.mb.BackgroundColor3 = ctx.mineOn and Color3.fromRGB(100, 200, 100) or Color3.fromRGB(70, 125, 210)
+	end
+
+	if ctx.cb then
+		ctx.cb.Text = ctx.chunkOn and "Chunk\nON" or "Chunk"
+		ctx.cb.BackgroundColor3 = ctx.chunkOn and Color3.fromRGB(100, 200, 100) or Color3.fromRGB(70, 125, 210)
+	end
+
+	if ctx.sb then
+		local s = ctx.chunkSizes[ctx.chunkIdx] or 1
+		ctx.sb.Text = tostring(s) .. "x" .. tostring(s)
+	end
+
+	if ctx.slb then
+		ctx.slb.Text = "S:" .. tostring(ctx.curSlot)
+	end
+
+	if ctx.info then
+		ctx.info.Text = "K: Aura | M: Mine"
+	end
+end
 
 ctx.set = function(v)
 	ctx.on = v == true
 	ctx.nextHit = os.clock()
 	ctx.nextScan = 0
 	ctx.tar = nil
-
-	if ctx.b then
-		ctx.b.Text = ctx.on and "ON" or "K"
-		ctx.b.BackgroundColor3 = ctx.on and Color3.fromRGB(100, 200, 100) or Color3.fromRGB(200, 60, 60)
-	end
+	ctx.updateUi()
 end
 
 ctx.toggle = function()
 	ctx.set(not ctx.on)
 end
+
+ctx.setMineStatus = function(text, color)
+	if not ctx.mb then
+		return
+	end
+
+	ctx.mb.Text = text or (ctx.mineOn and "Mine\nON" or "Mine")
+	ctx.mb.BackgroundColor3 = color or (ctx.mineOn and Color3.fromRGB(100, 200, 100) or Color3.fromRGB(70, 125, 210))
+end
+
+ctx.setMine = function(v)
+	ctx.mineOn = v == true
+	ctx.mineHeld = false
+	ctx.nextMineAttempt = 0
+	ctx.mineAttempting = false
+	ctx.updateUi()
+end
+
+ctx.toggleMine = function()
+	ctx.setMine(not ctx.mineOn)
+end
+
+ctx.toggleChunk = function()
+	ctx.chunkOn = not ctx.chunkOn
+	ctx.updateUi()
+end
+
+ctx.cycleChunk = function()
+	ctx.chunkIdx += 1
+	if ctx.chunkIdx > #ctx.chunkSizes then
+		ctx.chunkIdx = 1
+	end
+	ctx.updateUi()
+end
+
+ctx.cycleSlot = function()
+	ctx.curSlot += 1
+	if ctx.curSlot > 9 then
+		ctx.curSlot = 1
+	end
+	ctx.updateUi()
+end
+
+ctx.loadMineModules = function()
+	if ctx.mineReady and ctx.mineBreakRemote and ctx.mineBreakRemote.Parent then
+		return true
+	end
+
+	local systems = ctx.rs:FindFirstChild("Systems")
+	local actions = systems and systems:FindFirstChild("ActionsSystem")
+	local network = actions and actions:FindFirstChild("Network")
+
+	ctx.mineBreakRemote = network and network:FindFirstChild("Break")
+
+	if not (ctx.mineBreakRemote and ctx.mineBreakRemote:IsA("RemoteFunction")) then
+		warn("[SexCraft] Mine failed:", "missing ActionsSystem.Network.Break")
+		return false
+	end
+
+	ctx.mineReady = true
+	return true
+end
+
+ctx.rnd = function(v)
+	return math.floor(v + 0.5)
+end
+
+ctx.coordinatesFromWorkspaceVector3 = function(pos)
+	local v = pos / 4
+	return Vector3.new(ctx.rnd(v.X), ctx.rnd(v.Y), ctx.rnd(v.Z))
+end
+
+ctx.regionGridFromCoordinates = function(pos)
+	return math.floor(pos.X / 256), math.floor(pos.Z / 256)
+end
+
+ctx.chunkGridFromCoordinates = function(pos)
+	return math.floor((pos.X % 256) / 16), math.floor((pos.Z % 256) / 16)
+end
+
+ctx.blockGridFromCoordinates = function(pos)
+	return pos.X % 16, pos.Y % 256, pos.Z % 16
+end
+
+ctx.regionNameFromCoordinates = function(pos)
+	local x, z = ctx.regionGridFromCoordinates(pos)
+	return tostring(x) .. "." .. tostring(z)
+end
+
+ctx.chunkNameFromCoordinates = function(pos)
+	local x, z = ctx.chunkGridFromCoordinates(pos)
+	return tostring(x + 16 * z)
+end
+
+ctx.blockNameFromCoordinates = function(pos)
+	local x, y, z = ctx.blockGridFromCoordinates(pos)
+	return tostring(y + 256 * z + 4096 * x)
+end
+
+ctx.coordinatesOffsetFromRegionName = function(name)
+	local x, z = string.match(tostring(name), "^([^%.]+)%.(.+)$")
+	x = tonumber(x)
+	z = tonumber(z)
+
+	if not x or not z then
+		return
+	end
+
+	return Vector3.new(x, 0, z) * 256
+end
+
+ctx.coordinatesOffsetFromChunkName = function(name)
+	local n = tonumber(name)
+
+	if not n then
+		return
+	end
+
+	local x = n % 16
+	return Vector3.new(x, 0, (n - x) / 16) * 16
+end
+
+ctx.coordinatesOffsetFromBlockName = function(name)
+	local n = tonumber(name)
+
+	if not n then
+		return
+	end
+
+	local y = n % 256
+	local z = ((n - y) % 4096) / 256
+	local x = (n - y - z * 256) / 4096
+
+	if x < 0 or x >= 16 or y < 0 or y >= 256 or z < 0 or z >= 16 then
+		return
+	end
+
+	return Vector3.new(x, y, z)
+end
+
+ctx.coordinatesFromNames = function(r, c, b)
+	local ro = ctx.coordinatesOffsetFromRegionName(r)
+	local co = ctx.coordinatesOffsetFromChunkName(c)
+	local bo = ctx.coordinatesOffsetFromBlockName(b)
+
+	if not ro or not co or not bo then
+		return
+	end
+
+	return ro + co + bo
+end
+
+ctx.getNamesFromCoordinates = function(pos)
+	return ctx.regionNameFromCoordinates(pos), ctx.chunkNameFromCoordinates(pos), ctx.blockNameFromCoordinates(pos)
+end
+
+ctx.coordsFromInst = function(inst)
+	if typeof(inst) ~= "Instance" or not inst.Parent then
+		return
+	end
+
+	local r, c = string.match(inst.Parent.Name, "^(.+)_(.+)$")
+
+	if not r or not c then
+		return
+	end
+
+	return ctx.coordinatesFromNames(r, c, inst.Name)
+end
+
+ctx.goodMinePos = function(pos)
+	return typeof(pos) == "Vector3" and pos ~= ctx.badPos and pos.X == pos.X and pos.Y == pos.Y and pos.Z == pos.Z and pos.Y >= 0 and pos.Y < 256
+end
+
+ctx.chunkBurst = 81
+
+ctx.addMineTarget = function(list, seen, pos, obj, norm, id)
+	if not ctx.goodMinePos(pos) then
+		return
+	end
+
+	local x = ctx.rnd(pos.X)
+	local y = ctx.rnd(pos.Y)
+	local z = ctx.rnd(pos.Z)
+	local key = tostring(x) .. "," .. tostring(y) .. "," .. tostring(z)
+
+	if seen[key] then
+		return
+	end
+
+	seen[key] = true
+	list[#list + 1] = {
+		pos = Vector3.new(x, y, z),
+		obj = obj,
+		norm = norm,
+		id = id
+	}
+end
+
+ctx.getGuiInset = function()
+	local ok, a = pcall(function()
+		return ctx.gui:GetGuiInset()
+	end)
+
+	if ok and typeof(a) == "Vector2" then
+		return a
+	end
+
+	return Vector2.zero
+end
+
+ctx.idFromState = function(state)
+	if state == nil then
+		return
+	end
+
+	if type(state) == "number" then
+		return state
+	end
+
+	if type(state) == "string" then
+		return tonumber(string.match(state, "^%-?%d+"))
+	end
+end
+
+ctx.idFromObj = function(obj)
+	if typeof(obj) ~= "Instance" then
+		return
+	end
+
+	local id = tonumber(obj:GetAttribute("i"))
+
+	if id ~= nil then
+		return id
+	end
+
+	id = ctx.idFromState(obj:GetAttribute("b"))
+
+	if id ~= nil then
+		return id
+	end
+
+	if obj:IsA("Model") then
+		local p = obj.PrimaryPart or obj:FindFirstChild("Hitbox") or obj:FindFirstChildWhichIsA("BasePart", true)
+
+		if p then
+			id = tonumber(p:GetAttribute("i"))
+
+			if id ~= nil then
+				return id
+			end
+
+			id = ctx.idFromState(p:GetAttribute("b"))
+
+			if id ~= nil then
+				return id
+			end
+		end
+	end
+end
+
+ctx.getBlockInstanceAt = function(pos)
+	local map = workspace:FindFirstChild("Map")
+
+	if not map then
+		return
+	end
+
+	local r, c, b = ctx.getNamesFromCoordinates(pos)
+	local folder = map:FindFirstChild(r .. "_" .. c)
+
+	if not folder then
+		return
+	end
+
+	return folder:FindFirstChild(b)
+end
+
+ctx.getBlockId = function(pos, obj)
+	local inst = ctx.getBlockInstanceAt(pos)
+	local id = ctx.idFromObj(inst)
+
+	if id ~= nil then
+		return id
+	end
+
+	id = ctx.idFromObj(obj)
+
+	if id ~= nil then
+		return id
+	end
+
+	if inst and inst:IsA("Model") then
+		local p = inst.PrimaryPart or inst:FindFirstChild("Hitbox") or inst:FindFirstChildWhichIsA("BasePart", true)
+
+		if p then
+			return ctx.idFromObj(p)
+		end
+	end
+end
+
+ctx.coordsFromObjHit = function(obj, hit)
+	if typeof(obj) ~= "Instance" then
+		return
+	end
+
+	local pos = ctx.coordsFromInst(obj)
+
+	if pos then
+		return pos
+	end
+
+	if obj:IsA("BasePart") and obj.Parent and obj.Parent:IsA("Model") then
+		pos = ctx.coordsFromInst(obj.Parent)
+
+		if pos then
+			return pos
+		end
+	end
+
+	if obj:IsA("Model") then
+		local p = obj.PrimaryPart or obj:FindFirstChild("Hitbox") or obj:FindFirstChildWhichIsA("BasePart", true)
+
+		if p then
+			pos = ctx.coordsFromInst(p)
+
+			if pos then
+				return pos
+			end
+		end
+	end
+
+	if hit then
+		if obj:GetAttribute("PartType") == ctx.pt.GreedyMeshingPart then
+			return ctx.coordinatesFromWorkspaceVector3(hit.Position - hit.Normal * 0.05)
+		end
+
+		return ctx.coordinatesFromWorkspaceVector3(hit.Position - hit.Normal * 0.001)
+	end
+
+	if obj:IsA("BasePart") then
+		return ctx.coordinatesFromWorkspaceVector3(obj.Position)
+	end
+
+	if obj:IsA("Model") then
+		local p = obj.PrimaryPart or obj:FindFirstChild("Hitbox") or obj:FindFirstChildWhichIsA("BasePart", true)
+
+		if p then
+			return ctx.coordinatesFromWorkspaceVector3(p.Position)
+		end
+	end
+end
+
+ctx.raycastMineTargets = function(list, seen)
+	local cam = workspace.CurrentCamera
+	local map = workspace:FindFirstChild("Map")
+
+	if not cam or not map then
+		return
+	end
+
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Include
+	params.FilterDescendantsInstances = { map }
+
+	pcall(function()
+		params.CollisionGroup = "Default"
+	end)
+
+	local inset = ctx.getGuiInset()
+	local ray = cam:ScreenPointToRay(cam.ViewportSize.X / 2, cam.ViewportSize.Y / 2 - inset.Y, 0)
+	local hit = workspace:Raycast(ray.Origin, ray.Direction * 20, params)
+
+	if not hit or not hit.Instance then
+		return
+	end
+
+	if hit.Instance.Name == "BarrierChunk" or hit.Instance:FindFirstAncestor("Skybox") then
+		return
+	end
+
+	if not hit.Instance:IsDescendantOf(map) then
+		return
+	end
+
+	local obj = hit.Instance
+
+	if obj.Parent and obj.Parent:IsA("Model") and obj.Parent:IsDescendantOf(map) then
+		obj = obj.Parent
+	end
+
+	local id = ctx.idFromObj(obj)
+	local p1 = ctx.coordsFromObjHit(obj, hit)
+	local p2 = ctx.coordinatesFromWorkspaceVector3(hit.Position - hit.Normal * 0.001)
+	local p3 = ctx.coordinatesFromWorkspaceVector3(hit.Position - hit.Normal * 0.05)
+	local p4 = ctx.coordinatesFromWorkspaceVector3(hit.Position - hit.Normal)
+
+	ctx.addMineTarget(list, seen, p1, obj, hit.Normal, id)
+	ctx.addMineTarget(list, seen, p2, obj, hit.Normal, id)
+	ctx.addMineTarget(list, seen, p3, obj, hit.Normal, id)
+	ctx.addMineTarget(list, seen, p4, obj, hit.Normal, id)
+end
+
+ctx.getMineTargets = function()
+	local list = {}
+	local seen = {}
+
+	ctx.raycastMineTargets(list, seen)
+
+	return list
+end
+
+ctx.getAxes = function(norm)
+	norm = typeof(norm) == "Vector3" and norm or Vector3.yAxis
+
+	local x = math.abs(norm.X)
+	local y = math.abs(norm.Y)
+	local z = math.abs(norm.Z)
+
+	if y >= x and y >= z then
+		return Vector3.xAxis, Vector3.zAxis
+	end
+
+	if x >= z then
+		return Vector3.yAxis, Vector3.zAxis
+	end
+
+	return Vector3.xAxis, Vector3.yAxis
+end
+
+ctx.getOffsets = function(size)
+	if ctx.offCache[size] then
+		return ctx.offCache[size]
+	end
+
+	local list = {}
+	local a = -math.floor((size - 1) / 2)
+	local b = a + size - 1
+
+	for x = a, b do
+		for y = a, b do
+			list[#list + 1] = {
+				x = x,
+				y = y,
+				d = x * x + y * y
+			}
+		end
+	end
+
+	table.sort(list, function(a2, b2)
+		if a2.d == b2.d then
+			if a2.x == b2.x then
+				return a2.y < b2.y
+			end
+
+			return a2.x < b2.x
+		end
+
+		return a2.d < b2.d
+	end)
+
+	ctx.offCache[size] = list
+	return list
+end
+
+ctx.expandMineTargets = function(base)
+	if not ctx.chunkOn then
+		return base
+	end
+
+	local size = ctx.chunkSizes[ctx.chunkIdx] or 1
+
+	if size <= 1 or not base[1] then
+		return base
+	end
+
+	local center = base[1]
+	local ax, ay = ctx.getAxes(center.norm)
+	local offs = ctx.getOffsets(size)
+	local list = {}
+	local seen = {}
+
+	for i = 1, #offs do
+		local o = offs[i]
+		ctx.addMineTarget(
+			list,
+			seen,
+			center.pos + ax * o.x + ay * o.y,
+			center.obj,
+			center.norm,
+			center.id
+		)
+	end
+
+	return list
+end
+
+ctx.getMineTarget = function()
+	local list = ctx.getMineTargets()
+	local item = list[1]
+	return item and item.pos
+end
+
+ctx.getInv = function()
+	local raw = ctx.lp:GetAttribute("inventory")
+
+	if type(raw) ~= "string" or raw == "" then
+		return
+	end
+
+	local ok, inv = pcall(function()
+		return ctx.http:JSONDecode(raw)
+	end)
+
+	if ok and type(inv) == "table" then
+		return inv
+	end
+end
+
+ctx.getSlots = function()
+	return { ctx.curSlot or ctx.mineDefaultHotbarSlot or 1 }
+end
+
+ctx.nearMineDist = function(pos)
+	local ch = ctx.lp.Character
+	local root = ch and (ch.PrimaryPart or ch:FindFirstChild("HumanoidRootPart"))
+
+	if not root then
+		return false
+	end
+
+	return (root.Position - pos * 4).Magnitude <= 32
+end
+
+ctx.mineBlock = function(pos, obj, id)
+	if not ctx.goodMinePos(pos) or not ctx.nearMineDist(pos) then
+		return false
+	end
+
+	local blockId = ctx.getBlockId(pos, obj) or id
+
+	if blockId == nil or ctx.noMineIds[blockId] then
+		return false
+	end
+
+	local r, c, b = ctx.getNamesFromCoordinates(pos)
+	local slots = ctx.getSlots()
+
+	for i = 1, #slots do
+		local slot = slots[i]
+
+		local ok, broke = pcall(function()
+			return ctx.mineBreakRemote:InvokeServer(r, c, b, blockId, slot)
+		end)
+
+		if ok and broke == true then
+			return true
+		end
+	end
+
+	return false
+end
+
+ctx.tryMineTarget = function(force)
+	if not ctx.mineOn or ctx.dead then
+		return
+	end
+
+	local now = os.clock()
+
+	if not force and now < ctx.nextMineAttempt then
+		return
+	end
+
+	if ctx.mineAttempting then
+		return
+	end
+
+	ctx.nextMineAttempt = now + ctx.mineRate
+	ctx.mineAttempting = true
+
+	task.spawn(function()
+		if not ctx.loadMineModules() then
+			ctx.mineOn = false
+			ctx.mineHeld = false
+			ctx.mineAttempting = false
+			ctx.setMineStatus("Mine\nError", Color3.fromRGB(190, 70, 70))
+
+			task.delay(1, function()
+				if not ctx.dead then
+					ctx.updateUi()
+				end
+			end)
+
+			return
+		end
+
+		local targets = ctx.expandMineTargets(ctx.getMineTargets())
+		local broke = false
+		local maxTry = ctx.chunkOn and ctx.chunkBurst or ctx.mineTries
+		local tries = math.min(#targets, maxTry)
+
+		for i = 1, tries do
+			local item = targets[i]
+
+			if item and ctx.mineBlock(item.pos, item.obj, item.id) then
+				broke = true
+
+				if not ctx.chunkOn then
+					break
+				end
+			end
+		end
+
+		if not broke and force then
+			ctx.setMineStatus(#targets > 0 and "No\nBreak" or "No\nTarget", Color3.fromRGB(190, 70, 70))
+
+			task.delay(0.45, function()
+				if not ctx.dead then
+					ctx.updateUi()
+				end
+			end)
+		end
+
+		ctx.mineAttempting = false
+	end)
+end
+
+ctx.instantMine = ctx.toggleMine
 
 ctx.valid = function(m)
 	if typeof(m) ~= "Instance" or not m:IsA("Model") then
@@ -330,17 +1052,64 @@ ctx.okmove = function(i)
 	return i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch
 end
 
+ctx.okmine = function(i)
+	return i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch
+end
+
+ctx.overFrame = function(i)
+	if not ctx.f or not i.Position then
+		return false
+	end
+
+	local p = i.Position
+	local pos = ctx.f.AbsolutePosition
+	local size = ctx.f.AbsoluteSize
+
+	return p.X >= pos.X and p.X <= pos.X + size.X and p.Y >= pos.Y and p.Y <= pos.Y + size.Y
+end
+
 ctx.bind(ctx.ev.Event, ctx.clean)
 
 ctx.bind(ctx.b.Activated, ctx.toggle)
+ctx.bind(ctx.mb.Activated, ctx.toggleMine)
+ctx.bind(ctx.cb.Activated, ctx.toggleChunk)
+ctx.bind(ctx.sb.Activated, ctx.cycleChunk)
+ctx.bind(ctx.slb.Activated, ctx.cycleSlot)
 
 ctx.bind(ctx.uis.InputBegan, function(i, gp)
-	if gp then
+	if ctx.dead then
 		return
 	end
 
-	if i.KeyCode == Enum.KeyCode.K then
-		ctx.toggle()
+	local slot = ctx.hotKeys[i.KeyCode]
+	if slot then
+		ctx.curSlot = slot
+		ctx.updateUi()
+	end
+
+	if not gp then
+		if i.KeyCode == ctx.keys.aura then
+			ctx.toggle()
+			return
+		end
+
+		if i.KeyCode == ctx.keys.mine then
+			ctx.toggleMine()
+			return
+		end
+	end
+
+	if gp or not ctx.mineOn or not ctx.okmine(i) or ctx.overFrame(i) then
+		return
+	end
+
+	ctx.mineHeld = true
+	ctx.tryMineTarget(true)
+end)
+
+ctx.bind(ctx.uis.InputEnded, function(i)
+	if ctx.okmine(i) then
+		ctx.mineHeld = false
 	end
 end)
 
@@ -385,11 +1154,19 @@ ctx.bind(ctx.uis.InputChanged, function(i)
 end)
 
 ctx.bind(ctx.run.PreSimulation, function()
-	if not ctx.on or ctx.dead then
+	if ctx.dead then
 		return
 	end
 
-	ctx.pulse()
+	if ctx.on then
+		ctx.pulse()
+	end
+
+	if ctx.mineOn and ctx.mineHeld then
+		ctx.tryMineTarget(false)
+	end
 end)
 
 ctx.set(false)
+ctx.setMine(false)
+ctx.updateUi()

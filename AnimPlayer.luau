@@ -82,6 +82,29 @@ sg.DisplayOrder = 1000;
 if not __NAProtectUI(sg, { keepName = false }) then
 	sg.Parent = pg;
 end;
+local cons, alive = {}, true;
+local function on(sig, fn)
+	if not alive or not sig then
+		return nil;
+	end;
+	local c = sig:Connect(fn);
+	cons[#cons + 1] = c;
+	return c;
+end;
+local function off()
+	for i = 1, #cons do
+		local c = cons[i];
+		if c then
+			pcall(function()
+				c:Disconnect();
+			end);
+			cons[i] = nil;
+		end;
+	end;
+end;
+local function gone()
+	return not alive or not sg or sg.Parent == nil;
+end;
 local function NAdrag(ui, dragui)
 	if not dragui then
 		dragui = ui;
@@ -96,24 +119,24 @@ local function NAdrag(ui, dragui)
 		local newYScale = startPos.Y.Scale + newYOffset / sz.Y;
 		ui.Position = UDim2.new(newXScale, 0, newYScale, 0);
 	end;
-	dragui.InputBegan:Connect(function(i)
+	on(dragui.InputBegan, function(i)
 		if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
 			dragging = true;
 			dragStart = i.Position;
 			startPos = ui.Position;
-			i.Changed:Connect(function()
+			on(i.Changed, function()
 				if i.UserInputState == Enum.UserInputState.End then
 					dragging = false;
 				end;
 			end);
 		end;
 	end);
-	dragui.InputChanged:Connect(function(i)
+	on(dragui.InputChanged, function(i)
 		if i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch then
 			dragInput = i;
 		end;
 	end);
-	U.InputChanged:Connect(function(i)
+	on(U.InputChanged, function(i)
 		if dragging and i == dragInput then
 			update(i);
 		end;
@@ -185,7 +208,10 @@ sf.ScrollBarThickness = 6;
 (Instance.new("UICorner", sf)).CornerRadius = UDim.new(0, 8);
 local ly = Instance.new("UIListLayout", sf);
 ly.SortOrder, ly.Padding = Enum.SortOrder.LayoutOrder, UDim.new(0, 4);
-(ly:GetPropertyChangedSignal("AbsoluteContentSize")):Connect(function()
+on(ly:GetPropertyChangedSignal("AbsoluteContentSize"), function()
+	if gone() then
+		return;
+	end;
 	sf.CanvasSize = UDim2.new(0, 0, 0, ly.AbsoluteContentSize.Y);
 end);
 local of = Instance.new("Frame", f);
@@ -221,13 +247,13 @@ local function stopCur()
 	end;
 end;
 local function bindH(h)
-	h.Running:Connect(function(s)
+	on(h.Running, function(s)
 		if s > 0 then
 			stopCur();
 		end;
 	end);
-	h.Jumping:Connect(stopCur);
-	h.StateChanged:Connect(function(_, ns)
+	on(h.Jumping, stopCur);
+	on(h.StateChanged, function(_, ns)
 		if ns == Enum.HumanoidStateType.Climbing or ns == Enum.HumanoidStateType.Freefall or ns == Enum.HumanoidStateType.Swimming then
 			stopCur();
 		end;
@@ -236,11 +262,14 @@ end;
 if pl.Character then
 	bindH(pl.Character:WaitForChild("Humanoid"));
 end;
-pl.CharacterAdded:Connect(function(c)
+on(pl.CharacterAdded, function(c)
 	bindH(c:WaitForChild("Humanoid"));
 end);
 NAdrag(f, dragBtn);
-tb.MouseButton1Click:Connect(function()
+on(tb.MouseButton1Click, function()
+	if gone() then
+		return;
+	end;
 	exp = not exp;
 	tb.Text = exp and "Animations ▲" or "Animations ▼";
 	local H = math.clamp(ly.AbsoluteContentSize.Y, 0, 176);
@@ -257,7 +286,10 @@ tb.MouseButton1Click:Connect(function()
 		})):Play();
 	end;
 end);
-cancelBtn.MouseButton1Click:Connect(function()
+on(cancelBtn.MouseButton1Click, function()
+	if gone() then
+		return;
+	end;
 	if pl.Character then
 		local h = pl.Character:FindFirstChildOfClass("Humanoid");
 		for _, t in ipairs(h and h:GetPlayingAnimationTracks() or {}) do
@@ -279,10 +311,24 @@ cancelBtn.MouseButton1Click:Connect(function()
 		})):Play();
 	end;
 end);
-closeBtn.MouseButton1Click:Connect(function()
-	sg.Enabled = false;
-end);
-playBtn.MouseButton1Click:Connect(function()
+local function kill()
+	if not alive then
+		return;
+	end;
+	alive = false;
+	stopCur();
+	off();
+	if sg then
+		pcall(function()
+			sg:Destroy();
+		end);
+	end;
+end;
+on(closeBtn.MouseButton1Click, kill);
+on(playBtn.MouseButton1Click, function()
+	if gone() then
+		return;
+	end;
 	if sel and pl.Character then
 		local h = pl.Character:FindFirstChildOfClass("Humanoid");
 		if h then
@@ -306,7 +352,10 @@ playBtn.MouseButton1Click:Connect(function()
 		Size = UDim2.new(0, 0, 0, 0)
 	})):Play();
 end);
-copyBtn.MouseButton1Click:Connect(function()
+on(copyBtn.MouseButton1Click, function()
+	if gone() then
+		return;
+	end;
 	if sel then
 		local id = sel.anim.AnimationId:match("%d+") or "";
 		if setclipboard then
@@ -330,8 +379,12 @@ copyBtn.MouseButton1Click:Connect(function()
 	})):Play();
 end);
 task.spawn(function()
-	local D, tot = game:QueryDescendants("Instance"), #game:QueryDescendants("Instance");
+	local D = game:QueryDescendants("Instance");
+	local tot = #D;
 	for i, inst in ipairs(D) do
+		if gone() then
+			return;
+		end;
 		local aid;
 		if inst:IsA("Animation") then
 			local m = inst.AnimationId:match("%d+");
@@ -363,10 +416,20 @@ task.spawn(function()
 				end;
 			end;
 		end;
-		ld.Text = "Loading... " .. math.floor(i / tot * 100) .. "%";
+		if ld and ld.Parent then
+			ld.Text = "Loading... " .. math.floor(i / math.max(tot, 1) * 100) .. "%";
+		end;
 	end;
-	ld:Destroy();
+	if gone() then
+		return;
+	end;
+	if ld and ld.Parent then
+		ld:Destroy();
+	end;
 	for i, d in ipairs(anims) do
+		if gone() then
+			return;
+		end;
 		local b = Instance.new("TextButton", sf);
 		b.Name = "Btn" .. i;
 		b.Text = d.name;
@@ -378,7 +441,10 @@ task.spawn(function()
 		b.TextColor3 = Color3.new(1, 1, 1);
 		b.LayoutOrder = i;
 		(Instance.new("UICorner", b)).CornerRadius = UDim.new(0, 4);
-		b.MouseButton1Click:Connect(function()
+		on(b.MouseButton1Click, function()
+			if gone() then
+				return;
+			end;
 			sel = d;
 			of.Visible = true;
 			(__lt.cm("TweenService", "Create", of, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {

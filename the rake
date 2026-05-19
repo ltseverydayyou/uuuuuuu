@@ -183,6 +183,7 @@ if game.GameId == 847722000 then
 
 	st.fov = cfgNum("fov", tonumber(_G.FieldOfView) or 70, 1, 120)
 	st.fovOn = cfgBool("fovOn", _G.enableFOV == true)
+	st.fovUiFix = cfgBool("fovUiFix", true)
 	st.spd = cfgNum("spd", tonumber(_G.WalkSpeedd) or 16, 0, 30)
 	st.spdOn = cfgBool("spdOn", _G.enableSpeed == true)
 	st.freeCam = false
@@ -254,9 +255,27 @@ if game.GameId == 847722000 then
 	st.flashlightNoShadows = cfgBool("flashlightNoShadows", false)
 	st.flashlightBoost = cfgBool("flashlightBoost", false)
 	st.disableMenuReopen = cfgBool("disableMenuReopen", false)
+	st.forceBackpack = cfgBool("forceBackpack", false)
+	st.forceMouseIcon = cfgBool("forceMouseIcon", false)
+	st.forceTopbar = cfgBool("forceTopbar", false)
+	st.disableCameraShake = cfgBool("disableCameraShake", false)
+	st.disableVisualFx = cfgBool("disableVisualFx", false)
+	st.noDowned = cfgBool("noDowned", false)
+	st.noMoveLock = cfgBool("noMoveLock", false)
+	st.noTrapLock = cfgBool("noTrapLock", false)
+	st.noJumpCooldown = cfgBool("noJumpCooldown", false)
+	st.noJumpscareCam = cfgBool("noJumpscareCam", false)
+	st.noChaseStatic = cfgBool("noChaseStatic", false)
+	st.safeRecover = cfgBool("safeRecover", false)
+	st.fullbright = cfgBool("fullbright", false)
+	st.autoDropPrompts = false
+	st.autoSafePrompts = false
+	st.autoTowerPrompts = false
+	st.autoPowerPrompts = false
 	st.adonisBypass = cfgBool("adonisBypass", true)
 	_G.FieldOfView = st.fov
 	_G.enableFOV = st.fovOn
+	_G.RakeFovUiFix = st.fovUiFix
 	_G.WalkSpeedd = st.spd
 	_G.enableSpeed = st.spdOn
 	_G.FreeCam = false
@@ -298,6 +317,23 @@ if game.GameId == 847722000 then
 	_G.RakeFlashlightNoShadows = st.flashlightNoShadows
 	_G.RakeFlashlightBoost = st.flashlightBoost
 	_G.RakeDisableMenuReopen = st.disableMenuReopen
+	_G.RakeForceBackpack = st.forceBackpack
+	_G.RakeForceMouseIcon = st.forceMouseIcon
+	_G.RakeForceTopbar = st.forceTopbar
+	_G.RakeDisableCameraShake = st.disableCameraShake
+	_G.RakeDisableVisualFx = st.disableVisualFx
+	_G.RakeNoDowned = st.noDowned
+	_G.RakeNoMoveLock = st.noMoveLock
+	_G.RakeNoTrapLock = st.noTrapLock
+	_G.RakeNoJumpCooldown = st.noJumpCooldown
+	_G.RakeNoJumpscareCam = st.noJumpscareCam
+	_G.RakeNoChaseStatic = st.noChaseStatic
+	_G.RakeSafeRecover = st.safeRecover
+	_G.RakeFullbright = st.fullbright
+	_G.RakeAutoDropPrompts = false
+	_G.RakeAutoSafePrompts = false
+	_G.RakeAutoTowerPrompts = false
+	_G.RakeAutoPowerPrompts = false
 	if genv.RakeGui then
 		return
 	end
@@ -466,7 +502,6 @@ if game.GameId == 847722000 then
 	local wait = task and task.wait or wait
 	local conns = {}
 	local wipeFog
-	local wipeFovConns
 	local cleanupEsp
 	local esp
 
@@ -711,7 +746,7 @@ if game.GameId == 847722000 then
 				if token ~= infSys.token or AllowRunService ~= true then
 					return
 				end
-				applyInfTabs(true)
+				applyInfTabs(i == 1)
 				task.wait(i <= 4 and 0.25 or 0.75)
 			end
 		end)
@@ -824,6 +859,13 @@ if game.GameId == 847722000 then
 	local clientBypass = {}
 	clientBypass.originals = {}
 	clientBypass.mutedSounds = setmetatable({}, { __mode = "k" })
+	clientBypass.prompts = setmetatable({}, { __mode = "k" })
+	clientBypass.ch = setmetatable({}, { __mode = "k" })
+	clientBypass.chT = 3
+	clientBypass.fullbrightOn = false
+	clientBypass.lastSafe = nil
+	clientBypass.fovUiCache = setmetatable({}, { __mode = "k" })
+	clientBypass.fovUiScanned = false
 
 	function clientBypass.getCamera()
 		return Ws.CurrentCamera or workspace.CurrentCamera
@@ -865,6 +907,22 @@ if game.GameId == 847722000 then
 		pcall(function()
 			ClonedService("UserInputService").MouseIconEnabled = true
 		end)
+	end
+
+	function clientBypass.forceCoreParts()
+		if st.forceTopbar == true then
+			pcall(function()
+				ClonedService("StarterGui"):SetCore("TopbarEnabled", true)
+			end)
+		end
+		if st.forceBackpack == true then
+			clientBypass.setCoreGuiEnabled(Enum.CoreGuiType.Backpack, true)
+		end
+		if st.forceMouseIcon == true then
+			pcall(function()
+				ClonedService("UserInputService").MouseIconEnabled = true
+			end)
+		end
 	end
 
 	function clientBypass.destroyCameraEffects(match)
@@ -1068,12 +1126,15 @@ if game.GameId == 847722000 then
 		if not prompt or not prompt:IsA("ProximityPrompt") then
 			return false
 		end
+		clientBypass.prompts[prompt] = true
+		local dist = math.clamp(tonumber(st.promptDistance) or 25, 5, 100)
 		pcall(function()
 			prompt.Enabled = true
 			prompt.HoldDuration = 0
 			prompt.RequiresLineOfSight = false
 			prompt.ClickablePrompt = true
-			prompt.MaxActivationDistance = math.clamp(tonumber(st.promptDistance) or 25, 5, 100)
+			prompt.MaxActivationDistance = dist
+			prompt:SetAttribute("ODistance", dist)
 		end)
 		pcall(function()
 			prompt:SetAttribute("Busy", false)
@@ -1092,6 +1153,23 @@ if game.GameId == 847722000 then
 		for _, obj in pairs(desc(Ws)) do
 			if clientBypass.unlockPrompt(obj) then
 				n += 1
+			end
+		end
+		return n
+	end
+
+	function clientBypass.applyKnownPromptBypass()
+		if st.promptBypass ~= true then
+			return 0
+		end
+		local n = 0
+		for prompt in pairs(clientBypass.prompts) do
+			if prompt and prompt.Parent then
+				if clientBypass.unlockPrompt(prompt) then
+					n += 1
+				end
+			else
+				clientBypass.prompts[prompt] = nil
 			end
 		end
 		return n
@@ -1325,6 +1403,408 @@ if game.GameId == 847722000 then
 		return n
 	end
 
+	function clientBypass.cfgVal(cfg, k, def)
+		local ok, res = pcall(function()
+			return cfg[k]
+		end)
+		if ok and res ~= nil then
+			return res
+		end
+		return def
+	end
+
+	function clientBypass.applyFullbright()
+		if st.fullbright ~= true then
+			if clientBypass.fullbrightOn == true then
+				clientBypass.fullbrightOn = false
+				pcall(function()
+					local o = clientBypass.originals
+					if o.Lighting_Brightness ~= nil then Lit.Brightness = o.Lighting_Brightness end
+					if o.Lighting_ClockTime ~= nil then Lit.ClockTime = o.Lighting_ClockTime end
+					if o.Lighting_Ambient ~= nil then Lit.Ambient = o.Lighting_Ambient end
+					if o.Lighting_OutdoorAmbient ~= nil then Lit.OutdoorAmbient = o.Lighting_OutdoorAmbient end
+					if o.Lighting_FogStart ~= nil then Lit.FogStart = o.Lighting_FogStart end
+					if o.Lighting_FogEnd ~= nil then Lit.FogEnd = o.Lighting_FogEnd end
+					if o.Lighting_GlobalShadows ~= nil then Lit.GlobalShadows = o.Lighting_GlobalShadows end
+				end)
+			end
+			return false
+		end
+		pcall(function()
+			clientBypass.fullbrightOn = true
+			local o = clientBypass.originals
+			if o.Lighting_Brightness == nil then o.Lighting_Brightness = Lit.Brightness end
+			if o.Lighting_ClockTime == nil then o.Lighting_ClockTime = Lit.ClockTime end
+			if o.Lighting_Ambient == nil then o.Lighting_Ambient = Lit.Ambient end
+			if o.Lighting_OutdoorAmbient == nil then o.Lighting_OutdoorAmbient = Lit.OutdoorAmbient end
+			if o.Lighting_FogStart == nil then o.Lighting_FogStart = Lit.FogStart end
+			if o.Lighting_FogEnd == nil then o.Lighting_FogEnd = Lit.FogEnd end
+			if o.Lighting_GlobalShadows == nil then o.Lighting_GlobalShadows = Lit.GlobalShadows end
+			Lit.Brightness = 3
+			Lit.ClockTime = 14
+			Lit.Ambient = Color3.new(1, 1, 1)
+			Lit.OutdoorAmbient = Color3.new(1, 1, 1)
+			Lit.FogStart = 0
+			Lit.FogEnd = 9e9
+			Lit.GlobalShadows = false
+		end)
+		return true
+	end
+
+	function clientBypass.applyCharBypasses()
+		local hum = getHum()
+		local ch = getChar()
+		if not ch or not hum then
+			return false
+		end
+		if st.noDowned == true then
+			pcall(function()
+				local d = ffc(ch, "Downed")
+				if d and d:IsA("BoolValue") then
+					d.Value = false
+				end
+				local rt = ffc(ch, "RagdollTime")
+				local sw = rt and ffc(rt, "RagdollSwitch")
+				if sw and sw:IsA("BoolValue") then
+					sw.Value = false
+				end
+			end)
+		end
+		if st.noTrapLock == true then
+			pcall(function()
+				hum:SetAttribute("iTRPED", nil)
+				hum:SetAttribute("iTRPED3", nil)
+				hum:SetAttribute("TrapPos", nil)
+				hum:SetAttribute("TrapRelease", true)
+				Run:UnbindFromRenderStep("YawBind")
+			end)
+		end
+		if st.noDowned == true or st.noMoveLock == true or st.noTrapLock == true then
+			pcall(function()
+				hum.PlatformStand = false
+				hum.Sit = false
+				hum.AutoRotate = true
+			end)
+		end
+		if st.noMoveLock == true then
+			pcall(function()
+				local ws = math.clamp(tonumber(st.spd) or 16, 1, 30)
+				if hum.WalkSpeed <= 1 then
+					hum.WalkSpeed = ws
+				end
+				if hum.UseJumpPower ~= false and hum.JumpPower <= 1 then
+					hum.JumpPower = 35
+				elseif hum.UseJumpPower == false and hum.JumpHeight <= 1 then
+					hum.JumpHeight = 7.2
+				end
+			end)
+		end
+		return true
+	end
+
+	function clientBypass.applySafeRecover()
+		if st.safeRecover ~= true then
+			return false
+		end
+		local hum = getHum()
+		local root = GET_HRP()
+		if not hum or not root then
+			return false
+		end
+		local y = root.Position.Y
+		local lim = tonumber(Ws.FallenPartsDestroyHeight) or -500
+		local grounded = hum.FloorMaterial ~= Enum.Material.Air and hum.Health > 0 and y > lim + 35
+		if grounded then
+			clientBypass.lastSafe = root.CFrame
+			return true
+		end
+		local vel = root.AssemblyLinearVelocity
+		if y <= lim + 30 or vel.Y <= -175 then
+			local cf = clientBypass.lastSafe
+			if cf then
+				pcall(function()
+					root.CFrame = cf + Vector3.new(0, 4, 0)
+					root.AssemblyLinearVelocity = Vector3.zero
+					root.AssemblyAngularVelocity = Vector3.zero
+				end)
+				return true
+			end
+		end
+		return false
+	end
+
+	function clientBypass.pathHas(obj, a, b)
+		local ok, path = pcall(function()
+			return obj:GetFullName():lower()
+		end)
+		if not ok or type(path) ~= "string" then
+			return false
+		end
+		return path:find(a, 1, true) ~= nil or (b and path:find(b, 1, true) ~= nil)
+	end
+
+
+	function clientBypass.isCH(t)
+		return type(t) == "table"
+			and rawget(t, "plr") == Plrs.LocalPlayer
+			and type(rawget(t, "vars")) == "table"
+			and type(rawget(t, "funcs")) == "table"
+			and rawget(t, "CONFIG") ~= nil
+	end
+
+	function clientBypass.addCH(t)
+		if clientBypass.isCH(t) then
+			clientBypass.ch[t] = true
+			return true
+		end
+		return false
+	end
+
+	function clientBypass.scanCH()
+		if type(filtergc) == "function" then
+			pcall(function()
+				local one = filtergc("table", {
+					Keys = { "plr", "vars", "funcs", "CONFIG" },
+				}, true)
+				clientBypass.addCH(one)
+			end)
+		end
+		if type(getgc) == "function" then
+			local ok, list = pcall(getgc, true)
+			if ok and type(list) == "table" then
+				for _, t in pairs(list) do
+					clientBypass.addCH(t)
+				end
+			end
+		end
+	end
+
+	function clientBypass.resetFx(x, hard)
+		if typeof(x) ~= "Instance" then
+			return false
+		end
+		pcall(function()
+			if x:IsA("BlurEffect") then
+				x.Size = 0
+				x.Enabled = false
+			elseif x:IsA("ColorCorrectionEffect") then
+				if hard == true then
+					x.Brightness = 0
+					x.Contrast = 0
+					x.Saturation = 0
+					x.TintColor = Color3.new(1, 1, 1)
+				end
+				x.Enabled = false
+			end
+		end)
+		return true
+	end
+
+	function clientBypass.stopShake(x)
+		if not x then
+			return false
+		end
+		pcall(function()
+			if type(x.StopSustained) == "function" then
+				x:StopSustained(0)
+			end
+		end)
+		pcall(function()
+			if type(x.Stop) == "function" then
+				x:Stop()
+			end
+		end)
+		return true
+	end
+
+	function clientBypass.zeroSpring(x)
+		if type(x) ~= "table" then
+			return false
+		end
+		pcall(function()
+			x.p = Vector3.zero
+			x.v = Vector3.zero
+			x.t = Vector3.zero
+		end)
+		return true
+	end
+
+	function clientBypass.clearTab(t)
+		if type(t) ~= "table" then
+			return
+		end
+		if table.clear then
+			table.clear(t)
+			return
+		end
+		for k in pairs(t) do
+			t[k] = nil
+		end
+	end
+
+	function clientBypass.patchCH(t)
+		if not clientBypass.isCH(t) then
+			clientBypass.ch[t] = nil
+			return false
+		end
+		local vars = rawget(t, "vars")
+		local cfg = rawget(t, "CONFIG")
+		if st.infStamina == true and type(vars) == "table" then
+			pcall(function()
+				vars.stamina = clientBypass.cfgVal(cfg, "MAX_STAMINA", 100)
+				vars.can_jump = true
+				vars.can_jump2 = true
+				vars.lastJump = 0
+			end)
+		end
+		local nvg = rawget(t, "nvg")
+		if st.infNight == true and type(nvg) == "table" then
+			pcall(function()
+				nvg.power = clientBypass.cfgVal(cfg, "MAX_NVG_P", 100)
+				nvg.cooldown = false
+				nvg.s = tick()
+			end)
+		end
+		if type(vars) == "table" then
+			if st.noDowned == true then
+				pcall(function()
+					vars.downed = false
+					vars.lastDowned = false
+					vars.downedupbusy = false
+					t.dead = false
+					local d = rawget(vars, "downedV")
+					if typeof(d) == "Instance" and d:IsA("BoolValue") then
+						d.Value = false
+					end
+				end)
+			end
+			if st.noTrapLock == true then
+				pcall(function()
+					vars.rTrapped = false
+					vars.trapCamTurn = false
+					vars.trapCamPos = nil
+					vars.sTrap = nil
+					vars.interactHold = false
+					vars.TTakeStamina = false
+					Run:UnbindFromRenderStep("YawBind")
+				end)
+			end
+			if st.noMoveLock == true or st.noJumpCooldown == true then
+				pcall(function()
+					vars.canMove = true
+					vars.can_jump = true
+					vars.can_jump2 = true
+					vars.lastJump = 0
+					vars.handlingSRegen = false
+					vars.regeningS = false
+					if st.noJumpCooldown == true then
+						vars.stamina = clientBypass.cfgVal(cfg, "MAX_STAMINA", 100)
+					end
+				end)
+			end
+		end
+		if st.noJumpscareCam == true then
+			pcall(function()
+				Run:UnbindFromRenderStep("JMPSCR")
+				t.dead = false
+				if type(t.sc) == "table" then
+					t.sc.db = true
+					t.sc.fov = 0
+				end
+				local cam = clientBypass.getCamera()
+				if cam then
+					cam.CameraType = Enum.CameraType.Custom
+					if t.hum then
+						cam.CameraSubject = t.hum
+					end
+				end
+				clientBypass.restoreCoreGui()
+			end)
+		end
+		if st.noChaseStatic == true then
+			local rc = rawget(t, "rc")
+			if type(rc) == "table" then
+				pcall(function()
+					rc.chasePlaying = false
+					rc.spotted = false
+					rc.spotted2 = false
+					rc.turn = false
+					rc.lastChaseT = 0
+					rc.lastStaticFactor = 0
+					if rc.fovV then rc.fovV.Value = 0 end
+					for _, snd in pairs({ rc.static, rc.chase, rc.heartbeat }) do
+						if typeof(snd) == "Instance" and snd:IsA("Sound") then
+							snd.Volume = 0
+							snd.Playing = false
+						end
+					end
+				end)
+			end
+		end
+		if st.disableMotionBlur == true or st.disableDeathFx == true or st.disableVisualFx == true or st.noChaseStatic == true then
+			if type(vars) == "table" then
+				clientBypass.resetFx(rawget(vars, "downBlur"), true)
+				clientBypass.resetFx(rawget(vars, "downCC"), true)
+			end
+			local vi = rawget(t, "visualInstances")
+			if type(vi) == "table" then
+				for name, it in pairs(vi) do
+					if type(it) == "table" then
+						local hard = st.disableVisualFx == true or (st.disableDeathFx == true and (name == "Death" or name == "Susto"))
+						if st.disableMotionBlur == true or hard then
+							clientBypass.resetFx(rawget(it, "blur"), hard)
+						end
+						if hard then
+							clientBypass.resetFx(rawget(it, "colorcorrection"), true)
+						end
+					end
+				end
+			end
+		end
+		if st.disableCameraShake == true then
+			clientBypass.zeroSpring(rawget(t, "cameraspring"))
+			clientBypass.zeroSpring(rawget(t, "cameraspring2"))
+			clientBypass.stopShake(rawget(t, "lowHpShake"))
+			clientBypass.stopShake(rawget(t, "staticShake"))
+			clientBypass.stopShake(rawget(t, "vibrateShake"))
+			clientBypass.clearTab(rawget(t, "vibrationShakesTable"))
+			t.vibrationShakeRunning = false
+		end
+		clientBypass.forceCoreParts()
+		return true
+	end
+
+	function clientBypass.applyCH(scan)
+		local any = st.infStamina == true
+			or st.infNight == true
+			or st.disableMotionBlur == true
+			or st.disableDeathFx == true
+			or st.disableVisualFx == true
+			or st.disableCameraShake == true
+			or st.forceBackpack == true
+			or st.forceMouseIcon == true
+			or st.forceTopbar == true
+			or st.noDowned == true
+			or st.noMoveLock == true
+			or st.noTrapLock == true
+			or st.noJumpCooldown == true
+			or st.noJumpscareCam == true
+			or st.noChaseStatic == true
+		if any ~= true then
+			return 0
+		end
+		if scan == true then
+			clientBypass.scanCH()
+		end
+		local n = 0
+		for t in pairs(clientBypass.ch) do
+			if clientBypass.patchCH(t) then
+				n += 1
+			end
+		end
+		return n
+	end
+
 	function clientBypass.removeIntroClones()
 		if st.disableMenuReopen ~= true then
 			return 0
@@ -1344,7 +1824,7 @@ if game.GameId == 847722000 then
 		return n
 	end
 
-	bind(Ws.DescendantAdded, function(obj)
+	local function onNewDesc(obj)
 		if st.promptBypass == true and obj:IsA("ProximityPrompt") then
 			task.defer(clientBypass.unlockPrompt, obj)
 		end
@@ -1354,7 +1834,16 @@ if game.GameId == 847722000 then
 		if (obj:IsA("Light") or obj:IsA("BasePart")) and (st.flashlightNoShadows == true or st.flashlightBoost == true) then
 			task.defer(clientBypass.applyLightToolBypasses)
 		end
-	end)
+		if st.fovUiFix == true and obj:IsA("BillboardGui") and type(clientBypass.patchFovUi) == "function" then
+			task.defer(clientBypass.patchFovUi, obj)
+		end
+	end
+
+	bind(Ws.DescendantAdded, onNewDesc)
+	local curPg = clientBypass.getPlayerGui()
+	if curPg then
+		bind(curPg.DescendantAdded, onNewDesc)
+	end
 
 	bind(Ws:GetPropertyChangedSignal("CurrentCamera"), function()
 		task.defer(function()
@@ -1466,14 +1955,20 @@ if game.GameId == 847722000 then
 			if not prompt:IsA("ProximityPrompt") then
 				error("bad prompt")
 			end
+			local dist = math.clamp(tonumber(st.promptDistance) or 25, 5, 100)
+			prompt.Enabled = true
 			prompt.HoldDuration = 0
 			prompt.RequiresLineOfSight = false
+			prompt.ClickablePrompt = true
+			prompt.MaxActivationDistance = dist
+			prompt:SetAttribute("ODistance", dist)
 		end)
 		if ok and attrs == true then
 			pcall(function()
-				for k in pairs(prompt:GetAttributes()) do
-					prompt:SetAttribute(tostring(k), false)
-				end
+				prompt:SetAttribute("Busy", false)
+				prompt:SetAttribute("Busy2", false)
+				prompt:SetAttribute("Unavailable", false)
+				prompt:SetAttribute("Unavailable2", false)
 			end)
 		end
 		return ok
@@ -1493,10 +1988,6 @@ if game.GameId == 847722000 then
 
 	local function trapPrompt(prompt)
 		if fastPrompt(prompt, false) then
-			pcall(function()
-				prompt.ActionText = "Close"
-				prompt.ObjectText = "Rake Trap"
-			end)
 			return true
 		end
 		return false
@@ -1612,6 +2103,7 @@ if game.GameId == 847722000 then
 
 
 
+	clientBypass.buildUi = function()
 	local RunService = ClonedService("RunService")
 	local InputService = ClonedService("UserInputService")
 	local FreeCamPart
@@ -2312,6 +2804,7 @@ if game.GameId == 847722000 then
 	local infoBubble
 	local infoLbl
 	local infoRoot
+	local infoDrag
 	local infoTgt = "Rake's Target : ?"
 	local infoTime = "Time Until Day : ?"
 	local infoPower = "Power : ?"
@@ -2339,79 +2832,134 @@ if game.GameId == 847722000 then
 		return infoTgt .. "\n" .. infoTime .. "\n" .. infoPower
 	end
 
-	local function findBubble()
-		if infoLbl and infoLbl.Parent then
-			return infoLbl
-		end
-		local gui = Library.ScreenGui
-		if typeof(gui) ~= "Instance" then
-			return nil
-		end
-		for _, v in ipairs(gui:GetDescendants()) do
-			if v:IsA("TextLabel") or v:IsA("TextButton") or v:IsA("TextBox") then
-				local tx = tostring(v.Text or "")
-				if tx:find("Rake's Target", 1, true) or tx:find("Time Until", 1, true) or tx:find("Power", 1, true) then
-					infoLbl = v
-					local root = v
-					while root.Parent and root.Parent:IsA("GuiObject") and root.Parent ~= gui do
-						root = root.Parent
-					end
-					infoRoot = root
-					return v
-				end
+	local function bubbleParent()
+		local ok, hui = pcall(function()
+			if type(gethui) == "function" then
+				return gethui()
 			end
+		end)
+		if ok and typeof(hui) == "Instance" then
+			return hui
+		end
+		local pg = clientBypass.getPlayerGui()
+		if pg then
+			return pg
+		end
+		local ok2, cg = pcall(function()
+			return ClonedService("CoreGui")
+		end)
+		if ok2 and cg then
+			return cg
 		end
 		return nil
 	end
 
+	local function makeBubble()
+		if infoRoot and infoRoot.Parent and infoLbl and infoLbl.Parent then
+			return infoRoot
+		end
+		local par = bubbleParent()
+		if not par then
+			return nil
+		end
+		local gui = par:FindFirstChild("__RakeInfoBubbleGui")
+		if not gui then
+			gui = Instance.new("ScreenGui")
+			gui.Name = "__RakeInfoBubbleGui"
+			gui.ResetOnSpawn = false
+			gui.IgnoreGuiInset = true
+			gui.DisplayOrder = 999999
+			gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+			gui.Parent = par
+		end
+		local root = gui:FindFirstChild("Bubble")
+		if not root then
+			root = Instance.new("Frame")
+			root.Name = "Bubble"
+			root.Size = UDim2.fromOffset(210, 72)
+			root.Position = UDim2.fromOffset(94, 96)
+			root.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+			root.BackgroundTransparency = 0.12
+			root.BorderSizePixel = 0
+			root.Active = true
+			root.Visible = st.infoBubble == true
+			root.Parent = gui
+			local cr = Instance.new("UICorner")
+			cr.CornerRadius = UDim.new(0, 8)
+			cr.Parent = root
+			local stroke = Instance.new("UIStroke")
+			stroke.Thickness = 1
+			stroke.Transparency = 0.55
+			stroke.Color = Color3.fromRGB(140, 95, 255)
+			stroke.Parent = root
+			local pad = Instance.new("UIPadding")
+			pad.PaddingTop = UDim.new(0, 8)
+			pad.PaddingBottom = UDim.new(0, 8)
+			pad.PaddingLeft = UDim.new(0, 10)
+			pad.PaddingRight = UDim.new(0, 10)
+			pad.Parent = root
+		end
+		local lbl = root:FindFirstChild("Text")
+		if not lbl then
+			lbl = Instance.new("TextLabel")
+			lbl.Name = "Text"
+			lbl.BackgroundTransparency = 1
+			lbl.Size = UDim2.fromScale(1, 1)
+			lbl.Font = Enum.Font.Code
+			lbl.TextSize = 14
+			lbl.TextXAlignment = Enum.TextXAlignment.Left
+			lbl.TextYAlignment = Enum.TextYAlignment.Top
+			lbl.TextColor3 = Color3.fromRGB(235, 235, 240)
+			lbl.TextStrokeTransparency = 0.75
+			lbl.TextWrapped = false
+			lbl.RichText = false
+			lbl.Parent = root
+		end
+		infoBubble = gui
+		infoRoot = root
+		infoLbl = lbl
+		if not infoDrag or infoDrag.root ~= root then
+			infoDrag = {on = false, root = root}
+			bind(root.InputBegan, function(input)
+				if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+					infoDrag.on = true
+					infoDrag.input = input
+					infoDrag.start = input.Position
+					infoDrag.pos = root.Position
+				end
+			end)
+			bind(root.InputEnded, function(input)
+				if input == infoDrag.input then
+					infoDrag.on = false
+					infoDrag.input = nil
+				end
+			end)
+			bind(InputService.InputChanged, function(input)
+				if infoDrag.on ~= true or not infoDrag.input then
+					return
+				end
+				if input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then
+					return
+				end
+				local delta = input.Position - infoDrag.start
+				root.Position = UDim2.new(infoDrag.pos.X.Scale, infoDrag.pos.X.Offset + delta.X, infoDrag.pos.Y.Scale, infoDrag.pos.Y.Offset + delta.Y)
+			end)
+		end
+		return root
+	end
+
 	local function setBubbleVisible(v)
-		local on = v == true
-		pcall(function()
-			if type(infoBubble) == "table" and type(infoBubble.SetVisible) == "function" then
-				infoBubble:SetVisible(on)
-			elseif type(infoBubble) == "table" and type(infoBubble.SetVisibility) == "function" then
-				infoBubble:SetVisibility(on)
-			end
-		end)
-		pcall(function()
-			if typeof(infoBubble) == "Instance" and infoBubble:IsA("GuiObject") then
-				infoBubble.Visible = on
-			end
-		end)
-		findBubble()
-		pcall(function()
-			if infoRoot and infoRoot.Parent then
-				infoRoot.Visible = on
-			elseif infoLbl and infoLbl.Parent then
-				infoLbl.Visible = on
-			end
-		end)
+		local root = makeBubble()
+		if root then
+			root.Visible = v == true
+		end
 	end
 
 	local function syncBubble()
-		local txt = infoText()
-		pcall(function()
-			if type(infoBubble) == "table" and type(infoBubble.SetText) == "function" then
-				infoBubble:SetText(txt)
-			elseif typeof(infoBubble) == "Instance" then
-				if infoBubble:IsA("TextLabel") or infoBubble:IsA("TextButton") or infoBubble:IsA("TextBox") then
-					infoBubble.Text = txt
-				else
-					for _, v in ipairs(infoBubble:GetDescendants()) do
-						if v:IsA("TextLabel") or v:IsA("TextButton") or v:IsA("TextBox") then
-							v.Text = txt
-							break
-						end
-					end
-				end
-			end
-		end)
-		findBubble()
-		pcall(function()
-			if infoLbl and infoLbl.Parent then
-				infoLbl.Text = txt
-			end
-		end)
+		makeBubble()
+		if infoLbl and infoLbl.Parent then
+			infoLbl.Text = infoText()
+		end
 		setBubbleVisible(st.infoBubble)
 	end
 
@@ -2442,14 +2990,10 @@ if game.GameId == 847722000 then
 		syncBubble()
 	end
 
-	pcall(function()
-		if type(Library.AddDraggableLabel) == "function" then
-			infoBubble = Library:AddDraggableLabel(infoText())
-		end
-	end)
 	task.defer(function()
 		syncBubble()
 	end)
+
 
 	local function saveNow()
 		saveDirty = false
@@ -2887,8 +3431,8 @@ if game.GameId == 847722000 then
 				end
 			end)
 			wipeCharConns()
-			if wipeFovConns then
-				wipeFovConns()
+			if clientBypass and clientBypass.wipeFovConns then
+				clientBypass.wipeFovConns()
 			end
 			if wipeFog then
 				wipeFog()
@@ -2897,6 +3441,10 @@ if game.GameId == 847722000 then
 			safeDestroy(FreeCamPart)
 			safeDestroy(HidePartHightLight)
 			safeDestroy(HidePart)
+			safeDestroy(infoBubble)
+			infoBubble = nil
+			infoRoot = nil
+			infoLbl = nil
 			pcall(function() genv.RakeGui = false end)
 			pcall(function() Obsidian:Destroy() end)
 		end,
@@ -2987,6 +3535,7 @@ if game.GameId == 847722000 then
 			cfgSet("disableDeathFx", st.disableDeathFx)
 			if st.disableDeathFx then
 				clientBypass.applyDeathFxBypass()
+				clientBypass.applyCH(true)
 			end
 		end,
 	})
@@ -3001,6 +3550,7 @@ if game.GameId == 847722000 then
 			cfgSet("disableMotionBlur", st.disableMotionBlur)
 			if st.disableMotionBlur then
 				clientBypass.applyMotionBlurBypass()
+				clientBypass.applyCH(true)
 			end
 		end,
 	})
@@ -3319,6 +3869,141 @@ if game.GameId == 847722000 then
 		end,
 	})
 
+	ClientTab:CreateToggle({
+		Name = "Force Backpack Enabled",
+		CurrentValue = st.forceBackpack,
+		Flag = "ForceBackpackEnabled",
+		Callback = function(state)
+			st.forceBackpack = state == true
+			_G.RakeForceBackpack = st.forceBackpack
+			cfgSet("forceBackpack", st.forceBackpack)
+			clientBypass.forceCoreParts()
+		end,
+	})
+
+	ClientTab:CreateToggle({
+		Name = "Force Mouse Icon",
+		CurrentValue = st.forceMouseIcon,
+		Flag = "ForceMouseIcon",
+		Callback = function(state)
+			st.forceMouseIcon = state == true
+			_G.RakeForceMouseIcon = st.forceMouseIcon
+			cfgSet("forceMouseIcon", st.forceMouseIcon)
+			clientBypass.forceCoreParts()
+		end,
+	})
+
+	ClientTab:CreateToggle({
+		Name = "Force Topbar Enabled",
+		CurrentValue = st.forceTopbar,
+		Flag = "ForceTopbarEnabled",
+		Callback = function(state)
+			st.forceTopbar = state == true
+			_G.RakeForceTopbar = st.forceTopbar
+			cfgSet("forceTopbar", st.forceTopbar)
+			clientBypass.forceCoreParts()
+		end,
+	})
+
+	ClientTab:CreateToggle({
+		Name = "Disable Visual FX",
+		CurrentValue = st.disableVisualFx,
+		Flag = "DisableVisualFX",
+		Callback = function(state)
+			st.disableVisualFx = state == true
+			_G.RakeDisableVisualFx = st.disableVisualFx
+			cfgSet("disableVisualFx", st.disableVisualFx)
+			clientBypass.applyCH(true)
+		end,
+	})
+
+	ClientTab:CreateToggle({
+		Name = "Disable Camera Shake",
+		CurrentValue = st.disableCameraShake,
+		Flag = "DisableCameraShake",
+		Callback = function(state)
+			st.disableCameraShake = state == true
+			_G.RakeDisableCameraShake = st.disableCameraShake
+			cfgSet("disableCameraShake", st.disableCameraShake)
+			clientBypass.applyCH(true)
+		end,
+	})
+
+	ClientTab:CreateToggle({
+		Name = "No Downed / Ragdoll",
+		CurrentValue = st.noDowned,
+		Flag = "NoDownedRagdoll",
+		Callback = function(state)
+			st.noDowned = state == true
+			_G.RakeNoDowned = st.noDowned
+			cfgSet("noDowned", st.noDowned)
+			clientBypass.applyCharBypasses()
+			clientBypass.applyCH(true)
+		end,
+	})
+
+	ClientTab:CreateToggle({
+		Name = "No Movement Lock",
+		CurrentValue = st.noMoveLock,
+		Flag = "NoMovementLock",
+		Callback = function(state)
+			st.noMoveLock = state == true
+			_G.RakeNoMoveLock = st.noMoveLock
+			cfgSet("noMoveLock", st.noMoveLock)
+			clientBypass.applyCharBypasses()
+			clientBypass.applyCH(true)
+		end,
+	})
+
+	ClientTab:CreateToggle({
+		Name = "No Trap Lock",
+		CurrentValue = st.noTrapLock,
+		Flag = "NoTrapLock",
+		Callback = function(state)
+			st.noTrapLock = state == true
+			_G.RakeNoTrapLock = st.noTrapLock
+			cfgSet("noTrapLock", st.noTrapLock)
+			clientBypass.applyCharBypasses()
+			clientBypass.applyCH(true)
+		end,
+	})
+
+	ClientTab:CreateToggle({
+		Name = "No Jumpscare Camera",
+		CurrentValue = st.noJumpscareCam,
+		Flag = "NoJumpscareCamera",
+		Callback = function(state)
+			st.noJumpscareCam = state == true
+			_G.RakeNoJumpscareCam = st.noJumpscareCam
+			cfgSet("noJumpscareCam", st.noJumpscareCam)
+			clientBypass.applyCH(true)
+		end,
+	})
+
+	ClientTab:CreateToggle({
+		Name = "No Chase Static",
+		CurrentValue = st.noChaseStatic,
+		Flag = "NoChaseStatic",
+		Callback = function(state)
+			st.noChaseStatic = state == true
+			_G.RakeNoChaseStatic = st.noChaseStatic
+			cfgSet("noChaseStatic", st.noChaseStatic)
+			clientBypass.applyCH(true)
+		end,
+	})
+
+	ClientTab:CreateToggle({
+		Name = "Fullbright",
+		CurrentValue = st.fullbright,
+		Flag = "Fullbright",
+		Callback = function(state)
+			st.fullbright = state == true
+			_G.RakeFullbright = st.fullbright
+			cfgSet("fullbright", st.fullbright)
+			clientBypass.applyFullbright()
+		end,
+	})
+
 	ClientTab:CreateButton({
 		Name = "Third Person",
 		Callback = function()
@@ -3340,6 +4025,7 @@ if game.GameId == 847722000 then
 			if st.infStamina == true then
 				applyInfTabs(true)
 				queueInfTabs(12)
+				clientBypass.applyCH(true)
 			end
 		end,
 	})
@@ -3355,6 +4041,7 @@ if game.GameId == 847722000 then
 			if st.infNight == true then
 				applyInfTabs(true)
 				queueInfTabs(12)
+				clientBypass.applyCH(true)
 			end
 		end,
 	})
@@ -3519,15 +4206,16 @@ if game.GameId == 847722000 then
 		locs = {},
 		players = {},
 		scraps = {},
+		scrapRoot = nil,
 		traps = {},
 	}
 
-	local function getLocFolder()
+	esp.getLocFolder = function()
 		local filter = ffc(Ws, "Filter")
 		return filter and ffc(filter, "LocationPoints") or nil
 	end
 
-	local function locName(obj)
+	esp.locName = function(obj)
 		local n = tostring(obj and obj.Name or "Location")
 		n = n:gsub("MSG$", "")
 		n = n:gsub("_", " ")
@@ -3535,7 +4223,7 @@ if game.GameId == 847722000 then
 		return n
 	end
 
-	local function locPos(obj)
+	esp.locPos = function(obj)
 		if not obj then
 			return nil
 		end
@@ -3557,7 +4245,11 @@ if game.GameId == 847722000 then
 		return nil
 	end
 
-	local function drawTxt(txt, col)
+	clientBypass.fovUiMult = function()
+		return 1
+	end
+
+	esp.drawTxt = function(txt, col)
 		if not Drawing or not Drawing.new then
 			return nil
 		end
@@ -3577,7 +4269,7 @@ if game.GameId == 847722000 then
 		return d
 	end
 
-	local function cham(par, name, fill, out, trans)
+	esp.cham = function(par, name, fill, out, trans)
 		if not par or st.espChams ~= true then
 			return nil
 		end
@@ -3597,7 +4289,7 @@ if game.GameId == 847722000 then
 		return h
 	end
 
-	local function posOf(obj)
+	esp.posOf = function(obj)
 		if not obj then
 			return nil
 		end
@@ -3619,7 +4311,7 @@ if game.GameId == 847722000 then
 		return nil
 	end
 
-	local function show(d, pos, txt)
+	esp.show = function(d, pos, txt)
 		if not d or not pos then
 			if d then d.Visible = false end
 			return
@@ -3668,7 +4360,7 @@ if game.GameId == 847722000 then
 		end
 	end
 
-	local function itemVal(root, name)
+	esp.itemVal = function(root, name)
 		local cur = root
 		for _ = 1, 5 do
 			if not cur then
@@ -3689,14 +4381,14 @@ if game.GameId == 847722000 then
 		return "?"
 	end
 
-	local function scrapTxt(part)
+	esp.scrapTxt = function(part)
 		local root = part and part.Parent
-		local pts = itemVal(root, "PointsVal")
-		local lvl = itemVal(root, "LevelVal")
+		local pts = esp.itemVal(root, "PointsVal")
+		local lvl = esp.itemVal(root, "LevelVal")
 		return "Scrap, Points "..tostring(pts)..", Level "..tostring(lvl)
 	end
 
-	local function clearOne(tab, key)
+	esp.clearOne = function(tab, key)
 		local it = tab[key]
 		if not it then
 			return
@@ -3723,12 +4415,12 @@ if game.GameId == 847722000 then
 		end
 		if not kind or kind == "players" then
 			for k in pairs(esp.players) do
-				clearOne(esp.players, k)
+				esp.clearOne(esp.players, k)
 			end
 		end
 		if not kind or kind == "drops" then
 			for k in pairs(esp.drops) do
-				clearOne(esp.drops, k)
+				esp.clearOne(esp.drops, k)
 			end
 		end
 		if not kind or kind == "locs" then
@@ -3739,12 +4431,12 @@ if game.GameId == 847722000 then
 		end
 		if not kind or kind == "scraps" then
 			for k in pairs(esp.scraps) do
-				clearOne(esp.scraps, k)
+				esp.clearOne(esp.scraps, k)
 			end
 		end
 		if not kind or kind == "traps" then
 			for k in pairs(esp.traps) do
-				clearOne(esp.traps, k)
+				esp.clearOne(esp.traps, k)
 			end
 		end
 	end
@@ -3771,7 +4463,9 @@ if game.GameId == 847722000 then
 			_G.ScrapESP = state == true
 			st.scrapEsp = _G.ScrapESP
 			cfgSet("scrapEsp", st.scrapEsp)
-			if not state and cleanupEsp then
+			if state then
+				esp.scrapRoot = nil
+			elseif cleanupEsp then
 				cleanupEsp("scraps")
 			end
 		end,
@@ -3791,14 +4485,14 @@ if game.GameId == 847722000 then
 		end,
 	})
 
-	local scanT = 1
-	local updT = 0
+	esp.scanT = 1
+	esp.updT = 0
 
-	local function espAny()
+	esp.espAny = function()
 		return _G.FlareGunESP == true or _G.RakeChams == true or _G.PlayerESP == true or _G.SupplyDropESP == true or _G.LocationESP == true or _G.ScrapESP == true or _G.RakeTrapESP == true
 	end
 
-	local function scanEsp()
+	esp.scanEsp = function()
 		if _G.FlareGunESP == true then
 			local fl = ffcr(Ws, "FlareGunPickUp")
 			if fl then
@@ -3806,8 +4500,8 @@ if game.GameId == 847722000 then
 					cleanupEsp("flare")
 					esp.flare = {
 						o = fl,
-						d = drawTxt("Flare Gun", Color3.fromRGB(0, 225, 255)),
-						h = cham(fl, "FlareGunChams", Color3.fromRGB(255, 0, 0), Color3.fromRGB(170, 170, 170), 0.3),
+						d = esp.drawTxt("Flare Gun", Color3.fromRGB(0, 225, 255)),
+						h = esp.cham(fl, "FlareGunChams", Color3.fromRGB(255, 0, 0), Color3.fromRGB(170, 170, 170), 0.3),
 					}
 				end
 			else
@@ -3824,8 +4518,8 @@ if game.GameId == 847722000 then
 					cleanupEsp("rake")
 					esp.rake = {
 						o = rk,
-						d = drawTxt("Rake", Color3.fromRGB(255, 0, 0)),
-						h = cham(rk, "RakeChams", Color3.fromRGB(170, 0, 0), Color3.fromRGB(255, 255, 255), 0.3),
+						d = esp.drawTxt("Rake", Color3.fromRGB(255, 0, 0)),
+						h = esp.cham(rk, "RakeChams", Color3.fromRGB(170, 0, 0), Color3.fromRGB(255, 255, 255), 0.3),
 					}
 				end
 			else
@@ -3840,18 +4534,18 @@ if game.GameId == 847722000 then
 				if p ~= Plrs.LocalPlayer and p.Character then
 					local ch = p.Character
 					if not esp.players[p] or esp.players[p].o ~= ch then
-						clearOne(esp.players, p)
+						esp.clearOne(esp.players, p)
 						esp.players[p] = {
 							o = ch,
-							d = drawTxt(p.Name, Color3.fromRGB(0, 255, 34)),
-							h = cham(ch, "PlayerChams", Color3.fromRGB(0, 11, 170), Color3.fromRGB(170, 170, 170), 0.3),
+							d = esp.drawTxt(p.Name, Color3.fromRGB(0, 255, 34)),
+							h = esp.cham(ch, "PlayerChams", Color3.fromRGB(0, 11, 170), Color3.fromRGB(170, 170, 170), 0.3),
 						}
 					end
 				end
 			end
 			for p, it in pairs(esp.players) do
 				if not p.Parent or not p.Character or p.Character ~= it.o then
-					clearOne(esp.players, p)
+					esp.clearOne(esp.players, p)
 				end
 			end
 		else
@@ -3863,14 +4557,14 @@ if game.GameId == 847722000 then
 				if not esp.drops[box] then
 					esp.drops[box] = {
 						o = box,
-						d = drawTxt("Supply Drop", Color3.fromRGB(251, 255, 0)),
+						d = esp.drawTxt("Supply Drop", Color3.fromRGB(251, 255, 0)),
 						h = nil,
 					}
 				end
 			end)
 			for box in pairs(esp.drops) do
 				if not box.Parent then
-					clearOne(esp.drops, box)
+					esp.clearOne(esp.drops, box)
 				end
 			end
 		else
@@ -3880,21 +4574,26 @@ if game.GameId == 847722000 then
 		if _G.ScrapESP == true then
 			local filter = ffc(Ws, "Filter")
 			local root = filter and ffc(filter, "ScrapSpawns")
-			for _, v in pairs(desc(root)) do
-				if v.Name == "Scrap" and v:IsA("BasePart") and not esp.scraps[v] then
-					esp.scraps[v] = {
-						o = v,
-						d = drawTxt(scrapTxt(v), Color3.fromRGB(77, 35, 1)),
-						h = cham(v, "ScrapChams", Color3.fromRGB(77, 35, 1), Color3.fromRGB(170, 170, 170), 0),
-					}
+			if root ~= esp.scrapRoot then
+				esp.scrapRoot = root
+				cleanupEsp("scraps")
+				for _, v in pairs(desc(root)) do
+					if v.Name == "Scrap" and v:IsA("BasePart") and not esp.scraps[v] then
+						esp.scraps[v] = {
+							o = v,
+							d = esp.drawTxt(esp.scrapTxt(v), Color3.fromRGB(77, 35, 1)),
+							h = esp.cham(v, "ScrapChams", Color3.fromRGB(77, 35, 1), Color3.fromRGB(170, 170, 170), 0),
+						}
+					end
 				end
 			end
 			for v in pairs(esp.scraps) do
 				if not v.Parent then
-					clearOne(esp.scraps, v)
+					esp.clearOne(esp.scraps, v)
 				end
 			end
 		else
+			esp.scrapRoot = nil
 			cleanupEsp("scraps")
 		end
 
@@ -3906,15 +4605,15 @@ if game.GameId == 847722000 then
 					if v.Name == "RakeTrapModel" and v:IsA("Model") and not esp.traps[v] then
 						esp.traps[v] = {
 							o = v,
-							d = drawTxt("Rake Trap", Color3.fromRGB(255, 85, 0)),
-							h = cham(v, "RakeTrapChams", Color3.fromRGB(255, 85, 0), Color3.fromRGB(255, 255, 255), 0.3),
+							d = esp.drawTxt("Rake Trap", Color3.fromRGB(255, 85, 0)),
+							h = esp.cham(v, "RakeTrapChams", Color3.fromRGB(255, 85, 0), Color3.fromRGB(255, 255, 255), 0.3),
 						}
 					end
 				end
 			end
 			for v in pairs(esp.traps) do
 				if not v.Parent or v.Parent ~= root then
-					clearOne(esp.traps, v)
+					esp.clearOne(esp.traps, v)
 				end
 			end
 		else
@@ -3922,44 +4621,59 @@ if game.GameId == 847722000 then
 		end
 	end
 
+	bind(Ws.DescendantAdded, function(obj)
+		if _G.ScrapESP == true and obj.Name == "Scrap" and obj:IsA("BasePart") then
+			local filter = ffc(Ws, "Filter")
+			local root = filter and ffc(filter, "ScrapSpawns")
+			if root and obj:IsDescendantOf(root) and not esp.scraps[obj] then
+				esp.scrapRoot = root
+				esp.scraps[obj] = {
+					o = obj,
+					d = esp.drawTxt(esp.scrapTxt(obj), Color3.fromRGB(77, 35, 1)),
+					h = esp.cham(obj, "ScrapChams", Color3.fromRGB(77, 35, 1), Color3.fromRGB(170, 170, 170), 0),
+				}
+			end
+		end
+	end)
+
 	bind(Run.Heartbeat, function(dt)
 		if AllowRunService ~= true then
 			cleanupEsp()
 			return
 		end
 
-		if not espAny() then
+		if not esp.espAny() then
 			return
 		end
 
-		scanT += dt
-		updT += dt
+		esp.scanT += dt
+		esp.updT += dt
 
-		if scanT >= (tonumber(st.espScan) or 0.75) then
-			scanT = 0
-			scanEsp()
+		if esp.scanT >= (tonumber(st.espScan) or 0.75) then
+			esp.scanT = 0
+			esp.scanEsp()
 		end
 
-		if updT < 0.08 then
+		if esp.updT < 0.08 then
 			return
 		end
-		updT = 0
+		esp.updT = 0
 
 		if _G.LocationESP == true then
-			local root = getLocFolder()
+			local root = esp.getLocFolder()
 			local alive = {}
 			if root then
 				for _, obj in pairs(kids(root)) do
-					local pos = locPos(obj)
+					local pos = esp.locPos(obj)
 					if pos then
 						alive[obj] = true
-						local name = locName(obj)
+						local name = esp.locName(obj)
 						local d = esp.locs[obj]
 						if not d then
-							d = drawTxt("[LOCATION] "..name, Color3.fromRGB(255, 136, 0))
+							d = esp.drawTxt("[LOCATION] "..name, Color3.fromRGB(255, 136, 0))
 							esp.locs[obj] = d
 						end
-						show(d, pos, "[LOCATION] "..name)
+						esp.show(d, pos, "[LOCATION] "..name)
 					end
 				end
 			end
@@ -3976,7 +4690,7 @@ if game.GameId == 847722000 then
 		if esp.flare then
 			local fl = esp.flare.o
 			local part = fl and (ffcr(fl, "FlareGun") or fl)
-			show(esp.flare.d, _G.FlareGunESP and posOf(part), "Flare Gun")
+			esp.show(esp.flare.d, _G.FlareGunESP and esp.posOf(part), "Flare Gun")
 		end
 
 		if esp.rake then
@@ -3987,7 +4701,7 @@ if game.GameId == 847722000 then
 				local hum = ffca(rk, "Humanoid")
 				hp = hum and hum.Health or hp
 			end
-			show(esp.rake.d, _G.RakeChams and posOf(ffcr(rk, "Head") or rk), "Rake, Health : "..tostring(hp or "?"))
+			esp.show(esp.rake.d, _G.RakeChams and esp.posOf(ffcr(rk, "Head") or rk), "Rake, Health : "..tostring(hp or "?"))
 		end
 
 		for p, it in pairs(esp.players) do
@@ -3997,55 +4711,55 @@ if game.GameId == 847722000 then
 			if _G.PlayerESPShowDistance == true then
 				txt = p.Name.." [Distance Travelled : "..tostring(valOf(ffc(p, "DistanceTravelled"), "?")).."]"
 			end
-			show(it.d, _G.PlayerESP and posOf(head or ch), txt)
+			esp.show(it.d, _G.PlayerESP and esp.posOf(head or ch), txt)
 		end
 
 		for box, it in pairs(esp.drops) do
-			show(it.d, _G.SupplyDropESP and posOf(ffcr(box, "HitBox") or box), "Supply Drop")
+			esp.show(it.d, _G.SupplyDropESP and esp.posOf(ffcr(box, "HitBox") or box), "Supply Drop")
 		end
 
 		for v, it in pairs(esp.scraps) do
-			show(it.d, _G.ScrapESP and posOf(v), scrapTxt(v))
+			esp.show(it.d, _G.ScrapESP and esp.posOf(v), esp.scrapTxt(v))
 		end
 
 		for v, it in pairs(esp.traps) do
-			show(it.d, _G.RakeTrapESP and posOf(v), "Rake Trap")
+			esp.show(it.d, _G.RakeTrapESP and esp.posOf(v), "Rake Trap")
 		end
 	end)
 
-	local noFall = {
+	clientBypass.noFall = {
 		haystackSize = Vector3.new(100000, 100000, 100000),
 		applyToken = 0,
 		env = getgenv and getgenv() or _G,
 	}
 
-	noFall.getHaystack = function()
+	clientBypass.noFall.getHaystack = function()
 		local ws = game:GetService("Workspace")
 		local filter = ffc(ws, "Filter")
 		return filter and ffc(filter, "Haystack") or nil
 	end
 
-	noFall.applyHaystack = function(enabled)
-		noFall.applyToken = noFall.applyToken + 1
-		local token = noFall.applyToken
+	clientBypass.noFall.applyHaystack = function(enabled)
+		clientBypass.noFall.applyToken = clientBypass.noFall.applyToken + 1
+		local token = clientBypass.noFall.applyToken
 
 		task.spawn(function()
 			for _ = 1, 40 do
-				if token ~= noFall.applyToken then
+				if token ~= clientBypass.noFall.applyToken then
 					return
 				end
 
-				local haystack = noFall.getHaystack()
+				local haystack = clientBypass.noFall.getHaystack()
 				if haystack then
 					pcall(function()
-						if noFall.env.__rakeHaystackOriginalSize == nil and haystack.Size ~= noFall.haystackSize then
-							noFall.env.__rakeHaystackOriginalSize = haystack.Size
+						if clientBypass.noFall.env.__rakeHaystackOriginalSize == nil and haystack.Size ~= clientBypass.noFall.haystackSize then
+							clientBypass.noFall.env.__rakeHaystackOriginalSize = haystack.Size
 						end
 
 						if enabled == true then
-							haystack.Size = noFall.haystackSize
-						elseif noFall.env.__rakeHaystackOriginalSize then
-							haystack.Size = noFall.env.__rakeHaystackOriginalSize
+							haystack.Size = clientBypass.noFall.haystackSize
+						elseif clientBypass.noFall.env.__rakeHaystackOriginalSize then
+							haystack.Size = clientBypass.noFall.env.__rakeHaystackOriginalSize
 						end
 					end)
 					return
@@ -4064,17 +4778,150 @@ if game.GameId == 847722000 then
 			_G.NoFallDMG = state == true
 			st.noFall = _G.NoFallDMG
 			cfgSet("noFall", st.noFall)
-			noFall.applyHaystack(_G.NoFallDMG)
+			clientBypass.noFall.applyHaystack(_G.NoFallDMG)
 		end,
 	})
 
-	noFall.applyHaystack(st.noFall)
+	PlayerTab:CreateToggle({
+		Name = "Safe Position Recovery",
+		CurrentValue = st.safeRecover,
+		Flag = "SafePositionRecovery",
+		Callback = function(state)
+			st.safeRecover = state == true
+			_G.RakeSafeRecover = st.safeRecover
+			cfgSet("safeRecover", st.safeRecover)
+			clientBypass.applySafeRecover()
+		end,
+	})
+
+	PlayerTab:CreateToggle({
+		Name = "No Jump Cooldown",
+		CurrentValue = st.noJumpCooldown,
+		Flag = "NoJumpCooldown",
+		Callback = function(state)
+			st.noJumpCooldown = state == true
+			_G.RakeNoJumpCooldown = st.noJumpCooldown
+			cfgSet("noJumpCooldown", st.noJumpCooldown)
+			clientBypass.applyCH(true)
+		end,
+	})
+
+	clientBypass.noFall.applyHaystack(st.noFall)
+
 
 	clientBypass.lastCam = nil
 	clientBypass.lastFov = nil
 	clientBypass.fovConns = {}
 
-	wipeFovConns = function()
+	clientBypass.fovUiMult = function()
+		if st.fovUiFix ~= true or st.fovOn ~= true then
+			return 1
+		end
+		local fov = math.clamp(tonumber(st.fov) or 70, 1, 120)
+		if fov <= 70 then
+			return 1
+		end
+		return math.clamp(math.tan(math.rad(fov) * 0.5) / math.tan(math.rad(70) * 0.5), 1, 2.75)
+	end
+
+	clientBypass.mulDim2 = function(v, m)
+		return UDim2.new(v.X.Scale * m, math.floor(v.X.Offset * m + 0.5), v.Y.Scale * m, math.floor(v.Y.Offset * m + 0.5))
+	end
+
+	clientBypass.isTextGui = function(obj)
+		return obj and (obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox"))
+	end
+
+	clientBypass.patchFovUiText = function(obj, rec, m)
+		if not rec.text then
+			rec.text = setmetatable({}, { __mode = "k" })
+		end
+		for _, ui in pairs(desc(obj)) do
+			if clientBypass.isTextGui(ui) then
+				local tr = rec.text[ui]
+				if not tr then
+					tr = { size = ui.TextSize, scaled = ui.TextScaled }
+					rec.text[ui] = tr
+				end
+				pcall(function()
+					if tr.scaled == true then
+						ui.TextScaled = true
+					else
+						ui.TextScaled = false
+						ui.TextSize = math.clamp(math.floor((tonumber(tr.size) or ui.TextSize or 14) * m + 0.5), 8, 72)
+					end
+				end)
+			end
+		end
+	end
+
+	function clientBypass.patchFovUi(obj)
+		if not obj or not obj.Parent or not obj:IsA("BillboardGui") then
+			return false
+		end
+		local rec = clientBypass.fovUiCache[obj]
+		if not rec then
+			rec = { size = obj.Size }
+			clientBypass.fovUiCache[obj] = rec
+		end
+		local m = clientBypass.fovUiMult()
+		pcall(function()
+			obj.Size = clientBypass.mulDim2(rec.size, m)
+		end)
+		clientBypass.patchFovUiText(obj, rec, m)
+		return true
+	end
+
+	function clientBypass.applyFovUiFix(scan)
+		if st.fovUiFix ~= true then
+			return 0
+		end
+		local n = 0
+		for obj in pairs(clientBypass.fovUiCache) do
+			if obj and obj.Parent then
+				if clientBypass.patchFovUi(obj) then
+					n += 1
+				end
+			else
+				clientBypass.fovUiCache[obj] = nil
+			end
+		end
+		if scan == true and clientBypass.fovUiScanned ~= true then
+			clientBypass.fovUiScanned = true
+			for _, root in pairs({ Ws, clientBypass.getPlayerGui() }) do
+				for _, obj in pairs(desc(root)) do
+					if obj:IsA("BillboardGui") and clientBypass.patchFovUi(obj) then
+						n += 1
+					end
+				end
+			end
+		end
+		return n
+	end
+
+	function clientBypass.restoreFovUiFix()
+		for obj, rec in pairs(clientBypass.fovUiCache) do
+			if obj and obj.Parent and rec and rec.size then
+				pcall(function()
+					obj.Size = rec.size
+				end)
+			end
+			if rec and rec.text then
+				for ui, tr in pairs(rec.text) do
+					if ui and ui.Parent and tr then
+						pcall(function()
+							ui.TextScaled = tr.scaled == true
+							ui.TextSize = tr.size or ui.TextSize
+						end)
+					end
+				end
+			end
+		end
+		clientBypass.fovUiCache = setmetatable({}, { __mode = "k" })
+		clientBypass.fovUiScanned = false
+	end
+
+	clientBypass.wipeFovConns = function()
 		for i = #clientBypass.fovConns, 1, -1 do
 			local c = clientBypass.fovConns[i]
 			if c then
@@ -4086,7 +4933,7 @@ if game.GameId == 847722000 then
 		end
 	end
 
-	local function applyFov(force)
+	clientBypass.applyFov = function(force)
 		if not AllowRunService or st.fovOn ~= true then
 			return
 		end
@@ -4101,11 +4948,12 @@ if game.GameId == 847722000 then
 			pcall(function()
 				cam.FieldOfView = num
 			end)
+			pcall(clientBypass.applyFovUiFix, true)
 		end
 	end
 
-	function bindFovCam(cam)
-		wipeFovConns()
+	clientBypass.bindFovCam = function(cam)
+		clientBypass.wipeFovConns()
 		if not cam then
 			return
 		end
@@ -4114,7 +4962,7 @@ if game.GameId == 847722000 then
 			return cam:GetPropertyChangedSignal("FieldOfView"):Connect(function()
 				if AllowRunService == true and st.fovOn == true then
 					task.defer(function()
-						applyFov(true)
+						clientBypass.applyFov(true)
 					end)
 				end
 			end)
@@ -4122,10 +4970,10 @@ if game.GameId == 847722000 then
 		if ok and c then
 			clientBypass.fovConns[#clientBypass.fovConns + 1] = c
 		end
-		applyFov(true)
+		clientBypass.applyFov(true)
 	end
 
-	local function applySpeed(force)
+	clientBypass.applySpeed = function(force)
 		if not AllowRunService or st.spdOn ~= true then
 			return
 		end
@@ -4141,11 +4989,12 @@ if game.GameId == 847722000 then
 		end
 	end
 
-	local function onChar(ch)
+	clientBypass.onChar = function(ch)
 		wipeCharConns()
 		curChar = ch
 		curHum = nil
 		curHrp = nil
+		clientBypass.lastSafe = nil
 		if not ch then
 			return
 		end
@@ -4156,23 +5005,25 @@ if game.GameId == 847722000 then
 			local hum = ffca(ch, "Humanoid") or ch:WaitForChild("Humanoid", 10)
 			if hum then
 				curHum = hum
-				applySpeed(true)
+				clientBypass.applySpeed(true)
+				pcall(clientBypass.applyCharBypasses)
+				pcall(clientBypass.applySafeRecover)
 				if st.infStamina == true or st.infNight == true then
 					applyInfTabs(true)
 				end
 				bindChar(hum:GetPropertyChangedSignal("WalkSpeed"), function()
-					applySpeed(true)
+					clientBypass.applySpeed(true)
 				end)
 			end
 		end)
 	end
 
-	local lp = Plrs.LocalPlayer
-	if lp then
-		if lp.Character then
-			task.defer(onChar, lp.Character)
+	clientBypass.lp = Plrs.LocalPlayer
+	if clientBypass.lp then
+		if clientBypass.lp.Character then
+			task.defer(clientBypass.onChar, clientBypass.lp.Character)
 		end
-		bind(lp.CharacterAdded, onChar)
+		bind(clientBypass.lp.CharacterAdded, clientBypass.onChar)
 	end
 
 	PlayerTab:CreateSlider({
@@ -4185,7 +5036,8 @@ if game.GameId == 847722000 then
 			st.fov = math.clamp(tonumber(state) or st.fov, 1, 120)
 			_G.FieldOfView = st.fov
 			cfgSet("fov", st.fov)
-			applyFov(true)
+			clientBypass.applyFov(true)
+			clientBypass.applyFovUiFix(true)
 		end,
 	})
 
@@ -4198,8 +5050,27 @@ if game.GameId == 847722000 then
 			_G.enableFOV = st.fovOn
 			cfgSet("fovOn", st.fovOn)
 			clientBypass.lastCam = nil
-			bindFovCam(Ws.CurrentCamera or workspace.CurrentCamera)
-			applyFov(true)
+			clientBypass.bindFovCam(Ws.CurrentCamera or workspace.CurrentCamera)
+			clientBypass.applyFov(true)
+			if st.fovOn ~= true then
+				clientBypass.restoreFovUiFix()
+			end
+		end,
+	})
+
+	PlayerTab:CreateToggle({
+		Name = "Fix High FOV UI Scale",
+		CurrentValue = st.fovUiFix,
+		Flag = "FixHighFovUiScale",
+		Callback = function(state)
+			st.fovUiFix = state == true
+			_G.RakeFovUiFix = st.fovUiFix
+			cfgSet("fovUiFix", st.fovUiFix)
+			if st.fovUiFix then
+				clientBypass.applyFovUiFix(true)
+			else
+				clientBypass.restoreFovUiFix()
+			end
 		end,
 	})
 	
@@ -4213,7 +5084,7 @@ if game.GameId == 847722000 then
 			st.spd = math.clamp(tonumber(state) or st.spd, 0, 30)
 			_G.WalkSpeedd = st.spd
 			cfgSet("spd", st.spd)
-			applySpeed(true)
+			clientBypass.applySpeed(true)
 		end,
 	})
 
@@ -4225,64 +5096,10 @@ if game.GameId == 847722000 then
 			st.spdOn = state == true
 			_G.enableSpeed = st.spdOn
 			cfgSet("spdOn", st.spdOn)
-			applySpeed(true)
+			clientBypass.applySpeed(true)
 		end,
 	})
 
---[[
-	do
-		local env = getgenv and getgenv() or _G
-		local unpackFn = (table and table.unpack) or unpack
-		local function callArgs(fn, self, args)
-			if type(unpackFn) == "function" then
-				return fn(self, unpackFn(args))
-			end
-			return fn(self, args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], args[9], args[10])
-		end
-
-		if not _G.__rakeNoFallHook then
-			_G.__rakeNoFallHook = true
-
-			if type(hookmetamethod) == "function" and type(getnamecallmethod) == "function" then
-				local hook
-				hook = hookmetamethod(game, "__namecall", function(self, ...)
-					if (not checkcaller or not checkcaller()) and _G.NoFallDMG == true then
-						local method = tostring(getnamecallmethod() or ""):lower()
-						if method == "fireserver" and tostring(self) == "FD_Event" then
-							local args = {...}
-							args[1] = 0
-							args[2] = 0
-							return callArgs(hook, self, args)
-						end
-					end
-					return hook(self, ...)
-				end)
-			elseif type(getrawmetatable) == "function" and type(setreadonly) == "function" and type(getnamecallmethod) == "function" then
-				local ok, mt = pcall(getrawmetatable, game)
-				if ok and type(mt) == "table" and mt.__namecall then
-					local namecall = mt.__namecall
-					setreadonly(mt, false)
-
-					local fn = function(self, ...)
-						if (not checkcaller or not checkcaller()) and _G.NoFallDMG == true then
-							local method = tostring(getnamecallmethod() or ""):lower()
-							if method == "fireserver" and tostring(self) == "FD_Event" then
-								local args = {...}
-								args[1] = 0
-								args[2] = 0
-								return callArgs(namecall, self, args)
-							end
-						end
-						return namecall(self, ...)
-					end
-
-					mt.__namecall = type(newcclosure) == "function" and newcclosure(fn) or fn
-					setreadonly(mt, true)
-				end
-			end
-		end
-	end
-]]
 
 	ExploitsTab:CreateToggle({
 		Name = "Insta Open SupplyDrop",
@@ -4336,10 +5153,11 @@ if game.GameId == 847722000 then
 			st.promptDistance = math.clamp(tonumber(v) or 25, 5, 100)
 			cfgSet("promptDistance", st.promptDistance)
 			if st.promptBypass then
-				clientBypass.applyPromptBypass()
+				clientBypass.applyKnownPromptBypass()
 			end
 		end,
 	})
+
 
 	ExploitsTab:CreateButton({
 		Name = "Unlock Prompts Once",
@@ -4437,9 +5255,16 @@ if game.GameId == 847722000 then
 		clientBypass.soundT += dt
 		clientBypass.lightT += dt
 		clientBypass.deathMsgT += dt
-		if st.promptBypass == true and clientBypass.promptBypassT >= 5 then
+		clientBypass.chT += dt
+		if st.promptBypass == true and clientBypass.promptInitScan ~= true then
+			clientBypass.promptInitScan = true
 			clientBypass.promptBypassT = 0
 			pcall(clientBypass.applyPromptBypass)
+		elseif st.promptBypass ~= true then
+			clientBypass.promptInitScan = false
+		elseif clientBypass.promptBypassT >= 5 then
+			clientBypass.promptBypassT = 0
+			pcall(clientBypass.applyKnownPromptBypass)
 		end
 		if clientBypass.clientBypassT >= 0.75 then
 			clientBypass.clientBypassT = 0
@@ -4452,7 +5277,18 @@ if game.GameId == 847722000 then
 			pcall(clientBypass.applyLookFreeze)
 			pcall(clientBypass.cleanupPromptModals)
 			pcall(clientBypass.applyDeviceSpoof)
+			pcall(clientBypass.applyCharBypasses)
+			pcall(clientBypass.applySafeRecover)
+			pcall(clientBypass.applyFullbright)
+			pcall(clientBypass.applyFovUiFix, false)
 			pcall(clientBypass.removeIntroClones)
+			pcall(clientBypass.forceCoreParts)
+			if clientBypass.chBootScan ~= true then
+				clientBypass.chBootScan = true
+				pcall(clientBypass.applyCH, true)
+			else
+				pcall(clientBypass.applyCH, false)
+			end
 		end
 		if clientBypass.deathMsgT >= 2 then
 			clientBypass.deathMsgT = 0
@@ -4468,12 +5304,29 @@ if game.GameId == 847722000 then
 		end
 	end)
 
-	bindFovCam(Ws.CurrentCamera or workspace.CurrentCamera)
+	bind(Run.RenderStepped, function()
+		if AllowRunService ~= true then
+			return
+		end
+		if st.fovOn == true then
+			clientBypass.applyFov(false)
+		end
+		if _G.NoFog == true then
+			setFogOff()
+		end
+		pcall(clientBypass.applySafeRecover)
+		pcall(clientBypass.applyCharBypasses)
+		pcall(clientBypass.applyFullbright)
+		pcall(clientBypass.applyCH, false)
+	end)
+
+	clientBypass.bindFovCam(Ws.CurrentCamera or workspace.CurrentCamera)
+	pcall(clientBypass.applyFovUiFix, true)
 
 	pcall(function()
 		bind(Ws:GetPropertyChangedSignal("CurrentCamera"), function()
 			task.defer(function()
-				bindFovCam(Ws.CurrentCamera or workspace.CurrentCamera)
+				clientBypass.bindFovCam(Ws.CurrentCamera or workspace.CurrentCamera)
 			end)
 		end)
 	end)
@@ -4487,7 +5340,7 @@ if game.GameId == 847722000 then
 		clientBypass.spdT += dt
 		if clientBypass.spdT >= 0.5 then
 			clientBypass.spdT = 0
-			applySpeed(false)
+			clientBypass.applySpeed(false)
 		end
 	end)
 
@@ -4502,20 +5355,15 @@ if game.GameId == 847722000 then
 			return
 		end
 
-		local scan = infSys.scan >= 2.5
 		infSys.fast = 0
-		if scan then
-			infSys.scan = 0
-		end
-
-		applyInfTabs(scan)
+		applyInfTabs(false)
 	end)
 
 	function DestroyUI()
 		AllowRunService = false
 		saveNow()
 		wipeCharConns()
-		wipeFovConns()
+		clientBypass.wipeFovConns()
 		wipeFog()
 		if cleanupEsp then
 			cleanupEsp()
@@ -4524,6 +5372,10 @@ if game.GameId == 847722000 then
 		safeDestroy(FreeCamPart)
 		safeDestroy(HidePartHightLight)
 		safeDestroy(HidePart)
+		safeDestroy(infoBubble)
+		infoBubble = nil
+		infoRoot = nil
+		infoLbl = nil
 		genv.RakeGui = false
 		pcall(function()
 			Obsidian:Destroy()
@@ -4630,4 +5482,7 @@ if game.GameId == 847722000 then
 			Obsidian:LoadConfiguration()
 		end)
 	end
+	end
+
+	clientBypass.buildUi()
 end

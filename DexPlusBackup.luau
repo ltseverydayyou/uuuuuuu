@@ -308,9 +308,8 @@ DefaultSettings = (function()
 			OpenProperties = true
 		},
 		Decompiler = {
-			DecompilerFallback = "Konstant", -- Konstant, Shiny, AdvancedDecompiler
+			DecompilerFallback = "lua.expert", -- lua.expert, Konstant
 			PreferDecompilerFallback = false,
-			ShinyDecompilerPort = 3000,
 		},
 		Files = {
 			_Recurse = true,
@@ -1342,27 +1341,6 @@ Main = (function()
 			return type(getNativeDecompiler()) ~= "function" and type(getscriptbytecode) == "function"
 		end
 
-		local advancedDecCache
-		local advancedDecTried = false
-		local function getAdvancedDecompiler()
-			if advancedDecTried then
-				return advancedDecCache
-			end
-			advancedDecTried = true
-			local ok, dec = pcall(function()
-				local src = oldgame:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/refs/heads/main/AdvancedDecompV3.lua")
-				local loader = loadstring(src)
-				if type(loader) ~= "function" then
-					return nil
-				end
-				return loader()
-			end)
-			if ok and type(dec) == "function" then
-				advancedDecCache = dec
-			end
-			return advancedDecCache
-		end
-
 		local fallbackDecompile = (function()
 			-- by lovrewe
 			if not env.getscriptbytecode then --[[warn('Konstant decompiler is not supported. "getscriptbytecode" is missing.')]] return end
@@ -1421,42 +1399,93 @@ Main = (function()
 			return decompileFallback
 		end)()
 
-		local function shinyDecompile(scriptInstance)
-			if not env.request then
-				return nil, "Shiny fallback unavailable: request function is missing."
+		local luaExpertDecompile = (function()
+			if not env.getscriptbytecode then
+				return
 			end
-			if type(crypt) ~= "table" or type(crypt.base64encode) ~= "function" then
-				return nil, "Shiny fallback unavailable: crypt.base64encode is missing."
+			local request = env.request
+			if type(request) ~= "function" then
+				return
 			end
-			local okBytecode, bytecode = pcall(env.getscriptbytecode, scriptInstance)
-			if not okBytecode then
-				return nil, "Shiny fallback failed to get bytecode: "..tostring(bytecode)
+
+			local last_call = 0
+
+			local function base64Encode(data)
+				local encoder = env.base64_encode or base64_encode
+				if type(encoder) == "function" then
+					local ok, encoded = pcall(encoder, data)
+					if ok and type(encoded) == "string" then
+						return encoded
+					end
+				end
+
+				local alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+				return ((data:gsub(".", function(char)
+					local bits, byte = "", char:byte()
+					for i = 8, 1, -1 do
+						bits = bits .. (byte % 2 ^ i - byte % 2 ^ (i - 1) > 0 and "1" or "0")
+					end
+					return bits
+				end) .. "0000"):gsub("%d%d%d?%d?%d?%d?", function(bits)
+					if #bits < 6 then
+						return ""
+					end
+					local index = 0
+					for i = 1, 6 do
+						index = index + (bits:sub(i, i) == "1" and 2 ^ (6 - i) or 0)
+					end
+					return alphabet:sub(index + 1, index + 1)
+				end) .. ({ "", "==", "=" })[#data % 3 + 1])
 			end
-			if type(bytecode) ~= "string" or bytecode == "" then
-				return nil, "Shiny fallback bytecode is empty."
+
+			return function(scriptInstance)
+				local okBytecode, bytecode = pcall(env.getscriptbytecode, scriptInstance)
+				if not okBytecode then
+					return nil, "lua.expert fallback failed to get bytecode: "..tostring(bytecode)
+				end
+				if type(bytecode) ~= "string" or bytecode == "" then
+					return nil, "lua.expert fallback bytecode is empty."
+				end
+
+				local time_elapsed = os.clock() - last_call
+				if time_elapsed < .6 then
+					task.wait(.6 - time_elapsed)
+				end
+
+				local okPayload, payload = pcall(service.HttpService.JSONEncode, service.HttpService, {
+					script = base64Encode(bytecode)
+				})
+				if not okPayload then
+					return nil, "lua.expert fallback failed to encode request body: "..tostring(payload)
+				end
+
+				local response = request({
+					Url = "https://api.lua.expert/decompile",
+					Method = "POST",
+					Headers = {
+						["content-type"] = "application/json"
+					},
+					Body = payload
+				})
+
+				last_call = os.clock()
+
+				if type(response) ~= "table" then
+					return nil, "lua.expert fallback returned an invalid HTTP response."
+				end
+				if response.StatusCode and response.StatusCode ~= 200 then
+					return nil, "lua.expert fallback HTTP error ("..tostring(response.StatusCode).."): "..tostring(response.Body)
+				end
+				if type(response.Body) ~= "string" or response.Body == "" then
+					return nil, "lua.expert fallback returned an empty response body."
+				end
+				return response.Body
 			end
-			local encoded = crypt.base64encode(bytecode)
-			local port = (Settings and Settings.Decompiler and Settings.Decompiler.ShinyDecompilerPort) or DefaultSettings.Decompiler.ShinyDecompilerPort
-			local response = env.request({
-				Url = "http://127.0.0.1:"..tostring(port).."/luau/decompile",
-				Method = "POST",
-				Body = encoded
-			})
-			if type(response) ~= "table" then
-				return nil, "Shiny fallback returned an invalid HTTP response."
-			end
-			if response.StatusCode and response.StatusCode ~= 200 then
-				return nil, "Shiny fallback HTTP error ("..tostring(response.StatusCode).."): "..tostring(response.Body)
-			end
-			if type(response.Body) ~= "string" or response.Body == "" then
-				return nil, "Shiny fallback returned an empty response body."
-			end
-			return response.Body
-		end
+		end)()
 
 		env.decompile = function(...)
 			local builtInDecompiler = getNativeDecompiler()
-			local fallbackMode = (Settings and Settings.Decompiler and Settings.Decompiler.DecompilerFallback) or "Konstant"
+			local fallbackMode = (Settings and Settings.Decompiler and Settings.Decompiler.DecompilerFallback) or "lua.expert"
 			local preferFallback = (Settings and Settings.Decompiler and Settings.Decompiler.PreferDecompilerFallback) == true
 			local attempts = {}
 			local included = {}
@@ -1471,18 +1500,10 @@ Main = (function()
 			end
 
 			local function queueFallback(mode)
-				if mode == "Konstant" then
+				if mode == "lua.expert" then
+					queueAttempt("lua.expert", luaExpertDecompile)
+				elseif mode == "Konstant" then
 					queueAttempt("Konstant", fallbackDecompile)
-				elseif mode == "Shiny" then
-					queueAttempt("Shiny", shinyDecompile)
-				elseif mode == "AdvancedDecompiler" then
-					queueAttempt("AdvancedDecompiler", function(...)
-						local adv = getAdvancedDecompiler()
-						if type(adv) ~= "function" then
-							return nil, "AdvancedDecompiler could not be loaded."
-						end
-						return adv(...)
-					end)
 				end
 			end
 
@@ -1494,7 +1515,7 @@ Main = (function()
 				queueFallback(fallbackMode)
 			end
 
-			for _, mode in ipairs({"Konstant", "Shiny", "AdvancedDecompiler"}) do
+			for _, mode in ipairs({"lua.expert", "Konstant"}) do
 				if mode ~= fallbackMode then
 					queueFallback(mode)
 				end
@@ -1887,17 +1908,12 @@ Main = (function()
 			Settings.Decompiler = {}
 		end
 		local fallbackMode = Settings.Decompiler.DecompilerFallback
-		if fallbackMode ~= "Konstant" and fallbackMode ~= "Shiny" and fallbackMode ~= "AdvancedDecompiler" then
+		if fallbackMode ~= "lua.expert" and fallbackMode ~= "Konstant" then
 			Settings.Decompiler.DecompilerFallback = DefaultSettings.Decompiler.DecompilerFallback
 		end
 		if type(Settings.Decompiler.PreferDecompilerFallback) ~= "boolean" then
 			Settings.Decompiler.PreferDecompilerFallback = DefaultSettings.Decompiler.PreferDecompilerFallback
 		end
-		local shinyPort = tonumber(Settings.Decompiler.ShinyDecompilerPort)
-		if shinyPort == nil then
-			shinyPort = DefaultSettings.Decompiler.ShinyDecompilerPort
-		end
-		Settings.Decompiler.ShinyDecompilerPort = math.clamp(math.floor(shinyPort), 1, 65535)
 		if Settings.ClassIcon ~= "NewDark" and Settings.ClassIcon ~= "Vanilla3" and Settings.ClassIcon ~= "Old" then
 			Settings.ClassIcon = DefaultSettings.ClassIcon
 		end

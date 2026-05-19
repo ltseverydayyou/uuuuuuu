@@ -186,16 +186,18 @@ local getPromptPart = function(pp)
 end;
 
 if isPoopSploit then
+	local ProximityPromptService = __lt.cs("ProximityPromptService", cloneref)
+
 	local function toOpts(o)
 		if typeof(o) == "number" then
 			return {
 				hold = o
-			};
-		end;
-		return typeof(o) == "table" and o or {};
-	end;
+			}
+		end
+		return typeof(o) == "table" and o or {}
+	end
 
-	local state = {};
+	local state = {}
 
 	local function snapshot(pp)
 		return {
@@ -204,11 +206,11 @@ if isPoopSploit then
 			R = pp.RequiresLineOfSight,
 			D = pp.MaxActivationDistance,
 			X = pp.Exclusivity
-		};
-	end;
+		}
+	end
 
 	local function cleanProxies(s)
-		local list = s and s.proxy;
+		local list = s and s.proxy
 		if not list then
 			return
 		end
@@ -226,208 +228,317 @@ if isPoopSploit then
 
 	local function begin(pp, o)
 		if not (pp and pp.Parent) then
-			return false;
-		end;
-		local s = state[pp];
+			return false
+		end
+
+		local s = state[pp]
 		if not s then
-			s = snapshot(pp);
-			s.ref = 0;
-			s.inFlight = false;
+			s = snapshot(pp)
+			s.ref = 0
+			s.inFlight = false
 			s.proxy = nil
-			state[pp] = s;
-		end;
+			state[pp] = s
+		end
+
 		if s.inFlight then
-			return false;
-		end;
-		s.inFlight = true;
-		s.ref += 1;
-		pp.HoldDuration = 0;
+			return false
+		end
+
+		s.inFlight = true
+		s.ref += 1
+
+		pp.HoldDuration = 0
+
 		if o.requireLoS ~= nil then
-			pp.RequiresLineOfSight = o.requireLoS and true or false;
+			pp.RequiresLineOfSight = o.requireLoS and true or false
 		elseif o.disableLoS ~= false then
-			pp.RequiresLineOfSight = false;
-		end;
+			pp.RequiresLineOfSight = false
+		end
+
 		if o.distance ~= nil then
-			pp.MaxActivationDistance = o.distance;
+			pp.MaxActivationDistance = o.distance
 		elseif o.autoDistance ~= false then
-			pp.MaxActivationDistance = 1000000000;
-		end;
+			pp.MaxActivationDistance = 1000000000
+		end
+
 		if o.exclusivity ~= nil then
-			pp.Exclusivity = o.exclusivity;
+			pp.Exclusivity = o.exclusivity
 		else
-			pp.Exclusivity = Enum.ProximityPromptExclusivity.AlwaysShow;
-		end;
+			pp.Exclusivity = Enum.ProximityPromptExclusivity.AlwaysShow
+		end
+
 		if o.forceEnable ~= false then
-			pp.Enabled = true;
-		end;
-		return true;
-	end;
+			pp.Enabled = true
+		end
+
+		return true
+	end
 
 	local function finish(pp)
-		local s = state[pp];
+		local s = state[pp]
 		if not s then
-			return;
-		end;
-		s.ref -= 1;
-		s.inFlight = false;
+			return
+		end
+
+		s.ref -= 1
+		s.inFlight = false
+
 		if s.ref <= 0 and pp and pp.Parent then
-			pp.Enabled = s.E;
-			pp.HoldDuration = s.H;
-			pp.RequiresLineOfSight = s.R;
-			pp.MaxActivationDistance = s.D;
-			pp.Exclusivity = s.X;
+			pp.Enabled = s.E
+			pp.HoldDuration = s.H
+			pp.RequiresLineOfSight = s.R
+			pp.MaxActivationDistance = s.D
+			pp.Exclusivity = s.X
 			cleanProxies(s)
-			state[pp] = nil;
+			state[pp] = nil
 		elseif s.ref <= 0 then
 			cleanProxies(s)
-			state[pp] = nil;
-		end;
-	end;
+			state[pp] = nil
+		end
+	end
+
+	local function rstep(n)
+		for i = 1, n or 1 do
+			pcall(function()
+				RunService.RenderStepped:Wait()
+			end)
+			RunService.Heartbeat:Wait()
+		end
+	end
+
+	local function shouldProxy(pp, o)
+		if o.relocate == false then
+			return false
+		end
+
+		if o.proxyAlways == true then
+			return true
+		end
+
+		local cam = workspace.CurrentCamera
+		local part = getPromptPart(pp)
+
+		if not cam or not part then
+			return true
+		end
+
+		local vp, on = cam:WorldToViewportPoint(part.Position)
+		if vp.Z <= 0 or not on then
+			return true
+		end
+
+		local dir = part.Position - cam.CFrame.Position
+		if dir.Magnitude <= 0 then
+			return true
+		end
+
+		return dir.Unit:Dot(cam.CFrame.LookVector) < 0.05
+	end
+
+	local function makeProxy(pp, o)
+		local cam = workspace.CurrentCamera
+		if not cam then
+			return nil
+		end
+
+		local shown = false
+		local con
+
+		pcall(function()
+			con = ProximityPromptService.PromptShown:Connect(function(p)
+				if p == pp then
+					shown = true
+				end
+			end)
+		end)
+
+		local cf = cam.CFrame
+		local dist = tonumber(o.relocateDistance) or 5
+		local up = o.relocateUp ~= nil and tonumber(o.relocateUp) or -0.35
+		local right = o.relocateRight ~= nil and tonumber(o.relocateRight) or 0
+
+		if not up then
+			up = -0.35
+		end
+
+		if not right then
+			right = 0
+		end
+
+		dist = math.clamp(dist, 1, 50)
+
+		local pos = cf.Position + cf.LookVector * dist + cf.UpVector * up + cf.RightVector * right
+		local old = pp.Parent
+
+		local ok, proxy = pcall(function()
+			local p = Instance.new("Part")
+			p.Name = rStringgg and rStringgg() or "\000"
+			p.Size = Vector3.new(0.05, 0.05, 0.05)
+			p.Anchored = true
+			p.CanCollide = false
+			p.CanTouch = false
+			p.CanQuery = false
+			p.CastShadow = false
+			p.Transparency = 1
+			p.CFrame = CFrame.new(pos, pos + cf.LookVector)
+			p.Parent = workspace
+			return p
+		end)
+
+		if not ok or not proxy then
+			if con then
+				pcall(function()
+					con:Disconnect()
+				end)
+			end
+			return nil
+		end
+
+		regHp(proxy)
+
+		local s = state[pp]
+		if s then
+			s.proxy = s.proxy or {}
+			table.insert(s.proxy, proxy)
+		end
+
+		pcall(function()
+			pp.Enabled = false
+		end)
+
+		pcall(function()
+			pp.Parent = proxy
+		end)
+
+		rstep(1)
+
+		if o.forceEnable ~= false then
+			pcall(function()
+				pp.Enabled = true
+			end)
+		end
+
+		local dead = false
+
+		local function closeCon()
+			if con then
+				pcall(function()
+					con:Disconnect()
+				end)
+				con = nil
+			end
+		end
+
+		local function waitShow(lim)
+			lim = tonumber(lim) or 0.12
+			local t0 = tick()
+
+			repeat
+				rstep(1)
+			until shown or dead or tick() - t0 >= lim or not (pp and pp.Parent)
+
+			closeCon()
+		end
+
+		local function restore()
+			dead = true
+			closeCon()
+
+			if pp then
+				pcall(function()
+					pp.Parent = old
+				end)
+			end
+
+			if proxy and proxy.Parent then
+				pcall(function()
+					proxy:Destroy()
+				end)
+			end
+		end
+
+		return restore, waitShow
+	end
 
 	local function fireOne(pp, o)
 		if not begin(pp, o) then
-			return;
-		end;
-		local restorePos;
-		if o.relocate ~= false then
-			local part = getPromptPart(pp);
-			local cam = workspace.CurrentCamera;
-			if part and part:IsA("BasePart") and cam then
-				local camPos = cam.CFrame.Position;
-				local look = cam.CFrame.LookVector;
-				local dir = part.Position - camPos;
-				if dir.Magnitude > 0 then
-					local dot = dir.Unit:Dot(look);
-					if dot < 0 then
-						local dist = tonumber(o.relocateDistance) or 4;
-						local downFactor = o.relocateDownFactor ~= nil and o.relocateDownFactor or 1.8;
-						local target = camPos + look * dist + cam.CFrame.UpVector * (-dist) * downFactor;
-						local useProxy = o.relocateProxy ~= false;
-						if useProxy then
-							local ok, proxy = pcall(function()
-								local p = Instance.new("Part");
-								p.Size = Vector3.new(0.2, 0.2, 0.2);
-								p.Anchored = true;
-								p.CanCollide = false;
-								p.CanTouch = false;
-								p.CanQuery = false;
-								p.Transparency = 1;
-								p.CFrame = CFrame.new(target, target + look);
-								p.Name = rStringgg and rStringgg() or "\000";
-								p.Parent = workspace;
-								return p;
-							end);
-							if ok and proxy then
-								regHp(proxy)
-								local s = state[pp]
-								if s then
-									s.proxy = s.proxy or {}
-									table.insert(s.proxy, proxy)
-								end
-								local origParent = pp.Parent;
-								pp.Parent = proxy;
-								restorePos = function()
-									if pp then
-										pp.Parent = origParent;
-									end;
-									if proxy and proxy.Parent then
-										pcall(function()
-											proxy:Destroy();
-										end);
-									end;
-								end;
-							end;
-						end;
-						if not restorePos then
-							local origCF = part.CFrame;
-							local origCollide = part.CanCollide;
-							local origTouch = part.CanTouch;
-							local origQuery = part.CanQuery;
-							local origTrans = part.Transparency;
-							local hasLTM, origLTM = pcall(function()
-								return part.LocalTransparencyModifier;
-							end);
-							part.CFrame = CFrame.new(target, target + look);
-							part.CanCollide = false;
-							part.CanTouch = false;
-							part.CanQuery = false;
-							part.Transparency = o.relocateTransparency ~= nil and o.relocateTransparency or 1;
-							if hasLTM then
-								pcall(function()
-									part.LocalTransparencyModifier = o.relocateTransparency ~= nil and o.relocateTransparency or 1;
-								end);
-							end;
-							restorePos = function()
-								if part and part.Parent then
-									part.CFrame = origCF;
-									part.CanCollide = origCollide;
-									part.CanTouch = origTouch;
-									part.CanQuery = origQuery;
-									part.Transparency = origTrans;
-									if hasLTM then
-										pcall(function()
-											part.LocalTransparencyModifier = origLTM;
-										end);
-									end;
-								end;
-							end;
-						end;
-					end;
-				end;
-			end;
-		end;
+			return
+		end
+
+		local restorePos
+		local waitShow
+
 		local ok, err = pcall(function()
-			hb(1);
-			pp:InputHoldBegin();
-			local t = o.hold ~= nil and tonumber(o.hold) or 0;
-			if t and t > 0 then
-				Wait(t);
+			if shouldProxy(pp, o) then
+				restorePos, waitShow = makeProxy(pp, o)
+				if waitShow then
+					waitShow(o.showTimeout)
+				else
+					rstep(2)
+				end
 			else
-				hb(1);
-			end;
-			pp:InputHoldEnd();
-			hb(1);
-		end);
+				rstep(1)
+			end
+
+			pp:InputHoldBegin()
+
+			local t = o.hold ~= nil and tonumber(o.hold) or 0
+			if t and t > 0 then
+				Wait(t)
+			else
+				rstep(1)
+			end
+
+			pp:InputHoldEnd()
+			rstep(1)
+		end)
+
 		if restorePos then
-			pcall(restorePos);
-		end;
-		finish(pp);
+			pcall(restorePos)
+		end
+
+		finish(pp)
+
 		if not ok then
-			warn(("[fireproximityprompt] %s"):format(err));
-		end;
-	end;
+			warn(("[fireproximityprompt] %s"):format(err))
+		end
+	end
 
 	_env.fireproximityprompt = function(target, opts)
-		local o = toOpts(opts);
-		local list = {};
+		local o = toOpts(opts)
+		local list = {}
+
 		if typeof(target) == "Instance" and target:IsA("ProximityPrompt") then
-			list[1] = target;
+			list[1] = target
 		elseif typeof(target) == "table" then
 			for _, v in ipairs(target) do
 				if typeof(v) == "Instance" and v:IsA("ProximityPrompt") then
-					Insert(list, v);
-				end;
-			end;
+					Insert(list, v)
+				end
+			end
 		else
-			return false;
-		end;
-		local stagger = o.stagger ~= nil and math.max(0, o.stagger) or 0;
+			return false
+		end
+
+		local stagger = o.stagger ~= nil and math.max(0, o.stagger) or 0
 		if stagger <= 0 and #list > 1 then
-			stagger = 0.02;
-		end;
+			stagger = 0.02
+		end
+
 		for i, pp in ipairs(list) do
-			local d = stagger * (i - 1);
+			local d = stagger * (i - 1)
 			if d > 0 then
 				Delay(d, function()
-					fireOne(pp, o);
-				end);
+					fireOne(pp, o)
+				end)
 			else
-				Spawn(fireOne, pp, o);
-			end;
-		end;
-		return #list > 0;
-	end;
-end;
+				Spawn(fireOne, pp, o)
+			end
+		end
+
+		return #list > 0
+	end
+end
 
 if isPoopSploit then
 	local Players = __lt.cs("Players", cloneref);

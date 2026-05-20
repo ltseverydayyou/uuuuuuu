@@ -2204,6 +2204,15 @@ local function main()
 		local checkMouseInGui = Lib.CheckMouseInGui
 		local createArrow = Lib.CreateArrow
 
+		local function forEachArrowPart(button, callback)
+			if not (button and button.Parent) then return end
+			local arrow = button:FindFirstChild("Arrow")
+			if not arrow then return end
+			for i,v in pairs(arrow:GetChildren()) do
+				callback(v, i)
+			end
+		end
+
 		local function drawThumb(self)
 			local total = self.TotalSpace
 			local visible = self.VisibleSpace
@@ -2459,30 +2468,34 @@ local function main()
 
 			self.Index = math.clamp(self.Index, 0, math.max(0, total - visible))
 
+			if not (button1 and button1.Parent and button2 and button2.Parent and self.GuiElems.ScrollThumb and self.GuiElems.ScrollThumb.Parent and self.GuiElems.ScrollThumbFrame and self.GuiElems.ScrollThumbFrame.Parent) then
+				return
+			end
+
 			if self.LastTotalSpace ~= self.TotalSpace then
 				self.LastTotalSpace = self.TotalSpace
 				self:UpdateMarkers()
 			end
 
 			if self:CanScrollUp() then
-				for i,v in pairs(button1.Arrow:GetChildren()) do
+				forEachArrowPart(button1, function(v)
 					v.BackgroundTransparency = 0
-				end
+				end)
 			else
 				button1.BackgroundTransparency = 1
-				for i,v in pairs(button1.Arrow:GetChildren()) do
+				forEachArrowPart(button1, function(v)
 					v.BackgroundTransparency = 0.5
-				end
+				end)
 			end
 			if self:CanScrollDown() then
-				for i,v in pairs(button2.Arrow:GetChildren()) do
+				forEachArrowPart(button2, function(v)
 					v.BackgroundTransparency = 0
-				end
+				end)
 			else
 				button2.BackgroundTransparency = 1
-				for i,v in pairs(button2.Arrow:GetChildren()) do
+				forEachArrowPart(button2, function(v)
 					v.BackgroundTransparency = 0.5
-				end
+				end)
 			end
 
 			drawThumb(self)
@@ -2561,12 +2574,12 @@ local function main()
 			self.Gui.BackgroundColor3 = data.FrameColor or Color3.new(0,0,0)
 			self.GuiElems.Button1.BackgroundColor3 = data.ButtonColor or Color3.new(0,0,0)
 			self.GuiElems.Button2.BackgroundColor3 = data.ButtonColor or Color3.new(0,0,0)
-			for i,v in pairs(self.GuiElems.Button1.Arrow:GetChildren()) do
+			forEachArrowPart(self.GuiElems.Button1, function(v)
 				v.BackgroundColor3 = data.ArrowColor or Color3.new(0,0,0)
-			end
-			for i,v in pairs(self.GuiElems.Button2.Arrow:GetChildren()) do
+			end)
+			forEachArrowPart(self.GuiElems.Button2, function(v)
 				v.BackgroundColor3 = data.ArrowColor or Color3.new(0,0,0)
-			end
+			end)
 		end
 
 		funcs.SetScrollFrame = function(self,frame)

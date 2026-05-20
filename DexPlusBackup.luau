@@ -510,6 +510,7 @@ Main = (function()
 		["rbxassetid://1072518502"] = "colorstrip.png",
 		["rbxassetid://135148380892747"] = "Texture.png",
 		["rbxassetid://114851699900089"] = "Vanilla3.png",
+		["DexPlusIconDraft"] = "icondraft.png",
 	}
 	Main.IconSourceBaseUrl = "https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/main/DexPlusIcons/"
 	Main.ResolvedAssetCache = {}
@@ -2542,15 +2543,54 @@ Main = (function()
 
 		local iconIndex = data.Icon
 		if data.IconMap and iconIndex then
-			if type(iconIndex) == "number" then
+			if data.IconMap == Explorer.LegacyClassIcons and type(iconIndex) == "number" then
+				app.Main.Icon.Image = ""
+				app.Main.Icon.ImageRectOffset = Vector2.new(0,0)
+				app.Main.Icon.ImageRectSize = Vector2.new(0,0)
+				app.Main.Icon.ClipsDescendants = true
+				app.Main.Icon.Size = UDim2.new(0,32,0,32)
+				app.Main.Icon.Position = UDim2.new(0.5,-16,0,4)
+
+				local legacyIcon = Instance.new("ImageLabel")
+				legacyIcon.BackgroundTransparency = 1
+				legacyIcon.Image = data.IconMap.MapId
+				legacyIcon.ImageRectOffset = Vector2.new(0,0)
+				legacyIcon.ImageRectSize = Vector2.new(0,0)
+				legacyIcon.ScaleType = Enum.ScaleType.Stretch
+				legacyIcon.Size = UDim2.new(0,4704,0,32)
+				legacyIcon.Position = UDim2.new(0,-32 * iconIndex,0,0)
+				legacyIcon.Name = "LegacyIcon"
+				legacyIcon.Parent = app.Main.Icon
+			elseif type(iconIndex) == "number" then
 				data.IconMap:Display(app.Main.Icon,iconIndex)
 			elseif type(iconIndex) == "string" then
 				data.IconMap:DisplayByKey(app.Main.Icon,iconIndex)
 			end
+			if data.IconSize or data.IconPosition then
+				app.Main.Icon.Size = data.IconSize or app.Main.Icon.Size
+				app.Main.Icon.Position = data.IconPosition or app.Main.Icon.Position
+			elseif data.IconMap == Explorer.LegacyClassIcons then
+				app.Main.Icon.Size = UDim2.new(0,32,0,32)
+				app.Main.Icon.Position = UDim2.new(0.5,-16,0,4)
+				app.Main.Icon.ScaleType = Enum.ScaleType.Fit
+			end
 		elseif type(iconIndex) == "string" then
 			app.Main.Icon.Image = iconIndex
+			app.Main.Icon.ImageRectOffset = Vector2.new(0,0)
+			app.Main.Icon.ImageRectSize = Vector2.new(0,0)
+			app.Main.Icon.ScaleType = Enum.ScaleType.Fit
+			app.Main.Icon.Size = data.IconSize or UDim2.new(0,16,0,16)
+			app.Main.Icon.Position = data.IconPosition or UDim2.new(0.5,-8,0,12)
+			if data.ImageRectOffset then
+				app.Main.Icon.ImageRectOffset = data.ImageRectOffset
+			end
+			if data.ImageRectSize then
+				app.Main.Icon.ImageRectSize = data.ImageRectSize
+			end
 		else
 			app.Main.Icon.Image = ""
+			app.Main.Icon.ImageRectOffset = Vector2.new(0,0)
+			app.Main.Icon.ImageRectSize = Vector2.new(0,0)
 		end
 
 		local function updateState()
@@ -2998,7 +3038,7 @@ Main = (function()
 			end
 		end
 
-		Main.CreateApp({Name = "Exit Dex", IconMap = Explorer.LegacyClassIcons, Icon = 37, OnClick = function(isOpen)
+		Main.CreateApp({Name = "Exit Dex", Icon = Main.ResolveAsset("DexPlusIconDraft"), ImageRectOffset = Vector2.new(166,221), ImageRectSize = Vector2.new(14,13), IconSize = UDim2.new(0,32,0,30), IconPosition = UDim2.new(0.5,-16,0,5), OnClick = function(isOpen)
 			if isOpen then
 				Main.Exit()
 			end

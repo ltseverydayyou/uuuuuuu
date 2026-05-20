@@ -84,6 +84,121 @@ local function __NAProtectUI(gui, options)
 	return nil;
 end;
 
+local DexState = (function()
+	local stateKey = "__DEXPP_STATE";
+	local legacyKey = "__DEXPP";
+	local stores = {};
+	local seen = {};
+
+	local api = {};
+
+	api.AddStore = function(store)
+		if type(store) == "table" and not seen[store] then
+			seen[store] = true;
+			table.insert(stores, store);
+		end;
+	end;
+
+	local okGenv, genv = pcall(function()
+		return (getgenv and getgenv()) or nil;
+	end);
+	if okGenv then
+		api.AddStore(genv);
+	end;
+	api.AddStore(_G);
+
+	api.Sync = function(state)
+		for _, store in ipairs(stores) do
+			rawset(store, stateKey, state);
+			rawset(store, legacyKey, state);
+		end;
+		return state;
+	end;
+
+	api.Get = function(create)
+		for _, store in ipairs(stores) do
+			local state = rawget(store, stateKey);
+			if type(state) == "table" then
+				return api.Sync(state);
+			end;
+
+			local legacyState = rawget(store, legacyKey);
+			if type(legacyState) == "table" then
+				return api.Sync(legacyState);
+			end;
+		end;
+
+		if not create then
+			return nil;
+		end;
+
+		return api.Sync({});
+	end;
+
+	api.Clear = function(state)
+		for _, store in ipairs(stores) do
+			if rawget(store, stateKey) == state then
+				rawset(store, stateKey, nil);
+			end;
+			if rawget(store, legacyKey) == state then
+				rawset(store, legacyKey, nil);
+			end;
+		end;
+	end;
+
+	api.IsLive = function(state)
+		if type(state) ~= "table" then
+			return false;
+		end;
+
+		local main = rawget(state, "Main");
+		if type(main) ~= "table" or type(main.Exit) ~= "function" then
+			return false;
+		end;
+
+		local gui = rawget(main, "MainGui");
+		if typeof(gui) == "Instance" then
+			local okParent, parent = pcall(function()
+				return gui.Parent;
+			end);
+			if okParent and parent then
+				local okOpenButton, openButton = pcall(function()
+					return gui:FindFirstChild("OpenButton");
+				end);
+				if okOpenButton and openButton then
+					return true;
+				end;
+			end;
+		end;
+
+		if rawget(main, "__DexInitStarted") == true then
+			local startedAt = tonumber(rawget(state, "StartedAt"));
+			if startedAt and (os.clock() - startedAt) <= 30 then
+				return true;
+			end;
+		end;
+
+		return false;
+	end;
+
+	return api;
+end)();
+
+do
+	local existingState = DexState.Get(false);
+	if existingState and DexState.IsLive(existingState) then
+		pcall(function()
+			local existingMain = existingState.Main;
+			if existingMain and existingMain.__DexLoaded and existingMain.SetMainGuiOpen then
+				existingMain.SetMainGuiOpen(true);
+			end;
+		end);
+		return existingState;
+	elseif existingState then
+		DexState.Clear(existingState);
+	end;
+end;
+
 local getnilinstances = getnilinstances or function()
 	return {};
 end;
@@ -2544,7 +2659,7 @@ local EmbeddedModules = {
 						{
 							BackgroundColor3 = Color3.new(1, 1, 1),
 							BackgroundTransparency = 1,
-							Image = "rbxassetid://5642383285",
+							Image = Main.ResolveAsset("rbxassetid://5642383285"),
 							ImageRectOffset = Vector2.new(144, 16),
 							ImageRectSize = Vector2.new(16, 16),
 							Name = "Icon",
@@ -2976,7 +3091,7 @@ local EmbeddedModules = {
 						{
 							BackgroundColor3 = Color3.new(1, 1, 1),
 							BackgroundTransparency = 1,
-							Image = "rbxassetid://5034718129",
+							Image = Main.ResolveAsset("rbxassetid://5034718129"),
 							ImageColor3 = Color3.new(0.39215686917305, 0.39215686917305, 0.39215686917305),
 							Parent = {
 								7
@@ -3011,7 +3126,7 @@ local EmbeddedModules = {
 						{
 							BackgroundColor3 = Color3.new(1, 1, 1),
 							BackgroundTransparency = 1,
-							Image = "rbxassetid://5642310344",
+							Image = Main.ResolveAsset("rbxassetid://5642310344"),
 							Parent = {
 								9
 							},
@@ -5176,7 +5291,7 @@ local EmbeddedModules = {
 						{
 							BackgroundColor3 = Color3.new(1, 1, 1),
 							BackgroundTransparency = 1,
-							Image = "rbxassetid://5642383285",
+							Image = Main.ResolveAsset("rbxassetid://5642383285"),
 							ImageRectOffset = Vector2.new(144, 16),
 							ImageRectSize = Vector2.new(16, 16),
 							Name = "Icon",
@@ -5434,7 +5549,7 @@ local EmbeddedModules = {
 						{
 							BackgroundColor3 = Color3.new(1, 1, 1),
 							BackgroundTransparency = 1,
-							Image = "rbxassetid://5642383285",
+							Image = Main.ResolveAsset("rbxassetid://5642383285"),
 							ImageRectOffset = Vector2.new(144, 16),
 							ImageRectSize = Vector2.new(16, 16),
 							Name = "Icon",
@@ -5499,7 +5614,7 @@ local EmbeddedModules = {
 						{
 							BackgroundColor3 = Color3.new(1, 1, 1),
 							BackgroundTransparency = 1,
-							Image = "rbxassetid://5034718180",
+							Image = Main.ResolveAsset("rbxassetid://5034718180"),
 							ImageTransparency = 0.20000000298023,
 							Name = "Icon",
 							Parent = {
@@ -5646,7 +5761,7 @@ local EmbeddedModules = {
 						{
 							BackgroundColor3 = Color3.new(1, 1, 1),
 							BackgroundTransparency = 1,
-							Image = "rbxassetid://5034718129",
+							Image = Main.ResolveAsset("rbxassetid://5034718129"),
 							ImageColor3 = Color3.new(0.39215686917305, 0.39215686917305, 0.39215686917305),
 							Parent = {
 								7
@@ -5681,7 +5796,7 @@ local EmbeddedModules = {
 						{
 							BackgroundColor3 = Color3.new(1, 1, 1),
 							BackgroundTransparency = 1,
-							Image = "rbxassetid://5642310344",
+							Image = Main.ResolveAsset("rbxassetid://5642310344"),
 							Parent = {
 								9
 							},
@@ -6590,6 +6705,9 @@ local EmbeddedModules = {
 			end;
 			Lib.ProtectedGuis = {};
 			Lib.ShowGui = function(gui)
+				if Main and Main.TrackGui then
+					Main.TrackGui(gui);
+				end;
 				if env.gethui then
 					gui.Parent = env.gethui();
 				elseif env.protectgui then
@@ -7037,7 +7155,7 @@ local EmbeddedModules = {
 						Frame.ClipsDescendants = true;
 						local obj = Instance.new("ImageLabel", Frame);
 						obj.BackgroundTransparency = 1;
-						obj.Image = "http://www.roblox.com/asset/?id=" .. self.ExplorerIcons.MapId;
+						obj.Image = Main.ResolveAsset("http://www.roblox.com/asset/?id=" .. self.ExplorerIcons.MapId);
 						obj.Name = "IconMap";
 						self:GetExplorerIcon(obj, index);
 					end;
@@ -7743,7 +7861,7 @@ local EmbeddedModules = {
 							{
 								BackgroundColor3 = Color3.new(1, 1, 1),
 								BackgroundTransparency = 1,
-								Image = "rbxassetid://5054663650",
+								Image = Main.ResolveAsset("rbxassetid://5054663650"),
 								Parent = {
 									7
 								},
@@ -7787,7 +7905,7 @@ local EmbeddedModules = {
 							{
 								BackgroundColor3 = Color3.new(1, 1, 1),
 								BackgroundTransparency = 1,
-								Image = "rbxassetid://5034768003",
+								Image = Main.ResolveAsset("rbxassetid://5034768003"),
 								Parent = {
 									10
 								},
@@ -7812,7 +7930,7 @@ local EmbeddedModules = {
 								BackgroundColor3 = Color3.new(1, 1, 1),
 								BackgroundTransparency = 1,
 								BorderSizePixel = 0,
-								Image = "rbxassetid://1427967925",
+								Image = Main.ResolveAsset("rbxassetid://1427967925"),
 								Name = "Outlines",
 								Parent = {
 									2
@@ -8487,7 +8605,7 @@ local EmbeddedModules = {
 						if not table.find(visibleWindows, self) then
 							table.insert(visibleWindows, 1, self);
 						end;
-						self.GuiElems.Minimize.ImageLabel.Image = "rbxassetid://5034768003";
+						self.GuiElems.Minimize.ImageLabel.Image = Main.ResolveAsset("rbxassetid://5034768003");
 						self.Side = nil;
 						updateWindows();
 					else
@@ -8498,7 +8616,7 @@ local EmbeddedModules = {
 								break;
 							end;
 						end;
-						self.GuiElems.Minimize.ImageLabel.Image = "rbxassetid://5448127505";
+						self.GuiElems.Minimize.ImageLabel.Image = Main.ResolveAsset("rbxassetid://5448127505");
 					end;
 				end;
 				funcs.Add = function(self, obj, name)
@@ -8647,7 +8765,7 @@ local EmbeddedModules = {
 					window.GuiElems.Close.ImageLabel.ImageTransparency = 0;
 					window.GuiElems.TopBar.BackgroundTransparency = 0;
 					window.GuiElems.Outlines.ImageTransparency = 0;
-					window.GuiElems.Minimize.ImageLabel.Image = "rbxassetid://5034768003";
+					window.GuiElems.Minimize.ImageLabel.Image = Main.ResolveAsset("rbxassetid://5034768003");
 					window.GuiElems.Main.Active = true;
 					window.GuiElems.Main.Outlines.Visible = true;
 					window:SetMinimized(false, 3);
@@ -11090,7 +11208,7 @@ local EmbeddedModules = {
 								BackgroundColor3 = Color3.new(1, 1, 1),
 								BackgroundTransparency = 1,
 								BorderSizePixel = 0,
-								Image = "rbxassetid://6234266378",
+								Image = Main.ResolveAsset("rbxassetid://6234266378"),
 								Parent = {
 									9
 								},
@@ -11106,7 +11224,7 @@ local EmbeddedModules = {
 								AnchorPoint = Vector2.new(0.5, 0.5),
 								BackgroundColor3 = Color3.new(1, 1, 1),
 								BackgroundTransparency = 1,
-								Image = "rbxassetid://6401617475",
+								Image = Main.ResolveAsset("rbxassetid://6401617475"),
 								ImageColor3 = Color3.new(0.20784313976765, 0.69803923368454, 0.98431372642517),
 								Name = "checkmark2",
 								Parent = {
@@ -11123,7 +11241,7 @@ local EmbeddedModules = {
 							{
 								BackgroundColor3 = Color3.new(1, 1, 1),
 								BackgroundTransparency = 1,
-								Image = "rbxassetid://6425281788",
+								Image = Main.ResolveAsset("rbxassetid://6425281788"),
 								ImageTransparency = 0.20000000298023,
 								Name = "middle",
 								Parent = {
@@ -11420,7 +11538,7 @@ local EmbeddedModules = {
 								BackgroundColor3 = Color3.new(1, 1, 1),
 								BackgroundTransparency = 1,
 								BorderSizePixel = 0,
-								Image = "rbxassetid://1281023007",
+								Image = Main.ResolveAsset("rbxassetid://1281023007"),
 								ImageColor3 = Color3.new(0.33333334326744, 0.33333334326744, 0.49803924560547),
 								Name = "Hex",
 								Parent = {
@@ -11805,7 +11923,7 @@ local EmbeddedModules = {
 								BackgroundColor3 = Color3.new(1, 1, 1),
 								BorderColor3 = Color3.new(0.37647062540054, 0.37647062540054, 0.37647062540054),
 								BorderSizePixel = 0,
-								Image = "rbxassetid://1072518406",
+								Image = Main.ResolveAsset("rbxassetid://1072518406"),
 								Name = "ColorSpace",
 								Parent = {
 									18
@@ -12982,7 +13100,7 @@ local EmbeddedModules = {
 							{
 								BackgroundColor3 = Color3.new(1, 1, 1),
 								BorderColor3 = Color3.new(0.21568627655506, 0.21568627655506, 0.21568627655506),
-								Image = "rbxassetid://1072518502",
+								Image = Main.ResolveAsset("rbxassetid://1072518502"),
 								Name = "ColorStrip",
 								Parent = {
 									1
@@ -15451,12 +15569,168 @@ Main = (function()
 	Main.MenuApps = {};
 	Main.ModuleErrors = {};
 	Main.StubbedApps = {};
+	Main.ConnList = {};
+	Main.GuiList = {};
+	Main.IconOverrides = {
+		["http://www.roblox.com/asset/?id=6511490623"] = "NewestIcons.png",
+		["rbxassetid://6511490623"] = "NewestIcons.png",
+		["rbxassetid://6579106223"] = "icons.png",
+		["rbxassetid://129589545519436"] = "icons.png",
+		["rbxassetid://6578933307"] = "info.png",
+		["rbxassetid://6578871732"] = "settings.png",
+		["rbxassetid://1427967925"] = "borders.png",
+		["rbxassetid://2764171053"] = "2.png",
+		["rbxassetid://5642383285"] = "Test_Icons.png",
+		["rbxassetid://5034718129"] = "search2.png",
+		["rbxassetid://5642310344"] = "refresh-icon3.png",
+		["rbxassetid://5034718180"] = "settings2.png",
+		["rbxassetid://5054663650"] = "close3.png",
+		["rbxassetid://5034768003"] = "minimize2.png",
+		["rbxassetid://5448127505"] = "squares_icon2.png",
+		["rbxassetid://6234266378"] = "checkmark.png",
+		["rbxassetid://6401617475"] = "checkmark2.png",
+		["rbxassetid://6425281788"] = "luvlies.png",
+		["rbxassetid://1281023007"] = "honey_icon.png",
+		["rbxassetid://1072518406"] = "colors.png",
+		["rbxassetid://1072518502"] = "colorstrip.png",
+		["DexPlusIconDraft"] = "icondraft.png",
+	};
+	Main.IconSourceBaseUrl = "https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/main/DexPlusIcons/";
+	Main.ResolvedAssetCache = {};
+	Main.IconFileReady = {};
+	Main.IconFoldersReady = false;
 	Main.DisplayOrders = {
 		SideWindow = 8,
 		Window = 10,
 		Menu = 100000,
 		Core = 101000
 	};
+	Main.TrackConn = function(conn)
+		if conn then
+			Main.ConnList[(#Main.ConnList) + 1] = conn;
+		end;
+		return conn;
+	end;
+	Main.TrackGui = function(gui)
+		if typeof(gui) ~= "Instance" then
+			return gui;
+		end;
+		for _, trackedGui in ipairs(Main.GuiList) do
+			if trackedGui == gui then
+				return gui;
+			end;
+		end;
+		Main.GuiList[(#Main.GuiList) + 1] = gui;
+		return gui;
+	end;
+	Main.ResolveAsset = function(assetId)
+		local override = Main.IconOverrides and Main.IconOverrides[assetId];
+		if override then
+			local getter = (env and env.getcustomasset) or getcustomasset or getsynasset;
+			local path = "dex/assets/" .. override;
+			local cached = Main.ResolvedAssetCache and Main.ResolvedAssetCache[path];
+			if cached then
+				return cached;
+			end;
+
+			if env and env.makefolder and not Main.IconFoldersReady then
+				pcall(env.makefolder, "dex");
+				pcall(env.makefolder, "dex/assets");
+				Main.IconFoldersReady = true;
+			end;
+
+			local function ensureFile()
+				if Main.IconFileReady[path] then
+					return true;
+				end;
+				if env and env.isfile then
+					local okExists, exists = pcall(env.isfile, path);
+					if okExists and exists then
+						Main.IconFileReady[path] = true;
+						return true;
+					end;
+				end;
+				if not (env and env.writefile) then
+					return false;
+				end;
+				local ok, bytes = pcall(game.HttpGet, game, Main.IconSourceBaseUrl .. override);
+				if ok and type(bytes) == "string" then
+					local okWrite = pcall(env.writefile, path, bytes);
+					if okWrite then
+						Main.IconFileReady[path] = true;
+						return true;
+					end;
+				end;
+				return false;
+			end;
+
+			if ensureFile() and getter then
+				local ok, result = pcall(getter, path);
+				if ok and result then
+					Main.ResolvedAssetCache[path] = result;
+					return result;
+				end;
+			end;
+		end;
+		return assetId;
+	end;
+	Main.EnsureAllIcons = function(forceRefresh)
+		if not (env and env.writefile and env.makefolder and ((env.getcustomasset) or getcustomasset or getsynasset)) then
+			return false;
+		end;
+		local force = forceRefresh == true;
+		local deleteFn = (env and env.delfile) or delfile;
+		local processed = {};
+		pcall(env.makefolder, "dex");
+		pcall(env.makefolder, "dex/assets");
+		Main.IconFoldersReady = true;
+		if force then
+			if table.clear then
+				table.clear(Main.ResolvedAssetCache);
+			else
+				Main.ResolvedAssetCache = {};
+			end;
+		else
+			Main.ResolvedAssetCache = Main.ResolvedAssetCache or {};
+		end;
+		for _, fileName in pairs(Main.IconOverrides) do
+			if processed[fileName] then
+				continue;
+			end;
+			processed[fileName] = true;
+
+			local path = "dex/assets/" .. fileName;
+			local needDownload = force;
+
+			if force and env.isfile and deleteFn then
+				local okExists, exists = pcall(env.isfile, path);
+				if okExists and exists then
+					pcall(deleteFn, path);
+				end;
+				Main.IconFileReady[path] = nil;
+			end;
+
+			if not needDownload and env.isfile then
+				local ok, exists = pcall(env.isfile, path);
+				local fileExists = ok and exists;
+				if fileExists then
+					Main.IconFileReady[path] = true;
+				end;
+				needDownload = not fileExists;
+			end;
+
+			if needDownload then
+				local ok, data = pcall(game.HttpGet, game, Main.IconSourceBaseUrl .. fileName);
+				if ok and type(data) == "string" then
+					local okWrite = pcall(env.writefile, path, data);
+					if okWrite then
+						Main.IconFileReady[path] = true;
+					end;
+				end;
+			end;
+		end;
+		return true;
+	end;
 	Main.GetInitDeps = function()
 		return {
 			Main = Main,
@@ -15597,6 +15871,9 @@ Main = (function()
 		env.writefile = writefile;
 		env.appendfile = appendfile;
 		env.makefolder = makefolder;
+		env.isfile = isfile;
+		env.isfolder = isfolder;
+		env.delfile = delfile;
 		env.listfiles = listfiles;
 		env.loadfile = loadfile;
 		env.movefileas = movefileas;
@@ -15612,6 +15889,7 @@ Main = (function()
 		env.request = syn and syn.request or http and http.request or http_request or fluxus and fluxus.request or request;
 		env.protectgui = protect_gui or syn and syn.protect_gui;
 		env.gethui = gethui or get_hidden_gui;
+		env.getcustomasset = getcustomasset or getsynasset;
 		env.setclipboard = setclipboard or toclipboard or set_clipboard or Clipboard and Clipboard.set;
 		env.getnilinstances = getnilinstances or get_nil_instances;
 		env.getloadedmodules = getloadedmodules;
@@ -16125,6 +16403,7 @@ Main = (function()
 		};
 	end;
 	Main.ShowGui = function(gui)
+		Main.TrackGui(gui);
 		if env.gethui then
 			gui.Parent = env.gethui();
 		elseif env.protectgui then
@@ -16276,7 +16555,7 @@ Main = (function()
 				{
 					BackgroundColor3 = Color3.new(1, 1, 1),
 					BackgroundTransparency = 1,
-					Image = "rbxassetid://2764171053",
+					Image = Main.ResolveAsset("rbxassetid://2764171053"),
 					ImageColor3 = Color3.new(0.17647059261799, 0.17647059261799, 0.17647059261799),
 					Parent = {
 						8
@@ -16357,7 +16636,7 @@ Main = (function()
 					BackgroundColor3 = Color3.new(1, 1, 1),
 					BackgroundTransparency = 1,
 					BorderSizePixel = 0,
-					Image = "rbxassetid://1427967925",
+					Image = Main.ResolveAsset("rbxassetid://1427967925"),
 					Name = "Outlines",
 					Parent = {
 						2
@@ -16615,8 +16894,21 @@ Main = (function()
 			end;
 		elseif type(iconIndex) == "string" then
 			app.Main.Icon.Image = iconIndex;
+			app.Main.Icon.ImageRectOffset = Vector2.new(0, 0);
+			app.Main.Icon.ImageRectSize = Vector2.new(0, 0);
+			app.Main.Icon.ScaleType = Enum.ScaleType.Fit;
+			app.Main.Icon.Size = data.IconSize or UDim2.new(0, 16, 0, 16);
+			app.Main.Icon.Position = data.IconPosition or UDim2.new(0.5, -8, 0, 12);
+			if data.ImageRectOffset then
+				app.Main.Icon.ImageRectOffset = data.ImageRectOffset;
+			end;
+			if data.ImageRectSize then
+				app.Main.Icon.ImageRectSize = data.ImageRectSize;
+			end;
 		else
 			app.Main.Icon.Image = "";
+			app.Main.Icon.ImageRectOffset = Vector2.new(0, 0);
+			app.Main.Icon.ImageRectSize = Vector2.new(0, 0);
 		end;
 		local function updateState()
 			app.Main.BackgroundTransparency = data.Open and 0 or (Lib.CheckMouseInGui(app.Main) and 0 or 1);
@@ -16706,7 +16998,10 @@ Main = (function()
 			BackgroundTransparency = val and 0 or (Lib.CheckMouseInGui(Main.MainGui.OpenButton) and 0 or 0.2)
 		})):Play();
 		if Main.MainGuiMouseEvent then
-			Main.MainGuiMouseEvent:Disconnect();
+			pcall(function()
+				Main.MainGuiMouseEvent:Disconnect();
+			end);
+			Main.MainGuiMouseEvent = nil;
 		end;
 		if not val then
 			if Main.SettingsMenuContext and Main.SettingsMenuContext.Gui and Main.SettingsMenuContext.Gui.Parent then
@@ -16727,7 +17022,7 @@ Main = (function()
 				end;
 			end))();
 		else
-			Main.MainGuiMouseEvent = service.UserInputService.InputBegan:Connect(function(input)
+			Main.MainGuiMouseEvent = Main.TrackConn(service.UserInputService.InputBegan:Connect(function(input)
 				local clickedSettingsMenu = Main.SettingsMenuContext and Main.SettingsMenuContext.GuiElems and Main.SettingsMenuContext.GuiElems.Main and Lib.CheckMouseInGui(Main.SettingsMenuContext.GuiElems.Main);
 				local clickedInfoMenu = Main.InfoMenuContext and Main.InfoMenuContext.GuiElems and Main.InfoMenuContext.GuiElems.Main and Lib.CheckMouseInGui(Main.InfoMenuContext.GuiElems.Main);
 				local clickedTransparencySlider = Main.SettingsTransparencySlider and Main.SettingsTransparencySlider.Visible and Lib.CheckMouseInGui(Main.SettingsTransparencySlider);
@@ -16737,7 +17032,111 @@ Main = (function()
 					end;
 					Main.SetMainGuiOpen(false);
 				end;
+			end));
+		end;
+	end;
+	Main.Exit = function(keepDexState)
+		Main.__DexLoaded = false;
+		Main.__DexInitStarted = keepDexState == true;
+
+		if Main.MainGuiMouseEvent then
+			pcall(function()
+				Main.MainGuiMouseEvent:Disconnect();
 			end);
+			Main.MainGuiMouseEvent = nil;
+		end;
+
+		if Main.SettingsMenuContext and Main.SettingsMenuContext.Hide then
+			pcall(function()
+				Main.SettingsMenuContext:Hide();
+			end);
+			if Main.SettingsMenuContext.CloseEvent then
+				pcall(function()
+					Main.SettingsMenuContext.CloseEvent:Disconnect();
+				end);
+				Main.SettingsMenuContext.CloseEvent = nil;
+			end;
+			if Main.SettingsMenuContext.Gui then
+				pcall(function()
+					Main.SettingsMenuContext.Gui:Destroy();
+				end);
+			end;
+		end;
+		if Main.InfoMenuContext and Main.InfoMenuContext.Hide then
+			pcall(function()
+				Main.InfoMenuContext:Hide();
+			end);
+			if Main.InfoMenuContext.CloseEvent then
+				pcall(function()
+					Main.InfoMenuContext.CloseEvent:Disconnect();
+				end);
+				Main.InfoMenuContext.CloseEvent = nil;
+			end;
+			if Main.InfoMenuContext.Gui then
+				pcall(function()
+					Main.InfoMenuContext.Gui:Destroy();
+				end);
+			end;
+		end;
+
+		if Main.ConnList then
+			for _, conn in ipairs(Main.ConnList) do
+				pcall(function()
+					if conn then
+						conn:Disconnect();
+					end;
+				end);
+			end;
+			table.clear(Main.ConnList);
+		end;
+
+		if Main.GuiList then
+			for _, gui in ipairs(Main.GuiList) do
+				pcall(function()
+					if gui and gui.Destroy then
+						gui:Destroy();
+					end;
+				end);
+			end;
+			table.clear(Main.GuiList);
+		end;
+
+		if Main.MainGui then
+			pcall(function()
+				Main.MainGui:Destroy();
+			end);
+			Main.MainGui = nil;
+		end;
+
+		Main.MainGuiOpen = false;
+		Main.SettingsMenuContext = nil;
+		Main.InfoMenuContext = nil;
+		Main.SettingsTransparencySlider = nil;
+		Main.Apps = {};
+		Main.AppControls = {};
+		Main.MenuApps = {};
+		Main.ModuleErrors = {};
+		Main.StubbedApps = {};
+
+		Explorer = nil;
+		Properties = nil;
+		ScriptViewer = nil;
+		Notebook = nil;
+
+		if Main.__DexState then
+			if keepDexState == true then
+				Main.__DexState.Main = Main;
+				Main.__DexState.State = "reloading";
+				Main.__DexState.StartedAt = os.clock();
+				if Main.SessionId then
+					Main.__DexState.SessionId = Main.SessionId;
+				end;
+				DexState.Sync(Main.__DexState);
+			else
+				Main.__DexState.State = "dead";
+				DexState.Clear(Main.__DexState);
+				Main.__DexState = nil;
+			end;
 		end;
 	end;
 	Main.CreateMainGui = function()
@@ -16880,7 +17279,7 @@ Main = (function()
 				{
 					BackgroundColor3 = Color3.new(1, 1, 1),
 					BackgroundTransparency = 1,
-					Image = "rbxassetid://6578871732",
+					Image = Main.ResolveAsset("rbxassetid://6578871732"),
 					ImageTransparency = 0.20000000298023,
 					Name = "Icon",
 					Parent = {
@@ -16914,7 +17313,7 @@ Main = (function()
 				{
 					BackgroundColor3 = Color3.new(1, 1, 1),
 					BackgroundTransparency = 1,
-					Image = "rbxassetid://6578933307",
+					Image = Main.ResolveAsset("rbxassetid://6578933307"),
 					ImageTransparency = 0.20000000298023,
 					Name = "Icon",
 					Parent = {
@@ -17007,7 +17406,7 @@ Main = (function()
 				{
 					BackgroundColor3 = Color3.new(1, 1, 1),
 					BackgroundTransparency = 1,
-					Image = "rbxassetid://6579106223",
+					Image = Main.ResolveAsset("rbxassetid://6579106223"),
 					ImageRectSize = Vector2.new(32, 32),
 					Name = "Icon",
 					Parent = {
@@ -17298,16 +17697,16 @@ Main = (function()
 				transparencyDragging = false;
 			end;
 		end);
-		service.UserInputService.InputChanged:Connect(function(input)
+		Main.TrackConn(service.UserInputService.InputChanged:Connect(function(input)
 			if transparencyDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
 				setTransparencyFromPosition(input.Position.X);
 			end;
-		end);
-		service.UserInputService.InputEnded:Connect(function(input)
+		end));
+		Main.TrackConn(service.UserInputService.InputEnded:Connect(function(input)
 			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 				transparencyDragging = false;
 			end;
-		end);
+		end));
 		local function makeToggleLabel(name, value)
 			return (value and "[ON] " or "[OFF] ") .. name;
 		end;
@@ -17473,7 +17872,7 @@ Main = (function()
 				OnClick = function(callback)
 					if callback then
 						local mouse = Main.Mouse;
-						cptsOnMouseClick = mouse.Button1Down:Connect(function()
+						cptsOnMouseClick = Main.TrackConn(mouse.Button1Down:Connect(function()
 							pcall(function()
 								local object = mouse.Target;
 								if nodes[object] then
@@ -17481,7 +17880,7 @@ Main = (function()
 									Explorer.ViewNode(nodes[object]);
 								end;
 							end);
-						end);
+						end));
 					elseif cptsOnMouseClick ~= nil then
 						cptsOnMouseClick:Disconnect();
 						cptsOnMouseClick = nil;
@@ -17489,6 +17888,19 @@ Main = (function()
 				end
 			});
 		end;
+		Main.CreateApp({
+			Name = "Exit Dex",
+			Icon = Main.ResolveAsset("DexPlusIconDraft"),
+			ImageRectOffset = Vector2.new(166, 221),
+			ImageRectSize = Vector2.new(14, 13),
+			IconSize = UDim2.new(0, 32, 0, 30),
+			IconPosition = UDim2.new(0.5, -16, 0, 5),
+			OnClick = function(isOpen)
+				if isOpen then
+					Main.Exit();
+				end;
+			end
+		});
 		Lib.ShowGui(gui);
 	end;
 	Main.SetupFilesystem = function()
@@ -17521,7 +17933,11 @@ Main = (function()
 		local intro = Main.CreateIntro("Initializing Library");
 		Lib = Main.LoadModule("Lib");
 		Lib.FastWait();
-		Main.MiscIcons = Lib.IconMap.new("http://www.roblox.com/asset/?id=6511490623", 256, 256, 16, 16);
+		if env and (env.getcustomasset or getcustomasset or getsynasset) then
+			intro.SetProgress("Loading Icons", 0.3);
+			Main.EnsureAllIcons();
+		end;
+		Main.MiscIcons = Lib.IconMap.new(Main.ResolveAsset("http://www.roblox.com/asset/?id=6511490623"), 256, 256, 16, 16);
 		Main.MiscIcons:SetDict({
 			Reference = 0,
 			Cut = 1,
@@ -17563,7 +17979,7 @@ Main = (function()
 			Pause = 37,
 			Rename_Disabled = 38
 		});
-		Main.LargeIcons = Lib.IconMap.new("rbxassetid://6579106223", 256, 256, 32, 32);
+		Main.LargeIcons = Lib.IconMap.new(Main.ResolveAsset("rbxassetid://6579106223"), 256, 256, 32, 32);
 		Main.LargeIcons:SetDict({
 			Explorer = 0,
 			Properties = 1,
@@ -17644,4 +18060,32 @@ Main = (function()
 	end;
 	return Main;
 end)();
-Main.Init();
+local dexState = DexState.Get(true);
+Main.__DexState = dexState;
+Main.__DexLoaded = false;
+Main.__DexInitStarted = true;
+Main.SessionId = Main.SessionId or tostring(math.random(1, 1000000000));
+
+dexState.Main = Main;
+dexState.State = "starting";
+dexState.StartedAt = os.clock();
+dexState.SessionId = Main.SessionId;
+DexState.Sync(dexState);
+
+local okInit, initErr = pcall(Main.Init);
+if okInit then
+	Main.__DexLoaded = true;
+	Main.__DexInitStarted = false;
+	dexState.Main = Main;
+	dexState.State = "ready";
+	dexState.StartedAt = os.clock();
+	dexState.SessionId = Main.SessionId;
+	DexState.Sync(dexState);
+else
+	Main.__DexLoaded = false;
+	Main.__DexInitStarted = false;
+	dexState.State = "dead";
+	DexState.Clear(dexState);
+	Main.__DexState = nil;
+	error(initErr);
+end;

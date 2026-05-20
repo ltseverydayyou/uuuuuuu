@@ -1,5 +1,5 @@
 local __lt = (function()
-	local globalEnv = (getgenv and getgenv()) or _G or {};
+	local globalEnv = _G or {};
 	local sharedEnv = rawget(_G, "shared");
 	local cacheHost = type(sharedEnv) == "table" and sharedEnv or (type(globalEnv) == "table" and globalEnv or nil);
 	if cacheHost then
@@ -28,10 +28,78 @@ end)();
 
 ---@diagnostic disable: undefined-global
 if game.GameId == 847722000 then
-	local genv = (getgenv and getgenv()) or _G
-	local fenv = (getfenv and getfenv()) or _G
-	if type(fenv) ~= "table" then
-		fenv = _G
+	local genv = _G
+
+	local function addScriptEnv(list, seen, env)
+		if type(env) == "table" and env ~= _G and not seen[env] then
+			seen[env] = true
+			list[#list + 1] = env
+		end
+	end
+
+	local function getScriptEnvs()
+		local list = {}
+		local seen = {}
+		if type(getfenv) == "function" then
+			for i = 0, 6 do
+				pcall(function()
+					addScriptEnv(list, seen, getfenv(i))
+				end)
+			end
+		end
+		if type(getrenv) == "function" then
+			pcall(function()
+				local env = getrenv()
+				addScriptEnv(list, seen, env)
+				if type(env) == "table" then
+					addScriptEnv(list, seen, rawget(env, "_G"))
+					addScriptEnv(list, seen, rawget(env, "shared"))
+				end
+			end)
+		end
+		return list
+	end
+
+	local function getScriptGlobal(k)
+		local envs = getScriptEnvs()
+		for i = 1, #envs do
+			local env = envs[i]
+			local ok, v = pcall(rawget, env, k)
+			if ok and v ~= nil then
+				return v, env
+			end
+		end
+		return rawget(_G, k), _G
+	end
+
+	local function setScriptGlobal(k, v)
+		local hit = false
+		local envs = getScriptEnvs()
+		for i = 1, #envs do
+			local env = envs[i]
+			local ok, old = pcall(rawget, env, k)
+			if ok and old ~= nil then
+				pcall(function()
+					env[k] = v
+				end)
+				hit = true
+			end
+		end
+		if not hit then
+			local env = envs[1] or _G
+			pcall(function()
+				env[k] = v
+			end)
+		end
+	end
+
+	local function getScriptTable(k)
+		local v = getScriptGlobal(k)
+		if type(v) ~= "table" then
+			v = {}
+			setScriptGlobal(k, v)
+		end
+		return v
 	end
 	local Http = game:GetService("HttpService")
 	local cfgFolder = "ProjectTheRake"
@@ -259,7 +327,12 @@ if game.GameId == 847722000 then
 	st.forceMouseIcon = cfgBool("forceMouseIcon", false)
 	st.forceTopbar = cfgBool("forceTopbar", false)
 	st.disableCameraShake = cfgBool("disableCameraShake", false)
+	st.disableCameraBobbing = cfgBool("disableCameraBobbing", false)
 	st.disableVisualFx = cfgBool("disableVisualFx", false)
+	st.hideLocationPopups = cfgBool("hideLocationPopups", false)
+	st.hideScrapPopups = cfgBool("hideScrapPopups", false)
+	st.hideTrapGui = cfgBool("hideTrapGui", false)
+	st.knownPromptBypass = cfgBool("knownPromptBypass", false)
 	st.noDowned = cfgBool("noDowned", false)
 	st.noMoveLock = cfgBool("noMoveLock", false)
 	st.noTrapLock = cfgBool("noTrapLock", false)
@@ -321,7 +394,12 @@ if game.GameId == 847722000 then
 	_G.RakeForceMouseIcon = st.forceMouseIcon
 	_G.RakeForceTopbar = st.forceTopbar
 	_G.RakeDisableCameraShake = st.disableCameraShake
+	_G.RakeDisableCameraBobbing = st.disableCameraBobbing
 	_G.RakeDisableVisualFx = st.disableVisualFx
+	_G.RakeHideLocationPopups = st.hideLocationPopups
+	_G.RakeHideScrapPopups = st.hideScrapPopups
+	_G.RakeHideTrapGui = st.hideTrapGui
+	_G.RakeKnownPromptBypass = st.knownPromptBypass
 	_G.RakeNoDowned = st.noDowned
 	_G.RakeNoMoveLock = st.noMoveLock
 	_G.RakeNoTrapLock = st.noTrapLock
@@ -576,6 +654,45 @@ if game.GameId == 847722000 then
 			return v:GetDescendants()
 		end)
 		return ok and res or {}
+	end
+
+	local function addEnv(list, seen, env)
+		if type(env) == "table" and not seen[env] then
+			seen[env] = true
+			list[#list + 1] = env
+		end
+	end
+
+	local function getModuleEnvList()
+		local list = {}
+		local seen = {}
+		addEnv(list, seen, _G)
+		pcall(function()
+			addEnv(list, seen, shared)
+		end)
+		pcall(function()
+			addEnv(list, seen, rawget(_G, "shared"))
+		end)
+		local envs = getScriptEnvs()
+		for i = 1, #envs do
+			local env = envs[i]
+			addEnv(list, seen, env)
+			pcall(function()
+				addEnv(list, seen, rawget(env, "_G"))
+				addEnv(list, seen, rawget(env, "shared"))
+			end)
+		end
+		return list
+	end
+
+	local function safeReq(mod)
+		if type(require) ~= "function" then
+			return false
+		end
+		if not (typeof(mod) == "Instance" and mod:IsA("ModuleScript")) then
+			return false
+		end
+		return pcall(require, mod)
 	end
 
 	local function ffc(v, name)
@@ -866,6 +983,19 @@ if game.GameId == 847722000 then
 	clientBypass.lastSafe = nil
 	clientBypass.fovUiCache = setmetatable({}, { __mode = "k" })
 	clientBypass.fovUiScanned = false
+	clientBypass.bobFns = setmetatable({}, { __mode = "k" })
+	clientBypass.uiState = setmetatable({}, { __mode = "k" })
+	clientBypass.stamMods = setmetatable({}, { __mode = "k" })
+	clientBypass.mainMods = setmetatable({}, { __mode = "k" })
+	clientBypass.modRoots = setmetatable({}, { __mode = "k" })
+	clientBypass.stamTk = setmetatable({}, { __mode = "k" })
+	clientBypass.stamScanT = 12
+	clientBypass.gstmnaOwned = false
+	clientBypass.gstmnaInst = nil
+	clientBypass.gstmnaFn = function()
+		return 100
+	end
+	clientBypass.noop = function() end
 
 	function clientBypass.getCamera()
 		return Ws.CurrentCamera or workspace.CurrentCamera
@@ -877,11 +1007,7 @@ if game.GameId == 847722000 then
 	end
 
 	function clientBypass.getGSettings()
-		local gs = rawget(fenv, "GSettings")
-		if type(gs) ~= "table" then
-			gs = {}
-			fenv.GSettings = gs
-		end
+		local gs = getScriptTable("GSettings")
 		return gs
 	end
 
@@ -946,7 +1072,7 @@ if game.GameId == 847722000 then
 		end
 		local gs = clientBypass.getGSettings()
 		gs.MotionBlur = false
-		fenv.GSettings = gs
+		setScriptGlobal("GSettings", gs)
 		return clientBypass.destroyCameraEffects(function(v)
 			return (v:IsA("BlurEffect") and (v.Name == "MotionBlur" or v.Name == "ESCB"))
 				or (v:IsA("ColorCorrectionEffect") and v.Name == "ESCC")
@@ -1054,7 +1180,7 @@ if game.GameId == 847722000 then
 			clientBypass.ensureLocalPlayerMarker("SixthSenseGamepass", false, "BoolValue")
 			gs.SixthSense = clientBypass.defaultOriginal("GSettings_SixthSense", gs.SixthSense == true)
 		end
-		fenv.GSettings = gs
+		setScriptGlobal("GSettings", gs)
 	end
 
 	function clientBypass.applyDeathFxBypass()
@@ -1092,8 +1218,8 @@ if game.GameId == 847722000 then
 		if st.introBypass ~= true then
 			return 0
 		end
-		fenv.IsLoading = nil
-		fenv.SLoaded = true
+		setScriptGlobal("IsLoading", nil)
+		setScriptGlobal("SLoaded", true)
 		local lp = Plrs.LocalPlayer
 		pcall(function()
 			if lp then
@@ -1349,11 +1475,11 @@ if game.GameId == 847722000 then
 		if st.forcePcDevice ~= true then
 			return false
 		end
-		fenv.deviceType = "PC"
-		fenv.deviceType2 = nil
-		fenv.inputType = "PC"
+		setScriptGlobal("deviceType", "PC")
+		setScriptGlobal("deviceType2", nil)
+		setScriptGlobal("inputType", "PC")
 		pcall(function()
-			local ev = rawget(fenv, "InputTypeChangeEvent")
+			local ev = getScriptGlobal("InputTypeChangeEvent")
 			if ev and ev.Fire then
 				ev:Fire("PC")
 			end
@@ -1403,6 +1529,201 @@ if game.GameId == 847722000 then
 		return n
 	end
 
+
+	function clientBypass.patchMovementModule(mod, enabled)
+		if type(mod) ~= "table" then
+			return false
+		end
+		local cur = rawget(mod, "Movement")
+		if enabled == true then
+			if clientBypass.bobFns[mod] == nil and type(cur) == "function" then
+				clientBypass.bobFns[mod] = cur
+				mod.Movement = clientBypass.noop
+				return true
+			end
+			return clientBypass.bobFns[mod] ~= nil
+		end
+		local old = clientBypass.bobFns[mod]
+		if old then
+			pcall(function()
+				mod.Movement = old
+			end)
+			clientBypass.bobFns[mod] = nil
+			return true
+		end
+		return false
+	end
+
+	function clientBypass.restoreMovementPatches()
+		local n = 0
+		for mod, old in pairs(clientBypass.bobFns) do
+			if type(mod) == "table" and type(old) == "function" then
+				pcall(function()
+					mod.Movement = old
+				end)
+				n += 1
+			end
+			clientBypass.bobFns[mod] = nil
+		end
+		return n
+	end
+
+	function clientBypass.setGuiHidden(obj, hide)
+		if typeof(obj) ~= "Instance" then
+			return false
+		end
+		local prop
+		if obj:IsA("LayerCollector") then
+			prop = "Enabled"
+		elseif obj:IsA("GuiObject") then
+			prop = "Visible"
+		else
+			return false
+		end
+		local state = clientBypass.uiState[obj]
+		if not state then
+			state = {}
+			clientBypass.uiState[obj] = state
+		end
+		local ok = pcall(function()
+			if state[prop] == nil then
+				state[prop] = obj[prop]
+			end
+			if hide == true then
+				obj[prop] = false
+			elseif state[prop] ~= nil then
+				obj[prop] = state[prop]
+			end
+		end)
+		return ok
+	end
+
+	function clientBypass.restoreHiddenUi()
+		local n = 0
+		for obj, state in pairs(clientBypass.uiState) do
+			if typeof(obj) == "Instance" and obj.Parent and type(state) == "table" then
+				pcall(function()
+					if state.Enabled ~= nil and obj:IsA("LayerCollector") then
+						obj.Enabled = state.Enabled
+					end
+					if state.Visible ~= nil and obj:IsA("GuiObject") then
+						obj.Visible = state.Visible
+					end
+				end)
+				n += 1
+			end
+			clientBypass.uiState[obj] = nil
+		end
+		return n
+	end
+
+	function clientBypass.isTrapBarGui(gui)
+		return typeof(gui) == "Instance" and gui:IsA("ScreenGui") and gui.Name == "BarGUI" and ffc(gui, "Frame2") ~= nil
+	end
+
+	function clientBypass.applyClientPopupBypasses()
+		local n = 0
+		for ch in pairs(clientBypass.ch) do
+			if clientBypass.isCH(ch) then
+				local frames = rawget(ch, "frames")
+				local lbl = type(frames) == "table" and rawget(frames, "locationLabel") or nil
+				if clientBypass.setGuiHidden(lbl, st.hideLocationPopups == true) then
+					n += 1
+				end
+			end
+		end
+		local pg = clientBypass.getPlayerGui()
+		if pg then
+			for _, gui in pairs(kids(pg)) do
+				if gui:IsA("ScreenGui") and gui.Name == "ScrapGUI" then
+					if clientBypass.setGuiHidden(gui, st.hideScrapPopups == true) then
+						n += 1
+					end
+				elseif clientBypass.isTrapBarGui(gui) then
+					if clientBypass.setGuiHidden(gui, st.hideTrapGui == true) then
+						n += 1
+					end
+				end
+			end
+		end
+		return n
+	end
+
+	function clientBypass.path(root, list)
+		local cur = root
+		for i = 1, #list do
+			if not cur then
+				return nil
+			end
+			cur = ffc(cur, list[i])
+		end
+		return cur
+	end
+
+	function clientBypass.unlockPromptIn(obj)
+		if typeof(obj) ~= "Instance" then
+			return false
+		end
+		if obj:IsA("ProximityPrompt") then
+			return clientBypass.unlockPrompt(obj)
+		end
+		return clientBypass.unlockPrompt(ffca(obj, "ProximityPrompt"))
+	end
+
+	function clientBypass.unlockPromptPath(root, list)
+		return clientBypass.unlockPromptIn(clientBypass.path(root, list))
+	end
+
+	function clientBypass.applyKnownGamePrompts()
+		if st.knownPromptBypass ~= true then
+			return 0
+		end
+		local n = 0
+		local map = ffc(Ws, "Map")
+		local paths = {
+			{ "SafeHouse", "Door", "DoorLever", "DoorGUIPart" },
+			{ "SafeHouse", "Door", "LightLever", "LightGUIPart" },
+			{ "SafeHouse", "Door", "Door", "DoorGUIPart" },
+			{ "SafeHouse", "Door", "PowerBox", "GUIPart" },
+			{ "SafeHouse", "Giver", "WalkieTalkie", "Attachment" },
+			{ "PowerStation", "StationFolder", "StationGUIPart" },
+			{ "Shack", "ShopPart" },
+			{ "ObservationTower", "Lights", "LightLever", "LightGUIPart" },
+			{ "ObservationTower", "Door", "DoorLever", "DoorGUIPart" },
+			{ "ObservationTower", "Door", "DoorLever2", "DoorGUIPart2" },
+			{ "ObservationTower", "Radar", "Lever", "RadarGUIPart" },
+			{ "ObservationTower", "LadderPart", "Attachment" },
+			{ "ObservationTower", "Door", "DoorModel", "Door", "KnockA" },
+		}
+		if map then
+			for i = 1, #paths do
+				if clientBypass.unlockPromptPath(map, paths[i]) then
+					n += 1
+				end
+			end
+		end
+		local debris = ffc(Ws, "Debris")
+		local drops = debris and (ffc(debris, "SupplyCrates") or ffc(debris, "SupplyCreates"))
+		if drops then
+			for _, obj in pairs(desc(drops)) do
+				if obj.Name == "Box" or obj.Name == "GUIPart" or obj:IsA("ProximityPrompt") then
+					if clientBypass.unlockPromptIn(obj) then
+						n += 1
+					end
+				end
+			end
+		end
+		local traps = debris and ffc(debris, "Traps")
+		if traps then
+			for _, trap in pairs(kids(traps)) do
+				if trap.Name == "RakeTrapModel" and clientBypass.unlockPromptIn(trap) then
+					n += 1
+				end
+			end
+		end
+		return n
+	end
+
 	function clientBypass.cfgVal(cfg, k, def)
 		local ok, res = pcall(function()
 			return cfg[k]
@@ -1411,6 +1732,391 @@ if game.GameId == 847722000 then
 			return res
 		end
 		return def
+	end
+
+	function clientBypass.fillStamina(ch)
+		if type(ch) ~= "table" then
+			return false
+		end
+		local vars = rawget(ch, "vars")
+		if type(vars) ~= "table" then
+			return false
+		end
+		local cfg = rawget(ch, "CONFIG")
+		local max = clientBypass.cfgVal(cfg, "MAX_STAMINA", 100)
+		pcall(function()
+			vars.stamina = max
+			vars.can_jump = true
+			vars.can_jump2 = true
+			vars.lastJump = 0
+			vars.handlingSRegen = false
+			vars.regeningS = false
+			vars.breathing = false
+			vars.GT_VTZ = true
+			local fov = rawget(ch, "sprintFovV")
+			if typeof(fov) == "Instance" and fov:IsA("NumberValue") and fov.Value < 0 then
+				fov.Value = 0
+			end
+		end)
+		if clientBypass.isCH and clientBypass.isCH(ch) then
+			clientBypass.ch[ch] = true
+		end
+		return true
+	end
+
+	function clientBypass.fillNvg(ch)
+		if type(ch) ~= "table" then
+			return false
+		end
+		local nvg = rawget(ch, "nvg")
+		if type(nvg) ~= "table" then
+			return false
+		end
+		local cfg = rawget(ch, "CONFIG")
+		pcall(function()
+			nvg.power = clientBypass.cfgVal(cfg, "MAX_NVG_P", 100)
+			nvg.cooldown = false
+			nvg.s = tick()
+		end)
+		if clientBypass.isCH and clientBypass.isCH(ch) then
+			clientBypass.ch[ch] = true
+		end
+		return true
+	end
+
+	function clientBypass.stamCap(ch)
+		if st.infStamina == true then
+			clientBypass.fillStamina(ch)
+		end
+		if st.infNight == true then
+			clientBypass.fillNvg(ch)
+		end
+	end
+
+	function clientBypass.patchStaminaModule(mod)
+		if not (mod and mod:IsA("ModuleScript")) then
+			return false
+		end
+		if clientBypass.stamMods[mod] then
+			return true
+		end
+		if mod.Name ~= "M_H" then
+			return false
+		end
+		local ok, lib = safeReq(mod)
+		if not ok or type(lib) ~= "table" then
+			return false
+		end
+		if type(rawget(lib, "TakeStamina")) ~= "function" and type(rawget(lib, "Update")) ~= "function" then
+			return false
+		end
+		local old = {}
+		for _, name in pairs({ "CanSprintCheck", "JumpHandler", "TakeStamina", "StaminaDrain", "DoRegenStamina", "RegenStaminaHandler", "Update" }) do
+			local fn = rawget(lib, name)
+			if type(fn) == "function" then
+				old[name] = fn
+			end
+		end
+		clientBypass.stamMods[mod] = { lib = lib, old = old }
+		if old.CanSprintCheck then
+			lib.CanSprintCheck = function(ch, ...)
+				if st.infStamina == true then
+					clientBypass.fillStamina(ch)
+					local vars = type(ch) == "table" and rawget(ch, "vars")
+					local hum = type(ch) == "table" and rawget(ch, "hum")
+					return type(vars) == "table" and vars.canMove ~= false and vars.canMove2 ~= false and (typeof(hum) ~= "Instance" or hum.Health > 0)
+				end
+				return old.CanSprintCheck(ch, ...)
+			end
+		end
+		if old.JumpHandler then
+			lib.JumpHandler = function(ch, state, ...)
+				if st.infStamina == true and state == false then
+					clientBypass.fillStamina(ch)
+					state = true
+				end
+				return old.JumpHandler(ch, state, ...)
+			end
+		end
+		if old.TakeStamina then
+			lib.TakeStamina = function(ch, amount, ...)
+				if st.infStamina == true and type(amount) == "number" and amount > 0 then
+					clientBypass.fillStamina(ch)
+					return
+				end
+				local a, b, c = old.TakeStamina(ch, amount, ...)
+				clientBypass.stamCap(ch)
+				return a, b, c
+			end
+		end
+		if old.StaminaDrain then
+			lib.StaminaDrain = function(ch, ...)
+				if st.infStamina == true then
+					clientBypass.fillStamina(ch)
+					return
+				end
+				return old.StaminaDrain(ch, ...)
+			end
+		end
+		if old.DoRegenStamina then
+			lib.DoRegenStamina = function(ch, ...)
+				if st.infStamina == true then
+					clientBypass.fillStamina(ch)
+					return
+				end
+				return old.DoRegenStamina(ch, ...)
+			end
+		end
+		if old.RegenStaminaHandler then
+			lib.RegenStaminaHandler = function(ch, ...)
+				if st.infStamina == true then
+					clientBypass.fillStamina(ch)
+					return
+				end
+				return old.RegenStaminaHandler(ch, ...)
+			end
+		end
+		if old.Update then
+			lib.Update = function(ch, ...)
+				clientBypass.stamCap(ch)
+				local a, b, c = old.Update(ch, ...)
+				clientBypass.stamCap(ch)
+				return a, b, c
+			end
+		end
+		return true
+	end
+
+	function clientBypass.restoreStaminaModules()
+		for mod, data in pairs(clientBypass.stamMods) do
+			pcall(function()
+				local lib = data.lib
+				for name, fn in pairs(data.old or {}) do
+					lib[name] = fn
+				end
+			end)
+			clientBypass.stamMods[mod] = nil
+		end
+	end
+
+	function clientBypass.fetchRootModule()
+		local envs = getModuleEnvList()
+		for i = 1, #envs do
+			local env = envs[i]
+			local box = type(env) == "table" and rawget(env, "C09KOPGRE09430989PSD39090W3R") or nil
+			local fn = type(box) == "table" and rawget(box, "POKDS908") or nil
+			if type(fn) == "function" then
+				local ok, mod = pcall(fn, "2390WE890OFD-0F")
+				if ok and typeof(mod) == "Instance" and mod:IsA("ModuleScript") then
+					clientBypass.modRoots[mod] = true
+					return mod
+				end
+			end
+		end
+		return nil
+	end
+
+	function clientBypass.captureCH(ch)
+		if clientBypass.addCH(ch) then
+			clientBypass.patchCH(ch)
+			return true
+		end
+		return false
+	end
+
+	function clientBypass.patchMainClientModule(mod)
+		if not (mod and mod:IsA("ModuleScript")) then
+			return false
+		end
+		if clientBypass.mainMods[mod] then
+			return true
+		end
+		local ok, lib = safeReq(mod)
+		if not ok or type(lib) ~= "table" then
+			return false
+		end
+		local old = {}
+		for _, name in pairs({ "new", "UpdateHB", "UpdateRS", "Update" }) do
+			local fn = rawget(lib, name)
+			if type(fn) == "function" then
+				old[name] = fn
+			end
+		end
+		if not next(old) then
+			return false
+		end
+		clientBypass.mainMods[mod] = { lib = lib, old = old }
+		if old.new then
+			lib.new = function(...)
+				local a, b, c = old.new(...)
+				clientBypass.captureCH(a)
+				return a, b, c
+			end
+		end
+		for _, name in pairs({ "UpdateHB", "UpdateRS", "Update" }) do
+			local fn = old[name]
+			if fn then
+				lib[name] = function(ch, ...)
+					clientBypass.captureCH(ch)
+					clientBypass.stamCap(ch)
+					local a, b, c = fn(ch, ...)
+					clientBypass.stamCap(ch)
+					return a, b, c
+				end
+			end
+		end
+		return true
+	end
+
+	function clientBypass.restoreMainClientModules()
+		for mod, data in pairs(clientBypass.mainMods) do
+			pcall(function()
+				local lib = data.lib
+				for name, fn in pairs(data.old or {}) do
+					lib[name] = fn
+				end
+			end)
+			clientBypass.mainMods[mod] = nil
+		end
+	end
+
+	function clientBypass.addModuleCandidate(obj, seen, list)
+		if typeof(obj) == "Instance" and obj:IsA("ModuleScript") and obj.Name == "M_H" and not seen[obj] then
+			seen[obj] = true
+			list[#list + 1] = obj
+		end
+	end
+
+	function clientBypass.findStaminaModules()
+		local seen = {}
+		local list = {}
+		local root = clientBypass.fetchRootModule()
+		if root then
+			clientBypass.patchMainClientModule(root)
+			for _, obj in pairs(desc(root)) do
+				clientBypass.addModuleCandidate(obj, seen, list)
+			end
+		end
+		for rootMod in pairs(clientBypass.modRoots) do
+			if rootMod and rootMod.Parent then
+				clientBypass.patchMainClientModule(rootMod)
+				for _, obj in pairs(desc(rootMod)) do
+					clientBypass.addModuleCandidate(obj, seen, list)
+				end
+			end
+		end
+		if type(getloadedmodules) == "function" then
+			pcall(function()
+				for _, mod in pairs(getloadedmodules()) do
+					clientBypass.addModuleCandidate(mod, seen, list)
+				end
+			end)
+		end
+		if type(getnilinstances) == "function" then
+			pcall(function()
+				for _, obj in pairs(getnilinstances()) do
+					clientBypass.addModuleCandidate(obj, seen, list)
+				end
+			end)
+		end
+		local lp = Plrs.LocalPlayer
+		for _, root in pairs({ lp, lp and ffc(lp, "PlayerScripts"), lp and ffc(lp, "PlayerGui"), lp and ffc(lp, "Backpack"), Rep }) do
+			for _, obj in pairs(desc(root)) do
+				clientBypass.addModuleCandidate(obj, seen, list)
+			end
+		end
+		return list
+	end
+
+	function clientBypass.applyStaminaModuleBypass()
+		if st.infStamina ~= true and st.infNight ~= true then
+			return 0
+		end
+		local n = 0
+		local root = clientBypass.fetchRootModule()
+		if root and clientBypass.patchMainClientModule(root) then
+			n += 1
+		end
+		for _, mod in pairs(clientBypass.findStaminaModules()) do
+			if clientBypass.patchStaminaModule(mod) then
+				n += 1
+			end
+		end
+		return n
+	end
+
+	function clientBypass.restoreStaminaSignals()
+		for c in pairs(clientBypass.stamTk) do
+			pcall(function()
+				if type(c.Enable) == "function" then
+					c:Enable()
+				elseif c.Enabled ~= nil then
+					c.Enabled = true
+				end
+			end)
+			clientBypass.stamTk[c] = nil
+		end
+		local gst = clientBypass.gstmnaInst
+		if clientBypass.gstmnaOwned == true and gst and gst.Parent and gst:IsA("BindableFunction") then
+			pcall(function()
+				gst.OnInvoke = nil
+			end)
+		end
+		clientBypass.gstmnaOwned = false
+		clientBypass.gstmnaInst = nil
+	end
+
+	function clientBypass.applyStaminaSignals()
+		local gst = ffc(Rep, "GSTMNA")
+		if gst and gst:IsA("BindableFunction") then
+			if st.infStamina == true then
+				pcall(function()
+					gst.OnInvoke = clientBypass.gstmnaFn
+					clientBypass.gstmnaOwned = true
+					clientBypass.gstmnaInst = gst
+				end)
+			elseif clientBypass.gstmnaOwned == true and clientBypass.gstmnaInst == gst then
+				pcall(function()
+					gst.OnInvoke = nil
+				end)
+				clientBypass.gstmnaOwned = false
+				clientBypass.gstmnaInst = nil
+			end
+		end
+		local tk = ffc(Rep, "TKSMNA")
+		if not (tk and tk:IsA("BindableEvent") and type(getconnections) == "function") then
+			if st.infStamina ~= true then
+				clientBypass.restoreStaminaSignals()
+			end
+			return false
+		end
+		local ok, cons = pcall(getconnections, tk.Event)
+		if not ok or type(cons) ~= "table" then
+			return false
+		end
+		for _, c in pairs(cons) do
+			if st.infStamina == true then
+				pcall(function()
+					if type(c.Disable) == "function" then
+						c:Disable()
+						clientBypass.stamTk[c] = true
+					elseif c.Enabled ~= nil then
+						c.Enabled = false
+						clientBypass.stamTk[c] = true
+					end
+				end)
+			elseif clientBypass.stamTk[c] then
+				pcall(function()
+					if type(c.Enable) == "function" then
+						c:Enable()
+					elseif c.Enabled ~= nil then
+						c.Enabled = true
+					end
+				end)
+				clientBypass.stamTk[c] = nil
+			end
+		end
+		return true
 	end
 
 	function clientBypass.applyFullbright()
@@ -1650,20 +2356,10 @@ if game.GameId == 847722000 then
 		local vars = rawget(t, "vars")
 		local cfg = rawget(t, "CONFIG")
 		if st.infStamina == true and type(vars) == "table" then
-			pcall(function()
-				vars.stamina = clientBypass.cfgVal(cfg, "MAX_STAMINA", 100)
-				vars.can_jump = true
-				vars.can_jump2 = true
-				vars.lastJump = 0
-			end)
+			clientBypass.fillStamina(t)
 		end
-		local nvg = rawget(t, "nvg")
-		if st.infNight == true and type(nvg) == "table" then
-			pcall(function()
-				nvg.power = clientBypass.cfgVal(cfg, "MAX_NVG_P", 100)
-				nvg.cooldown = false
-				nvg.s = tick()
-			end)
+		if st.infNight == true then
+			clientBypass.fillNvg(t)
 		end
 		if type(vars) == "table" then
 			if st.noDowned == true then
@@ -1721,6 +2417,23 @@ if game.GameId == 847722000 then
 				clientBypass.restoreCoreGui()
 			end)
 		end
+		if st.disableCameraBobbing == true then
+			pcall(function()
+				local camH = rawget(t, "camH")
+				if type(camH) == "table" then
+					clientBypass.patchMovementModule(rawget(camH, "DataModule"), true)
+				end
+				clientBypass.zeroSpring(rawget(t, "cameraspring"))
+				clientBypass.zeroSpring(rawget(t, "cameraspring2"))
+			end)
+		else
+			pcall(function()
+				local camH = rawget(t, "camH")
+				if type(camH) == "table" then
+					clientBypass.patchMovementModule(rawget(camH, "DataModule"), false)
+				end
+			end)
+		end
 		if st.noChaseStatic == true then
 			local rc = rawget(t, "rc")
 			if type(rc) == "table" then
@@ -1770,6 +2483,9 @@ if game.GameId == 847722000 then
 			clientBypass.clearTab(rawget(t, "vibrationShakesTable"))
 			t.vibrationShakeRunning = false
 		end
+		if st.hideLocationPopups == true or st.hideScrapPopups == true or st.hideTrapGui == true then
+			clientBypass.applyClientPopupBypasses()
+		end
 		clientBypass.forceCoreParts()
 		return true
 	end
@@ -1781,6 +2497,8 @@ if game.GameId == 847722000 then
 			or st.disableDeathFx == true
 			or st.disableVisualFx == true
 			or st.disableCameraShake == true
+			or st.disableCameraBobbing == true
+			or st.hideLocationPopups == true
 			or st.forceBackpack == true
 			or st.forceMouseIcon == true
 			or st.forceTopbar == true
@@ -1830,6 +2548,12 @@ if game.GameId == 847722000 then
 		end
 		if obj:IsA("Sound") and clientBypass.shouldMuteSound(obj) then
 			task.defer(clientBypass.muteSound, obj)
+		end
+		if st.knownPromptBypass == true and obj:IsA("ProximityPrompt") then
+			task.defer(clientBypass.applyKnownGamePrompts)
+		end
+		if (st.hideScrapPopups == true or st.hideTrapGui == true or st.hideLocationPopups == true) and (obj:IsA("ScreenGui") or obj:IsA("GuiObject")) then
+			task.defer(clientBypass.applyClientPopupBypasses)
 		end
 		if (obj:IsA("Light") or obj:IsA("BasePart")) and (st.flashlightNoShadows == true or st.flashlightBoost == true) then
 			task.defer(clientBypass.applyLightToolBypasses)
@@ -3434,6 +4158,12 @@ if game.GameId == 847722000 then
 			if clientBypass and clientBypass.wipeFovConns then
 				clientBypass.wipeFovConns()
 			end
+			if clientBypass and clientBypass.restoreMovementPatches then
+				clientBypass.restoreMovementPatches()
+			end
+			if clientBypass and clientBypass.restoreHiddenUi then
+				clientBypass.restoreHiddenUi()
+			end
 			if wipeFog then
 				wipeFog()
 			end
@@ -3602,8 +4332,8 @@ if game.GameId == 847722000 then
 		Name = "Remove Intro GUI",
 		Callback = function()
 			local removed = clientBypass.removeIntroGui()
-			fenv.IsLoading = nil
-			fenv.SLoaded = true
+			setScriptGlobal("IsLoading", nil)
+			setScriptGlobal("SLoaded", true)
 			clientBypass.restoreCoreGui()
 			Obsidian:Notify({
 				Title = "Intro",
@@ -3930,6 +4660,59 @@ if game.GameId == 847722000 then
 	})
 
 	ClientTab:CreateToggle({
+		Name = "Disable Camera Bobbing",
+		CurrentValue = st.disableCameraBobbing,
+		Flag = "DisableCameraBobbing",
+		Callback = function(state)
+			st.disableCameraBobbing = state == true
+			_G.RakeDisableCameraBobbing = st.disableCameraBobbing
+			cfgSet("disableCameraBobbing", st.disableCameraBobbing)
+			if st.disableCameraBobbing then
+				clientBypass.applyCH(true)
+			else
+				clientBypass.restoreMovementPatches()
+			end
+		end,
+	})
+
+	ClientTab:CreateToggle({
+		Name = "Hide Location Popups",
+		CurrentValue = st.hideLocationPopups,
+		Flag = "HideLocationPopups",
+		Callback = function(state)
+			st.hideLocationPopups = state == true
+			_G.RakeHideLocationPopups = st.hideLocationPopups
+			cfgSet("hideLocationPopups", st.hideLocationPopups)
+			clientBypass.applyCH(true)
+			clientBypass.applyClientPopupBypasses()
+		end,
+	})
+
+	ClientTab:CreateToggle({
+		Name = "Hide Scrap Popups",
+		CurrentValue = st.hideScrapPopups,
+		Flag = "HideScrapPopups",
+		Callback = function(state)
+			st.hideScrapPopups = state == true
+			_G.RakeHideScrapPopups = st.hideScrapPopups
+			cfgSet("hideScrapPopups", st.hideScrapPopups)
+			clientBypass.applyClientPopupBypasses()
+		end,
+	})
+
+	ClientTab:CreateToggle({
+		Name = "Hide Trap Struggle UI",
+		CurrentValue = st.hideTrapGui,
+		Flag = "HideTrapStruggleUI",
+		Callback = function(state)
+			st.hideTrapGui = state == true
+			_G.RakeHideTrapGui = st.hideTrapGui
+			cfgSet("hideTrapGui", st.hideTrapGui)
+			clientBypass.applyClientPopupBypasses()
+		end,
+	})
+
+	ClientTab:CreateToggle({
 		Name = "No Downed / Ragdoll",
 		CurrentValue = st.noDowned,
 		Flag = "NoDownedRagdoll",
@@ -4025,7 +4808,11 @@ if game.GameId == 847722000 then
 			if st.infStamina == true then
 				applyInfTabs(true)
 				queueInfTabs(12)
+				pcall(clientBypass.applyStaminaModuleBypass)
+				pcall(clientBypass.applyStaminaSignals)
 				clientBypass.applyCH(true)
+			else
+				pcall(clientBypass.applyStaminaSignals)
 			end
 		end,
 	})
@@ -4041,6 +4828,7 @@ if game.GameId == 847722000 then
 			if st.infNight == true then
 				applyInfTabs(true)
 				queueInfTabs(12)
+				clientBypass.applyStaminaModuleBypass()
 				clientBypass.applyCH(true)
 			end
 		end,
@@ -4730,7 +5518,7 @@ if game.GameId == 847722000 then
 	clientBypass.noFall = {
 		haystackSize = Vector3.new(100000, 100000, 100000),
 		applyToken = 0,
-		env = getgenv and getgenv() or _G,
+		env = _G,
 	}
 
 	clientBypass.noFall.getHaystack = function()
@@ -5124,6 +5912,26 @@ if game.GameId == 847722000 then
 	})
 
 	ExploitsTab:CreateToggle({
+		Name = "Known Object Prompt Bypass",
+		CurrentValue = st.knownPromptBypass,
+		Flag = "KnownObjectPromptBypass",
+		Callback = function(state)
+			st.knownPromptBypass = state == true
+			_G.RakeKnownPromptBypass = st.knownPromptBypass
+			cfgSet("knownPromptBypass", st.knownPromptBypass)
+			if st.knownPromptBypass then
+				local n = clientBypass.applyKnownGamePrompts()
+				Obsidian:Notify({
+					Title = "Known Prompts",
+					Content = "Unlocked known prompts: " .. tostring(n),
+					Duration = 2,
+					Image = 4483362458,
+				})
+			end
+		end,
+	})
+
+	ExploitsTab:CreateToggle({
 		Name = "Prompt Bypass",
 		CurrentValue = st.promptBypass,
 		Flag = "PromptBypass",
@@ -5180,8 +5988,8 @@ if game.GameId == 847722000 then
 		Callback = function()
 			local ok, res = clientBypass.invokeStartRemote("Play")
 			if ok then
-				fenv.IsLoading = nil
-				fenv.SLoaded = true
+				setScriptGlobal("IsLoading", nil)
+				setScriptGlobal("SLoaded", true)
 				clientBypass.restoreCoreGui()
 			end
 			Obsidian:Notify({
@@ -5222,9 +6030,11 @@ if game.GameId == 847722000 then
 	clientBypass.promptT = 1
 	clientBypass.promptBypassT = 1
 	clientBypass.clientBypassT = 1
+	clientBypass.knownPromptT = 1
 	clientBypass.soundT = 1
 	clientBypass.lightT = 5
 	clientBypass.deathMsgT = 2
+	clientBypass.fastBypassT = 0
 
 	bind(Run.Heartbeat, function(dt)
 		if AllowRunService ~= true then
@@ -5254,8 +6064,14 @@ if game.GameId == 847722000 then
 		clientBypass.clientBypassT += dt
 		clientBypass.soundT += dt
 		clientBypass.lightT += dt
+		clientBypass.knownPromptT += dt
 		clientBypass.deathMsgT += dt
 		clientBypass.chT += dt
+		clientBypass.stamScanT += dt
+		if (st.infStamina == true or st.infNight == true) and clientBypass.stamScanT >= 12 then
+			clientBypass.stamScanT = 0
+			pcall(clientBypass.applyStaminaModuleBypass)
+		end
 		if st.promptBypass == true and clientBypass.promptInitScan ~= true then
 			clientBypass.promptInitScan = true
 			clientBypass.promptBypassT = 0
@@ -5265,6 +6081,11 @@ if game.GameId == 847722000 then
 		elseif clientBypass.promptBypassT >= 5 then
 			clientBypass.promptBypassT = 0
 			pcall(clientBypass.applyKnownPromptBypass)
+		end
+		if clientBypass.knownPromptT >= 1.25 then
+			clientBypass.knownPromptT = 0
+			pcall(clientBypass.applyKnownGamePrompts)
+			pcall(clientBypass.applyClientPopupBypasses)
 		end
 		if clientBypass.clientBypassT >= 0.75 then
 			clientBypass.clientBypassT = 0
@@ -5280,9 +6101,11 @@ if game.GameId == 847722000 then
 			pcall(clientBypass.applyCharBypasses)
 			pcall(clientBypass.applySafeRecover)
 			pcall(clientBypass.applyFullbright)
+			pcall(clientBypass.applyClientPopupBypasses)
 			pcall(clientBypass.applyFovUiFix, false)
 			pcall(clientBypass.removeIntroClones)
 			pcall(clientBypass.forceCoreParts)
+			pcall(clientBypass.applyStaminaSignals)
 			if clientBypass.chBootScan ~= true then
 				clientBypass.chBootScan = true
 				pcall(clientBypass.applyCH, true)
@@ -5304,7 +6127,7 @@ if game.GameId == 847722000 then
 		end
 	end)
 
-	bind(Run.RenderStepped, function()
+	bind(Run.Heartbeat, function()
 		if AllowRunService ~= true then
 			return
 		end
@@ -5322,6 +6145,9 @@ if game.GameId == 847722000 then
 
 	clientBypass.bindFovCam(Ws.CurrentCamera or workspace.CurrentCamera)
 	pcall(clientBypass.applyFovUiFix, true)
+	pcall(clientBypass.fetchRootModule)
+	pcall(clientBypass.applyStaminaModuleBypass)
+	pcall(clientBypass.applyStaminaSignals)
 
 	pcall(function()
 		bind(Ws:GetPropertyChangedSignal("CurrentCamera"), function()
@@ -5351,12 +6177,13 @@ if game.GameId == 847722000 then
 
 		infSys.fast += dt
 		infSys.scan += dt
-		if infSys.fast < 0.5 then
+		if infSys.fast < 0.75 then
 			return
 		end
 
 		infSys.fast = 0
 		applyInfTabs(false)
+		pcall(clientBypass.applyStaminaSignals)
 	end)
 
 	function DestroyUI()
@@ -5364,6 +6191,11 @@ if game.GameId == 847722000 then
 		saveNow()
 		wipeCharConns()
 		clientBypass.wipeFovConns()
+		clientBypass.restoreMovementPatches()
+		clientBypass.restoreStaminaModules()
+		clientBypass.restoreMainClientModules()
+		clientBypass.restoreStaminaSignals()
+		clientBypass.restoreHiddenUi()
 		wipeFog()
 		if cleanupEsp then
 			cleanupEsp()

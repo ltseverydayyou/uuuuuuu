@@ -314,14 +314,35 @@ local function shouldHide(row)
 		return true
 	end
 
-	local desc = row:GetDescendants()
-	if #desc == 0 then
+	local stack = {}
+	local okKids, kids = pcall(row.GetChildren, row)
+	if not okKids or type(kids) ~= "table" or #kids == 0 then
 		return nil
 	end
 
-	for i = 1, #desc do
-		if isLockTextNode(desc[i]) then
+	local stackN = 0
+	for i = 1, #kids do
+		stackN = stackN + 1
+		stack[stackN] = kids[i]
+	end
+
+	local scanned = 0
+	while stackN > 0 and scanned < 120 do
+		local inst = stack[stackN]
+		stack[stackN] = nil
+		stackN = stackN - 1
+		scanned = scanned + 1
+
+		if isLockTextNode(inst) then
 			return true
+		end
+
+		local okChildren, children = pcall(inst.GetChildren, inst)
+		if okChildren and type(children) == "table" then
+			for i = 1, #children do
+				stackN = stackN + 1
+				stack[stackN] = children[i]
+			end
 		end
 	end
 

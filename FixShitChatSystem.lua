@@ -36,6 +36,83 @@ end;
 
 local root = (getgenv and getgenv()) or _G or {}
 local glob = type(_G) == "table" and _G or root
+local function naEnvList()
+	local list = {root, glob}
+
+	pcall(function()
+		if type(shared) == "table" then
+			list[#list + 1] = shared
+		end
+	end)
+
+	pcall(function()
+		if type(_G) == "table" and type(rawget(_G, "shared")) == "table" then
+			list[#list + 1] = rawget(_G, "shared")
+		end
+	end)
+
+	return list
+end
+
+local function naManage()
+	local list = naEnvList()
+	for i = 1, #list do
+		local env = list[i]
+		if type(env) == "table" then
+			local direct = rawget(env, "NAmanage") or rawget(env, "__NAmanage")
+			if type(direct) == "table" then
+				return direct
+			end
+
+			local rootEnv = rawget(env, "__nameless_admin_private")
+			local testEnv = type(rootEnv) == "table" and rawget(rootEnv, "testing") or nil
+			local sharedState = type(testEnv) == "table" and rawget(testEnv, "shared") or nil
+			local nested = type(sharedState) == "table" and (rawget(sharedState, "NAmanage") or rawget(sharedState, "__NAmanage")) or nil
+			if type(nested) == "table" then
+				return nested
+			end
+		end
+	end
+
+	return nil
+end
+
+local function qDesc(rootInst, className)
+	if not rootInst then
+		return {}
+	end
+
+	local mgr = naManage()
+	if type(mgr) == "table" and type(mgr.qDesc) == "function" then
+		local ok, res = pcall(mgr.qDesc, rootInst, className)
+		if ok and type(res) == "table" then
+			return res
+		end
+	end
+
+	local ok, res = pcall(function()
+		return rootInst:GetDescendants()
+	end)
+
+	if not ok or type(res) ~= "table" then
+		return {}
+	end
+
+	if type(className) ~= "string" or className == "" then
+		return res
+	end
+
+	local out = {}
+	for i = 1, #res do
+		local inst = res[i]
+		if inst and inst:IsA(className) then
+			out[#out + 1] = inst
+		end
+	end
+
+	return out
+end
+
 local old = rawget(root, "__chatLockFix") or rawget(glob, "__chatLockFix")
 
 if type(old) == "table" and type(old.stop) == "function" then
@@ -95,6 +172,29 @@ local function bind(sig, fn, bag)
 	local t = bag or cons
 	t[#t + 1] = c
 	return c
+end
+
+local function bindDescAdd(rootInst, fn, filter, bag)
+	if not rootInst or type(fn) ~= "function" then
+		return nil
+	end
+
+	local mgr = naManage()
+	if type(mgr) == "table" and type(mgr.descAdd) == "function" then
+		local ok, con = pcall(mgr.descAdd, rootInst, fn, filter)
+		if ok and con then
+			local t = bag or cons
+			t[#t + 1] = con
+			return con
+		end
+	end
+
+	return bind(rootInst.DescendantAdded, function(inst)
+		if type(filter) == "function" and not filter(inst) then
+			return
+		end
+		fn(inst)
+	end, bag)
 end
 
 local function drop(t)
@@ -314,35 +414,14 @@ local function shouldHide(row)
 		return true
 	end
 
-	local stack = {}
-	local okKids, kids = pcall(row.GetChildren, row)
-	if not okKids or type(kids) ~= "table" or #kids == 0 then
+	local desc = qDesc(row)
+	if #desc == 0 then
 		return nil
 	end
 
-	local stackN = 0
-	for i = 1, #kids do
-		stackN = stackN + 1
-		stack[stackN] = kids[i]
-	end
-
-	local scanned = 0
-	while stackN > 0 and scanned < 120 do
-		local inst = stack[stackN]
-		stack[stackN] = nil
-		stackN = stackN - 1
-		scanned = scanned + 1
-
-		if isLockTextNode(inst) then
+	for i = 1, #desc do
+		if isLockTextNode(desc[i]) then
 			return true
-		end
-
-		local okChildren, children = pcall(inst.GetChildren, inst)
-		if okChildren and type(children) == "table" then
-			for i = 1, #children do
-				stackN = stackN + 1
-				stack[stackN] = children[i]
-			end
 		end
 	end
 
@@ -498,14 +577,12 @@ local function hookCont(nc)
 		push(ch, 0, 0)
 	end, cbag)
 
-	bind(nc.DescendantAdded, function(inst)
+	bindDescAdd(nc, function(inst)
 		if not live or cont ~= nc then
 			return
 		end
-		if likelyInst(inst) then
-			pushInst(inst)
-		end
-	end, cbag)
+		pushInst(inst)
+	end, likelyInst, cbag)
 
 	bind(nc.AncestryChanged, function(_, par)
 		if par == nil and cont == nc then

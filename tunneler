@@ -1,295 +1,743 @@
-local __lt = (function()
-	local globalEnv = (getgenv and getgenv()) or _G or {};
-	local sharedEnv = rawget(_G, "shared");
-	local cacheHost = type(sharedEnv) == "table" and sharedEnv or (type(globalEnv) == "table" and globalEnv or nil);
-	if cacheHost then
-		local cached = rawget(cacheHost, "__lt_service_resolver");
-		if type(cached) == "table" then
-			return cached;
-		end;
-	end;
-	local loader = loadstring or load;
-	if type(loader) ~= "function" then
-		error("Service resolver loader unavailable");
-	end;
-	local resolver = loader(game:HttpGet("https://ltseverydayyou.github.io/ServiceResolver.luau"), "@ServiceResolver.luau");
-	if type(resolver) ~= "function" then
-		error("Service resolver failed to compile");
-	end;
-	local loaded = resolver();
-	if type(loaded) ~= "table" then
-		error("Service resolver failed to load");
-	end;
-	if cacheHost then
-		cacheHost.__lt_service_resolver = loaded;
-	end;
-	return loaded;
-end)();
+local g = (getgenv and getgenv()) or _G
+local old = type(g) == "table" and rawget(g, "__tun") or nil
+if type(old) == "table" and type(old.clean) == "function" then
+	pcall(old.clean)
+end
 
-if game.GameId == 1524368576 then
-	local function ClonedService(name)
-		local Service = function(_, serviceName) return __lt.gs(serviceName); end;
-		local Reference = cloneref or function(reference)
-			return reference;
-		end;
-		return __lt.cs(name, Reference);
-	end;
-	local plr = (ClonedService("Players")).LocalPlayer;
-	local ui = plr.PlayerGui;
-	local rs = ClonedService("RunService");
-	local function checkUI(element)
-		return ui:FindFirstChild(element) ~= nil;
-	end;
-	local function loadRay()
-		return (loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/Rayfield-backup/main/Rayfield")))();
-	end;
-	local function getBgs(badgeList)
-		for _, id in ipairs(badgeList) do
+local st = {
+	cn = {},
+	opt = {},
+	dead = false,
+	gunColor = Color3.fromRGB(255, 255, 255),
+	gunLevel = 2,
+	rgbSpeed = 0.15,
+	fallLimit = 20,
+	voidRaise = 15,
+	nextScan = 0,
+	nextPerf = 0,
+	nextCon = 0,
+	dis = {}
+}
+
+if type(g) == "table" then
+	g.__tun = st
+end
+
+function st.clean()
+	st.dead = true
+	if type(st.opt) == "table" then
+		for k in pairs(st.opt) do
+			st.opt[k] = false
+		end
+	end
+	for i = 1, #st.cn do
+		local c = st.cn[i]
+		if c then
 			pcall(function()
-				(((ClonedService("ReplicatedStorage")):FindFirstChild("DataStore")):FindFirstChild("Award")):FireServer(id);
-			end);
-		end;
-	end;
-	local function createWin()
-		local Rayfield = loadRay();
-		local Window = Rayfield:CreateWindow({
-			Name = "TUNNELER",
-			LoadingTitle = "TUNNELER",
-			LoadingSubtitle = "i am currently inside your tunnels",
-			ConfigurationSaving = {
-				Enabled = true,
-				FolderName = "tunnels",
-				FileName = "meal"
-			}
-		});
-		return Window;
-	end;
-	local function createTabs(Window)
-		local Tab = Window:CreateTab("Misc", 4483362458);
-		local Tab1 = Window:CreateTab("Gun Functions", 4483362458);
-		return Tab, Tab1;
-	end;
-	local function createUIElems(Tab, Tab1, badgeList)
-		local elements = {};
-		if checkUI("god") then
-			elements.gmod = Tab:CreateToggle({
-				Name = "God Mode",
-				CurrentValue = false,
-				Flag = "god",
-				Callback = function(v)
-					ui.god.Value = v;
-				end
-			});
-		end;
-		if checkUI("thirdperson") then
-			elements.lol = Tab:CreateToggle({
-				Name = "Third Person",
-				CurrentValue = false,
-				Flag = "thirdp",
-				Callback = function(v)
-					ui.thirdperson.Value = v;
-				end
-			});
-		end;
-		if checkUI("hasPortalGun") then
-			elements.check = Tab:CreateToggle({
-				Name = "Portal Gun",
-				CurrentValue = false,
-				Flag = "gun",
-				Callback = function(v)
-					ui.hasPortalGun.Value = v;
-				end
-			});
-		end;
-		if checkUI("ForceFOV") then
-			Tab:CreateSlider({
-				Name = "Field Of View",
-				Range = {
-					0,
-					120
-				},
-				Increment = 1,
-				Suffix = "FOV",
-				CurrentValue = 70,
-				Flag = "fieldofview",
-				Callback = function(fov)
-					ui.ForceFOV.Value = fov;
-				end
-			});
-		end;
-		if checkUI("velocityLimit") then
-			Tab:CreateInput({
-				Name = "Velocity Limit",
-				PlaceholderText = "Input Limit",
-				RemoveTextAfterFocusLost = false,
-				Flag = "velLimit",
-				Callback = function(vel)
-					ui.velocityLimit.Value = vel;
-				end
-			});
-		end;
-		if checkUI("wantedColor") then
-			Tab1:CreateColorPicker({
-				Name = "Portal Gun Color",
-				Color = Color3.fromRGB(255, 255, 255),
-				Flag = "ColorPicker1",
-				Callback = function(c)
-					ui.wantedColor.Value = c;
-					(getgenv()).GunColor = c;
-				end
-			});
-		end;
-		Tab1:CreateToggle({
-			Name = "Loop Portal Gun Color",
-			CurrentValue = false,
-			Flag = "loopRGB",
-			Callback = function(v)
-				(getgenv()).gunLoop = v;
+				c:Disconnect()
+			end)
+			st.cn[i] = nil
+		end
+	end
+	for c in pairs(st.dis) do
+		pcall(function()
+			c:Enable()
+		end)
+		st.dis[c] = nil
+	end
+end
+
+if game.GameId ~= 1524368576 then
+	return
+end
+
+local function gs(n)
+	local ok, svc = pcall(function()
+		if type(cloneref) == "function" then
+			return cloneref(game:GetService(n))
+		end
+		return game:GetService(n)
+	end)
+	if ok and svc then
+		return svc
+	end
+	return game:GetService(n)
+end
+
+local plrs = gs("Players")
+local rs = gs("RunService")
+local ts = gs("TweenService")
+local cp = gs("ContentProvider")
+local light = gs("Lighting")
+local ss = gs("SoundService")
+local rps = gs("ReplicatedStorage")
+local sg = gs("StarterGui")
+local plr = plrs.LocalPlayer
+local ui = plr:WaitForChild("PlayerGui")
+local cam = workspace.CurrentCamera
+
+local cap = {
+	meta = type(hookmetamethod) == "function" and type(getnamecallmethod) == "function",
+	conn = type(getconnections) == "function",
+	gc = type(filtergc) == "function" or type(getgc) == "function"
+}
+
+local nc = type(newcclosure) == "function" and newcclosure or function(f)
+	return f
+end
+
+local function bind(sig, fn)
+	local ok, c = pcall(function()
+		return sig:Connect(fn)
+	end)
+	if ok and c then
+		st.cn[#st.cn + 1] = c
+		return c
+	end
+end
+
+local function pg(n)
+	return ui and ui:FindFirstChild(n)
+end
+
+local function gp(root, ...)
+	local obj = root
+	for i = 1, select("#", ...) do
+		if not obj then
+			return nil
+		end
+		obj = obj:FindFirstChild(select(i, ...))
+	end
+	return obj
+end
+
+local function val(obj, def)
+	if not obj then
+		return def
+	end
+	local ok, v = pcall(function()
+		return obj.Value
+	end)
+	if ok then
+		return v
+	end
+	return def
+end
+
+local function setv(obj, v)
+	if not obj then
+		return false
+	end
+	local ok = pcall(function()
+		obj.Value = v
+	end)
+	return ok
+end
+
+local function boolv(root, name, v)
+	local obj = root and root:FindFirstChild(name)
+	if obj then
+		setv(obj, v)
+	end
+	return obj
+end
+
+local function num(v, def)
+	v = tonumber(v)
+	if v == nil then
+		return def
+	end
+	return v
+end
+
+local function char()
+	return plr.Character
+end
+
+local function hum()
+	local c = char()
+	return c and c:FindFirstChildOfClass("Humanoid")
+end
+
+local function root()
+	local c = char()
+	return c and c:FindFirstChild("HumanoidRootPart")
+end
+
+local Rayfield
+
+local function note(t)
+	pcall(function()
+		if Rayfield and type(Rayfield.Notify) == "function" then
+			Rayfield:Notify({
+				Title = "TUNNELER",
+				Content = t,
+				Duration = 4,
+				Image = 4483362458
+			})
+		else
+			pcall(function()
+				sg:SetCore("SendNotification", {
+					Title = "TUNNELER",
+					Text = t,
+					Duration = 4
+				})
+			end)
+		end
+	end)
+end
+
+local function loadRay()
+	local loader = loadstring or load
+	if type(loader) ~= "function" then
+		error("loadstring unavailable")
+	end
+	local src = game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/Rayfield-backup/main/Rayfield")
+	return loader(src)()
+end
+
+Rayfield = loadRay()
+local Window = Rayfield:CreateWindow({
+	Name = "TUNNELER",
+	LoadingTitle = "TUNNELER",
+	LoadingSubtitle = "i am currently inside your tunnels",
+	ConfigurationSaving = {
+		Enabled = true,
+		FolderName = "tunnels",
+		FileName = "meal"
+	}
+})
+
+local misc = Window:CreateTab("Misc", 4483362458)
+local move = Window:CreateTab("Movement", 4483362458)
+local gun = Window:CreateTab("Gun Functions", 4483362458)
+local byp = Window:CreateTab("Bypasses", 4483362458)
+local perf = Window:CreateTab("Performance", 4483362458)
+local adv = nil
+if cap.meta or cap.conn or cap.gc then
+	adv = Window:CreateTab("Advanced", 4483362458)
+end
+
+local elems = {}
+
+local function tog(tab, name, flag, cur, cb)
+	local e = tab:CreateToggle({
+		Name = name,
+		CurrentValue = cur == true,
+		Flag = flag,
+		Callback = function(v)
+			st.opt[flag] = v == true
+			if cb then
+				pcall(cb, v == true)
 			end
-		});
-		Tab1:CreateToggle({
-			Name = "Rainbow Gun",
-			CurrentValue = false,
-			Flag = "RGB",
-			Callback = function(v)
-				(getgenv()).rgbEnabled = v;
+		end
+	})
+	elems[flag] = e
+	st.opt[flag] = cur == true
+	return e
+end
+
+local function sl(tab, name, flag, range, inc, cur, suf, cb)
+	local e = tab:CreateSlider({
+		Name = name,
+		Range = range,
+		Increment = inc,
+		Suffix = suf or "",
+		CurrentValue = cur,
+		Flag = flag,
+		Callback = function(v)
+			st[flag] = v
+			if cb then
+				pcall(cb, v)
 			end
-		});
-		if checkUI("portalsIgnoreMaterial") then
-			elements.no = Tab1:CreateToggle({
-				Name = "Portal Ignore Material",
-				CurrentValue = false,
-				Flag = "materials",
-				Callback = function(v)
-					ui.portalsIgnoreMaterial.Value = v;
-				end
-			});
-		end;
-		if checkUI("PortalLevel") then
-			Tab1:CreateSlider({
-				Name = "Portal Level",
-				Range = {
-					0,
-					2
-				},
-				Increment = 1,
-				CurrentValue = 2,
-				Flag = "portalLevel",
-				Callback = function(lvl)
-					(getgenv()).gunLevel = lvl;
-				end
-			});
-		end;
-		Tab:CreateButton({
-			Name = "Get All Badges",
-			Callback = function()
-				getBgs(badgeList);
+		end
+	})
+	st[flag] = cur
+	return e
+end
+
+local function inp(tab, name, flag, ph, cb)
+	return tab:CreateInput({
+		Name = name,
+		PlaceholderText = ph,
+		RemoveTextAfterFocusLost = false,
+		Flag = flag,
+		Callback = function(v)
+			if cb then
+				pcall(cb, v)
 			end
-		});
-		return elements;
-	end;
-	local function syncUI(elements)
-		task.spawn(function()
-			if elements.check then
-				(ui:FindFirstChild("hasPortalGun")).Changed:Connect(function(v)
-					elements.check:Set(v);
-				end);
-			end;
-			if elements.lol then
-				(ui:FindFirstChild("thirdperson")).Changed:Connect(function(v)
-					elements.lol:Set(v);
-				end);
-			end;
-			if elements.no then
-				(ui:FindFirstChild("portalsIgnoreMaterial")).Changed:Connect(function(v)
-					elements.no:Set(v);
-				end);
-			end;
-			if elements.gmod then
-				(ui:FindFirstChild("god")).Changed:Connect(function(v)
-					elements.gmod:Set(v);
-				end);
-			end;
-		end);
-	end;
-	local function rainbowEffect()
-		task.spawn(function()
-			while true do
-				if (getgenv()).rgbEnabled then
-					for i = 0, 255, 5 do
-						ui.wantedColor.Value = Color3.fromRGB(255, i, 0);
-						wait(0.01);
-					end;
-					for i = 255, 0, -5 do
-						ui.wantedColor.Value = Color3.fromRGB(i, 255, 0);
-						wait(0.01);
-					end;
-					for i = 0, 255, 5 do
-						ui.wantedColor.Value = Color3.fromRGB(0, 255, i);
-						wait(0.01);
-					end;
-					for i = 255, 0, -5 do
-						ui.wantedColor.Value = Color3.fromRGB(0, i, 255);
-						wait(0.01);
-					end;
-					for i = 0, 255, 5 do
-						ui.wantedColor.Value = Color3.fromRGB(i, 0, 255);
-						wait(0.01);
-					end;
-					for i = 255, 0, -5 do
-						ui.wantedColor.Value = Color3.fromRGB(255, 0, i);
-						wait(0.01);
-					end;
-				end;
-				wait();
-			end;
-		end);
-	end;
-	local function updatePortalLvl()
-		rs.PreSimulation:Connect(function()
-			if checkUI("PortalLevel") then
-				ui.PortalLevel.Value = (getgenv()).gunLevel;
-			end;
-			if not (getgenv()).rgbEnabled and (getgenv()).gunLoop then
-				ui.wantedColor.Value = (getgenv()).GunColor;
-			end;
-		end);
-	end;
-	local badgeList = {
-		2124531179,
-		2124531181,
-		2124531182,
-		2124531184,
-		2124531185,
-		2124531198,
-		2124531213,
-		2124531723,
-		2124587582,
-		2124587583,
-		2124587597,
-		2124587936,
-		2124948632,
-		2124948674,
-		2124948729,
-		2124948745,
-		2124948842,
-		2124969259,
-		2124970540,
-		2125003412,
-		2125003419,
-		2125793440,
-		2143211391
-	};
-	(getgenv()).GunColor = Color3.fromRGB(255, 255, 255);
-	(getgenv()).rgbEnabled = false;
-	(getgenv()).gunLoop = false;
-	(getgenv()).gunLevel = 2;
-	print("values found loading script");
-	local Window = createWin();
-	local Tab, Tab1 = createTabs(Window);
-	local elements = createUIElems(Tab, Tab1, badgeList);
-	syncUI(elements);
-	rainbowEffect();
-	updatePortalLvl();
-	Rayfield:LoadConfiguration();
-end;
+		end
+	})
+end
+
+local function btn(tab, name, cb)
+	return tab:CreateButton({
+		Name = name,
+		Callback = function()
+			pcall(cb)
+		end
+	})
+end
+
+local function watch(obj, e)
+	if not obj or not e then
+		return
+	end
+	bind(obj:GetPropertyChangedSignal("Value"), function()
+		if st.dead then
+			return
+		end
+		pcall(function()
+			e:Set(obj.Value)
+		end)
+	end)
+end
+
+local function uiToggle(tab, title, obj, flag)
+	local o = pg(obj)
+	if o then
+		local e = tog(tab, title, flag, val(o, false), function(v)
+			setv(o, v)
+		end)
+		watch(o, e)
+		return e
+	end
+end
+
+uiToggle(misc, "God Mode", "god", "god")
+tog(byp, "Loop God / Health", "loopGod", false)
+uiToggle(misc, "Third Person", "thirdperson", "thirdp")
+uiToggle(misc, "Dev Console", "devConsoleEnabled", "devcon")
+tog(byp, "Pause Menu Bypass", "pauseBypass", false)
+tog(byp, "Force Can Move", "forceMove", false)
+tog(byp, "No Death Ragdoll", "noRag", false)
+btn(misc, "Reset Character Lock", function()
+	local c = char()
+	local h = hum()
+	local r = root()
+	boolv(c, "canMove", true)
+	if h then
+		h.PlatformStand = false
+		h.Sit = false
+		if h.Health < 100 then
+			h.Health = math.max(h.Health, 100)
+		end
+	end
+	if r then
+		r.Anchored = false
+		r.AssemblyLinearVelocity = Vector3.zero
+		r.AssemblyAngularVelocity = Vector3.zero
+	end
+end)
+
+uiToggle(move, "Noclip", "noclipEnabled", "noclip")
+tog(move, "Anti Void", "antiVoid", true)
+tog(byp, "No Jump Disable Zones", "jumpBypass", false)
+tog(byp, "No Emancipation Grill", "emancBypass", false)
+tog(byp, "No Drown", "noDrown", false)
+tog(byp, "No Swim Drag", "noSwim", false)
+tog(byp, "No Portal World Colliders", "noPortalCollide", false)
+sl(move, "Fall Velocity Limit", "fallLimit", { 5, 150 }, 1, 20, "stud/s")
+sl(move, "Void Lift Amount", "voidRaise", { 5, 100 }, 1, 15, "studs")
+if pg("velocityLimit") then
+	inp(move, "Game Velocity Limit", "velLimit", tostring(val(pg("velocityLimit"), 40)), function(v)
+		setv(pg("velocityLimit"), num(v, val(pg("velocityLimit"), 40)))
+	end)
+end
+if pg("ForceFOV") then
+	sl(move, "Field Of View", "fieldOfView", { -1, 120 }, 1, num(val(pg("ForceFOV"), 70), 70), "FOV", function(v)
+		setv(pg("ForceFOV"), v)
+	end)
+end
+
+uiToggle(gun, "Portal Gun", "hasPortalGun", "gun")
+tog(gun, "Loop Portal Gun", "loopGun", false)
+uiToggle(gun, "Portal Ignore Material", "portalsIgnoreMaterial", "materials")
+tog(gun, "Loop Ignore Material", "loopMat", false)
+tog(byp, "Force Shoot Ready", "shootReady", false)
+tog(gun, "Loop Portal Gun Color", "gunLoop", false)
+tog(gun, "Rainbow Gun", "rgbEnabled", false)
+if pg("PortalLevel") then
+	sl(gun, "Portal Level", "gunLevel", { 0, 2 }, 1, 2, "", function(v)
+		st.gunLevel = v
+		setv(pg("PortalLevel"), v)
+	end)
+end
+sl(gun, "Rainbow Speed", "rgbSpeed", { 0.02, 1 }, 0.01, 0.15, "x")
+if pg("wantedColor") then
+	gun:CreateColorPicker({
+		Name = "Portal Gun Color",
+		Color = Color3.fromRGB(255, 255, 255),
+		Flag = "ColorPicker1",
+		Callback = function(c)
+			st.gunColor = c
+			setv(pg("wantedColor"), c)
+		end
+	})
+end
+btn(gun, "Give Max Portal Gun", function()
+	setv(pg("hasPortalGun"), true)
+	setv(pg("PortalLevel"), 2)
+	setv(pg("portalsIgnoreMaterial"), true)
+end)
+btn(gun, "Place Portal A In Front", function()
+	local p = gp(workspace, "Portals", "PortalA")
+	if p then
+		p.CFrame = cam.CFrame * CFrame.new(0, 0, -6)
+		setv(p:FindFirstChild("Active"), true)
+	end
+end)
+btn(gun, "Place Portal B In Front", function()
+	local p = gp(workspace, "Portals", "PortalB")
+	if p then
+		p.CFrame = cam.CFrame * CFrame.new(0, 0, -6)
+		setv(p:FindFirstChild("Active"), true)
+	end
+end)
+
+local badges = {
+	2124531179,
+	2124531181,
+	2124531182,
+	2124531184,
+	2124531185,
+	2124531198,
+	2124531213,
+	2124531723,
+	2124587582,
+	2124587583,
+	2124587597,
+	2124587936,
+	2124948632,
+	2124948674,
+	2124948729,
+	2124948745,
+	2124948842,
+	2124969259,
+	2124970540,
+	2125003412,
+	2125003419,
+	2125793440,
+	2143211391
+}
+btn(gun, "Get All Badges", function()
+	local ds = rps:FindFirstChild("DataStore")
+	local aw = ds and ds:FindFirstChild("Award")
+	if aw then
+		for i = 1, #badges do
+			pcall(function()
+				aw:FireServer(badges[i])
+			end)
+			task.wait(0.02)
+		end
+	end
+end)
+
+if gp(ui, "GameSettings", "Video", "Bloom") then
+	tog(perf, "No Bloom", "noBloom", false)
+end
+if gp(ui, "GameSettings", "Video", "ColorCorrection") then
+	tog(perf, "No Color Correction", "noCC", false)
+end
+if gp(ui, "GameSettings", "Video", "CameraShakeEnabled") then
+	tog(perf, "No Camera Shake", "noShake", false)
+end
+if gp(ui, "GameSettings", "Video", "PhysicalParticles") then
+	tog(perf, "No Physical Particles", "noPhys", false)
+end
+if gp(ui, "GameSettings", "Video", "WavyBeamsEnabled") then
+	tog(perf, "No Wavy Beams", "noWavy", false)
+end
+if gp(ui, "GameSettings", "Video", "Shadows") then
+	tog(perf, "No Shadows", "noShadow", false)
+end
+tog(perf, "Disable Dynamic DOF", "noDof", false)
+tog(perf, "Disable TVs", "noTv", false)
+tog(perf, "Hide Light Glares", "noGlares", false)
+uiToggle(perf, "Disable Axle", "axleDisabled", "noAxle")
+
+if adv then
+	if cap.meta then
+		tog(adv, "Block Local TakeDamage", "blockDamage", false, function(v)
+			if v and not st.mtHook then
+				local hook
+				local ok, err = pcall(function()
+					hook = hookmetamethod(game, "__namecall", nc(function(self, ...)
+						local m = getnamecallmethod():lower()
+						if not st.dead and st.opt.blockDamage and self == st.hum and m == "takedamage" then
+							return nil
+						end
+						return hook(self, ...)
+					end))
+				end)
+				if ok then
+					st.mtHook = hook
+				else
+					st.opt.blockDamage = false
+					note("TakeDamage hook failed")
+				end
+			end
+		end)
+	end
+	if cap.conn then
+		tog(adv, "Disable HRP Touch Connections", "disableTouch", false)
+	end
+	if cap.gc then
+		btn(adv, "Executor GC Available", function()
+			note("filtergc/getgc is supported, so future GC options can be added safely.")
+		end)
+	end
+end
+
+local function setVideo(n, v)
+	setv(gp(ui, "GameSettings", "Video", n), v)
+end
+
+local function applyPerf()
+	if st.opt.noBloom then
+		setVideo("Bloom", false)
+		local b = light:FindFirstChildOfClass("BloomEffect") or light:FindFirstChild("Bloom")
+		if b then
+			pcall(function()
+				b.Intensity = 0
+			end)
+		end
+	end
+	if st.opt.noCC then
+		setVideo("ColorCorrection", false)
+		for _, v in ipairs(light:GetChildren()) do
+			if v:IsA("ColorCorrectionEffect") then
+				v.Enabled = false
+			end
+		end
+	end
+	if st.opt.noShake then
+		setVideo("CameraShakeEnabled", false)
+	end
+	if st.opt.noPhys then
+		setVideo("PhysicalParticles", false)
+	end
+	if st.opt.noWavy then
+		setVideo("WavyBeamsEnabled", false)
+	end
+	if st.opt.noShadow then
+		setVideo("Shadows", false)
+		light.GlobalShadows = false
+	end
+	if st.opt.noDof then
+		for _, v in ipairs(light:GetChildren()) do
+			if v:IsA("DepthOfFieldEffect") then
+				v.Enabled = false
+				v.FarIntensity = 0
+				v.NearIntensity = 0
+			end
+		end
+	end
+	if st.opt.noTv then
+		for _, v in ipairs(workspace:GetDescendants()) do
+			if v:IsA("VideoFrame") then
+				v.Playing = false
+				v.Volume = 0
+			end
+		end
+	end
+	if st.opt.noGlares then
+		for _, v in ipairs(workspace:GetDescendants()) do
+			if v.Name == "ClientLightGlare" and v.Parent and v.Parent:IsA("BillboardGui") then
+				v.Parent.Enabled = false
+			end
+		end
+	end
+end
+
+local function setPortalCollide(v)
+	local ps = workspace:FindFirstChild("Portals")
+	if not ps then
+		return
+	end
+	for _, p in ipairs(ps:GetChildren()) do
+		local w = p:FindFirstChild("WorldColliders")
+		if w then
+			for _, c in ipairs(w:GetChildren()) do
+				if c:IsA("BasePart") then
+					c.CanCollide = v
+					c.CanTouch = v
+				end
+			end
+		end
+	end
+end
+
+local function scanBypasses()
+	if st.opt.emancBypass then
+		local lvl = workspace:FindFirstChild("Level")
+		if lvl then
+			for _, v in ipairs(lvl:GetDescendants()) do
+				if string.find(v.Name, "EmancipationGrill") then
+					local d = v:FindFirstChild("Disabled")
+					if d then
+						setv(d, true)
+					end
+				end
+			end
+		end
+	end
+	if st.opt.noPortalCollide then
+		setPortalCollide(false)
+	end
+end
+
+local function touchCon(on)
+	if not cap.conn then
+		return
+	end
+	local r = root()
+	if not r then
+		return
+	end
+	if on then
+		local now = os.clock()
+		if now < st.nextCon then
+			return
+		end
+		st.nextCon = now + 1
+		local ok, cons = pcall(getconnections, r.Touched)
+		if ok and type(cons) == "table" then
+			for _, c in ipairs(cons) do
+				if c and not st.dis[c] then
+					st.dis[c] = true
+					pcall(function()
+						c:Disable()
+					end)
+				end
+			end
+		end
+	else
+		for c in pairs(st.dis) do
+			pcall(function()
+				c:Enable()
+			end)
+			st.dis[c] = nil
+		end
+	end
+end
+
+local function loop(dt)
+	if st.dead then
+		return
+	end
+	local c = char()
+	local h = hum()
+	local r = root()
+	st.char = c
+	st.hum = h
+	st.root = r
+	if st.opt.loopGod then
+		setv(pg("god"), true)
+		if h and h.Health > 0 then
+			pcall(function()
+				h.MaxHealth = math.max(h.MaxHealth, 100)
+				if h.Health < h.MaxHealth then
+					h.Health = h.MaxHealth
+				end
+			end)
+		end
+	end
+	if st.opt.pauseBypass then
+		setv(pg("pauseMenuOpen"), false)
+	end
+	if st.opt.forceMove and c then
+		boolv(c, "canMove", true)
+		if h then
+			h.PlatformStand = false
+			h.Sit = false
+		end
+		if r then
+			r.Anchored = false
+		end
+	end
+	if st.opt.noRag and c then
+		boolv(c, "useDeathRagdoll", false)
+		local dr = c:FindFirstChild("deathRagdoll")
+		if dr then
+			pcall(function()
+				dr.Value = nil
+			end)
+		end
+	end
+	if st.opt.jumpBypass and c then
+		boolv(c, "insideJumpDisableZone", false)
+	end
+	if st.opt.emancBypass and c then
+		boolv(c, "insideEmancipationGrill", false)
+	end
+	if st.opt.noDrown and c then
+		boolv(c, "isUnderwater", false)
+		local dg = ui:FindFirstChild("DrowningIndicator")
+		local vg = dg and dg:FindFirstChild("Vignette")
+		if vg then
+			vg.ImageTransparency = 1
+		end
+		local wb = light:FindFirstChild("WaterBlur")
+		if wb then
+			wb.Size = 0
+		end
+	end
+	if st.opt.noSwim and c then
+		boolv(c, "isSwimming", false)
+	end
+	if st.opt.loopGun then
+		setv(pg("hasPortalGun"), true)
+		setv(pg("PortalLevel"), st.gunLevel or 2)
+	end
+	if st.opt.loopMat then
+		setv(pg("portalsIgnoreMaterial"), true)
+	end
+	if st.opt.shootReady and c then
+		boolv(c, "shooting", false)
+		boolv(c, "vrRightHandClipping", false)
+	end
+	if pg("wantedColor") then
+		if st.opt.rgbEnabled then
+			local hue = (os.clock() * (st.rgbSpeed or 0.15)) % 1
+			setv(pg("wantedColor"), Color3.fromHSV(hue, 1, 1))
+		elseif st.opt.gunLoop then
+			setv(pg("wantedColor"), st.gunColor)
+		end
+	end
+	if st.opt.antiVoid and r then
+		local fh = workspace.FallenPartsDestroyHeight or -500
+		local av = r.AssemblyLinearVelocity
+		if av.Y < -(st.fallLimit or 20) then
+			r.AssemblyLinearVelocity = Vector3.new(av.X, -(st.fallLimit or 20), av.Z)
+		end
+		if r.Position.Y < fh + 35 then
+			r.CFrame = r.CFrame + Vector3.new(0, st.voidRaise or 15, 0)
+			r.AssemblyLinearVelocity = Vector3.new(av.X, math.abs(st.fallLimit or 20), av.Z)
+		end
+	end
+	touchCon(st.opt.disableTouch)
+	local now = os.clock()
+	if now >= st.nextScan then
+		st.nextScan = now + 1
+		scanBypasses()
+	end
+	if now >= st.nextPerf then
+		st.nextPerf = now + 2
+		applyPerf()
+	end
+end
+
+bind(rs.PreSimulation, loop)
+bind(plr.CharacterAdded, function()
+	st.nextCon = 0
+	for c in pairs(st.dis) do
+		st.dis[c] = nil
+	end
+end)
+
+pcall(function()
+	Rayfield:LoadConfiguration()
+end)
+
+note("Loaded with extra options + compatibility checks")

@@ -260,6 +260,9 @@ if game.GameId == 847722000 then
 	st.infStamina = cfgBool("infStamina", false)
 	st.infNight = cfgBool("infNight", false)
 	st.rakeAura = cfgBool("rakeAura", false)
+	st.rakeAuraRange = cfgNum("rakeAuraRange", 200, 25, 500)
+	st.rakeAuraDelay = cfgNum("rakeAuraDelay", 0.12, 0.05, 0.6)
+	st.rakeAuraAutoEquip = cfgBool("rakeAuraAutoEquip", true)
 	st.rakeChams = cfgBool("rakeChams", false)
 	st.playerEsp = cfgBool("playerEsp", false)
 	st.showDist = cfgBool("showDist", false)
@@ -357,6 +360,9 @@ if game.GameId == 847722000 then
 	_G.InfStamina = st.infStamina
 	_G.InfNightVision = st.infNight
 	_G.RakeKillAura = st.rakeAura
+	_G.RakeAuraRange = st.rakeAuraRange
+	_G.RakeAuraDelay = st.rakeAuraDelay
+	_G.RakeAuraAutoEquip = st.rakeAuraAutoEquip
 	_G.RakeChams = st.rakeChams
 	_G.PlayerESP = st.playerEsp
 	_G.PlayerESPShowDistance = st.showDist
@@ -4851,29 +4857,293 @@ if game.GameId == 847722000 then
 		end,
 	})
 
-	-- rake killaura hitpart 
+	ExploitsTab:CreateSlider({
+		Name = "Killaura Range",
+		Range = {25, 500},
+		Increment = 5,
+		CurrentValue = st.rakeAuraRange,
+		Flag = "RakeAuraRange",
+		Callback = function(v)
+			st.rakeAuraRange = math.clamp(tonumber(v) or 200, 25, 500)
+			_G.RakeAuraRange = st.rakeAuraRange
+			cfgSet("rakeAuraRange", st.rakeAuraRange)
+		end,
+	})
+
+	ExploitsTab:CreateSlider({
+		Name = "Killaura Delay",
+		Range = {0.05, 0.6},
+		Increment = 0.01,
+		CurrentValue = st.rakeAuraDelay,
+		Flag = "RakeAuraDelay",
+		Callback = function(v)
+			st.rakeAuraDelay = math.clamp(tonumber(v) or 0.12, 0.05, 0.6)
+			_G.RakeAuraDelay = st.rakeAuraDelay
+			cfgSet("rakeAuraDelay", st.rakeAuraDelay)
+		end,
+	})
+
+	ExploitsTab:CreateToggle({
+		Name = "Killaura Auto Equip",
+		CurrentValue = st.rakeAuraAutoEquip,
+		Flag = "RakeAuraAutoEquip",
+		Callback = function(state)
+			st.rakeAuraAutoEquip = state == true
+			_G.RakeAuraAutoEquip = st.rakeAuraAutoEquip
+			cfgSet("rakeAuraAutoEquip", st.rakeAuraAutoEquip)
+		end,
+	})
+
 	local auraT = 0
+	local aura = {
+		rk = nil,
+		rr = nil,
+		rh = nil,
+		stick = nil,
+		ev = nil,
+		hp = nil,
+		bp = nil,
+	}
+
+	local function auraClearRake()
+		aura.rk = nil
+		aura.rr = nil
+		aura.rh = nil
+	end
+
+	local function auraClearStick()
+		aura.stick = nil
+		aura.ev = nil
+		aura.hp = nil
+	end
+
+	local function auraIsStick(v)
+		if not (v and v:IsA("Tool")) then
+			return false
+		end
+		local n = string.lower(v.Name)
+		return n == "stunstick" or (string.find(n, "stun", 1, true) and string.find(n, "stick", 1, true)) ~= nil
+	end
+
+	local function auraGetRake()
+		local rk = aura.rk
+		if not (rk and rk.Parent) then
+			rk = ffc(Ws, "Rake")
+			aura.rk = rk
+			aura.rr = nil
+			aura.rh = nil
+		end
+		if not rk then
+			return nil
+		end
+		local rh = aura.rh
+		if not (rh and rh.Parent) then
+			rh = ffc(rk, "Monster") or ffca(rk, "Humanoid")
+			aura.rh = rh
+		end
+		if rh and rh.Health and rh.Health <= 0 then
+			return nil
+		end
+		local rr = aura.rr
+		if not (rr and rr.Parent) then
+			rr = ffc(rk, "HumanoidRootPart") or ffcr(rk, "HumanoidRootPart")
+			aura.rr = rr
+		end
+		if not rr then
+			return nil
+		end
+		return rk, rr, rh
+	end
+
+	local function auraGetPart(rk, rr, pos)
+		local best = rr
+		local bd = rr and (rr.Position - pos).Magnitude or math.huge
+		local names = { "Head", "Torso", "UpperTorso", "LowerTorso", "HumanoidRootPart" }
+		for i = 1, #names do
+			local v = ffc(rk, names[i])
+			if v and v:IsA("BasePart") then
+				local d = (v.Position - pos).Magnitude
+				if d < bd then
+					best = v
+					bd = d
+				end
+			end
+		end
+		return best
+	end
+
+	local function auraGetStick()
+		local ch = getChar()
+		if not ch then
+			return nil
+		end
+		local s = aura.stick
+		if not (s and s.Parent) then
+			s = nil
+			for _, v in pairs(kids(ch)) do
+				if auraIsStick(v) then
+					s = v
+					break
+				end
+			end
+			if not s then
+				local bp = aura.bp
+				if not (bp and bp.Parent) then
+					local lp = Plrs.LocalPlayer
+					bp = lp and ffc(lp, "Backpack") or nil
+					aura.bp = bp
+				end
+				if bp then
+					for _, v in pairs(kids(bp)) do
+						if auraIsStick(v) then
+							s = v
+							break
+						end
+					end
+				end
+				if s and _G.RakeAuraAutoEquip == true then
+					local hum = getHum()
+					if hum then
+						pcall(function()
+							hum:EquipTool(s)
+						end)
+					end
+					return nil
+				end
+			end
+			aura.stick = s
+			aura.ev = nil
+			aura.hp = nil
+		end
+		if not (s and s.Parent == ch) then
+			if s and _G.RakeAuraAutoEquip == true then
+				local hum = getHum()
+				if hum then
+					pcall(function()
+						hum:EquipTool(s)
+					end)
+				end
+				auraClearStick()
+			end
+			return nil
+		end
+		local ev = aura.ev
+		if not (ev and ev.Parent) then
+			ev = ffc(s, "Event") or ffcr(s, "Event")
+			aura.ev = ev
+		end
+		local hp = aura.hp
+		if not (hp and hp.Parent) then
+			hp = ffc(s, "HitPart") or ffcr(s, "HitPart")
+			aura.hp = hp
+		end
+		return s, ev, hp
+	end
+
+	local function auraHasPower()
+		local p = ffc(Rep, "StationPower")
+		if p and p.Value ~= true then
+			return false
+		end
+		return true
+	end
+
+	local function auraHasStamina()
+		if st.infStamina == true or _G.InfStamina == true then
+			return true
+		end
+		local g = ffc(Rep, "GSTMNA")
+		if not g then
+			return true
+		end
+		local ok, val = pcall(function()
+			return g:Invoke()
+		end)
+		return not ok or not val or val >= 12
+	end
+
+	local function auraTakeStamina()
+		if st.infStamina == true or _G.InfStamina == true then
+			return
+		end
+		local tks = ffc(Rep, "TKSMNA")
+		if tks then
+			pcall(function()
+				tks:Fire(12)
+			end)
+		end
+	end
+
+	local function auraMoveHitpart(hp, hit)
+		if not (hp and hit) then
+			return
+		end
+		pcall(function()
+			hp.CanTouch = true
+			hp.CanQuery = true
+			hp.CFrame = hit.CFrame
+		end)
+	end
+
+	local function auraSwing(ev, hit)
+		if not (ev and hit) then
+			return
+		end
+		pcall(function()
+			ev:FireServer("S")
+		end)
+		auraTakeStamina()
+		pcall(function()
+			ev:FireServer("H", hit)
+		end)
+	end
+
+	bind(Ws.ChildAdded, function(obj)
+		if obj and obj.Name == "Rake" then
+			auraClearRake()
+			aura.rk = obj
+		end
+	end)
+
+	bind(Ws.ChildRemoved, function(obj)
+		if obj == aura.rk or obj.Name == "Rake" then
+			auraClearRake()
+		end
+	end)
+
+	bind(Plrs.LocalPlayer.CharacterAdded, function()
+		auraClearStick()
+	end)
 
 	bind(Run.Heartbeat, function(dt)
 		if AllowRunService ~= true or _G.RakeKillAura ~= true then
+			auraT = 0
 			return
 		end
 		auraT += dt
 		pcall(function()
-			local ch = getChar()
 			local root = GET_HRP()
-			local rk = ffcr(Ws, "Rake")
-			local rr = ffcr(rk, "HumanoidRootPart")
-			local stick = ch and ffcr(ch, "StunStick")
-			local hp = stick and ffcr(stick, "HitPart")
-			local ev = stick and ffcr(stick, "Event")
-			if hp and rr then
-				hp.Position = rr.Position
+			if not root then
+				return
 			end
-			if auraT >= 0.12 and root and rr and ev and (rr.Position - root.Position).Magnitude < 200 then
+			local rk, rr = auraGetRake()
+			if not (rk and rr) then
+				return
+			end
+			local range = math.clamp(tonumber(_G.RakeAuraRange) or 200, 25, 500)
+			if (rr.Position - root.Position).Magnitude > range then
+				return
+			end
+			local stick, ev, hp = auraGetStick()
+			if not (stick and ev) then
+				return
+			end
+			local hit = auraGetPart(rk, rr, root.Position)
+			auraMoveHitpart(hp, hit)
+			local delay = math.clamp(tonumber(_G.RakeAuraDelay) or 0.12, 0.05, 0.6)
+			if auraT >= delay and auraHasPower() and auraHasStamina() then
 				auraT = 0
-				ev:FireServer("S")
-				ev:FireServer("H", rr)
+				auraSwing(ev, hit)
 			end
 		end)
 	end)

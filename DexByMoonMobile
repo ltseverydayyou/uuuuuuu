@@ -861,13 +861,13 @@ local EmbeddedModules = {
 						end;
 						local listOffsetX = startX - treeFrame.AbsolutePosition.X;
 						local listOffsetY = startY - treeFrame.AbsolutePosition.Y;
-						releaseEvent = service.UserInputService.InputEnded:Connect(function(input)
+						releaseEvent = Main.TrackConn(service.UserInputService.InputEnded:Connect(function(input)
 							if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 								releaseEvent:Disconnect();
 								mouseEvent:Disconnect();
 							end;
-						end);
-						mouseEvent = service.UserInputService.InputChanged:Connect(function(input)
+						end));
+						mouseEvent = Main.TrackConn(service.UserInputService.InputChanged:Connect(function(input)
 							if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 								local currentX, currentY;
 								if input.UserInputType == Enum.UserInputType.Touch then
@@ -887,7 +887,7 @@ local EmbeddedModules = {
 									Explorer.StartDrag(listOffsetX, listOffsetY);
 								end;
 							end;
-						end);
+						end));
 					end;
 				end);
 				newEntry.MouseButton2Down:Connect(function()
@@ -1983,12 +1983,12 @@ local EmbeddedModules = {
 				if shortcutInputCon then
 					shortcutInputCon:Disconnect();
 				end;
-				shortcutInputCon = service.UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
+				shortcutInputCon = Main.TrackConn(service.UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
 					if gameProcessedEvent then
 						return;
 					end;
 					Explorer.TryHandleShortcut(input);
-				end);
+				end));
 			end;
 			Explorer.HideNilInstances = function()
 				table.clear(nilMap);
@@ -4234,14 +4234,14 @@ local EmbeddedModules = {
 						return;
 					end;
 					local releaseEvent, inputEvent;
-					releaseEvent = service.UserInputService.InputEnded:Connect(function(input)
+					releaseEvent = Main.TrackConn(service.UserInputService.InputEnded:Connect(function(input)
 						if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 							releaseEvent:Disconnect();
 							if inputEvent then
 								inputEvent:Disconnect();
 							end;
 						end;
-					end);
+					end));
 					local timeLine = newEntry.ValueFrame.SoundPreview.TimeLine;
 					local soundObj = Properties.FindFirstObjWhichIsA("Sound");
 					if soundObj then
@@ -4268,11 +4268,11 @@ local EmbeddedModules = {
 						timeLine.Slider.Position = UDim2.new(perc, -4, 0, -8);
 					end;
 					update(input);
-					inputEvent = service.UserInputService.InputChanged:Connect(function(input)
+					inputEvent = Main.TrackConn(service.UserInputService.InputChanged:Connect(function(input)
 						if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 							update(input);
 						end;
-					end);
+					end));
 				end);
 				newEntry.Parent = propsFrame;
 				return {
@@ -7659,7 +7659,7 @@ local EmbeddedModules = {
 								local offY = input.Position.Y - resizer.AbsolutePosition.Y;
 								self.Resizing = resizer;
 								resizer.BackgroundTransparency = 1;
-								releaseEvent = service.UserInputService.InputEnded:Connect(function(input)
+								releaseEvent = Main.TrackConn(service.UserInputService.InputEnded:Connect(function(input)
 									if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 										releaseEvent:Disconnect();
 										if mouseEvent then
@@ -7668,8 +7668,8 @@ local EmbeddedModules = {
 										self.Resizing = false;
 										resizer.BackgroundTransparency = 1;
 									end;
-								end);
-								mouseEvent = service.UserInputService.InputChanged:Connect(function(input)
+								end));
+								mouseEvent = Main.TrackConn(service.UserInputService.InputChanged:Connect(function(input)
 									if self.Resizable and self.ResizableInternal and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
 										self:StopTweens();
 										local deltaX = input.Position.X - resizer.AbsolutePosition.X - offX;
@@ -7688,7 +7688,7 @@ local EmbeddedModules = {
 										self.SizeY = self.SizeY + (isV and deltaY * signY or 0);
 										guiMain.Size = UDim2.new(0, self.SizeX, 0, self.Minimized and 20 or self.SizeY);
 									end;
-								end);
+								end));
 							end;
 						end;
 					end);
@@ -8147,7 +8147,7 @@ local EmbeddedModules = {
 								local offY = input.Position.Y - initY;
 								local alignInsertPos, alignInsertSide;
 								guiDragging = true;
-								releaseEvent = service.UserInputService.InputEnded:Connect(function(input)
+								releaseEvent = Main.TrackConn(service.UserInputService.InputEnded:Connect(function(input)
 									if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 										releaseEvent:Disconnect();
 										if mouseEvent then
@@ -8160,8 +8160,8 @@ local EmbeddedModules = {
 											self:AlignTo(targetSide, alignInsertPos);
 										end;
 									end;
-								end);
-								mouseEvent = service.UserInputService.InputChanged:Connect(function(input)
+								end));
+								mouseEvent = Main.TrackConn(service.UserInputService.InputChanged:Connect(function(input)
 									if (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) and self.Draggable and (not self.Closed) and ButtonDown then
 										if self.Aligned then
 											if leftSide.Resizing or rightSide.Resizing then
@@ -8207,7 +8207,7 @@ local EmbeddedModules = {
 											alignInsertSide = nil;
 										end;
 									end;
-								end);
+								end));
 							end;
 						end;
 					end);
@@ -8335,7 +8335,7 @@ local EmbeddedModules = {
 								local offY = input.Position.Y - resizer.AbsolutePosition.Y;
 								side.Resizing = resizer;
 								resizer.BackgroundColor3 = theme.MainColor2;
-								releaseEvent = service.UserInputService.InputEnded:Connect(function(input)
+								releaseEvent = Main.TrackConn(service.UserInputService.InputEnded:Connect(function(input)
 									if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 										releaseEvent:Disconnect();
 										if inputEvent then
@@ -8344,8 +8344,8 @@ local EmbeddedModules = {
 										side.Resizing = false;
 										resizer.BackgroundColor3 = theme.Button;
 									end;
-								end);
-								inputEvent = service.UserInputService.InputChanged:Connect(function(input)
+								end));
+								inputEvent = Main.TrackConn(service.UserInputService.InputChanged:Connect(function(input)
 									if not resizer.Parent then
 										releaseEvent:Disconnect();
 										if inputEvent then
@@ -8401,7 +8401,7 @@ local EmbeddedModules = {
 											sideResized(otherSide);
 										end;
 									end;
-								end);
+								end));
 							end;
 						end;
 					end);
@@ -9668,7 +9668,7 @@ local EmbeddedModules = {
 					if self.CloseEvent then
 						self.CloseEvent:Disconnect();
 					end;
-					self.CloseEvent = service.UserInputService.InputBegan:Connect(function(input)
+					self.CloseEvent = Main.TrackConn(service.UserInputService.InputBegan:Connect(function(input)
 						if not closable then
 							return;
 						end;
@@ -9678,7 +9678,7 @@ local EmbeddedModules = {
 								self:Hide();
 							end;
 						end;
-					end);
+					end));
 					if reverseY then
 						elems.Main.Position = UDim2.new(0, x, 0, y - (self.ReverseYOffset or 0));
 						local newY = y - toSize - (self.ReverseYOffset or 0);
@@ -9987,15 +9987,15 @@ local EmbeddedModules = {
 								obj.FloatCursorX = sel2X;
 								obj:Refresh();
 							end;
-							releaseEvent = service.UserInputService.InputEnded:Connect(function(input)
+							releaseEvent = Main.TrackConn(service.UserInputService.InputEnded:Connect(function(input)
 								if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 									releaseEvent:Disconnect();
 									inputEvent:Disconnect();
 									scrollEvent:Disconnect();
 									obj:SetCopyableSelection();
 								end;
-							end);
-							inputEvent = service.UserInputService.InputChanged:Connect(function(input)
+							end));
+							inputEvent = Main.TrackConn(service.UserInputService.InputChanged:Connect(function(input)
 								if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 									local upDelta = input.Position.Y - codeFrame.AbsolutePosition.Y;
 									local downDelta = input.Position.Y - codeFrame.AbsolutePosition.Y - codeFrame.AbsoluteSize.Y;
@@ -10015,13 +10015,13 @@ local EmbeddedModules = {
 									end;
 									updateSelection();
 								end;
-							end);
-							scrollEvent = service.RunService.RenderStepped:Connect(function()
+							end));
+							scrollEvent = Main.TrackConn(service.RunService.RenderStepped:Connect(function()
 								if scrollPowerV ~= 0 or scrollPowerH ~= 0 then
 									obj:ScrollDelta(scrollPowerH, scrollPowerV);
 									updateSelection();
 								end;
-							end);
+							end));
 							obj:Refresh();
 						end;
 					end);
@@ -10139,7 +10139,7 @@ local EmbeddedModules = {
 					if self.EditBoxEvent then
 						self.EditBoxEvent:Disconnect();
 					end;
-					self.EditBoxEvent = service.UserInputService.InputBegan:Connect(function(input)
+					self.EditBoxEvent = Main.TrackConn(service.UserInputService.InputBegan:Connect(function(input)
 						if input.UserInputType ~= Enum.UserInputType.Keyboard then
 							return;
 						end;
@@ -10147,13 +10147,13 @@ local EmbeddedModules = {
 						local keycode = input.KeyCode;
 						local function setupMove(key, func)
 							local endCon, finished;
-							endCon = service.UserInputService.InputEnded:Connect(function(input)
+							endCon = Main.TrackConn(service.UserInputService.InputEnded:Connect(function(input)
 								if input.KeyCode ~= key then
 									return;
 								end;
 								endCon:Disconnect();
 								finished = true;
-							end);
+							end));
 							func();
 							Lib.FastWait(0.5);
 							while not finished do
@@ -10283,7 +10283,7 @@ local EmbeddedModules = {
 								self:Refresh();
 							end;
 						end;
-					end);
+					end));
 				end;
 				funcs.DisconnectEditBoxEvent = function(self)
 					if self.EditBoxEvent then
@@ -11602,7 +11602,7 @@ local EmbeddedModules = {
 					if self.CloseEvent then
 						self.CloseEvent:Disconnect();
 					end;
-					self.CloseEvent = service.UserInputService.InputBegan:Connect(function(input)
+					self.CloseEvent = Main.TrackConn(service.UserInputService.InputBegan:Connect(function(input)
 						if not closable or input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then
 							return;
 						end;
@@ -11610,7 +11610,7 @@ local EmbeddedModules = {
 							self.CloseEvent:Disconnect();
 							self:Close();
 						end;
-					end);
+					end));
 					if reverseY then
 						local newY = y - sizeY - (self.ReverseYOffset or 0);
 						y = newY >= 0 and newY or 0;
@@ -15384,14 +15384,14 @@ local EmbeddedModules = {
 							end);
 						end;
 						local release;
-						release = service.UserInputService.InputEnded:Connect(function(input)
+						release = Main.TrackConn(service.UserInputService.InputEnded:Connect(function(input)
 							if input.UserInputType == Enum.UserInputType["MouseButton" .. button] then
 								release:Disconnect();
 								if Lib.CheckMouseInGui(item) and self.LastButton == button and self.LastItem == item then
 									self.OnRelease:Fire(item, self.Combo, button);
 								end;
 							end;
-						end);
+						end));
 						self.OnDown:Fire(item, self.Combo, button);
 					end;
 				end;

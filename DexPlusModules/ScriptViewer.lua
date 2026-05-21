@@ -323,6 +323,9 @@ end
 
 		local UserInputService = __lt.cs("UserInputService", cloneref)
 		local isHoldingCTRL = false
+		local function trackConn(conn)
+			return Main and Main.TrackConn and Main.TrackConn(conn) or conn
+		end
 
 		local function setWheelScrollingEnabled(enabled)
 			if not (codeFrame and codeFrame.ScrollV) then return end
@@ -340,26 +343,26 @@ end
 				return
 			end
 
-			local lines = codeFrame.Frame and (codeFrame.Frame:FindFirstChild("Lines") or codeFrame.Frame.Lines)
+			local lines = codeFrame.Frame and codeFrame.Frame:FindFirstChild("Lines")
 			if lines then
 				scrollV:SetScrollFrame(lines)
 			end
 		end
 
-		UserInputService.InputBegan:Connect(function(input, gameproc)
+		trackConn(UserInputService.InputBegan:Connect(function(input, gameproc)
 			if gameproc then return end
 			if input.KeyCode == Enum.KeyCode.LeftControl or input.KeyCode == Enum.KeyCode.RightControl then
 				isHoldingCTRL = true
 				setWheelScrollingEnabled(false)
 			end
-		end)
-		UserInputService.InputEnded:Connect(function(input, gameproc)
+		end))
+		trackConn(UserInputService.InputEnded:Connect(function(input, gameproc)
 			if gameproc then return end
 			if input.KeyCode == Enum.KeyCode.LeftControl or input.KeyCode == Enum.KeyCode.RightControl then
 				isHoldingCTRL = false
 				setWheelScrollingEnabled(true)
 			end
-		end)
+		end))
 
 		local linesFrame = codeFrame.Frame:FindFirstChild("Lines")
 		if linesFrame then

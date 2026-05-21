@@ -154,6 +154,7 @@ local Tabs = {
 	Settings = win:AddTab("Settings", "settings")
 };
 local gbCore = Tabs.Main:AddLeftGroupbox("Core");
+local gbBypass = Tabs.Main:AddLeftGroupbox("Bypasses");
 local gbESP = Tabs.Main:AddRightGroupbox("ESP");
 local gbInfo = Tabs.Main:AddRightGroupbox("Info");
 gbCore:AddToggle("AutoFarm", {
@@ -241,6 +242,53 @@ gbCore:AddButton("Respawn", function()
 	local ev = ((__lt.cm("ReplicatedStorage", "WaitForChild", "Events")):WaitForChild("Player")):WaitForChild("ChangePlayerMode");
 	ev:FireServer(true);
 end);
+gbBypass:AddToggle("FastPrompts", {
+	Text = "Fast Prompts",
+	Default = false,
+	Tooltip = "Sets proximity prompt hold time to 0"
+});
+gbBypass:AddToggle("PromptLOS", {
+	Text = "Prompt Reach",
+	Default = false,
+	Tooltip = "Disables prompt line-of-sight and applies custom activation range"
+});
+gbBypass:AddSlider("PromptDistance", {
+	Text = "Prompt Distance",
+	Min = 10,
+	Max = 50,
+	Default = 18,
+	Rounding = 0,
+	Suffix = " studs"
+});
+gbBypass:AddToggle("ForceHeadlamp", {
+	Text = "Force Headlamp",
+	Default = false,
+	Tooltip = "Forces the client Headlamp attribute so headgear light modules stay enabled"
+});
+gbBypass:AddToggle("CameraUnlock", {
+	Text = "Camera Unlock",
+	Default = false,
+	Tooltip = "Uses the client camera handler to widen pitch limits and apply shiftlock offset"
+});
+gbBypass:AddSlider("ShiftLockX", {
+	Text = "Shiftlock X",
+	Min = -4,
+	Max = 4,
+	Default = 1.75,
+	Rounding = 2
+});
+gbBypass:AddToggle("ElevatorUnlock", {
+	Text = "Elevator Unlock",
+	Default = false,
+	Tooltip = "Patches the client elevator class to ignore local Locked state"
+});
+gbBypass:AddSlider("ElevatorSpeed", {
+	Text = "Elevator Speed",
+	Min = 5,
+	Max = 60,
+	Default = 30,
+	Rounding = 0
+});
 gbESP:AddToggle("ESPPlayers", {
 	Text = "Player ESP",
 	Default = false,
@@ -337,6 +385,14 @@ local wmGui, wmLbl;
 local espParent;
 local wmScale = 1;
 local farmPlatform;
+local prOrig = {};
+local headOrig = setmetatable({}, {
+	__mode = "k"
+});
+local elevOrig = setmetatable({}, {
+	__mode = "k"
+});
+local elevPatched = 0;
 local dpiMap = {
 	["50%"] = 0.5,
 	["75%"] = 0.75,
@@ -375,6 +431,50 @@ gbScript:AddButton("Unload Script", function()
 	if farmPlatform then
 		farmPlatform:Destroy();
 		farmPlatform = nil;
+	end;
+	for pr, old in pairs(prOrig) do
+		if pr and pr.Parent and old then
+			pcall(function()
+				if old.HoldDuration ~= nil then
+					pr.HoldDuration = old.HoldDuration;
+				end;
+				if old.RequiresLineOfSight ~= nil then
+					pr.RequiresLineOfSight = old.RequiresLineOfSight;
+				end;
+				if old.MaxActivationDistance ~= nil then
+					pr.MaxActivationDistance = old.MaxActivationDistance;
+				end;
+			end);
+		end;
+		prOrig[pr] = nil;
+	end;
+	for ch, old in pairs(headOrig) do
+		if ch and ch.Parent and old then
+			pcall(function()
+				if old.had then
+					ch:SetAttribute("Headlamp", old.val);
+				else
+					ch:SetAttribute("Headlamp", nil);
+				end;
+			end);
+		end;
+		headOrig[ch] = nil;
+	end;
+	for cls, old in pairs(elevOrig) do
+		if cls and old then
+			pcall(function()
+				if old.new then
+					cls.new = old.new;
+				end;
+				if old.Use then
+					cls.Use = old.Use;
+				end;
+				if old.Elevate then
+					cls.Elevate = old.Elevate;
+				end;
+			end);
+		end;
+		elevOrig[cls] = nil;
 	end;
 	for i = 1, #safeZoneParts do
 		local part = safeZoneParts[i];
@@ -488,6 +588,15 @@ local collFarm = Tog.CollectibleFarm and Tog.CollectibleFarm.Value or false;
 local autoFarm = Tog.AutoFarm and Tog.AutoFarm.Value or false;
 local espColl = Tog.ESPCollectibles and Tog.ESPCollectibles.Value or false;
 local colColl = Opt.ESPCollColor and Opt.ESPCollColor.Value or Color3.fromRGB(255, 170, 0);
+local fastPrompt = Tog.FastPrompts and Tog.FastPrompts.Value or false;
+local promptLOS = Tog.PromptLOS and Tog.PromptLOS.Value or false;
+local promptDist = Opt.PromptDistance and Opt.PromptDistance.Value or 18;
+local forceLamp = Tog.ForceHeadlamp and Tog.ForceHeadlamp.Value or false;
+local camUnlock = Tog.CameraUnlock and Tog.CameraUnlock.Value or false;
+local slX = Opt.ShiftLockX and Opt.ShiftLockX.Value or 1.75;
+local elevUnlock = Tog.ElevatorUnlock and Tog.ElevatorUnlock.Value or false;
+local elevSpeed = Opt.ElevatorSpeed and Opt.ElevatorSpeed.Value or 30;
+local camWas = false;
 local farmPos = Vector3.new(0, 5000, 0);
 local dmgAvoidRange = 7;
 local plrGUI;
@@ -589,6 +698,46 @@ end;
 if Opt.ESPCollColor then
 	Opt.ESPCollColor:OnChanged(function(v)
 		colColl = v;
+	end);
+end;
+if Tog.FastPrompts then
+	Tog.FastPrompts:OnChanged(function(v)
+		fastPrompt = v;
+	end);
+end;
+if Tog.PromptLOS then
+	Tog.PromptLOS:OnChanged(function(v)
+		promptLOS = v;
+	end);
+end;
+if Opt.PromptDistance then
+	Opt.PromptDistance:OnChanged(function(v)
+		promptDist = v;
+	end);
+end;
+if Tog.ForceHeadlamp then
+	Tog.ForceHeadlamp:OnChanged(function(v)
+		forceLamp = v;
+	end);
+end;
+if Tog.CameraUnlock then
+	Tog.CameraUnlock:OnChanged(function(v)
+		camUnlock = v;
+	end);
+end;
+if Opt.ShiftLockX then
+	Opt.ShiftLockX:OnChanged(function(v)
+		slX = v;
+	end);
+end;
+if Tog.ElevatorUnlock then
+	Tog.ElevatorUnlock:OnChanged(function(v)
+		elevUnlock = v;
+	end);
+end;
+if Opt.ElevatorSpeed then
+	Opt.ElevatorSpeed:OnChanged(function(v)
+		elevSpeed = v;
 	end);
 end;
 Opt.ReviveRange:OnChanged(function(v)
@@ -932,6 +1081,286 @@ local function getRoot(o)
 	end;
 	return rec.root or mdl and NA_GRAB_BODY.firstPart(mdl) or nil;
 end;
+local function savePrompt(pr)
+	if prOrig[pr] then
+		return;
+	end;
+	prOrig[pr] = {
+		HoldDuration = pr.HoldDuration,
+		RequiresLineOfSight = pr.RequiresLineOfSight,
+		MaxActivationDistance = pr.MaxActivationDistance
+	};
+end;
+local function applyPrompt(pr)
+	if not pr or not pr:IsA("ProximityPrompt") then
+		return;
+	end;
+	if fastPrompt or promptLOS then
+		savePrompt(pr);
+	end;
+	if promptLOS then
+		pcall(function()
+			pr.RequiresLineOfSight = false;
+			pr.MaxActivationDistance = promptDist;
+		end);
+	end;
+	if fastPrompt then
+		pcall(function()
+			pr.HoldDuration = 0;
+		end);
+	end;
+end;
+local function applyPrompts()
+	if not (fastPrompt or promptLOS) then
+		return;
+	end;
+	for _, d in ipairs(ws:GetDescendants()) do
+		if d:IsA("ProximityPrompt") then
+			applyPrompt(d);
+		end;
+	end;
+end;
+local function restorePrompts()
+	for pr, old in pairs(prOrig) do
+		if pr and pr.Parent and old then
+			pcall(function()
+				pr.HoldDuration = old.HoldDuration;
+				pr.RequiresLineOfSight = old.RequiresLineOfSight;
+				pr.MaxActivationDistance = old.MaxActivationDistance;
+			end);
+		end;
+		prOrig[pr] = nil;
+	end;
+end;
+local function applyHeadlamp(on)
+	local ch = getChar();
+	if not ch then
+		return;
+	end;
+	if on then
+		if not headOrig[ch] then
+			local val = ch:GetAttribute("Headlamp");
+			headOrig[ch] = {
+				had = val ~= nil,
+				val = val
+			};
+		end;
+		if ch:GetAttribute("Headlamp") ~= true then
+			pcall(function()
+				ch:SetAttribute("Headlamp", true);
+			end);
+		end;
+	else
+		local old = headOrig[ch];
+		if old then
+			pcall(function()
+				if old.had then
+					ch:SetAttribute("Headlamp", old.val);
+				else
+					ch:SetAttribute("Headlamp", nil);
+				end;
+			end);
+			headOrig[ch] = nil;
+		end;
+	end;
+end;
+local function camSet(...)
+	local pg = lp and (lp:FindFirstChildOfClass("PlayerScripts") or lp:FindFirstChild("PlayerScripts"));
+	local cam = pg and pg:FindFirstChild("Camera");
+	local bf = cam and cam:FindFirstChild("Set");
+	if bf and bf:IsA("BindableFunction") then
+		return pcall(function(...)
+			return bf:Invoke(...);
+		end, ...);
+	end;
+	return false;
+end;
+local function resetCamera()
+	camSet("MouseOffset", "Evader", Vector3.new());
+	camSet("MinY", -80);
+	camSet("MaxY", 80);
+end;
+local function applyCamera()
+	if not camUnlock then
+		return;
+	end;
+	camSet("MouseLockEnabled", true);
+	camSet("MinY", -89);
+	camSet("MaxY", 89);
+	camSet("MouseOffset", "Evader", Vector3.new(slX, 0, 0));
+	camWas = true;
+end;
+local function elevLike(m)
+	if not m or not m:IsA("Model") then
+		return false;
+	end;
+	local n = string.lower(m.Name or "");
+	if n:find("elevator", 1, true) then
+		return true;
+	end;
+	if m:FindFirstChild("Floor2") or m:FindFirstChild("ElevatorFloor", true) then
+		return true;
+	end;
+	return false;
+end;
+local function applyElevInst(inst)
+	if not elevUnlock then
+		return;
+	end;
+	local m = inst;
+	if inst:IsA("ProximityPrompt") then
+		m = inst:FindFirstAncestorWhichIsA("Model");
+	end;
+	if elevLike(m) then
+		pcall(function()
+			m:SetAttribute("Locked", false);
+		end);
+		local pr = m:FindFirstChildWhichIsA("ProximityPrompt", true);
+		if pr then
+			pcall(function()
+				pr.RequiresLineOfSight = false;
+				pr.MaxActivationDistance = math.max(promptDist, 15);
+			end);
+		end;
+	end;
+end;
+local function applyElevators()
+	if not elevUnlock then
+		return;
+	end;
+	for _, d in ipairs(ws:GetDescendants()) do
+		if d:IsA("Model") and elevLike(d) then
+			applyElevInst(d);
+		end;
+	end;
+end;
+local function patchElevClass()
+	if not elevUnlock or type(getgc) ~= "function" then
+		return;
+	end;
+	if tick() - elevPatched < 3 then
+		return;
+	end;
+	elevPatched = tick();
+	local ok, gc = pcall(getgc, true);
+	if not ok or type(gc) ~= "table" then
+		return;
+	end;
+	for i = 1, #gc do
+		local cls = gc[i];
+		if type(cls) == "table" and not elevOrig[cls] then
+			local use = rawget(cls, "Use");
+			local elv = rawget(cls, "Elevate");
+			local mv = rawget(cls, "MoveDoors");
+			local nw = rawget(cls, "new");
+			if type(use) == "function" and type(elv) == "function" and type(mv) == "function" and type(nw) == "function" then
+				local old = {
+					Use = use,
+					Elevate = elv,
+					new = nw
+				};
+				local okPatch = pcall(function()
+					cls.new = function(...)
+						local obj = old.new(...);
+						if type(obj) == "table" then
+							if elevUnlock then
+								obj.Locked = false;
+								local el = rawget(obj, "Elevator");
+								if typeof(el) == "Instance" then
+									pcall(function()
+										el:SetAttribute("Locked", false);
+									end);
+								end;
+							end;
+							if elevUnlock and elevSpeed then
+								obj.ElevatorSpeed = elevSpeed;
+							end;
+						end;
+						return obj;
+					end;
+					cls.Use = function(self, ...)
+						if elevUnlock and type(self) == "table" then
+							self.Locked = false;
+							local el = rawget(self, "Elevator");
+							if typeof(el) == "Instance" then
+								pcall(function()
+									el:SetAttribute("Locked", false);
+								end);
+							end;
+						end;
+						if elevUnlock and elevSpeed and type(self) == "table" then
+							self.ElevatorSpeed = elevSpeed;
+						end;
+						return old.Use(self, ...);
+					end;
+					cls.Elevate = function(self, ...)
+						if elevUnlock and elevSpeed and type(self) == "table" then
+							self.ElevatorSpeed = elevSpeed;
+						end;
+						return old.Elevate(self, ...);
+					end;
+				end);
+				if okPatch then
+					elevOrig[cls] = old;
+					dbg("Elevator class patched");
+				end;
+			end;
+		end;
+	end;
+end;
+local function restoreElevClass()
+	for cls, old in pairs(elevOrig) do
+		if cls and old then
+			pcall(function()
+				if old.new then
+					cls.new = old.new;
+				end;
+				if old.Use then
+					cls.Use = old.Use;
+				end;
+				if old.Elevate then
+					cls.Elevate = old.Elevate;
+				end;
+			end);
+		end;
+		elevOrig[cls] = nil;
+	end;
+end;
+addConn(ws.DescendantAdded, function(inst)
+	if inst:IsA("ProximityPrompt") then
+		applyPrompt(inst);
+	end;
+	if inst:IsA("Model") or inst:IsA("ProximityPrompt") then
+		applyElevInst(inst);
+	end;
+end);
+task.spawn(function()
+	while running do
+		if fastPrompt or promptLOS then
+			applyPrompts();
+		elseif next(prOrig) ~= nil then
+			restorePrompts();
+		end;
+		if forceLamp then
+			applyHeadlamp(true);
+		else
+			applyHeadlamp(false);
+		end;
+		if camUnlock then
+			applyCamera();
+		elseif camWas then
+			resetCamera();
+			camWas = false;
+		end;
+		if elevUnlock then
+			patchElevClass();
+			applyElevators();
+		elseif next(elevOrig) ~= nil then
+			restoreElevClass();
+		end;
+		task.wait(0.75);
+	end;
+end);
 local others = {};
 local function updOthers()
 	table.clear(others);

@@ -260,7 +260,7 @@ if game.GameId == 847722000 then
 	st.infStamina = cfgBool("infStamina", false)
 	st.infNight = cfgBool("infNight", false)
 	st.rakeAura = cfgBool("rakeAura", false)
-	st.rakeAuraRange = cfgNum("rakeAuraRange", 200, 25, 500)
+	st.rakeAuraRange = cfgNum("rakeAuraRange", 12, 6, 30)
 	st.rakeAuraDelay = cfgNum("rakeAuraDelay", 0.12, 0.05, 0.6)
 	st.rakeAuraAutoEquip = cfgBool("rakeAuraAutoEquip", true)
 	st.rakeChams = cfgBool("rakeChams", false)
@@ -983,6 +983,7 @@ if game.GameId == 847722000 then
 	clientBypass.originals = {}
 	clientBypass.mutedSounds = setmetatable({}, { __mode = "k" })
 	clientBypass.prompts = setmetatable({}, { __mode = "k" })
+	clientBypass.promptHold = setmetatable({}, { __mode = "k" })
 	clientBypass.ch = setmetatable({}, { __mode = "k" })
 	clientBypass.chT = 3
 	clientBypass.fullbrightOn = false
@@ -1254,15 +1255,67 @@ if game.GameId == 847722000 then
 		return ok, res
 	end
 
+	function clientBypass.isHoldRequiredPrompt(prompt)
+		if not prompt or not prompt:IsA("ProximityPrompt") then
+			return false
+		end
+		local map = ffc(Ws, "Map")
+		if not map then
+			return false
+		end
+		local ps = ffc(map, "PowerStation")
+		local ot = ffc(map, "ObservationTower")
+		local ok, res = pcall(function()
+			return (ps and prompt:IsDescendantOf(ps)) or (ot and prompt:IsDescendantOf(ot))
+		end)
+		return ok and res == true
+	end
+
+	function clientBypass.cachePromptHold(prompt)
+		if not prompt or not prompt:IsA("ProximityPrompt") then
+			return
+		end
+		if clientBypass.promptHold[prompt] then
+			return
+		end
+		pcall(function()
+			local hold = tonumber(prompt.HoldDuration)
+			if hold and hold > 0 then
+				clientBypass.promptHold[prompt] = hold
+			end
+		end)
+	end
+
+	function clientBypass.restorePromptHold(prompt)
+		if not prompt or not prompt:IsA("ProximityPrompt") then
+			return
+		end
+		pcall(function()
+			local hold = tonumber(clientBypass.promptHold[prompt]) or tonumber(prompt:GetAttribute("ActivateTime")) or tonumber(prompt:GetAttribute("HoldDuration")) or tonumber(prompt:GetAttribute("OHoldDuration"))
+			if not hold or hold <= 0 then
+				hold = 1
+			end
+			if prompt.HoldDuration <= 0 then
+				prompt.HoldDuration = hold
+			end
+		end)
+	end
+
 	function clientBypass.unlockPrompt(prompt)
 		if not prompt or not prompt:IsA("ProximityPrompt") then
 			return false
 		end
 		clientBypass.prompts[prompt] = true
+		clientBypass.cachePromptHold(prompt)
+		local keepHold = clientBypass.isHoldRequiredPrompt(prompt)
 		local dist = math.clamp(tonumber(st.promptDistance) or 25, 5, 100)
 		pcall(function()
 			prompt.Enabled = true
-			prompt.HoldDuration = 0
+			if keepHold then
+				clientBypass.restorePromptHold(prompt)
+			else
+				prompt.HoldDuration = 0
+			end
 			prompt.RequiresLineOfSight = false
 			prompt.ClickablePrompt = true
 			prompt.MaxActivationDistance = dist
@@ -2685,9 +2738,15 @@ if game.GameId == 847722000 then
 			if not prompt:IsA("ProximityPrompt") then
 				error("bad prompt")
 			end
+			clientBypass.cachePromptHold(prompt)
+			local keepHold = clientBypass.isHoldRequiredPrompt(prompt)
 			local dist = math.clamp(tonumber(st.promptDistance) or 25, 5, 100)
 			prompt.Enabled = true
-			prompt.HoldDuration = 0
+			if keepHold then
+				clientBypass.restorePromptHold(prompt)
+			else
+				prompt.HoldDuration = 0
+			end
 			prompt.RequiresLineOfSight = false
 			prompt.ClickablePrompt = true
 			prompt.MaxActivationDistance = dist
@@ -4859,12 +4918,12 @@ if game.GameId == 847722000 then
 
 	ExploitsTab:CreateSlider({
 		Name = "Killaura Range",
-		Range = {25, 500},
-		Increment = 5,
+		Range = {6, 30},
+		Increment = 1,
 		CurrentValue = st.rakeAuraRange,
 		Flag = "RakeAuraRange",
 		Callback = function(v)
-			st.rakeAuraRange = math.clamp(tonumber(v) or 200, 25, 500)
+			st.rakeAuraRange = math.clamp(tonumber(v) or 12, 6, 30)
 			_G.RakeAuraRange = st.rakeAuraRange
 			cfgSet("rakeAuraRange", st.rakeAuraRange)
 		end,
@@ -5074,14 +5133,13 @@ if game.GameId == 847722000 then
 		end
 	end
 
-	local function auraMoveHitpart(hp, hit)
-		if not (hp and hit) then
+	local function auraPrepHitpart(hp)
+		if not hp then
 			return
 		end
 		pcall(function()
 			hp.CanTouch = true
 			hp.CanQuery = true
-			hp.CFrame = hit.CFrame
 		end)
 	end
 
@@ -5130,7 +5188,7 @@ if game.GameId == 847722000 then
 			if not (rk and rr) then
 				return
 			end
-			local range = math.clamp(tonumber(_G.RakeAuraRange) or 200, 25, 500)
+			local range = math.clamp(tonumber(_G.RakeAuraRange) or 12, 6, 30)
 			if (rr.Position - root.Position).Magnitude > range then
 				return
 			end
@@ -5139,7 +5197,10 @@ if game.GameId == 847722000 then
 				return
 			end
 			local hit = auraGetPart(rk, rr, root.Position)
-			auraMoveHitpart(hp, hit)
+			if not hit or (hit.Position - root.Position).Magnitude > range then
+				return
+			end
+			auraPrepHitpart(hp)
 			local delay = math.clamp(tonumber(_G.RakeAuraDelay) or 0.12, 0.05, 0.6)
 			if auraT >= delay and auraHasPower() and auraHasStamina() then
 				auraT = 0

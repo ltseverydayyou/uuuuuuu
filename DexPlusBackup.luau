@@ -477,8 +477,8 @@ Main = (function()
 	}
 	Main.ThemeSettings = {}
 
-	Main.StartupModuleList = {"Explorer","Properties","ScriptViewer","Console","SaveInstance","ModelViewer"}
-	Main.DeferredModuleList = {"ThemeManager","SettingsWindow"}
+	Main.StartupModuleList = {"Explorer","Properties","ScriptViewer"}
+	Main.DeferredModuleList = {"Console","SaveInstance","ModelViewer","ThemeManager","SettingsWindow"}
 	Main.ModuleList = {"Explorer","Properties","ScriptViewer","Console","SaveInstance","ModelViewer","SettingsWindow","ThemeManager"}
 	Main.Elevated = false
 	Main.AllowDraggableOnMobile = true
@@ -493,6 +493,8 @@ Main = (function()
 	Main.GitRepoBranch = "main"
 	Main.GitModulesPath = "DexPlusModules"
 	Main.ModuleHashData = {} -- prevent remote hash fetch; prefer local modules
+	Main.ModuleForceRefresh = false
+	Main.ModuleRefreshFlagFile = "DexPlusPlus/RefreshModules.txt"
 	Main.SettingsFile = "DexPlusSettings.json"
 	Main.UserSettingsFile = "DexPlusUserSettings.json"
 	Main.ThemeFile = "DexPlusTheme.json"
@@ -873,7 +875,10 @@ Main = (function()
 			end
 
 			if EmbeddedModules then -- Offline Modules
-				control = EmbeddedModules[name]()
+				local embed = EmbeddedModules[name]
+				if type(embed) == "function" then
+					control = embed()
+				end
 
 				if not control then Main.Error("Missing Embedded Module: "..name) end
 			elseif _G.DebugLoadModel then -- Load Debug Model File
@@ -889,55 +894,113 @@ Main = (function()
 				print("Locally Loaded Module",name,control)
 			else
 				local modulePathLocal = (Main.GitModulesPath or "Modules").."/"..name..".lua"
-				local hasLocalModule = false
-				if env and env.isfile then
-					local okExists, exists = pcall(env.isfile, modulePathLocal)
-					hasLocalModule = okExists and exists
-				end
-				if env and env.readfile and hasLocalModule then
-					local okLocal, moduleStrLocal = pcall(env.readfile, modulePathLocal)
-					if okLocal and type(moduleStrLocal) == "string" then
-						local loadedControl, loadErr = loadControlFromSource(moduleStrLocal, "Local module "..modulePathLocal)
-						if loadedControl then
-							control = loadedControl
-						else
-							lastModuleLoadError = loadErr
+				local cachePath = "DexPlusPlus/ModuleCache/"..name..".lua"
+				local triedCache = false
+
+				local function shouldForceRefresh()
+					if Main.ModuleForceRefresh == true then
+						return true
+					end
+
+					local okGenv, genv = pcall(function()
+						return getgenv and getgenv()
+					end)
+
+					if okGenv and type(genv) == "table" and rawget(genv, "DexPlusRefreshModules") == true then
+						return true
+					end
+
+					if type(_G) == "table" and rawget(_G, "DexPlusRefreshModules") == true then
+						return true
+					end
+
+					local flagPath = Main.ModuleRefreshFlagFile or "DexPlusPlus/RefreshModules.txt"
+					if env and type(env.isfile) == "function" and type(env.readfile) == "function" then
+						local okExists, exists = pcall(env.isfile, flagPath)
+						if okExists and exists then
+							local okRead, body = pcall(env.readfile, flagPath)
+							local txt = okRead and string.lower(tostring(body or "")) or ""
+							txt = txt:gsub("^%s+", ""):gsub("%s+$", "")
+							return txt ~= "" and txt ~= "0" and txt ~= "false" and txt ~= "off" and txt ~= "no"
 						end
+					end
+
+					return false
+				end
+
+				local function tryFile(path, label)
+					if not (env and env.readfile and type(path) == "string") then
+						return false, nil, "readfile unavailable"
+					end
+
+					if type(env.isfile) == "function" then
+						local okExists, exists = pcall(env.isfile, path)
+						if not okExists or not exists then
+							return false, nil, nil
+						end
+					end
+
+					local okRead, source = pcall(env.readfile, path)
+					if not okRead or type(source) ~= "string" then
+						return true, nil, tostring(label).." read failed: "..tostring(source)
+					end
+
+					local loadedControl, loadErr = loadControlFromSource(source, tostring(label).." "..path)
+					if loadedControl then
+						return true, loadedControl, nil
+					end
+
+					return true, nil, loadErr
+				end
+
+				local function tryCache()
+					triedCache = true
+					local exists, loadedControl, loadErr = tryFile(cachePath, "Cached module")
+					if loadedControl then
+						control = loadedControl
+					elseif exists and loadErr then
+						lastModuleLoadError = loadErr
 					end
 				end
 
+				local forceRemote = shouldForceRefresh()
+				local localExists, localControl, localErr = tryFile(modulePathLocal, "Local module")
+
+				if localExists then
+					if localControl then
+						control = localControl
+					else
+						Main.Error("Failed to load local module "..name.." from "..modulePathLocal.." | "..tostring(localErr))
+					end
+				elseif not forceRemote then
+					tryCache()
+				end
+
 				if not control then
-					local modulePath = (Main.GitModulesPath or "Modules").."/"..name..".lua"
+					local modulePath = modulePathLocal
 					local okRemote, moduleStr = Main.FetchRepoFile(modulePath)
 					if okRemote and type(moduleStr) == "string" then
 						local loadedControl, loadErr = loadControlFromSource(moduleStr, "Remote module "..modulePath)
 						if loadedControl then
 							control = loadedControl
-							if env.writefile then
-								pcall(env.writefile, "DexPlusPlus/ModuleCache/"..name..".lua", moduleStr)
+							if env and env.writefile then
+								pcall(env.writefile, cachePath, moduleStr)
 							end
 						else
 							lastModuleLoadError = loadErr
 						end
+					else
+						lastModuleLoadError = tostring(moduleStr)
 					end
 				end
 
-				if not control then
-					local filePath = "DexPlusPlus/ModuleCache/"..name..".lua"
-					local readSuccess, readResult = pcall(env.readfile, filePath)
-					if readSuccess and type(readResult) == "string" then
-						local loadedControl, loadErr = loadControlFromSource(readResult, "Cached module "..filePath)
-						if loadedControl then
-							control = loadedControl
-						else
-							lastModuleLoadError = loadErr
-						end
-					end
+				if not control and forceRemote and not triedCache then
+					tryCache()
 				end
 
 				if not control then
 					local suffix = lastModuleLoadError and (" | " .. tostring(lastModuleLoadError)) or ""
-					Main.Error("Failed to get external module data of "..name.." (no valid local, remote, or cached copy)" .. suffix)
+					Main.Error("Failed to get external module data of "..name.." (no valid local, cached, or remote copy)" .. suffix)
 				end
 			end
 
@@ -2700,6 +2763,22 @@ Main = (function()
 	Main.RegisterDeferredApps = function()
 		Main.UpdateSettingsButton()
 
+		if not Main.MainGui then
+			return
+		end
+
+		if Console and Console.Window and not Main.MenuApps["Console"] then
+			Main.CreateApp({Name = "Console", IconMap = Main.LargeIcons, Icon = "Output", Window = Console.Window})
+		end
+
+		if SaveInstance and SaveInstance.Window and not Main.MenuApps["Save Instance"] then
+			Main.CreateApp({Name = "Save Instance", IconMap = Main.LargeIcons, Icon = "Watcher", Window = SaveInstance.Window})
+		end
+
+		if ModelViewer and ModelViewer.Window and not Main.MenuApps["3D Viewer"] then
+			Main.CreateApp({Name = "3D Viewer", IconMap = Explorer and Explorer.LegacyClassIcons, Icon = 54, Window = ModelViewer.Window})
+		end
+
 		if ThemeManager and ThemeManager.Window and not Main.MenuApps["Theme Manager"] then
 			Main.CreateApp({Name = "Theme Manager", IconMap = Explorer and Explorer.LegacyClassIcons, Icon = 83, Window = ThemeManager.Window})
 		end
@@ -3040,12 +3119,6 @@ Main = (function()
 			end
 		end})
 
-		Main.CreateApp({Name = "Console", IconMap = Main.LargeIcons, Icon = "Output", Window = Console.Window})
-
-		Main.CreateApp({Name = "Save Instance", IconMap = Main.LargeIcons, Icon = "Watcher", Window = SaveInstance.Window})
-
-		Main.CreateApp({Name = "3D Viewer", IconMap = Explorer.LegacyClassIcons, Icon = 54, Window = ModelViewer.Window})
-
 		Main.RegisterDeferredApps()
 
 		for _, loadedPlugin in pairs(Main.Plugins) do
@@ -3123,8 +3196,7 @@ Main = (function()
 		Lib.FastWait()
 
 		if (env and (env.getcustomasset or getcustomasset or getsynasset)) then
-			intro.SetProgress("Loading Icons",0.3)
-			Main.EnsureAllIcons()
+			intro.SetProgress("Preparing Icons",0.3)
 		end
 
 		-- Init icons
@@ -3202,7 +3274,6 @@ Main = (function()
 		Main.AppControls.Lib.InitDeps(Main.GetInitDeps()) -- Missing deps now available
 		Main.LoadModules(Main.StartupModuleList)
 		Main.ApplyPatches()
-		Lib.FastWait()
 
 		-- Init other modules
 		intro.SetProgress("Initializing Modules",0.9)
@@ -3212,9 +3283,6 @@ Main = (function()
 		end
 		Main.InitAppModule(Properties, "Properties")
 		Main.InitAppModule(ScriptViewer, "ScriptViewer")
-		Main.InitAppModule(Console, "Console")
-		Main.InitAppModule(SaveInstance, "SaveInstance")
-		Main.InitAppModule(ModelViewer, "ModelViewer")
 
 		local listfilesFn = (env and env.listfiles) or listfiles
 		if env and env.readfile and type(listfilesFn) == "function" then

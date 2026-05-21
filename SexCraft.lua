@@ -14,11 +14,14 @@ ctx.on = false
 ctx.idx = 1
 ctx.dead = false
 ctx.cons = {}
-ctx.rate = 0.035
-ctx.scanRate = 0.045
-ctx.burst = 6
-ctx.maxFly = 3
+ctx.rate = 0.00075
+ctx.scanRate = 0.01
+ctx.burst = 128
+ctx.maxFly = 96
 ctx.fly = 0
+ctx.loopYield = 0.001
+ctx.maxDebt = 0.08
+ctx.auraId = 0
 ctx.nextHit = os.clock()
 ctx.nextScan = 0
 ctx.tar = nil
@@ -238,11 +241,61 @@ ctx.updateUi = function()
 	end
 end
 
+ctx.startAura = function()
+	ctx.auraId += 1
+
+	local id = ctx.auraId
+	local last = os.clock()
+	local tok = ctx.burst
+
+	task.spawn(function()
+		while ctx.on and not ctx.dead and ctx.auraId == id do
+			local now = os.clock()
+			local dt = now - last
+			last = now
+
+			if dt < 0 then
+				dt = 0
+			elseif dt > ctx.maxDebt then
+				dt = ctx.maxDebt
+			end
+
+			tok = math.min(tok + dt / ctx.rate, ctx.burst)
+
+			local hits = math.floor(tok)
+			if hits > 0 then
+				tok -= hits
+				ctx.pulse(hits)
+			end
+
+			task.wait(ctx.loopYield)
+		end
+	end)
+end
+
+ctx.stopAura = function()
+	ctx.auraId += 1
+	ctx.fly = 0
+end
+
 ctx.set = function(v)
-	ctx.on = v == true
+	local on = v == true
+
+	if ctx.on == on then
+		return
+	end
+
+	ctx.on = on
 	ctx.nextHit = os.clock()
 	ctx.nextScan = 0
 	ctx.tar = nil
+
+	if ctx.on then
+		ctx.startAura()
+	else
+		ctx.stopAura()
+	end
+
 	ctx.updateUi()
 end
 
@@ -1010,7 +1063,7 @@ ctx.hit = function(t)
 	end)
 end
 
-ctx.pulse = function()
+ctx.pulse = function(amount)
 	local now = os.clock()
 
 	if now >= ctx.nextScan or not ctx.goodtar(ctx.tar) then
@@ -1018,9 +1071,11 @@ ctx.pulse = function()
 		ctx.tar = ctx.near()
 	end
 
+	amount = math.clamp(tonumber(amount) or ctx.burst, 1, ctx.burst)
+
 	local n = 0
 
-	while ctx.on and not ctx.dead and now >= ctx.nextHit and n < ctx.burst do
+	while ctx.on and not ctx.dead and n < amount do
 		if ctx.goodtar(ctx.tar) then
 			ctx.hit(ctx.tar)
 		else
@@ -1030,12 +1085,7 @@ ctx.pulse = function()
 			end
 		end
 
-		ctx.nextHit += ctx.rate
 		n += 1
-	end
-
-	if now - ctx.nextHit > 1 then
-		ctx.nextHit = now
 	end
 end
 
@@ -1156,10 +1206,6 @@ end)
 ctx.bind(ctx.run.PreSimulation, function()
 	if ctx.dead then
 		return
-	end
-
-	if ctx.on then
-		ctx.pulse()
 	end
 
 	if ctx.mineOn and ctx.mineHeld then

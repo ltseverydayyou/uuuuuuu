@@ -34,6 +34,12 @@ local function initAfterMain()
 	Notebook = Apps.Notebook
 end
 
+local function trackConn(conn)
+	if Main and Main.TrackConn then
+		return Main.TrackConn(conn)
+	end
+	return conn
+end
 local function main()
 	local SettingsWindow = {}
 	local window, ListFrame
@@ -302,16 +308,16 @@ local function main()
 			cancelButton.Text = "Apply Later"
 			cancelButton.Position = UDim2.new(1,-5,1,-5)
 			cancelButton.Size = UDim2.new(0.5,-10,0,20)
-			cancelButton.OnClick:Connect(function()
+			trackConn(cancelButton.OnClick:Connect(function()
 				win:Close()
-			end)
+			end))
 			win:Add(cancelButton)
 
 			reloadButton.Text = "Apply Now"
 			reloadButton.AnchorPoint = Vector2.new(0,1)
 			reloadButton.Position = UDim2.new(0,5,1,-5)
 			reloadButton.Size = UDim2.new(0.5,-5,0,20)
-			reloadButton.OnClick:Connect(function()
+			trackConn(reloadButton.OnClick:Connect(function()
 				if Main and Main.Reinit then
 					Main.Reinit()
 				elseif Main and Main.Exit and Main.Init then
@@ -319,7 +325,7 @@ local function main()
 					task.wait()
 					Main.Init()
 				end
-			end)
+			end))
 
 			win:Add(reloadButton,"reloadButton")
 
@@ -334,7 +340,7 @@ local function main()
 		window:Resize(Settings.Window.SettingsWidth or 250, Settings.Window.SettingsHeight or 375)
 		SettingsWindow.Window = window
 
-		window.GuiElems.Main:GetPropertyChangedSignal("Size"):Connect(function()
+		trackConn(window.GuiElems.Main:GetPropertyChangedSignal("Size"):Connect(function()
 			if not window or window.Closed then
 				return
 			end
@@ -355,7 +361,7 @@ local function main()
 				end
 				persistSettings()
 			end)
-		end)
+		end))
 
 		local sectionAnchors = {}
 		local quickTabButtons = {}
@@ -500,9 +506,9 @@ local function main()
 			button.TextColor3 = Settings.Theme.Text
 			button.TextSize = 14
 			button.ZIndex = 4
-			button.MouseButton1Click:Connect(function()
+			trackConn(button.MouseButton1Click:Connect(function()
 				scrollToSection(sectionName)
-			end)
+			end))
 			quickTabButtons[sectionName] = button
 		end
 		
@@ -512,13 +518,13 @@ local function main()
 		AddText("Use the tabs above to jump between sections.")
 		
 		local titleonmiddle = AddCheckbox("Window Title On Middle", Settings.Window.TitleOnMiddle)
-		titleonmiddle.OnInput:Connect(function()
+		trackConn(titleonmiddle.OnInput:Connect(function()
 			Settings.Window.TitleOnMiddle = titleonmiddle.Toggled
 			persistSettings()
-		end)
+		end))
 		
 		local bgTransparency = AddTextbox("Background Transparency", tostring(Settings.Window.Transparency), 15)
-		bgTransparency.FocusLost:Connect(function()
+		trackConn(bgTransparency.FocusLost:Connect(function()
 			local input = tonumber(bgTransparency.Text)
 			if input == nil then
 				bgTransparency.Text = tostring(Settings.Window.Transparency)
@@ -533,24 +539,24 @@ local function main()
 			if Lib and Lib.RefreshTheme then
 				pcall(Lib.RefreshTheme)
 			end
-		end)
+		end))
 		
 		local classIcon = AddDropdown("Class Icons", {"NewDark", "Vanilla3", "Old"}, Settings.ClassIcon, false, 100)
-		classIcon.OnSelect:Connect(function()
+		trackConn(classIcon.OnSelect:Connect(function()
 			Settings.ClassIcon = classIcon.Selected
 			persistSettings()
-		end)
+		end))
 		AddText("Resize this window directly; the size is saved automatically.")
 
 		Main.UserSettings = Main.UserSettings or {}
 		local rememberLastTab = AddCheckbox("Remember Last Settings Tab", Main.UserSettings.RememberLastSettingsTab ~= false)
-		rememberLastTab.OnInput:Connect(function()
+		trackConn(rememberLastTab.OnInput:Connect(function()
 			Main.UserSettings.RememberLastSettingsTab = rememberLastTab.Toggled
 			if rememberLastTab.Toggled then
 				Main.UserSettings.SettingsLastTab = currentSectionName
 			end
 			persistUserSettings()
-		end)
+		end))
 		AddText("Changing class icons requires restart.")
 
 		sectionAnchors.Startup = AddSeperator("Startup")
@@ -559,63 +565,63 @@ local function main()
 		Settings.Startup = Settings.Startup or {}
 
 		local explorerStartupSide = AddDropdown("Explorer Window Side", {"Left", "Right"}, Settings.Startup.ExplorerSide or "Right", false, 90)
-		explorerStartupSide.OnSelect:Connect(function()
+		trackConn(explorerStartupSide.OnSelect:Connect(function()
 			Settings.Startup.ExplorerSide = explorerStartupSide.Selected
 			persistSettings()
-		end)
+		end))
 
 		local propertiesStartupSide = AddDropdown("Properties Window Side", {"Left", "Right"}, Settings.Startup.PropertiesSide or "Right", false, 90)
-		propertiesStartupSide.OnSelect:Connect(function()
+		trackConn(propertiesStartupSide.OnSelect:Connect(function()
 			Settings.Startup.PropertiesSide = propertiesStartupSide.Selected
 			persistSettings()
-		end)
+		end))
 
 		local openExplorerOnStartup = AddCheckbox("Open Explorer On Startup", Settings.Startup.OpenExplorer ~= false)
-		openExplorerOnStartup.OnInput:Connect(function()
+		trackConn(openExplorerOnStartup.OnInput:Connect(function()
 			Settings.Startup.OpenExplorer = openExplorerOnStartup.Toggled
 			persistSettings()
-		end)
+		end))
 
 		local openPropertiesOnStartup = AddCheckbox("Open Properties On Startup", Settings.Startup.OpenProperties ~= false)
-		openPropertiesOnStartup.OnInput:Connect(function()
+		trackConn(openPropertiesOnStartup.OnInput:Connect(function()
 			Settings.Startup.OpenProperties = openPropertiesOnStartup.Toggled
 			persistSettings()
-		end)
+		end))
 
 		AddText("You can start with both, one, or neither window open.")
 		
 		sectionAnchors.Explorer = AddSeperator("Explorer")
 
 		local sorting = AddCheckbox("Sorting", Settings.Explorer.Sorting)
-		sorting.OnInput:Connect(function()
+		trackConn(sorting.OnInput:Connect(function()
 			Settings.Explorer.Sorting = sorting.Toggled
 			if Explorer and Explorer.SetSortingEnabled then
 				pcall(Explorer.SetSortingEnabled, sorting.Toggled)
 			end
 			persistSettings()
 			applyExplorerRefresh()
-		end)
+		end))
 		
 		local clickRename = AddCheckbox("Click to Rename", Settings.Explorer.ClickToRename)
-		clickRename.OnInput:Connect(function()
+		trackConn(clickRename.OnInput:Connect(function()
 			Settings.Explorer.ClickToRename = clickRename.Toggled
 			persistSettings()
-		end)
+		end))
 
 		local autoUpdateSearch = AddCheckbox("Auto Update Search", Settings.Explorer.AutoUpdateSearch)
-		autoUpdateSearch.OnInput:Connect(function()
+		trackConn(autoUpdateSearch.OnInput:Connect(function()
 			Settings.Explorer.AutoUpdateSearch = autoUpdateSearch.Toggled
 			if Explorer and Explorer.SetAutoUpdateSearch then
 				pcall(Explorer.SetAutoUpdateSearch, autoUpdateSearch.Toggled)
 			end
 			persistSettings()
-		end)
+		end))
 
 		local keyboardShortcuts = AddCheckbox("Keyboard Shortcuts", Settings.Explorer.KeyboardShortcuts ~= false)
-		keyboardShortcuts.OnInput:Connect(function()
+		trackConn(keyboardShortcuts.OnInput:Connect(function()
 			Settings.Explorer.KeyboardShortcuts = keyboardShortcuts.Toggled
 			persistSettings()
-		end)
+		end))
 
 		local autoUpdateModeLabels = {
 			[0] = "Default",
@@ -624,7 +630,7 @@ local function main()
 			[3] = "Frozen",
 		}
 		local autoUpdateMode = AddDropdown("Auto Update Mode", {"Default", "Quiet Refresh", "Manual Tree", "Frozen"}, autoUpdateModeLabels[tonumber(Settings.Explorer.AutoUpdateMode) or 0] or "Default", false, 110)
-		autoUpdateMode.OnSelect:Connect(function()
+		trackConn(autoUpdateMode.OnSelect:Connect(function()
 			local mapped = 0
 			if autoUpdateMode.Selected == "Quiet Refresh" then
 				mapped = 1
@@ -636,42 +642,42 @@ local function main()
 			Settings.Explorer.AutoUpdateMode = mapped
 			persistSettings()
 			applyExplorerRefresh(true)
-		end)
+		end))
 		AddText("Quiet Refresh keeps data fresh but stops auto-redrawing the tree.")
 		
 		local partSelectionBox = AddCheckbox("Part Selection Box", Settings.Explorer.PartSelectionBox)
-		partSelectionBox.OnInput:Connect(function()
+		trackConn(partSelectionBox.OnInput:Connect(function()
 			Settings.Explorer.PartSelectionBox = partSelectionBox.Toggled
 			persistSettings()
 			if Explorer and Explorer.UpdateSelectionVisuals then
 				pcall(Explorer.UpdateSelectionVisuals)
 			end
-		end)
+		end))
 
 		local guiSelectionBox = AddCheckbox("GUI Selection Box", Settings.Explorer.GuiSelectionBox)
-		guiSelectionBox.OnInput:Connect(function()
+		trackConn(guiSelectionBox.OnInput:Connect(function()
 			Settings.Explorer.GuiSelectionBox = guiSelectionBox.Toggled
 			persistSettings()
 			if Explorer and Explorer.UpdateSelectionVisuals then
 				pcall(Explorer.UpdateSelectionVisuals)
 			end
-		end)
+		end))
 		
 		local copypathUseChildren = AddCheckbox("Use GetChildren to Copy Path", Settings.Explorer.CopyPathUseGetChildren)
-		copypathUseChildren.OnInput:Connect(function()
+		trackConn(copypathUseChildren.OnInput:Connect(function()
 			Settings.Explorer.CopyPathUseGetChildren = copypathUseChildren.Toggled
 			persistSettings()
-		end)
+		end))
 
 		local useNameWidth = AddCheckbox("Use Name Width", Settings.Explorer.UseNameWidth)
-		useNameWidth.OnInput:Connect(function()
+		trackConn(useNameWidth.OnInput:Connect(function()
 			Settings.Explorer.UseNameWidth = useNameWidth.Toggled
 			persistSettings()
 			applyExplorerRefresh(true)
-		end)
+		end))
 
 		local maxSelectionBoxes = AddTextbox("Max Selection Boxes", tostring(Settings.Explorer.MaxSelectionBoxes), 70)
-		maxSelectionBoxes.FocusLost:Connect(function()
+		trackConn(maxSelectionBoxes.FocusLost:Connect(function()
 			local n = tonumber(maxSelectionBoxes.Text)
 			if not n then
 				maxSelectionBoxes.Text = tostring(Settings.Explorer.MaxSelectionBoxes)
@@ -684,19 +690,19 @@ local function main()
 			if Explorer and Explorer.UpdateSelectionVisuals then
 				pcall(Explorer.UpdateSelectionVisuals)
 			end
-		end)
+		end))
 
 		local writeRemoteAttr = AddCheckbox("Write Remote Block Attr", Settings.RemoteBlockWriteAttribute)
-		writeRemoteAttr.OnInput:Connect(function()
+		trackConn(writeRemoteAttr.OnInput:Connect(function()
 			Settings.RemoteBlockWriteAttribute = writeRemoteAttr.Toggled
 			persistSettings()
-		end)
+		end))
 
 		local function bindOffsetTextbox(label, axis)
 			local curOffset = Settings.Explorer.TeleportToOffset
 			local curValue = (axis == "X" and curOffset.X) or (axis == "Y" and curOffset.Y) or curOffset.Z
 			local tb = AddTextbox(label, tostring(curValue), 70)
-			tb.FocusLost:Connect(function()
+			trackConn(tb.FocusLost:Connect(function()
 				local n = tonumber(tb.Text)
 				if n == nil then
 					local offset = Settings.Explorer.TeleportToOffset
@@ -716,7 +722,7 @@ local function main()
 				Settings.Explorer.TeleportToOffset = Vector3.new(x, y, z)
 				tb.Text = tostring(n)
 				persistSettings()
-			end)
+			end))
 		end
 		bindOffsetTextbox("Teleport Offset X", "X")
 		bindOffsetTextbox("Teleport Offset Y", "Y")
@@ -725,40 +731,40 @@ local function main()
 		sectionAnchors.Properties = AddSeperator("Properties")
 
 		local showDeprecated = AddCheckbox("Show Deprecated", Settings.Properties.ShowDeprecated)
-		showDeprecated.OnInput:Connect(function()
+		trackConn(showDeprecated.OnInput:Connect(function()
 			Settings.Properties.ShowDeprecated = showDeprecated.Toggled
 			persistSettings()
 			applyPropertiesRefresh(true)
-		end)
+		end))
 		
 		local showHidden = AddCheckbox("Show Hidden", Settings.Properties.ShowHidden)
-		showHidden.OnInput:Connect(function()
+		trackConn(showHidden.OnInput:Connect(function()
 			Settings.Properties.ShowHidden = showHidden.Toggled
 			persistSettings()
 			applyPropertiesRefresh(true)
-		end)
+		end))
 		
 		local showAttributes = AddCheckbox("Show Attributes", Settings.Properties.ShowAttributes)
-		showAttributes.OnInput:Connect(function()
+		trackConn(showAttributes.OnInput:Connect(function()
 			Settings.Properties.ShowAttributes = showAttributes.Toggled
 			persistSettings()
 			applyPropertiesRefresh(true)
-		end)
+		end))
 
 		local clearOnFocus = AddCheckbox("Clear On Focus", Settings.Properties.ClearOnFocus)
-		clearOnFocus.OnInput:Connect(function()
+		trackConn(clearOnFocus.OnInput:Connect(function()
 			Settings.Properties.ClearOnFocus = clearOnFocus.Toggled
 			persistSettings()
-		end)
+		end))
 
 		local loadstringInput = AddCheckbox("Loadstring Input", Settings.Properties.LoadstringInput)
-		loadstringInput.OnInput:Connect(function()
+		trackConn(loadstringInput.OnInput:Connect(function()
 			Settings.Properties.LoadstringInput = loadstringInput.Toggled
 			persistSettings()
-		end)
+		end))
 
 		local maxConflictCheck = AddTextbox("Max Conflict Check", tostring(Settings.Properties.MaxConflictCheck), 70)
-		maxConflictCheck.FocusLost:Connect(function()
+		trackConn(maxConflictCheck.FocusLost:Connect(function()
 			local n = tonumber(maxConflictCheck.Text)
 			if not n then
 				maxConflictCheck.Text = tostring(Settings.Properties.MaxConflictCheck)
@@ -769,10 +775,10 @@ local function main()
 			maxConflictCheck.Text = tostring(n)
 			persistSettings()
 			applyPropertiesRefresh(true)
-		end)
+		end))
 
 		local maxAttributes = AddTextbox("Max Attributes", tostring(Settings.Properties.MaxAttributes), 70)
-		maxAttributes.FocusLost:Connect(function()
+		trackConn(maxAttributes.FocusLost:Connect(function()
 			local n = tonumber(maxAttributes.Text)
 			if not n then
 				maxAttributes.Text = tostring(Settings.Properties.MaxAttributes)
@@ -783,10 +789,10 @@ local function main()
 			maxAttributes.Text = tostring(n)
 			persistSettings()
 			applyPropertiesRefresh(true)
-		end)
+		end))
 
 		local numberRounding = AddTextbox("Number Rounding", tostring(Settings.Properties.NumberRounding), 70)
-		numberRounding.FocusLost:Connect(function()
+		trackConn(numberRounding.FocusLost:Connect(function()
 			local n = tonumber(numberRounding.Text)
 			if not n then
 				numberRounding.Text = tostring(Settings.Properties.NumberRounding)
@@ -797,30 +803,30 @@ local function main()
 			numberRounding.Text = tostring(n)
 			persistSettings()
 			applyPropertiesRefresh()
-		end)
+		end))
 
 		local scaleTypeLabel = (tonumber(Settings.Properties.ScaleType) == 1) and "Equal Halves" or "Full Name"
 		local scaleType = AddDropdown("Scale Type", {"Full Name", "Equal Halves"}, scaleTypeLabel, false, 100)
-		scaleType.OnSelect:Connect(function()
+		trackConn(scaleType.OnSelect:Connect(function()
 			Settings.Properties.ScaleType = (scaleType.Selected == "Equal Halves") and 1 or 0
 			persistSettings()
 			applyPropertiesRefresh()
-		end)
+		end))
 		
 		sectionAnchors.Viewer = AddSeperator("Script Viewer")
 		
 		local showMoreInfo = AddCheckbox("Show Decompiled Script Info", Settings.ScriptViewer.ShowMoreInfo)
-		showMoreInfo.OnInput:Connect(function()
+		trackConn(showMoreInfo.OnInput:Connect(function()
 			Settings.ScriptViewer.ShowMoreInfo = showMoreInfo.Toggled
 			persistSettings()
 			if ScriptViewer and ScriptViewer.RefreshCurrentView then
 				pcall(ScriptViewer.RefreshCurrentView)
 			end
-		end)
+		end))
 
 		local defaultTextSize = (Main and Main.UserSettings and Main.UserSettings.ScriptViewerTextSize) or 16
 		local scriptTextSize = AddTextbox("Editor Text Size", tostring(defaultTextSize), 60)
-		scriptTextSize.FocusLost:Connect(function()
+		trackConn(scriptTextSize.FocusLost:Connect(function()
 			local n = tonumber(scriptTextSize.Text)
 			if not n then
 				n = (Main and Main.UserSettings and Main.UserSettings.ScriptViewerTextSize) or 16
@@ -836,7 +842,7 @@ local function main()
 			else
 				persistUserSettings()
 			end
-		end)
+		end))
 		AddText("Editor text size updates live.")
 
 		sectionAnchors.Console = AddSeperator("Console")
@@ -851,10 +857,10 @@ local function main()
 
 		local function bindConsoleFilter(filterName, label)
 			local checkbox = AddCheckbox(label, Main.UserSettings.ConsoleFilters[filterName] ~= false)
-			checkbox.OnInput:Connect(function()
+			trackConn(checkbox.OnInput:Connect(function()
 				Main.UserSettings.ConsoleFilters[filterName] = checkbox.Toggled
 				persistUserSettings()
-			end)
+			end))
 		end
 		bindConsoleFilter("Output", "Output Messages")
 		bindConsoleFilter("Info", "Info Messages")
@@ -863,7 +869,7 @@ local function main()
 		bindConsoleFilter("Listen", "Remote Listener")
 
 		local consoleTextSize = AddTextbox("Console Text Size", tostring(Main.UserSettings.ConsoleTextSize or 15), 60)
-		consoleTextSize.FocusLost:Connect(function()
+		trackConn(consoleTextSize.FocusLost:Connect(function()
 			local n = tonumber(consoleTextSize.Text)
 			if not n then
 				consoleTextSize.Text = tostring(Main.UserSettings.ConsoleTextSize or 15)
@@ -877,10 +883,10 @@ local function main()
 			else
 				persistUserSettings()
 			end
-		end)
+		end))
 
 		local consoleOutputLimit = AddTextbox("Console Output Limit", tostring(Main.UserSettings.ConsoleOutputLimit or 500), 60)
-		consoleOutputLimit.FocusLost:Connect(function()
+		trackConn(consoleOutputLimit.FocusLost:Connect(function()
 			local n = tonumber(consoleOutputLimit.Text)
 			if not n then
 				consoleOutputLimit.Text = tostring(Main.UserSettings.ConsoleOutputLimit or 500)
@@ -894,27 +900,27 @@ local function main()
 			else
 				persistUserSettings()
 			end
-		end)
+		end))
 
 		local consoleCtrlScroll = AddCheckbox("Ctrl + Wheel Resizes Output", Main.UserSettings.ConsoleCtrlScroll == true)
-		consoleCtrlScroll.OnInput:Connect(function()
+		trackConn(consoleCtrlScroll.OnInput:Connect(function()
 			Main.UserSettings.ConsoleCtrlScroll = consoleCtrlScroll.Toggled
 			if Console and Console.SetCtrlScrollEnabled then
 				pcall(Console.SetCtrlScrollEnabled, consoleCtrlScroll.Toggled)
 			else
 				persistUserSettings()
 			end
-		end)
+		end))
 
 		local consoleAutoScroll = AddCheckbox("Auto Scroll New Output", Main.UserSettings.ConsoleAutoScroll == true)
-		consoleAutoScroll.OnInput:Connect(function()
+		trackConn(consoleAutoScroll.OnInput:Connect(function()
 			Main.UserSettings.ConsoleAutoScroll = consoleAutoScroll.Toggled
 			if Console and Console.SetAutoScrollEnabled then
 				pcall(Console.SetAutoScrollEnabled, consoleAutoScroll.Toggled)
 			else
 				persistUserSettings()
 			end
-		end)
+		end))
 
 		AddText("Console filters apply fully after reloading Dex.")
 		
@@ -924,39 +930,39 @@ local function main()
 		AddText("'getscriptbytecode' is mandatory to use fallback decompilers.")
 		local decompilerOption = {"lua.expert", "Konstant"}
 		local decompiler = AddDropdown("Decompiler Fallback", decompilerOption, Settings.Decompiler.DecompilerFallback, false, 125)
-		decompiler.OnSelect:Connect(function()
+		trackConn(decompiler.OnSelect:Connect(function()
 			Settings.Decompiler.DecompilerFallback = decompiler.Selected
 			persistSettings()
-		end)
+		end))
 
 		local preferFallback = AddCheckbox("Prefer Fallback Decompiler", Settings.Decompiler.PreferDecompilerFallback)
-		preferFallback.OnInput:Connect(function()
+		trackConn(preferFallback.OnInput:Connect(function()
 			Settings.Decompiler.PreferDecompilerFallback = preferFallback.Toggled
 			persistSettings()
-		end)
+		end))
 
 		sectionAnchors.Themes = AddSeperator("Themes")
 		AddText("Use Theme Manager for color-by-color customization.")
 
 		local openThemeManagerButton = AddButton("Theme Manager", "Open", 70)
-		openThemeManagerButton.OnClick:Connect(function()
+		trackConn(openThemeManagerButton.OnClick:Connect(function()
 			if ThemeManager and ThemeManager.Window then
 				ThemeManager.Window:Show()
 			else
 				setWindowTitleSuffix("Theme Manager Missing", 2)
 			end
-		end)
+		end))
 
 		local saveThemeButton = AddButton("Save Current Theme", "Save", 70)
-		saveThemeButton.OnClick:Connect(function()
+		trackConn(saveThemeButton.OnClick:Connect(function()
 			if Main and Main.SaveThemeSettings then
 				pcall(Main.SaveThemeSettings)
 				setWindowTitleSuffix("Theme Saved")
 			end
-		end)
+		end))
 
 		local reloadThemeButton = AddButton("Reload Theme File", "Load", 70)
-		reloadThemeButton.OnClick:Connect(function()
+		trackConn(reloadThemeButton.OnClick:Connect(function()
 			if Main and Main.LoadThemeSettings then
 				pcall(Main.LoadThemeSettings)
 				if Lib and Lib.RefreshTheme then
@@ -964,14 +970,14 @@ local function main()
 				end
 				setWindowTitleSuffix("Theme Reloaded")
 			end
-		end)
+		end))
 
 		sectionAnchors.Files = AddSeperator("Files")
 		AddText("Filename tokens: {placeName} {placeId} {className} {name} {timestamp} {date} {time} {unix} {index} {count}")
 		AddText("Save Instance uses the place format. Explorer and Model Viewer 'Save to File' use the object format.")
 
 		local saveInstanceFormat = AddTextbox("Save Instance Name", Settings.Files.SaveInstanceNameFormat, 180)
-		saveInstanceFormat.FocusLost:Connect(function()
+		trackConn(saveInstanceFormat.FocusLost:Connect(function()
 			local value = tostring(saveInstanceFormat.Text or "")
 			if value == "" then
 				value = DefaultSettings.Files.SaveInstanceNameFormat
@@ -979,10 +985,10 @@ local function main()
 			Settings.Files.SaveInstanceNameFormat = value
 			saveInstanceFormat.Text = value
 			persistSettings()
-		end)
+		end))
 
 		local objectSaveFormat = AddTextbox("Object Save Name", Settings.Files.ObjectSaveNameFormat, 180)
-		objectSaveFormat.FocusLost:Connect(function()
+		trackConn(objectSaveFormat.FocusLost:Connect(function()
 			local value = tostring(objectSaveFormat.Text or "")
 			if value == "" then
 				value = DefaultSettings.Files.ObjectSaveNameFormat
@@ -990,24 +996,24 @@ local function main()
 			Settings.Files.ObjectSaveNameFormat = value
 			objectSaveFormat.Text = value
 			persistSettings()
-		end)
+		end))
 
 		AddText("The restart button below saves settings, then reloads Dex.")
 
 		local saveSettingsButton = AddButton("Write Settings File", "Save", 70)
-		saveSettingsButton.OnClick:Connect(function()
+		trackConn(saveSettingsButton.OnClick:Connect(function()
 			if persistSettings() then
 				setWindowTitleSuffix("Settings Saved")
 			else
 				setWindowTitleSuffix("Save Failed", 2)
 			end
-		end)
+		end))
 
 		local saveUserButton = AddButton("Write User Prefs", "Save", 70)
-		saveUserButton.OnClick:Connect(function()
+		trackConn(saveUserButton.OnClick:Connect(function()
 			persistUserSettings()
 			setWindowTitleSuffix("User Prefs Saved")
-		end)
+		end))
 
 		for _, sectionName in ipairs({"UI", "Startup", "Explorer", "Properties", "Viewer", "Console", "Decompiler", "Themes", "Files"}) do
 			createQuickTab(sectionName)
@@ -1043,7 +1049,7 @@ local function main()
 		reloadButton.Position = UDim2.new(0,0, 0,0)
 		reloadButton.BackgroundTransparency = 1
 		
-		reloadButton.MouseButton1Click:Connect(function()
+		trackConn(reloadButton.MouseButton1Click:Connect(function()
 			window:SetTitle("Settings - Saving")
 
 			persistUserSettings()
@@ -1064,7 +1070,7 @@ local function main()
 			task.wait(3)
 			
 			window:SetTitle("Settings")
-		end)
+		end))
 	end
 
 	return SettingsWindow

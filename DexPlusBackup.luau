@@ -435,16 +435,25 @@ Main = (function()
 	local Main = {}
 	Main.GuiList = Main.GuiList or {}
 	Main.ConnList = Main.ConnList or {}
+	Main.ConnSet = Main.ConnSet or {}
 	Main.TrackGui = function(gui)
 		if gui and gui.Destroy then
 			table.insert(Main.GuiList, gui)
 		end
 	end
 	Main.TrackConn = function(c)
-		if typeof(c) == "RBXScriptConnection" then
-			table.insert(Main.ConnList, c)
+		if not c then
+			return c
 		end
+		if Main.ConnSet[c] then
+			return c
+		end
+		Main.ConnSet[c] = true
+		table.insert(Main.ConnList, c)
 		return c
+	end
+	local function trackConn(c)
+		return Main.TrackConn(c)
 	end
 	local Settings = deepCopy(DefaultSettings)
 	local Apps = {}
@@ -2406,12 +2415,12 @@ Main = (function()
 		local function tweenNumber(n,ti,func)
 			local tweenVal = Instance.new("IntValue")
 			tweenVal.Value = 0
-			tweenVal.Changed:Connect(func)
+			trackConn(tweenVal.Changed:Connect(func))
 			local tween = tweenS:Create(tweenVal,ti,{Value = n})
 			tween:Play()
-			tween.Completed:Connect(function()
+			trackConn(tween.Completed:Connect(function()
 				tweenVal:Destroy()
-			end)
+			end))
 		end
 
 		local ti = TweenInfo.new(0.4,Enum.EasingStyle.Quad,Enum.EasingDirection.Out)
@@ -2599,6 +2608,7 @@ Main = (function()
 		end
 
 		local function enable(silent)
+			if Main.__DexExiting then return end
 			if data.Open then return end
 			data.Open = true
 			updateState()
@@ -2609,6 +2619,7 @@ Main = (function()
 		end
 
 		local function disable(silent)
+			if Main.__DexExiting then return end
 			if not data.Open then return end
 			data.Open = false
 			updateState()
@@ -2624,29 +2635,29 @@ Main = (function()
 		app.Main.Size = UDim2.new(1,0,0,math.clamp(46+ySize,60,74))
 		app.Main.AppName.Text = data.Name
 
-		app.Main.InputBegan:Connect(function(input)
+		trackConn(app.Main.InputBegan:Connect(function(input)
 			if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 				app.Main.BackgroundTransparency = 0
 				app.Main.BackgroundColor3 = Settings.Theme.ButtonHover
 			end
-		end)
+		end))
 
 
-		app.Main.InputEnded:Connect(function(input)
+		trackConn(app.Main.InputEnded:Connect(function(input)
 			if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 				app.Main.BackgroundTransparency = data.Open and 0 or 1
 				app.Main.BackgroundColor3 = Settings.Theme.Button
 			end
-		end)
+		end))
 
-		app.Main.MouseButton1Click:Connect(function()
+		trackConn(app.Main.MouseButton1Click:Connect(function()
 			if data.Open then disable() else enable() end
-		end)
+		end))
 
 		local window = data.Window
 		if window then
-			window.OnActivate:Connect(function() enable(true) end)
-			window.OnDeactivate:Connect(function() disable(true) end)
+			trackConn(window.OnActivate:Connect(function() enable(true) end))
+			trackConn(window.OnDeactivate:Connect(function() disable(true) end))
 		end
 
 		app.Visible = true
@@ -2671,7 +2682,7 @@ Main = (function()
 
 		if settingsWindow and not Main.SettingsButtonBound then
 			Main.SettingsButtonBound = true
-			settingsButton.MouseButton1Click:Connect(function()
+			trackConn(settingsButton.MouseButton1Click:Connect(function()
 				local activeWindow = SettingsWindow and SettingsWindow.Window
 				if not activeWindow then
 					return
@@ -2682,7 +2693,7 @@ Main = (function()
 				else
 					activeWindow:Show()
 				end
-			end)
+			end))
 		end
 	end
 
@@ -2772,6 +2783,10 @@ Main = (function()
 	end
 
 	Main.Exit = function(keepDexState)
+		if Main.__DexExiting and keepDexState ~= true then
+			return
+		end
+		Main.__DexExiting = true
 		Main.__DexLoaded = false
 		Main.__DexInitStarted = keepDexState == true
 
@@ -2786,11 +2801,20 @@ Main = (function()
 			for i,c in ipairs(Main.ConnList) do
 				pcall(function()
 					if c then
-						c:Disconnect()
+						if c.Disconnect then
+							c:Disconnect()
+						elseif c.disconnect then
+							c:disconnect()
+						end
 					end
 				end)
 			end
 			table.clear(Main.ConnList)
+			table.clear(Main.ConnSet)
+		end
+
+		if Lib and Lib.Window and type(Lib.Window.Shutdown) == "function" then
+			pcall(Lib.Window.Shutdown)
 		end
 
 		if Main.GuiList then
@@ -2928,24 +2952,24 @@ Main = (function()
 			Main.SetMainGuiOpen(not Main.MainGuiOpen)
 		end))
 
-		openButton.InputBegan:Connect(function(input)
+		trackConn(openButton.InputBegan:Connect(function(input)
 			if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 				service.TweenService:Create(Main.MainGui.OpenButton,TweenInfo.new(0,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{BackgroundTransparency = 0}):Play()
 			end
-		end)
+		end))
 
-		openButton.InputEnded:Connect(function(input)
+		trackConn(openButton.InputEnded:Connect(function(input)
 			if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 				service.TweenService:Create(Main.MainGui.OpenButton,TweenInfo.new(0,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{BackgroundTransparency = Main.MainGuiOpen and 0 or 0.2}):Play()
 			end
-		end)
+		end))
 
 		local infoDexIntro, isInfoCD
 
 		openButton.MainFrame.BottomFrame.Settings.Visible = false
 		Main.UpdateSettingsButton()
 
-		openButton.MainFrame.BottomFrame.Information.MouseButton1Click:Connect(function()
+		trackConn(openButton.MainFrame.BottomFrame.Information.MouseButton1Click:Connect(function()
 			local duration = 1
 			local Infos = {
 				"Contributors >>",
@@ -2981,7 +3005,7 @@ Main = (function()
 					isInfoCD = false
 				end)()
 			end
-		end)
+		end))
 
 		-- Create Main Apps
 		local startupSettings = (Settings and Settings.Startup) or (DefaultSettings and DefaultSettings.Startup) or {}
@@ -3074,6 +3098,7 @@ Main = (function()
 	end
 
 	Main.Init = function()
+		Main.__DexExiting = false
 		Main.MenuApps = {}
 		Main.Apps = {}
 		Main.AppControls = {}

@@ -258,9 +258,9 @@ end
 		textSizePad.PaddingBottom = UDim.new(0, 2)
 
 		local sizeBoxFocused = false
-		textSizeInput.Focused:Connect(function()
+		trackConn(textSizeInput.Focused:Connect(function()
 			sizeBoxFocused = true
-		end)
+		end))
 
 		local saveQueued = false
 		local function queueSaveUserSettings()
@@ -309,7 +309,7 @@ end
 			end
 		end
 
-		textSizeInput.FocusLost:Connect(function()
+		trackConn(textSizeInput.FocusLost:Connect(function()
 			sizeBoxFocused = false
 			local n = tonumber(textSizeInput.Text)
 			if n and n > 0 then
@@ -317,16 +317,12 @@ end
 			else
 				textSizeInput.Text = tostring(textSizeValue.Value)
 			end
-		end)
-		textSizeValue:GetPropertyChangedSignal("Value"):Connect(applyTextSize)
+		end))
+		trackConn(textSizeValue:GetPropertyChangedSignal("Value"):Connect(applyTextSize))
 		applyTextSize()
 
 		local UserInputService = __lt.cs("UserInputService", cloneref)
 		local isHoldingCTRL = false
-		local function trackConn(conn)
-			return Main and Main.TrackConn and Main.TrackConn(conn) or conn
-		end
-
 		local function setWheelScrollingEnabled(enabled)
 			if not (codeFrame and codeFrame.ScrollV) then return end
 			local scrollV = codeFrame.ScrollV
@@ -366,19 +362,19 @@ end
 
 		local linesFrame = codeFrame.Frame:FindFirstChild("Lines")
 		if linesFrame then
-			linesFrame.MouseWheelForward:Connect(function()
+			trackConn(linesFrame.MouseWheelForward:Connect(function()
 				if isHoldingCTRL then
 					textSizeValue.Value = textSizeValue.Value + 1
 				end
-			end)
-			linesFrame.MouseWheelBackward:Connect(function()
+			end))
+			trackConn(linesFrame.MouseWheelBackward:Connect(function()
 				if isHoldingCTRL then
 					local newSize = textSizeValue.Value - 1
 					if newSize >= 1 then
 						textSizeValue.Value = newSize
 					end
 				end
-			end)
+			end))
 		end
 		
 		local copy = Instance.new("TextButton",window.GuiElems.Content)
@@ -395,10 +391,10 @@ end
 			copy.Interactable = false
 		end
 
-		copy.MouseButton1Click:Connect(function()
+		trackConn(copy.MouseButton1Click:Connect(function()
 			local source = codeFrame:GetText()
 			env.setclipboard(source)
-		end)
+		end))
 
 		local save = Instance.new("TextButton",window.GuiElems.Content)
 		save.BackgroundTransparency = 1
@@ -415,13 +411,13 @@ end
 			--save.Interactable = false
 		end
 
-		save.MouseButton1Click:Connect(function()
+		trackConn(save.MouseButton1Click:Connect(function()
 			local source = codeFrame:GetText()
 			local filename = "Place_"..game.PlaceId.."_Script_"..os.time()..".txt"
 
 			Lib.SaveAsPrompt(filename,source)
 			--env.writefile(filename,source)
-		end)
+		end))
 		-- Buttons below the editor
 		
 		
@@ -440,10 +436,10 @@ end
 			execute.Interactable = false
 		end
 
-		execute.MouseButton1Click:Connect(function()
+		trackConn(execute.MouseButton1Click:Connect(function()
 			local source = codeFrame:GetText()
 			env.loadstring(source)()
-		end)
+		end))
 
 		clear = Instance.new("TextButton",window.GuiElems.Content)
 		clear.BackgroundTransparency = 1
@@ -452,9 +448,9 @@ end
 		clear.Text = "Clear"
 		clear.TextColor3 = Color3.new(1,1,1)
 
-		clear.MouseButton1Click:Connect(function()
+		trackConn(clear.MouseButton1Click:Connect(function()
 			codeFrame:SetText("")
-		end)
+		end))
 
 		ScriptViewer.ApplyTheme = function()
 			local t = Settings and Settings.Theme
@@ -496,11 +492,11 @@ end
 			dumpbtn.TextColor3 = Color3.new(0.5,0.5,0.5)
 			dumpbtn.Visible = false -- hidden until viewing a script
 
-			dumpbtn.MouseButton1Click:Connect(function()
+			trackConn(dumpbtn.MouseButton1Click:Connect(function()
 				if PreviousScr ~= nil then
 					pcall(ScriptViewer.DumpFunctions, PreviousScr)
 				end
-			end)
+			end))
 		end
 		dumpbtn.Visible = true
 		if env.getgc then

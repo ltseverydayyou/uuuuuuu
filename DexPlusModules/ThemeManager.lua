@@ -12,6 +12,12 @@ end
 
 local function initAfterMain() end
 
+local function trackConn(conn)
+	if Main and Main.TrackConn then
+		return Main.TrackConn(conn)
+	end
+	return conn
+end
 local function main()
 	local ThemeManager = {}
 	local window
@@ -387,7 +393,7 @@ local function main()
 			btn.BackgroundColor3 = Settings.Theme.Button
 			Lib.ButtonAnim(btn,{PressColor = Settings.Theme.ButtonPress})
 			btn.Parent = content
-			btn.MouseButton1Click:Connect(onClick)
+			trackConn(btn.MouseButton1Click:Connect(onClick))
 			return btn
 		end
 
@@ -454,14 +460,14 @@ local function main()
 			b.LayoutOrder = 10 + i
 			b.Parent = scroll
 			Lib.ButtonAnim(b,{PressColor = Settings.Theme.ButtonPress})
-			b.MouseButton1Click:Connect(function()
+			trackConn(b.MouseButton1Click:Connect(function()
 				p.apply()
 				if refreshRows then
 					refreshRows()
 				end
 				Main.SaveThemeSettings()
 				Lib.RefreshTheme()
-			end)
+			end))
 		end
 
 		local sep = Instance.new("Frame")
@@ -557,14 +563,14 @@ local function main()
 			pickBtn.Parent = row
 			rows[#rows+1] = {key=keyLabel, path=path, preview=preview}
 
-			pickBtn.MouseButton1Click:Connect(function()
+			trackConn(pickBtn.MouseButton1Click:Connect(function()
 				activeKey = path
 				colorPicker:SetColor(preview.BackgroundColor3)
 				colorPicker:Show()
-			end)
+			end))
 		end
 
-		colorPicker.OnSelect:Connect(function(col)
+		trackConn(colorPicker.OnSelect:Connect(function(col)
 			if not activeKey then return end
 			setThemeColor(activeKey, col)
 			for _, row in ipairs(rows) do
@@ -577,7 +583,7 @@ local function main()
 			Lib.RefreshTheme()
 			activeKey = nil
 			refreshRows()
-		end)
+		end))
 
 		refreshRows()
 	end

@@ -67,6 +67,12 @@ local function getPath(obj)
 	end
 end
 
+local function trackConn(conn)
+	if Main and Main.TrackConn then
+		return Main.TrackConn(conn)
+	end
+	return conn
+end
 local function main()
 	local RunService = __lt.cs("RunService", cloneref)
 	local UserInputService = __lt.cs("UserInputService", cloneref)
@@ -227,7 +233,7 @@ local function main()
 		local hovering = false
 		local lastpos = Vector2.zero
 
-		viewportFrame.InputBegan:Connect(function(input)
+		trackConn(viewportFrame.InputBegan:Connect(function(input)
 			if not ModelViewer.EnableInputCamera then return end
 			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 				dragging = true
@@ -235,26 +241,26 @@ local function main()
 			elseif input.KeyCode == Enum.KeyCode.LeftShift then
 				ModelViewer.ZoomMultiplier = 10
 			end
-		end)
+		end))
 		
 
-		viewportFrame.MouseEnter:Connect(function()
+		trackConn(viewportFrame.MouseEnter:Connect(function()
 			hovering = true
-		end)
-		viewportFrame.MouseLeave:Connect(function()
+		end))
+		trackConn(viewportFrame.MouseLeave:Connect(function()
 			hovering = false
-		end)
+		end))
 
-		viewportFrame.InputEnded:Connect(function(input)
+		trackConn(viewportFrame.InputEnded:Connect(function(input)
 			if not ModelViewer.EnableInputCamera then return end
 			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 				dragging = false
 			elseif input.KeyCode == Enum.KeyCode.LeftShift then
 				ModelViewer.ZoomMultiplier = 2
 			end
-		end)
+		end))
 
-		viewportFrame.InputChanged:Connect(function(input)
+		trackConn(viewportFrame.InputChanged:Connect(function(input)
 			if not ModelViewer.EnableInputCamera then return end
 			if dragging and input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 				local delta = input.Position - lastpos
@@ -268,9 +274,9 @@ local function main()
 			if input.UserInputType == Enum.UserInputType.MouseWheel and hovering then
 				distance = math.clamp(distance - (input.Position.Z * ModelViewer.ZoomMultiplier), 0.1, math.huge)
 			end
-		end)
+		end))
 
-		RunService.RenderStepped:Connect(function()
+		trackConn(RunService.RenderStepped:Connect(function()
 			if camera and model then
 				if not dragging and ModelViewer.AutoRotate then
 					rotationY += ModelViewer.RotationSpeed
@@ -285,7 +291,7 @@ local function main()
 				camera.CFrame = CFrame.lookAt(camCF.Position, center)
 				
 			end
-		end)
+		end))
 		
 		-- context stuffs
 		local context = Lib.ContextMenu.new()
@@ -427,16 +433,16 @@ local function main()
 			context:Hide()
 		end
 		
-		viewportFrame.InputBegan:Connect(function(input)
+		trackConn(viewportFrame.InputBegan:Connect(function(input)
 			if input.UserInputType == Enum.UserInputType.MouseButton2 then
 				ShowContext()
 			elseif input.UserInputType == Enum.UserInputType.MouseButton1 and Lib.CheckMouseInGui(context.Gui) then
 				HideContext()
 			end
-		end)
-		settingsButton.MouseButton1Click:Connect(function()
+		end))
+		trackConn(settingsButton.MouseButton1Click:Connect(function()
 			ShowContext()
-		end)
+		end))
 	end
 
 	return ModelViewer

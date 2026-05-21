@@ -56,6 +56,12 @@ local function initAfterMain()
 	Notebook = Apps.Notebook
 end
 
+local function trackConn(conn)
+	if Main and Main.TrackConn then
+		return Main.TrackConn(conn)
+	end
+	return conn
+end
 local function main()
 	local Console = {}
 
@@ -208,13 +214,13 @@ local function main()
 	G2L["a"]["ScrollBarThickness"] = 16;
 	G2L["a"]["ZIndex"] = 1;
 
-	G2L["a"]:GetPropertyChangedSignal("AbsoluteWindowSize"):Connect(function()
+	trackConn(G2L["a"]:GetPropertyChangedSignal("AbsoluteWindowSize"):Connect(function()
 		if G2L["a"].AbsoluteCanvasSize ~= G2L["a"].AbsoluteWindowSize then
 			scrollbar.Gui.Visible = true
 		else
 			scrollbar.Gui.Visible = false
 		end
-	end)
+	end))
 
 	-- StarterGui.ScreenGui.Console.Output.UIListLayout
 	G2L["b"] = Instance.new("UIListLayout", G2L["a"]);
@@ -887,37 +893,37 @@ local function main()
 		end
 
 		setToggle(Console.CtrlScroll, CtrlScroll)
-		Console.CtrlScroll.MouseButton1Click:Connect(function()
+		trackConn(Console.CtrlScroll.MouseButton1Click:Connect(function()
 			CtrlScroll = not CtrlScroll
 			setToggle(Console.CtrlScroll, CtrlScroll)
 			persistPreferences()
-		end)
+		end))
 
 		local IsHoldingCTRL = false
-		UserInputService.InputBegan:Connect(function(input, gameproc)
+		trackConn(UserInputService.InputBegan:Connect(function(input, gameproc)
 			if not gameproc then
 				if input.KeyCode == Enum.KeyCode.LeftControl or input.KeyCode == Enum.KeyCode.RightControl then
 					IsHoldingCTRL = true
 				end
 			end
-		end)
-		UserInputService.InputEnded:Connect(function(input, gameproc)
+		end))
+		trackConn(UserInputService.InputEnded:Connect(function(input, gameproc)
 			if not gameproc then
 				if input.KeyCode == Enum.KeyCode.LeftControl or input.KeyCode == Enum.KeyCode.RightControl then
 					IsHoldingCTRL = false
 				end
 			end
-		end)
+		end))
 
 		setToggle(Console.AutoScroll, AutoScroll)
-		Console.AutoScroll.MouseButton1Click:Connect(function()
+		trackConn(Console.AutoScroll.MouseButton1Click:Connect(function()
 			AutoScroll = not AutoScroll
 			setToggle(Console.AutoScroll, AutoScroll)
 			if AutoScroll then
 				Console.Output.CanvasPosition = Vector2.new(0, 9e9)
 			end
 			persistPreferences()
-		end)
+		end))
 
 		setToggle(Console.FilterOutput, filterState[Enum.MessageType.MessageOutput])
 		setToggle(Console.FilterInfo, filterState[Enum.MessageType.MessageInfo])
@@ -947,24 +953,24 @@ local function main()
 			persistPreferences()
 		end
 
-		Console.FilterOutput.MouseButton1Click:Connect(function()
+		trackConn(Console.FilterOutput.MouseButton1Click:Connect(function()
 			toggleFilter(Enum.MessageType.MessageOutput, Console.FilterOutput)
-		end)
-		Console.FilterInfo.MouseButton1Click:Connect(function()
+		end))
+		trackConn(Console.FilterInfo.MouseButton1Click:Connect(function()
 			toggleFilter(Enum.MessageType.MessageInfo, Console.FilterInfo)
-		end)
-		Console.FilterWarn.MouseButton1Click:Connect(function()
+		end))
+		trackConn(Console.FilterWarn.MouseButton1Click:Connect(function()
 			toggleFilter(Enum.MessageType.MessageWarning, Console.FilterWarn)
-		end)
-		Console.FilterError.MouseButton1Click:Connect(function()
+		end))
+		trackConn(Console.FilterError.MouseButton1Click:Connect(function()
 			toggleFilter(Enum.MessageType.MessageError, Console.FilterError)
-		end)
+		end))
 
-		Console.Listen.MouseButton1Click:Connect(function()
+		trackConn(Console.Listen.MouseButton1Click:Connect(function()
 			listenEnabled = not listenEnabled
 			setToggle(Console.Listen, listenEnabled)
 			persistPreferences()
-		end)
+		end))
 
 		consoleApp.SetTextSize = function(size)
 			local n = math.clamp(math.floor(tonumber(size) or OutputTextSize.Value), 1, 64)
@@ -996,13 +1002,13 @@ local function main()
 		-- Console part
 		Console.TextSizeBox.TextBox.Text = tostring(OutputTextSize.Value)
 
-		Console.TextSizeBox.TextBox:GetPropertyChangedSignal("Text"):Connect(function()
+		trackConn(Console.TextSizeBox.TextBox:GetPropertyChangedSignal("Text"):Connect(function()
 			local tonum = tonumber(Console.TextSizeBox.TextBox.Text)
 			if tonum then
 				OutputTextSize.Value = math.clamp(math.floor(tonum), 1, 64)
 			end
-		end)
-		OutputTextSize:GetPropertyChangedSignal("Value"):Connect(function()
+		end))
+		trackConn(OutputTextSize:GetPropertyChangedSignal("Value"):Connect(function()
 			local clamped = math.clamp(math.floor(OutputTextSize.Value), 1, 64)
 			if OutputTextSize.Value ~= clamped then
 				OutputTextSize.Value = clamped
@@ -1010,11 +1016,11 @@ local function main()
 			end
 			Console.TextSizeBox.TextBox.Text = tostring(OutputTextSize.Value)
 			persistPreferences()
-		end)
+		end))
 
 		local scrollConsoleInput
-		Console.Output.MouseEnter:Connect(function()
-			scrollConsoleInput = UserInputService.InputChanged:Connect(function(input)
+		trackConn(Console.Output.MouseEnter:Connect(function()
+			scrollConsoleInput = trackConn(UserInputService.InputChanged:Connect(function(input)
 				if CtrlScroll and input.UserInputType == Enum.UserInputType.MouseWheel and IsHoldingCTRL == true then
 					Console.Output.ScrollingEnabled = false
 					local newTextSize = OutputTextSize.Value + input.Position.Z
@@ -1024,17 +1030,17 @@ local function main()
 				else
 					Console.Output.ScrollingEnabled = true
 				end
-			end)
-		end)
-		Console.Output.MouseLeave:Connect(function()
+			end))
+		end))
+		trackConn(Console.Output.MouseLeave:Connect(function()
 			if scrollConsoleInput then
 				scrollConsoleInput:Disconnect()
 				scrollConsoleInput = nil
 			end
-		end)
+		end))
 
 
-		Console.Clear.MouseButton1Click:Connect(function()
+		trackConn(Console.Clear.MouseButton1Click:Connect(function()
 			for _, log in pairs(Console.Output:GetChildren()) do
 				if log:IsA("TextBox") then
 					log:Destroy()
@@ -1047,7 +1053,7 @@ local function main()
 					displayedOutput[i] = nil
 				end
 			end
-		end)
+		end))
 
 		local focussedOutput
 
@@ -1082,20 +1088,20 @@ local function main()
 			end
 
 			newOutputText.TextSize = OutputTextSize.Value
-			OutputTextSize:GetPropertyChangedSignal("Value"):Connect(function()
+			trackConn(OutputTextSize:GetPropertyChangedSignal("Value"):Connect(function()
 				newOutputText.TextSize = OutputTextSize.Value
-			end)
+			end))
 
 			newOutputText:SetAttribute("MessageType", msgtype.Name or "MessageOutput")
 
-			newOutputText.Focused:Connect(function()
+			trackConn(newOutputText.Focused:Connect(function()
 				focussedOutput = newOutputText
 				newOutputText.Text = unformattedText
-			end)
-			newOutputText.FocusLost:Connect(function()
+			end))
+			trackConn(newOutputText.FocusLost:Connect(function()
 				focussedOutput = nil
 				newOutputText.Text = formattedText
-			end)
+			end))
 
 			newOutputText.Parent = Console.Output
 			newOutputText.Visible = filterState[msgtype] ~= false
@@ -1114,35 +1120,35 @@ local function main()
 			end
 		end
 
-		LogService.MessageOut:Connect(function(msg, msgtype)
+		trackConn(LogService.MessageOut:Connect(function(msg, msgtype)
 			if not listenEnabled then
 				return
 			end
 			pushLog(msg, msgtype)
-		end)
+		end))
 
-		Console.Output.MouseLeave:Connect(function()
+		trackConn(Console.Output.MouseLeave:Connect(function()
 			if focussedOutput then
 				focussedOutput:ReleaseFocus()
 			end
-		end)
+		end))
 
-		Console.CommandLine.ScrollingFrame.TextBox:GetPropertyChangedSignal("Text"):Connect(function()
+		trackConn(Console.CommandLine.ScrollingFrame.TextBox:GetPropertyChangedSignal("Text"):Connect(function()
 
 			local oneliner = string.gsub(Console.CommandLine.ScrollingFrame.TextBox.Text, "\n", "    ")
 			Console.CommandLine.ScrollingFrame.TextBox.Text = oneliner
 
 			Console.CommandLine.ScrollingFrame.Highlight.Text = SyntaxHighlightingModule.run(Console.CommandLine.ScrollingFrame.TextBox.Text)
-		end)
+		end))
 
 
 
-		Console.CommandLine.ScrollingFrame.TextBox.FocusLost:Connect(function(enterPressed)
+		trackConn(Console.CommandLine.ScrollingFrame.TextBox.FocusLost:Connect(function(enterPressed)
 			if enterPressed and Console.CommandLine.ScrollingFrame.TextBox.Text ~= "" then
 				print("> "..Console.CommandLine.ScrollingFrame.TextBox.Text)
 				loadstring(Console.CommandLine.ScrollingFrame.TextBox.Text)()
 			end
-		end)
+		end))
 
 		consoleApp.ApplyTheme = function()
 			local t = Settings and Settings.Theme

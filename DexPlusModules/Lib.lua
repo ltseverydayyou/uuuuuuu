@@ -117,6 +117,12 @@ local function initAfterMain()
 	Notebook = Apps.Notebook
 end
 
+local function trackConn(conn)
+	if Main and Main.TrackConn then
+		return Main.TrackConn(conn)
+	end
+	return conn
+end
 local function main()
 	local Lib = {}
 
@@ -464,7 +470,7 @@ local function main()
 			control.OutlineColor = data.OutlineColor
 		end
 
-		button.InputBegan:Connect(function(input)
+		trackConn(button.InputBegan:Connect(function(input)
 			if disabled then return end
 
 			if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
@@ -484,9 +490,9 @@ local function main()
 					if control.OutlineColor then button.BorderColor3 = control.PressColor end
 				end
 			end
-		end)
+		end))
 
-		button.InputEnded:Connect(function(input)
+		trackConn(button.InputEnded:Connect(function(input)
 			if disabled then return end
 
 			if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
@@ -506,7 +512,7 @@ local function main()
 					if control.OutlineColor then button.BorderColor3 = control.OutlineColor end
 				end
 			end
-		end)
+		end))
 
 		control.Disable = function()
 			disabled = true
@@ -556,11 +562,11 @@ local function main()
 
 			if con then con:Disconnect() con = nil end
 			if target then
-				con = target.Changed:Connect(function(prop)
+				con = trackConn(target.Changed:Connect(function(prop)
 					if not disabled and prop == "AbsolutePosition" or prop == "AbsoluteSize" then
 						update()
 					end
-				end)
+				end))
 			end
 
 			update()
@@ -647,9 +653,9 @@ local function main()
 
 			--nameBox.TextBox.Text = filename or ""
 
-			nameBox.TextBox:GetPropertyChangedSignal("Text"):Connect(function()
+			trackConn(nameBox.TextBox:GetPropertyChangedSignal("Text"):Connect(function()
 				saveButton:SetDisabled(#nameBox:GetText() == 0)
-			end)
+			end))
 
 			local errorLabel = Lib.Label.new()
 			errorLabel.Text = ""
@@ -664,18 +670,18 @@ local function main()
 			cancelButton.Text = "Cancel"
 			cancelButton.Position = UDim2.new(1,-5,1,-5)
 			cancelButton.Size = UDim2.new(0.5,-10,0,20)
-			cancelButton.OnClick:Connect(function()
+			trackConn(cancelButton.OnClick:Connect(function()
 				win:Close()
-			end)
+			end))
 			win:Add(cancelButton)
 
 			saveButton.Text = "Save"
 			saveButton.AnchorPoint = Vector2.new(0,1)
 			saveButton.Position = UDim2.new(0,5,1,-5)
 			saveButton.Size = UDim2.new(0.5,-5,0,20)
-			saveButton.OnClick:Connect(function()
+			trackConn(saveButton.OnClick:Connect(function()
 				currentclickhandler()
-			end)
+			end))
 
 			win:Add(saveButton,"SaveButton")
 
@@ -2329,13 +2335,13 @@ local function main()
 					self.Scrolled:Fire()
 					local buttonTick = tick()
 					local releaseEvent
-					releaseEvent = user.InputEnded:Connect(function(input)
+					releaseEvent = trackConn(user.InputEnded:Connect(function(input)
 						if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 							releaseEvent:Disconnect()
 							button.BackgroundTransparency = checkMouseInGui(button) and 0.8 or 1
 							buttonPress = false
 						end
-					end)
+					end))
 					while buttonPress do
 						if tick() - buttonTick >= 0.25 and self:CanScroll(scrollDirection) then
 							self:ScrollToDirection(scrollDirection)
@@ -2346,29 +2352,29 @@ local function main()
 				end
 			end
 
-			button1.MouseButton1Down:Connect(function(input)
+			trackConn(button1.MouseButton1Down:Connect(function(input)
 				buttonPress = true
 				handleButtonPress(button1, "Up")
-			end)
+			end))
 
-			button1.InputEnded:Connect(function(input)
+			trackConn(button1.InputEnded:Connect(function(input)
 				if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 					button1.BackgroundTransparency = 1
 				end
-			end)
+			end))
 
-			button2.MouseButton1Down:Connect(function(input)
+			trackConn(button2.MouseButton1Down:Connect(function(input)
 				buttonPress = true
 				handleButtonPress(button2, "Down")
-			end)
+			end))
 
-			button2.InputEnded:Connect(function(input)
+			trackConn(button2.InputEnded:Connect(function(input)
 				if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 					button2.BackgroundTransparency = 1
 				end
-			end)
+			end))
 
-			scrollThumb.InputBegan:Connect(function(input)
+			trackConn(scrollThumb.InputBegan:Connect(function(input)
 				if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
 					local dir = self.Horizontal and "X" or "Y"
 					local lastThumbPos = nil
@@ -2378,16 +2384,16 @@ local function main()
 					local releaseEvent
 					local mouseEvent
 
-					releaseEvent = user.InputEnded:Connect(function(input)
+					releaseEvent = trackConn(user.InputEnded:Connect(function(input)
 						if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 							releaseEvent:Disconnect()
 							if mouseEvent then mouseEvent:Disconnect() end
 							scrollThumb.BackgroundTransparency = 0.2
 							thumbPress = false
 						end
-					end)
+					end))
 
-					mouseEvent = user.InputChanged:Connect(function(input)
+					mouseEvent = trackConn(user.InputChanged:Connect(function(input)
 						if (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) and thumbPress then
 							local thumbFrameSize = scrollThumbFrame.AbsoluteSize[dir] - scrollThumb.AbsoluteSize[dir]
 							local pos = mouse[dir] - scrollThumbFrame.AbsolutePosition[dir] - mouseOffset
@@ -2398,17 +2404,17 @@ local function main()
 								self:ScrollTo(math.floor(0.5 + pos / thumbFrameSize * (self.TotalSpace - self.VisibleSpace)))
 							end
 						end
-					end)
+					end))
 				end
-			end)
+			end))
 
-			scrollThumb.InputEnded:Connect(function(input)
+			trackConn(scrollThumb.InputEnded:Connect(function(input)
 				if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 					scrollThumb.BackgroundTransparency = 0
 				end
-			end)
+			end))
 
-			scrollThumbFrame.InputBegan:Connect(function(input)
+			trackConn(scrollThumbFrame.InputBegan:Connect(function(input)
 				if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and not checkMouseInGui(scrollThumb) then
 					local dir = self.Horizontal and "X" or "Y"
 					local scrollDir = (mouse[dir] >= scrollThumb.AbsolutePosition[dir] + scrollThumb.AbsoluteSize[dir]) and 1 or 0
@@ -2426,12 +2432,12 @@ local function main()
 					doTick()
 					local thumbFrameTick = tick()
 					local releaseEvent
-					releaseEvent = user.InputEnded:Connect(function(input)
+					releaseEvent = trackConn(user.InputEnded:Connect(function(input)
 						if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 							releaseEvent:Disconnect()
 							thumbFramePress = false
 						end
-					end)
+					end))
 
 					while thumbFramePress do
 						if tick() - thumbFrameTick >= 0.3 and checkMouseInGui(scrollThumbFrame) then
@@ -2440,15 +2446,15 @@ local function main()
 						task.wait()
 					end
 				end
-			end)
+			end))
 
-			newFrame.MouseWheelForward:Connect(function()
+			trackConn(newFrame.MouseWheelForward:Connect(function()
 				self:ScrollTo(self.Index - self.WheelIncrement)
-			end)
+			end))
 
-			newFrame.MouseWheelBackward:Connect(function()
+			trackConn(newFrame.MouseWheelBackward:Connect(function()
 				self:ScrollTo(self.Index + self.WheelIncrement)
-			end)
+			end))
 
 			self.GuiElems.ScrollThumb = scrollThumb
 			self.GuiElems.ScrollThumbFrame = scrollThumbFrame
@@ -2585,8 +2591,8 @@ local function main()
 		funcs.SetScrollFrame = function(self,frame)
 			if self.ScrollUpEvent then self.ScrollUpEvent:Disconnect() self.ScrollUpEvent = nil end
 			if self.ScrollDownEvent then self.ScrollDownEvent:Disconnect() self.ScrollDownEvent = nil end
-			self.ScrollUpEvent = frame.MouseWheelForward:Connect(function() self:ScrollTo(self.Index - self.WheelIncrement) end)
-			self.ScrollDownEvent = frame.MouseWheelBackward:Connect(function() self:ScrollTo(self.Index + self.WheelIncrement) end)
+			self.ScrollUpEvent = trackConn(frame.MouseWheelForward:Connect(function() self:ScrollTo(self.Index - self.WheelIncrement) end))
+			self.ScrollDownEvent = trackConn(frame.MouseWheelBackward:Connect(function() self:ScrollTo(self.Index + self.WheelIncrement) end))
 		end
 
 		local mt = {}
@@ -2635,6 +2641,26 @@ local function main()
 		local tweens = {}
 		local isA = game.IsA
 
+		local function safeFindChild(parent,name,className)
+			if not parent then return nil end
+			local ok,child = pcall(function()
+				return parent:FindFirstChild(name)
+			end)
+			if ok and child and (not className or child:IsA(className)) then
+				return child
+			end
+			return nil
+		end
+
+		local function getButtonImage(button)
+			local image = safeFindChild(button,"ImageLabel","ImageLabel")
+			if image then return image end
+			local ok,found = pcall(function()
+				return button and button:FindFirstChildWhichIsA("ImageLabel")
+			end)
+			return ok and found or nil
+		end
+
 		local theme = {
 			MainColor1 = Color3.fromRGB(52,52,52),
 			MainColor2 = Color3.fromRGB(45,45,45),
@@ -2653,13 +2679,13 @@ local function main()
 			
 			local guiMain = self.GuiElems.Main
 			
-			resizer.MouseEnter:Connect(function() resizer.BackgroundTransparency = 0.5 end)
-			resizer.MouseButton1Down:Connect(function() pressing = true resizer.BackgroundTransparency = 0.5 end)
-			resizer.MouseButton1Up:Connect(function() pressing = false resizer.BackgroundTransparency = 1 end)
+			trackConn(resizer.MouseEnter:Connect(function() resizer.BackgroundTransparency = 0.5 end))
+			trackConn(resizer.MouseButton1Down:Connect(function() pressing = true resizer.BackgroundTransparency = 0.5 end))
+			trackConn(resizer.MouseButton1Up:Connect(function() pressing = false resizer.BackgroundTransparency = 1 end))
 			
 			
 			
-			resizer.InputBegan:Connect(function(input)
+			trackConn(resizer.InputBegan:Connect(function(input)
 				if not self.Dragging and not self.Resizing and self.Resizable and self.ResizableInternal and pressing then
 					local isH = dir:find("[WE]") and true
 					local isV = dir:find("[NS]") and true
@@ -2677,16 +2703,16 @@ local function main()
 
 						self.Resizing = resizer
 						
-						releaseEvent = service.UserInputService.InputEnded:Connect(function(input)
+						releaseEvent = trackConn(service.UserInputService.InputEnded:Connect(function(input)
 							if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 								releaseEvent:Disconnect()
 								if mouseEvent then mouseEvent:Disconnect() end
 								self.Resizing = false
 								resizer.BackgroundTransparency = 1
 							end
-						end)
+						end))
 
-						mouseEvent = service.UserInputService.InputChanged:Connect(function(input)
+						mouseEvent = trackConn(service.UserInputService.InputChanged:Connect(function(input)
 							if self.Resizable and self.ResizableInternal and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
 								self:StopTweens()
 								local deltaX = input.Position.X - resizer.AbsolutePosition.X - offX
@@ -2701,17 +2727,17 @@ local function main()
 								self.SizeY = self.SizeY + (isV and deltaY * signY or 0)
 								guiMain.Size = UDim2.new(0, self.SizeX, 0, self.Minimized and 20 or self.SizeY)
 							end
-						end)
+						end))
 					end
 				end
-			end)
+			end))
 
-			resizer.InputEnded:Connect(function(input)
+			trackConn(resizer.InputEnded:Connect(function(input)
 				--if input.UserInputType == Enum.UserInputType.Touch and Main.AllowDraggableOnMobile == false then return end
 				if (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) and self.Resizing ~= resizer then
 					resizer.BackgroundTransparency = 1
 				end
-			end)
+			end))
 		end
 
 		local updateWindows
@@ -2756,13 +2782,13 @@ local function main()
 
 		local function focusInput(self,obj)
 			if isA(obj,"GuiButton") then
-				obj.MouseButton1Down:Connect(function()
+				trackConn(obj.MouseButton1Down:Connect(function()
 					moveToTop(self)
-				end)
+				end))
 			elseif isA(obj,"TextBox") then
-				obj.Focused:Connect(function()
+				trackConn(obj.Focused:Connect(function()
 					moveToTop(self)
-				end)
+				end))
 			end
 		end
 
@@ -2828,8 +2854,8 @@ local function main()
 			--blur.updateAll()
 			
 			local ButtonDown = false
-			guiTopBar.MouseButton1Down:Connect(function() ButtonDown = true end)
-			guiTopBar.MouseButton1Up:Connect(function() ButtonDown = false end)
+			trackConn(guiTopBar.MouseButton1Down:Connect(function() ButtonDown = true end))
+			trackConn(guiTopBar.MouseButton1Up:Connect(function() ButtonDown = false end))
 
 			if Settings.Window.TitleOnMiddle then
 				self.GuiElems.Title.TextXAlignment = 2
@@ -2842,7 +2868,7 @@ local function main()
 			end
 
 
-			guiTopBar.InputBegan:Connect(function(input)
+			trackConn(guiTopBar.InputBegan:Connect(function(input)
 				if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 					if self.Draggable then
 						local releaseEvent, mouseEvent
@@ -2857,7 +2883,7 @@ local function main()
 
 						guiDragging = true
 
-						releaseEvent = service.UserInputService.InputEnded:Connect(function(input)
+						releaseEvent = trackConn(service.UserInputService.InputEnded:Connect(function(input)
 							if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 								releaseEvent:Disconnect()
 								if mouseEvent then mouseEvent:Disconnect() end
@@ -2868,9 +2894,9 @@ local function main()
 									self:AlignTo(targetSide, alignInsertPos)
 								end
 							end
-						end)
+						end))
 
-						mouseEvent = service.UserInputService.InputChanged:Connect(function(input)
+						mouseEvent = trackConn(service.UserInputService.InputChanged:Connect(function(input)
 							if (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) and self.Draggable and not self.Closed and ButtonDown then
 								if self.Aligned then
 									if leftSide.Resizing or rightSide.Resizing then return end
@@ -2913,44 +2939,44 @@ local function main()
 									alignInsertSide = nil
 								end
 							end
-						end)
+						end))
 					end
 				end
-			end)
+			end))
 
-			guiTopBar.Close.MouseButton1Click:Connect(function()
+			trackConn(guiTopBar.Close.MouseButton1Click:Connect(function()
 				if self.Closed then return end
 				self:Close()
-			end)
+			end))
 
-			guiTopBar.Minimize.MouseButton1Click:Connect(function()
+			trackConn(guiTopBar.Minimize.MouseButton1Click:Connect(function()
 				if self.Closed then return end
 				if self.Aligned then
 					self:SetAligned(false)
 				else
 					self:SetMinimized()
 				end
-			end)
+			end))
 
-			guiTopBar.Minimize.MouseButton2Click:Connect(function()
+			trackConn(guiTopBar.Minimize.MouseButton2Click:Connect(function()
 				if self.Closed then return end
 				if not self.Aligned then
 					self:SetMinimized(nil,2)
 					guiTopBar.Minimize.BackgroundTransparency = 1
 				end
-			end)
+			end))
 
-			guiMain.InputBegan:Connect(function(input)
+			trackConn(guiMain.InputBegan:Connect(function(input)
 				if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch and not self.Aligned and not self.Closed then
 					moveToTop(self)
 				end
-			end)
+			end))
 
-			guiMain:GetPropertyChangedSignal("AbsolutePosition"):Connect(function()
+			trackConn(guiMain:GetPropertyChangedSignal("AbsolutePosition"):Connect(function()
 				local absPos = guiMain.AbsolutePosition
 				self.PosX = absPos.X
 				self.PosY = absPos.Y
-			end)
+			end))
 
 			resizeHook(self,guiResizeControls.North,"N")
 			resizeHook(self,guiResizeControls.NorthEast,"NE")
@@ -2963,7 +2989,7 @@ local function main()
 
 			guiMain.Size = UDim2.new(0,self.SizeX,0,self.SizeY)
 
-			gui.DescendantAdded:Connect(function(obj) focusInput(self,obj) end)
+			trackConn(gui.DescendantAdded:Connect(function(obj) focusInput(self,obj) end))
 			local descs = gui:QueryDescendants("Instance")
 			for i = 1,#descs do
 				focusInput(self,descs[i])
@@ -2977,10 +3003,24 @@ local function main()
 
 		local function updateSideFrames(noTween)
 			stopTweens()
+			local leftFrame = leftSide.Frame
+			local rightFrame = rightSide.Frame
+			if not (sidesGui and leftFrame and rightFrame) then
+				return false
+			end
+
+			local leftResizer = safeFindChild(leftFrame,"Resizer","TextButton")
+			local rightResizer = safeFindChild(rightFrame,"Resizer","TextButton")
+			local leftToggle = safeFindChild(sidesGui,"LeftToggle","TextButton")
+			local rightToggle = safeFindChild(sidesGui,"RightToggle","TextButton")
+			if not (leftResizer and rightResizer and leftToggle and rightToggle) then
+				return false
+			end
+
 			leftSide.Frame.Size = UDim2.new(0,leftSide.Width,1,0)
 			rightSide.Frame.Size = UDim2.new(0,rightSide.Width,1,0)
-			leftSide.Frame.Resizer.Position = UDim2.new(0,leftSide.Width,0,0)
-			rightSide.Frame.Resizer.Position = UDim2.new(0,-5,0,0)
+			leftResizer.Position = UDim2.new(0,leftSide.Width,0,0)
+			rightResizer.Position = UDim2.new(0,-5,0,0)
 
 			--leftSide.Frame.Visible = (#leftSide.Windows > 0)
 			--rightSide.Frame.Visible = (#rightSide.Windows > 0)
@@ -2997,8 +3037,8 @@ local function main()
 			local leftPos = (leftHidden and UDim2.new(0,-leftSide.Width-10,0,0) or UDim2.new(0,0,0,0))
 			local rightPos = (rightHidden and UDim2.new(1,10,0,0) or UDim2.new(1,-rightSide.Width,0,0))
 
-			sidesGui.LeftToggle.Text = leftHidden and ">" or "<"
-			sidesGui.RightToggle.Text = rightHidden and "<" or ">"
+			leftToggle.Text = leftHidden and ">" or "<"
+			rightToggle.Text = rightHidden and "<" or ">"
 
 			if not noTween then
 				local function insertTween(...)
@@ -3008,14 +3048,15 @@ local function main()
 				end
 				insertTween(leftSide.Frame,sideTweenInfo,{Position = leftPos})
 				insertTween(rightSide.Frame,sideTweenInfo,{Position = rightPos})
-				insertTween(sidesGui.LeftToggle,sideTweenInfo,{Position = UDim2.new(0,#leftSide.Windows == 0 and -16 or 0,0,-36)})
-				insertTween(sidesGui.RightToggle,sideTweenInfo,{Position = UDim2.new(1,#rightSide.Windows == 0 and 0 or -16,0,-36)})
+				insertTween(leftToggle,sideTweenInfo,{Position = UDim2.new(0,#leftSide.Windows == 0 and -16 or 0,0,-36)})
+				insertTween(rightToggle,sideTweenInfo,{Position = UDim2.new(1,#rightSide.Windows == 0 and 0 or -16,0,-36)})
 			else
 				leftSide.Frame.Position = leftPos
 				rightSide.Frame.Position = rightPos
-				sidesGui.LeftToggle.Position = UDim2.new(0,#leftSide.Windows == 0 and -16 or 0,0,-36)
-				sidesGui.RightToggle.Position = UDim2.new(1,#rightSide.Windows == 0 and 0 or -16,0,-36)
+				leftToggle.Position = UDim2.new(0,#leftSide.Windows == 0 and -16 or 0,0,-36)
+				rightToggle.Position = UDim2.new(1,#rightSide.Windows == 0 and 0 or -16,0,-36)
 			end
+			return true
 		end
 
 		local function getSideFramePos(side)
@@ -3045,12 +3086,12 @@ local function main()
 			local mouse = Main.Mouse
 			local windows = side.Windows
 
-			resizer.MouseEnter:Connect(function() resizer.BackgroundColor3 = theme.MainColor2 end)
-			resizer.MouseButton1Down:Connect(function() pressing = true resizer.BackgroundColor3 = theme.MainColor2 end)
-			resizer.MouseButton1Up:Connect(function() pressing = false resizer.BackgroundColor3 = theme.Button end)
+			trackConn(resizer.MouseEnter:Connect(function() resizer.BackgroundColor3 = theme.MainColor2 end))
+			trackConn(resizer.MouseButton1Down:Connect(function() pressing = true resizer.BackgroundColor3 = theme.MainColor2 end))
+			trackConn(resizer.MouseButton1Up:Connect(function() pressing = false resizer.BackgroundColor3 = theme.Button end))
 
 
-			resizer.InputBegan:Connect(function(input)
+			trackConn(resizer.InputBegan:Connect(function(input)
 				if not side.Resizing and pressing then
 					if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 						resizer.BackgroundColor3 = theme.MainColor2
@@ -3064,16 +3105,16 @@ local function main()
 						side.Resizing = resizer
 						resizer.BackgroundColor3 = theme.MainColor2
 
-						releaseEvent = service.UserInputService.InputEnded:Connect(function(input)
+						releaseEvent = trackConn(service.UserInputService.InputEnded:Connect(function(input)
 							if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 								releaseEvent:Disconnect()
 								mouseEvent:Disconnect()
 								side.Resizing = false
 								resizer.BackgroundColor3 = theme.Button
 							end
-						end)
+						end))
 
-						mouseEvent = service.UserInputService.InputChanged:Connect(function(input)
+						mouseEvent = trackConn(service.UserInputService.InputChanged:Connect(function(input)
 							if not resizer.Parent then
 								releaseEvent:Disconnect()
 								mouseEvent:Disconnect()
@@ -3131,19 +3172,20 @@ local function main()
 									sideResized(otherSide)
 								end
 							end
-						end)
+						end))
 					end
 				end
-			end)
+			end))
 
-			resizer.InputEnded:Connect(function(input)
+			trackConn(resizer.InputEnded:Connect(function(input)
 				if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch and side.Resizing ~= resizer then
 					resizer.BackgroundColor3 = theme.Button
 				end
-			end)
+			end))
 		end
 
 		local function renderSide(side,noTween)
+			if not (side.Frame and side.WindowResizer) then return end
 			local currentPos = 0
 			local sideFramePos = getSideFramePos(side)
 			local template = side.WindowResizer:Clone()
@@ -3172,12 +3214,12 @@ local function main()
 				if not isEnd then
 					local newTemplate = template:Clone()
 					newTemplate.Position = UDim2.new(1,-side.Width,0,currentPos-4)
-					side.ResizeCons[#side.ResizeCons+1] = v.Gui.Main:GetPropertyChangedSignal("Size"):Connect(function()
+					side.ResizeCons[#side.ResizeCons+1] = trackConn(v.Gui.Main:GetPropertyChangedSignal("Size"):Connect(function()
 						newTemplate.Position = UDim2.new(1,-side.Width,0, v.GuiElems.Main.Position.Y.Offset + v.GuiElems.Main.Size.Y.Offset)
-					end)
-					side.ResizeCons[#side.ResizeCons+1] = v.Gui.Main:GetPropertyChangedSignal("Position"):Connect(function()
+					end))
+					side.ResizeCons[#side.ResizeCons+1] = trackConn(v.Gui.Main:GetPropertyChangedSignal("Position"):Connect(function()
 						newTemplate.Position = UDim2.new(1,-side.Width,0, v.GuiElems.Main.Position.Y.Offset + v.GuiElems.Main.Size.Y.Offset)
-					end)
+					end))
 					sideResizerHook(newTemplate,"V",side,i)
 					newTemplate.Parent = side.Frame
 				end
@@ -3185,6 +3227,20 @@ local function main()
 
 			--side.Frame.Back.Position = UDim2.new(0,0,0,0)
 			--side.Frame.Back.Size = UDim2.new(0,side.Width,1,0)
+		end
+
+		local function clearSide(side)
+			for i,v in pairs(side.ResizeCons) do
+				pcall(function()
+					v:Disconnect()
+				end)
+			end
+			side.ResizeCons = {}
+			side.Windows = {}
+			side.Resizing = nil
+			side.Frame = nil
+			side.WindowResizer = nil
+			side.Hidden = true
 		end
 
 		local function updateSide(side,noTween)
@@ -3219,7 +3275,9 @@ local function main()
 		end
 
 		updateWindows = function(noTween)
-			updateSideFrames(noTween)
+			if updateSideFrames(noTween) == false then
+				return
+			end
 			updateSide(leftSide,noTween)
 			updateSide(rightSide,noTween)
 			local count = 0
@@ -3260,7 +3318,10 @@ local function main()
 					self.GuiElems.Main:TweenPosition(newPos,Enum.EasingDirection.Out,Enum.EasingStyle.Quart,0.25,true)
 					self.GuiElems.Main:TweenSize(UDim2.new(0,self.SizeX,0,newVal and 20 or self.SizeY),Enum.EasingDirection.Out,Enum.EasingStyle.Quart,0.25,true)
 				end
-				self.GuiElems.Minimize.ImageLabel.Image = newVal and Main.ResolveAsset("rbxassetid://5060023708") or Main.ResolveAsset("rbxassetid://5034768003")
+				local minimizeImage = getButtonImage(self.GuiElems.Minimize)
+				if minimizeImage then
+					minimizeImage.Image = newVal and Main.ResolveAsset("rbxassetid://5060023708") or Main.ResolveAsset("rbxassetid://5034768003")
+				end
 			end
 
 			if oldVal ~= newVal then
@@ -3303,13 +3364,19 @@ local function main()
 				for i,v in pairs(leftSide.Windows) do if v == self then table.remove(leftSide.Windows,i) break end end
 				for i,v in pairs(rightSide.Windows) do if v == self then table.remove(rightSide.Windows,i) break end end
 				if not table.find(visibleWindows,self) then table.insert(visibleWindows,1,self) end
-				self.GuiElems.Minimize.ImageLabel.Image = Main.ResolveAsset("rbxassetid://5034768003")
+				local minimizeImage = getButtonImage(self.GuiElems.Minimize)
+				if minimizeImage then
+					minimizeImage.Image = Main.ResolveAsset("rbxassetid://5034768003")
+				end
 				self.Side = nil
 				updateWindows()
 			else
 				self:SetMinimized(false,3)
 				for i,v in pairs(visibleWindows) do if v == self then table.remove(visibleWindows,i) break end end
-				self.GuiElems.Minimize.ImageLabel.Image = Main.ResolveAsset("rbxassetid://5448127505")
+				local minimizeImage = getButtonImage(self.GuiElems.Minimize)
+				if minimizeImage then
+					minimizeImage.Image = Main.ResolveAsset("rbxassetid://5448127505")
+				end
 			end
 		end
 
@@ -3376,8 +3443,10 @@ local function main()
 
 				self:DoTween(self.GuiElems.Main,ti,{Size = UDim2.new(0,self.SizeX,0,20)})
 				self:DoTween(self.GuiElems.Title,ti,{TextTransparency = 1})
-				self:DoTween(self.GuiElems.Minimize.ImageLabel,ti,{ImageTransparency = 1})
-				self:DoTween(self.GuiElems.Close.ImageLabel,ti,{ImageTransparency = 1})
+				local minimizeImage = getButtonImage(self.GuiElems.Minimize)
+				local closeImage = getButtonImage(self.GuiElems.Close)
+				if minimizeImage then self:DoTween(minimizeImage,ti,{ImageTransparency = 1}) end
+				if closeImage then self:DoTween(closeImage,ti,{ImageTransparency = 1}) end
 				Lib.FastWait(0.2)
 				if closeTime ~= self.LastClose then return end
 
@@ -3415,8 +3484,10 @@ local function main()
 
 				self:DoTween(self.GuiElems.Main,ti,{Size = UDim2.new(0,self.SizeX,0,20)})
 				self:DoTween(self.GuiElems.Title,ti,{TextTransparency = 1})
-				self:DoTween(self.GuiElems.Minimize.ImageLabel,ti,{ImageTransparency = 1})
-				self:DoTween(self.GuiElems.Close.ImageLabel,ti,{ImageTransparency = 1})
+				local minimizeImage = getButtonImage(self.GuiElems.Minimize)
+				local closeImage = getButtonImage(self.GuiElems.Close)
+				if minimizeImage then self:DoTween(minimizeImage,ti,{ImageTransparency = 1}) end
+				if closeImage then self:DoTween(closeImage,ti,{ImageTransparency = 1}) end
 				Lib.FastWait(0.2)
 				if closeTime ~= self.LastClose then return end
 
@@ -3496,11 +3567,13 @@ local function main()
 			window.Closed = false
 			window.LastClose = tick()
 			window.GuiElems.Title.TextTransparency = 0
-			window.GuiElems.Minimize.ImageLabel.ImageTransparency = 0
-			window.GuiElems.Close.ImageLabel.ImageTransparency = 0
+			local minimizeImage = getButtonImage(window.GuiElems.Minimize)
+			local closeImage = getButtonImage(window.GuiElems.Close)
+			if minimizeImage then minimizeImage.ImageTransparency = 0 end
+			if closeImage then closeImage.ImageTransparency = 0 end
 			window.GuiElems.TopBar.BackgroundTransparency = 0
 			window.GuiElems.Outlines.ImageTransparency = 0
-			window.GuiElems.Minimize.ImageLabel.Image = Main.ResolveAsset("rbxassetid://5034768003")
+			if minimizeImage then minimizeImage.Image = Main.ResolveAsset("rbxassetid://5034768003") end
 			window.GuiElems.Main.Active = true
 			window.GuiElems.Main.Outlines.Visible = true
 			window:SetMinimized(false,3)
@@ -3558,7 +3631,45 @@ local function main()
 			updateWindows()
 		end
 
+		static.Shutdown = function()
+			stopTweens()
+
+			for i = #visibleWindows,1,-1 do
+				local window = visibleWindows[i]
+				if window then
+					window.Closed = true
+					window.Aligned = false
+					window.Side = nil
+					if window.MinimizeAnim and window.MinimizeAnim.Disable then
+						pcall(window.MinimizeAnim.Disable)
+					end
+					if window.CloseAnim and window.CloseAnim.Disable then
+						pcall(window.CloseAnim.Disable)
+					end
+				end
+				visibleWindows[i] = nil
+			end
+
+			clearSide(leftSide)
+			clearSide(rightSide)
+
+			if alignIndicator then
+				pcall(function()
+					alignIndicator:Destroy()
+				end)
+				alignIndicator = nil
+			end
+
+			if sidesGui then
+				pcall(function()
+					sidesGui:Destroy()
+				end)
+				sidesGui = nil
+			end
+		end
+
 		static.Init = function()
+			static.Shutdown()
 			displayOrderStart = Main.DisplayOrders.Window or MAX_DO
 			sideDisplayOrder = Main.DisplayOrders.SideWindow or MAX_DO
 
@@ -3598,8 +3709,10 @@ local function main()
 				rightFrame.BackgroundTransparency = 1
 			end
 
-			sideResizerHook(leftFrame.Resizer,"H",leftSide)
-			sideResizerHook(rightFrame.Resizer,"H",rightSide)
+			local leftResizer = safeFindChild(leftFrame,"Resizer","TextButton")
+			local rightResizer = safeFindChild(rightFrame,"Resizer","TextButton")
+			if leftResizer then sideResizerHook(leftResizer,"H",leftSide) end
+			if rightResizer then sideResizerHook(rightResizer,"H",rightSide) end
 
 			alignIndicator = Instance.new("ScreenGui")
 			alignIndicator.DisplayOrder = Main.DisplayOrders.Core or MAX_DO
@@ -3618,18 +3731,18 @@ local function main()
 			Lib.ButtonAnim(leftToggle,{Mode = 2,PressColor = Color3.fromRGB(32,32,32)})
 			Lib.ButtonAnim(rightToggle,{Mode = 2,PressColor = Color3.fromRGB(32,32,32)})
 
-			leftToggle.MouseButton1Click:Connect(function()
+			trackConn(leftToggle.MouseButton1Click:Connect(function()
 				static.ToggleSide("left")
-			end)
+			end))
 
-			rightToggle.MouseButton1Click:Connect(function()
+			trackConn(rightToggle.MouseButton1Click:Connect(function()
 				static.ToggleSide("right")
-			end)
+			end))
 
 			leftToggle.Parent = sidesGui
 			rightToggle.Parent = sidesGui
 
-			sidesGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+			trackConn(sidesGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
 				local maxWidth = math.max(300,sidesGui.AbsoluteSize.X-static.FreeWidth)
 				leftSide.Width = math.max(static.MinWidth,math.min(leftSide.Width,maxWidth-rightSide.Width))
 				rightSide.Width = math.max(static.MinWidth,math.min(rightSide.Width,maxWidth-leftSide.Width))
@@ -3637,7 +3750,7 @@ local function main()
 					visibleWindows[i]:MoveInBoundary()
 				end
 				updateWindows(true)
-			end)
+			end))
 
 			sidesGui.DisplayOrder = sideDisplayOrder - 1
 			Lib.ShowGui(sidesGui)
@@ -3713,7 +3826,7 @@ local function main()
 			self.GuiElems.SearchBar = self.GuiElems.SearchFrame.SearchContainer.SearchBox
 			Lib.ViewportTextBox.convert(self.GuiElems.SearchBar)
 
-			self.GuiElems.SearchBar:GetPropertyChangedSignal("Text"):Connect(function()
+			trackConn(self.GuiElems.SearchBar:GetPropertyChangedSignal("Text"):Connect(function()
 				local lower,find = string.lower,string.find
 				local searchText = lower(self.GuiElems.SearchBar.Text)
 				local items = self.Items
@@ -3749,7 +3862,7 @@ local function main()
 
 				local toSize = self.GuiElems.List.UIListLayout.AbsoluteContentSize.Y + 6
 				self.GuiElems.List.CanvasSize = UDim2.new(0,0,0,toSize-6)
-			end)
+			end))
 
 			return contextGui
 		end
@@ -3890,35 +4003,35 @@ local function main()
 
 					if not item.Disabled then
 						if item.OnClick then
-							newEntry.MouseButton1Click:Connect(function()
+							trackConn(newEntry.MouseButton1Click:Connect(function()
 								item.OnClick(item.Name)
 								if not item.NoHide then
 									self:Hide()
 								end
-							end)
+							end))
 						end
 
 						if item.OnRightClick then
-							newEntry.MouseButton2Click:Connect(function()
+							trackConn(newEntry.MouseButton2Click:Connect(function()
 								item.OnRightClick(item.Name)
 								if not item.NoHide then
 									self:Hide()
 								end
-							end)
+							end))
 						end
 					end
 
-					newEntry.InputBegan:Connect(function(input)
+					trackConn(newEntry.InputBegan:Connect(function(input)
 						if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 							newEntry.BackgroundTransparency = 0
 						end
-					end)
+					end))
 
-					newEntry.InputEnded:Connect(function(input)
+					trackConn(newEntry.InputEnded:Connect(function(input)
 						if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 							newEntry.BackgroundTransparency = 1
 						end
-					end)
+					end))
 
 					newEntry.Visible = true
 					map[item] = newEntry
@@ -3967,7 +4080,7 @@ local function main()
 			-- Close event
 			local closable
 			if self.CloseEvent then self.CloseEvent:Disconnect() end
-			self.CloseEvent = service.UserInputService.InputBegan:Connect(function(input)
+			self.CloseEvent = trackConn(service.UserInputService.InputBegan:Connect(function(input)
 				if not closable then return end
 
 				if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -3976,7 +4089,7 @@ local function main()
 						self:Hide()
 					end
 				end
-			end)
+			end))
 
 			-- Resize
 			if reverseY then
@@ -4257,22 +4370,22 @@ local function main()
 		local function setupEditBox(obj)
 			local editBox = obj.GuiElems.EditBox
 
-			editBox.Focused:Connect(function()
+			trackConn(editBox.Focused:Connect(function()
 				obj:ConnectEditBoxEvent()
 				obj.Editing = true
-			end)
+			end))
 
-			editBox.FocusLost:Connect(function()
+			trackConn(editBox.FocusLost:Connect(function()
 				obj:DisconnectEditBoxEvent()
 				obj.Editing = false
-			end)
+			end))
 
-			editBox:GetPropertyChangedSignal("Text"):Connect(function()
+			trackConn(editBox:GetPropertyChangedSignal("Text"):Connect(function()
 				local text = editBox.Text
 				if #text == 0 or obj.EditBoxCopying then return end
 				editBox.Text = ""
 				obj:AppendText(text)
-			end)
+			end))
 		end
 
 		local function setupMouseSelection(obj)
@@ -4280,7 +4393,7 @@ local function main()
 			local codeFrame = obj.GuiElems.LinesFrame
 			local lines = obj.Lines
 
-			codeFrame.InputBegan:Connect(function(input)
+			trackConn(codeFrame.InputBegan:Connect(function(input)
 				if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 					local fontSizeX,fontSizeY = math.ceil(obj.FontSize/2),obj.FontSize
 
@@ -4319,7 +4432,7 @@ local function main()
 						obj:Refresh()
 					end
 
-					releaseEvent = service.UserInputService.InputEnded:Connect(function(input)
+					releaseEvent = trackConn(service.UserInputService.InputEnded:Connect(function(input)
 						if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 							releaseEvent:Disconnect()
 							mouseEvent:Disconnect()
@@ -4327,9 +4440,9 @@ local function main()
 							obj:SetCopyableSelection()
 							--updateSelection()
 						end
-					end)
+					end))
 
-					mouseEvent = service.UserInputService.InputChanged:Connect(function(input)
+					mouseEvent = trackConn(service.UserInputService.InputChanged:Connect(function(input)
 						if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 							local upDelta = mouse.Y - codeFrame.AbsolutePosition.Y
 							local downDelta = mouse.Y - codeFrame.AbsolutePosition.Y - codeFrame.AbsoluteSize.Y
@@ -4349,18 +4462,18 @@ local function main()
 							end
 							updateSelection()
 						end
-					end)
+					end))
 
-					scrollEvent = __lt.cs("RunService", cloneref).RenderStepped:Connect(function()
+					scrollEvent = trackConn(__lt.cs("RunService", cloneref).RenderStepped:Connect(function()
 						if scrollPowerV ~= 0 or scrollPowerH ~= 0 then
 							obj:ScrollDelta(scrollPowerH,scrollPowerV)
 							updateSelection()
 						end
-					end)
+					end))
 
 					obj:Refresh()
 				end
-			end)
+			end))
 		end
 
 		local function makeFrame(obj)
@@ -4413,11 +4526,11 @@ local function main()
 			elems.ScrollCorner = create({{1,"Frame",{BackgroundColor3=Color3.new(0.15686275064945,0.15686275064945,0.15686275064945),BorderSizePixel=0,Name="ScrollCorner",Position=UDim2.new(1,-16,1,-16),Size=UDim2.new(0,16,0,16),Visible=false,}}})
 
 			elems.ScrollCorner.Parent = frame
-			linesFrame.InputBegan:Connect(function(input)
+			trackConn(linesFrame.InputBegan:Connect(function(input)
 				if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 					obj:SetEditing(true,input)
 				end
-			end)
+			end))
 
 			obj.Frame = frame
 			obj.Gui = frame
@@ -4471,7 +4584,7 @@ local function main()
 				self.EditBoxEvent:Disconnect()
 			end
 
-			self.EditBoxEvent = service.UserInputService.InputBegan:Connect(function(input)
+			self.EditBoxEvent = trackConn(service.UserInputService.InputBegan:Connect(function(input)
 				if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
 
 				local keycodes = Enum.KeyCode
@@ -4479,11 +4592,11 @@ local function main()
 
 				local function setupMove(key,func)
 					local endCon,finished
-					endCon = service.UserInputService.InputEnded:Connect(function(input)
+					endCon = trackConn(service.UserInputService.InputEnded:Connect(function(input)
 						if input.KeyCode ~= key then return end
 						endCon:Disconnect()
 						finished = true
-					end)
+					end))
 					func()
 					Lib.FastWait(0.5)
 					while not finished do func() Lib.FastWait(0.03) end
@@ -4590,7 +4703,7 @@ local function main()
 						self:Refresh()
 					end
 				end
-			end)
+			end))
 		end
 
 		funcs.DisconnectEditBoxEvent = function(self)
@@ -5379,15 +5492,15 @@ local function main()
 			scrollH.Increment = 2
 			scrollH.WheelIncrement = 7
 
-			scrollV.Scrolled:Connect(function()
+			trackConn(scrollV.Scrolled:Connect(function()
 				obj.ViewY = scrollV.Index
 				obj:Refresh()
-			end)
+			end))
 
-			scrollH.Scrolled:Connect(function()
+			trackConn(scrollH.Scrolled:Connect(function()
 				obj.ViewX = scrollH.Index
 				obj:Refresh()
-			end)
+			end))
 
 			makeFrame(obj)
 			obj:MakeRichTemplates()
@@ -5397,10 +5510,10 @@ local function main()
 			scrollH.Gui.Parent = obj.Frame
 
 			obj:UpdateView()
-			obj.Frame:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+			trackConn(obj.Frame:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
 				obj:UpdateView()
 				obj:Refresh()
-			end)
+			end))
 
 			return obj
 		end
@@ -5498,7 +5611,7 @@ local function main()
 			end)]]
 			
 			-- Best input compatibility:
-			checkbox.MouseButton1Up:Connect(function()
+			trackConn(checkbox.MouseButton1Up:Connect(function()
 				if Lib.CheckMouseInGui(checkbox) then
 					if self.Style == 0 then
 						ripple(ripples_container, self.Disabled and self.Colors.Disabled or self.Colors.Primary)
@@ -5512,7 +5625,7 @@ local function main()
 
 					self.OnInput:Fire()
 				end
-			end)
+			end))
 
 			-- Old:
 			--[[checkbox.InputBegan:Connect(function(i)
@@ -5538,7 +5651,7 @@ local function main()
 						end
 					end)
 				end
-			end)]]
+			end))]]
 
 			self:Paint()
 		end
@@ -5721,22 +5834,22 @@ local function main()
 		end
 
 		local function hexInput(self, hex, color)
-			hex.InputBegan:Connect(function(input)
+			trackConn(hex.InputBegan:Connect(function(input)
 				if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 					if isMouseInHexagon(hex, input.Position) then
 						self.OnSelect:Fire(color)
 						self:Close()
 					end
 				end
-			end)
+			end))
 
-			hex.InputChanged:Connect(function(input)
+			trackConn(hex.InputChanged:Connect(function(input)
 				if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 					if isMouseInHexagon(hex, input.Position) then
 						self.OnPreview:Fire(color)
 					end
 				end
-			end)
+			end))
 		end
 
 		local function createGui(self)
@@ -5774,10 +5887,10 @@ local function main()
 				paletteCount = paletteCount + 1
 			end
 
-			colorFrame.MoreColors.MouseButton1Click:Connect(function()
+			trackConn(colorFrame.MoreColors.MouseButton1Click:Connect(function()
 				self.OnMoreColors:Fire()
 				self:Close()
-			end)
+			end))
 
 			self.Gui = gui
 		end
@@ -5804,7 +5917,7 @@ local function main()
 			local closable = false
 			if self.CloseEvent then self.CloseEvent:Disconnect() end
 
-			self.CloseEvent = service.UserInputService.InputBegan:Connect(function(input)
+			self.CloseEvent = trackConn(service.UserInputService.InputBegan:Connect(function(input)
 				if not closable or (input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch) then
 					return
 				end
@@ -5813,7 +5926,7 @@ local function main()
 					self.CloseEvent:Disconnect()
 					self:Close()
 				end
-			end)
+			end))
 
 
 			if reverseY then
@@ -6069,11 +6182,11 @@ local function main()
 				updateColor()
 			end
 
-			colorSpace.InputBegan:Connect(function(input) handleInputBegan(input, colorSpaceInput) end)
-			colorStrip.InputBegan:Connect(function(input) handleInputBegan(input, colorStripInput) end)
+			trackConn(colorSpace.InputBegan:Connect(function(input) handleInputBegan(input, colorSpaceInput) end))
+			trackConn(colorStrip.InputBegan:Connect(function(input) handleInputBegan(input, colorStripInput) end))
 
 			local function hookButtons(frame, func)
-				frame.ArrowFrame.Up.InputBegan:Connect(function(input)
+				trackConn(frame.ArrowFrame.Up.InputBegan:Connect(function(input)
 					if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 						local releaseEvent, runEvent
 						local startTime = tick()
@@ -6082,12 +6195,12 @@ local function main()
 
 						if not startNum then return end
 
-						releaseEvent = user.InputEnded:Connect(function(endInput)
+						releaseEvent = trackConn(user.InputEnded:Connect(function(endInput)
 							if endInput.UserInputType == Enum.UserInputType.MouseButton1 or endInput.UserInputType == Enum.UserInputType.Touch then
 								releaseEvent:Disconnect()
 								pressing = false
 							end
-						end)
+						end))
 
 						startNum = startNum + 1
 						func(startNum)
@@ -6100,9 +6213,9 @@ local function main()
 							task.wait(0.1)
 						end
 					end
-				end)
+				end))
 
-				frame.ArrowFrame.Down.InputBegan:Connect(function(input)
+				trackConn(frame.ArrowFrame.Down.InputBegan:Connect(function(input)
 					if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 						local releaseEvent, runEvent
 						local startTime = tick()
@@ -6111,12 +6224,12 @@ local function main()
 
 						if not startNum then return end
 
-						releaseEvent = user.InputEnded:Connect(function(endInput)
+						releaseEvent = trackConn(user.InputEnded:Connect(function(endInput)
 							if endInput.UserInputType == Enum.UserInputType.MouseButton1 or endInput.UserInputType == Enum.UserInputType.Touch then
 								releaseEvent:Disconnect()
 								pressing = false
 							end
-						end)
+						end))
 
 						startNum = startNum - 1
 						func(startNum)
@@ -6129,7 +6242,7 @@ local function main()
 							task.wait(0.1)
 						end
 					end
-				end)
+				end))
 			end
 
 			--[[local function UpdateBox(TextBox, Value, IsHSV, ...)
@@ -6155,7 +6268,7 @@ local function main()
 					updateColor(1)
 				end
 			end
-			hueInput.FocusLost:Connect(function() updateHue(hueInput.Text) end) hookButtons(hueInput, hueInput)
+			trackConn(hueInput.FocusLost:Connect(function() updateHue(hueInput.Text) end)) hookButtons(hueInput, hueInput)
 
 			local function updateSat(str)
 				local num = tonumber(str)
@@ -6167,7 +6280,7 @@ local function main()
 					updateColor(1)
 				end
 			end
-			satInput.FocusLost:Connect(function() updateSat(satInput.Text) end) hookButtons(satInput,updateSat)
+			trackConn(satInput.FocusLost:Connect(function() updateSat(satInput.Text) end)) hookButtons(satInput,updateSat)
 
 			local function updateVal(str)
 				local num = tonumber(str)
@@ -6179,7 +6292,7 @@ local function main()
 					updateColor(1)
 				end
 			end
-			valInput.FocusLost:Connect(function() updateVal(valInput.Text) end) hookButtons(valInput,updateVal)
+			trackConn(valInput.FocusLost:Connect(function() updateVal(valInput.Text) end)) hookButtons(valInput,updateVal)
 
 			local function updateRed(str)
 				local num = tonumber(str)
@@ -6191,7 +6304,7 @@ local function main()
 					updateColor(2)
 				end
 			end
-			redInput.FocusLost:Connect(function() updateRed(redInput.Text) end) hookButtons(redInput,updateRed)
+			trackConn(redInput.FocusLost:Connect(function() updateRed(redInput.Text) end)) hookButtons(redInput,updateRed)
 
 			local function updateGreen(str)
 				local num = tonumber(str)
@@ -6203,7 +6316,7 @@ local function main()
 					updateColor(2)
 				end
 			end
-			greenInput.FocusLost:Connect(function() updateGreen(greenInput.Text) end) hookButtons(greenInput,updateGreen)
+			trackConn(greenInput.FocusLost:Connect(function() updateGreen(greenInput.Text) end)) hookButtons(greenInput,updateGreen)
 
 			local function updateBlue(str)
 				local num = tonumber(str)
@@ -6215,7 +6328,7 @@ local function main()
 					updateColor(2)
 				end
 			end
-			blueInput.FocusLost:Connect(function() updateBlue(blueInput.Text) end) hookButtons(blueInput,updateBlue)
+			trackConn(blueInput.FocusLost:Connect(function() updateBlue(blueInput.Text) end)) hookButtons(blueInput,updateBlue)
 
 			local colorChoice = Instance.new("TextButton")
 			colorChoice.Name = "Choice"
@@ -6231,12 +6344,12 @@ local function main()
 				newColor.BackgroundColor3 = v
 				newColor.Position = UDim2.new(0,1 + 30*column,0,21 + 23*row)
 
-				newColor.MouseButton1Click:Connect(function()
+				trackConn(newColor.MouseButton1Click:Connect(function()
 					red,green,blue = v.r,v.g,v.b
 					local newColor = Color3.new(red,green,blue)
 					hue,sat,val = Color3.toHSV(newColor)
 					updateColor()
-				end)
+				end))
 
 				newColor.Parent = basicColorsFrame
 				column = column + 1
@@ -6251,31 +6364,31 @@ local function main()
 				newColor.BackgroundColor3 = color
 				newColor.Position = UDim2.new(0,1 + 30*column,0,20 + 23*row)
 
-				newColor.MouseButton1Click:Connect(function()
+				trackConn(newColor.MouseButton1Click:Connect(function()
 					local curColor = customColors[i] or Color3.new(0,0,0)
 					red,green,blue = curColor.r,curColor.g,curColor.b
 					hue,sat,val = Color3.toHSV(curColor)
 					updateColor()
-				end)
+				end))
 
-				newColor.MouseButton2Click:Connect(function()
+				trackConn(newColor.MouseButton2Click:Connect(function()
 					customColors[i] = chosenColor
 					newColor.BackgroundColor3 = chosenColor
-				end)
+				end))
 
 				newColor.Parent = customColorsFrame
 				column = column + 1
 				if column == 6 then row = row + 1 column = 0 end
 			end
 
-			okButton.MouseButton1Click:Connect(function() newMt.OnSelect:Fire(chosenColor) window:Close() end)
-			okButton.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then okButton.BackgroundTransparency = 0.4 end end)
-			okButton.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then okButton.BackgroundTransparency = 0 end end)
+			trackConn(okButton.MouseButton1Click:Connect(function() newMt.OnSelect:Fire(chosenColor) window:Close() end))
+			trackConn(okButton.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then okButton.BackgroundTransparency = 0.4 end end))
+			trackConn(okButton.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then okButton.BackgroundTransparency = 0 end end))
 
 
-			cancelButton.MouseButton1Click:Connect(function() newMt.OnCancel:Fire() window:Close() end)
-			cancelButton.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then cancelButton.BackgroundTransparency = 0.4 end end)
-			cancelButton.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then cancelButton.BackgroundTransparency = 0 end end)
+			trackConn(cancelButton.MouseButton1Click:Connect(function() newMt.OnCancel:Fire() window:Close() end))
+			trackConn(cancelButton.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then cancelButton.BackgroundTransparency = 0.4 end end))
+			trackConn(cancelButton.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then cancelButton.BackgroundTransparency = 0 end end))
 
 			updateColor()
 
@@ -6451,7 +6564,7 @@ local function main()
 				end
 			end
 
-			envelopeDragTop.InputBegan:Connect(function(input)
+			trackConn(envelopeDragTop.InputBegan:Connect(function(input)
 				if (input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch) or not currentPoint or Lib.CheckMouseInGui(currentPoint[4].Select) then return end
 
 				local mouseEvent, releaseEvent
@@ -6461,15 +6574,15 @@ local function main()
 				envelopeDragTop.Line.Position = UDim2.new(0, 2, 0, 0)
 				envelopeDragTop.Line.Size = UDim2.new(0, 3, 0, 20)
 
-				releaseEvent = user.InputEnded:Connect(function(input)
+				releaseEvent = trackConn(user.InputEnded:Connect(function(input)
 					if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
 					mouseEvent:Disconnect()
 					releaseEvent:Disconnect()
 					envelopeDragTop.Line.Position = UDim2.new(0, 3, 0, 0)
 					envelopeDragTop.Line.Size = UDim2.new(0, 1, 0, 20)
-				end)
+				end))
 
-				mouseEvent = user.InputChanged:Connect(function(input)
+				mouseEvent = trackConn(user.InputChanged:Connect(function(input)
 					if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 						local topDiff = (currentPoint[4].AbsolutePosition.Y + 2) - (mouse.Y - mouseDelta) - 19
 						local newEnvelope = 10 * (math.max(topDiff, 0) / maxSize)
@@ -6479,10 +6592,10 @@ local function main()
 						buildSequence()
 						updateInputs(currentPoint)
 					end
-				end)
-			end)
+				end))
+			end))
 
-			envelopeDragBottom.InputBegan:Connect(function(input)
+			trackConn(envelopeDragBottom.InputBegan:Connect(function(input)
 				if (input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch) or not currentPoint or Lib.CheckMouseInGui(currentPoint[4].Select) then return end
 
 				local mouseEvent, releaseEvent
@@ -6492,15 +6605,15 @@ local function main()
 				envelopeDragBottom.Line.Position = UDim2.new(0, 2, 0, 0)
 				envelopeDragBottom.Line.Size = UDim2.new(0, 3, 0, 20)
 
-				releaseEvent = user.InputEnded:Connect(function(input)
+				releaseEvent = trackConn(user.InputEnded:Connect(function(input)
 					if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
 					mouseEvent:Disconnect()
 					releaseEvent:Disconnect()
 					envelopeDragBottom.Line.Position = UDim2.new(0, 3, 0, 0)
 					envelopeDragBottom.Line.Size = UDim2.new(0, 1, 0, 20)
-				end)
+				end))
 
-				mouseEvent = user.InputChanged:Connect(function(input)
+				mouseEvent = trackConn(user.InputChanged:Connect(function(input)
 					if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 						local bottomDiff = (mouse.Y + (20 - mouseDelta)) - (currentPoint[4].AbsolutePosition.Y + 2) - 19
 						local newEnvelope = 10 * (math.max(bottomDiff, 0) / maxSize)
@@ -6510,8 +6623,8 @@ local function main()
 						buildSequence()
 						updateInputs(currentPoint)
 					end
-				end)
-			end)
+				end))
+			end))
 
 			local function placePoint(point)
 				local newPoint = Instance.new("Frame")
@@ -6532,7 +6645,7 @@ local function main()
 				newPoint.Parent = numberLine
 
 
-				newSelect.InputBegan:Connect(function(input)
+				trackConn(newSelect.InputBegan:Connect(function(input)
 					if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 						for i, v in pairs(points) do 
 							v[4].Select.BackgroundTransparency = 1 
@@ -6550,16 +6663,16 @@ local function main()
 
 						local oldEnvelope = point[3]
 
-						releaseEvent = user.InputEnded:Connect(function(input)
+						releaseEvent = trackConn(user.InputEnded:Connect(function(input)
 							if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then	return end
 
 							mouseEvent:Disconnect()
 							releaseEvent:Disconnect()
 							currentlySelected = nil
 							newSelect.BackgroundColor3 = Color3.new(199/255, 44/255, 28/255)
-						end)
+						end))
 
-						mouseEvent = user.InputChanged:Connect(function(input)
+						mouseEvent = trackConn(user.InputChanged:Connect(function(input)
 							if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 								local maxX = numberLine.AbsoluteSize.X - 1
 								local relativeX = (input.Position.X - numberLine.AbsolutePosition.X)
@@ -6588,9 +6701,9 @@ local function main()
 								newSelect.BackgroundTransparency = 0
 								buildSequence()
 							end
-						end)
+						end))
 					end
-				end)
+				end))
 
 				return newPoint
 			end
@@ -6673,7 +6786,7 @@ local function main()
 			end
 			newMt.SetSequence = loadSequence
 
-			timeBox.FocusLost:Connect(function()
+			trackConn(timeBox.FocusLost:Connect(function()
 				local point = currentPoint
 				local num = tonumber(timeBox.Text)
 				if point and num and point ~= beginPoint and point ~= endPoint then
@@ -6683,9 +6796,9 @@ local function main()
 					buildSequence()
 					updateInputs(point)
 				end
-			end)
+			end))
 
-			valueBox.FocusLost:Connect(function()
+			trackConn(valueBox.FocusLost:Connect(function()
 				local point = currentPoint
 				local num = tonumber(valueBox.Text)
 				if point and num then
@@ -6698,9 +6811,9 @@ local function main()
 					buildSequence()
 					updateInputs(point)
 				end
-			end)
+			end))
 
-			envelopeBox.FocusLost:Connect(function()
+			trackConn(envelopeBox.FocusLost:Connect(function()
 				local point = currentPoint
 				local num = tonumber(envelopeBox.Text)
 				if point and num then
@@ -6711,14 +6824,14 @@ local function main()
 					buildSequence()
 					updateInputs(point)
 				end
-			end)
+			end))
 
 			local function buttonAnimations(button,inverse)
-				button.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then button.BackgroundTransparency = (inverse and 0.5 or 0.4) end end)
-				button.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then button.BackgroundTransparency = (inverse and 1 or 0) end end)
+				trackConn(button.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then button.BackgroundTransparency = (inverse and 0.5 or 0.4) end end))
+				trackConn(button.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then button.BackgroundTransparency = (inverse and 1 or 0) end end))
 			end
 
-			numberLine.InputBegan:Connect(function(input)
+			trackConn(numberLine.InputBegan:Connect(function(input)
 				if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and #points < 20 then
 
 					if Lib.CheckMouseInGui(envelopeDragTop) or Lib.CheckMouseInGui(envelopeDragBottom) then return end
@@ -6746,9 +6859,9 @@ local function main()
 					redraw()
 					buildSequence()
 				end
-			end)
+			end))
 
-			deleteButton.MouseButton1Click:Connect(function()
+			trackConn(deleteButton.MouseButton1Click:Connect(function()
 				if currentPoint and currentPoint ~= beginPoint and currentPoint ~= endPoint then
 					for i,v in pairs(points) do
 						if v == currentPoint then
@@ -6762,18 +6875,18 @@ local function main()
 					buildSequence()
 					updateInputs(points[1])
 				end
-			end)
+			end))
 
-			resetButton.MouseButton1Click:Connect(function()
+			trackConn(resetButton.MouseButton1Click:Connect(function()
 				if resetSequence then
 					newMt:SetSequence(resetSequence)
 					buildSequence()
 				end
-			end)
+			end))
 
-			closeButton.MouseButton1Click:Connect(function()
+			trackConn(closeButton.MouseButton1Click:Connect(function()
 				window:Close()
-			end)
+			end))
 
 			buttonAnimations(deleteButton)
 			buttonAnimations(resetButton)
@@ -6894,7 +7007,7 @@ local function main()
 				newArrow.Visible = true
 				newArrow.Parent = arrowFrame
 
-				newArrow.InputBegan:Connect(function(input)
+				trackConn(newArrow.InputBegan:Connect(function(input)
 					if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 						cursor.Visible = true
 						cursor.Position = UDim2.new(0, 9 + newArrow.Position.X.Offset, 0, 0)
@@ -6907,15 +7020,15 @@ local function main()
 						local mouseEvent, releaseEvent
 						currentlySelected = true
 
-						releaseEvent = user.InputEnded:Connect(function(input)
+						releaseEvent = trackConn(user.InputEnded:Connect(function(input)
 							if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
 							mouseEvent:Disconnect()
 							releaseEvent:Disconnect()
 							currentlySelected = nil
 							cursor.Visible = false
-						end)
+						end))
 
-						mouseEvent = user.InputChanged:Connect(function(input)
+						mouseEvent = trackConn(user.InputChanged:Connect(function(input)
 							if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 								local maxSize = colorLine.AbsoluteSize.X - 1
 								local relativeX = (input.Position.X - colorLine.AbsolutePosition.X)
@@ -6929,15 +7042,15 @@ local function main()
 								buildSequence()
 								newMt:Redraw()
 							end
-						end)
+						end))
 					end
-				end)
+				end))
 
-				newArrow.InputEnded:Connect(function(input)
+				trackConn(newArrow.InputEnded:Connect(function(input)
 					if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 						cursor.Visible = false
 					end
-				end)
+				end))
 
 
 
@@ -6981,11 +7094,11 @@ local function main()
 			newMt.SetSequence = loadSequence
 
 			local function buttonAnimations(button,inverse)
-				button.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then button.BackgroundTransparency = (inverse and 0.5 or 0.4) end end)
-				button.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then button.BackgroundTransparency = (inverse and 1 or 0) end end)
+				trackConn(button.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then button.BackgroundTransparency = (inverse and 0.5 or 0.4) end end))
+				trackConn(button.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then button.BackgroundTransparency = (inverse and 1 or 0) end end))
 			end
 
-			colorLine.InputBegan:Connect(function(input)
+			trackConn(colorLine.InputBegan:Connect(function(input)
 				if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and #colors < 20 then
 					local maxSize = colorLine.AbsoluteSize.X - 1
 					local relativeX = (input.Position.X - colorLine.AbsolutePosition.X)
@@ -7010,9 +7123,9 @@ local function main()
 					buildSequence()
 					redraw()
 				end
-			end)
+			end))
 
-			colorLine.InputChanged:Connect(function(input)
+			trackConn(colorLine.InputChanged:Connect(function(input)
 				if (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
 					local maxSize = colorLine.AbsoluteSize.X - 1
 					local relativeX = (input.Position.X - colorLine.AbsolutePosition.X)
@@ -7021,9 +7134,9 @@ local function main()
 					cursor.Visible = true
 					cursor.Position = UDim2.new(0, 10 + relativeX, 0, 0)
 				end
-			end)
+			end))
 
-			colorLine.InputEnded:Connect(function(input)
+			trackConn(colorLine.InputEnded:Connect(function(input)
 				if (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
 					local inArrow = false
 					for i, v in pairs(colors) do
@@ -7034,9 +7147,9 @@ local function main()
 					cursor.Visible = inArrow and true or false
 					if inArrow then cursor.Position = UDim2.new(0, 9 + inArrow.Position.X.Offset, 0, 0) end
 				end
-			end)
+			end))
 
-			timeBox:GetPropertyChangedSignal("Text"):Connect(function()
+			trackConn(timeBox:GetPropertyChangedSignal("Text"):Connect(function()
 				local point = currentPoint
 				local num = tonumber(timeBox.Text)
 				if point and num and point ~= beginPoint and point ~= endPoint then
@@ -7045,31 +7158,31 @@ local function main()
 					buildSequence()
 					redraw()
 				end
-			end)
+			end))
 
-			colorBox.InputBegan:Connect(function(input)
+			trackConn(colorBox.InputBegan:Connect(function(input)
 				if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
 					local editor = newMt.ColorPicker
 					if not editor then
 						editor = Lib.ColorPicker.new()
 						editor.Window:SetTitle("ColorSequence Color Picker")
 
-						editor.OnSelect:Connect(function(col)
+						trackConn(editor.OnSelect:Connect(function(col)
 							if currentPoint then
 								currentPoint[1] = col
 							end
 							buildSequence()
 							redraw()
-						end)
+						end))
 
 						newMt.ColorPicker = editor
 					end
 
 					editor.Window:ShowAndFocus()
 				end
-			end)
+			end))
 
-			deleteButton.MouseButton1Click:Connect(function()
+			trackConn(deleteButton.MouseButton1Click:Connect(function()
 				if currentPoint and currentPoint ~= beginPoint and currentPoint ~= endPoint then
 					for i,v in pairs(colors) do
 						if v == currentPoint then
@@ -7083,21 +7196,21 @@ local function main()
 					buildSequence()
 					redraw()
 				end
-			end)
+			end))
 
-			resetButton.MouseButton1Click:Connect(function()
+			trackConn(resetButton.MouseButton1Click:Connect(function()
 				if resetSequence then
 					newMt:SetSequence(resetSequence)
 				end
-			end)
+			end))
 
-			closeButton.MouseButton1Click:Connect(function()
+			trackConn(closeButton.MouseButton1Click:Connect(function()
 				window:Close()
-			end)
+			end))
 
-			topClose.MouseButton1Click:Connect(function()
+			trackConn(topClose.MouseButton1Click:Connect(function()
 				window:Close()
-			end)
+			end))
 
 			buttonAnimations(deleteButton)
 			buttonAnimations(resetButton)
@@ -7187,13 +7300,13 @@ local function main()
 			obj.View = view
 			obj.Gui = view
 
-			textbox.Changed:Connect(function(prop)
+			trackConn(textbox.Changed:Connect(function(prop)
 				if prop == "Text" or prop == "CursorPosition" or prop == "AbsoluteSize" then
 					local cursorPos = obj.TextBox.CursorPosition
 					if cursorPos ~= -1 then obj.CursorPos = cursorPos end
 					obj:Update()
 				end
-			end)
+			end))
 
 			obj:Update()
 
@@ -7312,13 +7425,13 @@ local function main()
 			obj.Gui = b
 			obj.Anim = Lib.ButtonAnim(b,{Mode = 2, StartColor = Settings.Theme.Button, HoverColor = Settings.Theme.ButtonHover, PressColor = Settings.Theme.ButtonPress, OutlineColor = Settings.Theme.Outline2})
 
-			b.MouseButton1Click:Connect(function() obj:Trigger("Click",1) end)
-			b.MouseButton1Down:Connect(function() obj:Trigger("Down",1) end)
-			b.MouseButton1Up:Connect(function() obj:Trigger("Up",1) end)
+			trackConn(b.MouseButton1Click:Connect(function() obj:Trigger("Click",1) end))
+			trackConn(b.MouseButton1Down:Connect(function() obj:Trigger("Down",1) end))
+			trackConn(b.MouseButton1Up:Connect(function() obj:Trigger("Up",1) end))
 
-			b.MouseButton2Click:Connect(function() obj:Trigger("Click",2) end)
-			b.MouseButton2Down:Connect(function() obj:Trigger("Down",2) end)
-			b.MouseButton2Up:Connect(function() obj:Trigger("Up",2) end)
+			trackConn(b.MouseButton2Click:Connect(function() obj:Trigger("Click",2) end))
+			trackConn(b.MouseButton2Down:Connect(function() obj:Trigger("Down",2) end))
+			trackConn(b.MouseButton2Up:Connect(function() obj:Trigger("Up",2) end))
 
 			return obj
 		end
@@ -7423,7 +7536,7 @@ local function main()
 			obj.Context.MaxHeight = 200
 			obj.Selected = nil
 			obj.GuiElems = {Label = label}
-			f.MouseButton1Down:Connect(function() obj:ShowOptions() end)
+			trackConn(f.MouseButton1Down:Connect(function() obj:ShowOptions() end))
 			obj:Update()
 			return obj
 		end
@@ -7485,7 +7598,7 @@ local function main()
 				end)
 
 				local release
-				release = service.UserInputService.InputEnded:Connect(function(input)
+				release = trackConn(service.UserInputService.InputEnded:Connect(function(input)
 					if input.UserInputType == Enum.UserInputType["MouseButton" .. button] then
 						release:Disconnect()
 						if Lib.CheckMouseInGui(item) and self.LastButton == button and self.LastItem == item then
@@ -7493,7 +7606,7 @@ local function main()
 							self["OnRelease"]:Fire(item,self.Combo,button)
 						end
 					end
-				end)
+				end))
 
 				self["OnDown"]:Fire(item,self.Combo,button)
 			end
@@ -7503,8 +7616,8 @@ local function main()
 			if table.find(self.Items,item) then return end
 
 			local cons = {}
-			cons[1] = item.MouseButton1Down:Connect(function(X, Y) self:Trigger(item, 1, X, Y) end)
-			cons[2] = item.MouseButton2Down:Connect(function(X, Y) self:Trigger(item, 2, X, Y) end)
+			cons[1] = trackConn(item.MouseButton1Down:Connect(function(X, Y) self:Trigger(item, 1, X, Y) end))
+			cons[2] = trackConn(item.MouseButton2Down:Connect(function(X, Y) self:Trigger(item, 2, X, Y) end))
 
 			self.ItemCons[item] = cons
 			self.Items[#self.Items+1] = item

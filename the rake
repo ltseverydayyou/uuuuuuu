@@ -691,11 +691,31 @@ if game.GameId == 847722000 then
 		return list
 	end
 
+	local function isLiveInst(obj)
+		if typeof(obj) ~= "Instance" then
+			return false
+		end
+		local ok, par = pcall(function()
+			return obj.Parent
+		end)
+		if not ok or par == nil then
+			return false
+		end
+		local ok2, live = pcall(function()
+			return obj:IsDescendantOf(game)
+		end)
+		return ok2 and live == true
+	end
+
+	local function isLiveMod(mod)
+		return isLiveInst(mod) and mod:IsA("ModuleScript")
+	end
+
 	local function safeReq(mod)
 		if type(require) ~= "function" then
 			return false
 		end
-		if not (typeof(mod) == "Instance" and mod:IsA("ModuleScript")) then
+		if not isLiveMod(mod) then
 			return false
 		end
 		return pcall(require, mod)
@@ -1853,7 +1873,7 @@ if game.GameId == 847722000 then
 	end
 
 	function clientBypass.patchStaminaModule(mod)
-		if not (mod and mod:IsA("ModuleScript")) then
+		if not isLiveMod(mod) then
 			return false
 		end
 		if clientBypass.stamMods[mod] then
@@ -1966,7 +1986,7 @@ if game.GameId == 847722000 then
 			local fn = type(box) == "table" and rawget(box, "POKDS908") or nil
 			if type(fn) == "function" then
 				local ok, mod = pcall(fn, "2390WE890OFD-0F")
-				if ok and typeof(mod) == "Instance" and mod:IsA("ModuleScript") then
+				if ok and isLiveMod(mod) then
 					clientBypass.modRoots[mod] = true
 					return mod
 				end
@@ -1984,7 +2004,7 @@ if game.GameId == 847722000 then
 	end
 
 	function clientBypass.patchMainClientModule(mod)
-		if not (mod and mod:IsA("ModuleScript")) then
+		if not isLiveMod(mod) then
 			return false
 		end
 		if clientBypass.mainMods[mod] then
@@ -2040,7 +2060,7 @@ if game.GameId == 847722000 then
 	end
 
 	function clientBypass.addModuleCandidate(obj, seen, list)
-		if typeof(obj) == "Instance" and obj:IsA("ModuleScript") and obj.Name == "M_H" and not seen[obj] then
+		if isLiveMod(obj) and obj.Name == "M_H" and not seen[obj] then
 			seen[obj] = true
 			list[#list + 1] = obj
 		end
@@ -2050,18 +2070,20 @@ if game.GameId == 847722000 then
 		local seen = {}
 		local list = {}
 		local root = clientBypass.fetchRootModule()
-		if root then
+		if isLiveMod(root) then
 			clientBypass.patchMainClientModule(root)
 			for _, obj in pairs(desc(root)) do
 				clientBypass.addModuleCandidate(obj, seen, list)
 			end
 		end
 		for rootMod in pairs(clientBypass.modRoots) do
-			if rootMod and rootMod.Parent then
+			if isLiveMod(rootMod) then
 				clientBypass.patchMainClientModule(rootMod)
 				for _, obj in pairs(desc(rootMod)) do
 					clientBypass.addModuleCandidate(obj, seen, list)
 				end
+			else
+				clientBypass.modRoots[rootMod] = nil
 			end
 		end
 		if type(getloadedmodules) == "function" then
@@ -2093,7 +2115,7 @@ if game.GameId == 847722000 then
 		end
 		local n = 0
 		local root = clientBypass.fetchRootModule()
-		if root and clientBypass.patchMainClientModule(root) then
+		if isLiveMod(root) and clientBypass.patchMainClientModule(root) then
 			n += 1
 		end
 		for _, mod in pairs(clientBypass.findStaminaModules()) do

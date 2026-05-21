@@ -58,6 +58,30 @@ local function initAfterMain()
 	Notebook = Apps.Notebook
 end
 
+local function trackConn(conn)
+	if conn and Main and type(Main.TrackConn) == "function" then
+		return Main.TrackConn(conn)
+	end
+	return conn
+end
+
+local function safeConnect(signal, callback)
+	if not signal or type(callback) ~= "function" then
+		return nil
+	end
+
+	local connect = signal.Connect or signal.connect
+	if type(connect) ~= "function" then
+		return nil
+	end
+
+	local ok, conn = pcall(connect, signal, callback)
+	if ok then
+		return trackConn(conn)
+	end
+	return nil
+end
+
 local executorName = "Unknown"
 local executorVersion = "???"
 if identifyexecutor then
@@ -258,21 +282,27 @@ end
 		textSizePad.PaddingBottom = UDim.new(0, 2)
 
 		local sizeBoxFocused = false
-		trackConn(textSizeInput.Focused:Connect(function()
+		safeConnect(textSizeInput.Focused, function()
 			sizeBoxFocused = true
-		end))
+		end)
 
 		local saveQueued = false
 		local function queueSaveUserSettings()
 			if not (Main and Main.SaveUserSettings) then return end
 			if saveQueued then return end
 			saveQueued = true
-			delay(0.35, function()
+			local function saveNow()
 				saveQueued = false
 				if Main and Main.SaveUserSettings then
-					Main.SaveUserSettings()
+					pcall(Main.SaveUserSettings)
 				end
-			end)
+			end
+			local delayFn = (task and task.delay) or delay
+			if type(delayFn) == "function" then
+				delayFn(0.35, saveNow)
+			else
+				saveNow()
+			end
 		end
 
 		local function applyTextSize()
@@ -309,7 +339,7 @@ end
 			end
 		end
 
-		trackConn(textSizeInput.FocusLost:Connect(function()
+		safeConnect(textSizeInput.FocusLost, function()
 			sizeBoxFocused = false
 			local n = tonumber(textSizeInput.Text)
 			if n and n > 0 then
@@ -317,8 +347,8 @@ end
 			else
 				textSizeInput.Text = tostring(textSizeValue.Value)
 			end
-		end))
-		trackConn(textSizeValue:GetPropertyChangedSignal("Value"):Connect(applyTextSize))
+		end)
+		safeConnect(textSizeValue:GetPropertyChangedSignal("Value"), applyTextSize)
 		applyTextSize()
 
 		local UserInputService = __lt.cs("UserInputService", cloneref)
@@ -345,36 +375,36 @@ end
 			end
 		end
 
-		trackConn(UserInputService.InputBegan:Connect(function(input, gameproc)
+		safeConnect(UserInputService and UserInputService.InputBegan, function(input, gameproc)
 			if gameproc then return end
 			if input.KeyCode == Enum.KeyCode.LeftControl or input.KeyCode == Enum.KeyCode.RightControl then
 				isHoldingCTRL = true
 				setWheelScrollingEnabled(false)
 			end
-		end))
-		trackConn(UserInputService.InputEnded:Connect(function(input, gameproc)
+		end)
+		safeConnect(UserInputService and UserInputService.InputEnded, function(input, gameproc)
 			if gameproc then return end
 			if input.KeyCode == Enum.KeyCode.LeftControl or input.KeyCode == Enum.KeyCode.RightControl then
 				isHoldingCTRL = false
 				setWheelScrollingEnabled(true)
 			end
-		end))
+		end)
 
 		local linesFrame = codeFrame.Frame:FindFirstChild("Lines")
 		if linesFrame then
-			trackConn(linesFrame.MouseWheelForward:Connect(function()
+			safeConnect(linesFrame.MouseWheelForward, function()
 				if isHoldingCTRL then
 					textSizeValue.Value = textSizeValue.Value + 1
 				end
-			end))
-			trackConn(linesFrame.MouseWheelBackward:Connect(function()
+			end)
+			safeConnect(linesFrame.MouseWheelBackward, function()
 				if isHoldingCTRL then
 					local newSize = textSizeValue.Value - 1
 					if newSize >= 1 then
 						textSizeValue.Value = newSize
 					end
 				end
-			end))
+			end)
 		end
 		
 		local copy = Instance.new("TextButton",window.GuiElems.Content)
@@ -391,10 +421,12 @@ end
 			copy.Interactable = false
 		end
 
-		trackConn(copy.MouseButton1Click:Connect(function()
+		safeConnect(copy.MouseButton1Click, function()
 			local source = codeFrame:GetText()
-			env.setclipboard(source)
-		end))
+			if env.setclipboard then
+				env.setclipboard(source)
+			end
+		end)
 
 		local save = Instance.new("TextButton",window.GuiElems.Content)
 		save.BackgroundTransparency = 1
@@ -411,13 +443,13 @@ end
 			--save.Interactable = false
 		end
 
-		trackConn(save.MouseButton1Click:Connect(function()
+		safeConnect(save.MouseButton1Click, function()
 			local source = codeFrame:GetText()
 			local filename = "Place_"..game.PlaceId.."_Script_"..os.time()..".txt"
 
 			Lib.SaveAsPrompt(filename,source)
 			--env.writefile(filename,source)
-		end))
+		end)
 		-- Buttons below the editor
 		
 		
@@ -436,10 +468,15 @@ end
 			execute.Interactable = false
 		end
 
-		trackConn(execute.MouseButton1Click:Connect(function()
+		safeConnect(execute.MouseButton1Click, function()
 			local source = codeFrame:GetText()
-			env.loadstring(source)()
-		end))
+			if env.loadstring then
+				local fn = env.loadstring(source)
+				if type(fn) == "function" then
+					fn()
+				end
+			end
+		end)
 
 		clear = Instance.new("TextButton",window.GuiElems.Content)
 		clear.BackgroundTransparency = 1
@@ -448,9 +485,9 @@ end
 		clear.Text = "Clear"
 		clear.TextColor3 = Color3.new(1,1,1)
 
-		trackConn(clear.MouseButton1Click:Connect(function()
+		safeConnect(clear.MouseButton1Click, function()
 			codeFrame:SetText("")
-		end))
+		end)
 
 		ScriptViewer.ApplyTheme = function()
 			local t = Settings and Settings.Theme
@@ -492,11 +529,11 @@ end
 			dumpbtn.TextColor3 = Color3.new(0.5,0.5,0.5)
 			dumpbtn.Visible = false -- hidden until viewing a script
 
-			trackConn(dumpbtn.MouseButton1Click:Connect(function()
+			safeConnect(dumpbtn.MouseButton1Click, function()
 				if PreviousScr ~= nil then
 					pcall(ScriptViewer.DumpFunctions, PreviousScr)
 				end
-			end))
+			end)
 		end
 		dumpbtn.Visible = true
 		if env.getgc then

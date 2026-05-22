@@ -222,6 +222,8 @@ local Uis = ctx.gt("UserInputService")
 local Sgui = ctx.gt("StarterGui")
 local Guis = ctx.gt("GuiService")
 local Cgui = ctx.gt("CoreGui")
+local Rpf = ctx.gt("ReplicatedFirst")
+local Tps = ctx.gt("TeleportService")
 local LP = Plr and Plr.LocalPlayer or nil
 local MP = Wsp and (Wsp:FindFirstChild("Multiplayer") or Wsp:WaitForChild("Multiplayer", 10)) or nil
 
@@ -533,6 +535,7 @@ local ItemDataRemotes = {}
 local GameStateRemotes = {}
 local RebirthRemote = nil
 local PasskeyRemote = nil
+local ExitTitleRemote = nil
 local passKey = nil
 local FE2CalcLevelXP = nil
 do
@@ -628,6 +631,11 @@ do
 	local rb = findRemote("ReqRebirth", "RemoteEvent") or findRemote("rebirth", "RemoteEvent")
 	if rb and rb:IsA("RemoteEvent") then
 		RebirthRemote = rb
+	end
+
+	local et = findRemote("ExitTitle", "RemoteEvent")
+	if et and et:IsA("RemoteEvent") then
+		ExitTitleRemote = et
 	end
 
 	addRemote(PressRemotes, "PressedMapButton")
@@ -2015,6 +2023,148 @@ end
 
 ctx.requestPlayerData(true)
 
+ctx.restoreTitleCamera = function()
+	local cam = Wsp and Wsp.CurrentCamera
+	if cam then
+		pcall(function()
+			cam.CameraType = Enum.CameraType.Custom
+		end)
+		pcall(function()
+			if tonumber(cam.FieldOfView) == nil or cam.FieldOfView < 10 then
+				cam.FieldOfView = 80
+			end
+		end)
+		local h = select(2, ctx.rh(false))
+		if h then
+			pcall(function()
+				cam.CameraSubject = h
+			end)
+		end
+	end
+	if Sgui then
+		pcall(function()
+			Sgui:SetCoreGuiEnabled(Enum.CoreGuiType.Chat, true)
+		end)
+	end
+end
+
+ctx.findTitleGui = function()
+	local pg = LP and LP:FindFirstChild("PlayerGui")
+	if pg then
+		local direct = pg:FindFirstChild("TitleGui")
+		if direct then
+			return direct
+		end
+		for _, d in ipairs(ctx.descOf(pg)) do
+			if d.Name == "TitleScreen" then
+				local g = d:FindFirstAncestorWhichIsA("ScreenGui")
+				if g then
+					return g
+				end
+			end
+		end
+	end
+	return nil
+end
+
+ctx.stopTitleScripts = function()
+	if not Rpf then
+		return
+	end
+	for _, obj in ipairs(ctx.descOf(Rpf)) do
+		if obj.Name == "TitleHandler" and obj:IsA("LocalScript") then
+			pcall(function()
+				obj.Disabled = true
+			end)
+			pcall(function()
+				obj.Enabled = false
+			end)
+			pcall(function()
+				obj:Destroy()
+			end)
+		end
+	end
+end
+
+ctx.setLocalHandlerEnabled = function()
+	local ps = LP and LP:FindFirstChild("PlayerScripts")
+	local lh = ps and ps:FindFirstChild("LocalHandler")
+	if lh then
+		pcall(function()
+			lh.Disabled = false
+		end)
+		pcall(function()
+			lh.Enabled = true
+		end)
+	end
+end
+
+ctx.bypassTitle = function(force)
+	if not LP then
+		return false
+	end
+	local acted = false
+	pcall(function()
+		LP:SetAttribute("TitleBypassed", true)
+	end)
+	if Tps then
+		pcall(function()
+			Tps:SetTeleportSetting("IsPlaying", true)
+		end)
+	end
+	ctx.setLocalHandlerEnabled()
+	ctx.stopTitleScripts()
+	if ExitTitleRemote and ExitTitleRemote.Parent then
+		pcall(function()
+			ExitTitleRemote:FireServer()
+		end)
+		acted = true
+	end
+	local tg = ctx.findTitleGui()
+	if tg then
+		pcall(function()
+			if tg:IsA("ScreenGui") then
+				tg.Enabled = false
+			end
+		end)
+		pcall(function()
+			tg:Destroy()
+		end)
+		acted = true
+	end
+	local pg = LP:FindFirstChild("PlayerGui")
+	if pg then
+		local tp = pg:FindFirstChild("Teleporting")
+		if tp then
+			pcall(function()
+				tp:Destroy()
+			end)
+		end
+	end
+	ctx.restoreTitleCamera()
+	if force or acted then
+		return true
+	end
+	return false
+end
+
+ctx.watchTitle = function()
+	ctx.spawnLoop(function()
+		local last = 0
+		while ctx.alive() do
+			local now = os.clock()
+			local tg = ctx.findTitleGui()
+			local cam = Wsp and Wsp.CurrentCamera
+			local blocked = tg ~= nil or (cam and cam.CameraType == Enum.CameraType.Scriptable and cam.FieldOfView <= 2)
+			if blocked and now - last > 0.5 then
+				last = now
+				ctx.bypassTitle(false)
+			end
+			task.wait(0.2)
+		end
+	end)
+end
+
 ctx.addNc = function(obj)
 	if obj and obj:IsA("BasePart") then
 		cTab[obj] = true
@@ -2137,6 +2287,7 @@ ctx.doLift = function()
 	if not on then
 		return
 	end
+	ctx.bypassTitle(true)
 	if Lift then
 		pcall(function()
 			Lift:FireServer()
@@ -2703,6 +2854,7 @@ ctx.toggle = function(v)
 		return
 	end
 
+	ctx.bypassTitle(true)
 	ctx.startFarmRemotes()
 	task.spawn(ctx.burstLoaded)
 	ctx.requestPlayerData(true)
@@ -3253,6 +3405,8 @@ ctx.mkUi = function()
 end
 
 ctx.mkUi()
+ctx.bypassTitle(false)
+ctx.watchTitle()
 ctx.startPassiveRemotes()
 ctx.startButtonAura()
 ctx.startBonusCollector()

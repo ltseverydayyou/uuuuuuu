@@ -16,8 +16,8 @@ ctx.dead = false
 ctx.cons = {}
 ctx.rate = 0.00075
 ctx.scanRate = 0.01
-ctx.burst = 128
-ctx.maxFly = 96
+ctx.burst = 1
+ctx.maxFly = 16
 ctx.fly = 0
 ctx.loopYield = 0.001
 ctx.maxDebt = 0.08
@@ -25,6 +25,7 @@ ctx.auraId = 0
 ctx.nextHit = os.clock()
 ctx.nextScan = 0
 ctx.tar = nil
+ctx.auraBusy = false
 ctx.mineOn = false
 ctx.mineHeld = false
 ctx.mineRate = 0.035
@@ -243,39 +244,15 @@ end
 
 ctx.startAura = function()
 	ctx.auraId += 1
-
-	local id = ctx.auraId
-	local last = os.clock()
-	local tok = ctx.burst
-
-	task.spawn(function()
-		while ctx.on and not ctx.dead and ctx.auraId == id do
-			local now = os.clock()
-			local dt = now - last
-			last = now
-
-			if dt < 0 then
-				dt = 0
-			elseif dt > ctx.maxDebt then
-				dt = ctx.maxDebt
-			end
-
-			tok = math.min(tok + dt / ctx.rate, ctx.burst)
-
-			local hits = math.floor(tok)
-			if hits > 0 then
-				tok -= hits
-				ctx.pulse(hits)
-			end
-
-			task.wait(ctx.loopYield)
-		end
-	end)
+	ctx.tar = nil
+	ctx.auraBusy = false
 end
 
 ctx.stopAura = function()
 	ctx.auraId += 1
 	ctx.fly = 0
+	ctx.tar = nil
+	ctx.auraBusy = false
 end
 
 ctx.set = function(v)
@@ -955,7 +932,7 @@ ctx.dist = function(a, b)
 	return v.X * v.X + v.Y * v.Y + v.Z * v.Z
 end
 
-ctx.near = function()
+ctx.nearPlayer = function()
 	local ch = ctx.lp.Character
 	local _, root = ctx.valid(ch)
 
@@ -984,24 +961,45 @@ ctx.near = function()
 		end
 	end
 
-	local fold = workspace:FindFirstChild("Entities")
-	if fold then
-		local ents = fold:GetChildren()
-		for i = 1, #ents do
-			local e = ents[i]
-			local _, r = ctx.valid(e)
+	return best
+end
 
-			if r then
-				local d = ctx.dist(r.Position, pos)
-				if d < bdist then
-					best = e
-					bdist = d
-				end
+ctx.nearEntity = function()
+	local ch = ctx.lp.Character
+	local _, root = ctx.valid(ch)
+
+	if not root then
+		return
+	end
+
+	local fold = workspace:FindFirstChild("Entities")
+	if not fold then
+		return
+	end
+
+	local pos = root.Position
+	local best = nil
+	local bdist = ctx.max * ctx.max
+	local ents = fold:GetChildren()
+
+	for i = 1, #ents do
+		local e = ents[i]
+		local _, r = ctx.valid(e)
+
+		if r then
+			local d = ctx.dist(r.Position, pos)
+			if d < bdist then
+				best = e
+				bdist = d
 			end
 		end
 	end
 
 	return best
+end
+
+ctx.near = function()
+	return ctx.nearPlayer() or ctx.nearEntity()
 end
 
 ctx.goodtar = function(t)
@@ -1045,48 +1043,52 @@ ctx.hit = function(t)
 	local idx = ctx.idx
 	ctx.idx = ctx.idx == 1 and 2 or 1
 
-	if isEvent then
-		pcall(function()
-			r:FireServer(t, idx)
-		end)
-		return
-	end
-
 	ctx.fly += 1
 
 	task.spawn(function()
-		pcall(function()
-			r:InvokeServer(t, idx)
-		end)
+		if isEvent then
+			pcall(function()
+				r:FireServer(t, idx)
+			end)
+		else
+			pcall(function()
+				r:InvokeServer(t, idx)
+			end)
+		end
 
 		ctx.fly = math.max(ctx.fly - 1, 0)
 	end)
 end
 
-ctx.pulse = function(amount)
-	local now = os.clock()
-
-	if now >= ctx.nextScan or not ctx.goodtar(ctx.tar) then
-		ctx.nextScan = now + ctx.scanRate
-		ctx.tar = ctx.near()
+ctx.pulse = function()
+	if not ctx.on or ctx.dead then
+		return
 	end
 
-	amount = math.clamp(tonumber(amount) or ctx.burst, 1, ctx.burst)
+	local t = ctx.near()
+	ctx.tar = t
 
-	local n = 0
+	if ctx.goodtar(t) then
+		ctx.hit(t)
+	end
+end
 
-	while ctx.on and not ctx.dead and n < amount do
-		if ctx.goodtar(ctx.tar) then
-			ctx.hit(ctx.tar)
-		else
-			ctx.tar = ctx.near()
-			if ctx.goodtar(ctx.tar) then
-				ctx.hit(ctx.tar)
-			end
+ctx.stepAura = function()
+	if not ctx.on or ctx.dead or ctx.auraBusy then
+		return
+	end
+
+	ctx.auraBusy = true
+
+	task.defer(function()
+		ctx.auraBusy = false
+
+		if not ctx.on or ctx.dead then
+			return
 		end
 
-		n += 1
-	end
+		task.spawn(ctx.pulse)
+	end)
 end
 
 ctx.drag = false
@@ -1203,9 +1205,13 @@ ctx.bind(ctx.uis.InputChanged, function(i)
 	ctx.f.Position = UDim2.new(ctx.sp.X.Scale, ctx.sp.X.Offset + d.X, ctx.sp.Y.Scale, ctx.sp.Y.Offset + d.Y)
 end)
 
-ctx.bind(ctx.run.PreSimulation, function()
+ctx.bind(ctx.run.Heartbeat, function()
 	if ctx.dead then
 		return
+	end
+
+	if ctx.on then
+		ctx.stepAura()
 	end
 
 	if ctx.mineOn and ctx.mineHeld then

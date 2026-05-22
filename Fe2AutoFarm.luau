@@ -291,6 +291,7 @@ local bScanAt = 0
 local locSeq = 0
 local roundCur = nil
 local roundTotal = nil
+local roundLeft = nil
 local roundState = nil
 local safeCf = nil
 local safeAt = 0
@@ -402,6 +403,7 @@ ctx.stop = function()
 	auraAt = 0
 	roundCur = nil
 	roundTotal = nil
+	roundLeft = nil
 	roundState = nil
 	safeCf = nil
 	safeAt = 0
@@ -543,32 +545,87 @@ do
 			FE2CalcLevelXP = loaded.calcLevelXP
 		end
 	end
+	local lib2 = mods and mods:FindFirstChild("Library")
+	if not FE2CalcLevelXP and lib2 and type(require) == "function" then
+		local ok, loaded = pcall(require, lib2)
+		if ok and type(loaded) == "table" and type(loaded.GetLevelExperience) == "function" then
+			FE2CalcLevelXP = function(lv)
+				return loaded.GetLevelExperience(lv)
+			end
+		end
+	end
 end
 
 do
-	local ok, r = pcall(function()
-		local rem = Rsp and Rsp:FindFirstChild("Remote")
-		if not rem then
-			return nil
+	local remFolders = {}
+	local seenFolders = {}
+
+	local function addFolder(folder)
+		if folder and not seenFolders[folder] then
+			seenFolders[folder] = true
+			remFolders[#remFolders + 1] = folder
 		end
-		return rem:FindFirstChild("dKgyIXnLdhwvSyEorkEWJJAkgUslGCtR") or rem:FindFirstChild("sTYfsJjxNdIpKgbXIuymAQiYcmAaORRN") or rem:FindFirstChild("AddedWaiting")
+	end
+
+	addFolder(Rsp and Rsp:FindFirstChild("Remote"))
+	addFolder(Rsp and Rsp:FindFirstChild("Events"))
+
+	local function scanRuntime(name, cls)
+		local scanners = {}
+		if type(getnilinstances) == "function" then
+			scanners[#scanners + 1] = getnilinstances
+		end
+		if type(getinstances) == "function" then
+			scanners[#scanners + 1] = getinstances
+		end
+		for _, fn in ipairs(scanners) do
+			local ok, list = pcall(fn)
+			if ok and type(list) == "table" then
+				for _, obj in ipairs(list) do
+					if typeof(obj) == "Instance" and obj.Name == name and (not cls or obj:IsA(cls)) then
+						return obj
+					end
+				end
+			end
+		end
+		return nil
+	end
+
+	local function findRemote(name, cls)
+		for _, folder in ipairs(remFolders) do
+			local obj = folder:FindFirstChild(name)
+			if obj and (not cls or obj:IsA(cls)) then
+				return obj
+			end
+		end
+		return scanRuntime(name, cls)
+	end
+
+	local ok, r = pcall(function()
+		return findRemote("dKgyIXnLdhwvSyEorkEWJJAkgUslGCtR", "RemoteEvent")
+			or findRemote("sTYfsJjxNdIpKgbXIuymAQiYcmAaORRN", "RemoteEvent")
+			or findRemote("AddedWaiting", "RemoteEvent")
 	end)
 	Lift = ok and r or nil
 
-	local rem = Rsp and Rsp:FindFirstChild("Remote")
 	local function addRemote(list, name)
-		local obj = rem and rem:FindFirstChild(name)
+		local obj = findRemote(name, "RemoteEvent")
 		if obj and obj:IsA("RemoteEvent") then
+			for _, old in ipairs(list) do
+				if old == obj then
+					return
+				end
+			end
 			list[#list + 1] = obj
 		end
 	end
 
-	local pk = rem and rem:FindFirstChild("ReqPasskey")
+	local pk = findRemote("ReqPasskey", "RemoteFunction")
 	if pk and pk:IsA("RemoteFunction") then
 		PasskeyRemote = pk
 	end
 
-	local rb = rem and rem:FindFirstChild("ReqRebirth")
+	local rb = findRemote("ReqRebirth", "RemoteEvent") or findRemote("rebirth", "RemoteEvent")
 	if rb and rb:IsA("RemoteEvent") then
 		RebirthRemote = rb
 	end
@@ -577,8 +634,10 @@ do
 	addRemote(PressRemotes, "igzyswprgEbMOxwZWHUxvFWNJhDtaODb")
 	addRemote(LocatorRemotes, "UpdGoalLocator")
 	addRemote(LocatorRemotes, "FiIxfRCqDOTWRKHqFMoRjSaAxXOutMzD")
+	addRemote(LocatorRemotes, "SetButtonLocator")
 	addRemote(RoundStatsRemotes, "UpdIngameStats")
 	addRemote(RoundStatsRemotes, "flDEUOrLddFXZVDiezUpxyiHWduVnlEC")
+	addRemote(RoundStatsRemotes, "UpdateGameInfo")
 	addRemote(LoadedMapRemotes, "LoadedMap")
 	addRemote(SurvivedRemotes, "Survived")
 	addRemote(PlayerDataRemotes, "UpdPlayerData")
@@ -722,6 +781,22 @@ ctx.safeMapCf = function(map, r)
 end
 
 ctx.inState = function(nm)
+	if LP then
+		local ok, a = pcall(function()
+			return LP:GetAttribute(nm == "InLift" and "IsInLift" or "IsPlaying")
+		end)
+		if ok and a ~= nil then
+			if nm == "InGame" then
+				local survived = false
+				pcall(function()
+					survived = LP:GetAttribute("SurvivedRound") == true
+				end)
+				return a == true and not survived
+			end
+			return a == true
+		end
+	end
+
 	local r = select(1, ctx.rh(false))
 	if not r then
 		return false
@@ -742,15 +817,38 @@ ctx.updateRoundStats = function(stats)
 	if type(stats) ~= "table" then
 		return
 	end
-	if type(stats.currentButton) == "number" then
-		roundCur = stats.currentButton
+
+	local curVal = stats.currentButton
+	local newButtonMode = false
+	if curVal == nil then
+		curVal = stats.CurrentButton
+		newButtonMode = curVal ~= nil
 	end
-	if type(stats.totalButtons) == "number" then
-		roundTotal = stats.totalButtons
+	if type(curVal) == "number" then
+		if newButtonMode then
+			roundLeft = curVal
+			if curVal <= 0 then
+				roundCur = 1
+				if type(roundTotal) ~= "number" then
+					roundTotal = 1
+				end
+			else
+				roundCur = curVal
+			end
+		else
+			roundCur = curVal
+		end
 	end
-	if type(stats.gameStatus) == "string" then
-		roundState = stats.gameStatus
-		local st = stats.gameStatus:lower()
+
+	local totalVal = stats.totalButtons or stats.TotalButtons or stats.TotalButton or stats.ButtonsTotal
+	if type(totalVal) == "number" then
+		roundTotal = totalVal
+	end
+
+	local stateVal = stats.gameStatus or stats.GameStatus or stats.GameState or stats.State
+	if type(stateVal) == "string" then
+		local st = stateVal:lower()
+		roundState = st
 		if st == "ingame" then
 			survivedSeen = false
 		elseif st == "survived" then
@@ -762,6 +860,9 @@ end
 ctx.buttonsDone = function()
 	if roundState and roundState ~= "ingame" then
 		return false
+	end
+	if type(roundLeft) == "number" then
+		return roundLeft <= 0
 	end
 	if type(roundCur) == "number" and type(roundTotal) == "number" then
 		return roundCur >= roundTotal
@@ -1476,6 +1577,29 @@ ctx.cacheData = function(data)
 	end
 end
 
+ctx.cacheLocalData = function()
+	if not LP then
+		return
+	end
+	local data = LP:FindFirstChild("Data")
+	if not data then
+		return
+	end
+	local function val(n)
+		local obj = data:FindFirstChild(n)
+		return obj and obj:IsA("ValueBase") and obj.Value or nil
+	end
+	ctx.cacheData({
+		stats = {
+			level = val("Level"),
+			xp = val("Experience"),
+			coins = val("Coins"),
+			gems = val("Amethysts"),
+			rebirth = val("Rebirths"),
+		},
+	})
+end
+
 ctx.needXp = function(lv, rb)
 	lv = tonumber(lv) or 0
 	rb = tonumber(rb) or 0
@@ -1648,6 +1772,7 @@ ctx.requestPlayerData = function(force)
 			end)
 		end
 	end
+	ctx.cacheLocalData()
 end
 
 ctx.tryRebirth = function(force)
@@ -1813,19 +1938,21 @@ ctx.startPassiveRemotes = function()
 end
 
 for _, rem in ipairs(LocatorRemotes) do
-	if rem and rem.Parent then
-		ctx.bind(rem.OnClientEvent:Connect(function(goal, hit, _, nextHit)
-			ctx.addLocatorBtn(hit or goal, nextHit)
+	if rem then
+		ctx.bind(rem.OnClientEvent:Connect(function(goal, hit, ui, nextHit)
+			ctx.addLocatorBtn(hit or goal, nextHit or ui)
 		end))
 	end
 end
 
 for _, rem in ipairs(RoundStatsRemotes) do
-	if rem and rem.Parent then
+	if rem then
 		ctx.bind(rem.OnClientEvent:Connect(ctx.updateRoundStats))
-		pcall(function()
-			rem:FireServer()
-		end)
+		if rem.Parent then
+			pcall(function()
+				rem:FireServer()
+			end)
+		end
 	end
 end
 
@@ -1867,6 +1994,23 @@ for _, rem in ipairs(GameStateRemotes) do
 			end
 		end))
 	end
+end
+
+if LP then
+	ctx.bind(LP:GetAttributeChangedSignal("SurvivedRound"):Connect(function()
+		if LP:GetAttribute("SurvivedRound") == true then
+			ctx.markSurvived("attribute")
+		elseif LP:GetAttribute("IsPlaying") == true then
+			survivedSeen = false
+			roundState = "ingame"
+		end
+	end))
+	ctx.bind(LP:GetAttributeChangedSignal("IsPlaying"):Connect(function()
+		if LP:GetAttribute("IsPlaying") == true and LP:GetAttribute("SurvivedRound") ~= true then
+			survivedSeen = false
+			roundState = "ingame"
+		end
+	end))
 end
 
 ctx.requestPlayerData(true)
@@ -1924,6 +2068,43 @@ ctx.setNc = function(v)
 	end)
 end
 
+ctx.liftTarget = function()
+	local lobby = Wsp and Wsp:FindFirstChild("Lobby")
+	if not lobby then
+		return nil
+	end
+	local play = lobby:FindFirstChild("PlayHere")
+	if play then
+		local best = nil
+		for _, obj in ipairs(ctx.descOf(play)) do
+			if obj:IsA("BasePart") then
+				if obj:FindFirstChild("SurfaceGui") or not best then
+					best = obj
+				end
+			end
+		end
+		if best then
+			return best
+		end
+	end
+	local mw = lobby:FindFirstChild("MapWaiting")
+	local direct = mw and (mw:FindFirstChild("LiftTeleport", true) or mw:FindFirstChild("LiftCollision", true) or mw:FindFirstChild("Plate", true))
+	if direct and direct:IsA("BasePart") then
+		return direct
+	end
+	return nil
+end
+
+ctx.touchLift = function(part, r)
+	if not (part and part.Parent and r and r.Parent) then
+		return
+	end
+	if type(firetouchinterest) == "function" then
+		pcall(firetouchinterest, r, part, 0)
+		pcall(firetouchinterest, r, part, 1)
+	end
+end
+
 ctx.pushLift = function()
 	local r = select(1, ctx.rh(true))
 	if not r then
@@ -1938,18 +2119,29 @@ ctx.pushLift = function()
 		if not rr then
 			continue
 		end
-		rr.AssemblyLinearVelocity = LFG
+		local part = ctx.liftTarget()
+		if part then
+			pcall(function()
+				ctx.pivotRootTo(part.CFrame + Vector3.new(0, 3, 0), rr)
+				rr.AssemblyLinearVelocity = Vector3.zero
+			end)
+			ctx.touchLift(part, rr)
+		else
+			rr.AssemblyLinearVelocity = LFG
+		end
 		ctx.mkPlat(rr)
 	end
 end
 
 ctx.doLift = function()
-	if not (on and Lift) then
+	if not on then
 		return
 	end
-	pcall(function()
-		Lift:FireServer()
-	end)
+	if Lift then
+		pcall(function()
+			Lift:FireServer()
+		end)
+	end
 	task.spawn(function()
 		local ok, err = xpcall(ctx.pushLift, debug.traceback)
 		if not ok then
@@ -2607,6 +2799,7 @@ ctx.onMap = function(map, id)
 
 		roundCur = nil
 		roundTotal = nil
+		roundLeft = nil
 		roundState = nil
 		for _, rem in ipairs(RoundStatsRemotes) do
 			if rem and rem.Parent then
@@ -2823,7 +3016,7 @@ ctx.curMap = function()
 	if not MP or not MP.Parent then
 		MP = Wsp and (Wsp:FindFirstChild("Multiplayer") or Wsp:WaitForChild("Multiplayer", 3)) or nil
 	end
-	return MP and MP:FindFirstChild("Map") or nil
+	return MP and (MP:FindFirstChild("Map") or MP:FindFirstChild("NewMap")) or nil
 end
 
 ctx.rootPart = function()
@@ -2891,7 +3084,7 @@ end
 
 if MP then
 	ctx.bind(MP.ChildAdded:Connect(function(ch)
-		if ch.Name == "Map" and on then
+		if (ch.Name == "Map" or ch.Name == "NewMap") and on then
 			task.spawn(ctx.burstLoaded)
 		end
 	end))

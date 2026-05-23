@@ -680,26 +680,50 @@ A.setap = function(v)
 end
 
 A.kpool = {
+	Enum.KeyCode.A,
+	Enum.KeyCode.B,
+	Enum.KeyCode.C,
+	Enum.KeyCode.D,
+	Enum.KeyCode.E,
 	Enum.KeyCode.F,
 	Enum.KeyCode.G,
 	Enum.KeyCode.H,
+	Enum.KeyCode.I,
 	Enum.KeyCode.J,
 	Enum.KeyCode.K,
 	Enum.KeyCode.L,
-	Enum.KeyCode.Z,
-	Enum.KeyCode.X,
-	Enum.KeyCode.C,
-	Enum.KeyCode.V,
-	Enum.KeyCode.B,
-	Enum.KeyCode.N,
 	Enum.KeyCode.M,
+	Enum.KeyCode.N,
+	Enum.KeyCode.O,
+	Enum.KeyCode.P,
 	Enum.KeyCode.Q,
-	Enum.KeyCode.W,
-	Enum.KeyCode.E,
 	Enum.KeyCode.R,
+	Enum.KeyCode.S,
 	Enum.KeyCode.T,
+	Enum.KeyCode.U,
+	Enum.KeyCode.V,
+	Enum.KeyCode.W,
+	Enum.KeyCode.X,
 	Enum.KeyCode.Y,
-	Enum.KeyCode.U
+	Enum.KeyCode.Z,
+	Enum.KeyCode.One,
+	Enum.KeyCode.Two,
+	Enum.KeyCode.Three,
+	Enum.KeyCode.Four,
+	Enum.KeyCode.Five,
+	Enum.KeyCode.Six,
+	Enum.KeyCode.Seven,
+	Enum.KeyCode.Eight,
+	Enum.KeyCode.Nine,
+	Enum.KeyCode.KeypadOne,
+	Enum.KeyCode.KeypadTwo,
+	Enum.KeyCode.KeypadThree,
+	Enum.KeyCode.KeypadFour,
+	Enum.KeyCode.KeypadFive,
+	Enum.KeyCode.KeypadSix,
+	Enum.KeyCode.KeypadSeven,
+	Enum.KeyCode.KeypadEight,
+	Enum.KeyCode.KeypadNine
 }
 
 A.hpool = {
@@ -712,41 +736,53 @@ A.hpool = {
 	Enum.KeyCode.Seven,
 	Enum.KeyCode.Eight,
 	Enum.KeyCode.Nine,
-	Enum.KeyCode.Zero
+	Enum.KeyCode.KeypadOne,
+	Enum.KeyCode.KeypadTwo,
+	Enum.KeyCode.KeypadThree,
+	Enum.KeyCode.KeypadFour,
+	Enum.KeyCode.KeypadFive,
+	Enum.KeyCode.KeypadSix,
+	Enum.KeyCode.KeypadSeven,
+	Enum.KeyCode.KeypadEight,
+	Enum.KeyCode.KeypadNine
 }
 
 A.rkey = Enum.KeyCode.P
-A.ckey = Enum.KeyCode.O
+A.ckey = Enum.KeyCode.KeypadZero
 A.kidx = 1
 A.hidx = 1
+A.pidx = {}
+
+A.idx = function(pool)
+	if pool == A.hpool then
+		return "hidx"
+	end
+	return "kidx"
+end
 
 A.nextkey = function(pool)
 	pool = pool or A.kpool
+	if #pool <= 0 then
+		return nil
+	end
+
+	local idx = A.idx(pool)
 	for _ = 1, #pool do
-		local k = pool[A.kidx]
-		A.kidx = A.kidx + 1
-		if A.kidx > #pool then
-			A.kidx = 1
+		local k = pool[A[idx]]
+		A[idx] = A[idx] + 1
+		if A[idx] > #pool then
+			A[idx] = 1
 		end
-		if not A.keys[k] then
+		if k and not A.keys[k] then
 			return k
 		end
 	end
-	return pool[1]
+
+	return nil
 end
 
 A.nexthold = function()
-	for _ = 1, #A.hpool do
-		local k = A.hpool[A.hidx]
-		A.hidx = A.hidx + 1
-		if A.hidx > #A.hpool then
-			A.hidx = 1
-		end
-		if not A.keys[k] then
-			return k
-		end
-	end
-	return A.hpool[1]
+	return A.nextkey(A.hpool) or A.nextkey(A.kpool)
 end
 
 A.fake = function(k, down)
@@ -794,6 +830,9 @@ end
 
 A.gpress = function(k, force)
 	k = k or A.nextkey(A.kpool)
+	if not k then
+		return false
+	end
 
 	if A.keys[k] and not force then
 		return true
@@ -815,7 +854,9 @@ A.gpress = function(k, force)
 end
 
 A.grel = function(k, force)
-	k = k or A.nextkey(A.kpool)
+	if not k then
+		return false
+	end
 	A.keys[k] = nil
 
 	if A.vkey(k, false) then
@@ -833,12 +874,21 @@ end
 
 A.tap = function(k)
 	k = k or A.nextkey(A.kpool)
-	A.gpress(k, true)
+	if not k or A.keys[k] then
+		return false
+	end
+
+	if not A.gpress(k, true) then
+		return false
+	end
+
 	task.delay(0.032, function()
 		if A.run then
 			A.grel(k, true)
 		end
 	end)
+
+	return true
 end
 
 A.chart = {
@@ -1088,6 +1138,9 @@ A.doev = function(ev)
 		A.tap()
 	elseif k == "hstart" then
 		local hk = A.nexthold()
+		if not hk then
+			return
+		end
 		A.chart.holds[id] = hk
 		A.gpress(hk, true)
 	elseif k == "hend" then

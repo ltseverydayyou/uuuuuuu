@@ -1,0 +1,1615 @@
+local A = {}
+
+A.ex = type(getfenv) == "function" and getfenv() or {}
+if type(A.ex.__rusher_obs) == "table" and type(A.ex.__rusher_obs.cln) == "function" then
+	pcall(A.ex.__rusher_obs.cln)
+end
+A.ex.__rusher_obs = A
+
+A.run = true
+A.con = {}
+A.envs = {}
+A.vars = {}
+A.last = {}
+A.keys = {}
+A.cfg = {
+	ap = false,
+	cap = false,
+	caj = false,
+	ninp = false,
+	keep = false,
+	cwin = 55,
+	hlate = 45,
+	rlate = 22,
+	rlead = 65,
+	clead = 45,
+	speed = 1,
+	off = 0,
+	voff = 0,
+	tw = 2,
+	pm = 1,
+	em = 1,
+	he = 1,
+	guide = 2,
+	hit = 2,
+	hurt = 2,
+	partner = "lester"
+}
+
+A.svc = function(n)
+	if type(cloneref) == "function" then
+		return cloneref(game:GetService(n))
+	end
+	return game:GetService(n)
+end
+
+A.plrs = A.svc("Players")
+A.rs = A.svc("RunService")
+A.sg = A.svc("StarterGui")
+A.uis = A.svc("UserInputService")
+A.lp = A.plrs.LocalPlayer
+A.pg = A.lp:WaitForChild("PlayerGui", 30)
+
+A.add = function(c)
+	if c then
+		table.insert(A.con, c)
+	end
+	return c
+end
+
+A.scr = function(n)
+	if not A.pg then
+		return nil
+	end
+
+	if n == "game" then
+		return A.pg:FindFirstChild("gameplay_script")
+	elseif n == "song" then
+		return A.pg:FindFirstChild("songselect_script")
+	elseif n == "menu" then
+		return A.pg:FindFirstChild("menu_script")
+	elseif n == "cfg" then
+		return A.pg:FindFirstChild("configs")
+	elseif n == "assist" then
+		return A.pg:FindFirstChild("assist_scripts")
+	elseif n == "load" then
+		local l = A.pg:FindFirstChild("loading")
+		return l and l:FindFirstChild("initializer")
+	elseif n == "caj" then
+		local m = A.pg:FindFirstChild("minigame")
+		return m and m:FindFirstChild("cajon")
+	end
+
+	return nil
+end
+
+A.fenv = function(s)
+	if not s then
+		return nil
+	end
+
+	if type(getsenv) == "function" then
+		local ok, e = pcall(getsenv, s)
+		if ok and type(e) == "table" then
+			return e
+		end
+	end
+
+	if type(getfenv) == "function" then
+		local ok, e = pcall(getfenv, s)
+		if ok and type(e) == "table" then
+			return e
+		end
+	end
+
+	if type(getscriptclosure) == "function" and type(getfenv) == "function" then
+		local ok, f = pcall(getscriptclosure, s)
+		if ok and type(f) == "function" then
+			local ok2, e = pcall(getfenv, f)
+			if ok2 and type(e) == "table" then
+				return e
+			end
+		end
+	end
+
+	return nil
+end
+
+A.gtab = function(e)
+	if type(e) ~= "table" then
+		return nil
+	end
+
+	local ok, g = pcall(function()
+		return rawget(e, "_G")
+	end)
+
+	if ok and type(g) == "table" then
+		return g
+	end
+
+	ok, g = pcall(function()
+		return e._G
+	end)
+
+	if ok and type(g) == "table" then
+		return g
+	end
+
+	return e
+end
+
+A.push = function(e)
+	local g = A.gtab(e)
+	if type(g) == "table" then
+		for k, v in pairs(A.vars) do
+			pcall(function()
+				g[k] = v
+			end)
+		end
+	end
+
+	if type(e) == "table" then
+		for k, v in pairs(A.vars) do
+			pcall(function()
+				e[k] = v
+			end)
+		end
+	end
+end
+
+A.env = function(n)
+	if A.envs[n] then
+		return A.envs[n]
+	end
+
+	local s = A.scr(n)
+	local e = A.fenv(s)
+
+	if type(e) == "table" then
+		A.envs[n] = e
+		A.push(e)
+		return e
+	end
+
+	return nil
+end
+
+A.envall = function()
+	local out = {}
+	for _, n in ipairs({ "game", "song", "menu", "cfg", "assist", "load", "caj" }) do
+		local e = A.env(n)
+		if type(e) == "table" then
+			table.insert(out, e)
+		end
+	end
+	return out
+end
+
+A.gget = function(k)
+	for _, e in ipairs(A.envall()) do
+		local g = A.gtab(e)
+
+		if type(g) == "table" then
+			local ok, v = pcall(function()
+				return g[k]
+			end)
+
+			if ok and v ~= nil then
+				return v
+			end
+		end
+
+		local ok, v = pcall(function()
+			return e[k]
+		end)
+
+		if ok and v ~= nil then
+			return v
+		end
+	end
+
+	return A.vars[k]
+end
+
+A.gset = function(k, v)
+	A.vars[k] = v
+
+	for _, e in ipairs(A.envall()) do
+		local g = A.gtab(e)
+
+		if type(g) == "table" then
+			pcall(function()
+				g[k] = v
+			end)
+		end
+
+		pcall(function()
+			e[k] = v
+		end)
+	end
+end
+
+A.req = function(m)
+	if typeof(m) ~= "Instance" then
+		return false, nil
+	end
+
+	if not m:IsA("ModuleScript") or m.Parent == nil then
+		return false, nil
+	end
+
+	local ok, r = pcall(require, m)
+	if ok then
+		return true, r
+	end
+
+	return false, nil
+end
+
+A.guv = function(f, n)
+	if type(f) ~= "function" or type(debug) ~= "table" then
+		return nil, nil
+	end
+
+	if type(debug.getupvalue) == "function" then
+		for i = 1, 180 do
+			local r = { pcall(debug.getupvalue, f, i) }
+			if not r[1] then
+				break
+			end
+
+			if r[3] ~= nil and r[2] == n then
+				return r[3], i
+			end
+
+			if r[2] ~= nil and n == i then
+				return r[2], i
+			end
+
+			if r[2] == nil then
+				break
+			end
+		end
+	end
+
+	if type(debug.getupvalues) == "function" then
+		local ok, uv = pcall(debug.getupvalues, f)
+		if ok and type(uv) == "table" and uv[n] ~= nil then
+			return uv[n], n
+		end
+	end
+
+	return nil, nil
+end
+
+A.suv = function(f, n, v)
+	if type(f) ~= "function" or type(debug) ~= "table" or type(debug.setupvalue) ~= "function" then
+		return false
+	end
+
+	if type(debug.getupvalue) == "function" then
+		for i = 1, 180 do
+			local r = { pcall(debug.getupvalue, f, i) }
+			if not r[1] then
+				break
+			end
+
+			if r[3] ~= nil and r[2] == n then
+				return pcall(debug.setupvalue, f, i, v)
+			end
+
+			if r[2] == nil then
+				break
+			end
+		end
+	end
+
+	if type(debug.getupvalues) == "function" then
+		local ok, uv = pcall(debug.getupvalues, f)
+		if ok and type(uv) == "table" and uv[n] ~= nil then
+			return pcall(debug.setupvalue, f, n, v)
+		end
+	end
+
+	return false
+end
+
+A.call = function(sc, fn, ...)
+	local e = A.env(sc)
+	if not e or type(e[fn]) ~= "function" then
+		return false
+	end
+	return pcall(e[fn], ...)
+end
+
+A.fire = function(n, ...)
+	local sw = A.sg:FindFirstChild("switchscreen")
+	if sw and type(sw.Fire) == "function" then
+		return pcall(function(...)
+			sw:Fire(...)
+		end, n, ...)
+	end
+	return false
+end
+
+A.conf = function(k, v)
+	local c = A.gget("CONFIGURATIONS")
+	if type(c) ~= "table" then
+		c = {}
+		A.gset("CONFIGURATIONS", c)
+	end
+
+	c[k] = v
+	A.gset("CONFIGURATIONS", c)
+
+	local e = A.env("cfg")
+	if e and type(e.updatevalue) == "function" then
+		pcall(e.updatevalue, k, v)
+	end
+end
+
+A.setap = function(v)
+	local e = A.env("game")
+	if not e then
+		return false
+	end
+
+	local ok = false
+
+	for _, n in ipairs({ "playing", "input", "start", "heartbeat" }) do
+		if type(e[n]) == "function" then
+			if A.suv(e[n], "v4", v) then
+				ok = true
+			end
+		end
+	end
+
+	return ok
+end
+
+A.kpool = {
+	Enum.KeyCode.F,
+	Enum.KeyCode.G,
+	Enum.KeyCode.H,
+	Enum.KeyCode.J,
+	Enum.KeyCode.K,
+	Enum.KeyCode.L,
+	Enum.KeyCode.Z,
+	Enum.KeyCode.X,
+	Enum.KeyCode.C,
+	Enum.KeyCode.V,
+	Enum.KeyCode.B,
+	Enum.KeyCode.N,
+	Enum.KeyCode.M,
+	Enum.KeyCode.Q,
+	Enum.KeyCode.W,
+	Enum.KeyCode.E,
+	Enum.KeyCode.R,
+	Enum.KeyCode.T,
+	Enum.KeyCode.Y,
+	Enum.KeyCode.U
+}
+
+A.hpool = {
+	Enum.KeyCode.One,
+	Enum.KeyCode.Two,
+	Enum.KeyCode.Three,
+	Enum.KeyCode.Four,
+	Enum.KeyCode.Five,
+	Enum.KeyCode.Six,
+	Enum.KeyCode.Seven,
+	Enum.KeyCode.Eight,
+	Enum.KeyCode.Nine,
+	Enum.KeyCode.Zero
+}
+
+A.rkey = Enum.KeyCode.P
+A.ckey = Enum.KeyCode.O
+A.kidx = 1
+A.hidx = 1
+
+A.nextkey = function(pool)
+	pool = pool or A.kpool
+	for _ = 1, #pool do
+		local k = pool[A.kidx]
+		A.kidx = A.kidx + 1
+		if A.kidx > #pool then
+			A.kidx = 1
+		end
+		if not A.keys[k] then
+			return k
+		end
+	end
+	return pool[1]
+end
+
+A.nexthold = function()
+	for _ = 1, #A.hpool do
+		local k = A.hpool[A.hidx]
+		A.hidx = A.hidx + 1
+		if A.hidx > #A.hpool then
+			A.hidx = 1
+		end
+		if not A.keys[k] then
+			return k
+		end
+	end
+	return A.hpool[1]
+end
+
+A.fake = function(k)
+	return {
+		KeyCode = k,
+		UserInputType = Enum.UserInputType.Keyboard,
+		UserInputState = Enum.UserInputState.Begin,
+		Position = Vector3.zero
+	}
+end
+
+A.gpress = function(k, force)
+	k = k or A.nextkey(A.kpool)
+
+	if A.keys[k] and not force then
+		return true
+	end
+
+	local e = A.env("game")
+	if e and type(e.input) == "function" then
+		A.keys[k] = true
+		pcall(e.input, A.fake(k), false)
+		return true
+	end
+
+	if type(keypress) == "function" then
+		A.keys[k] = true
+		if not pcall(keypress, k.Value) then
+			pcall(keypress, k)
+		end
+		return true
+	end
+
+	if type(keytap) == "function" then
+		if not pcall(keytap, k.Value) then
+			pcall(keytap, k)
+		end
+		return true
+	end
+
+	return false
+end
+
+A.grel = function(k, force)
+	k = k or A.nextkey(A.kpool)
+
+	local e = A.env("game")
+	if e and type(e.release) == "function" then
+		A.keys[k] = nil
+		pcall(e.release, A.fake(k), false)
+		return true
+	end
+
+	if type(keyrelease) == "function" then
+		A.keys[k] = nil
+		if not pcall(keyrelease, k.Value) then
+			pcall(keyrelease, k)
+		end
+		return true
+	end
+
+	A.keys[k] = nil
+	return false
+end
+
+A.tap = function(k)
+	k = k or A.nextkey(A.kpool)
+	A.gpress(k, true)
+	task.delay(0.032, function()
+		if A.run then
+			A.grel(k, true)
+		end
+	end)
+end
+
+A.chart = {
+	cur = nil,
+	seq = {},
+	i = 1,
+	bpms = nil,
+	last = 0,
+	holds = {},
+	catch = false
+}
+
+A.same = function(a, b)
+	return math.abs((a or 0) - (b or 0)) <= 0.004
+end
+
+A.bps = function(ch)
+	return 60 / (tonumber(ch and ch.basebpm) or 120)
+end
+
+A.mkbpm = function(ch)
+	local b = tonumber(ch and ch.basebpm) or 120
+	local src = type(ch and ch.bpms) == "table" and ch.bpms or {
+		{ beat = 0, bpm = b },
+		{ beat = 999999, bpm = b }
+	}
+
+	if #src == 0 then
+		src = {
+			{ beat = 0, bpm = b },
+			{ beat = 999999, bpm = b }
+		}
+	end
+
+	local out = {}
+	local last = {
+		sum = 0,
+		mul = 1,
+		ms = tonumber(src[1] and src[1].beat) or 0,
+		bpm = tonumber(src[1] and src[1].bpm) or b
+	}
+
+	last.mul = last.bpm / b
+	table.insert(out, last)
+
+	for i = 2, #src do
+		local it = src[i]
+		local ms = tonumber(it.beat) or last.ms
+		local bpm = tonumber(it.bpm) or b
+		local sum = last.sum + (ms - last.ms) * last.mul
+
+		last = {
+			ms = ms,
+			sum = sum,
+			mul = bpm / b,
+			bpm = bpm
+		}
+
+		table.insert(out, last)
+	end
+
+	table.insert(out, {
+		ms = 99999999,
+		sum = last.sum + (99999999 - last.ms) * last.mul,
+		mul = last.mul,
+		bpm = last.bpm
+	})
+
+	return out
+end
+
+A.bpmnow = function(ch, pos)
+	local map = A.chart.bpms
+	if type(map) ~= "table" then
+		return pos
+	end
+
+	local old = map[1]
+	for i = 2, #map do
+		local nxt = map[i]
+		if pos <= nxt.ms then
+			return old.sum + (pos - old.ms) * old.mul
+		end
+		old = nxt
+	end
+
+	return pos
+end
+
+A.gnow = function()
+	local e = A.env("game")
+
+	if e and type(e.playing) == "function" then
+		local v = A.guv(e.playing, "v30")
+		if type(v) == "number" then
+			return v
+		end
+	end
+
+	local gs = A.scr("game")
+	local snd = gs and gs:FindFirstChild("Sound")
+	local ch = A.gget("currentchart")
+
+	if not snd or type(ch) ~= "table" then
+		return nil
+	end
+
+	local c = A.gget("CONFIGURATIONS")
+	local song = A.gget("currentsong")
+	local off = 0
+
+	off = off + (tonumber(ch.offset) or 0) / 1000
+
+	if type(c) == "table" then
+		off = off + (tonumber(c.offset) or 0) / 1000
+	end
+
+	if type(song) == "table" then
+		off = off - (tonumber(song.offset) or 0) / 1000
+	end
+
+	return A.bpmnow(ch, snd.TimePosition + off)
+end
+
+A.addseq = function(t, k, a, lead)
+	table.insert(A.chart.seq, {
+		t = t,
+		k = k,
+		a = a,
+		lead = lead or 0.018
+	})
+end
+
+A.resetkeys = function()
+	A.chart.holds = {}
+	A.chart.catch = false
+
+	for k in pairs(A.keys) do
+		A.grel(k, true)
+	end
+
+	A.keys = {}
+end
+
+A.buildcatch = function(catches)
+	if #catches == 0 then
+		return
+	end
+
+	table.sort(catches, function(a, b)
+		return a < b
+	end)
+
+	local s = catches[1]
+	local e = catches[1]
+
+	for i = 2, #catches do
+		local t = catches[i]
+		if t - e <= 0.35 then
+			e = t
+		else
+			A.addseq(s - A.cfg.clead / 1000, "cstart", nil, 0.01)
+			A.addseq(e + 0.16, "cend", nil, 0)
+			s = t
+			e = t
+		end
+	end
+
+	A.addseq(s - A.cfg.clead / 1000, "cstart", nil, 0.01)
+	A.addseq(e + 0.16, "cend", nil, 0)
+end
+
+A.takerel = function(rels, beat)
+	for _, r in ipairs(rels) do
+		if not r.used and A.same(r.beat, beat) then
+			r.used = true
+			return r
+		end
+	end
+	return nil
+end
+
+A.loadchart = function()
+	local ch = A.gget("currentchart")
+	if type(ch) ~= "table" or type(ch.notes) ~= "table" then
+		return false
+	end
+
+	if A.chart.cur == ch then
+		return true
+	end
+
+	A.resetkeys()
+	A.chart.cur = ch
+	A.chart.seq = {}
+	A.chart.i = 1
+	A.chart.bpms = A.mkbpm(ch)
+	A.chart.last = 0
+
+	local bps = A.bps(ch)
+	local catches = {}
+	local holds = {}
+	local rels = {}
+	local id = 0
+
+	for _, n in ipairs(ch.notes) do
+		local nt = tonumber(n[1]) or 1
+		local st = tonumber(n[2])
+		local en = tonumber(n[3]) or -1
+		local layer = tonumber(n[5]) or 0
+
+		if st and layer >= 0 then
+			id = id + 1
+			local ts = st * bps
+
+			if nt == 4 then
+			elseif nt == 2 then
+				table.insert(catches, ts)
+			elseif nt == 3 then
+				table.insert(rels, {
+					id = id,
+					beat = st,
+					t = ts,
+					used = false
+				})
+			else
+				if en and en > 0 then
+					table.insert(holds, {
+						id = id,
+						st = st,
+						en = en,
+						ts = ts,
+						te = en * bps
+					})
+				else
+					A.addseq(ts, "tap", id, 0.018)
+				end
+			end
+		end
+	end
+
+	for _, h in ipairs(holds) do
+		A.addseq(h.ts, "hstart", h.id, 0.018)
+
+		local r = A.takerel(rels, h.en)
+		if r then
+			A.addseq(r.t + (A.cfg.rlate or 22) / 1000, "hrel", h.id, 0)
+		else
+			A.addseq(h.te + A.cfg.hlate / 1000, "hend", h.id, 0)
+		end
+	end
+
+	for _, r in ipairs(rels) do
+		if not r.used then
+			A.addseq(r.t + (A.cfg.rlate or 22) / 1000, "release", r.id, 0)
+		end
+	end
+
+	A.buildcatch(catches)
+
+	table.sort(A.chart.seq, function(a, b)
+		if a.t == b.t then
+			local o = {
+				hstart = 1,
+				cstart = 2,
+				tap = 3,
+				hrel = 4,
+				release = 5,
+				cend = 6,
+				hend = 7
+			}
+			return (o[a.k] or 99) < (o[b.k] or 99)
+		end
+		return a.t < b.t
+	end)
+
+	return true
+end
+
+A.doev = function(ev)
+	local k = ev.k
+	local id = ev.a
+
+	if k == "tap" then
+		A.tap()
+	elseif k == "hstart" then
+		local hk = A.nexthold()
+		A.chart.holds[id] = hk
+		A.gpress(hk, true)
+	elseif k == "hend" then
+		local hk = A.chart.holds[id]
+		if hk then
+			A.chart.holds[id] = nil
+			A.grel(hk, true)
+		end
+	elseif k == "hrel" then
+		local hk = A.chart.holds[id]
+		if hk then
+			A.chart.holds[id] = nil
+			A.grel(hk, true)
+		else
+			A.grel(A.rkey, true)
+		end
+	elseif k == "release" then
+		A.grel(A.rkey, true)
+	elseif k == "cstart" then
+		if not A.chart.catch then
+			A.chart.catch = true
+			A.gpress(A.ckey, true)
+		end
+	elseif k == "cend" then
+		if A.chart.catch then
+			A.chart.catch = false
+			A.grel(A.ckey, true)
+		end
+	end
+end
+
+A.chartplay = function()
+	if not A.loadchart() then
+		return
+	end
+
+	local now = A.gnow()
+	if not now then
+		return
+	end
+
+	local c = A.gget("CONFIGURATIONS")
+	local vo = 0
+
+	if type(c) == "table" then
+		vo = (tonumber(c.offsetvisual) or 0) / 1000
+	end
+
+	now = now + vo
+
+	if A.chart.last > 0 and now < A.chart.last - 1 then
+		A.chart.i = 1
+		A.resetkeys()
+	end
+
+	A.chart.last = now
+
+	while true do
+		local ev = A.chart.seq[A.chart.i]
+		if not ev then
+			break
+		end
+
+		local lead = ev.lead or 0
+		if ev.t - now > lead then
+			break
+		end
+
+		if now - ev.t <= 0.18 then
+			A.doev(ev)
+		end
+
+		A.chart.i = A.chart.i + 1
+	end
+end
+
+A.cajon = function()
+	local e = A.env("caj")
+	if not e or type(e.input) ~= "function" then
+		return
+	end
+
+	local ready = A.guv(e.input, "v6")
+	if ready == false then
+		return
+	end
+
+	local list = A.guv(e.input, "t4")
+	local idx = A.guv(e.input, "v9")
+	local bar = A.guv(e.input, "v8")
+	local tim = A.guv(e.input, "v7")
+
+	if type(list) ~= "table" or type(idx) ~= "number" or type(bar) ~= "number" or type(tim) ~= "number" then
+		return
+	end
+
+	local note = list[idx]
+	if type(note) ~= "number" then
+		return
+	end
+
+	local dst = math.abs((note + bar) * 0.6 - tim)
+	if dst <= math.clamp(A.cfg.cwin / 1000, 0.01, 0.11) then
+		local id = tostring(idx) .. ":" .. tostring(bar)
+		if A.last.caj ~= id then
+			A.last.caj = id
+			local k = A.nextkey(A.kpool)
+			pcall(e.input, A.fake(k), false)
+			task.delay(0.032, function()
+				if A.run and type(e.release) == "function" then
+					pcall(e.release, A.fake(k), false)
+				end
+			end)
+		end
+	end
+end
+
+A.sync = function()
+	A.conf("speed", A.cfg.speed)
+	A.conf("offset", A.cfg.off)
+	A.conf("offsetvisual", A.cfg.voff)
+	A.conf("tw", A.cfg.tw)
+	A.conf("pm", A.cfg.pm)
+	A.conf("em", A.cfg.em)
+	A.conf("hebeta", A.cfg.he)
+	A.conf("guideenable", A.cfg.guide)
+	A.conf("hitsoundenable", A.cfg.hit)
+	A.conf("disablehurtanimation", A.cfg.hurt)
+end
+
+A.pick = function(p)
+	A.cfg.partner = p
+	A.gset("partner", p)
+
+	A.call("song", "select_partner", p)
+	A.call("assist", "selectassist", p)
+
+	for _, n in ipairs({ "song", "assist" }) do
+		local e = A.env(n)
+		if e and type(e.playerdata) == "table" then
+			pcall(function()
+				e.playerdata.partner = p
+				if type(e.playerdata.savepartner) == "function" then
+					e.playerdata.savepartner()
+				end
+			end)
+		end
+	end
+end
+
+A.cln = function()
+	A.run = false
+	A.cfg.ap = false
+	A.cfg.cap = false
+	A.cfg.caj = false
+	A.setap(false)
+	A.resetkeys()
+
+	for _, c in ipairs(A.con) do
+		pcall(function()
+			c:Disconnect()
+		end)
+	end
+
+	A.con = {}
+end
+
+A.add(A.rs.RenderStepped:Connect(function()
+	if not A.run then
+		return
+	end
+
+	if A.cfg.ap then
+		A.setap(true)
+	end
+
+	if A.cfg.cap then
+		A.chartplay()
+	end
+
+	if A.cfg.caj then
+		A.cajon()
+	end
+
+	if A.cfg.ninp then
+		A.gset("noinput", false)
+	end
+
+	if A.cfg.keep then
+		A.sync()
+	end
+end))
+
+
+A.hsvc = A.svc("HttpService")
+A.dir = "RusherAutoplayer"
+A.afile = A.dir .. "/autoload.txt"
+
+A.cname = function()
+	local n = "default"
+	local ok, o = pcall(function()
+		return Options and Options.RusherConfigName
+	end)
+	if ok and type(o) == "table" and o.Value ~= nil then
+		n = tostring(o.Value)
+	end
+	n = n:gsub("[^%w%-%_ ]", "_")
+	if n == "" then
+		n = "default"
+	end
+	return n
+end
+
+A.cfile = function(n)
+	n = tostring(n or A.cname())
+	n = n:gsub("[^%w%-%_ ]", "_")
+	if n == "" then
+		n = "default"
+	end
+	return A.dir .. "/" .. n .. ".json", n
+end
+
+A.setctl = function(o, v)
+	if type(o) ~= "table" then
+		return false
+	end
+	if type(o.SetValue) == "function" then
+		local ok = pcall(function()
+			o:SetValue(v)
+		end)
+		if ok then
+			return true
+		end
+	end
+	if type(o.SetValueRGB) == "function" then
+		local ok = pcall(function()
+			o:SetValueRGB(v)
+		end)
+		if ok then
+			return true
+		end
+	end
+	local ok = pcall(function()
+		o.Value = v
+	end)
+	return ok
+end
+
+A.mkdir = function()
+	if type(isfolder) == "function" and type(makefolder) == "function" then
+		local ok, yes = pcall(isfolder, A.dir)
+		if not ok or not yes then
+			pcall(makefolder, A.dir)
+		end
+	end
+end
+
+A.fsave = function(n)
+	if type(writefile) ~= "function" then
+		return false
+	end
+
+	A.mkdir()
+
+	local dat = {
+		tog = {},
+		opt = {}
+	}
+
+	local tg = type(Toggles) == "table" and Toggles or {}
+	local op = type(Options) == "table" and Options or {}
+
+	for k, v in pairs(tg) do
+		if type(v) == "table" and v.Value ~= nil then
+			dat.tog[k] = v.Value
+		end
+	end
+
+	for k, v in pairs(op) do
+		if type(v) == "table" and v.Value ~= nil then
+			dat.opt[k] = v.Value
+		end
+	end
+
+	local ok, body = pcall(function()
+		return A.hsvc:JSONEncode(dat)
+	end)
+	if not ok then
+		return false
+	end
+
+	local file = A.cfile(n)
+	return pcall(writefile, file, body)
+end
+
+A.fload = function(n)
+	if type(readfile) ~= "function" or type(isfile) ~= "function" then
+		return false
+	end
+
+	local file = A.cfile(n)
+	local ok, yes = pcall(isfile, file)
+	if not ok or not yes then
+		return false
+	end
+
+	local ok2, body = pcall(readfile, file)
+	if not ok2 then
+		return false
+	end
+
+	local ok3, dat = pcall(function()
+		return A.hsvc:JSONDecode(body)
+	end)
+	if not ok3 or type(dat) ~= "table" then
+		return false
+	end
+
+	local tg = type(Toggles) == "table" and Toggles or {}
+	local op = type(Options) == "table" and Options or {}
+
+	if type(dat.tog) == "table" then
+		for k, v in pairs(dat.tog) do
+			A.setctl(tg[k], v)
+		end
+	end
+
+	if type(dat.opt) == "table" then
+		for k, v in pairs(dat.opt) do
+			A.setctl(op[k], v)
+		end
+	end
+
+	A.sync()
+	return true
+end
+
+A.asave = function(n)
+	if type(writefile) ~= "function" then
+		return false
+	end
+	A.mkdir()
+	return pcall(writefile, A.afile, tostring(n or A.cname()))
+end
+
+A.aload = function()
+	if type(readfile) ~= "function" or type(isfile) ~= "function" then
+		return false
+	end
+	local ok, yes = pcall(isfile, A.afile)
+	if not ok or not yes then
+		return false
+	end
+	local ok2, n = pcall(readfile, A.afile)
+	if not ok2 then
+		return false
+	end
+	return A.fload(n)
+end
+
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/Library.lua"))()
+
+local SaveManager = nil
+pcall(function()
+	SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/addons/SaveManager.lua"))()
+end)
+
+if type(SaveManager) == "table" then
+	pcall(function()
+		SaveManager:SetLibrary(Library)
+		SaveManager:IgnoreThemeSettings()
+		SaveManager:SetIgnoreIndexes({ "MenuKeybind", "RusherConfigName" })
+		SaveManager:SetFolder("RusherAutoplayer")
+	end)
+end
+
+A.smcfg = function(n)
+	n = n or A.cname()
+	local ok = false
+	if type(SaveManager) == "table" and type(SaveManager.Save) == "function" then
+		ok = pcall(function()
+			SaveManager:Save(n)
+		end)
+	end
+	local ok2 = A.fsave(n)
+	return ok or ok2
+end
+
+A.lmcfg = function(n)
+	n = n or A.cname()
+	local ok = false
+	if type(SaveManager) == "table" and type(SaveManager.Load) == "function" then
+		ok = pcall(function()
+			SaveManager:Load(n)
+		end)
+	end
+	local ok2 = A.fload(n)
+	return ok or ok2
+end
+
+A.amcfg = function(n)
+	n = n or A.cname()
+	local ok = false
+	if type(SaveManager) == "table" then
+		if type(SaveManager.SetAutoloadConfig) == "function" then
+			ok = pcall(function()
+				SaveManager:SetAutoloadConfig(n)
+			end)
+		elseif type(SaveManager.SetAutoload) == "function" then
+			ok = pcall(function()
+				SaveManager:SetAutoload(n)
+			end)
+		end
+	end
+	local ok2 = A.asave(n)
+	return ok or ok2
+end
+
+A.lacfg = function()
+	local ok = false
+	if type(SaveManager) == "table" and type(SaveManager.LoadAutoloadConfig) == "function" then
+		ok = pcall(function()
+			SaveManager:LoadAutoloadConfig()
+		end)
+	end
+	local ok2 = A.aload()
+	return ok or ok2
+end
+
+local W = Library:CreateWindow({
+	Title = "Rusher Autoplayer",
+	Footer = "Obsidian",
+	Center = true,
+	AutoShow = true,
+	ToggleKeybind = Enum.KeyCode.RightControl
+})
+
+local T = {
+	Main = W:AddTab("Main", "play"),
+	Config = W:AddTab("Config", "settings"),
+	Settings = W:AddTab("UI Settings", "wrench")
+}
+
+local M1 = T.Main:AddLeftGroupbox("Auto Player")
+local M2 = T.Main:AddRightGroupbox("Game")
+local C1 = T.Config:AddLeftGroupbox("Gameplay")
+local C2 = T.Config:AddRightGroupbox("Audio / Visual")
+local S1 = T.Settings:AddLeftGroupbox("Menu")
+
+M1:AddToggle("RusherAutoPlay", {
+	Text = "Gameplay Auto Player",
+	Default = false,
+	Tooltip = "Uses the game's hidden client auto flag when debug upvalue access works.",
+	Callback = function(v)
+		A.cfg.ap = v
+		A.setap(v)
+	end
+})
+
+M1:AddToggle("RusherChartAuto", {
+	Text = "Chart Fallback Auto Player",
+	Default = false,
+	Tooltip = "Uses getfenv game globals and _G.currentchart.notes when hidden autoplay cannot be changed.",
+	Callback = function(v)
+		A.cfg.cap = v
+		A.chart.cur = nil
+		A.chart.seq = {}
+		A.chart.i = 1
+		A.resetkeys()
+	end
+})
+
+M1:AddToggle("RusherCajonAuto", {
+	Text = "Cajon Auto Player",
+	Default = false,
+	Tooltip = "Uses cajon script timing values through its game env.",
+	Callback = function(v)
+		A.cfg.caj = v
+	end
+})
+
+M1:AddSlider("RusherCajonWindow", {
+	Text = "Cajon Hit Window",
+	Default = 55,
+	Min = 10,
+	Max = 110,
+	Rounding = 0,
+	Suffix = "ms",
+	Callback = function(v)
+		A.cfg.cwin = v
+	end
+})
+
+M1:AddSlider("RusherHoldLate", {
+	Text = "Hold Release Delay",
+	Default = 45,
+	Min = 0,
+	Max = 120,
+	Rounding = 0,
+	Suffix = "ms",
+	Callback = function(v)
+		A.cfg.hlate = v
+		A.chart.cur = nil
+	end
+})
+
+M1:AddSlider("RusherReleaseLate", {
+	Text = "Release Hit Delay",
+	Default = 22,
+	Min = 0,
+	Max = 80,
+	Rounding = 0,
+	Suffix = "ms",
+	Callback = function(v)
+		A.cfg.rlate = v
+		A.chart.cur = nil
+	end
+})
+
+M1:AddSlider("RusherCatchLead", {
+	Text = "Catch Lead",
+	Default = 45,
+	Min = 10,
+	Max = 120,
+	Rounding = 0,
+	Suffix = "ms",
+	Callback = function(v)
+		A.cfg.clead = v
+		A.chart.cur = nil
+	end
+})
+
+M1:AddToggle("RusherNoInput", {
+	Text = "Force NoInput Off",
+	Default = false,
+	Callback = function(v)
+		A.cfg.ninp = v
+		if v then
+			A.gset("noinput", false)
+		end
+	end
+})
+
+M1:AddToggle("RusherKeepCfg", {
+	Text = "Keep Config Applied",
+	Default = false,
+	Callback = function(v)
+		A.cfg.keep = v
+		if v then
+			A.sync()
+		end
+	end
+})
+
+M2:AddButton({
+	Text = "Open Song Select",
+	Func = function()
+		A.fire("songselect", true)
+	end
+})
+
+M2:AddButton({
+	Text = "Play Selected Song",
+	Func = function()
+		A.call("song", "play")
+	end
+})
+
+M2:AddButton({
+	Text = "Random Song",
+	Func = function()
+		A.call("song", "randomize")
+	end
+})
+
+M2:AddButton({
+	Text = "Open Menu",
+	Func = function()
+		A.fire("menu")
+	end
+})
+
+M2:AddButton({
+	Text = "Start Cajon",
+	Func = function()
+		A.fire("cajon")
+	end
+})
+
+M2:AddDropdown("RusherPartner", {
+	Text = "Partner",
+	Values = {
+		"iris",
+		"lester",
+		"lisa",
+		"rae",
+		"ziera",
+		"bellemond",
+		"aetheria"
+	},
+	Default = 2,
+	Multi = false,
+	Callback = function(v)
+		A.pick(v)
+	end
+})
+
+C1:AddSlider("RusherSpeed", {
+	Text = "Note Speed",
+	Default = 1,
+	Min = 0.25,
+	Max = 5,
+	Rounding = 2,
+	Callback = function(v)
+		A.cfg.speed = v
+		A.conf("speed", v)
+	end
+})
+
+C1:AddSlider("RusherOffset", {
+	Text = "Audio Offset",
+	Default = 0,
+	Min = -500,
+	Max = 500,
+	Rounding = 0,
+	Suffix = "ms",
+	Callback = function(v)
+		A.cfg.off = v
+		A.conf("offset", v)
+	end
+})
+
+C1:AddSlider("RusherVOffset", {
+	Text = "Visual Offset",
+	Default = 0,
+	Min = -500,
+	Max = 500,
+	Rounding = 0,
+	Suffix = "ms",
+	Callback = function(v)
+		A.cfg.voff = v
+		A.conf("offsetvisual", v)
+	end
+})
+
+C1:AddDropdown("RusherTW", {
+	Text = "Timing Window",
+	Values = {
+		"Easy",
+		"Normal",
+		"Strict"
+	},
+	Default = 2,
+	Multi = false,
+	Callback = function(v)
+		local n = v == "Easy" and 1 or v == "Normal" and 2 or 3
+		A.cfg.tw = n
+		A.conf("tw", n)
+	end
+})
+
+C1:AddToggle("RusherNoHurtAnim", {
+	Text = "Disable Hurt Animation",
+	Default = true,
+	Callback = function(v)
+		A.cfg.hurt = v and 2 or 1
+		A.conf("disablehurtanimation", A.cfg.hurt)
+	end
+})
+
+C2:AddToggle("RusherEM", {
+	Text = "Extra Effects",
+	Default = false,
+	Callback = function(v)
+		A.cfg.em = v and 2 or 1
+		A.conf("em", A.cfg.em)
+	end
+})
+
+C2:AddToggle("RusherPM", {
+	Text = "Performance Mode",
+	Default = false,
+	Callback = function(v)
+		A.cfg.pm = v and 2 or 1
+		A.conf("pm", A.cfg.pm)
+	end
+})
+
+C2:AddDropdown("RusherHBeta", {
+	Text = "Hit Effect Beta",
+	Values = {
+		"Normal",
+		"Beta"
+	},
+	Default = 1,
+	Multi = false,
+	Callback = function(v)
+		A.cfg.he = v == "Beta" and 2 or 1
+		A.conf("hebeta", A.cfg.he)
+	end
+})
+
+C2:AddToggle("RusherGuideSound", {
+	Text = "Guide Sound",
+	Default = true,
+	Callback = function(v)
+		A.cfg.guide = v and 2 or 1
+		A.conf("guideenable", A.cfg.guide)
+	end
+})
+
+C2:AddToggle("RusherHitSound", {
+	Text = "Hit Sound",
+	Default = true,
+	Callback = function(v)
+		A.cfg.hit = v and 2 or 1
+		A.conf("hitsoundenable", A.cfg.hit)
+	end
+})
+
+C2:AddSlider("RusherHitVol", {
+	Text = "Hit Volume",
+	Default = 1,
+	Min = 0,
+	Max = 2,
+	Rounding = 2,
+	Callback = function(v)
+		A.conf("hvolume", v)
+		A.conf("hvolume2", v)
+		A.conf("hvolume3", v)
+	end
+})
+
+C2:AddSlider("RusherGuideVol", {
+	Text = "Guide Volume",
+	Default = 0.1,
+	Min = 0,
+	Max = 2,
+	Rounding = 2,
+	Callback = function(v)
+		A.conf("hvolume1", v)
+	end
+})
+
+S1:AddButton({
+	Text = "Reload Game Envs",
+	Func = function()
+		A.envs = {}
+		A.envall()
+	end
+})
+
+S1:AddButton({
+	Text = "Apply Config Now",
+	Func = function()
+		A.sync()
+	end
+})
+
+S1:AddInput("RusherConfigName", {
+	Text = "Config Name",
+	Default = "default",
+	Numeric = false,
+	Finished = false
+})
+
+S1:AddButton({
+	Text = "Save Config",
+	Func = function()
+		if not A.smcfg(A.cname()) then
+			warn("Rusher Autoplayer: failed to save config")
+		end
+	end
+})
+
+S1:AddButton({
+	Text = "Load Config",
+	Func = function()
+		if not A.lmcfg(A.cname()) then
+			warn("Rusher Autoplayer: failed to load config")
+		end
+	end
+})
+
+S1:AddButton({
+	Text = "Set Autoload",
+	Func = function()
+		if not A.amcfg(A.cname()) then
+			warn("Rusher Autoplayer: failed to set autoload")
+		end
+	end
+})
+
+S1:AddButton({
+	Text = "Load Autoload",
+	Func = function()
+		if not A.lacfg() then
+			warn("Rusher Autoplayer: failed to load autoload")
+		end
+	end
+})
+
+S1:AddButton({
+	Text = "Unload",
+	Func = function()
+		A.cln()
+		if Library and type(Library.Unload) == "function" then
+			Library:Unload()
+		end
+	end
+})
+
+A.envall()
+A.sync()
+task.defer(function()
+	A.lacfg()
+end)

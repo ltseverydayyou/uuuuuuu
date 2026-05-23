@@ -1,32 +1,101 @@
-local gEnv = getgenv and getgenv()
-if type(gEnv) ~= "table" then
-	gEnv = _G
+local gEnv
+
+do
+	local ok, env = pcall(function()
+		if type(getgenv) == "function" then
+			return getgenv()
+		end
+	end)
+	gEnv = ok and type(env) == "table" and env or _G
+	if type(gEnv) ~= "table" then
+		gEnv = {}
+	end
+end
+
+local function safeSvc(name, cr)
+	local ok, svc = pcall(function()
+		return game:GetService(name)
+	end)
+	if not ok or not svc then
+		return nil
+	end
+
+	local fn = type(cr) == "function" and cr or (type(cloneref) == "function" and cloneref or nil)
+	if fn then
+		local okRef, ref = pcall(fn, svc)
+		if okRef and ref then
+			return ref
+		end
+	end
+
+	return svc
+end
+
+local function safeCM(root, method, ...)
+	local obj = root
+	if type(root) == "string" then
+		obj = safeSvc(root)
+	end
+	if typeof(obj) ~= "Instance" then
+		return nil
+	end
+
+	local fn = obj[method]
+	if type(fn) ~= "function" then
+		return nil
+	end
+
+	local ok, res = pcall(fn, obj, ...)
+	if ok then
+		return res
+	end
+	return nil
 end
 
 local __lt = (function()
 	local globalEnv = gEnv or _G or {}
-	local sharedEnv = rawget(_G, "shared")
+	local sharedEnv = type(_G) == "table" and rawget(_G, "shared") or nil
 	local cacheHost = type(sharedEnv) == "table" and sharedEnv or (type(globalEnv) == "table" and globalEnv or nil)
 	if cacheHost then
 		local cached = rawget(cacheHost, "__lt_service_resolver")
 		if type(cached) == "table" then
+			if type(cached.cs) ~= "function" then
+				cached.cs = safeSvc
+			end
+			if type(cached.cm) ~= "function" then
+				cached.cm = safeCM
+			end
 			return cached
 		end
 	end
 
+	local loaded
 	local loader = loadstring or load
-	if type(loader) ~= "function" then
-		error("Service resolver loader unavailable")
+	if type(loader) == "function" then
+		local okSrc, src = pcall(function()
+			return game:HttpGet("https://ltseverydayyou.github.io/ServiceResolver.luau")
+		end)
+		if okSrc and type(src) == "string" and src ~= "" then
+			local okCompile, resolver = pcall(function()
+				return loader(src, "@ServiceResolver.luau")
+			end)
+			if okCompile and type(resolver) == "function" then
+				local okLoad, got = pcall(resolver)
+				if okLoad and type(got) == "table" then
+					loaded = got
+				end
+			end
+		end
 	end
 
-	local resolver = loader(game:HttpGet("https://ltseverydayyou.github.io/ServiceResolver.luau"), "@ServiceResolver.luau")
-	if type(resolver) ~= "function" then
-		error("Service resolver failed to compile")
-	end
-
-	local loaded = resolver()
 	if type(loaded) ~= "table" then
-		error("Service resolver failed to load")
+		loaded = {}
+	end
+	if type(loaded.cs) ~= "function" then
+		loaded.cs = safeSvc
+	end
+	if type(loaded.cm) ~= "function" then
+		loaded.cm = safeCM
 	end
 
 	if cacheHost then
@@ -35,6 +104,32 @@ local __lt = (function()
 
 	return loaded
 end)()
+
+local function safeReq(mod)
+	if typeof(mod) ~= "Instance" or not mod.Parent or not mod:IsA("ModuleScript") then
+		return nil
+	end
+	if type(require) ~= "function" then
+		return nil
+	end
+	local ok, res = pcall(require, mod)
+	if ok then
+		return res
+	end
+	return nil
+end
+
+local function waitChild(parent, name, tm)
+	if typeof(parent) ~= "Instance" then
+		return nil
+	end
+	return parent:FindFirstChild(name) or parent:WaitForChild(name, tm or 10)
+end
+
+local function stepSig()
+	local r = safeSvc("RunService")
+	return r and (r.PreSimulation or r.Heartbeat or r.RenderStepped)
+end
 
 if type(gEnv.__na_aex_cleanup) == "function" then
 	pcall(gEnv.__na_aex_cleanup)
@@ -46,35 +141,75 @@ if game.GameId ~= 4538598064 then
 	return
 end
 
-local Plrs = __lt.cs("Players", cloneref)
-local Run = __lt.cs("RunService", cloneref)
-local SS = __lt.cs("SoundService", cloneref)
-local TS = __lt.cs("TweenService", cloneref)
-local RSrv = __lt.cs("ReplicatedStorage", cloneref)
-local UIS = __lt.cs("UserInputService", cloneref)
-local SG = __lt.cs("StarterGui", cloneref)
+local cref = type(cloneref) == "function" and cloneref or nil
+local Plrs = __lt.cs("Players", cref)
+local Run = __lt.cs("RunService", cref)
+local SS = __lt.cs("SoundService", cref)
+local TS = __lt.cs("TweenService", cref)
+local RSrv = __lt.cs("ReplicatedStorage", cref)
+local UIS = __lt.cs("UserInputService", cref)
+local SG = __lt.cs("StarterGui", cref)
 local WS = workspace
 
-local lp = Plrs.LocalPlayer
+local lp = Plrs and Plrs.LocalPlayer
 if not lp then
 	gEnv.__na_aex = nil
 	return
 end
 
-local BM = require(RSrv.TS.BindableManager).BindableManager
-local AbilityID = require(RSrv.TS.Enums.AbilityID).AbilityID
-local Def = (require(RSrv.TS.Abilities.DeflectAbility)).DeflectAbility
+local TSFolder = waitChild(RSrv, "TS", 10)
+local Remotes = waitChild(RSrv, "Remotes", 10)
+local GenRemotes = TSFolder and TSFolder:FindFirstChild("GeneratedNetworkRemotes")
+local BallSyncRemote = Remotes and Remotes:FindFirstChild("BallSyncData")
+
+local bmMod = TSFolder and safeReq(TSFolder:FindFirstChild("BindableManager"))
+local BM = bmMod and bmMod.BindableManager or nil
+local enumFolder = TSFolder and TSFolder:FindFirstChild("Enums")
+local abMod = enumFolder and safeReq(enumFolder:FindFirstChild("AbilityID"))
+local AbilityID = abMod and abMod.AbilityID or { Deflect = "Deflect" }
+local abilFolder = TSFolder and TSFolder:FindFirstChild("Abilities")
+local defMod = abilFolder and safeReq(abilFolder:FindFirstChild("DeflectAbility"))
+local Def = defMod and defMod.DeflectAbility or {}
 local PNotif = __lt.cm("ReplicatedStorage", "FindFirstChild", "PromptNotification")
-local Remotes = RSrv:WaitForChild("Remotes")
+
+local function refreshRefs()
+	if not RSrv then
+		return
+	end
+	if not (TSFolder and TSFolder.Parent) then
+		TSFolder = RSrv:FindFirstChild("TS")
+	end
+	if not (Remotes and Remotes.Parent) then
+		Remotes = RSrv:FindFirstChild("Remotes")
+	end
+	if TSFolder and not (GenRemotes and GenRemotes.Parent) then
+		GenRemotes = TSFolder:FindFirstChild("GeneratedNetworkRemotes")
+	end
+	if Remotes and not (BallSyncRemote and BallSyncRemote.Parent) then
+		BallSyncRemote = Remotes:FindFirstChild("BallSyncData")
+	end
+end
 
 local oAvail
-oAvail = hookfunction(Def.IsAvailable, function(self, ...)
-	return true
-end)
+if type(hookfunction) == "function" and type(Def.IsAvailable) == "function" then
+	pcall(function()
+		oAvail = hookfunction(Def.IsAvailable, function(self, ...)
+			return true
+		end)
+	end)
+end
+if not oAvail and type(Def) == "table" and type(Def.IsAvailable) == "function" then
+	pcall(function()
+		Def.IsAvailable = function(self, ...)
+			return true
+		end
+	end)
+end
 
 local cleanup
 local notify
 local parryRemote
+local parryMode
 local parryInitDone = false
 local parryRemoteLocked = false
 local cooldownFrame
@@ -109,29 +244,137 @@ local function sameSize(a, b)
 		and a.Y.Offset == b.Y.Offset
 end
 
+local function validRemote(remote)
+	return typeof(remote) == "Instance" and remote.Parent ~= nil and remote:IsA("RemoteEvent")
+end
+
+local gameEnv
+local gameG
+
+local function getGameGlobal()
+	if type(gameG) == "table" then
+		return gameG, gameEnv
+	end
+
+	if type(getfenv) == "function" then
+		local fns = {}
+		if type(Def) == "table" then
+			fns[#fns + 1] = Def.Deflect
+			fns[#fns + 1] = Def.OnClientCreate
+			fns[#fns + 1] = Def.OnServerCreate
+			fns[#fns + 1] = Def.constructor
+		end
+
+		for i = 1, #fns do
+			local fn = fns[i]
+			if type(fn) == "function" then
+				local ok, env = pcall(getfenv, fn)
+				if ok and type(env) == "table" then
+					gameEnv = env
+					local g = rawget(env, "_G")
+					gameG = type(g) == "table" and g or env
+					return gameG, gameEnv
+				end
+			end
+		end
+	end
+
+	gameEnv = type(_G) == "table" and _G or {}
+	gameG = gameEnv
+	return gameG, gameEnv
+end
+
+local function getGameDid()
+	local g, env = getGameGlobal()
+	local did = type(g) == "table" and rawget(g, "did") or nil
+	if validRemote(did) then
+		return did
+	end
+
+	did = type(env) == "table" and rawget(env, "did") or nil
+	if validRemote(did) then
+		return did
+	end
+
+	return nil
+end
+
+local function setGameDid(remote)
+	local g, env = getGameGlobal()
+	if type(g) == "table" then
+		rawset(g, "did", remote)
+	end
+	if type(env) == "table" and env ~= g and rawget(env, "_G") == nil then
+		rawset(env, "did", remote)
+	end
+end
+
+local function cacheParryRemote(remote, mode, locked)
+	if not validRemote(remote) then
+		return nil
+	end
+
+	parryRemote = remote
+	parryMode = mode
+
+	if locked ~= nil then
+		parryRemoteLocked = locked and true or false
+	end
+
+	if mode == "buffer" then
+		setGameDid(remote)
+	end
+
+	return parryRemote, parryMode
+end
+
+local function getGeneratedRemote(id)
+	refreshRefs()
+	if not TSFolder then
+		return nil
+	end
+	if not (GenRemotes and GenRemotes.Parent) then
+		GenRemotes = TSFolder:FindFirstChild("GeneratedNetworkRemotes")
+	end
+
+	if not GenRemotes then
+		return nil
+	end
+
+	local remote = GenRemotes:FindFirstChild("RE_" .. tostring(id))
+	if validRemote(remote) then
+		return remote
+	end
+
+	return nil
+end
+
 local function resolveParryRemote()
+	refreshRefs()
 	if parryRemoteLocked then
-		if parryRemote and parryRemote.Parent then
-			return parryRemote
+		if validRemote(parryRemote) then
+			return parryRemote, parryMode
 		end
 		return nil
 	end
 
-	if parryRemote and parryRemote.Parent then
-		return parryRemote
+	if validRemote(parryRemote) then
+		return parryRemote, parryMode
 	end
 
-	local globalDid = rawget(_G, "did")
-	if typeof(globalDid) == "Instance" then
-		parryRemote = globalDid
-		return parryRemote
+	local globalDid = getGameDid()
+	if validRemote(globalDid) then
+		return cacheParryRemote(globalDid, "buffer")
 	end
 
-	local byName = Remotes:FindFirstChild("pr_" .. tostring(lp.UserId))
-	if typeof(byName) == "Instance" then
-		parryRemote = byName
-		_G.did = byName
-		return parryRemote
+	local byName = Remotes and Remotes:FindFirstChild("pr_" .. tostring(lp.UserId))
+	if validRemote(byName) then
+		return cacheParryRemote(byName, "buffer")
+	end
+
+	local generated = getGeneratedRemote(1)
+	if validRemote(generated) then
+		return cacheParryRemote(generated, "event")
 	end
 
 	return nil
@@ -157,9 +400,18 @@ local function ensureParryInitialized()
 		return true
 	end
 
-	local remote = resolveParryRemote()
+	local remote, mode = resolveParryRemote()
+	if not remote then
+		return false
+	end
+
+	if mode == "event" then
+		parryInitDone = true
+		return true
+	end
+
 	local payload = makeDeflectBuffer(2)
-	if not (remote and payload) then
+	if not payload then
 		return false
 	end
 
@@ -173,7 +425,8 @@ local function ensureParryInitialized()
 end
 
 local function probeNamedRemoteEvents()
-	if probingRemote then
+	refreshRefs()
+	if probingRemote or not Remotes then
 		return nil
 	end
 
@@ -213,13 +466,11 @@ local function probeNamedRemoteEvents()
 			local sz = cd.Size
 			local changed = not sameSize(sz, baseline)
 			if changed then
-				parryRemote = remote
+				cacheParryRemote(remote, "buffer", true)
 				parryInitDone = true
-				parryRemoteLocked = true
-				_G.did = remote
 				notify("Parry remote found: " .. remote.Name, true)
 				probingRemote = false
-				return parryRemote
+				return parryRemote, parryMode
 			end
 		end
 	end
@@ -229,6 +480,10 @@ local function probeNamedRemoteEvents()
 end
 
 local function getDeflectAbility()
+	if not BM or not AbilityID or AbilityID.Deflect == nil then
+		return nil
+	end
+
 	local okFn, fn = pcall(function()
 		return BM:GetFunction("AbilityManager::GetAbility")
 	end)
@@ -255,56 +510,81 @@ function notify(txt, okv)
 				return
 			end
 		end
-		pcall(function()
-			SG:SetCore("SendNotification", {
-				Title = "Nameless Admin",
-				Text = tostring(txt),
-				Duration = 4
-			})
-		end)
+		if SG then
+			pcall(function()
+				SG:SetCore("SendNotification", {
+					Title = "Nameless Admin",
+					Text = tostring(txt),
+					Duration = 4
+				})
+			end)
+		end
 	end)
 end
 
+local function fireParryRemote(remote, mode, flag)
+	if not validRemote(remote) then
+		return false
+	end
+
+	if mode == "event" then
+		local ok = pcall(function()
+			remote:FireServer()
+		end)
+		return ok
+	end
+
+	local payload = makeDeflectBuffer(flag or 1)
+	if not payload then
+		return false
+	end
+
+	ensureParryInitialized()
+
+	local ok = pcall(function()
+		remote:FireServer(payload)
+	end)
+	return ok
+end
+
 local function sendParry()
-	if parryRemoteLocked and parryRemote and parryRemote.Parent then
-		local payload = makeDeflectBuffer(1)
-		if payload ~= nil then
-			ensureParryInitialized()
-			pcall(function()
-				parryRemote:FireServer(payload)
-			end)
-		end
+	local remote, mode = resolveParryRemote()
+	if remote and fireParryRemote(remote, mode, 1) then
 		return
 	end
 
 	local ability = getDeflectAbility()
-	if ability and type(ability.Deflect) == "function" then
-		local ok = pcall(function()
-			ability:Deflect()
-		end)
-		if ok then
+	if ability then
+		local did = rawget(ability, "did")
+		if validRemote(did) and fireParryRemote((cacheParryRemote(did, "buffer")), "buffer", 1) then
 			return
 		end
 	end
 
-	local remote = resolveParryRemote()
-	if not remote then
-		remote = probeNamedRemoteEvents()
+	remote, mode = probeNamedRemoteEvents()
+	if remote and fireParryRemote(remote, mode, 1) then
+		return
 	end
-	local payload = makeDeflectBuffer(1)
-	if remote and payload ~= nil then
-		ensureParryInitialized()
+
+	if ability and type(ability.Deflect) == "function" and validRemote(getGameDid()) then
 		pcall(function()
-			remote:FireServer(payload)
+			ability:Deflect()
 		end)
 	end
 end
 
 notify("super scuffed autoparry loaded 💀💀💀", true)
 task.defer(function()
-	local found = probeNamedRemoteEvents()
+	local found, mode = resolveParryRemote()
 	if found then
-		notify("Parry remote detected successfully", true)
+		ensureParryInitialized()
+		notify("Parry remote detected successfully: " .. tostring(mode), true)
+		return
+	end
+
+	found, mode = probeNamedRemoteEvents()
+	if found then
+		notify("Parry remote detected successfully: " .. tostring(mode), true)
 	else
 		ensureParryInitialized()
 	end
@@ -517,20 +797,17 @@ end
 
 local gi
 do
-	local ok, mod = pcall(function()
-		return require((__lt.cm("ReplicatedStorage", "WaitForChild", "TS")):WaitForChild("GameInfo"))
-	end)
-	if ok and mod and mod.GameInfo then
+	local mod = TSFolder and safeReq(TSFolder:FindFirstChild("GameInfo"))
+	if mod and mod.GameInfo then
 		gi = mod.GameInfo
 	end
 end
 
 local br
 do
-	local ok, mod = pcall(function()
-		return require(((__lt.cm("ReplicatedStorage", "WaitForChild", "TS")):WaitForChild("BallReplicator")):WaitForChild("BallReplicator"))
-	end)
-	if ok and mod and mod.BallReplicator then
+	local bf = TSFolder and TSFolder:FindFirstChild("BallReplicator")
+	local mod = bf and safeReq(bf:FindFirstChild("BallReplicator"))
+	if mod and mod.BallReplicator then
 		br = mod.BallReplicator
 	end
 end
@@ -557,6 +834,11 @@ local mob
 local syncIcon = false
 local bindId = 0
 local dead = false
+local ballConn
+local ballSync
+local ballSyncAt = 0
+local ballCache
+local ballScanAt = 0
 
 local delMap = {
 	ballhit = true,
@@ -579,26 +861,197 @@ local function kill(o)
 	return nil
 end
 
-local function getBall()
-	local bm = gi and gi.BallModel
-	if bm and bm.Parent then
-		return bm
+local function usefulSync(sd)
+	if type(sd) ~= "table" then
+		return false
 	end
-	return WS:FindFirstChild("GameBall", true) or WS:FindFirstChild("GameBall")
+
+	local tid = tonumber(rawget(sd, "TargetPlayerID")) or -1
+	local hid = tonumber(rawget(sd, "HighlightTargetPlayerID")) or -1
+	local spd = tonumber(rawget(sd, "Speed")) or 0
+	local rp = rawget(sd, "RealPosition")
+	return tid > 0 or hid > 0 or spd > 0 or (typeof(rp) == "Vector3" and rp.Magnitude > 0.01)
 end
 
-local function tgtOn(ch)
-	if ch and ch:FindFirstChild("Highlight") then
-		return true
-	end
-
-	local t = WS:GetAttribute("GameBallTarget")
-	if t == lp.UserId then
-		return true
+local function getSync()
+	if usefulSync(ballSync) then
+		return ballSync
 	end
 
 	local sd = br and br.syncData
-	if sd and sd.HighlightTargetPlayerID == lp.UserId then
+	if usefulSync(sd) then
+		return sd
+	end
+
+	if type(ballSync) == "table" then
+		return ballSync
+	end
+
+	if type(sd) == "table" then
+		return sd
+	end
+
+	return nil
+end
+
+local function hookBallSync()
+	refreshRefs()
+	if ballConn or not Remotes then
+		return
+	end
+
+	if not (BallSyncRemote and BallSyncRemote.Parent) then
+		BallSyncRemote = Remotes:FindFirstChild("BallSyncData")
+	end
+
+	if not validRemote(BallSyncRemote) then
+		return
+	end
+
+	ballConn = BallSyncRemote.OnClientEvent:Connect(function(sd)
+		if type(sd) == "table" then
+			ballSync = sd
+			ballSyncAt = os.clock()
+		end
+	end)
+end
+
+hookBallSync()
+
+local function sameId(v, id)
+	local n = tonumber(v)
+	return n ~= nil and n == id
+end
+
+local function getPart(o)
+	if typeof(o) ~= "Instance" or not o.Parent then
+		return nil
+	end
+
+	if o:IsA("BasePart") then
+		return o
+	end
+
+	if o:IsA("Model") then
+		return o.PrimaryPart or o:FindFirstChildWhichIsA("BasePart", true)
+	end
+
+	return nil
+end
+
+local function getBall()
+	local bm = gi and gi.BallModel
+	local bp = getPart(bm)
+	if bp then
+		ballCache = bp
+		return bp
+	end
+
+	if ballCache and ballCache.Parent then
+		return ballCache
+	end
+
+	local now = os.clock()
+	if now - ballScanAt < 0.2 then
+		return nil
+	end
+
+	ballScanAt = now
+	bp = getPart(WS:FindFirstChild("GameBall", true))
+	if bp then
+		ballCache = bp
+		return bp
+	end
+
+	return nil
+end
+
+local function getRoot(plr)
+	local ch = plr and plr.Character
+	if not ch then
+		return nil
+	end
+	return ch:FindFirstChild("HumanoidRootPart")
+end
+
+local function getBallPos(ball, sd)
+	local bp
+	if ball and ball.Parent then
+		bp = ball.Position
+	end
+
+	local rp = sd and rawget(sd, "RealPosition")
+	if typeof(rp) == "Vector3" and rp.Magnitude > 0.01 then
+		if not bp or (rp - bp).Magnitude > 24 then
+			return rp
+		end
+	end
+
+	if bp then
+		return bp
+	end
+
+	local tp = sd and rawget(sd, "TeleportPosition")
+	if typeof(tp) == "Vector3" and tp.Magnitude > 0.01 then
+		return tp
+	end
+
+	return nil
+end
+
+local function getSyncVel(sd, bp, hrpPos)
+	if type(sd) ~= "table" or not bp then
+		return nil
+	end
+
+	local spd = tonumber(rawget(sd, "Speed")) or 0
+	if spd <= 0 then
+		return nil
+	end
+
+	local dir = br and br.clientBallDir
+	if typeof(dir) ~= "Vector3" or dir.Magnitude <= 0.01 then
+		dir = rawget(sd, "ForcedDirection")
+	end
+
+	if typeof(dir) ~= "Vector3" or dir.Magnitude <= 0.01 then
+		local id = tonumber(rawget(sd, "TargetPlayerID")) or tonumber(rawget(sd, "HighlightTargetPlayerID"))
+		local plr = id and Plrs:GetPlayerByUserId(id)
+		local root = getRoot(plr)
+		if root then
+			dir = root.Position - bp
+		elseif hrpPos then
+			dir = hrpPos - bp
+		end
+	end
+
+	if typeof(dir) == "Vector3" and dir.Magnitude > 0.01 then
+		return dir.Unit * spd
+	end
+
+	return nil
+end
+
+local function getWindow(spd)
+	local a = math.clamp((spd - 16) / 584, 0, 1)
+	return math.clamp(0.85 + (0.2 - 0.85) * a, 0.2, 0.65)
+end
+
+local function tgtOn(ch)
+	local id = lp.UserId
+	local t = WS:GetAttribute("GameBallTarget")
+	if sameId(t, id) then
+		return true
+	end
+
+	local sd = getSync()
+	if sd then
+		if sameId(rawget(sd, "HighlightTargetPlayerID"), id) or sameId(rawget(sd, "TargetPlayerID"), id) then
+			return true
+		end
+	end
+
+	if ch and (ch:FindFirstChildWhichIsA("Highlight", true) or ch:FindFirstChild("Highlight")) then
 		return true
 	end
 
@@ -660,9 +1113,12 @@ local function setSpam(v)
 
 	if cfg.spam then
 		if not spamConn then
-			spamConn = Run.PreSimulation:Connect(function()
-				sendParry()
-			end)
+			local sig = stepSig()
+			if sig then
+				spamConn = sig:Connect(function()
+					sendParry()
+				end)
+			end
 		end
 	else
 		spamConn = disc(spamConn)
@@ -735,7 +1191,12 @@ local function bind(ch)
 	local ballAt = 0
 	local ballCd = 0.03
 
-	simConn = Run.PreSimulation:Connect(function(dt)
+	local sig = stepSig()
+	if not sig then
+		return
+	end
+
+	simConn = sig:Connect(function(dt)
 		if dead or myId ~= bindId then
 			return
 		end
@@ -752,19 +1213,32 @@ local function bind(ch)
 			ballAt = now
 		end
 
-		if not (ball and ball.Parent) then
+		local sd = getSync()
+		local hrpPos = hrp.Position
+		local bp = getBallPos(ball, sd)
+		if not bp then
+			hookBallSync()
 			ring.Color = cfg.spam and red or white
-			ring.CFrame = CFrame.new(hrp.Position)
+			ring.CFrame = CFrame.new(hrpPos)
 			return
 		end
 
-		local bp = ball.Position
 		local raw
-		local okVel, av = pcall(function()
-			return ball.AssemblyLinearVelocity
-		end)
+		local okVel = false
+		local av
+		if ball and ball.Parent then
+			okVel, av = pcall(function()
+				return ball.AssemblyLinearVelocity
+			end)
+		end
 
-		if okVel and typeof(av) == "Vector3" and av.Magnitude > 0.1 then
+		local sv = getSyncVel(sd, bp, hrpPos)
+		if sv and (not okVel or typeof(av) ~= "Vector3" or av.Magnitude < 0.1 or math.abs(av.Magnitude - sv.Magnitude) > 45) then
+			raw = sv
+			vel = sv
+			lastPos = bp
+			lastT = now
+		elseif okVel and typeof(av) == "Vector3" and av.Magnitude > 0.1 then
 			raw = av
 			vel = av
 			lastPos = bp
@@ -781,8 +1255,6 @@ local function bind(ch)
 			lastPos = bp
 			lastT = now
 		end
-
-		local hrpPos = hrp.Position
 		local spd = vel.Magnitude
 		local rad = spd * 0.32 + 6
 
@@ -806,7 +1278,10 @@ local function bind(ch)
 			tImp = d / spd
 		end
 
-		local can = ok and app and spd > 5 and d <= parryRad and tImp <= 0.35
+		local locked = sd and rawget(sd, "Locked") == true
+		local grace = sd and rawget(sd, "Grace") == true
+		local win = getWindow(spd)
+		local can = ok and not locked and app and spd > 5 and d <= parryRad and (tImp <= win or (grace and d <= parryRad * 0.65))
 
 		if cfg.spam then
 			ring.Color = red
@@ -834,20 +1309,22 @@ local function bind(ch)
 	end)
 end
 
-UIS.InputBegan:Connect(function(inp, gpe)
-	if gpe then
-		return
-	end
+if UIS then
+	UIS.InputBegan:Connect(function(inp, gpe)
+		if gpe then
+			return
+		end
 
-	local kc = inp.KeyCode
-	if kc == Enum.KeyCode.X then
-		setSpam(not cfg.spam)
-	elseif kc == Enum.KeyCode.Z then
-		setVis(not cfg.vis)
-	elseif kc == Enum.KeyCode.C then
-		setFx(not cfg.fx)
-	end
-end)
+		local kc = inp.KeyCode
+		if kc == Enum.KeyCode.X then
+			setSpam(not cfg.spam)
+		elseif kc == Enum.KeyCode.Z then
+			setVis(not cfg.vis)
+		elseif kc == Enum.KeyCode.C then
+			setFx(not cfg.fx)
+		end
+	end)
+end
 
 task.spawn(function()
 	local ok, Icon = pcall(function()
@@ -942,6 +1419,7 @@ task.spawn(function()
 			spamConn = disc(spamConn)
 			charConn = disc(charConn)
 			fxConn = disc(fxConn)
+			ballConn = disc(ballConn)
 		end)
 	end
 
@@ -1005,6 +1483,7 @@ cleanup = function()
 	spamConn = disc(spamConn)
 	charConn = disc(charConn)
 	fxConn = disc(fxConn)
+	ballConn = disc(ballConn)
 	if mob and mob.root and type(mob.root.destroy) == "function" then
 		pcall(function()
 			mob.root:destroy()

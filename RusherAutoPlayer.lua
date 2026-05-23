@@ -202,6 +202,7 @@ A.envnames = { "game", "song", "menu", "cfg", "assist", "load", "caj", "news", "
 A.vars = {}
 A.last = {}
 A.keys = {}
+A.upq = {}
 A.cfg = {
 	ap = false,
 	cap = false,
@@ -209,10 +210,14 @@ A.cfg = {
 	ninp = false,
 	keep = false,
 	cwin = 55,
+	tlead = 18,
+	tdur = 12,
 	hlate = 45,
 	rlate = 22,
 	rlead = 65,
 	clead = 45,
+	ctail = 160,
+	late = 180,
 	speed = 1,
 	off = 0,
 	voff = 0,
@@ -794,6 +799,25 @@ A.fake = function(k, down)
 	}
 end
 
+A.hasenv = function(fn)
+	local e = A.env("game")
+	return e and type(e[fn]) == "function"
+end
+
+A.evk = function(k, down)
+	local e = A.env("game")
+	if not e then
+		return false
+	end
+
+	local fn = if down == false then e.release else e.input
+	if type(fn) ~= "function" then
+		return false
+	end
+
+	return pcall(fn, A.fake(k, down), false)
+end
+
 A.getvim = function()
 	if A.vim and typeof(A.vim) == "Instance" then
 		return A.vim
@@ -828,6 +852,168 @@ A.vkey = function(k, down)
 	return ok
 end
 
+A.firecons = function(sig, k, down)
+	if not sig or not k then
+		return false
+	end
+
+	local inp = A.fake(k, down)
+	local fired = false
+
+	if type(firesignal) == "function" then
+		local ok = pcall(firesignal, sig, inp, false)
+		if ok then
+			fired = true
+		end
+	end
+
+	if fired then
+		return true
+	end
+
+	if type(getconnections) ~= "function" then
+		return false
+	end
+
+	local ok, cons = pcall(getconnections, sig)
+	if not ok or type(cons) ~= "table" then
+		return false
+	end
+
+	for _, c in ipairs(cons) do
+		local enabled = true
+		pcall(function()
+			if c.Enabled == false then
+				enabled = false
+			end
+		end)
+
+		if enabled then
+			local ok2 = false
+
+			if type(c.Fire) == "function" then
+				ok2 = pcall(function()
+					c:Fire(inp, false)
+				end)
+			elseif type(c.fire) == "function" then
+				ok2 = pcall(function()
+					c:fire(inp, false)
+				end)
+			else
+				local fn = nil
+				pcall(function()
+					fn = c.Function or c._function
+				end)
+
+				if type(fn) == "function" then
+					ok2 = pcall(fn, inp, false)
+				end
+			end
+
+			if ok2 then
+				fired = true
+			end
+		end
+	end
+
+	return fired
+end
+
+A.hasin = function(list, k)
+	if type(list) ~= "table" then
+		return nil
+	end
+
+	for i, v in ipairs(list) do
+		if type(v) == "table" and v[1] == k then
+			return i
+		end
+	end
+
+	return nil
+end
+
+A.markdown = function(k)
+	if not k then
+		return false
+	end
+
+	local e = A.env("game")
+	if not e or type(e.release) ~= "function" then
+		return false
+	end
+
+	local t27 = A.guv(e.release, "t27")
+	local t28 = A.guv(e.release, "t28")
+	local ok = false
+	local tm = tick()
+
+	if type(t27) == "table" then
+		if not A.hasin(t27, k) then
+			table.insert(t27, { k, tm })
+		end
+		ok = true
+	end
+
+	if type(t28) == "table" then
+		if not A.hasin(t28, k) then
+			table.insert(t28, { k, tm })
+		end
+		ok = true
+	end
+
+	if ok then
+		A.keys[k] = true
+	end
+
+	return ok
+end
+
+A.rawpress = function(k)
+	if not k then
+		return false
+	end
+
+	if A.evk(k, true) then
+		A.keys[k] = true
+		return true
+	end
+
+	if A.firecons(A.uis.InputBegan, k, true) then
+		A.keys[k] = true
+		return true
+	end
+
+	if A.vkey(k, true) then
+		A.keys[k] = true
+		return true
+	end
+
+	return false
+end
+
+A.rawrel = function(k)
+	if not k then
+		return false
+	end
+
+	A.keys[k] = nil
+
+	if A.evk(k, false) then
+		return true
+	end
+
+	if A.firecons(A.uis.InputEnded, k, false) then
+		return true
+	end
+
+	if A.vkey(k, false) then
+		return true
+	end
+
+	return false
+end
+
 A.gpress = function(k, force)
 	k = k or A.nextkey(A.kpool)
 	if not k then
@@ -838,15 +1024,13 @@ A.gpress = function(k, force)
 		return true
 	end
 
-	if A.vkey(k, true) then
+	if A.evk(k, true) then
 		A.keys[k] = true
 		return true
 	end
 
-	local e = A.env("game")
-	if e and type(e.input) == "function" then
+	if A.vkey(k, true) then
 		A.keys[k] = true
-		pcall(e.input, A.fake(k, true), false)
 		return true
 	end
 
@@ -857,22 +1041,49 @@ A.grel = function(k, force)
 	if not k then
 		return false
 	end
+
 	A.keys[k] = nil
 
-	if A.vkey(k, false) then
+	if A.evk(k, false) then
 		return true
 	end
 
-	local e = A.env("game")
-	if e and type(e.release) == "function" then
-		pcall(e.release, A.fake(k, false), false)
+	if A.vkey(k, false) then
 		return true
 	end
 
 	return false
 end
 
-A.tap = function(k)
+A.relq = function(k, t)
+	if not k then
+		return false
+	end
+
+	table.insert(A.upq, {
+		k = k,
+		t = t or os.clock()
+	})
+
+	return true
+end
+
+A.flush = function()
+	local now = os.clock()
+
+	for i = #A.upq, 1, -1 do
+		local it = A.upq[i]
+		local k = it and it.k
+		if not k or not A.keys[k] then
+			table.remove(A.upq, i)
+		elseif now >= (tonumber(it.t) or now) then
+			A.grel(k, true)
+			table.remove(A.upq, i)
+		end
+	end
+end
+
+A.tap = function(k, dur)
 	k = k or A.nextkey(A.kpool)
 	if not k or A.keys[k] then
 		return false
@@ -882,13 +1093,82 @@ A.tap = function(k)
 		return false
 	end
 
-	task.delay(0.032, function()
-		if A.run then
-			A.grel(k, true)
-		end
-	end)
+	dur = math.clamp((tonumber(dur) or A.cfg.tdur or 12) / 1000, 0.004, 0.08)
+	A.relq(k, os.clock() + dur)
 
 	return true
+end
+
+A.rprep = function(id)
+	local k = A.chart.rkeys[id]
+	if k and A.keys[k] then
+		return true
+	end
+
+	k = A.nextkey(A.kpool) or A.rkey
+	if not k then
+		return false
+	end
+
+	A.chart.rkeys[id] = k
+	return A.markdown(k)
+end
+
+A.dirrel = function()
+	local e = A.env("game")
+	if not e or type(e.release) ~= "function" then
+		return false
+	end
+
+	local list = A.guv(e.release, "t34")
+	local idx = A.guv(e.release, "v67")
+	local now = A.guv(e.release, "v30")
+	local note = type(list) == "table" and type(idx) == "number" and list[idx] or nil
+
+	if type(note) ~= "table" or note.notetype ~= "release" or note.hitted == true or note.obj == nil then
+		return false
+	end
+
+	if type(now) ~= "number" then
+		now = A.gnow() or 0
+	end
+
+	local ok = pcall(function()
+		note:hit(now, false)
+	end)
+
+	if ok and note.hitted == true then
+		A.suv(e.release, "v67", idx + 1)
+		return true
+	end
+
+	return false
+end
+
+A.relhit = function(id)
+	local k = A.chart.rkeys[id] or A.nextkey(A.kpool) or A.rkey
+	A.chart.rkeys[id] = nil
+
+	if not k then
+		return false
+	end
+
+	if not A.keys[k] then
+		if not A.markdown(k) then
+			A.rawpress(k)
+		end
+	end
+
+	local hit = A.dirrel()
+	A.rawrel(k)
+
+	if hit then
+		return true
+	end
+
+	A.rawpress(k)
+	A.rawrel(k)
+	return A.dirrel()
 end
 
 A.chart = {
@@ -1027,6 +1307,7 @@ A.resetkeys = function()
 	A.chart.holds = {}
 	A.chart.rkeys = {}
 	A.chart.catch = false
+	A.upq = {}
 
 	for k in pairs(A.keys) do
 		A.grel(k, true)
@@ -1053,14 +1334,14 @@ A.buildcatch = function(catches)
 			e = t
 		else
 			A.addseq(s - A.cfg.clead / 1000, "cstart", nil, 0.01)
-			A.addseq(e + 0.16, "cend", nil, 0)
+			A.addseq(e + A.cfg.ctail / 1000, "cend", nil, 0)
 			s = t
 			e = t
 		end
 	end
 
 	A.addseq(s - A.cfg.clead / 1000, "cstart", nil, 0.01)
-	A.addseq(e + 0.16, "cend", nil, 0)
+	A.addseq(e + A.cfg.ctail / 1000, "cend", nil, 0)
 end
 
 A.loadchart = function()
@@ -1098,12 +1379,13 @@ A.loadchart = function()
 			elseif nt == 2 then
 				table.insert(catches, ts)
 			elseif nt == 3 then
-				A.addseq(ts + A.cfg.rlate / 1000, "release", id, 0.018)
+				A.addseq(ts - A.cfg.rlead / 1000, "rprep", id, A.cfg.tlead / 1000)
+				A.addseq(ts + A.cfg.rlate / 1000, "release", id, 0.006)
 			elseif en and en > 0 then
-				A.addseq(ts, "hstart", id, 0.018)
+				A.addseq(ts, "hstart", id, A.cfg.tlead / 1000)
 				A.addseq(en * bps + A.cfg.hlate / 1000, "hend", id, 0)
 			else
-				A.addseq(ts, "tap", id, 0.018)
+				A.addseq(ts, "tap", id, A.cfg.tlead / 1000)
 			end
 		end
 	end
@@ -1113,12 +1395,13 @@ A.loadchart = function()
 	table.sort(A.chart.seq, function(a, b)
 		if a.t == b.t then
 			local o = {
-				hstart = 1,
-				cstart = 2,
-				tap = 3,
-				release = 4,
-				cend = 5,
-				hend = 6
+				rprep = 1,
+				hstart = 2,
+				cstart = 3,
+				tap = 4,
+				release = 5,
+				cend = 6,
+				hend = 7
 			}
 			return (o[a.k] or 99) < (o[b.k] or 99)
 		end
@@ -1134,8 +1417,10 @@ A.doev = function(ev)
 
 	if k == "tap" then
 		A.tap()
+	elseif k == "rprep" then
+		A.rprep(id)
 	elseif k == "release" then
-		A.tap()
+		A.relhit(id)
 	elseif k == "hstart" then
 		local hk = A.nexthold()
 		if not hk then
@@ -1163,6 +1448,8 @@ A.doev = function(ev)
 end
 
 A.chartplay = function()
+	A.flush()
+
 	if not A.loadchart() then
 		return
 	end
@@ -1199,7 +1486,7 @@ A.chartplay = function()
 			break
 		end
 
-		if now - ev.t <= 0.18 then
+		if now - ev.t <= math.clamp(A.cfg.late / 1000, 0.04, 0.35) then
 			A.doev(ev)
 		end
 
@@ -1293,10 +1580,12 @@ A.cln = function()
 	A.con = {}
 end
 
-A.add(A.rs.RenderStepped:Connect(function()
+A.step = function()
 	if not A.run then
 		return
 	end
+
+	A.flush()
 
 	if A.cfg.ap then
 		A.setap(true)
@@ -1317,7 +1606,9 @@ A.add(A.rs.RenderStepped:Connect(function()
 	if A.cfg.keep then
 		A.sync()
 	end
-end))
+end
+
+A.add(A.rs.Heartbeat:Connect(A.step))
 
 
 A.hsvc = A.svc("HttpService")
@@ -1697,6 +1988,31 @@ M1:AddSlider("RusherCajonWindow", {
 	end
 })
 
+M1:AddSlider("RusherTapLead", {
+	Text = "Tap Lead",
+	Default = 18,
+	Min = 0,
+	Max = 60,
+	Rounding = 0,
+	Suffix = "ms",
+	Callback = function(v)
+		A.cfg.tlead = v
+		A.chart.cur = nil
+	end
+})
+
+M1:AddSlider("RusherTapHold", {
+	Text = "Tap Hold Time",
+	Default = 12,
+	Min = 4,
+	Max = 45,
+	Rounding = 0,
+	Suffix = "ms",
+	Callback = function(v)
+		A.cfg.tdur = v
+	end
+})
+
 M1:AddSlider("RusherHoldLate", {
 	Text = "Hold Release Delay",
 	Default = 45,
@@ -1723,6 +2039,19 @@ M1:AddSlider("RusherReleaseLate", {
 	end
 })
 
+M1:AddSlider("RusherReleasePrep", {
+	Text = "Release Prep Lead",
+	Default = 65,
+	Min = 0,
+	Max = 150,
+	Rounding = 0,
+	Suffix = "ms",
+	Callback = function(v)
+		A.cfg.rlead = v
+		A.chart.cur = nil
+	end
+})
+
 M1:AddSlider("RusherCatchLead", {
 	Text = "Catch Lead",
 	Default = 45,
@@ -1733,6 +2062,31 @@ M1:AddSlider("RusherCatchLead", {
 	Callback = function(v)
 		A.cfg.clead = v
 		A.chart.cur = nil
+	end
+})
+
+M1:AddSlider("RusherCatchTail", {
+	Text = "Catch End Delay",
+	Default = 160,
+	Min = 40,
+	Max = 260,
+	Rounding = 0,
+	Suffix = "ms",
+	Callback = function(v)
+		A.cfg.ctail = v
+		A.chart.cur = nil
+	end
+})
+
+M1:AddSlider("RusherLateWindow", {
+	Text = "Max Catch-Up",
+	Default = 180,
+	Min = 80,
+	Max = 350,
+	Rounding = 0,
+	Suffix = "ms",
+	Callback = function(v)
+		A.cfg.late = v
 	end
 })
 

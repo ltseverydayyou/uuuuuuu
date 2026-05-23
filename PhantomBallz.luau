@@ -128,7 +128,12 @@ end
 
 local function stepSig()
 	local r = safeSvc("RunService")
-	return r and (r.PreSimulation or r.Heartbeat or r.RenderStepped)
+	return r and (r.PostSimulation or r.Heartbeat or r.PreSimulation or r.RenderStepped)
+end
+
+local function spamSig()
+	local r = safeSvc("RunService")
+	return r and (r.PostSimulation or r.Heartbeat or r.PreSimulation or r.RenderStepped)
 end
 
 if type(gEnv.__na_aex_cleanup) == "function" then
@@ -826,6 +831,10 @@ local yellow = Color3.fromRGB(255, 200, 60)
 
 local simConn
 local spamConn
+local spamAcc = 0
+local spamLast = 0
+local spamStep = 1 / 28
+local spamBurst = 4
 local ancConn
 local charConn
 local fxConn
@@ -834,11 +843,6 @@ local mob
 local syncIcon = false
 local bindId = 0
 local dead = false
-local ballConn
-local ballSync
-local ballSyncAt = 0
-local ballCache
-local ballScanAt = 0
 
 local delMap = {
 	ballhit = true,
@@ -861,197 +865,26 @@ local function kill(o)
 	return nil
 end
 
-local function usefulSync(sd)
-	if type(sd) ~= "table" then
-		return false
-	end
-
-	local tid = tonumber(rawget(sd, "TargetPlayerID")) or -1
-	local hid = tonumber(rawget(sd, "HighlightTargetPlayerID")) or -1
-	local spd = tonumber(rawget(sd, "Speed")) or 0
-	local rp = rawget(sd, "RealPosition")
-	return tid > 0 or hid > 0 or spd > 0 or (typeof(rp) == "Vector3" and rp.Magnitude > 0.01)
-end
-
-local function getSync()
-	if usefulSync(ballSync) then
-		return ballSync
-	end
-
-	local sd = br and br.syncData
-	if usefulSync(sd) then
-		return sd
-	end
-
-	if type(ballSync) == "table" then
-		return ballSync
-	end
-
-	if type(sd) == "table" then
-		return sd
-	end
-
-	return nil
-end
-
-local function hookBallSync()
-	refreshRefs()
-	if ballConn or not Remotes then
-		return
-	end
-
-	if not (BallSyncRemote and BallSyncRemote.Parent) then
-		BallSyncRemote = Remotes:FindFirstChild("BallSyncData")
-	end
-
-	if not validRemote(BallSyncRemote) then
-		return
-	end
-
-	ballConn = BallSyncRemote.OnClientEvent:Connect(function(sd)
-		if type(sd) == "table" then
-			ballSync = sd
-			ballSyncAt = os.clock()
-		end
-	end)
-end
-
-hookBallSync()
-
-local function sameId(v, id)
-	local n = tonumber(v)
-	return n ~= nil and n == id
-end
-
-local function getPart(o)
-	if typeof(o) ~= "Instance" or not o.Parent then
-		return nil
-	end
-
-	if o:IsA("BasePart") then
-		return o
-	end
-
-	if o:IsA("Model") then
-		return o.PrimaryPart or o:FindFirstChildWhichIsA("BasePart", true)
-	end
-
-	return nil
-end
-
 local function getBall()
 	local bm = gi and gi.BallModel
-	local bp = getPart(bm)
-	if bp then
-		ballCache = bp
-		return bp
+	if bm and bm.Parent then
+		return bm
 	end
-
-	if ballCache and ballCache.Parent then
-		return ballCache
-	end
-
-	local now = os.clock()
-	if now - ballScanAt < 0.2 then
-		return nil
-	end
-
-	ballScanAt = now
-	bp = getPart(WS:FindFirstChild("GameBall", true))
-	if bp then
-		ballCache = bp
-		return bp
-	end
-
-	return nil
-end
-
-local function getRoot(plr)
-	local ch = plr and plr.Character
-	if not ch then
-		return nil
-	end
-	return ch:FindFirstChild("HumanoidRootPart")
-end
-
-local function getBallPos(ball, sd)
-	local bp
-	if ball and ball.Parent then
-		bp = ball.Position
-	end
-
-	local rp = sd and rawget(sd, "RealPosition")
-	if typeof(rp) == "Vector3" and rp.Magnitude > 0.01 then
-		if not bp or (rp - bp).Magnitude > 24 then
-			return rp
-		end
-	end
-
-	if bp then
-		return bp
-	end
-
-	local tp = sd and rawget(sd, "TeleportPosition")
-	if typeof(tp) == "Vector3" and tp.Magnitude > 0.01 then
-		return tp
-	end
-
-	return nil
-end
-
-local function getSyncVel(sd, bp, hrpPos)
-	if type(sd) ~= "table" or not bp then
-		return nil
-	end
-
-	local spd = tonumber(rawget(sd, "Speed")) or 0
-	if spd <= 0 then
-		return nil
-	end
-
-	local dir = br and br.clientBallDir
-	if typeof(dir) ~= "Vector3" or dir.Magnitude <= 0.01 then
-		dir = rawget(sd, "ForcedDirection")
-	end
-
-	if typeof(dir) ~= "Vector3" or dir.Magnitude <= 0.01 then
-		local id = tonumber(rawget(sd, "TargetPlayerID")) or tonumber(rawget(sd, "HighlightTargetPlayerID"))
-		local plr = id and Plrs:GetPlayerByUserId(id)
-		local root = getRoot(plr)
-		if root then
-			dir = root.Position - bp
-		elseif hrpPos then
-			dir = hrpPos - bp
-		end
-	end
-
-	if typeof(dir) == "Vector3" and dir.Magnitude > 0.01 then
-		return dir.Unit * spd
-	end
-
-	return nil
-end
-
-local function getWindow(spd)
-	local a = math.clamp((spd - 16) / 584, 0, 1)
-	return math.clamp(0.85 + (0.2 - 0.85) * a, 0.2, 0.65)
+	return WS:FindFirstChild("GameBall", true) or WS:FindFirstChild("GameBall")
 end
 
 local function tgtOn(ch)
-	local id = lp.UserId
-	local t = WS:GetAttribute("GameBallTarget")
-	if sameId(t, id) then
+	if ch and ch:FindFirstChild("Highlight") then
 		return true
 	end
 
-	local sd = getSync()
-	if sd then
-		if sameId(rawget(sd, "HighlightTargetPlayerID"), id) or sameId(rawget(sd, "TargetPlayerID"), id) then
-			return true
-		end
+	local t = WS:GetAttribute("GameBallTarget")
+	if t == lp.UserId then
+		return true
 	end
 
-	if ch and (ch:FindFirstChildWhichIsA("Highlight", true) or ch:FindFirstChild("Highlight")) then
+	local sd = br and br.syncData
+	if sd and sd.HighlightTargetPlayerID == lp.UserId then
 		return true
 	end
 
@@ -1103,6 +936,39 @@ local function updIcons()
 	syncIcon = false
 end
 
+local function runSpam(dt)
+	if not cfg.spam then
+		return
+	end
+
+	local now = os.clock()
+	local add = 0
+	if spamLast > 0 then
+		add = now - spamLast
+	elseif type(dt) == "number" and dt > 0 then
+		add = dt
+	end
+	spamLast = now
+
+	if type(dt) == "number" and dt > add and dt < 0.25 then
+		add = dt
+	end
+
+	if add < 0 then
+		add = 0
+	elseif add > spamStep * spamBurst then
+		add = spamStep * spamBurst
+	end
+
+	spamAcc = math.min(spamAcc + add, spamStep * spamBurst)
+	local sent = 0
+	while spamAcc >= spamStep and sent < spamBurst do
+		spamAcc -= spamStep
+		sent += 1
+		sendParry()
+	end
+end
+
 local function setSpam(v)
 	if cfg.spam == v then
 		updIcons()
@@ -1112,16 +978,20 @@ local function setSpam(v)
 	cfg.spam = v
 
 	if cfg.spam then
+		spamAcc = spamStep
+		spamLast = os.clock()
 		if not spamConn then
-			local sig = stepSig()
+			local sig = spamSig()
 			if sig then
-				spamConn = sig:Connect(function()
-					sendParry()
+				spamConn = sig:Connect(function(dt)
+					runSpam(dt)
 				end)
 			end
 		end
 	else
 		spamConn = disc(spamConn)
+		spamAcc = 0
+		spamLast = 0
 	end
 
 	updIcons()
@@ -1213,32 +1083,19 @@ local function bind(ch)
 			ballAt = now
 		end
 
-		local sd = getSync()
-		local hrpPos = hrp.Position
-		local bp = getBallPos(ball, sd)
-		if not bp then
-			hookBallSync()
+		if not (ball and ball.Parent) then
 			ring.Color = cfg.spam and red or white
-			ring.CFrame = CFrame.new(hrpPos)
+			ring.CFrame = CFrame.new(hrp.Position)
 			return
 		end
 
+		local bp = ball.Position
 		local raw
-		local okVel = false
-		local av
-		if ball and ball.Parent then
-			okVel, av = pcall(function()
-				return ball.AssemblyLinearVelocity
-			end)
-		end
+		local okVel, av = pcall(function()
+			return ball.AssemblyLinearVelocity
+		end)
 
-		local sv = getSyncVel(sd, bp, hrpPos)
-		if sv and (not okVel or typeof(av) ~= "Vector3" or av.Magnitude < 0.1 or math.abs(av.Magnitude - sv.Magnitude) > 45) then
-			raw = sv
-			vel = sv
-			lastPos = bp
-			lastT = now
-		elseif okVel and typeof(av) == "Vector3" and av.Magnitude > 0.1 then
+		if okVel and typeof(av) == "Vector3" and av.Magnitude > 0.1 then
 			raw = av
 			vel = av
 			lastPos = bp
@@ -1255,6 +1112,8 @@ local function bind(ch)
 			lastPos = bp
 			lastT = now
 		end
+
+		local hrpPos = hrp.Position
 		local spd = vel.Magnitude
 		local rad = spd * 0.32 + 6
 
@@ -1278,10 +1137,7 @@ local function bind(ch)
 			tImp = d / spd
 		end
 
-		local locked = sd and rawget(sd, "Locked") == true
-		local grace = sd and rawget(sd, "Grace") == true
-		local win = getWindow(spd)
-		local can = ok and not locked and app and spd > 5 and d <= parryRad and (tImp <= win or (grace and d <= parryRad * 0.65))
+		local can = ok and app and spd > 5 and d <= parryRad and tImp <= 0.35
 
 		if cfg.spam then
 			ring.Color = red
@@ -1419,7 +1275,6 @@ task.spawn(function()
 			spamConn = disc(spamConn)
 			charConn = disc(charConn)
 			fxConn = disc(fxConn)
-			ballConn = disc(ballConn)
 		end)
 	end
 
@@ -1483,7 +1338,6 @@ cleanup = function()
 	spamConn = disc(spamConn)
 	charConn = disc(charConn)
 	fxConn = disc(fxConn)
-	ballConn = disc(ballConn)
 	if mob and mob.root and type(mob.root.destroy) == "function" then
 		pcall(function()
 			mob.root:destroy()

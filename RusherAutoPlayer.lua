@@ -1,14 +1,204 @@
+local __lt = (function()
+	local ge = {}
+	pcall(function()
+		if type(getgenv) == "function" then
+			ge = getgenv()
+		end
+	end)
+	if type(ge) ~= "table" then
+		ge = type(_G) == "table" and _G or {}
+	end
+
+	local sh = nil
+	pcall(function()
+		if type(_G) == "table" then
+			sh = rawget(_G, "shared")
+		end
+	end)
+	if type(sh) ~= "table" then
+		pcall(function()
+			sh = shared
+		end)
+	end
+
+	local host = type(sh) == "table" and sh or (type(ge) == "table" and ge or nil)
+
+	if host then
+		local ok, old = pcall(function()
+			return rawget(host, "__lt_service_resolver")
+		end)
+		if ok and type(old) == "table" then
+			return old
+		end
+	end
+
+	local geturl = function(url)
+		local ok, body = pcall(function()
+			return game:HttpGet(url)
+		end)
+		if ok and type(body) == "string" and body ~= "" then
+			return body
+		end
+
+		local req = nil
+		pcall(function()
+			req = type(request) == "function" and request or nil
+		end)
+		if type(req) ~= "function" then
+			pcall(function()
+				req = type(http) == "table" and type(http.request) == "function" and http.request or nil
+			end)
+		end
+		if type(req) ~= "function" then
+			pcall(function()
+				req = type(syn) == "table" and type(syn.request) == "function" and syn.request or nil
+			end)
+		end
+		if type(req) ~= "function" then
+			pcall(function()
+				req = type(http_request) == "function" and http_request or nil
+			end)
+		end
+
+		if type(req) == "function" then
+			local ok2, res = pcall(req, {
+				Url = url,
+				Method = "GET"
+			})
+			local b = type(res) == "table" and (res.Body or res.body) or nil
+			if ok2 and type(b) == "string" and b ~= "" then
+				return b
+			end
+		end
+
+		return nil
+	end
+
+	local ok, lib = pcall(function()
+		local ld = loadstring or load
+		if type(ld) ~= "function" then
+			return nil
+		end
+
+		local body = geturl("https://ltseverydayyou.github.io/ServiceResolver.luau")
+		if type(body) ~= "string" then
+			return nil
+		end
+
+		local fn = ld(body, "@ServiceResolver.luau")
+		if type(fn) ~= "function" then
+			return nil
+		end
+
+		return fn()
+	end)
+
+	if ok and type(lib) == "table" then
+		if host then
+			pcall(function()
+				host.__lt_service_resolver = lib
+			end)
+		end
+		return lib
+	end
+
+	return {
+		cs = function(n, cr)
+			if type(cr) == "function" then
+				local ok2, r = pcall(function()
+					return cloneref(game:GetService(n))
+				end)
+				if ok2 and r then
+					return r
+				end
+			end
+
+			local ok3, s = pcall(function()
+				return game:GetService(n)
+			end)
+			if ok3 then
+				return s
+			end
+			return nil
+		end,
+		cm = function(n, m, ...)
+			local ok2, s = pcall(function()
+				return game:GetService(n)
+			end)
+			if not ok2 or not s or type(s[m]) ~= "function" then
+				return nil
+			end
+			return s[m](s, ...)
+		end
+	}
+end)()
+
 local A = {}
 
-A.ex = type(getfenv) == "function" and getfenv() or {}
-if type(A.ex.__rusher_obs) == "table" and type(A.ex.__rusher_obs.cln) == "function" then
-	pcall(A.ex.__rusher_obs.cln)
+A.ex = {}
+pcall(function()
+	if type(getfenv) == "function" then
+		A.ex = getfenv()
+	end
+end)
+if type(A.ex) ~= "table" then
+	A.ex = {}
+end
+
+A.globs = {}
+A.addglob = function(g)
+	if type(g) ~= "table" then
+		return
+	end
+	for _, v in ipairs(A.globs) do
+		if v == g then
+			return
+		end
+	end
+	table.insert(A.globs, g)
+end
+A.addglob(A.ex)
+pcall(function()
+	if type(getgenv) == "function" then
+		A.addglob(getgenv())
+	end
+end)
+if type(_G) == "table" then
+	A.addglob(_G)
+end
+pcall(function()
+	if type(shared) == "table" then
+		A.addglob(shared)
+	end
+end)
+pcall(function()
+	if type(_G) == "table" and type(rawget(_G, "shared")) == "table" then
+		A.addglob(rawget(_G, "shared"))
+	end
+end)
+
+local old = nil
+for _, g in ipairs(A.globs) do
+	pcall(function()
+		if type(rawget(g, "__rusher_obs")) == "table" then
+			old = rawget(g, "__rusher_obs")
+		end
+	end)
+end
+if type(old) == "table" and type(old.cln) == "function" then
+	pcall(old.cln)
+end
+for _, g in ipairs(A.globs) do
+	pcall(function()
+		g.__rusher_obs = A
+	end)
 end
 A.ex.__rusher_obs = A
 
 A.run = true
 A.con = {}
 A.envs = {}
+A.envnames = { "game", "song", "menu", "cfg", "assist", "load", "caj", "news", "outside", "room", "tutorial", "dialog", "chartmod" }
 A.vars = {}
 A.last = {}
 A.keys = {}
@@ -37,8 +227,20 @@ A.cfg = {
 }
 
 A.svc = function(n)
+	if type(__lt) == "table" and type(__lt.cs) == "function" then
+		local ok, s = pcall(__lt.cs, n, cloneref)
+		if ok and s then
+			return s
+		end
+	end
+
 	if type(cloneref) == "function" then
-		return cloneref(game:GetService(n))
+		local ok, r = pcall(function()
+			return cloneref(game:GetService(n))
+		end)
+		if ok and r then
+			return r
+		end
 	end
 	return game:GetService(n)
 end
@@ -47,6 +249,7 @@ A.plrs = A.svc("Players")
 A.rs = A.svc("RunService")
 A.sg = A.svc("StarterGui")
 A.uis = A.svc("UserInputService")
+A.vim = nil
 A.lp = A.plrs.LocalPlayer
 A.pg = A.lp:WaitForChild("PlayerGui", 30)
 
@@ -72,12 +275,45 @@ A.scr = function(n)
 		return A.pg:FindFirstChild("configs")
 	elseif n == "assist" then
 		return A.pg:FindFirstChild("assist_scripts")
+	elseif n == "news" then
+		return A.pg:FindFirstChild("news_script")
+	elseif n == "outside" then
+		return A.pg:FindFirstChild("outside_script")
+	elseif n == "room" then
+		return A.pg:FindFirstChild("roomsearch_script")
+	elseif n == "tutorial" then
+		return A.pg:FindFirstChild("tutorial_script")
+	elseif n == "dialog" then
+		local d = A.pg:FindFirstChild("dialogue")
+		return d and d:FindFirstChild("dialoguesystem")
 	elseif n == "load" then
 		local l = A.pg:FindFirstChild("loading")
 		return l and l:FindFirstChild("initializer")
 	elseif n == "caj" then
 		local m = A.pg:FindFirstChild("minigame")
 		return m and m:FindFirstChild("cajon")
+	elseif n == "chartmod" then
+		local ch = nil
+		for _, nm in ipairs({ "song", "load", "game", "menu" }) do
+			local e = A.envs[nm]
+			if type(e) ~= "table" then
+				e = A.fenv(A.scr(nm))
+			end
+			local g = A.gtab(e)
+			if type(g) == "table" then
+				local ok, v = pcall(function()
+					return g.currentsong
+				end)
+				if ok and type(v) == "table" then
+					ch = v
+					break
+				end
+			end
+		end
+		local id = type(ch) == "table" and tostring(ch.chart_id or "") or ""
+		local charts = workspace:FindFirstChild("Charts")
+		local f = id ~= "" and charts and charts:FindFirstChild(id) or nil
+		return f and f:FindFirstChild("mod") or nil
 	end
 
 	return nil
@@ -177,33 +413,48 @@ end
 
 A.envall = function()
 	local out = {}
-	for _, n in ipairs({ "game", "song", "menu", "cfg", "assist", "load", "caj" }) do
+	local seen = {}
+	for _, n in ipairs(A.envnames) do
 		local e = A.env(n)
-		if type(e) == "table" then
+		if type(e) == "table" and not seen[e] then
+			seen[e] = true
 			table.insert(out, e)
 		end
 	end
 	return out
 end
 
-A.gget = function(k)
+A.gtabs = function()
+	local out = {}
+	local seen = {}
+
 	for _, e in ipairs(A.envall()) do
 		local g = A.gtab(e)
-
-		if type(g) == "table" then
-			local ok, v = pcall(function()
-				return g[k]
-			end)
-
-			if ok and v ~= nil then
-				return v
-			end
+		if type(g) == "table" and not seen[g] then
+			seen[g] = true
+			table.insert(out, g)
 		end
+		if type(e) == "table" and not seen[e] then
+			seen[e] = true
+			table.insert(out, e)
+		end
+	end
 
+	for _, g in ipairs(A.globs) do
+		if type(g) == "table" and not seen[g] then
+			seen[g] = true
+			table.insert(out, g)
+		end
+	end
+
+	return out
+end
+
+A.gget = function(k)
+	for _, g in ipairs(A.gtabs()) do
 		local ok, v = pcall(function()
-			return e[k]
+			return g[k]
 		end)
-
 		if ok and v ~= nil then
 			return v
 		end
@@ -215,36 +466,96 @@ end
 A.gset = function(k, v)
 	A.vars[k] = v
 
-	for _, e in ipairs(A.envall()) do
-		local g = A.gtab(e)
-
-		if type(g) == "table" then
-			pcall(function()
-				g[k] = v
-			end)
-		end
-
+	for _, g in ipairs(A.gtabs()) do
 		pcall(function()
-			e[k] = v
+			g[k] = v
 		end)
 	end
 end
 
 A.req = function(m)
 	if typeof(m) ~= "Instance" then
-		return false, nil
+		return false, nil, "not_instance"
 	end
 
-	if not m:IsA("ModuleScript") or m.Parent == nil then
-		return false, nil
+	local okc, ismod = pcall(function()
+		return m:IsA("ModuleScript")
+	end)
+	if not okc or not ismod then
+		return false, nil, "not_module"
 	end
 
-	local ok, r = pcall(require, m)
-	if ok then
-		return true, r
+	local okp, par = pcall(function()
+		return m.Parent
+	end)
+	if not okp or par == nil then
+		return false, nil, "no_parent"
 	end
 
-	return false, nil
+	if type(require) == "function" then
+		local ok, r = pcall(require, m)
+		if ok then
+			return true, r, "require"
+		end
+	end
+
+	if type(getscriptclosure) == "function" then
+		local ok, f = pcall(getscriptclosure, m)
+		if ok and type(f) == "function" then
+			local ok2, r = pcall(f)
+			if ok2 then
+				return true, r, "closure"
+			end
+		end
+	end
+
+	return false, nil, "unavailable"
+end
+
+A.gcf = function(kind, pred, one)
+	if type(pred) ~= "function" then
+		return one and nil or {}
+	end
+
+	if type(filtergc) == "function" then
+		local opt = {}
+		local ok, res = pcall(filtergc, kind or "table", opt, one == true)
+		if ok then
+			if one and pred(res) then
+				return res
+			end
+			if type(res) == "table" then
+				local out = {}
+				for _, v in pairs(res) do
+					if pred(v) then
+						if one then
+							return v
+						end
+						table.insert(out, v)
+					end
+				end
+				return out
+			end
+		end
+	end
+
+	if type(getgc) == "function" then
+		local ok, res = pcall(getgc, true)
+		if ok and type(res) == "table" then
+			local out = {}
+			for _, v in pairs(res) do
+				if (not kind or type(v) == kind) and pred(v) then
+					if one then
+						return v
+					end
+					table.insert(out, v)
+				end
+			end
+			return out
+		end
+	end
+
+	return one and nil or {}
 end
 
 A.guv = function(f, n)
@@ -438,13 +749,47 @@ A.nexthold = function()
 	return A.hpool[1]
 end
 
-A.fake = function(k)
+A.fake = function(k, down)
 	return {
 		KeyCode = k,
 		UserInputType = Enum.UserInputType.Keyboard,
-		UserInputState = Enum.UserInputState.Begin,
+		UserInputState = if down == false then Enum.UserInputState.End else Enum.UserInputState.Begin,
 		Position = Vector3.zero
 	}
+end
+
+A.getvim = function()
+	if A.vim and typeof(A.vim) == "Instance" then
+		return A.vim
+	end
+
+	local ok, v = pcall(function()
+		return A.svc("VirtualInputManager")
+	end)
+
+	if ok and v then
+		A.vim = v
+		return v
+	end
+
+	return nil
+end
+
+A.vkey = function(k, down)
+	if not k or typeof(k) ~= "EnumItem" then
+		return false
+	end
+
+	local v = A.getvim()
+	if not v then
+		return false
+	end
+
+	local ok = pcall(function()
+		v:SendKeyEvent(down == true, k, false, nil)
+	end)
+
+	return ok
 end
 
 A.gpress = function(k, force)
@@ -454,25 +799,15 @@ A.gpress = function(k, force)
 		return true
 	end
 
+	if A.vkey(k, true) then
+		A.keys[k] = true
+		return true
+	end
+
 	local e = A.env("game")
 	if e and type(e.input) == "function" then
 		A.keys[k] = true
-		pcall(e.input, A.fake(k), false)
-		return true
-	end
-
-	if type(keypress) == "function" then
-		A.keys[k] = true
-		if not pcall(keypress, k.Value) then
-			pcall(keypress, k)
-		end
-		return true
-	end
-
-	if type(keytap) == "function" then
-		if not pcall(keytap, k.Value) then
-			pcall(keytap, k)
-		end
+		pcall(e.input, A.fake(k, true), false)
 		return true
 	end
 
@@ -481,23 +816,18 @@ end
 
 A.grel = function(k, force)
 	k = k or A.nextkey(A.kpool)
+	A.keys[k] = nil
+
+	if A.vkey(k, false) then
+		return true
+	end
 
 	local e = A.env("game")
 	if e and type(e.release) == "function" then
-		A.keys[k] = nil
-		pcall(e.release, A.fake(k), false)
+		pcall(e.release, A.fake(k, false), false)
 		return true
 	end
 
-	if type(keyrelease) == "function" then
-		A.keys[k] = nil
-		if not pcall(keyrelease, k.Value) then
-			pcall(keyrelease, k)
-		end
-		return true
-	end
-
-	A.keys[k] = nil
 	return false
 end
 
@@ -518,6 +848,7 @@ A.chart = {
 	bpms = nil,
 	last = 0,
 	holds = {},
+	rkeys = {},
 	catch = false
 }
 
@@ -644,6 +975,7 @@ end
 
 A.resetkeys = function()
 	A.chart.holds = {}
+	A.chart.rkeys = {}
 	A.chart.catch = false
 
 	for k in pairs(A.keys) do
@@ -681,16 +1013,6 @@ A.buildcatch = function(catches)
 	A.addseq(e + 0.16, "cend", nil, 0)
 end
 
-A.takerel = function(rels, beat)
-	for _, r in ipairs(rels) do
-		if not r.used and A.same(r.beat, beat) then
-			r.used = true
-			return r
-		end
-	end
-	return nil
-end
-
 A.loadchart = function()
 	local ch = A.gget("currentchart")
 	if type(ch) ~= "table" or type(ch.notes) ~= "table" then
@@ -710,8 +1032,6 @@ A.loadchart = function()
 
 	local bps = A.bps(ch)
 	local catches = {}
-	local holds = {}
-	local rels = {}
 	local id = 0
 
 	for _, n in ipairs(ch.notes) do
@@ -728,42 +1048,13 @@ A.loadchart = function()
 			elseif nt == 2 then
 				table.insert(catches, ts)
 			elseif nt == 3 then
-				table.insert(rels, {
-					id = id,
-					beat = st,
-					t = ts,
-					used = false
-				})
+				A.addseq(ts + A.cfg.rlate / 1000, "release", id, 0.018)
+			elseif en and en > 0 then
+				A.addseq(ts, "hstart", id, 0.018)
+				A.addseq(en * bps + A.cfg.hlate / 1000, "hend", id, 0)
 			else
-				if en and en > 0 then
-					table.insert(holds, {
-						id = id,
-						st = st,
-						en = en,
-						ts = ts,
-						te = en * bps
-					})
-				else
-					A.addseq(ts, "tap", id, 0.018)
-				end
+				A.addseq(ts, "tap", id, 0.018)
 			end
-		end
-	end
-
-	for _, h in ipairs(holds) do
-		A.addseq(h.ts, "hstart", h.id, 0.018)
-
-		local r = A.takerel(rels, h.en)
-		if r then
-			A.addseq(r.t + (A.cfg.rlate or 22) / 1000, "hrel", h.id, 0)
-		else
-			A.addseq(h.te + A.cfg.hlate / 1000, "hend", h.id, 0)
-		end
-	end
-
-	for _, r in ipairs(rels) do
-		if not r.used then
-			A.addseq(r.t + (A.cfg.rlate or 22) / 1000, "release", r.id, 0)
 		end
 	end
 
@@ -775,10 +1066,9 @@ A.loadchart = function()
 				hstart = 1,
 				cstart = 2,
 				tap = 3,
-				hrel = 4,
-				release = 5,
-				cend = 6,
-				hend = 7
+				release = 4,
+				cend = 5,
+				hend = 6
 			}
 			return (o[a.k] or 99) < (o[b.k] or 99)
 		end
@@ -794,6 +1084,8 @@ A.doev = function(ev)
 
 	if k == "tap" then
 		A.tap()
+	elseif k == "release" then
+		A.tap()
 	elseif k == "hstart" then
 		local hk = A.nexthold()
 		A.chart.holds[id] = hk
@@ -804,16 +1096,6 @@ A.doev = function(ev)
 			A.chart.holds[id] = nil
 			A.grel(hk, true)
 		end
-	elseif k == "hrel" then
-		local hk = A.chart.holds[id]
-		if hk then
-			A.chart.holds[id] = nil
-			A.grel(hk, true)
-		else
-			A.grel(A.rkey, true)
-		end
-	elseif k == "release" then
-		A.grel(A.rkey, true)
 	elseif k == "cstart" then
 		if not A.chart.catch then
 			A.chart.catch = true
@@ -903,12 +1185,7 @@ A.cajon = function()
 		if A.last.caj ~= id then
 			A.last.caj = id
 			local k = A.nextkey(A.kpool)
-			pcall(e.input, A.fake(k), false)
-			task.delay(0.032, function()
-				if A.run and type(e.release) == "function" then
-					pcall(e.release, A.fake(k), false)
-				end
-			end)
+			A.tap(k)
 		end
 	end
 end
@@ -1156,11 +1433,89 @@ A.aload = function()
 	return A.fload(n)
 end
 
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/Library.lua"))()
+A.geturl = function(url)
+	local ok, body = pcall(function()
+		return game:HttpGet(url)
+	end)
+	if ok and type(body) == "string" and body ~= "" then
+		return body
+	end
+
+	local req = nil
+	pcall(function()
+		req = type(request) == "function" and request or nil
+	end)
+	if type(req) ~= "function" then
+		pcall(function()
+			req = type(http) == "table" and type(http.request) == "function" and http.request or nil
+		end)
+	end
+	if type(req) ~= "function" then
+		pcall(function()
+			req = type(syn) == "table" and type(syn.request) == "function" and syn.request or nil
+		end)
+	end
+	if type(req) ~= "function" then
+		pcall(function()
+			req = type(http_request) == "function" and http_request or nil
+		end)
+	end
+
+	if type(req) == "function" then
+		local ok2, res = pcall(req, {
+			Url = url,
+			Method = "GET"
+		})
+		local b = type(res) == "table" and (res.Body or res.body) or nil
+		if ok2 and type(b) == "string" and b ~= "" then
+			return b
+		end
+	end
+
+	return nil
+end
+
+A.ldurl = function(url, name)
+	local ld = loadstring or load
+	if type(ld) ~= "function" then
+		return false, nil
+	end
+
+	local body = A.geturl(url)
+	if type(body) ~= "string" then
+		return false, nil
+	end
+
+	local ok, fn = pcall(ld, body, name or "@chunk")
+	if not ok or type(fn) ~= "function" then
+		return false, nil
+	end
+
+	local ok2, ret = pcall(fn)
+	if ok2 then
+		return true, ret
+	end
+
+	return false, nil
+end
+
+local okLib, Library = A.ldurl("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/Library.lua", "@Obsidian.lua")
+if not okLib or type(Library) ~= "table" or type(Library.CreateWindow) ~= "function" then
+	warn("Rusher Autoplayer: UI library unavailable, runtime loaded without menu")
+	A.envall()
+	A.sync()
+	task.defer(function()
+		A.lacfg()
+	end)
+	return A
+end
 
 local SaveManager = nil
 pcall(function()
-	SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/addons/SaveManager.lua"))()
+	local okSm, sm = A.ldurl("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/addons/SaveManager.lua", "@SaveManager.lua")
+	if okSm and type(sm) == "table" then
+		SaveManager = sm
+	end
 end)
 
 if type(SaveManager) == "table" then
@@ -1258,7 +1613,7 @@ M1:AddToggle("RusherAutoPlay", {
 M1:AddToggle("RusherChartAuto", {
 	Text = "Chart Fallback Auto Player",
 	Default = false,
-	Tooltip = "Uses getfenv game globals and _G.currentchart.notes when hidden autoplay cannot be changed.",
+	Tooltip = "Uses getfenv game globals and currentchart.notes when hidden autoplay cannot be changed.",
 	Callback = function(v)
 		A.cfg.cap = v
 		A.chart.cur = nil

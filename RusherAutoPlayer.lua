@@ -219,8 +219,8 @@ A.cfg = {
 	clead = 45,
 	ctail = 160,
 	late = 180,
-	rhold = 12,
-	rgap = 10,
+	rhold = 65,
+	rgap = 22,
 	rretry = 3,
 	aprefer = false,
 	autonews = false,
@@ -228,6 +228,12 @@ A.cfg = {
 	off = 0,
 	voff = 0,
 	tw = 2,
+	notecolor = 2,
+	bgdim = 0,
+	comboposition = 1,
+	combotransparency = 0,
+	clumpaces = 1,
+	newrating = 1,
 	pm = 1,
 	em = 1,
 	he = 1,
@@ -461,10 +467,30 @@ A.gtabs = function()
 	return out
 end
 
+A.gametabs = function()
+	local out = {}
+	local seen = {}
+
+	for _, e in ipairs(A.envall()) do
+		local g = A.gtab(e)
+		if type(g) == "table" and not seen[g] then
+			seen[g] = true
+			table.insert(out, g)
+		end
+		if type(e) == "table" and not seen[e] then
+			seen[e] = true
+			table.insert(out, e)
+		end
+	end
+
+	return out
+end
+
 A.gkeys = {
 	"currentchart",
 	"currentsong",
 	"currentdiff",
+	"currentdifficulty",
 	"currentfolder",
 	"selectedsong",
 	"beattime",
@@ -520,7 +546,8 @@ end
 
 A.gget = function(k)
 	A.pullg()
-	for _, g in ipairs(A.gtabs()) do
+	local tabs = table.find(A.gkeys, k) and A.gametabs() or A.gtabs()
+	for _, g in ipairs(tabs) do
 		local ok, v = pcall(function()
 			return g[k]
 		end)
@@ -535,7 +562,8 @@ end
 A.gset = function(k, v)
 	A.vars[k] = v
 
-	for _, g in ipairs(A.gtabs()) do
+	local tabs = table.find(A.gkeys, k) and A.gametabs() or A.gtabs()
+	for _, g in ipairs(tabs) do
 		pcall(function()
 			g[k] = v
 		end)
@@ -1019,6 +1047,31 @@ A.markdown = function(k)
 	return ok
 end
 
+A.unmark = function(k)
+	if not k then
+		return false
+	end
+
+	local e = A.env("game")
+	if e and type(e.release) == "function" then
+		local t27 = A.guv(e.release, "t27")
+		local t28 = A.guv(e.release, "t28")
+
+		local i = A.hasin(t27, k)
+		if i then
+			table.remove(t27, i)
+		end
+
+		i = A.hasin(t28, k)
+		if i then
+			table.remove(t28, i)
+		end
+	end
+
+	A.keys[k] = nil
+	return true
+end
+
 A.rawpress = function(k)
 	if not k then
 		return false
@@ -1165,6 +1218,7 @@ A.chart = {
 	bpms = nil,
 	last = 0,
 	holds = {},
+	rkeys = {},
 	catch = false
 }
 
@@ -1291,6 +1345,7 @@ end
 
 A.resetkeys = function()
 	A.chart.holds = {}
+	A.chart.rkeys = {}
 	A.chart.catch = false
 	A.upq = {}
 	A.relq2 = {}
@@ -1346,11 +1401,13 @@ A.loadchart = function()
 	A.chart.i = 1
 	A.chart.bpms = A.mkbpm(ch)
 	A.chart.last = 0
+	A.chart.rkeys = {}
 
 	local bps = A.bps(ch)
 	local catches = {}
 	local rels = {}
 	local id = 0
+	local relid = 0
 
 	for _, n in ipairs(ch.notes) do
 		local nt = tonumber(n[1]) or 1
@@ -1366,7 +1423,12 @@ A.loadchart = function()
 			elseif nt == 2 then
 				table.insert(catches, ts)
 			elseif nt == 3 then
-				A.addseq(ts, "tap", id, A.cfg.tlead / 1000)
+				relid = relid + 1
+				A.addseq(ts - A.cfg.rhold / 1000, "rprep", relid, A.cfg.tlead / 1000)
+				local retries = math.clamp(math.floor(tonumber(A.cfg.rretry) or 1), 1, 5)
+				for r = 1, retries do
+					A.addseq(ts + (A.cfg.rgap + (r - 1) * 4) / 1000, "release", relid, 0.006)
+				end
 			elseif en and en > 0 then
 				A.addseq(ts, "hstart", id, A.cfg.tlead / 1000)
 				A.addseq(en * bps + A.cfg.hlate / 1000, "hend", id, 0)
@@ -1383,11 +1445,15 @@ A.loadchart = function()
 			local o = {
 				hstart = 1,
 				cstart = 2,
-				tap = 3,
-				cend = 4,
-				hend = 5,
-				rel = 3
+				rprep = 3,
+				tap = 4,
+				release = 5,
+				hend = 6,
+				cend = 7
 			}
+			if (o[a.k] or 99) == (o[b.k] or 99) then
+				return (a.a or 0) < (b.a or 0)
+			end
 			return (o[a.k] or 99) < (o[b.k] or 99)
 		end
 		return a.t < b.t
@@ -1396,14 +1462,97 @@ A.loadchart = function()
 	return true
 end
 
+A.rprep = function(id)
+	local k = A.chart.rkeys[id]
+	if k and A.keys[k] then
+		return true
+	end
+
+	k = A.nextkey(A.kpool) or A.rkey
+	if not k then
+		return false
+	end
+
+	A.chart.rkeys[id] = k
+	if A.markdown(k) then
+		return true
+	end
+
+	return A.rawpress(k)
+end
+
+A.dirrel = function()
+	local e = A.env("game")
+	if not e or type(e.release) ~= "function" then
+		return false
+	end
+
+	local list = A.guv(e.release, "t34")
+	local idx = A.guv(e.release, "v67")
+	local now = A.guv(e.release, "v30") or A.gnow()
+
+	if type(list) ~= "table" or type(idx) ~= "number" or type(now) ~= "number" then
+		return false
+	end
+
+	local note = list[idx]
+	if type(note) ~= "table" or note.notetype ~= "release" or note.hitted == true or note.obj == nil or type(note.hit) ~= "function" then
+		return false
+	end
+
+	local ok = pcall(function()
+		note:hit(now, false)
+	end)
+
+	if not ok then
+		return false
+	end
+
+	if note.hitted == true or (tonumber(note.acc) or 0) >= 2 then
+		A.suv(e.release, "v67", idx + 1)
+		return true
+	end
+
+	return false
+end
+
+A.relhit = function(id)
+	local k = A.chart.rkeys[id] or A.nextkey(A.kpool) or A.rkey
+	A.chart.rkeys[id] = nil
+
+	if not k then
+		return false
+	end
+
+	if not A.keys[k] then
+		if not A.markdown(k) then
+			A.rawpress(k)
+		end
+	end
+
+	local hit = A.dirrel()
+
+	if hit then
+		A.unmark(k)
+		return true
+	end
+
+	A.rawrel(k)
+	A.rawpress(k)
+	A.rawrel(k)
+	return A.dirrel()
+end
+
 A.doev = function(ev)
 	local k = ev.k
 	local id = ev.a
 
 	if k == "tap" then
 		A.tap()
-	elseif k == "rel" then
-		A.tap()
+	elseif k == "rprep" then
+		A.rprep(id)
+	elseif k == "release" then
+		A.relhit(id)
 	elseif k == "hstart" then
 		local hk = A.nexthold()
 		if not hk then
@@ -1518,6 +1667,12 @@ A.sync = function()
 	A.conf("offset", A.cfg.off)
 	A.conf("offsetvisual", A.cfg.voff)
 	A.conf("tw", A.cfg.tw)
+	A.conf("notecolor", A.cfg.notecolor)
+	A.conf("bgdim", A.cfg.bgdim)
+	A.conf("comboposition", A.cfg.comboposition)
+	A.conf("combotransparency", A.cfg.combotransparency)
+	A.conf("clumpaces", A.cfg.clumpaces)
+	A.conf("newrating", A.cfg.newrating)
 	A.conf("pm", A.cfg.pm)
 	A.conf("em", A.cfg.em)
 	A.conf("hebeta", A.cfg.he)
@@ -1755,6 +1910,9 @@ A.objload = function(dat)
 			local idx = type(it) == "table" and it.idx or nil
 			local typ = type(it) == "table" and it.type or nil
 			if type(idx) == "string" and not A.signore[idx] then
+				if idx == "RusherReleaseLate" then
+					idx = "RusherReleaseDelay"
+				end
 				local obj = nil
 				if typ == "Toggle" then
 					obj = Toggles[idx]
@@ -2150,7 +2308,7 @@ M1:AddToggle("RusherAutoPlay", {
 M1:AddToggle("RusherChartAuto", {
 	Text = "Chart Fallback Auto Player",
 	Default = false,
-	Tooltip = "Runs the chart autoplayer path with type 3 handled like a normal tap.",
+	Tooltip = "Runs the chart autoplayer path with type 3 handled as an actual release.",
 	Callback = function(v)
 		A.cfg.cap = v
 		A.chart.cur = nil
@@ -2219,7 +2377,43 @@ M1:AddSlider("RusherHoldLate", {
 	end
 })
 
+M1:AddSlider("RusherReleasePrep", {
+	Text = "Release Prep Lead",
+	Default = 65,
+	Min = 0,
+	Max = 150,
+	Rounding = 0,
+	Suffix = "ms",
+	Callback = function(v)
+		A.cfg.rhold = v
+		A.chart.cur = nil
+	end
+})
 
+M1:AddSlider("RusherReleaseDelay", {
+	Text = "Release Hit Delay",
+	Default = 22,
+	Min = 0,
+	Max = 80,
+	Rounding = 0,
+	Suffix = "ms",
+	Callback = function(v)
+		A.cfg.rgap = v
+		A.chart.cur = nil
+	end
+})
+
+M1:AddSlider("RusherReleaseRetries", {
+	Text = "Release Retries",
+	Default = 3,
+	Min = 1,
+	Max = 5,
+	Rounding = 0,
+	Callback = function(v)
+		A.cfg.rretry = v
+		A.chart.cur = nil
+	end
+})
 
 
 
@@ -2426,6 +2620,81 @@ C1:AddDropdown("RusherTW", {
 		local n = v == "Easy" and 1 or v == "Normal" and 2 or 3
 		A.cfg.tw = n
 		A.conf("tw", n)
+	end
+})
+
+C1:AddDropdown("RusherNoteColor", {
+	Text = "Note Color",
+	Values = {
+		"Gray",
+		"Beat Color",
+		"Direction",
+		"Subdivision Chain"
+	},
+	Default = 2,
+	Multi = false,
+	Callback = function(v)
+		local n = table.find({ "Gray", "Beat Color", "Direction", "Subdivision Chain" }, v) or 2
+		A.cfg.notecolor = n
+		A.conf("notecolor", n)
+	end
+})
+
+C1:AddSlider("RusherBGDim", {
+	Text = "Background Dim",
+	Default = 0,
+	Min = 0,
+	Max = 0.8,
+	Rounding = 2,
+	Callback = function(v)
+		A.cfg.bgdim = v
+		A.conf("bgdim", v)
+	end
+})
+
+C1:AddDropdown("RusherComboPosition", {
+	Text = "Combo Position",
+	Values = {
+		"Bottom",
+		"Middle",
+		"Top"
+	},
+	Default = 1,
+	Multi = false,
+	Callback = function(v)
+		local n = v == "Middle" and 2 or v == "Top" and 3 or 1
+		A.cfg.comboposition = n
+		A.conf("comboposition", n)
+	end
+})
+
+C1:AddSlider("RusherComboTransparency", {
+	Text = "Combo Transparency",
+	Default = 0,
+	Min = 0,
+	Max = 1,
+	Rounding = 2,
+	Callback = function(v)
+		A.cfg.combotransparency = v
+		A.conf("combotransparency", v)
+	end
+})
+
+C1:AddToggle("RusherClumpAces", {
+	Text = "Clump ACEs",
+	Default = false,
+	Callback = function(v)
+		A.cfg.clumpaces = v and 2 or 1
+		A.conf("clumpaces", A.cfg.clumpaces)
+	end
+})
+
+C1:AddToggle("RusherNewRating", {
+	Text = "New Rating Display",
+	Default = false,
+	Callback = function(v)
+		A.cfg.newrating = v and 2 or 1
+		A.conf("newrating", A.cfg.newrating)
 	end
 })
 

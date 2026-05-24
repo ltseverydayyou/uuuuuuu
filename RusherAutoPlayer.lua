@@ -203,6 +203,9 @@ A.vars = {}
 A.last = {}
 A.keys = {}
 A.upq = {}
+A.relq2 = {}
+A.apstate = false
+A.mode = "none"
 A.cfg = {
 	ap = false,
 	cap = false,
@@ -216,6 +219,11 @@ A.cfg = {
 	clead = 45,
 	ctail = 160,
 	late = 180,
+	rhold = 12,
+	rgap = 10,
+	rretry = 3,
+	aprefer = false,
+	autonews = false,
 	speed = 1,
 	off = 0,
 	voff = 0,
@@ -453,7 +461,65 @@ A.gtabs = function()
 	return out
 end
 
+A.gkeys = {
+	"currentchart",
+	"currentsong",
+	"currentdiff",
+	"currentfolder",
+	"selectedsong",
+	"beattime",
+	"currentbpm",
+	"noinput",
+	"CONFIGURATIONS",
+	"partner",
+	"playing",
+	"waitabit",
+	"chartid",
+	"songid"
+}
+
+A.pullg = function()
+	for _, e in ipairs(A.envall()) do
+		local g = A.gtab(e)
+		if type(g) == "table" then
+			for _, k in ipairs(A.gkeys) do
+				local v = nil
+				pcall(function()
+					v = rawget(g, k)
+				end)
+				if v == nil then
+					pcall(function()
+						v = g[k]
+					end)
+				end
+				if v ~= nil then
+					A.vars[k] = v
+				end
+			end
+		end
+		if type(e) == "table" then
+			for _, k in ipairs(A.gkeys) do
+				if A.vars[k] == nil then
+					local v = nil
+					pcall(function()
+						v = rawget(e, k)
+					end)
+					if v == nil then
+						pcall(function()
+							v = e[k]
+						end)
+					end
+					if v ~= nil then
+						A.vars[k] = v
+					end
+				end
+			end
+		end
+	end
+end
+
 A.gget = function(k)
+	A.pullg()
 	for _, g in ipairs(A.gtabs()) do
 		local ok, v = pcall(function()
 			return g[k]
@@ -664,22 +730,8 @@ A.conf = function(k, v)
 end
 
 A.setap = function(v)
-	local e = A.env("game")
-	if not e then
-		return false
-	end
-
-	local ok = false
-
-	for _, n in ipairs({ "playing", "input", "start", "heartbeat" }) do
-		if type(e[n]) == "function" then
-			if A.suv(e[n], "v4", v) then
-				ok = true
-			end
-		end
-	end
-
-	return ok
+	A.apstate = false
+	return false
 end
 
 A.kpool = {
@@ -1081,6 +1133,15 @@ A.flush = function()
 	end
 end
 
+A.relpush = function()
+	return false
+end
+
+A.flushrel = function()
+	A.relq2 = {}
+	return
+end
+
 A.tap = function(k, dur)
 	k = k or A.nextkey(A.kpool)
 	if not k or A.keys[k] then
@@ -1232,6 +1293,7 @@ A.resetkeys = function()
 	A.chart.holds = {}
 	A.chart.catch = false
 	A.upq = {}
+	A.relq2 = {}
 
 	for k in pairs(A.keys) do
 		A.grel(k, true)
@@ -1287,6 +1349,7 @@ A.loadchart = function()
 
 	local bps = A.bps(ch)
 	local catches = {}
+	local rels = {}
 	local id = 0
 
 	for _, n in ipairs(ch.notes) do
@@ -1322,7 +1385,8 @@ A.loadchart = function()
 				cstart = 2,
 				tap = 3,
 				cend = 4,
-				hend = 5
+				hend = 5,
+				rel = 3
 			}
 			return (o[a.k] or 99) < (o[b.k] or 99)
 		end
@@ -1337,6 +1401,8 @@ A.doev = function(ev)
 	local id = ev.a
 
 	if k == "tap" then
+		A.tap()
+	elseif k == "rel" then
 		A.tap()
 	elseif k == "hstart" then
 		local hk = A.nexthold()
@@ -1502,18 +1568,32 @@ A.step = function()
 		return
 	end
 
+	A.pullg()
 	A.flush()
+	A.flushrel()
 
-	if A.cfg.ap then
-		A.setap(true)
+	if A.apstate then
+		A.setap(false)
 	end
 
-	if A.cfg.cap then
+	local runchart = A.cfg.ap or A.cfg.cap
+
+	if runchart then
 		A.chartplay()
+	end
+
+	if runchart then
+		A.mode = "chart"
+	else
+		A.mode = "none"
 	end
 
 	if A.cfg.caj then
 		A.cajon()
+	end
+
+	if A.cfg.autonews then
+		A.call("news", "close")
 	end
 
 	if A.cfg.ninp then
@@ -1591,6 +1671,140 @@ A.mkdir = function()
 	end
 end
 
+A.signore = {
+	MenuKeybind = true,
+	RusherConfigName = true,
+	SaveManager_ConfigList = true,
+	SaveManager_ConfigName = true
+}
+
+A.objsave = function()
+	local dat = {
+		objects = {}
+	}
+
+	local function add(idx, obj)
+		if type(idx) ~= "string" or A.signore[idx] then
+			return
+		end
+		if type(obj) ~= "table" or obj.Type == nil then
+			return
+		end
+
+		if obj.Type == "Toggle" then
+			table.insert(dat.objects, {
+				type = "Toggle",
+				idx = idx,
+				value = obj.Value
+			})
+		elseif obj.Type == "Slider" then
+			table.insert(dat.objects, {
+				type = "Slider",
+				idx = idx,
+				value = tostring(obj.Value)
+			})
+		elseif obj.Type == "Dropdown" then
+			table.insert(dat.objects, {
+				type = "Dropdown",
+				idx = idx,
+				value = obj.Value,
+				multi = obj.Multi
+			})
+		elseif obj.Type == "ColorPicker" and obj.Value and type(obj.Value.ToHex) == "function" then
+			table.insert(dat.objects, {
+				type = "ColorPicker",
+				idx = idx,
+				value = obj.Value:ToHex(),
+				transparency = obj.Transparency
+			})
+		elseif obj.Type == "KeyPicker" then
+			table.insert(dat.objects, {
+				type = "KeyPicker",
+				idx = idx,
+				mode = obj.Mode,
+				key = obj.Value,
+				modifiers = obj.Modifiers
+			})
+		elseif obj.Type == "Input" then
+			table.insert(dat.objects, {
+				type = "Input",
+				idx = idx,
+				text = obj.Value
+			})
+		end
+	end
+
+	for idx, obj in pairs(type(Toggles) == "table" and Toggles or {}) do
+		add(idx, obj)
+	end
+
+	for idx, obj in pairs(type(Options) == "table" and Options or {}) do
+		add(idx, obj)
+	end
+
+	return dat
+end
+
+A.objload = function(dat)
+	if type(dat) ~= "table" then
+		return false
+	end
+
+	if type(dat.objects) == "table" then
+		for _, it in ipairs(dat.objects) do
+			local idx = type(it) == "table" and it.idx or nil
+			local typ = type(it) == "table" and it.type or nil
+			if type(idx) == "string" and not A.signore[idx] then
+				local obj = nil
+				if typ == "Toggle" then
+					obj = Toggles[idx]
+				elseif typ == "Slider" or typ == "Dropdown" or typ == "ColorPicker" or typ == "KeyPicker" or typ == "Input" then
+					obj = Options[idx]
+				else
+					obj = Options[idx] or Toggles[idx]
+				end
+
+				if obj then
+					if typ == "ColorPicker" and type(obj.SetValueRGB) == "function" and type(it.value) == "string" then
+						pcall(function()
+							obj:SetValueRGB(Color3.fromHex(it.value), it.transparency)
+						end)
+					elseif typ == "KeyPicker" and type(obj.SetValue) == "function" then
+						pcall(function()
+							obj:SetValue({ it.key, it.mode, it.modifiers })
+						end)
+					elseif typ == "Input" and type(it.text) == "string" then
+						A.setctl(obj, it.text)
+					elseif it.value ~= nil then
+						A.setctl(obj, it.value)
+					end
+				end
+			end
+		end
+
+		A.sync()
+		return true
+	end
+
+	local tg = type(Toggles) == "table" and Toggles or {}
+	local op = type(Options) == "table" and Options or {}
+
+	if type(dat.tog) == "table" then
+		for k, v in pairs(dat.tog) do
+			A.setctl(tg[k], v)
+		end
+	end
+
+	if type(dat.opt) == "table" then
+		for k, v in pairs(dat.opt) do
+			A.setctl(op[k], v)
+		end
+	end
+
+	A.sync()
+	return true
+end
+
 A.fsave = function(n)
 	if type(writefile) ~= "function" then
 		return false
@@ -1598,28 +1812,8 @@ A.fsave = function(n)
 
 	A.mkdir()
 
-	local dat = {
-		tog = {},
-		opt = {}
-	}
-
-	local tg = type(Toggles) == "table" and Toggles or {}
-	local op = type(Options) == "table" and Options or {}
-
-	for k, v in pairs(tg) do
-		if type(v) == "table" and v.Value ~= nil then
-			dat.tog[k] = v.Value
-		end
-	end
-
-	for k, v in pairs(op) do
-		if type(v) == "table" and v.Value ~= nil then
-			dat.opt[k] = v.Value
-		end
-	end
-
 	local ok, body = pcall(function()
-		return A.hsvc:JSONEncode(dat)
+		return A.hsvc:JSONEncode(A.objsave())
 	end)
 	if not ok then
 		return false
@@ -1652,23 +1846,7 @@ A.fload = function(n)
 		return false
 	end
 
-	local tg = type(Toggles) == "table" and Toggles or {}
-	local op = type(Options) == "table" and Options or {}
-
-	if type(dat.tog) == "table" then
-		for k, v in pairs(dat.tog) do
-			A.setctl(tg[k], v)
-		end
-	end
-
-	if type(dat.opt) == "table" then
-		for k, v in pairs(dat.opt) do
-			A.setctl(op[k], v)
-		end
-	end
-
-	A.sync()
-	return true
+	return A.objload(dat)
 end
 
 A.asave = function(n)
@@ -1771,7 +1949,18 @@ if not okLib or type(Library) ~= "table" or type(Library.CreateWindow) ~= "funct
 	return A
 end
 
+local Options = Library.Options
+local Toggles = Library.Toggles
+local ThemeManager = nil
 local SaveManager = nil
+
+pcall(function()
+	local okTm, tm = A.ldurl("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/addons/ThemeManager.lua", "@ThemeManager.lua")
+	if okTm and type(tm) == "table" then
+		ThemeManager = tm
+	end
+end)
+
 pcall(function()
 	local okSm, sm = A.ldurl("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/addons/SaveManager.lua", "@SaveManager.lua")
 	if okSm and type(sm) == "table" then
@@ -1779,12 +1968,20 @@ pcall(function()
 	end
 end)
 
+if type(ThemeManager) == "table" then
+	pcall(function()
+		ThemeManager:SetLibrary(Library)
+		ThemeManager:SetFolder("RusherAutoplayer")
+	end)
+end
+
 if type(SaveManager) == "table" then
 	pcall(function()
 		SaveManager:SetLibrary(Library)
 		SaveManager:IgnoreThemeSettings()
 		SaveManager:SetIgnoreIndexes({ "MenuKeybind", "RusherConfigName" })
 		SaveManager:SetFolder("RusherAutoplayer")
+		SaveManager:SetLoadingOrder(true, { "Toggle", "Dropdown", "Slider", "ColorPicker", "KeyPicker", "Input" })
 	end)
 end
 
@@ -1792,9 +1989,10 @@ A.smcfg = function(n)
 	n = n or A.cname()
 	local ok = false
 	if type(SaveManager) == "table" and type(SaveManager.Save) == "function" then
-		ok = pcall(function()
-			SaveManager:Save(n)
+		local ok0, ret = pcall(function()
+			return SaveManager:Save(n)
 		end)
+		ok = ok0 and ret == true
 	end
 	local ok2 = A.fsave(n)
 	return ok or ok2
@@ -1804,9 +2002,10 @@ A.lmcfg = function(n)
 	n = n or A.cname()
 	local ok = false
 	if type(SaveManager) == "table" and type(SaveManager.Load) == "function" then
-		ok = pcall(function()
-			SaveManager:Load(n)
+		local ok0, ret = pcall(function()
+			return SaveManager:Load(n)
 		end)
+		ok = ok0 and ret == true
 	end
 	local ok2 = A.fload(n)
 	return ok or ok2
@@ -1816,14 +2015,21 @@ A.amcfg = function(n)
 	n = n or A.cname()
 	local ok = false
 	if type(SaveManager) == "table" then
-		if type(SaveManager.SetAutoloadConfig) == "function" then
-			ok = pcall(function()
-				SaveManager:SetAutoloadConfig(n)
+		if type(SaveManager.SaveAutoloadConfig) == "function" then
+			local ok0, ret = pcall(function()
+				return SaveManager:SaveAutoloadConfig(n)
 			end)
+			ok = ok0 and ret == true
+		elseif type(SaveManager.SetAutoloadConfig) == "function" then
+			local ok0, ret = pcall(function()
+				return SaveManager:SetAutoloadConfig(n)
+			end)
+			ok = ok0 and ret == true
 		elseif type(SaveManager.SetAutoload) == "function" then
-			ok = pcall(function()
-				SaveManager:SetAutoload(n)
+			local ok0, ret = pcall(function()
+				return SaveManager:SetAutoload(n)
 			end)
+			ok = ok0 and ret == true
 		end
 	end
 	local ok2 = A.asave(n)
@@ -1833,9 +2039,10 @@ end
 A.lacfg = function()
 	local ok = false
 	if type(SaveManager) == "table" and type(SaveManager.LoadAutoloadConfig) == "function" then
-		ok = pcall(function()
+		local ok0 = pcall(function()
 			SaveManager:LoadAutoloadConfig()
 		end)
+		ok = ok0 == true
 	end
 	local ok2 = A.aload()
 	return ok or ok2
@@ -1861,20 +2068,89 @@ local C1 = T.Config:AddLeftGroupbox("Gameplay")
 local C2 = T.Config:AddRightGroupbox("Audio / Visual")
 local S1 = T.Settings:AddLeftGroupbox("Menu")
 
+S1:AddToggle("KeybindMenuOpen", {
+	Default = Library.KeybindFrame and Library.KeybindFrame.Visible or false,
+	Text = "Open Keybind Menu",
+	Callback = function(value)
+		if Library.KeybindFrame then
+			Library.KeybindFrame.Visible = value
+		end
+	end
+})
+
+S1:AddToggle("ShowCustomCursor", {
+	Text = "Custom Cursor",
+	Default = true,
+	Callback = function(v)
+		Library.ShowCustomCursor = v
+	end
+})
+
+S1:AddDropdown("NotificationSide", {
+	Values = { "Left", "Right" },
+	Default = "Right",
+	Text = "Notification Side",
+	Callback = function(v)
+		if type(Library.SetNotifySide) == "function" then
+			Library:SetNotifySide(v)
+		end
+	end
+})
+
+S1:AddDropdown("DPIDropdown", {
+	Values = { "50%", "75%", "100%", "125%", "150%", "175%", "200%" },
+	Default = "100%",
+	Text = "DPI Scale",
+	Callback = function(v)
+		local n = tonumber((tostring(v):gsub("%%", "")))
+		if n and type(Library.SetDPIScale) == "function" then
+			Library:SetDPIScale(n)
+		end
+	end
+})
+
+S1:AddSlider("UICornerSlider", {
+	Text = "Corner Radius",
+	Default = tonumber(Library.CornerRadius) or 6,
+	Min = 0,
+	Max = 20,
+	Rounding = 0,
+	Callback = function(v)
+		if type(W.SetCornerRadius) == "function" then
+			W:SetCornerRadius(v)
+		end
+	end
+})
+
+S1:AddDivider()
+S1:AddLabel("Menu bind"):AddKeyPicker("MenuKeybind", {
+	Default = "RightControl",
+	NoUI = true,
+	Text = "Menu keybind"
+})
+
+if Options and Options.MenuKeybind then
+	Library.ToggleKeybind = Options.MenuKeybind
+end
+
 M1:AddToggle("RusherAutoPlay", {
 	Text = "Gameplay Auto Player",
 	Default = false,
-	Tooltip = "Uses the game's hidden client auto flag when debug upvalue access works.",
+	Tooltip = "Runs the chart autoplayer path.",
 	Callback = function(v)
 		A.cfg.ap = v
-		A.setap(v)
+		A.setap(false)
+		A.chart.cur = nil
+		A.chart.seq = {}
+		A.chart.i = 1
+		A.resetkeys()
 	end
 })
 
 M1:AddToggle("RusherChartAuto", {
 	Text = "Chart Fallback Auto Player",
 	Default = false,
-	Tooltip = "Uses getfenv game globals and currentchart.notes when hidden autoplay cannot be changed.",
+	Tooltip = "Runs the chart autoplayer path with type 3 handled like a normal tap.",
 	Callback = function(v)
 		A.cfg.cap = v
 		A.chart.cur = nil
@@ -1940,6 +2216,18 @@ M1:AddSlider("RusherHoldLate", {
 	Callback = function(v)
 		A.cfg.hlate = v
 		A.chart.cur = nil
+	end
+})
+
+
+
+
+
+M1:AddToggle("RusherAutoNews", {
+	Text = "Auto Close News",
+	Default = false,
+	Callback = function(v)
+		A.cfg.autonews = v
 	end
 })
 
@@ -2029,6 +2317,36 @@ M2:AddButton({
 	Text = "Open Menu",
 	Func = function()
 		A.fire("menu")
+	end
+})
+
+M2:AddButton({
+	Text = "Show News",
+	Func = function()
+		A.call("news", "main")
+	end
+})
+
+M2:AddButton({
+	Text = "Close News",
+	Func = function()
+		A.call("news", "close")
+	end
+})
+
+M2:AddButton({
+	Text = "Reload Globals",
+	Func = function()
+		A.envs = {}
+		A.envall()
+		A.pullg()
+	end
+})
+
+M2:AddButton({
+	Text = "Release All Keys",
+	Func = function()
+		A.resetkeys()
 	end
 })
 
@@ -2209,6 +2527,7 @@ S1:AddButton({
 	end
 })
 
+if not (type(SaveManager) == "table" and type(SaveManager.BuildConfigSection) == "function") then
 S1:AddInput("RusherConfigName", {
 	Text = "Config Name",
 	Default = "default",
@@ -2252,6 +2571,8 @@ S1:AddButton({
 	end
 })
 
+end
+
 S1:AddButton({
 	Text = "Unload",
 	Func = function()
@@ -2261,6 +2582,18 @@ S1:AddButton({
 		end
 	end
 })
+
+if type(SaveManager) == "table" and type(SaveManager.BuildConfigSection) == "function" then
+	pcall(function()
+		SaveManager:BuildConfigSection(T.Settings)
+	end)
+end
+
+if type(ThemeManager) == "table" and type(ThemeManager.ApplyToTab) == "function" then
+	pcall(function()
+		ThemeManager:ApplyToTab(T.Settings)
+	end)
+end
 
 A.envall()
 A.sync()

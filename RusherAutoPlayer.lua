@@ -213,8 +213,6 @@ A.cfg = {
 	tlead = 18,
 	tdur = 12,
 	hlate = 45,
-	rlate = 22,
-	rlead = 65,
 	clead = 45,
 	ctail = 160,
 	late = 180,
@@ -1099,78 +1097,6 @@ A.tap = function(k, dur)
 	return true
 end
 
-A.rprep = function(id)
-	local k = A.chart.rkeys[id]
-	if k and A.keys[k] then
-		return true
-	end
-
-	k = A.nextkey(A.kpool) or A.rkey
-	if not k then
-		return false
-	end
-
-	A.chart.rkeys[id] = k
-	return A.markdown(k)
-end
-
-A.dirrel = function()
-	local e = A.env("game")
-	if not e or type(e.release) ~= "function" then
-		return false
-	end
-
-	local list = A.guv(e.release, "t34")
-	local idx = A.guv(e.release, "v67")
-	local now = A.guv(e.release, "v30")
-	local note = type(list) == "table" and type(idx) == "number" and list[idx] or nil
-
-	if type(note) ~= "table" or note.notetype ~= "release" or note.hitted == true or note.obj == nil then
-		return false
-	end
-
-	if type(now) ~= "number" then
-		now = A.gnow() or 0
-	end
-
-	local ok = pcall(function()
-		note:hit(now, false)
-	end)
-
-	if ok and note.hitted == true then
-		A.suv(e.release, "v67", idx + 1)
-		return true
-	end
-
-	return false
-end
-
-A.relhit = function(id)
-	local k = A.chart.rkeys[id] or A.nextkey(A.kpool) or A.rkey
-	A.chart.rkeys[id] = nil
-
-	if not k then
-		return false
-	end
-
-	if not A.keys[k] then
-		if not A.markdown(k) then
-			A.rawpress(k)
-		end
-	end
-
-	local hit = A.dirrel()
-	A.rawrel(k)
-
-	if hit then
-		return true
-	end
-
-	A.rawpress(k)
-	A.rawrel(k)
-	return A.dirrel()
-end
-
 A.chart = {
 	cur = nil,
 	seq = {},
@@ -1178,7 +1104,6 @@ A.chart = {
 	bpms = nil,
 	last = 0,
 	holds = {},
-	rkeys = {},
 	catch = false
 }
 
@@ -1305,7 +1230,6 @@ end
 
 A.resetkeys = function()
 	A.chart.holds = {}
-	A.chart.rkeys = {}
 	A.chart.catch = false
 	A.upq = {}
 
@@ -1379,8 +1303,7 @@ A.loadchart = function()
 			elseif nt == 2 then
 				table.insert(catches, ts)
 			elseif nt == 3 then
-				A.addseq(ts - A.cfg.rlead / 1000, "rprep", id, A.cfg.tlead / 1000)
-				A.addseq(ts + A.cfg.rlate / 1000, "release", id, 0.006)
+				A.addseq(ts, "tap", id, A.cfg.tlead / 1000)
 			elseif en and en > 0 then
 				A.addseq(ts, "hstart", id, A.cfg.tlead / 1000)
 				A.addseq(en * bps + A.cfg.hlate / 1000, "hend", id, 0)
@@ -1395,13 +1318,11 @@ A.loadchart = function()
 	table.sort(A.chart.seq, function(a, b)
 		if a.t == b.t then
 			local o = {
-				rprep = 1,
-				hstart = 2,
-				cstart = 3,
-				tap = 4,
-				release = 5,
-				cend = 6,
-				hend = 7
+				hstart = 1,
+				cstart = 2,
+				tap = 3,
+				cend = 4,
+				hend = 5
 			}
 			return (o[a.k] or 99) < (o[b.k] or 99)
 		end
@@ -1417,10 +1338,6 @@ A.doev = function(ev)
 
 	if k == "tap" then
 		A.tap()
-	elseif k == "rprep" then
-		A.rprep(id)
-	elseif k == "release" then
-		A.relhit(id)
 	elseif k == "hstart" then
 		local hk = A.nexthold()
 		if not hk then
@@ -2026,31 +1943,6 @@ M1:AddSlider("RusherHoldLate", {
 	end
 })
 
-M1:AddSlider("RusherReleaseLate", {
-	Text = "Release Hit Delay",
-	Default = 22,
-	Min = 0,
-	Max = 80,
-	Rounding = 0,
-	Suffix = "ms",
-	Callback = function(v)
-		A.cfg.rlate = v
-		A.chart.cur = nil
-	end
-})
-
-M1:AddSlider("RusherReleasePrep", {
-	Text = "Release Prep Lead",
-	Default = 65,
-	Min = 0,
-	Max = 150,
-	Rounding = 0,
-	Suffix = "ms",
-	Callback = function(v)
-		A.cfg.rlead = v
-		A.chart.cur = nil
-	end
-})
 
 M1:AddSlider("RusherCatchLead", {
 	Text = "Catch Lead",

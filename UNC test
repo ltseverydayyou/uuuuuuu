@@ -108,6 +108,7 @@ local ls = {
 	extraFail = {},
 	extraMiss = {},
 	extraExist = {},
+	extraSkip = {},
 }
 
 local id = tostring(math.floor(os.clock() * 1000000))
@@ -158,14 +159,79 @@ local function notify(t, m, d)
 	print("[UNC] " .. tostring(t) .. ": " .. tostring(m))
 end
 
-local rconWarn = false
-local function warnRcon()
-	if rconWarn then
-		return
+local function pushNotif(data, tries)
+	local sg = svc("StarterGui")
+	if not sg then
+		return false, "StarterGui unavailable"
 	end
-	rconWarn = true
-	notify("UNC rconsole tests", "rconsole will be used now. Some executors crash when their console API is broken.", 8)
-	task.wait(1)
+	local last
+	for _ = 1, (tries or 10) do
+		local ok, err = pcall(function()
+			sg:SetCore("SendNotification", data)
+		end)
+		if ok then
+			return true
+		end
+		last = err
+		task.wait(0.2)
+	end
+	return false, last or "SendNotification failed"
+end
+
+local function mkSkip(msg)
+	return { _unc_skip = tostring(msg or "skipped") }
+end
+
+local rconAskDone = false
+local rconAllow = false
+local function askRcon()
+	if rconAskDone then
+		return rconAllow, rconAllow and "approved" or "user chose no"
+	end
+	local cb = Instance.new("BindableFunction")
+	local ans
+	cb.OnInvoke = function(v)
+		ans = tostring(v or ""):lower()
+	end
+	local ok, err = pushNotif({
+		Title = "UNC rconsole tests",
+		Text = "Some executors crash on rconsole. Test rconsole functions?",
+		Duration = 15,
+		Button1 = "Yes",
+		Button2 = "No",
+		Callback = cb,
+	}, 15)
+	if not ok then
+		cb:Destroy()
+		notify("UNC rconsole tests", "Notification UI failed, so rconsole tests were skipped for safety.", 8)
+		rconAskDone = true
+		rconAllow = false
+		return false, short(err)
+	end
+	local t = os.clock()
+	while ans == nil and os.clock() - t < 15 do
+		task.wait(0.05)
+	end
+	cb:Destroy()
+	rconAskDone = true
+	rconAllow = ans == "yes"
+	if rconAllow then
+		notify("UNC rconsole tests", "Approved. Running rconsole checks.", 5)
+		return true, "approved"
+	end
+	notify("UNC rconsole tests", "Skipped rconsole checks.", 5)
+	if ans == nil then
+		return false, "no response"
+	end
+	return false, "user chose no"
+end
+
+local function needRcon()
+	local ok, why = askRcon()
+	if ok then
+		return true
+	end
+	return false, why
 end
 
 local function mkDraw(kind)
@@ -748,52 +814,79 @@ local core = {
 
 local extra = {
 	{ n = "rconsolecreate", f = function(fn)
-		warnRcon()
-		local ok, err = pcall(fn)
-		assert(ok, err or "rconsolecreate errored")
+		local ok, why = needRcon()
+		if not ok then
+			return mkSkip("rconsole skipped: " .. tostring(why))
+		end
+		local ok2, err = pcall(fn)
+		assert(ok2, err or "rconsolecreate errored")
 		return "created/opened console"
 	end },
 	{ n = "rconsolesettitle", f = function(fn)
-		warnRcon()
-		local ok, err = pcall(fn, "UNC Test")
-		assert(ok, err or "rconsolesettitle errored")
+		local ok, why = needRcon()
+		if not ok then
+			return mkSkip("rconsole skipped: " .. tostring(why))
+		end
+		local ok2, err = pcall(fn, "UNC Test")
+		assert(ok2, err or "rconsolesettitle errored")
 	end },
 	{ n = "rconsoleprint", f = function(fn)
-		warnRcon()
-		local ok, err = pcall(fn, "[UNC] rconsoleprint test\n")
-		assert(ok, err or "rconsoleprint errored")
+		local ok, why = needRcon()
+		if not ok then
+			return mkSkip("rconsole skipped: " .. tostring(why))
+		end
+		local ok2, err = pcall(fn, "[UNC] rconsoleprint test\n")
+		assert(ok2, err or "rconsoleprint errored")
 	end },
 	{ n = "rconsoleinfo", f = function(fn)
-		warnRcon()
-		local ok, err = pcall(fn, "[UNC] rconsoleinfo test")
-		assert(ok, err or "rconsoleinfo errored")
+		local ok, why = needRcon()
+		if not ok then
+			return mkSkip("rconsole skipped: " .. tostring(why))
+		end
+		local ok2, err = pcall(fn, "[UNC] rconsoleinfo test")
+		assert(ok2, err or "rconsoleinfo errored")
 	end },
 	{ n = "rconsolewarn", f = function(fn)
-		warnRcon()
-		local ok, err = pcall(fn, "[UNC] rconsolewarn test")
-		assert(ok, err or "rconsolewarn errored")
+		local ok, why = needRcon()
+		if not ok then
+			return mkSkip("rconsole skipped: " .. tostring(why))
+		end
+		local ok2, err = pcall(fn, "[UNC] rconsolewarn test")
+		assert(ok2, err or "rconsolewarn errored")
 	end },
 	{ n = "rconsoleerror", f = function(fn)
-		warnRcon()
-		local ok, err = pcall(fn, "[UNC] rconsoleerror test")
-		assert(ok, err or "rconsoleerror errored")
+		local ok, why = needRcon()
+		if not ok then
+			return mkSkip("rconsole skipped: " .. tostring(why))
+		end
+		local ok2, err = pcall(fn, "[UNC] rconsoleerror test")
+		assert(ok2, err or "rconsoleerror errored")
 	end },
 	{ n = "rconsoleclear", f = function(fn)
-		warnRcon()
-		local ok, err = pcall(fn)
-		assert(ok, err or "rconsoleclear errored")
+		local ok, why = needRcon()
+		if not ok then
+			return mkSkip("rconsole skipped: " .. tostring(why))
+		end
+		local ok2, err = pcall(fn)
+		assert(ok2, err or "rconsoleclear errored")
 	end },
 	{ n = "rconsoleinput", timeout = 25, f = function(fn)
-		warnRcon()
+		local ok, why = needRcon()
+		if not ok then
+			return mkSkip("rconsole skipped: " .. tostring(why))
+		end
 		notify("UNC rconsoleinput", "Type anything in the console and press Enter to pass this test.", 12)
 		local r = fn()
 		assert(type(r) == "string", "rconsoleinput must return console input as a string")
 		return "returned input"
 	end },
 	{ n = "rconsoledestroy", f = function(fn)
-		warnRcon()
-		local ok, err = pcall(fn)
-		assert(ok, err or "rconsoledestroy errored")
+		local ok, why = needRcon()
+		if not ok then
+			return mkSkip("rconsole skipped: " .. tostring(why))
+		end
+		local ok2, err = pcall(fn)
+		assert(ok2, err or "rconsoledestroy errored")
 		return "destroyed console"
 	end },
 	{ n = "crypt.base64encode", f = function(fn)
@@ -1299,6 +1392,17 @@ local function runOne(d, kind)
 		return d.f(fn, used)
 	end, d.timeout)
 	if ok then
+		if type(ret) == "table" and ret._unc_skip then
+			s.skip += 1
+			local msg = label .. " • " .. tostring(ret._unc_skip)
+			if kind == "core" then
+				add(ls.skip, msg)
+			else
+				add(ls.extraSkip, msg)
+			end
+			print("⏭️ " .. msg)
+			return
+		end
 		s.pass += 1
 		if kind == "core" then
 			add(ls.pass, label .. (ret and " • " .. tostring(ret) or ""))
@@ -1357,12 +1461,18 @@ print("UNC core score: " .. rate .. "% (" .. st.core.pass .. " / " .. total .. "
 print("\nOptional documented extensions")
 print("✅ Optional passes: " .. st.extra.pass)
 print("⛔ Optional behavior fails: " .. st.extra.fail)
+print("⏭️ Optional skipped: " .. st.extra.skip)
 print("⏺️ Optional exists-only: " .. st.extra.exist)
 print("⏺️ Optional missing: " .. st.extra.miss)
 
 if #ls.miss > 0 then
 	print("\n❌ Missing core functions:")
 	print("  " .. table.concat(ls.miss, ", "))
+end
+
+if #ls.extraSkip > 0 then
+	print("\n⏭️ Skipped optional functions:")
+	print("  " .. table.concat(ls.extraSkip, ", "))
 end
 if #ls.fail > 0 then
 	print("\n⛔ Core behavior failures:")

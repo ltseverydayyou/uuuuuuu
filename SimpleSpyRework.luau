@@ -4656,7 +4656,7 @@ captureRemoteCall = function(options)
 end
 
 RuntimeState.call_original_namecall = function(method, self, ...)
-    if setnamecallmethod then
+    if method and setnamecallmethod then
         setnamecallmethod(method)
     end
     return RuntimeState.originalnamecall(self, ...)
@@ -4751,7 +4751,7 @@ RuntimeState.newFire = RuntimeState.wrapHook(function(self, ...)
     })
 end)
 
-RuntimeState.newInvoke = function(self, ...)
+RuntimeState.newInvoke = RuntimeState.wrapHook(function(self, ...)
     local args = { ... }
     local argsLength = select('#', ...)
     if internalRemotes[self] then
@@ -4772,7 +4772,7 @@ RuntimeState.newInvoke = function(self, ...)
             return originalFunction(self, ...)
         end,
     })
-end
+end)
 
 RuntimeState.hookState = {
     active = false,
@@ -4780,6 +4780,21 @@ RuntimeState.hookState = {
     fireServer = false,
     invokeServer = false,
 }
+
+RuntimeState.tryHookInvokeServer = function(hooker)
+    if type(hooker) ~= 'function' or RuntimeState.hookState.invokeServer then
+        return
+    end
+    local okInvoke, oldInvoke = pcall(
+        hooker,
+        baseInvokeServer,
+        RuntimeState.cloneHook(RuntimeState.newInvoke)
+    )
+    if okInvoke and oldInvoke then
+        originalFunction = oldInvoke
+        RuntimeState.hookState.invokeServer = true
+    end
+end
 
 RuntimeState.disablehooks = function()
     if not RuntimeState.hookState.active then
@@ -4868,15 +4883,7 @@ function toggleSpy()
                         originalEvent = oldFire
                         RuntimeState.hookState.fireServer = true
                     end
-                    local okInvoke, oldInvoke = pcall(
-                        hook,
-                        baseInvokeServer,
-                        RuntimeState.cloneHook(RuntimeState.newInvoke)
-                    )
-                    if okInvoke and oldInvoke then
-                        originalFunction = oldInvoke
-                        RuntimeState.hookState.invokeServer = true
-                    end
+                    RuntimeState.tryHookInvokeServer(hook)
                 end
             else
                 if caps.namecallHook then
@@ -4913,15 +4920,7 @@ function toggleSpy()
                         originalEvent = oldFire
                         RuntimeState.hookState.fireServer = true
                     end
-                    local okInvoke, oldInvoke = pcall(
-                        hookfunction,
-                        baseInvokeServer,
-                        RuntimeState.cloneHook(RuntimeState.newInvoke)
-                    )
-                    if okInvoke and oldInvoke then
-                        originalFunction = oldInvoke
-                        RuntimeState.hookState.invokeServer = true
-                    end
+                    RuntimeState.tryHookInvokeServer(hookfunction)
                 end
             end
             if oldnamecall then

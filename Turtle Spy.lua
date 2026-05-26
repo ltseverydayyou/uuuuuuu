@@ -346,16 +346,28 @@ local hookFunction = hookfunction
 local hookMetaMethod = hookmetamethod or buildHookMetaMethodFallback()
 local directHookState = {
 	fireServer = false,
+	unreliableFireServer = false,
 	invokeServer = false
 }
 tstate.directHookState = directHookState
 
 local _tmpRemoteEvent = Instance.new("RemoteEvent")
 local _tmpRemoteFunction = Instance.new("RemoteFunction")
+local _tmpUnreliableRemoteEvent
+pcall(function()
+	_tmpUnreliableRemoteEvent = Instance.new("UnreliableRemoteEvent")
+end)
 local baseFireServer = _tmpRemoteEvent.FireServer
 local baseInvokeServer = _tmpRemoteFunction.InvokeServer
+local baseUnreliableFireServer = _tmpUnreliableRemoteEvent and _tmpUnreliableRemoteEvent.FireServer or nil
+if baseUnreliableFireServer == baseFireServer then
+	baseUnreliableFireServer = nil
+end
 _tmpRemoteEvent:Destroy()
 _tmpRemoteFunction:Destroy()
+if _tmpUnreliableRemoteEvent then
+	_tmpUnreliableRemoteEvent:Destroy()
+end
 
 local function resolveAdonisEnv()
 	local gc = getgc or (debug and debug.getgc)
@@ -1297,7 +1309,66 @@ local function len(t)
 	end;
 	return n;
 end;
-local hasBuffer = type(buffer) == "table" and type(buffer.fromstring) == "function" and type(buffer.tostring) == "function";
+local hasBuffer = type(buffer) == "table" and type(buffer.fromstring) == "function";
+local function quoteString(str)
+	str = tostring(str or "")
+	local out = {
+		"\""
+	}
+	for i = 1, #str do
+		local b = string.byte(str, i)
+		if b == 34 then
+			out[#out + 1] = "\\\""
+		elseif b == 92 then
+			out[#out + 1] = "\\\\"
+		elseif b == 10 then
+			out[#out + 1] = "\\n"
+		elseif b == 13 then
+			out[#out + 1] = "\\r"
+		elseif b == 9 then
+			out[#out + 1] = "\\t"
+		elseif b >= 32 and b <= 126 then
+			out[#out + 1] = string.char(b)
+		else
+			out[#out + 1] = string.format("\\%03d", b)
+		end
+	end
+	out[#out + 1] = "\""
+	return table.concat(out)
+end
+local function isBufferValue(value)
+	if not hasBuffer then
+		return false
+	end
+	if typeof(value) == "buffer" then
+		return true
+	end
+	if type(buffer.len) == "function" then
+		local ok = pcall(buffer.len, value)
+		return ok
+	end
+	return false
+end
+local function bufferLiteral(value)
+	if type(buffer.tostring) == "function" then
+		local ok, str = pcall(buffer.tostring, value)
+		if ok and type(str) == "string" then
+			return "buffer.fromstring(" .. quoteString(str) .. ")"
+		end
+	end
+	if type(buffer.len) == "function" and type(buffer.readu8) == "function" then
+		local okLen, len = pcall(buffer.len, value)
+		if okLen and type(len) == "number" then
+			local bytes = {}
+			for i = 0, len - 1 do
+				local okByte, byte = pcall(buffer.readu8, value, i)
+				bytes[#bytes + 1] = tostring((okByte and type(byte) == "number") and byte or 0)
+			end
+			return "buffer.fromstring(string.char(" .. table.concat(bytes, ",") .. "))"
+		end
+	end
+	return "buffer.fromstring(\"\")"
+end
 local function isArray(tbl)
 	local max = 0;
 	local c = 0;
@@ -1312,27 +1383,13 @@ local function isArray(tbl)
 	end;
 	return max == c;
 end;
-local function needsUnicodeEncoding(str)
-	for _, cp in utf8.codes(str) do
-		if cp < 32 or cp > 126 then
-			return true;
-		end;
-	end;
-	return false;
-end;
 local function serializeValue(v, depth)
 	depth = depth or 0;
 	local t = typeof(v);
 	if t == "Instance" then
 		return GetFullPathOfAnInstance(v);
-	elseif t == "buffer" and hasBuffer then
-		local ok, s = pcall(function()
-			return buffer.tostring(v);
-		end);
-		if not ok or type(s) ~= "string" then
-			return "buffer.fromstring(\"<buffer dump failed>\")";
-		end;
-		return "buffer.fromstring(" .. string.format("%q", s) .. ")";
+	elseif isBufferValue(v) then
+		return bufferLiteral(v);
 	elseif t == "Vector3" then
 		return string.format("Vector3.new(%s, %s, %s)", v.X, v.Y, v.Z);
 	elseif t == "Vector2" then
@@ -1350,10 +1407,7 @@ local function serializeValue(v, depth)
 		return tostring(v);
 	end;
 	if type(v) == "string" then
-		if needsUnicodeEncoding(v) then
-			return toUnicode(v);
-		end;
-		return string.format("%q", v);
+		return quoteString(v);
 	elseif type(v) == "number" or type(v) == "boolean" then
 		return tostring(v);
 	elseif type(v) == "table" then
@@ -1406,10 +1460,12 @@ local function buildNamedListTable(name, list)
 		};
 	end;
 	local lines = {};
+	local n = list.n or #list
 	lines[(#lines) + 1] = "local " .. name .. " = {";
-	for i = 1, #list do
+	for i = 1, n do
 		lines[(#lines) + 1] = "\t[" .. i .. "] = " .. serializeValue(list[i], 1) .. ",";
 	end;
+	lines[(#lines) + 1] = "\tn = " .. tostring(n) .. ",";
 	lines[(#lines) + 1] = "}";
 	lines[(#lines) + 1] = "";
 	return table.concat(lines, "\n");
@@ -1455,31 +1511,46 @@ local function updateCodeDisplay(remote, args, isClientEvent, callType)
 		return
 	end
 	args = args or {}
-	local path = GetFullPathOfAnInstance(remote)
-	local n = args.n or #args
-	local codeText
-	if callType == "OnClientInvoke" then
-		codeText = buildArgsTable(args) .. path .. ".OnClientInvoke = function(...)\n\t-- TODO: return something\n\treturn nil\nend"
-	elseif isClientEvent or callType == "OnClientEvent" then
-		local evtPath = path .. ".OnClientEvent"
-		if n == 0 then
-			codeText = "firesignal(" .. evtPath .. ")"
+	local ok, codeText = pcall(function()
+		local path = GetFullPathOfAnInstance(remote)
+		local n = args.n or #args
+		local text
+		if callType == "OnClientInvoke" then
+			text = buildArgsTable(args) .. path .. ".OnClientInvoke = function(...)\n\treturn nil\nend"
+		elseif isClientEvent or callType == "OnClientEvent" then
+			local evtPath = path .. ".OnClientEvent"
+			if n == 0 then
+				text = "firesignal(" .. evtPath .. ")"
+			else
+				text = buildArgsTable(args) .. "firesignal(" .. evtPath .. ", unpack(args, 1, args.n or #args))"
+			end
 		else
-			codeText = buildArgsTable(args) .. "firesignal(" .. evtPath .. ", unpack(args))"
+			local call = (callType == "InvokeServer" and ":InvokeServer") or ":FireServer"
+			if callType == nil and isA(remote, "RemoteFunction") then
+				call = ":InvokeServer"
+			end
+			if n == 0 then
+				text = path .. call .. "()"
+			else
+				text = buildArgsTable(args) .. path .. call .. "(unpack(args, 1, args.n or #args))"
+			end
 		end
+		return text
+	end)
+	local finalText
+	if not ok then
+		local pathOk, path = pcall(GetFullPathOfAnInstance, remote)
+		finalText = "-- Turtle Spy render error: " .. tostring(codeText) .. "\n" .. tostring(pathOk and path or remote)
 	else
-		local call = (callType == "InvokeServer" and ":InvokeServer") or ":FireServer"
-		if callType == nil and isA(remote, "RemoteFunction") then
-			call = ":InvokeServer"
-		end
-		if n == 0 then
-			codeText = path .. call .. "()"
-		else
-			codeText = buildArgsTable(args) .. path .. call .. "(unpack(args))"
-		end
+		finalText = codeText
+	end
+	local okSet = pcall(function()
+		Code.Text = finalText
+	end)
+	if not okSet then
+		Code.Text = "-- Turtle Spy text render error. The args contained invalid text bytes.\n" .. tostring(remote)
 	end
 	Code.TextWrapped = false
-	Code.Text = codeText
 	fitCode()
 end
 Code:GetPropertyChangedSignal("Text"):Connect(fitCode)
@@ -2103,6 +2174,7 @@ function addToList(event, remote, argsPack, results, callType)
 	local args = {}
 	if type(argsPack) == "table" then
 		local n = argsPack.n or #argsPack
+		args.n = n
 		for i = 1, n do
 			args[i] = argsPack[i]
 		end
@@ -2300,6 +2372,31 @@ if not directHookState.fireServer and hookFunction then
 		directHookState.fireServer = true
 	end
 end
+if not directHookState.unreliableFireServer and hookFunction and type(baseUnreliableFireServer) == "function" then
+	local oldUnreliableFireServer
+	local hookedUnreliableFireServer = hookClone(function(self, ...)
+		if tstate.enabled and typeof(self) == "Instance" and isRemoteEvent(self) and not safeCheckCaller() then
+			if table.find(BlockList, self) then
+				return
+			end
+			local args = table.pack(...)
+			local results = table.pack(oldUnreliableFireServer(self, ...))
+			if tstate.handler then
+				task.spawn(function()
+					pcall(tstate.handler, self, "fireserver", args, results)
+				end)
+			end
+			return table.unpack(results, 1, results.n)
+		end
+		return oldUnreliableFireServer(self, ...)
+	end)
+	local ok, previous = pcall(hookFunction, baseUnreliableFireServer, hookedUnreliableFireServer)
+	if ok and previous then
+		oldUnreliableFireServer = previous
+		tstate.oldUnreliableFireServer = tstate.oldUnreliableFireServer or previous
+		directHookState.unreliableFireServer = true
+	end
+end
 if not directHookState.invokeServer and hookFunction then
 	local oldInvokeServer
 	local hookedInvokeServer = hookClone(function(self, ...)
@@ -2384,6 +2481,22 @@ tstate.cleanup = function()
 		end
 		if restored then
 			directHookState.fireServer = false
+		end
+	end
+	if directHookState.unreliableFireServer and tstate.oldUnreliableFireServer and type(baseUnreliableFireServer) == "function" then
+		local restored = false
+		if type(restoreFunction) == "function" then
+			restored = pcall(function()
+				restoreFunction(baseUnreliableFireServer)
+			end)
+		end
+		if not restored then
+			restored = pcall(function()
+				hookFunction(baseUnreliableFireServer, tstate.oldUnreliableFireServer)
+			end)
+		end
+		if restored then
+			directHookState.unreliableFireServer = false
 		end
 	end
 	if directHookState.invokeServer and tstate.oldInvokeServer then

@@ -1559,7 +1559,8 @@ local function main()
 					count = 1
 				})
 				Lib.SaveAsPrompt(saveName, function(filename)
-					env.saveinstance(sList[1].Obj, filename, {
+					env.saveinstance(sList[1].Obj, {
+						FilePath = filename,
 						Decompile = true,
 						RemovePlayerCharacters = false
 					})
@@ -1573,7 +1574,8 @@ local function main()
 						count = #sList
 					})
 					Lib.SaveAsPrompt(saveName, function(filename)
-						env.saveinstance(sList[i].Obj, filename, {
+						env.saveinstance(sList[i].Obj, {
+							FilePath = filename,
 							Decompile = true,
 							RemovePlayerCharacters = false
 						})

@@ -713,7 +713,8 @@ local function main()
 				return
 			end
 			window:SetTitle("Save Instance - Saving")
-			local s, result = pcall(env.saveinstance, game, fileName, saveOptions)
+			saveOptions.FilePath = fileName
+			local s, result = pcall(env.saveinstance, game, saveOptions)
 			if s then
 				window:SetTitle("Save Instance - Saved")
 			else
@@ -722,7 +723,7 @@ local function main()
 			end
 			task.wait(5)
 			window:SetTitle("Save Instance")
-			---env.saveinstance(game, fileName, SaveInstanceArgs)
+			---env.saveinstance(game, saveOptions)
 		end))
 	end
 

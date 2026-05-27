@@ -342,8 +342,9 @@ local function main()
 					window:SetTitle(originalModel.Name.." - Model Viewer - Saving")	
 					
 					local success, result = pcall(env.saveinstance,
-					originalModel, filename,
+						originalModel,
 						{
+							FilePath = filename,
 							Decompile = true,
 							RemovePlayerCharacters = false
 						}

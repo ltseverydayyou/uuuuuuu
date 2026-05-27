@@ -1274,7 +1274,8 @@ Main = (function()
 			if __lt.cs("RunService", cloneref):IsStudio() then return function() error("Cannot run in Roblox Studio!") end end
 
 			local cacheHost = (getgenv and getgenv()) or _G
-			local cached = type(cacheHost) == "table" and rawget(cacheHost, "__dex_ussi_saveinstance")
+			local cacheKey = "__dex_ussi_saveinstance_v3"
+			local cached = type(cacheHost) == "table" and rawget(cacheHost, cacheKey)
 			if type(cached) == "function" then
 				return cached
 			end
@@ -1283,7 +1284,18 @@ Main = (function()
 				RepoURL = "https://raw.githubusercontent.com/luau/UniversalSynSaveInstance/main/",
 				SSI = "saveinstance",
 			}
-			local synsaveinstance = loadstring(oldgame:HttpGet(Params.RepoURL .. Params.SSI .. ".luau", true), Params.SSI)()
+			local source = oldgame:HttpGet(Params.RepoURL .. Params.SSI .. ".luau", true)
+			source = source:gsub("StatusGui%.Parent = global_container%.gethui%(%)", [[
+			local huiOk, hui = pcall(global_container.gethui)
+			if huiOk and typeof(hui) == "Instance" then
+				StatusGui.Parent = hui
+			else
+				local CoreGui = game:GetService("CoreGui")
+				local RobloxGui = CoreGui:FindFirstChild("RobloxGui")
+				StatusGui.Parent = RobloxGui or CoreGui
+			end
+			]], 1)
+			local synsaveinstance = loadstring(source, Params.SSI)()
 
 			local function applySavedSaveInstanceOptions(finalOptions)
 				local saveState = Settings and Settings.SaveInstance
@@ -1323,20 +1335,133 @@ Main = (function()
 				return finalOptions
 			end
 
+			local function mergeOptions(target, sourceOptions)
+				if type(sourceOptions) ~= "table" then
+					return
+				end
+
+				for key, value in sourceOptions do
+					target[key] = value
+				end
+			end
+
+			local function getLocalHumanoid()
+				local ok, player = pcall(function()
+					return __lt.cs("Players", cloneref).LocalPlayer
+				end)
+				local character = ok and player and player.Character
+				if character then
+					return character:FindFirstChildOfClass("Humanoid")
+				end
+			end
+
+			local function captureClientState()
+				local state = {}
+
+				pcall(function()
+					local camera = workspace.CurrentCamera
+					state.Camera = camera
+					if camera then
+						state.CameraType = camera.CameraType
+						state.CameraSubject = camera.CameraSubject
+					end
+				end)
+
+				pcall(function()
+					local userInput = __lt.cs("UserInputService", cloneref)
+					state.UserInput = userInput
+					state.MouseBehavior = userInput.MouseBehavior
+					state.MouseIconEnabled = userInput.MouseIconEnabled
+				end)
+
+				return state
+			end
+
+			local function restoreClientState(state)
+				if type(state) ~= "table" then
+					return
+				end
+
+				pcall(function()
+					local userInput = state.UserInput or __lt.cs("UserInputService", cloneref)
+					if state.MouseBehavior then
+						userInput.MouseBehavior = state.MouseBehavior
+					end
+					if state.MouseIconEnabled ~= nil then
+						userInput.MouseIconEnabled = state.MouseIconEnabled
+					end
+				end)
+
+				pcall(function()
+					local runService = __lt.cs("RunService", cloneref)
+					if runService and runService.Set3dRenderingEnabled then
+						runService:Set3dRenderingEnabled(true)
+					end
+				end)
+
+				pcall(function()
+					local camera = state.Camera
+					if not camera or camera.Parent == nil then
+						camera = workspace.CurrentCamera
+					end
+					if not camera then
+						return
+					end
+
+					local subject = state.CameraSubject
+					if not subject or subject.Parent == nil then
+						subject = getLocalHumanoid()
+					end
+
+					if subject then
+						camera.CameraSubject = subject
+					end
+
+					if state.CameraType then
+						camera.CameraType = state.CameraType
+					elseif subject then
+						camera.CameraType = Enum.CameraType.Custom
+					end
+				end)
+			end
+
 			local function wrappedsaveinstance(obj, filepath, options)
 				local finalOptions = {}
 				applySavedSaveInstanceOptions(finalOptions)
-				if type(options) == "table" then
-					for key, value in options do
-						finalOptions[key] = value
-					end
+
+				if type(obj) == "table" and filepath == nil and options == nil then
+					options = obj
+					obj = nil
+				elseif type(filepath) == "table" and options == nil then
+					options = filepath
+					filepath = options.FilePath or options.FileName
 				end
-				finalOptions.FilePath = filepath
-				finalOptions.Object = obj
-				return synsaveinstance(finalOptions)
+
+				mergeOptions(finalOptions, options)
+
+				if filepath ~= nil then
+					finalOptions.FilePath = filepath
+				end
+
+				if typeof(obj) == "Instance" then
+					finalOptions.Object = obj
+				end
+
+				local clientState = captureClientState()
+				local ok, result = pcall(synsaveinstance, finalOptions)
+				restoreClientState(clientState)
+				task.defer(restoreClientState, clientState)
+				task.delay(1, restoreClientState, clientState)
+
+				if not ok then
+					error(result, 0)
+				end
+
+				return result
 			end
 
 			if type(cacheHost) == "table" then
+				rawset(cacheHost, cacheKey, wrappedsaveinstance)
 				rawset(cacheHost, "__dex_ussi_saveinstance", wrappedsaveinstance)
 				rawset(cacheHost, "saveinstance", wrappedsaveinstance)
 			end

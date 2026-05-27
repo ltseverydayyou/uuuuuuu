@@ -25,7 +25,7 @@ function Dropdown.new(instance)
         dropdown.Collapsed = collapsed
     end)
 
-    for _i, v in pairs(instance.Selection.Clip.List:GetChildren()) do
+    for _i, v in instance.Selection.Clip.List:GetChildren() do
         if v:IsA("TextButton") then
             v.Activated:Connect(function()
 
@@ -86,7 +86,7 @@ end
 
 -- oh.Events.DropdownCollapse = UserInput.InputEnded:Connect(function(input)
 --     if input.UserInputType == Enum.UserInputType.MouseButton1 then
---         for _i, dropdown in pairs(dropdownCache) do
+--         for _i, dropdown in dropdownCache do
 --             dropdown:Collapse()
 --         end
 --     end

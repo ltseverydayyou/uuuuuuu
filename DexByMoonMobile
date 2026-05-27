@@ -108,7 +108,7 @@ local DexState = (function()
 	api.AddStore(_G);
 
 	api.Sync = function(state)
-		for _, store in ipairs(stores) do
+		for _, store in stores do
 			rawset(store, stateKey, state);
 			rawset(store, legacyKey, state);
 		end;
@@ -116,7 +116,7 @@ local DexState = (function()
 	end;
 
 	api.Get = function(create)
-		for _, store in ipairs(stores) do
+		for _, store in stores do
 			local state = rawget(store, stateKey);
 			if type(state) == "table" then
 				return api.Sync(state);
@@ -136,7 +136,7 @@ local DexState = (function()
 	end;
 
 	api.Clear = function(state)
-		for _, store in ipairs(stores) do
+		for _, store in stores do
 			if rawget(store, stateKey) == state then
 				rawset(store, stateKey, nil);
 			end;
@@ -685,7 +685,7 @@ local EmbeddedModules = {
 				Explorer.Dragging = true;
 				local dragTree = treeFrame:Clone();
 				dragTree:ClearAllChildren();
-				for i, v in pairs(listEntries) do
+				for i, v in listEntries do
 					local node = tree[i + Explorer.Index];
 					if node and selection.Map[node] then
 						local clone = v:Clone();
@@ -1821,7 +1821,7 @@ local EmbeddedModules = {
 						if not hrp then
 							return;
 						end;
-						for _, v in ipairs(selection.List) do
+						for _, v in selection.List do
 							if v.Obj and v.Obj:IsA("TouchTransmitter") then
 								firetouchinterest(hrp, v.Obj.Parent, 0);
 							end;
@@ -1837,7 +1837,7 @@ local EmbeddedModules = {
 						if not hrp then
 							return;
 						end;
-						for _, v in ipairs(selection.List) do
+						for _, v in selection.List do
 							if v.Obj and v.Obj:IsA("ClickDetector") then
 								fireclickdetector(v.Obj);
 							end;
@@ -1853,7 +1853,7 @@ local EmbeddedModules = {
 						if not hrp then
 							return;
 						end;
-						for _, v in ipairs(selection.List) do
+						for _, v in selection.List do
 							if v.Obj and v.Obj:IsA("ProximityPrompt") then
 								fireproximityprompt(v.Obj);
 							end;
@@ -2125,9 +2125,9 @@ local EmbeddedModules = {
 					end;
 				end);
 				local function defaultProps(obj)
-					for class, props in pairs(Explorer.DefaultProps) do
+					for class, props in Explorer.DefaultProps do
 						if obj:IsA(class) then
-							for prop, value in pairs(props) do
+							for prop, value in props do
 								obj[prop] = type(value) == "function" and value(obj) or value;
 							end;
 						end;
@@ -2207,7 +2207,7 @@ local EmbeddedModules = {
 					local classes = API and API.Classes;
 					local partialMatch;
 					if type(classes) == "table" then
-						for className in pairs(classes) do
+						for className in classes do
 							local lowerClassName = className:lower();
 							if lowerClassName == query then
 								classNameCache[cacheKey] = className;
@@ -2288,7 +2288,7 @@ local EmbeddedModules = {
 				end;
 				local function searchTable(root, str, func)
 					local expandedpar = false;
-					for _, node in ipairs(root) do
+					for _, node in root do
 						if func(node.Obj, str) then
 							expandTable[node] = 0;
 							searchResults[node] = true;
@@ -2320,7 +2320,7 @@ local EmbeddedModules = {
 						searchTable(allnodes, lower or "", defaultSearch);
 					end;
 				end;
-				for _, v in ipairs(query:split(",")) do
+				for _, v in query:split(",") do
 					if v:len() > 0 then
 						Search(v);
 					end;
@@ -2344,7 +2344,7 @@ local EmbeddedModules = {
 				local searchFocused = false;
 				local classSuggestions = {};
 				if API and type(API.Classes) == "table" then
-					for className in pairs(API.Classes) do
+					for className in API.Classes do
 						classSuggestions[#classSuggestions + 1] = {
 							Name = className,
 							Lower = className:lower()
@@ -2398,7 +2398,7 @@ local EmbeddedModules = {
 					suggestionEntries = {};
 					suggestionFrame.Visible = false;
 					suggestionFrame.Size = UDim2.new(1, 0, 0, 0);
-					for _, button in ipairs(suggestionButtons) do
+					for _, button in suggestionButtons do
 						button.Visible = false;
 					end;
 				end;
@@ -2432,7 +2432,7 @@ local EmbeddedModules = {
 					end;
 					local prefixMatches = {};
 					local containsMatches = {};
-					for _, entry in ipairs(classSuggestions) do
+					for _, entry in classSuggestions do
 						local position = entry.Lower:find(lowerQuery, 1, true);
 						if position then
 							if position == 1 then
@@ -2443,13 +2443,13 @@ local EmbeddedModules = {
 						end;
 					end;
 					local results = {};
-					for _, name in ipairs(prefixMatches) do
+					for _, name in prefixMatches do
 						results[#results + 1] = name;
 						if #results >= 6 then
 							return results;
 						end;
 					end;
-					for _, name in ipairs(containsMatches) do
+					for _, name in containsMatches do
 						results[#results + 1] = name;
 						if #results >= 6 then
 							break;
@@ -2925,7 +2925,7 @@ local EmbeddedModules = {
 					Explorer.SelectionVisualBox = boxTemplate;
 				end;
 				holder:ClearAllChildren();
-				for i, v in pairs(Explorer.SelectionVisualGui:GetChildren()) do
+				for i, v in Explorer.SelectionVisualGui:GetChildren() do
 					v.BackgroundColor3 = Color3.fromRGB(0, 170, 255);
 				end;
 				local attachCons = Explorer.SelectionVisualCons;
@@ -3799,7 +3799,7 @@ local EmbeddedModules = {
 					end;
 					if showingAttrs and attrCount < maxAttrs then
 						local attrs = getAttributes(obj);
-						for name, val in pairs(attrs) do
+						for name, val in attrs do
 							local typ = typeof(val);
 							if not foundAttrs[name] then
 								local category = typ == "Instance" and "Class" or typ == "EnumItem" and "Enum" or "Other";
@@ -3889,7 +3889,7 @@ local EmbeddedModules = {
 			end;
 			Properties.MakeSubProp = function(prop, subName, valueType, displayName)
 				local subProp = {};
-				for i, v in pairs(prop) do
+				for i, v in prop do
 					subProp[i] = v;
 				end;
 				subProp.RootType = subProp.RootType or subProp.ValueType;
@@ -4539,7 +4539,7 @@ local EmbeddedModules = {
 					editor.OnMoreColors:Connect(function()
 						editor:Close();
 						local colProp;
-						for i, v in pairs(API.Classes.BasePart.Properties) do
+						for i, v in API.Classes.BasePart.Properties do
 							if v.Name == "Color" then
 								colProp = v;
 								break;
@@ -5036,7 +5036,7 @@ local EmbeddedModules = {
 										"Right",
 										"Top"
 									};
-									for _, face in pairs(faceList) do
+									for _, face in faceList do
 										local val;
 										if subName == "." .. face then
 											val = setVal;
@@ -5055,7 +5055,7 @@ local EmbeddedModules = {
 										"Y",
 										"Z"
 									};
-									for _, axe in pairs(axesList) do
+									for _, axe in axesList do
 										local val;
 										if subName == "." .. axe then
 											val = setVal;
@@ -6216,7 +6216,7 @@ local EmbeddedModules = {
 								local indent = indent < 0 and 0 or indent;
 								functions:add_to_dump(("%s [%s] %s"):format(tostring(index), tostring(typeof(input)), tostring(input)), indent - 1);
 								local count = 0;
-								for index, value in pairs(input) do
+								for index, value in input do
 									count = count + 1;
 									if type(value) == "function" then
 										functions:add_to_dump(("%d [function] = %s"):format(count, functions:get_function_name(value)), indent);
@@ -6236,7 +6236,7 @@ local EmbeddedModules = {
 							function functions:dump_function(input, indent)
 								functions:add_to_dump(("\nFunction Dump: %s"):format(functions:get_function_name(input)), indent);
 								functions:add_to_dump(("\nFunction Upvalues: %s"):format(functions:get_function_name(input)), indent);
-								for index, upvalue in pairs(getupvalues(input)) do
+								for index, upvalue in getupvalues(input) do
 									if type(upvalue) == "function" then
 										functions:add_to_dump(("%d [function] = %s"):format(index, functions:get_function_name(upvalue)), indent + 1);
 									elseif type(upvalue) == "table" then
@@ -6252,7 +6252,7 @@ local EmbeddedModules = {
 									end;
 								end;
 								functions:add_to_dump(("\nFunction Constants: %s"):format(functions:get_function_name(input)), indent);
-								for index, constant in pairs(getconstants(input)) do
+								for index, constant in getconstants(input) do
 									if type(constant) == "function" then
 										functions:add_to_dump(("%d [function] = %s"):format(index, functions:get_function_name(constant)), indent + 1);
 									elseif type(constant) == "table" then
@@ -6268,7 +6268,7 @@ local EmbeddedModules = {
 									end;
 								end;
 							end;
-							for _, _function in pairs(getgc()) do
+							for _, _function in getgc() do
 								if typeof(_function) == "function" and (getfenv(_function)).script and (getfenv(_function)).script == PreviousScr then
 									functions:dump_function(_function, 0);
 									functions:add_to_dump("\n" .. ("="):rep(100), 0, false);
@@ -6326,7 +6326,7 @@ local EmbeddedModules = {
 				local type = type;
 				local function copy(t)
 					local res = {};
-					for i, v in pairs(t) do
+					for i, v in t do
 						if v == SIGNAL then
 							res[i] = Lib.Signal.new();
 						elseif type(v) == "table" then
@@ -6545,7 +6545,7 @@ local EmbeddedModules = {
 					end;
 					function createEntityTable(docEntities, resultEntities)
 						entities = resultEntities or defaultEntityTable();
-						for _, e in pairs(docEntities) do
+						for _, e in docEntities do
 							e.value = replaceEntities(e.value, entities);
 							entities[e.name] = e.value;
 						end;
@@ -7453,22 +7453,22 @@ local EmbeddedModules = {
 						self:UpdateMarkers();
 					end;
 					if self:CanScrollUp() then
-						for i, v in pairs(button1.Arrow:GetChildren()) do
+						for i, v in button1.Arrow:GetChildren() do
 							v.BackgroundTransparency = 0;
 						end;
 					else
 						button1.BackgroundTransparency = 1;
-						for i, v in pairs(button1.Arrow:GetChildren()) do
+						for i, v in button1.Arrow:GetChildren() do
 							v.BackgroundTransparency = 0.5;
 						end;
 					end;
 					if self:CanScrollDown() then
-						for i, v in pairs(button2.Arrow:GetChildren()) do
+						for i, v in button2.Arrow:GetChildren() do
 							v.BackgroundTransparency = 0;
 						end;
 					else
 						button2.BackgroundTransparency = 1;
-						for i, v in pairs(button2.Arrow:GetChildren()) do
+						for i, v in button2.Arrow:GetChildren() do
 							v.BackgroundTransparency = 0.5;
 						end;
 					end;
@@ -7477,7 +7477,7 @@ local EmbeddedModules = {
 				funcs.UpdateMarkers = function(self)
 					local markerFrame = self.GuiElems.MarkerFrame;
 					markerFrame:ClearAllChildren();
-					for i, v in pairs(self.Markers) do
+					for i, v in self.Markers do
 						if i < self.TotalSpace then
 							createSimple("Frame", {
 								BackgroundTransparency = 0,
@@ -7544,10 +7544,10 @@ local EmbeddedModules = {
 					self.Gui.BackgroundColor3 = data.FrameColor or Color3.new(0, 0, 0);
 					self.GuiElems.Button1.BackgroundColor3 = data.ButtonColor or Color3.new(0, 0, 0);
 					self.GuiElems.Button2.BackgroundColor3 = data.ButtonColor or Color3.new(0, 0, 0);
-					for i, v in pairs(self.GuiElems.Button1.Arrow:GetChildren()) do
+					for i, v in self.GuiElems.Button1.Arrow:GetChildren() do
 						v.BackgroundColor3 = data.ArrowColor or Color3.new(0, 0, 0);
 					end;
-					for i, v in pairs(self.GuiElems.Button2.Arrow:GetChildren()) do
+					for i, v in self.GuiElems.Button2.Arrow:GetChildren() do
 						v.BackgroundColor3 = data.ArrowColor or Color3.new(0, 0, 0);
 					end;
 				end;
@@ -7710,7 +7710,7 @@ local EmbeddedModules = {
 				local function sideHasRoom(side, neededSize)
 					local maxY = sidesGui.AbsoluteSize.Y - math.max(0, ((#side.Windows) - 1)) * 4;
 					local inc = 0;
-					for i, v in pairs(side.Windows) do
+					for i, v in side.Windows do
 						inc = inc + (v.MinY or 100);
 						if inc > maxY - neededSize then
 							return false;
@@ -7724,7 +7724,7 @@ local EmbeddedModules = {
 						0,
 						sidesGui.AbsoluteSize.Y
 					};
-					for i, v in pairs(side.Windows) do
+					for i, v in side.Windows do
 						local midPos = v.PosY + v.SizeY / 2;
 						if curY <= midPos then
 							pos = i;
@@ -8315,7 +8315,7 @@ local EmbeddedModules = {
 				local function sideResized(side)
 					local currentPos = 0;
 					local sideFramePos = getSideFramePos(side);
-					for i, v in pairs(side.Windows) do
+					for i, v in side.Windows do
 						v.SizeX = side.Width;
 						v.GuiElems.Main.Size = UDim2.new(0, side.Width, 0, v.SizeY);
 						v.GuiElems.Main.Position = UDim2.new(sideFramePos.X.Scale, sideFramePos.X.Offset, 0, currentPos);
@@ -8417,17 +8417,17 @@ local EmbeddedModules = {
 					local currentPos = 0;
 					local sideFramePos = getSideFramePos(side);
 					local template = side.WindowResizer:Clone();
-					for i, v in pairs(side.ResizeCons) do
+					for i, v in side.ResizeCons do
 						v:Disconnect();
 					end;
-					for i, v in pairs(side.Frame:GetChildren()) do
+					for i, v in side.Frame:GetChildren() do
 						if v.Name == "WindowResizer" then
 							v:Destroy();
 						end;
 					end;
 					side.ResizeCons = {};
 					side.Resizing = nil;
-					for i, v in pairs(side.Windows) do
+					for i, v in side.Windows do
 						v.SidePos = i;
 						local isEnd = i == (#side.Windows);
 						local size = UDim2.new(0, side.Width, 0, v.SizeY);
@@ -8465,10 +8465,10 @@ local EmbeddedModules = {
 					local neededSize = 0;
 					local windows = side.Windows;
 					local height = sidesGui.AbsoluteSize.Y - math.max(0, ((#windows) - 1)) * 4;
-					for i, v in pairs(windows) do
+					for i, v in windows do
 						oldHeight = oldHeight + v.SizeY;
 					end;
-					for i, v in pairs(windows) do
+					for i, v in windows do
 						if i == (#windows) then
 							v.SizeY = height - currentPos;
 							neededSize = math.max(0, (v.MinY or 100) - v.SizeY);
@@ -8590,13 +8590,13 @@ local EmbeddedModules = {
 					self.GuiElems.Main.Active = not val;
 					self.GuiElems.Main.Outlines.Visible = not val;
 					if not val then
-						for i, v in pairs(leftSide.Windows) do
+						for i, v in leftSide.Windows do
 							if v == self then
 								table.remove(leftSide.Windows, i);
 								break;
 							end;
 						end;
-						for i, v in pairs(rightSide.Windows) do
+						for i, v in rightSide.Windows do
 							if v == self then
 								table.remove(rightSide.Windows, i);
 								break;
@@ -8610,7 +8610,7 @@ local EmbeddedModules = {
 						updateWindows();
 					else
 						self:SetMinimized(false, 3);
-						for i, v in pairs(visibleWindows) do
+						for i, v in visibleWindows do
 							if v == self then
 								table.remove(visibleWindows, i);
 								break;
@@ -8639,7 +8639,7 @@ local EmbeddedModules = {
 					size = size or self.SizeY;
 					if size > 0 and size <= 1 then
 						local totalSideHeight = 0;
-						for i, v in pairs(side.Windows) do
+						for i, v in side.Windows do
 							totalSideHeight = totalSideHeight + v.SizeY;
 						end;
 						self.SizeY = totalSideHeight > 0 and totalSideHeight * size * 2 or size;
@@ -8650,7 +8650,7 @@ local EmbeddedModules = {
 					self.Side = side;
 					self.SizeX = side.Width;
 					self.Gui.DisplayOrder = sideDisplayOrder + 1;
-					for i, v in pairs(side.Windows) do
+					for i, v in side.Windows do
 						v.Gui.DisplayOrder = sideDisplayOrder;
 					end;
 					pos = math.min((#side.Windows) + 1, pos or 1);
@@ -8731,7 +8731,7 @@ local EmbeddedModules = {
 					tween:Play();
 				end;
 				funcs.StopTweens = function(self)
-					for i, v in pairs(self.Tweens) do
+					for i, v in self.Tweens do
 						v:Cancel();
 					end;
 					self.Tweens = {};
@@ -8797,7 +8797,7 @@ local EmbeddedModules = {
 				static.ToggleSide = function(name)
 					local side = name == "left" and leftSide or rightSide;
 					side.Hidden = not side.Hidden;
-					for i, v in pairs(side.Windows) do
+					for i, v in side.Windows do
 						if side.Hidden then
 							v.OnDeactivate:Fire();
 						else
@@ -8809,7 +8809,7 @@ local EmbeddedModules = {
 				static.SetSideVisible = function(s, vis)
 					local side = type(s) == "table" and s or (s == "left" and leftSide or rightSide);
 					side.Hidden = not vis;
-					for i, v in pairs(side.Windows) do
+					for i, v in side.Windows do
 						if side.Hidden then
 							v.OnDeactivate:Fire();
 						else
@@ -9105,7 +9105,7 @@ local EmbeddedModules = {
 						leftSide and leftSide.Windows or nil,
 						rightSide and rightSide.Windows or nil
 					};
-					for _, windowList in ipairs(sideWindows) do
+					for _, windowList in sideWindows do
 						if windowList then
 							for i = 1, #windowList do
 								local window = windowList[i];
@@ -9544,7 +9544,7 @@ local EmbeddedModules = {
 					self.Updated = nil;
 				end;
 				funcs.Refresh = function(self)
-					for i, v in pairs(self.GuiElems.List:GetChildren()) do
+					for i, v in self.GuiElems.List:GetChildren() do
 						if not v:IsA("UIListLayout") then
 							v:Destroy();
 						end;
@@ -10395,7 +10395,7 @@ local EmbeddedModules = {
 						local middle = line:sub(x, x);
 						local right = line:sub(x + 1, x + 1);
 						local selRange = (#left > 0 and left or " ") .. (#middle > 0 and middle or " ") .. (#right > 0 and right or " ");
-						for i, v in pairs(tabJumps) do
+						for i, v in tabJumps do
 							if selRange:find(i) then
 								return v;
 							end;
@@ -10958,7 +10958,7 @@ local EmbeddedModules = {
 				funcs.MakeRichTemplates = function(self)
 					local floor = math.floor;
 					local templates = {};
-					for name, color in pairs(self.Colors) do
+					for name, color in self.Colors do
 						templates[name] = ("<font color=\"rgb(%s,%s,%s)\">"):format(floor(color.r * 255), floor(color.g * 255), floor(color.b * 255));
 					end;
 					self.RichTemplates = templates;
@@ -13208,7 +13208,7 @@ local EmbeddedModules = {
 					window.Alignable = false;
 					window:SetTitle("Color Picker");
 					window:Resize(450, 330);
-					for i, v in pairs(guiContents:GetChildren()) do
+					for i, v in guiContents:GetChildren() do
 						v.Parent = window.GuiElems.Content;
 					end;
 					newMt.Window = window;
@@ -13502,7 +13502,7 @@ local EmbeddedModules = {
 					colorChoice.AutoButtonColor = false;
 					local row = 0;
 					local column = 0;
-					for i, v in pairs(basicColors) do
+					for i, v in basicColors do
 						local newColor = colorChoice:Clone();
 						newColor.BackgroundColor3 = v;
 						newColor.Position = UDim2.new(0, 1 + 30 * column, 0, 21 + 23 * row);
@@ -13860,7 +13860,7 @@ local EmbeddedModules = {
 					window:SetTitle("NumberSequence Editor");
 					newMt.Window = window;
 					newMt.Gui = window.Gui;
-					for i, v in pairs(guiContents:GetChildren()) do
+					for i, v in guiContents:GetChildren() do
 						v.Parent = window.GuiElems.Content;
 					end;
 					local gui = window.Gui;
@@ -13973,7 +13973,7 @@ local EmbeddedModules = {
 					envelopeDragBottom.Parent = numberLine;
 					local function buildSequence()
 						local newPoints = {};
-						for i, v in pairs(points) do
+						for i, v in points do
 							table.insert(newPoints, NumberSequenceKeypoint.new(v[2], v[1], v[3]));
 						end;
 						newMt.Sequence = NumberSequence.new(newPoints);
@@ -14074,7 +14074,7 @@ local EmbeddedModules = {
 						newPoint.Parent = numberLine;
 						newSelect.InputBegan:Connect(function(input)
 							if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-								for i, v in pairs(points) do
+								for i, v in points do
 									v[4].Select.BackgroundTransparency = 1;
 								end;
 								newSelect.BackgroundTransparency = 0;
@@ -14121,7 +14121,7 @@ local EmbeddedModules = {
 										point[3] = math.min(oldEnvelope, maxEnvelope);
 										newMt:Redraw();
 										updateInputs(point);
-										for i, v in pairs(points) do
+										for i, v in points do
 											v[4].Select.BackgroundTransparency = 1;
 										end;
 										newSelect.BackgroundTransparency = 0;
@@ -14133,7 +14133,7 @@ local EmbeddedModules = {
 						return newPoint;
 					end;
 					local function placePoints()
-						for i, v in pairs(points) do
+						for i, v in points do
 							v[4] = placePoint(v);
 						end;
 					end;
@@ -14142,7 +14142,7 @@ local EmbeddedModules = {
 						table.sort(points, function(a, b)
 							return a[2] < b[2];
 						end);
-						for i, v in pairs(points) do
+						for i, v in points do
 							v[4].Position = UDim2.new(0, math.floor((numberLineSize.X - 1) * v[2]) - 2, 0, (numberLineSize.Y - 1) * (10 - v[1]) / 10 - 2);
 						end;
 						lines[1].Size = UDim2.new(0, 1, 0, 0);
@@ -14190,13 +14190,13 @@ local EmbeddedModules = {
 					newMt.Redraw = redraw;
 					local function loadSequence(self, seq)
 						resetSequence = seq;
-						for i, v in pairs(points) do
+						for i, v in points do
 							if v[4] then
 								v[4]:Destroy();
 							end;
 						end;
 						points = {};
-						for i, v in pairs(seq.Keypoints) do
+						for i, v in seq.Keypoints do
 							local maxEnvelope = math.min(v.Value, 10 - v.Value);
 							local newPoint = {
 								v.Value,
@@ -14268,7 +14268,7 @@ local EmbeddedModules = {
 							if Lib.CheckMouseInGui(envelopeDragTop) or Lib.CheckMouseInGui(envelopeDragBottom) then
 								return;
 							end;
-							for i, v in pairs(points) do
+							for i, v in points do
 								if Lib.CheckMouseInGui(v[4].Select) then
 									return;
 								end;
@@ -14303,7 +14303,7 @@ local EmbeddedModules = {
 					end);
 					deleteButton.MouseButton1Click:Connect(function()
 						if currentPoint and currentPoint ~= beginPoint and currentPoint ~= endPoint then
-							for i, v in pairs(points) do
+							for i, v in points do
 								if v == currentPoint then
 									v[4]:Destroy();
 									table.remove(points, i);
@@ -14657,7 +14657,7 @@ local EmbeddedModules = {
 					window:SetTitle("ColorSequence Editor");
 					newMt.Window = window;
 					newMt.Gui = window.Gui;
-					for i, v in pairs(guiContents:GetChildren()) do
+					for i, v in guiContents:GetChildren() do
 						v.Parent = window.GuiElems.Content;
 					end;
 					local gui = window.Gui;
@@ -14709,7 +14709,7 @@ local EmbeddedModules = {
 						table.sort(colors, function(a, b)
 							return a[2] < b[2];
 						end);
-						for i, v in pairs(colors) do
+						for i, v in colors do
 							table.insert(newPoints, ColorSequenceKeypoint.new(v[2], v[1]));
 						end;
 						newMt.Sequence = ColorSequence.new(newPoints);
@@ -14784,7 +14784,7 @@ local EmbeddedModules = {
 						return newArrow;
 					end;
 					local function placeArrows()
-						for i, v in pairs(colors) do
+						for i, v in colors do
 							v[3] = placeArrow(math.floor((colorLine.AbsoluteSize.X - 1) * v[2]) + 1, v);
 						end;
 					end;
@@ -14799,14 +14799,14 @@ local EmbeddedModules = {
 					newMt.Redraw = redraw;
 					local function loadSequence(self, seq)
 						resetSequence = seq;
-						for i, v in pairs(colors) do
+						for i, v in colors do
 							if v[3] then
 								v[3]:Destroy();
 							end;
 						end;
 						colors = {};
 						currentlySelected = nil;
-						for i, v in pairs(seq.Keypoints) do
+						for i, v in seq.Keypoints do
 							local newPoint = {
 								v.Value,
 								v.Time
@@ -14847,7 +14847,7 @@ local EmbeddedModules = {
 							local raw = relativeX / maxSize;
 							local fromColor = nil;
 							local toColor = nil;
-							for i, col in pairs(colors) do
+							for i, col in colors do
 								if col[2] >= raw then
 									fromColor = colors[math.max(i - 1, 1)];
 									toColor = colors[i];
@@ -14883,7 +14883,7 @@ local EmbeddedModules = {
 					colorLine.InputEnded:Connect(function(input)
 						if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 							local inArrow = false;
-							for i, v in pairs(colors) do
+							for i, v in colors do
 								if Lib.CheckMouseInGui(v[3]) then
 									inArrow = v[3];
 								end;
@@ -14924,7 +14924,7 @@ local EmbeddedModules = {
 					end);
 					deleteButton.MouseButton1Click:Connect(function()
 						if currentPoint and currentPoint ~= beginPoint and currentPoint ~= endPoint then
-							for i, v in pairs(colors) do
+							for i, v in colors do
 								if v == currentPoint then
 									v[3]:Destroy();
 									table.remove(colors, i);
@@ -15414,7 +15414,7 @@ local EmbeddedModules = {
 					if not ind then
 						return;
 					end;
-					for i, v in pairs(self.ItemCons[item]) do
+					for i, v in self.ItemCons[item] do
 						v:Disconnect();
 					end;
 					self.ItemCons[item] = nil;
@@ -15531,11 +15531,11 @@ local env = {};
 local plr = service.Players.LocalPlayer or service.Players.PlayerAdded:wait();
 local create = function(data)
 	local insts = {};
-	for i, v in pairs(data) do
+	for i, v in data do
 		insts[v[1]] = Instance.new(v[2]);
 	end;
-	for _, v in pairs(data) do
-		for prop, val in pairs(v[3]) do
+	for _, v in data do
+		for prop, val in v[3] do
 			if type(val) == "table" then
 				insts[v[1]][prop] = insts[val[1]];
 			else
@@ -15615,7 +15615,7 @@ Main = (function()
 		if typeof(gui) ~= "Instance" then
 			return gui;
 		end;
-		for _, trackedGui in ipairs(Main.GuiList) do
+		for _, trackedGui in Main.GuiList do
 			if trackedGui == gui then
 				return gui;
 			end;
@@ -15693,7 +15693,7 @@ Main = (function()
 		else
 			Main.ResolvedAssetCache = Main.ResolvedAssetCache or {};
 		end;
-		for _, fileName in pairs(Main.IconOverrides) do
+		for _, fileName in Main.IconOverrides do
 			if processed[fileName] then
 				continue;
 			end;
@@ -15827,7 +15827,7 @@ Main = (function()
 	Main.LoadModules = function()
 		Main.ModuleErrors = {};
 		Main.StubbedApps = {};
-		for _, name in ipairs(Main.ModuleList) do
+		for _, name in Main.ModuleList do
 			local success, err = pcall(Main.LoadModule, name);
 			if not success then
 				local message = ("FAILED LOADING %s CAUSE %s"):format(name, err);
@@ -15850,7 +15850,7 @@ Main = (function()
 		if Main.AppControls.Lib and Main.AppControls.Lib.InitAfterMain then
 			Main.AppControls.Lib.InitAfterMain(appTable);
 		end;
-		for _, name in ipairs(Main.ModuleList) do
+		for _, name in Main.ModuleList do
 			local control = Main.AppControls[name];
 			if control and control.InitAfterMain then
 				control.InitAfterMain(appTable);
@@ -15973,7 +15973,7 @@ Main = (function()
 				elseif type(templateValue) == "table" then
 					if type(value) == "table" then
 						local fallbackTable = type(fallback) == "table" and fallback or nil;
-						for subKey, subTemplate in pairs(templateValue) do
+						for subKey, subTemplate in templateValue do
 							if subKey ~= "_Recurse" and value[subKey] ~= nil then
 								local subFallback = fallbackTable and fallbackTable[subKey] or nil;
 								value[subKey] = coerceByTemplate(value[subKey], subTemplate, subFallback);
@@ -15990,7 +15990,7 @@ Main = (function()
 			return value;
 		end;
 		local function apply(src, dest, template)
-			for key, val in pairs(src) do
+			for key, val in src do
 				local destVal = dest[key];
 				local templateVal = template and template[key] or destVal;
 				if type(val) == "table" and type(destVal) == "table" and destVal._Recurse then
@@ -16030,7 +16030,7 @@ Main = (function()
 	end;
 	Main.ResetSettings = function()
 		local function recur(t, res)
-			for set, val in pairs(t) do
+			for set, val in t do
 				if type(val) == "table" and val._Recurse then
 					if type(res[set]) ~= "table" then
 						res[set] = {};
@@ -16062,7 +16062,7 @@ Main = (function()
 				};
 			elseif valType == "table" then
 				local newTbl = {};
-				for key, value in pairs(val) do
+				for key, value in val do
 					newTbl[key] = serialize(value);
 				end;
 				return newTbl;
@@ -16160,7 +16160,7 @@ Main = (function()
 			end;
 			table.insert(t, pos, item);
 		end;
-		for _, class in pairs(api.Classes) do
+		for _, class in api.Classes do
 			local newClass = {};
 			newClass.Name = class.Name;
 			newClass.Superclass = class.Superclass;
@@ -16170,18 +16170,18 @@ Main = (function()
 			newClass.Callbacks = {};
 			newClass.Tags = {};
 			if class.Tags then
-				for c, tag in pairs(class.Tags) do
+				for c, tag in class.Tags do
 					newClass.Tags[tag] = true;
 				end;
 			end;
-			for __, member in pairs(class.Members) do
+			for __, member in class.Members do
 				local newMember = {};
 				newMember.Name = member.Name;
 				newMember.Class = class.Name;
 				newMember.Security = member.Security;
 				newMember.Tags = {};
 				if member.Tags then
-					for c, tag in pairs(member.Tags) do
+					for c, tag in member.Tags do
 						newMember.Tags[tag] = true;
 					end;
 				end;
@@ -16200,7 +16200,7 @@ Main = (function()
 				elseif mType == "Function" then
 					newMember.Parameters = {};
 					newMember.ReturnType = member.ReturnType.Name;
-					for c, param in pairs(member.Parameters) do
+					for c, param in member.Parameters do
 						table.insert(newMember.Parameters, {
 							Name = param.Name,
 							Type = param.Type.Name
@@ -16209,7 +16209,7 @@ Main = (function()
 					table.insert(newClass.Functions, newMember);
 				elseif mType == "Event" then
 					newMember.Parameters = {};
-					for c, param in pairs(member.Parameters) do
+					for c, param in member.Parameters do
 						table.insert(newMember.Parameters, {
 							Name = param.Name,
 							Type = param.Type.Name
@@ -16220,20 +16220,20 @@ Main = (function()
 			end;
 			classes[class.Name] = newClass;
 		end;
-		for _, class in pairs(classes) do
+		for _, class in classes do
 			class.Superclass = classes[class.Superclass];
 		end;
-		for _, enum in pairs(api.Enums) do
+		for _, enum in api.Enums do
 			local newEnum = {};
 			newEnum.Name = enum.Name;
 			newEnum.Items = {};
 			newEnum.Tags = {};
 			if enum.Tags then
-				for c, tag in pairs(enum.Tags) do
+				for c, tag in enum.Tags do
 					newEnum.Tags[tag] = true;
 				end;
 			end;
-			for __, item in pairs(enum.Items) do
+			for __, item in enum.Items do
 				local newItem = {};
 				newItem.Name = item.Name;
 				newItem.Value = item.Value;
@@ -16248,7 +16248,7 @@ Main = (function()
 			local result = {};
 			local currentClass = classes[class];
 			while currentClass do
-				for _, entry in pairs(currentClass[member]) do
+				for _, entry in currentClass[member] do
 					result[(#result) + 1] = entry;
 				end;
 				currentClass = currentClass.Superclass;
@@ -16304,16 +16304,16 @@ Main = (function()
 		local enumList = parsed.children[1].children[2].children;
 		local propertyOrders = {};
 		local classes, enums = {}, {};
-		for _, class in pairs(classList) do
+		for _, class in classList do
 			local className = "";
-			for _, child in pairs(class.children) do
+			for _, child in class.children do
 				if child.tag == "Properties" then
 					local data = {
 						Properties = {},
 						Functions = {}
 					};
 					local props = child.children;
-					for _, prop in pairs(props) do
+					for _, prop in props do
 						local name = prop.attrs.name;
 						name = (name:sub(1, 1)):upper() .. name:sub(2);
 						data[name] = prop.children[1].text;
@@ -16322,12 +16322,12 @@ Main = (function()
 					classes[className] = data;
 				elseif child.attrs.class == "ReflectionMetadataProperties" then
 					local members = child.children;
-					for _, member in pairs(members) do
+					for _, member in members do
 						if member.attrs.class == "ReflectionMetadataMember" then
 							local data = {};
 							if member.children[1].tag == "Properties" then
 								local props = member.children[1].children;
-								for _, prop in pairs(props) do
+								for _, prop in props do
 									if prop.attrs then
 										local name = prop.attrs.name;
 										name = (name:sub(1, 1)):upper() .. name:sub(2);
@@ -16348,12 +16348,12 @@ Main = (function()
 					end;
 				elseif child.attrs.class == "ReflectionMetadataFunctions" then
 					local members = child.children;
-					for _, member in pairs(members) do
+					for _, member in members do
 						if member.attrs.class == "ReflectionMetadataMember" then
 							local data = {};
 							if member.children[1].tag == "Properties" then
 								local props = member.children[1].children;
-								for _, prop in pairs(props) do
+								for _, prop in props do
 									if prop.attrs then
 										local name = prop.attrs.name;
 										name = (name:sub(1, 1)):upper() .. name:sub(2);
@@ -16367,15 +16367,15 @@ Main = (function()
 				end;
 			end;
 		end;
-		for _, enum in pairs(enumList) do
+		for _, enum in enumList do
 			local enumName = "";
-			for _, child in pairs(enum.children) do
+			for _, child in enum.children do
 				if child.tag == "Properties" then
 					local data = {
 						Items = {}
 					};
 					local props = child.children;
-					for _, prop in pairs(props) do
+					for _, prop in props do
 						local name = prop.attrs.name;
 						name = (name:sub(1, 1)):upper() .. name:sub(2);
 						data[name] = prop.children[1].text;
@@ -16386,7 +16386,7 @@ Main = (function()
 					local data = {};
 					if child.children[1].tag == "Properties" then
 						local props = child.children[1].children;
-						for _, prop in pairs(props) do
+						for _, prop in props do
 							local name = prop.attrs.name;
 							name = (name:sub(1, 1)):upper() .. name:sub(2);
 							data[name] = prop.children[1].text;
@@ -17080,7 +17080,7 @@ Main = (function()
 		end;
 
 		if Main.ConnList then
-			for _, conn in ipairs(Main.ConnList) do
+			for _, conn in Main.ConnList do
 				pcall(function()
 					if conn then
 						conn:Disconnect();
@@ -17091,7 +17091,7 @@ Main = (function()
 		end;
 
 		if Main.GuiList then
-			for _, gui in ipairs(Main.GuiList) do
+			for _, gui in Main.GuiList do
 				pcall(function()
 					if gui and gui.Destroy then
 						gui:Destroy();

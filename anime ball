@@ -258,7 +258,7 @@ if game.GameId == 5120885191 then
 		if not (antiKb and char) then
 			return
 		end
-		for _, desc in ipairs(char:QueryDescendants("Instance")) do
+		for _, desc in char:QueryDescendants("Instance") do
 			if isVelocityInstance(desc) then
 				desc:Destroy()
 			end
@@ -280,7 +280,7 @@ if game.GameId == 5120885191 then
 	end
 
 	local function purgeEffects()
-		for _, desc in ipairs(__lt.cm("Workspace", "QueryDescendants", "Instance")) do
+		for _, desc in __lt.cm("Workspace", "QueryDescendants", "Instance") do
 			if isEffectInstance(desc) then
 				desc:Destroy()
 			end
@@ -664,7 +664,7 @@ if game.GameId == 5120885191 then
 			tween(frame, 0.22, { Size = fullSize })
 		end
 		task.defer(function()
-			for _, v in ipairs(frame:GetChildren()) do
+			for _, v in frame:GetChildren() do
 				if v:IsA("GuiObject") and v ~= title and v ~= closeBtn and v ~= minimizeBtn and v ~= deviceLbl then
 					v.Visible = not minimized
 				end
@@ -738,7 +738,7 @@ if game.GameId == 5120885191 then
 		if not ball or not ball.Parent then
 			return
 		end
-		for _, v in ipairs(ball:QueryDescendants("Instance")) do
+		for _, v in ball:QueryDescendants("Instance") do
 			if v:IsA("ParticleEmitter") or v:IsA("Beam") or v:IsA("Trail") or v:IsA("Attachment") then
 				v:Destroy()
 			end

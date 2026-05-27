@@ -20,7 +20,7 @@ local function tableToString(data, root, indents)
         local elements = 0
         local indent = ('\t'):rep(indents)
         
-        for i,v in pairs(data) do
+        for i,v in data do
             if i ~= root and v ~= root then
                 head = head .. ("%s[%s] = %s,\n"):format(indent, tableToString(i, root, indents + 1), tableToString(v, root, indents + 1))
             else
@@ -41,7 +41,7 @@ local function tableToString(data, root, indents)
 end
 
 local function compareTables(x, y)
-    for i, v in pairs(x) do
+    for i, v in x do
         if v ~= y[i] then
             return false
         end

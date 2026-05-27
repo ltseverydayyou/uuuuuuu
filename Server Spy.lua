@@ -249,7 +249,7 @@ menustuff = function(menu)
 	if clear then
 		clear.MouseButton1Click:Connect(function()
 			local t = ((menu:FindFirstChild("Container", true)):FindFirstChildOfClass("ScrollingFrame")):FindFirstChildOfClass("UIListLayout", true);
-			for _, v in ipairs(t.Parent:GetChildren()) do
+			for _, v in t.Parent:GetChildren() do
 				if v:IsA("TextLabel") or v:IsA("TextButton") then
 					v:Destroy();
 				end;
@@ -328,7 +328,7 @@ function formatValue(value)
 		return GetInstancePath(value);
 	elseif typeof(value) == "table" then
 		local result = "{ ";
-		for k, v in pairs(value) do
+		for k, v in value do
 			result = result .. string.format("[%s] = %s; \n", formatValue(k), formatValue(v));
 		end;
 		result = result:sub(1, -2);
@@ -339,7 +339,7 @@ function formatValue(value)
 end;
 function Format(args)
 	local formattedArgs = {};
-	for i, arg in ipairs(args) do
+	for i, arg in args do
 		formattedArgs[i] = string.format("%s", formatValue(arg));
 	end;
 	return formattedArgs;
@@ -402,7 +402,7 @@ function handleRemote(remote)
 	end;
 end;
 function wrapRemotes()
-	for _, obj in ipairs(game:QueryDescendants("Instance")) do
+	for _, obj in game:QueryDescendants("Instance") do
 		if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
 			handleRemote(obj);
 		end;

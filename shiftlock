@@ -128,7 +128,7 @@ end;
 local function getParts()
 	local c = plr.Character or plr.CharacterAdded:Wait();
 	local hum, hrp;
-	for _, d in ipairs(c:QueryDescendants("Instance")) do
+	for _, d in c:QueryDescendants("Instance") do
 		if not hum and d:IsA("Humanoid") then
 			hum = d;
 		end;

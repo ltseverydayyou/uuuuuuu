@@ -13,11 +13,11 @@ function Overflow.start(incomingIcon)
 	Icon = incomingIcon;
 	iconsDict = Icon.iconsDictionary;
 	local primaryScreenGui;
-	for _, screenGui in pairs(Icon.container) do
+	for _, screenGui in Icon.container do
 		if primaryScreenGui == nil and screenGui.ScreenInsets == Enum.ScreenInsets.TopbarSafeInsets then
 			primaryScreenGui = screenGui;
 		end;
-		for _, holder in pairs(screenGui.Holders:GetChildren()) do
+		for _, holder in screenGui.Holders:GetChildren() do
 			if holder:GetAttribute("IsAHolder") then
 				holders[holder.Name] = holder;
 			end;
@@ -66,7 +66,7 @@ end;
 function Overflow.updateAvailableIcons(alignment)
 	local ourTotal = 0;
 	local ourOrderedIcons = {};
-	for _, icon in pairs(iconsDict) do
+	for _, icon in iconsDict do
 		local parentUID = icon.parentIconUID;
 		local isDirectlyOnTopbar = not parentUID or overflowIconUIDs[parentUID];
 		local isOverflow = overflowIconUIDs[icon.UID];
@@ -138,7 +138,7 @@ function Overflow.updateBoundary(alignment)
 	local ourOrderedIcons = Overflow.updateAvailableIcons(alignment);
 	local boundWidth = 0;
 	local ourTotal = 0;
-	for _, icon in pairs(ourOrderedIcons) do
+	for _, icon in ourOrderedIcons do
 		boundWidth += Overflow.getWidth(icon) + topbarPadding;
 		ourTotal += 1;
 	end;

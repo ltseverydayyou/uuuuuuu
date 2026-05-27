@@ -185,9 +185,9 @@ local function guiroot()
 		or pg
 end
 
-for _, root in ipairs({huigrab(), cg, pg}) do
+for _, root in {huigrab(), cg, pg} do
 	if typeof(root) == "Instance" then
-		for _, v in ipairs(root:GetDescendants()) do
+		for _, v in root:GetDescendants() do
 			if v:IsA("ScreenGui") and v:GetAttribute(tag) == true then
 				v:Destroy()
 			end
@@ -276,7 +276,7 @@ local function protectui(g)
 		IgnoreGuiInset = true,
 	}
 
-	for prop, val in pairs(props) do
+	for prop, val in props do
 		bind(g:GetPropertyChangedSignal(prop), function()
 			if dead then
 				return
@@ -326,7 +326,7 @@ end)
 
 local function mk(cls, prop)
 	local o = Instance.new(cls)
-	for k, v in pairs(prop) do
+	for k, v in prop do
 		o[k] = v
 	end
 	o.Name = uiname()
@@ -615,7 +615,7 @@ local function cloneplain(t)
 		end
 	end
 	local cp = {}
-	for k, v in pairs(t) do
+	for k, v in t do
 		cp[k] = v
 	end
 	local mt = getmetatable(t)
@@ -759,7 +759,7 @@ end
 
 local function sortkeys(t)
 	local out = {}
-	for k in pairs(t) do
+	for k in t do
 		out[#out + 1] = k
 	end
 	table.sort(out, function(a, b)
@@ -783,7 +783,7 @@ end
 
 local function tablecount(t)
 	local n = 0
-	for _ in pairs(t) do
+	for _ in t do
 		n += 1
 	end
 	return n
@@ -853,7 +853,7 @@ local function getCopiedInstancePath(obj)
 
 	local function dupchildpath(parentExpr, childName, className, occurrence)
 		return string.format(
-			"(function(parent)\n\tlocal seen = 0\n\tfor _, child in ipairs(parent:GetChildren()) do\n\t\tif child.Name == %q and child.ClassName == %q then\n\t\t\tseen += 1\n\t\t\tif seen == %d then\n\t\t\t\treturn child\n\t\t\tend\n\t\tend\n\tend\nend)(%s)",
+			"(function(parent)\n\tlocal seen = 0\n\tfor _, child in parent:GetChildren() do\n\t\tif child.Name == %q and child.ClassName == %q then\n\t\t\tseen += 1\n\t\t\tif seen == %d then\n\t\t\t\treturn child\n\t\t\tend\n\t\tend\n\tend\nend)(%s)",
 			childName,
 			className,
 			occurrence,
@@ -876,7 +876,7 @@ local function getCopiedInstancePath(obj)
 	end
 
 	local path = "game"
-	for _, item in ipairs(chain) do
+	for _, item in chain do
 		local parent = item.Parent
 		local className = item.ClassName
 		local currentName = tostring(item)
@@ -886,7 +886,7 @@ local function getCopiedInstancePath(obj)
 		else
 			local duplicateByName = false
 			local occurrence = 0
-			for _, sibling in ipairs(parent:GetChildren()) do
+			for _, sibling in parent:GetChildren() do
 				if sibling.Name == currentName then
 					if sibling.ClassName == className then
 						occurrence += 1
@@ -984,7 +984,7 @@ function Upvalue.update(upvalue, newValue)
 		upvalue.Scanned = nil
 		upvalue.TemporaryElements = nil
 	elseif scanned then
-		for i in pairs(scanned) do
+		for i in scanned do
 			scanned[i] = value[i]
 		end
 	end
@@ -1058,13 +1058,13 @@ local function scanUpvalues(query, deep)
 	local blocked = {}
 	local skipped = 0
 
-	for _, closureData in pairs(rawGetGc()) do
+	for _, closureData in rawGetGc() do
 		if type(closureData) == "function"
 			and not isXClosure(closureData)
 			and (not isLClosure or isLClosure(closureData)) then
 			local ok, upvalues = pcall(getUpvaluesCompat, closureData)
 			if ok and type(upvalues) == "table" then
-				for index, value in pairs(upvalues) do
+				for index, value in upvalues do
 					local valueType = type(value)
 					if valueType ~= "table" and compareQuery(query, value) then
 						local closure = found[closureData]
@@ -1083,7 +1083,7 @@ local function scanUpvalues(query, deep)
 					elseif deep and valueType == "table" then
 						local closure = found[closureData]
 						local tableUpvalue
-						for i, v in pairs(value) do
+						for i, v in value do
 							if (i ~= value and v ~= value) and (compareQuery(query, i, true) or compareQuery(query, v)) then
 								if not closure and not blocked[closureData] then
 									closure = Closure.new(closureData)
@@ -1113,7 +1113,7 @@ local function scanUpvalues(query, deep)
 	end
 
 	local list = {}
-	for _, closure in pairs(found) do
+	for _, closure in found do
 		list[#list + 1] = closure
 	end
 
@@ -1136,7 +1136,7 @@ local function ensureAllUpvalues(closure)
 		statusText = "failed to read upvalues"
 		return
 	end
-	for index, value in pairs(values) do
+	for index, value in values do
 		if not closure.Upvalues[index] and not closure.TemporaryUpvalues[index] then
 			local upvalue = Upvalue.new(closure, index, value)
 			if type(value) == "table" then
@@ -1155,7 +1155,7 @@ local function ensureAllElements(upvalue)
 	local scanned = upvalue.Scanned or {}
 	upvalue.Scanned = scanned
 	local temporary = upvalue.TemporaryElements or {}
-	for index, value in pairs(upvalue.Value) do
+	for index, value in upvalue.Value do
 		if scanned[index] == nil and temporary[index] == nil then
 			temporary[index] = value
 		end
@@ -1237,7 +1237,7 @@ local function findLoopLock(target)
 		return nil
 	end
 
-	for index, lock in ipairs(loopLocks) do
+	for index, lock in loopLocks do
 		if lock.kind == target.kind and sameUpvalueRef(lock.upvalue, target.upvalue) then
 			if lock.kind ~= "element" or lock.key == target.key then
 				lock.upvalue = target.upvalue
@@ -1367,7 +1367,7 @@ local function tablecodelit(data, root, indent)
 	local prefix = string.rep("\t", indent)
 	local hadAny = false
 
-	for k, v in pairs(data) do
+	for k, v in data do
 		hadAny = true
 		local keyCode
 		local valueCode
@@ -1417,7 +1417,7 @@ local function buildCopyCode(loopTarget, newValue, forceLoop)
 	if type(rawGetConstants) == "function" then
 		local ok, constants = pcall(rawGetConstants, closureData)
 		if ok and type(constants) == "table" then
-			for idx, constant in pairs(constants) do
+			for idx, constant in constants do
 				if currentIndex > 5 then
 					break
 				elseif type(constant) ~= "function" then
@@ -1481,7 +1481,7 @@ local function buildCopyCode(loopTarget, newValue, forceLoop)
 	generated[#generated + 1] = "\t\treturn true"
 	generated[#generated + 1] = "\tend"
 	generated[#generated + 1] = "\tlocal constants = getConstants(func)"
-	generated[#generated + 1] = "\tfor index, constant in pairs(list) do"
+	generated[#generated + 1] = "\tfor index, constant in list do"
 	generated[#generated + 1] = "\t\tif constants[index] ~= constant and constant ~= placeholderUserdataConstant then"
 	generated[#generated + 1] = "\t\t\treturn false"
 	generated[#generated + 1] = "\t\tend"
@@ -1490,7 +1490,7 @@ local function buildCopyCode(loopTarget, newValue, forceLoop)
 	generated[#generated + 1] = "end"
 	generated[#generated + 1] = ""
 	generated[#generated + 1] = "local function searchClosure(targetScript)"
-	generated[#generated + 1] = "\tfor _, func in pairs(rawGetGc()) do"
+	generated[#generated + 1] = "\tfor _, func in rawGetGc() do"
 	generated[#generated + 1] = "\t\tif type(func) == \"function\" and (not isLClosure or isLClosure(func)) and not isXClosure(func) then"
 	generated[#generated + 1] = "\t\t\tlocal okEnv, env = pcall(getfenv, func)"
 	generated[#generated + 1] = "\t\t\tlocal parentScript = okEnv and env and rawget(env, \"script\") or nil"
@@ -1892,7 +1892,7 @@ local function dragger(ui, dragui)
 		end
 		local topg
 		local topo
-		for _, g in ipairs(list) do
+		for _, g in list do
 			local o = getorder(g)
 			if not topg or o > topo then
 				topg = g
@@ -2041,7 +2041,7 @@ local function fit()
 
 	local tabw = math.floor((w - 32) / 3)
 	local x = 0
-	for _, key in ipairs({"closures", "upvalues", "elements"}) do
+	for _, key in {"closures", "upvalues", "elements"} do
 		local b = tabs[key]
 		b.Position = UDim2.fromOffset(x, 0)
 		b.Size = UDim2.new(0, tabw - 4, 1, 0)
@@ -2085,7 +2085,7 @@ local function card(parent, y, h, temporary)
 end
 
 local function clear()
-	for _, v in ipairs(listc:GetChildren()) do
+	for _, v in listc:GetChildren() do
 		v:Destroy()
 	end
 end
@@ -2140,7 +2140,7 @@ local function updateButtons()
 		allb.TextColor3 = Color3.fromRGB(120, 120, 120)
 	end
 
-	for key, button in pairs(tabs) do
+	for key, button in tabs do
 		local on = key == mode
 		button.BackgroundColor3 = on and Color3.fromRGB(235, 235, 235) or Color3.fromRGB(24, 24, 24)
 		button.TextColor3 = on and Color3.fromRGB(10, 10, 10) or Color3.new(1, 1, 1)
@@ -2595,7 +2595,7 @@ local function collectRows()
 
 		local applyNameFilter = q ~= "" and q ~= lastScanQuery
 		local shown = 0
-		for _, closure in ipairs(closures) do
+		for _, closure in closures do
 			local script = closureScript(closure)
 			local scriptPath = script and getInstancePath(script) or "detached"
 			if not applyNameFilter or filtered(closure.Name, q) or filtered(scriptPath, q) then
@@ -2618,18 +2618,18 @@ local function collectRows()
 		end
 
 		local merged = {}
-		for index, upvalue in pairs(selectedClosure.Upvalues) do
+		for index, upvalue in selectedClosure.Upvalues do
 			merged[index] = upvalue
 		end
 		if showAllUpvalues then
 			ensureAllUpvalues(selectedClosure)
-			for index, upvalue in pairs(selectedClosure.TemporaryUpvalues) do
+			for index, upvalue in selectedClosure.TemporaryUpvalues do
 				merged[index] = upvalue
 			end
 		end
 
 		local keys = sortkeys(merged)
-		for _, index in ipairs(keys) do
+		for _, index in keys do
 			local upvalue = merged[index]
 			local value = upvalue.Value
 			local labelText = "upvalue[" .. tostring(index) .. "]"
@@ -2697,19 +2697,19 @@ local function collectRows()
 
 		local merged = {}
 		if selectedUpvalue.Scanned then
-			for index, value in pairs(selectedUpvalue.Scanned) do
+			for index, value in selectedUpvalue.Scanned do
 				merged[index] = {value = value}
 			end
 		end
 		if showAllElements then
 			ensureAllElements(selectedUpvalue)
-			for index, value in pairs(selectedUpvalue.TemporaryElements or {}) do
+			for index, value in selectedUpvalue.TemporaryElements or {} do
 				merged[index] = {value = value, temporary = true}
 			end
 		end
 
 		local keys = sortkeys(merged)
-		for _, index in ipairs(keys) do
+		for _, index in keys do
 			local data = merged[index]
 			local value = data.value
 			local labelText = "[" .. tostring(index) .. "]"
@@ -2780,7 +2780,7 @@ draw = function()
 
 	local items = collectRows()
 	local y = 0
-	for _, item in ipairs(items) do
+	for _, item in items do
 		local h = 0
 		if item.kind == "msg" then
 			h = showmsg(y, item.a, item.b)
@@ -2907,7 +2907,7 @@ bind(deepb.Activated, function()
 	draw()
 end)
 
-for key, button in pairs(tabs) do
+for key, button in tabs do
 	bind(button.Activated, function()
 		if key == "closures" then
 			mode = "closures"
@@ -2975,7 +2975,7 @@ bind(run.Heartbeat, function(dt)
 	if selectedClosure then
 		local ok, values = pcall(getUpvaluesCompat, selectedClosure)
 		if ok and type(values) == "table" then
-			for index, value in pairs(values) do
+			for index, value in values do
 				local upvalue = selectedClosure.Upvalues[index] or selectedClosure.TemporaryUpvalues[index]
 				if upvalue then
 					upvalue:Update(value)

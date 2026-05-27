@@ -464,7 +464,7 @@ local function main()
 
 		local function updateQuickTabState(selectedName)
 			currentSectionName = selectedName
-			for name, button in pairs(quickTabButtons) do
+			for name, button in quickTabButtons do
 				if name == selectedName then
 					button.BackgroundColor3 = Settings.Theme.ListSelection
 				else
@@ -1015,7 +1015,7 @@ local function main()
 			setWindowTitleSuffix("User Prefs Saved")
 		end))
 
-		for _, sectionName in ipairs({"UI", "Startup", "Explorer", "Properties", "Viewer", "Console", "Decompiler", "Themes", "Files"}) do
+		for _, sectionName in {"UI", "Startup", "Explorer", "Properties", "Viewer", "Console", "Decompiler", "Themes", "Files"} do
 			createQuickTab(sectionName)
 		end
 

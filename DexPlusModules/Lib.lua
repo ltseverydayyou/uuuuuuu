@@ -136,7 +136,7 @@ local function main()
 		local type = type
 		local function copy(t)
 			local res = {}
-			for i,v in pairs(t) do
+			for i,v in t do
 				if v == SIGNAL then
 					res[i] = Lib.Signal.new()
 				elseif type(v) == "table" then
@@ -238,7 +238,7 @@ local function main()
 		end
 
 		if Main and Main.AppControls then
-			for _, ctrl in pairs(Main.AppControls) do
+			for _, ctrl in Main.AppControls do
 				if type(ctrl) == "table" then
 					local okApply, applyFunc = pcall(function() return ctrl.ApplyTheme end)
 					if okApply and type(applyFunc) == "function" then
@@ -257,7 +257,7 @@ local function main()
 		end
 
 		if Main and Main.Apps then
-			for _, app in pairs(Main.Apps) do
+			for _, app in Main.Apps do
 				if type(app) == "table" then
 					local okApply, applyFunc = pcall(function() return app.ApplyTheme end)
 					if okApply and type(applyFunc) == "function" then
@@ -435,7 +435,7 @@ local function main()
 
 			function createEntityTable(docEntities, resultEntities)
 				entities = resultEntities or defaultEntityTable()
-				for _,e in pairs(docEntities) do
+				for _,e in docEntities do
 					e.value = replaceEntities(e.value, entities)
 					entities[e.name] = e.value
 				end
@@ -2214,7 +2214,7 @@ local function main()
 			if not (button and button.Parent) then return end
 			local arrow = button:FindFirstChild("Arrow")
 			if not arrow then return end
-			for i,v in pairs(arrow:GetChildren()) do
+			for i,v in arrow:GetChildren() do
 				callback(v, i)
 			end
 		end
@@ -2511,7 +2511,7 @@ local function main()
 			local markerFrame = self.GuiElems.MarkerFrame
 			markerFrame:ClearAllChildren()
 
-			for i,v in pairs(self.Markers) do
+			for i,v in self.Markers do
 				if i < self.TotalSpace then
 					createSimple("Frame", {
 						BackgroundTransparency = 0,
@@ -2754,7 +2754,7 @@ local function main()
 		local function sideHasRoom(side,neededSize)
 			local maxY = sidesGui.AbsoluteSize.Y - (math.max(0,#side.Windows - 1) * 4)
 			local inc = 0
-			for i,v in pairs(side.Windows) do
+			for i,v in side.Windows do
 				inc = inc + (v.MinY or 100)
 				if inc > maxY - neededSize then return false end
 			end
@@ -2766,7 +2766,7 @@ local function main()
 			local pos = #side.Windows + 1
 			local range = {0,sidesGui.AbsoluteSize.Y}
 
-			for i,v in pairs(side.Windows) do
+			for i,v in side.Windows do
 				local midPos = v.PosY + v.SizeY/2
 				if curY <= midPos then
 					pos = i
@@ -3072,7 +3072,7 @@ local function main()
 		local function sideResized(side)
 			local currentPos = 0
 			local sideFramePos = getSideFramePos(side)
-			for i,v in pairs(side.Windows) do
+			for i,v in side.Windows do
 				v.SizeX = side.Width
 				v.GuiElems.Main.Size = UDim2.new(0,side.Width,0,v.SizeY)
 				v.GuiElems.Main.Position = UDim2.new(sideFramePos.X.Scale,sideFramePos.X.Offset,0,currentPos)
@@ -3189,12 +3189,12 @@ local function main()
 			local currentPos = 0
 			local sideFramePos = getSideFramePos(side)
 			local template = side.WindowResizer:Clone()
-			for i,v in pairs(side.ResizeCons) do v:Disconnect() end
-			for i,v in pairs(side.Frame:GetChildren()) do if v.Name == "WindowResizer" then v:Destroy() end end
+			for i,v in side.ResizeCons do v:Disconnect() end
+			for i,v in side.Frame:GetChildren() do if v.Name == "WindowResizer" then v:Destroy() end end
 			side.ResizeCons = {}
 			side.Resizing = nil
 
-			for i,v in pairs(side.Windows) do
+			for i,v in side.Windows do
 				v.SidePos = i
 				local isEnd = i == #side.Windows
 				local size = UDim2.new(0,side.Width,0,v.SizeY)
@@ -3230,7 +3230,7 @@ local function main()
 		end
 
 		local function clearSide(side)
-			for i,v in pairs(side.ResizeCons) do
+			for i,v in side.ResizeCons do
 				pcall(function()
 					v:Disconnect()
 				end)
@@ -3250,8 +3250,8 @@ local function main()
 			local windows = side.Windows
 			local height = sidesGui.AbsoluteSize.Y - (math.max(0,#windows - 1) * 4)
 
-			for i,v in pairs(windows) do oldHeight = oldHeight + v.SizeY end
-			for i,v in pairs(windows) do
+			for i,v in windows do oldHeight = oldHeight + v.SizeY end
+			for i,v in windows do
 				if i == #windows then
 					v.SizeY = height-currentPos
 					neededSize = math.max(0,(v.MinY or 100)-v.SizeY)
@@ -3361,8 +3361,8 @@ local function main()
 			self.GuiElems.Main.Active = not val
 			self.GuiElems.Main.Outlines.Visible = not val
 			if not val then
-				for i,v in pairs(leftSide.Windows) do if v == self then table.remove(leftSide.Windows,i) break end end
-				for i,v in pairs(rightSide.Windows) do if v == self then table.remove(rightSide.Windows,i) break end end
+				for i,v in leftSide.Windows do if v == self then table.remove(leftSide.Windows,i) break end end
+				for i,v in rightSide.Windows do if v == self then table.remove(rightSide.Windows,i) break end end
 				if not table.find(visibleWindows,self) then table.insert(visibleWindows,1,self) end
 				local minimizeImage = getButtonImage(self.GuiElems.Minimize)
 				if minimizeImage then
@@ -3372,7 +3372,7 @@ local function main()
 				updateWindows()
 			else
 				self:SetMinimized(false,3)
-				for i,v in pairs(visibleWindows) do if v == self then table.remove(visibleWindows,i) break end end
+				for i,v in visibleWindows do if v == self then table.remove(visibleWindows,i) break end end
 				local minimizeImage = getButtonImage(self.GuiElems.Minimize)
 				if minimizeImage then
 					minimizeImage.Image = Main.ResolveAsset("rbxassetid://5448127505")
@@ -3399,7 +3399,7 @@ local function main()
 			size = size or self.SizeY
 			if size > 0 and size <= 1 then
 				local totalSideHeight = 0
-				for i,v in pairs(side.Windows) do totalSideHeight = totalSideHeight + v.SizeY end
+				for i,v in side.Windows do totalSideHeight = totalSideHeight + v.SizeY end
 				self.SizeY = (totalSideHeight > 0 and totalSideHeight * size * 2) or size
 			else
 				self.SizeY = (size > 0 and size or 100)
@@ -3409,7 +3409,7 @@ local function main()
 			self.Side = side
 			self.SizeX = side.Width
 			self.Gui.DisplayOrder = sideDisplayOrder + 1
-			for i,v in pairs(side.Windows) do v.Gui.DisplayOrder = sideDisplayOrder end
+			for i,v in side.Windows do v.Gui.DisplayOrder = sideDisplayOrder end
 			pos = math.min(#side.Windows+1, pos or 1)
 			self.SidePos = pos
 			table.insert(side.Windows, pos, self)
@@ -3532,7 +3532,7 @@ local function main()
 		end
 
 		funcs.StopTweens = function(self)
-			for i,v in pairs(self.Tweens) do
+			for i,v in self.Tweens do
 				v:Cancel()
 			end
 			self.Tweens = {}
@@ -3608,7 +3608,7 @@ local function main()
 		static.ToggleSide = function(name)
 			local side = (name == "left" and leftSide or rightSide)
 			side.Hidden = not side.Hidden
-			for i,v in pairs(side.Windows) do
+			for i,v in side.Windows do
 				if side.Hidden then
 					v.OnDeactivate:Fire()
 				else
@@ -3621,7 +3621,7 @@ local function main()
 		static.SetSideVisible = function(s,vis)
 			local side = (type(s) == "table" and s) or (s == "left" and leftSide or rightSide)
 			side.Hidden = not vis
-			for i,v in pairs(side.Windows) do
+			for i,v in side.Windows do
 				if side.Hidden then
 					v.OnDeactivate:Fire()
 				else
@@ -3937,7 +3937,7 @@ local function main()
 		end
 
 		funcs.Refresh = function(self)
-			for i,v in pairs(self.GuiElems.List:GetChildren()) do
+			for i,v in self.GuiElems.List:GetChildren() do
 				if not v:IsA("UIListLayout") then
 					v:Destroy()
 				end
@@ -4808,7 +4808,7 @@ local function main()
 				local right = line:sub(x+1,x+1)
 				local selRange = (#left > 0 and left or " ") .. (#middle > 0 and middle or " ") .. (#right > 0 and right or " ")
 
-				for i,v in pairs(tabJumps) do
+				for i,v in tabJumps do
 					if selRange:find(i) then
 						return v
 					end
@@ -5443,7 +5443,7 @@ local function main()
 			local floor = math.floor
 			local templates = {}
 
-			for name,color in pairs(self.Colors) do
+			for name,color in self.Colors do
 				templates[name] = ('<font color="rgb(%s,%s,%s)">'):format(floor(color.r*255),floor(color.g*255),floor(color.b*255))
 			end
 
@@ -6084,7 +6084,7 @@ local function main()
 			window.Alignable = false
 			window:SetTitle("Color Picker")
 			window:Resize(450,330)
-			for i,v in pairs(guiContents:GetChildren()) do
+			for i,v in guiContents:GetChildren() do
 				v.Parent = window.GuiElems.Content
 			end
 			newMt.Window = window
@@ -6339,7 +6339,7 @@ local function main()
 
 			local row = 0
 			local column = 0
-			for i,v in pairs(basicColors) do
+			for i,v in basicColors do
 				local newColor = colorChoice:Clone()
 				newColor.BackgroundColor3 = v
 				newColor.Position = UDim2.new(0,1 + 30*column,0,21 + 23*row)
@@ -6438,7 +6438,7 @@ local function main()
 			window:SetTitle("NumberSequence Editor")
 			newMt.Window = window
 			newMt.Gui = window.Gui
-			for i,v in pairs(guiContents:GetChildren()) do
+			for i,v in guiContents:GetChildren() do
 				v.Parent = window.GuiElems.Content
 			end
 			local gui = window.Gui
@@ -6536,7 +6536,7 @@ local function main()
 
 			local function buildSequence()
 				local newPoints = {}
-				for i,v in pairs(points) do
+				for i,v in points do
 					table.insert(newPoints,NumberSequenceKeypoint.new(v[2],v[1],v[3]))
 				end
 				newMt.Sequence = NumberSequence.new(newPoints)
@@ -6647,7 +6647,7 @@ local function main()
 
 				trackConn(newSelect.InputBegan:Connect(function(input)
 					if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-						for i, v in pairs(points) do 
+						for i, v in points do
 							v[4].Select.BackgroundTransparency = 1 
 						end
 
@@ -6694,7 +6694,7 @@ local function main()
 								newMt:Redraw()
 								updateInputs(point)
 
-								for i, v in pairs(points) do 
+								for i, v in points do
 									v[4].Select.BackgroundTransparency = 1 
 								end
 
@@ -6709,7 +6709,7 @@ local function main()
 			end
 
 			local function placePoints()
-				for i,v in pairs(points) do
+				for i,v in points do
 					v[4] = placePoint(v)
 				end
 			end
@@ -6717,7 +6717,7 @@ local function main()
 			local function redraw(self)
 				local numberLineSize = numberLine.AbsoluteSize
 				table.sort(points,function(a,b) return a[2] < b[2] end)
-				for i,v in pairs(points) do
+				for i,v in points do
 					v[4].Position = UDim2.new(0,math.floor((numberLineSize.X-1) * v[2])-2,0,(numberLineSize.Y-1)*(10-v[1])/10-2)
 				end
 				lines[1].Size = UDim2.new(0,1,0,0)
@@ -6769,9 +6769,9 @@ local function main()
 
 			local function loadSequence(self,seq)
 				resetSequence = seq
-				for i,v in pairs(points) do if v[4] then v[4]:Destroy() end end
+				for i,v in points do if v[4] then v[4]:Destroy() end end
 				points = {}
-				for i,v in pairs(seq.Keypoints) do
+				for i,v in seq.Keypoints do
 					local maxEnvelope = math.min(v.Value,10-v.Value)
 					local newPoint = {v.Value,v.Time,math.min(v.Envelope,maxEnvelope)}
 					newPoint[4] = placePoint(newPoint)
@@ -6836,7 +6836,7 @@ local function main()
 
 					if Lib.CheckMouseInGui(envelopeDragTop) or Lib.CheckMouseInGui(envelopeDragBottom) then return end
 
-					for i, v in pairs(points) do
+					for i, v in points do
 						if Lib.CheckMouseInGui(v[4].Select) then
 							return
 						end
@@ -6863,7 +6863,7 @@ local function main()
 
 			trackConn(deleteButton.MouseButton1Click:Connect(function()
 				if currentPoint and currentPoint ~= beginPoint and currentPoint ~= endPoint then
-					for i,v in pairs(points) do
+					for i,v in points do
 						if v == currentPoint then
 							v[4]:Destroy()
 							table.remove(points,i)
@@ -6941,7 +6941,7 @@ local function main()
 			window:SetTitle("ColorSequence Editor")
 			newMt.Window = window
 			newMt.Gui = window.Gui
-			for i,v in pairs(guiContents:GetChildren()) do
+			for i,v in guiContents:GetChildren() do
 				v.Parent = window.GuiElems.Content
 			end
 			local gui = window.Gui
@@ -6980,7 +6980,7 @@ local function main()
 			local function buildSequence(noupdate)
 				local newPoints = {}
 				table.sort(colors,function(a,b) return a[2] < b[2] end)
-				for i,v in pairs(colors) do
+				for i,v in colors do
 					table.insert(newPoints,ColorSequenceKeypoint.new(v[2],v[1]))
 				end
 				newMt.Sequence = ColorSequence.new(newPoints)
@@ -7058,7 +7058,7 @@ local function main()
 			end
 
 			local function placeArrows()
-				for i,v in pairs(colors) do
+				for i,v in colors do
 					v[3] = placeArrow(math.floor((colorLine.AbsoluteSize.X-1) * v[2]) + 1,v)
 				end
 			end
@@ -7076,10 +7076,10 @@ local function main()
 
 			local function loadSequence(self,seq)
 				resetSequence = seq
-				for i,v in pairs(colors) do if v[3] then v[3]:Destroy() end end
+				for i,v in colors do if v[3] then v[3]:Destroy() end end
 				colors = {}
 				currentlySelected = nil
-				for i,v in pairs(seq.Keypoints) do
+				for i,v in seq.Keypoints do
 					local newPoint = {v.Value,v.Time}
 					newPoint[3] = placeArrow(v.Time,newPoint)
 					table.insert(colors,newPoint)
@@ -7108,7 +7108,7 @@ local function main()
 					local raw = relativeX / maxSize
 					local fromColor = nil
 					local toColor = nil
-					for i, col in pairs(colors) do
+					for i, col in colors do
 						if col[2] >= raw then
 							fromColor = colors[math.max(i - 1, 1)]
 							toColor = colors[i]
@@ -7139,7 +7139,7 @@ local function main()
 			trackConn(colorLine.InputEnded:Connect(function(input)
 				if (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
 					local inArrow = false
-					for i, v in pairs(colors) do
+					for i, v in colors do
 						if Lib.CheckMouseInGui(v[3]) then
 							inArrow = v[3]
 						end
@@ -7184,7 +7184,7 @@ local function main()
 
 			trackConn(deleteButton.MouseButton1Click:Connect(function()
 				if currentPoint and currentPoint ~= beginPoint and currentPoint ~= endPoint then
-					for i,v in pairs(colors) do
+					for i,v in colors do
 						if v == currentPoint then
 							v[3]:Destroy()
 							table.remove(colors,i)
@@ -7627,7 +7627,7 @@ local function main()
 			local ind = table.find(self.Items,item)
 			if not ind then return end
 
-			for i,v in pairs(self.ItemCons[item]) do
+			for i,v in self.ItemCons[item] do
 				v:Disconnect()
 			end
 			self.ItemCons[item] = nil

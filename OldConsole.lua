@@ -169,7 +169,7 @@ local function setGuiTreeZ(root, z)
 			root.ZIndex = z
 		end
 	end)
-	for _, child in pairs(root:GetDescendants()) do
+	for _, child in root:GetDescendants() do
 		pcall(function()
 			if child:IsA("GuiObject") then
 				child.ZIndex = z
@@ -308,7 +308,7 @@ local function CreateSignal()
 	
 	function this:disconnect()
 		if self ~= this then error("disconnect must be called with `:`, not `.`", 2) end
-		for cn, _ in pairs(mAllCns) do
+		for cn, _ in mAllCns do
 			cn:Disconnect()
 			mAllCns[cn] = nil
 		end
@@ -394,7 +394,7 @@ local function tweenObject(obj, props, time, style, dir, done)
 		end
 		tw:Play()
 	else
-		for k, v in pairs(props) do
+		for k, v in props do
 			pcall(function() obj[k] = v end)
 		end
 		if done then
@@ -828,7 +828,7 @@ function DeveloperConsole.new(screenGui, permissions, messagesAndStats)
 		function setShownOptionTypes(shownOptionTypes)
 			-- Example showOptionTypes:
 			-- {Log = true}
-			for optionType, container in pairs(optionTypeContainers) do
+			for optionType, container in optionTypeContainers do
 				container.Visible = shownOptionTypes[optionType] or false
 			end
 		end
@@ -2412,7 +2412,7 @@ do
 				return false
 			end
 			local found = false
-			for _, filterString in ipairs(warningsToFilter) do
+			for _, filterString in warningsToFilter do
 				if string.find(message.Message, filterString) ~= nil then
 					found = true
 					break

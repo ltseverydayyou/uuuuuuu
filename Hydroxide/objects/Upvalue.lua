@@ -27,7 +27,7 @@ function Upvalue.update(upvalue, newValue)
     if type(value) ~= "table" and scanned then
         upvalue.Scanned = nil
     elseif scanned then
-        for i,v in pairs(value) do
+        for i,v in value do
             if scanned[i] then
                 scanned[i] = v
             end

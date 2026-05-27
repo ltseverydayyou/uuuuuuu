@@ -199,7 +199,7 @@ local function hk(root, cfg)
 	root.DescendantAdded:Connect(add)
 	root.DescendantRemoving:Connect(rem)
 
-	for _, i in ipairs(root:GetDescendants()) do
+	for _, i in root:GetDescendants() do
 		add(i)
 	end
 end
@@ -212,7 +212,7 @@ local function hookByName(i)
 	end
 end
 
-for _, i in ipairs(workspace:GetDescendants()) do
+for _, i in workspace:GetDescendants() do
 	hookByName(i)
 end
 
@@ -245,7 +245,7 @@ __lt.cm("RunService", "BindToRenderStep", MK .. "_Update", Enum.RenderPriority.C
 	local vs = cam.ViewportSize
 	local base = Vector2.new(vs.X * 0.5, 0)
 
-	for o, d in pairs(map) do
+	for o, d in map do
 		local a = d.a
 		local t = d.t
 		local line = d.line

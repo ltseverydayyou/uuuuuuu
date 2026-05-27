@@ -148,7 +148,7 @@ end
 function Hook.areArgsBlocked(hook, args)
     local blockedArgs = hook.BlockedArgs
 
-    for index, value in pairs(args) do
+    for index, value in args do
         local indexBlock = blockedArgs[index]
         
         if indexBlock and ( indexBlock.types[typeof(value)] or indexBlock.values[value] ~= nil ) then
@@ -162,7 +162,7 @@ end
 function Hook.areArgsIgnored(hook, args)
     local ignoredArgs = hook.IgnoredArgs
 
-    for index, value in pairs(args) do
+    for index, value in args do
         local indexIgnore = ignoredArgs[index]
 
         if indexIgnore and ( indexIgnore.types[typeof(value)] or indexIgnore.values[value] ~= nil ) then

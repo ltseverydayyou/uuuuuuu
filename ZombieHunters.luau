@@ -40,7 +40,7 @@ if game.GameId == 5170973975 then
 	(getgenv()).zombieslol = not (getgenv()).zombieslol;
 	while (getgenv()).zombieslol and task.wait() do
 		pcall(function()
-			for i, v in pairs((ClonedService("Workspace")).Stage_Monster:GetChildren()) do
+			for i, v in (ClonedService("Workspace")).Stage_Monster:GetChildren() do
 				local args = {
 					[1] = {
 						CF = CFrame.new(4.875078201293945, 24.025789260864258, 11.118204116821289) * CFrame.Angles(0.01760457269847393, (-0.02762647345662117), 0.00048634063568897545),
@@ -57,7 +57,7 @@ if game.GameId == 5170973975 then
 				};
 				(__lt.cs("ReplicatedStorage", cloneref)).Remote.CastRemote:FireServer(unpack(args));
 			end;
-			for _, j in pairs((ClonedService("Workspace")).Temp_Item:GetChildren()) do
+			for _, j in (ClonedService("Workspace")).Temp_Item:GetChildren() do
 				spawn(function()
 					fireproximityprompt(j.Base.Attachment.ProximityPrompt);
 				end);

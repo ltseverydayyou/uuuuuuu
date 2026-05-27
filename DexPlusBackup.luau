@@ -107,7 +107,7 @@ do
 end
 
 local function syncDexStateReferences(state)
-	for _, store in ipairs(globalStores) do
+	for _, store in globalStores do
 		rawset(store, DEXPP_STATE_KEY, state)
 		rawset(store, DEXPP_LEGACY_KEY, state)
 	end
@@ -115,7 +115,7 @@ local function syncDexStateReferences(state)
 end
 
 local function getDexState(create)
-	for _, store in ipairs(globalStores) do
+	for _, store in globalStores do
 		local state = rawget(store, DEXPP_STATE_KEY)
 		if type(state) == "table" then
 			return syncDexStateReferences(state)
@@ -135,7 +135,7 @@ local function getDexState(create)
 end
 
 local function clearDexState(state)
-	for _, store in ipairs(globalStores) do
+	for _, store in globalStores do
 		if rawget(store, DEXPP_STATE_KEY) == state then
 			rawset(store, DEXPP_STATE_KEY, nil)
 		end
@@ -378,7 +378,7 @@ local function decodeBase64(data)
 		end,
 	}
 
-	for _, method in ipairs(methods) do
+	for _, method in methods do
 		local ok, result = pcall(method, data)
 		if ok and type(result) == "string" then
 			return true, result
@@ -391,10 +391,10 @@ local plr = service.Players.LocalPlayer or service.Players.PlayerAdded:Wait()
 
 local create = function(data)
 	local insts = {}
-	for i,v in pairs(data) do insts[v[1]] = Instance.new(v[2]) end
+	for i,v in data do insts[v[1]] = Instance.new(v[2]) end
 
-	for _,v in pairs(data) do
-		for prop,val in pairs(v[3]) do
+	for _,v in data do
+		for prop,val in v[3] do
 			if type(val) == "table" then
 				insts[v[1]][prop] = insts[val[1]]
 			else
@@ -422,7 +422,7 @@ local function deepCopy(obj)
 		return Vector3.new(obj.X, obj.Y, obj.Z)
 	elseif type(obj) == "table" then
 		local t = {}
-		for k,v in pairs(obj) do
+		for k,v in obj do
 			t[k] = deepCopy(v)
 		end
 		return t
@@ -748,7 +748,7 @@ Main = (function()
 
 		local tokens = {}
 		if type(extraTokens) == "table" then
-			for key, value in pairs(extraTokens) do
+			for key, value in extraTokens do
 				tokens[key] = value
 			end
 		end
@@ -1117,7 +1117,7 @@ Main = (function()
 			Main.AppControls.Lib.InitAfterMain(appTable)
 		end
 
-		for _, control in pairs(Main.AppControls) do
+		for _, control in Main.AppControls do
 			if control and type(control.InitAfterMain) == "function" then
 				if control ~= Main.AppControls.Lib then
 					control.InitAfterMain(appTable)
@@ -1130,7 +1130,7 @@ Main = (function()
 
 	Main.LoadModules = function(moduleList)
 		local modulesToLoad = moduleList or Main.ModuleList
-		for _, v in ipairs(modulesToLoad) do
+		for _, v in modulesToLoad do
 			local s,e = pcall(Main.LoadModule,v)
 			if not s then
 				Main.Error("FAILED LOADING " .. v .. " CAUSE " .. e)
@@ -1208,7 +1208,7 @@ Main = (function()
 		else
 			Main.ResolvedAssetCache = Main.ResolvedAssetCache or {}
 		end
-		for _, fileName in pairs(Main.IconOverrides) do
+		for _, fileName in Main.IconOverrides do
 			if processed[fileName] then
 				continue
 			end
@@ -1293,11 +1293,11 @@ Main = (function()
 
 				local savedOptions = saveState.Options
 				if type(savedOptions) == "table" then
-					for key, value in pairs(savedOptions) do
+					for key, value in savedOptions do
 						if finalOptions[key] == nil then
 							if type(value) == "table" then
 								local copy = {}
-								for subKey, subValue in pairs(value) do
+								for subKey, subValue in value do
 									copy[subKey] = subValue
 								end
 								finalOptions[key] = copy
@@ -1312,7 +1312,7 @@ Main = (function()
 				if type(extraOptionsJson) == "string" and extraOptionsJson:match("%S") then
 					local okDecode, decoded = pcall(service.HttpService.JSONDecode, service.HttpService, extraOptionsJson)
 					if okDecode and type(decoded) == "table" then
-						for key, value in pairs(decoded) do
+						for key, value in decoded do
 							if finalOptions[key] == nil then
 								finalOptions[key] = value
 							end
@@ -1327,7 +1327,7 @@ Main = (function()
 				local finalOptions = {}
 				applySavedSaveInstanceOptions(finalOptions)
 				if type(options) == "table" then
-					for key, value in pairs(options) do
+					for key, value in options do
 						finalOptions[key] = value
 					end
 				end
@@ -1588,7 +1588,7 @@ Main = (function()
 				queueFallback(fallbackMode)
 			end
 
-			for _, mode in ipairs({"lua.expert", "Konstant"}) do
+			for _, mode in {"lua.expert", "Konstant"} do
 				if mode ~= fallbackMode then
 					queueFallback(mode)
 				end
@@ -1600,7 +1600,7 @@ Main = (function()
 				queueAttempt("Built-in", builtInDecompiler)
 			end
 
-			for _, attempt in ipairs(attempts) do
+			for _, attempt in attempts do
 				local ok, result, err = pcall(attempt.Fn, ...)
 				if ok and result ~= nil and result ~= false then
 					return result
@@ -1670,7 +1670,7 @@ Main = (function()
 
 		local function recur(tbl)
 			local newTbl = {}
-			for i, v in pairs(tbl) do
+			for i, v in tbl do
 				if typeof(v) == "table" then
 					newTbl[i] = recur(v)
 				else
@@ -1711,7 +1711,7 @@ Main = (function()
 		if fileData then
 			local ok, decoded = pcall(service.HttpService.JSONDecode, service.HttpService, fileData)
 			if ok and type(decoded) == "table" then
-				for k,v in pairs(decoded) do
+				for k,v in decoded do
 					Main.UserSettings[k] = v
 				end
 			end
@@ -1738,7 +1738,7 @@ Main = (function()
 			Listen = true,
 		}
 
-		for key, defaultValue in pairs(filterDefaults) do
+		for key, defaultValue in filterDefaults do
 			if type(filters[key]) ~= "boolean" then
 				filters[key] = defaultValue
 			end
@@ -1769,7 +1769,7 @@ Main = (function()
 		if not (env and env.writefile) then return end
 		local function recur(tbl)
 			local newTbl = {}
-			for i, v in pairs(tbl) do
+			for i, v in tbl do
 				if typeof(v) == "table" then
 					newTbl[i] = recur(v)
 				else
@@ -1801,7 +1801,7 @@ Main = (function()
 			if ok and type(decoded) == "table" then
 				local function recur(tbl)
 					local newTbl = {}
-					for k,v in pairs(tbl) do
+					for k,v in tbl do
 						if typeof(v) == "table" and v.R and v.G and v.B then
 							newTbl[k] = deserialize(v)
 						elseif typeof(v) == "table" then
@@ -2000,7 +2000,7 @@ Main = (function()
 
 				local function recur(tbl)
 					local newTbl = {}
-					for i, v in pairs(tbl) do
+					for i, v in tbl do
 						if typeof(v) == "table" then
 							newTbl[i] = deserialize(recur(v))
 						else
@@ -2011,7 +2011,7 @@ Main = (function()
 				end
 
 				local deserializedData = recur(decoded)
-				for k, v in pairs(deserializedData) do
+				for k, v in deserializedData do
 					Settings[k] = v
 				end
 				Main.ValidateSettings()
@@ -2028,9 +2028,9 @@ Main = (function()
 
 
 	Main.ResetSettings = function()
-		for k in pairs(Settings) do Settings[k] = nil end
+		for k in Settings do Settings[k] = nil end
 		local function copyInto(dest, src)
-			for key, val in pairs(src) do
+			for key, val in src do
 				if type(val) == "table" then
 					dest[key] = copyInto({}, val)
 				else
@@ -2139,7 +2139,7 @@ Main = (function()
 			table.insert(t,pos,item)
 		end
 
-		for _,class in pairs(api.Classes) do
+		for _,class in api.Classes do
 			local newClass = {}
 			newClass.Name = class.Name
 			newClass.Superclass = class.Superclass
@@ -2149,14 +2149,14 @@ Main = (function()
 			newClass.Callbacks = {}
 			newClass.Tags = {}
 
-			if class.Tags then for c,tag in pairs(class.Tags) do newClass.Tags[tag] = true end end
-			for __,member in pairs(class.Members) do
+			if class.Tags then for c,tag in class.Tags do newClass.Tags[tag] = true end end
+			for __,member in class.Members do
 				local newMember = {}
 				newMember.Name = member.Name
 				newMember.Class = class.Name
 				newMember.Security = member.Security
 				newMember.Tags ={}
-				if member.Tags then for c,tag in pairs(member.Tags) do newMember.Tags[tag] = true end end
+				if member.Tags then for c,tag in member.Tags do newMember.Tags[tag] = true end end
 
 				local mType = member.MemberType
 				if mType == "Property" then
@@ -2173,13 +2173,13 @@ Main = (function()
 				elseif mType == "Function" then
 					newMember.Parameters = {}
 					newMember.ReturnType = member.ReturnType.Name
-					for c,param in pairs(member.Parameters) do
+					for c,param in member.Parameters do
 						table.insert(newMember.Parameters,{Name = param.Name, Type = param.Type.Name})
 					end
 					table.insert(newClass.Functions,newMember)
 				elseif mType == "Event" then
 					newMember.Parameters = {}
-					for c,param in pairs(member.Parameters) do
+					for c,param in member.Parameters do
 						table.insert(newMember.Parameters,{Name = param.Name, Type = param.Type.Name})
 					end
 					table.insert(newClass.Events,newMember)
@@ -2189,18 +2189,18 @@ Main = (function()
 			classes[class.Name] = newClass
 		end
 
-		for _,class in pairs(classes) do
+		for _,class in classes do
 			class.Superclass = classes[class.Superclass]
 		end
 
-		for _,enum in pairs(api.Enums) do
+		for _,enum in api.Enums do
 			local newEnum = {}
 			newEnum.Name = enum.Name
 			newEnum.Items = {}
 			newEnum.Tags = {}
 
-			if enum.Tags then for c,tag in pairs(enum.Tags) do newEnum.Tags[tag] = true end end
-			for __,item in pairs(enum.Items) do
+			if enum.Tags then for c,tag in enum.Tags do newEnum.Tags[tag] = true end end
+			for __,item in enum.Items do
 				local newItem = {}
 				newItem.Name = item.Name
 				newItem.Value = item.Value
@@ -2216,7 +2216,7 @@ Main = (function()
 
 			local currentClass = classes[class]
 			while currentClass do
-				for _,entry in pairs(currentClass[member]) do
+				for _,entry in currentClass[member] do
 					result[#result+1] = entry
 				end
 				currentClass = currentClass.Superclass
@@ -2314,13 +2314,13 @@ Main = (function()
 
 		local classes, enums = {}, {}
 
-		for _, class in pairs(classList) do
+		for _, class in classList do
 			local className = ""
-			for _, child in pairs(class.children) do
+			for _, child in class.children do
 				if child.tag == "Properties" then
 					local data = {Properties = {}, Functions = {}}
 					local props = child.children
-					for _, prop in pairs(props) do
+					for _, prop in props do
 						local name = prop.attrs.name
 						name = name:sub(1,1):upper()..name:sub(2)
 						data[name] = prop.children[1].text
@@ -2329,12 +2329,12 @@ Main = (function()
 					classes[className] = data
 				elseif child.attrs.class == "ReflectionMetadataProperties" then
 					local members = child.children
-					for _, member in pairs(members) do
+					for _, member in members do
 						if member.attrs.class == "ReflectionMetadataMember" then
 							local data = {}
 							if member.children[1].tag == "Properties" then
 								local props = member.children[1].children
-								for _, prop in pairs(props) do
+								for _, prop in props do
 									if prop.attrs then
 										local name = prop.attrs.name
 										name = name:sub(1,1):upper()..name:sub(2)
@@ -2355,12 +2355,12 @@ Main = (function()
 					end
 				elseif child.attrs.class == "ReflectionMetadataFunctions" then
 					local members = child.children
-					for _, member in pairs(members) do
+					for _, member in members do
 						if member.attrs.class == "ReflectionMetadataMember" then
 							local data = {}
 							if member.children[1].tag == "Properties" then
 								local props = member.children[1].children
-								for _, prop in pairs(props) do
+								for _, prop in props do
 									if prop.attrs then
 										local name = prop.attrs.name
 										name = name:sub(1,1):upper()..name:sub(2)
@@ -2375,13 +2375,13 @@ Main = (function()
 			end
 		end
 
-		for _, enum in pairs(enumList) do
+		for _, enum in enumList do
 			local enumName = ""
-			for _, child in pairs(enum.children) do
+			for _, child in enum.children do
 				if child.tag == "Properties" then
 					local data = {Items = {}}
 					local props = child.children
-					for _, prop in pairs(props) do
+					for _, prop in props do
 						local name = prop.attrs.name
 						name = name:sub(1,1):upper()..name:sub(2)
 						data[name] = prop.children[1].text
@@ -2392,7 +2392,7 @@ Main = (function()
 					local data = {}
 					if child.children[1].tag == "Properties" then
 						local props = child.children[1].children
-						for _, prop in pairs(props) do
+						for _, prop in props do
 							local name = prop.attrs.name
 							name = name:sub(1,1):upper()..name:sub(2)
 							data[name] = prop.children[1].text
@@ -2793,7 +2793,7 @@ Main = (function()
 		end
 		Main.DeferredModulesStarted = true
 
-		for _, moduleName in ipairs(Main.DeferredModuleList or {}) do
+		for _, moduleName in Main.DeferredModuleList or {} do
 			if not Main.MainGui then
 				return
 			end
@@ -2877,7 +2877,7 @@ Main = (function()
 		end
 
 		if Main.ConnList then
-			for i,c in ipairs(Main.ConnList) do
+			for i,c in Main.ConnList do
 				pcall(function()
 					if c then
 						if c.Disconnect then
@@ -2897,7 +2897,7 @@ Main = (function()
 		end
 
 		if Main.GuiList then
-			for i,g in ipairs(Main.GuiList) do
+			for i,g in Main.GuiList do
 				pcall(function()
 					if g and g.Destroy then
 						g:Destroy()
@@ -3065,7 +3065,7 @@ Main = (function()
 
 				coroutine.wrap(function()
 					while infoDexIntro do
-						for i, text in ipairs(Infos) do
+						for i, text in Infos do
 							if not infoDexIntro then break end
 							infoDexIntro.SetProgress(text,(1 / #Infos) * i)
 							task.wait(duration)
@@ -3121,7 +3121,7 @@ Main = (function()
 
 		Main.RegisterDeferredApps()
 
-		for _, loadedPlugin in pairs(Main.Plugins) do
+		for _, loadedPlugin in Main.Plugins do
 			if loadedPlugin and loadedPlugin.Window then
 				local pluginData = loadedPlugin.PluginData or {}
 				local windowTitle = loadedPlugin.Window.GuiElems and loadedPlugin.Window.GuiElems.Title and loadedPlugin.Window.GuiElems.Title.Text
@@ -3289,7 +3289,7 @@ Main = (function()
 			local okList, pluginFiles = pcall(listfilesFn, "DexPlusPlus/plugins")
 			if okList and type(pluginFiles) == "table" and #pluginFiles > 0 then
 				intro.SetProgress("Loading Plugin Files",0.92)
-				for _, pluginPath in pairs(pluginFiles) do
+				for _, pluginPath in pluginFiles do
 					local pathStr = tostring(pluginPath)
 					local lowerPath = string.lower(pathStr)
 					if lowerPath:sub(-4) == ".lua" or lowerPath:sub(-5) == ".luau" then
@@ -3353,18 +3353,18 @@ Main = (function()
 		queueStartupWindow(Explorer.Window, startupSettings.OpenExplorer ~= false, startupSettings.ExplorerSide)
 		queueStartupWindow(Properties.Window, startupSettings.OpenProperties ~= false, startupSettings.PropertiesSide)
 
-		for _, align in ipairs({"left", "right"}) do
+		for _, align in {"left", "right"} do
 			local windowsOnSide = startupWindows[align]
 			if windowsOnSide then
 				local windowSize = (#windowsOnSide > 1) and 0.5 or 1
-				for index, startupWindow in ipairs(windowsOnSide) do
+				for index, startupWindow in windowsOnSide do
 					startupWindow:Show({Align = align, Pos = index, Size = windowSize, Silent = true})
 				end
 			end
 		end
 
 		Lib.DeferFunc(function()
-			for _, align in ipairs({"left", "right"}) do
+			for _, align in {"left", "right"} do
 				if startupWindows[align] and #startupWindows[align] > 0 then
 					Lib.Window.SetSideVisible(align, true)
 				end
@@ -3404,4 +3404,4 @@ else
 	error(initErr)
 end
 
---for i,v in pairs(Main.MissingEnv) do print(i,v) end
+--for i,v in Main.MissingEnv do print(i,v) end

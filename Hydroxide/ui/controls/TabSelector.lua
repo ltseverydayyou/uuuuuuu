@@ -51,7 +51,7 @@ local function methodsCheck(methods)
     local globalMethods = oh.Methods
     local missingMethods = ""
 
-    for methodName in pairs(methods) do
+    for methodName in methods do
         if not globalMethods[methodName] then
             missingMethods = missingMethods .. methodName .. ", "
         end
@@ -94,7 +94,7 @@ local function selectTab(tabName)
     return true
 end
 
-for _i, tab in pairs(Tabs:GetChildren()) do
+for _i, tab in Tabs:GetChildren() do
     if tab:IsA("ImageButton") then
         tab.Active = true
         local selected = TweenService:Create(tab, constants.fadeLength, { ImageColor3 = constants.tabSelected })

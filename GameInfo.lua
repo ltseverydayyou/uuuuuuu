@@ -225,7 +225,7 @@ local function robloxApiUrls(url)
 	}
 end
 local function jget(url)
-	for _, apiUrl in ipairs(robloxApiUrls(url)) do
+	for _, apiUrl in robloxApiUrls(url) do
 		if req then
 			local ok, r = pcall(function()
 				return req({Url = apiUrl, Method = "GET", Headers = {Accept = "application/json", ["Cache-Control"] = "no-cache", ["User-Agent"] = "Roblox-Client"}})
@@ -700,7 +700,7 @@ local function addDropdown(titleText, tbl, order)
 
 		if typeof(v) == "table" then
 			local n, isArr, maxk = 0, true, 0
-			for kk in pairs(v) do n += 1 if typeof(kk) ~= "number" then isArr = false elseif kk > maxk then maxk = kk end end
+			for kk in v do n += 1 if typeof(kk) ~= "number" then isArr = false elseif kk > maxk then maxk = kk end end
 			if n == 0 then return end
 			if isArr and maxk == n then
 				local p = {} for i = 1, #v do p[i] = tostring(v[i]) end
@@ -722,11 +722,11 @@ local function addDropdown(titleText, tbl, order)
 	end
 
 	local function rebuild()
-		for _, ch in ipairs(sub:GetChildren()) do if ch:IsA("Frame") then ch:Destroy() end end
+		for _, ch in sub:GetChildren() do if ch:IsA("Frame") then ch:Destroy() end end
 		local keys = {}
-		for k in pairs(tbl) do table.insert(keys, k) end
+		for k in tbl do table.insert(keys, k) end
 		table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
-		for _, k in ipairs(keys) do subRow(sub, k, tbl[k]) end
+		for _, k in keys do subRow(sub, k, tbl[k]) end
 		task.defer(function()
 			local h = subL.AbsoluteContentSize.Y + 8
 			tw(sub, 0.3, {Size = UDim2.new(1, -26, 0, h)}, Enum.EasingStyle.Back)
@@ -764,7 +764,7 @@ end
 
 local function clearBody()
 	rowIndex = 0
-	for _, ch in ipairs(scroll:GetChildren()) do
+	for _, ch in scroll:GetChildren() do
 		if ch:IsA("Frame") then ch:Destroy() end
 	end
 end
@@ -855,7 +855,7 @@ local function displayGameInfo()
 	local function stringify(v)
 		if typeof(v) == "table" then
 			local n, isArr, maxk = 0, true, 0
-			for kk in pairs(v) do n += 1 if typeof(kk) ~= "number" then isArr = false elseif kk > maxk then maxk = kk end end
+			for kk in v do n += 1 if typeof(kk) ~= "number" then isArr = false elseif kk > maxk then maxk = kk end end
 			if n == 0 then return nil end
 			if isArr and maxk == n then
 				local p = {} for i = 1, #v do p[i] = tostring(v[i]) end
@@ -878,21 +878,21 @@ local function displayGameInfo()
 	end
 
 	if gdata then
-		for k, v in pairs(gdata) do
+		for k, v in gdata do
 			if k ~= "creator" then addKV(k, v) end
 		end
 	end
 	if gi then
-		for k, v in pairs(gi) do
+		for k, v in gi do
 			if k ~= "Creator" and k ~= "ProductId" then addKV(k, v) end
 		end
 	end
 
 	order += 1
 	local cdrop = {}
-	if creator then for ck, cv in pairs(creator) do cdrop[ck] = cv end end
+	if creator then for ck, cv in creator do cdrop[ck] = cv end end
 	if next(cdrop) == nil and gi and typeof(gi.Creator) == "table" then
-		for ck, cv in pairs(gi.Creator) do cdrop[ck] = cv end
+		for ck, cv in gi.Creator do cdrop[ck] = cv end
 	end
 	if next(cdrop) then addDropdown("Creator Details", cdrop, order) end
 
@@ -909,7 +909,7 @@ local function displayGameInfo()
 	local socials = jget("https://games.roproxy.com/v1/games/" .. universeId .. "/social-links/list")
 	if socials and socials.data and #socials.data > 0 then
 		local stbl = {}
-		for _, s in ipairs(socials.data) do
+		for _, s in socials.data do
 			stbl[(s.type or "Link") .. " (" .. (s.title or "") .. ")"] = s.url or ""
 		end
 		order += 1

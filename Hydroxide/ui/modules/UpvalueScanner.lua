@@ -202,7 +202,7 @@ local function addUpvalue(upvalue, temporary)
         end
 
         if not temporary then
-            for i, v in pairs(upvalue.Scanned) do
+            for i, v in upvalue.Scanned do
                 local elementLog = addElement(upvalueLog, upvalue, i, v)
                 elementLog.Parent = upvalueLog.Elements
                 
@@ -263,14 +263,14 @@ local function updateUpvalue(closureLog, upvalue)
         local closureName = getInfo(newValue).name or ''
         upvalueLog.Value.Text = (closureName == '' and "Unnamed function") or closureName
     elseif valueType == "table" and upvalue.Scanned then
-        for i, v in pairs(upvalue.Scanned) do
+        for i, v in upvalue.Scanned do
             updateElement(upvalueLog, i, v)
         end
 
         if upvalue.TemporaryElements then
             local table = upvalue.Value
 
-            for idx, _v in pairs(upvalue.TemporaryElements) do
+            for idx, _v in upvalue.TemporaryElements do
                 updateElement(upvalueLog, idx, table[idx])
             end
         end
@@ -298,7 +298,7 @@ function Log.new(closure)
     log.Upvalues = {}
     log.Update = Log.update
 
-    for i, upvalue in pairs(closure.Upvalues) do
+    for i, upvalue in closure.Upvalues do
         local upvalueLog = addUpvalue(upvalue)
         upvalueLog.Parent = instance.Upvalues
 
@@ -320,11 +320,11 @@ function Log.new(closure)
 end
 
 function Log.update(log)
-    for _i, upvalue in pairs(log.Closure.Upvalues) do
+    for _i, upvalue in log.Closure.Upvalues do
         updateUpvalue(log, upvalue)
     end
     
-    for _i, upvalue in pairs(log.Closure.TemporaryUpvalues) do
+    for _i, upvalue in log.Closure.TemporaryUpvalues do
         updateUpvalue(log, upvalue)
     end
 end
@@ -343,7 +343,7 @@ local function addUpvalues()
         upvalueList:Clear()
         currentUpvalues = {}
 
-        for _i, closure in pairs(Methods.Scan(query, deepSearchFlag)) do
+        for _i, closure in Methods.Scan(query, deepSearchFlag) do
             if closure.Name == '' then
                 unnamedFunctions[closure.Data] = closure
             else
@@ -353,7 +353,7 @@ local function addUpvalues()
             showResultLabel = true
         end
 
-        for _i, closure in pairs(unnamedFunctions) do
+        for _i, closure in unnamedFunctions do
             Log.new(closure)
         end
 
@@ -514,7 +514,7 @@ local function generateScript(elementIndex)
         closureScript = nil
     end
 
-    for idx, constant in pairs(getConstants(closureData)) do
+    for idx, constant in getConstants(closureData) do
         if currentIndex > 5 then 
             break 
         elseif type(constant) ~= "function" then
@@ -568,7 +568,7 @@ viewUpvaluesContext:SetCallback(function()
         local newHeight = 0
 
         if temporaryUpvalues then
-            for _i, upvalueLog in pairs(temporaryUpvalues) do
+            for _i, upvalueLog in temporaryUpvalues do
                 newHeight = newHeight - (upvalueLog.AbsoluteSize.Y + 5)
                 upvalueLog:Destroy()
             end
@@ -580,7 +580,7 @@ viewUpvaluesContext:SetCallback(function()
             
             temporaryUpvalues = {}
 
-            for i,v in pairs(getUpvalues(closure)) do
+            for i,v in getUpvalues(closure) do
                 if not closure.Upvalues[i] then
                     local upvalue = Upvalue.new(closure, i, v)
                     
@@ -624,7 +624,7 @@ viewElementsContext:SetCallback(function()
     local newHeight = 0
 
     if temporaryElements then
-        for index, _v in pairs(temporaryElements) do
+        for index, _v in temporaryElements do
             local elementLog = selectedUpvalueLog.Elements[toString(index)]
             newHeight = newHeight - (elementLog.AbsoluteSize.Y + 5)
 
@@ -636,7 +636,7 @@ viewElementsContext:SetCallback(function()
         local scanned = selectedUpvalue.Scanned
         temporaryElements = {}
 
-        for i,v in pairs(selectedUpvalue.Value) do
+        for i,v in selectedUpvalue.Value do
             if not scanned[i] then
                 local elementLog = addElement(selectedUpvalueLog, selectedUpvalue, i, v, true)
                 elementLog.Parent = selectedUpvalueLog.Elements
@@ -690,7 +690,7 @@ changeElementContext:SetCallback(function()
 end)
 
 oh.Events.UpdateUpvalues = RunService.Heartbeat:Connect(function()
-    for _i, closureLog in pairs(currentUpvalues) do
+    for _i, closureLog in currentUpvalues do
         closureLog:Update()
     end
 end)

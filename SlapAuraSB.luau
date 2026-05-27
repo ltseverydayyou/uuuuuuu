@@ -135,7 +135,7 @@ local function removeRemote(v)
 		end;
 	end;
 end;
-for _, d in ipairs(__lt.cm("ReplicatedStorage", "QueryDescendants", "Instance")) do
+for _, d in __lt.cm("ReplicatedStorage", "QueryDescendants", "Instance") do
 	addRemote(d);
 end;
 trackConn(ReplicatedStorage.DescendantAdded:Connect(addRemote));
@@ -200,7 +200,7 @@ local function initPlayer(p)
 		setFlag(f);
 	end;
 end;
-for _, p in ipairs(__lt.cm("Players", "GetPlayers")) do
+for _, p in __lt.cm("Players", "GetPlayers") do
 	initPlayer(p);
 end;
 trackConn(Players.PlayerAdded:Connect(initPlayer));
@@ -263,7 +263,7 @@ runtimeState.cleanup = function()
 	end;
 	runtimeState.alive = false;
 	auraEnabled = false;
-	for _, conn in ipairs(runtimeState.connections) do
+	for _, conn in runtimeState.connections do
 		pcall(function()
 			conn:Disconnect();
 		end);
@@ -577,11 +577,11 @@ local function moveTabSelector(toBtn, animate)
 		tabSelector.Position = UDim2.new(0, relX, 0, 0);
 		tabSelector.Size = UDim2.new(0, w, 1, 0);
 	end;
-	for _, b in ipairs({
+	for _, b in {
 		tabActions,
 		tabSettings,
 		tabCombat
-	}) do
+	} do
 		(__lt.cm("TweenService", "Create", b, TweenInfo.new(0.12), {
 			TextColor3 = b == toBtn and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(220, 220, 235)
 		})):Play();
@@ -879,10 +879,10 @@ local function moveModeSelector(toBtn, animate)
 		selector.Position = UDim2.new(0, relX, 0, 0);
 		selector.Size = UDim2.new(0, w, 1, 0);
 	end;
-	for _, b in ipairs({
+	for _, b in {
 		enterBtn,
 		allBtn
-	}) do
+	} do
 		(__lt.cm("TweenService", "Create", b, TweenInfo.new(0.12), {
 			TextColor3 = b == toBtn and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(220, 220, 235)
 		})):Play();
@@ -1214,7 +1214,7 @@ trackConn(RunService.Heartbeat:Connect(function(dt)
 			end;
 		end;
 	else
-		for k, _ in pairs(loops) do
+		for k, _ in loops do
 			loops[k] = nil;
 		end;
 		if not allLoopActive then

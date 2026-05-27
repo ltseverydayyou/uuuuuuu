@@ -143,7 +143,7 @@ end
 			local indent = indent < 0 and 0 or indent
 			functions:add_to_dump(("%s [%s] %s"):format(tostring(index), tostring(typeof(input)), tostring(input)), indent - 1)
 			local count = 0
-			for index, value in pairs(input) do
+			for index, value in input do
 				count = count + 1
 				if type(value) == "function" then
 					functions:add_to_dump(("%d [function] = %s"):format(count, functions:get_function_name(value)), indent)
@@ -163,7 +163,7 @@ end
 		function functions:dump_function(input, indent)
 			functions:add_to_dump(("\nFunction Dump: %s"):format(functions:get_function_name(input)), indent)
 			functions:add_to_dump(("\nFunction Upvalues: %s"):format(functions:get_function_name(input)), indent)
-			for index, upvalue in pairs(getupvalues(input)) do
+			for index, upvalue in getupvalues(input) do
 				if type(upvalue) == "function" then
 					functions:add_to_dump(("%d [function] = %s"):format(index, functions:get_function_name(upvalue)), indent + 1)
 				elseif type(upvalue) == "table" then
@@ -179,7 +179,7 @@ end
 				end
 			end
 			functions:add_to_dump(("\nFunction Constants: %s"):format(functions:get_function_name(input)), indent)
-			for index, constant in pairs(getconstants(input)) do
+			for index, constant in getconstants(input) do
 				if type(constant) == "function" then
 					functions:add_to_dump(("%d [function] = %s"):format(index, functions:get_function_name(constant)), indent + 1)
 				elseif type(constant) == "table" then
@@ -195,7 +195,7 @@ end
 				end
 			end
 		end
-		for _, _function in pairs(env.getgc()) do
+		for _, _function in env.getgc() do
 			if typeof(_function) == "function" and getfenv(_function).script and getfenv(_function).script == scr then
 				functions:dump_function(_function, 0)
 				functions:add_to_dump("\n" .. ("="):rep(100), 0, false)

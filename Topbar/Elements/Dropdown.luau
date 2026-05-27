@@ -162,12 +162,12 @@ return function(icon)
 		end);
 	end);
 	icon.dropdownSet:Connect(function(arrayOfIcons)
-		for i, otherIconUID in pairs(icon.dropdownIcons) do
+		for i, otherIconUID in icon.dropdownIcons do
 			local otherIcon = Icon.getIconByUID(otherIconUID);
 			otherIcon:destroy();
 		end;
 		if type(arrayOfIcons) == "table" then
-			for i, otherIcon in pairs(arrayOfIcons) do
+			for i, otherIcon in arrayOfIcons do
 				otherIcon:joinDropdown(icon);
 			end;
 		end;
@@ -178,7 +178,7 @@ return function(icon)
 			return 0;
 		end;
 		local children = {};
-		for _, child in pairs(dropdownScroller:GetChildren()) do
+		for _, child in dropdownScroller:GetChildren() do
 			if child:IsA("GuiObject") and child.Visible then
 				table.insert(children, child);
 			end;
@@ -296,7 +296,7 @@ return function(icon)
 			return;
 		end;
 		local orderedInstances = {};
-		for _, child in pairs(dropdownScroller:GetChildren()) do
+		for _, child in dropdownScroller:GetChildren() do
 			if child:IsA("GuiObject") and child.Visible then
 				table.insert(orderedInstances, {
 					child,
@@ -353,7 +353,7 @@ return function(icon)
 			(child:GetPropertyChangedSignal("Size")):Connect(updateChildSize);
 		end;
 	end;
-	for _, child in pairs(dropdownScroller:GetChildren()) do
+	for _, child in dropdownScroller:GetChildren() do
 		connectVisibilityListeners(child);
 	end;
 	dropdownScroller.ChildAdded:Connect(function(child)

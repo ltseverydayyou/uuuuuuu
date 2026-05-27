@@ -276,7 +276,7 @@ local function GetFullPathOfAnInstance(instance)
 	local siblings = parent:GetChildren();
 	local sameCount = 0;
 	local sameIndex = 0;
-	for i, child in ipairs(siblings) do
+	for i, child in siblings do
 		if child.Name == instance.Name and child.ClassName == instance.ClassName then
 			sameCount = sameCount + 1;
 			sameIndex = i;
@@ -788,7 +788,7 @@ local function openBrowseRunner(r)
 	BrowseExecTitle.Text = "Execute: " .. (r.Name or "Remote");
 end;
 local function refreshBrowserList(filter)
-	for _, child in ipairs(RemoteBrowserFrame:GetChildren()) do
+	for _, child in RemoteBrowserFrame:GetChildren() do
 		if child:IsA("TextButton") and child ~= RemoteButton2 then
 			child:Destroy()
 		end
@@ -797,7 +797,7 @@ local function refreshBrowserList(filter)
 	browsedButtonOffset = 10
 	filter = filter and filter:lower() or ""
 
-	for _, r in ipairs(browseRemotes) do
+	for _, r in browseRemotes do
 		local name = r.Name or ""
 		if filter == "" or name:lower():find(filter, 1, true) then
 			local btn = RemoteButton2:Clone()
@@ -1304,7 +1304,7 @@ local function ButtonEffect(textlabel, text)
 end
 local function len(t)
 	local n = 0;
-	for _ in pairs(t) do
+	for _ in t do
 		n = n + 1;
 	end;
 	return n;
@@ -1372,7 +1372,7 @@ end
 local function isArray(tbl)
 	local max = 0;
 	local c = 0;
-	for k in pairs(tbl) do
+	for k in tbl do
 		if type(k) ~= "number" then
 			return false;
 		end;
@@ -1432,13 +1432,13 @@ function convertTableToString(tbl, depth)
 		end;
 	else
 		local keys = {};
-		for k in pairs(tbl) do
+		for k in tbl do
 			keys[(#keys) + 1] = k;
 		end;
 		table.sort(keys, function(a, b)
 			return tostring(a) < tostring(b);
 		end);
-		for _, k in ipairs(keys) do
+		for _, k in keys do
 			local keyStr;
 			if type(k) == "string" and k:match("^[%a_][%w_]*$") then
 				keyStr = k .. " = ";
@@ -1718,7 +1718,7 @@ end
 local function setClientEventLogging(on)
 	logClientEvents = on;
 	if on then
-		for _, v in ipairs(game:QueryDescendants("Instance")) do
+		for _, v in game:QueryDescendants("Instance") do
 			if isRemoteEvent(v) then
 				attachClientLogger(v);
 			end;
@@ -1732,7 +1732,7 @@ local function setClientEventLogging(on)
 			table.insert(connections, descAddedConn);
 		end;
 	else
-		for remote, c in pairs(clientEventConns) do
+		for remote, c in clientEventConns do
 			pcall(function()
 				c:Disconnect();
 			end);
@@ -1742,7 +1742,7 @@ local function setClientEventLogging(on)
 end;
 
 local function initClientInvokeLogging()
-	for _, v in ipairs(game:QueryDescendants("Instance")) do
+	for _, v in game:QueryDescendants("Instance") do
 		if isA(v, "RemoteFunction") then
 			wrapClientInvoke(v)
 		end
@@ -1773,7 +1773,7 @@ local function disableIncomingHooks()
 			tstate.oldNewIndex = nil
 		end
 	end
-	for remote, callback in pairs(_origClientInvoke) do
+	for remote, callback in _origClientInvoke do
 		pcall(function()
 			remote.OnClientInvoke = callback
 		end)
@@ -1860,7 +1860,7 @@ CopyScriptPath.MouseButton1Click:Connect(function()
 	local remoteIdx = nil;
 	if lookingAt then
 		if table.find(unstacked, lookingAt) then
-			for i, v in ipairs(remotes) do
+			for i, v in remotes do
 				if v == lookingAt and remoteArgs[i] == lookingAtArgs then
 					remoteIdx = i;
 					break;
@@ -1880,7 +1880,7 @@ CopyDecompiled.MouseButton1Click:Connect(function()
 	local remoteIdx = nil;
 	if lookingAt then
 		if table.find(unstacked, lookingAt) then
-			for i, v in ipairs(remotes) do
+			for i, v in remotes do
 				if v == lookingAt and remoteArgs[i] == lookingAtArgs then
 					remoteIdx = i;
 					break;
@@ -2007,12 +2007,12 @@ WhileLoop.MouseButton1Click:Connect(function()
 	ButtonEffect(WhileLoop);
 end);
 Clear.MouseButton1Click:Connect(function()
-	for i, v in ipairs(RemoteScrollFrame:GetChildren()) do
+	for i, v in RemoteScrollFrame:GetChildren() do
 		if i > 1 and v:IsA("TextButton") then
 			v:Destroy();
 		end;
 	end;
-	for _, v in ipairs(connections) do
+	for _, v in connections do
 		pcall(function()
 			v:Disconnect();
 		end);
@@ -2060,14 +2060,14 @@ local function showCallsForRemote(remote, idx, button)
 		return t
 	end
 	CallsScroll.Visible = true
-	for _, c in ipairs(CallsScroll:GetChildren()) do
+	for _, c in CallsScroll:GetChildren() do
 		if c:IsA("TextButton") and c ~= CallButton then
 			c:Destroy()
 		end
 	end
 	local list = remoteLogs[idx] or {}
 	local offset = 10
-	for i, data in ipairs(list) do
+	for i, data in list do
 		local btn = CallButton:Clone()
 		btn.Name = "CallItem"
 		btn.Parent = CallsScroll
@@ -2147,7 +2147,7 @@ local function FindRemote(remote, args)
 	set_identity(7);
 	local foundIndex = nil;
 	if table.find(unstacked, remote) then
-		for index, value in ipairs(remotes) do
+		for index, value in remotes do
 			if value == remote and remoteArgs[index] == args then
 				foundIndex = index;
 				break;
@@ -2269,7 +2269,7 @@ ImageButton.MouseButton1Click:Connect(function()
 		return;
 	end;
 	browseRemotes = {};
-	for _, v in ipairs(game:QueryDescendants("Instance")) do
+	for _, v in game:QueryDescendants("Instance") do
 		if isRemoteEvent(v) or isA(v, "RemoteFunction") then
 			table.insert(browseRemotes, v);
 		end;
@@ -2437,12 +2437,12 @@ runAdonisBypass()
 tstate.cleanup = function()
 	tstate.enabled = false;
 	tstate.spamRemote.disconnect()
-	for _, c in ipairs(connections) do
+	for _, c in connections do
 		pcall(function()
 			c:Disconnect()
 		end)
 	end
-	for _, c in pairs(clientEventConns) do
+	for _, c in clientEventConns do
 		pcall(function()
 			c:Disconnect()
 		end)

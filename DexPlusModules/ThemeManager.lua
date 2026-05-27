@@ -447,7 +447,7 @@ local function main()
 		pLabel.LayoutOrder = 1
 		pLabel.Parent = scroll
 
-		for i,p in ipairs(presets) do
+		for i,p in presets do
 			local b = Instance.new("TextButton")
 			b.Size = UDim2.new(1,0,0,24)
 			b.BackgroundTransparency = 0
@@ -523,13 +523,13 @@ local function main()
 		end
 
 		function refreshRows()
-			for _, row in ipairs(rows) do
+			for _, row in rows do
 				local col = getThemeColor(row.path) or Color3.fromRGB(60,60,60)
 				row.preview.BackgroundColor3 = col
 			end
 		end
 
-		for i,path in ipairs(themeEntries) do
+		for i,path in themeEntries do
 			local keyLabel = table.concat(path,".")
 			local row = Instance.new("Frame")
 			row.Name = keyLabel
@@ -573,7 +573,7 @@ local function main()
 		trackConn(colorPicker.OnSelect:Connect(function(col)
 			if not activeKey then return end
 			setThemeColor(activeKey, col)
-			for _, row in ipairs(rows) do
+			for _, row in rows do
 				if row.path == activeKey then
 					row.preview.BackgroundColor3 = col
 					break

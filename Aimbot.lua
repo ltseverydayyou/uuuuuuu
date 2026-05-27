@@ -148,7 +148,7 @@ local function getClosestPart(character)
     local shortestCursorDistance = aimFov
     local cameraPos = camera.CFrame.Position
 
-    for _, partName in ipairs(aimParts) do
+    for _, partName in aimParts do
         local part = character:FindFirstChild(partName)
         if part then
             local partPos = camera:WorldToViewportPoint(part.Position)
@@ -170,7 +170,7 @@ local function getTarget()
     local closestPart = nil
     local shortestCursorDistance = aimFov
 
-    for _, player in ipairs(__lt.cm("Players", "GetPlayers")) do
+    for _, player in __lt.cm("Players", "GetPlayers") do
         if player ~= plr and player.Character and not checkTeam(player) then
             if player.Character.Humanoid.Health >= minHealth or not healthCheck then
                 local targetPart = getClosestPart(player.Character)
@@ -516,7 +516,7 @@ local spinbottoggle = Misc:CreateToggle({
     Callback = function(Value)
         spinBot = Value
         if Value then
-            for i,v in pairs(hrp:GetChildren()) do
+            for i,v in hrp:GetChildren() do
                 if v.Name == "Spinning" then
                     v:Destroy()
                 end
@@ -529,7 +529,7 @@ local spinbottoggle = Misc:CreateToggle({
             Spin.AngularVelocity = Vector3.new(0,spinBotSpeed,0)
             Rayfield:Notify({Title = "Spin Bot", Content = "Enabled!", Duration = 1, Image = 4483362458,})
         else
-            for i,v in pairs(hrp:GetChildren()) do
+            for i,v in hrp:GetChildren() do
                 if v.Name == "Spinning" then
                     v:Destroy()
                 end
@@ -549,7 +549,7 @@ local spinbotspeed = Misc:CreateSlider({
     Callback = function(Value)
         spinBotSpeed = Value
         if spinBot then
-            for i,v in pairs(hrp:GetChildren()) do
+            for i,v in hrp:GetChildren() do
                 if v.Name == "Spinning" then
                     v:Destroy()
                 end
@@ -587,7 +587,7 @@ local ServerHop = Misc:CreateButton({
             end
             local body
             local serverUrl = string.format("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Desc&limit=100&excludeFullGames=true", game.PlaceId)
-            for _, apiUrl in ipairs(robloxApiUrls(serverUrl)) do
+            for _, apiUrl in robloxApiUrls(serverUrl) do
                 local ok, req = pcall(httprequest, {Url = apiUrl, Method = "GET", Headers = {Accept = "application/json"}})
                 if ok and req and type(req.Body) == "string" and (not req.StatusCode or (req.StatusCode >= 200 and req.StatusCode < 300)) then
                     local ok2, decoded = pcall(function()

@@ -450,7 +450,7 @@ local function probeNamedRemoteEvents()
 	if typeof(direct) == "Instance" and type(direct.FireServer) == "function" then
 		candidates[#candidates + 1] = direct
 	end
-	for _, remote in ipairs(Remotes:GetChildren()) do
+	for _, remote in Remotes:GetChildren() do
 		if remote.Name == "RemoteEvent" and typeof(remote) == "Instance" and type(remote.FireServer) == "function" then
 			candidates[#candidates + 1] = remote
 		end
@@ -603,7 +603,7 @@ do
 	local main = lob and lob:FindFirstChild("Main")
 
 	if mus and gam and main then
-		for _, v in ipairs(gam:GetChildren()) do
+		for _, v in gam:GetChildren() do
 			if v:IsA("Sound") then
 				pcall(function()
 					v:Destroy()
@@ -1323,7 +1323,7 @@ do
 		end
 	end
 
-	for _, d in ipairs(WS:GetDescendants()) do
+	for _, d in WS:GetDescendants() do
 		task.defer(chk, d)
 	end
 

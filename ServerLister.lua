@@ -519,7 +519,7 @@ if uis.KeyboardEnabled then
 	end);
 end;
 local function wipe()
-	for _, v in ipairs(list:GetChildren()) do
+	for _, v in list:GetChildren() do
 		if v:IsA("Frame") and v.Name == "row" then v:Destroy(); end;
 	end;
 end;
@@ -654,7 +654,7 @@ local function scrapePage(first)
 	local q = "?sortOrder=Asc&limit=100";
 	if not first and cur then q = q .. "&cursor=" .. __lt.cm("HttpService", "UrlEncode", tostring(cur)); end;
 	local d = nil;
-	for _, b in ipairs(srvBases) do
+	for _, b in srvBases do
 		local url = b .. "/v1/games/" .. pid .. "/servers/Public" .. q;
 		d = pull(url);
 		if d and type(d.data) == "table" then break; end;
@@ -668,11 +668,11 @@ local function scrapePage(first)
 	if not d or type(d.data) ~= "table" then return false; end;
 	cur = d.nextPageCursor;
 	hasCur = cur ~= nil;
-	for _, t in pairs(d.data) do mkRow(t); end;
+	for _, t in d.data do mkRow(t); end;
 	return true;
 end;
 local function sortList(kind, up)
-	for _, r in ipairs(list:GetChildren()) do
+	for _, r in list:GetChildren() do
 		if r:IsA("Frame") and r.Name == "row" then
 			local v = 0;
 			if kind == "p" then

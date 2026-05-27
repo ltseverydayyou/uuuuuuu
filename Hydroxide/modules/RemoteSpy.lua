@@ -105,7 +105,7 @@ local function checkPermission(instance)
     if (instance.ClassName) then end
 end
 
-for _name, hook in pairs(methodHooks) do
+for _name, hook in methodHooks do
     local originalMethod
     originalMethod = hookFunction(hook, newCClosure(function(...)
         local instance = ...

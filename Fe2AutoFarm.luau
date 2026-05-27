@@ -120,7 +120,7 @@ if host and type(host.__lt_af_ctx) == "table" then
 	if type(old.stop) == "function" then
 		pcall(old.stop)
 	elseif type(old.con) == "table" then
-		for _, c in ipairs(old.con) do
+		for _, c in old.con do
 			if c and type(c.Disconnect) == "function" then
 				pcall(function()
 					c:Disconnect()
@@ -376,7 +376,7 @@ ctx.stop = function()
 	ctx.cut(nCd1)
 	ctx.cut(nCd2)
 	ctx.cut(chC)
-	for _, th in ipairs(ctx.threads) do
+	for _, th in ctx.threads do
 		if type(task.cancel) == "function" then
 			pcall(task.cancel, th)
 		end
@@ -387,7 +387,7 @@ ctx.stop = function()
 	nCd1 = nil
 	nCd2 = nil
 	chC = nil
-	for _, c in ipairs(ctx.con) do
+	for _, c in ctx.con do
 		ctx.cut(c)
 	end
 	ctx.con = {}
@@ -578,10 +578,10 @@ do
 		if type(getinstances) == "function" then
 			scanners[#scanners + 1] = getinstances
 		end
-		for _, fn in ipairs(scanners) do
+		for _, fn in scanners do
 			local ok, list = pcall(fn)
 			if ok and type(list) == "table" then
-				for _, obj in ipairs(list) do
+				for _, obj in list do
 					if typeof(obj) == "Instance" and obj.Name == name and (not cls or obj:IsA(cls)) then
 						return obj
 					end
@@ -592,7 +592,7 @@ do
 	end
 
 	local function findRemote(name, cls)
-		for _, folder in ipairs(remFolders) do
+		for _, folder in remFolders do
 			local obj = folder:FindFirstChild(name)
 			if obj and (not cls or obj:IsA(cls)) then
 				return obj
@@ -611,7 +611,7 @@ do
 	local function addRemote(list, name)
 		local obj = findRemote(name, "RemoteEvent")
 		if obj and obj:IsA("RemoteEvent") then
-			for _, old in ipairs(list) do
+			for _, old in list do
 				if old == obj then
 					return
 				end
@@ -927,7 +927,7 @@ ctx.anyPart = function(obj)
 		if obj.PrimaryPart then
 			return obj.PrimaryPart
 		end
-		for _, d in ipairs(ctx.descOf(obj)) do
+		for _, d in ctx.descOf(obj) do
 			if d:IsA("BasePart") then
 				return d
 			end
@@ -1013,7 +1013,7 @@ ctx.scanBonuses = function(map)
 	bCache.pg = nil
 	bCache.ct = nil
 	bCache.npc = nil
-	for _, obj in ipairs(ctx.descOf(map)) do
+	for _, obj in ctx.descOf(map) do
 		ctx.addBonus(obj)
 		if bCache.pg and bCache.ct then
 			break
@@ -1140,12 +1140,12 @@ end
 
 ctx.scanBtns = function(map)
 	local t = {}
-	for _, obj in ipairs(ctx.descOf(map)) do
+	for _, obj in ctx.descOf(map) do
 		if obj.ClassName == "Model" then
 			local hit = nil
 			local hasUi = obj:FindFirstChildWhichIsA("BillboardGui", true) ~= nil
 			local hasFuse = ctx.ffc(obj, "Fuse", true) ~= nil
-			for _, ch in ipairs(obj:GetChildren()) do
+			for _, ch in obj:GetChildren() do
 				if ch:IsA("BasePart") and tostring(ch.BrickColor) ~= "Medium stone grey" then
 					hit = ch
 					break
@@ -1167,7 +1167,7 @@ ctx.valOf = function(obj, names)
 	if not obj then
 		return nil
 	end
-	for _, n in ipairs(names) do
+	for _, n in names do
 		local ok, v = pcall(function()
 			return obj:GetAttribute(n)
 		end)
@@ -1175,10 +1175,10 @@ ctx.valOf = function(obj, names)
 			return v
 		end
 	end
-	for _, d in ipairs(ctx.descOf(obj)) do
+	for _, d in ctx.descOf(obj) do
 		if d:IsA("ValueBase") then
 			local nm = d.Name:lower():gsub("[^%w]", "")
-			for _, n in ipairs(names) do
+			for _, n in names do
 				if nm == n:lower():gsub("[^%w]", "") then
 					return d.Value
 				end
@@ -1203,7 +1203,7 @@ ctx.guiOn = function(obj)
 	if not obj then
 		return false
 	end
-	for _, d in ipairs(ctx.descOf(obj)) do
+	for _, d in ctx.descOf(obj) do
 		if d:IsA("BillboardGui") and d.Enabled then
 			return true
 		end
@@ -1248,7 +1248,7 @@ ctx.auraEntries = function(map)
 		auraList = {}
 		local ok, res = pcall(ctx.scanBtns, map)
 		if ok and type(res) == "table" then
-			for _, entry in ipairs(res) do
+			for _, entry in res do
 				if ctx.auraReady(entry) then
 					auraList[#auraList + 1] = entry
 				end
@@ -1275,7 +1275,7 @@ ctx.asPart = function(v)
 	local r = select(1, ctx.rh(false))
 	local best = nil
 	local bestDist = math.huge
-	for _, obj in pairs(v) do
+	for _, obj in v do
 		if typeof(obj) == "Instance" and obj:IsA("BasePart") then
 			local dist = r and (r.Position - obj.Position).Magnitude or 0
 			if dist < bestDist then
@@ -1323,7 +1323,7 @@ end
 
 ctx.locatorEntries = function(map)
 	local t = {}
-	for hit, entry in pairs(locBtns) do
+	for hit, entry in locBtns do
 		if hit and hit.Parent and (not map or hit:IsDescendantOf(map)) then
 			t[#t + 1] = entry
 		else
@@ -1339,7 +1339,7 @@ ctx.nearestEntry = function(entries, pos)
 	if not pos then
 		return nil
 	end
-	for _, entry in ipairs(entries) do
+	for _, entry in entries do
 		local hit = entry and entry.hit
 		if hit and hit.Parent then
 			local dist = (pos - hit.Position).Magnitude
@@ -1390,12 +1390,12 @@ end
 
 ctx.mergeLocatorBtns = function(t, map)
 	local seen = {}
-	for _, entry in ipairs(t) do
+	for _, entry in t do
 		if entry.hit and (not entry.loc or locBtns[entry.hit] == entry) then
 			seen[entry.hit] = true
 		end
 	end
-	for hit, entry in pairs(locBtns) do
+	for hit, entry in locBtns do
 		if not (hit and hit.Parent) then
 			locBtns[hit] = nil
 		elseif not seen[hit] and (not map or hit:IsDescendantOf(map)) then
@@ -1421,7 +1421,7 @@ ctx.fuseRange = function(src, hit)
 	if hit and hit.Parent and (not root or root == hit) then
 		root = hit.Parent
 	end
-	for _, obj in ipairs(ctx.descOf(root)) do
+	for _, obj in ctx.descOf(root) do
 		if obj:IsA("Part") and obj ~= hit and obj.Shape == Enum.PartType.Ball then
 			local sz = math.max(obj.Size.X, obj.Size.Y, obj.Size.Z)
 			local red = obj.Color.R > 0.75 and obj.Color.G < 0.15 and obj.Color.B < 0.15
@@ -1474,7 +1474,7 @@ ctx.pressMapButton = function(hit)
 		return
 	end
 	pressTimes[hit] = now
-	for _, rem in ipairs(PressRemotes) do
+	for _, rem in PressRemotes do
 		if rem and rem.Parent then
 			pcall(function()
 				rem:FireServer(hit)
@@ -1549,7 +1549,7 @@ ctx.dataSig = function(data)
 		return nil
 	end
 	local parts = {}
-	for k, v in pairs(st) do
+	for k, v in st do
 		if type(v) ~= "table" and typeof(v) ~= "Instance" then
 			parts[#parts + 1] = tostring(k) .. "=" .. tostring(v)
 		end
@@ -1709,7 +1709,7 @@ ctx.canRebirth = function()
 end
 
 ctx.fireLoaded = function(key)
-	for _, rem in ipairs(LoadedMapRemotes) do
+	for _, rem in LoadedMapRemotes do
 		if rem and rem.Parent then
 			pcall(function()
 				if key ~= nil then
@@ -1724,7 +1724,7 @@ end
 
 ctx.fireSurvived = function(key, tm)
 	tm = tonumber(tm) or 100
-	for _, rem in ipairs(SurvivedRemotes) do
+	for _, rem in SurvivedRemotes do
 		if rem and rem.Parent then
 			pcall(function()
 				if key ~= nil then
@@ -1738,7 +1738,7 @@ ctx.fireSurvived = function(key, tm)
 end
 
 ctx.requestRoundStats = function()
-	for _, rem in ipairs(RoundStatsRemotes) do
+	for _, rem in RoundStatsRemotes do
 		if rem and rem.Parent then
 			pcall(function()
 				rem:FireServer()
@@ -1754,7 +1754,7 @@ ctx.requestPlayerData = function(force)
 	end
 	lastData = now
 	local key = ctx.getPassArg(false)
-	for _, rem in ipairs(ItemDataRemotes) do
+	for _, rem in ItemDataRemotes do
 		if rem and rem.Parent then
 			pcall(function()
 				if key ~= nil then
@@ -1765,7 +1765,7 @@ ctx.requestPlayerData = function(force)
 			end)
 		end
 	end
-	for _, rem in ipairs(PlayerDataRemotes) do
+	for _, rem in PlayerDataRemotes do
 		if rem and rem.Parent then
 			pcall(function()
 				rem:FireServer()
@@ -1821,7 +1821,7 @@ ctx.statBurst = function()
 		return
 	end
 	lastBurst = now
-	for _, d in ipairs(RFD) do
+	for _, d in RFD do
 		task.delay(d, function()
 			if ctx.alive() and on then
 				ctx.requestRoundStats()
@@ -1937,7 +1937,7 @@ ctx.startPassiveRemotes = function()
 	end)
 end
 
-for _, rem in ipairs(LocatorRemotes) do
+for _, rem in LocatorRemotes do
 	if rem then
 		ctx.bind(rem.OnClientEvent:Connect(function(goal, hit, ui, nextHit)
 			ctx.addLocatorBtn(hit or goal, nextHit or ui)
@@ -1945,7 +1945,7 @@ for _, rem in ipairs(LocatorRemotes) do
 	end
 end
 
-for _, rem in ipairs(RoundStatsRemotes) do
+for _, rem in RoundStatsRemotes do
 	if rem then
 		ctx.bind(rem.OnClientEvent:Connect(ctx.updateRoundStats))
 		if rem.Parent then
@@ -1956,13 +1956,13 @@ for _, rem in ipairs(RoundStatsRemotes) do
 	end
 end
 
-for _, rem in ipairs(PlayerDataRemotes) do
+for _, rem in PlayerDataRemotes do
 	if rem and rem.Parent then
 		ctx.bind(rem.OnClientEvent:Connect(ctx.cacheData))
 	end
 end
 
-for _, rem in ipairs(ItemDataRemotes) do
+for _, rem in ItemDataRemotes do
 	if rem and rem.Parent then
 		ctx.bind(rem.OnClientEvent:Connect(function(data)
 			ctx.cacheData(data)
@@ -1970,7 +1970,7 @@ for _, rem in ipairs(ItemDataRemotes) do
 	end
 end
 
-for _, rem in ipairs(SurvivedRemotes) do
+for _, rem in SurvivedRemotes do
 	if rem and rem.Parent then
 		ctx.bind(rem.OnClientEvent:Connect(function(ok)
 			if ok == true or tostring(ok):lower() == "survived" then
@@ -1980,7 +1980,7 @@ for _, rem in ipairs(SurvivedRemotes) do
 	end
 end
 
-for _, rem in ipairs(GameStateRemotes) do
+for _, rem in GameStateRemotes do
 	if rem and rem.Parent then
 		ctx.bind(rem.OnClientEvent:Connect(function(st)
 			local state = tostring(st):lower()
@@ -2035,7 +2035,7 @@ ctx.bindNc = function(c)
 		return
 	end
 	ctx.addNc(c)
-	for _, d in ipairs(ctx.descOf(c)) do
+	for _, d in ctx.descOf(c) do
 		ctx.addNc(d)
 	end
 	nCd1 = c.DescendantAdded:Connect(function(d)
@@ -2058,7 +2058,7 @@ ctx.setNc = function(v)
 		if not on then
 			return
 		end
-		for p in pairs(cTab) do
+		for p in cTab do
 			if p and p.Parent then
 				p.CanCollide = false
 			else
@@ -2076,7 +2076,7 @@ ctx.liftTarget = function()
 	local play = lobby:FindFirstChild("PlayHere")
 	if play then
 		local best = nil
-		for _, obj in ipairs(ctx.descOf(play)) do
+		for _, obj in ctx.descOf(play) do
 			if obj:IsA("BasePart") then
 				if obj:FindFirstChild("SurfaceGui") or not best then
 					best = obj
@@ -2557,7 +2557,7 @@ ctx.NAgui_dragger = function(ui, dragui)
 		end
 		local top = nil
 		local topOrder = nil
-		for _, g in ipairs(list) do
+		for _, g in list do
 			if typeof(g) == "Instance" and g:IsA("GuiObject") then
 				local order = getOrder(g)
 				if not top or order > topOrder then
@@ -2801,7 +2801,7 @@ ctx.onMap = function(map, id)
 		roundTotal = nil
 		roundLeft = nil
 		roundState = nil
-		for _, rem in ipairs(RoundStatsRemotes) do
+		for _, rem in RoundStatsRemotes do
 			if rem and rem.Parent then
 				pcall(function()
 					rem:FireServer()
@@ -2842,7 +2842,7 @@ ctx.onMap = function(map, id)
 
 			local pressFirst = not exitReady
 			if exitReady then
-				for _, entry in ipairs(btns) do
+				for _, entry in btns do
 					if entry.loc and entry.hit and entry.hit.Parent and locBtns[entry.hit] == entry then
 						pressFirst = true
 						break
@@ -2856,7 +2856,7 @@ ctx.onMap = function(map, id)
 			end
 
 			if pressFirst then
-				for _, entry in ipairs(btns) do
+				for _, entry in btns do
 					if not ctx.activeRun(map, id) then
 						break
 					end

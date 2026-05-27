@@ -393,7 +393,7 @@ local function C_13()
 			Close();
 		end);
 		MainFrame.Buttons.Clear.MouseButton1Click:Connect(function()
-			for _, v in pairs(MainFrame.Remotes:GetChildren()) do
+			for _, v in MainFrame.Remotes:GetChildren() do
 				if v:IsA("TextButton") then
 					v:Destroy();
 				end;
@@ -465,7 +465,7 @@ function formatValue(value)
 		return GetInstancePath(value);
 	elseif typeof(value) == "table" then
 		local result = "{ ";
-		for k, v in pairs(value) do
+		for k, v in value do
 			result = result .. string.format("[%s] = %s; \n", formatValue(k), formatValue(v));
 		end;
 		result = result:sub(1, -2);
@@ -476,7 +476,7 @@ function formatValue(value)
 end;
 local function Format(args)
 	local formattedArgs = {};
-	for i, arg in ipairs(args) do
+	for i, arg in args do
 		formattedArgs[i] = string.format("[%d] = %s", i, formatValue(arg));
 	end;
 	return formattedArgs;
@@ -528,7 +528,7 @@ local function handleRemote(remote)
 	end;
 end;
 local function wrapRemotes(folder)
-	for _, obj in ipairs(folder:QueryDescendants("Instance")) do
+	for _, obj in folder:QueryDescendants("Instance") do
 		if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
 			handleRemote(obj);
 		end;
@@ -545,7 +545,7 @@ local folders = {
 	game.StarterPack,
 	game.StarterPlayer
 };
-for _, folder in ipairs(folders) do
+for _, folder in folders do
 	wrapRemotes(folder);
 	folder.DescendantAdded:Connect(function(descendant)
 		if descendant:IsA("RemoteEvent") or descendant:IsA("RemoteFunction") then

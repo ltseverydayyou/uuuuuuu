@@ -35,9 +35,9 @@ end
 local function scan(query, deepSearch)
     local upvalues = {}
 
-    for _i, closure in pairs(getGc()) do
+    for _i, closure in getGc() do
         if type(closure) == "function" and not isXClosure(closure) and not upvalues[closure] then
-            for index, value in pairs(getUpvalues(closure)) do
+            for index, value in getUpvalues(closure) do
                 local valueType = type(value)
 
                 if valueType ~= "table" and compareUpvalue(query, value) then
@@ -54,7 +54,7 @@ local function scan(query, deepSearch)
                     local storage = upvalues[closure]
                     local table
 
-                    for i, v in pairs(value) do
+                    for i, v in value do
                         if (i ~= value and v ~= value) and (compareUpvalue(query, i, true) or compareUpvalue(query, v)) then
                             if not storage then
                                 local newClosure = Closure.new(closure)

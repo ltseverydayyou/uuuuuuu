@@ -183,7 +183,7 @@ local connect = function(name, connection)
 end;
 local disconnect = function(name)
 	if connections[name] then
-		for _, conn in ipairs(connections[name]) do
+		for _, conn in connections[name] do
 			conn:Disconnect();
 		end;
 		connections[name] = nil;
@@ -199,7 +199,7 @@ local ApplyLastInputPatch = function()
 	if getconnections and (not LastInputPatched) then
 		table.clear(LastInputConns);
 		table.clear(PreferredInputConns);
-		for _, c in ipairs(getconnections(UserInputService.LastInputTypeChanged)) do
+		for _, c in getconnections(UserInputService.LastInputTypeChanged) do
 			table.insert(LastInputConns, c);
 			pcall(function()
 				if c.Disable then
@@ -212,7 +212,7 @@ local ApplyLastInputPatch = function()
 			prefSignal = __lt.cm("UserInputService", "GetPropertyChangedSignal", "PreferredInput");
 		end);
 		if prefSignal then
-			for _, c in ipairs(getconnections(prefSignal)) do
+			for _, c in getconnections(prefSignal) do
 				table.insert(PreferredInputConns, c);
 				pcall(function()
 					if c.Disable then
@@ -251,7 +251,7 @@ local RevertLastInputPatch = function()
 	end;
 	if getconnections then
 		if LastInputConns and #LastInputConns > 0 then
-			for _, c in ipairs(LastInputConns) do
+			for _, c in LastInputConns do
 				pcall(function()
 					if c.Enable then
 						c:Enable();
@@ -260,7 +260,7 @@ local RevertLastInputPatch = function()
 			end;
 		end;
 		if PreferredInputConns and #PreferredInputConns > 0 then
-			for _, c in ipairs(PreferredInputConns) do
+			for _, c in PreferredInputConns do
 				pcall(function()
 					if c.Enable then
 						c:Enable();
@@ -277,7 +277,7 @@ end;
 local function purgeOldAutoParryArtifacts()
 	local ok, guiParent = pcall(guiCHECKINGAHHHHH);
 	if ok and guiParent then
-		for _, old in ipairs(guiParent:GetDescendants()) do
+		for _, old in guiParent:GetDescendants() do
 			if old.Name == "Range" or old.Name == "Distance" then
 				pcall(function()
 					old:Destroy();
@@ -285,7 +285,7 @@ local function purgeOldAutoParryArtifacts()
 			end;
 		end;
 	end;
-	for _, old in ipairs(workspace:GetDescendants()) do
+	for _, old in workspace:GetDescendants() do
 		if old:IsA("BasePart") and (old.Name == "Visualizer" or old.Name == "VisualizerNoUnit" or old.Name == "VisualizerFollowBall") then
 			pcall(function()
 				old:Destroy();
@@ -297,10 +297,10 @@ do
 	purgeOldAutoParryArtifacts();
 	local ok, guiParent = pcall(guiCHECKINGAHHHHH);
 	if ok and guiParent then
-		for _, n in ipairs({
+		for _, n in {
 			"Range",
 			"Distance"
-		}) do
+		} do
 			local old = guiParent:FindFirstChild(n);
 			if old then
 				old:Destroy();
@@ -388,7 +388,7 @@ local function normalizeVisualizerConfig()
 			enabled = raw == true
 		};
 	end;
-	for key, defaultValue in pairs(VisualizerDefaults) do
+	for key, defaultValue in VisualizerDefaults do
 		if raw[key] == nil then
 			raw[key] = defaultValue;
 		end;
@@ -514,7 +514,7 @@ local function applyVisualizerProfileValues(name)
 	if not profile then
 		return false;
 	end;
-	for key, value in pairs(profile) do
+	for key, value in profile do
 		visualizerConfig[key] = value;
 	end;
 	visualizerConfig.profile = name;
@@ -731,7 +731,7 @@ local function applyProfile(name)
 	saveTopbarConfig();
 end;
 local function findProfileIndex(name)
-	for idx, profileName in ipairs(profileOrder) do
+	for idx, profileName in profileOrder do
 		if profileName == name then
 			return idx;
 		end;
@@ -843,7 +843,7 @@ local function setupTopbarIcon()
 			applyProfile(name);
 		end);
 	end;
-	for _, name in ipairs(profileOrder) do
+	for _, name in profileOrder do
 		addModeEntry(name);
 	end;
 	updateApLabel();
@@ -977,7 +977,7 @@ local function detachContainer(c)
 				conns:Disconnect();
 			end);
 		elseif type(conns) == "table" then
-			for _, conn in ipairs(conns) do
+			for _, conn in conns do
 				pcall(function()
 					conn:Disconnect();
 				end);
@@ -1024,7 +1024,7 @@ local function attachContainer(c)
 	if c:IsA("BasePart") then
 		addBall(c);
 	end;
-	for _, d in ipairs(c:QueryDescendants("Instance")) do
+	for _, d in c:QueryDescendants("Instance") do
 		if d:IsA("BasePart") then
 			addBall(d);
 		end;
@@ -1057,7 +1057,7 @@ local function trackNamedContainer(parent, name)
 	if not (typeof(parent) == "Instance" and type(name) == "string") then
 		return;
 	end;
-	for _, inst in ipairs(parent:QueryDescendants("Instance")) do
+	for _, inst in parent:QueryDescendants("Instance") do
 		if inst.Name == name then
 			attachContainer(inst);
 		end;
@@ -1083,7 +1083,7 @@ local function trackNamedContainer(parent, name)
 						conns:Disconnect();
 					end);
 				elseif type(conns) == "table" then
-					for _, cn in ipairs(conns) do
+					for _, cn in conns do
 						pcall(function()
 							cn:Disconnect();
 						end);
@@ -1121,7 +1121,7 @@ local function setupBallTracking()
 			p
 		};
 	end;
-	for _, src in ipairs(paths) do
+	for _, src in paths do
 		local t = typeof(src);
 		if t == "Instance" then
 			attachContainer(src);
@@ -1251,7 +1251,7 @@ end;
 local function getBalls()
 	table.clear(ballState.ballList);
 	local byName = {};
-	for b in pairs(ballState.ballsMap) do
+	for b in ballState.ballsMap do
 		if b and b.Parent then
 			local name = b.Name;
 			local list = byName[name];
@@ -1266,7 +1266,7 @@ local function getBalls()
 			cleanupBallVisual(b);
 		end;
 	end;
-	for _, list in pairs(byName) do
+	for _, list in byName do
 		if #list == 1 then
 			appendPrimaryBall(list);
 		else
@@ -1305,7 +1305,7 @@ local function getBallVisual(ball)
 	return v;
 end;
 local function cleanupAllBallVisuals()
-	for b in pairs(visualizerState.ballVis) do
+	for b in visualizerState.ballVis do
 		cleanupBallVisual(b);
 	end;
 end;
@@ -1313,7 +1313,7 @@ local function applyVisualizerVisible(show)
 	rangeGui.Enabled = show;
 	ringPlayer.Transparency = show and visualizerState.ringBaseTransparency or 1;
 	ringPlayerNoUnit.Transparency = show and visualizerState.ringPinkTransparency or 1;
-	for _, v in pairs(visualizerState.ballVis) do
+	for _, v in visualizerState.ballVis do
 		if v.gui then
 			v.gui.Enabled = show;
 		end;
@@ -1327,27 +1327,27 @@ local function trackConnection(conn)
 	return conn;
 end;
 local function cleanup()
-	for _, c in ipairs(ballState.trackedConnections) do
+	for _, c in ballState.trackedConnections do
 		pcall(function()
 			c:Disconnect();
 		end);
 	end;
 	ballState.trackedConnections = {};
-	for _, conns in pairs(ballState.ballConns) do
-		for _, conn in ipairs(conns) do
+	for _, conns in ballState.ballConns do
+		for _, conn in conns do
 			pcall(function()
 				conn:Disconnect();
 			end);
 		end;
 	end;
 	ballState.ballConns = {};
-	for _, conn in pairs(ballState.containerConns) do
+	for _, conn in ballState.containerConns do
 		if typeof(conn) == "RBXScriptConnection" then
 			pcall(function()
 				conn:Disconnect();
 			end);
 		elseif type(conn) == "table" then
-			for _, cn in ipairs(conn) do
+			for _, cn in conn do
 				pcall(function()
 					cn:Disconnect();
 				end);
@@ -1404,7 +1404,7 @@ local function attachVisualizer(hasBall)
 		if not visualizerState.visualizerAttached then
 			local guiParent = guiCHECKINGAHHHHH();
 			rangeGui.Parent = guiParent;
-			for _, v in pairs(visualizerState.ballVis) do
+			for _, v in visualizerState.ballVis do
 				if v.gui then
 					v.gui.Parent = guiParent;
 				end;
@@ -1419,7 +1419,7 @@ local function attachVisualizer(hasBall)
 	elseif visualizerState.visualizerAttached then
 		rangeGui.Parent = nil;
 		rangeGui.Adornee = nil;
-		for _, v in pairs(visualizerState.ballVis) do
+		for _, v in visualizerState.ballVis do
 			if v.gui then
 				v.gui.Parent = nil;
 				v.gui.Adornee = nil;
@@ -1464,7 +1464,7 @@ local function resolveRemote()
 	if typeof(r) == "Instance" or type(r) == "table" and (r.inst or r.parent or r[1]) then
 		return resolveOne(r);
 	elseif type(r) == "table" then
-		for _, v in ipairs(r) do
+		for _, v in r do
 			local inst, args = resolveOne(v);
 			if inst then
 				return inst, args;
@@ -1545,7 +1545,7 @@ local function resolveBtn()
 	if typeof(b) == "Instance" or type(b) == "table" and (b.parent or b.name) then
 		return resolveOne(b);
 	elseif type(b) == "table" then
-		for _, v in ipairs(b) do
+		for _, v in b do
 			local r = resolveOne(v);
 			if r then
 				return r;
@@ -1662,7 +1662,7 @@ local function getHighlightColor(inst)
 	local best;
 	local bestColor;
 	local bestTrans = math.huge;
-	for _, child in ipairs(inst:GetChildren()) do
+	for _, child in inst:GetChildren() do
 		if child:IsA("Highlight") then
 			local ft = child.FillTransparency or 1;
 			if child.Enabled ~= false and ft < bestTrans then
@@ -1710,7 +1710,7 @@ local function getBallTargetAttr(ball)
 		return nil;
 	end;
 	local attrs = ball:GetAttributes();
-	for k, v in pairs(attrs) do
+	for k, v in attrs do
 		if typeof(k) == "string" and k:lower() == "target" then
 			return v;
 		end;
@@ -2040,7 +2040,7 @@ local function tryPromoteImmediateBall(balls, char, hrp, excludeBall, pingValue)
 	local bestBall;
 	local bestHit = math.huge;
 	local bestDist = math.huge;
-	for _, ball in ipairs(balls) do
+	for _, ball in balls do
 		if ball and ball.Parent and ball ~= excludeBall and ball ~= parryState.activeParryBall then
 			local targetState = getBallTargetState(ball, char, parryState.curFrame, true);
 			local currentTargetConfirmed = targetState and (targetState.targeted or targetState.attrNow) or false;
@@ -2148,7 +2148,7 @@ local function AutoParryStep(dt)
 		local focusDistTargeted = math.huge;
 		local focusIsTargeted = false;
 		local primBaseSize, primPredictNoPing, primPredictRadius;
-		for _, ball in ipairs(balls) do
+		for _, ball in balls do
 			if ball and ball.Position then
 				seen[ball] = true;
 				local vis = getBallVisual(ball);
@@ -2704,7 +2704,7 @@ local function AutoParryStep(dt)
 			rescaleRing(ringPlayerNoUnit, 10, vs.predictMaxSize, dt);
 			vs.ringLimited = false;
 		end;
-		for b in pairs(vs.ballVis) do
+		for b in vs.ballVis do
 			if not seen[b] or (not b.Parent) then
 				cleanupBallVisual(b);
 				bs.lastBallSamples[b] = nil;

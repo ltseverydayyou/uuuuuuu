@@ -110,14 +110,14 @@ local function onAdded(o)
 end;
 local function onRemoved(o)
 	if o:IsA("ClickDetector") then
-		for i, v in ipairs(clickDetectors) do
+		for i, v in clickDetectors do
 			if v == o then
 				table.remove(clickDetectors, i);
 				break;
 			end;
 		end;
 	elseif o:IsA("ProximityPrompt") then
-		for i, v in ipairs(proximityPrompts) do
+		for i, v in proximityPrompts do
 			if v == o then
 				table.remove(proximityPrompts, i);
 				break;
@@ -125,7 +125,7 @@ local function onRemoved(o)
 		end;
 	end;
 end;
-for _, o in ipairs(workspace:QueryDescendants("Instance")) do
+for _, o in workspace:QueryDescendants("Instance") do
 	onAdded(o);
 end;
 workspace.DescendantAdded:Connect(onAdded);
@@ -194,26 +194,26 @@ local function rebuildActiveSets()
 	table.clear(activeClickIdxList);
 	table.clear(activePromptIdxList);
 	if next(selectedClickNames) == nil then
-		for i, v in ipairs(clickDetectors) do
+		for i, v in clickDetectors do
 			if v and v.Parent then
 				activeClickIdxList[(#activeClickIdxList) + 1] = i;
 			end;
 		end;
 	else
-		for i, v in ipairs(clickDetectors) do
+		for i, v in clickDetectors do
 			if v and v.Parent and selectedClickNames[holderNameFor(v)] then
 				activeClickIdxList[(#activeClickIdxList) + 1] = i;
 			end;
 		end;
 	end;
 	if next(selectedPromptNames) == nil then
-		for i, v in ipairs(proximityPrompts) do
+		for i, v in proximityPrompts do
 			if v and v.Parent then
 				activePromptIdxList[(#activePromptIdxList) + 1] = i;
 			end;
 		end;
 	else
-		for i, v in ipairs(proximityPrompts) do
+		for i, v in proximityPrompts do
 			if v and v.Parent and selectedPromptNames[holderNameFor(v)] then
 				activePromptIdxList[(#activePromptIdxList) + 1] = i;
 			end;
@@ -520,32 +520,32 @@ btnPPSel.Position = UDim2.fromOffset(180, 2);
 local ddPrompts, ddPBar, ddPromptsBody, btnUnselPrompts = dropdownFrame(groupPrompts, "Prompts", 300, 260);
 ddPrompts.Position = UDim2.fromOffset(0, 44);
 ddPrompts.Visible = false;
-for _, h in ipairs({
+for _, h in {
 	groupClicks,
 	btnCD,
 	btnCDSel,
 	ddBar
-}) do
+} do
 	DragController:attachHandle(groupClicks, h);
 end;
-for _, h in ipairs({
+for _, h in {
 	groupPrompts,
 	btnPP,
 	btnPPSel,
 	ddPBar
-}) do
+} do
 	DragController:attachHandle(groupPrompts, h);
 end;
-for _, h in ipairs({
+for _, h in {
 	groupInterval,
 	btnDelay
-}) do
+} do
 	DragController:attachHandle(groupInterval, h);
 end;
-for _, h in ipairs({
+for _, h in {
 	groupDistance,
 	btnDist
-}) do
+} do
 	DragController:attachHandle(groupDistance, h);
 end;
 local topPaddingButtons = 44;
@@ -613,7 +613,7 @@ btnPP.Activated:Connect(function()
 	btnPP.BackgroundColor3 = promptsEnabled and Color3.fromRGB(50, 110, 70) or Color3.fromRGB(44, 44, 50);
 end);
 local function clearChildren(p)
-	for _, c in ipairs(p:GetChildren()) do
+	for _, c in p:GetChildren() do
 		if not c:IsA("UIListLayout") then
 			c:Destroy();
 		end;
@@ -622,15 +622,15 @@ end;
 local function rebuildClicksList()
 	clearChildren(ddClicksBody);
 	local seen = {};
-	for _, cd in ipairs(clickDetectors) do
+	for _, cd in clickDetectors do
 		if cd and cd.Parent then
 			seen[holderNameFor(cd)] = true;
 		end;
 	end;
-	for k, _ in pairs(selectedClickNames) do
+	for k, _ in selectedClickNames do
 		seen[k] = seen[k] or false;
 	end;
-	for label, _ in pairs(seen) do
+	for label, _ in seen do
 		local act = selectedClickNames[label] and true or false;
 		listRow(ddClicksBody, label, act, function(btn)
 			local ns = not (selectedClickNames[label] and true or false);
@@ -648,15 +648,15 @@ end;
 local function rebuildPromptsList()
 	clearChildren(ddPromptsBody);
 	local seen = {};
-	for _, pp in ipairs(proximityPrompts) do
+	for _, pp in proximityPrompts do
 		if pp and pp.Parent then
 			seen[holderNameFor(pp)] = true;
 		end;
 	end;
-	for k, _ in pairs(selectedPromptNames) do
+	for k, _ in selectedPromptNames do
 		seen[k] = seen[k] or false;
 	end;
-	for label, _ in pairs(seen) do
+	for label, _ in seen do
 		local act = selectedPromptNames[label] and true or false;
 		listRow(ddPromptsBody, label, act, function(btn)
 			local ns = not (selectedPromptNames[label] and true or false);
@@ -737,14 +737,14 @@ workspace.DescendantAdded:Connect(function(o)
 end);
 workspace.DescendantRemoving:Connect(function(o)
 	if o:IsA("ClickDetector") then
-		for i, v in ipairs(clickDetectors) do
+		for i, v in clickDetectors do
 			if v == o then
 				table.remove(clickDetectors, i);
 				break;
 			end;
 		end;
 	elseif o:IsA("ProximityPrompt") then
-		for i, v in ipairs(proximityPrompts) do
+		for i, v in proximityPrompts do
 			if v == o then
 				table.remove(proximityPrompts, i);
 				break;

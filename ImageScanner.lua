@@ -292,7 +292,7 @@ local function scanInst(inst)
 			return inst:GetAttributes()
 		end)
 		if ok and type(at) == "table" then
-			for k, v in pairs(at) do
+			for k, v in at do
 				if type(v) == "string" then
 					findIds(v, inst, "Attr:" .. tostring(k))
 				end

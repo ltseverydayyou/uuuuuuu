@@ -649,7 +649,7 @@ local function main()
 
 			local function createKeywordSet(keywords)
 				local keywordSet = {}
-				for _, keyword in ipairs(keywords) do
+				for _, keyword in keywords do
 					keywordSet[keyword] = true
 				end
 				return keywordSet
@@ -768,7 +768,7 @@ local function main()
 
 				local highlighted = {}
 
-				for i, token in ipairs(tokens) do
+				for i, token in tokens do
 					local highlight = getHighlight(tokens, i)
 
 					if highlight then
@@ -1041,7 +1041,7 @@ local function main()
 
 
 		trackConn(Console.Clear.MouseButton1Click:Connect(function()
-			for _, log in pairs(Console.Output:GetChildren()) do
+			for _, log in Console.Output:GetChildren() do
 				if log:IsA("TextBox") then
 					log:Destroy()
 				end
@@ -1115,7 +1115,7 @@ local function main()
 			return __lt.cm("LogService", "GetLogHistory")
 		end)
 		if historySuccess and type(history) == "table" then
-			for _, entry in ipairs(history) do
+			for _, entry in history do
 				pushLog(entry.message or entry.Message or "", entry.messageType or entry.MessageType, entry.timestamp or entry.time)
 			end
 		end

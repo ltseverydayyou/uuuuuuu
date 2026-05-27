@@ -292,7 +292,7 @@ on(cancelBtn.MouseButton1Click, function()
 	end;
 	if pl.Character then
 		local h = pl.Character:FindFirstChildOfClass("Humanoid");
-		for _, t in ipairs(h and h:GetPlayingAnimationTracks() or {}) do
+		for _, t in h and h:GetPlayingAnimationTracks() or {} do
 			t:Stop();
 		end;
 	end;
@@ -332,7 +332,7 @@ on(playBtn.MouseButton1Click, function()
 	if sel and pl.Character then
 		local h = pl.Character:FindFirstChildOfClass("Humanoid");
 		if h then
-			for _, t in ipairs(h:GetPlayingAnimationTracks()) do
+			for _, t in h:GetPlayingAnimationTracks() do
 				t:Stop();
 			end;
 			cur = h:LoadAnimation(sel.anim);
@@ -381,7 +381,7 @@ end);
 task.spawn(function()
 	local D = game:QueryDescendants("Instance");
 	local tot = #D;
-	for i, inst in ipairs(D) do
+	for i, inst in D do
 		if gone() then
 			return;
 		end;
@@ -426,7 +426,7 @@ task.spawn(function()
 	if ld and ld.Parent then
 		ld:Destroy();
 	end;
-	for i, d in ipairs(anims) do
+	for i, d in anims do
 		if gone() then
 			return;
 		end;

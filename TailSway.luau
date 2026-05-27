@@ -34,7 +34,7 @@ TA.Enabled   = (TA.Enabled ~= false)
 TA.Speed     = TA.Speed or 1.5
 TA.Amplitude = TA.Amplitude or 25
 
-for _, k in ipairs({ "_conn", "_charConn", "_childConn" }) do
+for _, k in { "_conn", "_charConn", "_childConn" } do
 	if TA[k] then
 		TA[k]:Disconnect()
 		TA[k] = nil
@@ -85,7 +85,7 @@ local function getMotorFromAccessory(acc)
 end
 
 local function findTailMotor(character)
-	for _, child in ipairs(character:GetChildren()) do
+	for _, child in character:GetChildren() do
 		if isTailAccessory(child) then
 			local m = getMotorFromAccessory(child)
 			if m then

@@ -102,7 +102,7 @@ local function CleanIgnoreList(list)
 		return {};
 	end;
 	local cleaned = {};
-	for _, v in pairs(list) do
+	for _, v in list do
 		if typeof(v) == "Instance" then
 			cleaned[(#cleaned) + 1] = v;
 		end;
@@ -167,7 +167,7 @@ function _CameraUI()
 			local inst = Instance.new(className);
 			local parent = props.Parent;
 			props.Parent = nil;
-			for name, val in pairs(props) do
+			for name, val in props do
 				if type(name) == "string" then
 					inst[name] = val;
 				else
@@ -660,7 +660,7 @@ function _BaseCamera()
 		self.humanoidRootPart = nil;
 		if IsOnMobile then
 			self.PlayerGui = player:WaitForChild("PlayerGui");
-			for _, child in ipairs(char:GetChildren()) do
+			for _, child in char:GetChildren() do
 				if child:IsA("Tool") then
 					self.isAToolEquipped = true;
 				end;
@@ -1046,7 +1046,7 @@ function _BaseCamera()
 		self.isMiddleMouseDown = false;
 		self:OnMousePanButtonReleased();
 		if IsOnMobile then
-			for inputObject in pairs(self.fingerTouches) do
+			for inputObject in self.fingerTouches do
 				self.fingerTouches[inputObject] = nil;
 			end;
 			self.dynamicTouchInput = nil;
@@ -1252,7 +1252,7 @@ function _BaseCamera()
 		end;
 		if self.numUnsunkTouches == 2 then
 			local unsunkTouches = {};
-			for touch, wasSunk in pairs(self.fingerTouches) do
+			for touch, wasSunk in self.fingerTouches do
 				if not wasSunk then
 					table.insert(unsunkTouches, touch);
 				end;
@@ -1798,7 +1798,7 @@ function _Popper()
 		local function refreshIgnoreList()
 			local n = 1;
 			blacklist = {};
-			for _, character in pairs(charMap) do
+			for _, character in charMap do
 				blacklist[n] = character;
 				n = n + 1;
 			end;
@@ -1824,7 +1824,7 @@ function _Popper()
 		end;
 		Players.PlayerAdded:Connect(playerAdded);
 		Players.PlayerRemoving:Connect(playerRemoving);
-		for _, player in ipairs(__lt.cm("Players", "GetPlayers")) do
+		for _, player in __lt.cm("Players", "GetPlayers") do
 			playerAdded(player);
 		end;
 		refreshIgnoreList();
@@ -1954,7 +1954,7 @@ function _Popper()
 		end;
 		do
 			debug.profilebegin("testOffsets");
-			for _, offset in ipairs(SCAN_SAMPLE_OFFSETS) do
+			for _, offset in SCAN_SAMPLE_OFFSETS do
 				local scaledOffset = offset;
 				local pos = getCollisionPoint(fP, fX * scaledOffset.x + fY * scaledOffset.y);
 				if queryPoint(pos, (fP + fZ * dist - pos).Unit, dist) == inf then
@@ -2159,7 +2159,7 @@ function _MouseLockController()
 	function MouseLockController:OnBoundKeysObjectChanged(newValue)
 		self.boundKeys = {};
 		for token in string.gmatch(newValue, "[^%s,]+") do
-			for _, keyEnum in pairs(Enum.KeyCode:GetEnumItems()) do
+			for _, keyEnum in Enum.KeyCode:GetEnumItems() do
 				if token == keyEnum.Name then
 					self.boundKeys[(#self.boundKeys) + 1] = keyEnum;
 					break;
@@ -2265,13 +2265,13 @@ function _TransparencyController()
 				self.cachedParts[object] = true;
 				self.transparencyDirty = true;
 			end;
-			for _, child in pairs(object:GetChildren()) do
+			for _, child in object:GetChildren() do
 				self:CachePartsRecursive(child);
 			end;
 		end;
 	end;
 	function TransparencyController:TeardownTransparency()
-		for child, _ in pairs(self.cachedParts) do
+		for child, _ in self.cachedParts do
 			child.LocalTransparencyModifier = 0;
 		end;
 		self.cachedParts = {};
@@ -2285,11 +2285,11 @@ function _TransparencyController()
 			self.descendantRemovingConn:disconnect();
 			self.descendantRemovingConn = nil;
 		end;
-		for object, conn in pairs(self.toolDescendantAddedConns) do
+		for object, conn in self.toolDescendantAddedConns do
 			conn:Disconnect();
 			self.toolDescendantAddedConns[object] = nil;
 		end;
-		for object, conn in pairs(self.toolDescendantRemovingConns) do
+		for object, conn in self.toolDescendantRemovingConns do
 			conn:Disconnect();
 			self.toolDescendantRemovingConns[object] = nil;
 		end;
@@ -2385,7 +2385,7 @@ function _TransparencyController()
 				transparency = math.clamp(Util.Round(transparency, 2), 0, 1);
 			end;
 			if self.transparencyDirty or self.lastTransparency ~= transparency then
-				for child, _ in pairs(self.cachedParts) do
+				for child, _ in self.cachedParts do
 					child.LocalTransparencyModifier = transparency;
 				end;
 				self.transparencyDirty = false;
@@ -2522,9 +2522,9 @@ function _Invisicam()
 	local function AssertTypes(param, ...)
 		local allowedTypes = {};
 		local typeString = "";
-		for _, typeName in pairs({
+		for _, typeName in {
 			...
-		}) do
+		} do
 			allowedTypes[typeName] = true;
 			typeString = typeString .. (typeString == "" and "" or " or ") .. typeName;
 		end;
@@ -2592,7 +2592,7 @@ function _Invisicam()
 		return Enum.DevCameraOcclusionMode.Invisicam;
 	end;
 	function Invisicam:LimbBehavior(castPoints)
-		for limb, _ in pairs(self.trackedLimbs) do
+		for limb, _ in self.trackedLimbs do
 			castPoints[(#castPoints) + 1] = limb.Position;
 		end;
 	end;
@@ -2767,13 +2767,13 @@ function _Invisicam()
 		end;
 		self.childAddedConn = char.ChildAdded:Connect(childAdded);
 		self.childRemovedConn = char.ChildRemoved:Connect(childRemoved);
-		for _, child in pairs(self.char:GetChildren()) do
+		for _, child in self.char:GetChildren() do
 			childAdded(child);
 		end;
 	end;
 	function Invisicam:SetMode(newMode)
 		AssertTypes(newMode, "number");
-		for _, modeNum in pairs(MODE) do
+		for _, modeNum in MODE do
 			if modeNum == newMode then
 				self.mode = newMode;
 				self.behaviorFunction = self.behaviors[self.mode];
@@ -2786,7 +2786,7 @@ function _Invisicam()
 		return self.savedHits;
 	end;
 	function Invisicam:Cleanup()
-		for hit, originalFade in pairs(self.savedHits) do
+		for hit, originalFade in self.savedHits do
 			hit.LocalTransparencyModifier = originalFade;
 		end;
 	end;
@@ -2850,7 +2850,7 @@ function _Invisicam()
 				local hitPart = hitParts[i];
 				hitPartCount = hitPartCount + 1;
 				headTorsoRayHitParts[hitPart] = true;
-				for _, child in pairs(hitPart:GetChildren()) do
+				for _, child in hitPart:GetChildren() do
 					if child:IsA("Decal") or child:IsA("Texture") then
 						hitPartCount = hitPartCount + 1;
 						break;
@@ -2870,7 +2870,7 @@ function _Invisicam()
 			if hitPart.Transparency < partTargetTransparency[hitPart] then
 				add(hitPart);
 			end;
-			for _, child in pairs(hitPart:GetChildren()) do
+			for _, child in hitPart:GetChildren() do
 				if child:IsA("Decal") or child:IsA("Texture") then
 					if child.Transparency < partTargetTransparency[hitPart] then
 						partTargetTransparency[child] = partTargetTransparency[hitPart];
@@ -2879,7 +2879,7 @@ function _Invisicam()
 				end;
 			end;
 		end;
-		for hitPart, originalLTM in pairs(self.savedHits) do
+		for hitPart, originalLTM in self.savedHits do
 			if currentHits[hitPart] then
 				hitPart.LocalTransparencyModifier = hitPart.Transparency < 1 and (partTargetTransparency[hitPart] - hitPart.Transparency) / (1 - hitPart.Transparency) or 0;
 			else
@@ -3693,7 +3693,7 @@ function _CameraModule()
 		self.currentComputerCameraMovementMode = nil;
 		self.cameraSubjectChangedConn = nil;
 		self.cameraTypeChangedConn = nil;
-		for _, player in pairs(__lt.cm("Players", "GetPlayers")) do
+		for _, player in __lt.cm("Players", "GetPlayers") do
 			self:OnPlayerAdded(player);
 		end;
 		Players.PlayerAdded:Connect(function(player)
@@ -3716,12 +3716,12 @@ function _CameraModule()
 		__lt.cm("RunService", "BindToRenderStep", "cameraRenderUpdate", Enum.RenderPriority.Camera.Value, function(dt)
 			self:Update(dt);
 		end);
-		for _, propertyName in pairs(PLAYER_CAMERA_PROPERTIES) do
+		for _, propertyName in PLAYER_CAMERA_PROPERTIES do
 			(Players.LocalPlayer:GetPropertyChangedSignal(propertyName)):Connect(function()
 				self:OnLocalPlayerCameraPropertyChanged(propertyName);
 			end);
 		end;
-		for _, propertyName in pairs(USER_GAME_SETTINGS_PROPERTIES) do
+		for _, propertyName in USER_GAME_SETTINGS_PROPERTIES do
 			(UserGameSettings:GetPropertyChangedSignal(propertyName)):Connect(function()
 				self:OnUserGameSettingsPropertyChanged(propertyName);
 			end);
@@ -3794,7 +3794,7 @@ function _CameraModule()
 					self.activeOcclusionModule:CharacterAdded(Players.LocalPlayer.Character, Players.LocalPlayer);
 				end;
 			else
-				for _, player in pairs(__lt.cm("Players", "GetPlayers")) do
+				for _, player in __lt.cm("Players", "GetPlayers") do
 					if player and player.Character then
 						self.activeOcclusionModule:CharacterAdded(player.Character, player);
 					end;
@@ -4920,7 +4920,7 @@ function _ClickToMoveController()
 		};
 		if CurrentIgnoreTag ~= nil then
 			local ignoreParts = __lt.cm("CollectionService", "GetTagged", CurrentIgnoreTag);
-			for _, ignorePart in ipairs(ignoreParts) do
+			for _, ignorePart in ignoreParts do
 				table.insert(CurrentIgnoreList, ignorePart);
 			end;
 			TaggedInstanceAddedConnection = (__lt.cm("CollectionService", "GetInstanceAddedSignal", CurrentIgnoreTag)):Connect(function(ignorePart)
@@ -5282,7 +5282,7 @@ function _ClickToMoveController()
 	end;
 	local function GetEquippedTool(character)
 		if character ~= nil then
-			for _, child in pairs(character:GetChildren()) do
+			for _, child in character:GetChildren() do
 				if child:IsA("Tool") then
 					return child;
 				end;
@@ -5526,7 +5526,7 @@ function _ClickToMoveController()
 				end;
 			end;
 		end);
-		for _, child in pairs(character:GetChildren()) do
+		for _, child in character:GetChildren() do
 			OnCharacterChildAdded(child);
 		end;
 	end;
@@ -5561,7 +5561,7 @@ function _ClickToMoveController()
 				if IsOnMobile then
 					local character = Player.Character;
 					if character then
-						for _, child in pairs(character:GetChildren()) do
+						for _, child in character:GetChildren() do
 							if child:IsA("Tool") then
 								child.ManualActivationOnly = false;
 							end;
@@ -6363,7 +6363,7 @@ function _Gamepad()
 	function Gamepad:GetHighestPriorityGamepad()
 		local connectedGamepads = __lt.cm("UserInputService", "GetConnectedGamepads");
 		local bestGamepad = NONE;
-		for _, gamepad in pairs(connectedGamepads) do
+		for _, gamepad in connectedGamepads do
 			if gamepad.Value < bestGamepad.Value then
 				bestGamepad = gamepad;
 			end;
@@ -7054,21 +7054,21 @@ function _sounds()
 	end;
 	local function shallowCopy(t)
 		local out = {};
-		for k, v in pairs(t) do
+		for k, v in t do
 			out[k] = v;
 		end;
 		return out;
 	end;
 	local function initializeSoundSystem(player, humanoid, rootPart)
 		local sounds = {};
-		for name, props in pairs(SOUND_DATA) do
+		for name, props in SOUND_DATA do
 			local sound = Instance.new("Sound");
 			sound.Name = name;
 			sound.Archivable = false;
 			sound.EmitterSize = 5;
 			sound.MaxDistance = 150;
 			sound.Volume = 0.65;
-			for propName, propValue in pairs(props) do
+			for propName, propValue in props do
 				sound[propName] = propValue;
 			end;
 			sound.Parent = rootPart;
@@ -7076,7 +7076,7 @@ function _sounds()
 		end;
 		local playingLoopedSounds = {};
 		local function stopPlayingLoopedSounds(except)
-			for sound in pairs(shallowCopy(playingLoopedSounds)) do
+			for sound in shallowCopy(playingLoopedSounds) do
 				if sound ~= except then
 					sound.Playing = false;
 					playingLoopedSounds[sound] = nil;
@@ -7182,7 +7182,7 @@ function _sounds()
 			end;
 		end);
 		local steppedConn = RunService.PreSimulation:Connect(function(_, worldDt)
-			for sound in pairs(playingLoopedSounds) do
+			for sound in playingLoopedSounds do
 				local updater = loopedSoundUpdaters[sound];
 				if updater then
 					updater(worldDt, sound, rootPart.Velocity);
@@ -7243,7 +7243,7 @@ function _sounds()
 		player.CharacterAdded:Connect(characterAdded);
 	end;
 	Players.PlayerAdded:Connect(playerAdded);
-	for _, player in ipairs(__lt.cm("Players", "GetPlayers")) do
+	for _, player in __lt.cm("Players", "GetPlayers") do
 		playerAdded(player);
 	end;
 	return SetState;
@@ -7527,7 +7527,7 @@ function _R6()
 		};
 		function configureAnimationSet(name, fileList)
 			if animTable[name] ~= nil then
-				for _, connection in pairs(animTable[name].connections) do
+				for _, connection in animTable[name].connections do
 					connection:disconnect();
 				end;
 			end;
@@ -7544,7 +7544,7 @@ function _R6()
 					configureAnimationSet(name, fileList);
 				end));
 				local idx = 1;
-				for _, childPart in pairs(config:GetChildren()) do
+				for _, childPart in config:GetChildren() do
 					if childPart:IsA("Animation") then
 						table.insert(animTable[name].connections, childPart.Changed:connect(function(property)
 							configureAnimationSet(name, fileList);
@@ -7564,7 +7564,7 @@ function _R6()
 				end;
 			end;
 			if animTable[name].count <= 0 then
-				for idx, anim in pairs(fileList) do
+				for idx, anim in fileList do
 					animTable[name][idx] = {};
 					animTable[name][idx].anim = Instance.new("Animation");
 					animTable[name][idx].anim.Name = name;
@@ -7583,7 +7583,7 @@ function _R6()
 		end;
 		script.ChildAdded:connect(scriptChildModified);
 		script.ChildRemoved:connect(scriptChildModified);
-		for name, fileList in pairs(animNames) do
+		for name, fileList in animNames do
 			configureAnimationSet(name, fileList);
 		end;
 		local toolAnim = "None";
@@ -7752,7 +7752,7 @@ function _R6()
 			end;
 		end;
 		function getTool()
-			for _, kid in ipairs(Figure:GetChildren()) do
+			for _, kid in Figure:GetChildren() do
 				if kid.className == "Tool" then
 					return kid;
 				end;
@@ -7760,7 +7760,7 @@ function _R6()
 			return nil;
 		end;
 		function getToolAnim(tool)
-			for _, c in ipairs(tool:GetChildren()) do
+			for _, c in tool:GetChildren() do
 				if c.Name == "toolanim" and c.className == "StringValue" then
 					return c;
 				end;
@@ -8109,7 +8109,7 @@ function _R15()
 		end;
 		function configureAnimationSet(name, fileList)
 			if animTable[name] ~= nil then
-				for _, connection in pairs(animTable[name].connections) do
+				for _, connection in animTable[name].connections do
 					connection:disconnect();
 				end;
 			end;
@@ -8133,7 +8133,7 @@ function _R15()
 					configureAnimationSet(name, fileList);
 				end));
 				local idx = 0;
-				for _, childPart in pairs(config:GetChildren()) do
+				for _, childPart in config:GetChildren() do
 					if childPart:IsA("Animation") then
 						local newWeight = 1;
 						local weightObject = childPart:FindFirstChild("Weight");
@@ -8159,7 +8159,7 @@ function _R15()
 				end;
 			end;
 			if animTable[name].count <= 0 then
-				for idx, anim in pairs(fileList) do
+				for idx, anim in fileList do
 					animTable[name][idx] = {};
 					animTable[name][idx].anim = Instance.new("Animation");
 					animTable[name][idx].anim.Name = name;
@@ -8170,7 +8170,7 @@ function _R15()
 				end;
 			end;
 			if PreloadAnimsUserFlag then
-				for i, animType in pairs(animTable) do
+				for i, animType in animTable do
 					for idx = 1, animType.count, 1 do
 						if PreloadedAnims[animType[idx].anim.AnimationId] == nil then
 							Humanoid:LoadAnimation(animType[idx].anim);
@@ -8182,7 +8182,7 @@ function _R15()
 		end;
 		function configureAnimationSetOld(name, fileList)
 			if animTable[name] ~= nil then
-				for _, connection in pairs(animTable[name].connections) do
+				for _, connection in animTable[name].connections do
 					connection:disconnect();
 				end;
 			end;
@@ -8206,7 +8206,7 @@ function _R15()
 					configureAnimationSet(name, fileList);
 				end));
 				local idx = 1;
-				for _, childPart in pairs(config:GetChildren()) do
+				for _, childPart in config:GetChildren() do
 					if childPart:IsA("Animation") then
 						table.insert(animTable[name].connections, childPart.Changed:connect(function(property)
 							configureAnimationSet(name, fileList);
@@ -8226,7 +8226,7 @@ function _R15()
 				end;
 			end;
 			if animTable[name].count <= 0 then
-				for idx, anim in pairs(fileList) do
+				for idx, anim in fileList do
 					animTable[name][idx] = {};
 					animTable[name][idx].anim = Instance.new("Animation");
 					animTable[name][idx].anim.Name = name;
@@ -8237,7 +8237,7 @@ function _R15()
 				end;
 			end;
 			if PreloadAnimsUserFlag then
-				for i, animType in pairs(animTable) do
+				for i, animType in animTable do
 					for idx = 1, animType.count, 1 do
 						Humanoid:LoadAnimation(animType[idx].anim);
 					end;
@@ -8252,7 +8252,7 @@ function _R15()
 		end;
 		script.ChildAdded:connect(scriptChildModified);
 		script.ChildRemoved:connect(scriptChildModified);
-		for name, fileList in pairs(animNames) do
+		for name, fileList in animNames do
 			configureAnimationSet(name, fileList);
 		end;
 		local toolAnim = "None";
@@ -8538,7 +8538,7 @@ function _R15()
 			end;
 		end;
 		function getToolAnim(tool)
-			for _, c in ipairs(tool:GetChildren()) do
+			for _, c in tool:GetChildren() do
 				if c.Name == "toolanim" and c.className == "StringValue" then
 					return c;
 				end;

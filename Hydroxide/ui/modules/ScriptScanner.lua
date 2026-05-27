@@ -165,15 +165,15 @@ function Log.new(localScript)
             InfoScript.Label.Size = UDim2.new(0, nameLength, 0, 20)
             InfoScript.Position = UDim2.new(1, -nameLength, 0, 0)
 
-            for i,v in pairs(localScript.Protos) do
+            for i,v in localScript.Protos do
                 createProto(i, v)
             end 
 
-            for i,v in pairs(localScript.Constants) do
+            for i,v in localScript.Constants do
                 createConstant(i, v)
             end
 
-            -- for i,v in pairs(localScript.Environment) do
+            -- for i,v in localScript.Environment do
             --     createEnvironment(i, v)
             -- end
 
@@ -200,7 +200,7 @@ local function addScripts(query)
     scriptList:Clear()
     scriptLogs = {}
 
-    for _instance, localScript in pairs(Methods.Scan(query)) do
+    for _instance, localScript in Methods.Scan(query) do
         Log.new(localScript)
     end
 
@@ -229,7 +229,7 @@ local selectedSection = InfoProtos
 local selectedSectionButton = InfoOptions.Protos
 local animationCache = {}
 
-for _i, sectionButton in pairs(InfoOptions:GetChildren()) do
+for _i, sectionButton in InfoOptions:GetChildren() do
     if sectionButton:IsA("TextButton") then
         local label = sectionButton.Label
         local enterAnimation = TweenService:Create(label, constants.fadeLength, { TextTransparency = 0 })

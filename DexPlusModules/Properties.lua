@@ -375,7 +375,7 @@ local function main()
         if Settings.Properties.LoadstringInput then
             local loadFn = (env and env.loadstring) or loadstring
             if type(loadFn) == "function" then
-                for _, source in ipairs({"return " .. str, str}) do
+                for _, source in {"return " .. str, str} do
                     local okLoad, chunk = pcall(loadFn, source)
                     if okLoad and type(chunk) == "function" then
                         local okExec, result = pcall(chunk)
@@ -665,7 +665,7 @@ local function main()
 
             if showingAttrs and attrCount < maxAttrs then
                 local attrs = getAttributes(obj)
-                for name, val in pairs(attrs) do
+                for name, val in attrs do
                     local typ = typeof(val)
                     if not foundAttrs[name] then
                         local category = (typ == "Instance" and "Class") or (typ == "EnumItem" and "Enum") or "Other"
@@ -779,7 +779,7 @@ local function main()
 
     Properties.MakeSubProp = function(prop, subName, valueType, displayName)
         local subProp = {}
-        for i, v in pairs(prop) do
+        for i, v in prop do
             subProp[i] = v
         end
         subProp.RootType = subProp.RootType or subProp.ValueType
@@ -1633,7 +1633,7 @@ local function main()
                         Properties.DisplayColorEditor(colorProp, editor.SavedColor.Color)
                     else
                         local colProp
-                        for i, v in pairs(API.Classes.BasePart.Properties) do
+                        for i, v in API.Classes.BasePart.Properties do
                             if v.Name == "Color" then
                                 colProp = v
                                 break
@@ -2377,7 +2377,7 @@ local function main()
                             elseif rootTypeName == "Faces" then
                                 local faces = {}
                                 local faceList = {"Back", "Bottom", "Front", "Left", "Right", "Top"}
-                                for _, face in pairs(faceList) do
+                                for _, face in faceList do
                                     local v
                                     if subName == "." .. face then
                                         v = setVal
@@ -2392,7 +2392,7 @@ local function main()
                             elseif rootTypeName == "Axes" then
                                 local axes = {}
                                 local axesList = {"X", "Y", "Z"}
-                                for _, axe in pairs(axesList) do
+                                for _, axe in axesList do
                                     local v
                                     if subName == "." .. axe then
                                         v = setVal

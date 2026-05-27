@@ -213,11 +213,11 @@ if tabs and tabs:FindFirstChild("editor") and tabs.editor:FindFirstChild("conten
 end;
 
 if codexPrivate.scope.hooks and type(codexPrivate.scope.hooks) == "table" then
-	for _, v in pairs(codexPrivate.scope.hooks) do
+	for _, v in codexPrivate.scope.hooks do
 		if typeof(v) == "RBXScriptConnection" then
 			pcall(function() v:Disconnect(); end);
 		elseif type(v) == "table" then
-			for _, c in pairs(v) do
+			for _, c in v do
 				if typeof(c) == "RBXScriptConnection" then
 					pcall(function() c:Disconnect(); end);
 				end;
@@ -318,7 +318,7 @@ local function HookEditorButton(btn)
 	end;
 	apply(btn);
 	hookObj(btn);
-	for _, d in ipairs(btn:GetDescendants()) do
+	for _, d in btn:GetDescendants() do
 		hookObj(d);
 	end;
 	local descConn;
@@ -374,7 +374,7 @@ local function HookTabsFolder(f)
 			apply(o);
 		end;
 	end;
-	for _, o in ipairs(f:GetDescendants()) do
+	for _, o in f:GetDescendants() do
 		apply(o);
 		hookObj(o);
 	end;
@@ -396,7 +396,7 @@ if navbar then
 	if main and main:IsA("Frame") then
 		local container = main:FindFirstChild("container");
 		if container and container:IsA("Frame") then
-			for _, v in ipairs(container:GetChildren()) do
+			for _, v in container:GetChildren() do
 				if v:IsA("TextButton") then
 					task.spawn(ChangeIcon, v);
 				end;
@@ -438,10 +438,10 @@ if navbar then
 end;
 
 if tabs then
-	for _, tab in ipairs(tabs:GetChildren()) do
+	for _, tab in tabs:GetChildren() do
 		local buttons = tab:FindFirstChild("buttons");
 		if buttons and buttons:IsA("Frame") then
-			for _, v in ipairs(buttons:GetChildren()) do
+			for _, v in buttons:GetChildren() do
 				if v:IsA("TextButton") then
 					task.spawn(ChangeIcon, v);
 				end;
@@ -454,13 +454,13 @@ if tabs then
 	if editor and editor:IsA("Frame") then
 		local edButtons = editor:FindFirstChild("buttons");
 		if edButtons and edButtons:IsA("Frame") then
-			for _, v in ipairs(edButtons:GetChildren()) do
+			for _, v in edButtons:GetChildren() do
 				if v:IsA("TextButton") then task.spawn(HookEditorButton, v); end;
 			end;
 		end;
 		local tabButtons = editor:FindFirstChild("tabButtons");
 		if tabButtons and tabButtons:IsA("ScrollingFrame") then
-			for _, v in ipairs(tabButtons:GetChildren()) do
+			for _, v in tabButtons:GetChildren() do
 				if v:IsA("TextButton") then task.spawn(HookEditorButton, v); end;
 			end;
 		end;
@@ -468,7 +468,7 @@ if tabs then
 	if localScripts and localScripts:IsA("Frame") then
 		local tbBtns = localScripts:FindFirstChild("tabButtons");
 		if tbBtns and tbBtns:IsA("ScrollingFrame") then
-			for _, v in ipairs(tbBtns:GetChildren()) do
+			for _, v in tbBtns:GetChildren() do
 				if v:IsA("TextButton") then task.spawn(HookEditorButton, v); end;
 			end;
 		end;
@@ -480,7 +480,7 @@ if tabs then
 	if exploitSettings and exploitSettings:IsA("Frame") then
 		local tbBtns = exploitSettings:FindFirstChild("tabButtons");
 		if tbBtns and tbBtns:IsA("ScrollingFrame") then
-			for _, v in ipairs(tbBtns:GetChildren()) do
+			for _, v in tbBtns:GetChildren() do
 				if v:IsA("TextButton") then task.spawn(HookEditorButton, v); end;
 			end;
 		end;

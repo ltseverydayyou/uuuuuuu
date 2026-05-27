@@ -47,7 +47,7 @@ if game.GameId == 5205364928 then
 	(getgenv()).Char = plrs.LocalPlayer.Character or plrs.LocalPlayer.CharacterAdded:Wait();
 	function GetPlrs()
 		local sorted = {};
-		for _, plr in ipairs(__lt.cm("Players", "GetPlayers")) do
+		for _, plr in __lt.cm("Players", "GetPlayers") do
 			if plr ~= plrs.LocalPlayer then
 				table.insert(sorted, plr);
 			end;
@@ -136,7 +136,7 @@ if game.GameId == 5205364928 then
 	});
 	rs.PreSimulation:Connect(function()
 		if (getgenv()).kill_aura == true then
-			for _, v in ipairs(GetPlrs()) do
+			for _, v in GetPlrs() do
 				local char = (getgenv()).Char;
 				if v.Character and v.Character:FindFirstChildOfClass("Humanoid") and v.Character:FindFirstChild("HumanoidRootPart") then
 					local distance = ((char:FindFirstChild("HumanoidRootPart")).Position - (v.Character:FindFirstChild("HumanoidRootPart")).Position).Magnitude;
@@ -158,7 +158,7 @@ if game.GameId == 5205364928 then
 	rs.PreSimulation:Connect(function()
 		if (getgenv()).plrtween == true then
 			local char = (getgenv()).Char;
-			for _, v in ipairs(GetPlrs()) do
+			for _, v in GetPlrs() do
 				if char and char:FindFirstChild("HumanoidRootPart") and v.Character and v.Character:FindFirstChild("HumanoidRootPart") then
 					local distance = (char.HumanoidRootPart.Position - v.Character.HumanoidRootPart.Position).Magnitude;
 					if distance <= (getgenv()).aura then
@@ -178,7 +178,7 @@ if game.GameId == 5205364928 then
 				if (getgenv()).walkto == true then
 					local char = (getgenv()).Char;
 					local circle;
-					for i, v in pairs(game.Workspace:QueryDescendants("Instance")) do
+					for i, v in game.Workspace:QueryDescendants("Instance") do
 						if v.Name == "Detect" then
 							circle = v;
 						end;
@@ -196,7 +196,7 @@ if game.GameId == 5205364928 then
 		if (getgenv()).tween == true then
 			local char = (getgenv()).Char;
 			local circle;
-			for i, v in pairs(game.Workspace:QueryDescendants("Instance")) do
+			for i, v in game.Workspace:QueryDescendants("Instance") do
 				if v.Name == "Detect" then
 					circle = v;
 				end;
@@ -213,7 +213,7 @@ if game.GameId == 5205364928 then
 		if (getgenv()).tele == true then
 			local char = (getgenv()).Char;
 			local circle;
-			for i, v in pairs(game.Workspace:QueryDescendants("Instance")) do
+			for i, v in game.Workspace:QueryDescendants("Instance") do
 				if v.Name == "Detect" then
 					circle = v;
 				end;

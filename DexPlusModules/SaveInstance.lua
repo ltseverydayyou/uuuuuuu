@@ -133,7 +133,7 @@ local function main()
 
 		local savedOptions = savedState.Options
 		if type(savedOptions) == "table" then
-			for key, value in pairs(savedOptions) do
+			for key, value in savedOptions do
 				if SaveInstanceArgs[key] ~= nil then
 					SaveInstanceArgs[key] = value
 				end
@@ -307,7 +307,7 @@ local function main()
 
 	local function parseSimpleList(text)
 		local result = {}
-		for _, entry in ipairs(string.split(tostring(text or ""), ",")) do
+		for _, entry in string.split(tostring(text or ""), ",") do
 			local clean = tostring(entry):gsub("^%s+", ""):gsub("%s+$", "")
 			if clean ~= "" then
 				table.insert(result, clean)
@@ -318,10 +318,10 @@ local function main()
 
 	cloneOptions = function(options)
 		local cloned = {}
-		for key, value in pairs(options) do
+		for key, value in options do
 			if type(value) == "table" then
 				local copy = {}
-				for subKey, subValue in pairs(value) do
+				for subKey, subValue in value do
 					copy[subKey] = subValue
 				end
 				cloned[key] = copy
@@ -342,7 +342,7 @@ local function main()
 				return nil, "Extra Options JSON is invalid"
 			end
 
-			for key, value in pairs(decoded) do
+			for key, value in decoded do
 				options[key] = value
 			end
 		end

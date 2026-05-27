@@ -392,7 +392,7 @@ function deselection(tab)
 end
 
 function bumpTabs(num)
-	for i, v in pairs(tabsFrame:GetChildren()) do
+	for i, v in tabsFrame:GetChildren() do
 		if v:IsA("TextButton") then
 			v.LayoutOrder = v.LayoutOrder + num
 		end
@@ -400,7 +400,7 @@ function bumpTabs(num)
 end
 
 function createTab(info, key)
-	for i, v in pairs(tabsFrame:GetChildren()) do
+	for i, v in tabsFrame:GetChildren() do
 		deselection(v)
 	end
 	
@@ -422,7 +422,7 @@ function createTab(info, key)
 	tab.Parent = tabsFrame
 	
 	tab.MouseButton1Click:Connect(function()
-		for i, v in pairs(tabsFrame:GetChildren()) do
+		for i, v in tabsFrame:GetChildren() do
 			deselection(v)
 		end
 		
@@ -439,7 +439,7 @@ function createTab(info, key)
 		tab:Destroy()
 		
 		if otherdone == key then
-			for i, v in pairs(sourceFrame:GetChildren()) do
+			for i, v in sourceFrame:GetChildren() do
 				if v.Name == "Line" then
 					v:Destroy()
 				end
@@ -494,7 +494,7 @@ end
 
 function loadSource(source)
 	cSource = source
-	for i, v in pairs(sourceFrame:GetChildren()) do
+	for i, v in sourceFrame:GetChildren() do
 		if v.Name == "Line" then
 			v:Destroy()
 		end
@@ -643,7 +643,7 @@ function createButton(parent, info)
 	
 	button.Clicked.MouseButton1Click:Connect(function()
 		if tabsFrame:FindFirstChild(tostring(key)) then
-			for i, v in pairs(tabsFrame:GetChildren()) do
+			for i, v in tabsFrame:GetChildren() do
 				deselection(v)
 			end
 			selection(tabsFrame[tostring(key)])
@@ -686,7 +686,7 @@ function createButton(parent, info)
 			if not expand then return end
 			
 			if class == "folder" then
-				for i, v in pairs(getScriptsOfParent(obj)) do
+				for i, v in getScriptsOfParent(obj) do
 					createButton(button, {
 						Name = v.Name,
 						Type = v.ClassName,
@@ -694,7 +694,7 @@ function createButton(parent, info)
 					})
 				end
 			elseif class == "table" then
-				for i, v in pairs(value) do
+				for i, v in value do
 					createButton(button, {
 						Name = i,
 						Type = GVT(v),
@@ -704,7 +704,7 @@ function createButton(parent, info)
 			elseif class == "localscript" or class == "modulescript" then
 				pcall(function()
 					local env = getEnv(obj)
-					for i, v in pairs(env) do
+					for i, v in env do
 						createButton(button, {
 							Name = i,
 							Type = GVT(v),
@@ -715,7 +715,7 @@ function createButton(parent, info)
 			elseif class == "function" then
 				pcall(function() --getupvalues
 					local env = (debug.getupvalues and debug.getupvalues(value)) or {ERROR_GETTING_UPVALUES = true}
-					for i, v in pairs(env) do
+					for i, v in env do
 						createButton(button, {
 							Name = i,
 							Type = GVT(v, "upvalue"),
@@ -726,7 +726,7 @@ function createButton(parent, info)
 				end)
 				pcall(function() --getconstants
 					local env = (debug.getconstants and debug.getconstants(value)) or {ERROR_GETTING_CONSTANTS = true}
-					for i, v in pairs(env) do
+					for i, v in env do
 						createButton(button, {
 							Name = tostring(v),
 							Type = GVT(v, "constant"),
@@ -785,7 +785,7 @@ do
 	
 	local function bindToolbar(bar)
 		bar.MouseButton1Down:Connect(function()
-			for i, v in pairs(toolbarFrame:GetChildren()) do
+			for i, v in toolbarFrame:GetChildren() do
 				if v.Name ~= "UIListLayout" then
 					shutToolbar(v)
 				end
@@ -812,14 +812,14 @@ do
 	end)
 	
 	toolbarArea.MouseLeave:Connect(function()
-		for i, v in pairs(toolbarFrame:GetChildren()) do
+		for i, v in toolbarFrame:GetChildren() do
 			if v.Name ~= "UIListLayout" then
 				shutToolbar(v)
 			end
 		end
 	end)
 	
-	for i, v in pairs(toolbarFrame:GetChildren()) do
+	for i, v in toolbarFrame:GetChildren() do
 		if v.Name ~= "UIListLayout" then
 			bindToolbar(v)
 		end
@@ -906,7 +906,7 @@ createButton(scriptList,
 	{Name="Nil", Type="Folder", Obj=nil}
 )
 
-for i, v in pairs(game:GetChildren()) do
+for i, v in game:GetChildren() do
 	pcall(function()
 		if v:FindFirstChildWhichIsA("LocalScript", true) or v:FindFirstChildWhichIsA("ModuleScript", true) then
 			createButton(scriptList,

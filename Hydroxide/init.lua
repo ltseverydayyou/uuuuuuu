@@ -94,7 +94,7 @@ local function fetchAsset(asset)
 end
 
 local function hasMethods(methods)
-    for name in pairs(methods) do
+    for name in methods do
         if not environment[name] then
             return false
         end
@@ -104,7 +104,7 @@ local function hasMethods(methods)
 end
 
 local function useMethods(module)
-    for name, method in pairs(module) do
+    for name, method in module do
         if method then
             environment[name] = method
         end
@@ -213,11 +213,11 @@ environment.oh = {
         }
     },
     Exit = function()
-        for _i, event in pairs(oh.Events) do
+        for _i, event in oh.Events do
             event:Disconnect()
         end
 
-        for original, hook in pairs(oh.Hooks) do
+        for original, hook in oh.Hooks do
             local hookType = type(hook)
             if hookType == "function" then
                 hookFunction(hook, original)
@@ -240,7 +240,7 @@ environment.oh = {
 }
 
 if getConnections then 
-    for __, connection in pairs(getConnections(__betterGetService("ScriptContext").Error)) do
+    for __, connection in getConnections(__betterGetService("ScriptContext").Error) do
 
         local conn = getrawmetatable(connection)
         local old = conn and conn.__index

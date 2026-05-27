@@ -2017,7 +2017,7 @@ do
 				if Library.Window then
 					Sides = Library.Window.Tabs[Library.ActiveTab]:GetSides();
 				end;
-				for _, Side in pairs(Sides) do
+				for _, Side in Sides do
 					if typeof(Side) == "Instance" then
 						if Side:IsA("ScrollingFrame") then
 							Side.ScrollingEnabled = false;
@@ -2044,7 +2044,7 @@ do
 				if Library.IsMobile then
 					Library.CanDrag = true;
 				end;
-				for _, Side in pairs(Sides) do
+				for _, Side in Sides do
 					if typeof(Side) == "Instance" then
 						if Side:IsA("ScrollingFrame") then
 							Side.ScrollingEnabled = true;

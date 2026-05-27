@@ -244,7 +244,7 @@ local function httpTxt(u, hdr)
 			["Accept"] = "*/*",
 		}
 		if type(hdr) == "table" then
-			for k, v in pairs(hdr) do
+			for k, v in hdr do
 				h[k] = v
 			end
 		end
@@ -361,7 +361,7 @@ local NAlib = {}
 function NAlib.disconnect(n)
 	local t = _naConns[n]
 	if t then
-		for _, c in ipairs(t) do
+		for _, c in t do
 			pcall(function()
 				c:Disconnect()
 			end)
@@ -506,7 +506,7 @@ local function isGib(n)
 	return not n:match("^[%w _%-]+$")
 end
 local function getMain()
-	for _, g in ipairs(root:GetChildren()) do
+	for _, g in root:GetChildren() do
 		if g:IsA("ScreenGui") and isGib(g.Name) then
 			if
 				g:FindFirstChild("Executor", true)
@@ -540,7 +540,7 @@ local function fixNet(rootGui)
 		over.ZIndex = net.ZIndex + 1
 		over.Parent = net
 	end
-	for _, name in ipairs({ "Holder", "Information" }) do
+	for _, name in { "Holder", "Information" } do
 		local ch = net:FindFirstChild(name)
 		if ch and ch ~= over and ch.Parent == net and not over:FindFirstChild(name) then
 			ch.Parent = over
@@ -556,7 +556,7 @@ local function getIconGui()
 		local kids = g:GetChildren()
 		local img
 		local cnt = 0
-		for _, c in ipairs(kids) do
+		for _, c in kids do
 			if c:IsA("ImageButton") then
 				cnt += 1
 				img = c
@@ -568,7 +568,7 @@ local function getIconGui()
 			return g, img
 		end
 	end
-	for _, g in ipairs(root:GetChildren()) do
+	for _, g in root:GetChildren() do
 		local ig, ib = chk(g)
 		if ig then
 			return ig, ib
@@ -727,7 +727,7 @@ local function MouseButtonFix(button, clickCallback)
 	end
 	return {
 		Disconnect = function()
-			for _, conn in ipairs(connections) do
+			for _, conn in connections do
 				if conn and conn.Disconnect then
 					conn:Disconnect()
 				end
@@ -1062,7 +1062,7 @@ local function scanIcons()
 		return
 	end
 	local list = {}
-	for _, full in ipairs(items) do
+	for _, full in items do
 		local n = getName(full)
 		if n then
 			list[#list + 1] = { file = n }
@@ -1072,7 +1072,7 @@ local function scanIcons()
 	if type(dIcons.localPath) == "string" and dIcons.localPath ~= "" then
 		local cur = getName(dIcons.localPath)
 		if cur then
-			for i, e in ipairs(list) do
+			for i, e in list do
 				if e.file == cur then
 					dIcons.index = i
 					if updateIconStatusUI then
@@ -1154,7 +1154,7 @@ local function iconHttpGetBinary(url, headers)
 		end
 		local h = {}
 		if type(hdr) == "table" then
-			for k, v in pairs(hdr) do
+			for k, v in hdr do
 				h[k] = v
 			end
 		end
@@ -1215,7 +1215,7 @@ local function iconSaveFromUrl(url)
 	dIcons.localPath = full
 	local list = dIcons.entries
 	local idx
-	for i, e in ipairs(list) do
+	for i, e in list do
 		if e.file == safe then
 			idx = i
 			break
@@ -1378,7 +1378,7 @@ local function removeIconEntry(entry)
 end
 local function removeAllIcons()
 	local list = dIcons.entries or {}
-	for _, e in ipairs(list) do
+	for _, e in list do
 		if e and e.file then
 			delIconFile(e.file)
 		end
@@ -1714,11 +1714,11 @@ task.defer(function()
 			sc.Scale = math.clamp(tonumber(v) or 1, 0.5, 1.65)
 		end)
 		task.defer(function()
-			for _, delayTime in ipairs({ 0, 0.03, 0.1 }) do
+			for _, delayTime in { 0, 0.03, 0.1 } do
 				if delayTime > 0 then
 					task.wait(delayTime)
 				end
-				for sf, refresh in pairs(uiScaleState.refreshers) do
+				for sf, refresh in uiScaleState.refreshers do
 					if sf and sf.Parent and type(refresh) == "function" then
 						pcall(refresh)
 					else
@@ -1781,11 +1781,11 @@ task.defer(function()
 			local canvasPos = sf.CanvasPosition
 			local uiScaleFactor = getUiScaleFactor()
 			if verticalOnly then
-				for _, child in ipairs(sf:GetChildren()) do
+				for _, child in sf:GetChildren() do
 					if child:IsA("GuiObject") and isVisibleInScroll(child) then
 						local relY = ((child.AbsolutePosition.Y - sf.AbsolutePosition.Y) / uiScaleFactor) + canvasPos.Y
 						maxY = math.max(maxY, relY + (child.AbsoluteSize.Y / uiScaleFactor))
-						for _, desc in ipairs(child:GetDescendants()) do
+						for _, desc in child:GetDescendants() do
 							if desc:IsA("GuiObject") and desc.Name == "Dropdown" and isVisibleInScroll(desc) then
 								local dRelY = ((desc.AbsolutePosition.Y - sf.AbsolutePosition.Y) / uiScaleFactor) + canvasPos.Y
 								maxY = math.max(maxY, dRelY + (desc.AbsoluteSize.Y / uiScaleFactor))
@@ -1794,7 +1794,7 @@ task.defer(function()
 					end
 				end
 			else
-				for _, desc in ipairs(sf:GetDescendants()) do
+				for _, desc in sf:GetDescendants() do
 					if desc:IsA("GuiObject") and isVisibleInScroll(desc) then
 						local relX = ((desc.AbsolutePosition.X - sf.AbsolutePosition.X) / uiScaleFactor) + canvasPos.X
 						local relY = ((desc.AbsolutePosition.Y - sf.AbsolutePosition.Y) / uiScaleFactor) + canvasPos.Y
@@ -1809,7 +1809,7 @@ task.defer(function()
 			if not fixRows then
 				return
 			end
-			for _, ch in ipairs(sf:GetChildren()) do
+			for _, ch in sf:GetChildren() do
 				if
 					ch:IsA("GuiObject")
 					and ch.Visible
@@ -1892,7 +1892,7 @@ task.defer(function()
 					return
 				end
 				bindVerticalGui(row)
-				for _, desc in ipairs(row:GetDescendants()) do
+				for _, desc in row:GetDescendants() do
 					if desc:IsA("GuiObject") and desc.Name == "Dropdown" then
 						bindVerticalGui(desc)
 					end
@@ -1915,7 +1915,7 @@ task.defer(function()
 					end)
 				)
 			end
-			for _, child in ipairs(sf:GetChildren()) do
+			for _, child in sf:GetChildren() do
 				bindVerticalRow(child)
 			end
 			upd()
@@ -1980,7 +1980,7 @@ task.defer(function()
 				end)
 			)
 		end
-		for _, desc in ipairs(sf:GetDescendants()) do
+		for _, desc in sf:GetDescendants() do
 			bindGui(desc)
 		end
 		upd()
@@ -2126,7 +2126,7 @@ task.defer(function()
 		end
 	end
 	if settingsHolder then
-		for _, c in ipairs(settingsHolder:GetChildren()) do
+		for _, c in settingsHolder:GetChildren() do
 			if c:IsA("Frame") and c.Name == "Button" then
 				settingTemplate = c
 				break
@@ -2189,7 +2189,7 @@ task.defer(function()
 		if not settingsHolder then
 			return
 		end
-		for _, child in ipairs(settingsHolder:GetChildren()) do
+		for _, child in settingsHolder:GetChildren() do
 			if child:IsA("Frame") then
 				bindHiddenStockDropdownRow(child)
 			end
@@ -2213,7 +2213,7 @@ task.defer(function()
 			f.Name = isCustom and "Section_Customization" or "Section_Delta"
 			f.Parent = settingsHolder
 			f.LayoutOrder = order
-			for _, d in ipairs(f:GetDescendants()) do
+			for _, d in f:GetDescendants() do
 				if d:IsA("LocalScript") then
 					d:Destroy()
 				end
@@ -2738,7 +2738,7 @@ task.defer(function()
 		fr.Parent = settingsHolder
 		fr.Visible = true
 		fr.LayoutOrder = -2
-		for _, d in ipairs(fr:GetDescendants()) do
+		for _, d in fr:GetDescendants() do
 			if d:IsA("LocalScript") then
 				d:Destroy()
 			end
@@ -3213,7 +3213,7 @@ task.defer(function()
 		end
 		opts = type(opts) == "table" and opts or {}
 		local names = {}
-		for _, item in ipairs(enumItems or {}) do
+		for _, item in enumItems or {} do
 			if typeof(item) == "EnumItem" then
 				names[#names + 1] = item.Name
 			elseif type(item) == "string" and item ~= "" then
@@ -3239,7 +3239,7 @@ task.defer(function()
 		card.Visible = true
 		card.Size = UDim2.new(1, 0, 0, baseHeight)
 		card.Position = UDim2.new(0, 0, 0, 0)
-		for _, d in ipairs(card:GetDescendants()) do
+		for _, d in card:GetDescendants() do
 			if d:IsA("LocalScript") then
 				d:Destroy()
 			end
@@ -3400,7 +3400,7 @@ task.defer(function()
 			setExpanded(false)
 		end
 		local function refreshOptions()
-			for name, btn in pairs(optionButtons) do
+			for name, btn in optionButtons do
 				if btn and btn.Parent then
 					btn.TextColor3 = name == selectedName and Color3.fromRGB(255, 255, 255)
 						or Color3.fromRGB(245, 247, 252)
@@ -3425,7 +3425,7 @@ task.defer(function()
 			end
 			refreshOptions()
 		end
-		for idx, name in ipairs(names) do
+		for idx, name in names do
 			local option = Instance.new("TextButton")
 			option.Name = name
 			option.Size = UDim2.new(1, 0, 0, 30)
@@ -3525,7 +3525,7 @@ task.defer(function()
 		frame.Parent = settingsHolder
 		frame.Visible = true
 		frame.LayoutOrder = -2
-		for _, d in ipairs(frame:GetDescendants()) do
+		for _, d in frame:GetDescendants() do
 			if d:IsA("LocalScript") then
 				d:Destroy()
 			end
@@ -3622,7 +3622,7 @@ task.defer(function()
 		frame.Parent = settingsHolder
 		frame.Visible = true
 		frame.LayoutOrder = -2
-		for _, d in ipairs(frame:GetDescendants()) do
+		for _, d in frame:GetDescendants() do
 			if d:IsA("LocalScript") then
 				d:Destroy()
 			end
@@ -3683,7 +3683,7 @@ task.defer(function()
 		frame.Parent = settingsHolder
 		frame.Visible = true
 		frame.LayoutOrder = -2
-		for _, d in ipairs(frame:GetDescendants()) do
+		for _, d in frame:GetDescendants() do
 			if d:IsA("LocalScript") then
 				d:Destroy()
 			end
@@ -3741,7 +3741,7 @@ task.defer(function()
 		frame.Parent = settingsHolder
 		frame.Visible = true
 		frame.LayoutOrder = -2
-		for _, d in ipairs(frame:GetDescendants()) do
+		for _, d in frame:GetDescendants() do
 			if d:IsA("LocalScript") then
 				d:Destroy()
 			end
@@ -3804,7 +3804,7 @@ task.defer(function()
 		frame.Parent = settingsHolder
 		frame.Visible = true
 		frame.LayoutOrder = -2
-		for _, d in ipairs(frame:GetDescendants()) do
+		for _, d in frame:GetDescendants() do
 			if d:IsA("LocalScript") then
 				d:Destroy()
 			end
@@ -3863,7 +3863,7 @@ task.defer(function()
 		frame.Parent = settingsHolder
 		frame.Visible = true
 		frame.LayoutOrder = -2
-		for _, d in ipairs(frame:GetDescendants()) do
+		for _, d in frame:GetDescendants() do
 			if d:IsA("LocalScript") then
 				d:Destroy()
 			end
@@ -3924,7 +3924,7 @@ task.defer(function()
 		frame.Parent = settingsHolder
 		frame.Visible = true
 		frame.LayoutOrder = -2
-		for _, d in ipairs(frame:GetDescendants()) do
+		for _, d in frame:GetDescendants() do
 			if d:IsA("LocalScript") then
 				d:Destroy()
 			end
@@ -3987,7 +3987,7 @@ task.defer(function()
 		frame.Parent = settingsHolder
 		frame.Visible = true
 		frame.LayoutOrder = -2
-		for _, d in ipairs(frame:GetDescendants()) do
+		for _, d in frame:GetDescendants() do
 			if d:IsA("LocalScript") then
 				d:Destroy()
 			end
@@ -4122,7 +4122,7 @@ task.defer(function()
 		frame.Parent = settingsHolder
 		frame.Visible = true
 		frame.LayoutOrder = -2
-		for _, d in ipairs(frame:GetDescendants()) do
+		for _, d in frame:GetDescendants() do
 			if d:IsA("LocalScript") then
 				d:Destroy()
 			end
@@ -4326,7 +4326,7 @@ task.defer(function()
 			normalizeSidebarGeometry()
 		end
 		if mainGui then
-			for _, n in ipairs(sectionsList) do
+			for _, n in sectionsList do
 				local fr = mainGui:FindFirstChild(n)
 				if fr and fr:IsA("GuiObject") then
 					fr.Visible = false
@@ -4363,7 +4363,7 @@ task.defer(function()
 		normalizeSidebarGeometry()
 		setIconForcedHidden(true)
 		if mainGui and sidebarCurrentSection then
-			for _, n in ipairs(sectionsList) do
+			for _, n in sectionsList do
 				local fr = mainGui:FindFirstChild(n)
 				if fr and fr:IsA("GuiObject") then
 					fr.Visible = n == sidebarCurrentSection
@@ -4458,7 +4458,7 @@ task.defer(function()
 		frame.Parent = settingsHolder
 		frame.Visible = true
 		frame.LayoutOrder = -2
-		for _, d in ipairs(frame:GetDescendants()) do
+		for _, d in frame:GetDescendants() do
 			if d:IsA("LocalScript") then
 				d:Destroy()
 			end
@@ -4517,7 +4517,7 @@ task.defer(function()
 		frame.Parent = settingsHolder
 		frame.Visible = true
 		frame.LayoutOrder = -2
-		for _, d in ipairs(frame:GetDescendants()) do
+		for _, d in frame:GetDescendants() do
 			if d:IsA("LocalScript") then
 				d:Destroy()
 			end
@@ -4573,7 +4573,7 @@ task.defer(function()
 		frame.Parent = settingsHolder
 		frame.Visible = true
 		frame.LayoutOrder = -2
-		for _, d in ipairs(frame:GetDescendants()) do
+		for _, d in frame:GetDescendants() do
 			if d:IsA("LocalScript") then
 				d:Destroy()
 			end
@@ -4629,7 +4629,7 @@ task.defer(function()
 			return nil
 		end
 		local cur
-		for _, name in ipairs(sectionsList) do
+		for _, name in sectionsList do
 			local fr = mainGui:FindFirstChild(name)
 			if fr and fr:IsA("GuiObject") and fr.Visible then
 				cur = name
@@ -4646,7 +4646,7 @@ task.defer(function()
 		if current then
 			sidebarCurrentSection = current
 		end
-		for _, name in ipairs(sectionsList) do
+		for _, name in sectionsList do
 			local fr = mainGui:FindFirstChild(name)
 			if fr and fr:IsA("GuiObject") then
 				NAlib.connect(
@@ -4815,7 +4815,7 @@ task.defer(function()
 					end
 					setIconForcedHidden(true)
 					if mainGui and sidebarCurrentSection then
-						for _, n in ipairs(sectionsList) do
+						for _, n in sectionsList do
 							local fr = mainGui:FindFirstChild(n)
 							if fr and fr:IsA("GuiObject") then
 								fr.Visible = n == sidebarCurrentSection
@@ -4827,7 +4827,7 @@ task.defer(function()
 						if curSec then
 							sidebarCurrentSection = curSec
 						end
-						for _, n in ipairs(sectionsList) do
+						for _, n in sectionsList do
 							local fr = mainGui:FindFirstChild(n)
 							if fr and fr:IsA("GuiObject") then
 								fr.Visible = false
@@ -5076,7 +5076,7 @@ task.defer(function()
 			newCard.Parent = parent
 			newCard.Name = "Script"
 			local labs = {}
-			for _, d in ipairs(newCard:GetDescendants()) do
+			for _, d in newCard:GetDescendants() do
 				if d:IsA("TextLabel") then
 					table.insert(labs, d)
 				end
@@ -5100,7 +5100,7 @@ task.defer(function()
 				end
 			end
 			local clickable = nil
-			for _, d in ipairs(newCard:GetDescendants()) do
+			for _, d in newCard:GetDescendants() do
 				if d:IsA("LocalScript") then
 					d:Destroy()
 				elseif d:IsA("TextButton") then
@@ -5192,7 +5192,7 @@ task.defer(function()
 	local btns = overlay:FindFirstChild("Buttons", true)
 	if btns then
 		local bl = {}
-		for _, v in ipairs(btns:GetChildren()) do
+		for _, v in btns:GetChildren() do
 			if v:IsA("ImageButton") or v:IsA("TextButton") then
 				table.insert(bl, v)
 			end
@@ -5210,7 +5210,7 @@ task.defer(function()
 			local cnt = #bl
 			if cnt > 0 then
 				local w = cnt == 4 and 0.22 or (1 / cnt)
-				for _, b in ipairs(bl) do
+				for _, b in bl do
 					b.Size = UDim2.new(w, 0, 1, 0)
 				end
 			end
@@ -5219,7 +5219,7 @@ task.defer(function()
 					return
 				end
 				local cur
-				for _, tb in ipairs(codeSf:GetDescendants()) do
+				for _, tb in codeSf:GetDescendants() do
 					if tb:IsA("TextBox") and tb.Visible then
 						cur = tb
 						break
@@ -5266,7 +5266,7 @@ task.defer(function()
 	end
 	local function getCodeBoxes()
 		local t = {}
-		for _, c in ipairs(codeSf:GetDescendants()) do
+		for _, c in codeSf:GetDescendants() do
 			if c:IsA("TextBox") and isScriptName(c.Name) then
 				table.insert(t, c)
 			end
@@ -5278,7 +5278,7 @@ task.defer(function()
 	end
 	local function getSavedNames()
 		local list = {}
-		for _, p in ipairs(listfiles(tabsDir)) do
+		for _, p in listfiles(tabsDir) do
 			local nm = p:match("([^/\\]+)$")
 			if nm and isScriptName(nm) then
 				table.insert(list, nm)
@@ -5352,7 +5352,7 @@ task.defer(function()
 			setupForName(box.Name)
 		end)
 	end
-	for _, b in ipairs(boxes) do
+	for _, b in boxes do
 		hookBox(b)
 	end
 	codeSf.DescendantAdded:Connect(function(obj)
@@ -5409,7 +5409,7 @@ if type(__lt.deltaPatchState.visualEnv) == "table" and not __lt.deltaPatchState.
 			return not n:match("^[%w _%-]+$")
 		end
 		local function getMain()
-			for _, g in ipairs(root:GetChildren()) do
+			for _, g in root:GetChildren() do
 				if g:IsA("ScreenGui") and isGib(g.Name) then
 					if
 						g:FindFirstChild("Executor", true)
@@ -5528,7 +5528,7 @@ if type(__lt.deltaPatchState.visualEnv) == "table" and not __lt.deltaPatchState.
 			if not mainGui then
 				return
 			end
-			for _, o in ipairs(mainGui:GetDescendants()) do
+			for _, o in mainGui:GetDescendants() do
 				if o:IsA("UICorner") then
 					local p = o.Parent
 					if p and p:IsA("GuiObject") and not skip[p.Name] then
@@ -5616,7 +5616,7 @@ if type(__lt.deltaPatchState.visualEnv) == "table" and not __lt.deltaPatchState.
 		local function apRad()
 			capUi()
 			local v = math.floor(math.clamp(radVal.Value, 0, 18) + 0.5)
-			for o, b in pairs(base.cor) do
+			for o, b in base.cor do
 				if o and o.Parent then
 					pcall(function()
 						o.CornerRadius = UDim.new(b.Scale, math.max(b.Offset, v))
@@ -5627,7 +5627,7 @@ if type(__lt.deltaPatchState.visualEnv) == "table" and not __lt.deltaPatchState.
 		local function apPan()
 			capUi()
 			local a = math.clamp(panVal.Value, 0, 0.35)
-			for o, b in pairs(base.pan) do
+			for o, b in base.pan do
 				if o and o.Parent then
 					pcall(function()
 						o[b[1]] = math.clamp(b[2] + a, 0, 1)
@@ -5638,7 +5638,7 @@ if type(__lt.deltaPatchState.visualEnv) == "table" and not __lt.deltaPatchState.
 		local function apStk()
 			capUi()
 			local m = math.clamp(stkVal.Value, 0, 2.5)
-			for o, b in pairs(base.str) do
+			for o, b in base.str do
 				if o and o.Parent then
 					pcall(function()
 						o.Thickness = b * m
@@ -5647,7 +5647,7 @@ if type(__lt.deltaPatchState.visualEnv) == "table" and not __lt.deltaPatchState.
 			end
 		end
 		local function uiOpen()
-			for _, n in ipairs(sectionsList) do
+			for _, n in sectionsList do
 				local fr = mainGui:FindFirstChild(n)
 				if fr and fr:IsA("GuiObject") and fr.Visible then
 					return true
@@ -5683,7 +5683,7 @@ if type(__lt.deltaPatchState.visualEnv) == "table" and not __lt.deltaPatchState.
 			fxSync()
 			saveCfg("UiDim", { value = math.clamp(dimVal.Value, 0, 0.65) })
 		end)
-		for _, n in ipairs(sectionsList) do
+		for _, n in sectionsList do
 			local fr = mainGui:FindFirstChild(n)
 			if fr and fr.GetPropertyChangedSignal then
 				fr:GetPropertyChangedSignal("Visible"):Connect(function()
@@ -5695,7 +5695,7 @@ if type(__lt.deltaPatchState.visualEnv) == "table" and not __lt.deltaPatchState.
 		local holder = settings and settings:FindFirstChild("Holder")
 		local template
 		if holder then
-			for _, c in ipairs(holder:GetChildren()) do
+			for _, c in holder:GetChildren() do
 				if c:IsA("Frame") and c.Name == "Button" then
 					template = c
 					break
@@ -5944,7 +5944,7 @@ local function con(c)
 end
 
 local function disc()
-	for _, c in ipairs(st.con) do
+	for _, c in st.con do
 		pcall(function()
 			c:Disconnect()
 		end)
@@ -5970,7 +5970,7 @@ local function stop()
 			st.pg.sh.LT_ScriptHub:Destroy()
 		end)
 	end
-	for o, v in pairs(st.muted) do
+	for o, v in st.muted do
 		if o and o.Parent then
 			pcall(function()
 				o.Visible = v
@@ -6000,7 +6000,7 @@ local function isg(s)
 end
 
 local function getMain()
-	for _, g in ipairs(root:GetChildren()) do
+	for _, g in root:GetChildren() do
 		if g:IsA("ScreenGui") and isg(g.Name) then
 			if
 				g:FindFirstChild("Executor", true)
@@ -6096,7 +6096,7 @@ local function openMusic()
 		return
 	end
 	musicState.activeTab = "Music"
-	for _, n in ipairs(sec) do
+	for _, n in sec do
 		local p = gui:FindFirstChild(n)
 		if p and p:IsA("GuiObject") and p ~= musicState.frame then
 			p.Visible = false
@@ -6133,7 +6133,7 @@ local function hideAll(exn)
 	end
 	musicState.activeTab = exn
 	closeMusic(true)
-	for _, n in ipairs(sec) do
+	for _, n in sec do
 		local p = gui:FindFirstChild(n)
 		if p and p:IsA("GuiObject") and n ~= "Music" then
 			p.Visible = n == exn
@@ -6145,7 +6145,7 @@ local function hideAll(exn)
 end
 
 local function txtOf(o)
-	for _, d in ipairs(o:GetDescendants()) do
+	for _, d in o:GetDescendants() do
 		if d:IsA("TextLabel") or d:IsA("TextButton") then
 			return d
 		end
@@ -6153,7 +6153,7 @@ local function txtOf(o)
 end
 
 local function gbtn(nm)
-	for _, d in ipairs(sb:GetDescendants()) do
+	for _, d in sb:GetDescendants() do
 		if d:IsA("GuiButton") and d.Name == nm then
 			return d
 		end
@@ -6245,7 +6245,7 @@ local function applyBtnState(btn, on)
 end
 
 local function visibleTab()
-	for _, n in ipairs(sec) do
+	for _, n in sec do
 		local p = gui:FindFirstChild(n)
 		if p and p:IsA("GuiObject") and p.Visible then
 			return n
@@ -6263,7 +6263,7 @@ function syncTabColors(forceTab)
 		Console = sidebarRefs.console,
 		Music = musicState.button,
 	}
-	for n, b in pairs(map) do
+	for n, b in map do
 		applyBtnState(b, curTab == n)
 	end
 end
@@ -6300,7 +6300,7 @@ end
 
 local function muteSh()
 	st.muted = {}
-	for _, d in ipairs(sh:GetDescendants()) do
+	for _, d in sh:GetDescendants() do
 		muteObj(d)
 	end
 end
@@ -6322,10 +6322,10 @@ local col = {
 
 local function mk(class, props, kids)
 	local o = Instance.new(class)
-	for k, v in pairs(props or {}) do
+	for k, v in props or {} do
 		o[k] = v
 	end
-	for _, c in ipairs(kids or {}) do
+	for _, c in kids or {} do
 		c.Parent = o
 	end
 	return o
@@ -6407,7 +6407,7 @@ local function clearImageCache()
 	if not okList or type(files) ~= "table" then
 		return false
 	end
-	for _, path in ipairs(files) do
+	for _, path in files do
 		if type(path) == "string" and path ~= "" then
 			pcall(delfile, path)
 		end
@@ -6521,7 +6521,7 @@ local function scanMusicFiles()
 	if not okList or type(files) ~= "table" then
 		return list
 	end
-	for _, path in ipairs(files) do
+	for _, path in files do
 		if type(path) == "string" then
 			local ext = getAudioExt(path)
 			if ext then
@@ -6687,7 +6687,7 @@ local function makeMusicFolderDropdown(par, y, z, onPick, onToggle)
 	end
 
 	local function rebuild()
-		for _, child in ipairs(menuList:GetChildren()) do
+		for _, child in menuList:GetChildren() do
 			if not child:IsA("UIListLayout") and not child:IsA("UIPadding") then
 				child:Destroy()
 			end
@@ -6707,7 +6707,7 @@ local function makeMusicFolderDropdown(par, y, z, onPick, onToggle)
 				ZIndex = z + 5,
 			})
 		else
-			for i, item in ipairs(items) do
+			for i, item in items do
 				local row = mk("TextButton", {
 					Name = "Track_" .. i,
 					BackgroundColor3 = Color3.fromRGB(43, 47, 58),
@@ -6789,7 +6789,7 @@ local function findLocalMusicEntry(query)
 		return nil
 	end
 	local lower = query:lower()
-	for _, item in ipairs(scanMusicFiles()) do
+	for _, item in scanMusicFiles() do
 		local nm = (item.name or ""):lower()
 		local base = nm:gsub("%.[^%.]+$", "")
 		if lower == nm or lower == base then
@@ -6889,7 +6889,7 @@ function httpGetBinary(url, headers)
 		end
 		local h = {}
 		if type(hdr) == "table" then
-			for k, v in pairs(hdr) do
+			for k, v in hdr do
 				h[k] = v
 			end
 		end
@@ -6963,7 +6963,7 @@ local function resolveScriptBloxImage(d)
 		return nil
 	end
 	local function pick(vals)
-		for _, v in ipairs(vals) do
+		for _, v in vals do
 			local n = normalizeImageUrl(v, SCRIPTBLOX_BASE)
 			if n and isMeaningfulImageUrl(n) then
 				return n
@@ -6989,7 +6989,7 @@ local function resolveRScriptsImage(d)
 		return nil
 	end
 	local function pick(vals)
-		for _, v in ipairs(vals) do
+		for _, v in vals do
 			local n = normalizeImageUrl(v, RSCRIPTS_BASE)
 			if n then
 				return n
@@ -7292,7 +7292,7 @@ local function pass(d)
 end
 
 local function shClr()
-	for _, c in ipairs(list:GetChildren()) do
+	for _, c in list:GetChildren() do
 		if c:IsA("GuiObject") then
 			c:Destroy()
 		end
@@ -7622,7 +7622,7 @@ local function ren()
 	local n = 0
 	local row
 	local coln = 0
-	for _, d in ipairs(data) do
+	for _, d in data do
 		if pass(d) then
 			if not row or coln >= 3 then
 				row = mkRow()
@@ -7815,7 +7815,7 @@ local function buildMusicTab()
 			musicState.frame.Size = sh.Size
 			musicState.frame.ZIndex = sh.ZIndex
 		end)
-		for _, d in ipairs(musicState.frame:GetDescendants()) do
+		for _, d in musicState.frame:GetDescendants() do
 			if d:IsA("LocalScript") then
 				d:Destroy()
 			elseif d:IsA("GuiObject") and d ~= musicState.frame then
@@ -8418,7 +8418,7 @@ local function buildMusicTab()
 		end
 		local currentLower = currentRaw:lower()
 		local currentIndex
-		for i, item in ipairs(items) do
+		for i, item in items do
 			local nm = (item.name or ""):lower()
 			local base = nm:gsub("%.[^%.]+$", "")
 			if currentLower == nm or currentLower == base then
@@ -8841,7 +8841,7 @@ musicState.setupSidebar = function()
 		pcall(function()
 			if sidebarRefs.toggle and sidebarRefs.toggle:IsA("GuiButton") then
 				local to = sidebarRefs.toggle.LayoutOrder or 999
-				for _, d in ipairs(sb:GetChildren()) do
+				for _, d in sb:GetChildren() do
 					if d:IsA("GuiButton") and d ~= musicState.button and d.LayoutOrder and d.LayoutOrder >= to then
 						d.LayoutOrder += 1
 					end
@@ -8849,7 +8849,7 @@ musicState.setupSidebar = function()
 				musicState.button.LayoutOrder = to
 			else
 				local lo = 0
-				for _, d in ipairs(sb:GetChildren()) do
+				for _, d in sb:GetChildren() do
 					if d:IsA("GuiButton") and d ~= musicState.button then
 						lo = math.max(lo, d.LayoutOrder or 0)
 					end
@@ -8898,7 +8898,7 @@ musicState.setupSidebar = function()
 			local above
 			local ay = -math.huge
 			local ty = op.Y.Scale + op.Y.Offset / 100000
-			for _, d in ipairs(sidebarRefs.toggle.Parent:GetChildren()) do
+			for _, d in sidebarRefs.toggle.Parent:GetChildren() do
 				if d:IsA("GuiButton") and d ~= sidebarRefs.toggle and d ~= musicState.button then
 					local py = d.Position.Y.Scale + d.Position.Y.Offset / 100000
 					if py < ty and py > ay then
@@ -8950,7 +8950,7 @@ musicState.setupSidebar = function()
 		end))
 	end
 
-	for _, n in ipairs(sec) do
+	for _, n in sec do
 		local p = gui:FindFirstChild(n)
 		if p and p:IsA("GuiObject") and p.GetPropertyChangedSignal then
 			con(p:GetPropertyChangedSignal("Visible"):Connect(function()
@@ -9015,7 +9015,7 @@ st.fn.setupHubMusic();
 		end
 
 		local function getMain()
-			for _, g in ipairs(root:GetChildren()) do
+			for _, g in root:GetChildren() do
 				if g:IsA("ScreenGui") and isGib(g.Name) then
 					if
 						g:FindFirstChild("Executor", true)
@@ -9078,7 +9078,7 @@ st.fn.setupHubMusic();
 			if base.got then
 				return
 			end
-			for _, o in ipairs(mainGui:GetDescendants()) do
+			for _, o in mainGui:GetDescendants() do
 				if
 					o:IsA("Frame")
 					or o:IsA("ImageButton")
@@ -9286,22 +9286,22 @@ st.fn.setupHubMusic();
 		end
 
 		local function restoreAll()
-			for o, c in pairs(base.bg) do
+			for o, c in base.bg do
 				if o and o.Parent then
 					setBg(o, c)
 				end
 			end
-			for o, c in pairs(base.txt) do
+			for o, c in base.txt do
 				if o and o.Parent then
 					setTxt(o, c)
 				end
 			end
-			for o, c in pairs(base.st) do
+			for o, c in base.st do
 				if o and o.Parent then
 					setStroke(o, c)
 				end
 			end
-			for o, c in pairs(base.img) do
+			for o, c in base.img do
 				if o and o.Parent then
 					setImg(o, c)
 				end
@@ -9309,22 +9309,22 @@ st.fn.setupHubMusic();
 		end
 
 		local function restoreExec()
-			for o, c in pairs(base.bg) do
+			for o, c in base.bg do
 				if inExec(o) then
 					setBg(o, c)
 				end
 			end
-			for o, c in pairs(base.txt) do
+			for o, c in base.txt do
 				if inExec(o) then
 					setTxt(o, c)
 				end
 			end
-			for o, c in pairs(base.st) do
+			for o, c in base.st do
 				if inExec(o) then
 					setStroke(o, c)
 				end
 			end
-			for o, c in pairs(base.img) do
+			for o, c in base.img do
 				if inExec(o) then
 					setImg(o, c)
 				end
@@ -9335,7 +9335,7 @@ st.fn.setupHubMusic();
 			if not rootObj then
 				return
 			end
-			for _, d in ipairs(rootObj:GetDescendants()) do
+			for _, d in rootObj:GetDescendants() do
 				fn(d)
 			end
 		end
@@ -9375,7 +9375,7 @@ st.fn.setupHubMusic();
 			if not rootObj then
 				return
 			end
-			for _, d in ipairs(rootObj:GetDescendants()) do
+			for _, d in rootObj:GetDescendants() do
 				if d:IsA("TextLabel") and d.Name == nm then
 					return d
 				end
@@ -9409,7 +9409,7 @@ st.fn.setupHubMusic();
 			local menu = over and over:FindFirstChild("Menu", true)
 			local dd = menu and menu:FindFirstChild("Dropdown", true)
 			local map = { Option1 = "Default", Option2 = "Light", Option3 = "Amoled" }
-			for key, nm in pairs(map) do
+			for key, nm in map do
 				local opt = dd and dd:FindFirstChild(key)
 				local chk = opt and opt:FindFirstChild("Checked", true)
 				if chk and chk:IsA("GuiObject") then
@@ -9520,7 +9520,7 @@ st.fn.setupHubMusic();
 			end
 			if dd then
 				setBg(dd, p.drop)
-				for _, ch in ipairs(dd:GetChildren()) do
+				for _, ch in dd:GetChildren() do
 					if ch:IsA("Frame") and ch.Name == "Divider" then
 						setBg(ch, p.div)
 					elseif ch:IsA("ImageButton") and ch.Name:match("^Option%d+$") then
@@ -9607,7 +9607,7 @@ st.fn.setupHubMusic();
 			if name:lower() == "default" then
 				restoreAll()
 			elseif name:lower() == "light" then
-				for o, c in pairs(base.bg) do
+				for o, c in base.bg do
 					if o and o.Parent and not inExec(o) then
 						pcall(function()
 							if isCustomSettingPart(o) then
@@ -9618,7 +9618,7 @@ st.fn.setupHubMusic();
 						end)
 					end
 				end
-				for o, c in pairs(base.txt) do
+				for o, c in base.txt do
 					if o and o.Parent and not inExec(o) then
 						pcall(function()
 							if isCustomSettingPart(o) then
@@ -9629,7 +9629,7 @@ st.fn.setupHubMusic();
 						end)
 					end
 				end
-				for o, c in pairs(base.st) do
+				for o, c in base.st do
 					if o and o.Parent and not inExec(o) then
 						pcall(function()
 							if isCustomSettingPart(o) then
@@ -9640,7 +9640,7 @@ st.fn.setupHubMusic();
 						end)
 					end
 				end
-				for _, o in ipairs(mainGui:GetDescendants()) do
+				for _, o in mainGui:GetDescendants() do
 					if (o:IsA("ImageLabel") or o:IsA("ImageButton")) and o.Parent and not inExec(o) then
 						local c = base.img[o] or o.ImageColor3
 						pcall(function()
@@ -9653,7 +9653,7 @@ st.fn.setupHubMusic();
 					end
 				end
 			elseif name:lower() == "amoled" then
-				for o, c in pairs(base.bg) do
+				for o, c in base.bg do
 					if o and o.Parent and not inExec(o) then
 						pcall(function()
 							if isCustomSettingPart(o) then
@@ -9664,7 +9664,7 @@ st.fn.setupHubMusic();
 						end)
 					end
 				end
-				for o, c in pairs(base.txt) do
+				for o, c in base.txt do
 					if o and o.Parent and not inExec(o) then
 						pcall(function()
 							if isCustomSettingPart(o) then
@@ -9675,7 +9675,7 @@ st.fn.setupHubMusic();
 						end)
 					end
 				end
-				for o, c in pairs(base.st) do
+				for o, c in base.st do
 					if o and o.Parent and not inExec(o) then
 						pcall(function()
 							if isCustomSettingPart(o) then
@@ -9686,7 +9686,7 @@ st.fn.setupHubMusic();
 						end)
 					end
 				end
-				for _, o in ipairs(mainGui:GetDescendants()) do
+				for _, o in mainGui:GetDescendants() do
 					if (o:IsA("ImageLabel") or o:IsA("ImageButton")) and o.Parent and not inExec(o) then
 						local c = base.img[o] or o.ImageColor3
 						pcall(function()
@@ -9719,10 +9719,10 @@ st.fn.setupHubMusic();
 				return
 			end
 			local out = {}
-			for _, o in ipairs(dd:GetChildren()) do
+			for _, o in dd:GetChildren() do
 				if o:IsA("ImageButton") and o.Name:match("^Option%d+$") then
 					local txt = ""
-					for _, d in ipairs(o:GetDescendants()) do
+					for _, d in o:GetDescendants() do
 						if d:IsA("TextLabel") and trim(d.Text or "") ~= "" then
 							txt = trim(d.Text)
 							break
@@ -9744,7 +9744,7 @@ st.fn.setupHubMusic();
 			local menu = over and over:FindFirstChild("Menu", true)
 			local dd = menu and menu:FindFirstChild("Dropdown", true)
 			local map = { Option1 = "Default", Option2 = "Light", Option3 = "Amoled" }
-			for key, name in pairs(map) do
+			for key, name in map do
 				local opt = dd and dd:FindFirstChild(key)
 				local chk = opt and opt:FindFirstChild("Checked", true)
 				if chk and chk:IsA("GuiObject") and chk.Visible then
@@ -9769,7 +9769,7 @@ st.fn.setupHubMusic();
 				applyTheme(name)
 			end)
 		end
-		for _, v in ipairs(opts) do
+		for _, v in opts do
 			bindOpt(v.btn, v.name)
 		end
 
@@ -9787,7 +9787,7 @@ st.fn.setupHubMusic();
 					local p = o.Parent
 					if p and p.Name == "Dropdown" and p:FindFirstAncestor("Menu") then
 						local txt = ""
-						for _, d in ipairs(o:GetDescendants()) do
+						for _, d in o:GetDescendants() do
 							if d:IsA("TextLabel") and trim(d.Text or "") ~= "" then
 								txt = trim(d.Text)
 								break

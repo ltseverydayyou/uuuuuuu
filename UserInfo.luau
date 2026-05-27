@@ -193,7 +193,7 @@ local function setZi(obj, zi)
 	pcall(function()
 		obj.ZIndex = zi
 	end)
-	for _, ch in ipairs(obj:GetDescendants()) do
+	for _, ch in obj:GetDescendants() do
 		pcall(function()
 			ch.ZIndex = zi
 		end)
@@ -217,7 +217,7 @@ end
 
 local function tween(o, info, goal)
 	if not cfg.anim then
-		for k, v in pairs(goal) do
+		for k, v in goal do
 			o[k] = v
 		end
 		return nil
@@ -469,7 +469,7 @@ local selected
 local lastQ = ""
 
 local function clearWorld(w)
-	for _, v in ipairs(w:GetChildren()) do
+	for _, v in w:GetChildren() do
 		v:Destroy()
 	end
 end
@@ -512,7 +512,7 @@ local function jreq(m, u, b, tries)
 	end
 	local body = b and Hs:JSONEncode(b) or nil
 	for _ = 1, tries or 3 do
-		for _, apiUrl in ipairs(robloxApiUrls(u)) do
+		for _, apiUrl in robloxApiUrls(u) do
 			local ok, r = pcall(function()
 				return req({
 					Url = apiUrl,
@@ -595,7 +595,7 @@ local function buildDesc(av)
 		HatAccessory = {}
 	}
 	if av and av.assets then
-		for _, a in ipairs(av.assets) do
+		for _, a in av.assets do
 			local t = a.assetType and (a.assetType.name or a.assetType.id) or ""
 			local p = mapProp(t)
 			if p:find("Animation") then
@@ -607,7 +607,7 @@ local function buildDesc(av)
 			end
 		end
 	end
-	for k, v in pairs(acc) do
+	for k, v in acc do
 		if #v > 0 then
 			setProp(d, k, table.concat(v, ","))
 		end
@@ -666,7 +666,7 @@ local clothes = {
 local function applyTry()
 	local hum, ch = getHum()
 	local d = baseDesc:Clone()
-	for id, prop in pairs(tryMap) do
+	for id, prop in tryMap do
 		local n = tonumber(id)
 		if clothes[prop] or prop == "Face" or prop == "Head" or prop == "Torso" or prop == "LeftArm" or prop == "RightArm" or prop == "LeftLeg" or prop == "RightLeg" then
 			d[prop] = n
@@ -677,10 +677,10 @@ local function applyTry()
 			d[prop] = cur == "" and tostring(n) or (cur .. "," .. n)
 		end
 	end
-	for _, prop in pairs(tryMap) do
+	for _, prop in tryMap do
 		local cls = clothes[prop]
 		if cls then
-			for _, inst in ipairs(ch:GetChildren()) do
+			for _, inst in ch:GetChildren() do
 				if inst.ClassName == cls then
 					inst:Destroy()
 				end
@@ -951,7 +951,7 @@ local function setHead(uid, ban, tok, av)
 end
 
 local function clearInfo()
-	for _, ch in ipairs(info:GetChildren()) do
+	for _, ch in info:GetChildren() do
 		if ch:IsA("Frame") then
 			ch:Destroy()
 		end
@@ -959,7 +959,7 @@ local function clearInfo()
 end
 
 local function clearRes()
-	for _, ch in ipairs(res:GetChildren()) do
+	for _, ch in res:GetChildren() do
 		if ch:IsA("Frame") then
 			ch:Destroy()
 		end
@@ -1102,7 +1102,7 @@ local function addRow(u, prof0, tok)
 					local seen, arr = {}, {}
 					local function push(hx)
 						if hx and hx.data then
-							for _, it in ipairs(hx.data) do
+							for _, it in hx.data do
 								local n = it.name or it.username
 								if n and not seen[n] then
 									seen[n] = true
@@ -1142,7 +1142,7 @@ local function addRow(u, prof0, tok)
 					local _, ah = mkSec("Avatar")
 					kv(ah, "Avatar Type", curAv.playerAvatarType or "")
 					local _, sh = mkSec("Body Scales")
-					for _, k in ipairs({"height","width","head","depth","proportion","bodyType"}) do
+					for _, k in {"height","width","head","depth","proportion","bodyType"} do
 						local v = curAv.scales and curAv.scales[k]
 						if v ~= nil then
 							kv(sh, k, math.floor(v * 100) / 100)
@@ -1150,14 +1150,14 @@ local function addRow(u, prof0, tok)
 					end
 					local _, ch = mkSec("Body Colors")
 					local bc = curAv.bodyColors or {}
-					for _, pair in ipairs({
+					for _, pair in {
 						{"Head", bc.headColorId},
 						{"Torso", bc.torsoColorId},
 						{"Left Arm", bc.leftArmColorId},
 						{"Right Arm", bc.rightArmColorId},
 						{"Left Leg", bc.leftLegColorId},
 						{"Right Leg", bc.rightLegColorId}
-					}) do
+					} do
 						if pair[2] then
 							local br = BrickColor.new(pair[2])
 							local rgb = math.floor(br.Color.R * 255 + 0.5) .. "," .. math.floor(br.Color.G * 255 + 0.5) .. "," .. math.floor(br.Color.B * 255 + 0.5)
@@ -1168,7 +1168,7 @@ local function addRow(u, prof0, tok)
 					local _, bp = mkSec("Body Parts")
 					local _, ac = mkSec("Accessories")
 					local _, em = mkSec("Emotes")
-					for _, a in ipairs(curAv.assets or {}) do
+					for _, a in curAv.assets or {} do
 						local kind = a.assetType and a.assetType.name or "Asset"
 						local prop = mapProp(kind)
 						if kind ~= "Emote" then
@@ -1182,7 +1182,7 @@ local function addRow(u, prof0, tok)
 						end
 					end
 					if curAv.emotes and #curAv.emotes > 0 then
-						for _, e in ipairs(curAv.emotes) do
+						for _, e in curAv.emotes do
 							itemRow(em, e.assetId, e.assetName or "Emote", "Emote", "", false)
 						end
 					else
@@ -1193,14 +1193,14 @@ local function addRow(u, prof0, tok)
 					local promo = jget("https://users.roproxy.com/v1/users/" .. u.id .. "/promotion-channels")
 					if promo and not promo.errors then
 						local keep = {}
-						for k, v in pairs(promo) do
+						for k, v in promo do
 							if v and v ~= "" then
 								keep[k] = v
 							end
 						end
 						if next(keep) then
 							local _, h = mkSec("Promotion Channels")
-							for k, v in pairs(keep) do
+							for k, v in keep do
 								kv(h, k, v)
 							end
 						end
@@ -1208,7 +1208,7 @@ local function addRow(u, prof0, tok)
 					local meta = jget("https://users.roproxy.com/v1/users/" .. u.id .. "/metadata")
 					if meta and not meta.errors and next(meta) then
 						local _, h = mkSec("User Metadata")
-						for k, v in pairs(meta) do
+						for k, v in meta do
 							kv(h, k, v)
 						end
 					end
@@ -1218,7 +1218,7 @@ local function addRow(u, prof0, tok)
 						local d = jget("https://inventory.roproxy.com/v2/users/" .. tostring(u.id) .. "/inventory?assetTypes=" .. kinds .. "&limit=" .. tostring(cfg.invLim) .. "&sortOrder=Desc")
 						if d and d.data and #d.data > 0 then
 							local _, h = mkSec(name)
-							for _, it in ipairs(d.data) do
+							for _, it in d.data do
 								invCard(h, it)
 							end
 						end
@@ -1258,7 +1258,7 @@ local function fillRows(list, tok)
 		end
 	end
 	if cfg.autoPick then
-		for _, ch in ipairs(res:GetChildren()) do
+		for _, ch in res:GetChildren() do
 			if ch:IsA("Frame") and rowFns[ch] then
 				task.spawn(function()
 					pcall(rowFns[ch])
@@ -1289,7 +1289,7 @@ local function runSearch(q)
 	else
 		local resData = jget("https://users.roproxy.com/v1/users/search?keyword=" .. Hs:UrlEncode(q) .. "&limit=" .. tostring(cfg.compact and 12 or 25))
 		if resData and not resData.errors and resData.data then
-			for _, u in ipairs(resData.data) do
+			for _, u in resData.data do
 				list[#list + 1] = {id = u.id, basic = u}
 			end
 		end
@@ -1300,7 +1300,7 @@ local function runSearch(q)
 		local d = ex and ex.data and ex.data[1]
 		if d and d.id then
 			local seen = false
-			for _, it in ipairs(list) do
+			for _, it in list do
 				if it.id == d.id then
 					seen = true
 					break
@@ -1544,7 +1544,7 @@ con(bOpts.MouseButton1Click, function()
 end)
 
 con(bClose.MouseButton1Click, function()
-	for _, c in ipairs(cons) do
+	for _, c in cons do
 		pcall(function()
 			c:Disconnect()
 		end)
@@ -1561,8 +1561,8 @@ con(bWear.MouseButton1Click, function()
 		return
 	end
 	local hum, ch = getHum()
-	for _, cls in ipairs({"Shirt", "Pants", "ShirtGraphic"}) do
-		for _, inst in ipairs(ch:GetChildren()) do
+	for _, cls in {"Shirt", "Pants", "ShirtGraphic"} do
+		for _, inst in ch:GetChildren() do
 			if inst.ClassName == cls then
 				inst:Destroy()
 			end

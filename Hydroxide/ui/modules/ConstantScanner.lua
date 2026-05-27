@@ -90,7 +90,7 @@ function Log.new(closure)
     local constants = closure.Constants
     local logHeight = 30
 
-    for _i, constant in pairs(constants) do
+    for _i, constant in constants do
         local constantLog = addConstant(constant)
         constantLog.Parent = button.Constants
 
@@ -128,7 +128,7 @@ local function addConstants()
         constantList:Clear()
         constantLogs = {}
 
-        for _i, closure in pairs(Methods.Scan(query)) do
+        for _i, closure in Methods.Scan(query) do
             Log.new(closure)
         end
 
@@ -162,7 +162,7 @@ viewConstantsContext:SetCallback(function()
         local newHeight = 0
 
         if temporaryConstants then
-            for _i, constantLog in pairs(temporaryConstants) do
+            for _i, constantLog in temporaryConstants do
                 newHeight = newHeight - (constantLog.AbsoluteSize.Y + 5)
                 constantLog:Destroy()
             end
@@ -174,7 +174,7 @@ viewConstantsContext:SetCallback(function()
 
             temporaryConstants = {}
 
-            for i,v in pairs(getConstants(closure.Data)) do
+            for i,v in getConstants(closure.Data) do
                 if not closure.Constants[i] then
                     local constant = Constant.new(closure, i, v) 
 

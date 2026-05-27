@@ -129,7 +129,7 @@ end
 
 local function mk(c, p, parn)
 	local o = Instance.new(c)
-	for k, v in pairs(p or {}) do
+	for k, v in p or {} do
 		o[k] = v
 	end
 	if o:IsA("GuiObject") then
@@ -302,12 +302,12 @@ addBind("refesp", "Refresh ESP", Enum.KeyCode.T, false, "vis")
 addBind("mini", "Minimize UI", Enum.KeyCode.RightControl, false, "ui")
 
 local defState = {}
-for k, v in pairs(state) do
+for k, v in state do
 	defState[k] = v
 end
 
 local defBinds = {}
-for id, b in pairs(binds) do
+for id, b in binds do
 	defBinds[id] = {key = b.key, ctrl = b.ctrl, shift = b.shift, alt = b.alt}
 end
 
@@ -374,7 +374,7 @@ local cfgKeys = {
 
 local function packCfg()
 	local st = {}
-	for k, v in pairs(state) do
+	for k, v in state do
 		local tp = typeof(v)
 		if tp == "boolean" or tp == "number" or tp == "string" then
 			if state.saveTog or not liveKeys[k] then
@@ -384,7 +384,7 @@ local function packCfg()
 	end
 	local bd = {}
 	if state.saveBinds then
-		for id, b in pairs(binds) do
+		for id, b in binds do
 			bd[id] = {
 				key = b.key and b.key.Name or "Unknown",
 				ctrl = b.ctrl == true,
@@ -470,7 +470,7 @@ local function loadCfg(silent)
 	end
 	loading = true
 	if typeof(data.state) == "table" then
-		for k, v in pairs(data.state) do
+		for k, v in data.state do
 			if state[k] ~= nil or cfgKeys[k] then
 				local cur = typeof(state[k])
 				local nt = typeof(v)
@@ -481,7 +481,7 @@ local function loadCfg(silent)
 		end
 	end
 	if typeof(data.binds) == "table" then
-		for id, v in pairs(data.binds) do
+		for id, v in data.binds do
 			local b = binds[id]
 			if b and typeof(v) == "table" then
 				b.key = keyByName(v.key)
@@ -498,13 +498,13 @@ end
 
 local function resetState()
 	loading = true
-	for k in pairs(state) do
+	for k in state do
 		state[k] = nil
 	end
-	for k, v in pairs(defState) do
+	for k, v in defState do
 		state[k] = v
 	end
-	for id, b in pairs(defBinds) do
+	for id, b in defBinds do
 		if binds[id] then
 			binds[id].key = b.key
 			binds[id].ctrl = b.ctrl
@@ -643,7 +643,7 @@ local function tab(n)
 		end
 		tabTok += 1
 		active = n
-		for pn, p in pairs(pages) do
+		for pn, p in pages do
 			if pn == n then
 				p.Visible = true
 				p.CanvasPosition = Vector2.zero
@@ -658,7 +658,7 @@ local function tab(n)
 				p.Position = UDim2.fromScale(0, 0)
 			end
 		end
-		for tn, tb in pairs(tabs) do
+		for tn, tb in tabs do
 			local on = tn == n
 			tw(tb.b, ti(0.18), {
 				BackgroundColor3 = on and Color3.fromRGB(72, 91, 151) or Color3.fromRGB(28, 32, 47),
@@ -703,7 +703,7 @@ local fit
 local set
 
 local function clear(t)
-	for k in pairs(t) do
+	for k in t do
 		t[k] = nil
 	end
 end
@@ -800,7 +800,7 @@ local function pick()
 	local cen = Vector2.new(vp.X * 0.5, vp.Y * 0.5)
 	local best
 	local score = math.huge
-	for _, plr in ipairs(Plrs:GetPlayers()) do
+	for _, plr in Plrs:GetPlayers() do
 		if plr ~= lp and not same(plr) then
 			local tg = partOf(plr)
 			if tg then
@@ -872,14 +872,14 @@ end
 local function updKey(id)
 	local ls = keyLs[id]
 	if ls then
-		for _, l in ipairs(ls) do
+		for _, l in ls do
 			l.Text = kstr(id)
 		end
 	end
 end
 
 local function updKeys()
-	for id in pairs(binds) do
+	for id in binds do
 		updKey(id)
 	end
 end
@@ -1076,7 +1076,7 @@ local function choose(p, k, nm, vals)
 	st(b, Color3.fromRGB(90, 102, 150), 0.62)
 	bind(b.Activated, function()
 		local idx = 1
-		for i, v in ipairs(vals) do
+		for i, v in vals do
 			if v == state[k] then
 				idx = i
 				break
@@ -1115,7 +1115,7 @@ local function keyRow(p, id)
 		capMods = {ctrl = false, shift = false, alt = false}
 		capOnly = nil
 		capTok += 1
-		for _, l in ipairs(keyLs[id] or {}) do
+		for _, l in keyLs[id] or {} do
 			l.Text = "Press..."
 		end
 	end)
@@ -1137,13 +1137,13 @@ local function scanNo()
 	if not c then
 		return
 	end
-	for _, v in ipairs(c:GetDescendants()) do
+	for _, v in c:GetDescendants() do
 		addPart(v)
 	end
 end
 
 local function noStep()
-	for p in pairs(noParts) do
+	for p in noParts do
 		if p and p.Parent then
 			if p.CanCollide then
 				p.CanCollide = false
@@ -1180,7 +1180,7 @@ local function noOff()
 		addCon:Disconnect()
 		addCon = nil
 	end
-	for p, v in pairs(oldCol) do
+	for p, v in oldCol do
 		if p and p.Parent then
 			pcall(function()
 				p.CanCollide = v
@@ -1272,7 +1272,7 @@ end
 local function espDel(plr)
 	local d = espMap[plr]
 	if d then
-		for _, o in pairs(d) do
+		for _, o in d do
 			if typeof(o) == "Instance" then
 				o:Destroy()
 			end
@@ -1319,23 +1319,23 @@ local function espOne(plr)
 end
 
 local function espRefresh()
-	for plr in pairs(espMap) do
+	for plr in espMap do
 		espDel(plr)
 	end
 	if not state.esp then
 		return
 	end
-	for _, plr in ipairs(Plrs:GetPlayers()) do
+	for _, plr in Plrs:GetPlayers() do
 		espOne(plr)
 	end
 end
 
 local function espOff()
-	for _, c in ipairs(espCon) do
+	for _, c in espCon do
 		c:Disconnect()
 	end
 	clear(espCon)
-	for plr in pairs(espMap) do
+	for plr in espMap do
 		espDel(plr)
 	end
 end
@@ -1354,7 +1354,7 @@ local function espOn()
 	espCon[#espCon + 1] = Plrs.PlayerRemoving:Connect(function(plr)
 		espDel(plr)
 	end)
-	for _, plr in ipairs(Plrs:GetPlayers()) do
+	for _, plr in Plrs:GetPlayers() do
 		if plr ~= lp then
 			espCon[#espCon + 1] = plr.CharacterAdded:Connect(function()
 				task.wait(0.45)
@@ -1500,12 +1500,12 @@ set = function(k, v)
 end
 
 local function refreshUI()
-	for k, v in pairs(state) do
+	for k, v in state do
 		if rows[k] then
 			setRow(k, v == true)
 		end
 	end
-	for _, fn in pairs(vals) do
+	for _, fn in vals do
 		pcall(fn)
 	end
 	updKeys()
@@ -1662,7 +1662,7 @@ keyRow(pSet, "esp")
 keyRow(pSet, "refesp")
 keyRow(pSet, "mini")
 actBtn(pSet, "Reset Binds", nil, function()
-	for id, b in pairs(defBinds) do
+	for id, b in defBinds do
 		if binds[id] then
 			binds[id].key = b.key
 			binds[id].ctrl = b.ctrl
@@ -1679,7 +1679,7 @@ cr(fovBox, 999)
 st(fovBox, Color3.fromRGB(90, 160, 255), 0.25, 1.4)
 fovUpd()
 
-for _, p in pairs(pages) do
+for _, p in pages do
 	p.Visible = false
 end
 pages.Aimbot.Visible = true
@@ -1962,7 +1962,7 @@ mobLayout = function()
 	local rowsN = math.ceil(#names / cols)
 	mobPanel.Size = UDim2.fromOffset(cols * sz + (cols + 1) * gap, rowsN * sz + (rowsN + 1) * gap)
 	local i = 0
-	for _, id in ipairs(names) do
+	for _, id in names do
 		local b = mobBtns[id]
 		if b then
 			i += 1
@@ -1998,7 +1998,7 @@ mobRefresh = function()
 		down = "DN",
 		hide = mini and "+" or "−"
 	}
-	for id, b in pairs(mobBtns) do
+	for id, b in mobBtns do
 		b.Text = state.mobLabels and labels[id] or "•"
 		mobSetBtn(id)
 	end
@@ -2030,7 +2030,7 @@ makeMobile = function()
 		{"down", "DN"},
 		{"hide", "−"}
 	}
-	for _, it in ipairs(items) do
+	for _, it in items do
 		local id, label = it[1], it[2]
 		local b = mk("TextButton", {
 			AutoButtonColor = false,
@@ -2137,12 +2137,12 @@ bind(UIS.InputBegan, function(input, gp)
 					capOnly = kc
 					capTok += 1
 					local tok = capTok
-					for _, l in ipairs(keyLs[id] or {}) do
+					for _, l in keyLs[id] or {} do
 						l.Text = modText(capMods)
 					end
 					task.delay(1.25, function()
 						if cap == id and capOnly == kc and capTok == tok then
-							for _, l in ipairs(keyLs[id] or {}) do
+							for _, l in keyLs[id] or {} do
 								l.Text = modText(capMods)
 							end
 						end
@@ -2163,7 +2163,7 @@ bind(UIS.InputBegan, function(input, gp)
 	if gp or not state.keys or input.UserInputType ~= Enum.UserInputType.Keyboard then
 		return
 	end
-	for id, b in pairs(binds) do
+	for id, b in binds do
 		if secOn(b.sec) and matched(input, id) then
 			runAct(id)
 			if mobRefresh then
@@ -2214,12 +2214,12 @@ gui.Destroying:Connect(function()
 	noOff()
 	flyOff()
 	espOff()
-	for _, t in pairs(tws) do
+	for _, t in tws do
 		pcall(function()
 			t:Cancel()
 		end)
 	end
-	for _, c in ipairs(cons) do
+	for _, c in cons do
 		pcall(function()
 			c:Disconnect()
 		end)

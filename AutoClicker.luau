@@ -121,7 +121,7 @@ elseif type(sharedEnv.AutoClickerCleanup) == "function" then
 	pcall(sharedEnv.AutoClickerCleanup)
 end
 
-for _, child in ipairs(parentUI:GetChildren()) do
+for _, child in parentUI:GetChildren() do
 	if child:IsA("ScreenGui") and child:GetAttribute(INSTANCE_MARKER) then
 		pcall(function()
 			child:Destroy()
@@ -179,7 +179,7 @@ local THEME = {
 
 local function cloneTable(source)
 	local copy = {}
-	for key, value in pairs(source) do
+	for key, value in source do
 		if type(value) == "table" then
 			copy[key] = cloneTable(value)
 		else
@@ -191,7 +191,7 @@ end
 
 local function mergeTable(base, override)
 	local merged = cloneTable(base)
-	for key, value in pairs(override or {}) do
+	for key, value in override or {} do
 		merged[key] = value
 	end
 	return merged
@@ -300,7 +300,7 @@ local function new(className, parent, properties)
 		end
 	end
 	instance.Name = randomName
-	for key, value in pairs(properties or {}) do
+	for key, value in properties or {} do
 		if key ~= "Name" then
 		instance[key] = value
 		end
@@ -1281,7 +1281,7 @@ bind(RunService.Heartbeat, function(dt)
 		if ok and type(touches) == "table" then
 			local matchedTouch = nil
 			if activeTouchInput ~= nil then
-				for _, touch in ipairs(touches) do
+				for _, touch in touches do
 					if touch == activeTouchInput then
 						matchedTouch = touch
 						break
@@ -1293,7 +1293,7 @@ bind(RunService.Heartbeat, function(dt)
 				updatePointerTarget(Vector2.new(matchedTouch.Position.X, matchedTouch.Position.Y))
 			else
 				activeTouchInput = nil
-				for _, touch in ipairs(touches) do
+				for _, touch in touches do
 					if touch and touch.Position then
 						local point = Vector2.new(touch.Position.X, touch.Position.Y)
 						if not pointOverOwnUI(getOwnUIPoint(point)) then
@@ -1521,7 +1521,7 @@ local function cleanup()
 	cleaningUp = true
 	stopClicking("Closed")
 	activeTouchInput = nil
-	for _, connection in ipairs(connections) do
+	for _, connection in connections do
 		pcall(function()
 			connection:Disconnect()
 		end)

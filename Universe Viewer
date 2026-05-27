@@ -569,7 +569,7 @@ local defaultCfg = {
 	animSpeed = 2
 };
 local cfg = {};
-for k, v in pairs(defaultCfg) do
+for k, v in defaultCfg do
 	cfg[k] = v;
 end;
 local rows = {};
@@ -578,7 +578,7 @@ local function mergeCfg(src)
 	if type(src) ~= "table" then
 		return;
 	end;
-	for k, v in pairs(src) do
+	for k, v in src do
 		if cfg[k] ~= nil and type(v) == type(cfg[k]) then
 			cfg[k] = v;
 		end;
@@ -670,7 +670,7 @@ local function setFav(id, v)
 	saveFavs();
 end;
 local function putProps(o, g)
-	for k, v in pairs(g or {}) do
+	for k, v in g or {} do
 		pcall(function()
 			o[k] = v;
 		end);
@@ -959,7 +959,7 @@ local function applyTheme()
 	TTL_ACC.BackgroundColor3 = p.accent2;
 	CFG.ScrollBarImageColor3 = p.accent;
 	LST.ScrollBarImageColor3 = p.accent;
-	for _, l in ipairs(cfgLabels or {}) do
+	for _, l in cfgLabels or {} do
 		l.TextColor3 = p.dim;
 	end;
 	M_GR.Color = ColorSequence.new({
@@ -973,7 +973,7 @@ local function applyTheme()
 	setHv(BTN_CFG, CFG.Visible and p.accent or p.btn, p.hover, CFG.Visible);
 	setHv(BTN_X, p.danger, p.danger, true);
 	setHv(SORT, p.btn, p.hover);
-	for _, it in ipairs(rows or {}) do
+	for _, it in rows or {} do
 		if it.f then
 			it.f.BackgroundColor3 = it.cur and p.cur or p.row;
 			local st = it.f:FindFirstChild("S") or it.f:FindFirstChildWhichIsA("UIStroke");
@@ -1250,7 +1250,7 @@ local function pushUrl(t, v)
 	if type(v) ~= "string" or v == "" then
 		return;
 	end;
-	for _, x in ipairs(t) do
+	for _, x in t do
 		if x == v then
 			return;
 		end;
@@ -1275,7 +1275,7 @@ local function robloxApiUrls(url)
 	};
 end;
 local function getRobloxJson(url)
-	for _, apiUrl in ipairs(robloxApiUrls(url)) do
+	for _, apiUrl in robloxApiUrls(url) do
 		local ok, resp = pcall(function()
 			return game:HttpGet(apiUrl);
 		end);
@@ -1296,7 +1296,7 @@ local function getPlaceInfo(pid, force)
 		return placeInfoCache[pid] or nil;
 	end;
 	local out = nil;
-	for _, base in ipairs(srvBases) do
+	for _, base in srvBases do
 		local url = base .. "/v1/games/multiget-place-details?placeIds=" .. HS:UrlEncode(pid);
 		local ok, resp = pcall(function()
 			return game:HttpGet(url);
@@ -1326,7 +1326,7 @@ local function getIconUrls(pid, force)
 		pushUrl(urls, "rbxthumb://type=GameIcon&id=" .. tostring(uid) .. "&w=150&h=150");
 		pushUrl(urls, "rbxthumb://type=GameIcon&id=" .. tostring(uid) .. "&w=256&h=256");
 	end;
-	for _, size in ipairs({"150x150", "256x256", "512x512"}) do
+	for _, size in {"150x150", "256x256", "512x512"} do
 		local url = "https://thumbnails.roblox.com/v1/places/gameicons?placeIds=" .. HS:UrlEncode(pid) .. "&returnPolicy=PlaceHolder&size=" .. size .. "&format=Png&isCircular=false";
 		local js = getRobloxJson(url);
 		if type(js) == "table" and type(js.data) == "table" and type(js.data[1]) == "table" then
@@ -1347,7 +1347,7 @@ loadCfg();
 loadFavs();
 applyTheme();
 local function clr()
-	for _, it in ipairs(rows) do
+	for _, it in rows do
 		if it.f then
 			it.f:Destroy();
 		end;
@@ -1358,7 +1358,7 @@ end;
 local function apply()
 	local q = string.lower(SB.Text);
 	local a = {};
-	for _, it in ipairs(rows) do
+	for _, it in rows do
 		local v = q == "" or string.find(string.lower(it.n), q, 1, true) or string.find(tostring(it.id), q, 1, true);
 		it.f.Visible = v;
 		if v then
@@ -1378,7 +1378,7 @@ local function apply()
 			return x.id < y.id;
 		end;
 	end);
-	for i, ob in ipairs(a) do
+	for i, ob in a do
 		ob.f.LayoutOrder = i;
 	end;
 	EMP.Visible = #a == 0;
@@ -1407,7 +1407,7 @@ local function getSrvData(placeId, allowSame)
 	local pid = tostring(placeId);
 	local query = "?sortOrder=Asc&limit=100";
 	local resTable = nil;
-	for _, base in ipairs(srvBases) do
+	for _, base in srvBases do
 		local url = base .. "/v1/games/" .. pid .. "/servers/Public" .. query;
 		local ok, resp = pcall(function()
 			return game:HttpGet(url);
@@ -1440,7 +1440,7 @@ local function getSrvData(placeId, allowSame)
 		return nil;
 	end;
 	local data = {};
-	for _, v in ipairs(resTable.data) do
+	for _, v in resTable.data do
 		if type(v) == "table" and v.maxPlayers > v.playing and (allowSame or v.id ~= game.JobId) then
 			table.insert(data, {
 				id = v.id,
@@ -1473,7 +1473,7 @@ local function srvSpin(lbl, v)
 	end;
 end;
 local function srvFetch(placeId, r)
-	for _, c in ipairs(r.slist:GetChildren()) do
+	for _, c in r.slist:GetChildren() do
 		if c:IsA("TextButton") or c:IsA("Frame") then
 			c:Destroy();
 		end;
@@ -1496,7 +1496,7 @@ local function srvFetch(placeId, r)
 		r.semp.Visible = true;
 		return;
 	end;
-	for _, entry in ipairs(data) do
+	for _, entry in data do
 		local b = Instance.new("TextButton");
 		b.Parent = r.slist;
 		b.BackgroundColor3 = Color3.fromRGB(30, 24, 52);
@@ -1664,7 +1664,7 @@ local function mk(pl, idx)
 
 	txt.Visible = false
 	bar.ZIndex = 5
-	for _, ch in ipairs(bar:GetChildren()) do
+	for _, ch in bar:GetChildren() do
 		if ch:IsA("GuiObject") then
 			ch.ZIndex = 5
 		end
@@ -2022,7 +2022,7 @@ local function mk(pl, idx)
 			local urls = getIconUrls(pid, force)
 			local okLoad = false
 			local tried = false
-			for _, url in ipairs(urls) do
+			for _, url in urls do
 				tried = true
 				ico.Image = url
 				ico.ImageTransparency = 0.08
@@ -2331,7 +2331,7 @@ local function mk(pl, idx)
 	end)
 end
 refreshRows = function()
-	for _, it in ipairs(rows) do
+	for _, it in rows do
 		if it.refresh then
 			it.refresh()
 		end
@@ -2391,7 +2391,7 @@ local function fetch()
 	end;
 	local i = 0;
 	while true do
-		for _, pl in ipairs(pg:GetCurrentPage()) do
+		for _, pl in pg:GetCurrentPage() do
 			i += 1;
 			mk(pl, i);
 		end;
@@ -2404,7 +2404,7 @@ local function fetch()
 	apply();
 	local curName;
 	local curId;
-	for _, r in ipairs(rows) do
+	for _, r in rows do
 		if r.cur then
 			curName = r.n;
 			curId = r.id;
@@ -2467,7 +2467,7 @@ local function cfgButtonColors(active)
 	return active and p.accent or p.btn, active and p.accent2 or p.hover;
 end;
 local function syncCfgBtns()
-	for _, fn in ipairs(cfgBtns) do
+	for _, fn in cfgBtns do
 		fn();
 	end
 	applyTheme();
@@ -2478,7 +2478,7 @@ end;
 local function addCycle(key, label, vals, names)
 	local b = mkCfgBtn(label);
 	local function idxOf(v)
-		for i, x in ipairs(vals) do
+		for i, x in vals do
 			if x == v then
 				return i;
 			end;
@@ -2553,7 +2553,7 @@ addCfg("showSrvStats", "Server stats");
 addCfg("showToasts", "Notifications");
 mkCfgSection("Maintenance");
 addAction("Reset preferences", function()
-	for k, v in pairs(defaultCfg) do
+	for k, v in defaultCfg do
 		cfg[k] = v;
 	end;
 	saveCfg();

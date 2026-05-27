@@ -19,7 +19,7 @@ local function shortVal(v)
 		return "string (length " .. len .. ")";
 	elseif t == "table" then
 		local c = 0;
-		for _ in pairs(v) do
+		for _ in v do
 			c += 1;
 		end;
 		return "table (" .. c .. " keys)";
@@ -753,7 +753,7 @@ local tests = {
 			local plrs = __betterGetService("Players");
 			return effect_test("Can preload all UIs, which can be abused for weird behavior.", function()
 				local list = {};
-				for _, v in ipairs(plrs:QueryDescendants("Instance")) do
+				for _, v in plrs:QueryDescendants("Instance") do
 					if v:IsA("ScreenGui") then
 						table.insert(list, v);
 					end;
@@ -922,7 +922,7 @@ local tests = {
 		end
 	}
 };
-for _, s in ipairs(tests) do
+for _, s in tests do
 	Vulnerabilities_Test.Running = Vulnerabilities_Test.Running + 1;
 	local completed, callOk, resultStatus, resultInfo = run_with_timeout(s.callback, TEST_TIMEOUT);
 	local status, info;

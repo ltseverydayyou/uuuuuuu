@@ -110,7 +110,7 @@ local ME, CanBeEnabled = Players.LocalPlayer, {
 	"Sparkles"
 };
 local function PartOfCharacter(Instance)
-	for i, v in pairs(Players:GetPlayers()) do
+	for i, v in Players:GetPlayers() do
 		if v ~= ME and v.Character and Instance:IsDescendantOf(v.Character) then
 			return true;
 		end;
@@ -118,7 +118,7 @@ local function PartOfCharacter(Instance)
 	return false;
 end;
 local function DescendantOfIgnore(Instance)
-	for i, v in pairs(_G.Ignore) do
+	for i, v in _G.Ignore do
 		if Instance:IsDescendantOf(v) then
 			return true;
 		end;
@@ -318,7 +318,7 @@ end);
 end);
 (coroutine.wrap(pcall))(function()
 	if _G.Settings["Reset Materials"] or _G.Settings.Other and _G.Settings.Other["Reset Materials"] then
-		for i, v in pairs(MaterialService:GetChildren()) do
+		for i, v in MaterialService:GetChildren() do
 			v:Destroy();
 		end;
 		MaterialService.Use2022Materials = false;
@@ -394,7 +394,7 @@ end;
 if _G.ConsoleLogs then
 	warn("Checking " .. #Descendants .. " Instances...");
 end;
-for i, v in pairs(Descendants) do
+for i, v in Descendants do
 	CheckIfBad(v);
 	if i == WaitNumber then
 		task.wait();

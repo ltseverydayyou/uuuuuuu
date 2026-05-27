@@ -1446,7 +1446,7 @@ local function sort(t)
 		return tostring(a) < tostring(b)
 	end)
 end
-for _, t in pairs(ls) do
+for _, t in ls do
 	sort(t)
 end
 

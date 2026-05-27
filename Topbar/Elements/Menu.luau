@@ -141,7 +141,7 @@ return function(icon)
 				return;
 			end;
 			local orderedInstances = {};
-			for _, child in pairs(menu:GetChildren()) do
+			for _, child in menu:GetChildren() do
 				local widgetUID = child:GetAttribute("WidgetUID");
 				if widgetUID and child.Visible then
 					table.insert(orderedInstances, {
@@ -178,12 +178,12 @@ return function(icon)
 	end;
 	icon.menuChildAdded:Connect(totalChildrenChanged);
 	icon.menuSet:Connect(function(arrayOfIcons)
-		for i, otherIconUID in pairs(icon.menuIcons) do
+		for i, otherIconUID in icon.menuIcons do
 			local otherIcon = Icon.getIconByUID(otherIconUID);
 			otherIcon:destroy();
 		end;
 		if type(arrayOfIcons) == "table" then
-			for i, otherIcon in pairs(arrayOfIcons) do
+			for i, otherIcon in arrayOfIcons do
 				otherIcon:joinMenu(icon);
 			end;
 		end;

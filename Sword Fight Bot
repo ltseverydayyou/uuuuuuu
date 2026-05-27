@@ -135,7 +135,7 @@ local function getRootPart(c)
 		if p and p:IsA("BasePart") then
 			return p;
 		end;
-		for _, v in pairs(c:GetChildren()) do
+		for _, v in c:GetChildren() do
 			if v:IsA("BasePart") then
 				return v;
 			end;
@@ -146,7 +146,7 @@ local npcList = {};
 task.spawn(function()
 	while true do
 		local newList = {};
-		for _, inst in ipairs(Workspace:QueryDescendants("Instance")) do
+		for _, inst in Workspace:QueryDescendants("Instance") do
 			if inst:IsA("Model") then
 				local h = inst:FindFirstChildOfClass("Humanoid");
 				if h and h.Health > 0 and (not __lt.cm("Players", "GetPlayerFromCharacter", inst)) and (not inst:FindFirstChildOfClass("ForceField")) then
@@ -164,7 +164,7 @@ local function findClosestPlayer()
 		return;
 	end;
 	local best, bd = nil, math.huge;
-	for _, p in ipairs(__lt.cm("Players", "GetPlayers")) do
+	for _, p in __lt.cm("Players", "GetPlayers") do
 		if p ~= LocalPlayer then
 			local c = getCharacter(p);
 			if not c:FindFirstChildOfClass("ForceField") then
@@ -187,7 +187,7 @@ local function findClosestNPC()
 		return;
 	end;
 	local best, bd = nil, math.huge;
-	for _, m in ipairs(npcList) do
+	for _, m in npcList do
 		local r = getRootPart(m);
 		local h = getHumanoid(m);
 		if r and h and h.Health > 0 then
@@ -474,7 +474,7 @@ RunService.RenderStepped:Connect(function(deltaTime)
 	local handle = tool and tool:FindFirstChild("Handle");
 	if handle and (root.Position - trRoot.Position).Magnitude <= 8 then
 		tool:Activate();
-		for _, p in ipairs(trChar:QueryDescendants("Instance")) do
+		for _, p in trChar:QueryDescendants("Instance") do
 			if p:IsA("BasePart") then
 				firetouchinterest(handle, p, 0);
 				firetouchinterest(handle, p, 1);

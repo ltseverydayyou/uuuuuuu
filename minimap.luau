@@ -144,7 +144,7 @@ local defs = {
 }
 
 local cfg = {}
-for k, v in pairs(defs) do
+for k, v in defs do
 	if type(v) == "table" then
 		local t = {}
 		for i = 1, #v do
@@ -326,7 +326,7 @@ local function getRoot(obj)
 	if obj.PrimaryPart then
 		return obj.PrimaryPart
 	end
-	for _, v in ipairs(obj:GetChildren()) do
+	for _, v in obj:GetChildren() do
 		if v:IsA("BasePart") then
 			return v
 		end
@@ -342,14 +342,14 @@ local function isChar(obj)
 end
 
 local function refIgn()
-	for k in pairs(ign) do
+	for k in ign do
 		ign[k] = nil
 	end
 	local c = plr.Character
 	if not c then
 		return
 	end
-	for _, v in ipairs(c:GetDescendants()) do
+	for _, v in c:GetDescendants() do
 		if v:IsA("BasePart") then
 			ign[v] = true
 		end
@@ -432,12 +432,12 @@ local visDesc = {
 }
 
 local function hasVis(part)
-	for _, v in ipairs(part:GetChildren()) do
+	for _, v in part:GetChildren() do
 		if visDesc[v.ClassName] then
 			return true
 		end
 		if v:IsA("Attachment") then
-			for _, d in ipairs(v:GetChildren()) do
+			for _, d in v:GetChildren() do
 				if visDesc[d.ClassName] then
 					return true
 				end
@@ -459,7 +459,7 @@ local function prepMapPart(part)
 end
 
 local function prepRigModel(mdl)
-	for _, v in ipairs(mdl:GetDescendants()) do
+	for _, v in mdl:GetDescendants() do
 		if v:IsA("BasePart") then
 			pcall(function()
 				v.Anchored = true
@@ -537,7 +537,7 @@ local function cloneMapPart(src)
 	if not ok or not cp then
 		return
 	end
-	for _, d in ipairs(cp:GetDescendants()) do
+	for _, d in cp:GetDescendants() do
 		if d ~= cp and not mapKeep[d.ClassName] then
 			d:Destroy()
 		end
@@ -619,7 +619,7 @@ local function getQ()
 end
 
 local function scanMap(rootPos, q)
-	for _, it in pairs(parts) do
+	for _, it in parts do
 		it.keep = false
 	end
 	local op = OverlapParams.new()
@@ -657,7 +657,7 @@ local function scanMap(rootPos, q)
 		end
 	end
 	local kill = {}
-	for src, it in pairs(parts) do
+	for src, it in parts do
 		if not it.keep or not src.Parent then
 			kill[#kill + 1] = src
 		end
@@ -721,7 +721,7 @@ local function mkRig(src, par, name)
 	if not ok or not cp then
 		return
 	end
-	for _, d in ipairs(cp:GetDescendants()) do
+	for _, d in cp:GetDescendants() do
 		if d ~= cp and not rigKeep[d.ClassName] and not d:IsA("BasePart") then
 			d:Destroy()
 		end
@@ -730,7 +730,7 @@ local function mkRig(src, par, name)
 	cp.Name = name or src.Name
 	cp.Parent = par
 	local map = {}
-	for _, d in ipairs(cp:GetDescendants()) do
+	for _, d in cp:GetDescendants() do
 		local path = relPath(cp, d)
 		if path then
 			map[path] = d
@@ -738,7 +738,7 @@ local function mkRig(src, par, name)
 	end
 	local refs = {}
 	local cnt = 0
-	for _, d in ipairs(src:GetDescendants()) do
+	for _, d in src:GetDescendants() do
 		if d:IsA("BasePart") then
 			local path = relPath(src, d)
 			local dst = path and map[path]
@@ -800,7 +800,7 @@ local function upRig(it, now)
 	local isFull = full ~= it.full
 	it.full = full
 	local ok = false
-	for src, cp in pairs(it.map) do
+	for src, cp in it.map do
 		if src.Parent and cp.Parent then
 			cp.CFrame = src.CFrame
 			if cp.Size ~= src.Size then
@@ -824,11 +824,11 @@ local function upRig(it, now)
 end
 
 local function scanRigs(rootPos, q)
-	for _, it in pairs(rigs) do
+	for _, it in rigs do
 		it.keep = false
 	end
 	local list = {}
-	for _, op in ipairs(Plrs:GetPlayers()) do
+	for _, op in Plrs:GetPlayers() do
 		if op ~= plr then
 			local ch = op.Character
 			local rp = ch and getRoot(ch)
@@ -851,7 +851,7 @@ local function scanRigs(rootPos, q)
 		end
 	end
 	local kill = {}
-	for src, it in pairs(rigs) do
+	for src, it in rigs do
 		if not it.keep or not src.Parent then
 			kill[#kill + 1] = src
 		end
@@ -1282,10 +1282,10 @@ local function destroy()
 		return
 	end
 	dead = true
-	for src in pairs(parts) do
+	for src in parts do
 		killPart(src)
 	end
-	for src in pairs(rigs) do
+	for src in rigs do
 		killRig(rigs, src)
 	end
 	if you and you.mdl then
@@ -1318,7 +1318,7 @@ give(plr.CharacterAdded:Connect(function()
 end))
 
 give(plr.CharacterRemoving:Connect(function()
-	for k in pairs(ign) do
+	for k in ign do
 		ign[k] = nil
 	end
 	if you and you.mdl then
@@ -1422,7 +1422,7 @@ give(Run.RenderStepped:Connect(function(dt)
 	end
 	youTag.Transparency = okYou and 1 or 0
 	youTag.CFrame = CFrame.new(rootPos + Vector3.new(0, 1.1, 0))
-	for src, it in pairs(rigs) do
+	for src, it in rigs do
 		if not src.Parent then
 			killRig(rigs, src)
 		else

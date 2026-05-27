@@ -15,7 +15,7 @@ ap.clear = function(t)
         return
     end
 
-    for k in pairs(t) do
+    for k in t do
         t[k] = nil
     end
 end
@@ -272,7 +272,7 @@ ap.findroot = function()
         return nil
     end
 
-    for _, r in ipairs(ap.pg:GetChildren()) do
+    for _, r in ap.pg:GetChildren() do
         if r:FindFirstChild("MENUS") and r:FindFirstChild("GameplayFrame") and ap.goodroot(r) then
             ap.root = r
             return r
@@ -296,7 +296,7 @@ ap.startscan = function()
 
     local delays = { 0.45, 1.25, 2.5, 4.5, 7.5, 11, 15.5 }
 
-    for _, d in ipairs(delays) do
+    for _, d in delays do
         task.delay(d, function()
             if ap.dead or not ap.cfg.autorescan then
                 return
@@ -334,7 +334,7 @@ ap.ui = function()
 
     local fb = nil
 
-    for _, v in ipairs(ap.pg:GetDescendants()) do
+    for _, v in ap.pg:GetDescendants() do
         if v:IsA("GuiObject") and v.Name == "GameplayFrame" and not ap.badframe(v) then
             local tr = v:FindFirstChild("Tracks")
             local tb = v:FindFirstChild("TriggerButtons")
@@ -506,7 +506,7 @@ ap.watch = function(g)
     ap.watched = g
 
     if ap.watchcon then
-        for _, c in ipairs(ap.watchcon) do
+        for _, c in ap.watchcon do
             pcall(function()
                 c:Disconnect()
             end)
@@ -785,7 +785,7 @@ ap.best = function(tr)
     local tp = nil
     local td = math.huge
 
-    for _, n in ipairs(tr:GetChildren()) do
+    for _, n in tr:GetChildren() do
         if ap.nvis(n) then
             local k = ap.kind(n)
 
@@ -964,7 +964,7 @@ ap.stop = function()
     ap.rel(true)
 
     if ap.watchcon then
-        for _, c in ipairs(ap.watchcon) do
+        for _, c in ap.watchcon do
             pcall(function()
                 c:Disconnect()
             end)
@@ -972,7 +972,7 @@ ap.stop = function()
         ap.clear(ap.watchcon)
     end
 
-    for _, c in ipairs(ap.con) do
+    for _, c in ap.con do
         pcall(function()
             c:Disconnect()
         end)

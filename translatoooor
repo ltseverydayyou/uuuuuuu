@@ -194,7 +194,7 @@ local function iso(s)
 	if not s then
 		return;
 	end;
-	for k, v in pairs(langs) do
+	for k, v in langs do
 		if k == s or v == s then
 			return k;
 		end;
@@ -202,9 +202,9 @@ local function iso(s)
 end;
 local function q(data)
 	local s = "";
-	for k, v in pairs(data) do
+	for k, v in data do
 		if type(v) == "table" then
-			for _, vv in pairs(v) do
+			for _, vv in v do
 				s ..= "&" .. __lt.cm("HttpService", "UrlEncode", k) .. "=" .. __lt.cm("HttpService", "UrlEncode", vv);
 			end;
 		else
@@ -331,7 +331,7 @@ local function findWhisper(recipient)
 	if not recipient or recipient == "All" then
 		return nil;
 	end;
-	for _, c in ipairs(TCS.TextChannels:GetChildren()) do
+	for _, c in TCS.TextChannels:GetChildren() do
 		if string.find(c.Name, "^RBXWhisper:") and c:FindFirstChild(recipient) then
 			return c;
 		end;
@@ -346,7 +346,7 @@ local function resolveRecipient(chip)
 		local who = string.match(txt, "^%[To%s+(.+)%]$");
 		if who and who ~= "" then
 			local d = string.lower(who);
-			for _, plr in ipairs(__lt.cm("Players", "GetPlayers")) do
+			for _, plr in __lt.cm("Players", "GetPlayers") do
 				if string.lower(plr.DisplayName) == d then
 					return plr.Name;
 				end;
@@ -384,7 +384,7 @@ local function showUsage()
 end;
 local function showLangs()
 	local codes = {};
-	for code, _ in pairs(langs) do
+	for code, _ in langs do
 		table.insert(codes, code);
 	end;
 	table.sort(codes, function(a, b)

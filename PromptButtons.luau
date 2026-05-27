@@ -146,7 +146,7 @@ if hasFS() then
 			if s and s ~= "" then
 				local t = __lt.cm("HttpService", "JSONDecode", s);
 				if type(t) == "table" then
-					for k, v in pairs(t) do
+					for k, v in t do
 						if k == "bgColor" and type(v) == "table" then
 							if #v >= 3 then
 								cfg.bgColor = Color3.new(v[1], v[2], v[3]);
@@ -468,7 +468,7 @@ local kbtn = {};
 local klist = {};
 local function encodeCfg()
 	local t = {};
-	for k, v in pairs(cfg) do
+	for k, v in cfg do
 		local tv = typeof(v);
 		if tv == "Color3" then
 			t[k] = {
@@ -500,7 +500,7 @@ local function saveKeys()
 		return;
 	end;
 	local t = {};
-	for k, v in pairs(kst) do
+	for k, v in kst do
 		if v then
 			t[k] = true;
 		end;
@@ -532,7 +532,7 @@ local function hdur(pr)
 end;
 local function recAny()
 	local v = false;
-	for _, b in pairs(kst) do
+	for _, b in kst do
 		if b then
 			v = true;
 			break;
@@ -550,7 +550,7 @@ local function okKey(k)
 	return kst[k] == true;
 end;
 local function refVis()
-	for _, d in pairs(map) do
+	for _, d in map do
 		local ok = okKey(d.key);
 		if d.w then
 			if ok then
@@ -608,7 +608,7 @@ local function applyAllStyle()
 	end;
 	col.Size = UDim2.new(0, cfg.w, 1, 0);
 	lst.Padding = UDim.new(0, cfg.gap);
-	for _, d in pairs(map) do
+	for _, d in map do
 		restylePrompt(d);
 	end;
 end;
@@ -664,7 +664,7 @@ local function mkK(n)
 		saveKeys();
 	end);
 end;
-for _, kc in ipairs(Enum.KeyCode:GetEnumItems()) do
+for _, kc in Enum.KeyCode:GetEnumItems() do
 	if kc ~= Enum.KeyCode.Unknown then
 		local n = kc.Name:gsub("^Key", "");
 		if n ~= "" then
@@ -680,7 +680,7 @@ refVis();
 local function refSearch()
 	local q = low(srh.Text);
 	if q == "" then
-		for _, n in ipairs(klist) do
+		for _, n in klist do
 			local b = kbtn[n];
 			if b then
 				b.Visible = true;
@@ -688,7 +688,7 @@ local function refSearch()
 		end;
 		return;
 	end;
-	for _, n in ipairs(klist) do
+	for _, n in klist do
 		local b = kbtn[n];
 		if b then
 			b.Visible = (low(n)):find(q, 1, true) ~= nil;
@@ -697,7 +697,7 @@ local function refSearch()
 end;
 (srh:GetPropertyChangedSignal("Text")):Connect(refSearch);
 allBtn.Activated:Connect(function()
-	for _, n in ipairs(klist) do
+	for _, n in klist do
 		kst[n] = true;
 		updK(n);
 	end;
@@ -706,7 +706,7 @@ allBtn.Activated:Connect(function()
 	saveKeys();
 end);
 noneBtn.Activated:Connect(function()
-	for _, n in ipairs(klist) do
+	for _, n in klist do
 		kst[n] = nil;
 		updK(n);
 	end;
@@ -715,7 +715,7 @@ noneBtn.Activated:Connect(function()
 	saveKeys();
 end);
 invBtn.Activated:Connect(function()
-	for _, n in ipairs(klist) do
+	for _, n in klist do
 		kst[n] = not (kst[n] == true);
 		updK(n);
 	end;
@@ -800,7 +800,7 @@ local modeList = {
 	"hold"
 };
 local modeIdx = 1;
-for i, v in ipairs(modeList) do
+for i, v in modeList do
 	if v == cfg.mode then
 		modeIdx = i;
 		break;
@@ -821,7 +821,7 @@ local heightList = {
 	52
 };
 local hIdx = 1;
-for i, v in ipairs(heightList) do
+for i, v in heightList do
 	if v == cfg.h then
 		hIdx = i;
 		break;
@@ -842,7 +842,7 @@ local widthList = {
 	300
 };
 local wIdx = 1;
-for i, v in ipairs(widthList) do
+for i, v in widthList do
 	if v == cfg.w then
 		wIdx = i;
 		break;
@@ -863,7 +863,7 @@ local gapList = {
 	12
 };
 local gIdx = 1;
-for i, v in ipairs(gapList) do
+for i, v in gapList do
 	if v == cfg.gap then
 		gIdx = i;
 		break;
@@ -884,7 +884,7 @@ local cornerList = {
 	20
 };
 local cIdx = 1;
-for i, v in ipairs(cornerList) do
+for i, v in cornerList do
 	if v == cfg.corner then
 		cIdx = i;
 		break;
@@ -938,7 +938,7 @@ local fontList = {
 	"large"
 };
 local fIdx = 1;
-for i, v in ipairs(fontList) do
+for i, v in fontList do
 	if v == cfg.fontScale then
 		fIdx = i;
 		break;
@@ -959,7 +959,7 @@ local alignList = {
 	"right"
 };
 local aIdx = 1;
-for i, v in ipairs(alignList) do
+for i, v in alignList do
 	if v == cfg.align then
 		aIdx = i;
 		break;
@@ -981,7 +981,7 @@ local offsetList = {
 	140
 };
 local oIdx = 1;
-for i, v in ipairs(offsetList) do
+for i, v in offsetList do
 	if v == cfg.yOffset then
 		oIdx = i;
 		break;
@@ -1047,7 +1047,7 @@ local function rm(pr)
 	end;
 	map[pr] = nil;
 	if d.c then
-		for _, x in ipairs(d.c) do
+		for _, x in d.c do
 			pcall(function()
 				x:Disconnect();
 			end);

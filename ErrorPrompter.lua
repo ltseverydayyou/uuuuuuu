@@ -122,7 +122,7 @@ local function Create(cls)
 	return function(props)
 		local inst = Instance.new(cls)
 
-		for k, v in pairs(props) do
+		for k, v in props do
 			if typeof(k) == "number" then
 				v.Parent = inst
 			else
@@ -569,7 +569,7 @@ function TrollErrorPrompt:clearButtons()
 
 	local area = self._frame.MessageArea.ErrorFrame.ButtonArea
 
-	for _, v in pairs(area:GetChildren()) do
+	for _, v in area:GetChildren() do
 		if v.Name ~= "ButtonLayout" then
 			v:Destroy()
 		end
@@ -589,7 +589,7 @@ function TrollErrorPrompt:updateButtons(btns)
 	local count = 0
 	local area = self._frame.MessageArea.ErrorFrame.ButtonArea
 
-	for _, info in pairs(btns) do
+	for _, info in btns do
 		local text = info.Text or "OK"
 		local btn = makeButton(text, info.LayoutOrder or 1, info.Primary == true)
 

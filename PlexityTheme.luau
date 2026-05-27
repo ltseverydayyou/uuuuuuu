@@ -354,7 +354,7 @@ function PT.applyAll()
 	PT.applying = true;
 	task.spawn(function()
 		local n = 0;
-		for o in pairs(PT.images) do
+		for o in PT.images do
 			if o and o.Parent then
 				applyGrad(o);
 			else
@@ -416,7 +416,7 @@ local function refresh()
 	if fsok then
 		saveCfg(PT.data);
 	end;
-	for _, s in ipairs(sliders) do
+	for _, s in sliders do
 		local t = s.get();
 		s.handle.Position = UDim2.new(t * (1 - s.handle.Size.X.Scale), 0, 0, 0);
 		if s.isVal then
@@ -428,7 +428,7 @@ local function refresh()
 			s.track.BackgroundColor3 = Color3.fromHSV(hue, 1, t);
 		else
 			local pts = {};
-			for _, v in ipairs(stops) do
+			for _, v in stops do
 				pts[(#pts) + 1] = ColorSequenceKeypoint.new(v, Color3.fromHSV(v, 1, 1));
 			end;
 			s.grad.Color = ColorSequence.new(pts);
@@ -550,7 +550,7 @@ local function mk(label, isV, getV, setV, getH)
 		});
 	else
 		local pts = {};
-		for _, v in ipairs(stops) do
+		for _, v in stops do
 			pts[(#pts) + 1] = ColorSequenceKeypoint.new(v, Color3.fromHSV(v, 1, 1));
 		end;
 		gr.Color = ColorSequence.new(pts);

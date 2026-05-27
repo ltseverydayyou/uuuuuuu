@@ -18,7 +18,7 @@ local function matchConstants(closure, list)
     
     local constants = getConstants(closure)
     
-    for index, value in pairs(list) do
+    for index, value in list do
         if constants[index] ~= value and value ~= placeholderUserdataConstant then
             return false
         end
@@ -28,7 +28,7 @@ local function matchConstants(closure, list)
 end
 
 local function searchClosure(script, name, upvalueIndex, constants)
-    for _i, v in pairs(getGc()) do
+    for _i, v in getGc() do
         local parentScript = rawget(getfenv(v), "script")
 
         if type(v) == "function" and 

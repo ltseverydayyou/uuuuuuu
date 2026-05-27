@@ -150,7 +150,7 @@ A.addglob = function(g)
 	if type(g) ~= "table" then
 		return
 	end
-	for _, v in ipairs(A.globs) do
+	for _, v in A.globs do
 		if v == g then
 			return
 		end
@@ -178,7 +178,7 @@ pcall(function()
 end)
 
 local old = nil
-for _, g in ipairs(A.globs) do
+for _, g in A.globs do
 	pcall(function()
 		if type(rawget(g, "__rusher_obs")) == "table" then
 			old = rawget(g, "__rusher_obs")
@@ -188,7 +188,7 @@ end
 if type(old) == "table" and type(old.cln) == "function" then
 	pcall(old.cln)
 end
-for _, g in ipairs(A.globs) do
+for _, g in A.globs do
 	pcall(function()
 		g.__rusher_obs = A
 	end)
@@ -311,7 +311,7 @@ A.scr = function(n)
 		return m and m:FindFirstChild("cajon")
 	elseif n == "chartmod" then
 		local ch = nil
-		for _, nm in ipairs({ "song", "load", "game", "menu" }) do
+		for _, nm in { "song", "load", "game", "menu" } do
 			local e = A.envs[nm]
 			if type(e) ~= "table" then
 				e = A.fenv(A.scr(nm))
@@ -395,7 +395,7 @@ end
 A.push = function(e)
 	local g = A.gtab(e)
 	if type(g) == "table" then
-		for k, v in pairs(A.vars) do
+		for k, v in A.vars do
 			pcall(function()
 				g[k] = v
 			end)
@@ -403,7 +403,7 @@ A.push = function(e)
 	end
 
 	if type(e) == "table" then
-		for k, v in pairs(A.vars) do
+		for k, v in A.vars do
 			pcall(function()
 				e[k] = v
 			end)
@@ -431,7 +431,7 @@ end
 A.envall = function()
 	local out = {}
 	local seen = {}
-	for _, n in ipairs(A.envnames) do
+	for _, n in A.envnames do
 		local e = A.env(n)
 		if type(e) == "table" and not seen[e] then
 			seen[e] = true
@@ -445,7 +445,7 @@ A.gtabs = function()
 	local out = {}
 	local seen = {}
 
-	for _, e in ipairs(A.envall()) do
+	for _, e in A.envall() do
 		local g = A.gtab(e)
 		if type(g) == "table" and not seen[g] then
 			seen[g] = true
@@ -457,7 +457,7 @@ A.gtabs = function()
 		end
 	end
 
-	for _, g in ipairs(A.globs) do
+	for _, g in A.globs do
 		if type(g) == "table" and not seen[g] then
 			seen[g] = true
 			table.insert(out, g)
@@ -471,7 +471,7 @@ A.gametabs = function()
 	local out = {}
 	local seen = {}
 
-	for _, e in ipairs(A.envall()) do
+	for _, e in A.envall() do
 		local g = A.gtab(e)
 		if type(g) == "table" and not seen[g] then
 			seen[g] = true
@@ -505,10 +505,10 @@ A.gkeys = {
 }
 
 A.pullg = function()
-	for _, e in ipairs(A.envall()) do
+	for _, e in A.envall() do
 		local g = A.gtab(e)
 		if type(g) == "table" then
-			for _, k in ipairs(A.gkeys) do
+			for _, k in A.gkeys do
 				local v = nil
 				pcall(function()
 					v = rawget(g, k)
@@ -524,7 +524,7 @@ A.pullg = function()
 			end
 		end
 		if type(e) == "table" then
-			for _, k in ipairs(A.gkeys) do
+			for _, k in A.gkeys do
 				if A.vars[k] == nil then
 					local v = nil
 					pcall(function()
@@ -547,7 +547,7 @@ end
 A.gget = function(k)
 	A.pullg()
 	local tabs = table.find(A.gkeys, k) and A.gametabs() or A.gtabs()
-	for _, g in ipairs(tabs) do
+	for _, g in tabs do
 		local ok, v = pcall(function()
 			return g[k]
 		end)
@@ -563,7 +563,7 @@ A.gset = function(k, v)
 	A.vars[k] = v
 
 	local tabs = table.find(A.gkeys, k) and A.gametabs() or A.gtabs()
-	for _, g in ipairs(tabs) do
+	for _, g in tabs do
 		pcall(function()
 			g[k] = v
 		end)
@@ -623,7 +623,7 @@ A.gcf = function(kind, pred, one)
 			end
 			if type(res) == "table" then
 				local out = {}
-				for _, v in pairs(res) do
+				for _, v in res do
 					if pred(v) then
 						if one then
 							return v
@@ -640,7 +640,7 @@ A.gcf = function(kind, pred, one)
 		local ok, res = pcall(getgc, true)
 		if ok and type(res) == "table" then
 			local out = {}
-			for _, v in pairs(res) do
+			for _, v in res do
 				if (not kind or type(v) == kind) and pred(v) then
 					if one then
 						return v
@@ -958,7 +958,7 @@ A.firecons = function(sig, k, down)
 		return false
 	end
 
-	for _, c in ipairs(cons) do
+	for _, c in cons do
 		local enabled = true
 		pcall(function()
 			if c.Enabled == false then
@@ -1002,7 +1002,7 @@ A.hasin = function(list, k)
 		return nil
 	end
 
-	for i, v in ipairs(list) do
+	for i, v in list do
 		if type(v) == "table" and v[1] == k then
 			return i
 		end
@@ -1350,7 +1350,7 @@ A.resetkeys = function()
 	A.upq = {}
 	A.relq2 = {}
 
-	for k in pairs(A.keys) do
+	for k in A.keys do
 		A.grel(k, true)
 	end
 
@@ -1409,7 +1409,7 @@ A.loadchart = function()
 	local id = 0
 	local relid = 0
 
-	for _, n in ipairs(ch.notes) do
+	for _, n in ch.notes do
 		local nt = tonumber(n[1]) or 1
 		local st = tonumber(n[2])
 		local en = tonumber(n[3]) or -1
@@ -1688,7 +1688,7 @@ A.pick = function(p)
 	A.call("song", "select_partner", p)
 	A.call("assist", "selectassist", p)
 
-	for _, n in ipairs({ "song", "assist" }) do
+	for _, n in { "song", "assist" } do
 		local e = A.env(n)
 		if e and type(e.playerdata) == "table" then
 			pcall(function()
@@ -1709,7 +1709,7 @@ A.cln = function()
 	A.setap(false)
 	A.resetkeys()
 
-	for _, c in ipairs(A.con) do
+	for _, c in A.con do
 		pcall(function()
 			c:Disconnect()
 		end)
@@ -1889,11 +1889,11 @@ A.objsave = function()
 		end
 	end
 
-	for idx, obj in pairs(type(Toggles) == "table" and Toggles or {}) do
+	for idx, obj in type(Toggles) == "table" and Toggles or {} do
 		add(idx, obj)
 	end
 
-	for idx, obj in pairs(type(Options) == "table" and Options or {}) do
+	for idx, obj in type(Options) == "table" and Options or {} do
 		add(idx, obj)
 	end
 
@@ -1906,7 +1906,7 @@ A.objload = function(dat)
 	end
 
 	if type(dat.objects) == "table" then
-		for _, it in ipairs(dat.objects) do
+		for _, it in dat.objects do
 			local idx = type(it) == "table" and it.idx or nil
 			local typ = type(it) == "table" and it.type or nil
 			if type(idx) == "string" and not A.signore[idx] then
@@ -1948,13 +1948,13 @@ A.objload = function(dat)
 	local op = type(Options) == "table" and Options or {}
 
 	if type(dat.tog) == "table" then
-		for k, v in pairs(dat.tog) do
+		for k, v in dat.tog do
 			A.setctl(tg[k], v)
 		end
 	end
 
 	if type(dat.opt) == "table" then
-		for k, v in pairs(dat.opt) do
+		for k, v in dat.opt do
 			A.setctl(op[k], v)
 		end
 	end

@@ -145,7 +145,7 @@ if game.GameId == 847722000 then
 		end
 		makeCfgFolder()
 		local out = {}
-		for k, v in pairs(tbl or {}) do
+		for k, v in tbl or {} do
 			local tv = typeof(v)
 			if tv == "boolean" or tv == "number" or tv == "string" then
 				out[k] = v
@@ -783,7 +783,7 @@ if game.GameId == 847722000 then
 		local ok, objects = pcall(function()
 			return Ws:GetDescendants()
 		end)
-		for _, obj in pairs(ok and objects or {}) do
+		for _, obj in ok and objects or {} do
 			zeroBasePartVelocity(obj)
 		end
 	end
@@ -823,7 +823,7 @@ if game.GameId == 847722000 then
 		if not ok or type(res) ~= "table" then
 			return false
 		end
-		for _, v in pairs(res) do
+		for _, v in res do
 			pcall(fn, v)
 		end
 		return true
@@ -868,7 +868,7 @@ if game.GameId == 847722000 then
 			return
 		end
 
-		for v in pairs(infSys.tabs) do
+		for v in infSys.tabs do
 			pcall(patchInfTab, v)
 		end
 
@@ -897,7 +897,7 @@ if game.GameId == 847722000 then
 
 	-- Stamina Table
     --[[
-    for i,v in pairs(getgc(true)) do
+    for i,v in getgc(true) do
         if type(v) == "table" then
             if rawget(v,"stamina") then
                 _G.StaminaTable = v
@@ -1084,7 +1084,7 @@ if game.GameId == 847722000 then
 			return 0
 		end
 		local removed = 0
-		for _, v in pairs(kids(cam)) do
+		for _, v in kids(cam) do
 			if match(v) then
 				removed += 1
 				safeDestroy(v)
@@ -1232,7 +1232,7 @@ if game.GameId == 847722000 then
 			return 0
 		end
 		local removed = 0
-		for _, gui in pairs(kids(pg)) do
+		for _, gui in kids(pg) do
 			if gui:IsA("ScreenGui") and (gui.Name == "IntroGUI" or (ffc(gui, "LoadingFrame") and ffc(gui, "MenuFrame"))) then
 				removed += 1
 				safeDestroy(gui)
@@ -1355,7 +1355,7 @@ if game.GameId == 847722000 then
 			return 0
 		end
 		local n = 0
-		for _, obj in pairs(desc(Ws)) do
+		for _, obj in desc(Ws) do
 			if clientBypass.unlockPrompt(obj) then
 				n += 1
 			end
@@ -1368,7 +1368,7 @@ if game.GameId == 847722000 then
 			return 0
 		end
 		local n = 0
-		for prompt in pairs(clientBypass.prompts) do
+		for prompt in clientBypass.prompts do
 			if prompt and prompt.Parent then
 				if clientBypass.unlockPrompt(prompt) then
 					n += 1
@@ -1399,7 +1399,7 @@ if game.GameId == 847722000 then
 
 	function clientBypass.restoreMutedSounds()
 		local n = 0
-		for obj in pairs(clientBypass.mutedSounds) do
+		for obj in clientBypass.mutedSounds do
 			if not obj or not obj.Parent then
 				clientBypass.mutedSounds[obj] = nil
 			elseif obj:IsA("Sound") and obj:GetAttribute("RakeAdminMuted") == true and not clientBypass.shouldMuteSound(obj) then
@@ -1452,7 +1452,7 @@ if game.GameId == 847722000 then
 			return 0
 		end
 		local n = 0
-		for _, obj in pairs(desc(root)) do
+		for _, obj in desc(root) do
 			if obj:IsA("Sound") and clientBypass.shouldMuteSound(obj) then
 				if clientBypass.muteSound(obj) then
 					n += 1
@@ -1471,7 +1471,7 @@ if game.GameId == 847722000 then
 		local cam = clientBypass.getCamera()
 		n += clientBypass.scanSoundContainer(cam)
 		local lp = Plrs.LocalPlayer
-		for _, p in pairs(kids(Plrs)) do
+		for _, p in kids(Plrs) do
 			n += clientBypass.scanSoundContainer(p.Character)
 		end
 		if lp and lp.Character then
@@ -1514,7 +1514,7 @@ if game.GameId == 847722000 then
 			return 0
 		end
 		local n = 0
-		for _, obj in pairs(desc(pg)) do
+		for _, obj in desc(pg) do
 			if obj.Name == "DeathMsg" and (obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox")) then
 				obj.Visible = st.hideDeathMessages ~= true
 				if st.hideDeathMessages == true then
@@ -1541,7 +1541,7 @@ if game.GameId == 847722000 then
 			return 0
 		end
 		local n = 0
-		for _, gui in pairs(kids(pg)) do
+		for _, gui in kids(pg) do
 			if gui:IsA("ScreenGui") and ((st.blockFavoritePrompts == true and gui.Name == "_fav") or (st.blockGroupPrompts == true and gui.Name == "_fav2")) then
 				n += 1
 				safeDestroy(gui)
@@ -1575,7 +1575,7 @@ if game.GameId == 847722000 then
 			if not root then
 				return
 			end
-			for _, obj in pairs(desc(root)) do
+			for _, obj in desc(root) do
 				if obj:IsA("Light") then
 					if st.flashlightNoShadows == true then
 						pcall(function()
@@ -1601,7 +1601,7 @@ if game.GameId == 847722000 then
 				end
 			end
 		end
-		for _, p in pairs(kids(Plrs)) do
+		for _, p in kids(Plrs) do
 			scan(p.Character)
 		end
 		scan(ffcr(Ws, "Rake"))
@@ -1635,7 +1635,7 @@ if game.GameId == 847722000 then
 
 	function clientBypass.restoreMovementPatches()
 		local n = 0
-		for mod, old in pairs(clientBypass.bobFns) do
+		for mod, old in clientBypass.bobFns do
 			if type(mod) == "table" and type(old) == "function" then
 				pcall(function()
 					mod.Movement = old
@@ -1679,7 +1679,7 @@ if game.GameId == 847722000 then
 
 	function clientBypass.restoreHiddenUi()
 		local n = 0
-		for obj, state in pairs(clientBypass.uiState) do
+		for obj, state in clientBypass.uiState do
 			if typeof(obj) == "Instance" and obj.Parent and type(state) == "table" then
 				pcall(function()
 					if state.Enabled ~= nil and obj:IsA("LayerCollector") then
@@ -1702,7 +1702,7 @@ if game.GameId == 847722000 then
 
 	function clientBypass.applyClientPopupBypasses()
 		local n = 0
-		for ch in pairs(clientBypass.ch) do
+		for ch in clientBypass.ch do
 			if clientBypass.isCH(ch) then
 				local frames = rawget(ch, "frames")
 				local lbl = type(frames) == "table" and rawget(frames, "locationLabel") or nil
@@ -1713,7 +1713,7 @@ if game.GameId == 847722000 then
 		end
 		local pg = clientBypass.getPlayerGui()
 		if pg then
-			for _, gui in pairs(kids(pg)) do
+			for _, gui in kids(pg) do
 				if gui:IsA("ScreenGui") and gui.Name == "ScrapGUI" then
 					if clientBypass.setGuiHidden(gui, st.hideScrapPopups == true) then
 						n += 1
@@ -1784,7 +1784,7 @@ if game.GameId == 847722000 then
 		local debris = ffc(Ws, "Debris")
 		local drops = debris and (ffc(debris, "SupplyCrates") or ffc(debris, "SupplyCreates"))
 		if drops then
-			for _, obj in pairs(desc(drops)) do
+			for _, obj in desc(drops) do
 				if obj.Name == "Box" or obj.Name == "GUIPart" or obj:IsA("ProximityPrompt") then
 					if clientBypass.unlockPromptIn(obj) then
 						n += 1
@@ -1794,7 +1794,7 @@ if game.GameId == 847722000 then
 		end
 		local traps = debris and ffc(debris, "Traps")
 		if traps then
-			for _, trap in pairs(kids(traps)) do
+			for _, trap in kids(traps) do
 				if trap.Name == "RakeTrapModel" and clientBypass.unlockPromptIn(trap) then
 					n += 1
 				end
@@ -1890,7 +1890,7 @@ if game.GameId == 847722000 then
 			return false
 		end
 		local old = {}
-		for _, name in pairs({ "CanSprintCheck", "JumpHandler", "TakeStamina", "StaminaDrain", "DoRegenStamina", "RegenStaminaHandler", "Update" }) do
+		for _, name in { "CanSprintCheck", "JumpHandler", "TakeStamina", "StaminaDrain", "DoRegenStamina", "RegenStaminaHandler", "Update" } do
 			local fn = rawget(lib, name)
 			if type(fn) == "function" then
 				old[name] = fn
@@ -1967,10 +1967,10 @@ if game.GameId == 847722000 then
 	end
 
 	function clientBypass.restoreStaminaModules()
-		for mod, data in pairs(clientBypass.stamMods) do
+		for mod, data in clientBypass.stamMods do
 			pcall(function()
 				local lib = data.lib
-				for name, fn in pairs(data.old or {}) do
+				for name, fn in data.old or {} do
 					lib[name] = fn
 				end
 			end)
@@ -2015,7 +2015,7 @@ if game.GameId == 847722000 then
 			return false
 		end
 		local old = {}
-		for _, name in pairs({ "new", "UpdateHB", "UpdateRS", "Update" }) do
+		for _, name in { "new", "UpdateHB", "UpdateRS", "Update" } do
 			local fn = rawget(lib, name)
 			if type(fn) == "function" then
 				old[name] = fn
@@ -2032,7 +2032,7 @@ if game.GameId == 847722000 then
 				return a, b, c
 			end
 		end
-		for _, name in pairs({ "UpdateHB", "UpdateRS", "Update" }) do
+		for _, name in { "UpdateHB", "UpdateRS", "Update" } do
 			local fn = old[name]
 			if fn then
 				lib[name] = function(ch, ...)
@@ -2048,10 +2048,10 @@ if game.GameId == 847722000 then
 	end
 
 	function clientBypass.restoreMainClientModules()
-		for mod, data in pairs(clientBypass.mainMods) do
+		for mod, data in clientBypass.mainMods do
 			pcall(function()
 				local lib = data.lib
-				for name, fn in pairs(data.old or {}) do
+				for name, fn in data.old or {} do
 					lib[name] = fn
 				end
 			end)
@@ -2072,14 +2072,14 @@ if game.GameId == 847722000 then
 		local root = clientBypass.fetchRootModule()
 		if isLiveMod(root) then
 			clientBypass.patchMainClientModule(root)
-			for _, obj in pairs(desc(root)) do
+			for _, obj in desc(root) do
 				clientBypass.addModuleCandidate(obj, seen, list)
 			end
 		end
-		for rootMod in pairs(clientBypass.modRoots) do
+		for rootMod in clientBypass.modRoots do
 			if isLiveMod(rootMod) then
 				clientBypass.patchMainClientModule(rootMod)
-				for _, obj in pairs(desc(rootMod)) do
+				for _, obj in desc(rootMod) do
 					clientBypass.addModuleCandidate(obj, seen, list)
 				end
 			else
@@ -2088,21 +2088,21 @@ if game.GameId == 847722000 then
 		end
 		if type(getloadedmodules) == "function" then
 			pcall(function()
-				for _, mod in pairs(getloadedmodules()) do
+				for _, mod in getloadedmodules() do
 					clientBypass.addModuleCandidate(mod, seen, list)
 				end
 			end)
 		end
 		if type(getnilinstances) == "function" then
 			pcall(function()
-				for _, obj in pairs(getnilinstances()) do
+				for _, obj in getnilinstances() do
 					clientBypass.addModuleCandidate(obj, seen, list)
 				end
 			end)
 		end
 		local lp = Plrs.LocalPlayer
-		for _, root in pairs({ lp, lp and ffc(lp, "PlayerScripts"), lp and ffc(lp, "PlayerGui"), lp and ffc(lp, "Backpack"), Rep }) do
-			for _, obj in pairs(desc(root)) do
+		for _, root in { lp, lp and ffc(lp, "PlayerScripts"), lp and ffc(lp, "PlayerGui"), lp and ffc(lp, "Backpack"), Rep } do
+			for _, obj in desc(root) do
 				clientBypass.addModuleCandidate(obj, seen, list)
 			end
 		end
@@ -2118,7 +2118,7 @@ if game.GameId == 847722000 then
 		if isLiveMod(root) and clientBypass.patchMainClientModule(root) then
 			n += 1
 		end
-		for _, mod in pairs(clientBypass.findStaminaModules()) do
+		for _, mod in clientBypass.findStaminaModules() do
 			if clientBypass.patchStaminaModule(mod) then
 				n += 1
 			end
@@ -2127,7 +2127,7 @@ if game.GameId == 847722000 then
 	end
 
 	function clientBypass.restoreStaminaSignals()
-		for c in pairs(clientBypass.stamTk) do
+		for c in clientBypass.stamTk do
 			pcall(function()
 				if type(c.Enable) == "function" then
 					c:Enable()
@@ -2175,7 +2175,7 @@ if game.GameId == 847722000 then
 		if not ok or type(cons) ~= "table" then
 			return false
 		end
-		for _, c in pairs(cons) do
+		for _, c in cons do
 			if st.infStamina == true then
 				pcall(function()
 					if type(c.Disable) == "function" then
@@ -2359,7 +2359,7 @@ if game.GameId == 847722000 then
 		if type(getgc) == "function" then
 			local ok, list = pcall(getgc, true)
 			if ok and type(list) == "table" then
-				for _, t in pairs(list) do
+				for _, t in list do
 					clientBypass.addCH(t)
 				end
 			end
@@ -2424,7 +2424,7 @@ if game.GameId == 847722000 then
 			table.clear(t)
 			return
 		end
-		for k in pairs(t) do
+		for k in t do
 			t[k] = nil
 		end
 	end
@@ -2526,7 +2526,7 @@ if game.GameId == 847722000 then
 					rc.lastChaseT = 0
 					rc.lastStaticFactor = 0
 					if rc.fovV then rc.fovV.Value = 0 end
-					for _, snd in pairs({ rc.static, rc.chase, rc.heartbeat }) do
+					for _, snd in { rc.static, rc.chase, rc.heartbeat } do
 						if typeof(snd) == "Instance" and snd:IsA("Sound") then
 							snd.Volume = 0
 							snd.Playing = false
@@ -2542,7 +2542,7 @@ if game.GameId == 847722000 then
 			end
 			local vi = rawget(t, "visualInstances")
 			if type(vi) == "table" then
-				for name, it in pairs(vi) do
+				for name, it in vi do
 					if type(it) == "table" then
 						local hard = st.disableVisualFx == true or (st.disableDeathFx == true and (name == "Death" or name == "Susto"))
 						if st.disableMotionBlur == true or hard then
@@ -2596,7 +2596,7 @@ if game.GameId == 847722000 then
 			clientBypass.scanCH()
 		end
 		local n = 0
-		for t in pairs(clientBypass.ch) do
+		for t in clientBypass.ch do
 			if clientBypass.patchCH(t) then
 				n += 1
 			end
@@ -2614,7 +2614,7 @@ if game.GameId == 847722000 then
 			return 0
 		end
 		local n = 0
-		for _, obj in pairs(kids(ps)) do
+		for _, obj in kids(ps) do
 			if obj.Name == "IntroHandler" then
 				n += 1
 				safeDestroy(obj)
@@ -2725,11 +2725,11 @@ if game.GameId == 847722000 then
 			end
 		end
 		run(ffc(root, "Box"))
-		for _, box in pairs(kids(root)) do
+		for _, box in kids(root) do
 			run(box)
 		end
 		if n <= 0 then
-			for _, box in pairs(desc(root)) do
+			for _, box in desc(root) do
 				run(box)
 			end
 		end
@@ -2743,7 +2743,7 @@ if game.GameId == 847722000 then
 			return 0
 		end
 		local n = 0
-		for _, trap in pairs(kids(traps)) do
+		for _, trap in kids(traps) do
 			if trap and trap.Name == "RakeTrapModel" then
 				n += 1
 				pcall(fn, trap)
@@ -2836,7 +2836,7 @@ if game.GameId == 847722000 then
 
 		local waypoints = path:GetWaypoints()
 
-		for i,v in pairs(waypoints) do
+		for i,v in waypoints do
 			getHum():MoveTo(v.Position)
 		end
 	end
@@ -2876,7 +2876,7 @@ if game.GameId == 847722000 then
 			end)
 		elseif tostring(mode) == "Disable" then
 			local root = dropRoot()
-			for _, v in pairs(desc(root)) do
+			for _, v in desc(root) do
 				if v.Name == "SleepyDropChams" then
 					v:Destroy()
 				end
@@ -3815,19 +3815,19 @@ if game.GameId == 847722000 then
 		if not esp then
 			return
 		end
-		for _, it in pairs({ esp.flare, esp.rake }) do
+		for _, it in { esp.flare, esp.rake } do
 			if it and it.d then
 				pcall(fn, it.d)
 			end
 		end
-		for _, bucket in pairs({ esp.players, esp.drops, esp.scraps }) do
-			for _, it in pairs(bucket) do
+		for _, bucket in { esp.players, esp.drops, esp.scraps } do
+			for _, it in bucket do
 				if it and it.d then
 					pcall(fn, it.d)
 				end
 			end
 		end
-		for _, d in pairs(esp.locs) do
+		for _, d in esp.locs do
 			if d then
 				pcall(fn, d)
 			end
@@ -4060,7 +4060,7 @@ if game.GameId == 847722000 then
 		local n = dpiNum(v)
 		local best = 100
 		local dist = math.huge
-		for _, x in ipairs(dpiNums) do
+		for _, x in dpiNums do
 			local d = math.abs(n - x)
 			if d < dist then
 				dist = d
@@ -4124,7 +4124,7 @@ if game.GameId == 847722000 then
 		Name = "Reset Saved Settings",
 		Callback = function()
 			saved = {}
-			for k in pairs(st) do
+			for k in st do
 				st[k] = nil
 			end
 			pcall(function()
@@ -5061,7 +5061,7 @@ if game.GameId == 847722000 then
 		local s = aura.stick
 		if not (s and s.Parent) then
 			s = nil
-			for _, v in pairs(kids(ch)) do
+			for _, v in kids(ch) do
 				if auraIsStick(v) then
 					s = v
 					break
@@ -5075,7 +5075,7 @@ if game.GameId == 847722000 then
 					aura.bp = bp
 				end
 				if bp then
-					for _, v in pairs(kids(bp)) do
+					for _, v in kids(bp) do
 						if auraIsStick(v) then
 							s = v
 							break
@@ -5302,7 +5302,7 @@ if game.GameId == 847722000 then
 	ExploitsTab:CreateButton({
 		Name = "Bring Scraps",
 		Callback = function()
-			for i,v in pairs(Ws.Filter.ScrapSpawns:QueryDescendants("Instance")) do
+			for i,v in Ws.Filter.ScrapSpawns:QueryDescendants("Instance") do
 				if v.Name:lower() == "scrap" then
 					v:PivotTo(Plrs.LocalPlayer.Character:GetPivot())
 				end
@@ -5555,28 +5555,28 @@ if game.GameId == 847722000 then
 			end
 		end
 		if not kind or kind == "players" then
-			for k in pairs(esp.players) do
+			for k in esp.players do
 				esp.clearOne(esp.players, k)
 			end
 		end
 		if not kind or kind == "drops" then
-			for k in pairs(esp.drops) do
+			for k in esp.drops do
 				esp.clearOne(esp.drops, k)
 			end
 		end
 		if not kind or kind == "locs" then
-			for k, d in pairs(esp.locs) do
+			for k, d in esp.locs do
 				safeDrawRemove(d)
 				esp.locs[k] = nil
 			end
 		end
 		if not kind or kind == "scraps" then
-			for k in pairs(esp.scraps) do
+			for k in esp.scraps do
 				esp.clearOne(esp.scraps, k)
 			end
 		end
 		if not kind or kind == "traps" then
-			for k in pairs(esp.traps) do
+			for k in esp.traps do
 				esp.clearOne(esp.traps, k)
 			end
 		end
@@ -5671,7 +5671,7 @@ if game.GameId == 847722000 then
 		end
 
 		if _G.PlayerESP == true then
-			for _, p in pairs(Plrs:GetPlayers()) do
+			for _, p in Plrs:GetPlayers() do
 				if p ~= Plrs.LocalPlayer and p.Character then
 					local ch = p.Character
 					if not esp.players[p] or esp.players[p].o ~= ch then
@@ -5684,7 +5684,7 @@ if game.GameId == 847722000 then
 					end
 				end
 			end
-			for p, it in pairs(esp.players) do
+			for p, it in esp.players do
 				if not p.Parent or not p.Character or p.Character ~= it.o then
 					esp.clearOne(esp.players, p)
 				end
@@ -5703,7 +5703,7 @@ if game.GameId == 847722000 then
 					}
 				end
 			end)
-			for box in pairs(esp.drops) do
+			for box in esp.drops do
 				if not box.Parent then
 					esp.clearOne(esp.drops, box)
 				end
@@ -5718,7 +5718,7 @@ if game.GameId == 847722000 then
 			if root ~= esp.scrapRoot then
 				esp.scrapRoot = root
 				cleanupEsp("scraps")
-				for _, v in pairs(desc(root)) do
+				for _, v in desc(root) do
 					if v.Name == "Scrap" and v:IsA("BasePart") and not esp.scraps[v] then
 						esp.scraps[v] = {
 							o = v,
@@ -5728,7 +5728,7 @@ if game.GameId == 847722000 then
 					end
 				end
 			end
-			for v in pairs(esp.scraps) do
+			for v in esp.scraps do
 				if not v.Parent then
 					esp.clearOne(esp.scraps, v)
 				end
@@ -5742,7 +5742,7 @@ if game.GameId == 847722000 then
 			local debris = ffc(Ws, "Debris")
 			local root = debris and ffc(debris, "Traps")
 			if root then
-				for _, v in pairs(kids(root)) do
+				for _, v in kids(root) do
 					if v.Name == "RakeTrapModel" and v:IsA("Model") and not esp.traps[v] then
 						esp.traps[v] = {
 							o = v,
@@ -5752,7 +5752,7 @@ if game.GameId == 847722000 then
 					end
 				end
 			end
-			for v in pairs(esp.traps) do
+			for v in esp.traps do
 				if not v.Parent or v.Parent ~= root then
 					esp.clearOne(esp.traps, v)
 				end
@@ -5804,7 +5804,7 @@ if game.GameId == 847722000 then
 			local root = esp.getLocFolder()
 			local alive = {}
 			if root then
-				for _, obj in pairs(kids(root)) do
+				for _, obj in kids(root) do
 					local pos = esp.locPos(obj)
 					if pos then
 						alive[obj] = true
@@ -5818,7 +5818,7 @@ if game.GameId == 847722000 then
 					end
 				end
 			end
-			for obj, d in pairs(esp.locs) do
+			for obj, d in esp.locs do
 				if not alive[obj] or not obj.Parent then
 					safeDrawRemove(d)
 					esp.locs[obj] = nil
@@ -5845,7 +5845,7 @@ if game.GameId == 847722000 then
 			esp.show(esp.rake.d, _G.RakeChams and esp.posOf(ffcr(rk, "Head") or rk), "Rake, Health : "..tostring(hp or "?"))
 		end
 
-		for p, it in pairs(esp.players) do
+		for p, it in esp.players do
 			local ch = it.o
 			local head = ch and ffcr(ch, "Head")
 			local txt = p.Name
@@ -5855,15 +5855,15 @@ if game.GameId == 847722000 then
 			esp.show(it.d, _G.PlayerESP and esp.posOf(head or ch), txt)
 		end
 
-		for box, it in pairs(esp.drops) do
+		for box, it in esp.drops do
 			esp.show(it.d, _G.SupplyDropESP and esp.posOf(ffcr(box, "HitBox") or box), "Supply Drop")
 		end
 
-		for v, it in pairs(esp.scraps) do
+		for v, it in esp.scraps do
 			esp.show(it.d, _G.ScrapESP and esp.posOf(v), esp.scrapTxt(v))
 		end
 
-		for v, it in pairs(esp.traps) do
+		for v, it in esp.traps do
 			esp.show(it.d, _G.RakeTrapESP and esp.posOf(v), "Rake Trap")
 		end
 	end)
@@ -5977,7 +5977,7 @@ if game.GameId == 847722000 then
 		if not rec.text then
 			rec.text = setmetatable({}, { __mode = "k" })
 		end
-		for _, ui in pairs(desc(obj)) do
+		for _, ui in desc(obj) do
 			if clientBypass.isTextGui(ui) then
 				local tr = rec.text[ui]
 				if not tr then
@@ -6018,7 +6018,7 @@ if game.GameId == 847722000 then
 			return 0
 		end
 		local n = 0
-		for obj in pairs(clientBypass.fovUiCache) do
+		for obj in clientBypass.fovUiCache do
 			if obj and obj.Parent then
 				if clientBypass.patchFovUi(obj) then
 					n += 1
@@ -6029,8 +6029,8 @@ if game.GameId == 847722000 then
 		end
 		if scan == true and clientBypass.fovUiScanned ~= true then
 			clientBypass.fovUiScanned = true
-			for _, root in pairs({ Ws, clientBypass.getPlayerGui() }) do
-				for _, obj in pairs(desc(root)) do
+			for _, root in { Ws, clientBypass.getPlayerGui() } do
+				for _, obj in desc(root) do
 					if obj:IsA("BillboardGui") and clientBypass.patchFovUi(obj) then
 						n += 1
 					end
@@ -6041,14 +6041,14 @@ if game.GameId == 847722000 then
 	end
 
 	function clientBypass.restoreFovUiFix()
-		for obj, rec in pairs(clientBypass.fovUiCache) do
+		for obj, rec in clientBypass.fovUiCache do
 			if obj and obj.Parent and rec and rec.size then
 				pcall(function()
 					obj.Size = rec.size
 				end)
 			end
 			if rec and rec.text then
-				for ui, tr in pairs(rec.text) do
+				for ui, tr in rec.text do
 					if ui and ui.Parent and tr then
 						pcall(function()
 							ui.TextScaled = tr.scaled == true

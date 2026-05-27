@@ -91,7 +91,7 @@ function Utility.copyTable(t)
 
 	assert(type(t) == "table", "First argument must be a table")
 	local tCopy = table.create(#t)
-	for k,v in pairs(t) do
+	for k,v in t do
 		if (type(v) == "table") then
 			tCopy[k] = Utility.copyTable(v)
 		else
@@ -135,7 +135,7 @@ function Utility.setVisible(instance, bool, sourceUID)
 	end
 	local isVisible = bool
 	if bool then
-		for sourceUID, _ in pairs(tracker) do
+		for sourceUID, _ in tracker do
 			isVisible = false
 			break
 		end
@@ -228,7 +228,7 @@ function Utility.clipOutside(icon, instance)
 	updateScreenGui()
 
 
-	for _, child in pairs(instance:GetChildren()) do
+	for _, child in instance:GetChildren() do
 		if child:IsA("UIAspectRatioConstraint") then
 			child:Clone().Parent = clone
 		end
@@ -499,7 +499,7 @@ function Utility.joinFeature(originalIcon, parentIcon, iconsArray, scrollingFram
 		if not joinedFrame then
 			return
 		end
-		for i, iconUID in pairs(iconsArray) do
+		for i, iconUID in iconsArray do
 			if iconUID == originalIconUID then
 				table.remove(iconsArray, i)
 				break
@@ -519,7 +519,7 @@ function Utility.joinFeature(originalIcon, parentIcon, iconsArray, scrollingFram
 		local parentHasNoChildren = true
 		local parentChildIcons = parentIcon.childIconsDict
 		parentChildIcons[originalIconUID] = nil
-		for childIconUID, _ in pairs(parentChildIcons) do
+		for childIconUID, _ in parentChildIcons do
 			parentHasNoChildren = false
 			break
 		end

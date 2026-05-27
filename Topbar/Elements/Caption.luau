@@ -278,7 +278,7 @@ return function(icon)
 	updatePosition(false)
 
 	captionJanitor:add(icon.toggleKeyAdded:Connect(updateHotkey))
-	for keyCodeEnum, _ in pairs(icon.bindedToggleKeys) do
+	for keyCodeEnum, _ in icon.bindedToggleKeys do
 		updateHotkey(keyCodeEnum)
 		break
 	end

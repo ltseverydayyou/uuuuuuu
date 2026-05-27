@@ -140,13 +140,13 @@ local function findUiTag(parent, tag, recursive)
 	if not parent then
 		return nil;
 	end;
-	for _, child in ipairs(parent:GetChildren()) do
+	for _, child in parent:GetChildren() do
 		if getUiTag(child) == tag then
 			return child;
 		end;
 	end;
 	if recursive then
-		for _, child in ipairs(parent:GetDescendants()) do
+		for _, child in parent:GetDescendants() do
 			if getUiTag(child) == tag then
 				return child;
 			end;
@@ -246,7 +246,7 @@ local function rebuildPlrs()
 	table.clear(plrChars);
 	table.clear(charOwner);
 	table.clear(plrModelMark);
-	for _, pp in ipairs(Players:GetPlayers()) do
+	for _, pp in Players:GetPlayers() do
 		trackPlayer(pp);
 	end;
 end;
@@ -292,7 +292,7 @@ function npc.player(model)
 	if ok and owner then
 		return true;
 	end;
-	for _, pp in ipairs(getPlrs()) do
+	for _, pp in getPlrs() do
 		local ch = pp.Character;
 		if ch and (model == ch or model:IsDescendantOf(ch) or ch:IsDescendantOf(model)) then
 			return true;
@@ -346,7 +346,7 @@ function npc.root(model, rec)
 		end;
 		return pp;
 	end;
-	for _, ch in ipairs(model:GetChildren()) do
+	for _, ch in model:GetChildren() do
 		if ch:IsA("BasePart") then
 			if rec then
 				rec.root = ch;
@@ -951,7 +951,7 @@ local OPT = {
 };
 local function normalizeAimMode(mode)
 	local lower = (tostring(mode or "")):lower();
-	for _, opt in ipairs(OPT.AIM_TARGET_OPTIONS) do
+	for _, opt in OPT.AIM_TARGET_OPTIONS do
 		if lower == opt:lower() then
 			return opt;
 		end;
@@ -961,7 +961,7 @@ end;
 _G.aimTargetMode = normalizeAimMode(_G.aimTargetMode);
 local function normalizeChoice(mode, options, defaultValue)
 	local lower = tostring(mode or ""):lower();
-	for _, opt in ipairs(options or {}) do
+	for _, opt in options or {} do
 		if lower == tostring(opt):lower() then
 			return opt;
 		end;
@@ -972,7 +972,7 @@ local function normalizeActionList(list, options, defaults)
 	local out = {};
 	local seen = {};
 	local source = type(list) == "table" and list or defaults or {};
-	for _, item in ipairs(source) do
+	for _, item in source do
 		local picked = normalizeChoice(item, options, nil);
 		if picked and (not seen[picked]) then
 			seen[picked] = true;
@@ -980,7 +980,7 @@ local function normalizeActionList(list, options, defaults)
 		end;
 	end;
 	if #out == 0 and defaults then
-		for _, item in ipairs(defaults) do
+		for _, item in defaults do
 			local picked = normalizeChoice(item, options, nil);
 			if picked and (not seen[picked]) then
 				seen[picked] = true;
@@ -1024,7 +1024,7 @@ local function copyCfgVal(v)
 		return v;
 	end;
 	local out = {};
-	for k, vv in pairs(v) do
+	for k, vv in v do
 		out[k] = copyCfgVal(vv);
 	end;
 	return out;
@@ -1117,7 +1117,7 @@ local DEFAULT_CONFIG = {
 	selectedConfigName = "default"
 };
 local function resetCfg()
-	for k, v in pairs(DEFAULT_CONFIG) do
+	for k, v in DEFAULT_CONFIG do
 		_G[k] = copyCfgVal(v);
 	end;
 end;
@@ -1158,7 +1158,7 @@ local function getConfigNames()
 		table.insert(names, picked);
 	end;
 	if listfiles and isfolder and isfolder("ltseverydayyou-Aimbot/configs") then
-		for _, path in ipairs(listfiles("ltseverydayyou-Aimbot/configs")) do
+		for _, path in listfiles("ltseverydayyou-Aimbot/configs") do
 			local name = tostring(path):match("([^/\\]+)%.json$");
 			if name then
 				name = cleanCfgName(name);
@@ -1234,7 +1234,7 @@ end;
 applyTheme(_G.uiTheme);
 local function normChoice(v, opts, def)
 	local low = tostring(v or ""):lower();
-	for _, opt in ipairs(opts or {}) do
+	for _, opt in opts or {} do
 		if low == tostring(opt):lower() then
 			return opt;
 		end;
@@ -1310,7 +1310,7 @@ local function applyCustomUI()
 		uiRefs.topToggle.BackgroundColor3 = UI.bar1;
 	end;
 	if gui then
-		for _, d in ipairs(gui:GetDescendants()) do
+		for _, d in gui:GetDescendants() do
 			if d:IsA("GuiObject") and (getUiTag(d) == "Glow" or getUiTag(d) == "Accent") then
 				d.BackgroundColor3 = UI.acc2;
 			elseif d:IsA("ScrollingFrame") then
@@ -1337,7 +1337,7 @@ local function applyCustomUI()
 	end;
 end;
 local function cleanup()
-	for _, g in pairs(uiRoot:GetChildren()) do
+	for _, g in uiRoot:GetChildren() do
 		if g:IsA("ScreenGui") and (g.Name == "VyperiaBot" or getUiTag(g) == "VyperiaBot") then
 			g:Destroy();
 		end;
@@ -1380,7 +1380,7 @@ local function grad(p, c1, c2, rot)
 	return g;
 end;
 local function noGrad(p)
-	for _, c in ipairs(p:GetChildren()) do
+	for _, c in p:GetChildren() do
 		if c:IsA("UIGradient") then
 			c:Destroy();
 		end;
@@ -1400,7 +1400,7 @@ local function tw(obj, info, props)
 		return;
 	end;
 	if _G.uiAnimations == false then
-		for k, v in pairs(props or {}) do
+		for k, v in props or {} do
 			pcall(function()
 				obj[k] = v;
 			end);
@@ -1694,7 +1694,7 @@ local function MouseButtonFix(button, clickCallback)
 	end;
 	return {
 		Disconnect = function()
-			for _, conn in ipairs(connections) do
+			for _, conn in connections do
 				if conn and conn.Disconnect then
 					conn:Disconnect();
 				end;
@@ -1726,7 +1726,7 @@ local function attachBetterDragger(ui, dragTargets, onDragEnd)
 			dragTargets
 		};
 	elseif type(dragTargets) == "table" then
-		for _, handle in ipairs(dragTargets) do
+		for _, handle in dragTargets do
 			if typeof(handle) == "Instance" then
 				table.insert(handles, handle);
 			end;
@@ -1780,7 +1780,7 @@ local function attachBetterDragger(ui, dragTargets, onDragEnd)
 			return true;
 		end;
 		local top, topOrder;
-		for _, g in ipairs(list) do
+		for _, g in list do
 			if typeof(g) == "Instance" and g:IsA("GuiObject") then
 				local ord = getOrder(g);
 				if not top or ord > topOrder then
@@ -1868,7 +1868,7 @@ local function attachBetterDragger(ui, dragTargets, onDragEnd)
 			update(frameInput);
 		end);
 	end;
-	for _, handle in ipairs(handles) do
+	for _, handle in handles do
 		pcall(function()
 			handle.Active = true;
 		end);
@@ -2076,7 +2076,7 @@ local function toast(msg)
 		Size = UDim2.new(0, 0, 0, 2)
 	});
 	local live = {};
-	for _, c in ipairs(toastHolder:GetChildren()) do
+	for _, c in toastHolder:GetChildren() do
 		if c:IsA("GuiObject") and c.Name:match("^Toast_") then
 			table.insert(live, c);
 		end;
@@ -2302,12 +2302,12 @@ local function applyCfg(obj)
 	if obj.targetMaxDistance ~= nil then
 		obj.targetMaxDistance = math.clamp(tonumber(obj.targetMaxDistance) or 2500, 100, 5000);
 	end;
-	for _, key in ipairs(OPT.RANDOM_WEIGHT_VARS) do
+	for _, key in OPT.RANDOM_WEIGHT_VARS do
 		if obj[key] ~= nil then
 			obj[key] = clampRandomWeightValue(obj[key], _G[key]);
 		end;
 	end;
-	for k, v in pairs(obj) do
+	for k, v in obj do
 		if _G[k] ~= nil then
 			_G[k] = copyCfgVal(v);
 		end;
@@ -2439,7 +2439,7 @@ local NA_GRAB_BODY = (function()
 		return nil;
 	end;
 	local function firstPart(model)
-		for _, d in ipairs(model:QueryDescendants("Instance")) do
+		for _, d in model:QueryDescendants("Instance") do
 			if d:IsA("BasePart") then
 				return d;
 			end;
@@ -2454,7 +2454,7 @@ local NA_GRAB_BODY = (function()
 		rec.lowerTorso = nil;
 		rec.humanoid = nil;
 		rec.parts = {};
-		for _, inst in ipairs(model:QueryDescendants("Instance")) do
+		for _, inst in model:QueryDescendants("Instance") do
 			if inst:IsA("Humanoid") then
 				rec.humanoid = inst;
 			elseif inst:IsA("AnimationController") then
@@ -2710,7 +2710,7 @@ local function aimPartPool(m, needLOS)
 	add(getPart(model, "LowerTorso"), 1);
 	add(getTorso(model), 1);
 	if rec.parts then
-		for _, part in ipairs(rec.parts) do
+		for _, part in rec.parts do
 			add(part, 1);
 		end;
 	end;
@@ -2719,7 +2719,7 @@ end;
 local function chooseAimPart(pool, avoid)
 	if avoid then
 		local alt = {};
-		for _, part in ipairs(pool) do
+		for _, part in pool do
 			if part ~= avoid then
 				table.insert(alt, part);
 			end;
@@ -2749,7 +2749,7 @@ local function resetAimCaches(resetTrackedTarget)
 		if type(npcCache.nextPicks) == "table" then
 			table.clear(npcCache.nextPicks);
 		end;
-		for model in pairs(npcCache.cands or {}) do
+		for model in npcCache.cands or {} do
 			if not model or not model.Parent or npc.player(model) then
 				if type(npcCache.remove) == "function" then
 					npcCache.remove(model);
@@ -2798,7 +2798,7 @@ local function buildWeightedPartEntries(m, needLOS, avoid)
 	add(getTorso(model), _G.randomWeightTorso);
 	local otherWeight = clampRandomWeightValue(_G.randomWeightOther, 0);
 	if otherWeight > 0 and rec.parts then
-		for _, part in ipairs(rec.parts) do
+		for _, part in rec.parts do
 			if part ~= avoid then
 				add(part, otherWeight);
 			end;
@@ -2806,7 +2806,7 @@ local function buildWeightedPartEntries(m, needLOS, avoid)
 	end;
 	if avoid then
 		local alt = {};
-		for _, entry in ipairs(entries) do
+		for _, entry in entries do
 			if entry.part ~= avoid then
 				table.insert(alt, entry);
 			end;
@@ -2819,7 +2819,7 @@ local function buildWeightedPartEntries(m, needLOS, avoid)
 end;
 local function chooseWeightedEntry(entries)
 	local total = 0;
-	for _, entry in ipairs(entries) do
+	for _, entry in entries do
 		total += entry.weight;
 	end;
 	if total <= 0 then
@@ -2827,7 +2827,7 @@ local function chooseWeightedEntry(entries)
 	end;
 	local roll = rng:NextNumber(0, total);
 	local acc = 0;
-	for _, entry in ipairs(entries) do
+	for _, entry in entries do
 		acc += entry.weight;
 		if roll <= acc then
 			return entry.part;
@@ -2850,7 +2850,7 @@ local function pickPreferredPart(m, prefer)
 		table.insert(order, head);
 	end;
 	local fallback = nil;
-	for _, part in ipairs(order) do
+	for _, part in order do
 		if usableAimPart(part, m) then
 			if not _G.wallCheck or clearLOS(part) then
 				return part;
@@ -3022,7 +3022,7 @@ local function getScanAimPart(ch)
 				end;
 				return a.weight > b.weight;
 			end);
-			for _, entry in ipairs(weighted) do
+			for _, entry in weighted do
 				add(entry.part);
 			end;
 		end;
@@ -3034,7 +3034,7 @@ local function getScanAimPart(ch)
 		add(getTorso(ch));
 		add(getHead(ch));
 	end;
-	for _, part in ipairs(candidates) do
+	for _, part in candidates do
 		if not _G.wallCheck or clearLOS(part) then
 			return part;
 		end;
@@ -3198,14 +3198,14 @@ local function findTarget()
 		};
 	end;
 	if allowPlayers then
-		for _, op in ipairs(getPlrs()) do
+		for _, op in getPlrs() do
 			if op ~= plr and op.Character and isEnemy(op) then
 				considerCharacter(op.Character, false);
 			end;
 		end;
 	end;
 	if allowNpcs then
-		for _, np in ipairs(npc.get()) do
+		for _, np in npc.get() do
 			considerCharacter(np, true);
 		end;
 	end;
@@ -3434,7 +3434,7 @@ local function espDetach(p)
 		return;
 	end;
 	if rec.conns then
-		for _, cc in ipairs(rec.conns) do
+		for _, cc in rec.conns do
 			if typeof(cc) == "RBXScriptConnection" and cc.Connected then
 				cc:Disconnect();
 			end;
@@ -3589,13 +3589,13 @@ local function updateESP()
 		return;
 	end;
 	if not _G.espEnabled then
-		for p, _ in pairs(espMap) do
+		for p, _ in espMap do
 			espDetach(p);
 		end;
 		espMap = {};
 		return;
 	end;
-	for _, p in ipairs(getPlrs()) do
+	for _, p in getPlrs() do
 		if p ~= plr then
 			if _G.teamCheck and (not isEnemy(p)) then
 				espDetach(p);
@@ -3604,7 +3604,7 @@ local function updateESP()
 			end;
 		end;
 	end;
-	for p, _ in pairs(espMap) do
+	for p, _ in espMap do
 		if not plrIdx[p] then
 			espDetach(p);
 		end;
@@ -3612,7 +3612,7 @@ local function updateESP()
 end;
 local function refreshESPTransparency()
 	local tr = math.clamp(_G.espTransparency or 0.3, 0, 1);
-	for _, rec in pairs(espMap) do
+	for _, rec in espMap do
 		if rec.hi then
 			rec.hi.FillTransparency = tr;
 			rec.hi.OutlineTransparency = math.clamp(tonumber(_G.espOutlineTransparency) or 0.12, 0, 1);
@@ -3637,7 +3637,7 @@ local function setTab(name)
 	local oldTab = oldName and tabs[oldName] or nil;
 	activeTab = name;
 	tabTok += 1;
-	for k, t in pairs(tabs) do
+	for k, t in tabs do
 		local sel = k == name;
 		local targetText = sel and UI.text or UI.sub;
 		local targetBg = sel and UI.tabActive or UI.tab;
@@ -3902,7 +3902,7 @@ local function addRowDropdown(parent, labelText, var, options, desc, onChange)
 	lay.Padding = UDim.new(0, 5);
 	lay.SortOrder = Enum.SortOrder.LayoutOrder;
 	local function normalize(opt)
-		for _, o in ipairs(options) do
+		for _, o in options do
 			if (tostring(opt)):lower() == (tostring(o)):lower() then
 				return o;
 			end;
@@ -3913,7 +3913,7 @@ local function addRowDropdown(parent, labelText, var, options, desc, onChange)
 	txt.Text = _G[var];
 	local btns = {};
 	local function refreshButtons()
-		for opt, o in pairs(btns) do
+		for opt, o in btns do
 			local sel = normalize(_G[var]) == opt;
 			o.BackgroundColor3 = sel and UI.tabActive or UI.bar2;
 			o.TextColor3 = sel and UI.text or UI.sub;
@@ -3939,13 +3939,13 @@ local function addRowDropdown(parent, labelText, var, options, desc, onChange)
 	end;
 	local closeOpenDropdown;
 	local function rebuildOptions()
-		for _, c in ipairs(list:GetChildren()) do
+		for _, c in list:GetChildren() do
 			if c:IsA("TextButton") then
 				c:Destroy();
 			end;
 		end;
 		btns = {};
-		for i, opt in ipairs(options) do
+		for i, opt in options do
 			local o = newUi("TextButton", list);
 			o.LayoutOrder = i;
 			o.Size = UDim2.new(1, 0, 0, optH);
@@ -4470,7 +4470,7 @@ local function makeTabBar(parent)
 			scroll = content
 		}
 	};
-	for name, t in pairs(tabs) do
+	for name, t in tabs do
 		local c = bindClick(t.btn, function()
 			setTab(name);
 		end);
@@ -5014,23 +5014,23 @@ local function createUI()
 	chipsLayout.SortOrder = Enum.SortOrder.LayoutOrder;
 	chipsLayout.VerticalAlignment = Enum.VerticalAlignment.Center;
 	local keysSet = {};
-	for _, k in ipairs(_G.toggleKeys) do
+	for _, k in _G.toggleKeys do
 		keysSet[k] = true;
 	end;
 	local function rebuildChips()
-		for _, c in ipairs(chips:GetChildren()) do
+		for _, c in chips:GetChildren() do
 			if c:IsA("Frame") then
 				c:Destroy();
 			end;
 		end;
-		for k, _ in pairs(keysSet) do
+		for k, _ in keysSet do
 			makeKeyChip(chips, k, function(name, chip)
 				keysSet[name] = nil;
 				if chip and chip.Parent then
 					chip:Destroy();
 				end;
 				local list = {};
-				for n, _ in pairs(keysSet) do
+				for n, _ in keysSet do
 					table.insert(list, n);
 				end;
 				_G.toggleKeys = list;
@@ -5110,7 +5110,7 @@ local function createUI()
 			if not keysSet[name] then
 				keysSet[name] = true;
 				local list = {};
-				for n, _ in pairs(keysSet) do
+				for n, _ in keysSet do
 					table.insert(list, n);
 				end;
 				_G.toggleKeys = list;
@@ -5330,12 +5330,12 @@ local function createUI()
 	local function refreshConfigPicker()
 		configNames = getConfigNames();
 		cfgPickTxt.Text = cleanCfgName(_G.selectedConfigName);
-		for _, c in ipairs(cfgPickList:GetChildren()) do
+		for _, c in cfgPickList:GetChildren() do
 			if c:IsA("TextButton") then
 				c:Destroy();
 			end;
 		end;
-		for i, name in ipairs(configNames) do
+		for i, name in configNames do
 			local opt = newUi("TextButton", cfgPickList);
 			opt.LayoutOrder = i;
 			opt.Size = UDim2.new(1, 0, 0, _G.uiCompact and 29 or 33);
@@ -5488,13 +5488,13 @@ local function createUI()
 	round(clrBind, UDim.new(0.2, 0));
 	stroke(clrBind, 1, UI.stroke2, 0.15);
 	local function rebuildOptionBindRows()
-		for _, c in ipairs(bindBox:GetChildren()) do
+		for _, c in bindBox:GetChildren() do
 			if c:IsA("Frame") then
 				c:Destroy();
 			end;
 		end;
 		local any = false;
-		for keyName, action in pairs(type(_G.optionBinds) == "table" and _G.optionBinds or {}) do
+		for keyName, action in type(_G.optionBinds) == "table" and _G.optionBinds or {} do
 			any = true;
 			local row = newUi("Frame", bindBox);
 			row.BackgroundColor3 = UI.bar2;
@@ -5592,7 +5592,7 @@ local function createUI()
 		helperLay.Padding = UDim.new(0, 6);
 		helperLay.SortOrder = Enum.SortOrder.LayoutOrder;
 		local function rebuildMobileHelperRows()
-			for _, c in ipairs(helperBox:GetChildren()) do
+			for _, c in helperBox:GetChildren() do
 				if c:IsA("Frame") then
 					c:Destroy();
 				end;
@@ -5611,13 +5611,13 @@ local function createUI()
 				txt.Text = "no helper buttons selected";
 				return;
 			end;
-			for _, actionName in ipairs(_G.mobileHelperButtons) do
+			for _, actionName in _G.mobileHelperButtons do
 				local row = newUi("Frame", helperBox);
 				row.BackgroundTransparency = 1;
 				row.Size = UDim2.new(1, 0, 0, 28);
 				makeKeyChip(row, actionName, function(name)
 					local nextList = {};
-					for _, existing in ipairs(_G.mobileHelperButtons) do
+					for _, existing in _G.mobileHelperButtons do
 						if existing ~= name then
 							table.insert(nextList, existing);
 						end;
@@ -5670,7 +5670,7 @@ local function createUI()
 		stroke(resetHelperPos, 1, UI.stroke2, 0.25);
 		bindClick(addHelper, function()
 			local picked = normChoice(_G.pendingMobileAction, OPT.MOBILE_ACTION_OPTIONS, "Aimbot");
-			for _, existing in ipairs(_G.mobileHelperButtons) do
+			for _, existing in _G.mobileHelperButtons do
 				if existing == picked then
 					toast("helper button already added");
 					return;
@@ -5866,7 +5866,7 @@ local function createUI()
 		rememberMobileHelperPos(holder.Position);
 	end;
 	rebuildMobileHelper = function()
-		for _, child in ipairs(mobContent:GetChildren()) do
+		for _, child in mobContent:GetChildren() do
 			if child:IsA("TextButton") then
 				child:Destroy();
 			end;
@@ -5883,7 +5883,7 @@ local function createUI()
 		mobGrid.CellPadding = UDim2.new(0, pad, 0, pad);
 		mobGrid.FillDirectionMaxCells = cols;
 		mobEmpty.Visible = #actions == 0;
-		for index, actionName in ipairs(actions) do
+		for index, actionName in actions do
 			local b = newUi("TextButton", mobContent);
 			b.LayoutOrder = index;
 			b.BackgroundColor3 = actionName == "Menu" and UI.acc2 or (actionName == "Lock" and UI.acc or UI.bar2);
@@ -6008,7 +6008,7 @@ local function createUI()
 		saveCfg();
 	end);
 	local closeCon = bindClick(btnX, function()
-		for _, c in pairs(conns) do
+		for _, c in conns do
 			disconnectConn(c);
 		end;
 		conns = {};
@@ -6032,7 +6032,7 @@ local function createUI()
 		lastLockedPart = nil;
 		VLO.stop();
 		clearFOVHooks();
-		for p, _ in pairs(espMap) do
+		for p, _ in espMap do
 			espDetach(p);
 		end;
 		espMap = {};
@@ -6155,10 +6155,10 @@ uiRefs.collectHotkeyInputs = function()
 			out[#out + 1] = enumItem;
 		end;
 	end;
-	for _, name in ipairs(type(_G.toggleKeys) == "table" and _G.toggleKeys or {}) do
+	for _, name in type(_G.toggleKeys) == "table" and _G.toggleKeys or {} do
 		push(name);
 	end;
-	for keyName, _ in pairs(type(_G.optionBinds) == "table" and _G.optionBinds or {}) do
+	for keyName, _ in type(_G.optionBinds) == "table" and _G.optionBinds or {} do
 		push(keyName);
 	end;
 	return out;
@@ -6477,7 +6477,7 @@ uiRefs.setupPlayerMonitoring = function()
 		table.insert(conns, cr);
 	end;
 	rebuildPlrs();
-	for _, pp in ipairs(getPlrs()) do
+	for _, pp in getPlrs() do
 		if pp ~= plr then
 			hook(pp);
 		end;
@@ -6548,12 +6548,12 @@ table.insert(conns, RunService.Heartbeat:Connect(function(dt)
 end));
 _G.__vyperiaAimbotCleanup = function()
 	npc.dispose(false);
-	for _, c in pairs(conns) do
+	for _, c in conns do
 		disconnectConn(c);
 	end;
 	table.clear(conns);
 	VLO.stop();
-	for p, _ in pairs(espMap) do
+	for p, _ in espMap do
 		espDetach(p);
 	end;
 	unbindStrongInputs();

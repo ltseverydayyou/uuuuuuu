@@ -158,7 +158,7 @@ end
 function List.clear(list)
     local instance = list.Instance
 
-    for _i, listButton in pairs(instance:GetChildren()) do
+    for _i, listButton in instance:GetChildren() do
         if listButton:IsA("ImageButton") then
             listButton:Destroy()
         end
@@ -171,7 +171,7 @@ end
 function List.recalculate(list)
     local newHeight = 15
 
-    for instance in pairs(list.Buttons) do
+    for instance in list.Buttons do
         if instance.Visible then
             newHeight = newHeight + instance.AbsoluteSize.Y + 5
         end
@@ -239,9 +239,9 @@ oh.Events.ListInputBegan = UserInput.InputBegan:Connect(function(input)
     if input.KeyCode == Enum.KeyCode.LeftControl then
         ctrlHeld = true
     elseif not ctrlHeld and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
-        for _i, list in pairs(lists) do
+        for _i, list in lists do
             if list.Selected then
-                for _k, listButton in pairs(list.Selected) do
+                for _k, listButton in list.Selected do
                     listButton.DeselectAnimation:Play()
                 end
 

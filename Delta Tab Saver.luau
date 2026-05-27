@@ -146,7 +146,7 @@ local NAlib = {};
 function NAlib.disconnect(n)
 	local t = _naConns[n];
 	if t then
-		for _, c in ipairs(t) do
+		for _, c in t do
 			pcall(function()
 				c:Disconnect();
 			end);
@@ -276,7 +276,7 @@ local function isGib(n)
 	return not n:match("^[%w _%-]+$");
 end;
 local function getMain()
-	for _, g in ipairs(root:GetChildren()) do
+	for _, g in root:GetChildren() do
 		if g:IsA("ScreenGui") and isGib(g.Name) then
 			if g:FindFirstChild("Executor", true) and g:FindFirstChild("Scripthub", true) and g:FindFirstChild("Sidebar", true) then
 				return g;
@@ -292,7 +292,7 @@ local function getIconGui()
 		local kids = g:GetChildren();
 		local img;
 		local cnt = 0;
-		for _, c in ipairs(kids) do
+		for _, c in kids do
 			if c:IsA("ImageButton") then
 				cnt += 1;
 				img = c;
@@ -304,7 +304,7 @@ local function getIconGui()
 			return g, img;
 		end;
 	end;
-	for _, g in ipairs(root:GetChildren()) do
+	for _, g in root:GetChildren() do
 		local ig, ib = chk(g);
 		if ig then
 			return ig, ib;
@@ -377,7 +377,7 @@ task.defer(function()
 			newBtn.Parent = parent;
 			newBtn.Name = "Script";
 			local labs = {};
-			for _, d in ipairs(newBtn:QueryDescendants("Instance")) do
+			for _, d in newBtn:QueryDescendants("Instance") do
 				if d:IsA("TextLabel") then
 					table.insert(labs, d);
 				end;
@@ -399,7 +399,7 @@ task.defer(function()
 					desc.Text = "continuation of Nameless Admin with advanced features, fixed commands and lots of customization.";
 				end;
 			end;
-			for _, d in ipairs(newBtn:QueryDescendants("Instance")) do
+			for _, d in newBtn:QueryDescendants("Instance") do
 				if d:IsA("LocalScript") then
 					d:Destroy();
 				end;
@@ -442,7 +442,7 @@ task.defer(function()
 	local btns = overlay:FindFirstChild("Buttons", true);
 	if btns then
 		local bl = {};
-		for _, v in ipairs(btns:GetChildren()) do
+		for _, v in btns:GetChildren() do
 			if v:IsA("ImageButton") or v:IsA("TextButton") then
 				table.insert(bl, v);
 			end;
@@ -465,7 +465,7 @@ task.defer(function()
 				else
 					w = 1 / cnt;
 				end;
-				for _, b in ipairs(bl) do
+				for _, b in bl do
 					b.Size = UDim2.new(w, 0, 1, 0);
 				end;
 			end;
@@ -474,7 +474,7 @@ task.defer(function()
 					return;
 				end;
 				local cur;
-				for _, tb in ipairs(codeSf:QueryDescendants("Instance")) do
+				for _, tb in codeSf:QueryDescendants("Instance") do
 					if tb:IsA("TextBox") and tb.Visible then
 						cur = tb;
 						break;
@@ -515,7 +515,7 @@ task.defer(function()
 	end;
 	local function getCodeBoxes()
 		local t = {};
-		for _, c in ipairs(codeSf:QueryDescendants("Instance")) do
+		for _, c in codeSf:QueryDescendants("Instance") do
 			if c:IsA("TextBox") and isScriptName(c.Name) then
 				table.insert(t, c);
 			end;
@@ -527,7 +527,7 @@ task.defer(function()
 	end;
 	local function getSavedNames()
 		local list = {};
-		for _, p in ipairs(listfiles(dir)) do
+		for _, p in listfiles(dir) do
 			local nm = p:match("([^/\\]+)$");
 			if nm and isScriptName(nm) then
 				table.insert(list, nm);
@@ -602,7 +602,7 @@ task.defer(function()
 			setupForName(box.Name);
 		end);
 	end;
-	for _, b in ipairs(boxes) do
+	for _, b in boxes do
 		hookBox(b);
 	end;
 	codeSf.DescendantAdded:Connect(function(obj)

@@ -712,7 +712,7 @@ end
 
 local function clearKeys()
 	activeKeys = {}
-	for _, c in ipairs(keysScroll:GetChildren()) do
+	for _, c in keysScroll:GetChildren() do
 		if c:IsA("Frame") then
 			c:Destroy()
 		end
@@ -736,11 +736,11 @@ end
 
 local function addWeighted(r, items)
 	local pad, tot = 8, 0
-	for _, it in ipairs(items) do
+	for _, it in items do
 		tot += typeof(it) == "table" and it[2] or 1
 	end
 	local i = 1
-	for _, it in ipairs(items) do
+	for _, it in items do
 		local inst, w
 		if typeof(it) == "table" then
 			inst, w = typeof(it[1]) == "Instance" and it[1] or makeKey(it[1]), it[2] or 1
@@ -973,7 +973,7 @@ local function layAll()
 	local per = IsOnMobile and 10 or 16
 	local h = math.floor(32 * rowScale)
 	local row, count = nil, 0
-	for _, kc in ipairs(allKeycodes) do
+	for _, kc in allKeycodes do
 		if kc ~= Enum.KeyCode.Unknown then
 			if count % per == 0 then
 				row = newRow(h, 100 + math.floor(count / per))
@@ -1039,7 +1039,7 @@ local function applyScheme(s)
 	setOutlineColor(closeBtn, Color3.fromRGB(255, 120, 140))
 	setOutlineColor(procBtn, outline)
 	setOutlineColor(palette, outline)
-	for _, k in ipairs(activeKeys) do
+	for _, k in activeKeys do
 		setBase(k, s.Btn)
 	end
 end
@@ -1245,7 +1245,7 @@ local function applyBaseColor(base)
 	rgbBtn.Text = "Rainbow"
 end
 
-for _, pair in ipairs(namedColors) do
+for _, pair in namedColors do
 	local n, c = pair[1], pair[2]
 	local sw = Instance.new("TextButton")
 	sw.Text = n

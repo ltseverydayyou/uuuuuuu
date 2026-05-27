@@ -127,9 +127,9 @@ local function guiroot()
 		or pg
 end
 
-for _, root in ipairs({huigrab(), cg, pg}) do
+for _, root in {huigrab(), cg, pg} do
 	if typeof(root) == "Instance" then
-		for _, v in ipairs(root:GetDescendants()) do
+		for _, v in root:GetDescendants() do
 			if v:IsA("ScreenGui") and v:GetAttribute(tag) == true then
 				v:Destroy()
 			end
@@ -295,7 +295,7 @@ local function protectui(g)
 		IgnoreGuiInset = true,
 	}
 
-	for prop, val in pairs(props) do
+	for prop, val in props do
 		bind(g:GetPropertyChangedSignal(prop), function()
 			if dead then
 				return
@@ -322,7 +322,7 @@ local function protectui(g)
 	task.spawn(function()
 		while not dead and g and g.Parent do
 			task.wait(0.75)
-			for prop, val in pairs(props) do
+			for prop, val in props do
 				if g[prop] ~= val then
 					pcall(function()
 						g[prop] = val
@@ -358,7 +358,7 @@ end)
 
 local function mk(cls, prop)
 	local o = Instance.new(cls)
-	for k, v in pairs(prop) do
+	for k, v in prop do
 		o[k] = v
 	end
 	o.Name = uiname()
@@ -619,7 +619,7 @@ local function cloneplain(t)
 		end
 	end
 	local cp = {}
-	for k, v in pairs(t) do
+	for k, v in t do
 		cp[k] = v
 	end
 	local mt = getmetatable(t)
@@ -731,14 +731,14 @@ local function klist(t, fn)
 		end
 	end
 
-	for k, v in pairs(t) do
+	for k, v in t do
 		add(k, v)
 	end
 
 	local mt = getmetatable(t)
 	local idx = mt and mt.__index
 	if type(idx) == "table" then
-		for k in pairs(idx) do
+		for k in idx do
 			local v = rawget(t, k)
 			if v == nil then
 				local ok, res = pcall(function()
@@ -764,9 +764,9 @@ local function klist(t, fn)
 		end
 
 		if type(ups) == "table" then
-			for _, up in pairs(ups) do
+			for _, up in ups do
 				if type(up) == "table" then
-					for k in pairs(up) do
+					for k in up do
 						local v = rawget(t, k)
 						if v == nil then
 							local ok, res = pcall(function()
@@ -1102,7 +1102,7 @@ local function dragger(ui, dragui)
 		end
 		local topg
 		local topo
-		for _, g in ipairs(list) do
+		for _, g in list do
 			local o = getorder(g)
 			if not topg or o > topo then
 				topg = g
@@ -1249,7 +1249,7 @@ local function fit()
 
 	local tw = math.floor((w - 32) / 3)
 	local x = 0
-	for _, k in ipairs({"mods", "ents", "flds"}) do
+	for _, k in {"mods", "ents", "flds"} do
 		local b = tabs[k]
 		b.Position = UDim2.fromOffset(x, 0)
 		b.Size = UDim2.new(0, tw - 4, 1, 0)
@@ -1261,7 +1261,7 @@ local function fit()
 
 	local rw = math.floor((w - 32) / 5)
 	local rx = 0
-	for _, k in ipairs({"all", "workspace", "replicatedstorage", "replicatedfirst", "players"}) do
+	for _, k in {"all", "workspace", "replicatedstorage", "replicatedfirst", "players"} do
 		local b = roottabs[k]
 		b.Position = UDim2.fromOffset(rx, 0)
 		b.Size = UDim2.new(0, rw - 4, 1, 0)
@@ -1285,7 +1285,7 @@ updatepmb()
 bind(cam:GetPropertyChangedSignal("ViewportSize"), fit)
 
 local function clear()
-	for _, v in ipairs(listc:GetChildren()) do
+	for _, v in listc:GetChildren() do
 		if not v:IsA("UICorner") then
 			v:Destroy()
 		end
@@ -1313,7 +1313,7 @@ local function infof(a, b)
 end
 
 local function rootname(obj)
-	for _, v in ipairs(roots) do
+	for _, v in roots do
 		if obj == v then
 			return v.Name
 		end
@@ -1334,7 +1334,7 @@ local function curp()
 		return p
 	end
 	local s = p
-	for _, v in ipairs(stk) do
+	for _, v in stk do
 		s ..= "." .. tostring(v)
 	end
 	return s
@@ -1498,7 +1498,7 @@ local function haschildtables(t)
 	if type(t) ~= "table" then
 		return false
 	end
-	for _, v in pairs(t) do
+	for _, v in t do
 		if type(v) == "table" and not iscycletable(v) then
 			return true
 		end
@@ -1520,7 +1520,7 @@ local function tcnt(t)
 	local a = 0
 	local b = 0
 	local c = 0
-	for _, k in ipairs(klist(t)) do
+	for _, k in klist(t) do
 		local v = t[k]
 		local ty = typeof(v)
 		if ty == "table" and not iscycletable(v) then
@@ -2226,7 +2226,7 @@ local function rowh(kind, v)
 end
 
 local function clearrows()
-	for idx, row in pairs(renderedrows) do
+	for idx, row in renderedrows do
 		if row then
 			row:Destroy()
 		end
@@ -2313,7 +2313,7 @@ renderlist = function(force)
 	end
 	firstrendered = first
 	lastrendered = last
-	for idx, row in pairs(renderedrows) do
+	for idx, row in renderedrows do
 		if idx < first or idx > last then
 			row:Destroy()
 			renderedrows[idx] = nil
@@ -2360,13 +2360,13 @@ draw = function()
 		return
 	end
 
-	for k, b in pairs(tabs) do
+	for k, b in tabs do
 		local on = k == mode
 		b.BackgroundColor3 = on and Color3.fromRGB(235, 235, 235) or Color3.fromRGB(24, 24, 24)
 		b.TextColor3 = on and Color3.fromRGB(10, 10, 10) or Color3.new(1, 1, 1)
 	end
 
-	for k, b in pairs(roottabs) do
+	for k, b in roottabs do
 		local on = k == rootfilter
 		b.BackgroundColor3 = on and Color3.fromRGB(235, 235, 235) or Color3.fromRGB(24, 24, 24)
 		b.TextColor3 = on and Color3.fromRGB(10, 10, 10) or Color3.new(1, 1, 1)
@@ -2378,7 +2378,7 @@ draw = function()
 		local q = low(qry)
 		local cnt = 0
 		local items = {}
-		for _, ent in ipairs(mods) do
+		for _, ent in mods do
 			local rootok = rootfilter == "all" or ent.rootk == rootfilter
 			local searchok = q == "" or has(ent.n, q) or has(ent.p, q) or has(ent.root, q)
 			if rootok and searchok then
@@ -2540,7 +2540,7 @@ draw = function()
 					a = "No nested tables here",
 					b = "Showing read-only members from this level.",
 				}
-				for _, k in ipairs(oks) do
+				for _, k in oks do
 					items[#items + 1] = {
 						kind = "other",
 						h = rowh("other"),
@@ -2561,7 +2561,7 @@ draw = function()
 			return
 		end
 
-		for _, k in ipairs(ks) do
+		for _, k in ks do
 			items[#items + 1] = {
 				kind = "ent",
 				h = rowh("ent"),
@@ -2596,7 +2596,7 @@ draw = function()
 			return
 		end
 
-		for _, k in ipairs(ks) do
+		for _, k in ks do
 			items[#items + 1] = {
 				kind = "val",
 				h = rowh("val", t[k]),
@@ -2623,7 +2623,7 @@ local function scan()
 		local count = 0
 		local skipped = 0
 
-		for ri, root in ipairs(roots) do
+		for ri, root in roots do
 			if dead or id ~= sid then
 				return
 			end
@@ -2632,7 +2632,7 @@ local function scan()
 			local tot = #all
 			local rootn = rootname(root)
 
-			for i, v in ipairs(all) do
+			for i, v in all do
 				if dead or id ~= sid then
 					return
 				end
@@ -2724,14 +2724,14 @@ bind(srh:GetPropertyChangedSignal("Text"), function()
 	draw()
 end)
 
-for k, b in pairs(tabs) do
+for k, b in tabs do
 	bind(b.Activated, function()
 		mode = k
 		draw()
 	end)
 end
 
-for k, b in pairs(roottabs) do
+for k, b in roottabs do
 	bind(b.Activated, function()
 		if rootfilter == k then
 			return

@@ -254,22 +254,22 @@ local function createConditions(remote)
     ConditionsRemote.Label.Size = UDim2.new(0, nameLength, 0, 20)
     ConditionsRemote.Position = UDim2.new(1, -nameLength, 0, 0)
 
-    for index, arg in pairs(remote.IgnoredArgs) do
-        for type in pairs(arg.types) do
+    for index, arg in remote.IgnoredArgs do
+        for type in arg.types do
             Condition.new(remote, "Ignore", index, nil, type)
         end
 
-        for value in pairs(arg.values) do
+        for value in arg.values do
             Condition.new(remote, "Ignore", index, value)
         end
     end
 
-    for index, arg in pairs(remote.BlockedArgs) do
-        for type in pairs(arg.types) do
+    for index, arg in remote.BlockedArgs do
+        for type in arg.types do
             Condition.new(remote, "Block", index, nil, type)
         end
 
-        for value in pairs(arg.values) do
+        for value in arg.values do
             Condition.new(remote, "Block", index, value)
         end
     end
@@ -310,7 +310,7 @@ function Log.new(remote)
         
         selected.remoteLog = log
 
-        for _i, call in pairs(remote.Logs) do
+        for _i, call in remote.Logs do
             ArgsLog.new(log, call)
         end
 
@@ -503,14 +503,14 @@ end
 -- UI Functionality
 
 local function refreshLogs()
-    for remoteInstance, log in pairs(currentLogs) do
+    for remoteInstance, log in currentLogs do
         log.Button.Instance.Visible = remotesViewing[remoteInstance.ClassName]
     end
 
     remoteList:Recalculate()
 end
 
-for _i,flag in pairs(ListFlags:GetChildren()) do
+for _i,flag in ListFlags:GetChildren() do
     if flag:IsA("Frame") then
         local check = CheckBox.new(flag)
 
@@ -523,7 +523,7 @@ end
 
 ListSearch.FocusLost:Connect(function(returned)
     if returned then
-        for remoteInstance, log in pairs(currentLogs) do
+        for remoteInstance, log in currentLogs do
             local instance = log.Button.Instance
             instance.Visible = not (instance.Visible and not remoteInstance.Name:lower():find(ListSearch.Text))
         end
@@ -748,7 +748,7 @@ end)
 pathContextSelected:SetCallback(function()
     local paths = ""
 
-    for _i, log in pairs(selected.logs) do
+    for _i, log in selected.logs do
         paths = paths .. getInstancePath(log.Remote.Instance) .. '\n'
     end
 
@@ -757,7 +757,7 @@ pathContextSelected:SetCallback(function()
 end)
 
 ignoreContextSelected:SetCallback(function()
-    for _i, log in pairs(selected.logs) do
+    for _i, log in selected.logs do
         local remote = log.Remote
 
         remote:Ignore()
@@ -773,7 +773,7 @@ ignoreContextSelected:SetCallback(function()
 end)
 
 unignoreContextSelected:SetCallback(function()
-    for _i, log in pairs(selected.logs) do
+    for _i, log in selected.logs do
         local remote = log.Remote
 
         if remote.Ignored then
@@ -791,7 +791,7 @@ unignoreContextSelected:SetCallback(function()
 end)
 
 blockContextSelected:SetCallback(function()
-    for _i, log in pairs(selected.logs) do
+    for _i, log in selected.logs do
         local remote = log.Remote
 
         if remote.Blocked then
@@ -809,7 +809,7 @@ blockContextSelected:SetCallback(function()
 end)
 
 unblockContextSelected:SetCallback(function()
-    for _i, log in pairs(selected.logs) do
+    for _i, log in selected.logs do
         local remote = log.Remote
 
         remote:Unblock()
@@ -825,7 +825,7 @@ unblockContextSelected:SetCallback(function()
 end)
 
 clearContextSelected:SetCallback(function()
-    for _i, log in pairs(selected.logs) do
+    for _i, log in selected.logs do
         log:Clear()
     end
 
@@ -833,7 +833,7 @@ clearContextSelected:SetCallback(function()
 end)
 
 removeContextSelected:SetCallback(function()
-    for _i, log in pairs(selected.logs) do
+    for _i, log in selected.logs do
         log:Remove()
     end
 
@@ -948,7 +948,7 @@ viewAsHexContext:SetCallback(function()
         selected.callPodButton.oldStrings = {}
     end
 
-    for idx, arg in pairs(selected.args) do
+    for idx, arg in selected.args do
         if type(arg) == "string" then
             local textObject = selected.callPodButton.Instance.Contents[tostring(idx)].Label
             if selected.callPodButton.hexViewEnabled then
@@ -971,7 +971,7 @@ removeConditionContext:SetCallback(function()
 end)
 
 removeConditionContextSelected:SetCallback(function()
-    for _i, condition in pairs(selected.conditions) do
+    for _i, condition in selected.conditions do
         condition:Remove()
     end
 

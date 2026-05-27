@@ -409,11 +409,11 @@ local function addConn(sig, fn)
 end;
 gbScript:AddButton("Unload Script", function()
 	running = false;
-	for _, c in ipairs(conns) do
+	for _, c in conns do
 		c:Disconnect();
 	end;
 	conns = {};
-	for _, info in pairs(espObjs) do
+	for _, info in espObjs do
 		if info.gui then
 			info.gui:Destroy();
 		end;
@@ -432,7 +432,7 @@ gbScript:AddButton("Unload Script", function()
 		farmPlatform:Destroy();
 		farmPlatform = nil;
 	end;
-	for pr, old in pairs(prOrig) do
+	for pr, old in prOrig do
 		if pr and pr.Parent and old then
 			pcall(function()
 				if old.HoldDuration ~= nil then
@@ -448,7 +448,7 @@ gbScript:AddButton("Unload Script", function()
 		end;
 		prOrig[pr] = nil;
 	end;
-	for ch, old in pairs(headOrig) do
+	for ch, old in headOrig do
 		if ch and ch.Parent and old then
 			pcall(function()
 				if old.had then
@@ -460,7 +460,7 @@ gbScript:AddButton("Unload Script", function()
 		end;
 		headOrig[ch] = nil;
 	end;
-	for cls, old in pairs(elevOrig) do
+	for cls, old in elevOrig do
 		if cls and old then
 			pcall(function()
 				if old.new then
@@ -808,7 +808,7 @@ local NA_GRAB_BODY = (function()
 		return nil;
 	end;
 	local function firstPart(m)
-		for _, d in ipairs(m:QueryDescendants("Instance")) do
+		for _, d in m:QueryDescendants("Instance") do
 			if d:IsA("BasePart") then
 				return d;
 			end;
@@ -1114,14 +1114,14 @@ local function applyPrompts()
 	if not (fastPrompt or promptLOS) then
 		return;
 	end;
-	for _, d in ipairs(ws:GetDescendants()) do
+	for _, d in ws:GetDescendants() do
 		if d:IsA("ProximityPrompt") then
 			applyPrompt(d);
 		end;
 	end;
 end;
 local function restorePrompts()
-	for pr, old in pairs(prOrig) do
+	for pr, old in prOrig do
 		if pr and pr.Parent and old then
 			pcall(function()
 				pr.HoldDuration = old.HoldDuration;
@@ -1228,7 +1228,7 @@ local function applyElevators()
 	if not elevUnlock then
 		return;
 	end;
-	for _, d in ipairs(ws:GetDescendants()) do
+	for _, d in ws:GetDescendants() do
 		if d:IsA("Model") and elevLike(d) then
 			applyElevInst(d);
 		end;
@@ -1309,7 +1309,7 @@ local function patchElevClass()
 	end;
 end;
 local function restoreElevClass()
-	for cls, old in pairs(elevOrig) do
+	for cls, old in elevOrig do
 		if cls and old then
 			pcall(function()
 				if old.new then
@@ -1364,7 +1364,7 @@ end);
 local others = {};
 local function updOthers()
 	table.clear(others);
-	for _, p in ipairs(__lt.cm("Players", "GetPlayers")) do
+	for _, p in __lt.cm("Players", "GetPlayers") do
 		if p ~= lp then
 			others[(#others) + 1] = p;
 		end;
@@ -1432,7 +1432,7 @@ local function isCharInSafeZone(ch)
 	if not ch then
 		return false;
 	end;
-	for _, part in ipairs(ch:QueryDescendants("Instance")) do
+	for _, part in ch:QueryDescendants("Instance") do
 		if part:IsA("BasePart") then
 			local p = part.Position;
 			for i = 1, #safeZoneParts do
@@ -1449,7 +1449,7 @@ local function getCharSafeZoneContact(ch)
 	if not ch then
 		return nil, nil, nil;
 	end;
-	for _, part in ipairs(ch:QueryDescendants("Instance")) do
+	for _, part in ch:QueryDescendants("Instance") do
 		if part:IsA("BasePart") then
 			local p = part.Position;
 			for i = 1, #safeZoneParts do
@@ -1477,9 +1477,9 @@ local function refreshSafeZones()
 	if not gFolder then
 		return;
 	end;
-	for _, inst in ipairs(gFolder:QueryDescendants("Instance")) do
+	for _, inst in gFolder:QueryDescendants("Instance") do
 		if inst:IsA("Model") and inst.Name == "SafeZones" then
-			for _, ch in ipairs(inst:QueryDescendants("Instance")) do
+			for _, ch in inst:QueryDescendants("Instance") do
 				if ch:IsA("BasePart") then
 					safeZoneParts[(#safeZoneParts) + 1] = ch;
 					if szEsp then
@@ -1512,7 +1512,7 @@ local dmgMap = {};
 local collCollecting = false;
 local function cleanupLeakTables()
 	local now = tick();
-	for p, _ in pairs(dmgMap) do
+	for p, _ in dmgMap do
 		if not p or (not p.Parent) then
 			dmgMap[p] = nil;
 		end;
@@ -1523,7 +1523,7 @@ local function cleanupLeakTables()
 			table.remove(dmgParts, i);
 		end;
 	end;
-	for k, info in pairs(espObjs) do
+	for k, info in espObjs do
 		local gui = info and info.gui;
 		if gui and (not gui.Parent) then
 			espObjs[k] = nil;
@@ -1553,7 +1553,7 @@ local function markTouchDamage(tt)
 		addDamageFlag(part);
 	end;
 end;
-for _, inst in ipairs(__lt.cm("Workspace", "QueryDescendants", "Instance")) do
+for _, inst in __lt.cm("Workspace", "QueryDescendants", "Instance") do
 	if inst:IsA("TouchTransmitter") then
 		markTouchDamage(inst);
 	end;
@@ -1576,7 +1576,7 @@ local function isCharOnDamage(ch)
 	if not ch then
 		return false;
 	end;
-	for _, part in ipairs(ch:QueryDescendants("Instance")) do
+	for _, part in ch:QueryDescendants("Instance") do
 		if part:IsA("BasePart") then
 			if isPointInDamage(part.Position) then
 				return true;
@@ -2064,7 +2064,7 @@ task.spawn(function()
 				local eff = gFolder and gFolder:FindFirstChild("Effects");
 				local tFolder = eff and eff:FindFirstChild("Tickets");
 				if tFolder then
-					for _, v in ipairs(tFolder:GetChildren()) do
+					for _, v in tFolder:GetChildren() do
 						if not running or (not collFarm) then
 							collCollecting = false;
 							break;
@@ -2143,7 +2143,7 @@ local function updESP()
 		return;
 	end;
 	if not (espPl or espDn or espBt or espColl) then
-		for _, info in pairs(espObjs) do
+		for _, info in espObjs do
 			if info.gui then
 				info.gui:Destroy();
 			end;
@@ -2259,7 +2259,7 @@ local function updESP()
 			end;
 		end;
 	end;
-	for k, info in pairs(espObjs) do
+	for k, info in espObjs do
 		if not vis[k] then
 			if info.gui then
 				info.gui:Destroy();

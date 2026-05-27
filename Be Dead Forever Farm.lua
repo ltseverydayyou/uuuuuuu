@@ -504,7 +504,7 @@ bind(minimizeBtn.MouseButton1Click:Connect(function()
 end));
 local monitorCds = {};
 local trashCds = {};
-for _, m in ipairs(workspace:QueryDescendants("Instance")) do
+for _, m in workspace:QueryDescendants("Instance") do
 	if m.Name:lower() == "monitor" then
 		local cd = m:FindFirstChildWhichIsA("ClickDetector", true);
 		if cd then
@@ -512,7 +512,7 @@ for _, m in ipairs(workspace:QueryDescendants("Instance")) do
 		end;
 	end;
 end;
-for _, t in ipairs(workspace:QueryDescendants("Instance")) do
+for _, t in workspace:QueryDescendants("Instance") do
 	if t.Name:lower() == "trashcan" then
 		local cd = t:FindFirstChildWhichIsA("ClickDetector", true);
 		if cd then
@@ -523,13 +523,13 @@ end;
 local t0 = os.clock();
 local renderConn = bind(RunService.RenderStepped:Connect(function()
 	local t = (os.clock() - t0) * 0.15;
-	for i, s in ipairs(strokes) do
+	for i, s in strokes do
 		local h = (t + i * 0.08) % 1;
 		s.Color = Color3.fromHSV(h, 0.85, 1);
 		s.Transparency = 0.22 + 0.12 * (0.5 + 0.5 * math.sin((t * 6 + i)));
 		s.Thickness = 1 + 0.25 * (0.5 + 0.5 * math.sin((t * 5 + i * 0.6)));
 	end;
-	for i, g in ipairs(gradients) do
+	for i, g in gradients do
 		g.Rotation = 90 + math.sin((t * 8 + i * 0.5)) * 20;
 	end;
 	sheen.Offset = Vector2.new(t * 0.9 % 2 - 1, 0);
@@ -539,7 +539,7 @@ task.spawn(function()
 		task.wait(0.1);
 		if monitorEnabled then
 			pcall(function()
-				for _, cd in ipairs(monitorCds) do
+				for _, cd in monitorCds do
 					fireclickdetector(cd);
 				end;
 			end);
@@ -573,7 +573,7 @@ task.spawn(function()
 					p.Character.Humanoid:EquipTool(tool);
 				end;
 			end;
-			for _, cd in ipairs(trashCds) do
+			for _, cd in trashCds do
 				fireclickdetector(cd);
 			end;
 		end;
@@ -598,7 +598,7 @@ bind(closeBtn.MouseButton1Click:Connect(function()
 	monitorEnabled = false;
 	shutterEnabled = false;
 	alive = false;
-	for _, c in ipairs(signals) do
+	for _, c in signals do
 		pcall(function()
 			c:Disconnect();
 		end);

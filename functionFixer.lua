@@ -95,7 +95,7 @@ local function regHp(p)
 	end
 	hconn = RunService.Heartbeat:Connect(function()
 		local now = tick()
-		for part, t0 in pairs(hparts) do
+		for part, t0 in hparts do
 			if (not part) or (not part.Parent) or (now - t0 > 10) then
 				hparts[part] = nil
 				if part then
@@ -511,7 +511,7 @@ if isPoopSploit then
 		if typeof(target) == "Instance" and target:IsA("ProximityPrompt") then
 			list[1] = target
 		elseif typeof(target) == "table" then
-			for _, v in ipairs(target) do
+			for _, v in target do
 				if typeof(v) == "Instance" and v:IsA("ProximityPrompt") then
 					Insert(list, v)
 				end
@@ -525,7 +525,7 @@ if isPoopSploit then
 			stagger = 0.02
 		end
 
-		for i, pp in ipairs(list) do
+		for i, pp in list do
 			local d = stagger * (i - 1)
 			if d > 0 then
 				Delay(d, function()

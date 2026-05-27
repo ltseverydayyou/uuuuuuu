@@ -1587,13 +1587,13 @@ local function Decompile(bytecode, options)
 
 							local variablesBody = formatRegister(targetRegister + 2) ..", ".. formatRegister(targetRegister + 3)
 
-							result ..= "for ".. variablesBody .." in ipairs(".. formatRegister(targetRegister) ..") do"
+							result ..= "for ".. variablesBody .." in ".. formatRegister(targetRegister) .." do"
 						elseif opCodeName == "FORGPREP_NEXT" then
 							local targetRegister = usedRegisters[1] + 1
 
 							local variablesBody = formatRegister(targetRegister + 2) ..", ".. formatRegister(targetRegister + 3)
 
-							result ..= "for ".. variablesBody .." in pairs(".. formatRegister(targetRegister) ..") do -- could be doing next, t"
+							result ..= "for ".. variablesBody .." in ".. formatRegister(targetRegister) .." do -- could be doing next, t"
 						elseif opCodeName == "FORGPREP" then
 							local targetRegister = usedRegisters[1]
 

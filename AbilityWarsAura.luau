@@ -165,7 +165,7 @@ runtimeState.cleanup = function()
 	end;
 	runtimeState.alive = false;
 	auraEnabled = false;
-	for _, conn in ipairs(runtimeState.connections) do
+	for _, conn in runtimeState.connections do
 		pcall(function()
 			conn:Disconnect();
 		end);
@@ -305,7 +305,7 @@ do
 		if nd and nd > 0 then
 			delay = nd;
 		end;
-		for _, other in ipairs(__lt.cm("Players", "GetPlayers")) do
+		for _, other in __lt.cm("Players", "GetPlayers") do
 			if other ~= localPlayer and other.Character and (not ignoreFriends or (not localPlayer:IsFriendsWith(other.UserId))) then
 				local tp = getRootPart(other.Character);
 				if tp then

@@ -237,22 +237,22 @@ local function createConditions(hook)
     ConditionsClosure.Label.Size = UDim2.new(0, nameLength, 0, 20)
     ConditionsClosure.Position = UDim2.new(1, -nameLength, 0, 0)
 
-    for index, arg in pairs(hook.IgnoredArgs) do
-        for type in pairs(arg.types) do
+    for index, arg in hook.IgnoredArgs do
+        for type in arg.types do
             Condition.new(hook, "Ignore", index, nil, type)
         end
 
-        for value in pairs(arg.values) do
+        for value in arg.values do
             Condition.new(hook, "Ignore", index, value)
         end
     end
 
-    for index, arg in pairs(hook.BlockedArgs) do
-        for type in pairs(arg.types) do
+    for index, arg in hook.BlockedArgs do
+        for type in arg.types do
             Condition.new(hook, "Block", index, nil, type)
         end
 
-        for value in pairs(arg.values) do
+        for value in arg.values do
             Condition.new(hook, "Block", index, value)
         end
     end
@@ -297,7 +297,7 @@ function Log.new(hook)
         
         selected.hookLog = log
 
-        for _i, call in pairs(hook.Logs) do
+        for _i, call in hook.Logs do
             ArgsLog.new(log, call)
         end
 
@@ -496,7 +496,7 @@ end
 -- UI Functionality
 ListSearch.FocusLost:Connect(function(returned)
     if returned then
-        for hook, log in pairs(currentLogs) do
+        for hook, log in currentLogs do
             local instance = log.Button.Instance
             instance.Visible = not (instance.Visible and not hook.Closure.Name:lower():find(ListSearch.Text))
         end
@@ -715,7 +715,7 @@ end)
 
 
 ignoreContextSelected:SetCallback(function()
-    for _i, log in pairs(selected.logs) do
+    for _i, log in selected.logs do
         local hook = log.Hook
 
         if not hook.Ignored then
@@ -733,7 +733,7 @@ ignoreContextSelected:SetCallback(function()
 end)
 
 unignoreContextSelected:SetCallback(function()
-    for _i, log in pairs(selected.logs) do
+    for _i, log in selected.logs do
         local hook = log.Hook
 
         if hook.Ignored then
@@ -751,7 +751,7 @@ unignoreContextSelected:SetCallback(function()
 end)
 
 blockContextSelected:SetCallback(function()
-    for _i, log in pairs(selected.logs) do
+    for _i, log in selected.logs do
         local hook = log.Hook
 
         if not hook.Blocked then
@@ -769,7 +769,7 @@ blockContextSelected:SetCallback(function()
 end)
 
 unblockContextSelected:SetCallback(function()
-    for _i, log in pairs(selected.logs) do
+    for _i, log in selected.logs do
         local hook = log.Hook
 
         if hook.Blocked then
@@ -787,7 +787,7 @@ unblockContextSelected:SetCallback(function()
 end)
 
 clearContextSelected:SetCallback(function()
-    for _i, log in pairs(selected.logs) do
+    for _i, log in selected.logs do
         log:Clear()
     end
 
@@ -795,7 +795,7 @@ clearContextSelected:SetCallback(function()
 end)
 
 removeContextSelected:SetCallback(function()
-    for _i, log in pairs(selected.logs) do
+    for _i, log in selected.logs do
         log:Remove()
     end
 
@@ -818,7 +818,7 @@ removeConditionContext:SetCallback(function()
 end)
 
 removeConditionContextSelected:SetCallback(function()
-    for _i, condition in pairs(selected.conditions) do
+    for _i, condition in selected.conditions do
         condition:Remove()
     end
 

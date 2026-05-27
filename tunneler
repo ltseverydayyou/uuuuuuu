@@ -26,7 +26,7 @@ end
 function st.clean()
 	st.dead = true
 	if type(st.opt) == "table" then
-		for k in pairs(st.opt) do
+		for k in st.opt do
 			st.opt[k] = false
 		end
 	end
@@ -39,7 +39,7 @@ function st.clean()
 			st.cn[i] = nil
 		end
 	end
-	for c in pairs(st.dis) do
+	for c in st.dis do
 		pcall(function()
 			c:Enable()
 		end)
@@ -505,7 +505,7 @@ local function applyPerf()
 	end
 	if st.opt.noCC then
 		setVideo("ColorCorrection", false)
-		for _, v in ipairs(light:GetChildren()) do
+		for _, v in light:GetChildren() do
 			if v:IsA("ColorCorrectionEffect") then
 				v.Enabled = false
 			end
@@ -525,7 +525,7 @@ local function applyPerf()
 		light.GlobalShadows = false
 	end
 	if st.opt.noDof then
-		for _, v in ipairs(light:GetChildren()) do
+		for _, v in light:GetChildren() do
 			if v:IsA("DepthOfFieldEffect") then
 				v.Enabled = false
 				v.FarIntensity = 0
@@ -534,7 +534,7 @@ local function applyPerf()
 		end
 	end
 	if st.opt.noTv then
-		for _, v in ipairs(workspace:GetDescendants()) do
+		for _, v in workspace:GetDescendants() do
 			if v:IsA("VideoFrame") then
 				v.Playing = false
 				v.Volume = 0
@@ -542,7 +542,7 @@ local function applyPerf()
 		end
 	end
 	if st.opt.noGlares then
-		for _, v in ipairs(workspace:GetDescendants()) do
+		for _, v in workspace:GetDescendants() do
 			if v.Name == "ClientLightGlare" and v.Parent and v.Parent:IsA("BillboardGui") then
 				v.Parent.Enabled = false
 			end
@@ -555,10 +555,10 @@ local function setPortalCollide(v)
 	if not ps then
 		return
 	end
-	for _, p in ipairs(ps:GetChildren()) do
+	for _, p in ps:GetChildren() do
 		local w = p:FindFirstChild("WorldColliders")
 		if w then
-			for _, c in ipairs(w:GetChildren()) do
+			for _, c in w:GetChildren() do
 				if c:IsA("BasePart") then
 					c.CanCollide = v
 					c.CanTouch = v
@@ -572,7 +572,7 @@ local function scanBypasses()
 	if st.opt.emancBypass then
 		local lvl = workspace:FindFirstChild("Level")
 		if lvl then
-			for _, v in ipairs(lvl:GetDescendants()) do
+			for _, v in lvl:GetDescendants() do
 				if string.find(v.Name, "EmancipationGrill") then
 					local d = v:FindFirstChild("Disabled")
 					if d then
@@ -603,7 +603,7 @@ local function touchCon(on)
 		st.nextCon = now + 1
 		local ok, cons = pcall(getconnections, r.Touched)
 		if ok and type(cons) == "table" then
-			for _, c in ipairs(cons) do
+			for _, c in cons do
 				if c and not st.dis[c] then
 					st.dis[c] = true
 					pcall(function()
@@ -613,7 +613,7 @@ local function touchCon(on)
 			end
 		end
 	else
-		for c in pairs(st.dis) do
+		for c in st.dis do
 			pcall(function()
 				c:Enable()
 			end)
@@ -731,7 +731,7 @@ end
 bind(rs.PreSimulation, loop)
 bind(plr.CharacterAdded, function()
 	st.nextCon = 0
-	for c in pairs(st.dis) do
+	for c in st.dis do
 		st.dis[c] = nil
 	end
 end)

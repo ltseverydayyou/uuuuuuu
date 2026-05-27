@@ -623,7 +623,7 @@ do
         local function appendToLayer(layerName, text)
             for i = 1, #text do
                 local ch = text:sub(i, i)
-                for key, arr in pairs(buffers) do
+                for key, arr in buffers do
                     arr[#arr + 1] = (key == layerName) and ch or blankFor(ch)
                 end
             end
@@ -632,7 +632,7 @@ do
             for i = 1, #text do
                 local rawCh = text:sub(i, i)
                 local blankCh = blankFor(rawCh)
-                for key, arr in pairs(buffers) do
+                for key, arr in buffers do
                     arr[#arr + 1] = (key == 'plains') and rawCh or blankCh
                 end
             end
@@ -840,14 +840,14 @@ do
             local width, height = measure(text)
             content.Size = UDim2.fromOffset(width, height)
             textBox.Size = UDim2.fromOffset(width - 8, height - 4)
-            for _, layer in pairs(layers) do
+            for _, layer in layers do
                 layer.Size = textBox.Size
             end
             scroll.CanvasSize = UDim2.fromOffset(width, height)
         end
 
         local function setLayerVisible(visible)
-            for _, layer in pairs(layers) do
+            for _, layer in layers do
                 layer.Visible = visible
                 if not visible then
                     layer.Text = ''
@@ -864,7 +864,7 @@ do
             end
             setLayerVisible(true)
             local buffers = buildHighlightLayers(text)
-            for name, layer in pairs(layers) do
+            for name, layer in layers do
                 layer.Text = table.concat(buffers[name])
             end
         end
@@ -1311,7 +1311,7 @@ local function pruneTrackedRemoteMaps(force)
     end
     weakReplacementPruneCounter = 0
 
-    for remote, callback in pairs(_origClientInvoke) do
+    for remote, callback in _origClientInvoke do
         if isDeadTrackedInstance(remote) then
             _origClientInvoke[remote] = nil
             wrappedClientInvoke[remote] = nil
@@ -1321,25 +1321,25 @@ local function pruneTrackedRemoteMaps(force)
         end
     end
 
-    for callback, remote in pairs(wrappedInvokeCallbacks) do
+    for callback, remote in wrappedInvokeCallbacks do
         if type(callback) ~= 'function' or isDeadTrackedInstance(remote) then
             wrappedInvokeCallbacks[callback] = nil
         end
     end
 
-    for callback, remote in pairs(logConnectionFunctions) do
+    for callback, remote in logConnectionFunctions do
         if type(callback) ~= 'function' or isDeadTrackedInstance(remote) then
             logConnectionFunctions[callback] = nil
         end
     end
 
-    for remote in pairs(loggedClientEvent) do
+    for remote in loggedClientEvent do
         if isDeadTrackedInstance(remote) then
             loggedClientEvent[remote] = nil
         end
     end
 
-    for remote in pairs(wrappedClientInvoke) do
+    for remote in wrappedClientInvoke do
         if isDeadTrackedInstance(remote) then
             wrappedClientInvoke[remote] = nil
         end
@@ -2534,7 +2534,7 @@ local function cloneReturnValues(container)
         end
     end
     local fallback = {}
-    for k, v in pairs(data) do
+    for k, v in data do
         fallback[k] = v
     end
     return fallback
@@ -3097,7 +3097,7 @@ local function logClientEvent(re: Instance)
         end
 
         if connections then
-            for _, conn in ipairs(connections) do
+            for _, conn in connections do
                 if conn.ForeignState then
                     continue
                 end
@@ -3255,14 +3255,14 @@ local function disableIncomingHooks()
     incomingHooksEnabled = false
     configs.log_Receive = false
 
-    for remote, conn in pairs(incomingClientConns) do
+    for remote, conn in incomingClientConns do
         pcall(function()
             conn:Disconnect()
         end)
         incomingClientConns[remote] = nil
     end
 
-    for remote, callback in pairs(_origClientInvoke) do
+    for remote, callback in _origClientInvoke do
         if typeof(remote) == 'Instance' and type(callback) == 'function' then
             pcall(function()
                 local callbackMember = getInvokeCallbackMember(remote)
@@ -3782,7 +3782,7 @@ end
 --- @param i userdata
 local function hasDupName(parent, name)
     local n = 0
-    for _, c in ipairs(parent:GetChildren()) do
+    for _, c in parent:GetChildren() do
         if c.Name == name then
             n += 1
             if n > 1 then
@@ -3839,7 +3839,7 @@ function i2p(i, customgen)
         return string.format('%q', s)
     end
     local function getplayer(instance)
-        for _, plr in ipairs(Players:GetPlayers()) do
+        for _, plr in Players:GetPlayers() do
             local ch = plr.Character
             if ch and (instance == ch or instance:IsDescendantOf(ch)) then
                 return plr
@@ -3848,7 +3848,7 @@ function i2p(i, customgen)
     end
     local function hasDupName(parent, name)
         local n = 0
-        for _, c in ipairs(parent:GetChildren()) do
+        for _, c in parent:GetChildren() do
             if c.Name == name then
                 n += 1
                 if n > 1 then
@@ -3985,7 +3985,7 @@ function i2p(i, customgen)
         table.insert(chain, 1, node)
         node = node.Parent
     end
-    for _, child in ipairs(chain) do
+    for _, child in chain do
         descend = descend .. stepFromParentToChild(child.Parent, child)
     end
 
@@ -4476,7 +4476,7 @@ RuntimeState.methodAllowed = function(classData, transferType, method)
         return false
     end
 
-    for _, name in ipairs(allowed) do
+    for _, name in allowed do
         if name == method then
             return true
         end
@@ -4963,7 +4963,7 @@ RuntimeState.shutdown = function()
     clear(RuntimeState.connections)
     clear(logs)
     clear(remoteLogs)
-    for remote, callback in pairs(_origClientInvoke) do
+    for remote, callback in _origClientInvoke do
         if typeof(remote) == 'Instance' and type(callback) == 'function' then
             pcall(function()
                 local callbackMember = getInvokeCallbackMember(remote)
@@ -4985,7 +4985,7 @@ RuntimeState.shutdown = function()
         end)
         descAddedInvokeConn = nil
     end
-    for remote, conn in pairs(incomingClientConns) do
+    for remote, conn in incomingClientConns do
         pcall(function()
             conn:Disconnect()
         end)

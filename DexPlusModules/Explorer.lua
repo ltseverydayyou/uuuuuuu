@@ -532,7 +532,7 @@ local function main()
 		local dragTree = treeFrame:Clone()
 		dragTree:ClearAllChildren()
 
-		for i,v in pairs(listEntries) do
+		for i,v in listEntries do
 			local node = tree[i + Explorer.Index]
 			if node and selection.Map[node] then
 				local clone = v:Clone()
@@ -1679,19 +1679,19 @@ local function main()
 		context:Register("FIRE_TOUCHTRANSMITTER",{Name = "Fire TouchTransmitter", OnClick = function()
 			local hrp = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
 			if not hrp then return end
-			for _, v in ipairs(selection.List) do if v.Obj and v.Obj:IsA("TouchTransmitter") then firetouchinterest(hrp, v.Obj.Parent, 0) end end
+			for _, v in selection.List do if v.Obj and v.Obj:IsA("TouchTransmitter") then firetouchinterest(hrp, v.Obj.Parent, 0) end end
 		end})
 
 		context:Register("FIRE_CLICKDETECTOR",{Name = "Fire ClickDetector", OnClick = function()
 			local hrp = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
 			if not hrp then return end
-			for _, v in ipairs(selection.List) do if v.Obj and v.Obj:IsA("ClickDetector") then fireclickdetector(v.Obj) end end
+			for _, v in selection.List do if v.Obj and v.Obj:IsA("ClickDetector") then fireclickdetector(v.Obj) end end
 		end})
 
 		context:Register("FIRE_PROXIMITYPROMPT",{Name = "Fire ProximityPrompt", OnClick = function()
 			local hrp = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
 			if not hrp then return end
-			for _, v in ipairs(selection.List) do if v.Obj and v.Obj:IsA("ProximityPrompt") then fireproximityprompt(v.Obj) end end
+			for _, v in selection.List do if v.Obj and v.Obj:IsA("ProximityPrompt") then fireproximityprompt(v.Obj) end end
 		end})
 
 		context:Register("VIEW_SCRIPT",{Name = "View Script", IconMap = Explorer.MiscIcons, Icon = "ViewScript", DisabledIcon = "Empty", OnClick = function()
@@ -1994,9 +1994,9 @@ local function main()
 		end)
 
 		local function defaultProps(obj)
-			for class, props in pairs(Explorer.DefaultProps) do
+			for class, props in Explorer.DefaultProps do
 				if obj:IsA(class) then
-					for prop, value in pairs(props) do
+					for prop, value in props do
 						obj[prop] = (type(value) == "function" and value(obj)) or value
 					end
 				end
@@ -2105,7 +2105,7 @@ local function main()
 		end
 
 		local partialClassName
-		for class,_ in pairs(API.Classes) do
+		for class,_ in API.Classes do
 			local cName = lower(class)
 			if cName == classQuery then
 				resolvedSearchClassNames[cacheKey] = class
@@ -2515,7 +2515,7 @@ return search]==]
 		local searchFocused = false
 		local classSuggestions = {}
 		if API and type(API.Classes) == "table" then
-			for className in pairs(API.Classes) do
+			for className in API.Classes do
 				classSuggestions[#classSuggestions + 1] = {
 					Name = className,
 					Lower = className:lower()
@@ -2571,7 +2571,7 @@ return search]==]
 			suggestionEntries = {}
 			suggestionFrame.Visible = false
 			suggestionFrame.Size = UDim2.new(1,0,0,0)
-			for _, button in ipairs(suggestionButtons) do
+			for _, button in suggestionButtons do
 				button.Visible = false
 			end
 		end
@@ -2609,7 +2609,7 @@ return search]==]
 
 			local prefixMatches = {}
 			local containsMatches = {}
-			for _, entry in ipairs(classSuggestions) do
+			for _, entry in classSuggestions do
 				local position = entry.Lower:find(lowerQuery, 1, true)
 				if position then
 					if position == 1 then
@@ -2621,13 +2621,13 @@ return search]==]
 			end
 
 			local results = {}
-			for _, name in ipairs(prefixMatches) do
+			for _, name in prefixMatches do
 				results[#results + 1] = name
 				if #results >= 6 then
 					return results
 				end
 			end
-			for _, name in ipairs(containsMatches) do
+			for _, name in containsMatches do
 				results[#results + 1] = name
 				if #results >= 6 then
 					break
@@ -2948,7 +2948,7 @@ return search]==]
 		holder:ClearAllChildren()
 
 		-- Updates theme
-		for i,v in pairs(Explorer.SelectionVisualGui:GetChildren()) do
+		for i,v in Explorer.SelectionVisualGui:GetChildren() do
 			v.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
 		end
 
@@ -3001,7 +3001,7 @@ return search]==]
 			Explorer.ClassIcons = Lib.IconMap.new("rbxassetid://"..tostring(iconData.MapId), iconData.IconSize * iconData.Witdh, iconData.IconSize * iconData.Height,iconData.IconSize,iconData.IconSize)
 			-- move every value dict 1 behind because SetDict starts at 0 not 1 lol
 			local fixed = {}
-			for i,v in pairs(iconData.Icons) do
+			for i,v in iconData.Icons do
 				fixed[i] = v - 1
 			end
 			

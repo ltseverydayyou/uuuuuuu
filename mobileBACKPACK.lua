@@ -498,7 +498,7 @@ mini.Parent = ui;
 corner(mini, 10);
 stroke(mini, 1);
 local function setStrokeOn(on)
-	for _, s in ipairs(strokes) do
+	for _, s in strokes do
 		if s and s.Parent then
 			s.Transparency = on and 0 or 1;
 		end;
@@ -544,12 +544,12 @@ if not mob then
 end;
 local function cntDrop()
 	local n = 0;
-	for _, cont in ipairs({
+	for _, cont in {
 		Plr.Backpack,
 		Plr.Character
-	}) do
+	} do
 		if cont then
-			for _, t in ipairs(cont:GetChildren()) do
+			for _, t in cont:GetChildren() do
 				if canDrop(t) then
 					n += 1;
 				end;
@@ -621,7 +621,7 @@ local function tipForBtn(b, name)
 end;
 local function orderedQBButtons()
 	local arr = {};
-	for _, ch in ipairs(qb:GetChildren()) do
+	for _, ch in qb:GetChildren() do
 		if ch:IsA("GuiButton") then
 			table.insert(arr, ch);
 		end;
@@ -798,12 +798,12 @@ local function place()
 	expFr.Position = UDim2.new(0.5, 0, 1, -(barH + gap + 8));
 end;
 function rebuild()
-	for _, c in ipairs(qb:GetChildren()) do
+	for _, c in qb:GetChildren() do
 		if c:IsA("GuiButton") then
 			c:Destroy();
 		end;
 	end;
-	for _, c in ipairs(scr:GetChildren()) do
+	for _, c in scr:GetChildren() do
 		if c:IsA("GuiButton") then
 			c:Destroy();
 		end;
@@ -811,12 +811,12 @@ function rebuild()
 	table.clear(tBtns);
 	local bp = Plr:FindFirstChild("Backpack");
 	local map = {};
-	for _, cont in ipairs({
+	for _, cont in {
 		bp,
 		Plr.Character
-	}) do
+	} do
 		if cont then
-			for _, t in ipairs(cont:GetChildren()) do
+			for _, t in cont:GetChildren() do
 				if t:IsA("Tool") then
 					map[t] = true;
 				end;
@@ -824,13 +824,13 @@ function rebuild()
 		end;
 	end;
 	toolCnt = 0;
-	for _ in pairs(map) do
+	for _ in map do
 		toolCnt += 1;
 	end;
 	if sel and (not map[sel]) then
 		sel = nil;
 	end;
-	for t in pairs(map) do
+	for t in map do
 		if not table.find(tOrder, t) then
 			table.insert(tOrder, t);
 		end;
@@ -842,12 +842,12 @@ function rebuild()
 	end;
 	local list = {};
 	local idxMap = {};
-	for i, v in ipairs(tOrder) do
+	for i, v in tOrder do
 		idxMap[v] = i;
 	end;
 	local q = qtxt;
 	local qlwr = q ~= "" and string.lower(q) or nil;
-	for _, t in ipairs(tOrder) do
+	for _, t in tOrder do
 		if map[t] then
 			if not qlwr or string.find(string.lower(t.Name), qlwr, 1, true) then
 				table.insert(list, t);
@@ -947,7 +947,7 @@ function rebuild()
 					return;
 				end;
 				local i1, i2;
-				for k, v in ipairs(tOrder) do
+				for k, v in tOrder do
 					if v == swSel then
 						i1 = k;
 					end;
@@ -979,7 +979,7 @@ function rebuild()
 		end);
 		return b;
 	end;
-	for i, t in ipairs(list) do
+	for i, t in list do
 		local b = mkBtn(t, i);
 		b.LayoutOrder = i;
 		if i <= 10 then
@@ -1109,12 +1109,12 @@ cYes.MouseButton1Click:Connect(function()
 	end;
 	running = true;
 	local lst = {};
-	for _, cont in ipairs({
+	for _, cont in {
 		Plr.Backpack,
 		Plr.Character
-	}) do
+	} do
 		if cont then
-			for _, t in ipairs(cont:GetChildren()) do
+			for _, t in cont:GetChildren() do
 				if canDrop(t) then
 					table.insert(lst, t);
 				end;
@@ -1128,7 +1128,7 @@ cYes.MouseButton1Click:Connect(function()
 		end);
 	end;
 	local c = Plr.Character;
-	for _, t in ipairs(lst) do
+	for _, t in lst do
 		if t and t.Parent and t.Parent ~= WS then
 			if c and t.Parent ~= c then
 				t.Parent = c;
@@ -1222,7 +1222,7 @@ local function attachToolSignals(t)
 		return;
 	end;
 	if tConns[t] then
-		for _, c in ipairs(tConns[t]) do
+		for _, c in tConns[t] do
 			if c and c.Disconnect then
 				c:Disconnect();
 			end;
@@ -1254,7 +1254,7 @@ local function attachToolSignals(t)
 	end));
 end;
 local function hook()
-	for _, c in ipairs(conns) do
+	for _, c in conns do
 		if c and c.Disconnect then
 			c:Disconnect();
 		end;
@@ -1262,7 +1262,7 @@ local function hook()
 	table.clear(conns);
 	local bp = Plr:FindFirstChild("Backpack");
 	if bp then
-		for _, t in ipairs(bp:GetChildren()) do
+		for _, t in bp:GetChildren() do
 			attachToolSignals(t);
 		end;
 		table.insert(conns, bp.ChildAdded:Connect(function(ch)
@@ -1271,7 +1271,7 @@ local function hook()
 		end));
 		table.insert(conns, bp.ChildRemoved:Connect(function(ch)
 			if tConns[ch] then
-				for _, c in ipairs(tConns[ch]) do
+				for _, c in tConns[ch] do
 					if c and c.Disconnect then
 						c:Disconnect();
 					end;
@@ -1286,7 +1286,7 @@ local function hook()
 		end));
 	end;
 	if Plr.Character then
-		for _, t in ipairs(Plr.Character:GetChildren()) do
+		for _, t in Plr.Character:GetChildren() do
 			attachToolSignals(t);
 		end;
 		table.insert(conns, Plr.Character.ChildAdded:Connect(function(ch)
@@ -1295,7 +1295,7 @@ local function hook()
 		end));
 		table.insert(conns, Plr.Character.ChildRemoved:Connect(function(ch)
 			if tConns[ch] then
-				for _, c in ipairs(tConns[ch]) do
+				for _, c in tConns[ch] do
 					if c and c.Disconnect then
 						c:Disconnect();
 					end;
@@ -1328,7 +1328,7 @@ RS.Heartbeat:Connect(function()
 	local c = Plr.Character;
 	if c then
 		local anyTool = nil;
-		for _, t in ipairs(c:GetChildren()) do
+		for _, t in c:GetChildren() do
 			if t:IsA("Tool") then
 				anyTool = t;
 				break;

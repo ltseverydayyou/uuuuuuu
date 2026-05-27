@@ -248,7 +248,7 @@ if game.GameId == 319401355 then
 		end);
 		CustomClick(function()
 			if scriptEnabled and lp.Character then
-				for i, v in pairs(lp.Character:GetChildren()) do
+				for i, v in lp.Character:GetChildren() do
 					if v:IsA("Tool") and v.Name == "Axe" and v:FindFirstChild("ServerControl") then
 						(coroutine.wrap(function()
 							v.ServerControl:InvokeServer("Click", true, mouse.Hit.p);
@@ -257,7 +257,7 @@ if game.GameId == 319401355 then
 				end;
 			elseif scriptEnabled then
 				lp.CharacterAdded:Wait();
-				for i, v in pairs(lp.Character:GetChildren()) do
+				for i, v in lp.Character:GetChildren() do
 					if v:IsA("Tool") and v.Name == "Axe" and v:FindFirstChild("ServerControl") then
 						(coroutine.wrap(function()
 							v.ServerControl:InvokeServer("Click", true, mouse.Hit.p);
@@ -268,7 +268,7 @@ if game.GameId == 319401355 then
 		end);
 		mouse.KeyDown:Connect(function(key)
 			if scriptEnabled and key:lower() == "q" and lp.Backpack ~= nil then
-				for i, v in pairs(lp.Backpack:GetChildren()) do
+				for i, v in lp.Backpack:GetChildren() do
 					(coroutine.wrap(function()
 						if v.Name == "Axe" and v:IsA("Tool") then
 							v.Parent = lp.Character;

@@ -471,7 +471,7 @@ ap.rel = function(force)
 end
 
 ap.reset = function(full)
-    ap.rel()
+    ap.rel(true)
     ap.clear(ap.down)
     ap.clear(ap.hold)
     ap.hit = setmetatable({}, { __mode = "k" })
@@ -530,7 +530,7 @@ ap.watch = function(g)
 
         if ff and ff:IsA("GuiObject") then
             add(ff:GetPropertyChangedSignal("Visible"):Connect(function()
-                ap.rel()
+                ap.rel(true)
                 if not ff.Visible then
                     ap.defer(0.2)
                 end
@@ -539,7 +539,7 @@ ap.watch = function(g)
 
         if rs and rs:IsA("GuiObject") then
             add(rs:GetPropertyChangedSignal("Visible"):Connect(function()
-                ap.rel()
+                ap.rel(true)
                 if not rs.Visible then
                     ap.defer(0.2)
                 end
@@ -842,6 +842,7 @@ ap.step = function()
     elseif not ap.g or not ap.live(ap.g) then
         if now >= (ap.nextui or 0) then
             ap.nextui = now + 3
+            ap.rel(true)
             ap.g = ap.ui()
         end
     end
@@ -849,7 +850,7 @@ ap.step = function()
     if not ap.g or not ap.active(ap.g) then
         if not ap.idle then
             ap.idle = true
-            ap.rel()
+            ap.rel(true)
         end
         return
     end

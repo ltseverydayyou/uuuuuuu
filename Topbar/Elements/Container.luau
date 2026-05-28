@@ -136,10 +136,9 @@ return function(Icon)
 	holders.Name = "Holders"
 	holders.BackgroundTransparency = 1
 	insetChanged:Connect(function()
-		local holderY = if isUsingVR then 36 else 56
-		local holderSize = if isConsoleScreen then UDim2.new(1, 0, 0, holderY) else UDim2.new(1, 0, 1, ySizeOffset)
+		local holderY = if isUsingVR then 36 else math.max(GuiService.TopbarInset.Height + ySizeOffset, 50)
 		holders.Position = UDim2.new(0, 0, 0, yDownOffset)
-		holders.Size = holderSize
+		holders.Size = UDim2.new(1, 0, 0, holderY)
 	end)
 	holders.Visible = true
 	holders.ZIndex = 1

@@ -177,7 +177,7 @@ function(self: Icon, keycode: Enum.KeyCode): Icon
 		return nil :: any
 	end),
 	call: typeof(
-function(self: Icon, func: (self: Icon) -> ...any, ...: any): Icon
+	function(self: Icon, func: (self: Icon) -> (...any), ...: any): Icon
 		return nil :: any
 	end),
 	addToJanitor: typeof(
@@ -240,7 +240,7 @@ function(self: Icon): Icon
 function(
 		self: Icon,
 		numberSpinner: any,
-		func: (...any) -> ...any,
+		func: (...any) -> (...any),
 		...: any
 	): Icon
 		return nil :: any

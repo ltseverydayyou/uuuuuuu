@@ -256,6 +256,10 @@ function Themes.set(icon, theme)
 		themesJanitor = Janitor.new()
 		icon.themesJanitor = if icon.janitor then icon.janitor:add(themesJanitor) else themesJanitor
 	end
+	if not icon.stateChanged or type(icon.stateChanged.Connect) ~= "function" then
+		local Signal = Import(script.Parent.Parent.Packages.GoodSignal)
+		icon.stateChanged = if icon.janitor then icon.janitor:add(Signal.new()) else Signal.new()
+	end
 	themesJanitor:clean()
 	themesJanitor:add(icon.stateChanged:Connect(function()
 		Themes.change(icon)

@@ -695,9 +695,17 @@ function Icon:removeModificationWith(instanceName, property, state)
 	return self
 end
 
-function Icon:setTheme(theme)
-	Themes.set(self, theme)
-	return self
+function Icon.setTheme(selfOrTheme, theme)
+	if selfOrTheme == Icon or type(selfOrTheme) ~= "table" or not rawget(selfOrTheme, "UID") then
+		local baseTheme = if selfOrTheme == Icon then theme else selfOrTheme
+		Icon.baseTheme = Themes.getModifications(baseTheme)
+		for _, icon in pairs(iconsDict) do
+			icon:setTheme(Icon.baseTheme)
+		end
+		return Icon
+	end
+	Themes.set(selfOrTheme, theme)
+	return selfOrTheme
 end
 
 function Icon:setEnabled(bool)

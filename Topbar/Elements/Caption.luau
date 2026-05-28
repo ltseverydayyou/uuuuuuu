@@ -169,9 +169,11 @@ return function(icon)
 	local captionJanitor = icon.captionJanitor
 	local _, captionClone = icon:clipOutside(caption)
 	captionClone.AutomaticSize = Enum.AutomaticSize.None
+	captionClone.Visible = true
+	captionClone.Active = false
+	captionClone.Selectable = false
 	local function matchSize()
-		local absolute = caption.AbsoluteSize
-		captionClone.Size = UDim2.fromOffset(absolute.X, absolute.Y)
+		captionClone.Size = UDim2.fromOffset(0, 0)
 	end
 	captionJanitor:add(caption:GetPropertyChangedSignal("AbsoluteSize"):Connect(matchSize))
 	matchSize()

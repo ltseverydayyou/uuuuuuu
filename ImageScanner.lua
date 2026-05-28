@@ -1263,4 +1263,4 @@ task.spawn(function()
 	if not alive then return end
 	__lt.cm("TweenService", "Create", root, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {BackgroundTransparency = 0}):Play()
 	__lt.cm("TweenService", "Create", sc, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = sc.Scale}):Play()
-end)end)
+end)

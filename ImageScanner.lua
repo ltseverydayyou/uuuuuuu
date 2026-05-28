@@ -118,12 +118,45 @@ local function getPar()
 end
 
 local par = getPar()
+local store = (function()
+	local okShared, sharedEnv = pcall(function()
+		return rawget(_G, "shared")
+	end)
+	if okShared and type(sharedEnv) == "table" then
+		return sharedEnv
+	end
+	local okGlobal, globalEnv = pcall(function()
+		return getgenv and getgenv()
+	end)
+	if okGlobal and type(globalEnv) == "table" then
+		return globalEnv
+	end
+	return nil
+end)()
+local appKey = "__img_scan_gui_state"
+if store then
+	local oldState = rawget(store, appKey)
+	if type(oldState) == "table" and type(oldState.clean) == "function" then
+		pcall(oldState.clean)
+	end
+end
+local alive = true
+local state = {}
+if store then
+	rawset(store, appKey, state)
+end
+
 local nm = "ImgScanGui"
 local old = par:FindFirstChild(nm)
 if old then pcall(function() old:Destroy() end) end
 
 local con = {}
 local function on(c)
+	if not c then return nil end
+	if not alive then
+		pcall(function() c:Disconnect() end)
+		return c
+	end
 	con[#con+1] = c
 	return c
 end
@@ -132,6 +165,9 @@ local function off()
 		local c = con[i]
 		con[i] = nil
 		pcall(function() c:Disconnect() end)
+	end
+	if store and rawget(store, appKey) == state then
+		rawset(store, appKey, nil)
 	end
 end
 
@@ -277,13 +313,18 @@ local function getPlist(inst)
 	return lst
 end
 
+local gui
 local scanAttr = true
 local function scanInst(inst)
+	if not alive or not inst then return end
+	if gui and (inst == gui or inst:IsDescendantOf(gui)) then return end
 	local lst = getPlist(inst)
 	for i = 1, #lst do
 		local p = lst[i]
-		local v = inst[p]
-		if type(v) == "string" then
+		local ok, v = pcall(function()
+			return inst[p]
+		end)
+		if ok and type(v) == "string" then
 			findIds(v, inst, p)
 		end
 	end
@@ -301,18 +342,27 @@ local function scanInst(inst)
 	end
 end
 
-local gui = Instance.new("ScreenGui")
+gui = Instance.new("ScreenGui")
 gui.Name = nm
 gui.ResetOnSpawn = false
 gui.IgnoreGuiInset = true
 pcall(function() gui.Parent = par end)
-on(gui.AncestryChanged:Connect(function(_, p) if not p then off() end end))
+on(gui.AncestryChanged:Connect(function(_, p)
+	if not p and alive then
+		if type(state.clean) == "function" then
+			state.clean()
+		else
+			alive = false
+			off()
+		end
+	end
+end))
 
 local root = Instance.new("Frame")
 root.Name = "Root"
 root.AnchorPoint = Vector2.new(0.5, 0.5)
 root.Position = UDim2.fromScale(0.5, 0.5)
-root.Size = UDim2.fromOffset(760, 500)
+root.Size = UDim2.fromOffset(780, 540)
 root.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
 root.BackgroundTransparency = 0
 root.BorderSizePixel = 0
@@ -330,6 +380,14 @@ rootStroke.Thickness = 2
 rootStroke.Color = Color3.fromRGB(255, 255, 255)
 rootStroke.Transparency = 0.75
 rootStroke.Parent = root
+
+local rootGrad = Instance.new("UIGradient")
+rootGrad.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(24, 24, 34)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(14, 14, 20))
+})
+rootGrad.Rotation = 90
+rootGrad.Parent = root
 
 local sc = Instance.new("UIScale")
 sc.Scale = 1
@@ -360,6 +418,7 @@ ttl.Font = Enum.Font.GothamSemibold
 ttl.TextSize = 17
 ttl.TextXAlignment = Enum.TextXAlignment.Left
 ttl.TextColor3 = Color3.fromRGB(240, 240, 245)
+ttl.TextTruncate = Enum.TextTruncate.AtEnd
 ttl.Text = "Image Scanner"
 ttl.Parent = top
 
@@ -411,9 +470,16 @@ box.Size = UDim2.new(1, -36, 0, 40)
 box.Font = Enum.Font.Gotham
 box.TextSize = 15
 box.TextXAlignment = Enum.TextXAlignment.Left
+box.TextWrapped = false
+box.TextTruncate = Enum.TextTruncate.AtEnd
 box.TextColor3 = Color3.fromRGB(235, 235, 240)
 box.PlaceholderColor3 = Color3.fromRGB(150, 155, 170)
 box.Parent = root
+
+local boxPad = Instance.new("UIPadding")
+boxPad.PaddingLeft = UDim.new(0, 12)
+boxPad.PaddingRight = UDim.new(0, 12)
+boxPad.Parent = box
 
 local boxCorner = Instance.new("UICorner")
 boxCorner.CornerRadius = UDim.new(0, 12)
@@ -432,6 +498,7 @@ statusLabel.Size = UDim2.new(1, -40, 0, 20)
 statusLabel.Font = Enum.Font.Gotham
 statusLabel.TextSize = 13
 statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+statusLabel.TextTruncate = Enum.TextTruncate.AtEnd
 statusLabel.TextColor3 = Color3.fromRGB(170, 175, 190)
 statusLabel.Text = ""
 statusLabel.Parent = root
@@ -459,6 +526,7 @@ list.BorderSizePixel = 0
 list.Size = UDim2.new(1, 0, 1, 0)
 list.ScrollBarThickness = 6
 list.ScrollBarImageColor3 = Color3.fromRGB(90, 100, 120)
+list.ScrollingDirection = Enum.ScrollingDirection.Y
 list.CanvasSize = UDim2.new(0, 0, 0, 0)
 list.Parent = left
 
@@ -476,7 +544,8 @@ grid.CellSize = UDim2.new(0, 86, 0, 86)
 grid.Parent = list
 
 local function setCan()
-	list.CanvasSize = UDim2.new(0, grid.AbsoluteContentSize.X + 16, 0, grid.AbsoluteContentSize.Y + 16)
+	if not alive then return end
+	list.CanvasSize = UDim2.new(0, 0, 0, grid.AbsoluteContentSize.Y + 16)
 end
 on(grid:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(setCan))
 
@@ -515,11 +584,18 @@ idBox.BorderSizePixel = 0
 idBox.Size = UDim2.new(1, 0, 0, 38)
 idBox.Position = UDim2.new(0, 0, 0.49, 6)
 idBox.Font = Enum.Font.Gotham
-idBox.TextScaled = true
+idBox.TextSize = 13
+idBox.TextWrapped = false
+idBox.TextTruncate = Enum.TextTruncate.AtEnd
 idBox.TextXAlignment = Enum.TextXAlignment.Left
 idBox.TextColor3 = Color3.fromRGB(235,235,240)
 idBox.PlaceholderColor3 = Color3.fromRGB(155,160,175)
 idBox.Parent = right
+
+local idPad = Instance.new("UIPadding")
+idPad.PaddingLeft = UDim.new(0, 10)
+idPad.PaddingRight = UDim.new(0, 10)
+idPad.Parent = idBox
 
 local idCorner = Instance.new("UICorner")
 idCorner.CornerRadius = UDim.new(0, 12)
@@ -539,6 +615,7 @@ infoScroll.Size = UDim2.new(1, 0, 0.23, -8)
 infoScroll.ScrollBarThickness = 5
 infoScroll.ScrollBarImageColor3 = Color3.fromRGB(90,100,120)
 infoScroll.CanvasSize = UDim2.new(0,0,0,0)
+infoScroll.ClipsDescendants = true
 infoScroll.Parent = right
 
 local infoLabel = Instance.new("TextLabel")
@@ -556,7 +633,8 @@ infoLabel.Text = "Select an image to preview"
 infoLabel.Parent = infoScroll
 
 local function updInfoCanvas()
-	infoScroll.CanvasSize = UDim2.new(0, 0, 0, infoLabel.TextBounds.Y + 20)
+	if not alive then return end
+	infoScroll.CanvasSize = UDim2.new(0, 0, 0, math.max(infoScroll.AbsoluteSize.Y, infoLabel.TextBounds.Y + 20))
 end
 on(infoLabel:GetPropertyChangedSignal("TextBounds"):Connect(updInfoCanvas))
 
@@ -583,33 +661,130 @@ cpStroke.Transparency = 0.7
 cpStroke.Parent = cp
 
 local function fitUi()
+	if not alive then return end
 	local cam = workspace.CurrentCamera
 	if not cam then return end
 	local vp = cam.ViewportSize
+	local mob = isMob()
+	local margin = mob and 10 or 24
+	local minW = mob and 310 or 520
+	local minH = mob and 340 or 420
+	local w = math.clamp(vp.X - margin * 2, math.min(minW, math.max(300, vp.X - 8)), 860)
+	local h = math.clamp(vp.Y - margin * 2, math.min(minH, math.max(300, vp.Y - 8)), 620)
 
-	local w = math.clamp(vp.X - 24, 340, 740)
-	local h = math.clamp(vp.Y - 90, 260, 520)
 	root.Size = UDim2.fromOffset(w, h)
+	root.Position = UDim2.fromScale(0.5, 0.5)
+	sc.Scale = 1
 
-	if isMob() then
-		local s = math.clamp(math.min(vp.X / 980, vp.Y / 840), 0.40, 0.68)
-		sc.Scale = s
-		grid.CellSize = UDim2.new(0, 72, 0, 72)
-		grid.CellPadding = UDim2.new(0, 8, 0, 8)
+	local compact = w < 610 or (mob and vp.X < 760)
+	local topH = compact and 48 or 52
+	local boxH = compact and 36 or 40
+	local boxY = topH + 12
+	local statusY = boxY + boxH + 6
+	local contentY = statusY + 24
+	local contentW = math.max(0, w - 36)
+	local contentH = math.max(120, h - contentY - 16)
+
+	top.Size = UDim2.new(1, 0, 0, topH)
+	topMask.Position = UDim2.new(0, 0, 1, -14)
+	topMask.Size = UDim2.new(1, 0, 0, 14)
+
+	local bw = compact and 42 or 48
+	local bh = compact and 32 or 34
+	bRef.Size = UDim2.fromOffset(bw, bh)
+	bX.Size = UDim2.fromOffset(bw, bh)
+	bRef.Position = UDim2.new(1, -(bw * 2 + 16), 0.5, -bh / 2)
+	bX.Position = UDim2.new(1, -(bw + 10), 0.5, -bh / 2)
+	ttl.Position = UDim2.new(0, compact and 14 or 18, 0, 0)
+	ttl.Size = UDim2.new(1, -(bw * 2 + 64), 1, 0)
+	ttl.TextSize = compact and 15 or 17
+
+	box.Position = UDim2.new(0, 18, 0, boxY)
+	box.Size = UDim2.new(1, -36, 0, boxH)
+	box.TextSize = compact and 13 or 15
+
+	statusLabel.Position = UDim2.new(0, 20, 0, statusY)
+	statusLabel.Size = UDim2.new(1, -40, 0, 18)
+	statusLabel.TextSize = compact and 11 or 13
+
+	content.Position = UDim2.new(0, 18, 0, contentY)
+	content.Size = UDim2.new(1, -36, 0, contentH)
+
+	local gap = compact and 10 or 14
+	local rightH
+	local leftW
+	if compact then
+		local listH = math.floor(contentH * (contentH < 330 and 0.42 or 0.47))
+		listH = math.clamp(listH, 118, math.max(118, contentH - 150))
+		left.Position = UDim2.fromOffset(0, 0)
+		left.Size = UDim2.new(1, 0, 0, listH)
+		right.Position = UDim2.fromOffset(0, listH + gap)
+		rightH = math.max(120, contentH - listH - gap)
+		right.Size = UDim2.new(1, 0, 0, rightH)
+		leftW = contentW
 	else
-		sc.Scale = 1
-		grid.CellSize = UDim2.new(0, 86, 0, 86)
-		grid.CellPadding = UDim2.new(0, 10, 0, 10)
+		leftW = math.floor(contentW * 0.58)
+		left.Position = UDim2.fromOffset(0, 0)
+		left.Size = UDim2.new(0, leftW, 1, 0)
+		right.Position = UDim2.fromOffset(leftW + gap, 0)
+		rightH = contentH
+		right.Size = UDim2.new(0, math.max(0, contentW - leftW - gap), 1, 0)
 	end
+
+	local padX = compact and 8 or 10
+	local cells = compact and 4 or 5
+	local cell = math.floor((math.max(260, leftW) - 16 - padX * (cells - 1)) / cells)
+	cell = math.clamp(cell, mob and 58 or 68, compact and 82 or 94)
+	grid.CellSize = UDim2.fromOffset(cell, cell)
+	grid.CellPadding = UDim2.fromOffset(padX, padX)
+
+	local rgap = compact and 7 or 9
+	local idH = compact and 34 or 38
+	local cpH = compact and 36 or 42
+	local minInfo = compact and 42 or 64
+	local prevH = math.floor(rightH * (compact and 0.34 or 0.45))
+	prevH = math.clamp(prevH, compact and 64 or 112, compact and 132 or 230)
+	local infoH = rightH - prevH - idH - cpH - rgap * 3
+	if infoH < minInfo then
+		prevH = math.max(compact and 54 or 90, prevH - (minInfo - infoH))
+		infoH = rightH - prevH - idH - cpH - rgap * 3
+	end
+	infoH = math.max(34, infoH)
+
+	previewFrame.Position = UDim2.fromOffset(0, 0)
+	previewFrame.Size = UDim2.new(1, 0, 0, prevH)
+	idBox.Position = UDim2.fromOffset(0, prevH + rgap)
+	idBox.Size = UDim2.new(1, 0, 0, idH)
+	idBox.TextSize = compact and 12 or 13
+	infoScroll.Position = UDim2.fromOffset(0, prevH + rgap + idH + rgap)
+	infoScroll.Size = UDim2.new(1, 0, 0, infoH)
+	cp.Position = UDim2.fromOffset(0, math.max(0, rightH - cpH))
+	cp.Size = UDim2.new(1, 0, 0, cpH)
+	cp.TextSize = compact and 13 or 15
+
+	setCan()
+	updInfoCanvas()
+end
+local camCon
+local function bindCam()
+	if camCon then
+		pcall(function() camCon:Disconnect() end)
+		camCon = nil
+	end
+	local cam = workspace.CurrentCamera
+	if cam then
+		camCon = on(cam:GetPropertyChangedSignal("ViewportSize"):Connect(fitUi))
+	end
+	fitUi()
 end
 
 task.defer(function()
-	repeat task.wait() until workspace.CurrentCamera
-	fitUi()
-	local cam = workspace.CurrentCamera
-	if cam then
-		on(cam:GetPropertyChangedSignal("ViewportSize"):Connect(fitUi))
+	while alive and not workspace.CurrentCamera do
+		task.wait()
 	end
+	if not alive then return end
+	bindCam()
+	on(workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(bindCam))
 end)
 
 local rows = {}
@@ -652,6 +827,7 @@ local function killRow(fr)
 end
 
 local function mkRow(it, idx)
+	if not alive then return nil end
 	local fr = Instance.new("TextButton")
 	fr.AutoButtonColor = false
 	fr.BackgroundColor3 = Color3.fromRGB(26, 26, 34)
@@ -760,29 +936,31 @@ local pumping = false
 local pumpTok = 0
 local building = false
 local buildTok = 0
+local pump
 
 local function enq(it)
 	qadd[#qadd+1] = it
+	if pump then pump() end
 end
 onNew = enq
 
 local uiBud = isMob() and 0.0034 or 0.0064
 
-local function pump()
+pump = function()
+	if not alive or pumping then return end
 	pumpTok += 1
 	local tok = pumpTok
-	if pumping then return end
 	pumping = true
 
 	task.spawn(function()
-		while tok == pumpTok do
+		while alive and tok == pumpTok do
 			if building then
 				task.wait()
 			else
 				local t0 = os.clock()
 				local q = box.Text:lower()
 
-				while tok == pumpTok and not building and qh <= #qadd and (os.clock() - t0) < uiBud do
+				while alive and tok == pumpTok and not building and qh <= #qadd and (os.clock() - t0) < uiBud do
 					local it = qadd[qh]
 					qadd[qh] = nil
 					qh += 1
@@ -810,20 +988,28 @@ local function pump()
 				end
 
 				setCan()
+				if qh > #qadd then
+					break
+				end
 				task.wait()
 			end
 		end
 		pumping = false
+		if alive and tok == pumpTok and qh <= #qadd then
+			pump()
+		end
 	end)
 end
 
 local function rebuild()
+	if not alive then return end
 	buildTok += 1
 	local tok = buildTok
 	building = true
 	pumpTok += 1
 
 	task.spawn(function()
+		if not alive then return end
 		clr()
 
 		local q = box.Text:lower()
@@ -831,9 +1017,9 @@ local function rebuild()
 		local n = #data
 		local made = 0
 
-		while tok == buildTok and i <= n do
+		while alive and tok == buildTok and i <= n do
 			local t0 = os.clock()
-			while tok == buildTok and i <= n and (os.clock() - t0) < uiBud do
+			while alive and tok == buildTok and i <= n and (os.clock() - t0) < uiBud do
 				local it = data[i]
 				i += 1
 				if it and not shown[it.src] and match(it, q) then
@@ -847,7 +1033,7 @@ local function rebuild()
 		end
 
 		building = false
-		if tok == buildTok then
+		if alive and tok == buildTok then
 			pump()
 		end
 	end)
@@ -866,18 +1052,18 @@ local dRun = false
 local dTok = 0
 
 local function dPump()
+	if not alive or dRun then return end
 	dTok += 1
 	local tok = dTok
-	if dRun then return end
 	dRun = true
 	task.spawn(function()
-		while tok == dTok do
+		while alive and tok == dTok and dh <= #din do
 			local t0 = os.clock()
-			while tok == dTok and dh <= #din and (os.clock() - t0) < scanBud do
+			while alive and tok == dTok and dh <= #din and (os.clock() - t0) < scanBud do
 				local inst = din[dh]
 				din[dh] = nil
 				dh += 1
-				if inst then
+				if inst and not (gui and (inst == gui or inst:IsDescendantOf(gui))) then
 					pcall(scanInst, inst)
 					addSeen += 1
 				end
@@ -900,18 +1086,26 @@ local function dPump()
 				end
 			end
 
+			if dh > #din then
+				break
+			end
 			task.wait()
 		end
 		dRun = false
+		if alive and tok == dTok and dh <= #din then
+			dPump()
+		end
 	end)
 end
 
 on(game.DescendantAdded:Connect(function(inst)
+	if not alive or (gui and (inst == gui or inst:IsDescendantOf(gui))) then return end
 	din[#din+1] = inst
 	dPump()
 end))
 
 local function scanStart()
+	if not alive then return end
 	scanTok += 1
 	local tok = scanTok
 	scanning = true
@@ -920,6 +1114,7 @@ local function scanStart()
 	addSeen = 0
 
 	task.spawn(function()
+		if not alive then return end
 		if statusLabel then
 			statusLabel.Text = "Indexing..."
 		end
@@ -928,8 +1123,13 @@ local function scanStart()
 		local ok = pcall(function()
 			desc = game:QueryDescendants("Instance")
 		end)
-		if not ok or not desc then
-			desc = {}
+		if not ok or type(desc) ~= "table" then
+			local okDesc = pcall(function()
+				desc = game:GetDescendants()
+			end)
+			if not okDesc or type(desc) ~= "table" then
+				desc = {}
+			end
 		end
 		desc[#desc+1] = game
 
@@ -942,9 +1142,9 @@ local function scanStart()
 		end
 
 		local i = 1
-		while tok == scanTok and i <= tot do
+		while alive and tok == scanTok and i <= tot do
 			local t0 = os.clock()
-			while tok == scanTok and i <= tot and (os.clock() - t0) < scanBud do
+			while alive and tok == scanTok and i <= tot and (os.clock() - t0) < scanBud do
 				local inst = desc[i]
 				i += 1
 				if inst then
@@ -961,7 +1161,7 @@ local function scanStart()
 			task.wait()
 		end
 
-		if tok == scanTok then
+		if alive and tok == scanTok then
 			scanning = false
 			if statusLabel then
 				statusLabel.Text = ("Done • %d/%d • %d images • %d shown"):format(done, tot, #data, #rows)
@@ -972,7 +1172,7 @@ end
 
 on(cp.MouseButton1Click:Connect(function()
 	local it = pick
-	if not it or isCopying then return end
+	if not alive or not it or isCopying then return end
 	isCopying = true
 	local s = it.src
 
@@ -980,13 +1180,13 @@ on(cp.MouseButton1Click:Connect(function()
 		pcall(setclipboard, s)
 		local origColor = cp.BackgroundColor3
 		cp.Text = "Copied ✓"
-		local tween1 = __lt.cm("TweenService", "Create", cp, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = Color3.fromRGB(70, 190, 110)})
-		tween1:Play()
-		tween1.Completed:Wait()
-		local tween2 = __lt.cm("TweenService", "Create", cp, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = origColor})
-		tween2:Play()
-		tween2.Completed:Wait()
+		__lt.cm("TweenService", "Create", cp, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = Color3.fromRGB(70, 190, 110)}):Play()
+		task.delay(0.35, function()
+			if not alive or not cp.Parent then return end
+			__lt.cm("TweenService", "Create", cp, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = origColor}):Play()
+		end)
 		task.delay(1.1, function()
+			if not alive or not cp.Parent then return end
 			cp.Text = "Copy ID"
 			isCopying = false
 		end)
@@ -1004,7 +1204,7 @@ on(box:GetPropertyChangedSignal("Text"):Connect(function()
 	ftok += 1
 	local t = ftok
 	task.delay(0.14, function()
-		if t ~= ftok then return end
+		if not alive or t ~= ftok then return end
 		rebuild()
 	end)
 end))
@@ -1020,7 +1220,19 @@ local function stopAll()
 	dRun = false
 end
 
+state.clean = function()
+	if not alive then return end
+	alive = false
+	stopAll()
+	pcall(clr)
+	off()
+	if gui then
+		pcall(function() gui:Destroy() end)
+	end
+end
+
 local function refData()
+	if not alive then return end
 	stopAll()
 	resetData()
 	table.clear(ccache)
@@ -1042,15 +1254,13 @@ end
 
 on(bRef.MouseButton1Click:Connect(refData))
 on(bX.MouseButton1Click:Connect(function()
-	stopAll()
-	pcall(clr)
-	off()
-	pcall(function() gui:Destroy() end)
+	state.clean()
 end))
 
 refData()
 
 task.spawn(function()
+	if not alive then return end
 	__lt.cm("TweenService", "Create", root, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {BackgroundTransparency = 0}):Play()
 	__lt.cm("TweenService", "Create", sc, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = sc.Scale}):Play()
-end)
+end)end)

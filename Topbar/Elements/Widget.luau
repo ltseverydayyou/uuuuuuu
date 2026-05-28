@@ -57,7 +57,7 @@ return function(icon, Icon)
 		end)
 	end)
 
-	local GuiService = __lt.cs("GuiService", cloneref)
+	local GuiService = __lt.gs("GuiService")
 	icon:setBehaviour("IconButton", "BackgroundTransparency", function(value)
 		local preference = GuiService.PreferredTransparency
 		local newValue = value * preference
@@ -215,7 +215,7 @@ return function(icon, Icon)
 	iconImageCorner.Name = "IconImageCorner"
 	iconImageCorner.Parent = iconImage
 
-	local TweenService = __lt.cs("TweenService", cloneref)
+	local TweenService = __lt.gs("TweenService")
 	local resizingCount = 0
 	local function handleLabelAndImageChangesUnstaggered(forceUpdateString)
 		task.defer(function()
@@ -404,7 +404,7 @@ return function(icon, Icon)
 		updateBorderSize()
 	end)
 
-	local Players = __lt.cs("Players", cloneref)
+	local Players = __lt.gs("Players")
 	local localPlayer = Players.LocalPlayer
 	local lastLocaleId = localPlayer.LocaleId
 	icon.janitor:add(localPlayer:GetPropertyChangedSignal("LocaleId"):Connect(function()

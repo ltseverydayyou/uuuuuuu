@@ -27,7 +27,7 @@ local __lt = (function()
 	return loaded
 end)()
 
-local RunService = __lt.cs("RunService", cloneref)
+local RunService = __lt.gs("RunService")
 local Heartbeat = RunService.Heartbeat
 local function getPromiseReference()
 	return false

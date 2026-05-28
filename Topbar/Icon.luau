@@ -86,10 +86,10 @@ local function __NAProtectUI(gui, options)
 	return nil
 end
 
-local UserInputService = __lt.cs("UserInputService", cloneref)
-local ContentProvider = __lt.cs("ContentProvider", cloneref)
-local StarterGui = __lt.cs("StarterGui", cloneref)
-local Players = __lt.cs("Players", cloneref)
+local UserInputService = __lt.gs("UserInputService")
+local ContentProvider = __lt.gs("ContentProvider")
+local StarterGui = __lt.gs("StarterGui")
+local Players = __lt.gs("Players")
 local Types = Import(script.Types)
 
 export type Icon = Types.Icon
@@ -212,7 +212,7 @@ task.defer(function()
 			g.ResetOnSpawn = false
 			g.IgnoreGuiInset = true
 		end
-		local coreGui = __lt.cs("CoreGui", cloneref)
+		local coreGui = __lt.gs("CoreGui")
 		local lp = Players.LocalPlayer
 		local function nap(obj, prop)
 			if obj then
@@ -231,7 +231,7 @@ task.defer(function()
 		end
 		if coreGui then
 			nap(g)
-			local robloxGui = __lt.cm("CoreGui", "FindFirstChild", "RobloxGui")
+			local robloxGui = coreGui:FindFirstChild("RobloxGui")
 			if robloxGui then
 				g.Parent = robloxGui
 			else

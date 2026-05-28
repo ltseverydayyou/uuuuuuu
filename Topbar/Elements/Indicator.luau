@@ -50,8 +50,8 @@ return function(icon, Icon)
 	indicatorButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 	indicatorButton.Parent = indicator
 
-	local GuiService = __lt.cs("GuiService", cloneref)
-	local GamepadService = __lt.cs("GamepadService", cloneref)
+	local GuiService = __lt.gs("GuiService")
+	local GamepadService = __lt.gs("GamepadService")
 	local ourClickRegion = icon:getInstance("ClickRegion")
 	local function selectionChanged()
 		local selectedClickRegion = GuiService.SelectedObject
@@ -82,7 +82,7 @@ return function(icon, Icon)
 	UICorner.CornerRadius = UDim.new(1, 0)
 	UICorner.Parent = indicatorButton
 
-	local UserInputService = __lt.cs("UserInputService", cloneref)
+	local UserInputService = __lt.gs("UserInputService")
 	local function setIndicatorVisible(visibility)
 		if visibility == nil then
 			visibility = indicator.Visible

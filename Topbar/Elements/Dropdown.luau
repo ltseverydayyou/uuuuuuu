@@ -27,8 +27,8 @@ local __lt = (function()
 	return loaded
 end)()
 
-local TweenService = __lt.cs("TweenService", cloneref)
-local RunService = __lt.cs("RunService", cloneref)
+local TweenService = __lt.gs("TweenService")
+local RunService = __lt.gs("RunService")
 local Themes = Import(script.Parent.Parent.Features.Themes)
 local PADDING = 0
 return function(icon)
@@ -43,7 +43,7 @@ return function(icon)
 	dropdown.ClipsDescendants = true
 	dropdown.Parent = icon.widget
 
-	local GuiService = __lt.cs("GuiService", cloneref)
+	local GuiService = __lt.gs("GuiService")
 	icon:setBehaviour("Dropdown", "BackgroundTransparency", function(value)
 		local preference = GuiService.PreferredTransparency
 		local newValue = value * preference

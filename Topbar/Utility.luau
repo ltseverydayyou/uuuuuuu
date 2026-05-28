@@ -28,7 +28,7 @@ local __lt = (function()
 end)()
 
 local Utility = {}
-local Players = __lt.cs("Players", cloneref)
+local Players = __lt.gs("Players")
 local localPlayer = Players.LocalPlayer
 
 function Utility.createStagger(delayTime, callback, delayInitially)
@@ -220,7 +220,7 @@ function Utility.getClippedContainer(screenGui)
 end
 
 local Janitor = Import(script.Parent.Packages.Janitor)
-local GuiService = __lt.cs("GuiService", cloneref)
+local GuiService = __lt.gs("GuiService")
 function Utility.clipOutside(icon, instance)
 	local cloneJanitor = icon.janitor:add(Janitor.new())
 	instance.Destroying:Once(function()

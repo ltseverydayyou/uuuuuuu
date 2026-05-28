@@ -178,7 +178,7 @@ return function(icon)
 
 	local isCompletelyEnabled = false
 	local captionHeader = caption.Box.Header
-	local UserInputService = __lt.cs("UserInputService", cloneref)
+	local UserInputService = __lt.gs("UserInputService")
 	local function updateHotkey(keyCodeEnum)
 		local hasKeyboard = UserInputService.KeyboardEnabled
 		local text = caption:GetAttribute("CaptionText") or ""
@@ -203,8 +203,8 @@ return function(icon)
 	local TWEEN_SPEED = 0.2
 	local TWEEN_INFO_IN = TweenInfo.new(TWEEN_SPEED, EASING_STYLE, Enum.EasingDirection.In)
 	local TWEEN_INFO_OUT = TweenInfo.new(TWEEN_SPEED, EASING_STYLE, Enum.EasingDirection.Out)
-	local TweenService = __lt.cs("TweenService", cloneref)
-	local RunService = __lt.cs("RunService", cloneref)
+	local TweenService = __lt.gs("TweenService")
+	local RunService = __lt.gs("RunService")
 	local function getCaptionPosition(customEnabled)
 		local enabled = if customEnabled ~= nil then customEnabled else isCompletelyEnabled
 		local yOut = 2

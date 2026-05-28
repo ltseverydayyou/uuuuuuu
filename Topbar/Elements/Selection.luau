@@ -57,8 +57,8 @@ return function(Icon)
 	UICorner.CornerRadius = UDim.new(1, 0)
 	UICorner.Parent = selection
 
-	local RunService = __lt.cs("RunService", cloneref)
-	local GuiService = __lt.cs("GuiService", cloneref)
+	local RunService = __lt.gs("RunService")
+	local GuiService = __lt.gs("GuiService")
 	local rotationSpeed = 1
 	selection:GetAttributeChangedSignal("RotationSpeed"):Connect(function()
 		rotationSpeed = selection:GetAttribute("RotationSpeed")

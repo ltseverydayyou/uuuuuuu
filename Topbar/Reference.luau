@@ -27,12 +27,12 @@ local __lt = (function()
 	return loaded
 end)()
 
-local replicatedStorage = __lt.cs("ReplicatedStorage", cloneref)
+local replicatedStorage = __lt.gs("ReplicatedStorage")
 local Reference = {}
 Reference.objectName = "TopbarPlusReference_LTS"
 
 function Reference.addToReplicatedStorage()
-	local existingItem = __lt.cm("ReplicatedStorage", "FindFirstChild", Reference.objectName)
+	local existingItem = replicatedStorage:FindFirstChild(Reference.objectName)
 	if existingItem then
 		return false
 	end
@@ -47,7 +47,7 @@ function Reference.addToReplicatedStorage()
 end
 
 function Reference.getObject()
-	local objectValue = __lt.cm("ReplicatedStorage", "FindFirstChild", Reference.objectName)
+	local objectValue = replicatedStorage:FindFirstChild(Reference.objectName)
 	if objectValue then
 		return objectValue
 	end

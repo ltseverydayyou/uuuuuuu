@@ -27,9 +27,9 @@ local __lt = (function()
 	return loaded
 end)()
 
-local GamepadService = __lt.cs("GamepadService", cloneref)
-local UserInputService = __lt.cs("UserInputService", cloneref)
-local GuiService = __lt.cs("GuiService", cloneref)
+local GamepadService = __lt.gs("GamepadService")
+local UserInputService = __lt.gs("UserInputService")
+local GuiService = __lt.gs("GuiService")
 
 local DEFAULT_HIGHLIGHT_KEY = Enum.KeyCode.DPadUp
 local GAMEPAD_INPUT = Enum.PreferredInput.Gamepad

@@ -251,6 +251,11 @@ end
 
 function Themes.set(icon, theme)
 	local themesJanitor = icon.themesJanitor
+	if not themesJanitor or type(themesJanitor.clean) ~= "function" then
+		local Janitor = Import(script.Parent.Parent.Packages.Janitor)
+		themesJanitor = Janitor.new()
+		icon.themesJanitor = if icon.janitor then icon.janitor:add(themesJanitor) else themesJanitor
+	end
 	themesJanitor:clean()
 	themesJanitor:add(icon.stateChanged:Connect(function()
 		Themes.change(icon)

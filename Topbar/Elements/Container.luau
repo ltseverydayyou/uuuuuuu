@@ -38,6 +38,7 @@ return function(Icon)
 	local insetChanged = Signal.new()
 	local guiInset = GuiService:GetGuiInset()
 	local startInset = 0
+	local iconPadding = 0
 	local yDownOffset = 0
 	local ySizeOffset = 0
 	local checkCount = 0
@@ -92,11 +93,14 @@ return function(Icon)
 		end
 
 		guiInset = GuiService:GetGuiInset()
-		startInset = if isOldTopbar then 12 else guiInset.Y - 50
+		local topbarInset = GuiService.TopbarInset
+		iconPadding = if isOldTopbar then 12 else math.max(guiInset.Y - 50, 0)
+		startInset = if isOldTopbar then 12 else topbarInset.Min.X
 		yDownOffset = if isOldTopbar then 2 else 0
 		ySizeOffset = -2
 		if isConsoleScreen then
 			startInset = 10
+			iconPadding = 10
 			yDownOffset = 0
 		end
 		if GuiService.TopbarInset.Height == 0 and not hasBecomeOldTheme then
@@ -126,7 +130,7 @@ return function(Icon)
 	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	screenGui.IgnoreGuiInset = true
 	screenGui.ResetOnSpawn = false
-	screenGui.ScreenInsets = Enum.ScreenInsets.TopbarSafeInsets
+	screenGui.ScreenInsets = Enum.ScreenInsets.None
 	container[screenGui.Name] = screenGui
 	Icon.baseDisplayOrderChanged:Connect(function()
 		screenGui.DisplayOrder = Icon.baseDisplayOrder
@@ -182,6 +186,7 @@ return function(Icon)
 	left.Name = "Left"
 	insetChanged:Connect(function()
 		left.Position = UDim2.fromOffset(startInset, 0)
+		left.Size = UDim2.new(1, holderReduction - startInset, 1, 0)
 	end)
 	left.Size = UDim2.new(1, holderReduction, 1, 0)
 	left.BackgroundTransparency = 1
@@ -202,7 +207,7 @@ return function(Icon)
 
 	local UIListLayout = Instance.new("UIListLayout")
 	insetChanged:Connect(function()
-		UIListLayout.Padding = UDim.new(0, startInset)
+		UIListLayout.Padding = UDim.new(0, iconPadding)
 	end)
 	UIListLayout.FillDirection = Enum.FillDirection.Horizontal
 	UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
@@ -212,7 +217,7 @@ return function(Icon)
 
 	local center = left:Clone()
 	insetChanged:Connect(function()
-		center.UIListLayout.Padding = UDim.new(0, startInset)
+		center.UIListLayout.Padding = UDim.new(0, iconPadding)
 	end)
 	center.ScrollingEnabled = false
 	center.UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
@@ -221,7 +226,7 @@ return function(Icon)
 
 	local right = left:Clone()
 	insetChanged:Connect(function()
-		right.UIListLayout.Padding = UDim.new(0, startInset)
+		right.UIListLayout.Padding = UDim.new(0, iconPadding)
 	end)
 	right.UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
 	right.Name = "Right"

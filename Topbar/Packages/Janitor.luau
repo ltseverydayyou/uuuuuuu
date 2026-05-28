@@ -108,6 +108,8 @@ function Janitor.__index:Add(Object, MethodName, Index)
 	return Object
 end
 Janitor.__index.Give = Janitor.__index.Add
+Janitor.__index.add = Janitor.__index.Add
+Janitor.__index.give = Janitor.__index.Add
 
 function Janitor.__index:AddPromise(PromiseObject)
 	local Promise = getPromiseReference()
@@ -141,6 +143,8 @@ function Janitor.__index:AddPromise(PromiseObject)
 	end
 end
 Janitor.__index.GivePromise = Janitor.__index.AddPromise
+Janitor.__index.addPromise = Janitor.__index.AddPromise
+Janitor.__index.givePromise = Janitor.__index.AddPromise
 
 function Janitor.__index:AddObject(Object)
 	local Id = newproxy(false)
@@ -159,6 +163,8 @@ function Janitor.__index:AddObject(Object)
 end
 
 Janitor.__index.GiveObject = Janitor.__index.AddObject
+Janitor.__index.addObject = Janitor.__index.AddObject
+Janitor.__index.giveObject = Janitor.__index.AddObject
 
 function Janitor.__index:Remove(Index)
 	local This = self[IndicesReference]
@@ -188,6 +194,7 @@ function Janitor.__index:Remove(Index)
 
 	return self
 end
+Janitor.__index.remove = Janitor.__index.Remove
 
 function Janitor.__index:Get(Index)
 	local This = self[IndicesReference]
@@ -196,6 +203,7 @@ function Janitor.__index:Get(Index)
 	end
 	return nil
 end
+Janitor.__index.get = Janitor.__index.Get
 
 function Janitor.__index:Cleanup()
 	if not self.CurrentlyCleaning then
@@ -264,6 +272,7 @@ Janitor.__index.clean = Janitor.__index.Cleanup
 function Janitor.__index:Destroy()
 	self:Cleanup()
 end
+Janitor.__index.destroy = Janitor.__index.Destroy
 
 Janitor.__call = Janitor.__index.Cleanup
 

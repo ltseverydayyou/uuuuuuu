@@ -30,6 +30,7 @@ end)()
 local hasBecomeOldTheme = false
 local previousInsetHeight = 0
 return function(Icon)
+	local CoreGui = __lt.gs("CoreGui")
 	local GuiService = __lt.gs("GuiService")
 	local Players = __lt.gs("Players")
 	local UserInputService = __lt.gs("UserInputService")
@@ -44,6 +45,40 @@ return function(Icon)
 	local checkCount = 0
 	local isConsoleScreen = false
 	local isUsingVR = false
+	local function getCoreGuiLeftInset()
+		local robloxGui = CoreGui:FindFirstChild("RobloxGui")
+		if not robloxGui then
+			return 0
+		end
+		local topbarHeight = math.max(GuiService.TopbarInset.Height, guiInset.Y, 50)
+		local maxRight = 0
+		for _, instance in ipairs(robloxGui:GetDescendants()) do
+			if instance:IsA("GuiObject") and instance.Visible then
+				local screenGui = instance:FindFirstAncestorOfClass("ScreenGui")
+				local screenGuiName = screenGui and screenGui.Name
+				local isTopbarContainer = screenGuiName == "TopbarStandard"
+					or screenGuiName == "TopbarCentered"
+					or screenGuiName == "TopbarStandardClipped"
+					or screenGuiName == "TopbarCenteredClipped"
+				if not isTopbarContainer then
+					local position = instance.AbsolutePosition
+					local size = instance.AbsoluteSize
+					local rightEdge = position.X + size.X
+					local isLeftTopbarObject = position.Y < topbarHeight
+						and position.X >= 0
+						and position.X < 260
+						and size.X > 0
+						and size.Y > 0
+						and size.X <= 260
+						and size.Y <= topbarHeight + 8
+					if isLeftTopbarObject then
+						maxRight = math.max(maxRight, rightEdge)
+					end
+				end
+			end
+		end
+		return if maxRight > 0 then maxRight + 8 else 0
+	end
 	local function checkInset(status)
 		local currentHeight = GuiService.TopbarInset.Height
 		local isOldTopbar = currentHeight <= 36
@@ -94,7 +129,7 @@ return function(Icon)
 
 		guiInset = GuiService:GetGuiInset()
 		iconPadding = if isOldTopbar then 12 else math.max(guiInset.Y - 50, 8)
-		startInset = if isOldTopbar then 12 else math.max(guiInset.X, guiInset.Y, iconPadding)
+		startInset = if isOldTopbar then 12 else math.max(guiInset.X, guiInset.Y, iconPadding, getCoreGuiLeftInset())
 		yDownOffset = if isOldTopbar then 2 else 0
 		ySizeOffset = -2
 		if isConsoleScreen then
@@ -116,8 +151,36 @@ return function(Icon)
 			end)
 		end
 	end
+	local function queueInsetRefresh(delayTime)
+		task.delay(delayTime, function()
+			checkInset("CoreGuiRefresh")
+		end)
+	end
+	local robloxGui = CoreGui:FindFirstChild("RobloxGui")
+	if robloxGui then
+		local queued = false
+		local function queueCoreGuiRefresh()
+			if queued then
+				return
+			end
+			queued = true
+			task.defer(function()
+				queued = false
+				checkInset("CoreGuiRefresh")
+			end)
+		end
+		robloxGui.DescendantAdded:Connect(queueCoreGuiRefresh)
+		robloxGui.DescendantRemoving:Connect(queueCoreGuiRefresh)
+	end
+	CoreGui.ChildAdded:Connect(function(child)
+		if child.Name == "RobloxGui" then
+			queueInsetRefresh(0)
+		end
+	end)
 	GuiService:GetPropertyChangedSignal("TopbarInset"):Connect(checkInset)
 	checkInset("FirstTime")
+	queueInsetRefresh(1)
+	queueInsetRefresh(3)
 
 	local screenGui = Instance.new("ScreenGui")
 	insetChanged:Connect(function()

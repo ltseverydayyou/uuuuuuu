@@ -204,9 +204,9 @@ A.last = {}
 A.keys = {}
 A.upq = {}
 A.relq2 = {}
-A.reltry = {}
 A.apstate = false
 A.mode = "none"
+A.bind = "__rusher_obs_step"
 A.cfg = {
 	ap = false,
 	cap = false,
@@ -759,31 +759,8 @@ A.conf = function(k, v)
 end
 
 A.setap = function(v)
-	local e = A.env("game")
-	local want = v == true
-
-	if not e then
-		A.apstate = false
-		return false
-	end
-
-	local ok = false
-
-	for _, n in { "playing", "input", "release", "start", "heartbeat" } do
-		local fn = e[n]
-		if type(fn) == "function" then
-			local cur, idx = A.guv(fn, "v4")
-			if idx ~= nil or type(cur) == "boolean" then
-				if A.suv(fn, "v4", want) then
-					ok = true
-					break
-				end
-			end
-		end
-	end
-
-	A.apstate = ok and want or false
-	return ok
+	A.apstate = false
+	return false
 end
 
 A.kpool = {
@@ -1182,123 +1159,6 @@ A.grel = function(k, force)
 	return false
 end
 
-A.firstdown = function()
-	for k in A.keys do
-		return k
-	end
-
-	return nil
-end
-
-A.relstate = function()
-	local e = A.env("game")
-	if not e then
-		return nil, nil, nil
-	end
-
-	local t34 = nil
-	local v67 = nil
-	local v30 = nil
-
-	for _, n in { "release", "playing" } do
-		local fn = e[n]
-		if type(fn) == "function" then
-			if type(t34) ~= "table" then
-				t34 = A.guv(fn, "t34")
-			end
-			if type(v67) ~= "number" then
-				v67 = A.guv(fn, "v67")
-			end
-			if type(v30) ~= "number" then
-				v30 = A.guv(fn, "v30")
-			end
-		end
-	end
-
-	return t34, v67, v30
-end
-
-A.setrelidx = function(v)
-	local e = A.env("game")
-	if not e or type(v) ~= "number" then
-		return false
-	end
-
-	local ok = false
-
-	for _, n in { "release", "playing" } do
-		local fn = e[n]
-		if type(fn) == "function" and A.suv(fn, "v67", v) then
-			ok = true
-		end
-	end
-
-	return ok
-end
-
-A.relscan = function(t34, v67, v30)
-	if type(t34) ~= "table" or type(v67) ~= "number" or type(v30) ~= "number" then
-		return false
-	end
-
-	while true do
-		local note = t34[v67]
-		if note == nil then
-			return false
-		end
-		if note.obj == nil or note.hitted == true or note.miss == true then
-			v67 = v67 + 1
-		else
-			break
-		end
-	end
-
-	local note = t34[v67]
-	if note == nil or note.notetype ~= "release" or type(note.hit) ~= "function" then
-		return false
-	end
-
-	local ok = pcall(function()
-		note:hit(v30, false)
-	end)
-
-	if not ok then
-		return false
-	end
-
-	if (tonumber(note.acc) or 0) > 0 or note.hitted == true then
-		A.setrelidx(v67 + 1)
-		return true
-	end
-
-	return false
-end
-
-A.tryrel = function()
-	local t34, v67, v30 = A.relstate()
-	local prev = v67
-	local k = A.firstdown() or A.rkey
-
-	if k then
-		A.grel(k, true)
-	end
-
-	local _, nowidx = A.relstate()
-	if type(prev) == "number" and type(nowidx) == "number" and nowidx > prev then
-		return true
-	end
-
-	return A.relscan(t34, v67, v30)
-end
-
-A.qreltry = function()
-	table.insert(A.reltry, {
-		t = os.clock(),
-		n = 6
-	})
-end
-
-
 A.relq = function(k, t)
 	if not k then
 		return false
@@ -1325,20 +1185,6 @@ A.flush = function()
 			table.remove(A.upq, i)
 		end
 	end
-
-	for i = #A.reltry, 1, -1 do
-		local it = A.reltry[i]
-		if type(it) ~= "table" then
-			table.remove(A.reltry, i)
-		elseif now >= (tonumber(it.t) or now) then
-			if A.tryrel() or (tonumber(it.n) or 0) <= 1 then
-				table.remove(A.reltry, i)
-			else
-				it.n = (tonumber(it.n) or 1) - 1
-				it.t = now + 0.012
-			end
-		end
-	end
 end
 
 A.relpush = function()
@@ -1346,6 +1192,7 @@ A.relpush = function()
 end
 
 A.flushrel = function()
+	A.relq2 = {}
 	return
 end
 
@@ -1503,7 +1350,6 @@ A.resetkeys = function()
 	A.chart.catch = false
 	A.upq = {}
 	A.relq2 = {}
-	A.reltry = {}
 
 	for k in A.keys do
 		A.grel(k, true)
@@ -1579,11 +1425,6 @@ A.loadchart = function()
 				table.insert(catches, ts)
 			elseif nt == 3 then
 				relid = relid + 1
-				A.addseq(ts - A.cfg.rhold / 1000, "rprep", relid, A.cfg.tlead / 1000)
-				local retries = math.clamp(math.floor(tonumber(A.cfg.rretry) or 1), 1, 5)
-				for r = 1, retries do
-					A.addseq(ts + (A.cfg.rgap + (r - 1) * 4) / 1000, "release", relid, 0.006)
-				end
 			elseif en and en > 0 then
 				A.addseq(ts, "hstart", id, A.cfg.tlead / 1000)
 				A.addseq(en * bps + A.cfg.hlate / 1000, "hend", id, 0)
@@ -1618,68 +1459,148 @@ A.loadchart = function()
 end
 
 A.rprep = function(id)
-	local k = A.chart.rkeys[id]
-	if k and A.keys[k] then
-		return true
-	end
+	return true
+end
 
-	k = A.nextkey(A.kpool) or A.rkey
-	if not k then
+A.setrelidx = function(v)
+	local e = A.env("game")
+	if not e or type(v) ~= "number" then
 		return false
 	end
 
-	A.chart.rkeys[id] = k
-	if A.markdown(k) then
-		return true
+	local ok = false
+
+	for _, n in { "release", "playing" } do
+		local fn = e[n]
+		if type(fn) == "function" and A.suv(fn, "v67", v) then
+			ok = true
+		end
 	end
 
-	return A.rawpress(k)
+	return ok
+end
+
+A.relcur = function()
+	local e = A.env("game")
+	if not e then
+		return nil
+	end
+
+	local t34 = nil
+	local v67 = nil
+	local v30 = nil
+	local v29 = nil
+
+	for _, n in { "release", "playing" } do
+		local fn = e[n]
+		if type(fn) == "function" then
+			if type(t34) ~= "table" then
+				t34 = A.guv(fn, "t34")
+			end
+			if type(v67) ~= "number" then
+				v67 = A.guv(fn, "v67")
+			end
+			if type(v30) ~= "number" then
+				v30 = A.guv(fn, "v30")
+			end
+			if type(v29) ~= "number" then
+				v29 = A.guv(fn, "v29")
+			end
+		end
+	end
+
+	if type(t34) ~= "table" or type(v67) ~= "number" then
+		return nil
+	end
+
+	if type(v30) ~= "number" then
+		v30 = A.gnow()
+	end
+
+	if type(v30) ~= "number" then
+		return nil
+	end
+
+	local start = v67
+
+	while true do
+		local note = t34[v67]
+		if type(note) ~= "table" then
+			return nil
+		end
+		if note.obj == nil or note.hitted == true or note.miss == true then
+			v67 = v67 + 1
+		else
+			break
+		end
+	end
+
+	if v67 ~= start then
+		A.setrelidx(v67)
+	end
+
+	local note = t34[v67]
+	if type(note) ~= "table" or note.notetype ~= "release" or type(note.hit) ~= "function" then
+		return nil
+	end
+
+	return e, t34, v67, note, v30, v29
+end
+
+A.relplay = function()
+	local any = false
+
+	for _ = 1, 4 do
+		local e, t34, v67, note, v30, v29 = A.relcur()
+		if not e or type(note) ~= "table" then
+			break
+		end
+
+		local st = tonumber(note.real_stime)
+		if type(st) ~= "number" then
+			break
+		end
+
+		local prep = math.max(0, (tonumber(A.cfg.rhold) or 0) / 1000)
+		if st - v30 > prep then
+			break
+		end
+
+		local eps = 0
+		if type(v29) == "number" then
+			eps = math.min(math.max(v29 * 0.125, 0), 1 / 240)
+		end
+
+		if v30 + eps < st then
+			break
+		end
+
+		local ok = pcall(function()
+			note:hit(v30, false)
+		end)
+
+		if not ok then
+			break
+		end
+
+		local acc = tonumber(note.acc) or 0
+		if note.hitted == true or acc > 0 then
+			A.setrelidx(v67 + 1)
+			any = true
+		else
+			break
+		end
+	end
+
+	return any
 end
 
 A.dirrel = function()
-	local e = A.env("game")
-	if not e or type(e.release) ~= "function" then
-		return false
-	end
-
-	local list = A.guv(e.release, "t34")
-	local idx = A.guv(e.release, "v67")
-	local now = A.guv(e.release, "v30") or A.gnow()
-
-	if type(list) ~= "table" or type(idx) ~= "number" or type(now) ~= "number" then
-		return false
-	end
-
-	local note = list[idx]
-	if type(note) ~= "table" or note.notetype ~= "release" or note.hitted == true or note.obj == nil or type(note.hit) ~= "function" then
-		return false
-	end
-
-	local ok = pcall(function()
-		note:hit(now, false)
-	end)
-
-	if not ok then
-		return false
-	end
-
-	if note.hitted == true or (tonumber(note.acc) or 0) >= 2 then
-		A.suv(e.release, "v67", idx + 1)
-		return true
-	end
-
-	return false
+	return A.relplay()
 end
 
 A.relhit = function(id)
-	A.chart.rkeys[id] = nil
-
-	if A.tryrel() then
-		return true
-	end
-
-	A.qreltry()
-	return false
+	return A.relplay()
 end
 
 A.doev = function(ev)
@@ -1848,6 +1769,12 @@ A.cln = function()
 	A.setap(false)
 	A.resetkeys()
 
+	pcall(function()
+		if type(A.rs.UnbindFromRenderStep) == "function" then
+			A.rs:UnbindFromRenderStep(A.bind)
+		end
+	end)
+
 	for _, c in A.con do
 		pcall(function()
 			c:Disconnect()
@@ -1866,31 +1793,18 @@ A.step = function()
 	A.flush()
 	A.flushrel()
 
-	local hidden = false
-	if A.cfg.ap then
-		hidden = A.setap(true) == true
-	elseif A.apstate then
+	if A.apstate then
 		A.setap(false)
 	end
 
-	local runchart = false
-	if A.cfg.cap then
-		runchart = true
-	end
-	if A.cfg.ap and not hidden then
-		runchart = true
-	end
-	if hidden then
-		runchart = false
-	end
+	local runchart = A.cfg.ap or A.cfg.cap
 
 	if runchart then
 		A.chartplay()
+		A.relplay()
 	end
 
-	if hidden then
-		A.mode = "hidden"
-	elseif runchart then
+	if runchart then
 		A.mode = "chart"
 	else
 		A.mode = "none"
@@ -1913,7 +1827,29 @@ A.step = function()
 	end
 end
 
-A.add(A.rs.Heartbeat:Connect(A.step))
+pcall(function()
+	if type(A.rs.UnbindFromRenderStep) == "function" then
+		A.rs:UnbindFromRenderStep(A.bind)
+	end
+end)
+
+if type(A.rs.BindToRenderStep) == "function" then
+	local ok = pcall(function()
+		A.rs:BindToRenderStep(A.bind, 401, A.step)
+	end)
+
+	if not ok then
+		if A.rs.RenderStepped then
+			A.add(A.rs.RenderStepped:Connect(A.step))
+		else
+			A.add(A.rs.Heartbeat:Connect(A.step))
+		end
+	end
+elseif A.rs.RenderStepped then
+	A.add(A.rs.RenderStepped:Connect(A.step))
+else
+	A.add(A.rs.Heartbeat:Connect(A.step))
+end
 
 
 A.hsvc = A.svc("HttpService")
@@ -2447,12 +2383,10 @@ end
 M1:AddToggle("RusherAutoPlay", {
 	Text = "Gameplay Auto Player",
 	Default = false,
-	Tooltip = "Uses the game's hidden client auto flag first, then falls back to chart auto when it can't be toggled.",
+	Tooltip = "Runs the chart autoplayer path.",
 	Callback = function(v)
 		A.cfg.ap = v
-		if not v then
-			A.setap(false)
-		end
+		A.setap(false)
 		A.chart.cur = nil
 		A.chart.seq = {}
 		A.chart.i = 1
@@ -2463,7 +2397,7 @@ M1:AddToggle("RusherAutoPlay", {
 M1:AddToggle("RusherChartAuto", {
 	Text = "Chart Fallback Auto Player",
 	Default = false,
-	Tooltip = "Uses the currentchart.notes fallback path with release retry recovery when hidden autoplay cannot be changed.",
+	Tooltip = "Runs the chart autoplayer path with type 3 handled as an actual release.",
 	Callback = function(v)
 		A.cfg.cap = v
 		A.chart.cur = nil

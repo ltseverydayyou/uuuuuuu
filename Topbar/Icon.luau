@@ -631,7 +631,7 @@ function Icon:getInstanceOrCollective(collectiveOrInstanceName)
 end
 
 function Icon:getStateGroup(iconState)
-	local chosenState = iconState or self.activeState
+	local chosenState = iconState or self.activeState or "Deselected"
 	if type(self.appearance) ~= "table" then
 		self.appearance = {}
 	end

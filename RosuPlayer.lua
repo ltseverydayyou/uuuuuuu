@@ -130,6 +130,7 @@ ap.down = {}
 ap.hold = {}
 ap.hit = setmetatable({}, { __mode = "k" })
 ap.seen = setmetatable({}, { __mode = "k" })
+ap.pos = setmetatable({}, { __mode = "k" })
 ap.bind = "ap_" .. tostring(math.random(10000, 99999))
 
 ap.plrs = ap.svc("Players")
@@ -476,6 +477,7 @@ ap.reset = function(full)
     ap.clear(ap.hold)
     ap.hit = setmetatable({}, { __mode = "k" })
     ap.seen = setmetatable({}, { __mode = "k" })
+    ap.pos = setmetatable({}, { __mode = "k" })
 
     if full then
         ap.g = nil
@@ -697,6 +699,21 @@ ap.mark = function(n, y)
     }
 end
 
+ap.cross = function(n, y, target)
+    if not n or type(y) ~= "number" or type(target) ~= "number" then
+        return false
+    end
+
+    local old = ap.pos[n]
+    ap.pos[n] = y
+
+    if type(old) ~= "number" then
+        return false
+    end
+
+    return (old < target and y >= target) or (old > target and y <= target)
+end
+
 ap.hready = function(n)
     local h = n and n:FindFirstChild("Head")
     if h and h:IsA("GuiObject") then
@@ -715,8 +732,10 @@ ap.tapok = function(n)
         return false, math.huge
     end
 
-    local d = math.abs(y - ap.tar())
-    return d <= ap.cfg.win, d
+    local target = ap.tar()
+    local crossed = ap.cross(n, y, target)
+    local d = math.abs(y - target)
+    return crossed or d <= ap.cfg.win, d
 end
 
 ap.holdok = function(n)
@@ -733,8 +752,10 @@ ap.holdok = function(n)
         return false, math.huge
     end
 
-    local d = math.abs(h - ap.tar())
-    return d <= ap.cfg.hwin, d
+    local target = ap.tar()
+    local crossed = ap.cross(n, h, target)
+    local d = math.abs(h - target)
+    return crossed or d <= ap.cfg.hwin, d
 end
 
 ap.rtar = function()
@@ -782,8 +803,10 @@ end
 ap.best = function(tr)
     local ht = nil
     local hd = math.huge
+    local hc = false
     local tp = nil
     local td = math.huge
+    local tc = false
 
     for _, n in tr:GetChildren() do
         if ap.nvis(n) then
@@ -791,25 +814,27 @@ ap.best = function(tr)
 
             if k == "hold" then
                 local ok, d = ap.holdok(n)
-                if d < hd and d <= ap.cfg.hwin * 3 then
+                if (ok or d <= ap.cfg.hwin * 3) and d < hd then
                     ht = n
                     hd = d
+                    hc = ok
                 end
             elseif k == "tap" then
                 local ok, d = ap.tapok(n)
-                if d < td and d <= ap.cfg.win * 3 then
+                if (ok or d <= ap.cfg.win * 3) and d < td then
                     tp = n
                     td = d
+                    tc = ok
                 end
             end
         end
     end
 
-    if ht and hd <= ap.cfg.hwin then
+    if ht and (hc or hd <= ap.cfg.hwin) then
         return ht, "hold"
     end
 
-    if tp and td <= ap.cfg.win then
+    if tp and (tc or td <= ap.cfg.win) then
         return tp, "tap"
     end
 end

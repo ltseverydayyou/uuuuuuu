@@ -1,102 +1,42 @@
 local __lt = (function()
-	local globalEnv = (getgenv and getgenv()) or _G or {};
-	local sharedEnv = rawget(_G, "shared");
-	local cacheHost = type(sharedEnv) == "table" and sharedEnv or (type(globalEnv) == "table" and globalEnv or nil);
+	local globalEnv = (getgenv and getgenv()) or _G or {}
+	local sharedEnv = rawget(_G, "shared")
+	local cacheHost = type(sharedEnv) == "table" and sharedEnv or (type(globalEnv) == "table" and globalEnv or nil)
 	if cacheHost then
-		local cached = rawget(cacheHost, "__lt_service_resolver");
+		local cached = rawget(cacheHost, "__lt_service_resolver")
 		if type(cached) == "table" then
-			return cached;
-		end;
-	end;
-	local loader = loadstring or load;
+			return cached
+		end
+	end
+	local loader = loadstring or load
 	if type(loader) ~= "function" then
-		error("Service resolver loader unavailable");
-	end;
-	local resolver = loader(game:HttpGet("https://ltseverydayyou.github.io/ServiceResolver.luau"), "@ServiceResolver.luau");
+		error("Service resolver loader unavailable")
+	end
+	local resolver =
+		loader(game:HttpGet("https://ltseverydayyou.github.io/ServiceResolver.luau"), "@ServiceResolver.luau")
 	if type(resolver) ~= "function" then
-		error("Service resolver failed to compile");
-	end;
-	local loaded = resolver();
+		error("Service resolver failed to compile")
+	end
+	local loaded = resolver()
 	if type(loaded) ~= "table" then
-		error("Service resolver failed to load");
-	end;
+		error("Service resolver failed to load")
+	end
 	if cacheHost then
-		cacheHost.__lt_service_resolver = loaded;
-	end;
-	return loaded;
-end)();
-local __NAUIProtector = (function()
-	local globalEnv = (getgenv and getgenv()) or _G or {};
-	local sharedEnv = rawget(_G, "shared");
-	local cacheHost = type(sharedEnv) == "table" and sharedEnv or (type(globalEnv) == "table" and globalEnv or nil);
-	if cacheHost then
-		local cached = rawget(cacheHost, "__lt_ui_protector");
-		if type(cached) == "table" then
-			return cached;
-		end;
-	end;
-	local loader = loadstring or load;
-	if type(loader) ~= "function" then
-		return nil;
-	end;
-	local okSource, source = pcall(function()
-		return game:HttpGet("https://ltseverydayyou.github.io/UIprotector.luau");
-	end);
-	if not okSource or type(source) ~= "string" or source == "" then
-		return nil;
-	end;
-	local chunk = loader(source, "@UIprotector.luau");
-	if type(chunk) ~= "function" then
-		return nil;
-	end;
-	local okLoaded, loaded = pcall(chunk);
-	if okLoaded and type(loaded) == "table" then
-		if cacheHost then
-			cacheHost.__lt_ui_protector = loaded;
-		end;
-		return loaded;
-	end;
-	return nil;
-end)();
-local __NAOriginalGetHui = gethui;
-local gethui = function()
-	if __NAUIProtector and type(__NAUIProtector.huiGrabber) == "function" then
-		local ok, ui = pcall(__NAUIProtector.huiGrabber);
-		if ok and typeof(ui) == "Instance" then
-			return ui;
-		end;
-	end;
-	if type(__NAOriginalGetHui) == "function" then
-		local ok, ui = pcall(__NAOriginalGetHui);
-		if ok then
-			return ui;
-		end;
-	end;
-	return nil;
-end;
-local function __NAProtectUI(gui, options)
-	if __NAUIProtector and type(__NAUIProtector.protectUI) == "function" then
-		local ok, protected = pcall(__NAUIProtector.protectUI, gui, options);
-		if ok and protected then
-			return protected;
-		end;
-	end;
-	return nil;
-end;
+		cacheHost.__lt_service_resolver = loaded
+	end
+	return loaded
+end)()
 
 local hasBecomeOldTheme = false
 local previousInsetHeight = 0
 return function(Icon)
-
-
-
 	local GuiService = __lt.cs("GuiService", cloneref)
-	local Players =  __lt.cs("Players", cloneref)
+	local Players = __lt.cs("Players", cloneref)
 	local UserInputService = __lt.cs("UserInputService", cloneref)
 	local container = {}
 	local Signal = Import(script.Parent.Parent.Packages.GoodSignal)
 	local insetChanged = Signal.new()
-	local guiInset = __lt.cm("GuiService", "GetGuiInset")
+	local guiInset = GuiService:GetGuiInset()
 	local startInset = 0
 	local yDownOffset = 0
 	local ySizeOffset = 0
@@ -107,11 +47,7 @@ return function(Icon)
 		local currentHeight = GuiService.TopbarInset.Height
 		local isOldTopbar = currentHeight <= 36
 
-
-
-
-
-		isConsoleScreen = __lt.cm("GuiService", "IsTenFootInterface")
+		isConsoleScreen = GuiService:IsTenFootInterface()
 		isUsingVR = UserInputService.VREnabled
 		Icon.isOldTopbar = isOldTopbar
 		checkCount += 1
@@ -130,15 +66,18 @@ return function(Icon)
 			end)
 		end
 
-
-		if Icon.isOldTopbar and not isConsoleScreen and not isUsingVR and hasBecomeOldTheme == false and (currentHeight ~= 0 or status == "ForceConvertToOld") then
+		if
+			Icon.isOldTopbar
+			and not isConsoleScreen
+			and not isUsingVR
+			and hasBecomeOldTheme == false
+			and (currentHeight ~= 0 or status == "ForceConvertToOld")
+		then
 			hasBecomeOldTheme = true
 			task.defer(function()
-
 				local themes = script.Parent.Parent.Features.Themes
 				local Classic = Import(themes.Classic)
 				Icon.modifyBaseTheme(Classic)
-
 
 				local function decideToHideTopbar()
 					if GuiService.MenuIsOpen then
@@ -147,13 +86,12 @@ return function(Icon)
 						Icon.setTopbarEnabled()
 					end
 				end
-				__lt.cm("GuiService", "GetPropertyChangedSignal", "MenuIsOpen"):Connect(decideToHideTopbar)
+				GuiService:GetPropertyChangedSignal("MenuIsOpen"):Connect(decideToHideTopbar)
 				decideToHideTopbar()
 			end)
 		end
 
-
-		guiInset = __lt.cm("GuiService", "GetGuiInset")
+		guiInset = GuiService:GetGuiInset()
 		startInset = if isOldTopbar then 12 else guiInset.Y - 50
 		yDownOffset = if isOldTopbar then 2 else 0
 		ySizeOffset = -2
@@ -166,7 +104,6 @@ return function(Icon)
 			ySizeOffset = 50
 		end
 
-
 		insetChanged:Fire(guiInset)
 		local insetHeight = guiInset.Y
 		if insetHeight ~= previousInsetHeight then
@@ -175,9 +112,8 @@ return function(Icon)
 				Icon.insetHeightChanged:Fire(insetHeight)
 			end)
 		end
-
 	end
-	__lt.cm("GuiService", "GetPropertyChangedSignal", "TopbarInset"):Connect(checkInset)
+	GuiService:GetPropertyChangedSignal("TopbarInset"):Connect(checkInset)
 	checkInset("FirstTime")
 
 	local screenGui = Instance.new("ScreenGui")
@@ -212,7 +148,7 @@ return function(Icon)
 	local screenGuiCenter = screenGui:Clone()
 	local holdersCenter = screenGuiCenter.Holders
 	local function updateCenteredHoldersHeight()
-		holdersCenter.Size = UDim2.new(1, 0, 0, GuiService.TopbarInset.Height+ySizeOffset)
+		holdersCenter.Size = UDim2.new(1, 0, 0, GuiService.TopbarInset.Height + ySizeOffset)
 	end
 	screenGuiCenter.Name = "TopbarCentered"
 	screenGuiCenter.DisplayOrder = Icon.baseDisplayOrder
@@ -226,7 +162,7 @@ return function(Icon)
 	updateCenteredHoldersHeight()
 
 	local screenGuiClipped = screenGui:Clone()
-	screenGuiClipped.Name = screenGuiClipped.Name.."Clipped"
+	screenGuiClipped.Name = screenGuiClipped.Name .. "Clipped"
 	screenGuiClipped.DisplayOrder = (Icon.baseDisplayOrder + 1)
 	Icon.baseDisplayOrderChanged:Connect(function()
 		screenGuiClipped.DisplayOrder = (Icon.baseDisplayOrder + 1)
@@ -234,7 +170,7 @@ return function(Icon)
 	container[screenGuiClipped.Name] = screenGuiClipped
 
 	local screenGuiCenterClipped = screenGuiCenter:Clone()
-	screenGuiCenterClipped.Name = screenGuiCenterClipped.Name.."Clipped"
+	screenGuiCenterClipped.Name = screenGuiCenterClipped.Name .. "Clipped"
 	screenGuiCenterClipped.DisplayOrder = (Icon.baseDisplayOrder + 1)
 	Icon.baseDisplayOrderChanged:Connect(function()
 		screenGuiCenterClipped.DisplayOrder = (Icon.baseDisplayOrder + 1)
@@ -253,7 +189,7 @@ return function(Icon)
 	left.Visible = true
 	left.ZIndex = 1
 	left.Active = false
-	left.ClipsDescendants = false
+	left.ClipsDescendants = true
 	left.HorizontalScrollBarInset = Enum.ScrollBarInset.None
 	left.CanvasSize = UDim2.new(0, 0, 1, -1)
 	left.AutomaticCanvasSize = Enum.AutomaticSize.X
@@ -282,7 +218,6 @@ return function(Icon)
 	center.ScrollingEnabled = false
 	center.UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 	center.Name = "Center"
-	center.ClipsDescendants = false
 	center.Parent = holdersCenter
 
 	local right = left:Clone()
@@ -293,9 +228,7 @@ return function(Icon)
 	right.Name = "Right"
 	right.AnchorPoint = Vector2.new(1, 0)
 	right.Position = UDim2.new(1, -12, 0, 0)
-	right.ClipsDescendants = false
 	right.Parent = holders
-
 
 	insetChanged:Fire(guiInset)
 

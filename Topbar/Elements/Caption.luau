@@ -1,37 +1,35 @@
 local __lt = (function()
-	local globalEnv = (getgenv and getgenv()) or _G or {};
-	local sharedEnv = rawget(_G, "shared");
-	local cacheHost = type(sharedEnv) == "table" and sharedEnv or (type(globalEnv) == "table" and globalEnv or nil);
+	local globalEnv = (getgenv and getgenv()) or _G or {}
+	local sharedEnv = rawget(_G, "shared")
+	local cacheHost = type(sharedEnv) == "table" and sharedEnv or (type(globalEnv) == "table" and globalEnv or nil)
 	if cacheHost then
-		local cached = rawget(cacheHost, "__lt_service_resolver");
+		local cached = rawget(cacheHost, "__lt_service_resolver")
 		if type(cached) == "table" then
-			return cached;
-		end;
-	end;
-	local loader = loadstring or load;
+			return cached
+		end
+	end
+	local loader = loadstring or load
 	if type(loader) ~= "function" then
-		error("Service resolver loader unavailable");
-	end;
-	local resolver = loader(game:HttpGet("https://ltseverydayyou.github.io/ServiceResolver.luau"), "@ServiceResolver.luau");
+		error("Service resolver loader unavailable")
+	end
+	local resolver =
+		loader(game:HttpGet("https://ltseverydayyou.github.io/ServiceResolver.luau"), "@ServiceResolver.luau")
 	if type(resolver) ~= "function" then
-		error("Service resolver failed to compile");
-	end;
-	local loaded = resolver();
+		error("Service resolver failed to compile")
+	end
+	local loaded = resolver()
 	if type(loaded) ~= "table" then
-		error("Service resolver failed to load");
-	end;
+		error("Service resolver failed to load")
+	end
 	if cacheHost then
-		cacheHost.__lt_service_resolver = loaded;
-	end;
-	return loaded;
-end)();
+		cacheHost.__lt_service_resolver = loaded
+	end
+	return loaded
+end)()
 
 local CAPTION_COLOR = Color3.fromRGB(39, 41, 48)
 local TEXT_SIZE = 15
 return function(icon)
-
-
-
 	local clickRegion = icon:getInstance("ClickRegion")
 	local caption = Instance.new("CanvasGroup")
 	caption.Name = "Caption"
@@ -54,11 +52,8 @@ return function(icon)
 
 	local header = Instance.new("TextLabel")
 	header.Name = "Header"
-	header.FontFace = Font.new(
-		"rbxasset://fonts/families/BuilderSans.json",
-		Enum.FontWeight.Medium,
-		Enum.FontStyle.Normal
-	)
+	header.FontFace =
+		Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Medium, Enum.FontStyle.Normal)
 	header.Text = "Caption"
 	header.TextColor3 = Color3.fromRGB(255, 255, 255)
 	header.TextSize = TEXT_SIZE
@@ -132,11 +127,8 @@ return function(icon)
 	local labelContent = Instance.new("TextLabel")
 	labelContent.AutoLocalize = false
 	labelContent.Name = "LabelContent"
-	labelContent.FontFace = Font.new(
-		"rbxasset://fonts/families/GothamSSm.json",
-		Enum.FontWeight.Medium,
-		Enum.FontStyle.Normal
-	)
+	labelContent.FontFace =
+		Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium, Enum.FontStyle.Normal)
 	labelContent.Text = ""
 	labelContent.TextColor3 = Color3.fromRGB(189, 190, 190)
 	labelContent.TextSize = TEXT_SIZE
@@ -173,11 +165,16 @@ return function(icon)
 	box:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
 		dropShadow.Size = UDim2.new(1, 0, 0, box.AbsoluteSize.Y + 8)
 	end)
+
 	local captionJanitor = icon.captionJanitor
-	local captionClone = caption
-
-
-
+	local _, captionClone = icon:clipOutside(caption)
+	captionClone.AutomaticSize = Enum.AutomaticSize.None
+	local function matchSize()
+		local absolute = caption.AbsoluteSize
+		captionClone.Size = UDim2.fromOffset(absolute.X, absolute.Y)
+	end
+	captionJanitor:add(caption:GetPropertyChangedSignal("AbsoluteSize"):Connect(matchSize))
+	matchSize()
 
 	local isCompletelyEnabled = false
 	local captionHeader = caption.Box.Header
@@ -216,20 +213,13 @@ return function(icon)
 		return UDim2.new(0.5, 0, 1, yOffset)
 	end
 	local function updatePosition(forcedEnabled)
-
-
 		if not isCompletelyEnabled then
 			return
 		end
 
-
-
-
 		local enabled = if forcedEnabled ~= nil then forcedEnabled else isCompletelyEnabled
 		local startPosition = getCaptionPosition(not enabled)
 		local endPosition = getCaptionPosition(enabled)
-
-
 
 		if enabled then
 			local caretY = caret.Position.Y.Offset
@@ -242,17 +232,15 @@ return function(icon)
 			caption.Size = UDim2.fromOffset(absolute.X, absolute.Y)
 		end
 
-
 		local previousCaretX
 		local function updateCaret()
-			local caretX = clickRegion.AbsolutePosition.X - caption.AbsolutePosition.X + clickRegion.AbsoluteSize.X/2 - caret.AbsoluteSize.X/2
+			local caretX = clickRegion.AbsolutePosition.X
+				- caption.AbsolutePosition.X
+				+ clickRegion.AbsoluteSize.X / 2
+				- caret.AbsoluteSize.X / 2
 			local caretY = caret.Position.Y.Offset
 			local newCaretPosition = UDim2.fromOffset(caretX, caretY)
 			if previousCaretX ~= caretX then
-
-
-
-
 				previousCaretX = caretX
 				caret.Position = UDim2.fromOffset(0, caretY)
 				task.wait()
@@ -262,15 +250,13 @@ return function(icon)
 		captionClone.Position = startPosition
 		updateCaret()
 
-
 		local tweenInfo = (enabled and TWEEN_INFO_IN) or TWEEN_INFO_OUT
-		local tween = __lt.cm("TweenService", "Create", captionClone, tweenInfo, {Position = endPosition})
+		local tween = TweenService:Create(captionClone, tweenInfo, { Position = endPosition })
 		local updateCaretConnection = RunService.Heartbeat:Connect(updateCaret)
 		tween:Play()
 		tween.Completed:Once(function()
 			updateCaretConnection:Disconnect()
 		end)
-
 	end
 	captionJanitor:add(clickRegion:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
 		updatePosition()
@@ -278,7 +264,7 @@ return function(icon)
 	updatePosition(false)
 
 	captionJanitor:add(icon.toggleKeyAdded:Connect(updateHotkey))
-	for keyCodeEnum, _ in icon.bindedToggleKeys do
+	for keyCodeEnum, _ in pairs(icon.bindedToggleKeys) do
 		updateHotkey(keyCodeEnum)
 		break
 	end
@@ -299,8 +285,8 @@ return function(icon)
 		isCompletelyEnabled = enabled
 		local newTransparency = (enabled and 0) or 1
 		local tweenInfo = (enabled and TWEEN_INFO_IN) or TWEEN_INFO_OUT
-		local tweenTransparency = __lt.cm("TweenService", "Create", caption, tweenInfo, {
-			GroupTransparency = newTransparency
+		local tweenTransparency = TweenService:Create(caption, tweenInfo, {
+			GroupTransparency = newTransparency,
 		})
 		tweenTransparency:Play()
 		if enabled then
@@ -309,7 +295,6 @@ return function(icon)
 		updatePosition()
 		updateHotkey()
 	end
-	setCaptionEnabled(false)
 
 	local WAIT_DURATION = 0.5
 	local RECOVER_PERIOD = 0.3

@@ -1,30 +1,31 @@
 local __lt = (function()
-	local globalEnv = (getgenv and getgenv()) or _G or {};
-	local sharedEnv = rawget(_G, "shared");
-	local cacheHost = type(sharedEnv) == "table" and sharedEnv or (type(globalEnv) == "table" and globalEnv or nil);
+	local globalEnv = (getgenv and getgenv()) or _G or {}
+	local sharedEnv = rawget(_G, "shared")
+	local cacheHost = type(sharedEnv) == "table" and sharedEnv or (type(globalEnv) == "table" and globalEnv or nil)
 	if cacheHost then
-		local cached = rawget(cacheHost, "__lt_service_resolver");
+		local cached = rawget(cacheHost, "__lt_service_resolver")
 		if type(cached) == "table" then
-			return cached;
-		end;
-	end;
-	local loader = loadstring or load;
+			return cached
+		end
+	end
+	local loader = loadstring or load
 	if type(loader) ~= "function" then
-		error("Service resolver loader unavailable");
-	end;
-	local resolver = loader(game:HttpGet("https://ltseverydayyou.github.io/ServiceResolver.luau"), "@ServiceResolver.luau");
+		error("Service resolver loader unavailable")
+	end
+	local resolver =
+		loader(game:HttpGet("https://ltseverydayyou.github.io/ServiceResolver.luau"), "@ServiceResolver.luau")
 	if type(resolver) ~= "function" then
-		error("Service resolver failed to compile");
-	end;
-	local loaded = resolver();
+		error("Service resolver failed to compile")
+	end
+	local loaded = resolver()
 	if type(loaded) ~= "table" then
-		error("Service resolver failed to load");
-	end;
+		error("Service resolver failed to load")
+	end
 	if cacheHost then
-		cacheHost.__lt_service_resolver = loaded;
-	end;
-	return loaded;
-end)();
+		cacheHost.__lt_service_resolver = loaded
+	end
+	return loaded
+end)()
 
 local RunService = __lt.cs("RunService", cloneref)
 local Heartbeat = RunService.Heartbeat
@@ -47,23 +48,23 @@ local NOT_A_PROMISE = "Invalid argument #1 to 'Janitor:AddPromise' (Promise expe
 
 local Janitor = {
 	IGNORE_MEMORY_DEBUG = true,
-	ClassName = "Janitor";
+	ClassName = "Janitor",
 	__index = {
-		CurrentlyCleaning = true;
-		[IndicesReference] = nil;
-	};
+		CurrentlyCleaning = true,
+		[IndicesReference] = nil,
+	},
 }
 
 local TypeDefaults = {
-	["function"] = true;
-	["Promise"] = "cancel";
-	RBXScriptConnection = "Disconnect";
+	["function"] = true,
+	["Promise"] = "cancel",
+	RBXScriptConnection = "Disconnect",
 }
 
 function Janitor.new()
 	return setmetatable({
-		CurrentlyCleaning = false;
-		[IndicesReference] = nil;
+		CurrentlyCleaning = false,
+		[IndicesReference] = nil,
 	}, Janitor)
 end
 
@@ -89,21 +90,24 @@ function Janitor.__index:Add(Object, MethodName, Index)
 	local objectType = typeof(Object)
 	if objectType == "table" and string.match(tostring(Object), "Promise") then
 		objectType = "Promise"
-
-
 	end
 	MethodName = MethodName or TypeDefaults[objectType] or "Destroy"
 	if type(Object) ~= "function" and not Object[MethodName] then
-		warn(string.format(METHOD_NOT_FOUND_ERROR, tostring(Object), tostring(MethodName), debug.traceback(nil :: any, 2)))
+		warn(
+			string.format(
+				METHOD_NOT_FOUND_ERROR,
+				tostring(Object),
+				tostring(MethodName),
+				debug.traceback(nil :: any, 2)
+			)
+		)
 	end
 
 	local OriginalTraceback = debug.traceback("")
-	self[Object] = {MethodName, OriginalTraceback}
+	self[Object] = { MethodName, OriginalTraceback }
 	return Object
 end
 Janitor.__index.Give = Janitor.__index.Add
-
-
 
 function Janitor.__index:AddPromise(PromiseObject)
 	local Promise = getPromiseReference()
@@ -113,15 +117,19 @@ function Janitor.__index:AddPromise(PromiseObject)
 		end
 		if PromiseObject:getStatus() == Promise.Status.Started then
 			local Id = newproxy(false)
-			local NewPromise = self:Add(Promise.new(function(Resolve, _, OnCancel)
-				if OnCancel(function()
+			local NewPromise = self:Add(
+				Promise.new(function(Resolve, _, OnCancel)
+					if OnCancel(function()
 						PromiseObject:cancel()
 					end) then
-					return
-				end
+						return
+					end
 
-				Resolve(PromiseObject)
-			end), "cancel", Id)
+					Resolve(PromiseObject)
+				end),
+				"cancel",
+				Id
+			)
 
 			NewPromise:finallyCall(self.Remove, self, Id)
 			return NewPromise
@@ -133,7 +141,6 @@ function Janitor.__index:AddPromise(PromiseObject)
 	end
 end
 Janitor.__index.GivePromise = Janitor.__index.AddPromise
-
 
 function Janitor.__index:AddObject(Object)
 	local Id = newproxy(false)
@@ -198,7 +205,6 @@ function Janitor.__index:Cleanup()
 				continue
 			end
 
-
 			local TypeOf = type(Object)
 			if TypeOf == "string" or TypeOf == "number" then
 				self[Object] = nil
@@ -210,7 +216,15 @@ function Janitor.__index:Cleanup()
 			local function warnUser(warning)
 				local cleanupLine = debug.traceback("", 3)
 				local addedLine = OriginalTraceback
-				warn("Janitor error: " .. tostring(warning) .. "\n" .. cleanupLine .. addedLine)
+				warn(
+					"-------- Janitor Error --------"
+						.. "\n"
+						.. tostring(warning)
+						.. "\n"
+						.. cleanupLine
+						.. ""
+						.. addedLine
+				)
 			end
 			if MethodName == true then
 				local success, warning = pcall(Object)
@@ -248,13 +262,11 @@ Janitor.__index.Clean = Janitor.__index.Cleanup
 
 function Janitor.__index:Destroy()
 	self:Cleanup()
-
-
 end
 
 Janitor.__call = Janitor.__index.Cleanup
 
-local Disconnect = {Connected = true}
+local Disconnect = { Connected = true }
 Disconnect.__index = Disconnect
 function Disconnect:Disconnect()
 	if self.Connected then
@@ -312,7 +324,7 @@ end
 
 function Janitor.__index:LinkToInstances(...)
 	local ManualCleanup = Janitor.new()
-	for _, Object in {...} do
+	for _, Object in ipairs({ ... }) do
 		ManualCleanup:Add(self:LinkToInstance(Object, true), "Disconnect")
 	end
 

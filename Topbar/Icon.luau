@@ -1,88 +1,90 @@
 local __lt = (function()
-	local globalEnv = (getgenv and getgenv()) or _G or {};
-	local sharedEnv = rawget(_G, "shared");
-	local cacheHost = type(sharedEnv) == "table" and sharedEnv or (type(globalEnv) == "table" and globalEnv or nil);
+	local globalEnv = (getgenv and getgenv()) or _G or {}
+	local sharedEnv = rawget(_G, "shared")
+	local cacheHost = type(sharedEnv) == "table" and sharedEnv or (type(globalEnv) == "table" and globalEnv or nil)
 	if cacheHost then
-		local cached = rawget(cacheHost, "__lt_service_resolver");
+		local cached = rawget(cacheHost, "__lt_service_resolver")
 		if type(cached) == "table" then
-			return cached;
-		end;
-	end;
-	local loader = loadstring or load;
+			return cached
+		end
+	end
+	local loader = loadstring or load
 	if type(loader) ~= "function" then
-		error("Service resolver loader unavailable");
-	end;
-	local resolver = loader(game:HttpGet("https://ltseverydayyou.github.io/ServiceResolver.luau"), "@ServiceResolver.luau");
+		error("Service resolver loader unavailable")
+	end
+	local resolver =
+		loader(game:HttpGet("https://ltseverydayyou.github.io/ServiceResolver.luau"), "@ServiceResolver.luau")
 	if type(resolver) ~= "function" then
-		error("Service resolver failed to compile");
-	end;
-	local loaded = resolver();
+		error("Service resolver failed to compile")
+	end
+	local loaded = resolver()
 	if type(loaded) ~= "table" then
-		error("Service resolver failed to load");
-	end;
+		error("Service resolver failed to load")
+	end
 	if cacheHost then
-		cacheHost.__lt_service_resolver = loaded;
-	end;
-	return loaded;
-end)();
+		cacheHost.__lt_service_resolver = loaded
+	end
+	return loaded
+end)()
+
 local __NAUIProtector = (function()
-	local globalEnv = (getgenv and getgenv()) or _G or {};
-	local sharedEnv = rawget(_G, "shared");
-	local cacheHost = type(sharedEnv) == "table" and sharedEnv or (type(globalEnv) == "table" and globalEnv or nil);
+	local globalEnv = (getgenv and getgenv()) or _G or {}
+	local sharedEnv = rawget(_G, "shared")
+	local cacheHost = type(sharedEnv) == "table" and sharedEnv or (type(globalEnv) == "table" and globalEnv or nil)
 	if cacheHost then
-		local cached = rawget(cacheHost, "__lt_ui_protector");
+		local cached = rawget(cacheHost, "__lt_ui_protector")
 		if type(cached) == "table" then
-			return cached;
-		end;
-	end;
-	local loader = loadstring or load;
+			return cached
+		end
+	end
+	local loader = loadstring or load
 	if type(loader) ~= "function" then
-		return nil;
-	end;
+		return nil
+	end
 	local okSource, source = pcall(function()
-		return game:HttpGet("https://ltseverydayyou.github.io/UIprotector.luau");
-	end);
+		return game:HttpGet("https://ltseverydayyou.github.io/UIprotector.luau")
+	end)
 	if not okSource or type(source) ~= "string" or source == "" then
-		return nil;
-	end;
-	local chunk = loader(source, "@UIprotector.luau");
+		return nil
+	end
+	local chunk = loader(source, "@UIprotector.luau")
 	if type(chunk) ~= "function" then
-		return nil;
-	end;
-	local okLoaded, loaded = pcall(chunk);
+		return nil
+	end
+	local okLoaded, loaded = pcall(chunk)
 	if okLoaded and type(loaded) == "table" then
 		if cacheHost then
-			cacheHost.__lt_ui_protector = loaded;
-		end;
-		return loaded;
-	end;
-	return nil;
-end)();
-local __NAOriginalGetHui = gethui;
+			cacheHost.__lt_ui_protector = loaded
+		end
+		return loaded
+	end
+	return nil
+end)()
+local __NAOriginalGetHui = gethui
 local gethui = function()
 	if __NAUIProtector and type(__NAUIProtector.huiGrabber) == "function" then
-		local ok, ui = pcall(__NAUIProtector.huiGrabber);
+		local ok, ui = pcall(__NAUIProtector.huiGrabber)
 		if ok and typeof(ui) == "Instance" then
-			return ui;
-		end;
-	end;
+			return ui
+		end
+	end
 	if type(__NAOriginalGetHui) == "function" then
-		local ok, ui = pcall(__NAOriginalGetHui);
+		local ok, ui = pcall(__NAOriginalGetHui)
 		if ok then
-			return ui;
-		end;
-	end;
-	return nil;
-end;
+			return ui
+		end
+	end
+	return nil
+end
 local function __NAProtectUI(gui, options)
 	if __NAUIProtector and type(__NAUIProtector.protectUI) == "function" then
-		local ok, protected = pcall(__NAUIProtector.protectUI, gui, options);
+		local ok, protected = pcall(__NAUIProtector.protectUI, gui, options)
 		if ok and protected then
-			return protected;
-		end;
-	end;
-	return nil;
-end;
+			return protected
+		end
+	end
+	return nil
+end
 
 local UserInputService = __lt.cs("UserInputService", cloneref)
 local ContentProvider = __lt.cs("ContentProvider", cloneref)
@@ -90,15 +92,7 @@ local StarterGui = __lt.cs("StarterGui", cloneref)
 local Players = __lt.cs("Players", cloneref)
 local Types = Import(script.Types)
 
-
-
-
 export type Icon = Types.Icon
-
-
-
-
-
 
 local iconModule = script
 local Reference = Import(iconModule.Reference)
@@ -115,9 +109,6 @@ if not referenceObject then
 	Reference.addToReplicatedStorage()
 end
 
-
-
-
 local Signal = Import(iconModule.Packages.GoodSignal)
 local Janitor = Import(iconModule.Packages.Janitor)
 local Utility = Import(iconModule.Utility)
@@ -127,13 +118,7 @@ local Overflow = Import(iconModule.Features.Overflow)
 local Icon = {}
 Icon.__index = Icon
 
-
-
-
 local localPlayer = Players.LocalPlayer
-local function isNode(value)
-	return type(value) == "table" and rawget(value, "__path") ~= nil
-end
 local themes = iconModule.Features.Themes
 local iconsDict = {}
 local anyIconSelected = Signal.new()
@@ -142,11 +127,8 @@ local totalCreatedIcons = 0
 local preferredInput = {
 	mobile = Enum.PreferredInput.Touch,
 	desktop = Enum.PreferredInput.KeyboardAndMouse,
-	console = Enum.PreferredInput.Gamepad
+	console = Enum.PreferredInput.Gamepad,
 }
-
-
-
 
 Icon.baseDisplayOrderChanged = Signal.new()
 Icon.baseDisplayOrder = 10
@@ -155,16 +137,10 @@ Icon.isOldTopbar = false
 Icon.iconsDictionary = iconsDict
 Icon.insetHeightChanged = Signal.new()
 Icon.container = Import(elements.Container)(Icon)
-Icon.Features = iconModule.Features
-Icon.Themes = themes
-Icon.closeableOverflowMenus = true
 Icon.topbarEnabled = true
 Icon.iconAdded = Signal.new()
 Icon.iconRemoved = Signal.new()
 Icon.iconChanged = Signal.new()
-
-
-
 
 function Icon.getIcons()
 	return Icon.iconsDictionary
@@ -183,7 +159,7 @@ function Icon.getIcon(nameOrUID)
 	if match then
 		return match
 	end
-	for _, icon in iconsDict do
+	for _, icon in pairs(iconsDict) do
 		if icon.name == nameOrUID then
 			return icon
 		end
@@ -198,22 +174,19 @@ function Icon.setTopbarEnabled(bool, isInternal)
 	if not isInternal then
 		Icon.topbarEnabled = bool
 	end
-	for _, screenGui in Icon.container do
+	for _, screenGui in pairs(Icon.container) do
 		screenGui.Enabled = bool
 	end
 end
 
 function Icon.modifyBaseTheme(modifications)
-	if isNode(modifications) then
-		modifications = Import(modifications)
-	end
 	modifications = Themes.getModifications(modifications)
-	for _, modification in modifications do
-		for _, detail in Icon.baseTheme do
+	for _, modification in pairs(modifications) do
+		for _, detail in pairs(Icon.baseTheme) do
 			Themes.merge(detail, modification)
 		end
 	end
-	for _, icon in iconsDict do
+	for _, icon in pairs(iconsDict) do
 		icon:setTheme(Icon.baseTheme)
 	end
 end
@@ -222,9 +195,6 @@ function Icon.setDisplayOrder(int)
 	Icon.baseDisplayOrder = int
 	Icon.baseDisplayOrderChanged:Fire(int)
 end
-
-
-
 
 task.defer(Gamepad.start, Icon)
 task.defer(Overflow.start, Icon)
@@ -280,13 +250,9 @@ task.defer(function()
 	end
 end)
 
-
-
-
 function Icon.new()
 	local self = {}
 	setmetatable(self, Icon)
-
 
 	local janitor = Janitor.new()
 	self.janitor = janitor
@@ -297,13 +263,11 @@ function Icon.new()
 	self.menuJanitor = janitor:add(Janitor.new())
 	self.dropdownJanitor = janitor:add(Janitor.new())
 
-
 	local iconUID = Utility.generateUID()
 	iconsDict[iconUID] = self
 	janitor:add(function()
 		iconsDict[iconUID] = nil
 	end)
-
 
 	self.selected = janitor:add(Signal.new())
 	self.deselected = janitor:add(Signal.new())
@@ -329,7 +293,6 @@ function Icon.new()
 	self.indicatorSet = janitor:add(Signal.new())
 	self.dropdownChildAdded = janitor:add(Signal.new())
 	self.menuChildAdded = janitor:add(Signal.new())
-
 
 	self.iconModule = iconModule
 	self.UID = iconUID
@@ -359,21 +322,16 @@ function Icon.new()
 	self.childIconsDict = {}
 	self.creationTime = os.clock()
 
-
 	local widget = janitor:add(Import(elements.Widget)(self, Icon))
 	self.widget = widget
 	self:setAlignment()
 
-
-
 	totalCreatedIcons += 1
-	local ourOrder = 1+(totalCreatedIcons*0.01)
+	local ourOrder = 1 + (totalCreatedIcons * 0.01)
 	self:setOrder(ourOrder, "deselected")
 	self:setOrder(ourOrder, "selected")
 
-
 	self:setTheme(Icon.baseTheme)
-
 
 	local clickRegion = self:getInstance("ClickRegion")
 	local hasUsedMouseButton1Click = false
@@ -384,7 +342,6 @@ function Icon.new()
 		if self.locked then
 			return
 		end
-
 
 		local currentTime = tick()
 		if currentTime - lastToggleTime < DEBOUNCE_TIME then
@@ -405,17 +362,10 @@ function Icon.new()
 	end)
 
 	clickRegion.TouchTap:Connect(function()
-
-
-
-
-
-
 		if not hasUsedMouseButton1Click then
 			handleToggle()
 		end
 	end)
-
 
 	janitor:add(UserInputService.InputBegan:Connect(function(input, touchingAnObject)
 		if self.locked then
@@ -425,9 +375,6 @@ function Icon.new()
 			handleToggle()
 		end
 	end))
-
-
-
 
 	local function viewingStarted(dontSetState)
 		if self.locked then
@@ -476,7 +423,6 @@ function Icon.new()
 		touchCount += 1
 	end)
 
-
 	local iconOverlay = self:getInstance("IconOverlay")
 	self.viewingStarted:Connect(function()
 		iconOverlay.Visible = not self.overlayDisabled
@@ -485,23 +431,21 @@ function Icon.new()
 		iconOverlay.Visible = false
 	end)
 
-
 	janitor:add(anyIconSelected:Connect(function(incomingIcon)
-		if incomingIcon ~= self and self.deselectWhenOtherIconSelected and incomingIcon.deselectWhenOtherIconSelected then
+		if
+			incomingIcon ~= self
+			and self.deselectWhenOtherIconSelected
+			and incomingIcon.deselectWhenOtherIconSelected
+		then
 			self:deselect("AutoDeselect", incomingIcon)
 		end
 	end))
 
-
-
-
-
-
-	local source =  debug.info(2, "s")
+	local source = debug.info(2, "s")
 	local sourcePath = string.split(source, ".")
 	local origin = game
 	local originsScreenGui
-	for i, sourceName in sourcePath do
+	for i, sourceName in pairs(sourcePath) do
 		origin = origin:FindFirstChild(sourceName)
 		if not origin then
 			break
@@ -517,56 +461,42 @@ function Icon.new()
 		end)
 	end
 
-
 	self.toggled:Connect(function(isSelected)
 		self.noticeChanged:Fire(self.totalNotices)
-		for childIconUID, _ in self.childIconsDict do
+		for childIconUID, _ in pairs(self.childIconsDict) do
 			local childIcon = Icon.getIconByUID(childIconUID)
 			childIcon.noticeChanged:Fire(childIcon.totalNotices)
 			if not isSelected and childIcon.isSelected then
-
-
-				for _, _ in childIcon.childIconsDict do
+				for _, _ in pairs(childIcon.childIconsDict) do
 					childIcon:deselect("HideParentFeature", self)
 				end
 			end
 		end
 	end)
 
-
-
-
-
-
-
-
-
 	self.selected:Connect(function()
 		local isDropdown = #self.dropdownIcons > 0
 		if isDropdown then
-			if __lt.cm("StarterGui", "GetCore", "ChatActive") and self.alignment ~= "Right" then
+			if StarterGui:GetCore("ChatActive") and self.alignment ~= "Right" then
 				self.chatWasPreviouslyActive = true
-				__lt.cm("StarterGui", "SetCore", "ChatActive", false)
+				StarterGui:SetCore("ChatActive", false)
 			end
-			if __lt.cm("StarterGui", "GetCoreGuiEnabled", "PlayerList") and self.alignment ~= "Left" then
+			if StarterGui:GetCoreGuiEnabled("PlayerList") and self.alignment ~= "Left" then
 				self.playerlistWasPreviouslyActive = true
-				__lt.cm("StarterGui", "SetCoreGuiEnabled", Enum.CoreGuiType.PlayerList, false)
+				StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.PlayerList, false)
 			end
 		end
 	end)
 	self.deselected:Connect(function()
 		if self.chatWasPreviouslyActive then
 			self.chatWasPreviouslyActive = nil
-			__lt.cm("StarterGui", "SetCore", "ChatActive", true)
+			StarterGui:SetCore("ChatActive", true)
 		end
 		if self.playerlistWasPreviouslyActive then
 			self.playerlistWasPreviouslyActive = nil
-			__lt.cm("StarterGui", "SetCoreGuiEnabled", Enum.CoreGuiType.PlayerList, true)
+			StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.PlayerList, true)
 		end
 	end)
-
-
-
 
 	task.delay(0.1, function()
 		if self.activeState == "Deselected" then
@@ -575,14 +505,10 @@ function Icon.new()
 		end
 	end)
 
-
 	Icon.iconAdded:Fire(self)
 
 	return self
 end
-
-
-
 
 function Icon:setName(name)
 	self.widget.Name = name
@@ -591,9 +517,6 @@ function Icon:setName(name)
 end
 
 function Icon:setState(incomingStateName, fromSource, sourceIcon)
-
-
-
 	if not incomingStateName then
 		incomingStateName = (self.isSelected and "Selected") or "Deselected"
 	end
@@ -624,9 +547,6 @@ function Icon:setState(incomingStateName, fromSource, sourceIcon)
 end
 
 function Icon:getInstance(name)
-
-
-
 	local instance = self.cachedNamesToInstances[name]
 	if instance then
 		return instance
@@ -655,14 +575,11 @@ function Icon:getInstance(name)
 
 	local returnChild
 	local function scanChildren(parentInstance)
-		for _, child in parentInstance:GetChildren() do
+		for _, child in pairs(parentInstance:GetChildren()) do
 			local widgetUID = child:GetAttribute("WidgetUID")
 			if widgetUID and widgetUID ~= self.UID then
-
-
 				continue
 			end
-
 
 			local realChild = Themes.getRealInstance(child)
 			if realChild then
@@ -684,18 +601,12 @@ function Icon:getInstance(name)
 end
 
 function Icon:getCollective(name)
-
-
-
-
-
-
 	local collective = self.cachedCollectives[name]
 	if collective then
 		return collective
 	end
 	collective = {}
-	for instance, _ in self.cachedInstances do
+	for instance, _ in pairs(self.cachedInstances) do
 		if instance:GetAttribute("Collective") == name then
 			table.insert(collective, instance)
 		end
@@ -705,8 +616,6 @@ function Icon:getCollective(name)
 end
 
 function Icon:getInstanceOrCollective(collectiveOrInstanceName)
-
-
 	local instances = {}
 	local instance = self:getInstance(collectiveOrInstanceName)
 	if instance then
@@ -747,13 +656,11 @@ function Icon:updateParent()
 end
 
 function Icon:setBehaviour(collectiveOrInstanceName, property, callback, refreshAppearance)
-
-
-	local key = collectiveOrInstanceName.."-"..property
+	local key = collectiveOrInstanceName .. "-" .. property
 	self.customBehaviours[key] = callback
 	if refreshAppearance then
 		local instances = self:getInstanceOrCollective(collectiveOrInstanceName)
-		for _, instance in instances do
+		for _, instance in pairs(instances) do
 			self:refreshAppearance(instance, property)
 		end
 	end
@@ -765,11 +672,9 @@ function Icon:modifyTheme(modifications, customModificationUID)
 end
 
 function Icon:modifyChildTheme(modifications, modificationUID)
-
-
 	self.childModifications = modifications
 	self.childModificationsUID = modificationUID
-	for childIconUID, _ in self.childIconsDict do
+	for childIconUID, _ in pairs(self.childIconsDict) do
 		local childIcon = Icon.getIconByUID(childIconUID)
 		childIcon:modifyTheme(modifications, modificationUID)
 	end
@@ -811,10 +716,6 @@ function Icon:deselect(fromSource, sourceIcon)
 end
 
 function Icon:notify(customClearSignal, noticeId)
-
-
-
-
 	local notice = self.notice
 	if not notice then
 		notice = Import(elements.Notice)(self, Icon)
@@ -836,55 +737,38 @@ end
 Icon.disableStateOverlay = Icon.disableOverlay
 
 function Icon:setImage(imageId, iconState)
-	local useBuilderFont = iconState == true
-	local state = useBuilderFont and nil or iconState
+	self:modifyTheme({ "IconImage", "Image", imageId, iconState })
 
-	if useBuilderFont then
-		local builderFont = Font.new("rbxasset://LuaPackages/Packages/_Index/BuilderIcons/BuilderIcons/BuilderIcons.json")
-		self:modifyTheme({"IconImage", "Image", "", state})
-		self:modifyTheme({"IconImage", "ImageTransparency", 1, state})
-		self:modifyTheme({"IconLabel", "FontFace", builderFont, state})
-		self:modifyTheme({"IconLabel", "TextScaled", true, state})
-		self:modifyTheme({"IconLabel", "TextSize", 24, state})
-		self:modifyTheme({"IconLabel", "Text", tostring(imageId or ""), state})
-	else
-		self:modifyTheme({"IconImage", "ImageTransparency", 0, state})
-		self:modifyTheme({"IconLabel", "Text", "", state})
-		self:modifyTheme({"IconImage", "Image", imageId, state})
+	task.spawn(function()
+		local newIdContent = if tonumber(imageId) then `rbxassetid://{imageId}` else imageId
+		local initialAssetFetchStatus = ContentProvider:GetAssetFetchStatus(newIdContent)
 
-		task.spawn(function()
-			local newIdContent = if tonumber(imageId) then `rbxassetid://{imageId}` else imageId
-			local initialAssetFetchStatus = __lt.cm("ContentProvider", "GetAssetFetchStatus", newIdContent)
-			if initialAssetFetchStatus ~= Enum.AssetFetchStatus.Success then
-				pcall(ContentProvider.PreloadAsync, ContentProvider, { newIdContent })
-			end
-		end)
-	end
+		if initialAssetFetchStatus ~= Enum.AssetFetchStatus.Success then
+			pcall(ContentProvider.PreloadAsync, ContentProvider, { newIdContent })
+		end
+	end)
 
 	return self
 end
 
 function Icon:setLabel(text, iconState)
-	self:modifyTheme({"IconLabel", "Text", text, iconState})
+	self:modifyTheme({ "IconLabel", "Text", text, iconState })
 	return self
 end
 
 function Icon:setOrder(int, iconState)
-
-
-	local newInt = int*100
-	self:modifyTheme({"IconSpot", "LayoutOrder", newInt, iconState})
-	self:modifyTheme({"Widget", "LayoutOrder", newInt, iconState})
+	local newInt = int * 100
+	self:modifyTheme({ "IconSpot", "LayoutOrder", newInt, iconState })
+	self:modifyTheme({ "Widget", "LayoutOrder", newInt, iconState })
 	return self
 end
 
 function Icon:setCornerRadius(udim, iconState)
-	self:modifyTheme({"IconCorners", "CornerRadius", udim, iconState})
+	self:modifyTheme({ "IconCorners", "CornerRadius", udim, iconState })
 	return self
 end
 
 function Icon:align(leftCenterOrRight, isFromParentIcon)
-
 	local direction = tostring(leftCenterOrRight):lower()
 	if direction == "mid" or direction == "centre" then
 		direction = "center"
@@ -892,12 +776,9 @@ function Icon:align(leftCenterOrRight, isFromParentIcon)
 	if direction ~= "left" and direction ~= "center" and direction ~= "right" then
 		direction = "left"
 	end
-	if self.parentIconUID and not isFromParentIcon then
-		self:leave()
-	end
 	local screenGui = (direction == "center" and Icon.container.TopbarCentered) or Icon.container.TopbarStandard
 	local holders = screenGui.Holders
-	local finalDirection = string.upper(string.sub(direction, 1, 1))..string.sub(direction, 2)
+	local finalDirection = string.upper(string.sub(direction, 1, 1)) .. string.sub(direction, 2)
 	if not isFromParentIcon then
 		self.originalAlignment = finalDirection
 	end
@@ -931,25 +812,22 @@ function Icon:setRight()
 end
 
 function Icon:setWidth(offsetMinimum, iconState)
-
-
-
-	self:modifyTheme({"Widget", "DesiredWidth", offsetMinimum, iconState})
+	self:modifyTheme({ "Widget", "DesiredWidth", offsetMinimum, iconState })
 	return self
 end
 
 function Icon:setImageScale(number, iconState)
-	self:modifyTheme({"IconImageScale", "Value", number, iconState})
+	self:modifyTheme({ "IconImageScale", "Value", number, iconState })
 	return self
 end
 
 function Icon:setImageRatio(number, iconState)
-	self:modifyTheme({"IconImageRatio", "AspectRatio", number, iconState})
+	self:modifyTheme({ "IconImageRatio", "AspectRatio", number, iconState })
 	return self
 end
 
 function Icon:setTextSize(number, iconState)
-	self:modifyTheme({"IconLabel", "TextSize", number, iconState})
+	self:modifyTheme({ "IconLabel", "TextSize", number, iconState })
 	return self
 end
 
@@ -970,7 +848,7 @@ function Icon:setTextFont(font, fontWeight, fontStyle, iconState)
 	if not fontFace then
 		fontFace = Font.new(font, fontWeight, fontStyle)
 	end
-	self:modifyTheme({"IconLabel", "FontFace", fontFace, iconState})
+	self:modifyTheme({ "IconLabel", "FontFace", fontFace, iconState })
 	return self
 end
 
@@ -982,7 +860,7 @@ function Icon:setTextColor(Color, iconState)
 		Color = Color3.fromRGB(255, 255, 255)
 	end
 
-	self:modifyTheme({"IconLabel", "TextColor3", Color, iconState})
+	self:modifyTheme({ "IconLabel", "TextColor3", Color, iconState })
 	return self
 end
 
@@ -1002,11 +880,9 @@ function Icon:unbindToggleItem(guiObjectOrLayerCollector)
 end
 
 function Icon:_updateSelectionInstances()
-
-
-	for guiObjectOrLayerCollector, _ in self.toggleItems do
+	for guiObjectOrLayerCollector, _ in pairs(self.toggleItems) do
 		local buttonInstancesArray = {}
-		for _, instance in guiObjectOrLayerCollector:QueryDescendants("Instance") do
+		for _, instance in pairs(guiObjectOrLayerCollector:GetDescendants()) do
 			if (instance:IsA("TextButton") or instance:IsA("ImageButton")) and instance.Active then
 				table.insert(buttonInstancesArray, instance)
 			end
@@ -1016,7 +892,7 @@ function Icon:_updateSelectionInstances()
 end
 
 function Icon:_setToggleItemsVisible(bool, fromSource, sourceIcon)
-	for toggleItem, _ in self.toggleItems do
+	for toggleItem, _ in pairs(self.toggleItems) do
 		if not sourceIcon or sourceIcon == self or sourceIcon.toggleItems[toggleItem] == nil then
 			local property = "Visible"
 			if toggleItem:IsA("LayerCollector") then
@@ -1029,7 +905,10 @@ end
 
 function Icon:bindEvent(iconEventName, eventFunction)
 	local event = self[iconEventName]
-	assert(event and typeof(event) == "table" and event.Connect, "argument[1] must be a valid topbarplus icon event name!")
+	assert(
+		event and typeof(event) == "table" and event.Connect,
+		"argument[1] must be a valid topbarplus icon event name!"
+	)
 	assert(typeof(eventFunction) == "function", "argument[2] must be a function!")
 	self.bindedEvents[iconEventName] = event:Connect(function(...)
 		eventFunction(self, ...)
@@ -1074,7 +953,6 @@ function Icon:addToJanitor(callback, methodName, index)
 end
 
 function Icon:lock()
-
 	local clickRegion = self:getInstance("ClickRegion")
 	clickRegion.Visible = false
 	self.locked = true
@@ -1096,8 +974,6 @@ function Icon:debounce(seconds)
 end
 
 function Icon:autoDeselect(bool)
-
-
 	if bool == nil then
 		bool = true
 	end
@@ -1105,57 +981,24 @@ function Icon:autoDeselect(bool)
 	return self
 end
 
-function Icon:oneClick(callbackOrBool)
-	local enable = callbackOrBool
-	local callback = nil
-	if type(callbackOrBool) == "function" then
-		enable = true
-		callback = callbackOrBool
-	elseif callbackOrBool == nil then
-		enable = true
-	end
+function Icon:oneClick(bool)
 	local singleClickJanitor = self.singleClickJanitor
-	if not singleClickJanitor or not (singleClickJanitor.clean or singleClickJanitor.Clean or singleClickJanitor.Cleanup) then
-		local Janitor = Import(self.iconModule.Packages.Janitor)
-		singleClickJanitor = Janitor.new()
-		self.singleClickJanitor = singleClickJanitor
-	end
-	local cleaner = singleClickJanitor.clean or singleClickJanitor.Clean or singleClickJanitor.Cleanup
-	if cleaner then
-		cleaner(singleClickJanitor)
-	end
-	if enable then
-		local addFn = singleClickJanitor.add or singleClickJanitor.Add
-		local connFn = function()
-			if callback then
-				callback(self)
-			end
+	singleClickJanitor:clean()
+	if bool or bool == nil then
+		singleClickJanitor:add(self.selected:Connect(function()
 			self:deselect("OneClick", self)
-		end
-		if addFn then
-			addFn(singleClickJanitor, self.selected:Connect(connFn))
-		else
-			self.selected:Connect(connFn)
-		end
+		end))
 	end
 	self.oneClickEnabled = true
 	return self
 end
 
 function Icon:setCaption(text)
-	if text == "_hotkey_" and (self.captionText) then
+	if text == "_hotkey_" and self.captionText then
 		return self
 	end
 	local captionJanitor = self.captionJanitor
-	if not captionJanitor or not (captionJanitor.clean or captionJanitor.Clean or captionJanitor.Cleanup) then
-		local Janitor = Import(self.iconModule.Packages.Janitor)
-		captionJanitor = Janitor.new()
-		self.captionJanitor = captionJanitor
-	end
-	local cleaner = captionJanitor.clean or captionJanitor.Clean or captionJanitor.Cleanup
-	if cleaner then
-		cleaner(captionJanitor)
-	end
+	self.captionJanitor:clean()
 	if not text or text == "" then
 		self.caption = nil
 		self.captionText = nil
@@ -1168,19 +1011,11 @@ function Icon:setCaption(text)
 	return self
 end
 
-function Icon:setCaptionHint(keyCodeOrText)
-	if typeof(keyCodeOrText) == "EnumItem" then
-		self.fakeToggleKey = keyCodeOrText
-		self.fakeToggleKeyChanged:Fire(keyCodeOrText)
-		self:setCaption("_hotkey_")
-	elseif type(keyCodeOrText) == "string" then
-		self.fakeToggleKey = nil
-		self.fakeToggleKeyChanged:Fire(nil)
-		self:setCaption(keyCodeOrText)
-	elseif keyCodeOrText == nil then
-		self.fakeToggleKey = nil
-		self.fakeToggleKeyChanged:Fire(nil)
-	end
+function Icon:setCaptionHint(keyCodeEnum)
+	assert(typeof(keyCodeEnum) == "EnumItem", "argument[1] must be a KeyCode EnumItem!")
+	self.fakeToggleKey = keyCodeEnum
+	self.fakeToggleKeyChanged:Fire(keyCodeEnum)
+	self:setCaption("_hotkey_")
 	return self
 end
 
@@ -1196,18 +1031,6 @@ function Icon:joinMenu(parentIcon)
 	return self
 end
 
-function Icon:addMenu()
-	local parentIcon = self
-	parentIcon:getInstance("Menu")
-	local builder = {}
-	function builder:new()
-		local child = Icon.new()
-		child:joinMenu(parentIcon)
-		return child
-	end
-	return builder
-end
-
 function Icon:setMenu(arrayOfIcons)
 	self.menuSet:Fire(arrayOfIcons)
 	return self
@@ -1220,38 +1043,18 @@ end
 Icon.setFrozenMenu = Icon.setFixedMenu
 
 function Icon:freezeMenu()
-
-
 	self:select("FrozenMenu", self)
 	self:bindEvent("deselected", function(icon)
 		icon:select("FrozenMenu", self)
 	end)
-	self:modifyTheme({"IconSpot", "Visible", false})
+	self:modifyTheme({ "IconSpot", "Visible", false })
 end
 
 function Icon:joinDropdown(parentIcon)
 	parentIcon:getDropdown()
 	Utility.joinFeature(self, parentIcon, parentIcon.dropdownIcons, parentIcon:getInstance("DropdownScroller"))
-	self:removeModification("JoinModification")
-	local cr = self:getInstance("ClickRegion")
-	if cr then
-		cr.Active = true
-		cr.Selectable = true
-	end
 	parentIcon.dropdownChildAdded:Fire(self)
 	return self
-end
-
-function Icon:addDropdown()
-	local parentIcon = self
-	parentIcon:getDropdown()
-	local builder = {}
-	function builder:new()
-		local child = Icon.new()
-		child:joinDropdown(parentIcon)
-		return child
-	end
-	return builder
 end
 
 function Icon:getDropdown()
@@ -1259,13 +1062,7 @@ function Icon:getDropdown()
 	if not dropdown then
 		dropdown = Import(elements.Dropdown)(self)
 		self.dropdown = dropdown
-		if self.widget then
-			self.widget.ClipsDescendants = false
-		end
-		local iconButton = self:getInstance("IconButton")
-		if iconButton then
-			iconButton.ClipsDescendants = false
-		end
+		self:clipOutside(dropdown)
 	end
 	return dropdown
 end
@@ -1277,20 +1074,12 @@ function Icon:setDropdown(arrayOfIcons)
 end
 
 function Icon:clipOutside(instance)
-
-
-
-
-
 	local instanceClone = Utility.clipOutside(self, instance)
 	self:refreshAppearance(instance)
 	return self, instanceClone
 end
 
 function Icon:setIndicator(keyCode)
-
-
-
 	local indicator = self.indicator
 	if not indicator then
 		indicator = self.janitor:add(Import(elements.Indicator)(self, Icon))
@@ -1301,7 +1090,6 @@ end
 
 function Icon:convertLabelToNumberSpinner(numberSpinner, callback)
 	task.defer(function()
-
 		local label = self:getInstance("IconLabel")
 		label.Transparency = 1
 		numberSpinner.Parent = label.Parent
@@ -1321,7 +1109,7 @@ function Icon:convertLabelToNumberSpinner(numberSpinner, callback)
 			"TextStrokeTransparency",
 			"TextColor3",
 		}
-		for _, property in propertiesToChangeLabel do
+		for _, property in ipairs(propertiesToChangeLabel) do
 			numberSpinner[property] = label[property]
 			self:addToJanitor(label:GetPropertyChangedSignal(property):Connect(function()
 				numberSpinner[property] = label[property]
@@ -1409,7 +1197,6 @@ function Icon:convertLabelToNumberSpinner(numberSpinner, callback)
 
 		self:updateParent()
 
-
 		numberSpinner.Name = "LabelSpinner"
 		numberSpinner.Prefix = "$"
 		numberSpinner.Commas = true
@@ -1421,13 +1208,9 @@ function Icon:convertLabelToNumberSpinner(numberSpinner, callback)
 		if typeof(callback) == "function" then
 			callback()
 		end
-
 	end)
 	return self
 end
-
-
-
 
 function Icon:destroy()
 	if self.isDestroyed then

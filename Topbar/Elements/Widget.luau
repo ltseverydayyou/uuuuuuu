@@ -36,6 +36,9 @@ return function(icon, Icon)
 	widget.ZIndex = 20
 	widget.Active = false
 	widget.ClipsDescendants = true
+	widget:SetAttribute("MinimumWidth", 44)
+	widget:SetAttribute("MinimumHeight", 44)
+	widget:SetAttribute("BorderSize", 4)
 
 	local button = Instance.new("Frame")
 	button.Name = "IconButton"
@@ -259,9 +262,9 @@ return function(icon, Icon)
 					initialWidgetWidth += itemWidth + contentsPadding
 				end
 			end
-			local widgetMinimumWidth = widget:GetAttribute("MinimumWidth")
-			local widgetMinimumHeight = widget:GetAttribute("MinimumHeight")
-			local widgetBorderSize = widget:GetAttribute("BorderSize")
+			local widgetMinimumWidth = widget:GetAttribute("MinimumWidth") or 44
+			local widgetMinimumHeight = widget:GetAttribute("MinimumHeight") or 44
+			local widgetBorderSize = widget:GetAttribute("BorderSize") or 4
 			local widgetWidth = math.clamp(initialWidgetWidth, widgetMinimumWidth, viewportX)
 			local menuIcons = icon.menuIcons
 			local additionalWidth = 0

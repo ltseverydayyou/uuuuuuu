@@ -259,6 +259,7 @@ function Janitor.__index:Cleanup()
 end
 
 Janitor.__index.Clean = Janitor.__index.Cleanup
+Janitor.__index.clean = Janitor.__index.Cleanup
 
 function Janitor.__index:Destroy()
 	self:Cleanup()

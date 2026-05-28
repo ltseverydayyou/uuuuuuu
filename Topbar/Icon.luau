@@ -632,6 +632,9 @@ end
 
 function Icon:getStateGroup(iconState)
 	local chosenState = iconState or self.activeState
+	if type(self.appearance) ~= "table" then
+		self.appearance = {}
+	end
 	local stateGroup = self.appearance[chosenState]
 	if not stateGroup then
 		stateGroup = {}

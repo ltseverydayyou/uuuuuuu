@@ -31,6 +31,16 @@ local Themes = {}
 local Utility = Import(script.Parent.Parent.Utility)
 local baseTheme = Import(script.Default)
 
+function Themes.ensureIconThemeState(icon)
+	if type(icon.appearance) ~= "table" then
+		icon.appearance = {}
+	end
+	if type(icon.appliedTheme) ~= "table" then
+		icon.appliedTheme = {}
+	end
+	return icon.appearance
+end
+
 function Themes.getThemeValue(stateGroup, instanceName, property, iconState)
 	if stateGroup then
 		for _, detail in pairs(stateGroup) do
@@ -176,6 +186,7 @@ function Themes.merge(detail, modification, callback)
 end
 
 function Themes.modify(icon, modifications, modificationsUID)
+	Themes.ensureIconThemeState(icon)
 	task.spawn(function()
 		modificationsUID = modificationsUID or Utility.generateUID()
 		modifications = Themes.getModifications(modifications)
@@ -213,7 +224,8 @@ function Themes.modify(icon, modifications, modificationsUID)
 end
 
 function Themes.remove(icon, modificationsUID)
-	for iconState, stateGroup in pairs(icon.appearance) do
+	local appearance = Themes.ensureIconThemeState(icon)
+	for iconState, stateGroup in pairs(appearance) do
 		for i = #stateGroup, 1, -1 do
 			local detail = stateGroup[i]
 			local checkingUID = detail[5]
@@ -226,7 +238,8 @@ function Themes.remove(icon, modificationsUID)
 end
 
 function Themes.removeWith(icon, instanceName, property, state)
-	for iconState, stateGroup in pairs(icon.appearance) do
+	local appearance = Themes.ensureIconThemeState(icon)
+	for iconState, stateGroup in pairs(appearance) do
 		if state == iconState or not state then
 			for i = #stateGroup, 1, -1 do
 				local detail = stateGroup[i]
@@ -242,6 +255,7 @@ function Themes.removeWith(icon, instanceName, property, state)
 end
 
 function Themes.change(icon)
+	Themes.ensureIconThemeState(icon)
 	local stateGroup = icon:getStateGroup()
 	for _, detail in pairs(stateGroup) do
 		local instanceName, property, value = unpack(detail)
@@ -250,6 +264,7 @@ function Themes.change(icon)
 end
 
 function Themes.set(icon, theme)
+	Themes.ensureIconThemeState(icon)
 	local themesJanitor = icon.themesJanitor
 	if not themesJanitor or type(themesJanitor.clean) ~= "function" then
 		local Janitor = Import(script.Parent.Parent.Packages.Janitor)
@@ -278,6 +293,7 @@ function Themes.statesMatch(state1, state2)
 end
 
 function Themes.rebuild(icon)
+	local appearance = Themes.ensureIconThemeState(icon)
 	local appliedTheme = icon.appliedTheme
 	local statesArray = { "Deselected", "Selected", "Viewing" }
 	local function generateTheme()
@@ -314,7 +330,7 @@ function Themes.rebuild(icon)
 			end
 
 			local alreadyAppliedTheme = {}
-			local alreadyAppliedGroup = icon.appearance[stateName]
+			local alreadyAppliedGroup = appearance[stateName]
 			if alreadyAppliedGroup then
 				for _, modifier in pairs(alreadyAppliedGroup) do
 					local modificationsUID = modifier[5]
@@ -330,7 +346,7 @@ function Themes.rebuild(icon)
 			for _, detail in pairs(stateAppearance) do
 				table.insert(finalStateAppearance, detail)
 			end
-			icon.appearance[stateName] = finalStateAppearance
+			appearance[stateName] = finalStateAppearance
 		end
 		Themes.change(icon)
 	end

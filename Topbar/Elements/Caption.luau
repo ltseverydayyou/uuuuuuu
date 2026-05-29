@@ -205,9 +205,10 @@ return function(icon)
 	local TWEEN_INFO_OUT = TweenInfo.new(TWEEN_SPEED, EASING_STYLE, Enum.EasingDirection.Out)
 	local TweenService = __lt.gs("TweenService")
 	local RunService = __lt.gs("RunService")
-	local GuiService = __lt.gs("GuiService")
 	local activeTransparencyTween
 	local hoverCheckConnection
+	local hoverToken = 0
+	local isHoverIntentActive = false
 	local function getCaptionPosition(customEnabled)
 		local enabled = if customEnabled ~= nil then customEnabled else isCompletelyEnabled
 		local yOut = 2
@@ -277,16 +278,7 @@ return function(icon)
 	end
 	local function isPointerInsideClickRegion()
 		local point = UserInputService:GetMouseLocation()
-		if isInsideClickRegion(point) then
-			return true
-		end
-		local ok, inset = pcall(function()
-			return GuiService and GuiService:GetGuiInset()
-		end)
-		if ok and typeof(inset) == "Vector2" and inset ~= Vector2.zero then
-			return isInsideClickRegion(point - inset)
-		end
-		return false
+		return isInsideClickRegion(point)
 	end
 	local Icon = Import(icon.iconModule)
 	local function forceCaptionHidden()
@@ -294,6 +286,8 @@ return function(icon)
 		caption.Visible = false
 		captionClone.Visible = false
 	end
+	local WAIT_DURATION = 0.5
+	local RECOVER_PERIOD = 0.3
 	local setCaptionEnabled
 	local function startHoverCheck()
 		if not RunService or not UserInputService.MouseEnabled then
@@ -301,15 +295,14 @@ return function(icon)
 		end
 		stopHoverCheck()
 		hoverCheckConnection = RunService.Heartbeat:Connect(function()
-			if not isCompletelyEnabled then
+			if not isCompletelyEnabled and not isHoverIntentActive then
 				stopHoverCheck()
 				return
 			end
 			if not isPointerInsideClickRegion() then
 				Icon.captionLastClosedClock = os.clock()
-				if icon.activeState == "Viewing" then
-					icon:setState(nil, "User", icon)
-				end
+				hoverToken += 1
+				isHoverIntentActive = false
 				setCaptionEnabled(false, true)
 			end
 		end)
@@ -333,6 +326,9 @@ return function(icon)
 	end
 
 	function setCaptionEnabled(enabled, forced)
+		if enabled and not isHoverIntentActive then
+			enabled = false
+		end
 		if isCompletelyEnabled == enabled and not forced then
 			if not enabled then
 				forceCaptionHidden()
@@ -376,35 +372,50 @@ return function(icon)
 		updatePosition()
 		updateHotkey()
 	end
-	captionJanitor:add(clickRegion.MouseLeave:Connect(function()
+	local function hideFromHover()
 		Icon.captionLastClosedClock = os.clock()
+		hoverToken += 1
+		isHoverIntentActive = false
 		setCaptionEnabled(false, true)
+	end
+	local function scheduleShowFromHover()
+		if not isPointerInsideClickRegion() then
+			hideFromHover()
+			return
+		end
+		isHoverIntentActive = true
+		hoverToken += 1
+		local token = hoverToken
+		startHoverCheck()
+		local lastClock = Icon.captionLastClosedClock
+		local clockDifference = (lastClock and os.clock() - lastClock) or 999
+		local waitDuration = (clockDifference < RECOVER_PERIOD and 0) or WAIT_DURATION
+		task.delay(waitDuration, function()
+			if token == hoverToken and isHoverIntentActive and isPointerInsideClickRegion() then
+				setCaptionEnabled(true, true)
+			end
+		end)
+	end
+	captionJanitor:add(clickRegion.MouseEnter:Connect(scheduleShowFromHover))
+	captionJanitor:add(clickRegion.MouseLeave:Connect(hideFromHover))
+	captionJanitor:add(clickRegion.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+			scheduleShowFromHover()
+		end
 	end))
 	captionJanitor:add(clickRegion.InputEnded:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-			Icon.captionLastClosedClock = os.clock()
-			setCaptionEnabled(false, true)
+			hideFromHover()
 		end
 	end))
 
-	local WAIT_DURATION = 0.5
-	local RECOVER_PERIOD = 0.3
 	captionJanitor:add(icon.stateChanged:Connect(function(stateName)
 		if stateName == "Viewing" then
-			local lastClock = Icon.captionLastClosedClock
-			local clockDifference = (lastClock and os.clock() - lastClock) or 999
-			local waitDuration = (clockDifference < RECOVER_PERIOD and 0) or WAIT_DURATION
-			task.delay(waitDuration, function()
-				if icon.activeState == "Viewing" and isPointerInsideClickRegion() then
-					setCaptionEnabled(true)
-				else
-					Icon.captionLastClosedClock = os.clock()
-					setCaptionEnabled(false, true)
-				end
-			end)
+			if isPointerInsideClickRegion() then
+				scheduleShowFromHover()
+			end
 		else
-			Icon.captionLastClosedClock = os.clock()
-			setCaptionEnabled(false)
+			hideFromHover()
 		end
 	end))
 

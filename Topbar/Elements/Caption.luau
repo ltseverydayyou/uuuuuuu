@@ -281,19 +281,55 @@ return function(icon)
 	local mouseCheckConnection
 	local function isMouseOverClickRegion()
 		if not UserInputService.MouseEnabled then
-			return true
+			return false
 		end
 		local mousePosition = UserInputService:GetMouseLocation()
-		local guiInset = GuiService:GetGuiInset()
+		local function isRelatedToClickRegion(guiObject)
+			local current = guiObject
+			while current do
+				if current == clickRegion then
+					return true
+				end
+				current = current.Parent
+			end
+			current = clickRegion
+			while current do
+				if current == guiObject then
+					return true
+				end
+				current = current.Parent
+			end
+			return false
+		end
+		local function hasClickRegionAtPosition(point)
+			local ok, objects = pcall(function()
+				return GuiService:GetGuiObjectsAtPosition(point.X, point.Y)
+			end)
+			if not ok or type(objects) ~= "table" then
+				return nil
+			end
+			for _, guiObject in pairs(objects) do
+				if isRelatedToClickRegion(guiObject) then
+					return true
+				end
+			end
+			return false
+		end
+		local directHit = hasClickRegionAtPosition(mousePosition)
+		if directHit ~= nil then
+			if directHit then
+				return true
+			end
+			local guiInset = GuiService:GetGuiInset()
+			local insetHit = hasClickRegionAtPosition(mousePosition - guiInset)
+			return insetHit == true
+		end
 		local position = clickRegion.AbsolutePosition
 		local size = clickRegion.AbsoluteSize
-		local function contains(point)
-			return point.X >= position.X
-				and point.X <= position.X + size.X
-				and point.Y >= position.Y
-				and point.Y <= position.Y + size.Y
-		end
-		return contains(mousePosition) or contains(mousePosition - guiInset)
+		return mousePosition.X >= position.X
+			and mousePosition.X <= position.X + size.X
+			and mousePosition.Y >= position.Y
+			and mousePosition.Y <= position.Y + size.Y
 	end
 	local function stopMouseCheck()
 		if mouseCheckConnection then

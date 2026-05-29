@@ -90,6 +90,8 @@ local UserInputService = __lt.gs("UserInputService")
 local ContentProvider = __lt.gs("ContentProvider")
 local StarterGui = __lt.gs("StarterGui")
 local Players = __lt.gs("Players")
+local GuiService = __lt.gs("GuiService")
+local RunService = __lt.gs("RunService")
 local Types = Import(script.Types)
 
 export type Icon = Types.Icon
@@ -379,6 +381,34 @@ function Icon.new()
 		end
 	end))
 
+	local hoverBoundsConnection
+	local function isMouseInsideClickRegion()
+		local mousePosition = UserInputService:GetMouseLocation()
+		local guiInset = Vector2.zero
+		local hasInset, resolvedInset = pcall(function()
+			return GuiService:GetGuiInset()
+		end)
+		if hasInset and typeof(resolvedInset) == "Vector2" then
+			guiInset = resolvedInset
+		end
+		local position = clickRegion.AbsolutePosition
+		local size = clickRegion.AbsoluteSize
+		local function contains(point)
+			return point.X >= position.X
+				and point.X <= position.X + size.X
+				and point.Y >= position.Y
+				and point.Y <= position.Y + size.Y
+		end
+		return contains(mousePosition) or contains(mousePosition - guiInset)
+	end
+	local function stopHoverBoundsCheck()
+		if hoverBoundsConnection then
+			hoverBoundsConnection:Disconnect()
+			hoverBoundsConnection = nil
+		end
+	end
+	local viewingEnded
+	janitor:add(stopHoverBoundsCheck)
 	local function viewingStarted(dontSetState)
 		if self.locked then
 			return
@@ -388,11 +418,24 @@ function Icon.new()
 		if not dontSetState then
 			self:setState("Viewing", "User", self)
 		end
+		if UserInputService.MouseEnabled and UserInputService.PreferredInput == preferredInput.desktop then
+			stopHoverBoundsCheck()
+			hoverBoundsConnection = RunService.Heartbeat:Connect(function()
+				if not self.isViewing then
+					stopHoverBoundsCheck()
+					return
+				end
+				if not isMouseInsideClickRegion() then
+					viewingEnded()
+				end
+			end)
+		end
 	end
-	local function viewingEnded()
+	function viewingEnded()
 		if self.locked then
 			return
 		end
+		stopHoverBoundsCheck()
 		self.isViewing = false
 		self.viewingEnded:Fire(true)
 		self:setState(nil, "User", self)

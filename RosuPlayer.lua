@@ -131,6 +131,8 @@ ap.hold = {}
 ap.hit = setmetatable({}, { __mode = "k" })
 ap.seen = setmetatable({}, { __mode = "k" })
 ap.pos = setmetatable({}, { __mode = "k" })
+ap.relq = {}
+ap.ingame = false
 ap.bind = "ap_" .. tostring(math.random(10000, 99999))
 
 ap.plrs = ap.svc("Players")
@@ -183,6 +185,100 @@ end
 
 ap.live = function(x)
     return typeof(x) == "Instance" and x.Parent ~= nil
+end
+
+ap.addsrc = function(list, x)
+    if not ap.live(x) then
+        return
+    end
+
+    if x:IsA("LocalScript") or x:IsA("ModuleScript") then
+        list[#list + 1] = x
+    end
+end
+
+ap.gameenv = function(force)
+    if type(ap.genv) == "table" and not force then
+        return ap.genv
+    end
+
+    if ap.ingame and not force then
+        return nil
+    end
+
+    if ap.genvdead and not force then
+        return nil
+    end
+
+    if type(getfenv) ~= "function" or type(getscriptclosure) ~= "function" then
+        ap.genvdead = true
+        return nil
+    end
+
+    local now = ap.clock()
+    if not force and ap.genvtry and now < ap.genvtry then
+        return nil
+    end
+
+    ap.genvtry = now + 12
+
+    local root = ap.root or ap.findroot()
+    if not root then
+        return nil
+    end
+
+    local list = {}
+    ap.addsrc(list, root:FindFirstChild("MAIN SYSTEM"))
+    ap.addsrc(list, root:FindFirstChild("LocalScript"))
+
+    for _, v in root:GetChildren() do
+        ap.addsrc(list, v)
+    end
+
+    if #list <= 0 then
+        return nil
+    end
+
+    for _, src in list do
+        local ok, fn = pcall(getscriptclosure, src)
+        if ok and type(fn) == "function" then
+            local ok2, env = pcall(getfenv, fn)
+            if ok2 and type(env) == "table" then
+                ap.genv = env
+                ap.genvsrc = src
+                return env
+            end
+        end
+    end
+
+    ap.genvdead = true
+    return nil
+end
+
+ap.gameg = function(force)
+    local env = ap.gameenv(force)
+    local g = type(env) == "table" and rawget(env, "_G") or nil
+
+    if type(g) == "table" then
+        return g
+    end
+
+    return nil
+end
+
+ap.ready = function()
+    if ap.ingame then
+        return true
+    end
+
+    local g = ap.gameg()
+
+    if not g then
+        return true
+    end
+
+    local v = rawget(g, "Settings")
+    return v == nil or v == true
 end
 
 ap.vis = function(x)
@@ -284,7 +380,16 @@ ap.findroot = function()
 end
 
 ap.startscan = function()
-    if ap.dead or not ap.cfg.autorescan then
+    if ap.dead or not ap.cfg.autorescan or ap.ingame then
+        return
+    end
+
+    if not ap.ready() then
+        ap.defer(0.5)
+        return
+    end
+
+    if ap.g and ap.active(ap.g) then
         return
     end
 
@@ -299,11 +404,11 @@ ap.startscan = function()
 
     for _, d in delays do
         task.delay(d, function()
-            if ap.dead or not ap.cfg.autorescan then
+            if ap.dead or not ap.cfg.autorescan or ap.ingame then
                 return
             end
 
-            if ap.g and ap.active(ap.g) and ap.isinp(ap.inp) then
+            if ap.g and ap.active(ap.g) then
                 return
             end
 
@@ -321,6 +426,10 @@ ap.ui = function()
         return
     end
 
+    if not ap.ready() then
+        return nil
+    end
+
     local root = ap.findroot()
     local g = root and root:FindFirstChild("GameplayFrame")
 
@@ -332,6 +441,12 @@ ap.ui = function()
             return g
         end
     end
+
+    local now = ap.clock()
+    if ap.nextfull and now < ap.nextfull then
+        return nil
+    end
+    ap.nextfull = now + 6
 
     local fb = nil
 
@@ -462,6 +577,7 @@ ap.up = function(i)
 
     ap.down[i] = nil
     ap.hold[i] = nil
+    ap.relq[i] = nil
     ap.kup(d.key or d, d.mode)
 end
 
@@ -475,6 +591,7 @@ ap.reset = function(full)
     ap.rel(true)
     ap.clear(ap.down)
     ap.clear(ap.hold)
+    ap.clear(ap.relq)
     ap.hit = setmetatable({}, { __mode = "k" })
     ap.seen = setmetatable({}, { __mode = "k" })
     ap.pos = setmetatable({}, { __mode = "k" })
@@ -489,7 +606,11 @@ ap.reset = function(full)
 end
 
 ap.defer = function(delay)
-    if not ap.cfg.autorescan or ap.dead then
+    if not ap.cfg.autorescan or ap.dead or ap.ingame then
+        return
+    end
+
+    if ap.g and ap.active(ap.g) then
         return
     end
 
@@ -549,6 +670,10 @@ ap.watch = function(g)
         end
 
         add(root.ChildAdded:Connect(function(ch)
+            if ap.ingame then
+                return
+            end
+
             if ch.Name == "GameplayFrame" or ch.Name == "FailedFrame" or ch.Name == "RankingScreen" then
                 ap.defer(0.1)
             end
@@ -588,6 +713,10 @@ ap.setupwatch = function()
 
         if msg and msg:IsA("GuiObject") then
             ap.add(msg:GetPropertyChangedSignal("Visible"):Connect(function()
+                if ap.ingame then
+                    return
+                end
+
                 if not msg.Visible and (not sel or not sel.Visible) then
                     ap.g = nil
                     ap.inp = nil
@@ -599,7 +728,7 @@ ap.setupwatch = function()
     end
 
     ap.add(ap.pg.DescendantAdded:Connect(function(v)
-        if not ap.cfg.autorescan or ap.dead then
+        if not ap.cfg.autorescan or ap.dead or ap.ingame then
             return
         end
 
@@ -617,11 +746,9 @@ ap.tap = function(i)
 
     ap.dn(i, true)
 
-    task.delay(math.max(ap.cfg.tap, ap.cfg.pulse), function()
-        if not ap.hold[i] then
-            ap.up(i)
-        end
-    end)
+    if ap.down[i] then
+        ap.relq[i] = ap.clock() + math.max(ap.cfg.tap, ap.cfg.pulse)
+    end
 end
 
 ap.kind = function(n)
@@ -840,16 +967,22 @@ ap.best = function(tr)
 end
 
 ap.sync = function()
-    local cfg = ap.rs:FindFirstChild("Configuration")
-    if not cfg then
+    if ap.syncdone or not ap.cfg.new then
         return
     end
 
-    if ap.cfg.new then
-        local v = cfg:FindFirstChild("UseNewInput")
-        if v and v:IsA("BoolValue") and v.Value == false then
+    ap.conf = ap.conf or ap.rs:FindFirstChild("Configuration")
+    if not ap.conf then
+        return
+    end
+
+    ap.useinp = ap.useinp or ap.conf:FindFirstChild("UseNewInput")
+    local v = ap.useinp
+    if v and v:IsA("BoolValue") then
+        if v.Value == false then
             v.Value = true
         end
+        ap.syncdone = true
     end
 end
 
@@ -859,20 +992,37 @@ ap.step = function()
     end
 
     local now = ap.clock()
+    local active = ap.g and ap.active(ap.g) or false
 
-    if ap.needscan and now >= ap.needscan then
+    if active then
+        ap.ingame = true
         ap.needscan = nil
-        ap.reset(true)
-        ap.g = ap.ui()
-    elseif not ap.g or not ap.live(ap.g) then
-        if now >= (ap.nextui or 0) then
-            ap.nextui = now + 3
-            ap.rel(true)
+    else
+        ap.ingame = false
+
+        if ap.needscan and now >= ap.needscan then
+            ap.needscan = nil
+            if not ap.ready() then
+                ap.defer(0.5)
+                return
+            end
+            ap.reset(true)
             ap.g = ap.ui()
+        elseif not ap.g or not ap.live(ap.g) then
+            if now >= (ap.nextui or 0) then
+                ap.nextui = now + 3
+                if ap.ready() then
+                    ap.rel(true)
+                    ap.g = ap.ui()
+                end
+            end
         end
+
+        active = ap.g and ap.active(ap.g) or false
     end
 
-    if not ap.g or not ap.active(ap.g) then
+    if not active then
+        ap.ingame = false
         if not ap.idle then
             ap.idle = true
             ap.rel(true)
@@ -880,8 +1030,8 @@ ap.step = function()
         return
     end
 
+    ap.ingame = true
     ap.idle = false
-
 
     if ap.lastg ~= ap.g then
         ap.lastg = ap.g
@@ -946,7 +1096,10 @@ ap.step = function()
                 ap.tap(i)
             end
         elseif not ap.hold[i] then
-            ap.up(i)
+            local rt = ap.relq[i]
+            if not rt or now >= rt then
+                ap.up(i)
+            end
         end
     end
 end
@@ -970,6 +1123,7 @@ ap.capmsg = function()
     parts[#parts + 1] = "vim=" .. tostring(ap.vim ~= nil)
     parts[#parts + 1] = "loadstring=" .. tostring(type(loadstring) == "function")
     parts[#parts + 1] = "cloneref=" .. tostring(type(cloneref) == "function")
+    parts[#parts + 1] = "gameenv=" .. tostring(type(ap.gameg()) == "table")
     return table.concat(parts, " | ")
 end
 
@@ -1006,6 +1160,7 @@ ap.stop = function()
     ap.clear(ap.con)
     ap.clear(ap.down)
     ap.clear(ap.hold)
+    ap.clear(ap.relq)
 
     if ap.lib and not ap.uic then
         ap.uic = true

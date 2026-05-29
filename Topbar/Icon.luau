@@ -90,6 +90,9 @@ local UserInputService = __lt.gs("UserInputService")
 local ContentProvider = __lt.gs("ContentProvider")
 local StarterGui = __lt.gs("StarterGui")
 local Players = __lt.gs("Players")
+local CoreGui = __lt.gs("CoreGui")
+local GuiService = __lt.gs("GuiService")
+local RunService = __lt.gs("RunService")
 local Types = Import(script.Types)
 
 export type Icon = Types.Icon
@@ -381,6 +384,74 @@ function Icon.new()
 
 	local isHovering = false
 	local activeTouchInputs = {}
+	local hoverCheckConnection
+	local function stopHoverCheck()
+		if hoverCheckConnection then
+			hoverCheckConnection:Disconnect()
+			hoverCheckConnection = nil
+		end
+	end
+	local function isClickRegionObject(guiObject)
+		local current = guiObject
+		while current and current ~= clickRegion do
+			if current:GetAttribute("IsAClippedClone") or current.Name == "Caption" then
+				return false
+			end
+			current = current.Parent
+		end
+		return current == clickRegion
+	end
+	local function queryGuiObjects(container, position)
+		if not container or type(container.GetGuiObjectsAtPosition) ~= "function" then
+			return nil
+		end
+		local ok, objects = pcall(function()
+			return container:GetGuiObjectsAtPosition(position.X, position.Y)
+		end)
+		if ok and type(objects) == "table" then
+			return objects
+		end
+		return nil
+	end
+	local function hasClickRegionAtPosition(position)
+		local containers = {
+			localPlayer and localPlayer:FindFirstChildOfClass("PlayerGui"),
+			CoreGui,
+		}
+		for _, screenGui in pairs(Icon.container) do
+			table.insert(containers, screenGui)
+		end
+		for _, container in pairs(containers) do
+			local objects = queryGuiObjects(container, position)
+			if objects then
+				for _, object in ipairs(objects) do
+					if isClickRegionObject(object) then
+						return true
+					end
+				end
+			end
+		end
+		local absolutePosition = clickRegion.AbsolutePosition
+		local absoluteSize = clickRegion.AbsoluteSize
+		return position.X >= absolutePosition.X
+			and position.X <= absolutePosition.X + absoluteSize.X
+			and position.Y >= absolutePosition.Y
+			and position.Y <= absolutePosition.Y + absoluteSize.Y
+	end
+	local function isPointerOverClickRegion()
+		local position = UserInputService:GetMouseLocation()
+		if hasClickRegionAtPosition(position) then
+			return true
+		end
+		local ok, inset = pcall(function()
+			return GuiService and GuiService:GetGuiInset()
+		end)
+		if ok and typeof(inset) == "Vector2" and inset ~= Vector2.zero then
+			return hasClickRegionAtPosition(position - inset)
+		end
+		return false
+	end
+	local viewingEnded
 	local function viewingStarted(dontSetState)
 		if self.locked then
 			return
@@ -391,17 +462,31 @@ function Icon.new()
 		if not dontSetState then
 			self:setState("Viewing", "User", self)
 		end
+		if RunService and UserInputService.MouseEnabled and UserInputService.PreferredInput == preferredInput.desktop then
+			stopHoverCheck()
+			hoverCheckConnection = RunService.Heartbeat:Connect(function()
+				if not isHovering then
+					stopHoverCheck()
+					return
+				end
+				if not isPointerOverClickRegion() then
+					viewingEnded()
+				end
+			end)
+		end
 	end
-	local function viewingEnded()
+	function viewingEnded()
 		if self.locked then
 			return
 		end
+		stopHoverCheck()
 		isHovering = false
 		table.clear(activeTouchInputs)
 		self.isViewing = false
 		self.viewingEnded:Fire(true)
 		self:setState(nil, "User", self)
 	end
+	janitor:add(stopHoverCheck)
 	self.joinedParent:Connect(function()
 		if self.isViewing then
 			viewingEnded()

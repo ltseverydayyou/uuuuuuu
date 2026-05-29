@@ -998,6 +998,15 @@ end
 function Icon:oneClick(bool)
 	local singleClickJanitor = self.singleClickJanitor
 	singleClickJanitor:clean()
+	if type(bool) == "function" then
+		local callback = bool
+		singleClickJanitor:add(self.selected:Connect(function(...)
+			callback(...)
+			self:deselect("OneClick", self)
+		end))
+		self.oneClickEnabled = true
+		return self
+	end
 	if bool or bool == nil then
 		singleClickJanitor:add(self.selected:Connect(function()
 			self:deselect("OneClick", self)
@@ -1043,6 +1052,19 @@ function Icon:joinMenu(parentIcon)
 	Utility.joinFeature(self, parentIcon, parentIcon.menuIcons, parentIcon:getInstance("Menu"))
 	parentIcon.menuChildAdded:Fire(self)
 	return self
+end
+
+function Icon:addMenu()
+	local parentIcon = self
+	local menuIcons = {}
+	local menu = {}
+	function menu:new()
+		local childIcon = Icon.new()
+		table.insert(menuIcons, childIcon)
+		parentIcon:setMenu(menuIcons)
+		return childIcon
+	end
+	return menu
 end
 
 function Icon:setMenu(arrayOfIcons)

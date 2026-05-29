@@ -474,7 +474,7 @@ end, true)
 
 ### Menus and Dropdowns
 
-There is no `addMenu()` or `addDropdown()` helper. Create child icons normally, then pass them to `setMenu` or `setDropdown`.
+Create child icons normally, then pass them to `setMenu` or `setDropdown`.
 
 Horizontal menu:
 
@@ -489,6 +489,19 @@ local two = Icon.new():setName("ToolTwo"):setLabel("Two")
 local three = Icon.new():setName("ToolThree"):setLabel("Three")
 
 parent:setMenu({ one, two, three })
+```
+
+Compatibility menu builder:
+
+```lua
+local menu = parent:addMenu()
+
+local visual = menu:new()
+	:setName("VisualToggle")
+	:setLabel("Visual: OFF")
+	:oneClick(function()
+		print("visual toggled")
+	end)
 ```
 
 Fixed menu:
@@ -799,10 +812,11 @@ Instance methods:
 | `unlock()` | Re-enables clicking/toggling. |
 | `debounce(seconds)` | Locks, waits, unlocks. |
 | `autoDeselect(bool)` | Controls deselect when another icon selects. |
-| `oneClick(bool)` | Auto-deselects after selection. |
+| `oneClick(boolOrCallback)` | Auto-deselects after selection, or runs a callback then deselects. |
 | `setCaption(text)` | Sets hover caption. |
 | `setCaptionHint(keyCode)` | Uses a key hint caption. |
 | `leave()` | Leaves menu/dropdown parent. |
+| `addMenu()` | Returns a compatibility menu builder with `:new()`. |
 | `joinMenu(parentIcon)` | Joins parent menu. |
 | `setMenu(iconArray)` | Sets horizontal menu children. |
 | `setFixedMenu(iconArray)` | Creates frozen menu. |
@@ -1035,7 +1049,6 @@ icon:destroy()
 
 - `setCaptionHint` expects an `Enum.KeyCode`, not a string.
 - `setIndicator` expects an `Enum.KeyCode`, not an image id.
-- There is no `addMenu()` or `addDropdown()` method. Use `setMenu`, `joinMenu`, `setDropdown`, or `joinDropdown`.
 - `setImage` accepts either a full image string or a numeric asset id.
 - `modifyTheme` returns `self, modificationUID`.
 - Most instance methods return `self` so calls can be chained.

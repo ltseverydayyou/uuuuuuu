@@ -38,7 +38,7 @@ return function(icon)
 	caption.BorderSizePixel = 0
 	caption.GroupTransparency = 1
 	caption.Position = UDim2.fromOffset(0, 0)
-	caption.Visible = false
+	caption.Visible = true
 	caption.ZIndex = 30
 	caption.Parent = clickRegion
 
@@ -169,11 +169,9 @@ return function(icon)
 	local captionJanitor = icon.captionJanitor
 	local _, captionClone = icon:clipOutside(caption)
 	captionClone.AutomaticSize = Enum.AutomaticSize.None
-	captionClone.Visible = true
-	captionClone.Active = false
-	captionClone.Selectable = false
 	local function matchSize()
-		captionClone.Size = UDim2.fromOffset(0, 0)
+		local absolute = caption.AbsoluteSize
+		captionClone.Size = UDim2.fromOffset(absolute.X, absolute.Y)
 	end
 	captionJanitor:add(caption:GetPropertyChangedSignal("AbsoluteSize"):Connect(matchSize))
 	matchSize()
@@ -276,150 +274,38 @@ return function(icon)
 		updateHotkey(fakeToggleKey)
 	end
 
-	local Icon = Import(icon.iconModule)
-	local GuiService = __lt.gs("GuiService")
-	local mouseCheckConnection
-	local function isMouseOverClickRegion()
-		if not UserInputService.MouseEnabled then
-			return false
-		end
-		local mousePosition = UserInputService:GetMouseLocation()
-		local function isRelatedToClickRegion(guiObject)
-			local current = guiObject
-			while current do
-				if current == clickRegion then
-					return true
-				end
-				current = current.Parent
-			end
-			current = clickRegion
-			while current do
-				if current == guiObject then
-					return true
-				end
-				current = current.Parent
-			end
-			return false
-		end
-		local function hasClickRegionAtPosition(point)
-			local ok, objects = pcall(function()
-				return GuiService:GetGuiObjectsAtPosition(point.X, point.Y)
-			end)
-			if not ok or type(objects) ~= "table" then
-				return nil
-			end
-			for _, guiObject in pairs(objects) do
-				if isRelatedToClickRegion(guiObject) then
-					return true
-				end
-			end
-			return false
-		end
-		local directHit = hasClickRegionAtPosition(mousePosition)
-		if directHit ~= nil then
-			if directHit then
-				return true
-			end
-			local guiInset = GuiService:GetGuiInset()
-			local insetHit = hasClickRegionAtPosition(mousePosition - guiInset)
-			return insetHit == true
-		end
-		local position = clickRegion.AbsolutePosition
-		local size = clickRegion.AbsoluteSize
-		return mousePosition.X >= position.X
-			and mousePosition.X <= position.X + size.X
-			and mousePosition.Y >= position.Y
-			and mousePosition.Y <= position.Y + size.Y
-	end
-	local function stopMouseCheck()
-		if mouseCheckConnection then
-			mouseCheckConnection:Disconnect()
-			mouseCheckConnection = nil
-		end
-	end
-	local setCaptionEnabled
-	local function startMouseCheck()
-		stopMouseCheck()
-		mouseCheckConnection = RunService.Heartbeat:Connect(function()
-			if not isCompletelyEnabled then
-				stopMouseCheck()
-				return
-			end
-			if not isMouseOverClickRegion() then
-				if icon.activeState == "Viewing" then
-					icon:setState(nil, "CaptionBounds", icon)
-				end
-				setCaptionEnabled(false)
-			end
-		end)
-	end
-	function setCaptionEnabled(enabled)
-		if enabled and not isMouseOverClickRegion() then
-			enabled = false
-		end
+	local function setCaptionEnabled(enabled)
 		if isCompletelyEnabled == enabled then
-			if not enabled then
-				caption.Visible = false
-				caption.GroupTransparency = 1
-			end
 			return
 		end
 		local joinedFrame = icon.joinedFrame
 		if joinedFrame and string.match(joinedFrame.Name, "Dropdown") then
 			enabled = false
 		end
-		if enabled then
-			local activeCaption = Icon.activeCaption
-			if activeCaption and activeCaption.icon ~= icon and activeCaption.setEnabled then
-				activeCaption.setEnabled(false)
-			end
-			Icon.activeCaption = {
-				icon = icon,
-				setEnabled = setCaptionEnabled,
-			}
-		elseif Icon.activeCaption and Icon.activeCaption.icon == icon then
-			Icon.activeCaption = nil
-		end
 		isCompletelyEnabled = enabled
 		local newTransparency = (enabled and 0) or 1
 		local tweenInfo = (enabled and TWEEN_INFO_IN) or TWEEN_INFO_OUT
-		if enabled then
-			caption.Visible = true
-		end
 		local tweenTransparency = TweenService:Create(caption, tweenInfo, {
 			GroupTransparency = newTransparency,
 		})
 		tweenTransparency:Play()
-		if not enabled then
-			tweenTransparency.Completed:Once(function()
-				if not isCompletelyEnabled then
-					caption.Visible = false
-				end
-			end)
-		end
 		if enabled then
 			captionClone:SetAttribute("ForceUpdate", true)
-			startMouseCheck()
-		else
-			stopMouseCheck()
 		end
 		updatePosition()
 		updateHotkey()
 	end
 
-	setCaptionEnabled(false)
 	local WAIT_DURATION = 0.5
 	local RECOVER_PERIOD = 0.3
-	captionJanitor:add(function()
-		setCaptionEnabled(false)
-	end)
+	local Icon = Import(icon.iconModule)
 	captionJanitor:add(icon.stateChanged:Connect(function(stateName)
 		if stateName == "Viewing" then
 			local lastClock = Icon.captionLastClosedClock
 			local clockDifference = (lastClock and os.clock() - lastClock) or 999
 			local waitDuration = (clockDifference < RECOVER_PERIOD and 0) or WAIT_DURATION
 			task.delay(waitDuration, function()
-				if icon.activeState == "Viewing" and isMouseOverClickRegion() then
+				if icon.activeState == "Viewing" then
 					setCaptionEnabled(true)
 				end
 			end)

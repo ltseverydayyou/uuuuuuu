@@ -183,12 +183,16 @@ return function(icon)
 	icon.menuSet:Connect(function(arrayOfIcons)
 		for i, otherIconUID in pairs(icon.menuIcons) do
 			local otherIcon = Icon.getIconByUID(otherIconUID)
-			otherIcon:destroy()
+			if otherIcon then
+				otherIcon:destroy()
+			end
 		end
 
 		if type(arrayOfIcons) == "table" then
 			for i, otherIcon in pairs(arrayOfIcons) do
-				otherIcon:joinMenu(icon)
+				if otherIcon then
+					otherIcon:joinMenu(icon)
+				end
 			end
 		end
 	end)

@@ -468,10 +468,12 @@ function Icon.new()
 		self.noticeChanged:Fire(self.totalNotices)
 		for childIconUID, _ in pairs(self.childIconsDict) do
 			local childIcon = Icon.getIconByUID(childIconUID)
-			childIcon.noticeChanged:Fire(childIcon.totalNotices)
-			if not isSelected and childIcon.isSelected then
-				for _, _ in pairs(childIcon.childIconsDict) do
-					childIcon:deselect("HideParentFeature", self)
+			if childIcon then
+				childIcon.noticeChanged:Fire(childIcon.totalNotices)
+				if not isSelected and childIcon.isSelected then
+					for _, _ in pairs(childIcon.childIconsDict) do
+						childIcon:deselect("HideParentFeature", self)
+					end
 				end
 			end
 		end
@@ -682,7 +684,9 @@ function Icon:modifyChildTheme(modifications, modificationUID)
 	self.childModificationsUID = modificationUID
 	for childIconUID, _ in pairs(self.childIconsDict) do
 		local childIcon = Icon.getIconByUID(childIconUID)
-		childIcon:modifyTheme(modifications, modificationUID)
+		if childIcon then
+			childIcon:modifyTheme(modifications, modificationUID)
+		end
 	end
 	self.childThemeModified:Fire()
 	return self
@@ -1061,7 +1065,11 @@ function Icon:addMenu()
 	function menu:new()
 		local childIcon = Icon.new()
 		table.insert(menuIcons, childIcon)
-		parentIcon:setMenu(menuIcons)
+		if #menuIcons == 1 then
+			parentIcon:setMenu(menuIcons)
+		else
+			childIcon:joinMenu(parentIcon)
+		end
 		return childIcon
 	end
 	return menu

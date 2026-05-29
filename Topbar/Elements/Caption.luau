@@ -38,7 +38,7 @@ return function(icon)
 	caption.BorderSizePixel = 0
 	caption.GroupTransparency = 1
 	caption.Position = UDim2.fromOffset(0, 0)
-	caption.Visible = true
+	caption.Visible = false
 	caption.ZIndex = 30
 	caption.Parent = clickRegion
 
@@ -318,7 +318,14 @@ return function(icon)
 		end)
 	end
 	function setCaptionEnabled(enabled)
+		if enabled and not isMouseOverClickRegion() then
+			enabled = false
+		end
 		if isCompletelyEnabled == enabled then
+			if not enabled then
+				caption.Visible = false
+				caption.GroupTransparency = 1
+			end
 			return
 		end
 		local joinedFrame = icon.joinedFrame
@@ -340,10 +347,20 @@ return function(icon)
 		isCompletelyEnabled = enabled
 		local newTransparency = (enabled and 0) or 1
 		local tweenInfo = (enabled and TWEEN_INFO_IN) or TWEEN_INFO_OUT
+		if enabled then
+			caption.Visible = true
+		end
 		local tweenTransparency = TweenService:Create(caption, tweenInfo, {
 			GroupTransparency = newTransparency,
 		})
 		tweenTransparency:Play()
+		if not enabled then
+			tweenTransparency.Completed:Once(function()
+				if not isCompletelyEnabled then
+					caption.Visible = false
+				end
+			end)
+		end
 		if enabled then
 			captionClone:SetAttribute("ForceUpdate", true)
 			startMouseCheck()
@@ -354,6 +371,7 @@ return function(icon)
 		updateHotkey()
 	end
 
+	setCaptionEnabled(false)
 	local WAIT_DURATION = 0.5
 	local RECOVER_PERIOD = 0.3
 	captionJanitor:add(function()

@@ -246,6 +246,38 @@ local function formatChild(parentPath, inst)
 	local method = pathMode == "wait" and ":WaitForChild(" or ":FindFirstChild(";
 	return parentPath .. method .. string.format("%q", name) .. ")";
 end;
+local getNilSource = "local function getNil(name, class)\n\tif type(getnilinstances) ~= \"function\" then\n\t\treturn nil\n\tend\n\tfor _, v in next, getnilinstances() do\n\t\tif typeof(v) == \"Instance\" and v.Parent == nil and v.ClassName == class and v.Name == name then\n\t\t\treturn v\n\t\tend\n\tend\nend\n\n";
+local function getNilInstance(name, class)
+	if type(getnilinstances) ~= "function" then
+		return nil
+	end
+	local ok, list = pcall(getnilinstances)
+	if not ok or type(list) ~= "table" then
+		return nil
+	end
+	for _, v in next, list do
+		if typeof(v) == "Instance" and v.Parent == nil and v.ClassName == class and v.Name == name then
+			return v
+		end
+	end
+	return nil
+end
+if type(G) == "table" and type(rawget(G, "getNil")) ~= "function" then
+	G.getNil = getNilInstance
+end
+local function getNilInstancesSafe()
+	if type(getnilinstances) ~= "function" then
+		return {}
+	end
+	local ok, list = pcall(getnilinstances)
+	if ok and type(list) == "table" then
+		return list
+	end
+	return {}
+end
+local function nilPathForInstance(instance)
+	return ("getNil(%q, %q)"):format(tostring(instance.Name or ""), tostring(instance.ClassName or "Instance"))
+end
 local function GetFullPathOfAnInstance(instance)
 	if instance == game then
 		return "game";
@@ -255,7 +287,7 @@ local function GetFullPathOfAnInstance(instance)
 	end;
 	local parent = instance.Parent;
 	if not parent then
-		return instance.Name or "nil";
+		return nilPathForInstance(instance);
 	end;
 	local parentPath = GetFullPathOfAnInstance(parent);
 	if parent == game then
@@ -1513,6 +1545,10 @@ local function updateCodeDisplay(remote, args, isClientEvent, callType)
 	args = args or {}
 	local ok, codeText = pcall(function()
 		local path = GetFullPathOfAnInstance(remote)
+		local okDesc, inGame = pcall(function()
+			return remote:IsDescendantOf(game)
+		end)
+		local needsNil = not (okDesc and inGame)
 		local n = args.n or #args
 		local text
 		if callType == "OnClientInvoke" then
@@ -1534,6 +1570,9 @@ local function updateCodeDisplay(remote, args, isClientEvent, callType)
 			else
 				text = buildArgsTable(args) .. path .. call .. "(unpack(args, 1, args.n or #args))"
 			end
+		end
+		if needsNil then
+			text = getNilSource .. text
 		end
 		return text
 	end)
@@ -1558,6 +1597,26 @@ CodeFrame:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitCode)
 local function isRemoteEvent(obj)
 	return isA(obj, "RemoteEvent") or isA(obj, "UnreliableRemoteEvent");
 end;
+local function isRemoteInstance(obj)
+	return typeof(obj) == "Instance" and (isRemoteEvent(obj) or isA(obj, "RemoteFunction"))
+end
+local function getRemoteInstances()
+	local out = {}
+	local seen = {}
+	for _, v in game:QueryDescendants("Instance") do
+		if isRemoteInstance(v) and not seen[v] then
+			seen[v] = true
+			out[#out + 1] = v
+		end
+	end
+	for _, v in next, getNilInstancesSafe() do
+		if isRemoteInstance(v) and v.Parent == nil and not seen[v] then
+			seen[v] = true
+			out[#out + 1] = v
+		end
+	end
+	return out
+end
 local lookingAt
 local lookingAtArgs
 local lookingAtButton
@@ -1718,7 +1777,7 @@ end
 local function setClientEventLogging(on)
 	logClientEvents = on;
 	if on then
-		for _, v in game:QueryDescendants("Instance") do
+		for _, v in getRemoteInstances() do
 			if isRemoteEvent(v) then
 				attachClientLogger(v);
 			end;
@@ -1742,7 +1801,7 @@ local function setClientEventLogging(on)
 end;
 
 local function initClientInvokeLogging()
-	for _, v in game:QueryDescendants("Instance") do
+	for _, v in getRemoteInstances() do
 		if isA(v, "RemoteFunction") then
 			wrapClientInvoke(v)
 		end
@@ -2269,10 +2328,8 @@ ImageButton.MouseButton1Click:Connect(function()
 		return;
 	end;
 	browseRemotes = {};
-	for _, v in game:QueryDescendants("Instance") do
-		if isRemoteEvent(v) or isA(v, "RemoteFunction") then
-			table.insert(browseRemotes, v);
-		end;
+	for _, v in getRemoteInstances() do
+		browseRemotes[#browseRemotes + 1] = v;
 	end;
 	refreshBrowserList(BrowserSearch.Text);
 end);

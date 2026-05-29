@@ -1252,6 +1252,37 @@ baseRemoteEvent:Destroy()
 baseRemoteFunction:Destroy()
 local GetDebugIDInvoke = GetDebugIdHandler.Invoke
 local internalRemotes = {}
+local function getNilInstancesSafe()
+    if type(getnilinstances) ~= 'function' then
+        return {}
+    end
+    local ok, list = pcall(getnilinstances)
+    if ok and type(list) == 'table' then
+        return list
+    end
+    return {}
+end
+local function getNilInstance(name, class)
+    for _, v in next, getNilInstancesSafe() do
+        if
+            typeof(v) == 'Instance'
+            and v.Parent == nil
+            and v.ClassName == class
+            and v.Name == name
+        then
+            return v
+        end
+    end
+end
+local function isNilRemote(inst)
+    return typeof(inst) == 'Instance'
+        and inst.Parent == nil
+        and (
+            inst:IsA('RemoteEvent')
+            or inst:IsA('UnreliableRemoteEvent')
+            or inst:IsA('RemoteFunction')
+        )
+end
 local preferIndexPaths = false
 local preferIndexOverride = rawget(getgenv(), 'SimpleSpyPreferIndexPaths')
 if preferIndexOverride ~= nil then
@@ -3309,6 +3340,22 @@ local function trackIncomingRemote(inst)
     end
 end
 
+local function scanNilIncomingRemotes()
+    local processed = 0
+    for _, inst in next, getNilInstancesSafe() do
+        if not incomingHooksEnabled then
+            break
+        end
+        if isNilRemote(inst) then
+            trackIncomingRemote(inst)
+            processed += 1
+            if processed % realconfigs.remoteScanBatchSize == 0 then
+                task.wait()
+            end
+        end
+    end
+end
+
 local function scanIncomingRemotes()
     local queue = game:GetChildren()
     local index = 1
@@ -3334,6 +3381,8 @@ local function scanIncomingRemotes()
             task.wait()
         end
     end
+
+    scanNilIncomingRemotes()
 end
 
 local function enableIncomingHooks()
@@ -4295,7 +4344,7 @@ function getScriptFromSrc(src)
         s = 2
     else
         runningTest = src:sub(2, e and e - 1 or -1)
-        for _, v in next, getnilinstances() do
+        for _, v in next, getNilInstancesSafe() do
             if v.Name == runningTest then
                 realPath = v
                 break
@@ -5040,11 +5089,7 @@ RuntimeState.initializeSimpleSpy = function()
     getgenv().SimpleSpy = SimpleSpy
     logthread(spawn(runAdonisBypass))
     getgenv().getNil = function(name, class)
-        for _, v in next, getnilinstances() do
-            if v.ClassName == class and v.Name == name then
-                return v
-            end
-        end
+        return getNilInstance(name, class)
     end
     ui.Background.MouseEnter:Connect(function(...)
         RuntimeState.mouseInGui = true

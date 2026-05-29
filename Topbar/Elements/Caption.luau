@@ -205,6 +205,9 @@ return function(icon)
 	local TWEEN_INFO_OUT = TweenInfo.new(TWEEN_SPEED, EASING_STYLE, Enum.EasingDirection.Out)
 	local TweenService = __lt.gs("TweenService")
 	local RunService = __lt.gs("RunService")
+	local GuiService = __lt.gs("GuiService")
+	local activeTransparencyTween
+	local hoverCheckConnection
 	local function getCaptionPosition(customEnabled)
 		local enabled = if customEnabled ~= nil then customEnabled else isCompletelyEnabled
 		local yOut = 2
@@ -258,10 +261,65 @@ return function(icon)
 			updateCaretConnection:Disconnect()
 		end)
 	end
+	local function stopHoverCheck()
+		if hoverCheckConnection then
+			hoverCheckConnection:Disconnect()
+			hoverCheckConnection = nil
+		end
+	end
+	local function isInsideClickRegion(point)
+		local position = clickRegion.AbsolutePosition
+		local size = clickRegion.AbsoluteSize
+		return point.X >= position.X
+			and point.X <= position.X + size.X
+			and point.Y >= position.Y
+			and point.Y <= position.Y + size.Y
+	end
+	local function isPointerInsideClickRegion()
+		local point = UserInputService:GetMouseLocation()
+		if isInsideClickRegion(point) then
+			return true
+		end
+		local ok, inset = pcall(function()
+			return GuiService and GuiService:GetGuiInset()
+		end)
+		if ok and typeof(inset) == "Vector2" and inset ~= Vector2.zero then
+			return isInsideClickRegion(point - inset)
+		end
+		return false
+	end
+	local Icon = Import(icon.iconModule)
+	local function forceCaptionHidden()
+		caption.GroupTransparency = 1
+		caption.Visible = false
+		captionClone.Visible = false
+	end
+	local setCaptionEnabled
+	local function startHoverCheck()
+		if not RunService or not UserInputService.MouseEnabled then
+			return
+		end
+		stopHoverCheck()
+		hoverCheckConnection = RunService.Heartbeat:Connect(function()
+			if not isCompletelyEnabled then
+				stopHoverCheck()
+				return
+			end
+			if not isPointerInsideClickRegion() then
+				Icon.captionLastClosedClock = os.clock()
+				if icon.activeState == "Viewing" then
+					icon:setState(nil, "User", icon)
+				end
+				setCaptionEnabled(false, true)
+			end
+		end)
+	end
+	captionJanitor:add(stopHoverCheck)
 	captionJanitor:add(clickRegion:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
 		updatePosition()
 	end))
 	updatePosition(false)
+	forceCaptionHidden()
 
 	captionJanitor:add(icon.toggleKeyAdded:Connect(updateHotkey))
 	for keyCodeEnum, _ in pairs(icon.bindedToggleKeys) do
@@ -274,8 +332,11 @@ return function(icon)
 		updateHotkey(fakeToggleKey)
 	end
 
-	local function setCaptionEnabled(enabled)
-		if isCompletelyEnabled == enabled then
+	function setCaptionEnabled(enabled, forced)
+		if isCompletelyEnabled == enabled and not forced then
+			if not enabled then
+				forceCaptionHidden()
+			end
 			return
 		end
 		local joinedFrame = icon.joinedFrame
@@ -283,30 +344,62 @@ return function(icon)
 			enabled = false
 		end
 		isCompletelyEnabled = enabled
+		if activeTransparencyTween then
+			activeTransparencyTween:Cancel()
+			activeTransparencyTween = nil
+		end
+		if enabled then
+			caption.Visible = true
+			captionClone.Visible = true
+			startHoverCheck()
+		else
+			stopHoverCheck()
+		end
 		local newTransparency = (enabled and 0) or 1
 		local tweenInfo = (enabled and TWEEN_INFO_IN) or TWEEN_INFO_OUT
 		local tweenTransparency = TweenService:Create(caption, tweenInfo, {
 			GroupTransparency = newTransparency,
 		})
+		activeTransparencyTween = tweenTransparency
 		tweenTransparency:Play()
+		tweenTransparency.Completed:Once(function()
+			if activeTransparencyTween == tweenTransparency then
+				activeTransparencyTween = nil
+			end
+			if not isCompletelyEnabled then
+				forceCaptionHidden()
+			end
+		end)
 		if enabled then
 			captionClone:SetAttribute("ForceUpdate", true)
 		end
 		updatePosition()
 		updateHotkey()
 	end
+	captionJanitor:add(clickRegion.MouseLeave:Connect(function()
+		Icon.captionLastClosedClock = os.clock()
+		setCaptionEnabled(false, true)
+	end))
+	captionJanitor:add(clickRegion.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+			Icon.captionLastClosedClock = os.clock()
+			setCaptionEnabled(false, true)
+		end
+	end))
 
 	local WAIT_DURATION = 0.5
 	local RECOVER_PERIOD = 0.3
-	local Icon = Import(icon.iconModule)
 	captionJanitor:add(icon.stateChanged:Connect(function(stateName)
 		if stateName == "Viewing" then
 			local lastClock = Icon.captionLastClosedClock
 			local clockDifference = (lastClock and os.clock() - lastClock) or 999
 			local waitDuration = (clockDifference < RECOVER_PERIOD and 0) or WAIT_DURATION
 			task.delay(waitDuration, function()
-				if icon.activeState == "Viewing" then
+				if icon.activeState == "Viewing" and isPointerInsideClickRegion() then
 					setCaptionEnabled(true)
+				else
+					Icon.captionLastClosedClock = os.clock()
+					setCaptionEnabled(false, true)
 				end
 			end)
 		else

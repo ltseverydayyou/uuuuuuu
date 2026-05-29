@@ -1,4 +1,4 @@
-local __lt = (function()
+local __lt, __lt_uip = (function()
 	local ge = {}
 	pcall(function()
 		if type(getgenv) == "function" then
@@ -22,15 +22,8 @@ local __lt = (function()
 	end
 
 	local host = type(sh) == "table" and sh or (type(ge) == "table" and ge or nil)
-
-	if host then
-		local ok, old = pcall(function()
-			return rawget(host, "__lt_service_resolver")
-		end)
-		if ok and type(old) == "table" then
-			return old
-		end
-	end
+	local srUrl = "https://raw.githubusercontent.com/ltseverydayyou/ltseverydayyou.github.io/refs/heads/main/ServiceResolver.luau"
+	local uipUrl = "https://raw.githubusercontent.com/ltseverydayyou/ltseverydayyou.github.io/refs/heads/main/UIprotector.luau"
 
 	local geturl = function(url)
 		local ok, body = pcall(function()
@@ -74,66 +67,113 @@ local __lt = (function()
 		return nil
 	end
 
-	local ok, lib = pcall(function()
+	local loadurl = function(url, chunk)
+		local body = geturl(url)
 		local ld = loadstring or load
-		if type(ld) ~= "function" then
+		if type(body) ~= "string" or type(ld) ~= "function" then
 			return nil
 		end
 
-		local body = geturl("https://ltseverydayyou.github.io/ServiceResolver.luau")
-		if type(body) ~= "string" then
-			return nil
-		end
-
-		local fn = ld(body, "@ServiceResolver.luau")
+		local fn = ld(body, chunk or ("@" .. tostring(url)))
 		if type(fn) ~= "function" then
 			return nil
 		end
 
-		return fn()
-	end)
-
-	if ok and type(lib) == "table" then
-		if host then
-			pcall(function()
-				host.__lt_service_resolver = lib
-			end)
+		local ok, lib = pcall(fn)
+		if ok and type(lib) == "table" then
+			return lib
 		end
-		return lib
+
+		return nil
 	end
 
-	return {
-		cs = function(n, cr)
-			if type(cr) == "function" then
-				local ok2, r = pcall(function()
-					return cloneref(game:GetService(n))
-				end)
-				if ok2 and r then
-					return r
-				end
-			end
+	local sr = nil
+	local uip = nil
 
-			local ok3, s = pcall(function()
-				return game:GetService(n)
-			end)
-			if ok3 then
-				return s
+	if host then
+		pcall(function()
+			local old = rawget(host, "__lt_service_resolver")
+			if type(old) == "table" then
+				sr = old
 			end
-			return nil
-		end,
-		cm = function(n, m, ...)
-			local ok2, s = pcall(function()
-				return game:GetService(n)
-			end)
-			if not ok2 or not s or type(s[m]) ~= "function" then
-				return nil
+			local oldUip = rawget(host, "__lt_ui_protector")
+			if type(oldUip) == "table" then
+				uip = oldUip
 			end
-			return s[m](s, ...)
+		end)
+	end
+
+	sr = sr or loadurl(srUrl, "@ServiceResolver.luau")
+	uip = uip or loadurl(uipUrl, "@UIprotector.luau")
+
+	if type(uip) == "table" then
+		if type(uip.install) == "function" then
+			pcall(uip.install)
 		end
-	}
+		if type(uip.parent) == "function" then
+			pcall(uip.parent)
+		end
+	end
+
+	if host then
+		if type(sr) == "table" then
+			pcall(function()
+				host.__lt_service_resolver = sr
+			end)
+		end
+		if type(uip) == "table" then
+			pcall(function()
+				host.__lt_ui_protector = uip
+			end)
+		end
+	end
+
+	if type(sr) ~= "table" then
+		sr = {
+			cs = function(n, cr)
+				if type(cr) == "function" then
+					local ok2, r = pcall(function()
+						return cr(game:GetService(n))
+					end)
+					if ok2 and r then
+						return r
+					end
+				end
+
+				local ok3, s = pcall(function()
+					return game:GetService(n)
+				end)
+				if ok3 then
+					return s
+				end
+				return nil
+			end,
+			gs = function(n)
+				local ok3, s = pcall(function()
+					return game:GetService(n)
+				end)
+				if ok3 then
+					return s
+				end
+				return nil
+			end,
+			cm = function(n, m, ...)
+				local ok2, s = pcall(function()
+					return game:GetService(n)
+				end)
+				if not ok2 or not s or type(s[m]) ~= "function" then
+					return nil
+				end
+				return s[m](s, ...)
+			end
+		}
+	end
+
+	return sr, uip
 end)()
 
 local A = {}
+A.UIP = __lt_uip
 
 A.ex = {}
 pcall(function()
@@ -245,10 +285,18 @@ A.cfg = {
 }
 
 A.svc = function(n)
-	if type(__lt) == "table" and type(__lt.cs) == "function" then
-		local ok, s = pcall(__lt.cs, n, cloneref)
-		if ok and s then
-			return s
+	if type(__lt) == "table" then
+		if type(__lt.cs) == "function" then
+			local ok, s = pcall(__lt.cs, n, cloneref)
+			if ok and s then
+				return s
+			end
+		end
+		if type(__lt.gs) == "function" then
+			local ok, s = pcall(__lt.gs, n)
+			if ok and s then
+				return s
+			end
 		end
 	end
 
@@ -2185,6 +2233,61 @@ A.ldurl = function(url, name)
 	return false, nil
 end
 
+
+A.protectui = function(obj, name)
+	if typeof(obj) ~= "Instance" or type(A.UIP) ~= "table" or type(A.UIP.protectUI) ~= "function" then
+		return false
+	end
+
+	local opts = {
+		name = name or obj.Name,
+		keepName = true,
+		harden = true,
+		deep = true,
+		watch = true
+	}
+
+	if not obj:IsA("ScreenGui") then
+		opts.lockName = true
+	end
+
+	local ok = pcall(A.UIP.protectUI, obj, opts)
+	return ok
+end
+
+A.protectlib = function(lib, win, name)
+	local seen = {}
+
+	local function scan(t, depth)
+		if type(t) ~= "table" or depth > 2 then
+			return false
+		end
+
+		local found = false
+		for _, v in t do
+			if typeof(v) == "Instance" and not seen[v] then
+				seen[v] = true
+				if v:IsA("ScreenGui") then
+					found = A.protectui(v, name) or found
+				elseif v:IsA("GuiObject") then
+					local sg = v:FindFirstAncestorWhichIsA("ScreenGui")
+					if sg and not seen[sg] then
+						seen[sg] = true
+						found = A.protectui(sg, name) or found
+					end
+				end
+			elseif type(v) == "table" then
+				found = scan(v, depth + 1) or found
+			end
+		end
+
+		return found
+	end
+
+	return scan(lib, 0) or scan(win, 0)
+end
+
+
 local okLib, Library = A.ldurl("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/Library.lua", "@Obsidian.lua")
 if not okLib or type(Library) ~= "table" or type(Library.CreateWindow) ~= "function" then
 	warn("Rusher Autoplayer: UI library unavailable, runtime loaded without menu")
@@ -2302,6 +2405,8 @@ local W = Library:CreateWindow({
 	AutoShow = true,
 	ToggleKeybind = Enum.KeyCode.RightControl
 })
+
+A.protectlib(Library, W, "Rusher Autoplayer")
 
 local T = {
 	Main = W:AddTab("Main", "play"),

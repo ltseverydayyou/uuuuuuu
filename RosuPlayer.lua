@@ -28,7 +28,111 @@ ap.clock = function()
     return tick()
 end
 
+
+ap.lturls = {
+    sr = "https://raw.githubusercontent.com/ltseverydayyou/ltseverydayyou.github.io/refs/heads/main/ServiceResolver.luau",
+    uip = "https://raw.githubusercontent.com/ltseverydayyou/ltseverydayyou.github.io/refs/heads/main/UIprotector.luau"
+}
+
+ap.req = function(url)
+    local ok, body = pcall(function()
+        return game:HttpGet(url)
+    end)
+    if ok and type(body) == "string" and body ~= "" then
+        return body
+    end
+
+    local req = nil
+    pcall(function()
+        req = type(request) == "function" and request or nil
+    end)
+    if type(req) ~= "function" then
+        pcall(function()
+            req = type(http) == "table" and type(http.request) == "function" and http.request or nil
+        end)
+    end
+    if type(req) ~= "function" then
+        pcall(function()
+            req = type(syn) == "table" and type(syn.request) == "function" and syn.request or nil
+        end)
+    end
+    if type(req) ~= "function" then
+        pcall(function()
+            req = type(http_request) == "function" and http_request or nil
+        end)
+    end
+
+    if type(req) == "function" then
+        local ok2, res = pcall(req, {
+            Url = url,
+            Method = "GET"
+        })
+        local b = type(res) == "table" and (res.Body or res.body) or nil
+        if ok2 and type(b) == "string" and b ~= "" then
+            return b
+        end
+    end
+
+    return nil
+end
+
+ap.ld = function(url, chunk)
+    local src = ap.req(url)
+    if type(src) ~= "string" then
+        return nil
+    end
+
+    local ld = loadstring or load
+    if type(ld) ~= "function" then
+        return nil
+    end
+
+    local fn, err = ld(src, chunk or ("@" .. tostring(url)))
+    if type(fn) ~= "function" then
+        warn("[autoplayer] compile failed: " .. tostring(err))
+        return nil
+    end
+
+    local ok, res = pcall(fn)
+    if ok then
+        return res
+    end
+
+    warn("[autoplayer] load failed: " .. tostring(res))
+    return nil
+end
+
+ap.SR = ap.ld(ap.lturls.sr, "@ServiceResolver.luau")
+ap.UIP = ap.ld(ap.lturls.uip, "@UIprotector.luau")
+
+if type(ap.UIP) == "table" then
+    if type(ap.UIP.install) == "function" then
+        pcall(ap.UIP.install)
+    end
+    if type(ap.UIP.parent) == "function" then
+        pcall(function()
+            ap.uipar = ap.UIP.parent()
+        end)
+    end
+end
+
+
 ap.svc = function(n)
+    if type(ap.SR) == "table" then
+        if type(ap.SR.cs) == "function" then
+            local ok, v = pcall(ap.SR.cs, n, cloneref)
+            if ok and v then
+                return v
+            end
+        end
+        if type(ap.SR.gs) == "function" then
+            local ok, v = pcall(ap.SR.gs, n)
+            if ok and v then
+                return v
+            end
+        end
+    end
+
     if type(cloneref) == "function" then
         local ok, v = pcall(function()
             return cloneref(game:GetService(n))
@@ -147,7 +251,10 @@ if not ap.plrs or not ap.rs or not ap.run or not ap.uis or not ap.lp then
 end
 
 pcall(function()
-    ap.vim = Instance.new("VirtualInputManager")
+    if type(ap.SR) == "table" and type(ap.SR.ns) == "function" then
+        ap.vim = ap.SR.ns("VirtualInputManager")
+    end
+    ap.vim = ap.vim or Instance.new("VirtualInputManager")
 end)
 
 if not ap.vim then
@@ -1172,6 +1279,61 @@ ap.stop = function()
     warn("[autoplayer] unloaded")
 end
 
+
+ap.protectui = function(obj, name)
+    if typeof(obj) ~= "Instance" or type(ap.UIP) ~= "table" or type(ap.UIP.protectUI) ~= "function" then
+        return false
+    end
+
+    local opts = {
+        name = name or obj.Name,
+        keepName = true,
+        harden = true,
+        deep = true,
+        watch = true
+    }
+
+    if not obj:IsA("ScreenGui") then
+        opts.lockName = true
+    end
+
+    local ok = pcall(ap.UIP.protectUI, obj, opts)
+    return ok
+end
+
+ap.protectlib = function(lib, win, name)
+    local seen = {}
+
+    local function scan(t, depth)
+        if type(t) ~= "table" or depth > 2 then
+            return false
+        end
+
+        local found = false
+        for _, v in t do
+            if typeof(v) == "Instance" and not seen[v] then
+                seen[v] = true
+                if v:IsA("ScreenGui") then
+                    found = ap.protectui(v, name) or found
+                elseif v:IsA("GuiObject") then
+                    local sg = v:FindFirstAncestorWhichIsA("ScreenGui")
+                    if sg and not seen[sg] then
+                        seen[sg] = true
+                        found = ap.protectui(sg, name) or found
+                    end
+                end
+            elseif type(v) == "table" then
+                found = scan(v, depth + 1) or found
+            end
+        end
+
+        return found
+    end
+
+    return scan(lib, 0) or scan(win, 0)
+end
+
+
 local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
 local lib = ap.load(repo .. "Library.lua")
 local tm = ap.load(repo .. "addons/ThemeManager.lua")
@@ -1196,6 +1358,8 @@ local win = lib:CreateWindow({
     ShowCustomCursor = true,
     AutoShow = true
 })
+
+ap.protectlib(lib, win, "rosu!mania Autoplayer")
 
 local tabs = {
     Main = win:AddTab("Main", "music"),

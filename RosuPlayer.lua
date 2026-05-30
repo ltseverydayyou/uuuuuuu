@@ -236,6 +236,20 @@ ap.hit = setmetatable({}, { __mode = "k" })
 ap.seen = setmetatable({}, { __mode = "k" })
 ap.pos = setmetatable({}, { __mode = "k" })
 ap.relq = {}
+ap.trk = {}
+ap.tcon = {}
+ap.tnote = setmetatable({}, { __mode = "k" })
+ap.ntrack = setmetatable({}, { __mode = "k" })
+ap.ninf = setmetatable({}, { __mode = "k" })
+ap.empty = {}
+ap.gidx = setmetatable({}, { __mode = "k" })
+ap.ridx = setmetatable({}, { __mode = "k" })
+ap.sidx = setmetatable({}, { __mode = "k" })
+ap.nidx = setmetatable({}, { __mode = "k" })
+ap.tridx = setmetatable({}, { __mode = "k" })
+ap.gprim = nil
+ap.pgsrc = nil
+ap.booted = false
 ap.ingame = false
 ap.bind = "ap_" .. tostring(math.random(10000, 99999))
 
@@ -338,8 +352,12 @@ ap.gameenv = function(force)
     ap.addsrc(list, root:FindFirstChild("MAIN SYSTEM"))
     ap.addsrc(list, root:FindFirstChild("LocalScript"))
 
-    for _, v in root:GetChildren() do
-        ap.addsrc(list, v)
+    for src in ap.sidx do
+        if ap.live(src) and src:IsDescendantOf(root) then
+            ap.addsrc(list, src)
+        else
+            ap.sidx[src] = nil
+        end
     end
 
     if #list <= 0 then
@@ -404,8 +422,52 @@ ap.vis = function(x)
     return true
 end
 
-ap.nvis = function(n)
+ap.info = function(n)
     if not ap.live(n) then
+        return nil
+    end
+
+    local inf = ap.ninf[n]
+    if inf and inf.name == n.Name then
+        return inf
+    end
+
+    local h = n:FindFirstChild("Head")
+    local t = n:FindFirstChild("Tail")
+    local b = n:FindFirstChild("Body")
+    local nm = string.lower(n.Name)
+    local k = nil
+
+    if nm == "noteproto" or nm == "note" then
+        k = "tap"
+    elseif nm == "heldnoteproto" or nm == "heldnote" then
+        k = "hold"
+    elseif h and t then
+        k = "hold"
+    elseif nm:find("held") then
+        k = "hold"
+    elseif nm:find("note") and not nm:find("track") then
+        k = "tap"
+    end
+
+    inf = {
+        name = n.Name,
+        h = h,
+        t = t,
+        b = b,
+        k = k
+    }
+
+    if k or h or t or b then
+        ap.ninf[n] = inf
+    end
+
+    return inf
+end
+
+ap.nvis = function(n)
+    local inf = ap.info(n)
+    if not inf then
         return false
     end
 
@@ -413,9 +475,9 @@ ap.nvis = function(n)
         return n.Visible ~= false
     end
 
-    local h = n:FindFirstChild("Head")
-    local t = n:FindFirstChild("Tail")
-    local b = n:FindFirstChild("Body")
+    local h = inf.h
+    local t = inf.t
+    local b = inf.b
 
     if h or t or b then
         if h and h:IsA("GuiObject") and h.Visible ~= false then
@@ -427,7 +489,7 @@ ap.nvis = function(n)
         if b and b:IsA("GuiObject") and b.Visible ~= false then
             return true
         end
-        return true
+        return false
     end
 
     return true
@@ -466,18 +528,190 @@ ap.goodroot = function(r)
         and r:FindFirstChild("RankingScreen")
 end
 
+ap.istrack = function(x)
+    if typeof(x) ~= "Instance" then
+        return false
+    end
+
+    local n = x.Name
+    if n ~= "Track1" and n ~= "Track2" and n ~= "Track3" and n ~= "Track4" then
+        return false
+    end
+
+    local p = x.Parent
+    return p and p.Name == "Tracks"
+end
+
+ap.addnidx = function(tr, n)
+    if not ap.live(tr) or not ap.live(n) then
+        return
+    end
+
+    local set = ap.nidx[tr]
+    if not set then
+        set = setmetatable({}, { __mode = "k" })
+        ap.nidx[tr] = set
+    end
+
+    set[n] = true
+end
+
+ap.index = function(v)
+    if typeof(v) ~= "Instance" then
+        return
+    end
+
+    if v:IsA("LocalScript") or v:IsA("ModuleScript") then
+        ap.sidx[v] = true
+    end
+
+    if v.Name == "GameplayFrame" and v:IsA("GuiObject") then
+        ap.gidx[v] = true
+        if v.Parent then
+            ap.ridx[v.Parent] = true
+        end
+    elseif v.Name == "Tracks" or v.Name == "TriggerButtons" then
+        local p = v.Parent
+        if p and p.Name == "GameplayFrame" and p:IsA("GuiObject") then
+            ap.gidx[p] = true
+            if p.Parent then
+                ap.ridx[p.Parent] = true
+            end
+        end
+    end
+
+    local p = v.Parent
+    if p and (v.Name == "DebugFrame" or v.Name == "FailedFrame" or v.Name == "RankingScreen") then
+        ap.ridx[p] = true
+    end
+
+    if ap.istrack(v) then
+        ap.tridx[v] = true
+    end
+
+    if p and ap.istrack(p) and type(ap.noteish) == "function" and ap.noteish(v) then
+        ap.addnidx(p, v)
+        if ap.trk then
+            for _, tr in ap.trk do
+                if tr == p then
+                    ap.putnote(p, v)
+                    break
+                end
+            end
+        end
+    end
+end
+
+ap.trackui = function(v)
+    ap.index(v)
+end
+
+ap.dropui = function(v)
+    if typeof(v) ~= "Instance" then
+        return
+    end
+
+    ap.gidx[v] = nil
+    ap.ridx[v] = nil
+    ap.sidx[v] = nil
+    ap.tridx[v] = nil
+
+    if ap.nidx[v] then
+        ap.nidx[v] = nil
+    end
+
+    local p = v.Parent
+    if p and ap.nidx[p] then
+        ap.nidx[p][v] = nil
+    end
+
+    if type(ap.clearnote) == "function" then
+        ap.clearnote(v)
+    end
+
+    if v == ap.g then
+        ap.g = nil
+        if type(ap.cleartracks) == "function" then
+            ap.cleartracks()
+        end
+    end
+
+    if v == ap.root then
+        ap.root = nil
+        if type(ap.cleartracks) == "function" then
+            ap.cleartracks()
+        end
+    end
+end
+
+ap.bootscan = function()
+    ap.pg = ap.lp and ap.lp:FindFirstChildOfClass("PlayerGui")
+    if not ap.pg then
+        return
+    end
+
+    if ap.pgsrc ~= ap.pg then
+        ap.gidx = setmetatable({}, { __mode = "k" })
+        ap.ridx = setmetatable({}, { __mode = "k" })
+        ap.sidx = setmetatable({}, { __mode = "k" })
+        ap.nidx = setmetatable({}, { __mode = "k" })
+        ap.tridx = setmetatable({}, { __mode = "k" })
+        ap.gprim = nil
+        ap.booted = false
+        ap.pgsrc = ap.pg
+    end
+
+    if ap.booted then
+        return
+    end
+
+    ap.booted = true
+    ap.gprim = true
+
+    for _, r in ap.pg:GetChildren() do
+        ap.index(r)
+    end
+
+    for _, v in ap.pg:GetDescendants() do
+        ap.index(v)
+    end
+end
+
+ap.primeui = function(force)
+    ap.bootscan()
+end
+
 ap.findroot = function()
     if ap.root and ap.goodroot(ap.root) then
         return ap.root
     end
 
-    ap.pg = ap.lp and ap.lp:FindFirstChildOfClass("PlayerGui")
-    if not ap.pg then
-        return nil
+    ap.primeui(false)
+
+    for r in ap.ridx do
+        if not ap.live(r) then
+            ap.ridx[r] = nil
+            continue
+        end
+
+        if ap.goodroot(r) then
+            local g = r:FindFirstChild("GameplayFrame")
+            if g and ap.gidx[g] and not ap.badframe(g) then
+                ap.root = r
+                return r
+            end
+        end
     end
 
-    for _, r in ap.pg:GetChildren() do
-        if r:FindFirstChild("MENUS") and r:FindFirstChild("GameplayFrame") and ap.goodroot(r) then
+    for g in ap.gidx do
+        if not ap.live(g) then
+            ap.gidx[g] = nil
+            continue
+        end
+
+        local r = g.Parent
+        if r and ap.goodroot(r) and not ap.badframe(g) then
+            ap.ridx[r] = true
             ap.root = r
             return r
         end
@@ -506,25 +740,6 @@ ap.startscan = function()
     ap.ctx = nil
     ap.reset(true)
     ap.defer(0.05)
-
-    local delays = { 0.45, 1.25, 2.5, 4.5, 7.5, 11, 15.5 }
-
-    for _, d in delays do
-        task.delay(d, function()
-            if ap.dead or not ap.cfg.autorescan or ap.ingame then
-                return
-            end
-
-            if ap.g and ap.active(ap.g) then
-                return
-            end
-
-            ap.g = nil
-            ap.inp = nil
-            ap.ctx = nil
-            ap.defer(0.01)
-        end)
-    end
 end
 
 ap.ui = function()
@@ -545,19 +760,21 @@ ap.ui = function()
         local tb = g:FindFirstChild("TriggerButtons")
         if tr and tb and ap.vis(g) then
             ap.root = root
+            ap.trackui(g)
             return g
         end
     end
 
-    local now = ap.clock()
-    if ap.nextfull and now < ap.nextfull then
-        return nil
-    end
-    ap.nextfull = now + 6
+    ap.primeui(false)
 
     local fb = nil
 
-    for _, v in ap.pg:GetDescendants() do
+    for v in ap.gidx do
+        if not ap.live(v) then
+            ap.gidx[v] = nil
+            continue
+        end
+
         if v:IsA("GuiObject") and v.Name == "GameplayFrame" and not ap.badframe(v) then
             local tr = v:FindFirstChild("Tracks")
             local tb = v:FindFirstChild("TriggerButtons")
@@ -709,6 +926,9 @@ ap.reset = function(full)
         ap.inp = nil
         ap.ctx = nil
         ap.nextinp = 0
+        if type(ap.cleartracks) == "function" then
+            ap.cleartracks()
+        end
     end
 end
 
@@ -728,6 +948,198 @@ ap.defer = function(delay)
     end
 end
 
+ap.dcon = function(c)
+    if c then
+        pcall(function()
+            c:Disconnect()
+        end)
+    end
+end
+
+ap.clearnote = function(n, keeparr)
+    if n then
+        local tr = ap.ntrack[n]
+        if tr and not keeparr then
+            local arr = ap.tnote and ap.tnote[tr]
+            if arr then
+                for i = #arr, 1, -1 do
+                    if arr[i] == n then
+                        arr[i] = arr[#arr]
+                        arr[#arr] = nil
+                        break
+                    end
+                end
+            end
+        end
+
+        if tr and ap.nidx and ap.nidx[tr] then
+            ap.nidx[tr][n] = nil
+        end
+
+        ap.ntrack[n] = nil
+        ap.ninf[n] = nil
+        ap.hit[n] = nil
+        ap.seen[n] = nil
+        ap.pos[n] = nil
+    end
+end
+
+ap.cleartracks = function()
+    if ap.tcon then
+        for _, list in ap.tcon do
+            if type(list) == "table" then
+                for _, c in list do
+                    ap.dcon(c)
+                end
+            else
+                ap.dcon(list)
+            end
+        end
+    end
+
+    ap.tcon = {}
+    ap.trk = {}
+    ap.trf = nil
+    ap.tnote = setmetatable({}, { __mode = "k" })
+    ap.ntrack = setmetatable({}, { __mode = "k" })
+    ap.ninf = setmetatable({}, { __mode = "k" })
+end
+
+ap.addtc = function(i, c)
+    if not c then
+        return
+    end
+
+    ap.tcon[i] = ap.tcon[i] or {}
+    ap.tcon[i][#ap.tcon[i] + 1] = c
+end
+
+ap.noteish = function(n)
+    if typeof(n) ~= "Instance" then
+        return false
+    end
+
+    if n:IsA("GuiObject") then
+        return true
+    end
+
+    local nm = string.lower(n.Name)
+    return nm:find("note") ~= nil or n:FindFirstChild("Head") ~= nil or n:FindFirstChild("Tail") ~= nil or n:FindFirstChild("Body") ~= nil
+end
+
+ap.putnote = function(tr, n)
+    if not ap.live(tr) or not ap.live(n) or not ap.noteish(n) then
+        return
+    end
+
+    local old = ap.ntrack[n]
+    if old == tr then
+        ap.ninf[n] = nil
+        return
+    end
+
+    if old then
+        ap.clearnote(n)
+    end
+
+    local arr = ap.tnote[tr]
+    if not arr then
+        arr = {}
+        ap.tnote[tr] = arr
+    end
+
+    ap.ntrack[n] = tr
+    ap.ninf[n] = nil
+    arr[#arr + 1] = n
+end
+
+ap.dropnote = function(n)
+    ap.clearnote(n)
+end
+
+ap.notes = function(tr)
+    local arr = ap.tnote[tr]
+    if not arr then
+        return ap.empty
+    end
+
+    local i = 1
+    while i <= #arr do
+        local n = arr[i]
+        if ap.live(n) and n.Parent == tr then
+            i += 1
+        else
+            ap.clearnote(n, true)
+            arr[i] = arr[#arr]
+            arr[#arr] = nil
+        end
+    end
+
+    return arr
+end
+
+ap.bindtrack = function(i, tr)
+    if ap.trk[i] == tr then
+        return
+    end
+
+    if ap.tcon[i] then
+        for _, c in ap.tcon[i] do
+            ap.dcon(c)
+        end
+        ap.tcon[i] = nil
+    end
+
+    ap.trk[i] = tr
+
+    if not ap.live(tr) then
+        return
+    end
+
+    ap.tnote[tr] = {}
+
+    local set = ap.nidx[tr]
+    if set then
+        for ch in set do
+            if ap.live(ch) and ch.Parent == tr then
+                ap.putnote(tr, ch)
+            else
+                set[ch] = nil
+            end
+        end
+    end
+
+    ap.addtc(i, tr.ChildAdded:Connect(function(ch)
+        ap.index(ch)
+        ap.putnote(tr, ch)
+    end))
+
+    ap.addtc(i, tr.ChildRemoved:Connect(function(ch)
+        ap.dropnote(ch)
+    end))
+end
+
+ap.refreshtracks = function(g)
+    if not ap.live(g) then
+        ap.cleartracks()
+        return
+    end
+
+    local trf = g:FindFirstChild("Tracks")
+    if trf ~= ap.trf then
+        ap.cleartracks()
+        ap.trf = trf
+    end
+
+    if not ap.live(trf) then
+        return
+    end
+
+    for i = 1, 4 do
+        ap.bindtrack(i, trf:FindFirstChild("Track" .. i))
+    end
+end
+
 ap.watch = function(g)
     if ap.watched == g then
         return
@@ -743,6 +1155,7 @@ ap.watch = function(g)
         end
     end
 
+    ap.cleartracks()
     ap.watchcon = {}
 
     local root = g and g.Parent
@@ -753,6 +1166,28 @@ ap.watch = function(g)
             ap.watchcon[#ap.watchcon + 1] = c
         end
     end
+
+    ap.refreshtracks(g)
+
+    add(g.ChildAdded:Connect(function(ch)
+        ap.index(ch)
+        if ch.Name == "Tracks" or ch.Name == "TriggerButtons" then
+            ap.refreshtracks(g)
+            if not ap.ingame then
+                ap.defer(0.05)
+            end
+        end
+    end))
+
+    add(g.ChildRemoved:Connect(function(ch)
+        ap.dropui(ch)
+        if ch.Name == "Tracks" or ch == ap.trf then
+            ap.cleartracks()
+            if not ap.ingame then
+                ap.defer(0.05)
+            end
+        end
+    end))
 
     if root then
         local ff = root:FindFirstChild("FailedFrame")
@@ -777,6 +1212,7 @@ ap.watch = function(g)
         end
 
         add(root.ChildAdded:Connect(function(ch)
+            ap.index(ch)
             if ap.ingame then
                 return
             end
@@ -784,6 +1220,10 @@ ap.watch = function(g)
             if ch.Name == "GameplayFrame" or ch.Name == "FailedFrame" or ch.Name == "RankingScreen" then
                 ap.defer(0.1)
             end
+        end))
+
+        add(root.ChildRemoved:Connect(function(ch)
+            ap.dropui(ch)
         end))
     end
 end
@@ -793,6 +1233,8 @@ ap.setupwatch = function()
     if not ap.pg then
         return
     end
+
+    ap.primeui(false)
 
     local root = ap.findroot()
 
@@ -834,15 +1276,33 @@ ap.setupwatch = function()
         end
     end
 
+    ap.add(ap.pg.ChildAdded:Connect(function(v)
+        ap.index(v)
+        if not ap.cfg.autorescan or ap.dead or ap.ingame then
+            return
+        end
+        ap.defer(0.05)
+    end))
+
+    ap.add(ap.pg.ChildRemoved:Connect(function(v)
+        ap.dropui(v)
+    end))
+
     ap.add(ap.pg.DescendantAdded:Connect(function(v)
+        ap.index(v)
+
         if not ap.cfg.autorescan or ap.dead or ap.ingame then
             return
         end
 
         local n = v.Name
         if n == "GameplayFrame" or n == "Tracks" or n == "TriggerButtons" or n == "FailedFrame" or n == "RankingScreen" then
-            ap.defer(0.2)
+            ap.defer(0.05)
         end
+    end))
+
+    ap.add(ap.pg.DescendantRemoving:Connect(function(v)
+        ap.dropui(v)
     end))
 end
 
@@ -859,31 +1319,8 @@ ap.tap = function(i)
 end
 
 ap.kind = function(n)
-    if not ap.live(n) then
-        return
-    end
-
-    local nm = string.lower(n.Name)
-
-    if nm == "noteproto" or nm == "note" then
-        return "tap"
-    end
-
-    if nm == "heldnoteproto" or nm == "heldnote" then
-        return "hold"
-    end
-
-    if n:FindFirstChild("Head") and n:FindFirstChild("Tail") then
-        return "hold"
-    end
-
-    if nm:find("held") then
-        return "hold"
-    end
-
-    if nm:find("note") and not nm:find("track") then
-        return "tap"
-    end
+    local inf = ap.info(n)
+    return inf and inf.k or nil
 end
 
 ap.scl = function(g)
@@ -893,9 +1330,14 @@ ap.scl = function(g)
 end
 
 ap.hd = function(n)
-    local h = n:FindFirstChild("Head")
-    local t = n:FindFirstChild("Tail")
-    local b = n:FindFirstChild("Body")
+    local inf = ap.info(n)
+    if not inf then
+        return nil
+    end
+
+    local h = inf.h
+    local t = inf.t
+    local b = inf.b
 
     local hy = h and h:IsA("GuiObject") and ap.scl(h) or nil
     local ty = t and t:IsA("GuiObject") and ap.scl(t) or nil
@@ -949,7 +1391,8 @@ ap.cross = function(n, y, target)
 end
 
 ap.hready = function(n)
-    local h = n and n:FindFirstChild("Head")
+    local inf = n and ap.info(n) or nil
+    local h = inf and inf.h or nil
     if h and h:IsA("GuiObject") then
         return h.Visible ~= false
     end
@@ -1042,10 +1485,9 @@ ap.best = function(tr)
     local td = math.huge
     local tc = false
 
-    for _, n in tr:GetChildren() do
-        if ap.nvis(n) then
-            local k = ap.kind(n)
-
+    for _, n in ap.notes(tr) do
+        local k = ap.kind(n)
+        if k and ap.nvis(n) then
             if k == "hold" then
                 local ok, d = ap.holdok(n)
                 if (ok or d <= ap.cfg.hwin * 3) and d < hd then
@@ -1148,13 +1590,22 @@ ap.step = function()
 
     ap.sync()
 
-    local trf = ap.g:FindFirstChild("Tracks")
+    if not ap.trf or ap.trf.Parent ~= ap.g then
+        ap.refreshtracks(ap.g)
+    end
+
+    local trf = ap.trf
     if not trf then
         return
     end
 
     for i = 1, 4 do
-        local tr = trf:FindFirstChild("Track" .. i)
+        local tr = ap.trk[i]
+
+        if not tr or tr.Parent ~= trf then
+            ap.refreshtracks(ap.g)
+            tr = ap.trk[i]
+        end
 
         if not tr then
             ap.up(i)
@@ -1173,6 +1624,7 @@ ap.step = function()
                     local _, ty = ap.hd(hn)
                     ap.mark(hn, ty)
                     ap.up(i)
+                    ap.dropnote(hn)
                 end
 
                 continue
@@ -1181,6 +1633,7 @@ ap.step = function()
             local _, ty = ap.hd(hn)
             ap.mark(hn, ty)
             ap.up(i)
+            ap.dropnote(hn)
         end
 
         local n, k = ap.best(tr)
@@ -1201,6 +1654,7 @@ ap.step = function()
                 local y = ap.scl(n)
                 ap.mark(n, y)
                 ap.tap(i)
+                ap.dropnote(n)
             end
         elseif not ap.hold[i] then
             local rt = ap.relq[i]
@@ -1256,6 +1710,10 @@ ap.stop = function()
             end)
         end
         ap.clear(ap.watchcon)
+    end
+
+    if type(ap.cleartracks) == "function" then
+        ap.cleartracks()
     end
 
     for _, c in ap.con do
@@ -1480,7 +1938,8 @@ act:AddButton({
     Text = "Rescan Gameplay",
     Func = function()
         ap.reset(true)
-        ap.ntf("Autoplayer", "Gameplay cache reset")
+        ap.g = ap.ui()
+        ap.ntf("Autoplayer", "Gameplay cache refreshed")
     end
 })
 

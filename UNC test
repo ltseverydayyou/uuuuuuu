@@ -317,36 +317,70 @@ local core = {
 		end
 	end },
 	{ n = "hookmetamethod", f = function(fn)
-		local old
-		old = fn(game, "__index", function(self, key)
-			if self == game and key == "__UNC_HOOK_TEST__" then
-				return "ok"
-			end
-			return old(self, key)
+		local obj = setmetatable({}, {
+			__index = function()
+				return false
+			end,
+			__metatable = "Locked!",
+		})
+		local old = fn(obj, "__index", function()
+			return true
 		end)
 		assert(type(old) == "function", "hookmetamethod must return the original metamethod")
-		assert(game.__UNC_HOOK_TEST__ == "ok", "hookmetamethod did not intercept __index")
+		assert(obj.test == true, "hookmetamethod did not replace behavior")
+		local ok, r = pcall(old, obj, "test")
+		if not ok then
+			ok, r = pcall(old)
+		end
+		assert(ok, r or "original metamethod errored")
+		assert(r == false, "returned original metamethod behaved incorrectly")
 	end },
 	{ n = "iscclosure", f = function(fn)
-		assert(type(fn(print)) == "boolean", "iscclosure must return a boolean")
+		assert(fn(print) == true, "print should be a C closure")
+		assert(fn(function() end) == false, "Lua closure should not be a C closure")
+		local nc = res("newcclosure")
+		if type(nc) == "function" then
+			assert(fn(nc(function() end)) == true, "newcclosure result should be a C closure")
+		end
 	end },
 	{ n = "isexecutorclosure", f = function(fn)
-		assert(type(fn(function() end)) == "boolean", "isexecutorclosure must return a boolean")
+		assert(fn(fn) == true, "executor global should be an executor closure")
+		assert(fn(function() end) == true, "executor-created Lua closure should be an executor closure")
+		assert(fn(print) == false, "Roblox global should not be an executor closure")
+		local nc = res("newcclosure")
+		if type(nc) == "function" then
+			assert(fn(nc(function() end)) == true, "executor-created C closure should be an executor closure")
+		end
 	end },
 	{ n = "islclosure", f = function(fn)
-		assert(type(fn(function() end)) == "boolean", "islclosure must return a boolean")
+		assert(fn(print) == false, "print should not be a Lua closure")
+		assert(fn(function() end) == true, "executor-created function should be a Lua closure")
+		local nc = res("newcclosure")
+		if type(nc) == "function" then
+			assert(fn(nc(function() end)) == false, "newcclosure result should not be a Lua closure")
+		end
 	end },
 	{ n = "loadstring", f = function(fn)
 		local f, e = fn("return ... + 1")
 		assert(type(f) == "function", "loadstring did not compile valid Luau: " .. tostring(e))
 		assert(f(4) == 5, "compiled chunk returned wrong value")
+		local bad, err = fn("local =")
+		assert(bad == nil and type(err) == "string", "loadstring must return nil and an error string for compiler errors")
+		local g = fn("return function(a) return a .. 'b' end")
+		assert(type(g) == "function" and g()("a") == "ab", "loadstring returned a broken nested function")
 	end },
 	{ n = "newcclosure", f = function(fn)
-		local f = fn(function(a)
-			return a + 1
-		end)
-		assert(type(f) == "function", "newcclosure must return a function")
-		assert(f(1) == 2, "newcclosure returned a broken function")
+		local function a(x)
+			return x + 1
+		end
+		local b = fn(a)
+		assert(type(b) == "function", "newcclosure must return a function")
+		assert(b ~= a, "newcclosure returned the same closure")
+		assert(b(1) == a(1), "newcclosure returned a broken function")
+		local isc = res("iscclosure")
+		if type(isc) == "function" then
+			assert(isc(b) == true, "newcclosure result should be a C closure")
+		end
 	end },
 	{ n = "restorefunction", f = function(fn)
 		local hook = need("hookfunction")
@@ -390,25 +424,58 @@ local core = {
 			end
 			return b
 		end
-		local ok, p = pcall(fn, a, 1)
-		assert(ok, p or "debug.getproto errored")
-		assert(p ~= nil, "debug.getproto returned nil")
+		local ok, p = pcall(fn, a, 1, true)
+		assert(ok, p or "debug.getproto active mode errored")
+		if type(p) == "table" then
+			p = p[1]
+		end
+		assert(type(p) == "function", "debug.getproto active mode did not return the inner function")
+		assert(p() == true, "active proto returned the wrong value")
+		local ok2, rp = pcall(fn, a, 1)
+		assert(ok2, rp or "debug.getproto errored")
+		assert(type(rp) == "function", "debug.getproto must return a proto function")
+		local ok3, rr = pcall(rp)
+		if ok3 and rr ~= true then
+			return "proto return values are disabled on this executor"
+		end
+		assert(ok3, rr or "proto function errored")
 	end },
 	{ n = "debug.getprotos", f = function(fn)
+		local gp = need("debug.getproto")
 		local function a()
 			local function b()
 				return true
 			end
-			return b
+			local function c()
+				return true
+			end
+			local function d()
+				return true
+			end
+			return b, c, d
 		end
 		local t = fn(a)
 		assert(type(t) == "table", "debug.getprotos must return a table")
+		assert(#t >= 3, "debug.getprotos did not return all inner protos")
+		for i = 1, 3 do
+			local ok, p = pcall(gp, a, i, true)
+			assert(ok, p or "debug.getproto active mode errored for proto " .. i)
+			if type(p) == "table" then
+				p = p[1]
+			end
+			assert(type(p) == "function", "missing active proto " .. i)
+			assert(p() == true, "active proto " .. i .. " returned the wrong value")
+		end
 	end },
 	{ n = "debug.getstack", f = function(fn)
-		local a = "UNC_STACK"
-		local ok, r = pcall(fn, 1)
-		assert(ok, r or "debug.getstack errored")
-		assert(type(r) == "table" or r == a or r ~= nil, "debug.getstack returned nil")
+		local function a()
+			local v = "UNC_" .. "STACK"
+			assert(fn(1, 1) == v, "debug.getstack(level, index) returned the wrong stack value")
+			local t = fn(1)
+			assert(type(t) == "table", "debug.getstack(level) must return a stack table")
+			assert(t[1] == v, "debug.getstack(level)[1] returned the wrong stack value")
+		end
+		a()
 	end },
 	{ n = "debug.getupvalue", f = function(fn)
 		local up = "UNC_UP"
@@ -560,8 +627,10 @@ local core = {
 		local p = base .. "_asset.txt"
 		wr(p, "asset")
 		local a = fn(p)
-		assert(type(a) == "string" and #a > 0, "getcustomasset must return an asset string")
 		rm(p)
+		assert(type(a) == "string", "getcustomasset must return a string")
+		assert(#a > 0, "getcustomasset returned an empty string")
+		assert(a:sub(1, 11) == "rbxasset://", "getcustomasset did not return an rbxasset:// URL")
 	end },
 	{ n = "isfile", f = function(fn)
 		local wr = need("writefile")
@@ -621,9 +690,22 @@ local core = {
 		local cg = svc("CoreGui") or game
 		local c = fn(cg)
 		assert(typeof(c) == "Instance", "cloneref must return an Instance")
+		assert(c ~= cg, "cloneref returned the original instance")
+		local cmp = res("compareinstances")
+		if type(cmp) == "function" then
+			assert(cmp(c, cg) == true, "compareinstances must treat cloneref result as the same instance")
+		end
 	end },
 	{ n = "compareinstances", f = function(fn)
-		assert(fn(game, game) == true, "compareinstances must return true for same instance")
+		local cr = need("cloneref")
+		local cg = svc("CoreGui") or game
+		local c = cr(cg)
+		local f = Instance.new("Folder")
+		assert(fn(game, game) == true, "compareinstances must return true for the same instance")
+		assert(c ~= cg, "cloneref setup returned the original instance")
+		assert(fn(c, cg) == true, "compareinstances must return true for a cloneref and its original")
+		assert(fn(cg, f) == false, "compareinstances must return false for different instances")
+		f:Destroy()
 	end },
 	{ n = "fireclickdetector", note = "exists-only by request; live signal is not fired" },
 	{ n = "fireproximityprompt", note = "exists-only by request; live prompt is not fired" },
@@ -642,40 +724,102 @@ local core = {
 		assert(typeof(fn()) == "Instance", "gethui must return an Instance")
 	end },
 	{ n = "getinstances", f = function(fn)
+		local host = svc("CoreGui") or svc("ReplicatedStorage") or workspace
+		local obj = Instance.new("Folder")
+		obj.Name = "UNC_getinstances_" .. id
+		obj.Parent = host
 		local t = fn()
 		assert(type(t) == "table", "getinstances must return a table")
+		local cmp = res("compareinstances")
+		local any = false
+		local hit = false
+		for _, v in t do
+			if typeof(v) == "Instance" then
+				any = true
+				if v == obj or (type(cmp) == "function" and cmp(v, obj)) then
+					hit = true
+				end
+			end
+		end
+		obj:Destroy()
+		assert(any, "getinstances returned no Instance values")
+		assert(hit, "getinstances did not include a live test Instance")
 	end },
 	{ n = "getnilinstances", f = function(fn)
+		local obj = Instance.new("Folder")
+		obj.Name = "UNC_getnilinstances_" .. id
 		local t = fn()
 		assert(type(t) == "table", "getnilinstances must return a table")
+		local cmp = res("compareinstances")
+		local any = false
+		local hit = false
+		for _, v in t do
+			if typeof(v) == "Instance" then
+				any = true
+				assert(v.Parent == nil, "getnilinstances returned an Instance that is not parented to nil")
+				if v == obj or (type(cmp) == "function" and cmp(v, obj)) then
+					hit = true
+				end
+			end
+		end
+		obj:Destroy()
+		assert(any, "getnilinstances returned no Instance values")
+		assert(hit, "getnilinstances did not include a nil-parented test Instance")
 	end },
 	{ n = "getnamecallmethod", f = function(fn)
-		local v = fn()
-		assert(v == nil or type(v) == "string", "getnamecallmethod must return string or nil outside __namecall")
+		local hook = need("hookmetamethod")
+		local method
+		local old
+		old = hook(game, "__namecall", function(self, ...)
+			if self == game and method == nil then
+				method = fn()
+			end
+			return old(self, ...)
+		end)
+		game:GetService("Lighting")
+		assert(method == "GetService", "getnamecallmethod did not return GetService inside __namecall")
 	end },
 	{ n = "getrawmetatable", f = function(fn)
+		local mt = { __metatable = "Locked!" }
+		local obj = setmetatable({}, mt)
+		assert(fn(obj) == mt, "getrawmetatable did not return the real locked metatable")
 		assert(type(fn(game)) == "table", "getrawmetatable(game) must return a table")
 	end },
 	{ n = "isreadonly", f = function(fn)
-		assert(type(fn({})) == "boolean", "isreadonly must return a boolean")
+		local obj = {}
+		assert(fn(obj) == false, "new table should not be readonly")
+		table.freeze(obj)
+		assert(fn(obj) == true, "frozen table should be readonly")
 	end },
 	{ n = "setrawmetatable", f = function(fn)
-		local t = {}
-		fn(t, { __index = function()
-			return "ok"
-		end })
-		assert(t.x == "ok", "setrawmetatable did not update metatable")
+		local obj = setmetatable({}, {
+			__index = function()
+				return false
+			end,
+			__metatable = "Locked!",
+		})
+		local ret = fn(obj, {
+			__index = function()
+				return true
+			end,
+		})
+		assert(obj.test == true, "setrawmetatable did not update a locked metatable")
+		if ret ~= nil then
+			assert(ret == obj, "setrawmetatable should return the original object when returning a value")
+		end
 	end },
 	{ n = "setreadonly", f = function(fn)
-		local t = {}
-		fn(t, true)
-		local locked = not pcall(function()
-			t.x = true
+		local obj = { ok = false }
+		table.freeze(obj)
+		fn(obj, false)
+		obj.ok = true
+		assert(obj.ok == true, "setreadonly(false) did not allow writes")
+		fn(obj, true)
+		local bad = pcall(function()
+			obj.fail = true
 		end)
-		fn(t, false)
-		t.x = true
-		assert(t.x == true, "setreadonly(false) did not unlock table")
-		assert(type(locked) == "boolean", "lock probe failed")
+		fn(obj, false)
+		assert(bad == false, "setreadonly(true) did not block writes")
 	end },
 	{ n = "identifyexecutor", f = function(fn)
 		local a, b = fn()
@@ -683,53 +827,74 @@ local core = {
 		assert(b == nil or type(b) == "string" or type(b) == "number", "unexpected version return type")
 	end },
 	{ n = "request", names = { "request", "http.request", "syn.request" }, timeout = 15, f = function(fn)
-		local ok, r = pcall(fn, { Url = "https://example.com", Method = "GET" })
+		local ok, r = pcall(fn, { Url = "https://httpbin.org/user-agent", Method = "GET" })
 		assert(ok, r or "request errored")
-		assert(type(r) == "table" or type(r) == "string", "request must return a table or string")
+		assert(type(r) == "table", "request must return a response table")
+		assert(type(r.StatusCode) == "number", "request response must include numeric StatusCode")
+		assert(r.StatusCode == 200, "request did not return HTTP 200")
+		assert(type(r.Body) == "string" and #r.Body > 0, "request response must include a non-empty Body string")
+		local hs = svc("HttpService")
+		if hs then
+			local ok2, data = pcall(function()
+				return hs:JSONDecode(r.Body)
+			end)
+			assert(ok2 and type(data) == "table" and type(data["user-agent"]) == "string", "request body did not include a user-agent JSON field")
+			return "User-Agent: " .. data["user-agent"]
+		end
 	end },
 	{ n = "gethiddenproperty", f = function(fn)
 		local fire = Instance.new("Fire")
 		local ok, v, hidden = pcall(fn, fire, "size_xml")
 		fire:Destroy()
 		assert(ok, v or "gethiddenproperty errored")
-		assert(v ~= nil, "gethiddenproperty returned nil")
-		assert(hidden == nil or type(hidden) == "boolean", "second return must be boolean or nil")
+		assert(v == 5, "gethiddenproperty returned the wrong default size_xml value")
+		assert(hidden == true, "gethiddenproperty did not report size_xml as hidden")
 	end },
 	{ n = "getthreadidentity", names = { "getthreadidentity", "getidentity", "getthreadcontext" }, f = function(fn)
 		assert(type(fn()) == "number", "getthreadidentity must return a number")
 	end },
 	{ n = "isscriptable", f = function(fn)
 		local fire = Instance.new("Fire")
-		local ok, v = pcall(fn, fire, "size_xml")
+		local ok1, a = pcall(fn, fire, "size_xml")
+		local ok2, b = pcall(fn, fire, "Size")
 		fire:Destroy()
-		assert(ok, v or "isscriptable errored")
-		assert(type(v) == "boolean", "isscriptable must return a boolean")
+		assert(ok1, a or "isscriptable errored on hidden property")
+		assert(ok2, b or "isscriptable errored on scriptable property")
+		assert(a == false, "isscriptable must return false for size_xml")
+		assert(b == true, "isscriptable must return true for Size")
 	end },
 	{ n = "sethiddenproperty", f = function(fn)
 		local geth = need("gethiddenproperty")
 		local fire = Instance.new("Fire")
-		local ok, r = pcall(fn, fire, "size_xml", 10)
+		local ok, hidden = pcall(fn, fire, "size_xml", 10)
 		local got = geth(fire, "size_xml")
 		fire:Destroy()
-		assert(ok, r or "sethiddenproperty errored")
+		assert(ok, hidden or "sethiddenproperty errored")
+		assert(hidden == true, "sethiddenproperty must return true for hidden property")
 		assert(got == 10, "sethiddenproperty did not set hidden property")
 	end },
 	{ n = "setscriptable", f = function(fn)
 		local iss = need("isscriptable")
 		local fire = Instance.new("Fire")
-		local old = iss(fire, "size_xml")
-		local ok, err = pcall(fn, fire, "size_xml", true)
-		assert(ok, err or "setscriptable errored")
-		assert(iss(fire, "size_xml") == true, "setscriptable did not make property scriptable")
-		pcall(fn, fire, "size_xml", old)
+		local ok, old = pcall(fn, fire, "size_xml", true)
+		assert(ok, old or "setscriptable errored")
+		assert(old == false, "setscriptable must return old scriptable state")
+		assert(iss(fire, "size_xml") == true, "setscriptable did not make size_xml scriptable")
 		fire:Destroy()
+		local fire2 = Instance.new("Fire")
+		local still = iss(fire2, "size_xml")
+		fire2:Destroy()
+		assert(still == false, "setscriptable persisted across unique instances")
 	end },
 	{ n = "setthreadidentity", names = { "setthreadidentity", "setidentity", "setthreadcontext" }, f = function(fn)
 		local getid = need({ "getthreadidentity", "getidentity", "getthreadcontext" })
 		local old = getid()
-		local ok, err = pcall(fn, old)
+		local ok, err = pcall(fn, 3)
 		assert(ok, err or "setthreadidentity errored")
-		assert(getid() == old, "setthreadidentity did not accept current identity")
+		local cur = getid()
+		pcall(fn, old)
+		assert(cur == 3, "setthreadidentity did not change identity to 3")
+		assert(getid() == old, "setthreadidentity did not restore the original identity")
 	end },
 	{ n = "getcallingscript", f = function(fn)
 		local v = fn()
@@ -789,13 +954,44 @@ local core = {
 		assert(got == "ok", "firesignal did not fire connection")
 	end },
 	{ n = "getconnections", f = function(fn)
+		local types = {
+			Enabled = "boolean",
+			ForeignState = "boolean",
+			LuaConnection = "boolean",
+			Function = "function",
+			Thread = "thread",
+			Fire = "function",
+			Defer = "function",
+			Disconnect = "function",
+			Disable = "function",
+			Enable = "function",
+		}
 		local b = Instance.new("BindableEvent")
-		local cn = b.Event:Connect(function() end)
+		local got
+		local cn = b.Event:Connect(function(v)
+			got = v
+		end)
 		local t = fn(b.Event)
+		assert(type(t) == "table", "getconnections must return a table")
+		local c = t[1]
+		assert(type(c) == "table" or type(c) == "userdata", "getconnections did not return a connection object")
+		for k, v in types do
+			assert(c[k] ~= nil, "connection missing field " .. k)
+			assert(type(c[k]) == v, "connection field " .. k .. " must be " .. v .. ", got " .. type(c[k]))
+		end
+		local ok = pcall(c.Fire, c, "ok")
+		if not ok then
+			ok = pcall(c.Fire, "ok")
+		end
+		task.wait()
+		assert(ok and got == "ok", "connection Fire did not invoke the callback")
+		pcall(c.Disable, c)
+		assert(c.Enabled == false, "connection Disable did not update Enabled")
+		pcall(c.Enable, c)
+		assert(c.Enabled == true, "connection Enable did not update Enabled")
+		pcall(c.Disconnect, c)
 		cn:Disconnect()
 		b:Destroy()
-		assert(type(t) == "table", "getconnections must return a table")
-		assert(#t >= 1, "getconnections did not return the active connection")
 	end },
 	{ n = "replicatesignal", f = function(fn)
 		local r = Instance.new("RemoteEvent")
@@ -806,13 +1002,19 @@ local core = {
 	{ n = "WebSocket.connect", timeout = 20, f = function(fn)
 		local ws = fn("wss://ws.postman-echo.com/raw")
 		assert(type(ws) == "table" or type(ws) == "userdata", "WebSocket.connect must return a websocket object")
-		assert(type(ws.Send) == "function" or type(ws.send) == "function", "websocket object must expose Send/send")
-		if type(ws.Close) == "function" then pcall(ws.Close, ws) end
-		if type(ws.close) == "function" then pcall(ws.close, ws) end
+		local send = ws.Send or ws.send
+		local close = ws.Close or ws.close
+		assert(type(send) == "function", "websocket object must expose Send/send")
+		assert(type(close) == "function", "websocket object must expose Close/close")
+		assert(ws.OnMessage ~= nil, "websocket object must expose OnMessage")
+		assert(ws.OnClose ~= nil, "websocket object must expose OnClose")
+		local ok = pcall(send, ws, "UNC_WS_TEST")
+		if not ok then
+			ok = pcall(send, "UNC_WS_TEST")
+		end
+		assert(ok, "websocket Send errored")
+		pcall(close, ws)
 	end },
-}
-
-local extra = {
 	{ n = "rconsolecreate", f = function(fn)
 		local ok, why = needRcon()
 		if not ok then

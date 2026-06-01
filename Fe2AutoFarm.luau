@@ -258,6 +258,7 @@ local DRI = 6
 local RBI = 3
 local SFT = 20
 local SFI = 0.35
+local CHI = 1.5
 
 local on = false
 local cur = nil
@@ -278,6 +279,7 @@ local distBtn
 local distLabel
 local distRow
 local bonusBtn
+local chBtn
 local plt
 local cTab = {}
 local locBtns = {}
@@ -316,7 +318,26 @@ local auraList = {}
 local auraMap = nil
 local auraAt = 0
 local autoCollectBonuses = true
+local autoChallenges = false
 local optionsOpen = false
+local chSeen = setmetatable({}, { __mode = "k" })
+local chWallSeen = setmetatable({}, { __mode = "k" })
+local chZipSeen = setmetatable({}, { __mode = "k" })
+local chSlideSeen = setmetatable({}, { __mode = "k" })
+local chMap = nil
+local chAt = 0
+local chCache = {}
+local zipBusy = false
+local chSlideAt = 0
+local chWallAt = 0
+local chZipAt = 0
+local chAirAt = 0
+local chDumpAt = 0
+local chRegAt = 0
+local chLavaAt = 0
+local chCons = {}
+local chTok = 0
+local chIndex = { air = {}, wall = {}, zip = {}, slide = {} }
 
 ctx.current = function()
 	return ctx.live and (not host or host.__lt_af_ctx == ctx)
@@ -430,6 +451,26 @@ ctx.stop = function()
 	distLabel = nil
 	distRow = nil
 	bonusBtn = nil
+	chBtn = nil
+	chSeen = setmetatable({}, { __mode = "k" })
+	chWallSeen = setmetatable({}, { __mode = "k" })
+	chZipSeen = setmetatable({}, { __mode = "k" })
+	chSlideSeen = setmetatable({}, { __mode = "k" })
+	chMap = nil
+	chAt = 0
+	chCache = {}
+	chSlideAt = 0
+	chWallAt = 0
+	chZipAt = 0
+	chDumpAt = 0
+	chRegAt = 0
+	chLavaAt = 0
+	chTok += 1
+	for _, c in chCons do
+		ctx.cut(c)
+	end
+	chCons = {}
+	chIndex = { air = {}, wall = {}, zip = {}, slide = {} }
 end
 
 ctx.descOf = function(obj)
@@ -531,6 +572,21 @@ local SurvivedRemotes = {}
 local PlayerDataRemotes = {}
 local ItemDataRemotes = {}
 local GameStateRemotes = {}
+local ChallengeRemotes = {
+	GetAirBubble = {},
+	SwimInLava = {},
+	RegeneratedAir = {},
+	SlideCheck = {},
+	Walljumped = {},
+	RideZipline = {},
+}
+local ZiplineRemotes = {
+	RideZipline = {},
+	Zipline = {},
+}
+local WalljumpRemotes = {
+	Walljump = {},
+}
 local RebirthRemote = nil
 local PasskeyRemote = nil
 local passKey = nil
@@ -569,6 +625,11 @@ do
 
 	addFolder(Rsp and Rsp:FindFirstChild("Remote"))
 	addFolder(Rsp and Rsp:FindFirstChild("Events"))
+	local rmt = Rsp and Rsp:FindFirstChild("Remote")
+	local chFolder = rmt and rmt:FindFirstChild("Challenges")
+	local gpFolder = rmt and rmt:FindFirstChild("Gameplay")
+	addFolder(chFolder)
+	addFolder(gpFolder)
 
 	local function scanRuntime(name, cls)
 		local scanners = {}
@@ -620,6 +681,18 @@ do
 		end
 	end
 
+	local function addFolderRemote(list, folder, name)
+		local obj = folder and folder:FindFirstChild(name)
+		if obj and obj:IsA("RemoteEvent") then
+			for _, old in list do
+				if old == obj then
+					return
+				end
+			end
+			list[#list + 1] = obj
+		end
+	end
+
 	local pk = findRemote("ReqPasskey", "RemoteFunction")
 	if pk and pk:IsA("RemoteFunction") then
 		PasskeyRemote = pk
@@ -643,6 +716,16 @@ do
 	addRemote(PlayerDataRemotes, "UpdPlayerData")
 	addRemote(ItemDataRemotes, "ReqItemData")
 	addRemote(GameStateRemotes, "UpdateGameState")
+	addRemote(ChallengeRemotes.GetAirBubble, "GetAirBubble")
+	addRemote(ChallengeRemotes.SwimInLava, "SwimInLava")
+	addRemote(ChallengeRemotes.RegeneratedAir, "RegeneratedAir")
+	addRemote(ChallengeRemotes.SlideCheck, "SlideCheck")
+	addRemote(ChallengeRemotes.Walljumped, "Walljumped")
+	addFolderRemote(ChallengeRemotes.RideZipline, chFolder, "RideZipline")
+	addFolderRemote(ZiplineRemotes.RideZipline, rmt, "RideZipline")
+	addRemote(ZiplineRemotes.Zipline, "Zipline")
+	addFolderRemote(WalljumpRemotes.Walljump, gpFolder, "Walljump")
+	addRemote(WalljumpRemotes.Walljump, "Walljump")
 end
 
 ctx.chr = function(w)
@@ -2243,6 +2326,14 @@ ctx.setBonusBtn = function()
 	bonusBtn.BackgroundColor3 = autoCollectBonuses and Color3.fromRGB(60, 130, 210) or Color3.fromRGB(70, 70, 70)
 end
 
+ctx.setChallengeBtn = function()
+	if not chBtn then
+		return
+	end
+	chBtn.Text = autoChallenges and "Challenges: ON" or "Challenges: OFF"
+	chBtn.BackgroundColor3 = autoChallenges and Color3.fromRGB(60, 130, 210) or Color3.fromRGB(70, 70, 70)
+end
+
 ctx.setOptionsOpen = function(open)
 	optionsOpen = open and true or false
 	if optBtn then
@@ -2252,7 +2343,7 @@ ctx.setOptionsOpen = function(open)
 		optionsFrame.Visible = optionsOpen
 	end
 	if panel then
-		panel.Size = optionsOpen and UDim2.new(0, 190, 0, 285) or UDim2.new(0, 190, 0, 105)
+		panel.Size = optionsOpen and UDim2.new(0, 190, 0, 330) or UDim2.new(0, 190, 0, 105)
 	end
 end
 
@@ -3067,6 +3158,739 @@ ctx.startButtonAura = function()
 	end)
 end
 
+ctx.fireChallenge = function(n, ...)
+	local t = ChallengeRemotes[n]
+	if type(t) ~= "table" then
+		return false
+	end
+	local fired = false
+	for _, rem in t do
+		if rem and rem.Parent then
+			local ok = pcall(function(...)
+				rem:FireServer(...)
+			end, ...)
+			fired = fired or ok
+		end
+	end
+	return fired
+end
+
+ctx.fireZipline = function(part)
+	if not (part and part.Parent) then
+		return false
+	end
+	local fired = ctx.fireChallenge("RideZipline", part)
+	for _, rem in ZiplineRemotes.RideZipline do
+		if rem and rem.Parent then
+			local ok = pcall(function()
+				rem:FireServer(part)
+			end)
+			fired = fired or ok
+		end
+	end
+	for _, rem in ZiplineRemotes.Zipline do
+		if rem and rem.Parent then
+			local ok = pcall(function()
+				rem:FireServer(part)
+			end)
+			fired = fired or ok
+		end
+	end
+	return fired
+end
+
+ctx.wallData = function(wall, r, c)
+	if not (wall and wall.Parent and wall:IsA("BasePart")) then
+		return nil
+	end
+	r = r or select(1, ctx.rh(false))
+	c = c or ctx.chr(false)
+	local rp = r and r.Position or (wall.Position + wall.CFrame.LookVector * 4)
+	local pos = wall.Position
+	local norm = nil
+	local dir = wall.Position - rp
+	if dir.Magnitude > 0.05 and Wsp then
+		local prm = RaycastParams.new()
+		prm.FilterType = Enum.RaycastFilterType.Exclude
+		local ex = {}
+		if c then
+			ex[#ex + 1] = c
+		end
+		if Wsp.CurrentCamera then
+			ex[#ex + 1] = Wsp.CurrentCamera
+		end
+		prm.FilterDescendantsInstances = ex
+		local ok, hit = pcall(function()
+			return Wsp:Raycast(rp, dir.Unit * math.min(dir.Magnitude + 6, 12), prm)
+		end)
+		if ok and hit and hit.Instance == wall then
+			pos = hit.Position
+			norm = hit.Normal
+		end
+	end
+	if not norm then
+		norm = rp - wall.Position
+		norm = Vector3.new(norm.X, 0, norm.Z)
+		if norm.Magnitude < 0.05 then
+			norm = wall.CFrame.LookVector
+		end
+		norm = norm.Unit
+	end
+	local c0 = wall.CFrame:ToObjectSpace(CFrame.new(pos + norm * 0.5, pos + norm))
+	return pos, norm, c0
+end
+
+ctx.fireWalljump = function(wall, c0)
+	if not (wall and wall.Parent) then
+		return false
+	end
+	local fired = false
+	for _, rem in WalljumpRemotes.Walljump do
+		if rem and rem.Parent then
+			local ok = pcall(function()
+				if c0 ~= nil then
+					rem:FireServer(wall, c0)
+				else
+					rem:FireServer(wall)
+				end
+			end)
+			fired = fired or ok
+		end
+	end
+	fired = ctx.fireChallenge("Walljumped", wall) or fired
+	return fired
+end
+
+ctx.releaseWalljump = function()
+	local r, h, c = ctx.rh(false)
+	for _, rem in WalljumpRemotes.Walljump do
+		if rem and rem.Parent then
+			pcall(function()
+				rem:FireServer()
+			end)
+		end
+	end
+	if r and r.Parent then
+		for _, ch in r:GetChildren() do
+			if ch.ClassName == "ManualWeld" and (ch.Name == "WalljumpWeld_Live" or ch.Name == "WalljumpWeld_Server") then
+				pcall(function()
+					ch.Part0 = nil
+					ch.Part1 = nil
+					ch:Destroy()
+				end)
+			end
+		end
+	end
+	if h then
+		pcall(function()
+			h.AutoRotate = true
+			h:SetStateEnabled(Enum.HumanoidStateType.Running, true)
+			h:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
+			h:SetStateEnabled(Enum.HumanoidStateType.RunningNoPhysics, true)
+			h:SetStateEnabled(Enum.HumanoidStateType.Climbing, true)
+			h:ChangeState(Enum.HumanoidStateType.Jumping)
+		end)
+	end
+	local ps = LP and LP:FindFirstChild("PlayerScripts")
+	local main = ps and ps:FindFirstChild("CL_MAIN_GameScript")
+	local tv = main and main:FindFirstChild("ToggleVelocity")
+	if tv and tv.Fire then
+		pcall(function()
+			tv:Fire(true)
+		end)
+	end
+end
+
+ctx.jumpOffWall = function(wall, norm)
+	local r, h = ctx.rh(false)
+	if not (r and r.Parent) then
+		return
+	end
+	norm = norm or Vector3.new(r.CFrame.LookVector.X, 0, r.CFrame.LookVector.Z)
+	if norm.Magnitude < 0.05 then
+		norm = Vector3.new(0, 0, -1)
+	end
+	norm = norm.Unit
+	local cfg = wall and wall:FindFirstChild("_Wall")
+	local ang = 45
+	if cfg then
+		local a = cfg:GetAttribute("JumpAngle")
+		if type(a) == "number" then
+			ang = math.clamp(a, -90, 90)
+		end
+	end
+	local sp = 70.71
+	local cf = CFrame.new(Vector3.new(), norm)
+	local lv = (cf * CFrame.Angles(math.rad(ang), 0, 0)).LookVector
+	ctx.releaseWalljump()
+	pcall(function()
+		r.AssemblyLinearVelocity = Vector3.new(lv.X * sp, math.max(48, lv.Y * sp), lv.Z * sp)
+		r.AssemblyAngularVelocity = Vector3.zero
+		if h then
+			h:ChangeState(Enum.HumanoidStateType.Jumping)
+		end
+	end)
+end
+
+ctx.dumpChallenges = function()
+	return
+end
+
+ctx.addChallengeHit = function(list, obj)
+	if obj and not list[obj] then
+		list[obj] = true
+	end
+end
+
+ctx.remChallengeHit = function(list, obj)
+	if obj then
+		list[obj] = nil
+	end
+end
+
+ctx.clearChallengeIndex = function()
+	chTok += 1
+	for _, c in chCons do
+		ctx.cut(c)
+	end
+	chCons = {}
+	chIndex = { air = {}, wall = {}, zip = {}, slide = {} }
+	chCache = chIndex
+end
+
+ctx.airHitbox = function(obj)
+	if not obj then
+		return nil
+	end
+	if obj.Name == "AirTank" then
+		local hb = obj:FindFirstChild("Hitbox")
+		if hb and hb:IsA("BasePart") then
+			return hb
+		end
+	elseif obj:IsA("BasePart") and obj.Name == "Hitbox" and obj.Parent and obj.Parent.Name == "AirTank" then
+		return obj
+	end
+	return nil
+end
+
+ctx.indexChallengeObj = function(obj)
+	if not obj then
+		return
+	end
+	local hb = ctx.airHitbox(obj)
+	if hb then
+		ctx.addChallengeHit(chIndex.air, hb)
+	end
+	if obj:IsA("BasePart") then
+		if obj:FindFirstChild("_Wall") then
+			ctx.addChallengeHit(chIndex.wall, obj)
+		elseif obj.Name == "RopeStart" then
+			ctx.addChallengeHit(chIndex.zip, obj)
+		elseif obj.Name == "SlideBeam" then
+			ctx.addChallengeHit(chIndex.slide, obj)
+		end
+	end
+end
+
+ctx.unindexChallengeObj = function(obj)
+	if not obj then
+		return
+	end
+	local hb = ctx.airHitbox(obj)
+	if hb then
+		ctx.remChallengeHit(chIndex.air, hb)
+	end
+	ctx.remChallengeHit(chIndex.air, obj)
+	ctx.remChallengeHit(chIndex.wall, obj)
+	ctx.remChallengeHit(chIndex.zip, obj)
+	ctx.remChallengeHit(chIndex.slide, obj)
+end
+
+ctx.seedChallengeRoot = function(root, id)
+	if not (root and root.Parent) then
+		return
+	end
+	ctx.indexChallengeObj(root)
+	local q = { root }
+	local qi = 1
+	local steps = 0
+	while ctx.alive() and chTok == id and qi <= #q do
+		local obj = q[qi]
+		qi += 1
+		if obj and obj.Parent then
+			ctx.indexChallengeObj(obj)
+			local ok, kids = pcall(obj.GetChildren, obj)
+			if ok and type(kids) == "table" then
+				for _, ch in kids do
+					q[#q + 1] = ch
+				end
+			end
+		end
+		steps += 1
+		if steps % 120 == 0 then
+			task.wait()
+		end
+	end
+end
+
+ctx.bindChallengeRoot = function(root, id, seed)
+	if not (root and root.Parent) then
+		return
+	end
+	chCons[#chCons + 1] = root.DescendantAdded:Connect(function(obj)
+		if chTok == id then
+			ctx.indexChallengeObj(obj)
+		end
+	end)
+	chCons[#chCons + 1] = root.DescendantRemoving:Connect(function(obj)
+		if chTok == id then
+			ctx.unindexChallengeObj(obj)
+		end
+	end)
+	if seed ~= false then
+		task.spawn(function()
+			ctx.seedChallengeRoot(root, id)
+		end)
+	end
+end
+
+ctx.ensureChallenges = function(map)
+	if not (map and map.Parent) then
+		if chMap ~= nil then
+			chMap = nil
+			ctx.clearChallengeIndex()
+		end
+		return false
+	end
+	if chMap == map then
+		return true
+	end
+	chMap = map
+	ctx.clearChallengeIndex()
+	local id = chTok
+	chSeen = setmetatable({}, { __mode = "k" })
+	chWallSeen = setmetatable({}, { __mode = "k" })
+	chZipSeen = setmetatable({}, { __mode = "k" })
+	chSlideSeen = setmetatable({}, { __mode = "k" })
+	chSlideAt = 0
+	chWallAt = 0
+	chZipAt = 0
+	chAirAt = 0
+	ctx.bindChallengeRoot(map, id, true)
+	local deb = Wsp and Wsp:FindFirstChild("Debris")
+	if deb then
+		ctx.bindChallengeRoot(deb, id, false)
+	end
+	return true
+end
+
+ctx.listFromIndex = function(src, root)
+	local out = {}
+	local deb = Wsp and Wsp:FindFirstChild("Debris")
+	for obj in src do
+		if obj and obj.Parent and ((root and obj:IsDescendantOf(root)) or (deb and obj:IsDescendantOf(deb))) then
+			out[#out + 1] = obj
+		else
+			src[obj] = nil
+		end
+	end
+	return out
+end
+
+ctx.challengeHits = function(map)
+	if not ctx.ensureChallenges(map) then
+		return { air = {}, wall = {}, zip = {}, slide = {} }
+	end
+	return {
+		air = ctx.listFromIndex(chIndex.air, map),
+		wall = ctx.listFromIndex(chIndex.wall, map),
+		zip = ctx.listFromIndex(chIndex.zip, map),
+		slide = ctx.listFromIndex(chIndex.slide, map),
+	}
+end
+
+ctx.feScript = function()
+	local c = ctx.chr(false)
+	if not c then
+		return nil
+	end
+	local fe = c:FindFirstChild("FE2_Character")
+	if fe then
+		return fe
+	end
+	return nil
+end
+
+ctx.feEnv = function()
+	local fe = ctx.feScript()
+	if not (fe and type(getsenv) == "function") then
+		return nil
+	end
+	local ok, env = pcall(getsenv, fe)
+	if ok and type(env) == "table" then
+		return env
+	end
+	return nil
+end
+
+ctx.slidePts = function(bm, r)
+	if not (bm and bm.Parent and bm:IsA("BasePart")) then
+		return nil
+	end
+	local sx = bm.Size.X
+	local sz = bm.Size.Z
+	local ax = sx >= sz and bm.CFrame.RightVector or bm.CFrame.LookVector
+	ax = Vector3.new(ax.X, 0, ax.Z)
+	if ax.Magnitude < 0.05 then
+		ax = r and Vector3.new(r.CFrame.LookVector.X, 0, r.CFrame.LookVector.Z) or Vector3.new(1, 0, 0)
+	end
+	ax = ax.Unit
+	local len = math.max(sx, sz)
+	local a = bm.Position - ax * math.max(8, len * 0.48)
+	local b = bm.Position + ax * math.max(28, len * 0.48)
+	local y = bm.Position.Y - math.max(2.25, bm.Size.Y * 0.5 + 1.75)
+	return Vector3.new(a.X, y, a.Z), Vector3.new(b.X, y, b.Z), ax
+end
+
+ctx.trySlideChallenge = function(list, remoteOnly)
+	local now = os.clock()
+	if now - chSlideAt < 6 then
+		return false
+	end
+	list = type(list) == "table" and list or {}
+	local r, h, c = ctx.rh(false)
+	if not (r and r.Parent and h and c and c.Parent) then
+		return false
+	end
+	local best = nil
+	local bestDist = math.huge
+	for _, bm in list do
+		if bm and bm.Parent then
+			local t = chSlideSeen[bm]
+			if not t or now - t > 8 then
+				local d = (r.Position - bm.Position).Magnitude
+				if d < bestDist then
+					best = bm
+					bestDist = d
+				end
+			end
+		end
+	end
+	local p1, p2, dir
+	if best then
+		p1, p2, dir = ctx.slidePts(best, r)
+	else
+		return false
+	end
+	if not (p1 and p2 and dir) then
+		return false
+	end
+	chSlideAt = now
+	if best then
+		chSlideSeen[best] = now
+	end
+	if remoteOnly == true then
+		return ctx.fireChallenge("SlideCheck", p1, Vector3.new(p2.X, p1.Y, p2.Z))
+	end
+	local old = r.CFrame
+	local ok = false
+	local env = ctx.feEnv()
+	pcall(function()
+		ctx.pivotRootTo(CFrame.new(p1, p1 + dir), r, c)
+		r.AssemblyLinearVelocity = Vector3.zero
+		r.AssemblyAngularVelocity = Vector3.zero
+	end)
+	task.wait(0.05)
+	local fe = ctx.feScript()
+	local sl = fe and fe:FindFirstChild("Slide")
+	if sl and sl:IsA("BindableEvent") then
+		pcall(function()
+			sl:Fire(nil, Enum.UserInputState.Begin, best ~= nil)
+		end)
+	end
+	if env and type(env.runSlide) == "function" then
+		pcall(env.runSlide, nil, Enum.UserInputState.Begin, best ~= nil)
+	end
+	task.wait(0.12)
+	pcall(function()
+		ctx.pivotRootTo(CFrame.new(p2, p2 + dir), r, c)
+		r.AssemblyLinearVelocity = Vector3.zero
+		r.AssemblyAngularVelocity = Vector3.zero
+	end)
+	task.wait(0.05)
+	if env and type(env.endSlide) == "function" then
+		ok = pcall(env.endSlide, p1) or ok
+	end
+	ok = ctx.fireChallenge("SlideCheck", p1, Vector3.new(p2.X, p1.Y, p2.Z)) or ok
+	if old and r and r.Parent and on then
+		task.delay(0.15, function()
+			if ctx.alive() and on and r and r.Parent then
+				pcall(function()
+					ctx.pivotRootTo(old, r, c)
+					r.AssemblyLinearVelocity = Vector3.zero
+					r.AssemblyAngularVelocity = Vector3.zero
+				end)
+			end
+		end)
+	end
+	return ok
+end
+
+ctx.tryWallChallenge = function(list, remoteOnly)
+	local now = os.clock()
+	if now - chWallAt < 3 then
+		return false
+	end
+	list = type(list) == "table" and list or {}
+	local r, h, c = ctx.rh(false)
+	local best = nil
+	local bestDist = math.huge
+	for _, wall in list do
+		if wall and wall.Parent and not chWallSeen[wall] then
+			local dist = r and (r.Position - wall.Position).Magnitude or 0
+			if dist < bestDist then
+				best = wall
+				bestDist = dist
+			end
+		end
+	end
+	if not best then
+		return false
+	end
+	chWallSeen[best] = now
+	chWallAt = now
+	local pos, norm, c0 = ctx.wallData(best, r, c)
+	if remoteOnly == true then
+		local ok = ctx.fireWalljump(best, c0)
+		task.delay(0.08, function()
+			if ctx.alive() then
+				ctx.releaseWalljump()
+			end
+		end)
+		return ok
+	end
+	if not (r and r.Parent and c and c.Parent and pos and norm) then
+		local ok = ctx.fireWalljump(best, c0)
+		task.delay(0.08, function()
+			if ctx.alive() then
+				ctx.releaseWalljump()
+			end
+		end)
+		return ok
+	end
+	local ok = false
+	pcall(function()
+		ctx.pivotRootTo(CFrame.new(pos + norm * 1.35 + Vector3.new(0, 1.5, 0), pos), r, c)
+		r.AssemblyLinearVelocity = Vector3.zero
+		r.AssemblyAngularVelocity = Vector3.zero
+		if h then
+			h.AutoRotate = false
+			h:ChangeState(Enum.HumanoidStateType.Freefall)
+		end
+	end)
+	task.wait(0.08)
+	ok = ctx.fireWalljump(best, c0) or ok
+	task.wait(0.12)
+	ctx.jumpOffWall(best, norm)
+	task.delay(0.25, function()
+		if ctx.alive() then
+			ctx.releaseWalljump()
+		end
+	end)
+	return ok
+end
+
+ctx.tryZipChallenge = function(list, remoteOnly)
+	local now = os.clock()
+	if zipBusy or now - chZipAt < 8 then
+		return false
+	end
+	list = type(list) == "table" and list or {}
+	local r, h, c = ctx.rh(false)
+	if not (r and r.Parent and c and c.Parent) then
+		return false
+	end
+	local best = nil
+	local bestDist = math.huge
+	for _, rope in list do
+		if rope and rope.Parent then
+			local t = chZipSeen[rope]
+			if not t or now - t > 10 then
+				local dist = (r.Position - rope.Position).Magnitude
+				if dist < bestDist then
+					best = rope
+					bestDist = dist
+				end
+			end
+		end
+	end
+	if not best then
+		return false
+	end
+	chZipSeen[best] = now
+	chZipAt = now
+	if remoteOnly == true then
+		return ctx.fireZipline(best)
+	end
+	zipBusy = true
+	task.spawn(function()
+		local ok, err = xpcall(function()
+			local rr, hh, cc = ctx.rh(false)
+			if not (rr and rr.Parent and cc and cc.Parent and best and best.Parent) then
+				return
+			end
+			local old = rr.CFrame
+			pcall(function()
+				ctx.pivotRootTo(best.CFrame + Vector3.new(0, 1.5, 0), rr, cc)
+				rr.AssemblyLinearVelocity = Vector3.zero
+				rr.AssemblyAngularVelocity = Vector3.zero
+			end)
+			task.wait(0.08)
+			local feh = ctx.getFeHitbox()
+			if feh and feh.Parent and type(firetouchinterest) == "function" then
+				pcall(firetouchinterest, feh, best, 0)
+				pcall(firetouchinterest, best, feh, 0)
+				task.wait(0.05)
+				pcall(firetouchinterest, feh, best, 1)
+				pcall(firetouchinterest, best, feh, 1)
+			end
+			local env = ctx.feEnv()
+			local used = false
+			if env and type(env.startZipline) == "function" then
+				used = pcall(env.startZipline, best) or used
+			end
+			if not used then
+				ctx.fireZipline(best)
+			else
+				ctx.fireZipline(best)
+			end
+			task.delay(0.35, function()
+				if ctx.alive() and on and rr and rr.Parent and old then
+					pcall(function()
+						rr.AssemblyLinearVelocity = Vector3.zero
+						rr.AssemblyAngularVelocity = Vector3.zero
+					end)
+				end
+			end)
+		end, debug.traceback)
+		if not ok then
+			warn(err)
+		end
+		zipBusy = false
+	end)
+	return true
+end
+
+ctx.getFeHitbox = function()
+	local c = ctx.chr(false)
+	if not c then
+		return nil
+	end
+	local hb = c:FindFirstChild("FE2_Hitbox")
+	if hb and hb:IsA("BasePart") then
+		return hb
+	end
+	return nil
+end
+
+ctx.touchAirTank = function(hb, remoteOnly)
+	if not (hb and hb.Parent and hb:IsA("BasePart")) then
+		return false
+	end
+	local now = os.clock()
+	local last = chSeen[hb]
+	if last and now - last < 2.5 then
+		return false
+	end
+	local r, h = ctx.rh(false)
+	if not (r and r.Parent) or (h and h.Health <= 0) then
+		return false
+	end
+	local dist = (r.Position - hb.Position).Magnitude
+	if remoteOnly == true then
+		chSeen[hb] = now
+		return ctx.fireChallenge("GetAirBubble", hb)
+	end
+	if dist > 10 then
+		return false
+	end
+	chSeen[hb] = now
+	local fe = ctx.getFeHitbox()
+	local ok = false
+	if fe and fe.Parent and type(firetouchinterest) == "function" then
+		pcall(firetouchinterest, fe, hb, 0)
+		pcall(firetouchinterest, hb, fe, 0)
+		task.wait(0.05)
+		pcall(firetouchinterest, fe, hb, 1)
+		pcall(firetouchinterest, hb, fe, 1)
+		ok = true
+	end
+	if hb and hb.Parent then
+		ok = ctx.fireChallenge("GetAirBubble", hb) or ok
+	end
+	return ok
+end
+
+ctx.tryAirChallenges = function(list, remoteOnly)
+	local now = os.clock()
+	if now - chAirAt < 1.5 then
+		return false
+	end
+	chAirAt = now
+	list = type(list) == "table" and list or {}
+	local r = select(1, ctx.rh(false))
+	if not (r and r.Parent) then
+		return false
+	end
+	local best = nil
+	local bestDist = remoteOnly == true and math.huge or 10
+	for _, hb in list do
+		if hb and hb.Parent then
+			local t = chSeen[hb]
+			if not t or now - t > 6 then
+				local d = (r.Position - hb.Position).Magnitude
+				if d <= bestDist then
+					best = hb
+					bestDist = d
+				end
+			end
+		end
+	end
+	return best and ctx.touchAirTank(best, remoteOnly) or false
+end
+
+ctx.doChallenges = function(map, remoteOnly)
+	if not (autoChallenges and ctx.isRoundIngame()) then
+		return
+	end
+	ctx.dumpChallenges()
+	local now = os.clock()
+	if now - chRegAt > 3 then
+		chRegAt = now
+		ctx.fireChallenge("RegeneratedAir", 9999)
+	end
+	if now - chLavaAt > 5 then
+		chLavaAt = now
+		ctx.fireChallenge("SwimInLava")
+	end
+	local hits = ctx.challengeHits(map)
+	ctx.tryAirChallenges(hits.air, remoteOnly == true)
+	ctx.trySlideChallenge(hits.slide, remoteOnly == true)
+	ctx.tryWallChallenge(hits.wall, remoteOnly == true)
+	ctx.tryZipChallenge(hits.zip, remoteOnly == true)
+end
+
+ctx.startChallenges = function()
+	ctx.spawnLoop(function()
+		while ctx.alive() do
+			if autoChallenges then
+				ctx.doChallenges(ctx.curMap(), not on)
+			end
+			task.wait(CHI)
+		end
+	end)
+end
+
 ctx.startBonusCollector = function()
 	ctx.spawnLoop(function()
 		while ctx.alive() do
@@ -3142,7 +3966,7 @@ ctx.mkUi = function()
 
 	optionsFrame = Instance.new("Frame")
 	optionsFrame.Name = "Options"
-	optionsFrame.Size = UDim2.new(1, -20, 0, 175)
+	optionsFrame.Size = UDim2.new(1, -20, 0, 220)
 	optionsFrame.Position = UDim2.new(0, 10, 0, 100)
 	optionsFrame.BackgroundTransparency = 1
 	optionsFrame.Visible = false
@@ -3211,6 +4035,17 @@ ctx.mkUi = function()
 	bonusBtn.Active = true
 	bonusBtn.Parent = optionsFrame
 
+	chBtn = Instance.new("TextButton")
+	chBtn.Size = UDim2.new(1, 0, 0, 35)
+	chBtn.Position = UDim2.new(0, 0, 0, 180)
+	chBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+	chBtn.TextColor3 = Color3.new(1, 1, 1)
+	chBtn.Font = Enum.Font.SourceSansBold
+	chBtn.TextSize = 16
+	chBtn.Text = "Challenges: OFF"
+	chBtn.Active = true
+	chBtn.Parent = optionsFrame
+
 	ctx.bind(ctx.NAgui_dragger(panel))
 
 	ctx.bind(ctx.MouseButtonFix(btn, function()
@@ -3244,18 +4079,25 @@ ctx.mkUi = function()
 		ctx.setBonusBtn()
 	end))
 
+	ctx.bind(ctx.MouseButtonFix(chBtn, function()
+		autoChallenges = not autoChallenges
+		ctx.setChallengeBtn()
+	end))
+
 	ctx.setBtn()
 	ctx.setOptionsOpen(false)
 	ctx.setAuraBtn()
 	ctx.setDistModeBtn()
 	ctx.setDistBtn()
 	ctx.setBonusBtn()
+	ctx.setChallengeBtn()
 end
 
 ctx.mkUi()
 ctx.startPassiveRemotes()
 ctx.startButtonAura()
 ctx.startBonusCollector()
+ctx.startChallenges()
 
 if LP then
 	chC = LP.CharacterAdded:Connect(ctx.onChar)

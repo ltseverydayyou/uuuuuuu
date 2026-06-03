@@ -172,6 +172,54 @@ ctx.__NAProtectUI = function(gui, options)
 	return nil;
 end;
 
+ctx.protectedScreen = function(name)
+	local gui = nil
+	if __NAUIProtector and type(__NAUIProtector.getScreenGui) == "function" then
+		local ok, res = pcall(__NAUIProtector.getScreenGui, name)
+		if ok and typeof(res) == "Instance" then
+			gui = res
+		end
+	end
+	if not gui then
+		gui = Instance.new("ScreenGui")
+		gui.Name = name
+		local par = nil
+		if __NAUIProtector and type(__NAUIProtector.parent) == "function" then
+			local ok, res = pcall(__NAUIProtector.parent)
+			if ok and typeof(res) == "Instance" then
+				par = res
+			end
+		end
+		if not par then
+			local cg = type(ctx.gt) == "function" and ctx.gt("CoreGui") or nil
+			local ps = type(ctx.gt) == "function" and ctx.gt("Players") or nil
+			local lp = ps and ps.LocalPlayer or nil
+			par = ctx.gethui() or cg or (lp and lp:FindFirstChildOfClass("PlayerGui"))
+		end
+		if not par then
+			return nil
+		end
+		pcall(function()
+			gui.Parent = par
+		end)
+	end
+	pcall(function()
+		gui.Name = name
+		gui.IgnoreGuiInset = true
+		gui.ResetOnSpawn = false
+		gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	end)
+	ctx.__NAProtectUI(gui, {
+		name = name,
+		keepName = true,
+		harden = true,
+		deep = true,
+		watch = true,
+		rename = false,
+	})
+	return gui
+end
+
 ctx.bind = function(c)
 	if c then
 		ctx.con[#ctx.con + 1] = c
@@ -2401,9 +2449,9 @@ ctx.startPassiveRemotes = function()
 				continue
 			end
 			local now = os.clock()
-			local playing = ctx.isRoundIngame()
-			local doSurvive = ctx.opt.surviveLoopOn and ctx.isFE2Game() and (playing or on)
-			if (on or doSurvive) and now >= la then
+			local playing = on or autoChallenges
+			local doSurvive = ctx.opt.surviveLoopOn and ctx.isFE2Game()
+			if doSurvive and now >= la then
 				if now >= ka then
 					sk = ctx.getPassArg(false)
 					ka = now + 3
@@ -2419,7 +2467,7 @@ ctx.startPassiveRemotes = function()
 				ctx.fireSurvived(sk, 100)
 				sa = now + PSI
 			end
-			if (on or playing or autoChallenges or doSurvive) and now >= ra then
+			if playing and now >= ra then
 				ctx.requestRoundStats()
 				ra = now + RSI
 			end
@@ -5915,19 +5963,11 @@ ctx.openAuraPrompt = function()
 		ctx.closeAuraPrompt()
 		return
 	end
-	ctx.tmpParent = LP and LP:FindFirstChildOfClass("PlayerGui") or Cgui
-	if not ctx.tmpParent then
-		ctx.note("No UI parent")
+	ctx.ui.auraPrompt = ctx.protectedScreen("FE2AuraDistancePrompt")
+	if not ctx.ui.auraPrompt then
+		ctx.note("No protected UI parent")
 		return
 	end
-	ctx.ui.auraPrompt = Instance.new("ScreenGui")
-	ctx.ui.auraPrompt.Name = "FE2AuraDistancePrompt"
-	ctx.ui.auraPrompt.IgnoreGuiInset = true
-	ctx.ui.auraPrompt.ResetOnSpawn = false
-	ctx.ui.auraPrompt.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	pcall(function()
-		ctx.ui.auraPrompt.Parent = ctx.tmpParent
-	end)
 	ctx.tmpFrame = Instance.new("Frame")
 	ctx.tmpFrame.Name = "Box"
 	ctx.tmpFrame.AnchorPoint = Vector2.new(0.5, 0)
@@ -6041,19 +6081,11 @@ ctx.openZipPrompt = function()
 		ctx.closeZipPrompt()
 		return
 	end
-	ctx.tmpParent = LP and LP:FindFirstChildOfClass("PlayerGui") or Cgui
-	if not ctx.tmpParent then
-		ctx.note("No UI parent")
+	ctx.ui.zipPrompt = ctx.protectedScreen("FE2ZipSpeedPrompt")
+	if not ctx.ui.zipPrompt then
+		ctx.note("No protected UI parent")
 		return
 	end
-	ctx.ui.zipPrompt = Instance.new("ScreenGui")
-	ctx.ui.zipPrompt.Name = "FE2ZipSpeedPrompt"
-	ctx.ui.zipPrompt.IgnoreGuiInset = true
-	ctx.ui.zipPrompt.ResetOnSpawn = false
-	ctx.ui.zipPrompt.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	pcall(function()
-		ctx.ui.zipPrompt.Parent = ctx.tmpParent
-	end)
 	ctx.tmpFrame = Instance.new("Frame")
 	ctx.tmpFrame.Name = "Box"
 	ctx.tmpFrame.AnchorPoint = Vector2.new(0.5, 0)

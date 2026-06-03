@@ -277,6 +277,7 @@ ctx.support = function(k)
 			clickTp = true,
 			next = true,
 			femVote = true,
+			survive = false,
 		})[k] == true
 	end
 	if ctx.isFE2Game() then
@@ -297,6 +298,7 @@ ctx.support = function(k)
 			clickTp = true,
 			next = true,
 			femVote = false,
+			survive = true,
 		})[k] == true
 	end
 	return k == "start" or k == "infJump" or k == "clickTp"
@@ -411,6 +413,7 @@ ctx.opt.infAirOn = false
 ctx.opt.infJumpOn = false
 ctx.opt.clickTpOn = false
 ctx.opt.femVoteOn = false
+ctx.opt.surviveLoopOn = true
 ctx.opt.claimBusy = false
 ctx.opt.shopBusy = false
 ctx.cache.zipOld = setmetatable({}, { __mode = "k" })
@@ -466,6 +469,7 @@ ctx.cfgKeys = {
 	"infJumpOn",
 	"clickTpOn",
 	"femVoteOn",
+	"surviveLoopOn",
 }
 
 ctx.getSetting = function(k)
@@ -2179,17 +2183,33 @@ end
 
 ctx.fireSurvived = function(key, tm)
 	tm = tonumber(tm) or 100
+	ctx.tmpHasSurvived = false
 	for _, rem in SurvivedRemotes do
 		if rem and rem.Parent then
-			pcall(function()
-				if key ~= nil then
-					rem:FireServer(key, tm)
-				else
-					rem:FireServer(tm)
-				end
-			end)
+			ctx.tmpHasSurvived = true
+			break
 		end
 	end
+	if not ctx.tmpHasSurvived and os.clock() >= (ctx.cache.surviveFindAt or 0) then
+		ctx.addRemoteOnce(SurvivedRemotes, ctx.findRemoteNamed("Survived"))
+		ctx.cache.surviveFindAt = os.clock() + 3
+	end
+	ctx.tmpSurvivedFired = false
+	for _, rem in SurvivedRemotes do
+		if rem and rem.Parent then
+			if key ~= nil then
+				ctx.tmpOk = pcall(function() rem:FireServer(key, tm) end)
+				ctx.tmpSurvivedFired = ctx.tmpSurvivedFired or ctx.tmpOk
+				ctx.tmpOk = pcall(function() rem:FireServer(key) end)
+				ctx.tmpSurvivedFired = ctx.tmpSurvivedFired or ctx.tmpOk
+			end
+			ctx.tmpOk = pcall(function() rem:FireServer(tm) end)
+			ctx.tmpSurvivedFired = ctx.tmpSurvivedFired or ctx.tmpOk
+			ctx.tmpOk = pcall(function() rem:FireServer() end)
+			ctx.tmpSurvivedFired = ctx.tmpSurvivedFired or ctx.tmpOk
+		end
+	end
+	return ctx.tmpSurvivedFired
 end
 
 ctx.requestRoundStats = function()
@@ -2373,6 +2393,8 @@ ctx.startPassiveRemotes = function()
 		local ra = 0
 		local la = 0
 		local sa = 0
+		local ka = 0
+		local sk = nil
 		while ctx.alive() do
 			if ctx.isFEMGame() then
 				task.wait(0.5)
@@ -2380,15 +2402,24 @@ ctx.startPassiveRemotes = function()
 			end
 			local now = os.clock()
 			local playing = ctx.isRoundIngame()
-			if on and now >= la then
-				ctx.fireLoaded(ctx.getPassArg(false))
+			local doSurvive = ctx.opt.surviveLoopOn and ctx.isFE2Game() and (playing or on)
+			if (on or doSurvive) and now >= la then
+				if now >= ka then
+					sk = ctx.getPassArg(false)
+					ka = now + 3
+				end
+				ctx.fireLoaded(sk)
 				la = now + PLI
 			end
-			if on and playing and now >= sa then
-				ctx.fireSurvived(ctx.getPassArg(false), 100)
+			if doSurvive and now >= sa then
+				if now >= ka then
+					sk = ctx.getPassArg(false)
+					ka = now + 3
+				end
+				ctx.fireSurvived(sk, 100)
 				sa = now + PSI
 			end
-			if (on or playing or autoChallenges) and now >= ra then
+			if (on or playing or autoChallenges or doSurvive) and now >= ra then
 				ctx.requestRoundStats()
 				ra = now + RSI
 			end
@@ -2798,6 +2829,10 @@ end
 
 ctx.setFemVoteBtn = function()
 	ctx.setTopBtn(ctx.ui.femVoteBtn, ctx.opt.femVoteOn and "FEM Auto Vote: ON" or "FEM Auto Vote: OFF", ctx.opt.femVoteOn)
+end
+
+ctx.setSurviveBtn = function()
+	ctx.setTopBtn(ctx.ui.surviveBtn, ctx.opt.surviveLoopOn and "Survived Loop: ON" or "Survived Loop: OFF", ctx.opt.surviveLoopOn)
 end
 
 ctx.setOptionsOpen = function(open)
@@ -6427,7 +6462,7 @@ end
 
 ctx.applyProfileUi = function()
 	if ctx.isFEMGame() then
-		for _, field in { "bonusBtn", "chBtn", "floodBtn", "clipBtn", "rescueBtn", "devBtn" } do
+		for _, field in { "bonusBtn", "chBtn", "floodBtn", "clipBtn", "rescueBtn", "devBtn", "surviveBtn" } do
 			ctx.hideIcon(field)
 		end
 	elseif ctx.isFE2Game() then
@@ -6577,6 +6612,11 @@ ctx.mkUi = function()
 			ctx.startFemAutoVote()
 		end
 	end, Color3.fromRGB(44, 160, 110))
+	ctx.ui.surviveBtn = ctx.icon("SurvivedLoop", "Survived Loop: ON", function()
+		ctx.opt.surviveLoopOn = not ctx.opt.surviveLoopOn
+		ctx.setSurviveBtn()
+		ctx.saveSoon()
+	end, Color3.fromRGB(80, 150, 220))
 	ctx.ui.nextBtn = ctx.icon("NextButton", "Next Button", function()
 		ctx.fireNextButton()
 	end, Color3.fromRGB(55, 90, 150))
@@ -6602,6 +6642,7 @@ ctx.mkUi = function()
 	ctx.setInfJumpBtn()
 	ctx.setClickTpBtn()
 	ctx.setFemVoteBtn()
+	ctx.setSurviveBtn()
 end
 
 ctx.mkUi()

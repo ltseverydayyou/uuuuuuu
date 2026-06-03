@@ -136,6 +136,10 @@ local ctx = {
 	live = true,
 	con = {},
 	threads = {},
+	ui = {},
+	opt = {},
+	cache = {},
+	flood = {},
 }
 
 if host then
@@ -223,6 +227,80 @@ local Sgui = ctx.gt("StarterGui")
 local Guis = ctx.gt("GuiService")
 local Cgui = ctx.gt("CoreGui")
 local LP = Plr and Plr.LocalPlayer or nil
+ctx.hs = ctx.gt("HttpService")
+ctx.cfgPath = "ltseverydayyou-fe2/gay.json"
+ctx.cfgDir = "ltseverydayyou-fe2"
+ctx.gameProfiles = {
+	[323675642] = "FE2",
+	[761462079] = "FEM",
+}
+ctx.profileName = function()
+	ctx.tmpGameId = nil
+	pcall(function()
+		ctx.tmpGameId = game.GameId
+	end)
+	return ctx.gameProfiles[ctx.tmpGameId] or ("Game_" .. tostring(ctx.tmpGameId or "Unknown"))
+end
+
+ctx.gameId = function()
+	ctx.tmpGameId = nil
+	pcall(function()
+		ctx.tmpGameId = game.GameId
+	end)
+	return ctx.tmpGameId
+end
+
+ctx.isFE2Game = function()
+	return ctx.gameId() == 323675642
+end
+
+ctx.isFEMGame = function()
+	return ctx.gameId() == 761462079
+end
+
+ctx.support = function(k)
+	if ctx.isFEMGame() then
+		return ({
+			start = true,
+			aura = true,
+			bonus = false,
+			challenges = false,
+			flood = false,
+			paid = true,
+			shop = true,
+			clip = false,
+			rescue = false,
+			dev = false,
+			zip = true,
+			infAir = true,
+			infJump = true,
+			clickTp = true,
+			next = true,
+			femVote = true,
+		})[k] == true
+	end
+	if ctx.isFE2Game() then
+		return ({
+			start = true,
+			aura = true,
+			bonus = true,
+			challenges = true,
+			flood = true,
+			paid = true,
+			shop = true,
+			clip = true,
+			rescue = true,
+			dev = true,
+			zip = true,
+			infAir = true,
+			infJump = true,
+			clickTp = true,
+			next = true,
+			femVote = false,
+		})[k] == true
+	end
+	return k == "start" or k == "infJump" or k == "clickTp"
+end
 local MP = Wsp and (Wsp:FindFirstChild("Multiplayer") or Wsp:WaitForChild("Multiplayer", 10)) or nil
 
 local TPD = 0.05
@@ -247,13 +325,13 @@ local RCH = 12
 local LDB = 6
 local LDI = 0.1
 local BSI = 0.035
-local ASI = 0.035
-local PLI = 0.25
-local PSI = 0.1
-local PMW = 0.03
+local ASI = 0.08
+local PLI = 1
+local PSI = 0.35
+local PMW = 0.08
 local FMI = 0.1
-local RSI = 1
-local SRI = 0.75
+local RSI = 3
+local SRI = 1.5
 local DRI = 6
 local RBI = 3
 local SFT = 20
@@ -271,15 +349,6 @@ local chC
 local gui
 local btn
 local panel
-local optBtn
-local optionsFrame
-local auraBtn
-local distModeBtn
-local distBtn
-local distLabel
-local distRow
-local bonusBtn
-local chBtn
 local plt
 local cTab = {}
 local locBtns = {}
@@ -319,6 +388,272 @@ local auraMap = nil
 local auraAt = 0
 local autoCollectBonuses = true
 local autoChallenges = false
+ctx.opt.floodOn = true
+ctx.opt.floodEnabled = true
+ctx.opt.floodRandom = false
+ctx.cache.floodTok = 0
+ctx.cache.floodHooks = setmetatable({}, { __mode = "k" })
+ctx.cache.uiTok = 0
+ctx.cache.uiHooks = setmetatable({}, { __mode = "k" })
+ctx.opt.passOn = true
+ctx.opt.paidOn = true
+ctx.opt.clipOn = false
+ctx.opt.fpPartOn = false
+ctx.opt.rescueOn = false
+ctx.opt.devOn = false
+ctx.opt.wallLvl = 0
+ctx.opt.zipFastOn = false
+ctx.opt.zipSpeed = 90
+ctx.opt.zipStopOn = true
+ctx.opt.zipAutoOn = true
+ctx.opt.zipActive = false
+ctx.opt.infAirOn = false
+ctx.opt.infJumpOn = false
+ctx.opt.clickTpOn = false
+ctx.opt.femVoteOn = false
+ctx.opt.claimBusy = false
+ctx.opt.shopBusy = false
+ctx.cache.zipOld = setmetatable({}, { __mode = "k" })
+ctx.cache.zipWatches = setmetatable({}, { __mode = "k" })
+ctx.cache.remoteByName = {}
+ctx.cache.godAt = 0
+ctx.cache.zipAt = 0
+ctx.cache.zipConn = nil
+ctx.cache.zipChar = nil
+ctx.cache.airHum = nil
+ctx.cache.airHealthConn = nil
+ctx.cache.airDiedConn = nil
+ctx.cache.airHooked = false
+ctx.cache.airAlertEnv = nil
+ctx.cache.airAlertOld = nil
+ctx.cache.femStarted = false
+ctx.cache.femVoteAt = 0
+ctx.cache.femLastVoteId = nil
+ctx.cache.femBtnStarted = false
+ctx.cache.femButtonPart = nil
+ctx.cache.femZipStarted = false
+ctx.cache.femZipStopStarted = false
+ctx.cache.femRopeData = nil
+ctx.cache.femRopeOld = setmetatable({}, { __mode = "k" })
+ctx.cache.jumpAt = 0
+ctx.cache.wallAt = 0
+ctx.cache.slideAt = 0
+ctx.cache.swimAt = 0
+ctx.flood.floodColors = {
+	water = Color3.fromHSV(0.6, 0.99, 0.99),
+	acid = Color3.fromHSV(0.33, 0.99, 0.99),
+	lava = Color3.fromHSV(0.01, 0.99, 0.99),
+}
+
+ctx.cfgKeys = {
+	"auraOn",
+	"auraUseDistance",
+	"auraDist",
+	"autoCollectBonuses",
+	"autoChallenges",
+	"floodOn",
+	"floodEnabled",
+	"floodRandom",
+	"paidOn",
+	"clipOn",
+	"rescueOn",
+	"devOn",
+	"zipFastOn",
+	"zipSpeed",
+	"zipStopOn",
+	"zipAutoOn",
+	"infAirOn",
+	"infJumpOn",
+	"clickTpOn",
+	"femVoteOn",
+}
+
+ctx.getSetting = function(k)
+	if k == "auraOn" then
+		return auraOn
+	elseif k == "auraUseDistance" then
+		return auraUseDistance
+	elseif k == "auraDist" then
+		return auraDist
+	elseif k == "autoCollectBonuses" then
+		return autoCollectBonuses
+	elseif k == "autoChallenges" then
+		return autoChallenges
+	elseif ctx.opt[k] ~= nil then
+		return ctx.opt[k]
+	end
+	return nil
+end
+
+ctx.setSetting = function(k, v)
+	if k == "auraOn" then
+		auraOn = v == true
+	elseif k == "auraUseDistance" then
+		auraUseDistance = v ~= false
+	elseif k == "auraDist" then
+		if type(v) == "number" then
+			auraDist = math.clamp(v, 0, 1000)
+		end
+	elseif k == "autoCollectBonuses" then
+		autoCollectBonuses = v == true
+	elseif k == "autoChallenges" then
+		autoChallenges = v == true
+	elseif ctx.opt[k] ~= nil then
+		if type(ctx.opt[k]) == "number" then
+			ctx.opt[k] = tonumber(v) or ctx.opt[k]
+		else
+			ctx.opt[k] = v == true
+		end
+	end
+end
+
+ctx.fs = ctx.fs or {}
+ctx.fs.dir = ctx.cfgDir
+ctx.fs.path = ctx.cfgPath
+ctx.fs.ready = function()
+	ctx.fs.hasRead = type(readfile) == "function"
+	ctx.fs.hasWrite = type(writefile) == "function"
+	ctx.fs.hasIsFile = type(isfile) == "function"
+	ctx.fs.hasIsFolder = type(isfolder) == "function"
+	ctx.fs.hasMakeFolder = type(makefolder) == "function"
+	ctx.fs.hasDeleteFile = type(delfile) == "function"
+	ctx.fs.hasListFiles = type(listfiles) == "function"
+	ctx.fs.hasAppendFile = type(appendfile) == "function"
+	ctx.fs.hasLoadFile = type(loadfile) == "function"
+	return ctx.fs.hasRead and ctx.fs.hasWrite and ctx.fs.hasIsFile
+end
+
+ctx.fs.jsonEncode = function(t)
+	if not ctx.hs then
+		return nil
+	end
+	ctx.fs.ok, ctx.fs.res = pcall(function()
+		return ctx.hs:JSONEncode(t)
+	end)
+	if ctx.fs.ok and type(ctx.fs.res) == "string" then
+		return ctx.fs.res
+	end
+	return nil
+end
+
+ctx.fs.jsonDecode = function(s)
+	if not ctx.hs then
+		return nil
+	end
+	ctx.fs.ok, ctx.fs.res = pcall(function()
+		return ctx.hs:JSONDecode(s)
+	end)
+	if ctx.fs.ok and type(ctx.fs.res) == "table" then
+		return ctx.fs.res
+	end
+	return nil
+end
+
+ctx.fs.ensure = function()
+	if not ctx.fs.ready() then
+		return false
+	end
+	if ctx.fs.hasIsFolder and ctx.fs.hasMakeFolder then
+		pcall(function()
+			if not isfolder(ctx.fs.dir) then
+				makefolder(ctx.fs.dir)
+			end
+		end)
+	end
+	return true
+end
+
+ctx.fs.write = function(path, txt)
+	if not ctx.fs.ensure() or type(txt) ~= "string" then
+		return false
+	end
+	ctx.fs.ok = pcall(writefile, path, txt)
+	return ctx.fs.ok == true
+end
+
+ctx.fs.read = function(path)
+	if not ctx.fs.ready() then
+		return nil
+	end
+	ctx.fs.ok, ctx.fs.res = pcall(function()
+		if not isfile(path) then
+			return nil
+		end
+		return readfile(path)
+	end)
+	if ctx.fs.ok and type(ctx.fs.res) == "string" then
+		return ctx.fs.res
+	end
+	return nil
+end
+
+ctx.readCfgRoot = function()
+	ctx.tmpTxt = ctx.fs.read(ctx.cfgPath)
+	if type(ctx.tmpTxt) ~= "string" or ctx.tmpTxt == "" then
+		return {}
+	end
+	ctx.tmpData = ctx.fs.jsonDecode(ctx.tmpTxt)
+	if type(ctx.tmpData) == "table" then
+		return ctx.tmpData
+	end
+	return {}
+end
+
+ctx.profileCfg = function(root)
+	ctx.tmpProfile = ctx.profileName()
+	if type(root) ~= "table" then
+		return {}
+	end
+	if type(root[ctx.tmpProfile]) == "table" then
+		return root[ctx.tmpProfile]
+	end
+	for _, k in ctx.cfgKeys do
+		if root[k] ~= nil then
+			return root
+		end
+	end
+	return {}
+end
+
+ctx.saveNow = function()
+	ctx.tmpRootCfg = ctx.readCfgRoot()
+	ctx.tmpProfile = ctx.profileName()
+	ctx.tmpCfg = {}
+	for _, k in ctx.cfgKeys do
+		ctx.tmpCfg[k] = ctx.getSetting(k)
+	end
+	ctx.tmpRootCfg[ctx.tmpProfile] = ctx.tmpCfg
+	ctx.tmpTxt = ctx.fs.jsonEncode(ctx.tmpRootCfg)
+	if type(ctx.tmpTxt) ~= "string" then
+		return false
+	end
+	return ctx.fs.write(ctx.cfgPath, ctx.tmpTxt)
+end
+
+ctx.saveSoon = function()
+	ctx.cache.saveTok = (ctx.cache.saveTok or 0) + 1
+	task.delay(0.2, function(tk)
+		if ctx.alive() and ctx.cache.saveTok == tk then
+			ctx.saveNow()
+		end
+	end, ctx.cache.saveTok)
+end
+
+ctx.loadSettings = function()
+	ctx.tmpRootCfg = ctx.readCfgRoot()
+	ctx.tmpData = ctx.profileCfg(ctx.tmpRootCfg)
+	if type(ctx.tmpData) ~= "table" then
+		return false
+	end
+	for _, k in ctx.cfgKeys do
+		if ctx.tmpData[k] ~= nil then
+			ctx.setSetting(k, ctx.tmpData[k])
+		end
+	end
+	return true
+end
+
+ctx.loadSettings()
 local optionsOpen = false
 local chSeen = setmetatable({}, { __mode = "k" })
 local chWallSeen = setmetatable({}, { __mode = "k" })
@@ -418,6 +753,9 @@ ctx.stop = function()
 	if ctx.clearBonuses then
 		ctx.clearBonuses()
 	end
+	if ctx.unprotectAirHealth then
+		ctx.unprotectAirHealth()
+	end
 	ctx.clearLocators()
 	auraList = {}
 	auraMap = nil
@@ -440,18 +778,45 @@ ctx.stop = function()
 			gui:Destroy()
 		end)
 	end
+	if ctx.ui.auraPrompt then
+		pcall(function()
+			ctx.ui.auraPrompt:Destroy()
+		end)
+	end
+	ctx.ui.auraPrompt = nil
+	if ctx.ui.rootIcon then
+		pcall(function()
+			ctx.ui.rootIcon:destroy()
+		end)
+	end
+	if type(ctx.ui.menu) == "table" then
+		for _, ic in ctx.ui.menu do
+			if ic and type(ic.destroy) == "function" then
+				pcall(function()
+					ic:destroy()
+				end)
+			end
+		end
+	end
 	gui = nil
 	btn = nil
 	panel = nil
-	optBtn = nil
-	optionsFrame = nil
-	auraBtn = nil
-	distModeBtn = nil
-	distBtn = nil
-	distLabel = nil
-	distRow = nil
-	bonusBtn = nil
-	chBtn = nil
+	ctx.ui.optBtn = nil
+	ctx.ui.optionsFrame = nil
+	ctx.ui.auraBtn = nil
+	ctx.ui.distModeBtn = nil
+	ctx.ui.distBtn = nil
+	ctx.ui.distLabel = nil
+	ctx.ui.distRow = nil
+	ctx.ui.bonusBtn = nil
+	ctx.ui.chBtn = nil
+	ctx.ui.floodBtn = nil
+	ctx.ui.passBtn = nil
+	ctx.ui.paidBtn = nil
+	ctx.cache.floodTok += 1
+	ctx.cache.uiTok += 1
+	ctx.cache.floodHooks = setmetatable({}, { __mode = "k" })
+	ctx.cache.uiHooks = setmetatable({}, { __mode = "k" })
 	chSeen = setmetatable({}, { __mode = "k" })
 	chWallSeen = setmetatable({}, { __mode = "k" })
 	chZipSeen = setmetatable({}, { __mode = "k" })
@@ -477,14 +842,9 @@ ctx.descOf = function(obj)
 	if not obj then
 		return {}
 	end
-	local q = obj.QueryDescendants
-	if type(q) == "function" then
-		local ok, res = pcall(q, obj, "Instance")
-		if ok and type(res) == "table" then
-			return res
-		end
-	end
-	local ok, res = pcall(obj.GetDescendants, obj)
+	local ok, res = pcall(function()
+		return obj:GetDescendants()
+	end)
 	if ok and type(res) == "table" then
 		return res
 	end
@@ -589,6 +949,9 @@ local WalljumpRemotes = {
 }
 local RebirthRemote = nil
 local PasskeyRemote = nil
+local ConfirmItemRemote = nil
+local PassReqSeasonData = nil
+local PassReqSeasonList = nil
 local passKey = nil
 local FE2CalcLevelXP = nil
 do
@@ -715,6 +1078,15 @@ do
 	addRemote(SurvivedRemotes, "Survived")
 	addRemote(PlayerDataRemotes, "UpdPlayerData")
 	addRemote(ItemDataRemotes, "ReqItemData")
+	ConfirmItemRemote = findRemote("ConfirmItem", "RemoteEvent")
+	do
+		local rr = Rsp and Rsp:FindFirstChild("Remote")
+		local pf = rr and rr:FindFirstChild("Pass")
+		local rsd = pf and pf:FindFirstChild("ReqSeasonData")
+		local rsl = pf and pf:FindFirstChild("ReqSeasonList")
+		PassReqSeasonData = rsd and rsd:IsA("RemoteEvent") and rsd or nil
+		PassReqSeasonList = rsl and rsl:IsA("RemoteEvent") and rsl or nil
+	end
 	addRemote(GameStateRemotes, "UpdateGameState")
 	addRemote(ChallengeRemotes.GetAirBubble, "GetAirBubble")
 	addRemote(ChallengeRemotes.SwimInLava, "SwimInLava")
@@ -2002,16 +2374,21 @@ ctx.startPassiveRemotes = function()
 		local la = 0
 		local sa = 0
 		while ctx.alive() do
+			if ctx.isFEMGame() then
+				task.wait(0.5)
+				continue
+			end
 			local now = os.clock()
-			if now >= la then
+			local playing = ctx.isRoundIngame()
+			if on and now >= la then
 				ctx.fireLoaded(ctx.getPassArg(false))
 				la = now + PLI
 			end
-			if ctx.isRoundIngame() and now >= sa then
+			if on and playing and now >= sa then
 				ctx.fireSurvived(ctx.getPassArg(false), 100)
 				sa = now + PSI
 			end
-			if now >= ra then
+			if (on or playing or autoChallenges) and now >= ra then
 				ctx.requestRoundStats()
 				ra = now + RSI
 			end
@@ -2047,8 +2424,11 @@ end
 
 for _, rem in ItemDataRemotes do
 	if rem and rem.Parent then
-		ctx.bind(rem.OnClientEvent:Connect(function(data)
+		ctx.bind(rem.OnClientEvent:Connect(function(data, items)
 			ctx.cacheData(data)
+			if type(items) == "table" then
+				ctx.cache.shopItems = items
+			end
 		end))
 	end
 end
@@ -2287,64 +2667,141 @@ ctx.antiVoid = function(getMap)
 	end)
 end
 
-ctx.setBtn = function()
-	if not btn then
+ctx.uiLabel = function(o, t)
+	if not o then
 		return
 	end
-	btn.Text = on and "Stop AutoFarm" or "Start AutoFarm"
-	btn.BackgroundColor3 = on and Color3.fromRGB(180, 60, 60) or Color3.fromRGB(60, 180, 60)
+	if type(o.setLabel) == "function" then
+		pcall(function()
+			o:setLabel(t)
+		end)
+	else
+		pcall(function()
+			o.Text = t
+		end)
+	end
+end
+
+ctx.uiColor = function(o, c)
+	if not o then
+		return
+	end
+	if type(o.modifyTheme) == "function" then
+		pcall(function()
+			o:modifyTheme({
+				{ "IconButton", "BackgroundColor3", c },
+				{ "IconOverlay", "BackgroundColor3", c },
+			})
+		end)
+	else
+		pcall(function()
+			o.BackgroundColor3 = c
+		end)
+	end
+end
+
+ctx.setTopBtn = function(o, t, st, col)
+	ctx.uiLabel(o, t)
+	ctx.uiColor(o, col or (st and Color3.fromRGB(60, 130, 210) or Color3.fromRGB(70, 70, 70)))
+end
+
+ctx.setBtn = function()
+	ctx.setTopBtn(ctx.ui.startBtn or btn, on and "Stop AutoFarm" or "Start AutoFarm", on, on and Color3.fromRGB(180, 60, 60) or Color3.fromRGB(60, 180, 60))
 end
 
 ctx.setAuraBtn = function()
-	if not auraBtn then
-		return
-	end
-	auraBtn.Text = auraOn and "Button Aura: ON" or "Button Aura: OFF"
-	auraBtn.BackgroundColor3 = auraOn and Color3.fromRGB(60, 130, 210) or Color3.fromRGB(70, 70, 70)
+	ctx.setTopBtn(ctx.ui.auraBtn, auraOn and "Button Aura: ON" or "Button Aura: OFF", auraOn)
 end
 
 ctx.setDistModeBtn = function()
-	if not distModeBtn then
-		return
-	end
-	distModeBtn.Text = auraUseDistance and "Button Distance: ON" or "Button Distance: OFF"
-	distModeBtn.BackgroundColor3 = auraUseDistance and Color3.fromRGB(60, 130, 210) or Color3.fromRGB(70, 70, 70)
+	ctx.setTopBtn(ctx.ui.distModeBtn, auraUseDistance and "Button Distance: ON" or "Button Distance: OFF", auraUseDistance)
 end
 
 ctx.setDistBtn = function()
-	if not distBtn then
-		return
-	end
-	distBtn.Text = tostring(auraDist)
+	ctx.setTopBtn(ctx.ui.distBtn, "Aura Dist: " .. tostring(auraDist), false, Color3.fromRGB(55, 55, 55))
 end
 
 ctx.setBonusBtn = function()
-	if not bonusBtn then
-		return
-	end
-	bonusBtn.Text = autoCollectBonuses and "Collect Bonuses: ON" or "Collect Bonuses: OFF"
-	bonusBtn.BackgroundColor3 = autoCollectBonuses and Color3.fromRGB(60, 130, 210) or Color3.fromRGB(70, 70, 70)
+	ctx.setTopBtn(ctx.ui.bonusBtn, autoCollectBonuses and "Collect Bonuses: ON" or "Collect Bonuses: OFF", autoCollectBonuses)
 end
 
 ctx.setChallengeBtn = function()
-	if not chBtn then
-		return
-	end
-	chBtn.Text = autoChallenges and "Challenges: ON" or "Challenges: OFF"
-	chBtn.BackgroundColor3 = autoChallenges and Color3.fromRGB(60, 130, 210) or Color3.fromRGB(70, 70, 70)
+	ctx.setTopBtn(ctx.ui.chBtn, autoChallenges and "Challenges: ON" or "Challenges: OFF", autoChallenges)
+end
+
+ctx.setFloodBtn = function()
+	ctx.setTopBtn(ctx.ui.floodBtn, ctx.opt.floodOn and "Custom Flood: ON" or "Custom Flood: OFF", ctx.opt.floodOn)
+end
+
+ctx.setPassBtn = function()
+end
+
+ctx.setPaidBtn = function()
+	ctx.setTopBtn(ctx.ui.paidBtn, ctx.opt.paidOn and "Paid UI Locks: ON" or "Paid UI Locks: OFF", ctx.opt.paidOn)
+end
+
+ctx.setBuyCoinBtn = function()
+	ctx.setTopBtn(ctx.ui.buyCoinBtn, ctx.opt.shopBusy and "Buying Shop Items..." or "Buy Coin Shop Items", ctx.opt.shopBusy, ctx.opt.shopBusy and Color3.fromRGB(155, 89, 182) or Color3.fromRGB(218, 165, 32))
+end
+
+ctx.setBuyGemBtn = function()
+	ctx.setTopBtn(ctx.ui.buyGemBtn, ctx.opt.shopBusy and "Buying Shop Items..." or "Buy Gem Shop Items", ctx.opt.shopBusy, ctx.opt.shopBusy and Color3.fromRGB(155, 89, 182) or Color3.fromRGB(142, 68, 173))
+end
+
+ctx.setClipBtn = function()
+	ctx.setTopBtn(ctx.ui.clipBtn, ctx.opt.clipOn and "No SideClip TP: ON" or "No SideClip TP: OFF", ctx.opt.clipOn)
+end
+
+ctx.setFpPartBtn = function()
+end
+
+ctx.setRescueBtn = function()
+	ctx.setTopBtn(ctx.ui.rescueBtn, ctx.opt.rescueOn and "Hide Rescue NPC: ON" or "Hide Rescue NPC: OFF", ctx.opt.rescueOn)
+end
+
+ctx.setDevBtn = function()
+	ctx.setTopBtn(ctx.ui.devBtn, ctx.opt.devOn and "DevTools: ON" or "DevTools: OFF", ctx.opt.devOn)
+end
+
+ctx.setWallBtn = function()
+end
+
+ctx.setSwimBtn = function()
+end
+
+ctx.setSlidePhysBtn = function()
+end
+
+ctx.setZipBtn = function()
+	ctx.setTopBtn(ctx.ui.zipBtn, ctx.opt.zipFastOn and ("Zip Speed: " .. tostring(ctx.opt.zipSpeed)) or "Zip Speed: OFF", ctx.opt.zipFastOn)
+end
+
+ctx.setZipStopBtn = function()
+	ctx.setTopBtn(ctx.ui.zipStopBtn, ctx.opt.zipStopOn and "Zip Stop Velocity: ON" or "Zip Stop Velocity: OFF", ctx.opt.zipStopOn)
+end
+
+ctx.setZipAutoBtn = function()
+	ctx.setTopBtn(ctx.ui.zipAutoBtn, ctx.opt.zipAutoOn and "Zip Auto Apply: ON" or "Zip Auto Apply: OFF", ctx.opt.zipAutoOn)
+end
+
+ctx.setInfAirBtn = function()
+	ctx.setTopBtn(ctx.ui.infAirBtn, ctx.opt.infAirOn and "Inf Air: ON" or "Inf Air: OFF", ctx.opt.infAirOn)
+end
+
+ctx.setInfJumpBtn = function()
+	ctx.setTopBtn(ctx.ui.infJumpBtn, ctx.opt.infJumpOn and "Inf Jump: ON" or "Inf Jump: OFF", ctx.opt.infJumpOn)
+end
+
+ctx.setClickTpBtn = function()
+	ctx.setTopBtn(ctx.ui.clickTpBtn, ctx.opt.clickTpOn and "Click TP: ON" or "Click TP: OFF", ctx.opt.clickTpOn)
+end
+
+ctx.setFemVoteBtn = function()
+	ctx.setTopBtn(ctx.ui.femVoteBtn, ctx.opt.femVoteOn and "FEM Auto Vote: ON" or "FEM Auto Vote: OFF", ctx.opt.femVoteOn)
 end
 
 ctx.setOptionsOpen = function(open)
 	optionsOpen = open and true or false
-	if optBtn then
-		optBtn.Text = optionsOpen and "Options ^" or "Options v"
-	end
-	if optionsFrame then
-		optionsFrame.Visible = optionsOpen
-	end
-	if panel then
-		panel.Size = optionsOpen and UDim2.new(0, 190, 0, 330) or UDim2.new(0, 190, 0, 105)
-	end
 end
 
 local mouseButtonFixHooks = setmetatable({}, { __mode = "k" })
@@ -2810,6 +3267,10 @@ ctx.onChar = function(c)
 		return
 	end
 	ctx.bindNc(c)
+	ctx.hookZipStop(c)
+	if ctx.opt.zipFastOn and ctx.opt.zipAutoOn then
+		task.defer(ctx.reapplyZipSpeed)
+	end
 	if on then
 		task.spawn(function()
 			if not Lift then
@@ -3141,12 +3602,21 @@ ctx.startButtonAura = function()
 			end
 
 			local now = os.clock()
-			if now >= req then
+			if not ctx.isFEMGame() and now >= req then
 				ctx.requestRoundStats()
-				req = now + 0.25
+				req = now + 0.75
 			end
 
-			if map and ctx.isRoundIngame() and type(ctx.pressMapButton) == "function" then
+			if ctx.isFEMGame() and type(ctx.pressMapButton) == "function" then
+				ctx.tmpRoot = select(1, ctx.rh(false))
+				ctx.tmpHit = ctx.femLocatorHit()
+				if ctx.tmpRoot and ctx.tmpHit and ctx.tmpHit.Parent then
+					ctx.tmpDist = (ctx.tmpRoot.Position - ctx.tmpHit.Position).Magnitude
+					if not auraUseDistance or ctx.tmpDist <= auraDist then
+						ctx.pressMapButton(ctx.tmpHit)
+					end
+				end
+			elseif map and ctx.isRoundIngame() and type(ctx.pressMapButton) == "function" then
 				local entries, hasLoc = ctx.auraEntries(map)
 				if #entries > 0 then
 					ctx.pressAuraEntries(entries, map, not hasLoc)
@@ -3158,11 +3628,79 @@ ctx.startButtonAura = function()
 	end)
 end
 
+ctx.addRemoteOnce = function(list, obj)
+	if type(list) ~= "table" or not (obj and typeof(obj) == "Instance" and obj:IsA("RemoteEvent")) then
+		return false
+	end
+	for _, old in list do
+		if old == obj then
+			return true
+		end
+	end
+	list[#list + 1] = obj
+	return true
+end
+
+ctx.findRemoteNamed = function(nm)
+	if type(nm) ~= "string" or nm == "" then
+		return nil
+	end
+	ctx.tmpCachedRemote = ctx.cache.remoteByName[nm]
+	if ctx.tmpCachedRemote and ctx.tmpCachedRemote.Parent then
+		return ctx.tmpCachedRemote
+	end
+	ctx.tmpRootRemote = Rsp and Rsp:FindFirstChild("Remote")
+	ctx.tmpTestRemote = ctx.tmpRootRemote and ctx.tmpRootRemote:FindFirstChild("TEST")
+	ctx.tmpFoundRemote = ctx.tmpTestRemote and ctx.tmpTestRemote:FindFirstChild(nm) or nil
+	if not (ctx.tmpFoundRemote and ctx.tmpFoundRemote:IsA("RemoteEvent")) then
+		ctx.tmpFoundRemote = ctx.tmpRootRemote and ctx.tmpRootRemote:FindFirstChild(nm, true) or nil
+	end
+	if not (ctx.tmpFoundRemote and ctx.tmpFoundRemote:IsA("RemoteEvent")) then
+		pcall(function()
+			for _, o in Rsp:GetDescendants() do
+				if o.Name == nm and o:IsA("RemoteEvent") then
+					ctx.tmpFoundRemote = o
+					break
+				end
+			end
+		end)
+	end
+	if not (ctx.tmpFoundRemote and ctx.tmpFoundRemote:IsA("RemoteEvent")) then
+		ctx.tmpScanFns = {}
+		if type(getnilinstances) == "function" then
+			ctx.tmpScanFns[#ctx.tmpScanFns + 1] = getnilinstances
+		end
+		if type(getinstances) == "function" then
+			ctx.tmpScanFns[#ctx.tmpScanFns + 1] = getinstances
+		end
+		for _, fn in ctx.tmpScanFns do
+			ctx.tmpOk, ctx.tmpList = pcall(fn)
+			if ctx.tmpOk and type(ctx.tmpList) == "table" then
+				for _, o in ctx.tmpList do
+					if typeof(o) == "Instance" and o.Name == nm and o:IsA("RemoteEvent") then
+						ctx.tmpFoundRemote = o
+						break
+					end
+				end
+			end
+			if ctx.tmpFoundRemote then
+				break
+			end
+		end
+	end
+	if ctx.tmpFoundRemote and ctx.tmpFoundRemote:IsA("RemoteEvent") then
+		ctx.cache.remoteByName[nm] = ctx.tmpFoundRemote
+		return ctx.tmpFoundRemote
+	end
+	return nil
+end
+
 ctx.fireChallenge = function(n, ...)
 	local t = ChallengeRemotes[n]
 	if type(t) ~= "table" then
 		return false
 	end
+	ctx.addRemoteOnce(t, ctx.findRemoteNamed(n))
 	local fired = false
 	for _, rem in t do
 		if rem and rem.Parent then
@@ -3223,9 +3761,19 @@ ctx.wallData = function(wall, r, c)
 		local ok, hit = pcall(function()
 			return Wsp:Raycast(rp, dir.Unit * math.min(dir.Magnitude + 6, 12), prm)
 		end)
-		if ok and hit and hit.Instance == wall then
-			pos = hit.Position
-			norm = hit.Normal
+		if ok and hit then
+			local okPos, hitPos = pcall(function()
+				return hit.Position
+			end)
+			local okNorm, hitNorm = pcall(function()
+				return hit.Normal
+			end)
+			if okPos and hitPos then
+				pos = hitPos
+			end
+			if okNorm and hitNorm then
+				norm = hitNorm
+			end
 		end
 	end
 	if not norm then
@@ -3521,16 +4069,82 @@ ctx.feScript = function()
 	return nil
 end
 
-ctx.feEnv = function()
-	local fe = ctx.feScript()
-	if not (fe and type(getsenv) == "function") then
+ctx.envOf = function(scr)
+	if not scr then
 		return nil
 	end
-	local ok, env = pcall(getsenv, fe)
-	if ok and type(env) == "table" then
-		return env
+	if type(getsenv) == "function" then
+		local ok, env = pcall(getsenv, scr)
+		if ok and type(env) == "table" then
+			return env
+		end
 	end
 	return nil
+end
+
+ctx.gameEnv = function()
+	if ctx.cache.gameEnv then
+		return ctx.cache.gameEnv
+	end
+	local m = ctx.mainScript()
+	ctx.cache.gameEnv = ctx.envOf(m)
+	return ctx.cache.gameEnv
+end
+
+ctx.baseEnv = function()
+	if ctx.cache.baseEnv ~= nil then
+		return ctx.cache.baseEnv ~= false and ctx.cache.baseEnv or nil
+	end
+	if type(getfenv) == "function" then
+		local ok, env = pcall(getfenv)
+		if ok and type(env) == "table" then
+			ctx.cache.baseEnv = env
+			return env
+		end
+	end
+	ctx.cache.baseEnv = type(_G) == "table" and _G or false
+	return ctx.cache.baseEnv ~= false and ctx.cache.baseEnv or nil
+end
+
+ctx.scriptGlobal = function(env, name)
+	if type(env) == "table" then
+		local v = rawget(env, name)
+		if v ~= nil then
+			return v
+		end
+		local g = rawget(env, "_G")
+		if type(g) == "table" and rawget(g, name) ~= nil then
+			return rawget(g, name)
+		end
+	end
+	local b = ctx.baseEnv()
+	if type(b) == "table" then
+		if rawget(b, name) ~= nil then
+			return rawget(b, name)
+		end
+		local g = rawget(b, "_G")
+		if type(g) == "table" then
+			return rawget(g, name)
+		end
+	end
+	return nil
+end
+
+ctx.callScriptGlobal = function(env, name, ...)
+	local fn = ctx.scriptGlobal(env, name)
+	if type(fn) ~= "function" then
+		return false
+	end
+	return pcall(fn, ...)
+end
+
+ctx.feEnv = function()
+	ctx.tmpFeScript = ctx.feScript()
+	return ctx.envOf(ctx.tmpFeScript)
+end
+
+ctx.feCall = function(name, ...)
+	return ctx.callScriptGlobal(ctx.feEnv(), name, ...)
 end
 
 ctx.slidePts = function(bm, r)
@@ -3637,150 +4251,32 @@ ctx.trySlideChallenge = function(list, remoteOnly)
 end
 
 ctx.tryWallChallenge = function(list, remoteOnly)
-	local now = os.clock()
-	if now - chWallAt < 3 then
-		return false
-	end
 	list = type(list) == "table" and list or {}
-	local r, h, c = ctx.rh(false)
-	local best = nil
-	local bestDist = math.huge
+	ctx.tmpWallSent = false
 	for _, wall in list do
 		if wall and wall.Parent and not chWallSeen[wall] then
-			local dist = r and (r.Position - wall.Position).Magnitude or 0
-			if dist < bestDist then
-				best = wall
-				bestDist = dist
-			end
+			chWallSeen[wall] = os.clock()
+			ctx.tmpWallSent = ctx.fireChallenge("Walljumped", wall) or ctx.tmpWallSent
+			task.wait(0.05)
 		end
 	end
-	if not best then
-		return false
-	end
-	chWallSeen[best] = now
-	chWallAt = now
-	local pos, norm, c0 = ctx.wallData(best, r, c)
-	if remoteOnly == true then
-		local ok = ctx.fireWalljump(best, c0)
-		task.delay(0.08, function()
-			if ctx.alive() then
-				ctx.releaseWalljump()
-			end
-		end)
-		return ok
-	end
-	if not (r and r.Parent and c and c.Parent and pos and norm) then
-		local ok = ctx.fireWalljump(best, c0)
-		task.delay(0.08, function()
-			if ctx.alive() then
-				ctx.releaseWalljump()
-			end
-		end)
-		return ok
-	end
-	local ok = false
-	pcall(function()
-		ctx.pivotRootTo(CFrame.new(pos + norm * 1.35 + Vector3.new(0, 1.5, 0), pos), r, c)
-		r.AssemblyLinearVelocity = Vector3.zero
-		r.AssemblyAngularVelocity = Vector3.zero
-		if h then
-			h.AutoRotate = false
-			h:ChangeState(Enum.HumanoidStateType.Freefall)
-		end
-	end)
-	task.wait(0.08)
-	ok = ctx.fireWalljump(best, c0) or ok
-	task.wait(0.12)
-	ctx.jumpOffWall(best, norm)
-	task.delay(0.25, function()
-		if ctx.alive() then
-			ctx.releaseWalljump()
-		end
-	end)
-	return ok
+	return ctx.tmpWallSent
 end
-
 ctx.tryZipChallenge = function(list, remoteOnly)
-	local now = os.clock()
-	if zipBusy or now - chZipAt < 8 then
-		return false
-	end
 	list = type(list) == "table" and list or {}
-	local r, h, c = ctx.rh(false)
-	if not (r and r.Parent and c and c.Parent) then
-		return false
-	end
-	local best = nil
-	local bestDist = math.huge
+	ctx.tmpZipSent = false
 	for _, rope in list do
 		if rope and rope.Parent then
-			local t = chZipSeen[rope]
-			if not t or now - t > 10 then
-				local dist = (r.Position - rope.Position).Magnitude
-				if dist < bestDist then
-					best = rope
-					bestDist = dist
-				end
-			end
-		end
-	end
-	if not best then
-		return false
-	end
-	chZipSeen[best] = now
-	chZipAt = now
-	if remoteOnly == true then
-		return ctx.fireZipline(best)
-	end
-	zipBusy = true
-	task.spawn(function()
-		local ok, err = xpcall(function()
-			local rr, hh, cc = ctx.rh(false)
-			if not (rr and rr.Parent and cc and cc.Parent and best and best.Parent) then
-				return
-			end
-			local old = rr.CFrame
-			pcall(function()
-				ctx.pivotRootTo(best.CFrame + Vector3.new(0, 1.5, 0), rr, cc)
-				rr.AssemblyLinearVelocity = Vector3.zero
-				rr.AssemblyAngularVelocity = Vector3.zero
-			end)
-			task.wait(0.08)
-			local feh = ctx.getFeHitbox()
-			if feh and feh.Parent and type(firetouchinterest) == "function" then
-				pcall(firetouchinterest, feh, best, 0)
-				pcall(firetouchinterest, best, feh, 0)
+			ctx.tmpZipLast = chZipSeen[rope]
+			if not ctx.tmpZipLast then
+				chZipSeen[rope] = os.clock()
+				ctx.tmpZipSent = ctx.fireChallenge("RideZipline", rope) or ctx.tmpZipSent
 				task.wait(0.05)
-				pcall(firetouchinterest, feh, best, 1)
-				pcall(firetouchinterest, best, feh, 1)
 			end
-			local env = ctx.feEnv()
-			local used = false
-			if env and type(env.startZipline) == "function" then
-				used = pcall(env.startZipline, best) or used
-			end
-			if not used then
-				ctx.fireZipline(best)
-			else
-				ctx.fireZipline(best)
-			end
-			task.delay(0.35, function()
-				if ctx.alive() and on and rr and rr.Parent and old then
-					pcall(function()
-						rr.AssemblyLinearVelocity = Vector3.zero
-						rr.AssemblyAngularVelocity = Vector3.zero
-					end)
-				end
-			end)
-		end, debug.traceback)
-		if not ok then
-			warn(err)
 		end
-		zipBusy = false
-	end)
-	return true
+	end
+	return ctx.tmpZipSent
 end
-
 ctx.getFeHitbox = function()
 	local c = ctx.chr(false)
 	if not c then
@@ -3865,10 +4361,6 @@ ctx.doChallenges = function(map, remoteOnly)
 	end
 	ctx.dumpChallenges()
 	local now = os.clock()
-	if now - chRegAt > 3 then
-		chRegAt = now
-		ctx.fireChallenge("RegeneratedAir", 9999)
-	end
 	if now - chLavaAt > 5 then
 		chLavaAt = now
 		ctx.fireChallenge("SwimInLava")
@@ -3884,9 +4376,17 @@ ctx.startChallenges = function()
 	ctx.spawnLoop(function()
 		while ctx.alive() do
 			if autoChallenges then
-				ctx.doChallenges(ctx.curMap(), not on)
+				ctx.doChallenges(ctx.curMap(), true)
 			end
 			task.wait(CHI)
+		end
+	end)
+	ctx.spawnLoop(function()
+		while ctx.alive() do
+			if autoChallenges or ctx.opt.infAirOn then
+				ctx.fireChallenge("RegeneratedAir", 9999)
+			end
+			task.wait(1)
 		end
 	end)
 end
@@ -3906,198 +4406,2232 @@ ctx.startBonusCollector = function()
 	end)
 end
 
+ctx.floodPage = function()
+	local pg = LP and LP:FindFirstChildOfClass("PlayerGui")
+	local mg = pg and pg:FindFirstChild("MenuGui")
+	local op = mg and mg:FindFirstChild("Options")
+	local win = op and op:FindFirstChild("Window")
+	local cont = win and win:FindFirstChild("Content")
+	local pages = cont and cont:FindFirstChild("Pages")
+	return pages and pages:FindFirstChild("CustomFloodColors") or nil
+end
+
+ctx.floodWaterScript = function()
+	local ps = LP and LP:FindFirstChild("PlayerScripts")
+	local misc = ps and ps:FindFirstChild("Misc")
+	return misc and misc:FindFirstChild("CL_WaterColors") or nil
+end
+
+ctx.floodBind = function(obj, ev, fn)
+	if not obj or ctx.cache.floodHooks[obj] then
+		return
+	end
+	local sig = obj[ev]
+	if not sig then
+		return
+	end
+	ctx.cache.floodHooks[obj] = true
+	ctx.bind(sig:Connect(fn))
+end
+
+ctx.floodCols = function()
+	if not ctx.opt.floodRandom then
+		return ctx.flood.floodColors
+	end
+	local cfg = Rsp and Rsp:FindFirstChild("Config")
+	local rnd = cfg and cfg:FindFirstChild("RandomFloodColors")
+	if not rnd then
+		return ctx.flood.floodColors
+	end
+	local out = {}
+	for k, v in ctx.flood.floodColors do
+		local ok, c = pcall(function()
+			return rnd:GetAttribute(k)
+		end)
+		out[k] = ok and typeof(c) == "Color3" and c or v
+	end
+	return out
+end
+
+ctx.floodSetProp = function(obj, prop, col)
+	pcall(function()
+		local old = obj[prop]
+		obj[prop] = typeof(old) == "ColorSequence" and ColorSequence.new(col) or col
+	end)
+end
+
+ctx.floodVisual = function(col, obj)
+	if not obj then
+		return
+	end
+	if obj:IsA("BasePart") then
+		ctx.floodSetProp(obj, "Color", col)
+	elseif obj:IsA("Light") then
+		ctx.floodSetProp(obj, "Color", col)
+	elseif obj.ClassName == "Decal" then
+		ctx.floodSetProp(obj, "Color3", col)
+	elseif obj.ClassName == "Smoke" then
+		ctx.floodSetProp(obj, "Color", col)
+	elseif obj.ClassName == "Trail" or obj.ClassName == "ParticleEmitter" or obj.ClassName == "Beam" then
+		ctx.floodSetProp(obj, "Color", col)
+	elseif obj.ClassName == "Fire" then
+		ctx.floodSetProp(obj, "Color", col)
+		ctx.floodSetProp(obj, "SecondaryColor", col)
+	elseif obj.ClassName == "Sparkles" then
+		ctx.floodSetProp(obj, "SparklesColor", col)
+	elseif obj:IsA("ImageLabel") or obj:IsA("ImageButton") then
+		ctx.floodSetProp(obj, "ImageColor3", col)
+	end
+end
+
+ctx.floodState = function(part)
+	local st = "water"
+	local val = part and part:FindFirstChild("WaterState")
+	pcall(function()
+		if val and type(val.Value) == "string" then
+			st = string.lower(val.Value)
+		end
+	end)
+	if ctx.flood.floodColors[st] then
+		return st
+	end
+	local nm = string.lower(part and part.Name or "")
+	if string.find(nm, "acid") then
+		return "acid"
+	elseif string.find(nm, "lava") then
+		return "lava"
+	end
+	return "water"
+end
+
+ctx.floodApply = function(root)
+	if not (ctx.opt.floodOn and ctx.opt.floodEnabled and root) then
+		return
+	end
+	local cols = ctx.floodCols()
+	local desc = ctx.descOf(root)
+	for _, obj in desc do
+		if obj:IsA("BasePart") and string.find(obj.Name, "_Water") then
+			local col = cols[ctx.floodState(obj)] or cols.water
+			ctx.floodVisual(col, obj)
+		end
+	end
+	for _, obj in desc do
+		if obj:IsA("ObjectValue") and obj.Name == "_LinkColor" and obj.Value and obj.Value:IsA("BasePart") then
+			local p = obj.Parent
+			if p then
+				local col = obj.Value.Color
+				ctx.floodVisual(col, p)
+				for _, ch in ctx.descOf(p) do
+					ctx.floodVisual(col, ch)
+				end
+			end
+		end
+	end
+end
+
+ctx.floodSetHsv = function(key, nm, val)
+	local h, s, v = ctx.flood.floodColors[key]:ToHSV()
+	val = math.clamp(val, 0.01, 0.99)
+	if nm == "Hue" then
+		h = val
+	elseif nm == "Saturation" then
+		s = val
+	elseif nm == "Value" then
+		v = val
+	end
+	ctx.flood.floodColors[key] = Color3.fromHSV(h, s, v)
+	ctx.floodPush()
+end
+
+ctx.floodStep = function(key, nm, dir)
+	local h, s, v = ctx.flood.floodColors[key]:ToHSV()
+	local cur = nm == "Hue" and h or nm == "Saturation" and s or v
+	ctx.floodSetHsv(key, nm, cur + 0.06125 * dir)
+end
+
+ctx.floodUi = function()
+	local page = ctx.floodPage()
+	if not page then
+		return
+	end
+	local buy = page:FindFirstChild("PurchaseGamepass")
+	if buy then
+		buy.Visible = false
+		buy.Active = false
+	end
+	local tog = page:FindFirstChild("CustomToggle")
+	if tog then
+		tog.Text = ctx.opt.floodEnabled and "Enabled" or "Disabled"
+		tog.BackgroundColor3 = ctx.opt.floodEnabled and Color3.fromRGB(46, 204, 113) or Color3.fromRGB(24, 34, 44)
+	end
+	local rnd = page:FindFirstChild("MapRandomizer")
+	if rnd then
+		rnd.BackgroundColor3 = ctx.opt.floodRandom and Color3.fromRGB(46, 204, 113) or Color3.fromRGB(24, 34, 44)
+	end
+	local hsv = page:FindFirstChild("HSV_Container")
+	if not hsv then
+		return
+	end
+	for key, col in ctx.flood.floodColors do
+		local box = hsv:FindFirstChild(key .. "_HSV")
+		if box then
+			pcall(function()
+				local h, ss, vv = col:ToHSV()
+				local dat = {
+					{ n = "Hue", v = h },
+					{ n = "Saturation", v = ss },
+					{ n = "Value", v = vv },
+				}
+				for _, it in dat do
+					local cn = it.n == "Saturation" and "Sat" or it.n == "Value" and "Val" or it.n
+					local obj = box.Config[cn]
+					obj.Info.Text = it.n .. ": " .. tostring(math.floor(it.v * 100 * 1.021) - 1) .. "%"
+					obj.Bar.Graphic.Marker:TweenPosition(UDim2.new(it.v, 0, 0.5, 0), "Out", "Sine", 0.3, true)
+				end
+				box.Input.HexInput.Text = "#" .. col:ToHex()
+				box.Preview.BackgroundColor3 = col
+				box.Config.Val.Bar.Graphic.BackgroundColor3 = Color3.fromHSV(h, ss, 1)
+				box.Config.Sat.Bar.Graphic.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
+				box.Config.Sat.Bar.Graphic.DarknessCover.BackgroundTransparency = vv
+			end)
+		end
+	end
+end
+
+ctx.floodPush = function()
+	local wc = ctx.floodWaterScript()
+	local ev = wc and wc:FindFirstChild("UpdCustomColors")
+	if ev and ev.Fire then
+		pcall(function()
+			ev:Fire(ctx.flood.floodColors, ctx.opt.floodEnabled, ctx.opt.floodRandom, "RGB")
+		end)
+	end
+	ctx.floodUi()
+	ctx.floodApply(ctx.curMap())
+end
+
+ctx.floodHookUi = function()
+	local page = ctx.floodPage()
+	if not page then
+		return
+	end
+	ctx.floodUi()
+	ctx.floodBind(page:FindFirstChild("CustomToggle"), "Activated", function()
+		if not ctx.opt.floodOn then
+			return
+		end
+		ctx.opt.floodEnabled = not ctx.opt.floodEnabled
+		ctx.floodPush()
+	end)
+	ctx.floodBind(page:FindFirstChild("MapRandomizer"), "Activated", function()
+		if not ctx.opt.floodOn then
+			return
+		end
+		ctx.opt.floodRandom = not ctx.opt.floodRandom
+		ctx.floodPush()
+	end)
+	local hsv = page:FindFirstChild("HSV_Container")
+	if not hsv then
+		return
+	end
+	local themes = {
+		Classic = { water = Color3.fromRGB(13, 105, 172), acid = Color3.fromRGB(3, 252, 3), lava = Color3.fromRGB(252, 28, 3) },
+		Realism = { water = Color3.fromRGB(152, 194, 219), acid = Color3.fromRGB(117, 17, 1), lava = Color3.fromRGB(213, 115, 61) },
+		Vapor = { water = Color3.fromRGB(86, 3, 252), acid = Color3.fromRGB(252, 169, 3), lava = Color3.fromRGB(3, 252, 252) },
+		Soda = { water = Color3.fromRGB(252, 169, 3), acid = Color3.fromRGB(252, 84, 126), lava = Color3.fromRGB(84, 84, 252) },
+	}
+	local th = hsv:FindFirstChild("Themes")
+	local tc = th and th:FindFirstChild("ThemeContainer")
+	if tc then
+		for _, b in tc:GetChildren() do
+			if b:IsA("GuiButton") then
+				ctx.floodBind(b, "Activated", function()
+					local dat = themes[b.Text]
+					if not dat then
+						return
+					end
+					for k, v in dat do
+						ctx.flood.floodColors[k] = v
+					end
+					ctx.floodPush()
+				end)
+			end
+		end
+	end
+	for key in ctx.flood.floodColors do
+		local box = hsv:FindFirstChild(key .. "_HSV")
+		if box then
+			local hex = box:FindFirstChild("Input") and box.Input:FindFirstChild("HexInput")
+			ctx.floodBind(hex, "FocusLost", function()
+				local ok, c = pcall(function()
+					return Color3.fromHex(hex.Text)
+				end)
+				if ok and typeof(c) == "Color3" then
+					ctx.flood.floodColors[key] = c
+				end
+				ctx.floodPush()
+			end)
+			for _, sp in {
+				{ n = "Hue" },
+				{ n = "Saturation" },
+				{ n = "Value" },
+			} do
+				local cn = sp.n == "Saturation" and "Sat" or sp.n == "Value" and "Val" or sp.n
+				local row = box.Config and box.Config:FindFirstChild(cn)
+				local bar = row and row:FindFirstChild("Bar")
+				local gr = bar and bar:FindFirstChild("Graphic")
+				ctx.floodBind(bar and bar:FindFirstChild("Less"), "Activated", function()
+					ctx.floodStep(key, sp.n, -1)
+				end)
+				ctx.floodBind(bar and bar:FindFirstChild("More"), "Activated", function()
+					ctx.floodStep(key, sp.n, 1)
+				end)
+				ctx.floodBind(gr, "MouseButton1Down", function(x)
+					if type(x) ~= "number" or gr.AbsoluteSize.X <= 0 then
+						return
+					end
+					ctx.floodSetHsv(key, sp.n, (x - gr.AbsolutePosition.X) / gr.AbsoluteSize.X)
+				end)
+			end
+		end
+	end
+end
+
+ctx.startFloodColors = function()
+	if not ctx.support("flood") then
+		return
+	end
+	ctx.cache.floodTok += 1
+	local id = ctx.cache.floodTok
+	local rmt = Rsp and Rsp:FindFirstChild("Remote")
+	local tw = rmt and rmt:FindFirstChild("TweenWaterColor")
+	if tw and tw:IsA("RemoteEvent") then
+		ctx.bind(tw.OnClientEvent:Connect(function(part)
+			if ctx.opt.floodOn and part then
+				task.defer(function()
+					ctx.floodApply(ctx.curMap() or part.Parent)
+				end)
+			end
+		end))
+	end
+	ctx.spawnLoop(function()
+		local uiAt = 0
+		local lastMap = nil
+		while ctx.alive() and ctx.cache.floodTok == id do
+			if ctx.opt.floodOn then
+				local now = os.clock()
+				if now >= uiAt then
+					ctx.floodHookUi()
+					uiAt = now + 3
+				end
+				local map = ctx.curMap()
+				if map and map ~= lastMap then
+					lastMap = map
+					task.defer(ctx.floodApply, map)
+				end
+			end
+			task.wait(1.5)
+		end
+	end)
+end
+
+ctx.pg = function()
+	return LP and LP:FindFirstChildOfClass("PlayerGui") or nil
+end
+
+ctx.uiSet = function(obj, prop, val)
+	if not obj then
+		return
+	end
+	pcall(function()
+		obj[prop] = val
+	end)
+end
+
+ctx.uiHide = function(obj)
+	ctx.uiSet(obj, "Visible", false)
+	ctx.uiSet(obj, "Active", false)
+end
+
+ctx.uiEach = function(root, fn)
+	if not (root and type(fn) == "function") then
+		return
+	end
+	fn(root)
+	for _, obj in ctx.descOf(root) do
+		fn(obj)
+	end
+end
+
+ctx.uiBind = function(obj, ev, tag, fn)
+	if not (obj and type(fn) == "function") then
+		return
+	end
+	local h = ctx.cache.uiHooks[obj]
+	if type(h) ~= "table" then
+		h = {}
+		ctx.cache.uiHooks[obj] = h
+	end
+	local k = tostring(ev) .. tostring(tag)
+	if h[k] then
+		return
+	end
+	local sig = obj[ev]
+	if not sig then
+		return
+	end
+	h[k] = true
+	ctx.bind(sig:Connect(fn))
+end
+
+ctx.dataLib = function()
+	local mods = Rsp and Rsp:FindFirstChild("Modules")
+	local sh = mods and mods:FindFirstChild("Shared")
+	local m = sh and sh:FindFirstChild("FE2DataLibrary")
+	if m and type(require) == "function" then
+		local ok, lib = pcall(require, m)
+		if ok and type(lib) == "table" then
+			return lib
+		end
+	end
+end
+
+
+ctx.shopItemList = function()
+	local dl = ctx.dataLib()
+	if dl and type(dl.ItemData) == "table" then
+		ctx.cache.shopItems = dl.ItemData
+		return ctx.cache.shopItems, dl
+	end
+	if type(ctx.cache.shopItems) == "table" then
+		return ctx.cache.shopItems, dl
+	end
+	ctx.requestPlayerData(true)
+	local st = os.clock()
+	repeat
+		dl = ctx.dataLib()
+		if dl and type(dl.ItemData) == "table" then
+			ctx.cache.shopItems = dl.ItemData
+			return ctx.cache.shopItems, dl
+		end
+		if type(ctx.cache.shopItems) == "table" then
+			return ctx.cache.shopItems, dl
+		end
+		task.wait(0.05)
+	until os.clock() - st > 3 or not ctx.alive()
+	return ctx.cache.shopItems, dl
+end
+
+ctx.ownedItems = function()
+	local out = {}
+	local inv = type(pdata) == "table" and pdata.inventory or nil
+	if type(inv) == "table" then
+		for _, id in inv do
+			local n = tonumber(id) or id
+			out[n] = true
+		end
+	end
+	return out
+end
+
+ctx.shopBuyIds = function(cur)
+	local list = ctx.shopItemList()
+	local ids = {}
+	local seen = {}
+	local owned = ctx.ownedItems()
+	cur = tonumber(cur)
+	if type(list) ~= "table" then
+		return ids
+	end
+	for _, it in list do
+		if type(it) == "table" then
+			local id = tonumber(it.ID)
+			local cat = tostring(it.catagory or "")
+			local cc = tonumber(it.currency)
+			if id and cc == cur and not seen[id] and not owned[id] and it.notForSale ~= true and cat ~= "Currency" and cat ~= "Gamepasses" and cat ~= "UGC" then
+				seen[id] = true
+				ids[#ids + 1] = id
+			end
+		end
+	end
+	return ids
+end
+
+ctx.buyShopCurrency = function(cur)
+	if ctx.isFEMGame() then
+		return ctx.buyFemShopCurrency(cur)
+	end
+	if ctx.opt.shopBusy then
+		return
+	end
+	ctx.opt.shopBusy = true
+	ctx.setBuyCoinBtn()
+	ctx.setBuyGemBtn()
+	local name = cur == 1 and "gem" or "coin"
+	local function done(msg)
+		ctx.opt.shopBusy = false
+		ctx.setBuyCoinBtn()
+		ctx.setBuyGemBtn()
+		if msg then
+			ctx.note(msg)
+		end
+	end
+
+	if not (ConfirmItemRemote and ConfirmItemRemote.Parent) then
+		done("ConfirmItem remote not found.")
+		return
+	end
+	local key = ctx.getPassArg(false)
+	if key == nil then
+		done("Passkey not ready.")
+		return
+	end
+	ctx.requestPlayerData(true)
+	local ids = ctx.shopBuyIds(cur)
+	if #ids < 1 then
+		done("No " .. name .. " shop items found.")
+		return
+	end
+	for _, id in ids do
+		pcall(function()
+			ConfirmItemRemote:FireServer(key, id)
+		end)
+		task.wait(0.08)
+	end
+	pcall(function()
+		ConfirmItemRemote:FireServer(key, -1)
+	end)
+	ctx.requestPlayerData(true)
+	done(("Sent %d %s shop purchase%s"):format(#ids, name, #ids == 1 and "" or "s"))
+end
+
+
+ctx.isFxObj = function(o)
+	return o and (o:IsA("ParticleEmitter") or o:IsA("Beam") or o:IsA("Trail") or o:IsA("Fire") or o:IsA("Smoke") or o:IsA("Sparkles"))
+end
+
+ctx.patchSideClip = function(force)
+	local c = ctx.chr(false)
+	local s = c and c:FindFirstChild("CL_AntiSideClip")
+	local z = s and s:FindFirstChild("Ziplining")
+	if s and s:IsA("LocalScript") then
+		pcall(function()
+			s.Disabled = false
+		end)
+	end
+	if z and z:IsA("BindableEvent") then
+		pcall(function()
+			z:Fire(ctx.opt.clipOn == true or force == true)
+		end)
+	end
+end
+
+ctx.patchFpParts = function()
+	if not ctx.opt.fpPartOn then
+		return
+	end
+	local c = ctx.chr(false)
+	if not c then
+		return
+	end
+	local m = c:FindFirstChild("CL_FirstPerson_ParticleManager")
+	if m and m:IsA("LocalScript") then
+		pcall(function()
+			m.Disabled = true
+		end)
+	end
+	for _, o in ctx.descOf(c) do
+		if ctx.isFxObj(o) then
+			pcall(function()
+				o.Enabled = true
+			end)
+		end
+	end
+end
+
+ctx.patchRescue = function()
+	if not ctx.opt.rescueOn then
+		return
+	end
+	local cam = Wsp and Wsp.CurrentCamera
+	if not cam then
+		return
+	end
+	for _, o in ctx.descOf(cam) do
+		if o:IsA("BasePart") then
+			local p = o.Parent
+			if p and (p.Name == "NPC" or p:FindFirstChild("HumanoidRootPart")) then
+				pcall(function()
+					o.LocalTransparencyModifier = 1
+				end)
+			end
+		elseif ctx.isFxObj(o) then
+			pcall(function()
+				o.Enabled = false
+			end)
+		end
+	end
+end
+
+ctx.setDevTools = function(st)
+	ctx.opt.devOn = st and true or false
+	ctx.opt.infAirOn = ctx.opt.devOn
+	ctx.opt.infJumpOn = ctx.opt.devOn
+	ctx.opt.clickTpOn = ctx.opt.devOn
+	local main = LP and LP:FindFirstChild("PlayerScripts") and LP.PlayerScripts:FindFirstChild("CL_MAIN_GameScript")
+	local god = main and main:FindFirstChild("GodMode")
+	if god and god.Fire then
+		pcall(function()
+			god:Fire(ctx.opt.devOn)
+		end)
+	end
+	if ctx.opt.infAirOn then
+		ctx.keepAirFast()
+	else
+		ctx.unprotectAirHealth()
+	end
+	ctx.setDevBtn()
+	ctx.setInfAirBtn()
+	ctx.setInfJumpBtn()
+	ctx.setClickTpBtn()
+end
+
+
+ctx.patchPaidUi = function()
+	if not ctx.opt.paidOn then
+		return
+	end
+	local pg = ctx.pg()
+	if not pg then
+		return
+	end
+	if ctx.support("flood") then
+		ctx.floodUi()
+	end
+	local roots = {
+		pg:FindFirstChild("MenuGui"),
+		pg:FindFirstChild("GameGui"),
+		pg:FindFirstChild("DailyChallengeGui"),
+	}
+	local lob = Wsp and Wsp:FindFirstChild("Lobby")
+	if lob then
+		roots[#roots + 1] = lob:FindFirstChild("ProductWindows")
+	end
+	for _, root in roots do
+		ctx.uiEach(root, function(o)
+			if o.Name == "PurchaseGamepass" or o.Name == "PremiumOnly" or o.Name == "LockedFrame" then
+				ctx.uiHide(o)
+			elseif o:IsA("GuiButton") then
+				ctx.uiSet(o, "Active", true)
+				ctx.uiSet(o, "AutoButtonColor", true)
+			elseif o:IsA("TextLabel") or o:IsA("TextButton") then
+				local tx = tostring(o.Text or "")
+				if string.find(tx, "Unlock") then
+					ctx.uiSet(o, "Text", (string.gsub(tx, "Unlock & ", "")))
+				elseif string.find(tx, "Premium Only") then
+					ctx.uiSet(o, "Visible", false)
+				end
+			end
+		end)
+	end
+end
+
+
+ctx.mainScript = function()
+	local ps = LP and LP:FindFirstChild("PlayerScripts")
+	return ps and ps:FindFirstChild("CL_MAIN_GameScript") or nil
+end
+
+ctx.isSwimmingNow = function()
+	local m = ctx.mainScript()
+	local f = m and m:FindFirstChild("isSwimming")
+	if f and f.Invoke then
+		local ok, res = pcall(function()
+			return f:Invoke()
+		end)
+		return ok and res == true
+	end
+	return false
+end
+
+ctx.partWords = function(p, words)
+	if not p then
+		return false
+	end
+	ctx.tmpName = string.lower((p.Name or "") .. " " .. (p.Parent and p.Parent.Name or ""))
+	for _, w in words do
+		if string.find(ctx.tmpName, w, 1, true) then
+			return true
+		end
+	end
+	return false
+end
+
+ctx.nearNamedPart = function(r, words, dist)
+	if not (Wsp and r) then
+		return false
+	end
+	ctx.tmpParts = nil
+	pcall(function()
+		ctx.tmpParts = Wsp:GetPartBoundsInRadius(r.Position, dist or 8)
+	end)
+	if type(ctx.tmpParts) == "table" then
+		for _, p in ctx.tmpParts do
+			if p and p:IsA("BasePart") then
+				if table.find(words, "truss") and p:IsA("TrussPart") then
+					return true
+				end
+				if ctx.partWords(p, words) then
+					return true
+				end
+			end
+		end
+	end
+	ctx.tmpMap = ctx.curMap() or MP
+	if ctx.tmpMap then
+		for _, p in ctx.descOf(ctx.tmpMap) do
+			if p and p:IsA("BasePart") then
+				if table.find(words, "truss") and p:IsA("TrussPart") and (r.Position - p.Position).Magnitude <= (dist or 8) then
+					return true
+				end
+				if ctx.partWords(p, words) and (r.Position - p.Position).Magnitude <= (dist or 8) then
+					return true
+				end
+			end
+		end
+	end
+	return false
+end
+
+ctx.nearWalljump = function(r)
+	if not r then
+		return nil
+	end
+	ctx.tmpBestWall = nil
+	ctx.tmpBestWallDist = 9
+	ctx.tmpMap = ctx.curMap()
+	if ctx.tmpMap then
+		ctx.ensureChallenges(ctx.tmpMap)
+		ctx.tmpHits = ctx.challengeHits(ctx.tmpMap)
+		for _, wall in ctx.tmpHits.wall do
+			if wall and wall.Parent then
+				ctx.tmpDist = (r.Position - wall.Position).Magnitude
+				if ctx.tmpDist < ctx.tmpBestWallDist then
+					ctx.tmpBestWall = wall
+					ctx.tmpBestWallDist = ctx.tmpDist
+				end
+			end
+		end
+	end
+	ctx.tmpRoots = { ctx.tmpMap, MP }
+	for _, root in ctx.tmpRoots do
+		if root then
+			for _, p in ctx.descOf(root) do
+				if p and p:IsA("BasePart") and ((p:FindFirstChild("_Wall") ~= nil) or ctx.partWords(p, { "walljump", "wall_jump", "_wall" })) then
+					ctx.tmpDist = (r.Position - p.Position).Magnitude
+					if ctx.tmpDist < ctx.tmpBestWallDist then
+						ctx.tmpBestWall = p
+						ctx.tmpBestWallDist = ctx.tmpDist
+					end
+				end
+			end
+		end
+	end
+	if ctx.tmpBestWall then
+		ctx.tmpPos, ctx.tmpNorm = ctx.wallData(ctx.tmpBestWall, r, ctx.chr(false))
+		return ctx.tmpBestWall, ctx.tmpNorm
+	end
+	return nil
+end
+
+ctx.nearSwim = function(r)
+	return ctx.nearNamedPart(r, { "water", "flood", "acid", "lava", "liquid", "swim" }, 12)
+end
+
+ctx.climbJump = function(lvl)
+	ctx.tmpRoot, ctx.tmpHum = ctx.rh(false)
+	if not (ctx.tmpRoot and ctx.tmpHum) then
+		return false
+	end
+	ctx.tmpOldState = ctx.tmpHum:GetState()
+	if ctx.tmpOldState ~= Enum.HumanoidStateType.Climbing then
+		return false
+	end
+	ctx.tmpPow = lvl == 1 and 6 or lvl == 2 and 11 or 16
+	ctx.tmpFwd = lvl == 1 and 4 or lvl == 2 and 7 or 10
+	pcall(function()
+		ctx.tmpHum:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
+		ctx.tmpHum.Jump = true
+		ctx.tmpHum:ChangeState(Enum.HumanoidStateType.Jumping)
+	end)
+	if ctx.feCall("AccurateJump", true) ~= true then
+		ctx.callScriptGlobal(ctx.feEnv(), "AccurateJump", true)
+	end
+	pcall(function()
+		ctx.tmpVel = ctx.tmpRoot.AssemblyLinearVelocity
+		ctx.tmpLoc = ctx.tmpRoot.CFrame:VectorToObjectSpace(ctx.tmpVel)
+		ctx.tmpLoc = Vector3.new(ctx.tmpLoc.X, ctx.tmpLoc.Y + ctx.tmpPow, ctx.tmpLoc.Z + ctx.tmpFwd)
+		ctx.tmpVel = ctx.tmpRoot.CFrame:VectorToWorldSpace(ctx.tmpLoc)
+		ctx.tmpRoot.Velocity = ctx.tmpVel
+		ctx.tmpRoot.AssemblyLinearVelocity = ctx.tmpVel
+	end)
+	return true
+end
+
+ctx.jumpRoot = function(pow, fwd, climb)
+	ctx.tmpRoot, ctx.tmpHum = ctx.rh(false)
+	if not (ctx.tmpRoot and ctx.tmpHum) then
+		return false
+	end
+	if climb then
+		return false
+	end
+	ctx.tmpVel = ctx.tmpRoot.AssemblyLinearVelocity
+	pcall(function()
+		ctx.tmpHum:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
+		ctx.tmpHum.Jump = true
+		ctx.tmpHum:ChangeState(Enum.HumanoidStateType.Jumping)
+		ctx.tmpRoot.Velocity = Vector3.new(ctx.tmpVel.X, math.max(ctx.tmpVel.Y, pow), ctx.tmpVel.Z)
+		ctx.tmpRoot.AssemblyLinearVelocity = ctx.tmpRoot.Velocity
+	end)
+	return true
+end
+
+ctx.doJumpBoost = function()
+	ctx.tmpRoot, ctx.tmpHum = ctx.rh(false)
+	if not (ctx.tmpHum and ctx.tmpRoot) then
+		return
+	end
+	ctx.tmpState = ctx.tmpHum:GetState()
+	if ctx.opt.infJumpOn then
+		ctx.jumpRoot(52, 0, false)
+	end
+end
+
+
+ctx.remoteRoot = function()
+	return Rsp and Rsp:FindFirstChild("Remote") or nil
+end
+
+ctx.remotePath = function(...)
+	ctx.tmpNode = ctx.remoteRoot()
+	for _, nm in { ... } do
+		ctx.tmpNode = ctx.tmpNode and ctx.tmpNode:FindFirstChild(nm)
+	end
+	return ctx.tmpNode
+end
+
+ctx.fireRemote = function(rem, ...)
+	if not (rem and rem.FireServer) then
+		return false
+	end
+	return pcall(function(...)
+		rem:FireServer(...)
+	end, ...)
+end
+
+ctx.fireRegenAir = function()
+	ctx.tmpRem = ctx.remotePath("Challenges", "RegeneratedAir") or ctx.findRemoteNamed("RegeneratedAir")
+	ctx.tmpOk = ctx.fireRemote(ctx.tmpRem, 9999)
+	ctx.tmpOk = ctx.fireRemote(ctx.tmpRem, 300) or ctx.tmpOk
+	ctx.tmpOk = ctx.fireRemote(ctx.tmpRem) or ctx.tmpOk
+	return ctx.tmpOk
+end
+
+ctx.keepAirLocal = function()
+	ctx.tmpAirEnv = ctx.gameEnv()
+	ctx.callScriptGlobal(ctx.tmpAirEnv, "takeAir", -9999)
+	ctx.callScriptGlobal(ctx.tmpAirEnv, "switchAir", "tank", true)
+	ctx.tmpPg = ctx.pg()
+	ctx.tmpAir = ctx.tmpPg and ctx.tmpPg:FindFirstChild("Air", true)
+	ctx.tmpCnt = ctx.tmpAir and ctx.tmpAir:FindFirstChild("Count", true)
+	if ctx.tmpCnt and (ctx.tmpCnt:IsA("TextLabel") or ctx.tmpCnt:IsA("TextButton")) then
+		pcall(function()
+			ctx.tmpCnt.Text = "∞"
+			ctx.tmpCnt.TextColor3 = Color3.new(1, 1, 1)
+		end)
+	end
+end
+
+ctx.airHpValue = function(h)
+	ctx.tmpHp = 100
+	if h then
+		pcall(function()
+			ctx.tmpHp = math.max(100, h.MaxHealth)
+		end)
+	end
+	return ctx.tmpHp
+end
+
+ctx.resetAirHealth = function(h)
+	if not h then
+		return
+	end
+	pcall(function()
+		if ctx.live and ctx.opt.infAirOn and h.Health <= math.max(1, h.MaxHealth * 0.2) then
+			h.Health = ctx.airHpValue(h)
+		end
+	end)
+end
+
+ctx.airBlockAlert = function(env)
+	if type(env) ~= "table" then
+		return
+	end
+	if ctx.cache.airAlertEnv ~= env then
+		if ctx.cache.airAlertEnv and ctx.cache.airAlertOld then
+			pcall(function()
+				ctx.cache.airAlertEnv.newAlert = ctx.cache.airAlertOld
+			end)
+		end
+		ctx.cache.airAlertEnv = env
+		ctx.cache.airAlertOld = type(env.newAlert) == "function" and env.newAlert or nil
+	end
+	if type(ctx.cache.airAlertOld) ~= "function" then
+		return
+	end
+	if env.newAlert ~= ctx.cache.airAlertWrap then
+		ctx.cache.airAlertWrap = function(msg, ...)
+			if ctx.live and ctx.opt.infAirOn and type(msg) == "string" and (msg:find("Drowned") or msg:find("drowned") or msg:find("lava") or msg:find("Lava")) then
+				return
+			end
+			return ctx.cache.airAlertOld(msg, ...)
+		end
+		pcall(function()
+			env.newAlert = ctx.cache.airAlertWrap
+		end)
+	end
+end
+
+ctx.unblockAirAlert = function()
+	if ctx.cache.airAlertEnv and ctx.cache.airAlertOld then
+		pcall(function()
+			ctx.cache.airAlertEnv.newAlert = ctx.cache.airAlertOld
+		end)
+	end
+	ctx.cache.airAlertEnv = nil
+	ctx.cache.airAlertOld = nil
+	ctx.cache.airAlertWrap = nil
+end
+
+ctx.protectAirHealth = function()
+	ctx.tmpRoot, ctx.tmpHum = ctx.rh(false)
+	if not ctx.tmpHum then
+		return
+	end
+	ctx.cache.airHum = ctx.tmpHum
+	if ctx.cache.airHealthHum ~= ctx.tmpHum then
+		ctx.cut(ctx.cache.airHealthConn)
+		ctx.cut(ctx.cache.airDiedConn)
+		ctx.cache.airHealthHum = ctx.tmpHum
+		ctx.cache.airHealthConn = ctx.tmpHum:GetPropertyChangedSignal("Health"):Connect(function()
+			ctx.resetAirHealth(ctx.cache.airHealthHum)
+		end)
+		ctx.bind(ctx.cache.airHealthConn)
+		ctx.cache.airDiedConn = ctx.tmpHum.Died:Connect(function()
+			if ctx.live and ctx.opt.infAirOn then
+				ctx.resetAirHealth(ctx.cache.airHealthHum)
+			end
+		end)
+		ctx.bind(ctx.cache.airDiedConn)
+	end
+	pcall(function()
+		ctx.tmpHum.BreakJointsOnDeath = false
+	end)
+	pcall(function()
+		ctx.tmpHum.RequiresNeck = false
+	end)
+	pcall(function()
+		ctx.tmpHum:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
+	end)
+	pcall(function()
+		if ctx.tmpHum.Health <= math.max(1, ctx.tmpHum.MaxHealth * 0.2) then
+			ctx.tmpHum.Health = ctx.airHpValue(ctx.tmpHum)
+		end
+	end)
+end
+
+ctx.unprotectAirHealth = function()
+	ctx.tmpRoot, ctx.tmpHum = ctx.rh(false)
+	if ctx.tmpHum then
+		pcall(function()
+			ctx.tmpHum:SetStateEnabled(Enum.HumanoidStateType.Dead, true)
+		end)
+	end
+	ctx.unblockAirAlert()
+	ctx.keepFemAir(false)
+end
+
+ctx.femSwimming = function()
+	if type(ctx.cache.femSwim) == "table" then
+		return ctx.cache.femSwim
+	end
+	if ctx.cache.femSwim == false and os.clock() < (ctx.cache.femSwimRetry or 0) then
+		return nil
+	end
+	ctx.cache.femSwim = false
+	ctx.cache.femSwimRetry = os.clock() + 2
+	ctx.tmpPs = LP and LP:FindFirstChild("PlayerScripts")
+	ctx.tmpLh = ctx.tmpPs and ctx.tmpPs:FindFirstChild("LocalHandler")
+	ctx.tmpSw = ctx.tmpLh and ctx.tmpLh:FindFirstChild("Swimming")
+	if ctx.tmpSw and type(require) == "function" then
+		ctx.tmpOk, ctx.tmpMod = pcall(require, ctx.tmpSw)
+		if ctx.tmpOk and type(ctx.tmpMod) == "table" then
+			ctx.cache.femSwim = ctx.tmpMod
+			return ctx.tmpMod
+		end
+	end
+	return nil
+end
+
+ctx.keepFemAir = function(st)
+	ctx.tmpSwim = ctx.femSwimming()
+	if type(ctx.tmpSwim) ~= "table" then
+		return false
+	end
+	if type(ctx.tmpSwim.Invincibility) == "function" then
+		pcall(ctx.tmpSwim.Invincibility, st ~= false)
+	end
+	if st ~= false and type(ctx.tmpSwim.SubtractAir) == "function" then
+		pcall(ctx.tmpSwim.SubtractAir, -9999)
+	end
+	return true
+end
+
+ctx.keepAirFast = function()
+	ctx.protectAirHealth()
+	ctx.keepFemAir(true)
+	ctx.tmpAirEnv = ctx.cache.airEnv or ctx.gameEnv()
+	if ctx.tmpAirEnv then
+		ctx.cache.airEnv = ctx.tmpAirEnv
+		ctx.airBlockAlert(ctx.tmpAirEnv)
+	end
+	ctx.callScriptGlobal(ctx.tmpAirEnv, "takeAir", -9999)
+	ctx.callScriptGlobal(ctx.tmpAirEnv, "switchAir", "tank", true)
+	ctx.protectAirHealth()
+end
+
+ctx.fireGod = function(st)
+	ctx.tmpMain = ctx.mainScript()
+	ctx.tmpGod = ctx.tmpMain and ctx.tmpMain:FindFirstChild("GodMode")
+	if ctx.tmpGod and ctx.tmpGod.Fire then
+		pcall(function()
+			ctx.tmpGod:Fire(st == true)
+		end)
+	end
+	if st == true then
+		ctx.keepAirLocal()
+		ctx.keepFemAir(true)
+		ctx.fireRegenAir()
+	else
+		ctx.keepFemAir(false)
+	end
+end
+
+ctx.femLocatorHit = function()
+	ctx.tmpPg = ctx.pg()
+	ctx.tmpLoc = ctx.tmpPg and ctx.tmpPg:FindFirstChild("Locator", true)
+	ctx.tmpView = ctx.tmpLoc and ctx.tmpLoc:FindFirstChild("LocatorViewport", true)
+	ctx.tmpBall = ctx.tmpView and ctx.tmpView:FindFirstChild("Ball")
+	if ctx.tmpBall and ctx.tmpBall:IsA("BasePart") then
+		return ctx.tmpBall
+	end
+	return nil
+end
+
+ctx.fireNextButton = function()
+	ctx.tmpMap = ctx.curMap()
+	ctx.tmpRoot = select(1, ctx.rh(false))
+	if ctx.isFEM() then
+		ctx.tmpHit = ctx.femLocatorHit()
+		if ctx.tmpHit and ctx.tmpHit.Parent then
+			if ctx.tmpRoot and ctx.tmpRoot.Parent then
+				pcall(function()
+					ctx.pivotRootTo(ctx.tmpHit.CFrame + Vector3.new(0, 3, 0), ctx.tmpRoot)
+					ctx.tmpRoot.AssemblyLinearVelocity = Vector3.zero
+				end)
+				task.wait(0.08)
+			end
+			ctx.cache.muteNotifyUntil = os.clock() + 1.5
+			ctx.pressMapButton(ctx.tmpHit)
+			return true
+		end
+	end
+	ctx.tmpEntries = {}
+	if ctx.tmpMap then
+		ctx.tmpEntries = ctx.auraEntries(ctx.tmpMap) or {}
+		ctx.mergeLocatorBtns(ctx.tmpEntries, ctx.tmpMap)
+		if #ctx.tmpEntries <= 0 then
+			ctx.tmpOk, ctx.tmpRes = pcall(ctx.scanBtns, ctx.tmpMap)
+			if ctx.tmpOk and type(ctx.tmpRes) == "table" then
+				ctx.tmpEntries = ctx.tmpRes
+			end
+		end
+	end
+	ctx.tmpEntry = ctx.nearestEntry(ctx.tmpEntries, ctx.tmpRoot and ctx.tmpRoot.Position)
+	ctx.tmpHit = ctx.tmpEntry and ctx.tmpEntry.hit
+	if ctx.tmpHit and ctx.tmpHit.Parent then
+		if ctx.tmpRoot and ctx.tmpRoot.Parent then
+			pcall(function()
+				ctx.pivotRootTo(ctx.tmpHit.CFrame + Vector3.new(0, 3, 0), ctx.tmpRoot)
+				ctx.tmpRoot.AssemblyLinearVelocity = Vector3.zero
+			end)
+			task.wait(0.08)
+			if type(firetouchinterest) == "function" then
+				pcall(firetouchinterest, ctx.tmpRoot, ctx.tmpHit, 0)
+				pcall(firetouchinterest, ctx.tmpRoot, ctx.tmpHit, 1)
+			end
+		end
+		ctx.cache.muteNotifyUntil = os.clock() + 1.5
+		ctx.pressMapButton(ctx.tmpHit)
+		return true
+	end
+	ctx.note("No map button found")
+	return false
+end
+
+ctx.fireTestRemote = function(nm)
+	if nm == "NextButton" then
+		return ctx.fireNextButton()
+	end
+	ctx.tmpEv = ctx.findRemoteNamed(nm)
+	if not (ctx.tmpEv and ctx.tmpEv.FireServer) then
+		ctx.note(tostring(nm) .. " remote not found")
+		return false
+	end
+	return ctx.fireRemote(ctx.tmpEv)
+end
+
+
+ctx.safeParent = function(o)
+	ctx.tmpOk, ctx.tmpPar = pcall(function()
+		return o and o.Parent
+	end)
+	if ctx.tmpOk then
+		return ctx.tmpPar
+	end
+	return nil
+end
+
+ctx.zipTarget = function(o)
+	if not (o and typeof(o) == "Instance") then
+		return false
+	end
+	ctx.tmpZipPar = ctx.safeParent(o)
+	ctx.tmpZipName = string.lower((o.Name or "") .. " " .. (ctx.tmpZipPar and ctx.tmpZipPar.Name or ""))
+	return string.find(ctx.tmpZipName, "zip", 1, true)
+		or string.find(ctx.tmpZipName, "rope", 1, true)
+		or o:GetAttribute("RopeSpeed") ~= nil
+		or o:GetAttribute("ZiplineSpeed") ~= nil
+		or o:GetAttribute("VelocityInheritance") ~= nil
+end
+
+ctx.zipPatchOne = function(o, st)
+	if not (o and typeof(o) == "Instance") then
+		return
+	end
+	if ctx.cache.zipOld[o] == nil then
+		ctx.cache.zipOld[o] = {
+			o:GetAttribute("RopeSpeed"),
+			o:GetAttribute("ZiplineSpeed"),
+			o:GetAttribute("Speed"),
+			o:GetAttribute("VelocityInheritance"),
+		}
+	end
+	pcall(function()
+		if st and ctx.opt.zipSpeed > 0 then
+			o:SetAttribute("RopeSpeed", ctx.opt.zipSpeed)
+			o:SetAttribute("ZiplineSpeed", ctx.opt.zipSpeed)
+			o:SetAttribute("Speed", ctx.opt.zipSpeed)
+			o:SetAttribute("VelocityInheritance", 0)
+		elseif ctx.cache.zipOld[o] then
+			o:SetAttribute("RopeSpeed", ctx.cache.zipOld[o][1])
+			o:SetAttribute("ZiplineSpeed", ctx.cache.zipOld[o][2])
+			o:SetAttribute("Speed", ctx.cache.zipOld[o][3])
+			o:SetAttribute("VelocityInheritance", ctx.cache.zipOld[o][4])
+		end
+	end)
+end
+
+ctx.watchZipRoot = function(root)
+	if not (root and typeof(root) == "Instance") or ctx.cache.zipWatches[root] then
+		return
+	end
+	ctx.cache.zipWatches[root] = true
+	if root.DescendantAdded then
+		ctx.bind(root.DescendantAdded:Connect(function(o)
+			if not (ctx.alive() and ctx.opt.zipFastOn and ctx.opt.zipAutoOn) then
+				return
+			end
+			task.defer(function()
+				if not (ctx.alive() and ctx.opt.zipFastOn and ctx.opt.zipAutoOn) then
+					return
+				end
+				if ctx.zipTarget(o) then
+					ctx.zipPatchOne(o, true)
+				end
+				ctx.tmpZipPar = ctx.safeParent(o)
+				if ctx.tmpZipPar and ctx.zipTarget(ctx.tmpZipPar) then
+					ctx.zipPatchOne(ctx.tmpZipPar, true)
+				end
+			end)
+		end))
+	end
+end
+
+ctx.setZipAttrs = function(st)
+	ctx.tmpMap = ctx.curMap()
+	ctx.tmpZipRoots = {}
+	if ctx.tmpMap then
+		ctx.tmpZipRoots[#ctx.tmpZipRoots + 1] = ctx.tmpMap
+	end
+	if MP then
+		ctx.tmpZipRoots[#ctx.tmpZipRoots + 1] = MP
+	end
+	for _, root in ctx.tmpZipRoots do
+		ctx.watchZipRoot(root)
+		for _, o in ctx.descOf(root) do
+			if ctx.zipTarget(o) then
+				ctx.zipPatchOne(o, st)
+			end
+			ctx.tmpZipPar = ctx.safeParent(o)
+			if ctx.tmpZipPar and ctx.zipTarget(ctx.tmpZipPar) then
+				ctx.zipPatchOne(ctx.tmpZipPar, st)
+			end
+		end
+	end
+end
+
+ctx.reapplyZipSpeed = function()
+	if not (ctx.opt.zipFastOn and ctx.opt.zipAutoOn) then
+		return
+	end
+	ctx.setZipAttrs(true)
+end
+
+ctx.resetZipVelocity = function()
+	ctx.tmpRoot = select(1, ctx.rh(false))
+	if not ctx.tmpRoot then
+		return
+	end
+	pcall(function()
+		ctx.tmpRoot.AssemblyLinearVelocity = Vector3.zero
+		ctx.tmpRoot.Velocity = Vector3.zero
+	end)
+	task.delay(0.04, function()
+		if not ctx.alive() then
+			return
+		end
+		ctx.tmpRoot = select(1, ctx.rh(false))
+		if ctx.tmpRoot then
+			pcall(function()
+				ctx.tmpRoot.AssemblyLinearVelocity = Vector3.zero
+				ctx.tmpRoot.Velocity = Vector3.zero
+			end)
+		end
+	end)
+end
+
+ctx.hookZipStop = function(c)
+	if ctx.cache.zipChar == c then
+		return
+	end
+	ctx.cut(ctx.cache.zipConn)
+	ctx.cache.zipConn = nil
+	ctx.cache.zipChar = c
+	ctx.tmpAnti = c and c:FindFirstChild("CL_AntiSideClip")
+	ctx.tmpZipEv = ctx.tmpAnti and ctx.tmpAnti:FindFirstChild("Ziplining")
+	if ctx.tmpZipEv and ctx.tmpZipEv.Event then
+		ctx.cache.zipConn = ctx.bind(ctx.tmpZipEv.Event:Connect(function(st)
+			ctx.opt.zipActive = st and true or false
+			if not st and ctx.opt.zipStopOn then
+				ctx.resetZipVelocity()
+			end
+		end))
+	end
+end
+
+ctx.fireSlideBindable = function()
+	ctx.tmpOk = ctx.feCall("runSlide", "FE2Helper", Enum.UserInputState.Begin, true)
+	if ctx.tmpOk then
+		return true
+	end
+	ctx.tmpChar = ctx.chr(false)
+	ctx.tmpFe = ctx.tmpChar and ctx.tmpChar:FindFirstChild("FE2_Character")
+	ctx.tmpSlide = ctx.tmpFe and ctx.tmpFe:FindFirstChild("Slide")
+	if ctx.tmpSlide and ctx.tmpSlide.Fire then
+		pcall(function()
+			ctx.tmpSlide:Fire("FE2Helper", Enum.UserInputState.Begin, true)
+		end)
+		return true
+	end
+	return false
+end
+
+ctx.swimVelocity = function(r, h, y, spd)
+	if not (r and h and ctx.isSwimmingNow()) then
+		return
+	end
+	ctx.tmpDir = h.MoveDirection
+	if ctx.tmpDir.Magnitude < 0.05 then
+		return
+	end
+	ctx.tmpSwimVel = r:FindFirstChild("SwimVel")
+	if not ctx.tmpSwimVel then
+		return
+	end
+	pcall(function()
+		ctx.tmpSwimVel.MaxForce = Vector3.new(5000, 0, 5000)
+		ctx.tmpSwimVel.Velocity = Vector3.new(ctx.tmpDir.X * spd, 0, ctx.tmpDir.Z * spd)
+		if y ~= 0 then
+			ctx.tmpSwimVel.MaxForce = Vector3.new(5000, 3500, 5000)
+			ctx.tmpSwimVel.Velocity = ctx.tmpSwimVel.Velocity + Vector3.new(0, y, 0)
+		end
+	end)
+end
+
+ctx.applyPhysicsOptions = function()
+	if not (ctx.opt.infJumpOn or ctx.opt.zipFastOn) then
+		return
+	end
+	ctx.tmpRoot, ctx.tmpHum, ctx.tmpChar = ctx.rh(false)
+	if not (ctx.tmpChar and ctx.tmpHum and ctx.tmpRoot) then
+		return
+	end
+	ctx.tmpNow = os.clock()
+	ctx.tmpSpace = Uis and Uis:IsKeyDown(Enum.KeyCode.Space)
+
+	if ctx.opt.infJumpOn and ctx.tmpSpace and ctx.tmpNow - ctx.cache.jumpAt >= 0.16 and ctx.tmpHum:GetState() ~= Enum.HumanoidStateType.Climbing then
+		ctx.cache.jumpAt = ctx.tmpNow
+		ctx.jumpRoot(52, 0, false)
+	end
+end
+
+ctx.startInfAirHeartbeat = function()
+	if not Run or ctx.cache.infAirHb then
+		return
+	end
+	ctx.cache.infAirHb = Run.Heartbeat:Connect(function()
+		if not ctx.alive() then
+			return
+		end
+		if ctx.opt.infAirOn then
+			ctx.keepAirFast()
+		elseif ctx.cache.airAlertEnv then
+			ctx.unprotectAirHealth()
+		end
+	end)
+	ctx.bind(ctx.cache.infAirHb)
+end
+
+ctx.startPhysicsOptions = function()
+	ctx.startInfAirHeartbeat()
+	if Uis then
+		ctx.bind(Uis.JumpRequest:Connect(function()
+			ctx.doJumpBoost()
+		end))
+		ctx.bind(Uis.InputBegan:Connect(function(inp, gp)
+			if gp or not inp then
+				return
+			end
+			if inp.KeyCode == Enum.KeyCode.Space then
+				ctx.doJumpBoost()
+			end
+		end))
+	end
+	ctx.tmpMouse = LP and LP:GetMouse()
+	if ctx.tmpMouse then
+		ctx.bind(ctx.tmpMouse.Button1Up:Connect(function()
+			if not ctx.opt.clickTpOn then
+				return
+			end
+			ctx.tmpRoot = select(1, ctx.rh(false))
+			if ctx.tmpRoot and ctx.tmpMouse.Hit then
+				ctx.tmpRx, ctx.tmpRy, ctx.tmpRz = ctx.tmpRoot.CFrame:ToEulerAnglesXYZ()
+				pcall(function()
+					ctx.tmpRoot.CFrame = CFrame.new(ctx.tmpMouse.Hit.Position + Vector3.new(0, 2.5, 0)) * CFrame.fromEulerAnglesXYZ(ctx.tmpRx, ctx.tmpRy, ctx.tmpRz)
+				end)
+			end
+		end))
+	end
+	ctx.spawnLoop(function()
+		while ctx.alive() do
+			ctx.applyPhysicsOptions()
+			task.wait(0.18)
+		end
+	end)
+end
+
+ctx.startUiUnlocks = function()
+	ctx.cache.uiTok += 1
+	ctx.tmpUiTok = ctx.cache.uiTok
+	ctx.spawnLoop(function()
+		while ctx.alive() and ctx.cache.uiTok == ctx.tmpUiTok do
+			if ctx.opt.paidOn then
+				ctx.patchPaidUi()
+			end
+			if ctx.opt.clipOn then
+				ctx.patchSideClip()
+			end
+			if ctx.opt.rescueOn then
+				ctx.patchRescue()
+			end
+			task.wait(3)
+		end
+	end)
+end
+
 if MP then
 	ctx.bind(MP.ChildAdded:Connect(function(ch)
-		if (ch.Name == "Map" or ch.Name == "NewMap") and on then
-			task.spawn(ctx.burstLoaded)
+		if ch.Name == "Map" or ch.Name == "NewMap" then
+			if on then
+				task.spawn(ctx.burstLoaded)
+			end
+			if ctx.opt.zipFastOn and ctx.opt.zipAutoOn then
+				task.defer(ctx.reapplyZipSpeed)
+				task.delay(0.75, ctx.reapplyZipSpeed)
+				task.delay(2, ctx.reapplyZipSpeed)
+			end
 		end
 	end))
 end
 
-ctx.mkUi = function()
-	local par = ctx.uiPar()
-	if not par then
-		return
+ctx.loadTopbar = function()
+	if ctx.topbar then
+		return ctx.topbar
 	end
-
-	local old = ctx.ffc(par, "AF_Toggle", false)
-	if old then
+	ctx.tmpLoader = loadstring or load
+	if type(ctx.tmpLoader) ~= "function" then
+		return nil
+	end
+	ctx.tmpSrc = nil
+	pcall(function()
+		ctx.tmpSrc = game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/refs/heads/main/Icon.luau")
+	end)
+	if type(ctx.tmpSrc) ~= "string" or ctx.tmpSrc == "" then
+		return nil
+	end
+	ctx.tmpChunk = ctx.tmpLoader(ctx.tmpSrc, "@lt_topbar_icon.luau")
+	if type(ctx.tmpChunk) ~= "function" then
+		return nil
+	end
+	pcall(function()
+		ctx.topbar = ctx.tmpChunk()
+	end)
+	if type(ctx.topbar) == "table" then
 		pcall(function()
-			old:Destroy()
+			ctx.topbar.setDisplayOrder(2147483647)
+		end)
+		return ctx.topbar
+	end
+	return nil
+end
+
+ctx.icon = function(name, label, cb, col)
+	ctx.tmpIcon = ctx.topbar.new()
+	pcall(function()
+		ctx.tmpIcon:setName("FE2_" .. name)
+	end)
+	pcall(function()
+		ctx.tmpIcon:setLabel(label)
+	end)
+	pcall(function()
+		ctx.tmpIcon:oneClick()
+	end)
+	if col then
+		ctx.uiColor(ctx.tmpIcon, col)
+	end
+	if type(cb) == "function" then
+		pcall(function()
+			ctx.tmpIcon:bindEvent("selected", function()
+				pcall(cb)
+			end)
 		end)
 	end
+	ctx.ui.menu[#ctx.ui.menu + 1] = ctx.tmpIcon
+	return ctx.tmpIcon
+end
 
-	gui = Instance.new("ScreenGui")
-	gui.Name = "AF_Toggle"
-	gui.IgnoreGuiInset = true
-	gui.ResetOnSpawn = false
-	gui.Parent = par
+ctx.applyAuraDistText = function(txt)
+	ctx.tmpNum = tonumber(txt)
+	if not ctx.tmpNum then
+		ctx.note("Invalid aura distance")
+		return false
+	end
+	auraDist = math.clamp(math.floor(ctx.tmpNum * 100 + 0.5) / 100, 0, 1000)
+	ctx.setDistBtn()
+	ctx.saveSoon()
+	ctx.note("Aura distance set to " .. tostring(auraDist))
+	return true
+end
 
-	panel = Instance.new("Frame")
-	panel.Name = "Panel"
-	panel.Size = UDim2.new(0, 190, 0, 105)
-	panel.Position = UDim2.new(0.5, -95, 0, 10)
-	panel.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-	panel.BorderSizePixel = 0
-	panel.Active = true
-	panel.Parent = gui
+ctx.closeAuraPrompt = function()
+	if ctx.ui.auraPrompt then
+		pcall(function()
+			ctx.ui.auraPrompt:Destroy()
+		end)
+	end
+	ctx.ui.auraPrompt = nil
+end
 
-	btn = Instance.new("TextButton")
-	btn.Size = UDim2.new(1, -20, 0, 40)
-	btn.Position = UDim2.new(0, 10, 0, 10)
-	btn.BackgroundColor3 = Color3.fromRGB(60, 180, 60)
-	btn.TextColor3 = Color3.new(1, 1, 1)
-	btn.Font = Enum.Font.SourceSansBold
-	btn.TextSize = 18
-	btn.Text = "Start AutoFarm"
-	btn.Active = true
-	btn.Parent = panel
+ctx.openAuraPrompt = function()
+	if ctx.ui.auraPrompt then
+		ctx.closeAuraPrompt()
+		return
+	end
+	ctx.tmpParent = LP and LP:FindFirstChildOfClass("PlayerGui") or Cgui
+	if not ctx.tmpParent then
+		ctx.note("No UI parent")
+		return
+	end
+	ctx.ui.auraPrompt = Instance.new("ScreenGui")
+	ctx.ui.auraPrompt.Name = "FE2AuraDistancePrompt"
+	ctx.ui.auraPrompt.IgnoreGuiInset = true
+	ctx.ui.auraPrompt.ResetOnSpawn = false
+	ctx.ui.auraPrompt.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	pcall(function()
+		ctx.ui.auraPrompt.Parent = ctx.tmpParent
+	end)
+	ctx.tmpFrame = Instance.new("Frame")
+	ctx.tmpFrame.Name = "Box"
+	ctx.tmpFrame.AnchorPoint = Vector2.new(0.5, 0)
+	ctx.tmpFrame.Position = UDim2.new(0.5, 0, 0, 72)
+	ctx.tmpFrame.Size = UDim2.fromOffset(260, 112)
+	ctx.tmpFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+	ctx.tmpFrame.BorderSizePixel = 0
+	ctx.tmpFrame.Parent = ctx.ui.auraPrompt
+	ctx.tmpCorner = Instance.new("UICorner")
+	ctx.tmpCorner.CornerRadius = UDim.new(0, 10)
+	ctx.tmpCorner.Parent = ctx.tmpFrame
+	ctx.tmpTitle = Instance.new("TextLabel")
+	ctx.tmpTitle.BackgroundTransparency = 1
+	ctx.tmpTitle.Size = UDim2.new(1, -16, 0, 28)
+	ctx.tmpTitle.Position = UDim2.fromOffset(8, 6)
+	ctx.tmpTitle.Font = Enum.Font.GothamBold
+	ctx.tmpTitle.TextScaled = true
+	ctx.tmpTitle.TextColor3 = Color3.new(1, 1, 1)
+	ctx.tmpTitle.Text = "Aura Distance"
+	ctx.tmpTitle.Parent = ctx.tmpFrame
+	ctx.tmpBox = Instance.new("TextBox")
+	ctx.tmpBox.Name = "Input"
+	ctx.tmpBox.Size = UDim2.new(1, -24, 0, 34)
+	ctx.tmpBox.Position = UDim2.fromOffset(12, 42)
+	ctx.tmpBox.BackgroundColor3 = Color3.fromRGB(45, 45, 52)
+	ctx.tmpBox.BorderSizePixel = 0
+	ctx.tmpBox.ClearTextOnFocus = false
+	ctx.tmpBox.Text = tostring(auraDist)
+	ctx.tmpBox.PlaceholderText = "number, e.g. 2 or 8"
+	ctx.tmpBox.Font = Enum.Font.Gotham
+	ctx.tmpBox.TextScaled = true
+	ctx.tmpBox.TextColor3 = Color3.new(1, 1, 1)
+	ctx.tmpBox.Parent = ctx.tmpFrame
+	ctx.tmpBoxCorner = Instance.new("UICorner")
+	ctx.tmpBoxCorner.CornerRadius = UDim.new(0, 8)
+	ctx.tmpBoxCorner.Parent = ctx.tmpBox
+	ctx.tmpApply = Instance.new("TextButton")
+	ctx.tmpApply.Name = "Apply"
+	ctx.tmpApply.Size = UDim2.new(0.5, -18, 0, 26)
+	ctx.tmpApply.Position = UDim2.fromOffset(12, 82)
+	ctx.tmpApply.BackgroundColor3 = Color3.fromRGB(60, 160, 75)
+	ctx.tmpApply.BorderSizePixel = 0
+	ctx.tmpApply.Font = Enum.Font.GothamBold
+	ctx.tmpApply.TextScaled = true
+	ctx.tmpApply.TextColor3 = Color3.new(1, 1, 1)
+	ctx.tmpApply.Text = "Apply"
+	ctx.tmpApply.Parent = ctx.tmpFrame
+	ctx.tmpApplyCorner = Instance.new("UICorner")
+	ctx.tmpApplyCorner.CornerRadius = UDim.new(0, 8)
+	ctx.tmpApplyCorner.Parent = ctx.tmpApply
+	ctx.tmpCancel = Instance.new("TextButton")
+	ctx.tmpCancel.Name = "Cancel"
+	ctx.tmpCancel.Size = UDim2.new(0.5, -18, 0, 26)
+	ctx.tmpCancel.Position = UDim2.new(0.5, 6, 0, 82)
+	ctx.tmpCancel.BackgroundColor3 = Color3.fromRGB(150, 55, 55)
+	ctx.tmpCancel.BorderSizePixel = 0
+	ctx.tmpCancel.Font = Enum.Font.GothamBold
+	ctx.tmpCancel.TextScaled = true
+	ctx.tmpCancel.TextColor3 = Color3.new(1, 1, 1)
+	ctx.tmpCancel.Text = "Cancel"
+	ctx.tmpCancel.Parent = ctx.tmpFrame
+	ctx.tmpCancelCorner = Instance.new("UICorner")
+	ctx.tmpCancelCorner.CornerRadius = UDim.new(0, 8)
+	ctx.tmpCancelCorner.Parent = ctx.tmpCancel
+	ctx.bind(ctx.tmpApply.MouseButton1Click:Connect(function()
+		if ctx.applyAuraDistText(ctx.tmpBox.Text) then
+			ctx.closeAuraPrompt()
+		end
+	end))
+	ctx.bind(ctx.tmpCancel.MouseButton1Click:Connect(ctx.closeAuraPrompt))
+	ctx.bind(ctx.tmpBox.FocusLost:Connect(function(enter)
+		if enter and ctx.applyAuraDistText(ctx.tmpBox.Text) then
+			ctx.closeAuraPrompt()
+		end
+	end))
+	pcall(function()
+		ctx.tmpBox:CaptureFocus()
+	end)
+end
 
-	optBtn = Instance.new("TextButton")
-	optBtn.Size = UDim2.new(1, -20, 0, 40)
-	optBtn.Position = UDim2.new(0, 10, 0, 55)
-	optBtn.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
-	optBtn.TextColor3 = Color3.new(1, 1, 1)
-	optBtn.Font = Enum.Font.SourceSansBold
-	optBtn.TextSize = 18
-	optBtn.Text = "Options v"
-	optBtn.Active = true
-	optBtn.Parent = panel
+ctx.applyZipSpeedText = function(txt)
+	ctx.tmpNum = tonumber(txt)
+	if not ctx.tmpNum then
+		ctx.note("Invalid zipline speed")
+		return false
+	end
+	ctx.tmpNum = math.clamp(math.floor(ctx.tmpNum * 100 + 0.5) / 100, 0, 500)
+	ctx.opt.zipSpeed = ctx.tmpNum
+	ctx.opt.zipFastOn = ctx.tmpNum > 0
+	ctx.setZipBtn()
+	ctx.setZipAttrs(ctx.opt.zipFastOn)
+	if not ctx.opt.zipFastOn and ctx.opt.zipStopOn then
+		ctx.resetZipVelocity()
+	end
+	ctx.saveSoon()
+	ctx.note(ctx.opt.zipFastOn and ("Zipline speed set to " .. tostring(ctx.opt.zipSpeed)) or "Zipline speed disabled")
+	return true
+end
 
-	optionsFrame = Instance.new("Frame")
-	optionsFrame.Name = "Options"
-	optionsFrame.Size = UDim2.new(1, -20, 0, 220)
-	optionsFrame.Position = UDim2.new(0, 10, 0, 100)
-	optionsFrame.BackgroundTransparency = 1
-	optionsFrame.Visible = false
-	optionsFrame.Parent = panel
+ctx.closeZipPrompt = function()
+	if ctx.ui.zipPrompt then
+		pcall(function()
+			ctx.ui.zipPrompt:Destroy()
+		end)
+	end
+	ctx.ui.zipPrompt = nil
+end
 
-	auraBtn = Instance.new("TextButton")
-	auraBtn.Size = UDim2.new(1, 0, 0, 35)
-	auraBtn.Position = UDim2.new(0, 0, 0, 0)
-	auraBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
-	auraBtn.TextColor3 = Color3.new(1, 1, 1)
-	auraBtn.Font = Enum.Font.SourceSansBold
-	auraBtn.TextSize = 16
-	auraBtn.Text = "Button Aura: OFF"
-	auraBtn.Active = true
-	auraBtn.Parent = optionsFrame
+ctx.openZipPrompt = function()
+	if ctx.ui.zipPrompt then
+		ctx.closeZipPrompt()
+		return
+	end
+	ctx.tmpParent = LP and LP:FindFirstChildOfClass("PlayerGui") or Cgui
+	if not ctx.tmpParent then
+		ctx.note("No UI parent")
+		return
+	end
+	ctx.ui.zipPrompt = Instance.new("ScreenGui")
+	ctx.ui.zipPrompt.Name = "FE2ZipSpeedPrompt"
+	ctx.ui.zipPrompt.IgnoreGuiInset = true
+	ctx.ui.zipPrompt.ResetOnSpawn = false
+	ctx.ui.zipPrompt.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	pcall(function()
+		ctx.ui.zipPrompt.Parent = ctx.tmpParent
+	end)
+	ctx.tmpFrame = Instance.new("Frame")
+	ctx.tmpFrame.Name = "Box"
+	ctx.tmpFrame.AnchorPoint = Vector2.new(0.5, 0)
+	ctx.tmpFrame.Position = UDim2.new(0.5, 0, 0, 72)
+	ctx.tmpFrame.Size = UDim2.fromOffset(270, 116)
+	ctx.tmpFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+	ctx.tmpFrame.BorderSizePixel = 0
+	ctx.tmpFrame.Parent = ctx.ui.zipPrompt
+	ctx.tmpCorner = Instance.new("UICorner")
+	ctx.tmpCorner.CornerRadius = UDim.new(0, 10)
+	ctx.tmpCorner.Parent = ctx.tmpFrame
+	ctx.tmpTitle = Instance.new("TextLabel")
+	ctx.tmpTitle.BackgroundTransparency = 1
+	ctx.tmpTitle.Size = UDim2.new(1, -16, 0, 28)
+	ctx.tmpTitle.Position = UDim2.fromOffset(8, 6)
+	ctx.tmpTitle.Font = Enum.Font.GothamBold
+	ctx.tmpTitle.TextScaled = true
+	ctx.tmpTitle.TextColor3 = Color3.new(1, 1, 1)
+	ctx.tmpTitle.Text = "Zipline Speed"
+	ctx.tmpTitle.Parent = ctx.tmpFrame
+	ctx.tmpBox = Instance.new("TextBox")
+	ctx.tmpBox.Name = "Input"
+	ctx.tmpBox.Size = UDim2.new(1, -24, 0, 34)
+	ctx.tmpBox.Position = UDim2.fromOffset(12, 42)
+	ctx.tmpBox.BackgroundColor3 = Color3.fromRGB(45, 45, 52)
+	ctx.tmpBox.BorderSizePixel = 0
+	ctx.tmpBox.ClearTextOnFocus = false
+	ctx.tmpBox.Text = tostring(ctx.opt.zipSpeed)
+	ctx.tmpBox.PlaceholderText = "0 disables, e.g. 60 or 90"
+	ctx.tmpBox.Font = Enum.Font.Gotham
+	ctx.tmpBox.TextScaled = true
+	ctx.tmpBox.TextColor3 = Color3.new(1, 1, 1)
+	ctx.tmpBox.Parent = ctx.tmpFrame
+	ctx.tmpBoxCorner = Instance.new("UICorner")
+	ctx.tmpBoxCorner.CornerRadius = UDim.new(0, 8)
+	ctx.tmpBoxCorner.Parent = ctx.tmpBox
+	ctx.tmpApply = Instance.new("TextButton")
+	ctx.tmpApply.Name = "Apply"
+	ctx.tmpApply.Size = UDim2.new(0.5, -18, 0, 26)
+	ctx.tmpApply.Position = UDim2.fromOffset(12, 86)
+	ctx.tmpApply.BackgroundColor3 = Color3.fromRGB(60, 160, 75)
+	ctx.tmpApply.BorderSizePixel = 0
+	ctx.tmpApply.Font = Enum.Font.GothamBold
+	ctx.tmpApply.TextScaled = true
+	ctx.tmpApply.TextColor3 = Color3.new(1, 1, 1)
+	ctx.tmpApply.Text = "Apply"
+	ctx.tmpApply.Parent = ctx.tmpFrame
+	ctx.tmpApplyCorner = Instance.new("UICorner")
+	ctx.tmpApplyCorner.CornerRadius = UDim.new(0, 8)
+	ctx.tmpApplyCorner.Parent = ctx.tmpApply
+	ctx.tmpCancel = Instance.new("TextButton")
+	ctx.tmpCancel.Name = "Cancel"
+	ctx.tmpCancel.Size = UDim2.new(0.5, -18, 0, 26)
+	ctx.tmpCancel.Position = UDim2.new(0.5, 6, 0, 86)
+	ctx.tmpCancel.BackgroundColor3 = Color3.fromRGB(150, 55, 55)
+	ctx.tmpCancel.BorderSizePixel = 0
+	ctx.tmpCancel.Font = Enum.Font.GothamBold
+	ctx.tmpCancel.TextScaled = true
+	ctx.tmpCancel.TextColor3 = Color3.new(1, 1, 1)
+	ctx.tmpCancel.Text = "Cancel"
+	ctx.tmpCancel.Parent = ctx.tmpFrame
+	ctx.tmpCancelCorner = Instance.new("UICorner")
+	ctx.tmpCancelCorner.CornerRadius = UDim.new(0, 8)
+	ctx.tmpCancelCorner.Parent = ctx.tmpCancel
+	ctx.bind(ctx.tmpApply.MouseButton1Click:Connect(function()
+		if ctx.applyZipSpeedText(ctx.tmpBox.Text) then
+			ctx.closeZipPrompt()
+		end
+	end))
+	ctx.bind(ctx.tmpCancel.MouseButton1Click:Connect(ctx.closeZipPrompt))
+	ctx.bind(ctx.tmpBox.FocusLost:Connect(function(enter)
+		if enter and ctx.applyZipSpeedText(ctx.tmpBox.Text) then
+			ctx.closeZipPrompt()
+		end
+	end))
+	pcall(function()
+		ctx.tmpBox:CaptureFocus()
+	end)
+end
 
-	distModeBtn = Instance.new("TextButton")
-	distModeBtn.Size = UDim2.new(1, 0, 0, 35)
-	distModeBtn.Position = UDim2.new(0, 0, 0, 45)
-	distModeBtn.BackgroundColor3 = Color3.fromRGB(60, 130, 210)
-	distModeBtn.TextColor3 = Color3.new(1, 1, 1)
-	distModeBtn.Font = Enum.Font.SourceSansBold
-	distModeBtn.TextSize = 16
-	distModeBtn.Text = "Button Distance: ON"
-	distModeBtn.Active = true
-	distModeBtn.Parent = optionsFrame
 
-	distRow = Instance.new("Frame")
-	distRow.Size = UDim2.new(1, 0, 0, 35)
-	distRow.Position = UDim2.new(0, 0, 0, 90)
-	distRow.BackgroundTransparency = 1
-	distRow.Parent = optionsFrame
+ctx.femEventsRoot = function()
+	return Rsp and Rsp:FindFirstChild("Events") or nil
+end
 
-	distLabel = Instance.new("TextLabel")
-	distLabel.Size = UDim2.new(0.48, 0, 1, 0)
-	distLabel.Position = UDim2.new(0, 0, 0, 0)
-	distLabel.BackgroundTransparency = 1
-	distLabel.TextColor3 = Color3.new(1, 1, 1)
-	distLabel.Font = Enum.Font.SourceSansBold
-	distLabel.TextSize = 16
-	distLabel.TextXAlignment = Enum.TextXAlignment.Left
-	distLabel.Text = "Aura Dist:"
-	distLabel.Parent = distRow
+ctx.femGetEventsTable = function()
+	if ctx.cache.femEventsTable ~= nil then
+		return ctx.cache.femEventsTable
+	end
+	ctx.cache.femEventsTable = false
+	ctx.tmpPs = LP and LP:FindFirstChild("PlayerScripts")
+	ctx.tmpLh = ctx.tmpPs and ctx.tmpPs:FindFirstChild("LocalHandler")
+	ctx.tmpGe = ctx.tmpLh and ctx.tmpLh:FindFirstChild("GetEvents")
+	if ctx.tmpGe and type(require) == "function" then
+		ctx.tmpOk, ctx.tmpRes = pcall(function()
+			return require(ctx.tmpGe)()
+		end)
+		if ctx.tmpOk and type(ctx.tmpRes) == "table" then
+			ctx.cache.femEventsTable = ctx.tmpRes
+			return ctx.tmpRes
+		end
+	end
+	return nil
+end
 
-	distBtn = Instance.new("TextBox")
-	distBtn.Size = UDim2.new(0.5, 0, 1, 0)
-	distBtn.Position = UDim2.new(0.5, 0, 0, 0)
-	distBtn.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
-	distBtn.TextColor3 = Color3.new(1, 1, 1)
-	distBtn.Font = Enum.Font.SourceSansBold
-	distBtn.TextSize = 16
-	distBtn.Text = "7"
-	distBtn.PlaceholderText = "1-100"
-	distBtn.ClearTextOnFocus = false
-	distBtn.Active = true
-	distBtn.Parent = distRow
+ctx.femEvent = function(n, cls)
+	ctx.tmpEvs = ctx.femEventsRoot()
+	ctx.tmpEv = ctx.tmpEvs and ctx.tmpEvs:FindFirstChild(n)
+	if ctx.tmpEv and (not cls or ctx.tmpEv:IsA(cls)) then
+		return ctx.tmpEv
+	end
+	ctx.tmpTbl = ctx.femGetEventsTable()
+	ctx.tmpEv = type(ctx.tmpTbl) == "table" and ctx.tmpTbl[n] or nil
+	if ctx.tmpEv and (not cls or ctx.tmpEv:IsA(cls)) then
+		return ctx.tmpEv
+	end
+	if type(getnilinstances) == "function" or type(getinstances) == "function" then
+		for _, fn in { getnilinstances, getinstances } do
+			if type(fn) == "function" then
+				ctx.tmpOk, ctx.tmpList = pcall(fn)
+				if ctx.tmpOk and type(ctx.tmpList) == "table" then
+					for _, obj in ctx.tmpList do
+						if typeof(obj) == "Instance" and obj.Name == n and (not cls or obj:IsA(cls)) then
+							return obj
+						end
+					end
+				end
+			end
+		end
+	end
+	return nil
+end
 
-	bonusBtn = Instance.new("TextButton")
-	bonusBtn.Size = UDim2.new(1, 0, 0, 35)
-	bonusBtn.Position = UDim2.new(0, 0, 0, 135)
-	bonusBtn.BackgroundColor3 = Color3.fromRGB(60, 130, 210)
-	bonusBtn.TextColor3 = Color3.new(1, 1, 1)
-	bonusBtn.Font = Enum.Font.SourceSansBold
-	bonusBtn.TextSize = 16
-	bonusBtn.Text = "Collect Bonuses: ON"
-	bonusBtn.Active = true
-	bonusBtn.Parent = optionsFrame
+ctx.isFEM = function()
+	if ctx.cache.isFEM == true then
+		return true
+	end
+	if ctx.cache.isFEM == false and os.clock() < (ctx.cache.femRetry or 0) then
+		return false
+	end
+	ctx.tmpGameId = nil
+	pcall(function()
+		ctx.tmpGameId = game.GameId
+	end)
+	ctx.cache.isFEM = ctx.tmpGameId == 761462079 and ctx.femEvent("StartMapVote", "RemoteEvent") ~= nil and ctx.femEvent("UpdMapVote", "RemoteEvent") ~= nil
+	if ctx.cache.isFEM ~= true then
+		ctx.cache.femRetry = os.clock() + 2
+	end
+	return ctx.cache.isFEM == true
+end
 
-	chBtn = Instance.new("TextButton")
-	chBtn.Size = UDim2.new(1, 0, 0, 35)
-	chBtn.Position = UDim2.new(0, 0, 0, 180)
-	chBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
-	chBtn.TextColor3 = Color3.new(1, 1, 1)
-	chBtn.Font = Enum.Font.SourceSansBold
-	chBtn.TextSize = 16
-	chBtn.Text = "Challenges: OFF"
-	chBtn.Active = true
-	chBtn.Parent = optionsFrame
+ctx.femFreeMap = function(data)
+	if type(data) ~= "table" or type(data.MapData) ~= "table" then
+		return nil
+	end
+	ctx.tmpBest = nil
+	for _, map in data.MapData do
+		if type(map) == "table" and map.ID ~= nil and map.ShowMap ~= false and map.Cooldown ~= true and map.Locked ~= true then
+			ctx.tmpBest = map
+			break
+		end
+	end
+	return ctx.tmpBest
+end
 
-	ctx.bind(ctx.NAgui_dragger(panel))
+ctx.femVoteData = function(data)
+	if not ctx.opt.femVoteOn or not ctx.isFEM() then
+		return false
+	end
+	ctx.tmpMap = ctx.femFreeMap(data)
+	if not ctx.tmpMap then
+		return false
+	end
+	ctx.tmpId = ctx.tmpMap.ID
+	ctx.tmpNow = os.clock()
+	if ctx.cache.femLastVoteId == ctx.tmpId and ctx.tmpNow - (ctx.cache.femVoteAt or 0) < 1.25 then
+		return false
+	end
+	ctx.tmpVote = ctx.femEvent("UpdMapVote", "RemoteEvent")
+	if not ctx.tmpVote then
+		return false
+	end
+	ctx.cache.femLastVoteId = ctx.tmpId
+	ctx.cache.femVoteAt = ctx.tmpNow
+	return ctx.fireRemote(ctx.tmpVote, ctx.tmpId, 0)
+end
 
-	ctx.bind(ctx.MouseButtonFix(btn, function()
+ctx.startFemAutoVote = function()
+	if ctx.cache.femStarted then
+		return
+	end
+	ctx.cache.femStarted = true
+	ctx.tmpStartVote = ctx.femEvent("StartMapVote", "RemoteEvent")
+	if ctx.tmpStartVote then
+		ctx.bind(ctx.tmpStartVote.OnClientEvent:Connect(function(data)
+			if ctx.opt.femVoteOn then
+				task.defer(ctx.femVoteData, data)
+			end
+		end))
+	end
+	ctx.tmpUpdVote = ctx.femEvent("UpdMapVote", "RemoteEvent")
+	if ctx.tmpUpdVote then
+		ctx.bind(ctx.tmpUpdVote.OnClientEvent:Connect(function(data)
+			if ctx.opt.femVoteOn then
+				task.defer(ctx.femVoteData, data)
+			end
+		end))
+	end
+end
+
+ctx.femItemData = function()
+	if type(ctx.cache.femItems) == "table" then
+		return ctx.cache.femItems
+	end
+	ctx.cache.femItems = false
+	ctx.tmpMods = Rsp and Rsp:FindFirstChild("Modules")
+	ctx.tmpItemData = ctx.tmpMods and ctx.tmpMods:FindFirstChild("ItemData")
+	if ctx.tmpItemData and type(require) == "function" then
+		ctx.tmpOk, ctx.tmpMod = pcall(require, ctx.tmpItemData)
+		if ctx.tmpOk and type(ctx.tmpMod) == "table" and type(ctx.tmpMod.GetItemData) == "function" then
+			ctx.tmpOk2, ctx.tmpItems = pcall(ctx.tmpMod.GetItemData)
+			if ctx.tmpOk2 and type(ctx.tmpItems) == "table" then
+				ctx.cache.femItems = ctx.tmpItems
+				return ctx.tmpItems
+			end
+		end
+	end
+	return nil
+end
+
+ctx.femOwnedItems = function()
+	ctx.tmpOwned = {}
+	ctx.tmpData = LP and LP:FindFirstChild("Data")
+	ctx.tmpShop = ctx.tmpData and ctx.tmpData:FindFirstChild("Shop")
+	ctx.tmpItems = ctx.tmpShop and ctx.tmpShop:FindFirstChild("Items")
+	if ctx.tmpItems then
+		for _, obj in ctx.tmpItems:GetChildren() do
+			ctx.tmpId = tonumber(obj.Name) or obj.Name
+			ctx.tmpOwned[ctx.tmpId] = true
+		end
+	end
+	return ctx.tmpOwned
+end
+
+ctx.femFunds = function(cur)
+	ctx.tmpData = LP and LP:FindFirstChild("Data")
+	ctx.tmpVal = ctx.tmpData and ctx.tmpData:FindFirstChild(cur == 1 and "Amethysts" or "Coins")
+	return ctx.tmpVal and tonumber(ctx.tmpVal.Value) or 0
+end
+
+ctx.femShopBuyIds = function(cur)
+	ctx.tmpItems = ctx.femItemData()
+	ctx.tmpIds = {}
+	ctx.tmpSeen = {}
+	ctx.tmpOwned = ctx.femOwnedItems()
+	ctx.tmpBudget = ctx.femFunds(cur)
+	ctx.tmpSpent = 0
+	if type(ctx.tmpItems) ~= "table" then
+		return ctx.tmpIds
+	end
+	for _, it in ctx.tmpItems do
+		if type(it) == "table" then
+			ctx.tmpId = tonumber(it.ID)
+			ctx.tmpCat = tostring(it.Catagory or it.catagory or "")
+			ctx.tmpPrice = tonumber(cur == 1 and it.Price_Amethysts or it.Price_Coins)
+			if ctx.tmpId and ctx.tmpPrice and ctx.tmpPrice > 0 and not ctx.tmpSeen[ctx.tmpId] and not ctx.tmpOwned[ctx.tmpId] and it.NotForSale ~= true and it.notForSale ~= true and ctx.tmpCat ~= "Currency" and ctx.tmpCat ~= "Gamepasses" and ctx.tmpSpent + ctx.tmpPrice <= ctx.tmpBudget then
+				ctx.tmpSeen[ctx.tmpId] = true
+				ctx.tmpSpent += ctx.tmpPrice
+				ctx.tmpIds[#ctx.tmpIds + 1] = { id = ctx.tmpId, cat = ctx.tmpCat }
+			end
+		end
+	end
+	return ctx.tmpIds
+end
+
+ctx.buyFemShopCurrency = function(cur)
+	if ctx.opt.shopBusy then
+		return
+	end
+	ctx.opt.shopBusy = true
+	ctx.setBuyCoinBtn()
+	ctx.setBuyGemBtn()
+	ctx.tmpName = cur == 1 and "amethyst" or "coin"
+	local function done(msg)
+		ctx.opt.shopBusy = false
+		ctx.setBuyCoinBtn()
+		ctx.setBuyGemBtn()
+		if msg then
+			ctx.note(msg)
+		end
+	end
+	ctx.tmpPurchase = ctx.femEvent("PurchaseItem", "RemoteFunction")
+	if not ctx.tmpPurchase then
+		done("FEM PurchaseItem remote not found.")
+		return
+	end
+	ctx.tmpIds = ctx.femShopBuyIds(cur)
+	if #ctx.tmpIds < 1 then
+		done("No affordable FEM " .. ctx.tmpName .. " shop items found.")
+		return
+	end
+	ctx.tmpBought = 0
+	for _, it in ctx.tmpIds do
+		ctx.tmpOk, ctx.tmpRes = pcall(function()
+			return ctx.tmpPurchase:InvokeServer(it.id, cur == 1 and 2 or 1, nil, it.cat)
+		end)
+		if ctx.tmpOk and ctx.tmpRes == true then
+			ctx.tmpBought += 1
+		end
+		task.wait(0.08)
+	end
+	done(("Sent %d FEM %s purchase%s"):format(ctx.tmpBought, ctx.tmpName, ctx.tmpBought == 1 and "" or "s"))
+end
+
+ctx.patchFemRopeData = function(data)
+	if type(data) ~= "table" then
+		return false
+	end
+	ctx.cache.femRopeData = data
+	ctx.tmpTarget = tonumber(ctx.opt.zipSpeed) or 0
+	for _, rope in data do
+		if type(rope) == "table" and type(rope[2]) == "table" then
+			if ctx.cache.femRopeOld[rope] == nil then
+				ctx.cache.femRopeOld[rope] = tonumber(rope[3]) or 40
+			end
+			if ctx.opt.zipFastOn and ctx.tmpTarget > 0 then
+				ctx.tmpBase = ctx.cache.femRopeOld[rope] or tonumber(rope[3]) or 40
+				rope[3] = math.clamp(ctx.tmpBase * 40 / math.max(ctx.tmpTarget, 1), 1, 200)
+			else
+				rope[3] = ctx.cache.femRopeOld[rope] or rope[3]
+			end
+		end
+	end
+	return true
+end
+
+ctx.startFemZipPatch = function()
+	if ctx.cache.femZipStarted then
+		return
+	end
+	ctx.cache.femZipStarted = true
+	ctx.tmpRope = ctx.femEvent("UpdRopeData", "RemoteEvent")
+	if ctx.tmpRope then
+		ctx.bind(ctx.tmpRope.OnClientEvent:Connect(function(data)
+			task.defer(ctx.patchFemRopeData, data)
+		end))
+	end
+end
+
+ctx.femSetZip = function(st)
+	ctx.startFemZipPatch()
+	if ctx.cache.femRopeData then
+		ctx.patchFemRopeData(ctx.cache.femRopeData)
+	end
+end
+
+ctx.startFemZipStop = function()
+	if ctx.cache.femZipStopStarted or not LP then
+		return
+	end
+	ctx.cache.femZipStopStarted = true
+	ctx.cache.femZipLast = LP:GetAttribute("Ziplining") == true
+	ctx.bind(LP:GetAttributeChangedSignal("Ziplining"):Connect(function()
+		ctx.tmpZipState = LP:GetAttribute("Ziplining") == true
+		if ctx.cache.femZipLast and not ctx.tmpZipState and ctx.opt.zipStopOn then
+			ctx.resetZipVelocity()
+		end
+		ctx.cache.femZipLast = ctx.tmpZipState
+	end))
+end
+
+ctx.startFemButtonCache = function()
+	if ctx.cache.femBtnStarted then
+		return
+	end
+	ctx.cache.femBtnStarted = true
+	ctx.tmpSet = ctx.femEvent("SetButtonLocator", "RemoteEvent")
+	if ctx.tmpSet then
+		ctx.bind(ctx.tmpSet.OnClientEvent:Connect(function(goal, hit, ui)
+			if hit and typeof(hit) == "Instance" and hit:IsA("BasePart") then
+				ctx.cache.femButtonPart = hit
+			end
+		end))
+	end
+end
+
+ctx.hideIcon = function(field)
+	ctx.tmpIcon = ctx.ui[field]
+	if not ctx.tmpIcon then
+		return
+	end
+	for i = #ctx.ui.menu, 1, -1 do
+		if ctx.ui.menu[i] == ctx.tmpIcon then
+			table.remove(ctx.ui.menu, i)
+		end
+	end
+	pcall(function()
+		if type(ctx.tmpIcon.destroy) == "function" then
+			ctx.tmpIcon:destroy()
+		elseif type(ctx.tmpIcon.Destroy) == "function" then
+			ctx.tmpIcon:Destroy()
+		end
+	end)
+	ctx.ui[field] = nil
+end
+
+ctx.applyProfileUi = function()
+	if ctx.isFEMGame() then
+		for _, field in { "bonusBtn", "chBtn", "floodBtn", "clipBtn", "rescueBtn", "devBtn" } do
+			ctx.hideIcon(field)
+		end
+	elseif ctx.isFE2Game() then
+		ctx.hideIcon("femVoteBtn")
+	end
+end
+
+do
+	local oldSetZipAttrs = ctx.setZipAttrs
+	ctx.setZipAttrs = function(st)
+		if ctx.isFEMGame() then
+			return ctx.femSetZip(st)
+		end
+		return oldSetZipAttrs(st)
+	end
+	local oldHookZipStop = ctx.hookZipStop
+	ctx.hookZipStop = function(c)
+		oldHookZipStop(c)
+		if ctx.isFEMGame() then
+			ctx.startFemZipStop()
+		end
+	end
+	local oldFemLocatorHit = ctx.femLocatorHit
+	ctx.femLocatorHit = function()
+		ctx.startFemButtonCache()
+		ctx.tmpBtn = ctx.cache.femButtonPart
+		if ctx.tmpBtn and ctx.tmpBtn.Parent then
+			return ctx.tmpBtn
+		end
+		return nil
+	end
+end
+
+ctx.mkUi = function()
+	ctx.topbar = ctx.loadTopbar()
+	if type(ctx.topbar) ~= "table" or type(ctx.topbar.new) ~= "function" then
+		ctx.note("Topbar loader failed")
+		return
+	end
+	ctx.ui.menu = {}
+	ctx.ui.rootIcon = ctx.topbar.new()
+	ctx.ui.rootIcon:setName("FE2_Helper_Dropdown")
+	ctx.ui.rootIcon:setLabel("FE2 Helper")
+	ctx.ui.rootIcon:setImage(6031280882)
+	ctx.ui.rootIcon:align("Center")
+	ctx.ui.rootIcon:setOrder(50)
+	ctx.ui.startBtn = ctx.icon("Start", "Start AutoFarm", function()
 		ctx.toggle(not on)
-	end))
-
-	ctx.bind(ctx.MouseButtonFix(optBtn, function()
-		ctx.setOptionsOpen(not optionsOpen)
-	end))
-
-	ctx.bind(ctx.MouseButtonFix(auraBtn, function()
+	end, Color3.fromRGB(60, 180, 60))
+	ctx.ui.auraBtn = ctx.icon("Aura", "Button Aura: OFF", function()
 		auraOn = not auraOn
 		ctx.setAuraBtn()
-	end))
-
-	ctx.bind(ctx.MouseButtonFix(distModeBtn, function()
+		ctx.saveSoon()
+	end)
+	ctx.ui.distModeBtn = ctx.icon("AuraDistance", "Button Distance: ON", function()
 		auraUseDistance = not auraUseDistance
 		ctx.setDistModeBtn()
-	end))
-
-	ctx.bind(distBtn.FocusLost:Connect(function()
-		local n = tonumber(distBtn.Text)
-		if n then
-			auraDist = math.clamp(math.floor(n + 0.5), 1, 100)
-		end
-		ctx.setDistBtn()
-	end))
-
-	ctx.bind(ctx.MouseButtonFix(bonusBtn, function()
+		ctx.saveSoon()
+	end, Color3.fromRGB(60, 130, 210))
+	ctx.ui.distBtn = ctx.icon("AuraDist", "Aura Dist: 7", ctx.openAuraPrompt, Color3.fromRGB(55, 55, 55))
+	ctx.ui.bonusBtn = ctx.icon("Bonuses", "Collect Bonuses: ON", function()
 		autoCollectBonuses = not autoCollectBonuses
 		ctx.setBonusBtn()
-	end))
-
-	ctx.bind(ctx.MouseButtonFix(chBtn, function()
+		ctx.saveSoon()
+	end, Color3.fromRGB(60, 130, 210))
+	ctx.ui.chBtn = ctx.icon("Challenges", "Challenges: OFF", function()
 		autoChallenges = not autoChallenges
 		ctx.setChallengeBtn()
-	end))
-
+		ctx.saveSoon()
+	end)
+	ctx.ui.floodBtn = ctx.icon("CustomFlood", "Custom Flood: ON", function()
+		ctx.opt.floodOn = not ctx.opt.floodOn
+		ctx.setFloodBtn()
+		ctx.saveSoon()
+		ctx.floodPush()
+	end, Color3.fromRGB(60, 130, 210))
+	ctx.ui.paidBtn = ctx.icon("PaidLocks", "Paid UI Locks: ON", function()
+		ctx.opt.paidOn = not ctx.opt.paidOn
+		ctx.setPaidBtn()
+		ctx.saveSoon()
+		if ctx.opt.paidOn then
+			ctx.patchPaidUi()
+		end
+	end, Color3.fromRGB(60, 130, 210))
+	ctx.ui.buyCoinBtn = ctx.icon("BuyCoin", "Buy Coin Shop Items", function()
+		task.spawn(ctx.buyShopCurrency, 0)
+	end, Color3.fromRGB(218, 165, 32))
+	ctx.ui.buyGemBtn = ctx.icon("BuyGem", "Buy Gem Shop Items", function()
+		task.spawn(ctx.buyShopCurrency, 1)
+	end, Color3.fromRGB(142, 68, 173))
+	ctx.ui.clipBtn = ctx.icon("NoSideClip", "No SideClip TP: OFF", function()
+		ctx.opt.clipOn = not ctx.opt.clipOn
+		ctx.setClipBtn()
+		ctx.saveSoon()
+		ctx.patchSideClip(not ctx.opt.clipOn)
+	end)
+	ctx.ui.rescueBtn = ctx.icon("HideRescue", "Hide Rescue NPC: OFF", function()
+		ctx.opt.rescueOn = not ctx.opt.rescueOn
+		ctx.setRescueBtn()
+		ctx.saveSoon()
+		ctx.patchRescue()
+	end)
+	ctx.ui.zipBtn = ctx.icon("ZiplineSpeed", "Zip Speed: OFF", ctx.openZipPrompt)
+	ctx.ui.zipStopBtn = ctx.icon("ZipStopVelocity", "Zip Stop Velocity: ON", function()
+		ctx.opt.zipStopOn = not ctx.opt.zipStopOn
+		ctx.setZipStopBtn()
+		ctx.saveSoon()
+	end)
+	ctx.ui.zipAutoBtn = ctx.icon("ZipAutoApply", "Zip Auto Apply: ON", function()
+		ctx.opt.zipAutoOn = not ctx.opt.zipAutoOn
+		ctx.setZipAutoBtn()
+		ctx.saveSoon()
+		if ctx.opt.zipAutoOn then
+			ctx.reapplyZipSpeed()
+		end
+	end)
+	ctx.ui.devBtn = ctx.icon("DevTools", "DevTools: OFF", function()
+		ctx.setDevTools(not ctx.opt.devOn)
+		ctx.saveSoon()
+	end)
+	ctx.ui.infAirBtn = ctx.icon("InfAir", "Inf Air: OFF", function()
+		ctx.opt.infAirOn = not ctx.opt.infAirOn
+		ctx.setInfAirBtn()
+		ctx.saveSoon()
+		if ctx.opt.infAirOn then
+			ctx.keepAirFast()
+		else
+			ctx.unprotectAirHealth()
+		end
+		ctx.fireGod(ctx.opt.infAirOn)
+	end)
+	ctx.ui.infJumpBtn = ctx.icon("InfJump", "Inf Jump: OFF", function()
+		ctx.opt.infJumpOn = not ctx.opt.infJumpOn
+		ctx.setInfJumpBtn()
+		ctx.saveSoon()
+	end)
+	ctx.ui.clickTpBtn = ctx.icon("ClickTP", "Click TP: OFF", function()
+		ctx.opt.clickTpOn = not ctx.opt.clickTpOn
+		ctx.setClickTpBtn()
+		ctx.saveSoon()
+	end)
+	ctx.ui.femVoteBtn = ctx.icon("FemAutoVote", "FEM Auto Vote: OFF", function()
+		ctx.opt.femVoteOn = not ctx.opt.femVoteOn
+		ctx.setFemVoteBtn()
+		ctx.saveSoon()
+		if ctx.opt.femVoteOn then
+			ctx.startFemAutoVote()
+		end
+	end, Color3.fromRGB(44, 160, 110))
+	ctx.ui.nextBtn = ctx.icon("NextButton", "Next Button", function()
+		ctx.fireNextButton()
+	end, Color3.fromRGB(55, 90, 150))
+	ctx.applyProfileUi()
+	ctx.ui.rootIcon:setDropdown(ctx.ui.menu)
 	ctx.setBtn()
-	ctx.setOptionsOpen(false)
 	ctx.setAuraBtn()
 	ctx.setDistModeBtn()
 	ctx.setDistBtn()
 	ctx.setBonusBtn()
 	ctx.setChallengeBtn()
+	ctx.setFloodBtn()
+	ctx.setPaidBtn()
+	ctx.setBuyCoinBtn()
+	ctx.setBuyGemBtn()
+	ctx.setClipBtn()
+	ctx.setRescueBtn()
+	ctx.setDevBtn()
+	ctx.setZipBtn()
+	ctx.setZipStopBtn()
+	ctx.setZipAutoBtn()
+	ctx.setInfAirBtn()
+	ctx.setInfJumpBtn()
+	ctx.setClickTpBtn()
+	ctx.setFemVoteBtn()
 end
 
 ctx.mkUi()
 ctx.startPassiveRemotes()
 ctx.startButtonAura()
-ctx.startBonusCollector()
-ctx.startChallenges()
+if ctx.support("bonus") then
+	ctx.startBonusCollector()
+end
+if ctx.support("challenges") then
+	ctx.startChallenges()
+end
+if ctx.support("flood") then
+	ctx.startFloodColors()
+end
+ctx.startUiUnlocks()
+ctx.startPhysicsOptions()
+if ctx.support("femVote") then
+	ctx.startFemAutoVote()
+end
+if ctx.isFEMGame() then
+	ctx.startFemButtonCache()
+	ctx.startFemZipPatch()
+	ctx.startFemZipStop()
+end
+if LP and LP.Character then
+	ctx.hookZipStop(LP.Character)
+end
+if ctx.opt.zipFastOn and ctx.opt.zipAutoOn then
+	task.defer(ctx.reapplyZipSpeed)
+end
 
 if LP then
 	chC = LP.CharacterAdded:Connect(ctx.onChar)
@@ -4107,7 +6641,7 @@ if LP then
 end
 
 ctx.antiVoid(ctx.curMap)
-ctx.note("Ready")
+ctx.note("Ready [" .. ctx.profileName() .. "]")
 
 task.spawn(function()
 	while ctx.alive() do

@@ -220,19 +220,46 @@ ctx.protectedScreen = function(name)
 	return gui
 end
 
+ctx.pruneCons = function()
+	for i = #ctx.con, 1, -1 do
+		local c = ctx.con[i]
+		if not c or c.Connected == false then
+			table.remove(ctx.con, i)
+		end
+	end
+end
+
 ctx.bind = function(c)
 	if c then
 		ctx.con[#ctx.con + 1] = c
+		if #ctx.con % 32 == 0 then
+			ctx.pruneCons()
+		end
 	end
 	return c
 end
 
-ctx.spawnLoop = function(fn)
-	local th = task.spawn(function()
-		local ok, err = xpcall(fn, debug.traceback)
-		if not ok then
+ctx.dropThread = function(th)
+	for i = #ctx.threads, 1, -1 do
+		if ctx.threads[i] == th then
+			table.remove(ctx.threads, i)
+			return
+		end
+	end
+end
+
+ctx.spawnLoop = function(fn, ...)
+	local args = table.pack(...)
+	local th
+	th = task.spawn(function()
+		local ok, err = xpcall(function()
+			return fn(table.unpack(args, 1, args.n))
+		end, debug.traceback)
+		args = nil
+		if not ok and (type(ctx.current) ~= "function" or ctx.current()) then
 			warn(err)
 		end
+		ctx.dropThread(th)
 	end)
 	ctx.threads[#ctx.threads + 1] = th
 	return th
@@ -243,6 +270,16 @@ ctx.cut = function(c)
 		pcall(function()
 			c:Disconnect()
 		end)
+	end
+end
+
+ctx.clearCons = function(t)
+	if type(t) ~= "table" then
+		return
+	end
+	for i = #t, 1, -1 do
+		ctx.cut(t[i])
+		t[i] = nil
 	end
 end
 
@@ -467,6 +504,8 @@ ctx.opt.shopBusy = false
 ctx.cache.zipOld = setmetatable({}, { __mode = "k" })
 ctx.cache.zipWatches = setmetatable({}, { __mode = "k" })
 ctx.cache.remoteByName = {}
+ctx.cache.auraPromptCons = {}
+ctx.cache.zipPromptCons = {}
 ctx.cache.godAt = 0
 ctx.cache.zipAt = 0
 ctx.cache.zipConn = nil
@@ -784,6 +823,10 @@ ctx.stop = function()
 	ctx.cut(nCd1)
 	ctx.cut(nCd2)
 	ctx.cut(chC)
+	ctx.cut(ctx.cache.zipConn)
+	ctx.cut(ctx.cache.infAirHb)
+	ctx.cut(ctx.cache.airHealthConn)
+	ctx.cut(ctx.cache.airDiedConn)
 	for _, th in ctx.threads do
 		if type(task.cancel) == "function" then
 			pcall(task.cancel, th)
@@ -795,6 +838,11 @@ ctx.stop = function()
 	nCd1 = nil
 	nCd2 = nil
 	chC = nil
+	ctx.cache.zipConn = nil
+	ctx.cache.infAirHb = nil
+	ctx.cache.airHealthConn = nil
+	ctx.cache.airDiedConn = nil
+	ctx.cache.airHealthHum = nil
 	for _, c in ctx.con do
 		ctx.cut(c)
 	end
@@ -825,17 +873,27 @@ ctx.stop = function()
 	pendingSaveSig = nil
 	ctx.killPlat()
 	ctx.releaseRoot()
+	if type(ctx.closeAuraPrompt) == "function" then
+		ctx.closeAuraPrompt()
+	elseif ctx.ui.auraPrompt then
+		pcall(function()
+			ctx.ui.auraPrompt:Destroy()
+		end)
+		ctx.ui.auraPrompt = nil
+	end
+	if type(ctx.closeZipPrompt) == "function" then
+		ctx.closeZipPrompt()
+	elseif ctx.ui.zipPrompt then
+		pcall(function()
+			ctx.ui.zipPrompt:Destroy()
+		end)
+		ctx.ui.zipPrompt = nil
+	end
 	if gui and gui.Parent then
 		pcall(function()
 			gui:Destroy()
 		end)
 	end
-	if ctx.ui.auraPrompt then
-		pcall(function()
-			ctx.ui.auraPrompt:Destroy()
-		end)
-	end
-	ctx.ui.auraPrompt = nil
 	if ctx.ui.rootIcon then
 		pcall(function()
 			ctx.ui.rootIcon:destroy()
@@ -865,6 +923,22 @@ ctx.stop = function()
 	ctx.ui.floodBtn = nil
 	ctx.ui.passBtn = nil
 	ctx.ui.paidBtn = nil
+	ctx.ui.buyCoinBtn = nil
+	ctx.ui.buyGemBtn = nil
+	ctx.ui.clipBtn = nil
+	ctx.ui.rescueBtn = nil
+	ctx.ui.devBtn = nil
+	ctx.ui.zipBtn = nil
+	ctx.ui.zipStopBtn = nil
+	ctx.ui.zipAutoBtn = nil
+	ctx.ui.infAirBtn = nil
+	ctx.ui.infJumpBtn = nil
+	ctx.ui.clickTpBtn = nil
+	ctx.ui.femVoteBtn = nil
+	ctx.ui.surviveBtn = nil
+	ctx.ui.nextBtn = nil
+	ctx.ui.rootIcon = nil
+	ctx.ui.menu = {}
 	ctx.cache.floodTok += 1
 	ctx.cache.uiTok += 1
 	ctx.cache.floodHooks = setmetatable({}, { __mode = "k" })
@@ -888,6 +962,17 @@ ctx.stop = function()
 	end
 	chCons = {}
 	chIndex = { air = {}, wall = {}, zip = {}, slide = {} }
+	ctx.cache.remoteByName = {}
+	ctx.cache.zipOld = setmetatable({}, { __mode = "k" })
+	ctx.cache.zipWatches = setmetatable({}, { __mode = "k" })
+	ctx.cache.femRopeOld = setmetatable({}, { __mode = "k" })
+	ctx.cache.femRopeData = nil
+	ctx.cache.shopItems = nil
+	ctx.cache.airEnv = nil
+	ctx.cache.femSwim = nil
+	if host and host.__lt_af_ctx == ctx then
+		host.__lt_af_ctx = nil
+	end
 end
 
 ctx.descOf = function(obj)
@@ -1810,7 +1895,7 @@ ctx.addLocatorBtn = function(hit, nextHit)
 		seq = locSeq,
 	}
 	local id = locSeq
-	task.spawn(function()
+	ctx.spawnLoop(function()
 		while ctx.alive() and locSeq == id and hit and hit.Parent do
 			if not auraOn then
 				task.wait(0.1)
@@ -1994,7 +2079,7 @@ ctx.startPressLoop = function(hit, runId, keepGoing)
 	if not hit or not hit.Parent then
 		return
 	end
-	task.spawn(function()
+	ctx.spawnLoop(function()
 		while ctx.alive() and on and tok == runId and hit and hit.Parent do
 			if type(keepGoing) == "function" and not keepGoing() then
 				break
@@ -2360,7 +2445,7 @@ ctx.flushStatsAfterSurvival = function()
 	local id = saveFlushTok
 	pendingSaveSig = statsSig or ""
 	local started = os.clock()
-	task.spawn(function()
+	ctx.spawnLoop(function()
 		while ctx.alive() and on and saveFlushTok == id and os.clock() - started < SFT do
 			ctx.requestRoundStats()
 			ctx.requestPlayerData(true)
@@ -2411,7 +2496,7 @@ end
 ctx.startFarmRemotes = function()
 	farmTok += 1
 	local id = farmTok
-	task.spawn(function()
+	ctx.spawnLoop(function()
 		local ka = 0
 		local ra = 0
 		while ctx.alive() and on and farmTok == id do
@@ -2684,7 +2769,7 @@ ctx.doLift = function()
 			Lift:FireServer()
 		end)
 	end
-	task.spawn(function()
+	ctx.spawnLoop(function()
 		local ok, err = xpcall(ctx.pushLift, debug.traceback)
 		if not ok then
 			warn(err)
@@ -3335,7 +3420,7 @@ ctx.toggle = function(v)
 	end
 
 	ctx.startFarmRemotes()
-	task.spawn(ctx.burstLoaded)
+	ctx.spawnLoop(ctx.burstLoaded)
 	ctx.requestPlayerData(true)
 
 	if ctx.inState("InGame") then
@@ -3355,7 +3440,7 @@ ctx.onChar = function(c)
 		task.defer(ctx.reapplyZipSpeed)
 	end
 	if on then
-		task.spawn(function()
+		ctx.spawnLoop(function()
 			if not Lift then
 				return
 			end
@@ -3369,7 +3454,7 @@ ctx.onChar = function(c)
 				task.wait(RRG)
 			end
 		end)
-		task.spawn(function()
+		ctx.spawnLoop(function()
 			local ok, err = xpcall(ctx.pushLift, debug.traceback)
 			if not ok then
 				warn(err)
@@ -3404,7 +3489,7 @@ ctx.onMap = function(map, id)
 
 		survivedSeen = false
 		ctx.note("Map Loaded! " .. tostring(nm))
-		task.spawn(ctx.burstLoaded)
+		ctx.spawnLoop(ctx.burstLoaded)
 
 		if not ctx.inState("InGame") then
 			ctx.note("Skipping due to InGame == false.")
@@ -4079,7 +4164,7 @@ ctx.bindChallengeRoot = function(root, id, seed)
 		end
 	end)
 	if seed ~= false then
-		task.spawn(function()
+		ctx.spawnLoop(function()
 			ctx.seedChallengeRoot(root, id)
 		end)
 	end
@@ -5411,13 +5496,11 @@ ctx.protectAirHealth = function()
 		ctx.cache.airHealthConn = ctx.tmpHum:GetPropertyChangedSignal("Health"):Connect(function()
 			ctx.resetAirHealth(ctx.cache.airHealthHum)
 		end)
-		ctx.bind(ctx.cache.airHealthConn)
 		ctx.cache.airDiedConn = ctx.tmpHum.Died:Connect(function()
 			if ctx.live and ctx.opt.infAirOn then
 				ctx.resetAirHealth(ctx.cache.airHealthHum)
 			end
 		end)
-		ctx.bind(ctx.cache.airDiedConn)
 	end
 	pcall(function()
 		ctx.tmpHum.BreakJointsOnDeath = false
@@ -5437,6 +5520,12 @@ end
 
 ctx.unprotectAirHealth = function()
 	ctx.tmpRoot, ctx.tmpHum = ctx.rh(false)
+	ctx.cut(ctx.cache.airHealthConn)
+	ctx.cut(ctx.cache.airDiedConn)
+	ctx.cache.airHealthConn = nil
+	ctx.cache.airDiedConn = nil
+	ctx.cache.airHealthHum = nil
+	ctx.cache.airHum = nil
 	if ctx.tmpHum then
 		pcall(function()
 			ctx.tmpHum:SetStateEnabled(Enum.HumanoidStateType.Dead, true)
@@ -5726,12 +5815,12 @@ ctx.hookZipStop = function(c)
 	ctx.tmpAnti = c and c:FindFirstChild("CL_AntiSideClip")
 	ctx.tmpZipEv = ctx.tmpAnti and ctx.tmpAnti:FindFirstChild("Ziplining")
 	if ctx.tmpZipEv and ctx.tmpZipEv.Event then
-		ctx.cache.zipConn = ctx.bind(ctx.tmpZipEv.Event:Connect(function(st)
+		ctx.cache.zipConn = ctx.tmpZipEv.Event:Connect(function(st)
 			ctx.opt.zipActive = st and true or false
 			if not st and ctx.opt.zipStopOn then
 				ctx.resetZipVelocity()
 			end
-		end))
+		end)
 	end
 end
 
@@ -5869,7 +5958,7 @@ if MP then
 	ctx.bind(MP.ChildAdded:Connect(function(ch)
 		if ch.Name == "Map" or ch.Name == "NewMap" then
 			if on then
-				task.spawn(ctx.burstLoaded)
+				ctx.spawnLoop(ctx.burstLoaded)
 			end
 			if ctx.opt.zipFastOn and ctx.opt.zipAutoOn then
 				task.defer(ctx.reapplyZipSpeed)
@@ -5950,12 +6039,22 @@ ctx.applyAuraDistText = function(txt)
 end
 
 ctx.closeAuraPrompt = function()
+	ctx.clearCons(ctx.cache.auraPromptCons)
 	if ctx.ui.auraPrompt then
 		pcall(function()
 			ctx.ui.auraPrompt:Destroy()
 		end)
 	end
 	ctx.ui.auraPrompt = nil
+	ctx.tmpFrame = nil
+	ctx.tmpCorner = nil
+	ctx.tmpTitle = nil
+	ctx.tmpBox = nil
+	ctx.tmpBoxCorner = nil
+	ctx.tmpApply = nil
+	ctx.tmpApplyCorner = nil
+	ctx.tmpCancel = nil
+	ctx.tmpCancelCorner = nil
 end
 
 ctx.openAuraPrompt = function()
@@ -6032,17 +6131,17 @@ ctx.openAuraPrompt = function()
 	ctx.tmpCancelCorner = Instance.new("UICorner")
 	ctx.tmpCancelCorner.CornerRadius = UDim.new(0, 8)
 	ctx.tmpCancelCorner.Parent = ctx.tmpCancel
-	ctx.bind(ctx.tmpApply.MouseButton1Click:Connect(function()
+	ctx.cache.auraPromptCons[#ctx.cache.auraPromptCons + 1] = ctx.tmpApply.MouseButton1Click:Connect(function()
 		if ctx.applyAuraDistText(ctx.tmpBox.Text) then
 			ctx.closeAuraPrompt()
 		end
-	end))
-	ctx.bind(ctx.tmpCancel.MouseButton1Click:Connect(ctx.closeAuraPrompt))
-	ctx.bind(ctx.tmpBox.FocusLost:Connect(function(enter)
+	end)
+	ctx.cache.auraPromptCons[#ctx.cache.auraPromptCons + 1] = ctx.tmpCancel.MouseButton1Click:Connect(ctx.closeAuraPrompt)
+	ctx.cache.auraPromptCons[#ctx.cache.auraPromptCons + 1] = ctx.tmpBox.FocusLost:Connect(function(enter)
 		if enter and ctx.applyAuraDistText(ctx.tmpBox.Text) then
 			ctx.closeAuraPrompt()
 		end
-	end))
+	end)
 	pcall(function()
 		ctx.tmpBox:CaptureFocus()
 	end)
@@ -6068,12 +6167,22 @@ ctx.applyZipSpeedText = function(txt)
 end
 
 ctx.closeZipPrompt = function()
+	ctx.clearCons(ctx.cache.zipPromptCons)
 	if ctx.ui.zipPrompt then
 		pcall(function()
 			ctx.ui.zipPrompt:Destroy()
 		end)
 	end
 	ctx.ui.zipPrompt = nil
+	ctx.tmpFrame = nil
+	ctx.tmpCorner = nil
+	ctx.tmpTitle = nil
+	ctx.tmpBox = nil
+	ctx.tmpBoxCorner = nil
+	ctx.tmpApply = nil
+	ctx.tmpApplyCorner = nil
+	ctx.tmpCancel = nil
+	ctx.tmpCancelCorner = nil
 end
 
 ctx.openZipPrompt = function()
@@ -6150,17 +6259,17 @@ ctx.openZipPrompt = function()
 	ctx.tmpCancelCorner = Instance.new("UICorner")
 	ctx.tmpCancelCorner.CornerRadius = UDim.new(0, 8)
 	ctx.tmpCancelCorner.Parent = ctx.tmpCancel
-	ctx.bind(ctx.tmpApply.MouseButton1Click:Connect(function()
+	ctx.cache.zipPromptCons[#ctx.cache.zipPromptCons + 1] = ctx.tmpApply.MouseButton1Click:Connect(function()
 		if ctx.applyZipSpeedText(ctx.tmpBox.Text) then
 			ctx.closeZipPrompt()
 		end
-	end))
-	ctx.bind(ctx.tmpCancel.MouseButton1Click:Connect(ctx.closeZipPrompt))
-	ctx.bind(ctx.tmpBox.FocusLost:Connect(function(enter)
+	end)
+	ctx.cache.zipPromptCons[#ctx.cache.zipPromptCons + 1] = ctx.tmpCancel.MouseButton1Click:Connect(ctx.closeZipPrompt)
+	ctx.cache.zipPromptCons[#ctx.cache.zipPromptCons + 1] = ctx.tmpBox.FocusLost:Connect(function(enter)
 		if enter and ctx.applyZipSpeedText(ctx.tmpBox.Text) then
 			ctx.closeZipPrompt()
 		end
-	end))
+	end)
 	pcall(function()
 		ctx.tmpBox:CaptureFocus()
 	end)
@@ -6580,10 +6689,10 @@ ctx.mkUi = function()
 		end
 	end, Color3.fromRGB(60, 130, 210))
 	ctx.ui.buyCoinBtn = ctx.icon("BuyCoin", "Buy Coin Shop Items", function()
-		task.spawn(ctx.buyShopCurrency, 0)
+		ctx.spawnLoop(ctx.buyShopCurrency, 0)
 	end, Color3.fromRGB(218, 165, 32))
 	ctx.ui.buyGemBtn = ctx.icon("BuyGem", "Buy Gem Shop Items", function()
-		task.spawn(ctx.buyShopCurrency, 1)
+		ctx.spawnLoop(ctx.buyShopCurrency, 1)
 	end, Color3.fromRGB(142, 68, 173))
 	ctx.ui.clipBtn = ctx.icon("NoSideClip", "No SideClip TP: OFF", function()
 		ctx.opt.clipOn = not ctx.opt.clipOn
@@ -6709,14 +6818,14 @@ end
 if LP then
 	chC = LP.CharacterAdded:Connect(ctx.onChar)
 	if LP.Character then
-		task.spawn(ctx.onChar, LP.Character)
+		ctx.spawnLoop(ctx.onChar, LP.Character)
 	end
 end
 
 ctx.antiVoid(ctx.curMap)
 ctx.note("Ready [" .. ctx.profileName() .. "]")
 
-task.spawn(function()
+ctx.spawnLoop(function()
 	while ctx.alive() do
 		local ok, err = xpcall(function()
 			task.wait(SCI)

@@ -35,11 +35,26 @@ local currentCamera = workspace.CurrentCamera
 local overflowIcons = {}
 local overflowIconUIDs = {}
 local Utility = Import(script.Parent.Parent.Utility)
+local Janitor = Import(script.Parent.Parent.Packages.Janitor)
 local beginCheckingCenterIcons = false
 local beganSecondaryCenterCheck = false
+local startJanitor = nil
+local startToken = 0
 local Icon
 
 function Overflow.start(incomingIcon)
+	startToken += 1
+	local token = startToken
+	if startJanitor then
+		startJanitor:Destroy()
+	end
+	startJanitor = Janitor.new()
+	holders = {}
+	orderedAvailableIcons = {}
+	overflowIcons = {}
+	overflowIconUIDs = {}
+	beginCheckingCenterIcons = false
+	beganSecondaryCenterCheck = false
 	Icon = incomingIcon
 	iconsDict = Icon.iconsDictionary
 	local primaryScreenGui
@@ -66,22 +81,36 @@ function Overflow.start(incomingIcon)
 		Overflow.updateBoundary("Right")
 	end)
 	task.delay(0.5, function()
+		if token ~= startToken then
+			return
+		end
 		beginOverflow = true
 		updateBoundaries()
 	end)
 	task.delay(2, function()
+		if token ~= startToken then
+			return
+		end
 		beginCheckingCenterIcons = true
 		updateBoundaries()
 	end)
-	Icon.iconAdded:Connect(updateBoundaries)
-	Icon.iconRemoved:Connect(updateBoundaries)
-	Icon.iconChanged:Connect(updateBoundaries)
-	currentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+	startJanitor:add(Icon.iconAdded:Connect(updateBoundaries))
+	startJanitor:add(Icon.iconRemoved:Connect(updateBoundaries))
+	startJanitor:add(Icon.iconChanged:Connect(updateBoundaries))
+	startJanitor:add(currentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
 		updateBoundaries(true)
-	end)
-	primaryScreenGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-		updateBoundaries(true)
-	end)
+	end))
+	if primaryScreenGui then
+		startJanitor:add(primaryScreenGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+			updateBoundaries(true)
+		end))
+		startJanitor:add(primaryScreenGui.Destroying:Once(function()
+			if token == startToken and startJanitor then
+				startJanitor:Destroy()
+				startJanitor = nil
+			end
+		end))
+	end
 end
 
 function Overflow.getWidth(icon, getMaxWidth)

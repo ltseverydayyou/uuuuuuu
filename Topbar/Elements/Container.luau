@@ -36,6 +36,8 @@ return function(Icon)
 	local container = {}
 	local Signal = Import(script.Parent.Parent.Packages.GoodSignal)
 	local insetChanged = Signal.new()
+	local cleanupTasks = {}
+	local didCleanup = false
 	local guiInset = GuiService:GetGuiInset()
 	local startInset = 0
 	local iconPadding = 0
@@ -44,7 +46,27 @@ return function(Icon)
 	local checkCount = 0
 	local isConsoleScreen = false
 	local isUsingVR = false
+	local function track(connection)
+		cleanupTasks[#cleanupTasks + 1] = connection
+		return connection
+	end
+	local function cleanup()
+		if didCleanup then
+			return
+		end
+		didCleanup = true
+		for _, connection in cleanupTasks do
+			if connection and type(connection.Disconnect) == "function" then
+				connection:Disconnect()
+			end
+		end
+		table.clear(cleanupTasks)
+		insetChanged:DisconnectAll()
+	end
 	local function checkInset(status)
+		if didCleanup then
+			return
+		end
 		local currentHeight = GuiService.TopbarInset.Height
 		local isOldTopbar = currentHeight <= 36
 
@@ -76,6 +98,9 @@ return function(Icon)
 		then
 			hasBecomeOldTheme = true
 			task.defer(function()
+				if didCleanup then
+					return
+				end
 				local themes = script.Parent.Parent.Features.Themes
 				local Classic = Import(themes.Classic)
 				Icon.modifyBaseTheme(Classic)
@@ -87,7 +112,7 @@ return function(Icon)
 						Icon.setTopbarEnabled()
 					end
 				end
-				GuiService:GetPropertyChangedSignal("MenuIsOpen"):Connect(decideToHideTopbar)
+				track(GuiService:GetPropertyChangedSignal("MenuIsOpen"):Connect(decideToHideTopbar))
 				decideToHideTopbar()
 			end)
 		end
@@ -113,17 +138,21 @@ return function(Icon)
 		if insetHeight ~= previousInsetHeight then
 			previousInsetHeight = insetHeight
 			task.defer(function()
+				if didCleanup then
+					return
+				end
 				Icon.insetHeightChanged:Fire(insetHeight)
 			end)
 		end
 	end
-	GuiService:GetPropertyChangedSignal("TopbarInset"):Connect(checkInset)
+	track(GuiService:GetPropertyChangedSignal("TopbarInset"):Connect(checkInset))
 	checkInset("FirstTime")
 
 	local screenGui = Instance.new("ScreenGui")
-	insetChanged:Connect(function()
+	screenGui.Destroying:Once(cleanup)
+	track(insetChanged:Connect(function()
 		screenGui:SetAttribute("StartInset", startInset)
-	end)
+	end))
 	screenGui.Name = "TopbarStandard"
 	screenGui.Enabled = true
 	screenGui.DisplayOrder = Icon.baseDisplayOrder
@@ -132,18 +161,18 @@ return function(Icon)
 	screenGui.ResetOnSpawn = false
 	screenGui.ScreenInsets = Enum.ScreenInsets.None
 	container[screenGui.Name] = screenGui
-	Icon.baseDisplayOrderChanged:Connect(function()
+	track(Icon.baseDisplayOrderChanged:Connect(function()
 		screenGui.DisplayOrder = Icon.baseDisplayOrder
-	end)
+	end))
 
 	local holders = Instance.new("Frame")
 	holders.Name = "Holders"
 	holders.BackgroundTransparency = 1
-	insetChanged:Connect(function()
+	track(insetChanged:Connect(function()
 		local holderY = if isUsingVR then 36 else math.max(GuiService.TopbarInset.Height + ySizeOffset, 50)
 		holders.Position = UDim2.new(0, 0, 0, yDownOffset)
 		holders.Size = UDim2.new(1, 0, 0, holderY)
-	end)
+	end))
 	holders.Visible = true
 	holders.ZIndex = 1
 	holders.Parent = screenGui
@@ -156,38 +185,38 @@ return function(Icon)
 	screenGuiCenter.Name = "TopbarCentered"
 	screenGuiCenter.DisplayOrder = Icon.baseDisplayOrder
 	screenGuiCenter.ScreenInsets = Enum.ScreenInsets.None
-	Icon.baseDisplayOrderChanged:Connect(function()
+	track(Icon.baseDisplayOrderChanged:Connect(function()
 		screenGuiCenter.DisplayOrder = Icon.baseDisplayOrder
-	end)
+	end))
 	container[screenGuiCenter.Name] = screenGuiCenter
 
-	insetChanged:Connect(updateCenteredHoldersHeight)
+	track(insetChanged:Connect(updateCenteredHoldersHeight))
 	updateCenteredHoldersHeight()
 
 	local screenGuiClipped = screenGui:Clone()
 	screenGuiClipped.Name = screenGuiClipped.Name .. "Clipped"
 	screenGuiClipped.DisplayOrder = (Icon.baseDisplayOrder + 1)
-	Icon.baseDisplayOrderChanged:Connect(function()
+	track(Icon.baseDisplayOrderChanged:Connect(function()
 		screenGuiClipped.DisplayOrder = (Icon.baseDisplayOrder + 1)
-	end)
+	end))
 	container[screenGuiClipped.Name] = screenGuiClipped
 
 	local screenGuiCenterClipped = screenGuiCenter:Clone()
 	screenGuiCenterClipped.Name = screenGuiCenterClipped.Name .. "Clipped"
 	screenGuiCenterClipped.DisplayOrder = (Icon.baseDisplayOrder + 1)
-	Icon.baseDisplayOrderChanged:Connect(function()
+	track(Icon.baseDisplayOrderChanged:Connect(function()
 		screenGuiCenterClipped.DisplayOrder = (Icon.baseDisplayOrder + 1)
-	end)
+	end))
 	container[screenGuiCenterClipped.Name] = screenGuiCenterClipped
 
 	local holderReduction = -24
 	local left = Instance.new("ScrollingFrame")
 	left:SetAttribute("IsAHolder", true)
 	left.Name = "Left"
-	insetChanged:Connect(function()
+	track(insetChanged:Connect(function()
 		left.Position = UDim2.fromOffset(startInset, 0)
 		left.Size = UDim2.new(1, holderReduction - startInset, 1, 0)
-	end)
+	end))
 	left.Size = UDim2.new(1, holderReduction, 1, 0)
 	left.BackgroundTransparency = 1
 	left.Visible = true
@@ -206,9 +235,9 @@ return function(Icon)
 	left.Parent = holders
 
 	local UIListLayout = Instance.new("UIListLayout")
-	insetChanged:Connect(function()
+	track(insetChanged:Connect(function()
 		UIListLayout.Padding = UDim.new(0, iconPadding)
-	end)
+	end))
 	UIListLayout.FillDirection = Enum.FillDirection.Horizontal
 	UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	UIListLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
@@ -216,18 +245,18 @@ return function(Icon)
 	UIListLayout.Parent = left
 
 	local center = left:Clone()
-	insetChanged:Connect(function()
+	track(insetChanged:Connect(function()
 		center.UIListLayout.Padding = UDim.new(0, iconPadding)
-	end)
+	end))
 	center.ScrollingEnabled = false
 	center.UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 	center.Name = "Center"
 	center.Parent = holdersCenter
 
 	local right = left:Clone()
-	insetChanged:Connect(function()
+	track(insetChanged:Connect(function()
 		right.UIListLayout.Padding = UDim.new(0, iconPadding)
-	end)
+	end))
 	right.UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
 	right.Name = "Right"
 	right.AnchorPoint = Vector2.new(1, 0)

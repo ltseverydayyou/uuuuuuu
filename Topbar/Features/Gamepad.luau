@@ -30,18 +30,30 @@ end)()
 local GamepadService = __lt.gs("GamepadService")
 local UserInputService = __lt.gs("UserInputService")
 local GuiService = __lt.gs("GuiService")
+local Janitor = Import(script.Parent.Parent.Packages.Janitor)
 
 local DEFAULT_HIGHLIGHT_KEY = Enum.KeyCode.DPadUp
 local GAMEPAD_INPUT = Enum.PreferredInput.Gamepad
 local Gamepad = {}
 local Icon
+local startJanitor = nil
+local startToken = 0
 
 function Gamepad.start(incomingIcon)
+	startToken += 1
+	local token = startToken
+	if startJanitor then
+		startJanitor:Destroy()
+	end
+	startJanitor = Janitor.new()
 	Icon = incomingIcon
 	Icon.highlightKey = if Icon.highlightKey ~= nil then Icon.highlightKey else DEFAULT_HIGHLIGHT_KEY
 	Icon.highlightIcon = false
 
 	task.delay(1, function()
+		if token ~= startToken then
+			return
+		end
 		local iconsDict = Icon.iconsDictionary
 		local function getIconFromSelectedObject()
 			local clickRegion = GuiService.SelectedObject
@@ -95,7 +107,7 @@ function Gamepad.start(incomingIcon)
 				end
 			end
 		end
-		GuiService:GetPropertyChangedSignal("SelectedObject"):Connect(updateSelectedObject)
+		startJanitor:add(GuiService:GetPropertyChangedSignal("SelectedObject"):Connect(updateSelectedObject))
 
 		local function preferredInputChanged()
 			local preferredInput = UserInputService.PreferredInput
@@ -107,10 +119,10 @@ function Gamepad.start(incomingIcon)
 			end
 			updateSelectedObject()
 		end
-		UserInputService:GetPropertyChangedSignal("PreferredInput"):Connect(preferredInputChanged)
+		startJanitor:add(UserInputService:GetPropertyChangedSignal("PreferredInput"):Connect(preferredInputChanged))
 		preferredInputChanged()
 
-		UserInputService.InputBegan:Connect(function(input, touchingAnObject)
+		startJanitor:add(UserInputService.InputBegan:Connect(function(input, touchingAnObject)
 			if input.UserInputType == Enum.UserInputType.MouseButton1 then
 				local icon = getIconFromSelectedObject()
 				if icon then
@@ -130,7 +142,7 @@ function Gamepad.start(incomingIcon)
 				local clickRegion = iconToHighlight:getInstance("ClickRegion")
 				GuiService.SelectedObject = clickRegion
 			end
-		end)
+		end))
 	end)
 end
 
@@ -155,7 +167,7 @@ end
 
 function Gamepad.registerButton(buttonInstance)
 	local inputBegan = false
-	buttonInstance.InputBegan:Connect(function(input)
+	local inputBeganConnection = buttonInstance.InputBegan:Connect(function(input)
 		inputBegan = true
 		task.wait()
 		task.wait()
@@ -179,6 +191,7 @@ function Gamepad.registerButton(buttonInstance)
 		end
 	end)
 	buttonInstance.Destroying:Once(function()
+		inputBeganConnection:Disconnect()
 		connection:Disconnect()
 	end)
 end

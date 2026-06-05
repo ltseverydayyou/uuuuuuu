@@ -4,13 +4,29 @@ if not loader then
 	loader = {
 		sourceCache = {},
 		moduleCache = {},
-		nodes = {}
+		nodes = {},
+		baseUrl = BASE_URL
 	};
 	rawset(_G, "__TopbarHttpLoader", loader);
+else
+	loader.sourceCache = type(loader.sourceCache) == "table" and loader.sourceCache or {};
+	loader.moduleCache = type(loader.moduleCache) == "table" and loader.moduleCache or {};
+	loader.nodes = type(loader.nodes) == "table" and loader.nodes or {};
+	if loader.baseUrl ~= BASE_URL then
+		table.clear(loader.sourceCache);
+		table.clear(loader.moduleCache);
+		table.clear(loader.nodes);
+		loader.baseUrl = BASE_URL;
+	end;
 end;
 local sourceCache = loader.sourceCache;
 local moduleCache = loader.moduleCache;
 local nodes = loader.nodes;
+function loader.clear()
+	table.clear(sourceCache);
+	table.clear(moduleCache);
+	table.clear(nodes);
+end;
 local Node = loader.Node;
 if not Node then
 	Node = {};

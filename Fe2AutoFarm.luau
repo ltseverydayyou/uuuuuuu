@@ -319,12 +319,30 @@ ctx.gameProfiles = {
 	[323675642] = "FE2",
 	[761462079] = "FEM",
 }
+ctx.placeProfiles = {
+	[12339127827] = "FE2_Retro",
+}
 ctx.profileName = function()
+	ctx.tmpPlaceId = nil
+	pcall(function()
+		ctx.tmpPlaceId = game.PlaceId
+	end)
+	if ctx.placeProfiles[ctx.tmpPlaceId] then
+		return ctx.placeProfiles[ctx.tmpPlaceId]
+	end
 	ctx.tmpGameId = nil
 	pcall(function()
 		ctx.tmpGameId = game.GameId
 	end)
 	return ctx.gameProfiles[ctx.tmpGameId] or ("Game_" .. tostring(ctx.tmpGameId or "Unknown"))
+end
+
+ctx.placeId = function()
+	ctx.tmpPlaceId = nil
+	pcall(function()
+		ctx.tmpPlaceId = game.PlaceId
+	end)
+	return ctx.tmpPlaceId
 end
 
 ctx.gameId = function()
@@ -336,7 +354,11 @@ ctx.gameId = function()
 end
 
 ctx.isFE2Game = function()
-	return ctx.gameId() == 323675642
+	return ctx.gameId() == 323675642 or ctx.placeId() == 12339127827
+end
+
+ctx.isRetroGame = function()
+	return ctx.placeId() == 12339127827
 end
 
 ctx.isFEMGame = function()
@@ -363,6 +385,27 @@ ctx.support = function(k)
 			next = true,
 			femVote = true,
 			survive = false,
+		})[k] == true
+	end
+	if ctx.isRetroGame() then
+		return ({
+			start = true,
+			aura = true,
+			bonus = false,
+			challenges = false,
+			flood = false,
+			paid = true,
+			shop = true,
+			clip = true,
+			rescue = false,
+			dev = false,
+			zip = false,
+			infAir = true,
+			infJump = true,
+			clickTp = true,
+			next = true,
+			femVote = false,
+			survive = true,
 		})[k] == true
 	end
 	if ctx.isFE2Game() then
@@ -1086,6 +1129,7 @@ local WalljumpRemotes = {
 }
 local RebirthRemote = nil
 local PasskeyRemote = nil
+local ItemDataFunction = nil
 local ConfirmItemRemote = nil
 local PassReqSeasonData = nil
 local PassReqSeasonList = nil
@@ -1215,6 +1259,10 @@ do
 	addRemote(SurvivedRemotes, "Survived")
 	addRemote(PlayerDataRemotes, "UpdPlayerData")
 	addRemote(ItemDataRemotes, "ReqItemData")
+	local idf = findRemote("ReqItemData", "RemoteFunction")
+	if idf and idf:IsA("RemoteFunction") then
+		ItemDataFunction = idf
+	end
 	ConfirmItemRemote = findRemote("ConfirmItem", "RemoteEvent")
 	do
 		local rr = Rsp and Rsp:FindFirstChild("Remote")
@@ -1719,7 +1767,7 @@ ctx.collectMapBonuses = function(map, r, notify)
 	return moved
 end
 
-ctx.addBtnEntry = function(t, src, hit, loc)
+ctx.addBtnEntry = function(t, src, hit, loc, retro)
 	if not hit or not hit:IsA("BasePart") then
 		return
 	end
@@ -1727,6 +1775,7 @@ ctx.addBtnEntry = function(t, src, hit, loc)
 		src = src or hit,
 		hit = hit,
 		loc = loc and true or false,
+		retro = retro and true or false,
 	}
 end
 
@@ -1734,6 +1783,13 @@ ctx.scanBtns = function(map)
 	local t = {}
 	for _, obj in ctx.descOf(map) do
 		if obj.ClassName == "Model" then
+			if ctx.isRetroGame() and tostring(obj.Name):match("^_Button%d+$") then
+				local hit = obj:FindFirstChild("Hitbox", true)
+				if hit and hit:IsA("BasePart") then
+					ctx.addBtnEntry(t, obj, hit, false, true)
+				end
+				continue
+			end
 			local hit = nil
 			local hasUi = obj:FindFirstChildWhichIsA("BillboardGui", true) ~= nil
 			local hasFuse = ctx.ffc(obj, "Fuse", true) ~= nil
@@ -1751,6 +1807,24 @@ ctx.scanBtns = function(map)
 				ctx.addBtnEntry(t, obj, hit, false)
 			end
 		end
+	end
+	if ctx.isRetroGame() then
+		table.sort(t, function(a, b)
+			local aSrc = a and (a.src or a.hit)
+			local bSrc = b and (b.src or b.hit)
+			local aNum = tonumber(tostring(aSrc and aSrc.Name or ""):match("%d+"))
+			local bNum = tonumber(tostring(bSrc and bSrc.Name or ""):match("%d+"))
+			if aNum and bNum then
+				return aNum < bNum
+			end
+			if aNum then
+				return true
+			end
+			if bNum then
+				return false
+			end
+			return false
+		end)
 	end
 	return t
 end
@@ -1808,6 +1882,9 @@ ctx.auraReady = function(entry)
 	local src = entry and entry.src
 	if not (hit and hit.Parent) then
 		return false
+	end
+	if entry.retro then
+		return true
 	end
 	if entry.loc then
 		return true
@@ -2066,6 +2143,16 @@ ctx.pressMapButton = function(hit)
 		return
 	end
 	pressTimes[hit] = now
+	if ctx.isRetroGame() and type(firetouchinterest) == "function" then
+		local r = type(ctx.rootPart) == "function" and ctx.rootPart() or nil
+		if r and r.Parent then
+			pcall(firetouchinterest, r, hit, 0)
+			pcall(firetouchinterest, hit, r, 0)
+			task.wait(0.03)
+			pcall(firetouchinterest, r, hit, 1)
+			pcall(firetouchinterest, hit, r, 1)
+		end
+	end
 	for _, rem in PressRemotes do
 		if rem and rem.Parent then
 			pcall(function()
@@ -2112,6 +2199,24 @@ ctx.startAutoFarmButtonSpam = function(map, runId, entries)
 			task.wait(BSI)
 		end
 	end)
+end
+
+ctx.retroButtonsDone = function(entries, sent)
+	entries = type(entries) == "table" and entries or {}
+	sent = type(sent) == "table" and sent or {}
+	local hasRetro = false
+	for _, entry in entries do
+		if entry and entry.retro then
+			local hit = entry.hit
+			if hit and hit.Parent then
+				hasRetro = true
+				if not sent[hit] then
+					return false
+				end
+			end
+		end
+	end
+	return hasRetro
 end
 
 ctx.getPassArg = function(force)
@@ -2362,6 +2467,20 @@ ctx.requestPlayerData = function(force)
 	end
 	lastData = now
 	local key = ctx.getPassArg(false)
+	if ItemDataFunction and ItemDataFunction.Parent then
+		local ok, data, items = pcall(function()
+			if key ~= nil then
+				return ItemDataFunction:InvokeServer(key, LP, true)
+			end
+			return ItemDataFunction:InvokeServer(nil, LP, true)
+		end)
+		if ok then
+			ctx.cacheData(data)
+			if type(items) == "table" then
+				ctx.cache.shopItems = items
+			end
+		end
+	end
 	for _, rem in ItemDataRemotes do
 		if rem and rem.Parent then
 			pcall(function()
@@ -3555,6 +3674,9 @@ ctx.onMap = function(map, id)
 			ctx.mergeLocatorBtns(btns, map)
 			local statsExpected = #RoundStatsRemotes > 0
 			local exitReady = ex and (ctx.buttonsDone() or (not statsExpected and roundCur == nil and roundTotal == nil))
+			if ctx.isRetroGame() then
+				exitReady = ex and ctx.retroButtonsDone(btns, sent)
+			end
 
 			if waitLocSeq and locSeq ~= waitLocSeq then
 				waitLocSeq = nil
@@ -3592,7 +3714,7 @@ ctx.onMap = function(map, id)
 						pcall(function()
 							gg = (b and b:FindFirstChildWhichIsA("BillboardGui", true)) or hit:FindFirstChildWhichIsA("BillboardGui", true)
 						end)
-						if entry.loc or (ti and gg) then
+						if entry.loc or entry.retro or (ti and gg) then
 							r, h = ctx.rh(false)
 							if not r or not h then
 								break
@@ -6602,7 +6724,11 @@ ctx.hideIcon = function(field)
 end
 
 ctx.applyProfileUi = function()
-	if ctx.isFEMGame() then
+	if ctx.isRetroGame() then
+		for _, field in { "bonusBtn", "chBtn", "floodBtn", "rescueBtn", "devBtn", "zipBtn", "zipStopBtn", "zipAutoBtn", "femVoteBtn" } do
+			ctx.hideIcon(field)
+		end
+	elseif ctx.isFEMGame() then
 		for _, field in { "bonusBtn", "chBtn", "floodBtn", "clipBtn", "rescueBtn", "devBtn", "surviveBtn" } do
 			ctx.hideIcon(field)
 		end

@@ -162,11 +162,10 @@ return function(icon)
 	dropShadow.Position = UDim2.fromOffset(0, 5)
 	dropShadow.Size = UDim2.new(1, 0, 0, 48)
 	dropShadow.Parent = caption
-	box:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-		dropShadow.Size = UDim2.new(1, 0, 0, box.AbsoluteSize.Y + 8)
-	end)
-
 	local captionJanitor = icon.captionJanitor
+	captionJanitor:add(box:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+		dropShadow.Size = UDim2.new(1, 0, 0, box.AbsoluteSize.Y + 8)
+	end))
 	local _, captionClone = icon:clipOutside(caption)
 	captionClone.AutomaticSize = Enum.AutomaticSize.None
 	local function matchSize()
@@ -197,7 +196,7 @@ return function(icon)
 			hotkeys.Visible = false
 		end
 	end
-	caption:GetAttributeChangedSignal("CaptionText"):Connect(updateHotkey)
+	captionJanitor:add(caption:GetAttributeChangedSignal("CaptionText"):Connect(updateHotkey))
 
 	local EASING_STYLE = Enum.EasingStyle.Quad
 	local TWEEN_SPEED = 0.2
@@ -216,6 +215,7 @@ return function(icon)
 		local yOffset = if enabled then yIn else yOut
 		return UDim2.new(0.5, 0, 1, yOffset)
 	end
+	local updatePositionCount = 0
 	local function updatePosition(forcedEnabled)
 		if not isCompletelyEnabled then
 			return
@@ -257,9 +257,12 @@ return function(icon)
 		local tweenInfo = (enabled and TWEEN_INFO_IN) or TWEEN_INFO_OUT
 		local tween = TweenService:Create(captionClone, tweenInfo, { Position = endPosition })
 		local updateCaretConnection = RunService.Heartbeat:Connect(updateCaret)
+		updatePositionCount += 1
+		local updateCaretConnectionId = "CaptionCaret-" .. updatePositionCount
+		captionJanitor:add(updateCaretConnection, "Disconnect", updateCaretConnectionId)
 		tween:Play()
 		tween.Completed:Once(function()
-			updateCaretConnection:Disconnect()
+			captionJanitor:remove(updateCaretConnectionId)
 		end)
 	end
 	local function stopHoverCheck()
@@ -268,6 +271,13 @@ return function(icon)
 			hoverCheckConnection = nil
 		end
 	end
+	captionJanitor:add(function()
+		hoverToken += 1
+		if activeTransparencyTween then
+			activeTransparencyTween:Cancel()
+			activeTransparencyTween = nil
+		end
+	end)
 	local function isInsideClickRegion(point)
 		local position = clickRegion.AbsolutePosition
 		local size = clickRegion.AbsoluteSize

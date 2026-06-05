@@ -362,16 +362,16 @@ function Icon.new()
 		end
 	end
 
-	clickRegion.MouseButton1Click:Connect(function()
+	janitor:add(clickRegion.MouseButton1Click:Connect(function()
 		hasUsedMouseButton1Click = true
 		handleToggle()
-	end)
+	end))
 
-	clickRegion.TouchTap:Connect(function()
+	janitor:add(clickRegion.TouchTap:Connect(function()
 		if not hasUsedMouseButton1Click then
 			handleToggle()
 		end
-	end)
+	end))
 
 	janitor:add(UserInputService.InputBegan:Connect(function(input, touchingAnObject)
 		if self.locked then
@@ -487,15 +487,15 @@ function Icon.new()
 		self:setState(nil, "User", self)
 	end
 	janitor:add(stopHoverCheck)
-	self.joinedParent:Connect(function()
+	janitor:add(self.joinedParent:Connect(function()
 		if self.isViewing then
 			viewingEnded()
 		end
-	end)
-	clickRegion.MouseEnter:Connect(function()
+	end))
+	janitor:add(clickRegion.MouseEnter:Connect(function()
 		local dontSetState = UserInputService.PreferredInput ~= preferredInput.desktop
 		viewingStarted(dontSetState)
-	end)
+	end))
 	janitor:add(UserInputService.TouchEnded:Connect(function(input)
 		if activeTouchInputs[input] then
 			activeTouchInputs[input] = nil
@@ -504,8 +504,8 @@ function Icon.new()
 			end
 		end
 	end))
-	clickRegion.MouseLeave:Connect(viewingEnded)
-	clickRegion.InputBegan:Connect(function(input)
+	janitor:add(clickRegion.MouseLeave:Connect(viewingEnded))
+	janitor:add(clickRegion.InputBegan:Connect(function(input)
 		local inputType = input.UserInputType
 		if inputType == Enum.UserInputType.MouseMovement then
 			if not isHovering then
@@ -516,8 +516,8 @@ function Icon.new()
 			activeTouchInputs[input] = true
 			viewingStarted()
 		end
-	end)
-	clickRegion.InputEnded:Connect(function(input)
+	end))
+	janitor:add(clickRegion.InputEnded:Connect(function(input)
 		local inputType = input.UserInputType
 		if inputType == Enum.UserInputType.MouseMovement then
 			viewingEnded()
@@ -527,17 +527,17 @@ function Icon.new()
 				viewingEnded()
 			end
 		end
-	end)
-	clickRegion.SelectionGained:Connect(viewingStarted)
-	clickRegion.SelectionLost:Connect(viewingEnded)
+	end))
+	janitor:add(clickRegion.SelectionGained:Connect(viewingStarted))
+	janitor:add(clickRegion.SelectionLost:Connect(viewingEnded))
 
 	local iconOverlay = self:getInstance("IconOverlay")
-	self.viewingStarted:Connect(function()
+	janitor:add(self.viewingStarted:Connect(function()
 		iconOverlay.Visible = not self.overlayDisabled
-	end)
-	self.viewingEnded:Connect(function()
+	end))
+	janitor:add(self.viewingEnded:Connect(function()
 		iconOverlay.Visible = false
-	end)
+	end))
 
 	janitor:add(anyIconSelected:Connect(function(incomingIcon)
 		if
@@ -564,12 +564,12 @@ function Icon.new()
 	end
 	if origin and originsScreenGui and originsScreenGui.ResetOnSpawn == true then
 		self.originsScreenGui = originsScreenGui
-		Utility.localPlayerRespawned(function()
+		janitor:add(Utility.localPlayerRespawned(function()
 			self:destroy()
-		end)
+		end))
 	end
 
-	self.toggled:Connect(function(isSelected)
+	janitor:add(self.toggled:Connect(function(isSelected)
 		self.noticeChanged:Fire(self.totalNotices)
 		for childIconUID, _ in pairs(self.childIconsDict) do
 			local childIcon = Icon.getIconByUID(childIconUID)
@@ -582,9 +582,9 @@ function Icon.new()
 				end
 			end
 		end
-	end)
+	end))
 
-	self.selected:Connect(function()
+	janitor:add(self.selected:Connect(function()
 		local isDropdown = #self.dropdownIcons > 0
 		if isDropdown then
 			if StarterGui:GetCore("ChatActive") and self.alignment ~= "Right" then
@@ -596,8 +596,8 @@ function Icon.new()
 				StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.PlayerList, false)
 			end
 		end
-	end)
-	self.deselected:Connect(function()
+	end))
+	janitor:add(self.deselected:Connect(function()
 		if self.chatWasPreviouslyActive then
 			self.chatWasPreviouslyActive = nil
 			StarterGui:SetCore("ChatActive", true)
@@ -606,9 +606,12 @@ function Icon.new()
 			self.playerlistWasPreviouslyActive = nil
 			StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.PlayerList, true)
 		end
-	end)
+	end))
 
 	task.delay(0.1, function()
+		if self.isDestroyed then
+			return
+		end
 		if self.activeState == "Deselected" then
 			self.stateChanged:Fire("Deselected")
 			self:refresh()
@@ -1033,16 +1036,18 @@ function Icon:bindEvent(iconEventName, eventFunction)
 		"argument[1] must be a valid topbarplus icon event name!"
 	)
 	assert(typeof(eventFunction) == "function", "argument[2] must be a function!")
-	self.bindedEvents[iconEventName] = event:Connect(function(...)
+	self:unbindEvent(iconEventName)
+	local connection = event:Connect(function(...)
 		eventFunction(self, ...)
 	end)
+	self.bindedEvents[iconEventName] = self.janitor:add(connection, "Disconnect", "BindEvent-" .. iconEventName)
 	return self
 end
 
 function Icon:unbindEvent(iconEventName)
 	local eventConnection = self.bindedEvents[iconEventName]
 	if eventConnection then
-		eventConnection:Disconnect()
+		self.janitor:remove("BindEvent-" .. iconEventName)
 		self.bindedEvents[iconEventName] = nil
 	end
 	return self

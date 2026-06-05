@@ -48,14 +48,17 @@ return function(icon, Icon)
 	button.Parent = widget
 	button.ClipsDescendants = true
 	button.Active = false
-	icon.deselected:Connect(function()
+	icon.janitor:add(icon.deselected:Connect(function()
 		button.ClipsDescendants = true
 		task.delay(0.2, function()
+			if icon.isDestroyed then
+				return
+			end
 			if icon.isSelected then
 				button.ClipsDescendants = false
 			end
 		end)
-	end)
+	end))
 
 	local GuiService = __lt.gs("GuiService")
 	icon:setBehaviour("IconButton", "BackgroundTransparency", function(value)
@@ -380,8 +383,8 @@ return function(icon, Icon)
 	end
 	icon:setBehaviour("Widget", "BorderSize", updateBorderSize)
 	icon:setBehaviour("IconSpot", "Visible", updateBorderSize)
-	icon.startMenuUpdate:Connect(handleLabelAndImageChanges)
-	icon.updateSize:Connect(handleLabelAndImageChanges)
+	icon.janitor:add(icon.startMenuUpdate:Connect(handleLabelAndImageChanges))
+	icon.janitor:add(icon.updateSize:Connect(handleLabelAndImageChanges))
 	icon:setBehaviour("ContentsList", "HorizontalAlignment", handleLabelAndImageChanges)
 	icon:setBehaviour("Widget", "Visible", handleLabelAndImageChanges)
 	icon:setBehaviour("Widget", "DesiredWidth", handleLabelAndImageChanges)
@@ -396,13 +399,13 @@ return function(icon, Icon)
 		end
 		return textureId
 	end)
-	icon.alignmentChanged:Connect(function(newAlignment)
+	icon.janitor:add(icon.alignmentChanged:Connect(function(newAlignment)
 		if newAlignment == "Center" then
 			newAlignment = "Left"
 		end
 		menuUIListLayout.HorizontalAlignment = Enum.HorizontalAlignment[newAlignment]
 		updateBorderSize()
-	end)
+	end))
 
 	local Players = __lt.gs("Players")
 	local localPlayer = Players.LocalPlayer
@@ -422,9 +425,9 @@ return function(icon, Icon)
 	local iconImageScale = Instance.new("NumberValue")
 	iconImageScale.Name = "IconImageScale"
 	iconImageScale.Parent = iconImage
-	iconImageScale:GetPropertyChangedSignal("Value"):Connect(function()
+	icon.janitor:add(iconImageScale:GetPropertyChangedSignal("Value"):Connect(function()
 		iconImage.Size = UDim2.new(iconImageScale.Value, 0, iconImageScale.Value, 0)
-	end)
+	end))
 
 	local UIAspectRatioConstraint = Instance.new("UIAspectRatioConstraint")
 	UIAspectRatioConstraint.Name = "IconImageRatio"

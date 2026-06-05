@@ -99,20 +99,20 @@ return function(icon, Icon)
 		icon.updateSize:Fire()
 	end
 	icon.janitor:add(GamepadService:GetPropertyChangedSignal("GamepadCursorEnabled"):Connect(setIndicatorVisible))
-	icon.indicatorSet:Connect(function(keyCode)
+	icon.janitor:add(icon.indicatorSet:Connect(function(keyCode)
 		local visibility = false
 		if keyCode then
 			imageLabel.Image = UserInputService:GetImageForKeyCode(keyCode)
 			visibility = true
 		end
 		setIndicatorVisible(visibility)
-	end)
+	end))
 
 	local function updateSize()
 		local ySize = widget.AbsoluteSize.Y * 0.96
 		indicator.Size = UDim2.new(0, ySize, 0, ySize)
 	end
-	widget:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateSize)
+	icon.janitor:add(widget:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateSize))
 	updateSize()
 
 	return indicator

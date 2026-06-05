@@ -206,7 +206,7 @@ function Utility.formatStateName(incomingStateName)
 end
 
 function Utility.localPlayerRespawned(callback)
-	localPlayer.CharacterRemoving:Connect(callback)
+	return localPlayer.CharacterRemoving:Connect(callback)
 end
 
 function Utility.getClippedContainer(screenGui)

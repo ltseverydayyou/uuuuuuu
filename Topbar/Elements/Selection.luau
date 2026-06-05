@@ -60,14 +60,18 @@ return function(Icon)
 	local RunService = __lt.gs("RunService")
 	local GuiService = __lt.gs("GuiService")
 	local rotationSpeed = 1
-	selection:GetAttributeChangedSignal("RotationSpeed"):Connect(function()
+	local rotationSpeedConnection = selection:GetAttributeChangedSignal("RotationSpeed"):Connect(function()
 		rotationSpeed = selection:GetAttribute("RotationSpeed")
 	end)
-	RunService.Heartbeat:Connect(function()
+	local heartbeatConnection = RunService.Heartbeat:Connect(function()
 		if not GuiService.SelectedObject then
 			return
 		end
 		selectionGradient.Rotation = (os.clock() * rotationSpeed * 100) % 360
+	end)
+	selectionContainer.Destroying:Once(function()
+		rotationSpeedConnection:Disconnect()
+		heartbeatConnection:Disconnect()
 	end)
 
 	return selectionContainer

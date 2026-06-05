@@ -68,7 +68,7 @@ return function(icon, Icon)
 	local Janitor = Import(packages.Janitor)
 	local Signal = Import(packages.GoodSignal)
 	local Utility = Import(iconModule.Utility)
-	icon.noticeChanged:Connect(function(totalNotices)
+	icon.janitor:add(icon.noticeChanged:Connect(function(totalNotices)
 		if not totalNotices then
 			return
 		end
@@ -91,8 +91,8 @@ return function(icon, Icon)
 			enabled = false
 		end
 		Utility.setVisible(notice, enabled, "NoticeHandler")
-	end)
-	icon.noticeStarted:Connect(function(customClearSignal, noticeId)
+	end))
+	icon.janitor:add(icon.noticeStarted:Connect(function(customClearSignal, noticeId)
 		if not customClearSignal then
 			customClearSignal = icon.deselected
 		end
@@ -101,7 +101,9 @@ return function(icon, Icon)
 			parentIcon:notify(customClearSignal)
 		end
 
-		local noticeJanitor = icon.janitor:add(Janitor.new())
+		noticeId = noticeId or Utility.generateUID()
+		local noticeJanitorId = "Notice-" .. tostring(noticeId)
+		local noticeJanitor = icon.janitor:add(Janitor.new(), "destroy", noticeJanitorId)
 		local noticeComplete = noticeJanitor:add(Signal.new())
 		noticeJanitor:add(icon.endNotices:Connect(function()
 			noticeComplete:Fire()
@@ -109,7 +111,6 @@ return function(icon, Icon)
 		noticeJanitor:add(customClearSignal:Connect(function()
 			noticeComplete:Fire()
 		end))
-		noticeId = noticeId or Utility.generateUID()
 		icon.notices[noticeId] = {
 			completeSignal = noticeComplete,
 			clearNoticeEvent = customClearSignal,
@@ -121,12 +122,12 @@ return function(icon, Icon)
 		icon.totalNotices += 1
 		updateNotice()
 		noticeComplete:Once(function()
-			noticeJanitor:destroy()
+			icon.janitor:remove(noticeJanitorId)
 			icon.totalNotices -= 1
 			icon.notices[noticeId] = nil
 			updateNotice()
 		end)
-	end)
+	end))
 
 	notice:SetAttribute("ClipToJoinedParent", true)
 	icon:clipOutside(notice)

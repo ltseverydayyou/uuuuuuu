@@ -104,6 +104,7 @@ local function import(target)
 		return cached;
 	end;
 	local src = fetch(path);
+	sourceCache[path] = nil;
 	local fn, err = loadstring("return function(Import, script)\n" .. src .. "\nend", "=" .. path);
 	if not fn then
 		error(err);

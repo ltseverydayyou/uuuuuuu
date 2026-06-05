@@ -105,7 +105,7 @@ return function(icon)
 
 	local dropdownJanitor = icon.dropdownJanitor
 	local Icon = Import(icon.iconModule)
-	icon.dropdownChildAdded:Connect(function(childIcon)
+	dropdownJanitor:add(icon.dropdownChildAdded:Connect(function(childIcon)
 		local _, modificationUID = childIcon:modifyTheme({
 			{ "Widget", "BorderSize", 0 },
 			{ "IconCorners", "CornerRadius", UDim.new(0, 10) },
@@ -124,8 +124,8 @@ return function(icon)
 				childIcon:removeModification(modificationUID)
 			end)
 		end)
-	end)
-	icon.dropdownSet:Connect(function(arrayOfIcons)
+	end))
+	dropdownJanitor:add(icon.dropdownSet:Connect(function(arrayOfIcons)
 		for i, otherIconUID in pairs(icon.dropdownIcons) do
 			local otherIcon = Icon.getIconByUID(otherIconUID)
 			if otherIcon then
@@ -139,7 +139,7 @@ return function(icon)
 				end
 			end
 		end
-	end)
+	end))
 
 	local function updateMaxIcons()
 		local maxIcons = dropdown:GetAttribute("MaxIcons")
@@ -210,7 +210,7 @@ return function(icon)
 			openTween =
 				TweenService:Create(dropdown, tweenInfo, { Size = UDim2.new(0, dropdown.Size.X.Offset, 0, height) })
 			openTween:Play()
-			openTween.Completed:Connect(function()
+			openTween.Completed:Once(function()
 				openTween = nil
 			end)
 		else
@@ -218,7 +218,7 @@ return function(icon)
 			closeTween =
 				TweenService:Create(dropdown, closeTweenInfo, { Size = UDim2.new(0, dropdown.Size.X.Offset, 0, 0) })
 			closeTween:Play()
-			closeTween.Completed:Connect(function()
+			closeTween.Completed:Once(function()
 				closeTween = nil
 			end)
 		end
@@ -247,12 +247,10 @@ return function(icon)
 
 		openTween = TweenService:Create(dropdown, tweenInfo, { Size = UDim2.new(0, dropdown.Size.X.Offset, 0, height) })
 		openTween:Play()
-		openTween.Completed:Connect(function()
+		openTween.Completed:Once(function()
 			openTween = nil
 		end)
 	end
-
-	dropdownJanitor:add(icon.toggled:Connect(updateVisibility))
 
 	local updateCount = 0
 	local isUpdating = false
@@ -321,29 +319,54 @@ return function(icon)
 
 	dropdownJanitor:add(dropdownScroller:GetPropertyChangedSignal("AbsoluteCanvasSize"):Connect(updateMaxIconsListener))
 	dropdownJanitor:add(dropdownScroller.ChildAdded:Connect(updateMaxIconsListener))
-	dropdownJanitor:add(dropdownScroller.ChildRemoved:Connect(updateChildSize))
-	dropdownJanitor:add(dropdownScroller.ChildRemoved:Connect(updateMaxIconsListener))
 	dropdownJanitor:add(dropdown:GetAttributeChangedSignal("MaxIcons"):Connect(updateMaxIconsListener))
 	dropdownJanitor:add(dropdown:GetAttributeChangedSignal("MaxIcons"):Connect(updateChildSize))
 	dropdownJanitor:add(icon.childThemeModified:Connect(updateMaxIconsListener))
 	updateMaxIconsListener()
 
+	local childConnections = {}
+	local function disconnectVisibilityListeners(child)
+		local connections = childConnections[child]
+		if not connections then
+			return
+		end
+		for _, connection in pairs(connections) do
+			connection:Disconnect()
+		end
+		childConnections[child] = nil
+	end
+
 	local function connectVisibilityListeners(child)
-		if child:IsA("GuiObject") then
-			child:GetPropertyChangedSignal("Visible"):Connect(updateChildSize)
-			child:GetPropertyChangedSignal("Size"):Connect(updateChildSize)
+		if child:IsA("GuiObject") and not childConnections[child] then
+			childConnections[child] = {
+				child:GetPropertyChangedSignal("Visible"):Connect(updateChildSize),
+				child:GetPropertyChangedSignal("Size"):Connect(updateChildSize),
+			}
 		end
 	end
+	dropdownJanitor:add(function()
+		for _, connections in pairs(childConnections) do
+			for _, connection in pairs(connections) do
+				connection:Disconnect()
+			end
+		end
+		table.clear(childConnections)
+	end)
 
 	for _, child in pairs(dropdownScroller:GetChildren()) do
 		connectVisibilityListeners(child)
 	end
 
-	dropdownScroller.ChildAdded:Connect(function(child)
+	dropdownJanitor:add(dropdownScroller.ChildRemoved:Connect(function(child)
+		disconnectVisibilityListeners(child)
+		updateChildSize()
+		updateMaxIconsListener()
+	end))
+	dropdownJanitor:add(dropdownScroller.ChildAdded:Connect(function(child)
 		RunService.Heartbeat:Wait()
 		connectVisibilityListeners(child)
 		updateChildSize()
-	end)
+	end))
 
 	dropdown.Visible = false
 

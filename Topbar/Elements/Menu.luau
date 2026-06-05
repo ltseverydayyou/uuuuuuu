@@ -135,11 +135,11 @@ return function(icon)
 		menuJanitor:add(icon.alignmentChanged:Connect(updateAlignent))
 		updateAlignent()
 
-		menu:GetAttributeChangedSignal("MenuCanvasWidth"):Connect(function()
+		menuJanitor:add(menu:GetAttributeChangedSignal("MenuCanvasWidth"):Connect(function()
 			local canvasWidth = menu:GetAttribute("MenuCanvasWidth")
 			local canvasY = menu.CanvasSize.Y
 			menu.CanvasSize = UDim2.new(0, canvasWidth, canvasY.Scale, canvasY.Offset)
-		end)
+		end))
 		menuJanitor:add(icon.updateMenu:Connect(function()
 			local maxIcons = menu:GetAttribute("MaxIcons")
 			if not maxIcons then
@@ -179,8 +179,8 @@ return function(icon)
 		startMenuUpdate()
 	end
 
-	icon.menuChildAdded:Connect(totalChildrenChanged)
-	icon.menuSet:Connect(function(arrayOfIcons)
+	icon.janitor:add(icon.menuChildAdded:Connect(totalChildrenChanged))
+	icon.janitor:add(icon.menuSet:Connect(function(arrayOfIcons)
 		for i, otherIconUID in pairs(icon.menuIcons) do
 			local otherIcon = Icon.getIconByUID(otherIconUID)
 			if otherIcon then
@@ -195,7 +195,7 @@ return function(icon)
 				end
 			end
 		end
-	end)
+	end))
 
 	return menu
 end

@@ -5000,7 +5000,7 @@ task.defer(function()
 				end)
 			)
 		end
-		makeSizeSlider("FpsCap", "FPS cap", "set your FPS cap to anything you like", fpsCapValue, 30, 999, {
+		makeSizeSlider("FpsCap", "FPS cap", "set your FPS cap to anything you like", fpsCapValue, 1, 999, {
 			integer = true,
 			apply = applyFpsCap,
 		})

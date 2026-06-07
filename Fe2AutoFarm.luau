@@ -435,7 +435,7 @@ local MP = Wsp and (Wsp:FindFirstChild("Multiplayer") or Wsp:WaitForChild("Multi
 
 local TPD = 0.05
 local BTD = 0.05
-local SCI = 0.025
+local SCI = 0.08
 local VDY = -50
 local EXP = Vector3.new(50, -1, 50)
 local JMP = Vector3.new(0, 100, 0)
@@ -447,19 +447,19 @@ local RRG = 0.3
 local EXM = 50
 local FGM = 2
 local LHW = 8
-local PCD = 0.03
+local PCD = 0.1
 local RFD = { 0, 0.25, 0.75, 1.5, 3, 5 }
 local FDM = 160
 local VLM = 20
 local RCH = 12
 local LDB = 6
 local LDI = 0.1
-local BSI = 0.035
-local ASI = 0.08
-local PLI = 1
-local PSI = 0.35
-local PMW = 0.08
-local FMI = 0.1
+local BSI = 0.1
+local ASI = 0.14
+local PLI = 2
+local PSI = 1
+local PMW = 0.2
+local FMI = 0.2
 local RSI = 3
 local SRI = 1.5
 local DRI = 6
@@ -483,6 +483,11 @@ local plt
 local cTab = {}
 local locBtns = {}
 local pressTimes = setmetatable({}, { __mode = "k" })
+local pressWin = 0
+local pressCnt = 0
+local pressMax = 12
+local pressGap = 0.25
+local pressBudget = 3
 local bonusSeen = setmetatable({}, { __mode = "k" })
 local bMap = nil
 local bCache = nil
@@ -828,6 +833,7 @@ end
 ctx.clearLocators = function()
 	locBtns = {}
 	locSeq += 1
+	pressTimes = setmetatable({}, { __mode = "k" })
 end
 
 ctx.releaseRoot = function()
@@ -903,6 +909,8 @@ ctx.stop = function()
 	auraList = {}
 	auraMap = nil
 	auraAt = 0
+	pressWin = 0
+	pressCnt = 0
 	roundCur = nil
 	roundTotal = nil
 	roundLeft = nil
@@ -1911,7 +1919,7 @@ ctx.auraEntries = function(map)
 		return t, true
 	end
 	local now = os.clock()
-	if auraMap ~= map or now - auraAt > 0.25 then
+	if auraMap ~= map or now - auraAt > 0.6 then
 		auraMap = map
 		auraAt = now
 		auraList = {}
@@ -1971,23 +1979,6 @@ ctx.addLocatorBtn = function(hit, nextHit)
 		next = nextHit,
 		seq = locSeq,
 	}
-	local id = locSeq
-	ctx.spawnLoop(function()
-		while ctx.alive() and locSeq == id and hit and hit.Parent do
-			if not auraOn then
-				task.wait(0.1)
-				continue
-			end
-			if type(ctx.pressMapButton) == "function" and ctx.isRoundIngame() then
-				local hb = auraUseDistance and type(ctx.rootPart) == "function" and ctx.rootPart() or nil
-				local maxDist = math.max(0, tonumber(auraDist) or 7)
-				if not auraUseDistance or (hb and hb.Parent and (hb.Position - hit.Position).Magnitude <= maxDist) then
-					ctx.pressMapButton(hit)
-				end
-			end
-			task.wait(BSI)
-		end
-	end)
 end
 
 ctx.locatorEntries = function(map)
@@ -2025,6 +2016,7 @@ ctx.pressAuraEntries = function(entries, map, allowNearestFallback)
 	local hb = type(ctx.rootPart) == "function" and ctx.rootPart() or nil
 	local maxDist = math.max(0, tonumber(auraDist) or 7)
 	local pressed = false
+	local used = 0
 	if not hb and auraUseDistance then
 		return false
 	end
@@ -2036,8 +2028,7 @@ ctx.pressAuraEntries = function(entries, map, allowNearestFallback)
 		local entry = ctx.nearestEntry(entries, hb and hb.Position or nil)
 		local hit = entry and entry.hit
 		if hit and hit.Parent and (not map or hit:IsDescendantOf(map)) then
-			ctx.pressMapButton(hit)
-			return true
+			return ctx.pressMapButton(hit) == true
 		end
 		return false
 	end
@@ -2047,10 +2038,10 @@ ctx.pressAuraEntries = function(entries, map, allowNearestFallback)
 		local hit = entry and entry.hit
 		if not (hit and hit.Parent and (not map or hit:IsDescendantOf(map))) then
 			table.remove(entries, i)
-		elseif not auraUseDistance or (hb and hb.Parent and (hb.Position - hit.Position).Magnitude <= maxDist) then
-			pressed = true
-			if type(ctx.pressMapButton) == "function" then
-				ctx.pressMapButton(hit)
+		elseif used < pressBudget and (not auraUseDistance or (hb and hb.Parent and (hb.Position - hit.Position).Magnitude <= maxDist)) then
+			used += 1
+			if type(ctx.pressMapButton) == "function" and ctx.pressMapButton(hit) then
+				pressed = true
 			end
 		end
 	end
@@ -2135,13 +2126,21 @@ end
 
 ctx.pressMapButton = function(hit)
 	if not hit or not hit.Parent then
-		return
+		return false
 	end
 	local now = os.clock()
 	local last = pressTimes[hit]
 	if last and now - last < PCD then
-		return
+		return false
 	end
+	if now - pressWin >= pressGap then
+		pressWin = now
+		pressCnt = 0
+	end
+	if pressCnt >= pressMax then
+		return false
+	end
+	pressCnt += 1
 	pressTimes[hit] = now
 	if ctx.isRetroGame() and type(firetouchinterest) == "function" then
 		local r = type(ctx.rootPart) == "function" and ctx.rootPart() or nil
@@ -2153,13 +2152,16 @@ ctx.pressMapButton = function(hit)
 			pcall(firetouchinterest, hit, r, 1)
 		end
 	end
+	local fired = false
 	for _, rem in PressRemotes do
 		if rem and rem.Parent then
-			pcall(function()
+			local ok = pcall(function()
 				rem:FireServer(hit)
 			end)
+			fired = fired or ok
 		end
 	end
+	return fired
 end
 
 ctx.startPressLoop = function(hit, runId, keepGoing)
@@ -2167,12 +2169,16 @@ ctx.startPressLoop = function(hit, runId, keepGoing)
 		return
 	end
 	ctx.spawnLoop(function()
-		while ctx.alive() and on and tok == runId and hit and hit.Parent do
+		local tries = 0
+		local t0 = os.clock()
+		while ctx.alive() and on and tok == runId and hit and hit.Parent and tries < 8 and os.clock() - t0 < 3 do
 			if type(keepGoing) == "function" and not keepGoing() then
 				break
 			end
-			ctx.pressMapButton(hit)
-			task.wait(BSI)
+			if ctx.pressMapButton(hit) then
+				tries += 1
+			end
+			task.wait(math.max(BSI, PCD))
 		end
 	end)
 end
@@ -2183,17 +2189,30 @@ ctx.startAutoFarmButtonSpam = function(map, runId, entries)
 	end
 	entries = type(entries) == "table" and entries or {}
 	ctx.spawnLoop(function()
+		local idx = 1
 		while ctx.activeRun(map, runId) and ctx.inState("InGame") do
 			ctx.mergeLocatorBtns(entries, map)
 			if not ctx.buttonsDone() then
-				for i = #entries, 1, -1 do
-					local entry = entries[i]
+				local total = #entries
+				local tried = 0
+				local done = 0
+				while total > 0 and tried < total and done < pressBudget do
+					if idx > #entries then
+						idx = 1
+					end
+					local entry = entries[idx]
 					local hit = entry and entry.hit
 					if hit and hit.Parent and hit:IsDescendantOf(map) then
 						ctx.pressMapButton(hit)
+						done += 1
+						idx += 1
 					else
-						table.remove(entries, i)
+						table.remove(entries, idx)
+						if idx > #entries then
+							idx = 1
+						end
 					end
+					tried += 1
 				end
 			end
 			task.wait(BSI)
@@ -3523,6 +3542,8 @@ ctx.toggle = function(v)
 	on = v and true or false
 	tok += 1
 	cur = nil
+	pressWin = 0
+	pressCnt = 0
 	ctx.clearLocators()
 	survivedSeen = false
 	ctx.setBtn()

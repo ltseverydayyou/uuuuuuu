@@ -318,9 +318,18 @@ ctx.cfgDir = "ltseverydayyou-fe2"
 ctx.gameProfiles = {
 	[323675642] = "FE2",
 	[761462079] = "FEM",
+	[4229990801] = "FE2CM",
 }
 ctx.placeProfiles = {
 	[12339127827] = "FE2_Retro",
+	[11951199229] = "FE2CM",
+	[12074120006] = "FE2CM",
+	[14708572114] = "FE2CM",
+}
+ctx.fe2cmPlaces = {
+	[11951199229] = true,
+	[12074120006] = true,
+	[14708572114] = true,
 }
 ctx.profileName = function()
 	ctx.tmpPlaceId = nil
@@ -353,8 +362,12 @@ ctx.gameId = function()
 	return ctx.tmpGameId
 end
 
+ctx.isFE2CMGame = function()
+	return ctx.gameId() == 4229990801 or ctx.fe2cmPlaces[ctx.placeId()] == true
+end
+
 ctx.isFE2Game = function()
-	return ctx.gameId() == 323675642 or ctx.placeId() == 12339127827
+	return ctx.gameId() == 323675642 or ctx.placeId() == 12339127827 or ctx.isFE2CMGame()
 end
 
 ctx.isRetroGame = function()
@@ -400,6 +413,27 @@ ctx.support = function(k)
 			rescue = false,
 			dev = false,
 			zip = false,
+			infAir = true,
+			infJump = true,
+			clickTp = true,
+			next = true,
+			femVote = false,
+			survive = true,
+		})[k] == true
+	end
+	if ctx.isFE2CMGame() then
+		return ({
+			start = true,
+			aura = true,
+			bonus = true,
+			challenges = true,
+			flood = true,
+			paid = true,
+			shop = true,
+			clip = true,
+			rescue = true,
+			dev = true,
+			zip = true,
 			infAir = true,
 			infJump = true,
 			clickTp = true,
@@ -1250,7 +1284,7 @@ do
 		PasskeyRemote = pk
 	end
 
-	local rb = findRemote("ReqRebirth", "RemoteEvent") or findRemote("rebirth", "RemoteEvent")
+	local rb = findRemote("ReqRebirth", "RemoteEvent") or findRemote("rebirth", "RemoteEvent") or findRemote("LxWowhVdggjbxLTozuicVKHltFbUuVUg", "RemoteEvent")
 	if rb and rb:IsA("RemoteEvent") then
 		RebirthRemote = rb
 	end
@@ -1266,29 +1300,36 @@ do
 	addRemote(LoadedMapRemotes, "LoadedMap")
 	addRemote(SurvivedRemotes, "Survived")
 	addRemote(PlayerDataRemotes, "UpdPlayerData")
+	addRemote(PlayerDataRemotes, "mbTUpXEtICXoMoBrBEoiHpRywCzJjtba")
 	addRemote(ItemDataRemotes, "ReqItemData")
+	addRemote(ItemDataRemotes, "jBRXdUHKhwduqDelrUCPdolYbvaFGFMi")
 	local idf = findRemote("ReqItemData", "RemoteFunction")
 	if idf and idf:IsA("RemoteFunction") then
 		ItemDataFunction = idf
 	end
-	ConfirmItemRemote = findRemote("ConfirmItem", "RemoteEvent")
+	ConfirmItemRemote = findRemote("ConfirmItem", "RemoteEvent") or findRemote("IBHzeWzRcHyDJcPNXXfEkcXARFJrSvvt", "RemoteEvent")
 	do
 		local rr = Rsp and Rsp:FindFirstChild("Remote")
 		local pf = rr and rr:FindFirstChild("Pass")
-		local rsd = pf and pf:FindFirstChild("ReqSeasonData")
-		local rsl = pf and pf:FindFirstChild("ReqSeasonList")
+		local rsd = pf and (pf:FindFirstChild("ReqSeasonData") or pf:FindFirstChild("wYXTxuCjheiXJfcizJPuPwrfonMOVMVJ"))
+		local rsl = pf and (pf:FindFirstChild("ReqSeasonList") or pf:FindFirstChild("eumTfRpsBhpIbMhPbsgBhNWijGPZcWZZ"))
 		PassReqSeasonData = rsd and rsd:IsA("RemoteEvent") and rsd or nil
 		PassReqSeasonList = rsl and rsl:IsA("RemoteEvent") and rsl or nil
 	end
 	addRemote(GameStateRemotes, "UpdateGameState")
+	addRemote(GameStateRemotes, "FBbJEWQDfbOPQZBNaWtXPmnKTDndEbbK")
 	addRemote(ChallengeRemotes.GetAirBubble, "GetAirBubble")
 	addRemote(ChallengeRemotes.SwimInLava, "SwimInLava")
+	addRemote(ChallengeRemotes.SwimInLava, "fvgxdrskCQyGiyAbJXnVrzFRinSqigYN")
 	addRemote(ChallengeRemotes.RegeneratedAir, "RegeneratedAir")
+	addRemote(ChallengeRemotes.RegeneratedAir, "ZdwUWbHbtYFphslKtWDPwBpPOrOQbGPZ")
 	addRemote(ChallengeRemotes.SlideCheck, "SlideCheck")
 	addRemote(ChallengeRemotes.Walljumped, "Walljumped")
+	addRemote(ChallengeRemotes.Walljumped, "cLtjGlpevadbSJSvVQMCvNicyzbFZMGj")
 	addFolderRemote(ChallengeRemotes.RideZipline, chFolder, "RideZipline")
 	addFolderRemote(ZiplineRemotes.RideZipline, rmt, "RideZipline")
 	addRemote(ZiplineRemotes.Zipline, "Zipline")
+	addFolderRemote(ZiplineRemotes.Zipline, gpFolder, "Zipline")
 	addFolderRemote(WalljumpRemotes.Walljump, gpFolder, "Walljump")
 	addRemote(WalljumpRemotes.Walljump, "Walljump")
 end

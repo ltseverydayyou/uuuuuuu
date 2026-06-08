@@ -117,6 +117,12 @@ local host = type(sh) == "table" and sh or (type(g) == "table" and g or nil)
 
 if host and type(host.__lt_af_ctx) == "table" then
 	local old = host.__lt_af_ctx
+	if type(old.opt) == "table" then
+		old.opt.fePhysicsOn = true
+	end
+	if type(old.applyFeMovement) == "function" then
+		pcall(old.applyFeMovement)
+	end
 	if type(old.stop) == "function" then
 		pcall(old.stop)
 	elseif type(old.con) == "table" then
@@ -567,6 +573,7 @@ ctx.cache.uiHooks = setmetatable({}, { __mode = "k" })
 ctx.opt.passOn = true
 ctx.opt.paidOn = true
 ctx.opt.clipOn = false
+ctx.opt.fePhysicsOn = false
 ctx.opt.fpPartOn = false
 ctx.opt.rescueOn = false
 ctx.opt.devOn = false
@@ -628,6 +635,7 @@ ctx.cfgKeys = {
 	"floodRandom",
 	"paidOn",
 	"clipOn",
+	"fePhysicsOn",
 	"rescueOn",
 	"devOn",
 	"zipFastOn",
@@ -896,6 +904,10 @@ end
 ctx.stop = function()
 	if not ctx.live then
 		return
+	end
+	ctx.opt.fePhysicsOn = true
+	if type(ctx.applyFeMovement) == "function" then
+		pcall(ctx.applyFeMovement)
 	end
 	ctx.live = false
 	on = false
@@ -3095,6 +3107,10 @@ ctx.setClipBtn = function()
 	ctx.setTopBtn(ctx.ui.clipBtn, ctx.opt.clipOn and "No SideClip TP: ON" or "No SideClip TP: OFF", ctx.opt.clipOn)
 end
 
+ctx.setFePhysicsBtn = function()
+	ctx.setTopBtn(ctx.ui.fePhysBtn, ctx.opt.fePhysicsOn and "FE2 Physics: ON" or "FE2 Physics: OFF", ctx.opt.fePhysicsOn, ctx.opt.fePhysicsOn and Color3.fromRGB(180, 90, 45) or Color3.fromRGB(60, 130, 210))
+end
+
 ctx.setFpPartBtn = function()
 end
 
@@ -5267,14 +5283,15 @@ ctx.patchSideClip = function(force)
 	local c = ctx.chr(false)
 	local s = c and c:FindFirstChild("CL_AntiSideClip")
 	local z = s and s:FindFirstChild("Ziplining")
+	local block = ctx.opt.clipOn == true or force == true or ctx.opt.fePhysicsOn ~= true
 	if s and s:IsA("LocalScript") then
 		pcall(function()
-			s.Disabled = false
+			s.Disabled = block
 		end)
 	end
 	if z and z:IsA("BindableEvent") then
 		pcall(function()
-			z:Fire(ctx.opt.clipOn == true or force == true)
+			z:Fire(block)
 		end)
 	end
 end
@@ -6081,8 +6098,195 @@ ctx.startInfAirHeartbeat = function()
 	ctx.bind(ctx.cache.infAirHb)
 end
 
+ctx.cache.feMoveOrig = ctx.cache.feMoveOrig or setmetatable({}, { __mode = "k" })
+ctx.cache.feMoveModOrig = ctx.cache.feMoveModOrig or {}
+ctx.cache.feMoveChar = nil
+ctx.cache.feMoveCharCons = ctx.cache.feMoveCharCons or {}
+ctx.cache.feMoveLoop = nil
+ctx.cache.feVelHb = ctx.cache.feVelHb
+ctx.cache.feVelTask = ctx.cache.feVelTask
+ctx.cache.feVelSeen = ctx.cache.feVelSeen
+ctx.cache.feVelLast = 0
+ctx.cache.feVelLastState = nil
+
+ctx.feMoveNoop = function()
+end
+
+ctx.patchFeMoveEnv = function(scr, st)
+	if type(getsenv) ~= "function" or not scr then
+		return
+	end
+	local ok, env = pcall(getsenv, scr)
+	if not ok or type(env) ~= "table" then
+		return
+	end
+	local save = ctx.cache.feMoveOrig[scr]
+	if type(save) ~= "table" then
+		save = {}
+		ctx.cache.feMoveOrig[scr] = save
+	end
+	for _, n in { "AccurateJump" } do
+		if save[n] ~= nil then
+			env[n] = save[n]
+		elseif type(env[n]) == "function" and env[n] ~= ctx.feMoveNoop then
+			save[n] = env[n]
+		end
+	end
+end
+
+ctx.patchFeAntiWallhop = function(st)
+	local mods = Rsp and Rsp:FindFirstChild("Modules")
+	local client = mods and mods:FindFirstChild("Client")
+	local mod = client and client:FindFirstChild("AntiWallhop")
+	if not (mod and type(require) == "function") then
+		return
+	end
+	local ok, t = pcall(require, mod)
+	if not ok or type(t) ~= "table" then
+		return
+	end
+	for _, n in { "enable", "onPostSimulation" } do
+		if ctx.cache.feMoveModOrig[n] ~= nil then
+			t[n] = ctx.cache.feMoveModOrig[n]
+		elseif type(t[n]) == "function" and t[n] ~= ctx.feMoveNoop then
+			ctx.cache.feMoveModOrig[n] = t[n]
+		end
+	end
+end
+
+ctx.feVelocityEvent = function()
+	local main = ctx.mainScript()
+	local tv = main and main:FindFirstChild("ToggleVelocity")
+	if tv and tv.Fire then
+		return tv
+	end
+	return nil
+end
+
+ctx.fireFeVelocityLimit = function(st, force)
+	local tv = ctx.feVelocityEvent()
+	if not tv then
+		return false
+	end
+	local now = os.clock()
+	if force ~= true and ctx.cache.feVelLastState == st and now - (ctx.cache.feVelLast or 0) < (st and 0.75 or 0.015) then
+		return true
+	end
+	local ok = pcall(function()
+		tv:Fire(st == true)
+	end)
+	if ok then
+		ctx.cache.feVelLastState = st
+		ctx.cache.feVelLast = now
+	end
+	return ok
+end
+
+ctx.keepFeVelocityLimitOff = function()
+	if ctx.opt.fePhysicsOn == true then
+		if ctx.cache.feVelSeen ~= true then
+			ctx.fireFeVelocityLimit(true, true)
+			ctx.cache.feVelSeen = true
+		end
+		return
+	end
+	ctx.cache.feVelSeen = false
+	ctx.fireFeVelocityLimit(false, true)
+end
+
+ctx.startFeVelocityLoop = function()
+	if Run and not ctx.cache.feVelHb then
+		ctx.cache.feVelHb = Run.Heartbeat:Connect(function()
+			ctx.keepFeVelocityLimitOff()
+		end)
+		ctx.bind(ctx.cache.feVelHb)
+	end
+	if not ctx.cache.feVelTask then
+		ctx.cache.feVelTask = true
+		ctx.spawnLoop(function()
+			while ctx.alive() do
+				ctx.keepFeVelocityLimitOff()
+				task.wait(ctx.opt.fePhysicsOn and 0.75 or 0.03)
+			end
+		end)
+	end
+end
+
+ctx.applyFeMovement = function()
+	local st = ctx.opt.fePhysicsOn == true
+	local c = ctx.chr(false)
+	ctx.patchFeAntiWallhop(st)
+	ctx.fireFeVelocityLimit(st, true)
+	if not c then
+		return
+	end
+	local fe = c:FindFirstChild("FE2_Character")
+	if fe and fe:IsA("LocalScript") then
+		pcall(function()
+			fe.Disabled = false
+		end)
+		ctx.patchFeMoveEnv(fe, st)
+	end
+	local anti = c:FindFirstChild("CL_AntiSideClip")
+	if anti and anti:IsA("LocalScript") then
+		pcall(function()
+			anti.Disabled = st ~= true or ctx.opt.clipOn == true
+		end)
+		local z = anti:FindFirstChild("Ziplining")
+		if z and z.Fire then
+			pcall(function()
+				z:Fire(st ~= true or ctx.opt.clipOn == true)
+			end)
+		end
+	end
+	local main = ctx.mainScript()
+	if main then
+		ctx.patchFeMoveEnv(main, st)
+	end
+end
+
+ctx.bindFeMovementChar = function(c)
+	ctx.clearCons(ctx.cache.feMoveCharCons)
+	ctx.cache.feMoveChar = c
+	if not c then
+		return
+	end
+	ctx.cache.feMoveCharCons[#ctx.cache.feMoveCharCons + 1] = c.ChildAdded:Connect(function(v)
+		if v.Name == "FE2_Character" or v.Name == "CL_AntiSideClip" then
+			task.defer(ctx.applyFeMovement)
+		end
+	end)
+	ctx.applyFeMovement()
+end
+
+ctx.startFeMovementPatch = function()
+	ctx.startFeVelocityLoop()
+	if ctx.cache.feMoveLoop then
+		return
+	end
+	if LP then
+		ctx.bind(LP.CharacterAdded:Connect(function(c)
+			task.defer(ctx.bindFeMovementChar, c)
+		end))
+	end
+	if LP and LP.Character then
+		ctx.bindFeMovementChar(LP.Character)
+	end
+	ctx.cache.feMoveLoop = true
+	ctx.spawnLoop(function()
+		while ctx.alive() do
+			if LP and LP.Character ~= ctx.cache.feMoveChar then
+				ctx.bindFeMovementChar(LP.Character)
+			end
+			ctx.applyFeMovement()
+			task.wait(ctx.opt.fePhysicsOn and 1.5 or 0.25)
+		end
+	end)
+end
+
 ctx.startPhysicsOptions = function()
 	ctx.startInfAirHeartbeat()
+	ctx.startFeMovementPatch()
 	if Uis then
 		ctx.bind(Uis.JumpRequest:Connect(function()
 			ctx.doJumpBoost()
@@ -6888,6 +7092,12 @@ ctx.mkUi = function()
 		ctx.saveSoon()
 		ctx.patchSideClip(not ctx.opt.clipOn)
 	end)
+	ctx.ui.fePhysBtn = ctx.icon("FePhysics", "FE2 Physics: OFF", function()
+		ctx.opt.fePhysicsOn = not ctx.opt.fePhysicsOn
+		ctx.setFePhysicsBtn()
+		ctx.saveSoon()
+		ctx.applyFeMovement()
+	end)
 	ctx.ui.rescueBtn = ctx.icon("HideRescue", "Hide Rescue NPC: OFF", function()
 		ctx.opt.rescueOn = not ctx.opt.rescueOn
 		ctx.setRescueBtn()
@@ -6962,6 +7172,7 @@ ctx.mkUi = function()
 	ctx.setBuyCoinBtn()
 	ctx.setBuyGemBtn()
 	ctx.setClipBtn()
+	ctx.setFePhysicsBtn()
 	ctx.setRescueBtn()
 	ctx.setDevBtn()
 	ctx.setZipBtn()

@@ -5283,7 +5283,7 @@ ctx.patchSideClip = function(force)
 	local c = ctx.chr(false)
 	local s = c and c:FindFirstChild("CL_AntiSideClip")
 	local z = s and s:FindFirstChild("Ziplining")
-	local block = ctx.opt.clipOn == true or force == true or ctx.opt.fePhysicsOn ~= true
+	local block = ctx.opt.clipOn == true or force == true
 	if s and s:IsA("LocalScript") then
 		pcall(function()
 			s.Disabled = block
@@ -6126,10 +6126,17 @@ ctx.patchFeMoveEnv = function(scr, st)
 		ctx.cache.feMoveOrig[scr] = save
 	end
 	for _, n in { "AccurateJump" } do
-		if save[n] ~= nil then
-			env[n] = save[n]
-		elseif type(env[n]) == "function" and env[n] ~= ctx.feMoveNoop then
-			save[n] = env[n]
+		if st == true then
+			if save[n] ~= nil then
+				env[n] = save[n]
+			end
+		else
+			if save[n] == nil and type(env[n]) == "function" and env[n] ~= ctx.feMoveNoop then
+				save[n] = env[n]
+			end
+			if type(env[n]) == "function" then
+				env[n] = ctx.feMoveNoop
+			end
 		end
 	end
 end
@@ -6146,10 +6153,298 @@ ctx.patchFeAntiWallhop = function(st)
 		return
 	end
 	for _, n in { "enable", "onPostSimulation" } do
-		if ctx.cache.feMoveModOrig[n] ~= nil then
-			t[n] = ctx.cache.feMoveModOrig[n]
-		elseif type(t[n]) == "function" and t[n] ~= ctx.feMoveNoop then
-			ctx.cache.feMoveModOrig[n] = t[n]
+		if st == true then
+			if ctx.cache.feMoveModOrig[n] ~= nil then
+				t[n] = ctx.cache.feMoveModOrig[n]
+			end
+		else
+			if ctx.cache.feMoveModOrig[n] == nil and type(t[n]) == "function" and t[n] ~= ctx.feMoveNoop then
+				ctx.cache.feMoveModOrig[n] = t[n]
+			end
+			if type(t[n]) == "function" then
+				t[n] = ctx.feMoveNoop
+			end
+		end
+	end
+	if st ~= true then
+		local _, h = ctx.rh(false)
+		if h then
+			pcall(function()
+				h:SetStateEnabled(Enum.HumanoidStateType.Landed, true)
+			end)
+		end
+	end
+end
+
+ctx.connectionFn = function(c)
+	if type(c) ~= "table" and typeof(c) ~= "RBXScriptConnection" then
+		return nil
+	end
+	for _, k in { "Function", "func", "Callback", "_function" } do
+		local ok, v = pcall(function()
+			return c[k]
+		end)
+		if ok and type(v) == "function" then
+			return v
+		end
+	end
+	return nil
+end
+
+ctx.connectionMethod = function(c, n)
+	if not c then
+		return nil
+	end
+	local ok, v = pcall(function()
+		return c[n]
+	end)
+	if ok and type(v) == "function" then
+		return v
+	end
+	return nil
+end
+
+ctx.fnEnvScript = function(fn)
+	if type(fn) ~= "function" or type(getfenv) ~= "function" then
+		return nil
+	end
+	local ok, env = pcall(getfenv, fn)
+	if ok and type(env) == "table" and typeof(env.script) == "Instance" then
+		return env.script
+	end
+	return nil
+end
+
+ctx.fnBelongsToScript = function(fn, scr)
+	if not (scr and type(fn) == "function") then
+		return false
+	end
+	local envScript = ctx.fnEnvScript(fn)
+	if envScript == scr then
+		return true
+	end
+	local dbg = type(debug) == "table" and debug or nil
+	local info = dbg and dbg.info
+	if type(info) == "function" then
+		local ok, src = pcall(info, fn, "s")
+		if ok and type(src) == "string" and string.find(src, scr.Name, 1, true) then
+			return true
+		end
+	end
+	return false
+end
+
+ctx.setFirstBoolUpvalue = function(fn, v)
+	if type(fn) ~= "function" then
+		return false
+	end
+	local dbg = type(debug) == "table" and debug or nil
+	local setup = (dbg and dbg.setupvalue) or setupvalue
+	if type(setup) ~= "function" then
+		return false
+	end
+	local getvals = (dbg and dbg.getupvalues) or getupvalues
+	if type(getvals) == "function" then
+		local ok, vals = pcall(getvals, fn)
+		if ok and type(vals) == "table" then
+			for i, val in vals do
+				if type(i) == "number" and type(val) == "boolean" then
+					local ok2 = pcall(setup, fn, i, v == true)
+					return ok2
+				end
+			end
+		end
+	end
+	local getone = (dbg and dbg.getupvalue) or getupvalue
+	if type(getone) ~= "function" then
+		return false
+	end
+	for i = 1, 64 do
+		local ok, a, b = pcall(getone, fn, i)
+		if not ok or (a == nil and b == nil) then
+			break
+		end
+		local val = if b ~= nil then b else a
+		if type(val) == "boolean" then
+			local ok2 = pcall(setup, fn, i, v == true)
+			return ok2
+		end
+	end
+	return false
+end
+
+ctx.eachSignalConnection = function(sig, cb)
+	if type(getconnections) ~= "function" or not sig then
+		return false
+	end
+	local ok, list = pcall(getconnections, sig)
+	if not ok or type(list) ~= "table" then
+		return false
+	end
+	local hit = false
+	for _, con in list do
+		hit = true
+		pcall(cb, con)
+	end
+	return hit
+end
+
+ctx.patchFeVelocityConnections = function(st)
+	local tv = ctx.feVelocityEvent()
+	if not (tv and tv.Event) then
+		return false
+	end
+	ctx.cache.feVelCons = ctx.cache.feVelCons or setmetatable({}, { __mode = "k" })
+	if st == true then
+		for con in ctx.cache.feVelCons do
+			local enable = ctx.connectionMethod(con, "Enable")
+			if enable then
+				pcall(function()
+					enable(con)
+				end)
+			end
+		end
+		ctx.cache.feVelCons = setmetatable({}, { __mode = "k" })
+		return true
+	end
+	local patched = false
+	ctx.eachSignalConnection(tv.Event, function(con)
+		local fn = ctx.connectionFn(con)
+		if ctx.setFirstBoolUpvalue(fn, false) then
+			patched = true
+		end
+		local disable = ctx.connectionMethod(con, "Disable")
+		local enable = ctx.connectionMethod(con, "Enable")
+		if disable and enable then
+			pcall(function()
+				disable(con)
+			end)
+			ctx.cache.feVelCons[con] = true
+			patched = true
+		end
+	end)
+	return patched
+end
+
+ctx.patchFeSignalConnections = function(sig, scr, key, st)
+	if not sig then
+		return false
+	end
+	ctx.cache[key] = ctx.cache[key] or setmetatable({}, { __mode = "k" })
+	if st == true then
+		for con in ctx.cache[key] do
+			local enable = ctx.connectionMethod(con, "Enable")
+			if enable then
+				pcall(function()
+					enable(con)
+				end)
+			end
+		end
+		ctx.cache[key] = setmetatable({}, { __mode = "k" })
+		return true
+	end
+	local patched = false
+	ctx.eachSignalConnection(sig, function(con)
+		local fn = ctx.connectionFn(con)
+		if not ctx.fnBelongsToScript(fn, scr) then
+			return
+		end
+		local disable = ctx.connectionMethod(con, "Disable")
+		local enable = ctx.connectionMethod(con, "Enable")
+		if disable and enable then
+			pcall(function()
+				disable(con)
+			end)
+			ctx.cache[key][con] = true
+			patched = true
+		end
+	end)
+	return patched
+end
+
+ctx.patchFeHumanoidSignals = function(scr, st)
+	local _, h = ctx.rh(false)
+	if not (scr and h) then
+		return
+	end
+	ctx.patchFeSignalConnections(h.StateChanged, scr, "feStateCons", st)
+	ctx.patchFeSignalConnections(h.FallingDown, scr, "feFallCons", st)
+	if st == true then
+		ctx.cut(ctx.cache.feScanConn)
+		ctx.cache.feScanConn = nil
+		return
+	end
+	if ctx.cache.feScanHum == h and ctx.cache.feScanConn then
+		return
+	end
+	ctx.cut(ctx.cache.feScanConn)
+	ctx.cache.feScanHum = h
+	ctx.cache.feScanConn = h.StateChanged:Connect(function(_, newState)
+		if ctx.opt.fePhysicsOn == true then
+			return
+		end
+		if newState ~= Enum.HumanoidStateType.Freefall and newState ~= Enum.HumanoidStateType.Jumping then
+			return
+		end
+		local env = ctx.envOf(scr)
+		if env and type(env.scanWalljumps) == "function" then
+			task.defer(function()
+				pcall(env.scanWalljumps)
+			end)
+		end
+	end)
+	ctx.bind(ctx.cache.feScanConn)
+end
+
+ctx.patchFeMainEnv = function(st)
+	local env = ctx.gameEnv()
+	if not env then
+		return
+	end
+	local save = ctx.cache.feMoveOrig.__main
+	if type(save) ~= "table" then
+		save = {}
+		ctx.cache.feMoveOrig.__main = save
+	end
+	for _, n in { "AccurateJump" } do
+		if st == true then
+			if save[n] ~= nil then
+				env[n] = save[n]
+			end
+		else
+			if save[n] == nil and type(env[n]) == "function" and env[n] ~= ctx.feMoveNoop then
+				save[n] = env[n]
+			end
+			if type(env[n]) == "function" then
+				env[n] = ctx.feMoveNoop
+			end
+		end
+	end
+end
+
+ctx.patchFeMovementState = function(st)
+	ctx.patchFeAntiWallhop(st)
+	if st == true then
+		ctx.patchFeVelocityConnections(true)
+	else
+		ctx.fireFeVelocityLimit(false, true)
+		ctx.patchFeVelocityConnections(false)
+	end
+	ctx.patchFeMainEnv(st)
+end
+
+ctx.restoreFeMoveEnv = function(scr)
+	local save = ctx.cache.feMoveOrig[scr]
+	if type(save) ~= "table" then
+		return
+	end
+	local env = ctx.envOf(scr)
+	if not env then
+		return
+	end
+	for n, fn in save do
+		if type(n) == "string" and type(fn) == "function" then
+			env[n] = save[n]
 		end
 	end
 end
@@ -6185,6 +6480,7 @@ end
 ctx.keepFeVelocityLimitOff = function()
 	if ctx.opt.fePhysicsOn == true then
 		if ctx.cache.feVelSeen ~= true then
+			ctx.patchFeVelocityConnections(true)
 			ctx.fireFeVelocityLimit(true, true)
 			ctx.cache.feVelSeen = true
 		end
@@ -6192,6 +6488,7 @@ ctx.keepFeVelocityLimitOff = function()
 	end
 	ctx.cache.feVelSeen = false
 	ctx.fireFeVelocityLimit(false, true)
+	ctx.patchFeVelocityConnections(false)
 end
 
 ctx.startFeVelocityLoop = function()
@@ -6215,8 +6512,10 @@ end
 ctx.applyFeMovement = function()
 	local st = ctx.opt.fePhysicsOn == true
 	local c = ctx.chr(false)
-	ctx.patchFeAntiWallhop(st)
-	ctx.fireFeVelocityLimit(st, true)
+	ctx.patchFeMovementState(st)
+	if st == true then
+		ctx.fireFeVelocityLimit(true, true)
+	end
 	if not c then
 		return
 	end
@@ -6226,16 +6525,17 @@ ctx.applyFeMovement = function()
 			fe.Disabled = false
 		end)
 		ctx.patchFeMoveEnv(fe, st)
+		ctx.patchFeHumanoidSignals(fe, st)
 	end
 	local anti = c:FindFirstChild("CL_AntiSideClip")
 	if anti and anti:IsA("LocalScript") then
 		pcall(function()
-			anti.Disabled = st ~= true or ctx.opt.clipOn == true
+			anti.Disabled = ctx.opt.clipOn == true
 		end)
 		local z = anti:FindFirstChild("Ziplining")
 		if z and z.Fire then
 			pcall(function()
-				z:Fire(st ~= true or ctx.opt.clipOn == true)
+				z:Fire(ctx.opt.clipOn == true)
 			end)
 		end
 	end
@@ -7090,7 +7390,7 @@ ctx.mkUi = function()
 		ctx.opt.clipOn = not ctx.opt.clipOn
 		ctx.setClipBtn()
 		ctx.saveSoon()
-		ctx.patchSideClip(not ctx.opt.clipOn)
+		ctx.patchSideClip()
 	end)
 	ctx.ui.fePhysBtn = ctx.icon("FePhysics", "FE2 Physics: OFF", function()
 		ctx.opt.fePhysicsOn = not ctx.opt.fePhysicsOn

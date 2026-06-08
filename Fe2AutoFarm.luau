@@ -6166,14 +6166,6 @@ ctx.patchFeAntiWallhop = function(st)
 			end
 		end
 	end
-	if st ~= true then
-		local _, h = ctx.rh(false)
-		if h then
-			pcall(function()
-				h:SetStateEnabled(Enum.HumanoidStateType.Landed, true)
-			end)
-		end
-	end
 end
 
 ctx.connectionFn = function(c)

@@ -447,18 +447,18 @@ local RRG = 0.3
 local EXM = 50
 local FGM = 2
 local LHW = 8
-local PCD = 0.1
+local PCD = 0.1 -- Button press cooldown per button/locator hit
 local RFD = { 0, 0.25, 0.75, 1.5, 3, 5 }
 local FDM = 160
 local VLM = 20
 local RCH = 12
 local LDB = 6
 local LDI = 0.1
-local BSI = 0.1
-local ASI = 0.14
-local PLI = 2
-local PSI = 1
-local PMW = 0.2
+local BSI = 0.1 -- Direct button spam loop wait floor
+local ASI = 0.1 -- Button aura spam loop interval
+local PLI = 2 -- Loaded remote interval
+local PSI = 0.1 -- Survived remote spam interval
+local PMW = 0.1 -- Passive remote loop wait / tick speed
 local FMI = 0.2
 local RSI = 3
 local SRI = 1.5
@@ -486,7 +486,7 @@ local pressTimes = setmetatable({}, { __mode = "k" })
 local pressWin = 0
 local pressCnt = 0
 local pressMax = 12
-local pressGap = 0.25
+local pressGap = 0.1
 local pressBudget = 3
 local bonusSeen = setmetatable({}, { __mode = "k" })
 local bMap = nil
@@ -1714,7 +1714,7 @@ ctx.getBonuses = function(map)
 	end
 	local now = os.clock()
 	if bDirty and now >= bScanAt then
-		bScanAt = now + 2
+		bScanAt = now + 0.3 -- Bonus cache rescan throttle after DescendantAdded/GetDescendants changes
 		ctx.scanBonuses(map)
 	end
 	return bCache
@@ -2171,7 +2171,7 @@ ctx.startPressLoop = function(hit, runId, keepGoing)
 	ctx.spawnLoop(function()
 		local tries = 0
 		local t0 = os.clock()
-		while ctx.alive() and on and tok == runId and hit and hit.Parent and tries < 8 and os.clock() - t0 < 3 do
+		while ctx.alive() and on and tok == runId and hit and hit.Parent and tries < 30 and os.clock() - t0 < 3 do
 			if type(keepGoing) == "function" and not keepGoing() then
 				break
 			end
@@ -4712,7 +4712,7 @@ ctx.startBonusCollector = function()
 					ctx.collectMapBonuses(map, r, true)
 				end
 			end
-			task.wait(0.35)
+			task.wait(0.3) -- Bonus collector loop interval
 		end
 	end)
 end

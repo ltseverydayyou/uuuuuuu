@@ -3859,7 +3859,6 @@ ctx.onMap = function(map, id)
 					tr += 1
 					pcall(function()
 						ctx.pivotRootTo(ex.CFrame, r)
-						h:ChangeState(Enum.HumanoidStateType.Landed)
 						r.Velocity = EXP
 					end)
 					ctx.mkPlat(r)

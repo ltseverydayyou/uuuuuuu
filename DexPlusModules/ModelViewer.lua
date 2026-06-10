@@ -84,7 +84,13 @@ local function main()
 		ZoomMultiplier = 2,
 		AutoRotate = true,
 		RotationSpeed = 0.01,
-		RefreshRate = 30 -- hertz
+		RefreshRate = 30, -- hertz
+		ParticlePreviewMaxEmitters = 10,
+		ParticlePreviewMaxParticles = 55,
+		ParticlePreviewMaxSpawnPerFrame = 6,
+		ParticlePreviewRateScale = 0.12,
+		ParticlePreviewMaxRatePerEmitter = 30,
+		ParticlePreviewMaxPixelSize = 42,
 	}
 	
 	local window, viewportFrame, particleOverlay, pathLabel, settingsButton
@@ -295,6 +301,8 @@ local function main()
 
 	local function emitPreviewParticle(emitter, count)
 		if not particleOverlay then return end
+		local remaining = ModelViewer.ParticlePreviewMaxParticles - #previewParticles
+		if remaining <= 0 then return 0 end
 
 		local texture = ""
 		local lifetime = NumberRange.new(1)
@@ -313,11 +321,11 @@ local function main()
 		pcall(function() size = emitter.Size end)
 		pcall(function() transparency = emitter.Transparency end)
 
-		count = math.clamp(count or 1, 1, 80)
+		count = math.clamp(count or 1, 1, remaining)
 
 		for _ = 1, count do
-			local life = math.max(sampleRange(lifetime, 1), 0.05)
-			local velocity = getEmitterDirection(emitter) * sampleRange(speed, 2)
+			local life = math.clamp(sampleRange(lifetime, 1), 0.08, 1.25)
+			local velocity = getEmitterDirection(emitter) * math.min(sampleRange(speed, 2), 12)
 			local gui = makeParticleGui(texture)
 
 			table.insert(previewParticles, {
@@ -332,6 +340,8 @@ local function main()
 				Transparency = transparency,
 			})
 		end
+
+		return count
 	end
 
 	local function updateParticleGui(particle)
@@ -358,7 +368,7 @@ local function main()
 
 		local alpha = math.clamp(particle.Age / particle.Life, 0, 1)
 		local particleSize = sampleSequence(particle.Size, alpha, 1)
-		local pixelSize = math.clamp((particleSize * 28) / math.max(-cameraPoint.Z / 8, 0.25), 2, 180)
+		local pixelSize = math.clamp((particleSize * 12) / math.max(-cameraPoint.Z / 8, 0.35), 2, ModelViewer.ParticlePreviewMaxPixelSize)
 		local particleColor = sampleColor(particle.Color, alpha, Color3.new(1, 1, 1))
 		local particleTransparency = math.clamp(sampleSequence(particle.Transparency, alpha, 0), 0, 1)
 
@@ -383,22 +393,33 @@ local function main()
 			if child:IsA("BasePart") then
 				child.Anchored = true
 			elseif child:IsA("ParticleEmitter") then
-				if forceEffects then
-					child.Enabled = true
+				if #particleEmitters >= ModelViewer.ParticlePreviewMaxEmitters then
+					child.Enabled = false
+					continue
 				end
+
+				local previewEnabled = true
+				pcall(function()
+					previewEnabled = child.Enabled
+				end)
+				if forceEffects then
+					previewEnabled = true
+				end
+				child.Enabled = false
+
 				table.insert(particleEmitters, {
 					Emitter = child,
 					Accumulator = 0,
+					Enabled = previewEnabled,
 				})
 
-				local emitCount = 8
+				local emitCount = 2
 				pcall(function()
-					emitCount = math.clamp(math.floor(child.Rate / 4), 1, 30)
+					emitCount = math.clamp(math.floor(math.min(child.Rate, ModelViewer.ParticlePreviewMaxRatePerEmitter) * 0.08), 1, 4)
 				end)
-				pcall(function()
-					child:Emit(emitCount)
-				end)
-				emitPreviewParticle(child, emitCount)
+				if previewEnabled then
+					emitPreviewParticle(child, emitCount)
+				end
 			elseif isClass(child, "Beam") or isClass(child, "Trail") or isClass(child, "Fire") or isClass(child, "Smoke") or isClass(child, "Sparkles") then
 				if forceEffects then
 					child.Enabled = true
@@ -715,11 +736,12 @@ local function main()
 
 				if not emitter or not emitter.Parent then
 					table.remove(particleEmitters, i)
-				elseif emitter.Enabled then
+				elseif particleData.Enabled then
 					local emitRate = 0
 					pcall(function()
 						emitRate = emitter.Rate
 					end)
+					emitRate = math.min(emitRate, ModelViewer.ParticlePreviewMaxRatePerEmitter) * ModelViewer.ParticlePreviewRateScale
 
 					if emitRate > 0 then
 						particleData.Accumulator += emitRate * dt
@@ -727,10 +749,7 @@ local function main()
 
 						if emitCount > 0 then
 							particleData.Accumulator -= emitCount
-							pcall(function()
-								emitter:Emit(math.clamp(emitCount, 1, 50))
-							end)
-							emitPreviewParticle(emitter, emitCount)
+							emitPreviewParticle(emitter, math.min(emitCount, ModelViewer.ParticlePreviewMaxSpawnPerFrame))
 						end
 					end
 				end

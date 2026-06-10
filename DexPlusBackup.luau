@@ -494,6 +494,7 @@ Main = (function()
 	Main.GitModulesPath = "DexPlusModules"
 	Main.ModuleHashData = {} -- prevent remote hash fetch; prefer local modules
 	Main.ModuleForceRefresh = false
+	Main.ModuleCacheVersion = "2026-06-10-particle-preview"
 	Main.ModuleRefreshFlagFile = "DexPlusPlus/RefreshModules.txt"
 	Main.SettingsFile = "DexPlusSettings.json"
 	Main.UserSettingsFile = "DexPlusUserSettings.json"
@@ -894,7 +895,8 @@ Main = (function()
 				print("Locally Loaded Module",name,control)
 			else
 				local modulePathLocal = (Main.GitModulesPath or "Modules").."/"..name..".lua"
-				local cachePath = "DexPlusPlus/ModuleCache/"..name..".lua"
+				local cacheFolder = "DexPlusPlus/ModuleCache/"..tostring(Main.ModuleCacheVersion or "default")
+				local cachePath = cacheFolder.."/"..name..".lua"
 				local triedCache = false
 
 				local function shouldForceRefresh()
@@ -984,6 +986,11 @@ Main = (function()
 						if loadedControl then
 							control = loadedControl
 							if env and env.writefile then
+								if env.makefolder then
+									pcall(env.makefolder, "DexPlusPlus")
+									pcall(env.makefolder, "DexPlusPlus/ModuleCache")
+									pcall(env.makefolder, cacheFolder)
+								end
 								pcall(env.writefile, cachePath, moduleStr)
 							end
 						else

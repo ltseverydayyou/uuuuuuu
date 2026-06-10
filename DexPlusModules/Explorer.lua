@@ -1054,9 +1054,21 @@ local function main()
 
 		context:QueueDivider()
 
+		local can3DPreview = presentClasses["BasePart"]
+			or presentClasses["Model"]
+			or presentClasses["ParticleEmitter"]
+			or presentClasses["Beam"]
+			or presentClasses["Trail"]
+			or presentClasses["Fire"]
+			or presentClasses["Smoke"]
+			or presentClasses["Sparkles"]
+			or presentClasses["Attachment"]
+
 		if presentClasses["BasePart"] or presentClasses["Model"] then
 			context:AddRegistered("TELEPORT_TO")
 			context:AddRegistered("VIEW_OBJECT")
+		end
+		if can3DPreview then
 			context:AddRegistered("3DVIEW_MODEL")
 		end
 		if presentClasses["Tween"] then context:AddRegistered("PLAY_TWEEN") end
@@ -1646,7 +1658,10 @@ local function main()
 			local isa = game.IsA
 			
 			if #sList == 1 then
-				if isa(sList[1].Obj,"BasePart") or isa(sList[1].Obj,"Model") then
+				if ModelViewer and ModelViewer.CanView and ModelViewer.CanView(sList[1].Obj) then
+					ModelViewer.ViewModel(sList[1].Obj)
+					return
+				elseif ModelViewer and (isa(sList[1].Obj,"BasePart") or isa(sList[1].Obj,"Model")) then
 					ModelViewer.ViewModel(sList[1].Obj)
 					return
 				end

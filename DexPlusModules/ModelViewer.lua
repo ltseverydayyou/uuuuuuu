@@ -89,15 +89,163 @@ local function main()
 	
 	local window, viewportFrame, pathLabel, settingsButton
 	local model, camera, originalModel
+	local particleEmitters = {}
+
+	local effectClasses = {
+		"ParticleEmitter",
+		"Beam",
+		"Trail",
+		"Fire",
+		"Smoke",
+		"Sparkles",
+	}
+
+	local function isPreviewEffect(item)
+		if not item then return false end
+		for _, className in effectClasses do
+			if item:IsA(className) then
+				return true
+			end
+		end
+		return false
+	end
+
+	local function hasPreviewEffect(item)
+		if not item then return false end
+		if isPreviewEffect(item) then
+			return true
+		end
+		for _, child in item:GetDescendants() do
+			if isPreviewEffect(child) then
+				return true
+			end
+		end
+		return false
+	end
+
+	local function clearViewportContent(keepCamera)
+		if not viewportFrame then return end
+		for _, child in viewportFrame:GetChildren() do
+			if not (keepCamera and camera and child == camera) then
+				child:Destroy()
+			end
+		end
+		particleEmitters = {}
+	end
+
+	local function preparePreview(root, forceEffects)
+		if not root then return end
+		local items = root:GetDescendants()
+		table.insert(items, root)
+
+		for _, child in items do
+			if child:IsA("BasePart") then
+				child.Anchored = true
+			elseif child:IsA("ParticleEmitter") then
+				if forceEffects then
+					child.Enabled = true
+				end
+				table.insert(particleEmitters, {
+					Emitter = child,
+					Accumulator = 0,
+				})
+
+				local emitCount = 8
+				pcall(function()
+					emitCount = math.clamp(math.floor(child.Rate / 4), 1, 30)
+				end)
+				pcall(function()
+					child:Emit(emitCount)
+				end)
+			elseif child:IsA("Beam") or child:IsA("Trail") or child:IsA("Fire") or child:IsA("Smoke") or child:IsA("Sparkles") then
+				if forceEffects then
+					child.Enabled = true
+				end
+			end
+		end
+	end
+
+	local function createPreviewWorld()
+		local worldModel = Instance.new("WorldModel")
+		worldModel.Name = "ViewModel"
+		worldModel.Parent = viewportFrame
+		return worldModel
+	end
+
+	local function createEffectPreview(item, worldModel)
+		model = Instance.new("Model")
+		model.Name = item.Name .. " Preview"
+		model.Parent = worldModel
+
+		local hostPart = Instance.new("Part")
+		hostPart.Name = "EffectOrigin"
+		hostPart.Anchored = true
+		hostPart.CanCollide = false
+		hostPart.CanTouch = false
+		hostPart.CanQuery = false
+		hostPart.Transparency = 1
+		hostPart.Size = Vector3.new(1, 1, 1)
+		hostPart.CFrame = CFrame.new(0, 0, 0)
+		hostPart.Parent = model
+		model.PrimaryPart = hostPart
+
+		if item:IsA("Beam") or item:IsA("Trail") then
+			local attach0 = Instance.new("Attachment")
+			attach0.Name = "PreviewAttachment0"
+			attach0.Position = Vector3.new(-1, 0, 0)
+			attach0.Parent = hostPart
+
+			local attach1 = Instance.new("Attachment")
+			attach1.Name = "PreviewAttachment1"
+			attach1.Position = Vector3.new(1, 0, 0)
+			attach1.Parent = hostPart
+
+			pcall(function()
+				if item.Attachment0 then
+					attach0.CFrame = item.Attachment0.CFrame
+				end
+			end)
+			pcall(function()
+				if item.Attachment1 then
+					attach1.CFrame = item.Attachment1.CFrame
+				end
+			end)
+
+			local clone = item:Clone()
+			clone.Attachment0 = attach0
+			clone.Attachment1 = attach1
+			clone.Enabled = true
+			clone.Parent = hostPart
+		elseif item:IsA("Attachment") then
+			local attachment = item:Clone()
+			attachment.Parent = hostPart
+		else
+			local parent = item.Parent
+			local effectParent = hostPart
+
+			if parent and parent:IsA("Attachment") then
+				local attachment = parent:Clone()
+				attachment:ClearAllChildren()
+				attachment.Parent = hostPart
+				effectParent = attachment
+			end
+
+			local clone = item:Clone()
+			clone.Parent = effectParent
+		end
+
+		preparePreview(model, true)
+	end
 	
 	
 	ModelViewer.StopViewModel = function(updating)
 		if updating then
-			viewportFrame:FindFirstChildOfClass("Model"):Destroy()
+			clearViewportContent(true)
+			model = nil
 		else
 			if camera then camera = nil end
 			if model then model = nil end
-			viewportFrame:ClearAllChildren()
+			clearViewportContent(false)
 			
 			ModelViewer.IsViewing = false
 			window:SetTitle("3D Preview")
@@ -105,22 +253,34 @@ local function main()
 		end
 	end
 
+	ModelViewer.CanView = function(item)
+		return item and (
+			item:IsA("BasePart")
+			or item:IsA("Model")
+			or isPreviewEffect(item)
+			or (item:IsA("Attachment") and hasPreviewEffect(item))
+		)
+	end
+
 	ModelViewer.ViewModel = function(item, updating)
 		if not item then return end
 		ModelViewer.StopViewModel(updating)
 		
 		if item ~= workspace and not item:IsA("Terrain") then
+			local worldModel = createPreviewWorld()
+
 			-- why Model == workspace
 			-- wtf?
 			
 			if item:IsA("BasePart") and not item:IsA("Model") then			
 				model = Instance.new("Model")
-				model.Parent = viewportFrame
+				model.Parent = worldModel
 
 				local clone = item:Clone()
 				clone.Parent = model
 				model.PrimaryPart = clone
 				model:SetPrimaryPartCFrame(CFrame.new(0, 0, 0))
+				preparePreview(model, true)
 			elseif item:IsA("Model") then
 				item.Archivable = true
 
@@ -128,15 +288,18 @@ local function main()
 				pathLabel.Gui.Text = "Failed to view model: No PrimaryPart is found."
 				return
 			end]]
-				if #item:GetChildren() == 0 then return end
+				if #item:GetChildren() == 0 then
+					worldModel:Destroy()
+					return
+				end
 				
 				model = item:Clone()
-				model.Parent = viewportFrame
+				model.Parent = worldModel
 
 				-- fallback
 				if not model.PrimaryPart then
 					local found = false
-					for _, child in model:QueryDescendants("Instance") do
+					for _, child in model:GetDescendants() do
 						if child:IsA("BasePart") then
 							model.PrimaryPart = child
 							model:SetPrimaryPartCFrame(CFrame.new(0, 0, 0))
@@ -147,10 +310,15 @@ local function main()
 					if not found then
 						model:Destroy()
 						model = nil
+						worldModel:Destroy()
 						return
 					end
 				end
+				preparePreview(model, true)
+			elseif isPreviewEffect(item) or (item:IsA("Attachment") and hasPreviewEffect(item)) then
+				createEffectPreview(item, worldModel)
 			else
+				worldModel:Destroy()
 				return
 			end
 		end
@@ -276,7 +444,7 @@ local function main()
 			end
 		end))
 
-		trackConn(RunService.RenderStepped:Connect(function()
+		trackConn(RunService.RenderStepped:Connect(function(dt)
 			if camera and model then
 				if not dragging and ModelViewer.AutoRotate then
 					rotationY += ModelViewer.RotationSpeed
@@ -290,6 +458,32 @@ local function main()
 
 				camera.CFrame = CFrame.lookAt(camCF.Position, center)
 				
+			end
+
+			for i = #particleEmitters, 1, -1 do
+				local particleData = particleEmitters[i]
+				local emitter = particleData.Emitter
+
+				if not emitter or not emitter.Parent then
+					table.remove(particleEmitters, i)
+				elseif emitter.Enabled then
+					local emitRate = 0
+					pcall(function()
+						emitRate = emitter.Rate
+					end)
+
+					if emitRate > 0 then
+						particleData.Accumulator += emitRate * dt
+						local emitCount = math.floor(particleData.Accumulator)
+
+						if emitCount > 0 then
+							particleData.Accumulator -= emitCount
+							pcall(function()
+								emitter:Emit(math.clamp(emitCount, 1, 50))
+							end)
+						end
+					end
+				end
 			end
 		end))
 		

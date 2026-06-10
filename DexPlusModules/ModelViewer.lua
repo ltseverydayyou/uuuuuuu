@@ -87,9 +87,11 @@ local function main()
 		RefreshRate = 30 -- hertz
 	}
 	
-	local window, viewportFrame, pathLabel, settingsButton
+	local window, viewportFrame, particleOverlay, pathLabel, settingsButton
 	local model, camera, originalModel
 	local particleEmitters = {}
+	local previewParticles = {}
+	local random = Random.new()
 
 	local effectClasses = {
 		"ParticleEmitter",
@@ -130,7 +132,246 @@ local function main()
 				child:Destroy()
 			end
 		end
+		if particleOverlay then
+			particleOverlay:ClearAllChildren()
+		end
 		particleEmitters = {}
+		previewParticles = {}
+	end
+
+	local function isClass(item, className)
+		local ok, result = pcall(function()
+			return item:IsA(className)
+		end)
+		return ok and result
+	end
+
+	local function sampleRange(range, fallback)
+		if typeof(range) == "NumberRange" then
+			return random:NextNumber(range.Min, range.Max)
+		end
+		return fallback or 0
+	end
+
+	local function sampleSequence(sequence, alpha, fallback)
+		if typeof(sequence) ~= "NumberSequence" then
+			return fallback or 0
+		end
+
+		local keypoints = sequence.Keypoints
+		if #keypoints == 0 then
+			return fallback or 0
+		end
+		if alpha <= keypoints[1].Time then
+			return keypoints[1].Value
+		end
+
+		for i = 2, #keypoints do
+			local previous = keypoints[i - 1]
+			local current = keypoints[i]
+
+			if alpha <= current.Time then
+				local span = current.Time - previous.Time
+				local t = span > 0 and ((alpha - previous.Time) / span) or 0
+				return previous.Value + ((current.Value - previous.Value) * t)
+			end
+		end
+
+		return keypoints[#keypoints].Value
+	end
+
+	local function sampleColor(sequence, alpha, fallback)
+		if typeof(sequence) ~= "ColorSequence" then
+			return fallback or Color3.new(1, 1, 1)
+		end
+
+		local keypoints = sequence.Keypoints
+		if #keypoints == 0 then
+			return fallback or Color3.new(1, 1, 1)
+		end
+		if alpha <= keypoints[1].Time then
+			return keypoints[1].Value
+		end
+
+		for i = 2, #keypoints do
+			local previous = keypoints[i - 1]
+			local current = keypoints[i]
+
+			if alpha <= current.Time then
+				local span = current.Time - previous.Time
+				local t = span > 0 and ((alpha - previous.Time) / span) or 0
+				return previous.Value:Lerp(current.Value, t)
+			end
+		end
+
+		return keypoints[#keypoints].Value
+	end
+
+	local function getEmitterOrigin(emitter)
+		local parent = emitter and emitter.Parent
+		if not parent then
+			return Vector3.zero
+		end
+
+		if parent:IsA("Attachment") then
+			return parent.WorldPosition
+		elseif parent:IsA("BasePart") then
+			return parent.Position
+		end
+
+		local part = emitter:FindFirstAncestorWhichIsA("BasePart")
+		if part then
+			return part.Position
+		end
+
+		return model and model.PrimaryPart and model.PrimaryPart.Position or Vector3.zero
+	end
+
+	local function getEmitterDirection(emitter)
+		local parent = emitter and emitter.Parent
+		local cf = CFrame.new()
+
+		if parent then
+			if parent:IsA("Attachment") then
+				cf = parent.WorldCFrame
+			elseif parent:IsA("BasePart") then
+				cf = parent.CFrame
+			end
+		end
+
+		local baseDirection = cf.LookVector
+		pcall(function()
+			if emitter.EmissionDirection == Enum.NormalId.Top then
+				baseDirection = cf.UpVector
+			elseif emitter.EmissionDirection == Enum.NormalId.Bottom then
+				baseDirection = -cf.UpVector
+			elseif emitter.EmissionDirection == Enum.NormalId.Front then
+				baseDirection = -cf.LookVector
+			elseif emitter.EmissionDirection == Enum.NormalId.Back then
+				baseDirection = cf.LookVector
+			elseif emitter.EmissionDirection == Enum.NormalId.Right then
+				baseDirection = cf.RightVector
+			elseif emitter.EmissionDirection == Enum.NormalId.Left then
+				baseDirection = -cf.RightVector
+			end
+		end)
+
+		local spread = Vector2.zero
+		pcall(function()
+			spread = emitter.SpreadAngle
+		end)
+
+		local yaw = math.rad(random:NextNumber(-spread.X, spread.X))
+		local pitch = math.rad(random:NextNumber(-spread.Y, spread.Y))
+		return (CFrame.lookAt(Vector3.zero, baseDirection) * CFrame.Angles(pitch, yaw, 0)).LookVector
+	end
+
+	local function makeParticleGui(texture)
+		local gui
+
+		if type(texture) == "string" and texture ~= "" then
+			gui = Instance.new("ImageLabel")
+			gui.BackgroundTransparency = 1
+			gui.Image = texture
+			gui.ScaleType = Enum.ScaleType.Fit
+		else
+			gui = Instance.new("Frame")
+			gui.BackgroundColor3 = Color3.new(1, 1, 1)
+			gui.BorderSizePixel = 0
+
+			local corner = Instance.new("UICorner")
+			corner.CornerRadius = UDim.new(1, 0)
+			corner.Parent = gui
+		end
+
+		gui.AnchorPoint = Vector2.new(0.5, 0.5)
+		gui.Position = UDim2.new(0.5, 0, 0.5, 0)
+		gui.Size = UDim2.new(0, 8, 0, 8)
+		gui.ZIndex = particleOverlay.ZIndex + 1
+		gui.Visible = false
+		gui.Parent = particleOverlay
+		return gui
+	end
+
+	local function emitPreviewParticle(emitter, count)
+		if not particleOverlay then return end
+
+		local texture = ""
+		local lifetime = NumberRange.new(1)
+		local speed = NumberRange.new(2)
+		local color = ColorSequence.new(Color3.new(1, 1, 1))
+		local size = NumberSequence.new(1)
+		local transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0),
+			NumberSequenceKeypoint.new(1, 1),
+		})
+
+		pcall(function() texture = emitter.Texture end)
+		pcall(function() lifetime = emitter.Lifetime end)
+		pcall(function() speed = emitter.Speed end)
+		pcall(function() color = emitter.Color end)
+		pcall(function() size = emitter.Size end)
+		pcall(function() transparency = emitter.Transparency end)
+
+		count = math.clamp(count or 1, 1, 80)
+
+		for _ = 1, count do
+			local life = math.max(sampleRange(lifetime, 1), 0.05)
+			local velocity = getEmitterDirection(emitter) * sampleRange(speed, 2)
+			local gui = makeParticleGui(texture)
+
+			table.insert(previewParticles, {
+				Emitter = emitter,
+				Gui = gui,
+				Position = getEmitterOrigin(emitter),
+				Velocity = velocity,
+				Age = 0,
+				Life = life,
+				Color = color,
+				Size = size,
+				Transparency = transparency,
+			})
+		end
+	end
+
+	local function updateParticleGui(particle)
+		if not camera or not particleOverlay then return end
+
+		local size = particleOverlay.AbsoluteSize
+		if size.X <= 0 or size.Y <= 0 then return end
+
+		local cameraPoint = camera.CFrame:PointToObjectSpace(particle.Position)
+		if cameraPoint.Z >= -0.05 then
+			particle.Gui.Visible = false
+			return
+		end
+
+		local yScale = 0.5 / math.tan(math.rad(camera.FieldOfView) / 2)
+		local xScale = yScale * (size.Y / size.X)
+		local screenX = 0.5 + ((cameraPoint.X / -cameraPoint.Z) * xScale)
+		local screenY = 0.5 - ((cameraPoint.Y / -cameraPoint.Z) * yScale)
+
+		if screenX < -0.1 or screenX > 1.1 or screenY < -0.1 or screenY > 1.1 then
+			particle.Gui.Visible = false
+			return
+		end
+
+		local alpha = math.clamp(particle.Age / particle.Life, 0, 1)
+		local particleSize = sampleSequence(particle.Size, alpha, 1)
+		local pixelSize = math.clamp((particleSize * 28) / math.max(-cameraPoint.Z / 8, 0.25), 2, 180)
+		local particleColor = sampleColor(particle.Color, alpha, Color3.new(1, 1, 1))
+		local particleTransparency = math.clamp(sampleSequence(particle.Transparency, alpha, 0), 0, 1)
+
+		particle.Gui.Position = UDim2.new(screenX, 0, screenY, 0)
+		particle.Gui.Size = UDim2.new(0, pixelSize, 0, pixelSize)
+		if particle.Gui:IsA("ImageLabel") then
+			particle.Gui.ImageColor3 = particleColor
+			particle.Gui.ImageTransparency = particleTransparency
+		else
+			particle.Gui.BackgroundColor3 = particleColor
+			particle.Gui.BackgroundTransparency = particleTransparency
+		end
+		particle.Gui.Visible = true
 	end
 
 	local function preparePreview(root, forceEffects)
@@ -157,7 +398,8 @@ local function main()
 				pcall(function()
 					child:Emit(emitCount)
 				end)
-			elseif child:IsA("Beam") or child:IsA("Trail") or child:IsA("Fire") or child:IsA("Smoke") or child:IsA("Sparkles") then
+				emitPreviewParticle(child, emitCount)
+			elseif isClass(child, "Beam") or isClass(child, "Trail") or isClass(child, "Fire") or isClass(child, "Smoke") or isClass(child, "Sparkles") then
 				if forceEffects then
 					child.Enabled = true
 				end
@@ -359,6 +601,13 @@ local function main()
 		viewportFrame.Parent = window.GuiElems.Content
 		viewportFrame.BackgroundTransparency = 1
 		viewportFrame.Size = UDim2.new(1,0,1,0)
+
+		particleOverlay = Instance.new("Frame")
+		particleOverlay.Parent = window.GuiElems.Content
+		particleOverlay.BackgroundTransparency = 1
+		particleOverlay.ClipsDescendants = true
+		particleOverlay.Size = UDim2.new(1,0,1,0)
+		particleOverlay.ZIndex = viewportFrame.ZIndex + 1
 		
 		pathLabel = Lib.Label.new()
 		pathLabel.Gui.Parent = window.GuiElems.Content
@@ -481,7 +730,29 @@ local function main()
 							pcall(function()
 								emitter:Emit(math.clamp(emitCount, 1, 50))
 							end)
+							emitPreviewParticle(emitter, emitCount)
 						end
+					end
+				end
+			end
+
+			for i = #previewParticles, 1, -1 do
+				local particle = previewParticles[i]
+
+				if not particle.Gui or not particle.Gui.Parent or not particle.Emitter or not particle.Emitter.Parent then
+					if particle.Gui then
+						particle.Gui:Destroy()
+					end
+					table.remove(previewParticles, i)
+				else
+					particle.Age += dt
+
+					if particle.Age >= particle.Life then
+						particle.Gui:Destroy()
+						table.remove(previewParticles, i)
+					else
+						particle.Position += particle.Velocity * dt
+						updateParticleGui(particle)
 					end
 				end
 			end

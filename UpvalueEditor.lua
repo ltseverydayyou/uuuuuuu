@@ -231,6 +231,9 @@ local statusText = ""
 local lastScanQuery = ""
 local lastSkippedPS = 0
 local loopLocks = {}
+local openActionMenu
+local originalValues = {}
+local pendingTexts = {}
 local closureScript
 
 local tempColors = {
@@ -378,7 +381,8 @@ local function readnums(txt)
 
 	while i <= len do
 		local ch = string.sub(txt, i, i)
-		if string.match(ch, "[%+%-%d%.]") then
+		local prev = i > 1 and string.sub(txt, i - 1, i - 1) or ""
+		if string.match(ch, "[%+%-%d%.]") and not string.match(prev, "[%w_]") then
 			local j = i
 			local seenDigit = false
 			local seenExp = false
@@ -1271,6 +1275,63 @@ local function clearLoopLock(target)
 		return true
 	end
 	return false
+end
+
+local function targetId(target, labelText)
+	if target and target.upvalue then
+		local parts = {
+			target.kind or "",
+			tostring(target.upvalue.Index),
+			tostring(closureRef(target.upvalue.Closure)),
+		}
+		if target.kind == "element" then
+			parts[#parts + 1] = typeof(target.key) .. ":" .. tostring(target.key)
+		end
+		return table.concat(parts, "\31")
+	end
+	return tostring(labelText)
+end
+
+local function primaryinput(input)
+	return input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.Touch
+end
+
+local function bindhold(btn, clickfn, holdfn)
+	local down = false
+	local held = false
+	local seq = 0
+
+	bind(btn.InputBegan, function(input)
+		if not primaryinput(input) then
+			return
+		end
+		down = true
+		held = false
+		seq += 1
+		local myseq = seq
+		task.delay(0.45, function()
+			if dead or not down or seq ~= myseq then
+				return
+			end
+			held = true
+			holdfn()
+		end)
+	end)
+
+	bind(btn.InputEnded, function(input)
+		if primaryinput(input) then
+			down = false
+		end
+	end)
+
+	bind(btn.Activated, function()
+		if held then
+			held = false
+			return
+		end
+		clickfn()
+	end)
 end
 
 local function codelit(v)
@@ -2183,6 +2244,29 @@ local function actionButton(parent, text, x, y, w, callback, color)
 		Parent = b,
 		CornerRadius = UDim.new(0, 8),
 	})
+	if callback then
+		bind(b.Activated, callback)
+	end
+	return b
+end
+
+local function menuButton(parent, text, x, y, w, callback, color)
+	local b = mk("TextButton", {
+		Parent = parent,
+		AutoButtonColor = false,
+		BackgroundColor3 = color or Color3.fromRGB(34, 34, 34),
+		BorderSizePixel = 0,
+		Position = UDim2.new(x, 0, 0, y),
+		Size = UDim2.new(w, -4, 0, 28),
+		Font = Enum.Font.GothamBold,
+		Text = text,
+		TextColor3 = Color3.new(1, 1, 1),
+		TextSize = 11,
+	})
+	mk("UICorner", {
+		Parent = b,
+		CornerRadius = UDim.new(0, 7),
+	})
 	bind(b.Activated, callback)
 	return b
 end
@@ -2299,8 +2383,15 @@ end
 local function valueRow(y, labelText, value, applyFn, temporary, loopTarget)
 	local raw = editvalue(value)
 	local ty = edittype(value)
-	local h = typeof(raw) == "boolean" and 72 or 146
+	local id = targetId(loopTarget, labelText)
+	local menuopen = openActionMenu == id
+	local h = typeof(raw) == "boolean" and (menuopen and 112 or 72) or (menuopen and 146 or 78)
 	local f = card(listc, y, h, temporary)
+	local loopLock = loopTarget and findLoopLock(loopTarget) or nil
+
+	if originalValues[id] == nil then
+		originalValues[id] = raw
+	end
 
 	mk("TextLabel", {
 		Parent = f,
@@ -2333,9 +2424,9 @@ local function valueRow(y, labelText, value, applyFn, temporary, loopTarget)
 			BackgroundColor3 = raw and Color3.fromRGB(26, 70, 36) or Color3.fromRGB(58, 26, 26),
 			BorderSizePixel = 0,
 			Position = UDim2.fromOffset(10, 32),
-			Size = UDim2.new(1, -20, 0, 30),
+			Size = UDim2.new(1, -58, 0, 30),
 			Font = Enum.Font.GothamBold,
-			Text = raw and "true" or "false",
+			Text = (loopLock and "frozen " or "") .. (raw and "true" or "false"),
 			TextColor3 = Color3.new(1, 1, 1),
 			TextSize = 13,
 		})
@@ -2343,24 +2434,86 @@ local function valueRow(y, labelText, value, applyFn, temporary, loopTarget)
 			Parent = tog,
 			CornerRadius = UDim.new(0, 8),
 		})
-		bind(tog.Activated, function()
+
+		local more = mk("TextButton", {
+			Parent = f,
+			AutoButtonColor = false,
+			BackgroundColor3 = Color3.fromRGB(40, 40, 40),
+			BorderSizePixel = 0,
+			Position = UDim2.new(1, -42, 0, 32),
+			Size = UDim2.fromOffset(32, 30),
+			Font = Enum.Font.GothamBold,
+			Text = "...",
+			TextColor3 = Color3.new(1, 1, 1),
+			TextSize = 13,
+		})
+		mk("UICorner", {
+			Parent = more,
+			CornerRadius = UDim.new(0, 8),
+		})
+
+		local function toggleBool()
 			local ok, err = applyFn(not raw)
 			if not ok then
 				statusText = "failed: " .. tostring(err)
 			end
 			draw()
-		end)
+		end
+
+		local function toggleMenu()
+			openActionMenu = menuopen and nil or id
+			draw()
+		end
+
+		bindhold(tog, toggleBool, toggleMenu)
+		bind(more.Activated, toggleMenu)
+
+		if menuopen then
+			menuButton(f, "Freeze true", 0, 72, 1 / 3, function()
+				local ok, err = applyFn(true)
+				if not ok then
+					statusText = "failed: " .. tostring(err)
+					draw()
+					return
+				end
+				if loopTarget then
+					setLoopLock(loopTarget, true, labelText)
+				end
+				statusText = "frozen true: " .. labelText
+				draw()
+			end)
+			menuButton(f, "Freeze false", 1 / 3, 72, 1 / 3, function()
+				local ok, err = applyFn(false)
+				if not ok then
+					statusText = "failed: " .. tostring(err)
+					draw()
+					return
+				end
+				if loopTarget then
+					setLoopLock(loopTarget, false, labelText)
+				end
+				statusText = "frozen false: " .. labelText
+				draw()
+			end)
+			menuButton(f, loopLock and "Unfreeze" or "Close", 2 / 3, 72, 1 / 3, function()
+				if loopTarget and loopLock then
+					clearLoopLock(loopTarget)
+					statusText = "unfrozen: " .. labelText
+				end
+				openActionMenu = nil
+				draw()
+			end)
+		end
 	else
-		local loopLock = loopTarget and findLoopLock(loopTarget) or nil
 		local box = mk("TextBox", {
 			Parent = f,
 			BackgroundColor3 = Color3.fromRGB(30, 30, 30),
 			BorderSizePixel = 0,
 			ClearTextOnFocus = false,
 			Position = UDim2.fromOffset(10, 32),
-			Size = UDim2.new(1, -20, 0, 34),
+			Size = UDim2.new(1, -124, 0, 34),
 			Font = Enum.Font.Code,
-			Text = fmt(loopLock and loopLock.value or value),
+			Text = pendingTexts[id] or fmt(loopLock and loopLock.value or value),
 			TextColor3 = Color3.new(1, 1, 1),
 			TextSize = 13,
 			TextXAlignment = Enum.TextXAlignment.Left,
@@ -2394,6 +2547,7 @@ local function valueRow(y, labelText, value, applyFn, temporary, loopTarget)
 			if not wrote then
 				statusText = "failed: " .. tostring(err)
 				box.Text = fmt(loopLock and loopLock.value or value)
+				pendingTexts[id] = nil
 				return
 			end
 			if loopTarget then
@@ -2403,6 +2557,7 @@ local function valueRow(y, labelText, value, applyFn, temporary, loopTarget)
 				end
 			end
 			statusText = labelText .. " = " .. cut(fmt(newValue), 80)
+			pendingTexts[id] = nil
 			draw()
 		end
 
@@ -2415,6 +2570,8 @@ local function valueRow(y, labelText, value, applyFn, temporary, loopTarget)
 			if activeLock then
 				clearLoopLock(loopTarget)
 				statusText = "loop off: " .. labelText
+				pendingTexts[id] = nil
+				openActionMenu = nil
 				draw()
 				return
 			end
@@ -2428,11 +2585,14 @@ local function valueRow(y, labelText, value, applyFn, temporary, loopTarget)
 			if not wrote then
 				statusText = "failed: " .. tostring(err)
 				box.Text = fmt(loopLock and loopLock.value or value)
+				pendingTexts[id] = nil
 				return
 			end
 
 			setLoopLock(loopTarget, newValue, labelText)
 			statusText = "loop on: " .. labelText .. " = " .. cut(fmt(newValue), 80)
+			pendingTexts[id] = nil
+			openActionMenu = nil
 			draw()
 		end
 
@@ -2479,47 +2639,64 @@ local function valueRow(y, labelText, value, applyFn, temporary, loopTarget)
 			draw()
 		end
 
-		local copyButton = actionButton(
-			f,
-			"Copy Code",
-			10,
-			74,
-			64,
-			function()
+		local applyButton = actionButton(f, "Apply", 0, 32, 64, nil)
+		applyButton.Position = UDim2.new(1, -106, 0, 32)
+		applyButton.Size = UDim2.fromOffset(64, 34)
+
+		local more = actionButton(f, "...", 0, 32, 24, function()
+			pendingTexts[id] = box.Text
+			openActionMenu = menuopen and nil or id
+			draw()
+		end)
+		more.Position = UDim2.new(1, -34, 0, 32)
+		more.Size = UDim2.fromOffset(24, 34)
+
+		bindhold(applyButton, apply, function()
+			pendingTexts[id] = box.Text
+			openActionMenu = menuopen and nil or id
+			draw()
+		end)
+
+		if menuopen then
+			menuButton(f, loopLock and "Stop loop" or "Loop", 0, 74, 1 / 3, toggleLoop, loopLock and Color3.fromRGB(48, 78, 42) or nil)
+			menuButton(f, "Reset", 1 / 3, 74, 1 / 3, function()
+				if loopTarget then
+					clearLoopLock(loopTarget)
+				end
+				local ok, err = applyFn(originalValues[id])
+				if ok then
+					statusText = "reset: " .. labelText
+				else
+					statusText = "failed: " .. tostring(err)
+				end
+				pendingTexts[id] = nil
+				openActionMenu = nil
+				draw()
+			end)
+			menuButton(f, "Copy", 2 / 3, 74, 1 / 3, function()
+				if not setClipboard then
+					statusText = "clipboard unavailable"
+					draw()
+					return
+				end
+				local ok, err = pcall(setClipboard, box.Text)
+				statusText = ok and ("copied: " .. labelText) or ("copy failed: " .. tostring(err))
+				pendingTexts[id] = nil
+				openActionMenu = nil
+				draw()
+			end)
+			menuButton(f, "Copy Code", 0, 108, 0.5, function()
+				pendingTexts[id] = nil
+				openActionMenu = nil
 				copyCode(false)
-			end,
-			Color3.fromRGB(54, 46, 30)
-		)
-		copyButton.Size = UDim2.new(0.5, -15, 0, 28)
-
-		local copyLoopButton = actionButton(
-			f,
-			"Copy Code Loop",
-			0,
-			74,
-			64,
-			function()
+			end, Color3.fromRGB(54, 46, 30))
+			menuButton(f, "Copy Loop Code", 0.5, 108, 0.5, function()
+				pendingTexts[id] = nil
+				openActionMenu = nil
 				copyCode(true)
-			end,
-			Color3.fromRGB(62, 52, 34)
-		)
-		copyLoopButton.Position = UDim2.new(0.5, 5, 0, 74)
-		copyLoopButton.Size = UDim2.new(0.5, -15, 0, 28)
+			end, Color3.fromRGB(62, 52, 34))
+		end
 
-		local loopButton = actionButton(
-			f,
-			loopLock and "Loop On" or "Loop Off",
-			10,
-			108,
-			64,
-			toggleLoop,
-			loopLock and Color3.fromRGB(48, 78, 42) or Color3.fromRGB(40, 40, 40)
-		)
-		loopButton.Size = UDim2.new(0.5, -15, 0, 28)
-
-		local applyButton = actionButton(f, "Apply", 0, 108, 64, apply)
-		applyButton.Position = UDim2.new(0.5, 5, 0, 108)
-		applyButton.Size = UDim2.new(0.5, -15, 0, 28)
 		bind(box.FocusLost, function(enterPressed)
 			if enterPressed then
 				apply()

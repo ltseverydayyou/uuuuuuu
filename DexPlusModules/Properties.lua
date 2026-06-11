@@ -410,7 +410,14 @@ local function main()
             return val.Min .. ", " .. val.Max
         end
 
-        return tostring(val)
+        local ok, str = pcall(tostring, val)
+        if ok then
+            return str
+        end
+
+        local okType, valueType = pcall(typeof, val)
+        valueType = okType and valueType or typeName
+        return "<" .. tostring(valueType or type(val)) .. ">"
     end
 
     Properties.GetIndexableProps = function(obj, classData)

@@ -7203,7 +7203,25 @@ local EmbeddedModules = {
 				local mouse = plr:GetMouse();
 				local checkMouseInGui = Lib.CheckMouseInGui;
 				local createArrow = Lib.CreateArrow;
+				local function isShuttingDown()
+					return Main and (Main.__DexExiting or not Main.MainGui);
+				end;
+				local function forEachArrowPart(button, callback)
+					if not (button and button.Parent) then
+						return;
+					end;
+					local arrow = button:FindFirstChild("Arrow");
+					if not arrow then
+						return;
+					end;
+					for i, v in arrow:GetChildren() do
+						callback(v, i);
+					end;
+				end;
 				local function drawThumb(self)
+					if isShuttingDown() then
+						return;
+					end;
 					local total = self.TotalSpace;
 					local visible = self.VisibleSpace;
 					local index = self.Index;
@@ -7322,20 +7340,24 @@ local EmbeddedModules = {
 					local thumbPress = false;
 					local thumbFramePress = false;
 					local function handleButtonPress(button, scrollDirection)
-						if self:CanScroll(scrollDirection) then
+						if not isShuttingDown() and self:CanScroll(scrollDirection) then
 							button.BackgroundTransparency = 0.5;
 							self:ScrollToDirection(scrollDirection);
 							self.Scrolled:Fire();
 							local buttonTick = tick();
 							local releaseEvent;
-							releaseEvent = user.InputEnded:Connect(function(input)
+							releaseEvent = Main.TrackConn(user.InputEnded:Connect(function(input)
 								if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 									releaseEvent:Disconnect();
 									button.BackgroundTransparency = checkMouseInGui(button) and 0.8 or 1;
 									buttonPress = false;
 								end;
-							end);
+							end));
 							while buttonPress do
+								if isShuttingDown() then
+									buttonPress = false;
+									break;
+								end;
 								if tick() - buttonTick >= 0.25 and self:CanScroll(scrollDirection) then
 									self:ScrollToDirection(scrollDirection);
 									self.Scrolled:Fire();
@@ -7344,25 +7366,34 @@ local EmbeddedModules = {
 							end;
 						end;
 					end;
-					button1.MouseButton1Down:Connect(function(input)
+					Main.TrackConn(button1.MouseButton1Down:Connect(function(input)
+						if isShuttingDown() then
+							return;
+						end;
 						buttonPress = true;
 						handleButtonPress(button1, "Up");
-					end);
-					button1.InputEnded:Connect(function(input)
+					end));
+					Main.TrackConn(button1.InputEnded:Connect(function(input)
 						if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 							button1.BackgroundTransparency = 1;
 						end;
-					end);
-					button2.MouseButton1Down:Connect(function(input)
+					end));
+					Main.TrackConn(button2.MouseButton1Down:Connect(function(input)
+						if isShuttingDown() then
+							return;
+						end;
 						buttonPress = true;
 						handleButtonPress(button2, "Down");
-					end);
-					button2.InputEnded:Connect(function(input)
+					end));
+					Main.TrackConn(button2.InputEnded:Connect(function(input)
 						if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 							button2.BackgroundTransparency = 1;
 						end;
-					end);
-					scrollThumb.InputBegan:Connect(function(input)
+					end));
+					Main.TrackConn(scrollThumb.InputBegan:Connect(function(input)
+						if isShuttingDown() then
+							return;
+						end;
 						if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 							local dir = self.Horizontal and "X" or "Y";
 							local lastThumbPos = nil;
@@ -7371,7 +7402,7 @@ local EmbeddedModules = {
 							local mouseOffset = mouse[dir] - scrollThumb.AbsolutePosition[dir];
 							local releaseEvent;
 							local mouseEvent;
-							releaseEvent = user.InputEnded:Connect(function(input)
+							releaseEvent = Main.TrackConn(user.InputEnded:Connect(function(input)
 								if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 									releaseEvent:Disconnect();
 									if mouseEvent then
@@ -7380,8 +7411,12 @@ local EmbeddedModules = {
 									scrollThumb.BackgroundTransparency = 0.2;
 									thumbPress = false;
 								end;
-							end);
-							mouseEvent = user.InputChanged:Connect(function(input)
+							end));
+							mouseEvent = Main.TrackConn(user.InputChanged:Connect(function(input)
+								if isShuttingDown() then
+									thumbPress = false;
+									return;
+								end;
 								if (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) and thumbPress then
 									local thumbFrameSize = scrollThumbFrame.AbsoluteSize[dir] - scrollThumb.AbsoluteSize[dir];
 									local pos = mouse[dir] - scrollThumbFrame.AbsolutePosition[dir] - mouseOffset;
@@ -7395,15 +7430,18 @@ local EmbeddedModules = {
 										self:ScrollTo(math.floor(0.5 + pos / thumbFrameSize * (self.TotalSpace - self.VisibleSpace)));
 									end;
 								end;
-							end);
+							end));
 						end;
-					end);
-					scrollThumb.InputEnded:Connect(function(input)
+					end));
+					Main.TrackConn(scrollThumb.InputEnded:Connect(function(input)
 						if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 							scrollThumb.BackgroundTransparency = 0;
 						end;
-					end);
-					scrollThumbFrame.InputBegan:Connect(function(input)
+					end));
+					Main.TrackConn(scrollThumbFrame.InputBegan:Connect(function(input)
+						if isShuttingDown() then
+							return;
+						end;
 						if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and (not checkMouseInGui(scrollThumb)) then
 							local dir = self.Horizontal and "X" or "Y";
 							local scrollDir = mouse[dir] >= scrollThumb.AbsolutePosition[dir] + scrollThumb.AbsoluteSize[dir] and 1 or 0;
@@ -7420,26 +7458,36 @@ local EmbeddedModules = {
 							doTick();
 							local thumbFrameTick = tick();
 							local releaseEvent;
-							releaseEvent = user.InputEnded:Connect(function(input)
+							releaseEvent = Main.TrackConn(user.InputEnded:Connect(function(input)
 								if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 									releaseEvent:Disconnect();
 									thumbFramePress = false;
 								end;
-							end);
+							end));
 							while thumbFramePress do
+								if isShuttingDown() then
+									thumbFramePress = false;
+									break;
+								end;
 								if tick() - thumbFrameTick >= 0.3 and checkMouseInGui(scrollThumbFrame) then
 									doTick();
 								end;
 								task.wait();
 							end;
 						end;
-					end);
-					newFrame.MouseWheelForward:Connect(function()
+					end));
+					Main.TrackConn(newFrame.MouseWheelForward:Connect(function()
+						if isShuttingDown() then
+							return;
+						end;
 						self:ScrollTo(self.Index - self.WheelIncrement);
-					end);
-					newFrame.MouseWheelBackward:Connect(function()
+					end));
+					Main.TrackConn(newFrame.MouseWheelBackward:Connect(function()
+						if isShuttingDown() then
+							return;
+						end;
 						self:ScrollTo(self.Index + self.WheelIncrement);
-					end);
+					end));
 					self.GuiElems.ScrollThumb = scrollThumb;
 					self.GuiElems.ScrollThumbFrame = scrollThumbFrame;
 					self.GuiElems.Button1 = button1;
@@ -7448,35 +7496,41 @@ local EmbeddedModules = {
 					return newFrame;
 				end;
 				funcs.Update = function(self, nocallback)
+					if isShuttingDown() then
+						return;
+					end;
 					local total = self.TotalSpace;
 					local visible = self.VisibleSpace;
 					local index = self.Index;
 					local button1 = self.GuiElems.Button1;
 					local button2 = self.GuiElems.Button2;
 					self.Index = math.clamp(self.Index, 0, math.max(0, total - visible));
+					if not (button1 and button1.Parent and button2 and button2.Parent and self.GuiElems.ScrollThumb and self.GuiElems.ScrollThumb.Parent and self.GuiElems.ScrollThumbFrame and self.GuiElems.ScrollThumbFrame.Parent) then
+						return;
+					end;
 					if self.LastTotalSpace ~= self.TotalSpace then
 						self.LastTotalSpace = self.TotalSpace;
 						self:UpdateMarkers();
 					end;
 					if self:CanScrollUp() then
-						for i, v in button1.Arrow:GetChildren() do
+						forEachArrowPart(button1, function(v)
 							v.BackgroundTransparency = 0;
-						end;
+						end);
 					else
 						button1.BackgroundTransparency = 1;
-						for i, v in button1.Arrow:GetChildren() do
+						forEachArrowPart(button1, function(v)
 							v.BackgroundTransparency = 0.5;
-						end;
+						end);
 					end;
 					if self:CanScrollDown() then
-						for i, v in button2.Arrow:GetChildren() do
+						forEachArrowPart(button2, function(v)
 							v.BackgroundTransparency = 0;
-						end;
+						end);
 					else
 						button2.BackgroundTransparency = 1;
-						for i, v in button2.Arrow:GetChildren() do
+						forEachArrowPart(button2, function(v)
 							v.BackgroundTransparency = 0.5;
-						end;
+						end);
 					end;
 					drawThumb(self);
 				end;
@@ -7544,18 +7598,21 @@ local EmbeddedModules = {
 					end;
 				end;
 				funcs.Texture = function(self, data)
+					if isShuttingDown() then
+						return;
+					end;
 					self.ThumbColor = data.ThumbColor or Color3.new(0, 0, 0);
 					self.ThumbSelectColor = data.ThumbSelectColor or Color3.new(0, 0, 0);
 					self.GuiElems.ScrollThumb.BackgroundColor3 = data.ThumbColor or Color3.new(0, 0, 0);
 					self.Gui.BackgroundColor3 = data.FrameColor or Color3.new(0, 0, 0);
 					self.GuiElems.Button1.BackgroundColor3 = data.ButtonColor or Color3.new(0, 0, 0);
 					self.GuiElems.Button2.BackgroundColor3 = data.ButtonColor or Color3.new(0, 0, 0);
-					for i, v in self.GuiElems.Button1.Arrow:GetChildren() do
+					forEachArrowPart(self.GuiElems.Button1, function(v)
 						v.BackgroundColor3 = data.ArrowColor or Color3.new(0, 0, 0);
-					end;
-					for i, v in self.GuiElems.Button2.Arrow:GetChildren() do
+					end);
+					forEachArrowPart(self.GuiElems.Button2, function(v)
 						v.BackgroundColor3 = data.ArrowColor or Color3.new(0, 0, 0);
-					end;
+					end);
 				end;
 				funcs.SetScrollFrame = function(self, frame)
 					if self.ScrollUpEvent then
@@ -15576,6 +15633,7 @@ Main = (function()
 	Main.ModuleErrors = {};
 	Main.StubbedApps = {};
 	Main.ConnList = {};
+	Main.ConnSet = {};
 	Main.GuiList = {};
 	Main.IconOverrides = {
 		["http://www.roblox.com/asset/?id=6511490623"] = "NewestIcons.png",
@@ -15612,9 +15670,24 @@ Main = (function()
 		Core = 101000
 	};
 	Main.TrackConn = function(conn)
-		if conn then
-			Main.ConnList[(#Main.ConnList) + 1] = conn;
+		if not conn then
+			return conn;
 		end;
+		if Main.__DexExiting then
+			pcall(function()
+				if conn.Disconnect then
+					conn:Disconnect();
+				elseif conn.disconnect then
+					conn:disconnect();
+				end;
+			end);
+			return conn;
+		end;
+		if Main.ConnSet[conn] then
+			return conn;
+		end;
+		Main.ConnSet[conn] = true;
+		Main.ConnList[(#Main.ConnList) + 1] = conn;
 		return conn;
 	end;
 	Main.TrackGui = function(gui)
@@ -16298,7 +16371,7 @@ Main = (function()
 					Main.DepsVersionData[1] = "";
 				end;
 			end;
-			rawXML = rawXML or game:HttpGet("https://raw.githubusercontent.com/CloneTrooper1019/Roblox-Client-Tracker/roblox/ReflectionMetadata.xml");
+			rawXML = rawXML or game:HttpGet("https://raw.githubusercontent.com/MaximumADHD/Roblox-Client-Tracker/refs/heads/roblox/ReflectionMetadata.xml");
 		elseif script:FindFirstChild("RMD") then
 			rawXML = require(script.RMD);
 		else
@@ -17042,6 +17115,10 @@ Main = (function()
 		end;
 	end;
 	Main.Exit = function(keepDexState)
+		if Main.__DexExiting and keepDexState ~= true then
+			return;
+		end;
+		Main.__DexExiting = true;
 		Main.__DexLoaded = false;
 		Main.__DexInitStarted = keepDexState == true;
 
@@ -17094,6 +17171,7 @@ Main = (function()
 				end);
 			end;
 			table.clear(Main.ConnList);
+			table.clear(Main.ConnSet);
 		end;
 
 		if Main.GuiList then
@@ -17924,6 +18002,7 @@ Main = (function()
 		return Main.DepsVersionData and Main.ClientVersion == Main.DepsVersionData[1];
 	end;
 	Main.Init = function()
+		Main.__DexExiting = false;
 		Main.Elevated = pcall(function()
 			local a = service.CoreGui:GetFullName();
 		end);

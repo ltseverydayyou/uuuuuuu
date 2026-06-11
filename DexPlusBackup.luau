@@ -445,6 +445,16 @@ Main = (function()
 		if not c then
 			return c
 		end
+		if Main.__DexExiting then
+			pcall(function()
+				if c.Disconnect then
+					c:Disconnect()
+				elseif c.disconnect then
+					c:disconnect()
+				end
+			end)
+			return c
+		end
 		if Main.ConnSet[c] then
 			return c
 		end

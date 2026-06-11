@@ -2210,6 +2210,10 @@ local function main()
 		local checkMouseInGui = Lib.CheckMouseInGui
 		local createArrow = Lib.CreateArrow
 
+		local function isShuttingDown()
+			return Main and (Main.__DexExiting or not Main.MainGui)
+		end
+
 		local function forEachArrowPart(button, callback)
 			if not (button and button.Parent) then return end
 			local arrow = button:FindFirstChild("Arrow")
@@ -2220,6 +2224,7 @@ local function main()
 		end
 
 		local function drawThumb(self)
+			if isShuttingDown() then return end
 			local total = self.TotalSpace
 			local visible = self.VisibleSpace
 			local index = self.Index
@@ -2466,6 +2471,7 @@ local function main()
 		end
 
 		funcs.Update = function(self,nocallback)
+			if isShuttingDown() then return end
 			local total = self.TotalSpace
 			local visible = self.VisibleSpace
 			local index = self.Index
@@ -2574,6 +2580,7 @@ local function main()
 		end
 
 		funcs.Texture = function(self,data)
+			if isShuttingDown() then return end
 			self.ThumbColor = data.ThumbColor or Color3.new(0,0,0)
 			self.ThumbSelectColor = data.ThumbSelectColor or Color3.new(0,0,0)
 			self.GuiElems.ScrollThumb.BackgroundColor3 = data.ThumbColor or Color3.new(0,0,0)

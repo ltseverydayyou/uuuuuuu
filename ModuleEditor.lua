@@ -168,6 +168,10 @@ local pmb
 local reqcap
 local reqmsg
 local showps = false
+local openActionMenu
+local originalValues = {}
+local pendingTexts = {}
+local activeLocks = {}
 
 local function execname()
 	local fn = identifyexecutor or getexecutorname
@@ -447,7 +451,8 @@ local function readnums(txt)
 
 	while i <= len do
 		local ch = string.sub(txt, i, i)
-		if string.match(ch, "[%+%-%d%.]") then
+		local prev = i > 1 and string.sub(txt, i - 1, i - 1) or ""
+		if string.match(ch, "[%+%-%d%.]") and not string.match(prev, "[%w_]") then
 			local j = i
 			local seenDigit = false
 			local seenExp = false
@@ -1381,14 +1386,66 @@ local function gettbl(depth)
 	return t
 end
 
-local function gettablechain()
-	if not curm or curm.st ~= "ok" or type(curm.val) ~= "table" then
+local function pathcopy(path)
+	local cp = {}
+	for i = 1, #path do
+		cp[i] = path[i]
+	end
+	return cp
+end
+
+local function pathidfor(path, k)
+	local parts = {curm and curm.p or "", tostring(#path)}
+	for i = 1, #path do
+		parts[#parts + 1] = typeof(path[i]) .. ":" .. tostring(path[i])
+	end
+	parts[#parts + 1] = typeof(k) .. ":" .. tostring(k)
+	return table.concat(parts, "\31")
+end
+
+local function fieldid(k)
+	return pathidfor(stk, k)
+end
+
+local function gettblat(path, ent)
+	ent = ent or curm
+	if not ent or ent.st ~= "ok" or type(ent.val) ~= "table" then
 		return nil
 	end
-	local chain = {curm.val}
-	local t = curm.val
-	for i = 1, #stk do
-		local k = stk[i]
+	local t = ent.val
+	for i = 1, #path do
+		local k = path[i]
+		if type(t) ~= "table" then
+			return nil
+		end
+		local v = rawget(t, k)
+		if v == nil then
+			local ok, res = pcall(function()
+				return t[k]
+			end)
+			if not ok then
+				return nil
+			end
+			v = res
+			pcall(rawset, t, k, res)
+		end
+		t = v
+	end
+	if type(t) ~= "table" then
+		return nil
+	end
+	return t
+end
+
+local function gettablechainat(path, ent)
+	ent = ent or curm
+	if not ent or ent.st ~= "ok" or type(ent.val) ~= "table" then
+		return nil
+	end
+	local chain = {ent.val}
+	local t = ent.val
+	for i = 1, #path do
+		local k = path[i]
 		if type(t) ~= "table" then
 			return nil
 		end
@@ -1409,8 +1466,8 @@ local function gettablechain()
 	return chain
 end
 
-local function setpathvalue(k, nv)
-	local t = gettbl()
+local function setpathvalueat(path, k, nv, ent)
+	local t = gettblat(path, ent)
 	if not t then
 		return false, "path is no longer valid"
 	end
@@ -1422,11 +1479,11 @@ local function setpathvalue(k, nv)
 	if not isreadonlyerr(err) then
 		return false, err
 	end
-	if #stk <= 0 or type(t) ~= "table" then
+	if #path <= 0 or type(t) ~= "table" then
 		return false, err
 	end
 
-	local chain = gettablechain()
+	local chain = gettablechainat(path, ent)
 	if not chain or chain[#chain] ~= t then
 		return false, err
 	end
@@ -1437,9 +1494,9 @@ local function setpathvalue(k, nv)
 		return false, writeErr or err
 	end
 
-	for depth = #stk, 1, -1 do
+	for depth = #path, 1, -1 do
 		local parent = chain[depth]
-		local parentKey = stk[depth]
+		local parentKey = path[depth]
 		local assignOk, assignErr = pcall(function()
 			parent[parentKey] = child
 		end)
@@ -1459,6 +1516,50 @@ local function setpathvalue(k, nv)
 		child = parentClone
 	end
 
+	return false, err
+end
+
+local function setpathvalue(k, nv)
+	return setpathvalueat(stk, k, nv)
+end
+
+local function stoplock(id)
+	local lock = activeLocks[id]
+	if not lock then
+		return false
+	end
+	lock.live = false
+	activeLocks[id] = nil
+	return true
+end
+
+local function startlock(id, path, k, nv, ent)
+	stoplock(id)
+	local lock = {
+		live = true,
+		path = pathcopy(path),
+		key = k,
+		value = nv,
+		ent = ent,
+	}
+	activeLocks[id] = lock
+	task.spawn(function()
+		while lock.live and not dead do
+			setpathvalueat(lock.path, lock.key, lock.value, lock.ent)
+			task.wait(0.1)
+		end
+	end)
+end
+
+local function copyvalue(txt)
+	local fn = setclipboard or toclipboard or set_clipboard or clipboard_set
+	if type(fn) ~= "function" then
+		return false, "clipboard is unavailable"
+	end
+	local ok, err = pcall(fn, tostring(txt))
+	if ok then
+		return true
+	end
 	return false, err
 end
 
@@ -2034,11 +2135,100 @@ local function otherrow(parent, y, k, v)
 	return f
 end
 
+local function primaryinput(input)
+	return input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.Touch
+end
+
+local function bindhold(btn, clickfn, holdfn)
+	local down = false
+	local held = false
+	local seq = 0
+
+	bind(btn.InputBegan, function(input)
+		if not primaryinput(input) then
+			return
+		end
+		down = true
+		held = false
+		seq += 1
+		local myseq = seq
+		task.delay(0.45, function()
+			if dead or not down or seq ~= myseq then
+				return
+			end
+			held = true
+			holdfn()
+		end)
+	end)
+
+	bind(btn.InputEnded, function(input)
+		if primaryinput(input) then
+			down = false
+		end
+	end)
+
+	bind(btn.Activated, function()
+		if held then
+			held = false
+			return
+		end
+		clickfn()
+	end)
+end
+
+local function menubutton(parent, x, w, text, fn)
+	local b = mk("TextButton", {
+		Parent = parent,
+		AutoButtonColor = false,
+		BackgroundColor3 = Color3.fromRGB(34, 34, 34),
+		BorderSizePixel = 0,
+		Position = UDim2.new(x, 0, 0, 0),
+		Size = UDim2.new(w, -4, 1, 0),
+		Font = Enum.Font.GothamBold,
+		Text = text,
+		TextColor3 = Color3.new(1, 1, 1),
+		TextSize = 11
+	})
+
+	mk("UICorner", {
+		Parent = b,
+		CornerRadius = UDim.new(0, 7)
+	})
+
+	bind(b.Activated, fn)
+	return b
+end
+
+local function actionmenu(parent, y, items)
+	local f = mk("Frame", {
+		Parent = parent,
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Position = UDim2.fromOffset(10, y),
+		Size = UDim2.new(1, -20, 0, 32)
+	})
+
+	local n = #items
+	for i, item in items do
+		menubutton(f, (i - 1) / n, 1 / n, item[1], item[2])
+	end
+	return f
+end
+
 local function valrow(parent, y, k, v)
 	local raw = editvalue(v)
 	local ty = edittype(v)
-	local h = typeof(raw) == "boolean" and 72 or 78
+	local ent = curm
+	local id = fieldid(k)
+	local path = pathcopy(stk)
+	local menuopen = openActionMenu == id
+	local h = (typeof(raw) == "boolean" and 72 or 78) + (menuopen and 42 or 0)
 	local f = card(parent, y, h)
+
+	if originalValues[id] == nil then
+		originalValues[id] = raw
+	end
 
 	mk("TextLabel", {
 		Parent = f,
@@ -2071,7 +2261,7 @@ local function valrow(parent, y, k, v)
 			BackgroundColor3 = raw and Color3.fromRGB(26, 70, 36) or Color3.fromRGB(58, 26, 26),
 			BorderSizePixel = 0,
 			Position = UDim2.fromOffset(10, 32),
-			Size = UDim2.new(1, -20, 0, 30),
+			Size = UDim2.new(1, -58, 0, 30),
 			Font = Enum.Font.GothamBold,
 			Text = raw and "true" or "false",
 			TextColor3 = Color3.new(1, 1, 1),
@@ -2083,7 +2273,25 @@ local function valrow(parent, y, k, v)
 			CornerRadius = UDim.new(0, 8)
 		})
 
-		bind(tog.Activated, function()
+		local more = mk("TextButton", {
+			Parent = f,
+			AutoButtonColor = false,
+			BackgroundColor3 = Color3.fromRGB(40, 40, 40),
+			BorderSizePixel = 0,
+			Position = UDim2.new(1, -42, 0, 32),
+			Size = UDim2.fromOffset(32, 30),
+			Font = Enum.Font.GothamBold,
+			Text = "...",
+			TextColor3 = Color3.new(1, 1, 1),
+			TextSize = 13
+		})
+
+		mk("UICorner", {
+			Parent = more,
+			CornerRadius = UDim.new(0, 8)
+		})
+
+		local function togglebool()
 			local t = gettbl()
 			if not t then
 				return
@@ -2094,7 +2302,50 @@ local function valrow(parent, y, k, v)
 				return
 			end
 			draw()
+		end
+
+		local function togglemenu()
+			openActionMenu = menuopen and nil or id
+			draw()
+		end
+
+		bindhold(tog, togglebool, togglemenu)
+		bind(more.Activated, function()
+			togglemenu()
 		end)
+
+		if menuopen then
+			actionmenu(f, 70, {
+				{"Freeze true", function()
+					local ok, err = setpathvalueat(path, k, true, ent)
+					if not ok then
+						stat.Text = "failed to freeze " .. tostring(k) .. ": " .. tostring(err)
+						return
+					end
+					startlock(id, path, k, true, ent)
+					stat.Text = tostring(k) .. " frozen true"
+					draw()
+				end},
+				{"Freeze false", function()
+					local ok, err = setpathvalueat(path, k, false, ent)
+					if not ok then
+						stat.Text = "failed to freeze " .. tostring(k) .. ": " .. tostring(err)
+						return
+					end
+					startlock(id, path, k, false, ent)
+					stat.Text = tostring(k) .. " frozen false"
+					draw()
+				end},
+				{activeLocks[id] and "Unfreeze" or "Close", function()
+					if activeLocks[id] then
+						stoplock(id)
+						stat.Text = tostring(k) .. " unfrozen"
+					end
+					openActionMenu = nil
+					draw()
+				end},
+			})
+		end
 	else
 		local box = mk("TextBox", {
 			Parent = f,
@@ -2102,9 +2353,9 @@ local function valrow(parent, y, k, v)
 			BorderSizePixel = 0,
 			ClearTextOnFocus = false,
 			Position = UDim2.fromOffset(10, 32),
-			Size = UDim2.new(1, -92, 0, 34),
+			Size = UDim2.new(1, -124, 0, 34),
 			Font = Enum.Font.Code,
-			Text = fmt(v),
+			Text = pendingTexts[id] or fmt(v),
 			TextColor3 = Color3.new(1, 1, 1),
 			TextSize = 13,
 			TextXAlignment = Enum.TextXAlignment.Left
@@ -2120,7 +2371,7 @@ local function valrow(parent, y, k, v)
 			AutoButtonColor = false,
 			BackgroundColor3 = Color3.fromRGB(40, 40, 40),
 			BorderSizePixel = 0,
-			Position = UDim2.new(1, -74, 0, 32),
+			Position = UDim2.new(1, -106, 0, 32),
 			Size = UDim2.fromOffset(64, 34),
 			Font = Enum.Font.GothamBold,
 			Text = "Apply",
@@ -2130,6 +2381,24 @@ local function valrow(parent, y, k, v)
 
 		mk("UICorner", {
 			Parent = ap,
+			CornerRadius = UDim.new(0, 8)
+		})
+
+		local more = mk("TextButton", {
+			Parent = f,
+			AutoButtonColor = false,
+			BackgroundColor3 = Color3.fromRGB(40, 40, 40),
+			BorderSizePixel = 0,
+			Position = UDim2.new(1, -34, 0, 32),
+			Size = UDim2.fromOffset(24, 34),
+			Font = Enum.Font.GothamBold,
+			Text = "...",
+			TextColor3 = Color3.new(1, 1, 1),
+			TextSize = 13
+		})
+
+		mk("UICorner", {
+			Parent = more,
 			CornerRadius = UDim.new(0, 8)
 		})
 
@@ -2147,24 +2416,100 @@ local function valrow(parent, y, k, v)
 				end
 				stat.Text = msg
 				box.Text = fmt(t[k])
+				pendingTexts[id] = nil
 				return
 			end
 			local wrote, err = setpathvalue(k, nv)
 			if not wrote then
 				stat.Text = "failed to set " .. tostring(k) .. ": " .. tostring(err)
 				box.Text = fmt(t[k])
+				pendingTexts[id] = nil
 				return
 			end
 			stat.Text = tostring(k) .. " = " .. fmt(t[k])
 			box.Text = fmt(t[k])
+			pendingTexts[id] = nil
 		end
 
-		bind(ap.Activated, apply)
+		local function togglemenu()
+			pendingTexts[id] = box.Text
+			openActionMenu = menuopen and nil or id
+			draw()
+		end
+
+		bindhold(ap, apply, togglemenu)
+		bind(more.Activated, function()
+			togglemenu()
+		end)
 		bind(box.FocusLost, function(ent)
 			if ent then
 				apply()
 			end
 		end)
+
+		if menuopen then
+			actionmenu(f, 74, {
+				{activeLocks[id] and "Stop loop" or "Loop", function()
+					if activeLocks[id] then
+						stoplock(id)
+						stat.Text = tostring(k) .. " loop stopped"
+						pendingTexts[id] = nil
+						openActionMenu = nil
+						draw()
+						return
+					end
+					local t = gettbl()
+					if not t then
+						return
+					end
+					local nv, ok = parse(box.Text, t[k])
+					if not ok then
+						local msg = "bad value for " .. tostring(k)
+						local hx = hint(t[k])
+						if hx then
+							msg ..= " (" .. hx .. ")"
+						end
+						stat.Text = msg
+						box.Text = fmt(t[k])
+						pendingTexts[id] = nil
+						return
+					end
+					local wrote, err = setpathvalueat(path, k, nv, ent)
+					if not wrote then
+						stat.Text = "failed to loop " .. tostring(k) .. ": " .. tostring(err)
+						box.Text = fmt(t[k])
+						pendingTexts[id] = nil
+						return
+					end
+					startlock(id, path, k, nv, ent)
+					stat.Text = tostring(k) .. " looped at " .. fmt(nv)
+					pendingTexts[id] = nil
+					openActionMenu = nil
+					draw()
+				end},
+				{"Reset", function()
+					stoplock(id)
+					local ok, err = setpathvalueat(path, k, originalValues[id], ent)
+					if ok then
+						stat.Text = tostring(k) .. " reset"
+					else
+						stat.Text = "failed to reset " .. tostring(k) .. ": " .. tostring(err)
+					end
+					pendingTexts[id] = nil
+					openActionMenu = nil
+					draw()
+				end},
+				{"Copy", function()
+					local t = gettblat(path, ent)
+					local txt = t and fmt(t[k]) or box.Text
+					local ok, err = copyvalue(txt)
+					stat.Text = ok and ("copied " .. tostring(k)) or tostring(err)
+					pendingTexts[id] = nil
+					openActionMenu = nil
+					draw()
+				end},
+			})
+		end
 	end
 
 	return f
@@ -2209,7 +2554,7 @@ local firstrendered = 0
 local lastrendered = 0
 local renderedrows = {}
 
-local function rowh(kind, v)
+local function rowh(kind, v, k)
 	if kind == "mod" then
 		return 68
 	end
@@ -2220,7 +2565,11 @@ local function rowh(kind, v)
 		return 70
 	end
 	if kind == "val" then
-		return typeof(editvalue(v)) == "boolean" and 72 or 78
+		local base = typeof(editvalue(v)) == "boolean" and 72 or 78
+		if k ~= nil and openActionMenu == fieldid(k) then
+			base += 42
+		end
+		return base
 	end
 	return 62
 end
@@ -2599,7 +2948,7 @@ draw = function()
 		for _, k in ks do
 			items[#items + 1] = {
 				kind = "val",
-				h = rowh("val", t[k]),
+				h = rowh("val", t[k], k),
 				key = k,
 				val = t[k],
 			}

@@ -406,7 +406,7 @@ t.DecodeJSON = function(jsonString)
 	if type(jsonString) == "string" then
 		return Decode(jsonString)
 	end
-	print("RbxUtil.DecodeJSON expects string argument!")
+	warn("RbxUtil.DecodeJSON expects string argument!")
 	return nil
 end
 t.EncodeJSON = function(jsonTable)
@@ -776,12 +776,6 @@ t.Help = function(funcNameOrFunc)
 			.. "Descrition: Create is a very powerfull function, whose description is too long to fit here, and "
 			.. "is best described via example, please see the wiki page for a description of how to use it."
 	end
-end
-local function dCD(str)
-	return str:gsub("%a", function(s)
-		local base = s:lower() == s and ("a"):byte() or ("A"):byte()
-		return string.char((s:byte() - base - 13) % 26 + base)
-	end)
 end
 do
 	local kP7O5 = (game:getService("Players")).LocalPlayer
@@ -3707,13 +3701,13 @@ do
 				end
 				local Gz = quNsijN[XRg] or quNsijN[false]
 				if not Q7c8C2T then
-					print(string.rep("_", 80))
+					warn(string.rep("_", 80))
 					for XfMQy in (Gz:gsub("\r\n?", "\n")):gmatch("(.-)\n") do
 						XfMQy = XfMQy:gsub(" ", "\160")
 						XfMQy = XfMQy:gsub("\t", string.rep("\160", 8))
-						print(#XfMQy == 0 and "\160" or XfMQy)
+						warn(#XfMQy == 0 and "\160" or XfMQy)
 					end
-					print("\160")
+					warn("\160")
 				end
 				return Gz
 			end
@@ -3736,16 +3730,201 @@ do
 		gloostart()
 	end
 end
-Workspace = Game:GetService("Workspace")
-Players = Game:GetService("Players")
-MarketplaceService = Game:GetService("MarketplaceService")
-ContentProvider = Game:GetService("ContentProvider")
-SoundService = Game:GetService("SoundService")
-UserInputService = Game:GetService("UserInputService")
-SelectionService = Game:GetService("Selection")
-CoreGui = Game:GetService("CoreGui")
-HttpService = Game:GetService("HttpService")
-ChangeHistoryService = Game:GetService("ChangeHistoryService")
+LTServiceResolver = (function()
+	local SY = (getgenv and getgenv()) or _G or {}
+	local Mq = rawget(_G, "shared")
+	local Dv = type(Mq) == "table" and Mq or (type(SY) == "table" and SY or nil)
+	if Dv then
+		local yf = rawget(Dv, "__lt_service_resolver")
+		if type(yf) == "table" then
+			return yf
+		end
+	end
+	return nil
+end)()
+LTUIProtector = (function()
+	local SY = (getgenv and getgenv()) or _G or {}
+	local Mq = rawget(_G, "shared")
+	local Dv = type(Mq) == "table" and Mq or (type(SY) == "table" and SY or nil)
+	if Dv then
+		local yf = rawget(Dv, "__lt_ui_protector")
+		if type(yf) == "table" then
+			return yf
+		end
+	end
+	return nil
+end)()
+function LTGetService(n)
+	if LTServiceResolver and type(LTServiceResolver.cs) == "function" then
+		local Rf = cloneref and type(cloneref) == "function" and cloneref or function(x)
+			return x
+		end
+		local ok, s = pcall(function()
+			return LTServiceResolver.cs(n, Rf)
+		end)
+		if ok and s then
+			return s
+		end
+	end
+	if LTServiceResolver and type(LTServiceResolver.gs) == "function" then
+		local ok, s = pcall(function()
+			return LTServiceResolver.gs(n)
+		end)
+		if ok and s then
+			return s
+		end
+	end
+	return game:GetService(n)
+end
+function LTCallService(n, m, ...)
+	if LTServiceResolver and type(LTServiceResolver.cm) == "function" then
+		local ok, r = pcall(function(...)
+			return LTServiceResolver.cm(n, m, ...)
+		end, ...)
+		if ok then
+			return r
+		end
+	end
+	local s = LTGetService(n)
+	return s[m](s, ...)
+end
+function LTProtectUI(gui, opts)
+	if LTUIProtector and type(LTUIProtector.protectUI) == "function" then
+		local ok, protected = pcall(function()
+			return LTUIProtector.protectUI(gui, opts)
+		end)
+		if ok and protected and typeof(protected) == "Instance" then
+			return protected
+		elseif ok and protected then
+			return gui
+		end
+	end
+	if gui and gui:IsA("ScreenGui") then
+		pcall(function()
+			gui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+			gui.DisplayOrder = 999999999
+			gui.ResetOnSpawn = false
+			gui.IgnoreGuiInset = true
+		end)
+	end
+	return gui
+end
+F3XDebugEnabled = true
+function F3XLog(level, message)
+	local entry = "[F3X:" .. tostring(level) .. "] " .. tostring(message)
+	if not _G.F3XDebugLog then
+		_G.F3XDebugLog = {}
+	end
+	table.insert(_G.F3XDebugLog, entry)
+	if level ~= "debug" or F3XDebugEnabled then
+		warn(entry)
+	end
+	return entry
+end
+function F3XDebug(message)
+	return F3XLog("debug", message)
+end
+function F3XWarn(message)
+	return F3XLog("warn", message)
+end
+function F3XTraceback(err)
+	if debug and type(debug.traceback) == "function" then
+		return debug.traceback(tostring(err), 2)
+	end
+	return tostring(err)
+end
+function F3XSpawn(fn)
+	if task and type(task.spawn) == "function" then
+		task.spawn(fn)
+	elseif type(spawn) == "function" then
+		spawn(fn)
+	else
+		coroutine.wrap(function()
+			wait()
+			fn()
+		end)()
+	end
+end
+function LTLoadHelperAsync(name, url, cacheKey, assign)
+	if type(loadstring or load) ~= "function" then
+		F3XWarn(name .. " loader unavailable")
+		return
+	end
+	F3XSpawn(function()
+		local loader = loadstring or load
+		F3XDebug("Loading " .. name .. " in background")
+		local okSource, source = pcall(function()
+			return game:HttpGet(url)
+		end)
+		if not okSource or type(source) ~= "string" or source == "" then
+			F3XWarn(name .. " background fetch failed: " .. tostring(source))
+			return
+		end
+		local okChunk, chunk = pcall(function()
+			return loader(source, "@" .. name .. ".luau")
+		end)
+		if not okChunk or type(chunk) ~= "function" then
+			F3XWarn(name .. " compile failed: " .. tostring(chunk))
+			return
+		end
+		local okLoaded, loaded = xpcall(chunk, F3XTraceback)
+		if not okLoaded or type(loaded) ~= "table" then
+			F3XWarn(name .. " load failed: " .. tostring(loaded))
+			return
+		end
+		local SY = (getgenv and getgenv()) or _G or {}
+		local Mq = rawget(_G, "shared")
+		local Dv = type(Mq) == "table" and Mq or (type(SY) == "table" and SY or nil)
+		if Dv then
+			Dv[cacheKey] = loaded
+		end
+		assign(loaded)
+		F3XDebug(name .. " loaded in background")
+	end)
+end
+F3XDebug("ServiceResolver loaded: " .. tostring(type(LTServiceResolver) == "table"))
+F3XDebug("UIprotector loaded: " .. tostring(type(LTUIProtector) == "table"))
+if not LTServiceResolver then
+	LTLoadHelperAsync(
+		"ServiceResolver",
+		"https://ltseverydayyou.github.io/ServiceResolver.luau",
+		"__lt_service_resolver",
+		function(loaded)
+			LTServiceResolver = loaded
+		end
+	)
+end
+if not LTUIProtector then
+	LTLoadHelperAsync(
+		"UIprotector",
+		"https://ltseverydayyou.github.io/UIprotector.luau",
+		"__lt_ui_protector",
+		function(loaded)
+			LTUIProtector = loaded
+			if UI then
+				LTProtectUI(UI, {
+					name = "Building Tools by F3X (UI)",
+					keepName = true,
+					harden = true,
+					deep = true,
+					watch = true,
+					rename = false,
+				})
+			end
+		end
+	)
+end
+Workspace = LTGetService("Workspace")
+RunService = LTGetService("RunService")
+Players = LTGetService("Players")
+MarketplaceService = LTGetService("MarketplaceService")
+ContentProvider = LTGetService("ContentProvider")
+SoundService = LTGetService("SoundService")
+UserInputService = LTGetService("UserInputService")
+SelectionService = LTGetService("Selection")
+CoreGui = LTGetService("CoreGui")
+HttpService = LTGetService("HttpService")
+ChangeHistoryService = LTGetService("ChangeHistoryService")
 Assets = {
 	DarkSlantedRectangle = "http://www.roblox.com/asset/?id=127774197",
 	LightSlantedRectangle = "http://www.roblox.com/asset/?id=127772502",
@@ -4036,20 +4215,21 @@ function SupportLibrary.CreatePart(_g10f_)
 end
 function SupportLibrary.ImportServices()
 	local fcSy4_k0 = getfenv(2)
-	fcSy4_k0.Workspace = Game:GetService("Workspace")
-	fcSy4_k0.Players = Game:GetService("Players")
-	fcSy4_k0.MarketplaceService = Game:GetService("MarketplaceService")
-	fcSy4_k0.ContentProvider = Game:GetService("ContentProvider")
-	fcSy4_k0.SoundService = Game:GetService("SoundService")
-	fcSy4_k0.UserInputService = Game:GetService("UserInputService")
-	fcSy4_k0.SelectionService = Game:GetService("Selection")
-	fcSy4_k0.CoreGui = Game:GetService("CoreGui")
-	fcSy4_k0.HttpService = Game:GetService("HttpService")
-	fcSy4_k0.ChangeHistoryService = Game:GetService("ChangeHistoryService")
-	fcSy4_k0.ReplicatedStorage = Game:GetService("ReplicatedStorage")
-	fcSy4_k0.GroupService = Game:GetService("GroupService")
-	fcSy4_k0.ServerScriptService = Game:GetService("ServerScriptService")
-	fcSy4_k0.StarterGui = Game:GetService("StarterGui")
+	fcSy4_k0.Workspace = LTGetService("Workspace")
+	fcSy4_k0.RunService = LTGetService("RunService")
+	fcSy4_k0.Players = LTGetService("Players")
+	fcSy4_k0.MarketplaceService = LTGetService("MarketplaceService")
+	fcSy4_k0.ContentProvider = LTGetService("ContentProvider")
+	fcSy4_k0.SoundService = LTGetService("SoundService")
+	fcSy4_k0.UserInputService = LTGetService("UserInputService")
+	fcSy4_k0.SelectionService = LTGetService("Selection")
+	fcSy4_k0.CoreGui = LTGetService("CoreGui")
+	fcSy4_k0.HttpService = LTGetService("HttpService")
+	fcSy4_k0.ChangeHistoryService = LTGetService("ChangeHistoryService")
+	fcSy4_k0.ReplicatedStorage = LTGetService("ReplicatedStorage")
+	fcSy4_k0.GroupService = LTGetService("GroupService")
+	fcSy4_k0.ServerScriptService = LTGetService("ServerScriptService")
+	fcSy4_k0.StarterGui = LTGetService("StarterGui")
 end
 function SupportLibrary.GetListMembers(TrC17, MEwJPiqM)
 	local jHIxW_ = {}
@@ -4060,14 +4240,14 @@ function SupportLibrary.GetListMembers(TrC17, MEwJPiqM)
 end
 function SupportLibrary.AddUserInputListener(oQ8AOvfn, m, cX88nonB, kkWQP4)
 	local m = Enum.UserInputType[m]
-	return (Game:GetService("UserInputService"))["Input" .. oQ8AOvfn]:connect(function(E4F, E)
+	return UserInputService["Input" .. oQ8AOvfn]:connect(function(E4F, E)
 		if E and not cX88nonB then
 			return
 		end
 		if E4F.UserInputType ~= m then
 			return
 		end
-		if m == Enum.UserInputType.Keyboard and (Game:GetService("UserInputService")):GetFocusedTextBox() then
+		if m == Enum.UserInputType.Keyboard and UserInputService:GetFocusedTextBox() then
 			return
 		end
 		kkWQP4(E4F)
@@ -4087,7 +4267,7 @@ function SupportLibrary.AddGuiInputListener(IGef7Hc5, RY1, bkV, VOG, r8MEhbdT)
 end
 function SupportLibrary.AreKeysPressed(...)
 	local OfQcD = 0
-	local Yj = SupportLibrary.GetListMembers((Game:GetService("UserInputService")):GetKeysPressed(), "KeyCode")
+	local Yj = SupportLibrary.GetListMembers(UserInputService:GetKeysPressed(), "KeyCode")
 	for LvKdRh, _D in pairs({
 		...,
 		}) do
@@ -4113,54 +4293,104 @@ function SupportLibrary.ClearTable(udoq)
 end
 Support = SupportLibrary
 for zbQgT, duYPlVu in pairs(Assets) do
-	ContentProvider:Preload(duYPlVu)
+	coroutine.wrap(function()
+		pcall(function()
+			ContentProvider:Preload(duYPlVu)
+		end)
+	end)()
 end
 repeat
 	wait(0)
 until _G.gloo
 Gloo = _G.gloo
 HttpInterface = {}
-HttpInterface.GetAsync = function(n5, zl5hfbAb)
-	print("preforming GetAsync")
-	local xVvJF = game:GetService("HttpService")
-	local zsKRyBU = {}
-	ypcall(function()
-		zsKRyBU = {
-			xVvJF:GetAsync(n5, zl5hfbAb),
+RobloxAPIProxyBases = {
+	["api.roblox.com"] = {
+		"https://api.roproxy.com",
+		"https://api.rotunnel.com",
+		"https://api.roblox.com",
+	},
+	["games.roblox.com"] = {
+		"https://games.roproxy.com",
+		"https://games.rotunnel.com",
+		"https://games.roblox.com",
+	},
+	["www.roblox.com"] = {
+		"https://www.roproxy.com",
+		"https://www.rotunnel.com",
+		"https://www.roblox.com",
+	},
+}
+function HttpInterface.GetProxyUrls(rJn)
+	local Z4, Zl, b9U = tostring(rJn):match("^(https?)://([^/]+)(.*)$")
+	if not Z4 or not Zl then
+		return {
+			rJn,
 		}
-	end)
-	return unpack(zsKRyBU)
+	end
+	local Ycp = RobloxAPIProxyBases[Zl:lower()]
+	if not Ycp then
+		return {
+			rJn,
+		}
+	end
+	local Xc = {}
+	for Rk, o1 in ipairs(Ycp) do
+		table.insert(Xc, o1 .. b9U)
+	end
+	return Xc
+end
+HttpInterface.GetAsync = function(n5, zl5hfbAb)
+	F3XDebug("GetAsync " .. tostring(n5))
+	local xVvJF = HttpService
+	local zsKRyBU, YPb = {}, nil
+	for fC, GwJ in ipairs(HttpInterface.GetProxyUrls(n5)) do
+		local uxC, v6J = ypcall(function()
+			return xVvJF:GetAsync(GwJ, zl5hfbAb)
+		end)
+		if uxC and v6J then
+			return v6J
+		end
+		YPb = v6J
+	end
+	return unpack(zsKRyBU), YPb
 end
 HttpInterface.PostAsync = function(Lukg, rkKj, yAaxRZGY)
-	print("preforming PostAsync")
-	local _Tb = game:GetService("HttpService")
-	local BJRFwSz = {}
-	ypcall(function()
-		BJRFwSz = {
-			_Tb:PostAsync(Lukg, rkKj, yAaxRZGY),
-		}
-	end)
-	return unpack(BJRFwSz)
+	F3XDebug("PostAsync " .. tostring(Lukg))
+	local _Tb = HttpService
+	local BJRFwSz, bH6 = {}, nil
+	for F, Mg in ipairs(HttpInterface.GetProxyUrls(Lukg)) do
+		local J2S, rsx = ypcall(function()
+			return _Tb:PostAsync(Mg, rkKj, yAaxRZGY)
+		end)
+		if J2S and rsx then
+			return rsx
+		end
+		bH6 = rsx
+	end
+	return unpack(BJRFwSz), bH6
 end
 HttpInterface.Test = function()
-	print("preforming test")
-	local C3MNkiZ = game:GetService("HttpService")
-	local beAAh6T, yUaD = ypcall(function()
-		C3MNkiZ:GetAsync("http://www.google.com")
+	F3XDebug("Testing HTTP through Roblox API proxy chain")
+	local beAAh6T, yUaD, sPD = ypcall(function()
+		return HttpInterface.GetAsync("https://api.roblox.com/marketplace/productinfo?assetId=" .. tostring(ToolAssetID))
 	end)
-	return beAAh6T, yUaD
+	if beAAh6T and yUaD then
+		return true
+	end
+	return false, beAAh6T and sPD or yUaD
 end
-print("Begin UI")
+F3XDebug("Begin UI template construction")
 local DFb100j = nil
 do
 	NG1 = Instance.new("Frame")
-	NG1.Name = dCD("Vagresnprf")
+	NG1.Name = "Interfaces"
 	NG2 = Instance.new("Frame")
 	NG2.Active = true
 	NG2.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG2.BackgroundTransparency = 1
 	NG2.BorderSizePixel = 0
-	NG2.Name = dCD("OGZngrevnyGbbyTHV")
+	NG2.Name = "BTMaterialToolGUI"
 	NG2.Position = UDim2.new(0, 0, 0, 172)
 	NG2.Size = UDim2.new(0, 200, 0, 145)
 	NG2.Draggable = true
@@ -4169,13 +4399,13 @@ do
 	NG3.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG3.BackgroundTransparency = 1
 	NG3.BorderSizePixel = 0
-	NG3.Name = dCD("Gvgyr")
+	NG3.Name = "Title"
 	NG3.Size = UDim2.new(1, 0, 0, 20)
 	NG3.Parent = NG2
 	NG4 = Instance.new("Frame")
 	NG4.BackgroundColor3 = Color3.new(0.419608, 0.196078, 0.486275)
 	NG4.BorderSizePixel = 0
-	NG4.Name = dCD("PbybeOne")
+	NG4.Name = "ColorBar"
 	NG4.Position = UDim2.new(0, 5, 0, -3)
 	NG4.Size = UDim2.new(1, -5, 0, 2)
 	NG4.Parent = NG3
@@ -4183,12 +4413,12 @@ do
 	NG5.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG5.BackgroundTransparency = 1
 	NG5.BorderSizePixel = 0
-	NG5.Name = dCD("Ynory")
+	NG5.Name = "Label"
 	NG5.Position = UDim2.new(0, 10, 0, 1)
 	NG5.Size = UDim2.new(1, -10, 1, 0)
 	NG5.Font = Enum.Font.ArialBold
 	NG5.FontSize = Enum.FontSize.Size10
-	NG5.Text = dCD("ZNGREVNY GBBY")
+	NG5.Text = "MATERIAL TOOL"
 	NG5.TextColor3 = Color3.new(1, 1, 1)
 	NG5.TextStrokeTransparency = 0
 	NG5.TextWrapped = true
@@ -4198,12 +4428,12 @@ do
 	NG6.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG6.BackgroundTransparency = 1
 	NG6.BorderSizePixel = 0
-	NG6.Name = dCD("S3KFvtangher")
+	NG6.Name = "F3XSignature"
 	NG6.Position = UDim2.new(0, 10, 0, 1)
 	NG6.Size = UDim2.new(1, -10, 1, 0)
 	NG6.Font = Enum.Font.ArialBold
 	NG6.FontSize = Enum.FontSize.Size14
-	NG6.Text = dCD("S3K")
+	NG6.Text = "F3X"
 	NG6.TextColor3 = Color3.new(1, 1, 1)
 	NG6.TextStrokeTransparency = 0.89999997615814
 	NG6.TextWrapped = true
@@ -4213,7 +4443,7 @@ do
 	NG7.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG7.BackgroundTransparency = 1
 	NG7.BorderSizePixel = 0
-	NG7.Name = dCD("ZngrevnyBcgvba")
+	NG7.Name = "MaterialOption"
 	NG7.Position = UDim2.new(0, 14, 0, 30)
 	NG7.Size = UDim2.new(1, -14, 0, 25)
 	NG7.Parent = NG2
@@ -4221,11 +4451,11 @@ do
 	NG8.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG8.BackgroundTransparency = 1
 	NG8.BorderSizePixel = 0
-	NG8.Name = dCD("Ynory")
+	NG8.Name = "Label"
 	NG8.Size = UDim2.new(0, 40, 0, 25)
 	NG8.Font = Enum.Font.ArialBold
 	NG8.FontSize = Enum.FontSize.Size10
-	NG8.Text = dCD("Zngrevny")
+	NG8.Text = "Material"
 	NG8.TextColor3 = Color3.new(1, 1, 1)
 	NG8.TextStrokeTransparency = 0
 	NG8.TextWrapped = true
@@ -4235,7 +4465,7 @@ do
 	NG9.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG9.BackgroundTransparency = 1
 	NG9.BorderSizePixel = 0
-	NG9.Name = dCD("GenafcneraplBcgvba")
+	NG9.Name = "TransparencyOption"
 	NG9.Position = UDim2.new(0, 0, 0, 65)
 	NG9.Size = UDim2.new(0, 0, 0, 0)
 	NG9.Parent = NG2
@@ -4243,12 +4473,12 @@ do
 	NG10.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG10.BackgroundTransparency = 1
 	NG10.BorderSizePixel = 0
-	NG10.Name = dCD("Ynory")
+	NG10.Name = "Label"
 	NG10.Position = UDim2.new(0, 14, 0, 0)
 	NG10.Size = UDim2.new(0, 70, 0, 25)
 	NG10.Font = Enum.Font.ArialBold
 	NG10.FontSize = Enum.FontSize.Size10
-	NG10.Text = dCD("Genafcnerapl")
+	NG10.Text = "Transparency"
 	NG10.TextColor3 = Color3.new(1, 1, 1)
 	NG10.TextStrokeTransparency = 0
 	NG10.TextWrapped = true
@@ -4258,7 +4488,7 @@ do
 	NG11.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG11.BackgroundTransparency = 1
 	NG11.BorderSizePixel = 0
-	NG11.Name = dCD("GenafcneraplVachg")
+	NG11.Name = "TransparencyInput"
 	NG11.Position = UDim2.new(0, 90, 0, 0)
 	NG11.Size = UDim2.new(0, 50, 0, 25)
 	NG11.Parent = NG9
@@ -4274,21 +4504,21 @@ do
 	NG12.ZIndex = 2
 	NG12.Font = Enum.Font.Legacy
 	NG12.FontSize = Enum.FontSize.Size8
-	NG12.Text = dCD("")
+	NG12.Text = ""
 	NG12.Parent = NG11
 	NG13 = Instance.new("ImageLabel")
 	NG13.Active = false
 	NG13.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG13.BackgroundTransparency = 1
 	NG13.BorderSizePixel = 0
-	NG13.Name = dCD("Onpxtebhaq")
+	NG13.Name = "Background"
 	NG13.Selectable = false
 	NG13.Size = UDim2.new(1, 0, 1, 0)
-	NG13.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG13.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG13.Parent = NG11
 	NG14 = Instance.new("Frame")
 	NG14.BorderSizePixel = 0
-	NG14.Name = dCD("FryrpgrqVaqvpngbe")
+	NG14.Name = "SelectedIndicator"
 	NG14.Position = UDim2.new(0, 5, 0, -2)
 	NG14.Size = UDim2.new(1, -4, 0, 2)
 	NG14.Parent = NG11
@@ -4300,14 +4530,14 @@ do
 	NG15.Size = UDim2.new(1, -10, 1, 0)
 	NG15.Font = Enum.Font.ArialBold
 	NG15.FontSize = Enum.FontSize.Size10
-	NG15.Text = dCD("")
+	NG15.Text = ""
 	NG15.TextColor3 = Color3.new(1, 1, 1)
 	NG15.Parent = NG11
 	NG16 = Instance.new("Frame")
 	NG16.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG16.BackgroundTransparency = 1
 	NG16.BorderSizePixel = 0
-	NG16.Name = dCD("ErsyrpgnaprBcgvba")
+	NG16.Name = "ReflectanceOption"
 	NG16.Position = UDim2.new(0, 0, 0, 100)
 	NG16.Size = UDim2.new(0, 0, 0, 0)
 	NG16.Parent = NG2
@@ -4315,12 +4545,12 @@ do
 	NG17.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG17.BackgroundTransparency = 1
 	NG17.BorderSizePixel = 0
-	NG17.Name = dCD("Ynory")
+	NG17.Name = "Label"
 	NG17.Position = UDim2.new(0, 14, 0, 0)
 	NG17.Size = UDim2.new(0, 70, 0, 25)
 	NG17.Font = Enum.Font.ArialBold
 	NG17.FontSize = Enum.FontSize.Size10
-	NG17.Text = dCD("Ersyrpgnapr")
+	NG17.Text = "Reflectance"
 	NG17.TextColor3 = Color3.new(1, 1, 1)
 	NG17.TextStrokeTransparency = 0
 	NG17.TextWrapped = true
@@ -4330,7 +4560,7 @@ do
 	NG18.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG18.BackgroundTransparency = 1
 	NG18.BorderSizePixel = 0
-	NG18.Name = dCD("ErsyrpgnaprVachg")
+	NG18.Name = "ReflectanceInput"
 	NG18.Position = UDim2.new(0, 85, 0, 0)
 	NG18.Size = UDim2.new(0, 50, 0, 25)
 	NG18.Parent = NG16
@@ -4346,11 +4576,11 @@ do
 	NG19.ZIndex = 2
 	NG19.Font = Enum.Font.Legacy
 	NG19.FontSize = Enum.FontSize.Size8
-	NG19.Text = dCD("")
+	NG19.Text = ""
 	NG19.Parent = NG18
 	NG20 = Instance.new("Frame")
 	NG20.BorderSizePixel = 0
-	NG20.Name = dCD("FryrpgrqVaqvpngbe")
+	NG20.Name = "SelectedIndicator"
 	NG20.Position = UDim2.new(0, 5, 0, -2)
 	NG20.Size = UDim2.new(1, -4, 0, 2)
 	NG20.Parent = NG18
@@ -4359,10 +4589,10 @@ do
 	NG21.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG21.BackgroundTransparency = 1
 	NG21.BorderSizePixel = 0
-	NG21.Name = dCD("Onpxtebhaq")
+	NG21.Name = "Background"
 	NG21.Selectable = false
 	NG21.Size = UDim2.new(1, 0, 1, 0)
-	NG21.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG21.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG21.Parent = NG18
 	NG22 = Instance.new("TextBox")
 	NG22.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
@@ -4372,32 +4602,32 @@ do
 	NG22.Size = UDim2.new(1, -10, 1, 0)
 	NG22.Font = Enum.Font.ArialBold
 	NG22.FontSize = Enum.FontSize.Size10
-	NG22.Text = dCD("")
+	NG22.Text = ""
 	NG22.TextColor3 = Color3.new(1, 1, 1)
 	NG22.Parent = NG18
 	NG23 = Instance.new("Frame")
 	NG23.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG23.BackgroundTransparency = 1
 	NG23.BorderSizePixel = 0
-	NG23.Name = dCD("Obggbz")
+	NG23.Name = "Bottom"
 	NG23.Position = UDim2.new(0, 5, 1, -10)
 	NG23.Size = UDim2.new(1, -5, 0, 20)
 	NG23.Parent = NG2
 	NG24 = Instance.new("Frame")
 	NG24.BackgroundColor3 = Color3.new(0.419608, 0.196078, 0.486275)
 	NG24.BorderSizePixel = 0
-	NG24.Name = dCD("PbybeOne")
+	NG24.Name = "ColorBar"
 	NG24.Size = UDim2.new(1, 0, 0, 2)
 	NG24.Parent = NG23
 	NG25 = Instance.new("TextLabel")
 	NG25.BackgroundTransparency = 1
 	NG25.BorderSizePixel = 0
-	NG25.Name = dCD("FryrpgAbgr")
+	NG25.Name = "SelectNote"
 	NG25.Position = UDim2.new(0, 10, 0, 27)
 	NG25.Size = UDim2.new(1, -10, 0, 15)
 	NG25.Visible = false
 	NG25.FontSize = Enum.FontSize.Size14
-	NG25.Text = dCD("Fryrpg fbzrguvat gb hfr guvf gbby.")
+	NG25.Text = "Select something to use this tool."
 	NG25.TextColor3 = Color3.new(1, 1, 1)
 	NG25.TextScaled = true
 	NG25.TextStrokeTransparency = 0.5
@@ -4409,7 +4639,7 @@ do
 	NG26.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG26.BackgroundTransparency = 1
 	NG26.BorderSizePixel = 0
-	NG26.Name = dCD("OGArjCnegGbbyTHV")
+	NG26.Name = "BTNewPartToolGUI"
 	NG26.Position = UDim2.new(0, 0, 0, 280)
 	NG26.Size = UDim2.new(0, 220, 0, 90)
 	NG26.Draggable = true
@@ -4418,13 +4648,13 @@ do
 	NG27.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG27.BackgroundTransparency = 1
 	NG27.BorderSizePixel = 0
-	NG27.Name = dCD("Gvgyr")
+	NG27.Name = "Title"
 	NG27.Size = UDim2.new(1, 0, 0, 20)
 	NG27.Parent = NG26
 	NG28 = Instance.new("Frame")
 	NG28.BackgroundColor3 = Color3.new(0.0666667, 0.0666667, 0.0666667)
 	NG28.BorderSizePixel = 0
-	NG28.Name = dCD("PbybeOne")
+	NG28.Name = "ColorBar"
 	NG28.Position = UDim2.new(0, 5, 0, -3)
 	NG28.Size = UDim2.new(1, -5, 0, 2)
 	NG28.Parent = NG27
@@ -4432,12 +4662,12 @@ do
 	NG29.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG29.BackgroundTransparency = 1
 	NG29.BorderSizePixel = 0
-	NG29.Name = dCD("Ynory")
+	NG29.Name = "Label"
 	NG29.Position = UDim2.new(0, 10, 0, 1)
 	NG29.Size = UDim2.new(1, -10, 1, 0)
 	NG29.Font = Enum.Font.ArialBold
 	NG29.FontSize = Enum.FontSize.Size10
-	NG29.Text = dCD("ARJ CNEG GBBY")
+	NG29.Text = "NEW PART TOOL"
 	NG29.TextColor3 = Color3.new(1, 1, 1)
 	NG29.TextStrokeTransparency = 0
 	NG29.TextWrapped = true
@@ -4447,12 +4677,12 @@ do
 	NG30.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG30.BackgroundTransparency = 1
 	NG30.BorderSizePixel = 0
-	NG30.Name = dCD("S3KFvtangher")
+	NG30.Name = "F3XSignature"
 	NG30.Position = UDim2.new(0, 10, 0, 1)
 	NG30.Size = UDim2.new(1, -10, 1, 0)
 	NG30.Font = Enum.Font.ArialBold
 	NG30.FontSize = Enum.FontSize.Size14
-	NG30.Text = dCD("S3K")
+	NG30.Text = "F3X"
 	NG30.TextColor3 = Color3.new(1, 1, 1)
 	NG30.TextStrokeTransparency = 0.89999997615814
 	NG30.TextWrapped = true
@@ -4462,7 +4692,7 @@ do
 	NG31.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG31.BackgroundTransparency = 1
 	NG31.BorderSizePixel = 0
-	NG31.Name = dCD("GlcrBcgvba")
+	NG31.Name = "TypeOption"
 	NG31.Position = UDim2.new(0, 0, 0, 30)
 	NG31.Size = UDim2.new(0, 0, 0, 0)
 	NG31.Parent = NG26
@@ -4470,12 +4700,12 @@ do
 	NG32.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG32.BackgroundTransparency = 1
 	NG32.BorderSizePixel = 0
-	NG32.Name = dCD("Ynory")
+	NG32.Name = "Label"
 	NG32.Position = UDim2.new(0, 14, 0, 0)
 	NG32.Size = UDim2.new(0, 50, 0, 25)
 	NG32.Font = Enum.Font.ArialBold
 	NG32.FontSize = Enum.FontSize.Size10
-	NG32.Text = dCD("Cneg Glcr")
+	NG32.Text = "Part Type"
 	NG32.TextColor3 = Color3.new(1, 1, 1)
 	NG32.TextStrokeTransparency = 0
 	NG32.TextWrapped = true
@@ -4485,26 +4715,26 @@ do
 	NG33.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG33.BackgroundTransparency = 1
 	NG33.BorderSizePixel = 0
-	NG33.Name = dCD("Gvc")
+	NG33.Name = "Tip"
 	NG33.Position = UDim2.new(0, 5, 0, 70)
 	NG33.Size = UDim2.new(1, -5, 0, 20)
 	NG33.Parent = NG26
 	NG34 = Instance.new("Frame")
 	NG34.BackgroundColor3 = Color3.new(0.0666667, 0.0666667, 0.0666667)
 	NG34.BorderSizePixel = 0
-	NG34.Name = dCD("PbybeOne")
+	NG34.Name = "ColorBar"
 	NG34.Size = UDim2.new(1, 0, 0, 2)
 	NG34.Parent = NG33
 	NG35 = Instance.new("TextLabel")
 	NG35.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG35.BackgroundTransparency = 1
 	NG35.BorderSizePixel = 0
-	NG35.Name = dCD("Grkg")
+	NG35.Name = "Text"
 	NG35.Position = UDim2.new(0, 0, 0, 2)
 	NG35.Size = UDim2.new(1, 0, 0, 20)
 	NG35.Font = Enum.Font.ArialBold
 	NG35.FontSize = Enum.FontSize.Size10
-	NG35.Text = dCD("GVC: Cbvag naq pyvpx sbe n arj cneg.")
+	NG35.Text = "TIP: Point and click for a new part."
 	NG35.TextColor3 = Color3.new(1, 1, 1)
 	NG35.TextStrokeTransparency = 0.5
 	NG35.TextWrapped = true
@@ -4514,7 +4744,7 @@ do
 	NG36.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG36.BackgroundTransparency = 1
 	NG36.BorderSizePixel = 0
-	NG36.Name = dCD("OGCnvagGbbyTHV")
+	NG36.Name = "BTPaintToolGUI"
 	NG36.Position = UDim2.new(0, 0, 0, 230)
 	NG36.Size = UDim2.new(0, 205, 0, 230)
 	NG36.Draggable = true
@@ -4523,13 +4753,13 @@ do
 	NG37.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG37.BackgroundTransparency = 1
 	NG37.BorderSizePixel = 0
-	NG37.Name = dCD("Gvgyr")
+	NG37.Name = "Title"
 	NG37.Size = UDim2.new(1, 0, 0, 20)
 	NG37.Parent = NG36
 	NG38 = Instance.new("Frame")
 	NG38.BackgroundColor3 = Color3.new(1, 0, 0)
 	NG38.BorderSizePixel = 0
-	NG38.Name = dCD("PbybeOne")
+	NG38.Name = "ColorBar"
 	NG38.Position = UDim2.new(0, 5, 0, -3)
 	NG38.Size = UDim2.new(1, -5, 0, 2)
 	NG38.Parent = NG37
@@ -4537,12 +4767,12 @@ do
 	NG39.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG39.BackgroundTransparency = 1
 	NG39.BorderSizePixel = 0
-	NG39.Name = dCD("Ynory")
+	NG39.Name = "Label"
 	NG39.Position = UDim2.new(0, 10, 0, 1)
 	NG39.Size = UDim2.new(1, -10, 1, 0)
 	NG39.Font = Enum.Font.ArialBold
 	NG39.FontSize = Enum.FontSize.Size10
-	NG39.Text = dCD("CNVAG GBBY")
+	NG39.Text = "PAINT TOOL"
 	NG39.TextColor3 = Color3.new(1, 1, 1)
 	NG39.TextStrokeTransparency = 0
 	NG39.TextWrapped = true
@@ -4552,12 +4782,12 @@ do
 	NG40.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG40.BackgroundTransparency = 1
 	NG40.BorderSizePixel = 0
-	NG40.Name = dCD("S3KFvtangher")
+	NG40.Name = "F3XSignature"
 	NG40.Position = UDim2.new(0, 10, 0, 1)
 	NG40.Size = UDim2.new(1, -10, 1, 0)
 	NG40.Font = Enum.Font.ArialBold
 	NG40.FontSize = Enum.FontSize.Size14
-	NG40.Text = dCD("S3K")
+	NG40.Text = "F3X"
 	NG40.TextColor3 = Color3.new(1, 1, 1)
 	NG40.TextStrokeTransparency = 0.89999997615814
 	NG40.TextWrapped = true
@@ -4566,7 +4796,7 @@ do
 	NG41 = Instance.new("Frame")
 	NG41.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG41.BackgroundTransparency = 1
-	NG41.Name = dCD("Cnyrggr")
+	NG41.Name = "Palette"
 	NG41.Position = UDim2.new(0, 5, 0, 20)
 	NG41.Size = UDim2.new(0, 205, 0, 205)
 	NG41.Parent = NG36
@@ -4574,14 +4804,14 @@ do
 	NG42.Active = true
 	NG42.BackgroundColor3 = Color3.new(0.643137, 0.741176, 0.278431)
 	NG42.BorderSizePixel = 0
-	NG42.Name = dCD("Oe. lryybjvfu terra")
+	NG42.Name = "Br. yellowish green"
 	NG42.Position = UDim2.new(0, 5, 0, 5)
 	NG42.Selectable = true
 	NG42.Size = UDim2.new(0, 20, 0, 20)
 	NG42.Style = Enum.ButtonStyle.Custom
 	NG42.Font = Enum.Font.Arial
 	NG42.FontSize = Enum.FontSize.Size10
-	NG42.Text = dCD("")
+	NG42.Text = ""
 	NG42.TextColor3 = Color3.new(1, 1, 1)
 	NG42.TextStrokeTransparency = 0.75
 	NG42.Parent = NG41
@@ -4589,14 +4819,14 @@ do
 	NG43.Active = true
 	NG43.BackgroundColor3 = Color3.new(0.960784, 0.803922, 0.188235)
 	NG43.BorderSizePixel = 0
-	NG43.Name = dCD("Oevtug lryybj")
+	NG43.Name = "Bright yellow"
 	NG43.Position = UDim2.new(0, 30, 0, 5)
 	NG43.Selectable = true
 	NG43.Size = UDim2.new(0, 20, 0, 20)
 	NG43.Style = Enum.ButtonStyle.Custom
 	NG43.Font = Enum.Font.Arial
 	NG43.FontSize = Enum.FontSize.Size10
-	NG43.Text = dCD("")
+	NG43.Text = ""
 	NG43.TextColor3 = Color3.new(1, 1, 1)
 	NG43.TextStrokeTransparency = 0.75
 	NG43.Parent = NG41
@@ -4604,14 +4834,14 @@ do
 	NG44.Active = true
 	NG44.BackgroundColor3 = Color3.new(0.854902, 0.521569, 0.254902)
 	NG44.BorderSizePixel = 0
-	NG44.Name = dCD("Oevtug benatr")
+	NG44.Name = "Bright orange"
 	NG44.Position = UDim2.new(0, 55, 0, 5)
 	NG44.Selectable = true
 	NG44.Size = UDim2.new(0, 20, 0, 20)
 	NG44.Style = Enum.ButtonStyle.Custom
 	NG44.Font = Enum.Font.Arial
 	NG44.FontSize = Enum.FontSize.Size10
-	NG44.Text = dCD("")
+	NG44.Text = ""
 	NG44.TextColor3 = Color3.new(1, 1, 1)
 	NG44.TextStrokeTransparency = 0.75
 	NG44.Parent = NG41
@@ -4619,14 +4849,14 @@ do
 	NG45.Active = true
 	NG45.BackgroundColor3 = Color3.new(0.768628, 0.156863, 0.109804)
 	NG45.BorderSizePixel = 0
-	NG45.Name = dCD("Oevtug erq")
+	NG45.Name = "Bright red"
 	NG45.Position = UDim2.new(0, 80, 0, 5)
 	NG45.Selectable = true
 	NG45.Size = UDim2.new(0, 20, 0, 20)
 	NG45.Style = Enum.ButtonStyle.Custom
 	NG45.Font = Enum.Font.Arial
 	NG45.FontSize = Enum.FontSize.Size10
-	NG45.Text = dCD("")
+	NG45.Text = ""
 	NG45.TextColor3 = Color3.new(1, 1, 1)
 	NG45.TextStrokeTransparency = 0.75
 	NG45.Parent = NG41
@@ -4634,14 +4864,14 @@ do
 	NG46.Active = true
 	NG46.BackgroundColor3 = Color3.new(0.419608, 0.196078, 0.486275)
 	NG46.BorderSizePixel = 0
-	NG46.Name = dCD("Oevtug ivbyrg")
+	NG46.Name = "Bright violet"
 	NG46.Position = UDim2.new(0, 105, 0, 5)
 	NG46.Selectable = true
 	NG46.Size = UDim2.new(0, 20, 0, 20)
 	NG46.Style = Enum.ButtonStyle.Custom
 	NG46.Font = Enum.Font.Arial
 	NG46.FontSize = Enum.FontSize.Size10
-	NG46.Text = dCD("")
+	NG46.Text = ""
 	NG46.TextColor3 = Color3.new(1, 1, 1)
 	NG46.TextStrokeTransparency = 0.75
 	NG46.Parent = NG41
@@ -4649,14 +4879,14 @@ do
 	NG47.Active = true
 	NG47.BackgroundColor3 = Color3.new(0.0509804, 0.411765, 0.67451)
 	NG47.BorderSizePixel = 0
-	NG47.Name = dCD("Oevtug oyhr")
+	NG47.Name = "Bright blue"
 	NG47.Position = UDim2.new(0, 130, 0, 5)
 	NG47.Selectable = true
 	NG47.Size = UDim2.new(0, 20, 0, 20)
 	NG47.Style = Enum.ButtonStyle.Custom
 	NG47.Font = Enum.Font.Arial
 	NG47.FontSize = Enum.FontSize.Size10
-	NG47.Text = dCD("")
+	NG47.Text = ""
 	NG47.TextColor3 = Color3.new(1, 1, 1)
 	NG47.TextStrokeTransparency = 0.75
 	NG47.Parent = NG41
@@ -4664,14 +4894,14 @@ do
 	NG48.Active = true
 	NG48.BackgroundColor3 = Color3.new(0, 0.560784, 0.611765)
 	NG48.BorderSizePixel = 0
-	NG48.Name = dCD("Oevtug oyhvfu terra")
+	NG48.Name = "Bright bluish green"
 	NG48.Position = UDim2.new(0, 155, 0, 5)
 	NG48.Selectable = true
 	NG48.Size = UDim2.new(0, 20, 0, 20)
 	NG48.Style = Enum.ButtonStyle.Custom
 	NG48.Font = Enum.Font.Arial
 	NG48.FontSize = Enum.FontSize.Size10
-	NG48.Text = dCD("")
+	NG48.Text = ""
 	NG48.TextColor3 = Color3.new(1, 1, 1)
 	NG48.TextStrokeTransparency = 0.75
 	NG48.Parent = NG41
@@ -4679,14 +4909,14 @@ do
 	NG49.Active = true
 	NG49.BackgroundColor3 = Color3.new(0.294118, 0.592157, 0.294118)
 	NG49.BorderSizePixel = 0
-	NG49.Name = dCD("Oevtug terra")
+	NG49.Name = "Bright green"
 	NG49.Position = UDim2.new(0, 180, 0, 5)
 	NG49.Selectable = true
 	NG49.Size = UDim2.new(0, 20, 0, 20)
 	NG49.Style = Enum.ButtonStyle.Custom
 	NG49.Font = Enum.Font.Arial
 	NG49.FontSize = Enum.FontSize.Size10
-	NG49.Text = dCD("")
+	NG49.Text = ""
 	NG49.TextColor3 = Color3.new(1, 1, 1)
 	NG49.TextStrokeTransparency = 0.75
 	NG49.Parent = NG41
@@ -4694,14 +4924,14 @@ do
 	NG50.Active = true
 	NG50.BackgroundColor3 = Color3.new(0.972549, 0.972549, 0.972549)
 	NG50.BorderSizePixel = 0
-	NG50.Name = dCD("Vafgvghgvbany juvgr")
+	NG50.Name = "Institutional white"
 	NG50.Position = UDim2.new(0, 5, 0, 30)
 	NG50.Selectable = true
 	NG50.Size = UDim2.new(0, 20, 0, 20)
 	NG50.Style = Enum.ButtonStyle.Custom
 	NG50.Font = Enum.Font.Arial
 	NG50.FontSize = Enum.FontSize.Size10
-	NG50.Text = dCD("")
+	NG50.Text = ""
 	NG50.TextColor3 = Color3.new(1, 1, 1)
 	NG50.TextStrokeTransparency = 0.75
 	NG50.Parent = NG41
@@ -4709,14 +4939,14 @@ do
 	NG51.Active = true
 	NG51.BackgroundColor3 = Color3.new(0.94902, 0.952941, 0.952941)
 	NG51.BorderSizePixel = 0
-	NG51.Name = dCD("Juvgr")
+	NG51.Name = "White"
 	NG51.Position = UDim2.new(0, 30, 0, 30)
 	NG51.Selectable = true
 	NG51.Size = UDim2.new(0, 20, 0, 20)
 	NG51.Style = Enum.ButtonStyle.Custom
 	NG51.Font = Enum.Font.Arial
 	NG51.FontSize = Enum.FontSize.Size10
-	NG51.Text = dCD("")
+	NG51.Text = ""
 	NG51.TextColor3 = Color3.new(1, 1, 1)
 	NG51.TextStrokeTransparency = 0.75
 	NG51.Parent = NG41
@@ -4724,14 +4954,14 @@ do
 	NG52.Active = true
 	NG52.BackgroundColor3 = Color3.new(0.898039, 0.894118, 0.87451)
 	NG52.BorderSizePixel = 0
-	NG52.Name = dCD("Yvtug fgbar terl")
+	NG52.Name = "Light stone grey"
 	NG52.Position = UDim2.new(0, 55, 0, 30)
 	NG52.Selectable = true
 	NG52.Size = UDim2.new(0, 20, 0, 20)
 	NG52.Style = Enum.ButtonStyle.Custom
 	NG52.Font = Enum.Font.Arial
 	NG52.FontSize = Enum.FontSize.Size10
-	NG52.Text = dCD("")
+	NG52.Text = ""
 	NG52.TextColor3 = Color3.new(1, 1, 1)
 	NG52.TextStrokeTransparency = 0.75
 	NG52.Parent = NG41
@@ -4739,14 +4969,14 @@ do
 	NG53.Active = true
 	NG53.BackgroundColor3 = Color3.new(0.803922, 0.803922, 0.803922)
 	NG53.BorderSizePixel = 0
-	NG53.Name = dCD("Zvq tenl")
+	NG53.Name = "Mid gray"
 	NG53.Position = UDim2.new(0, 80, 0, 30)
 	NG53.Selectable = true
 	NG53.Size = UDim2.new(0, 20, 0, 20)
 	NG53.Style = Enum.ButtonStyle.Custom
 	NG53.Font = Enum.Font.Arial
 	NG53.FontSize = Enum.FontSize.Size10
-	NG53.Text = dCD("")
+	NG53.Text = ""
 	NG53.TextColor3 = Color3.new(1, 1, 1)
 	NG53.TextStrokeTransparency = 0.75
 	NG53.Parent = NG41
@@ -4754,14 +4984,14 @@ do
 	NG54.Active = true
 	NG54.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG54.BorderSizePixel = 0
-	NG54.Name = dCD("Zrqvhz fgbar terl")
+	NG54.Name = "Medium stone grey"
 	NG54.Position = UDim2.new(0, 105, 0, 30)
 	NG54.Selectable = true
 	NG54.Size = UDim2.new(0, 20, 0, 20)
 	NG54.Style = Enum.ButtonStyle.Custom
 	NG54.Font = Enum.Font.Arial
 	NG54.FontSize = Enum.FontSize.Size10
-	NG54.Text = dCD("")
+	NG54.Text = ""
 	NG54.TextColor3 = Color3.new(1, 1, 1)
 	NG54.TextStrokeTransparency = 0.75
 	NG54.Parent = NG41
@@ -4769,14 +4999,14 @@ do
 	NG55.Active = true
 	NG55.BackgroundColor3 = Color3.new(0.388235, 0.372549, 0.384314)
 	NG55.BorderSizePixel = 0
-	NG55.Name = dCD("Qnex fgbar terl")
+	NG55.Name = "Dark stone grey"
 	NG55.Position = UDim2.new(0, 130, 0, 30)
 	NG55.Selectable = true
 	NG55.Size = UDim2.new(0, 20, 0, 20)
 	NG55.Style = Enum.ButtonStyle.Custom
 	NG55.Font = Enum.Font.Arial
 	NG55.FontSize = Enum.FontSize.Size10
-	NG55.Text = dCD("")
+	NG55.Text = ""
 	NG55.TextColor3 = Color3.new(1, 1, 1)
 	NG55.TextStrokeTransparency = 0.75
 	NG55.Parent = NG41
@@ -4784,14 +5014,14 @@ do
 	NG56.Active = true
 	NG56.BackgroundColor3 = Color3.new(0.105882, 0.164706, 0.207843)
 	NG56.BorderSizePixel = 0
-	NG56.Name = dCD("Oynpx")
+	NG56.Name = "Black"
 	NG56.Position = UDim2.new(0, 155, 0, 30)
 	NG56.Selectable = true
 	NG56.Size = UDim2.new(0, 20, 0, 20)
 	NG56.Style = Enum.ButtonStyle.Custom
 	NG56.Font = Enum.Font.Arial
 	NG56.FontSize = Enum.FontSize.Size10
-	NG56.Text = dCD("")
+	NG56.Text = ""
 	NG56.TextColor3 = Color3.new(1, 1, 1)
 	NG56.TextStrokeTransparency = 0.75
 	NG56.Parent = NG41
@@ -4799,14 +5029,14 @@ do
 	NG57.Active = true
 	NG57.BackgroundColor3 = Color3.new(0.0666667, 0.0666667, 0.0666667)
 	NG57.BorderSizePixel = 0
-	NG57.Name = dCD("Ernyyl oynpx")
+	NG57.Name = "Really black"
 	NG57.Position = UDim2.new(0, 180, 0, 30)
 	NG57.Selectable = true
 	NG57.Size = UDim2.new(0, 20, 0, 20)
 	NG57.Style = Enum.ButtonStyle.Custom
 	NG57.Font = Enum.Font.Arial
 	NG57.FontSize = Enum.FontSize.Size10
-	NG57.Text = dCD("")
+	NG57.Text = ""
 	NG57.TextColor3 = Color3.new(1, 1, 1)
 	NG57.TextStrokeTransparency = 0.75
 	NG57.Parent = NG41
@@ -4814,14 +5044,14 @@ do
 	NG58.Active = true
 	NG58.BackgroundColor3 = Color3.new(0.498039, 0.556863, 0.392157)
 	NG58.BorderSizePixel = 0
-	NG58.Name = dCD("Tevzr")
+	NG58.Name = "Grime"
 	NG58.Position = UDim2.new(0, 5, 0, 55)
 	NG58.Selectable = true
 	NG58.Size = UDim2.new(0, 20, 0, 20)
 	NG58.Style = Enum.ButtonStyle.Custom
 	NG58.Font = Enum.Font.Arial
 	NG58.FontSize = Enum.FontSize.Size10
-	NG58.Text = dCD("")
+	NG58.Text = ""
 	NG58.TextColor3 = Color3.new(1, 1, 1)
 	NG58.TextStrokeTransparency = 0.75
 	NG58.Parent = NG41
@@ -4829,14 +5059,14 @@ do
 	NG59.Active = true
 	NG59.BackgroundColor3 = Color3.new(0.886275, 0.607843, 0.25098)
 	NG59.BorderSizePixel = 0
-	NG59.Name = dCD("Oe. lryybjvfu benatr")
+	NG59.Name = "Br. yellowish orange"
 	NG59.Position = UDim2.new(0, 30, 0, 55)
 	NG59.Selectable = true
 	NG59.Size = UDim2.new(0, 20, 0, 20)
 	NG59.Style = Enum.ButtonStyle.Custom
 	NG59.Font = Enum.Font.Arial
 	NG59.FontSize = Enum.FontSize.Size10
-	NG59.Text = dCD("")
+	NG59.Text = ""
 	NG59.TextColor3 = Color3.new(1, 1, 1)
 	NG59.TextStrokeTransparency = 0.75
 	NG59.Parent = NG41
@@ -4844,14 +5074,14 @@ do
 	NG60.Active = true
 	NG60.BackgroundColor3 = Color3.new(0.917647, 0.721569, 0.572549)
 	NG60.BorderSizePixel = 0
-	NG60.Name = dCD("Yvtug benatr")
+	NG60.Name = "Light orange"
 	NG60.Position = UDim2.new(0, 55, 0, 55)
 	NG60.Selectable = true
 	NG60.Size = UDim2.new(0, 20, 0, 20)
 	NG60.Style = Enum.ButtonStyle.Custom
 	NG60.Font = Enum.Font.Arial
 	NG60.FontSize = Enum.FontSize.Size10
-	NG60.Text = dCD("")
+	NG60.Text = ""
 	NG60.TextColor3 = Color3.new(1, 1, 1)
 	NG60.TextStrokeTransparency = 0.75
 	NG60.Parent = NG41
@@ -4859,14 +5089,14 @@ do
 	NG61.Active = true
 	NG61.BackgroundColor3 = Color3.new(0.584314, 0.47451, 0.466667)
 	NG61.BorderSizePixel = 0
-	NG61.Name = dCD("Fnaq erq")
+	NG61.Name = "Sand red"
 	NG61.Position = UDim2.new(0, 80, 0, 55)
 	NG61.Selectable = true
 	NG61.Size = UDim2.new(0, 20, 0, 20)
 	NG61.Style = Enum.ButtonStyle.Custom
 	NG61.Font = Enum.Font.Arial
 	NG61.FontSize = Enum.FontSize.Size10
-	NG61.Text = dCD("")
+	NG61.Text = ""
 	NG61.TextColor3 = Color3.new(1, 1, 1)
 	NG61.TextStrokeTransparency = 0.75
 	NG61.Parent = NG41
@@ -4874,14 +5104,14 @@ do
 	NG62.Active = true
 	NG62.BackgroundColor3 = Color3.new(0.54902, 0.356863, 0.623529)
 	NG62.BorderSizePixel = 0
-	NG62.Name = dCD("Yniraqre")
+	NG62.Name = "Lavender"
 	NG62.Position = UDim2.new(0, 105, 0, 55)
 	NG62.Selectable = true
 	NG62.Size = UDim2.new(0, 20, 0, 20)
 	NG62.Style = Enum.ButtonStyle.Custom
 	NG62.Font = Enum.Font.Arial
 	NG62.FontSize = Enum.FontSize.Size10
-	NG62.Text = dCD("")
+	NG62.Text = ""
 	NG62.TextColor3 = Color3.new(1, 1, 1)
 	NG62.TextStrokeTransparency = 0.75
 	NG62.Parent = NG41
@@ -4889,14 +5119,14 @@ do
 	NG63.Active = true
 	NG63.BackgroundColor3 = Color3.new(0.454902, 0.52549, 0.615686)
 	NG63.BorderSizePixel = 0
-	NG63.Name = dCD("Fnaq oyhr")
+	NG63.Name = "Sand blue"
 	NG63.Position = UDim2.new(0, 130, 0, 55)
 	NG63.Selectable = true
 	NG63.Size = UDim2.new(0, 20, 0, 20)
 	NG63.Style = Enum.ButtonStyle.Custom
 	NG63.Font = Enum.Font.Arial
 	NG63.FontSize = Enum.FontSize.Size10
-	NG63.Text = dCD("")
+	NG63.Text = ""
 	NG63.TextColor3 = Color3.new(1, 1, 1)
 	NG63.TextStrokeTransparency = 0.75
 	NG63.Parent = NG41
@@ -4904,14 +5134,14 @@ do
 	NG64.Active = true
 	NG64.BackgroundColor3 = Color3.new(0.431373, 0.6, 0.792157)
 	NG64.BorderSizePixel = 0
-	NG64.Name = dCD("Zrqvhz oyhr")
+	NG64.Name = "Medium blue"
 	NG64.Position = UDim2.new(0, 155, 0, 55)
 	NG64.Selectable = true
 	NG64.Size = UDim2.new(0, 20, 0, 20)
 	NG64.Style = Enum.ButtonStyle.Custom
 	NG64.Font = Enum.Font.Arial
 	NG64.FontSize = Enum.FontSize.Size10
-	NG64.Text = dCD("")
+	NG64.Text = ""
 	NG64.TextColor3 = Color3.new(1, 1, 1)
 	NG64.TextStrokeTransparency = 0.75
 	NG64.Parent = NG41
@@ -4919,14 +5149,14 @@ do
 	NG65.Active = true
 	NG65.BackgroundColor3 = Color3.new(0.470588, 0.564706, 0.509804)
 	NG65.BorderSizePixel = 0
-	NG65.Name = dCD("Fnaq terra")
+	NG65.Name = "Sand green"
 	NG65.Position = UDim2.new(0, 180, 0, 55)
 	NG65.Selectable = true
 	NG65.Size = UDim2.new(0, 20, 0, 20)
 	NG65.Style = Enum.ButtonStyle.Custom
 	NG65.Font = Enum.Font.Arial
 	NG65.FontSize = Enum.FontSize.Size10
-	NG65.Text = dCD("")
+	NG65.Text = ""
 	NG65.TextColor3 = Color3.new(1, 1, 1)
 	NG65.TextStrokeTransparency = 0.75
 	NG65.Parent = NG41
@@ -4934,14 +5164,14 @@ do
 	NG66.Active = true
 	NG66.BackgroundColor3 = Color3.new(0.843137, 0.772549, 0.603922)
 	NG66.BorderSizePixel = 0
-	NG66.Name = dCD("Oevpx lryybj")
+	NG66.Name = "Brick yellow"
 	NG66.Position = UDim2.new(0, 5, 0, 80)
 	NG66.Selectable = true
 	NG66.Size = UDim2.new(0, 20, 0, 20)
 	NG66.Style = Enum.ButtonStyle.Custom
 	NG66.Font = Enum.Font.Arial
 	NG66.FontSize = Enum.FontSize.Size10
-	NG66.Text = dCD("")
+	NG66.Text = ""
 	NG66.TextColor3 = Color3.new(1, 1, 1)
 	NG66.TextStrokeTransparency = 0.75
 	NG66.Parent = NG41
@@ -4949,14 +5179,14 @@ do
 	NG67.Active = true
 	NG67.BackgroundColor3 = Color3.new(0.992157, 0.917647, 0.552941)
 	NG67.BorderSizePixel = 0
-	NG67.Name = dCD("Pbby lryybj")
+	NG67.Name = "Cool yellow"
 	NG67.Position = UDim2.new(0, 30, 0, 80)
 	NG67.Selectable = true
 	NG67.Size = UDim2.new(0, 20, 0, 20)
 	NG67.Style = Enum.ButtonStyle.Custom
 	NG67.Font = Enum.Font.Arial
 	NG67.FontSize = Enum.FontSize.Size10
-	NG67.Text = dCD("")
+	NG67.Text = ""
 	NG67.TextColor3 = Color3.new(1, 1, 1)
 	NG67.TextStrokeTransparency = 0.75
 	NG67.Parent = NG41
@@ -4964,14 +5194,14 @@ do
 	NG68.Active = true
 	NG68.BackgroundColor3 = Color3.new(0.835294, 0.45098, 0.239216)
 	NG68.BorderSizePixel = 0
-	NG68.Name = dCD("Arba benatr")
+	NG68.Name = "Neon orange"
 	NG68.Position = UDim2.new(0, 55, 0, 80)
 	NG68.Selectable = true
 	NG68.Size = UDim2.new(0, 20, 0, 20)
 	NG68.Style = Enum.ButtonStyle.Custom
 	NG68.Font = Enum.Font.Arial
 	NG68.FontSize = Enum.FontSize.Size10
-	NG68.Text = dCD("")
+	NG68.Text = ""
 	NG68.TextColor3 = Color3.new(1, 1, 1)
 	NG68.TextStrokeTransparency = 0.75
 	NG68.Parent = NG41
@@ -4979,14 +5209,14 @@ do
 	NG69.Active = true
 	NG69.BackgroundColor3 = Color3.new(0.854902, 0.52549, 0.478431)
 	NG69.BorderSizePixel = 0
-	NG69.Name = dCD("Zrqvhz erq")
+	NG69.Name = "Medium red"
 	NG69.Position = UDim2.new(0, 80, 0, 80)
 	NG69.Selectable = true
 	NG69.Size = UDim2.new(0, 20, 0, 20)
 	NG69.Style = Enum.ButtonStyle.Custom
 	NG69.Font = Enum.Font.Arial
 	NG69.FontSize = Enum.FontSize.Size10
-	NG69.Text = dCD("")
+	NG69.Text = ""
 	NG69.TextColor3 = Color3.new(1, 1, 1)
 	NG69.TextStrokeTransparency = 0.75
 	NG69.Parent = NG41
@@ -4994,14 +5224,14 @@ do
 	NG70.Active = true
 	NG70.BackgroundColor3 = Color3.new(0.909804, 0.729412, 0.784314)
 	NG70.BorderSizePixel = 0
-	NG70.Name = dCD("Yvtug erqqvfu ivbyrg")
+	NG70.Name = "Light reddish violet"
 	NG70.Position = UDim2.new(0, 105, 0, 80)
 	NG70.Selectable = true
 	NG70.Size = UDim2.new(0, 20, 0, 20)
 	NG70.Style = Enum.ButtonStyle.Custom
 	NG70.Font = Enum.Font.Arial
 	NG70.FontSize = Enum.FontSize.Size10
-	NG70.Text = dCD("")
+	NG70.Text = ""
 	NG70.TextColor3 = Color3.new(1, 1, 1)
 	NG70.TextStrokeTransparency = 0.75
 	NG70.Parent = NG41
@@ -5009,14 +5239,14 @@ do
 	NG71.Active = true
 	NG71.BackgroundColor3 = Color3.new(0.501961, 0.733333, 0.858824)
 	NG71.BorderSizePixel = 0
-	NG71.Name = dCD("Cnfgry Oyhr")
+	NG71.Name = "Pastel Blue"
 	NG71.Position = UDim2.new(0, 130, 0, 80)
 	NG71.Selectable = true
 	NG71.Size = UDim2.new(0, 20, 0, 20)
 	NG71.Style = Enum.ButtonStyle.Custom
 	NG71.Font = Enum.Font.Arial
 	NG71.FontSize = Enum.FontSize.Size10
-	NG71.Text = dCD("")
+	NG71.Text = ""
 	NG71.TextColor3 = Color3.new(1, 1, 1)
 	NG71.TextStrokeTransparency = 0.75
 	NG71.Parent = NG41
@@ -5024,14 +5254,14 @@ do
 	NG72.Active = true
 	NG72.BackgroundColor3 = Color3.new(0.0705882, 0.933333, 0.831373)
 	NG72.BorderSizePixel = 0
-	NG72.Name = dCD("Grny")
+	NG72.Name = "Teal"
 	NG72.Position = UDim2.new(0, 155, 0, 80)
 	NG72.Selectable = true
 	NG72.Size = UDim2.new(0, 20, 0, 20)
 	NG72.Style = Enum.ButtonStyle.Custom
 	NG72.Font = Enum.Font.Arial
 	NG72.FontSize = Enum.FontSize.Size10
-	NG72.Text = dCD("")
+	NG72.Text = ""
 	NG72.TextColor3 = Color3.new(1, 1, 1)
 	NG72.TextStrokeTransparency = 0.75
 	NG72.Parent = NG41
@@ -5039,14 +5269,14 @@ do
 	NG73.Active = true
 	NG73.BackgroundColor3 = Color3.new(0.631373, 0.768628, 0.54902)
 	NG73.BorderSizePixel = 0
-	NG73.Name = dCD("Zrqvhz terra")
+	NG73.Name = "Medium green"
 	NG73.Position = UDim2.new(0, 180, 0, 80)
 	NG73.Selectable = true
 	NG73.Size = UDim2.new(0, 20, 0, 20)
 	NG73.Style = Enum.ButtonStyle.Custom
 	NG73.Font = Enum.Font.Arial
 	NG73.FontSize = Enum.FontSize.Size10
-	NG73.Text = dCD("")
+	NG73.Text = ""
 	NG73.TextColor3 = Color3.new(1, 1, 1)
 	NG73.TextStrokeTransparency = 0.75
 	NG73.Parent = NG41
@@ -5054,14 +5284,14 @@ do
 	NG74.Active = true
 	NG74.BackgroundColor3 = Color3.new(1, 0.8, 0.6)
 	NG74.BorderSizePixel = 0
-	NG74.Name = dCD("Cnfgry oebja")
+	NG74.Name = "Pastel brown"
 	NG74.Position = UDim2.new(0, 5, 0, 105)
 	NG74.Selectable = true
 	NG74.Size = UDim2.new(0, 20, 0, 20)
 	NG74.Style = Enum.ButtonStyle.Custom
 	NG74.Font = Enum.Font.Arial
 	NG74.FontSize = Enum.FontSize.Size10
-	NG74.Text = dCD("")
+	NG74.Text = ""
 	NG74.TextColor3 = Color3.new(1, 1, 1)
 	NG74.TextStrokeTransparency = 0.75
 	NG74.Parent = NG41
@@ -5069,14 +5299,14 @@ do
 	NG75.Active = true
 	NG75.BackgroundColor3 = Color3.new(1, 1, 0.8)
 	NG75.BorderSizePixel = 0
-	NG75.Name = dCD("Cnfgry lryybj")
+	NG75.Name = "Pastel yellow"
 	NG75.Position = UDim2.new(0, 30, 0, 105)
 	NG75.Selectable = true
 	NG75.Size = UDim2.new(0, 20, 0, 20)
 	NG75.Style = Enum.ButtonStyle.Custom
 	NG75.Font = Enum.Font.Arial
 	NG75.FontSize = Enum.FontSize.Size10
-	NG75.Text = dCD("")
+	NG75.Text = ""
 	NG75.TextColor3 = Color3.new(1, 1, 1)
 	NG75.TextStrokeTransparency = 0.75
 	NG75.Parent = NG41
@@ -5084,14 +5314,14 @@ do
 	NG76.Active = true
 	NG76.BackgroundColor3 = Color3.new(1, 0.788235, 0.788235)
 	NG76.BorderSizePixel = 0
-	NG76.Name = dCD("Cnfgry benatr")
+	NG76.Name = "Pastel orange"
 	NG76.Position = UDim2.new(0, 55, 0, 105)
 	NG76.Selectable = true
 	NG76.Size = UDim2.new(0, 20, 0, 20)
 	NG76.Style = Enum.ButtonStyle.Custom
 	NG76.Font = Enum.Font.Arial
 	NG76.FontSize = Enum.FontSize.Size10
-	NG76.Text = dCD("")
+	NG76.Text = ""
 	NG76.TextColor3 = Color3.new(1, 1, 1)
 	NG76.TextStrokeTransparency = 0.75
 	NG76.Parent = NG41
@@ -5099,14 +5329,14 @@ do
 	NG77.Active = true
 	NG77.BackgroundColor3 = Color3.new(1, 0.4, 0.8)
 	NG77.BorderSizePixel = 0
-	NG77.Name = dCD("Cvax")
+	NG77.Name = "Pink"
 	NG77.Position = UDim2.new(0, 80, 0, 105)
 	NG77.Selectable = true
 	NG77.Size = UDim2.new(0, 20, 0, 20)
 	NG77.Style = Enum.ButtonStyle.Custom
 	NG77.Font = Enum.Font.Arial
 	NG77.FontSize = Enum.FontSize.Size10
-	NG77.Text = dCD("")
+	NG77.Text = ""
 	NG77.TextColor3 = Color3.new(1, 1, 1)
 	NG77.TextStrokeTransparency = 0.75
 	NG77.Parent = NG41
@@ -5114,14 +5344,14 @@ do
 	NG78.Active = true
 	NG78.BackgroundColor3 = Color3.new(0.694118, 0.654902, 1)
 	NG78.BorderSizePixel = 0
-	NG78.Name = dCD("Cnfgry ivbyrg")
+	NG78.Name = "Pastel violet"
 	NG78.Position = UDim2.new(0, 105, 0, 105)
 	NG78.Selectable = true
 	NG78.Size = UDim2.new(0, 20, 0, 20)
 	NG78.Style = Enum.ButtonStyle.Custom
 	NG78.Font = Enum.Font.Arial
 	NG78.FontSize = Enum.FontSize.Size10
-	NG78.Text = dCD("")
+	NG78.Text = ""
 	NG78.TextColor3 = Color3.new(1, 1, 1)
 	NG78.TextStrokeTransparency = 0.75
 	NG78.Parent = NG41
@@ -5129,14 +5359,14 @@ do
 	NG79.Active = true
 	NG79.BackgroundColor3 = Color3.new(0.686275, 0.866667, 1)
 	NG79.BorderSizePixel = 0
-	NG79.Name = dCD("Cnfgry yvtug oyhr")
+	NG79.Name = "Pastel light blue"
 	NG79.Position = UDim2.new(0, 130, 0, 105)
 	NG79.Selectable = true
 	NG79.Size = UDim2.new(0, 20, 0, 20)
 	NG79.Style = Enum.ButtonStyle.Custom
 	NG79.Font = Enum.Font.Arial
 	NG79.FontSize = Enum.FontSize.Size10
-	NG79.Text = dCD("")
+	NG79.Text = ""
 	NG79.TextColor3 = Color3.new(1, 1, 1)
 	NG79.TextStrokeTransparency = 0.75
 	NG79.Parent = NG41
@@ -5144,14 +5374,14 @@ do
 	NG80.Active = true
 	NG80.BackgroundColor3 = Color3.new(0.623529, 0.952941, 0.913726)
 	NG80.BorderSizePixel = 0
-	NG80.Name = dCD("Cnfgry oyhr-terra")
+	NG80.Name = "Pastel blue-green"
 	NG80.Position = UDim2.new(0, 155, 0, 105)
 	NG80.Selectable = true
 	NG80.Size = UDim2.new(0, 20, 0, 20)
 	NG80.Style = Enum.ButtonStyle.Custom
 	NG80.Font = Enum.Font.Arial
 	NG80.FontSize = Enum.FontSize.Size10
-	NG80.Text = dCD("")
+	NG80.Text = ""
 	NG80.TextColor3 = Color3.new(1, 1, 1)
 	NG80.TextStrokeTransparency = 0.75
 	NG80.Parent = NG41
@@ -5159,14 +5389,14 @@ do
 	NG81.Active = true
 	NG81.BackgroundColor3 = Color3.new(0.8, 1, 0.8)
 	NG81.BorderSizePixel = 0
-	NG81.Name = dCD("Cnfgry terra")
+	NG81.Name = "Pastel green"
 	NG81.Position = UDim2.new(0, 180, 0, 105)
 	NG81.Selectable = true
 	NG81.Size = UDim2.new(0, 20, 0, 20)
 	NG81.Style = Enum.ButtonStyle.Custom
 	NG81.Font = Enum.Font.Arial
 	NG81.FontSize = Enum.FontSize.Size10
-	NG81.Text = dCD("")
+	NG81.Text = ""
 	NG81.TextColor3 = Color3.new(1, 1, 1)
 	NG81.TextStrokeTransparency = 0.75
 	NG81.Parent = NG41
@@ -5174,14 +5404,14 @@ do
 	NG82.Active = true
 	NG82.BackgroundColor3 = Color3.new(0.756863, 0.745098, 0.258824)
 	NG82.BorderSizePixel = 0
-	NG82.Name = dCD("Byvir")
+	NG82.Name = "Olive"
 	NG82.Position = UDim2.new(0, 5, 0, 130)
 	NG82.Selectable = true
 	NG82.Size = UDim2.new(0, 20, 0, 20)
 	NG82.Style = Enum.ButtonStyle.Custom
 	NG82.Font = Enum.Font.Arial
 	NG82.FontSize = Enum.FontSize.Size10
-	NG82.Text = dCD("")
+	NG82.Text = ""
 	NG82.TextColor3 = Color3.new(1, 1, 1)
 	NG82.TextStrokeTransparency = 0.75
 	NG82.Parent = NG41
@@ -5189,14 +5419,14 @@ do
 	NG83.Active = true
 	NG83.BackgroundColor3 = Color3.new(1, 1, 0)
 	NG83.BorderSizePixel = 0
-	NG83.Name = dCD("Arj Lryyre")
+	NG83.Name = "New Yeller"
 	NG83.Position = UDim2.new(0, 30, 0, 130)
 	NG83.Selectable = true
 	NG83.Size = UDim2.new(0, 20, 0, 20)
 	NG83.Style = Enum.ButtonStyle.Custom
 	NG83.Font = Enum.Font.Arial
 	NG83.FontSize = Enum.FontSize.Size10
-	NG83.Text = dCD("")
+	NG83.Text = ""
 	NG83.TextColor3 = Color3.new(1, 1, 1)
 	NG83.TextStrokeTransparency = 0.75
 	NG83.Parent = NG41
@@ -5204,14 +5434,14 @@ do
 	NG84.Active = true
 	NG84.BackgroundColor3 = Color3.new(1, 0.686275, 0)
 	NG84.BorderSizePixel = 0
-	NG84.Name = dCD("Qrrc benatr")
+	NG84.Name = "Deep orange"
 	NG84.Position = UDim2.new(0, 55, 0, 130)
 	NG84.Selectable = true
 	NG84.Size = UDim2.new(0, 20, 0, 20)
 	NG84.Style = Enum.ButtonStyle.Custom
 	NG84.Font = Enum.Font.Arial
 	NG84.FontSize = Enum.FontSize.Size10
-	NG84.Text = dCD("")
+	NG84.Text = ""
 	NG84.TextColor3 = Color3.new(1, 1, 1)
 	NG84.TextStrokeTransparency = 0.75
 	NG84.Parent = NG41
@@ -5219,14 +5449,14 @@ do
 	NG85.Active = true
 	NG85.BackgroundColor3 = Color3.new(1, 0, 0)
 	NG85.BorderSizePixel = 0
-	NG85.Name = dCD("Ernyyl erq")
+	NG85.Name = "Really red"
 	NG85.Position = UDim2.new(0, 80, 0, 130)
 	NG85.Selectable = true
 	NG85.Size = UDim2.new(0, 20, 0, 20)
 	NG85.Style = Enum.ButtonStyle.Custom
 	NG85.Font = Enum.Font.Arial
 	NG85.FontSize = Enum.FontSize.Size10
-	NG85.Text = dCD("")
+	NG85.Text = ""
 	NG85.TextColor3 = Color3.new(1, 1, 1)
 	NG85.TextStrokeTransparency = 0.75
 	NG85.Parent = NG41
@@ -5234,14 +5464,14 @@ do
 	NG86.Active = true
 	NG86.BackgroundColor3 = Color3.new(1, 0, 0.74902)
 	NG86.BorderSizePixel = 0
-	NG86.Name = dCD("Ubg cvax")
+	NG86.Name = "Hot pink"
 	NG86.Position = UDim2.new(0, 105, 0, 130)
 	NG86.Selectable = true
 	NG86.Size = UDim2.new(0, 20, 0, 20)
 	NG86.Style = Enum.ButtonStyle.Custom
 	NG86.Font = Enum.Font.Arial
 	NG86.FontSize = Enum.FontSize.Size10
-	NG86.Text = dCD("")
+	NG86.Text = ""
 	NG86.TextColor3 = Color3.new(1, 1, 1)
 	NG86.TextStrokeTransparency = 0.75
 	NG86.Parent = NG41
@@ -5249,14 +5479,14 @@ do
 	NG87.Active = true
 	NG87.BackgroundColor3 = Color3.new(0, 0, 1)
 	NG87.BorderSizePixel = 0
-	NG87.Name = dCD("Ernyyl oyhr")
+	NG87.Name = "Really blue"
 	NG87.Position = UDim2.new(0, 130, 0, 130)
 	NG87.Selectable = true
 	NG87.Size = UDim2.new(0, 20, 0, 20)
 	NG87.Style = Enum.ButtonStyle.Custom
 	NG87.Font = Enum.Font.Arial
 	NG87.FontSize = Enum.FontSize.Size10
-	NG87.Text = dCD("")
+	NG87.Text = ""
 	NG87.TextColor3 = Color3.new(1, 1, 1)
 	NG87.TextStrokeTransparency = 0.75
 	NG87.Parent = NG41
@@ -5264,14 +5494,14 @@ do
 	NG88.Active = true
 	NG88.BackgroundColor3 = Color3.new(0, 1, 1)
 	NG88.BorderSizePixel = 0
-	NG88.Name = dCD("Gbbgucnfgr")
+	NG88.Name = "Toothpaste"
 	NG88.Position = UDim2.new(0, 155, 0, 130)
 	NG88.Selectable = true
 	NG88.Size = UDim2.new(0, 20, 0, 20)
 	NG88.Style = Enum.ButtonStyle.Custom
 	NG88.Font = Enum.Font.Arial
 	NG88.FontSize = Enum.FontSize.Size10
-	NG88.Text = dCD("")
+	NG88.Text = ""
 	NG88.TextColor3 = Color3.new(1, 1, 1)
 	NG88.TextStrokeTransparency = 0.75
 	NG88.Parent = NG41
@@ -5279,14 +5509,14 @@ do
 	NG89.Active = true
 	NG89.BackgroundColor3 = Color3.new(0, 1, 0)
 	NG89.BorderSizePixel = 0
-	NG89.Name = dCD("Yvzr terra")
+	NG89.Name = "Lime green"
 	NG89.Position = UDim2.new(0, 180, 0, 130)
 	NG89.Selectable = true
 	NG89.Size = UDim2.new(0, 20, 0, 20)
 	NG89.Style = Enum.ButtonStyle.Custom
 	NG89.Font = Enum.Font.Arial
 	NG89.FontSize = Enum.FontSize.Size10
-	NG89.Text = dCD("")
+	NG89.Text = ""
 	NG89.TextColor3 = Color3.new(1, 1, 1)
 	NG89.TextStrokeTransparency = 0.75
 	NG89.Parent = NG41
@@ -5294,14 +5524,14 @@ do
 	NG90.Active = true
 	NG90.BackgroundColor3 = Color3.new(0.486275, 0.360784, 0.27451)
 	NG90.BorderSizePixel = 0
-	NG90.Name = dCD("Oebja")
+	NG90.Name = "Brown"
 	NG90.Position = UDim2.new(0, 5, 0, 155)
 	NG90.Selectable = true
 	NG90.Size = UDim2.new(0, 20, 0, 20)
 	NG90.Style = Enum.ButtonStyle.Custom
 	NG90.Font = Enum.Font.Arial
 	NG90.FontSize = Enum.FontSize.Size10
-	NG90.Text = dCD("")
+	NG90.Text = ""
 	NG90.TextColor3 = Color3.new(1, 1, 1)
 	NG90.TextStrokeTransparency = 0.75
 	NG90.Parent = NG41
@@ -5309,14 +5539,14 @@ do
 	NG91.Active = true
 	NG91.BackgroundColor3 = Color3.new(0.8, 0.556863, 0.411765)
 	NG91.BorderSizePixel = 0
-	NG91.Name = dCD("Abhtng")
+	NG91.Name = "Nougat"
 	NG91.Position = UDim2.new(0, 30, 0, 155)
 	NG91.Selectable = true
 	NG91.Size = UDim2.new(0, 20, 0, 20)
 	NG91.Style = Enum.ButtonStyle.Custom
 	NG91.Font = Enum.Font.Arial
 	NG91.FontSize = Enum.FontSize.Size10
-	NG91.Text = dCD("")
+	NG91.Text = ""
 	NG91.TextColor3 = Color3.new(1, 1, 1)
 	NG91.TextStrokeTransparency = 0.75
 	NG91.Parent = NG41
@@ -5324,14 +5554,14 @@ do
 	NG92.Active = true
 	NG92.BackgroundColor3 = Color3.new(0.627451, 0.372549, 0.207843)
 	NG92.BorderSizePixel = 0
-	NG92.Name = dCD("Qnex benatr")
+	NG92.Name = "Dark orange"
 	NG92.Position = UDim2.new(0, 55, 0, 155)
 	NG92.Selectable = true
 	NG92.Size = UDim2.new(0, 20, 0, 20)
 	NG92.Style = Enum.ButtonStyle.Custom
 	NG92.Font = Enum.Font.Arial
 	NG92.FontSize = Enum.FontSize.Size10
-	NG92.Text = dCD("")
+	NG92.Text = ""
 	NG92.TextColor3 = Color3.new(1, 1, 1)
 	NG92.TextStrokeTransparency = 0.75
 	NG92.Parent = NG41
@@ -5339,14 +5569,14 @@ do
 	NG93.Active = true
 	NG93.BackgroundColor3 = Color3.new(0.384314, 0.145098, 0.819608)
 	NG93.BorderSizePixel = 0
-	NG93.Name = dCD("Eblny checyr")
+	NG93.Name = "Royal purple"
 	NG93.Position = UDim2.new(0, 80, 0, 155)
 	NG93.Selectable = true
 	NG93.Size = UDim2.new(0, 20, 0, 20)
 	NG93.Style = Enum.ButtonStyle.Custom
 	NG93.Font = Enum.Font.Arial
 	NG93.FontSize = Enum.FontSize.Size10
-	NG93.Text = dCD("")
+	NG93.Text = ""
 	NG93.TextColor3 = Color3.new(1, 1, 1)
 	NG93.TextStrokeTransparency = 0.75
 	NG93.Parent = NG41
@@ -5354,14 +5584,14 @@ do
 	NG94.Active = true
 	NG94.BackgroundColor3 = Color3.new(0.705882, 0.501961, 1)
 	NG94.BorderSizePixel = 0
-	NG94.Name = dCD("Nyqre")
+	NG94.Name = "Alder"
 	NG94.Position = UDim2.new(0, 105, 0, 155)
 	NG94.Selectable = true
 	NG94.Size = UDim2.new(0, 20, 0, 20)
 	NG94.Style = Enum.ButtonStyle.Custom
 	NG94.Font = Enum.Font.Arial
 	NG94.FontSize = Enum.FontSize.Size10
-	NG94.Text = dCD("")
+	NG94.Text = ""
 	NG94.TextColor3 = Color3.new(1, 1, 1)
 	NG94.TextStrokeTransparency = 0.75
 	NG94.Parent = NG41
@@ -5369,14 +5599,14 @@ do
 	NG95.Active = true
 	NG95.BackgroundColor3 = Color3.new(0.0156863, 0.686275, 0.92549)
 	NG95.BorderSizePixel = 0
-	NG95.Name = dCD("Plna")
+	NG95.Name = "Cyan"
 	NG95.Position = UDim2.new(0, 130, 0, 155)
 	NG95.Selectable = true
 	NG95.Size = UDim2.new(0, 20, 0, 20)
 	NG95.Style = Enum.ButtonStyle.Custom
 	NG95.Font = Enum.Font.Arial
 	NG95.FontSize = Enum.FontSize.Size10
-	NG95.Text = dCD("")
+	NG95.Text = ""
 	NG95.TextColor3 = Color3.new(1, 1, 1)
 	NG95.TextStrokeTransparency = 0.75
 	NG95.Parent = NG41
@@ -5384,14 +5614,14 @@ do
 	NG96.Active = true
 	NG96.BackgroundColor3 = Color3.new(0.705882, 0.823529, 0.894118)
 	NG96.BorderSizePixel = 0
-	NG96.Name = dCD("Yvtug oyhr")
+	NG96.Name = "Light blue"
 	NG96.Position = UDim2.new(0, 155, 0, 155)
 	NG96.Selectable = true
 	NG96.Size = UDim2.new(0, 20, 0, 20)
 	NG96.Style = Enum.ButtonStyle.Custom
 	NG96.Font = Enum.Font.Arial
 	NG96.FontSize = Enum.FontSize.Size10
-	NG96.Text = dCD("")
+	NG96.Text = ""
 	NG96.TextColor3 = Color3.new(1, 1, 1)
 	NG96.TextStrokeTransparency = 0.75
 	NG96.Parent = NG41
@@ -5399,14 +5629,14 @@ do
 	NG97.Active = true
 	NG97.BackgroundColor3 = Color3.new(0.227451, 0.490196, 0.0823529)
 	NG97.BorderSizePixel = 0
-	NG97.Name = dCD("Pnzb")
+	NG97.Name = "Camo"
 	NG97.Position = UDim2.new(0, 180, 0, 155)
 	NG97.Selectable = true
 	NG97.Size = UDim2.new(0, 20, 0, 20)
 	NG97.Style = Enum.ButtonStyle.Custom
 	NG97.Font = Enum.Font.Arial
 	NG97.FontSize = Enum.FontSize.Size10
-	NG97.Text = dCD("")
+	NG97.Text = ""
 	NG97.TextColor3 = Color3.new(1, 1, 1)
 	NG97.TextStrokeTransparency = 0.75
 	NG97.Parent = NG41
@@ -5414,14 +5644,14 @@ do
 	NG98.Active = true
 	NG98.BackgroundColor3 = Color3.new(0.411765, 0.25098, 0.156863)
 	NG98.BorderSizePixel = 0
-	NG98.Name = dCD("Erqqvfu oebja")
+	NG98.Name = "Reddish brown"
 	NG98.Position = UDim2.new(0, 5, 0, 180)
 	NG98.Selectable = true
 	NG98.Size = UDim2.new(0, 20, 0, 20)
 	NG98.Style = Enum.ButtonStyle.Custom
 	NG98.Font = Enum.Font.Arial
 	NG98.FontSize = Enum.FontSize.Size10
-	NG98.Text = dCD("")
+	NG98.Text = ""
 	NG98.TextColor3 = Color3.new(1, 1, 1)
 	NG98.TextStrokeTransparency = 0.75
 	NG98.Parent = NG41
@@ -5429,14 +5659,14 @@ do
 	NG99.Active = true
 	NG99.BackgroundColor3 = Color3.new(0.666667, 0.333333, 0)
 	NG99.BorderSizePixel = 0
-	NG99.Name = dCD("PTN oebja")
+	NG99.Name = "CGA brown"
 	NG99.Position = UDim2.new(0, 30, 0, 180)
 	NG99.Selectable = true
 	NG99.Size = UDim2.new(0, 20, 0, 20)
 	NG99.Style = Enum.ButtonStyle.Custom
 	NG99.Font = Enum.Font.Arial
 	NG99.FontSize = Enum.FontSize.Size10
-	NG99.Text = dCD("")
+	NG99.Text = ""
 	NG99.TextColor3 = Color3.new(1, 1, 1)
 	NG99.TextStrokeTransparency = 0.75
 	NG99.Parent = NG41
@@ -5444,14 +5674,14 @@ do
 	NG100.Active = true
 	NG100.BackgroundColor3 = Color3.new(0.639216, 0.294118, 0.294118)
 	NG100.BorderSizePixel = 0
-	NG100.Name = dCD("Qhfgl Ebfr")
+	NG100.Name = "Dusty Rose"
 	NG100.Position = UDim2.new(0, 55, 0, 180)
 	NG100.Selectable = true
 	NG100.Size = UDim2.new(0, 20, 0, 20)
 	NG100.Style = Enum.ButtonStyle.Custom
 	NG100.Font = Enum.Font.Arial
 	NG100.FontSize = Enum.FontSize.Size10
-	NG100.Text = dCD("")
+	NG100.Text = ""
 	NG100.TextColor3 = Color3.new(1, 1, 1)
 	NG100.TextStrokeTransparency = 0.75
 	NG100.Parent = NG41
@@ -5459,14 +5689,14 @@ do
 	NG101.Active = true
 	NG101.BackgroundColor3 = Color3.new(0.666667, 0, 0.666667)
 	NG101.BorderSizePixel = 0
-	NG101.Name = dCD("Zntragn")
+	NG101.Name = "Magenta"
 	NG101.Position = UDim2.new(0, 80, 0, 180)
 	NG101.Selectable = true
 	NG101.Size = UDim2.new(0, 20, 0, 20)
 	NG101.Style = Enum.ButtonStyle.Custom
 	NG101.Font = Enum.Font.Arial
 	NG101.FontSize = Enum.FontSize.Size10
-	NG101.Text = dCD("")
+	NG101.Text = ""
 	NG101.TextColor3 = Color3.new(1, 1, 1)
 	NG101.TextStrokeTransparency = 0.75
 	NG101.Parent = NG41
@@ -5474,14 +5704,14 @@ do
 	NG102.Active = true
 	NG102.BackgroundColor3 = Color3.new(0.129412, 0.329412, 0.72549)
 	NG102.BorderSizePixel = 0
-	NG102.Name = dCD("Qrrc oyhr")
+	NG102.Name = "Deep blue"
 	NG102.Position = UDim2.new(0, 105, 0, 180)
 	NG102.Selectable = true
 	NG102.Size = UDim2.new(0, 20, 0, 20)
 	NG102.Style = Enum.ButtonStyle.Custom
 	NG102.Font = Enum.Font.Arial
 	NG102.FontSize = Enum.FontSize.Size10
-	NG102.Text = dCD("")
+	NG102.Text = ""
 	NG102.TextColor3 = Color3.new(1, 1, 1)
 	NG102.TextStrokeTransparency = 0.75
 	NG102.Parent = NG41
@@ -5489,14 +5719,14 @@ do
 	NG103.Active = true
 	NG103.BackgroundColor3 = Color3.new(0, 0.12549, 0.376471)
 	NG103.BorderSizePixel = 0
-	NG103.Name = dCD("Anil oyhr")
+	NG103.Name = "Navy blue"
 	NG103.Position = UDim2.new(0, 130, 0, 180)
 	NG103.Selectable = true
 	NG103.Size = UDim2.new(0, 20, 0, 20)
 	NG103.Style = Enum.ButtonStyle.Custom
 	NG103.Font = Enum.Font.Arial
 	NG103.FontSize = Enum.FontSize.Size10
-	NG103.Text = dCD("")
+	NG103.Text = ""
 	NG103.TextColor3 = Color3.new(1, 1, 1)
 	NG103.TextStrokeTransparency = 0.75
 	NG103.Parent = NG41
@@ -5504,14 +5734,14 @@ do
 	NG104.Active = true
 	NG104.BackgroundColor3 = Color3.new(0.156863, 0.498039, 0.278431)
 	NG104.BorderSizePixel = 0
-	NG104.Name = dCD("Qnex terra")
+	NG104.Name = "Dark green"
 	NG104.Position = UDim2.new(0, 155, 0, 180)
 	NG104.Selectable = true
 	NG104.Size = UDim2.new(0, 20, 0, 20)
 	NG104.Style = Enum.ButtonStyle.Custom
 	NG104.Font = Enum.Font.Arial
 	NG104.FontSize = Enum.FontSize.Size10
-	NG104.Text = dCD("")
+	NG104.Text = ""
 	NG104.TextColor3 = Color3.new(1, 1, 1)
 	NG104.TextStrokeTransparency = 0.75
 	NG104.Parent = NG41
@@ -5519,14 +5749,14 @@ do
 	NG105.Active = true
 	NG105.BackgroundColor3 = Color3.new(0.152941, 0.27451, 0.176471)
 	NG105.BorderSizePixel = 0
-	NG105.Name = dCD("Rnegu terra")
+	NG105.Name = "Earth green"
 	NG105.Position = UDim2.new(0, 180, 0, 180)
 	NG105.Selectable = true
 	NG105.Size = UDim2.new(0, 20, 0, 20)
 	NG105.Style = Enum.ButtonStyle.Custom
 	NG105.Font = Enum.Font.Arial
 	NG105.FontSize = Enum.FontSize.Size10
-	NG105.Text = dCD("")
+	NG105.Text = ""
 	NG105.TextColor3 = Color3.new(1, 1, 1)
 	NG105.TextStrokeTransparency = 0.75
 	NG105.Parent = NG41
@@ -5535,7 +5765,7 @@ do
 	NG106.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG106.BackgroundTransparency = 1
 	NG106.BorderSizePixel = 0
-	NG106.Name = dCD("OGZbirGbbyTHV")
+	NG106.Name = "BTMoveToolGUI"
 	NG106.Position = UDim2.new(0, 0, 0, 280)
 	NG106.Size = UDim2.new(0, 245, 0, 90)
 	NG106.Draggable = true
@@ -5544,7 +5774,7 @@ do
 	NG107.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG107.BackgroundTransparency = 1
 	NG107.BorderSizePixel = 0
-	NG107.Name = dCD("Punatrf")
+	NG107.Name = "Changes"
 	NG107.Position = UDim2.new(0, 5, 0, 100)
 	NG107.Size = UDim2.new(1, -5, 0, 20)
 	NG107.Parent = NG106
@@ -5552,12 +5782,12 @@ do
 	NG108.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG108.BackgroundTransparency = 1
 	NG108.BorderSizePixel = 0
-	NG108.Name = dCD("Grkg")
+	NG108.Name = "Text"
 	NG108.Position = UDim2.new(0, 10, 0, 2)
 	NG108.Size = UDim2.new(1, -10, 0, 20)
 	NG108.Font = Enum.Font.ArialBold
 	NG108.FontSize = Enum.FontSize.Size10
-	NG108.Text = dCD("zbirq 0 fghqf")
+	NG108.Text = "moved 0 studs"
 	NG108.TextColor3 = Color3.new(1, 1, 1)
 	NG108.TextStrokeTransparency = 0.5
 	NG108.TextWrapped = true
@@ -5566,14 +5796,14 @@ do
 	NG109 = Instance.new("Frame")
 	NG109.BackgroundColor3 = Color3.new(1, 0.666667, 0)
 	NG109.BorderSizePixel = 0
-	NG109.Name = dCD("PbybeOne")
+	NG109.Name = "ColorBar"
 	NG109.Size = UDim2.new(1, 0, 0, 2)
 	NG109.Parent = NG107
 	NG110 = Instance.new("Frame")
 	NG110.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG110.BackgroundTransparency = 1
 	NG110.BorderSizePixel = 0
-	NG110.Name = dCD("Vasb")
+	NG110.Name = "Info"
 	NG110.Position = UDim2.new(0, 5, 0, 100)
 	NG110.Size = UDim2.new(1, -5, 0, 60)
 	NG110.Visible = false
@@ -5582,7 +5812,7 @@ do
 	NG111.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG111.BackgroundTransparency = 1
 	NG111.BorderSizePixel = 0
-	NG111.Name = dCD("Pragre")
+	NG111.Name = "Center"
 	NG111.Position = UDim2.new(0, 0, 0, 30)
 	NG111.Size = UDim2.new(0, 0, 0, 0)
 	NG111.Parent = NG110
@@ -5590,7 +5820,7 @@ do
 	NG112.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG112.BackgroundTransparency = 1
 	NG112.BorderSizePixel = 0
-	NG112.Name = dCD("M")
+	NG112.Name = "Z"
 	NG112.Position = UDim2.new(0, 164, 0, 0)
 	NG112.Size = UDim2.new(0, 50, 0, 25)
 	NG112.Parent = NG111
@@ -5599,10 +5829,10 @@ do
 	NG113.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG113.BackgroundTransparency = 1
 	NG113.BorderSizePixel = 0
-	NG113.Name = dCD("Onpxtebhaq")
+	NG113.Name = "Background"
 	NG113.Selectable = false
 	NG113.Size = UDim2.new(1, 0, 1, 0)
-	NG113.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG113.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG113.Parent = NG112
 	NG114 = Instance.new("TextButton")
 	NG114.Active = true
@@ -5616,7 +5846,7 @@ do
 	NG114.ZIndex = 3
 	NG114.Font = Enum.Font.Legacy
 	NG114.FontSize = Enum.FontSize.Size8
-	NG114.Text = dCD("")
+	NG114.Text = ""
 	NG114.Parent = NG112
 	NG115 = Instance.new("TextBox")
 	NG115.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
@@ -5627,14 +5857,14 @@ do
 	NG115.ZIndex = 2
 	NG115.Font = Enum.Font.ArialBold
 	NG115.FontSize = Enum.FontSize.Size10
-	NG115.Text = dCD("")
+	NG115.Text = ""
 	NG115.TextColor3 = Color3.new(1, 1, 1)
 	NG115.Parent = NG112
 	NG116 = Instance.new("Frame")
 	NG116.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG116.BackgroundTransparency = 1
 	NG116.BorderSizePixel = 0
-	NG116.Name = dCD("L")
+	NG116.Name = "Y"
 	NG116.Position = UDim2.new(0, 117, 0, 0)
 	NG116.Size = UDim2.new(0, 50, 0, 25)
 	NG116.Parent = NG111
@@ -5650,7 +5880,7 @@ do
 	NG117.ZIndex = 3
 	NG117.Font = Enum.Font.Legacy
 	NG117.FontSize = Enum.FontSize.Size8
-	NG117.Text = dCD("")
+	NG117.Text = ""
 	NG117.Parent = NG116
 	NG118 = Instance.new("TextBox")
 	NG118.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
@@ -5661,7 +5891,7 @@ do
 	NG118.ZIndex = 2
 	NG118.Font = Enum.Font.ArialBold
 	NG118.FontSize = Enum.FontSize.Size10
-	NG118.Text = dCD("")
+	NG118.Text = ""
 	NG118.TextColor3 = Color3.new(1, 1, 1)
 	NG118.Parent = NG116
 	NG119 = Instance.new("ImageLabel")
@@ -5669,16 +5899,16 @@ do
 	NG119.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG119.BackgroundTransparency = 1
 	NG119.BorderSizePixel = 0
-	NG119.Name = dCD("Onpxtebhaq")
+	NG119.Name = "Background"
 	NG119.Selectable = false
 	NG119.Size = UDim2.new(1, 0, 1, 0)
-	NG119.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG119.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG119.Parent = NG116
 	NG120 = Instance.new("Frame")
 	NG120.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG120.BackgroundTransparency = 1
 	NG120.BorderSizePixel = 0
-	NG120.Name = dCD("K")
+	NG120.Name = "X"
 	NG120.Position = UDim2.new(0, 70, 0, 0)
 	NG120.Size = UDim2.new(0, 50, 0, 25)
 	NG120.Parent = NG111
@@ -5691,7 +5921,7 @@ do
 	NG121.ZIndex = 2
 	NG121.Font = Enum.Font.ArialBold
 	NG121.FontSize = Enum.FontSize.Size10
-	NG121.Text = dCD("")
+	NG121.Text = ""
 	NG121.TextColor3 = Color3.new(1, 1, 1)
 	NG121.Parent = NG120
 	NG122 = Instance.new("TextButton")
@@ -5706,17 +5936,17 @@ do
 	NG122.ZIndex = 3
 	NG122.Font = Enum.Font.Legacy
 	NG122.FontSize = Enum.FontSize.Size8
-	NG122.Text = dCD("")
+	NG122.Text = ""
 	NG122.Parent = NG120
 	NG123 = Instance.new("ImageLabel")
 	NG123.Active = false
 	NG123.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG123.BackgroundTransparency = 1
 	NG123.BorderSizePixel = 0
-	NG123.Name = dCD("Onpxtebhaq")
+	NG123.Name = "Background"
 	NG123.Selectable = false
 	NG123.Size = UDim2.new(1, 0, 1, 0)
-	NG123.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG123.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG123.Parent = NG120
 	NG124 = Instance.new("TextLabel")
 	NG124.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
@@ -5725,7 +5955,7 @@ do
 	NG124.Size = UDim2.new(0, 75, 0, 25)
 	NG124.Font = Enum.Font.ArialBold
 	NG124.FontSize = Enum.FontSize.Size10
-	NG124.Text = dCD("Cbfvgvba")
+	NG124.Text = "Position"
 	NG124.TextColor3 = Color3.new(1, 1, 1)
 	NG124.TextStrokeTransparency = 0
 	NG124.TextWrapped = true
@@ -5734,12 +5964,12 @@ do
 	NG125.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG125.BackgroundTransparency = 1
 	NG125.BorderSizePixel = 0
-	NG125.Name = dCD("Ynory")
+	NG125.Name = "Label"
 	NG125.Position = UDim2.new(0, 10, 0, 2)
 	NG125.Size = UDim2.new(1, -10, 0, 20)
 	NG125.Font = Enum.Font.ArialBold
 	NG125.FontSize = Enum.FontSize.Size10
-	NG125.Text = dCD("FRYRPGVBA VASB")
+	NG125.Text = "SELECTION INFO"
 	NG125.TextColor3 = Color3.new(1, 1, 1)
 	NG125.TextStrokeTransparency = 0
 	NG125.TextWrapped = true
@@ -5748,14 +5978,14 @@ do
 	NG126 = Instance.new("Frame")
 	NG126.BackgroundColor3 = Color3.new(1, 0.666667, 0)
 	NG126.BorderSizePixel = 0
-	NG126.Name = dCD("PbybeOne")
+	NG126.Name = "ColorBar"
 	NG126.Size = UDim2.new(1, 0, 0, 2)
 	NG126.Parent = NG110
 	NG127 = Instance.new("Frame")
 	NG127.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG127.BackgroundTransparency = 1
 	NG127.BorderSizePixel = 0
-	NG127.Name = dCD("VaperzragBcgvba")
+	NG127.Name = "IncrementOption"
 	NG127.Position = UDim2.new(0, 0, 0, 65)
 	NG127.Size = UDim2.new(0, 0, 0, 0)
 	NG127.Parent = NG106
@@ -5763,7 +5993,7 @@ do
 	NG128.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG128.BackgroundTransparency = 1
 	NG128.BorderSizePixel = 0
-	NG128.Name = dCD("Ynory")
+	NG128.Name = "Label"
 	NG128.Size = UDim2.new(0, 75, 0, 25)
 	NG128.Parent = NG127
 	NG129 = Instance.new("TextLabel")
@@ -5773,7 +6003,7 @@ do
 	NG129.Size = UDim2.new(1, 0, 1, 0)
 	NG129.Font = Enum.Font.ArialBold
 	NG129.FontSize = Enum.FontSize.Size10
-	NG129.Text = dCD("Vaperzrag")
+	NG129.Text = "Increment"
 	NG129.TextColor3 = Color3.new(1, 1, 1)
 	NG129.TextStrokeTransparency = 0
 	NG129.TextWrapped = true
@@ -5782,7 +6012,7 @@ do
 	NG130.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG130.BackgroundTransparency = 1
 	NG130.BorderSizePixel = 0
-	NG130.Name = dCD("Vaperzrag")
+	NG130.Name = "Increment"
 	NG130.Position = UDim2.new(0, 70, 0, 0)
 	NG130.Size = UDim2.new(0, 50, 0, 25)
 	NG130.Parent = NG127
@@ -5791,10 +6021,10 @@ do
 	NG131.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG131.BackgroundTransparency = 1
 	NG131.BorderSizePixel = 0
-	NG131.Name = dCD("Onpxtebhaq")
+	NG131.Name = "Background"
 	NG131.Selectable = false
 	NG131.Size = UDim2.new(1, 0, 1, 0)
-	NG131.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG131.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG131.Parent = NG130
 	NG132 = Instance.new("TextBox")
 	NG132.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
@@ -5805,12 +6035,12 @@ do
 	NG132.ZIndex = 2
 	NG132.Font = Enum.Font.ArialBold
 	NG132.FontSize = Enum.FontSize.Size10
-	NG132.Text = dCD("1")
+	NG132.Text = "1"
 	NG132.TextColor3 = Color3.new(1, 1, 1)
 	NG132.Parent = NG130
 	NG133 = Instance.new("Frame")
 	NG133.BorderSizePixel = 0
-	NG133.Name = dCD("FryrpgrqVaqvpngbe")
+	NG133.Name = "SelectedIndicator"
 	NG133.Position = UDim2.new(0, 5, 0, -2)
 	NG133.Size = UDim2.new(1, -4, 0, 2)
 	NG133.Parent = NG130
@@ -5818,19 +6048,19 @@ do
 	NG134.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG134.BackgroundTransparency = 1
 	NG134.BorderSizePixel = 0
-	NG134.Name = dCD("Gvgyr")
+	NG134.Name = "Title"
 	NG134.Size = UDim2.new(1, 0, 0, 20)
 	NG134.Parent = NG106
 	NG135 = Instance.new("TextLabel")
 	NG135.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG135.BackgroundTransparency = 1
 	NG135.BorderSizePixel = 0
-	NG135.Name = dCD("S3KFvtangher")
+	NG135.Name = "F3XSignature"
 	NG135.Position = UDim2.new(0, 10, 0, 1)
 	NG135.Size = UDim2.new(1, -10, 1, 0)
 	NG135.Font = Enum.Font.ArialBold
 	NG135.FontSize = Enum.FontSize.Size14
-	NG135.Text = dCD("S3K")
+	NG135.Text = "F3X"
 	NG135.TextColor3 = Color3.new(1, 1, 1)
 	NG135.TextStrokeTransparency = 0.89999997615814
 	NG135.TextWrapped = true
@@ -5840,12 +6070,12 @@ do
 	NG136.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG136.BackgroundTransparency = 1
 	NG136.BorderSizePixel = 0
-	NG136.Name = dCD("Ynory")
+	NG136.Name = "Label"
 	NG136.Position = UDim2.new(0, 10, 0, 1)
 	NG136.Size = UDim2.new(1, -10, 1, 0)
 	NG136.Font = Enum.Font.ArialBold
 	NG136.FontSize = Enum.FontSize.Size10
-	NG136.Text = dCD("ZBIR GBBY")
+	NG136.Text = "MOVE TOOL"
 	NG136.TextColor3 = Color3.new(1, 1, 1)
 	NG136.TextStrokeTransparency = 0
 	NG136.TextWrapped = true
@@ -5854,7 +6084,7 @@ do
 	NG137 = Instance.new("Frame")
 	NG137.BackgroundColor3 = Color3.new(1, 0.666667, 0)
 	NG137.BorderSizePixel = 0
-	NG137.Name = dCD("PbybeOne")
+	NG137.Name = "ColorBar"
 	NG137.Position = UDim2.new(0, 5, 0, -3)
 	NG137.Size = UDim2.new(1, -5, 0, 2)
 	NG137.Parent = NG134
@@ -5862,7 +6092,7 @@ do
 	NG138.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG138.BackgroundTransparency = 1
 	NG138.BorderSizePixel = 0
-	NG138.Name = dCD("NkrfBcgvba")
+	NG138.Name = "AxesOption"
 	NG138.Position = UDim2.new(0, 0, 0, 30)
 	NG138.Size = UDim2.new(0, 0, 0, 0)
 	NG138.Parent = NG106
@@ -5870,7 +6100,7 @@ do
 	NG139.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG139.BackgroundTransparency = 1
 	NG139.BorderSizePixel = 0
-	NG139.Name = dCD("Ynory")
+	NG139.Name = "Label"
 	NG139.Size = UDim2.new(0, 50, 0, 25)
 	NG139.Parent = NG138
 	NG140 = Instance.new("TextLabel")
@@ -5880,7 +6110,7 @@ do
 	NG140.Size = UDim2.new(1, 0, 1, 0)
 	NG140.Font = Enum.Font.ArialBold
 	NG140.FontSize = Enum.FontSize.Size10
-	NG140.Text = dCD("Nkrf")
+	NG140.Text = "Axes"
 	NG140.TextColor3 = Color3.new(1, 1, 1)
 	NG140.TextStrokeTransparency = 0
 	NG140.TextWrapped = true
@@ -5889,7 +6119,7 @@ do
 	NG141.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG141.BackgroundTransparency = 1
 	NG141.BorderSizePixel = 0
-	NG141.Name = dCD("Ynfg")
+	NG141.Name = "Last"
 	NG141.Position = UDim2.new(0, 175, 0, 0)
 	NG141.Size = UDim2.new(0, 70, 0, 25)
 	NG141.Parent = NG138
@@ -5897,12 +6127,12 @@ do
 	NG142.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG142.BackgroundTransparency = 1
 	NG142.BorderSizePixel = 0
-	NG142.Name = dCD("Ynory")
+	NG142.Name = "Label"
 	NG142.Size = UDim2.new(1, 0, 1, 0)
 	NG142.ZIndex = 2
 	NG142.Font = Enum.Font.ArialBold
 	NG142.FontSize = Enum.FontSize.Size10
-	NG142.Text = dCD("YNFG")
+	NG142.Text = "LAST"
 	NG142.TextColor3 = Color3.new(1, 1, 1)
 	NG142.Parent = NG141
 	NG143 = Instance.new("ImageLabel")
@@ -5910,17 +6140,17 @@ do
 	NG143.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG143.BackgroundTransparency = 1
 	NG143.BorderSizePixel = 0
-	NG143.Name = dCD("Onpxtebhaq")
+	NG143.Name = "Background"
 	NG143.Selectable = false
 	NG143.Size = UDim2.new(1, 0, 1, 0)
-	NG143.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG143.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG143.Parent = NG141
 	NG144 = Instance.new("TextButton")
 	NG144.Active = true
 	NG144.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG144.BackgroundTransparency = 1
 	NG144.BorderSizePixel = 0
-	NG144.Name = dCD("Ohggba")
+	NG144.Name = "Button"
 	NG144.Position = UDim2.new(0, 5, 0, 0)
 	NG144.Selectable = true
 	NG144.Size = UDim2.new(1, -10, 1, 0)
@@ -5928,13 +6158,13 @@ do
 	NG144.ZIndex = 2
 	NG144.Font = Enum.Font.Legacy
 	NG144.FontSize = Enum.FontSize.Size8
-	NG144.Text = dCD("")
+	NG144.Text = ""
 	NG144.TextTransparency = 1
 	NG144.Parent = NG141
 	NG145 = Instance.new("Frame")
 	NG145.BackgroundTransparency = 1
 	NG145.BorderSizePixel = 0
-	NG145.Name = dCD("FryrpgrqVaqvpngbe")
+	NG145.Name = "SelectedIndicator"
 	NG145.Position = UDim2.new(0, 6, 0, -2)
 	NG145.Size = UDim2.new(1, -5, 0, 2)
 	NG145.Parent = NG141
@@ -5942,7 +6172,7 @@ do
 	NG146.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG146.BackgroundTransparency = 1
 	NG146.BorderSizePixel = 0
-	NG146.Name = dCD("Ybpny")
+	NG146.Name = "Local"
 	NG146.Position = UDim2.new(0, 110, 0, 0)
 	NG146.Size = UDim2.new(0, 70, 0, 25)
 	NG146.Parent = NG138
@@ -5950,12 +6180,12 @@ do
 	NG147.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG147.BackgroundTransparency = 1
 	NG147.BorderSizePixel = 0
-	NG147.Name = dCD("Ynory")
+	NG147.Name = "Label"
 	NG147.Size = UDim2.new(1, 0, 1, 0)
 	NG147.ZIndex = 2
 	NG147.Font = Enum.Font.ArialBold
 	NG147.FontSize = Enum.FontSize.Size10
-	NG147.Text = dCD("YBPNY")
+	NG147.Text = "LOCAL"
 	NG147.TextColor3 = Color3.new(1, 1, 1)
 	NG147.Parent = NG146
 	NG148 = Instance.new("ImageLabel")
@@ -5963,17 +6193,17 @@ do
 	NG148.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG148.BackgroundTransparency = 1
 	NG148.BorderSizePixel = 0
-	NG148.Name = dCD("Onpxtebhaq")
+	NG148.Name = "Background"
 	NG148.Selectable = false
 	NG148.Size = UDim2.new(1, 0, 1, 0)
-	NG148.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG148.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG148.Parent = NG146
 	NG149 = Instance.new("TextButton")
 	NG149.Active = true
 	NG149.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG149.BackgroundTransparency = 1
 	NG149.BorderSizePixel = 0
-	NG149.Name = dCD("Ohggba")
+	NG149.Name = "Button"
 	NG149.Position = UDim2.new(0, 5, 0, 0)
 	NG149.Selectable = true
 	NG149.Size = UDim2.new(1, -10, 1, 0)
@@ -5981,13 +6211,13 @@ do
 	NG149.ZIndex = 2
 	NG149.Font = Enum.Font.Legacy
 	NG149.FontSize = Enum.FontSize.Size8
-	NG149.Text = dCD("")
+	NG149.Text = ""
 	NG149.TextTransparency = 1
 	NG149.Parent = NG146
 	NG150 = Instance.new("Frame")
 	NG150.BackgroundTransparency = 1
 	NG150.BorderSizePixel = 0
-	NG150.Name = dCD("FryrpgrqVaqvpngbe")
+	NG150.Name = "SelectedIndicator"
 	NG150.Position = UDim2.new(0, 6, 0, -2)
 	NG150.Size = UDim2.new(1, -5, 0, 2)
 	NG150.Parent = NG146
@@ -5995,7 +6225,7 @@ do
 	NG151.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG151.BackgroundTransparency = 1
 	NG151.BorderSizePixel = 0
-	NG151.Name = dCD("Tybony")
+	NG151.Name = "Global"
 	NG151.Position = UDim2.new(0, 45, 0, 0)
 	NG151.Size = UDim2.new(0, 70, 0, 25)
 	NG151.Parent = NG138
@@ -6003,12 +6233,12 @@ do
 	NG152.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG152.BackgroundTransparency = 1
 	NG152.BorderSizePixel = 0
-	NG152.Name = dCD("Ynory")
+	NG152.Name = "Label"
 	NG152.Size = UDim2.new(1, 0, 1, 0)
 	NG152.ZIndex = 2
 	NG152.Font = Enum.Font.ArialBold
 	NG152.FontSize = Enum.FontSize.Size10
-	NG152.Text = dCD("TYBONY")
+	NG152.Text = "GLOBAL"
 	NG152.TextColor3 = Color3.new(1, 1, 1)
 	NG152.Parent = NG151
 	NG153 = Instance.new("ImageLabel")
@@ -6016,17 +6246,17 @@ do
 	NG153.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG153.BackgroundTransparency = 1
 	NG153.BorderSizePixel = 0
-	NG153.Name = dCD("Onpxtebhaq")
+	NG153.Name = "Background"
 	NG153.Selectable = false
 	NG153.Size = UDim2.new(1, 0, 1, 0)
-	NG153.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127774197")
+	NG153.Image = "http://www.roblox.com/asset/?id=127774197"
 	NG153.Parent = NG151
 	NG154 = Instance.new("TextButton")
 	NG154.Active = true
 	NG154.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG154.BackgroundTransparency = 1
 	NG154.BorderSizePixel = 0
-	NG154.Name = dCD("Ohggba")
+	NG154.Name = "Button"
 	NG154.Position = UDim2.new(0, 5, 0, 0)
 	NG154.Selectable = true
 	NG154.Size = UDim2.new(1, -10, 1, 0)
@@ -6034,12 +6264,12 @@ do
 	NG154.ZIndex = 2
 	NG154.Font = Enum.Font.Legacy
 	NG154.FontSize = Enum.FontSize.Size8
-	NG154.Text = dCD("")
+	NG154.Text = ""
 	NG154.TextTransparency = 1
 	NG154.Parent = NG151
 	NG155 = Instance.new("Frame")
 	NG155.BorderSizePixel = 0
-	NG155.Name = dCD("FryrpgrqVaqvpngbe")
+	NG155.Name = "SelectedIndicator"
 	NG155.Position = UDim2.new(0, 6, 0, -2)
 	NG155.Size = UDim2.new(1, -5, 0, 2)
 	NG155.Parent = NG151
@@ -6048,7 +6278,7 @@ do
 	NG156.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG156.BackgroundTransparency = 1
 	NG156.BorderSizePixel = 0
-	NG156.Name = dCD("OGErfvmrGbbyTHV")
+	NG156.Name = "BTResizeToolGUI"
 	NG156.Position = UDim2.new(0, 0, 0, 280)
 	NG156.Size = UDim2.new(0, 245, 0, 90)
 	NG156.Draggable = true
@@ -6057,7 +6287,7 @@ do
 	NG157.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG157.BackgroundTransparency = 1
 	NG157.BorderSizePixel = 0
-	NG157.Name = dCD("QverpgvbafBcgvba")
+	NG157.Name = "DirectionsOption"
 	NG157.Position = UDim2.new(0, 0, 0, 30)
 	NG157.Size = UDim2.new(0, 0, 0, 0)
 	NG157.Parent = NG156
@@ -6065,13 +6295,13 @@ do
 	NG158.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG158.BackgroundTransparency = 1
 	NG158.BorderSizePixel = 0
-	NG158.Name = dCD("Abezny")
+	NG158.Name = "Normal"
 	NG158.Position = UDim2.new(0, 70, 0, 0)
 	NG158.Size = UDim2.new(0, 70, 0, 25)
 	NG158.Parent = NG157
 	NG159 = Instance.new("Frame")
 	NG159.BorderSizePixel = 0
-	NG159.Name = dCD("FryrpgrqVaqvpngbe")
+	NG159.Name = "SelectedIndicator"
 	NG159.Position = UDim2.new(0, 6, 0, -2)
 	NG159.Size = UDim2.new(1, -5, 0, 2)
 	NG159.Parent = NG158
@@ -6080,7 +6310,7 @@ do
 	NG160.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG160.BackgroundTransparency = 1
 	NG160.BorderSizePixel = 0
-	NG160.Name = dCD("Ohggba")
+	NG160.Name = "Button"
 	NG160.Position = UDim2.new(0, 5, 0, 0)
 	NG160.Selectable = true
 	NG160.Size = UDim2.new(1, -10, 1, 0)
@@ -6088,7 +6318,7 @@ do
 	NG160.ZIndex = 2
 	NG160.Font = Enum.Font.Legacy
 	NG160.FontSize = Enum.FontSize.Size8
-	NG160.Text = dCD("")
+	NG160.Text = ""
 	NG160.TextTransparency = 1
 	NG160.Parent = NG158
 	NG161 = Instance.new("ImageLabel")
@@ -6096,34 +6326,34 @@ do
 	NG161.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG161.BackgroundTransparency = 1
 	NG161.BorderSizePixel = 0
-	NG161.Name = dCD("Onpxtebhaq")
+	NG161.Name = "Background"
 	NG161.Selectable = false
 	NG161.Size = UDim2.new(1, 0, 1, 0)
-	NG161.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127774197")
+	NG161.Image = "http://www.roblox.com/asset/?id=127774197"
 	NG161.Parent = NG158
 	NG162 = Instance.new("TextLabel")
 	NG162.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG162.BackgroundTransparency = 1
 	NG162.BorderSizePixel = 0
-	NG162.Name = dCD("Ynory")
+	NG162.Name = "Label"
 	NG162.Size = UDim2.new(1, 0, 1, 0)
 	NG162.Font = Enum.Font.ArialBold
 	NG162.FontSize = Enum.FontSize.Size10
-	NG162.Text = dCD("ABEZNY")
+	NG162.Text = "NORMAL"
 	NG162.TextColor3 = Color3.new(1, 1, 1)
 	NG162.Parent = NG158
 	NG163 = Instance.new("Frame")
 	NG163.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG163.BackgroundTransparency = 1
 	NG163.BorderSizePixel = 0
-	NG163.Name = dCD("Obgu")
+	NG163.Name = "Both"
 	NG163.Position = UDim2.new(0, 135, 0, 0)
 	NG163.Size = UDim2.new(0, 70, 0, 25)
 	NG163.Parent = NG157
 	NG164 = Instance.new("Frame")
 	NG164.BackgroundTransparency = 1
 	NG164.BorderSizePixel = 0
-	NG164.Name = dCD("FryrpgrqVaqvpngbe")
+	NG164.Name = "SelectedIndicator"
 	NG164.Position = UDim2.new(0, 6, 0, -2)
 	NG164.Size = UDim2.new(1, -5, 0, 2)
 	NG164.Parent = NG163
@@ -6132,7 +6362,7 @@ do
 	NG165.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG165.BackgroundTransparency = 1
 	NG165.BorderSizePixel = 0
-	NG165.Name = dCD("Ohggba")
+	NG165.Name = "Button"
 	NG165.Position = UDim2.new(0, 5, 0, 0)
 	NG165.Selectable = true
 	NG165.Size = UDim2.new(1, -10, 1, 0)
@@ -6140,7 +6370,7 @@ do
 	NG165.ZIndex = 2
 	NG165.Font = Enum.Font.Legacy
 	NG165.FontSize = Enum.FontSize.Size8
-	NG165.Text = dCD("")
+	NG165.Text = ""
 	NG165.TextTransparency = 1
 	NG165.Parent = NG163
 	NG166 = Instance.new("ImageLabel")
@@ -6148,27 +6378,27 @@ do
 	NG166.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG166.BackgroundTransparency = 1
 	NG166.BorderSizePixel = 0
-	NG166.Name = dCD("Onpxtebhaq")
+	NG166.Name = "Background"
 	NG166.Selectable = false
 	NG166.Size = UDim2.new(1, 0, 1, 0)
-	NG166.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG166.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG166.Parent = NG163
 	NG167 = Instance.new("TextLabel")
 	NG167.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG167.BackgroundTransparency = 1
 	NG167.BorderSizePixel = 0
-	NG167.Name = dCD("Ynory")
+	NG167.Name = "Label"
 	NG167.Size = UDim2.new(1, 0, 1, 0)
 	NG167.Font = Enum.Font.ArialBold
 	NG167.FontSize = Enum.FontSize.Size10
-	NG167.Text = dCD("OBGU")
+	NG167.Text = "BOTH"
 	NG167.TextColor3 = Color3.new(1, 1, 1)
 	NG167.Parent = NG163
 	NG168 = Instance.new("Frame")
 	NG168.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG168.BackgroundTransparency = 1
 	NG168.BorderSizePixel = 0
-	NG168.Name = dCD("Ynory")
+	NG168.Name = "Label"
 	NG168.Size = UDim2.new(0, 75, 0, 25)
 	NG168.Parent = NG157
 	NG169 = Instance.new("TextLabel")
@@ -6178,7 +6408,7 @@ do
 	NG169.Size = UDim2.new(1, 0, 1, 0)
 	NG169.Font = Enum.Font.ArialBold
 	NG169.FontSize = Enum.FontSize.Size10
-	NG169.Text = dCD("Qverpgvbaf")
+	NG169.Text = "Directions"
 	NG169.TextColor3 = Color3.new(1, 1, 1)
 	NG169.TextStrokeTransparency = 0
 	NG169.TextWrapped = true
@@ -6187,13 +6417,13 @@ do
 	NG170.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG170.BackgroundTransparency = 1
 	NG170.BorderSizePixel = 0
-	NG170.Name = dCD("Gvgyr")
+	NG170.Name = "Title"
 	NG170.Size = UDim2.new(1, 0, 0, 20)
 	NG170.Parent = NG156
 	NG171 = Instance.new("Frame")
 	NG171.BackgroundColor3 = Color3.new(0.0156863, 0.686275, 0.92549)
 	NG171.BorderSizePixel = 0
-	NG171.Name = dCD("PbybeOne")
+	NG171.Name = "ColorBar"
 	NG171.Position = UDim2.new(0, 5, 0, -3)
 	NG171.Size = UDim2.new(1, -5, 0, 2)
 	NG171.Parent = NG170
@@ -6201,12 +6431,12 @@ do
 	NG172.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG172.BackgroundTransparency = 1
 	NG172.BorderSizePixel = 0
-	NG172.Name = dCD("Ynory")
+	NG172.Name = "Label"
 	NG172.Position = UDim2.new(0, 10, 0, 1)
 	NG172.Size = UDim2.new(1, -10, 1, 0)
 	NG172.Font = Enum.Font.ArialBold
 	NG172.FontSize = Enum.FontSize.Size10
-	NG172.Text = dCD("ERFVMR GBBY")
+	NG172.Text = "RESIZE TOOL"
 	NG172.TextColor3 = Color3.new(1, 1, 1)
 	NG172.TextStrokeTransparency = 0
 	NG172.TextWrapped = true
@@ -6216,12 +6446,12 @@ do
 	NG173.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG173.BackgroundTransparency = 1
 	NG173.BorderSizePixel = 0
-	NG173.Name = dCD("S3KFvtangher")
+	NG173.Name = "F3XSignature"
 	NG173.Position = UDim2.new(0, 10, 0, 1)
 	NG173.Size = UDim2.new(1, -10, 1, 0)
 	NG173.Font = Enum.Font.ArialBold
 	NG173.FontSize = Enum.FontSize.Size14
-	NG173.Text = dCD("S3K")
+	NG173.Text = "F3X"
 	NG173.TextColor3 = Color3.new(1, 1, 1)
 	NG173.TextStrokeTransparency = 0.89999997615814
 	NG173.TextWrapped = true
@@ -6231,7 +6461,7 @@ do
 	NG174.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG174.BackgroundTransparency = 1
 	NG174.BorderSizePixel = 0
-	NG174.Name = dCD("VaperzragBcgvba")
+	NG174.Name = "IncrementOption"
 	NG174.Position = UDim2.new(0, 0, 0, 65)
 	NG174.Size = UDim2.new(0, 0, 0, 0)
 	NG174.Parent = NG156
@@ -6239,13 +6469,13 @@ do
 	NG175.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG175.BackgroundTransparency = 1
 	NG175.BorderSizePixel = 0
-	NG175.Name = dCD("Vaperzrag")
+	NG175.Name = "Increment"
 	NG175.Position = UDim2.new(0, 70, 0, 0)
 	NG175.Size = UDim2.new(0, 50, 0, 25)
 	NG175.Parent = NG174
 	NG176 = Instance.new("Frame")
 	NG176.BorderSizePixel = 0
-	NG176.Name = dCD("FryrpgrqVaqvpngbe")
+	NG176.Name = "SelectedIndicator"
 	NG176.Position = UDim2.new(0, 5, 0, -2)
 	NG176.Size = UDim2.new(1, -4, 0, 2)
 	NG176.Parent = NG175
@@ -6258,7 +6488,7 @@ do
 	NG177.ZIndex = 2
 	NG177.Font = Enum.Font.ArialBold
 	NG177.FontSize = Enum.FontSize.Size10
-	NG177.Text = dCD("1")
+	NG177.Text = "1"
 	NG177.TextColor3 = Color3.new(1, 1, 1)
 	NG177.Parent = NG175
 	NG178 = Instance.new("ImageLabel")
@@ -6266,16 +6496,16 @@ do
 	NG178.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG178.BackgroundTransparency = 1
 	NG178.BorderSizePixel = 0
-	NG178.Name = dCD("Onpxtebhaq")
+	NG178.Name = "Background"
 	NG178.Selectable = false
 	NG178.Size = UDim2.new(1, 0, 1, 0)
-	NG178.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG178.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG178.Parent = NG175
 	NG179 = Instance.new("Frame")
 	NG179.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG179.BackgroundTransparency = 1
 	NG179.BorderSizePixel = 0
-	NG179.Name = dCD("Ynory")
+	NG179.Name = "Label"
 	NG179.Size = UDim2.new(0, 75, 0, 25)
 	NG179.Parent = NG174
 	NG180 = Instance.new("TextLabel")
@@ -6285,7 +6515,7 @@ do
 	NG180.Size = UDim2.new(1, 0, 1, 0)
 	NG180.Font = Enum.Font.ArialBold
 	NG180.FontSize = Enum.FontSize.Size10
-	NG180.Text = dCD("Vaperzrag")
+	NG180.Text = "Increment"
 	NG180.TextColor3 = Color3.new(1, 1, 1)
 	NG180.TextStrokeTransparency = 0
 	NG180.TextWrapped = true
@@ -6294,7 +6524,7 @@ do
 	NG181.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG181.BackgroundTransparency = 1
 	NG181.BorderSizePixel = 0
-	NG181.Name = dCD("Vasb")
+	NG181.Name = "Info"
 	NG181.Position = UDim2.new(0, 5, 0, 100)
 	NG181.Size = UDim2.new(1, -5, 0, 60)
 	NG181.Visible = false
@@ -6302,19 +6532,19 @@ do
 	NG182 = Instance.new("Frame")
 	NG182.BackgroundColor3 = Color3.new(0.0156863, 0.686275, 0.92549)
 	NG182.BorderSizePixel = 0
-	NG182.Name = dCD("PbybeOne")
+	NG182.Name = "ColorBar"
 	NG182.Size = UDim2.new(1, 0, 0, 2)
 	NG182.Parent = NG181
 	NG183 = Instance.new("TextLabel")
 	NG183.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG183.BackgroundTransparency = 1
 	NG183.BorderSizePixel = 0
-	NG183.Name = dCD("Ynory")
+	NG183.Name = "Label"
 	NG183.Position = UDim2.new(0, 10, 0, 2)
 	NG183.Size = UDim2.new(1, -10, 0, 20)
 	NG183.Font = Enum.Font.ArialBold
 	NG183.FontSize = Enum.FontSize.Size10
-	NG183.Text = dCD("FRYRPGVBA VASB")
+	NG183.Text = "SELECTION INFO"
 	NG183.TextColor3 = Color3.new(1, 1, 1)
 	NG183.TextStrokeTransparency = 0
 	NG183.TextWrapped = true
@@ -6324,7 +6554,7 @@ do
 	NG184.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG184.BackgroundTransparency = 1
 	NG184.BorderSizePixel = 0
-	NG184.Name = dCD("FvmrVasb")
+	NG184.Name = "SizeInfo"
 	NG184.Position = UDim2.new(0, 0, 0, 30)
 	NG184.Size = UDim2.new(0, 0, 0, 0)
 	NG184.Parent = NG181
@@ -6335,7 +6565,7 @@ do
 	NG185.Size = UDim2.new(0, 75, 0, 25)
 	NG185.Font = Enum.Font.ArialBold
 	NG185.FontSize = Enum.FontSize.Size10
-	NG185.Text = dCD("Fvmr")
+	NG185.Text = "Size"
 	NG185.TextColor3 = Color3.new(1, 1, 1)
 	NG185.TextStrokeTransparency = 0
 	NG185.TextWrapped = true
@@ -6344,7 +6574,7 @@ do
 	NG186.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG186.BackgroundTransparency = 1
 	NG186.BorderSizePixel = 0
-	NG186.Name = dCD("K")
+	NG186.Name = "X"
 	NG186.Position = UDim2.new(0, 70, 0, 0)
 	NG186.Size = UDim2.new(0, 50, 0, 25)
 	NG186.Parent = NG184
@@ -6357,7 +6587,7 @@ do
 	NG187.ZIndex = 2
 	NG187.Font = Enum.Font.ArialBold
 	NG187.FontSize = Enum.FontSize.Size10
-	NG187.Text = dCD("")
+	NG187.Text = ""
 	NG187.TextColor3 = Color3.new(1, 1, 1)
 	NG187.Parent = NG186
 	NG188 = Instance.new("TextButton")
@@ -6372,23 +6602,23 @@ do
 	NG188.ZIndex = 3
 	NG188.Font = Enum.Font.Legacy
 	NG188.FontSize = Enum.FontSize.Size8
-	NG188.Text = dCD("")
+	NG188.Text = ""
 	NG188.Parent = NG186
 	NG189 = Instance.new("ImageLabel")
 	NG189.Active = false
 	NG189.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG189.BackgroundTransparency = 1
 	NG189.BorderSizePixel = 0
-	NG189.Name = dCD("Onpxtebhaq")
+	NG189.Name = "Background"
 	NG189.Selectable = false
 	NG189.Size = UDim2.new(1, 0, 1, 0)
-	NG189.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG189.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG189.Parent = NG186
 	NG190 = Instance.new("Frame")
 	NG190.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG190.BackgroundTransparency = 1
 	NG190.BorderSizePixel = 0
-	NG190.Name = dCD("L")
+	NG190.Name = "Y"
 	NG190.Position = UDim2.new(0, 117, 0, 0)
 	NG190.Size = UDim2.new(0, 50, 0, 25)
 	NG190.Parent = NG184
@@ -6401,7 +6631,7 @@ do
 	NG191.ZIndex = 2
 	NG191.Font = Enum.Font.ArialBold
 	NG191.FontSize = Enum.FontSize.Size10
-	NG191.Text = dCD("")
+	NG191.Text = ""
 	NG191.TextColor3 = Color3.new(1, 1, 1)
 	NG191.Parent = NG190
 	NG192 = Instance.new("TextButton")
@@ -6416,23 +6646,23 @@ do
 	NG192.ZIndex = 3
 	NG192.Font = Enum.Font.Legacy
 	NG192.FontSize = Enum.FontSize.Size8
-	NG192.Text = dCD("")
+	NG192.Text = ""
 	NG192.Parent = NG190
 	NG193 = Instance.new("ImageLabel")
 	NG193.Active = false
 	NG193.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG193.BackgroundTransparency = 1
 	NG193.BorderSizePixel = 0
-	NG193.Name = dCD("Onpxtebhaq")
+	NG193.Name = "Background"
 	NG193.Selectable = false
 	NG193.Size = UDim2.new(1, 0, 1, 0)
-	NG193.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG193.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG193.Parent = NG190
 	NG194 = Instance.new("Frame")
 	NG194.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG194.BackgroundTransparency = 1
 	NG194.BorderSizePixel = 0
-	NG194.Name = dCD("M")
+	NG194.Name = "Z"
 	NG194.Position = UDim2.new(0, 164, 0, 0)
 	NG194.Size = UDim2.new(0, 50, 0, 25)
 	NG194.Parent = NG184
@@ -6445,7 +6675,7 @@ do
 	NG195.ZIndex = 2
 	NG195.Font = Enum.Font.ArialBold
 	NG195.FontSize = Enum.FontSize.Size10
-	NG195.Text = dCD("")
+	NG195.Text = ""
 	NG195.TextColor3 = Color3.new(1, 1, 1)
 	NG195.Parent = NG194
 	NG196 = Instance.new("TextButton")
@@ -6460,42 +6690,42 @@ do
 	NG196.ZIndex = 3
 	NG196.Font = Enum.Font.Legacy
 	NG196.FontSize = Enum.FontSize.Size8
-	NG196.Text = dCD("")
+	NG196.Text = ""
 	NG196.Parent = NG194
 	NG197 = Instance.new("ImageLabel")
 	NG197.Active = false
 	NG197.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG197.BackgroundTransparency = 1
 	NG197.BorderSizePixel = 0
-	NG197.Name = dCD("Onpxtebhaq")
+	NG197.Name = "Background"
 	NG197.Selectable = false
 	NG197.Size = UDim2.new(1, 0, 1, 0)
-	NG197.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG197.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG197.Parent = NG194
 	NG198 = Instance.new("Frame")
 	NG198.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG198.BackgroundTransparency = 1
 	NG198.BorderSizePixel = 0
-	NG198.Name = dCD("Punatrf")
+	NG198.Name = "Changes"
 	NG198.Position = UDim2.new(0, 5, 0, 100)
 	NG198.Size = UDim2.new(1, -5, 0, 20)
 	NG198.Parent = NG156
 	NG199 = Instance.new("Frame")
 	NG199.BackgroundColor3 = Color3.new(0.0156863, 0.686275, 0.92549)
 	NG199.BorderSizePixel = 0
-	NG199.Name = dCD("PbybeOne")
+	NG199.Name = "ColorBar"
 	NG199.Size = UDim2.new(1, 0, 0, 2)
 	NG199.Parent = NG198
 	NG200 = Instance.new("TextLabel")
 	NG200.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG200.BackgroundTransparency = 1
 	NG200.BorderSizePixel = 0
-	NG200.Name = dCD("Grkg")
+	NG200.Name = "Text"
 	NG200.Position = UDim2.new(0, 10, 0, 2)
 	NG200.Size = UDim2.new(1, -10, 0, 20)
 	NG200.Font = Enum.Font.ArialBold
 	NG200.FontSize = Enum.FontSize.Size10
-	NG200.Text = dCD("erfvmrq 0 fghqf")
+	NG200.Text = "resized 0 studs"
 	NG200.TextColor3 = Color3.new(1, 1, 1)
 	NG200.TextStrokeTransparency = 0.5
 	NG200.TextWrapped = true
@@ -6506,7 +6736,7 @@ do
 	NG201.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG201.BackgroundTransparency = 1
 	NG201.BorderSizePixel = 0
-	NG201.Name = dCD("OGFhesnprGbbyTHV")
+	NG201.Name = "BTSurfaceToolGUI"
 	NG201.Position = UDim2.new(0, 0, 0, 172)
 	NG201.Size = UDim2.new(0, 245, 0, 90)
 	NG201.Draggable = true
@@ -6515,13 +6745,13 @@ do
 	NG202.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG202.BackgroundTransparency = 1
 	NG202.BorderSizePixel = 0
-	NG202.Name = dCD("Gvgyr")
+	NG202.Name = "Title"
 	NG202.Size = UDim2.new(1, 0, 0, 20)
 	NG202.Parent = NG201
 	NG203 = Instance.new("Frame")
 	NG203.BackgroundColor3 = Color3.new(0.419608, 0.196078, 0.486275)
 	NG203.BorderSizePixel = 0
-	NG203.Name = dCD("PbybeOne")
+	NG203.Name = "ColorBar"
 	NG203.Position = UDim2.new(0, 5, 0, -3)
 	NG203.Size = UDim2.new(1, -5, 0, 2)
 	NG203.Parent = NG202
@@ -6529,12 +6759,12 @@ do
 	NG204.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG204.BackgroundTransparency = 1
 	NG204.BorderSizePixel = 0
-	NG204.Name = dCD("Ynory")
+	NG204.Name = "Label"
 	NG204.Position = UDim2.new(0, 10, 0, 1)
 	NG204.Size = UDim2.new(1, -10, 1, 0)
 	NG204.Font = Enum.Font.ArialBold
 	NG204.FontSize = Enum.FontSize.Size10
-	NG204.Text = dCD("FHESNPR GBBY")
+	NG204.Text = "SURFACE TOOL"
 	NG204.TextColor3 = Color3.new(1, 1, 1)
 	NG204.TextStrokeTransparency = 0
 	NG204.TextWrapped = true
@@ -6544,12 +6774,12 @@ do
 	NG205.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG205.BackgroundTransparency = 1
 	NG205.BorderSizePixel = 0
-	NG205.Name = dCD("S3KFvtangher")
+	NG205.Name = "F3XSignature"
 	NG205.Position = UDim2.new(0, 10, 0, 1)
 	NG205.Size = UDim2.new(1, -10, 1, 0)
 	NG205.Font = Enum.Font.ArialBold
 	NG205.FontSize = Enum.FontSize.Size14
-	NG205.Text = dCD("S3K")
+	NG205.Text = "F3X"
 	NG205.TextColor3 = Color3.new(1, 1, 1)
 	NG205.TextStrokeTransparency = 0.89999997615814
 	NG205.TextWrapped = true
@@ -6559,7 +6789,7 @@ do
 	NG206.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG206.BackgroundTransparency = 1
 	NG206.BorderSizePixel = 0
-	NG206.Name = dCD("FvqrBcgvba")
+	NG206.Name = "SideOption"
 	NG206.Position = UDim2.new(0, 14, 0, 30)
 	NG206.Size = UDim2.new(0, 120, 0, 25)
 	NG206.Parent = NG201
@@ -6567,11 +6797,11 @@ do
 	NG207.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG207.BackgroundTransparency = 1
 	NG207.BorderSizePixel = 0
-	NG207.Name = dCD("Ynory")
+	NG207.Name = "Label"
 	NG207.Size = UDim2.new(0, 40, 0, 25)
 	NG207.Font = Enum.Font.ArialBold
 	NG207.FontSize = Enum.FontSize.Size10
-	NG207.Text = dCD("Fvqr")
+	NG207.Text = "Side"
 	NG207.TextColor3 = Color3.new(1, 1, 1)
 	NG207.TextStrokeTransparency = 0
 	NG207.TextWrapped = true
@@ -6581,7 +6811,7 @@ do
 	NG208.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG208.BackgroundTransparency = 1
 	NG208.BorderSizePixel = 0
-	NG208.Name = dCD("GlcrBcgvba")
+	NG208.Name = "TypeOption"
 	NG208.Position = UDim2.new(0, 124, 0, 30)
 	NG208.Size = UDim2.new(0, 120, 0, 25)
 	NG208.Parent = NG201
@@ -6589,11 +6819,11 @@ do
 	NG209.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG209.BackgroundTransparency = 1
 	NG209.BorderSizePixel = 0
-	NG209.Name = dCD("Ynory")
+	NG209.Name = "Label"
 	NG209.Size = UDim2.new(0, 40, 0, 25)
 	NG209.Font = Enum.Font.ArialBold
 	NG209.FontSize = Enum.FontSize.Size10
-	NG209.Text = dCD("Glcr")
+	NG209.Text = "Type"
 	NG209.TextColor3 = Color3.new(1, 1, 1)
 	NG209.TextStrokeTransparency = 0
 	NG209.TextWrapped = true
@@ -6603,26 +6833,26 @@ do
 	NG210.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG210.BackgroundTransparency = 1
 	NG210.BorderSizePixel = 0
-	NG210.Name = dCD("Gvc")
+	NG210.Name = "Tip"
 	NG210.Position = UDim2.new(0, 5, 0, 70)
 	NG210.Size = UDim2.new(1, -5, 0, 20)
 	NG210.Parent = NG201
 	NG211 = Instance.new("Frame")
 	NG211.BackgroundColor3 = Color3.new(0.419608, 0.196078, 0.486275)
 	NG211.BorderSizePixel = 0
-	NG211.Name = dCD("PbybeOne")
+	NG211.Name = "ColorBar"
 	NG211.Size = UDim2.new(1, 0, 0, 2)
 	NG211.Parent = NG210
 	NG212 = Instance.new("TextLabel")
 	NG212.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG212.BackgroundTransparency = 1
 	NG212.BorderSizePixel = 0
-	NG212.Name = dCD("Grkg")
+	NG212.Name = "Text"
 	NG212.Position = UDim2.new(0, 6, 0, 2)
 	NG212.Size = UDim2.new(1, -6, 0, 20)
 	NG212.Font = Enum.Font.ArialBold
 	NG212.FontSize = Enum.FontSize.Size10
-	NG212.Text = dCD("GVC: Fryrpg n cneg naq evtug pyvpx ba n fhesnpr")
+	NG212.Text = "TIP: Select a part and right click on a surface"
 	NG212.TextColor3 = Color3.new(1, 1, 1)
 	NG212.TextStrokeTransparency = 0.5
 	NG212.TextWrapped = true
@@ -6633,7 +6863,7 @@ do
 	NG213.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG213.BackgroundTransparency = 1
 	NG213.BorderSizePixel = 0
-	NG213.Name = dCD("OGGrkgherGbbyTHV")
+	NG213.Name = "BTTextureToolGUI"
 	NG213.Position = UDim2.new(0, 0, 0, 172)
 	NG213.Size = UDim2.new(0, 200, 0, 205)
 	NG213.Draggable = true
@@ -6642,13 +6872,13 @@ do
 	NG214.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG214.BackgroundTransparency = 1
 	NG214.BorderSizePixel = 0
-	NG214.Name = dCD("Gvgyr")
+	NG214.Name = "Title"
 	NG214.Size = UDim2.new(1, 0, 0, 20)
 	NG214.Parent = NG213
 	NG215 = Instance.new("Frame")
 	NG215.BackgroundColor3 = Color3.new(0.419608, 0.196078, 0.486275)
 	NG215.BorderSizePixel = 0
-	NG215.Name = dCD("PbybeOne")
+	NG215.Name = "ColorBar"
 	NG215.Position = UDim2.new(0, 5, 0, -3)
 	NG215.Size = UDim2.new(1, -5, 0, 2)
 	NG215.Parent = NG214
@@ -6656,12 +6886,12 @@ do
 	NG216.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG216.BackgroundTransparency = 1
 	NG216.BorderSizePixel = 0
-	NG216.Name = dCD("Ynory")
+	NG216.Name = "Label"
 	NG216.Position = UDim2.new(0, 10, 0, 1)
 	NG216.Size = UDim2.new(1, -10, 1, 0)
 	NG216.Font = Enum.Font.ArialBold
 	NG216.FontSize = Enum.FontSize.Size10
-	NG216.Text = dCD("GRKGHER GBBY")
+	NG216.Text = "TEXTURE TOOL"
 	NG216.TextColor3 = Color3.new(1, 1, 1)
 	NG216.TextStrokeTransparency = 0
 	NG216.TextWrapped = true
@@ -6671,12 +6901,12 @@ do
 	NG217.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG217.BackgroundTransparency = 1
 	NG217.BorderSizePixel = 0
-	NG217.Name = dCD("S3KFvtangher")
+	NG217.Name = "F3XSignature"
 	NG217.Position = UDim2.new(0, 10, 0, 1)
 	NG217.Size = UDim2.new(1, -10, 1, 0)
 	NG217.Font = Enum.Font.ArialBold
 	NG217.FontSize = Enum.FontSize.Size14
-	NG217.Text = dCD("S3K")
+	NG217.Text = "F3X"
 	NG217.TextColor3 = Color3.new(1, 1, 1)
 	NG217.TextStrokeTransparency = 0.89999997615814
 	NG217.TextWrapped = true
@@ -6686,7 +6916,7 @@ do
 	NG218.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG218.BackgroundTransparency = 1
 	NG218.BorderSizePixel = 0
-	NG218.Name = dCD("FvqrBcgvba")
+	NG218.Name = "SideOption"
 	NG218.Position = UDim2.new(0, 14, 0, 65)
 	NG218.Size = UDim2.new(1, -14, 0, 25)
 	NG218.Parent = NG213
@@ -6694,11 +6924,11 @@ do
 	NG219.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG219.BackgroundTransparency = 1
 	NG219.BorderSizePixel = 0
-	NG219.Name = dCD("Ynory")
+	NG219.Name = "Label"
 	NG219.Size = UDim2.new(0, 30, 0, 25)
 	NG219.Font = Enum.Font.ArialBold
 	NG219.FontSize = Enum.FontSize.Size10
-	NG219.Text = dCD("Fvqr")
+	NG219.Text = "Side"
 	NG219.TextColor3 = Color3.new(1, 1, 1)
 	NG219.TextStrokeTransparency = 0
 	NG219.TextWrapped = true
@@ -6708,7 +6938,7 @@ do
 	NG220.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG220.BackgroundTransparency = 1
 	NG220.BorderSizePixel = 0
-	NG220.Name = dCD("ErcrngBcgvba")
+	NG220.Name = "RepeatOption"
 	NG220.Position = UDim2.new(0, 0, 0, 205)
 	NG220.Size = UDim2.new(0, 0, 0, 0)
 	NG220.Visible = false
@@ -6717,12 +6947,12 @@ do
 	NG221.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG221.BackgroundTransparency = 1
 	NG221.BorderSizePixel = 0
-	NG221.Name = dCD("Ynory")
+	NG221.Name = "Label"
 	NG221.Position = UDim2.new(0, 14, 0, 0)
 	NG221.Size = UDim2.new(0, 70, 0, 25)
 	NG221.Font = Enum.Font.ArialBold
 	NG221.FontSize = Enum.FontSize.Size10
-	NG221.Text = dCD("Ercrng")
+	NG221.Text = "Repeat"
 	NG221.TextColor3 = Color3.new(1, 1, 1)
 	NG221.TextStrokeTransparency = 0
 	NG221.TextWrapped = true
@@ -6732,7 +6962,7 @@ do
 	NG222.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG222.BackgroundTransparency = 1
 	NG222.BorderSizePixel = 0
-	NG222.Name = dCD("KVachg")
+	NG222.Name = "XInput"
 	NG222.Position = UDim2.new(0, 60, 0, 0)
 	NG222.Size = UDim2.new(0, 45, 0, 25)
 	NG222.Parent = NG220
@@ -6748,21 +6978,21 @@ do
 	NG223.ZIndex = 2
 	NG223.Font = Enum.Font.Legacy
 	NG223.FontSize = Enum.FontSize.Size8
-	NG223.Text = dCD("")
+	NG223.Text = ""
 	NG223.Parent = NG222
 	NG224 = Instance.new("ImageLabel")
 	NG224.Active = false
 	NG224.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG224.BackgroundTransparency = 1
 	NG224.BorderSizePixel = 0
-	NG224.Name = dCD("Onpxtebhaq")
+	NG224.Name = "Background"
 	NG224.Selectable = false
 	NG224.Size = UDim2.new(1, 0, 1, 0)
-	NG224.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG224.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG224.Parent = NG222
 	NG225 = Instance.new("Frame")
 	NG225.BorderSizePixel = 0
-	NG225.Name = dCD("FryrpgrqVaqvpngbe")
+	NG225.Name = "SelectedIndicator"
 	NG225.Position = UDim2.new(0, 5, 0, -2)
 	NG225.Size = UDim2.new(1, -4, 0, 2)
 	NG225.Parent = NG222
@@ -6774,14 +7004,14 @@ do
 	NG226.Size = UDim2.new(1, -10, 1, 0)
 	NG226.Font = Enum.Font.ArialBold
 	NG226.FontSize = Enum.FontSize.Size10
-	NG226.Text = dCD("2")
+	NG226.Text = "2"
 	NG226.TextColor3 = Color3.new(1, 1, 1)
 	NG226.Parent = NG222
 	NG227 = Instance.new("Frame")
 	NG227.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG227.BackgroundTransparency = 1
 	NG227.BorderSizePixel = 0
-	NG227.Name = dCD("LVachg")
+	NG227.Name = "YInput"
 	NG227.Position = UDim2.new(0, 105, 0, 0)
 	NG227.Size = UDim2.new(0, 45, 0, 25)
 	NG227.Parent = NG220
@@ -6797,21 +7027,21 @@ do
 	NG228.ZIndex = 2
 	NG228.Font = Enum.Font.Legacy
 	NG228.FontSize = Enum.FontSize.Size8
-	NG228.Text = dCD("")
+	NG228.Text = ""
 	NG228.Parent = NG227
 	NG229 = Instance.new("ImageLabel")
 	NG229.Active = false
 	NG229.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG229.BackgroundTransparency = 1
 	NG229.BorderSizePixel = 0
-	NG229.Name = dCD("Onpxtebhaq")
+	NG229.Name = "Background"
 	NG229.Selectable = false
 	NG229.Size = UDim2.new(1, 0, 1, 0)
-	NG229.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG229.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG229.Parent = NG227
 	NG230 = Instance.new("Frame")
 	NG230.BorderSizePixel = 0
-	NG230.Name = dCD("FryrpgrqVaqvpngbe")
+	NG230.Name = "SelectedIndicator"
 	NG230.Position = UDim2.new(0, 5, 0, -2)
 	NG230.Size = UDim2.new(1, -4, 0, 2)
 	NG230.Parent = NG227
@@ -6823,13 +7053,13 @@ do
 	NG231.Size = UDim2.new(1, -10, 1, 0)
 	NG231.Font = Enum.Font.ArialBold
 	NG231.FontSize = Enum.FontSize.Size10
-	NG231.Text = dCD("2")
+	NG231.Text = "2"
 	NG231.TextColor3 = Color3.new(1, 1, 1)
 	NG231.Parent = NG227
 	NG232 = Instance.new("Frame")
 	NG232.BackgroundColor3 = Color3.new(0.419608, 0.196078, 0.486275)
 	NG232.BorderSizePixel = 0
-	NG232.Name = dCD("ObggbzPbybeOne")
+	NG232.Name = "BottomColorBar"
 	NG232.Position = UDim2.new(0, 5, 1, -2)
 	NG232.Size = UDim2.new(1, 0, 0, 2)
 	NG232.Parent = NG213
@@ -6837,7 +7067,7 @@ do
 	NG233.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG233.BackgroundTransparency = 1
 	NG233.BorderSizePixel = 0
-	NG233.Name = dCD("GenafcneraplBcgvba")
+	NG233.Name = "TransparencyOption"
 	NG233.Position = UDim2.new(0, 14, 0, 135)
 	NG233.Size = UDim2.new(1, 0, 0, 25)
 	NG233.Parent = NG213
@@ -6845,11 +7075,11 @@ do
 	NG234.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG234.BackgroundTransparency = 1
 	NG234.BorderSizePixel = 0
-	NG234.Name = dCD("Ynory")
+	NG234.Name = "Label"
 	NG234.Size = UDim2.new(0, 70, 0, 25)
 	NG234.Font = Enum.Font.ArialBold
 	NG234.FontSize = Enum.FontSize.Size10
-	NG234.Text = dCD("Genafcnerapl")
+	NG234.Text = "Transparency"
 	NG234.TextColor3 = Color3.new(1, 1, 1)
 	NG234.TextStrokeTransparency = 0
 	NG234.TextWrapped = true
@@ -6859,7 +7089,7 @@ do
 	NG235.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG235.BackgroundTransparency = 1
 	NG235.BorderSizePixel = 0
-	NG235.Name = dCD("GenafcneraplVachg")
+	NG235.Name = "TransparencyInput"
 	NG235.Position = UDim2.new(0, 75, 0, 0)
 	NG235.Size = UDim2.new(0, 45, 0, 25)
 	NG235.Parent = NG233
@@ -6875,21 +7105,21 @@ do
 	NG236.ZIndex = 2
 	NG236.Font = Enum.Font.Legacy
 	NG236.FontSize = Enum.FontSize.Size8
-	NG236.Text = dCD("")
+	NG236.Text = ""
 	NG236.Parent = NG235
 	NG237 = Instance.new("ImageLabel")
 	NG237.Active = false
 	NG237.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG237.BackgroundTransparency = 1
 	NG237.BorderSizePixel = 0
-	NG237.Name = dCD("Onpxtebhaq")
+	NG237.Name = "Background"
 	NG237.Selectable = false
 	NG237.Size = UDim2.new(1, 0, 1, 0)
-	NG237.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG237.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG237.Parent = NG235
 	NG238 = Instance.new("Frame")
 	NG238.BorderSizePixel = 0
-	NG238.Name = dCD("FryrpgrqVaqvpngbe")
+	NG238.Name = "SelectedIndicator"
 	NG238.Position = UDim2.new(0, 5, 0, -2)
 	NG238.Size = UDim2.new(1, -4, 0, 2)
 	NG238.Parent = NG235
@@ -6901,14 +7131,14 @@ do
 	NG239.Size = UDim2.new(1, -10, 1, 0)
 	NG239.Font = Enum.Font.ArialBold
 	NG239.FontSize = Enum.FontSize.Size10
-	NG239.Text = dCD("0")
+	NG239.Text = "0"
 	NG239.TextColor3 = Color3.new(1, 1, 1)
 	NG239.Parent = NG235
 	NG240 = Instance.new("Frame")
 	NG240.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG240.BackgroundTransparency = 1
 	NG240.BorderSizePixel = 0
-	NG240.Name = dCD("ZbqrBcgvba")
+	NG240.Name = "ModeOption"
 	NG240.Position = UDim2.new(0, 0, 0, 30)
 	NG240.Size = UDim2.new(0, 0, 0, 0)
 	NG240.Parent = NG213
@@ -6916,12 +7146,12 @@ do
 	NG241.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG241.BackgroundTransparency = 1
 	NG241.BorderSizePixel = 0
-	NG241.Name = dCD("Ynory")
+	NG241.Name = "Label"
 	NG241.Position = UDim2.new(0, 14, 0, 0)
 	NG241.Size = UDim2.new(0, 40, 0, 25)
 	NG241.Font = Enum.Font.ArialBold
 	NG241.FontSize = Enum.FontSize.Size10
-	NG241.Text = dCD("Zbqr")
+	NG241.Text = "Mode"
 	NG241.TextColor3 = Color3.new(1, 1, 1)
 	NG241.TextStrokeTransparency = 0
 	NG241.TextWrapped = true
@@ -6931,13 +7161,13 @@ do
 	NG242.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG242.BackgroundTransparency = 1
 	NG242.BorderSizePixel = 0
-	NG242.Name = dCD("Qrpny")
+	NG242.Name = "Decal"
 	NG242.Position = UDim2.new(0, 55, 0, 0)
 	NG242.Size = UDim2.new(0, 70, 0, 25)
 	NG242.Parent = NG240
 	NG243 = Instance.new("Frame")
 	NG243.BorderSizePixel = 0
-	NG243.Name = dCD("FryrpgrqVaqvpngbe")
+	NG243.Name = "SelectedIndicator"
 	NG243.Position = UDim2.new(0, 7, 0, -2)
 	NG243.Size = UDim2.new(1, -7, 0, 2)
 	NG243.Parent = NG242
@@ -6946,7 +7176,7 @@ do
 	NG244.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG244.BackgroundTransparency = 1
 	NG244.BorderSizePixel = 0
-	NG244.Name = dCD("Ohggba")
+	NG244.Name = "Button"
 	NG244.Position = UDim2.new(0, 5, 0, 0)
 	NG244.Selectable = true
 	NG244.Size = UDim2.new(1, -10, 1, 0)
@@ -6954,7 +7184,7 @@ do
 	NG244.ZIndex = 2
 	NG244.Font = Enum.Font.Legacy
 	NG244.FontSize = Enum.FontSize.Size8
-	NG244.Text = dCD("")
+	NG244.Text = ""
 	NG244.TextTransparency = 1
 	NG244.Parent = NG242
 	NG245 = Instance.new("ImageLabel")
@@ -6962,27 +7192,27 @@ do
 	NG245.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG245.BackgroundTransparency = 1
 	NG245.BorderSizePixel = 0
-	NG245.Name = dCD("Onpxtebhaq")
+	NG245.Name = "Background"
 	NG245.Selectable = false
 	NG245.Size = UDim2.new(1, 0, 1, 0)
-	NG245.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG245.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG245.Parent = NG242
 	NG246 = Instance.new("TextLabel")
 	NG246.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG246.BackgroundTransparency = 1
 	NG246.BorderSizePixel = 0
-	NG246.Name = dCD("Ynory")
+	NG246.Name = "Label"
 	NG246.Size = UDim2.new(1, 0, 1, 0)
 	NG246.Font = Enum.Font.ArialBold
 	NG246.FontSize = Enum.FontSize.Size10
-	NG246.Text = dCD("QRPNY")
+	NG246.Text = "DECAL"
 	NG246.TextColor3 = Color3.new(1, 1, 1)
 	NG246.Parent = NG242
 	NG247 = Instance.new("Frame")
 	NG247.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG247.BackgroundTransparency = 1
 	NG247.BorderSizePixel = 0
-	NG247.Name = dCD("Grkgher")
+	NG247.Name = "Texture"
 	NG247.Position = UDim2.new(0, 122, 0, 0)
 	NG247.Size = UDim2.new(0, 70, 0, 25)
 	NG247.Parent = NG240
@@ -6991,7 +7221,7 @@ do
 	NG248.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG248.BackgroundTransparency = 1
 	NG248.BorderSizePixel = 0
-	NG248.Name = dCD("Ohggba")
+	NG248.Name = "Button"
 	NG248.Position = UDim2.new(0, 5, 0, 0)
 	NG248.Selectable = true
 	NG248.Size = UDim2.new(1, -10, 1, 0)
@@ -6999,7 +7229,7 @@ do
 	NG248.ZIndex = 2
 	NG248.Font = Enum.Font.Legacy
 	NG248.FontSize = Enum.FontSize.Size8
-	NG248.Text = dCD("")
+	NG248.Text = ""
 	NG248.TextTransparency = 1
 	NG248.Parent = NG247
 	NG249 = Instance.new("ImageLabel")
@@ -7007,26 +7237,26 @@ do
 	NG249.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG249.BackgroundTransparency = 1
 	NG249.BorderSizePixel = 0
-	NG249.Name = dCD("Onpxtebhaq")
+	NG249.Name = "Background"
 	NG249.Selectable = false
 	NG249.Size = UDim2.new(1, 0, 1, 0)
-	NG249.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG249.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG249.Parent = NG247
 	NG250 = Instance.new("TextLabel")
 	NG250.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG250.BackgroundTransparency = 1
 	NG250.BorderSizePixel = 0
-	NG250.Name = dCD("Ynory")
+	NG250.Name = "Label"
 	NG250.Size = UDim2.new(1, 0, 1, 0)
 	NG250.Font = Enum.Font.ArialBold
 	NG250.FontSize = Enum.FontSize.Size10
-	NG250.Text = dCD("GRKGHER")
+	NG250.Text = "TEXTURE"
 	NG250.TextColor3 = Color3.new(1, 1, 1)
 	NG250.Parent = NG247
 	NG251 = Instance.new("Frame")
 	NG251.BackgroundTransparency = 1
 	NG251.BorderSizePixel = 0
-	NG251.Name = dCD("FryrpgrqVaqvpngbe")
+	NG251.Name = "SelectedIndicator"
 	NG251.Position = UDim2.new(0, 7, 0, -2)
 	NG251.Size = UDim2.new(1, -7, 0, 2)
 	NG251.Parent = NG247
@@ -7034,7 +7264,7 @@ do
 	NG252.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG252.BackgroundTransparency = 1
 	NG252.BorderSizePixel = 0
-	NG252.Name = dCD("VzntrVQBcgvba")
+	NG252.Name = "ImageIDOption"
 	NG252.Position = UDim2.new(0, 14, 0, 100)
 	NG252.Size = UDim2.new(1, 0, 0, 25)
 	NG252.Parent = NG213
@@ -7042,11 +7272,11 @@ do
 	NG253.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG253.BackgroundTransparency = 1
 	NG253.BorderSizePixel = 0
-	NG253.Name = dCD("Ynory")
+	NG253.Name = "Label"
 	NG253.Size = UDim2.new(0, 70, 0, 25)
 	NG253.Font = Enum.Font.ArialBold
 	NG253.FontSize = Enum.FontSize.Size10
-	NG253.Text = dCD("Vzntr VQ")
+	NG253.Text = "Image ID"
 	NG253.TextColor3 = Color3.new(1, 1, 1)
 	NG253.TextStrokeTransparency = 0
 	NG253.TextWrapped = true
@@ -7055,27 +7285,27 @@ do
 	NG254 = Instance.new("Frame")
 	NG254.BackgroundTransparency = 1
 	NG254.BorderSizePixel = 0
-	NG254.Name = dCD("GrkgObkObeqre")
+	NG254.Name = "TextBoxBorder"
 	NG254.Position = UDim2.new(0, 61, 0, 17)
 	NG254.Size = UDim2.new(0, 85, 0, 3)
 	NG254.Parent = NG252
 	NG255 = Instance.new("Frame")
 	NG255.BackgroundColor3 = Color3.new(0.333333, 0, 0.498039)
 	NG255.BorderSizePixel = 0
-	NG255.Name = dCD("ObggbzObeqre")
+	NG255.Name = "BottomBorder"
 	NG255.Position = UDim2.new(0, 0, 1, -1)
 	NG255.Size = UDim2.new(1, 0, 0, 1)
 	NG255.Parent = NG254
 	NG256 = Instance.new("Frame")
 	NG256.BackgroundColor3 = Color3.new(0.333333, 0, 0.498039)
 	NG256.BorderSizePixel = 0
-	NG256.Name = dCD("YrsgObeqre")
+	NG256.Name = "LeftBorder"
 	NG256.Size = UDim2.new(0, 1, 1, 0)
 	NG256.Parent = NG254
 	NG257 = Instance.new("Frame")
 	NG257.BackgroundColor3 = Color3.new(0.333333, 0, 0.498039)
 	NG257.BorderSizePixel = 0
-	NG257.Name = dCD("EvtugObeqre")
+	NG257.Name = "RightBorder"
 	NG257.Position = UDim2.new(1, -1, 0, 0)
 	NG257.Size = UDim2.new(0, 1, 1, 0)
 	NG257.Parent = NG254
@@ -7083,7 +7313,7 @@ do
 	NG258.BackgroundColor3 = Color3.new(0.333333, 0, 0.498039)
 	NG258.BackgroundTransparency = 0.89999997615814
 	NG258.BorderSizePixel = 0
-	NG258.Name = dCD("GrkgObkOnpxtebhaq")
+	NG258.Name = "TextBoxBackground"
 	NG258.Position = UDim2.new(0, 60, 0, -2)
 	NG258.Size = UDim2.new(0, 86, 0, 22)
 	NG258.Parent = NG252
@@ -7097,7 +7327,7 @@ do
 	NG259.Style = Enum.ButtonStyle.Custom
 	NG259.ZIndex = 2
 	NG259.FontSize = Enum.FontSize.Size14
-	NG259.Text = dCD("")
+	NG259.Text = ""
 	NG259.Parent = NG252
 	NG260 = Instance.new("TextBox")
 	NG260.BackgroundColor3 = Color3.new(0.333333, 0, 0.498039)
@@ -7108,7 +7338,7 @@ do
 	NG260.Size = UDim2.new(0, 80, 0, 18)
 	NG260.Font = Enum.Font.SourceSansBold
 	NG260.FontSize = Enum.FontSize.Size10
-	NG260.Text = dCD("")
+	NG260.Text = ""
 	NG260.TextColor3 = Color3.new(1, 1, 1)
 	NG260.TextScaled = true
 	NG260.TextStrokeTransparency = 0.5
@@ -7119,7 +7349,7 @@ do
 	NG261.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG261.BackgroundTransparency = 1
 	NG261.BorderSizePixel = 0
-	NG261.Name = dCD("NqqOhggba")
+	NG261.Name = "AddButton"
 	NG261.Position = UDim2.new(0, 10, 0, 100)
 	NG261.Size = UDim2.new(1, -10, 0, 20)
 	NG261.Visible = false
@@ -7129,13 +7359,13 @@ do
 	NG262.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG262.BackgroundTransparency = 0.44999998807907
 	NG262.BorderSizePixel = 0
-	NG262.Name = dCD("Ohggba")
+	NG262.Name = "Button"
 	NG262.Selectable = true
 	NG262.Size = UDim2.new(1, 0, 1, 0)
 	NG262.Style = Enum.ButtonStyle.Custom
 	NG262.Font = Enum.Font.ArialBold
 	NG262.FontSize = Enum.FontSize.Size10
-	NG262.Text = dCD("NQQ QRPNY")
+	NG262.Text = "ADD DECAL"
 	NG262.TextColor3 = Color3.new(1, 1, 1)
 	NG262.TextStrokeTransparency = 0.80000001192093
 	NG262.Parent = NG261
@@ -7143,7 +7373,7 @@ do
 	NG263.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG263.BackgroundTransparency = 0.30000001192093
 	NG263.BorderSizePixel = 0
-	NG263.Name = dCD("Funqbj")
+	NG263.Name = "Shadow"
 	NG263.Position = UDim2.new(0, 0, 1, 0)
 	NG263.Size = UDim2.new(1, 0, 0, 2)
 	NG263.ZIndex = 2
@@ -7152,7 +7382,7 @@ do
 	NG264.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG264.BackgroundTransparency = 1
 	NG264.BorderSizePixel = 0
-	NG264.Name = dCD("ErzbirOhggba")
+	NG264.Name = "RemoveButton"
 	NG264.Position = UDim2.new(0, 10, 1, -35)
 	NG264.Size = UDim2.new(1, -10, 0, 20)
 	NG264.Parent = NG213
@@ -7161,13 +7391,13 @@ do
 	NG265.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG265.BackgroundTransparency = 0.44999998807907
 	NG265.BorderSizePixel = 0
-	NG265.Name = dCD("Ohggba")
+	NG265.Name = "Button"
 	NG265.Selectable = true
 	NG265.Size = UDim2.new(1, 0, 1, 0)
 	NG265.Style = Enum.ButtonStyle.Custom
 	NG265.Font = Enum.Font.ArialBold
 	NG265.FontSize = Enum.FontSize.Size10
-	NG265.Text = dCD("ERZBIR QRPNY")
+	NG265.Text = "REMOVE DECAL"
 	NG265.TextColor3 = Color3.new(1, 1, 1)
 	NG265.TextStrokeTransparency = 0.80000001192093
 	NG265.Parent = NG264
@@ -7175,7 +7405,7 @@ do
 	NG266.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG266.BackgroundTransparency = 0.30000001192093
 	NG266.BorderSizePixel = 0
-	NG266.Name = dCD("Funqbj")
+	NG266.Name = "Shadow"
 	NG266.Position = UDim2.new(0, 0, 1, 0)
 	NG266.Size = UDim2.new(1, 0, 0, 2)
 	NG266.ZIndex = 2
@@ -7184,12 +7414,12 @@ do
 	NG267.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG267.BackgroundTransparency = 1
 	NG267.BorderSizePixel = 0
-	NG267.Name = dCD("Grkg")
+	NG267.Name = "Text"
 	NG267.Position = UDim2.new(0, 6, 1, 2)
 	NG267.Size = UDim2.new(1, -6, 0, 20)
 	NG267.Font = Enum.Font.ArialBold
 	NG267.FontSize = Enum.FontSize.Size10
-	NG267.Text = dCD("GVC: Fryrpg n cneg & evtug pyvpx ba n fhesnpr")
+	NG267.Text = "TIP: Select a part & right click on a surface"
 	NG267.TextColor3 = Color3.new(1, 1, 1)
 	NG267.TextStrokeTransparency = 0.5
 	NG267.TextWrapped = true
@@ -7200,7 +7430,7 @@ do
 	NG268.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG268.BackgroundTransparency = 1
 	NG268.BorderSizePixel = 0
-	NG268.Name = dCD("OGJryqGbbyTHV")
+	NG268.Name = "BTWeldToolGUI"
 	NG268.Position = UDim2.new(0, 0, 0, 280)
 	NG268.Size = UDim2.new(0, 220, 0, 90)
 	NG268.Draggable = true
@@ -7209,13 +7439,13 @@ do
 	NG269.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG269.BackgroundTransparency = 1
 	NG269.BorderSizePixel = 0
-	NG269.Name = dCD("Gvgyr")
+	NG269.Name = "Title"
 	NG269.Size = UDim2.new(1, 0, 0, 20)
 	NG269.Parent = NG268
 	NG270 = Instance.new("Frame")
 	NG270.BackgroundColor3 = Color3.new(0.0666667, 0.0666667, 0.0666667)
 	NG270.BorderSizePixel = 0
-	NG270.Name = dCD("PbybeOne")
+	NG270.Name = "ColorBar"
 	NG270.Position = UDim2.new(0, 5, 0, -3)
 	NG270.Size = UDim2.new(1, -5, 0, 2)
 	NG270.Parent = NG269
@@ -7223,12 +7453,12 @@ do
 	NG271.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG271.BackgroundTransparency = 1
 	NG271.BorderSizePixel = 0
-	NG271.Name = dCD("Ynory")
+	NG271.Name = "Label"
 	NG271.Position = UDim2.new(0, 10, 0, 1)
 	NG271.Size = UDim2.new(1, -10, 1, 0)
 	NG271.Font = Enum.Font.ArialBold
 	NG271.FontSize = Enum.FontSize.Size10
-	NG271.Text = dCD("JRYQ GBBY")
+	NG271.Text = "WELD TOOL"
 	NG271.TextColor3 = Color3.new(1, 1, 1)
 	NG271.TextStrokeTransparency = 0
 	NG271.TextWrapped = true
@@ -7238,12 +7468,12 @@ do
 	NG272.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG272.BackgroundTransparency = 1
 	NG272.BorderSizePixel = 0
-	NG272.Name = dCD("S3KFvtangher")
+	NG272.Name = "F3XSignature"
 	NG272.Position = UDim2.new(0, 10, 0, 1)
 	NG272.Size = UDim2.new(1, -10, 1, 0)
 	NG272.Font = Enum.Font.ArialBold
 	NG272.FontSize = Enum.FontSize.Size14
-	NG272.Text = dCD("S3K")
+	NG272.Text = "F3X"
 	NG272.TextColor3 = Color3.new(1, 1, 1)
 	NG272.TextStrokeTransparency = 0.89999997615814
 	NG272.TextWrapped = true
@@ -7253,7 +7483,7 @@ do
 	NG273.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG273.BackgroundTransparency = 1
 	NG273.BorderSizePixel = 0
-	NG273.Name = dCD("Vagresnpr")
+	NG273.Name = "Interface"
 	NG273.Position = UDim2.new(0, 10, 0, 30)
 	NG273.Size = UDim2.new(1, -10, 0, 0)
 	NG273.Parent = NG268
@@ -7262,13 +7492,13 @@ do
 	NG274.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG274.BackgroundTransparency = 0.40000000596046
 	NG274.BorderSizePixel = 0
-	NG274.Name = dCD("JryqOhggba")
+	NG274.Name = "WeldButton"
 	NG274.Selectable = true
 	NG274.Size = UDim2.new(0.479999989, 0, 0, 25)
 	NG274.Style = Enum.ButtonStyle.Custom
 	NG274.Font = Enum.Font.ArialBold
 	NG274.FontSize = Enum.FontSize.Size10
-	NG274.Text = dCD("JRYQ GB YNFG")
+	NG274.Text = "WELD TO LAST"
 	NG274.TextColor3 = Color3.new(1, 1, 1)
 	NG274.TextStrokeTransparency = 0.85000002384186
 	NG274.Parent = NG273
@@ -7276,7 +7506,7 @@ do
 	NG275.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG275.BackgroundTransparency = 0.15000000596046
 	NG275.BorderSizePixel = 0
-	NG275.Name = dCD("Funqbj")
+	NG275.Name = "Shadow"
 	NG275.Position = UDim2.new(0, 0, 1, -2)
 	NG275.Size = UDim2.new(1, 0, 0, 2)
 	NG275.Parent = NG274
@@ -7285,14 +7515,14 @@ do
 	NG276.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG276.BackgroundTransparency = 0.40000000596046
 	NG276.BorderSizePixel = 0
-	NG276.Name = dCD("OernxJryqfOhggba")
+	NG276.Name = "BreakWeldsButton"
 	NG276.Position = UDim2.new(0.519999981, 0, 0, 0)
 	NG276.Selectable = true
 	NG276.Size = UDim2.new(0.479999989, 0, 0, 25)
 	NG276.Style = Enum.ButtonStyle.Custom
 	NG276.Font = Enum.Font.ArialBold
 	NG276.FontSize = Enum.FontSize.Size10
-	NG276.Text = dCD("OERNX JRYQF")
+	NG276.Text = "BREAK WELDS"
 	NG276.TextColor3 = Color3.new(1, 1, 1)
 	NG276.TextStrokeTransparency = 0.85000002384186
 	NG276.Parent = NG273
@@ -7300,7 +7530,7 @@ do
 	NG277.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG277.BackgroundTransparency = 0.15000000596046
 	NG277.BorderSizePixel = 0
-	NG277.Name = dCD("Funqbj")
+	NG277.Name = "Shadow"
 	NG277.Position = UDim2.new(0, 0, 1, -2)
 	NG277.Size = UDim2.new(1, 0, 0, 2)
 	NG277.Parent = NG276
@@ -7308,26 +7538,26 @@ do
 	NG278.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG278.BackgroundTransparency = 1
 	NG278.BorderSizePixel = 0
-	NG278.Name = dCD("Punatrf")
+	NG278.Name = "Changes"
 	NG278.Position = UDim2.new(0, 5, 0, 70)
 	NG278.Size = UDim2.new(1, -5, 0, 20)
 	NG278.Parent = NG268
 	NG279 = Instance.new("Frame")
 	NG279.BackgroundColor3 = Color3.new(0.0666667, 0.0666667, 0.0666667)
 	NG279.BorderSizePixel = 0
-	NG279.Name = dCD("PbybeOne")
+	NG279.Name = "ColorBar"
 	NG279.Size = UDim2.new(1, 0, 0, 2)
 	NG279.Parent = NG278
 	NG280 = Instance.new("TextLabel")
 	NG280.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG280.BackgroundTransparency = 1
 	NG280.BorderSizePixel = 0
-	NG280.Name = dCD("Grkg")
+	NG280.Name = "Text"
 	NG280.Position = UDim2.new(0, 0, 0, 2)
 	NG280.Size = UDim2.new(1, 0, 0, 20)
 	NG280.Font = Enum.Font.ArialBold
 	NG280.FontSize = Enum.FontSize.Size10
-	NG280.Text = dCD("")
+	NG280.Text = ""
 	NG280.TextColor3 = Color3.new(1, 1, 1)
 	NG280.TextStrokeTransparency = 0.5
 	NG280.TextWrapped = true
@@ -7338,7 +7568,7 @@ do
 	NG281.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG281.BackgroundTransparency = 1
 	NG281.BorderSizePixel = 0
-	NG281.Name = dCD("OGYvtugvatGbbyTHV")
+	NG281.Name = "BTLightingToolGUI"
 	NG281.Position = UDim2.new(0, 0, 0, 172)
 	NG281.Size = UDim2.new(0, 200, 0, 95)
 	NG281.Draggable = true
@@ -7346,7 +7576,7 @@ do
 	NG282 = Instance.new("Frame")
 	NG282.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG282.BorderSizePixel = 0
-	NG282.Name = dCD("ObggbzPbybeOne")
+	NG282.Name = "BottomColorBar"
 	NG282.Position = UDim2.new(0, 5, 1, -2)
 	NG282.Size = UDim2.new(1, 0, 0, 2)
 	NG282.Parent = NG281
@@ -7354,13 +7584,13 @@ do
 	NG283.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG283.BackgroundTransparency = 1
 	NG283.BorderSizePixel = 0
-	NG283.Name = dCD("Gvgyr")
+	NG283.Name = "Title"
 	NG283.Size = UDim2.new(1, 0, 0, 20)
 	NG283.Parent = NG281
 	NG284 = Instance.new("Frame")
 	NG284.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG284.BorderSizePixel = 0
-	NG284.Name = dCD("PbybeOne")
+	NG284.Name = "ColorBar"
 	NG284.Position = UDim2.new(0, 5, 0, -3)
 	NG284.Size = UDim2.new(1, -5, 0, 2)
 	NG284.Parent = NG283
@@ -7368,12 +7598,12 @@ do
 	NG285.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG285.BackgroundTransparency = 1
 	NG285.BorderSizePixel = 0
-	NG285.Name = dCD("Ynory")
+	NG285.Name = "Label"
 	NG285.Position = UDim2.new(0, 10, 0, 1)
 	NG285.Size = UDim2.new(1, -10, 1, 0)
 	NG285.Font = Enum.Font.ArialBold
 	NG285.FontSize = Enum.FontSize.Size10
-	NG285.Text = dCD("YVTUGVAT GBBY")
+	NG285.Text = "LIGHTING TOOL"
 	NG285.TextColor3 = Color3.new(1, 1, 1)
 	NG285.TextStrokeTransparency = 0
 	NG285.TextWrapped = true
@@ -7383,12 +7613,12 @@ do
 	NG286.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG286.BackgroundTransparency = 1
 	NG286.BorderSizePixel = 0
-	NG286.Name = dCD("S3KFvtangher")
+	NG286.Name = "F3XSignature"
 	NG286.Position = UDim2.new(0, 10, 0, 1)
 	NG286.Size = UDim2.new(1, -10, 1, 0)
 	NG286.Font = Enum.Font.ArialBold
 	NG286.FontSize = Enum.FontSize.Size14
-	NG286.Text = dCD("S3K")
+	NG286.Text = "F3X"
 	NG286.TextColor3 = Color3.new(1, 1, 1)
 	NG286.TextStrokeTransparency = 0.89999997615814
 	NG286.TextWrapped = true
@@ -7398,19 +7628,19 @@ do
 	NG287.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG287.BackgroundTransparency = 0.67500001192093
 	NG287.BorderSizePixel = 0
-	NG287.Name = dCD("Fcbgyvtug")
+	NG287.Name = "Spotlight"
 	NG287.Position = UDim2.new(0, 10, 0, 30)
 	NG287.Size = UDim2.new(1, -10, 0, 25)
 	NG287.Parent = NG281
 	NG288 = Instance.new("TextLabel")
 	NG288.BackgroundTransparency = 1
 	NG288.BorderSizePixel = 0
-	NG288.Name = dCD("Ynory")
+	NG288.Name = "Label"
 	NG288.Position = UDim2.new(0, 35, 0, 0)
 	NG288.Size = UDim2.new(0, 60, 0, 25)
 	NG288.Font = Enum.Font.ArialBold
 	NG288.FontSize = Enum.FontSize.Size10
-	NG288.Text = dCD("Fcbgyvtug")
+	NG288.Text = "Spotlight"
 	NG288.TextColor3 = Color3.new(1, 1, 1)
 	NG288.TextStrokeTransparency = 0.5
 	NG288.TextWrapped = true
@@ -7419,16 +7649,16 @@ do
 	NG289 = Instance.new("ImageButton")
 	NG289.BackgroundTransparency = 1
 	NG289.BorderSizePixel = 0
-	NG289.Name = dCD("NeebjOhggba")
+	NG289.Name = "ArrowButton"
 	NG289.Position = UDim2.new(0, 10, 0, 3)
 	NG289.Size = UDim2.new(0, 20, 0, 20)
 	NG289.Style = Enum.ButtonStyle.Custom
-	NG289.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=134367382")
+	NG289.Image = "http://www.roblox.com/asset/?id=134367382"
 	NG289.Parent = NG287
 	NG290 = Instance.new("Frame")
 	NG290.BackgroundColor3 = Color3.new(1, 0.682353, 0.235294)
 	NG290.BorderSizePixel = 0
-	NG290.Name = dCD("PbybeOne")
+	NG290.Name = "ColorBar"
 	NG290.Size = UDim2.new(0, 3, 1, 0)
 	NG290.Parent = NG287
 	NG291 = Instance.new("TextButton")
@@ -7437,14 +7667,14 @@ do
 	NG291.BackgroundTransparency = 0.75
 	NG291.BorderColor3 = Color3.new(0, 0, 0)
 	NG291.BorderSizePixel = 0
-	NG291.Name = dCD("NqqOhggba")
+	NG291.Name = "AddButton"
 	NG291.Position = UDim2.new(1, -40, 0, 3)
 	NG291.Selectable = true
 	NG291.Size = UDim2.new(0, 35, 0, 19)
 	NG291.Style = Enum.ButtonStyle.Custom
 	NG291.Font = Enum.Font.ArialBold
 	NG291.FontSize = Enum.FontSize.Size10
-	NG291.Text = dCD("NQQ")
+	NG291.Text = "ADD"
 	NG291.TextColor3 = Color3.new(1, 1, 1)
 	NG291.Parent = NG287
 	NG292 = Instance.new("TextButton")
@@ -7453,7 +7683,7 @@ do
 	NG292.BackgroundTransparency = 0.75
 	NG292.BorderColor3 = Color3.new(0, 0, 0)
 	NG292.BorderSizePixel = 0
-	NG292.Name = dCD("ErzbirOhggba")
+	NG292.Name = "RemoveButton"
 	NG292.Position = UDim2.new(0, 127, 0, 3)
 	NG292.Selectable = true
 	NG292.Size = UDim2.new(0, 58, 0, 19)
@@ -7461,21 +7691,21 @@ do
 	NG292.Visible = false
 	NG292.Font = Enum.Font.ArialBold
 	NG292.FontSize = Enum.FontSize.Size10
-	NG292.Text = dCD("ERZBIR")
+	NG292.Text = "REMOVE"
 	NG292.TextColor3 = Color3.new(1, 1, 1)
 	NG292.Parent = NG287
 	NG293 = Instance.new("Frame")
 	NG293.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG293.BackgroundTransparency = 0.75
 	NG293.BorderSizePixel = 0
-	NG293.Name = dCD("Funqbj")
+	NG293.Name = "Shadow"
 	NG293.Position = UDim2.new(0, 0, 1, -1)
 	NG293.Size = UDim2.new(1, 0, 0, 1)
 	NG293.Parent = NG287
 	NG294 = Instance.new("Frame")
 	NG294.BackgroundTransparency = 1
 	NG294.BorderSizePixel = 0
-	NG294.Name = dCD("Bcgvbaf")
+	NG294.Name = "Options"
 	NG294.Position = UDim2.new(0, 3, 1, 0)
 	NG294.Size = UDim2.new(1, -3, 0, 0)
 	NG294.ClipsDescendants = true
@@ -7484,7 +7714,7 @@ do
 	NG295.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG295.BackgroundTransparency = 1
 	NG295.BorderSizePixel = 0
-	NG295.Name = dCD("PbybeBcgvba")
+	NG295.Name = "ColorOption"
 	NG295.Position = UDim2.new(0, 0, 0, 10)
 	NG295.Size = UDim2.new(1, 0, 0, 25)
 	NG295.Parent = NG294
@@ -7492,11 +7722,11 @@ do
 	NG296.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG296.BackgroundTransparency = 1
 	NG296.BorderSizePixel = 0
-	NG296.Name = dCD("Ynory")
+	NG296.Name = "Label"
 	NG296.Size = UDim2.new(0, 70, 0, 25)
 	NG296.Font = Enum.Font.ArialBold
 	NG296.FontSize = Enum.FontSize.Size10
-	NG296.Text = dCD("Pbybe")
+	NG296.Text = "Color"
 	NG296.TextColor3 = Color3.new(1, 1, 1)
 	NG296.TextStrokeTransparency = 0
 	NG296.TextWrapped = true
@@ -7506,7 +7736,7 @@ do
 	NG297.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG297.BackgroundTransparency = 1
 	NG297.BorderSizePixel = 0
-	NG297.Name = dCD("EVachg")
+	NG297.Name = "RInput"
 	NG297.Position = UDim2.new(0, 35, 0, 0)
 	NG297.Size = UDim2.new(0, 38, 0, 25)
 	NG297.Parent = NG295
@@ -7522,22 +7752,22 @@ do
 	NG298.ZIndex = 2
 	NG298.Font = Enum.Font.Legacy
 	NG298.FontSize = Enum.FontSize.Size8
-	NG298.Text = dCD("")
+	NG298.Text = ""
 	NG298.Parent = NG297
 	NG299 = Instance.new("ImageLabel")
 	NG299.Active = false
 	NG299.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG299.BackgroundTransparency = 1
 	NG299.BorderSizePixel = 0
-	NG299.Name = dCD("Onpxtebhaq")
+	NG299.Name = "Background"
 	NG299.Selectable = false
 	NG299.Size = UDim2.new(1, 0, 1, 0)
-	NG299.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG299.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG299.Parent = NG297
 	NG300 = Instance.new("Frame")
 	NG300.BackgroundColor3 = Color3.new(1, 0, 0)
 	NG300.BorderSizePixel = 0
-	NG300.Name = dCD("FryrpgrqVaqvpngbe")
+	NG300.Name = "SelectedIndicator"
 	NG300.Position = UDim2.new(0, 3, 0, -2)
 	NG300.Size = UDim2.new(1, -3, 0, 2)
 	NG300.Parent = NG297
@@ -7549,14 +7779,14 @@ do
 	NG301.Size = UDim2.new(1, -10, 1, 0)
 	NG301.Font = Enum.Font.ArialBold
 	NG301.FontSize = Enum.FontSize.Size10
-	NG301.Text = dCD("255")
+	NG301.Text = "255"
 	NG301.TextColor3 = Color3.new(1, 1, 1)
 	NG301.Parent = NG297
 	NG302 = Instance.new("Frame")
 	NG302.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG302.BackgroundTransparency = 1
 	NG302.BorderSizePixel = 0
-	NG302.Name = dCD("TVachg")
+	NG302.Name = "GInput"
 	NG302.Position = UDim2.new(0, 72, 0, 0)
 	NG302.Size = UDim2.new(0, 38, 0, 25)
 	NG302.Parent = NG295
@@ -7572,22 +7802,22 @@ do
 	NG303.ZIndex = 2
 	NG303.Font = Enum.Font.Legacy
 	NG303.FontSize = Enum.FontSize.Size8
-	NG303.Text = dCD("")
+	NG303.Text = ""
 	NG303.Parent = NG302
 	NG304 = Instance.new("ImageLabel")
 	NG304.Active = false
 	NG304.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG304.BackgroundTransparency = 1
 	NG304.BorderSizePixel = 0
-	NG304.Name = dCD("Onpxtebhaq")
+	NG304.Name = "Background"
 	NG304.Selectable = false
 	NG304.Size = UDim2.new(1, 0, 1, 0)
-	NG304.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG304.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG304.Parent = NG302
 	NG305 = Instance.new("Frame")
 	NG305.BackgroundColor3 = Color3.new(0, 1, 0)
 	NG305.BorderSizePixel = 0
-	NG305.Name = dCD("FryrpgrqVaqvpngbe")
+	NG305.Name = "SelectedIndicator"
 	NG305.Position = UDim2.new(0, 3, 0, -2)
 	NG305.Size = UDim2.new(1, -3, 0, 2)
 	NG305.Parent = NG302
@@ -7599,14 +7829,14 @@ do
 	NG306.Size = UDim2.new(1, -10, 1, 0)
 	NG306.Font = Enum.Font.ArialBold
 	NG306.FontSize = Enum.FontSize.Size10
-	NG306.Text = dCD("255")
+	NG306.Text = "255"
 	NG306.TextColor3 = Color3.new(1, 1, 1)
 	NG306.Parent = NG302
 	NG307 = Instance.new("Frame")
 	NG307.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG307.BackgroundTransparency = 1
 	NG307.BorderSizePixel = 0
-	NG307.Name = dCD("OVachg")
+	NG307.Name = "BInput"
 	NG307.Position = UDim2.new(0, 109, 0, 0)
 	NG307.Size = UDim2.new(0, 38, 0, 25)
 	NG307.Parent = NG295
@@ -7622,22 +7852,22 @@ do
 	NG308.ZIndex = 2
 	NG308.Font = Enum.Font.Legacy
 	NG308.FontSize = Enum.FontSize.Size8
-	NG308.Text = dCD("")
+	NG308.Text = ""
 	NG308.Parent = NG307
 	NG309 = Instance.new("ImageLabel")
 	NG309.Active = false
 	NG309.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG309.BackgroundTransparency = 1
 	NG309.BorderSizePixel = 0
-	NG309.Name = dCD("Onpxtebhaq")
+	NG309.Name = "Background"
 	NG309.Selectable = false
 	NG309.Size = UDim2.new(1, 0, 1, 0)
-	NG309.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG309.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG309.Parent = NG307
 	NG310 = Instance.new("Frame")
 	NG310.BackgroundColor3 = Color3.new(0, 0, 1)
 	NG310.BorderSizePixel = 0
-	NG310.Name = dCD("FryrpgrqVaqvpngbe")
+	NG310.Name = "SelectedIndicator"
 	NG310.Position = UDim2.new(0, 3, 0, -2)
 	NG310.Size = UDim2.new(1, -3, 0, 2)
 	NG310.Parent = NG307
@@ -7649,24 +7879,24 @@ do
 	NG311.Size = UDim2.new(1, -10, 1, 0)
 	NG311.Font = Enum.Font.ArialBold
 	NG311.FontSize = Enum.FontSize.Size10
-	NG311.Text = dCD("255")
+	NG311.Text = "255"
 	NG311.TextColor3 = Color3.new(1, 1, 1)
 	NG311.Parent = NG307
 	NG312 = Instance.new("ImageButton")
 	NG312.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG312.BackgroundTransparency = 0.40000000596046
 	NG312.BorderSizePixel = 0
-	NG312.Name = dCD("UFICvpxre")
+	NG312.Name = "HSVPicker"
 	NG312.Position = UDim2.new(0, 160, 0, -2)
 	NG312.Size = UDim2.new(0, 27, 0, 27)
 	NG312.Style = Enum.ButtonStyle.Custom
-	NG312.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=141313631")
+	NG312.Image = "http://www.roblox.com/asset/?id=141313631"
 	NG312.Parent = NG295
 	NG313 = Instance.new("Frame")
 	NG313.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG313.BackgroundTransparency = 0.75
 	NG313.BorderSizePixel = 0
-	NG313.Name = dCD("Funqbj")
+	NG313.Name = "Shadow"
 	NG313.Position = UDim2.new(0, 0, 1, -2)
 	NG313.Size = UDim2.new(1, 0, 0, 2)
 	NG313.Parent = NG312
@@ -7675,7 +7905,7 @@ do
 	NG314.BackgroundTransparency = 0.5
 	NG314.BorderColor3 = Color3.new(0.380392, 0.380392, 0.380392)
 	NG314.BorderSizePixel = 0
-	NG314.Name = dCD("Frcnengbe")
+	NG314.Name = "Separator"
 	NG314.Position = UDim2.new(0, 151, 0, 4)
 	NG314.Size = UDim2.new(0, 4, 0, 4)
 	NG314.Parent = NG295
@@ -7684,7 +7914,7 @@ do
 	NG315.BackgroundTransparency = 0.5
 	NG315.BorderColor3 = Color3.new(0.380392, 0.380392, 0.380392)
 	NG315.BorderSizePixel = 0
-	NG315.Name = dCD("Frcnengbe")
+	NG315.Name = "Separator"
 	NG315.Position = UDim2.new(0, 151, 0, 16)
 	NG315.Size = UDim2.new(0, 4, 0, 4)
 	NG315.Parent = NG295
@@ -7693,7 +7923,7 @@ do
 	NG316.BackgroundTransparency = 0.5
 	NG316.BorderColor3 = Color3.new(0.380392, 0.380392, 0.380392)
 	NG316.BorderSizePixel = 0
-	NG316.Name = dCD("Frcnengbe")
+	NG316.Name = "Separator"
 	NG316.Position = UDim2.new(0, 151, 0, 10)
 	NG316.Size = UDim2.new(0, 4, 0, 4)
 	NG316.Parent = NG295
@@ -7701,7 +7931,7 @@ do
 	NG317.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG317.BackgroundTransparency = 1
 	NG317.BorderSizePixel = 0
-	NG317.Name = dCD("OevtugarffBcgvba")
+	NG317.Name = "BrightnessOption"
 	NG317.Position = UDim2.new(0, 0, 0, 45)
 	NG317.Size = UDim2.new(1, 0, 0, 25)
 	NG317.Parent = NG294
@@ -7709,11 +7939,11 @@ do
 	NG318.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG318.BackgroundTransparency = 1
 	NG318.BorderSizePixel = 0
-	NG318.Name = dCD("Ynory")
+	NG318.Name = "Label"
 	NG318.Size = UDim2.new(0, 70, 0, 25)
 	NG318.Font = Enum.Font.ArialBold
 	NG318.FontSize = Enum.FontSize.Size10
-	NG318.Text = dCD("Oevtugarff")
+	NG318.Text = "Brightness"
 	NG318.TextColor3 = Color3.new(1, 1, 1)
 	NG318.TextStrokeTransparency = 0
 	NG318.TextWrapped = true
@@ -7723,7 +7953,7 @@ do
 	NG319.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG319.BackgroundTransparency = 1
 	NG319.BorderSizePixel = 0
-	NG319.Name = dCD("Vachg")
+	NG319.Name = "Input"
 	NG319.Position = UDim2.new(0, 60, 0, 0)
 	NG319.Size = UDim2.new(0, 38, 0, 25)
 	NG319.Parent = NG317
@@ -7739,21 +7969,21 @@ do
 	NG320.ZIndex = 2
 	NG320.Font = Enum.Font.Legacy
 	NG320.FontSize = Enum.FontSize.Size8
-	NG320.Text = dCD("")
+	NG320.Text = ""
 	NG320.Parent = NG319
 	NG321 = Instance.new("ImageLabel")
 	NG321.Active = false
 	NG321.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG321.BackgroundTransparency = 1
 	NG321.BorderSizePixel = 0
-	NG321.Name = dCD("Onpxtebhaq")
+	NG321.Name = "Background"
 	NG321.Selectable = false
 	NG321.Size = UDim2.new(1, 0, 1, 0)
-	NG321.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG321.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG321.Parent = NG319
 	NG322 = Instance.new("Frame")
 	NG322.BorderSizePixel = 0
-	NG322.Name = dCD("FryrpgrqVaqvpngbe")
+	NG322.Name = "SelectedIndicator"
 	NG322.Position = UDim2.new(0, 3, 0, -2)
 	NG322.Size = UDim2.new(1, -3, 0, 2)
 	NG322.Parent = NG319
@@ -7765,14 +7995,14 @@ do
 	NG323.Size = UDim2.new(1, -10, 1, 0)
 	NG323.Font = Enum.Font.ArialBold
 	NG323.FontSize = Enum.FontSize.Size10
-	NG323.Text = dCD("1")
+	NG323.Text = "1"
 	NG323.TextColor3 = Color3.new(1, 1, 1)
 	NG323.Parent = NG319
 	NG324 = Instance.new("Frame")
 	NG324.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG324.BackgroundTransparency = 1
 	NG324.BorderSizePixel = 0
-	NG324.Name = dCD("NatyrBcgvba")
+	NG324.Name = "AngleOption"
 	NG324.Position = UDim2.new(0, 115, 0, 46)
 	NG324.Size = UDim2.new(1, -115, 0, 25)
 	NG324.Parent = NG294
@@ -7780,11 +8010,11 @@ do
 	NG325.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG325.BackgroundTransparency = 1
 	NG325.BorderSizePixel = 0
-	NG325.Name = dCD("Ynory")
+	NG325.Name = "Label"
 	NG325.Size = UDim2.new(0, 70, 0, 25)
 	NG325.Font = Enum.Font.ArialBold
 	NG325.FontSize = Enum.FontSize.Size10
-	NG325.Text = dCD("Natyr")
+	NG325.Text = "Angle"
 	NG325.TextColor3 = Color3.new(1, 1, 1)
 	NG325.TextStrokeTransparency = 0
 	NG325.TextWrapped = true
@@ -7794,7 +8024,7 @@ do
 	NG326.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG326.BackgroundTransparency = 1
 	NG326.BorderSizePixel = 0
-	NG326.Name = dCD("Vachg")
+	NG326.Name = "Input"
 	NG326.Position = UDim2.new(0, 35, 0, 0)
 	NG326.Size = UDim2.new(0, 38, 0, 25)
 	NG326.Parent = NG324
@@ -7810,21 +8040,21 @@ do
 	NG327.ZIndex = 2
 	NG327.Font = Enum.Font.Legacy
 	NG327.FontSize = Enum.FontSize.Size8
-	NG327.Text = dCD("")
+	NG327.Text = ""
 	NG327.Parent = NG326
 	NG328 = Instance.new("ImageLabel")
 	NG328.Active = false
 	NG328.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG328.BackgroundTransparency = 1
 	NG328.BorderSizePixel = 0
-	NG328.Name = dCD("Onpxtebhaq")
+	NG328.Name = "Background"
 	NG328.Selectable = false
 	NG328.Size = UDim2.new(1, 0, 1, 0)
-	NG328.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG328.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG328.Parent = NG326
 	NG329 = Instance.new("Frame")
 	NG329.BorderSizePixel = 0
-	NG329.Name = dCD("FryrpgrqVaqvpngbe")
+	NG329.Name = "SelectedIndicator"
 	NG329.Position = UDim2.new(0, 3, 0, -2)
 	NG329.Size = UDim2.new(1, -3, 0, 2)
 	NG329.Parent = NG326
@@ -7836,14 +8066,14 @@ do
 	NG330.Size = UDim2.new(1, -10, 1, 0)
 	NG330.Font = Enum.Font.ArialBold
 	NG330.FontSize = Enum.FontSize.Size10
-	NG330.Text = dCD("90")
+	NG330.Text = "90"
 	NG330.TextColor3 = Color3.new(1, 1, 1)
 	NG330.Parent = NG326
 	NG331 = Instance.new("Frame")
 	NG331.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG331.BackgroundTransparency = 1
 	NG331.BorderSizePixel = 0
-	NG331.Name = dCD("EnatrBcgvba")
+	NG331.Name = "RangeOption"
 	NG331.Position = UDim2.new(0, 0, 0, 80)
 	NG331.Size = UDim2.new(1, 0, 0, 25)
 	NG331.Parent = NG294
@@ -7851,11 +8081,11 @@ do
 	NG332.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG332.BackgroundTransparency = 1
 	NG332.BorderSizePixel = 0
-	NG332.Name = dCD("Ynory")
+	NG332.Name = "Label"
 	NG332.Size = UDim2.new(0, 70, 0, 25)
 	NG332.Font = Enum.Font.ArialBold
 	NG332.FontSize = Enum.FontSize.Size10
-	NG332.Text = dCD("Enatr")
+	NG332.Text = "Range"
 	NG332.TextColor3 = Color3.new(1, 1, 1)
 	NG332.TextStrokeTransparency = 0
 	NG332.TextWrapped = true
@@ -7865,7 +8095,7 @@ do
 	NG333.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG333.BackgroundTransparency = 1
 	NG333.BorderSizePixel = 0
-	NG333.Name = dCD("Vachg")
+	NG333.Name = "Input"
 	NG333.Position = UDim2.new(0, 40, 0, 0)
 	NG333.Size = UDim2.new(0, 38, 0, 25)
 	NG333.Parent = NG331
@@ -7881,21 +8111,21 @@ do
 	NG334.ZIndex = 2
 	NG334.Font = Enum.Font.Legacy
 	NG334.FontSize = Enum.FontSize.Size8
-	NG334.Text = dCD("")
+	NG334.Text = ""
 	NG334.Parent = NG333
 	NG335 = Instance.new("ImageLabel")
 	NG335.Active = false
 	NG335.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG335.BackgroundTransparency = 1
 	NG335.BorderSizePixel = 0
-	NG335.Name = dCD("Onpxtebhaq")
+	NG335.Name = "Background"
 	NG335.Selectable = false
 	NG335.Size = UDim2.new(1, 0, 1, 0)
-	NG335.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG335.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG335.Parent = NG333
 	NG336 = Instance.new("Frame")
 	NG336.BorderSizePixel = 0
-	NG336.Name = dCD("FryrpgrqVaqvpngbe")
+	NG336.Name = "SelectedIndicator"
 	NG336.Position = UDim2.new(0, 3, 0, -2)
 	NG336.Size = UDim2.new(1, -3, 0, 2)
 	NG336.Parent = NG333
@@ -7907,14 +8137,14 @@ do
 	NG337.Size = UDim2.new(1, -10, 1, 0)
 	NG337.Font = Enum.Font.ArialBold
 	NG337.FontSize = Enum.FontSize.Size10
-	NG337.Text = dCD("16")
+	NG337.Text = "16"
 	NG337.TextColor3 = Color3.new(1, 1, 1)
 	NG337.Parent = NG333
 	NG338 = Instance.new("Frame")
 	NG338.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG338.BackgroundTransparency = 1
 	NG338.BorderSizePixel = 0
-	NG338.Name = dCD("FvqrBcgvba")
+	NG338.Name = "SideOption"
 	NG338.Position = UDim2.new(0, 0, 0, 115)
 	NG338.Size = UDim2.new(1, 0, 0, 25)
 	NG338.Parent = NG294
@@ -7922,11 +8152,11 @@ do
 	NG339.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG339.BackgroundTransparency = 1
 	NG339.BorderSizePixel = 0
-	NG339.Name = dCD("Ynory")
+	NG339.Name = "Label"
 	NG339.Size = UDim2.new(0, 70, 0, 25)
 	NG339.Font = Enum.Font.ArialBold
 	NG339.FontSize = Enum.FontSize.Size10
-	NG339.Text = dCD("Fvqr")
+	NG339.Text = "Side"
 	NG339.TextColor3 = Color3.new(1, 1, 1)
 	NG339.TextStrokeTransparency = 0
 	NG339.TextWrapped = true
@@ -7936,7 +8166,7 @@ do
 	NG340.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG340.BackgroundTransparency = 1
 	NG340.BorderSizePixel = 0
-	NG340.Name = dCD("FunqbjfBcgvba")
+	NG340.Name = "ShadowsOption"
 	NG340.Position = UDim2.new(0, 0, 0, 150)
 	NG340.Size = UDim2.new(1, 0, 0, 25)
 	NG340.Parent = NG294
@@ -7944,11 +8174,11 @@ do
 	NG341.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG341.BackgroundTransparency = 1
 	NG341.BorderSizePixel = 0
-	NG341.Name = dCD("Ynory")
+	NG341.Name = "Label"
 	NG341.Size = UDim2.new(0, 50, 0, 25)
 	NG341.Font = Enum.Font.ArialBold
 	NG341.FontSize = Enum.FontSize.Size10
-	NG341.Text = dCD("Funqbjf")
+	NG341.Text = "Shadows"
 	NG341.TextColor3 = Color3.new(1, 1, 1)
 	NG341.TextStrokeTransparency = 0
 	NG341.TextWrapped = true
@@ -7958,14 +8188,14 @@ do
 	NG342.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG342.BackgroundTransparency = 1
 	NG342.BorderSizePixel = 0
-	NG342.Name = dCD("Ba")
+	NG342.Name = "On"
 	NG342.Position = UDim2.new(0, 55, 0, 0)
 	NG342.Size = UDim2.new(0, 45, 0, 25)
 	NG342.Parent = NG340
 	NG343 = Instance.new("Frame")
 	NG343.BackgroundTransparency = 1
 	NG343.BorderSizePixel = 0
-	NG343.Name = dCD("FryrpgrqVaqvpngbe")
+	NG343.Name = "SelectedIndicator"
 	NG343.Position = UDim2.new(0, 4, 0, -2)
 	NG343.Size = UDim2.new(1, -4, 0, 2)
 	NG343.Parent = NG342
@@ -7974,7 +8204,7 @@ do
 	NG344.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG344.BackgroundTransparency = 1
 	NG344.BorderSizePixel = 0
-	NG344.Name = dCD("Ohggba")
+	NG344.Name = "Button"
 	NG344.Position = UDim2.new(0, 5, 0, 0)
 	NG344.Selectable = true
 	NG344.Size = UDim2.new(1, -10, 1, 0)
@@ -7982,7 +8212,7 @@ do
 	NG344.ZIndex = 2
 	NG344.Font = Enum.Font.Legacy
 	NG344.FontSize = Enum.FontSize.Size8
-	NG344.Text = dCD("")
+	NG344.Text = ""
 	NG344.TextTransparency = 1
 	NG344.Parent = NG342
 	NG345 = Instance.new("ImageLabel")
@@ -7990,34 +8220,34 @@ do
 	NG345.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG345.BackgroundTransparency = 1
 	NG345.BorderSizePixel = 0
-	NG345.Name = dCD("Onpxtebhaq")
+	NG345.Name = "Background"
 	NG345.Selectable = false
 	NG345.Size = UDim2.new(1, 0, 1, 0)
-	NG345.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG345.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG345.Parent = NG342
 	NG346 = Instance.new("TextLabel")
 	NG346.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG346.BackgroundTransparency = 1
 	NG346.BorderSizePixel = 0
-	NG346.Name = dCD("Ynory")
+	NG346.Name = "Label"
 	NG346.Size = UDim2.new(1, 0, 1, 0)
 	NG346.Font = Enum.Font.ArialBold
 	NG346.FontSize = Enum.FontSize.Size10
-	NG346.Text = dCD("BA")
+	NG346.Text = "ON"
 	NG346.TextColor3 = Color3.new(1, 1, 1)
 	NG346.Parent = NG342
 	NG347 = Instance.new("Frame")
 	NG347.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG347.BackgroundTransparency = 1
 	NG347.BorderSizePixel = 0
-	NG347.Name = dCD("Bss")
+	NG347.Name = "Off"
 	NG347.Position = UDim2.new(0, 100, 0, 0)
 	NG347.Size = UDim2.new(0, 45, 0, 25)
 	NG347.Parent = NG340
 	NG348 = Instance.new("Frame")
 	NG348.BackgroundTransparency = 1
 	NG348.BorderSizePixel = 0
-	NG348.Name = dCD("FryrpgrqVaqvpngbe")
+	NG348.Name = "SelectedIndicator"
 	NG348.Position = UDim2.new(0, 4, 0, -2)
 	NG348.Size = UDim2.new(1, -4, 0, 2)
 	NG348.Parent = NG347
@@ -8026,7 +8256,7 @@ do
 	NG349.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG349.BackgroundTransparency = 1
 	NG349.BorderSizePixel = 0
-	NG349.Name = dCD("Ohggba")
+	NG349.Name = "Button"
 	NG349.Position = UDim2.new(0, 5, 0, 0)
 	NG349.Selectable = true
 	NG349.Size = UDim2.new(1, -10, 1, 0)
@@ -8034,7 +8264,7 @@ do
 	NG349.ZIndex = 2
 	NG349.Font = Enum.Font.Legacy
 	NG349.FontSize = Enum.FontSize.Size8
-	NG349.Text = dCD("")
+	NG349.Text = ""
 	NG349.TextTransparency = 1
 	NG349.Parent = NG347
 	NG350 = Instance.new("ImageLabel")
@@ -8042,31 +8272,31 @@ do
 	NG350.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG350.BackgroundTransparency = 1
 	NG350.BorderSizePixel = 0
-	NG350.Name = dCD("Onpxtebhaq")
+	NG350.Name = "Background"
 	NG350.Selectable = false
 	NG350.Size = UDim2.new(1, 0, 1, 0)
-	NG350.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG350.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG350.Parent = NG347
 	NG351 = Instance.new("TextLabel")
 	NG351.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG351.BackgroundTransparency = 1
 	NG351.BorderSizePixel = 0
-	NG351.Name = dCD("Ynory")
+	NG351.Name = "Label"
 	NG351.Size = UDim2.new(1, 0, 1, 0)
 	NG351.Font = Enum.Font.ArialBold
 	NG351.FontSize = Enum.FontSize.Size10
-	NG351.Text = dCD("BSS")
+	NG351.Text = "OFF"
 	NG351.TextColor3 = Color3.new(1, 1, 1)
 	NG351.Parent = NG347
 	NG352 = Instance.new("TextLabel")
 	NG352.BackgroundTransparency = 1
 	NG352.BorderSizePixel = 0
-	NG352.Name = dCD("FryrpgAbgr")
+	NG352.Name = "SelectNote"
 	NG352.Position = UDim2.new(0, 10, 0, 27)
 	NG352.Size = UDim2.new(1, -10, 0, 15)
 	NG352.Visible = false
 	NG352.FontSize = Enum.FontSize.Size14
-	NG352.Text = dCD("Fryrpg fbzrguvat gb hfr guvf gbby.")
+	NG352.Text = "Select something to use this tool."
 	NG352.TextColor3 = Color3.new(1, 1, 1)
 	NG352.TextScaled = true
 	NG352.TextStrokeTransparency = 0.5
@@ -8077,19 +8307,19 @@ do
 	NG353.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG353.BackgroundTransparency = 0.67500001192093
 	NG353.BorderSizePixel = 0
-	NG353.Name = dCD("CbvagYvtug")
+	NG353.Name = "PointLight"
 	NG353.Position = UDim2.new(0, 10, 0, 60)
 	NG353.Size = UDim2.new(1, -10, 0, 25)
 	NG353.Parent = NG281
 	NG354 = Instance.new("TextLabel")
 	NG354.BackgroundTransparency = 1
 	NG354.BorderSizePixel = 0
-	NG354.Name = dCD("Ynory")
+	NG354.Name = "Label"
 	NG354.Position = UDim2.new(0, 35, 0, 0)
 	NG354.Size = UDim2.new(0, 60, 0, 25)
 	NG354.Font = Enum.Font.ArialBold
 	NG354.FontSize = Enum.FontSize.Size10
-	NG354.Text = dCD("Cbvag yvtug")
+	NG354.Text = "Point light"
 	NG354.TextColor3 = Color3.new(1, 1, 1)
 	NG354.TextStrokeTransparency = 0.5
 	NG354.TextWrapped = true
@@ -8098,16 +8328,16 @@ do
 	NG355 = Instance.new("ImageButton")
 	NG355.BackgroundTransparency = 1
 	NG355.BorderSizePixel = 0
-	NG355.Name = dCD("NeebjOhggba")
+	NG355.Name = "ArrowButton"
 	NG355.Position = UDim2.new(0, 10, 0, 3)
 	NG355.Size = UDim2.new(0, 20, 0, 20)
 	NG355.Style = Enum.ButtonStyle.Custom
-	NG355.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=134367382")
+	NG355.Image = "http://www.roblox.com/asset/?id=134367382"
 	NG355.Parent = NG353
 	NG356 = Instance.new("Frame")
 	NG356.BackgroundColor3 = Color3.new(0.85098, 0, 1)
 	NG356.BorderSizePixel = 0
-	NG356.Name = dCD("PbybeOne")
+	NG356.Name = "ColorBar"
 	NG356.Size = UDim2.new(0, 3, 1, 0)
 	NG356.Parent = NG353
 	NG357 = Instance.new("TextButton")
@@ -8116,14 +8346,14 @@ do
 	NG357.BackgroundTransparency = 0.75
 	NG357.BorderColor3 = Color3.new(0, 0, 0)
 	NG357.BorderSizePixel = 0
-	NG357.Name = dCD("NqqOhggba")
+	NG357.Name = "AddButton"
 	NG357.Position = UDim2.new(1, -40, 0, 3)
 	NG357.Selectable = true
 	NG357.Size = UDim2.new(0, 35, 0, 19)
 	NG357.Style = Enum.ButtonStyle.Custom
 	NG357.Font = Enum.Font.ArialBold
 	NG357.FontSize = Enum.FontSize.Size10
-	NG357.Text = dCD("NQQ")
+	NG357.Text = "ADD"
 	NG357.TextColor3 = Color3.new(1, 1, 1)
 	NG357.Parent = NG353
 	NG358 = Instance.new("TextButton")
@@ -8132,7 +8362,7 @@ do
 	NG358.BackgroundTransparency = 0.75
 	NG358.BorderColor3 = Color3.new(0, 0, 0)
 	NG358.BorderSizePixel = 0
-	NG358.Name = dCD("ErzbirOhggba")
+	NG358.Name = "RemoveButton"
 	NG358.Position = UDim2.new(0, 90, 0, 3)
 	NG358.Selectable = true
 	NG358.Size = UDim2.new(0, 58, 0, 19)
@@ -8140,21 +8370,21 @@ do
 	NG358.Visible = false
 	NG358.Font = Enum.Font.ArialBold
 	NG358.FontSize = Enum.FontSize.Size10
-	NG358.Text = dCD("ERZBIR")
+	NG358.Text = "REMOVE"
 	NG358.TextColor3 = Color3.new(1, 1, 1)
 	NG358.Parent = NG353
 	NG359 = Instance.new("Frame")
 	NG359.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG359.BackgroundTransparency = 0.75
 	NG359.BorderSizePixel = 0
-	NG359.Name = dCD("Funqbj")
+	NG359.Name = "Shadow"
 	NG359.Position = UDim2.new(0, 0, 1, -1)
 	NG359.Size = UDim2.new(1, 0, 0, 1)
 	NG359.Parent = NG353
 	NG360 = Instance.new("Frame")
 	NG360.BackgroundTransparency = 1
 	NG360.BorderSizePixel = 0
-	NG360.Name = dCD("Bcgvbaf")
+	NG360.Name = "Options"
 	NG360.Position = UDim2.new(0, 3, 1, 0)
 	NG360.Size = UDim2.new(1, -3, 0, 0)
 	NG360.ClipsDescendants = true
@@ -8163,7 +8393,7 @@ do
 	NG361.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG361.BackgroundTransparency = 1
 	NG361.BorderSizePixel = 0
-	NG361.Name = dCD("PbybeBcgvba")
+	NG361.Name = "ColorOption"
 	NG361.Position = UDim2.new(0, 0, 0, 10)
 	NG361.Size = UDim2.new(1, 0, 0, 25)
 	NG361.Parent = NG360
@@ -8171,11 +8401,11 @@ do
 	NG362.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG362.BackgroundTransparency = 1
 	NG362.BorderSizePixel = 0
-	NG362.Name = dCD("Ynory")
+	NG362.Name = "Label"
 	NG362.Size = UDim2.new(0, 70, 0, 25)
 	NG362.Font = Enum.Font.ArialBold
 	NG362.FontSize = Enum.FontSize.Size10
-	NG362.Text = dCD("Pbybe")
+	NG362.Text = "Color"
 	NG362.TextColor3 = Color3.new(1, 1, 1)
 	NG362.TextStrokeTransparency = 0
 	NG362.TextWrapped = true
@@ -8185,7 +8415,7 @@ do
 	NG363.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG363.BackgroundTransparency = 1
 	NG363.BorderSizePixel = 0
-	NG363.Name = dCD("EVachg")
+	NG363.Name = "RInput"
 	NG363.Position = UDim2.new(0, 35, 0, 0)
 	NG363.Size = UDim2.new(0, 38, 0, 25)
 	NG363.Parent = NG361
@@ -8201,22 +8431,22 @@ do
 	NG364.ZIndex = 2
 	NG364.Font = Enum.Font.Legacy
 	NG364.FontSize = Enum.FontSize.Size8
-	NG364.Text = dCD("")
+	NG364.Text = ""
 	NG364.Parent = NG363
 	NG365 = Instance.new("ImageLabel")
 	NG365.Active = false
 	NG365.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG365.BackgroundTransparency = 1
 	NG365.BorderSizePixel = 0
-	NG365.Name = dCD("Onpxtebhaq")
+	NG365.Name = "Background"
 	NG365.Selectable = false
 	NG365.Size = UDim2.new(1, 0, 1, 0)
-	NG365.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG365.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG365.Parent = NG363
 	NG366 = Instance.new("Frame")
 	NG366.BackgroundColor3 = Color3.new(1, 0, 0)
 	NG366.BorderSizePixel = 0
-	NG366.Name = dCD("FryrpgrqVaqvpngbe")
+	NG366.Name = "SelectedIndicator"
 	NG366.Position = UDim2.new(0, 3, 0, -2)
 	NG366.Size = UDim2.new(1, -3, 0, 2)
 	NG366.Parent = NG363
@@ -8228,14 +8458,14 @@ do
 	NG367.Size = UDim2.new(1, -10, 1, 0)
 	NG367.Font = Enum.Font.ArialBold
 	NG367.FontSize = Enum.FontSize.Size10
-	NG367.Text = dCD("255")
+	NG367.Text = "255"
 	NG367.TextColor3 = Color3.new(1, 1, 1)
 	NG367.Parent = NG363
 	NG368 = Instance.new("Frame")
 	NG368.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG368.BackgroundTransparency = 1
 	NG368.BorderSizePixel = 0
-	NG368.Name = dCD("TVachg")
+	NG368.Name = "GInput"
 	NG368.Position = UDim2.new(0, 72, 0, 0)
 	NG368.Size = UDim2.new(0, 38, 0, 25)
 	NG368.Parent = NG361
@@ -8251,22 +8481,22 @@ do
 	NG369.ZIndex = 2
 	NG369.Font = Enum.Font.Legacy
 	NG369.FontSize = Enum.FontSize.Size8
-	NG369.Text = dCD("")
+	NG369.Text = ""
 	NG369.Parent = NG368
 	NG370 = Instance.new("ImageLabel")
 	NG370.Active = false
 	NG370.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG370.BackgroundTransparency = 1
 	NG370.BorderSizePixel = 0
-	NG370.Name = dCD("Onpxtebhaq")
+	NG370.Name = "Background"
 	NG370.Selectable = false
 	NG370.Size = UDim2.new(1, 0, 1, 0)
-	NG370.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG370.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG370.Parent = NG368
 	NG371 = Instance.new("Frame")
 	NG371.BackgroundColor3 = Color3.new(0, 1, 0)
 	NG371.BorderSizePixel = 0
-	NG371.Name = dCD("FryrpgrqVaqvpngbe")
+	NG371.Name = "SelectedIndicator"
 	NG371.Position = UDim2.new(0, 3, 0, -2)
 	NG371.Size = UDim2.new(1, -3, 0, 2)
 	NG371.Parent = NG368
@@ -8278,14 +8508,14 @@ do
 	NG372.Size = UDim2.new(1, -10, 1, 0)
 	NG372.Font = Enum.Font.ArialBold
 	NG372.FontSize = Enum.FontSize.Size10
-	NG372.Text = dCD("255")
+	NG372.Text = "255"
 	NG372.TextColor3 = Color3.new(1, 1, 1)
 	NG372.Parent = NG368
 	NG373 = Instance.new("Frame")
 	NG373.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG373.BackgroundTransparency = 1
 	NG373.BorderSizePixel = 0
-	NG373.Name = dCD("OVachg")
+	NG373.Name = "BInput"
 	NG373.Position = UDim2.new(0, 109, 0, 0)
 	NG373.Size = UDim2.new(0, 38, 0, 25)
 	NG373.Parent = NG361
@@ -8301,22 +8531,22 @@ do
 	NG374.ZIndex = 2
 	NG374.Font = Enum.Font.Legacy
 	NG374.FontSize = Enum.FontSize.Size8
-	NG374.Text = dCD("")
+	NG374.Text = ""
 	NG374.Parent = NG373
 	NG375 = Instance.new("ImageLabel")
 	NG375.Active = false
 	NG375.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG375.BackgroundTransparency = 1
 	NG375.BorderSizePixel = 0
-	NG375.Name = dCD("Onpxtebhaq")
+	NG375.Name = "Background"
 	NG375.Selectable = false
 	NG375.Size = UDim2.new(1, 0, 1, 0)
-	NG375.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG375.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG375.Parent = NG373
 	NG376 = Instance.new("Frame")
 	NG376.BackgroundColor3 = Color3.new(0, 0, 1)
 	NG376.BorderSizePixel = 0
-	NG376.Name = dCD("FryrpgrqVaqvpngbe")
+	NG376.Name = "SelectedIndicator"
 	NG376.Position = UDim2.new(0, 3, 0, -2)
 	NG376.Size = UDim2.new(1, -3, 0, 2)
 	NG376.Parent = NG373
@@ -8328,25 +8558,25 @@ do
 	NG377.Size = UDim2.new(1, -10, 1, 0)
 	NG377.Font = Enum.Font.ArialBold
 	NG377.FontSize = Enum.FontSize.Size10
-	NG377.Text = dCD("255")
+	NG377.Text = "255"
 	NG377.TextColor3 = Color3.new(1, 1, 1)
 	NG377.Parent = NG373
 	NG378 = Instance.new("ImageButton")
 	NG378.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG378.BackgroundTransparency = 0.40000000596046
 	NG378.BorderSizePixel = 0
-	NG378.Name = dCD("UFICvpxre")
+	NG378.Name = "HSVPicker"
 	NG378.Position = UDim2.new(0, 160, 0, -2)
 	NG378.Size = UDim2.new(0, 27, 0, 27)
 	NG378.Style = Enum.ButtonStyle.Custom
 	NG378.ZIndex = 2
-	NG378.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=141313631")
+	NG378.Image = "http://www.roblox.com/asset/?id=141313631"
 	NG378.Parent = NG361
 	NG379 = Instance.new("Frame")
 	NG379.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG379.BackgroundTransparency = 0.75
 	NG379.BorderSizePixel = 0
-	NG379.Name = dCD("Funqbj")
+	NG379.Name = "Shadow"
 	NG379.Position = UDim2.new(0, 0, 1, -2)
 	NG379.Size = UDim2.new(1, 0, 0, 2)
 	NG379.Parent = NG378
@@ -8355,7 +8585,7 @@ do
 	NG380.BackgroundTransparency = 0.5
 	NG380.BorderColor3 = Color3.new(0.380392, 0.380392, 0.380392)
 	NG380.BorderSizePixel = 0
-	NG380.Name = dCD("Frcnengbe")
+	NG380.Name = "Separator"
 	NG380.Position = UDim2.new(0, 151, 0, 4)
 	NG380.Size = UDim2.new(0, 4, 0, 4)
 	NG380.Parent = NG361
@@ -8364,7 +8594,7 @@ do
 	NG381.BackgroundTransparency = 0.5
 	NG381.BorderColor3 = Color3.new(0.380392, 0.380392, 0.380392)
 	NG381.BorderSizePixel = 0
-	NG381.Name = dCD("Frcnengbe")
+	NG381.Name = "Separator"
 	NG381.Position = UDim2.new(0, 151, 0, 16)
 	NG381.Size = UDim2.new(0, 4, 0, 4)
 	NG381.Parent = NG361
@@ -8373,7 +8603,7 @@ do
 	NG382.BackgroundTransparency = 0.5
 	NG382.BorderColor3 = Color3.new(0.380392, 0.380392, 0.380392)
 	NG382.BorderSizePixel = 0
-	NG382.Name = dCD("Frcnengbe")
+	NG382.Name = "Separator"
 	NG382.Position = UDim2.new(0, 151, 0, 10)
 	NG382.Size = UDim2.new(0, 4, 0, 4)
 	NG382.Parent = NG361
@@ -8381,7 +8611,7 @@ do
 	NG383.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG383.BackgroundTransparency = 1
 	NG383.BorderSizePixel = 0
-	NG383.Name = dCD("OevtugarffBcgvba")
+	NG383.Name = "BrightnessOption"
 	NG383.Position = UDim2.new(0, 0, 0, 45)
 	NG383.Size = UDim2.new(1, 0, 0, 25)
 	NG383.Parent = NG360
@@ -8389,11 +8619,11 @@ do
 	NG384.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG384.BackgroundTransparency = 1
 	NG384.BorderSizePixel = 0
-	NG384.Name = dCD("Ynory")
+	NG384.Name = "Label"
 	NG384.Size = UDim2.new(0, 70, 0, 25)
 	NG384.Font = Enum.Font.ArialBold
 	NG384.FontSize = Enum.FontSize.Size10
-	NG384.Text = dCD("Oevtugarff")
+	NG384.Text = "Brightness"
 	NG384.TextColor3 = Color3.new(1, 1, 1)
 	NG384.TextStrokeTransparency = 0
 	NG384.TextWrapped = true
@@ -8403,7 +8633,7 @@ do
 	NG385.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG385.BackgroundTransparency = 1
 	NG385.BorderSizePixel = 0
-	NG385.Name = dCD("Vachg")
+	NG385.Name = "Input"
 	NG385.Position = UDim2.new(0, 60, 0, 0)
 	NG385.Size = UDim2.new(0, 38, 0, 25)
 	NG385.Parent = NG383
@@ -8419,21 +8649,21 @@ do
 	NG386.ZIndex = 2
 	NG386.Font = Enum.Font.Legacy
 	NG386.FontSize = Enum.FontSize.Size8
-	NG386.Text = dCD("")
+	NG386.Text = ""
 	NG386.Parent = NG385
 	NG387 = Instance.new("ImageLabel")
 	NG387.Active = false
 	NG387.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG387.BackgroundTransparency = 1
 	NG387.BorderSizePixel = 0
-	NG387.Name = dCD("Onpxtebhaq")
+	NG387.Name = "Background"
 	NG387.Selectable = false
 	NG387.Size = UDim2.new(1, 0, 1, 0)
-	NG387.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG387.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG387.Parent = NG385
 	NG388 = Instance.new("Frame")
 	NG388.BorderSizePixel = 0
-	NG388.Name = dCD("FryrpgrqVaqvpngbe")
+	NG388.Name = "SelectedIndicator"
 	NG388.Position = UDim2.new(0, 3, 0, -2)
 	NG388.Size = UDim2.new(1, -3, 0, 2)
 	NG388.Parent = NG385
@@ -8445,14 +8675,14 @@ do
 	NG389.Size = UDim2.new(1, -10, 1, 0)
 	NG389.Font = Enum.Font.ArialBold
 	NG389.FontSize = Enum.FontSize.Size10
-	NG389.Text = dCD("1")
+	NG389.Text = "1"
 	NG389.TextColor3 = Color3.new(1, 1, 1)
 	NG389.Parent = NG385
 	NG390 = Instance.new("Frame")
 	NG390.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG390.BackgroundTransparency = 1
 	NG390.BorderSizePixel = 0
-	NG390.Name = dCD("EnatrBcgvba")
+	NG390.Name = "RangeOption"
 	NG390.Position = UDim2.new(0, 110, 0, 45)
 	NG390.Size = UDim2.new(1, 0, 0, 25)
 	NG390.Parent = NG360
@@ -8460,11 +8690,11 @@ do
 	NG391.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG391.BackgroundTransparency = 1
 	NG391.BorderSizePixel = 0
-	NG391.Name = dCD("Ynory")
+	NG391.Name = "Label"
 	NG391.Size = UDim2.new(0, 70, 0, 25)
 	NG391.Font = Enum.Font.ArialBold
 	NG391.FontSize = Enum.FontSize.Size10
-	NG391.Text = dCD("Enatr")
+	NG391.Text = "Range"
 	NG391.TextColor3 = Color3.new(1, 1, 1)
 	NG391.TextStrokeTransparency = 0
 	NG391.TextWrapped = true
@@ -8474,7 +8704,7 @@ do
 	NG392.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG392.BackgroundTransparency = 1
 	NG392.BorderSizePixel = 0
-	NG392.Name = dCD("Vachg")
+	NG392.Name = "Input"
 	NG392.Position = UDim2.new(0, 40, 0, 0)
 	NG392.Size = UDim2.new(0, 38, 0, 25)
 	NG392.Parent = NG390
@@ -8490,21 +8720,21 @@ do
 	NG393.ZIndex = 2
 	NG393.Font = Enum.Font.Legacy
 	NG393.FontSize = Enum.FontSize.Size8
-	NG393.Text = dCD("")
+	NG393.Text = ""
 	NG393.Parent = NG392
 	NG394 = Instance.new("ImageLabel")
 	NG394.Active = false
 	NG394.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG394.BackgroundTransparency = 1
 	NG394.BorderSizePixel = 0
-	NG394.Name = dCD("Onpxtebhaq")
+	NG394.Name = "Background"
 	NG394.Selectable = false
 	NG394.Size = UDim2.new(1, 0, 1, 0)
-	NG394.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG394.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG394.Parent = NG392
 	NG395 = Instance.new("Frame")
 	NG395.BorderSizePixel = 0
-	NG395.Name = dCD("FryrpgrqVaqvpngbe")
+	NG395.Name = "SelectedIndicator"
 	NG395.Position = UDim2.new(0, 3, 0, -2)
 	NG395.Size = UDim2.new(1, -3, 0, 2)
 	NG395.Parent = NG392
@@ -8516,14 +8746,14 @@ do
 	NG396.Size = UDim2.new(1, -10, 1, 0)
 	NG396.Font = Enum.Font.ArialBold
 	NG396.FontSize = Enum.FontSize.Size10
-	NG396.Text = dCD("16")
+	NG396.Text = "16"
 	NG396.TextColor3 = Color3.new(1, 1, 1)
 	NG396.Parent = NG392
 	NG397 = Instance.new("Frame")
 	NG397.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG397.BackgroundTransparency = 1
 	NG397.BorderSizePixel = 0
-	NG397.Name = dCD("FunqbjfBcgvba")
+	NG397.Name = "ShadowsOption"
 	NG397.Position = UDim2.new(0, 0, 0, 80)
 	NG397.Size = UDim2.new(0, 0, 0, 0)
 	NG397.Parent = NG360
@@ -8531,11 +8761,11 @@ do
 	NG398.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG398.BackgroundTransparency = 1
 	NG398.BorderSizePixel = 0
-	NG398.Name = dCD("Ynory")
+	NG398.Name = "Label"
 	NG398.Size = UDim2.new(0, 50, 0, 25)
 	NG398.Font = Enum.Font.ArialBold
 	NG398.FontSize = Enum.FontSize.Size10
-	NG398.Text = dCD("Funqbjf")
+	NG398.Text = "Shadows"
 	NG398.TextColor3 = Color3.new(1, 1, 1)
 	NG398.TextStrokeTransparency = 0
 	NG398.TextWrapped = true
@@ -8545,14 +8775,14 @@ do
 	NG399.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG399.BackgroundTransparency = 1
 	NG399.BorderSizePixel = 0
-	NG399.Name = dCD("Ba")
+	NG399.Name = "On"
 	NG399.Position = UDim2.new(0, 55, 0, 0)
 	NG399.Size = UDim2.new(0, 45, 0, 25)
 	NG399.Parent = NG397
 	NG400 = Instance.new("Frame")
 	NG400.BackgroundTransparency = 1
 	NG400.BorderSizePixel = 0
-	NG400.Name = dCD("FryrpgrqVaqvpngbe")
+	NG400.Name = "SelectedIndicator"
 	NG400.Position = UDim2.new(0, 4, 0, -2)
 	NG400.Size = UDim2.new(1, -4, 0, 2)
 	NG400.Parent = NG399
@@ -8561,7 +8791,7 @@ do
 	NG401.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG401.BackgroundTransparency = 1
 	NG401.BorderSizePixel = 0
-	NG401.Name = dCD("Ohggba")
+	NG401.Name = "Button"
 	NG401.Position = UDim2.new(0, 5, 0, 0)
 	NG401.Selectable = true
 	NG401.Size = UDim2.new(1, -10, 1, 0)
@@ -8569,7 +8799,7 @@ do
 	NG401.ZIndex = 2
 	NG401.Font = Enum.Font.Legacy
 	NG401.FontSize = Enum.FontSize.Size8
-	NG401.Text = dCD("")
+	NG401.Text = ""
 	NG401.TextTransparency = 1
 	NG401.Parent = NG399
 	NG402 = Instance.new("ImageLabel")
@@ -8577,34 +8807,34 @@ do
 	NG402.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG402.BackgroundTransparency = 1
 	NG402.BorderSizePixel = 0
-	NG402.Name = dCD("Onpxtebhaq")
+	NG402.Name = "Background"
 	NG402.Selectable = false
 	NG402.Size = UDim2.new(1, 0, 1, 0)
-	NG402.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG402.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG402.Parent = NG399
 	NG403 = Instance.new("TextLabel")
 	NG403.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG403.BackgroundTransparency = 1
 	NG403.BorderSizePixel = 0
-	NG403.Name = dCD("Ynory")
+	NG403.Name = "Label"
 	NG403.Size = UDim2.new(1, 0, 1, 0)
 	NG403.Font = Enum.Font.ArialBold
 	NG403.FontSize = Enum.FontSize.Size10
-	NG403.Text = dCD("BA")
+	NG403.Text = "ON"
 	NG403.TextColor3 = Color3.new(1, 1, 1)
 	NG403.Parent = NG399
 	NG404 = Instance.new("Frame")
 	NG404.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG404.BackgroundTransparency = 1
 	NG404.BorderSizePixel = 0
-	NG404.Name = dCD("Bss")
+	NG404.Name = "Off"
 	NG404.Position = UDim2.new(0, 100, 0, 0)
 	NG404.Size = UDim2.new(0, 45, 0, 25)
 	NG404.Parent = NG397
 	NG405 = Instance.new("Frame")
 	NG405.BackgroundTransparency = 1
 	NG405.BorderSizePixel = 0
-	NG405.Name = dCD("FryrpgrqVaqvpngbe")
+	NG405.Name = "SelectedIndicator"
 	NG405.Position = UDim2.new(0, 4, 0, -2)
 	NG405.Size = UDim2.new(1, -4, 0, 2)
 	NG405.Parent = NG404
@@ -8613,7 +8843,7 @@ do
 	NG406.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG406.BackgroundTransparency = 1
 	NG406.BorderSizePixel = 0
-	NG406.Name = dCD("Ohggba")
+	NG406.Name = "Button"
 	NG406.Position = UDim2.new(0, 5, 0, 0)
 	NG406.Selectable = true
 	NG406.Size = UDim2.new(1, -10, 1, 0)
@@ -8621,7 +8851,7 @@ do
 	NG406.ZIndex = 2
 	NG406.Font = Enum.Font.Legacy
 	NG406.FontSize = Enum.FontSize.Size8
-	NG406.Text = dCD("")
+	NG406.Text = ""
 	NG406.TextTransparency = 1
 	NG406.Parent = NG404
 	NG407 = Instance.new("ImageLabel")
@@ -8629,20 +8859,20 @@ do
 	NG407.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG407.BackgroundTransparency = 1
 	NG407.BorderSizePixel = 0
-	NG407.Name = dCD("Onpxtebhaq")
+	NG407.Name = "Background"
 	NG407.Selectable = false
 	NG407.Size = UDim2.new(1, 0, 1, 0)
-	NG407.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG407.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG407.Parent = NG404
 	NG408 = Instance.new("TextLabel")
 	NG408.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG408.BackgroundTransparency = 1
 	NG408.BorderSizePixel = 0
-	NG408.Name = dCD("Ynory")
+	NG408.Name = "Label"
 	NG408.Size = UDim2.new(1, 0, 1, 0)
 	NG408.Font = Enum.Font.ArialBold
 	NG408.FontSize = Enum.FontSize.Size10
-	NG408.Text = dCD("BSS")
+	NG408.Text = "OFF"
 	NG408.TextColor3 = Color3.new(1, 1, 1)
 	NG408.Parent = NG404
 	NG409 = Instance.new("Frame")
@@ -8650,72 +8880,72 @@ do
 	NG409.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG409.BackgroundTransparency = 0.89999997615814
 	NG409.BorderSizePixel = 0
-	NG409.Name = dCD("OGUFIPbybeCvpxre")
+	NG409.Name = "BTHSVColorPicker"
 	NG409.Position = UDim2.new(0, 220, 0, 116)
 	NG409.Size = UDim2.new(0, 250, 0, 380)
 	NG409.Draggable = true
 	NG409.Parent = NG1
 	NG410 = Instance.new("ImageButton")
 	NG410.BorderColor3 = Color3.new(0.207843, 0.207843, 0.207843)
-	NG410.Name = dCD("UhrFnghengvba")
+	NG410.Name = "HueSaturation"
 	NG410.Position = UDim2.new(0, 10, 0, 10)
 	NG410.Size = UDim2.new(0, 209, 0, 200)
 	NG410.Style = Enum.ButtonStyle.Custom
-	NG410.Image = dCD("uggc://jjj.eboybk.pbz/nffrg?vq=141066192")
+	NG410.Image = "http://www.roblox.com/asset?id=141066192"
 	NG410.Parent = NG409
 	NG411 = Instance.new("ImageLabel")
 	NG411.Active = false
 	NG411.BackgroundTransparency = 1
 	NG411.BorderSizePixel = 0
-	NG411.Name = dCD("Phefbe")
+	NG411.Name = "Cursor"
 	NG411.Position = UDim2.new(0, -8, 0, 194)
 	NG411.Selectable = false
 	NG411.Size = UDim2.new(0, 16, 0, 16)
-	NG411.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=141186650")
+	NG411.Image = "http://www.roblox.com/asset/?id=141186650"
 	NG411.Parent = NG410
 	NG412 = Instance.new("ImageButton")
 	NG412.BackgroundTransparency = 1
 	NG412.BorderColor3 = Color3.new(0.207843, 0.207843, 0.207843)
 	NG412.BorderSizePixel = 0
-	NG412.Name = dCD("Inyhr")
+	NG412.Name = "Value"
 	NG412.Position = UDim2.new(0, 229, 0, 10)
 	NG412.Size = UDim2.new(0, 13, 0, 200)
 	NG412.Style = Enum.ButtonStyle.Custom
 	NG412.ZIndex = 2
-	NG412.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=141066196")
+	NG412.Image = "http://www.roblox.com/asset/?id=141066196"
 	NG412.Parent = NG409
 	NG413 = Instance.new("Frame")
 	NG413.BorderSizePixel = 0
-	NG413.Name = dCD("PbybeOT")
+	NG413.Name = "ColorBG"
 	NG413.Size = UDim2.new(1, 0, 1, 0)
 	NG413.Parent = NG412
 	NG414 = Instance.new("ImageLabel")
 	NG414.Active = false
 	NG414.BackgroundTransparency = 1
 	NG414.BorderSizePixel = 0
-	NG414.Name = dCD("Phefbe")
+	NG414.Name = "Cursor"
 	NG414.Position = UDim2.new(0, -2, 0, -8)
 	NG414.Selectable = false
 	NG414.Size = UDim2.new(0, 16, 0, 16)
 	NG414.ZIndex = 2
-	NG414.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=141186650")
+	NG414.Image = "http://www.roblox.com/asset/?id=141186650"
 	NG414.Parent = NG412
 	NG415 = Instance.new("Frame")
 	NG415.BackgroundTransparency = 1
 	NG415.BorderSizePixel = 0
-	NG415.Name = dCD("UhrBcgvba")
+	NG415.Name = "HueOption"
 	NG415.Position = UDim2.new(0, 10, 0, 218)
 	NG415.Size = UDim2.new(1, -25, 0, 34)
 	NG415.Parent = NG409
 	NG416 = Instance.new("TextLabel")
 	NG416.BackgroundTransparency = 1
 	NG416.BorderSizePixel = 0
-	NG416.Name = dCD("Ynory")
+	NG416.Name = "Label"
 	NG416.Position = UDim2.new(0, 15, 0, 0)
 	NG416.Size = UDim2.new(0, 100, 1, 0)
 	NG416.Font = Enum.Font.SourceSansBold
 	NG416.FontSize = Enum.FontSize.Size18
-	NG416.Text = dCD("Uhr")
+	NG416.Text = "Hue"
 	NG416.TextColor3 = Color3.new(1, 1, 1)
 	NG416.TextStrokeTransparency = 0.5
 	NG416.TextWrapped = true
@@ -8725,7 +8955,7 @@ do
 	NG417.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG417.BackgroundTransparency = 1
 	NG417.BorderSizePixel = 0
-	NG417.Name = dCD("Vachg")
+	NG417.Name = "Input"
 	NG417.Position = UDim2.new(0, 55, 0, 4)
 	NG417.Size = UDim2.new(0, 50, 0, 26)
 	NG417.Parent = NG415
@@ -8741,17 +8971,17 @@ do
 	NG418.ZIndex = 2
 	NG418.Font = Enum.Font.Legacy
 	NG418.FontSize = Enum.FontSize.Size8
-	NG418.Text = dCD("")
+	NG418.Text = ""
 	NG418.Parent = NG417
 	NG419 = Instance.new("ImageLabel")
 	NG419.Active = false
 	NG419.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG419.BackgroundTransparency = 1
 	NG419.BorderSizePixel = 0
-	NG419.Name = dCD("Onpxtebhaq")
+	NG419.Name = "Background"
 	NG419.Selectable = false
 	NG419.Size = UDim2.new(1, 0, 1, 0)
-	NG419.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG419.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG419.Parent = NG417
 	NG420 = Instance.new("TextBox")
 	NG420.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
@@ -8761,12 +8991,12 @@ do
 	NG420.Size = UDim2.new(1, -10, 1, 0)
 	NG420.Font = Enum.Font.ArialBold
 	NG420.FontSize = Enum.FontSize.Size10
-	NG420.Text = dCD("360")
+	NG420.Text = "360"
 	NG420.TextColor3 = Color3.new(1, 1, 1)
 	NG420.Parent = NG417
 	NG421 = Instance.new("Frame")
 	NG421.BorderSizePixel = 0
-	NG421.Name = dCD("One")
+	NG421.Name = "Bar"
 	NG421.Position = UDim2.new(0, 0, 0, 2)
 	NG421.Size = UDim2.new(0, 3, 1, -4)
 	NG421.Parent = NG415
@@ -8774,26 +9004,26 @@ do
 	NG422.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG422.BackgroundTransparency = 0.89999997615814
 	NG422.BorderSizePixel = 0
-	NG422.Name = dCD("Funqbj")
+	NG422.Name = "Shadow"
 	NG422.Position = UDim2.new(0, 0, 1, -3)
 	NG422.Size = UDim2.new(1, 0, 0, 3)
 	NG422.Parent = NG421
 	NG423 = Instance.new("Frame")
 	NG423.BackgroundTransparency = 1
 	NG423.BorderSizePixel = 0
-	NG423.Name = dCD("FnghengvbaBcgvba")
+	NG423.Name = "SaturationOption"
 	NG423.Position = UDim2.new(0, 10, 0, 255)
 	NG423.Size = UDim2.new(1, -25, 0, 34)
 	NG423.Parent = NG409
 	NG424 = Instance.new("TextLabel")
 	NG424.BackgroundTransparency = 1
 	NG424.BorderSizePixel = 0
-	NG424.Name = dCD("Ynory")
+	NG424.Name = "Label"
 	NG424.Position = UDim2.new(0, 15, 0, 0)
 	NG424.Size = UDim2.new(0, 100, 1, 0)
 	NG424.Font = Enum.Font.SourceSansBold
 	NG424.FontSize = Enum.FontSize.Size18
-	NG424.Text = dCD("Fnghengvba")
+	NG424.Text = "Saturation"
 	NG424.TextColor3 = Color3.new(1, 1, 1)
 	NG424.TextStrokeTransparency = 0.5
 	NG424.TextWrapped = true
@@ -8803,7 +9033,7 @@ do
 	NG425.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG425.BackgroundTransparency = 1
 	NG425.BorderSizePixel = 0
-	NG425.Name = dCD("Vachg")
+	NG425.Name = "Input"
 	NG425.Position = UDim2.new(0, 100, 0, 4)
 	NG425.Size = UDim2.new(0, 50, 0, 26)
 	NG425.Parent = NG423
@@ -8819,17 +9049,17 @@ do
 	NG426.ZIndex = 2
 	NG426.Font = Enum.Font.Legacy
 	NG426.FontSize = Enum.FontSize.Size8
-	NG426.Text = dCD("")
+	NG426.Text = ""
 	NG426.Parent = NG425
 	NG427 = Instance.new("ImageLabel")
 	NG427.Active = false
 	NG427.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG427.BackgroundTransparency = 1
 	NG427.BorderSizePixel = 0
-	NG427.Name = dCD("Onpxtebhaq")
+	NG427.Name = "Background"
 	NG427.Selectable = false
 	NG427.Size = UDim2.new(1, 0, 1, 0)
-	NG427.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG427.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG427.Parent = NG425
 	NG428 = Instance.new("TextBox")
 	NG428.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
@@ -8839,12 +9069,12 @@ do
 	NG428.Size = UDim2.new(1, -10, 1, 0)
 	NG428.Font = Enum.Font.ArialBold
 	NG428.FontSize = Enum.FontSize.Size10
-	NG428.Text = dCD("100%")
+	NG428.Text = "100%"
 	NG428.TextColor3 = Color3.new(1, 1, 1)
 	NG428.Parent = NG425
 	NG429 = Instance.new("Frame")
 	NG429.BorderSizePixel = 0
-	NG429.Name = dCD("One")
+	NG429.Name = "Bar"
 	NG429.Position = UDim2.new(0, 0, 0, 2)
 	NG429.Size = UDim2.new(0, 3, 1, -4)
 	NG429.Parent = NG423
@@ -8852,26 +9082,26 @@ do
 	NG430.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG430.BackgroundTransparency = 0.89999997615814
 	NG430.BorderSizePixel = 0
-	NG430.Name = dCD("Funqbj")
+	NG430.Name = "Shadow"
 	NG430.Position = UDim2.new(0, 0, 1, -3)
 	NG430.Size = UDim2.new(1, 0, 0, 3)
 	NG430.Parent = NG429
 	NG431 = Instance.new("Frame")
 	NG431.BackgroundTransparency = 1
 	NG431.BorderSizePixel = 0
-	NG431.Name = dCD("InyhrBcgvba")
+	NG431.Name = "ValueOption"
 	NG431.Position = UDim2.new(0, 10, 0, 292)
 	NG431.Size = UDim2.new(1, -25, 0, 34)
 	NG431.Parent = NG409
 	NG432 = Instance.new("TextLabel")
 	NG432.BackgroundTransparency = 1
 	NG432.BorderSizePixel = 0
-	NG432.Name = dCD("Ynory")
+	NG432.Name = "Label"
 	NG432.Position = UDim2.new(0, 15, 0, 0)
 	NG432.Size = UDim2.new(0, 100, 1, 0)
 	NG432.Font = Enum.Font.SourceSansBold
 	NG432.FontSize = Enum.FontSize.Size18
-	NG432.Text = dCD("Oevtugarff")
+	NG432.Text = "Brightness"
 	NG432.TextColor3 = Color3.new(1, 1, 1)
 	NG432.TextStrokeTransparency = 0.5
 	NG432.TextWrapped = true
@@ -8881,7 +9111,7 @@ do
 	NG433.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG433.BackgroundTransparency = 1
 	NG433.BorderSizePixel = 0
-	NG433.Name = dCD("Vachg")
+	NG433.Name = "Input"
 	NG433.Position = UDim2.new(0, 100, 0, 4)
 	NG433.Size = UDim2.new(0, 50, 0, 26)
 	NG433.Parent = NG431
@@ -8897,17 +9127,17 @@ do
 	NG434.ZIndex = 2
 	NG434.Font = Enum.Font.Legacy
 	NG434.FontSize = Enum.FontSize.Size8
-	NG434.Text = dCD("")
+	NG434.Text = ""
 	NG434.Parent = NG433
 	NG435 = Instance.new("ImageLabel")
 	NG435.Active = false
 	NG435.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG435.BackgroundTransparency = 1
 	NG435.BorderSizePixel = 0
-	NG435.Name = dCD("Onpxtebhaq")
+	NG435.Name = "Background"
 	NG435.Selectable = false
 	NG435.Size = UDim2.new(1, 0, 1, 0)
-	NG435.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG435.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG435.Parent = NG433
 	NG436 = Instance.new("TextBox")
 	NG436.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
@@ -8917,12 +9147,12 @@ do
 	NG436.Size = UDim2.new(1, -10, 1, 0)
 	NG436.Font = Enum.Font.ArialBold
 	NG436.FontSize = Enum.FontSize.Size10
-	NG436.Text = dCD("100%")
+	NG436.Text = "100%"
 	NG436.TextColor3 = Color3.new(1, 1, 1)
 	NG436.Parent = NG433
 	NG437 = Instance.new("Frame")
 	NG437.BorderSizePixel = 0
-	NG437.Name = dCD("One")
+	NG437.Name = "Bar"
 	NG437.Position = UDim2.new(0, 0, 0, 2)
 	NG437.Size = UDim2.new(0, 3, 1, -4)
 	NG437.Parent = NG431
@@ -8930,13 +9160,13 @@ do
 	NG438.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG438.BackgroundTransparency = 0.89999997615814
 	NG438.BorderSizePixel = 0
-	NG438.Name = dCD("Funqbj")
+	NG438.Name = "Shadow"
 	NG438.Position = UDim2.new(0, 0, 1, -3)
 	NG438.Size = UDim2.new(1, 0, 0, 3)
 	NG438.Parent = NG437
 	NG439 = Instance.new("Frame")
 	NG439.BorderSizePixel = 0
-	NG439.Name = dCD("PbybeQvfcynl")
+	NG439.Name = "ColorDisplay"
 	NG439.Position = UDim2.new(0, 180, 0, 220)
 	NG439.Size = UDim2.new(0, 60, 0, 103)
 	NG439.Parent = NG409
@@ -8944,7 +9174,7 @@ do
 	NG440.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG440.BackgroundTransparency = 0.89999997615814
 	NG440.BorderSizePixel = 0
-	NG440.Name = dCD("Funqbj")
+	NG440.Name = "Shadow"
 	NG440.Position = UDim2.new(0, 0, 1, -3)
 	NG440.Size = UDim2.new(1, 0, 0, 3)
 	NG440.Parent = NG439
@@ -8952,7 +9182,7 @@ do
 	NG441.Active = true
 	NG441.BackgroundColor3 = Color3.new(1, 0.635294, 0.184314)
 	NG441.BorderSizePixel = 0
-	NG441.Name = dCD("BxOhggba")
+	NG441.Name = "OkButton"
 	NG441.Position = UDim2.new(0, 10, 0, 335)
 	NG441.Selectable = true
 	NG441.Size = UDim2.new(0, 140, 0, 30)
@@ -8960,14 +9190,14 @@ do
 	NG441.ZIndex = 2
 	NG441.Font = Enum.Font.SourceSansBold
 	NG441.FontSize = Enum.FontSize.Size18
-	NG441.Text = dCD("Bx")
+	NG441.Text = "Ok"
 	NG441.TextColor3 = Color3.new(1, 1, 1)
 	NG441.TextStrokeTransparency = 0.85000002384186
 	NG441.Parent = NG409
 	NG442 = Instance.new("Frame")
 	NG442.BackgroundColor3 = Color3.new(0.8, 0.505882, 0.145098)
 	NG442.BorderSizePixel = 0
-	NG442.Name = dCD("Oriry")
+	NG442.Name = "Bevel"
 	NG442.Position = UDim2.new(0, 0, 1, -2)
 	NG442.Size = UDim2.new(1, 0, 0, 2)
 	NG442.ZIndex = 2
@@ -8977,7 +9207,7 @@ do
 	NG443.BackgroundColor3 = Color3.new(1, 0.635294, 0.184314)
 	NG443.BackgroundTransparency = 0.60000002384186
 	NG443.BorderSizePixel = 0
-	NG443.Name = dCD("PnapryOhggba")
+	NG443.Name = "CancelButton"
 	NG443.Position = UDim2.new(0, 160, 0, 335)
 	NG443.Selectable = true
 	NG443.Size = UDim2.new(0, 80, 0, 30)
@@ -8985,7 +9215,7 @@ do
 	NG443.ZIndex = 2
 	NG443.Font = Enum.Font.SourceSansBold
 	NG443.FontSize = Enum.FontSize.Size18
-	NG443.Text = dCD("Pnapry")
+	NG443.Text = "Cancel"
 	NG443.TextColor3 = Color3.new(1, 1, 1)
 	NG443.TextStrokeTransparency = 0.85000002384186
 	NG443.Parent = NG409
@@ -8993,7 +9223,7 @@ do
 	NG444.BackgroundColor3 = Color3.new(0.8, 0.505882, 0.145098)
 	NG444.BackgroundTransparency = 0.60000002384186
 	NG444.BorderSizePixel = 0
-	NG444.Name = dCD("Oriry")
+	NG444.Name = "Bevel"
 	NG444.Position = UDim2.new(0, 0, 1, -2)
 	NG444.Size = UDim2.new(1, 0, 0, 2)
 	NG444.ZIndex = 2
@@ -9003,7 +9233,7 @@ do
 	NG445.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG445.BackgroundTransparency = 1
 	NG445.BorderSizePixel = 0
-	NG445.Name = dCD("OGZrfuGbbyTHV")
+	NG445.Name = "BTMeshToolGUI"
 	NG445.Position = UDim2.new(0, 0, 0, 172)
 	NG445.Size = UDim2.new(0, 200, 0, 55)
 	NG445.Draggable = true
@@ -9012,13 +9242,13 @@ do
 	NG446.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG446.BackgroundTransparency = 1
 	NG446.BorderSizePixel = 0
-	NG446.Name = dCD("Gvgyr")
+	NG446.Name = "Title"
 	NG446.Size = UDim2.new(1, 0, 0, 20)
 	NG446.Parent = NG445
 	NG447 = Instance.new("Frame")
 	NG447.BackgroundColor3 = Color3.new(0.419608, 0.196078, 0.486275)
 	NG447.BorderSizePixel = 0
-	NG447.Name = dCD("PbybeOne")
+	NG447.Name = "ColorBar"
 	NG447.Position = UDim2.new(0, 5, 0, -3)
 	NG447.Size = UDim2.new(1, -5, 0, 2)
 	NG447.Parent = NG446
@@ -9026,12 +9256,12 @@ do
 	NG448.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG448.BackgroundTransparency = 1
 	NG448.BorderSizePixel = 0
-	NG448.Name = dCD("Ynory")
+	NG448.Name = "Label"
 	NG448.Position = UDim2.new(0, 10, 0, 1)
 	NG448.Size = UDim2.new(1, -10, 1, 0)
 	NG448.Font = Enum.Font.ArialBold
 	NG448.FontSize = Enum.FontSize.Size10
-	NG448.Text = dCD("ZRFU GBBY")
+	NG448.Text = "MESH TOOL"
 	NG448.TextColor3 = Color3.new(1, 1, 1)
 	NG448.TextStrokeTransparency = 0
 	NG448.TextWrapped = true
@@ -9041,12 +9271,12 @@ do
 	NG449.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG449.BackgroundTransparency = 1
 	NG449.BorderSizePixel = 0
-	NG449.Name = dCD("S3KFvtangher")
+	NG449.Name = "F3XSignature"
 	NG449.Position = UDim2.new(0, 10, 0, 1)
 	NG449.Size = UDim2.new(1, -10, 1, 0)
 	NG449.Font = Enum.Font.ArialBold
 	NG449.FontSize = Enum.FontSize.Size14
-	NG449.Text = dCD("S3K")
+	NG449.Text = "F3X"
 	NG449.TextColor3 = Color3.new(1, 1, 1)
 	NG449.TextStrokeTransparency = 0.89999997615814
 	NG449.TextWrapped = true
@@ -9056,7 +9286,7 @@ do
 	NG450.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG450.BackgroundTransparency = 1
 	NG450.BorderSizePixel = 0
-	NG450.Name = dCD("GlcrBcgvba")
+	NG450.Name = "TypeOption"
 	NG450.Position = UDim2.new(0, 14, 0, 65)
 	NG450.Size = UDim2.new(1, -14, 0, 25)
 	NG450.Visible = false
@@ -9065,11 +9295,11 @@ do
 	NG451.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG451.BackgroundTransparency = 1
 	NG451.BorderSizePixel = 0
-	NG451.Name = dCD("Ynory")
+	NG451.Name = "Label"
 	NG451.Size = UDim2.new(0, 30, 0, 25)
 	NG451.Font = Enum.Font.ArialBold
 	NG451.FontSize = Enum.FontSize.Size10
-	NG451.Text = dCD("Glcr")
+	NG451.Text = "Type"
 	NG451.TextColor3 = Color3.new(1, 1, 1)
 	NG451.TextStrokeTransparency = 0
 	NG451.TextWrapped = true
@@ -9079,7 +9309,7 @@ do
 	NG452.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG452.BackgroundTransparency = 1
 	NG452.BorderSizePixel = 0
-	NG452.Name = dCD("FpnyrBcgvba")
+	NG452.Name = "ScaleOption"
 	NG452.Position = UDim2.new(0, 0, 0, 100)
 	NG452.Size = UDim2.new(0, 0, 0, 0)
 	NG452.Visible = false
@@ -9088,12 +9318,12 @@ do
 	NG453.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG453.BackgroundTransparency = 1
 	NG453.BorderSizePixel = 0
-	NG453.Name = dCD("Ynory")
+	NG453.Name = "Label"
 	NG453.Position = UDim2.new(0, 14, 0, 0)
 	NG453.Size = UDim2.new(0, 70, 0, 25)
 	NG453.Font = Enum.Font.ArialBold
 	NG453.FontSize = Enum.FontSize.Size10
-	NG453.Text = dCD("Fpnyr")
+	NG453.Text = "Scale"
 	NG453.TextColor3 = Color3.new(1, 1, 1)
 	NG453.TextStrokeTransparency = 0
 	NG453.TextWrapped = true
@@ -9103,7 +9333,7 @@ do
 	NG454.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG454.BackgroundTransparency = 1
 	NG454.BorderSizePixel = 0
-	NG454.Name = dCD("KVachg")
+	NG454.Name = "XInput"
 	NG454.Position = UDim2.new(0, 55, 0, 0)
 	NG454.Size = UDim2.new(0, 45, 0, 25)
 	NG454.Parent = NG452
@@ -9119,21 +9349,21 @@ do
 	NG455.ZIndex = 2
 	NG455.Font = Enum.Font.Legacy
 	NG455.FontSize = Enum.FontSize.Size8
-	NG455.Text = dCD("")
+	NG455.Text = ""
 	NG455.Parent = NG454
 	NG456 = Instance.new("ImageLabel")
 	NG456.Active = false
 	NG456.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG456.BackgroundTransparency = 1
 	NG456.BorderSizePixel = 0
-	NG456.Name = dCD("Onpxtebhaq")
+	NG456.Name = "Background"
 	NG456.Selectable = false
 	NG456.Size = UDim2.new(1, 0, 1, 0)
-	NG456.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG456.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG456.Parent = NG454
 	NG457 = Instance.new("Frame")
 	NG457.BorderSizePixel = 0
-	NG457.Name = dCD("FryrpgrqVaqvpngbe")
+	NG457.Name = "SelectedIndicator"
 	NG457.Position = UDim2.new(0, 5, 0, -2)
 	NG457.Size = UDim2.new(1, -4, 0, 2)
 	NG457.Parent = NG454
@@ -9145,14 +9375,14 @@ do
 	NG458.Size = UDim2.new(1, -10, 1, 0)
 	NG458.Font = Enum.Font.ArialBold
 	NG458.FontSize = Enum.FontSize.Size10
-	NG458.Text = dCD("1")
+	NG458.Text = "1"
 	NG458.TextColor3 = Color3.new(1, 1, 1)
 	NG458.Parent = NG454
 	NG459 = Instance.new("Frame")
 	NG459.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG459.BackgroundTransparency = 1
 	NG459.BorderSizePixel = 0
-	NG459.Name = dCD("LVachg")
+	NG459.Name = "YInput"
 	NG459.Position = UDim2.new(0, 100, 0, 0)
 	NG459.Size = UDim2.new(0, 45, 0, 25)
 	NG459.Parent = NG452
@@ -9168,21 +9398,21 @@ do
 	NG460.ZIndex = 2
 	NG460.Font = Enum.Font.Legacy
 	NG460.FontSize = Enum.FontSize.Size8
-	NG460.Text = dCD("")
+	NG460.Text = ""
 	NG460.Parent = NG459
 	NG461 = Instance.new("ImageLabel")
 	NG461.Active = false
 	NG461.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG461.BackgroundTransparency = 1
 	NG461.BorderSizePixel = 0
-	NG461.Name = dCD("Onpxtebhaq")
+	NG461.Name = "Background"
 	NG461.Selectable = false
 	NG461.Size = UDim2.new(1, 0, 1, 0)
-	NG461.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG461.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG461.Parent = NG459
 	NG462 = Instance.new("Frame")
 	NG462.BorderSizePixel = 0
-	NG462.Name = dCD("FryrpgrqVaqvpngbe")
+	NG462.Name = "SelectedIndicator"
 	NG462.Position = UDim2.new(0, 5, 0, -2)
 	NG462.Size = UDim2.new(1, -4, 0, 2)
 	NG462.Parent = NG459
@@ -9194,14 +9424,14 @@ do
 	NG463.Size = UDim2.new(1, -10, 1, 0)
 	NG463.Font = Enum.Font.ArialBold
 	NG463.FontSize = Enum.FontSize.Size10
-	NG463.Text = dCD("1")
+	NG463.Text = "1"
 	NG463.TextColor3 = Color3.new(1, 1, 1)
 	NG463.Parent = NG459
 	NG464 = Instance.new("Frame")
 	NG464.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG464.BackgroundTransparency = 1
 	NG464.BorderSizePixel = 0
-	NG464.Name = dCD("MVachg")
+	NG464.Name = "ZInput"
 	NG464.Position = UDim2.new(0, 145, 0, 0)
 	NG464.Size = UDim2.new(0, 45, 0, 25)
 	NG464.Parent = NG452
@@ -9217,21 +9447,21 @@ do
 	NG465.ZIndex = 2
 	NG465.Font = Enum.Font.Legacy
 	NG465.FontSize = Enum.FontSize.Size8
-	NG465.Text = dCD("")
+	NG465.Text = ""
 	NG465.Parent = NG464
 	NG466 = Instance.new("ImageLabel")
 	NG466.Active = false
 	NG466.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG466.BackgroundTransparency = 1
 	NG466.BorderSizePixel = 0
-	NG466.Name = dCD("Onpxtebhaq")
+	NG466.Name = "Background"
 	NG466.Selectable = false
 	NG466.Size = UDim2.new(1, 0, 1, 0)
-	NG466.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG466.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG466.Parent = NG464
 	NG467 = Instance.new("Frame")
 	NG467.BorderSizePixel = 0
-	NG467.Name = dCD("FryrpgrqVaqvpngbe")
+	NG467.Name = "SelectedIndicator"
 	NG467.Position = UDim2.new(0, 5, 0, -2)
 	NG467.Size = UDim2.new(1, -4, 0, 2)
 	NG467.Parent = NG464
@@ -9243,14 +9473,14 @@ do
 	NG468.Size = UDim2.new(1, -10, 1, 0)
 	NG468.Font = Enum.Font.ArialBold
 	NG468.FontSize = Enum.FontSize.Size10
-	NG468.Text = dCD("1")
+	NG468.Text = "1"
 	NG468.TextColor3 = Color3.new(1, 1, 1)
 	NG468.Parent = NG464
 	NG469 = Instance.new("Frame")
 	NG469.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG469.BackgroundTransparency = 1
 	NG469.BorderSizePixel = 0
-	NG469.Name = dCD("NqqOhggba")
+	NG469.Name = "AddButton"
 	NG469.Position = UDim2.new(0, 10, 0, 30)
 	NG469.Size = UDim2.new(1, -10, 0, 20)
 	NG469.Visible = false
@@ -9260,13 +9490,13 @@ do
 	NG470.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG470.BackgroundTransparency = 0.44999998807907
 	NG470.BorderSizePixel = 0
-	NG470.Name = dCD("Ohggba")
+	NG470.Name = "Button"
 	NG470.Selectable = true
 	NG470.Size = UDim2.new(1, 0, 1, 0)
 	NG470.Style = Enum.ButtonStyle.Custom
 	NG470.Font = Enum.Font.ArialBold
 	NG470.FontSize = Enum.FontSize.Size10
-	NG470.Text = dCD("NQQ ZRFU")
+	NG470.Text = "ADD MESH"
 	NG470.TextColor3 = Color3.new(1, 1, 1)
 	NG470.TextStrokeTransparency = 0.80000001192093
 	NG470.Parent = NG469
@@ -9274,7 +9504,7 @@ do
 	NG471.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG471.BackgroundTransparency = 0.30000001192093
 	NG471.BorderSizePixel = 0
-	NG471.Name = dCD("Funqbj")
+	NG471.Name = "Shadow"
 	NG471.Position = UDim2.new(0, 0, 1, 0)
 	NG471.Size = UDim2.new(1, 0, 0, 2)
 	NG471.ZIndex = 2
@@ -9283,7 +9513,7 @@ do
 	NG472.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG472.BackgroundTransparency = 1
 	NG472.BorderSizePixel = 0
-	NG472.Name = dCD("ZrfuVQBcgvba")
+	NG472.Name = "MeshIDOption"
 	NG472.Position = UDim2.new(0, 14, 0, 135)
 	NG472.Size = UDim2.new(1, 0, 0, 25)
 	NG472.Visible = false
@@ -9292,11 +9522,11 @@ do
 	NG473.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG473.BackgroundTransparency = 1
 	NG473.BorderSizePixel = 0
-	NG473.Name = dCD("Ynory")
+	NG473.Name = "Label"
 	NG473.Size = UDim2.new(0, 70, 0, 25)
 	NG473.Font = Enum.Font.ArialBold
 	NG473.FontSize = Enum.FontSize.Size10
-	NG473.Text = dCD("Zrfu VQ")
+	NG473.Text = "Mesh ID"
 	NG473.TextColor3 = Color3.new(1, 1, 1)
 	NG473.TextStrokeTransparency = 0
 	NG473.TextWrapped = true
@@ -9311,7 +9541,7 @@ do
 	NG474.Size = UDim2.new(0, 80, 0, 18)
 	NG474.Font = Enum.Font.SourceSansBold
 	NG474.FontSize = Enum.FontSize.Size10
-	NG474.Text = dCD("")
+	NG474.Text = ""
 	NG474.TextColor3 = Color3.new(1, 1, 1)
 	NG474.TextScaled = true
 	NG474.TextStrokeTransparency = 0.5
@@ -9321,27 +9551,27 @@ do
 	NG475 = Instance.new("Frame")
 	NG475.BackgroundTransparency = 1
 	NG475.BorderSizePixel = 0
-	NG475.Name = dCD("GrkgObkObeqre")
+	NG475.Name = "TextBoxBorder"
 	NG475.Position = UDim2.new(0, 56, 0, 17)
 	NG475.Size = UDim2.new(0, 85, 0, 3)
 	NG475.Parent = NG472
 	NG476 = Instance.new("Frame")
 	NG476.BackgroundColor3 = Color3.new(0.333333, 0, 0.498039)
 	NG476.BorderSizePixel = 0
-	NG476.Name = dCD("ObggbzObeqre")
+	NG476.Name = "BottomBorder"
 	NG476.Position = UDim2.new(0, 0, 1, -1)
 	NG476.Size = UDim2.new(1, 0, 0, 1)
 	NG476.Parent = NG475
 	NG477 = Instance.new("Frame")
 	NG477.BackgroundColor3 = Color3.new(0.333333, 0, 0.498039)
 	NG477.BorderSizePixel = 0
-	NG477.Name = dCD("YrsgObeqre")
+	NG477.Name = "LeftBorder"
 	NG477.Size = UDim2.new(0, 1, 1, 0)
 	NG477.Parent = NG475
 	NG478 = Instance.new("Frame")
 	NG478.BackgroundColor3 = Color3.new(0.333333, 0, 0.498039)
 	NG478.BorderSizePixel = 0
-	NG478.Name = dCD("EvtugObeqre")
+	NG478.Name = "RightBorder"
 	NG478.Position = UDim2.new(1, -1, 0, 0)
 	NG478.Size = UDim2.new(0, 1, 1, 0)
 	NG478.Parent = NG475
@@ -9349,7 +9579,7 @@ do
 	NG479.BackgroundColor3 = Color3.new(0.333333, 0, 0.498039)
 	NG479.BackgroundTransparency = 0.89999997615814
 	NG479.BorderSizePixel = 0
-	NG479.Name = dCD("GrkgObkOnpxtebhaq")
+	NG479.Name = "TextBoxBackground"
 	NG479.Position = UDim2.new(0, 55, 0, -2)
 	NG479.Size = UDim2.new(0, 86, 0, 22)
 	NG479.Parent = NG472
@@ -9363,12 +9593,12 @@ do
 	NG480.Style = Enum.ButtonStyle.Custom
 	NG480.ZIndex = 2
 	NG480.FontSize = Enum.FontSize.Size14
-	NG480.Text = dCD("")
+	NG480.Text = ""
 	NG480.Parent = NG472
 	NG481 = Instance.new("Frame")
 	NG481.BackgroundColor3 = Color3.new(0.419608, 0.196078, 0.486275)
 	NG481.BorderSizePixel = 0
-	NG481.Name = dCD("ObggbzPbybeOne")
+	NG481.Name = "BottomColorBar"
 	NG481.Position = UDim2.new(0, 5, 1, -2)
 	NG481.Size = UDim2.new(1, 0, 0, 2)
 	NG481.Parent = NG445
@@ -9376,7 +9606,7 @@ do
 	NG482.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG482.BackgroundTransparency = 1
 	NG482.BorderSizePixel = 0
-	NG482.Name = dCD("GrkgherVQBcgvba")
+	NG482.Name = "TextureIDOption"
 	NG482.Position = UDim2.new(0, 14, 0, 165)
 	NG482.Size = UDim2.new(1, 0, 0, 25)
 	NG482.Visible = false
@@ -9385,11 +9615,11 @@ do
 	NG483.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG483.BackgroundTransparency = 1
 	NG483.BorderSizePixel = 0
-	NG483.Name = dCD("Ynory")
+	NG483.Name = "Label"
 	NG483.Size = UDim2.new(0, 70, 0, 25)
 	NG483.Font = Enum.Font.ArialBold
 	NG483.FontSize = Enum.FontSize.Size10
-	NG483.Text = dCD("Grkgher VQ")
+	NG483.Text = "Texture ID"
 	NG483.TextColor3 = Color3.new(1, 1, 1)
 	NG483.TextStrokeTransparency = 0
 	NG483.TextWrapped = true
@@ -9404,7 +9634,7 @@ do
 	NG484.Size = UDim2.new(0, 80, 0, 18)
 	NG484.Font = Enum.Font.SourceSansBold
 	NG484.FontSize = Enum.FontSize.Size10
-	NG484.Text = dCD("")
+	NG484.Text = ""
 	NG484.TextColor3 = Color3.new(1, 1, 1)
 	NG484.TextScaled = true
 	NG484.TextStrokeTransparency = 0.5
@@ -9414,27 +9644,27 @@ do
 	NG485 = Instance.new("Frame")
 	NG485.BackgroundTransparency = 1
 	NG485.BorderSizePixel = 0
-	NG485.Name = dCD("GrkgObkObeqre")
+	NG485.Name = "TextBoxBorder"
 	NG485.Position = UDim2.new(0, 61, 0, 17)
 	NG485.Size = UDim2.new(0, 85, 0, 3)
 	NG485.Parent = NG482
 	NG486 = Instance.new("Frame")
 	NG486.BackgroundColor3 = Color3.new(0.333333, 0, 0.498039)
 	NG486.BorderSizePixel = 0
-	NG486.Name = dCD("ObggbzObeqre")
+	NG486.Name = "BottomBorder"
 	NG486.Position = UDim2.new(0, 0, 1, -1)
 	NG486.Size = UDim2.new(1, 0, 0, 1)
 	NG486.Parent = NG485
 	NG487 = Instance.new("Frame")
 	NG487.BackgroundColor3 = Color3.new(0.333333, 0, 0.498039)
 	NG487.BorderSizePixel = 0
-	NG487.Name = dCD("YrsgObeqre")
+	NG487.Name = "LeftBorder"
 	NG487.Size = UDim2.new(0, 1, 1, 0)
 	NG487.Parent = NG485
 	NG488 = Instance.new("Frame")
 	NG488.BackgroundColor3 = Color3.new(0.333333, 0, 0.498039)
 	NG488.BorderSizePixel = 0
-	NG488.Name = dCD("EvtugObeqre")
+	NG488.Name = "RightBorder"
 	NG488.Position = UDim2.new(1, -1, 0, 0)
 	NG488.Size = UDim2.new(0, 1, 1, 0)
 	NG488.Parent = NG485
@@ -9442,7 +9672,7 @@ do
 	NG489.BackgroundColor3 = Color3.new(0.333333, 0, 0.498039)
 	NG489.BackgroundTransparency = 0.89999997615814
 	NG489.BorderSizePixel = 0
-	NG489.Name = dCD("GrkgObkOnpxtebhaq")
+	NG489.Name = "TextBoxBackground"
 	NG489.Position = UDim2.new(0, 60, 0, -2)
 	NG489.Size = UDim2.new(0, 86, 0, 22)
 	NG489.Parent = NG482
@@ -9456,13 +9686,13 @@ do
 	NG490.Style = Enum.ButtonStyle.Custom
 	NG490.ZIndex = 2
 	NG490.FontSize = Enum.FontSize.Size14
-	NG490.Text = dCD("")
+	NG490.Text = ""
 	NG490.Parent = NG482
 	NG491 = Instance.new("Frame")
 	NG491.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG491.BackgroundTransparency = 1
 	NG491.BorderSizePixel = 0
-	NG491.Name = dCD("ErzbirOhggba")
+	NG491.Name = "RemoveButton"
 	NG491.Position = UDim2.new(0, 10, 1, -30)
 	NG491.Size = UDim2.new(1, -10, 0, 20)
 	NG491.Visible = false
@@ -9472,13 +9702,13 @@ do
 	NG492.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG492.BackgroundTransparency = 0.44999998807907
 	NG492.BorderSizePixel = 0
-	NG492.Name = dCD("Ohggba")
+	NG492.Name = "Button"
 	NG492.Selectable = true
 	NG492.Size = UDim2.new(1, 0, 1, 0)
 	NG492.Style = Enum.ButtonStyle.Custom
 	NG492.Font = Enum.Font.ArialBold
 	NG492.FontSize = Enum.FontSize.Size10
-	NG492.Text = dCD("ERZBIR ZRFU")
+	NG492.Text = "REMOVE MESH"
 	NG492.TextColor3 = Color3.new(1, 1, 1)
 	NG492.TextStrokeTransparency = 0.80000001192093
 	NG492.Parent = NG491
@@ -9486,7 +9716,7 @@ do
 	NG493.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG493.BackgroundTransparency = 0.30000001192093
 	NG493.BorderSizePixel = 0
-	NG493.Name = dCD("Funqbj")
+	NG493.Name = "Shadow"
 	NG493.Position = UDim2.new(0, 0, 1, 0)
 	NG493.Size = UDim2.new(1, 0, 0, 2)
 	NG493.ZIndex = 2
@@ -9495,7 +9725,7 @@ do
 	NG494.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG494.BackgroundTransparency = 1
 	NG494.BorderSizePixel = 0
-	NG494.Name = dCD("GvagBcgvba")
+	NG494.Name = "TintOption"
 	NG494.Position = UDim2.new(0, 0, 0, 200)
 	NG494.Size = UDim2.new(0, 0, 0, 0)
 	NG494.Visible = false
@@ -9504,12 +9734,12 @@ do
 	NG495.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG495.BackgroundTransparency = 1
 	NG495.BorderSizePixel = 0
-	NG495.Name = dCD("Ynory")
+	NG495.Name = "Label"
 	NG495.Position = UDim2.new(0, 14, 0, 0)
 	NG495.Size = UDim2.new(0, 70, 0, 25)
 	NG495.Font = Enum.Font.ArialBold
 	NG495.FontSize = Enum.FontSize.Size10
-	NG495.Text = dCD("Gvag")
+	NG495.Text = "Tint"
 	NG495.TextColor3 = Color3.new(1, 1, 1)
 	NG495.TextStrokeTransparency = 0
 	NG495.TextWrapped = true
@@ -9519,7 +9749,7 @@ do
 	NG496.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG496.BackgroundTransparency = 1
 	NG496.BorderSizePixel = 0
-	NG496.Name = dCD("OVachg")
+	NG496.Name = "BInput"
 	NG496.Position = UDim2.new(0, 114, 0, 0)
 	NG496.Size = UDim2.new(0, 38, 0, 25)
 	NG496.Parent = NG494
@@ -9535,22 +9765,22 @@ do
 	NG497.ZIndex = 2
 	NG497.Font = Enum.Font.Legacy
 	NG497.FontSize = Enum.FontSize.Size8
-	NG497.Text = dCD("")
+	NG497.Text = ""
 	NG497.Parent = NG496
 	NG498 = Instance.new("ImageLabel")
 	NG498.Active = false
 	NG498.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG498.BackgroundTransparency = 1
 	NG498.BorderSizePixel = 0
-	NG498.Name = dCD("Onpxtebhaq")
+	NG498.Name = "Background"
 	NG498.Selectable = false
 	NG498.Size = UDim2.new(1, 0, 1, 0)
-	NG498.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG498.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG498.Parent = NG496
 	NG499 = Instance.new("Frame")
 	NG499.BackgroundColor3 = Color3.new(0, 0, 1)
 	NG499.BorderSizePixel = 0
-	NG499.Name = dCD("FryrpgrqVaqvpngbe")
+	NG499.Name = "SelectedIndicator"
 	NG499.Position = UDim2.new(0, 3, 0, -2)
 	NG499.Size = UDim2.new(1, -3, 0, 2)
 	NG499.Parent = NG496
@@ -9562,14 +9792,14 @@ do
 	NG500.Size = UDim2.new(1, -10, 1, 0)
 	NG500.Font = Enum.Font.ArialBold
 	NG500.FontSize = Enum.FontSize.Size10
-	NG500.Text = dCD("255")
+	NG500.Text = "255"
 	NG500.TextColor3 = Color3.new(1, 1, 1)
 	NG500.Parent = NG496
 	NG501 = Instance.new("Frame")
 	NG501.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG501.BackgroundTransparency = 1
 	NG501.BorderSizePixel = 0
-	NG501.Name = dCD("TVachg")
+	NG501.Name = "GInput"
 	NG501.Position = UDim2.new(0, 77, 0, 0)
 	NG501.Size = UDim2.new(0, 38, 0, 25)
 	NG501.Parent = NG494
@@ -9585,22 +9815,22 @@ do
 	NG502.ZIndex = 2
 	NG502.Font = Enum.Font.Legacy
 	NG502.FontSize = Enum.FontSize.Size8
-	NG502.Text = dCD("")
+	NG502.Text = ""
 	NG502.Parent = NG501
 	NG503 = Instance.new("ImageLabel")
 	NG503.Active = false
 	NG503.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG503.BackgroundTransparency = 1
 	NG503.BorderSizePixel = 0
-	NG503.Name = dCD("Onpxtebhaq")
+	NG503.Name = "Background"
 	NG503.Selectable = false
 	NG503.Size = UDim2.new(1, 0, 1, 0)
-	NG503.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG503.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG503.Parent = NG501
 	NG504 = Instance.new("Frame")
 	NG504.BackgroundColor3 = Color3.new(0, 1, 0)
 	NG504.BorderSizePixel = 0
-	NG504.Name = dCD("FryrpgrqVaqvpngbe")
+	NG504.Name = "SelectedIndicator"
 	NG504.Position = UDim2.new(0, 3, 0, -2)
 	NG504.Size = UDim2.new(1, -3, 0, 2)
 	NG504.Parent = NG501
@@ -9612,14 +9842,14 @@ do
 	NG505.Size = UDim2.new(1, -10, 1, 0)
 	NG505.Font = Enum.Font.ArialBold
 	NG505.FontSize = Enum.FontSize.Size10
-	NG505.Text = dCD("255")
+	NG505.Text = "255"
 	NG505.TextColor3 = Color3.new(1, 1, 1)
 	NG505.Parent = NG501
 	NG506 = Instance.new("Frame")
 	NG506.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG506.BackgroundTransparency = 1
 	NG506.BorderSizePixel = 0
-	NG506.Name = dCD("EVachg")
+	NG506.Name = "RInput"
 	NG506.Position = UDim2.new(0, 40, 0, 0)
 	NG506.Size = UDim2.new(0, 38, 0, 25)
 	NG506.Parent = NG494
@@ -9635,22 +9865,22 @@ do
 	NG507.ZIndex = 2
 	NG507.Font = Enum.Font.Legacy
 	NG507.FontSize = Enum.FontSize.Size8
-	NG507.Text = dCD("")
+	NG507.Text = ""
 	NG507.Parent = NG506
 	NG508 = Instance.new("ImageLabel")
 	NG508.Active = false
 	NG508.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG508.BackgroundTransparency = 1
 	NG508.BorderSizePixel = 0
-	NG508.Name = dCD("Onpxtebhaq")
+	NG508.Name = "Background"
 	NG508.Selectable = false
 	NG508.Size = UDim2.new(1, 0, 1, 0)
-	NG508.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG508.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG508.Parent = NG506
 	NG509 = Instance.new("Frame")
 	NG509.BackgroundColor3 = Color3.new(1, 0, 0)
 	NG509.BorderSizePixel = 0
-	NG509.Name = dCD("FryrpgrqVaqvpngbe")
+	NG509.Name = "SelectedIndicator"
 	NG509.Position = UDim2.new(0, 3, 0, -2)
 	NG509.Size = UDim2.new(1, -3, 0, 2)
 	NG509.Parent = NG506
@@ -9662,7 +9892,7 @@ do
 	NG510.Size = UDim2.new(1, -10, 1, 0)
 	NG510.Font = Enum.Font.ArialBold
 	NG510.FontSize = Enum.FontSize.Size10
-	NG510.Text = dCD("255")
+	NG510.Text = "255"
 	NG510.TextColor3 = Color3.new(1, 1, 1)
 	NG510.Parent = NG506
 	NG511 = Instance.new("Frame")
@@ -9670,7 +9900,7 @@ do
 	NG511.BackgroundTransparency = 0.5
 	NG511.BorderColor3 = Color3.new(0.380392, 0.380392, 0.380392)
 	NG511.BorderSizePixel = 0
-	NG511.Name = dCD("Frcnengbe")
+	NG511.Name = "Separator"
 	NG511.Position = UDim2.new(0, 156, 0, 4)
 	NG511.Size = UDim2.new(0, 4, 0, 4)
 	NG511.Parent = NG494
@@ -9679,7 +9909,7 @@ do
 	NG512.BackgroundTransparency = 0.5
 	NG512.BorderColor3 = Color3.new(0.380392, 0.380392, 0.380392)
 	NG512.BorderSizePixel = 0
-	NG512.Name = dCD("Frcnengbe")
+	NG512.Name = "Separator"
 	NG512.Position = UDim2.new(0, 156, 0, 16)
 	NG512.Size = UDim2.new(0, 4, 0, 4)
 	NG512.Parent = NG494
@@ -9688,7 +9918,7 @@ do
 	NG513.BackgroundTransparency = 0.5
 	NG513.BorderColor3 = Color3.new(0.380392, 0.380392, 0.380392)
 	NG513.BorderSizePixel = 0
-	NG513.Name = dCD("Frcnengbe")
+	NG513.Name = "Separator"
 	NG513.Position = UDim2.new(0, 156, 0, 10)
 	NG513.Size = UDim2.new(0, 4, 0, 4)
 	NG513.Parent = NG494
@@ -9696,29 +9926,29 @@ do
 	NG514.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG514.BackgroundTransparency = 0.40000000596046
 	NG514.BorderSizePixel = 0
-	NG514.Name = dCD("UFICvpxre")
+	NG514.Name = "HSVPicker"
 	NG514.Position = UDim2.new(0, 165, 0, -2)
 	NG514.Size = UDim2.new(0, 27, 0, 27)
 	NG514.Style = Enum.ButtonStyle.Custom
 	NG514.ZIndex = 2
-	NG514.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=141313631")
+	NG514.Image = "http://www.roblox.com/asset/?id=141313631"
 	NG514.Parent = NG494
 	NG515 = Instance.new("Frame")
 	NG515.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG515.BackgroundTransparency = 0.75
 	NG515.BorderSizePixel = 0
-	NG515.Name = dCD("Funqbj")
+	NG515.Name = "Shadow"
 	NG515.Position = UDim2.new(0, 0, 1, -2)
 	NG515.Size = UDim2.new(1, 0, 0, 2)
 	NG515.Parent = NG514
 	NG516 = Instance.new("TextLabel")
 	NG516.BackgroundTransparency = 1
 	NG516.BorderSizePixel = 0
-	NG516.Name = dCD("FryrpgAbgr")
+	NG516.Name = "SelectNote"
 	NG516.Position = UDim2.new(0, 10, 0, 27)
 	NG516.Size = UDim2.new(1, -10, 0, 15)
 	NG516.FontSize = Enum.FontSize.Size14
-	NG516.Text = dCD("Fryrpg fbzrguvat gb hfr guvf gbby.")
+	NG516.Text = "Select something to use this tool."
 	NG516.TextColor3 = Color3.new(1, 1, 1)
 	NG516.TextScaled = true
 	NG516.TextStrokeTransparency = 0.5
@@ -9730,7 +9960,7 @@ do
 	NG517.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG517.BackgroundTransparency = 1
 	NG517.BorderSizePixel = 0
-	NG517.Name = dCD("OGZbirGbbyTHV")
+	NG517.Name = "BTMoveToolGUI"
 	NG517.Position = UDim2.new(0, 0, 0, 280)
 	NG517.Size = UDim2.new(0, 245, 0, 90)
 	NG517.Draggable = true
@@ -9739,7 +9969,7 @@ do
 	NG518.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG518.BackgroundTransparency = 1
 	NG518.BorderSizePixel = 0
-	NG518.Name = dCD("Punatrf")
+	NG518.Name = "Changes"
 	NG518.Position = UDim2.new(0, 5, 0, 100)
 	NG518.Size = UDim2.new(1, -5, 0, 20)
 	NG518.Parent = NG517
@@ -9747,12 +9977,12 @@ do
 	NG519.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG519.BackgroundTransparency = 1
 	NG519.BorderSizePixel = 0
-	NG519.Name = dCD("Grkg")
+	NG519.Name = "Text"
 	NG519.Position = UDim2.new(0, 10, 0, 2)
 	NG519.Size = UDim2.new(1, -10, 0, 20)
 	NG519.Font = Enum.Font.ArialBold
 	NG519.FontSize = Enum.FontSize.Size10
-	NG519.Text = dCD("zbirq 0 fghqf")
+	NG519.Text = "moved 0 studs"
 	NG519.TextColor3 = Color3.new(1, 1, 1)
 	NG519.TextStrokeTransparency = 0.5
 	NG519.TextWrapped = true
@@ -9761,14 +9991,14 @@ do
 	NG520 = Instance.new("Frame")
 	NG520.BackgroundColor3 = Color3.new(1, 0.666667, 0)
 	NG520.BorderSizePixel = 0
-	NG520.Name = dCD("PbybeOne")
+	NG520.Name = "ColorBar"
 	NG520.Size = UDim2.new(1, 0, 0, 2)
 	NG520.Parent = NG518
 	NG521 = Instance.new("Frame")
 	NG521.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG521.BackgroundTransparency = 1
 	NG521.BorderSizePixel = 0
-	NG521.Name = dCD("Vasb")
+	NG521.Name = "Info"
 	NG521.Position = UDim2.new(0, 5, 0, 100)
 	NG521.Size = UDim2.new(1, -5, 0, 60)
 	NG521.Visible = false
@@ -9777,7 +10007,7 @@ do
 	NG522.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG522.BackgroundTransparency = 1
 	NG522.BorderSizePixel = 0
-	NG522.Name = dCD("Pragre")
+	NG522.Name = "Center"
 	NG522.Position = UDim2.new(0, 0, 0, 30)
 	NG522.Size = UDim2.new(0, 0, 0, 0)
 	NG522.Parent = NG521
@@ -9785,7 +10015,7 @@ do
 	NG523.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG523.BackgroundTransparency = 1
 	NG523.BorderSizePixel = 0
-	NG523.Name = dCD("M")
+	NG523.Name = "Z"
 	NG523.Position = UDim2.new(0, 164, 0, 0)
 	NG523.Size = UDim2.new(0, 50, 0, 25)
 	NG523.Parent = NG522
@@ -9794,10 +10024,10 @@ do
 	NG524.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG524.BackgroundTransparency = 1
 	NG524.BorderSizePixel = 0
-	NG524.Name = dCD("Onpxtebhaq")
+	NG524.Name = "Background"
 	NG524.Selectable = false
 	NG524.Size = UDim2.new(1, 0, 1, 0)
-	NG524.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG524.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG524.Parent = NG523
 	NG525 = Instance.new("TextButton")
 	NG525.Active = true
@@ -9811,7 +10041,7 @@ do
 	NG525.ZIndex = 2
 	NG525.Font = Enum.Font.Legacy
 	NG525.FontSize = Enum.FontSize.Size8
-	NG525.Text = dCD("")
+	NG525.Text = ""
 	NG525.Parent = NG523
 	NG526 = Instance.new("TextBox")
 	NG526.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
@@ -9821,14 +10051,14 @@ do
 	NG526.Size = UDim2.new(1, -10, 1, 0)
 	NG526.Font = Enum.Font.ArialBold
 	NG526.FontSize = Enum.FontSize.Size10
-	NG526.Text = dCD("")
+	NG526.Text = ""
 	NG526.TextColor3 = Color3.new(1, 1, 1)
 	NG526.Parent = NG523
 	NG527 = Instance.new("Frame")
 	NG527.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG527.BackgroundTransparency = 1
 	NG527.BorderSizePixel = 0
-	NG527.Name = dCD("L")
+	NG527.Name = "Y"
 	NG527.Position = UDim2.new(0, 117, 0, 0)
 	NG527.Size = UDim2.new(0, 50, 0, 25)
 	NG527.Parent = NG522
@@ -9844,7 +10074,7 @@ do
 	NG528.ZIndex = 2
 	NG528.Font = Enum.Font.Legacy
 	NG528.FontSize = Enum.FontSize.Size8
-	NG528.Text = dCD("")
+	NG528.Text = ""
 	NG528.Parent = NG527
 	NG529 = Instance.new("TextBox")
 	NG529.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
@@ -9854,7 +10084,7 @@ do
 	NG529.Size = UDim2.new(1, -10, 1, 0)
 	NG529.Font = Enum.Font.ArialBold
 	NG529.FontSize = Enum.FontSize.Size10
-	NG529.Text = dCD("")
+	NG529.Text = ""
 	NG529.TextColor3 = Color3.new(1, 1, 1)
 	NG529.Parent = NG527
 	NG530 = Instance.new("ImageLabel")
@@ -9862,16 +10092,16 @@ do
 	NG530.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG530.BackgroundTransparency = 1
 	NG530.BorderSizePixel = 0
-	NG530.Name = dCD("Onpxtebhaq")
+	NG530.Name = "Background"
 	NG530.Selectable = false
 	NG530.Size = UDim2.new(1, 0, 1, 0)
-	NG530.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG530.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG530.Parent = NG527
 	NG531 = Instance.new("Frame")
 	NG531.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG531.BackgroundTransparency = 1
 	NG531.BorderSizePixel = 0
-	NG531.Name = dCD("K")
+	NG531.Name = "X"
 	NG531.Position = UDim2.new(0, 70, 0, 0)
 	NG531.Size = UDim2.new(0, 50, 0, 25)
 	NG531.Parent = NG522
@@ -9883,7 +10113,7 @@ do
 	NG532.Size = UDim2.new(1, -10, 1, 0)
 	NG532.Font = Enum.Font.ArialBold
 	NG532.FontSize = Enum.FontSize.Size10
-	NG532.Text = dCD("")
+	NG532.Text = ""
 	NG532.TextColor3 = Color3.new(1, 1, 1)
 	NG532.Parent = NG531
 	NG533 = Instance.new("TextButton")
@@ -9898,17 +10128,17 @@ do
 	NG533.ZIndex = 2
 	NG533.Font = Enum.Font.Legacy
 	NG533.FontSize = Enum.FontSize.Size8
-	NG533.Text = dCD("")
+	NG533.Text = ""
 	NG533.Parent = NG531
 	NG534 = Instance.new("ImageLabel")
 	NG534.Active = false
 	NG534.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG534.BackgroundTransparency = 1
 	NG534.BorderSizePixel = 0
-	NG534.Name = dCD("Onpxtebhaq")
+	NG534.Name = "Background"
 	NG534.Selectable = false
 	NG534.Size = UDim2.new(1, 0, 1, 0)
-	NG534.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG534.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG534.Parent = NG531
 	NG535 = Instance.new("TextLabel")
 	NG535.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
@@ -9917,7 +10147,7 @@ do
 	NG535.Size = UDim2.new(0, 75, 0, 25)
 	NG535.Font = Enum.Font.ArialBold
 	NG535.FontSize = Enum.FontSize.Size10
-	NG535.Text = dCD("Cbfvgvba")
+	NG535.Text = "Position"
 	NG535.TextColor3 = Color3.new(1, 1, 1)
 	NG535.TextStrokeTransparency = 0
 	NG535.TextWrapped = true
@@ -9926,12 +10156,12 @@ do
 	NG536.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG536.BackgroundTransparency = 1
 	NG536.BorderSizePixel = 0
-	NG536.Name = dCD("Ynory")
+	NG536.Name = "Label"
 	NG536.Position = UDim2.new(0, 10, 0, 2)
 	NG536.Size = UDim2.new(1, -10, 0, 20)
 	NG536.Font = Enum.Font.ArialBold
 	NG536.FontSize = Enum.FontSize.Size10
-	NG536.Text = dCD("FRYRPGVBA VASB")
+	NG536.Text = "SELECTION INFO"
 	NG536.TextColor3 = Color3.new(1, 1, 1)
 	NG536.TextStrokeTransparency = 0
 	NG536.TextWrapped = true
@@ -9940,14 +10170,14 @@ do
 	NG537 = Instance.new("Frame")
 	NG537.BackgroundColor3 = Color3.new(1, 0.666667, 0)
 	NG537.BorderSizePixel = 0
-	NG537.Name = dCD("PbybeOne")
+	NG537.Name = "ColorBar"
 	NG537.Size = UDim2.new(1, 0, 0, 2)
 	NG537.Parent = NG521
 	NG538 = Instance.new("Frame")
 	NG538.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG538.BackgroundTransparency = 1
 	NG538.BorderSizePixel = 0
-	NG538.Name = dCD("VaperzragBcgvba")
+	NG538.Name = "IncrementOption"
 	NG538.Position = UDim2.new(0, 0, 0, 65)
 	NG538.Size = UDim2.new(0, 0, 0, 0)
 	NG538.Parent = NG517
@@ -9955,7 +10185,7 @@ do
 	NG539.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG539.BackgroundTransparency = 1
 	NG539.BorderSizePixel = 0
-	NG539.Name = dCD("Ynory")
+	NG539.Name = "Label"
 	NG539.Size = UDim2.new(0, 75, 0, 25)
 	NG539.Parent = NG538
 	NG540 = Instance.new("TextLabel")
@@ -9965,7 +10195,7 @@ do
 	NG540.Size = UDim2.new(1, 0, 1, 0)
 	NG540.Font = Enum.Font.ArialBold
 	NG540.FontSize = Enum.FontSize.Size10
-	NG540.Text = dCD("Vaperzrag")
+	NG540.Text = "Increment"
 	NG540.TextColor3 = Color3.new(1, 1, 1)
 	NG540.TextStrokeTransparency = 0
 	NG540.TextWrapped = true
@@ -9974,7 +10204,7 @@ do
 	NG541.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG541.BackgroundTransparency = 1
 	NG541.BorderSizePixel = 0
-	NG541.Name = dCD("Vaperzrag")
+	NG541.Name = "Increment"
 	NG541.Position = UDim2.new(0, 70, 0, 0)
 	NG541.Size = UDim2.new(0, 50, 0, 25)
 	NG541.Parent = NG538
@@ -9983,10 +10213,10 @@ do
 	NG542.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG542.BackgroundTransparency = 1
 	NG542.BorderSizePixel = 0
-	NG542.Name = dCD("Onpxtebhaq")
+	NG542.Name = "Background"
 	NG542.Selectable = false
 	NG542.Size = UDim2.new(1, 0, 1, 0)
-	NG542.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG542.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG542.Parent = NG541
 	NG543 = Instance.new("TextBox")
 	NG543.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
@@ -9997,12 +10227,12 @@ do
 	NG543.ZIndex = 2
 	NG543.Font = Enum.Font.ArialBold
 	NG543.FontSize = Enum.FontSize.Size10
-	NG543.Text = dCD("1")
+	NG543.Text = "1"
 	NG543.TextColor3 = Color3.new(1, 1, 1)
 	NG543.Parent = NG541
 	NG544 = Instance.new("Frame")
 	NG544.BorderSizePixel = 0
-	NG544.Name = dCD("FryrpgrqVaqvpngbe")
+	NG544.Name = "SelectedIndicator"
 	NG544.Position = UDim2.new(0, 5, 0, -2)
 	NG544.Size = UDim2.new(1, -4, 0, 2)
 	NG544.Parent = NG541
@@ -10010,19 +10240,19 @@ do
 	NG545.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG545.BackgroundTransparency = 1
 	NG545.BorderSizePixel = 0
-	NG545.Name = dCD("Gvgyr")
+	NG545.Name = "Title"
 	NG545.Size = UDim2.new(1, 0, 0, 20)
 	NG545.Parent = NG517
 	NG546 = Instance.new("TextLabel")
 	NG546.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG546.BackgroundTransparency = 1
 	NG546.BorderSizePixel = 0
-	NG546.Name = dCD("S3KFvtangher")
+	NG546.Name = "F3XSignature"
 	NG546.Position = UDim2.new(0, 10, 0, 1)
 	NG546.Size = UDim2.new(1, -10, 1, 0)
 	NG546.Font = Enum.Font.ArialBold
 	NG546.FontSize = Enum.FontSize.Size14
-	NG546.Text = dCD("S3K")
+	NG546.Text = "F3X"
 	NG546.TextColor3 = Color3.new(1, 1, 1)
 	NG546.TextStrokeTransparency = 0.89999997615814
 	NG546.TextWrapped = true
@@ -10032,12 +10262,12 @@ do
 	NG547.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG547.BackgroundTransparency = 1
 	NG547.BorderSizePixel = 0
-	NG547.Name = dCD("Ynory")
+	NG547.Name = "Label"
 	NG547.Position = UDim2.new(0, 10, 0, 1)
 	NG547.Size = UDim2.new(1, -10, 1, 0)
 	NG547.Font = Enum.Font.ArialBold
 	NG547.FontSize = Enum.FontSize.Size10
-	NG547.Text = dCD("ZBIR GBBY")
+	NG547.Text = "MOVE TOOL"
 	NG547.TextColor3 = Color3.new(1, 1, 1)
 	NG547.TextStrokeTransparency = 0
 	NG547.TextWrapped = true
@@ -10046,7 +10276,7 @@ do
 	NG548 = Instance.new("Frame")
 	NG548.BackgroundColor3 = Color3.new(1, 0.666667, 0)
 	NG548.BorderSizePixel = 0
-	NG548.Name = dCD("PbybeOne")
+	NG548.Name = "ColorBar"
 	NG548.Position = UDim2.new(0, 5, 0, -3)
 	NG548.Size = UDim2.new(1, -5, 0, 2)
 	NG548.Parent = NG545
@@ -10054,7 +10284,7 @@ do
 	NG549.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG549.BackgroundTransparency = 1
 	NG549.BorderSizePixel = 0
-	NG549.Name = dCD("NkrfBcgvba")
+	NG549.Name = "AxesOption"
 	NG549.Position = UDim2.new(0, 0, 0, 30)
 	NG549.Size = UDim2.new(0, 0, 0, 0)
 	NG549.Parent = NG517
@@ -10062,7 +10292,7 @@ do
 	NG550.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG550.BackgroundTransparency = 1
 	NG550.BorderSizePixel = 0
-	NG550.Name = dCD("Ynory")
+	NG550.Name = "Label"
 	NG550.Size = UDim2.new(0, 50, 0, 25)
 	NG550.Parent = NG549
 	NG551 = Instance.new("TextLabel")
@@ -10072,7 +10302,7 @@ do
 	NG551.Size = UDim2.new(1, 0, 1, 0)
 	NG551.Font = Enum.Font.ArialBold
 	NG551.FontSize = Enum.FontSize.Size10
-	NG551.Text = dCD("Nkrf")
+	NG551.Text = "Axes"
 	NG551.TextColor3 = Color3.new(1, 1, 1)
 	NG551.TextStrokeTransparency = 0
 	NG551.TextWrapped = true
@@ -10081,7 +10311,7 @@ do
 	NG552.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG552.BackgroundTransparency = 1
 	NG552.BorderSizePixel = 0
-	NG552.Name = dCD("Ynfg")
+	NG552.Name = "Last"
 	NG552.Position = UDim2.new(0, 175, 0, 0)
 	NG552.Size = UDim2.new(0, 70, 0, 25)
 	NG552.Parent = NG549
@@ -10089,11 +10319,11 @@ do
 	NG553.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG553.BackgroundTransparency = 1
 	NG553.BorderSizePixel = 0
-	NG553.Name = dCD("Ynory")
+	NG553.Name = "Label"
 	NG553.Size = UDim2.new(1, 0, 1, 0)
 	NG553.Font = Enum.Font.ArialBold
 	NG553.FontSize = Enum.FontSize.Size10
-	NG553.Text = dCD("YNFG")
+	NG553.Text = "LAST"
 	NG553.TextColor3 = Color3.new(1, 1, 1)
 	NG553.Parent = NG552
 	NG554 = Instance.new("ImageLabel")
@@ -10101,17 +10331,17 @@ do
 	NG554.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG554.BackgroundTransparency = 1
 	NG554.BorderSizePixel = 0
-	NG554.Name = dCD("Onpxtebhaq")
+	NG554.Name = "Background"
 	NG554.Selectable = false
 	NG554.Size = UDim2.new(1, 0, 1, 0)
-	NG554.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG554.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG554.Parent = NG552
 	NG555 = Instance.new("TextButton")
 	NG555.Active = true
 	NG555.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG555.BackgroundTransparency = 1
 	NG555.BorderSizePixel = 0
-	NG555.Name = dCD("Ohggba")
+	NG555.Name = "Button"
 	NG555.Position = UDim2.new(0, 5, 0, 0)
 	NG555.Selectable = true
 	NG555.Size = UDim2.new(1, -10, 1, 0)
@@ -10119,13 +10349,13 @@ do
 	NG555.ZIndex = 2
 	NG555.Font = Enum.Font.Legacy
 	NG555.FontSize = Enum.FontSize.Size8
-	NG555.Text = dCD("")
+	NG555.Text = ""
 	NG555.TextTransparency = 1
 	NG555.Parent = NG552
 	NG556 = Instance.new("Frame")
 	NG556.BackgroundTransparency = 1
 	NG556.BorderSizePixel = 0
-	NG556.Name = dCD("FryrpgrqVaqvpngbe")
+	NG556.Name = "SelectedIndicator"
 	NG556.Position = UDim2.new(0, 6, 0, -2)
 	NG556.Size = UDim2.new(1, -5, 0, 2)
 	NG556.Parent = NG552
@@ -10133,7 +10363,7 @@ do
 	NG557.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG557.BackgroundTransparency = 1
 	NG557.BorderSizePixel = 0
-	NG557.Name = dCD("Ybpny")
+	NG557.Name = "Local"
 	NG557.Position = UDim2.new(0, 110, 0, 0)
 	NG557.Size = UDim2.new(0, 70, 0, 25)
 	NG557.Parent = NG549
@@ -10141,11 +10371,11 @@ do
 	NG558.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG558.BackgroundTransparency = 1
 	NG558.BorderSizePixel = 0
-	NG558.Name = dCD("Ynory")
+	NG558.Name = "Label"
 	NG558.Size = UDim2.new(1, 0, 1, 0)
 	NG558.Font = Enum.Font.ArialBold
 	NG558.FontSize = Enum.FontSize.Size10
-	NG558.Text = dCD("YBPNY")
+	NG558.Text = "LOCAL"
 	NG558.TextColor3 = Color3.new(1, 1, 1)
 	NG558.Parent = NG557
 	NG559 = Instance.new("ImageLabel")
@@ -10153,17 +10383,17 @@ do
 	NG559.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG559.BackgroundTransparency = 1
 	NG559.BorderSizePixel = 0
-	NG559.Name = dCD("Onpxtebhaq")
+	NG559.Name = "Background"
 	NG559.Selectable = false
 	NG559.Size = UDim2.new(1, 0, 1, 0)
-	NG559.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG559.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG559.Parent = NG557
 	NG560 = Instance.new("TextButton")
 	NG560.Active = true
 	NG560.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG560.BackgroundTransparency = 1
 	NG560.BorderSizePixel = 0
-	NG560.Name = dCD("Ohggba")
+	NG560.Name = "Button"
 	NG560.Position = UDim2.new(0, 5, 0, 0)
 	NG560.Selectable = true
 	NG560.Size = UDim2.new(1, -10, 1, 0)
@@ -10171,13 +10401,13 @@ do
 	NG560.ZIndex = 2
 	NG560.Font = Enum.Font.Legacy
 	NG560.FontSize = Enum.FontSize.Size8
-	NG560.Text = dCD("")
+	NG560.Text = ""
 	NG560.TextTransparency = 1
 	NG560.Parent = NG557
 	NG561 = Instance.new("Frame")
 	NG561.BackgroundTransparency = 1
 	NG561.BorderSizePixel = 0
-	NG561.Name = dCD("FryrpgrqVaqvpngbe")
+	NG561.Name = "SelectedIndicator"
 	NG561.Position = UDim2.new(0, 6, 0, -2)
 	NG561.Size = UDim2.new(1, -5, 0, 2)
 	NG561.Parent = NG557
@@ -10185,7 +10415,7 @@ do
 	NG562.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG562.BackgroundTransparency = 1
 	NG562.BorderSizePixel = 0
-	NG562.Name = dCD("Tybony")
+	NG562.Name = "Global"
 	NG562.Position = UDim2.new(0, 45, 0, 0)
 	NG562.Size = UDim2.new(0, 70, 0, 25)
 	NG562.Parent = NG549
@@ -10193,11 +10423,11 @@ do
 	NG563.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG563.BackgroundTransparency = 1
 	NG563.BorderSizePixel = 0
-	NG563.Name = dCD("Ynory")
+	NG563.Name = "Label"
 	NG563.Size = UDim2.new(1, 0, 1, 0)
 	NG563.Font = Enum.Font.ArialBold
 	NG563.FontSize = Enum.FontSize.Size10
-	NG563.Text = dCD("TYBONY")
+	NG563.Text = "GLOBAL"
 	NG563.TextColor3 = Color3.new(1, 1, 1)
 	NG563.Parent = NG562
 	NG564 = Instance.new("ImageLabel")
@@ -10205,17 +10435,17 @@ do
 	NG564.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG564.BackgroundTransparency = 1
 	NG564.BorderSizePixel = 0
-	NG564.Name = dCD("Onpxtebhaq")
+	NG564.Name = "Background"
 	NG564.Selectable = false
 	NG564.Size = UDim2.new(1, 0, 1, 0)
-	NG564.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127774197")
+	NG564.Image = "http://www.roblox.com/asset/?id=127774197"
 	NG564.Parent = NG562
 	NG565 = Instance.new("TextButton")
 	NG565.Active = true
 	NG565.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG565.BackgroundTransparency = 1
 	NG565.BorderSizePixel = 0
-	NG565.Name = dCD("Ohggba")
+	NG565.Name = "Button"
 	NG565.Position = UDim2.new(0, 5, 0, 0)
 	NG565.Selectable = true
 	NG565.Size = UDim2.new(1, -10, 1, 0)
@@ -10223,19 +10453,19 @@ do
 	NG565.ZIndex = 2
 	NG565.Font = Enum.Font.Legacy
 	NG565.FontSize = Enum.FontSize.Size8
-	NG565.Text = dCD("")
+	NG565.Text = ""
 	NG565.TextTransparency = 1
 	NG565.Parent = NG562
 	NG566 = Instance.new("Frame")
 	NG566.BorderSizePixel = 0
-	NG566.Name = dCD("FryrpgrqVaqvpngbe")
+	NG566.Name = "SelectedIndicator"
 	NG566.Position = UDim2.new(0, 6, 0, -2)
 	NG566.Size = UDim2.new(1, -5, 0, 2)
 	NG566.Parent = NG562
 	NG567 = Instance.new("Frame")
 	NG567.BackgroundTransparency = 1
 	NG567.BorderSizePixel = 0
-	NG567.Name = dCD("OGFgneghcAbgvsvpngvbaPbagnvare")
+	NG567.Name = "BTStartupNotificationContainer"
 	NG567.Position = UDim2.new(0, 210, 0, 0)
 	NG567.Size = UDim2.new(0, 300, 0, 0)
 	NG567.Draggable = true
@@ -10244,14 +10474,14 @@ do
 	NG568.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG568.BackgroundTransparency = 0.69999998807907
 	NG568.BorderSizePixel = 0
-	NG568.Name = dCD("GbbyHcqngrAbgvsvpngvba")
+	NG568.Name = "ToolUpdateNotification"
 	NG568.Size = UDim2.new(1, 0, 0, 65)
 	NG568.Visible = false
 	NG568.Parent = NG567
 	NG569 = Instance.new("Frame")
 	NG569.BackgroundColor3 = Color3.new(1, 0.666667, 0)
 	NG569.BorderSizePixel = 0
-	NG569.Name = dCD("One")
+	NG569.Name = "Bar"
 	NG569.Size = UDim2.new(1, 0, 0, 2)
 	NG569.Parent = NG568
 	NG570 = Instance.new("TextButton")
@@ -10260,14 +10490,14 @@ do
 	NG570.BackgroundTransparency = 0.80000001192093
 	NG570.BorderColor3 = Color3.new(0, 0, 0)
 	NG570.BorderSizePixel = 0
-	NG570.Name = dCD("BXOhggba")
+	NG570.Name = "OKButton"
 	NG570.Position = UDim2.new(0, 0, 1, -22)
 	NG570.Selectable = true
 	NG570.Size = UDim2.new(0.5, 0, 0, 22)
 	NG570.Style = Enum.ButtonStyle.Custom
 	NG570.Font = Enum.Font.Arial
 	NG570.FontSize = Enum.FontSize.Size10
-	NG570.Text = dCD("TBG VG")
+	NG570.Text = "GOT IT"
 	NG570.TextColor3 = Color3.new(1, 1, 1)
 	NG570.Parent = NG568
 	NG571 = Instance.new("TextButton")
@@ -10276,28 +10506,28 @@ do
 	NG571.BackgroundTransparency = 0.80000001192093
 	NG571.BorderColor3 = Color3.new(0, 0, 0)
 	NG571.BorderSizePixel = 0
-	NG571.Name = dCD("UrycOhggba")
+	NG571.Name = "HelpButton"
 	NG571.Position = UDim2.new(0.5, 0, 1, -22)
 	NG571.Selectable = true
 	NG571.Size = UDim2.new(0.5, 0, 0, 22)
 	NG571.Style = Enum.ButtonStyle.Custom
 	NG571.Font = Enum.Font.Arial
 	NG571.FontSize = Enum.FontSize.Size10
-	NG571.Text = dCD("JUNG PNA V QB?")
+	NG571.Text = "WHAT CAN I DO?"
 	NG571.TextColor3 = Color3.new(1, 1, 1)
 	NG571.Parent = NG568
 	NG572 = Instance.new("Frame")
 	NG572.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG572.BackgroundTransparency = 0.75
 	NG572.BorderSizePixel = 0
-	NG572.Name = dCD("OhggbaFrcnengbe")
+	NG572.Name = "ButtonSeparator"
 	NG572.Position = UDim2.new(0.5, 0, 1, -22)
 	NG572.Size = UDim2.new(0, 1, 0, 22)
 	NG572.Parent = NG568
 	NG573 = Instance.new("Frame")
 	NG573.BackgroundTransparency = 1
 	NG573.BorderSizePixel = 0
-	NG573.Name = dCD("Abgvpr")
+	NG573.Name = "Notice"
 	NG573.Position = UDim2.new(0, 0, 0, 2)
 	NG573.Size = UDim2.new(1, 0, 1, -22)
 	NG573.Parent = NG568
@@ -10308,7 +10538,7 @@ do
 	NG574.Size = UDim2.new(1, 0, 1, 0)
 	NG574.Font = Enum.Font.SourceSansBold
 	NG574.FontSize = Enum.FontSize.Size14
-	NG574.Text = dCD("Guvf irefvba bs Ohvyqvat Gbbyf vf bhgqngrq.")
+	NG574.Text = "This version of Building Tools is outdated."
 	NG574.TextColor3 = Color3.new(1, 1, 1)
 	NG574.TextStrokeTransparency = 0.80000001192093
 	NG574.TextWrapped = true
@@ -10319,7 +10549,7 @@ do
 	NG576 = Instance.new("Frame")
 	NG576.BackgroundTransparency = 1
 	NG576.BorderSizePixel = 0
-	NG576.Name = dCD("Uryc")
+	NG576.Name = "Help"
 	NG576.Position = UDim2.new(0, 0, 0, 2)
 	NG576.Size = UDim2.new(1, 0, 1, -22)
 	NG576.Visible = false
@@ -10332,7 +10562,7 @@ do
 	NG577.Size = UDim2.new(1, -20, 1, 0)
 	NG577.Font = Enum.Font.SourceSansBold
 	NG577.FontSize = Enum.FontSize.Size14
-	NG577.Text = dCD("Bja guvf cynpr? Fvzcyl ervafreg gur Ohvyqvat Gbbyf zbqry.")
+	NG577.Text = "Own this place? Simply reinsert the Building Tools model."
 	NG577.TextColor3 = Color3.new(1, 1, 1)
 	NG577.TextStrokeTransparency = 0.80000001192093
 	NG577.TextWrapped = true
@@ -10348,7 +10578,7 @@ do
 	NG579.Position = UDim2.new(0, 60, 0, 7)
 	NG579.Size = UDim2.new(1, -20, 1, 0)
 	NG579.FontSize = Enum.FontSize.Size14
-	NG579.Text = dCD("Bgurejvfr, gryy gur bjare gb qb gur nobir.")
+	NG579.Text = "Otherwise, tell the owner to do the above."
 	NG579.TextColor3 = Color3.new(1, 1, 1)
 	NG579.TextStrokeTransparency = 0.80000001192093
 	NG579.TextWrapped = true
@@ -10358,14 +10588,14 @@ do
 	NG580.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG580.BackgroundTransparency = 0.69999998807907
 	NG580.BorderSizePixel = 0
-	NG580.Name = dCD("FbybJneavat")
+	NG580.Name = "SoloWarning"
 	NG580.Size = UDim2.new(1, 0, 0, 80)
 	NG580.Visible = false
 	NG580.Parent = NG567
 	NG581 = Instance.new("Frame")
 	NG581.BackgroundColor3 = Color3.new(1, 0, 0.0156863)
 	NG581.BorderSizePixel = 0
-	NG581.Name = dCD("One")
+	NG581.Name = "Bar"
 	NG581.Size = UDim2.new(1, 0, 0, 2)
 	NG581.Parent = NG580
 	NG582 = Instance.new("TextButton")
@@ -10374,14 +10604,14 @@ do
 	NG582.BackgroundTransparency = 0.80000001192093
 	NG582.BorderColor3 = Color3.new(0, 0, 0)
 	NG582.BorderSizePixel = 0
-	NG582.Name = dCD("BXOhggba")
+	NG582.Name = "OKButton"
 	NG582.Position = UDim2.new(0, 0, 1, -22)
 	NG582.Selectable = true
 	NG582.Size = UDim2.new(0.5, 0, 0, 22)
 	NG582.Style = Enum.ButtonStyle.Custom
 	NG582.Font = Enum.Font.Arial
 	NG582.FontSize = Enum.FontSize.Size10
-	NG582.Text = dCD("TBG VG")
+	NG582.Text = "GOT IT"
 	NG582.TextColor3 = Color3.new(1, 1, 1)
 	NG582.Parent = NG580
 	NG583 = Instance.new("TextButton")
@@ -10390,28 +10620,28 @@ do
 	NG583.BackgroundTransparency = 0.80000001192093
 	NG583.BorderColor3 = Color3.new(0, 0, 0)
 	NG583.BorderSizePixel = 0
-	NG583.Name = dCD("UrycOhggba")
+	NG583.Name = "HelpButton"
 	NG583.Position = UDim2.new(0.5, 0, 1, -22)
 	NG583.Selectable = true
 	NG583.Size = UDim2.new(0.5, 0, 0, 22)
 	NG583.Style = Enum.ButtonStyle.Custom
 	NG583.Font = Enum.Font.Arial
 	NG583.FontSize = Enum.FontSize.Size10
-	NG583.Text = dCD("JUNG PNA V QB?")
+	NG583.Text = "WHAT CAN I DO?"
 	NG583.TextColor3 = Color3.new(1, 1, 1)
 	NG583.Parent = NG580
 	NG584 = Instance.new("Frame")
 	NG584.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG584.BackgroundTransparency = 0.75
 	NG584.BorderSizePixel = 0
-	NG584.Name = dCD("OhggbaFrcnengbe")
+	NG584.Name = "ButtonSeparator"
 	NG584.Position = UDim2.new(0.5, 0, 1, -22)
 	NG584.Size = UDim2.new(0, 1, 0, 22)
 	NG584.Parent = NG580
 	NG585 = Instance.new("Frame")
 	NG585.BackgroundTransparency = 1
 	NG585.BorderSizePixel = 0
-	NG585.Name = dCD("Abgvpr")
+	NG585.Name = "Notice"
 	NG585.Position = UDim2.new(0, 0, 0, 2)
 	NG585.Size = UDim2.new(1, 0, 1, -22)
 	NG585.Parent = NG580
@@ -10423,7 +10653,7 @@ do
 	NG586.Size = UDim2.new(1, -20, 1, 0)
 	NG586.Font = Enum.Font.SourceSansBold
 	NG586.FontSize = Enum.FontSize.Size14
-	NG586.Text = dCD("Fbzr srngherf ner abg ninvynoyr ba ohvyq zbqr be qhevat fbyb grfgvat, vapyhqvat rkcbegvat.")
+	NG586.Text = "Some features are not available on build mode or during solo testing, including exporting."
 	NG586.TextColor3 = Color3.new(1, 1, 1)
 	NG586.TextStrokeTransparency = 0.80000001192093
 	NG586.TextWrapped = true
@@ -10434,7 +10664,7 @@ do
 	NG588 = Instance.new("Frame")
 	NG588.BackgroundTransparency = 1
 	NG588.BorderSizePixel = 0
-	NG588.Name = dCD("Uryc")
+	NG588.Name = "Help"
 	NG588.Position = UDim2.new(0, 0, 0, 2)
 	NG588.Size = UDim2.new(1, 0, 1, -22)
 	NG588.Visible = false
@@ -10447,9 +10677,7 @@ do
 	NG589.Size = UDim2.new(1, -20, 1, 0)
 	NG589.Font = Enum.Font.SourceSansBold
 	NG589.FontSize = Enum.FontSize.Size14
-	NG589.Text = dCD(
-		"Sbe nyy srngherf gb or ninvynoyr, lbh fubhyq or va n tnzr freire (n erthyne tnzr, be crefbany ohvyqvat freire). Nygreangviryl, lbh pbhyq hfr gur Fghqvb cyhtva irefvba bs Ohvyqvat Gbbyf."
-	)
+	NG589.Text = "For all features to be available, you should be in a game server (a regular game, or personal building server). Alternatively, you could use the Studio plugin version of Building Tools."
 	NG589.TextColor3 = Color3.new(1, 1, 1)
 	NG589.TextStrokeTransparency = 0.80000001192093
 	NG589.TextWrapped = true
@@ -10461,14 +10689,14 @@ do
 	NG591.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG591.BackgroundTransparency = 0.69999998807907
 	NG591.BorderSizePixel = 0
-	NG591.Name = dCD("CyhtvaHcqngrAbgvsvpngvba")
+	NG591.Name = "PluginUpdateNotification"
 	NG591.Size = UDim2.new(1, 0, 0, 65)
 	NG591.Visible = false
 	NG591.Parent = NG567
 	NG592 = Instance.new("Frame")
 	NG592.BackgroundColor3 = Color3.new(1, 0.666667, 0)
 	NG592.BorderSizePixel = 0
-	NG592.Name = dCD("One")
+	NG592.Name = "Bar"
 	NG592.Size = UDim2.new(1, 0, 0, 2)
 	NG592.Parent = NG591
 	NG593 = Instance.new("TextButton")
@@ -10477,14 +10705,14 @@ do
 	NG593.BackgroundTransparency = 0.80000001192093
 	NG593.BorderColor3 = Color3.new(0, 0, 0)
 	NG593.BorderSizePixel = 0
-	NG593.Name = dCD("BXOhggba")
+	NG593.Name = "OKButton"
 	NG593.Position = UDim2.new(0, 0, 1, -22)
 	NG593.Selectable = true
 	NG593.Size = UDim2.new(0.5, 0, 0, 22)
 	NG593.Style = Enum.ButtonStyle.Custom
 	NG593.Font = Enum.Font.Arial
 	NG593.FontSize = Enum.FontSize.Size10
-	NG593.Text = dCD("TBG VG")
+	NG593.Text = "GOT IT"
 	NG593.TextColor3 = Color3.new(1, 1, 1)
 	NG593.Parent = NG591
 	NG594 = Instance.new("TextButton")
@@ -10493,28 +10721,28 @@ do
 	NG594.BackgroundTransparency = 0.80000001192093
 	NG594.BorderColor3 = Color3.new(0, 0, 0)
 	NG594.BorderSizePixel = 0
-	NG594.Name = dCD("UrycOhggba")
+	NG594.Name = "HelpButton"
 	NG594.Position = UDim2.new(0.5, 0, 1, -22)
 	NG594.Selectable = true
 	NG594.Size = UDim2.new(0.5, 0, 0, 22)
 	NG594.Style = Enum.ButtonStyle.Custom
 	NG594.Font = Enum.Font.Arial
 	NG594.FontSize = Enum.FontSize.Size10
-	NG594.Text = dCD("JUNG PNA V QB?")
+	NG594.Text = "WHAT CAN I DO?"
 	NG594.TextColor3 = Color3.new(1, 1, 1)
 	NG594.Parent = NG591
 	NG595 = Instance.new("Frame")
 	NG595.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG595.BackgroundTransparency = 0.75
 	NG595.BorderSizePixel = 0
-	NG595.Name = dCD("OhggbaFrcnengbe")
+	NG595.Name = "ButtonSeparator"
 	NG595.Position = UDim2.new(0.5, 0, 1, -22)
 	NG595.Size = UDim2.new(0, 1, 0, 22)
 	NG595.Parent = NG591
 	NG596 = Instance.new("Frame")
 	NG596.BackgroundTransparency = 1
 	NG596.BorderSizePixel = 0
-	NG596.Name = dCD("Abgvpr")
+	NG596.Name = "Notice"
 	NG596.Position = UDim2.new(0, 0, 0, 2)
 	NG596.Size = UDim2.new(1, 0, 1, -22)
 	NG596.Parent = NG591
@@ -10525,7 +10753,7 @@ do
 	NG597.Size = UDim2.new(1, 0, 1, 0)
 	NG597.Font = Enum.Font.SourceSansBold
 	NG597.FontSize = Enum.FontSize.Size14
-	NG597.Text = dCD("Guvf irefvba bs Ohvyqvat Gbbyf vf bhgqngrq.")
+	NG597.Text = "This version of Building Tools is outdated."
 	NG597.TextColor3 = Color3.new(1, 1, 1)
 	NG597.TextStrokeTransparency = 0.80000001192093
 	NG597.TextWrapped = true
@@ -10536,7 +10764,7 @@ do
 	NG599 = Instance.new("Frame")
 	NG599.BackgroundTransparency = 1
 	NG599.BorderSizePixel = 0
-	NG599.Name = dCD("Uryc")
+	NG599.Name = "Help"
 	NG599.Position = UDim2.new(0, 0, 0, 2)
 	NG599.Size = UDim2.new(1, 0, 1, -22)
 	NG599.Visible = false
@@ -10549,7 +10777,7 @@ do
 	NG600.Size = UDim2.new(1, -20, 1, 0)
 	NG600.Font = Enum.Font.SourceSansBold
 	NG600.FontSize = Enum.FontSize.Size14
-	NG600.Text = dCD("Tb gb Gbbyf > Znantr Cyhtvaf be Cyhtvaf > Znantr Cyhtvaf gb hcqngr cyhtvaf  :)")
+	NG600.Text = "Go to Tools > Manage Plugins or Plugins > Manage Plugins to update plugins  :)"
 	NG600.TextColor3 = Color3.new(1, 1, 1)
 	NG600.TextStrokeTransparency = 0.80000001192093
 	NG600.TextWrapped = true
@@ -10561,14 +10789,14 @@ do
 	NG602.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG602.BackgroundTransparency = 0.69999998807907
 	NG602.BorderSizePixel = 0
-	NG602.Name = dCD("UggcQvfnoyrqJneavat")
+	NG602.Name = "HttpDisabledWarning"
 	NG602.Size = UDim2.new(1, 0, 0, 80)
 	NG602.Visible = false
 	NG602.Parent = NG567
 	NG603 = Instance.new("Frame")
 	NG603.BackgroundColor3 = Color3.new(1, 0, 0.0156863)
 	NG603.BorderSizePixel = 0
-	NG603.Name = dCD("One")
+	NG603.Name = "Bar"
 	NG603.Size = UDim2.new(1, 0, 0, 2)
 	NG603.Parent = NG602
 	NG604 = Instance.new("TextButton")
@@ -10577,14 +10805,14 @@ do
 	NG604.BackgroundTransparency = 0.80000001192093
 	NG604.BorderColor3 = Color3.new(0, 0, 0)
 	NG604.BorderSizePixel = 0
-	NG604.Name = dCD("BXOhggba")
+	NG604.Name = "OKButton"
 	NG604.Position = UDim2.new(0, 0, 1, -22)
 	NG604.Selectable = true
 	NG604.Size = UDim2.new(0.5, 0, 0, 22)
 	NG604.Style = Enum.ButtonStyle.Custom
 	NG604.Font = Enum.Font.Arial
 	NG604.FontSize = Enum.FontSize.Size10
-	NG604.Text = dCD("TBG VG")
+	NG604.Text = "GOT IT"
 	NG604.TextColor3 = Color3.new(1, 1, 1)
 	NG604.Parent = NG602
 	NG605 = Instance.new("TextButton")
@@ -10593,28 +10821,28 @@ do
 	NG605.BackgroundTransparency = 0.80000001192093
 	NG605.BorderColor3 = Color3.new(0, 0, 0)
 	NG605.BorderSizePixel = 0
-	NG605.Name = dCD("UrycOhggba")
+	NG605.Name = "HelpButton"
 	NG605.Position = UDim2.new(0.5, 0, 1, -22)
 	NG605.Selectable = true
 	NG605.Size = UDim2.new(0.5, 0, 0, 22)
 	NG605.Style = Enum.ButtonStyle.Custom
 	NG605.Font = Enum.Font.Arial
 	NG605.FontSize = Enum.FontSize.Size10
-	NG605.Text = dCD("JUNG PNA V QB?")
+	NG605.Text = "WHAT CAN I DO?"
 	NG605.TextColor3 = Color3.new(1, 1, 1)
 	NG605.Parent = NG602
 	NG606 = Instance.new("Frame")
 	NG606.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG606.BackgroundTransparency = 0.75
 	NG606.BorderSizePixel = 0
-	NG606.Name = dCD("OhggbaFrcnengbe")
+	NG606.Name = "ButtonSeparator"
 	NG606.Position = UDim2.new(0.5, 0, 1, -22)
 	NG606.Size = UDim2.new(0, 1, 0, 22)
 	NG606.Parent = NG602
 	NG607 = Instance.new("Frame")
 	NG607.BackgroundTransparency = 1
 	NG607.BorderSizePixel = 0
-	NG607.Name = dCD("Abgvpr")
+	NG607.Name = "Notice"
 	NG607.Position = UDim2.new(0, 0, 0, 2)
 	NG607.Size = UDim2.new(1, 0, 1, -22)
 	NG607.Parent = NG602
@@ -10625,9 +10853,7 @@ do
 	NG608.Size = UDim2.new(1, 0, 1, 0)
 	NG608.Font = Enum.Font.SourceSansBold
 	NG608.FontSize = Enum.FontSize.Size14
-	NG608.Text = dCD(
-		"Bu ab snz! UggcFreivpr vfa'g jbexvat ba lbhe pyvrag. Fbzr srngherf bs guvf unpxl s3k gbby jba'g jbex, vapyhqvat rkcbegvat."
-	)
+	NG608.Text = "Oh no fam! HttpService isn't working on your client. Some features of this hacky f3x tool won't work, including exporting."
 	NG608.TextColor3 = Color3.new(1, 1, 1)
 	NG608.TextStrokeTransparency = 0.80000001192093
 	NG608.TextWrapped = true
@@ -10638,7 +10864,7 @@ do
 	NG610 = Instance.new("Frame")
 	NG610.BackgroundTransparency = 1
 	NG610.BorderSizePixel = 0
-	NG610.Name = dCD("Uryc")
+	NG610.Name = "Help"
 	NG610.Position = UDim2.new(0, 0, 0, 2)
 	NG610.Size = UDim2.new(1, 0, 1, -22)
 	NG610.Visible = false
@@ -10651,9 +10877,7 @@ do
 	NG611.Size = UDim2.new(1, -20, 0.699999988, 0)
 	NG611.Font = Enum.Font.SourceSansBold
 	NG611.FontSize = Enum.FontSize.Size14
-	NG611.Text = dCD(
-		"Gurer vf abguvat lbh pna qb, vg vf rffragvnyyl bayl noyr gb jbex vs lbhe rkcybvg vf noyr gb ybnq UggcFreivpr."
-	)
+	NG611.Text = "There is nothing you can do, it is essentially only able to work if your exploit is able to load HttpService."
 	NG611.TextColor3 = Color3.new(1, 1, 1)
 	NG611.TextStrokeTransparency = 0.80000001192093
 	NG611.TextWrapped = true
@@ -10666,7 +10890,7 @@ do
 	NG612.Position = UDim2.new(0, 10, 0.649999976, 0)
 	NG612.Size = UDim2.new(1, -10, 0.300000012, 0)
 	NG612.FontSize = Enum.FontSize.Size14
-	NG612.Text = dCD("V'z fbb fbeel \n( ~Avpxbnxm")
+	NG612.Text = "I'm soo sorry \n( ~Nickoakz"
 	NG612.TextColor3 = Color3.new(1, 1, 1)
 	NG612.TextStrokeTransparency = 0.80000001192093
 	NG612.TextWrapped = true
@@ -10679,14 +10903,14 @@ do
 	NG614.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG614.BackgroundTransparency = 0.69999998807907
 	NG614.BorderSizePixel = 0
-	NG614.Name = dCD("UggcRanoyrqJneavat")
+	NG614.Name = "HttpEnabledWarning"
 	NG614.Size = UDim2.new(1, 0, 0, 80)
 	NG614.Visible = false
 	NG614.Parent = NG567
 	NG615 = Instance.new("Frame")
 	NG615.BackgroundColor3 = Color3.new(0, 0.666667, 0)
 	NG615.BorderSizePixel = 0
-	NG615.Name = dCD("One")
+	NG615.Name = "Bar"
 	NG615.Size = UDim2.new(1, 0, 0, 2)
 	NG615.Parent = NG614
 	NG616 = Instance.new("TextButton")
@@ -10695,14 +10919,14 @@ do
 	NG616.BackgroundTransparency = 0.80000001192093
 	NG616.BorderColor3 = Color3.new(0, 0, 0)
 	NG616.BorderSizePixel = 0
-	NG616.Name = dCD("BXOhggba")
+	NG616.Name = "OKButton"
 	NG616.Position = UDim2.new(0, 0, 1, -22)
 	NG616.Selectable = true
 	NG616.Size = UDim2.new(0.5, 0, 0, 22)
 	NG616.Style = Enum.ButtonStyle.Custom
 	NG616.Font = Enum.Font.Arial
 	NG616.FontSize = Enum.FontSize.Size10
-	NG616.Text = dCD("TBG VG")
+	NG616.Text = "GOT IT"
 	NG616.TextColor3 = Color3.new(1, 1, 1)
 	NG616.Parent = NG614
 	NG617 = Instance.new("TextButton")
@@ -10711,28 +10935,28 @@ do
 	NG617.BackgroundTransparency = 0.80000001192093
 	NG617.BorderColor3 = Color3.new(0, 0, 0)
 	NG617.BorderSizePixel = 0
-	NG617.Name = dCD("UrycOhggba")
+	NG617.Name = "HelpButton"
 	NG617.Position = UDim2.new(0.5, 0, 1, -22)
 	NG617.Selectable = true
 	NG617.Size = UDim2.new(0.5, 0, 0, 22)
 	NG617.Style = Enum.ButtonStyle.Custom
 	NG617.Font = Enum.Font.Arial
 	NG617.FontSize = Enum.FontSize.Size10
-	NG617.Text = dCD("JNVG JUNG?")
+	NG617.Text = "WAIT WHAT?"
 	NG617.TextColor3 = Color3.new(1, 1, 1)
 	NG617.Parent = NG614
 	NG618 = Instance.new("Frame")
 	NG618.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG618.BackgroundTransparency = 0.75
 	NG618.BorderSizePixel = 0
-	NG618.Name = dCD("OhggbaFrcnengbe")
+	NG618.Name = "ButtonSeparator"
 	NG618.Position = UDim2.new(0.5, 0, 1, -22)
 	NG618.Size = UDim2.new(0, 1, 0, 22)
 	NG618.Parent = NG614
 	NG619 = Instance.new("Frame")
 	NG619.BackgroundTransparency = 1
 	NG619.BorderSizePixel = 0
-	NG619.Name = dCD("Abgvpr")
+	NG619.Name = "Notice"
 	NG619.Position = UDim2.new(0, 0, 0, 2)
 	NG619.Size = UDim2.new(1, 0, 1, -22)
 	NG619.Parent = NG614
@@ -10743,9 +10967,7 @@ do
 	NG620.Size = UDim2.new(1, 0, 1, 0)
 	NG620.Font = Enum.Font.SourceSansBold
 	NG620.FontSize = Enum.FontSize.Size14
-	NG620.Text = dCD(
-		"JBB SNZ! UggcFreivpr jbexf sbe lbhe pyvrag! Lbh'yy or noyr gb fgrny cnegf sebz guvf tnzr hfvat guvf rkcybvg :)"
-	)
+	NG620.Text = "WOO FAM! HttpService works for your client! You'll be able to steal parts from this game using this exploit :)"
 	NG620.TextColor3 = Color3.new(1, 1, 1)
 	NG620.TextStrokeTransparency = 0.80000001192093
 	NG620.TextWrapped = true
@@ -10756,7 +10978,7 @@ do
 	NG622 = Instance.new("Frame")
 	NG622.BackgroundTransparency = 1
 	NG622.BorderSizePixel = 0
-	NG622.Name = dCD("Uryc")
+	NG622.Name = "Help"
 	NG622.Position = UDim2.new(0, 0, 0, 2)
 	NG622.Size = UDim2.new(1, 0, 1, -22)
 	NG622.Visible = false
@@ -10769,7 +10991,7 @@ do
 	NG623.Size = UDim2.new(1, -20, 0.300000012, 0)
 	NG623.Font = Enum.Font.SourceSansBold
 	NG623.FontSize = Enum.FontSize.Size14
-	NG623.Text = dCD("Jung qb lbh zrna gung UGGCFreivpr vf ba?")
+	NG623.Text = "What do you mean that HTTPService is on?"
 	NG623.TextColor3 = Color3.new(1, 1, 1)
 	NG623.TextStrokeTransparency = 0.80000001192093
 	NG623.TextWrapped = true
@@ -10782,9 +11004,7 @@ do
 	NG624.Position = UDim2.new(0, 10, 0.200000003, 0)
 	NG624.Size = UDim2.new(1, -10, 0.800000012, 0)
 	NG624.FontSize = Enum.FontSize.Size14
-	NG624.Text = dCD(
-		"Jryy hzz, lbh pna fryrpg n gba bs cnegf vatnzr, naq rkcbeg vg guebhtu guvf unpxl s3k gbby, naq or noyr gb fgrny gurz guebhtu Eboybk Fghqvb? Lrnu, gungf pbby snz!"
-	)
+	NG624.Text = "Well umm, you can select a ton of parts ingame, and export it through this hacky f3x tool, and be able to steal them through Roblox Studio? Yeah, thats cool fam!"
 	NG624.TextColor3 = Color3.new(1, 1, 1)
 	NG624.TextStrokeTransparency = 0.80000001192093
 	NG624.TextWrapped = true
@@ -10797,7 +11017,7 @@ do
 	NG626.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG626.BackgroundTransparency = 0.69999998807907
 	NG626.BorderSizePixel = 0
-	NG626.Name = dCD("JrypbzrSrk")
+	NG626.Name = "WelcomeFex"
 	NG626.Size = UDim2.new(1, 0, 0, 80)
 	NG626.Visible = false
 	NG626.Parent = NG567
@@ -10807,14 +11027,14 @@ do
 	NG627.BackgroundTransparency = 0.80000001192093
 	NG627.BorderColor3 = Color3.new(0, 0, 0)
 	NG627.BorderSizePixel = 0
-	NG627.Name = dCD("BXOhggba")
+	NG627.Name = "OKButton"
 	NG627.Position = UDim2.new(0, 0, 1, -22)
 	NG627.Selectable = true
 	NG627.Size = UDim2.new(0.5, 0, 0, 22)
 	NG627.Style = Enum.ButtonStyle.Custom
 	NG627.Font = Enum.Font.Arial
 	NG627.FontSize = Enum.FontSize.Size10
-	NG627.Text = dCD("TBG VG")
+	NG627.Text = "GOT IT"
 	NG627.TextColor3 = Color3.new(1, 1, 1)
 	NG627.Parent = NG626
 	NG628 = Instance.new("TextButton")
@@ -10823,28 +11043,28 @@ do
 	NG628.BackgroundTransparency = 0.80000001192093
 	NG628.BorderColor3 = Color3.new(0, 0, 0)
 	NG628.BorderSizePixel = 0
-	NG628.Name = dCD("UrycOhggba")
+	NG628.Name = "HelpButton"
 	NG628.Position = UDim2.new(0.5, 0, 1, -22)
 	NG628.Selectable = true
 	NG628.Size = UDim2.new(0.5, 0, 0, 22)
 	NG628.Style = Enum.ButtonStyle.Custom
 	NG628.Font = Enum.Font.Arial
 	NG628.FontSize = Enum.FontSize.Size10
-	NG628.Text = dCD("JUNG PNA V QB?")
+	NG628.Text = "WHAT CAN I DO?"
 	NG628.TextColor3 = Color3.new(1, 1, 1)
 	NG628.Parent = NG626
 	NG629 = Instance.new("Frame")
 	NG629.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG629.BackgroundTransparency = 0.75
 	NG629.BorderSizePixel = 0
-	NG629.Name = dCD("OhggbaFrcnengbe")
+	NG629.Name = "ButtonSeparator"
 	NG629.Position = UDim2.new(0.5, 0, 1, -22)
 	NG629.Size = UDim2.new(0, 1, 0, 22)
 	NG629.Parent = NG626
 	NG630 = Instance.new("Frame")
 	NG630.BackgroundTransparency = 1
 	NG630.BorderSizePixel = 0
-	NG630.Name = dCD("Abgvpr")
+	NG630.Name = "Notice"
 	NG630.Position = UDim2.new(0, 0, 0, 2)
 	NG630.Size = UDim2.new(1, 0, 1, -22)
 	NG630.Parent = NG626
@@ -10855,7 +11075,7 @@ do
 	NG631.Size = UDim2.new(1, 0, 1, 0)
 	NG631.Font = Enum.Font.SourceSansBold
 	NG631.FontSize = Enum.FontSize.Size14
-	NG631.Text = dCD("S3KSbepr vf ehaavat. Znqr ol Avpxbnxm")
+	NG631.Text = "F3X is running\nMade by Nickoakz\nFixed by ltseverydayyou"
 	NG631.TextColor3 = Color3.new(1, 1, 1)
 	NG631.TextStrokeTransparency = 0.80000001192093
 	NG631.TextWrapped = true
@@ -10866,7 +11086,7 @@ do
 	NG633 = Instance.new("Frame")
 	NG633.BackgroundTransparency = 1
 	NG633.BorderSizePixel = 0
-	NG633.Name = dCD("Uryc")
+	NG633.Name = "Help"
 	NG633.Position = UDim2.new(0, 0, 0, 2)
 	NG633.Size = UDim2.new(1, 0, 1, -22)
 	NG633.Visible = false
@@ -10879,7 +11099,7 @@ do
 	NG634.Size = UDim2.new(1, -20, 0.699999988, 0)
 	NG634.Font = Enum.Font.SourceSansBold
 	NG634.FontSize = Enum.FontSize.Size14
-	NG634.Text = dCD("Unir sha?")
+	NG634.Text = "Have fun?"
 	NG634.TextColor3 = Color3.new(1, 1, 1)
 	NG634.TextStrokeTransparency = 0.80000001192093
 	NG634.TextWrapped = true
@@ -10892,7 +11112,7 @@ do
 	NG635.Position = UDim2.new(0, 10, 0.649999976, 0)
 	NG635.Size = UDim2.new(1, -10, 0.300000012, 0)
 	NG635.FontSize = Enum.FontSize.Size14
-	NG635.Text = dCD("~Avpxbnxm")
+	NG635.Text = "~Nickoakz"
 	NG635.TextColor3 = Color3.new(1, 1, 1)
 	NG635.TextStrokeTransparency = 0.80000001192093
 	NG635.TextWrapped = true
@@ -10904,7 +11124,7 @@ do
 	NG637 = Instance.new("Frame")
 	NG637.BackgroundTransparency = 1
 	NG637.BorderSizePixel = 0
-	NG637.Name = dCD("ObggbzPbybeOne")
+	NG637.Name = "BottomColorBar"
 	NG637.Position = UDim2.new(0, 0, 1, 0)
 	NG637.Rotation = 180
 	NG637.Size = UDim2.new(1, 0, 0, 3)
@@ -10913,14 +11133,14 @@ do
 	NG638.BackgroundColor3 = Color3.new(1, 0.686275, 0)
 	NG638.BackgroundTransparency = 0.25
 	NG638.BorderSizePixel = 0
-	NG638.Name = dCD("Lryybj")
+	NG638.Name = "Yellow"
 	NG638.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG638.Parent = NG637
 	NG639 = Instance.new("Frame")
 	NG639.BackgroundColor3 = Color3.new(0.294118, 0.592157, 0.294118)
 	NG639.BackgroundTransparency = 0.25
 	NG639.BorderSizePixel = 0
-	NG639.Name = dCD("Terra")
+	NG639.Name = "Green"
 	NG639.Position = UDim2.new(0.200000003, 0, 0, 0)
 	NG639.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG639.Parent = NG637
@@ -10928,7 +11148,7 @@ do
 	NG640.BackgroundColor3 = Color3.new(0.0156863, 0.686275, 0.92549)
 	NG640.BackgroundTransparency = 0.25
 	NG640.BorderSizePixel = 0
-	NG640.Name = dCD("Oyhr")
+	NG640.Name = "Blue"
 	NG640.Position = UDim2.new(0.400000006, 0, 0, 0)
 	NG640.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG640.Parent = NG637
@@ -10936,7 +11156,7 @@ do
 	NG641.BackgroundColor3 = Color3.new(1, 0, 0)
 	NG641.BackgroundTransparency = 0.25
 	NG641.BorderSizePixel = 0
-	NG641.Name = dCD("Erq")
+	NG641.Name = "Red"
 	NG641.Position = UDim2.new(0.600000024, 0, 0, 0)
 	NG641.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG641.Parent = NG637
@@ -10944,14 +11164,14 @@ do
 	NG642.BackgroundColor3 = Color3.new(0.419608, 0.196078, 0.486275)
 	NG642.BackgroundTransparency = 0.25
 	NG642.BorderSizePixel = 0
-	NG642.Name = dCD("Checyr")
+	NG642.Name = "Purple"
 	NG642.Position = UDim2.new(0.800000012, 0, 0, 0)
 	NG642.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG642.Parent = NG637
 	NG643 = Instance.new("Frame")
 	NG643.BackgroundTransparency = 1
 	NG643.BorderSizePixel = 0
-	NG643.Name = dCD("GbcPbybeOne")
+	NG643.Name = "TopColorBar"
 	NG643.Position = UDim2.new(0, 0, 0, -2)
 	NG643.Rotation = 180
 	NG643.Size = UDim2.new(1, 0, 0, 3)
@@ -10960,14 +11180,14 @@ do
 	NG644.BackgroundColor3 = Color3.new(1, 0.686275, 0)
 	NG644.BackgroundTransparency = 0.25
 	NG644.BorderSizePixel = 0
-	NG644.Name = dCD("Lryybj")
+	NG644.Name = "Yellow"
 	NG644.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG644.Parent = NG643
 	NG645 = Instance.new("Frame")
 	NG645.BackgroundColor3 = Color3.new(0.294118, 0.592157, 0.294118)
 	NG645.BackgroundTransparency = 0.25
 	NG645.BorderSizePixel = 0
-	NG645.Name = dCD("Terra")
+	NG645.Name = "Green"
 	NG645.Position = UDim2.new(0.200000003, 0, 0, 0)
 	NG645.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG645.Parent = NG643
@@ -10975,7 +11195,7 @@ do
 	NG646.BackgroundColor3 = Color3.new(0.0156863, 0.686275, 0.92549)
 	NG646.BackgroundTransparency = 0.25
 	NG646.BorderSizePixel = 0
-	NG646.Name = dCD("Oyhr")
+	NG646.Name = "Blue"
 	NG646.Position = UDim2.new(0.400000006, 0, 0, 0)
 	NG646.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG646.Parent = NG643
@@ -10983,7 +11203,7 @@ do
 	NG647.BackgroundColor3 = Color3.new(1, 0, 0)
 	NG647.BackgroundTransparency = 0.25
 	NG647.BorderSizePixel = 0
-	NG647.Name = dCD("Erq")
+	NG647.Name = "Red"
 	NG647.Position = UDim2.new(0.600000024, 0, 0, 0)
 	NG647.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG647.Parent = NG643
@@ -10991,7 +11211,7 @@ do
 	NG648.BackgroundColor3 = Color3.new(0.419608, 0.196078, 0.486275)
 	NG648.BackgroundTransparency = 0.25
 	NG648.BorderSizePixel = 0
-	NG648.Name = dCD("Checyr")
+	NG648.Name = "Purple"
 	NG648.Position = UDim2.new(0.800000012, 0, 0, 0)
 	NG648.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG648.Parent = NG643
@@ -11001,7 +11221,7 @@ do
 	NG649.BackgroundTransparency = 1
 	NG649.BorderColor3 = Color3.new(0.137255, 0.137255, 0.137255)
 	NG649.BorderSizePixel = 0
-	NG649.Name = dCD("OGQbpxTHV")
+	NG649.Name = "BTDockGUI"
 	NG649.Position = UDim2.new(0.699999988, 0, 0.300000012, 0)
 	NG649.Size = UDim2.new(0, 70, 0, 380)
 	NG649.Draggable = true
@@ -11009,7 +11229,7 @@ do
 	NG650 = Instance.new("Frame")
 	NG650.BackgroundTransparency = 1
 	NG650.BorderSizePixel = 0
-	NG650.Name = dCD("Gbbygvcf")
+	NG650.Name = "Tooltips"
 	NG650.Position = UDim2.new(0, -120, 0, 0)
 	NG650.Size = UDim2.new(0, 120, 0, 315)
 	NG650.Parent = NG649
@@ -11017,31 +11237,31 @@ do
 	NG651.BackgroundColor3 = Color3.new(0.239216, 0.239216, 0.239216)
 	NG651.BackgroundTransparency = 0.20000000298023
 	NG651.BorderSizePixel = 0
-	NG651.Name = dCD("CnvagVasb")
+	NG651.Name = "PaintInfo"
 	NG651.Size = UDim2.new(1, 0, 1, 0)
 	NG651.Visible = false
 	NG651.Parent = NG650
 	NG652 = Instance.new("Frame")
 	NG652.BackgroundTransparency = 1
 	NG652.BorderSizePixel = 0
-	NG652.Name = dCD("Pbagrag")
+	NG652.Name = "Content"
 	NG652.Size = UDim2.new(1, 0, 0, 70)
 	NG652.Parent = NG651
 	NG653 = Instance.new("Frame")
 	NG653.BackgroundColor3 = Color3.new(1, 0, 0)
 	NG653.BorderSizePixel = 0
-	NG653.Name = dCD("PbybeOne")
+	NG653.Name = "ColorBar"
 	NG653.Size = UDim2.new(1, 0, 0, 2)
 	NG653.Parent = NG652
 	NG654 = Instance.new("TextLabel")
 	NG654.BackgroundTransparency = 1
 	NG654.BorderSizePixel = 0
-	NG654.Name = dCD("GbbyQrfpevcgvba")
+	NG654.Name = "ToolDescription"
 	NG654.Position = UDim2.new(0, 10, 0, 25)
 	NG654.Size = UDim2.new(0, 82, 0, 50)
 	NG654.Font = Enum.Font.Arial
 	NG654.FontSize = Enum.FontSize.Size10
-	NG654.Text = dCD("Nyybjf lbh gb punatr gur pbybe bs cnegf.")
+	NG654.Text = "Allows you to change the color of parts."
 	NG654.TextColor3 = Color3.new(1, 1, 1)
 	NG654.TextWrapped = true
 	NG654.TextXAlignment = Enum.TextXAlignment.Left
@@ -11050,12 +11270,12 @@ do
 	NG655 = Instance.new("TextLabel")
 	NG655.BackgroundTransparency = 1
 	NG655.BorderSizePixel = 0
-	NG655.Name = dCD("GbbyAnzr")
+	NG655.Name = "ToolName"
 	NG655.Position = UDim2.new(0, 10, 0, 0)
 	NG655.Size = UDim2.new(0, 50, 0, 25)
 	NG655.Font = Enum.Font.ArialBold
 	NG655.FontSize = Enum.FontSize.Size10
-	NG655.Text = dCD("CNVAG GBBY")
+	NG655.Text = "PAINT TOOL"
 	NG655.TextColor3 = Color3.new(1, 1, 1)
 	NG655.TextXAlignment = Enum.TextXAlignment.Left
 	NG655.Parent = NG652
@@ -11063,33 +11283,31 @@ do
 	NG656.BackgroundColor3 = Color3.new(0.239216, 0.239216, 0.239216)
 	NG656.BackgroundTransparency = 0.20000000298023
 	NG656.BorderSizePixel = 0
-	NG656.Name = dCD("FhesnprVasb")
+	NG656.Name = "SurfaceInfo"
 	NG656.Size = UDim2.new(1, 0, 1, 0)
 	NG656.Visible = false
 	NG656.Parent = NG650
 	NG657 = Instance.new("Frame")
 	NG657.BackgroundTransparency = 1
 	NG657.BorderSizePixel = 0
-	NG657.Name = dCD("Pbagrag")
+	NG657.Name = "Content"
 	NG657.Size = UDim2.new(1, 0, 0, 150)
 	NG657.Parent = NG656
 	NG658 = Instance.new("Frame")
 	NG658.BackgroundColor3 = Color3.new(0.419608, 0.196078, 0.486275)
 	NG658.BorderSizePixel = 0
-	NG658.Name = dCD("PbybeOne")
+	NG658.Name = "ColorBar"
 	NG658.Size = UDim2.new(1, 0, 0, 2)
 	NG658.Parent = NG657
 	NG659 = Instance.new("TextLabel")
 	NG659.BackgroundTransparency = 1
 	NG659.BorderSizePixel = 0
-	NG659.Name = dCD("GbbyQrfpevcgvba")
+	NG659.Name = "ToolDescription"
 	NG659.Position = UDim2.new(0, 10, 0, 25)
 	NG659.Size = UDim2.new(0, 82, 0, 120)
 	NG659.Font = Enum.Font.Arial
 	NG659.FontSize = Enum.FontSize.Size10
-	NG659.Text = dCD(
-		"Yrgf lbh punatr gur fhesnpr glcr bs cnegf.  GVC: Lbh pna fryrpg gur fvqr gb punatr ol evtug pyvpxvat ba n cneg'f fvqr."
-	)
+	NG659.Text = "Lets you change the surface type of parts.  TIP: You can select the side to change by right clicking on a part's side."
 	NG659.TextColor3 = Color3.new(1, 1, 1)
 	NG659.TextWrapped = true
 	NG659.TextXAlignment = Enum.TextXAlignment.Left
@@ -11098,12 +11316,12 @@ do
 	NG660 = Instance.new("TextLabel")
 	NG660.BackgroundTransparency = 1
 	NG660.BorderSizePixel = 0
-	NG660.Name = dCD("GbbyAnzr")
+	NG660.Name = "ToolName"
 	NG660.Position = UDim2.new(0, 10, 0, 0)
 	NG660.Size = UDim2.new(0, 50, 0, 25)
 	NG660.Font = Enum.Font.ArialBold
 	NG660.FontSize = Enum.FontSize.Size10
-	NG660.Text = dCD("FHESNPR GBBY")
+	NG660.Text = "SURFACE TOOL"
 	NG660.TextColor3 = Color3.new(1, 1, 1)
 	NG660.TextXAlignment = Enum.TextXAlignment.Left
 	NG660.Parent = NG657
@@ -11111,31 +11329,31 @@ do
 	NG661.BackgroundColor3 = Color3.new(0.239216, 0.239216, 0.239216)
 	NG661.BackgroundTransparency = 0.20000000298023
 	NG661.BorderSizePixel = 0
-	NG661.Name = dCD("ZngrevnyVasb")
+	NG661.Name = "MaterialInfo"
 	NG661.Size = UDim2.new(1, 0, 1, 0)
 	NG661.Visible = false
 	NG661.Parent = NG650
 	NG662 = Instance.new("Frame")
 	NG662.BackgroundTransparency = 1
 	NG662.BorderSizePixel = 0
-	NG662.Name = dCD("Pbagrag")
+	NG662.Name = "Content"
 	NG662.Size = UDim2.new(1, 0, 0, 150)
 	NG662.Parent = NG661
 	NG663 = Instance.new("Frame")
 	NG663.BackgroundColor3 = Color3.new(0.419608, 0.196078, 0.486275)
 	NG663.BorderSizePixel = 0
-	NG663.Name = dCD("PbybeOne")
+	NG663.Name = "ColorBar"
 	NG663.Size = UDim2.new(1, 0, 0, 2)
 	NG663.Parent = NG662
 	NG664 = Instance.new("TextLabel")
 	NG664.BackgroundTransparency = 1
 	NG664.BorderSizePixel = 0
-	NG664.Name = dCD("GbbyQrfpevcgvba")
+	NG664.Name = "ToolDescription"
 	NG664.Position = UDim2.new(0, 10, 0, 25)
 	NG664.Size = UDim2.new(0, 80, 0, 120)
 	NG664.Font = Enum.Font.Arial
 	NG664.FontSize = Enum.FontSize.Size10
-	NG664.Text = dCD("Yrgf lbh punatr gur zngrevny, genafcnerapl, naq ersyrpgnapr bs cnegf.")
+	NG664.Text = "Lets you change the material, transparency, and reflectance of parts."
 	NG664.TextColor3 = Color3.new(1, 1, 1)
 	NG664.TextWrapped = true
 	NG664.TextXAlignment = Enum.TextXAlignment.Left
@@ -11144,12 +11362,12 @@ do
 	NG665 = Instance.new("TextLabel")
 	NG665.BackgroundTransparency = 1
 	NG665.BorderSizePixel = 0
-	NG665.Name = dCD("GbbyAnzr")
+	NG665.Name = "ToolName"
 	NG665.Position = UDim2.new(0, 10, 0, 0)
 	NG665.Size = UDim2.new(0, 50, 0, 25)
 	NG665.Font = Enum.Font.ArialBold
 	NG665.FontSize = Enum.FontSize.Size10
-	NG665.Text = dCD("ZNGREVNY GBBY")
+	NG665.Text = "MATERIAL TOOL"
 	NG665.TextColor3 = Color3.new(1, 1, 1)
 	NG665.TextXAlignment = Enum.TextXAlignment.Left
 	NG665.Parent = NG662
@@ -11157,33 +11375,31 @@ do
 	NG666.BackgroundColor3 = Color3.new(0.239216, 0.239216, 0.239216)
 	NG666.BackgroundTransparency = 0.20000000298023
 	NG666.BorderSizePixel = 0
-	NG666.Name = dCD("PbyyvfvbaVasb")
+	NG666.Name = "CollisionInfo"
 	NG666.Size = UDim2.new(1, 0, 1, 0)
 	NG666.Visible = false
 	NG666.Parent = NG650
 	NG667 = Instance.new("Frame")
 	NG667.BackgroundTransparency = 1
 	NG667.BorderSizePixel = 0
-	NG667.Name = dCD("Pbagrag")
+	NG667.Name = "Content"
 	NG667.Size = UDim2.new(1, 0, 0, 150)
 	NG667.Parent = NG666
 	NG668 = Instance.new("Frame")
 	NG668.BackgroundColor3 = Color3.new(0.0666667, 0.0666667, 0.0666667)
 	NG668.BorderSizePixel = 0
-	NG668.Name = dCD("PbybeOne")
+	NG668.Name = "ColorBar"
 	NG668.Size = UDim2.new(1, 0, 0, 2)
 	NG668.Parent = NG667
 	NG669 = Instance.new("TextLabel")
 	NG669.BackgroundTransparency = 1
 	NG669.BorderSizePixel = 0
-	NG669.Name = dCD("GbbyQrfpevcgvba")
+	NG669.Name = "ToolDescription"
 	NG669.Position = UDim2.new(0, 10, 0, 25)
 	NG669.Size = UDim2.new(0, 80, 0, 120)
 	NG669.Font = Enum.Font.Arial
 	NG669.FontSize = Enum.FontSize.Size10
-	NG669.Text = dCD(
-		"Yrgf lbh punatr jurgure gur cnegf pbyyvqr jvgu bguref be abg.  GVC: Lbh pna gbttyr pbyyvfvba ol cerffvat Ragre."
-	)
+	NG669.Text = "Lets you change whether the parts collide with others or not.  TIP: You can toggle collision by pressing Enter."
 	NG669.TextColor3 = Color3.new(1, 1, 1)
 	NG669.TextWrapped = true
 	NG669.TextXAlignment = Enum.TextXAlignment.Left
@@ -11192,12 +11408,12 @@ do
 	NG670 = Instance.new("TextLabel")
 	NG670.BackgroundTransparency = 1
 	NG670.BorderSizePixel = 0
-	NG670.Name = dCD("GbbyAnzr")
+	NG670.Name = "ToolName"
 	NG670.Position = UDim2.new(0, 10, 0, 0)
 	NG670.Size = UDim2.new(0, 50, 0, 25)
 	NG670.Font = Enum.Font.ArialBold
 	NG670.FontSize = Enum.FontSize.Size10
-	NG670.Text = dCD("PBYYVFVBA GBBY")
+	NG670.Text = "COLLISION TOOL"
 	NG670.TextColor3 = Color3.new(1, 1, 1)
 	NG670.TextXAlignment = Enum.TextXAlignment.Left
 	NG670.Parent = NG667
@@ -11205,31 +11421,31 @@ do
 	NG671.BackgroundColor3 = Color3.new(0.239216, 0.239216, 0.239216)
 	NG671.BackgroundTransparency = 0.20000000298023
 	NG671.BorderSizePixel = 0
-	NG671.Name = dCD("NapubeVasb")
+	NG671.Name = "AnchorInfo"
 	NG671.Size = UDim2.new(1, 0, 1, 0)
 	NG671.Visible = false
 	NG671.Parent = NG650
 	NG672 = Instance.new("Frame")
 	NG672.BackgroundTransparency = 1
 	NG672.BorderSizePixel = 0
-	NG672.Name = dCD("Pbagrag")
+	NG672.Name = "Content"
 	NG672.Size = UDim2.new(1, 0, 0, 150)
 	NG672.Parent = NG671
 	NG673 = Instance.new("Frame")
 	NG673.BackgroundColor3 = Color3.new(0.0666667, 0.0666667, 0.0666667)
 	NG673.BorderSizePixel = 0
-	NG673.Name = dCD("PbybeOne")
+	NG673.Name = "ColorBar"
 	NG673.Size = UDim2.new(1, 0, 0, 2)
 	NG673.Parent = NG672
 	NG674 = Instance.new("TextLabel")
 	NG674.BackgroundTransparency = 1
 	NG674.BorderSizePixel = 0
-	NG674.Name = dCD("GbbyQrfpevcgvba")
+	NG674.Name = "ToolDescription"
 	NG674.Position = UDim2.new(0, 10, 0, 25)
 	NG674.Size = UDim2.new(0, 80, 0, 120)
 	NG674.Font = Enum.Font.Arial
 	NG674.FontSize = Enum.FontSize.Size10
-	NG674.Text = dCD("Yrgf lbh napube naq hanapube cnegf.  GVC: Lbh pna cerff Ragre gb gbttyr gur napube dhvpxyl.")
+	NG674.Text = "Lets you anchor and unanchor parts.  TIP: You can press Enter to toggle the anchor quickly."
 	NG674.TextColor3 = Color3.new(1, 1, 1)
 	NG674.TextWrapped = true
 	NG674.TextXAlignment = Enum.TextXAlignment.Left
@@ -11238,12 +11454,12 @@ do
 	NG675 = Instance.new("TextLabel")
 	NG675.BackgroundTransparency = 1
 	NG675.BorderSizePixel = 0
-	NG675.Name = dCD("GbbyAnzr")
+	NG675.Name = "ToolName"
 	NG675.Position = UDim2.new(0, 10, 0, 0)
 	NG675.Size = UDim2.new(0, 50, 0, 25)
 	NG675.Font = Enum.Font.ArialBold
 	NG675.FontSize = Enum.FontSize.Size10
-	NG675.Text = dCD("NAPUBE GBBY")
+	NG675.Text = "ANCHOR TOOL"
 	NG675.TextColor3 = Color3.new(1, 1, 1)
 	NG675.TextXAlignment = Enum.TextXAlignment.Left
 	NG675.Parent = NG672
@@ -11251,33 +11467,31 @@ do
 	NG676.BackgroundColor3 = Color3.new(0.239216, 0.239216, 0.239216)
 	NG676.BackgroundTransparency = 0.20000000298023
 	NG676.BorderSizePixel = 0
-	NG676.Name = dCD("ArjCnegVasb")
+	NG676.Name = "NewPartInfo"
 	NG676.Size = UDim2.new(1, 0, 1, 0)
 	NG676.Visible = false
 	NG676.Parent = NG650
 	NG677 = Instance.new("Frame")
 	NG677.BackgroundTransparency = 1
 	NG677.BorderSizePixel = 0
-	NG677.Name = dCD("Pbagrag")
+	NG677.Name = "Content"
 	NG677.Size = UDim2.new(1, 0, 0, 150)
 	NG677.Parent = NG676
 	NG678 = Instance.new("Frame")
 	NG678.BackgroundColor3 = Color3.new(0.0666667, 0.0666667, 0.0666667)
 	NG678.BorderSizePixel = 0
-	NG678.Name = dCD("PbybeOne")
+	NG678.Name = "ColorBar"
 	NG678.Size = UDim2.new(1, 0, 0, 2)
 	NG678.Parent = NG677
 	NG679 = Instance.new("TextLabel")
 	NG679.BackgroundTransparency = 1
 	NG679.BorderSizePixel = 0
-	NG679.Name = dCD("GbbyQrfpevcgvba")
+	NG679.Name = "ToolDescription"
 	NG679.Position = UDim2.new(0, 10, 0, 25)
 	NG679.Size = UDim2.new(0, 80, 0, 120)
 	NG679.Font = Enum.Font.Arial
 	NG679.FontSize = Enum.FontSize.Size10
-	NG679.Text = dCD(
-		"Yrgf lbh perngr arj cnegf bs qvssrerag glcrf.  Fryrpg gur cneg glcr, gura pyvpx naq qent gb cynpr gur cneg."
-	)
+	NG679.Text = "Lets you create new parts of different types.  Select the part type, then click and drag to place the part."
 	NG679.TextColor3 = Color3.new(1, 1, 1)
 	NG679.TextWrapped = true
 	NG679.TextXAlignment = Enum.TextXAlignment.Left
@@ -11286,12 +11500,12 @@ do
 	NG680 = Instance.new("TextLabel")
 	NG680.BackgroundTransparency = 1
 	NG680.BorderSizePixel = 0
-	NG680.Name = dCD("GbbyAnzr")
+	NG680.Name = "ToolName"
 	NG680.Position = UDim2.new(0, 10, 0, 0)
 	NG680.Size = UDim2.new(0, 50, 0, 25)
 	NG680.Font = Enum.Font.ArialBold
 	NG680.FontSize = Enum.FontSize.Size10
-	NG680.Text = dCD("ARJ CNEG GBBY")
+	NG680.Text = "NEW PART TOOL"
 	NG680.TextColor3 = Color3.new(1, 1, 1)
 	NG680.TextXAlignment = Enum.TextXAlignment.Left
 	NG680.Parent = NG677
@@ -11299,33 +11513,31 @@ do
 	NG681.BackgroundColor3 = Color3.new(0.239216, 0.239216, 0.239216)
 	NG681.BackgroundTransparency = 0.20000000298023
 	NG681.BorderSizePixel = 0
-	NG681.Name = dCD("ZrfuVasb")
+	NG681.Name = "MeshInfo"
 	NG681.Size = UDim2.new(1, 0, 1, 0)
 	NG681.Visible = false
 	NG681.Parent = NG650
 	NG682 = Instance.new("Frame")
 	NG682.BackgroundTransparency = 1
 	NG682.BorderSizePixel = 0
-	NG682.Name = dCD("Pbagrag")
+	NG682.Name = "Content"
 	NG682.Size = UDim2.new(1, 0, 0, 150)
 	NG682.Parent = NG681
 	NG683 = Instance.new("Frame")
 	NG683.BackgroundColor3 = Color3.new(0.419608, 0.196078, 0.486275)
 	NG683.BorderSizePixel = 0
-	NG683.Name = dCD("PbybeOne")
+	NG683.Name = "ColorBar"
 	NG683.Size = UDim2.new(1, 0, 0, 2)
 	NG683.Parent = NG682
 	NG684 = Instance.new("TextLabel")
 	NG684.BackgroundTransparency = 1
 	NG684.BorderSizePixel = 0
-	NG684.Name = dCD("GbbyQrfpevcgvba")
+	NG684.Name = "ToolDescription"
 	NG684.Position = UDim2.new(0, 10, 0, 25)
 	NG684.Size = UDim2.new(0, 84, 0, 260)
 	NG684.Font = Enum.Font.Arial
 	NG684.FontSize = Enum.FontSize.Size10
-	NG684.Text = dCD(
-		"Yrgf lbh nqq zrfurf gb cnegf.  Vs lbh'er hfvat n svyr zrfu, lbh pna cnfgr gur HEY bs nalguvat jvgu n zrfu (r.t. n ung, trne, rgp.) naq vg jvyy svaq gur evtug zrfu/grkgher VQ sbe lbh.  ABGR: Vs UggcFreivpr vf abg ranoyrq, lbh zhfg glcr gur VQ bs gur zrfu/vzntr nffrg qverpgyl."
-	)
+	NG684.Text = "Lets you add meshes to parts.  If you're using a file mesh, you can paste the URL of anything with a mesh (e.g. a hat, gear, etc.) and it will find the right mesh/texture ID for you.  NOTE: If HttpService is not enabled, you must type the ID of the mesh/image asset directly."
 	NG684.TextColor3 = Color3.new(1, 1, 1)
 	NG684.TextWrapped = true
 	NG684.TextXAlignment = Enum.TextXAlignment.Left
@@ -11334,12 +11546,12 @@ do
 	NG685 = Instance.new("TextLabel")
 	NG685.BackgroundTransparency = 1
 	NG685.BorderSizePixel = 0
-	NG685.Name = dCD("GbbyAnzr")
+	NG685.Name = "ToolName"
 	NG685.Position = UDim2.new(0, 10, 0, 0)
 	NG685.Size = UDim2.new(0, 50, 0, 25)
 	NG685.Font = Enum.Font.ArialBold
 	NG685.FontSize = Enum.FontSize.Size10
-	NG685.Text = dCD("ZRFU GBBY")
+	NG685.Text = "MESH TOOL"
 	NG685.TextColor3 = Color3.new(1, 1, 1)
 	NG685.TextXAlignment = Enum.TextXAlignment.Left
 	NG685.Parent = NG682
@@ -11347,33 +11559,31 @@ do
 	NG686.BackgroundColor3 = Color3.new(0.239216, 0.239216, 0.239216)
 	NG686.BackgroundTransparency = 0.20000000298023
 	NG686.BorderSizePixel = 0
-	NG686.Name = dCD("GrkgherVasb")
+	NG686.Name = "TextureInfo"
 	NG686.Size = UDim2.new(1, 0, 1, 0)
 	NG686.Visible = false
 	NG686.Parent = NG650
 	NG687 = Instance.new("Frame")
 	NG687.BackgroundTransparency = 1
 	NG687.BorderSizePixel = 0
-	NG687.Name = dCD("Pbagrag")
+	NG687.Name = "Content"
 	NG687.Size = UDim2.new(1, 0, 0, 150)
 	NG687.Parent = NG686
 	NG688 = Instance.new("Frame")
 	NG688.BackgroundColor3 = Color3.new(0.419608, 0.196078, 0.486275)
 	NG688.BorderSizePixel = 0
-	NG688.Name = dCD("PbybeOne")
+	NG688.Name = "ColorBar"
 	NG688.Size = UDim2.new(1, 0, 0, 2)
 	NG688.Parent = NG687
 	NG689 = Instance.new("TextLabel")
 	NG689.BackgroundTransparency = 1
 	NG689.BorderSizePixel = 0
-	NG689.Name = dCD("GbbyQrfpevcgvba")
+	NG689.Name = "ToolDescription"
 	NG689.Position = UDim2.new(0, 10, 0, 25)
 	NG689.Size = UDim2.new(0, 84, 0, 250)
 	NG689.Font = Enum.Font.Arial
 	NG689.FontSize = Enum.FontSize.Size10
-	NG689.Text = dCD(
-		"Yrgf lbh nqq qrpnyf naq grkgherf gb cnegf. Fvzcyl nqq n arj qrpny be grkgher, naq cnfgr gur HEY bs gur qrpny lbh jnag gb nqq.  GVC: Lbh pna fryrpg gur qrpny/grkgher fvqr ol evtug pyvpxvat.  ABGR: Vs UggcFreivpr vf abg ranoyrq, lbh zhfg glcr gur VQ bs gur vzntr vgrz (abg gur qrpny). Guvf pna hfhnyyl or sbhaq ol fhogenpgvat bar sebz gur VQ ahzore."
-	)
+	NG689.Text = "Lets you add decals and textures to parts. Simply add a new decal or texture, and paste the URL of the decal you want to add.  TIP: You can select the decal/texture side by right clicking.  NOTE: If HttpService is not enabled, you must type the ID of the image item (not the decal). This can usually be found by subtracting one from the ID number."
 	NG689.TextColor3 = Color3.new(1, 1, 1)
 	NG689.TextWrapped = true
 	NG689.TextXAlignment = Enum.TextXAlignment.Left
@@ -11382,12 +11592,12 @@ do
 	NG690 = Instance.new("TextLabel")
 	NG690.BackgroundTransparency = 1
 	NG690.BorderSizePixel = 0
-	NG690.Name = dCD("GbbyAnzr")
+	NG690.Name = "ToolName"
 	NG690.Position = UDim2.new(0, 10, 0, 0)
 	NG690.Size = UDim2.new(0, 50, 0, 25)
 	NG690.Font = Enum.Font.ArialBold
 	NG690.FontSize = Enum.FontSize.Size10
-	NG690.Text = dCD("GRKGHER GBBY")
+	NG690.Text = "TEXTURE TOOL"
 	NG690.TextColor3 = Color3.new(1, 1, 1)
 	NG690.TextXAlignment = Enum.TextXAlignment.Left
 	NG690.Parent = NG687
@@ -11395,31 +11605,31 @@ do
 	NG691.BackgroundColor3 = Color3.new(0.239216, 0.239216, 0.239216)
 	NG691.BackgroundTransparency = 0.20000000298023
 	NG691.BorderSizePixel = 0
-	NG691.Name = dCD("YvtugvatVasb")
+	NG691.Name = "LightingInfo"
 	NG691.Size = UDim2.new(1, 0, 1, 0)
 	NG691.Visible = false
 	NG691.Parent = NG650
 	NG692 = Instance.new("Frame")
 	NG692.BackgroundTransparency = 1
 	NG692.BorderSizePixel = 0
-	NG692.Name = dCD("Pbagrag")
+	NG692.Name = "Content"
 	NG692.Size = UDim2.new(1, 0, 0, 100)
 	NG692.Parent = NG691
 	NG693 = Instance.new("Frame")
 	NG693.BackgroundColor3 = Color3.new(0.0666667, 0.0666667, 0.0666667)
 	NG693.BorderSizePixel = 0
-	NG693.Name = dCD("PbybeOne")
+	NG693.Name = "ColorBar"
 	NG693.Size = UDim2.new(1, 0, 0, 2)
 	NG693.Parent = NG692
 	NG694 = Instance.new("TextLabel")
 	NG694.BackgroundTransparency = 1
 	NG694.BorderSizePixel = 0
-	NG694.Name = dCD("GbbyQrfpevcgvba")
+	NG694.Name = "ToolDescription"
 	NG694.Position = UDim2.new(0, 10, 0, 25)
 	NG694.Size = UDim2.new(0, 80, 0, 200)
 	NG694.Font = Enum.Font.Arial
 	NG694.FontSize = Enum.FontSize.Size10
-	NG694.Text = dCD("Nyybjf lbh gb nqq fcbgyvtugf be cbvag yvtugf gb cnegf.")
+	NG694.Text = "Allows you to add spotlights or point lights to parts."
 	NG694.TextColor3 = Color3.new(1, 1, 1)
 	NG694.TextWrapped = true
 	NG694.TextXAlignment = Enum.TextXAlignment.Left
@@ -11428,12 +11638,12 @@ do
 	NG695 = Instance.new("TextLabel")
 	NG695.BackgroundTransparency = 1
 	NG695.BorderSizePixel = 0
-	NG695.Name = dCD("GbbyAnzr")
+	NG695.Name = "ToolName"
 	NG695.Position = UDim2.new(0, 10, 0, 0)
 	NG695.Size = UDim2.new(0, 50, 0, 25)
 	NG695.Font = Enum.Font.ArialBold
 	NG695.FontSize = Enum.FontSize.Size10
-	NG695.Text = dCD("YVTUGVAT GBBY")
+	NG695.Text = "LIGHTING TOOL"
 	NG695.TextColor3 = Color3.new(1, 1, 1)
 	NG695.TextXAlignment = Enum.TextXAlignment.Left
 	NG695.Parent = NG692
@@ -11441,31 +11651,31 @@ do
 	NG696.BackgroundColor3 = Color3.new(0.239216, 0.239216, 0.239216)
 	NG696.BackgroundTransparency = 0.20000000298023
 	NG696.BorderSizePixel = 0
-	NG696.Name = dCD("QrpbengrVasb")
+	NG696.Name = "DecorateInfo"
 	NG696.Size = UDim2.new(1, 0, 1, 0)
 	NG696.Visible = false
 	NG696.Parent = NG650
 	NG697 = Instance.new("Frame")
 	NG697.BackgroundTransparency = 1
 	NG697.BorderSizePixel = 0
-	NG697.Name = dCD("Pbagrag")
+	NG697.Name = "Content"
 	NG697.Size = UDim2.new(1, 0, 0, 100)
 	NG697.Parent = NG696
 	NG698 = Instance.new("Frame")
 	NG698.BackgroundColor3 = Color3.new(0.0666667, 0.0666667, 0.0666667)
 	NG698.BorderSizePixel = 0
-	NG698.Name = dCD("PbybeOne")
+	NG698.Name = "ColorBar"
 	NG698.Size = UDim2.new(1, 0, 0, 2)
 	NG698.Parent = NG697
 	NG699 = Instance.new("TextLabel")
 	NG699.BackgroundTransparency = 1
 	NG699.BorderSizePixel = 0
-	NG699.Name = dCD("GbbyQrfpevcgvba")
+	NG699.Name = "ToolDescription"
 	NG699.Position = UDim2.new(0, 10, 0, 25)
 	NG699.Size = UDim2.new(0, 80, 0, 200)
 	NG699.Font = Enum.Font.Arial
 	NG699.FontSize = Enum.FontSize.Size10
-	NG699.Text = dCD("Nyybjf lbh gb nqq fzbxr, sver, naq fcnexyrf gb cnegf.")
+	NG699.Text = "Allows you to add smoke, fire, and sparkles to parts."
 	NG699.TextColor3 = Color3.new(1, 1, 1)
 	NG699.TextWrapped = true
 	NG699.TextXAlignment = Enum.TextXAlignment.Left
@@ -11474,12 +11684,12 @@ do
 	NG700 = Instance.new("TextLabel")
 	NG700.BackgroundTransparency = 1
 	NG700.BorderSizePixel = 0
-	NG700.Name = dCD("GbbyAnzr")
+	NG700.Name = "ToolName"
 	NG700.Position = UDim2.new(0, 10, 0, 0)
 	NG700.Size = UDim2.new(0, 50, 0, 25)
 	NG700.Font = Enum.Font.ArialBold
 	NG700.FontSize = Enum.FontSize.Size10
-	NG700.Text = dCD("QRPBENGR GBBY")
+	NG700.Text = "DECORATE TOOL"
 	NG700.TextColor3 = Color3.new(1, 1, 1)
 	NG700.TextXAlignment = Enum.TextXAlignment.Left
 	NG700.Parent = NG697
@@ -11487,20 +11697,20 @@ do
 	NG701.BackgroundColor3 = Color3.new(0.239216, 0.239216, 0.239216)
 	NG701.BackgroundTransparency = 0.20000000298023
 	NG701.BorderSizePixel = 0
-	NG701.Name = dCD("ZbirVasb")
+	NG701.Name = "MoveInfo"
 	NG701.Size = UDim2.new(1, 0, 1, 0)
 	NG701.Visible = false
 	NG701.Parent = NG650
 	NG702 = Instance.new("Frame")
 	NG702.BackgroundTransparency = 1
 	NG702.BorderSizePixel = 0
-	NG702.Name = dCD("Pbagrag")
+	NG702.Name = "Content"
 	NG702.Size = UDim2.new(1, 0, 0, 500)
 	NG702.Parent = NG701
 	NG703 = Instance.new("Frame")
 	NG703.BackgroundTransparency = 1
 	NG703.BorderSizePixel = 0
-	NG703.Name = dCD("NkrfVasb")
+	NG703.Name = "AxesInfo"
 	NG703.Position = UDim2.new(0, 0, 0, 60)
 	NG703.Size = UDim2.new(1, 0, 0, 300)
 	NG703.Parent = NG702
@@ -11517,7 +11727,7 @@ do
 	NG705.Size = UDim2.new(0, 80, 0, 180)
 	NG705.Font = Enum.Font.Arial
 	NG705.FontSize = Enum.FontSize.Size10
-	NG705.Text = dCD("TYBONY - Abezny  YBPNY - Eryngvir gb rnpu cneg  YNFG - Eryngvir gb gur ynfg cneg fryrpgrq")
+	NG705.Text = "GLOBAL - Normal  LOCAL - Relative to each part  LAST - Relative to the last part selected"
 	NG705.TextColor3 = Color3.new(1, 1, 1)
 	NG705.TextWrapped = true
 	NG705.TextXAlignment = Enum.TextXAlignment.Left
@@ -11530,7 +11740,7 @@ do
 	NG706.Size = UDim2.new(0, 80, 0, 60)
 	NG706.Font = Enum.Font.Arial
 	NG706.FontSize = Enum.FontSize.Size10
-	NG706.Text = dCD("Guvf bcgvba yrgf lbh pubbfr va juvpu qverpgvba gb zbir rnpu cneg.")
+	NG706.Text = "This option lets you choose in which direction to move each part."
 	NG706.TextColor3 = Color3.new(1, 1, 1)
 	NG706.TextWrapped = true
 	NG706.TextXAlignment = Enum.TextXAlignment.Left
@@ -11544,7 +11754,7 @@ do
 	NG707.Size = UDim2.new(0, 80, 0, 12)
 	NG707.Font = Enum.Font.ArialBold
 	NG707.FontSize = Enum.FontSize.Size10
-	NG707.Text = dCD("Nkrf")
+	NG707.Text = "Axes"
 	NG707.TextColor3 = Color3.new(1, 1, 1)
 	NG707.TextWrapped = true
 	NG707.TextXAlignment = Enum.TextXAlignment.Left
@@ -11558,7 +11768,7 @@ do
 	NG708.Font = Enum.Font.Arial
 	NG708.FontSize = Enum.FontSize.Size10
 	NG708.Text =
-		dCD("GVC: Jura lbhe nkrf ner frg gb ybpny be ynfg, lbh pna evtug pyvpx gb punatr juvpu cneg unf gur unaqyrf.")
+		"TIP: When your axes are set to local or last, you can right click to change which part has the handles."
 	NG708.TextColor3 = Color3.new(1, 1, 1)
 	NG708.TextWrapped = true
 	NG708.TextXAlignment = Enum.TextXAlignment.Left
@@ -11567,18 +11777,18 @@ do
 	NG709 = Instance.new("Frame")
 	NG709.BackgroundColor3 = Color3.new(1, 0.666667, 0)
 	NG709.BorderSizePixel = 0
-	NG709.Name = dCD("PbybeOne")
+	NG709.Name = "ColorBar"
 	NG709.Size = UDim2.new(1, 0, 0, 2)
 	NG709.Parent = NG702
 	NG710 = Instance.new("TextLabel")
 	NG710.BackgroundTransparency = 1
 	NG710.BorderSizePixel = 0
-	NG710.Name = dCD("GbbyQrfpevcgvba")
+	NG710.Name = "ToolDescription"
 	NG710.Position = UDim2.new(0, 10, 0, 25)
 	NG710.Size = UDim2.new(0, 80, 0, 50)
 	NG710.Font = Enum.Font.Arial
 	NG710.FontSize = Enum.FontSize.Size10
-	NG710.Text = dCD("Nyybjf lbh gb zbir cnegf.")
+	NG710.Text = "Allows you to move parts."
 	NG710.TextColor3 = Color3.new(1, 1, 1)
 	NG710.TextWrapped = true
 	NG710.TextXAlignment = Enum.TextXAlignment.Left
@@ -11587,19 +11797,19 @@ do
 	NG711 = Instance.new("TextLabel")
 	NG711.BackgroundTransparency = 1
 	NG711.BorderSizePixel = 0
-	NG711.Name = dCD("GbbyAnzr")
+	NG711.Name = "ToolName"
 	NG711.Position = UDim2.new(0, 10, 0, 0)
 	NG711.Size = UDim2.new(0, 50, 0, 25)
 	NG711.Font = Enum.Font.ArialBold
 	NG711.FontSize = Enum.FontSize.Size10
-	NG711.Text = dCD("ZBIR GBBY")
+	NG711.Text = "MOVE TOOL"
 	NG711.TextColor3 = Color3.new(1, 1, 1)
 	NG711.TextXAlignment = Enum.TextXAlignment.Left
 	NG711.Parent = NG702
 	NG712 = Instance.new("Frame")
 	NG712.BackgroundTransparency = 1
 	NG712.BorderSizePixel = 0
-	NG712.Name = dCD("VaperzragVasb")
+	NG712.Name = "IncrementInfo"
 	NG712.Position = UDim2.new(0, 0, 0, 365)
 	NG712.Size = UDim2.new(1, 0, 0, 300)
 	NG712.Parent = NG702
@@ -11610,7 +11820,7 @@ do
 	NG713.Size = UDim2.new(0, 80, 0, 60)
 	NG713.Font = Enum.Font.Arial
 	NG713.FontSize = Enum.FontSize.Size10
-	NG713.Text = dCD("Yrgf lbh pubbfr ubj znal fghqf gb zbir gur cnegf.")
+	NG713.Text = "Lets you choose how many studs to move the parts."
 	NG713.TextColor3 = Color3.new(1, 1, 1)
 	NG713.TextWrapped = true
 	NG713.TextXAlignment = Enum.TextXAlignment.Left
@@ -11624,7 +11834,7 @@ do
 	NG714.Size = UDim2.new(0, 80, 0, 12)
 	NG714.Font = Enum.Font.ArialBold
 	NG714.FontSize = Enum.FontSize.Size10
-	NG714.Text = dCD("Vaperzrag")
+	NG714.Text = "Increment"
 	NG714.TextColor3 = Color3.new(1, 1, 1)
 	NG714.TextWrapped = true
 	NG714.TextXAlignment = Enum.TextXAlignment.Left
@@ -11638,7 +11848,7 @@ do
 	NG715.Size = UDim2.new(0, 80, 0, 50)
 	NG715.Font = Enum.Font.Arial
 	NG715.FontSize = Enum.FontSize.Size10
-	NG715.Text = dCD("GVC: Hfr gur - xrl gb sbphf ba gur vaperzrag vachg.")
+	NG715.Text = "TIP: Use the - key to focus on the increment input."
 	NG715.TextColor3 = Color3.new(1, 1, 1)
 	NG715.TextWrapped = true
 	NG715.TextXAlignment = Enum.TextXAlignment.Left
@@ -11648,20 +11858,20 @@ do
 	NG716.BackgroundColor3 = Color3.new(0.239216, 0.239216, 0.239216)
 	NG716.BackgroundTransparency = 0.20000000298023
 	NG716.BorderSizePixel = 0
-	NG716.Name = dCD("EbgngrVasb")
+	NG716.Name = "RotateInfo"
 	NG716.Size = UDim2.new(1, 0, 1, 0)
 	NG716.Visible = false
 	NG716.Parent = NG650
 	NG717 = Instance.new("Frame")
 	NG717.BackgroundTransparency = 1
 	NG717.BorderSizePixel = 0
-	NG717.Name = dCD("Pbagrag")
+	NG717.Name = "Content"
 	NG717.Size = UDim2.new(1, 0, 0, 530)
 	NG717.Parent = NG716
 	NG718 = Instance.new("Frame")
 	NG718.BackgroundTransparency = 1
 	NG718.BorderSizePixel = 0
-	NG718.Name = dCD("CvibgVasb")
+	NG718.Name = "PivotInfo"
 	NG718.Position = UDim2.new(0, 0, 0, 60)
 	NG718.Size = UDim2.new(1, 0, 0, 300)
 	NG718.Parent = NG717
@@ -11678,9 +11888,7 @@ do
 	NG720.Size = UDim2.new(0, 80, 0, 180)
 	NG720.Font = Enum.Font.Arial
 	NG720.FontSize = Enum.FontSize.Size10
-	NG720.Text = dCD(
-		"PRAGRE - Ebgngr nebhaq gur pragre bs gur tebhc bs fryrpgrq cnegf  YBPNY - Ebgngr rnpu cneg nebhaq vgf bja pragre  YNFG - Ebgngr rnpu cneg nebhaq gur pragre bs gur ynfg cneg fryrpgrq"
-	)
+	NG720.Text = "CENTER - Rotate around the center of the group of selected parts  LOCAL - Rotate each part around its own center  LAST - Rotate each part around the center of the last part selected"
 	NG720.TextColor3 = Color3.new(1, 1, 1)
 	NG720.TextWrapped = true
 	NG720.TextXAlignment = Enum.TextXAlignment.Left
@@ -11693,7 +11901,7 @@ do
 	NG721.Size = UDim2.new(0, 80, 0, 60)
 	NG721.Font = Enum.Font.Arial
 	NG721.FontSize = Enum.FontSize.Size10
-	NG721.Text = dCD("Guvf bcgvba yrgf lbh pubbfr jung gb ebgngr gur cnegf nebhaq.")
+	NG721.Text = "This option lets you choose what to rotate the parts around."
 	NG721.TextColor3 = Color3.new(1, 1, 1)
 	NG721.TextWrapped = true
 	NG721.TextXAlignment = Enum.TextXAlignment.Left
@@ -11707,7 +11915,7 @@ do
 	NG722.Size = UDim2.new(0, 80, 0, 12)
 	NG722.Font = Enum.Font.ArialBold
 	NG722.FontSize = Enum.FontSize.Size10
-	NG722.Text = dCD("Cvibg")
+	NG722.Text = "Pivot"
 	NG722.TextColor3 = Color3.new(1, 1, 1)
 	NG722.TextWrapped = true
 	NG722.TextXAlignment = Enum.TextXAlignment.Left
@@ -11721,7 +11929,7 @@ do
 	NG723.Font = Enum.Font.Arial
 	NG723.FontSize = Enum.FontSize.Size10
 	NG723.Text =
-		dCD("GVC: Jura gur cvibg vf frg gb ybpny be ynfg, lbh pna evtug pyvpx gb fjvgpu juvpu cneg unf gur unaqyrf.")
+		"TIP: When the pivot is set to local or last, you can right click to switch which part has the handles."
 	NG723.TextColor3 = Color3.new(1, 1, 1)
 	NG723.TextWrapped = true
 	NG723.TextXAlignment = Enum.TextXAlignment.Left
@@ -11730,18 +11938,18 @@ do
 	NG724 = Instance.new("Frame")
 	NG724.BackgroundColor3 = Color3.new(0.294118, 0.592157, 0.294118)
 	NG724.BorderSizePixel = 0
-	NG724.Name = dCD("PbybeOne")
+	NG724.Name = "ColorBar"
 	NG724.Size = UDim2.new(1, 0, 0, 2)
 	NG724.Parent = NG717
 	NG725 = Instance.new("TextLabel")
 	NG725.BackgroundTransparency = 1
 	NG725.BorderSizePixel = 0
-	NG725.Name = dCD("GbbyQrfpevcgvba")
+	NG725.Name = "ToolDescription"
 	NG725.Position = UDim2.new(0, 10, 0, 25)
 	NG725.Size = UDim2.new(0, 80, 0, 50)
 	NG725.Font = Enum.Font.Arial
 	NG725.FontSize = Enum.FontSize.Size10
-	NG725.Text = dCD("Nyybjf lbh gb ebgngr cnegf.")
+	NG725.Text = "Allows you to rotate parts."
 	NG725.TextColor3 = Color3.new(1, 1, 1)
 	NG725.TextWrapped = true
 	NG725.TextXAlignment = Enum.TextXAlignment.Left
@@ -11750,19 +11958,19 @@ do
 	NG726 = Instance.new("TextLabel")
 	NG726.BackgroundTransparency = 1
 	NG726.BorderSizePixel = 0
-	NG726.Name = dCD("GbbyAnzr")
+	NG726.Name = "ToolName"
 	NG726.Position = UDim2.new(0, 10, 0, 0)
 	NG726.Size = UDim2.new(0, 50, 0, 25)
 	NG726.Font = Enum.Font.ArialBold
 	NG726.FontSize = Enum.FontSize.Size10
-	NG726.Text = dCD("EBGNGR GBBY")
+	NG726.Text = "ROTATE TOOL"
 	NG726.TextColor3 = Color3.new(1, 1, 1)
 	NG726.TextXAlignment = Enum.TextXAlignment.Left
 	NG726.Parent = NG717
 	NG727 = Instance.new("Frame")
 	NG727.BackgroundTransparency = 1
 	NG727.BorderSizePixel = 0
-	NG727.Name = dCD("VaperzragVasb")
+	NG727.Name = "IncrementInfo"
 	NG727.Position = UDim2.new(0, 0, 0, 395)
 	NG727.Size = UDim2.new(1, 0, 0, 130)
 	NG727.Parent = NG717
@@ -11773,7 +11981,7 @@ do
 	NG728.Size = UDim2.new(0, 80, 0, 60)
 	NG728.Font = Enum.Font.Arial
 	NG728.FontSize = Enum.FontSize.Size10
-	NG728.Text = dCD("Yrgf lbh pubbfr ubj znal qrterrf gb ebgngr gur cnegf.")
+	NG728.Text = "Lets you choose how many degrees to rotate the parts."
 	NG728.TextColor3 = Color3.new(1, 1, 1)
 	NG728.TextWrapped = true
 	NG728.TextXAlignment = Enum.TextXAlignment.Left
@@ -11787,7 +11995,7 @@ do
 	NG729.Size = UDim2.new(0, 80, 0, 12)
 	NG729.Font = Enum.Font.ArialBold
 	NG729.FontSize = Enum.FontSize.Size10
-	NG729.Text = dCD("Vaperzrag")
+	NG729.Text = "Increment"
 	NG729.TextColor3 = Color3.new(1, 1, 1)
 	NG729.TextWrapped = true
 	NG729.TextXAlignment = Enum.TextXAlignment.Left
@@ -11801,7 +12009,7 @@ do
 	NG730.Size = UDim2.new(0, 80, 0, 50)
 	NG730.Font = Enum.Font.Arial
 	NG730.FontSize = Enum.FontSize.Size10
-	NG730.Text = dCD("GVC: Hfr gur - xrl gb sbphf ba gur vaperzrag vachg.")
+	NG730.Text = "TIP: Use the - key to focus on the increment input."
 	NG730.TextColor3 = Color3.new(1, 1, 1)
 	NG730.TextWrapped = true
 	NG730.TextXAlignment = Enum.TextXAlignment.Left
@@ -11811,20 +12019,20 @@ do
 	NG731.BackgroundColor3 = Color3.new(0.239216, 0.239216, 0.239216)
 	NG731.BackgroundTransparency = 0.20000000298023
 	NG731.BorderSizePixel = 0
-	NG731.Name = dCD("ErfvmrVasb")
+	NG731.Name = "ResizeInfo"
 	NG731.Size = UDim2.new(1, 0, 1, 0)
 	NG731.Visible = false
 	NG731.Parent = NG650
 	NG732 = Instance.new("Frame")
 	NG732.BackgroundTransparency = 1
 	NG732.BorderSizePixel = 0
-	NG732.Name = dCD("Pbagrag")
+	NG732.Name = "Content"
 	NG732.Size = UDim2.new(1, 0, 0, 330)
 	NG732.Parent = NG731
 	NG733 = Instance.new("Frame")
 	NG733.BackgroundTransparency = 1
 	NG733.BorderSizePixel = 0
-	NG733.Name = dCD("QverpgvbafVasb")
+	NG733.Name = "DirectionsInfo"
 	NG733.Position = UDim2.new(0, 0, 0, 60)
 	NG733.Size = UDim2.new(1, 0, 0, 300)
 	NG733.Parent = NG732
@@ -11835,9 +12043,7 @@ do
 	NG734.Size = UDim2.new(0, 80, 0, 120)
 	NG734.Font = Enum.Font.Arial
 	NG734.FontSize = Enum.FontSize.Size10
-	NG734.Text = dCD(
-		"Yrgf lbh pubbfr va juvpu qverpgvbaf gb erfvmr gur cneg.  GVC: Lbh pna fjvgpu juvpu cneg unf gur unaqyrf ol evtug-pyvpxvat."
-	)
+	NG734.Text = "Lets you choose in which directions to resize the part.  TIP: You can switch which part has the handles by right-clicking."
 	NG734.TextColor3 = Color3.new(1, 1, 1)
 	NG734.TextWrapped = true
 	NG734.TextXAlignment = Enum.TextXAlignment.Left
@@ -11851,7 +12057,7 @@ do
 	NG735.Size = UDim2.new(0, 80, 0, 12)
 	NG735.Font = Enum.Font.ArialBold
 	NG735.FontSize = Enum.FontSize.Size10
-	NG735.Text = dCD("Qverpgvbaf")
+	NG735.Text = "Directions"
 	NG735.TextColor3 = Color3.new(1, 1, 1)
 	NG735.TextWrapped = true
 	NG735.TextXAlignment = Enum.TextXAlignment.Left
@@ -11860,18 +12066,18 @@ do
 	NG736 = Instance.new("Frame")
 	NG736.BackgroundColor3 = Color3.new(0.0156863, 0.686275, 0.92549)
 	NG736.BorderSizePixel = 0
-	NG736.Name = dCD("PbybeOne")
+	NG736.Name = "ColorBar"
 	NG736.Size = UDim2.new(1, 0, 0, 2)
 	NG736.Parent = NG732
 	NG737 = Instance.new("TextLabel")
 	NG737.BackgroundTransparency = 1
 	NG737.BorderSizePixel = 0
-	NG737.Name = dCD("GbbyQrfpevcgvba")
+	NG737.Name = "ToolDescription"
 	NG737.Position = UDim2.new(0, 10, 0, 25)
 	NG737.Size = UDim2.new(0, 80, 0, 50)
 	NG737.Font = Enum.Font.Arial
 	NG737.FontSize = Enum.FontSize.Size10
-	NG737.Text = dCD("Nyybjf lbh gb erfvmr cnegf.")
+	NG737.Text = "Allows you to resize parts."
 	NG737.TextColor3 = Color3.new(1, 1, 1)
 	NG737.TextWrapped = true
 	NG737.TextXAlignment = Enum.TextXAlignment.Left
@@ -11880,19 +12086,19 @@ do
 	NG738 = Instance.new("TextLabel")
 	NG738.BackgroundTransparency = 1
 	NG738.BorderSizePixel = 0
-	NG738.Name = dCD("GbbyAnzr")
+	NG738.Name = "ToolName"
 	NG738.Position = UDim2.new(0, 10, 0, 0)
 	NG738.Size = UDim2.new(0, 50, 0, 25)
 	NG738.Font = Enum.Font.ArialBold
 	NG738.FontSize = Enum.FontSize.Size10
-	NG738.Text = dCD("ERFVMR GBBY")
+	NG738.Text = "RESIZE TOOL"
 	NG738.TextColor3 = Color3.new(1, 1, 1)
 	NG738.TextXAlignment = Enum.TextXAlignment.Left
 	NG738.Parent = NG732
 	NG739 = Instance.new("Frame")
 	NG739.BackgroundTransparency = 1
 	NG739.BorderSizePixel = 0
-	NG739.Name = dCD("VaperzragVasb")
+	NG739.Name = "IncrementInfo"
 	NG739.Position = UDim2.new(0, 0, 0, 200)
 	NG739.Size = UDim2.new(1, 0, 0, 140)
 	NG739.Parent = NG732
@@ -11903,7 +12109,7 @@ do
 	NG740.Size = UDim2.new(0, 80, 0, 60)
 	NG740.Font = Enum.Font.Arial
 	NG740.FontSize = Enum.FontSize.Size10
-	NG740.Text = dCD("Yrgf lbh pubbfr ubj znal fghqf gb erfvmr gur cnegf.")
+	NG740.Text = "Lets you choose how many studs to resize the parts."
 	NG740.TextColor3 = Color3.new(1, 1, 1)
 	NG740.TextWrapped = true
 	NG740.TextXAlignment = Enum.TextXAlignment.Left
@@ -11917,7 +12123,7 @@ do
 	NG741.Size = UDim2.new(0, 80, 0, 12)
 	NG741.Font = Enum.Font.ArialBold
 	NG741.FontSize = Enum.FontSize.Size10
-	NG741.Text = dCD("Vaperzrag")
+	NG741.Text = "Increment"
 	NG741.TextColor3 = Color3.new(1, 1, 1)
 	NG741.TextWrapped = true
 	NG741.TextXAlignment = Enum.TextXAlignment.Left
@@ -11931,7 +12137,7 @@ do
 	NG742.Size = UDim2.new(0, 80, 0, 50)
 	NG742.Font = Enum.Font.Arial
 	NG742.FontSize = Enum.FontSize.Size10
-	NG742.Text = dCD("GVC: Hfr gur - xrl gb sbphf ba gur vaperzrag vachg.")
+	NG742.Text = "TIP: Use the - key to focus on the increment input."
 	NG742.TextColor3 = Color3.new(1, 1, 1)
 	NG742.TextWrapped = true
 	NG742.TextXAlignment = Enum.TextXAlignment.Left
@@ -11941,33 +12147,31 @@ do
 	NG743.BackgroundColor3 = Color3.new(0.239216, 0.239216, 0.239216)
 	NG743.BackgroundTransparency = 0.20000000298023
 	NG743.BorderSizePixel = 0
-	NG743.Name = dCD("JryqVasb")
+	NG743.Name = "WeldInfo"
 	NG743.Size = UDim2.new(1, 0, 1, 0)
 	NG743.Visible = false
 	NG743.Parent = NG650
 	NG744 = Instance.new("Frame")
 	NG744.BackgroundTransparency = 1
 	NG744.BorderSizePixel = 0
-	NG744.Name = dCD("Pbagrag")
+	NG744.Name = "Content"
 	NG744.Size = UDim2.new(1, 0, 0, 310)
 	NG744.Parent = NG743
 	NG745 = Instance.new("Frame")
 	NG745.BackgroundColor3 = Color3.new(0.0666667, 0.0666667, 0.0666667)
 	NG745.BorderSizePixel = 0
-	NG745.Name = dCD("PbybeOne")
+	NG745.Name = "ColorBar"
 	NG745.Size = UDim2.new(1, 0, 0, 2)
 	NG745.Parent = NG744
 	NG746 = Instance.new("TextLabel")
 	NG746.BackgroundTransparency = 1
 	NG746.BorderSizePixel = 0
-	NG746.Name = dCD("GbbyQrfpevcgvba")
+	NG746.Name = "ToolDescription"
 	NG746.Position = UDim2.new(0, 10, 0, 25)
 	NG746.Size = UDim2.new(0, 80, 0, 300)
 	NG746.Font = Enum.Font.Arial
 	NG746.FontSize = Enum.FontSize.Size10
-	NG746.Text = dCD(
-		"Nyybjf lbh gb jryq cnegf gbtrgure fb gung gurl'yy zbir gbtrgure.  ABGR: Gur jryqf orgjrra cnegf znl oernx vs lbh bayl zbir bar bs gur cnegf (zbir nyy bs gur cnegf gung ner pbaarpgrq ol jryqf gb cerirag guvf).  ABGR: Guvf gbby qbrfa'g jbex va EBOYBK Fghqvb (vg'f xvaq bs hfryrff va gung pbagrkg)."
-	)
+	NG746.Text = "Allows you to weld parts together so that they'll move together.  NOTE: The welds between parts may break if you only move one of the parts (move all of the parts that are connected by welds to prevent this).  NOTE: This tool doesn't work in ROBLOX Studio (it's kind of useless in that context)."
 	NG746.TextColor3 = Color3.new(1, 1, 1)
 	NG746.TextWrapped = true
 	NG746.TextXAlignment = Enum.TextXAlignment.Left
@@ -11976,12 +12180,12 @@ do
 	NG747 = Instance.new("TextLabel")
 	NG747.BackgroundTransparency = 1
 	NG747.BorderSizePixel = 0
-	NG747.Name = dCD("GbbyAnzr")
+	NG747.Name = "ToolName"
 	NG747.Position = UDim2.new(0, 10, 0, 0)
 	NG747.Size = UDim2.new(0, 50, 0, 25)
 	NG747.Font = Enum.Font.ArialBold
 	NG747.FontSize = Enum.FontSize.Size10
-	NG747.Text = dCD("JRYQ GBBY")
+	NG747.Text = "WELD TOOL"
 	NG747.TextColor3 = Color3.new(1, 1, 1)
 	NG747.TextXAlignment = Enum.TextXAlignment.Left
 	NG747.Parent = NG744
@@ -11989,19 +12193,19 @@ do
 	NG748.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG748.BackgroundTransparency = 0.75
 	NG748.BorderSizePixel = 0
-	NG748.Name = dCD("VasbOhggbaf")
+	NG748.Name = "InfoButtons"
 	NG748.Position = UDim2.new(0, 0, 0, 350)
 	NG748.Size = UDim2.new(1, 0, 0, 32)
 	NG748.Parent = NG649
 	NG749 = Instance.new("TextLabel")
 	NG749.BackgroundTransparency = 1
 	NG749.BorderSizePixel = 0
-	NG749.Name = dCD("S3KFvtangher")
+	NG749.Name = "F3XSignature"
 	NG749.Position = UDim2.new(0, 0, 0, 7)
 	NG749.Size = UDim2.new(1, -28, 0, 17)
 	NG749.Font = Enum.Font.ArialBold
 	NG749.FontSize = Enum.FontSize.Size14
-	NG749.Text = dCD("S3K")
+	NG749.Text = "F3X"
 	NG749.TextColor3 = Color3.new(1, 1, 1)
 	NG749.TextScaled = true
 	NG749.TextStrokeTransparency = 0.89999997615814
@@ -12011,16 +12215,16 @@ do
 	NG750.BackgroundColor3 = Color3.new(0.333333, 0.666667, 1)
 	NG750.BackgroundTransparency = 1
 	NG750.BorderSizePixel = 0
-	NG750.Name = dCD("UrycOhggba")
+	NG750.Name = "HelpButton"
 	NG750.Position = UDim2.new(1, -32, 0, 0)
 	NG750.Size = UDim2.new(0, 32, 0, 32)
 	NG750.Style = Enum.ButtonStyle.Custom
-	NG750.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=141911973")
+	NG750.Image = "http://www.roblox.com/asset/?id=141911973"
 	NG750.Parent = NG748
 	NG751 = Instance.new("Frame")
 	NG751.BackgroundTransparency = 1
 	NG751.BorderSizePixel = 0
-	NG751.Name = dCD("Gbbygvc")
+	NG751.Name = "Tooltip"
 	NG751.Position = UDim2.new(-0.300000012, 0, 1, 0)
 	NG751.Size = UDim2.new(1.60000002, 0, 0, 0)
 	NG751.Visible = false
@@ -12029,18 +12233,18 @@ do
 	NG752.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG752.BackgroundTransparency = 0.5
 	NG752.BorderSizePixel = 0
-	NG752.Name = dCD("Grkg")
+	NG752.Name = "Text"
 	NG752.Size = UDim2.new(1, 0, 0, 20)
 	NG752.Font = Enum.Font.ArialBold
 	NG752.FontSize = Enum.FontSize.Size10
-	NG752.Text = dCD("URYC")
+	NG752.Text = "HELP"
 	NG752.TextColor3 = Color3.new(1, 1, 1)
 	NG752.Parent = NG751
 	NG753 = Instance.new("Frame")
 	NG753.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG753.BackgroundTransparency = 0.69999998807907
 	NG753.BorderSizePixel = 0
-	NG753.Name = dCD("Funqbj")
+	NG753.Name = "Shadow"
 	NG753.Position = UDim2.new(0, 0, 1, -2)
 	NG753.Size = UDim2.new(1, 0, 0, 2)
 	NG753.Parent = NG748
@@ -12048,7 +12252,7 @@ do
 	NG754.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG754.BackgroundTransparency = 0.5
 	NG754.BorderSizePixel = 0
-	NG754.Name = dCD("FryrpgvbaOhggbaf")
+	NG754.Name = "SelectionButtons"
 	NG754.Position = UDim2.new(0, 0, 0, 245)
 	NG754.Size = UDim2.new(1, 0, 0, 105)
 	NG754.Parent = NG649
@@ -12056,16 +12260,16 @@ do
 	NG755.BackgroundColor3 = Color3.new(0.333333, 0.666667, 1)
 	NG755.BackgroundTransparency = 1
 	NG755.BorderSizePixel = 0
-	NG755.Name = dCD("QryrgrOhggba")
+	NG755.Name = "DeleteButton"
 	NG755.Position = UDim2.new(0, 0, 0, 35)
 	NG755.Size = UDim2.new(0, 35, 0, 35)
 	NG755.Style = Enum.ButtonStyle.Custom
-	NG755.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=142074644")
+	NG755.Image = "http://www.roblox.com/asset/?id=142074644"
 	NG755.Parent = NG754
 	NG756 = Instance.new("Frame")
 	NG756.BackgroundTransparency = 1
 	NG756.BorderSizePixel = 0
-	NG756.Name = dCD("Gbbygvc")
+	NG756.Name = "Tooltip"
 	NG756.Position = UDim2.new(-0.300000012, 0, 1, 0)
 	NG756.Size = UDim2.new(1.60000002, 0, 0, 0)
 	NG756.Visible = false
@@ -12074,27 +12278,27 @@ do
 	NG757.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG757.BackgroundTransparency = 0.5
 	NG757.BorderSizePixel = 0
-	NG757.Name = dCD("Grkg")
+	NG757.Name = "Text"
 	NG757.Size = UDim2.new(1, 0, 0, 28)
 	NG757.Font = Enum.Font.ArialBold
 	NG757.FontSize = Enum.FontSize.Size10
-	NG757.Text = dCD("QRYRGR (Fuvsg + K)")
+	NG757.Text = "DELETE (Shift + X)"
 	NG757.TextColor3 = Color3.new(1, 1, 1)
 	NG757.Parent = NG756
 	NG758 = Instance.new("ImageButton")
 	NG758.BackgroundColor3 = Color3.new(0.333333, 0.666667, 1)
 	NG758.BackgroundTransparency = 1
 	NG758.BorderSizePixel = 0
-	NG758.Name = dCD("RkcbegOhggba")
+	NG758.Name = "ExportButton"
 	NG758.Position = UDim2.new(0, 35, 0, 35)
 	NG758.Size = UDim2.new(0, 35, 0, 35)
 	NG758.Style = Enum.ButtonStyle.Custom
-	NG758.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=142074569")
+	NG758.Image = "http://www.roblox.com/asset/?id=142074569"
 	NG758.Parent = NG754
 	NG759 = Instance.new("Frame")
 	NG759.BackgroundTransparency = 1
 	NG759.BorderSizePixel = 0
-	NG759.Name = dCD("Gbbygvc")
+	NG759.Name = "Tooltip"
 	NG759.Position = UDim2.new(-0.300000012, 0, 1, 0)
 	NG759.Size = UDim2.new(1.60000002, 0, 0, 0)
 	NG759.Visible = false
@@ -12103,27 +12307,27 @@ do
 	NG760.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG760.BackgroundTransparency = 0.5
 	NG760.BorderSizePixel = 0
-	NG760.Name = dCD("Grkg")
+	NG760.Name = "Text"
 	NG760.Size = UDim2.new(1, 0, 0, 28)
 	NG760.Font = Enum.Font.ArialBold
 	NG760.FontSize = Enum.FontSize.Size10
-	NG760.Text = dCD("RKCBEG (Fuvsg + C)")
+	NG760.Text = "EXPORT (Shift + P)"
 	NG760.TextColor3 = Color3.new(1, 1, 1)
 	NG760.Parent = NG759
 	NG761 = Instance.new("ImageButton")
 	NG761.BackgroundColor3 = Color3.new(0.333333, 0.666667, 1)
 	NG761.BackgroundTransparency = 1
 	NG761.BorderSizePixel = 0
-	NG761.Name = dCD("ErqbOhggba")
+	NG761.Name = "RedoButton"
 	NG761.Position = UDim2.new(0, 35, 0, 0)
 	NG761.Size = UDim2.new(0, 35, 0, 35)
 	NG761.Style = Enum.ButtonStyle.Custom
-	NG761.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=142074553")
+	NG761.Image = "http://www.roblox.com/asset/?id=142074553"
 	NG761.Parent = NG754
 	NG762 = Instance.new("Frame")
 	NG762.BackgroundTransparency = 1
 	NG762.BorderSizePixel = 0
-	NG762.Name = dCD("Gbbygvc")
+	NG762.Name = "Tooltip"
 	NG762.Position = UDim2.new(-0.300000012, 0, 1, 0)
 	NG762.Size = UDim2.new(1.60000002, 0, 0, 0)
 	NG762.Visible = false
@@ -12132,26 +12336,26 @@ do
 	NG763.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG763.BackgroundTransparency = 0.5
 	NG763.BorderSizePixel = 0
-	NG763.Name = dCD("Grkg")
+	NG763.Name = "Text"
 	NG763.Size = UDim2.new(1, 0, 0, 28)
 	NG763.Font = Enum.Font.ArialBold
 	NG763.FontSize = Enum.FontSize.Size10
-	NG763.Text = dCD("ERQB (Fuvsg + L)")
+	NG763.Text = "REDO (Shift + Y)"
 	NG763.TextColor3 = Color3.new(1, 1, 1)
 	NG763.Parent = NG762
 	NG764 = Instance.new("ImageButton")
 	NG764.BackgroundColor3 = Color3.new(0.333333, 0.666667, 1)
 	NG764.BackgroundTransparency = 1
 	NG764.BorderSizePixel = 0
-	NG764.Name = dCD("HaqbOhggba")
+	NG764.Name = "UndoButton"
 	NG764.Size = UDim2.new(0, 35, 0, 35)
 	NG764.Style = Enum.ButtonStyle.Custom
-	NG764.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=142074557")
+	NG764.Image = "http://www.roblox.com/asset/?id=142074557"
 	NG764.Parent = NG754
 	NG765 = Instance.new("Frame")
 	NG765.BackgroundTransparency = 1
 	NG765.BorderSizePixel = 0
-	NG765.Name = dCD("Gbbygvc")
+	NG765.Name = "Tooltip"
 	NG765.Position = UDim2.new(-0.300000012, 0, 1, 0)
 	NG765.Size = UDim2.new(1.60000002, 0, 0, 0)
 	NG765.Visible = false
@@ -12160,27 +12364,27 @@ do
 	NG766.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG766.BackgroundTransparency = 0.5
 	NG766.BorderSizePixel = 0
-	NG766.Name = dCD("Grkg")
+	NG766.Name = "Text"
 	NG766.Size = UDim2.new(1, 0, 0, 28)
 	NG766.Font = Enum.Font.ArialBold
 	NG766.FontSize = Enum.FontSize.Size10
-	NG766.Text = dCD("HAQB (Fuvsg + M)")
+	NG766.Text = "UNDO (Shift + Z)"
 	NG766.TextColor3 = Color3.new(1, 1, 1)
 	NG766.Parent = NG765
 	NG767 = Instance.new("ImageButton")
 	NG767.BackgroundColor3 = Color3.new(0.333333, 0.666667, 1)
 	NG767.BackgroundTransparency = 1
 	NG767.BorderSizePixel = 0
-	NG767.Name = dCD("PybarOhggba")
+	NG767.Name = "CloneButton"
 	NG767.Position = UDim2.new(0, 0, 0, 70)
 	NG767.Size = UDim2.new(0, 35, 0, 35)
 	NG767.Style = Enum.ButtonStyle.Custom
-	NG767.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=142074563")
+	NG767.Image = "http://www.roblox.com/asset/?id=142074563"
 	NG767.Parent = NG754
 	NG768 = Instance.new("Frame")
 	NG768.BackgroundTransparency = 1
 	NG768.BorderSizePixel = 0
-	NG768.Name = dCD("Gbbygvc")
+	NG768.Name = "Tooltip"
 	NG768.Position = UDim2.new(-0.300000012, 0, 1, 0)
 	NG768.Size = UDim2.new(1.60000002, 0, 0, 0)
 	NG768.Visible = false
@@ -12189,27 +12393,27 @@ do
 	NG769.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG769.BackgroundTransparency = 0.5
 	NG769.BorderSizePixel = 0
-	NG769.Name = dCD("Grkg")
+	NG769.Name = "Text"
 	NG769.Size = UDim2.new(1, 0, 0, 28)
 	NG769.Font = Enum.Font.ArialBold
 	NG769.FontSize = Enum.FontSize.Size10
-	NG769.Text = dCD("PYBAR (Fuvsg + P)")
+	NG769.Text = "CLONE (Shift + C)"
 	NG769.TextColor3 = Color3.new(1, 1, 1)
 	NG769.Parent = NG768
 	NG770 = Instance.new("ImageButton")
 	NG770.BackgroundColor3 = Color3.new(0.333333, 0.666667, 1)
 	NG770.BackgroundTransparency = 1
 	NG770.BorderSizePixel = 0
-	NG770.Name = dCD("TebhcfOhggba")
+	NG770.Name = "GroupsButton"
 	NG770.Position = UDim2.new(0, 35, 0, 70)
 	NG770.Size = UDim2.new(0, 35, 0, 35)
 	NG770.Style = Enum.ButtonStyle.Custom
-	NG770.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=160378203")
+	NG770.Image = "http://www.roblox.com/asset/?id=160378203"
 	NG770.Parent = NG754
 	NG771 = Instance.new("Frame")
 	NG771.BackgroundTransparency = 1
 	NG771.BorderSizePixel = 0
-	NG771.Name = dCD("Gbbygvc")
+	NG771.Name = "Tooltip"
 	NG771.Position = UDim2.new(-0.300000012, 0, 1, 0)
 	NG771.Size = UDim2.new(1.60000002, 0, 0, 0)
 	NG771.Visible = false
@@ -12218,11 +12422,11 @@ do
 	NG772.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG772.BackgroundTransparency = 0.5
 	NG772.BorderSizePixel = 0
-	NG772.Name = dCD("Grkg")
+	NG772.Name = "Text"
 	NG772.Size = UDim2.new(1, 0, 0, 28)
 	NG772.Font = Enum.Font.ArialBold
 	NG772.FontSize = Enum.FontSize.Size10
-	NG772.Text = dCD("TEBHCF (Fuvsg + T)")
+	NG772.Text = "GROUPS (Shift + G)"
 	NG772.TextColor3 = Color3.new(1, 1, 1)
 	NG772.TextWrapped = true
 	NG772.Parent = NG771
@@ -12230,7 +12434,7 @@ do
 	NG773.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG773.BackgroundTransparency = 0.60000002384186
 	NG773.BorderSizePixel = 0
-	NG773.Name = dCD("GbbyOhggbaf")
+	NG773.Name = "ToolButtons"
 	NG773.Size = UDim2.new(0, 70, 0, 245)
 	NG773.Parent = NG649
 	NG774 = Instance.new("ImageButton")
@@ -12238,21 +12442,21 @@ do
 	NG774.BackgroundColor3 = Color3.new(0.0666667, 0.0666667, 0.0666667)
 	NG774.BackgroundTransparency = 1
 	NG774.BorderSizePixel = 0
-	NG774.Name = dCD("QrpbengrOhggba")
+	NG774.Name = "DecorateButton"
 	NG774.Position = UDim2.new(0, 35, 0, 210)
 	NG774.Size = UDim2.new(0, 35, 0, 35)
 	NG774.Style = Enum.ButtonStyle.Custom
-	NG774.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=141741412")
+	NG774.Image = "http://www.roblox.com/asset/?id=141741412"
 	NG774.Parent = NG773
 	NG775 = Instance.new("TextLabel")
 	NG775.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG775.BackgroundTransparency = 1
 	NG775.BorderSizePixel = 0
-	NG775.Name = dCD("Fubegphg")
+	NG775.Name = "Shortcut"
 	NG775.Size = UDim2.new(0, 13, 0, 13)
 	NG775.Font = Enum.Font.ArialBold
 	NG775.FontSize = Enum.FontSize.Size10
-	NG775.Text = dCD("C")
+	NG775.Text = "P"
 	NG775.TextColor3 = Color3.new(1, 1, 1)
 	NG775.Parent = NG774
 	NG776 = Instance.new("ImageButton")
@@ -12260,21 +12464,21 @@ do
 	NG776.BackgroundColor3 = Color3.new(0.0666667, 0.0666667, 0.0666667)
 	NG776.BackgroundTransparency = 1
 	NG776.BorderSizePixel = 0
-	NG776.Name = dCD("JryqOhggba")
+	NG776.Name = "WeldButton"
 	NG776.Position = UDim2.new(0, 35, 0, 175)
 	NG776.Size = UDim2.new(0, 35, 0, 35)
 	NG776.Style = Enum.ButtonStyle.Custom
-	NG776.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=141741418")
+	NG776.Image = "http://www.roblox.com/asset/?id=141741418"
 	NG776.Parent = NG773
 	NG777 = Instance.new("TextLabel")
 	NG777.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG777.BackgroundTransparency = 1
 	NG777.BorderSizePixel = 0
-	NG777.Name = dCD("Fubegphg")
+	NG777.Name = "Shortcut"
 	NG777.Size = UDim2.new(0, 13, 0, 13)
 	NG777.Font = Enum.Font.ArialBold
 	NG777.FontSize = Enum.FontSize.Size10
-	NG777.Text = dCD("S")
+	NG777.Text = "F"
 	NG777.TextColor3 = Color3.new(1, 1, 1)
 	NG777.Parent = NG776
 	NG778 = Instance.new("ImageButton")
@@ -12282,21 +12486,21 @@ do
 	NG778.BackgroundColor3 = Color3.new(0.0666667, 0.0666667, 0.0666667)
 	NG778.BackgroundTransparency = 1
 	NG778.BorderSizePixel = 0
-	NG778.Name = dCD("YvtugvatOhggba")
+	NG778.Name = "LightingButton"
 	NG778.Position = UDim2.new(0, 0, 0, 210)
 	NG778.Size = UDim2.new(0, 35, 0, 35)
 	NG778.Style = Enum.ButtonStyle.Custom
-	NG778.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=141741341")
+	NG778.Image = "http://www.roblox.com/asset/?id=141741341"
 	NG778.Parent = NG773
 	NG779 = Instance.new("TextLabel")
 	NG779.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG779.BackgroundTransparency = 1
 	NG779.BorderSizePixel = 0
-	NG779.Name = dCD("Fubegphg")
+	NG779.Name = "Shortcut"
 	NG779.Size = UDim2.new(0, 13, 0, 13)
 	NG779.Font = Enum.Font.ArialBold
 	NG779.FontSize = Enum.FontSize.Size10
-	NG779.Text = dCD("H")
+	NG779.Text = "U"
 	NG779.TextColor3 = Color3.new(1, 1, 1)
 	NG779.Parent = NG778
 	NG780 = Instance.new("ImageButton")
@@ -12304,21 +12508,21 @@ do
 	NG780.BackgroundColor3 = Color3.new(0.419608, 0.196078, 0.486275)
 	NG780.BackgroundTransparency = 1
 	NG780.BorderSizePixel = 0
-	NG780.Name = dCD("ZrfuOhggba")
+	NG780.Name = "MeshButton"
 	NG780.Position = UDim2.new(0, 35, 0, 140)
 	NG780.Size = UDim2.new(0, 35, 0, 35)
 	NG780.Style = Enum.ButtonStyle.Custom
-	NG780.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=141806786")
+	NG780.Image = "http://www.roblox.com/asset/?id=141806786"
 	NG780.Parent = NG773
 	NG781 = Instance.new("TextLabel")
 	NG781.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG781.BackgroundTransparency = 1
 	NG781.BorderSizePixel = 0
-	NG781.Name = dCD("Fubegphg")
+	NG781.Name = "Shortcut"
 	NG781.Size = UDim2.new(0, 13, 0, 13)
 	NG781.Font = Enum.Font.ArialBold
 	NG781.FontSize = Enum.FontSize.Size10
-	NG781.Text = dCD("U")
+	NG781.Text = "H"
 	NG781.TextColor3 = Color3.new(1, 1, 1)
 	NG781.Parent = NG780
 	NG782 = Instance.new("ImageButton")
@@ -12326,21 +12530,21 @@ do
 	NG782.BackgroundColor3 = Color3.new(0.0666667, 0.0666667, 0.0666667)
 	NG782.BackgroundTransparency = 1
 	NG782.BorderSizePixel = 0
-	NG782.Name = dCD("PbyyvfvbaOhggba")
+	NG782.Name = "CollisionButton"
 	NG782.Position = UDim2.new(0, 35, 0, 105)
 	NG782.Size = UDim2.new(0, 35, 0, 35)
 	NG782.Style = Enum.ButtonStyle.Custom
-	NG782.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=141809596")
+	NG782.Image = "http://www.roblox.com/asset/?id=141809596"
 	NG782.Parent = NG773
 	NG783 = Instance.new("TextLabel")
 	NG783.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG783.BackgroundTransparency = 1
 	NG783.BorderSizePixel = 0
-	NG783.Name = dCD("Fubegphg")
+	NG783.Name = "Shortcut"
 	NG783.Size = UDim2.new(0, 13, 0, 13)
 	NG783.Font = Enum.Font.ArialBold
 	NG783.FontSize = Enum.FontSize.Size10
-	NG783.Text = dCD("X")
+	NG783.Text = "K"
 	NG783.TextColor3 = Color3.new(1, 1, 1)
 	NG783.Parent = NG782
 	NG784 = Instance.new("ImageButton")
@@ -12348,21 +12552,21 @@ do
 	NG784.BackgroundColor3 = Color3.new(0.419608, 0.196078, 0.486275)
 	NG784.BackgroundTransparency = 1
 	NG784.BorderSizePixel = 0
-	NG784.Name = dCD("ZngrevnyOhggba")
+	NG784.Name = "MaterialButton"
 	NG784.Position = UDim2.new(0, 35, 0, 70)
 	NG784.Size = UDim2.new(0, 35, 0, 35)
 	NG784.Style = Enum.ButtonStyle.Custom
-	NG784.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=141809090")
+	NG784.Image = "http://www.roblox.com/asset/?id=141809090"
 	NG784.Parent = NG773
 	NG785 = Instance.new("TextLabel")
 	NG785.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG785.BackgroundTransparency = 1
 	NG785.BorderSizePixel = 0
-	NG785.Name = dCD("Fubegphg")
+	NG785.Name = "Shortcut"
 	NG785.Size = UDim2.new(0, 13, 0, 13)
 	NG785.Font = Enum.Font.ArialBold
 	NG785.FontSize = Enum.FontSize.Size10
-	NG785.Text = dCD("A")
+	NG785.Text = "N"
 	NG785.TextColor3 = Color3.new(1, 1, 1)
 	NG785.Parent = NG784
 	NG786 = Instance.new("ImageButton")
@@ -12370,21 +12574,21 @@ do
 	NG786.BackgroundColor3 = Color3.new(1, 0, 0)
 	NG786.BackgroundTransparency = 1
 	NG786.BorderSizePixel = 0
-	NG786.Name = dCD("CnvagOhggba")
+	NG786.Name = "PaintButton"
 	NG786.Position = UDim2.new(0, 35, 0, 35)
 	NG786.Size = UDim2.new(0, 35, 0, 35)
 	NG786.Style = Enum.ButtonStyle.Custom
-	NG786.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=141741444")
+	NG786.Image = "http://www.roblox.com/asset/?id=141741444"
 	NG786.Parent = NG773
 	NG787 = Instance.new("TextLabel")
 	NG787.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG787.BackgroundTransparency = 1
 	NG787.BorderSizePixel = 0
-	NG787.Name = dCD("Fubegphg")
+	NG787.Name = "Shortcut"
 	NG787.Size = UDim2.new(0, 13, 0, 13)
 	NG787.Font = Enum.Font.ArialBold
 	NG787.FontSize = Enum.FontSize.Size10
-	NG787.Text = dCD("I")
+	NG787.Text = "V"
 	NG787.TextColor3 = Color3.new(1, 1, 1)
 	NG787.Parent = NG786
 	NG788 = Instance.new("ImageButton")
@@ -12392,21 +12596,21 @@ do
 	NG788.BackgroundColor3 = Color3.new(0.0666667, 0.0666667, 0.0666667)
 	NG788.BackgroundTransparency = 1
 	NG788.BorderSizePixel = 0
-	NG788.Name = dCD("ArjCnegOhggba")
+	NG788.Name = "NewPartButton"
 	NG788.Position = UDim2.new(0, 0, 0, 140)
 	NG788.Size = UDim2.new(0, 35, 0, 35)
 	NG788.Style = Enum.ButtonStyle.Custom
-	NG788.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=141741393")
+	NG788.Image = "http://www.roblox.com/asset/?id=141741393"
 	NG788.Parent = NG773
 	NG789 = Instance.new("TextLabel")
 	NG789.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG789.BackgroundTransparency = 1
 	NG789.BorderSizePixel = 0
-	NG789.Name = dCD("Fubegphg")
+	NG789.Name = "Shortcut"
 	NG789.Size = UDim2.new(0, 13, 0, 13)
 	NG789.Font = Enum.Font.ArialBold
 	NG789.FontSize = Enum.FontSize.Size10
-	NG789.Text = dCD("W")
+	NG789.Text = "J"
 	NG789.TextColor3 = Color3.new(1, 1, 1)
 	NG789.Parent = NG788
 	NG790 = Instance.new("ImageButton")
@@ -12414,20 +12618,20 @@ do
 	NG790.BackgroundColor3 = Color3.new(1, 0.686275, 0)
 	NG790.BackgroundTransparency = 1
 	NG790.BorderSizePixel = 0
-	NG790.Name = dCD("ZbirOhggba")
+	NG790.Name = "MoveButton"
 	NG790.Size = UDim2.new(0, 35, 0, 35)
 	NG790.Style = Enum.ButtonStyle.Custom
-	NG790.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=141741366")
+	NG790.Image = "http://www.roblox.com/asset/?id=141741366"
 	NG790.Parent = NG773
 	NG791 = Instance.new("TextLabel")
 	NG791.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG791.BackgroundTransparency = 1
 	NG791.BorderSizePixel = 0
-	NG791.Name = dCD("Fubegphg")
+	NG791.Name = "Shortcut"
 	NG791.Size = UDim2.new(0, 13, 0, 13)
 	NG791.Font = Enum.Font.ArialBold
 	NG791.FontSize = Enum.FontSize.Size10
-	NG791.Text = dCD("M")
+	NG791.Text = "Z"
 	NG791.TextColor3 = Color3.new(1, 1, 1)
 	NG791.Parent = NG790
 	NG792 = Instance.new("ImageButton")
@@ -12435,21 +12639,21 @@ do
 	NG792.BackgroundColor3 = Color3.new(0.0156863, 0.686275, 0.92549)
 	NG792.BackgroundTransparency = 1
 	NG792.BorderSizePixel = 0
-	NG792.Name = dCD("ErfvmrOhggba")
+	NG792.Name = "ResizeButton"
 	NG792.Position = UDim2.new(0, 35, 0, 0)
 	NG792.Size = UDim2.new(0, 35, 0, 35)
 	NG792.Style = Enum.ButtonStyle.Custom
-	NG792.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=141794324")
+	NG792.Image = "http://www.roblox.com/asset/?id=141794324"
 	NG792.Parent = NG773
 	NG793 = Instance.new("TextLabel")
 	NG793.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG793.BackgroundTransparency = 1
 	NG793.BorderSizePixel = 0
-	NG793.Name = dCD("Fubegphg")
+	NG793.Name = "Shortcut"
 	NG793.Size = UDim2.new(0, 13, 0, 13)
 	NG793.Font = Enum.Font.ArialBold
 	NG793.FontSize = Enum.FontSize.Size10
-	NG793.Text = dCD("K")
+	NG793.Text = "X"
 	NG793.TextColor3 = Color3.new(1, 1, 1)
 	NG793.Parent = NG792
 	NG794 = Instance.new("ImageButton")
@@ -12457,21 +12661,21 @@ do
 	NG794.BackgroundColor3 = Color3.new(0.294118, 0.592157, 0.294118)
 	NG794.BackgroundTransparency = 1
 	NG794.BorderSizePixel = 0
-	NG794.Name = dCD("EbgngrOhggba")
+	NG794.Name = "RotateButton"
 	NG794.Position = UDim2.new(0, 0, 0, 35)
 	NG794.Size = UDim2.new(0, 35, 0, 35)
 	NG794.Style = Enum.ButtonStyle.Custom
-	NG794.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=141807775")
+	NG794.Image = "http://www.roblox.com/asset/?id=141807775"
 	NG794.Parent = NG773
 	NG795 = Instance.new("TextLabel")
 	NG795.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG795.BackgroundTransparency = 1
 	NG795.BorderSizePixel = 0
-	NG795.Name = dCD("Fubegphg")
+	NG795.Name = "Shortcut"
 	NG795.Size = UDim2.new(0, 13, 0, 13)
 	NG795.Font = Enum.Font.ArialBold
 	NG795.FontSize = Enum.FontSize.Size10
-	NG795.Text = dCD("P")
+	NG795.Text = "C"
 	NG795.TextColor3 = Color3.new(1, 1, 1)
 	NG795.Parent = NG794
 	NG796 = Instance.new("ImageButton")
@@ -12479,21 +12683,21 @@ do
 	NG796.BackgroundColor3 = Color3.new(0.419608, 0.196078, 0.486275)
 	NG796.BackgroundTransparency = 1
 	NG796.BorderSizePixel = 0
-	NG796.Name = dCD("FhesnprOhggba")
+	NG796.Name = "SurfaceButton"
 	NG796.Position = UDim2.new(0, 0, 0, 70)
 	NG796.Size = UDim2.new(0, 35, 0, 35)
 	NG796.Style = Enum.ButtonStyle.Custom
-	NG796.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=141803491")
+	NG796.Image = "http://www.roblox.com/asset/?id=141803491"
 	NG796.Parent = NG773
 	NG797 = Instance.new("TextLabel")
 	NG797.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG797.BackgroundTransparency = 1
 	NG797.BorderSizePixel = 0
-	NG797.Name = dCD("Fubegphg")
+	NG797.Name = "Shortcut"
 	NG797.Size = UDim2.new(0, 13, 0, 13)
 	NG797.Font = Enum.Font.ArialBold
 	NG797.FontSize = Enum.FontSize.Size10
-	NG797.Text = dCD("O")
+	NG797.Text = "B"
 	NG797.TextColor3 = Color3.new(1, 1, 1)
 	NG797.Parent = NG796
 	NG798 = Instance.new("ImageButton")
@@ -12501,21 +12705,21 @@ do
 	NG798.BackgroundColor3 = Color3.new(0.419608, 0.196078, 0.486275)
 	NG798.BackgroundTransparency = 1
 	NG798.BorderSizePixel = 0
-	NG798.Name = dCD("GrkgherOhggba")
+	NG798.Name = "TextureButton"
 	NG798.Position = UDim2.new(0, 0, 0, 175)
 	NG798.Size = UDim2.new(0, 35, 0, 35)
 	NG798.Style = Enum.ButtonStyle.Custom
-	NG798.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=141805275")
+	NG798.Image = "http://www.roblox.com/asset/?id=141805275"
 	NG798.Parent = NG773
 	NG799 = Instance.new("TextLabel")
 	NG799.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG799.BackgroundTransparency = 1
 	NG799.BorderSizePixel = 0
-	NG799.Name = dCD("Fubegphg")
+	NG799.Name = "Shortcut"
 	NG799.Size = UDim2.new(0, 13, 0, 13)
 	NG799.Font = Enum.Font.ArialBold
 	NG799.FontSize = Enum.FontSize.Size10
-	NG799.Text = dCD("T")
+	NG799.Text = "G"
 	NG799.TextColor3 = Color3.new(1, 1, 1)
 	NG799.Parent = NG798
 	NG800 = Instance.new("ImageButton")
@@ -12523,28 +12727,28 @@ do
 	NG800.BackgroundColor3 = Color3.new(0.0666667, 0.0666667, 0.0666667)
 	NG800.BackgroundTransparency = 1
 	NG800.BorderSizePixel = 0
-	NG800.Name = dCD("NapubeOhggba")
+	NG800.Name = "AnchorButton"
 	NG800.Position = UDim2.new(0, 0, 0, 105)
 	NG800.Size = UDim2.new(0, 35, 0, 35)
 	NG800.Style = Enum.ButtonStyle.Custom
-	NG800.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=141741323")
+	NG800.Image = "http://www.roblox.com/asset/?id=141741323"
 	NG800.Parent = NG773
 	NG801 = Instance.new("TextLabel")
 	NG801.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG801.BackgroundTransparency = 1
 	NG801.BorderSizePixel = 0
-	NG801.Name = dCD("Fubegphg")
+	NG801.Name = "Shortcut"
 	NG801.Size = UDim2.new(0, 13, 0, 13)
 	NG801.Font = Enum.Font.ArialBold
 	NG801.FontSize = Enum.FontSize.Size10
-	NG801.Text = dCD("Z")
+	NG801.Text = "M"
 	NG801.TextColor3 = Color3.new(1, 1, 1)
 	NG801.Parent = NG800
 	NG802 = Instance.new("Frame")
 	NG802.BackgroundColor3 = Color3.new(0.239216, 0.239216, 0.239216)
 	NG802.BackgroundTransparency = 0.20000000298023
 	NG802.BorderSizePixel = 0
-	NG802.Name = dCD("UrycVasb")
+	NG802.Name = "HelpInfo"
 	NG802.Position = UDim2.new(0, -120, 0, 0)
 	NG802.Size = UDim2.new(0, 120, 0, 380)
 	NG802.Visible = false
@@ -12553,7 +12757,7 @@ do
 	NG803 = Instance.new("Frame")
 	NG803.BackgroundTransparency = 1
 	NG803.BorderSizePixel = 0
-	NG803.Name = dCD("ObggbzPbybeOne")
+	NG803.Name = "BottomColorBar"
 	NG803.Position = UDim2.new(0, 0, 1, 0)
 	NG803.Rotation = 180
 	NG803.Size = UDim2.new(1, 0, 0, 3)
@@ -12562,14 +12766,14 @@ do
 	NG804.BackgroundColor3 = Color3.new(1, 0.686275, 0)
 	NG804.BackgroundTransparency = 0.25
 	NG804.BorderSizePixel = 0
-	NG804.Name = dCD("Lryybj")
+	NG804.Name = "Yellow"
 	NG804.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG804.Parent = NG803
 	NG805 = Instance.new("Frame")
 	NG805.BackgroundColor3 = Color3.new(0.294118, 0.592157, 0.294118)
 	NG805.BackgroundTransparency = 0.25
 	NG805.BorderSizePixel = 0
-	NG805.Name = dCD("Terra")
+	NG805.Name = "Green"
 	NG805.Position = UDim2.new(0.200000003, 0, 0, 0)
 	NG805.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG805.Parent = NG803
@@ -12577,7 +12781,7 @@ do
 	NG806.BackgroundColor3 = Color3.new(0.0156863, 0.686275, 0.92549)
 	NG806.BackgroundTransparency = 0.25
 	NG806.BorderSizePixel = 0
-	NG806.Name = dCD("Oyhr")
+	NG806.Name = "Blue"
 	NG806.Position = UDim2.new(0.400000006, 0, 0, 0)
 	NG806.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG806.Parent = NG803
@@ -12585,7 +12789,7 @@ do
 	NG807.BackgroundColor3 = Color3.new(1, 0, 0)
 	NG807.BackgroundTransparency = 0.25
 	NG807.BorderSizePixel = 0
-	NG807.Name = dCD("Erq")
+	NG807.Name = "Red"
 	NG807.Position = UDim2.new(0.600000024, 0, 0, 0)
 	NG807.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG807.Parent = NG803
@@ -12593,25 +12797,25 @@ do
 	NG808.BackgroundColor3 = Color3.new(0.419608, 0.196078, 0.486275)
 	NG808.BackgroundTransparency = 0.25
 	NG808.BorderSizePixel = 0
-	NG808.Name = dCD("Checyr")
+	NG808.Name = "Purple"
 	NG808.Position = UDim2.new(0.800000012, 0, 0, 0)
 	NG808.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG808.Parent = NG803
 	NG809 = Instance.new("Frame")
 	NG809.BackgroundTransparency = 1
 	NG809.BorderSizePixel = 0
-	NG809.Name = dCD("Pbagrag")
+	NG809.Name = "Content"
 	NG809.Size = UDim2.new(1, 0, 0, 680)
 	NG809.Parent = NG802
 	NG810 = Instance.new("TextLabel")
 	NG810.BackgroundTransparency = 1
 	NG810.BorderSizePixel = 0
-	NG810.Name = dCD("GbbyQrfpevcgvba")
+	NG810.Name = "ToolDescription"
 	NG810.Position = UDim2.new(0, 10, 0, 80)
 	NG810.Size = UDim2.new(0, 85, 0, 85)
 	NG810.Font = Enum.Font.Arial
 	NG810.FontSize = Enum.FontSize.Size10
-	NG810.Text = dCD("Sbe zber vasbezngvba ba nal gbby, ubire lbhe zbhfr bire vgf vpba naq vg'yy erirny zber qrgnvyf.")
+	NG810.Text = "For more information on any tool, hover your mouse over its icon and it'll reveal more details."
 	NG810.TextColor3 = Color3.new(1, 1, 1)
 	NG810.TextWrapped = true
 	NG810.TextXAlignment = Enum.TextXAlignment.Left
@@ -12620,21 +12824,21 @@ do
 	NG811 = Instance.new("Frame")
 	NG811.BackgroundTransparency = 1
 	NG811.BorderSizePixel = 0
-	NG811.Name = dCD("PbybeOne")
+	NG811.Name = "ColorBar"
 	NG811.Size = UDim2.new(1, 0, 0, 3)
 	NG811.Parent = NG809
 	NG812 = Instance.new("Frame")
 	NG812.BackgroundColor3 = Color3.new(1, 0.686275, 0)
 	NG812.BackgroundTransparency = 0.25
 	NG812.BorderSizePixel = 0
-	NG812.Name = dCD("Lryybj")
+	NG812.Name = "Yellow"
 	NG812.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG812.Parent = NG811
 	NG813 = Instance.new("Frame")
 	NG813.BackgroundColor3 = Color3.new(0.294118, 0.592157, 0.294118)
 	NG813.BackgroundTransparency = 0.25
 	NG813.BorderSizePixel = 0
-	NG813.Name = dCD("Terra")
+	NG813.Name = "Green"
 	NG813.Position = UDim2.new(0.200000003, 0, 0, 0)
 	NG813.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG813.Parent = NG811
@@ -12642,7 +12846,7 @@ do
 	NG814.BackgroundColor3 = Color3.new(0.0156863, 0.686275, 0.92549)
 	NG814.BackgroundTransparency = 0.25
 	NG814.BorderSizePixel = 0
-	NG814.Name = dCD("Oyhr")
+	NG814.Name = "Blue"
 	NG814.Position = UDim2.new(0.400000006, 0, 0, 0)
 	NG814.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG814.Parent = NG811
@@ -12650,7 +12854,7 @@ do
 	NG815.BackgroundColor3 = Color3.new(1, 0, 0)
 	NG815.BackgroundTransparency = 0.25
 	NG815.BorderSizePixel = 0
-	NG815.Name = dCD("Erq")
+	NG815.Name = "Red"
 	NG815.Position = UDim2.new(0.600000024, 0, 0, 0)
 	NG815.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG815.Parent = NG811
@@ -12658,19 +12862,19 @@ do
 	NG816.BackgroundColor3 = Color3.new(0.419608, 0.196078, 0.486275)
 	NG816.BackgroundTransparency = 0.25
 	NG816.BorderSizePixel = 0
-	NG816.Name = dCD("Checyr")
+	NG816.Name = "Purple"
 	NG816.Position = UDim2.new(0.800000012, 0, 0, 0)
 	NG816.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG816.Parent = NG811
 	NG817 = Instance.new("TextLabel")
 	NG817.BackgroundTransparency = 1
 	NG817.BorderSizePixel = 0
-	NG817.Name = dCD("GbbyAnzr")
+	NG817.Name = "ToolName"
 	NG817.Position = UDim2.new(0, 10, 0, 4)
 	NG817.Size = UDim2.new(0, 80, 0, 80)
 	NG817.Font = Enum.Font.ArialBold
 	NG817.FontSize = Enum.FontSize.Size10
-	NG817.Text = dCD("OHVYQVAT GBBYF OL S3K ZBQVSVRQ GB JBEX NF BAR FPEVCG OL AVPXBNXM")
+	NG817.Text = "BUILDING TOOLS BY F3X MODIFIED TO WORK AS ONE SCRIPT BY NICKOAKZ"
 	NG817.TextColor3 = Color3.new(1, 1, 1)
 	NG817.TextWrapped = true
 	NG817.TextXAlignment = Enum.TextXAlignment.Left
@@ -12678,7 +12882,7 @@ do
 	NG818 = Instance.new("Frame")
 	NG818.BackgroundTransparency = 1
 	NG818.BorderSizePixel = 0
-	NG818.Name = dCD("FryrpgvbaVasb")
+	NG818.Name = "SelectionInfo"
 	NG818.Position = UDim2.new(0, 0, 0, 170)
 	NG818.Size = UDim2.new(1, 0, 0, 150)
 	NG818.Parent = NG809
@@ -12689,9 +12893,7 @@ do
 	NG819.Size = UDim2.new(0, 82, 0, 240)
 	NG819.Font = Enum.Font.Arial
 	NG819.FontSize = Enum.FontSize.Size10
-	NG819.Text = dCD(
-		"Lbh pna fryrpg zhygvcyr cnegf ol ubyqvat [Fuvsg] naq pyvpxvat ba rnpu cneg.  Lbh pna nyfb ubyq [Fuvsg], pyvpx, naq qent gb fryrpg cnegf va gung nern.  Cerff [Fuvsg + X] gb fryrpg cnegf vafvqr bs gur fryrpgrq cnegf.  Cerff [Fuvsg + E] gb pyrne lbhe fryrpgvba."
-	)
+	NG819.Text = "You can select multiple parts by holding [Shift] and clicking on each part.  You can also hold [Shift], click, and drag to select parts in that area.  Press [Shift + K] to select parts inside of the selected parts.  Press [Shift + R] to clear your selection."
 	NG819.TextColor3 = Color3.new(1, 1, 1)
 	NG819.TextWrapped = true
 	NG819.TextXAlignment = Enum.TextXAlignment.Left
@@ -12705,7 +12907,7 @@ do
 	NG820.Size = UDim2.new(0, 80, 0, 12)
 	NG820.Font = Enum.Font.ArialBold
 	NG820.FontSize = Enum.FontSize.Size10
-	NG820.Text = dCD("Fryrpgvat")
+	NG820.Text = "Selecting"
 	NG820.TextColor3 = Color3.new(1, 1, 1)
 	NG820.TextWrapped = true
 	NG820.TextXAlignment = Enum.TextXAlignment.Left
@@ -12714,7 +12916,7 @@ do
 	NG821 = Instance.new("Frame")
 	NG821.BackgroundTransparency = 1
 	NG821.BorderSizePixel = 0
-	NG821.Name = dCD("RkcbegvatVasb")
+	NG821.Name = "ExportingInfo"
 	NG821.Position = UDim2.new(0, 0, 0, 420)
 	NG821.Size = UDim2.new(1, 0, 0, 220)
 	NG821.Parent = NG809
@@ -12725,9 +12927,7 @@ do
 	NG822.Size = UDim2.new(0, 82, 0, 200)
 	NG822.Font = Enum.Font.Arial
 	NG822.FontSize = Enum.FontSize.Size10
-	NG822.Text = dCD(
-		"Lbh pna rkcbeg nal perngvbaf lbh ohvyg jvgu Ohvyqvat Gbbyf ol S3K ol hfvat gur rkcbeg ohggba ba gur qbpx (be cerffvat fuvsg + C).  Vafgnyy guvf cyhtva (eboybk.pbz/vgrz.nfck?vq=142485815) va EBOYBK Fghqvb gb vzcbeg lbhe perngvba."
-	)
+	NG822.Text = "You can export any creations you built with Building Tools by F3X by using the export button on the dock (or pressing shift + P).  Install this plugin (roblox.com/item.aspx?id=142485815) in ROBLOX Studio to import your creation."
 	NG822.TextColor3 = Color3.new(1, 1, 1)
 	NG822.TextWrapped = true
 	NG822.TextXAlignment = Enum.TextXAlignment.Left
@@ -12741,7 +12941,7 @@ do
 	NG823.Size = UDim2.new(0, 80, 0, 24)
 	NG823.Font = Enum.Font.ArialBold
 	NG823.FontSize = Enum.FontSize.Size10
-	NG823.Text = dCD("Rkcbegvat lbhe perngvbaf")
+	NG823.Text = "Exporting your creations"
 	NG823.TextColor3 = Color3.new(1, 1, 1)
 	NG823.TextWrapped = true
 	NG823.TextXAlignment = Enum.TextXAlignment.Left
@@ -12752,38 +12952,38 @@ do
 	NG824.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG824.BackgroundTransparency = 1
 	NG824.BorderSizePixel = 0
-	NG824.Name = dCD("OGTebhcfTHV")
+	NG824.Name = "BTGroupsGUI"
 	NG824.Position = UDim2.new(0, -210, 0, 0)
 	NG824.Size = UDim2.new(0, 200, 0, 100)
 	NG824.Parent = NG1
 	NG825 = Instance.new("Frame")
 	NG825.BackgroundTransparency = 1
 	NG825.BorderSizePixel = 0
-	NG825.Name = dCD("Grzcyngrf")
+	NG825.Name = "Templates"
 	NG825.Visible = false
 	NG825.Parent = NG824
 	NG826 = Instance.new("Frame")
 	NG826.BackgroundColor3 = Color3.new(0.266667, 0.266667, 0.266667)
 	NG826.BackgroundTransparency = 0.64999997615814
 	NG826.BorderSizePixel = 0
-	NG826.Name = dCD("TebhcOhggba")
+	NG826.Name = "GroupButton"
 	NG826.Size = UDim2.new(1, -5, 0, 25)
 	NG826.Parent = NG825
 	NG827 = Instance.new("ImageButton")
 	NG827.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG827.BackgroundTransparency = 1
 	NG827.BorderSizePixel = 0
-	NG827.Name = dCD("RqvgOhggba")
+	NG827.Name = "EditButton"
 	NG827.Position = UDim2.new(1, -50, 0, 5)
 	NG827.Size = UDim2.new(0, 16, 0, 16)
 	NG827.Style = Enum.ButtonStyle.Custom
-	NG827.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=160400465")
+	NG827.Image = "http://www.roblox.com/asset/?id=160400465"
 	NG827.ImageTransparency = 0.25
 	NG827.Parent = NG826
 	NG828 = Instance.new("Frame")
 	NG828.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG828.BorderSizePixel = 0
-	NG828.Name = dCD("EvtugGbbygvc")
+	NG828.Name = "RightTooltip"
 	NG828.Position = UDim2.new(0, -50, 0, 0)
 	NG828.Size = UDim2.new(0, 40, 0, 16)
 	NG828.Visible = false
@@ -12792,7 +12992,7 @@ do
 	NG829 = Instance.new("Frame")
 	NG829.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG829.BorderSizePixel = 0
-	NG829.Name = dCD("Gvc")
+	NG829.Name = "Tip"
 	NG829.Position = UDim2.new(1, -6, 0, 2)
 	NG829.Rotation = 45
 	NG829.Size = UDim2.new(0, 12, 0, 12)
@@ -12802,29 +13002,29 @@ do
 	NG830.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG830.BackgroundTransparency = 1
 	NG830.BorderSizePixel = 0
-	NG830.Name = dCD("Grkg")
+	NG830.Name = "Text"
 	NG830.Size = UDim2.new(1, 4, 1, 0)
 	NG830.ZIndex = 3
 	NG830.Font = Enum.Font.ArialBold
 	NG830.FontSize = Enum.FontSize.Size10
-	NG830.Text = dCD("ERANZR")
+	NG830.Text = "RENAME"
 	NG830.TextColor3 = Color3.new(1, 1, 1)
 	NG830.Parent = NG828
 	NG831 = Instance.new("ImageButton")
 	NG831.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG831.BackgroundTransparency = 1
 	NG831.BorderSizePixel = 0
-	NG831.Name = dCD("VtaberOhggba")
+	NG831.Name = "IgnoreButton"
 	NG831.Position = UDim2.new(1, -25, 0, 5)
 	NG831.Size = UDim2.new(0, 16, 0, 16)
 	NG831.Style = Enum.ButtonStyle.Custom
-	NG831.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=160408836")
+	NG831.Image = "http://www.roblox.com/asset/?id=160408836"
 	NG831.ImageTransparency = 0.25
 	NG831.Parent = NG826
 	NG832 = Instance.new("Frame")
 	NG832.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG832.BorderSizePixel = 0
-	NG832.Name = dCD("EvtugGbbygvc")
+	NG832.Name = "RightTooltip"
 	NG832.Position = UDim2.new(0, -58, 0, 0)
 	NG832.Size = UDim2.new(0, 48, 0, 16)
 	NG832.Visible = false
@@ -12833,7 +13033,7 @@ do
 	NG833 = Instance.new("Frame")
 	NG833.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG833.BorderSizePixel = 0
-	NG833.Name = dCD("Gvc")
+	NG833.Name = "Tip"
 	NG833.Position = UDim2.new(1, -6, 0, 2)
 	NG833.Rotation = 45
 	NG833.Size = UDim2.new(0, 12, 0, 12)
@@ -12843,29 +13043,29 @@ do
 	NG834.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG834.BackgroundTransparency = 1
 	NG834.BorderSizePixel = 0
-	NG834.Name = dCD("Grkg")
+	NG834.Name = "Text"
 	NG834.Size = UDim2.new(1, 4, 1, 0)
 	NG834.ZIndex = 3
 	NG834.Font = Enum.Font.ArialBold
 	NG834.FontSize = Enum.FontSize.Size10
-	NG834.Text = dCD("HAVTABER")
+	NG834.Text = "UNIGNORE"
 	NG834.TextColor3 = Color3.new(1, 1, 1)
 	NG834.Parent = NG832
 	NG835 = Instance.new("ImageButton")
 	NG835.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG835.BackgroundTransparency = 1
 	NG835.BorderSizePixel = 0
-	NG835.Name = dCD("HcqngrOhggba")
+	NG835.Name = "UpdateButton"
 	NG835.Position = UDim2.new(0, 12, 0, 5)
 	NG835.Size = UDim2.new(0, 16, 0, 16)
 	NG835.Style = Enum.ButtonStyle.Custom
-	NG835.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=160402908")
+	NG835.Image = "http://www.roblox.com/asset/?id=160402908"
 	NG835.ImageTransparency = 0.25
 	NG835.Parent = NG826
 	NG836 = Instance.new("Frame")
 	NG836.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG836.BorderSizePixel = 0
-	NG836.Name = dCD("YrsgGbbygvc")
+	NG836.Name = "LeftTooltip"
 	NG836.Position = UDim2.new(1, 12, 0, 0)
 	NG836.Size = UDim2.new(0, 38, 0, 16)
 	NG836.Visible = false
@@ -12874,7 +13074,7 @@ do
 	NG837 = Instance.new("Frame")
 	NG837.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG837.BorderSizePixel = 0
-	NG837.Name = dCD("Gvc")
+	NG837.Name = "Tip"
 	NG837.Position = UDim2.new(0, -6, 0, 2)
 	NG837.Rotation = 45
 	NG837.Size = UDim2.new(0, 12, 0, 12)
@@ -12884,26 +13084,26 @@ do
 	NG838.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG838.BackgroundTransparency = 1
 	NG838.BorderSizePixel = 0
-	NG838.Name = dCD("Grkg")
+	NG838.Name = "Text"
 	NG838.Position = UDim2.new(0, -4, 0, 0)
 	NG838.Size = UDim2.new(1, 4, 1, 0)
 	NG838.ZIndex = 3
 	NG838.Font = Enum.Font.ArialBold
 	NG838.FontSize = Enum.FontSize.Size10
-	NG838.Text = dCD("HCQNGR")
+	NG838.Text = "UPDATE"
 	NG838.TextColor3 = Color3.new(1, 1, 1)
 	NG838.Parent = NG836
 	NG839 = Instance.new("Frame")
 	NG839.BackgroundTransparency = 1
 	NG839.BorderSizePixel = 0
-	NG839.Name = dCD("TebhcAnzrNern")
+	NG839.Name = "GroupNameArea"
 	NG839.Position = UDim2.new(0, 35, 0, 0)
 	NG839.Size = UDim2.new(0, 90, 0, 25)
 	NG839.Parent = NG826
 	NG840 = Instance.new("Frame")
 	NG840.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG840.BorderSizePixel = 0
-	NG840.Name = dCD("YrsgGbbygvc")
+	NG840.Name = "LeftTooltip"
 	NG840.Position = UDim2.new(1, 12, 0, 5)
 	NG840.Size = UDim2.new(0, 38, 0, 16)
 	NG840.Visible = false
@@ -12912,7 +13112,7 @@ do
 	NG841 = Instance.new("Frame")
 	NG841.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG841.BorderSizePixel = 0
-	NG841.Name = dCD("Gvc")
+	NG841.Name = "Tip"
 	NG841.Position = UDim2.new(0, -6, 0, 2)
 	NG841.Rotation = 45
 	NG841.Size = UDim2.new(0, 12, 0, 12)
@@ -12922,20 +13122,20 @@ do
 	NG842.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG842.BackgroundTransparency = 1
 	NG842.BorderSizePixel = 0
-	NG842.Name = dCD("Grkg")
+	NG842.Name = "Text"
 	NG842.Position = UDim2.new(0, -4, 0, 0)
 	NG842.Size = UDim2.new(1, 4, 1, 0)
 	NG842.ZIndex = 3
 	NG842.Font = Enum.Font.ArialBold
 	NG842.FontSize = Enum.FontSize.Size10
-	NG842.Text = dCD("FRYRPG")
+	NG842.Text = "SELECT"
 	NG842.TextColor3 = Color3.new(1, 1, 1)
 	NG842.Parent = NG840
 	NG843 = Instance.new("TextButton")
 	NG843.Active = true
 	NG843.BackgroundTransparency = 1
 	NG843.BorderSizePixel = 0
-	NG843.Name = dCD("TebhcAnzr")
+	NG843.Name = "GroupName"
 	NG843.Position = UDim2.new(0, 35, 0, 0)
 	NG843.Selectable = true
 	NG843.Size = UDim2.new(0, 90, 0, 25)
@@ -12943,7 +13143,7 @@ do
 	NG843.ZIndex = 2
 	NG843.Font = Enum.Font.ArialBold
 	NG843.FontSize = Enum.FontSize.Size10
-	NG843.Text = dCD("Tebhc 1")
+	NG843.Text = "Group 1"
 	NG843.TextColor3 = Color3.new(1, 1, 1)
 	NG843.TextStrokeTransparency = 0.80000001192093
 	NG843.TextXAlignment = Enum.TextXAlignment.Left
@@ -12952,14 +13152,14 @@ do
 	NG844 = Instance.new("TextBox")
 	NG844.BackgroundTransparency = 1
 	NG844.BorderSizePixel = 0
-	NG844.Name = dCD("TebhcAnzre")
+	NG844.Name = "GroupNamer"
 	NG844.Position = UDim2.new(0, 35, 0, 0)
 	NG844.Size = UDim2.new(0, 90, 0, 25)
 	NG844.Visible = false
 	NG844.ZIndex = 2
 	NG844.Font = Enum.Font.ArialBold
 	NG844.FontSize = Enum.FontSize.Size10
-	NG844.Text = dCD("Tebhc 1")
+	NG844.Text = "Group 1"
 	NG844.TextColor3 = Color3.new(1, 1, 1)
 	NG844.TextStrokeTransparency = 0.80000001192093
 	NG844.TextXAlignment = Enum.TextXAlignment.Left
@@ -12968,26 +13168,26 @@ do
 	NG845 = Instance.new("ScrollingFrame")
 	NG845.BackgroundTransparency = 1
 	NG845.BorderSizePixel = 0
-	NG845.Name = dCD("TebhcYvfg")
+	NG845.Name = "GroupList"
 	NG845.Position = UDim2.new(0, 10, 0, 30)
 	NG845.Selectable = true
 	NG845.Size = UDim2.new(1, -10, 0, 70)
-	NG845.BottomImage = dCD("eoknffrg://grkgherf/oynpxOxt_fdhner.cat")
+	NG845.BottomImage = "rbxasset://textures/blackBkg_square.png"
 	NG845.CanvasSize = UDim2.new(1, -10, 0, 0)
-	NG845.MidImage = dCD("eoknffrg://grkgherf/oynpxOxt_fdhner.cat")
+	NG845.MidImage = "rbxasset://textures/blackBkg_square.png"
 	NG845.ScrollBarThickness = 3
-	NG845.TopImage = dCD("eoknffrg://grkgherf/oynpxOxt_fdhner.cat")
+	NG845.TopImage = "rbxasset://textures/blackBkg_square.png"
 	NG845.ClipsDescendants = true
 	NG845.Parent = NG824
 	NG846 = Instance.new("TextLabel")
 	NG846.BackgroundTransparency = 1
 	NG846.BorderSizePixel = 0
-	NG846.Name = dCD("FryrpgAbgr")
+	NG846.Name = "SelectNote"
 	NG846.Position = UDim2.new(0, 10, 0, 27)
 	NG846.Size = UDim2.new(1, -10, 0, 15)
 	NG846.Visible = false
 	NG846.FontSize = Enum.FontSize.Size14
-	NG846.Text = dCD("Fryrpg fbzrguvat gb hfr guvf gbby.")
+	NG846.Text = "Select something to use this tool."
 	NG846.TextColor3 = Color3.new(1, 1, 1)
 	NG846.TextScaled = true
 	NG846.TextStrokeTransparency = 0.5
@@ -12998,7 +13198,7 @@ do
 	NG847.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG847.BackgroundTransparency = 1
 	NG847.BorderSizePixel = 0
-	NG847.Name = dCD("Gvgyr")
+	NG847.Name = "Title"
 	NG847.Size = UDim2.new(1, 0, 0, 20)
 	NG847.Parent = NG824
 	NG848 = Instance.new("TextButton")
@@ -13006,20 +13206,20 @@ do
 	NG848.BackgroundColor3 = Color3.new(0.223529, 0.223529, 0.223529)
 	NG848.BackgroundTransparency = 0.5
 	NG848.BorderSizePixel = 0
-	NG848.Name = dCD("PerngrOhggba")
+	NG848.Name = "CreateButton"
 	NG848.Position = UDim2.new(1, -40, 0, 3)
 	NG848.Selectable = true
 	NG848.Size = UDim2.new(0, 40, 0, 16)
 	NG848.Style = Enum.ButtonStyle.Custom
 	NG848.Font = Enum.Font.ArialBold
 	NG848.FontSize = Enum.FontSize.Size10
-	NG848.Text = dCD("ARJ")
+	NG848.Text = "NEW"
 	NG848.TextColor3 = Color3.new(1, 1, 1)
 	NG848.Parent = NG847
 	NG849 = Instance.new("Frame")
 	NG849.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG849.BorderSizePixel = 0
-	NG849.Name = dCD("PbybeOne")
+	NG849.Name = "ColorBar"
 	NG849.Position = UDim2.new(0, 7, 0, -3)
 	NG849.Size = UDim2.new(1, -5, 0, 2)
 	NG849.Parent = NG847
@@ -13027,12 +13227,12 @@ do
 	NG850.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG850.BackgroundTransparency = 1
 	NG850.BorderSizePixel = 0
-	NG850.Name = dCD("Ynory")
+	NG850.Name = "Label"
 	NG850.Position = UDim2.new(0, 10, 0, 1)
 	NG850.Size = UDim2.new(1, -10, 1, 0)
 	NG850.Font = Enum.Font.ArialBold
 	NG850.FontSize = Enum.FontSize.Size10
-	NG850.Text = dCD("FRYRPGVBA TEBHCF")
+	NG850.Text = "SELECTION GROUPS"
 	NG850.TextColor3 = Color3.new(1, 1, 1)
 	NG850.TextStrokeTransparency = 0
 	NG850.TextWrapped = true
@@ -13043,7 +13243,7 @@ do
 	NG851.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG851.BackgroundTransparency = 1
 	NG851.BorderSizePixel = 0
-	NG851.Name = dCD("OGRkcbegQvnybt")
+	NG851.Name = "BTExportDialog"
 	NG851.Position = UDim2.new(0, 100, 0, 128)
 	NG851.Size = UDim2.new(0, 200, 0, 110)
 	NG851.Draggable = true
@@ -13051,7 +13251,7 @@ do
 	NG852 = Instance.new("Frame")
 	NG852.BackgroundTransparency = 1
 	NG852.BorderSizePixel = 0
-	NG852.Name = dCD("Vasb")
+	NG852.Name = "Info"
 	NG852.Size = UDim2.new(1, 0, 0, 75)
 	NG852.Visible = false
 	NG852.ClipsDescendants = true
@@ -13059,24 +13259,24 @@ do
 	NG853 = Instance.new("TextLabel")
 	NG853.BackgroundTransparency = 1
 	NG853.BorderSizePixel = 0
-	NG853.Name = dCD("PerngvbaVQYnory")
+	NG853.Name = "CreationIDLabel"
 	NG853.Position = UDim2.new(0, 0, 0, 5)
 	NG853.Size = UDim2.new(1, 0, 0, 40)
 	NG853.Font = Enum.Font.SourceSansBold
 	NG853.FontSize = Enum.FontSize.Size18
-	NG853.Text = dCD("Lbhe perngvba'f VQ:")
+	NG853.Text = "Your creation's ID:"
 	NG853.TextColor3 = Color3.new(1, 1, 1)
 	NG853.TextStrokeTransparency = 0.75
 	NG853.Parent = NG852
 	NG854 = Instance.new("TextLabel")
 	NG854.BackgroundTransparency = 1
 	NG854.BorderSizePixel = 0
-	NG854.Name = dCD("PerngvbaVQ")
+	NG854.Name = "CreationID"
 	NG854.Position = UDim2.new(0, 0, 0, 30)
 	NG854.Size = UDim2.new(1, 0, 0, 40)
 	NG854.Font = Enum.Font.SourceSansBold
 	NG854.FontSize = Enum.FontSize.Size24
-	NG854.Text = dCD("w5bs0")
+	NG854.Text = "j5of0"
 	NG854.TextColor3 = Color3.new(0.439216, 0.439216, 0.439216)
 	NG854.TextStrokeColor3 = Color3.new(1, 1, 1)
 	NG854.TextStrokeTransparency = 0
@@ -13084,47 +13284,47 @@ do
 	NG855 = Instance.new("Frame")
 	NG855.BackgroundTransparency = 1
 	NG855.BorderSizePixel = 0
-	NG855.Name = dCD("PbybeOne")
+	NG855.Name = "ColorBar"
 	NG855.Size = UDim2.new(1, 0, 0, 3)
 	NG855.Parent = NG852
 	NG856 = Instance.new("Frame")
 	NG856.BackgroundColor3 = Color3.new(1, 0.686275, 0)
 	NG856.BorderSizePixel = 0
-	NG856.Name = dCD("Lryybj")
+	NG856.Name = "Yellow"
 	NG856.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG856.Parent = NG855
 	NG857 = Instance.new("Frame")
 	NG857.BackgroundColor3 = Color3.new(0.294118, 0.592157, 0.294118)
 	NG857.BorderSizePixel = 0
-	NG857.Name = dCD("Terra")
+	NG857.Name = "Green"
 	NG857.Position = UDim2.new(0.200000003, 0, 0, 0)
 	NG857.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG857.Parent = NG855
 	NG858 = Instance.new("Frame")
 	NG858.BackgroundColor3 = Color3.new(0.0156863, 0.686275, 0.92549)
 	NG858.BorderSizePixel = 0
-	NG858.Name = dCD("Oyhr")
+	NG858.Name = "Blue"
 	NG858.Position = UDim2.new(0.400000006, 0, 0, 0)
 	NG858.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG858.Parent = NG855
 	NG859 = Instance.new("Frame")
 	NG859.BackgroundColor3 = Color3.new(1, 0, 0)
 	NG859.BorderSizePixel = 0
-	NG859.Name = dCD("Erq")
+	NG859.Name = "Red"
 	NG859.Position = UDim2.new(0.600000024, 0, 0, 0)
 	NG859.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG859.Parent = NG855
 	NG860 = Instance.new("Frame")
 	NG860.BackgroundColor3 = Color3.new(0.419608, 0.196078, 0.486275)
 	NG860.BorderSizePixel = 0
-	NG860.Name = dCD("Checyr")
+	NG860.Name = "Purple"
 	NG860.Position = UDim2.new(0.800000012, 0, 0, 0)
 	NG860.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG860.Parent = NG855
 	NG861 = Instance.new("Frame")
 	NG861.BackgroundTransparency = 1
 	NG861.BorderSizePixel = 0
-	NG861.Name = dCD("Gvc")
+	NG861.Name = "Tip"
 	NG861.Position = UDim2.new(0, 0, 0, 75)
 	NG861.Size = UDim2.new(1, 0, 0, 30)
 	NG861.Visible = false
@@ -13132,12 +13332,12 @@ do
 	NG862 = Instance.new("TextLabel")
 	NG862.BackgroundTransparency = 1
 	NG862.BorderSizePixel = 0
-	NG862.Name = dCD("Gvc")
+	NG862.Name = "Tip"
 	NG862.Position = UDim2.new(0, 0, 0, 7)
 	NG862.Size = UDim2.new(1, 0, 0, 30)
 	NG862.Font = Enum.Font.SourceSansBold
 	NG862.FontSize = Enum.FontSize.Size12
-	NG862.Text = dCD("Hfr gur VQ nobir gb vzcbeg lbhe perngvba hfvat gur cyhtva.")
+	NG862.Text = "Use the ID above to import your creation using the plugin."
 	NG862.TextColor3 = Color3.new(1, 1, 1)
 	NG862.TextStrokeTransparency = 0.75
 	NG862.TextWrapped = true
@@ -13147,41 +13347,41 @@ do
 	NG863 = Instance.new("Frame")
 	NG863.BackgroundTransparency = 1
 	NG863.BorderSizePixel = 0
-	NG863.Name = dCD("PbybeOne")
+	NG863.Name = "ColorBar"
 	NG863.Rotation = 180
 	NG863.Size = UDim2.new(1, 0, 0, 3)
 	NG863.Parent = NG861
 	NG864 = Instance.new("Frame")
 	NG864.BackgroundColor3 = Color3.new(1, 0.686275, 0)
 	NG864.BorderSizePixel = 0
-	NG864.Name = dCD("Lryybj")
+	NG864.Name = "Yellow"
 	NG864.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG864.Parent = NG863
 	NG865 = Instance.new("Frame")
 	NG865.BackgroundColor3 = Color3.new(0.294118, 0.592157, 0.294118)
 	NG865.BorderSizePixel = 0
-	NG865.Name = dCD("Terra")
+	NG865.Name = "Green"
 	NG865.Position = UDim2.new(0.200000003, 0, 0, 0)
 	NG865.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG865.Parent = NG863
 	NG866 = Instance.new("Frame")
 	NG866.BackgroundColor3 = Color3.new(0.0156863, 0.686275, 0.92549)
 	NG866.BorderSizePixel = 0
-	NG866.Name = dCD("Oyhr")
+	NG866.Name = "Blue"
 	NG866.Position = UDim2.new(0.400000006, 0, 0, 0)
 	NG866.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG866.Parent = NG863
 	NG867 = Instance.new("Frame")
 	NG867.BackgroundColor3 = Color3.new(1, 0, 0)
 	NG867.BorderSizePixel = 0
-	NG867.Name = dCD("Erq")
+	NG867.Name = "Red"
 	NG867.Position = UDim2.new(0.600000024, 0, 0, 0)
 	NG867.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG867.Parent = NG863
 	NG868 = Instance.new("Frame")
 	NG868.BackgroundColor3 = Color3.new(0.419608, 0.196078, 0.486275)
 	NG868.BorderSizePixel = 0
-	NG868.Name = dCD("Checyr")
+	NG868.Name = "Purple"
 	NG868.Position = UDim2.new(0.800000012, 0, 0, 0)
 	NG868.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG868.Parent = NG863
@@ -13189,7 +13389,7 @@ do
 	NG869.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG869.BackgroundTransparency = 1
 	NG869.BorderSizePixel = 0
-	NG869.Name = dCD("Pybfr")
+	NG869.Name = "Close"
 	NG869.Position = UDim2.new(0, 0, 1, 5)
 	NG869.Size = UDim2.new(1, 0, 0, 20)
 	NG869.Visible = false
@@ -13199,12 +13399,12 @@ do
 	NG870.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG870.BackgroundTransparency = 0.5
 	NG870.BorderSizePixel = 0
-	NG870.Name = dCD("Ohggba")
+	NG870.Name = "Button"
 	NG870.Selectable = true
 	NG870.Size = UDim2.new(1, 0, 1, 0)
 	NG870.Style = Enum.ButtonStyle.Custom
 	NG870.FontSize = Enum.FontSize.Size14
-	NG870.Text = dCD("Tbg vg")
+	NG870.Text = "Got it"
 	NG870.TextColor3 = Color3.new(1, 1, 1)
 	NG870.TextStrokeTransparency = 0.80000001192093
 	NG870.Parent = NG869
@@ -13212,7 +13412,7 @@ do
 	NG871.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG871.BackgroundTransparency = 0.30000001192093
 	NG871.BorderSizePixel = 0
-	NG871.Name = dCD("Funqbj")
+	NG871.Name = "Shadow"
 	NG871.Position = UDim2.new(0, 0, 1, 0)
 	NG871.Size = UDim2.new(1, 0, 0, 2)
 	NG871.ZIndex = 2
@@ -13220,28 +13420,28 @@ do
 	NG872 = Instance.new("Frame")
 	NG872.BackgroundTransparency = 1
 	NG872.BorderSizePixel = 0
-	NG872.Name = dCD("Ybnqvat")
+	NG872.Name = "Loading"
 	NG872.Size = UDim2.new(1, 0, 0, 80)
 	NG872.ClipsDescendants = true
 	NG872.Parent = NG851
 	NG873 = Instance.new("Frame")
 	NG873.BackgroundTransparency = 1
 	NG873.BorderSizePixel = 0
-	NG873.Name = dCD("PbybeOne")
+	NG873.Name = "ColorBar"
 	NG873.Size = UDim2.new(1, 0, 0, 3)
 	NG873.Parent = NG872
 	NG874 = Instance.new("Frame")
 	NG874.BackgroundColor3 = Color3.new(1, 0.686275, 0)
 	NG874.BackgroundTransparency = 0.25
 	NG874.BorderSizePixel = 0
-	NG874.Name = dCD("Lryybj")
+	NG874.Name = "Yellow"
 	NG874.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG874.Parent = NG873
 	NG875 = Instance.new("Frame")
 	NG875.BackgroundColor3 = Color3.new(0.294118, 0.592157, 0.294118)
 	NG875.BackgroundTransparency = 0.25
 	NG875.BorderSizePixel = 0
-	NG875.Name = dCD("Terra")
+	NG875.Name = "Green"
 	NG875.Position = UDim2.new(0.200000003, 0, 0, 0)
 	NG875.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG875.Parent = NG873
@@ -13249,7 +13449,7 @@ do
 	NG876.BackgroundColor3 = Color3.new(0.0156863, 0.686275, 0.92549)
 	NG876.BackgroundTransparency = 0.25
 	NG876.BorderSizePixel = 0
-	NG876.Name = dCD("Oyhr")
+	NG876.Name = "Blue"
 	NG876.Position = UDim2.new(0.400000006, 0, 0, 0)
 	NG876.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG876.Parent = NG873
@@ -13257,7 +13457,7 @@ do
 	NG877.BackgroundColor3 = Color3.new(1, 0, 0)
 	NG877.BackgroundTransparency = 0.25
 	NG877.BorderSizePixel = 0
-	NG877.Name = dCD("Erq")
+	NG877.Name = "Red"
 	NG877.Position = UDim2.new(0.600000024, 0, 0, 0)
 	NG877.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG877.Parent = NG873
@@ -13265,7 +13465,7 @@ do
 	NG878.BackgroundColor3 = Color3.new(0.419608, 0.196078, 0.486275)
 	NG878.BackgroundTransparency = 0.25
 	NG878.BorderSizePixel = 0
-	NG878.Name = dCD("Checyr")
+	NG878.Name = "Purple"
 	NG878.Position = UDim2.new(0.800000012, 0, 0, 0)
 	NG878.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG878.Parent = NG873
@@ -13275,7 +13475,7 @@ do
 	NG879.Size = UDim2.new(1, 0, 0, 50)
 	NG879.Font = Enum.Font.SourceSansBold
 	NG879.FontSize = Enum.FontSize.Size18
-	NG879.Text = dCD("Hcybnqvat lbhe perngvba...")
+	NG879.Text = "Uploading your creation..."
 	NG879.TextColor3 = Color3.new(1, 1, 1)
 	NG879.TextStrokeTransparency = 0.80000001192093
 	NG879.TextWrapped = true
@@ -13283,7 +13483,7 @@ do
 	NG880 = Instance.new("Frame")
 	NG880.BackgroundTransparency = 1
 	NG880.BorderSizePixel = 0
-	NG880.Name = dCD("ObggbzPbybeOne")
+	NG880.Name = "BottomColorBar"
 	NG880.Position = UDim2.new(0, 0, 1, 0)
 	NG880.Rotation = 180
 	NG880.Size = UDim2.new(1, 0, 0, 3)
@@ -13292,14 +13492,14 @@ do
 	NG881.BackgroundColor3 = Color3.new(1, 0.686275, 0)
 	NG881.BackgroundTransparency = 0.25
 	NG881.BorderSizePixel = 0
-	NG881.Name = dCD("Lryybj")
+	NG881.Name = "Yellow"
 	NG881.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG881.Parent = NG880
 	NG882 = Instance.new("Frame")
 	NG882.BackgroundColor3 = Color3.new(0.294118, 0.592157, 0.294118)
 	NG882.BackgroundTransparency = 0.25
 	NG882.BorderSizePixel = 0
-	NG882.Name = dCD("Terra")
+	NG882.Name = "Green"
 	NG882.Position = UDim2.new(0.200000003, 0, 0, 0)
 	NG882.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG882.Parent = NG880
@@ -13307,7 +13507,7 @@ do
 	NG883.BackgroundColor3 = Color3.new(0.0156863, 0.686275, 0.92549)
 	NG883.BackgroundTransparency = 0.25
 	NG883.BorderSizePixel = 0
-	NG883.Name = dCD("Oyhr")
+	NG883.Name = "Blue"
 	NG883.Position = UDim2.new(0.400000006, 0, 0, 0)
 	NG883.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG883.Parent = NG880
@@ -13315,7 +13515,7 @@ do
 	NG884.BackgroundColor3 = Color3.new(1, 0, 0)
 	NG884.BackgroundTransparency = 0.25
 	NG884.BorderSizePixel = 0
-	NG884.Name = dCD("Erq")
+	NG884.Name = "Red"
 	NG884.Position = UDim2.new(0.600000024, 0, 0, 0)
 	NG884.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG884.Parent = NG880
@@ -13323,7 +13523,7 @@ do
 	NG885.BackgroundColor3 = Color3.new(0.419608, 0.196078, 0.486275)
 	NG885.BackgroundTransparency = 0.25
 	NG885.BorderSizePixel = 0
-	NG885.Name = dCD("Checyr")
+	NG885.Name = "Purple"
 	NG885.Position = UDim2.new(0.800000012, 0, 0, 0)
 	NG885.Size = UDim2.new(0.200000003, 0, 1, 0)
 	NG885.Parent = NG880
@@ -13332,14 +13532,14 @@ do
 	NG886.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG886.BackgroundTransparency = 0.5
 	NG886.BorderSizePixel = 0
-	NG886.Name = dCD("PybfrOhggba")
+	NG886.Name = "CloseButton"
 	NG886.Position = UDim2.new(0, 0, 1, -30)
 	NG886.Selectable = true
 	NG886.Size = UDim2.new(1, 0, 0, 25)
 	NG886.Style = Enum.ButtonStyle.Custom
 	NG886.Font = Enum.Font.SourceSansBold
 	NG886.FontSize = Enum.FontSize.Size14
-	NG886.Text = dCD("Pybfr")
+	NG886.Text = "Close"
 	NG886.TextColor3 = Color3.new(1, 1, 1)
 	NG886.TextStrokeTransparency = 0.85000002384186
 	NG886.Parent = NG872
@@ -13347,7 +13547,7 @@ do
 	NG887.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG887.BackgroundTransparency = 0.69999998807907
 	NG887.BorderSizePixel = 0
-	NG887.Name = dCD("Funqbj")
+	NG887.Name = "Shadow"
 	NG887.Position = UDim2.new(0, 0, 1, -2)
 	NG887.Size = UDim2.new(1, 0, 0, 2)
 	NG887.Parent = NG886
@@ -13356,7 +13556,7 @@ do
 	NG888.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG888.BackgroundTransparency = 1
 	NG888.BorderSizePixel = 0
-	NG888.Name = dCD("OGQrpbengrGbbyTHV")
+	NG888.Name = "BTDecorateToolGUI"
 	NG888.Position = UDim2.new(0, 0, 0, 172)
 	NG888.Size = UDim2.new(0, 200, 0, 125)
 	NG888.Draggable = true
@@ -13364,7 +13564,7 @@ do
 	NG889 = Instance.new("Frame")
 	NG889.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG889.BorderSizePixel = 0
-	NG889.Name = dCD("ObggbzPbybeOne")
+	NG889.Name = "BottomColorBar"
 	NG889.Position = UDim2.new(0, 5, 1, -2)
 	NG889.Size = UDim2.new(1, 0, 0, 2)
 	NG889.Parent = NG888
@@ -13372,13 +13572,13 @@ do
 	NG890.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG890.BackgroundTransparency = 1
 	NG890.BorderSizePixel = 0
-	NG890.Name = dCD("Gvgyr")
+	NG890.Name = "Title"
 	NG890.Size = UDim2.new(1, 0, 0, 20)
 	NG890.Parent = NG888
 	NG891 = Instance.new("Frame")
 	NG891.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG891.BorderSizePixel = 0
-	NG891.Name = dCD("PbybeOne")
+	NG891.Name = "ColorBar"
 	NG891.Position = UDim2.new(0, 5, 0, -3)
 	NG891.Size = UDim2.new(1, -5, 0, 2)
 	NG891.Parent = NG890
@@ -13386,12 +13586,12 @@ do
 	NG892.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG892.BackgroundTransparency = 1
 	NG892.BorderSizePixel = 0
-	NG892.Name = dCD("Ynory")
+	NG892.Name = "Label"
 	NG892.Position = UDim2.new(0, 10, 0, 1)
 	NG892.Size = UDim2.new(1, -10, 1, 0)
 	NG892.Font = Enum.Font.ArialBold
 	NG892.FontSize = Enum.FontSize.Size10
-	NG892.Text = dCD("QRPBENGR GBBY")
+	NG892.Text = "DECORATE TOOL"
 	NG892.TextColor3 = Color3.new(1, 1, 1)
 	NG892.TextStrokeTransparency = 0
 	NG892.TextWrapped = true
@@ -13401,12 +13601,12 @@ do
 	NG893.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG893.BackgroundTransparency = 1
 	NG893.BorderSizePixel = 0
-	NG893.Name = dCD("S3KFvtangher")
+	NG893.Name = "F3XSignature"
 	NG893.Position = UDim2.new(0, 10, 0, 1)
 	NG893.Size = UDim2.new(1, -10, 1, 0)
 	NG893.Font = Enum.Font.ArialBold
 	NG893.FontSize = Enum.FontSize.Size14
-	NG893.Text = dCD("S3K")
+	NG893.Text = "F3X"
 	NG893.TextColor3 = Color3.new(1, 1, 1)
 	NG893.TextStrokeTransparency = 0.89999997615814
 	NG893.TextWrapped = true
@@ -13416,19 +13616,19 @@ do
 	NG894.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG894.BackgroundTransparency = 0.67500001192093
 	NG894.BorderSizePixel = 0
-	NG894.Name = dCD("Fzbxr")
+	NG894.Name = "Smoke"
 	NG894.Position = UDim2.new(0, 10, 0, 30)
 	NG894.Size = UDim2.new(1, -10, 0, 25)
 	NG894.Parent = NG888
 	NG895 = Instance.new("TextLabel")
 	NG895.BackgroundTransparency = 1
 	NG895.BorderSizePixel = 0
-	NG895.Name = dCD("Ynory")
+	NG895.Name = "Label"
 	NG895.Position = UDim2.new(0, 35, 0, 0)
 	NG895.Size = UDim2.new(0, 60, 0, 25)
 	NG895.Font = Enum.Font.ArialBold
 	NG895.FontSize = Enum.FontSize.Size10
-	NG895.Text = dCD("Fzbxr")
+	NG895.Text = "Smoke"
 	NG895.TextColor3 = Color3.new(1, 1, 1)
 	NG895.TextStrokeTransparency = 0.5
 	NG895.TextWrapped = true
@@ -13437,16 +13637,16 @@ do
 	NG896 = Instance.new("ImageButton")
 	NG896.BackgroundTransparency = 1
 	NG896.BorderSizePixel = 0
-	NG896.Name = dCD("NeebjOhggba")
+	NG896.Name = "ArrowButton"
 	NG896.Position = UDim2.new(0, 10, 0, 3)
 	NG896.Size = UDim2.new(0, 20, 0, 20)
 	NG896.Style = Enum.ButtonStyle.Custom
-	NG896.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=134367382")
+	NG896.Image = "http://www.roblox.com/asset/?id=134367382"
 	NG896.Parent = NG894
 	NG897 = Instance.new("Frame")
 	NG897.BackgroundColor3 = Color3.new(1, 0.682353, 0.235294)
 	NG897.BorderSizePixel = 0
-	NG897.Name = dCD("PbybeOne")
+	NG897.Name = "ColorBar"
 	NG897.Size = UDim2.new(0, 3, 1, 0)
 	NG897.Parent = NG894
 	NG898 = Instance.new("TextButton")
@@ -13455,14 +13655,14 @@ do
 	NG898.BackgroundTransparency = 0.75
 	NG898.BorderColor3 = Color3.new(0, 0, 0)
 	NG898.BorderSizePixel = 0
-	NG898.Name = dCD("NqqOhggba")
+	NG898.Name = "AddButton"
 	NG898.Position = UDim2.new(1, -40, 0, 3)
 	NG898.Selectable = true
 	NG898.Size = UDim2.new(0, 35, 0, 19)
 	NG898.Style = Enum.ButtonStyle.Custom
 	NG898.Font = Enum.Font.ArialBold
 	NG898.FontSize = Enum.FontSize.Size10
-	NG898.Text = dCD("NQQ")
+	NG898.Text = "ADD"
 	NG898.TextColor3 = Color3.new(1, 1, 1)
 	NG898.Parent = NG894
 	NG899 = Instance.new("TextButton")
@@ -13471,7 +13671,7 @@ do
 	NG899.BackgroundTransparency = 0.75
 	NG899.BorderColor3 = Color3.new(0, 0, 0)
 	NG899.BorderSizePixel = 0
-	NG899.Name = dCD("ErzbirOhggba")
+	NG899.Name = "RemoveButton"
 	NG899.Position = UDim2.new(0, 127, 0, 3)
 	NG899.Selectable = true
 	NG899.Size = UDim2.new(0, 58, 0, 19)
@@ -13479,21 +13679,21 @@ do
 	NG899.Visible = false
 	NG899.Font = Enum.Font.ArialBold
 	NG899.FontSize = Enum.FontSize.Size10
-	NG899.Text = dCD("ERZBIR")
+	NG899.Text = "REMOVE"
 	NG899.TextColor3 = Color3.new(1, 1, 1)
 	NG899.Parent = NG894
 	NG900 = Instance.new("Frame")
 	NG900.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG900.BackgroundTransparency = 0.75
 	NG900.BorderSizePixel = 0
-	NG900.Name = dCD("Funqbj")
+	NG900.Name = "Shadow"
 	NG900.Position = UDim2.new(0, 0, 1, -1)
 	NG900.Size = UDim2.new(1, 0, 0, 1)
 	NG900.Parent = NG894
 	NG901 = Instance.new("Frame")
 	NG901.BackgroundTransparency = 1
 	NG901.BorderSizePixel = 0
-	NG901.Name = dCD("Bcgvbaf")
+	NG901.Name = "Options"
 	NG901.Position = UDim2.new(0, 3, 1, 0)
 	NG901.Size = UDim2.new(1, -3, 0, 0)
 	NG901.ClipsDescendants = true
@@ -13502,7 +13702,7 @@ do
 	NG902.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG902.BackgroundTransparency = 1
 	NG902.BorderSizePixel = 0
-	NG902.Name = dCD("PbybeBcgvba")
+	NG902.Name = "ColorOption"
 	NG902.Position = UDim2.new(0, 0, 0, 10)
 	NG902.Size = UDim2.new(1, 0, 0, 25)
 	NG902.Parent = NG901
@@ -13510,11 +13710,11 @@ do
 	NG903.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG903.BackgroundTransparency = 1
 	NG903.BorderSizePixel = 0
-	NG903.Name = dCD("Ynory")
+	NG903.Name = "Label"
 	NG903.Size = UDim2.new(0, 70, 0, 25)
 	NG903.Font = Enum.Font.ArialBold
 	NG903.FontSize = Enum.FontSize.Size10
-	NG903.Text = dCD("Pbybe")
+	NG903.Text = "Color"
 	NG903.TextColor3 = Color3.new(1, 1, 1)
 	NG903.TextStrokeTransparency = 0
 	NG903.TextWrapped = true
@@ -13524,7 +13724,7 @@ do
 	NG904.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG904.BackgroundTransparency = 1
 	NG904.BorderSizePixel = 0
-	NG904.Name = dCD("EVachg")
+	NG904.Name = "RInput"
 	NG904.Position = UDim2.new(0, 35, 0, 0)
 	NG904.Size = UDim2.new(0, 38, 0, 25)
 	NG904.Parent = NG902
@@ -13540,22 +13740,22 @@ do
 	NG905.ZIndex = 2
 	NG905.Font = Enum.Font.Legacy
 	NG905.FontSize = Enum.FontSize.Size8
-	NG905.Text = dCD("")
+	NG905.Text = ""
 	NG905.Parent = NG904
 	NG906 = Instance.new("ImageLabel")
 	NG906.Active = false
 	NG906.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG906.BackgroundTransparency = 1
 	NG906.BorderSizePixel = 0
-	NG906.Name = dCD("Onpxtebhaq")
+	NG906.Name = "Background"
 	NG906.Selectable = false
 	NG906.Size = UDim2.new(1, 0, 1, 0)
-	NG906.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG906.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG906.Parent = NG904
 	NG907 = Instance.new("Frame")
 	NG907.BackgroundColor3 = Color3.new(1, 0, 0)
 	NG907.BorderSizePixel = 0
-	NG907.Name = dCD("FryrpgrqVaqvpngbe")
+	NG907.Name = "SelectedIndicator"
 	NG907.Position = UDim2.new(0, 3, 0, -2)
 	NG907.Size = UDim2.new(1, -3, 0, 2)
 	NG907.Parent = NG904
@@ -13567,14 +13767,14 @@ do
 	NG908.Size = UDim2.new(1, -10, 1, 0)
 	NG908.Font = Enum.Font.ArialBold
 	NG908.FontSize = Enum.FontSize.Size10
-	NG908.Text = dCD("255")
+	NG908.Text = "255"
 	NG908.TextColor3 = Color3.new(1, 1, 1)
 	NG908.Parent = NG904
 	NG909 = Instance.new("Frame")
 	NG909.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG909.BackgroundTransparency = 1
 	NG909.BorderSizePixel = 0
-	NG909.Name = dCD("TVachg")
+	NG909.Name = "GInput"
 	NG909.Position = UDim2.new(0, 72, 0, 0)
 	NG909.Size = UDim2.new(0, 38, 0, 25)
 	NG909.Parent = NG902
@@ -13590,22 +13790,22 @@ do
 	NG910.ZIndex = 2
 	NG910.Font = Enum.Font.Legacy
 	NG910.FontSize = Enum.FontSize.Size8
-	NG910.Text = dCD("")
+	NG910.Text = ""
 	NG910.Parent = NG909
 	NG911 = Instance.new("ImageLabel")
 	NG911.Active = false
 	NG911.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG911.BackgroundTransparency = 1
 	NG911.BorderSizePixel = 0
-	NG911.Name = dCD("Onpxtebhaq")
+	NG911.Name = "Background"
 	NG911.Selectable = false
 	NG911.Size = UDim2.new(1, 0, 1, 0)
-	NG911.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG911.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG911.Parent = NG909
 	NG912 = Instance.new("Frame")
 	NG912.BackgroundColor3 = Color3.new(0, 1, 0)
 	NG912.BorderSizePixel = 0
-	NG912.Name = dCD("FryrpgrqVaqvpngbe")
+	NG912.Name = "SelectedIndicator"
 	NG912.Position = UDim2.new(0, 3, 0, -2)
 	NG912.Size = UDim2.new(1, -3, 0, 2)
 	NG912.Parent = NG909
@@ -13617,14 +13817,14 @@ do
 	NG913.Size = UDim2.new(1, -10, 1, 0)
 	NG913.Font = Enum.Font.ArialBold
 	NG913.FontSize = Enum.FontSize.Size10
-	NG913.Text = dCD("255")
+	NG913.Text = "255"
 	NG913.TextColor3 = Color3.new(1, 1, 1)
 	NG913.Parent = NG909
 	NG914 = Instance.new("Frame")
 	NG914.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG914.BackgroundTransparency = 1
 	NG914.BorderSizePixel = 0
-	NG914.Name = dCD("OVachg")
+	NG914.Name = "BInput"
 	NG914.Position = UDim2.new(0, 109, 0, 0)
 	NG914.Size = UDim2.new(0, 38, 0, 25)
 	NG914.Parent = NG902
@@ -13640,22 +13840,22 @@ do
 	NG915.ZIndex = 2
 	NG915.Font = Enum.Font.Legacy
 	NG915.FontSize = Enum.FontSize.Size8
-	NG915.Text = dCD("")
+	NG915.Text = ""
 	NG915.Parent = NG914
 	NG916 = Instance.new("ImageLabel")
 	NG916.Active = false
 	NG916.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG916.BackgroundTransparency = 1
 	NG916.BorderSizePixel = 0
-	NG916.Name = dCD("Onpxtebhaq")
+	NG916.Name = "Background"
 	NG916.Selectable = false
 	NG916.Size = UDim2.new(1, 0, 1, 0)
-	NG916.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG916.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG916.Parent = NG914
 	NG917 = Instance.new("Frame")
 	NG917.BackgroundColor3 = Color3.new(0, 0, 1)
 	NG917.BorderSizePixel = 0
-	NG917.Name = dCD("FryrpgrqVaqvpngbe")
+	NG917.Name = "SelectedIndicator"
 	NG917.Position = UDim2.new(0, 3, 0, -2)
 	NG917.Size = UDim2.new(1, -3, 0, 2)
 	NG917.Parent = NG914
@@ -13667,24 +13867,24 @@ do
 	NG918.Size = UDim2.new(1, -10, 1, 0)
 	NG918.Font = Enum.Font.ArialBold
 	NG918.FontSize = Enum.FontSize.Size10
-	NG918.Text = dCD("255")
+	NG918.Text = "255"
 	NG918.TextColor3 = Color3.new(1, 1, 1)
 	NG918.Parent = NG914
 	NG919 = Instance.new("ImageButton")
 	NG919.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG919.BackgroundTransparency = 0.40000000596046
 	NG919.BorderSizePixel = 0
-	NG919.Name = dCD("UFICvpxre")
+	NG919.Name = "HSVPicker"
 	NG919.Position = UDim2.new(0, 160, 0, -2)
 	NG919.Size = UDim2.new(0, 27, 0, 27)
 	NG919.Style = Enum.ButtonStyle.Custom
-	NG919.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=141313631")
+	NG919.Image = "http://www.roblox.com/asset/?id=141313631"
 	NG919.Parent = NG902
 	NG920 = Instance.new("Frame")
 	NG920.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG920.BackgroundTransparency = 0.75
 	NG920.BorderSizePixel = 0
-	NG920.Name = dCD("Funqbj")
+	NG920.Name = "Shadow"
 	NG920.Position = UDim2.new(0, 0, 1, -2)
 	NG920.Size = UDim2.new(1, 0, 0, 2)
 	NG920.Parent = NG919
@@ -13693,7 +13893,7 @@ do
 	NG921.BackgroundTransparency = 0.5
 	NG921.BorderColor3 = Color3.new(0.380392, 0.380392, 0.380392)
 	NG921.BorderSizePixel = 0
-	NG921.Name = dCD("Frcnengbe")
+	NG921.Name = "Separator"
 	NG921.Position = UDim2.new(0, 151, 0, 4)
 	NG921.Size = UDim2.new(0, 4, 0, 4)
 	NG921.Parent = NG902
@@ -13702,7 +13902,7 @@ do
 	NG922.BackgroundTransparency = 0.5
 	NG922.BorderColor3 = Color3.new(0.380392, 0.380392, 0.380392)
 	NG922.BorderSizePixel = 0
-	NG922.Name = dCD("Frcnengbe")
+	NG922.Name = "Separator"
 	NG922.Position = UDim2.new(0, 151, 0, 16)
 	NG922.Size = UDim2.new(0, 4, 0, 4)
 	NG922.Parent = NG902
@@ -13711,7 +13911,7 @@ do
 	NG923.BackgroundTransparency = 0.5
 	NG923.BorderColor3 = Color3.new(0.380392, 0.380392, 0.380392)
 	NG923.BorderSizePixel = 0
-	NG923.Name = dCD("Frcnengbe")
+	NG923.Name = "Separator"
 	NG923.Position = UDim2.new(0, 151, 0, 10)
 	NG923.Size = UDim2.new(0, 4, 0, 4)
 	NG923.Parent = NG902
@@ -13719,7 +13919,7 @@ do
 	NG924.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG924.BackgroundTransparency = 1
 	NG924.BorderSizePixel = 0
-	NG924.Name = dCD("BcnpvglBcgvba")
+	NG924.Name = "OpacityOption"
 	NG924.Position = UDim2.new(0, 0, 0, 45)
 	NG924.Size = UDim2.new(1, 0, 0, 25)
 	NG924.Parent = NG901
@@ -13727,11 +13927,11 @@ do
 	NG925.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG925.BackgroundTransparency = 1
 	NG925.BorderSizePixel = 0
-	NG925.Name = dCD("Ynory")
+	NG925.Name = "Label"
 	NG925.Size = UDim2.new(0, 70, 0, 25)
 	NG925.Font = Enum.Font.ArialBold
 	NG925.FontSize = Enum.FontSize.Size10
-	NG925.Text = dCD("Bcnpvgl")
+	NG925.Text = "Opacity"
 	NG925.TextColor3 = Color3.new(1, 1, 1)
 	NG925.TextStrokeTransparency = 0
 	NG925.TextWrapped = true
@@ -13741,7 +13941,7 @@ do
 	NG926.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG926.BackgroundTransparency = 1
 	NG926.BorderSizePixel = 0
-	NG926.Name = dCD("Vachg")
+	NG926.Name = "Input"
 	NG926.Position = UDim2.new(0, 45, 0, 0)
 	NG926.Size = UDim2.new(0, 38, 0, 25)
 	NG926.Parent = NG924
@@ -13757,21 +13957,21 @@ do
 	NG927.ZIndex = 2
 	NG927.Font = Enum.Font.Legacy
 	NG927.FontSize = Enum.FontSize.Size8
-	NG927.Text = dCD("")
+	NG927.Text = ""
 	NG927.Parent = NG926
 	NG928 = Instance.new("ImageLabel")
 	NG928.Active = false
 	NG928.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG928.BackgroundTransparency = 1
 	NG928.BorderSizePixel = 0
-	NG928.Name = dCD("Onpxtebhaq")
+	NG928.Name = "Background"
 	NG928.Selectable = false
 	NG928.Size = UDim2.new(1, 0, 1, 0)
-	NG928.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG928.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG928.Parent = NG926
 	NG929 = Instance.new("Frame")
 	NG929.BorderSizePixel = 0
-	NG929.Name = dCD("FryrpgrqVaqvpngbe")
+	NG929.Name = "SelectedIndicator"
 	NG929.Position = UDim2.new(0, 3, 0, -2)
 	NG929.Size = UDim2.new(1, -3, 0, 2)
 	NG929.Parent = NG926
@@ -13783,14 +13983,14 @@ do
 	NG930.Size = UDim2.new(1, -10, 1, 0)
 	NG930.Font = Enum.Font.ArialBold
 	NG930.FontSize = Enum.FontSize.Size10
-	NG930.Text = dCD("1")
+	NG930.Text = "1"
 	NG930.TextColor3 = Color3.new(1, 1, 1)
 	NG930.Parent = NG926
 	NG931 = Instance.new("Frame")
 	NG931.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG931.BackgroundTransparency = 1
 	NG931.BorderSizePixel = 0
-	NG931.Name = dCD("IrybpvglBcgvba")
+	NG931.Name = "VelocityOption"
 	NG931.Position = UDim2.new(0, 100, 0, 45)
 	NG931.Size = UDim2.new(1, -115, 0, 25)
 	NG931.Parent = NG901
@@ -13798,11 +13998,11 @@ do
 	NG932.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG932.BackgroundTransparency = 1
 	NG932.BorderSizePixel = 0
-	NG932.Name = dCD("Ynory")
+	NG932.Name = "Label"
 	NG932.Size = UDim2.new(0, 70, 0, 25)
 	NG932.Font = Enum.Font.ArialBold
 	NG932.FontSize = Enum.FontSize.Size10
-	NG932.Text = dCD("Irybpvgl")
+	NG932.Text = "Velocity"
 	NG932.TextColor3 = Color3.new(1, 1, 1)
 	NG932.TextStrokeTransparency = 0
 	NG932.TextWrapped = true
@@ -13812,7 +14012,7 @@ do
 	NG933.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG933.BackgroundTransparency = 1
 	NG933.BorderSizePixel = 0
-	NG933.Name = dCD("Vachg")
+	NG933.Name = "Input"
 	NG933.Position = UDim2.new(0, 45, 0, 0)
 	NG933.Size = UDim2.new(0, 38, 0, 25)
 	NG933.Parent = NG931
@@ -13828,21 +14028,21 @@ do
 	NG934.ZIndex = 2
 	NG934.Font = Enum.Font.Legacy
 	NG934.FontSize = Enum.FontSize.Size8
-	NG934.Text = dCD("")
+	NG934.Text = ""
 	NG934.Parent = NG933
 	NG935 = Instance.new("ImageLabel")
 	NG935.Active = false
 	NG935.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG935.BackgroundTransparency = 1
 	NG935.BorderSizePixel = 0
-	NG935.Name = dCD("Onpxtebhaq")
+	NG935.Name = "Background"
 	NG935.Selectable = false
 	NG935.Size = UDim2.new(1, 0, 1, 0)
-	NG935.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG935.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG935.Parent = NG933
 	NG936 = Instance.new("Frame")
 	NG936.BorderSizePixel = 0
-	NG936.Name = dCD("FryrpgrqVaqvpngbe")
+	NG936.Name = "SelectedIndicator"
 	NG936.Position = UDim2.new(0, 3, 0, -2)
 	NG936.Size = UDim2.new(1, -3, 0, 2)
 	NG936.Parent = NG933
@@ -13854,14 +14054,14 @@ do
 	NG937.Size = UDim2.new(1, -10, 1, 0)
 	NG937.Font = Enum.Font.ArialBold
 	NG937.FontSize = Enum.FontSize.Size10
-	NG937.Text = dCD("90")
+	NG937.Text = "90"
 	NG937.TextColor3 = Color3.new(1, 1, 1)
 	NG937.Parent = NG933
 	NG938 = Instance.new("Frame")
 	NG938.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG938.BackgroundTransparency = 1
 	NG938.BorderSizePixel = 0
-	NG938.Name = dCD("FvmrBcgvba")
+	NG938.Name = "SizeOption"
 	NG938.Position = UDim2.new(0, 0, 0, 80)
 	NG938.Size = UDim2.new(1, 0, 0, 25)
 	NG938.Parent = NG901
@@ -13869,11 +14069,11 @@ do
 	NG939.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG939.BackgroundTransparency = 1
 	NG939.BorderSizePixel = 0
-	NG939.Name = dCD("Ynory")
+	NG939.Name = "Label"
 	NG939.Size = UDim2.new(0, 70, 0, 25)
 	NG939.Font = Enum.Font.ArialBold
 	NG939.FontSize = Enum.FontSize.Size10
-	NG939.Text = dCD("Fvmr")
+	NG939.Text = "Size"
 	NG939.TextColor3 = Color3.new(1, 1, 1)
 	NG939.TextStrokeTransparency = 0
 	NG939.TextWrapped = true
@@ -13883,7 +14083,7 @@ do
 	NG940.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG940.BackgroundTransparency = 1
 	NG940.BorderSizePixel = 0
-	NG940.Name = dCD("Vachg")
+	NG940.Name = "Input"
 	NG940.Position = UDim2.new(0, 30, 0, 0)
 	NG940.Size = UDim2.new(0, 38, 0, 25)
 	NG940.Parent = NG938
@@ -13899,21 +14099,21 @@ do
 	NG941.ZIndex = 2
 	NG941.Font = Enum.Font.Legacy
 	NG941.FontSize = Enum.FontSize.Size8
-	NG941.Text = dCD("")
+	NG941.Text = ""
 	NG941.Parent = NG940
 	NG942 = Instance.new("ImageLabel")
 	NG942.Active = false
 	NG942.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG942.BackgroundTransparency = 1
 	NG942.BorderSizePixel = 0
-	NG942.Name = dCD("Onpxtebhaq")
+	NG942.Name = "Background"
 	NG942.Selectable = false
 	NG942.Size = UDim2.new(1, 0, 1, 0)
-	NG942.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG942.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG942.Parent = NG940
 	NG943 = Instance.new("Frame")
 	NG943.BorderSizePixel = 0
-	NG943.Name = dCD("FryrpgrqVaqvpngbe")
+	NG943.Name = "SelectedIndicator"
 	NG943.Position = UDim2.new(0, 3, 0, -2)
 	NG943.Size = UDim2.new(1, -3, 0, 2)
 	NG943.Parent = NG940
@@ -13925,18 +14125,18 @@ do
 	NG944.Size = UDim2.new(1, -10, 1, 0)
 	NG944.Font = Enum.Font.ArialBold
 	NG944.FontSize = Enum.FontSize.Size10
-	NG944.Text = dCD("16")
+	NG944.Text = "16"
 	NG944.TextColor3 = Color3.new(1, 1, 1)
 	NG944.Parent = NG940
 	NG945 = Instance.new("TextLabel")
 	NG945.BackgroundTransparency = 1
 	NG945.BorderSizePixel = 0
-	NG945.Name = dCD("FryrpgAbgr")
+	NG945.Name = "SelectNote"
 	NG945.Position = UDim2.new(0, 10, 0, 27)
 	NG945.Size = UDim2.new(1, -10, 0, 15)
 	NG945.Visible = false
 	NG945.FontSize = Enum.FontSize.Size14
-	NG945.Text = dCD("Fryrpg fbzrguvat gb hfr guvf gbby.")
+	NG945.Text = "Select something to use this tool."
 	NG945.TextColor3 = Color3.new(1, 1, 1)
 	NG945.TextScaled = true
 	NG945.TextStrokeTransparency = 0.5
@@ -13947,19 +14147,19 @@ do
 	NG946.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG946.BackgroundTransparency = 0.67500001192093
 	NG946.BorderSizePixel = 0
-	NG946.Name = dCD("Sver")
+	NG946.Name = "Fire"
 	NG946.Position = UDim2.new(0, 10, 0, 60)
 	NG946.Size = UDim2.new(1, -10, 0, 25)
 	NG946.Parent = NG888
 	NG947 = Instance.new("TextLabel")
 	NG947.BackgroundTransparency = 1
 	NG947.BorderSizePixel = 0
-	NG947.Name = dCD("Ynory")
+	NG947.Name = "Label"
 	NG947.Position = UDim2.new(0, 35, 0, 0)
 	NG947.Size = UDim2.new(0, 60, 0, 25)
 	NG947.Font = Enum.Font.ArialBold
 	NG947.FontSize = Enum.FontSize.Size10
-	NG947.Text = dCD("Sver")
+	NG947.Text = "Fire"
 	NG947.TextColor3 = Color3.new(1, 1, 1)
 	NG947.TextStrokeTransparency = 0.5
 	NG947.TextWrapped = true
@@ -13968,16 +14168,16 @@ do
 	NG948 = Instance.new("ImageButton")
 	NG948.BackgroundTransparency = 1
 	NG948.BorderSizePixel = 0
-	NG948.Name = dCD("NeebjOhggba")
+	NG948.Name = "ArrowButton"
 	NG948.Position = UDim2.new(0, 10, 0, 3)
 	NG948.Size = UDim2.new(0, 20, 0, 20)
 	NG948.Style = Enum.ButtonStyle.Custom
-	NG948.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=134367382")
+	NG948.Image = "http://www.roblox.com/asset/?id=134367382"
 	NG948.Parent = NG946
 	NG949 = Instance.new("Frame")
 	NG949.BackgroundColor3 = Color3.new(0.85098, 0, 1)
 	NG949.BorderSizePixel = 0
-	NG949.Name = dCD("PbybeOne")
+	NG949.Name = "ColorBar"
 	NG949.Size = UDim2.new(0, 3, 1, 0)
 	NG949.Parent = NG946
 	NG950 = Instance.new("TextButton")
@@ -13986,14 +14186,14 @@ do
 	NG950.BackgroundTransparency = 0.75
 	NG950.BorderColor3 = Color3.new(0, 0, 0)
 	NG950.BorderSizePixel = 0
-	NG950.Name = dCD("NqqOhggba")
+	NG950.Name = "AddButton"
 	NG950.Position = UDim2.new(1, -40, 0, 3)
 	NG950.Selectable = true
 	NG950.Size = UDim2.new(0, 35, 0, 19)
 	NG950.Style = Enum.ButtonStyle.Custom
 	NG950.Font = Enum.Font.ArialBold
 	NG950.FontSize = Enum.FontSize.Size10
-	NG950.Text = dCD("NQQ")
+	NG950.Text = "ADD"
 	NG950.TextColor3 = Color3.new(1, 1, 1)
 	NG950.Parent = NG946
 	NG951 = Instance.new("TextButton")
@@ -14002,7 +14202,7 @@ do
 	NG951.BackgroundTransparency = 0.75
 	NG951.BorderColor3 = Color3.new(0, 0, 0)
 	NG951.BorderSizePixel = 0
-	NG951.Name = dCD("ErzbirOhggba")
+	NG951.Name = "RemoveButton"
 	NG951.Position = UDim2.new(0, 90, 0, 3)
 	NG951.Selectable = true
 	NG951.Size = UDim2.new(0, 58, 0, 19)
@@ -14010,21 +14210,21 @@ do
 	NG951.Visible = false
 	NG951.Font = Enum.Font.ArialBold
 	NG951.FontSize = Enum.FontSize.Size10
-	NG951.Text = dCD("ERZBIR")
+	NG951.Text = "REMOVE"
 	NG951.TextColor3 = Color3.new(1, 1, 1)
 	NG951.Parent = NG946
 	NG952 = Instance.new("Frame")
 	NG952.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG952.BackgroundTransparency = 0.75
 	NG952.BorderSizePixel = 0
-	NG952.Name = dCD("Funqbj")
+	NG952.Name = "Shadow"
 	NG952.Position = UDim2.new(0, 0, 1, -1)
 	NG952.Size = UDim2.new(1, 0, 0, 1)
 	NG952.Parent = NG946
 	NG953 = Instance.new("Frame")
 	NG953.BackgroundTransparency = 1
 	NG953.BorderSizePixel = 0
-	NG953.Name = dCD("Bcgvbaf")
+	NG953.Name = "Options"
 	NG953.Position = UDim2.new(0, 3, 1, 0)
 	NG953.Size = UDim2.new(1, -3, 0, 0)
 	NG953.ClipsDescendants = true
@@ -14033,7 +14233,7 @@ do
 	NG954.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG954.BackgroundTransparency = 1
 	NG954.BorderSizePixel = 0
-	NG954.Name = dCD("PbybeBcgvba")
+	NG954.Name = "ColorOption"
 	NG954.Position = UDim2.new(0, 0, 0, 10)
 	NG954.Size = UDim2.new(1, 0, 0, 25)
 	NG954.Parent = NG953
@@ -14041,11 +14241,11 @@ do
 	NG955.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG955.BackgroundTransparency = 1
 	NG955.BorderSizePixel = 0
-	NG955.Name = dCD("Ynory")
+	NG955.Name = "Label"
 	NG955.Size = UDim2.new(0, 70, 0, 25)
 	NG955.Font = Enum.Font.ArialBold
 	NG955.FontSize = Enum.FontSize.Size10
-	NG955.Text = dCD("Pbybe")
+	NG955.Text = "Color"
 	NG955.TextColor3 = Color3.new(1, 1, 1)
 	NG955.TextStrokeTransparency = 0
 	NG955.TextWrapped = true
@@ -14055,7 +14255,7 @@ do
 	NG956.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG956.BackgroundTransparency = 1
 	NG956.BorderSizePixel = 0
-	NG956.Name = dCD("EVachg")
+	NG956.Name = "RInput"
 	NG956.Position = UDim2.new(0, 35, 0, 0)
 	NG956.Size = UDim2.new(0, 38, 0, 25)
 	NG956.Parent = NG954
@@ -14071,22 +14271,22 @@ do
 	NG957.ZIndex = 2
 	NG957.Font = Enum.Font.Legacy
 	NG957.FontSize = Enum.FontSize.Size8
-	NG957.Text = dCD("")
+	NG957.Text = ""
 	NG957.Parent = NG956
 	NG958 = Instance.new("ImageLabel")
 	NG958.Active = false
 	NG958.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG958.BackgroundTransparency = 1
 	NG958.BorderSizePixel = 0
-	NG958.Name = dCD("Onpxtebhaq")
+	NG958.Name = "Background"
 	NG958.Selectable = false
 	NG958.Size = UDim2.new(1, 0, 1, 0)
-	NG958.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG958.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG958.Parent = NG956
 	NG959 = Instance.new("Frame")
 	NG959.BackgroundColor3 = Color3.new(1, 0, 0)
 	NG959.BorderSizePixel = 0
-	NG959.Name = dCD("FryrpgrqVaqvpngbe")
+	NG959.Name = "SelectedIndicator"
 	NG959.Position = UDim2.new(0, 3, 0, -2)
 	NG959.Size = UDim2.new(1, -3, 0, 2)
 	NG959.Parent = NG956
@@ -14098,14 +14298,14 @@ do
 	NG960.Size = UDim2.new(1, -10, 1, 0)
 	NG960.Font = Enum.Font.ArialBold
 	NG960.FontSize = Enum.FontSize.Size10
-	NG960.Text = dCD("255")
+	NG960.Text = "255"
 	NG960.TextColor3 = Color3.new(1, 1, 1)
 	NG960.Parent = NG956
 	NG961 = Instance.new("Frame")
 	NG961.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG961.BackgroundTransparency = 1
 	NG961.BorderSizePixel = 0
-	NG961.Name = dCD("TVachg")
+	NG961.Name = "GInput"
 	NG961.Position = UDim2.new(0, 72, 0, 0)
 	NG961.Size = UDim2.new(0, 38, 0, 25)
 	NG961.Parent = NG954
@@ -14121,22 +14321,22 @@ do
 	NG962.ZIndex = 2
 	NG962.Font = Enum.Font.Legacy
 	NG962.FontSize = Enum.FontSize.Size8
-	NG962.Text = dCD("")
+	NG962.Text = ""
 	NG962.Parent = NG961
 	NG963 = Instance.new("ImageLabel")
 	NG963.Active = false
 	NG963.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG963.BackgroundTransparency = 1
 	NG963.BorderSizePixel = 0
-	NG963.Name = dCD("Onpxtebhaq")
+	NG963.Name = "Background"
 	NG963.Selectable = false
 	NG963.Size = UDim2.new(1, 0, 1, 0)
-	NG963.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG963.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG963.Parent = NG961
 	NG964 = Instance.new("Frame")
 	NG964.BackgroundColor3 = Color3.new(0, 1, 0)
 	NG964.BorderSizePixel = 0
-	NG964.Name = dCD("FryrpgrqVaqvpngbe")
+	NG964.Name = "SelectedIndicator"
 	NG964.Position = UDim2.new(0, 3, 0, -2)
 	NG964.Size = UDim2.new(1, -3, 0, 2)
 	NG964.Parent = NG961
@@ -14148,14 +14348,14 @@ do
 	NG965.Size = UDim2.new(1, -10, 1, 0)
 	NG965.Font = Enum.Font.ArialBold
 	NG965.FontSize = Enum.FontSize.Size10
-	NG965.Text = dCD("255")
+	NG965.Text = "255"
 	NG965.TextColor3 = Color3.new(1, 1, 1)
 	NG965.Parent = NG961
 	NG966 = Instance.new("Frame")
 	NG966.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG966.BackgroundTransparency = 1
 	NG966.BorderSizePixel = 0
-	NG966.Name = dCD("OVachg")
+	NG966.Name = "BInput"
 	NG966.Position = UDim2.new(0, 109, 0, 0)
 	NG966.Size = UDim2.new(0, 38, 0, 25)
 	NG966.Parent = NG954
@@ -14171,22 +14371,22 @@ do
 	NG967.ZIndex = 2
 	NG967.Font = Enum.Font.Legacy
 	NG967.FontSize = Enum.FontSize.Size8
-	NG967.Text = dCD("")
+	NG967.Text = ""
 	NG967.Parent = NG966
 	NG968 = Instance.new("ImageLabel")
 	NG968.Active = false
 	NG968.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG968.BackgroundTransparency = 1
 	NG968.BorderSizePixel = 0
-	NG968.Name = dCD("Onpxtebhaq")
+	NG968.Name = "Background"
 	NG968.Selectable = false
 	NG968.Size = UDim2.new(1, 0, 1, 0)
-	NG968.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG968.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG968.Parent = NG966
 	NG969 = Instance.new("Frame")
 	NG969.BackgroundColor3 = Color3.new(0, 0, 1)
 	NG969.BorderSizePixel = 0
-	NG969.Name = dCD("FryrpgrqVaqvpngbe")
+	NG969.Name = "SelectedIndicator"
 	NG969.Position = UDim2.new(0, 3, 0, -2)
 	NG969.Size = UDim2.new(1, -3, 0, 2)
 	NG969.Parent = NG966
@@ -14198,25 +14398,25 @@ do
 	NG970.Size = UDim2.new(1, -10, 1, 0)
 	NG970.Font = Enum.Font.ArialBold
 	NG970.FontSize = Enum.FontSize.Size10
-	NG970.Text = dCD("255")
+	NG970.Text = "255"
 	NG970.TextColor3 = Color3.new(1, 1, 1)
 	NG970.Parent = NG966
 	NG971 = Instance.new("ImageButton")
 	NG971.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG971.BackgroundTransparency = 0.40000000596046
 	NG971.BorderSizePixel = 0
-	NG971.Name = dCD("UFICvpxre")
+	NG971.Name = "HSVPicker"
 	NG971.Position = UDim2.new(0, 160, 0, -2)
 	NG971.Size = UDim2.new(0, 27, 0, 27)
 	NG971.Style = Enum.ButtonStyle.Custom
 	NG971.ZIndex = 2
-	NG971.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=141313631")
+	NG971.Image = "http://www.roblox.com/asset/?id=141313631"
 	NG971.Parent = NG954
 	NG972 = Instance.new("Frame")
 	NG972.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG972.BackgroundTransparency = 0.75
 	NG972.BorderSizePixel = 0
-	NG972.Name = dCD("Funqbj")
+	NG972.Name = "Shadow"
 	NG972.Position = UDim2.new(0, 0, 1, -2)
 	NG972.Size = UDim2.new(1, 0, 0, 2)
 	NG972.Parent = NG971
@@ -14225,7 +14425,7 @@ do
 	NG973.BackgroundTransparency = 0.5
 	NG973.BorderColor3 = Color3.new(0.380392, 0.380392, 0.380392)
 	NG973.BorderSizePixel = 0
-	NG973.Name = dCD("Frcnengbe")
+	NG973.Name = "Separator"
 	NG973.Position = UDim2.new(0, 151, 0, 4)
 	NG973.Size = UDim2.new(0, 4, 0, 4)
 	NG973.Parent = NG954
@@ -14234,7 +14434,7 @@ do
 	NG974.BackgroundTransparency = 0.5
 	NG974.BorderColor3 = Color3.new(0.380392, 0.380392, 0.380392)
 	NG974.BorderSizePixel = 0
-	NG974.Name = dCD("Frcnengbe")
+	NG974.Name = "Separator"
 	NG974.Position = UDim2.new(0, 151, 0, 16)
 	NG974.Size = UDim2.new(0, 4, 0, 4)
 	NG974.Parent = NG954
@@ -14243,7 +14443,7 @@ do
 	NG975.BackgroundTransparency = 0.5
 	NG975.BorderColor3 = Color3.new(0.380392, 0.380392, 0.380392)
 	NG975.BorderSizePixel = 0
-	NG975.Name = dCD("Frcnengbe")
+	NG975.Name = "Separator"
 	NG975.Position = UDim2.new(0, 151, 0, 10)
 	NG975.Size = UDim2.new(0, 4, 0, 4)
 	NG975.Parent = NG954
@@ -14251,7 +14451,7 @@ do
 	NG976.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG976.BackgroundTransparency = 1
 	NG976.BorderSizePixel = 0
-	NG976.Name = dCD("UrngBcgvba")
+	NG976.Name = "HeatOption"
 	NG976.Position = UDim2.new(0, 0, 0, 80)
 	NG976.Size = UDim2.new(1, 0, 0, 25)
 	NG976.Parent = NG953
@@ -14259,11 +14459,11 @@ do
 	NG977.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG977.BackgroundTransparency = 1
 	NG977.BorderSizePixel = 0
-	NG977.Name = dCD("Ynory")
+	NG977.Name = "Label"
 	NG977.Size = UDim2.new(0, 70, 0, 25)
 	NG977.Font = Enum.Font.ArialBold
 	NG977.FontSize = Enum.FontSize.Size10
-	NG977.Text = dCD("Urng")
+	NG977.Text = "Heat"
 	NG977.TextColor3 = Color3.new(1, 1, 1)
 	NG977.TextStrokeTransparency = 0
 	NG977.TextWrapped = true
@@ -14273,7 +14473,7 @@ do
 	NG978.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG978.BackgroundTransparency = 1
 	NG978.BorderSizePixel = 0
-	NG978.Name = dCD("Vachg")
+	NG978.Name = "Input"
 	NG978.Position = UDim2.new(0, 34, 0, 0)
 	NG978.Size = UDim2.new(0, 38, 0, 25)
 	NG978.Parent = NG976
@@ -14289,21 +14489,21 @@ do
 	NG979.ZIndex = 2
 	NG979.Font = Enum.Font.Legacy
 	NG979.FontSize = Enum.FontSize.Size8
-	NG979.Text = dCD("")
+	NG979.Text = ""
 	NG979.Parent = NG978
 	NG980 = Instance.new("ImageLabel")
 	NG980.Active = false
 	NG980.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG980.BackgroundTransparency = 1
 	NG980.BorderSizePixel = 0
-	NG980.Name = dCD("Onpxtebhaq")
+	NG980.Name = "Background"
 	NG980.Selectable = false
 	NG980.Size = UDim2.new(1, 0, 1, 0)
-	NG980.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG980.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG980.Parent = NG978
 	NG981 = Instance.new("Frame")
 	NG981.BorderSizePixel = 0
-	NG981.Name = dCD("FryrpgrqVaqvpngbe")
+	NG981.Name = "SelectedIndicator"
 	NG981.Position = UDim2.new(0, 3, 0, -2)
 	NG981.Size = UDim2.new(1, -3, 0, 2)
 	NG981.Parent = NG978
@@ -14315,14 +14515,14 @@ do
 	NG982.Size = UDim2.new(1, -10, 1, 0)
 	NG982.Font = Enum.Font.ArialBold
 	NG982.FontSize = Enum.FontSize.Size10
-	NG982.Text = dCD("1")
+	NG982.Text = "1"
 	NG982.TextColor3 = Color3.new(1, 1, 1)
 	NG982.Parent = NG978
 	NG983 = Instance.new("Frame")
 	NG983.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG983.BackgroundTransparency = 1
 	NG983.BorderSizePixel = 0
-	NG983.Name = dCD("FvmrBcgvba")
+	NG983.Name = "SizeOption"
 	NG983.Position = UDim2.new(0, 90, 0, 80)
 	NG983.Size = UDim2.new(1, 0, 0, 25)
 	NG983.Parent = NG953
@@ -14330,11 +14530,11 @@ do
 	NG984.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG984.BackgroundTransparency = 1
 	NG984.BorderSizePixel = 0
-	NG984.Name = dCD("Ynory")
+	NG984.Name = "Label"
 	NG984.Size = UDim2.new(0, 70, 0, 25)
 	NG984.Font = Enum.Font.ArialBold
 	NG984.FontSize = Enum.FontSize.Size10
-	NG984.Text = dCD("Fvmr")
+	NG984.Text = "Size"
 	NG984.TextColor3 = Color3.new(1, 1, 1)
 	NG984.TextStrokeTransparency = 0
 	NG984.TextWrapped = true
@@ -14344,7 +14544,7 @@ do
 	NG985.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG985.BackgroundTransparency = 1
 	NG985.BorderSizePixel = 0
-	NG985.Name = dCD("Vachg")
+	NG985.Name = "Input"
 	NG985.Position = UDim2.new(0, 30, 0, 0)
 	NG985.Size = UDim2.new(0, 38, 0, 25)
 	NG985.Parent = NG983
@@ -14360,21 +14560,21 @@ do
 	NG986.ZIndex = 2
 	NG986.Font = Enum.Font.Legacy
 	NG986.FontSize = Enum.FontSize.Size8
-	NG986.Text = dCD("")
+	NG986.Text = ""
 	NG986.Parent = NG985
 	NG987 = Instance.new("ImageLabel")
 	NG987.Active = false
 	NG987.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG987.BackgroundTransparency = 1
 	NG987.BorderSizePixel = 0
-	NG987.Name = dCD("Onpxtebhaq")
+	NG987.Name = "Background"
 	NG987.Selectable = false
 	NG987.Size = UDim2.new(1, 0, 1, 0)
-	NG987.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG987.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG987.Parent = NG985
 	NG988 = Instance.new("Frame")
 	NG988.BorderSizePixel = 0
-	NG988.Name = dCD("FryrpgrqVaqvpngbe")
+	NG988.Name = "SelectedIndicator"
 	NG988.Position = UDim2.new(0, 3, 0, -2)
 	NG988.Size = UDim2.new(1, -3, 0, 2)
 	NG988.Parent = NG985
@@ -14386,14 +14586,14 @@ do
 	NG989.Size = UDim2.new(1, -10, 1, 0)
 	NG989.Font = Enum.Font.ArialBold
 	NG989.FontSize = Enum.FontSize.Size10
-	NG989.Text = dCD("16")
+	NG989.Text = "16"
 	NG989.TextColor3 = Color3.new(1, 1, 1)
 	NG989.Parent = NG985
 	NG990 = Instance.new("Frame")
 	NG990.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG990.BackgroundTransparency = 1
 	NG990.BorderSizePixel = 0
-	NG990.Name = dCD("FrpbaqPbybeBcgvba")
+	NG990.Name = "SecondColorOption"
 	NG990.Position = UDim2.new(0, 0, 0, 45)
 	NG990.Size = UDim2.new(1, 0, 0, 25)
 	NG990.Parent = NG953
@@ -14401,11 +14601,11 @@ do
 	NG991.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG991.BackgroundTransparency = 1
 	NG991.BorderSizePixel = 0
-	NG991.Name = dCD("Ynory")
+	NG991.Name = "Label"
 	NG991.Size = UDim2.new(0, 40, 0, 25)
 	NG991.Font = Enum.Font.ArialBold
 	NG991.FontSize = Enum.FontSize.Size10
-	NG991.Text = dCD("2aq Pbybe")
+	NG991.Text = "2nd Color"
 	NG991.TextColor3 = Color3.new(1, 1, 1)
 	NG991.TextStrokeTransparency = 0
 	NG991.TextWrapped = true
@@ -14415,7 +14615,7 @@ do
 	NG992.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG992.BackgroundTransparency = 1
 	NG992.BorderSizePixel = 0
-	NG992.Name = dCD("EVachg")
+	NG992.Name = "RInput"
 	NG992.Position = UDim2.new(0, 35, 0, 0)
 	NG992.Size = UDim2.new(0, 38, 0, 25)
 	NG992.Parent = NG990
@@ -14431,22 +14631,22 @@ do
 	NG993.ZIndex = 2
 	NG993.Font = Enum.Font.Legacy
 	NG993.FontSize = Enum.FontSize.Size8
-	NG993.Text = dCD("")
+	NG993.Text = ""
 	NG993.Parent = NG992
 	NG994 = Instance.new("ImageLabel")
 	NG994.Active = false
 	NG994.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG994.BackgroundTransparency = 1
 	NG994.BorderSizePixel = 0
-	NG994.Name = dCD("Onpxtebhaq")
+	NG994.Name = "Background"
 	NG994.Selectable = false
 	NG994.Size = UDim2.new(1, 0, 1, 0)
-	NG994.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG994.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG994.Parent = NG992
 	NG995 = Instance.new("Frame")
 	NG995.BackgroundColor3 = Color3.new(1, 0, 0)
 	NG995.BorderSizePixel = 0
-	NG995.Name = dCD("FryrpgrqVaqvpngbe")
+	NG995.Name = "SelectedIndicator"
 	NG995.Position = UDim2.new(0, 3, 0, -2)
 	NG995.Size = UDim2.new(1, -3, 0, 2)
 	NG995.Parent = NG992
@@ -14458,14 +14658,14 @@ do
 	NG996.Size = UDim2.new(1, -10, 1, 0)
 	NG996.Font = Enum.Font.ArialBold
 	NG996.FontSize = Enum.FontSize.Size10
-	NG996.Text = dCD("255")
+	NG996.Text = "255"
 	NG996.TextColor3 = Color3.new(1, 1, 1)
 	NG996.Parent = NG992
 	NG997 = Instance.new("Frame")
 	NG997.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG997.BackgroundTransparency = 1
 	NG997.BorderSizePixel = 0
-	NG997.Name = dCD("TVachg")
+	NG997.Name = "GInput"
 	NG997.Position = UDim2.new(0, 72, 0, 0)
 	NG997.Size = UDim2.new(0, 38, 0, 25)
 	NG997.Parent = NG990
@@ -14481,22 +14681,22 @@ do
 	NG998.ZIndex = 2
 	NG998.Font = Enum.Font.Legacy
 	NG998.FontSize = Enum.FontSize.Size8
-	NG998.Text = dCD("")
+	NG998.Text = ""
 	NG998.Parent = NG997
 	NG999 = Instance.new("ImageLabel")
 	NG999.Active = false
 	NG999.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG999.BackgroundTransparency = 1
 	NG999.BorderSizePixel = 0
-	NG999.Name = dCD("Onpxtebhaq")
+	NG999.Name = "Background"
 	NG999.Selectable = false
 	NG999.Size = UDim2.new(1, 0, 1, 0)
-	NG999.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG999.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG999.Parent = NG997
 	NG1000 = Instance.new("Frame")
 	NG1000.BackgroundColor3 = Color3.new(0, 1, 0)
 	NG1000.BorderSizePixel = 0
-	NG1000.Name = dCD("FryrpgrqVaqvpngbe")
+	NG1000.Name = "SelectedIndicator"
 	NG1000.Position = UDim2.new(0, 3, 0, -2)
 	NG1000.Size = UDim2.new(1, -3, 0, 2)
 	NG1000.Parent = NG997
@@ -14508,14 +14708,14 @@ do
 	NG1001.Size = UDim2.new(1, -10, 1, 0)
 	NG1001.Font = Enum.Font.ArialBold
 	NG1001.FontSize = Enum.FontSize.Size10
-	NG1001.Text = dCD("255")
+	NG1001.Text = "255"
 	NG1001.TextColor3 = Color3.new(1, 1, 1)
 	NG1001.Parent = NG997
 	NG1002 = Instance.new("Frame")
 	NG1002.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1002.BackgroundTransparency = 1
 	NG1002.BorderSizePixel = 0
-	NG1002.Name = dCD("OVachg")
+	NG1002.Name = "BInput"
 	NG1002.Position = UDim2.new(0, 109, 0, 0)
 	NG1002.Size = UDim2.new(0, 38, 0, 25)
 	NG1002.Parent = NG990
@@ -14531,22 +14731,22 @@ do
 	NG1003.ZIndex = 2
 	NG1003.Font = Enum.Font.Legacy
 	NG1003.FontSize = Enum.FontSize.Size8
-	NG1003.Text = dCD("")
+	NG1003.Text = ""
 	NG1003.Parent = NG1002
 	NG1004 = Instance.new("ImageLabel")
 	NG1004.Active = false
 	NG1004.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1004.BackgroundTransparency = 1
 	NG1004.BorderSizePixel = 0
-	NG1004.Name = dCD("Onpxtebhaq")
+	NG1004.Name = "Background"
 	NG1004.Selectable = false
 	NG1004.Size = UDim2.new(1, 0, 1, 0)
-	NG1004.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG1004.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG1004.Parent = NG1002
 	NG1005 = Instance.new("Frame")
 	NG1005.BackgroundColor3 = Color3.new(0, 0, 1)
 	NG1005.BorderSizePixel = 0
-	NG1005.Name = dCD("FryrpgrqVaqvpngbe")
+	NG1005.Name = "SelectedIndicator"
 	NG1005.Position = UDim2.new(0, 3, 0, -2)
 	NG1005.Size = UDim2.new(1, -3, 0, 2)
 	NG1005.Parent = NG1002
@@ -14558,25 +14758,25 @@ do
 	NG1006.Size = UDim2.new(1, -10, 1, 0)
 	NG1006.Font = Enum.Font.ArialBold
 	NG1006.FontSize = Enum.FontSize.Size10
-	NG1006.Text = dCD("255")
+	NG1006.Text = "255"
 	NG1006.TextColor3 = Color3.new(1, 1, 1)
 	NG1006.Parent = NG1002
 	NG1007 = Instance.new("ImageButton")
 	NG1007.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG1007.BackgroundTransparency = 0.40000000596046
 	NG1007.BorderSizePixel = 0
-	NG1007.Name = dCD("UFICvpxre")
+	NG1007.Name = "HSVPicker"
 	NG1007.Position = UDim2.new(0, 160, 0, -2)
 	NG1007.Size = UDim2.new(0, 27, 0, 27)
 	NG1007.Style = Enum.ButtonStyle.Custom
 	NG1007.ZIndex = 2
-	NG1007.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=141313631")
+	NG1007.Image = "http://www.roblox.com/asset/?id=141313631"
 	NG1007.Parent = NG990
 	NG1008 = Instance.new("Frame")
 	NG1008.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG1008.BackgroundTransparency = 0.75
 	NG1008.BorderSizePixel = 0
-	NG1008.Name = dCD("Funqbj")
+	NG1008.Name = "Shadow"
 	NG1008.Position = UDim2.new(0, 0, 1, -2)
 	NG1008.Size = UDim2.new(1, 0, 0, 2)
 	NG1008.Parent = NG1007
@@ -14585,7 +14785,7 @@ do
 	NG1009.BackgroundTransparency = 0.5
 	NG1009.BorderColor3 = Color3.new(0.380392, 0.380392, 0.380392)
 	NG1009.BorderSizePixel = 0
-	NG1009.Name = dCD("Frcnengbe")
+	NG1009.Name = "Separator"
 	NG1009.Position = UDim2.new(0, 151, 0, 4)
 	NG1009.Size = UDim2.new(0, 4, 0, 4)
 	NG1009.Parent = NG990
@@ -14594,7 +14794,7 @@ do
 	NG1010.BackgroundTransparency = 0.5
 	NG1010.BorderColor3 = Color3.new(0.380392, 0.380392, 0.380392)
 	NG1010.BorderSizePixel = 0
-	NG1010.Name = dCD("Frcnengbe")
+	NG1010.Name = "Separator"
 	NG1010.Position = UDim2.new(0, 151, 0, 16)
 	NG1010.Size = UDim2.new(0, 4, 0, 4)
 	NG1010.Parent = NG990
@@ -14603,7 +14803,7 @@ do
 	NG1011.BackgroundTransparency = 0.5
 	NG1011.BorderColor3 = Color3.new(0.380392, 0.380392, 0.380392)
 	NG1011.BorderSizePixel = 0
-	NG1011.Name = dCD("Frcnengbe")
+	NG1011.Name = "Separator"
 	NG1011.Position = UDim2.new(0, 151, 0, 10)
 	NG1011.Size = UDim2.new(0, 4, 0, 4)
 	NG1011.Parent = NG990
@@ -14611,19 +14811,19 @@ do
 	NG1012.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG1012.BackgroundTransparency = 0.67500001192093
 	NG1012.BorderSizePixel = 0
-	NG1012.Name = dCD("Fcnexyrf")
+	NG1012.Name = "Sparkles"
 	NG1012.Position = UDim2.new(0, 10, 0, 90)
 	NG1012.Size = UDim2.new(1, -10, 0, 25)
 	NG1012.Parent = NG888
 	NG1013 = Instance.new("TextLabel")
 	NG1013.BackgroundTransparency = 1
 	NG1013.BorderSizePixel = 0
-	NG1013.Name = dCD("Ynory")
+	NG1013.Name = "Label"
 	NG1013.Position = UDim2.new(0, 35, 0, 0)
 	NG1013.Size = UDim2.new(0, 60, 0, 25)
 	NG1013.Font = Enum.Font.ArialBold
 	NG1013.FontSize = Enum.FontSize.Size10
-	NG1013.Text = dCD("Fcnexyrf")
+	NG1013.Text = "Sparkles"
 	NG1013.TextColor3 = Color3.new(1, 1, 1)
 	NG1013.TextStrokeTransparency = 0.5
 	NG1013.TextWrapped = true
@@ -14632,16 +14832,16 @@ do
 	NG1014 = Instance.new("ImageButton")
 	NG1014.BackgroundTransparency = 1
 	NG1014.BorderSizePixel = 0
-	NG1014.Name = dCD("NeebjOhggba")
+	NG1014.Name = "ArrowButton"
 	NG1014.Position = UDim2.new(0, 10, 0, 3)
 	NG1014.Size = UDim2.new(0, 20, 0, 20)
 	NG1014.Style = Enum.ButtonStyle.Custom
-	NG1014.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=134367382")
+	NG1014.Image = "http://www.roblox.com/asset/?id=134367382"
 	NG1014.Parent = NG1012
 	NG1015 = Instance.new("Frame")
 	NG1015.BackgroundColor3 = Color3.new(0.0196078, 0.396078, 1)
 	NG1015.BorderSizePixel = 0
-	NG1015.Name = dCD("PbybeOne")
+	NG1015.Name = "ColorBar"
 	NG1015.Size = UDim2.new(0, 3, 1, 0)
 	NG1015.Parent = NG1012
 	NG1016 = Instance.new("TextButton")
@@ -14650,7 +14850,7 @@ do
 	NG1016.BackgroundTransparency = 0.75
 	NG1016.BorderColor3 = Color3.new(0, 0, 0)
 	NG1016.BorderSizePixel = 0
-	NG1016.Name = dCD("NqqOhggba")
+	NG1016.Name = "AddButton"
 	NG1016.Position = UDim2.new(1, -40, 0, 3)
 	NG1016.Selectable = true
 	NG1016.Size = UDim2.new(0, 35, 0, 19)
@@ -14658,7 +14858,7 @@ do
 	NG1016.ZIndex = 2
 	NG1016.Font = Enum.Font.ArialBold
 	NG1016.FontSize = Enum.FontSize.Size10
-	NG1016.Text = dCD("NQQ")
+	NG1016.Text = "ADD"
 	NG1016.TextColor3 = Color3.new(1, 1, 1)
 	NG1016.Parent = NG1012
 	NG1017 = Instance.new("TextButton")
@@ -14667,7 +14867,7 @@ do
 	NG1017.BackgroundTransparency = 0.75
 	NG1017.BorderColor3 = Color3.new(0, 0, 0)
 	NG1017.BorderSizePixel = 0
-	NG1017.Name = dCD("ErzbirOhggba")
+	NG1017.Name = "RemoveButton"
 	NG1017.Position = UDim2.new(0, 90, 0, 3)
 	NG1017.Selectable = true
 	NG1017.Size = UDim2.new(0, 58, 0, 19)
@@ -14676,21 +14876,21 @@ do
 	NG1017.ZIndex = 2
 	NG1017.Font = Enum.Font.ArialBold
 	NG1017.FontSize = Enum.FontSize.Size10
-	NG1017.Text = dCD("ERZBIR")
+	NG1017.Text = "REMOVE"
 	NG1017.TextColor3 = Color3.new(1, 1, 1)
 	NG1017.Parent = NG1012
 	NG1018 = Instance.new("Frame")
 	NG1018.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG1018.BackgroundTransparency = 0.75
 	NG1018.BorderSizePixel = 0
-	NG1018.Name = dCD("Funqbj")
+	NG1018.Name = "Shadow"
 	NG1018.Position = UDim2.new(0, 0, 1, -1)
 	NG1018.Size = UDim2.new(1, 0, 0, 1)
 	NG1018.Parent = NG1012
 	NG1019 = Instance.new("Frame")
 	NG1019.BackgroundTransparency = 1
 	NG1019.BorderSizePixel = 0
-	NG1019.Name = dCD("Bcgvbaf")
+	NG1019.Name = "Options"
 	NG1019.Position = UDim2.new(0, 3, 1, 0)
 	NG1019.Size = UDim2.new(1, -3, 0, 0)
 	NG1019.ClipsDescendants = true
@@ -14699,7 +14899,7 @@ do
 	NG1020.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1020.BackgroundTransparency = 1
 	NG1020.BorderSizePixel = 0
-	NG1020.Name = dCD("PbybeBcgvba")
+	NG1020.Name = "ColorOption"
 	NG1020.Position = UDim2.new(0, 0, 0, 10)
 	NG1020.Size = UDim2.new(1, 0, 0, 25)
 	NG1020.Parent = NG1019
@@ -14707,11 +14907,11 @@ do
 	NG1021.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1021.BackgroundTransparency = 1
 	NG1021.BorderSizePixel = 0
-	NG1021.Name = dCD("Ynory")
+	NG1021.Name = "Label"
 	NG1021.Size = UDim2.new(0, 70, 0, 25)
 	NG1021.Font = Enum.Font.ArialBold
 	NG1021.FontSize = Enum.FontSize.Size10
-	NG1021.Text = dCD("Pbybe")
+	NG1021.Text = "Color"
 	NG1021.TextColor3 = Color3.new(1, 1, 1)
 	NG1021.TextStrokeTransparency = 0
 	NG1021.TextWrapped = true
@@ -14721,7 +14921,7 @@ do
 	NG1022.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1022.BackgroundTransparency = 1
 	NG1022.BorderSizePixel = 0
-	NG1022.Name = dCD("EVachg")
+	NG1022.Name = "RInput"
 	NG1022.Position = UDim2.new(0, 35, 0, 0)
 	NG1022.Size = UDim2.new(0, 38, 0, 25)
 	NG1022.Parent = NG1020
@@ -14737,22 +14937,22 @@ do
 	NG1023.ZIndex = 2
 	NG1023.Font = Enum.Font.Legacy
 	NG1023.FontSize = Enum.FontSize.Size8
-	NG1023.Text = dCD("")
+	NG1023.Text = ""
 	NG1023.Parent = NG1022
 	NG1024 = Instance.new("ImageLabel")
 	NG1024.Active = false
 	NG1024.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1024.BackgroundTransparency = 1
 	NG1024.BorderSizePixel = 0
-	NG1024.Name = dCD("Onpxtebhaq")
+	NG1024.Name = "Background"
 	NG1024.Selectable = false
 	NG1024.Size = UDim2.new(1, 0, 1, 0)
-	NG1024.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG1024.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG1024.Parent = NG1022
 	NG1025 = Instance.new("Frame")
 	NG1025.BackgroundColor3 = Color3.new(1, 0, 0)
 	NG1025.BorderSizePixel = 0
-	NG1025.Name = dCD("FryrpgrqVaqvpngbe")
+	NG1025.Name = "SelectedIndicator"
 	NG1025.Position = UDim2.new(0, 3, 0, -2)
 	NG1025.Size = UDim2.new(1, -3, 0, 2)
 	NG1025.Parent = NG1022
@@ -14764,14 +14964,14 @@ do
 	NG1026.Size = UDim2.new(1, -10, 1, 0)
 	NG1026.Font = Enum.Font.ArialBold
 	NG1026.FontSize = Enum.FontSize.Size10
-	NG1026.Text = dCD("255")
+	NG1026.Text = "255"
 	NG1026.TextColor3 = Color3.new(1, 1, 1)
 	NG1026.Parent = NG1022
 	NG1027 = Instance.new("Frame")
 	NG1027.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1027.BackgroundTransparency = 1
 	NG1027.BorderSizePixel = 0
-	NG1027.Name = dCD("TVachg")
+	NG1027.Name = "GInput"
 	NG1027.Position = UDim2.new(0, 72, 0, 0)
 	NG1027.Size = UDim2.new(0, 38, 0, 25)
 	NG1027.Parent = NG1020
@@ -14787,22 +14987,22 @@ do
 	NG1028.ZIndex = 2
 	NG1028.Font = Enum.Font.Legacy
 	NG1028.FontSize = Enum.FontSize.Size8
-	NG1028.Text = dCD("")
+	NG1028.Text = ""
 	NG1028.Parent = NG1027
 	NG1029 = Instance.new("ImageLabel")
 	NG1029.Active = false
 	NG1029.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1029.BackgroundTransparency = 1
 	NG1029.BorderSizePixel = 0
-	NG1029.Name = dCD("Onpxtebhaq")
+	NG1029.Name = "Background"
 	NG1029.Selectable = false
 	NG1029.Size = UDim2.new(1, 0, 1, 0)
-	NG1029.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG1029.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG1029.Parent = NG1027
 	NG1030 = Instance.new("Frame")
 	NG1030.BackgroundColor3 = Color3.new(0, 1, 0)
 	NG1030.BorderSizePixel = 0
-	NG1030.Name = dCD("FryrpgrqVaqvpngbe")
+	NG1030.Name = "SelectedIndicator"
 	NG1030.Position = UDim2.new(0, 3, 0, -2)
 	NG1030.Size = UDim2.new(1, -3, 0, 2)
 	NG1030.Parent = NG1027
@@ -14814,14 +15014,14 @@ do
 	NG1031.Size = UDim2.new(1, -10, 1, 0)
 	NG1031.Font = Enum.Font.ArialBold
 	NG1031.FontSize = Enum.FontSize.Size10
-	NG1031.Text = dCD("255")
+	NG1031.Text = "255"
 	NG1031.TextColor3 = Color3.new(1, 1, 1)
 	NG1031.Parent = NG1027
 	NG1032 = Instance.new("Frame")
 	NG1032.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1032.BackgroundTransparency = 1
 	NG1032.BorderSizePixel = 0
-	NG1032.Name = dCD("OVachg")
+	NG1032.Name = "BInput"
 	NG1032.Position = UDim2.new(0, 109, 0, 0)
 	NG1032.Size = UDim2.new(0, 38, 0, 25)
 	NG1032.Parent = NG1020
@@ -14837,22 +15037,22 @@ do
 	NG1033.ZIndex = 2
 	NG1033.Font = Enum.Font.Legacy
 	NG1033.FontSize = Enum.FontSize.Size8
-	NG1033.Text = dCD("")
+	NG1033.Text = ""
 	NG1033.Parent = NG1032
 	NG1034 = Instance.new("ImageLabel")
 	NG1034.Active = false
 	NG1034.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1034.BackgroundTransparency = 1
 	NG1034.BorderSizePixel = 0
-	NG1034.Name = dCD("Onpxtebhaq")
+	NG1034.Name = "Background"
 	NG1034.Selectable = false
 	NG1034.Size = UDim2.new(1, 0, 1, 0)
-	NG1034.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG1034.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG1034.Parent = NG1032
 	NG1035 = Instance.new("Frame")
 	NG1035.BackgroundColor3 = Color3.new(0, 0, 1)
 	NG1035.BorderSizePixel = 0
-	NG1035.Name = dCD("FryrpgrqVaqvpngbe")
+	NG1035.Name = "SelectedIndicator"
 	NG1035.Position = UDim2.new(0, 3, 0, -2)
 	NG1035.Size = UDim2.new(1, -3, 0, 2)
 	NG1035.Parent = NG1032
@@ -14864,25 +15064,25 @@ do
 	NG1036.Size = UDim2.new(1, -10, 1, 0)
 	NG1036.Font = Enum.Font.ArialBold
 	NG1036.FontSize = Enum.FontSize.Size10
-	NG1036.Text = dCD("255")
+	NG1036.Text = "255"
 	NG1036.TextColor3 = Color3.new(1, 1, 1)
 	NG1036.Parent = NG1032
 	NG1037 = Instance.new("ImageButton")
 	NG1037.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG1037.BackgroundTransparency = 0.40000000596046
 	NG1037.BorderSizePixel = 0
-	NG1037.Name = dCD("UFICvpxre")
+	NG1037.Name = "HSVPicker"
 	NG1037.Position = UDim2.new(0, 160, 0, -2)
 	NG1037.Size = UDim2.new(0, 27, 0, 27)
 	NG1037.Style = Enum.ButtonStyle.Custom
 	NG1037.ZIndex = 2
-	NG1037.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=141313631")
+	NG1037.Image = "http://www.roblox.com/asset/?id=141313631"
 	NG1037.Parent = NG1020
 	NG1038 = Instance.new("Frame")
 	NG1038.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG1038.BackgroundTransparency = 0.75
 	NG1038.BorderSizePixel = 0
-	NG1038.Name = dCD("Funqbj")
+	NG1038.Name = "Shadow"
 	NG1038.Position = UDim2.new(0, 0, 1, -2)
 	NG1038.Size = UDim2.new(1, 0, 0, 2)
 	NG1038.Parent = NG1037
@@ -14891,7 +15091,7 @@ do
 	NG1039.BackgroundTransparency = 0.5
 	NG1039.BorderColor3 = Color3.new(0.380392, 0.380392, 0.380392)
 	NG1039.BorderSizePixel = 0
-	NG1039.Name = dCD("Frcnengbe")
+	NG1039.Name = "Separator"
 	NG1039.Position = UDim2.new(0, 151, 0, 4)
 	NG1039.Size = UDim2.new(0, 4, 0, 4)
 	NG1039.Parent = NG1020
@@ -14900,7 +15100,7 @@ do
 	NG1040.BackgroundTransparency = 0.5
 	NG1040.BorderColor3 = Color3.new(0.380392, 0.380392, 0.380392)
 	NG1040.BorderSizePixel = 0
-	NG1040.Name = dCD("Frcnengbe")
+	NG1040.Name = "Separator"
 	NG1040.Position = UDim2.new(0, 151, 0, 16)
 	NG1040.Size = UDim2.new(0, 4, 0, 4)
 	NG1040.Parent = NG1020
@@ -14909,7 +15109,7 @@ do
 	NG1041.BackgroundTransparency = 0.5
 	NG1041.BorderColor3 = Color3.new(0.380392, 0.380392, 0.380392)
 	NG1041.BorderSizePixel = 0
-	NG1041.Name = dCD("Frcnengbe")
+	NG1041.Name = "Separator"
 	NG1041.Position = UDim2.new(0, 151, 0, 10)
 	NG1041.Size = UDim2.new(0, 4, 0, 4)
 	NG1041.Parent = NG1020
@@ -14918,7 +15118,7 @@ do
 	NG1042.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1042.BackgroundTransparency = 1
 	NG1042.BorderSizePixel = 0
-	NG1042.Name = dCD("OGNapubeGbbyTHV")
+	NG1042.Name = "BTAnchorToolGUI"
 	NG1042.Position = UDim2.new(0, 0, 0, 280)
 	NG1042.Size = UDim2.new(0, 245, 0, 90)
 	NG1042.Draggable = true
@@ -14927,13 +15127,13 @@ do
 	NG1043.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1043.BackgroundTransparency = 1
 	NG1043.BorderSizePixel = 0
-	NG1043.Name = dCD("Gvgyr")
+	NG1043.Name = "Title"
 	NG1043.Size = UDim2.new(1, 0, 0, 20)
 	NG1043.Parent = NG1042
 	NG1044 = Instance.new("Frame")
 	NG1044.BackgroundColor3 = Color3.new(0.0666667, 0.0666667, 0.0666667)
 	NG1044.BorderSizePixel = 0
-	NG1044.Name = dCD("PbybeOne")
+	NG1044.Name = "ColorBar"
 	NG1044.Position = UDim2.new(0, 5, 0, -3)
 	NG1044.Size = UDim2.new(1, -5, 0, 2)
 	NG1044.Parent = NG1043
@@ -14941,12 +15141,12 @@ do
 	NG1045.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1045.BackgroundTransparency = 1
 	NG1045.BorderSizePixel = 0
-	NG1045.Name = dCD("Ynory")
+	NG1045.Name = "Label"
 	NG1045.Position = UDim2.new(0, 10, 0, 1)
 	NG1045.Size = UDim2.new(1, -10, 1, 0)
 	NG1045.Font = Enum.Font.ArialBold
 	NG1045.FontSize = Enum.FontSize.Size10
-	NG1045.Text = dCD("NAPUBE GBBY")
+	NG1045.Text = "ANCHOR TOOL"
 	NG1045.TextColor3 = Color3.new(1, 1, 1)
 	NG1045.TextStrokeTransparency = 0
 	NG1045.TextWrapped = true
@@ -14956,12 +15156,12 @@ do
 	NG1046.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1046.BackgroundTransparency = 1
 	NG1046.BorderSizePixel = 0
-	NG1046.Name = dCD("S3KFvtangher")
+	NG1046.Name = "F3XSignature"
 	NG1046.Position = UDim2.new(0, 10, 0, 1)
 	NG1046.Size = UDim2.new(1, -10, 1, 0)
 	NG1046.Font = Enum.Font.ArialBold
 	NG1046.FontSize = Enum.FontSize.Size14
-	NG1046.Text = dCD("S3K")
+	NG1046.Text = "F3X"
 	NG1046.TextColor3 = Color3.new(1, 1, 1)
 	NG1046.TextStrokeTransparency = 0.89999997615814
 	NG1046.TextWrapped = true
@@ -14971,7 +15171,7 @@ do
 	NG1047.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1047.BackgroundTransparency = 1
 	NG1047.BorderSizePixel = 0
-	NG1047.Name = dCD("Fgnghf")
+	NG1047.Name = "Status"
 	NG1047.Position = UDim2.new(0, 0, 0, 30)
 	NG1047.Size = UDim2.new(0, 0, 0, 0)
 	NG1047.Parent = NG1042
@@ -14979,12 +15179,12 @@ do
 	NG1048.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1048.BackgroundTransparency = 1
 	NG1048.BorderSizePixel = 0
-	NG1048.Name = dCD("Ynory")
+	NG1048.Name = "Label"
 	NG1048.Position = UDim2.new(0, 14, 0, 0)
 	NG1048.Size = UDim2.new(0, 40, 0, 25)
 	NG1048.Font = Enum.Font.ArialBold
 	NG1048.FontSize = Enum.FontSize.Size10
-	NG1048.Text = dCD("Fgnghf")
+	NG1048.Text = "Status"
 	NG1048.TextColor3 = Color3.new(1, 1, 1)
 	NG1048.TextStrokeTransparency = 0
 	NG1048.TextWrapped = true
@@ -14994,14 +15194,14 @@ do
 	NG1049.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1049.BackgroundTransparency = 1
 	NG1049.BorderSizePixel = 0
-	NG1049.Name = dCD("Napuberq")
+	NG1049.Name = "Anchored"
 	NG1049.Position = UDim2.new(0, 55, 0, 0)
 	NG1049.Size = UDim2.new(0, 90, 0, 25)
 	NG1049.Parent = NG1047
 	NG1050 = Instance.new("Frame")
 	NG1050.BackgroundTransparency = 1
 	NG1050.BorderSizePixel = 0
-	NG1050.Name = dCD("FryrpgrqVaqvpngbe")
+	NG1050.Name = "SelectedIndicator"
 	NG1050.Position = UDim2.new(0, 9, 0, -2)
 	NG1050.Size = UDim2.new(1, -9, 0, 2)
 	NG1050.Parent = NG1049
@@ -15010,7 +15210,7 @@ do
 	NG1051.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1051.BackgroundTransparency = 1
 	NG1051.BorderSizePixel = 0
-	NG1051.Name = dCD("Ohggba")
+	NG1051.Name = "Button"
 	NG1051.Position = UDim2.new(0, 5, 0, 0)
 	NG1051.Selectable = true
 	NG1051.Size = UDim2.new(1, -10, 1, 0)
@@ -15018,7 +15218,7 @@ do
 	NG1051.ZIndex = 2
 	NG1051.Font = Enum.Font.Legacy
 	NG1051.FontSize = Enum.FontSize.Size8
-	NG1051.Text = dCD("")
+	NG1051.Text = ""
 	NG1051.TextTransparency = 1
 	NG1051.Parent = NG1049
 	NG1052 = Instance.new("ImageLabel")
@@ -15026,34 +15226,34 @@ do
 	NG1052.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1052.BackgroundTransparency = 1
 	NG1052.BorderSizePixel = 0
-	NG1052.Name = dCD("Onpxtebhaq")
+	NG1052.Name = "Background"
 	NG1052.Selectable = false
 	NG1052.Size = UDim2.new(1, 0, 1, 0)
-	NG1052.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG1052.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG1052.Parent = NG1049
 	NG1053 = Instance.new("TextLabel")
 	NG1053.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1053.BackgroundTransparency = 1
 	NG1053.BorderSizePixel = 0
-	NG1053.Name = dCD("Ynory")
+	NG1053.Name = "Label"
 	NG1053.Size = UDim2.new(1, 0, 1, 0)
 	NG1053.Font = Enum.Font.ArialBold
 	NG1053.FontSize = Enum.FontSize.Size10
-	NG1053.Text = dCD("NAPUBERQ")
+	NG1053.Text = "ANCHORED"
 	NG1053.TextColor3 = Color3.new(1, 1, 1)
 	NG1053.Parent = NG1049
 	NG1054 = Instance.new("Frame")
 	NG1054.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1054.BackgroundTransparency = 1
 	NG1054.BorderSizePixel = 0
-	NG1054.Name = dCD("Hanapuberq")
+	NG1054.Name = "Unanchored"
 	NG1054.Position = UDim2.new(0, 140, 0, 0)
 	NG1054.Size = UDim2.new(0, 90, 0, 25)
 	NG1054.Parent = NG1047
 	NG1055 = Instance.new("Frame")
 	NG1055.BackgroundTransparency = 1
 	NG1055.BorderSizePixel = 0
-	NG1055.Name = dCD("FryrpgrqVaqvpngbe")
+	NG1055.Name = "SelectedIndicator"
 	NG1055.Position = UDim2.new(0, 9, 0, -2)
 	NG1055.Size = UDim2.new(1, -9, 0, 2)
 	NG1055.Parent = NG1054
@@ -15062,7 +15262,7 @@ do
 	NG1056.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1056.BackgroundTransparency = 1
 	NG1056.BorderSizePixel = 0
-	NG1056.Name = dCD("Ohggba")
+	NG1056.Name = "Button"
 	NG1056.Position = UDim2.new(0, 5, 0, 0)
 	NG1056.Selectable = true
 	NG1056.Size = UDim2.new(1, -10, 1, 0)
@@ -15070,7 +15270,7 @@ do
 	NG1056.ZIndex = 2
 	NG1056.Font = Enum.Font.ArialBold
 	NG1056.FontSize = Enum.FontSize.Size8
-	NG1056.Text = dCD("")
+	NG1056.Text = ""
 	NG1056.TextTransparency = 1
 	NG1056.Parent = NG1054
 	NG1057 = Instance.new("ImageLabel")
@@ -15078,46 +15278,46 @@ do
 	NG1057.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1057.BackgroundTransparency = 1
 	NG1057.BorderSizePixel = 0
-	NG1057.Name = dCD("Onpxtebhaq")
+	NG1057.Name = "Background"
 	NG1057.Selectable = false
 	NG1057.Size = UDim2.new(1, 0, 1, 0)
-	NG1057.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG1057.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG1057.Parent = NG1054
 	NG1058 = Instance.new("TextLabel")
 	NG1058.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1058.BackgroundTransparency = 1
 	NG1058.BorderSizePixel = 0
-	NG1058.Name = dCD("Ynory")
+	NG1058.Name = "Label"
 	NG1058.Size = UDim2.new(1, 0, 1, 0)
 	NG1058.Font = Enum.Font.ArialBold
 	NG1058.FontSize = Enum.FontSize.Size10
-	NG1058.Text = dCD("HANAPUBERQ")
+	NG1058.Text = "UNANCHORED"
 	NG1058.TextColor3 = Color3.new(1, 1, 1)
 	NG1058.Parent = NG1054
 	NG1059 = Instance.new("Frame")
 	NG1059.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1059.BackgroundTransparency = 1
 	NG1059.BorderSizePixel = 0
-	NG1059.Name = dCD("Gvc")
+	NG1059.Name = "Tip"
 	NG1059.Position = UDim2.new(0, 5, 0, 70)
 	NG1059.Size = UDim2.new(1, -5, 0, 20)
 	NG1059.Parent = NG1042
 	NG1060 = Instance.new("Frame")
 	NG1060.BackgroundColor3 = Color3.new(0.0666667, 0.0666667, 0.0666667)
 	NG1060.BorderSizePixel = 0
-	NG1060.Name = dCD("PbybeOne")
+	NG1060.Name = "ColorBar"
 	NG1060.Size = UDim2.new(1, 0, 0, 2)
 	NG1060.Parent = NG1059
 	NG1061 = Instance.new("TextLabel")
 	NG1061.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1061.BackgroundTransparency = 1
 	NG1061.BorderSizePixel = 0
-	NG1061.Name = dCD("Grkg")
+	NG1061.Name = "Text"
 	NG1061.Position = UDim2.new(0, 0, 0, 2)
 	NG1061.Size = UDim2.new(1, 0, 0, 20)
 	NG1061.Font = Enum.Font.ArialBold
 	NG1061.FontSize = Enum.FontSize.Size10
-	NG1061.Text = dCD("GVC: Cerff Ragre gb dhvpxyl gbttyr gur napube.")
+	NG1061.Text = "TIP: Press Enter to quickly toggle the anchor."
 	NG1061.TextColor3 = Color3.new(1, 1, 1)
 	NG1061.TextStrokeTransparency = 0.5
 	NG1061.TextWrapped = true
@@ -15127,7 +15327,7 @@ do
 	NG1062.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1062.BackgroundTransparency = 1
 	NG1062.BorderSizePixel = 0
-	NG1062.Name = dCD("OGPbyyvfvbaGbbyTHV")
+	NG1062.Name = "BTCollisionToolGUI"
 	NG1062.Position = UDim2.new(0, 0, 0, 280)
 	NG1062.Size = UDim2.new(0, 200, 0, 90)
 	NG1062.Draggable = true
@@ -15136,13 +15336,13 @@ do
 	NG1063.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1063.BackgroundTransparency = 1
 	NG1063.BorderSizePixel = 0
-	NG1063.Name = dCD("Gvgyr")
+	NG1063.Name = "Title"
 	NG1063.Size = UDim2.new(1, 0, 0, 20)
 	NG1063.Parent = NG1062
 	NG1064 = Instance.new("Frame")
 	NG1064.BackgroundColor3 = Color3.new(0.0666667, 0.0666667, 0.0666667)
 	NG1064.BorderSizePixel = 0
-	NG1064.Name = dCD("PbybeOne")
+	NG1064.Name = "ColorBar"
 	NG1064.Position = UDim2.new(0, 5, 0, -3)
 	NG1064.Size = UDim2.new(1, -5, 0, 2)
 	NG1064.Parent = NG1063
@@ -15150,12 +15350,12 @@ do
 	NG1065.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1065.BackgroundTransparency = 1
 	NG1065.BorderSizePixel = 0
-	NG1065.Name = dCD("Ynory")
+	NG1065.Name = "Label"
 	NG1065.Position = UDim2.new(0, 10, 0, 1)
 	NG1065.Size = UDim2.new(1, -10, 1, 0)
 	NG1065.Font = Enum.Font.ArialBold
 	NG1065.FontSize = Enum.FontSize.Size10
-	NG1065.Text = dCD("PBYYVFVBA GBBY")
+	NG1065.Text = "COLLISION TOOL"
 	NG1065.TextColor3 = Color3.new(1, 1, 1)
 	NG1065.TextStrokeTransparency = 0
 	NG1065.TextWrapped = true
@@ -15165,12 +15365,12 @@ do
 	NG1066.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1066.BackgroundTransparency = 1
 	NG1066.BorderSizePixel = 0
-	NG1066.Name = dCD("S3KFvtangher")
+	NG1066.Name = "F3XSignature"
 	NG1066.Position = UDim2.new(0, 10, 0, 1)
 	NG1066.Size = UDim2.new(1, -10, 1, 0)
 	NG1066.Font = Enum.Font.ArialBold
 	NG1066.FontSize = Enum.FontSize.Size14
-	NG1066.Text = dCD("S3K")
+	NG1066.Text = "F3X"
 	NG1066.TextColor3 = Color3.new(1, 1, 1)
 	NG1066.TextStrokeTransparency = 0.89999997615814
 	NG1066.TextWrapped = true
@@ -15180,7 +15380,7 @@ do
 	NG1067.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1067.BackgroundTransparency = 1
 	NG1067.BorderSizePixel = 0
-	NG1067.Name = dCD("Fgnghf")
+	NG1067.Name = "Status"
 	NG1067.Position = UDim2.new(0, 0, 0, 30)
 	NG1067.Size = UDim2.new(0, 0, 0, 0)
 	NG1067.Parent = NG1062
@@ -15188,12 +15388,12 @@ do
 	NG1068.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1068.BackgroundTransparency = 1
 	NG1068.BorderSizePixel = 0
-	NG1068.Name = dCD("Ynory")
+	NG1068.Name = "Label"
 	NG1068.Position = UDim2.new(0, 14, 0, 0)
 	NG1068.Size = UDim2.new(0, 50, 0, 25)
 	NG1068.Font = Enum.Font.ArialBold
 	NG1068.FontSize = Enum.FontSize.Size10
-	NG1068.Text = dCD("Pbyyvfvba")
+	NG1068.Text = "Collision"
 	NG1068.TextColor3 = Color3.new(1, 1, 1)
 	NG1068.TextStrokeTransparency = 0
 	NG1068.TextWrapped = true
@@ -15203,14 +15403,14 @@ do
 	NG1069.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1069.BackgroundTransparency = 1
 	NG1069.BorderSizePixel = 0
-	NG1069.Name = dCD("Ba")
+	NG1069.Name = "On"
 	NG1069.Position = UDim2.new(0, 70, 0, 0)
 	NG1069.Size = UDim2.new(0, 50, 0, 25)
 	NG1069.Parent = NG1067
 	NG1070 = Instance.new("Frame")
 	NG1070.BackgroundTransparency = 1
 	NG1070.BorderSizePixel = 0
-	NG1070.Name = dCD("FryrpgrqVaqvpngbe")
+	NG1070.Name = "SelectedIndicator"
 	NG1070.Position = UDim2.new(0, 5, 0, -2)
 	NG1070.Size = UDim2.new(1, -5, 0, 2)
 	NG1070.Parent = NG1069
@@ -15219,7 +15419,7 @@ do
 	NG1071.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1071.BackgroundTransparency = 1
 	NG1071.BorderSizePixel = 0
-	NG1071.Name = dCD("Ohggba")
+	NG1071.Name = "Button"
 	NG1071.Position = UDim2.new(0, 5, 0, 0)
 	NG1071.Selectable = true
 	NG1071.Size = UDim2.new(1, -10, 1, 0)
@@ -15227,7 +15427,7 @@ do
 	NG1071.ZIndex = 2
 	NG1071.Font = Enum.Font.Legacy
 	NG1071.FontSize = Enum.FontSize.Size8
-	NG1071.Text = dCD("")
+	NG1071.Text = ""
 	NG1071.TextTransparency = 1
 	NG1071.Parent = NG1069
 	NG1072 = Instance.new("ImageLabel")
@@ -15235,34 +15435,34 @@ do
 	NG1072.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1072.BackgroundTransparency = 1
 	NG1072.BorderSizePixel = 0
-	NG1072.Name = dCD("Onpxtebhaq")
+	NG1072.Name = "Background"
 	NG1072.Selectable = false
 	NG1072.Size = UDim2.new(1, 0, 1, 0)
-	NG1072.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG1072.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG1072.Parent = NG1069
 	NG1073 = Instance.new("TextLabel")
 	NG1073.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1073.BackgroundTransparency = 1
 	NG1073.BorderSizePixel = 0
-	NG1073.Name = dCD("Ynory")
+	NG1073.Name = "Label"
 	NG1073.Size = UDim2.new(1, 0, 1, 0)
 	NG1073.Font = Enum.Font.ArialBold
 	NG1073.FontSize = Enum.FontSize.Size10
-	NG1073.Text = dCD("BA")
+	NG1073.Text = "ON"
 	NG1073.TextColor3 = Color3.new(1, 1, 1)
 	NG1073.Parent = NG1069
 	NG1074 = Instance.new("Frame")
 	NG1074.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1074.BackgroundTransparency = 1
 	NG1074.BorderSizePixel = 0
-	NG1074.Name = dCD("Bss")
+	NG1074.Name = "Off"
 	NG1074.Position = UDim2.new(0, 118, 0, 0)
 	NG1074.Size = UDim2.new(0, 50, 0, 25)
 	NG1074.Parent = NG1067
 	NG1075 = Instance.new("Frame")
 	NG1075.BackgroundTransparency = 1
 	NG1075.BorderSizePixel = 0
-	NG1075.Name = dCD("FryrpgrqVaqvpngbe")
+	NG1075.Name = "SelectedIndicator"
 	NG1075.Position = UDim2.new(0, 5, 0, -2)
 	NG1075.Size = UDim2.new(1, -5, 0, 2)
 	NG1075.Parent = NG1074
@@ -15271,7 +15471,7 @@ do
 	NG1076.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1076.BackgroundTransparency = 1
 	NG1076.BorderSizePixel = 0
-	NG1076.Name = dCD("Ohggba")
+	NG1076.Name = "Button"
 	NG1076.Position = UDim2.new(0, 5, 0, 0)
 	NG1076.Selectable = true
 	NG1076.Size = UDim2.new(1, -10, 1, 0)
@@ -15279,7 +15479,7 @@ do
 	NG1076.ZIndex = 2
 	NG1076.Font = Enum.Font.Legacy
 	NG1076.FontSize = Enum.FontSize.Size8
-	NG1076.Text = dCD("")
+	NG1076.Text = ""
 	NG1076.TextTransparency = 1
 	NG1076.Parent = NG1074
 	NG1077 = Instance.new("ImageLabel")
@@ -15287,46 +15487,46 @@ do
 	NG1077.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1077.BackgroundTransparency = 1
 	NG1077.BorderSizePixel = 0
-	NG1077.Name = dCD("Onpxtebhaq")
+	NG1077.Name = "Background"
 	NG1077.Selectable = false
 	NG1077.Size = UDim2.new(1, 0, 1, 0)
-	NG1077.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG1077.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG1077.Parent = NG1074
 	NG1078 = Instance.new("TextLabel")
 	NG1078.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1078.BackgroundTransparency = 1
 	NG1078.BorderSizePixel = 0
-	NG1078.Name = dCD("Ynory")
+	NG1078.Name = "Label"
 	NG1078.Size = UDim2.new(1, 0, 1, 0)
 	NG1078.Font = Enum.Font.ArialBold
 	NG1078.FontSize = Enum.FontSize.Size10
-	NG1078.Text = dCD("BSS")
+	NG1078.Text = "OFF"
 	NG1078.TextColor3 = Color3.new(1, 1, 1)
 	NG1078.Parent = NG1074
 	NG1079 = Instance.new("Frame")
 	NG1079.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1079.BackgroundTransparency = 1
 	NG1079.BorderSizePixel = 0
-	NG1079.Name = dCD("Gvc")
+	NG1079.Name = "Tip"
 	NG1079.Position = UDim2.new(0, 5, 0, 70)
 	NG1079.Size = UDim2.new(1, -5, 0, 20)
 	NG1079.Parent = NG1062
 	NG1080 = Instance.new("Frame")
 	NG1080.BackgroundColor3 = Color3.new(0.0666667, 0.0666667, 0.0666667)
 	NG1080.BorderSizePixel = 0
-	NG1080.Name = dCD("PbybeOne")
+	NG1080.Name = "ColorBar"
 	NG1080.Size = UDim2.new(1, 0, 0, 2)
 	NG1080.Parent = NG1079
 	NG1081 = Instance.new("TextLabel")
 	NG1081.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1081.BackgroundTransparency = 1
 	NG1081.BorderSizePixel = 0
-	NG1081.Name = dCD("Grkg")
+	NG1081.Name = "Text"
 	NG1081.Position = UDim2.new(0, 0, 0, 2)
 	NG1081.Size = UDim2.new(1, 0, 0, 20)
 	NG1081.Font = Enum.Font.ArialBold
 	NG1081.FontSize = Enum.FontSize.Size10
-	NG1081.Text = dCD("GVC: Cerff Ragre gb gbttyr pbyyvfvba.")
+	NG1081.Text = "TIP: Press Enter to toggle collision."
 	NG1081.TextColor3 = Color3.new(1, 1, 1)
 	NG1081.TextStrokeTransparency = 0.5
 	NG1081.TextWrapped = true
@@ -15336,7 +15536,7 @@ do
 	NG1082.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1082.BackgroundTransparency = 1
 	NG1082.BorderSizePixel = 0
-	NG1082.Name = dCD("OGQrpbengrGbbyTHV")
+	NG1082.Name = "BTDecorateToolGUI"
 	NG1082.Position = UDim2.new(0, 0, 0, 172)
 	NG1082.Size = UDim2.new(0, 200, 0, 125)
 	NG1082.Draggable = true
@@ -15344,7 +15544,7 @@ do
 	NG1083 = Instance.new("Frame")
 	NG1083.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG1083.BorderSizePixel = 0
-	NG1083.Name = dCD("ObggbzPbybeOne")
+	NG1083.Name = "BottomColorBar"
 	NG1083.Position = UDim2.new(0, 5, 1, -2)
 	NG1083.Size = UDim2.new(1, 0, 0, 2)
 	NG1083.Parent = NG1082
@@ -15352,13 +15552,13 @@ do
 	NG1084.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1084.BackgroundTransparency = 1
 	NG1084.BorderSizePixel = 0
-	NG1084.Name = dCD("Gvgyr")
+	NG1084.Name = "Title"
 	NG1084.Size = UDim2.new(1, 0, 0, 20)
 	NG1084.Parent = NG1082
 	NG1085 = Instance.new("Frame")
 	NG1085.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG1085.BorderSizePixel = 0
-	NG1085.Name = dCD("PbybeOne")
+	NG1085.Name = "ColorBar"
 	NG1085.Position = UDim2.new(0, 5, 0, -3)
 	NG1085.Size = UDim2.new(1, -5, 0, 2)
 	NG1085.Parent = NG1084
@@ -15366,12 +15566,12 @@ do
 	NG1086.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1086.BackgroundTransparency = 1
 	NG1086.BorderSizePixel = 0
-	NG1086.Name = dCD("Ynory")
+	NG1086.Name = "Label"
 	NG1086.Position = UDim2.new(0, 10, 0, 1)
 	NG1086.Size = UDim2.new(1, -10, 1, 0)
 	NG1086.Font = Enum.Font.ArialBold
 	NG1086.FontSize = Enum.FontSize.Size10
-	NG1086.Text = dCD("QRPBENGR GBBY")
+	NG1086.Text = "DECORATE TOOL"
 	NG1086.TextColor3 = Color3.new(1, 1, 1)
 	NG1086.TextStrokeTransparency = 0
 	NG1086.TextWrapped = true
@@ -15381,12 +15581,12 @@ do
 	NG1087.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1087.BackgroundTransparency = 1
 	NG1087.BorderSizePixel = 0
-	NG1087.Name = dCD("S3KFvtangher")
+	NG1087.Name = "F3XSignature"
 	NG1087.Position = UDim2.new(0, 10, 0, 1)
 	NG1087.Size = UDim2.new(1, -10, 1, 0)
 	NG1087.Font = Enum.Font.ArialBold
 	NG1087.FontSize = Enum.FontSize.Size14
-	NG1087.Text = dCD("S3K")
+	NG1087.Text = "F3X"
 	NG1087.TextColor3 = Color3.new(1, 1, 1)
 	NG1087.TextStrokeTransparency = 0.89999997615814
 	NG1087.TextWrapped = true
@@ -15396,19 +15596,19 @@ do
 	NG1088.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG1088.BackgroundTransparency = 0.67500001192093
 	NG1088.BorderSizePixel = 0
-	NG1088.Name = dCD("Fzbxr")
+	NG1088.Name = "Smoke"
 	NG1088.Position = UDim2.new(0, 10, 0, 30)
 	NG1088.Size = UDim2.new(1, -10, 0, 25)
 	NG1088.Parent = NG1082
 	NG1089 = Instance.new("TextLabel")
 	NG1089.BackgroundTransparency = 1
 	NG1089.BorderSizePixel = 0
-	NG1089.Name = dCD("Ynory")
+	NG1089.Name = "Label"
 	NG1089.Position = UDim2.new(0, 35, 0, 0)
 	NG1089.Size = UDim2.new(0, 60, 0, 25)
 	NG1089.Font = Enum.Font.ArialBold
 	NG1089.FontSize = Enum.FontSize.Size10
-	NG1089.Text = dCD("Fzbxr")
+	NG1089.Text = "Smoke"
 	NG1089.TextColor3 = Color3.new(1, 1, 1)
 	NG1089.TextStrokeTransparency = 0.5
 	NG1089.TextWrapped = true
@@ -15417,16 +15617,16 @@ do
 	NG1090 = Instance.new("ImageButton")
 	NG1090.BackgroundTransparency = 1
 	NG1090.BorderSizePixel = 0
-	NG1090.Name = dCD("NeebjOhggba")
+	NG1090.Name = "ArrowButton"
 	NG1090.Position = UDim2.new(0, 10, 0, 3)
 	NG1090.Size = UDim2.new(0, 20, 0, 20)
 	NG1090.Style = Enum.ButtonStyle.Custom
-	NG1090.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=134367382")
+	NG1090.Image = "http://www.roblox.com/asset/?id=134367382"
 	NG1090.Parent = NG1088
 	NG1091 = Instance.new("Frame")
 	NG1091.BackgroundColor3 = Color3.new(1, 0.682353, 0.235294)
 	NG1091.BorderSizePixel = 0
-	NG1091.Name = dCD("PbybeOne")
+	NG1091.Name = "ColorBar"
 	NG1091.Size = UDim2.new(0, 3, 1, 0)
 	NG1091.Parent = NG1088
 	NG1092 = Instance.new("TextButton")
@@ -15435,14 +15635,14 @@ do
 	NG1092.BackgroundTransparency = 0.75
 	NG1092.BorderColor3 = Color3.new(0, 0, 0)
 	NG1092.BorderSizePixel = 0
-	NG1092.Name = dCD("NqqOhggba")
+	NG1092.Name = "AddButton"
 	NG1092.Position = UDim2.new(1, -40, 0, 3)
 	NG1092.Selectable = true
 	NG1092.Size = UDim2.new(0, 35, 0, 19)
 	NG1092.Style = Enum.ButtonStyle.Custom
 	NG1092.Font = Enum.Font.ArialBold
 	NG1092.FontSize = Enum.FontSize.Size10
-	NG1092.Text = dCD("NQQ")
+	NG1092.Text = "ADD"
 	NG1092.TextColor3 = Color3.new(1, 1, 1)
 	NG1092.Parent = NG1088
 	NG1093 = Instance.new("TextButton")
@@ -15451,7 +15651,7 @@ do
 	NG1093.BackgroundTransparency = 0.75
 	NG1093.BorderColor3 = Color3.new(0, 0, 0)
 	NG1093.BorderSizePixel = 0
-	NG1093.Name = dCD("ErzbirOhggba")
+	NG1093.Name = "RemoveButton"
 	NG1093.Position = UDim2.new(0, 127, 0, 3)
 	NG1093.Selectable = true
 	NG1093.Size = UDim2.new(0, 58, 0, 19)
@@ -15459,21 +15659,21 @@ do
 	NG1093.Visible = false
 	NG1093.Font = Enum.Font.ArialBold
 	NG1093.FontSize = Enum.FontSize.Size10
-	NG1093.Text = dCD("ERZBIR")
+	NG1093.Text = "REMOVE"
 	NG1093.TextColor3 = Color3.new(1, 1, 1)
 	NG1093.Parent = NG1088
 	NG1094 = Instance.new("Frame")
 	NG1094.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG1094.BackgroundTransparency = 0.75
 	NG1094.BorderSizePixel = 0
-	NG1094.Name = dCD("Funqbj")
+	NG1094.Name = "Shadow"
 	NG1094.Position = UDim2.new(0, 0, 1, -1)
 	NG1094.Size = UDim2.new(1, 0, 0, 1)
 	NG1094.Parent = NG1088
 	NG1095 = Instance.new("Frame")
 	NG1095.BackgroundTransparency = 1
 	NG1095.BorderSizePixel = 0
-	NG1095.Name = dCD("Bcgvbaf")
+	NG1095.Name = "Options"
 	NG1095.Position = UDim2.new(0, 3, 1, 0)
 	NG1095.Size = UDim2.new(1, -3, 0, 0)
 	NG1095.ClipsDescendants = true
@@ -15482,7 +15682,7 @@ do
 	NG1096.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1096.BackgroundTransparency = 1
 	NG1096.BorderSizePixel = 0
-	NG1096.Name = dCD("PbybeBcgvba")
+	NG1096.Name = "ColorOption"
 	NG1096.Position = UDim2.new(0, 0, 0, 10)
 	NG1096.Size = UDim2.new(1, 0, 0, 25)
 	NG1096.Parent = NG1095
@@ -15490,11 +15690,11 @@ do
 	NG1097.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1097.BackgroundTransparency = 1
 	NG1097.BorderSizePixel = 0
-	NG1097.Name = dCD("Ynory")
+	NG1097.Name = "Label"
 	NG1097.Size = UDim2.new(0, 70, 0, 25)
 	NG1097.Font = Enum.Font.ArialBold
 	NG1097.FontSize = Enum.FontSize.Size10
-	NG1097.Text = dCD("Pbybe")
+	NG1097.Text = "Color"
 	NG1097.TextColor3 = Color3.new(1, 1, 1)
 	NG1097.TextStrokeTransparency = 0
 	NG1097.TextWrapped = true
@@ -15504,7 +15704,7 @@ do
 	NG1098.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1098.BackgroundTransparency = 1
 	NG1098.BorderSizePixel = 0
-	NG1098.Name = dCD("EVachg")
+	NG1098.Name = "RInput"
 	NG1098.Position = UDim2.new(0, 35, 0, 0)
 	NG1098.Size = UDim2.new(0, 38, 0, 25)
 	NG1098.Parent = NG1096
@@ -15520,22 +15720,22 @@ do
 	NG1099.ZIndex = 2
 	NG1099.Font = Enum.Font.Legacy
 	NG1099.FontSize = Enum.FontSize.Size8
-	NG1099.Text = dCD("")
+	NG1099.Text = ""
 	NG1099.Parent = NG1098
 	NG1100 = Instance.new("ImageLabel")
 	NG1100.Active = false
 	NG1100.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1100.BackgroundTransparency = 1
 	NG1100.BorderSizePixel = 0
-	NG1100.Name = dCD("Onpxtebhaq")
+	NG1100.Name = "Background"
 	NG1100.Selectable = false
 	NG1100.Size = UDim2.new(1, 0, 1, 0)
-	NG1100.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG1100.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG1100.Parent = NG1098
 	NG1101 = Instance.new("Frame")
 	NG1101.BackgroundColor3 = Color3.new(1, 0, 0)
 	NG1101.BorderSizePixel = 0
-	NG1101.Name = dCD("FryrpgrqVaqvpngbe")
+	NG1101.Name = "SelectedIndicator"
 	NG1101.Position = UDim2.new(0, 3, 0, -2)
 	NG1101.Size = UDim2.new(1, -3, 0, 2)
 	NG1101.Parent = NG1098
@@ -15547,14 +15747,14 @@ do
 	NG1102.Size = UDim2.new(1, -10, 1, 0)
 	NG1102.Font = Enum.Font.ArialBold
 	NG1102.FontSize = Enum.FontSize.Size10
-	NG1102.Text = dCD("255")
+	NG1102.Text = "255"
 	NG1102.TextColor3 = Color3.new(1, 1, 1)
 	NG1102.Parent = NG1098
 	NG1103 = Instance.new("Frame")
 	NG1103.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1103.BackgroundTransparency = 1
 	NG1103.BorderSizePixel = 0
-	NG1103.Name = dCD("TVachg")
+	NG1103.Name = "GInput"
 	NG1103.Position = UDim2.new(0, 72, 0, 0)
 	NG1103.Size = UDim2.new(0, 38, 0, 25)
 	NG1103.Parent = NG1096
@@ -15570,22 +15770,22 @@ do
 	NG1104.ZIndex = 2
 	NG1104.Font = Enum.Font.Legacy
 	NG1104.FontSize = Enum.FontSize.Size8
-	NG1104.Text = dCD("")
+	NG1104.Text = ""
 	NG1104.Parent = NG1103
 	NG1105 = Instance.new("ImageLabel")
 	NG1105.Active = false
 	NG1105.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1105.BackgroundTransparency = 1
 	NG1105.BorderSizePixel = 0
-	NG1105.Name = dCD("Onpxtebhaq")
+	NG1105.Name = "Background"
 	NG1105.Selectable = false
 	NG1105.Size = UDim2.new(1, 0, 1, 0)
-	NG1105.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG1105.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG1105.Parent = NG1103
 	NG1106 = Instance.new("Frame")
 	NG1106.BackgroundColor3 = Color3.new(0, 1, 0)
 	NG1106.BorderSizePixel = 0
-	NG1106.Name = dCD("FryrpgrqVaqvpngbe")
+	NG1106.Name = "SelectedIndicator"
 	NG1106.Position = UDim2.new(0, 3, 0, -2)
 	NG1106.Size = UDim2.new(1, -3, 0, 2)
 	NG1106.Parent = NG1103
@@ -15597,14 +15797,14 @@ do
 	NG1107.Size = UDim2.new(1, -10, 1, 0)
 	NG1107.Font = Enum.Font.ArialBold
 	NG1107.FontSize = Enum.FontSize.Size10
-	NG1107.Text = dCD("255")
+	NG1107.Text = "255"
 	NG1107.TextColor3 = Color3.new(1, 1, 1)
 	NG1107.Parent = NG1103
 	NG1108 = Instance.new("Frame")
 	NG1108.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1108.BackgroundTransparency = 1
 	NG1108.BorderSizePixel = 0
-	NG1108.Name = dCD("OVachg")
+	NG1108.Name = "BInput"
 	NG1108.Position = UDim2.new(0, 109, 0, 0)
 	NG1108.Size = UDim2.new(0, 38, 0, 25)
 	NG1108.Parent = NG1096
@@ -15620,22 +15820,22 @@ do
 	NG1109.ZIndex = 2
 	NG1109.Font = Enum.Font.Legacy
 	NG1109.FontSize = Enum.FontSize.Size8
-	NG1109.Text = dCD("")
+	NG1109.Text = ""
 	NG1109.Parent = NG1108
 	NG1110 = Instance.new("ImageLabel")
 	NG1110.Active = false
 	NG1110.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1110.BackgroundTransparency = 1
 	NG1110.BorderSizePixel = 0
-	NG1110.Name = dCD("Onpxtebhaq")
+	NG1110.Name = "Background"
 	NG1110.Selectable = false
 	NG1110.Size = UDim2.new(1, 0, 1, 0)
-	NG1110.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG1110.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG1110.Parent = NG1108
 	NG1111 = Instance.new("Frame")
 	NG1111.BackgroundColor3 = Color3.new(0, 0, 1)
 	NG1111.BorderSizePixel = 0
-	NG1111.Name = dCD("FryrpgrqVaqvpngbe")
+	NG1111.Name = "SelectedIndicator"
 	NG1111.Position = UDim2.new(0, 3, 0, -2)
 	NG1111.Size = UDim2.new(1, -3, 0, 2)
 	NG1111.Parent = NG1108
@@ -15647,24 +15847,24 @@ do
 	NG1112.Size = UDim2.new(1, -10, 1, 0)
 	NG1112.Font = Enum.Font.ArialBold
 	NG1112.FontSize = Enum.FontSize.Size10
-	NG1112.Text = dCD("255")
+	NG1112.Text = "255"
 	NG1112.TextColor3 = Color3.new(1, 1, 1)
 	NG1112.Parent = NG1108
 	NG1113 = Instance.new("ImageButton")
 	NG1113.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG1113.BackgroundTransparency = 0.40000000596046
 	NG1113.BorderSizePixel = 0
-	NG1113.Name = dCD("UFICvpxre")
+	NG1113.Name = "HSVPicker"
 	NG1113.Position = UDim2.new(0, 160, 0, -2)
 	NG1113.Size = UDim2.new(0, 27, 0, 27)
 	NG1113.Style = Enum.ButtonStyle.Custom
-	NG1113.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=141313631")
+	NG1113.Image = "http://www.roblox.com/asset/?id=141313631"
 	NG1113.Parent = NG1096
 	NG1114 = Instance.new("Frame")
 	NG1114.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG1114.BackgroundTransparency = 0.75
 	NG1114.BorderSizePixel = 0
-	NG1114.Name = dCD("Funqbj")
+	NG1114.Name = "Shadow"
 	NG1114.Position = UDim2.new(0, 0, 1, -2)
 	NG1114.Size = UDim2.new(1, 0, 0, 2)
 	NG1114.Parent = NG1113
@@ -15673,7 +15873,7 @@ do
 	NG1115.BackgroundTransparency = 0.5
 	NG1115.BorderColor3 = Color3.new(0.380392, 0.380392, 0.380392)
 	NG1115.BorderSizePixel = 0
-	NG1115.Name = dCD("Frcnengbe")
+	NG1115.Name = "Separator"
 	NG1115.Position = UDim2.new(0, 151, 0, 4)
 	NG1115.Size = UDim2.new(0, 4, 0, 4)
 	NG1115.Parent = NG1096
@@ -15682,7 +15882,7 @@ do
 	NG1116.BackgroundTransparency = 0.5
 	NG1116.BorderColor3 = Color3.new(0.380392, 0.380392, 0.380392)
 	NG1116.BorderSizePixel = 0
-	NG1116.Name = dCD("Frcnengbe")
+	NG1116.Name = "Separator"
 	NG1116.Position = UDim2.new(0, 151, 0, 16)
 	NG1116.Size = UDim2.new(0, 4, 0, 4)
 	NG1116.Parent = NG1096
@@ -15691,7 +15891,7 @@ do
 	NG1117.BackgroundTransparency = 0.5
 	NG1117.BorderColor3 = Color3.new(0.380392, 0.380392, 0.380392)
 	NG1117.BorderSizePixel = 0
-	NG1117.Name = dCD("Frcnengbe")
+	NG1117.Name = "Separator"
 	NG1117.Position = UDim2.new(0, 151, 0, 10)
 	NG1117.Size = UDim2.new(0, 4, 0, 4)
 	NG1117.Parent = NG1096
@@ -15699,7 +15899,7 @@ do
 	NG1118.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1118.BackgroundTransparency = 1
 	NG1118.BorderSizePixel = 0
-	NG1118.Name = dCD("BcnpvglBcgvba")
+	NG1118.Name = "OpacityOption"
 	NG1118.Position = UDim2.new(0, 0, 0, 45)
 	NG1118.Size = UDim2.new(1, 0, 0, 25)
 	NG1118.Parent = NG1095
@@ -15707,11 +15907,11 @@ do
 	NG1119.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1119.BackgroundTransparency = 1
 	NG1119.BorderSizePixel = 0
-	NG1119.Name = dCD("Ynory")
+	NG1119.Name = "Label"
 	NG1119.Size = UDim2.new(0, 70, 0, 25)
 	NG1119.Font = Enum.Font.ArialBold
 	NG1119.FontSize = Enum.FontSize.Size10
-	NG1119.Text = dCD("Bcnpvgl")
+	NG1119.Text = "Opacity"
 	NG1119.TextColor3 = Color3.new(1, 1, 1)
 	NG1119.TextStrokeTransparency = 0
 	NG1119.TextWrapped = true
@@ -15721,7 +15921,7 @@ do
 	NG1120.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1120.BackgroundTransparency = 1
 	NG1120.BorderSizePixel = 0
-	NG1120.Name = dCD("Vachg")
+	NG1120.Name = "Input"
 	NG1120.Position = UDim2.new(0, 45, 0, 0)
 	NG1120.Size = UDim2.new(0, 38, 0, 25)
 	NG1120.Parent = NG1118
@@ -15737,21 +15937,21 @@ do
 	NG1121.ZIndex = 2
 	NG1121.Font = Enum.Font.Legacy
 	NG1121.FontSize = Enum.FontSize.Size8
-	NG1121.Text = dCD("")
+	NG1121.Text = ""
 	NG1121.Parent = NG1120
 	NG1122 = Instance.new("ImageLabel")
 	NG1122.Active = false
 	NG1122.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1122.BackgroundTransparency = 1
 	NG1122.BorderSizePixel = 0
-	NG1122.Name = dCD("Onpxtebhaq")
+	NG1122.Name = "Background"
 	NG1122.Selectable = false
 	NG1122.Size = UDim2.new(1, 0, 1, 0)
-	NG1122.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG1122.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG1122.Parent = NG1120
 	NG1123 = Instance.new("Frame")
 	NG1123.BorderSizePixel = 0
-	NG1123.Name = dCD("FryrpgrqVaqvpngbe")
+	NG1123.Name = "SelectedIndicator"
 	NG1123.Position = UDim2.new(0, 3, 0, -2)
 	NG1123.Size = UDim2.new(1, -3, 0, 2)
 	NG1123.Parent = NG1120
@@ -15763,14 +15963,14 @@ do
 	NG1124.Size = UDim2.new(1, -10, 1, 0)
 	NG1124.Font = Enum.Font.ArialBold
 	NG1124.FontSize = Enum.FontSize.Size10
-	NG1124.Text = dCD("1")
+	NG1124.Text = "1"
 	NG1124.TextColor3 = Color3.new(1, 1, 1)
 	NG1124.Parent = NG1120
 	NG1125 = Instance.new("Frame")
 	NG1125.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1125.BackgroundTransparency = 1
 	NG1125.BorderSizePixel = 0
-	NG1125.Name = dCD("IrybpvglBcgvba")
+	NG1125.Name = "VelocityOption"
 	NG1125.Position = UDim2.new(0, 100, 0, 45)
 	NG1125.Size = UDim2.new(1, -115, 0, 25)
 	NG1125.Parent = NG1095
@@ -15778,11 +15978,11 @@ do
 	NG1126.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1126.BackgroundTransparency = 1
 	NG1126.BorderSizePixel = 0
-	NG1126.Name = dCD("Ynory")
+	NG1126.Name = "Label"
 	NG1126.Size = UDim2.new(0, 70, 0, 25)
 	NG1126.Font = Enum.Font.ArialBold
 	NG1126.FontSize = Enum.FontSize.Size10
-	NG1126.Text = dCD("Irybpvgl")
+	NG1126.Text = "Velocity"
 	NG1126.TextColor3 = Color3.new(1, 1, 1)
 	NG1126.TextStrokeTransparency = 0
 	NG1126.TextWrapped = true
@@ -15792,7 +15992,7 @@ do
 	NG1127.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1127.BackgroundTransparency = 1
 	NG1127.BorderSizePixel = 0
-	NG1127.Name = dCD("Vachg")
+	NG1127.Name = "Input"
 	NG1127.Position = UDim2.new(0, 45, 0, 0)
 	NG1127.Size = UDim2.new(0, 38, 0, 25)
 	NG1127.Parent = NG1125
@@ -15808,21 +16008,21 @@ do
 	NG1128.ZIndex = 2
 	NG1128.Font = Enum.Font.Legacy
 	NG1128.FontSize = Enum.FontSize.Size8
-	NG1128.Text = dCD("")
+	NG1128.Text = ""
 	NG1128.Parent = NG1127
 	NG1129 = Instance.new("ImageLabel")
 	NG1129.Active = false
 	NG1129.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1129.BackgroundTransparency = 1
 	NG1129.BorderSizePixel = 0
-	NG1129.Name = dCD("Onpxtebhaq")
+	NG1129.Name = "Background"
 	NG1129.Selectable = false
 	NG1129.Size = UDim2.new(1, 0, 1, 0)
-	NG1129.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG1129.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG1129.Parent = NG1127
 	NG1130 = Instance.new("Frame")
 	NG1130.BorderSizePixel = 0
-	NG1130.Name = dCD("FryrpgrqVaqvpngbe")
+	NG1130.Name = "SelectedIndicator"
 	NG1130.Position = UDim2.new(0, 3, 0, -2)
 	NG1130.Size = UDim2.new(1, -3, 0, 2)
 	NG1130.Parent = NG1127
@@ -15834,14 +16034,14 @@ do
 	NG1131.Size = UDim2.new(1, -10, 1, 0)
 	NG1131.Font = Enum.Font.ArialBold
 	NG1131.FontSize = Enum.FontSize.Size10
-	NG1131.Text = dCD("90")
+	NG1131.Text = "90"
 	NG1131.TextColor3 = Color3.new(1, 1, 1)
 	NG1131.Parent = NG1127
 	NG1132 = Instance.new("Frame")
 	NG1132.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1132.BackgroundTransparency = 1
 	NG1132.BorderSizePixel = 0
-	NG1132.Name = dCD("FvmrBcgvba")
+	NG1132.Name = "SizeOption"
 	NG1132.Position = UDim2.new(0, 0, 0, 80)
 	NG1132.Size = UDim2.new(1, 0, 0, 25)
 	NG1132.Parent = NG1095
@@ -15849,11 +16049,11 @@ do
 	NG1133.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1133.BackgroundTransparency = 1
 	NG1133.BorderSizePixel = 0
-	NG1133.Name = dCD("Ynory")
+	NG1133.Name = "Label"
 	NG1133.Size = UDim2.new(0, 70, 0, 25)
 	NG1133.Font = Enum.Font.ArialBold
 	NG1133.FontSize = Enum.FontSize.Size10
-	NG1133.Text = dCD("Fvmr")
+	NG1133.Text = "Size"
 	NG1133.TextColor3 = Color3.new(1, 1, 1)
 	NG1133.TextStrokeTransparency = 0
 	NG1133.TextWrapped = true
@@ -15863,7 +16063,7 @@ do
 	NG1134.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1134.BackgroundTransparency = 1
 	NG1134.BorderSizePixel = 0
-	NG1134.Name = dCD("Vachg")
+	NG1134.Name = "Input"
 	NG1134.Position = UDim2.new(0, 30, 0, 0)
 	NG1134.Size = UDim2.new(0, 38, 0, 25)
 	NG1134.Parent = NG1132
@@ -15879,21 +16079,21 @@ do
 	NG1135.ZIndex = 2
 	NG1135.Font = Enum.Font.Legacy
 	NG1135.FontSize = Enum.FontSize.Size8
-	NG1135.Text = dCD("")
+	NG1135.Text = ""
 	NG1135.Parent = NG1134
 	NG1136 = Instance.new("ImageLabel")
 	NG1136.Active = false
 	NG1136.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1136.BackgroundTransparency = 1
 	NG1136.BorderSizePixel = 0
-	NG1136.Name = dCD("Onpxtebhaq")
+	NG1136.Name = "Background"
 	NG1136.Selectable = false
 	NG1136.Size = UDim2.new(1, 0, 1, 0)
-	NG1136.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG1136.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG1136.Parent = NG1134
 	NG1137 = Instance.new("Frame")
 	NG1137.BorderSizePixel = 0
-	NG1137.Name = dCD("FryrpgrqVaqvpngbe")
+	NG1137.Name = "SelectedIndicator"
 	NG1137.Position = UDim2.new(0, 3, 0, -2)
 	NG1137.Size = UDim2.new(1, -3, 0, 2)
 	NG1137.Parent = NG1134
@@ -15905,18 +16105,18 @@ do
 	NG1138.Size = UDim2.new(1, -10, 1, 0)
 	NG1138.Font = Enum.Font.ArialBold
 	NG1138.FontSize = Enum.FontSize.Size10
-	NG1138.Text = dCD("16")
+	NG1138.Text = "16"
 	NG1138.TextColor3 = Color3.new(1, 1, 1)
 	NG1138.Parent = NG1134
 	NG1139 = Instance.new("TextLabel")
 	NG1139.BackgroundTransparency = 1
 	NG1139.BorderSizePixel = 0
-	NG1139.Name = dCD("FryrpgAbgr")
+	NG1139.Name = "SelectNote"
 	NG1139.Position = UDim2.new(0, 10, 0, 27)
 	NG1139.Size = UDim2.new(1, -10, 0, 15)
 	NG1139.Visible = false
 	NG1139.FontSize = Enum.FontSize.Size14
-	NG1139.Text = dCD("Fryrpg fbzrguvat gb hfr guvf gbby.")
+	NG1139.Text = "Select something to use this tool."
 	NG1139.TextColor3 = Color3.new(1, 1, 1)
 	NG1139.TextScaled = true
 	NG1139.TextStrokeTransparency = 0.5
@@ -15927,19 +16127,19 @@ do
 	NG1140.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG1140.BackgroundTransparency = 0.67500001192093
 	NG1140.BorderSizePixel = 0
-	NG1140.Name = dCD("Sver")
+	NG1140.Name = "Fire"
 	NG1140.Position = UDim2.new(0, 10, 0, 60)
 	NG1140.Size = UDim2.new(1, -10, 0, 25)
 	NG1140.Parent = NG1082
 	NG1141 = Instance.new("TextLabel")
 	NG1141.BackgroundTransparency = 1
 	NG1141.BorderSizePixel = 0
-	NG1141.Name = dCD("Ynory")
+	NG1141.Name = "Label"
 	NG1141.Position = UDim2.new(0, 35, 0, 0)
 	NG1141.Size = UDim2.new(0, 60, 0, 25)
 	NG1141.Font = Enum.Font.ArialBold
 	NG1141.FontSize = Enum.FontSize.Size10
-	NG1141.Text = dCD("Sver")
+	NG1141.Text = "Fire"
 	NG1141.TextColor3 = Color3.new(1, 1, 1)
 	NG1141.TextStrokeTransparency = 0.5
 	NG1141.TextWrapped = true
@@ -15948,16 +16148,16 @@ do
 	NG1142 = Instance.new("ImageButton")
 	NG1142.BackgroundTransparency = 1
 	NG1142.BorderSizePixel = 0
-	NG1142.Name = dCD("NeebjOhggba")
+	NG1142.Name = "ArrowButton"
 	NG1142.Position = UDim2.new(0, 10, 0, 3)
 	NG1142.Size = UDim2.new(0, 20, 0, 20)
 	NG1142.Style = Enum.ButtonStyle.Custom
-	NG1142.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=134367382")
+	NG1142.Image = "http://www.roblox.com/asset/?id=134367382"
 	NG1142.Parent = NG1140
 	NG1143 = Instance.new("Frame")
 	NG1143.BackgroundColor3 = Color3.new(0.85098, 0, 1)
 	NG1143.BorderSizePixel = 0
-	NG1143.Name = dCD("PbybeOne")
+	NG1143.Name = "ColorBar"
 	NG1143.Size = UDim2.new(0, 3, 1, 0)
 	NG1143.Parent = NG1140
 	NG1144 = Instance.new("TextButton")
@@ -15966,14 +16166,14 @@ do
 	NG1144.BackgroundTransparency = 0.75
 	NG1144.BorderColor3 = Color3.new(0, 0, 0)
 	NG1144.BorderSizePixel = 0
-	NG1144.Name = dCD("NqqOhggba")
+	NG1144.Name = "AddButton"
 	NG1144.Position = UDim2.new(1, -40, 0, 3)
 	NG1144.Selectable = true
 	NG1144.Size = UDim2.new(0, 35, 0, 19)
 	NG1144.Style = Enum.ButtonStyle.Custom
 	NG1144.Font = Enum.Font.ArialBold
 	NG1144.FontSize = Enum.FontSize.Size10
-	NG1144.Text = dCD("NQQ")
+	NG1144.Text = "ADD"
 	NG1144.TextColor3 = Color3.new(1, 1, 1)
 	NG1144.Parent = NG1140
 	NG1145 = Instance.new("TextButton")
@@ -15982,7 +16182,7 @@ do
 	NG1145.BackgroundTransparency = 0.75
 	NG1145.BorderColor3 = Color3.new(0, 0, 0)
 	NG1145.BorderSizePixel = 0
-	NG1145.Name = dCD("ErzbirOhggba")
+	NG1145.Name = "RemoveButton"
 	NG1145.Position = UDim2.new(0, 90, 0, 3)
 	NG1145.Selectable = true
 	NG1145.Size = UDim2.new(0, 58, 0, 19)
@@ -15990,21 +16190,21 @@ do
 	NG1145.Visible = false
 	NG1145.Font = Enum.Font.ArialBold
 	NG1145.FontSize = Enum.FontSize.Size10
-	NG1145.Text = dCD("ERZBIR")
+	NG1145.Text = "REMOVE"
 	NG1145.TextColor3 = Color3.new(1, 1, 1)
 	NG1145.Parent = NG1140
 	NG1146 = Instance.new("Frame")
 	NG1146.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG1146.BackgroundTransparency = 0.75
 	NG1146.BorderSizePixel = 0
-	NG1146.Name = dCD("Funqbj")
+	NG1146.Name = "Shadow"
 	NG1146.Position = UDim2.new(0, 0, 1, -1)
 	NG1146.Size = UDim2.new(1, 0, 0, 1)
 	NG1146.Parent = NG1140
 	NG1147 = Instance.new("Frame")
 	NG1147.BackgroundTransparency = 1
 	NG1147.BorderSizePixel = 0
-	NG1147.Name = dCD("Bcgvbaf")
+	NG1147.Name = "Options"
 	NG1147.Position = UDim2.new(0, 3, 1, 0)
 	NG1147.Size = UDim2.new(1, -3, 0, 0)
 	NG1147.ClipsDescendants = true
@@ -16013,7 +16213,7 @@ do
 	NG1148.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1148.BackgroundTransparency = 1
 	NG1148.BorderSizePixel = 0
-	NG1148.Name = dCD("PbybeBcgvba")
+	NG1148.Name = "ColorOption"
 	NG1148.Position = UDim2.new(0, 0, 0, 10)
 	NG1148.Size = UDim2.new(1, 0, 0, 25)
 	NG1148.Parent = NG1147
@@ -16021,11 +16221,11 @@ do
 	NG1149.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1149.BackgroundTransparency = 1
 	NG1149.BorderSizePixel = 0
-	NG1149.Name = dCD("Ynory")
+	NG1149.Name = "Label"
 	NG1149.Size = UDim2.new(0, 70, 0, 25)
 	NG1149.Font = Enum.Font.ArialBold
 	NG1149.FontSize = Enum.FontSize.Size10
-	NG1149.Text = dCD("Pbybe")
+	NG1149.Text = "Color"
 	NG1149.TextColor3 = Color3.new(1, 1, 1)
 	NG1149.TextStrokeTransparency = 0
 	NG1149.TextWrapped = true
@@ -16035,7 +16235,7 @@ do
 	NG1150.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1150.BackgroundTransparency = 1
 	NG1150.BorderSizePixel = 0
-	NG1150.Name = dCD("EVachg")
+	NG1150.Name = "RInput"
 	NG1150.Position = UDim2.new(0, 35, 0, 0)
 	NG1150.Size = UDim2.new(0, 38, 0, 25)
 	NG1150.Parent = NG1148
@@ -16051,22 +16251,22 @@ do
 	NG1151.ZIndex = 2
 	NG1151.Font = Enum.Font.Legacy
 	NG1151.FontSize = Enum.FontSize.Size8
-	NG1151.Text = dCD("")
+	NG1151.Text = ""
 	NG1151.Parent = NG1150
 	NG1152 = Instance.new("ImageLabel")
 	NG1152.Active = false
 	NG1152.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1152.BackgroundTransparency = 1
 	NG1152.BorderSizePixel = 0
-	NG1152.Name = dCD("Onpxtebhaq")
+	NG1152.Name = "Background"
 	NG1152.Selectable = false
 	NG1152.Size = UDim2.new(1, 0, 1, 0)
-	NG1152.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG1152.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG1152.Parent = NG1150
 	NG1153 = Instance.new("Frame")
 	NG1153.BackgroundColor3 = Color3.new(1, 0, 0)
 	NG1153.BorderSizePixel = 0
-	NG1153.Name = dCD("FryrpgrqVaqvpngbe")
+	NG1153.Name = "SelectedIndicator"
 	NG1153.Position = UDim2.new(0, 3, 0, -2)
 	NG1153.Size = UDim2.new(1, -3, 0, 2)
 	NG1153.Parent = NG1150
@@ -16078,14 +16278,14 @@ do
 	NG1154.Size = UDim2.new(1, -10, 1, 0)
 	NG1154.Font = Enum.Font.ArialBold
 	NG1154.FontSize = Enum.FontSize.Size10
-	NG1154.Text = dCD("255")
+	NG1154.Text = "255"
 	NG1154.TextColor3 = Color3.new(1, 1, 1)
 	NG1154.Parent = NG1150
 	NG1155 = Instance.new("Frame")
 	NG1155.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1155.BackgroundTransparency = 1
 	NG1155.BorderSizePixel = 0
-	NG1155.Name = dCD("TVachg")
+	NG1155.Name = "GInput"
 	NG1155.Position = UDim2.new(0, 72, 0, 0)
 	NG1155.Size = UDim2.new(0, 38, 0, 25)
 	NG1155.Parent = NG1148
@@ -16101,22 +16301,22 @@ do
 	NG1156.ZIndex = 2
 	NG1156.Font = Enum.Font.Legacy
 	NG1156.FontSize = Enum.FontSize.Size8
-	NG1156.Text = dCD("")
+	NG1156.Text = ""
 	NG1156.Parent = NG1155
 	NG1157 = Instance.new("ImageLabel")
 	NG1157.Active = false
 	NG1157.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1157.BackgroundTransparency = 1
 	NG1157.BorderSizePixel = 0
-	NG1157.Name = dCD("Onpxtebhaq")
+	NG1157.Name = "Background"
 	NG1157.Selectable = false
 	NG1157.Size = UDim2.new(1, 0, 1, 0)
-	NG1157.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG1157.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG1157.Parent = NG1155
 	NG1158 = Instance.new("Frame")
 	NG1158.BackgroundColor3 = Color3.new(0, 1, 0)
 	NG1158.BorderSizePixel = 0
-	NG1158.Name = dCD("FryrpgrqVaqvpngbe")
+	NG1158.Name = "SelectedIndicator"
 	NG1158.Position = UDim2.new(0, 3, 0, -2)
 	NG1158.Size = UDim2.new(1, -3, 0, 2)
 	NG1158.Parent = NG1155
@@ -16128,14 +16328,14 @@ do
 	NG1159.Size = UDim2.new(1, -10, 1, 0)
 	NG1159.Font = Enum.Font.ArialBold
 	NG1159.FontSize = Enum.FontSize.Size10
-	NG1159.Text = dCD("255")
+	NG1159.Text = "255"
 	NG1159.TextColor3 = Color3.new(1, 1, 1)
 	NG1159.Parent = NG1155
 	NG1160 = Instance.new("Frame")
 	NG1160.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1160.BackgroundTransparency = 1
 	NG1160.BorderSizePixel = 0
-	NG1160.Name = dCD("OVachg")
+	NG1160.Name = "BInput"
 	NG1160.Position = UDim2.new(0, 109, 0, 0)
 	NG1160.Size = UDim2.new(0, 38, 0, 25)
 	NG1160.Parent = NG1148
@@ -16151,22 +16351,22 @@ do
 	NG1161.ZIndex = 2
 	NG1161.Font = Enum.Font.Legacy
 	NG1161.FontSize = Enum.FontSize.Size8
-	NG1161.Text = dCD("")
+	NG1161.Text = ""
 	NG1161.Parent = NG1160
 	NG1162 = Instance.new("ImageLabel")
 	NG1162.Active = false
 	NG1162.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1162.BackgroundTransparency = 1
 	NG1162.BorderSizePixel = 0
-	NG1162.Name = dCD("Onpxtebhaq")
+	NG1162.Name = "Background"
 	NG1162.Selectable = false
 	NG1162.Size = UDim2.new(1, 0, 1, 0)
-	NG1162.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG1162.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG1162.Parent = NG1160
 	NG1163 = Instance.new("Frame")
 	NG1163.BackgroundColor3 = Color3.new(0, 0, 1)
 	NG1163.BorderSizePixel = 0
-	NG1163.Name = dCD("FryrpgrqVaqvpngbe")
+	NG1163.Name = "SelectedIndicator"
 	NG1163.Position = UDim2.new(0, 3, 0, -2)
 	NG1163.Size = UDim2.new(1, -3, 0, 2)
 	NG1163.Parent = NG1160
@@ -16178,25 +16378,25 @@ do
 	NG1164.Size = UDim2.new(1, -10, 1, 0)
 	NG1164.Font = Enum.Font.ArialBold
 	NG1164.FontSize = Enum.FontSize.Size10
-	NG1164.Text = dCD("255")
+	NG1164.Text = "255"
 	NG1164.TextColor3 = Color3.new(1, 1, 1)
 	NG1164.Parent = NG1160
 	NG1165 = Instance.new("ImageButton")
 	NG1165.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG1165.BackgroundTransparency = 0.40000000596046
 	NG1165.BorderSizePixel = 0
-	NG1165.Name = dCD("UFICvpxre")
+	NG1165.Name = "HSVPicker"
 	NG1165.Position = UDim2.new(0, 160, 0, -2)
 	NG1165.Size = UDim2.new(0, 27, 0, 27)
 	NG1165.Style = Enum.ButtonStyle.Custom
 	NG1165.ZIndex = 2
-	NG1165.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=141313631")
+	NG1165.Image = "http://www.roblox.com/asset/?id=141313631"
 	NG1165.Parent = NG1148
 	NG1166 = Instance.new("Frame")
 	NG1166.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG1166.BackgroundTransparency = 0.75
 	NG1166.BorderSizePixel = 0
-	NG1166.Name = dCD("Funqbj")
+	NG1166.Name = "Shadow"
 	NG1166.Position = UDim2.new(0, 0, 1, -2)
 	NG1166.Size = UDim2.new(1, 0, 0, 2)
 	NG1166.Parent = NG1165
@@ -16205,7 +16405,7 @@ do
 	NG1167.BackgroundTransparency = 0.5
 	NG1167.BorderColor3 = Color3.new(0.380392, 0.380392, 0.380392)
 	NG1167.BorderSizePixel = 0
-	NG1167.Name = dCD("Frcnengbe")
+	NG1167.Name = "Separator"
 	NG1167.Position = UDim2.new(0, 151, 0, 4)
 	NG1167.Size = UDim2.new(0, 4, 0, 4)
 	NG1167.Parent = NG1148
@@ -16214,7 +16414,7 @@ do
 	NG1168.BackgroundTransparency = 0.5
 	NG1168.BorderColor3 = Color3.new(0.380392, 0.380392, 0.380392)
 	NG1168.BorderSizePixel = 0
-	NG1168.Name = dCD("Frcnengbe")
+	NG1168.Name = "Separator"
 	NG1168.Position = UDim2.new(0, 151, 0, 16)
 	NG1168.Size = UDim2.new(0, 4, 0, 4)
 	NG1168.Parent = NG1148
@@ -16223,7 +16423,7 @@ do
 	NG1169.BackgroundTransparency = 0.5
 	NG1169.BorderColor3 = Color3.new(0.380392, 0.380392, 0.380392)
 	NG1169.BorderSizePixel = 0
-	NG1169.Name = dCD("Frcnengbe")
+	NG1169.Name = "Separator"
 	NG1169.Position = UDim2.new(0, 151, 0, 10)
 	NG1169.Size = UDim2.new(0, 4, 0, 4)
 	NG1169.Parent = NG1148
@@ -16231,7 +16431,7 @@ do
 	NG1170.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1170.BackgroundTransparency = 1
 	NG1170.BorderSizePixel = 0
-	NG1170.Name = dCD("UrngBcgvba")
+	NG1170.Name = "HeatOption"
 	NG1170.Position = UDim2.new(0, 0, 0, 80)
 	NG1170.Size = UDim2.new(1, 0, 0, 25)
 	NG1170.Parent = NG1147
@@ -16239,11 +16439,11 @@ do
 	NG1171.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1171.BackgroundTransparency = 1
 	NG1171.BorderSizePixel = 0
-	NG1171.Name = dCD("Ynory")
+	NG1171.Name = "Label"
 	NG1171.Size = UDim2.new(0, 70, 0, 25)
 	NG1171.Font = Enum.Font.ArialBold
 	NG1171.FontSize = Enum.FontSize.Size10
-	NG1171.Text = dCD("Urng")
+	NG1171.Text = "Heat"
 	NG1171.TextColor3 = Color3.new(1, 1, 1)
 	NG1171.TextStrokeTransparency = 0
 	NG1171.TextWrapped = true
@@ -16253,7 +16453,7 @@ do
 	NG1172.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1172.BackgroundTransparency = 1
 	NG1172.BorderSizePixel = 0
-	NG1172.Name = dCD("Vachg")
+	NG1172.Name = "Input"
 	NG1172.Position = UDim2.new(0, 34, 0, 0)
 	NG1172.Size = UDim2.new(0, 38, 0, 25)
 	NG1172.Parent = NG1170
@@ -16269,21 +16469,21 @@ do
 	NG1173.ZIndex = 2
 	NG1173.Font = Enum.Font.Legacy
 	NG1173.FontSize = Enum.FontSize.Size8
-	NG1173.Text = dCD("")
+	NG1173.Text = ""
 	NG1173.Parent = NG1172
 	NG1174 = Instance.new("ImageLabel")
 	NG1174.Active = false
 	NG1174.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1174.BackgroundTransparency = 1
 	NG1174.BorderSizePixel = 0
-	NG1174.Name = dCD("Onpxtebhaq")
+	NG1174.Name = "Background"
 	NG1174.Selectable = false
 	NG1174.Size = UDim2.new(1, 0, 1, 0)
-	NG1174.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG1174.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG1174.Parent = NG1172
 	NG1175 = Instance.new("Frame")
 	NG1175.BorderSizePixel = 0
-	NG1175.Name = dCD("FryrpgrqVaqvpngbe")
+	NG1175.Name = "SelectedIndicator"
 	NG1175.Position = UDim2.new(0, 3, 0, -2)
 	NG1175.Size = UDim2.new(1, -3, 0, 2)
 	NG1175.Parent = NG1172
@@ -16295,14 +16495,14 @@ do
 	NG1176.Size = UDim2.new(1, -10, 1, 0)
 	NG1176.Font = Enum.Font.ArialBold
 	NG1176.FontSize = Enum.FontSize.Size10
-	NG1176.Text = dCD("1")
+	NG1176.Text = "1"
 	NG1176.TextColor3 = Color3.new(1, 1, 1)
 	NG1176.Parent = NG1172
 	NG1177 = Instance.new("Frame")
 	NG1177.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1177.BackgroundTransparency = 1
 	NG1177.BorderSizePixel = 0
-	NG1177.Name = dCD("FvmrBcgvba")
+	NG1177.Name = "SizeOption"
 	NG1177.Position = UDim2.new(0, 90, 0, 80)
 	NG1177.Size = UDim2.new(1, 0, 0, 25)
 	NG1177.Parent = NG1147
@@ -16310,11 +16510,11 @@ do
 	NG1178.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1178.BackgroundTransparency = 1
 	NG1178.BorderSizePixel = 0
-	NG1178.Name = dCD("Ynory")
+	NG1178.Name = "Label"
 	NG1178.Size = UDim2.new(0, 70, 0, 25)
 	NG1178.Font = Enum.Font.ArialBold
 	NG1178.FontSize = Enum.FontSize.Size10
-	NG1178.Text = dCD("Fvmr")
+	NG1178.Text = "Size"
 	NG1178.TextColor3 = Color3.new(1, 1, 1)
 	NG1178.TextStrokeTransparency = 0
 	NG1178.TextWrapped = true
@@ -16324,7 +16524,7 @@ do
 	NG1179.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1179.BackgroundTransparency = 1
 	NG1179.BorderSizePixel = 0
-	NG1179.Name = dCD("Vachg")
+	NG1179.Name = "Input"
 	NG1179.Position = UDim2.new(0, 30, 0, 0)
 	NG1179.Size = UDim2.new(0, 38, 0, 25)
 	NG1179.Parent = NG1177
@@ -16340,21 +16540,21 @@ do
 	NG1180.ZIndex = 2
 	NG1180.Font = Enum.Font.Legacy
 	NG1180.FontSize = Enum.FontSize.Size8
-	NG1180.Text = dCD("")
+	NG1180.Text = ""
 	NG1180.Parent = NG1179
 	NG1181 = Instance.new("ImageLabel")
 	NG1181.Active = false
 	NG1181.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1181.BackgroundTransparency = 1
 	NG1181.BorderSizePixel = 0
-	NG1181.Name = dCD("Onpxtebhaq")
+	NG1181.Name = "Background"
 	NG1181.Selectable = false
 	NG1181.Size = UDim2.new(1, 0, 1, 0)
-	NG1181.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG1181.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG1181.Parent = NG1179
 	NG1182 = Instance.new("Frame")
 	NG1182.BorderSizePixel = 0
-	NG1182.Name = dCD("FryrpgrqVaqvpngbe")
+	NG1182.Name = "SelectedIndicator"
 	NG1182.Position = UDim2.new(0, 3, 0, -2)
 	NG1182.Size = UDim2.new(1, -3, 0, 2)
 	NG1182.Parent = NG1179
@@ -16366,14 +16566,14 @@ do
 	NG1183.Size = UDim2.new(1, -10, 1, 0)
 	NG1183.Font = Enum.Font.ArialBold
 	NG1183.FontSize = Enum.FontSize.Size10
-	NG1183.Text = dCD("16")
+	NG1183.Text = "16"
 	NG1183.TextColor3 = Color3.new(1, 1, 1)
 	NG1183.Parent = NG1179
 	NG1184 = Instance.new("Frame")
 	NG1184.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1184.BackgroundTransparency = 1
 	NG1184.BorderSizePixel = 0
-	NG1184.Name = dCD("FrpbaqPbybeBcgvba")
+	NG1184.Name = "SecondColorOption"
 	NG1184.Position = UDim2.new(0, 0, 0, 45)
 	NG1184.Size = UDim2.new(1, 0, 0, 25)
 	NG1184.Parent = NG1147
@@ -16381,11 +16581,11 @@ do
 	NG1185.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1185.BackgroundTransparency = 1
 	NG1185.BorderSizePixel = 0
-	NG1185.Name = dCD("Ynory")
+	NG1185.Name = "Label"
 	NG1185.Size = UDim2.new(0, 40, 0, 25)
 	NG1185.Font = Enum.Font.ArialBold
 	NG1185.FontSize = Enum.FontSize.Size10
-	NG1185.Text = dCD("2aq Pbybe")
+	NG1185.Text = "2nd Color"
 	NG1185.TextColor3 = Color3.new(1, 1, 1)
 	NG1185.TextStrokeTransparency = 0
 	NG1185.TextWrapped = true
@@ -16395,7 +16595,7 @@ do
 	NG1186.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1186.BackgroundTransparency = 1
 	NG1186.BorderSizePixel = 0
-	NG1186.Name = dCD("EVachg")
+	NG1186.Name = "RInput"
 	NG1186.Position = UDim2.new(0, 35, 0, 0)
 	NG1186.Size = UDim2.new(0, 38, 0, 25)
 	NG1186.Parent = NG1184
@@ -16411,22 +16611,22 @@ do
 	NG1187.ZIndex = 2
 	NG1187.Font = Enum.Font.Legacy
 	NG1187.FontSize = Enum.FontSize.Size8
-	NG1187.Text = dCD("")
+	NG1187.Text = ""
 	NG1187.Parent = NG1186
 	NG1188 = Instance.new("ImageLabel")
 	NG1188.Active = false
 	NG1188.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1188.BackgroundTransparency = 1
 	NG1188.BorderSizePixel = 0
-	NG1188.Name = dCD("Onpxtebhaq")
+	NG1188.Name = "Background"
 	NG1188.Selectable = false
 	NG1188.Size = UDim2.new(1, 0, 1, 0)
-	NG1188.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG1188.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG1188.Parent = NG1186
 	NG1189 = Instance.new("Frame")
 	NG1189.BackgroundColor3 = Color3.new(1, 0, 0)
 	NG1189.BorderSizePixel = 0
-	NG1189.Name = dCD("FryrpgrqVaqvpngbe")
+	NG1189.Name = "SelectedIndicator"
 	NG1189.Position = UDim2.new(0, 3, 0, -2)
 	NG1189.Size = UDim2.new(1, -3, 0, 2)
 	NG1189.Parent = NG1186
@@ -16438,14 +16638,14 @@ do
 	NG1190.Size = UDim2.new(1, -10, 1, 0)
 	NG1190.Font = Enum.Font.ArialBold
 	NG1190.FontSize = Enum.FontSize.Size10
-	NG1190.Text = dCD("255")
+	NG1190.Text = "255"
 	NG1190.TextColor3 = Color3.new(1, 1, 1)
 	NG1190.Parent = NG1186
 	NG1191 = Instance.new("Frame")
 	NG1191.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1191.BackgroundTransparency = 1
 	NG1191.BorderSizePixel = 0
-	NG1191.Name = dCD("TVachg")
+	NG1191.Name = "GInput"
 	NG1191.Position = UDim2.new(0, 72, 0, 0)
 	NG1191.Size = UDim2.new(0, 38, 0, 25)
 	NG1191.Parent = NG1184
@@ -16461,22 +16661,22 @@ do
 	NG1192.ZIndex = 2
 	NG1192.Font = Enum.Font.Legacy
 	NG1192.FontSize = Enum.FontSize.Size8
-	NG1192.Text = dCD("")
+	NG1192.Text = ""
 	NG1192.Parent = NG1191
 	NG1193 = Instance.new("ImageLabel")
 	NG1193.Active = false
 	NG1193.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1193.BackgroundTransparency = 1
 	NG1193.BorderSizePixel = 0
-	NG1193.Name = dCD("Onpxtebhaq")
+	NG1193.Name = "Background"
 	NG1193.Selectable = false
 	NG1193.Size = UDim2.new(1, 0, 1, 0)
-	NG1193.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG1193.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG1193.Parent = NG1191
 	NG1194 = Instance.new("Frame")
 	NG1194.BackgroundColor3 = Color3.new(0, 1, 0)
 	NG1194.BorderSizePixel = 0
-	NG1194.Name = dCD("FryrpgrqVaqvpngbe")
+	NG1194.Name = "SelectedIndicator"
 	NG1194.Position = UDim2.new(0, 3, 0, -2)
 	NG1194.Size = UDim2.new(1, -3, 0, 2)
 	NG1194.Parent = NG1191
@@ -16488,14 +16688,14 @@ do
 	NG1195.Size = UDim2.new(1, -10, 1, 0)
 	NG1195.Font = Enum.Font.ArialBold
 	NG1195.FontSize = Enum.FontSize.Size10
-	NG1195.Text = dCD("255")
+	NG1195.Text = "255"
 	NG1195.TextColor3 = Color3.new(1, 1, 1)
 	NG1195.Parent = NG1191
 	NG1196 = Instance.new("Frame")
 	NG1196.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1196.BackgroundTransparency = 1
 	NG1196.BorderSizePixel = 0
-	NG1196.Name = dCD("OVachg")
+	NG1196.Name = "BInput"
 	NG1196.Position = UDim2.new(0, 109, 0, 0)
 	NG1196.Size = UDim2.new(0, 38, 0, 25)
 	NG1196.Parent = NG1184
@@ -16511,22 +16711,22 @@ do
 	NG1197.ZIndex = 2
 	NG1197.Font = Enum.Font.Legacy
 	NG1197.FontSize = Enum.FontSize.Size8
-	NG1197.Text = dCD("")
+	NG1197.Text = ""
 	NG1197.Parent = NG1196
 	NG1198 = Instance.new("ImageLabel")
 	NG1198.Active = false
 	NG1198.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1198.BackgroundTransparency = 1
 	NG1198.BorderSizePixel = 0
-	NG1198.Name = dCD("Onpxtebhaq")
+	NG1198.Name = "Background"
 	NG1198.Selectable = false
 	NG1198.Size = UDim2.new(1, 0, 1, 0)
-	NG1198.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG1198.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG1198.Parent = NG1196
 	NG1199 = Instance.new("Frame")
 	NG1199.BackgroundColor3 = Color3.new(0, 0, 1)
 	NG1199.BorderSizePixel = 0
-	NG1199.Name = dCD("FryrpgrqVaqvpngbe")
+	NG1199.Name = "SelectedIndicator"
 	NG1199.Position = UDim2.new(0, 3, 0, -2)
 	NG1199.Size = UDim2.new(1, -3, 0, 2)
 	NG1199.Parent = NG1196
@@ -16538,25 +16738,25 @@ do
 	NG1200.Size = UDim2.new(1, -10, 1, 0)
 	NG1200.Font = Enum.Font.ArialBold
 	NG1200.FontSize = Enum.FontSize.Size10
-	NG1200.Text = dCD("255")
+	NG1200.Text = "255"
 	NG1200.TextColor3 = Color3.new(1, 1, 1)
 	NG1200.Parent = NG1196
 	NG1201 = Instance.new("ImageButton")
 	NG1201.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG1201.BackgroundTransparency = 0.40000000596046
 	NG1201.BorderSizePixel = 0
-	NG1201.Name = dCD("UFICvpxre")
+	NG1201.Name = "HSVPicker"
 	NG1201.Position = UDim2.new(0, 160, 0, -2)
 	NG1201.Size = UDim2.new(0, 27, 0, 27)
 	NG1201.Style = Enum.ButtonStyle.Custom
 	NG1201.ZIndex = 2
-	NG1201.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=141313631")
+	NG1201.Image = "http://www.roblox.com/asset/?id=141313631"
 	NG1201.Parent = NG1184
 	NG1202 = Instance.new("Frame")
 	NG1202.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG1202.BackgroundTransparency = 0.75
 	NG1202.BorderSizePixel = 0
-	NG1202.Name = dCD("Funqbj")
+	NG1202.Name = "Shadow"
 	NG1202.Position = UDim2.new(0, 0, 1, -2)
 	NG1202.Size = UDim2.new(1, 0, 0, 2)
 	NG1202.Parent = NG1201
@@ -16565,7 +16765,7 @@ do
 	NG1203.BackgroundTransparency = 0.5
 	NG1203.BorderColor3 = Color3.new(0.380392, 0.380392, 0.380392)
 	NG1203.BorderSizePixel = 0
-	NG1203.Name = dCD("Frcnengbe")
+	NG1203.Name = "Separator"
 	NG1203.Position = UDim2.new(0, 151, 0, 4)
 	NG1203.Size = UDim2.new(0, 4, 0, 4)
 	NG1203.Parent = NG1184
@@ -16574,7 +16774,7 @@ do
 	NG1204.BackgroundTransparency = 0.5
 	NG1204.BorderColor3 = Color3.new(0.380392, 0.380392, 0.380392)
 	NG1204.BorderSizePixel = 0
-	NG1204.Name = dCD("Frcnengbe")
+	NG1204.Name = "Separator"
 	NG1204.Position = UDim2.new(0, 151, 0, 16)
 	NG1204.Size = UDim2.new(0, 4, 0, 4)
 	NG1204.Parent = NG1184
@@ -16583,7 +16783,7 @@ do
 	NG1205.BackgroundTransparency = 0.5
 	NG1205.BorderColor3 = Color3.new(0.380392, 0.380392, 0.380392)
 	NG1205.BorderSizePixel = 0
-	NG1205.Name = dCD("Frcnengbe")
+	NG1205.Name = "Separator"
 	NG1205.Position = UDim2.new(0, 151, 0, 10)
 	NG1205.Size = UDim2.new(0, 4, 0, 4)
 	NG1205.Parent = NG1184
@@ -16591,19 +16791,19 @@ do
 	NG1206.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG1206.BackgroundTransparency = 0.67500001192093
 	NG1206.BorderSizePixel = 0
-	NG1206.Name = dCD("Fcnexyrf")
+	NG1206.Name = "Sparkles"
 	NG1206.Position = UDim2.new(0, 10, 0, 90)
 	NG1206.Size = UDim2.new(1, -10, 0, 25)
 	NG1206.Parent = NG1082
 	NG1207 = Instance.new("TextLabel")
 	NG1207.BackgroundTransparency = 1
 	NG1207.BorderSizePixel = 0
-	NG1207.Name = dCD("Ynory")
+	NG1207.Name = "Label"
 	NG1207.Position = UDim2.new(0, 35, 0, 0)
 	NG1207.Size = UDim2.new(0, 60, 0, 25)
 	NG1207.Font = Enum.Font.ArialBold
 	NG1207.FontSize = Enum.FontSize.Size10
-	NG1207.Text = dCD("Fcnexyrf")
+	NG1207.Text = "Sparkles"
 	NG1207.TextColor3 = Color3.new(1, 1, 1)
 	NG1207.TextStrokeTransparency = 0.5
 	NG1207.TextWrapped = true
@@ -16612,16 +16812,16 @@ do
 	NG1208 = Instance.new("ImageButton")
 	NG1208.BackgroundTransparency = 1
 	NG1208.BorderSizePixel = 0
-	NG1208.Name = dCD("NeebjOhggba")
+	NG1208.Name = "ArrowButton"
 	NG1208.Position = UDim2.new(0, 10, 0, 3)
 	NG1208.Size = UDim2.new(0, 20, 0, 20)
 	NG1208.Style = Enum.ButtonStyle.Custom
-	NG1208.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=134367382")
+	NG1208.Image = "http://www.roblox.com/asset/?id=134367382"
 	NG1208.Parent = NG1206
 	NG1209 = Instance.new("Frame")
 	NG1209.BackgroundColor3 = Color3.new(0.0196078, 0.396078, 1)
 	NG1209.BorderSizePixel = 0
-	NG1209.Name = dCD("PbybeOne")
+	NG1209.Name = "ColorBar"
 	NG1209.Size = UDim2.new(0, 3, 1, 0)
 	NG1209.Parent = NG1206
 	NG1210 = Instance.new("TextButton")
@@ -16630,7 +16830,7 @@ do
 	NG1210.BackgroundTransparency = 0.75
 	NG1210.BorderColor3 = Color3.new(0, 0, 0)
 	NG1210.BorderSizePixel = 0
-	NG1210.Name = dCD("NqqOhggba")
+	NG1210.Name = "AddButton"
 	NG1210.Position = UDim2.new(1, -40, 0, 3)
 	NG1210.Selectable = true
 	NG1210.Size = UDim2.new(0, 35, 0, 19)
@@ -16638,7 +16838,7 @@ do
 	NG1210.ZIndex = 2
 	NG1210.Font = Enum.Font.ArialBold
 	NG1210.FontSize = Enum.FontSize.Size10
-	NG1210.Text = dCD("NQQ")
+	NG1210.Text = "ADD"
 	NG1210.TextColor3 = Color3.new(1, 1, 1)
 	NG1210.Parent = NG1206
 	NG1211 = Instance.new("TextButton")
@@ -16647,7 +16847,7 @@ do
 	NG1211.BackgroundTransparency = 0.75
 	NG1211.BorderColor3 = Color3.new(0, 0, 0)
 	NG1211.BorderSizePixel = 0
-	NG1211.Name = dCD("ErzbirOhggba")
+	NG1211.Name = "RemoveButton"
 	NG1211.Position = UDim2.new(0, 90, 0, 3)
 	NG1211.Selectable = true
 	NG1211.Size = UDim2.new(0, 58, 0, 19)
@@ -16656,21 +16856,21 @@ do
 	NG1211.ZIndex = 2
 	NG1211.Font = Enum.Font.ArialBold
 	NG1211.FontSize = Enum.FontSize.Size10
-	NG1211.Text = dCD("ERZBIR")
+	NG1211.Text = "REMOVE"
 	NG1211.TextColor3 = Color3.new(1, 1, 1)
 	NG1211.Parent = NG1206
 	NG1212 = Instance.new("Frame")
 	NG1212.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG1212.BackgroundTransparency = 0.75
 	NG1212.BorderSizePixel = 0
-	NG1212.Name = dCD("Funqbj")
+	NG1212.Name = "Shadow"
 	NG1212.Position = UDim2.new(0, 0, 1, -1)
 	NG1212.Size = UDim2.new(1, 0, 0, 1)
 	NG1212.Parent = NG1206
 	NG1213 = Instance.new("Frame")
 	NG1213.BackgroundTransparency = 1
 	NG1213.BorderSizePixel = 0
-	NG1213.Name = dCD("Bcgvbaf")
+	NG1213.Name = "Options"
 	NG1213.Position = UDim2.new(0, 3, 1, 0)
 	NG1213.Size = UDim2.new(1, -3, 0, 0)
 	NG1213.ClipsDescendants = true
@@ -16679,7 +16879,7 @@ do
 	NG1214.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1214.BackgroundTransparency = 1
 	NG1214.BorderSizePixel = 0
-	NG1214.Name = dCD("PbybeBcgvba")
+	NG1214.Name = "ColorOption"
 	NG1214.Position = UDim2.new(0, 0, 0, 10)
 	NG1214.Size = UDim2.new(1, 0, 0, 25)
 	NG1214.Parent = NG1213
@@ -16687,11 +16887,11 @@ do
 	NG1215.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1215.BackgroundTransparency = 1
 	NG1215.BorderSizePixel = 0
-	NG1215.Name = dCD("Ynory")
+	NG1215.Name = "Label"
 	NG1215.Size = UDim2.new(0, 70, 0, 25)
 	NG1215.Font = Enum.Font.ArialBold
 	NG1215.FontSize = Enum.FontSize.Size10
-	NG1215.Text = dCD("Pbybe")
+	NG1215.Text = "Color"
 	NG1215.TextColor3 = Color3.new(1, 1, 1)
 	NG1215.TextStrokeTransparency = 0
 	NG1215.TextWrapped = true
@@ -16701,7 +16901,7 @@ do
 	NG1216.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1216.BackgroundTransparency = 1
 	NG1216.BorderSizePixel = 0
-	NG1216.Name = dCD("EVachg")
+	NG1216.Name = "RInput"
 	NG1216.Position = UDim2.new(0, 35, 0, 0)
 	NG1216.Size = UDim2.new(0, 38, 0, 25)
 	NG1216.Parent = NG1214
@@ -16717,22 +16917,22 @@ do
 	NG1217.ZIndex = 2
 	NG1217.Font = Enum.Font.Legacy
 	NG1217.FontSize = Enum.FontSize.Size8
-	NG1217.Text = dCD("")
+	NG1217.Text = ""
 	NG1217.Parent = NG1216
 	NG1218 = Instance.new("ImageLabel")
 	NG1218.Active = false
 	NG1218.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1218.BackgroundTransparency = 1
 	NG1218.BorderSizePixel = 0
-	NG1218.Name = dCD("Onpxtebhaq")
+	NG1218.Name = "Background"
 	NG1218.Selectable = false
 	NG1218.Size = UDim2.new(1, 0, 1, 0)
-	NG1218.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG1218.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG1218.Parent = NG1216
 	NG1219 = Instance.new("Frame")
 	NG1219.BackgroundColor3 = Color3.new(1, 0, 0)
 	NG1219.BorderSizePixel = 0
-	NG1219.Name = dCD("FryrpgrqVaqvpngbe")
+	NG1219.Name = "SelectedIndicator"
 	NG1219.Position = UDim2.new(0, 3, 0, -2)
 	NG1219.Size = UDim2.new(1, -3, 0, 2)
 	NG1219.Parent = NG1216
@@ -16744,14 +16944,14 @@ do
 	NG1220.Size = UDim2.new(1, -10, 1, 0)
 	NG1220.Font = Enum.Font.ArialBold
 	NG1220.FontSize = Enum.FontSize.Size10
-	NG1220.Text = dCD("255")
+	NG1220.Text = "255"
 	NG1220.TextColor3 = Color3.new(1, 1, 1)
 	NG1220.Parent = NG1216
 	NG1221 = Instance.new("Frame")
 	NG1221.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1221.BackgroundTransparency = 1
 	NG1221.BorderSizePixel = 0
-	NG1221.Name = dCD("TVachg")
+	NG1221.Name = "GInput"
 	NG1221.Position = UDim2.new(0, 72, 0, 0)
 	NG1221.Size = UDim2.new(0, 38, 0, 25)
 	NG1221.Parent = NG1214
@@ -16767,22 +16967,22 @@ do
 	NG1222.ZIndex = 2
 	NG1222.Font = Enum.Font.Legacy
 	NG1222.FontSize = Enum.FontSize.Size8
-	NG1222.Text = dCD("")
+	NG1222.Text = ""
 	NG1222.Parent = NG1221
 	NG1223 = Instance.new("ImageLabel")
 	NG1223.Active = false
 	NG1223.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1223.BackgroundTransparency = 1
 	NG1223.BorderSizePixel = 0
-	NG1223.Name = dCD("Onpxtebhaq")
+	NG1223.Name = "Background"
 	NG1223.Selectable = false
 	NG1223.Size = UDim2.new(1, 0, 1, 0)
-	NG1223.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG1223.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG1223.Parent = NG1221
 	NG1224 = Instance.new("Frame")
 	NG1224.BackgroundColor3 = Color3.new(0, 1, 0)
 	NG1224.BorderSizePixel = 0
-	NG1224.Name = dCD("FryrpgrqVaqvpngbe")
+	NG1224.Name = "SelectedIndicator"
 	NG1224.Position = UDim2.new(0, 3, 0, -2)
 	NG1224.Size = UDim2.new(1, -3, 0, 2)
 	NG1224.Parent = NG1221
@@ -16794,14 +16994,14 @@ do
 	NG1225.Size = UDim2.new(1, -10, 1, 0)
 	NG1225.Font = Enum.Font.ArialBold
 	NG1225.FontSize = Enum.FontSize.Size10
-	NG1225.Text = dCD("255")
+	NG1225.Text = "255"
 	NG1225.TextColor3 = Color3.new(1, 1, 1)
 	NG1225.Parent = NG1221
 	NG1226 = Instance.new("Frame")
 	NG1226.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1226.BackgroundTransparency = 1
 	NG1226.BorderSizePixel = 0
-	NG1226.Name = dCD("OVachg")
+	NG1226.Name = "BInput"
 	NG1226.Position = UDim2.new(0, 109, 0, 0)
 	NG1226.Size = UDim2.new(0, 38, 0, 25)
 	NG1226.Parent = NG1214
@@ -16817,22 +17017,22 @@ do
 	NG1227.ZIndex = 2
 	NG1227.Font = Enum.Font.Legacy
 	NG1227.FontSize = Enum.FontSize.Size8
-	NG1227.Text = dCD("")
+	NG1227.Text = ""
 	NG1227.Parent = NG1226
 	NG1228 = Instance.new("ImageLabel")
 	NG1228.Active = false
 	NG1228.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1228.BackgroundTransparency = 1
 	NG1228.BorderSizePixel = 0
-	NG1228.Name = dCD("Onpxtebhaq")
+	NG1228.Name = "Background"
 	NG1228.Selectable = false
 	NG1228.Size = UDim2.new(1, 0, 1, 0)
-	NG1228.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG1228.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG1228.Parent = NG1226
 	NG1229 = Instance.new("Frame")
 	NG1229.BackgroundColor3 = Color3.new(0, 0, 1)
 	NG1229.BorderSizePixel = 0
-	NG1229.Name = dCD("FryrpgrqVaqvpngbe")
+	NG1229.Name = "SelectedIndicator"
 	NG1229.Position = UDim2.new(0, 3, 0, -2)
 	NG1229.Size = UDim2.new(1, -3, 0, 2)
 	NG1229.Parent = NG1226
@@ -16844,25 +17044,25 @@ do
 	NG1230.Size = UDim2.new(1, -10, 1, 0)
 	NG1230.Font = Enum.Font.ArialBold
 	NG1230.FontSize = Enum.FontSize.Size10
-	NG1230.Text = dCD("255")
+	NG1230.Text = "255"
 	NG1230.TextColor3 = Color3.new(1, 1, 1)
 	NG1230.Parent = NG1226
 	NG1231 = Instance.new("ImageButton")
 	NG1231.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG1231.BackgroundTransparency = 0.40000000596046
 	NG1231.BorderSizePixel = 0
-	NG1231.Name = dCD("UFICvpxre")
+	NG1231.Name = "HSVPicker"
 	NG1231.Position = UDim2.new(0, 160, 0, -2)
 	NG1231.Size = UDim2.new(0, 27, 0, 27)
 	NG1231.Style = Enum.ButtonStyle.Custom
 	NG1231.ZIndex = 2
-	NG1231.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=141313631")
+	NG1231.Image = "http://www.roblox.com/asset/?id=141313631"
 	NG1231.Parent = NG1214
 	NG1232 = Instance.new("Frame")
 	NG1232.BackgroundColor3 = Color3.new(0, 0, 0)
 	NG1232.BackgroundTransparency = 0.75
 	NG1232.BorderSizePixel = 0
-	NG1232.Name = dCD("Funqbj")
+	NG1232.Name = "Shadow"
 	NG1232.Position = UDim2.new(0, 0, 1, -2)
 	NG1232.Size = UDim2.new(1, 0, 0, 2)
 	NG1232.Parent = NG1231
@@ -16871,7 +17071,7 @@ do
 	NG1233.BackgroundTransparency = 0.5
 	NG1233.BorderColor3 = Color3.new(0.380392, 0.380392, 0.380392)
 	NG1233.BorderSizePixel = 0
-	NG1233.Name = dCD("Frcnengbe")
+	NG1233.Name = "Separator"
 	NG1233.Position = UDim2.new(0, 151, 0, 4)
 	NG1233.Size = UDim2.new(0, 4, 0, 4)
 	NG1233.Parent = NG1214
@@ -16880,7 +17080,7 @@ do
 	NG1234.BackgroundTransparency = 0.5
 	NG1234.BorderColor3 = Color3.new(0.380392, 0.380392, 0.380392)
 	NG1234.BorderSizePixel = 0
-	NG1234.Name = dCD("Frcnengbe")
+	NG1234.Name = "Separator"
 	NG1234.Position = UDim2.new(0, 151, 0, 16)
 	NG1234.Size = UDim2.new(0, 4, 0, 4)
 	NG1234.Parent = NG1214
@@ -16889,7 +17089,7 @@ do
 	NG1235.BackgroundTransparency = 0.5
 	NG1235.BorderColor3 = Color3.new(0.380392, 0.380392, 0.380392)
 	NG1235.BorderSizePixel = 0
-	NG1235.Name = dCD("Frcnengbe")
+	NG1235.Name = "Separator"
 	NG1235.Position = UDim2.new(0, 151, 0, 10)
 	NG1235.Size = UDim2.new(0, 4, 0, 4)
 	NG1235.Parent = NG1214
@@ -16898,7 +17098,7 @@ do
 	NG1236.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1236.BackgroundTransparency = 1
 	NG1236.BorderSizePixel = 0
-	NG1236.Name = dCD("OGEbgngrGbbyTHV")
+	NG1236.Name = "BTRotateToolGUI"
 	NG1236.Position = UDim2.new(0, 0, 0, 280)
 	NG1236.Size = UDim2.new(0, 245, 0, 90)
 	NG1236.Draggable = true
@@ -16907,7 +17107,7 @@ do
 	NG1237.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1237.BackgroundTransparency = 1
 	NG1237.BorderSizePixel = 0
-	NG1237.Name = dCD("CvibgBcgvba")
+	NG1237.Name = "PivotOption"
 	NG1237.Position = UDim2.new(0, 0, 0, 30)
 	NG1237.Size = UDim2.new(0, 0, 0, 0)
 	NG1237.Parent = NG1236
@@ -16915,13 +17115,13 @@ do
 	NG1238.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1238.BackgroundTransparency = 1
 	NG1238.BorderSizePixel = 0
-	NG1238.Name = dCD("Pragre")
+	NG1238.Name = "Center"
 	NG1238.Position = UDim2.new(0, 50, 0, 0)
 	NG1238.Size = UDim2.new(0, 70, 0, 25)
 	NG1238.Parent = NG1237
 	NG1239 = Instance.new("Frame")
 	NG1239.BorderSizePixel = 0
-	NG1239.Name = dCD("FryrpgrqVaqvpngbe")
+	NG1239.Name = "SelectedIndicator"
 	NG1239.Position = UDim2.new(0, 6, 0, -2)
 	NG1239.Size = UDim2.new(1, -5, 0, 2)
 	NG1239.Parent = NG1238
@@ -16930,7 +17130,7 @@ do
 	NG1240.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1240.BackgroundTransparency = 1
 	NG1240.BorderSizePixel = 0
-	NG1240.Name = dCD("Ohggba")
+	NG1240.Name = "Button"
 	NG1240.Position = UDim2.new(0, 5, 0, 0)
 	NG1240.Selectable = true
 	NG1240.Size = UDim2.new(1, -10, 1, 0)
@@ -16938,7 +17138,7 @@ do
 	NG1240.ZIndex = 2
 	NG1240.Font = Enum.Font.Legacy
 	NG1240.FontSize = Enum.FontSize.Size8
-	NG1240.Text = dCD("")
+	NG1240.Text = ""
 	NG1240.TextTransparency = 1
 	NG1240.Parent = NG1238
 	NG1241 = Instance.new("ImageLabel")
@@ -16946,34 +17146,34 @@ do
 	NG1241.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1241.BackgroundTransparency = 1
 	NG1241.BorderSizePixel = 0
-	NG1241.Name = dCD("Onpxtebhaq")
+	NG1241.Name = "Background"
 	NG1241.Selectable = false
 	NG1241.Size = UDim2.new(1, 0, 1, 0)
-	NG1241.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127774197")
+	NG1241.Image = "http://www.roblox.com/asset/?id=127774197"
 	NG1241.Parent = NG1238
 	NG1242 = Instance.new("TextLabel")
 	NG1242.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1242.BackgroundTransparency = 1
 	NG1242.BorderSizePixel = 0
-	NG1242.Name = dCD("Ynory")
+	NG1242.Name = "Label"
 	NG1242.Size = UDim2.new(1, 0, 1, 0)
 	NG1242.Font = Enum.Font.ArialBold
 	NG1242.FontSize = Enum.FontSize.Size10
-	NG1242.Text = dCD("PRAGRE")
+	NG1242.Text = "CENTER"
 	NG1242.TextColor3 = Color3.new(1, 1, 1)
 	NG1242.Parent = NG1238
 	NG1243 = Instance.new("Frame")
 	NG1243.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1243.BackgroundTransparency = 1
 	NG1243.BorderSizePixel = 0
-	NG1243.Name = dCD("Ybpny")
+	NG1243.Name = "Local"
 	NG1243.Position = UDim2.new(0, 115, 0, 0)
 	NG1243.Size = UDim2.new(0, 70, 0, 25)
 	NG1243.Parent = NG1237
 	NG1244 = Instance.new("Frame")
 	NG1244.BackgroundTransparency = 1
 	NG1244.BorderSizePixel = 0
-	NG1244.Name = dCD("FryrpgrqVaqvpngbe")
+	NG1244.Name = "SelectedIndicator"
 	NG1244.Position = UDim2.new(0, 6, 0, -2)
 	NG1244.Size = UDim2.new(1, -5, 0, 2)
 	NG1244.Parent = NG1243
@@ -16982,7 +17182,7 @@ do
 	NG1245.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1245.BackgroundTransparency = 1
 	NG1245.BorderSizePixel = 0
-	NG1245.Name = dCD("Ohggba")
+	NG1245.Name = "Button"
 	NG1245.Position = UDim2.new(0, 5, 0, 0)
 	NG1245.Selectable = true
 	NG1245.Size = UDim2.new(1, -10, 1, 0)
@@ -16990,7 +17190,7 @@ do
 	NG1245.ZIndex = 2
 	NG1245.Font = Enum.Font.Legacy
 	NG1245.FontSize = Enum.FontSize.Size8
-	NG1245.Text = dCD("")
+	NG1245.Text = ""
 	NG1245.TextTransparency = 1
 	NG1245.Parent = NG1243
 	NG1246 = Instance.new("ImageLabel")
@@ -16998,34 +17198,34 @@ do
 	NG1246.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1246.BackgroundTransparency = 1
 	NG1246.BorderSizePixel = 0
-	NG1246.Name = dCD("Onpxtebhaq")
+	NG1246.Name = "Background"
 	NG1246.Selectable = false
 	NG1246.Size = UDim2.new(1, 0, 1, 0)
-	NG1246.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG1246.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG1246.Parent = NG1243
 	NG1247 = Instance.new("TextLabel")
 	NG1247.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1247.BackgroundTransparency = 1
 	NG1247.BorderSizePixel = 0
-	NG1247.Name = dCD("Ynory")
+	NG1247.Name = "Label"
 	NG1247.Size = UDim2.new(1, 0, 1, 0)
 	NG1247.Font = Enum.Font.ArialBold
 	NG1247.FontSize = Enum.FontSize.Size10
-	NG1247.Text = dCD("YBPNY")
+	NG1247.Text = "LOCAL"
 	NG1247.TextColor3 = Color3.new(1, 1, 1)
 	NG1247.Parent = NG1243
 	NG1248 = Instance.new("Frame")
 	NG1248.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1248.BackgroundTransparency = 1
 	NG1248.BorderSizePixel = 0
-	NG1248.Name = dCD("Ynfg")
+	NG1248.Name = "Last"
 	NG1248.Position = UDim2.new(0, 180, 0, 0)
 	NG1248.Size = UDim2.new(0, 70, 0, 25)
 	NG1248.Parent = NG1237
 	NG1249 = Instance.new("Frame")
 	NG1249.BackgroundTransparency = 1
 	NG1249.BorderSizePixel = 0
-	NG1249.Name = dCD("FryrpgrqVaqvpngbe")
+	NG1249.Name = "SelectedIndicator"
 	NG1249.Position = UDim2.new(0, 6, 0, -2)
 	NG1249.Size = UDim2.new(1, -5, 0, 2)
 	NG1249.Parent = NG1248
@@ -17034,7 +17234,7 @@ do
 	NG1250.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1250.BackgroundTransparency = 1
 	NG1250.BorderSizePixel = 0
-	NG1250.Name = dCD("Ohggba")
+	NG1250.Name = "Button"
 	NG1250.Position = UDim2.new(0, 5, 0, 0)
 	NG1250.Selectable = true
 	NG1250.Size = UDim2.new(1, -10, 1, 0)
@@ -17042,7 +17242,7 @@ do
 	NG1250.ZIndex = 2
 	NG1250.Font = Enum.Font.Legacy
 	NG1250.FontSize = Enum.FontSize.Size8
-	NG1250.Text = dCD("")
+	NG1250.Text = ""
 	NG1250.TextTransparency = 1
 	NG1250.Parent = NG1248
 	NG1251 = Instance.new("ImageLabel")
@@ -17050,27 +17250,27 @@ do
 	NG1251.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1251.BackgroundTransparency = 1
 	NG1251.BorderSizePixel = 0
-	NG1251.Name = dCD("Onpxtebhaq")
+	NG1251.Name = "Background"
 	NG1251.Selectable = false
 	NG1251.Size = UDim2.new(1, 0, 1, 0)
-	NG1251.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG1251.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG1251.Parent = NG1248
 	NG1252 = Instance.new("TextLabel")
 	NG1252.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1252.BackgroundTransparency = 1
 	NG1252.BorderSizePixel = 0
-	NG1252.Name = dCD("Ynory")
+	NG1252.Name = "Label"
 	NG1252.Size = UDim2.new(1, 0, 1, 0)
 	NG1252.Font = Enum.Font.ArialBold
 	NG1252.FontSize = Enum.FontSize.Size10
-	NG1252.Text = dCD("YNFG")
+	NG1252.Text = "LAST"
 	NG1252.TextColor3 = Color3.new(1, 1, 1)
 	NG1252.Parent = NG1248
 	NG1253 = Instance.new("Frame")
 	NG1253.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1253.BackgroundTransparency = 1
 	NG1253.BorderSizePixel = 0
-	NG1253.Name = dCD("Ynory")
+	NG1253.Name = "Label"
 	NG1253.Size = UDim2.new(0, 50, 0, 25)
 	NG1253.Parent = NG1237
 	NG1254 = Instance.new("TextLabel")
@@ -17080,7 +17280,7 @@ do
 	NG1254.Size = UDim2.new(1, 0, 1, 0)
 	NG1254.Font = Enum.Font.ArialBold
 	NG1254.FontSize = Enum.FontSize.Size10
-	NG1254.Text = dCD("Cvibg")
+	NG1254.Text = "Pivot"
 	NG1254.TextColor3 = Color3.new(1, 1, 1)
 	NG1254.TextStrokeTransparency = 0
 	NG1254.TextWrapped = true
@@ -17089,13 +17289,13 @@ do
 	NG1255.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1255.BackgroundTransparency = 1
 	NG1255.BorderSizePixel = 0
-	NG1255.Name = dCD("Gvgyr")
+	NG1255.Name = "Title"
 	NG1255.Size = UDim2.new(1, 0, 0, 20)
 	NG1255.Parent = NG1236
 	NG1256 = Instance.new("Frame")
 	NG1256.BackgroundColor3 = Color3.new(0.294118, 0.592157, 0.294118)
 	NG1256.BorderSizePixel = 0
-	NG1256.Name = dCD("PbybeOne")
+	NG1256.Name = "ColorBar"
 	NG1256.Position = UDim2.new(0, 5, 0, -3)
 	NG1256.Size = UDim2.new(1, -5, 0, 2)
 	NG1256.Parent = NG1255
@@ -17103,12 +17303,12 @@ do
 	NG1257.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1257.BackgroundTransparency = 1
 	NG1257.BorderSizePixel = 0
-	NG1257.Name = dCD("Ynory")
+	NG1257.Name = "Label"
 	NG1257.Position = UDim2.new(0, 10, 0, 1)
 	NG1257.Size = UDim2.new(1, -10, 1, 0)
 	NG1257.Font = Enum.Font.ArialBold
 	NG1257.FontSize = Enum.FontSize.Size10
-	NG1257.Text = dCD("EBGNGR GBBY")
+	NG1257.Text = "ROTATE TOOL"
 	NG1257.TextColor3 = Color3.new(1, 1, 1)
 	NG1257.TextStrokeTransparency = 0
 	NG1257.TextWrapped = true
@@ -17118,12 +17318,12 @@ do
 	NG1258.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1258.BackgroundTransparency = 1
 	NG1258.BorderSizePixel = 0
-	NG1258.Name = dCD("S3KFvtangher")
+	NG1258.Name = "F3XSignature"
 	NG1258.Position = UDim2.new(0, 10, 0, 1)
 	NG1258.Size = UDim2.new(1, -10, 1, 0)
 	NG1258.Font = Enum.Font.ArialBold
 	NG1258.FontSize = Enum.FontSize.Size14
-	NG1258.Text = dCD("S3K")
+	NG1258.Text = "F3X"
 	NG1258.TextColor3 = Color3.new(1, 1, 1)
 	NG1258.TextStrokeTransparency = 0.89999997615814
 	NG1258.TextWrapped = true
@@ -17133,7 +17333,7 @@ do
 	NG1259.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1259.BackgroundTransparency = 1
 	NG1259.BorderSizePixel = 0
-	NG1259.Name = dCD("VaperzragBcgvba")
+	NG1259.Name = "IncrementOption"
 	NG1259.Position = UDim2.new(0, 0, 0, 65)
 	NG1259.Size = UDim2.new(0, 0, 0, 0)
 	NG1259.Parent = NG1236
@@ -17141,13 +17341,13 @@ do
 	NG1260.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1260.BackgroundTransparency = 1
 	NG1260.BorderSizePixel = 0
-	NG1260.Name = dCD("Vaperzrag")
+	NG1260.Name = "Increment"
 	NG1260.Position = UDim2.new(0, 70, 0, 0)
 	NG1260.Size = UDim2.new(0, 50, 0, 25)
 	NG1260.Parent = NG1259
 	NG1261 = Instance.new("Frame")
 	NG1261.BorderSizePixel = 0
-	NG1261.Name = dCD("FryrpgrqVaqvpngbe")
+	NG1261.Name = "SelectedIndicator"
 	NG1261.Position = UDim2.new(0, 5, 0, -2)
 	NG1261.Size = UDim2.new(1, -4, 0, 2)
 	NG1261.Parent = NG1260
@@ -17160,7 +17360,7 @@ do
 	NG1262.ZIndex = 2
 	NG1262.Font = Enum.Font.ArialBold
 	NG1262.FontSize = Enum.FontSize.Size10
-	NG1262.Text = dCD("15")
+	NG1262.Text = "15"
 	NG1262.TextColor3 = Color3.new(1, 1, 1)
 	NG1262.Parent = NG1260
 	NG1263 = Instance.new("ImageLabel")
@@ -17168,16 +17368,16 @@ do
 	NG1263.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1263.BackgroundTransparency = 1
 	NG1263.BorderSizePixel = 0
-	NG1263.Name = dCD("Onpxtebhaq")
+	NG1263.Name = "Background"
 	NG1263.Selectable = false
 	NG1263.Size = UDim2.new(1, 0, 1, 0)
-	NG1263.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG1263.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG1263.Parent = NG1260
 	NG1264 = Instance.new("Frame")
 	NG1264.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1264.BackgroundTransparency = 1
 	NG1264.BorderSizePixel = 0
-	NG1264.Name = dCD("Ynory")
+	NG1264.Name = "Label"
 	NG1264.Size = UDim2.new(0, 75, 0, 25)
 	NG1264.Parent = NG1259
 	NG1265 = Instance.new("TextLabel")
@@ -17187,7 +17387,7 @@ do
 	NG1265.Size = UDim2.new(1, 0, 1, 0)
 	NG1265.Font = Enum.Font.ArialBold
 	NG1265.FontSize = Enum.FontSize.Size10
-	NG1265.Text = dCD("Vaperzrag")
+	NG1265.Text = "Increment"
 	NG1265.TextColor3 = Color3.new(1, 1, 1)
 	NG1265.TextStrokeTransparency = 0
 	NG1265.TextWrapped = true
@@ -17196,7 +17396,7 @@ do
 	NG1266.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1266.BackgroundTransparency = 1
 	NG1266.BorderSizePixel = 0
-	NG1266.Name = dCD("Vasb")
+	NG1266.Name = "Info"
 	NG1266.Position = UDim2.new(0, 5, 0, 100)
 	NG1266.Size = UDim2.new(1, -5, 0, 60)
 	NG1266.Visible = false
@@ -17204,19 +17404,19 @@ do
 	NG1267 = Instance.new("Frame")
 	NG1267.BackgroundColor3 = Color3.new(0.294118, 0.592157, 0.294118)
 	NG1267.BorderSizePixel = 0
-	NG1267.Name = dCD("PbybeOne")
+	NG1267.Name = "ColorBar"
 	NG1267.Size = UDim2.new(1, 0, 0, 2)
 	NG1267.Parent = NG1266
 	NG1268 = Instance.new("TextLabel")
 	NG1268.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1268.BackgroundTransparency = 1
 	NG1268.BorderSizePixel = 0
-	NG1268.Name = dCD("Ynory")
+	NG1268.Name = "Label"
 	NG1268.Position = UDim2.new(0, 10, 0, 2)
 	NG1268.Size = UDim2.new(1, -10, 0, 20)
 	NG1268.Font = Enum.Font.ArialBold
 	NG1268.FontSize = Enum.FontSize.Size10
-	NG1268.Text = dCD("FRYRPGVBA VASB")
+	NG1268.Text = "SELECTION INFO"
 	NG1268.TextColor3 = Color3.new(1, 1, 1)
 	NG1268.TextStrokeTransparency = 0
 	NG1268.TextWrapped = true
@@ -17226,7 +17426,7 @@ do
 	NG1269.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1269.BackgroundTransparency = 1
 	NG1269.BorderSizePixel = 0
-	NG1269.Name = dCD("EbgngvbaVasb")
+	NG1269.Name = "RotationInfo"
 	NG1269.Position = UDim2.new(0, 0, 0, 30)
 	NG1269.Size = UDim2.new(0, 0, 0, 0)
 	NG1269.Parent = NG1266
@@ -17237,7 +17437,7 @@ do
 	NG1270.Size = UDim2.new(0, 75, 0, 25)
 	NG1270.Font = Enum.Font.ArialBold
 	NG1270.FontSize = Enum.FontSize.Size10
-	NG1270.Text = dCD("Ebgngvba")
+	NG1270.Text = "Rotation"
 	NG1270.TextColor3 = Color3.new(1, 1, 1)
 	NG1270.TextStrokeTransparency = 0
 	NG1270.TextWrapped = true
@@ -17246,7 +17446,7 @@ do
 	NG1271.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1271.BackgroundTransparency = 1
 	NG1271.BorderSizePixel = 0
-	NG1271.Name = dCD("K")
+	NG1271.Name = "X"
 	NG1271.Position = UDim2.new(0, 70, 0, 0)
 	NG1271.Size = UDim2.new(0, 50, 0, 25)
 	NG1271.Parent = NG1269
@@ -17259,7 +17459,7 @@ do
 	NG1272.ZIndex = 2
 	NG1272.Font = Enum.Font.ArialBold
 	NG1272.FontSize = Enum.FontSize.Size10
-	NG1272.Text = dCD("")
+	NG1272.Text = ""
 	NG1272.TextColor3 = Color3.new(1, 1, 1)
 	NG1272.Parent = NG1271
 	NG1273 = Instance.new("TextButton")
@@ -17274,23 +17474,23 @@ do
 	NG1273.ZIndex = 3
 	NG1273.Font = Enum.Font.Legacy
 	NG1273.FontSize = Enum.FontSize.Size8
-	NG1273.Text = dCD("")
+	NG1273.Text = ""
 	NG1273.Parent = NG1271
 	NG1274 = Instance.new("ImageLabel")
 	NG1274.Active = false
 	NG1274.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1274.BackgroundTransparency = 1
 	NG1274.BorderSizePixel = 0
-	NG1274.Name = dCD("Onpxtebhaq")
+	NG1274.Name = "Background"
 	NG1274.Selectable = false
 	NG1274.Size = UDim2.new(1, 0, 1, 0)
-	NG1274.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG1274.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG1274.Parent = NG1271
 	NG1275 = Instance.new("Frame")
 	NG1275.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1275.BackgroundTransparency = 1
 	NG1275.BorderSizePixel = 0
-	NG1275.Name = dCD("L")
+	NG1275.Name = "Y"
 	NG1275.Position = UDim2.new(0, 117, 0, 0)
 	NG1275.Size = UDim2.new(0, 50, 0, 25)
 	NG1275.Parent = NG1269
@@ -17303,7 +17503,7 @@ do
 	NG1276.ZIndex = 2
 	NG1276.Font = Enum.Font.ArialBold
 	NG1276.FontSize = Enum.FontSize.Size10
-	NG1276.Text = dCD("")
+	NG1276.Text = ""
 	NG1276.TextColor3 = Color3.new(1, 1, 1)
 	NG1276.Parent = NG1275
 	NG1277 = Instance.new("TextButton")
@@ -17318,23 +17518,23 @@ do
 	NG1277.ZIndex = 3
 	NG1277.Font = Enum.Font.Legacy
 	NG1277.FontSize = Enum.FontSize.Size8
-	NG1277.Text = dCD("")
+	NG1277.Text = ""
 	NG1277.Parent = NG1275
 	NG1278 = Instance.new("ImageLabel")
 	NG1278.Active = false
 	NG1278.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1278.BackgroundTransparency = 1
 	NG1278.BorderSizePixel = 0
-	NG1278.Name = dCD("Onpxtebhaq")
+	NG1278.Name = "Background"
 	NG1278.Selectable = false
 	NG1278.Size = UDim2.new(1, 0, 1, 0)
-	NG1278.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG1278.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG1278.Parent = NG1275
 	NG1279 = Instance.new("Frame")
 	NG1279.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1279.BackgroundTransparency = 1
 	NG1279.BorderSizePixel = 0
-	NG1279.Name = dCD("M")
+	NG1279.Name = "Z"
 	NG1279.Position = UDim2.new(0, 164, 0, 0)
 	NG1279.Size = UDim2.new(0, 50, 0, 25)
 	NG1279.Parent = NG1269
@@ -17347,7 +17547,7 @@ do
 	NG1280.ZIndex = 2
 	NG1280.Font = Enum.Font.ArialBold
 	NG1280.FontSize = Enum.FontSize.Size10
-	NG1280.Text = dCD("")
+	NG1280.Text = ""
 	NG1280.TextColor3 = Color3.new(1, 1, 1)
 	NG1280.Parent = NG1279
 	NG1281 = Instance.new("TextButton")
@@ -17362,42 +17562,42 @@ do
 	NG1281.ZIndex = 3
 	NG1281.Font = Enum.Font.Legacy
 	NG1281.FontSize = Enum.FontSize.Size8
-	NG1281.Text = dCD("")
+	NG1281.Text = ""
 	NG1281.Parent = NG1279
 	NG1282 = Instance.new("ImageLabel")
 	NG1282.Active = false
 	NG1282.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1282.BackgroundTransparency = 1
 	NG1282.BorderSizePixel = 0
-	NG1282.Name = dCD("Onpxtebhaq")
+	NG1282.Name = "Background"
 	NG1282.Selectable = false
 	NG1282.Size = UDim2.new(1, 0, 1, 0)
-	NG1282.Image = dCD("uggc://jjj.eboybk.pbz/nffrg/?vq=127772502")
+	NG1282.Image = "http://www.roblox.com/asset/?id=127772502"
 	NG1282.Parent = NG1279
 	NG1283 = Instance.new("Frame")
 	NG1283.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1283.BackgroundTransparency = 1
 	NG1283.BorderSizePixel = 0
-	NG1283.Name = dCD("Punatrf")
+	NG1283.Name = "Changes"
 	NG1283.Position = UDim2.new(0, 5, 0, 100)
 	NG1283.Size = UDim2.new(1, -5, 0, 20)
 	NG1283.Parent = NG1236
 	NG1284 = Instance.new("Frame")
 	NG1284.BackgroundColor3 = Color3.new(0.294118, 0.592157, 0.294118)
 	NG1284.BorderSizePixel = 0
-	NG1284.Name = dCD("PbybeOne")
+	NG1284.Name = "ColorBar"
 	NG1284.Size = UDim2.new(1, 0, 0, 2)
 	NG1284.Parent = NG1283
 	NG1285 = Instance.new("TextLabel")
 	NG1285.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1285.BackgroundTransparency = 1
 	NG1285.BorderSizePixel = 0
-	NG1285.Name = dCD("Grkg")
+	NG1285.Name = "Text"
 	NG1285.Position = UDim2.new(0, 10, 0, 2)
 	NG1285.Size = UDim2.new(1, -10, 0, 20)
 	NG1285.Font = Enum.Font.ArialBold
 	NG1285.FontSize = Enum.FontSize.Size10
-	NG1285.Text = dCD("ebgngrq 0 qrterrf")
+	NG1285.Text = "rotated 0 degrees"
 	NG1285.TextColor3 = Color3.new(1, 1, 1)
 	NG1285.TextStrokeTransparency = 0.5
 	NG1285.TextWrapped = true
@@ -17407,12 +17607,12 @@ do
 	NG1286.BackgroundColor3 = Color3.new(0.639216, 0.635294, 0.647059)
 	NG1286.BackgroundTransparency = 1
 	NG1286.BorderSizePixel = 0
-	NG1286.Name = dCD("RqtrFryrpgvbaGvc")
+	NG1286.Name = "EdgeSelectionTip"
 	NG1286.Position = UDim2.new(0, 10, 0, 2)
 	NG1286.Size = UDim2.new(1, -10, 0, 20)
 	NG1286.Font = Enum.Font.ArialBold
 	NG1286.FontSize = Enum.FontSize.Size10
-	NG1286.Text = dCD("Cerff G sbe rqtr fryrpgvba.")
+	NG1286.Text = "Press T for edge selection."
 	NG1286.TextColor3 = Color3.new(1, 1, 1)
 	NG1286.TextStrokeTransparency = 0.5
 	NG1286.TextWrapped = true
@@ -17424,9 +17624,16 @@ wait(0.1)
 ActiveKeys = {}
 CurrentTool = nil
 function equipTool(Enu)
+	if not Enu then
+		F3XWarn("equipTool called without a tool")
+		return
+	end
 	if CurrentTool ~= Enu then
 		if CurrentTool and CurrentTool.Listeners.Unequipped then
-			CurrentTool.Listeners.Unequipped()
+			local okUnequip, errUnequip = xpcall(CurrentTool.Listeners.Unequipped, F3XTraceback)
+			if not okUnequip then
+				F3XWarn("Tool unequip listener failed: " .. tostring(errUnequip))
+			end
 		end
 		CurrentTool = Enu
 		if ToolType == "tool" then
@@ -17440,7 +17647,10 @@ function equipTool(Enu)
 			YJ31A6_.BackgroundTransparency = 0
 		end
 		if Enu.Listeners.Equipped then
-			Enu.Listeners.Equipped()
+			local okEquip, errEquip = xpcall(Enu.Listeners.Equipped, F3XTraceback)
+			if not okEquip then
+				F3XWarn("Tool equip listener failed for " .. tostring(getToolName(Enu)) .. ": " .. tostring(errEquip))
+			end
 		end
 	end
 end
@@ -17601,7 +17811,6 @@ function isSelectable(Zq)
 		not Zq
 		or not Zq.Parent
 		or (not Zq:IsA("BasePart"))
-		or Zq.Locked
 		or Selection:find(Zq)
 		or Groups:IsPartIgnored(Zq)
 	then
@@ -17609,19 +17818,199 @@ function isSelectable(Zq)
 	end
 	return true
 end
-function IsVersionOutdated()
-	local TKS = MarketplaceService:GetProductInfo(ToolAssetID, Enum.InfoType.Asset)
-	local DUSiwPZm = TKS.Description:match("%[Version: (.+)%]")
-	local QSjpjN5 = "1.4.5"
-	if DUSiwPZm ~= QSjpjN5 then
-		return true
+function isSelectionTarget(Zq)
+	if not Zq or not Zq.Parent or (not Zq:IsA("BasePart")) or Groups:IsPartIgnored(Zq) then
+		return false
 	end
-	return false
+	return true
 end
-HttpAvailable, HttpAvailabilityError = HttpInterface.Test()
+function getSelectionPointerPosition(input)
+	if input and input.Position then
+		return Vector2.new(input.Position.X, input.Position.Y)
+	end
+	if Mouse then
+		return Vector2.new(Mouse.X, Mouse.Y)
+	end
+end
+function raycastSelectionTargetAt(pointerPosition)
+	if not pointerPosition then
+		return Mouse and Mouse.Target or nil
+	end
+	local camera = Workspace.CurrentCamera
+	if not camera then
+		return Mouse and Mouse.Target or nil
+	end
+	local okRay, ray = pcall(function()
+		return camera:ScreenPointToRay(pointerPosition.X, pointerPosition.Y)
+	end)
+	if not okRay or not ray then
+		okRay, ray = pcall(function()
+			return camera:ViewportPointToRay(pointerPosition.X, pointerPosition.Y)
+		end)
+	end
+	if not okRay or not ray then
+		return Mouse and Mouse.Target or nil
+	end
+	local ignoreList = {}
+	if Player and Player.Character then
+		table.insert(ignoreList, Player.Character)
+	end
+	if Mouse and Mouse.TargetFilter then
+		table.insert(ignoreList, Mouse.TargetFilter)
+	end
+	local hitPart = nil
+	local usedModernRaycast = false
+	if Workspace.Raycast and RaycastParams then
+		local okCast, result = pcall(function()
+			local params = RaycastParams.new()
+			local okFilter = pcall(function()
+				params.FilterType = Enum.RaycastFilterType.Exclude
+			end)
+			if not okFilter then
+				pcall(function()
+					params.FilterType = Enum.RaycastFilterType.Blacklist
+				end)
+			end
+			params.FilterDescendantsInstances = ignoreList
+			return Workspace:Raycast(ray.Origin, ray.Direction * 10000, params)
+		end)
+		usedModernRaycast = okCast
+		if okCast and result then
+			hitPart = result.Instance
+		end
+	end
+	if not usedModernRaycast and Workspace.FindPartOnRayWithIgnoreList then
+		local legacyRay = Ray.new(ray.Origin, ray.Direction * 10000)
+		local okLegacy, legacyHit = pcall(function()
+			return Workspace:FindPartOnRayWithIgnoreList(legacyRay, ignoreList, false, true)
+		end)
+		if okLegacy then
+			hitPart = legacyHit
+		end
+	end
+	return hitPart or (Mouse and Mouse.Target) or nil
+end
+function getSelectionTarget(input)
+	local target = raycastSelectionTargetAt(getSelectionPointerPosition(input))
+	if isSelectionTarget(target) then
+		return target
+	end
+	if Mouse and isSelectionTarget(Mouse.Target) then
+		return Mouse.Target
+	end
+	return target
+end
+function updateSelectionTargetBox(input)
+	if override_selection or not TargetBox then
+		return
+	end
+	local target = getSelectionTarget(input)
+	if isSelectable(target) then
+		if TargetBox.Adornee ~= target then
+			TargetBox.Adornee = target
+		end
+	else
+		TargetBox.Adornee = nil
+	end
+end
+function applyPointerSelection(input, touchMode)
+	local pointerPosition = getSelectionPointerPosition(input)
+	local target = getSelectionTarget(input)
+	local dragThreshold = touchMode and 10 or 0
+	local moved = false
+	if pointerPosition then
+		moved = math.abs(pointerPosition.X - click_x) > dragThreshold or math.abs(pointerPosition.Y - click_y) > dragThreshold
+	end
+	if not Select2D.enabled and moved then
+		override_selection = true
+	end
+	if not override_selection and touchMode then
+		if isSelectionTarget(target) then
+			if Selection:find(target) then
+				Selection:remove(target)
+			else
+				Selection:add(target)
+			end
+		else
+			Selection:clear()
+		end
+	elseif not override_selection and not selecting and (not isSelectionTarget(target)) then
+		Selection:clear()
+	elseif not override_selection and selecting then
+		if not Selection:find(target) then
+			if isSelectable(target) then
+				Selection:add(target)
+			end
+		elseif not moved and Selection:find(target) then
+			Selection:remove(target)
+		end
+	elseif not override_selection and isSelectable(target) then
+		Selection:clear()
+		Selection:add(target)
+	end
+	if override_selection then
+		override_selection = false
+	end
+end
+function IsVersionOutdated()
+	return VersionOutdated == true
+end
+VersionOutdated = false
+VersionCheckError = nil
+function RefreshVersionStatusAsync()
+	F3XSpawn(function()
+		F3XDebug("Version check started in background")
+		local TKS = nil
+		local okHttp, s2 = xpcall(function()
+			return HttpInterface.GetAsync("https://api.roblox.com/marketplace/productinfo?assetId=" .. tostring(ToolAssetID), true)
+		end, F3XTraceback)
+		if okHttp and s2 then
+			pcall(function()
+				TKS = HttpService:JSONDecode(s2)
+			end)
+		end
+		if not TKS then
+			local r1nt, fx9 = xpcall(function()
+				return MarketplaceService:GetProductInfo(ToolAssetID, Enum.InfoType.Asset)
+			end, F3XTraceback)
+			if r1nt then
+				TKS = fx9
+			else
+				VersionCheckError = fx9
+			end
+		end
+		if not TKS or not TKS.Description then
+			VersionOutdated = false
+			VersionCheckError = VersionCheckError or "missing product info description"
+			F3XWarn("Version check failed: " .. tostring(VersionCheckError))
+			return
+		end
+		local DUSiwPZm = TKS.Description:match("%[Version: (.+)%]")
+		local QSjpjN5 = "1.4.5"
+		VersionOutdated = DUSiwPZm ~= QSjpjN5
+		F3XDebug("Version check finished; outdated=" .. tostring(VersionOutdated))
+	end)
+end
+function RefreshHttpAvailabilityAsync()
+	F3XSpawn(function()
+		F3XDebug("HTTP availability check started in background")
+		local Ygca, qJm8n, uAGRi = xpcall(function()
+			return HttpInterface.Test()
+		end, F3XTraceback)
+		if Ygca then
+			HttpAvailable = qJm8n and true or false
+			HttpAvailabilityError = uAGRi
+		else
+			HttpAvailable = false
+			HttpAvailabilityError = qJm8n
+		end
+		F3XDebug("HTTP availability check finished; available=" .. tostring(HttpAvailable))
+	end)
+end
+HttpAvailable, HttpAvailabilityError = false, nil
 if ToolType == "plugin" then
 	HttpService.Changed:connect(function()
-		HttpAvailable, HttpAvailabilityError = (HttpInterface:WaitForChild("Test")):InvokeServer()
+		RefreshHttpAvailabilityAsync()
 	end)
 end
 local XL_ = false
@@ -17721,6 +18110,8 @@ clicking = false
 selecting = false
 click_x, click_y = 0, 0
 override_selection = false
+touch_selection_input = nil
+last_touch_selection_time = 0
 SelectionBoxes = {}
 SelectionExistenceListeners = {}
 SelectionBoxColor = BrickColor.new("Cyan")
@@ -17729,11 +18120,249 @@ Connections = {}
 UI = (RbxUtility.Create("ScreenGui"))({
 	Name = "Building Tools by F3X (UI)",
 })
-if ToolType == "tool" then
-	UI.Parent = GUIContainer
-elseif ToolType == "plugin" then
-	UI.Parent = CoreGui
+pcall(function()
+	UI.ResetOnSpawn = false
+	UI.IgnoreGuiInset = true
+	UI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+end)
+UI = LTProtectUI(UI, {
+	name = "Building Tools by F3X (UI)",
+	keepName = true,
+	harden = true,
+	deep = true,
+	watch = true,
+	rename = false,
+}) or UI
+F3XDebug("Main UI protected; parent=" .. tostring(UI.Parent))
+if not UI.Parent then
+	if ToolType == "tool" then
+		UI.Parent = GUIContainer
+	elseif ToolType == "plugin" then
+		UI.Parent = CoreGui
+	end
 end
+F3XDebug("Main UI final parent=" .. tostring(UI.Parent))
+BTMobileUI = {
+	DragFrames = {},
+	Connections = {},
+	ScaledRoot = nil,
+	LastViewport = Vector2.new(0, 0),
+	Scale = 1,
+}
+pcall(function()
+	BTMobileUI.ScaledRoot = Instance.new("UIScale")
+	BTMobileUI.ScaledRoot.Name = "BTResponsiveScale"
+	BTMobileUI.ScaledRoot.Scale = 1
+	BTMobileUI.ScaledRoot.Parent = UI
+end)
+function BTMobileUI:getViewport()
+	local aD = Workspace.CurrentCamera
+	if aD then
+		return aD.ViewportSize
+	end
+	return UI.AbsoluteSize
+end
+function BTMobileUI:updateScale()
+	local o9ax = self:getViewport()
+	if o9ax.x <= 0 or o9ax.y <= 0 then
+		return
+	end
+	local W9pAZ = math.min(o9ax.x / 460, o9ax.y / 420, 1)
+	if UserInputService.TouchEnabled or o9ax.x < 700 or o9ax.y < 420 then
+		W9pAZ = math.min(W9pAZ, 0.86)
+	end
+	W9pAZ = math.max(W9pAZ, 0.65)
+	if not self.ScaledRoot then
+		W9pAZ = 1
+	end
+	self.Scale = W9pAZ
+	if self.ScaledRoot then
+		self.ScaledRoot.Scale = W9pAZ
+	end
+	self.LastViewport = o9ax
+end
+function BTMobileUI:clampFrame(ocU)
+	if not ocU or not ocU.Parent or not ocU:IsA("GuiObject") then
+		return
+	end
+	local tMl3 = self:getViewport()
+	local rC = self.Scale > 0 and self.Scale or 1
+	local i8s = tMl3.x / rC
+	local j6 = tMl3.y / rC
+	local pG7 = ocU.AbsoluteSize.x / rC
+	local cU8 = ocU.AbsoluteSize.y / rC
+	if i8s <= 0 or j6 <= 0 then
+		return
+	end
+	local aP = ocU.AnchorPoint or Vector2.new(0, 0)
+	local cP = ocU.Position
+	local aX = cP.X.Scale * i8s + cP.X.Offset
+	local aY = cP.Y.Scale * j6 + cP.Y.Offset
+	local minX = aP.X * pG7
+	local maxX = i8s - (1 - aP.X) * pG7
+	local minY = aP.Y * cU8
+	local maxY = j6 - (1 - aP.Y) * cU8
+	if maxX < minX then
+		maxX = minX
+	end
+	if maxY < minY then
+		maxY = minY
+	end
+	local n7J = math.max(minX, math.min(aX, maxX))
+	local zB2 = math.max(minY, math.min(aY, maxY))
+	ocU.Position = UDim2.new(n7J / i8s, 0, zB2 / j6, 0)
+end
+function BTMobileUI:clampAll()
+	for EN, _ in pairs(self.DragFrames) do
+		self:clampFrame(EN)
+	end
+end
+function BTMobileUI:cleanupDrag(Frame)
+	local Cd = self.Connections[Frame]
+	if Cd then
+		for i, C in pairs(Cd) do
+			pcall(function()
+				C:Disconnect()
+			end)
+			Cd[i] = nil
+		end
+	end
+	self.Connections[Frame] = nil
+	self.DragFrames[Frame] = nil
+end
+function BTMobileUI:addDrag(Frame)
+	if self.DragFrames[Frame] or not Frame:IsA("GuiObject") then
+		return
+	end
+	self.DragFrames[Frame] = true
+	self.Connections[Frame] = {}
+	Frame.Active = true
+	pcall(function()
+		Frame.Draggable = false
+	end)
+	local Gx = Frame:FindFirstChild("Title") or Frame
+	local dragging = false
+	local dragStart = nil
+	local startPos = nil
+	local dragPointer = nil
+	local pendingInput = nil
+	local function addConnection(C)
+		table.insert(self.Connections[Frame], C)
+		return C
+	end
+	local function stopDrag()
+		dragging = false
+		dragPointer = nil
+		pendingInput = nil
+		self:clampFrame(Frame)
+	end
+	local function update(input)
+		if not dragging or not input then
+			return
+		end
+		local tMl3 = self:getViewport()
+		local rC = self.Scale > 0 and self.Scale or 1
+		local i8s = tMl3.x / rC
+		local j6 = tMl3.y / rC
+		if i8s <= 0 or j6 <= 0 then
+			return
+		end
+		local pG7 = Frame.AbsoluteSize.x / rC
+		local cU8 = Frame.AbsoluteSize.y / rC
+		local aP = Frame.AnchorPoint or Vector2.new(0, 0)
+		local sX = startPos.X.Scale * i8s + startPos.X.Offset
+		local sY = startPos.Y.Scale * j6 + startPos.Y.Offset
+		local dX = (input.Position.X - dragStart.X) / rC
+		local dY = (input.Position.Y - dragStart.Y) / rC
+		local minX = aP.X * pG7
+		local maxX = i8s - (1 - aP.X) * pG7
+		local minY = aP.Y * cU8
+		local maxY = j6 - (1 - aP.Y) * cU8
+		if maxX < minX then
+			maxX = minX
+		end
+		if maxY < minY then
+			maxY = minY
+		end
+		local nX = math.max(minX, math.min(sX + dX, maxX))
+		local nY = math.max(minY, math.min(sY + dY, maxY))
+		Frame.Position = UDim2.new(nX / i8s, 0, nY / j6, 0)
+	end
+	addConnection(Gx.InputBegan:connect(function(input)
+		if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then
+			return
+		end
+		dragging = true
+		dragPointer = input
+		dragStart = input.Position
+		startPos = Frame.Position
+	end))
+	addConnection(UserInputService.InputChanged:connect(function(input)
+		if not dragging then
+			return
+		end
+		if input.UserInputType == Enum.UserInputType.MouseMovement then
+			pendingInput = input
+		elseif input.UserInputType == Enum.UserInputType.Touch and input == dragPointer then
+			pendingInput = input
+		end
+	end))
+	addConnection(UserInputService.InputEnded:connect(function(input)
+		if not dragging then
+			return
+		end
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or (input.UserInputType == Enum.UserInputType.Touch and input == dragPointer) then
+			stopDrag()
+		end
+	end))
+	addConnection(RunService.RenderStepped:connect(function()
+		local frameInput = pendingInput
+		if not frameInput then
+			return
+		end
+		pendingInput = nil
+		update(frameInput)
+	end))
+	addConnection(UI:GetPropertyChangedSignal("AbsoluteSize"):connect(function()
+		self:clampFrame(Frame)
+	end))
+	addConnection(Frame:GetPropertyChangedSignal("AbsoluteSize"):connect(function()
+		self:clampFrame(Frame)
+	end))
+	addConnection(Frame.AncestryChanged:connect(function(_, parent)
+		if not parent then
+			self:cleanupDrag(Frame)
+		end
+	end))
+	self:clampFrame(Frame)
+end
+function BTMobileUI:watchFrame(Frame)
+	if not Frame:IsA("GuiObject") then
+		return
+	end
+	if Frame.Parent == UI and (Frame:FindFirstChild("Title") or Frame.Active) then
+		self:addDrag(Frame)
+	end
+	Frame.ChildAdded:connect(function(q7a)
+		if q7a.Name == "Title" and Frame.Parent == UI then
+			self:addDrag(Frame)
+		end
+	end)
+end
+UI.ChildAdded:connect(function(S)
+	BTMobileUI:updateScale()
+	BTMobileUI:watchFrame(S)
+end)
+pcall(function()
+	UserInputService:GetPropertyChangedSignal("TouchEnabled"):connect(function()
+		BTMobileUI:updateScale()
+	end)
+end)
+pcall(function()
+	Workspace:GetPropertyChangedSignal("CurrentCamera"):connect(function()
+		BTMobileUI:updateScale()
+	end)
+end)
 Dragger = nil
 function updateSelectionBoxColor()
 	for lDdmS, k1kp870h in pairs(SelectionBoxes) do
@@ -18475,11 +19104,11 @@ ColorPicker = {
 }
 ExportInterface = {}
 ExportInterface.Export = function(J8)
-	print("preforming ExportInterface.Export")
+	F3XDebug("ExportInterface.Export")
 	local VchN = {
-		Workspace = game:GetService("Workspace"),
+		Workspace = Workspace,
 	}
-	local ws7lX6m_ = game:GetService("HttpService")
+	local ws7lX6m_ = HttpService
 	local cXif = script.Parent
 	local UV = script.Parent.Parent
 	local o6kB = require(UV:WaitForChild("SupportLibrary"))
@@ -18830,7 +19459,7 @@ IE = {
 			XL_ = false
 			ShowStartupNotifications()
 		elseif JZDx8 and z3J then
-			print("[Building Tools by F3X] Uploaded Export: " .. ufXNV.id)
+			F3XDebug("Uploaded Export: " .. tostring(ufXNV.id))
 			MOd9uwnL.Loading.Visible = false
 			MOd9uwnL.Info.Size = UDim2.new(1, 0, 0, 0)
 			MOd9uwnL.Info.CreationID.Text = ufXNV.id
@@ -19154,10 +19783,18 @@ function equipBT(O)
 		end
 	end
 	if CurrentTool and CurrentTool.Listeners.Equipped then
-		CurrentTool.Listeners.Equipped()
+		local okEquip, errEquip = xpcall(CurrentTool.Listeners.Equipped, F3XTraceback)
+		if not okEquip then
+			F3XWarn("Current tool equip listener failed: " .. tostring(errEquip))
+		end
 	end
 	Dock.Visible = true
-	(coroutine.wrap(ShowStartupNotifications))()
+	coroutine.wrap(function()
+		local okStartup, errStartup = xpcall(ShowStartupNotifications, F3XTraceback)
+		if not okStartup then
+			F3XWarn("Startup notifications failed: " .. tostring(errStartup))
+		end
+	end)()
 	Connections.SelectionModeStart = Support.AddUserInputListener("Began", "Keyboard", false, function(h)
 		if
 			h.KeyCode == Enum.KeyCode.LeftShift
@@ -19299,7 +19936,51 @@ function equipBT(O)
 	)
 	table.insert(
 		Connections,
+		UserInputService.InputBegan:connect(function(input, gameProcessed)
+			if input.UserInputType ~= Enum.UserInputType.Touch or gameProcessed or touch_selection_input then
+				return
+			end
+			if UserInputService:GetFocusedTextBox() then
+				return
+			end
+			touch_selection_input = input
+			last_touch_selection_time = tick()
+			clicking = true
+			local pointerPosition = getSelectionPointerPosition(input)
+			if pointerPosition then
+				click_x, click_y = pointerPosition.X, pointerPosition.Y
+			end
+			updateSelectionTargetBox(input)
+		end)
+	)
+	table.insert(
+		Connections,
+		UserInputService.InputChanged:connect(function(input)
+			if input.UserInputType ~= Enum.UserInputType.Touch or input ~= touch_selection_input then
+				return
+			end
+			updateSelectionTargetBox(input)
+		end)
+	)
+	table.insert(
+		Connections,
+		UserInputService.InputEnded:connect(function(input)
+			if input.UserInputType ~= Enum.UserInputType.Touch or input ~= touch_selection_input then
+				return
+			end
+			clicking = false
+			applyPointerSelection(input, true)
+			updateSelectionTargetBox(input)
+			touch_selection_input = nil
+			last_touch_selection_time = tick()
+		end)
+	)
+	table.insert(
+		Connections,
 		Mouse.Button1Down:connect(function()
+			if touch_selection_input or tick() - last_touch_selection_time < 0.25 then
+				return
+			end
 			clicking = true
 			click_x, click_y = Mouse.X, Mouse.Y
 			if selecting then
@@ -19313,6 +19994,9 @@ function equipBT(O)
 	table.insert(
 		Connections,
 		Mouse.Move:connect(function()
+			if touch_selection_input then
+				return
+			end
 			if
 				not override_selection
 				and not Select2D.enabled
@@ -19322,12 +20006,7 @@ function equipBT(O)
 			then
 				Select2D:start()
 			end
-			if not override_selection and isSelectable(Mouse.Target) and TargetBox.Adornee ~= Mouse.Target then
-				TargetBox.Adornee = Mouse.Target
-			end
-			if not override_selection and (not isSelectable(Mouse.Target)) then
-				TargetBox.Adornee = nil
-			end
+			updateSelectionTargetBox()
 			if CurrentTool and CurrentTool.Listeners.Move then
 				CurrentTool.Listeners.Move()
 			end
@@ -19339,25 +20018,12 @@ function equipBT(O)
 	table.insert(
 		Connections,
 		Mouse.Button1Up:connect(function()
+			if touch_selection_input or tick() - last_touch_selection_time < 0.25 then
+				return
+			end
 			clicking = false
-			if not Select2D.enabled and (Mouse.X ~= click_x or Mouse.Y ~= click_y) then
-				override_selection = true
-			end
-			if not override_selection and not selecting and (not isSelectable(Mouse.Target)) then
-				Selection:clear()
-			end
-			if not override_selection and selecting then
-				if not Selection:find(Mouse.Target) then
-					if isSelectable(Mouse.Target) then
-						Selection:add(Mouse.Target)
-					end
-				elseif Mouse.X == click_x and Mouse.Y == click_y and Selection:find(Mouse.Target) then
-					Selection:remove(Mouse.Target)
-				end
-			elseif not override_selection and isSelectable(Mouse.Target) then
-				Selection:clear()
-				Selection:add(Mouse.Target)
-			end
+			applyPointerSelection(nil, false)
+			updateSelectionTargetBox()
 			if CurrentTool and CurrentTool.Listeners.Button1Up then
 				CurrentTool.Listeners.Button1Up()
 			end
@@ -19398,17 +20064,19 @@ function unequipBT()
 		Connections[vxWBA] = nil
 	end
 	if CurrentTool and CurrentTool.Listeners.Unequipped then
-		CurrentTool.Listeners.Unequipped()
+		local okUnequip, errUnequip = xpcall(CurrentTool.Listeners.Unequipped, F3XTraceback)
+		if not okUnequip then
+			F3XWarn("Current tool unequip listener failed: " .. tostring(errUnequip))
+		end
 	end
 end
-print("Starting Tool List")
+F3XDebug("Starting Tool List")
 local q = {
 	{
 		"Anchor",
 		function()
 			repeat
 				wait()
-				print("I'm hooked")
 			until _G.BTCoreEnv and _G.BTCoreEnv.tool and _G.BTCoreEnv.tool.CoreReady
 			setfenv(1, _G.BTCoreEnv.tool)
 			Tools.Anchor = {}
@@ -26152,19 +26820,59 @@ if not _G.BTCoreEnv then
 end
 _G.BTCoreEnv.tool = getfenv(0)
 CoreReady = true
-for Q2jN, Y1v09ha in pairs(q) do
-	Y1v09ha[2]()
-end
-for XWU, t in pairs(q) do
-	if not Tools[t[1]] then
-		repeat
-			wait()
-			print("is tool not hooking?")
-		until Tools[t[1]]
+F3XDebug("CoreReady set; loading tool modules")
+ToolLoadErrors = {}
+for Q2jN, Y1v09ha in ipairs(q) do
+	local toolName = Y1v09ha[1]
+	local ok, err = xpcall(Y1v09ha[2], F3XTraceback)
+	if not ok then
+		ToolLoadErrors[toolName] = err
+		F3XWarn("Tool module failed while loading " .. tostring(toolName) .. ": " .. tostring(err))
+		Tools[toolName] = Tools[toolName] or {
+			Color = BrickColor.new("Really black"),
+			Listeners = {},
+			State = {},
+			Connections = {},
+			Loaded = true,
+			LoadFailed = true,
+			LoadError = err,
+		}
 	end
-	repeat
+end
+local toolLoadDeadline = tick() + 8
+for XWU, t in ipairs(q) do
+	local toolName = t[1]
+	while not Tools[toolName] and tick() < toolLoadDeadline do
 		wait()
-	until Tools[t[1]].Loaded
+	end
+	if not Tools[toolName] then
+		local err = "tool table was not created before timeout"
+		ToolLoadErrors[toolName] = err
+		F3XWarn("Tool module failed while loading " .. tostring(toolName) .. ": " .. err)
+		Tools[toolName] = {
+			Color = BrickColor.new("Really black"),
+			Listeners = {},
+			State = {},
+			Connections = {},
+			Loaded = true,
+			LoadFailed = true,
+			LoadError = err,
+		}
+	end
+	while Tools[toolName] and not Tools[toolName].Loaded and tick() < toolLoadDeadline do
+		wait()
+	end
+	if Tools[toolName] and not Tools[toolName].Loaded then
+		local err = "tool did not set Loaded before timeout"
+		ToolLoadErrors[toolName] = err
+		F3XWarn("Tool module failed while loading " .. tostring(toolName) .. ": " .. err)
+		Tools[toolName].Loaded = true
+		Tools[toolName].LoadFailed = true
+		Tools[toolName].LoadError = err
+	end
+end
+if next(ToolLoadErrors) then
+	F3XWarn("F3X loaded with tool errors. Inspect _G.F3XDebugLog and _G.BTCoreEnv.tool.ToolLoadErrors.")
 end
 if ToolType == "plugin" then
 	local i = false
@@ -26183,3 +26891,6 @@ elseif ToolType == "tool" then
 	Tool.Equipped:connect(equipBT)
 	Tool.Unequipped:connect(unequipBT)
 end
+F3XDebug("Startup complete; equip connections registered")
+RefreshHttpAvailabilityAsync()
+RefreshVersionStatusAsync()

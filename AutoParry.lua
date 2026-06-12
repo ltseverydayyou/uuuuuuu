@@ -2804,7 +2804,7 @@ local function AutoParryStep(dt)
 	updateRingColors();
 	applyVisualizerVisible(showViz);
 end;
-local StepSignal = RunService.PreSimulation or RunService.Heartbeat;
+local StepSignal = RunService.PostSimulation or RunService.Heartbeat;
 trackConnection(StepSignal:Connect(function(dt)
 	local ok, err = xpcall(function()
 		dt = math.clamp(dt or 0, 0, 0.25);

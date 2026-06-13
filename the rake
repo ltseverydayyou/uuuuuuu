@@ -249,10 +249,18 @@ if game.GameId == 847722000 then
 		cfgSet(k, v == true)
 	end
 
+	local lp0 = game:GetService("Players").LocalPlayer
+	local dzMin = lp0 and tonumber(lp0.CameraMinZoomDistance) or 0.5
+	local dzMax = 100000
 	st.fov = cfgNum("fov", tonumber(_G.FieldOfView) or 70, 1, 120)
 	st.fovOn = cfgBool("fovOn", _G.enableFOV == true)
 	st.fovUiFix = cfgBool("fovUiFix", true)
-	st.spd = cfgNum("spd", tonumber(_G.WalkSpeedd) or 16, 0, 30)
+	st.minZoom = cfgNum("minZoom", tonumber(_G.RakeMinZoom) or 0.5, 0.5, 100000)
+	st.maxZoom = cfgNum("maxZoom", tonumber(_G.RakeMaxZoom) or dzMax or 100000, 0.5, 100000)
+	if st.maxZoom < st.minZoom then
+		st.maxZoom = st.minZoom
+	end
+	st.spd = cfgNum("spd", tonumber(_G.WalkSpeedd) or 16, 0, 30.5)
 	st.spdOn = cfgBool("spdOn", _G.enableSpeed == true)
 	st.freeCam = false
 	st.freeCamSpeed = 0.2
@@ -275,6 +283,13 @@ if game.GameId == 847722000 then
 	st.noFall = cfgBool("noFall", false)
 	st.instaDrop = cfgBool("instaDrop", false)
 	st.instaTrap = cfgBool("instaTrap", false)
+	st.autoSupplyCollect = cfgBool("autoSupplyCollect", false)
+	st.autoHealSelf = cfgBool("autoHealSelf", false)
+	st.autoHealPlayers = cfgBool("autoHealPlayers", false)
+	st.healAutoEquip = cfgBool("healAutoEquip", true)
+	st.healSelfAt = cfgNum("healSelfAt", 55, 1, 100)
+	st.healPlayerAt = cfgNum("healPlayerAt", 60, 1, 100)
+	st.noMonitorStatic = cfgBool("noMonitorStatic", false)
 	st.espSize = cfgNum("espSize", 12, 8, 24)
 	st.espScan = cfgNum("espScan", 0.75, 0.2, 3)
 	st.espMax = cfgNum("espMax", 0, 0, 5000)
@@ -325,6 +340,10 @@ if game.GameId == 847722000 then
 	st.forcePcDevice = cfgBool("forcePcDevice", false)
 	st.flashlightNoShadows = cfgBool("flashlightNoShadows", false)
 	st.flashlightBoost = cfgBool("flashlightBoost", false)
+	st.flashlightBrightness = math.min(cfgNum("flashlightBrightness", 2, 0, 10), 4)
+	st.flashlightRange = math.min(cfgNum("flashlightRange", 45, 8, 120), 80)
+	st.flashlightAngle = math.min(cfgNum("flashlightAngle", 70, 15, 120), 90)
+	st.flashlightBeamWidth = math.min(cfgNum("flashlightBeamWidth", 0.5, 0, 3), 1)
 	st.disableMenuReopen = cfgBool("disableMenuReopen", false)
 	st.forceBackpack = cfgBool("forceBackpack", false)
 	st.forceMouseIcon = cfgBool("forceMouseIcon", false)
@@ -352,6 +371,8 @@ if game.GameId == 847722000 then
 	_G.FieldOfView = st.fov
 	_G.enableFOV = st.fovOn
 	_G.RakeFovUiFix = st.fovUiFix
+	_G.RakeMinZoom = st.minZoom
+	_G.RakeMaxZoom = st.maxZoom
 	_G.WalkSpeedd = st.spd
 	_G.enableSpeed = st.spdOn
 	_G.FreeCam = false
@@ -374,6 +395,13 @@ if game.GameId == 847722000 then
 	_G.NoFallDMG = st.noFall
 	_G.InstaOpenSupplyDrop = st.instaDrop
 	_G.InstaCloseRakeTrap = st.instaTrap
+	_G.RakeAutoSupplyCollect = st.autoSupplyCollect
+	_G.RakeAutoHealSelf = st.autoHealSelf
+	_G.RakeAutoHealPlayers = st.autoHealPlayers
+	_G.RakeHealAutoEquip = st.healAutoEquip
+	_G.RakeHealSelfAt = st.healSelfAt
+	_G.RakeHealPlayerAt = st.healPlayerAt
+	_G.RakeNoMonitorStatic = st.noMonitorStatic
 	_G.RakeDisableDeathFx = st.disableDeathFx
 	_G.RakeDisableMotionBlur = st.disableMotionBlur
 	_G.RakeDisableMenuFx = st.disableMenuFx
@@ -395,6 +423,10 @@ if game.GameId == 847722000 then
 	_G.RakeBlockGroupPrompts = st.blockGroupPrompts
 	_G.RakeFlashlightNoShadows = st.flashlightNoShadows
 	_G.RakeFlashlightBoost = st.flashlightBoost
+	_G.RakeFlashlightBrightness = st.flashlightBrightness
+	_G.RakeFlashlightRange = st.flashlightRange
+	_G.RakeFlashlightAngle = st.flashlightAngle
+	_G.RakeFlashlightBeamWidth = st.flashlightBeamWidth
 	_G.RakeDisableMenuReopen = st.disableMenuReopen
 	_G.RakeForceBackpack = st.forceBackpack
 	_G.RakeForceMouseIcon = st.forceMouseIcon
@@ -1007,6 +1039,9 @@ if game.GameId == 847722000 then
 	clientBypass.ch = setmetatable({}, { __mode = "k" })
 	clientBypass.chT = 3
 	clientBypass.fullbrightOn = false
+	clientBypass.fullbrightConns = {}
+	clientBypass.lightState = setmetatable({}, { __mode = "k" })
+	clientBypass.lightConns = setmetatable({}, { __mode = "k" })
 	clientBypass.lastSafe = nil
 	clientBypass.fovUiCache = setmetatable({}, { __mode = "k" })
 	clientBypass.fovUiScanned = false
@@ -1566,48 +1601,235 @@ if game.GameId == 847722000 then
 		return true
 	end
 
+	function clientBypass.flashlightRoots()
+		local lp = Plrs.LocalPlayer
+		local list = {}
+		local ch = getChar()
+		local bp = lp and ffc(lp, "Backpack")
+		for _, root in { ch, bp } do
+			if root then
+				for _, obj in kids(root) do
+					if obj:IsA("Tool") and obj.Name:lower():find("flashlight", 1, true) then
+						list[#list + 1] = obj
+					end
+				end
+			end
+		end
+		return list
+	end
+
+	function clientBypass.saveLightState(obj)
+		local rec = clientBypass.lightState[obj]
+		if rec then
+			return rec
+		end
+		rec = {}
+		clientBypass.lightState[obj] = rec
+		pcall(function()
+			if obj:IsA("Light") then
+				rec.Brightness = obj.Brightness
+				rec.Range = obj.Range
+				rec.Shadows = obj.Shadows
+				rec.Enabled = obj.Enabled
+				if obj:IsA("SpotLight") then
+					rec.Angle = obj.Angle
+				end
+			elseif obj:IsA("Beam") then
+				rec.Enabled = obj.Enabled
+				rec.Width0 = obj.Width0
+				rec.Width1 = obj.Width1
+				rec.Brightness = obj.Brightness
+				rec.LightEmission = obj.LightEmission
+				rec.Transparency = obj.Transparency
+			elseif obj:IsA("ParticleEmitter") then
+				rec.Enabled = obj.Enabled
+				rec.Rate = obj.Rate
+				rec.LightEmission = obj.LightEmission
+				rec.ZOffset = obj.ZOffset
+			elseif obj:IsA("BasePart") then
+				rec.Transparency = obj.Transparency
+			end
+		end)
+		return rec
+	end
+
+	function clientBypass.setObjProp(obj, prop, val)
+		pcall(function()
+			if obj[prop] ~= val then
+				obj[prop] = val
+			end
+		end)
+	end
+
+	function clientBypass.restoreLightObj(obj, rec)
+		if not (obj and obj.Parent and type(rec) == "table") then
+			return false
+		end
+		for k, v in rec do
+			clientBypass.setObjProp(obj, k, v)
+		end
+		return true
+	end
+
+	function clientBypass.restoreLightTool(root)
+		local n = 0
+		for obj, rec in clientBypass.lightState do
+			if obj and obj.Parent and (not root or obj:IsDescendantOf(root)) then
+				if clientBypass.restoreLightObj(obj, rec) then
+					n += 1
+				end
+				clientBypass.lightState[obj] = nil
+			end
+		end
+		return n
+	end
+
+	function clientBypass.restoreLightToolBypasses()
+		local n = clientBypass.restoreLightTool(nil)
+		for obj, conns in clientBypass.lightConns do
+			if type(conns) == "table" then
+				for _, c in conns do
+					pcall(function()
+						c:Disconnect()
+					end)
+				end
+			end
+			clientBypass.lightConns[obj] = nil
+		end
+		return n
+	end
+
+	function clientBypass.isFlashlightOn(tool)
+		local got = false
+		for _, obj in desc(tool) do
+			if obj:IsA("Light") then
+				got = true
+				local ok, on = pcall(function()
+					return obj.Enabled == true and obj.Brightness > 0 and obj.Range > 0
+				end)
+				if ok and on then
+					return true
+				end
+			elseif obj:IsA("Beam") then
+				got = true
+				local ok, on = pcall(function()
+					return obj.Enabled == true and ((obj.Width0 or 0) > 0.02 or (obj.Width1 or 0) > 0.02)
+				end)
+				if ok and on then
+					return true
+				end
+			elseif obj:IsA("ParticleEmitter") and obj.Name:lower():find("light", 1, true) then
+				got = true
+				local ok, on = pcall(function()
+					return obj.Enabled == true and obj.Rate > 0
+				end)
+				if ok and on then
+					return true
+				end
+			end
+		end
+		return got == false
+	end
+
+	function clientBypass.bindFlashlightObj(obj)
+		if clientBypass.lightConns[obj] then
+			return
+		end
+		local conns = {}
+		clientBypass.lightConns[obj] = conns
+		local function reapply()
+			task.defer(function()
+				if st.flashlightBoost == true or st.flashlightNoShadows == true then
+					clientBypass.applyLightToolBypasses()
+				end
+			end)
+		end
+		local props = {}
+		if obj:IsA("Light") then
+			props = { "Enabled", "Brightness", "Range", "Shadows" }
+			if obj:IsA("SpotLight") then
+				props[#props + 1] = "Angle"
+			end
+		elseif obj:IsA("Beam") then
+			props = { "Enabled", "Width0", "Width1", "Brightness", "LightEmission", "Transparency" }
+		elseif obj:IsA("ParticleEmitter") then
+			props = { "Enabled", "Rate", "LightEmission", "ZOffset" }
+		else
+			return
+		end
+		for _, prop in props do
+			local ok, con = pcall(function()
+				return obj:GetPropertyChangedSignal(prop):Connect(reapply)
+			end)
+			if ok and con then
+				conns[#conns + 1] = con
+			end
+		end
+	end
+
+	function clientBypass.bindFlashlightTool(tool)
+		for _, obj in desc(tool) do
+			if obj:IsA("Light") or obj:IsA("Beam") or (obj:IsA("ParticleEmitter") and obj.Name:lower():find("light", 1, true)) then
+				clientBypass.bindFlashlightObj(obj)
+			end
+		end
+	end
+
 	function clientBypass.applyLightToolBypasses()
-		if not (st.flashlightNoShadows == true or st.flashlightBoost == true) then
-			return 0
+		local active = st.flashlightNoShadows == true or st.flashlightBoost == true
+		if not active then
+			return clientBypass.restoreLightToolBypasses()
 		end
 		local n = 0
-		local function scan(root)
-			if not root then
-				return
+		for _, tool in clientBypass.flashlightRoots() do
+			clientBypass.bindFlashlightTool(tool)
+			local on = clientBypass.isFlashlightOn(tool)
+			if on ~= true then
+				n += clientBypass.restoreLightTool(tool)
+				continue
 			end
-			for _, obj in desc(root) do
+			for _, obj in desc(tool) do
 				if obj:IsA("Light") then
+					clientBypass.saveLightState(obj)
 					if st.flashlightNoShadows == true then
-						pcall(function()
-							obj.Shadows = false
-						end)
+						clientBypass.setObjProp(obj, "Shadows", false)
 					end
-					if st.flashlightBoost == true and not obj:GetAttribute("RakeAdminBoosted") then
-						pcall(function()
-							obj:SetAttribute("RakeAdminBoosted", true)
-							obj:SetAttribute("RakeAdminBrightness", obj.Brightness)
-							obj.Brightness = math.clamp((tonumber(obj.Brightness) or 1) * 2, 0, 20)
-							if obj:IsA("SpotLight") then
-								obj.Angle = math.clamp((tonumber(obj.Angle) or 45) * 1.1, 0, 180)
-							end
-						end)
+					if st.flashlightBoost == true and obj.Enabled == true then
+						clientBypass.setObjProp(obj, "Brightness", math.clamp(tonumber(st.flashlightBrightness) or 2, 0, 10))
+						clientBypass.setObjProp(obj, "Range", math.clamp(tonumber(st.flashlightRange) or 45, 8, 120))
+						if obj:IsA("SpotLight") then
+							clientBypass.setObjProp(obj, "Angle", math.clamp(tonumber(st.flashlightAngle) or 70, 15, 120))
+						end
+					end
+					n += 1
+				elseif obj:IsA("Beam") then
+					clientBypass.saveLightState(obj)
+					if st.flashlightBoost == true and obj.Enabled == true then
+						local w = math.clamp(tonumber(st.flashlightBeamWidth) or 0.5, 0, 3)
+						clientBypass.setObjProp(obj, "Width0", w)
+						clientBypass.setObjProp(obj, "Width1", w * 1.15)
+						clientBypass.setObjProp(obj, "Brightness", math.clamp((tonumber(st.flashlightBrightness) or 2) * 0.35, 0, 4))
+						clientBypass.setObjProp(obj, "LightEmission", 0.55)
+						clientBypass.setObjProp(obj, "Transparency", NumberSequence.new(0.45))
+					end
+					n += 1
+				elseif obj:IsA("ParticleEmitter") and obj.Name:lower():find("light", 1, true) then
+					clientBypass.saveLightState(obj)
+					if st.flashlightBoost == true and obj.Enabled == true then
+						clientBypass.setObjProp(obj, "Rate", math.clamp((tonumber(st.flashlightBrightness) or 2) * 4, 0, 30))
+						clientBypass.setObjProp(obj, "LightEmission", 0.65)
+						clientBypass.setObjProp(obj, "ZOffset", 0.1)
 					end
 					n += 1
 				elseif obj:IsA("BasePart") and st.flashlightNoShadows == true and (obj.Name == "LShadow1" or obj.Name == "LShadow2") then
-					pcall(function()
-						obj.Transparency = 1
-					end)
+					clientBypass.saveLightState(obj)
+					clientBypass.setObjProp(obj, "Transparency", 1)
 					n += 1
 				end
 			end
 		end
-		for _, p in kids(Plrs) do
-			scan(p.Character)
-		end
-		scan(ffcr(Ws, "Rake"))
 		return n
 	end
-
 
 	function clientBypass.patchMovementModule(mod, enabled)
 		if type(mod) ~= "table" then
@@ -2200,41 +2422,122 @@ if game.GameId == 847722000 then
 		return true
 	end
 
-	function clientBypass.applyFullbright()
-		if st.fullbright ~= true then
-			if clientBypass.fullbrightOn == true then
-				clientBypass.fullbrightOn = false
+	clientBypass.fullbrightProps = {
+		"Brightness",
+		"ClockTime",
+		"Ambient",
+		"OutdoorAmbient",
+		"FogStart",
+		"FogEnd",
+		"GlobalShadows",
+		"ExposureCompensation",
+	}
+
+	clientBypass.fullbrightVals = {
+		Brightness = 4,
+		ClockTime = 14,
+		Ambient = Color3.new(1, 1, 1),
+		OutdoorAmbient = Color3.new(1, 1, 1),
+		FogStart = 0,
+		FogEnd = 1e10,
+		GlobalShadows = false,
+		ExposureCompensation = 0.5,
+	}
+
+	function clientBypass.getLightOrig()
+		local store = rawget(genv, "__RakeLightingOriginals")
+		if type(store) ~= "table" then
+			store = {}
+			rawset(genv, "__RakeLightingOriginals", store)
+		end
+		for _, prop in clientBypass.fullbrightProps do
+			if store[prop] == nil then
 				pcall(function()
-					local o = clientBypass.originals
-					if o.Lighting_Brightness ~= nil then Lit.Brightness = o.Lighting_Brightness end
-					if o.Lighting_ClockTime ~= nil then Lit.ClockTime = o.Lighting_ClockTime end
-					if o.Lighting_Ambient ~= nil then Lit.Ambient = o.Lighting_Ambient end
-					if o.Lighting_OutdoorAmbient ~= nil then Lit.OutdoorAmbient = o.Lighting_OutdoorAmbient end
-					if o.Lighting_FogStart ~= nil then Lit.FogStart = o.Lighting_FogStart end
-					if o.Lighting_FogEnd ~= nil then Lit.FogEnd = o.Lighting_FogEnd end
-					if o.Lighting_GlobalShadows ~= nil then Lit.GlobalShadows = o.Lighting_GlobalShadows end
+					store[prop] = Lit[prop]
 				end)
 			end
+		end
+		return store
+	end
+
+	function clientBypass.setFullbrightValues()
+		pcall(function()
+			for prop, val in clientBypass.fullbrightVals do
+				if Lit[prop] ~= val then
+					Lit[prop] = val
+				end
+			end
+		end)
+	end
+
+	function clientBypass.wipeFullbrightConns()
+		for i = #clientBypass.fullbrightConns, 1, -1 do
+			local c = clientBypass.fullbrightConns[i]
+			if c then
+				pcall(function()
+					c:Disconnect()
+				end)
+			end
+			clientBypass.fullbrightConns[i] = nil
+		end
+	end
+
+	function clientBypass.bindFullbrightSignals()
+		clientBypass.wipeFullbrightConns()
+		if st.fullbright ~= true then
+			return false
+		end
+		for _, prop in clientBypass.fullbrightProps do
+			local val = clientBypass.fullbrightVals[prop]
+			local ok, con = pcall(function()
+				return Lit:GetPropertyChangedSignal(prop):Connect(function()
+					if st.fullbright ~= true then
+						return
+					end
+					pcall(function()
+						if Lit[prop] ~= val then
+							Lit[prop] = val
+						end
+					end)
+				end)
+			end)
+			if ok and con then
+				clientBypass.fullbrightConns[#clientBypass.fullbrightConns + 1] = con
+			end
+		end
+		return true
+	end
+
+	function clientBypass.restoreFullbright()
+		clientBypass.fullbrightOn = false
+		rawset(genv, "__RakeFullbrightActive", false)
+		clientBypass.wipeFullbrightConns()
+		local store = rawget(genv, "__RakeLightingOriginals")
+		if type(store) ~= "table" then
 			return false
 		end
 		pcall(function()
-			clientBypass.fullbrightOn = true
-			local o = clientBypass.originals
-			if o.Lighting_Brightness == nil then o.Lighting_Brightness = Lit.Brightness end
-			if o.Lighting_ClockTime == nil then o.Lighting_ClockTime = Lit.ClockTime end
-			if o.Lighting_Ambient == nil then o.Lighting_Ambient = Lit.Ambient end
-			if o.Lighting_OutdoorAmbient == nil then o.Lighting_OutdoorAmbient = Lit.OutdoorAmbient end
-			if o.Lighting_FogStart == nil then o.Lighting_FogStart = Lit.FogStart end
-			if o.Lighting_FogEnd == nil then o.Lighting_FogEnd = Lit.FogEnd end
-			if o.Lighting_GlobalShadows == nil then o.Lighting_GlobalShadows = Lit.GlobalShadows end
-			Lit.Brightness = 3
-			Lit.ClockTime = 14
-			Lit.Ambient = Color3.new(1, 1, 1)
-			Lit.OutdoorAmbient = Color3.new(1, 1, 1)
-			Lit.FogStart = 0
-			Lit.FogEnd = 9e9
-			Lit.GlobalShadows = false
+			for _, prop in clientBypass.fullbrightProps do
+				if store[prop] ~= nil and Lit[prop] ~= store[prop] then
+					Lit[prop] = store[prop]
+				end
+			end
 		end)
+		return true
+	end
+
+	function clientBypass.applyFullbright(force)
+		if st.fullbright ~= true then
+			if clientBypass.fullbrightOn == true or rawget(genv, "__RakeFullbrightActive") == true then
+				return clientBypass.restoreFullbright()
+			end
+			return false
+		end
+		clientBypass.getLightOrig()
+		clientBypass.fullbrightOn = true
+		rawset(genv, "__RakeFullbrightActive", true)
+		clientBypass.setFullbrightValues()
+		clientBypass.bindFullbrightSignals()
 		return true
 	end
 
@@ -2812,6 +3115,185 @@ if game.GameId == 847722000 then
 			prompt = ffca(trap, "ProximityPrompt")
 		end
 		trapPrompt(prompt)
+	end
+
+	clientBypass.findTool = function(name)
+		name = tostring(name or ""):lower()
+		local lp = Plrs.LocalPlayer
+		local ch = getChar()
+		for _, root in { ch, lp and ffc(lp, "Backpack") } do
+			if root then
+				for _, obj in kids(root) do
+					if obj:IsA("Tool") and obj.Name:lower():find(name, 1, true) then
+						return obj
+					end
+				end
+			end
+		end
+		return nil
+	end
+
+	clientBypass.equipTool = function(tool)
+		if not tool or not tool:IsA("Tool") then
+			return false
+		end
+		local ch = getChar()
+		if ch and tool:IsDescendantOf(ch) then
+			return true
+		end
+		if st.healAutoEquip ~= true then
+			return false
+		end
+		local hum = getHum()
+		if not hum then
+			return false
+		end
+		return pcall(function()
+			hum:EquipTool(tool)
+		end)
+	end
+
+	clientBypass.firstAidReady = function(tool)
+		if not tool or not tool.Parent then
+			return false
+		end
+		if valOf(ffc(tool, "Done"), false) == true or valOf(ffc(tool, "Doing"), false) == true then
+			return false
+		end
+		local uses = ffc(tool, "Uses")
+		if uses and tonumber(valOf(uses, 1)) and tonumber(valOf(uses, 1)) <= 0 then
+			return false
+		end
+		return true
+	end
+
+	clientBypass.fireFirstAid = function(target)
+		local tool = clientBypass.findTool("firstaid") or clientBypass.findTool("first aid")
+		if not clientBypass.firstAidReady(tool) then
+			return false
+		end
+		clientBypass.equipTool(tool)
+		local ev = ffc(tool, "RemoteEvent")
+		if ev and ev:IsA("RemoteEvent") then
+			if target then
+				return pcall(function()
+					ev:FireServer("HealPlrStart", target)
+				end)
+			end
+			return pcall(function()
+				ev:FireServer("YourselfStart")
+			end)
+		end
+		if not target then
+			return pcall(function()
+				tool:Activate()
+			end)
+		end
+		return false
+	end
+
+	clientBypass.getHealTarget = function()
+		local ch = getChar()
+		local root = GET_HRP()
+		if not ch or not root then
+			return nil
+		end
+		local best, dist = nil, 5
+		for _, plr in kids(Plrs) do
+			local tc = plr.Character
+			if tc and tc ~= ch then
+				local hum = ffc(tc, "Humanoid")
+				local hrp = ffc(tc, "HumanoidRootPart")
+				if hum and hrp and hum.Health > 0 and hum.MaxHealth > 0 and hum.Health < hum.MaxHealth then
+					local pct = hum.Health / hum.MaxHealth * 100
+					local mag = (root.Position - hrp.Position).Magnitude
+					if pct <= (tonumber(st.healPlayerAt) or 60) and mag < dist then
+						dist = mag
+						best = tc
+					end
+				end
+			end
+		end
+		return best
+	end
+
+	clientBypass.autoFirstAid = function()
+		if st.autoHealSelf ~= true and st.autoHealPlayers ~= true then
+			return false
+		end
+		if time() - (clientBypass.lastHealT or 0) < 7.5 then
+			return false
+		end
+		local hum = getHum()
+		if not hum or hum.Health <= 0 or hum.MaxHealth <= 0 then
+			return false
+		end
+		if st.autoHealSelf == true and hum.Health < hum.MaxHealth and hum.Health / hum.MaxHealth * 100 <= (tonumber(st.healSelfAt) or 55) then
+			if clientBypass.fireFirstAid(nil) then
+				clientBypass.lastHealT = time()
+				return true
+			end
+		end
+		if st.autoHealPlayers == true then
+			local target = clientBypass.getHealTarget()
+			if target and clientBypass.fireFirstAid(target) then
+				clientBypass.lastHealT = time()
+				return true
+			end
+		end
+		return false
+	end
+
+	clientBypass.autoSupplyCollect = function()
+		if st.autoSupplyCollect ~= true then
+			return 0
+		end
+		local ev = ffc(Rep, "SupplyClientEvent")
+		local crates = ffc(ffc(Ws, "Debris"), "SupplyCrates")
+		if not ev or not crates then
+			return 0
+		end
+		local n = 0
+		for _, box in kids(crates) do
+			if box.Name == "Box" then
+				fastDrop(box)
+				local items = ffc(box, "Items_Folder")
+				for _, item in kids(items) do
+					if valOf(ffc(item, "Taken"), false) ~= true then
+						pcall(function()
+							ev:FireServer("Collect", item.Name)
+						end)
+						n += 1
+					end
+				end
+			end
+		end
+		return n
+	end
+
+	clientBypass.applyMonitorStaticBypass = function()
+		if st.noMonitorStatic ~= true then
+			return 0
+		end
+		local n = 0
+		local pg = clientBypass.getPlayerGui()
+		for _, root in { pg, getChar() } do
+			for _, obj in desc(root) do
+				if obj:IsA("Sound") and obj.Name:lower():find("static", 1, true) then
+					pcall(function()
+						obj.Volume = 0
+						obj.Playing = false
+					end)
+					n += 1
+				elseif obj:IsA("ImageLabel") and obj.Name:lower():find("static", 1, true) then
+					pcall(function()
+						obj.ImageTransparency = 1
+					end)
+					n += 1
+				end
+			end
+		end
+		return n
 	end
 
 	local function fastDoorLever()
@@ -4245,6 +4727,15 @@ if game.GameId == 847722000 then
 			if clientBypass and clientBypass.wipeFovConns then
 				clientBypass.wipeFovConns()
 			end
+			if clientBypass and clientBypass.wipeZoomConns then
+				clientBypass.wipeZoomConns()
+			end
+			if clientBypass and clientBypass.restoreFullbright then
+				clientBypass.restoreFullbright()
+			end
+			if clientBypass and clientBypass.restoreLightToolBypasses then
+				clientBypass.restoreLightToolBypasses()
+			end
 			if clientBypass and clientBypass.restoreMovementPatches then
 				clientBypass.restoreMovementPatches()
 			end
@@ -4674,6 +5165,62 @@ if game.GameId == 847722000 then
 		end,
 	})
 
+	ClientTab:CreateSlider({
+		Name = "Flashlight Brightness",
+		Range = {0, 10},
+		Increment = 0.1,
+		CurrentValue = st.flashlightBrightness,
+		Flag = "FlashlightBrightness",
+		Callback = function(v)
+			st.flashlightBrightness = math.clamp(tonumber(v) or 2, 0, 10)
+			_G.RakeFlashlightBrightness = st.flashlightBrightness
+			cfgSet("flashlightBrightness", st.flashlightBrightness)
+			clientBypass.applyLightToolBypasses()
+		end,
+	})
+
+	ClientTab:CreateSlider({
+		Name = "Flashlight Range",
+		Range = {8, 120},
+		Increment = 1,
+		CurrentValue = st.flashlightRange,
+		Flag = "FlashlightRange",
+		Callback = function(v)
+			st.flashlightRange = math.clamp(tonumber(v) or 45, 8, 120)
+			_G.RakeFlashlightRange = st.flashlightRange
+			cfgSet("flashlightRange", st.flashlightRange)
+			clientBypass.applyLightToolBypasses()
+		end,
+	})
+
+	ClientTab:CreateSlider({
+		Name = "Flashlight Angle",
+		Range = {15, 120},
+		Increment = 1,
+		CurrentValue = st.flashlightAngle,
+		Flag = "FlashlightAngle",
+		Callback = function(v)
+			st.flashlightAngle = math.clamp(tonumber(v) or 70, 15, 120)
+			_G.RakeFlashlightAngle = st.flashlightAngle
+			cfgSet("flashlightAngle", st.flashlightAngle)
+			clientBypass.applyLightToolBypasses()
+		end,
+	})
+
+	ClientTab:CreateSlider({
+		Name = "Flashlight Beam Width",
+		Range = {0, 3},
+		Increment = 0.05,
+		CurrentValue = st.flashlightBeamWidth,
+		Flag = "FlashlightBeamWidth",
+		Callback = function(v)
+			st.flashlightBeamWidth = math.clamp(tonumber(v) or 0.5, 0, 3)
+			_G.RakeFlashlightBeamWidth = st.flashlightBeamWidth
+			cfgSet("flashlightBeamWidth", st.flashlightBeamWidth)
+			clientBypass.applyLightToolBypasses()
+		end,
+	})
+
 	ClientTab:CreateToggle({
 		Name = "Block Menu Reopen",
 		CurrentValue = st.disableMenuReopen,
@@ -4759,6 +5306,18 @@ if game.GameId == 847722000 then
 			else
 				clientBypass.restoreMovementPatches()
 			end
+		end,
+	})
+
+	ClientTab:CreateToggle({
+		Name = "No Monitor Static",
+		CurrentValue = st.noMonitorStatic,
+		Flag = "NoMonitorStatic",
+		Callback = function(state)
+			st.noMonitorStatic = state == true
+			_G.RakeNoMonitorStatic = st.noMonitorStatic
+			cfgSet("noMonitorStatic", st.noMonitorStatic)
+			clientBypass.applyMonitorStaticBypass()
 		end,
 	})
 
@@ -4870,15 +5429,46 @@ if game.GameId == 847722000 then
 			st.fullbright = state == true
 			_G.RakeFullbright = st.fullbright
 			cfgSet("fullbright", st.fullbright)
-			clientBypass.applyFullbright()
+			if st.fullbright then
+				clientBypass.applyFullbright(true)
+			else
+				clientBypass.restoreFullbright()
+			end
 		end,
 	})
 
-	ClientTab:CreateButton({
-		Name = "Third Person",
-		Callback = function()
-			Plrs.LocalPlayer.Character.RagdollTime.RagdollSwitch.Value = true
-			Plrs.LocalPlayer.Character.RagdollTime.RagdollSwitch.Value = false
+	PlayerTab:CreateSlider({
+		Name = "MinZoom",
+		Range = {0.5, 100000},
+		Increment = 0.5,
+		CurrentValue = st.minZoom,
+		Flag = "MinZoom",
+		Callback = function(state)
+			st.minZoom = math.clamp(tonumber(state) or st.minZoom, 0.5, 100000)
+			if st.maxZoom < st.minZoom then
+				st.maxZoom = st.minZoom
+				cfgSet("maxZoom", st.maxZoom)
+			end
+			_G.RakeMinZoom = st.minZoom
+			cfgSet("minZoom", st.minZoom)
+			clientBypass.applyZoom(true)
+		end,
+	})
+
+	PlayerTab:CreateSlider({
+		Name = "MaxZoom",
+		Range = {0.5, 100000},
+		Increment = 100,
+		CurrentValue = st.maxZoom,
+		Flag = "MaxZoom",
+		Callback = function(state)
+			st.maxZoom = math.clamp(tonumber(state) or st.maxZoom, 0.5, 100000)
+			if st.maxZoom < st.minZoom then
+				st.maxZoom = st.minZoom
+			end
+			_G.RakeMaxZoom = st.maxZoom
+			cfgSet("maxZoom", st.maxZoom)
+			clientBypass.applyZoom(true)
 		end,
 	})
 
@@ -4918,6 +5508,65 @@ if game.GameId == 847722000 then
 				clientBypass.applyStaminaModuleBypass()
 				clientBypass.applyCH(true)
 			end
+		end,
+	})
+
+	PlayerTab:CreateToggle({
+		Name = "Auto FirstAid Self",
+		CurrentValue = st.autoHealSelf,
+		Flag = "AutoFirstAidSelf",
+		Callback = function(state)
+			st.autoHealSelf = state == true
+			_G.RakeAutoHealSelf = st.autoHealSelf
+			cfgSet("autoHealSelf", st.autoHealSelf)
+		end,
+	})
+
+	PlayerTab:CreateSlider({
+		Name = "Self Heal Below %",
+		Range = {1, 100},
+		Increment = 1,
+		CurrentValue = st.healSelfAt,
+		Flag = "SelfHealBelow",
+		Callback = function(v)
+			st.healSelfAt = math.clamp(tonumber(v) or 55, 1, 100)
+			_G.RakeHealSelfAt = st.healSelfAt
+			cfgSet("healSelfAt", st.healSelfAt)
+		end,
+	})
+
+	PlayerTab:CreateToggle({
+		Name = "Auto FirstAid Players",
+		CurrentValue = st.autoHealPlayers,
+		Flag = "AutoFirstAidPlayers",
+		Callback = function(state)
+			st.autoHealPlayers = state == true
+			_G.RakeAutoHealPlayers = st.autoHealPlayers
+			cfgSet("autoHealPlayers", st.autoHealPlayers)
+		end,
+	})
+
+	PlayerTab:CreateSlider({
+		Name = "Player Heal Below %",
+		Range = {1, 100},
+		Increment = 1,
+		CurrentValue = st.healPlayerAt,
+		Flag = "PlayerHealBelow",
+		Callback = function(v)
+			st.healPlayerAt = math.clamp(tonumber(v) or 60, 1, 100)
+			_G.RakeHealPlayerAt = st.healPlayerAt
+			cfgSet("healPlayerAt", st.healPlayerAt)
+		end,
+	})
+
+	PlayerTab:CreateToggle({
+		Name = "FirstAid Auto Equip",
+		CurrentValue = st.healAutoEquip,
+		Flag = "FirstAidAutoEquip",
+		Callback = function(state)
+			st.healAutoEquip = state == true
+			_G.RakeHealAutoEquip = st.healAutoEquip
+			cfgSet("healAutoEquip", st.healAutoEquip)
 		end,
 	})
 
@@ -5299,13 +5948,95 @@ if game.GameId == 847722000 then
 		end,
 	})
 
+	local function itemNote(title, msg)
+		pcall(function()
+			Obsidian:Notify({
+				Title = title,
+				Content = msg,
+				Duration = 4,
+			})
+		end)
+	end
+
+	local function charCf()
+		local ch = getChar()
+		if not ch or not ch.Parent then
+			return nil
+		end
+		local ok, cf = pcall(function()
+			return ch:GetPivot()
+		end)
+		return ok and cf or nil
+	end
+
+	local function inChar(obj)
+		for _, plr in kids(Plrs) do
+			local ch = plr.Character
+			if ch and obj:IsDescendantOf(ch) then
+				return true
+			end
+		end
+		return false
+	end
+
+	local function moveObj(obj, cf, n)
+		local off = CFrame.new((n % 5) * 1.5, 1.5 + math.floor(n / 5) * 0.35, 0)
+		if obj:IsA("BasePart") then
+			return pcall(function()
+				obj.CFrame = cf * off
+				obj.AssemblyLinearVelocity = Vector3.zero
+				obj.AssemblyAngularVelocity = Vector3.zero
+			end)
+		end
+		if obj:IsA("Model") then
+			return pcall(function()
+				obj:PivotTo(cf * off)
+			end)
+		end
+		return false
+	end
+
+	local function bringNamed(root, want, baseOnly)
+		local cf = charCf()
+		if not cf then
+			return 0
+		end
+		local n = 0
+		for _, obj in desc(root or Ws) do
+			if typeof(obj) == "Instance" and obj.Name:lower() == want and not inChar(obj) then
+				if (not baseOnly and (obj:IsA("BasePart") or obj:IsA("Model"))) or (baseOnly and obj:IsA("BasePart")) then
+					if moveObj(obj, cf, n) then
+						n += 1
+					end
+				end
+			end
+		end
+		return n
+	end
+
 	ExploitsTab:CreateButton({
 		Name = "Bring Scraps",
 		Callback = function()
-			for i,v in Ws.Filter.ScrapSpawns:QueryDescendants("Instance") do
-				if v.Name:lower() == "scrap" then
-					v:PivotTo(Plrs.LocalPlayer.Character:GetPivot())
-				end
+			local flt = ffc(Ws, "Filter")
+			local root = flt and ffc(flt, "ScrapSpawns") or ffcr(Ws, "ScrapSpawns") or Ws
+			local n = bringNamed(root, "scrap", false)
+			if n <= 0 then
+				itemNote("Bring Scraps", "No scraps found. Wait until they spawn in.")
+			else
+				itemNote("Bring Scraps", "Brought " .. tostring(n) .. " scrap" .. (n == 1 and "." or "s."))
+			end
+		end,
+	})
+
+	ExploitsTab:CreateButton({
+		Name = "Bring Flaregun",
+		Callback = function()
+			local root = ffcr(Ws, "FlareGunPickUp") or Ws
+			local n = bringNamed(root, "flaregun", true)
+			if n <= 0 then
+				itemNote("Bring Flaregun", "No flaregun found. Wait until it spawns in.")
+			else
+				itemNote("Bring Flaregun", "Brought flaregun.")
 			end
 		end,
 	})
@@ -6083,14 +6814,14 @@ if game.GameId == 847722000 then
 			return
 		end
 		local num = math.clamp(tonumber(st.fov) or 70, 1, 120)
-		if force or clientBypass.lastCam ~= cam or clientBypass.lastFov ~= num or cam.FieldOfView ~= num then
-			clientBypass.lastCam = cam
-			clientBypass.lastFov = num
-			pcall(function()
+		clientBypass.lastCam = cam
+		clientBypass.lastFov = num
+		pcall(function()
+			if cam.FieldOfView ~= num then
 				cam.FieldOfView = num
-			end)
-			pcall(clientBypass.applyFovUiFix, true)
-		end
+			end
+		end)
+		pcall(clientBypass.applyFovUiFix, true)
 	end
 
 	clientBypass.bindFovCam = function(cam)
@@ -6114,6 +6845,104 @@ if game.GameId == 847722000 then
 		clientBypass.applyFov(true)
 	end
 
+	clientBypass.zoomConns = {}
+
+	clientBypass.wipeZoomConns = function()
+		for i = #clientBypass.zoomConns, 1, -1 do
+			local c = clientBypass.zoomConns[i]
+			if c then
+				pcall(function()
+					c:Disconnect()
+				end)
+			end
+			clientBypass.zoomConns[i] = nil
+		end
+	end
+
+	clientBypass.normZoom = function()
+		local oldMin = st.minZoom
+		local oldMax = st.maxZoom
+		local mn = math.clamp(tonumber(st.minZoom) or 0.5, 0.5, 100000)
+		local mx = math.clamp(tonumber(st.maxZoom) or mn, 0.5, 100000)
+		if mx < mn then
+			mx = mn
+		end
+		st.minZoom = mn
+		st.maxZoom = mx
+		_G.RakeMinZoom = mn
+		_G.RakeMaxZoom = mx
+		if oldMin ~= mn then
+			cfgSet("minZoom", mn)
+		end
+		if oldMax ~= mx then
+			cfgSet("maxZoom", mx)
+		end
+		return mn, mx
+	end
+
+	clientBypass.applyZoom = function(force)
+		if AllowRunService ~= true then
+			return
+		end
+		local lp = Plrs.LocalPlayer
+		if not lp then
+			return
+		end
+		local mn, mx = clientBypass.normZoom()
+		pcall(function()
+			if lp.CameraMinZoomDistance ~= mn then
+				lp.CameraMinZoomDistance = mn
+			end
+			if lp.CameraMaxZoomDistance ~= mx then
+				lp.CameraMaxZoomDistance = mx
+			end
+		end)
+	end
+
+	clientBypass.bindZoomPlayer = function(lp)
+		clientBypass.wipeZoomConns()
+		if not lp then
+			return
+		end
+		local function reapply()
+			if AllowRunService == true then
+				task.defer(function()
+					clientBypass.applyZoom(true)
+				end)
+			end
+		end
+		for _, prop in { "CameraMinZoomDistance", "CameraMaxZoomDistance" } do
+			local ok, c = pcall(function()
+				return lp:GetPropertyChangedSignal(prop):Connect(reapply)
+			end)
+			if ok and c then
+				clientBypass.zoomConns[#clientBypass.zoomConns + 1] = c
+			end
+		end
+		clientBypass.applyZoom(true)
+	end
+
+	clientBypass.applyRespawnPatches = function(ch)
+		if AllowRunService ~= true then
+			return
+		end
+		if ch and curChar and ch ~= curChar then
+			return
+		end
+		pcall(clientBypass.applySpeed, true)
+		pcall(clientBypass.applyZoom, true)
+		pcall(clientBypass.applyFov, true)
+		pcall(clientBypass.applyCharBypasses)
+		pcall(clientBypass.applySafeRecover)
+		pcall(clientBypass.applyLightToolBypasses)
+		pcall(clientBypass.applyStaminaSignals)
+		pcall(clientBypass.applyStaminaModuleBypass)
+		pcall(clientBypass.applyClientPopupBypasses)
+		pcall(clientBypass.applyKnownGamePrompts)
+		pcall(clientBypass.applyMonitorStaticBypass)
+		pcall(clientBypass.applyCH, true)
+	end
+
 	clientBypass.applySpeed = function(force)
 		if not AllowRunService or st.spdOn ~= true then
 			return
@@ -6122,12 +6951,12 @@ if game.GameId == 847722000 then
 		if not hum or not hum.Parent then
 			return
 		end
-		local spd = math.clamp(tonumber(st.spd) or 16, 0, 30)
-		if force or hum.WalkSpeed ~= spd then
-			pcall(function()
+		local spd = math.clamp(tonumber(st.spd) or 16, 0, 30.5)
+		pcall(function()
+			if hum.WalkSpeed ~= spd then
 				hum.WalkSpeed = spd
-			end)
-		end
+			end
+		end)
 	end
 
 	clientBypass.onChar = function(ch)
@@ -6146,9 +6975,12 @@ if game.GameId == 847722000 then
 			local hum = ffca(ch, "Humanoid") or ch:WaitForChild("Humanoid", 10)
 			if hum then
 				curHum = hum
-				clientBypass.applySpeed(true)
-				pcall(clientBypass.applyCharBypasses)
-				pcall(clientBypass.applySafeRecover)
+				clientBypass.applyRespawnPatches(ch)
+				for _, d in { 0.25, 1, 2.5, 5 } do
+					task.delay(d, function()
+						clientBypass.applyRespawnPatches(ch)
+					end)
+				end
 				if st.infStamina == true or st.infNight == true then
 					applyInfTabs(true)
 				end
@@ -6217,12 +7049,12 @@ if game.GameId == 847722000 then
 	
 	PlayerTab:CreateSlider({
 		Name = "WalkSpeed",
-		Range = {0, 30},
-		Increment = 1,
+		Range = {0, 30.5},
+		Increment = 0.5,
 		CurrentValue = st.spd,
 		Flag = "walkspeed",
 		Callback = function(state)
-			st.spd = math.clamp(tonumber(state) or st.spd, 0, 30)
+			st.spd = math.clamp(tonumber(state) or st.spd, 0, 30.5)
 			_G.WalkSpeedd = st.spd
 			cfgSet("spd", st.spd)
 			clientBypass.applySpeed(true)
@@ -6250,6 +7082,20 @@ if game.GameId == 847722000 then
 			_G.InstaOpenSupplyDrop = state == true
 			st.instaDrop = _G.InstaOpenSupplyDrop
 			cfgSet("instaDrop", st.instaDrop)
+		end,
+	})
+
+	ExploitsTab:CreateToggle({
+		Name = "Auto Collect SupplyDrop",
+		CurrentValue = st.autoSupplyCollect,
+		Flag = "AutoCollectSupplyDrop",
+		Callback = function(state)
+			st.autoSupplyCollect = state == true
+			_G.RakeAutoSupplyCollect = st.autoSupplyCollect
+			cfgSet("autoSupplyCollect", st.autoSupplyCollect)
+			if st.autoSupplyCollect then
+				clientBypass.autoSupplyCollect()
+			end
 		end,
 	})
 
@@ -6388,6 +7234,21 @@ if game.GameId == 847722000 then
 	clientBypass.lightT = 5
 	clientBypass.deathMsgT = 2
 	clientBypass.fastBypassT = 0
+	clientBypass.toolT = 1
+
+	bind(Run.Heartbeat, function(dt)
+		if AllowRunService ~= true then
+			return
+		end
+		clientBypass.toolT += dt
+		if clientBypass.toolT < 1 then
+			return
+		end
+		clientBypass.toolT = 0
+		pcall(clientBypass.autoFirstAid)
+		pcall(clientBypass.autoSupplyCollect)
+		pcall(clientBypass.applyMonitorStaticBypass)
+	end)
 
 	bind(Run.Heartbeat, function(dt)
 		if AllowRunService ~= true then
@@ -6416,7 +7277,6 @@ if game.GameId == 847722000 then
 		clientBypass.promptBypassT += dt
 		clientBypass.clientBypassT += dt
 		clientBypass.soundT += dt
-		clientBypass.lightT += dt
 		clientBypass.knownPromptT += dt
 		clientBypass.deathMsgT += dt
 		clientBypass.chT += dt
@@ -6453,7 +7313,6 @@ if game.GameId == 847722000 then
 			pcall(clientBypass.applyDeviceSpoof)
 			pcall(clientBypass.applyCharBypasses)
 			pcall(clientBypass.applySafeRecover)
-			pcall(clientBypass.applyFullbright)
 			pcall(clientBypass.applyClientPopupBypasses)
 			pcall(clientBypass.applyFovUiFix, false)
 			pcall(clientBypass.removeIntroClones)
@@ -6469,10 +7328,6 @@ if game.GameId == 847722000 then
 		if clientBypass.deathMsgT >= 2 then
 			clientBypass.deathMsgT = 0
 			pcall(clientBypass.applyDeathMessageBypass)
-		end
-		if clientBypass.lightT >= 5 then
-			clientBypass.lightT = 0
-			pcall(clientBypass.applyLightToolBypasses)
 		end
 		if clientBypass.soundT >= 2.5 then
 			clientBypass.soundT = 0
@@ -6492,11 +7347,14 @@ if game.GameId == 847722000 then
 		end
 		pcall(clientBypass.applySafeRecover)
 		pcall(clientBypass.applyCharBypasses)
-		pcall(clientBypass.applyFullbright)
 		pcall(clientBypass.applyCH, false)
 	end)
 
 	clientBypass.bindFovCam(Ws.CurrentCamera or workspace.CurrentCamera)
+	clientBypass.bindZoomPlayer(Plrs.LocalPlayer)
+	if st.fullbright == true then
+		pcall(clientBypass.applyFullbright, true)
+	end
 	pcall(clientBypass.applyFovUiFix, true)
 	pcall(clientBypass.fetchRootModule)
 	pcall(clientBypass.applyStaminaModuleBypass)
@@ -6513,13 +7371,15 @@ if game.GameId == 847722000 then
 	clientBypass.spdT = 0
 
 	bind(Run.Heartbeat, function(dt)
-		if AllowRunService ~= true or st.spdOn ~= true then
+		if AllowRunService ~= true then
 			return
 		end
 		clientBypass.spdT += dt
 		if clientBypass.spdT >= 0.5 then
 			clientBypass.spdT = 0
-			clientBypass.applySpeed(false)
+			if st.spdOn == true then
+				clientBypass.applySpeed(false)
+			end
 		end
 	end)
 
@@ -6544,6 +7404,9 @@ if game.GameId == 847722000 then
 		saveNow()
 		wipeCharConns()
 		clientBypass.wipeFovConns()
+		clientBypass.wipeZoomConns()
+		clientBypass.restoreFullbright()
+		clientBypass.restoreLightToolBypasses()
 		clientBypass.restoreMovementPatches()
 		clientBypass.restoreStaminaModules()
 		clientBypass.restoreMainClientModules()

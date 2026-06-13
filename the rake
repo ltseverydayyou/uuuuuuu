@@ -254,7 +254,6 @@ if game.GameId == 847722000 then
 	local dzMax = 100000
 	st.fov = cfgNum("fov", tonumber(_G.FieldOfView) or 70, 1, 120)
 	st.fovOn = cfgBool("fovOn", _G.enableFOV == true)
-	st.fovUiFix = cfgBool("fovUiFix", true)
 	st.minZoom = cfgNum("minZoom", tonumber(_G.RakeMinZoom) or 0.5, 0.5, 100000)
 	st.maxZoom = cfgNum("maxZoom", tonumber(_G.RakeMaxZoom) or dzMax or 100000, 0.5, 100000)
 	if st.maxZoom < st.minZoom then
@@ -370,7 +369,6 @@ if game.GameId == 847722000 then
 	st.adonisBypass = cfgBool("adonisBypass", true)
 	_G.FieldOfView = st.fov
 	_G.enableFOV = st.fovOn
-	_G.RakeFovUiFix = st.fovUiFix
 	_G.RakeMinZoom = st.minZoom
 	_G.RakeMaxZoom = st.maxZoom
 	_G.WalkSpeedd = st.spd
@@ -1039,12 +1037,12 @@ if game.GameId == 847722000 then
 	clientBypass.ch = setmetatable({}, { __mode = "k" })
 	clientBypass.chT = 3
 	clientBypass.fullbrightOn = false
+	clientBypass.fullbrightApply = false
 	clientBypass.fullbrightConns = {}
 	clientBypass.lightState = setmetatable({}, { __mode = "k" })
 	clientBypass.lightConns = setmetatable({}, { __mode = "k" })
+	clientBypass.lightApply = false
 	clientBypass.lastSafe = nil
-	clientBypass.fovUiCache = setmetatable({}, { __mode = "k" })
-	clientBypass.fovUiScanned = false
 	clientBypass.bobFns = setmetatable({}, { __mode = "k" })
 	clientBypass.uiState = setmetatable({}, { __mode = "k" })
 	clientBypass.stamMods = setmetatable({}, { __mode = "k" })
@@ -1738,11 +1736,12 @@ if game.GameId == 847722000 then
 		local conns = {}
 		clientBypass.lightConns[obj] = conns
 		local function reapply()
-			task.defer(function()
-				if st.flashlightBoost == true or st.flashlightNoShadows == true then
-					clientBypass.applyLightToolBypasses()
-				end
-			end)
+			if clientBypass.lightApply == true then
+				return
+			end
+			if st.flashlightBoost == true or st.flashlightNoShadows == true then
+				clientBypass.applyLightToolBypasses()
+			end
 		end
 		local props = {}
 		if obj:IsA("Light") then
@@ -1776,10 +1775,14 @@ if game.GameId == 847722000 then
 	end
 
 	function clientBypass.applyLightToolBypasses()
+		if clientBypass.lightApply == true then
+			return 0
+		end
 		local active = st.flashlightNoShadows == true or st.flashlightBoost == true
 		if not active then
 			return clientBypass.restoreLightToolBypasses()
 		end
+		clientBypass.lightApply = true
 		local n = 0
 		for _, tool in clientBypass.flashlightRoots() do
 			clientBypass.bindFlashlightTool(tool)
@@ -1828,6 +1831,7 @@ if game.GameId == 847722000 then
 				end
 			end
 		end
+		clientBypass.lightApply = false
 		return n
 	end
 
@@ -2441,8 +2445,27 @@ if game.GameId == 847722000 then
 		FogStart = 0,
 		FogEnd = 1e10,
 		GlobalShadows = false,
-		ExposureCompensation = 0.5,
+		ExposureCompensation = -0.5,
 	}
+
+	clientBypass.fullbrightSignalProps = {
+		"Brightness",
+		"ClockTime",
+		"Ambient",
+		"OutdoorAmbient",
+		"FogStart",
+		"FogEnd",
+		"GlobalShadows",
+	}
+
+	function clientBypass.hasLiveCharacter()
+		local ch = getChar()
+		if not (ch and ch.Parent) then
+			return false
+		end
+		local hum = ffc(ch, "Humanoid")
+		return hum ~= nil and hum.Parent ~= nil and hum.Health > 0
+	end
 
 	function clientBypass.getLightOrig()
 		local store = rawget(genv, "__RakeLightingOriginals")
@@ -2461,13 +2484,19 @@ if game.GameId == 847722000 then
 	end
 
 	function clientBypass.setFullbrightValues()
-		pcall(function()
+		if clientBypass.fullbrightApply == true or not clientBypass.hasLiveCharacter() then
+			return false
+		end
+		clientBypass.fullbrightApply = true
+		local ok = pcall(function()
 			for prop, val in clientBypass.fullbrightVals do
 				if Lit[prop] ~= val then
 					Lit[prop] = val
 				end
 			end
 		end)
+		clientBypass.fullbrightApply = false
+		return ok
 	end
 
 	function clientBypass.wipeFullbrightConns()
@@ -2484,21 +2513,25 @@ if game.GameId == 847722000 then
 
 	function clientBypass.bindFullbrightSignals()
 		clientBypass.wipeFullbrightConns()
-		if st.fullbright ~= true then
+		if st.fullbright ~= true or not clientBypass.hasLiveCharacter() then
 			return false
 		end
-		for _, prop in clientBypass.fullbrightProps do
+		for _, prop in clientBypass.fullbrightSignalProps do
 			local val = clientBypass.fullbrightVals[prop]
 			local ok, con = pcall(function()
 				return Lit:GetPropertyChangedSignal(prop):Connect(function()
-					if st.fullbright ~= true then
+					if st.fullbright ~= true or clientBypass.fullbrightApply == true or not clientBypass.hasLiveCharacter() then
 						return
 					end
-					pcall(function()
-						if Lit[prop] ~= val then
-							Lit[prop] = val
-						end
-					end)
+					if Lit[prop] ~= val then
+						clientBypass.fullbrightApply = true
+						pcall(function()
+							if Lit[prop] ~= val then
+								Lit[prop] = val
+							end
+						end)
+						clientBypass.fullbrightApply = false
+					end
 				end)
 			end)
 			if ok and con then
@@ -2531,6 +2564,10 @@ if game.GameId == 847722000 then
 			if clientBypass.fullbrightOn == true or rawget(genv, "__RakeFullbrightActive") == true then
 				return clientBypass.restoreFullbright()
 			end
+			return false
+		end
+		if not clientBypass.hasLiveCharacter() then
+			clientBypass.wipeFullbrightConns()
 			return false
 		end
 		clientBypass.getLightOrig()
@@ -2942,9 +2979,6 @@ if game.GameId == 847722000 then
 		if (obj:IsA("Light") or obj:IsA("BasePart")) and (st.flashlightNoShadows == true or st.flashlightBoost == true) then
 			task.defer(clientBypass.applyLightToolBypasses)
 		end
-		if st.fovUiFix == true and obj:IsA("BillboardGui") and type(clientBypass.patchFovUi) == "function" then
-			task.defer(clientBypass.patchFovUi, obj)
-		end
 	end
 
 	bind(Ws.DescendantAdded, onNewDesc)
@@ -2954,11 +2988,9 @@ if game.GameId == 847722000 then
 	end
 
 	bind(Ws:GetPropertyChangedSignal("CurrentCamera"), function()
-		task.defer(function()
-			clientBypass.applyMotionBlurBypass()
-			clientBypass.applyMenuFxBypass()
-			clientBypass.applyDeathFxBypass()
-		end)
+		clientBypass.applyMotionBlurBypass()
+		clientBypass.applyMenuFxBypass()
+		clientBypass.applyDeathFxBypass()
 	end)
 
 
@@ -4831,6 +4863,22 @@ if game.GameId == 847722000 then
 		end,
 	})
 
+	ClientTab:CreateToggle({
+		Name = "Fullbright",
+		CurrentValue = st.fullbright,
+		Flag = "Fullbright",
+		Callback = function(state)
+			st.fullbright = state == true
+			_G.RakeFullbright = st.fullbright
+			cfgSet("fullbright", st.fullbright)
+			if st.fullbright then
+				clientBypass.applyFullbright(true)
+			else
+				clientBypass.restoreFullbright()
+			end
+		end,
+	})
+
 	watchFog()
 
 	ClientTab:CreateToggle({
@@ -5421,21 +5469,6 @@ if game.GameId == 847722000 then
 		end,
 	})
 
-	ClientTab:CreateToggle({
-		Name = "Fullbright",
-		CurrentValue = st.fullbright,
-		Flag = "Fullbright",
-		Callback = function(state)
-			st.fullbright = state == true
-			_G.RakeFullbright = st.fullbright
-			cfgSet("fullbright", st.fullbright)
-			if st.fullbright then
-				clientBypass.applyFullbright(true)
-			else
-				clientBypass.restoreFullbright()
-			end
-		end,
-	})
 
 	PlayerTab:CreateSlider({
 		Name = "MinZoom",
@@ -6117,9 +6150,6 @@ if game.GameId == 847722000 then
 		return nil
 	end
 
-	clientBypass.fovUiMult = function()
-		return 1
-	end
 
 	esp.drawTxt = function(txt, col)
 		if not Drawing or not Drawing.new then
@@ -6683,115 +6713,9 @@ if game.GameId == 847722000 then
 
 	clientBypass.lastCam = nil
 	clientBypass.lastFov = nil
+	clientBypass.fovApply = false
+	clientBypass.zoomApply = false
 	clientBypass.fovConns = {}
-
-	clientBypass.fovUiMult = function()
-		if st.fovUiFix ~= true or st.fovOn ~= true then
-			return 1
-		end
-		local fov = math.clamp(tonumber(st.fov) or 70, 1, 120)
-		if fov <= 70 then
-			return 1
-		end
-		return math.clamp(math.tan(math.rad(fov) * 0.5) / math.tan(math.rad(70) * 0.5), 1, 2.75)
-	end
-
-	clientBypass.mulDim2 = function(v, m)
-		return UDim2.new(v.X.Scale * m, math.floor(v.X.Offset * m + 0.5), v.Y.Scale * m, math.floor(v.Y.Offset * m + 0.5))
-	end
-
-	clientBypass.isTextGui = function(obj)
-		return obj and (obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox"))
-	end
-
-	clientBypass.patchFovUiText = function(obj, rec, m)
-		if not rec.text then
-			rec.text = setmetatable({}, { __mode = "k" })
-		end
-		for _, ui in desc(obj) do
-			if clientBypass.isTextGui(ui) then
-				local tr = rec.text[ui]
-				if not tr then
-					tr = { size = ui.TextSize, scaled = ui.TextScaled }
-					rec.text[ui] = tr
-				end
-				pcall(function()
-					if tr.scaled == true then
-						ui.TextScaled = true
-					else
-						ui.TextScaled = false
-						ui.TextSize = math.clamp(math.floor((tonumber(tr.size) or ui.TextSize or 14) * m + 0.5), 8, 72)
-					end
-				end)
-			end
-		end
-	end
-
-	function clientBypass.patchFovUi(obj)
-		if not obj or not obj.Parent or not obj:IsA("BillboardGui") then
-			return false
-		end
-		local rec = clientBypass.fovUiCache[obj]
-		if not rec then
-			rec = { size = obj.Size }
-			clientBypass.fovUiCache[obj] = rec
-		end
-		local m = clientBypass.fovUiMult()
-		pcall(function()
-			obj.Size = clientBypass.mulDim2(rec.size, m)
-		end)
-		clientBypass.patchFovUiText(obj, rec, m)
-		return true
-	end
-
-	function clientBypass.applyFovUiFix(scan)
-		if st.fovUiFix ~= true then
-			return 0
-		end
-		local n = 0
-		for obj in clientBypass.fovUiCache do
-			if obj and obj.Parent then
-				if clientBypass.patchFovUi(obj) then
-					n += 1
-				end
-			else
-				clientBypass.fovUiCache[obj] = nil
-			end
-		end
-		if scan == true and clientBypass.fovUiScanned ~= true then
-			clientBypass.fovUiScanned = true
-			for _, root in { Ws, clientBypass.getPlayerGui() } do
-				for _, obj in desc(root) do
-					if obj:IsA("BillboardGui") and clientBypass.patchFovUi(obj) then
-						n += 1
-					end
-				end
-			end
-		end
-		return n
-	end
-
-	function clientBypass.restoreFovUiFix()
-		for obj, rec in clientBypass.fovUiCache do
-			if obj and obj.Parent and rec and rec.size then
-				pcall(function()
-					obj.Size = rec.size
-				end)
-			end
-			if rec and rec.text then
-				for ui, tr in rec.text do
-					if ui and ui.Parent and tr then
-						pcall(function()
-							ui.TextScaled = tr.scaled == true
-							ui.TextSize = tr.size or ui.TextSize
-						end)
-					end
-				end
-			end
-		end
-		clientBypass.fovUiCache = setmetatable({}, { __mode = "k" })
-		clientBypass.fovUiScanned = false
-	end
 
 	clientBypass.wipeFovConns = function()
 		for i = #clientBypass.fovConns, 1, -1 do
@@ -6806,7 +6730,7 @@ if game.GameId == 847722000 then
 	end
 
 	clientBypass.applyFov = function(force)
-		if not AllowRunService or st.fovOn ~= true then
+		if not AllowRunService or st.fovOn ~= true or clientBypass.fovApply == true then
 			return
 		end
 		local cam = Ws.CurrentCamera or workspace.CurrentCamera
@@ -6816,12 +6740,19 @@ if game.GameId == 847722000 then
 		local num = math.clamp(tonumber(st.fov) or 70, 1, 120)
 		clientBypass.lastCam = cam
 		clientBypass.lastFov = num
-		pcall(function()
-			if cam.FieldOfView ~= num then
-				cam.FieldOfView = num
+		if cam.FieldOfView ~= num then
+			clientBypass.fovApply = true
+			local ok = pcall(function()
+				if cam.FieldOfView ~= num then
+					cam.FieldOfView = num
+				end
+			end)
+			clientBypass.fovApply = false
+			if not ok then
+				return false
 			end
-		end)
-		pcall(clientBypass.applyFovUiFix, true)
+		end
+		return true
 	end
 
 	clientBypass.bindFovCam = function(cam)
@@ -6832,10 +6763,8 @@ if game.GameId == 847722000 then
 		clientBypass.lastCam = nil
 		local ok, c = pcall(function()
 			return cam:GetPropertyChangedSignal("FieldOfView"):Connect(function()
-				if AllowRunService == true and st.fovOn == true then
-					task.defer(function()
-						clientBypass.applyFov(true)
-					end)
+				if AllowRunService == true and st.fovOn == true and clientBypass.fovApply ~= true then
+					clientBypass.applyFov(true)
 				end
 			end)
 		end)
@@ -6881,7 +6810,7 @@ if game.GameId == 847722000 then
 	end
 
 	clientBypass.applyZoom = function(force)
-		if AllowRunService ~= true then
+		if AllowRunService ~= true or clientBypass.zoomApply == true then
 			return
 		end
 		local lp = Plrs.LocalPlayer
@@ -6889,7 +6818,11 @@ if game.GameId == 847722000 then
 			return
 		end
 		local mn, mx = clientBypass.normZoom()
-		pcall(function()
+		if lp.CameraMinZoomDistance == mn and lp.CameraMaxZoomDistance == mx then
+			return true
+		end
+		clientBypass.zoomApply = true
+		local ok = pcall(function()
 			if lp.CameraMinZoomDistance ~= mn then
 				lp.CameraMinZoomDistance = mn
 			end
@@ -6897,6 +6830,8 @@ if game.GameId == 847722000 then
 				lp.CameraMaxZoomDistance = mx
 			end
 		end)
+		clientBypass.zoomApply = false
+		return ok
 	end
 
 	clientBypass.bindZoomPlayer = function(lp)
@@ -6905,10 +6840,8 @@ if game.GameId == 847722000 then
 			return
 		end
 		local function reapply()
-			if AllowRunService == true then
-				task.defer(function()
-					clientBypass.applyZoom(true)
-				end)
+			if AllowRunService == true and clientBypass.zoomApply ~= true then
+				clientBypass.applyZoom(true)
 			end
 		end
 		for _, prop in { "CameraMinZoomDistance", "CameraMaxZoomDistance" } do
@@ -6997,6 +6930,11 @@ if game.GameId == 847722000 then
 			task.defer(clientBypass.onChar, clientBypass.lp.Character)
 		end
 		bind(clientBypass.lp.CharacterAdded, clientBypass.onChar)
+		bind(clientBypass.lp.CharacterRemoving, function()
+			if st.fullbright == true then
+				clientBypass.restoreFullbright()
+			end
+		end)
 	end
 
 	PlayerTab:CreateSlider({
@@ -7010,7 +6948,6 @@ if game.GameId == 847722000 then
 			_G.FieldOfView = st.fov
 			cfgSet("fov", st.fov)
 			clientBypass.applyFov(true)
-			clientBypass.applyFovUiFix(true)
 		end,
 	})
 
@@ -7025,28 +6962,9 @@ if game.GameId == 847722000 then
 			clientBypass.lastCam = nil
 			clientBypass.bindFovCam(Ws.CurrentCamera or workspace.CurrentCamera)
 			clientBypass.applyFov(true)
-			if st.fovOn ~= true then
-				clientBypass.restoreFovUiFix()
-			end
 		end,
 	})
 
-	PlayerTab:CreateToggle({
-		Name = "Fix High FOV UI Scale",
-		CurrentValue = st.fovUiFix,
-		Flag = "FixHighFovUiScale",
-		Callback = function(state)
-			st.fovUiFix = state == true
-			_G.RakeFovUiFix = st.fovUiFix
-			cfgSet("fovUiFix", st.fovUiFix)
-			if st.fovUiFix then
-				clientBypass.applyFovUiFix(true)
-			else
-				clientBypass.restoreFovUiFix()
-			end
-		end,
-	})
-	
 	PlayerTab:CreateSlider({
 		Name = "WalkSpeed",
 		Range = {0, 30.5},
@@ -7314,7 +7232,6 @@ if game.GameId == 847722000 then
 			pcall(clientBypass.applyCharBypasses)
 			pcall(clientBypass.applySafeRecover)
 			pcall(clientBypass.applyClientPopupBypasses)
-			pcall(clientBypass.applyFovUiFix, false)
 			pcall(clientBypass.removeIntroClones)
 			pcall(clientBypass.forceCoreParts)
 			pcall(clientBypass.applyStaminaSignals)
@@ -7339,9 +7256,6 @@ if game.GameId == 847722000 then
 		if AllowRunService ~= true then
 			return
 		end
-		if st.fovOn == true then
-			clientBypass.applyFov(false)
-		end
 		if _G.NoFog == true then
 			setFogOff()
 		end
@@ -7355,16 +7269,13 @@ if game.GameId == 847722000 then
 	if st.fullbright == true then
 		pcall(clientBypass.applyFullbright, true)
 	end
-	pcall(clientBypass.applyFovUiFix, true)
 	pcall(clientBypass.fetchRootModule)
 	pcall(clientBypass.applyStaminaModuleBypass)
 	pcall(clientBypass.applyStaminaSignals)
 
 	pcall(function()
 		bind(Ws:GetPropertyChangedSignal("CurrentCamera"), function()
-			task.defer(function()
-				clientBypass.bindFovCam(Ws.CurrentCamera or workspace.CurrentCamera)
-			end)
+			clientBypass.bindFovCam(Ws.CurrentCamera or workspace.CurrentCamera)
 		end)
 	end)
 	

@@ -2464,7 +2464,7 @@ if game.GameId == 847722000 then
 			return false
 		end
 		local hum = ffc(ch, "Humanoid")
-		return hum ~= nil and hum.Parent ~= nil and hum.Health > 0
+		return hum ~= nil and hum.Parent ~= nil
 	end
 
 	function clientBypass.getLightOrig()
@@ -6908,6 +6908,9 @@ if game.GameId == 847722000 then
 			local hum = ffca(ch, "Humanoid") or ch:WaitForChild("Humanoid", 10)
 			if hum then
 				curHum = hum
+				if st.fullbright == true then
+					clientBypass.applyFullbright(true)
+				end
 				clientBypass.applyRespawnPatches(ch)
 				for _, d in { 0.25, 1, 2.5, 5 } do
 					task.delay(d, function()
@@ -6919,6 +6922,16 @@ if game.GameId == 847722000 then
 				end
 				bindChar(hum:GetPropertyChangedSignal("WalkSpeed"), function()
 					clientBypass.applySpeed(true)
+				end)
+				bindChar(hum:GetPropertyChangedSignal("Health"), function()
+					if st.fullbright == true then
+						clientBypass.applyFullbright(true)
+					end
+				end)
+				bindChar(ch.AncestryChanged, function()
+					if ch.Parent and st.fullbright == true then
+						clientBypass.applyFullbright(true)
+					end
 				end)
 			end
 		end)

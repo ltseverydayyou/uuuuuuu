@@ -128,12 +128,12 @@ end
 
 local function stepSig()
 	local r = safeSvc("RunService")
-	return r and (r.PostSimulation or r.Heartbeat or r.PreSimulation or r.RenderStepped)
+	return r and (r.PostSimulation or r.Heartbeat)
 end
 
 local function spamSig()
 	local r = safeSvc("RunService")
-	return r and (r.PostSimulation or r.Heartbeat or r.PreSimulation or r.RenderStepped)
+	return r and (r.PostSimulation or r.Heartbeat)
 end
 
 if type(gEnv.__na_aex_cleanup) == "function" then

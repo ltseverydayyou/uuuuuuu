@@ -338,33 +338,35 @@ ctx.fe2cmPlaces = {
 	[14708572114] = true,
 }
 ctx.profileName = function()
+	ctx.tmpPlaceId = ctx.placeId()
+	if ctx.placeProfiles[ctx.tmpPlaceId] then
+		return ctx.placeProfiles[ctx.tmpPlaceId]
+	end
+	ctx.tmpGameId = ctx.gameId()
+	return ctx.gameProfiles[ctx.tmpGameId] or ("Game_" .. tostring(ctx.tmpGameId or "Unknown"))
+end
+
+ctx.placeId = function()
+	if ctx.cache.placeId ~= nil then
+		return ctx.cache.placeId
+	end
 	ctx.tmpPlaceId = nil
 	pcall(function()
 		ctx.tmpPlaceId = game.PlaceId
 	end)
-	if ctx.placeProfiles[ctx.tmpPlaceId] then
-		return ctx.placeProfiles[ctx.tmpPlaceId]
+	ctx.cache.placeId = ctx.tmpPlaceId
+	return ctx.tmpPlaceId
+end
+
+ctx.gameId = function()
+	if ctx.cache.gameId ~= nil then
+		return ctx.cache.gameId
 	end
 	ctx.tmpGameId = nil
 	pcall(function()
 		ctx.tmpGameId = game.GameId
 	end)
-	return ctx.gameProfiles[ctx.tmpGameId] or ("Game_" .. tostring(ctx.tmpGameId or "Unknown"))
-end
-
-ctx.placeId = function()
-	ctx.tmpPlaceId = nil
-	pcall(function()
-		ctx.tmpPlaceId = game.PlaceId
-	end)
-	return ctx.tmpPlaceId
-end
-
-ctx.gameId = function()
-	ctx.tmpGameId = nil
-	pcall(function()
-		ctx.tmpGameId = game.GameId
-	end)
+	ctx.cache.gameId = ctx.tmpGameId
 	return ctx.tmpGameId
 end
 
@@ -382,6 +384,26 @@ end
 
 ctx.isFEMGame = function()
 	return ctx.gameId() == 761462079
+end
+
+ctx.helperTitle = function()
+	if ctx.isFEMGame() then
+		return "FEM Helper"
+	end
+	if ctx.isFE2CMGame() then
+		return "FE2CM Helper"
+	end
+	if ctx.isRetroGame() then
+		return "FE2 Retro Helper"
+	end
+	if ctx.isFE2Game() then
+		return "FE2 Helper"
+	end
+	return "FE2 Helper"
+end
+
+ctx.helperIconName = function()
+	return (ctx.helperTitle():gsub("%s+", "_")) .. "_Dropdown"
 end
 
 ctx.support = function(k)
@@ -605,6 +627,21 @@ ctx.cache.airDiedConn = nil
 ctx.cache.airHooked = false
 ctx.cache.airAlertEnv = nil
 ctx.cache.airAlertOld = nil
+ctx.cache.airFastAt = 0
+ctx.cache.airLocalAt = 0
+ctx.cache.airRemoteAt = 0
+ctx.cache.airFemAt = 0
+ctx.cache.airProtectAt = 0
+ctx.cache.airFnEnv = nil
+ctx.cache.airTakeFn = nil
+ctx.cache.airSwitchFn = nil
+ctx.cache.airRegenRemote = nil
+ctx.cache.curMap = nil
+ctx.cache.curMapAt = 0
+ctx.cache.mapRef = nil
+ctx.cache.mapSettings = nil
+ctx.cache.mapExit = nil
+ctx.cache.mapExitAt = 0
 ctx.cache.femStarted = false
 ctx.cache.femVoteAt = 0
 ctx.cache.femLastVoteId = nil
@@ -1066,6 +1103,21 @@ ctx.stop = function()
 	ctx.cache.femRopeData = nil
 	ctx.cache.shopItems = nil
 	ctx.cache.airEnv = nil
+	ctx.cache.airFastAt = 0
+	ctx.cache.airLocalAt = 0
+	ctx.cache.airRemoteAt = 0
+	ctx.cache.airFemAt = 0
+	ctx.cache.airProtectAt = 0
+	ctx.cache.airFnEnv = nil
+	ctx.cache.airTakeFn = nil
+	ctx.cache.airSwitchFn = nil
+	ctx.cache.airRegenRemote = nil
+	ctx.cache.curMap = nil
+	ctx.cache.curMapAt = 0
+	ctx.cache.mapRef = nil
+	ctx.cache.mapSettings = nil
+	ctx.cache.mapExit = nil
+	ctx.cache.mapExitAt = 0
 	ctx.cache.femSwim = nil
 	if host and host.__lt_af_ctx == ctx then
 		host.__lt_af_ctx = nil
@@ -1094,6 +1146,60 @@ ctx.ffc = function(obj, n, rec)
 		return res
 	end
 	return nil
+end
+
+ctx.liveChildOf = function(obj, parent)
+	if not (obj and obj.Parent) then
+		return false
+	end
+	if not parent then
+		return true
+	end
+	local ok, res = pcall(function()
+		return obj:IsDescendantOf(parent)
+	end)
+	return ok and res == true
+end
+
+ctx.resetMapCache = function(map)
+	if map ~= nil and ctx.cache.mapRef == map then
+		return
+	end
+	ctx.cache.mapRef = map
+	ctx.cache.mapSettings = nil
+	ctx.cache.mapExit = nil
+	ctx.cache.mapExitAt = 0
+end
+
+ctx.mapSettings = function(map)
+	if not (map and map.Parent) then
+		ctx.resetMapCache(nil)
+		return nil
+	end
+	ctx.resetMapCache(map)
+	if ctx.liveChildOf(ctx.cache.mapSettings, map) then
+		return ctx.cache.mapSettings
+	end
+	ctx.cache.mapSettings = ctx.ffc(map, "Settings", false)
+	return ctx.cache.mapSettings
+end
+
+ctx.mapExit = function(map)
+	if not (map and map.Parent) then
+		ctx.resetMapCache(nil)
+		return nil
+	end
+	ctx.resetMapCache(map)
+	if ctx.liveChildOf(ctx.cache.mapExit, map) then
+		return ctx.cache.mapExit
+	end
+	local now = os.clock()
+	if now < (ctx.cache.mapExitAt or 0) then
+		return nil
+	end
+	ctx.cache.mapExit = ctx.ffc(map, "ExitRegion", true)
+	ctx.cache.mapExitAt = now + (ctx.cache.mapExit and 2 or 0.25)
+	return ctx.cache.mapExit
 end
 
 ctx.uiPar = function()
@@ -3670,7 +3776,8 @@ ctx.onMap = function(map, id)
 		safeCf = r.CFrame
 		safeAt = os.clock()
 
-		local st = ctx.ffc(map, "Settings", false)
+		ctx.resetMapCache(map)
+		local st = ctx.mapSettings(map)
 		local nm = nil
 		if st then
 			local ok2, v = pcall(function()
@@ -3748,7 +3855,7 @@ ctx.onMap = function(map, id)
 				h.Jump = true
 			end)
 
-			local ex = ctx.ffc(map, "ExitRegion", true)
+			local ex = ctx.mapExit(map)
 			ctx.mergeLocatorBtns(btns, map)
 			local statsExpected = #RoundStatsRemotes > 0
 			local exitReady = ex and (ctx.buttonsDone() or (not statsExpected and roundCur == nil and roundTotal == nil))
@@ -3919,7 +4026,7 @@ ctx.onMap = function(map, id)
 
 	while ctx.alive() and on do
 		task.wait(0.2)
-		local m = MP and MP:FindFirstChild("Map") or nil
+		local m = ctx.curMap()
 		local rr = select(1, ctx.rh(false))
 		if rr then
 			ctx.mkPlat(rr)
@@ -3933,9 +4040,21 @@ end
 
 ctx.curMap = function()
 	if not MP or not MP.Parent then
-		MP = Wsp and (Wsp:FindFirstChild("Multiplayer") or Wsp:WaitForChild("Multiplayer", 3)) or nil
+		MP = Wsp and Wsp:FindFirstChild("Multiplayer") or nil
 	end
-	return MP and (MP:FindFirstChild("Map") or MP:FindFirstChild("NewMap")) or nil
+	if ctx.liveChildOf(ctx.cache.curMap, MP) and (ctx.cache.curMap.Name == "Map" or ctx.cache.curMap.Name == "NewMap") then
+		return ctx.cache.curMap
+	end
+	local now = os.clock()
+	if now < (ctx.cache.curMapAt or 0) then
+		return nil
+	end
+	ctx.cache.curMapAt = now + 0.1
+	ctx.cache.curMap = MP and (MP:FindFirstChild("Map") or MP:FindFirstChild("NewMap")) or nil
+	if ctx.cache.curMap then
+		ctx.resetMapCache(ctx.cache.curMap)
+	end
+	return ctx.cache.curMap
 end
 
 ctx.rootPart = function()
@@ -4067,7 +4186,16 @@ ctx.fireChallenge = function(n, ...)
 	if type(t) ~= "table" then
 		return false
 	end
-	ctx.addRemoteOnce(t, ctx.findRemoteNamed(n))
+	local hasRemote = false
+	for _, rem in t do
+		if rem and rem.Parent then
+			hasRemote = true
+			break
+		end
+	end
+	if not hasRemote then
+		ctx.addRemoteOnce(t, ctx.findRemoteNamed(n))
+	end
 	local fired = false
 	for _, rem in t do
 		if rem and rem.Parent then
@@ -4751,7 +4879,7 @@ ctx.startChallenges = function()
 	ctx.spawnLoop(function()
 		while ctx.alive() do
 			if autoChallenges or ctx.opt.infAirOn then
-				ctx.fireChallenge("RegeneratedAir", 9999)
+				ctx.fireRegenAir()
 			end
 			task.wait(1)
 		end
@@ -5599,8 +5727,28 @@ ctx.fireRemote = function(rem, ...)
 	end, ...)
 end
 
-ctx.fireRegenAir = function()
-	ctx.tmpRem = ctx.remotePath("Challenges", "RegeneratedAir") or ctx.findRemoteNamed("RegeneratedAir")
+ctx.fireRegenAir = function(force)
+	local now = os.clock()
+	if force ~= true and now < (ctx.cache.airRemoteAt or 0) then
+		return true
+	end
+	ctx.cache.airRemoteAt = now + 1
+	if not (ctx.cache.airRegenRemote and ctx.cache.airRegenRemote.Parent) then
+		local list = ChallengeRemotes.RegeneratedAir
+		if type(list) == "table" then
+			for _, rem in list do
+				if rem and rem.Parent then
+					ctx.cache.airRegenRemote = rem
+					break
+				end
+			end
+		end
+		if not (ctx.cache.airRegenRemote and ctx.cache.airRegenRemote.Parent) then
+			ctx.cache.airRegenRemote = ctx.remotePath("Challenges", "RegeneratedAir") or ctx.findRemoteNamed("RegeneratedAir")
+			ctx.addRemoteOnce(list, ctx.cache.airRegenRemote)
+		end
+	end
+	ctx.tmpRem = ctx.cache.airRegenRemote
 	ctx.tmpOk = ctx.fireRemote(ctx.tmpRem, 9999)
 	ctx.tmpOk = ctx.fireRemote(ctx.tmpRem, 300) or ctx.tmpOk
 	ctx.tmpOk = ctx.fireRemote(ctx.tmpRem) or ctx.tmpOk
@@ -5608,17 +5756,23 @@ ctx.fireRegenAir = function()
 end
 
 ctx.keepAirLocal = function()
-	ctx.tmpAirEnv = ctx.gameEnv()
-	ctx.callScriptGlobal(ctx.tmpAirEnv, "takeAir", -9999)
-	ctx.callScriptGlobal(ctx.tmpAirEnv, "switchAir", "tank", true)
-	ctx.tmpPg = ctx.pg()
-	ctx.tmpAir = ctx.tmpPg and ctx.tmpPg:FindFirstChild("Air", true)
-	ctx.tmpCnt = ctx.tmpAir and ctx.tmpAir:FindFirstChild("Count", true)
-	if ctx.tmpCnt and (ctx.tmpCnt:IsA("TextLabel") or ctx.tmpCnt:IsA("TextButton")) then
-		pcall(function()
-			ctx.tmpCnt.Text = "∞"
-			ctx.tmpCnt.TextColor3 = Color3.new(1, 1, 1)
-		end)
+	ctx.tmpAirEnv = ctx.cache.airEnv or ctx.gameEnv()
+	if ctx.tmpAirEnv then
+		ctx.cache.airEnv = ctx.tmpAirEnv
+	end
+	ctx.callAirFns(ctx.tmpAirEnv)
+	local now = os.clock()
+	if now >= (ctx.cache.airLocalAt or 0) then
+		ctx.cache.airLocalAt = now + 0.75
+		ctx.tmpPg = ctx.pg()
+		ctx.tmpAir = ctx.tmpPg and ctx.tmpPg:FindFirstChild("Air", true)
+		ctx.tmpCnt = ctx.tmpAir and ctx.tmpAir:FindFirstChild("Count", true)
+		if ctx.tmpCnt and (ctx.tmpCnt:IsA("TextLabel") or ctx.tmpCnt:IsA("TextButton")) then
+			pcall(function()
+				ctx.tmpCnt.Text = "∞"
+				ctx.tmpCnt.TextColor3 = Color3.new(1, 1, 1)
+			end)
+		end
 	end
 end
 
@@ -5733,6 +5887,9 @@ ctx.unprotectAirHealth = function()
 	end
 	ctx.unblockAirAlert()
 	ctx.keepFemAir(false)
+	ctx.cache.airFnEnv = nil
+	ctx.cache.airTakeFn = nil
+	ctx.cache.airSwitchFn = nil
 end
 
 ctx.femSwimming = function()
@@ -5758,6 +5915,13 @@ ctx.femSwimming = function()
 end
 
 ctx.keepFemAir = function(st)
+	local now = os.clock()
+	if st ~= false and now < (ctx.cache.airFemAt or 0) then
+		return type(ctx.cache.femSwim) == "table"
+	end
+	if st ~= false then
+		ctx.cache.airFemAt = now + 0.75
+	end
 	ctx.tmpSwim = ctx.femSwimming()
 	if type(ctx.tmpSwim) ~= "table" then
 		return false
@@ -5771,17 +5935,42 @@ ctx.keepFemAir = function(st)
 	return true
 end
 
+ctx.refreshAirFns = function(env)
+	if ctx.cache.airFnEnv == env then
+		return
+	end
+	ctx.cache.airFnEnv = env
+	ctx.cache.airTakeFn = type(env) == "table" and ctx.scriptGlobal(env, "takeAir") or nil
+	ctx.cache.airSwitchFn = type(env) == "table" and ctx.scriptGlobal(env, "switchAir") or nil
+end
+
+ctx.callAirFns = function(env)
+	ctx.refreshAirFns(env)
+	if type(ctx.cache.airTakeFn) == "function" then
+		pcall(ctx.cache.airTakeFn, -9999)
+	end
+	if type(ctx.cache.airSwitchFn) == "function" then
+		pcall(ctx.cache.airSwitchFn, "tank", true)
+	end
+end
+
 ctx.keepAirFast = function()
-	ctx.protectAirHealth()
-	ctx.keepFemAir(true)
+	local now = os.clock()
+	if now >= (ctx.cache.airProtectAt or 0) then
+		ctx.cache.airProtectAt = now + 0.75
+		ctx.protectAirHealth()
+	end
 	ctx.tmpAirEnv = ctx.cache.airEnv or ctx.gameEnv()
 	if ctx.tmpAirEnv then
 		ctx.cache.airEnv = ctx.tmpAirEnv
 		ctx.airBlockAlert(ctx.tmpAirEnv)
 	end
-	ctx.callScriptGlobal(ctx.tmpAirEnv, "takeAir", -9999)
-	ctx.callScriptGlobal(ctx.tmpAirEnv, "switchAir", "tank", true)
-	ctx.protectAirHealth()
+	ctx.callAirFns(ctx.tmpAirEnv)
+	ctx.keepFemAir(true)
+	ctx.fireRegenAir()
+	if now >= (ctx.cache.airLocalAt or 0) then
+		ctx.keepAirLocal()
+	end
 end
 
 ctx.fireGod = function(st)
@@ -5795,7 +5984,7 @@ ctx.fireGod = function(st)
 	if st == true then
 		ctx.keepAirLocal()
 		ctx.keepFemAir(true)
-		ctx.fireRegenAir()
+		ctx.fireRegenAir(true)
 	else
 		ctx.keepFemAir(false)
 	end
@@ -6089,6 +6278,11 @@ ctx.startInfAirHeartbeat = function()
 			return
 		end
 		if ctx.opt.infAirOn then
+			local now = os.clock()
+			if now < (ctx.cache.airFastAt or 0) then
+				return
+			end
+			ctx.cache.airFastAt = now + 0.25
 			ctx.keepAirFast()
 		elseif ctx.cache.airAlertEnv then
 			ctx.unprotectAirHealth()
@@ -6107,6 +6301,7 @@ ctx.cache.feVelTask = ctx.cache.feVelTask
 ctx.cache.feVelSeen = ctx.cache.feVelSeen
 ctx.cache.feVelLast = 0
 ctx.cache.feVelLastState = nil
+ctx.cache.feVelTickAt = 0
 
 ctx.feMoveNoop = function()
 end
@@ -6477,6 +6672,9 @@ ctx.keepFeVelocityLimitOff = function()
 		end
 		return
 	end
+	if ctx.cache.feVelSeen == false then
+		return
+	end
 	ctx.cache.feVelSeen = false
 	ctx.fireFeVelocityLimit(false, true)
 	ctx.patchFeVelocityConnections(false)
@@ -6485,6 +6683,12 @@ end
 ctx.startFeVelocityLoop = function()
 	if Run and not ctx.cache.feVelHb then
 		ctx.cache.feVelHb = Run.Heartbeat:Connect(function()
+			local now = os.clock()
+			local nextAt = ctx.cache.feVelTickAt or 0
+			if now < nextAt then
+				return
+			end
+			ctx.cache.feVelTickAt = now + (ctx.opt.fePhysicsOn and 0.5 or 1)
 			ctx.keepFeVelocityLimitOff()
 		end)
 		ctx.bind(ctx.cache.feVelHb)
@@ -6494,7 +6698,7 @@ ctx.startFeVelocityLoop = function()
 		ctx.spawnLoop(function()
 			while ctx.alive() do
 				ctx.keepFeVelocityLimitOff()
-				task.wait(ctx.opt.fePhysicsOn and 0.75 or 0.03)
+				task.wait(ctx.opt.fePhysicsOn and 0.75 or 1.5)
 			end
 		end)
 	end
@@ -6570,7 +6774,7 @@ ctx.startFeMovementPatch = function()
 				ctx.bindFeMovementChar(LP.Character)
 			end
 			ctx.applyFeMovement()
-			task.wait(ctx.opt.fePhysicsOn and 1.5 or 0.25)
+			task.wait(ctx.opt.fePhysicsOn and 1.5 or 2)
 		end
 	end)
 end
@@ -6636,6 +6840,9 @@ end
 if MP then
 	ctx.bind(MP.ChildAdded:Connect(function(ch)
 		if ch.Name == "Map" or ch.Name == "NewMap" then
+			ctx.cache.curMap = ch
+			ctx.cache.curMapAt = 0
+			ctx.resetMapCache(ch)
 			if on then
 				ctx.spawnLoop(ctx.burstLoaded)
 			end
@@ -6644,6 +6851,13 @@ if MP then
 				task.delay(0.75, ctx.reapplyZipSpeed)
 				task.delay(2, ctx.reapplyZipSpeed)
 			end
+		end
+	end))
+	ctx.bind(MP.ChildRemoved:Connect(function(ch)
+		if ch == ctx.cache.curMap or ch == ctx.cache.mapRef then
+			ctx.cache.curMap = nil
+			ctx.cache.curMapAt = 0
+			ctx.resetMapCache(nil)
 		end
 	end))
 end
@@ -7328,8 +7542,8 @@ ctx.mkUi = function()
 	end
 	ctx.ui.menu = {}
 	ctx.ui.rootIcon = ctx.topbar.new()
-	ctx.ui.rootIcon:setName("FE2_Helper_Dropdown")
-	ctx.ui.rootIcon:setLabel("FE2 Helper")
+	ctx.ui.rootIcon:setName(ctx.helperIconName())
+	ctx.ui.rootIcon:setLabel(ctx.helperTitle())
 	ctx.ui.rootIcon:setImage(6031280882)
 	ctx.ui.rootIcon:align("Center")
 	ctx.ui.rootIcon:setOrder(50)

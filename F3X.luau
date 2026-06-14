@@ -410,7 +410,7 @@ function Null()
 end
 t.DecodeJSON = function(jsonString)
 	pcall(function()
-		warn("RbxUtility.DecodeJSON is deprecated, please use Game:GetService('HttpService'):JSONDecode() instead.")
+		warn("RbxUtility.DecodeJSON is deprecated, please use HttpService:JSONDecode() instead.")
 	end)
 	if type(jsonString) == "string" then
 		return Decode(jsonString)
@@ -420,15 +420,15 @@ t.DecodeJSON = function(jsonString)
 end
 t.EncodeJSON = function(jsonTable)
 	pcall(function()
-		warn("RbxUtility.EncodeJSON is deprecated, please use Game:GetService('HttpService'):JSONEncode() instead.")
+		warn("RbxUtility.EncodeJSON is deprecated, please use HttpService:JSONEncode() instead.")
 	end)
 	return Encode(jsonTable)
 end
 t.MakeWedge = function(x, y, z, defaultmaterial)
-	return (game:GetService("Terrain")):AutoWedgeCell(x, y, z)
+	return (LTGetService("Terrain")):AutoWedgeCell(x, y, z)
 end
 t.SelectTerrainRegion = function(regionToSelect, color, selectEmptyCells, selectionParent)
-	local terrain = (game:GetService("Workspace")):FindFirstChild("Terrain")
+	local terrain = (LTGetService("Workspace")):FindFirstChild("Terrain")
 	if not terrain then
 		return
 	end
@@ -450,7 +450,7 @@ t.SelectTerrainRegion = function(regionToSelect, color, selectEmptyCells, select
 	if selectionParent then
 		setp(selectionContainer, "Parent", selectionParent)
 	else
-		setp(selectionContainer, "Parent", game:GetService("Workspace"))
+		setp(selectionContainer, "Parent", LTGetService("Workspace"))
 	end
 	local updateSelection = nil
 	local currentKeepAliveTag = nil
@@ -785,30 +785,6 @@ t.Help = function(funcNameOrFunc)
 			.. "Descrition: Create is a very powerfull function, whose description is too long to fit here, and "
 			.. "is best described via example, please see the wiki page for a description of how to use it."
 	end
-end
-do
-	local kP7O5 = (game:getService("Players")).LocalPlayer
-	Tool = Instance.new("Tool")
-	Tool.ToolTip = "Building Tools by F3X"
-	setp(Tool, "Name", "F3X")
-	Tool.CanBeDropped = false
-	Tool.RequiresHandle = true
-	Tool.GripForward = Vector3.new(0, 0, -1)
-	Tool.GripPos = Vector3.new(0, 0, 0.4)
-	Tool.GripRight = Vector3.new(1, 0, 0)
-	Tool.GripUp = Vector3.new(0, 1, 0)
-	local lqT = Instance.new("Part")
-	setp(lqT, "Size", Vector3.new(0.8, 0.8, 0.8))
-	setp(lqT, "TopSurface", 0)
-	setp(lqT, "BottomSurface", 0)
-	setp(lqT, "Name", "Handle")
-	setp(lqT, "Parent", Tool)
-	for mP3mlD = 0, 5, 1 do
-		local PrPyxMK = Instance.new("Decal", lqT)
-		setp(PrPyxMK, "Face", mP3mlD)
-		PrPyxMK.Texture = "rbxassetid://129748355"
-	end
-	setp(Tool, "Parent", kP7O5.Backpack)
 end
 do
 	do
@@ -3783,7 +3759,21 @@ function LTGetService(n)
 			return s
 		end
 	end
-	return game:GetService(n)
+	if game.FindService then
+		local okFind, service = pcall(function()
+			return game:FindService(n)
+		end)
+		if okFind and service then
+			return service
+		end
+	end
+	local okDirect, service = pcall(function()
+		return game[n]
+	end)
+	if okDirect and service then
+		return service
+	end
+	error("Unable to resolve service: " .. tostring(n))
 end
 function LTCallService(n, m, ...)
 	if LTServiceResolver and type(LTServiceResolver.cm) == "function" then
@@ -3950,6 +3940,90 @@ Assets = {
 }
 ToolAssetID = 142785488
 Player = Players.LocalPlayer
+F3XRuntimeKey = "__lt_f3x_singleton"
+F3XRuntimeStore = (getgenv and getgenv()) or _G
+do
+	local previous = type(F3XRuntimeStore) == "table" and rawget(F3XRuntimeStore, F3XRuntimeKey) or nil
+	if type(previous) == "table" then
+		if type(previous.Destroy) == "function" then
+			pcall(previous.Destroy, "reload")
+		else
+			if previous.Tool then
+				pcall(function()
+					previous.Tool:Destroy()
+				end)
+			end
+			if previous.UI then
+				pcall(function()
+					previous.UI:Destroy()
+				end)
+			end
+		end
+	end
+	F3XRuntime = {
+		Destroyed = false,
+		Connections = {},
+	}
+	local function destroyNamed(parent, className, name)
+		if not parent then
+			return
+		end
+		for _, child in pairs(parent:GetChildren()) do
+			if child.ClassName == className and child.Name == name then
+				pcall(function()
+					child:Destroy()
+				end)
+			end
+		end
+	end
+	local function destroyOldTools(parent)
+		if not parent then
+			return
+		end
+		for _, child in pairs(parent:GetChildren()) do
+			if child:IsA("Tool") and (child.Name == "F3X" or child.ToolTip == "Building Tools by F3X") then
+				pcall(function()
+					child:Destroy()
+				end)
+			end
+		end
+	end
+	if Player then
+		destroyOldTools(Player:FindFirstChildOfClass("Backpack"))
+		destroyOldTools(Player.Character)
+		destroyNamed(Player:FindFirstChildOfClass("PlayerGui"), "ScreenGui", "Building Tools by F3X (UI)")
+	end
+	destroyNamed(CoreGui, "ScreenGui", "Building Tools by F3X (UI)")
+	if type(F3XRuntimeStore) == "table" then
+		rawset(F3XRuntimeStore, F3XRuntimeKey, F3XRuntime)
+	end
+end
+do
+	Tool = Instance.new("Tool")
+	Tool.ToolTip = "Building Tools by F3X"
+	setp(Tool, "Name", "F3X")
+	Tool.CanBeDropped = false
+	Tool.RequiresHandle = true
+	Tool.GripForward = Vector3.new(0, 0, -1)
+	Tool.GripPos = Vector3.new(0, 0, 0.4)
+	Tool.GripRight = Vector3.new(1, 0, 0)
+	Tool.GripUp = Vector3.new(0, 1, 0)
+	local lqT = Instance.new("Part")
+	setp(lqT, "Size", Vector3.new(0.8, 0.8, 0.8))
+	setp(lqT, "TopSurface", 0)
+	setp(lqT, "BottomSurface", 0)
+	setp(lqT, "Name", "Handle")
+	setp(lqT, "Parent", Tool)
+	for mP3mlD = 0, 5, 1 do
+		local PrPyxMK = Instance.new("Decal", lqT)
+		setp(PrPyxMK, "Face", mP3mlD)
+		PrPyxMK.Texture = "rbxassetid://129748355"
+	end
+	if Player and Player:FindFirstChildOfClass("Backpack") then
+		setp(Tool, "Parent", Player:FindFirstChildOfClass("Backpack"))
+	end
+	F3XRuntime.Tool = Tool
+end
 Mouse = nil
 if plugin then
 	ToolType = "plugin"
@@ -17935,6 +18009,26 @@ function setMobileMultiSelect(v)
 		setp(MobileMultiButton, "TextColor3", mobile_multi_select and Color3.new(0.5, 1, 0.5) or Color3.new(1, 1, 1))
 	end
 end
+function isKeyboardSelectionModifierDown()
+	local keys = {
+		Enum.KeyCode.LeftShift,
+		Enum.KeyCode.RightShift,
+		Enum.KeyCode.LeftControl,
+		Enum.KeyCode.RightControl,
+	}
+	for _, key in pairs(keys) do
+		local ok, down = pcall(function()
+			return UserInputService:IsKeyDown(key)
+		end)
+		if ok and down then
+			return true
+		end
+	end
+	return false
+end
+function isSelectionModifierDown()
+	return selecting or isKeyboardSelectionModifierDown()
+end
 function updateSelectionTargetBox(input)
 	if override_selection or not TargetBox then
 		return
@@ -17959,7 +18053,7 @@ function applyPointerSelection(input, touchMode)
 	if not Select2D.enabled and moved then
 		override_selection = true
 	end
-	local addMode = selecting or (touchMode and mobile_multi_select)
+	local addMode = isSelectionModifierDown() or (touchMode and mobile_multi_select)
 	if not override_selection and touchMode and not addMode then
 		Selection:clear()
 		if isSelectable(target) then
@@ -18138,12 +18232,12 @@ function ShowStartupNotifications()
 		end
 	end
 	if ToolType == "tool" then
-		Tool.Unequipped:Connect(function()
+		F3XTrackConnection(Tool.Unequipped:Connect(function()
 			if M3ptD1Cf.Visible then
 				setp(M3ptD1Cf, "Visible", false)
 				M3ptD1Cf:Destroy()
 			end
-		end)
+		end))
 	end
 end
 clicking = false
@@ -18176,6 +18270,7 @@ UI = LTProtectUI(UI, {
 	watch = true,
 	rename = false,
 }) or UI
+F3XRuntime.UI = UI
 if not UI.Parent then
 	if ToolType == "tool" then
 		setp(UI, "Parent", GUIContainer)
@@ -19682,7 +19777,7 @@ function createMobileSelectionToggle()
 	local info = Dock.InfoButtons
 	local sig = info:FindFirstChild("F3XSignature")
 	if sig then
-		setp(sig, "Visible", false)
+		setp(sig, "Visible", true)
 	end
 	MobileMultiButton = Instance.new("TextButton")
 	setp(MobileMultiButton, "Name", "MobileMultiSelectToggle")
@@ -19690,8 +19785,8 @@ function createMobileSelectionToggle()
 	setp(MobileMultiButton, "BackgroundColor3", Color3.new(0, 0, 0))
 	setp(MobileMultiButton, "BackgroundTransparency", 0.55)
 	setp(MobileMultiButton, "BorderSizePixel", 0)
-	setp(MobileMultiButton, "Position", UDim2.new(0, 0, 0, 0))
-	setp(MobileMultiButton, "Size", UDim2.new(1, -32, 1, 0))
+	setp(MobileMultiButton, "Position", UDim2.new(1, 4, 0, 0))
+	setp(MobileMultiButton, "Size", UDim2.new(0, 44, 0, 32))
 	setp(MobileMultiButton, "ZIndex", 4)
 	setp(MobileMultiButton, "Font", Enum.Font.ArialBold)
 	setp(MobileMultiButton, "FontSize", Enum.FontSize.Size10)
@@ -20039,7 +20134,7 @@ function equipBT(O)
 			or nwlg80aZ.KeyCode == Enum.KeyCode.LeftControl
 			or nwlg80aZ.KeyCode == Enum.KeyCode.RightControl
 		then
-			selecting = false
+			selecting = isKeyboardSelectionModifierDown()
 		end
 	end)
 	table.insert(
@@ -20047,7 +20142,7 @@ function equipBT(O)
 		Mouse.KeyDown:Connect(function(B)
 			local B = B:lower()
 			local PDGF = B:byte()
-			local x_gZS_6x = selecting
+			local x_gZS_6x = isSelectionModifierDown()
 			if B == "x" and x_gZS_6x then
 				deleteSelection()
 				return
@@ -20138,7 +20233,7 @@ function equipBT(O)
 			local iAXm7_ = Sq5Mc:byte()
 			ActiveKeys[iAXm7_] = nil
 			ActiveKeys[Sq5Mc] = nil
-			if not selecting then
+			if not isSelectionModifierDown() then
 				if Select2D.enabled then
 					Select2D:select()
 					Select2D:finish()
@@ -20167,6 +20262,9 @@ function equipBT(O)
 			if input.UserInputType ~= Enum.UserInputType.Touch or touch_selection_input then
 				return
 			end
+			if gameProcessed then
+				return
+			end
 			if UserInputService:GetFocusedTextBox() or isPointerOverBTUI(input) then
 				return
 			end
@@ -20188,7 +20286,7 @@ function equipBT(O)
 			end
 			local pointerPosition = getSelectionPointerPosition(input)
 			if mobile_multi_select and touch_selection_start and pointerPosition and not Select2D.enabled then
-				local moved = math.abs(pointerPosition.X - touch_selection_start.X) > 14 or math.abs(pointerPosition.Y - touch_selection_start.Y) > 14
+				local moved = math.abs(pointerPosition.X - touch_selection_start.X) > 28 or math.abs(pointerPosition.Y - touch_selection_start.Y) > 28
 				if moved then
 					override_selection = true
 					Select2D:start(input, touch_selection_start)
@@ -20227,7 +20325,7 @@ function equipBT(O)
 			end
 			clicking = true
 			click_x, click_y = Mouse.X, Mouse.Y
-			if selecting then
+			if isSelectionModifierDown() then
 				return
 			end
 			if CurrentTool and CurrentTool.Listeners.Button1Down then
@@ -20245,7 +20343,7 @@ function equipBT(O)
 				not override_selection
 				and not Select2D.enabled
 				and clicking
-				and selecting
+				and isSelectionModifierDown()
 				and (click_x ~= Mouse.X or click_y ~= Mouse.Y)
 			then
 				Select2D:start()
@@ -20312,6 +20410,154 @@ function unequipBT()
 		if not okUnequip then
 			F3XWarn("Current tool unequip listener failed: " .. tostring(errUnequip))
 		end
+	end
+end
+function F3XTrackConnection(connection)
+	if connection then
+		table.insert(F3XRuntime.Connections, connection)
+	end
+	return connection
+end
+function F3XDisconnectRuntimeConnections()
+	for i, connection in pairs(F3XRuntime.Connections) do
+		pcall(function()
+			connection:Disconnect()
+		end)
+		F3XRuntime.Connections[i] = nil
+	end
+end
+function F3XDestroyToolSurfaces()
+	if type(Tools) ~= "table" then
+		return
+	end
+	for _, toolData in pairs(Tools) do
+		if type(toolData) == "table" then
+			if type(toolData.Connections) == "table" then
+				for key, connection in pairs(toolData.Connections) do
+					pcall(function()
+						connection:Disconnect()
+					end)
+					toolData.Connections[key] = nil
+				end
+			end
+			for _, field in pairs({ "Handles", "BoundingBox", "GUI", "Marker", "MarkerOutline" }) do
+				local instance = toolData[field]
+				if typeof(instance) == "Instance" then
+					pcall(function()
+						instance:Destroy()
+					end)
+					toolData[field] = nil
+				end
+			end
+			if type(toolData.Updater) == "function" then
+				pcall(toolData.Updater)
+				toolData.Updater = nil
+			end
+		end
+	end
+end
+function F3XDestroyMobileUIConnections()
+	if type(BTMobileUI) ~= "table" or type(BTMobileUI.Connections) ~= "table" then
+		return
+	end
+	for frame, connections in pairs(BTMobileUI.Connections) do
+		for key, connection in pairs(connections) do
+			pcall(function()
+				connection:Disconnect()
+			end)
+			connections[key] = nil
+		end
+		BTMobileUI.Connections[frame] = nil
+	end
+	if type(BTMobileUI.DragFrames) == "table" then
+		for frame, _ in pairs(BTMobileUI.DragFrames) do
+			BTMobileUI.DragFrames[frame] = nil
+		end
+	end
+end
+function destroyF3XInstance(reason)
+	if F3XRuntime.Destroyed then
+		return
+	end
+	F3XRuntime.Destroyed = true
+	F3XRuntime.Reason = tostring(reason or "destroy")
+	F3XDebug("Destroying F3X instance: " .. F3XRuntime.Reason)
+	F3XDisconnectRuntimeConnections()
+	pcall(function()
+		unequipBT()
+	end)
+	pcall(function()
+		if Select2D and Select2D.enabled then
+			Select2D:finish()
+		end
+	end)
+	pcall(function()
+		if SelectEdge and SelectEdge.started then
+			SelectEdge:stop()
+		end
+	end)
+	pcall(F3XDestroyToolSurfaces)
+	pcall(F3XDestroyMobileUIConnections)
+	for part, box in pairs(SelectionBoxes or {}) do
+		if typeof(box) == "Instance" then
+			pcall(function()
+				box:Destroy()
+			end)
+		end
+		SelectionBoxes[part] = nil
+	end
+	for part, connection in pairs(SelectionExistenceListeners or {}) do
+		pcall(function()
+			connection:Disconnect()
+		end)
+		SelectionExistenceListeners[part] = nil
+	end
+	if TargetBox then
+		pcall(function()
+			TargetBox:Destroy()
+		end)
+		TargetBox = nil
+	end
+	if UI then
+		pcall(function()
+			UI:Destroy()
+		end)
+		UI = nil
+	end
+	if Tool then
+		pcall(function()
+			Tool:Destroy()
+		end)
+		Tool = nil
+	end
+	if type(F3XRuntimeStore) == "table" and rawget(F3XRuntimeStore, F3XRuntimeKey) == F3XRuntime then
+		rawset(F3XRuntimeStore, F3XRuntimeKey, nil)
+	end
+end
+F3XRuntime.Destroy = destroyF3XInstance
+function F3XToolIsInInventory()
+	if ToolType ~= "tool" then
+		return true
+	end
+	if not Tool or not Tool.Parent then
+		return false
+	end
+	local backpack = Player and Player:FindFirstChildOfClass("Backpack") or nil
+	local character = Player and Player.Character or nil
+	if Tool.Parent == backpack or Tool.Parent == character then
+		return true
+	end
+	if character and Tool:IsDescendantOf(character) then
+		return true
+	end
+	return false
+end
+function F3XCheckToolInventory()
+	if F3XRuntime.Destroyed then
+		return
+	end
+	if not F3XToolIsInInventory() then
+		destroyF3XInstance("tool removed from backpack/character")
 	end
 end
 local q = {
@@ -21598,7 +21844,17 @@ local q = {
 						Transparency = 1,
 						Anchored = true,
 					})
+					pcall(function()
+						setp(KJ0Y6.BoundingBox, "CanTouch", false)
+					end)
+					pcall(function()
+						setp(KJ0Y6.BoundingBox, "CanQuery", false)
+					end)
+					pcall(function()
+						setp(KJ0Y6.BoundingBox, "Locked", true)
+					end)
 				end
+				setp(KJ0Y6.BoundingBox, "Parent", Workspace)
 				Mouse.TargetFilter = KJ0Y6.BoundingBox
 				KJ0Y6:changeAxes(KJ0Y6.Options.axes)
 				KJ0Y6.Connections.DraggerKeyListener = Mouse.KeyDown:Connect(function(C)
@@ -21703,6 +21959,9 @@ local q = {
 				eb6VK:FinishDragging()
 				eb6VK:hideGUI()
 				eb6VK:hideHandles()
+				if eb6VK.BoundingBox then
+					setp(eb6VK.BoundingBox, "Parent", nil)
+				end
 				for U8PPAC, bK92X9wQ in pairs(eb6VK.Connections) do
 					bK92X9wQ:Disconnect()
 					eb6VK.Connections[U8PPAC] = nil
@@ -22174,7 +22433,10 @@ local q = {
 				if QXOjuVP == "global" then
 					s3.Options.axes = "global"
 					s3:hideHandles()
-					s3:showHandles(s3.BoundingBox)
+					s3.Connections.HandleSelectionChangeListener = Selection.Changed:Connect(function()
+						s3:updateBoundingBox()
+					end)
+					s3:updateBoundingBox()
 					if s3.GUI then
 						setp(KOk.Global.SelectedIndicator, "BackgroundTransparency", 0)
 						setp(KOk.Global.Background, "Image", Assets.DarkSlantedRectangle)
@@ -26998,7 +27260,7 @@ if next(ToolLoadErrors) then
 end
 if ToolType == "plugin" then
 	local i = false
-	ToolbarButton.Click:Connect(function()
+	F3XTrackConnection(ToolbarButton.Click:Connect(function()
 		if i then
 			i = false
 			unequipBT()
@@ -27007,11 +27269,24 @@ if ToolType == "plugin" then
 			plugin:Activate(true)
 			equipBT(plugin:GetMouse())
 		end
-	end)
-	plugin.Deactivation:Connect(unequipBT)
+	end))
+	F3XTrackConnection(plugin.Deactivation:Connect(unequipBT))
 elseif ToolType == "tool" then
-	Tool.Equipped:Connect(equipBT)
-	Tool.Unequipped:Connect(unequipBT)
+	F3XTrackConnection(Tool.Equipped:Connect(equipBT))
+	F3XTrackConnection(Tool.Unequipped:Connect(unequipBT))
+	F3XTrackConnection(Tool.AncestryChanged:Connect(function()
+		F3XSpawn(F3XCheckToolInventory)
+	end))
+	pcall(function()
+		F3XTrackConnection(Tool.Destroying:Connect(function()
+			destroyF3XInstance("tool destroyed")
+		end))
+	end)
+	if Player then
+		F3XTrackConnection(Player.CharacterAdded:Connect(function()
+			F3XSpawn(F3XCheckToolInventory)
+		end))
+	end
 end
 RefreshHttpAvailabilityAsync()
 RefreshVersionStatusAsync()

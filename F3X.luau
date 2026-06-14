@@ -17901,6 +17901,40 @@ function getSelectionTarget(input)
 	end
 	return target
 end
+function isGuiVisibleDeep(obj)
+	local cur = obj
+	while cur and cur ~= UI do
+		if cur:IsA("GuiObject") and not cur.Visible then
+			return false
+		end
+		cur = cur.Parent
+	end
+	return true
+end
+function isPointerOverBTUI(input)
+	local p = getSelectionPointerPosition(input)
+	if not p or not UI then
+		return false
+	end
+	for _, obj in pairs(UI:GetDescendants()) do
+		if obj:IsA("GuiObject") and obj.Name ~= "Rectangle" and isGuiVisibleDeep(obj) then
+			local pos = obj.AbsolutePosition
+			local size = obj.AbsoluteSize
+			if size.X > 0 and size.Y > 0 and p.X >= pos.X and p.X <= pos.X + size.X and p.Y >= pos.Y and p.Y <= pos.Y + size.Y then
+				return true
+			end
+		end
+	end
+	return false
+end
+function setMobileMultiSelect(v)
+	mobile_multi_select = v == true
+	if MobileMultiButton then
+		setp(MobileMultiButton, "Text", mobile_multi_select and "MULTI\nON" or "MULTI\nOFF")
+		setp(MobileMultiButton, "BackgroundTransparency", mobile_multi_select and 0.15 or 0.55)
+		setp(MobileMultiButton, "TextColor3", mobile_multi_select and Color3.new(0.5, 1, 0.5) or Color3.new(1, 1, 1))
+	end
+end
 function updateSelectionTargetBox(input)
 	if override_selection or not TargetBox then
 		return
@@ -17925,19 +17959,15 @@ function applyPointerSelection(input, touchMode)
 	if not Select2D.enabled and moved then
 		override_selection = true
 	end
-	if not override_selection and touchMode then
-		if isSelectionTarget(target) then
-			if Selection:find(target) then
-				Selection:remove(target)
-			else
-				Selection:add(target)
-			end
-		else
-			Selection:clear()
-		end
-	elseif not override_selection and not selecting and (not isSelectionTarget(target)) then
+	local addMode = selecting or (touchMode and mobile_multi_select)
+	if not override_selection and touchMode and not addMode then
 		Selection:clear()
-	elseif not override_selection and selecting then
+		if isSelectable(target) then
+			Selection:add(target)
+		end
+	elseif not override_selection and not addMode and (not isSelectionTarget(target)) then
+		Selection:clear()
+	elseif not override_selection and addMode then
 		if not Selection:find(target) then
 			if isSelectable(target) then
 				Selection:add(target)
@@ -18121,7 +18151,10 @@ selecting = false
 click_x, click_y = 0, 0
 override_selection = false
 touch_selection_input = nil
+touch_selection_start = nil
 last_touch_selection_time = 0
+mobile_multi_select = false
+MobileMultiButton = nil
 SelectionBoxes = {}
 SelectionExistenceListeners = {}
 SelectionBoxColor = BrickColor.new("Cyan")
@@ -18771,10 +18804,12 @@ Select2D = {
 	enabled = false,
 	GUI = nil,
 	Connections = {},
-	start = function(fx)
+	start = function(fx, input, startPoint)
 		if fx.enabled then
 			return
 		end
+		local sp = startPoint or getSelectionPointerPosition(input) or Vector2.new(click_x, click_y)
+		local cp = getSelectionPointerPosition(input) or Vector2.new(Mouse.X, Mouse.Y)
 		fx.enabled = true
 		fx.GUI = (RbxUtility.Create("ScreenGui"))({
 			Name = "BTSelectionRectangle",
@@ -18787,29 +18822,33 @@ Select2D = {
 			BackgroundColor3 = Color3.new(0, 0, 0),
 			BackgroundTransparency = 0.5,
 			BorderSizePixel = 0,
-			Position = UDim2.new(0, math.min(click_x, Mouse.X), 0, math.min(click_y, Mouse.Y)),
-			Size = UDim2.new(
-				0,
-				math.max(click_x, Mouse.X) - math.min(click_x, Mouse.X),
-				0,
-				math.max(click_y, Mouse.Y) - math.min(click_y, Mouse.Y)
-			),
+			Position = UDim2.new(0, math.min(sp.X, cp.X), 0, math.min(sp.Y, cp.Y)),
+			Size = UDim2.new(0, math.abs(cp.X - sp.X), 0, math.abs(cp.Y - sp.Y)),
 		})
-		fx.Connections.SelectionResize = Mouse.Move:Connect(function()
-			setp(ZkXY, "Position", UDim2.new(0, math.min(click_x, Mouse.X), 0, math.min(click_y, Mouse.Y)))
-			ZkXY.Size = UDim2.new(
-				0,
-				math.max(click_x, Mouse.X) - math.min(click_x, Mouse.X),
-				0,
-				math.max(click_y, Mouse.Y) - math.min(click_y, Mouse.Y)
-			)
-		end)
-		fx.Connections.SelectionEnd = UserInputService.InputEnded:Connect(function(sWJA)
-			if sWJA.UserInputType == Enum.UserInputType.MouseButton1 then
-				fx:select()
-				fx:finish()
-			end
-		end)
+		local function resize(pos)
+			setp(ZkXY, "Position", UDim2.new(0, math.min(sp.X, pos.X), 0, math.min(sp.Y, pos.Y)))
+			ZkXY.Size = UDim2.new(0, math.abs(pos.X - sp.X), 0, math.abs(pos.Y - sp.Y))
+		end
+		if input and input.UserInputType == Enum.UserInputType.Touch then
+			fx.Connections.SelectionResize = UserInputService.InputChanged:Connect(function(changed)
+				if changed == input then
+					local pos = getSelectionPointerPosition(changed)
+					if pos then
+						resize(pos)
+					end
+				end
+			end)
+		else
+			fx.Connections.SelectionResize = Mouse.Move:Connect(function()
+				resize(Vector2.new(Mouse.X, Mouse.Y))
+			end)
+			fx.Connections.SelectionEnd = UserInputService.InputEnded:Connect(function(sWJA)
+				if sWJA.UserInputType == Enum.UserInputType.MouseButton1 then
+					fx:select()
+					fx:finish()
+				end
+			end)
+		end
 	end,
 	select = function(NVvo)
 		if not NVvo.enabled then
@@ -19636,6 +19675,48 @@ Tooltips = {}
 Dock = DFb100j.BTDockGUI:Clone()
 setp(Dock, "Parent", UI)
 setp(Dock, "Visible", false)
+function createMobileSelectionToggle()
+	if not Dock or not Dock:FindFirstChild("InfoButtons") or MobileMultiButton then
+		return
+	end
+	local info = Dock.InfoButtons
+	local sig = info:FindFirstChild("F3XSignature")
+	if sig then
+		setp(sig, "Visible", false)
+	end
+	MobileMultiButton = Instance.new("TextButton")
+	setp(MobileMultiButton, "Name", "MobileMultiSelectToggle")
+	setp(MobileMultiButton, "AutoButtonColor", true)
+	setp(MobileMultiButton, "BackgroundColor3", Color3.new(0, 0, 0))
+	setp(MobileMultiButton, "BackgroundTransparency", 0.55)
+	setp(MobileMultiButton, "BorderSizePixel", 0)
+	setp(MobileMultiButton, "Position", UDim2.new(0, 0, 0, 0))
+	setp(MobileMultiButton, "Size", UDim2.new(1, -32, 1, 0))
+	setp(MobileMultiButton, "ZIndex", 4)
+	setp(MobileMultiButton, "Font", Enum.Font.ArialBold)
+	setp(MobileMultiButton, "FontSize", Enum.FontSize.Size10)
+	setp(MobileMultiButton, "TextWrapped", true)
+	setp(MobileMultiButton, "TextScaled", true)
+	setp(MobileMultiButton, "Text", "MULTI\nOFF")
+	setp(MobileMultiButton, "TextColor3", Color3.new(1, 1, 1))
+	setp(MobileMultiButton, "Visible", UserInputService.TouchEnabled)
+	setp(MobileMultiButton, "Parent", info)
+	local function toggle()
+		setMobileMultiSelect(not mobile_multi_select)
+	end
+	if MobileMultiButton.Activated then
+		MobileMultiButton.Activated:Connect(toggle)
+	else
+		MobileMultiButton.MouseButton1Up:Connect(toggle)
+	end
+	pcall(function()
+		UserInputService:GetPropertyChangedSignal("TouchEnabled"):Connect(function()
+			setp(MobileMultiButton, "Visible", UserInputService.TouchEnabled)
+		end)
+	end)
+	setMobileMultiSelect(false)
+end
+createMobileSelectionToggle()
 function RegisterToolButton(NQSh)
 	local Y1rSR = NQSh.Name:match("(.+)Button")
 	if Y1rSR then
@@ -20083,18 +20164,18 @@ function equipBT(O)
 	table.insert(
 		Connections,
 		UserInputService.InputBegan:Connect(function(input, gameProcessed)
-			if input.UserInputType ~= Enum.UserInputType.Touch or gameProcessed or touch_selection_input then
+			if input.UserInputType ~= Enum.UserInputType.Touch or touch_selection_input then
 				return
 			end
-			if UserInputService:GetFocusedTextBox() then
+			if UserInputService:GetFocusedTextBox() or isPointerOverBTUI(input) then
 				return
 			end
 			touch_selection_input = input
+			touch_selection_start = getSelectionPointerPosition(input)
 			last_touch_selection_time = tick()
 			clicking = true
-			local pointerPosition = getSelectionPointerPosition(input)
-			if pointerPosition then
-				click_x, click_y = pointerPosition.X, pointerPosition.Y
+			if touch_selection_start then
+				click_x, click_y = touch_selection_start.X, touch_selection_start.Y
 			end
 			updateSelectionTargetBox(input)
 		end)
@@ -20104,6 +20185,14 @@ function equipBT(O)
 		UserInputService.InputChanged:Connect(function(input)
 			if input.UserInputType ~= Enum.UserInputType.Touch or input ~= touch_selection_input then
 				return
+			end
+			local pointerPosition = getSelectionPointerPosition(input)
+			if mobile_multi_select and touch_selection_start and pointerPosition and not Select2D.enabled then
+				local moved = math.abs(pointerPosition.X - touch_selection_start.X) > 14 or math.abs(pointerPosition.Y - touch_selection_start.Y) > 14
+				if moved then
+					override_selection = true
+					Select2D:start(input, touch_selection_start)
+				end
 			end
 			updateSelectionTargetBox(input)
 		end)
@@ -20115,10 +20204,19 @@ function equipBT(O)
 				return
 			end
 			clicking = false
-			applyPointerSelection(input, true)
+			if Select2D.enabled then
+				Select2D:select()
+				Select2D:finish()
+			else
+				applyPointerSelection(input, true)
+			end
 			updateSelectionTargetBox(input)
 			touch_selection_input = nil
+			touch_selection_start = nil
 			last_touch_selection_time = tick()
+			if override_selection then
+				override_selection = false
+			end
 		end)
 	)
 	table.insert(

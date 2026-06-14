@@ -3057,7 +3057,8 @@ Main = (function()
 		end
 
 		Main.MainGuiOpen = false
-		Main.Apps = {}
+		table.clear(Apps)
+		Main.Apps = Apps
 		Main.AppControls = {}
 		Main.Plugins = {}
 		Main.MenuApps = {}
@@ -3315,7 +3316,8 @@ Main = (function()
 	Main.Init = function()
 		Main.__DexExiting = false
 		Main.MenuApps = {}
-		Main.Apps = {}
+		table.clear(Apps)
+		Main.Apps = Apps
 		Main.AppControls = {}
 		Main.Plugins = {}
 

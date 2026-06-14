@@ -318,13 +318,22 @@ local function main()
 			reloadButton.Position = UDim2.new(0,5,1,-5)
 			reloadButton.Size = UDim2.new(0.5,-5,0,20)
 			trackConn(reloadButton.OnClick:Connect(function()
-				if Main and Main.Reinit then
-					Main.Reinit()
-				elseif Main and Main.Exit and Main.Init then
-					Main.Exit()
-					task.wait()
-					Main.Init()
+				if SettingsWindow.__Reloading then
+					return
 				end
+
+				SettingsWindow.__Reloading = true
+				reloadButton.Text = "Restarting..."
+
+				task.defer(function()
+					if Main and Main.Reinit then
+						Main.Reinit()
+					elseif Main and Main.Exit and Main.Init then
+						Main.Exit(true)
+						task.wait()
+						Main.Init()
+					end
+				end)
 			end))
 
 			win:Add(reloadButton,"reloadButton")

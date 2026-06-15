@@ -95,20 +95,6 @@ local srv = setmetatable({}, {
 	end
 });
 local function S(n) return srv[n]; end;
-local function LaunchExperience(params)
-	local ok = pcall(function()
-		(S("ExperienceService")):LaunchExperience(params);
-	end);
-	if ok then return true; end;
-	return pcall(function()
-		local pl = (S("Players")).LocalPlayer;
-		if params.gameInstanceId then
-			(S("TeleportService")):TeleportToPlaceInstance(params.placeId, params.gameInstanceId, pl);
-		else
-			(S("TeleportService")):Teleport(params.placeId, pl);
-		end;
-	end);
-end;
 local function protectUI(g)
 	local protected = __NAProtectUI(g)
 	if protected then
@@ -634,10 +620,10 @@ local function mkRow(t)
 		__lt.cm("TweenService", "Create", btnScale, TweenInfo.new(0.1, Enum.EasingStyle.Quad), {Scale = 1}):Play();
 	end);
 	btn.MouseButton1Down:Connect(function()
+		local pl = (S("Players")).LocalPlayer;
 		local job = t.id;
-		local pid = tonumber(idBox.Text) or idBox.Text;
-		local ok, err = LaunchExperience({placeId = pid, gameInstanceId = job});
-		if not ok then warn("LaunchExperience failed: " .. tostring(err)); end;
+		local pid = idBox.Text;
+		(S("TeleportService")):TeleportToPlaceInstance(pid, job, pl);
 	end);
 	row.MouseEnter:Connect(function()
 		__lt.cm("TweenService", "Create", row, TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.02}):Play();

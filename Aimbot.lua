@@ -38,10 +38,26 @@ local Rayfield = loadstring(game:HttpGet('https://raw.githubusercontent.com/ltse
 getgenv().AimbotLoaded=true
 local HttpService = ClonedService("HttpService")
 local RunService = ClonedService("RunService")
+local ExperienceService = ClonedService("ExperienceService")
 local TeleportService = ClonedService("TeleportService")
 local players = ClonedService("Players")
 local wrk = ClonedService("Workspace")
 local plr = players.LocalPlayer
+local function LaunchExperience(params)
+    local ok, err = pcall(function()
+        ExperienceService:LaunchExperience(params)
+    end)
+    if ok then
+        return true
+    end
+    return pcall(function()
+        if params.gameInstanceId then
+            TeleportService:TeleportToPlaceInstance(params.placeId, params.gameInstanceId, plr)
+        else
+            TeleportService:Teleport(params.placeId, plr)
+        end
+    end)
+end
 local hrp = nil
 local humanoid = nil
 local function onCharacterAdded(character)
@@ -609,7 +625,10 @@ local ServerHop = Misc:CreateButton({
             end
         
             if #servers > 0 then
-                __lt.cm("TeleportService", "TeleportToPlaceInstance", game.PlaceId, servers[math.random(1, #servers)], plr)
+                local ok, err = LaunchExperience({placeId = game.PlaceId, gameInstanceId = servers[math.random(1, #servers)]})
+                if not ok then
+                    Rayfield:Notify({Title = "Server Hop", Content = "LaunchExperience failed: " .. tostring(err), Duration = 2, Image = 4483362458,})
+                end
             else
                 Rayfield:Notify({Title = "Server Hop", Content = "Couldn't find a valid server!!!", Duration = 1, Image = 4483362458,})
             end

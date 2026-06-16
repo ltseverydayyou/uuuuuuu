@@ -1788,6 +1788,13 @@ ctx.moveTo = function(obj, r)
 		return false
 	end
 	local moved = false
+	if type(firetouchinterest) == "function" and p:IsA("BasePart") then
+		pcall(function()
+			firetouchinterest(r, p, 0)
+			task.wait()
+			firetouchinterest(r, p, 1)
+		end)
+	end
 	if obj:IsA("Model") then
 		moved = pcall(function()
 			obj:PivotTo(r.CFrame)
@@ -1796,6 +1803,12 @@ ctx.moveTo = function(obj, r)
 		moved = pcall(function()
 			p:PivotTo(r.CFrame)
 		end)
+	end
+	if p.Parent and r.Parent then
+		moved = pcall(function()
+			r.CFrame = p.CFrame + Vector3.new(0, 1.5, 0)
+			r.AssemblyLinearVelocity = Vector3.zero
+		end) or moved
 	end
 	return moved
 end
@@ -1809,13 +1822,13 @@ ctx.bKind = function(obj)
 		return nil
 	end
 	nm = nm:lower()
-	if nm == "_lostpage" then
+	if nm == "_lostpage" or nm == "lostpage" or string.find(nm, "lostpage", 1, true) or string.find(nm, "lost_page", 1, true) then
 		return "pg"
 	end
-	if nm == "contact" then
+	if nm == "contact" or nm == "escapeecontact" or (string.find(nm, "escapee", 1, true) and string.find(nm, "contact", 1, true)) then
 		return "ct"
 	end
-	if nm == "npc" then
+	if nm == "npc" or (string.find(nm, "escapee", 1, true) and (obj:IsA("Model") or obj:IsA("BasePart"))) then
 		return "npc"
 	end
 	return nil
@@ -4931,9 +4944,9 @@ end
 ctx.startBonusCollector = function()
 	ctx.spawnLoop(function()
 		while ctx.alive() do
-			if autoCollectBonuses and ctx.isRoundIngame() then
+			if autoCollectBonuses then
 				local map = ctx.curMap()
-				if map then
+				if map and map.Parent then
 					local r = select(1, ctx.rh(false))
 					ctx.collectMapBonuses(map, r, true)
 				end

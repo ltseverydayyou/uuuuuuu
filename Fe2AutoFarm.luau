@@ -117,14 +117,13 @@ local host = type(sh) == "table" and sh or (type(g) == "table" and g or nil)
 
 if host and type(host.__lt_af_ctx) == "table" then
 	local old = host.__lt_af_ctx
-	if type(old.opt) == "table" then
-		old.opt.fePhysicsOn = true
-	end
-	if type(old.applyFeMovement) == "function" then
-		pcall(old.applyFeMovement, true)
-	end
 	if type(old.stop) == "function" then
 		pcall(old.stop)
+	elseif type(old.applyFeMovement) == "function" then
+		if type(old.opt) == "table" then
+			old.opt.fePhysicsOn = true
+		end
+		pcall(old.applyFeMovement, true)
 	elseif type(old.con) == "table" then
 		for _, c in old.con do
 			if c and type(c.Disconnect) == "function" then
@@ -634,7 +633,6 @@ ctx.cache.airAlertOld = nil
 ctx.cache.airFastAt = 0
 ctx.cache.airLocalAt = 0
 ctx.cache.airRemoteAt = 0
-ctx.cache.airFemAt = 0
 ctx.cache.airProtectAt = 0
 ctx.cache.airFnEnv = nil
 ctx.cache.airTakeFn = nil
@@ -658,7 +656,6 @@ ctx.cache.femRopeOld = setmetatable({}, { __mode = "k" })
 ctx.cache.jumpAt = 0
 ctx.cache.wallAt = 0
 ctx.cache.slideAt = 0
-ctx.cache.swimAt = 0
 ctx.flood.floodColors = {
 	water = Color3.fromHSV(0.6, 0.99, 0.99),
 	acid = Color3.fromHSV(0.33, 0.99, 0.99),
@@ -1114,12 +1111,17 @@ ctx.stop = function()
 	ctx.cache.airFastAt = 0
 	ctx.cache.airLocalAt = 0
 	ctx.cache.airRemoteAt = 0
-	ctx.cache.airFemAt = 0
 	ctx.cache.airProtectAt = 0
 	ctx.cache.airFnEnv = nil
 	ctx.cache.airTakeFn = nil
 	ctx.cache.airSwitchFn = nil
 	ctx.cache.airRegenRemote = nil
+	ctx.cache.feApplyTok = (ctx.cache.feApplyTok or 0) + 1
+	ctx.cache.feApplying = false
+	ctx.cache.fePendingApply = false
+	ctx.cache.fePendingRestore = false
+	ctx.cache.fePatchState = nil
+	ctx.cache.feAppliedChar = nil
 	ctx.cache.buttonSpamKey = nil
 	ctx.cache.curMap = nil
 	ctx.cache.curMapAt = 0
@@ -1127,7 +1129,6 @@ ctx.stop = function()
 	ctx.cache.mapSettings = nil
 	ctx.cache.mapExit = nil
 	ctx.cache.mapExitAt = 0
-	ctx.cache.femSwim = nil
 	if host and host.__lt_af_ctx == ctx then
 		host.__lt_af_ctx = nil
 	end
@@ -3273,9 +3274,6 @@ ctx.setDevBtn = function()
 end
 
 ctx.setWallBtn = function()
-end
-
-ctx.setSwimBtn = function()
 end
 
 ctx.setSlidePhysBtn = function()
@@ -5583,18 +5581,6 @@ ctx.mainScript = function()
 	return ps and ps:FindFirstChild("CL_MAIN_GameScript") or nil
 end
 
-ctx.isSwimmingNow = function()
-	local m = ctx.mainScript()
-	local f = m and m:FindFirstChild("isSwimming")
-	if f and f.Invoke then
-		local ok, res = pcall(function()
-			return f:Invoke()
-		end)
-		return ok and res == true
-	end
-	return false
-end
-
 ctx.partWords = function(p, words)
 	if not p then
 		return false
@@ -5683,10 +5669,6 @@ ctx.nearWalljump = function(r)
 		return ctx.tmpBestWall, ctx.tmpNorm
 	end
 	return nil
-end
-
-ctx.nearSwim = function(r)
-	return ctx.nearNamedPart(r, { "water", "flood", "acid", "lava", "liquid", "swim" }, 12)
 end
 
 ctx.climbJump = function(lvl)
@@ -5968,53 +5950,9 @@ ctx.unprotectAirHealth = function()
 		end)
 	end
 	ctx.unblockAirAlert()
-	ctx.keepFemAir(false)
 	ctx.cache.airFnEnv = nil
 	ctx.cache.airTakeFn = nil
 	ctx.cache.airSwitchFn = nil
-end
-
-ctx.femSwimming = function()
-	if type(ctx.cache.femSwim) == "table" then
-		return ctx.cache.femSwim
-	end
-	if ctx.cache.femSwim == false and os.clock() < (ctx.cache.femSwimRetry or 0) then
-		return nil
-	end
-	ctx.cache.femSwim = false
-	ctx.cache.femSwimRetry = os.clock() + 2
-	ctx.tmpPs = LP and LP:FindFirstChild("PlayerScripts")
-	ctx.tmpLh = ctx.tmpPs and ctx.tmpPs:FindFirstChild("LocalHandler")
-	ctx.tmpSw = ctx.tmpLh and ctx.tmpLh:FindFirstChild("Swimming")
-	if ctx.tmpSw and type(require) == "function" then
-		ctx.tmpOk, ctx.tmpMod = pcall(require, ctx.tmpSw)
-		if ctx.tmpOk and type(ctx.tmpMod) == "table" then
-			ctx.cache.femSwim = ctx.tmpMod
-			return ctx.tmpMod
-		end
-	end
-	return nil
-end
-
-ctx.keepFemAir = function(st)
-	local now = os.clock()
-	if st ~= false and now < (ctx.cache.airFemAt or 0) then
-		return type(ctx.cache.femSwim) == "table"
-	end
-	if st ~= false then
-		ctx.cache.airFemAt = now + 0.75
-	end
-	ctx.tmpSwim = ctx.femSwimming()
-	if type(ctx.tmpSwim) ~= "table" then
-		return false
-	end
-	if type(ctx.tmpSwim.Invincibility) == "function" then
-		pcall(ctx.tmpSwim.Invincibility, st ~= false)
-	end
-	if st ~= false and type(ctx.tmpSwim.SubtractAir) == "function" then
-		pcall(ctx.tmpSwim.SubtractAir, -9999)
-	end
-	return true
 end
 
 ctx.refreshAirFns = function(env)
@@ -6048,7 +5986,6 @@ ctx.keepAirFast = function()
 		ctx.airBlockAlert(ctx.tmpAirEnv)
 	end
 	ctx.callAirFns(ctx.tmpAirEnv)
-	ctx.keepFemAir(true)
 	ctx.fireRegenAir()
 	if now >= (ctx.cache.airLocalAt or 0) then
 		ctx.keepAirLocal()
@@ -6065,10 +6002,7 @@ ctx.fireGod = function(st)
 	end
 	if st == true then
 		ctx.keepAirLocal()
-		ctx.keepFemAir(true)
 		ctx.fireRegenAir(true)
-	else
-		ctx.keepFemAir(false)
 	end
 end
 
@@ -6312,28 +6246,6 @@ ctx.fireSlideBindable = function()
 	return false
 end
 
-ctx.swimVelocity = function(r, h, y, spd)
-	if not (r and h and ctx.isSwimmingNow()) then
-		return
-	end
-	ctx.tmpDir = h.MoveDirection
-	if ctx.tmpDir.Magnitude < 0.05 then
-		return
-	end
-	ctx.tmpSwimVel = r:FindFirstChild("SwimVel")
-	if not ctx.tmpSwimVel then
-		return
-	end
-	pcall(function()
-		ctx.tmpSwimVel.MaxForce = Vector3.new(5000, 0, 5000)
-		ctx.tmpSwimVel.Velocity = Vector3.new(ctx.tmpDir.X * spd, 0, ctx.tmpDir.Z * spd)
-		if y ~= 0 then
-			ctx.tmpSwimVel.MaxForce = Vector3.new(5000, 3500, 5000)
-			ctx.tmpSwimVel.Velocity = ctx.tmpSwimVel.Velocity + Vector3.new(0, y, 0)
-		end
-	end)
-end
-
 ctx.isKeyDown = function(key)
 	if not (Uis and key) then
 		return false
@@ -6393,7 +6305,6 @@ ctx.bindMobileJumpButton = function()
 	ctx.cache.jumpButtonCons[#ctx.cache.jumpButtonCons + 1] = ctx.tmpJumpBtn.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
 			ctx.pulseJumpIntent(true)
-			ctx.fixSwimStick(true)
 			ctx.doJumpBoost()
 		end
 	end)
@@ -6412,41 +6323,7 @@ ctx.bindMobileJumpButton = function()
 	end)
 end
 
-ctx.fixSwimStick = function(forceUp)
-	ctx.tmpRoot, ctx.tmpHum = ctx.rh(false)
-	if not (ctx.tmpRoot and ctx.tmpHum and ctx.isSwimmingNow()) then
-		return false
-	end
-	ctx.tmpSwimVel = ctx.tmpRoot:FindFirstChild("SwimVel")
-	if not ctx.tmpSwimVel then
-		return false
-	end
-	ctx.tmpState = ctx.tmpHum:GetState()
-	ctx.tmpGrounded = ctx.tmpHum.FloorMaterial ~= Enum.Material.Air
-		or ctx.tmpState == Enum.HumanoidStateType.Running
-		or ctx.tmpState == Enum.HumanoidStateType.RunningNoPhysics
-		or ctx.tmpState == Enum.HumanoidStateType.Landed
-	if ctx.tmpGrounded then
-		pcall(function()
-			ctx.tmpHum:ChangeState(Enum.HumanoidStateType.Freefall)
-		end)
-	end
-	ctx.tmpUp = forceUp == true or ctx.isJumpHeld()
-	if not (ctx.tmpUp or ctx.tmpGrounded) then
-		return false
-	end
-	pcall(function()
-		local curVel = ctx.tmpSwimVel.Velocity
-		local y = ctx.tmpUp and math.max(curVel.Y, ctx.tmpHum.WalkSpeed, 18) or math.max(curVel.Y, 4)
-		ctx.tmpSwimVel.MaxForce = Vector3.new(math.max(ctx.tmpSwimVel.MaxForce.X, 5000), 9000, math.max(ctx.tmpSwimVel.MaxForce.Z, 5000))
-		ctx.tmpSwimVel.Velocity = Vector3.new(curVel.X, y, curVel.Z)
-		ctx.tmpRoot.AssemblyLinearVelocity = Vector3.new(ctx.tmpRoot.AssemblyLinearVelocity.X, math.max(ctx.tmpRoot.AssemblyLinearVelocity.Y, y * 0.35), ctx.tmpRoot.AssemblyLinearVelocity.Z)
-	end)
-	return true
-end
-
 ctx.applyPhysicsOptions = function()
-	ctx.fixSwimStick(false)
 	if not (ctx.opt.infJumpOn or ctx.opt.zipFastOn) then
 		return
 	end
@@ -6496,6 +6373,10 @@ ctx.cache.feVelSeen = ctx.cache.feVelSeen
 ctx.cache.feVelLast = 0
 ctx.cache.feVelLastState = nil
 ctx.cache.feVelTickAt = 0
+ctx.cache.feApplyTok = 0
+ctx.cache.feApplying = false
+ctx.cache.fePatchState = nil
+ctx.cache.feAppliedChar = nil
 
 ctx.feMoveNoop = function()
 end
@@ -6669,43 +6550,6 @@ ctx.eachSignalConnection = function(sig, cb)
 	return hit
 end
 
-ctx.patchFeVelocityConnections = function(st)
-	local tv = ctx.feVelocityEvent()
-	if not (tv and tv.Event) then
-		return false
-	end
-	ctx.cache.feVelCons = ctx.cache.feVelCons or setmetatable({}, { __mode = "k" })
-	if st == true then
-		for con in ctx.cache.feVelCons do
-			local enable = ctx.connectionMethod(con, "Enable")
-			if enable then
-				pcall(function()
-					enable(con)
-				end)
-			end
-		end
-		ctx.cache.feVelCons = setmetatable({}, { __mode = "k" })
-		return true
-	end
-	local patched = false
-	ctx.eachSignalConnection(tv.Event, function(con)
-		local fn = ctx.connectionFn(con)
-		if ctx.setFirstBoolUpvalue(fn, false) then
-			patched = true
-		end
-		local disable = ctx.connectionMethod(con, "Disable")
-		local enable = ctx.connectionMethod(con, "Enable")
-		if disable and enable then
-			pcall(function()
-				disable(con)
-			end)
-			ctx.cache.feVelCons[con] = true
-			patched = true
-		end
-	end)
-	return patched
-end
-
 ctx.patchFeSignalConnections = function(sig, scr, key, st)
 	if not sig then
 		return false
@@ -6809,7 +6653,7 @@ ctx.canRestoreFePhysics = function(force)
 	if ctx.opt.fePhysicsOn ~= true then
 		return true
 	end
-	if ctx.opt.zipActive == true or ctx.isSwimmingNow() then
+	if ctx.opt.zipActive == true then
 		return false
 	end
 	if ctx.inState("InGame") then
@@ -6818,15 +6662,17 @@ ctx.canRestoreFePhysics = function(force)
 	return true
 end
 
-ctx.patchFeMovementState = function(st)
-	ctx.patchFeAntiWallhop(st)
-	if st == true then
-		ctx.patchFeVelocityConnections(true)
-	else
-		ctx.fireFeVelocityLimit(false, true)
-		ctx.patchFeVelocityConnections(false)
+ctx.patchFeMovementState = function(st, force)
+	if st ~= true then
+		return false
 	end
+	if force ~= true and ctx.cache.fePatchState == st then
+		return true
+	end
+	ctx.patchFeAntiWallhop(st)
 	ctx.patchFeMainEnv(st)
+	ctx.cache.fePatchState = st
+	return true
 end
 
 ctx.restoreFeMoveEnv = function(scr)
@@ -6845,81 +6691,12 @@ ctx.restoreFeMoveEnv = function(scr)
 	end
 end
 
-ctx.feVelocityEvent = function()
-	local main = ctx.mainScript()
-	local tv = main and main:FindFirstChild("ToggleVelocity")
-	if tv and tv.Fire then
-		return tv
-	end
-	return nil
-end
-
-ctx.fireFeVelocityLimit = function(st, force)
-	local tv = ctx.feVelocityEvent()
-	if not tv then
+ctx.applyFeMovement = function(force)
+	if ctx.cache.feApplying and force ~= true then
+		ctx.cache.fePendingApply = true
 		return false
 	end
-	local now = os.clock()
-	if force ~= true and ctx.cache.feVelLastState == st and now - (ctx.cache.feVelLast or 0) < (st and 0.75 or 0.015) then
-		return true
-	end
-	local ok = pcall(function()
-		tv:Fire(st == true)
-	end)
-	if ok then
-		ctx.cache.feVelLastState = st
-		ctx.cache.feVelLast = now
-	end
-	return ok
-end
-
-ctx.keepFeVelocityLimitOff = function()
-	if ctx.opt.fePhysicsOn == true then
-		if not ctx.canRestoreFePhysics(false) then
-			ctx.cache.fePendingRestore = true
-			return
-		end
-		if ctx.cache.feVelSeen ~= true then
-			ctx.patchFeVelocityConnections(true)
-			ctx.fireFeVelocityLimit(true, true)
-			ctx.cache.feVelSeen = true
-		end
-		return
-	end
-	if ctx.cache.feVelSeen == false then
-		return
-	end
-	ctx.cache.feVelSeen = false
-	ctx.fireFeVelocityLimit(false, true)
-	ctx.patchFeVelocityConnections(false)
-end
-
-ctx.startFeVelocityLoop = function()
-	if Run and not ctx.cache.feVelHb then
-		ctx.cache.feVelHb = Run.Heartbeat:Connect(function()
-			local now = os.clock()
-			local nextAt = ctx.cache.feVelTickAt or 0
-			if now < nextAt then
-				return
-			end
-			ctx.cache.feVelTickAt = now + (ctx.opt.fePhysicsOn and 0.5 or 1)
-			ctx.keepFeVelocityLimitOff()
-		end)
-		ctx.bind(ctx.cache.feVelHb)
-	end
-	if not ctx.cache.feVelTask then
-		ctx.cache.feVelTask = true
-		ctx.spawnLoop(function()
-			while ctx.alive() do
-				ctx.keepFeVelocityLimitOff()
-				task.wait(ctx.opt.fePhysicsOn and 0.75 or 1.5)
-			end
-		end)
-	end
-end
-
-ctx.applyFeMovement = function(force)
-	local st = ctx.opt.fePhysicsOn == true
+	local st = true
 	if st and not ctx.canRestoreFePhysics(force) then
 		ctx.cache.fePendingRestore = true
 		local now = os.clock()
@@ -6931,39 +6708,68 @@ ctx.applyFeMovement = function(force)
 	end
 	ctx.cache.fePendingRestore = false
 	local c = ctx.chr(false)
-	ctx.patchFeMovementState(st)
-	if st == true then
-		ctx.fireFeVelocityLimit(true, true)
+	if force ~= true and ctx.cache.feLastApplyState == st and ctx.cache.feAppliedChar == c and not ctx.cache.fePendingApply then
+		return true
+	end
+	ctx.cache.feApplying = true
+	ctx.cache.fePendingApply = false
+	local ok = pcall(function()
+		ctx.patchFeMovementState(st, force)
+		if not c then
+			return
+		end
+		local fe = c:FindFirstChild("FE2_Character")
+		if fe and fe:IsA("LocalScript") then
+			pcall(function()
+				fe.Disabled = false
+			end)
+			ctx.patchFeMoveEnv(fe, st)
+			ctx.patchFeHumanoidSignals(fe, st)
+		end
+		local anti = c:FindFirstChild("CL_AntiSideClip")
+		if anti and anti:IsA("LocalScript") then
+			pcall(function()
+				anti.Disabled = ctx.opt.clipOn == true
+			end)
+			local z = anti:FindFirstChild("Ziplining")
+			if z and z.Fire then
+				pcall(function()
+					z:Fire(ctx.opt.clipOn == true)
+				end)
+			end
+		end
+		local main = ctx.mainScript()
+		if main then
+			ctx.patchFeMoveEnv(main, st)
+		end
+		ctx.cache.feLastApplyState = st
+		ctx.cache.feAppliedChar = c
+	end)
+	ctx.cache.feApplying = false
+	if not ok then
+		ctx.cache.fePatchState = nil
+		ctx.cache.fePendingApply = true
+		ctx.scheduleFeMovement(0.35)
+		return false
 	end
 	if not c then
-		return
+		return false
 	end
-	local fe = c:FindFirstChild("FE2_Character")
-	if fe and fe:IsA("LocalScript") then
-		pcall(function()
-			fe.Disabled = false
-		end)
-		ctx.patchFeMoveEnv(fe, st)
-		ctx.patchFeHumanoidSignals(fe, st)
+	if ctx.cache.fePendingApply then
+		ctx.scheduleFeMovement(0.15)
 	end
-	local anti = c:FindFirstChild("CL_AntiSideClip")
-	if anti and anti:IsA("LocalScript") then
-		pcall(function()
-			anti.Disabled = ctx.opt.clipOn == true
-		end)
-		local z = anti:FindFirstChild("Ziplining")
-		if z and z.Fire then
-			pcall(function()
-				z:Fire(ctx.opt.clipOn == true)
-			end)
-		end
-	end
-	local main = ctx.mainScript()
-	if main then
-		ctx.patchFeMoveEnv(main, st)
-	end
-	ctx.cache.feLastApplyState = st
 	return true
+end
+
+ctx.scheduleFeMovement = function(delayTime, force)
+	ctx.cache.feApplyTok = (ctx.cache.feApplyTok or 0) + 1
+	local id = ctx.cache.feApplyTok
+	task.delay(delayTime or 0.12, function()
+		if not ctx.alive() or ctx.cache.feApplyTok ~= id then
+			return
+		end
+		ctx.applyFeMovement(force == true)
+	end)
 end
 
 ctx.bindFeMovementChar = function(c)
@@ -6974,14 +6780,13 @@ ctx.bindFeMovementChar = function(c)
 	end
 	ctx.cache.feMoveCharCons[#ctx.cache.feMoveCharCons + 1] = c.ChildAdded:Connect(function(v)
 		if v.Name == "FE2_Character" or v.Name == "CL_AntiSideClip" then
-			task.defer(ctx.applyFeMovement)
+			ctx.scheduleFeMovement(0.1)
 		end
 	end)
-	ctx.applyFeMovement()
+	ctx.scheduleFeMovement(0.1)
 end
 
 ctx.startFeMovementPatch = function()
-	ctx.startFeVelocityLoop()
 	if ctx.cache.feMoveLoop then
 		return
 	end
@@ -7002,7 +6807,7 @@ ctx.startFeMovementPatch = function()
 			end
 			if lastState ~= ctx.opt.fePhysicsOn or ctx.cache.fePendingRestore then
 				ctx.applyFeMovement()
-				lastState = ctx.cache.feLastApplyState
+				lastState = ctx.opt.fePhysicsOn
 			end
 			task.wait(0.5)
 		end
@@ -7015,7 +6820,6 @@ ctx.startPhysicsOptions = function()
 	if Uis then
 		ctx.bind(Uis.JumpRequest:Connect(function()
 			ctx.bumpJumpIntent()
-			ctx.fixSwimStick(true)
 			ctx.doJumpBoost()
 		end))
 		ctx.bind(Uis.InputBegan:Connect(function(inp, gp)
@@ -7027,7 +6831,6 @@ ctx.startPhysicsOptions = function()
 			end
 			if ctx.isJumpInput(inp) then
 				ctx.pulseJumpIntent(true)
-				ctx.fixSwimStick(true)
 				ctx.doJumpBoost()
 			elseif gp then
 				return
@@ -7843,9 +7646,11 @@ ctx.mkUi = function()
 	end)
 	ctx.ui.fePhysBtn = ctx.icon("FePhysics", "FE2 Physics: OFF", function()
 		ctx.opt.fePhysicsOn = not ctx.opt.fePhysicsOn
+		ctx.cache.fePendingRestore = ctx.opt.fePhysicsOn == true and ctx.cache.fePendingRestore or false
+		ctx.cache.fePendingApply = true
 		ctx.setFePhysicsBtn()
 		ctx.saveSoon()
-		ctx.applyFeMovement()
+		ctx.scheduleFeMovement(0.15)
 	end)
 	ctx.ui.rescueBtn = ctx.icon("HideRescue", "Hide Rescue NPC: OFF", function()
 		ctx.opt.rescueOn = not ctx.opt.rescueOn

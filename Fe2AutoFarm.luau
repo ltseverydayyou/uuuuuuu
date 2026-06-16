@@ -121,7 +121,7 @@ if host and type(host.__lt_af_ctx) == "table" then
 		old.opt.fePhysicsOn = true
 	end
 	if type(old.applyFeMovement) == "function" then
-		pcall(old.applyFeMovement)
+		pcall(old.applyFeMovement, true)
 	end
 	if type(old.stop) == "function" then
 		pcall(old.stop)
@@ -509,18 +509,18 @@ local RRG = 0.3
 local EXM = 50
 local FGM = 2
 local LHW = 8
-local PCD = 0.1 -- Button press cooldown per button/locator hit
+local PCD = 0.18 -- Button press cooldown per button/locator hit
 local RFD = { 0, 0.25, 0.75, 1.5, 3, 5 }
 local FDM = 160
 local VLM = 20
 local RCH = 12
 local LDB = 6
 local LDI = 0.1
-local BSI = 0.1 -- Direct button spam loop wait floor
-local ASI = 0.1 -- Button aura spam loop interval
+local BSI = 0.18 -- Direct button spam loop wait floor
+local ASI = 0.16 -- Button aura spam loop interval
 local PLI = 2 -- Loaded remote interval
-local PSI = 0.1 -- Survived remote spam interval
-local PMW = 0.1 -- Passive remote loop wait / tick speed
+local PSI = 0.35 -- Survived remote interval while a round is active
+local PMW = 0.2 -- Passive remote loop wait / tick speed
 local FMI = 0.2
 local RSI = 3
 local SRI = 1.5
@@ -547,9 +547,9 @@ local locBtns = {}
 local pressTimes = setmetatable({}, { __mode = "k" })
 local pressWin = 0
 local pressCnt = 0
-local pressMax = 12
-local pressGap = 0.1
-local pressBudget = 3
+local pressMax = 6
+local pressGap = 0.25
+local pressBudget = 2
 local bonusSeen = setmetatable({}, { __mode = "k" })
 local bMap = nil
 local bCache = nil
@@ -609,7 +609,7 @@ ctx.opt.infAirOn = false
 ctx.opt.infJumpOn = false
 ctx.opt.clickTpOn = false
 ctx.opt.femVoteOn = false
-ctx.opt.surviveLoopOn = true
+ctx.opt.surviveLoopOn = false
 ctx.opt.claimBusy = false
 ctx.opt.shopBusy = false
 ctx.cache.zipOld = setmetatable({}, { __mode = "k" })
@@ -621,6 +621,10 @@ ctx.cache.godAt = 0
 ctx.cache.zipAt = 0
 ctx.cache.zipConn = nil
 ctx.cache.zipChar = nil
+ctx.cache.jumpHeld = false
+ctx.cache.jumpHeldUntil = 0
+ctx.cache.jumpButton = nil
+ctx.cache.jumpButtonCons = {}
 ctx.cache.airHum = nil
 ctx.cache.airHealthConn = nil
 ctx.cache.airDiedConn = nil
@@ -944,7 +948,7 @@ ctx.stop = function()
 	end
 	ctx.opt.fePhysicsOn = true
 	if type(ctx.applyFeMovement) == "function" then
-		pcall(ctx.applyFeMovement)
+		pcall(ctx.applyFeMovement, true)
 	end
 	ctx.live = false
 	on = false
@@ -959,6 +963,7 @@ ctx.stop = function()
 	ctx.cut(ctx.cache.infAirHb)
 	ctx.cut(ctx.cache.airHealthConn)
 	ctx.cut(ctx.cache.airDiedConn)
+	ctx.clearCons(ctx.cache.jumpButtonCons)
 	for _, th in ctx.threads do
 		if type(task.cancel) == "function" then
 			pcall(task.cancel, th)
@@ -975,6 +980,9 @@ ctx.stop = function()
 	ctx.cache.airHealthConn = nil
 	ctx.cache.airDiedConn = nil
 	ctx.cache.airHealthHum = nil
+	ctx.cache.jumpHeld = false
+	ctx.cache.jumpHeldUntil = 0
+	ctx.cache.jumpButton = nil
 	for _, c in ctx.con do
 		ctx.cut(c)
 	end
@@ -1112,6 +1120,7 @@ ctx.stop = function()
 	ctx.cache.airTakeFn = nil
 	ctx.cache.airSwitchFn = nil
 	ctx.cache.airRegenRemote = nil
+	ctx.cache.buttonSpamKey = nil
 	ctx.cache.curMap = nil
 	ctx.cache.curMapAt = 0
 	ctx.cache.mapRef = nil
@@ -1161,10 +1170,36 @@ ctx.liveChildOf = function(obj, parent)
 	return ok and res == true
 end
 
+ctx.clearMapRuntime = function(nextMap)
+	ctx.clearLocators()
+	auraList = {}
+	auraMap = nil
+	auraAt = 0
+	pressTimes = setmetatable({}, { __mode = "k" })
+	pressWin = 0
+	pressCnt = 0
+	ctx.cache.buttonSpamKey = nil
+	bonusSeen = setmetatable({}, { __mode = "k" })
+	if bMap and bMap ~= nextMap then
+		ctx.clearBonuses()
+	end
+	if chMap and chMap ~= nextMap then
+		for _, c in chCons do
+			ctx.cut(c)
+		end
+		chCons = {}
+		chMap = nil
+		chAt = 0
+		chCache = {}
+		chIndex = { air = {}, wall = {}, zip = {}, slide = {} }
+	end
+end
+
 ctx.resetMapCache = function(map)
 	if map ~= nil and ctx.cache.mapRef == map then
 		return
 	end
+	ctx.clearMapRuntime(map)
 	ctx.cache.mapRef = map
 	ctx.cache.mapSettings = nil
 	ctx.cache.mapExit = nil
@@ -2346,6 +2381,11 @@ ctx.startAutoFarmButtonSpam = function(map, runId, entries)
 	if not map or not map.Parent then
 		return
 	end
+	local spamKey = tostring(runId) .. ":" .. tostring(map)
+	if ctx.cache.buttonSpamKey == spamKey then
+		return
+	end
+	ctx.cache.buttonSpamKey = spamKey
 	entries = type(entries) == "table" and entries or {}
 	ctx.spawnLoop(function()
 		local idx = 1
@@ -2375,6 +2415,9 @@ ctx.startAutoFarmButtonSpam = function(map, runId, entries)
 				end
 			end
 			task.wait(BSI)
+		end
+		if ctx.cache.buttonSpamKey == spamKey then
+			ctx.cache.buttonSpamKey = nil
 		end
 	end)
 end
@@ -2832,7 +2875,8 @@ ctx.startPassiveRemotes = function()
 			end
 			local now = os.clock()
 			local playing = on or autoChallenges
-			local doSurvive = ctx.opt.surviveLoopOn and ctx.isFE2Game()
+			local inRound = ctx.isRoundIngame()
+			local doSurvive = ctx.opt.surviveLoopOn and ctx.isFE2Game() and inRound and not survivedSeen
 			if doSurvive and now >= la then
 				if now >= ka then
 					sk = ctx.getPassArg(false)
@@ -5705,6 +5749,44 @@ ctx.doJumpBoost = function()
 	end
 end
 
+ctx.clickTeleportTo = function(pos)
+	if typeof(pos) ~= "Vector3" then
+		return false
+	end
+	ctx.tmpRoot = select(1, ctx.rh(false))
+	if not (ctx.tmpRoot and ctx.tmpRoot.Parent) then
+		return false
+	end
+	ctx.tmpRx, ctx.tmpRy, ctx.tmpRz = ctx.tmpRoot.CFrame:ToEulerAnglesXYZ()
+	pcall(function()
+		ctx.pivotRootTo(CFrame.new(pos + Vector3.new(0, 2.5, 0)) * CFrame.fromEulerAnglesXYZ(ctx.tmpRx, ctx.tmpRy, ctx.tmpRz), ctx.tmpRoot)
+	end)
+	return true
+end
+
+ctx.touchClickTeleport = function(points, processed)
+	if processed or not ctx.opt.clickTpOn then
+		return
+	end
+	ctx.tmpPoint = type(points) == "table" and points[1] or nil
+	if typeof(ctx.tmpPoint) ~= "Vector2" then
+		return
+	end
+	ctx.tmpCam = Wsp and Wsp.CurrentCamera
+	if not ctx.tmpCam then
+		return
+	end
+	ctx.tmpRay = ctx.tmpCam:ViewportPointToRay(ctx.tmpPoint.X, ctx.tmpPoint.Y)
+	ctx.tmpParams = RaycastParams.new()
+	ctx.tmpParams.FilterType = Enum.RaycastFilterType.Exclude
+	ctx.tmpChar = ctx.chr(false)
+	ctx.tmpParams.FilterDescendantsInstances = ctx.tmpChar and { ctx.tmpChar } or {}
+	ctx.tmpHit = Wsp:Raycast(ctx.tmpRay.Origin, ctx.tmpRay.Direction * 1000, ctx.tmpParams)
+	if ctx.tmpHit then
+		ctx.clickTeleportTo(ctx.tmpHit.Position)
+	end
+end
+
 
 ctx.remoteRoot = function()
 	return Rsp and Rsp:FindFirstChild("Remote") or nil
@@ -6004,7 +6086,7 @@ end
 ctx.fireNextButton = function()
 	ctx.tmpMap = ctx.curMap()
 	ctx.tmpRoot = select(1, ctx.rh(false))
-	if ctx.isFEM() then
+	if ctx.isFEMGame() then
 		ctx.tmpHit = ctx.femLocatorHit()
 		if ctx.tmpHit and ctx.tmpHit.Parent then
 			if ctx.tmpRoot and ctx.tmpRoot.Parent then
@@ -6252,7 +6334,119 @@ ctx.swimVelocity = function(r, h, y, spd)
 	end)
 end
 
+ctx.isKeyDown = function(key)
+	if not (Uis and key) then
+		return false
+	end
+	local ok, down = pcall(function()
+		return Uis:IsKeyDown(key)
+	end)
+	return ok and down == true
+end
+
+ctx.isGamepadDown = function(key)
+	if not (Uis and key and type(Uis.IsGamepadButtonDown) == "function") then
+		return false
+	end
+	local ok, down = pcall(function()
+		return Uis:IsGamepadButtonDown(Enum.UserInputType.Gamepad1, key)
+	end)
+	return ok and down == true
+end
+
+ctx.isJumpHeld = function()
+	local now = os.clock()
+	return ctx.cache.jumpHeld == true
+		or now < (ctx.cache.jumpHeldUntil or 0)
+		or ctx.isKeyDown(Enum.KeyCode.Space)
+		or ctx.isGamepadDown(Enum.KeyCode.ButtonA)
+end
+
+ctx.isJumpInput = function(inp)
+	if not inp then
+		return false
+	end
+	return inp.KeyCode == Enum.KeyCode.Space or inp.KeyCode == Enum.KeyCode.ButtonA
+end
+
+ctx.pulseJumpIntent = function(held)
+	ctx.cache.jumpHeld = held == true
+	if held == true then
+		ctx.cache.jumpHeldUntil = os.clock() + 0.45
+	else
+		ctx.cache.jumpHeldUntil = 0
+	end
+end
+
+ctx.bumpJumpIntent = function()
+	ctx.cache.jumpHeldUntil = os.clock() + 0.45
+end
+
+ctx.bindMobileJumpButton = function()
+	ctx.tmpPg = LP and LP:FindFirstChildOfClass("PlayerGui")
+	ctx.tmpJumpBtn = ctx.tmpPg and ctx.tmpPg:FindFirstChild("JumpButton", true)
+	if not (ctx.tmpJumpBtn and ctx.tmpJumpBtn ~= ctx.cache.jumpButton) then
+		return
+	end
+	ctx.clearCons(ctx.cache.jumpButtonCons)
+	ctx.cache.jumpButton = ctx.tmpJumpBtn
+	ctx.cache.jumpButtonCons[#ctx.cache.jumpButtonCons + 1] = ctx.tmpJumpBtn.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+			ctx.pulseJumpIntent(true)
+			ctx.fixSwimStick(true)
+			ctx.doJumpBoost()
+		end
+	end)
+	ctx.cache.jumpButtonCons[#ctx.cache.jumpButtonCons + 1] = ctx.tmpJumpBtn.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+			ctx.pulseJumpIntent(false)
+		end
+	end)
+	ctx.cache.jumpButtonCons[#ctx.cache.jumpButtonCons + 1] = ctx.tmpJumpBtn.AncestryChanged:Connect(function(_, parent)
+		if parent ~= nil then
+			return
+		end
+		ctx.clearCons(ctx.cache.jumpButtonCons)
+		ctx.cache.jumpButton = nil
+		ctx.pulseJumpIntent(false)
+	end)
+end
+
+ctx.fixSwimStick = function(forceUp)
+	ctx.tmpRoot, ctx.tmpHum = ctx.rh(false)
+	if not (ctx.tmpRoot and ctx.tmpHum and ctx.isSwimmingNow()) then
+		return false
+	end
+	ctx.tmpSwimVel = ctx.tmpRoot:FindFirstChild("SwimVel")
+	if not ctx.tmpSwimVel then
+		return false
+	end
+	ctx.tmpState = ctx.tmpHum:GetState()
+	ctx.tmpGrounded = ctx.tmpHum.FloorMaterial ~= Enum.Material.Air
+		or ctx.tmpState == Enum.HumanoidStateType.Running
+		or ctx.tmpState == Enum.HumanoidStateType.RunningNoPhysics
+		or ctx.tmpState == Enum.HumanoidStateType.Landed
+	if ctx.tmpGrounded then
+		pcall(function()
+			ctx.tmpHum:ChangeState(Enum.HumanoidStateType.Freefall)
+		end)
+	end
+	ctx.tmpUp = forceUp == true or ctx.isJumpHeld()
+	if not (ctx.tmpUp or ctx.tmpGrounded) then
+		return false
+	end
+	pcall(function()
+		local curVel = ctx.tmpSwimVel.Velocity
+		local y = ctx.tmpUp and math.max(curVel.Y, ctx.tmpHum.WalkSpeed, 18) or math.max(curVel.Y, 4)
+		ctx.tmpSwimVel.MaxForce = Vector3.new(math.max(ctx.tmpSwimVel.MaxForce.X, 5000), 9000, math.max(ctx.tmpSwimVel.MaxForce.Z, 5000))
+		ctx.tmpSwimVel.Velocity = Vector3.new(curVel.X, y, curVel.Z)
+		ctx.tmpRoot.AssemblyLinearVelocity = Vector3.new(ctx.tmpRoot.AssemblyLinearVelocity.X, math.max(ctx.tmpRoot.AssemblyLinearVelocity.Y, y * 0.35), ctx.tmpRoot.AssemblyLinearVelocity.Z)
+	end)
+	return true
+end
+
 ctx.applyPhysicsOptions = function()
+	ctx.fixSwimStick(false)
 	if not (ctx.opt.infJumpOn or ctx.opt.zipFastOn) then
 		return
 	end
@@ -6261,7 +6455,7 @@ ctx.applyPhysicsOptions = function()
 		return
 	end
 	ctx.tmpNow = os.clock()
-	ctx.tmpSpace = Uis and Uis:IsKeyDown(Enum.KeyCode.Space)
+	ctx.tmpSpace = ctx.isJumpHeld()
 
 	if ctx.opt.infJumpOn and ctx.tmpSpace and ctx.tmpNow - ctx.cache.jumpAt >= 0.16 and ctx.tmpHum:GetState() ~= Enum.HumanoidStateType.Climbing then
 		ctx.cache.jumpAt = ctx.tmpNow
@@ -6608,6 +6802,22 @@ ctx.patchFeMainEnv = function(st)
 	end
 end
 
+ctx.canRestoreFePhysics = function(force)
+	if force == true then
+		return true
+	end
+	if ctx.opt.fePhysicsOn ~= true then
+		return true
+	end
+	if ctx.opt.zipActive == true or ctx.isSwimmingNow() then
+		return false
+	end
+	if ctx.inState("InGame") then
+		return false
+	end
+	return true
+end
+
 ctx.patchFeMovementState = function(st)
 	ctx.patchFeAntiWallhop(st)
 	if st == true then
@@ -6665,6 +6875,10 @@ end
 
 ctx.keepFeVelocityLimitOff = function()
 	if ctx.opt.fePhysicsOn == true then
+		if not ctx.canRestoreFePhysics(false) then
+			ctx.cache.fePendingRestore = true
+			return
+		end
 		if ctx.cache.feVelSeen ~= true then
 			ctx.patchFeVelocityConnections(true)
 			ctx.fireFeVelocityLimit(true, true)
@@ -6704,8 +6918,18 @@ ctx.startFeVelocityLoop = function()
 	end
 end
 
-ctx.applyFeMovement = function()
+ctx.applyFeMovement = function(force)
 	local st = ctx.opt.fePhysicsOn == true
+	if st and not ctx.canRestoreFePhysics(force) then
+		ctx.cache.fePendingRestore = true
+		local now = os.clock()
+		if now >= (ctx.cache.fePendingNoteAt or 0) then
+			ctx.cache.fePendingNoteAt = now + 3
+			ctx.note("FE2 Physics restore queued until the round is safe")
+		end
+		return false
+	end
+	ctx.cache.fePendingRestore = false
 	local c = ctx.chr(false)
 	ctx.patchFeMovementState(st)
 	if st == true then
@@ -6738,6 +6962,8 @@ ctx.applyFeMovement = function()
 	if main then
 		ctx.patchFeMoveEnv(main, st)
 	end
+	ctx.cache.feLastApplyState = st
+	return true
 end
 
 ctx.bindFeMovementChar = function(c)
@@ -6769,12 +6995,16 @@ ctx.startFeMovementPatch = function()
 	end
 	ctx.cache.feMoveLoop = true
 	ctx.spawnLoop(function()
+		local lastState = nil
 		while ctx.alive() do
 			if LP and LP.Character ~= ctx.cache.feMoveChar then
 				ctx.bindFeMovementChar(LP.Character)
 			end
-			ctx.applyFeMovement()
-			task.wait(ctx.opt.fePhysicsOn and 1.5 or 2)
+			if lastState ~= ctx.opt.fePhysicsOn or ctx.cache.fePendingRestore then
+				ctx.applyFeMovement()
+				lastState = ctx.cache.feLastApplyState
+			end
+			task.wait(0.5)
 		end
 	end)
 end
@@ -6784,14 +7014,28 @@ ctx.startPhysicsOptions = function()
 	ctx.startFeMovementPatch()
 	if Uis then
 		ctx.bind(Uis.JumpRequest:Connect(function()
+			ctx.bumpJumpIntent()
+			ctx.fixSwimStick(true)
 			ctx.doJumpBoost()
 		end))
 		ctx.bind(Uis.InputBegan:Connect(function(inp, gp)
-			if gp or not inp then
+			if not inp then
 				return
 			end
-			if inp.KeyCode == Enum.KeyCode.Space then
+			if gp and inp.UserInputType == Enum.UserInputType.Keyboard then
+				return
+			end
+			if ctx.isJumpInput(inp) then
+				ctx.pulseJumpIntent(true)
+				ctx.fixSwimStick(true)
 				ctx.doJumpBoost()
+			elseif gp then
+				return
+			end
+		end))
+		ctx.bind(Uis.InputEnded:Connect(function(inp)
+			if ctx.isJumpInput(inp) then
+				ctx.pulseJumpIntent(false)
 			end
 		end))
 	end
@@ -6801,17 +7045,17 @@ ctx.startPhysicsOptions = function()
 			if not ctx.opt.clickTpOn then
 				return
 			end
-			ctx.tmpRoot = select(1, ctx.rh(false))
-			if ctx.tmpRoot and ctx.tmpMouse.Hit then
-				ctx.tmpRx, ctx.tmpRy, ctx.tmpRz = ctx.tmpRoot.CFrame:ToEulerAnglesXYZ()
-				pcall(function()
-					ctx.tmpRoot.CFrame = CFrame.new(ctx.tmpMouse.Hit.Position + Vector3.new(0, 2.5, 0)) * CFrame.fromEulerAnglesXYZ(ctx.tmpRx, ctx.tmpRy, ctx.tmpRz)
-				end)
+			if ctx.tmpMouse.Hit then
+				ctx.clickTeleportTo(ctx.tmpMouse.Hit.Position)
 			end
 		end))
 	end
+	if Uis and Uis.TouchTap then
+		ctx.bind(Uis.TouchTap:Connect(ctx.touchClickTeleport))
+	end
 	ctx.spawnLoop(function()
 		while ctx.alive() do
+			ctx.bindMobileJumpButton()
 			ctx.applyPhysicsOptions()
 			task.wait(0.18)
 		end
@@ -7254,7 +7498,7 @@ ctx.femFreeMap = function(data)
 end
 
 ctx.femVoteData = function(data)
-	if not ctx.opt.femVoteOn or not ctx.isFEM() then
+	if not ctx.opt.femVoteOn or not ctx.isFEMGame() then
 		return false
 	end
 	ctx.tmpMap = ctx.femFreeMap(data)

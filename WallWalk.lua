@@ -97,6 +97,24 @@ if not (runtimeScript and typeof(runtimeScript) == "Instance") then
 	runtimeScript.Name = "WallWalkRuntime";
 end;
 local script = runtimeScript;
+local __WallWalkGlobal = (getgenv and getgenv()) or _G;
+if type(__WallWalkGlobal) == "table" then
+	local previousRuntime = rawget(__WallWalkGlobal, "__WallWalkRuntime");
+	if type(previousRuntime) == "table" and type(previousRuntime.Cleanup) == "function" then
+		pcall(previousRuntime.Cleanup);
+	end;
+	__WallWalkGlobal.__WallWalkRuntime = {
+		Connections = {}
+	};
+	pcall(function()
+		ClonedService("RunService"):UnbindFromRenderStep("GravityStep");
+		ClonedService("RunService"):UnbindFromRenderStep("GravityCameraInputStep");
+		ClonedService("RunService"):UnbindFromRenderStep("GravityCameraStep");
+		ClonedService("ContextActionService"):UnbindAction("WallWalkToggle");
+		ClonedService("ContextActionService"):UnbindAction("Toggle");
+	end);
+end;
+local __WallWalkRuntime = type(__WallWalkGlobal) == "table" and rawget(__WallWalkGlobal, "__WallWalkRuntime") or nil;
 local function CleanIgnoreList(list)
 	if type(list) ~= "table" then
 		return {};
@@ -122,22 +140,16 @@ local IsOnMobile = (function()
 	end;
 	return false;
 end)();
-repeat
-	wait();
-	a = pcall(function()
-		((ClonedService("Players")).LocalPlayer:WaitForChild("PlayerScripts")).ChildAdded:Connect(function(c)
-			if c.Name == "PlayerScriptsLoader" then
-				c.Disabled = true;
-			end;
+task.spawn(function()
+	local StarterGui = ClonedService("StarterGui");
+	for _ = 1, 30 do
+		local ok = pcall(function()
+			StarterGui:SetCore("AvatarContextMenuEnabled", false);
 		end);
-	end);
-	if a == true then
-		break;
-	end;
-until true == false;
-((ClonedService("Players")).LocalPlayer:WaitForChild("PlayerScripts")).ChildAdded:Connect(function(c)
-	if c.Name == "PlayerScriptsLoader" then
-		c.Disabled = true;
+		if ok then
+			break;
+		end;
+		task.wait(0.2);
 	end;
 end);
 function _CameraUI()
@@ -2472,13 +2484,6 @@ function _Poppercam()
 	end;
 	function Poppercam:OnCameraSubjectChanged(newSubject)
 	end;
-	local ZoomController = _ZoomController();
-	function Poppercam:Update(renderDt, desiredCameraCFrame, desiredCameraFocus, cameraController)
-		local rotatedFocus = desiredCameraFocus * (desiredCameraCFrame - desiredCameraCFrame.p);
-		local extrapolation = self.focusExtrapolator:Step(renderDt, rotatedFocus);
-		local zoom = ZoomController.Update(renderDt, rotatedFocus, extrapolation);
-		return rotatedFocus * CFrame.new(0, 0, zoom), desiredCameraFocus;
-	end;
 	return Poppercam;
 end;
 function _Invisicam()
@@ -2657,7 +2662,7 @@ function _Invisicam()
 			local offset = cframe * (3 * Vector3.new(math.cos(angle), math.sin(angle), 0));
 			offset = Vector3.new(offset.X, math.max(offset.Y, -2.25), offset.Z);
 			local ray = Ray.new(centerPoint + offset, (-3) * offset);
-			local hit, hitPoint = game.__lt.cm("Workspace", "FindPartOnRayWithWhitelist", ray, partsWhitelist, false, false);
+			local hit, hitPoint = __lt.cm("Workspace", "FindPartOnRayWithWhitelist", ray, partsWhitelist, false, false);
 			if hit then
 				castPoints[(#castPoints) + 1] = hitPoint + 0.2 * ((centerPoint - hitPoint)).unit;
 			end;
@@ -3726,7 +3731,7 @@ function _CameraModule()
 				self:OnUserGameSettingsPropertyChanged(propertyName);
 			end);
 		end;
-		(game.__lt.cm("Workspace", "GetPropertyChangedSignal", "CurrentCamera")):Connect(function()
+		(__lt.cm("Workspace", "GetPropertyChangedSignal", "CurrentCamera")):Connect(function()
 			self:OnCurrentCameraChanged();
 		end);
 		self.lastInputType = __lt.cm("UserInputService", "GetLastInputType");
@@ -5358,7 +5363,13 @@ function _ClickToMoveController()
 				local myHumanoid = findPlayerHumanoid(Player);
 				local hitPart, hitPt, hitNormal = Utility.Raycast(ray, true, getIgnoreList());
 				local hitChar, hitHumanoid = Utility.FindCharacterAncestor(hitPart);
-				if wasTouchTap and hitHumanoid and __lt.cm("StarterGui", "GetCore", "AvatarContextMenuEnabled") then
+				local avatarContextMenuEnabled = false;
+				if wasTouchTap and hitHumanoid then
+					pcall(function()
+						avatarContextMenuEnabled = __lt.cm("StarterGui", "GetCore", "AvatarContextMenuEnabled");
+					end);
+				end;
+				if wasTouchTap and hitHumanoid and avatarContextMenuEnabled then
 					local clickedPlayer = __lt.cm("Players", "GetPlayerFromCharacter", hitHumanoid.Parent);
 					if clickedPlayer then
 						CleanupPath();
@@ -7181,7 +7192,8 @@ function _sounds()
 				activeState = state;
 			end;
 		end);
-		local steppedConn = RunService.PreSimulation:Connect(function(_, worldDt)
+		local steppedConn = RunService.PreSimulation:Connect(function(worldDt)
+			worldDt = worldDt or 0;
 			for sound in playingLoopedSounds do
 				local updater = loopedSoundUpdaters[sound];
 				if updater then
@@ -7331,8 +7343,10 @@ function _InitObjects()
 		local hrp = self.HRP;
 		local humanoid = self.Humanoid;
 		local sphere = SPHERE:Clone();
+		sphere:SetAttribute("WallWalkObject", true);
 		sphere.Parent = self.Character;
 		local floor = FLOOR:Clone();
+		floor:SetAttribute("WallWalkObject", true);
 		floor.Parent = self.Character;
 		local isR15 = humanoid.RigType == Enum.HumanoidRigType.R15;
 		local height = isR15 and humanoid.HipHeight + 0.05 or 2;
@@ -7347,9 +7361,14 @@ function _InitObjects()
 		weld2.Part1 = floor;
 		weld2.Parent = floor;
 		local gyro = BGYRO:Clone();
+		gyro:SetAttribute("WallWalkObject", true);
 		gyro.CFrame = hrp.CFrame;
+		gyro.MaxTorque = Vector3.new(1000000000, 1000000000, 1000000000);
+		gyro.P = 100000;
+		gyro.D = 2000;
 		gyro.Parent = hrp;
 		local vForce = VFORCE:Clone();
+		vForce:SetAttribute("WallWalkObject", true);
 		vForce.Attachment0 = isR15 and hrp:WaitForChild("RootRigAttachment") or hrp:WaitForChild("RootAttachment");
 		vForce.Parent = hrp;
 		return sphere, gyro, vForce, floor;
@@ -7358,10 +7377,13 @@ function _InitObjects()
 end;
 local plr = game.Players.LocalPlayer;
 local ms = plr:GetMouse();
-local char;
-plr.CharacterAdded:Connect(function(c)
+local char = plr.Character;
+local charAddedConnection = plr.CharacterAdded:Connect(function(c)
 	char = c;
 end);
+if __WallWalkRuntime then
+	table.insert(__WallWalkRuntime.Connections, charAddedConnection);
+end;
 function _R6()
 	function r6()
 		local Figure = char;
@@ -8664,7 +8686,6 @@ function _Controller()
 	else
 		animFuncs = _R15();
 	end;
-	print("Animation succes");
 	return animFuncs;
 end;
 function _AnimationHandler()
@@ -8672,19 +8693,56 @@ function _AnimationHandler()
 	AnimationHandler.__index = AnimationHandler;
 	function AnimationHandler.new(humanoid, animate)
 		local self = setmetatable({}, AnimationHandler);
-		self._AnimFuncs = _Controller();
+		self._AnimFuncs = nil;
+		self.AnimateScript = animate;
+		self.WasAnimateDisabled = animate and animate.Disabled;
+		local controller = animate and animate:FindFirstChild("Controller");
+		if controller then
+			local ok, animFuncs = pcall(require, controller);
+			if ok and type(animFuncs) == "table" then
+				self._AnimFuncs = animFuncs;
+			end;
+		end;
+		if not self._AnimFuncs then
+			local ok, animFuncs = pcall(function()
+				char = humanoid.Parent;
+				return _Controller();
+			end);
+			if ok and type(animFuncs) == "table" then
+				self._AnimFuncs = animFuncs;
+			end;
+		end;
 		self.Humanoid = humanoid;
 		return self;
 	end;
+	function AnimationHandler:IsAvailable()
+		return self._AnimFuncs ~= nil;
+	end;
 	function AnimationHandler:EnableDefault(bool)
+		if not self._AnimFuncs then
+			return;
+		end;
 		if bool then
+			if self.AnimateScript then
+				self.AnimateScript.Disabled = self.WasAnimateDisabled and true or false;
+			end;
 			self._AnimFuncs.onHook();
 		else
+			if self.AnimateScript and self.AnimateScript.Disabled ~= true then
+				self.AnimateScript.Disabled = true;
+			end;
 			self._AnimFuncs.onUnhook();
 		end;
 	end;
+	function AnimationHandler:KeepDefaultDisabled()
+		if self.AnimateScript and self.AnimateScript.Disabled ~= true then
+			self.AnimateScript.Disabled = true;
+		end;
+	end;
 	function AnimationHandler:Run(name, ...)
-		self._AnimFuncs[name](...);
+		if self._AnimFuncs and self._AnimFuncs[name] then
+			self._AnimFuncs[name](...);
+		end;
 	end;
 	return AnimationHandler;
 end;
@@ -8698,6 +8756,8 @@ function _GravityController()
 	local JUMPMODIFIER = 1.2;
 	local TRANSITION = 0.15;
 	local WALKF = 200 / 3;
+	local TURN_RATE = 300;
+	local MAX_CAMERA_PITCH = 1.3962634015954636;
 	local UIS = ClonedService("UserInputService");
 	local RUNSERVICE = ClonedService("RunService");
 	local InitObjects = _InitObjects();
@@ -8713,9 +8773,248 @@ function _GravityController()
 		return CFrame.new(0, 0, 0, uxv.x, uxv.y, uxv.z, 1 + dot);
 	end;
 	local function lookAt(pos, forward, up)
+		if forward:Dot(forward) < 0.0001 then
+			forward = -UNIT_Z;
+		else
+			forward = forward.Unit;
+		end;
+		if up:Dot(up) < 0.0001 then
+			up = UNIT_Y;
+		else
+			up = up.Unit;
+		end;
 		local r = forward:Cross(up);
+		if r:Dot(r) < 0.0001 then
+			local fallback = math.abs(up:Dot(UNIT_Y)) < 0.999 and UNIT_Y or UNIT_X;
+			r = fallback:Cross(up);
+		end;
+		r = r.Unit;
 		local u = r:Cross(forward);
-		return CFrame.fromMatrix(pos, r.Unit, u.Unit);
+		if u:Dot(u) < 0.0001 then
+			u = up;
+		else
+			u = u.Unit;
+		end;
+		return CFrame.fromMatrix(pos, r, u);
+	end;
+	local function safeUnit(vector, fallback)
+		if vector:Dot(vector) > 0.0001 then
+			return vector.Unit;
+		end;
+		return fallback;
+	end;
+	local function charLookAt(pos, forward, up)
+		up = safeUnit(up, UNIT_Y);
+		forward = forward - up * forward:Dot(up);
+		if forward:Dot(forward) < 0.0001 then
+			local fallback = math.abs(up:Dot(UNIT_Z)) < 0.999 and -UNIT_Z or UNIT_X;
+			forward = fallback - up * fallback:Dot(up);
+		end;
+		forward = safeUnit(forward, -UNIT_Z);
+		local right = safeUnit(forward:Cross(up), UNIT_X);
+		forward = safeUnit(up:Cross(right), forward);
+		return CFrame.fromMatrix(pos, right, up, -forward);
+	end;
+	local function findLiveCameraModule()
+		if type(getgc) ~= "function" then
+			return nil;
+		end;
+		local ok, result = pcall(function()
+			for _, value in ipairs(getgc(true)) do
+				if type(value) == "table" then
+					local matched = false;
+					pcall(function()
+						matched = value.activeTransparencyController ~= nil and type(value.ActivateCameraController) == "function" and type(value.OnCurrentCameraChanged) == "function" and type(value.Update) == "function";
+					end);
+					if matched then
+						return value;
+					end;
+				end;
+			end;
+			return nil;
+		end);
+		if ok then
+			return result;
+		end;
+		return nil;
+	end;
+	local function createCameraAdapter(controller, playerModule)
+		local adapter = {
+			Source = nil,
+			UpVector = UNIT_Y,
+			PatchedController = nil
+		};
+		if type(playerModule.GetCameras) == "function" then
+			local ok, source = pcall(function()
+				return playerModule:GetCameras();
+			end);
+			if ok then
+				adapter.Source = source;
+			end;
+		end;
+		function adapter:GetUpVector(oldUpVector)
+			return controller.GravityUp;
+		end;
+		function adapter:IsFirstPerson()
+			if self.Source and type(self.Source.IsFirstPerson) == "function" then
+				local okFirstPerson, result = pcall(self.Source.IsFirstPerson, self.Source);
+				if okFirstPerson then
+					return result;
+				end;
+			end;
+			if self.Source and self.Source.activeCameraController and type(self.Source.activeCameraController.IsInFirstPerson) == "function" then
+				local okFirstPerson, result = pcall(self.Source.activeCameraController.IsInFirstPerson, self.Source.activeCameraController);
+				if okFirstPerson then
+					return result;
+				end;
+			end;
+			local currentCamera = workspace.CurrentCamera;
+			if not currentCamera then
+				return false;
+			end;
+			return (currentCamera.Focus.Position - currentCamera.CFrame.Position).Magnitude < 1;
+		end;
+		function adapter:IsMouseLocked()
+			if self.Source and type(self.Source.IsMouseLocked) == "function" then
+				local okMouseLocked, result = pcall(self.Source.IsMouseLocked, self.Source);
+				if okMouseLocked then
+					return result;
+				end;
+			end;
+			if self.Source and self.Source.activeMouseLockController and type(self.Source.activeMouseLockController.GetIsMouseLocked) == "function" then
+				local okMouseLocked, result = pcall(self.Source.activeMouseLockController.GetIsMouseLocked, self.Source.activeMouseLockController);
+				if okMouseLocked then
+					return result;
+				end;
+			end;
+			return UIS.MouseBehavior == Enum.MouseBehavior.LockCenter;
+		end;
+		function adapter:IsCamRelative()
+			return self:IsMouseLocked() or self:IsFirstPerson();
+		end;
+		function adapter:RefreshSource()
+			if self.Source and self.Source.activeCameraController then
+				return;
+			end;
+			local liveSource = findLiveCameraModule();
+			if liveSource then
+				self.Source = liveSource;
+			end;
+		end;
+		function adapter:GetGravitySpace(lookVector)
+			local currentCamera = workspace.CurrentCamera;
+			local cameraCF = currentCamera and currentCamera.CFrame or IDENTITYCF;
+			local up = safeUnit(self.UpVector, controller.GravityUp);
+			local flatLook = lookVector - up * lookVector:Dot(up);
+			if flatLook:Dot(flatLook) < 0.0001 then
+				flatLook = cameraCF.LookVector - up * cameraCF.LookVector:Dot(up);
+			end;
+			flatLook = safeUnit(flatLook, -UNIT_Z);
+			local right = safeUnit(flatLook:Cross(up), safeUnit(cameraCF.RightVector - up * cameraCF.RightVector:Dot(up), UNIT_X));
+			local forward = safeUnit(up:Cross(right), flatLook);
+			return CFrame.fromMatrix(ZERO, right, up, -forward);
+		end;
+		function adapter:CalculateNewLookCFrame(cameraController, suppliedLookVector, rotateInput)
+			rotateInput = rotateInput or Vector2.new();
+			local currentCamera = workspace.CurrentCamera;
+			local lookVector = suppliedLookVector or (currentCamera and currentCamera.CFrame.LookVector) or -UNIT_Z;
+			local gravitySpace = self:GetGravitySpace(lookVector);
+			local localLook = gravitySpace:VectorToObjectSpace(lookVector);
+			local pitch = math.asin(math.clamp(localLook.Y, -1, 1));
+			local constrainedRotateInput = Vector2.new(rotateInput.X, math.clamp(rotateInput.Y, pitch - MAX_CAMERA_PITCH, pitch + MAX_CAMERA_PITCH));
+			local localLookCFrame = CFrame.Angles(0, -constrainedRotateInput.X, 0) * CFrame.new(ZERO, localLook) * CFrame.Angles(-constrainedRotateInput.Y, 0, 0);
+			return gravitySpace * localLookCFrame;
+		end;
+		function adapter:PatchCameraController()
+			self:RefreshSource();
+			local cameraController = self.Source and self.Source.activeCameraController;
+			if not cameraController then
+				return false;
+			end;
+			if self.PatchedController and self.PatchedController ~= cameraController then
+				self:UnpatchCameraController();
+			end;
+			if cameraController.__WallWalkGravityPatched then
+				cameraController.__WallWalkGravityAdapter = self;
+				self.PatchedController = cameraController;
+				return true;
+			end;
+			cameraController.__WallWalkGravityPatched = true;
+			cameraController.__WallWalkGravityAdapter = self;
+			cameraController.__WallWalkGravityOriginals = {
+				CalculateNewLookCFrameFromArg = cameraController.CalculateNewLookCFrameFromArg,
+				CalculateNewLookVectorFromArg = cameraController.CalculateNewLookVectorFromArg,
+				CalculateNewLookCFrame = cameraController.CalculateNewLookCFrame,
+				CalculateNewLookVector = cameraController.CalculateNewLookVector
+			};
+			self.PatchedController = cameraController;
+			function cameraController:CalculateNewLookCFrameFromArg(suppliedLookVector, rotateInput)
+				local cameraAdapter = self.__WallWalkGravityAdapter;
+				if cameraAdapter then
+					return cameraAdapter:CalculateNewLookCFrame(self, suppliedLookVector, rotateInput);
+				end;
+				local originals = self.__WallWalkGravityOriginals;
+				if originals and originals.CalculateNewLookCFrameFromArg then
+					return originals.CalculateNewLookCFrameFromArg(self, suppliedLookVector, rotateInput);
+				end;
+				return CFrame.new(ZERO, suppliedLookVector or workspace.CurrentCamera.CFrame.LookVector);
+			end;
+			function cameraController:CalculateNewLookVectorFromArg(suppliedLookVector, rotateInput)
+				return self:CalculateNewLookCFrameFromArg(suppliedLookVector, rotateInput).LookVector;
+			end;
+			function cameraController:CalculateNewLookCFrame(suppliedLookVector)
+				local cameraAdapter = self.__WallWalkGravityAdapter;
+				if cameraAdapter then
+					return cameraAdapter:CalculateNewLookCFrame(self, suppliedLookVector, self.rotateInput or self.RotateInput or Vector2.new());
+				end;
+				local originals = self.__WallWalkGravityOriginals;
+				if originals and originals.CalculateNewLookCFrame then
+					return originals.CalculateNewLookCFrame(self, suppliedLookVector);
+				end;
+				return CFrame.new(ZERO, suppliedLookVector or workspace.CurrentCamera.CFrame.LookVector);
+			end;
+			function cameraController:CalculateNewLookVector(suppliedLookVector)
+				return self:CalculateNewLookCFrame(suppliedLookVector).LookVector;
+			end;
+			return true;
+		end;
+		function adapter:UnpatchCameraController()
+			local cameraController = self.PatchedController;
+			if not cameraController or cameraController.__WallWalkGravityAdapter ~= self then
+				return;
+			end;
+			local originals = cameraController.__WallWalkGravityOriginals;
+			if originals then
+				cameraController.CalculateNewLookCFrameFromArg = originals.CalculateNewLookCFrameFromArg;
+				cameraController.CalculateNewLookVectorFromArg = originals.CalculateNewLookVectorFromArg;
+				cameraController.CalculateNewLookCFrame = originals.CalculateNewLookCFrame;
+				cameraController.CalculateNewLookVector = originals.CalculateNewLookVector;
+			end;
+			cameraController.__WallWalkGravityPatched = nil;
+			cameraController.__WallWalkGravityAdapter = nil;
+			cameraController.__WallWalkGravityOriginals = nil;
+			self.PatchedController = nil;
+		end;
+		function adapter:Step()
+			local currentCamera = workspace.CurrentCamera;
+			if not currentCamera or currentCamera.CameraType == Enum.CameraType.Scriptable then
+				return;
+			end;
+			if not self:PatchCameraController() then
+				return;
+			end;
+			local oldUpVector = self.UpVector;
+			local newUpVector = self:GetUpVector(oldUpVector);
+			local transitionCF = IDENTITYCF:Lerp(getRotationBetween(oldUpVector, newUpVector, currentCamera.CFrame.RightVector), TRANSITION);
+			local cameraUp = safeUnit(transitionCF * oldUpVector, newUpVector);
+			self.UpVector = cameraUp;
+			local cameraPosition = currentCamera.CFrame.Position;
+			local focusPosition = currentCamera.Focus.Position;
+			local cameraLook = safeUnit(focusPosition - cameraPosition, currentCamera.CFrame.LookVector);
+			currentCamera.CFrame = lookAt(cameraPosition, cameraLook, cameraUp);
+			currentCamera.Focus = lookAt(focusPosition, cameraLook, cameraUp);
+		end;
+		return adapter;
 	end;
 	local function getMass(array)
 		local mass = 0;
@@ -8726,25 +9025,40 @@ function _GravityController()
 		end;
 		return mass;
 	end;
-	local ExecutedPlayerModule = _PlayerModule();
+	local function getPlayerModule(player)
+		local playerScripts = player:WaitForChild("PlayerScripts");
+		local playerModuleScript = playerScripts:FindFirstChild("PlayerModule");
+		if playerModuleScript then
+			local ok, module = pcall(require, playerModuleScript);
+			if ok and type(module) == "table" and type(module.GetControls) == "function" then
+				return module;
+			end;
+		end;
+		return _PlayerModule();
+	end;
 	local ExecutedSounds = _sounds();
 	function GravityController.new(player)
 		local self = setmetatable({}, GravityController);
-		local playerModule = ExecutedPlayerModule;
+		local playerModule = getPlayerModule(player);
 		self.Controls = playerModule:GetControls();
-		self.Camera = playerModule:GetCameras();
+		self.Camera = createCameraAdapter(self, playerModule);
 		self.Player = player;
 		self.Character = player.Character;
 		self.Humanoid = player.Character:WaitForChild("Humanoid");
 		self.HRP = player.Character:WaitForChild("HumanoidRootPart");
-		self.AnimationHandler = AnimationHandler.new(self.Humanoid, self.Character:WaitForChild("Animate"));
-		self.AnimationHandler:EnableDefault(false);
+		self.HumanoidConns = {};
+		self.AnimationHandler = AnimationHandler.new(self.Humanoid, self.Character:FindFirstChild("Animate"));
+		if self.AnimationHandler:IsAvailable() then
+			self.AnimationHandler:EnableDefault(false);
+		end;
 		local ssss = (ClonedService("Players")).LocalPlayer.PlayerScripts:FindFirstChild("SetState") or Instance.new("BindableEvent", (ClonedService("Players")).LocalPlayer.PlayerScripts);
 		local soundState = ExecutedSounds;
 		ssss.Name = "SetState";
 		self.StateTracker = StateTracker.new(self.Humanoid, soundState);
 		self.StateTracker.Changed:Connect(function(name, speed)
-			self.AnimationHandler:Run(name, speed);
+			if self.AnimationHandler then
+				self.AnimationHandler:Run(name, speed);
+			end;
 		end);
 		local collider, gyro, vForce, floor = InitObjects(self);
 		floor.Touched:Connect(function()
@@ -8761,16 +9075,19 @@ function _GravityController()
 		self.Ignores = {
 			self.Character
 		};
-		function self.Camera.GetUpVector(this, oldUpVector)
-			return self.GravityUp;
-		end;
+		self.WasPlatformStand = self.Humanoid.PlatformStand;
+		self.WasAutoRotate = self.Humanoid.AutoRotate;
+		self.WasSit = self.Humanoid.Sit;
+		self.Humanoid.AutoRotate = false;
 		self.Humanoid.PlatformStand = true;
+		self.Humanoid.Sit = false;
+		self:BindHumanoidLocks();
 		self.CharacterMass = getMass(self.Character:QueryDescendants("Instance"));
 		self.Character.AncestryChanged:Connect(function()
 			self.CharacterMass = getMass(self.Character:QueryDescendants("Instance"));
 		end);
 		self.JumpCon = RUNSERVICE.RenderStepped:Connect(function(dt)
-			if self.Controls:IsJumping() then
+			if self:IsJumping() then
 				self:OnJumpRequest();
 			end;
 		end);
@@ -8788,21 +9105,103 @@ function _GravityController()
 		__lt.cm("RunService", "BindToRenderStep", "GravityStep", Enum.RenderPriority.Input.Value + 1, function(dt)
 			self:OnGravityStep(dt);
 		end);
+		__lt.cm("RunService", "BindToRenderStep", "GravityCameraInputStep", Enum.RenderPriority.Camera.Value - 1, function(dt)
+			if self.Camera then
+				self.Camera:PatchCameraController();
+			end;
+		end);
+		__lt.cm("RunService", "BindToRenderStep", "GravityCameraStep", Enum.RenderPriority.Camera.Value + 1, function(dt)
+			if self.Camera then
+				self.Camera:Step(dt);
+			end;
+		end);
 		return self;
 	end;
 	function GravityController:Destroy()
+		if self._Destroyed then
+			return;
+		end;
+		self._Destroyed = true;
+		if self.Camera and self.Camera.UnpatchCameraController then
+			self.Camera:UnpatchCameraController();
+		end;
 		self.JumpCon:Disconnect();
 		self.DeathCon:Disconnect();
 		self.SeatCon:Disconnect();
 		self.HeartCon:Disconnect();
 		__lt.cm("RunService", "UnbindFromRenderStep", "GravityStep");
+		__lt.cm("RunService", "UnbindFromRenderStep", "GravityCameraInputStep");
+		__lt.cm("RunService", "UnbindFromRenderStep", "GravityCameraStep");
 		self.Collider:Destroy();
 		self.VForce:Destroy();
 		self.Gyro:Destroy();
 		self.StateTracker:Destroy();
-		self.Humanoid.PlatformStand = false;
-		self.AnimationHandler:EnableDefault(true);
+		if self.HumanoidConns then
+			for _, con in self.HumanoidConns do
+				con:Disconnect();
+			end;
+			self.HumanoidConns = nil;
+		end;
+		if self.Humanoid then
+			self.Humanoid.PlatformStand = self.WasPlatformStand and true or false;
+			self.Humanoid.AutoRotate = self.WasAutoRotate and true or false;
+			self.Humanoid.Sit = self.WasSit and true or false;
+		end;
+		if self.AnimationHandler then
+			self.AnimationHandler:EnableDefault(true);
+		end;
 		self.GravityUp = UNIT_Y;
+	end;
+	function GravityController:LockHumanoidProperty(prop, value)
+		local hum = self.Humanoid;
+		if not hum then
+			return;
+		end;
+		if hum[prop] ~= value then
+			hum[prop] = value;
+		end;
+		local con = hum:GetPropertyChangedSignal(prop):Connect(function()
+			if self._Destroyed or not self.Humanoid then
+				return;
+			end;
+			if self.Humanoid[prop] ~= value then
+				self.Humanoid[prop] = value;
+			end;
+		end);
+		self.HumanoidConns[(#self.HumanoidConns) + 1] = con;
+	end;
+	function GravityController:BindHumanoidLocks()
+		self:LockHumanoidProperty("PlatformStand", true);
+		self:LockHumanoidProperty("AutoRotate", false);
+		self:LockHumanoidProperty("Sit", false);
+		local anim = self.AnimationHandler and self.AnimationHandler.AnimateScript;
+		if anim then
+			local con = anim:GetPropertyChangedSignal("Disabled"):Connect(function()
+				if self._Destroyed or not self.AnimationHandler then
+					return;
+				end;
+				self.AnimationHandler:KeepDefaultDisabled();
+			end);
+			self.HumanoidConns[(#self.HumanoidConns) + 1] = con;
+		end;
+	end;
+	function GravityController:MaintainHumanoid()
+		local hum = self.Humanoid;
+		if not hum then
+			return;
+		end;
+		if hum.PlatformStand ~= true then
+			hum.PlatformStand = true;
+		end;
+		if hum.AutoRotate ~= false then
+			hum.AutoRotate = false;
+		end;
+		if hum.Sit ~= false then
+			hum.Sit = false;
+		end;
+		if self.AnimationHandler then
+			self.AnimationHandler:KeepDefaultDisabled();
+		end;
 	end;
 	function GravityController:GetGravityUp(oldGravity)
 		return oldGravity;
@@ -8837,7 +9236,33 @@ function _GravityController()
 		end;
 		return false;
 	end;
+	function GravityController:IsJumping()
+		local controls = self.Controls;
+		if not controls then
+			return false;
+		end;
+		if type(controls.IsJumping) == "function" then
+			local ok, jumping = pcall(controls.IsJumping, controls);
+			if ok then
+				return jumping;
+			end;
+		end;
+		if controls.activeController and type(controls.activeController.GetIsJumping) == "function" then
+			local ok, jumping = pcall(controls.activeController.GetIsJumping, controls.activeController);
+			if ok and jumping then
+				return true;
+			end;
+		end;
+		if controls.touchJumpController and type(controls.touchJumpController.GetIsJumping) == "function" then
+			local ok, jumping = pcall(controls.touchJumpController.GetIsJumping, controls.touchJumpController);
+			if ok and jumping then
+				return true;
+			end;
+		end;
+		return self.Humanoid and self.Humanoid.Jump or false;
+	end;
 	function GravityController:OnJumpRequest()
+		self:MaintainHumanoid();
 		if not self.StateTracker.Jumped and self:IsGrounded(true) then
 			local hrpVel = self.HRP.Velocity;
 			self.HRP.Velocity = hrpVel + self.GravityUp * self.Humanoid.JumpPower * JUMPMODIFIER;
@@ -8848,6 +9273,7 @@ function _GravityController()
 		return self.Controls:GetMoveVector();
 	end;
 	function GravityController:OnHeartbeatStep(dt)
+		self:MaintainHumanoid();
 		local ray = Ray.new(self.Collider.Position, (-1.1) * self.GravityUp);
 		local hit, pos, normal = FindPartOnRayWithIgnoreListSafe(ray, self.Ignores);
 		local lastPart = self.LastPart;
@@ -8859,33 +9285,51 @@ function _GravityController()
 		self.LastPartCFrame = hit and hit.CFrame;
 	end;
 	function GravityController:OnGravityStep(dt)
+		self:MaintainHumanoid();
+		dt = math.max(dt or 0, 1 / 240);
 		local oldGravity = self.GravityUp;
 		local newGravity = self:GetGravityUp(oldGravity);
 		local rotation = getRotationBetween(oldGravity, newGravity, workspace.CurrentCamera.CFrame.RightVector);
 		rotation = IDENTITYCF:Lerp(rotation, TRANSITION);
 		self.GravityUp = rotation * oldGravity;
+		local gravityUp = self.GravityUp;
 		local camCF = workspace.CurrentCamera.CFrame;
-		local fDot = camCF.LookVector:Dot(newGravity);
+		local fDot = camCF.LookVector:Dot(gravityUp);
 		local cForward = math.abs(fDot) > 0.5 and (-math.sign(fDot)) * camCF.UpVector or camCF.LookVector;
-		local left = (cForward:Cross(-newGravity)).Unit;
-		local forward = -(left:Cross(newGravity)).Unit;
+		local leftFallback = safeUnit(camCF.RightVector - gravityUp * camCF.RightVector:Dot(gravityUp), UNIT_X);
+		local left = safeUnit(cForward:Cross(-gravityUp), leftFallback);
+		local forward = safeUnit(-(left:Cross(gravityUp)), safeUnit(camCF.LookVector - gravityUp * camCF.LookVector:Dot(gravityUp), UNIT_Z));
 		local move = self:GetMoveVector();
 		local worldMove = forward * move.z - left * move.x;
 		worldMove = worldMove:Dot(worldMove) > 1 and worldMove.Unit or worldMove;
 		local isInputMoving = worldMove:Dot(worldMove) > 0;
+		local grounded = self:IsGrounded();
 		local hrpCFLook = self.HRP.CFrame.LookVector;
-		local charF = hrpCFLook:Dot(forward) * forward + hrpCFLook:Dot(left) * left;
-		local charR = (charF:Cross(newGravity)).Unit;
-		local newCharCF = CFrame.fromMatrix(ZERO, charR, newGravity, -charF);
-		local newCharRotation = IDENTITYCF;
-		if isInputMoving then
-			newCharRotation = IDENTITYCF:Lerp(getRotationBetween(charF, worldMove, newGravity), 0.7);
+		local charF = hrpCFLook - gravityUp * hrpCFLook:Dot(gravityUp);
+		charF = safeUnit(charF, forward);
+		local charRotation = charLookAt(ZERO, charF, gravityUp);
+		if grounded then
+			local targetF = nil;
+			if self.Camera:IsCamRelative() then
+				local lv = camCF.LookVector;
+				local hlv = lv - gravityUp * lv:Dot(gravityUp);
+				if hlv:Dot(hlv) > 0.0001 then
+					targetF = hlv;
+				end;
+			elseif isInputMoving then
+				targetF = worldMove;
+			end;
+			if targetF and targetF:Dot(targetF) > 0.0001 then
+				targetF = safeUnit(targetF, charF);
+				local turnAlpha = 1 - math.exp(-TURN_RATE * dt);
+				charRotation = IDENTITYCF:Lerp(getRotationBetween(charF, targetF, gravityUp), turnAlpha) * charRotation;
+			end;
 		end;
 		local g = workspace.Gravity;
-		local gForce = g * self.CharacterMass * (UNIT_Y - newGravity);
+		local gForce = g * self.CharacterMass * (UNIT_Y - gravityUp);
 		local cVelocity = self.HRP.Velocity;
 		local tVelocity = self.Humanoid.WalkSpeed * worldMove;
-		local gVelocity = cVelocity:Dot(newGravity) * newGravity;
+		local gVelocity = cVelocity:Dot(gravityUp) * gravityUp;
 		local hVelocity = cVelocity - gVelocity;
 		if hVelocity:Dot(hVelocity) < 1 then
 			hVelocity = ZERO;
@@ -8893,13 +9337,7 @@ function _GravityController()
 		local dVelocity = tVelocity - hVelocity;
 		local walkForceM = math.min(10000, WALKF * self.CharacterMass * dVelocity.Magnitude / (dt * 60));
 		local walkForce = walkForceM > 0 and dVelocity.Unit * walkForceM or ZERO;
-		local charRotation = newCharRotation * newCharCF;
-		if self.Camera:IsCamRelative() then
-			local lv = workspace.CurrentCamera.CFrame.LookVector;
-			local hlv = lv - charRotation.UpVector:Dot(lv) * charRotation.UpVector;
-			charRotation = lookAt(ZERO, hlv, charRotation.UpVector);
-		end;
-		self.StateTracker:OnStep(self.GravityUp, self:IsGrounded(), isInputMoving);
+		self.StateTracker:OnStep(self.GravityUp, grounded, isInputMoving);
 		self.VForce.Force = walkForce + gForce;
 		self.Gyro.CFrame = charRotation;
 	end;
@@ -9219,7 +9657,6 @@ function _DrawClass()
 end;
 local PLAYERS = ClonedService("Players");
 local GravityController = _GravityController();
-local Controller = GravityController.new(PLAYERS.LocalPlayer);
 local DrawClass = _DrawClass();
 local PI2 = math.pi * 2;
 local ZERO = Vector3.new(0, 0, 0);
@@ -9237,26 +9674,22 @@ local FEELER_APEX_OFFSET = 1;
 local FEELER_WEIGHTING = 8;
 function GetGravityUp(self, oldGravityUp)
 	local ignoreList = {};
-	for i, player in next, __lt.cm("Players", "GetPlayers") do
-		ignoreList[i] = player.Character;
+	for _, player in __lt.cm("Players", "GetPlayers") do
+		if player.Character then
+			ignoreList[(#ignoreList) + 1] = player.Character;
+		end;
 	end;
 	local hrpCF = self.HRP.CFrame;
 	local isR15 = self.Humanoid.RigType == Enum.HumanoidRigType.R15;
 	local origin = isR15 and hrpCF.p or hrpCF.p + 0.35 * oldGravityUp;
 	local radialVector = math.abs(hrpCF.LookVector:Dot(oldGravityUp)) < 0.999 and hrpCF.LookVector:Cross(oldGravityUp) or hrpCF.RightVector:Cross(oldGravityUp);
-	local centerRayLength = 25;
+	local centerRayLength = 10;
 	local centerRay = Ray.new(origin, (-centerRayLength) * oldGravityUp);
 	local centerHit, centerHitPoint, centerHitNormal = FindPartOnRayWithIgnoreListSafe(centerRay, ignoreList);
 	local downHitCount = 0;
-	local totalHitCount = 0;
-	local centerRayHitCount = 0;
 	local evenRayHitCount = 0;
 	local oddRayHitCount = 0;
-	local mainDownNormal = ZERO;
-	if centerHit then
-		mainDownNormal = centerHitNormal;
-		centerRayHitCount = 0;
-	end;
+	local mainDownNormal = centerHit and centerHitNormal or ZERO;
 	local downRaySum = ZERO;
 	for i = 1, NUM_DOWN_RAYS do
 		local dtheta = PI2 * ((i - 1) / NUM_DOWN_RAYS);
@@ -9294,7 +9727,7 @@ function GetGravityUp(self, oldGravityUp)
 			feelerHitCount = feelerHitCount + 1;
 		end;
 	end;
-	if centerRayHitCount + downHitCount + feelerHitCount > 0 then
+	if downHitCount + feelerHitCount > 0 then
 		local normalSum = mainDownNormal + downRaySum + feelerNormalSum;
 		if normalSum ~= ZERO then
 			return normalSum.unit;
@@ -9302,17 +9735,126 @@ function GetGravityUp(self, oldGravityUp)
 	end;
 	return oldGravityUp;
 end;
-Controller.GetGravityUp = GetGravityUp;
-(ClonedService("ContextActionService")):BindAction("Toggle", function(action, state, input)
-	if not (state == Enum.UserInputState.Begin) then
+local LocalPlayer = PLAYERS.LocalPlayer;
+local ContextActionService = ClonedService("ContextActionService");
+local ToggleInputService = ClonedService("UserInputService");
+local Controller = nil;
+local GravityEnabled = true;
+local TOGGLE_ACTION = "WallWalkToggle";
+local CREATE_TOUCH_TOGGLE = ToggleInputService.TouchEnabled;
+local function updateToggleButton()
+	pcall(function()
+		ContextActionService:SetTitle(TOGGLE_ACTION, GravityEnabled and "Wall: On" or "Wall: Off");
+	end);
+	pcall(function()
+		ContextActionService:SetPosition(TOGGLE_ACTION, UDim2.new(1, -92, 1, -190));
+	end);
+end;
+local function destroyController()
+	if Controller then
+		local oldController = Controller;
+		Controller = nil;
+		oldController:Destroy();
+	end;
+end;
+local function waitForCharacterParts(character)
+	if not character then
+		return false;
+	end;
+	local humanoid = character:FindFirstChildOfClass("Humanoid") or character:WaitForChild("Humanoid", 10);
+	local hrp = character:FindFirstChild("HumanoidRootPart") or character:WaitForChild("HumanoidRootPart", 10);
+	return humanoid ~= nil and hrp ~= nil and character.Parent ~= nil;
+end;
+local function cleanupMarkedObjects(character)
+	if not character then
 		return;
 	end;
-	if Controller then
-		Controller:Destroy();
-		Controller = nil;
-	else
-		Controller = GravityController.new(PLAYERS.LocalPlayer);
-		Controller.GetGravityUp = GetGravityUp;
+	for _, descendant in ipairs(character:GetDescendants()) do
+		if descendant:GetAttribute("WallWalkObject") then
+			pcall(function()
+				descendant:Destroy();
+			end);
+		end;
 	end;
-end, false, Enum.KeyCode.Z);
-print("end");
+end;
+local function createController()
+	if not GravityEnabled then
+		return;
+	end;
+	local character = LocalPlayer.Character;
+	if not waitForCharacterParts(character) then
+		return;
+	end;
+	destroyController();
+	cleanupMarkedObjects(character);
+	local ok, newController = pcall(function()
+		return GravityController.new(LocalPlayer);
+	end);
+	if not ok then
+		warn("WallWalk failed to start gravity controller:", newController);
+		return;
+	end;
+	Controller = newController;
+	Controller.GetGravityUp = GetGravityUp;
+end;
+local function setGravityEnabled(enabled)
+	GravityEnabled = enabled;
+	updateToggleButton();
+	if GravityEnabled then
+		task.defer(createController);
+	else
+		destroyController();
+	end;
+end;
+local function toggleGravity()
+	setGravityEnabled(not GravityEnabled);
+end;
+local managerCharacterAddedConn = LocalPlayer.CharacterAdded:Connect(function()
+	if GravityEnabled then
+		task.defer(createController);
+	end;
+end);
+local managerCharacterRemovingConn = LocalPlayer.CharacterRemoving:Connect(function()
+	destroyController();
+end);
+if __WallWalkRuntime then
+	table.insert(__WallWalkRuntime.Connections, managerCharacterAddedConn);
+	table.insert(__WallWalkRuntime.Connections, managerCharacterRemovingConn);
+end;
+ContextActionService:BindAction(TOGGLE_ACTION, function(action, state, input)
+	if state ~= Enum.UserInputState.Begin then
+		return Enum.ContextActionResult.Pass;
+	end;
+	toggleGravity();
+	return Enum.ContextActionResult.Sink;
+end, CREATE_TOUCH_TOGGLE, Enum.KeyCode.Z);
+updateToggleButton();
+if GravityEnabled then
+	task.defer(createController);
+end;
+if __WallWalkRuntime then
+	__WallWalkRuntime.Cleanup = function()
+		GravityEnabled = false;
+		destroyController();
+		cleanupMarkedObjects(LocalPlayer.Character);
+		pcall(function()
+			ContextActionService:UnbindAction(TOGGLE_ACTION);
+		end);
+		pcall(function()
+			ClonedService("RunService"):UnbindFromRenderStep("GravityStep");
+			ClonedService("RunService"):UnbindFromRenderStep("GravityCameraInputStep");
+			ClonedService("RunService"):UnbindFromRenderStep("GravityCameraStep");
+		end);
+		for _, connection in ipairs(__WallWalkRuntime.Connections) do
+			if connection and connection.Disconnect then
+				pcall(function()
+					connection:Disconnect();
+				end);
+			end;
+		end;
+		__WallWalkRuntime.Connections = {};
+		if type(__WallWalkGlobal) == "table" and rawget(__WallWalkGlobal, "__WallWalkRuntime") == __WallWalkRuntime then
+			__WallWalkGlobal.__WallWalkRuntime = nil;
+		end;
+	end;
+end;

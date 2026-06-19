@@ -555,6 +555,29 @@ local function main()
 			Settings.ClassIcon = classIcon.Selected
 			persistSettings()
 		end))
+
+		Settings.Explorer = Settings.Explorer or {}
+		local guiSelectionBox = AddCheckbox("GUI Selection Box", Settings.Explorer.GuiSelectionBox)
+		trackConn(guiSelectionBox.OnInput:Connect(function()
+			Settings.Explorer.GuiSelectionBox = guiSelectionBox.Toggled
+			persistSettings()
+			if Explorer and Explorer.UpdateSelectionVisuals then
+				pcall(Explorer.UpdateSelectionVisuals)
+			end
+		end))
+
+		local selectorScopes = {"PlayerGui", "CoreGui", "gethui", "All"}
+		local selectorScope = Settings.Explorer.GuiSelectorScope
+		if not table.find(selectorScopes, selectorScope) then
+			selectorScope = "PlayerGui"
+			Settings.Explorer.GuiSelectorScope = selectorScope
+		end
+		local guiSelectorScope = AddDropdown("GUI Selector Source", selectorScopes, selectorScope, false, 90)
+		trackConn(guiSelectorScope.OnSelect:Connect(function()
+			Settings.Explorer.GuiSelectorScope = guiSelectorScope.Selected
+			persistSettings()
+		end))
+
 		AddText("Resize this window directly; the size is saved automatically.")
 
 		Main.UserSettings = Main.UserSettings or {}
@@ -663,27 +686,6 @@ local function main()
 			end
 		end))
 
-		local guiSelectionBox = AddCheckbox("GUI Selection Box", Settings.Explorer.GuiSelectionBox)
-		trackConn(guiSelectionBox.OnInput:Connect(function()
-			Settings.Explorer.GuiSelectionBox = guiSelectionBox.Toggled
-			persistSettings()
-			if Explorer and Explorer.UpdateSelectionVisuals then
-				pcall(Explorer.UpdateSelectionVisuals)
-			end
-		end))
-
-		local selectorScopes = {"PlayerGui", "CoreGui", "gethui", "All"}
-		local selectorScope = Settings.Explorer.GuiSelectorScope
-		if not table.find(selectorScopes, selectorScope) then
-			selectorScope = "PlayerGui"
-			Settings.Explorer.GuiSelectorScope = selectorScope
-		end
-		local guiSelectorScope = AddDropdown("GUI Selector Source", selectorScopes, selectorScope, false, 90)
-		trackConn(guiSelectorScope.OnSelect:Connect(function()
-			Settings.Explorer.GuiSelectorScope = guiSelectorScope.Selected
-			persistSettings()
-		end))
-		
 		local copypathUseChildren = AddCheckbox("Use GetChildren to Copy Path", Settings.Explorer.CopyPathUseGetChildren)
 		trackConn(copypathUseChildren.OnInput:Connect(function()
 			Settings.Explorer.CopyPathUseGetChildren = copypathUseChildren.Toggled

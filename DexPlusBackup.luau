@@ -2785,23 +2785,12 @@ Main = (function()
 		local iconIndex = data.Icon
 		if data.IconMap and iconIndex then
 			if data.IconMap == Explorer.LegacyClassIcons and type(iconIndex) == "number" then
-				app.Main.Icon.Image = ""
-				app.Main.Icon.ImageRectOffset = Vector2.new(0,0)
-				app.Main.Icon.ImageRectSize = Vector2.new(0,0)
-				app.Main.Icon.ClipsDescendants = true
+				app.Main.Icon.Image = data.IconMap.MapId
+				app.Main.Icon.ImageRectOffset = Vector2.new(16 * iconIndex,0)
+				app.Main.Icon.ImageRectSize = Vector2.new(16,16)
+				app.Main.Icon.ScaleType = Enum.ScaleType.Fit
 				app.Main.Icon.Size = UDim2.new(0,32,0,32)
 				app.Main.Icon.Position = UDim2.new(0.5,-16,0,4)
-
-				local legacyIcon = Instance.new("ImageLabel")
-				legacyIcon.BackgroundTransparency = 1
-				legacyIcon.Image = data.IconMap.MapId
-				legacyIcon.ImageRectOffset = Vector2.new(0,0)
-				legacyIcon.ImageRectSize = Vector2.new(0,0)
-				legacyIcon.ScaleType = Enum.ScaleType.Stretch
-				legacyIcon.Size = UDim2.new(0,4704,0,32)
-				legacyIcon.Position = UDim2.new(0,-32 * iconIndex,0,0)
-				legacyIcon.Name = "LegacyIcon"
-				legacyIcon.Parent = app.Main.Icon
 			elseif type(iconIndex) == "number" then
 				data.IconMap:Display(app.Main.Icon,iconIndex)
 			elseif type(iconIndex) == "string" then
@@ -2861,6 +2850,16 @@ Main = (function()
 			end
 		end
 
+		local boundWindow
+		local function bindWindow(window)
+			if not window or boundWindow == window then
+				return
+			end
+			boundWindow = window
+			trackConn(window.OnActivate:Connect(function() enable(true) end))
+			trackConn(window.OnDeactivate:Connect(function() disable(true) end))
+		end
+
 		updateState()
 
 		local ySize = service.TextService:GetTextSize(data.Name,14,Enum.Font.SourceSans,Vector2.new(62,999999)).Y
@@ -2886,11 +2885,7 @@ Main = (function()
 			if data.Open then disable() else enable() end
 		end))
 
-		local window = data.Window
-		if window then
-			trackConn(window.OnActivate:Connect(function() enable(true) end))
-			trackConn(window.OnDeactivate:Connect(function() disable(true) end))
-		end
+		bindWindow(data.Window)
 
 		app.Visible = true
 		app.Parent = Main.AppsContainer
@@ -2898,6 +2893,10 @@ Main = (function()
 
 		control.Enable = enable
 		control.Disable = disable
+		control.SetWindow = function(window)
+			data.Window = window
+			bindWindow(window)
+		end
 		Main.MenuApps[data.Name] = control
 		return control
 	end
@@ -2945,11 +2944,11 @@ Main = (function()
 		end
 
 		if ModelViewer and ModelViewer.Window and not Main.MenuApps["3D Viewer"] then
-			Main.CreateApp({Name = "3D Viewer", IconMap = Explorer and Explorer.LegacyClassIcons, Icon = 54, Window = ModelViewer.Window})
+			Main.CreateApp({Name = "3D Viewer", IconMap = Main.LargeIcons, Icon = "Object", Window = ModelViewer.Window})
 		end
 
 		if ThemeManager and ThemeManager.Window and not Main.MenuApps["Theme Manager"] then
-			Main.CreateApp({Name = "Theme Manager", IconMap = Explorer and Explorer.LegacyClassIcons, Icon = 83, Window = ThemeManager.Window})
+			Main.CreateApp({Name = "Theme Manager", Icon = Main.ResolveAsset("rbxassetid://1072518406"), IconSize = UDim2.new(0,32,0,32), IconPosition = UDim2.new(0.5,-16,0,4), Window = ThemeManager.Window})
 		end
 	end
 
@@ -3666,7 +3665,7 @@ Main = (function()
 			end
 		end
 
-		Main.CreateApp({Name = "Click GUI to select", IconMap = Main.LargeIcons, Icon = 4, OnClick = function(callback)
+		Main.CreateApp({Name = "Click GUI to select", IconMap = Main.MiscIcons, Icon = "SelectChildren", IconSize = UDim2.new(0,32,0,32), IconPosition = UDim2.new(0.5,-16,0,4), OnClick = function(callback)
 			if callback then
 				guiSelStop()
 				cgtsBegan = Main.TrackConn(service.UserInputService.InputBegan:Connect(function(input)
@@ -3725,12 +3724,19 @@ Main = (function()
 			end
 		end})
 
-		local function toggleOptionalExplorer(moduleName, isOpen, onShow)
+		local function toggleOptionalExplorer(moduleName, appName, isOpen, onShow)
 			local moduleData = Apps[moduleName]
+			local appControl = Main.MenuApps[appName]
 			if isOpen then
 				moduleData = moduleData or Main.LoadOptionalModule(moduleName)
 				if not moduleData then
+					if appControl and appControl.Disable then
+						appControl.Disable(true)
+					end
 					return
+				end
+				if appControl and appControl.SetWindow and moduleData.Window then
+					appControl.SetWindow(moduleData.Window)
 				end
 				if type(onShow) == "function" and onShow(moduleData) == true then
 					return
@@ -3743,8 +3749,8 @@ Main = (function()
 			end
 		end
 
-		Main.CreateApp({Name = "Environment Explorer", IconMap = Main.LargeIcons, Icon = "Book", OnClick = function(isOpen)
-			toggleOptionalExplorer("EnvExplorer", isOpen, function(moduleData)
+		Main.CreateApp({Name = "Environment Explorer", IconMap = Main.MiscIcons, Icon = "ExploreData", IconSize = UDim2.new(0,32,0,32), IconPosition = UDim2.new(0.5,-16,0,4), OnClick = function(isOpen)
+			toggleOptionalExplorer("EnvExplorer", "Environment Explorer", isOpen, function(moduleData)
 				local selected = Explorer and Explorer.Selection and Explorer.Selection.List[1]
 				local obj = selected and selected.Obj
 				if obj and obj:IsA("LuaSourceContainer") and type(moduleData.ViewEnvironment) == "function" then
@@ -3755,12 +3761,12 @@ Main = (function()
 			end)
 		end})
 
-		Main.CreateApp({Name = "Data Explorer", IconMap = Main.LargeIcons, Icon = "Paper", OnClick = function(isOpen)
-			toggleOptionalExplorer("DataExplorer", isOpen)
+		Main.CreateApp({Name = "Data Explorer", IconMap = Main.LargeIcons, Icon = "Honey", OnClick = function(isOpen)
+			toggleOptionalExplorer("DataExplorer", "Data Explorer", isOpen)
 		end})
 
-		Main.CreateApp({Name = "Debug Explorer", IconMap = Main.LargeIcons, Icon = "Output", OnClick = function(isOpen)
-			toggleOptionalExplorer("DebugExplorer", isOpen)
+		Main.CreateApp({Name = "Debug Explorer", IconMap = Main.LargeIcons, Icon = "ScriptEdit", OnClick = function(isOpen)
+			toggleOptionalExplorer("DebugExplorer", "Debug Explorer", isOpen)
 		end})
 
 		Main.RegisterDeferredApps()
@@ -3856,7 +3862,7 @@ Main = (function()
 		})
 		Main.LargeIcons = Lib.IconMap.new(Main.ResolveAsset("rbxassetid://129589545519436"),256,256,32,32)
 		Main.LargeIcons:SetDict({
-			Explorer = 0, Properties = 1, Script_Viewer = 2, Watcher = 3, Output = 4, Paper = 5, Book = 6
+			Explorer = 0, Properties = 1, Script_Viewer = 2, Watcher = 3, Output = 4, Paper = 5, ScriptEdit = 5, Book = 6, Executor = 7, Object = 8, Honey = 9
 		})
 
 		--[[ Loading bypasses

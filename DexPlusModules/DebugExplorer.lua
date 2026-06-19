@@ -483,6 +483,7 @@ end))]], TargetPath, Name)
 
 	DebugExplorer.Init = function()
 		Window = Lib.Window.new()
+		Window.RestoreLastSide = false
 		Window:SetTitle("Debug Interface")
 		Window:Resize(650, 500)
 		DebugExplorer.Window = Window

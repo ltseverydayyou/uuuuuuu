@@ -761,6 +761,7 @@ local MatchesContainer = Instance.new("Frame", MainBox)
 
 	DataExplorer.Init = function()
 		Window = Lib.Window.new()
+		Window.RestoreLastSide = false
 		Window:SetTitle("Data Explorer")
 		Window:Resize(500, 450)
 		DataExplorer.Window = Window

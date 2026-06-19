@@ -428,6 +428,7 @@ end)
 
 	EnvExplorer.Init = function()
 		Window = Lib.Window.new()
+		Window.RestoreLastSide = false
 		Window:SetTitle("Environment Explorer")
 		Window:Resize(450, 400)
 		EnvExplorer.Window = Window

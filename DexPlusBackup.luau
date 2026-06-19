@@ -868,7 +868,6 @@ Main = (function()
 	Main.LoadModule = function(name)
 		if Main.Elevated then -- If you don't have filesystem api then ur outta luck tbh
 			local control
-			local lastModuleLoadError
 			local function loadControlFromSource(source, sourceName)
 				if type(source) ~= "string" then
 					return nil, sourceName .. " source is not a string"
@@ -909,37 +908,12 @@ Main = (function()
 				local modulePathLocal = (Main.GitModulesPath or "Modules").."/"..name..".lua"
 				local cacheFolder = "DexPlusPlus/ModuleCache/"..tostring(Main.ModuleCacheVersion or "default")
 				local cachePath = cacheFolder.."/"..name..".lua"
-				local triedCache = false
+				local loadErrors = {}
 
-				local function shouldForceRefresh()
-					if Main.ModuleForceRefresh == true then
-						return true
+				local function addLoadError(label, err)
+					if err ~= nil and tostring(err) ~= "" then
+						table.insert(loadErrors, tostring(label)..": "..tostring(err))
 					end
-
-					local okGenv, genv = pcall(function()
-						return getgenv and getgenv()
-					end)
-
-					if okGenv and type(genv) == "table" and rawget(genv, "DexPlusRefreshModules") == true then
-						return true
-					end
-
-					if type(_G) == "table" and rawget(_G, "DexPlusRefreshModules") == true then
-						return true
-					end
-
-					local flagPath = Main.ModuleRefreshFlagFile or "DexPlusPlus/RefreshModules.txt"
-					if env and type(env.isfile) == "function" and type(env.readfile) == "function" then
-						local okExists, exists = pcall(env.isfile, flagPath)
-						if okExists and exists then
-							local okRead, body = pcall(env.readfile, flagPath)
-							local txt = okRead and string.lower(tostring(body or "")) or ""
-							txt = txt:gsub("^%s+", ""):gsub("%s+$", "")
-							return txt ~= "" and txt ~= "0" and txt ~= "false" and txt ~= "off" and txt ~= "no"
-						end
-					end
-
-					return false
 				end
 
 				local function tryFile(path, label)
@@ -967,27 +941,12 @@ Main = (function()
 					return true, nil, loadErr
 				end
 
-				local function tryCache()
-					triedCache = true
-					local exists, loadedControl, loadErr = tryFile(cachePath, "Cached module")
-					if loadedControl then
-						control = loadedControl
-					elseif exists and loadErr then
-						lastModuleLoadError = loadErr
-					end
-				end
-
-				local forceRemote = shouldForceRefresh()
 				local localExists, localControl, localErr = tryFile(modulePathLocal, "Local module")
 
-				if localExists then
-					if localControl then
-						control = localControl
-					else
-						Main.Error("Failed to load local module "..name.." from "..modulePathLocal.." | "..tostring(localErr))
-					end
-				elseif not forceRemote then
-					tryCache()
+				if localControl then
+					control = localControl
+				elseif localExists then
+					addLoadError("local", localErr)
 				end
 
 				if not control then
@@ -1006,19 +965,24 @@ Main = (function()
 								pcall(env.writefile, cachePath, moduleStr)
 							end
 						else
-							lastModuleLoadError = loadErr
+							addLoadError("remote", loadErr)
 						end
 					else
-						lastModuleLoadError = tostring(moduleStr)
+						addLoadError("remote", moduleStr)
 					end
 				end
 
-				if not control and forceRemote and not triedCache then
-					tryCache()
+				if not control then
+					local cacheExists, cacheControl, cacheErr = tryFile(cachePath, "Cached module")
+					if cacheControl then
+						control = cacheControl
+					elseif cacheExists then
+						addLoadError("cache", cacheErr)
+					end
 				end
 
 				if not control then
-					local suffix = lastModuleLoadError and (" | " .. tostring(lastModuleLoadError)) or ""
+					local suffix = #loadErrors > 0 and (" | " .. table.concat(loadErrors, " | ")) or ""
 					Main.Error("Failed to get external module data of "..name.." (no valid local, cached, or remote copy)" .. suffix)
 				end
 			end
@@ -3005,6 +2969,12 @@ Main = (function()
 			if not okInit then
 				warn("[Dex] Failed initializing optional module '"..tostring(moduleName).."': "..tostring(initErr))
 				return nil
+			end
+			if moduleData.Window then
+				moduleData.Window.RestoreLastSide = false
+				if not moduleData.Window.Closed then
+					moduleData.Window:Hide()
+				end
 			end
 			Main.SyncModuleDependencies()
 		end

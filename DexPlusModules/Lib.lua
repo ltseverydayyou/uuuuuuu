@@ -3437,7 +3437,7 @@ local function main()
 
 			self.MinimizeAnim.Disable()
 			self.CloseAnim.Disable()
-			self.ClosedSide = self.Side
+			self.ClosedSide = (self.RestoreLastSide == false) and nil or self.Side
 			self.Side = nil
 			self.OnDeactivate:Fire()
 
@@ -3478,7 +3478,7 @@ local function main()
 
 			self.MinimizeAnim.Disable()
 			self.CloseAnim.Disable()
-			self.ClosedSide = self.Side
+			self.ClosedSide = (self.RestoreLastSide == false) and nil or self.Side
 			self.Side = nil
 			self.OnDeactivate:Fire()
 
@@ -3591,7 +3591,7 @@ local function main()
 			if align then
 				window:AlignTo(targetSide,pos,size,data.Silent)
 			else
-				if align == nil and window.ClosedSide then -- Regular open
+				if align == nil and window.ClosedSide and window.RestoreLastSide ~= false then -- Regular open
 					window:AlignTo(window.ClosedSide,window.SidePos,size,true)
 					static.SetSideVisible(window.ClosedSide,true)
 				else
@@ -3775,6 +3775,7 @@ local function main()
 				Resizable = true,
 				ResizableInternal = true,
 				Alignable = true,
+				RestoreLastSide = true,
 				Closed = true,
 				SizeX = 300,
 				SizeY = 300,

@@ -18052,6 +18052,10 @@ Main = (function()
 		local cgtsInput = nil;
 		local cgtsStart = nil;
 		local cgtsMoved = false;
+		local cgtsCycleX = nil;
+		local cgtsCycleY = nil;
+		local cgtsCycleIndex = 0;
+		local cgtsCycleLast = 0;
 		local function isDexGui(obj)
 			if typeof(obj) ~= "Instance" then
 				return false;
@@ -18092,13 +18096,19 @@ Main = (function()
 			local layer = getLayer(obj);
 			local order = 0;
 			local z = 0;
+			local areaScore = 0;
 			pcall(function()
 				order = layer and layer.DisplayOrder or 0;
 			end);
 			pcall(function()
 				z = obj.ZIndex or 0;
 			end);
-			return order * 1000000 + z * 1000 - ind;
+			pcall(function()
+				local size = obj.AbsoluteSize;
+				local area = math.max(1, size.X * size.Y);
+				areaScore = math.floor(1000000 / area);
+			end);
+			return order * 1000000000 + z * 1000000 + areaScore * 10 - ind;
 		end;
 		local function isShown(obj)
 			local ok, shown = pcall(function()
@@ -18187,28 +18197,8 @@ Main = (function()
 			end);
 			return okStroke and stroke;
 		end;
-		local function isInputGui(obj)
-			local ok, res = pcall(function()
-				return obj:IsA("GuiButton") or obj:IsA("TextBox") or obj:IsA("ScrollingFrame") or obj.Active == true or obj.Selectable == true or obj.Interactable == true;
-			end);
-			return ok and res;
-		end;
-		local function hasPaintChild(obj)
-			local ok, res = pcall(function()
-				for _, child in obj:GetDescendants() do
-					if child:IsA("GuiObject") and isShown(child) and hasPaint(child) then
-						return true;
-					end;
-				end;
-				return false;
-			end);
-			return ok and res;
-		end;
 		local function guiPrimary(obj)
-			return typeof(obj) == "Instance" and obj:IsA("GuiObject") and nodes[obj] and (not isDexGui(obj)) and isShown(obj) and (hasPaint(obj) or isInputGui(obj));
-		end;
-		local function guiFallback(obj)
-			return typeof(obj) == "Instance" and obj:IsA("GuiObject") and nodes[obj] and (not isDexGui(obj)) and isShown(obj) and hasPaintChild(obj);
+			return typeof(obj) == "Instance" and obj:IsA("GuiObject") and nodes[obj] and (not isDexGui(obj)) and isShown(obj) and hasPaint(obj);
 		end;
 		local function addScopeHolders(holders, seen, scope)
 			if scope == "All" or scope == "PlayerGui" then
@@ -18243,6 +18233,9 @@ Main = (function()
 				for _, gui in list do
 					if typeof(gui) == "Instance" then
 						local ok, res = pcall(function()
+							if gui.Name == "ExplorerSelections" then
+								return false;
+							end;
 							if gui:IsA("GuiObject") and pointInObj(gui, x, y) then
 								return true;
 							end;
@@ -18261,34 +18254,64 @@ Main = (function()
 			end;
 			return false;
 		end;
-		local function pickGui(guis, fallback)
-			for i = 1, #guis do
-				local obj = guis[i];
-				if (fallback and guiFallback(obj)) or ((not fallback) and guiPrimary(obj)) then
-					return obj;
+		local function hasPaintChildAtPoint(obj, x, y)
+			local ok, res = pcall(function()
+				for _, child in obj:GetDescendants() do
+					if child:IsA("GuiObject") and isShown(child) and hasPaint(child) and pointInObj(child, x, y) then
+						return true;
+					end;
 				end;
-			end;
+				return false;
+			end);
+			return ok and res;
 		end;
-		local function getGuiAt(x, y)
+		local function guiFallback(obj, x, y)
+			return typeof(obj) == "Instance" and obj:IsA("GuiObject") and nodes[obj] and (not isDexGui(obj)) and isShown(obj) and hasPaintChildAtPoint(obj, x, y);
+		end;
+		local function addGuiCandidate(candidates, seen, obj, score, fallback)
+			if seen[obj] then
+				return;
+			end;
+			seen[obj] = true;
+			candidates[#candidates + 1] = {
+				Obj = obj,
+				Score = score,
+				Fallback = fallback and 1 or 0
+			};
+		end;
+		local function getGuiCandidates(x, y)
 			x = math.floor(tonumber(x) or 0);
 			y = math.floor(tonumber(y) or 0);
-			local holders, seen = {}, {};
-			addScopeHolders(holders, seen, getGuiSelectorScope());
+			local holders, seenHolders = {}, {};
+			local candidates, seenCandidates = {}, {};
+			addScopeHolders(holders, seenHolders, getGuiSelectorScope());
 			for _, holder in holders do
 				local ok, guis = pcall(function()
 					return holder:GetGuiObjectsAtPosition(x, y);
 				end);
 				if ok and type(guis) == "table" then
-					local obj = pickGui(guis, false);
-					if obj then
-						return obj;
-					end;
-					obj = pickGui(guis, true);
-					if obj then
-						return obj;
+					for i = 1, #guis do
+						local obj = guis[i];
+						local score = guiScore(obj, i);
+						if guiPrimary(obj) then
+							addGuiCandidate(candidates, seenCandidates, obj, score, false);
+						elseif guiFallback(obj, x, y) then
+							addGuiCandidate(candidates, seenCandidates, obj, score, true);
+						end;
 					end;
 				end;
 			end;
+			table.sort(candidates, function(a, b)
+				if a.Fallback ~= b.Fallback then
+					return a.Fallback < b.Fallback;
+				end;
+				return a.Score > b.Score;
+			end);
+			return candidates;
+		end;
+		local function getGuiAt(x, y)
+			local candidates = getGuiCandidates(x, y);
+			return candidates[1] and candidates[1].Obj;
 		end;
 		if Explorer and (not isStubModule(Explorer)) then
 			Main.CreateApp({
@@ -18325,10 +18348,14 @@ Main = (function()
 				return x, y;
 			end;
 			local function guiSelStop()
-				for _, conn in { cgtsBegan, cgtsChanged, cgtsEnded } do
-					if conn then
-						conn:Disconnect();
-					end;
+				if cgtsBegan then
+					cgtsBegan:Disconnect();
+				end;
+				if cgtsChanged then
+					cgtsChanged:Disconnect();
+				end;
+				if cgtsEnded then
+					cgtsEnded:Disconnect();
 				end;
 				cgtsBegan = nil;
 				cgtsChanged = nil;
@@ -18336,12 +18363,33 @@ Main = (function()
 				cgtsInput = nil;
 				cgtsStart = nil;
 				cgtsMoved = false;
+				cgtsCycleX = nil;
+				cgtsCycleY = nil;
+				cgtsCycleIndex = 0;
+				cgtsCycleLast = 0;
 			end;
 			local function guiSelPick(x, y)
 				if isPointOnDexGui(x, y) then
 					return;
 				end;
-				local obj = getGuiAt(x, y);
+				local candidates = getGuiCandidates(x, y);
+				if #candidates == 0 then
+					cgtsCycleX = nil;
+					cgtsCycleY = nil;
+					cgtsCycleIndex = 0;
+					return;
+				end;
+				local now = os.clock();
+				local sameSpot = cgtsCycleX and ((x - cgtsCycleX) * (x - cgtsCycleX) + (y - cgtsCycleY) * (y - cgtsCycleY) <= 144) and now - cgtsCycleLast <= 4;
+				if sameSpot then
+					cgtsCycleIndex = (cgtsCycleIndex % #candidates) + 1;
+				else
+					cgtsCycleIndex = 1;
+				end;
+				cgtsCycleX = x;
+				cgtsCycleY = y;
+				cgtsCycleLast = now;
+				local obj = candidates[cgtsCycleIndex] and candidates[cgtsCycleIndex].Obj or getGuiAt(x, y);
 				local node = obj and nodes[obj];
 				if node then
 					selection:Set(node);

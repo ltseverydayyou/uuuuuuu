@@ -671,6 +671,18 @@ local function main()
 				pcall(Explorer.UpdateSelectionVisuals)
 			end
 		end))
+
+		local selectorScopes = {"PlayerGui", "CoreGui", "gethui", "All"}
+		local selectorScope = Settings.Explorer.GuiSelectorScope
+		if not table.find(selectorScopes, selectorScope) then
+			selectorScope = "PlayerGui"
+			Settings.Explorer.GuiSelectorScope = selectorScope
+		end
+		local guiSelectorScope = AddDropdown("GUI Selector Source", selectorScopes, selectorScope, false, 90)
+		trackConn(guiSelectorScope.OnSelect:Connect(function()
+			Settings.Explorer.GuiSelectorScope = guiSelectorScope.Selected
+			persistSettings()
+		end))
 		
 		local copypathUseChildren = AddCheckbox("Use GetChildren to Copy Path", Settings.Explorer.CopyPathUseGetChildren)
 		trackConn(copypathUseChildren.OnInput:Connect(function()

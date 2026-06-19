@@ -211,7 +211,7 @@ end
 local isFsSupported = readfile and writefile and isfile and isfolder and listfiles and delfile and delfolder
 
 -- Main vars
-local Main, Explorer, Properties, ScriptViewer, Console, SaveInstance, ModelViewer, SettingsWindow, ThemeManager--[[, SecretServicePanel]], DefaultSettings, Notebook, Serializer, Lib
+local Main, Explorer, Properties, ScriptViewer, Console, SaveInstance, ModelViewer, SettingsWindow, ThemeManager, EnvExplorer, DataExplorer, DebugExplorer--[[, SecretServicePanel]], DefaultSettings, Notebook, Serializer, Lib
 local ggv = getgenv
 local API, RMD
 
@@ -230,6 +230,7 @@ DefaultSettings = (function()
 			AutoUpdateMode = 0, -- 0 Default, 1 no tree update, 2 no descendant events, 3 frozen
 			PartSelectionBox = true,
 			GuiSelectionBox = true,
+			GuiSelectorScope = "PlayerGui",
 			CopyPathUseGetChildren = true,
 			UseNameWidth = false,
 			MaxSelectionBoxes = 1000
@@ -490,6 +491,7 @@ Main = (function()
 	Main.StartupModuleList = {"Explorer","Properties","ScriptViewer"}
 	Main.DeferredModuleList = {"Console","SaveInstance","ModelViewer","ThemeManager","SettingsWindow"}
 	Main.ModuleList = {"Explorer","Properties","ScriptViewer","Console","SaveInstance","ModelViewer","SettingsWindow","ThemeManager"}
+	Main.OptionalModuleList = {"EnvExplorer","DataExplorer","DebugExplorer"}
 	Main.Elevated = false
 	Main.AllowDraggableOnMobile = true
 	Main.MissingEnv = {}
@@ -1112,6 +1114,9 @@ Main = (function()
 		ModelViewer = Apps.ModelViewer
 		SettingsWindow = Apps.SettingsWindow
 		ThemeManager = Apps.ThemeManager
+		EnvExplorer = Apps.EnvExplorer
+		DataExplorer = Apps.DataExplorer
+		DebugExplorer = Apps.DebugExplorer
 		Notebook = Apps.Notebook
 
 		return {
@@ -1123,6 +1128,9 @@ Main = (function()
 			ModelViewer = ModelViewer,
 			SettingsWindow = SettingsWindow,
 			ThemeManager = ThemeManager,
+			EnvExplorer = EnvExplorer,
+			DataExplorer = DataExplorer,
+			DebugExplorer = DebugExplorer,
 			Notebook = Notebook,
 		}
 	end
@@ -1491,11 +1499,27 @@ Main = (function()
 
 		-- debug
 		env.getupvalues = debug.getupvalues or getupvalues or getupvals
+		env.setupvalues = debug.setupvalues or setupvalues or setupvals
+		env.setupvalue = debug.setupvalue or setupvalue or setupval
 		env.getconstants = debug.getconstants or getconstants or getconsts
+		env.setconstants = debug.setconstants or setconstants or setconsts
+		env.setconstant = debug.setconstant or setconstant or setconst
+		env.getprotos = debug.getprotos or getprotos
+		env.getproto = debug.getproto or getproto
+		env.getinfo = (debug and (debug.getinfo or debug.info)) or getinfo
 		env.islclosure = islclosure or is_l_closure
+		env.iscclosure = iscclosure or is_c_closure
+		env.isourclosure = isourclosure
 		env.checkcaller = checkcaller
 		env.getreg = getreg
 		env.getgc = getgc
+		env.getgenv = getgenv
+		env.getrenv = getrenv
+		env.getsenv = getsenv
+		env.getscripts = getscripts
+		env.getconnections = getconnections
+		env.getfunctionhash = getfunctionhash
+		env.restorefunction = restorefunction
 
 		-- hooks
 		env.hookfunction = hookfunction
@@ -2014,6 +2038,9 @@ Main = (function()
 		end
 		if type(explorer.GuiSelectionBox) ~= "boolean" then
 			explorer.GuiSelectionBox = defaultExplorer.GuiSelectionBox
+		end
+		if explorer.GuiSelectorScope ~= "PlayerGui" and explorer.GuiSelectorScope ~= "CoreGui" and explorer.GuiSelectorScope ~= "gethui" and explorer.GuiSelectorScope ~= "All" then
+			explorer.GuiSelectorScope = defaultExplorer.GuiSelectorScope or "PlayerGui"
 		end
 		if type(explorer.CopyPathUseGetChildren) ~= "boolean" then
 			explorer.CopyPathUseGetChildren = defaultExplorer.CopyPathUseGetChildren
@@ -2959,6 +2986,33 @@ Main = (function()
 		Main.RegisterDeferredApps()
 	end
 
+	Main.LoadOptionalModule = function(moduleName)
+		if not moduleName then
+			return nil
+		end
+		if Apps[moduleName] then
+			return Apps[moduleName]
+		end
+
+		local okLoad, loadErr = pcall(Main.LoadModules, {moduleName})
+		if not okLoad then
+			warn("[Dex] Failed loading optional module '"..tostring(moduleName).."': "..tostring(loadErr))
+			return nil
+		end
+
+		local moduleData = Apps[moduleName]
+		if moduleData then
+			local okInit, initErr = pcall(Main.InitAppModule, moduleData, moduleName)
+			if not okInit then
+				warn("[Dex] Failed initializing optional module '"..tostring(moduleName).."': "..tostring(initErr))
+				return nil
+			end
+			Main.SyncModuleDependencies()
+		end
+
+		return moduleData
+	end
+
 	Main.SetMainGuiOpen = function(val)
 		if not Main.MainGui or not Main.MainGui:FindFirstChild("OpenButton") then
 			return
@@ -3073,6 +3127,9 @@ Main = (function()
 		ModelViewer = nil
 		SettingsWindow = nil
 		ThemeManager = nil
+		EnvExplorer = nil
+		DataExplorer = nil
+		DebugExplorer = nil
 		Notebook = nil
 
 		if Main.__DexState then
@@ -3239,6 +3296,297 @@ Main = (function()
 		Main.CreateApp({Name = "Properties", IconMap = Main.LargeIcons, Icon = "Properties", Open = openPropertiesByDefault, Window = Properties.Window})
 
 		local cptsOnMouseClick = nil
+		local cgtsBegan = nil
+		local cgtsChanged = nil
+		local cgtsEnded = nil
+		local cgtsInput = nil
+		local cgtsStart = nil
+		local cgtsMoved = false
+		local cgtsCycleX = nil
+		local cgtsCycleY = nil
+		local cgtsCycleIndex = 0
+		local cgtsCycleLast = 0
+
+		local function isDexGui(obj)
+			if typeof(obj) ~= "Instance" then
+				return false
+			end
+			local list = Main.GuiList
+			if type(list) == "table" then
+				for _, gui in list do
+					local ok, res = pcall(function()
+						return gui and (obj == gui or obj:IsDescendantOf(gui))
+					end)
+					if ok and res then
+						return true
+					end
+				end
+			end
+			return false
+		end
+
+		local function addHolder(list, seen, holder)
+			if typeof(holder) ~= "Instance" or seen[holder] then
+				return
+			end
+			seen[holder] = true
+			list[#list + 1] = holder
+		end
+
+		local function getLayer(obj)
+			local cur = obj
+			while cur do
+				local ok, res = pcall(function()
+					return cur:IsA("LayerCollector")
+				end)
+				if ok and res then
+					return cur
+				end
+				cur = cur.Parent
+			end
+		end
+
+		local function guiScore(obj, ind)
+			local layer = getLayer(obj)
+			local order = 0
+			local z = 0
+			local areaScore = 0
+			pcall(function()
+				order = layer and layer.DisplayOrder or 0
+			end)
+			pcall(function()
+				z = obj.ZIndex or 0
+			end)
+			pcall(function()
+				local size = obj.AbsoluteSize
+				local area = math.max(1, size.X * size.Y)
+				areaScore = math.floor(1000000 / area)
+			end)
+			return order * 1000000000 + z * 1000000 + areaScore * 10 - ind
+		end
+
+		local function isShown(obj)
+			local ok, shown = pcall(function()
+				local size = obj.AbsoluteSize
+				return obj.Visible ~= false and size.X > 0 and size.Y > 0
+			end)
+			if not ok or not shown or not getLayer(obj) then
+				return false
+			end
+			local cur = obj.Parent
+			while cur do
+				local okObj, isObj = pcall(function()
+					return cur:IsA("GuiObject")
+				end)
+				if okObj and isObj then
+					local okVis, vis = pcall(function()
+						return cur.Visible
+					end)
+					if okVis and vis == false then
+						return false
+					end
+					local okSize, size = pcall(function()
+						return cur.AbsoluteSize
+					end)
+					if okSize and (size.X <= 0 or size.Y <= 0) then
+						return false
+					end
+				else
+					local okLayer, isLayer = pcall(function()
+						return cur:IsA("LayerCollector")
+					end)
+					if okLayer and isLayer then
+						local okEn, en = pcall(function()
+							return cur.Enabled
+						end)
+						if okEn and en == false then
+							return false
+						end
+					end
+				end
+				cur = cur.Parent
+			end
+			return true
+		end
+
+		local function hasPaint(obj)
+			local okBase, base = pcall(function()
+				return (obj.BackgroundTransparency or 1) < 1 or (obj.BorderSizePixel or 0) > 0
+			end)
+			if okBase and base then
+				return true
+			end
+			local okText, text = pcall(function()
+				return (obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox")) and obj.Text ~= "" and ((obj.TextTransparency or 1) < 1 or (obj.TextStrokeTransparency or 1) < 1)
+			end)
+			if okText and text then
+				return true
+			end
+			local okImage, image = pcall(function()
+				return (obj:IsA("ImageLabel") or obj:IsA("ImageButton")) and obj.Image ~= "" and (obj.ImageTransparency or 1) < 1
+			end)
+			if okImage and image then
+				return true
+			end
+			local okScroll, scroll = pcall(function()
+				return obj:IsA("ScrollingFrame") and (obj.ScrollBarThickness or 0) > 0 and (obj.ScrollBarImageTransparency or 1) < 1
+			end)
+			if okScroll and scroll then
+				return true
+			end
+			local okView, view = pcall(function()
+				return obj:IsA("ViewportFrame")
+			end)
+			if okView and view then
+				return true
+			end
+			local okStroke, stroke = pcall(function()
+				for _, child in obj:GetChildren() do
+					if child:IsA("UIStroke") and child.Enabled ~= false and (child.Transparency or 1) < 1 and (child.Thickness or 0) > 0 then
+						return true
+					end
+				end
+				return false
+			end)
+			return okStroke and stroke
+		end
+
+		local function guiPrimary(obj)
+			return typeof(obj) == "Instance" and obj:IsA("GuiObject") and nodes[obj] and not isDexGui(obj) and isShown(obj) and hasPaint(obj)
+		end
+
+		local guiSelectorScopes = {"PlayerGui", "CoreGui", "gethui", "All"}
+		local function getGuiSelectorScope()
+			local scope = Settings.Explorer and Settings.Explorer.GuiSelectorScope or "PlayerGui"
+			if not table.find(guiSelectorScopes, scope) then
+				scope = "PlayerGui"
+				if Settings.Explorer then
+					Settings.Explorer.GuiSelectorScope = scope
+				end
+			end
+			return scope
+		end
+
+		local function addScopeHolders(holders, seen, scope)
+			if scope == "All" or scope == "PlayerGui" then
+				addHolder(holders, seen, plr:FindFirstChildWhichIsA("PlayerGui"))
+			end
+			if (scope == "All" or scope == "gethui") and env.gethui then
+				local ok, hui = pcall(env.gethui)
+				if ok then
+					addHolder(holders, seen, hui)
+				end
+			end
+			if scope == "All" or scope == "CoreGui" then
+				addHolder(holders, seen, service.CoreGui)
+			end
+		end
+
+		local function pointInObj(obj, x, y)
+			local ok, res = pcall(function()
+				if not obj:IsA("GuiObject") or not isShown(obj) then
+					return false
+				end
+				local p = obj.AbsolutePosition
+				local s = obj.AbsoluteSize
+				return x >= p.X and y >= p.Y and x <= p.X + s.X and y <= p.Y + s.Y
+			end)
+			return ok and res
+		end
+
+		local function isPointOnDexGui(x, y)
+			x = math.floor(tonumber(x) or 0)
+			y = math.floor(tonumber(y) or 0)
+			local list = Main.GuiList
+			if type(list) == "table" then
+				for _, gui in list do
+					if typeof(gui) == "Instance" then
+						local ok, res = pcall(function()
+							if gui.Name == "ExplorerSelections" then
+								return false
+							end
+							if gui:IsA("GuiObject") and pointInObj(gui, x, y) then
+								return true
+							end
+							for _, obj in gui:GetDescendants() do
+								if obj:IsA("GuiObject") and pointInObj(obj, x, y) then
+									return true
+								end
+							end
+							return false
+						end)
+						if ok and res then
+							return true
+						end
+					end
+				end
+			end
+			return false
+		end
+
+		local function hasPaintChildAtPoint(obj, x, y)
+			local ok, res = pcall(function()
+				for _, child in obj:GetDescendants() do
+					if child:IsA("GuiObject") and isShown(child) and hasPaint(child) and pointInObj(child, x, y) then
+						return true
+					end
+				end
+				return false
+			end)
+			return ok and res
+		end
+
+		local function guiFallback(obj, x, y)
+			return typeof(obj) == "Instance" and obj:IsA("GuiObject") and nodes[obj] and not isDexGui(obj) and isShown(obj) and hasPaintChildAtPoint(obj, x, y)
+		end
+
+		local function addGuiCandidate(candidates, seen, obj, score, fallback)
+			if seen[obj] then
+				return
+			end
+			seen[obj] = true
+			candidates[#candidates + 1] = {
+				Obj = obj,
+				Score = score,
+				Fallback = fallback and 1 or 0
+			}
+		end
+
+		local function getGuiCandidates(x, y)
+			x = math.floor(tonumber(x) or 0)
+			y = math.floor(tonumber(y) or 0)
+			local holders, seenHolders = {}, {}
+			local candidates, seenCandidates = {}, {}
+			addScopeHolders(holders, seenHolders, getGuiSelectorScope())
+			for _, holder in holders do
+				local ok, guis = pcall(function()
+					return holder:GetGuiObjectsAtPosition(x, y)
+				end)
+				if ok and type(guis) == "table" then
+					for i = 1, #guis do
+						local obj = guis[i]
+						local score = guiScore(obj, i)
+						if guiPrimary(obj) then
+							addGuiCandidate(candidates, seenCandidates, obj, score, false)
+						elseif guiFallback(obj, x, y) then
+							addGuiCandidate(candidates, seenCandidates, obj, score, true)
+						end
+					end
+				end
+			end
+			table.sort(candidates, function(a, b)
+				if a.Fallback ~= b.Fallback then
+					return a.Fallback < b.Fallback
+				end
+				return a.Score > b.Score
+			end)
+			return candidates
+		end
+
+		local function getGuiAt(x, y)
+			local candidates = getGuiCandidates(x, y)
+			return candidates[1] and candidates[1].Obj
+		end
 		Main.CreateApp({Name = "Click part to select", IconMap = Main.LargeIcons, Icon = 6, OnClick = function(callback)
 			if callback then
 				local mouse = Main.Mouse
@@ -3254,12 +3602,165 @@ Main = (function()
 			else if cptsOnMouseClick ~= nil then cptsOnMouseClick:Disconnect() cptsOnMouseClick = nil end end
 		end})
 
+		local function guiSelInput(input)
+			return input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch
+		end
+
+		local function guiSelPos(input)
+			local pos = input.Position
+			local x, y = pos.X, pos.Y
+			if Main.Mouse and x == 0 and y == 0 then
+				x, y = Main.Mouse.X, Main.Mouse.Y
+			end
+			return x, y
+		end
+
+		local function guiSelStop()
+			if cgtsBegan then
+				cgtsBegan:Disconnect()
+			end
+			if cgtsChanged then
+				cgtsChanged:Disconnect()
+			end
+			if cgtsEnded then
+				cgtsEnded:Disconnect()
+			end
+			cgtsBegan = nil
+			cgtsChanged = nil
+			cgtsEnded = nil
+			cgtsInput = nil
+			cgtsStart = nil
+			cgtsMoved = false
+			cgtsCycleX = nil
+			cgtsCycleY = nil
+			cgtsCycleIndex = 0
+			cgtsCycleLast = 0
+		end
+
+		local function guiSelPick(x, y)
+			if isPointOnDexGui(x, y) then
+				return
+			end
+			local candidates = getGuiCandidates(x, y)
+			if #candidates == 0 then
+				cgtsCycleX = nil
+				cgtsCycleY = nil
+				cgtsCycleIndex = 0
+				return
+			end
+			local now = os.clock()
+			local sameSpot = cgtsCycleX and ((x - cgtsCycleX) * (x - cgtsCycleX) + (y - cgtsCycleY) * (y - cgtsCycleY) <= 144) and now - cgtsCycleLast <= 4
+			if sameSpot then
+				cgtsCycleIndex = (cgtsCycleIndex % #candidates) + 1
+			else
+				cgtsCycleIndex = 1
+			end
+			cgtsCycleX = x
+			cgtsCycleY = y
+			cgtsCycleLast = now
+			local obj = candidates[cgtsCycleIndex] and candidates[cgtsCycleIndex].Obj or getGuiAt(x, y)
+			local node = obj and nodes[obj]
+			if node then
+				selection:Set(node)
+				Explorer.ViewNode(node)
+			end
+		end
+
+		Main.CreateApp({Name = "Click GUI to select", IconMap = Main.LargeIcons, Icon = 4, OnClick = function(callback)
+			if callback then
+				guiSelStop()
+				cgtsBegan = Main.TrackConn(service.UserInputService.InputBegan:Connect(function(input)
+					if not guiSelInput(input) then
+						return
+					end
+					local x, y = guiSelPos(input)
+					if isPointOnDexGui(x, y) then
+						cgtsInput = nil
+						cgtsStart = nil
+						return
+					end
+					cgtsInput = input
+					cgtsStart = Vector2.new(x, y)
+					cgtsMoved = false
+				end))
+				cgtsChanged = Main.TrackConn(service.UserInputService.InputChanged:Connect(function(input)
+					if not cgtsStart then
+						return
+					end
+					local touchMove = cgtsInput and cgtsInput.UserInputType == Enum.UserInputType.Touch and input == cgtsInput
+					local mouseMove = cgtsInput and cgtsInput.UserInputType == Enum.UserInputType.MouseButton1 and input.UserInputType == Enum.UserInputType.MouseMovement
+					if not touchMove and not mouseMove then
+						return
+					end
+					local x, y = guiSelPos(input)
+					local dx = x - cgtsStart.X
+					local dy = y - cgtsStart.Y
+					if dx * dx + dy * dy > 100 then
+						cgtsMoved = true
+					end
+				end))
+				cgtsEnded = Main.TrackConn(service.UserInputService.InputEnded:Connect(function(input)
+					if input ~= cgtsInput then
+						return
+					end
+					local x, y = guiSelPos(input)
+					local moved = cgtsMoved
+					cgtsInput = nil
+					cgtsStart = nil
+					cgtsMoved = false
+					if not moved then
+						pcall(guiSelPick, x, y)
+					end
+				end))
+			else
+				guiSelStop()
+			end
+		end})
+
 		Main.CreateApp({Name = "Executor", IconMap = Main.LargeIcons, Icon = "Script_Viewer", Window = ScriptViewer.Window, OnClick = function(isOpen)
 			if isOpen and ScriptViewer and ScriptViewer.ShowExecutor then
 				ScriptViewer.ShowExecutor()
 			elseif isOpen and ScriptViewer and ScriptViewer.Window then
 				ScriptViewer.Window:SetTitle("Executor")
 			end
+		end})
+
+		local function toggleOptionalExplorer(moduleName, isOpen, onShow)
+			local moduleData = Apps[moduleName]
+			if isOpen then
+				moduleData = moduleData or Main.LoadOptionalModule(moduleName)
+				if not moduleData then
+					return
+				end
+				if type(onShow) == "function" and onShow(moduleData) == true then
+					return
+				end
+				if moduleData.Window then
+					moduleData.Window:Show()
+				end
+			elseif moduleData and moduleData.Window then
+				moduleData.Window:Hide()
+			end
+		end
+
+		Main.CreateApp({Name = "Environment Explorer", IconMap = Main.LargeIcons, Icon = "Book", OnClick = function(isOpen)
+			toggleOptionalExplorer("EnvExplorer", isOpen, function(moduleData)
+				local selected = Explorer and Explorer.Selection and Explorer.Selection.List[1]
+				local obj = selected and selected.Obj
+				if obj and obj:IsA("LuaSourceContainer") and type(moduleData.ViewEnvironment) == "function" then
+					moduleData.ViewEnvironment(obj)
+					return true
+				end
+				return false
+			end)
+		end})
+
+		Main.CreateApp({Name = "Data Explorer", IconMap = Main.LargeIcons, Icon = "Paper", OnClick = function(isOpen)
+			toggleOptionalExplorer("DataExplorer", isOpen)
+		end})
+
+		Main.CreateApp({Name = "Debug Explorer", IconMap = Main.LargeIcons, Icon = "Output", OnClick = function(isOpen)
+			toggleOptionalExplorer("DebugExplorer", isOpen)
 		end})
 
 		Main.RegisterDeferredApps()

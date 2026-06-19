@@ -1120,6 +1120,7 @@ local function main()
 			end
 
 			context:AddRegistered("VIEW_SCRIPT", not presentClasses.isViableDecompileScript or not canDecompile)
+			context:AddRegistered("VIEW_ENVIRONMENT", env.getsenv == nil and env.getgc == nil)
 			context:AddRegistered("DUMP_FUNCTIONS", not presentClasses.isViableDecompileScript or env.getupvalues == nil or env.getconstants == nil)
 			context:AddRegistered("SAVE_SCRIPT", not presentClasses.isViableDecompileScript or not canDecompile or env.writefile == nil)
 			context:AddRegistered("SAVE_BYTECODE", not presentClasses.isViableDecompileScript or env.getscriptbytecode == nil or env.writefile == nil)
@@ -1687,6 +1688,14 @@ local function main()
 		context:Register("VIEW_SCRIPT",{Name = "View Script", IconMap = Explorer.MiscIcons, Icon = "ViewScript", DisabledIcon = "Empty", OnClick = function()
 			local scr = selection.List[1] and selection.List[1].Obj
 			if scr then ScriptViewer.ViewScript(scr) end
+		end})
+		context:Register("VIEW_ENVIRONMENT",{Name = "View Environment", IconMap = Explorer.MiscIcons, Icon = "SelectChildren", DisabledIcon = "Empty", OnClick = function()
+			local scr = selection.List[1] and selection.List[1].Obj
+			if not scr or not scr:IsA("LuaSourceContainer") then return end
+			local moduleData = Apps.EnvExplorer or (Main.LoadOptionalModule and Main.LoadOptionalModule("EnvExplorer"))
+			if moduleData and type(moduleData.ViewEnvironment) == "function" then
+				moduleData.ViewEnvironment(scr)
+			end
 		end})
 		context:Register("DUMP_FUNCTIONS",{Name = "Dump Functions", IconMap = Explorer.MiscIcons, Icon = "SelectChildren", DisabledIcon = "Empty", OnClick = function()
 			local scr = selection.List[1] and selection.List[1].Obj

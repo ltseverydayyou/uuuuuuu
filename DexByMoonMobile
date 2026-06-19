@@ -7703,6 +7703,34 @@ local EmbeddedModules = {
 					end;
 					tweens = {};
 				end;
+				local function getResizePad()
+					local ok, touch = pcall(function()
+						return service.UserInputService.TouchEnabled;
+					end);
+					return ok and touch and 18 or 5;
+				end;
+				local function setResizeCtrl(parent, name, pos, size)
+					local obj = parent:FindFirstChild(name);
+					if obj then
+						obj.Position = pos;
+						obj.Size = size;
+						obj.Active = true;
+						obj.Selectable = false;
+					end;
+				end;
+				local function applyResizeCtrls(ctrls)
+					local p = getResizePad();
+					ctrls.Position = UDim2.new(0, -p, 0, -p);
+					ctrls.Size = UDim2.new(1, p * 2, 1, p * 2);
+					setResizeCtrl(ctrls, "North", UDim2.new(0, p, 0, 0), UDim2.new(1, -p * 2, 0, p));
+					setResizeCtrl(ctrls, "South", UDim2.new(0, p, 1, -p), UDim2.new(1, -p * 2, 0, p));
+					setResizeCtrl(ctrls, "East", UDim2.new(1, -p, 0, p), UDim2.new(0, p, 1, -p * 2));
+					setResizeCtrl(ctrls, "West", UDim2.new(0, 0, 0, p), UDim2.new(0, p, 1, -p * 2));
+					setResizeCtrl(ctrls, "NorthEast", UDim2.new(1, -p, 0, 0), UDim2.new(0, p, 0, p));
+					setResizeCtrl(ctrls, "NorthWest", UDim2.new(0, 0, 0, 0), UDim2.new(0, p, 0, p));
+					setResizeCtrl(ctrls, "SouthEast", UDim2.new(1, -p, 1, -p), UDim2.new(0, p, 0, p));
+					setResizeCtrl(ctrls, "SouthWest", UDim2.new(0, 0, 1, -p), UDim2.new(0, p, 0, p));
+				end;
 				local function resizeHook(self, resizer, dir)
 					local guiMain = self.GuiElems.Main;
 					resizer.InputBegan:Connect(function(input)
@@ -7714,44 +7742,67 @@ local EmbeddedModules = {
 							if self.Minimized and isV then
 								return;
 							end;
-							if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+							if input.UserInputType == Enum.UserInputType.MouseMovement then
 								resizer.BackgroundTransparency = 0.5;
 							elseif input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-								local releaseEvent, mouseEvent;
+								local releaseEvent, mouseEvent, touchEvent;
 								local offX = input.Position.X - resizer.AbsolutePosition.X;
 								local offY = input.Position.Y - resizer.AbsolutePosition.Y;
+								local lastX, lastY;
 								self.Resizing = resizer;
 								resizer.BackgroundTransparency = 1;
-								releaseEvent = Main.TrackConn(service.UserInputService.InputEnded:Connect(function(input)
-									if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+								local function stopResize()
+									if releaseEvent then
 										releaseEvent:Disconnect();
-										if mouseEvent then
-											mouseEvent:Disconnect();
-										end;
-										self.Resizing = false;
-										resizer.BackgroundTransparency = 1;
+										releaseEvent = nil;
+									end;
+									if mouseEvent then
+										mouseEvent:Disconnect();
+										mouseEvent = nil;
+									end;
+									if touchEvent then
+										touchEvent:Disconnect();
+										touchEvent = nil;
+									end;
+									self.Resizing = false;
+									resizer.BackgroundTransparency = 1;
+								end;
+								local function resizeFromInput(moveInput)
+									if not (self.Resizable and self.ResizableInternal) then
+										return;
+									end;
+									if moveInput.UserInputType ~= Enum.UserInputType.MouseMovement and moveInput.UserInputType ~= Enum.UserInputType.Touch then
+										return;
+									end;
+									local pos = moveInput.Position;
+									if lastX == pos.X and lastY == pos.Y then
+										return;
+									end;
+									lastX, lastY = pos.X, pos.Y;
+									self:StopTweens();
+									local deltaX = pos.X - resizer.AbsolutePosition.X - offX;
+									local deltaY = pos.Y - resizer.AbsolutePosition.Y - offY;
+									if guiMain.AbsoluteSize.X + deltaX * signX < self.MinX then
+										deltaX = signX * (self.MinX - guiMain.AbsoluteSize.X);
+									end;
+									if guiMain.AbsoluteSize.Y + deltaY * signY < self.MinY then
+										deltaY = signY * (self.MinY - guiMain.AbsoluteSize.Y);
+									end;
+									if signY < 0 and guiMain.AbsolutePosition.Y + deltaY < 0 then
+										deltaY = -guiMain.AbsolutePosition.Y;
+									end;
+									guiMain.Position = guiMain.Position + UDim2.new(0, (signX < 0 and deltaX or 0), 0, (signY < 0 and deltaY or 0));
+									self.SizeX = self.SizeX + (isH and deltaX * signX or 0);
+									self.SizeY = self.SizeY + (isV and deltaY * signY or 0);
+									guiMain.Size = UDim2.new(0, self.SizeX, 0, self.Minimized and 20 or self.SizeY);
+								end;
+								releaseEvent = Main.TrackConn(service.UserInputService.InputEnded:Connect(function(endInput)
+									if endInput.UserInputType == Enum.UserInputType.MouseButton1 or endInput.UserInputType == Enum.UserInputType.Touch then
+										stopResize();
 									end;
 								end));
-								mouseEvent = Main.TrackConn(service.UserInputService.InputChanged:Connect(function(input)
-									if self.Resizable and self.ResizableInternal and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-										self:StopTweens();
-										local deltaX = input.Position.X - resizer.AbsolutePosition.X - offX;
-										local deltaY = input.Position.Y - resizer.AbsolutePosition.Y - offY;
-										if guiMain.AbsoluteSize.X + deltaX * signX < self.MinX then
-											deltaX = signX * (self.MinX - guiMain.AbsoluteSize.X);
-										end;
-										if guiMain.AbsoluteSize.Y + deltaY * signY < self.MinY then
-											deltaY = signY * (self.MinY - guiMain.AbsoluteSize.Y);
-										end;
-										if signY < 0 and guiMain.AbsolutePosition.Y + deltaY < 0 then
-											deltaY = -guiMain.AbsolutePosition.Y;
-										end;
-										guiMain.Position = guiMain.Position + UDim2.new(0, (signX < 0 and deltaX or 0), 0, (signY < 0 and deltaY or 0));
-										self.SizeX = self.SizeX + (isH and deltaX * signX or 0);
-										self.SizeY = self.SizeY + (isV and deltaY * signY or 0);
-										guiMain.Size = UDim2.new(0, self.SizeX, 0, self.Minimized and 20 or self.SizeY);
-									end;
-								end));
+								mouseEvent = Main.TrackConn(service.UserInputService.InputChanged:Connect(resizeFromInput));
+								touchEvent = Main.TrackConn(service.UserInputService.TouchMoved:Connect(resizeFromInput));
 							end;
 						end;
 					end);
@@ -8182,6 +8233,7 @@ local EmbeddedModules = {
 					local guiMain = gui.Main;
 					local guiTopBar = guiMain.TopBar;
 					local guiResizeControls = guiMain.ResizeControls;
+					applyResizeCtrls(guiResizeControls);
 					self.GuiElems.Main = guiMain;
 					self.GuiElems.TopBar = guiMain.TopBar;
 					self.GuiElems.Content = guiMain.Content;
@@ -8333,8 +8385,16 @@ local EmbeddedModules = {
 					stopTweens();
 					leftSide.Frame.Size = UDim2.new(0, leftSide.Width, 1, 0);
 					rightSide.Frame.Size = UDim2.new(0, rightSide.Width, 1, 0);
+					local p = getResizePad();
+					leftSide.Frame.Resizer.Size = UDim2.new(0, p, 1, 0);
+					rightSide.Frame.Resizer.Size = UDim2.new(0, p, 1, 0);
+					pcall(function()
+						leftSide.Frame.Resizer.Line.Size = UDim2.new(0, 1, 1, 0);
+						rightSide.Frame.Resizer.Line.Position = UDim2.new(0, p - 1, 0, 0);
+						rightSide.Frame.Resizer.Line.Size = UDim2.new(0, 1, 1, 0);
+					end);
 					leftSide.Frame.Resizer.Position = UDim2.new(0, leftSide.Width, 0, 0);
-					rightSide.Frame.Resizer.Position = UDim2.new(0, -5, 0, 0);
+					rightSide.Frame.Resizer.Position = UDim2.new(0, -p, 0, 0);
 					local leftHidden = #leftSide.Windows == 0 or leftSide.Hidden;
 					local rightHidden = #rightSide.Windows == 0 or rightSide.Hidden;
 					local leftPos = leftHidden and UDim2.new(0, (-leftSide.Width) - 10, 0, 0) or UDim2.new(0, 0, 0, 0);
@@ -8964,6 +9024,7 @@ local EmbeddedModules = {
 					leftSide.Frame = leftFrame;
 					leftFrame.Position = UDim2.new(0, (-leftSide.Width) - 10, 0, 0);
 					leftSide.WindowResizer = leftFrame.WindowResizer;
+					leftSide.WindowResizer.Size = UDim2.new(1, 0, 0, getResizePad());
 					leftFrame.WindowResizer.Parent = nil;
 					leftFrame.Parent = sidesGui;
 					local rightFrame = create({
@@ -9045,6 +9106,7 @@ local EmbeddedModules = {
 					rightSide.Frame = rightFrame;
 					rightFrame.Position = UDim2.new(1, 10, 0, 0);
 					rightSide.WindowResizer = rightFrame.WindowResizer;
+					rightSide.WindowResizer.Size = UDim2.new(1, 0, 0, getResizePad());
 					rightFrame.WindowResizer.Parent = nil;
 					rightFrame.Parent = sidesGui;
 					sideResizerHook(leftFrame.Resizer, "H", leftSide);
@@ -15522,6 +15584,7 @@ DefaultSettings = (function()
 			AutoUpdateMode = 0,
 			PartSelectionBox = true,
 			GuiSelectionBox = true,
+			GuiSelectorScope = "PlayerGui",
 			CopyPathUseGetChildren = true,
 			UseNameWidth = false
 		},
@@ -17719,13 +17782,18 @@ Main = (function()
 			transparencyKnob.BackgroundColor3 = Settings.Theme.Text;
 			transparencyHint.TextColor3 = Settings.Theme.PlaceholderText;
 		end;
-		local function setTransparencyValue(value)
-			value = math.clamp(math.floor(value * 100 + 0.5) / 100, 0, 1);
-			Settings.Window.Transparency = value;
+		local function applyStoredWindowTransparency()
 			updateTransparencySliderVisual();
 			if Lib and Lib.RefreshTheme then
 				pcall(Lib.RefreshTheme);
 			end;
+		end;
+		Main.UpdateTransparencySliderVisual = updateTransparencySliderVisual;
+		Main.ApplyStoredWindowTransparency = applyStoredWindowTransparency;
+		local function setTransparencyValue(value)
+			value = math.clamp(math.floor(value * 100 + 0.5) / 100, 0, 1);
+			Settings.Window.Transparency = value;
+			applyStoredWindowTransparency();
 			persistCurrentSettings();
 			rebuildSettingsMenu();
 			if settingsMenu.Gui.Parent then
@@ -17791,6 +17859,26 @@ Main = (function()
 				transparencyDragging = false;
 			end;
 		end));
+		local guiSelectorScopes = {
+			"PlayerGui",
+			"CoreGui",
+			"gethui",
+			"All"
+		};
+		local function getGuiSelectorScope()
+			local scope = Settings.Explorer and Settings.Explorer.GuiSelectorScope or "PlayerGui";
+			if not table.find(guiSelectorScopes, scope) then
+				scope = "PlayerGui";
+				if Settings.Explorer then
+					Settings.Explorer.GuiSelectorScope = scope;
+				end;
+			end;
+			return scope;
+		end;
+		local function nextGuiSelectorScope()
+			local ind = table.find(guiSelectorScopes, getGuiSelectorScope()) or 1;
+			Settings.Explorer.GuiSelectorScope = guiSelectorScopes[ind % #guiSelectorScopes + 1];
+		end;
 		local function makeToggleLabel(name, value)
 			return (value and "[ON] " or "[OFF] ") .. name;
 		end;
@@ -17835,6 +17923,16 @@ Main = (function()
 				NoHide = true,
 				OnClick = function()
 					Settings.Explorer.KeyboardShortcuts = Settings.Explorer.KeyboardShortcuts == false;
+					persistCurrentSettings();
+					rebuildSettingsMenu();
+					settingsMenu:Refresh();
+				end
+			});
+			settingsMenu:Add({
+				Name = "GUI Selector Source: " .. getGuiSelectorScope(),
+				NoHide = true,
+				OnClick = function()
+					nextGuiSelectorScope();
 					persistCurrentSettings();
 					rebuildSettingsMenu();
 					settingsMenu:Refresh();
@@ -17948,6 +18046,250 @@ Main = (function()
 			});
 		end;
 		local cptsOnMouseClick = nil;
+		local cgtsBegan = nil;
+		local cgtsChanged = nil;
+		local cgtsEnded = nil;
+		local cgtsInput = nil;
+		local cgtsStart = nil;
+		local cgtsMoved = false;
+		local function isDexGui(obj)
+			if typeof(obj) ~= "Instance" then
+				return false;
+			end;
+			local list = Main.GuiList;
+			if type(list) == "table" then
+				for _, gui in list do
+					local ok, res = pcall(function()
+						return gui and (obj == gui or obj:IsDescendantOf(gui));
+					end);
+					if ok and res then
+						return true;
+					end;
+				end;
+			end;
+			return false;
+		end;
+		local function addHolder(list, seen, holder)
+			if typeof(holder) ~= "Instance" or seen[holder] then
+				return;
+			end;
+			seen[holder] = true;
+			list[#list + 1] = holder;
+		end;
+		local function getLayer(obj)
+			local cur = obj;
+			while cur do
+				local ok, res = pcall(function()
+					return cur:IsA("LayerCollector");
+				end);
+				if ok and res then
+					return cur;
+				end;
+				cur = cur.Parent;
+			end;
+		end;
+		local function guiScore(obj, ind)
+			local layer = getLayer(obj);
+			local order = 0;
+			local z = 0;
+			pcall(function()
+				order = layer and layer.DisplayOrder or 0;
+			end);
+			pcall(function()
+				z = obj.ZIndex or 0;
+			end);
+			return order * 1000000 + z * 1000 - ind;
+		end;
+		local function isShown(obj)
+			local ok, shown = pcall(function()
+				local size = obj.AbsoluteSize;
+				return obj.Visible ~= false and size.X > 0 and size.Y > 0;
+			end);
+			if not ok or not shown then
+				return false;
+			end;
+			if not getLayer(obj) then
+				return false;
+			end;
+			local cur = obj.Parent;
+			while cur do
+				local okObj, isObj = pcall(function()
+					return cur:IsA("GuiObject");
+				end);
+				if okObj and isObj then
+					local okVis, vis = pcall(function()
+						return cur.Visible;
+					end);
+					if okVis and vis == false then
+						return false;
+					end;
+					local okSize, size = pcall(function()
+						return cur.AbsoluteSize;
+					end);
+					if okSize and (size.X <= 0 or size.Y <= 0) then
+						return false;
+					end;
+				else
+					local okLayer, isLayer = pcall(function()
+						return cur:IsA("LayerCollector");
+					end);
+					if okLayer and isLayer then
+						local okEn, en = pcall(function()
+							return cur.Enabled;
+						end);
+						if okEn and en == false then
+							return false;
+						end;
+					end;
+				end;
+				cur = cur.Parent;
+			end;
+			return true;
+		end;
+		local function hasPaint(obj)
+			local okBase, base = pcall(function()
+				return (obj.BackgroundTransparency or 1) < 1 or (obj.BorderSizePixel or 0) > 0;
+			end);
+			if okBase and base then
+				return true;
+			end;
+			local okText, text = pcall(function()
+				return (obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox")) and obj.Text ~= "" and ((obj.TextTransparency or 1) < 1 or (obj.TextStrokeTransparency or 1) < 1);
+			end);
+			if okText and text then
+				return true;
+			end;
+			local okImage, image = pcall(function()
+				return (obj:IsA("ImageLabel") or obj:IsA("ImageButton")) and obj.Image ~= "" and (obj.ImageTransparency or 1) < 1;
+			end);
+			if okImage and image then
+				return true;
+			end;
+			local okScroll, scroll = pcall(function()
+				return obj:IsA("ScrollingFrame") and (obj.ScrollBarThickness or 0) > 0 and (obj.ScrollBarImageTransparency or 1) < 1;
+			end);
+			if okScroll and scroll then
+				return true;
+			end;
+			local okView, view = pcall(function()
+				return obj:IsA("ViewportFrame");
+			end);
+			if okView and view then
+				return true;
+			end;
+			local okStroke, stroke = pcall(function()
+				for _, child in obj:GetChildren() do
+					if child:IsA("UIStroke") and child.Enabled ~= false and (child.Transparency or 1) < 1 and (child.Thickness or 0) > 0 then
+						return true;
+					end;
+				end;
+				return false;
+			end);
+			return okStroke and stroke;
+		end;
+		local function isInputGui(obj)
+			local ok, res = pcall(function()
+				return obj:IsA("GuiButton") or obj:IsA("TextBox") or obj:IsA("ScrollingFrame") or obj.Active == true or obj.Selectable == true or obj.Interactable == true;
+			end);
+			return ok and res;
+		end;
+		local function hasPaintChild(obj)
+			local ok, res = pcall(function()
+				for _, child in obj:GetDescendants() do
+					if child:IsA("GuiObject") and isShown(child) and hasPaint(child) then
+						return true;
+					end;
+				end;
+				return false;
+			end);
+			return ok and res;
+		end;
+		local function guiPrimary(obj)
+			return typeof(obj) == "Instance" and obj:IsA("GuiObject") and nodes[obj] and (not isDexGui(obj)) and isShown(obj) and (hasPaint(obj) or isInputGui(obj));
+		end;
+		local function guiFallback(obj)
+			return typeof(obj) == "Instance" and obj:IsA("GuiObject") and nodes[obj] and (not isDexGui(obj)) and isShown(obj) and hasPaintChild(obj);
+		end;
+		local function addScopeHolders(holders, seen, scope)
+			if scope == "All" or scope == "PlayerGui" then
+				addHolder(holders, seen, plr:FindFirstChildWhichIsA("PlayerGui"));
+			end;
+			if (scope == "All" or scope == "gethui") and env.gethui then
+				local ok, hui = pcall(env.gethui);
+				if ok then
+					addHolder(holders, seen, hui);
+				end;
+			end;
+			if scope == "All" or scope == "CoreGui" then
+				addHolder(holders, seen, service.CoreGui);
+			end;
+		end;
+		local function pointInObj(obj, x, y)
+			local ok, res = pcall(function()
+				if not obj:IsA("GuiObject") or not isShown(obj) then
+					return false;
+				end;
+				local p = obj.AbsolutePosition;
+				local s = obj.AbsoluteSize;
+				return x >= p.X and y >= p.Y and x <= p.X + s.X and y <= p.Y + s.Y;
+			end);
+			return ok and res;
+		end;
+		local function isPointOnDexGui(x, y)
+			x = math.floor(tonumber(x) or 0);
+			y = math.floor(tonumber(y) or 0);
+			local list = Main.GuiList;
+			if type(list) == "table" then
+				for _, gui in list do
+					if typeof(gui) == "Instance" then
+						local ok, res = pcall(function()
+							if gui:IsA("GuiObject") and pointInObj(gui, x, y) then
+								return true;
+							end;
+							for _, obj in gui:GetDescendants() do
+								if obj:IsA("GuiObject") and pointInObj(obj, x, y) then
+									return true;
+								end;
+							end;
+							return false;
+						end);
+						if ok and res then
+							return true;
+						end;
+					end;
+				end;
+			end;
+			return false;
+		end;
+		local function pickGui(guis, fallback)
+			for i = 1, #guis do
+				local obj = guis[i];
+				if (fallback and guiFallback(obj)) or ((not fallback) and guiPrimary(obj)) then
+					return obj;
+				end;
+			end;
+		end;
+		local function getGuiAt(x, y)
+			x = math.floor(tonumber(x) or 0);
+			y = math.floor(tonumber(y) or 0);
+			local holders, seen = {}, {};
+			addScopeHolders(holders, seen, getGuiSelectorScope());
+			for _, holder in holders do
+				local ok, guis = pcall(function()
+					return holder:GetGuiObjectsAtPosition(x, y);
+				end);
+				if ok and type(guis) == "table" then
+					local obj = pickGui(guis, false);
+					if obj then
+						return obj;
+					end;
+					obj = pickGui(guis, true);
+					if obj then
+						return obj;
+					end;
+				end;
+			end;
+		end;
 		if Explorer and (not isStubModule(Explorer)) then
 			Main.CreateApp({
 				Name = "Click part to select",
@@ -17971,6 +18313,96 @@ Main = (function()
 					end;
 				end
 			});
+			local function guiSelInput(input)
+				return input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch;
+			end;
+			local function guiSelPos(input)
+				local pos = input.Position;
+				local x, y = pos.X, pos.Y;
+				if Main.Mouse and x == 0 and y == 0 then
+					x, y = Main.Mouse.X, Main.Mouse.Y;
+				end;
+				return x, y;
+			end;
+			local function guiSelStop()
+				for _, conn in { cgtsBegan, cgtsChanged, cgtsEnded } do
+					if conn then
+						conn:Disconnect();
+					end;
+				end;
+				cgtsBegan = nil;
+				cgtsChanged = nil;
+				cgtsEnded = nil;
+				cgtsInput = nil;
+				cgtsStart = nil;
+				cgtsMoved = false;
+			end;
+			local function guiSelPick(x, y)
+				if isPointOnDexGui(x, y) then
+					return;
+				end;
+				local obj = getGuiAt(x, y);
+				local node = obj and nodes[obj];
+				if node then
+					selection:Set(node);
+					Explorer.ViewNode(node);
+				end;
+			end;
+			Main.CreateApp({
+				Name = "Click GUI to select",
+				IconMap = Main.LargeIcons,
+				Icon = 4,
+				OnClick = function(callback)
+					if callback then
+						guiSelStop();
+						cgtsBegan = Main.TrackConn(service.UserInputService.InputBegan:Connect(function(input)
+							if not guiSelInput(input) then
+								return;
+							end;
+							local x, y = guiSelPos(input);
+							if isPointOnDexGui(x, y) then
+								cgtsInput = nil;
+								cgtsStart = nil;
+								return;
+							end;
+							cgtsInput = input;
+							cgtsStart = Vector2.new(x, y);
+							cgtsMoved = false;
+						end));
+						cgtsChanged = Main.TrackConn(service.UserInputService.InputChanged:Connect(function(input)
+							if not cgtsStart then
+								return;
+							end;
+							local touchMove = cgtsInput and cgtsInput.UserInputType == Enum.UserInputType.Touch and input == cgtsInput;
+							local mouseMove = cgtsInput and cgtsInput.UserInputType == Enum.UserInputType.MouseButton1 and input.UserInputType == Enum.UserInputType.MouseMovement;
+							if not touchMove and not mouseMove then
+								return;
+							end;
+							local x, y = guiSelPos(input);
+							local dx = x - cgtsStart.X;
+							local dy = y - cgtsStart.Y;
+							if dx * dx + dy * dy > 100 then
+								cgtsMoved = true;
+							end;
+						end));
+						cgtsEnded = Main.TrackConn(service.UserInputService.InputEnded:Connect(function(input)
+							if input ~= cgtsInput then
+								return;
+							end;
+							local x, y = guiSelPos(input);
+							local moved = cgtsMoved;
+							cgtsInput = nil;
+							cgtsStart = nil;
+							cgtsMoved = false;
+							if not moved then
+								pcall(guiSelPick, x, y);
+							end;
+						end));
+					else
+						guiSelStop();
+					end;
+				end
+			});
 		end;
 		Main.CreateApp({
 			Name = "Exit Dex",
@@ -17985,6 +18417,9 @@ Main = (function()
 				end;
 			end
 		});
+		if Main.ApplyStoredWindowTransparency then
+			pcall(Main.ApplyStoredWindowTransparency);
+		end;
 		Lib.ShowGui(gui);
 	end;
 	Main.SetupFilesystem = function()
@@ -18141,6 +18576,11 @@ Main = (function()
 			Lib.DeferFunc(function()
 				Lib.Window.ToggleSide("right");
 			end);
+		end;
+		if Main.ApplyStoredWindowTransparency then
+			pcall(Main.ApplyStoredWindowTransparency);
+		elseif Lib and Lib.RefreshTheme then
+			pcall(Lib.RefreshTheme);
 		end;
 	end;
 	return Main;

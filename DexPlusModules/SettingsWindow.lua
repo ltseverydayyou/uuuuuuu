@@ -591,6 +591,12 @@ local function main()
 			persistSettings()
 		end))
 
+		local ignoreInvisibleUI = AddCheckbox("Ignore Invisible UI", Settings.Explorer.IgnoreInvisibleUI ~= false)
+		trackConn(ignoreInvisibleUI.OnInput:Connect(function()
+			Settings.Explorer.IgnoreInvisibleUI = ignoreInvisibleUI.Toggled
+			persistSettings()
+		end))
+
 		AddText("Resize this window directly; the size is saved automatically.")
 
 		Main.UserSettings = Main.UserSettings or {}

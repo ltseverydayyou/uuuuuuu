@@ -15611,6 +15611,7 @@ DefaultSettings = (function()
 			PartSelectionBox = true,
 			GuiSelectionBox = true,
 			GuiSelectorScope = "PlayerGui",
+			IgnoreInvisibleUI = true,
 			CopyPathUseGetChildren = true,
 			UseNameWidth = false
 		},
@@ -17965,6 +17966,16 @@ Main = (function()
 				end
 			});
 			settingsMenu:Add({
+				Name = makeToggleLabel("Ignore Invisible UI", Settings.Explorer.IgnoreInvisibleUI ~= false),
+				NoHide = true,
+				OnClick = function()
+					Settings.Explorer.IgnoreInvisibleUI = Settings.Explorer.IgnoreInvisibleUI == false;
+					persistCurrentSettings();
+					rebuildSettingsMenu();
+					settingsMenu:Refresh();
+				end
+			});
+			settingsMenu:Add({
 				Name = ("UI Transparency: %d%%"):format(math.floor(getWindowTransparency() * 100 + 0.5)),
 				OnClick = function()
 					showTransparencySlider();
@@ -18136,10 +18147,20 @@ Main = (function()
 			end);
 			return order * 1000000000 + z * 1000000 + areaScore * 10 - ind;
 		end;
+		local function getIgnoreInvisibleUI()
+			return not (Settings.Explorer and Settings.Explorer.IgnoreInvisibleUI == false);
+		end;
 		local function isShown(obj)
+			local ignoreInvisible = getIgnoreInvisibleUI();
 			local ok, shown = pcall(function()
 				local size = obj.AbsoluteSize;
-				return obj.Visible ~= false and size.X > 0 and size.Y > 0;
+				if size.X <= 0 or size.Y <= 0 then
+					return false;
+				end;
+				if ignoreInvisible and obj.Visible == false then
+					return false;
+				end;
+				return true;
 			end);
 			if not ok or not shown then
 				return false;
@@ -18153,11 +18174,13 @@ Main = (function()
 					return cur:IsA("GuiObject");
 				end);
 				if okObj and isObj then
-					local okVis, vis = pcall(function()
-						return cur.Visible;
-					end);
-					if okVis and vis == false then
-						return false;
+					if ignoreInvisible then
+						local okVis, vis = pcall(function()
+							return cur.Visible;
+						end);
+						if okVis and vis == false then
+							return false;
+						end;
 					end;
 					local okSize, size = pcall(function()
 						return cur.AbsoluteSize;
@@ -18169,7 +18192,7 @@ Main = (function()
 					local okLayer, isLayer = pcall(function()
 						return cur:IsA("LayerCollector");
 					end);
-					if okLayer and isLayer then
+					if okLayer and isLayer and ignoreInvisible then
 						local okEn, en = pcall(function()
 							return cur.Enabled;
 						end);
@@ -18224,7 +18247,7 @@ Main = (function()
 			return okStroke and stroke;
 		end;
 		local function guiPrimary(obj)
-			return typeof(obj) == "Instance" and obj:IsA("GuiObject") and nodes[obj] and (not isDexGui(obj)) and isShown(obj) and hasPaint(obj);
+			return typeof(obj) == "Instance" and obj:IsA("GuiObject") and nodes[obj] and (not isDexGui(obj)) and isShown(obj) and ((not getIgnoreInvisibleUI()) or hasPaint(obj));
 		end;
 		local function addScopeHolders(holders, seen, scope)
 			if scope == "All" or scope == "PlayerGui" then

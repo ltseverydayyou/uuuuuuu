@@ -231,6 +231,7 @@ DefaultSettings = (function()
 			PartSelectionBox = true,
 			GuiSelectionBox = true,
 			GuiSelectorScope = "PlayerGui",
+			IgnoreInvisibleUI = true,
 			CopyPathUseGetChildren = true,
 			UseNameWidth = false,
 			MaxSelectionBoxes = 1000
@@ -3281,6 +3282,19 @@ Main = (function()
 		local cgtsCycleIndex = 0
 		local cgtsCycleLast = 0
 
+		local guiSelectorScopes = {"PlayerGui", "CoreGui", "gethui", "All"}
+
+		local function getGuiSelectorScope()
+			local scope = Settings.Explorer and Settings.Explorer.GuiSelectorScope or "PlayerGui"
+			if not table.find(guiSelectorScopes, scope) then
+				scope = "PlayerGui"
+				if Settings.Explorer then
+					Settings.Explorer.GuiSelectorScope = scope
+				end
+			end
+			return scope
+		end
+
 		local function isDexGui(obj)
 			if typeof(obj) ~= "Instance" then
 				return false
@@ -3339,10 +3353,21 @@ Main = (function()
 			return order * 1000000000 + z * 1000000 + areaScore * 10 - ind
 		end
 
+		local function getIgnoreInvisibleUI()
+			return not (Settings.Explorer and Settings.Explorer.IgnoreInvisibleUI == false)
+		end
+
 		local function isShown(obj)
+			local ignoreInvisible = getIgnoreInvisibleUI()
 			local ok, shown = pcall(function()
 				local size = obj.AbsoluteSize
-				return obj.Visible ~= false and size.X > 0 and size.Y > 0
+				if size.X <= 0 or size.Y <= 0 then
+					return false
+				end
+				if ignoreInvisible and obj.Visible == false then
+					return false
+				end
+				return true
 			end)
 			if not ok or not shown or not getLayer(obj) then
 				return false
@@ -3353,11 +3378,13 @@ Main = (function()
 					return cur:IsA("GuiObject")
 				end)
 				if okObj and isObj then
-					local okVis, vis = pcall(function()
-						return cur.Visible
-					end)
-					if okVis and vis == false then
-						return false
+					if ignoreInvisible then
+						local okVis, vis = pcall(function()
+							return cur.Visible
+						end)
+						if okVis and vis == false then
+							return false
+						end
 					end
 					local okSize, size = pcall(function()
 						return cur.AbsoluteSize
@@ -3369,7 +3396,7 @@ Main = (function()
 					local okLayer, isLayer = pcall(function()
 						return cur:IsA("LayerCollector")
 					end)
-					if okLayer and isLayer then
+					if okLayer and isLayer and ignoreInvisible then
 						local okEn, en = pcall(function()
 							return cur.Enabled
 						end)
@@ -3426,19 +3453,7 @@ Main = (function()
 		end
 
 		local function guiPrimary(obj)
-			return typeof(obj) == "Instance" and obj:IsA("GuiObject") and nodes[obj] and not isDexGui(obj) and isShown(obj) and hasPaint(obj)
-		end
-
-		local guiSelectorScopes = {"PlayerGui", "CoreGui", "gethui", "All"}
-		local function getGuiSelectorScope()
-			local scope = Settings.Explorer and Settings.Explorer.GuiSelectorScope or "PlayerGui"
-			if not table.find(guiSelectorScopes, scope) then
-				scope = "PlayerGui"
-				if Settings.Explorer then
-					Settings.Explorer.GuiSelectorScope = scope
-				end
-			end
-			return scope
+			return typeof(obj) == "Instance" and obj:IsA("GuiObject") and nodes[obj] and not isDexGui(obj) and isShown(obj) and ((not getIgnoreInvisibleUI()) or hasPaint(obj))
 		end
 
 		local function addScopeHolders(holders, seen, scope)
@@ -3542,6 +3557,27 @@ Main = (function()
 			end
 		end
 
+		local function scanGuiNodeCandidates(candidates, seenCandidates, holder, x, y, maxCandidates)
+			for obj in nodes do
+				if #candidates >= maxCandidates then
+					break
+				end
+				if typeof(obj) == "Instance" then
+					local ok, valid = pcall(function()
+						return obj:IsA("GuiObject") and (obj == holder or obj:IsDescendantOf(holder)) and pointInObj(obj, x, y)
+					end)
+					if ok and valid then
+						local score = guiScore(obj, #candidates + 1)
+						if guiPrimary(obj) then
+							addGuiCandidate(candidates, seenCandidates, obj, score, true)
+						else
+							addGuiAncestorCandidates(candidates, seenCandidates, obj, score)
+						end
+					end
+				end
+			end
+		end
+
 		local function getGuiCandidates(x, y)
 			x = math.floor(tonumber(x) or 0)
 			y = math.floor(tonumber(y) or 0)
@@ -3551,10 +3587,12 @@ Main = (function()
 			local maxCandidates = 80
 			addScopeHolders(holders, seenHolders, getGuiSelectorScope())
 			for _, holder in holders do
+				local usedHitList = false
 				local ok, guis = pcall(function()
 					return holder:GetGuiObjectsAtPosition(x, y)
 				end)
 				if ok and type(guis) == "table" then
+					usedHitList = true
 					for i = 1, math.min(#guis, maxGuiHits) do
 						local obj = guis[i]
 						local score = guiScore(obj, i)
@@ -3567,6 +3605,9 @@ Main = (function()
 							break
 						end
 					end
+				end
+				if not usedHitList or #candidates == 0 then
+					scanGuiNodeCandidates(candidates, seenCandidates, holder, x, y, maxCandidates)
 				end
 			end
 			table.sort(candidates, function(a, b)
@@ -3582,6 +3623,7 @@ Main = (function()
 			local candidates = getGuiCandidates(x, y)
 			return candidates[1] and candidates[1].Obj
 		end
+
 		Main.CreateApp({Name = "Click part to select", IconMap = Main.LargeIcons, Icon = 6, OnClick = function(callback)
 			if callback then
 				local mouse = Main.Mouse
@@ -3594,7 +3636,10 @@ Main = (function()
 						end
 					end)
 				end))
-			else if cptsOnMouseClick ~= nil then cptsOnMouseClick:Disconnect() cptsOnMouseClick = nil end end
+			elseif cptsOnMouseClick ~= nil then
+				cptsOnMouseClick:Disconnect()
+				cptsOnMouseClick = nil
+			end
 		end})
 
 		local function guiSelInput(input)
@@ -3711,7 +3756,6 @@ Main = (function()
 				guiSelStop()
 			end
 		end})
-
 		Main.CreateApp({Name = "Executor", IconMap = Main.LargeIcons, Icon = "Script_Viewer", Window = ScriptViewer.Window, OnClick = function(isOpen)
 			if isOpen and ScriptViewer and ScriptViewer.ShowExecutor then
 				ScriptViewer.ShowExecutor()

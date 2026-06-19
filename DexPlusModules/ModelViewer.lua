@@ -99,6 +99,26 @@ local function main()
 	local previewParticles = {}
 	local random = Random.new()
 
+	local function queryDescendants(root)
+		if not root then return {} end
+
+		local okQuery, result = pcall(function()
+			return root:QueryDescendants("Instance")
+		end)
+		if okQuery and type(result) == "table" then
+			return result
+		end
+
+		local okFallback, fallback = pcall(function()
+			return root:GetDescendants()
+		end)
+		if okFallback and type(fallback) == "table" then
+			return fallback
+		end
+
+		return {}
+	end
+
 	local effectClasses = {
 		"ParticleEmitter",
 		"Beam",
@@ -123,7 +143,7 @@ local function main()
 		if isPreviewEffect(item) then
 			return true
 		end
-		for _, child in item:GetDescendants() do
+		for _, child in queryDescendants(item) do
 			if isPreviewEffect(child) then
 				return true
 			end
@@ -386,7 +406,7 @@ local function main()
 
 	local function preparePreview(root, forceEffects)
 		if not root then return end
-		local items = root:GetDescendants()
+		local items = queryDescendants(root)
 		table.insert(items, root)
 
 		for _, child in items do
@@ -562,7 +582,7 @@ local function main()
 				-- fallback
 				if not model.PrimaryPart then
 					local found = false
-					for _, child in model:GetDescendants() do
+					for _, child in queryDescendants(model) do
 						if child:IsA("BasePart") then
 							model.PrimaryPart = child
 							model:SetPrimaryPartCFrame(CFrame.new(0, 0, 0))

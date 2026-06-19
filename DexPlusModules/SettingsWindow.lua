@@ -556,6 +556,19 @@ local function main()
 			persistSettings()
 		end))
 
+		local uiFonts = {"SourceSans", "Gotham", "GothamMedium", "GothamSemibold", "GothamBold", "RobotoMono", "Code", "Ubuntu"}
+		if not table.find(uiFonts, Settings.Window.Font) then
+			Settings.Window.Font = "SourceSans"
+		end
+		local uiFont = AddDropdown("UI Font", uiFonts, Settings.Window.Font, false, 120)
+		trackConn(uiFont.OnSelect:Connect(function()
+			Settings.Window.Font = uiFont.Selected
+			persistSettings()
+			if Lib and Lib.RefreshTheme then
+				pcall(Lib.RefreshTheme)
+			end
+		end))
+
 		Settings.Explorer = Settings.Explorer or {}
 		local guiSelectionBox = AddCheckbox("GUI Selection Box", Settings.Explorer.GuiSelectionBox)
 		trackConn(guiSelectionBox.OnInput:Connect(function()

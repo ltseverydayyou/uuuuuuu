@@ -102,7 +102,26 @@ local function main()
 	local expanded
 	local entryTemplate,treeFrame,toolBar,descendantAddedCon,descendantRemovingCon,itemChangedCon
 	local ffa = game.FindFirstAncestorWhichIsA
-	local getDescendants = game.GetDescendants
+	local function queryDescendants(root)
+		if not root then return {} end
+
+		local okQuery, result = pcall(function()
+			return root:QueryDescendants("Instance")
+		end)
+		if okQuery and type(result) == "table" then
+			return result
+		end
+
+		local okFallback, fallback = pcall(function()
+			return root:GetDescendants()
+		end)
+		if okFallback and type(fallback) == "table" then
+			return fallback
+		end
+
+		return {}
+	end
+	local getDescendants = queryDescendants
 	local getTextSize = service.TextService.GetTextSize
 	local updateDebounce,refreshDebounce = false,false
 	local nilNode = {Obj = Instance.new("Folder")}
@@ -1859,7 +1878,7 @@ local function main()
 
 		local nilInsts = env.getnilinstances()
 		local game = game
-		local getDescs = game.GetDescendants
+		local getDescs = queryDescendants
 		--local newNilMap = {}
 		--local newNilRoots = {}
 		--local nilRoots = Explorer.NilRoots

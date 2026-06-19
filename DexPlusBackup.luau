@@ -298,6 +298,7 @@ DefaultSettings = (function()
 		Window = {
 			TitleOnMiddle = false,
 			Transparency = .2,
+			Font = "SourceSans",
 			SettingsWidth = 250,
 			SettingsHeight = 375
 		},
@@ -2060,6 +2061,10 @@ Main = (function()
 			transp = DefaultSettings.Window.Transparency
 		end
 		Settings.Window.Transparency = math.clamp(transp, 0, 1)
+		local fontName = Settings.Window.Font
+		if fontName ~= "SourceSans" and fontName ~= "Gotham" and fontName ~= "GothamMedium" and fontName ~= "GothamSemibold" and fontName ~= "GothamBold" and fontName ~= "RobotoMono" and fontName ~= "Code" and fontName ~= "Ubuntu" then
+			Settings.Window.Font = DefaultSettings.Window.Font or "SourceSans"
+		end
 		local settingsWidth = math.floor(tonumber(Settings.Window.SettingsWidth) or DefaultSettings.Window.SettingsWidth or 250)
 		Settings.Window.SettingsWidth = math.clamp(settingsWidth, 220, 550)
 		local settingsHeight = math.floor(tonumber(Settings.Window.SettingsHeight) or DefaultSettings.Window.SettingsHeight or 375)
@@ -3463,6 +3468,17 @@ Main = (function()
 			return ok and res
 		end
 
+		local function isDescendantOf(obj, ancestor)
+			local cur = obj
+			while cur do
+				if cur == ancestor then
+					return true
+				end
+				cur = cur.Parent
+			end
+			return false
+		end
+
 		local function isPointOnDexGui(x, y)
 			x = math.floor(tonumber(x) or 0)
 			y = math.floor(tonumber(y) or 0)
@@ -3477,9 +3493,14 @@ Main = (function()
 							if gui:IsA("GuiObject") and pointInObj(gui, x, y) then
 								return true
 							end
-							for _, obj in gui:GetDescendants() do
-								if obj:IsA("GuiObject") and pointInObj(obj, x, y) then
-									return true
+							if gui:IsA("LayerCollector") then
+								local hitList = gui:GetGuiObjectsAtPosition(x, y)
+								if type(hitList) == "table" then
+									for _, obj in hitList do
+										if isDescendantOf(obj, gui) then
+											return true
+										end
+									end
 								end
 							end
 							return false
@@ -3491,22 +3512,6 @@ Main = (function()
 				end
 			end
 			return false
-		end
-
-		local function hasPaintChildAtPoint(obj, x, y)
-			local ok, res = pcall(function()
-				for _, child in obj:GetDescendants() do
-					if child:IsA("GuiObject") and isShown(child) and hasPaint(child) and pointInObj(child, x, y) then
-						return true
-					end
-				end
-				return false
-			end)
-			return ok and res
-		end
-
-		local function guiFallback(obj, x, y)
-			return typeof(obj) == "Instance" and obj:IsA("GuiObject") and nodes[obj] and not isDexGui(obj) and isShown(obj) and hasPaintChildAtPoint(obj, x, y)
 		end
 
 		local function addGuiCandidate(candidates, seen, obj, score, fallback)
@@ -3521,24 +3526,45 @@ Main = (function()
 			}
 		end
 
+		local function addGuiAncestorCandidates(candidates, seen, obj, score)
+			local cur = obj and obj.Parent
+			while cur do
+				local okGui, isGui = pcall(function()
+					return cur:IsA("GuiObject")
+				end)
+				if not okGui or not isGui then
+					break
+				end
+				if guiPrimary(cur) then
+					addGuiCandidate(candidates, seen, cur, score - 1, true)
+				end
+				cur = cur.Parent
+			end
+		end
+
 		local function getGuiCandidates(x, y)
 			x = math.floor(tonumber(x) or 0)
 			y = math.floor(tonumber(y) or 0)
 			local holders, seenHolders = {}, {}
 			local candidates, seenCandidates = {}, {}
+			local maxGuiHits = 160
+			local maxCandidates = 80
 			addScopeHolders(holders, seenHolders, getGuiSelectorScope())
 			for _, holder in holders do
 				local ok, guis = pcall(function()
 					return holder:GetGuiObjectsAtPosition(x, y)
 				end)
 				if ok and type(guis) == "table" then
-					for i = 1, #guis do
+					for i = 1, math.min(#guis, maxGuiHits) do
 						local obj = guis[i]
 						local score = guiScore(obj, i)
 						if guiPrimary(obj) then
 							addGuiCandidate(candidates, seenCandidates, obj, score, false)
-						elseif guiFallback(obj, x, y) then
-							addGuiCandidate(candidates, seenCandidates, obj, score, true)
+						else
+							addGuiAncestorCandidates(candidates, seenCandidates, obj, score)
+						end
+						if #candidates >= maxCandidates then
+							break
 						end
 					end
 				end

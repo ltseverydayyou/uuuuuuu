@@ -194,6 +194,72 @@ local function main()
 		return service.UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or service.UserInputService:IsKeyDown(Enum.KeyCode.RightControl)
 	end
 
+	Lib.QueryDescendants = function(root)
+		if not root then return {} end
+
+		local okQuery, result = pcall(function()
+			return root:QueryDescendants("Instance")
+		end)
+		if okQuery and type(result) == "table" then
+			return result
+		end
+
+		local okFallback, fallback = pcall(function()
+			return root:GetDescendants()
+		end)
+		if okFallback and type(fallback) == "table" then
+			return fallback
+		end
+
+		return {}
+	end
+
+	local uiFontMap = {
+		SourceSans = Enum.Font.SourceSans,
+		Gotham = Enum.Font.Gotham,
+		GothamMedium = Enum.Font.GothamMedium,
+		GothamSemibold = Enum.Font.GothamSemibold,
+		GothamBold = Enum.Font.GothamBold,
+		RobotoMono = Enum.Font.RobotoMono,
+		Code = Enum.Font.Code,
+		Ubuntu = Enum.Font.Ubuntu,
+	}
+
+	Lib.GetUIFont = function()
+		local fontName = Settings and Settings.Window and Settings.Window.Font
+		return uiFontMap[fontName] or uiFontMap.SourceSans
+	end
+
+	Lib.ApplyUIFont = function(root)
+		if not root then return end
+
+		local font = Lib.GetUIFont()
+		local protectedFonts = {
+			[Enum.Font.Code] = true,
+			[Enum.Font.RobotoMono] = true,
+		}
+		local function apply(obj)
+			if typeof(obj) == "Instance" and (obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox")) then
+				local okMarked, marked = pcall(function()
+					return obj:GetAttribute("DexUIFont")
+				end)
+				if protectedFonts[obj.Font] and not (okMarked and marked == true) then
+					return
+				end
+				obj.Font = font
+				pcall(function()
+					obj:SetAttribute("DexUIFont", true)
+				end)
+			end
+		end
+
+		apply(root)
+		local descs = Lib.QueryDescendants(root)
+		for i = 1,#descs do
+			apply(descs[i])
+		end
+	end
+
 	Lib.RefreshTheme = function()
 		local theme = Settings and Settings.Theme
 		if not theme then return end
@@ -221,6 +287,7 @@ local function main()
 						elems.Title.Size = UDim2.new(1,-10,0,20)
 					end
 				end
+				Lib.ApplyUIFont(elems.Main)
 			end
 		end
 
@@ -235,6 +302,7 @@ local function main()
 					bf.BackgroundColor3 = theme.Menu or bf.BackgroundColor3
 				end
 			end
+			Lib.ApplyUIFont(open)
 		end
 
 		if Main and Main.AppControls then
@@ -270,6 +338,10 @@ local function main()
 				local win = (type(app) == "table" and app.Window) or nil
 				applyWindow(win)
 			end
+		end
+
+		if Main and Main.MainGui then
+			Lib.ApplyUIFont(Main.MainGui)
 		end
 	end
 
@@ -2997,7 +3069,8 @@ local function main()
 			guiMain.Size = UDim2.new(0,self.SizeX,0,self.SizeY)
 
 			trackConn(gui.DescendantAdded:Connect(function(obj) focusInput(self,obj) end))
-			local descs = gui:QueryDescendants("Instance")
+			Lib.ApplyUIFont(gui)
+			local descs = Lib.QueryDescendants(gui)
 			for i = 1,#descs do
 				focusInput(self,descs[i])
 			end

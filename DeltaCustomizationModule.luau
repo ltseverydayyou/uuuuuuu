@@ -2614,7 +2614,10 @@ task.defer(function()
 		end
 		local shouldShow = iconVisible and not iconForcedHidden
 		pcall(function()
-			iconBtn.Active = shouldShow
+			iconBtn.Active = true
+		end)
+		pcall(function()
+			iconBtn.Interactable = true
 		end)
 		if shouldShow then
 			pcall(function()
@@ -2622,19 +2625,26 @@ task.defer(function()
 			end)
 			tweenIconVisual(0, 0, instant)
 		else
-			tweenIconVisual(1, 1, instant)
-			local stamp = tick()
-			task.delay(instant and 0 or 0.2, function()
-				if not iconBtn or not iconBtn.Parent then
-					return
-				end
-				if stamp and (iconVisible and not iconForcedHidden) then
-					return
-				end
+			if not iconForcedHidden then
 				pcall(function()
-					iconBtn.Visible = false
+					iconBtn.Visible = true
 				end)
-			end)
+			end
+			tweenIconVisual(1, 1, instant)
+			if iconForcedHidden then
+				local stamp = tick()
+				task.delay(instant and 0 or 0.2, function()
+					if not iconBtn or not iconBtn.Parent then
+						return
+					end
+					if stamp and not iconForcedHidden then
+						return
+					end
+					pcall(function()
+						iconBtn.Visible = false
+					end)
+				end)
+			end
 		end
 		applyIconStrokeState()
 	end

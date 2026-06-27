@@ -349,10 +349,8 @@ local function refIgn()
 	if not c then
 		return
 	end
-	for _, v in c:GetDescendants() do
-		if v:IsA("BasePart") then
-			ign[v] = true
-		end
+	for _, v in c:QueryDescendants("BasePart") do
+		ign[v] = true
 	end
 end
 
@@ -459,7 +457,7 @@ local function prepMapPart(part)
 end
 
 local function prepRigModel(mdl)
-	for _, v in mdl:GetDescendants() do
+	for _, v in mdl:QueryDescendants("Instance") do
 		if v:IsA("BasePart") then
 			pcall(function()
 				v.Anchored = true
@@ -537,7 +535,7 @@ local function cloneMapPart(src)
 	if not ok or not cp then
 		return
 	end
-	for _, d in cp:GetDescendants() do
+	for _, d in cp:QueryDescendants("Instance") do
 		if d ~= cp and not mapKeep[d.ClassName] then
 			d:Destroy()
 		end
@@ -721,7 +719,7 @@ local function mkRig(src, par, name)
 	if not ok or not cp then
 		return
 	end
-	for _, d in cp:GetDescendants() do
+	for _, d in cp:QueryDescendants("Instance") do
 		if d ~= cp and not rigKeep[d.ClassName] and not d:IsA("BasePart") then
 			d:Destroy()
 		end
@@ -730,7 +728,7 @@ local function mkRig(src, par, name)
 	cp.Name = name or src.Name
 	cp.Parent = par
 	local map = {}
-	for _, d in cp:GetDescendants() do
+	for _, d in cp:QueryDescendants("Instance") do
 		local path = relPath(cp, d)
 		if path then
 			map[path] = d
@@ -738,14 +736,12 @@ local function mkRig(src, par, name)
 	end
 	local refs = {}
 	local cnt = 0
-	for _, d in src:GetDescendants() do
-		if d:IsA("BasePart") then
-			local path = relPath(src, d)
-			local dst = path and map[path]
-			if dst and dst:IsA("BasePart") then
-				refs[d] = dst
-				cnt = cnt + 1
-			end
+	for _, d in src:QueryDescendants("BasePart") do
+		local path = relPath(src, d)
+		local dst = path and map[path]
+		if dst and dst:IsA("BasePart") then
+			refs[d] = dst
+			cnt = cnt + 1
 		end
 	end
 	return {

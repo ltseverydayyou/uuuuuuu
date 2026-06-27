@@ -91,7 +91,7 @@ local function qDesc(rootInst, className)
 	end
 
 	local ok, res = pcall(function()
-		return rootInst:GetDescendants()
+		return rootInst:QueryDescendants("Instance")
 	end)
 
 	if not ok or type(res) ~= "table" then

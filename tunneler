@@ -534,15 +534,13 @@ local function applyPerf()
 		end
 	end
 	if st.opt.noTv then
-		for _, v in workspace:GetDescendants() do
-			if v:IsA("VideoFrame") then
-				v.Playing = false
-				v.Volume = 0
-			end
+		for _, v in workspace:QueryDescendants("VideoFrame") do
+			v.Playing = false
+			v.Volume = 0
 		end
 	end
 	if st.opt.noGlares then
-		for _, v in workspace:GetDescendants() do
+		for _, v in workspace:QueryDescendants("Instance") do
 			if v.Name == "ClientLightGlare" and v.Parent and v.Parent:IsA("BillboardGui") then
 				v.Parent.Enabled = false
 			end
@@ -572,7 +570,7 @@ local function scanBypasses()
 	if st.opt.emancBypass then
 		local lvl = workspace:FindFirstChild("Level")
 		if lvl then
-			for _, v in lvl:GetDescendants() do
+			for _, v in lvl:QueryDescendants("Instance") do
 				if string.find(v.Name, "EmancipationGrill") then
 					local d = v:FindFirstChild("Disabled")
 					if d then

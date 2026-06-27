@@ -1125,7 +1125,7 @@ local function scanStart()
 		end)
 		if not ok or type(desc) ~= "table" then
 			local okDesc = pcall(function()
-				desc = game:GetDescendants()
+				desc = game:QueryDescendants("Instance")
 			end)
 			if not okDesc or type(desc) ~= "table" then
 				desc = {}

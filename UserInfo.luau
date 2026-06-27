@@ -193,7 +193,7 @@ local function setZi(obj, zi)
 	pcall(function()
 		obj.ZIndex = zi
 	end)
-	for _, ch in obj:GetDescendants() do
+	for _, ch in obj:QueryDescendants("Instance") do
 		pcall(function()
 			ch.ZIndex = zi
 		end)

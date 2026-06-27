@@ -1139,7 +1139,7 @@ ctx.descOf = function(obj)
 		return {}
 	end
 	local ok, res = pcall(function()
-		return obj:GetDescendants()
+		return obj:QueryDescendants("Instance")
 	end)
 	if ok and type(res) == "table" then
 		return res
@@ -4198,7 +4198,7 @@ ctx.findRemoteNamed = function(nm)
 	end
 	if not (ctx.tmpFoundRemote and ctx.tmpFoundRemote:IsA("RemoteEvent")) then
 		pcall(function()
-			for _, o in Rsp:GetDescendants() do
+			for _, o in Rsp:QueryDescendants("Instance") do
 				if o.Name == nm and o:IsA("RemoteEvent") then
 					ctx.tmpFoundRemote = o
 					break

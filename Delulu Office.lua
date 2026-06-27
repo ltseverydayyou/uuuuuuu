@@ -680,7 +680,7 @@ go(function()
 			end)
 		end
 	end
-	local list = workspace:GetDescendants()
+	local list = workspace:QueryDescendants("Instance")
 	for i = 1, #list do
 		if not st.alive then
 			return

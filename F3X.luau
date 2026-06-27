@@ -17990,9 +17990,8 @@ function isPointerOverBTUI(input)
 	if not p or not UI then
 		return false
 	end
-	for _, obj in pairs(UI:GetDescendants()) do
-		if obj:IsA("GuiObject") and obj.Name ~= "Rectangle" and isGuiVisibleDeep(obj) then
-			local pos = obj.AbsolutePosition
+	for _, obj in pairs(UI:QueryDescendants("GuiObject")) do
+		if obj.Name ~= "Rectangle" and isGuiVisibleDeep(obj) then			local pos = obj.AbsolutePosition
 			local size = obj.AbsoluteSize
 			if size.X > 0 and size.Y > 0 and p.X >= pos.X and p.X <= pos.X + size.X and p.Y >= pos.Y and p.Y <= pos.Y + size.Y then
 				return true

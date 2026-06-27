@@ -113,7 +113,7 @@ local function main()
 		end
 
 		local okFallback, fallback = pcall(function()
-			return root:GetDescendants()
+			return root:QueryDescendants("Instance")
 		end)
 		if okFallback and type(fallback) == "table" then
 			return fallback

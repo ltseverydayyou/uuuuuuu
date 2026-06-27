@@ -187,9 +187,8 @@ end
 
 for _, root in {huigrab(), cg, pg} do
 	if typeof(root) == "Instance" then
-		for _, v in root:GetDescendants() do
-			if v:IsA("ScreenGui") and v:GetAttribute(tag) == true then
-				v:Destroy()
+		for _, v in root:QueryDescendants("ScreenGui") do
+			if v:GetAttribute(tag) == true then				v:Destroy()
 			end
 		end
 	end

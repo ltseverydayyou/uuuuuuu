@@ -258,7 +258,7 @@ local EmbeddedModules = {
 					return result;
 				end;
 				local okFallback, fallback = pcall(function()
-					return root:GetDescendants();
+					return root:QueryDescendants("Instance");
 				end);
 				if okFallback and type(fallback) == "table" then
 					return fallback;
@@ -8396,7 +8396,7 @@ local EmbeddedModules = {
 					end);
 					if not okQuery or type(descs) ~= "table" then
 						local okFallback, fallback = pcall(function()
-							return gui:GetDescendants();
+							return gui:QueryDescendants("Instance");
 						end);
 						descs = okFallback and type(fallback) == "table" and fallback or {};
 					end;

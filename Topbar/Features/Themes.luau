@@ -99,7 +99,7 @@ function Themes.refresh(icon, instance, specificProperty)
 		return
 	end
 	local validInstances = { [instance.Name] = instance }
-	for _, child in pairs(instance:GetDescendants()) do
+	for _, child in pairs(instance:QueryDescendants("Instance")) do
 		local collective = child:GetAttribute("Collective")
 		if collective then
 			validInstances[collective] = child

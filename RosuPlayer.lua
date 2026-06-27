@@ -672,7 +672,7 @@ ap.bootscan = function()
         ap.index(r)
     end
 
-    for _, v in ap.pg:GetDescendants() do
+    for _, v in ap.pg:QueryDescendants("Instance") do
         ap.index(v)
     end
 end

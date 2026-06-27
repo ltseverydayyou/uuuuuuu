@@ -808,10 +808,8 @@ local NA_GRAB_BODY = (function()
 		return nil;
 	end;
 	local function firstPart(m)
-		for _, d in m:QueryDescendants("Instance") do
-			if d:IsA("BasePart") then
-				return d;
-			end;
+		for _, d in m:QueryDescendants("BasePart") do
+			return d;
 		end;
 		return nil;
 	end;
@@ -1114,10 +1112,8 @@ local function applyPrompts()
 	if not (fastPrompt or promptLOS) then
 		return;
 	end;
-	for _, d in ws:GetDescendants() do
-		if d:IsA("ProximityPrompt") then
-			applyPrompt(d);
-		end;
+	for _, d in ws:QueryDescendants("ProximityPrompt") do
+		applyPrompt(d);
 	end;
 end;
 local function restorePrompts()
@@ -1228,9 +1224,8 @@ local function applyElevators()
 	if not elevUnlock then
 		return;
 	end;
-	for _, d in ws:GetDescendants() do
-		if d:IsA("Model") and elevLike(d) then
-			applyElevInst(d);
+	for _, d in ws:QueryDescendants("Model") do
+		if elevLike(d) then			applyElevInst(d);
 		end;
 	end;
 end;
@@ -1432,14 +1427,12 @@ local function isCharInSafeZone(ch)
 	if not ch then
 		return false;
 	end;
-	for _, part in ch:QueryDescendants("Instance") do
-		if part:IsA("BasePart") then
-			local p = part.Position;
-			for i = 1, #safeZoneParts do
-				local sz = safeZoneParts[i];
-				if sz.Parent and isPointInPart(sz, p) then
-					return true;
-				end;
+	for _, part in ch:QueryDescendants("BasePart") do
+		local p = part.Position;
+		for i = 1, #safeZoneParts do
+			local sz = safeZoneParts[i];
+			if sz.Parent and isPointInPart(sz, p) then
+				return true;
 			end;
 		end;
 	end;
@@ -1449,14 +1442,12 @@ local function getCharSafeZoneContact(ch)
 	if not ch then
 		return nil, nil, nil;
 	end;
-	for _, part in ch:QueryDescendants("Instance") do
-		if part:IsA("BasePart") then
-			local p = part.Position;
-			for i = 1, #safeZoneParts do
-				local sz = safeZoneParts[i];
-				if sz.Parent and isPointInPart(sz, p) then
-					return part, sz, p;
-				end;
+	for _, part in ch:QueryDescendants("BasePart") do
+		local p = part.Position;
+		for i = 1, #safeZoneParts do
+			local sz = safeZoneParts[i];
+			if sz.Parent and isPointInPart(sz, p) then
+				return part, sz, p;
 			end;
 		end;
 	end;
@@ -1477,23 +1468,20 @@ local function refreshSafeZones()
 	if not gFolder then
 		return;
 	end;
-	for _, inst in gFolder:QueryDescendants("Instance") do
-		if inst:IsA("Model") and inst.Name == "SafeZones" then
-			for _, ch in inst:QueryDescendants("Instance") do
-				if ch:IsA("BasePart") then
-					safeZoneParts[(#safeZoneParts) + 1] = ch;
-					if szEsp then
-						local sb = ch:FindFirstChild("EvadeSafeZoneSB");
-						if not sb then
-							sb = Instance.new("SelectionBox");
-							sb.Name = "EvadeSafeZoneSB";
-							sb.Adornee = ch;
-							sb.LineThickness = 0.02;
-							sb.Color3 = Color3.fromRGB(180, 0, 255);
-							sb.SurfaceColor3 = Color3.fromRGB(120, 0, 200);
-							sb.SurfaceTransparency = 0.85;
-							sb.Parent = ch;
-						end;
+	for _, inst in gFolder:QueryDescendants("Model") do
+		if inst.Name == "SafeZones" then			for _, ch in inst:QueryDescendants("BasePart") do
+				safeZoneParts[(#safeZoneParts) + 1] = ch;
+				if szEsp then
+					local sb = ch:FindFirstChild("EvadeSafeZoneSB");
+					if not sb then
+						sb = Instance.new("SelectionBox");
+						sb.Name = "EvadeSafeZoneSB";
+						sb.Adornee = ch;
+						sb.LineThickness = 0.02;
+						sb.Color3 = Color3.fromRGB(180, 0, 255);
+						sb.SurfaceColor3 = Color3.fromRGB(120, 0, 200);
+						sb.SurfaceTransparency = 0.85;
+						sb.Parent = ch;
 					end;
 				end;
 			end;
@@ -1576,11 +1564,9 @@ local function isCharOnDamage(ch)
 	if not ch then
 		return false;
 	end;
-	for _, part in ch:QueryDescendants("Instance") do
-		if part:IsA("BasePart") then
-			if isPointInDamage(part.Position) then
-				return true;
-			end;
+	for _, part in ch:QueryDescendants("BasePart") do
+		if isPointInDamage(part.Position) then
+			return true;
 		end;
 	end;
 	return false;

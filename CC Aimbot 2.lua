@@ -1137,7 +1137,7 @@ local function scanNo()
 	if not c then
 		return
 	end
-	for _, v in c:GetDescendants() do
+	for _, v in c:QueryDescendants("Instance") do
 		addPart(v)
 	end
 end

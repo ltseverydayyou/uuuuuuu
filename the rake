@@ -687,7 +687,7 @@ if game.GameId == 847722000 then
 			return res
 		end
 		ok, res = pcall(function()
-			return v:GetDescendants()
+			return v:QueryDescendants("Instance")
 		end)
 		return ok and res or {}
 	end
@@ -811,7 +811,7 @@ if game.GameId == 847722000 then
 
 	local function zeroWorkspaceBasePartVelocities()
 		local ok, objects = pcall(function()
-			return Ws:GetDescendants()
+			return Ws:QueryDescendants("Instance")
 		end)
 		for _, obj in ok and objects or {} do
 			zeroBasePartVelocity(obj)

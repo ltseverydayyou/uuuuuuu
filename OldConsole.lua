@@ -169,7 +169,7 @@ local function setGuiTreeZ(root, z)
 			root.ZIndex = z
 		end
 	end)
-	for _, child in root:GetDescendants() do
+	for _, child in root:QueryDescendants("Instance") do
 		pcall(function()
 			if child:IsA("GuiObject") then
 				child.ZIndex = z

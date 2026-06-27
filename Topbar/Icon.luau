@@ -1008,7 +1008,7 @@ end
 function Icon:_updateSelectionInstances()
 	for guiObjectOrLayerCollector, _ in pairs(self.toggleItems) do
 		local buttonInstancesArray = {}
-		for _, instance in pairs(guiObjectOrLayerCollector:GetDescendants()) do
+		for _, instance in pairs(guiObjectOrLayerCollector:QueryDescendants("Instance")) do
 			if (instance:IsA("TextButton") or instance:IsA("ImageButton")) and instance.Active then
 				table.insert(buttonInstancesArray, instance)
 			end

@@ -199,7 +199,7 @@ local function hk(root, cfg)
 	root.DescendantAdded:Connect(add)
 	root.DescendantRemoving:Connect(rem)
 
-	for _, i in root:GetDescendants() do
+	for _, i in root:QueryDescendants("Instance") do
 		add(i)
 	end
 end
@@ -212,7 +212,7 @@ local function hookByName(i)
 	end
 end
 
-for _, i in workspace:GetDescendants() do
+for _, i in workspace:QueryDescendants("Instance") do
 	hookByName(i)
 end
 

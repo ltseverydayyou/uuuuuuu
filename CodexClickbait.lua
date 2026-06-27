@@ -318,7 +318,7 @@ local function HookEditorButton(btn)
 	end;
 	apply(btn);
 	hookObj(btn);
-	for _, d in btn:GetDescendants() do
+	for _, d in btn:QueryDescendants("Instance") do
 		hookObj(d);
 	end;
 	local descConn;
@@ -374,7 +374,7 @@ local function HookTabsFolder(f)
 			apply(o);
 		end;
 	end;
-	for _, o in f:GetDescendants() do
+	for _, o in f:QueryDescendants("Instance") do
 		apply(o);
 		hookObj(o);
 	end;

@@ -1785,18 +1785,16 @@ task.defer(function()
 					if child:IsA("GuiObject") and isVisibleInScroll(child) then
 						local relY = ((child.AbsolutePosition.Y - sf.AbsolutePosition.Y) / uiScaleFactor) + canvasPos.Y
 						maxY = math.max(maxY, relY + (child.AbsoluteSize.Y / uiScaleFactor))
-						for _, desc in child:GetDescendants() do
-							if desc:IsA("GuiObject") and desc.Name == "Dropdown" and isVisibleInScroll(desc) then
-								local dRelY = ((desc.AbsolutePosition.Y - sf.AbsolutePosition.Y) / uiScaleFactor) + canvasPos.Y
+						for _, desc in child:QueryDescendants("GuiObject") do
+							if desc.Name == "Dropdown" and isVisibleInScroll(desc) then								local dRelY = ((desc.AbsolutePosition.Y - sf.AbsolutePosition.Y) / uiScaleFactor) + canvasPos.Y
 								maxY = math.max(maxY, dRelY + (desc.AbsoluteSize.Y / uiScaleFactor))
 							end
 						end
 					end
 				end
 			else
-				for _, desc in sf:GetDescendants() do
-					if desc:IsA("GuiObject") and isVisibleInScroll(desc) then
-						local relX = ((desc.AbsolutePosition.X - sf.AbsolutePosition.X) / uiScaleFactor) + canvasPos.X
+				for _, desc in sf:QueryDescendants("GuiObject") do
+					if isVisibleInScroll(desc) then						local relX = ((desc.AbsolutePosition.X - sf.AbsolutePosition.X) / uiScaleFactor) + canvasPos.X
 						local relY = ((desc.AbsolutePosition.Y - sf.AbsolutePosition.Y) / uiScaleFactor) + canvasPos.Y
 						maxX = math.max(maxX, relX + (desc.AbsoluteSize.X / uiScaleFactor))
 						maxY = math.max(maxY, relY + (desc.AbsoluteSize.Y / uiScaleFactor))
@@ -1892,9 +1890,8 @@ task.defer(function()
 					return
 				end
 				bindVerticalGui(row)
-				for _, desc in row:GetDescendants() do
-					if desc:IsA("GuiObject") and desc.Name == "Dropdown" then
-						bindVerticalGui(desc)
+				for _, desc in row:QueryDescendants("GuiObject") do
+					if desc.Name == "Dropdown" then						bindVerticalGui(desc)
 					end
 				end
 				NAlib.connect(
@@ -1980,7 +1977,7 @@ task.defer(function()
 				end)
 			)
 		end
-		for _, desc in sf:GetDescendants() do
+		for _, desc in sf:QueryDescendants("Instance") do
 			bindGui(desc)
 		end
 		upd()
@@ -2213,10 +2210,8 @@ task.defer(function()
 			f.Name = isCustom and "Section_Customization" or "Section_Delta"
 			f.Parent = settingsHolder
 			f.LayoutOrder = order
-			for _, d in f:GetDescendants() do
-				if d:IsA("LocalScript") then
-					d:Destroy()
-				end
+			for _, d in f:QueryDescendants("LocalScript") do
+				d:Destroy()
 			end
 			local btn = f:FindFirstChild("Button", true)
 			if btn then
@@ -2748,10 +2743,8 @@ task.defer(function()
 		fr.Parent = settingsHolder
 		fr.Visible = true
 		fr.LayoutOrder = -2
-		for _, d in fr:GetDescendants() do
-			if d:IsA("LocalScript") then
-				d:Destroy()
-			end
+		for _, d in fr:QueryDescendants("LocalScript") do
+			d:Destroy()
 		end
 		local tL = fr:FindFirstChild("Title", true)
 		local dL = fr:FindFirstChild("Desc", true)
@@ -3249,10 +3242,8 @@ task.defer(function()
 		card.Visible = true
 		card.Size = UDim2.new(1, 0, 0, baseHeight)
 		card.Position = UDim2.new(0, 0, 0, 0)
-		for _, d in card:GetDescendants() do
-			if d:IsA("LocalScript") then
-				d:Destroy()
-			end
+		for _, d in card:QueryDescendants("LocalScript") do
+			d:Destroy()
 		end
 		local tl = card:FindFirstChild("Title", true)
 		local dl = card:FindFirstChild("Desc", true)
@@ -3535,10 +3526,8 @@ task.defer(function()
 		frame.Parent = settingsHolder
 		frame.Visible = true
 		frame.LayoutOrder = -2
-		for _, d in frame:GetDescendants() do
-			if d:IsA("LocalScript") then
-				d:Destroy()
-			end
+		for _, d in frame:QueryDescendants("LocalScript") do
+			d:Destroy()
 		end
 		local tLabel = frame:FindFirstChild("Title", true)
 		local dLabel = frame:FindFirstChild("Desc", true)
@@ -3632,10 +3621,8 @@ task.defer(function()
 		frame.Parent = settingsHolder
 		frame.Visible = true
 		frame.LayoutOrder = -2
-		for _, d in frame:GetDescendants() do
-			if d:IsA("LocalScript") then
-				d:Destroy()
-			end
+		for _, d in frame:QueryDescendants("LocalScript") do
+			d:Destroy()
 		end
 		local tLabel = frame:FindFirstChild("Title", true)
 		local dLabel = frame:FindFirstChild("Desc", true)
@@ -3693,10 +3680,8 @@ task.defer(function()
 		frame.Parent = settingsHolder
 		frame.Visible = true
 		frame.LayoutOrder = -2
-		for _, d in frame:GetDescendants() do
-			if d:IsA("LocalScript") then
-				d:Destroy()
-			end
+		for _, d in frame:QueryDescendants("LocalScript") do
+			d:Destroy()
 		end
 		local tLabel = frame:FindFirstChild("Title", true)
 		local dLabel = frame:FindFirstChild("Desc", true)
@@ -3751,10 +3736,8 @@ task.defer(function()
 		frame.Parent = settingsHolder
 		frame.Visible = true
 		frame.LayoutOrder = -2
-		for _, d in frame:GetDescendants() do
-			if d:IsA("LocalScript") then
-				d:Destroy()
-			end
+		for _, d in frame:QueryDescendants("LocalScript") do
+			d:Destroy()
 		end
 		local tLabel = frame:FindFirstChild("Title", true)
 		local dLabel = frame:FindFirstChild("Desc", true)
@@ -3814,10 +3797,8 @@ task.defer(function()
 		frame.Parent = settingsHolder
 		frame.Visible = true
 		frame.LayoutOrder = -2
-		for _, d in frame:GetDescendants() do
-			if d:IsA("LocalScript") then
-				d:Destroy()
-			end
+		for _, d in frame:QueryDescendants("LocalScript") do
+			d:Destroy()
 		end
 		local tLabel = frame:FindFirstChild("Title", true)
 		local dLabel = frame:FindFirstChild("Desc", true)
@@ -3873,10 +3854,8 @@ task.defer(function()
 		frame.Parent = settingsHolder
 		frame.Visible = true
 		frame.LayoutOrder = -2
-		for _, d in frame:GetDescendants() do
-			if d:IsA("LocalScript") then
-				d:Destroy()
-			end
+		for _, d in frame:QueryDescendants("LocalScript") do
+			d:Destroy()
 		end
 		local tLabel = frame:FindFirstChild("Title", true)
 		local dLabel = frame:FindFirstChild("Desc", true)
@@ -3934,10 +3913,8 @@ task.defer(function()
 		frame.Parent = settingsHolder
 		frame.Visible = true
 		frame.LayoutOrder = -2
-		for _, d in frame:GetDescendants() do
-			if d:IsA("LocalScript") then
-				d:Destroy()
-			end
+		for _, d in frame:QueryDescendants("LocalScript") do
+			d:Destroy()
 		end
 		local tLabel = frame:FindFirstChild("Title", true)
 		local dLabel = frame:FindFirstChild("Desc", true)
@@ -3997,10 +3974,8 @@ task.defer(function()
 		frame.Parent = settingsHolder
 		frame.Visible = true
 		frame.LayoutOrder = -2
-		for _, d in frame:GetDescendants() do
-			if d:IsA("LocalScript") then
-				d:Destroy()
-			end
+		for _, d in frame:QueryDescendants("LocalScript") do
+			d:Destroy()
 		end
 		local tLabel = frame:FindFirstChild("Title", true)
 		local dLabel = frame:FindFirstChild("Desc", true)
@@ -4132,10 +4107,8 @@ task.defer(function()
 		frame.Parent = settingsHolder
 		frame.Visible = true
 		frame.LayoutOrder = -2
-		for _, d in frame:GetDescendants() do
-			if d:IsA("LocalScript") then
-				d:Destroy()
-			end
+		for _, d in frame:QueryDescendants("LocalScript") do
+			d:Destroy()
 		end
 		local tLabel = frame:FindFirstChild("Title", true)
 		local dLabel = frame:FindFirstChild("Desc", true)
@@ -4468,10 +4441,8 @@ task.defer(function()
 		frame.Parent = settingsHolder
 		frame.Visible = true
 		frame.LayoutOrder = -2
-		for _, d in frame:GetDescendants() do
-			if d:IsA("LocalScript") then
-				d:Destroy()
-			end
+		for _, d in frame:QueryDescendants("LocalScript") do
+			d:Destroy()
 		end
 		local tLabel = frame:FindFirstChild("Title", true)
 		local dLabel = frame:FindFirstChild("Desc", true)
@@ -4527,10 +4498,8 @@ task.defer(function()
 		frame.Parent = settingsHolder
 		frame.Visible = true
 		frame.LayoutOrder = -2
-		for _, d in frame:GetDescendants() do
-			if d:IsA("LocalScript") then
-				d:Destroy()
-			end
+		for _, d in frame:QueryDescendants("LocalScript") do
+			d:Destroy()
 		end
 		local tLabel = frame:FindFirstChild("Title", true)
 		local dLabel = frame:FindFirstChild("Desc", true)
@@ -4583,10 +4552,8 @@ task.defer(function()
 		frame.Parent = settingsHolder
 		frame.Visible = true
 		frame.LayoutOrder = -2
-		for _, d in frame:GetDescendants() do
-			if d:IsA("LocalScript") then
-				d:Destroy()
-			end
+		for _, d in frame:QueryDescendants("LocalScript") do
+			d:Destroy()
 		end
 		local tLabel = frame:FindFirstChild("Title", true)
 		local dLabel = frame:FindFirstChild("Desc", true)
@@ -5086,10 +5053,8 @@ task.defer(function()
 			newCard.Parent = parent
 			newCard.Name = "Script"
 			local labs = {}
-			for _, d in newCard:GetDescendants() do
-				if d:IsA("TextLabel") then
-					table.insert(labs, d)
-				end
+			for _, d in newCard:QueryDescendants("TextLabel") do
+				table.insert(labs, d)
 			end
 			if #labs >= 3 then
 				table.sort(labs, function(a, b)
@@ -5110,7 +5075,7 @@ task.defer(function()
 				end
 			end
 			local clickable = nil
-			for _, d in newCard:GetDescendants() do
+			for _, d in newCard:QueryDescendants("Instance") do
 				if d:IsA("LocalScript") then
 					d:Destroy()
 				elseif d:IsA("TextButton") then
@@ -5229,9 +5194,8 @@ task.defer(function()
 					return
 				end
 				local cur
-				for _, tb in codeSf:GetDescendants() do
-					if tb:IsA("TextBox") and tb.Visible then
-						cur = tb
+				for _, tb in codeSf:QueryDescendants("TextBox") do
+					if tb.Visible then						cur = tb
 						break
 					end
 				end
@@ -5276,9 +5240,8 @@ task.defer(function()
 	end
 	local function getCodeBoxes()
 		local t = {}
-		for _, c in codeSf:GetDescendants() do
-			if c:IsA("TextBox") and isScriptName(c.Name) then
-				table.insert(t, c)
+		for _, c in codeSf:QueryDescendants("TextBox") do
+			if isScriptName(c.Name) then				table.insert(t, c)
 			end
 		end
 		table.sort(t, function(a, b)
@@ -5538,7 +5501,7 @@ if type(__lt.deltaPatchState.visualEnv) == "table" and not __lt.deltaPatchState.
 			if not mainGui then
 				return
 			end
-			for _, o in mainGui:GetDescendants() do
+			for _, o in mainGui:QueryDescendants("Instance") do
 				if o:IsA("UICorner") then
 					local p = o.Parent
 					if p and p:IsA("GuiObject") and not skip[p.Name] then
@@ -6155,7 +6118,7 @@ local function hideAll(exn)
 end
 
 local function txtOf(o)
-	for _, d in o:GetDescendants() do
+	for _, d in o:QueryDescendants("Instance") do
 		if d:IsA("TextLabel") or d:IsA("TextButton") then
 			return d
 		end
@@ -6163,9 +6126,8 @@ local function txtOf(o)
 end
 
 local function gbtn(nm)
-	for _, d in sb:GetDescendants() do
-		if d:IsA("GuiButton") and d.Name == nm then
-			return d
+	for _, d in sb:QueryDescendants("GuiButton") do
+		if d.Name == nm then			return d
 		end
 	end
 end
@@ -6310,7 +6272,7 @@ end
 
 local function muteSh()
 	st.muted = {}
-	for _, d in sh:GetDescendants() do
+	for _, d in sh:QueryDescendants("Instance") do
 		muteObj(d)
 	end
 end
@@ -7825,7 +7787,7 @@ local function buildMusicTab()
 			musicState.frame.Size = sh.Size
 			musicState.frame.ZIndex = sh.ZIndex
 		end)
-		for _, d in musicState.frame:GetDescendants() do
+		for _, d in musicState.frame:QueryDescendants("Instance") do
 			if d:IsA("LocalScript") then
 				d:Destroy()
 			elseif d:IsA("GuiObject") and d ~= musicState.frame then
@@ -9088,7 +9050,7 @@ st.fn.setupHubMusic();
 			if base.got then
 				return
 			end
-			for _, o in mainGui:GetDescendants() do
+			for _, o in mainGui:QueryDescendants("Instance") do
 				if
 					o:IsA("Frame")
 					or o:IsA("ImageButton")
@@ -9345,7 +9307,7 @@ st.fn.setupHubMusic();
 			if not rootObj then
 				return
 			end
-			for _, d in rootObj:GetDescendants() do
+			for _, d in rootObj:QueryDescendants("Instance") do
 				fn(d)
 			end
 		end
@@ -9385,9 +9347,8 @@ st.fn.setupHubMusic();
 			if not rootObj then
 				return
 			end
-			for _, d in rootObj:GetDescendants() do
-				if d:IsA("TextLabel") and d.Name == nm then
-					return d
+			for _, d in rootObj:QueryDescendants("TextLabel") do
+				if d.Name == nm then					return d
 				end
 			end
 		end
@@ -9650,7 +9611,7 @@ st.fn.setupHubMusic();
 						end)
 					end
 				end
-				for _, o in mainGui:GetDescendants() do
+				for _, o in mainGui:QueryDescendants("Instance") do
 					if (o:IsA("ImageLabel") or o:IsA("ImageButton")) and o.Parent and not inExec(o) then
 						local c = base.img[o] or o.ImageColor3
 						pcall(function()
@@ -9696,7 +9657,7 @@ st.fn.setupHubMusic();
 						end)
 					end
 				end
-				for _, o in mainGui:GetDescendants() do
+				for _, o in mainGui:QueryDescendants("Instance") do
 					if (o:IsA("ImageLabel") or o:IsA("ImageButton")) and o.Parent and not inExec(o) then
 						local c = base.img[o] or o.ImageColor3
 						pcall(function()
@@ -9732,9 +9693,8 @@ st.fn.setupHubMusic();
 			for _, o in dd:GetChildren() do
 				if o:IsA("ImageButton") and o.Name:match("^Option%d+$") then
 					local txt = ""
-					for _, d in o:GetDescendants() do
-						if d:IsA("TextLabel") and trim(d.Text or "") ~= "" then
-							txt = trim(d.Text)
+					for _, d in o:QueryDescendants("TextLabel") do
+						if trim(d.Text or "") ~= "" then							txt = trim(d.Text)
 							break
 						end
 					end
@@ -9797,9 +9757,8 @@ st.fn.setupHubMusic();
 					local p = o.Parent
 					if p and p.Name == "Dropdown" and p:FindFirstAncestor("Menu") then
 						local txt = ""
-						for _, d in o:GetDescendants() do
-							if d:IsA("TextLabel") and trim(d.Text or "") ~= "" then
-								txt = trim(d.Text)
+						for _, d in o:QueryDescendants("TextLabel") do
+							if trim(d.Text or "") ~= "" then								txt = trim(d.Text)
 								break
 							end
 						end

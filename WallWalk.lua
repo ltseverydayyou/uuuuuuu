@@ -9769,7 +9769,7 @@ local function cleanupMarkedObjects(character)
 	if not character then
 		return;
 	end;
-	for _, descendant in ipairs(character:GetDescendants()) do
+	for _, descendant in ipairs(character:QueryDescendants("Instance")) do
 		if descendant:GetAttribute("WallWalkObject") then
 			pcall(function()
 				descendant:Destroy();

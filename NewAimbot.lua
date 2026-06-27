@@ -146,7 +146,7 @@ local function findUiTag(parent, tag, recursive)
 		end;
 	end;
 	if recursive then
-		for _, child in parent:GetDescendants() do
+		for _, child in parent:QueryDescendants("Instance") do
 			if getUiTag(child) == tag then
 				return child;
 			end;
@@ -1310,9 +1310,8 @@ local function applyCustomUI()
 		uiRefs.topToggle.BackgroundColor3 = UI.bar1;
 	end;
 	if gui then
-		for _, d in gui:GetDescendants() do
-			if d:IsA("GuiObject") and (getUiTag(d) == "Glow" or getUiTag(d) == "Accent") then
-				d.BackgroundColor3 = UI.acc2;
+		for _, d in gui:QueryDescendants("GuiObject") do
+			if (getUiTag(d) == "Glow" or getUiTag(d) == "Accent") then				d.BackgroundColor3 = UI.acc2;
 			elseif d:IsA("ScrollingFrame") then
 				d.AutomaticCanvasSize = d.ScrollingDirection == Enum.ScrollingDirection.X and Enum.AutomaticSize.X or Enum.AutomaticSize.Y;
 				d.CanvasSize = UDim2.new(0, 0, 0, 0);
@@ -2439,10 +2438,8 @@ local NA_GRAB_BODY = (function()
 		return nil;
 	end;
 	local function firstPart(model)
-		for _, d in model:QueryDescendants("Instance") do
-			if d:IsA("BasePart") then
-				return d;
-			end;
+		for _, d in model:QueryDescendants("BasePart") do
+			return d;
 		end;
 		return nil;
 	end;

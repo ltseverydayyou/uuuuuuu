@@ -277,7 +277,7 @@ end;
 local function purgeOldAutoParryArtifacts()
 	local ok, guiParent = pcall(guiCHECKINGAHHHHH);
 	if ok and guiParent then
-		for _, old in guiParent:GetDescendants() do
+		for _, old in guiParent:QueryDescendants("Instance") do
 			if old.Name == "Range" or old.Name == "Distance" then
 				pcall(function()
 					old:Destroy();
@@ -285,9 +285,8 @@ local function purgeOldAutoParryArtifacts()
 			end;
 		end;
 	end;
-	for _, old in workspace:GetDescendants() do
-		if old:IsA("BasePart") and (old.Name == "Visualizer" or old.Name == "VisualizerNoUnit" or old.Name == "VisualizerFollowBall") then
-			pcall(function()
+	for _, old in workspace:QueryDescendants("BasePart") do
+		if (old.Name == "Visualizer" or old.Name == "VisualizerNoUnit" or old.Name == "VisualizerFollowBall") then			pcall(function()
 				old:Destroy();
 			end);
 		end;
@@ -1024,10 +1023,8 @@ local function attachContainer(c)
 	if c:IsA("BasePart") then
 		addBall(c);
 	end;
-	for _, d in c:QueryDescendants("Instance") do
-		if d:IsA("BasePart") then
-			addBall(d);
-		end;
+	for _, d in c:QueryDescendants("BasePart") do
+		addBall(d);
 	end;
 	local added = c.DescendantAdded:Connect(function(d)
 		if d:IsA("BasePart") then

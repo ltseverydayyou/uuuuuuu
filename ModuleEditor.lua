@@ -129,9 +129,8 @@ end
 
 for _, root in {huigrab(), cg, pg} do
 	if typeof(root) == "Instance" then
-		for _, v in root:GetDescendants() do
-			if v:IsA("ScreenGui") and v:GetAttribute(tag) == true then
-				v:Destroy()
+		for _, v in root:QueryDescendants("ScreenGui") do
+			if v:GetAttribute(tag) == true then				v:Destroy()
 			end
 		end
 	end
@@ -224,7 +223,7 @@ local function notifyunsupported(msg)
 end
 
 local function findplayersprobe()
-	local all = players:GetDescendants()
+	local all = players:QueryDescendants("Instance")
 	for i = 1, #all do
 		local v = all[i]
 		if v:IsA("ModuleScript") then
@@ -2977,7 +2976,7 @@ local function scan()
 				return
 			end
 
-			local all = root:GetDescendants()
+			local all = root:QueryDescendants("Instance")
 			local tot = #all
 			local rootn = rootname(root)
 

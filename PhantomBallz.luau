@@ -1323,7 +1323,7 @@ do
 		end
 	end
 
-	for _, d in WS:GetDescendants() do
+	for _, d in WS:QueryDescendants("Instance") do
 		task.defer(chk, d)
 	end
 

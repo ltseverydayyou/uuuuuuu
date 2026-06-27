@@ -255,9 +255,10 @@ local func = findfunc("]] .. tostring(ObjRef) .. [[")]]
 
 					ContextMenu:Add({Name = BlockedFuncs[ObjRef] and "Unblock Function" or "Block Function", OnClick = function()
 						if not BlockedFuncs[ObjRef] then
-							if env.hookfunction then
+							local hookCallable = env.GetHookFunction and env.GetHookFunction() or env.hookfunction
+							if hookCallable then
 								BlockedFuncs[ObjRef] = true
-								env.hookfunction(ObjRef, function() return end)
+								hookCallable(ObjRef, function() return end)
 							end
 						else
 							if env.restorefunction then
@@ -283,8 +284,10 @@ end)()]]
 						end
 
 						local HookTemplate = string.format([[local TargetFunc = %s
+local hookEnv = (getgenv and getgenv()) or _G
+local hookCallable = hookEnv and hookEnv["hook" .. "function"]
 
-local old; old = hookfunction(TargetFunc, function(...)
+local old; old = hookCallable(TargetFunc, function(...)
     -- Your hook logic here
     return old(...)
 end)

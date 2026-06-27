@@ -859,9 +859,10 @@ local func = findfunc("]] .. tostring(Target) .. [[")]]
 				if env.restorefunction then env.restorefunction(Target) end
 				BlockedFuncs[Target] = nil
 			else
-				if env.hookfunction then
+				local hookCallable = env.GetHookFunction and env.GetHookFunction() or env.hookfunction
+				if hookCallable then
 					BlockedFuncs[Target] = true
-					env.hookfunction(Target, function() end)
+					hookCallable(Target, function() end)
 				end
 			end
 		end})

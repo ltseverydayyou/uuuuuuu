@@ -138,7 +138,19 @@ local function main()
 
 	local iconData
 	local remote_blocklist = {} -- list of remotes beng blocked, k = the remote instance, v = their old function :3
+	local remote_block_hooked = false
 	nodes = nodes or {}
+
+	local function getHookMetamethod()
+		if env and type(env.GetHookMetamethod) == "function" then
+			return env.GetHookMetamethod()
+		end
+		return env and env.hookmetamethod or nil
+	end
+
+	local function hasHookMetamethod()
+		return type(getHookMetamethod()) == "function"
+	end
 
 	addObject = function(root)
 		if nodes[root] then return end
@@ -1101,21 +1113,21 @@ local function main()
 		if presentClasses["ProximityPrompt"] then context:AddRegistered("FIRE_PROXIMITYPROMPT", fireproximityprompt == nil) end
 		
 		
-		if presentClasses["RemoteEvent"] then context:AddRegistered("BLOCK_REMOTE", env.hookfunction == nil) end
-		if presentClasses["RemoteEvent"] then context:AddRegistered("UNBLOCK_REMOTE", env.hookfunction == nil) end
+		if presentClasses["RemoteEvent"] then context:AddRegistered("BLOCK_REMOTE", not hasHookMetamethod()) end
+		if presentClasses["RemoteEvent"] then context:AddRegistered("UNBLOCK_REMOTE") end
 		
-		if presentClasses["RemoteFunction"] then context:AddRegistered("BLOCK_REMOTE", env.hookfunction == nil) end
-		if presentClasses["RemoteFunction"] then context:AddRegistered("UNBLOCK_REMOTE", env.hookfunction == nil) end
+		if presentClasses["RemoteFunction"] then context:AddRegistered("BLOCK_REMOTE", not hasHookMetamethod()) end
+		if presentClasses["RemoteFunction"] then context:AddRegistered("UNBLOCK_REMOTE") end
 
-		if presentClasses["UnreliableRemoteEvent"] then context:AddRegistered("BLOCK_REMOTE", env.hookfunction == nil) end
-		if presentClasses["UnreliableRemoteEvent"] then context:AddRegistered("UNBLOCK_REMOTE", env.hookfunction == nil) end
+		if presentClasses["UnreliableRemoteEvent"] then context:AddRegistered("BLOCK_REMOTE", not hasHookMetamethod()) end
+		if presentClasses["UnreliableRemoteEvent"] then context:AddRegistered("UNBLOCK_REMOTE") end
 		
 		
-		if presentClasses["BindableEvent"] then context:AddRegistered("BLOCK_REMOTE", env.hookfunction == nil) end
-		if presentClasses["BindableEvent"] then context:AddRegistered("UNBLOCK_REMOTE", env.hookfunction == nil) end
+		if presentClasses["BindableEvent"] then context:AddRegistered("BLOCK_REMOTE", not hasHookMetamethod()) end
+		if presentClasses["BindableEvent"] then context:AddRegistered("UNBLOCK_REMOTE") end
 		
-		if presentClasses["BindableFunction"] then context:AddRegistered("BLOCK_REMOTE", env.hookfunction == nil) end
-		if presentClasses["BindableFunction"] then context:AddRegistered("UNBLOCK_REMOTE", env.hookfunction == nil) end
+		if presentClasses["BindableFunction"] then context:AddRegistered("BLOCK_REMOTE", not hasHookMetamethod()) end
+		if presentClasses["BindableFunction"] then context:AddRegistered("UNBLOCK_REMOTE") end
 		
 		
 		
@@ -1626,22 +1638,43 @@ local function main()
 			RemoteFunction = "InvokeServer",
 			UnreliableRemoteEvent = "FireServer",
 
-			BindableRemote = "Fire",
+			BindableEvent = "Fire",
 			BindableFunction = "Invoke",
 		}
+
+		local function ensureRemoteBlockHook()
+			if remote_block_hooked then
+				return true
+			end
+
+			local hookInstaller = getHookMetamethod()
+			if type(hookInstaller) ~= "function" then
+				return false
+			end
+
+			local oldNamecall
+			oldNamecall = hookInstaller((oldgame or game), "__namecall", function(self, ...)
+				local functionToHook = remote_blocklist[self]
+				if functionToHook and getnamecallmethod() == functionToHook then
+					return nil
+				end
+				return oldNamecall(self, ...)
+			end)
+			remote_block_hooked = true
+			return true
+		end
+
 		context:Register("BLOCK_REMOTE",{Name = "Block From Firing", IconMap = Explorer.MiscIcons, Icon = "Delete", DisabledIcon = "Empty", OnClick = function()
+			if not ensureRemoteBlockHook() then
+				return
+			end
+
 			local sList = selection.List
 			for i, list in sList do
 				local obj = list.Obj
-				if not remote_blocklist[obj] then
-					local functionToHook = ClassFire[obj.ClassName]
-					remote_blocklist[obj] = true
-					local old; old = env.hookmetamethod((oldgame or game), "__namecall", function(self, ...)
-						if remote_blocklist[obj] and self == obj and getnamecallmethod() == functionToHook then
-							return nil
-						end
-						return old(self,...)
-					end)
+				local functionToHook = ClassFire[obj.ClassName]
+				if functionToHook and not remote_blocklist[obj] then
+					remote_blocklist[obj] = functionToHook
 					if Settings.RemoteBlockWriteAttribute then
 						obj:SetAttribute("IsBlocked", true)
 					end

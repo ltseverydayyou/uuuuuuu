@@ -225,7 +225,7 @@ DefaultSettings = (function()
 			Sorting = true,
 			TeleportToOffset = Vector3.new(0,0,0),
 			ClickToRename = true,
-			AutoUpdateSearch = true,
+			AutoUpdateSearch = false,
 			KeyboardShortcuts = true,
 			AutoUpdateMode = 0, -- 0 Default, 1 no tree update, 2 no descendant events, 3 frozen
 			PartSelectionBox = true,
@@ -555,6 +555,7 @@ Main = (function()
 		local getinfo = getinfo or debug.getinfo
 		local DEBUG = false
 		local Hooked = {}
+		local hookCallable = env.GetHookFunction and env.GetHookFunction()
 
 		local Detected, Kill
 
@@ -568,7 +569,7 @@ Main = (function()
 				if typeof(DetectFunc) == "function" and not Detected then
 					Detected = DetectFunc
 
-					local Old; Old = hookfunction(Detected, function(Action, Info, NoCrash)
+					local Old; Old = hookCallable(Detected, function(Action, Info, NoCrash)
 						if Action ~= "_" then
 							if DEBUG then
 								warn(`Adonis AntiCheat flagged\nMethod: {Action}\nInfo: {Info}`)
@@ -583,7 +584,7 @@ Main = (function()
 
 				if rawget(v, "Variables") and rawget(v, "Process") and typeof(KillFunc) == "function" and not Kill then
 					Kill = KillFunc
-					local Old; Old = hookfunction(Kill, function(Info)
+					local Old; Old = hookCallable(Kill, function(Info)
 						if DEBUG then
 							warn(`Adonis AntiCheat tried to kill (fallback): {Info}`)
 						end
@@ -594,7 +595,7 @@ Main = (function()
 			end
 		end
 
-		local Old; Old = hookfunction(getrenv().debug.info, newcclosure(function(...)
+		local Old; Old = hookCallable(getrenv().debug.info, newcclosure(function(...)
 			local LevelOrFunc, Info = ...
 
 			if Detected and LevelOrFunc == Detected then
@@ -1488,8 +1489,54 @@ Main = (function()
 		env.restorefunction = restorefunction
 
 		-- hooks
-		env.hookfunction = hookfunction
-		env.hookmetamethod = hookmetamethod
+		env.ResolveExecutorFunction = function(name)
+			local value
+			if type(getgenv) == "function" then
+				local ok, genv = pcall(getgenv)
+				if ok and type(genv) == "table" then
+					value = rawget(genv, name)
+					if value ~= nil then return value end
+				end
+			end
+			if type(getrenv) == "function" then
+				local ok, renv = pcall(getrenv)
+				if ok and type(renv) == "table" then
+					value = rawget(renv, name)
+					if value ~= nil then return value end
+				end
+			end
+			return rawget(_G, name)
+		end
+
+		env.GetHookFunction = function()
+			local fn = env.ResolveExecutorFunction("hookfunction")
+			return type(fn) == "function" and fn or nil
+		end
+
+		env.GetHookMetamethod = function()
+			local fn = env.ResolveExecutorFunction("hookmetamethod")
+			return type(fn) == "function" and fn or nil
+		end
+
+		env.HasHookFunction = function()
+			return env.GetHookFunction() ~= nil
+		end
+
+		env.HasHookMetamethod = function()
+			return env.GetHookMetamethod() ~= nil
+		end
+
+		env.hookfunction = function(...)
+			local fn = env.GetHookFunction()
+			if not fn then return nil end
+			return fn(...)
+		end
+
+		env.hookmetamethod = function(...)
+			local fn = env.GetHookMetamethod()
+			if not fn then return nil end
+			return fn(...)
+		end
 
 		-- other
 		env.getscriptbytecode = getscriptbytecode
@@ -2161,6 +2208,22 @@ Main = (function()
 		else
 			Main.ResetSettings()
 		end
+	end
+
+	Main.ApplySettingsMigrations = function()
+		Main.UserSettings = Main.UserSettings or {}
+		local migrationKey = "ExplorerAutoUpdateSearchDefaultOff20260627"
+		if Main.UserSettings[migrationKey] then
+			return
+		end
+
+		if type(Settings.Explorer) ~= "table" then
+			Settings.Explorer = {}
+		end
+		Settings.Explorer.AutoUpdateSearch = false
+		Main.UserSettings[migrationKey] = true
+		if Main.SaveUserSettings then Main.SaveUserSettings() end
+		if Main.SaveCurrentSettings then Main.SaveCurrentSettings() end
 	end
 
 
@@ -3877,6 +3940,7 @@ Main = (function()
 		Main.InitEnv()
 		Main.LoadSettings()
 		Main.LoadUserSettings()
+		Main.ApplySettingsMigrations()
 		Main.LoadThemeSettings()
 
 		Main.SetupFilesystem()

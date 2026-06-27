@@ -542,7 +542,7 @@ local EmbeddedModules = {
 				Settings.Explorer.Sorting = val;
 			end;
 			Explorer.SetAutoUpdateSearch = function(val)
-				local enabled = val ~= false;
+				local enabled = val == true;
 				autoUpdateSearch = enabled;
 				Settings.Explorer.AutoUpdateSearch = enabled;
 				if enabled and Explorer.GuiElems and Explorer.GuiElems.SearchBar then
@@ -9839,9 +9839,6 @@ local EmbeddedModules = {
 						elems.Main:TweenSize(UDim2.new(0, self.Width, 0, toSize), Enum.EasingDirection.Out, Enum.EasingStyle.Quart, 0.2, true);
 					end;
 					Lib.FastWait();
-					if self.SearchEnabled and self.FocusSearchOnShow then
-						elems.SearchBar:CaptureFocus();
-					end;
 					closable = true;
 				end;
 				funcs.Hide = function(self)
@@ -9870,7 +9867,7 @@ local EmbeddedModules = {
 						Iconless = false,
 						SearchEnabled = false,
 						ClearSearchOnShow = true,
-						FocusSearchOnShow = true,
+						FocusSearchOnShow = false,
 						Updated = false,
 						QueuedDivider = false,
 						QueuedDividerText = "",
@@ -16195,6 +16192,20 @@ Main = (function()
 		end;
 		if type(Settings.Decompiler.UseLuaExpert) ~= "boolean" then
 			Settings.Decompiler.UseLuaExpert = DefaultSettings.Decompiler.UseLuaExpert;
+		end;
+		if type(Settings._Migrations) ~= "table" then
+			Settings._Migrations = {};
+		end;
+		local migrationKey = "ExplorerAutoUpdateSearchDefaultOff20260627";
+		if Settings._Migrations[migrationKey] ~= true then
+			if type(Settings.Explorer) ~= "table" then
+				Settings.Explorer = {};
+			end;
+			Settings.Explorer.AutoUpdateSearch = false;
+			Settings._Migrations[migrationKey] = true;
+			if Main.SaveCurrentSettings then
+				pcall(Main.SaveCurrentSettings);
+			end;
 		end;
 	end;
 	Main.ResetSettings = function()

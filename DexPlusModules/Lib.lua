@@ -4184,7 +4184,6 @@ local function main()
 
 			-- Close debounce
 			Lib.FastWait()
-			if self.SearchEnabled and self.FocusSearchOnShow then elems.SearchBar:CaptureFocus() end
 			closable = true
 		end
 
@@ -4214,7 +4213,7 @@ local function main()
 				Iconless = false,
 				SearchEnabled = false,
 				ClearSearchOnShow = true,
-				FocusSearchOnShow = true,
+				FocusSearchOnShow = false,
 				Updated = false,
 				QueuedDivider = false,
 				QueuedDividerText = "",

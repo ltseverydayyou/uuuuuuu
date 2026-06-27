@@ -325,8 +325,10 @@ local function MainFunc()
 						local TargetPath = Explorer.GetInstancePath(Target)
 						local Template = string.format([[local Inst = %s
 local compare = compareinstances or rawequal
+local hookEnv = (getgenv and getgenv()) or _G
+local hookCallable = hookEnv and hookEnv["hook" .. "function"]
 
-local o; o = hookfunction(getrawmetatable(game).__namecall, newcclosure(function(self, ...)
+local o; o = hookCallable(getrawmetatable(game).__namecall, newcclosure(function(self, ...)
     local method = getnamecallmethod()
 
     if not checkcaller() and compare(self, Inst) and method == '%s' then
@@ -348,14 +350,17 @@ end))]], TargetPath, Name)
 							local TargetPath = Explorer.GetInstancePath(Target)
 							local Code = string.format([[local Inst = %s
 local compare = compareinstances or rawequal
-local o; o = hookfunction(getrawmetatable(game).__namecall, newcclosure(function(self, ...)
+local hookEnv = (getgenv and getgenv()) or _G
+local hookCallable = hookEnv and hookEnv["hook" .. "function"]
+
+local o; o = hookCallable(getrawmetatable(game).__namecall, newcclosure(function(self, ...)
     local method = getnamecallmethod()
     if not checkcaller() and compare(self, Inst) and method == '%s' then
         return nil
     end
     return o(self, ...)
 end))
-local o2; o2 = hookfunction(Inst.%s, newcclosure(function(self, ...)
+local o2; o2 = hookCallable(Inst.%s, newcclosure(function(self, ...)
     if not checkcaller() and compare(self, Inst) then
         return nil
     end
@@ -389,8 +394,10 @@ end))]], TargetPath, Name, Name)
 						local TargetPath = Explorer.GetInstancePath(Target)
 						local Template = string.format([[local Inst = %s
 local compare = compareinstances or rawequal
+local hookEnv = (getgenv and getgenv()) or _G
+local hookCallable = hookEnv and hookEnv["hook" .. "function"]
 
-local o; o = hookfunction(getrawmetatable(game).__index, newcclosure(function(...)
+local o; o = hookCallable(getrawmetatable(game).__index, newcclosure(function(...)
     local self, arg = ...
 
     if not checkcaller() and compare(self, Inst) and arg == '%s' then
@@ -412,7 +419,10 @@ end))]], TargetPath, Name)
 							local TargetPath = Explorer.GetInstancePath(Target)
 							local Code = string.format([[local Inst = %s
 local compare = compareinstances or rawequal
-local o; o = hookfunction(getrawmetatable(game).__index, newcclosure(function(...)
+local hookEnv = (getgenv and getgenv()) or _G
+local hookCallable = hookEnv and hookEnv["hook" .. "function"]
+
+local o; o = hookCallable(getrawmetatable(game).__index, newcclosure(function(...)
     local self, arg = ...
 
     if not checkcaller() and compare(self, Inst) and arg == '%s' then
@@ -602,8 +612,10 @@ end))]], TargetPath, Name)
 			local TargetPath = Explorer.GetInstancePath(Mem.Target)
 			local Template = string.format([[local Inst = %s
 local compare = compareinstances or rawequal
+local hookEnv = (getgenv and getgenv()) or _G
+local hookCallable = hookEnv and hookEnv["hook" .. "function"]
 
-local o; o = hookfunction(getrawmetatable(game).__namecall, newcclosure(function(self, ...)
+local o; o = hookCallable(getrawmetatable(game).__namecall, newcclosure(function(self, ...)
     local method = getnamecallmethod()
 
     if not checkcaller() and compare(self, Inst) and method == '%s' then
@@ -623,8 +635,10 @@ end))]], TargetPath, Mem.Name)
 			local TargetPath = Explorer.GetInstancePath(Mem.Target)
 			local Template = string.format([[local Inst = %s
 local compare = compareinstances or rawequal
+local hookEnv = (getgenv and getgenv()) or _G
+local hookCallable = hookEnv and hookEnv["hook" .. "function"]
 
-local o; o = hookfunction(getrawmetatable(game).__index, newcclosure(function(...)
+local o; o = hookCallable(getrawmetatable(game).__index, newcclosure(function(...)
     local self, arg = ...
 
     if not checkcaller() and compare(self, Inst) and arg == '%s' then
@@ -644,7 +658,10 @@ end))]], TargetPath, Mem.Name)
 			local TargetPath = Explorer.GetInstancePath(Mem.Target)
 			local Code = string.format([[local Inst = %s
 local compare = compareinstances or rawequal
-local o; o = hookfunction(getrawmetatable(game).__index, newcclosure(function(...)
+local hookEnv = (getgenv and getgenv()) or _G
+local hookCallable = hookEnv and hookEnv["hook" .. "function"]
+
+local o; o = hookCallable(getrawmetatable(game).__index, newcclosure(function(...)
     local self, arg = ...
 
     if not checkcaller() and compare(self, Inst) and arg == '%s' then
@@ -669,7 +686,10 @@ end))]], TargetPath, Mem.Name)
 					local TargetPath = Explorer.GetInstancePath(Mem.Target)
 					local Code = string.format([[local Inst = %s
 local compare = compareinstances or rawequal
-local o; o = hookfunction(getrawmetatable(game).__index, newcclosure(function(...)
+local hookEnv = (getgenv and getgenv()) or _G
+local hookCallable = hookEnv and hookEnv["hook" .. "function"]
+
+local o; o = hookCallable(getrawmetatable(game).__index, newcclosure(function(...)
     local self, arg = ...
 
     if not checkcaller() and compare(self, Inst) and arg == '%s' then
@@ -752,9 +772,10 @@ end))]], TargetPath, Mem.Name, ValCode)
 				if env.restorefunction then pcall(env.restorefunction, Func) end
 				DebugExplorer.BlockedConnections[Hash] = nil
 			else
-				if env.hookfunction then
+				local hookCallable = env.GetHookFunction and env.GetHookFunction() or env.hookfunction
+				if hookCallable then
 					DebugExplorer.BlockedConnections[Hash] = true
-					pcall(env.hookfunction, Func, function() end)
+					pcall(hookCallable, Func, function() end)
 				end
 			end
 			DebugExplorer.RefreshConnections()
@@ -884,7 +905,10 @@ end))]], TargetPath, Mem.Name, ValCode)
 			local TargetPath = Explorer.GetInstancePath(Mem.Target)
 			local Code = string.format([[local Inst = %s
 local compare = compareinstances or rawequal
-local o; o = hookfunction(getrawmetatable(game).__index, newcclosure(function(...)
+local hookEnv = (getgenv and getgenv()) or _G
+local hookCallable = hookEnv and hookEnv["hook" .. "function"]
+
+local o; o = hookCallable(getrawmetatable(game).__index, newcclosure(function(...)
     local self, arg = ...
 
     if not checkcaller() and compare(self, Inst) and arg == '%s' then

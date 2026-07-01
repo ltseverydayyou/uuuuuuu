@@ -549,7 +549,34 @@ local EmbeddedModules = {
 					Explorer.DoSearch(Explorer.GuiElems.SearchBar.Text or "");
 				end;
 			end;
+			local function setExplorerScrollCornerVisible(visible)
+				local corner = Explorer.GuiElems and Explorer.GuiElems.ScrollCorner;
+				if not (corner and corner.Parent) then
+					local content = Explorer.Window and Explorer.Window.GuiElems and Explorer.Window.GuiElems.Content;
+					if not (content and content.Parent) then
+						return;
+					end;
+					corner = content:FindFirstChild("ScrollCorner");
+					if not corner then
+						corner = Instance.new("Frame");
+						corner.Name = "ScrollCorner";
+						corner.BackgroundColor3 = Color3.new(0.15686275064945, 0.15686275064945, 0.15686275064945);
+						corner.BorderSizePixel = 0;
+						corner.Position = UDim2.new(1, -16, 1, -16);
+						corner.Size = UDim2.new(0, 16, 0, 16);
+						corner.Visible = false;
+						corner.Parent = content;
+					end;
+					Explorer.GuiElems.ScrollCorner = corner;
+				end;
+				corner.Visible = visible == true;
+			end;
+
 			Explorer.UpdateView = function()
+				local content = Explorer.Window and Explorer.Window.GuiElems and Explorer.Window.GuiElems.Content;
+				if not (content and content.Parent and treeFrame and treeFrame.Parent and scrollV and scrollV.Gui and scrollH and scrollH.Gui) then
+					return;
+				end;
 				local maxNodes = math.ceil(treeFrame.AbsoluteSize.Y / 20);
 				local maxX = treeFrame.AbsoluteSize.X;
 				local totalWidth = Explorer.ViewWidth + Explorer.FreeWidth;
@@ -570,11 +597,11 @@ local EmbeddedModules = {
 					if scrollV.Gui.Visible and scrollH.Gui.Visible then
 						scrollV.Gui.Size = UDim2.new(0, 16, 1, -39);
 						scrollH.Gui.Size = UDim2.new(1, -16, 0, 16);
-						Explorer.Window.GuiElems.Content.ScrollCorner.Visible = true;
+						setExplorerScrollCornerVisible(true);
 					else
 						scrollV.Gui.Size = UDim2.new(0, 16, 1, -23);
 						scrollH.Gui.Size = UDim2.new(1, 0, 0, 16);
-						Explorer.Window.GuiElems.Content.ScrollCorner.Visible = false;
+						setExplorerScrollCornerVisible(false);
 					end;
 					Explorer.Index = scrollV.Index;
 				end;
@@ -3210,6 +3237,7 @@ local EmbeddedModules = {
 				toolBar.Parent = window.GuiElems.Content;
 				treeFrame.Parent = window.GuiElems.Content;
 				explorerItems.ScrollCorner.Parent = window.GuiElems.Content;
+				Explorer.GuiElems.ScrollCorner = explorerItems.ScrollCorner;
 				scrollV.Gui.Parent = window.GuiElems.Content;
 				scrollH.Gui.Parent = window.GuiElems.Content;
 				Explorer.InitRenameBox();
@@ -3882,7 +3910,34 @@ local EmbeddedModules = {
 				Properties.Update();
 				Properties.Refresh();
 			end;
+			local function setPropertiesScrollCornerVisible(visible)
+				local corner = Properties.GuiElems and Properties.GuiElems.ScrollCorner;
+				if not (corner and corner.Parent) then
+					local content = Properties.Window and Properties.Window.GuiElems and Properties.Window.GuiElems.Content;
+					if not (content and content.Parent) then
+						return;
+					end;
+					corner = content:FindFirstChild("ScrollCorner");
+					if not corner then
+						corner = Instance.new("Frame");
+						corner.Name = "ScrollCorner";
+						corner.BackgroundColor3 = Color3.new(0.15686275064945, 0.15686275064945, 0.15686275064945);
+						corner.BorderSizePixel = 0;
+						corner.Position = UDim2.new(1, -16, 1, -16);
+						corner.Size = UDim2.new(0, 16, 0, 16);
+						corner.Visible = false;
+						corner.Parent = content;
+					end;
+					Properties.GuiElems.ScrollCorner = corner;
+				end;
+				corner.Visible = visible == true;
+			end;
+
 			Properties.UpdateView = function()
+				local content = Properties.Window and Properties.Window.GuiElems and Properties.Window.GuiElems.Content;
+				if not (content and content.Parent and propsFrame and propsFrame.Parent and scrollV and scrollV.Gui and scrollH and scrollH.Gui) then
+					return;
+				end;
 				local maxEntries = math.ceil(propsFrame.AbsoluteSize.Y / 23);
 				local maxX = propsFrame.AbsoluteSize.X;
 				local totalWidth = Properties.ViewWidth + Properties.MinInputWidth;
@@ -3902,11 +3957,11 @@ local EmbeddedModules = {
 					if scrollV.Gui.Visible and scrollH.Gui.Visible then
 						scrollV.Gui.Size = UDim2.new(0, 16, 1, -39);
 						scrollH.Gui.Size = UDim2.new(1, -16, 0, 16);
-						Properties.Window.GuiElems.Content.ScrollCorner.Visible = true;
+						setPropertiesScrollCornerVisible(true);
 					else
 						scrollV.Gui.Size = UDim2.new(0, 16, 1, -23);
 						scrollH.Gui.Size = UDim2.new(1, 0, 0, 16);
-						Properties.Window.GuiElems.Content.ScrollCorner.Visible = false;
+						setPropertiesScrollCornerVisible(false);
 					end;
 					Properties.Index = scrollV.Index;
 				end;
@@ -5909,6 +5964,7 @@ local EmbeddedModules = {
 				toolBar.Parent = window.GuiElems.Content;
 				propsFrame.Parent = window.GuiElems.Content;
 				guiItems.ScrollCorner.Parent = window.GuiElems.Content;
+				Properties.GuiElems.ScrollCorner = guiItems.ScrollCorner;
 				scrollV.Gui.Parent = window.GuiElems.Content;
 				scrollH.Gui.Parent = window.GuiElems.Content;
 				Properties.InitInputBox();

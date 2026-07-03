@@ -74,10 +74,93 @@ local gethui = function()
 	end;
 	return nil;
 end;
+local function __NADexProtectOptions(options)
+	local merged = {}
+	if type(options) == "table" then
+		for key, value in next, options do
+			merged[key] = value
+		end
+	end
+
+	if merged.ignoreGuiInset == nil then
+		merged.ignoreGuiInset = false
+	end
+	if merged.IgnoreGuiInset == nil then
+		merged.IgnoreGuiInset = merged.ignoreGuiInset
+	end
+	if merged.forceIgnoreGuiInset == nil then
+		merged.forceIgnoreGuiInset = merged.ignoreGuiInset
+	end
+	if merged.enforceIgnoreGuiInset == nil then
+		merged.enforceIgnoreGuiInset = merged.ignoreGuiInset
+	end
+	if merged.setIgnoreGuiInset == nil then
+		merged.setIgnoreGuiInset = merged.ignoreGuiInset
+	end
+	if merged.autoEnable == nil then
+		merged.autoEnable = false
+	end
+	if merged.autoEnabled == nil then
+		merged.autoEnabled = merged.autoEnable
+	end
+	if merged.forceEnabled == nil then
+		merged.forceEnabled = merged.autoEnable
+	end
+	if merged.enforceEnabled == nil then
+		merged.enforceEnabled = merged.autoEnable
+	end
+	if merged.lockEnabled == nil then
+		merged.lockEnabled = merged.autoEnable
+	end
+	if merged.enabledLoop == nil then
+		merged.enabledLoop = merged.autoEnable
+	end
+	return merged
+end
+
+local function __NAApplyDexScreenGuiOptions(gui, options)
+	if typeof(gui) ~= "Instance" then
+		return gui
+	end
+	options = type(options) == "table" and options or {}
+
+	local screenGui = nil
+	if gui:IsA("ScreenGui") then
+		screenGui = gui
+	else
+		local parent = gui.Parent
+		if typeof(parent) == "Instance" and parent:IsA("ScreenGui") then
+			screenGui = parent
+		end
+	end
+
+	if screenGui then
+		if options.autoEnable == true or options.autoEnabled == true or options.forceEnabled == true or options.enforceEnabled == true or options.lockEnabled == true or options.enabledLoop == true then
+			pcall(function()
+				screenGui.Enabled = true
+			end)
+		end
+		if options.ignoreGuiInset == true or options.IgnoreGuiInset == true then
+			return gui
+		end
+		pcall(function()
+			screenGui.IgnoreGuiInset = false
+		end)
+		pcall(function()
+			screenGui.ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets
+		end)
+	end
+
+	return gui
+end
+
 local function __NAProtectUI(gui, options)
 	if __NAUIProtector and type(__NAUIProtector.protectUI) == "function" then
-		local ok, protected = pcall(__NAUIProtector.protectUI, gui, options);
+		local protectOptions = __NADexProtectOptions(options)
+		local ok, protected = pcall(__NAUIProtector.protectUI, gui, protectOptions);
 		if ok and protected then
+			__NAApplyDexScreenGuiOptions(gui, protectOptions)
+			__NAApplyDexScreenGuiOptions(protected, protectOptions)
 			return protected;
 		end;
 	end;
@@ -3923,7 +4006,19 @@ Main = (function()
 		--Main.CreateApp({Name = "Secret Service Panel", IconMap = Main.LargeIcons, Icon = "Output", Window = SecretServicePanel.Window})
 
 
-		Lib.ShowGui(gui)
+		Lib.ShowGui(gui, {
+			ignoreGuiInset = true,
+			IgnoreGuiInset = true,
+			forceIgnoreGuiInset = true,
+			enforceIgnoreGuiInset = true,
+			setIgnoreGuiInset = true,
+			autoEnable = true,
+			autoEnabled = true,
+			forceEnabled = true,
+			enforceEnabled = true,
+			lockEnabled = true,
+			enabledLoop = true
+		})
 	end
 
 	Main.SetupFilesystem = function()

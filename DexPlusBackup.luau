@@ -157,6 +157,18 @@ end
 local function __NAProtectUI(gui, options)
 	if __NAUIProtector and type(__NAUIProtector.protectUI) == "function" then
 		local protectOptions = __NADexProtectOptions(options)
+		if protectOptions.enforceParent == false or protectOptions.lockParent == false or protectOptions.parentLock == false then
+			if type(__NAUIProtector.nativeProtect) == "function" then
+				pcall(__NAUIProtector.nativeProtect, gui)
+			end
+			__NAApplyDexScreenGuiOptions(gui, protectOptions)
+			local okHui, hui = pcall(gethui)
+			if okHui and typeof(hui) == "Instance" then
+				gui.Parent = hui
+				return gui
+			end
+			return nil
+		end
 		local ok, protected = pcall(__NAUIProtector.protectUI, gui, protectOptions);
 		if ok and protected then
 			__NAApplyDexScreenGuiOptions(gui, protectOptions)
@@ -2976,7 +2988,7 @@ Main = (function()
 			data.Open = true
 			updateState()
 			if not silent then
-				if data.Window then data.Window:Show() end
+				if data.Window then data.Window:Show(data.WindowShowData) end
 				if data.OnClick then data.OnClick(data.Open) end
 			end
 		end
@@ -3437,10 +3449,17 @@ Main = (function()
 		local startupSettings = (Settings and Settings.Startup) or (DefaultSettings and DefaultSettings.Startup) or {}
 		local openExplorerByDefault = startupSettings.OpenExplorer ~= false
 		local openPropertiesByDefault = startupSettings.OpenProperties ~= false
+		local function startupWindowShowData(sideName, pos)
+			return {
+				Align = (sideName == "Left") and "left" or "right",
+				Pos = pos,
+				Size = 0.5
+			}
+		end
 
-		Main.CreateApp({Name = "Explorer", IconMap = Main.LargeIcons, Icon = "Explorer", Open = openExplorerByDefault, Window = Explorer.Window})
+		Main.CreateApp({Name = "Explorer", IconMap = Main.LargeIcons, Icon = "Explorer", Open = openExplorerByDefault, Window = Explorer.Window, WindowShowData = startupWindowShowData(startupSettings.ExplorerSide, 1)})
 
-		Main.CreateApp({Name = "Properties", IconMap = Main.LargeIcons, Icon = "Properties", Open = openPropertiesByDefault, Window = Properties.Window})
+		Main.CreateApp({Name = "Properties", IconMap = Main.LargeIcons, Icon = "Properties", Open = openPropertiesByDefault, Window = Properties.Window, WindowShowData = startupWindowShowData(startupSettings.PropertiesSide, 2)})
 
 		local cptsOnMouseClick = nil
 		local cgtsBegan = nil

@@ -157,6 +157,18 @@ end
 local function __NAProtectUI(gui, options)
 	if __NAUIProtector and type(__NAUIProtector.protectUI) == "function" then
 		local protectOptions = __NADexProtectOptions(options)
+		if protectOptions.enforceParent == false or protectOptions.lockParent == false or protectOptions.parentLock == false then
+			if type(__NAUIProtector.nativeProtect) == "function" then
+				pcall(__NAUIProtector.nativeProtect, gui)
+			end
+			__NAApplyDexScreenGuiOptions(gui, protectOptions)
+			local okHui, hui = pcall(gethui)
+			if okHui and typeof(hui) == "Instance" then
+				gui.Parent = hui
+				return gui
+			end
+			return nil
+		end
 		local ok, protected = pcall(__NAUIProtector.protectUI, gui, protectOptions);
 		if ok and protected then
 			__NAApplyDexScreenGuiOptions(gui, protectOptions)
@@ -3101,7 +3113,11 @@ local function main()
 												local insertPos, range = getSideInsertPos(leftSide, inputY)
 												alignIndicator.Indicator.Position = UDim2.new(0, -15, 0, range[1])
 												alignIndicator.Indicator.Size = UDim2.new(0, 40, 0, range[2] - range[1])
-												Lib.ShowGui(alignIndicator)
+												Lib.ShowGui(alignIndicator, {
+													enforceParent = false,
+													lockParent = false,
+													parentLock = false
+												})
 												alignInsertPos = insertPos
 												alignInsertSide = "left"
 												return
@@ -3111,7 +3127,11 @@ local function main()
 												local insertPos, range = getSideInsertPos(rightSide, inputY)
 												alignIndicator.Indicator.Position = UDim2.new(0, maxX - 25, 0, range[1])
 												alignIndicator.Indicator.Size = UDim2.new(0, 40, 0, range[2] - range[1])
-												Lib.ShowGui(alignIndicator)
+												Lib.ShowGui(alignIndicator, {
+													enforceParent = false,
+													lockParent = false,
+													parentLock = false
+												})
 												alignInsertPos = insertPos
 												alignInsertSide = "right"
 												return

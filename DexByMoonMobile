@@ -157,6 +157,18 @@ end;
 local function __NAProtectUI(gui, options)
 	if __NAUIProtector and type(__NAUIProtector.protectUI) == "function" then
 		local protectOptions = __NADexProtectOptions(options);
+		if protectOptions.enforceParent == false or protectOptions.lockParent == false or protectOptions.parentLock == false then
+			if type(__NAUIProtector.nativeProtect) == "function" then
+				pcall(__NAUIProtector.nativeProtect, gui);
+			end;
+			__NAApplyDexScreenGuiOptions(gui, protectOptions);
+			local okHui, hui = pcall(gethui);
+			if okHui and typeof(hui) == "Instance" then
+				gui.Parent = hui;
+				return gui;
+			end;
+			return nil;
+		end;
 		local ok, protected = pcall(__NAUIProtector.protectUI, gui, protectOptions);
 		if ok and protected then
 			__NAApplyDexScreenGuiOptions(gui, protectOptions);
@@ -8507,7 +8519,11 @@ local EmbeddedModules = {
 														local insertPos, range = getSideInsertPos(leftSide, inputY);
 														alignIndicator.Indicator.Position = UDim2.new(0, -15, 0, range[1]);
 														alignIndicator.Indicator.Size = UDim2.new(0, 40, 0, range[2] - range[1]);
-														Lib.ShowGui(alignIndicator);
+														Lib.ShowGui(alignIndicator, {
+															enforceParent = false,
+															lockParent = false,
+															parentLock = false
+														});
 														alignInsertPos = insertPos;
 														alignInsertSide = "left";
 														return;
@@ -8517,7 +8533,11 @@ local EmbeddedModules = {
 														local insertPos, range = getSideInsertPos(rightSide, inputY);
 														alignIndicator.Indicator.Position = UDim2.new(0, maxX - 25, 0, range[1]);
 														alignIndicator.Indicator.Size = UDim2.new(0, 40, 0, range[2] - range[1]);
-														Lib.ShowGui(alignIndicator);
+														Lib.ShowGui(alignIndicator, {
+															enforceParent = false,
+															lockParent = false,
+															parentLock = false
+														});
 														alignInsertPos = insertPos;
 														alignInsertSide = "right";
 														return;
@@ -17314,7 +17334,7 @@ Main = (function()
 			updateState();
 			if not silent then
 				if data.Window then
-					data.Window:Show();
+					data.Window:Show(data.WindowShowData);
 				end;
 				if data.OnClick then
 					data.OnClick(data.Open);
@@ -18285,7 +18305,12 @@ Main = (function()
 				IconMap = Main.LargeIcons,
 				Icon = "Explorer",
 				Open = true,
-				Window = Explorer.Window
+				Window = Explorer.Window,
+				WindowShowData = {
+					Align = "right",
+					Pos = 1,
+					Size = 0.5
+				}
 			});
 		end;
 		if Properties and Properties.Window and (not isStubModule(Properties)) then
@@ -18294,7 +18319,12 @@ Main = (function()
 				IconMap = Main.LargeIcons,
 				Icon = "Properties",
 				Open = true,
-				Window = Properties.Window
+				Window = Properties.Window,
+				WindowShowData = {
+					Align = "right",
+					Pos = 2,
+					Size = 0.5
+				}
 			});
 		end;
 		if ScriptViewer and ScriptViewer.Window and (not isStubModule(ScriptViewer)) then
@@ -18927,7 +18957,7 @@ Main = (function()
 		end;
 		if explorerReady and propertiesReady then
 			Lib.DeferFunc(function()
-				Lib.Window.ToggleSide("right");
+				Lib.Window.SetSideVisible("right", true);
 			end);
 		end;
 		if Main.ApplyStoredWindowTransparency then

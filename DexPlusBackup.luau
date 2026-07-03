@@ -74,105 +74,10 @@ local gethui = function()
 	end;
 	return nil;
 end;
-local function __NADexProtectOptions(options)
-	local merged = {}
-	if type(options) == "table" then
-		for key, value in next, options do
-			merged[key] = value
-		end
-	end
-
-	if merged.ignoreGuiInset == nil then
-		merged.ignoreGuiInset = false
-	end
-	if merged.IgnoreGuiInset == nil then
-		merged.IgnoreGuiInset = merged.ignoreGuiInset
-	end
-	if merged.forceIgnoreGuiInset == nil then
-		merged.forceIgnoreGuiInset = merged.ignoreGuiInset
-	end
-	if merged.enforceIgnoreGuiInset == nil then
-		merged.enforceIgnoreGuiInset = merged.ignoreGuiInset
-	end
-	if merged.setIgnoreGuiInset == nil then
-		merged.setIgnoreGuiInset = merged.ignoreGuiInset
-	end
-	if merged.autoEnable == nil then
-		merged.autoEnable = false
-	end
-	if merged.autoEnabled == nil then
-		merged.autoEnabled = merged.autoEnable
-	end
-	if merged.forceEnabled == nil then
-		merged.forceEnabled = merged.autoEnable
-	end
-	if merged.enforceEnabled == nil then
-		merged.enforceEnabled = merged.autoEnable
-	end
-	if merged.lockEnabled == nil then
-		merged.lockEnabled = merged.autoEnable
-	end
-	if merged.enabledLoop == nil then
-		merged.enabledLoop = merged.autoEnable
-	end
-	return merged
-end
-
-local function __NAApplyDexScreenGuiOptions(gui, options)
-	if typeof(gui) ~= "Instance" then
-		return gui
-	end
-	options = type(options) == "table" and options or {}
-
-	local screenGui = nil
-	if gui:IsA("ScreenGui") then
-		screenGui = gui
-	else
-		local parent = gui.Parent
-		if typeof(parent) == "Instance" and parent:IsA("ScreenGui") then
-			screenGui = parent
-		end
-	end
-
-	if screenGui then
-		if options.autoEnable == true or options.autoEnabled == true or options.forceEnabled == true or options.enforceEnabled == true or options.lockEnabled == true or options.enabledLoop == true then
-			pcall(function()
-				screenGui.Enabled = true
-			end)
-		end
-		if options.ignoreGuiInset == true or options.IgnoreGuiInset == true then
-			return gui
-		end
-		pcall(function()
-			screenGui.IgnoreGuiInset = false
-		end)
-		pcall(function()
-			screenGui.ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets
-		end)
-	end
-
-	return gui
-end
-
 local function __NAProtectUI(gui, options)
 	if __NAUIProtector and type(__NAUIProtector.protectUI) == "function" then
-		local protectOptions = __NADexProtectOptions(options)
-		if protectOptions.enforceParent == false or protectOptions.lockParent == false or protectOptions.parentLock == false then
-			if type(__NAUIProtector.nativeProtect) == "function" then
-				pcall(__NAUIProtector.nativeProtect, gui)
-			end
-			__NAApplyDexScreenGuiOptions(gui, protectOptions)
-			local okHui, hui = pcall(gethui)
-			if okHui and typeof(hui) == "Instance" then
-				gui.Parent = hui
-				return gui
-			end
-			return nil
-		end
-		local ok, protected = pcall(__NAUIProtector.protectUI, gui, protectOptions);
+		local ok, protected = pcall(__NAUIProtector.protectUI, gui, options);
 		if ok and protected then
-			__NAApplyDexScreenGuiOptions(gui, protectOptions)
-			__NAApplyDexScreenGuiOptions(protected, protectOptions)
 			return protected;
 		end;
 	end;
@@ -772,37 +677,30 @@ Main = (function()
 		return assetId
 	end
 
-	Main.SecureGui = function(gui, options)
-		if typeof(gui) ~= "Instance" then
-			return nil
-		end
-
+	Main.SecureGui = function(gui)
 		gui.Name = Main.GetRandomString()
 		if Main.TrackGui then
 			Main.TrackGui(gui)
 		end
 
-		local protected = __NAProtectUI(gui, options)
-		if protected then
-			return protected
+		if gethui then
+			gui.Parent = gethui()
+		elseif syn and syn.protect_gui then
+			syn.protect_gui(gui)
+			gui.Parent = service.CoreGui
+		elseif protect_gui then
+			protect_gui(gui)
+			gui.Parent = service.CoreGui
+		elseif protectgui then
+			protectgui(gui)
+			gui.Parent = service.CoreGui
+		else
+			if Main.Elevated then
+				gui.Parent = service.CoreGui
+			else
+				gui.Parent = service.Players.LocalPlayer:WaitForChild("PlayerGui")
+			end
 		end
-
-		local okHui, hui = pcall(gethui)
-		if okHui and typeof(hui) == "Instance" then
-			gui.Parent = hui
-			return gui
-		end
-
-		-- Last-resort fallback only when UIprotector/gethui failed to load.
-		local playerGui = plr and plr:FindFirstChildOfClass("PlayerGui")
-		local holder = (Main.GuiHolder and typeof(Main.GuiHolder) == "Instance" and Main.GuiHolder)
-			or (Main.Elevated and service.CoreGui)
-			or playerGui
-		if holder then
-			gui.Parent = holder
-			return gui
-		end
-		return nil
 	end
 
 	Main.GetInitDeps = function()
@@ -1380,18 +1278,13 @@ Main = (function()
 			}
 			local source = oldgame:HttpGet(Params.RepoURL .. Params.SSI .. ".luau", true)
 			source = source:gsub("StatusGui%.Parent = global_container%.gethui%(%)", [[
-			local cacheHost = (getgenv and getgenv()) or _G
-			local uiProtector = type(cacheHost) == "table" and rawget(cacheHost, "__lt_ui_protector") or nil
-			local protectedOk = false
-			if type(uiProtector) == "table" and type(uiProtector.protectUI) == "function" then
-				local okProtected, protected = pcall(uiProtector.protectUI, StatusGui)
-				protectedOk = okProtected and protected ~= nil
-			end
-			if not protectedOk then
-				local huiOk, hui = pcall(global_container.gethui)
-				if huiOk and typeof(hui) == "Instance" then
-					StatusGui.Parent = hui
-				end
+			local huiOk, hui = pcall(global_container.gethui)
+			if huiOk and typeof(hui) == "Instance" then
+				StatusGui.Parent = hui
+			else
+				local CoreGui = game:GetService("CoreGui")
+				local RobloxGui = CoreGui:FindFirstChild("RobloxGui")
+				StatusGui.Parent = RobloxGui or CoreGui
 			end
 			]], 1)
 			local synsaveinstance = loadstring(source, Params.SSI)()
@@ -1648,20 +1541,7 @@ Main = (function()
 		-- other
 		env.getscriptbytecode = getscriptbytecode
 		env.setfflag = setfflag
-		local nativeProtectGui = protect_gui or (syn and syn.protect_gui)
-		env.protectgui = function(gui, options)
-			local protected = __NAProtectUI(gui, options)
-			if protected then
-				return protected
-			end
-			if type(nativeProtectGui) == "function" then
-				local ok, result = pcall(nativeProtectGui, gui)
-				if ok then
-					return result or gui
-				end
-			end
-			return nil
-		end
+		env.protectgui = protect_gui or (syn and syn.protect_gui)
 		env.gethui = gethui
 		env.setclipboard = setclipboard
 		env.getnilinstances = getnilinstances or get_nil_instances
@@ -1926,8 +1806,7 @@ Main = (function()
 
 		env.getcustomasset = getcustomasset or getsynasset or env.getcustomasset
 
-		local okGuiHolder, guiHolder = pcall(gethui)
-		Main.GuiHolder = (okGuiHolder and typeof(guiHolder) == "Instance" and guiHolder) or (Main.Elevated and service.CoreGui or plr:FindFirstChildOfClass("PlayerGui"))
+		Main.GuiHolder = Main.Elevated and service.CoreGui or plr:FindFirstChildOfClass("PlayerGui")
 
 		setmetatable(env,nil)
 	end
@@ -2988,7 +2867,7 @@ Main = (function()
 			data.Open = true
 			updateState()
 			if not silent then
-				if data.Window then data.Window:Show(data.WindowShowData) end
+				if data.Window then data.Window:Show() end
 				if data.OnClick then data.OnClick(data.Open) end
 			end
 		end
@@ -3449,17 +3328,10 @@ Main = (function()
 		local startupSettings = (Settings and Settings.Startup) or (DefaultSettings and DefaultSettings.Startup) or {}
 		local openExplorerByDefault = startupSettings.OpenExplorer ~= false
 		local openPropertiesByDefault = startupSettings.OpenProperties ~= false
-		local function startupWindowShowData(sideName, pos)
-			return {
-				Align = (sideName == "Left") and "left" or "right",
-				Pos = pos,
-				Size = 0.5
-			}
-		end
 
-		Main.CreateApp({Name = "Explorer", IconMap = Main.LargeIcons, Icon = "Explorer", Open = openExplorerByDefault, Window = Explorer.Window, WindowShowData = startupWindowShowData(startupSettings.ExplorerSide, 1)})
+		Main.CreateApp({Name = "Explorer", IconMap = Main.LargeIcons, Icon = "Explorer", Open = openExplorerByDefault, Window = Explorer.Window})
 
-		Main.CreateApp({Name = "Properties", IconMap = Main.LargeIcons, Icon = "Properties", Open = openPropertiesByDefault, Window = Properties.Window, WindowShowData = startupWindowShowData(startupSettings.PropertiesSide, 2)})
+		Main.CreateApp({Name = "Properties", IconMap = Main.LargeIcons, Icon = "Properties", Open = openPropertiesByDefault, Window = Properties.Window})
 
 		local cptsOnMouseClick = nil
 		local cgtsBegan = nil
@@ -4025,19 +3897,7 @@ Main = (function()
 		--Main.CreateApp({Name = "Secret Service Panel", IconMap = Main.LargeIcons, Icon = "Output", Window = SecretServicePanel.Window})
 
 
-		Lib.ShowGui(gui, {
-			ignoreGuiInset = true,
-			IgnoreGuiInset = true,
-			forceIgnoreGuiInset = true,
-			enforceIgnoreGuiInset = true,
-			setIgnoreGuiInset = true,
-			autoEnable = true,
-			autoEnabled = true,
-			forceEnabled = true,
-			enforceEnabled = true,
-			lockEnabled = true,
-			enabledLoop = true
-		})
+		Lib.ShowGui(gui)
 	end
 
 	Main.SetupFilesystem = function()

@@ -74,105 +74,10 @@ local gethui = function()
 	end;
 	return nil;
 end;
-local function __NADexProtectOptions(options)
-	local merged = {}
-	if type(options) == "table" then
-		for key, value in next, options do
-			merged[key] = value
-		end
-	end
-
-	if merged.ignoreGuiInset == nil then
-		merged.ignoreGuiInset = false
-	end
-	if merged.IgnoreGuiInset == nil then
-		merged.IgnoreGuiInset = merged.ignoreGuiInset
-	end
-	if merged.forceIgnoreGuiInset == nil then
-		merged.forceIgnoreGuiInset = merged.ignoreGuiInset
-	end
-	if merged.enforceIgnoreGuiInset == nil then
-		merged.enforceIgnoreGuiInset = merged.ignoreGuiInset
-	end
-	if merged.setIgnoreGuiInset == nil then
-		merged.setIgnoreGuiInset = merged.ignoreGuiInset
-	end
-	if merged.autoEnable == nil then
-		merged.autoEnable = false
-	end
-	if merged.autoEnabled == nil then
-		merged.autoEnabled = merged.autoEnable
-	end
-	if merged.forceEnabled == nil then
-		merged.forceEnabled = merged.autoEnable
-	end
-	if merged.enforceEnabled == nil then
-		merged.enforceEnabled = merged.autoEnable
-	end
-	if merged.lockEnabled == nil then
-		merged.lockEnabled = merged.autoEnable
-	end
-	if merged.enabledLoop == nil then
-		merged.enabledLoop = merged.autoEnable
-	end
-	return merged
-end
-
-local function __NAApplyDexScreenGuiOptions(gui, options)
-	if typeof(gui) ~= "Instance" then
-		return gui
-	end
-	options = type(options) == "table" and options or {}
-
-	local screenGui = nil
-	if gui:IsA("ScreenGui") then
-		screenGui = gui
-	else
-		local parent = gui.Parent
-		if typeof(parent) == "Instance" and parent:IsA("ScreenGui") then
-			screenGui = parent
-		end
-	end
-
-	if screenGui then
-		if options.autoEnable == true or options.autoEnabled == true or options.forceEnabled == true or options.enforceEnabled == true or options.lockEnabled == true or options.enabledLoop == true then
-			pcall(function()
-				screenGui.Enabled = true
-			end)
-		end
-		if options.ignoreGuiInset == true or options.IgnoreGuiInset == true then
-			return gui
-		end
-		pcall(function()
-			screenGui.IgnoreGuiInset = false
-		end)
-		pcall(function()
-			screenGui.ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets
-		end)
-	end
-
-	return gui
-end
-
 local function __NAProtectUI(gui, options)
 	if __NAUIProtector and type(__NAUIProtector.protectUI) == "function" then
-		local protectOptions = __NADexProtectOptions(options)
-		if protectOptions.enforceParent == false or protectOptions.lockParent == false or protectOptions.parentLock == false then
-			if type(__NAUIProtector.nativeProtect) == "function" then
-				pcall(__NAUIProtector.nativeProtect, gui)
-			end
-			__NAApplyDexScreenGuiOptions(gui, protectOptions)
-			local okHui, hui = pcall(gethui)
-			if okHui and typeof(hui) == "Instance" then
-				gui.Parent = hui
-				return gui
-			end
-			return nil
-		end
-		local ok, protected = pcall(__NAUIProtector.protectUI, gui, protectOptions);
+		local ok, protected = pcall(__NAUIProtector.protectUI, gui, options);
 		if ok and protected then
-			__NAApplyDexScreenGuiOptions(gui, protectOptions)
-			__NAApplyDexScreenGuiOptions(protected, protectOptions)
 			return protected;
 		end;
 	end;
@@ -760,29 +665,7 @@ local function main()
 
 	Lib.ProtectedGuis = {}
 
-	Lib.ShowGui = function(gui, options)
-		if Main and type(Main.SecureGui) == "function" then
-			return Main.SecureGui(gui, options)
-		end
-		if typeof(gui) ~= "Instance" then
-			return nil
-		end
-		local protected = __NAProtectUI(gui, options)
-		if protected then
-			return protected
-		end
-		local okHui, hui = pcall(gethui)
-		if okHui and typeof(hui) == "Instance" then
-			gui.Parent = hui
-			return gui
-		end
-		local holder = Main and Main.GuiHolder
-		if typeof(holder) == "Instance" then
-			gui.Parent = holder
-			return gui
-		end
-		return nil
-	end
+	Lib.ShowGui = Main.SecureGui
 
 	Lib.ColorToBytes = function(col)
 		local round = math.round
@@ -3113,11 +2996,7 @@ local function main()
 												local insertPos, range = getSideInsertPos(leftSide, inputY)
 												alignIndicator.Indicator.Position = UDim2.new(0, -15, 0, range[1])
 												alignIndicator.Indicator.Size = UDim2.new(0, 40, 0, range[2] - range[1])
-												Lib.ShowGui(alignIndicator, {
-													enforceParent = false,
-													lockParent = false,
-													parentLock = false
-												})
+												Lib.ShowGui(alignIndicator)
 												alignInsertPos = insertPos
 												alignInsertSide = "left"
 												return
@@ -3127,11 +3006,7 @@ local function main()
 												local insertPos, range = getSideInsertPos(rightSide, inputY)
 												alignIndicator.Indicator.Position = UDim2.new(0, maxX - 25, 0, range[1])
 												alignIndicator.Indicator.Size = UDim2.new(0, 40, 0, range[2] - range[1])
-												Lib.ShowGui(alignIndicator, {
-													enforceParent = false,
-													lockParent = false,
-													parentLock = false
-												})
+												Lib.ShowGui(alignIndicator)
 												alignInsertPos = insertPos
 												alignInsertSide = "right"
 												return

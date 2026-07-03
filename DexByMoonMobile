@@ -6784,18 +6784,28 @@ local EmbeddedModules = {
 				};
 			end;
 			Lib.ProtectedGuis = {};
-			Lib.ShowGui = function(gui)
+			Lib.ShowGui = function(gui, options)
+				if typeof(gui) ~= "Instance" then
+					return nil;
+				end;
 				if Main and Main.TrackGui then
 					Main.TrackGui(gui);
 				end;
-				if env.gethui then
-					gui.Parent = env.gethui();
-				elseif env.protectgui then
-					env.protectgui(gui);
-					gui.Parent = Main.GuiHolder;
-				else
-					gui.Parent = Main.GuiHolder;
+				local protected = __NAProtectUI(gui, options);
+				if protected then
+					return protected;
 				end;
+				local okHui, hui = pcall(gethui);
+				if okHui and typeof(hui) == "Instance" then
+					gui.Parent = hui;
+					return gui;
+				end;
+				local holder = Main and Main.GuiHolder;
+				if typeof(holder) == "Instance" then
+					gui.Parent = holder;
+					return gui;
+				end;
+				return nil;
 			end;
 			Lib.ColorToBytes = function(col)
 				local round = math.round;
@@ -16109,13 +16119,27 @@ Main = (function()
 		env.base64encode = crypt and crypt.base64 and crypt.base64.encode;
 		env.getscriptbytecode = getscriptbytecode;
 		env.request = syn and syn.request or http and http.request or http_request or fluxus and fluxus.request or request;
-		env.protectgui = protect_gui or syn and syn.protect_gui;
+		local nativeProtectGui = protect_gui or syn and syn.protect_gui;
+		env.protectgui = function(gui, options)
+			local protected = __NAProtectUI(gui, options);
+			if protected then
+				return protected;
+			end;
+			if type(nativeProtectGui) == "function" then
+				local ok, result = pcall(nativeProtectGui, gui);
+				if ok then
+					return result or gui;
+				end;
+			end;
+			return nil;
+		end;
 		env.gethui = gethui or get_hidden_gui;
 		env.getcustomasset = getcustomasset or getsynasset;
 		env.setclipboard = setclipboard or toclipboard or set_clipboard or Clipboard and Clipboard.set;
 		env.getnilinstances = getnilinstances or get_nil_instances;
 		env.getloadedmodules = getloadedmodules;
-		Main.GuiHolder = Main.Elevated and service.CoreGui or plr:FindFirstChildWhichIsA("PlayerGui");
+		local okGuiHolder, guiHolder = pcall(gethui);
+		Main.GuiHolder = (okGuiHolder and typeof(guiHolder) == "Instance" and guiHolder) or (Main.Elevated and service.CoreGui or plr:FindFirstChildWhichIsA("PlayerGui"));
 		setmetatable(env, nil);
 	end;
 	Main.LoadSettings = function()
@@ -16638,16 +16662,25 @@ Main = (function()
 			PropertyOrders = propertyOrders
 		};
 	end;
-	Main.ShowGui = function(gui)
-		Main.TrackGui(gui);
-		if env.gethui then
-			gui.Parent = env.gethui();
-		elseif env.protectgui then
-			env.protectgui(gui);
-			gui.Parent = Main.GuiHolder;
-		else
-			gui.Parent = Main.GuiHolder;
+	Main.ShowGui = function(gui, options)
+		if typeof(gui) ~= "Instance" then
+			return nil;
 		end;
+		Main.TrackGui(gui);
+		local protected = __NAProtectUI(gui, options);
+		if protected then
+			return protected;
+		end;
+		local okHui, hui = pcall(gethui);
+		if okHui and typeof(hui) == "Instance" then
+			gui.Parent = hui;
+			return gui;
+		end;
+		if typeof(Main.GuiHolder) == "Instance" then
+			gui.Parent = Main.GuiHolder;
+			return gui;
+		end;
+		return nil;
 	end;
 	Main.CreateIntro = function(initStatus)
 		local gui = create({

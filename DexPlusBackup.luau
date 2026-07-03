@@ -677,30 +677,37 @@ Main = (function()
 		return assetId
 	end
 
-	Main.SecureGui = function(gui)
+	Main.SecureGui = function(gui, options)
+		if typeof(gui) ~= "Instance" then
+			return nil
+		end
+
 		gui.Name = Main.GetRandomString()
 		if Main.TrackGui then
 			Main.TrackGui(gui)
 		end
 
-		if gethui then
-			gui.Parent = gethui()
-		elseif syn and syn.protect_gui then
-			syn.protect_gui(gui)
-			gui.Parent = service.CoreGui
-		elseif protect_gui then
-			protect_gui(gui)
-			gui.Parent = service.CoreGui
-		elseif protectgui then
-			protectgui(gui)
-			gui.Parent = service.CoreGui
-		else
-			if Main.Elevated then
-				gui.Parent = service.CoreGui
-			else
-				gui.Parent = service.Players.LocalPlayer:WaitForChild("PlayerGui")
-			end
+		local protected = __NAProtectUI(gui, options)
+		if protected then
+			return protected
 		end
+
+		local okHui, hui = pcall(gethui)
+		if okHui and typeof(hui) == "Instance" then
+			gui.Parent = hui
+			return gui
+		end
+
+		-- Last-resort fallback only when UIprotector/gethui failed to load.
+		local playerGui = plr and plr:FindFirstChildOfClass("PlayerGui")
+		local holder = (Main.GuiHolder and typeof(Main.GuiHolder) == "Instance" and Main.GuiHolder)
+			or (Main.Elevated and service.CoreGui)
+			or playerGui
+		if holder then
+			gui.Parent = holder
+			return gui
+		end
+		return nil
 	end
 
 	Main.GetInitDeps = function()
@@ -1278,13 +1285,18 @@ Main = (function()
 			}
 			local source = oldgame:HttpGet(Params.RepoURL .. Params.SSI .. ".luau", true)
 			source = source:gsub("StatusGui%.Parent = global_container%.gethui%(%)", [[
-			local huiOk, hui = pcall(global_container.gethui)
-			if huiOk and typeof(hui) == "Instance" then
-				StatusGui.Parent = hui
-			else
-				local CoreGui = game:GetService("CoreGui")
-				local RobloxGui = CoreGui:FindFirstChild("RobloxGui")
-				StatusGui.Parent = RobloxGui or CoreGui
+			local cacheHost = (getgenv and getgenv()) or _G
+			local uiProtector = type(cacheHost) == "table" and rawget(cacheHost, "__lt_ui_protector") or nil
+			local protectedOk = false
+			if type(uiProtector) == "table" and type(uiProtector.protectUI) == "function" then
+				local okProtected, protected = pcall(uiProtector.protectUI, StatusGui)
+				protectedOk = okProtected and protected ~= nil
+			end
+			if not protectedOk then
+				local huiOk, hui = pcall(global_container.gethui)
+				if huiOk and typeof(hui) == "Instance" then
+					StatusGui.Parent = hui
+				end
 			end
 			]], 1)
 			local synsaveinstance = loadstring(source, Params.SSI)()
@@ -1541,7 +1553,20 @@ Main = (function()
 		-- other
 		env.getscriptbytecode = getscriptbytecode
 		env.setfflag = setfflag
-		env.protectgui = protect_gui or (syn and syn.protect_gui)
+		local nativeProtectGui = protect_gui or (syn and syn.protect_gui)
+		env.protectgui = function(gui, options)
+			local protected = __NAProtectUI(gui, options)
+			if protected then
+				return protected
+			end
+			if type(nativeProtectGui) == "function" then
+				local ok, result = pcall(nativeProtectGui, gui)
+				if ok then
+					return result or gui
+				end
+			end
+			return nil
+		end
 		env.gethui = gethui
 		env.setclipboard = setclipboard
 		env.getnilinstances = getnilinstances or get_nil_instances
@@ -1806,7 +1831,8 @@ Main = (function()
 
 		env.getcustomasset = getcustomasset or getsynasset or env.getcustomasset
 
-		Main.GuiHolder = Main.Elevated and service.CoreGui or plr:FindFirstChildOfClass("PlayerGui")
+		local okGuiHolder, guiHolder = pcall(gethui)
+		Main.GuiHolder = (okGuiHolder and typeof(guiHolder) == "Instance" and guiHolder) or (Main.Elevated and service.CoreGui or plr:FindFirstChildOfClass("PlayerGui"))
 
 		setmetatable(env,nil)
 	end

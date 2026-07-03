@@ -665,7 +665,29 @@ local function main()
 
 	Lib.ProtectedGuis = {}
 
-	Lib.ShowGui = Main.SecureGui
+	Lib.ShowGui = function(gui, options)
+		if Main and type(Main.SecureGui) == "function" then
+			return Main.SecureGui(gui, options)
+		end
+		if typeof(gui) ~= "Instance" then
+			return nil
+		end
+		local protected = __NAProtectUI(gui, options)
+		if protected then
+			return protected
+		end
+		local okHui, hui = pcall(gethui)
+		if okHui and typeof(hui) == "Instance" then
+			gui.Parent = hui
+			return gui
+		end
+		local holder = Main and Main.GuiHolder
+		if typeof(holder) == "Instance" then
+			gui.Parent = holder
+			return gui
+		end
+		return nil
+	end
 
 	Lib.ColorToBytes = function(col)
 		local round = math.round

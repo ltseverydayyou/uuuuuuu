@@ -3236,8 +3236,18 @@ local EmbeddedModules = {
 				Explorer.InitEntryTemplate();
 				toolBar.Parent = window.GuiElems.Content;
 				treeFrame.Parent = window.GuiElems.Content;
-				explorerItems.ScrollCorner.Parent = window.GuiElems.Content;
-				Explorer.GuiElems.ScrollCorner = explorerItems.ScrollCorner;
+				local explorerScrollCorner = explorerItems:FindFirstChild("ScrollCorner");
+				if not explorerScrollCorner then
+					explorerScrollCorner = Instance.new("Frame");
+					explorerScrollCorner.Name = "ScrollCorner";
+					explorerScrollCorner.BackgroundColor3 = Color3.new(0.15686275064945, 0.15686275064945, 0.15686275064945);
+					explorerScrollCorner.BorderSizePixel = 0;
+					explorerScrollCorner.Position = UDim2.new(1, -16, 1, -16);
+					explorerScrollCorner.Size = UDim2.new(0, 16, 0, 16);
+					explorerScrollCorner.Visible = false;
+				end;
+				explorerScrollCorner.Parent = window.GuiElems.Content;
+				Explorer.GuiElems.ScrollCorner = explorerScrollCorner;
 				scrollV.Gui.Parent = window.GuiElems.Content;
 				scrollH.Gui.Parent = window.GuiElems.Content;
 				Explorer.InitRenameBox();
@@ -5963,8 +5973,18 @@ local EmbeddedModules = {
 				window.GuiElems.Line.Position = UDim2.new(0, 0, 0, 22);
 				toolBar.Parent = window.GuiElems.Content;
 				propsFrame.Parent = window.GuiElems.Content;
-				guiItems.ScrollCorner.Parent = window.GuiElems.Content;
-				Properties.GuiElems.ScrollCorner = guiItems.ScrollCorner;
+				local propertiesScrollCorner = guiItems:FindFirstChild("ScrollCorner");
+				if not propertiesScrollCorner then
+					propertiesScrollCorner = Instance.new("Frame");
+					propertiesScrollCorner.Name = "ScrollCorner";
+					propertiesScrollCorner.BackgroundColor3 = Color3.new(0.15686275064945, 0.15686275064945, 0.15686275064945);
+					propertiesScrollCorner.BorderSizePixel = 0;
+					propertiesScrollCorner.Position = UDim2.new(1, -16, 1, -16);
+					propertiesScrollCorner.Size = UDim2.new(0, 16, 0, 16);
+					propertiesScrollCorner.Visible = false;
+				end;
+				propertiesScrollCorner.Parent = window.GuiElems.Content;
+				Properties.GuiElems.ScrollCorner = propertiesScrollCorner;
 				scrollV.Gui.Parent = window.GuiElems.Content;
 				scrollH.Gui.Parent = window.GuiElems.Content;
 				Properties.InitInputBox();

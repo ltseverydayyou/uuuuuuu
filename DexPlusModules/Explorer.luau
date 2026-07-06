@@ -1341,6 +1341,11 @@ local function main()
 			context:AddRegistered("REFRESH_NIL")
 			context:AddRegistered("HIDE_NIL")
 		end
+
+		context:QueueDivider()
+		context:AddRegistered("REJOIN_PLACE")
+		context:AddRegistered("REJOIN_JOB")
+		context:AddRegistered("KICK_SELF")
 	end
 
 	Explorer.TryHandleShortcut = function(input)
@@ -2027,6 +2032,32 @@ local function main()
 						task.wait(0.2)
 					end
 				end
+			end
+		end})
+
+		context:Register("REJOIN_PLACE",{Name = "Quick: Rejoin Place", IconMap = Explorer.MiscIcons, Icon = "TeleportTo", OnClick = function()
+			local teleportService = service.TeleportService
+			if teleportService and plr then
+				pcall(function()
+					teleportService:Teleport(game.PlaceId, plr)
+				end)
+			end
+		end})
+
+		context:Register("REJOIN_JOB",{Name = "Quick: Rejoin Current Job", IconMap = Explorer.MiscIcons, Icon = "TeleportTo", OnClick = function()
+			local teleportService = service.TeleportService
+			if teleportService and plr then
+				pcall(function()
+					teleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, plr)
+				end)
+			end
+		end})
+
+		context:Register("KICK_SELF",{Name = "Quick: Kick Self", IconMap = Explorer.MiscIcons, Icon = "Delete", OnClick = function()
+			if plr then
+				pcall(function()
+					plr:Kick("Kicked via Dex++")
+				end)
 			end
 		end})
 

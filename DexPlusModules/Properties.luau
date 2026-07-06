@@ -107,6 +107,7 @@ local function main()
     local isa = game.IsA
     local getAttribute = game.GetAttribute
     local setAttribute = game.SetAttribute
+    local collectionService = service.CollectionService
 
     Properties.GuiElems = {}
     Properties.Index = 0
@@ -124,6 +125,13 @@ local function main()
         Class = "",
         Name = "",
         SpecialRow = "AddAttribute",
+        Tags = {}
+    }
+    Properties.AddTagProp = {
+        Category = "Tags",
+        Class = "",
+        Name = "",
+        SpecialRow = "AddTag",
         Tags = {}
     }
     Properties.SoundPreviewProp = {
@@ -271,6 +279,27 @@ local function main()
         "NumberRange",
         "Rect"
     }
+
+    local function getSelectedObjects()
+        local result = {}
+        local sList = Explorer and Explorer.Selection and Explorer.Selection.List
+        if not sList then
+            return result
+        end
+        for i = 1, #sList do
+            local obj = sList[i].Obj
+            if obj then
+                result[#result + 1] = obj
+            end
+        end
+        return result
+    end
+
+    local function copyText(text)
+        if env and env.setclipboard then
+            env.setclipboard(text)
+        end
+    end
 
     Properties.StringToValue = function(prop, str)
         local typeData = prop.ValueType
@@ -500,6 +529,9 @@ local function main()
         if #sList > 0 then
             for i = 1, #propList do
                 local prop = propList[i]
+                if prop.IsTag then
+                    continue
+                end
                 local propName, propClass = prop.Name, prop.Class
                 local typeData = prop.RootType or prop.ValueType
                 local typeName = typeData.Name
@@ -636,6 +668,9 @@ local function main()
         local showingAttrs = Settings.Properties.ShowAttributes
         local foundAttrs = {}
         local attrCount = 0
+        local foundTags = {}
+        local tagCount = 0
+        local maxTags = 200
         local typeof = typeof
         local typeNameConvert = Properties.TypeNameConvert
 
@@ -712,6 +747,33 @@ local function main()
                     end
                 end
             end
+
+            if collectionService and tagCount < maxTags then
+                local okTags, tags = pcall(collectionService.GetTags, collectionService, obj)
+                if okTags and type(tags) == "table" then
+                    for _, tagName in tags do
+                        if not foundTags[tagName] then
+                            local tagProp = {
+                                IsTag = true,
+                                Name = "TAG_" .. tagName,
+                                TagName = tagName,
+                                DisplayName = tagName,
+                                Class = "Instance",
+                                ValueType = {Name = "bool"},
+                                Category = "Tags",
+                                Tags = {ReadOnly = true}
+                            }
+                            props[propCount] = tagProp
+                            propCount = propCount + 1
+                            tagCount = tagCount + 1
+                            foundTags[tagName] = tagProp
+                            if tagCount == maxTags then
+                                break
+                            end
+                        end
+                    end
+                end
+            end
         end
 
         table.sort(
@@ -735,6 +797,7 @@ local function main()
         Properties.ComputeConflicts()
         if #props > 0 then
             props[#props + 1] = Properties.AddAttributeProp
+            props[#props + 1] = Properties.AddTagProp
         end
 
         Properties.Update()
@@ -1178,7 +1241,12 @@ local function main()
         addCon(
             trackConn(newEntry.RowButton.MouseButton1Click:Connect(
                 function()
-                    Properties.DisplayAddAttributeWindow()
+                    local prop = viewList[index + Properties.Index]
+                    if prop and prop.SpecialRow == "AddTag" then
+                        Properties.DisplayAddTagWindow()
+                    else
+                        Properties.DisplayAddAttributeWindow()
+                    end
                 end
             ))
         )
@@ -1420,10 +1488,63 @@ local function main()
         if not context then
             context = Lib.ContextMenu.new()
             context.Iconless = true
-            context.Width = 80
+            context.Width = 110
             Properties.AttributeContext = context
         end
         context:Clear()
+
+        if prop and prop.IsTag then
+            context:Add(
+                {
+                    Name = "Copy Tag",
+                    OnClick = function()
+                        copyText(prop.TagName or "")
+                    end
+                }
+            )
+            context:Add(
+                {
+                    Name = "Copy Tags",
+                    OnClick = function()
+                        local tagMap = {}
+                        local tagList = {}
+                        if collectionService then
+                            local selected = getSelectedObjects()
+                            for i = 1, #selected do
+                                local okTags, tags = pcall(collectionService.GetTags, collectionService, selected[i])
+                                if okTags and type(tags) == "table" then
+                                    for _, tagName in tags do
+                                        if not tagMap[tagName] then
+                                            tagMap[tagName] = true
+                                            tagList[#tagList + 1] = tagName
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                        table.sort(tagList)
+                        copyText(table.concat(tagList, "\n"))
+                    end
+                }
+            )
+            context:Add(
+                {
+                    Name = "Remove",
+                    OnClick = function()
+                        if collectionService and prop.TagName then
+                            local selected = getSelectedObjects()
+                            for i = 1, #selected do
+                                pcall(collectionService.RemoveTag, collectionService, selected[i], prop.TagName)
+                            end
+                        end
+                        Properties.ShowExplorerProps()
+                    end
+                }
+            )
+
+            context:Show()
+            return
+        end
 
         context:Add(
             {
@@ -1444,6 +1565,84 @@ local function main()
         )
 
         context:Show()
+    end
+
+    Properties.DisplayAddTagWindow = function()
+        local win = Properties.AddTagWindow
+        if not win then
+            win = Lib.Window.new()
+            win.Alignable = false
+            win.Resizable = false
+            win:SetTitle("Add Tag")
+            win:SetSize(240, 95)
+
+            local saveButton = Lib.Button.new()
+            local nameLabel = Lib.Label.new()
+            nameLabel.Text = "Tag"
+            nameLabel.Position = UDim2.new(0, 20, 0, 10)
+            nameLabel.Size = UDim2.new(0, 45, 0, 20)
+            win:Add(nameLabel)
+
+            local nameBox = Lib.ViewportTextBox.new()
+            nameBox.Position = UDim2.new(0, 65, 0, 10)
+            nameBox.Size = UDim2.new(1, -70, 0, 20)
+            win:Add(nameBox, "NameBox")
+            trackConn(nameBox.TextBox:GetPropertyChangedSignal("Text"):Connect(
+                function()
+                    saveButton:SetDisabled(#nameBox:GetText() == 0)
+                end
+            ))
+
+            local errorLabel = Lib.Label.new()
+            errorLabel.Text = ""
+            errorLabel.Position = UDim2.new(0, 5, 1, -45)
+            errorLabel.Size = UDim2.new(1, -10, 0, 20)
+            errorLabel.TextColor3 = Settings.Theme.Important
+            win:Add(errorLabel, "Error")
+
+            local cancelButton = Lib.Button.new()
+            cancelButton.Text = "Cancel"
+            cancelButton.Position = UDim2.new(1, -97, 1, -25)
+            cancelButton.Size = UDim2.new(0, 92, 0, 20)
+            trackConn(cancelButton.OnClick:Connect(
+                function()
+                    win:Close()
+                end
+            ))
+            win:Add(cancelButton)
+
+            saveButton.Text = "Save"
+            saveButton.Position = UDim2.new(0, 5, 1, -25)
+            saveButton.Size = UDim2.new(0, 92, 0, 20)
+            trackConn(saveButton.OnClick:Connect(
+                function()
+                    if not collectionService then
+                        errorLabel.Text = "Error: CollectionService unavailable"
+                        return
+                    end
+                    local tagName = nameBox:GetText()
+                    if tagName == "" then
+                        errorLabel.Text = "Error: tag name is empty"
+                        return
+                    end
+                    local selected = getSelectedObjects()
+                    for i = 1, #selected do
+                        pcall(collectionService.AddTag, collectionService, selected[i], tagName)
+                    end
+                    Properties.ShowExplorerProps()
+                    win:Close()
+                end
+            ))
+            win:Add(saveButton, "SaveButton")
+
+            Properties.AddTagWindow = win
+        end
+
+        win:SetTitle("Add Tag")
+        win.Elements.Error.Text = ""
+        win.Elements.NameBox:SetText("")
+        win.Elements.SaveButton:SetDisabled(true)
+        win:Show()
     end
 
     Properties.DisplayAddAttributeWindow = function(editAttr)
@@ -1785,6 +1984,24 @@ local function main()
         if prop.MultiType then
             return "<Multiple Types>"
         end
+        if prop.IsTag then
+            if not collectionService then
+                return false
+            end
+            local tagName = prop.TagName
+            if obj then
+                local okHas, hasTag = pcall(collectionService.HasTag, collectionService, obj, tagName)
+                return okHas and hasTag or false
+            end
+            local selected = getSelectedObjects()
+            for i = 1, #selected do
+                local okHas, hasTag = pcall(collectionService.HasTag, collectionService, selected[i], tagName)
+                if okHas and hasTag then
+                    return true
+                end
+            end
+            return false
+        end
         if not obj then
             return
         end
@@ -2058,10 +2275,11 @@ local function main()
                 )
 
                 if prop.SpecialRow then
-                    if prop.SpecialRow == "AddAttribute" then
+                    if prop.SpecialRow == "AddAttribute" or prop.SpecialRow == "AddTag" then
                         nameFrame.Visible = false
                         valueFrame.Visible = false
                         guiElems.RowButton.Visible = true
+                        guiElems.RowButton.Text = (prop.SpecialRow == "AddTag") and "Add Tag" or "Add Attribute"
                     end
                 else
                     nameFrame.Visible = true
@@ -2100,8 +2318,8 @@ local function main()
                         local tags = prop.Tags
                         local propObj = autoUpdateObjs[gName]
 
-                        local attributeOffset = (prop.IsAttribute and 20 or 0)
-                        editAttributeButton.Visible = (prop.IsAttribute and not prop.RootType)
+                        local attributeOffset = ((prop.IsAttribute or prop.IsTag) and 20 or 0)
+                        editAttributeButton.Visible = ((prop.IsAttribute and not prop.RootType) or prop.IsTag) and true or false
                         toggleAttributes.Visible = false
 
                         if scaleType == 0 then
@@ -2235,6 +2453,9 @@ local function main()
     end
 
     Properties.SetProp = function(prop, val, noupdate, prevAttribute)
+        if prop.IsTag then
+            return
+        end
         local sList = Explorer.Selection.List
         local propName = prop.Name
         local subName = prop.SubName
@@ -3131,6 +3352,9 @@ local function main()
         )
 
         categoryOrder = API.CategoryOrder
+        if categoryOrder and not categoryOrder.Tags then
+            categoryOrder.Tags = (categoryOrder.Attributes or 9000) + 1
+        end
         for category, _ in next, categoryOrder do
             if not Properties.CollapsedCategories[category] then
                 expanded["CAT_" .. category] = true

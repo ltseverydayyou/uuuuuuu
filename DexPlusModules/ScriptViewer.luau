@@ -128,10 +128,76 @@ end
 		local ScriptViewer = {}
 		local window, codeFrame
 	
-		local execute, clear, dumpbtn
+		local execute, clear, dumpbtn, dumpScriptBtn, dumpBytecodeBtn, searchBox, searchBoxView, searchButton
 		local textSizeValue, textSizeFrame, textSizeInput
 	
 	local PreviousScr = nil
+
+	local function sanitizeFilePart(value)
+		value = tostring(value or "Script")
+		value = value:gsub("[<>:\"/\\|%?%*]", "_")
+		value = value:gsub("%s+", "_")
+		if value == "" then
+			value = "Script"
+		end
+		return value
+	end
+
+	local function scriptFileBase(scr, suffix)
+		local name = scr and scr.Name or "Script"
+		local className = scr and scr.ClassName or "LuaSourceContainer"
+		return ("%s_%s_%s_%i"):format(sanitizeFilePart(name), sanitizeFilePart(className), suffix, game.PlaceId)
+	end
+
+	local function setButtonEnabled(button, enabled)
+		if not button then return end
+		button.TextColor3 = enabled and Color3.new(1,1,1) or Color3.new(0.5,0.5,0.5)
+		button.Interactable = enabled
+	end
+
+	local function setButtonFlash(button, text)
+		if not button then return end
+		local oldText = button.Text
+		button.Text = text
+		task.delay(1.2, function()
+			if button and button.Parent then
+				button.Text = oldText
+			end
+		end)
+	end
+
+	local function functionBelongsToScript(fn, scr)
+		if type(getfenv) ~= "function" then
+			return false
+		end
+		local okEnv, fnEnv = pcall(getfenv, fn)
+		if not okEnv or type(fnEnv) ~= "table" then
+			return false
+		end
+		return rawget(fnEnv, "script") == scr
+	end
+
+	local function formatSearchValue(value)
+		local okType, valueType = pcall(typeof, value)
+		valueType = okType and valueType or type(value)
+		local okText, text = pcall(tostring, value)
+		if not okText then
+			text = "<unprintable>"
+		end
+		return ("[%s] %s"):format(tostring(valueType), tostring(text))
+	end
+
+	local function appendScriptViewerBlock(title, lines)
+		local current = codeFrame and codeFrame:GetText() or ""
+		local block = {"", "", "--[[", title}
+		for i = 1, #lines do
+			block[#block + 1] = lines[i]
+		end
+		block[#block + 1] = "]]"
+		if codeFrame then
+			codeFrame:SetText(current .. table.concat(block, "\n"))
+		end
+	end
 	
 	ScriptViewer.DumpFunctions = function(scr)
 		-- thanks King.Kevin#6025 you'll obviously be credited (no discord tag since that can easily be impersonated)
@@ -228,6 +294,14 @@ end
 	ScriptViewer.ShowExecutor = function()
 		if window then window:SetTitle("Executor") end
 		if dumpbtn then dumpbtn.Visible = false end
+		if dumpScriptBtn then dumpScriptBtn.Visible = false end
+		if dumpBytecodeBtn then dumpBytecodeBtn.Visible = false end
+		if searchBoxView and searchBoxView.Gui then
+			searchBoxView.Gui.Visible = false
+		elseif searchBox then
+			searchBox.Visible = false
+		end
+		if searchButton then searchButton.Visible = false end
 	end
 
 	ScriptViewer.SetTextSize = function(size)
@@ -246,8 +320,8 @@ end
 	end
 
 		codeFrame = Lib.CodeFrame.new()
-		codeFrame.Frame.Position = UDim2.new(0,0,0,20)
-		codeFrame.Frame.Size = UDim2.new(1,0,1,-40)
+		codeFrame.Frame.Position = UDim2.new(0,0,0,44)
+		codeFrame.Frame.Size = UDim2.new(1,0,1,-64)
 		codeFrame.Frame.Parent = window.GuiElems.Content
 
 		textSizeValue = Instance.new("NumberValue")
@@ -262,8 +336,8 @@ end
 		textSizeFrame.BorderSizePixel = 0
 		textSizeFrame.BackgroundColor3 = Color3.fromRGB(37, 37, 37)
 		textSizeFrame.ClipsDescendants = true
-		textSizeFrame.Size = UDim2.new(0.06, 0, 0, 18)
-		textSizeFrame.Position = UDim2.new(0.64, 0, 0, 1)
+		textSizeFrame.Size = UDim2.new(0.08, 0, 0, 18)
+		textSizeFrame.Position = UDim2.new(0.91, 0, 0, 1)
 
 		local textSizeStroke = Instance.new("UIStroke", textSizeFrame)
 		textSizeStroke.Transparency = 0.65
@@ -420,9 +494,9 @@ end
 		
 		local copy = Instance.new("TextButton",window.GuiElems.Content)
 		copy.BackgroundTransparency = 1
-		copy.Size = UDim2.new(0.32,0,0,20)
+		copy.Size = UDim2.new(0.18,0,0,20)
 		copy.Position = UDim2.new(0,0,0,0)
-		copy.Text = "Copy to Clipboard"
+		copy.Text = "Copy"
 		
 		if env.setclipboard then
 			copy.TextColor3 = Color3.new(1,1,1)
@@ -441,8 +515,8 @@ end
 
 		local save = Instance.new("TextButton",window.GuiElems.Content)
 		save.BackgroundTransparency = 1
-		save.Size = UDim2.new(0.32,0,0,20)
-		save.Position = UDim2.new(0.32,0,0,0)
+		save.Size = UDim2.new(0.16,0,0,20)
+		save.Position = UDim2.new(0.18,0,0,0)
 		save.Text = "Save to File"
 		save.TextColor3 = Color3.new(1,1,1)
 		
@@ -460,6 +534,125 @@ end
 
 			Lib.SaveAsPrompt(filename,source)
 			--env.writefile(filename,source)
+		end)
+
+		dumpScriptBtn = Instance.new("TextButton",window.GuiElems.Content)
+		dumpScriptBtn.BackgroundTransparency = 1
+		dumpScriptBtn.Size = UDim2.new(0.17,0,0,20)
+		dumpScriptBtn.Position = UDim2.new(0.34,0,0,0)
+		dumpScriptBtn.Text = "Dump Script"
+		dumpScriptBtn.TextColor3 = Color3.new(1,1,1)
+		dumpScriptBtn.Visible = false
+		safeConnect(dumpScriptBtn.MouseButton1Click, function()
+			local source = codeFrame:GetText()
+			local filename = scriptFileBase(PreviousScr, "Source")..".luau"
+			if env.writefile then
+				Lib.SaveAsPrompt(filename, source, "luau")
+			elseif env.setclipboard then
+				env.setclipboard(source)
+				setButtonFlash(dumpScriptBtn, "Copied")
+			end
+		end)
+
+		dumpBytecodeBtn = Instance.new("TextButton",window.GuiElems.Content)
+		dumpBytecodeBtn.BackgroundTransparency = 1
+		dumpBytecodeBtn.Size = UDim2.new(0.19,0,0,20)
+		dumpBytecodeBtn.Position = UDim2.new(0.51,0,0,0)
+		dumpBytecodeBtn.Text = "Dump Bytecode"
+		dumpBytecodeBtn.TextColor3 = Color3.new(0.5,0.5,0.5)
+		dumpBytecodeBtn.Interactable = false
+		dumpBytecodeBtn.Visible = false
+		safeConnect(dumpBytecodeBtn.MouseButton1Click, function()
+			if not PreviousScr or not env.getscriptbytecode then return end
+			local ok, bytecode = pcall(env.getscriptbytecode, PreviousScr)
+			if not ok or type(bytecode) ~= "string" or bytecode == "" then
+				setButtonFlash(dumpBytecodeBtn, "Failed")
+				return
+			end
+			local filename = scriptFileBase(PreviousScr, "Bytecode")..".txt"
+			if env.writefile then
+				Lib.SaveAsPrompt(filename, bytecode, "txt")
+			elseif env.setclipboard then
+				env.setclipboard(bytecode)
+				setButtonFlash(dumpBytecodeBtn, "Copied")
+			end
+		end)
+
+		searchBox = Instance.new("TextBox", window.GuiElems.Content)
+		searchBox.BackgroundColor3 = Color3.fromRGB(37, 37, 37)
+		searchBox.BackgroundTransparency = 0
+		searchBox.BorderSizePixel = 0
+		searchBox.ClearTextOnFocus = false
+		searchBox.Font = Enum.Font.SourceSans
+		searchBox.PlaceholderText = "Search constants & upvalues"
+		searchBox.PlaceholderColor3 = Color3.fromRGB(108, 108, 108)
+		searchBox.Position = UDim2.new(0, 4, 0, 23)
+		searchBox.Size = UDim2.new(0.7, -8, 0, 18)
+		searchBox.Text = ""
+		searchBox.TextColor3 = Color3.new(1,1,1)
+		searchBox.TextSize = 14
+		searchBox.TextXAlignment = Enum.TextXAlignment.Left
+		local searchPadding = Instance.new("UIPadding", searchBox)
+		searchPadding.PaddingLeft = UDim.new(0, 5)
+		searchPadding.PaddingRight = UDim.new(0, 5)
+		searchBoxView = Lib.ViewportTextBox.convert(searchBox)
+		searchBoxView.Gui.Visible = false
+
+		searchButton = Instance.new("TextButton", window.GuiElems.Content)
+		searchButton.BackgroundTransparency = 1
+		searchButton.Position = UDim2.new(0.7,0,0,22)
+		searchButton.Size = UDim2.new(0.3,0,0,20)
+		searchButton.Text = "Search Functions"
+		searchButton.TextColor3 = Color3.new(0.5,0.5,0.5)
+		searchButton.Interactable = false
+		searchButton.Visible = false
+		safeConnect(searchButton.MouseButton1Click, function()
+			if not PreviousScr or not env.getgc or not env.getconstants or not env.getupvalues then return end
+			local query = searchBox and searchBox.Text or ""
+			query = tostring(query or ""):lower()
+			if query == "" then return end
+
+			local lines = {}
+			local matches = 0
+			local getInfo = (debug and (debug.getinfo or debug.info)) or getinfo
+			local function functionName(fn)
+				local ok, info = pcall(getInfo, fn)
+				if ok and type(info) == "table" and info.name and info.name ~= "" then
+					return info.name
+				end
+				return "anonymous"
+			end
+
+			local function scanList(kind, fn, values)
+				for index, value in values do
+					local formatted = formatSearchValue(value)
+					if formatted:lower():find(query, 1, true) then
+						matches += 1
+						lines[#lines + 1] = ("%s %s[%s] in %s: %s"):format(matches, kind, tostring(index), functionName(fn), formatted)
+					end
+				end
+			end
+
+			local okGc, gcList = pcall(env.getgc)
+			if okGc and type(gcList) == "table" then
+				for _, fn in gcList do
+					if typeof(fn) == "function" and functionBelongsToScript(fn, PreviousScr) then
+						local okConstants, constants = pcall(env.getconstants, fn)
+						if okConstants and type(constants) == "table" then
+							scanList("constant", fn, constants)
+						end
+						local okUpvalues, upvalues = pcall(env.getupvalues, fn)
+						if okUpvalues and type(upvalues) == "table" then
+							scanList("upvalue", fn, upvalues)
+						end
+					end
+				end
+			end
+
+			if #lines == 0 then
+				lines[1] = "No matching constants or upvalues found."
+			end
+			appendScriptViewerBlock(("Function Search: %q"):format(searchBox.Text), lines)
 		end)
 		-- Buttons below the editor
 		
@@ -534,8 +727,8 @@ end
 		if not dumpbtn then
 			dumpbtn = Instance.new("TextButton",window.GuiElems.Content)
 			dumpbtn.BackgroundTransparency = 1
-			dumpbtn.Position = UDim2.new(0.7,0,0,0)
-			dumpbtn.Size = UDim2.new(0.3,0,0,20)
+			dumpbtn.Position = UDim2.new(0.70,0,0,0)
+			dumpbtn.Size = UDim2.new(0.21,0,0,20)
 			dumpbtn.Text = "Dump Functions"
 			dumpbtn.TextColor3 = Color3.new(0.5,0.5,0.5)
 			dumpbtn.Visible = false -- hidden until viewing a script
@@ -547,17 +740,26 @@ end
 			end)
 		end
 		dumpbtn.Visible = true
-		if env.getgc then
-			dumpbtn.TextColor3 = Color3.new(1,1,1)
-			dumpbtn.Interactable = true
-		else
-			dumpbtn.TextColor3 = Color3.new(0.5,0.5,0.5)
-			dumpbtn.Interactable = false
+		if dumpScriptBtn then dumpScriptBtn.Visible = true end
+		if dumpBytecodeBtn then dumpBytecodeBtn.Visible = true end
+		if searchBoxView and searchBoxView.Gui then
+			searchBoxView.Gui.Visible = true
+		elseif searchBox then
+			searchBox.Visible = true
+		end
+		if searchButton then searchButton.Visible = true end
+		setButtonEnabled(dumpbtn, env.getgc ~= nil and env.getupvalues ~= nil and env.getconstants ~= nil)
+		setButtonEnabled(dumpBytecodeBtn, PreviousScr ~= nil and env.getscriptbytecode ~= nil)
+		setButtonEnabled(searchButton, PreviousScr ~= nil and env.getgc ~= nil and env.getupvalues ~= nil and env.getconstants ~= nil)
+		if dumpScriptBtn then
+			setButtonEnabled(dumpScriptBtn, env.writefile ~= nil or env.setclipboard ~= nil)
 		end
 
 		if not s or not source then
 			PreviousScr = nil
-			dumpbtn.TextColor3 = Color3.new(0.5,0.5,0.5)
+			setButtonEnabled(dumpbtn, false)
+			setButtonEnabled(dumpBytecodeBtn, false)
+			setButtonEnabled(searchButton, false)
 			local decompileFailReason
 			if not s then
 				decompileFailReason = tostring(source)
@@ -581,7 +783,9 @@ end
 			end
 		else
 			PreviousScr = scr
-			dumpbtn.TextColor3 = Color3.new(1,1,1)
+			setButtonEnabled(dumpbtn, env.getgc ~= nil and env.getupvalues ~= nil and env.getconstants ~= nil)
+			setButtonEnabled(dumpBytecodeBtn, env.getscriptbytecode ~= nil)
+			setButtonEnabled(searchButton, env.getgc ~= nil and env.getupvalues ~= nil and env.getconstants ~= nil)
 
 			local decompiled = source
 

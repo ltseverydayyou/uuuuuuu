@@ -245,7 +245,17 @@ DefaultSettings = (function()
 			IgnoreInvisibleUI = true,
 			CopyPathUseGetChildren = true,
 			UseNameWidth = false,
-			MaxSelectionBoxes = 1000
+			MaxSelectionBoxes = 1000,
+			ShowNilInstances = false,
+			SearchNilInstances = false,
+			FreezeSearchEnabled = false,
+			FreezeSearchTerm = "",
+			FreezeSearchClassName = false,
+			AdvancedPropertySearch = true,
+			DragReparenting = true,
+			StickyExplorerHeader = true,
+			CameraFollowSelection = false,
+			PinnedObjects = true
 		},
 		Properties = {
 			_Recurse = true,
@@ -919,9 +929,17 @@ Main = (function()
 				end
 				print("Locally Loaded Module",name,control)
 			else
-				local modulePathLocal = (Main.GitModulesPath or "Modules").."/"..name..".lua"
+				local modulesPath = Main.GitModulesPath or "Modules"
+				local modulePathCandidates = {
+					modulesPath.."/"..name..".luau",
+					modulesPath.."/"..name..".lua",
+				}
 				local cacheFolder = "DexPlusPlus/ModuleCache/"..tostring(Main.ModuleCacheVersion or "default")
-				local cachePath = cacheFolder.."/"..name..".lua"
+				local cachePathCandidates = {
+					cacheFolder.."/"..name..".luau",
+					cacheFolder.."/"..name..".lua",
+				}
+				local cacheWritePath = cachePathCandidates[1]
 				local loadErrors = {}
 
 				local function addLoadError(label, err)
@@ -955,43 +973,50 @@ Main = (function()
 					return true, nil, loadErr
 				end
 
-				local localExists, localControl, localErr = tryFile(modulePathLocal, "Local module")
-
-				if localControl then
-					control = localControl
-				elseif localExists then
-					addLoadError("local", localErr)
-				end
-
-				if not control then
-					local modulePath = modulePathLocal
-					local okRemote, moduleStr = Main.FetchRepoFile(modulePath)
-					if okRemote and type(moduleStr) == "string" then
-						local loadedControl, loadErr = loadControlFromSource(moduleStr, "Remote module "..modulePath)
-						if loadedControl then
-							control = loadedControl
-							if env and env.writefile then
-								if env.makefolder then
-									pcall(env.makefolder, "DexPlusPlus")
-									pcall(env.makefolder, "DexPlusPlus/ModuleCache")
-									pcall(env.makefolder, cacheFolder)
-								end
-								pcall(env.writefile, cachePath, moduleStr)
-							end
-						else
-							addLoadError("remote", loadErr)
-						end
-					else
-						addLoadError("remote", moduleStr)
+				for _, modulePathLocal in modulePathCandidates do
+					local localExists, localControl, localErr = tryFile(modulePathLocal, "Local module")
+					if localControl then
+						control = localControl
+						break
+					elseif localExists then
+						addLoadError("local", localErr)
 					end
 				end
 
 				if not control then
-					local cacheExists, cacheControl, cacheErr = tryFile(cachePath, "Cached module")
-					if cacheControl then
-						control = cacheControl
-					elseif cacheExists then
-						addLoadError("cache", cacheErr)
+					for _, modulePath in modulePathCandidates do
+						local okRemote, moduleStr = Main.FetchRepoFile(modulePath)
+						if okRemote and type(moduleStr) == "string" then
+							local loadedControl, loadErr = loadControlFromSource(moduleStr, "Remote module "..modulePath)
+							if loadedControl then
+								control = loadedControl
+								if env and env.writefile then
+									if env.makefolder then
+										pcall(env.makefolder, "DexPlusPlus")
+										pcall(env.makefolder, "DexPlusPlus/ModuleCache")
+										pcall(env.makefolder, cacheFolder)
+									end
+									pcall(env.writefile, cacheWritePath, moduleStr)
+								end
+								break
+							else
+								addLoadError("remote", loadErr)
+							end
+						else
+							addLoadError("remote", moduleStr)
+						end
+					end
+				end
+
+				if not control then
+					for _, cachePath in cachePathCandidates do
+						local cacheExists, cacheControl, cacheErr = tryFile(cachePath, "Cached module")
+						if cacheControl then
+							control = cacheControl
+							break
+						elseif cacheExists then
+							addLoadError("cache", cacheErr)
+						end
 					end
 				end
 
@@ -2072,6 +2097,36 @@ Main = (function()
 		if type(explorer.UseNameWidth) ~= "boolean" then
 			explorer.UseNameWidth = defaultExplorer.UseNameWidth
 		end
+		if type(explorer.ShowNilInstances) ~= "boolean" then
+			explorer.ShowNilInstances = defaultExplorer.ShowNilInstances
+		end
+		if type(explorer.SearchNilInstances) ~= "boolean" then
+			explorer.SearchNilInstances = defaultExplorer.SearchNilInstances
+		end
+		if type(explorer.FreezeSearchEnabled) ~= "boolean" then
+			explorer.FreezeSearchEnabled = defaultExplorer.FreezeSearchEnabled
+		end
+		if type(explorer.FreezeSearchTerm) ~= "string" then
+			explorer.FreezeSearchTerm = defaultExplorer.FreezeSearchTerm or ""
+		end
+		if type(explorer.FreezeSearchClassName) ~= "boolean" then
+			explorer.FreezeSearchClassName = defaultExplorer.FreezeSearchClassName
+		end
+		if type(explorer.AdvancedPropertySearch) ~= "boolean" then
+			explorer.AdvancedPropertySearch = defaultExplorer.AdvancedPropertySearch
+		end
+		if type(explorer.DragReparenting) ~= "boolean" then
+			explorer.DragReparenting = defaultExplorer.DragReparenting
+		end
+		if type(explorer.StickyExplorerHeader) ~= "boolean" then
+			explorer.StickyExplorerHeader = defaultExplorer.StickyExplorerHeader
+		end
+		if type(explorer.CameraFollowSelection) ~= "boolean" then
+			explorer.CameraFollowSelection = defaultExplorer.CameraFollowSelection
+		end
+		if type(explorer.PinnedObjects) ~= "boolean" then
+			explorer.PinnedObjects = defaultExplorer.PinnedObjects
+		end
 		local maxSelectionBoxes = math.floor(tonumber(explorer.MaxSelectionBoxes) or defaultExplorer.MaxSelectionBoxes or 1000)
 		explorer.MaxSelectionBoxes = math.clamp(maxSelectionBoxes, 0, 5000)
 		local autoUpdateMode = math.floor(tonumber(explorer.AutoUpdateMode) or defaultExplorer.AutoUpdateMode or 0)
@@ -3027,6 +3082,9 @@ Main = (function()
 		end
 
 		Main.RegisterDeferredApps()
+		if Lib and Lib.RefreshTheme then
+			pcall(Lib.RefreshTheme)
+		end
 	end
 
 	Main.LoadOptionalModule = function(moduleName)
@@ -3057,6 +3115,9 @@ Main = (function()
 				end
 			end
 			Main.SyncModuleDependencies()
+			if Lib and Lib.RefreshTheme then
+				pcall(Lib.RefreshTheme)
+			end
 		end
 
 		return moduleData
@@ -4127,6 +4188,13 @@ Main = (function()
 					startupWindow:Show({Align = align, Pos = index, Size = windowSize, Silent = true})
 				end
 			end
+		end
+
+		if Lib and Lib.RefreshTheme then
+			pcall(Lib.RefreshTheme)
+			task.defer(function()
+				pcall(Lib.RefreshTheme)
+			end)
 		end
 
 		Lib.DeferFunc(function()

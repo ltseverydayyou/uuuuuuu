@@ -136,12 +136,15 @@ local function main()
 	local getTextSize = service.TextService.GetTextSize
 	local updateDebounce,refreshDebounce = false,false
 	local nilNode = {Obj = Instance.new("Folder")}
+	local pinnedNode = {Obj = Instance.new("Folder")}
 	local idCounter = 0
 	local scrollV,scrollH,clipboard
 	local renameBox,renamingNode,searchFunc,shortcutInputCon
 	local sortingEnabled,autoUpdateSearch
 	local table,math = table,math
 	local nilMap,nilCons = {},{}
+	local pinnedObjects,pinnedMap,pinnedNodeMap = {},{},{}
+	local stickyHeader
 	local function connectSignal(signal, func)
 		return trackConn(signal:Connect(func))
 	end
@@ -152,19 +155,101 @@ local function main()
 	local remote_block_hooked = false
 	nodes = nodes or {}
 
-	local function getHookMetamethod()
-		if env and type(env.GetHookMetamethod) == "function" then
-			return env.GetHookMetamethod()
-		end
-		return env and env.hookmetamethod or nil
+	local function isNilInstancesEnabled()
+		return Settings and Settings.Explorer and Settings.Explorer.ShowNilInstances == true and env.getnilinstances ~= nil
 	end
 
-	local function hasHookMetamethod()
-		return type(getHookMetamethod()) == "function"
+	local function isNilSearchEnabled()
+		return isNilInstancesEnabled() and Settings.Explorer.SearchNilInstances == true
+	end
+
+	local function disconnectNilCons()
+		local dummyCon = Instance.new("Folder").ChildAdded:Connect(function() end)
+		local disconnectCon = dummyCon.Disconnect
+		dummyCon:Disconnect()
+		for _, cons in next,nilCons do
+			if cons[1] then disconnectCon(cons[1]) end
+			if cons[2] then disconnectCon(cons[2]) end
+		end
+		table.clear(nilCons)
+	end
+
+	local function isPinnedEnabled()
+		return Settings and Settings.Explorer and Settings.Explorer.PinnedObjects ~= false
+	end
+
+	local function rebuildPinnedNodes()
+		table.clear(pinnedNode)
+		if not isPinnedEnabled() then
+			return
+		end
+
+		local nextPinned = {}
+		local nextMap = {}
+		local nextNodeMap = {}
+		for _, obj in pinnedObjects do
+			local okParent, parent = pcall(function()
+				return obj.Parent
+			end)
+			if okParent and parent ~= nil then
+				local node = pinnedNodeMap[obj] or {
+					Obj = obj,
+					Parent = pinnedNode,
+					PinnedProxy = true,
+				}
+				node.Parent = pinnedNode
+				node.Obj = obj
+				node.PinnedProxy = true
+				nextPinned[#nextPinned + 1] = obj
+				nextMap[obj] = true
+				nextNodeMap[obj] = node
+				pinnedNode[#pinnedNode + 1] = node
+			end
+		end
+		pinnedObjects = nextPinned
+		pinnedMap = nextMap
+		pinnedNodeMap = nextNodeMap
+	end
+
+	local function shouldFreezeForObject(obj)
+		local explorerSettings = Settings and Settings.Explorer
+		if not explorerSettings or explorerSettings.FreezeSearchEnabled ~= true then
+			return false
+		end
+
+		local term = tostring(explorerSettings.FreezeSearchTerm or ""):lower()
+		if term == "" then
+			return false
+		end
+
+		local okName, name = pcall(function()
+			return obj.Name
+		end)
+		if okName and tostring(name):lower():find(term, 1, true) then
+			return true
+		end
+
+		if explorerSettings.FreezeSearchClassName == true then
+			local okClass, className = pcall(function()
+				return obj.ClassName
+			end)
+			if okClass and tostring(className):lower():find(term, 1, true) then
+				return true
+			end
+		end
+
+		return false
 	end
 
 	addObject = function(root)
 		if nodes[root] then return end
+		if shouldFreezeForObject(root) then
+			Settings.Explorer.AutoUpdateMode = 3
+			if Explorer.SetupConnections then
+				task.defer(Explorer.SetupConnections)
+			end
+			return
+		end
 
 		local isNil = false
 		local rootParObj = ffa(root,"Instance")
@@ -542,10 +627,19 @@ local function main()
 			end
 		end
 
+		rebuildPinnedNodes()
+		if isPinnedEnabled() and #pinnedNode > 0 and not (isSearching and not searchResults[pinnedNode]) then
+			tree[count] = pinnedNode
+			count = count + 1
+			if expanded[pinnedNode] then
+				recur(pinnedNode,2)
+			end
+		end
+
 		recur(nodes[game],1)
 
 		-- Nil Instances
-		if env.getnilinstances then
+		if isNilInstancesEnabled() then
 			if not (isSearching and not searchResults[nilNode]) then
 				tree[count] = nilNode
 				count = count + 1
@@ -562,6 +656,7 @@ local function main()
 	end
 
 	Explorer.StartDrag = function(offX,offY)
+		if Settings.Explorer.DragReparenting == false then return end
 		if Explorer.Dragging then return end
 		for i,v in next, selection.List do
 			local Obj = v.Obj
@@ -775,6 +870,61 @@ local function main()
 		return newEntry
 	end
 
+	Explorer.UpdateStickyHeader = function()
+		if not stickyHeader then return end
+		if Settings.Explorer.StickyExplorerHeader == false or #tree == 0 then
+			stickyHeader.Visible = false
+			return
+		end
+
+		local node = tree[Explorer.Index + 1]
+		if not node then
+			stickyHeader.Visible = false
+			return
+		end
+
+		local root = node
+		if root.Parent == nilNode or root.Parent == pinnedNode then
+			root = root.Parent
+		end
+		while root.Parent and root.Parent ~= nodes[game] and root.Parent ~= nilNode and root.Parent ~= pinnedNode do
+			root = root.Parent
+		end
+
+		if not root or root == node and Explorer.NodeDepth(node) <= 1 then
+			stickyHeader.Visible = false
+			return
+		end
+
+		stickyHeader.Text = tostring(root.Obj)
+		stickyHeader.BackgroundColor3 = Settings.Theme.Main2
+		stickyHeader.TextColor3 = Settings.Theme.Text
+		stickyHeader.Visible = true
+	end
+
+	Explorer.UpdateCameraFollow = function()
+		if Settings.Explorer.CameraFollowSelection ~= true then
+			return
+		end
+
+		local node = selection and selection.List and selection.List[1]
+		local obj = node and node.Obj
+		if not obj then return end
+
+		local subject = obj
+		if obj:IsA("Player") then
+			subject = obj.Character
+		end
+		if subject and subject:IsA("Model") then
+			subject = subject:FindFirstChildOfClass("Humanoid") or subject.PrimaryPart or subject:FindFirstChildWhichIsA("BasePart")
+		end
+		if subject then
+			pcall(function()
+				workspace.CurrentCamera.CameraSubject = subject
+			end)
+		end
+	end
+
 	Explorer.Refresh = function()
 		local maxNodes = math.max(math.ceil((treeFrame.AbsoluteSize.Y) / 20), 0)	
 		local renameNodeVisible = false
@@ -837,6 +987,8 @@ local function main()
 			renameBox.Visible = false
 		end
 
+		Explorer.UpdateStickyHeader()
+
 		for i = maxNodes+1, #listEntries do
 			Explorer.ClickSystem:Remove(listEntries[i])
 			listEntries[i]:Destroy()
@@ -882,13 +1034,13 @@ local function main()
 	Explorer.NodeDepth = function(node)
 		local depth = 0
 
-		if node == nilNode then
+		if node == nilNode or node == pinnedNode then
 			return 1
 		end
 
 		local curNode = node.Parent
 		while curNode do
-			if curNode == nilNode then depth = depth + 1 end
+			if curNode == nilNode or curNode == pinnedNode then depth = depth + 1 end
 			curNode = curNode.Parent
 			depth = depth + 1
 		end
@@ -1080,6 +1232,22 @@ local function main()
 		context:AddRegistered("UNGROUP")
 		context:AddRegistered("SELECT_CHILDREN")
 		context:AddRegistered("JUMP_TO_PARENT")
+		if isPinnedEnabled() then
+			local hasPinnedSelection = false
+			local hasUnpinnedSelection = false
+			for i = 1,#sList do
+				local obj = sList[i].Obj
+				if obj ~= pinnedNode.Obj and obj ~= nilNode.Obj then
+					if pinnedMap[obj] then
+						hasPinnedSelection = true
+					else
+						hasUnpinnedSelection = true
+					end
+				end
+			end
+			if hasUnpinnedSelection then context:AddRegistered("PIN_SELECTION") end
+			if hasPinnedSelection then context:AddRegistered("UNPIN_SELECTION") end
+		end
 		context:AddRegistered("EXPAND_ALL")
 		context:AddRegistered("COLLAPSE_ALL")
 
@@ -1124,20 +1292,20 @@ local function main()
 		if presentClasses["ProximityPrompt"] then context:AddRegistered("FIRE_PROXIMITYPROMPT", fireproximityprompt == nil) end
 		
 		
-		if presentClasses["RemoteEvent"] then context:AddRegistered("BLOCK_REMOTE", not hasHookMetamethod()) end
+		if presentClasses["RemoteEvent"] then context:AddRegistered("BLOCK_REMOTE") end
 		if presentClasses["RemoteEvent"] then context:AddRegistered("UNBLOCK_REMOTE") end
 		
-		if presentClasses["RemoteFunction"] then context:AddRegistered("BLOCK_REMOTE", not hasHookMetamethod()) end
+		if presentClasses["RemoteFunction"] then context:AddRegistered("BLOCK_REMOTE") end
 		if presentClasses["RemoteFunction"] then context:AddRegistered("UNBLOCK_REMOTE") end
 
-		if presentClasses["UnreliableRemoteEvent"] then context:AddRegistered("BLOCK_REMOTE", not hasHookMetamethod()) end
+		if presentClasses["UnreliableRemoteEvent"] then context:AddRegistered("BLOCK_REMOTE") end
 		if presentClasses["UnreliableRemoteEvent"] then context:AddRegistered("UNBLOCK_REMOTE") end
 		
 		
-		if presentClasses["BindableEvent"] then context:AddRegistered("BLOCK_REMOTE", not hasHookMetamethod()) end
+		if presentClasses["BindableEvent"] then context:AddRegistered("BLOCK_REMOTE") end
 		if presentClasses["BindableEvent"] then context:AddRegistered("UNBLOCK_REMOTE") end
 		
-		if presentClasses["BindableFunction"] then context:AddRegistered("BLOCK_REMOTE", not hasHookMetamethod()) end
+		if presentClasses["BindableFunction"] then context:AddRegistered("BLOCK_REMOTE") end
 		if presentClasses["BindableFunction"] then context:AddRegistered("UNBLOCK_REMOTE") end
 		
 		
@@ -1418,6 +1586,43 @@ local function main()
 			end
 		end})
 
+		context:Register("PIN_SELECTION",{Name = "Pin", IconMap = Explorer.MiscIcons, Icon = "AddStar", OnClick = function()
+			local changed = false
+			for _, node in selection.List do
+				local obj = node.Obj
+				if obj and obj ~= pinnedNode.Obj and obj ~= nilNode.Obj and not pinnedMap[obj] then
+					pinnedObjects[#pinnedObjects + 1] = obj
+					pinnedMap[obj] = true
+					changed = true
+				end
+			end
+			if changed then
+				expanded[pinnedNode] = true
+				Explorer.ForceUpdate()
+			end
+		end})
+
+		context:Register("UNPIN_SELECTION",{Name = "Unpin", IconMap = Explorer.MiscIcons, Icon = "RemoveStar", OnClick = function()
+			local removeMap = {}
+			for _, node in selection.List do
+				if node.Obj then
+					removeMap[node.Obj] = true
+				end
+			end
+
+			local nextPinned = {}
+			for _, obj in pinnedObjects do
+				if not removeMap[obj] then
+					nextPinned[#nextPinned + 1] = obj
+				else
+					pinnedMap[obj] = nil
+					pinnedNodeMap[obj] = nil
+				end
+			end
+			pinnedObjects = nextPinned
+			Explorer.ForceUpdate()
+		end})
+
 		context:Register("TELEPORT_TO",{Name = "Teleport To", IconMap = Explorer.MiscIcons, Icon = "TeleportTo", OnClick = function()
 			local sList = selection.List
 			local plrRP = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
@@ -1658,7 +1863,12 @@ local function main()
 				return true
 			end
 
-			local hookInstaller = getHookMetamethod()
+			local hookInstaller = nil
+			if env and type(env.GetHookMetamethod) == "function" then
+				hookInstaller = env.GetHookMetamethod()
+			elseif env then
+				hookInstaller = env.hookmetamethod
+			end
 			if type(hookInstaller) ~= "function" then
 				return false
 			end
@@ -1902,23 +2112,21 @@ local function main()
 	Explorer.HideNilInstances = function()
 		table.clear(nilMap)
 
-		local disconnectCon = trackConn(Instance.new("Folder").ChildAdded:Connect(function() end)).Disconnect
-		for i,v in next,nilCons do
-			disconnectCon(v[1])
-			disconnectCon(v[2])
-		end
-		table.clear(nilCons)
+		disconnectNilCons()
 
 		for i = 1,#nilNode do
 			coroutine.wrap(removeObject)(nilNode[i].Obj)
 		end
+		nodes[nilNode.Obj] = nil
 
 		Explorer.Update()
 		Explorer.Refresh()
 	end
 
 	Explorer.RefreshNilInstances = function()
-		if not env.getnilinstances then return end
+		if not isNilInstancesEnabled() then return end
+
+		nodes[nilNode.Obj] = nilNode
 
 		local nilInsts = env.getnilinstances()
 		local game = game
@@ -1984,6 +2192,17 @@ local function main()
 
 		Explorer.Update()
 		Explorer.Refresh()
+	end
+
+	Explorer.SetNilInstancesEnabled = function(enabled)
+		Settings.Explorer.ShowNilInstances = enabled == true
+		if Settings.Explorer.ShowNilInstances then
+			nodes[nilNode.Obj] = nilNode
+			Explorer.RefreshNilInstances()
+		else
+			Settings.Explorer.SearchNilInstances = false
+			Explorer.HideNilInstances()
+		end
 	end
 
 	Explorer.GetInstancePath = function(obj)
@@ -2324,6 +2543,94 @@ local function main()
 		local specFilters = Explorer.SearchFilters.Specific
 		local init = 1
 		local lastOp = nil
+		local propFilterIndex = 0
+
+		local function quoteLua(value)
+			return string.format("%q", tostring(value or ""))
+		end
+
+		local function buildPropertyComparison(propName, op, rawValue)
+			if not (Settings and Settings.Explorer and Settings.Explorer.AdvancedPropertySearch ~= false) then
+				return nil
+			end
+			if type(propName) ~= "string" or propName == "" or type(op) ~= "string" then
+				return nil
+			end
+
+			rawValue = tostring(rawValue or ""):match("^%s*(.-)%s*$") or ""
+			if rawValue == "" then
+				return nil
+			end
+
+			propFilterIndex = propFilterIndex + 1
+			local idx = propFilterIndex
+			local propLit = quoteLua(propName)
+			local valueLit = quoteLua(rawValue)
+			local lowerValue = rawValue:lower()
+			local lowerLit = quoteLua(lowerValue)
+			local readDef = ("local propOk%d, propVal%d = pcall(function() return obj[%s] end)"):format(idx, idx, propLit)
+
+			if op == ">" or op == "<" or op == ">=" or op == "<=" then
+				local objectDef = table.concat({
+					readDef,
+					("local propNum%d = tonumber(propVal%d)"):format(idx, idx),
+					("local queryNum%d = tonumber(%s)"):format(idx, valueLit),
+				}, "\n")
+				return {
+					Headers = {"local tonumber = tonumber"},
+					ObjectDefs = {objectDef},
+					Predicate = ("propOk%d and propNum%d and queryNum%d and propNum%d %s queryNum%d"):format(idx, idx, idx, idx, op, idx)
+				}
+			elseif op == "~" then
+				local objectDef = table.concat({
+					readDef,
+					("local propText%d = lower(tostring(propVal%d))"):format(idx, idx),
+				}, "\n")
+				return {
+					Headers = {"local tostring = tostring", "local lower = string.lower", "local find = string.find"},
+					ObjectDefs = {objectDef},
+					Predicate = ("propOk%d and find(propText%d,%s,1,true) ~= nil"):format(idx, idx, lowerLit)
+				}
+			else
+				local equalsOp = (op == "=" or op == "==")
+				local notEqualsOp = (op == "~=" or op == "!=")
+				if not equalsOp and not notEqualsOp then
+					return nil
+				end
+
+				local objectDef = table.concat({
+					readDef,
+					("local propNum%d = tonumber(propVal%d)"):format(idx, idx),
+					("local queryNum%d = tonumber(%s)"):format(idx, valueLit),
+					("local propText%d = lower(tostring(propVal%d))"):format(idx, idx),
+				}, "\n")
+				local equalsPredicate = ("((propNum%d and queryNum%d and propNum%d == queryNum%d) or propText%d == %s)"):format(idx, idx, idx, idx, idx, lowerLit)
+				if notEqualsOp then
+					equalsPredicate = ("not %s"):format(equalsPredicate)
+				end
+				return {
+					Headers = {"local tostring = tostring", "local lower = string.lower", "local tonumber = tonumber"},
+					ObjectDefs = {objectDef},
+					Predicate = ("propOk%d and %s"):format(idx, equalsPredicate)
+				}
+			end
+		end
+
+		local function parsePropertyTerm(term)
+			local propName, rest = match(term, "^([%a_][%w_]*)%s*(.+)$")
+			if not propName then
+				return nil
+			end
+
+			rest = rest:match("^%s*(.-)%s*$") or ""
+			for _, op in {"<=", ">=", "~=", "!=", "==", "=", "<", ">", "~"} do
+				if rest:sub(1, #op) == op then
+					return propName, op, rest:sub(#op + 1)
+				end
+			end
+
+			return nil
+		end
 
 		local function processFilter(dat)
 			if dat.Headers then
@@ -2411,35 +2718,41 @@ local function main()
 							finalPredicate = finalPredicate.."false"
 						end
 					else
-						local x,y = find(term,"%S+")
-						if x then
-							local first = sub(term,x,y)
-							local specifier = sub(first,1,1) == "/" and lower(sub(first,2))
-							local compFunc = specifier and compFilters[specifier]
-							local specFunc = specifier and specFilters[specifier]
+						local propName, propOp, propValue = parsePropertyTerm(term)
+						local propFilter = propName and buildPropertyComparison(propName, propOp, inQuotes(propValue) or propValue)
+						if propFilter then
+							processFilter(propFilter)
+						else
+							local x,y = find(term,"%S+")
+							if x then
+								local first = sub(term,x,y)
+								local specifier = sub(first,1,1) == "/" and lower(sub(first,2))
+								local compFunc = specifier and compFilters[specifier]
+								local specFunc = specifier and specFilters[specifier]
 
-							if compFunc then
-								local argStr = sub(term,y+2)
-								local ret = compFunc(inQuotes(argStr) or argStr)
-								if ret then
-									processFilter(ret)
-								else
-									finalPredicate = finalPredicate.."false"
-								end
-							elseif specFunc then
-								local argStr = sub(term,y+2)
-								local ret = specFunc(inQuotes(argStr) or argStr)
-								if ret then
-									if not specMap[term] then
-										specFilterList[#specFilterList + 1] = ret
-										specMap[term] = #specFilterList
+								if compFunc then
+									local argStr = sub(term,y+2)
+									local ret = compFunc(inQuotes(argStr) or argStr)
+									if ret then
+										processFilter(ret)
+									else
+										finalPredicate = finalPredicate.."false"
 									end
-									processFilter(Explorer.SearchFilters.SpecificDefault(specMap[term]))
+								elseif specFunc then
+									local argStr = sub(term,y+2)
+									local ret = specFunc(inQuotes(argStr) or argStr)
+									if ret then
+										if not specMap[term] then
+											specFilterList[#specFilterList + 1] = ret
+											specMap[term] = #specFilterList
+										end
+										processFilter(Explorer.SearchFilters.SpecificDefault(specMap[term]))
+									else
+										finalPredicate = finalPredicate.."false"
+									end
 								else
-									finalPredicate = finalPredicate.."false"
+									processFilter(Explorer.SearchFilters.Default(term))
 								end
-							else
-								processFilter(Explorer.SearchFilters.Default(term))
 							end
 						end
 					end
@@ -2578,8 +2891,14 @@ return search]==]
 
 			if searchFunc then
 				local start = tick()
+				if isPinnedEnabled() then
+					rebuildPinnedNodes()
+					searchFunc(pinnedNode)
+				end
 				searchFunc(nodes[game])
-				searchFunc(nilNode)
+				if isNilSearchEnabled() then
+					searchFunc(nilNode)
+				end
 				--warn(tick()-start)
 			end
 		end
@@ -3118,6 +3437,8 @@ return search]==]
 
 		nilNode.Obj.Name = "Nil Instances"
 		nilNode.Locked = true
+		pinnedNode.Obj.Name = "Pinned Objects"
+		pinnedNode.Locked = true
 
 		local explorerItems = create({
 			{1,"Folder",{Name="ExplorerItems",}},
@@ -3136,9 +3457,29 @@ return search]==]
 
 		toolBar = explorerItems.ToolBar
 		treeFrame = explorerItems.List
+		stickyHeader = createSimple("TextLabel", {
+			Name = "StickyHeader",
+			BackgroundColor3 = Settings.Theme.Main2,
+			BorderSizePixel = 0,
+			Font = Enum.Font.SourceSans,
+			Parent = treeFrame,
+			Position = UDim2.new(0,0,0,0),
+			Size = UDim2.new(1,0,0,20),
+			Text = "",
+			TextColor3 = Settings.Theme.Text,
+			TextSize = 14,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Visible = false,
+			ZIndex = 5
+		})
+		createSimple("UIPadding", {
+			PaddingLeft = UDim.new(0,6),
+			Parent = stickyHeader
+		})
 
 		Explorer.GuiElems.ToolBar = toolBar
 		Explorer.GuiElems.TreeFrame = treeFrame
+		Explorer.GuiElems.StickyHeader = stickyHeader
 
 		scrollV = Lib.ScrollBar.new()		
 		scrollV.WheelIncrement = 3
@@ -3178,6 +3519,10 @@ return search]==]
 			local g = Explorer.GuiElems
 			if g.ToolBar then g.ToolBar.BackgroundColor3 = t.Main2 or g.ToolBar.BackgroundColor3 end
 			if g.TreeFrame then g.TreeFrame.BackgroundColor3 = t.Main1 or g.TreeFrame.BackgroundColor3 end
+			if g.StickyHeader then
+				g.StickyHeader.BackgroundColor3 = t.Main2 or g.StickyHeader.BackgroundColor3
+				g.StickyHeader.TextColor3 = t.Text or g.StickyHeader.TextColor3
+			end
 			if g.ScrollCorner then g.ScrollCorner.BackgroundColor3 = t.Main1 or g.ScrollCorner.BackgroundColor3 end
 			if g.SearchBar then g.SearchBar.BackgroundColor3 = t.TextBox or g.SearchBar.BackgroundColor3 end
 		end
@@ -3187,6 +3532,7 @@ return search]==]
 		Explorer.InitSearch()
 		Explorer.InitDelCleaner()
 		trackConn(selection.Changed:Connect(Explorer.UpdateSelectionVisuals))
+		trackConn(selection.Changed:Connect(Explorer.UpdateCameraFollow))
 
 		-- Window events
 		trackConn(window.GuiElems.Main:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
@@ -3218,7 +3564,8 @@ return search]==]
 		expanded[nodes[game]] = true
 
 		-- Nil Instances
-		if env.getnilinstances then
+		nodes[pinnedNode.Obj] = pinnedNode
+		if isNilInstancesEnabled() then
 			nodes[nilNode.Obj] = nilNode
 		end
 
@@ -3250,6 +3597,10 @@ return search]==]
 				nodes[obj] = newNode
 				par[#par+1] = newNode
 			end
+		end
+
+		if isNilInstancesEnabled() then
+			Explorer.RefreshNilInstances()
 		end
 	end
 

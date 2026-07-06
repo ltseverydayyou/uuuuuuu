@@ -679,6 +679,88 @@ local function main()
 			persistSettings()
 		end))
 
+		local showNilInstances = AddCheckbox("Show Nil Instances Folder", Settings.Explorer.ShowNilInstances == true)
+		trackConn(showNilInstances.OnInput:Connect(function()
+			Settings.Explorer.ShowNilInstances = showNilInstances.Toggled
+			if not showNilInstances.Toggled then
+				Settings.Explorer.SearchNilInstances = false
+			end
+			persistSettings()
+			if Explorer and Explorer.SetNilInstancesEnabled then
+				pcall(Explorer.SetNilInstancesEnabled, showNilInstances.Toggled)
+			else
+				applyExplorerRefresh()
+			end
+		end))
+
+		local searchNilInstances = AddCheckbox("Search Nil Instances", Settings.Explorer.SearchNilInstances == true)
+		trackConn(searchNilInstances.OnInput:Connect(function()
+			Settings.Explorer.SearchNilInstances = searchNilInstances.Toggled
+			if searchNilInstances.Toggled then
+				Settings.Explorer.ShowNilInstances = true
+				if Explorer and Explorer.SetNilInstancesEnabled then
+					pcall(Explorer.SetNilInstancesEnabled, true)
+				end
+			end
+			persistSettings()
+			applyExplorerRefresh()
+		end))
+
+		AddText("Nil instance scanning calls getnilinstances only after enabling it.")
+
+		local freezeSearchEnabled = AddCheckbox("Freeze Search", Settings.Explorer.FreezeSearchEnabled == true)
+		trackConn(freezeSearchEnabled.OnInput:Connect(function()
+			Settings.Explorer.FreezeSearchEnabled = freezeSearchEnabled.Toggled
+			persistSettings()
+		end))
+
+		local freezeSearchTerm = AddTextbox("Freeze Search Term", Settings.Explorer.FreezeSearchTerm or "", 120)
+		trackConn(freezeSearchTerm.FocusLost:Connect(function()
+			Settings.Explorer.FreezeSearchTerm = freezeSearchTerm.Text or ""
+			persistSettings()
+		end))
+
+		local freezeSearchClassName = AddCheckbox("Freeze Search Matches ClassName", Settings.Explorer.FreezeSearchClassName == true)
+		trackConn(freezeSearchClassName.OnInput:Connect(function()
+			Settings.Explorer.FreezeSearchClassName = freezeSearchClassName.Toggled
+			persistSettings()
+		end))
+
+		local advancedPropertySearch = AddCheckbox("Advanced Property Search", Settings.Explorer.AdvancedPropertySearch ~= false)
+		trackConn(advancedPropertySearch.OnInput:Connect(function()
+			Settings.Explorer.AdvancedPropertySearch = advancedPropertySearch.Toggled
+			persistSettings()
+		end))
+
+		local dragReparenting = AddCheckbox("Drag Reparenting", Settings.Explorer.DragReparenting ~= false)
+		trackConn(dragReparenting.OnInput:Connect(function()
+			Settings.Explorer.DragReparenting = dragReparenting.Toggled
+			persistSettings()
+		end))
+
+		local pinnedObjects = AddCheckbox("Pinned Objects", Settings.Explorer.PinnedObjects ~= false)
+		trackConn(pinnedObjects.OnInput:Connect(function()
+			Settings.Explorer.PinnedObjects = pinnedObjects.Toggled
+			persistSettings()
+			applyExplorerRefresh()
+		end))
+
+		local stickyExplorerHeader = AddCheckbox("Sticky Explorer Header", Settings.Explorer.StickyExplorerHeader ~= false)
+		trackConn(stickyExplorerHeader.OnInput:Connect(function()
+			Settings.Explorer.StickyExplorerHeader = stickyExplorerHeader.Toggled
+			persistSettings()
+			applyExplorerRefresh()
+		end))
+
+		local cameraFollowSelection = AddCheckbox("Camera Follow Selection", Settings.Explorer.CameraFollowSelection == true)
+		trackConn(cameraFollowSelection.OnInput:Connect(function()
+			Settings.Explorer.CameraFollowSelection = cameraFollowSelection.Toggled
+			persistSettings()
+			if Explorer and Explorer.UpdateCameraFollow then
+				pcall(Explorer.UpdateCameraFollow)
+			end
+		end))
+
 		local keyboardShortcuts = AddCheckbox("Keyboard Shortcuts", Settings.Explorer.KeyboardShortcuts ~= false)
 		trackConn(keyboardShortcuts.OnInput:Connect(function()
 			Settings.Explorer.KeyboardShortcuts = keyboardShortcuts.Toggled

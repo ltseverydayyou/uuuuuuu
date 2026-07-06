@@ -1,6 +1,18 @@
+--!nocheck
 local __dcm_boot = {
 	hostEnv = (getgenv and getgenv()) or _G or {},
 }
+
+__dcm_boot.getLoader = function()
+	local hostLoader = type(__dcm_boot.hostEnv) == "table" and rawget(__dcm_boot.hostEnv, "loadstring") or nil
+	if type(hostLoader) == "function" then
+		return hostLoader
+	end
+	if type(loadstring) == "function" then
+		return loadstring
+	end
+	return nil
+end
 __dcm_boot.hostGetfenv = type(__dcm_boot.hostEnv.getfenv) == "function" and __dcm_boot.hostEnv.getfenv or getfenv
 __dcm_boot.hostSetfenv = type(__dcm_boot.hostEnv.setfenv) == "function" and __dcm_boot.hostEnv.setfenv or setfenv
 __dcm_boot.debug = rawget(__dcm_boot.hostEnv, "debug") or debug
@@ -113,7 +125,7 @@ local __lt = (function()
 	if type(cached) == "table" then
 		return cached
 	end
-	local loader = loadstring or load
+	local loader = __dcm_boot.getLoader()
 	if type(loader) ~= "function" then
 		error("Service resolver loader unavailable")
 	end
@@ -144,7 +156,7 @@ local __NAUIProtector = (function()
 			return cached;
 		end;
 	end;
-	local loader = loadstring or load;
+	local loader = __dcm_boot.getLoader();
 	if type(loader) ~= "function" then
 		return nil;
 	end;
@@ -271,7 +283,7 @@ local function httpTxt(u, hdr)
 end
 
 local function runUrl(u, name, hdr)
-	local ld = loadstring or load
+	local ld = __dcm_boot.getLoader()
 	if type(ld) ~= "function" then
 		return false, "loadstring unavailable"
 	end
@@ -7517,7 +7529,7 @@ local function mkCard(par, i, d)
 
 	con(run.MouseButton1Click:Connect(function()
 		local ok, er = pcall(function()
-			local ld = loadstring or load
+			local ld = __dcm_boot.getLoader()
 			if type(ld) ~= "function" then
 				error("loadstring unavailable")
 			end

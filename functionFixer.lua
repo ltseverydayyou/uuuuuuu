@@ -1,48 +1,95 @@
+--!nonstrict
+
+type RuntimeState = {
+	alive: boolean,
+	cleanup: (() -> ())?,
+}
+
+type PromptOptions = {
+	hold: number?,
+	requireLoS: boolean?,
+	disableLoS: boolean?,
+	distance: number?,
+	autoDistance: boolean?,
+	exclusivity: Enum.ProximityPromptExclusivity?,
+	forceEnable: boolean?,
+	relocate: boolean?,
+	proxyAlways: boolean?,
+	relocateDistance: number?,
+	relocateUp: number?,
+	relocateRight: number?,
+	showTimeout: number?,
+	stagger: number?,
+}
+
+type PromptState = {
+	E: boolean,
+	H: number,
+	R: boolean,
+	D: number,
+	X: Enum.ProximityPromptExclusivity,
+	ref: number,
+	inFlight: boolean,
+	proxy: { BasePart }?,
+}
+
+type TouchSnapshot = {
+	CF: CFrame,
+	VEL: Vector3,
+	ANG: Vector3,
+	CT: boolean,
+	CQ: boolean,
+	CC: boolean,
+	CG: number?,
+	AN: boolean?,
+	MS: boolean?,
+}
+
 local __lt = (function()
-	local globalEnv = (getgenv and getgenv()) or _G or {};
-	local sharedEnv = rawget(_G, "shared");
-	local cacheHost = type(sharedEnv) == "table" and sharedEnv or (type(globalEnv) == "table" and globalEnv or nil);
+	local globalEnv = (getgenv and getgenv()) or _G or {}
+	local sharedEnv = rawget(_G, "shared")
+	local cacheHost = type(sharedEnv) == "table" and sharedEnv or (type(globalEnv) == "table" and globalEnv or nil)
 	if cacheHost then
-		local cached = rawget(cacheHost, "__lt_service_resolver");
+		local cached = rawget(cacheHost, "__lt_service_resolver")
 		if type(cached) == "table" then
-			return cached;
-		end;
-	end;
-	local loader = loadstring or load;
+			return cached
+		end
+	end
+	local loader = loadstring or load
 	if type(loader) ~= "function" then
-		error("Service resolver loader unavailable");
-	end;
-	local resolver = loader(game:HttpGet("https://ltseverydayyou.github.io/ServiceResolver.luau"), "@ServiceResolver.luau");
+		error("Service resolver loader unavailable")
+	end
+	local resolver = loader(game:HttpGet("https://ltseverydayyou.github.io/ServiceResolver.luau"), "@ServiceResolver.luau")
 	if type(resolver) ~= "function" then
-		error("Service resolver failed to compile");
-	end;
-	local loaded = resolver();
+		error("Service resolver failed to compile")
+	end
+	local loaded = resolver()
 	if type(loaded) ~= "table" then
-		error("Service resolver failed to load");
-	end;
+		error("Service resolver failed to load")
+	end
 	if cacheHost then
-		cacheHost.__lt_service_resolver = loaded;
-	end;
-	return loaded;
-end)();
+		cacheHost.__lt_service_resolver = loaded
+	end
+	return loaded
+end)()
 
-local _env = getgenv and getgenv() or _G or {};
+local _env = getgenv and getgenv() or _G or {}
 if type(_env.__NAFunctionFixerRuntime) == "table" and type(_env.__NAFunctionFixerRuntime.cleanup) == "function" then
-	pcall(_env.__NAFunctionFixerRuntime.cleanup);
-end;
-local _runtime = {
+	pcall(_env.__NAFunctionFixerRuntime.cleanup)
+end
+local _runtime: RuntimeState = {
 	alive = true
-};
-_env.__NAFunctionFixerRuntime = _runtime;
-local RunService = __lt.cs("RunService", cloneref);
-local HttpService = __lt.cs("HttpService", cloneref);
-local Wait = task.wait;
-local Delay = task.delay;
-local Spawn = task.spawn;
-local Insert = table.insert;
-local Concat = table.concat;
+}
+_env.__NAFunctionFixerRuntime = _runtime
+local RunService = __lt.cs("RunService", cloneref)
+local HttpService = __lt.cs("HttpService", cloneref)
+local Wait = task.wait
+local Delay = task.delay
+local Spawn = task.spawn
+local Insert = table.insert
+local Concat = table.concat
 
-local promptPartCache = {};
+local promptPartCache: { [Instance]: BasePart | false } = {}
 
 local glitchMarks = {
 	"̶",
@@ -58,34 +105,34 @@ local glitchMarks = {
 	"͞",
 	"͟",
 	"͢"
-};
+}
 
-local hparts = {}
-local hconn
+local hparts: { [BasePart]: number } = {}
+local hconn: RBXScriptConnection?
 _runtime.cleanup = function()
 	if not _runtime.alive then
-		return;
-	end;
-	_runtime.alive = false;
+		return
+	end
+	_runtime.alive = false
 	if hconn then
 		pcall(function()
-			hconn:Disconnect();
-		end);
-		hconn = nil;
-	end;
-	hparts = {};
+			hconn:Disconnect()
+		end)
+		hconn = nil
+	end
+	hparts = {}
 	if _env.__NAFunctionFixerRuntime == _runtime then
-		_env.__NAFunctionFixerRuntime = nil;
-	end;
-end;
+		_env.__NAFunctionFixerRuntime = nil
+	end
+end
 
-local function hb(n)
+local function hb(n: number?)
 	for i = 1, n or 1 do
-		RunService.Heartbeat:Wait();
-	end;
-end;
+		RunService.Heartbeat:Wait()
+	end
+end
 
-local function regHp(p)
+local function regHp(p: BasePart?)
 	if not p then
 		return
 	end
@@ -112,83 +159,97 @@ local function regHp(p)
 	end)
 end
 
-local isPoopSploit = identifyexecutor and ((identifyexecutor()):lower() == "solara" or (identifyexecutor()):lower() == "xeno") or typeof(firetouchinterest) ~= "function";
+local function getExecutorName(): string
+	if typeof(identifyexecutor) ~= "function" then
+		return ""
+	end
 
-local rStringgg = function()
+	local ok, name = pcall(identifyexecutor)
+	if ok and typeof(name) == "string" then
+		return string.lower(name)
+	end
+
+	return ""
+end
+
+local executorName = getExecutorName()
+local isLimitedExecutor = executorName == "solara" or executorName == "xeno" or typeof(firetouchinterest) ~= "function"
+
+local function randomString(): string
 	if HttpService and HttpService.GenerateGUID then
-		return __lt.cm("HttpService", "GenerateGUID", false);
-	end;
-	local length = math.random(10, 20);
-	local result = {};
+		return __lt.cm("HttpService", "GenerateGUID", false)
+	end
+	local length = math.random(10, 20)
+	local result = {}
 	for i = 1, length do
-		local char = string.char(math.random(32, 126));
-		Insert(result, char);
+		local char = string.char(math.random(32, 126))
+		Insert(result, char)
 		if math.random() < 0.5 then
-			local numGlitches = math.random(1, 4);
+			local numGlitches = math.random(1, 4)
 			for j = 1, numGlitches do
-				Insert(result, glitchMarks[math.random(#glitchMarks)]);
-			end;
-		end;
-	end;
+				Insert(result, glitchMarks[math.random(#glitchMarks)])
+			end
+		end
+	end
 	if math.random() < 0.3 then
-		Insert(result, utf8.char(math.random(768, 879)));
-	end;
+		Insert(result, utf8.char(math.random(768, 879)))
+	end
 	if math.random() < 0.1 then
-		Insert(result, "\000");
-	end;
+		Insert(result, "\000")
+	end
 	if math.random() < 0.1 then
-		Insert(result, string.rep("43", math.random(5, 20)));
-	end;
+		Insert(result, string.rep("43", math.random(5, 20)))
+	end
 	if math.random() < 0.2 then
-		Insert(result, utf8.char(8238));
-	end;
-	return Concat(result);
-end;
+		Insert(result, utf8.char(8238))
+	end
+	return Concat(result)
+end
 
-local getPromptPart = function(pp)
+local function getPromptPart(pp: ProximityPrompt?): BasePart?
 	if not pp then
-		return nil;
-	end;
-	local c = promptPartCache[pp];
+		return nil
+	end
+	local c = promptPartCache[pp]
 	if c ~= nil then
 		if c == false then
-			return nil;
-		end;
-		return c;
-	end;
-	local parent = pp.Parent;
-	local part;
+			return nil
+		end
+		return c
+	end
+	local parent = pp.Parent
+	local part
 	if parent then
 		if parent:IsA("Attachment") then
-			local p = parent.Parent;
+			local p = parent.Parent
 			if p and p:IsA("BasePart") then
-				part = p;
-			end;
+				part = p
+			end
 		elseif parent:IsA("BasePart") then
-			part = parent;
-		end;
-	end;
+			part = parent
+		end
+	end
 	if not part then
-		local model = pp:FindFirstAncestorWhichIsA("Model");
+		local model = pp:FindFirstAncestorWhichIsA("Model")
 		if model then
 			if model.PrimaryPart then
-				part = model.PrimaryPart;
+				part = model.PrimaryPart
 			else
-				part = model:FindFirstChildWhichIsA("BasePart", true);
-			end;
-		end;
-	end;
+				part = model:FindFirstChildWhichIsA("BasePart", true)
+			end
+		end
+	end
 	if not part then
-		part = pp:FindFirstAncestorWhichIsA("BasePart");
-	end;
-	promptPartCache[pp] = part or false;
-	return part;
-end;
+		part = pp:FindFirstAncestorWhichIsA("BasePart")
+	end
+	promptPartCache[pp] = part or false
+	return part
+end
 
-if isPoopSploit then
+if isLimitedExecutor then
 	local ProximityPromptService = __lt.cs("ProximityPromptService", cloneref)
 
-	local function toOpts(o)
+	local function toOpts(o: any): PromptOptions
 		if typeof(o) == "number" then
 			return {
 				hold = o
@@ -197,9 +258,9 @@ if isPoopSploit then
 		return typeof(o) == "table" and o or {}
 	end
 
-	local state = {}
+	local state: { [ProximityPrompt]: PromptState } = {}
 
-	local function snapshot(pp)
+	local function snapshot(pp: ProximityPrompt): PromptState
 		return {
 			E = pp.Enabled,
 			H = pp.HoldDuration,
@@ -209,7 +270,7 @@ if isPoopSploit then
 		}
 	end
 
-	local function cleanProxies(s)
+	local function cleanProxies(s: PromptState?)
 		local list = s and s.proxy
 		if not list then
 			return
@@ -226,7 +287,7 @@ if isPoopSploit then
 		s.proxy = nil
 	end
 
-	local function begin(pp, o)
+	local function begin(pp: ProximityPrompt, o: PromptOptions): boolean
 		if not (pp and pp.Parent) then
 			return false
 		end
@@ -274,7 +335,7 @@ if isPoopSploit then
 		return true
 	end
 
-	local function finish(pp)
+	local function finish(pp: ProximityPrompt)
 		local s = state[pp]
 		if not s then
 			return
@@ -297,7 +358,7 @@ if isPoopSploit then
 		end
 	end
 
-	local function rstep(n)
+	local function rstep(n: number?)
 		for i = 1, n or 1 do
 			pcall(function()
 				RunService.RenderStepped:Wait()
@@ -306,7 +367,7 @@ if isPoopSploit then
 		end
 	end
 
-	local function shouldProxy(pp, o)
+	local function shouldProxy(pp: ProximityPrompt, o: PromptOptions): boolean
 		if o.relocate == false then
 			return false
 		end
@@ -335,7 +396,7 @@ if isPoopSploit then
 		return dir.Unit:Dot(cam.CFrame.LookVector) < 0.05
 	end
 
-	local function makeProxy(pp, o)
+	local function makeProxy(pp: ProximityPrompt, o: PromptOptions)
 		local cam = workspace.CurrentCamera
 		if not cam then
 			return nil
@@ -372,7 +433,7 @@ if isPoopSploit then
 
 		local ok, proxy = pcall(function()
 			local p = Instance.new("Part")
-			p.Name = rStringgg and rStringgg() or "\000"
+			p.Name = randomString and randomString() or "\000"
 			p.Size = Vector3.new(0.05, 0.05, 0.05)
 			p.Anchored = true
 			p.CanCollide = false
@@ -429,7 +490,7 @@ if isPoopSploit then
 			end
 		end
 
-		local function waitShow(lim)
+		local function waitShow(lim: number?)
 			lim = tonumber(lim) or 0.12
 			local t0 = tick()
 
@@ -460,7 +521,7 @@ if isPoopSploit then
 		return restore, waitShow
 	end
 
-	local function fireOne(pp, o)
+	local function fireOne(pp: ProximityPrompt, o: PromptOptions)
 		if not begin(pp, o) then
 			return
 		end
@@ -520,7 +581,8 @@ if isPoopSploit then
 			return false
 		end
 
-		local stagger = o.stagger ~= nil and math.max(0, o.stagger) or 0
+		local stagger = tonumber(o.stagger) or 0
+		stagger = math.max(0, stagger)
 		if stagger <= 0 and #list > 1 then
 			stagger = 0.02
 		end
@@ -540,30 +602,30 @@ if isPoopSploit then
 	end
 end
 
-if isPoopSploit then
-	local Players = __lt.cs("Players", cloneref);
-	local touchState = setmetatable({}, {
+if isLimitedExecutor then
+	local Players = __lt.cs("Players", cloneref)
+	local touchState: { [BasePart]: { [BasePart]: any } } = setmetatable({}, {
 		__mode = "k"
-	});
+	})
 
-	local function snapshot(part)
-		local vel, ang = Vector3.zero, Vector3.zero;
+	local function snapshot(part: BasePart): TouchSnapshot
+		local vel, ang = Vector3.zero, Vector3.zero
 		pcall(function()
-			vel = part.AssemblyLinearVelocity;
-			ang = part.AssemblyAngularVelocity;
-		end);
-		local cg = nil;
+			vel = part.AssemblyLinearVelocity
+			ang = part.AssemblyAngularVelocity
+		end)
+		local cg = nil
 		pcall(function()
-			cg = part.CollisionGroupId;
-		end);
-		local anchored = nil;
+			cg = part.CollisionGroupId
+		end)
+		local anchored = nil
 		pcall(function()
-			anchored = part.Anchored;
-		end);
-		local massless = nil;
+			anchored = part.Anchored
+		end)
+		local massless = nil
 		pcall(function()
-			massless = part.Massless;
-		end);
+			massless = part.Massless
+		end)
 		return {
 			CF = part.CFrame,
 			VEL = vel,
@@ -574,125 +636,125 @@ if isPoopSploit then
 			CG = cg,
 			AN = anchored,
 			MS = massless
-		};
-	end;
+		}
+	end
 
-	local function restore(part, snap)
+	local function restore(part: BasePart?, snap: TouchSnapshot?)
 		if not (snap and part and part.Parent) then
-			return;
-		end;
+			return
+		end
 		pcall(function()
-			part.CFrame = snap.CF;
-			part.AssemblyLinearVelocity = snap.VEL;
-			part.AssemblyAngularVelocity = snap.ANG;
-			part.CanTouch = snap.CT;
-			part.CanQuery = snap.CQ;
-			part.CanCollide = snap.CC;
+			part.CFrame = snap.CF
+			part.AssemblyLinearVelocity = snap.VEL
+			part.AssemblyAngularVelocity = snap.ANG
+			part.CanTouch = snap.CT
+			part.CanQuery = snap.CQ
+			part.CanCollide = snap.CC
 			if snap.AN ~= nil then
-				part.Anchored = snap.AN;
-			end;
+				part.Anchored = snap.AN
+			end
 			if snap.MS ~= nil then
-				part.Massless = snap.MS;
-			end;
+				part.Massless = snap.MS
+			end
 			if snap.CG then
-				part.CollisionGroupId = snap.CG;
-			end;
-		end);
-	end;
+				part.CollisionGroupId = snap.CG
+			end
+		end)
+	end
 
-	local function restoreTouchProps(part, snap)
+	local function restoreTouchProps(part: BasePart?, snap: TouchSnapshot?)
 		if not (snap and part and part.Parent) then
-			return;
-		end;
+			return
+		end
 		pcall(function()
-			part.CanTouch = snap.CT;
-			part.CanQuery = snap.CQ;
-		end);
-	end;
+			part.CanTouch = snap.CT
+			part.CanQuery = snap.CQ
+		end)
+	end
 
-	local function getPart(p)
+	local function getPart(p: any): BasePart?
 		if typeof(p) ~= "Instance" or (not p:IsA("BasePart")) then
-			return nil;
-		end;
-		return p;
-	end;
+			return nil
+		end
+		return p
+	end
 
-	local function getRoot(p)
+	local function getRoot(p: BasePart?): BasePart?
 		if not p then
-			return nil;
-		end;
-		local root = nil;
+			return nil
+		end
+		local root = nil
 		pcall(function()
-			root = p.AssemblyRootPart;
-		end);
-		return root or p;
-	end;
+			root = p.AssemblyRootPart
+		end)
+		return root or p
+	end
 
-	local function getPair(partA, partB, create)
-		local map = touchState[partA];
+	local function getPair(partA: BasePart, partB: BasePart, create: boolean)
+		local map = touchState[partA]
 		if not map and create then
 			map = setmetatable({}, {
 				__mode = "k"
-			});
-			touchState[partA] = map;
-		end;
-		return map and map[partB], map;
-	end;
+			})
+			touchState[partA] = map
+		end
+		return map and map[partB], map
+	end
 
-	local function isLocalCharacterPart(part)
-		local lp = Players and Players.LocalPlayer;
-		local char = lp and lp.Character;
-		return char and part:IsDescendantOf(char);
-	end;
+	local function isLocalCharacterPart(part: BasePart): boolean?
+		local lp = Players and Players.LocalPlayer
+		local char = lp and lp.Character
+		return char and part:IsDescendantOf(char)
+	end
 
-	local function chooseMover(partA, partB)
-		local aLocal = isLocalCharacterPart(partA);
-		local bLocal = isLocalCharacterPart(partB);
+	local function chooseMover(partA: BasePart, partB: BasePart): (BasePart, BasePart)
+		local aLocal = isLocalCharacterPart(partA)
+		local bLocal = isLocalCharacterPart(partB)
 		if aLocal and not bLocal then
-			return partB, partA;
-		end;
+			return partB, partA
+		end
 		if bLocal and not aLocal then
-			return partA, partB;
-		end;
-		return partA, partB;
-	end;
+			return partA, partB
+		end
+		return partA, partB
+	end
 
-	local function setTouchProps(part)
+	local function setTouchProps(part: BasePart)
 		pcall(function()
 			if part.CanTouch == false then
-				part.CanTouch = true;
-			end;
+				part.CanTouch = true
+			end
 			if part.CanQuery == false then
-				part.CanQuery = true;
-			end;
-		end);
-	end;
+				part.CanQuery = true
+			end
+		end)
+	end
 
-	local function moveIntoTouch(mover, target)
-		local root = getRoot(mover);
+	local function moveIntoTouch(mover: BasePart, target: BasePart)
+		local root = getRoot(mover)
 		if not root then
-			return nil;
-		end;
-		local rootSnap = snapshot(root);
-		local moverSnap = mover == root and rootSnap or snapshot(mover);
-		local targetSnap = snapshot(target);
-		local offset = root.CFrame:ToObjectSpace(mover.CFrame);
+			return nil
+		end
+		local rootSnap = snapshot(root)
+		local moverSnap = mover == root and rootSnap or snapshot(mover)
+		local targetSnap = snapshot(target)
+		local offset = root.CFrame:ToObjectSpace(mover.CFrame)
 		pcall(function()
-			root.AssemblyLinearVelocity = Vector3.zero;
-			root.AssemblyAngularVelocity = Vector3.zero;
-		end);
+			root.AssemblyLinearVelocity = Vector3.zero
+			root.AssemblyAngularVelocity = Vector3.zero
+		end)
 		pcall(function()
-			root.CanCollide = false;
-		end);
+			root.CanCollide = false
+		end)
 		pcall(function()
-			mover.CanCollide = false;
-		end);
-		setTouchProps(root);
-		setTouchProps(mover);
-		setTouchProps(target);
+			mover.CanCollide = false
+		end)
+		setTouchProps(root)
+		setTouchProps(mover)
+		setTouchProps(target)
 		pcall(function()
-			root.CFrame = target.CFrame * offset:Inverse();
-		end);
+			root.CFrame = target.CFrame * offset:Inverse()
+		end)
 		return {
 			root = root,
 			mover = mover,
@@ -700,59 +762,59 @@ if isPoopSploit then
 			rootSnap = rootSnap,
 			moverSnap = moverSnap,
 			targetSnap = targetSnap
-		};
-	end;
+		}
+	end
 
 	_env.firetouchinterest = function(partA, partB, state)
-		partA = getPart(partA);
-		partB = getPart(partB);
+		partA = getPart(partA)
+		partB = getPart(partB)
 		if not partA or (not partB) then
-			return false;
-		end;
-		state = tonumber(state) or 0;
-		state = state == 1 and 1 or 0;
-		local st, map = getPair(partA, partB, state == 0);
+			return false
+		end
+		state = tonumber(state) or 0
+		state = state == 1 and 1 or 0
+		local st, map = getPair(partA, partB, state == 0)
 		if state == 0 then
 			if not st then
-				local mover, target = chooseMover(partA, partB);
-				st = moveIntoTouch(mover, target);
+				local mover, target = chooseMover(partA, partB)
+				st = moveIntoTouch(mover, target)
 				if not st then
-					return false;
-				end;
-				st.partA = partA;
-				st.partB = partB;
-				st.ref = 0;
-				map[partB] = st;
-			end;
-			st.ref += 1;
-			hb(1);
+					return false
+				end
+				st.partA = partA
+				st.partB = partB
+				st.ref = 0
+				map[partB] = st
+			end
+			st.ref += 1
+			hb(1)
 		else
 			if st then
-				st.ref -= 1;
+				st.ref -= 1
 				if st.ref <= 0 then
-					restore(st.root, st.rootSnap);
+					restore(st.root, st.rootSnap)
 					if st.mover ~= st.root then
-						restore(st.mover, st.moverSnap);
-					end;
-					restoreTouchProps(st.target, st.targetSnap);
-					map[partB] = nil;
-				end;
+						restore(st.mover, st.moverSnap)
+					end
+					restoreTouchProps(st.target, st.targetSnap)
+					map[partB] = nil
+				end
 			else
-				local reverse, reverseMap = getPair(partB, partA, false);
+				local reverse, reverseMap = getPair(partB, partA, false)
 				if reverse then
-					reverse.ref -= 1;
+					reverse.ref -= 1
 					if reverse.ref <= 0 then
-						restore(reverse.root, reverse.rootSnap);
+						restore(reverse.root, reverse.rootSnap)
 						if reverse.mover ~= reverse.root then
-							restore(reverse.mover, reverse.moverSnap);
-						end;
-						restoreTouchProps(reverse.target, reverse.targetSnap);
-						reverseMap[partA] = nil;
-					end;
-				end;
-			end;
-			hb(1);
-		end;
-		return true;
-	end;
-end;
+							restore(reverse.mover, reverse.moverSnap)
+						end
+						restoreTouchProps(reverse.target, reverse.targetSnap)
+						reverseMap[partA] = nil
+					end
+				end
+			end
+			hb(1)
+		end
+		return true
+	end
+end

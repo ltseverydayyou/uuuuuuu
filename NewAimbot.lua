@@ -769,6 +769,7 @@ _G.espTransparency = _G.espTransparency or 0.3;
 _G.lockToNearest = _G.lockToNearest or false;
 _G.aliveCheck = _G.aliveCheck or false;
 _G.teamCheck = _G.teamCheck or false;
+_G.ignoreFriends = _G.ignoreFriends ~= nil and _G.ignoreFriends or false;
 _G.wallCheck = _G.wallCheck or false;
 _G.aimTween = _G.aimTween or false;
 _G.aimSmooth = _G.aimSmooth or 0.15;
@@ -896,6 +897,7 @@ local OPT = {
 		"ESP",
 		"Wall Check",
 		"Team Check",
+		"Ignore Friends",
 		"Alive Check",
 		"Lock FOV",
 		"Smooth Aim",
@@ -912,6 +914,7 @@ local OPT = {
 		["ESP"] = "espEnabled",
 		["Wall Check"] = "wallCheck",
 		["Team Check"] = "teamCheck",
+		["Ignore Friends"] = "ignoreFriends",
 		["Alive Check"] = "aliveCheck",
 		["Lock FOV"] = "fovEnabled",
 		["Smooth Aim"] = "aimTween",
@@ -930,6 +933,7 @@ local OPT = {
 		"ESP",
 		"Wall Check",
 		"Team Check",
+		"Ignore Friends",
 		"Alive Check",
 		"Lock FOV",
 		"Prediction",
@@ -1036,6 +1040,7 @@ local DEFAULT_CONFIG = {
 	lockToNearest = false,
 	aliveCheck = false,
 	teamCheck = false,
+	ignoreFriends = false,
 	wallCheck = false,
 	aimTween = false,
 	aimSmooth = 0.28,
@@ -2147,6 +2152,7 @@ local function saveCfg(forceSave, nameOverride)
 		lockToNearest = _G.lockToNearest,
 		aliveCheck = _G.aliveCheck,
 		teamCheck = _G.teamCheck,
+		ignoreFriends = _G.ignoreFriends,
 		wallCheck = _G.wallCheck,
 		aimTween = _G.aimTween,
 		aimSmooth = _G.aimSmooth,
@@ -3063,6 +3069,37 @@ local function isEnemy(op)
 		return op.Team ~= nil and plr.Team ~= nil and op.Team ~= plr.Team;
 	end;
 end;
+local friendCache = {};
+local FRIEND_CACHE_SECONDS = 60;
+local function isIgnoredFriend(op)
+	if _G.ignoreFriends ~= true then
+		return false;
+	end;
+	if not op or op == plr or not plr then
+		return false;
+	end;
+	local uid = tonumber(op.UserId);
+	if not uid or uid <= 0 then
+		return false;
+	end;
+	local now = os.clock();
+	local cached = friendCache[uid];
+	if type(cached) == "table" and (now - (tonumber(cached.t) or 0)) < FRIEND_CACHE_SECONDS then
+		return cached.v == true;
+	end;
+	local ok, result = pcall(function()
+		return plr:IsFriendsWith(uid);
+	end);
+	local isFriend = ok and result == true;
+	friendCache[uid] = {
+		v = isFriend,
+		t = now
+	};
+	return isFriend;
+end;
+local function isTargetPlayer(op, ch)
+	return op ~= plr and op.Character ~= nil and isEnemy(op) and (not isIgnoredFriend(op)) and (ch == nil or op.Character == ch);
+end;
 local function isAlive(ch)
 	if not _G.aliveCheck then
 		return true;
@@ -3086,7 +3123,7 @@ local function isCharacterStillTargetable(ch, preferredPart)
 		if not allowPlayers then
 			return false, nil;
 		end;
-		if op == plr or (not isEnemy(op)) or (not isAlive(ch)) then
+		if (not isTargetPlayer(op, ch)) or (not isAlive(ch)) then
 			return false, nil;
 		end;
 	else
@@ -3196,7 +3233,7 @@ local function findTarget()
 	end;
 	if allowPlayers then
 		for _, op in getPlrs() do
-			if op ~= plr and op.Character and isEnemy(op) then
+			if isTargetPlayer(op) then
 				considerCharacter(op.Character, false);
 			end;
 		end;
@@ -3780,6 +3817,8 @@ local function addRowToggle(parent, labelText, var, desc)
 			end;
 			applyCustomUI();
 			updateFOVCircle();
+		elseif var == "ignoreFriends" then
+			resetAimCaches(true);
 		elseif var == "randWtOn" then
 			normalizeRandomWeights();
 			resetAimCaches(false);
@@ -4786,6 +4825,7 @@ local function createUI()
 	addRowToggleSlider(pgAim, "aim prediction", "aimPredict", "aimLead", 0.01, 1, 2, "adaptive prediction, dampens close targets");
 	addRowToggleSlider(pgAim, "lock fov", "fovEnabled", "fovValue", 1, 120, 0, "changes camera FOV");
 	addRowToggle(pgTarget, "team check", "teamCheck");
+	addRowToggle(pgTarget, "ignore friends", "ignoreFriends", "do not lock onto Roblox friends");
 	addRowToggle(pgTarget, "alive check", "aliveCheck");
 	addRowToggle(pgESP, "enable esp", "espEnabled");
 	addRowToggle(pgESP, "team color", "espTeamColor");
@@ -5820,6 +5860,7 @@ local function createUI()
 			["Aim Lock"] = "LOCKMODE",
 			["Wall Check"] = "WALL",
 			["Team Check"] = "TEAM",
+			["Ignore Friends"] = "FRIENDS",
 			["Alive Check"] = "ALIVE",
 			["Lock FOV"] = "FOV",
 			["FOV Circle"] = "CIRCLE",
@@ -6236,6 +6277,8 @@ handleOptionBind = function(action)
 		updateFOVCircle();
 	elseif var == "fovCircleEnabled" then
 		updateFOVCircle();
+	elseif var == "ignoreFriends" then
+		resetAimCaches(true);
 	end;
 	saveCfg();
 	toast(action .. (_G[var] and " enabled" or " disabled"));
@@ -6491,6 +6534,9 @@ uiRefs.setupPlayerMonitoring = function()
 	end);
 	table.insert(conns, a);
 	local r = Players.PlayerRemoving:Connect(function(pp)
+		if pp and tonumber(pp.UserId) then
+			friendCache[tonumber(pp.UserId)] = nil;
+		end;
 		untrackPlayer(pp);
 		if pp.Character and lastLockedCharacter == pp.Character then
 			invalidateTargetState(pp.Character);

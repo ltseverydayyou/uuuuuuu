@@ -708,6 +708,15 @@ local function main()
 
 		AddText("Nil instance scanning calls getnilinstances only after enabling it.")
 
+		local freezeNilInstances = AddCheckbox("Freeze Nil Instances", Settings.Explorer.FreezeNilInstances == true)
+		trackConn(freezeNilInstances.OnInput:Connect(function()
+			Settings.Explorer.FreezeNilInstances = freezeNilInstances.Toggled
+			persistSettings()
+			if not freezeNilInstances.Toggled and Settings.Explorer.ShowNilInstances == true and Explorer and Explorer.RefreshNilInstances then
+				pcall(Explorer.RefreshNilInstances)
+			end
+		end))
+
 		local freezeSearchEnabled = AddCheckbox("Freeze Search", Settings.Explorer.FreezeSearchEnabled == true)
 		trackConn(freezeSearchEnabled.OnInput:Connect(function()
 			Settings.Explorer.FreezeSearchEnabled = freezeSearchEnabled.Toggled

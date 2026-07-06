@@ -145,6 +145,7 @@ local function main()
 	local nilMap,nilCons = {},{}
 	local pinnedObjects,pinnedMap,pinnedNodeMap = {},{},{}
 	local stickyHeader
+	local allowFrozenNilSnapshotAdd = false
 	local function connectSignal(signal, func)
 		return trackConn(signal:Connect(func))
 	end
@@ -161,6 +162,24 @@ local function main()
 
 	local function isNilSearchEnabled()
 		return isNilInstancesEnabled() and Settings.Explorer.SearchNilInstances == true
+	end
+
+	local function isNilFreezeEnabled()
+		return isNilInstancesEnabled() and Settings.Explorer.FreezeNilInstances == true
+	end
+
+	local function freezeExplorerUpdates()
+		local explorerSettings = Settings and Settings.Explorer
+		if not explorerSettings then return end
+
+		explorerSettings.AutoUpdateMode = 3
+		if Explorer and Explorer.SetupConnections then
+			task.defer(Explorer.SetupConnections)
+		end
+	end
+
+	local function shouldFreezeNilObject()
+		return isNilFreezeEnabled() and not allowFrozenNilSnapshotAdd
 	end
 
 	local function disconnectNilCons()
@@ -244,10 +263,7 @@ local function main()
 	addObject = function(root)
 		if nodes[root] then return end
 		if shouldFreezeForObject(root) then
-			Settings.Explorer.AutoUpdateMode = 3
-			if Explorer.SetupConnections then
-				task.defer(Explorer.SetupConnections)
-			end
+			freezeExplorerUpdates()
 			return
 		end
 
@@ -274,6 +290,11 @@ local function main()
 				connectSignal(root.AncestryChanged,moveObject),
 			}
 			isNil = true
+		end
+
+		if isNil and shouldFreezeNilObject() then
+			freezeExplorerUpdates()
+			return
 		end
 
 		local newNode = {Obj = root, Parent = par}
@@ -2162,6 +2183,10 @@ local function main()
 		local nilInsts = env.getnilinstances()
 		local game = game
 		local getDescs = queryDescendants
+		local oldAllowFrozenNilSnapshotAdd = allowFrozenNilSnapshotAdd
+		allowFrozenNilSnapshotAdd = isNilFreezeEnabled() and #nilNode == 0
+		local freezeNewNilInstances = isNilFreezeEnabled() and not allowFrozenNilSnapshotAdd
+		local foundFrozenNilInstance = false
 		--local newNilMap = {}
 		--local newNilRoots = {}
 		--local nilRoots = Explorer.NilRoots
@@ -2196,7 +2221,18 @@ local function main()
 		for i = 1,#nilInsts do
 			local obj = nilInsts[i]
 			local node = nodes[obj]
-			if not node then coroutine.wrap(addObject)(obj) end
+			if not node then
+				if freezeNewNilInstances then
+					foundFrozenNilInstance = true
+				else
+					coroutine.wrap(addObject)(obj)
+				end
+			end
+		end
+		allowFrozenNilSnapshotAdd = oldAllowFrozenNilSnapshotAdd
+
+		if foundFrozenNilInstance then
+			freezeExplorerUpdates()
 		end
 
 		--[[

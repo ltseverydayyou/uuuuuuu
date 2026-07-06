@@ -248,6 +248,7 @@ DefaultSettings = (function()
 			MaxSelectionBoxes = 1000,
 			ShowNilInstances = false,
 			SearchNilInstances = false,
+			FreezeNilInstances = false,
 			FreezeSearchEnabled = false,
 			FreezeSearchTerm = "",
 			FreezeSearchClassName = false,
@@ -2102,6 +2103,9 @@ Main = (function()
 		end
 		if type(explorer.SearchNilInstances) ~= "boolean" then
 			explorer.SearchNilInstances = defaultExplorer.SearchNilInstances
+		end
+		if type(explorer.FreezeNilInstances) ~= "boolean" then
+			explorer.FreezeNilInstances = defaultExplorer.FreezeNilInstances
 		end
 		if type(explorer.FreezeSearchEnabled) ~= "boolean" then
 			explorer.FreezeSearchEnabled = defaultExplorer.FreezeSearchEnabled

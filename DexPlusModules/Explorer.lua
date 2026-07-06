@@ -1,3 +1,14 @@
+--!nonstrict
+local unpack = table.unpack or unpack
+local loadstring = loadstring or load
+local newproxy = newproxy or function()
+	return setmetatable({}, {
+		__tostring = function()
+			return "userdata: 0x0"
+		end,
+	})
+end
+
 local __NAUIProtector = (function()
 	local globalEnv = (getgenv and getgenv()) or _G or {};
 	local sharedEnv = rawget(_G, "shared");

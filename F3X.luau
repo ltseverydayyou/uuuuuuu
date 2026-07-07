@@ -1,7 +1,20 @@
+--!nocheck
 local t = {}
 local string = string
 local math = math
 local table = table
+local unpack = table.unpack or unpack
+local pcall = pcall
+local xpcall = xpcall
+local getfenv = getfenv
+local setfenv = setfenv
+local loadstring = loadstring
+local load = load
+local task = task
+local coroutine = coroutine
+local debug = debug
+local game = game
+local _G = _G
 local error = error
 local tonumber = tonumber
 local tostring = tostring

@@ -920,6 +920,273 @@ local tests = {
 			end;
 			return "safe", "listfiles returned nil (likely stubbed).";
 		end
+	},
+	{
+		name = "getgenv/getrenv isolation",
+		callback = function()
+			if type(getgenv) ~= "function" then
+				return "unknown", "getgenv is not available in this executor.";
+			end;
+			local marker = "VULNTEST_" .. tostring(math.random(100000, 999999));
+			local env = getgenv();
+			env[marker] = true;
+			local leakedG = rawget(_G, marker) ~= nil;
+			local leakedFenv = false;
+			if type(getfenv) == "function" then
+				local ok, fe = pcall(getfenv, 0);
+				leakedFenv = ok and type(fe) == "table" and rawget(fe, marker) ~= nil;
+			end;
+			env[marker] = nil;
+			if leakedG or leakedFenv then
+				return "unsafe", "A value stored with getgenv() leaked into the game's global scope. Game scripts could read your executor's globals.";
+			end;
+			return "safe", "getgenv() values stayed isolated from the game's global scope.";
+		end
+	},
+	{
+		name = "getrenv game environment access",
+		callback = function()
+			if type(getrenv) ~= "function" then
+				return "unknown", "getrenv is not available in this executor.";
+			end;
+			local ok, env = pcall(getrenv);
+			if not ok then
+				return classify_error("Reads the real game's global environment table.", env);
+			end;
+			if type(env) == "table" then
+				return "unsafe", "getrenv() returned the game's real global environment (" .. shortVal(env) .. "). Scripts can read variables/functions the game itself relies on.";
+			end;
+			return "safe", "getrenv() did not return a usable environment table.";
+		end
+	},
+	{
+		name = "debug.getupvalue scope reach",
+		callback = function()
+			if type(debug) ~= "table" or type(debug.getupvalue) ~= "function" then
+				return "unknown", "debug.getupvalue is not available in this executor.";
+			end;
+			local secret = "VULNTEST_SECRET";
+			local function holder()
+				local hidden = secret;
+				return function() return hidden; end;
+			end;
+			local inner = holder();
+			local ok, name, value = pcall(debug.getupvalue, inner, 1);
+			if ok and value == secret then
+				return "unsafe", "debug.getupvalue can read closed-over local variables from other functions/scripts. Nothing kept in an upvalue is private.";
+			end;
+			return "safe", "debug.getupvalue could not read another function's upvalue in this test.";
+		end
+	},
+	{
+		name = "debug.getinfo source disclosure",
+		callback = function()
+			if type(debug) ~= "table" or type(debug.getinfo) ~= "function" then
+				return "unknown", "debug.getinfo is not available in this executor.";
+			end;
+			return data_test("Inspects internal info (source, line, function) of arbitrary functions.", function()
+				return debug.getinfo(print);
+			end);
+		end
+	},
+	{
+		name = "getrawmetatable (locked Instance)",
+		callback = function()
+			if type(getrawmetatable) ~= "function" then
+				return "unknown", "getrawmetatable is not available in this executor.";
+			end;
+			return data_test("Reads the protected metatable of a locked Roblox Instance.", function()
+				return getrawmetatable(game);
+			end);
+		end
+	},
+	{
+		name = "setreadonly enforcement",
+		callback = function()
+			if type(setreadonly) ~= "function" or type(isreadonly) ~= "function" then
+				return "unknown", "setreadonly/isreadonly are not both available in this executor.";
+			end;
+			local t = {value = 1};
+			local setOk = pcall(setreadonly, t, true);
+			if not setOk then
+				return "unknown", "setreadonly call failed unexpectedly.";
+			end;
+			pcall(function() t.value = 2; end);
+			pcall(setreadonly, t, false);
+			if t.value == 2 then
+				return "unsafe", "A table marked read-only with setreadonly could still be modified. Table/object protection is not enforced.";
+			end;
+			return "safe", "setreadonly correctly blocked writes to a protected table.";
+		end
+	},
+	{
+		name = "hookfunction capability",
+		callback = function()
+			if type(hookfunction) ~= "function" then
+				return "unknown", "hookfunction is not available in this executor.";
+			end;
+			local hooked = false;
+			local original = function() return "original"; end;
+			local ok = pcall(function()
+				local old;
+				old = hookfunction(original, function(...)
+					hooked = true;
+					return old(...);
+				end);
+			end);
+			if ok then
+				pcall(original);
+			end;
+			if hooked then
+				return "unsafe", "hookfunction can silently replace the behavior of any function, including Roblox APIs. A malicious script could hijack functions your other scripts rely on.";
+			end;
+			return "unknown", "hookfunction did not visibly hook a local test function.";
+		end
+	},
+	{
+		name = "getconnections signal spying",
+		callback = function()
+			if type(getconnections) ~= "function" then
+				return "unknown", "getconnections is not available in this executor.";
+			end;
+			local bindable = Instance.new("BindableEvent");
+			bindable.Event:Connect(function() end);
+			local ok, conns = pcall(getconnections, bindable.Event);
+			local exposed = ok and type(conns) == "table" and #conns > 0;
+			bindable:Destroy();
+			if exposed then
+				return "unsafe", "getconnections exposed live signal connections, meaning scripts can spy on, disconnect, or fire other scripts' event handlers.";
+			end;
+			return "safe", "getconnections did not expose signal connections in this test.";
+		end
+	},
+	{
+		name = "getscripts/getloadedmodules enumeration",
+		callback = function()
+			local fn = getscripts or getloadedmodules;
+			if type(fn) ~= "function" then
+				return "unknown", "getscripts/getloadedmodules are not available in this executor.";
+			end;
+			return data_test("Lists every running script/module in the game, including other developers' scripts.", fn);
+		end
+	},
+	{
+		name = "getsenv environment disclosure",
+		callback = function()
+			if type(getsenv) ~= "function" then
+				return "unknown", "getsenv is not available in this executor.";
+			end;
+			return data_test("Reads the full global variable table of a running script (tested on this script).", function()
+				return getsenv(script);
+			end);
+		end
+	},
+	{
+		name = "getscriptbytecode/getscripthash source disclosure",
+		callback = function()
+			local fn = getscriptbytecode or getscripthash;
+			if type(fn) ~= "function" then
+				return "unknown", "getscriptbytecode/getscripthash are not available in this executor.";
+			end;
+			return data_test("Extracts a script's compiled bytecode/hash (tested on this script). The same call could target other developers' scripts.", function()
+				return fn(script);
+			end);
+		end
+	},
+	{
+		name = "checkcaller identity",
+		callback = function()
+			if type(checkcaller) ~= "function" then
+				return "unknown", "checkcaller is not available in this executor.";
+			end;
+			local ok, ret = pcall(checkcaller);
+			if not ok then
+				return classify_error("Identifies whether running code belongs to the executor or the game.", ret);
+			end;
+			if ret == true then
+				return "safe", "checkcaller correctly identifies this executor script as the caller.";
+			end;
+			return "unsafe", "checkcaller did not identify this executor script as the caller (returned " .. shortVal(ret) .. "). Script identity may be spoofable.";
+		end
+	},
+	{
+		name = "setthreadidentity privilege escalation",
+		callback = function()
+			if type(getthreadidentity) ~= "function" or type(setthreadidentity) ~= "function" then
+				return "unknown", "getthreadidentity/setthreadidentity are not both available in this executor.";
+			end;
+			local okBefore, before = pcall(getthreadidentity);
+			local raisedOk = pcall(setthreadidentity, 8);
+			local okAfter, after = pcall(getthreadidentity);
+			if okBefore then
+				pcall(setthreadidentity, before);
+			end;
+			if raisedOk and okBefore and okAfter and after ~= before then
+				return "unsafe", "Thread identity could be changed freely (from " .. tostring(before) .. " to " .. tostring(after) .. "). Scripts can escalate their own privilege level.";
+			end;
+			return "safe", "Thread identity could not be freely escalated in this test.";
+		end
+	},
+	{
+		name = "getreg/getgc registry dump",
+		callback = function()
+			local fn = getreg or getgc;
+			if type(fn) ~= "function" then
+				return "unknown", "getreg/getgc are not available in this executor.";
+			end;
+			local ok, ret = pcall(fn);
+			if not ok then
+				return classify_error("Dumps the Lua registry/garbage-collector list, which can expose references and data from other scripts.", ret);
+			end;
+			if type(ret) == "table" then
+				local count = 0;
+				for _ in ret do
+					count += 1;
+				end;
+				if count > 0 then
+					return "unsafe", "getreg/getgc returned " .. count .. " entries. Scripts can enumerate internal references and potentially reach other scripts' data.";
+				end;
+			end;
+			return "safe", "getreg/getgc returned no usable data in this test.";
+		end
+	},
+	{
+		name = "getinstances/getnilinstances enumeration",
+		callback = function()
+			local fn = getinstances or getnilinstances;
+			if type(fn) ~= "function" then
+				return "unknown", "getinstances/getnilinstances are not available in this executor.";
+			end;
+			return data_test("Lists every Instance in memory, including destroyed or hidden ones other scripts created.", fn);
+		end
+	},
+	{
+		name = "saveinstance game dump capability",
+		callback = function()
+			if type(saveinstance) ~= "function" then
+				return "unknown", "saveinstance is not available in this executor.";
+			end;
+			return "unsafe", "saveinstance is exposed. Scripts could dump the entire game (maps, scripts, assets) to disk without actually calling it.";
+		end
+	},
+	{
+		name = "queue_on_teleport persistence",
+		callback = function()
+			if type(queue_on_teleport) ~= "function" then
+				return "unknown", "queue_on_teleport is not available in this executor.";
+			end;
+			return "unsafe", "queue_on_teleport is exposed. A script could silently persist and re-run itself across every place/server teleport.";
+		end
+	},
+	{
+		name = "WebSocket network exfiltration",
+		callback = function()
+			local ws = (type(WebSocket) == "table" and WebSocket) or (type(Websocket) == "table" and Websocket);
+			if type(ws) ~= "table" or type(ws.connect) ~= "function" then
+				return "unknown", "WebSocket support is not available in this executor.";
+			end;
+			return "unsafe", "This executor exposes raw WebSocket connections. Scripts can open arbitrary outbound connections and exfiltrate data without using Roblox's HTTP APIs.";
+		end
 	}
 };
 for _, s in tests do

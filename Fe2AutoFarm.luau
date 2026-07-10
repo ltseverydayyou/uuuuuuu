@@ -1,6 +1,60 @@
+local __exec = (function()
+	local function asFunction(value)
+		return type(value) == "function" and value or nil
+	end
+
+	return {
+		getgenv = asFunction(getgenv),
+		gethui = asFunction(gethui),
+		cloneref = asFunction(cloneref),
+		getsenv = asFunction(getsenv),
+		getfenv = asFunction(getfenv),
+		getconnections = asFunction(getconnections),
+		hookfunction = asFunction(hookfunction),
+		hookmetamethod = asFunction(hookmetamethod),
+		newcclosure = asFunction(newcclosure),
+		getgc = asFunction(getgc),
+		getinstances = asFunction(getinstances),
+		getnilinstances = asFunction(getnilinstances),
+		getupvalue = asFunction(getupvalue),
+		getupvalues = asFunction(getupvalues),
+		setupvalue = asFunction(setupvalue),
+		firetouchinterest = asFunction(firetouchinterest),
+		readfile = asFunction(readfile),
+		writefile = asFunction(writefile),
+		isfile = asFunction(isfile),
+		isfolder = asFunction(isfolder),
+		makefolder = asFunction(makefolder),
+		delfile = asFunction(delfile),
+		listfiles = asFunction(listfiles),
+		loader = asFunction(loadstring) or asFunction(load),
+	}
+end)()
+
+local __traceback = if type(debug) == "table" and type(debug.traceback) == "function" then debug.traceback else function(err)
+	return tostring(err)
+end
+
+local function __safeGlobalEnv()
+	local env = nil
+	if __exec.getgenv then
+		local ok, result = pcall(__exec.getgenv)
+		if ok and type(result) == "table" then
+			env = result
+		end
+	end
+	if type(env) == "table" then
+		return env
+	end
+	if type(_G) == "table" then
+		return _G
+	end
+	return {}
+end
+
 local __lt = (function()
-	local g = (getgenv and getgenv()) or _G or {}
-	local sh = rawget(_G, "shared")
+	local g = __safeGlobalEnv()
+	local sh = rawget(type(_G) == "table" and _G or {}, "shared")
 	local host = type(sh) == "table" and sh or (type(g) == "table" and g or nil)
 
 	local function fb()
@@ -52,7 +106,7 @@ local __lt = (function()
 
 	local out
 	local ok = pcall(function()
-		local ld = loadstring or load
+		local ld = __exec.loader
 		if type(ld) ~= "function" then
 			error("loader unavailable")
 		end
@@ -79,8 +133,8 @@ local __lt = (function()
 	return out
 end)()
 local __NAUIProtector = (function()
-	local globalEnv = (getgenv and getgenv()) or _G or {};
-	local sharedEnv = rawget(_G, "shared");
+	local globalEnv = __safeGlobalEnv();
+	local sharedEnv = rawget(type(_G) == "table" and _G or {}, "shared");
 	local cacheHost = type(sharedEnv) == "table" and sharedEnv or (type(globalEnv) == "table" and globalEnv or nil);
 	if cacheHost then
 		local cached = rawget(cacheHost, "__lt_ui_protector");
@@ -88,7 +142,7 @@ local __NAUIProtector = (function()
 			return cached;
 		end;
 	end;
-	local loader = loadstring or load;
+	local loader = __exec.loader;
 	if type(loader) ~= "function" then
 		return nil;
 	end;
@@ -111,8 +165,8 @@ local __NAUIProtector = (function()
 	end;
 	return nil;
 end)();
-local g = (getgenv and getgenv()) or _G or {}
-local sh = rawget(_G, "shared")
+local g = __safeGlobalEnv()
+local sh = rawget(type(_G) == "table" and _G or {}, "shared")
 local host = type(sh) == "table" and sh or (type(g) == "table" and g or nil)
 
 if host and type(host.__lt_af_ctx) == "table" then
@@ -121,7 +175,7 @@ if host and type(host.__lt_af_ctx) == "table" then
 		pcall(old.stop)
 	elseif type(old.applyFeMovement) == "function" then
 		if type(old.opt) == "table" then
-			old.opt.fePhysicsOn = true
+			old.opt.fePhysicsOn = false
 		end
 		pcall(old.applyFeMovement, true)
 	elseif type(old.con) == "table" then
@@ -145,13 +199,14 @@ local ctx = {
 	opt = {},
 	cache = {},
 	flood = {},
+	exec = __exec,
 }
 
 if host then
 	host.__lt_af_ctx = ctx
 end
 
-local __NAOriginalGetHui = gethui;
+local __NAOriginalGetHui = __exec.gethui;
 ctx.gethui = function()
 	if __NAUIProtector and type(__NAUIProtector.huiGrabber) == "function" then
 		local ok, ui = pcall(__NAUIProtector.huiGrabber);
@@ -259,7 +314,7 @@ ctx.spawnLoop = function(fn, ...)
 	th = task.spawn(function()
 		local ok, err = xpcall(function()
 			return fn(table.unpack(args, 1, args.n))
-		end, debug.traceback)
+		end, __traceback)
 		args = nil
 		if not ok and (type(ctx.current) ~= "function" or ctx.current()) then
 			warn(err)
@@ -290,15 +345,15 @@ end
 
 ctx.gt = function(n)
 	local ok, svc = pcall(function()
-		return __lt.cs(n, cloneref)
+		return __lt.cs(n, __exec.cloneref)
 	end)
 	if ok and svc then
 		return svc
 	end
 	local ok2, svc2 = pcall(game.GetService, game, n)
 	if ok2 then
-		if type(cloneref) == "function" then
-			local ok3, v = pcall(cloneref, svc2)
+		if __exec.cloneref then
+			local ok3, v = pcall(__exec.cloneref, svc2)
 			if ok3 and v then
 				return v
 			end
@@ -317,6 +372,39 @@ local Sgui = ctx.gt("StarterGui")
 local Guis = ctx.gt("GuiService")
 local Cgui = ctx.gt("CoreGui")
 local LP = Plr and Plr.LocalPlayer or nil
+
+ctx.isPremiumPlayer = function(player)
+	if not player then
+		return false
+	end
+	local okMembership, membershipType = pcall(function()
+		return player.MembershipType
+	end)
+	if okMembership then
+		return membershipType == Enum.MembershipType.Premium
+	end
+
+	local okSubscription, hasSubscription = pcall(function()
+		return player.HasRobloxSubscription
+	end)
+	return okSubscription and hasSubscription == true
+end
+
+ctx.isLocalPremium = function()
+	return ctx.isPremiumPlayer(LP)
+end
+
+ctx.compatibility = {
+	advancedEnvironment = __exec.getsenv ~= nil,
+	functionEnvironment = __exec.getfenv ~= nil,
+	signalIntrospection = __exec.getconnections ~= nil,
+	functionHooking = __exec.hookfunction ~= nil,
+	metamethodHooking = __exec.hookmetamethod ~= nil,
+	touchSimulation = __exec.firetouchinterest ~= nil,
+	filesystem = __exec.readfile ~= nil and __exec.writefile ~= nil,
+}
+ctx.compatibility.degraded = not (ctx.compatibility.advancedEnvironment and ctx.compatibility.signalIntrospection)
+
 ctx.hs = ctx.gt("HttpService")
 ctx.cfgPath = "ltseverydayyou-fe2/gay.json"
 ctx.cfgDir = "ltseverydayyou-fe2"
@@ -369,12 +457,33 @@ ctx.gameId = function()
 	return ctx.tmpGameId
 end
 
+ctx.hasFE2CMRuntime = function()
+	local remote = Rsp and Rsp:FindFirstChild("Remote")
+	local testFolder = remote and remote:FindFirstChild("TEST")
+	if testFolder then
+		local hasMapTesting = testFolder:FindFirstChild("ReqTestMap")
+			or testFolder:FindFirstChild("tSPOgWeVyzmFZtkPoORSawvTCEerdTpd")
+			or testFolder:FindFirstChild("wzLbxpDgodnfZRXLvbtMfaQsCyjSzVXs")
+		if hasMapTesting then
+			return true
+		end
+	end
+
+	local playerGui = LP and LP:FindFirstChildOfClass("PlayerGui")
+	local menuGui = playerGui and playerGui:FindFirstChild("MenuGui")
+	return menuGui and menuGui:FindFirstChild("MapTest") ~= nil or false
+end
+
 ctx.isFE2CMGame = function()
-	return ctx.gameId() == 4229990801 or ctx.fe2cmPlaces[ctx.placeId()] == true
+	return ctx.gameId() == 4229990801
+		or ctx.fe2cmPlaces[ctx.placeId()] == true
+		or ctx.hasFE2CMRuntime()
 end
 
 ctx.isFE2Game = function()
-	return ctx.gameId() == 323675642 or ctx.placeId() == 12339127827 or ctx.isFE2CMGame()
+	return ctx.gameId() == 323675642
+		or ctx.placeId() == 12339127827
+		or ctx.isFE2CMGame()
 end
 
 ctx.isRetroGame = function()
@@ -417,6 +526,7 @@ ctx.support = function(k)
 			shop = true,
 			clip = false,
 			rescue = false,
+			fpfx = false,
 			dev = false,
 			zip = true,
 			infAir = true,
@@ -438,6 +548,7 @@ ctx.support = function(k)
 			shop = true,
 			clip = true,
 			rescue = false,
+			fpfx = false,
 			dev = false,
 			zip = false,
 			infAir = true,
@@ -459,6 +570,7 @@ ctx.support = function(k)
 			shop = true,
 			clip = true,
 			rescue = true,
+			fpfx = true,
 			dev = true,
 			zip = true,
 			infAir = true,
@@ -480,6 +592,7 @@ ctx.support = function(k)
 			shop = true,
 			clip = true,
 			rescue = true,
+			fpfx = true,
 			dev = true,
 			zip = true,
 			infAir = true,
@@ -544,6 +657,7 @@ local plt
 local cTab = {}
 local locBtns = {}
 local pressTimes = setmetatable({}, { __mode = "k" })
+local fusePressed = setmetatable({}, { __mode = "k" })
 local pressWin = 0
 local pressCnt = 0
 local pressMax = 6
@@ -601,7 +715,7 @@ ctx.opt.devOn = false
 ctx.opt.wallLvl = 0
 ctx.opt.zipFastOn = false
 ctx.opt.zipSpeed = 90
-ctx.opt.zipStopOn = true
+ctx.opt.zipStopOn = false
 ctx.opt.zipAutoOn = true
 ctx.opt.zipActive = false
 ctx.opt.infAirOn = false
@@ -620,6 +734,11 @@ ctx.cache.godAt = 0
 ctx.cache.zipAt = 0
 ctx.cache.zipConn = nil
 ctx.cache.zipChar = nil
+ctx.cache.zipStateSource = nil
+ctx.cache.zipEventKnown = false
+ctx.cache.zipWasActive = false
+ctx.cache.zipMoverBaseline = setmetatable({}, { __mode = "k" })
+ctx.cache.zipDismountToken = 0
 ctx.cache.jumpHeld = false
 ctx.cache.jumpHeldUntil = 0
 ctx.cache.jumpButton = nil
@@ -673,7 +792,7 @@ ctx.cfgKeys = {
 	"floodRandom",
 	"paidOn",
 	"clipOn",
-	"fePhysicsOn",
+	"fpPartOn",
 	"rescueOn",
 	"devOn",
 	"zipFastOn",
@@ -730,13 +849,13 @@ ctx.fs = ctx.fs or {}
 ctx.fs.dir = ctx.cfgDir
 ctx.fs.path = ctx.cfgPath
 ctx.fs.ready = function()
-	ctx.fs.hasRead = type(readfile) == "function"
-	ctx.fs.hasWrite = type(writefile) == "function"
-	ctx.fs.hasIsFile = type(isfile) == "function"
-	ctx.fs.hasIsFolder = type(isfolder) == "function"
-	ctx.fs.hasMakeFolder = type(makefolder) == "function"
-	ctx.fs.hasDeleteFile = type(delfile) == "function"
-	ctx.fs.hasListFiles = type(listfiles) == "function"
+	ctx.fs.hasRead = __exec.readfile ~= nil
+	ctx.fs.hasWrite = __exec.writefile ~= nil
+	ctx.fs.hasIsFile = __exec.isfile ~= nil
+	ctx.fs.hasIsFolder = __exec.isfolder ~= nil
+	ctx.fs.hasMakeFolder = __exec.makefolder ~= nil
+	ctx.fs.hasDeleteFile = __exec.delfile ~= nil
+	ctx.fs.hasListFiles = __exec.listfiles ~= nil
 	ctx.fs.hasAppendFile = type(appendfile) == "function"
 	ctx.fs.hasLoadFile = type(loadfile) == "function"
 	return ctx.fs.hasRead and ctx.fs.hasWrite and ctx.fs.hasIsFile
@@ -774,8 +893,8 @@ ctx.fs.ensure = function()
 	end
 	if ctx.fs.hasIsFolder and ctx.fs.hasMakeFolder then
 		pcall(function()
-			if not isfolder(ctx.fs.dir) then
-				makefolder(ctx.fs.dir)
+			if not __exec.isfolder(ctx.fs.dir) then
+				__exec.makefolder(ctx.fs.dir)
 			end
 		end)
 	end
@@ -786,7 +905,7 @@ ctx.fs.write = function(path, txt)
 	if not ctx.fs.ensure() or type(txt) ~= "string" then
 		return false
 	end
-	ctx.fs.ok = pcall(writefile, path, txt)
+	ctx.fs.ok = pcall(__exec.writefile, path, txt)
 	return ctx.fs.ok == true
 end
 
@@ -795,10 +914,10 @@ ctx.fs.read = function(path)
 		return nil
 	end
 	ctx.fs.ok, ctx.fs.res = pcall(function()
-		if not isfile(path) then
+		if not __exec.isfile(path) then
 			return nil
 		end
-		return readfile(path)
+		return __exec.readfile(path)
 	end)
 	if ctx.fs.ok and type(ctx.fs.res) == "string" then
 		return ctx.fs.res
@@ -873,6 +992,7 @@ ctx.loadSettings = function()
 end
 
 ctx.loadSettings()
+ctx.opt.fePhysicsOn = false
 local optionsOpen = false
 local chSeen = setmetatable({}, { __mode = "k" })
 local chWallSeen = setmetatable({}, { __mode = "k" })
@@ -916,14 +1036,29 @@ ctx.clearLocators = function()
 	pressTimes = setmetatable({}, { __mode = "k" })
 end
 
-ctx.releaseRoot = function()
-	if type(ctx.rh) ~= "function" then
+ctx.releaseRoot = function(root)
+	if type(ctx.rh) ~= "function" and not root then
 		return
 	end
-	local r = select(1, ctx.rh(false))
+	local r, h = root, nil
+	if not r then
+		r, h = ctx.rh(false)
+	elseif type(ctx.rh) == "function" then
+		local _, hum = ctx.rh(false)
+		h = hum
+	end
 	if r then
 		pcall(function()
 			r.Anchored = false
+			if r.AssemblyLinearVelocity.Magnitude < 0.05 then
+				r.AssemblyLinearVelocity = Vector3.new(0, 1, 0)
+			end
+		end)
+	end
+	if h then
+		pcall(function()
+			h.PlatformStand = false
+			h:ChangeState(Enum.HumanoidStateType.Running)
 		end)
 	end
 end
@@ -940,12 +1075,21 @@ ctx.clearBonuses = function()
 end
 
 ctx.stop = function()
+	if type(ctx.setFePhysicsFallback) == "function" then
+		ctx.setFePhysicsFallback(false)
+	end
 	if not ctx.live then
 		return
 	end
-	ctx.opt.fePhysicsOn = true
+	ctx.opt.fePhysicsOn = false
 	if type(ctx.applyFeMovement) == "function" then
 		pcall(ctx.applyFeMovement, true)
+	end
+	if type(ctx.restoreFeOptionManagers) == "function" then
+		pcall(ctx.restoreFeOptionManagers)
+	end
+	if type(ctx.setZipAttrs) == "function" then
+		pcall(ctx.setZipAttrs, false)
 	end
 	ctx.live = false
 	on = false
@@ -984,6 +1128,9 @@ ctx.stop = function()
 		ctx.cut(c)
 	end
 	ctx.con = {}
+	if type(ctx.restoreNc) == "function" then
+		ctx.restoreNc()
+	end
 	cTab = {}
 	pressTimes = setmetatable({}, { __mode = "k" })
 	bonusSeen = setmetatable({}, { __mode = "k" })
@@ -1177,6 +1324,7 @@ ctx.clearMapRuntime = function(nextMap)
 	auraMap = nil
 	auraAt = 0
 	pressTimes = setmetatable({}, { __mode = "k" })
+	fusePressed = setmetatable({}, { __mode = "k" })
 	pressWin = 0
 	pressCnt = 0
 	ctx.cache.buttonSpamKey = nil
@@ -1252,8 +1400,8 @@ local Cls = LP and LP:FindFirstChild("PlayerScripts") or nil
 local Clm = Cls and Cls:FindFirstChild("CL_MAIN_GameScript") or nil
 local cenv = nil
 
-if Clm and type(getsenv) == "function" then
-	local ok, env = pcall(getsenv, Clm)
+if Clm and __exec.getsenv then
+	local ok, env = pcall(__exec.getsenv, Clm)
 	if ok and type(env) == "table" then
 		cenv = env
 	end
@@ -1370,14 +1518,19 @@ do
 	local gpFolder = rmt and rmt:FindFirstChild("Gameplay")
 	addFolder(chFolder)
 	addFolder(gpFolder)
+	addFolder(rmt and rmt:FindFirstChild("TEST"))
+	addFolder(rmt and rmt:FindFirstChild("Pass"))
+	addFolder(rmt and rmt:FindFirstChild("Goals"))
+	addFolder(rmt and rmt:FindFirstChild("ClientTimelines"))
+	addFolder(rmt and rmt:FindFirstChild("Replication"))
 
 	local function scanRuntime(name, cls)
 		local scanners = {}
-		if type(getnilinstances) == "function" then
-			scanners[#scanners + 1] = getnilinstances
+		if __exec.getnilinstances then
+			scanners[#scanners + 1] = __exec.getnilinstances
 		end
-		if type(getinstances) == "function" then
-			scanners[#scanners + 1] = getinstances
+		if __exec.getinstances then
+			scanners[#scanners + 1] = __exec.getinstances
 		end
 		for _, fn in scanners do
 			local ok, list = pcall(fn)
@@ -1394,7 +1547,7 @@ do
 
 	local function findRemote(name, cls)
 		for _, folder in remFolders do
-			local obj = folder:FindFirstChild(name)
+			local obj = folder:FindFirstChild(name) or folder:FindFirstChild(name, true)
 			if obj and (not cls or obj:IsA(cls)) then
 				return obj
 			end
@@ -1788,11 +1941,11 @@ ctx.moveTo = function(obj, r)
 		return false
 	end
 	local moved = false
-	if type(firetouchinterest) == "function" and p:IsA("BasePart") then
+	if __exec.firetouchinterest ~= nil and p:IsA("BasePart") then
 		pcall(function()
-			firetouchinterest(r, p, 0)
+			__exec.firetouchinterest(r, p, 0)
 			task.wait()
-			firetouchinterest(r, p, 1)
+			__exec.firetouchinterest(r, p, 1)
 		end)
 	end
 	if obj:IsA("Model") then
@@ -1922,7 +2075,7 @@ ctx.getBonuses = function(map)
 	end
 	local now = os.clock()
 	if bDirty and now >= bScanAt then
-		bScanAt = now + 0.3 -- Bonus cache rescan throttle after DescendantAdded/GetDescendants changes
+		bScanAt = now + 0.3
 		ctx.scanBonuses(map)
 	end
 	return bCache
@@ -2016,7 +2169,7 @@ ctx.scanBtns = function(map)
 				end
 			end
 			local hasTouch = hit and ctx.ffc(hit, "TouchInterest", true) ~= nil
-			if hit and (ctx.isRand(obj.Name) or hasUi or hasFuse or hasTouch) then
+			if hit and ctx.buttonHitAllowed(hit, map) and (ctx.isRand(obj.Name) or hasUi or hasFuse or hasTouch) then
 				if ctx.isRand(hit.Name) then
 					hit.Name = "Hitbox"
 				end
@@ -2093,10 +2246,140 @@ ctx.guiOn = function(obj)
 	return false
 end
 
+ctx.truthyValue = function(v)
+	if v == nil then
+		return nil
+	end
+	if type(v) == "boolean" then
+		return v
+	end
+	if type(v) == "number" then
+		return v ~= 0
+	end
+	local s = tostring(v):lower()
+	if s == "true" or s == "yes" or s == "on" or s == "enabled" or s == "active" or s == "pressed" or s == "done" or s == "complete" or s == "completed" then
+		return true
+	end
+	if s == "false" or s == "no" or s == "off" or s == "disabled" or s == "inactive" or s == "unpressed" or s == "pending" then
+		return false
+	end
+	return nil
+end
+
+ctx.buttonHitAllowed = function(hit, map)
+	if not (hit and hit.Parent and hit:IsA("BasePart")) then
+		return false
+	end
+	if map and not hit:IsDescendantOf(map) then
+		return false
+	end
+	local src = hit.Parent or hit
+	if tostring(hit.Name) == "AirTank" or tostring(src.Name) == "AirTank" then
+		return false
+	end
+	if tostring(hit.Name) == "Hitbox" and hit.Parent and tostring(hit.Parent.Name) == "AirTank" then
+		return false
+	end
+	local hasUi = false
+	pcall(function()
+		hasUi = (src and src:FindFirstChildWhichIsA("BillboardGui", true) ~= nil) or hit:FindFirstChildWhichIsA("BillboardGui", true) ~= nil
+	end)
+	local hasFuse = ctx.ffc(src, "Fuse", true) ~= nil or ctx.ffc(hit, "Fuse", true) ~= nil
+	local hasTouch = ctx.ffc(hit, "TouchInterest", true) ~= nil or ctx.ffc(src, "TouchInterest", true) ~= nil
+	return ctx.isRand(tostring(src.Name)) or ctx.isRand(tostring(hit.Name)) or hasUi or hasFuse or hasTouch
+end
+
+ctx.entryKnownPressed = function(entry)
+	local src = entry and entry.src
+	local hit = entry and entry.hit
+	local v = ctx.valOf(src, { "Pressed", "IsPressed", "Completed", "Complete", "Done", "Finished", "Activated", "Triggered" })
+	if v == nil then
+		v = ctx.valOf(hit, { "Pressed", "IsPressed", "Completed", "Complete", "Done", "Finished", "Activated", "Triggered" })
+	end
+	local b = ctx.truthyValue(v)
+	return b == true
+end
+
+ctx.entryReady = function(entry, map, sent)
+	local hit = entry and entry.hit
+	local src = entry and entry.src
+	if not (hit and hit.Parent and hit:IsA("BasePart")) then
+		return false
+	end
+	if map and not hit:IsDescendantOf(map) then
+		return false
+	end
+	if entry.loc then
+		return locBtns[hit] == entry
+	end
+	if sent and sent[hit] then
+		return false
+	end
+	if not ctx.buttonHitAllowed(hit, map) then
+		return false
+	end
+	if ctx.entryKnownPressed(entry) then
+		return false
+	end
+	if type(ctx.fuseUnsafe) == "function" and ctx.fuseUnsafe(src, hit, map) then
+		return false
+	end
+	if entry.retro then
+		return true
+	end
+	local av = ctx.valOf(src, { "Active", "IsActive", "Enabled", "Pressable", "CanPress", "Current", "Selected" })
+	if av ~= nil then
+		return ctx.truthyValue(av) == true
+	end
+	if type(roundCur) == "number" then
+		local n = ctx.numOf(src) or ctx.numOf(hit)
+		if n then
+			return n == roundCur or n == roundCur + 1
+		end
+	end
+	if ctx.isFuseBtn(src) then
+		return ctx.ffc(hit, "TouchInterest", true) ~= nil
+	end
+	return ctx.guiOn(src) or ctx.guiOn(hit) or ctx.ffc(hit, "TouchInterest", true) ~= nil
+end
+
+ctx.hasReadyEntry = function(entries, map, sent)
+	entries = type(entries) == "table" and entries or {}
+	for _, entry in entries do
+		if ctx.entryReady(entry, map, sent) then
+			return true
+		end
+	end
+	return false
+end
+
+ctx.allButtonsHandled = function(entries, map, sent)
+	entries = type(entries) == "table" and entries or {}
+	local sawButton = false
+	for _, entry in entries do
+		local hit = entry and entry.hit
+		local src = entry and entry.src
+		if hit and hit.Parent and (not map or hit:IsDescendantOf(map)) and not entry.loc then
+			sawButton = true
+			local handled = (sent and sent[hit]) or ctx.entryKnownPressed(entry) or (type(ctx.fuseUnsafe) == "function" and ctx.fuseUnsafe(src, hit, map))
+			if not handled then
+				return false
+			end
+		end
+	end
+	return sawButton
+end
+
 ctx.auraReady = function(entry)
 	local hit = entry and entry.hit
 	local src = entry and entry.src
 	if not (hit and hit.Parent) then
+		return false
+	end
+	if ctx.entryKnownPressed(entry) then
+		return false
+	end
+	if type(ctx.fuseUnsafe) == "function" and ctx.fuseUnsafe(src, hit) then
 		return false
 	end
 	if entry.retro then
@@ -2114,6 +2397,9 @@ ctx.auraReady = function(entry)
 		if n then
 			return n == roundCur or n == roundCur + 1
 		end
+	end
+	if ctx.isFuseBtn(src) then
+		return ctx.ffc(hit, "TouchInterest", true) ~= nil
 	end
 	if ctx.guiOn(src) or ctx.guiOn(hit) then
 		return true
@@ -2282,6 +2568,135 @@ ctx.isFuseBtn = function(src)
 	return f and f:IsA("ValueBase")
 end
 
+ctx.fuseValueTarget = function(src, hit)
+	local f = ctx.ffc(src, "Fuse", true)
+	if not f and hit and hit.Parent then
+		f = ctx.ffc(hit.Parent, "Fuse", true)
+	end
+	if not (f and f:IsA("ValueBase")) then
+		return nil
+	end
+	local ok, v = pcall(function()
+		return f.Value
+	end)
+	if ok and typeof(v) == "Instance" then
+		return v
+	end
+	return nil
+end
+
+ctx.isFuseBlastPart = function(obj)
+	local ok, isPart = pcall(function()
+		return obj and obj:IsA("Part")
+	end)
+	if not (ok and isPart) then
+		return false
+	end
+	local okProps, shape, size, color, material, brickColor = pcall(function()
+		return obj.Shape, obj.Size, obj.Color, obj.Material, obj.BrickColor
+	end)
+	if not okProps or shape ~= Enum.PartType.Ball then
+		return false
+	end
+	local sz = math.max(size.X, size.Y, size.Z)
+	if sz < 10 then
+		return false
+	end
+	local red = color.R > 0.75 and color.G < 0.2 and color.B < 0.2
+	local neon = material == Enum.Material.Neon
+	local reallyRed = tostring(brickColor) == "Really red"
+	return red and (neon or reallyRed or sz >= 18)
+end
+
+ctx.nearFuseBlast = function(src, hit, map)
+	if not (hit and hit.Parent) then
+		return false, nil
+	end
+	local target = ctx.fuseValueTarget(src, hit)
+	if target and ctx.isFuseBlastPart(target) then
+		return true, target
+	end
+	local root = src
+	if hit and hit.Parent and (not root or root == hit) then
+		root = hit.Parent
+	end
+	local parts = {}
+	if root then
+		for _, obj in ctx.descOf(root) do
+			if obj ~= hit and ctx.isFuseBlastPart(obj) then
+				parts[#parts + 1] = obj
+			end
+		end
+	end
+	local best = nil
+	local bestDist = math.huge
+	for _, part in parts do
+		if part then
+			local okPart, size, pos = pcall(function()
+				return part.Size, part.Position
+			end)
+			if okPart and size and pos then
+				local radius = math.max(size.X, size.Y, size.Z) * 0.5
+				local dist = (hit.Position - pos).Magnitude
+				if dist <= math.max(80, radius + 35) and dist < bestDist then
+					best = part
+					bestDist = dist
+				end
+			end
+		end
+	end
+	return best ~= nil, best
+end
+
+ctx.fuseBlastSizePosition = function(part)
+	local ok, size, pos = pcall(function()
+		return part and part.Size, part and part.Position
+	end)
+	if ok and size and pos then
+		return size, pos
+	end
+	return nil, nil
+end
+
+ctx.markFusePressed = function(src, hit)
+	local untilTime = os.clock() + 2.5
+	if src then
+		fusePressed[src] = untilTime
+	end
+	if hit then
+		fusePressed[hit] = untilTime
+	end
+	if hit and hit.Parent then
+		fusePressed[hit.Parent] = untilTime
+	end
+	ctx.cache.fuseBlastAt = 0
+end
+
+ctx.fusePressedRecently = function(src, hit)
+	local now = os.clock()
+	for _, obj in { src, hit, hit and hit.Parent } do
+		local t = obj and fusePressed[obj]
+		if type(t) == "number" then
+			if now < t then
+				return true
+			end
+			fusePressed[obj] = nil
+		end
+	end
+	return false
+end
+
+ctx.fuseUnsafe = function(src, hit, map)
+	if not ctx.isFuseBtn(src or hit) then
+		return false
+	end
+	if ctx.fusePressedRecently(src, hit) then
+		return true
+	end
+	local near = ctx.nearFuseBlast(src, hit, map)
+	return near == true
+end
+
 ctx.fuseRange = function(src, hit)
 	local best = nil
 	local bestSize = 0
@@ -2290,16 +2705,45 @@ ctx.fuseRange = function(src, hit)
 		root = hit.Parent
 	end
 	for _, obj in ctx.descOf(root) do
-		if obj:IsA("Part") and obj ~= hit and obj.Shape == Enum.PartType.Ball then
+		if obj ~= hit and ctx.isFuseBlastPart(obj) then
 			local sz = math.max(obj.Size.X, obj.Size.Y, obj.Size.Z)
-			local red = obj.Color.R > 0.75 and obj.Color.G < 0.15 and obj.Color.B < 0.15
-			if sz >= 10 and red and sz > bestSize then
+			if sz > bestSize then
 				best = obj
 				bestSize = sz
 			end
 		end
 	end
+	if not best then
+		local _, blast = ctx.nearFuseBlast(src, hit)
+		best = blast
+	end
 	return best
+end
+
+ctx.fuseSafePosition = function(src, hit, r)
+	local sp = ctx.fuseRange(src, hit)
+	local spSize, spPos = ctx.fuseBlastSizePosition(sp)
+	if not (spSize and spPos) then
+		if not hit then
+			return nil
+		end
+		local away = Vector3.new(hit.CFrame.LookVector.X, 0, hit.CFrame.LookVector.Z)
+		if away.Magnitude < 0.05 then
+			away = Vector3.new(1, 0, 0)
+		end
+		return hit.Position + away.Unit * 35 + Vector3.new(0, ESY, 0)
+	end
+	local origin = spPos
+	local from = (r and r.Parent and r.Position) or (hit and hit.Position) or (origin + Vector3.new(1, 0, 0))
+	local away = Vector3.new(from.X - origin.X, 0, from.Z - origin.Z)
+	if away.Magnitude < 0.05 and hit then
+		away = Vector3.new(hit.Position.X - origin.X, 0, hit.Position.Z - origin.Z)
+	end
+	if away.Magnitude < 0.05 then
+		away = Vector3.new(1, 0, 0)
+	end
+	local radius = math.max(spSize.X, spSize.Y, spSize.Z) * 0.5
+	return origin + away.Unit * (radius + 12) + Vector3.new(0, ESY, 0)
 end
 
 ctx.waitFuseRange = function(src, hit, keepGoing)
@@ -2322,8 +2766,10 @@ ctx.moveFuseSafe = function(src, hit, r, keepGoing)
 	if not r or not r.Parent then
 		return
 	end
-	local sp = ctx.fuseRange(src, hit)
-	local pos = sp and sp.Parent and sp.Position or (hit.Position + Vector3.new(0, ESY, 0))
+	local pos = ctx.fuseSafePosition(src, hit, r)
+	if not pos then
+		return
+	end
 	pcall(function()
 		ctx.pivotRootTo(CFrame.new(pos), r)
 		r.AssemblyLinearVelocity = Vector3.zero
@@ -2350,14 +2796,14 @@ ctx.pressMapButton = function(hit)
 	end
 	pressCnt += 1
 	pressTimes[hit] = now
-	if ctx.isRetroGame() and type(firetouchinterest) == "function" then
+	if ctx.isRetroGame() and __exec.firetouchinterest ~= nil then
 		local r = type(ctx.rootPart) == "function" and ctx.rootPart() or nil
 		if r and r.Parent then
-			pcall(firetouchinterest, r, hit, 0)
-			pcall(firetouchinterest, hit, r, 0)
+			pcall(__exec.firetouchinterest, r, hit, 0)
+			pcall(__exec.firetouchinterest, hit, r, 0)
 			task.wait(0.03)
-			pcall(firetouchinterest, r, hit, 1)
-			pcall(firetouchinterest, hit, r, 1)
+			pcall(__exec.firetouchinterest, r, hit, 1)
+			pcall(__exec.firetouchinterest, hit, r, 1)
 		end
 	end
 	local fired = false
@@ -2369,6 +2815,9 @@ ctx.pressMapButton = function(hit)
 			fired = fired or ok
 		end
 	end
+	if fired and type(ctx.markFusePressed) == "function" and ctx.isFuseBtn(hit.Parent or hit) then
+		ctx.markFusePressed(hit.Parent or hit, hit)
+	end
 	return fired
 end
 
@@ -2379,7 +2828,7 @@ ctx.startPressLoop = function(hit, runId, keepGoing)
 	ctx.spawnLoop(function()
 		local tries = 0
 		local t0 = os.clock()
-		while ctx.alive() and on and tok == runId and hit and hit.Parent and tries < 30 and os.clock() - t0 < 3 do
+		while ctx.alive() and on and tok == runId and hit and hit.Parent and tries < 80 and os.clock() - t0 < 8 do
 			if type(keepGoing) == "function" and not keepGoing() then
 				break
 			end
@@ -2416,8 +2865,10 @@ ctx.startAutoFarmButtonSpam = function(map, runId, entries)
 					local entry = entries[idx]
 					local hit = entry and entry.hit
 					if hit and hit.Parent and hit:IsDescendantOf(map) then
-						ctx.pressMapButton(hit)
-						done += 1
+						if ctx.entryReady(entry, map) then
+							ctx.pressMapButton(hit)
+							done += 1
+						end
 						idx += 1
 					else
 						table.remove(entries, idx)
@@ -2494,6 +2945,9 @@ ctx.cacheData = function(data)
 	if type(data) == "table" and type(data.stats) == "table" then
 		local sig = ctx.dataSig(data)
 		pdata = data
+		if data.dailyChallenges ~= nil and type(ctx.updateChallengePlan) == "function" then
+			ctx.updateChallengePlan(data)
+		end
 		if sig then
 			if sig ~= statsSig then
 				lastFreshData = os.clock()
@@ -2866,7 +3320,7 @@ ctx.startFarmRemotes = function()
 					ctx.requestRoundStats()
 					ra = now + RSI
 				end
-			end, debug.traceback)
+			end, __traceback)
 			if not ok then
 				warn(err)
 			end
@@ -2978,6 +3432,168 @@ for _, rem in GameStateRemotes do
 	end
 end
 
+ctx.cache.fe2RemoteBound = ctx.cache.fe2RemoteBound or setmetatable({}, { __mode = "k" })
+ctx.cache.fe2RemoteRoot = nil
+ctx.cache.fe2RemoteRootConn = nil
+
+ctx.resolveFE2Remote = function(name, className)
+	if type(name) ~= "string" or name == "" then
+		return nil
+	end
+	local root = Rsp and Rsp:FindFirstChild("Remote")
+	local found = root and (root:FindFirstChild(name) or root:FindFirstChild(name, true)) or nil
+	if found and (not className or found:IsA(className)) then
+		return found
+	end
+	return nil
+end
+
+ctx.bindLateFE2Remote = function(kind, rem)
+	if not (rem and rem:IsA("RemoteEvent")) or ctx.cache.fe2RemoteBound[rem] then
+		return
+	end
+	ctx.cache.fe2RemoteBound[rem] = true
+
+	if kind == "locator" then
+		ctx.bind(rem.OnClientEvent:Connect(function(goal, hit, ui, nextHit)
+			ctx.addLocatorBtn(hit or goal, nextHit or ui)
+		end))
+	elseif kind == "round" then
+		ctx.bind(rem.OnClientEvent:Connect(ctx.updateRoundStats))
+		pcall(function()
+			rem:FireServer()
+		end)
+	elseif kind == "playerData" then
+		ctx.bind(rem.OnClientEvent:Connect(ctx.cacheData))
+	elseif kind == "itemData" then
+		ctx.bind(rem.OnClientEvent:Connect(function(data, items)
+			ctx.cacheData(data)
+			if type(items) == "table" then
+				ctx.cache.shopItems = items
+			end
+		end))
+	elseif kind == "survived" then
+		ctx.bind(rem.OnClientEvent:Connect(function(ok)
+			if ok == true or tostring(ok):lower() == "survived" then
+				ctx.markSurvived("remote")
+			end
+		end))
+	elseif kind == "gameState" then
+		ctx.bind(rem.OnClientEvent:Connect(function(st)
+			local state = tostring(st):lower()
+			if state ~= "" and state ~= "nil" then
+				roundState = state
+			end
+			if state == "ingame" then
+				survivedSeen = false
+			elseif state == "survived" then
+				ctx.markSurvived("state")
+			end
+		end))
+	end
+end
+
+ctx.refreshFE2RemoteRegistry = function()
+	local function addOne(list, kind, rem)
+		if not (rem and rem:IsA("RemoteEvent")) then
+			return
+		end
+		for _, current in list do
+			if current == rem then
+				return
+			end
+		end
+		list[#list + 1] = rem
+		ctx.bindLateFE2Remote(kind, rem)
+	end
+
+	local function addGroup(list, kind, names)
+		for _, name in names do
+			addOne(list, kind, ctx.resolveFE2Remote(name, "RemoteEvent"))
+		end
+	end
+
+	addGroup(PressRemotes, nil, { "PressedMapButton", "igzyswprgEbMOxwZWHUxvFWNJhDtaODb" })
+	addGroup(LocatorRemotes, "locator", { "UpdGoalLocator", "FiIxfRCqDOTWRKHqFMoRjSaAxXOutMzD", "SetButtonLocator" })
+	addGroup(RoundStatsRemotes, "round", { "UpdIngameStats", "flDEUOrLddFXZVDiezUpxyiHWduVnlEC", "UpdateGameInfo" })
+	addGroup(LoadedMapRemotes, nil, { "LoadedMap" })
+	addGroup(SurvivedRemotes, "survived", { "Survived" })
+	addGroup(PlayerDataRemotes, "playerData", { "UpdPlayerData", "mbTUpXEtICXoMoBrBEoiHpRywCzJjtba" })
+	addGroup(ItemDataRemotes, "itemData", { "ReqItemData", "jBRXdUHKhwduqDelrUCPdolYbvaFGFMi" })
+	addGroup(GameStateRemotes, "gameState", { "UpdateGameState", "FBbJEWQDfbOPQZBNaWtXPmnKTDndEbbK" })
+	addGroup(ChallengeRemotes.GetAirBubble, nil, { "GetAirBubble" })
+	addGroup(ChallengeRemotes.SwimInLava, nil, { "SwimInLava", "fvgxdrskCQyGiyAbJXnVrzFRinSqigYN" })
+	addGroup(ChallengeRemotes.RegeneratedAir, nil, { "RegeneratedAir", "ZdwUWbHbtYFphslKtWDPwBpPOrOQbGPZ" })
+	addGroup(ChallengeRemotes.SlideCheck, nil, { "SlideCheck" })
+	addGroup(ChallengeRemotes.Walljumped, nil, { "Walljumped", "cLtjGlpevadbSJSvVQMCvNicyzbFZMGj" })
+
+	local remoteRoot = Rsp and Rsp:FindFirstChild("Remote")
+	local challengeFolder = remoteRoot and remoteRoot:FindFirstChild("Challenges")
+	local gameplayFolder = remoteRoot and remoteRoot:FindFirstChild("Gameplay")
+	addOne(ChallengeRemotes.RideZipline, nil, challengeFolder and challengeFolder:FindFirstChild("RideZipline"))
+	addOne(ZiplineRemotes.RideZipline, nil, remoteRoot and remoteRoot:FindFirstChild("RideZipline"))
+	addOne(ZiplineRemotes.Zipline, nil, remoteRoot and remoteRoot:FindFirstChild("Zipline"))
+	addOne(ZiplineRemotes.Zipline, nil, gameplayFolder and gameplayFolder:FindFirstChild("Zipline"))
+	addOne(WalljumpRemotes.Walljump, nil, gameplayFolder and gameplayFolder:FindFirstChild("Walljump"))
+
+	Lift = Lift or ctx.resolveFE2Remote("AddedWaiting", "RemoteEvent")
+		or ctx.resolveFE2Remote("sTYfsJjxNdIpKgbXIuymAQiYcmAaORRN", "RemoteEvent")
+		or ctx.resolveFE2Remote("dKgyIXnLdhwvSyEorkEWJJAkgUslGCtR", "RemoteEvent")
+	PasskeyRemote = PasskeyRemote or ctx.resolveFE2Remote("ReqPasskey", "RemoteFunction")
+	RebirthRemote = RebirthRemote or ctx.resolveFE2Remote("ReqRebirth", "RemoteEvent")
+		or ctx.resolveFE2Remote("LxWowhVdggjbxLTozuicVKHltFbUuVUg", "RemoteEvent")
+	ConfirmItemRemote = ConfirmItemRemote or ctx.resolveFE2Remote("ConfirmItem", "RemoteEvent")
+		or ctx.resolveFE2Remote("IBHzeWzRcHyDJcPNXXfEkcXARFJrSvvt", "RemoteEvent")
+
+	local passFolder = Rsp and Rsp:FindFirstChild("Remote")
+	passFolder = passFolder and passFolder:FindFirstChild("Pass")
+	if passFolder then
+		PassReqSeasonData = PassReqSeasonData
+			or passFolder:FindFirstChild("ReqSeasonData")
+			or passFolder:FindFirstChild("wYXTxuCjheiXJfcizJPuPwrfonMOVMVJ")
+		PassReqSeasonList = PassReqSeasonList
+			or passFolder:FindFirstChild("ReqSeasonList")
+			or passFolder:FindFirstChild("eumTfRpsBhpIbMhPbsgBhNWijGPZcWZZ")
+	end
+end
+
+ctx.startFE2RemoteRegistry = function()
+	for _, list in { LocatorRemotes, RoundStatsRemotes, PlayerDataRemotes, ItemDataRemotes, SurvivedRemotes, GameStateRemotes } do
+		for _, rem in list do
+			if rem and rem.Parent then
+				ctx.cache.fe2RemoteBound[rem] = true
+			end
+		end
+	end
+
+	ctx.refreshFE2RemoteRegistry()
+	local function bindRoot(root)
+		if not root or ctx.cache.fe2RemoteRoot == root then
+			return
+		end
+		ctx.cut(ctx.cache.fe2RemoteRootConn)
+		ctx.cache.fe2RemoteRoot = root
+		ctx.cache.fe2RemoteRootConn = root.DescendantAdded:Connect(function(obj)
+			if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
+				task.defer(ctx.refreshFE2RemoteRegistry)
+			end
+		end)
+		ctx.bind(ctx.cache.fe2RemoteRootConn)
+	end
+
+	bindRoot(Rsp and Rsp:FindFirstChild("Remote"))
+	if Rsp then
+		ctx.bind(Rsp.ChildAdded:Connect(function(child)
+			if child.Name == "Remote" then
+				bindRoot(child)
+				task.defer(ctx.refreshFE2RemoteRegistry)
+			end
+		end))
+	end
+end
+
+ctx.startFE2RemoteRegistry()
+
 if LP then
 	ctx.bind(LP:GetAttributeChangedSignal("SurvivedRound"):Connect(function()
 		if LP:GetAttribute("SurvivedRound") == true then
@@ -2997,18 +3613,36 @@ end
 
 ctx.requestPlayerData(true)
 
+ctx.restoreNc = function()
+	for part, originalCanCollide in cTab do
+		if part and part.Parent and type(originalCanCollide) == "boolean" then
+			pcall(function()
+				if part.CanCollide ~= originalCanCollide then
+					part.CanCollide = originalCanCollide
+				end
+			end)
+		end
+	end
+end
+
 ctx.addNc = function(obj)
-	if obj and obj:IsA("BasePart") then
-		cTab[obj] = true
+	if obj and obj:IsA("BasePart") and cTab[obj] == nil then
+		local ok, originalCanCollide = pcall(function()
+			return obj.CanCollide
+		end)
+		if ok then
+			cTab[obj] = originalCanCollide
+		end
 	end
 end
 
 ctx.clrNc = function()
-	cTab = {}
 	ctx.cut(nCd1)
 	ctx.cut(nCd2)
 	nCd1 = nil
 	nCd2 = nil
+	ctx.restoreNc()
+	cTab = {}
 end
 
 ctx.bindNc = function(c)
@@ -3024,6 +3658,14 @@ ctx.bindNc = function(c)
 		ctx.addNc(d)
 	end)
 	nCd2 = c.DescendantRemoving:Connect(function(d)
+		local originalCanCollide = cTab[d]
+		if d and d:IsA("BasePart") and type(originalCanCollide) == "boolean" then
+			pcall(function()
+				if d.CanCollide ~= originalCanCollide then
+					d.CanCollide = originalCanCollide
+				end
+			end)
+		end
 		cTab[d] = nil
 	end)
 end
@@ -3040,11 +3682,13 @@ ctx.setNc = function(v)
 		if not on then
 			return
 		end
-		for p in cTab do
-			if p and p.Parent then
-				p.CanCollide = false
+		for part in cTab do
+			if part and part.Parent then
+				if part.CanCollide ~= false then
+					part.CanCollide = false
+				end
 			else
-				cTab[p] = nil
+				cTab[part] = nil
 			end
 		end
 	end)
@@ -3081,9 +3725,9 @@ ctx.touchLift = function(part, r)
 	if not (part and part.Parent and r and r.Parent) then
 		return
 	end
-	if type(firetouchinterest) == "function" then
-		pcall(firetouchinterest, r, part, 0)
-		pcall(firetouchinterest, r, part, 1)
+	if __exec.firetouchinterest ~= nil then
+		pcall(__exec.firetouchinterest, r, part, 0)
+		pcall(__exec.firetouchinterest, r, part, 1)
 	end
 end
 
@@ -3125,7 +3769,7 @@ ctx.doLift = function()
 		end)
 	end
 	ctx.spawnLoop(function()
-		local ok, err = xpcall(ctx.pushLift, debug.traceback)
+		local ok, err = xpcall(ctx.pushLift, __traceback)
 		if not ok then
 			warn(err)
 		end
@@ -3245,7 +3889,7 @@ ctx.setBonusBtn = function()
 end
 
 ctx.setChallengeBtn = function()
-	ctx.setTopBtn(ctx.ui.chBtn, autoChallenges and "Challenges: ON" or "Challenges: OFF", autoChallenges)
+	ctx.setTopBtn(ctx.ui.chBtn, autoChallenges and "Challenge Manager: ON" or "Challenge Manager: OFF", autoChallenges)
 end
 
 ctx.setFloodBtn = function()
@@ -3268,18 +3912,15 @@ ctx.setBuyGemBtn = function()
 end
 
 ctx.setClipBtn = function()
-	ctx.setTopBtn(ctx.ui.clipBtn, ctx.opt.clipOn and "No SideClip TP: ON" or "No SideClip TP: OFF", ctx.opt.clipOn)
-end
-
-ctx.setFePhysicsBtn = function()
-	ctx.setTopBtn(ctx.ui.fePhysBtn, ctx.opt.fePhysicsOn and "FE2 Physics: ON" or "FE2 Physics: OFF", ctx.opt.fePhysicsOn, ctx.opt.fePhysicsOn and Color3.fromRGB(180, 90, 45) or Color3.fromRGB(60, 130, 210))
+	ctx.setTopBtn(ctx.ui.clipBtn, ctx.opt.clipOn and "Side-Clip Rollback: BLOCKED" or "Side-Clip Rollback: GAME", ctx.opt.clipOn)
 end
 
 ctx.setFpPartBtn = function()
+	ctx.setTopBtn(ctx.ui.fpPartBtn, ctx.opt.fpPartOn and "First-Person FX: VISIBLE" or "First-Person FX: GAME", ctx.opt.fpPartOn)
 end
 
 ctx.setRescueBtn = function()
-	ctx.setTopBtn(ctx.ui.rescueBtn, ctx.opt.rescueOn and "Hide Rescue NPC: ON" or "Hide Rescue NPC: OFF", ctx.opt.rescueOn)
+	ctx.setTopBtn(ctx.ui.rescueBtn, ctx.opt.rescueOn and "Rescue Visual: HIDDEN" or "Rescue Visual: GAME", ctx.opt.rescueOn)
 end
 
 ctx.setDevBtn = function()
@@ -3293,11 +3934,21 @@ ctx.setSlidePhysBtn = function()
 end
 
 ctx.setZipBtn = function()
-	ctx.setTopBtn(ctx.ui.zipBtn, ctx.opt.zipFastOn and ("Zip Speed: " .. tostring(ctx.opt.zipSpeed)) or "Zip Speed: OFF", ctx.opt.zipFastOn)
+	local enabled = ctx.opt.zipAutoOn and ctx.opt.zipFastOn
+	local label = ctx.opt.zipFastOn and ("Zip Speed: " .. tostring(ctx.opt.zipSpeed)) or "Zip Speed: OFF"
+	if ctx.opt.zipFastOn and not ctx.opt.zipAutoOn then
+		label ..= " (AUTO OFF)"
+	end
+	ctx.setTopBtn(ctx.ui.zipBtn, label, enabled)
 end
 
 ctx.setZipStopBtn = function()
-	ctx.setTopBtn(ctx.ui.zipStopBtn, ctx.opt.zipStopOn and "Zip Stop Velocity: ON" or "Zip Stop Velocity: OFF", ctx.opt.zipStopOn)
+	local enabled = ctx.opt.zipAutoOn and ctx.opt.zipStopOn
+	local label = ctx.opt.zipStopOn and "Zip Stop Velocity: ON" or "Zip Stop Velocity: OFF"
+	if ctx.opt.zipStopOn and not ctx.opt.zipAutoOn then
+		label ..= " (AUTO OFF)"
+	end
+	ctx.setTopBtn(ctx.ui.zipStopBtn, label, enabled)
 end
 
 ctx.setZipAutoBtn = function()
@@ -3783,6 +4434,14 @@ ctx.toggle = function(v)
 
 	if ctx.inState("InGame") then
 		ctx.note("Resuming current map")
+		local m = ctx.curMap()
+		if m and m.Parent then
+			cur = m
+			local id = tok
+			ctx.spawnLoop(function()
+				ctx.onMap(m, id)
+			end)
+		end
 	else
 		ctx.doLift()
 	end
@@ -3794,6 +4453,9 @@ ctx.onChar = function(c)
 	end
 	ctx.bindNc(c)
 	ctx.hookZipStop(c)
+	ctx.patchSideClip()
+	ctx.patchFpParts()
+	ctx.patchRescue()
 	if ctx.opt.zipFastOn and ctx.opt.zipAutoOn then
 		task.defer(ctx.reapplyZipSpeed)
 	end
@@ -3813,7 +4475,7 @@ ctx.onChar = function(c)
 			end
 		end)
 		ctx.spawnLoop(function()
-			local ok, err = xpcall(ctx.pushLift, debug.traceback)
+			local ok, err = xpcall(ctx.pushLift, __traceback)
 			if not ok then
 				warn(err)
 			end
@@ -3912,8 +4574,7 @@ ctx.onMap = function(map, id)
 
 			local ex = ctx.mapExit(map)
 			ctx.mergeLocatorBtns(btns, map)
-			local statsExpected = #RoundStatsRemotes > 0
-			local exitReady = ex and (ctx.buttonsDone() or (not statsExpected and roundCur == nil and roundTotal == nil))
+			local exitReady = ex and (ctx.buttonsDone() or (not ctx.isFE2CMGame() and ctx.allButtonsHandled(btns, map, sent)))
 			if ctx.isRetroGame() then
 				exitReady = ex and ctx.retroButtonsDone(btns, sent)
 			end
@@ -3933,6 +4594,7 @@ ctx.onMap = function(map, id)
 			end
 
 			if exitReady and not pressFirst and waitLocSeq and os.clock() - waitLocAt < LHW then
+				ctx.releaseRoot(r)
 				ctx.mkPlat(r)
 				continue
 			end
@@ -3947,7 +4609,7 @@ ctx.onMap = function(map, id)
 					local hit = entry.hit
 					local key = entry.loc and entry or hit
 					local currentLoc = not entry.loc or locBtns[hit] == entry
-					local canPress = entry.loc or not (exitReady and sent[key])
+					local canPress = entry.loc or ctx.entryReady(entry, map)
 					if currentLoc and canPress and (not exitReady or entry.loc) and hit and hit.Parent then
 						local ti = ctx.ffc(hit, "TouchInterest", true) or ctx.ffc(b, "TouchInterest", true)
 						local gg = nil
@@ -3975,27 +4637,34 @@ ctx.onMap = function(map, id)
 								break
 							end
 							local now = os.clock()
+							local pressedNow = false
 							if entry.loc then
 								if not lastPress[key] or now - lastPress[key] >= PCD then
 									lastPress[key] = now
-									ctx.pressMapButton(hit)
+									pressedNow = ctx.pressMapButton(hit) == true
 									waitLocSeq = entry.seq
 									waitLocAt = now
 								end
-							elseif not sent[key] then
-								sent[key] = true
-								if not pressLoops[key] then
+							else
+								if not fuse and not pressLoops[key] then
 									pressLoops[key] = true
 									ctx.startPressLoop(hit, id, function()
-										return ctx.activeRun(map, id) and ctx.inState("InGame") and not ctx.buttonsDone()
+										return ctx.activeRun(map, id) and ctx.inState("InGame") and not ctx.buttonsDone() and ctx.entryReady(entry, map)
 									end)
 								end
-								ctx.pressMapButton(hit)
+								pressedNow = ctx.pressMapButton(hit) == true
+								if pressedNow then
+									sent[key] = true
+								end
 							end
 							if fuse then
-								ctx.moveFuseSafe(b, hit, r, function()
-									return ctx.activeRun(map, id)
-								end)
+								if pressedNow then
+									ctx.moveFuseSafe(b, hit, r, function()
+										return ctx.activeRun(map, id)
+									end)
+								else
+									ctx.releaseRoot(r)
+								end
 							else
 								pcall(function()
 									ctx.pivotRootTo(CFrame.new(hit.Position + Vector3.new(0, ESY, 0)), r)
@@ -4003,6 +4672,7 @@ ctx.onMap = function(map, id)
 								end)
 							end
 							task.wait(BTD)
+							ctx.releaseRoot(r)
 							if not ctx.activeRun(map, id) then
 								ctx.releaseRoot()
 								break
@@ -4053,7 +4723,7 @@ ctx.onMap = function(map, id)
 				end
 			end
 		end
-	end, debug.traceback)
+	end, __traceback)
 
 	ctx.cut(hp)
 
@@ -4208,11 +4878,11 @@ ctx.findRemoteNamed = function(nm)
 	end
 	if not (ctx.tmpFoundRemote and ctx.tmpFoundRemote:IsA("RemoteEvent")) then
 		ctx.tmpScanFns = {}
-		if type(getnilinstances) == "function" then
-			ctx.tmpScanFns[#ctx.tmpScanFns + 1] = getnilinstances
+		if __exec.getnilinstances then
+			ctx.tmpScanFns[#ctx.tmpScanFns + 1] = __exec.getnilinstances
 		end
-		if type(getinstances) == "function" then
-			ctx.tmpScanFns[#ctx.tmpScanFns + 1] = getinstances
+		if __exec.getinstances then
+			ctx.tmpScanFns[#ctx.tmpScanFns + 1] = __exec.getinstances
 		end
 		for _, fn in ctx.tmpScanFns do
 			ctx.tmpOk, ctx.tmpList = pcall(fn)
@@ -4623,8 +5293,8 @@ ctx.envOf = function(scr)
 	if not scr then
 		return nil
 	end
-	if type(getsenv) == "function" then
-		local ok, env = pcall(getsenv, scr)
+	if __exec.getsenv then
+		local ok, env = pcall(__exec.getsenv, scr)
 		if ok and type(env) == "table" then
 			return env
 		end
@@ -4645,8 +5315,8 @@ ctx.baseEnv = function()
 	if ctx.cache.baseEnv ~= nil then
 		return ctx.cache.baseEnv ~= false and ctx.cache.baseEnv or nil
 	end
-	if type(getfenv) == "function" then
-		local ok, env = pcall(getfenv)
+	if __exec.getfenv then
+		local ok, env = pcall(__exec.getfenv)
 		if ok and type(env) == "table" then
 			ctx.cache.baseEnv = env
 			return env
@@ -4863,12 +5533,12 @@ ctx.touchAirTank = function(hb, remoteOnly)
 	chSeen[hb] = now
 	local fe = ctx.getFeHitbox()
 	local ok = false
-	if fe and fe.Parent and type(firetouchinterest) == "function" then
-		pcall(firetouchinterest, fe, hb, 0)
-		pcall(firetouchinterest, hb, fe, 0)
+	if fe and fe.Parent and __exec.firetouchinterest ~= nil then
+		pcall(__exec.firetouchinterest, fe, hb, 0)
+		pcall(__exec.firetouchinterest, hb, fe, 0)
 		task.wait(0.05)
-		pcall(firetouchinterest, fe, hb, 1)
-		pcall(firetouchinterest, hb, fe, 1)
+		pcall(__exec.firetouchinterest, fe, hb, 1)
+		pcall(__exec.firetouchinterest, hb, fe, 1)
 		ok = true
 	end
 	if hb and hb.Parent then
@@ -4905,24 +5575,164 @@ ctx.tryAirChallenges = function(list, remoteOnly)
 	return best and ctx.touchAirTank(best, remoteOnly) or false
 end
 
+ctx.cache.challengePlan = ctx.cache.challengePlan or {
+	known = false,
+	active = true,
+	all = true,
+	air = true,
+	lava = true,
+	slide = true,
+	wall = true,
+	zip = true,
+}
+
+ctx.updateChallengePlan = function(data)
+	ctx.tmpDaily = type(data) == "table" and data.dailyChallenges or nil
+	if type(ctx.tmpDaily) ~= "table" then
+		ctx.cache.challengePlan.known = false
+		ctx.cache.challengePlan.active = true
+		ctx.cache.challengePlan.all = true
+		return
+	end
+
+	ctx.tmpTier = "standard"
+	ctx.tmpStandard = ctx.tmpDaily.standard
+	if type(ctx.tmpStandard) == "table" then
+		ctx.tmpAllStandard = true
+		for _, challenge in ctx.tmpStandard do
+			if type(challenge) == "table" and challenge.completed ~= true then
+				ctx.tmpAllStandard = false
+				break
+			end
+		end
+		if ctx.tmpAllStandard then
+			ctx.tmpTier = "master"
+		end
+	end
+
+	ctx.tmpRows = ctx.tmpDaily[ctx.tmpTier]
+	if type(ctx.tmpRows) ~= "table" then
+		ctx.cache.challengePlan.known = false
+		ctx.cache.challengePlan.active = true
+		ctx.cache.challengePlan.all = true
+		return
+	end
+
+	ctx.tmpPlan = {
+		known = true,
+		active = false,
+		all = false,
+		air = false,
+		lava = false,
+		slide = false,
+		wall = false,
+		zip = false,
+		premium = ctx.isLocalPremium(),
+		premiumBlocked = false,
+	}
+
+	for _, challenge in ctx.tmpRows do
+		if type(challenge) == "table" then
+			ctx.tmpRequired = tonumber(challenge.amtRequired) or 1
+			ctx.tmpCurrent = tonumber(challenge.amtCurrent) or 0
+			ctx.tmpPremiumChallenge = challenge.isPremium == true
+			ctx.tmpPremiumAllowed = not ctx.tmpPremiumChallenge or ctx.tmpPlan.premium == true
+			if challenge.completed ~= true and ctx.tmpCurrent < ctx.tmpRequired and ctx.tmpPremiumAllowed then
+				ctx.tmpPlan.active = true
+				ctx.tmpDesc = string.lower(tostring(challenge.desc or challenge.name or ""))
+				ctx.tmpMatched = false
+				if string.find(ctx.tmpDesc, "air", 1, true) or string.find(ctx.tmpDesc, "bubble", 1, true) or string.find(ctx.tmpDesc, "tank", 1, true) or string.find(ctx.tmpDesc, "regenerat", 1, true) then
+					ctx.tmpPlan.air = true
+					ctx.tmpMatched = true
+				end
+				if string.find(ctx.tmpDesc, "lava", 1, true) or string.find(ctx.tmpDesc, "acid", 1, true) then
+					ctx.tmpPlan.lava = true
+					ctx.tmpMatched = true
+				end
+				if string.find(ctx.tmpDesc, "slide", 1, true) then
+					ctx.tmpPlan.slide = true
+					ctx.tmpMatched = true
+				end
+				if string.find(ctx.tmpDesc, "wall", 1, true) then
+					ctx.tmpPlan.wall = true
+					ctx.tmpMatched = true
+				end
+				if string.find(ctx.tmpDesc, "zip", 1, true) then
+					ctx.tmpPlan.zip = true
+					ctx.tmpMatched = true
+				end
+				if not ctx.tmpMatched then
+					ctx.tmpPlan.all = true
+				end
+			elseif challenge.completed ~= true and ctx.tmpCurrent < ctx.tmpRequired and ctx.tmpPremiumChallenge then
+				ctx.tmpPlan.premiumBlocked = true
+			end
+		end
+	end
+
+	ctx.cache.challengePlan = ctx.tmpPlan
+end
+
+ctx.refreshChallengeEligibility = function()
+	if type(ctx.updateChallengePlan) == "function" then
+		ctx.updateChallengePlan(pdata)
+	end
+end
+
+if LP then
+	pcall(function()
+		ctx.bind(LP:GetPropertyChangedSignal("MembershipType"):Connect(ctx.refreshChallengeEligibility))
+	end)
+	pcall(function()
+		ctx.bind(LP:GetPropertyChangedSignal("HasRobloxSubscription"):Connect(ctx.refreshChallengeEligibility))
+	end)
+end
+if Plr and Plr.PlayerMembershipChanged then
+	ctx.bind(Plr.PlayerMembershipChanged:Connect(function(player)
+		if player == LP then
+			ctx.refreshChallengeEligibility()
+		end
+	end))
+end
+
+ctx.challengeNeeded = function(kind)
+	ctx.tmpPlan = ctx.cache.challengePlan
+	if type(ctx.tmpPlan) ~= "table" or ctx.tmpPlan.known ~= true then
+		return true
+	end
+	if ctx.tmpPlan.active ~= true then
+		return false
+	end
+	return ctx.tmpPlan.all == true or ctx.tmpPlan[kind] == true
+end
+
 ctx.doChallenges = function(map, remoteOnly)
 	if not (autoChallenges and ctx.isRoundIngame()) then
 		return
 	end
 	ctx.dumpChallenges()
-	local now = os.clock()
-	if now - chLavaAt > 5 then
-		chLavaAt = now
+	ctx.tmpNow = os.clock()
+	if ctx.challengeNeeded("lava") and ctx.tmpNow - chLavaAt > 5 then
+		chLavaAt = ctx.tmpNow
 		ctx.fireChallenge("SwimInLava")
 	end
-	local hits = ctx.challengeHits(map)
-	ctx.tryAirChallenges(hits.air, remoteOnly == true)
-	ctx.trySlideChallenge(hits.slide, remoteOnly == true)
-	ctx.tryWallChallenge(hits.wall, remoteOnly == true)
-	ctx.tryZipChallenge(hits.zip, remoteOnly == true)
+	ctx.tmpHits = ctx.challengeHits(map)
+	if ctx.challengeNeeded("air") then
+		ctx.tryAirChallenges(ctx.tmpHits.air, remoteOnly == true)
+	end
+	if ctx.challengeNeeded("slide") then
+		ctx.trySlideChallenge(ctx.tmpHits.slide, remoteOnly == true)
+	end
+	if ctx.challengeNeeded("wall") then
+		ctx.tryWallChallenge(ctx.tmpHits.wall, remoteOnly == true)
+	end
+	if ctx.challengeNeeded("zip") then
+		ctx.tryZipChallenge(ctx.tmpHits.zip, remoteOnly == true)
+	end
 end
 
 ctx.startChallenges = function()
+	ctx.updateChallengePlan(pdata)
 	ctx.spawnLoop(function()
 		while ctx.alive() do
 			if autoChallenges then
@@ -4933,7 +5743,7 @@ ctx.startChallenges = function()
 	end)
 	ctx.spawnLoop(function()
 		while ctx.alive() do
-			if autoChallenges or ctx.opt.infAirOn then
+			if ctx.opt.infAirOn or (autoChallenges and ctx.challengeNeeded("air")) then
 				ctx.fireRegenAir()
 			end
 			task.wait(1)
@@ -5461,68 +6271,362 @@ ctx.isFxObj = function(o)
 	return o and (o:IsA("ParticleEmitter") or o:IsA("Beam") or o:IsA("Trail") or o:IsA("Fire") or o:IsA("Smoke") or o:IsA("Sparkles"))
 end
 
-ctx.patchSideClip = function(force)
-	local c = ctx.chr(false)
-	local s = c and c:FindFirstChild("CL_AntiSideClip")
-	local z = s and s:FindFirstChild("Ziplining")
-	local block = ctx.opt.clipOn == true or force == true
-	if s and s:IsA("LocalScript") then
+ctx.feManagers = ctx.feManagers or {}
+ctx.feManagers.sideClip = ctx.feManagers.sideClip or {
+	original = setmetatable({}, { __mode = "k" }),
+	watches = setmetatable({}, { __mode = "k" }),
+}
+ctx.feManagers.firstPersonFx = ctx.feManagers.firstPersonFx or {
+	scriptOriginal = setmetatable({}, { __mode = "k" }),
+	fxOriginal = setmetatable({}, { __mode = "k" }),
+	fxWatches = setmetatable({}, { __mode = "k" }),
+}
+ctx.feManagers.rescue = ctx.feManagers.rescue or {
+	scriptOriginal = setmetatable({}, { __mode = "k" }),
+	original = setmetatable({}, { __mode = "k" }),
+	watches = setmetatable({}, { __mode = "k" }),
+	camera = nil,
+	cameraCons = {},
+}
+ctx.cache.feOptionChar = nil
+ctx.cache.feOptionCharCons = ctx.cache.feOptionCharCons or {}
+ctx.cache.feOptionStarted = ctx.cache.feOptionStarted or false
+
+ctx.feManagerSet = function(obj, prop, value)
+	if not obj then
+		return false
+	end
+	ctx.tmpSetOk = pcall(function()
+		if obj[prop] ~= value then
+			obj[prop] = value
+		end
+	end)
+	return ctx.tmpSetOk
+end
+
+ctx.currentZipState = function()
+	if ctx.cache.zipStateSource == "bindable" and ctx.cache.zipEventKnown then
+		return ctx.opt.zipActive == true
+	end
+	if ctx.cache.zipStateSource == "attribute" and LP then
+		local ok, value = pcall(function()
+			return LP:GetAttribute("Ziplining") == true
+		end)
+		if ok then
+			return value
+		end
+	end
+	ctx.tmpZipState = ctx.opt.zipActive == true
+	if LP then
 		pcall(function()
-			s.Disabled = block
+			ctx.tmpZipState = ctx.tmpZipState or LP:GetAttribute("Ziplining") == true
 		end)
 	end
-	if z and z:IsA("BindableEvent") then
+	return ctx.tmpZipState == true
+end
+
+ctx.watchSideClipScript = function(scr)
+	if not (scr and scr:IsA("LocalScript")) or ctx.feManagers.sideClip.watches[scr] then
+		return
+	end
+	ctx.tmpCons = {}
+	ctx.feManagers.sideClip.watches[scr] = ctx.tmpCons
+	ctx.tmpCons[#ctx.tmpCons + 1] = scr:GetPropertyChangedSignal("Disabled"):Connect(function()
+		if ctx.opt.clipOn and scr.Parent and scr.Disabled ~= true then
+			ctx.feManagerSet(scr, "Disabled", true)
+		end
+	end)
+	ctx.tmpCons[#ctx.tmpCons + 1] = scr.ChildAdded:Connect(function(child)
+		if child.Name == "Ziplining" then
+			task.defer(ctx.patchSideClip)
+			task.defer(ctx.hookZipStop, scr.Parent)
+		end
+	end)
+	ctx.tmpCons[#ctx.tmpCons + 1] = scr.Destroying:Once(function()
+		ctx.clearCons(ctx.feManagers.sideClip.watches[scr])
+		ctx.feManagers.sideClip.watches[scr] = nil
+		ctx.feManagers.sideClip.original[scr] = nil
+	end)
+end
+
+ctx.patchSideClip = function()
+	ctx.tmpChar = ctx.chr(false)
+	ctx.tmpScript = ctx.tmpChar and ctx.tmpChar:FindFirstChild("CL_AntiSideClip")
+	if not (ctx.tmpScript and ctx.tmpScript:IsA("LocalScript")) then
+		return false
+	end
+	if ctx.feManagers.sideClip.original[ctx.tmpScript] == nil then
+		ctx.feManagers.sideClip.original[ctx.tmpScript] = ctx.tmpScript.Disabled
+	end
+	ctx.watchSideClipScript(ctx.tmpScript)
+	ctx.tmpBlock = ctx.opt.clipOn == true
+	ctx.feManagerSet(ctx.tmpScript, "Disabled", ctx.tmpBlock and true or ctx.feManagers.sideClip.original[ctx.tmpScript])
+	ctx.tmpZipEvent = ctx.tmpScript:FindFirstChild("Ziplining")
+	if ctx.tmpZipEvent and ctx.tmpZipEvent:IsA("BindableEvent") and not ctx.tmpBlock then
 		pcall(function()
-			z:Fire(block)
+			ctx.tmpZipEvent:Fire(ctx.currentZipState())
 		end)
+	end
+	return true
+end
+
+ctx.watchFirstPersonFx = function(obj)
+	if not (ctx.isFxObj(obj) and obj.Parent) then
+		return
+	end
+	if ctx.feManagers.firstPersonFx.fxOriginal[obj] == nil then
+		ctx.feManagers.firstPersonFx.fxOriginal[obj] = obj.Enabled
+	end
+	if not ctx.feManagers.firstPersonFx.fxWatches[obj] then
+		ctx.tmpCons = {}
+		ctx.feManagers.firstPersonFx.fxWatches[obj] = ctx.tmpCons
+		ctx.tmpCons[#ctx.tmpCons + 1] = obj:GetPropertyChangedSignal("Enabled"):Connect(function()
+			if ctx.opt.fpPartOn and obj.Parent and obj.Enabled ~= true then
+				ctx.feManagerSet(obj, "Enabled", true)
+			end
+		end)
+		ctx.tmpCons[#ctx.tmpCons + 1] = obj.Destroying:Once(function()
+			ctx.clearCons(ctx.feManagers.firstPersonFx.fxWatches[obj])
+			ctx.feManagers.firstPersonFx.fxWatches[obj] = nil
+			ctx.feManagers.firstPersonFx.fxOriginal[obj] = nil
+		end)
+	end
+	if ctx.opt.fpPartOn then
+		ctx.feManagerSet(obj, "Enabled", true)
+	end
+end
+
+ctx.restoreFirstPersonFx = function()
+	for obj, original in ctx.feManagers.firstPersonFx.fxOriginal do
+		if obj and obj.Parent then
+			ctx.feManagerSet(obj, "Enabled", original)
+		end
+	end
+	for obj, cons in ctx.feManagers.firstPersonFx.fxWatches do
+		ctx.clearCons(cons)
+		ctx.feManagers.firstPersonFx.fxWatches[obj] = nil
+	end
+	ctx.feManagers.firstPersonFx.fxOriginal = setmetatable({}, { __mode = "k" })
+	ctx.feManagers.firstPersonFx.fxWatches = setmetatable({}, { __mode = "k" })
+	for scr, original in ctx.feManagers.firstPersonFx.scriptOriginal do
+		if scr and scr.Parent then
+			ctx.feManagerSet(scr, "Disabled", original)
+		end
 	end
 end
 
 ctx.patchFpParts = function()
+	ctx.tmpChar = ctx.chr(false)
+	if not ctx.tmpChar then
+		return false
+	end
+	ctx.tmpManager = ctx.tmpChar:FindFirstChild("CL_FirstPerson_ParticleManager")
+	if ctx.tmpManager and ctx.tmpManager:IsA("LocalScript") then
+		if ctx.feManagers.firstPersonFx.scriptOriginal[ctx.tmpManager] == nil then
+			ctx.feManagers.firstPersonFx.scriptOriginal[ctx.tmpManager] = ctx.tmpManager.Disabled
+		end
+		ctx.feManagerSet(ctx.tmpManager, "Disabled", ctx.opt.fpPartOn and true or ctx.feManagers.firstPersonFx.scriptOriginal[ctx.tmpManager])
+	end
 	if not ctx.opt.fpPartOn then
+		ctx.restoreFirstPersonFx()
+		return true
+	end
+	for _, obj in ctx.descOf(ctx.tmpChar) do
+		if ctx.isFxObj(obj) then
+			ctx.watchFirstPersonFx(obj)
+		end
+	end
+	return true
+end
+
+ctx.isRescueVisual = function(obj)
+	ctx.tmpCam = Wsp and Wsp.CurrentCamera
+	if not (obj and ctx.tmpCam and obj:IsDescendantOf(ctx.tmpCam)) then
+		return false
+	end
+	ctx.tmpParent = obj
+	while ctx.tmpParent and ctx.tmpParent ~= ctx.tmpCam do
+		if ctx.tmpParent:IsA("Model") and ctx.tmpParent.Name == "NPC" then
+			return true
+		end
+		ctx.tmpParent = ctx.tmpParent.Parent
+	end
+	return false
+end
+
+ctx.watchRescueObject = function(obj)
+	if not (ctx.opt.rescueOn and ctx.isRescueVisual(obj)) then
 		return
 	end
-	local c = ctx.chr(false)
-	if not c then
+	ctx.tmpProp = nil
+	ctx.tmpHidden = nil
+	if obj:IsA("BasePart") then
+		ctx.tmpProp = "LocalTransparencyModifier"
+		ctx.tmpHidden = 1
+	elseif ctx.isFxObj(obj) then
+		ctx.tmpProp = "Enabled"
+		ctx.tmpHidden = false
+	end
+	if not ctx.tmpProp then
 		return
 	end
-	local m = c:FindFirstChild("CL_FirstPerson_ParticleManager")
-	if m and m:IsA("LocalScript") then
-		pcall(function()
-			m.Disabled = true
+	if ctx.feManagers.rescue.original[obj] == nil then
+		ctx.feManagers.rescue.original[obj] = {
+			property = ctx.tmpProp,
+			value = obj[ctx.tmpProp],
+		}
+	end
+	if not ctx.feManagers.rescue.watches[obj] then
+		ctx.tmpCons = {}
+		ctx.feManagers.rescue.watches[obj] = ctx.tmpCons
+		local watchProp = ctx.tmpProp
+		local watchValue = ctx.tmpHidden
+		ctx.tmpCons[#ctx.tmpCons + 1] = obj:GetPropertyChangedSignal(watchProp):Connect(function()
+			if ctx.opt.rescueOn and obj.Parent and ctx.isRescueVisual(obj) and obj[watchProp] ~= watchValue then
+				ctx.feManagerSet(obj, watchProp, watchValue)
+			end
+		end)
+		ctx.tmpCons[#ctx.tmpCons + 1] = obj.Destroying:Once(function()
+			ctx.clearCons(ctx.feManagers.rescue.watches[obj])
+			ctx.feManagers.rescue.watches[obj] = nil
+			ctx.feManagers.rescue.original[obj] = nil
 		end)
 	end
-	for _, o in ctx.descOf(c) do
-		if ctx.isFxObj(o) then
-			pcall(function()
-				o.Enabled = true
-			end)
+	ctx.feManagerSet(obj, ctx.tmpProp, ctx.tmpHidden)
+end
+
+ctx.restoreRescueVisuals = function()
+	for scr, original in ctx.feManagers.rescue.scriptOriginal do
+		if scr and scr.Parent then
+			ctx.feManagerSet(scr, "Disabled", original)
+		end
+	end
+	for obj, snapshot in ctx.feManagers.rescue.original do
+		if obj and obj.Parent and type(snapshot) == "table" then
+			ctx.feManagerSet(obj, snapshot.property, snapshot.value)
+		end
+	end
+	for obj, cons in ctx.feManagers.rescue.watches do
+		ctx.clearCons(cons)
+		ctx.feManagers.rescue.watches[obj] = nil
+	end
+	ctx.feManagers.rescue.scriptOriginal = setmetatable({}, { __mode = "k" })
+	ctx.feManagers.rescue.original = setmetatable({}, { __mode = "k" })
+	ctx.feManagers.rescue.watches = setmetatable({}, { __mode = "k" })
+end
+
+ctx.patchRescueScript = function()
+	ctx.tmpChar = ctx.chr(false)
+	ctx.tmpScript = ctx.tmpChar and ctx.tmpChar:FindFirstChild("CL_RescueVisual")
+	if not (ctx.tmpScript and ctx.tmpScript:IsA("LocalScript")) then
+		return false
+	end
+	if ctx.feManagers.rescue.scriptOriginal[ctx.tmpScript] == nil then
+		ctx.feManagers.rescue.scriptOriginal[ctx.tmpScript] = ctx.tmpScript.Disabled
+	end
+	ctx.feManagerSet(ctx.tmpScript, "Disabled", ctx.opt.rescueOn and true or ctx.feManagers.rescue.scriptOriginal[ctx.tmpScript])
+	return true
+end
+
+ctx.bindRescueCamera = function()
+	ctx.clearCons(ctx.feManagers.rescue.cameraCons)
+	ctx.feManagers.rescue.camera = Wsp and Wsp.CurrentCamera or nil
+	ctx.tmpCam = ctx.feManagers.rescue.camera
+	if not ctx.tmpCam then
+		return
+	end
+	ctx.feManagers.rescue.cameraCons[#ctx.feManagers.rescue.cameraCons + 1] = ctx.tmpCam.DescendantAdded:Connect(function(obj)
+		if ctx.opt.rescueOn then
+			task.defer(ctx.watchRescueObject, obj)
+		end
+	end)
+	if ctx.opt.rescueOn then
+		for _, obj in ctx.descOf(ctx.tmpCam) do
+			ctx.watchRescueObject(obj)
 		end
 	end
 end
 
 ctx.patchRescue = function()
+	ctx.patchRescueScript()
 	if not ctx.opt.rescueOn then
+		ctx.restoreRescueVisuals()
+		return true
+	end
+	if ctx.feManagers.rescue.camera ~= (Wsp and Wsp.CurrentCamera) then
+		ctx.bindRescueCamera()
+	end
+	ctx.tmpCam = Wsp and Wsp.CurrentCamera
+	if not ctx.tmpCam then
+		return false
+	end
+	for _, obj in ctx.descOf(ctx.tmpCam) do
+		ctx.watchRescueObject(obj)
+	end
+	return true
+end
+
+ctx.bindFeOptionCharacter = function(char)
+	ctx.clearCons(ctx.cache.feOptionCharCons)
+	ctx.cache.feOptionChar = char
+	if not char then
 		return
 	end
-	local cam = Wsp and Wsp.CurrentCamera
-	if not cam then
-		return
-	end
-	for _, o in ctx.descOf(cam) do
-		if o:IsA("BasePart") then
-			local p = o.Parent
-			if p and (p.Name == "NPC" or p:FindFirstChild("HumanoidRootPart")) then
-				pcall(function()
-					o.LocalTransparencyModifier = 1
-				end)
-			end
-		elseif ctx.isFxObj(o) then
-			pcall(function()
-				o.Enabled = false
-			end)
+	ctx.cache.feOptionCharCons[#ctx.cache.feOptionCharCons + 1] = char.ChildAdded:Connect(function(child)
+		if child.Name == "CL_AntiSideClip" then
+			task.defer(ctx.patchSideClip)
+		elseif child.Name == "CL_FirstPerson_ParticleManager" then
+			task.defer(ctx.patchFpParts)
+		elseif child.Name == "CL_RescueVisual" then
+			task.defer(ctx.patchRescue)
 		end
+	end)
+	ctx.cache.feOptionCharCons[#ctx.cache.feOptionCharCons + 1] = char.DescendantAdded:Connect(function(obj)
+		if ctx.opt.fpPartOn and ctx.isFxObj(obj) then
+			task.defer(ctx.watchFirstPersonFx, obj)
+		end
+	end)
+	task.defer(ctx.patchSideClip)
+	task.defer(ctx.patchFpParts)
+	task.defer(ctx.patchRescue)
+end
+
+ctx.startFeOptionManagers = function()
+	if ctx.cache.feOptionStarted then
+		return
 	end
+	ctx.cache.feOptionStarted = true
+	if LP then
+		ctx.bind(LP.CharacterAdded:Connect(function(char)
+			task.defer(ctx.bindFeOptionCharacter, char)
+		end))
+	end
+	if Wsp then
+		ctx.bind(Wsp:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+			task.defer(ctx.bindRescueCamera)
+		end))
+	end
+	ctx.bindFeOptionCharacter(LP and LP.Character or nil)
+	ctx.bindRescueCamera()
+	ctx.patchRescue()
+end
+
+ctx.restoreFeOptionManagers = function()
+	ctx.opt.clipOn = false
+	ctx.opt.fpPartOn = false
+	ctx.opt.rescueOn = false
+	ctx.patchSideClip()
+	for scr, cons in ctx.feManagers.sideClip.watches do
+		ctx.clearCons(cons)
+		ctx.feManagers.sideClip.watches[scr] = nil
+	end
+	ctx.feManagers.sideClip.original = setmetatable({}, { __mode = "k" })
+	ctx.feManagers.sideClip.watches = setmetatable({}, { __mode = "k" })
+	ctx.restoreFirstPersonFx()
+	ctx.feManagers.firstPersonFx.scriptOriginal = setmetatable({}, { __mode = "k" })
+	ctx.restoreRescueVisuals()
+	ctx.clearCons(ctx.cache.feOptionCharCons)
+	ctx.clearCons(ctx.feManagers.rescue.cameraCons)
 end
 
 ctx.setDevTools = function(st)
@@ -6050,12 +7154,27 @@ ctx.fireNextButton = function()
 	end
 	ctx.tmpEntries = {}
 	if ctx.tmpMap then
-		ctx.tmpEntries = ctx.auraEntries(ctx.tmpMap) or {}
-		ctx.mergeLocatorBtns(ctx.tmpEntries, ctx.tmpMap)
-		if #ctx.tmpEntries <= 0 then
+		ctx.tmpRawEntries = ctx.auraEntries(ctx.tmpMap) or {}
+		ctx.mergeLocatorBtns(ctx.tmpRawEntries, ctx.tmpMap)
+		if #ctx.tmpRawEntries <= 0 then
 			ctx.tmpOk, ctx.tmpRes = pcall(ctx.scanBtns, ctx.tmpMap)
 			if ctx.tmpOk and type(ctx.tmpRes) == "table" then
-				ctx.tmpEntries = ctx.tmpRes
+				ctx.tmpRawEntries = ctx.tmpRes
+			end
+		end
+		for _, entry in ctx.tmpRawEntries do
+			if ctx.entryReady(entry, ctx.tmpMap) then
+				ctx.tmpEntries[#ctx.tmpEntries + 1] = entry
+			end
+		end
+		if #ctx.tmpEntries <= 0 then
+			ctx.tmpExit = ctx.mapExit(ctx.tmpMap)
+			if ctx.tmpExit and (ctx.buttonsDone() or (not ctx.isFE2CMGame() and #ctx.tmpRawEntries > 0)) and ctx.tmpRoot and ctx.tmpRoot.Parent then
+				pcall(function()
+					ctx.pivotRootTo(ctx.tmpExit.CFrame, ctx.tmpRoot)
+					ctx.tmpRoot.AssemblyLinearVelocity = Vector3.zero
+				end)
+				return true
 			end
 		end
 	end
@@ -6068,9 +7187,9 @@ ctx.fireNextButton = function()
 				ctx.tmpRoot.AssemblyLinearVelocity = Vector3.zero
 			end)
 			task.wait(0.08)
-			if type(firetouchinterest) == "function" then
-				pcall(firetouchinterest, ctx.tmpRoot, ctx.tmpHit, 0)
-				pcall(firetouchinterest, ctx.tmpRoot, ctx.tmpHit, 1)
+			if __exec.firetouchinterest ~= nil then
+				pcall(__exec.firetouchinterest, ctx.tmpRoot, ctx.tmpHit, 0)
+				pcall(__exec.firetouchinterest, ctx.tmpRoot, ctx.tmpHit, 1)
 			end
 		end
 		ctx.cache.muteNotifyUntil = os.clock() + 1.5
@@ -6134,12 +7253,10 @@ ctx.zipPatchOne = function(o, st)
 			o:SetAttribute("RopeSpeed", ctx.opt.zipSpeed)
 			o:SetAttribute("ZiplineSpeed", ctx.opt.zipSpeed)
 			o:SetAttribute("Speed", ctx.opt.zipSpeed)
-			o:SetAttribute("VelocityInheritance", 0)
 		elseif ctx.cache.zipOld[o] then
 			o:SetAttribute("RopeSpeed", ctx.cache.zipOld[o][1])
 			o:SetAttribute("ZiplineSpeed", ctx.cache.zipOld[o][2])
 			o:SetAttribute("Speed", ctx.cache.zipOld[o][3])
-			o:SetAttribute("VelocityInheritance", ctx.cache.zipOld[o][4])
 		end
 	end)
 end
@@ -6206,25 +7323,167 @@ ctx.resetZipVelocity = function()
 		return
 	end
 	pcall(function()
-		ctx.tmpRoot.AssemblyLinearVelocity = Vector3.zero
-		ctx.tmpRoot.Velocity = Vector3.zero
-	end)
-	task.delay(0.04, function()
-		if not ctx.alive() then
-			return
-		end
-		ctx.tmpRoot = select(1, ctx.rh(false))
-		if ctx.tmpRoot then
-			pcall(function()
-				ctx.tmpRoot.AssemblyLinearVelocity = Vector3.zero
-				ctx.tmpRoot.Velocity = Vector3.zero
-			end)
-		end
+		local velocity = ctx.tmpRoot.AssemblyLinearVelocity
+		ctx.tmpRoot.AssemblyLinearVelocity = Vector3.new(0, velocity.Y, 0)
 	end)
 end
 
+ctx.zipGroundClearance = function(character, root, humanoid)
+	local clearance = math.max(root.Size.Y * 0.5 + humanoid.HipHeight, root.Size.Y * 0.5)
+	if humanoid.RigType == Enum.HumanoidRigType.R6 then
+		local legHeight = 0
+		for _, name in { "Left Leg", "Right Leg" } do
+			local leg = character:FindFirstChild(name)
+			if leg and leg:IsA("BasePart") then
+				legHeight = math.max(legHeight, leg.Size.Y)
+			end
+		end
+		clearance += legHeight
+	end
+	return math.max(clearance, 2.5)
+end
+
+ctx.isZipMover = function(obj)
+	return obj and (obj:IsA("BodyPosition")
+		or obj:IsA("BodyVelocity")
+		or obj:IsA("BodyGyro")
+		or obj:IsA("LinearVelocity")
+		or obj:IsA("AlignPosition")
+		or obj:IsA("AlignOrientation"))
+end
+
+ctx.captureZipMovers = function(root)
+	ctx.cache.zipMoverBaseline = setmetatable({}, { __mode = "k" })
+	if not root then
+		return
+	end
+	for _, obj in root:GetChildren() do
+		if ctx.isZipMover(obj) then
+			ctx.cache.zipMoverBaseline[obj] = true
+		end
+	end
+end
+
+ctx.clearZipMovers = function(root)
+	if not root then
+		return
+	end
+	for _, obj in root:GetChildren() do
+		if ctx.isZipMover(obj) and not ctx.cache.zipMoverBaseline[obj] then
+			pcall(function()
+				obj:Destroy()
+			end)
+		end
+	end
+end
+
+ctx.setMainVelocityEnabled = function(enabled)
+	local main = ctx.mainScript and ctx.mainScript() or nil
+	local toggle = main and main:FindFirstChild("ToggleVelocity")
+	if toggle and toggle:IsA("BindableEvent") then
+		pcall(function()
+			toggle:Fire(enabled == true)
+		end)
+		return true
+	end
+	return false
+end
+
+ctx.zipRootBlocked = function(character, root)
+	if not (workspace.GetPartBoundsInBox and character and root) then
+		return false
+	end
+	local params = OverlapParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = { character }
+	params.RespectCanCollide = true
+	params.CollisionGroup = root.CollisionGroup
+	local ok, parts = pcall(function()
+		return workspace:GetPartBoundsInBox(root.CFrame, root.Size * 0.88, params)
+	end)
+	if not ok then
+		return false
+	end
+	for _, part in parts do
+		if part:IsA("BasePart") and part.CanCollide then
+			return true
+		end
+	end
+	return false
+end
+
+ctx.raiseZipCharacter = function(character, root, humanoid)
+	local moved = false
+	local clearance = ctx.zipGroundClearance(character, root, humanoid)
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = { character }
+	params.RespectCanCollide = true
+	params.IgnoreWater = true
+	params.CollisionGroup = root.CollisionGroup
+
+	local origin = root.Position + Vector3.new(0, math.max(clearance + 8, 12), 0)
+	local result = workspace:Raycast(origin, Vector3.new(0, -math.max(clearance + 22, 30), 0), params)
+	if result and result.Normal.Y > 0.35 then
+		local targetY = result.Position.Y + clearance + 0.12
+		if root.Position.Y < targetY then
+			local delta = Vector3.new(0, targetY - root.Position.Y, 0)
+			pcall(function()
+				character:PivotTo(character:GetPivot() + delta)
+			end)
+			moved = true
+		end
+	end
+
+	for _ = 1, 28 do
+		if not ctx.zipRootBlocked(character, root) then
+			break
+		end
+		pcall(function()
+			character:PivotTo(character:GetPivot() + Vector3.new(0, 0.25, 0))
+		end)
+		moved = true
+	end
+	return moved
+end
+
+ctx.recoverZipDismount = function(token)
+	if not (ctx.opt.zipAutoOn and ctx.opt.zipStopOn) then
+		return false
+	end
+	if not ctx.alive() or token ~= ctx.cache.zipDismountToken or ctx.currentZipState() then
+		return false
+	end
+	local root, humanoid = ctx.rh(false)
+	if not (root and humanoid and humanoid.Health > 0) then
+		return false
+	end
+	pcall(function()
+		local velocity = root.AssemblyLinearVelocity
+		root.AssemblyLinearVelocity = Vector3.new(0, velocity.Y, 0)
+	end)
+	return true
+end
+
+ctx.finishZipDismount = function()
+	if not (ctx.opt.zipAutoOn and ctx.opt.zipStopOn) then
+		return
+	end
+	ctx.cache.zipDismountToken = (ctx.cache.zipDismountToken or 0) + 1
+	local token = ctx.cache.zipDismountToken
+	task.defer(function()
+		ctx.recoverZipDismount(token)
+	end)
+	if Run and Run.Heartbeat then
+		task.spawn(function()
+			Run.Heartbeat:Wait()
+			ctx.recoverZipDismount(token)
+		end)
+	end
+end
+
 ctx.hookZipStop = function(c)
-	if ctx.cache.zipChar == c then
+	if ctx.cache.zipChar == c and ctx.cache.zipConn then
 		return
 	end
 	ctx.cut(ctx.cache.zipConn)
@@ -6234,9 +7493,15 @@ ctx.hookZipStop = function(c)
 	ctx.tmpZipEv = ctx.tmpAnti and ctx.tmpAnti:FindFirstChild("Ziplining")
 	if ctx.tmpZipEv and ctx.tmpZipEv.Event then
 		ctx.cache.zipConn = ctx.tmpZipEv.Event:Connect(function(st)
+			local wasActive = ctx.opt.zipActive == true or ctx.cache.zipWasActive == true
+			ctx.cache.zipStateSource = "bindable"
+			ctx.cache.zipEventKnown = true
 			ctx.opt.zipActive = st and true or false
-			if not st and ctx.opt.zipStopOn then
-				ctx.resetZipVelocity()
+			ctx.cache.zipWasActive = ctx.opt.zipActive
+			if st then
+				ctx.cache.zipDismountToken = (ctx.cache.zipDismountToken or 0) + 1
+			elseif wasActive then
+				ctx.finishZipDismount()
 			end
 		end)
 	end
@@ -6337,7 +7602,7 @@ ctx.bindMobileJumpButton = function()
 end
 
 ctx.applyPhysicsOptions = function()
-	if not (ctx.opt.infJumpOn or ctx.opt.zipFastOn) then
+	if not (ctx.opt.infJumpOn or (ctx.opt.zipFastOn and ctx.opt.zipAutoOn)) then
 		return
 	end
 	ctx.tmpRoot, ctx.tmpHum, ctx.tmpChar = ctx.rh(false)
@@ -6395,10 +7660,10 @@ ctx.feMoveNoop = function()
 end
 
 ctx.patchFeMoveEnv = function(scr, st)
-	if type(getsenv) ~= "function" or not scr then
-		return
+	if not (__exec.getsenv and scr) then
+		return false
 	end
-	local ok, env = pcall(getsenv, scr)
+	local ok, env = pcall(__exec.getsenv, scr)
 	if not ok or type(env) ~= "table" then
 		return
 	end
@@ -6428,13 +7693,13 @@ ctx.patchFeAntiWallhop = function(st)
 	local client = mods and mods:FindFirstChild("Client")
 	local mod = client and client:FindFirstChild("AntiWallhop")
 	if not (mod and type(require) == "function") then
-		return
+		return false
 	end
 	local ok, t = pcall(require, mod)
 	if not ok or type(t) ~= "table" then
-		return
+		return false
 	end
-	for _, n in { "enable", "onPostSimulation" } do
+	for _, n in { "onPostSimulation" } do
 		if st == true then
 			if ctx.cache.feMoveModOrig[n] ~= nil then
 				t[n] = ctx.cache.feMoveModOrig[n]
@@ -6448,6 +7713,7 @@ ctx.patchFeAntiWallhop = function(st)
 			end
 		end
 	end
+	return true
 end
 
 ctx.connectionFn = function(c)
@@ -6479,10 +7745,10 @@ ctx.connectionMethod = function(c, n)
 end
 
 ctx.fnEnvScript = function(fn)
-	if type(fn) ~= "function" or type(getfenv) ~= "function" then
+	if type(fn) ~= "function" or not __exec.getfenv then
 		return nil
 	end
-	local ok, env = pcall(getfenv, fn)
+	local ok, env = pcall(__exec.getfenv, fn)
 	if ok and type(env) == "table" and typeof(env.script) == "Instance" then
 		return env.script
 	end
@@ -6513,11 +7779,11 @@ ctx.setFirstBoolUpvalue = function(fn, v)
 		return false
 	end
 	local dbg = type(debug) == "table" and debug or nil
-	local setup = (dbg and dbg.setupvalue) or setupvalue
+	local setup = (dbg and dbg.setupvalue) or __exec.setupvalue
 	if type(setup) ~= "function" then
 		return false
 	end
-	local getvals = (dbg and dbg.getupvalues) or getupvalues
+	local getvals = (dbg and dbg.getupvalues) or __exec.getupvalues
 	if type(getvals) == "function" then
 		local ok, vals = pcall(getvals, fn)
 		if ok and type(vals) == "table" then
@@ -6529,7 +7795,7 @@ ctx.setFirstBoolUpvalue = function(fn, v)
 			end
 		end
 	end
-	local getone = (dbg and dbg.getupvalue) or getupvalue
+	local getone = (dbg and dbg.getupvalue) or __exec.getupvalue
 	if type(getone) ~= "function" then
 		return false
 	end
@@ -6548,10 +7814,10 @@ ctx.setFirstBoolUpvalue = function(fn, v)
 end
 
 ctx.eachSignalConnection = function(sig, cb)
-	if type(getconnections) ~= "function" or not sig then
+	if not (__exec.getconnections and sig) then
 		return false
 	end
-	local ok, list = pcall(getconnections, sig)
+	local ok, list = pcall(__exec.getconnections, sig)
 	if not ok or type(list) ~= "table" then
 		return false
 	end
@@ -6604,8 +7870,10 @@ ctx.patchFeHumanoidSignals = function(scr, st)
 	if not (scr and h) then
 		return
 	end
-	ctx.patchFeSignalConnections(h.StateChanged, scr, "feStateCons", st)
-	ctx.patchFeSignalConnections(h.FallingDown, scr, "feFallCons", st)
+	if __exec.getconnections then
+		ctx.patchFeSignalConnections(h.StateChanged, scr, "feStateCons", st)
+		ctx.patchFeSignalConnections(h.FallingDown, scr, "feFallCons", st)
+	end
 	if st == true then
 		ctx.cut(ctx.cache.feScanConn)
 		ctx.cache.feScanConn = nil
@@ -6617,7 +7885,7 @@ ctx.patchFeHumanoidSignals = function(scr, st)
 	ctx.cut(ctx.cache.feScanConn)
 	ctx.cache.feScanHum = h
 	ctx.cache.feScanConn = h.StateChanged:Connect(function(_, newState)
-		if ctx.opt.fePhysicsOn == true then
+		if ctx.opt.fePhysicsOn ~= true then
 			return
 		end
 		if newState ~= Enum.HumanoidStateType.Freefall and newState ~= Enum.HumanoidStateType.Jumping then
@@ -6627,6 +7895,13 @@ ctx.patchFeHumanoidSignals = function(scr, st)
 		if env and type(env.scanWalljumps) == "function" then
 			task.defer(function()
 				pcall(env.scanWalljumps)
+			end)
+		elseif ctx.opt.fePhysicsOn then
+			task.defer(function()
+				ctx.patchFeAntiWallhop(false)
+				pcall(function()
+					h:SetStateEnabled(Enum.HumanoidStateType.Landed, true)
+				end)
 			end)
 		end
 	end)
@@ -6659,32 +7934,56 @@ ctx.patchFeMainEnv = function(st)
 	end
 end
 
+ctx.setFePhysicsFallback = function(enabled)
+	if enabled ~= true then
+		ctx.cut(ctx.cache.feCompatPostSimulation)
+		ctx.cache.feCompatPostSimulation = nil
+		ctx.cache.feCompatFallback = false
+		return
+	end
+	ctx.cache.feCompatFallback = true
+	if ctx.cache.feCompatPostSimulation or not (Run and Run.PostSimulation) then
+		return
+	end
+	ctx.cache.feCompatPostSimulation = Run.PostSimulation:Connect(function()
+		if not (ctx.alive() and ctx.opt.fePhysicsOn) then
+			return
+		end
+		local _, humanoid = ctx.rh(false)
+		if humanoid then
+			pcall(function()
+				if humanoid:GetStateEnabled(Enum.HumanoidStateType.Landed) ~= true then
+					humanoid:SetStateEnabled(Enum.HumanoidStateType.Landed, true)
+				end
+			end)
+		end
+	end)
+	ctx.bind(ctx.cache.feCompatPostSimulation)
+end
+
 ctx.canRestoreFePhysics = function(force)
 	if force == true then
 		return true
 	end
-	if ctx.opt.fePhysicsOn ~= true then
-		return true
-	end
-	if ctx.opt.zipActive == true then
-		return false
-	end
-	if ctx.inState("InGame") then
-		return false
-	end
-	return true
+	return ctx.opt.zipActive ~= true
 end
 
 ctx.patchFeMovementState = function(st, force)
-	if st ~= true then
-		return false
+	ctx.tmpSameState = force ~= true and ctx.cache.fePatchState == st
+	if not ctx.tmpSameState then
+		ctx.tmpAntiWallhopPatched = ctx.patchFeAntiWallhop(st)
+		ctx.patchFeMainEnv(st)
+		ctx.setFePhysicsFallback(st == false and ctx.tmpAntiWallhopPatched ~= true)
+		ctx.cache.fePatchState = st
 	end
-	if force ~= true and ctx.cache.fePatchState == st then
-		return true
+	ctx.tmpRoot, ctx.tmpHum = ctx.rh(false)
+	ctx.tmpConfig = Rsp and Rsp:FindFirstChild("Config")
+	ctx.tmpAntiWallhopActive = not ctx.tmpConfig or ctx.tmpConfig:GetAttribute("Unpatched") ~= true
+	if ctx.tmpHum and ctx.tmpAntiWallhopActive then
+		pcall(function()
+			ctx.tmpHum:SetStateEnabled(Enum.HumanoidStateType.Landed, st ~= true)
+		end)
 	end
-	ctx.patchFeAntiWallhop(st)
-	ctx.patchFeMainEnv(st)
-	ctx.cache.fePatchState = st
 	return true
 end
 
@@ -6709,13 +8008,13 @@ ctx.applyFeMovement = function(force)
 		ctx.cache.fePendingApply = true
 		return false
 	end
-	local st = true
-	if st and not ctx.canRestoreFePhysics(force) then
+	local st = ctx.opt.fePhysicsOn ~= true
+	if st and ctx.cache.fePatchState == false and not ctx.canRestoreFePhysics(force) then
 		ctx.cache.fePendingRestore = true
 		local now = os.clock()
 		if now >= (ctx.cache.fePendingNoteAt or 0) then
 			ctx.cache.fePendingNoteAt = now + 3
-			ctx.note("FE2 Physics restore queued until the round is safe")
+			ctx.note("Movement guard restore queued until the zipline ends")
 		end
 		return false
 	end
@@ -6733,24 +8032,10 @@ ctx.applyFeMovement = function(force)
 		end
 		local fe = c:FindFirstChild("FE2_Character")
 		if fe and fe:IsA("LocalScript") then
-			pcall(function()
-				fe.Disabled = false
-			end)
 			ctx.patchFeMoveEnv(fe, st)
 			ctx.patchFeHumanoidSignals(fe, st)
 		end
-		local anti = c:FindFirstChild("CL_AntiSideClip")
-		if anti and anti:IsA("LocalScript") then
-			pcall(function()
-				anti.Disabled = ctx.opt.clipOn == true
-			end)
-			local z = anti:FindFirstChild("Ziplining")
-			if z and z.Fire then
-				pcall(function()
-					z:Fire(ctx.opt.clipOn == true)
-				end)
-			end
-		end
+		ctx.patchSideClip()
 		local main = ctx.mainScript()
 		if main then
 			ctx.patchFeMoveEnv(main, st)
@@ -6813,14 +8098,15 @@ ctx.startFeMovementPatch = function()
 	end
 	ctx.cache.feMoveLoop = true
 	ctx.spawnLoop(function()
-		local lastState = nil
+		local appliedCharacter = nil
 		while ctx.alive() do
+			ctx.opt.fePhysicsOn = false
 			if LP and LP.Character ~= ctx.cache.feMoveChar then
 				ctx.bindFeMovementChar(LP.Character)
 			end
-			if lastState ~= ctx.opt.fePhysicsOn or ctx.cache.fePendingRestore then
-				ctx.applyFeMovement()
-				lastState = ctx.opt.fePhysicsOn
+			if appliedCharacter ~= LP.Character or ctx.cache.fePendingRestore or ctx.cache.fePendingApply then
+				ctx.applyFeMovement(true)
+				appliedCharacter = LP.Character
 			end
 			task.wait(0.5)
 		end
@@ -6886,12 +8172,6 @@ ctx.startUiUnlocks = function()
 			if ctx.opt.paidOn then
 				ctx.patchPaidUi()
 			end
-			if ctx.opt.clipOn then
-				ctx.patchSideClip()
-			end
-			if ctx.opt.rescueOn then
-				ctx.patchRescue()
-			end
 			task.wait(3)
 		end
 	end)
@@ -6903,6 +8183,9 @@ if MP then
 			ctx.cache.curMap = ch
 			ctx.cache.curMapAt = 0
 			ctx.resetMapCache(ch)
+			if ctx.opt.floodOn and type(ctx.floodApply) == "function" then
+				task.defer(ctx.floodApply, ch)
+			end
 			if on then
 				ctx.spawnLoop(ctx.burstLoaded)
 			end
@@ -6926,7 +8209,7 @@ ctx.loadTopbar = function()
 	if ctx.topbar then
 		return ctx.topbar
 	end
-	ctx.tmpLoader = loadstring or load
+	ctx.tmpLoader = __exec.loader
 	if type(ctx.tmpLoader) ~= "function" then
 		return nil
 	end
@@ -6970,7 +8253,18 @@ ctx.icon = function(name, label, cb, col)
 	if type(cb) == "function" then
 		pcall(function()
 			ctx.tmpIcon:bindEvent("selected", function()
-				pcall(cb)
+				if Run then
+					local once
+					once = Run.Heartbeat:Connect(function()
+						if once then
+							once:Disconnect()
+							once = nil
+						end
+						ctx.spawnLoop(cb)
+					end)
+				else
+					ctx.spawnLoop(cb)
+				end
 			end)
 		end)
 	end
@@ -6991,23 +8285,169 @@ ctx.applyAuraDistText = function(txt)
 	return true
 end
 
-ctx.closeAuraPrompt = function()
-	ctx.clearCons(ctx.cache.auraPromptCons)
-	if ctx.ui.auraPrompt then
-		pcall(function()
-			ctx.ui.auraPrompt:Destroy()
+ctx.releasePromptIcon = function(icon)
+	if not icon then
+		return
+	end
+	pcall(function()
+		if type(icon.deselect) == "function" then
+			icon:deselect()
+		elseif type(icon.setState) == "function" then
+			icon:setState("Deselected")
+		end
+	end)
+end
+
+ctx.deferUiTask = function(fn, ...)
+	if type(fn) ~= "function" then
+		return
+	end
+	local args = table.pack(...)
+	local function run()
+		ctx.spawnLoop(function()
+			fn(table.unpack(args, 1, args.n))
+			args = nil
 		end)
 	end
+	if Run then
+		local once
+		once = Run.Heartbeat:Connect(function()
+			if once then
+				once:Disconnect()
+				once = nil
+			end
+			run()
+		end)
+	else
+		task.defer(run)
+	end
+end
+
+ctx.hideDestroyPrompt = function(prompt)
+	if not prompt then
+		return
+	end
+	pcall(function()
+		if prompt:IsA("ScreenGui") then
+			prompt.Enabled = false
+		end
+	end)
+	pcall(function()
+		for _, obj in prompt:GetDescendants() do
+			if obj:IsA("GuiObject") then
+				obj.Visible = false
+			end
+		end
+	end)
+	pcall(function()
+		prompt.Parent = nil
+	end)
+	task.defer(function()
+		pcall(function()
+			prompt:Destroy()
+		end)
+	end)
+end
+
+ctx.cleanupPromptByName = function(name)
+	if type(name) ~= "string" or name == "" then
+		return
+	end
+	local roots = {}
+	local function add(root)
+		if root then
+			roots[#roots + 1] = root
+		end
+	end
+	local okHui, hui = pcall(ctx.gethui)
+	if okHui then
+		add(hui)
+	end
+	add(Cgui)
+	add(LP and LP:FindFirstChildOfClass("PlayerGui"))
+	local seen = {}
+	for _, root in roots do
+		if root and not seen[root] then
+			seen[root] = true
+			local okKids, kids = pcall(root.GetChildren, root)
+			if okKids and type(kids) == "table" then
+				for _, child in kids do
+					if child and child.Name == name then
+						ctx.hideDestroyPrompt(child)
+					end
+				end
+			end
+			local okDesc, desc = pcall(root.GetDescendants, root)
+			if okDesc and type(desc) == "table" then
+				for _, obj in desc do
+					if obj and obj.Name == name then
+						ctx.hideDestroyPrompt(obj)
+					end
+				end
+			end
+		end
+	end
+end
+
+ctx.disposableScreen = function(name)
+	ctx.cleanupPromptByName(name)
+	local gui = Instance.new("ScreenGui")
+	gui.Name = name
+	gui.IgnoreGuiInset = true
+	gui.ResetOnSpawn = false
+	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	gui.DisplayOrder = 2147483647
+
+	local protected = ctx.__NAProtectUI(gui, {
+		name = name,
+		keepName = true,
+		harden = false,
+		deep = false,
+		watch = false,
+		rename = false,
+	})
+	if typeof(protected) == "Instance" then
+		gui = protected
+	end
+
+	if not gui.Parent then
+		local parent = nil
+		if __NAUIProtector and type(__NAUIProtector.parent) == "function" then
+			local ok, result = pcall(__NAUIProtector.parent)
+			if ok and typeof(result) == "Instance" then
+				parent = result
+			end
+		end
+		if not parent then
+			local ok, result = pcall(ctx.gethui)
+			if ok and typeof(result) == "Instance" then
+				parent = result
+			end
+		end
+		if not parent and type(ctx.gt) == "function" then
+			parent = ctx.gt("CoreGui")
+		end
+		if not parent then
+			gui:Destroy()
+			return nil
+		end
+		gui.Parent = parent
+	end
+
+	return gui
+end
+
+ctx.cleanupPromptByName("FE2AuraDistancePrompt")
+ctx.cleanupPromptByName("FE2ZipSpeedPrompt")
+
+ctx.closeAuraPrompt = function()
+	local prompt = ctx.ui.auraPrompt
 	ctx.ui.auraPrompt = nil
-	ctx.tmpFrame = nil
-	ctx.tmpCorner = nil
-	ctx.tmpTitle = nil
-	ctx.tmpBox = nil
-	ctx.tmpBoxCorner = nil
-	ctx.tmpApply = nil
-	ctx.tmpApplyCorner = nil
-	ctx.tmpCancel = nil
-	ctx.tmpCancelCorner = nil
+	ctx.clearCons(ctx.cache.auraPromptCons)
+	if prompt then
+		ctx.hideDestroyPrompt(prompt)
+	end
+	ctx.releasePromptIcon(ctx.ui.distBtn)
 end
 
 ctx.openAuraPrompt = function()
@@ -7015,88 +8455,103 @@ ctx.openAuraPrompt = function()
 		ctx.closeAuraPrompt()
 		return
 	end
-	ctx.ui.auraPrompt = ctx.protectedScreen("FE2AuraDistancePrompt")
-	if not ctx.ui.auraPrompt then
-		ctx.note("No protected UI parent")
+	if ctx.ui.zipPrompt then
+		ctx.closeZipPrompt()
+	end
+
+	local prompt = ctx.disposableScreen("FE2AuraDistancePrompt")
+	ctx.ui.auraPrompt = prompt
+	if not prompt then
+		ctx.note("No usable UI parent")
+		ctx.releasePromptIcon(ctx.ui.distBtn)
 		return
 	end
-	ctx.tmpFrame = Instance.new("Frame")
-	ctx.tmpFrame.Name = "Box"
-	ctx.tmpFrame.AnchorPoint = Vector2.new(0.5, 0)
-	ctx.tmpFrame.Position = UDim2.new(0.5, 0, 0, 72)
-	ctx.tmpFrame.Size = UDim2.fromOffset(260, 112)
-	ctx.tmpFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
-	ctx.tmpFrame.BorderSizePixel = 0
-	ctx.tmpFrame.Parent = ctx.ui.auraPrompt
-	ctx.tmpCorner = Instance.new("UICorner")
-	ctx.tmpCorner.CornerRadius = UDim.new(0, 10)
-	ctx.tmpCorner.Parent = ctx.tmpFrame
-	ctx.tmpTitle = Instance.new("TextLabel")
-	ctx.tmpTitle.BackgroundTransparency = 1
-	ctx.tmpTitle.Size = UDim2.new(1, -16, 0, 28)
-	ctx.tmpTitle.Position = UDim2.fromOffset(8, 6)
-	ctx.tmpTitle.Font = Enum.Font.GothamBold
-	ctx.tmpTitle.TextScaled = true
-	ctx.tmpTitle.TextColor3 = Color3.new(1, 1, 1)
-	ctx.tmpTitle.Text = "Aura Distance"
-	ctx.tmpTitle.Parent = ctx.tmpFrame
-	ctx.tmpBox = Instance.new("TextBox")
-	ctx.tmpBox.Name = "Input"
-	ctx.tmpBox.Size = UDim2.new(1, -24, 0, 34)
-	ctx.tmpBox.Position = UDim2.fromOffset(12, 42)
-	ctx.tmpBox.BackgroundColor3 = Color3.fromRGB(45, 45, 52)
-	ctx.tmpBox.BorderSizePixel = 0
-	ctx.tmpBox.ClearTextOnFocus = false
-	ctx.tmpBox.Text = tostring(auraDist)
-	ctx.tmpBox.PlaceholderText = "number, e.g. 2 or 8"
-	ctx.tmpBox.Font = Enum.Font.Gotham
-	ctx.tmpBox.TextScaled = true
-	ctx.tmpBox.TextColor3 = Color3.new(1, 1, 1)
-	ctx.tmpBox.Parent = ctx.tmpFrame
-	ctx.tmpBoxCorner = Instance.new("UICorner")
-	ctx.tmpBoxCorner.CornerRadius = UDim.new(0, 8)
-	ctx.tmpBoxCorner.Parent = ctx.tmpBox
-	ctx.tmpApply = Instance.new("TextButton")
-	ctx.tmpApply.Name = "Apply"
-	ctx.tmpApply.Size = UDim2.new(0.5, -18, 0, 26)
-	ctx.tmpApply.Position = UDim2.fromOffset(12, 82)
-	ctx.tmpApply.BackgroundColor3 = Color3.fromRGB(60, 160, 75)
-	ctx.tmpApply.BorderSizePixel = 0
-	ctx.tmpApply.Font = Enum.Font.GothamBold
-	ctx.tmpApply.TextScaled = true
-	ctx.tmpApply.TextColor3 = Color3.new(1, 1, 1)
-	ctx.tmpApply.Text = "Apply"
-	ctx.tmpApply.Parent = ctx.tmpFrame
-	ctx.tmpApplyCorner = Instance.new("UICorner")
-	ctx.tmpApplyCorner.CornerRadius = UDim.new(0, 8)
-	ctx.tmpApplyCorner.Parent = ctx.tmpApply
-	ctx.tmpCancel = Instance.new("TextButton")
-	ctx.tmpCancel.Name = "Cancel"
-	ctx.tmpCancel.Size = UDim2.new(0.5, -18, 0, 26)
-	ctx.tmpCancel.Position = UDim2.new(0.5, 6, 0, 82)
-	ctx.tmpCancel.BackgroundColor3 = Color3.fromRGB(150, 55, 55)
-	ctx.tmpCancel.BorderSizePixel = 0
-	ctx.tmpCancel.Font = Enum.Font.GothamBold
-	ctx.tmpCancel.TextScaled = true
-	ctx.tmpCancel.TextColor3 = Color3.new(1, 1, 1)
-	ctx.tmpCancel.Text = "Cancel"
-	ctx.tmpCancel.Parent = ctx.tmpFrame
-	ctx.tmpCancelCorner = Instance.new("UICorner")
-	ctx.tmpCancelCorner.CornerRadius = UDim.new(0, 8)
-	ctx.tmpCancelCorner.Parent = ctx.tmpCancel
-	ctx.cache.auraPromptCons[#ctx.cache.auraPromptCons + 1] = ctx.tmpApply.MouseButton1Click:Connect(function()
-		if ctx.applyAuraDistText(ctx.tmpBox.Text) then
-			ctx.closeAuraPrompt()
+
+	local frame = Instance.new("Frame")
+	frame.Name = "Box"
+	frame.AnchorPoint = Vector2.new(0.5, 0)
+	frame.Position = UDim2.new(0.5, 0, 0, 72)
+	frame.Size = UDim2.fromOffset(260, 112)
+	frame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+	frame.BorderSizePixel = 0
+	frame.Parent = prompt
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 10)
+	corner.Parent = frame
+
+	local title = Instance.new("TextLabel")
+	title.BackgroundTransparency = 1
+	title.Size = UDim2.new(1, -16, 0, 28)
+	title.Position = UDim2.fromOffset(8, 6)
+	title.Font = Enum.Font.GothamBold
+	title.TextScaled = true
+	title.TextColor3 = Color3.new(1, 1, 1)
+	title.Text = "Aura Distance"
+	title.Parent = frame
+
+	local box = Instance.new("TextBox")
+	box.Name = "Input"
+	box.Size = UDim2.new(1, -24, 0, 34)
+	box.Position = UDim2.fromOffset(12, 42)
+	box.BackgroundColor3 = Color3.fromRGB(45, 45, 52)
+	box.BorderSizePixel = 0
+	box.ClearTextOnFocus = false
+	box.Text = tostring(auraDist)
+	box.PlaceholderText = "number, e.g. 2 or 8"
+	box.Font = Enum.Font.Gotham
+	box.TextScaled = true
+	box.TextColor3 = Color3.new(1, 1, 1)
+	box.Parent = frame
+
+	local boxCorner = Instance.new("UICorner")
+	boxCorner.CornerRadius = UDim.new(0, 8)
+	boxCorner.Parent = box
+
+	local apply = Instance.new("TextButton")
+	apply.Name = "Apply"
+	apply.Size = UDim2.new(0.5, -18, 0, 26)
+	apply.Position = UDim2.fromOffset(12, 82)
+	apply.BackgroundColor3 = Color3.fromRGB(60, 160, 75)
+	apply.BorderSizePixel = 0
+	apply.Font = Enum.Font.GothamBold
+	apply.TextScaled = true
+	apply.TextColor3 = Color3.new(1, 1, 1)
+	apply.Text = "Apply"
+	apply.Parent = frame
+
+	local applyCorner = Instance.new("UICorner")
+	applyCorner.CornerRadius = UDim.new(0, 8)
+	applyCorner.Parent = apply
+
+	local cancel = Instance.new("TextButton")
+	cancel.Name = "Cancel"
+	cancel.Size = UDim2.new(0.5, -18, 0, 26)
+	cancel.Position = UDim2.new(0.5, 6, 0, 82)
+	cancel.BackgroundColor3 = Color3.fromRGB(150, 55, 55)
+	cancel.BorderSizePixel = 0
+	cancel.Font = Enum.Font.GothamBold
+	cancel.TextScaled = true
+	cancel.TextColor3 = Color3.new(1, 1, 1)
+	cancel.Text = "Cancel"
+	cancel.Parent = frame
+
+	local cancelCorner = Instance.new("UICorner")
+	cancelCorner.CornerRadius = UDim.new(0, 8)
+	cancelCorner.Parent = cancel
+
+	ctx.cache.auraPromptCons[#ctx.cache.auraPromptCons + 1] = apply.Activated:Connect(function()
+		if ctx.applyAuraDistText(box.Text) then
+			ctx.deferUiTask(ctx.closeAuraPrompt)
 		end
 	end)
-	ctx.cache.auraPromptCons[#ctx.cache.auraPromptCons + 1] = ctx.tmpCancel.MouseButton1Click:Connect(ctx.closeAuraPrompt)
-	ctx.cache.auraPromptCons[#ctx.cache.auraPromptCons + 1] = ctx.tmpBox.FocusLost:Connect(function(enter)
-		if enter and ctx.applyAuraDistText(ctx.tmpBox.Text) then
-			ctx.closeAuraPrompt()
-		end
+	ctx.cache.auraPromptCons[#ctx.cache.auraPromptCons + 1] = cancel.Activated:Connect(function()
+		ctx.deferUiTask(ctx.closeAuraPrompt)
 	end)
-	pcall(function()
-		ctx.tmpBox:CaptureFocus()
+	ctx.cache.auraPromptCons[#ctx.cache.auraPromptCons + 1] = box.FocusLost:Connect(function(enterPressed)
+		if enterPressed and ctx.applyAuraDistText(box.Text) then
+			ctx.deferUiTask(ctx.closeAuraPrompt)
+		end
 	end)
 end
 
@@ -7110,32 +8565,20 @@ ctx.applyZipSpeedText = function(txt)
 	ctx.opt.zipSpeed = ctx.tmpNum
 	ctx.opt.zipFastOn = ctx.tmpNum > 0
 	ctx.setZipBtn()
-	ctx.setZipAttrs(ctx.opt.zipFastOn)
-	if not ctx.opt.zipFastOn and ctx.opt.zipStopOn then
-		ctx.resetZipVelocity()
-	end
+	ctx.setZipAttrs(ctx.opt.zipAutoOn and ctx.opt.zipFastOn)
 	ctx.saveSoon()
 	ctx.note(ctx.opt.zipFastOn and ("Zipline speed set to " .. tostring(ctx.opt.zipSpeed)) or "Zipline speed disabled")
 	return true
 end
 
 ctx.closeZipPrompt = function()
-	ctx.clearCons(ctx.cache.zipPromptCons)
-	if ctx.ui.zipPrompt then
-		pcall(function()
-			ctx.ui.zipPrompt:Destroy()
-		end)
-	end
+	local prompt = ctx.ui.zipPrompt
 	ctx.ui.zipPrompt = nil
-	ctx.tmpFrame = nil
-	ctx.tmpCorner = nil
-	ctx.tmpTitle = nil
-	ctx.tmpBox = nil
-	ctx.tmpBoxCorner = nil
-	ctx.tmpApply = nil
-	ctx.tmpApplyCorner = nil
-	ctx.tmpCancel = nil
-	ctx.tmpCancelCorner = nil
+	ctx.clearCons(ctx.cache.zipPromptCons)
+	if prompt then
+		ctx.hideDestroyPrompt(prompt)
+	end
+	ctx.releasePromptIcon(ctx.ui.zipBtn)
 end
 
 ctx.openZipPrompt = function()
@@ -7143,91 +8586,105 @@ ctx.openZipPrompt = function()
 		ctx.closeZipPrompt()
 		return
 	end
-	ctx.ui.zipPrompt = ctx.protectedScreen("FE2ZipSpeedPrompt")
-	if not ctx.ui.zipPrompt then
-		ctx.note("No protected UI parent")
+	if ctx.ui.auraPrompt then
+		ctx.closeAuraPrompt()
+	end
+
+	local prompt = ctx.disposableScreen("FE2ZipSpeedPrompt")
+	ctx.ui.zipPrompt = prompt
+	if not prompt then
+		ctx.note("No usable UI parent")
+		ctx.releasePromptIcon(ctx.ui.zipBtn)
 		return
 	end
-	ctx.tmpFrame = Instance.new("Frame")
-	ctx.tmpFrame.Name = "Box"
-	ctx.tmpFrame.AnchorPoint = Vector2.new(0.5, 0)
-	ctx.tmpFrame.Position = UDim2.new(0.5, 0, 0, 72)
-	ctx.tmpFrame.Size = UDim2.fromOffset(270, 116)
-	ctx.tmpFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
-	ctx.tmpFrame.BorderSizePixel = 0
-	ctx.tmpFrame.Parent = ctx.ui.zipPrompt
-	ctx.tmpCorner = Instance.new("UICorner")
-	ctx.tmpCorner.CornerRadius = UDim.new(0, 10)
-	ctx.tmpCorner.Parent = ctx.tmpFrame
-	ctx.tmpTitle = Instance.new("TextLabel")
-	ctx.tmpTitle.BackgroundTransparency = 1
-	ctx.tmpTitle.Size = UDim2.new(1, -16, 0, 28)
-	ctx.tmpTitle.Position = UDim2.fromOffset(8, 6)
-	ctx.tmpTitle.Font = Enum.Font.GothamBold
-	ctx.tmpTitle.TextScaled = true
-	ctx.tmpTitle.TextColor3 = Color3.new(1, 1, 1)
-	ctx.tmpTitle.Text = "Zipline Speed"
-	ctx.tmpTitle.Parent = ctx.tmpFrame
-	ctx.tmpBox = Instance.new("TextBox")
-	ctx.tmpBox.Name = "Input"
-	ctx.tmpBox.Size = UDim2.new(1, -24, 0, 34)
-	ctx.tmpBox.Position = UDim2.fromOffset(12, 42)
-	ctx.tmpBox.BackgroundColor3 = Color3.fromRGB(45, 45, 52)
-	ctx.tmpBox.BorderSizePixel = 0
-	ctx.tmpBox.ClearTextOnFocus = false
-	ctx.tmpBox.Text = tostring(ctx.opt.zipSpeed)
-	ctx.tmpBox.PlaceholderText = "0 disables, e.g. 60 or 90"
-	ctx.tmpBox.Font = Enum.Font.Gotham
-	ctx.tmpBox.TextScaled = true
-	ctx.tmpBox.TextColor3 = Color3.new(1, 1, 1)
-	ctx.tmpBox.Parent = ctx.tmpFrame
-	ctx.tmpBoxCorner = Instance.new("UICorner")
-	ctx.tmpBoxCorner.CornerRadius = UDim.new(0, 8)
-	ctx.tmpBoxCorner.Parent = ctx.tmpBox
-	ctx.tmpApply = Instance.new("TextButton")
-	ctx.tmpApply.Name = "Apply"
-	ctx.tmpApply.Size = UDim2.new(0.5, -18, 0, 26)
-	ctx.tmpApply.Position = UDim2.fromOffset(12, 86)
-	ctx.tmpApply.BackgroundColor3 = Color3.fromRGB(60, 160, 75)
-	ctx.tmpApply.BorderSizePixel = 0
-	ctx.tmpApply.Font = Enum.Font.GothamBold
-	ctx.tmpApply.TextScaled = true
-	ctx.tmpApply.TextColor3 = Color3.new(1, 1, 1)
-	ctx.tmpApply.Text = "Apply"
-	ctx.tmpApply.Parent = ctx.tmpFrame
-	ctx.tmpApplyCorner = Instance.new("UICorner")
-	ctx.tmpApplyCorner.CornerRadius = UDim.new(0, 8)
-	ctx.tmpApplyCorner.Parent = ctx.tmpApply
-	ctx.tmpCancel = Instance.new("TextButton")
-	ctx.tmpCancel.Name = "Cancel"
-	ctx.tmpCancel.Size = UDim2.new(0.5, -18, 0, 26)
-	ctx.tmpCancel.Position = UDim2.new(0.5, 6, 0, 86)
-	ctx.tmpCancel.BackgroundColor3 = Color3.fromRGB(150, 55, 55)
-	ctx.tmpCancel.BorderSizePixel = 0
-	ctx.tmpCancel.Font = Enum.Font.GothamBold
-	ctx.tmpCancel.TextScaled = true
-	ctx.tmpCancel.TextColor3 = Color3.new(1, 1, 1)
-	ctx.tmpCancel.Text = "Cancel"
-	ctx.tmpCancel.Parent = ctx.tmpFrame
-	ctx.tmpCancelCorner = Instance.new("UICorner")
-	ctx.tmpCancelCorner.CornerRadius = UDim.new(0, 8)
-	ctx.tmpCancelCorner.Parent = ctx.tmpCancel
-	ctx.cache.zipPromptCons[#ctx.cache.zipPromptCons + 1] = ctx.tmpApply.MouseButton1Click:Connect(function()
-		if ctx.applyZipSpeedText(ctx.tmpBox.Text) then
-			ctx.closeZipPrompt()
+
+	local frame = Instance.new("Frame")
+	frame.Name = "Box"
+	frame.AnchorPoint = Vector2.new(0.5, 0)
+	frame.Position = UDim2.new(0.5, 0, 0, 72)
+	frame.Size = UDim2.fromOffset(270, 116)
+	frame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+	frame.BorderSizePixel = 0
+	frame.Parent = prompt
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 10)
+	corner.Parent = frame
+
+	local title = Instance.new("TextLabel")
+	title.BackgroundTransparency = 1
+	title.Size = UDim2.new(1, -16, 0, 28)
+	title.Position = UDim2.fromOffset(8, 6)
+	title.Font = Enum.Font.GothamBold
+	title.TextScaled = true
+	title.TextColor3 = Color3.new(1, 1, 1)
+	title.Text = "Zipline Speed"
+	title.Parent = frame
+
+	local box = Instance.new("TextBox")
+	box.Name = "Input"
+	box.Size = UDim2.new(1, -24, 0, 34)
+	box.Position = UDim2.fromOffset(12, 42)
+	box.BackgroundColor3 = Color3.fromRGB(45, 45, 52)
+	box.BorderSizePixel = 0
+	box.ClearTextOnFocus = false
+	box.Text = tostring(ctx.opt.zipSpeed)
+	box.PlaceholderText = "0 disables, e.g. 60 or 90"
+	box.Font = Enum.Font.Gotham
+	box.TextScaled = true
+	box.TextColor3 = Color3.new(1, 1, 1)
+	box.Parent = frame
+
+	local boxCorner = Instance.new("UICorner")
+	boxCorner.CornerRadius = UDim.new(0, 8)
+	boxCorner.Parent = box
+
+	local apply = Instance.new("TextButton")
+	apply.Name = "Apply"
+	apply.Size = UDim2.new(0.5, -18, 0, 26)
+	apply.Position = UDim2.fromOffset(12, 86)
+	apply.BackgroundColor3 = Color3.fromRGB(60, 160, 75)
+	apply.BorderSizePixel = 0
+	apply.Font = Enum.Font.GothamBold
+	apply.TextScaled = true
+	apply.TextColor3 = Color3.new(1, 1, 1)
+	apply.Text = "Apply"
+	apply.Parent = frame
+
+	local applyCorner = Instance.new("UICorner")
+	applyCorner.CornerRadius = UDim.new(0, 8)
+	applyCorner.Parent = apply
+
+	local cancel = Instance.new("TextButton")
+	cancel.Name = "Cancel"
+	cancel.Size = UDim2.new(0.5, -18, 0, 26)
+	cancel.Position = UDim2.new(0.5, 6, 0, 86)
+	cancel.BackgroundColor3 = Color3.fromRGB(150, 55, 55)
+	cancel.BorderSizePixel = 0
+	cancel.Font = Enum.Font.GothamBold
+	cancel.TextScaled = true
+	cancel.TextColor3 = Color3.new(1, 1, 1)
+	cancel.Text = "Cancel"
+	cancel.Parent = frame
+
+	local cancelCorner = Instance.new("UICorner")
+	cancelCorner.CornerRadius = UDim.new(0, 8)
+	cancelCorner.Parent = cancel
+
+	ctx.cache.zipPromptCons[#ctx.cache.zipPromptCons + 1] = apply.Activated:Connect(function()
+		if ctx.applyZipSpeedText(box.Text) then
+			ctx.deferUiTask(ctx.closeZipPrompt)
 		end
 	end)
-	ctx.cache.zipPromptCons[#ctx.cache.zipPromptCons + 1] = ctx.tmpCancel.MouseButton1Click:Connect(ctx.closeZipPrompt)
-	ctx.cache.zipPromptCons[#ctx.cache.zipPromptCons + 1] = ctx.tmpBox.FocusLost:Connect(function(enter)
-		if enter and ctx.applyZipSpeedText(ctx.tmpBox.Text) then
-			ctx.closeZipPrompt()
-		end
+	ctx.cache.zipPromptCons[#ctx.cache.zipPromptCons + 1] = cancel.Activated:Connect(function()
+		ctx.deferUiTask(ctx.closeZipPrompt)
 	end)
-	pcall(function()
-		ctx.tmpBox:CaptureFocus()
+	ctx.cache.zipPromptCons[#ctx.cache.zipPromptCons + 1] = box.FocusLost:Connect(function(enterPressed)
+		if enterPressed and ctx.applyZipSpeedText(box.Text) then
+			ctx.deferUiTask(ctx.closeZipPrompt)
+		end
 	end)
 end
-
 
 ctx.femEventsRoot = function()
 	return Rsp and Rsp:FindFirstChild("Events") or nil
@@ -7264,8 +8721,8 @@ ctx.femEvent = function(n, cls)
 	if ctx.tmpEv and (not cls or ctx.tmpEv:IsA(cls)) then
 		return ctx.tmpEv
 	end
-	if type(getnilinstances) == "function" or type(getinstances) == "function" then
-		for _, fn in { getnilinstances, getinstances } do
+	if __exec.getnilinstances or __exec.getinstances then
+		for _, fn in { __exec.getnilinstances, __exec.getinstances } do
 			if type(fn) == "function" then
 				ctx.tmpOk, ctx.tmpList = pcall(fn)
 				if ctx.tmpOk and type(ctx.tmpList) == "table" then
@@ -7473,7 +8930,7 @@ ctx.patchFemRopeData = function(data)
 			if ctx.cache.femRopeOld[rope] == nil then
 				ctx.cache.femRopeOld[rope] = tonumber(rope[3]) or 40
 			end
-			if ctx.opt.zipFastOn and ctx.tmpTarget > 0 then
+			if ctx.opt.zipAutoOn and ctx.opt.zipFastOn and ctx.tmpTarget > 0 then
 				ctx.tmpBase = ctx.cache.femRopeOld[rope] or tonumber(rope[3]) or 40
 				rope[3] = math.clamp(ctx.tmpBase * 40 / math.max(ctx.tmpTarget, 1), 1, 200)
 			else
@@ -7509,11 +8966,17 @@ ctx.startFemZipStop = function()
 		return
 	end
 	ctx.cache.femZipStopStarted = true
+	ctx.cache.zipStateSource = "attribute"
 	ctx.cache.femZipLast = LP:GetAttribute("Ziplining") == true
+	ctx.opt.zipActive = ctx.cache.femZipLast
 	ctx.bind(LP:GetAttributeChangedSignal("Ziplining"):Connect(function()
 		ctx.tmpZipState = LP:GetAttribute("Ziplining") == true
-		if ctx.cache.femZipLast and not ctx.tmpZipState and ctx.opt.zipStopOn then
-			ctx.resetZipVelocity()
+		ctx.cache.zipStateSource = "attribute"
+		ctx.opt.zipActive = ctx.tmpZipState
+		if ctx.tmpZipState then
+			ctx.cache.zipDismountToken = (ctx.cache.zipDismountToken or 0) + 1
+		elseif ctx.cache.femZipLast then
+			ctx.finishZipDismount()
 		end
 		ctx.cache.femZipLast = ctx.tmpZipState
 	end))
@@ -7527,8 +8990,10 @@ ctx.startFemButtonCache = function()
 	ctx.tmpSet = ctx.femEvent("SetButtonLocator", "RemoteEvent")
 	if ctx.tmpSet then
 		ctx.bind(ctx.tmpSet.OnClientEvent:Connect(function(goal, hit, ui)
-			if hit and typeof(hit) == "Instance" and hit:IsA("BasePart") then
+			if hit and typeof(hit) == "Instance" and hit:IsA("BasePart") and ctx.buttonHitAllowed(hit, ctx.curMap()) then
 				ctx.cache.femButtonPart = hit
+			elseif hit and typeof(hit) == "Instance" and hit:IsA("BasePart") and (tostring(hit.Name) == "AirTank" or (hit.Parent and tostring(hit.Parent.Name) == "AirTank")) then
+				ctx.cache.femButtonPart = nil
 			end
 		end))
 	end
@@ -7556,11 +9021,11 @@ end
 
 ctx.applyProfileUi = function()
 	if ctx.isRetroGame() then
-		for _, field in { "bonusBtn", "chBtn", "floodBtn", "rescueBtn", "devBtn", "zipBtn", "zipStopBtn", "zipAutoBtn", "femVoteBtn" } do
+		for _, field in { "bonusBtn", "chBtn", "floodBtn", "fpPartBtn", "rescueBtn", "devBtn", "zipBtn", "zipStopBtn", "zipAutoBtn", "femVoteBtn" } do
 			ctx.hideIcon(field)
 		end
 	elseif ctx.isFEMGame() then
-		for _, field in { "bonusBtn", "chBtn", "floodBtn", "clipBtn", "rescueBtn", "devBtn", "surviveBtn" } do
+		for _, field in { "bonusBtn", "chBtn", "floodBtn", "clipBtn", "fpPartBtn", "rescueBtn", "devBtn", "surviveBtn" } do
 			ctx.hideIcon(field)
 		end
 	elseif ctx.isFE2Game() then
@@ -7587,7 +9052,7 @@ do
 	ctx.femLocatorHit = function()
 		ctx.startFemButtonCache()
 		ctx.tmpBtn = ctx.cache.femButtonPart
-		if ctx.tmpBtn and ctx.tmpBtn.Parent then
+		if ctx.tmpBtn and ctx.tmpBtn.Parent and ctx.buttonHitAllowed(ctx.tmpBtn, ctx.curMap()) then
 			return ctx.tmpBtn
 		end
 		return nil
@@ -7626,7 +9091,7 @@ ctx.mkUi = function()
 		ctx.setBonusBtn()
 		ctx.saveSoon()
 	end, Color3.fromRGB(60, 130, 210))
-	ctx.ui.chBtn = ctx.icon("Challenges", "Challenges: OFF", function()
+	ctx.ui.chBtn = ctx.icon("Challenges", "Challenge Manager: OFF", function()
 		autoChallenges = not autoChallenges
 		ctx.setChallengeBtn()
 		ctx.saveSoon()
@@ -7651,21 +9116,19 @@ ctx.mkUi = function()
 	ctx.ui.buyGemBtn = ctx.icon("BuyGem", "Buy Gem Shop Items", function()
 		ctx.spawnLoop(ctx.buyShopCurrency, 1)
 	end, Color3.fromRGB(142, 68, 173))
-	ctx.ui.clipBtn = ctx.icon("NoSideClip", "No SideClip TP: OFF", function()
+	ctx.ui.clipBtn = ctx.icon("NoSideClip", "Side-Clip Rollback: GAME", function()
 		ctx.opt.clipOn = not ctx.opt.clipOn
 		ctx.setClipBtn()
 		ctx.saveSoon()
 		ctx.patchSideClip()
 	end)
-	ctx.ui.fePhysBtn = ctx.icon("FePhysics", "FE2 Physics: OFF", function()
-		ctx.opt.fePhysicsOn = not ctx.opt.fePhysicsOn
-		ctx.cache.fePendingRestore = ctx.opt.fePhysicsOn == true and ctx.cache.fePendingRestore or false
-		ctx.cache.fePendingApply = true
-		ctx.setFePhysicsBtn()
+	ctx.ui.fpPartBtn = ctx.icon("FirstPersonFx", "First-Person FX: GAME", function()
+		ctx.opt.fpPartOn = not ctx.opt.fpPartOn
+		ctx.setFpPartBtn()
 		ctx.saveSoon()
-		ctx.scheduleFeMovement(0.15)
-	end)
-	ctx.ui.rescueBtn = ctx.icon("HideRescue", "Hide Rescue NPC: OFF", function()
+		ctx.patchFpParts()
+	end, Color3.fromRGB(110, 85, 170))
+	ctx.ui.rescueBtn = ctx.icon("HideRescue", "Rescue Visual: GAME", function()
 		ctx.opt.rescueOn = not ctx.opt.rescueOn
 		ctx.setRescueBtn()
 		ctx.saveSoon()
@@ -7679,11 +9142,12 @@ ctx.mkUi = function()
 	end)
 	ctx.ui.zipAutoBtn = ctx.icon("ZipAutoApply", "Zip Auto Apply: ON", function()
 		ctx.opt.zipAutoOn = not ctx.opt.zipAutoOn
+		ctx.cache.zipDismountToken = (ctx.cache.zipDismountToken or 0) + 1
 		ctx.setZipAutoBtn()
+		ctx.setZipBtn()
+		ctx.setZipStopBtn()
+		ctx.setZipAttrs(ctx.opt.zipAutoOn and ctx.opt.zipFastOn)
 		ctx.saveSoon()
-		if ctx.opt.zipAutoOn then
-			ctx.reapplyZipSpeed()
-		end
 	end)
 	ctx.ui.devBtn = ctx.icon("DevTools", "DevTools: OFF", function()
 		ctx.setDevTools(not ctx.opt.devOn)
@@ -7728,6 +9192,10 @@ ctx.mkUi = function()
 	end, Color3.fromRGB(55, 90, 150))
 	ctx.applyProfileUi()
 	ctx.ui.rootIcon:setDropdown(ctx.ui.menu)
+	if ctx.compatibility.degraded and not ctx.cache.compatibilityNoticeShown then
+		ctx.cache.compatibilityNoticeShown = true
+		task.defer(ctx.note, (ctx.isFE2CMGame() and "FE2CM compatibility mode active: using module, BindableEvent, property, and semantic remote fallbacks" or "Compatibility mode active: advanced executor hooks are unavailable; FE2 module, event, property, and remote fallbacks are being used"))
+	end
 	ctx.setBtn()
 	ctx.setAuraBtn()
 	ctx.setDistModeBtn()
@@ -7739,7 +9207,7 @@ ctx.mkUi = function()
 	ctx.setBuyCoinBtn()
 	ctx.setBuyGemBtn()
 	ctx.setClipBtn()
-	ctx.setFePhysicsBtn()
+	ctx.setFpPartBtn()
 	ctx.setRescueBtn()
 	ctx.setDevBtn()
 	ctx.setZipBtn()
@@ -7765,6 +9233,7 @@ if ctx.support("flood") then
 	ctx.startFloodColors()
 end
 ctx.startUiUnlocks()
+ctx.startFeOptionManagers()
 ctx.startPhysicsOptions()
 if ctx.support("femVote") then
 	ctx.startFemAutoVote()
@@ -7809,7 +9278,7 @@ ctx.spawnLoop(function()
 			elseif not m or not ig then
 				cur = nil
 			end
-		end, debug.traceback)
+		end, __traceback)
 
 		if not ok then
 			warn(err)

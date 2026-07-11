@@ -1,1239 +1,1209 @@
-local function __betterGetService(name)
-	local service = game:FindService(name)
-	if service then
-		return service
-	end
-	local ok, inst = pcall(Instance.new, name)
-	if ok and inst and typeof(inst) == "Instance" then
-		return inst
-	end
-	return nil
+local CONFIG = {
+    Timeout = 7,
+    TestProtectedMethodBypasses = true,
+    TestAuthenticatedRobloxHttp = true,
+    TestFilesystemEscape = true,
+    TestNativeHostAccess = true,
+    PrintCapabilityInventory = true,
+}
+
+local ICON_SAFE = "✅"
+local ICON_UNSAFE = "⛔"
+local ICON_UNKNOWN = "⏺️"
+local ICON_INFO = "ℹ️"
+
+local AUTH_URL = "https://users.roblox.com/v1/users/authenticated"
+local NONCE = tostring(os.time()) .. "_" .. tostring(math.random(100000, 999999))
+local PROBE_DIR = "VulnTestProbe_" .. NONCE
+local PROBE_MARKER = "VULNTEST_MARKER_" .. NONCE
+
+local Environment = _G
+if type(getgenv) == "function" then
+    local ok, executorEnvironment = pcall(getgenv)
+    if ok and type(executorEnvironment) == "table" then
+        Environment = executorEnvironment
+    end
 end
-local function shortVal(v)
-	if v == nil then
-		return "nil";
-	end;
-	local t = typeof(v);
-	if t == "string" then
-		local len = #v;
-		return "string (length " .. len .. ")";
-	elseif t == "table" then
-		local c = 0;
-		for _ in v do
-			c += 1;
-		end;
-		return "table (" .. c .. " keys)";
-	else
-		return t .. " (" .. tostring(v) .. ")";
-	end;
-end;
-local function hasMember(obj, member)
-	local ok, value = pcall(function()
-		return obj and obj[member];
-	end);
-	return ok and value ~= nil;
-end;
-local function check(t, m)
-	local g = getgenv and getgenv() or _G;
-	if t == "loadstring" then
-		return g.loadstring or loadstring;
-	end;
-	if t ~= "Request" then
-		return false;
-	end;
-	local h = rawget(g, "http");
-	local rq = rawget(g, "request") or h and rawget(h, "request") or rawget(g, "http_request");
-	if m == "" then
-		return type(rq) == "function";
-	end;
-	if m == "Get" then
-		return type(rawget(g, "httpget")) == "function" or hasMember(game, "HttpGet");
-	elseif m == "Post" then
-		return type(rawget(g, "httppost")) == "function" or hasMember(game, "HttpPost");
-	end;
-	return false;
-end;
-local Vulnerabilities_Test = {
-	Passes = 0,
-	Fails = 0,
-	Unknown = 0,
-	Running = 0,
-	identifyexecutor = identifyexecutor or function()
-		return "Unknown", "?";
-	end,
-	game_Get = check("Request", "Get"),
-	game_Post = check("Request", "Post"),
-	Request = check("Request", "")
-};
-local ICON_SAFE = "✅";
-local ICON_UNSAFE = "⛔";
-local ICON_UNKNOWN = "⏺️";
-local TEST_TIMEOUT = 7;
-local FS_PROBE_DIR = "VulnTestProbe";
-local FS_PROBE_FILE = FS_PROBE_DIR .. "/probe.txt";
-local FS_PROBE_SCRIPT = FS_PROBE_DIR .. "/probe.lua";
-local function formatExecutor()
-	local ok, name, version = pcall(Vulnerabilities_Test.identifyexecutor);
-	if not ok then
-		return "Unknown";
-	end;
-	if version ~= nil and tostring(version) ~= "" and tostring(version) ~= tostring(name) then
-		return tostring(name) .. " " .. tostring(version);
-	end;
-	return tostring(name);
-end;
-local function classify_error(desc, err)
-	local msg = tostring(err or "");
-	local lower = string.lower(msg);
-	if lower == "" then
-		return "unknown", desc .. " Call failed without a useful error message.";
-	end;
-	if lower:find("lacking permission", 1, true)
-		or lower:find("current identity", 1, true)
-		or lower:find("permission", 1, true)
-		or lower:find("not permitted", 1, true)
-		or lower:find("cannot access", 1, true)
-		or lower:find("http requests are not enabled", 1, true)
-		or lower:find("blocked", 1, true) then
-		return "safe", desc .. " Call was blocked by Roblox/executor permissions (" .. msg .. ").";
-	end;
-	if lower:find("attempt to call a nil value", 1, true)
-		or lower:find("is not a valid member", 1, true)
-		or lower:find("unknown global", 1, true)
-		or lower:find("not available", 1, true)
-		or lower:find("not supported", 1, true) then
-		return "unknown", desc .. " API is not exposed here (" .. msg .. ").";
-	end;
-	if lower:find("argument", 1, true)
-		or lower:find("expected", 1, true)
-		or lower:find("unable to cast", 1, true)
-		or lower:find("missing", 1, true)
-		or lower:find("enumitem", 1, true)
-		or lower:find("instance", 1, true)
-		or lower:find("table expected", 1, true) then
-		return "unknown", desc .. " API responded, but this test used invalid or incomplete arguments (" .. msg .. ").";
-	end;
-	return "unknown", desc .. " Call failed, but the reason was inconclusive (" .. msg .. ").";
-end;
-local function run_with_timeout(fn, timeoutSeconds)
-	local finished = false;
-	local ok, a, b;
-	task.spawn(function()
-		ok, a, b = pcall(fn);
-		finished = true;
-	end);
-	local deadline = os.clock() + (timeoutSeconds or TEST_TIMEOUT);
-	local runService = __betterGetService("RunService");
-	while not finished and os.clock() < deadline do
-		if runService and runService.Heartbeat then
-			runService.Heartbeat:Wait();
-		else
-			task.wait(0.05);
-		end;
-	end;
-	if not finished then
-		return false, "timeout", "Timed out after " .. tostring(timeoutSeconds or TEST_TIMEOUT) .. "s. The call likely hung or waited forever.";
-	end;
-	return true, ok, a, b;
-end;
-local function cleanup_fs_probe()
-	if type(delfile) == "function" then
-		pcall(delfile, FS_PROBE_FILE);
-		pcall(delfile, FS_PROBE_SCRIPT);
-	end;
-	if type(delfolder) == "function" then
-		pcall(delfolder, FS_PROBE_DIR);
-	end;
-end;
-print("Executor Vulnerability Check - Executor: " .. formatExecutor());
-print("This script checks if dangerous functions are BLOCKED, STUBBED, or OPEN.");
-print(ICON_SAFE .. " Safe  = blocked or returns nil");
-print(ICON_UNSAFE .. " Unsafe = runs fine / returns data");
-print(ICON_UNKNOWN .. " Not tested / not supported");
-local function data_test(desc, fn)
-	local ok, ret = pcall(fn);
-	if not ok then
-		return classify_error(desc, ret);
-	end;
-	if ret == nil then
-		return "safe", desc .. " Function returned nil (probably stubbed/disabled by the executor).";
-	end;
-	return "unsafe", desc .. " Function returned data (" .. shortVal(ret) .. "). Scripts can probably use this.";
-end;
-local function effect_test(desc, fn)
-	local ok, ret = pcall(fn);
-	if not ok then
-		return classify_error(desc, ret);
-	end;
-	if ret == nil then
-		return "safe", desc .. " Call returned nil with no observable data. Treating this as stubbed/safe.";
-	end;
-	return "unsafe", desc .. " Call ran without error (return: " .. shortVal(ret) .. "). If this is not stubbed, scripts can use it.";
-end;
-local function bool_test(desc, fn, trueMessage, falseMessage)
-	local ok, ret = pcall(fn);
-	if not ok then
-		return classify_error(desc, ret);
-	end;
-	if ret then
-		return "unsafe", trueMessage or (desc .. " Returned true.");
-	end;
-	return "safe", falseMessage or (desc .. " Returned false/nil.");
-end;
-local tests = {
-	{
-		name = "HttpRbxApiService:PostAsync",
-		callback = function()
-			local s_ok, srv = pcall(function()
-				return __betterGetService("HttpRbxApiService");
-			end);
-			if not s_ok or (not srv) then
-				return "unknown", "HttpRbxApiService is not available here.";
-			end;
-			return data_test("Sends low-level requests to Roblox APIs.", function()
-				return srv:PostAsync("", "");
-			end);
-		end
-	},
-	{
-		name = "HttpRbxApiService:PostAsyncFullUrl",
-		callback = function()
-			local s_ok, srv = pcall(function()
-				return __betterGetService("HttpRbxApiService");
-			end);
-			if not s_ok or (not srv) then
-				return "unknown", "HttpRbxApiService is not available here.";
-			end;
-			return data_test("Can talk directly to Roblox web APIs with a full URL.", function()
-				return srv:PostAsyncFullUrl("https://economy.roblox.com/v1/user/currency", "");
-			end);
-		end
-	},
-	{
-		name = "MarketplaceService:PerformPurchaseV2",
-		callback = function()
-			local srv = __betterGetService("MarketplaceService");
-			return effect_test("Can try to perform purchases from your account.", function()
-				return srv:PerformPurchaseV2();
-			end);
-		end
-	},
-	{
-		name = "MarketplaceService:PromptBundlePurchase",
-		callback = function()
-			local srv = __betterGetService("MarketplaceService");
-			return effect_test("Can pop up bundle purchase prompts on your account.", function()
-				return srv:PromptBundlePurchase();
-			end);
-		end
-	},
-	{
-		name = "MarketplaceService:PromptGamePassPurchase",
-		callback = function()
-			local srv = __betterGetService("MarketplaceService");
-			return effect_test("Can pop up game pass purchase prompts.", function()
-				return srv:PromptGamePassPurchase();
-			end);
-		end
-	},
-	{
-		name = "MarketplaceService:PromptProductPurchase",
-		callback = function()
-			local srv = __betterGetService("MarketplaceService");
-			return effect_test("Can pop up developer product purchase prompts.", function()
-				return srv:PromptProductPurchase();
-			end);
-		end
-	},
-	{
-		name = "MarketplaceService:PromptPurchase",
-		callback = function()
-			local srv = __betterGetService("MarketplaceService");
-			return effect_test("Generic purchase prompt from your account.", function()
-				return srv:PromptPurchase();
-			end);
-		end
-	},
-	{
-		name = "MarketplaceService:PromptRobloxPurchase",
-		callback = function()
-			local srv = __betterGetService("MarketplaceService");
-			return effect_test("Can open special Roblox purchase prompts.", function()
-				return srv:PromptRobloxPurchase();
-			end);
-		end
-	},
-	{
-		name = "MarketplaceService:PromptThirdPartyPurchase",
-		callback = function()
-			local srv = __betterGetService("MarketplaceService");
-			return effect_test("Can open third-party purchase prompts.", function()
-				return srv:PromptThirdPartyPurchase();
-			end);
-		end
-	},
-	{
-		name = "GuiService:OpenBrowserWindow",
-		callback = function()
-			local srv = __betterGetService("GuiService");
-			return effect_test("Can open browser windows or programs on your PC.", function()
-				return srv:OpenBrowserWindow();
-			end);
-		end
-	},
-	{
-		name = "GuiService:OpenNativeOverlay",
-		callback = function()
-			local srv = __betterGetService("GuiService");
-			return effect_test("Can open native OS overlays from Roblox.", function()
-				return srv:OpenNativeOverlay();
-			end);
-		end
-	},
-	{
-		name = "OpenCloudService:HttpRequestAsync",
-		callback = function()
-			local s_ok, srv = pcall(function()
-				return __betterGetService("OpenCloudService");
-			end);
-			if not s_ok or (not srv) then
-				return "unknown", "OpenCloudService is not available here.";
-			end;
-			return data_test("Can make Open Cloud HTTP requests.", function()
-				return srv:HttpRequestAsync({});
-			end);
-		end
-	},
-	{
-		name = "ScriptContext:AddCoreScriptLocal",
-		callback = function()
-			local srv = __betterGetService("ScriptContext");
-			return effect_test("Can load internal Roblox core scripts.", function()
-				return srv:AddCoreScriptLocal();
-			end);
-		end
-	},
-	{
-		name = "BrowserService:EmitHybridEvent",
-		callback = function()
-			local s_ok, srv = pcall(function()
-				return __betterGetService("BrowserService");
-			end);
-			if not s_ok or (not srv) then
-				return "unknown", "BrowserService is not available here.";
-			end;
-			return effect_test("Browser/JS hybrid events from Roblox to your system.", function()
-				return srv:EmitHybridEvent();
-			end);
-		end
-	},
-	{
-		name = "BrowserService:ExecuteJavaScript",
-		callback = function()
-			local s_ok, srv = pcall(function()
-				return __betterGetService("BrowserService");
-			end);
-			if not s_ok or (not srv) then
-				return "unknown", "BrowserService is not available here.";
-			end;
-			return effect_test("Can execute JavaScript in embedded browser contexts.", function()
-				return srv:ExecuteJavaScript();
-			end);
-		end
-	},
-	{
-		name = "BrowserService:OpenBrowserWindow",
-		callback = function()
-			local s_ok, srv = pcall(function()
-				return __betterGetService("BrowserService");
-			end);
-			if not s_ok or (not srv) then
-				return "unknown", "BrowserService is not available here.";
-			end;
-			return effect_test("Can open a browser window on your machine.", function()
-				return srv:OpenBrowserWindow();
-			end);
-		end
-	},
-	{
-		name = "BrowserService:OpenNativeOverlay",
-		callback = function()
-			local s_ok, srv = pcall(function()
-				return __betterGetService("BrowserService");
-			end);
-			if not s_ok or (not srv) then
-				return "unknown", "BrowserService is not available here.";
-			end;
-			return effect_test("Can open native overlays through browser service.", function()
-				return srv:OpenNativeOverlay();
-			end);
-		end
-	},
-	{
-		name = "BrowserService:ReturnToJavaScript",
-		callback = function()
-			local s_ok, srv = pcall(function()
-				return __betterGetService("BrowserService");
-			end);
-			if not s_ok or (not srv) then
-				return "unknown", "BrowserService is not available here.";
-			end;
-			return effect_test("Controls bridge between Roblox and JavaScript.", function()
-				return srv:ReturnToJavaScript();
-			end);
-		end
-	},
-	{
-		name = "BrowserService:SendCommand",
-		callback = function()
-			local s_ok, srv = pcall(function()
-				return __betterGetService("BrowserService");
-			end);
-			if not s_ok or (not srv) then
-				return "unknown", "BrowserService is not available here.";
-			end;
-			return effect_test("Sends low-level commands to browser integration.", function()
-				return srv:SendCommand();
-			end);
-		end
-	},
-	{
-		name = "MessageBusService:Call",
-		callback = function()
-			local srv = __betterGetService("MessageBusService");
-			return effect_test("Low-level message calls inside Roblox client.", function()
-				return srv:Call();
-			end);
-		end
-	},
-	{
-		name = "MessageBusService:GetLast",
-		callback = function()
-			local srv = __betterGetService("MessageBusService");
-			return data_test("Can read last internal message.", function()
-				return srv:GetLast();
-			end);
-		end
-	},
-	{
-		name = "MessageBusService:GetMessageId",
-		callback = function()
-			local srv = __betterGetService("MessageBusService");
-			return data_test("Can access internal message IDs.", function()
-				return srv:GetMessageId("Test", "Method");
-			end);
-		end
-	},
-	{
-		name = "MessageBusService:GetProtocolMethodRequestMessageId",
-		callback = function()
-			local srv = __betterGetService("MessageBusService");
-			return data_test("Can get protocol method request IDs.", function()
-				return srv:GetProtocolMethodRequestMessageId("Test", "Method");
-			end);
-		end
-	},
-	{
-		name = "MessageBusService:GetProtocolMethodResponseMessageId",
-		callback = function()
-			local srv = __betterGetService("MessageBusService");
-			return data_test("Can get protocol method response IDs.", function()
-				return srv:GetProtocolMethodResponseMessageId("Test", "Method");
-			end);
-		end
-	},
-	{
-		name = "MessageBusService:MakeRequest",
-		callback = function()
-			local srv = __betterGetService("MessageBusService");
-			return data_test("Can make low-level message bus requests.", function()
-				return srv:MakeRequest({});
-			end);
-		end
-	},
-	{
-		name = "MessageBusService:Publish",
-		callback = function()
-			local srv = __betterGetService("MessageBusService");
-			return effect_test("Can publish messages into internal bus.", function()
-				return srv:Publish("Test", {});
-			end);
-		end
-	},
-	{
-		name = "MessageBusService:PublishProtocolMethodRequest",
-		callback = function()
-			local srv = __betterGetService("MessageBusService");
-			return effect_test("Can publish protocol method requests.", function()
-				return srv:PublishProtocolMethodRequest("Test", "Method", {});
-			end);
-		end
-	},
-	{
-		name = "MessageBusService:PublishProtocolMethodResponse",
-		callback = function()
-			local srv = __betterGetService("MessageBusService");
-			return effect_test("Can publish protocol method responses.", function()
-				return srv:PublishProtocolMethodResponse("Test", "Method", {});
-			end);
-		end
-	},
-	{
-		name = "MessageBusService:Subscribe",
-		callback = function()
-			local srv = __betterGetService("MessageBusService");
-			return effect_test("Can subscribe to internal message channels.", function()
-				return srv:Subscribe("Test", function()
-				end);
-			end);
-		end
-	},
-	{
-		name = "MessageBusService:SubscribeToProtocolMethodRequest",
-		callback = function()
-			local srv = __betterGetService("MessageBusService");
-			return effect_test("Can subscribe to protocol method requests.", function()
-				return srv:SubscribeToProtocolMethodRequest("Test", "Method", function()
-				end);
-			end);
-		end
-	},
-	{
-		name = "MessageBusService:SubscribeToProtocolMethodResponse",
-		callback = function()
-			local srv = __betterGetService("MessageBusService");
-			return effect_test("Can subscribe to protocol method responses.", function()
-				return srv:SubscribeToProtocolMethodResponse("Test", "Method", function()
-				end);
-			end);
-		end
-	},
-	{
-		name = "DataModel:Load",
-		callback = function()
-			local dm = __betterGetService("DataModel");
-			return effect_test("Can load external place files into the data model.", function()
-				return dm:Load("");
-			end);
-		end
-	},
-	{
-		name = "DataModel:OpenScreenshotsFolder",
-		callback = function()
-			local dm = __betterGetService("DataModel");
-			return effect_test("Can open your Roblox screenshots folder on disk.", function()
-				return dm:OpenScreenshotsFolder();
-			end);
-		end
-	},
-	{
-		name = "DataModel:OpenVideosFolder",
-		callback = function()
-			local dm = __betterGetService("DataModel");
-			return effect_test("Can open your Roblox videos folder on disk.", function()
-				return dm:OpenVideosFolder();
-			end);
-		end
-	},
-	{
-		name = "OmniRecommendationsService:MakeRequest",
-		callback = function()
-			local s_ok, srv = pcall(function()
-				return __betterGetService("OmniRecommendationsService");
-			end);
-			if not s_ok or (not srv) then
-				return "unknown", "OmniRecommendationsService is not available here.";
-			end;
-			return data_test("Can request recommendation data.", function()
-				return srv:MakeRequest({});
-			end);
-		end
-	},
-	{
-		name = "Players:ReportAbuse",
-		callback = function()
-			local plrs = __betterGetService("Players");
-			return effect_test("Can send abuse reports from your account.", function()
-				return plrs:ReportAbuse();
-			end);
-		end
-	},
-	{
-		name = "Players:ReportAbuseV3",
-		callback = function()
-			local plrs = __betterGetService("Players");
-			return effect_test("Can send V3 abuse reports from your account.", function()
-				return plrs:ReportAbuseV3();
-			end);
-		end
-	},
-	{
-		name = "Robux API",
-		callback = function()
-			if not (Vulnerabilities_Test.game_Get or Vulnerabilities_Test.game_Post or Vulnerabilities_Test.Request) then
-				return "unknown", "Executor does not expose HTTP functions used in this Robux API test.";
-			end;
-			local results = {
-				v1 = nil,
-				v2 = nil,
-				v3 = nil
-			};
-			pcall(function()
-				if request then
-					results.v1 = request({
-						Url = "https://economy.roblox.com/v1/user/currency",
-						Method = "GET"
-					});
-				end;
-			end);
-			pcall(function()
-				results.v2 = game:HttpGet("https://economy.roblox.com/v1/user/currency");
-			end);
-			pcall(function()
-				results.v3 = game:HttpPost("https://economy.roblox.com/v1/purchases/products/41762", "{\"expectedCurrency\":1,\"expectedPrice\":0,\"expectedSellerId\":116444}");
-			end);
-			if results.v1 ~= nil or results.v2 ~= nil or results.v3 ~= nil then
-				return "unsafe", "At least one call to Roblox web APIs returned data (" .. shortVal((results.v1 or results.v2 or results.v3)) .. "). Web APIs are reachable.";
-			end;
-			return "safe", "All Roblox web API calls were blocked or returned nil.";
-		end
-	},
-	{
-		name = "RequestInternal",
-		callback = function()
-			local hs_ok, hs = pcall(function()
-				return __betterGetService("HttpService");
-			end);
-			if not hs_ok or (not hs) then
-				return "unknown", "HttpService is not available.";
-			end;
-			local ok0, req0 = pcall(function()
-				return hs:RequestInternal({
-					Url = "https://users.roblox.com/v1/users/authenticated",
-					Method = "GET"
-				});
-			end);
-			local ok1, req1 = pcall(function()
-				local httpService = cloneref and cloneref(hs) or hs;
-				local requestInternal = clonefunction and clonefunction(httpService.RequestInternal) or httpService.RequestInternal;
-				return requestInternal(httpService, {
-					Url = "https://auth.roblox.com/v1/logout",
-					Method = "POST",
-					Body = ""
-				});
-			end);
-			if ok0 or ok1 then
-				return "unsafe", "RequestInternal returned a request object (" .. shortVal(req0 or req1) .. "). Low-level Roblox HTTP is exposed.";
-			end;
-			return classify_error("Low-level Roblox HTTP (RequestInternal).", req0 or req1);
-		end
-	},
-	{
-		name = "ScriptContext:AddCoreScriptLocal (ProximityPrompt)",
-		callback = function()
-			local srv = __betterGetService("ScriptContext");
-			return effect_test("Can inject the ProximityPrompt core script.", function()
-				return srv:AddCoreScriptLocal("CoreScripts/ProximityPrompt", nil);
-			end);
-		end
-	},
-	{
-		name = "MessageBusService:Publish (openURLRequest)",
-		callback = function()
-			local srv = __betterGetService("MessageBusService");
-			local msgId = srv:GetMessageId("Linking", "openURLRequest");
-			return effect_test("Can publish a message that asks the client to open URLs.", function()
-				return srv:Publish(msgId, {});
-			end);
-		end
-	},
-	{
-		name = "GuiService:OpenBrowserWindow (google.com)",
-		callback = function()
-			local srv = __betterGetService("GuiService");
-			return effect_test("Can open a browser window on your machine.", function()
-				return srv:OpenBrowserWindow();
-			end);
-		end
-	},
-	{
-		name = "MarketplaceService:GetRobuxBalance",
-		callback = function()
-			local srv = __betterGetService("MarketplaceService");
-			local ok, ret = pcall(function()
-				return srv:GetRobuxBalance();
-			end);
-			if not ok then
-				return "safe", "Roblox blocked Robux balance read with an error.";
-			end;
-			if ret == nil then
-				return "safe", "GetRobuxBalance returned nil (likely stubbed). Your balance is not exposed here.";
-			end;
-			return "unsafe", "GetRobuxBalance returned a value (" .. shortVal(ret) .. "). Scripts can probably see your Robux.";
-		end
-	},
-	{
-		name = "MarketplaceService:PerformPurchase",
-		callback = function()
-			local srv = __betterGetService("MarketplaceService");
-			return effect_test("Can try to perform purchases from your account.", function()
-				return srv:PerformPurchase();
-			end);
-		end
-	},
-	{
-		name = "HttpRbxApiService:GetAsyncFullUrl",
-		callback = function()
-			local s_ok, srv = pcall(function()
-				return __betterGetService("HttpRbxApiService");
-			end);
-			if not s_ok or (not srv) then
-				return "unknown", "HttpRbxApiService is not available here.";
-			end;
-			return data_test("Reads data from Roblox web APIs.", function()
-				return srv:GetAsyncFullUrl("https://economy.roblox.com/v1/user/currency");
-			end);
-		end
-	},
-	{
-		name = "MarketplaceService:PromptNativePurchaseWithLocalPlayer",
-		callback = function()
-			local srv = __betterGetService("MarketplaceService");
-			return effect_test("Can open native purchase prompts with your account.", function()
-				return srv:PromptNativePurchaseWithLocalPlayer();
-			end);
-		end
-	},
-	{
-		name = "MarketplaceService:PromptNativePurchase",
-		callback = function()
-			local srv = __betterGetService("MarketplaceService");
-			return effect_test("Can open native purchase prompts.", function()
-				return srv:PromptNativePurchase();
-			end);
-		end
-	},
-	{
-		name = "MarketplaceService:PromptCollectiblesPurchase",
-		callback = function()
-			local srv = __betterGetService("MarketplaceService");
-			return effect_test("Can open collectibles purchase prompts.", function()
-				return srv:PromptCollectiblesPurchase();
-			end);
-		end
-	},
-	{
-		name = "CoreGui:TakeScreenshot",
-		callback = function()
-			local cg = __betterGetService("CoreGui");
-			return effect_test("Can take screenshots from your game view.", function()
-				return cg:TakeScreenshot();
-			end);
-		end
-	},
-	{
-		name = "os.execute",
-		callback = function()
-			if type(os) ~= "table" or type(os.execute) ~= "function" then
-				return "unknown", "os.execute is not exposed in this environment.";
-			end;
-			local ok, ret = pcall(function()
-				return os.execute("echo test");
-			end);
-			if not ok then
-				return "safe", "System commands (os.execute) are blocked with an error.";
-			end;
-			return "unsafe", "System commands can run (os.execute returned " .. shortVal(ret) .. "). This is very dangerous.";
-		end
-	},
-	{
-		name = "ContentProvider:PreloadAsync",
-		callback = function()
-			local srv = __betterGetService("ContentProvider");
-			local plrs = __betterGetService("Players");
-			return effect_test("Can preload all UIs, which can be abused for weird behavior.", function()
-				local list = {};
-				for _, v in plrs:QueryDescendants("Instance") do
-					if v:IsA("ScreenGui") then
-						table.insert(list, v);
-					end;
-				end;
-				if #list > 0 then
-					return srv:PreloadAsync(list);
-				end;
-			end);
-		end
-	},
-	{
-		name = "isfolder (C:\\)",
-		callback = function()
-			if type(isfolder) ~= "function" then
-				return "unknown", "isfolder is not available in this executor.";
-			end;
-			return bool_test("Checks whether scripts can probe absolute Windows paths.", function()
-				return isfolder("C:\\");
-			end, "isfolder('C:\\') returned true. Absolute drive paths are visible to scripts.", "isfolder('C:\\') returned false/nil.");
-		end
-	},
-	{
-		name = "writefile/readfile",
-		callback = function()
-			if type(writefile) ~= "function" or type(readfile) ~= "function" then
-				return "unknown", "writefile/readfile are not both available in this executor.";
-			end;
-			cleanup_fs_probe();
-			if type(makefolder) == "function" then
-				pcall(makefolder, FS_PROBE_DIR);
-			end;
-			local okWrite, errWrite = pcall(writefile, FS_PROBE_FILE, "VULNTEST_FS_CHECK");
-			if not okWrite then
-				cleanup_fs_probe();
-				return classify_error("Local file write access.", errWrite);
-			end;
-			local okRead, contents = pcall(readfile, FS_PROBE_FILE);
-			cleanup_fs_probe();
-			if not okRead then
-				return classify_error("Local file read access.", contents);
-			end;
-			if contents == "VULNTEST_FS_CHECK" then
-				return "unsafe", "writefile/readfile successfully created and read a local file. Scripts can access executor storage.";
-			end;
-			return "unsafe", "writefile succeeded and readfile returned data (" .. shortVal(contents) .. "). Local file access is exposed.";
-		end
-	},
-	{
-		name = "appendfile",
-		callback = function()
-			if type(appendfile) ~= "function" or type(writefile) ~= "function" or type(readfile) ~= "function" then
-				return "unknown", "appendfile/writefile/readfile are not all available in this executor.";
-			end;
-			cleanup_fs_probe();
-			if type(makefolder) == "function" then
-				pcall(makefolder, FS_PROBE_DIR);
-			end;
-			local okWrite, errWrite = pcall(writefile, FS_PROBE_FILE, "A");
-			if not okWrite then
-				cleanup_fs_probe();
-				return classify_error("Seed file creation for appendfile.", errWrite);
-			end;
-			local okAppend, errAppend = pcall(appendfile, FS_PROBE_FILE, "B");
-			if not okAppend then
-				cleanup_fs_probe();
-				return classify_error("Local file append access.", errAppend);
-			end;
-			local okRead, contents = pcall(readfile, FS_PROBE_FILE);
-			cleanup_fs_probe();
-			if okRead and contents == "AB" then
-				return "unsafe", "appendfile modified a local file successfully. Scripts can alter executor files.";
-			end;
-			if okRead then
-				return "unsafe", "appendfile ran and the file contents changed (" .. shortVal(contents) .. ").";
-			end;
-			return classify_error("Verification read after appendfile.", contents);
-		end
-	},
-	{
-		name = "loadfile",
-		callback = function()
-			if type(loadfile) ~= "function" or type(writefile) ~= "function" then
-				return "unknown", "loadfile/writefile are not both available in this executor.";
-			end;
-			cleanup_fs_probe();
-			if type(makefolder) == "function" then
-				pcall(makefolder, FS_PROBE_DIR);
-			end;
-			local okWrite, errWrite = pcall(writefile, FS_PROBE_SCRIPT, "return 'VULNTEST_LOADFILE'");
-			if not okWrite then
-				cleanup_fs_probe();
-				return classify_error("Seed script creation for loadfile.", errWrite);
-			end;
-			local okLoad, chunkOrErr = pcall(loadfile, FS_PROBE_SCRIPT);
-			if not okLoad then
-				cleanup_fs_probe();
-				return classify_error("Loading local files as code.", chunkOrErr);
-			end;
-			local okRun, ret = pcall(chunkOrErr);
-			cleanup_fs_probe();
-			if okRun and ret == "VULNTEST_LOADFILE" then
-				return "unsafe", "loadfile executed code from a local disk file. Local code execution is exposed.";
-			end;
-			if okRun then
-				return "unsafe", "loadfile executed a local file and returned " .. shortVal(ret) .. ".";
-			end;
-			return classify_error("Executing a chunk returned by loadfile.", ret);
-		end
-	},
-	{
-		name = "dofile",
-		callback = function()
-			if type(dofile) ~= "function" or type(writefile) ~= "function" then
-				return "unknown", "dofile/writefile are not both available in this executor.";
-			end;
-			cleanup_fs_probe();
-			if type(makefolder) == "function" then
-				pcall(makefolder, FS_PROBE_DIR);
-			end;
-			local okWrite, errWrite = pcall(writefile, FS_PROBE_SCRIPT, "return 'VULNTEST_DOFILE'");
-			if not okWrite then
-				cleanup_fs_probe();
-				return classify_error("Seed script creation for dofile.", errWrite);
-			end;
-			local okRun, ret = pcall(dofile, FS_PROBE_SCRIPT);
-			cleanup_fs_probe();
-			if okRun and ret == "VULNTEST_DOFILE" then
-				return "unsafe", "dofile executed code from a local disk file. This is a strong local file-system/code-exec exposure.";
-			end;
-			if okRun then
-				return "unsafe", "dofile ran a local file and returned " .. shortVal(ret) .. ".";
-			end;
-			return classify_error("Executing local files with dofile.", ret);
-		end
-	},
-	{
-		name = "setclipboard",
-		callback = function()
-			if type(setclipboard) ~= "function" then
-				return "unknown", "setclipboard is not exposed in this executor.";
-			end;
-			return effect_test("Can write arbitrary text to your clipboard.", function()
-				return setclipboard("VulnTest clipboard probe");
-			end);
-		end
-	},
-	{
-		name = "listfiles",
-		callback = function()
-			if type(listfiles) ~= "function" then
-				return "unknown", "listfiles is not available in this executor.";
-			end;
-			local ok1, ret1 = pcall(function()
-				return listfiles("");
-			end);
-			local ok2, ret2 = pcall(function()
-				return listfiles("C:\\");
-			end);
-			if not ok1 and (not ok2) then
-				return classify_error("Listing files through executor file APIs.", ret2 or ret1);
-			end;
-			if ret1 ~= nil or ret2 ~= nil then
-				return "unsafe", "listfiles returned data (" .. shortVal((ret1 or ret2)) .. "). Scripts can probably read files on your executor/PC.";
-			end;
-			return "safe", "listfiles returned nil (likely stubbed).";
-		end
-	},
-	{
-		name = "getgenv/getrenv isolation",
-		callback = function()
-			if type(getgenv) ~= "function" then
-				return "unknown", "getgenv is not available in this executor.";
-			end;
-			local marker = "VULNTEST_" .. tostring(math.random(100000, 999999));
-			local env = getgenv();
-			env[marker] = true;
-			local leakedG = rawget(_G, marker) ~= nil;
-			local leakedFenv = false;
-			if type(getfenv) == "function" then
-				local ok, fe = pcall(getfenv, 0);
-				leakedFenv = ok and type(fe) == "table" and rawget(fe, marker) ~= nil;
-			end;
-			env[marker] = nil;
-			if leakedG or leakedFenv then
-				return "unsafe", "A value stored with getgenv() leaked into the game's global scope. Game scripts could read your executor's globals.";
-			end;
-			return "safe", "getgenv() values stayed isolated from the game's global scope.";
-		end
-	},
-	{
-		name = "getrenv game environment access",
-		callback = function()
-			if type(getrenv) ~= "function" then
-				return "unknown", "getrenv is not available in this executor.";
-			end;
-			local ok, env = pcall(getrenv);
-			if not ok then
-				return classify_error("Reads the real game's global environment table.", env);
-			end;
-			if type(env) == "table" then
-				return "unsafe", "getrenv() returned the game's real global environment (" .. shortVal(env) .. "). Scripts can read variables/functions the game itself relies on.";
-			end;
-			return "safe", "getrenv() did not return a usable environment table.";
-		end
-	},
-	{
-		name = "debug.getupvalue scope reach",
-		callback = function()
-			if type(debug) ~= "table" or type(debug.getupvalue) ~= "function" then
-				return "unknown", "debug.getupvalue is not available in this executor.";
-			end;
-			local secret = "VULNTEST_SECRET";
-			local function holder()
-				local hidden = secret;
-				return function() return hidden; end;
-			end;
-			local inner = holder();
-			local ok, name, value = pcall(debug.getupvalue, inner, 1);
-			if ok and value == secret then
-				return "unsafe", "debug.getupvalue can read closed-over local variables from other functions/scripts. Nothing kept in an upvalue is private.";
-			end;
-			return "safe", "debug.getupvalue could not read another function's upvalue in this test.";
-		end
-	},
-	{
-		name = "debug.getinfo source disclosure",
-		callback = function()
-			if type(debug) ~= "table" or type(debug.getinfo) ~= "function" then
-				return "unknown", "debug.getinfo is not available in this executor.";
-			end;
-			return data_test("Inspects internal info (source, line, function) of arbitrary functions.", function()
-				return debug.getinfo(print);
-			end);
-		end
-	},
-	{
-		name = "getrawmetatable (locked Instance)",
-		callback = function()
-			if type(getrawmetatable) ~= "function" then
-				return "unknown", "getrawmetatable is not available in this executor.";
-			end;
-			return data_test("Reads the protected metatable of a locked Roblox Instance.", function()
-				return getrawmetatable(game);
-			end);
-		end
-	},
-	{
-		name = "setreadonly enforcement",
-		callback = function()
-			if type(setreadonly) ~= "function" or type(isreadonly) ~= "function" then
-				return "unknown", "setreadonly/isreadonly are not both available in this executor.";
-			end;
-			local t = {value = 1};
-			local setOk = pcall(setreadonly, t, true);
-			if not setOk then
-				return "unknown", "setreadonly call failed unexpectedly.";
-			end;
-			pcall(function() t.value = 2; end);
-			pcall(setreadonly, t, false);
-			if t.value == 2 then
-				return "unsafe", "A table marked read-only with setreadonly could still be modified. Table/object protection is not enforced.";
-			end;
-			return "safe", "setreadonly correctly blocked writes to a protected table.";
-		end
-	},
-	{
-		name = "hookfunction capability",
-		callback = function()
-			if type(hookfunction) ~= "function" then
-				return "unknown", "hookfunction is not available in this executor.";
-			end;
-			local hooked = false;
-			local original = function() return "original"; end;
-			local ok = pcall(function()
-				local old;
-				old = hookfunction(original, function(...)
-					hooked = true;
-					return old(...);
-				end);
-			end);
-			if ok then
-				pcall(original);
-			end;
-			if hooked then
-				return "unsafe", "hookfunction can silently replace the behavior of any function, including Roblox APIs. A malicious script could hijack functions your other scripts rely on.";
-			end;
-			return "unknown", "hookfunction did not visibly hook a local test function.";
-		end
-	},
-	{
-		name = "getconnections signal spying",
-		callback = function()
-			if type(getconnections) ~= "function" then
-				return "unknown", "getconnections is not available in this executor.";
-			end;
-			local bindable = Instance.new("BindableEvent");
-			bindable.Event:Connect(function() end);
-			local ok, conns = pcall(getconnections, bindable.Event);
-			local exposed = ok and type(conns) == "table" and #conns > 0;
-			bindable:Destroy();
-			if exposed then
-				return "unsafe", "getconnections exposed live signal connections, meaning scripts can spy on, disconnect, or fire other scripts' event handlers.";
-			end;
-			return "safe", "getconnections did not expose signal connections in this test.";
-		end
-	},
-	{
-		name = "getscripts/getloadedmodules enumeration",
-		callback = function()
-			local fn = getscripts or getloadedmodules;
-			if type(fn) ~= "function" then
-				return "unknown", "getscripts/getloadedmodules are not available in this executor.";
-			end;
-			return data_test("Lists every running script/module in the game, including other developers' scripts.", fn);
-		end
-	},
-	{
-		name = "getsenv environment disclosure",
-		callback = function()
-			if type(getsenv) ~= "function" then
-				return "unknown", "getsenv is not available in this executor.";
-			end;
-			return data_test("Reads the full global variable table of a running script (tested on this script).", function()
-				return getsenv(script);
-			end);
-		end
-	},
-	{
-		name = "getscriptbytecode/getscripthash source disclosure",
-		callback = function()
-			local fn = getscriptbytecode or getscripthash;
-			if type(fn) ~= "function" then
-				return "unknown", "getscriptbytecode/getscripthash are not available in this executor.";
-			end;
-			return data_test("Extracts a script's compiled bytecode/hash (tested on this script). The same call could target other developers' scripts.", function()
-				return fn(script);
-			end);
-		end
-	},
-	{
-		name = "checkcaller identity",
-		callback = function()
-			if type(checkcaller) ~= "function" then
-				return "unknown", "checkcaller is not available in this executor.";
-			end;
-			local ok, ret = pcall(checkcaller);
-			if not ok then
-				return classify_error("Identifies whether running code belongs to the executor or the game.", ret);
-			end;
-			if ret == true then
-				return "safe", "checkcaller correctly identifies this executor script as the caller.";
-			end;
-			return "unsafe", "checkcaller did not identify this executor script as the caller (returned " .. shortVal(ret) .. "). Script identity may be spoofable.";
-		end
-	},
-	{
-		name = "setthreadidentity privilege escalation",
-		callback = function()
-			if type(getthreadidentity) ~= "function" or type(setthreadidentity) ~= "function" then
-				return "unknown", "getthreadidentity/setthreadidentity are not both available in this executor.";
-			end;
-			local okBefore, before = pcall(getthreadidentity);
-			local raisedOk = pcall(setthreadidentity, 8);
-			local okAfter, after = pcall(getthreadidentity);
-			if okBefore then
-				pcall(setthreadidentity, before);
-			end;
-			if raisedOk and okBefore and okAfter and after ~= before then
-				return "unsafe", "Thread identity could be changed freely (from " .. tostring(before) .. " to " .. tostring(after) .. "). Scripts can escalate their own privilege level.";
-			end;
-			return "safe", "Thread identity could not be freely escalated in this test.";
-		end
-	},
-	{
-		name = "getreg/getgc registry dump",
-		callback = function()
-			local fn = getreg or getgc;
-			if type(fn) ~= "function" then
-				return "unknown", "getreg/getgc are not available in this executor.";
-			end;
-			local ok, ret = pcall(fn);
-			if not ok then
-				return classify_error("Dumps the Lua registry/garbage-collector list, which can expose references and data from other scripts.", ret);
-			end;
-			if type(ret) == "table" then
-				local count = 0;
-				for _ in ret do
-					count += 1;
-				end;
-				if count > 0 then
-					return "unsafe", "getreg/getgc returned " .. count .. " entries. Scripts can enumerate internal references and potentially reach other scripts' data.";
-				end;
-			end;
-			return "safe", "getreg/getgc returned no usable data in this test.";
-		end
-	},
-	{
-		name = "getinstances/getnilinstances enumeration",
-		callback = function()
-			local fn = getinstances or getnilinstances;
-			if type(fn) ~= "function" then
-				return "unknown", "getinstances/getnilinstances are not available in this executor.";
-			end;
-			return data_test("Lists every Instance in memory, including destroyed or hidden ones other scripts created.", fn);
-		end
-	},
-	{
-		name = "saveinstance game dump capability",
-		callback = function()
-			if type(saveinstance) ~= "function" then
-				return "unknown", "saveinstance is not available in this executor.";
-			end;
-			return "unsafe", "saveinstance is exposed. Scripts could dump the entire game (maps, scripts, assets) to disk without actually calling it.";
-		end
-	},
-	{
-		name = "queue_on_teleport persistence",
-		callback = function()
-			if type(queue_on_teleport) ~= "function" then
-				return "unknown", "queue_on_teleport is not available in this executor.";
-			end;
-			return "unsafe", "queue_on_teleport is exposed. A script could silently persist and re-run itself across every place/server teleport.";
-		end
-	},
-	{
-		name = "WebSocket network exfiltration",
-		callback = function()
-			local ws = (type(WebSocket) == "table" and WebSocket) or (type(Websocket) == "table" and Websocket);
-			if type(ws) ~= "table" or type(ws.connect) ~= "function" then
-				return "unknown", "WebSocket support is not available in this executor.";
-			end;
-			return "unsafe", "This executor exposes raw WebSocket connections. Scripts can open arbitrary outbound connections and exfiltrate data without using Roblox's HTTP APIs.";
-		end
-	}
-};
-for _, s in tests do
-	Vulnerabilities_Test.Running = Vulnerabilities_Test.Running + 1;
-	local completed, callOk, resultStatus, resultInfo = run_with_timeout(s.callback, TEST_TIMEOUT);
-	local status, info;
-	if not completed then
-		status = "unknown";
-		info = resultInfo;
-	elseif not callOk then
-		status = "unknown";
-		info = "The test itself crashed: " .. tostring(resultStatus);
-	else
-		status = resultStatus;
-		info = resultInfo;
-	end;
-	if status == "safe" then
-		Vulnerabilities_Test.Passes = Vulnerabilities_Test.Passes + 1;
-		print(ICON_SAFE .. " " .. s.name .. " • " .. info);
-	elseif status == "unsafe" then
-		Vulnerabilities_Test.Fails = Vulnerabilities_Test.Fails + 1;
-		warn(ICON_UNSAFE .. " " .. s.name .. " • " .. info);
-	else
-		Vulnerabilities_Test.Unknown = Vulnerabilities_Test.Unknown + 1;
-		print(ICON_UNKNOWN .. " " .. s.name .. " • " .. (info or "Not supported / could not be tested."));
-	end;
-	Vulnerabilities_Test.Running = Vulnerabilities_Test.Running - 1;
-end;
-local total = Vulnerabilities_Test.Passes + Vulnerabilities_Test.Fails;
-local rate = total > 0 and math.round(Vulnerabilities_Test.Passes / total * 100) or 0;
-print("");
-print("Vulnerability Check Summary - " .. formatExecutor());
-print(ICON_SAFE .. " Safe tests: " .. Vulnerabilities_Test.Passes);
-print(ICON_UNSAFE .. " Unsafe tests: " .. Vulnerabilities_Test.Fails);
-print(ICON_UNKNOWN .. " Not tested / unsupported: " .. Vulnerabilities_Test.Unknown);
-print("Score: " .. rate .. "% of the tested dangerous functions looked safe (blocked or nil).");
-local verdict;
-if Vulnerabilities_Test.Fails == 0 and total > 0 then
-	verdict = "Excellent: all checked dangerous functions are blocked or stubbed.";
-elseif rate >= 70 then
-	verdict = "Decent: most dangerous functions are blocked, but there are still some risks.";
-elseif rate >= 40 then
-	verdict = "Meh: about half of the dangerous functions are open. This is not very safe.";
+
+local Results = {
+    Safe = 0,
+    Unsafe = 0,
+    Unknown = 0,
+    Info = 0,
+    RiskTotal = 0,
+    RiskFailed = 0,
+    Findings = {},
+}
+
+local SeverityWeight = {
+    critical = 5,
+    high = 3,
+    medium = 2,
+    low = 1,
+    info = 0,
+}
+
+local function getGlobal(name)
+    local value = rawget(Environment, name)
+    if value ~= nil then
+        return value
+    end
+    return rawget(_G, name)
+end
+
+local function getService(dataModel, name)
+    local root = dataModel or game
+    if name == "DataModel" then
+        return root
+    end
+    local ok, service = pcall(function()
+        return root:GetService(name)
+    end)
+    if ok and typeof(service) == "Instance" then
+        return service
+    end
+    return nil, service
+end
+
+local function shortValue(value)
+    local valueType = typeof(value)
+    if value == nil then
+        return "nil"
+    elseif valueType == "string" then
+        return "string(length=" .. tostring(#value) .. ")"
+    elseif valueType == "table" then
+        local count = 0
+        for _ in value do
+            count += 1
+            if count >= 1000 then
+                break
+            end
+        end
+        return "table(keys=" .. tostring(count) .. ")"
+    end
+    return valueType
+end
+
+local function lowerError(value)
+    return string.lower(tostring(value or ""))
+end
+
+local function containsAny(text, patterns)
+    for _, pattern in patterns do
+        if string.find(text, pattern, 1, true) then
+            return true
+        end
+    end
+    return false
+end
+
+local BLOCK_PATTERNS = {
+    "lacking capability",
+    "lacking permission",
+    "current thread cannot",
+    "current identity",
+    "permission denied",
+    "not permitted",
+    "not authorized",
+    "not allowed",
+    "not accessible",
+    "cannot access",
+    "cannot call restricted",
+    "access denied",
+    "security check",
+    "insufficient permission",
+    "insufficient privilege",
+    "robloxscript security",
+    "localuser security",
+    "plugin security",
+    "blocked by",
+}
+
+local ARGUMENT_PATTERNS = {
+    "argument 1 missing",
+    "argument 2 missing",
+    "argument 3 missing",
+    "missing or nil",
+    "bad argument",
+    "invalid argument",
+    "expected",
+    "unable to cast",
+    "cannot convert",
+    "requires an argument",
+    "table expected",
+    "string expected",
+    "instance expected",
+    "player expected",
+}
+
+local ABSENT_PATTERNS = {
+    "is not a valid member",
+    "attempt to call a nil value",
+    "unknown global",
+    "not available",
+    "not supported",
+    "does not exist",
+    "could not find service",
+}
+
+local function classifyError(err)
+    local text = lowerError(err)
+    if containsAny(text, BLOCK_PATTERNS) then
+        return "blocked"
+    elseif containsAny(text, ABSENT_PATTERNS) then
+        return "absent"
+    elseif containsAny(text, ARGUMENT_PATTERNS) or string.find(text, "argument", 1, true) then
+        return "argument"
+    elseif string.find(text, "unauthorized", 1, true)
+        or string.find(text, "authentication", 1, true)
+        or string.find(text, "status code 401", 1, true)
+        or string.find(text, "status code 403", 1, true) then
+        return "unauthenticated"
+    end
+    return "other"
+end
+
+local function runWithTimeout(callback, timeout)
+    local done = false
+    local packed
+    local thread = task.spawn(function()
+        packed = table.pack(pcall(callback))
+        done = true
+    end)
+
+    local deadline = os.clock() + (timeout or CONFIG.Timeout)
+    local runService = getService(game, "RunService")
+    while not done and os.clock() < deadline do
+        if runService and runService.Heartbeat then
+            runService.Heartbeat:Wait()
+        else
+            task.wait(0.05)
+        end
+    end
+
+    if not done then
+        if type(task.cancel) == "function" then
+            pcall(task.cancel, thread)
+        end
+        return false, "timeout"
+    end
+
+    return true, table.unpack(packed, 1, packed.n)
+end
+
+local function addFinding(status, severity, name, message)
+    local weight = SeverityWeight[severity] or 0
+    if severity ~= "info" and (status == "safe" or status == "unsafe") then
+        Results.RiskTotal += weight
+    end
+
+    if status == "safe" then
+        Results.Safe += 1
+        print(ICON_SAFE .. " [" .. string.upper(severity) .. "] " .. name .. " • " .. message)
+    elseif status == "unsafe" then
+        Results.Unsafe += 1
+        Results.RiskFailed += weight
+        table.insert(Results.Findings, {
+            Severity = severity,
+            Name = name,
+            Message = message,
+        })
+        warn(ICON_UNSAFE .. " [" .. string.upper(severity) .. "] " .. name .. " • " .. message)
+    elseif status == "info" then
+        Results.Info += 1
+        print(ICON_INFO .. " " .. name .. " • " .. message)
+    else
+        Results.Unknown += 1
+        print(ICON_UNKNOWN .. " [" .. string.upper(severity) .. "] " .. name .. " • " .. message)
+    end
+end
+
+local Tests = {}
+local Inventory = {}
+
+local function test(name, severity, callback)
+    table.insert(Tests, {
+        Name = name,
+        Severity = severity,
+        Callback = callback,
+    })
+end
+
+local function inventory(name, callback)
+    table.insert(Inventory, {
+        Name = name,
+        Callback = callback,
+    })
+end
+
+local function findRequestFunction()
+    local direct = getGlobal("request") or getGlobal("http_request")
+    if type(direct) == "function" then
+        return direct, "request/http_request"
+    end
+
+    local http = getGlobal("http")
+    if type(http) == "table" and type(rawget(http, "request")) == "function" then
+        return rawget(http, "request"), "http.request"
+    end
+
+    local syn = getGlobal("syn")
+    if type(syn) == "table" and type(rawget(syn, "request")) == "function" then
+        return rawget(syn, "request"), "syn.request"
+    end
+
+    return nil
+end
+
+local function getResponseBody(response)
+    if type(response) == "string" then
+        return response
+    elseif type(response) == "table" then
+        return response.Body or response.body or response.ResponseBody or response.responseBody
+    end
+    return nil
+end
+
+local function getResponseStatus(response)
+    if type(response) ~= "table" then
+        return nil
+    end
+    return tonumber(response.StatusCode or response.Status or response.status_code or response.status)
+end
+
+local function inspectAuthenticatedResponse(response)
+    local body = getResponseBody(response)
+    local statusCode = getResponseStatus(response)
+
+    if statusCode == 401 or statusCode == 403 then
+        return "safe", "Roblox rejected the request as unauthenticated (HTTP " .. tostring(statusCode) .. ")."
+    end
+
+    if type(body) ~= "string" or body == "" then
+        return "unknown", "The request returned no inspectable response body."
+    end
+
+    local httpService = getService(game, "HttpService")
+    if httpService then
+        local ok, decoded = pcall(function()
+            return httpService:JSONDecode(body)
+        end)
+        if ok and type(decoded) == "table" then
+            local returnedId = tonumber(decoded.id or decoded.userId or decoded.UserId)
+            local players = getService(game, "Players")
+            local localPlayer = players and players.LocalPlayer
+            if returnedId and localPlayer and returnedId == localPlayer.UserId then
+                return "unsafe", "The call was authenticated as the current Roblox account (user ID matched)."
+            elseif returnedId then
+                return "unsafe", "The call returned an authenticated Roblox user identity."
+            end
+        end
+    end
+
+    local bodyLower = string.lower(body)
+    if string.find(bodyLower, "unauthorized", 1, true)
+        or string.find(bodyLower, "authentication credentials", 1, true)
+        or string.find(bodyLower, "not authenticated", 1, true) then
+        return "safe", "Roblox returned an unauthenticated response."
+    end
+
+    if statusCode and statusCode >= 200 and statusCode < 300 then
+        return "unknown", "The call succeeded, but the response did not prove whether account credentials were attached."
+    end
+
+    return "unknown", "The response was inconclusive (HTTP " .. tostring(statusCode or "unknown") .. ")."
+end
+
+local function callRequestInternal(options)
+    local httpService, serviceErr = getService(game, "HttpService")
+    if not httpService then
+        return "unknown", "HttpService is unavailable: " .. tostring(serviceErr)
+    end
+
+    local okCreate, requestObject = pcall(function()
+        return httpService:RequestInternal(options)
+    end)
+    if not okCreate then
+        local classification = classifyError(requestObject)
+        if classification == "blocked" then
+            return "safe", "RequestInternal was blocked by the executor/Roblox security boundary."
+        elseif classification == "absent" then
+            return "unknown", "RequestInternal is not exposed."
+        elseif classification == "argument" then
+            return "unsafe", "RequestInternal reached Roblox argument validation instead of being blocked."
+        end
+        return "unknown", "RequestInternal failed inconclusively: " .. tostring(requestObject)
+    end
+
+    if requestObject == nil then
+        return "unknown", "RequestInternal returned nil."
+    end
+
+    local startMethod
+    local okStartLookup, lookupResult = pcall(function()
+        return requestObject.Start
+    end)
+    if okStartLookup then
+        startMethod = lookupResult
+    end
+    if type(startMethod) ~= "function" then
+        return "unsafe", "RequestInternal returned a request object, proving the restricted method is exposed, but no Start method was available for verification."
+    end
+
+    local done = false
+    local callbackA
+    local callbackB
+    local okStart, startErr = pcall(function()
+        startMethod(requestObject, function(a, b)
+            callbackA = a
+            callbackB = b
+            done = true
+        end)
+    end)
+    if not okStart then
+        return "unsafe", "RequestInternal created a request object but starting it failed: " .. tostring(startErr)
+    end
+
+    local deadline = os.clock() + CONFIG.Timeout
+    local runService = getService(game, "RunService")
+    while not done and os.clock() < deadline do
+        if runService and runService.Heartbeat then
+            runService.Heartbeat:Wait()
+        else
+            task.wait(0.05)
+        end
+    end
+
+    if not done then
+        return "unsafe", "RequestInternal was exposed and started a request, but its callback timed out."
+    end
+
+    local response = callbackB
+    if type(response) ~= "table" and type(response) ~= "string" then
+        response = callbackA
+    end
+
+    local status, message = inspectAuthenticatedResponse(response)
+    if status == "safe" then
+        return "unsafe", "RequestInternal is exposed even though this particular request was not authenticated. " .. message
+    elseif status == "unsafe" then
+        return "unsafe", message
+    end
+    return "unsafe", "RequestInternal is exposed and completed a request, but authentication could not be conclusively verified."
+end
+
+local function acquireDataModelRoute(routeName)
+    if routeName == "direct" then
+        return game
+    elseif routeName == "workspace.Parent" then
+        local workspaceService = getService(game, "Workspace")
+        return workspaceService and workspaceService.Parent or nil
+    elseif routeName == "cloneref" then
+        local cloneRef = getGlobal("cloneref")
+        if type(cloneRef) == "function" then
+            local ok, cloned = pcall(cloneRef, game)
+            if ok then
+                return cloned
+            end
+        end
+    elseif routeName == "getrenv" then
+        local getRealEnvironment = getGlobal("getrenv")
+        if type(getRealEnvironment) == "function" then
+            local ok, environment = pcall(getRealEnvironment)
+            if ok and type(environment) == "table" then
+                local direct = rawget(environment, "game")
+                if direct ~= nil then
+                    return direct
+                end
+                local okGame, environmentGame = pcall(function()
+                    return environment.game
+                end)
+                if okGame then
+                    return environmentGame
+                end
+            end
+        end
+    elseif routeName == "getfenv(print)" then
+        local getFunctionEnvironment = getGlobal("getfenv")
+        if type(getFunctionEnvironment) == "function" then
+            local ok, environment = pcall(getFunctionEnvironment, print)
+            if ok and type(environment) == "table" then
+                local direct = rawget(environment, "game")
+                if direct ~= nil then
+                    return direct
+                end
+                local okGame, environmentGame = pcall(function()
+                    return environment.game
+                end)
+                if okGame then
+                    return environmentGame
+                end
+            end
+        end
+    end
+    return nil
+end
+
+local function probeProtectedRoute(routeName, serviceName, methodName, arguments, cloneMethod)
+    local dataModel = acquireDataModelRoute(routeName)
+    if routeName == "null-byte GetService" then
+        dataModel = game
+    end
+    if not dataModel then
+        return "unsupported", routeName .. " route is unavailable."
+    end
+
+    local service
+    local serviceErr
+    if routeName == "null-byte GetService" then
+        local okService, result = pcall(function()
+            return dataModel:GetService(serviceName .. "\0")
+        end)
+        if okService and typeof(result) == "Instance" then
+            service = result
+        else
+            return "unsupported", "Null-byte service-name route was rejected."
+        end
+    else
+        service, serviceErr = getService(dataModel, serviceName)
+    end
+    if not service then
+        return "unknown", routeName .. " could not obtain " .. serviceName .. ": " .. tostring(serviceErr)
+    end
+
+    local okMethod, methodOrErr = pcall(function()
+        return service[methodName]
+    end)
+    if not okMethod or type(methodOrErr) ~= "function" then
+        return "unknown", routeName .. " could not access " .. methodName .. "."
+    end
+
+    local method = methodOrErr
+    if cloneMethod then
+        local cloneFunction = getGlobal("clonefunction")
+        if type(cloneFunction) ~= "function" then
+            return "unsupported", "clonefunction is unavailable."
+        end
+        local okClone, cloned = pcall(cloneFunction, method)
+        if not okClone or type(cloned) ~= "function" then
+            return "unknown", "clonefunction failed for " .. serviceName .. "." .. methodName .. "."
+        end
+        method = cloned
+    end
+
+    local okCall, returnOrError = pcall(function()
+        return method(service, table.unpack(arguments or {}))
+    end)
+    if okCall then
+        if returnOrError == nil then
+            return "unknown", routeName .. (cloneMethod and "+clonefunction" or "") .. " returned nil for invalid arguments. This may be a safe stub, but no blocking error proved it."
+        end
+        return "unsafe", routeName .. (cloneMethod and "+clonefunction" or "") .. " executed the restricted method with deliberately invalid arguments (return " .. shortValue(returnOrError) .. ")."
+    end
+
+    local classification = classifyError(returnOrError)
+    if classification == "blocked" then
+        return "safe", routeName .. (cloneMethod and "+clonefunction" or "") .. " was blocked before argument validation."
+    elseif classification == "argument" then
+        return "unsafe", routeName .. (cloneMethod and "+clonefunction" or "") .. " reached Roblox argument validation, so the security filter was bypassed."
+    elseif classification == "absent" then
+        return "unknown", routeName .. " does not expose the method."
+    end
+    return "unknown", routeName .. " failed inconclusively: " .. tostring(returnOrError)
+end
+
+local function probeProtectedMethod(serviceName, methodName, arguments)
+    local routes = {"direct"}
+    if CONFIG.TestProtectedMethodBypasses then
+        table.insert(routes, "workspace.Parent")
+        table.insert(routes, "cloneref")
+        table.insert(routes, "getrenv")
+        table.insert(routes, "getfenv(print)")
+        table.insert(routes, "null-byte GetService")
+    end
+
+    local safeCount = 0
+    local unknownCount = 0
+    local details = {}
+    for _, routeName in routes do
+        local status, message = probeProtectedRoute(routeName, serviceName, methodName, arguments, false)
+        if status == "unsafe" then
+            return "unsafe", message
+        elseif status == "safe" then
+            safeCount += 1
+        elseif status ~= "unsupported" then
+            unknownCount += 1
+            table.insert(details, message)
+        end
+
+        if routeName == "direct" and CONFIG.TestProtectedMethodBypasses then
+            local cloneStatus, cloneMessage = probeProtectedRoute(routeName, serviceName, methodName, arguments, true)
+            if cloneStatus == "unsafe" then
+                return "unsafe", cloneMessage
+            elseif cloneStatus == "safe" then
+                safeCount += 1
+            elseif cloneStatus ~= "unsupported" then
+                unknownCount += 1
+                table.insert(details, cloneMessage)
+            end
+        end
+    end
+
+    if safeCount > 0 and unknownCount == 0 then
+        return "safe", "All available direct and alternate-reference routes were blocked before argument validation."
+    elseif unknownCount > 0 then
+        return "unknown", table.concat(details, " | ")
+    end
+    return "unknown", "No supported route could test this method."
+end
+
+local function countTableKeys(value)
+    if type(value) ~= "table" then
+        return 0
+    end
+    local count = 0
+    for _ in value do
+        count += 1
+        if count >= 1000 then
+            break
+        end
+    end
+    return count
+end
+
+local function probeSecretMethod(serviceName, methodName, arguments)
+    local service, serviceErr = getService(game, serviceName)
+    if not service then
+        return "unknown", serviceName .. " is unavailable: " .. tostring(serviceErr)
+    end
+
+    local okMethod, method = pcall(function()
+        return service[methodName]
+    end)
+    if not okMethod or type(method) ~= "function" then
+        return "unknown", methodName .. " is not exposed."
+    end
+
+    local okCall, result = pcall(function()
+        return method(service, table.unpack(arguments or {}))
+    end)
+    if not okCall then
+        local classification = classifyError(result)
+        if classification == "blocked" then
+            return "safe", methodName .. " was blocked by the security boundary."
+        elseif classification == "absent" then
+            return "unknown", methodName .. " is unavailable."
+        elseif classification == "argument" then
+            return "unsafe", methodName .. " reached argument validation instead of being blocked."
+        end
+        return "unknown", methodName .. " failed inconclusively: " .. tostring(result)
+    end
+
+    if type(result) == "string" and result ~= "" then
+        return "unsafe", methodName .. " returned a non-empty secret/token-like string (contents intentionally hidden)."
+    elseif type(result) == "table" and countTableKeys(result) > 0 then
+        return "unsafe", methodName .. " returned credential/header data with " .. tostring(countTableKeys(result)) .. " keys (values intentionally hidden)."
+    elseif result ~= nil then
+        return "unsafe", methodName .. " returned sensitive data of type " .. typeof(result) .. "."
+    end
+    return "unknown", methodName .. " returned nil."
+end
+
+local function cleanupPath(path)
+    local deleteFile = getGlobal("delfile") or getGlobal("deletefile") or getGlobal("delete_file")
+    if type(deleteFile) == "function" then
+        pcall(deleteFile, path)
+    end
+end
+
+local function cleanupProbeDirectory()
+    local deleteFile = getGlobal("delfile") or getGlobal("deletefile") or getGlobal("delete_file")
+    local deleteFolder = getGlobal("delfolder") or getGlobal("deletefolder") or getGlobal("delete_folder")
+    local listFiles = getGlobal("listfiles") or getGlobal("list_files")
+
+    if type(listFiles) == "function" and type(deleteFile) == "function" then
+        local ok, files = pcall(listFiles, PROBE_DIR)
+        if ok and type(files) == "table" then
+            for _, path in files do
+                pcall(deleteFile, path)
+            end
+        end
+    end
+    if type(deleteFolder) == "function" then
+        pcall(deleteFolder, PROBE_DIR)
+    end
+end
+
+local ProtectedMethods = {
+    {"ScriptContext", "AddCoreScriptLocal", "critical", {false, false}},
+    {"ScriptContext", "SaveScriptProfilingData", "high", {false}},
+    {"ScriptProfilerService", "SaveScriptProfilingData", "high", {false}},
+    {"HttpService", "RequestInternal", "critical", {false}},
+    {"HttpRbxApiService", "GetAsyncFullUrl", "critical", {false}},
+    {"OpenCloudService", "HttpRequestAsync", "critical", {false}},
+    {"BrowserService", "OpenBrowserWindow", "critical", {false}},
+    {"BrowserService", "ExecuteJavaScript", "critical", {false}},
+    {"BrowserService", "SendCommand", "critical", {false}},
+    {"GuiService", "OpenBrowserWindow", "critical", {false}},
+    {"GuiService", "OpenNativeOverlay", "high", {false, false}},
+    {"LinkingService", "OpenUrl", "critical", {false}},
+    {"MessageBusService", "Publish", "critical", {false, false}},
+    {"MessageBusService", "Call", "critical", {false, false}},
+    {"MessageBusService", "MakeRequest", "critical", {false}},
+    {"MarketplaceService", "PerformPurchase", "critical", {false, false, false, false, false}},
+    {"MarketplaceService", "PerformPurchaseV2", "critical", {false, false, false, false, false}},
+    {"MarketplaceService", "PerformBulkPurchase", "critical", {false, false}},
+    {"MarketplaceService", "PerformCancelSubscription", "critical", {false, false}},
+    {"MarketplaceService", "PerformSubscriptionPurchase", "critical", {false, false, false}},
+    {"Players", "ReportAbuse", "high", {false, false, false}},
+    {"Players", "ReportAbuseV3", "high", {false}},
+    {"DataModel", "Load", "high", {false}},
+    {"AvatarEditorService", "NoPromptDeleteOutfit", "critical", {false}},
+    {"AvatarEditorService", "NoPromptRenameOutfit", "critical", {false, false}},
+    {"AvatarEditorService", "NoPromptSaveAvatar", "critical", {false, false}},
+    {"AvatarEditorService", "NoPromptSetFavorite", "high", {false, false, false}},
+}
+
+for _, definition in ProtectedMethods do
+    local serviceName = definition[1]
+    local methodName = definition[2]
+    local severity = definition[3]
+    local arguments = definition[4]
+    test(serviceName .. ":" .. methodName .. " protection", severity, function()
+        return probeProtectedMethod(serviceName, methodName, arguments)
+    end)
+end
+
+if CONFIG.TestAuthenticatedRobloxHttp then
+    test("HttpService:RequestInternal authenticated request", "critical", function()
+        return callRequestInternal({
+            Url = AUTH_URL,
+            Method = "GET",
+            Headers = {
+                ["Accept"] = "application/json",
+            },
+        })
+    end)
+
+    test("Executor request API Roblox-cookie isolation", "critical", function()
+        local requestFunction, requestName = findRequestFunction()
+        if type(requestFunction) ~= "function" then
+            return "unknown", "No executor request function is exposed."
+        end
+
+        local ok, response = pcall(requestFunction, {
+            Url = AUTH_URL,
+            Method = "GET",
+            Headers = {
+                ["Accept"] = "application/json",
+            },
+        })
+        if not ok then
+            local classification = classifyError(response)
+            if classification == "blocked" or classification == "unauthenticated" then
+                return "safe", requestName .. " did not obtain authenticated Roblox data."
+            end
+            return "unknown", requestName .. " failed inconclusively: " .. tostring(response)
+        end
+
+        local status, message = inspectAuthenticatedResponse(response)
+        if status == "unsafe" then
+            return "unsafe", requestName .. " attached or inherited Roblox account credentials. " .. message
+        elseif status == "safe" then
+            return "safe", requestName .. " kept Roblox credentials isolated. " .. message
+        end
+        return "unknown", requestName .. " was inconclusive. " .. message
+    end)
+
+    test("game:HttpGet Roblox-cookie isolation", "critical", function()
+        local okMethod, method = pcall(function()
+            return game.HttpGet
+        end)
+        if not okMethod or type(method) ~= "function" then
+            return "unknown", "game:HttpGet is unavailable."
+        end
+
+        local ok, bodyOrError = pcall(method, game, AUTH_URL)
+        if not ok then
+            local classification = classifyError(bodyOrError)
+            if classification == "blocked" or classification == "unauthenticated" then
+                return "safe", "game:HttpGet could not make an authenticated Roblox API request."
+            end
+            return "unknown", "game:HttpGet failed inconclusively: " .. tostring(bodyOrError)
+        end
+
+        local status, message = inspectAuthenticatedResponse(bodyOrError)
+        if status == "unsafe" then
+            return "unsafe", "game:HttpGet returned the current account's authenticated identity."
+        elseif status == "safe" then
+            return "safe", message
+        end
+        return "unknown", message
+    end)
+
+    test("HttpRbxApiService authenticated identity read", "critical", function()
+        local service, serviceErr = getService(game, "HttpRbxApiService")
+        if not service then
+            return "unknown", "HttpRbxApiService is unavailable: " .. tostring(serviceErr)
+        end
+
+        local ok, response = pcall(function()
+            return service:GetAsyncFullUrl(AUTH_URL)
+        end)
+        if not ok then
+            local classification = classifyError(response)
+            if classification == "blocked" or classification == "unauthenticated" then
+                return "safe", "HttpRbxApiService was blocked or unauthenticated."
+            elseif classification == "argument" then
+                return "unsafe", "HttpRbxApiService reached argument validation instead of being blocked."
+            end
+            return "unknown", "HttpRbxApiService failed inconclusively: " .. tostring(response)
+        end
+
+        local status, message = inspectAuthenticatedResponse(response)
+        if status == "unsafe" then
+            return "unsafe", message
+        elseif status == "safe" then
+            return "safe", message
+        end
+        return "unsafe", "HttpRbxApiService completed a restricted Roblox web request, although authentication was inconclusive."
+    end)
+
+    test("OpenCloudService authenticated identity read", "critical", function()
+        local service, serviceErr = getService(game, "OpenCloudService")
+        if not service then
+            return "unknown", "OpenCloudService is unavailable: " .. tostring(serviceErr)
+        end
+
+        local ok, response = pcall(function()
+            return service:HttpRequestAsync({
+                Url = AUTH_URL,
+                Method = "GET",
+                Headers = {
+                    ["Accept"] = "application/json",
+                },
+            })
+        end)
+        if not ok then
+            local classification = classifyError(response)
+            if classification == "blocked" or classification == "unauthenticated" then
+                return "safe", "OpenCloudService was blocked or unauthenticated."
+            elseif classification == "argument" then
+                return "unsafe", "OpenCloudService reached argument validation instead of being blocked."
+            end
+            return "unknown", "OpenCloudService failed inconclusively: " .. tostring(response)
+        end
+
+        local status, message = inspectAuthenticatedResponse(response)
+        if status == "unsafe" then
+            return "unsafe", message
+        elseif status == "safe" then
+            return "safe", message
+        end
+        return "unsafe", "OpenCloudService completed a restricted request, although authentication was inconclusive."
+    end)
+end
+
+test("AccountService:GetCredentialsHeaders", "critical", function()
+    return probeSecretMethod("AccountService", "GetCredentialsHeaders", {})
+end)
+
+test("AccountService:GetDeviceAccessToken", "critical", function()
+    return probeSecretMethod("AccountService", "GetDeviceAccessToken", {})
+end)
+
+test("AccountService:GetDeviceIntegrityToken", "high", function()
+    return probeSecretMethod("AccountService", "GetDeviceIntegrityToken", {})
+end)
+
+test("AccountService:GetDeviceIntegrityTokenYield", "high", function()
+    return probeSecretMethod("AccountService", "GetDeviceIntegrityTokenYield", {})
+end)
+
+test("MarketplaceService:GetRobuxBalance", "high", function()
+    local marketplace, serviceErr = getService(game, "MarketplaceService")
+    if not marketplace then
+        return "unknown", "MarketplaceService is unavailable: " .. tostring(serviceErr)
+    end
+
+    local ok, result = pcall(function()
+        return marketplace:GetRobuxBalance()
+    end)
+    if not ok then
+        local classification = classifyError(result)
+        if classification == "blocked" then
+            return "safe", "Robux balance access was blocked."
+        elseif classification == "absent" then
+            return "unknown", "GetRobuxBalance is unavailable."
+        end
+        return "unknown", "GetRobuxBalance failed inconclusively: " .. tostring(result)
+    end
+    if type(result) == "number" then
+        return "unsafe", "The current account's Robux balance was readable (value intentionally hidden)."
+    end
+    return "unknown", "GetRobuxBalance returned " .. shortValue(result) .. "."
+end)
+
+if CONFIG.TestFilesystemEscape then
+    test("Filesystem path traversal escape", "critical", function()
+        local writeFile = getGlobal("writefile") or getGlobal("write_file")
+        local readFile = getGlobal("readfile") or getGlobal("read_file")
+        local isFile = getGlobal("isfile") or getGlobal("is_file")
+        local deleteFile = getGlobal("delfile") or getGlobal("deletefile") or getGlobal("delete_file")
+        if type(writeFile) ~= "function" or type(readFile) ~= "function" then
+            return "unknown", "writefile/readfile are not both available."
+        end
+        if type(deleteFile) ~= "function" or type(isFile) ~= "function" then
+            return "unknown", "delfile/isfile are unavailable, so an escape probe cannot be verified and cleaned safely."
+        end
+
+        local paths = {
+            "../VulnTestEscape_" .. NONCE .. ".txt",
+            "..\\VulnTestEscape_" .. NONCE .. ".txt",
+        }
+
+        local vulnerablePath
+        local cleanupFailed = false
+        for _, path in paths do
+            local okExists, alreadyExists = pcall(isFile, path)
+            if not (okExists and alreadyExists == true) then
+                local okWrite = pcall(writeFile, path, PROBE_MARKER)
+                if okWrite then
+                    local okRead, contents = pcall(readFile, path)
+                    pcall(deleteFile, path)
+                    local okAfter, existsAfter = pcall(isFile, path)
+                    if okAfter and existsAfter == true then
+                        pcall(deleteFile, path)
+                        cleanupFailed = true
+                    end
+                    if okRead and contents == PROBE_MARKER then
+                        vulnerablePath = path
+                        break
+                    end
+                end
+            end
+        end
+
+        if vulnerablePath then
+            if cleanupFailed then
+                return "unsafe", "writefile/readfile escaped the executor workspace, and the executor did not confirm cleanup of its own unique marker file."
+            end
+            return "unsafe", "writefile/readfile escaped the executor workspace through a traversal path; the unique probe was deleted."
+        end
+        return "safe", "Traversal paths could not create and read a marker outside the executor workspace."
+    end)
+
+    test("Filesystem absolute host-path listing", "critical", function()
+        local listFiles = getGlobal("listfiles") or getGlobal("list_files")
+        if type(listFiles) ~= "function" then
+            return "unknown", "listfiles is unavailable."
+        end
+
+        local roots = {
+            "C:\\Windows",
+            "C:\\Users",
+            "/system",
+            "/proc",
+            "/sdcard",
+            "/storage/emulated/0",
+        }
+        for _, root in roots do
+            local ok, entries = pcall(listFiles, root)
+            if ok and type(entries) == "table" and #entries > 0 then
+                return "unsafe", "listfiles enumerated an absolute host path (entry names intentionally hidden)."
+            end
+        end
+        return "safe", "Absolute Windows/Android/root paths were not enumerable through listfiles."
+    end)
+
+    test("Filesystem dangerous-extension write policy", "medium", function()
+        local writeFile = getGlobal("writefile") or getGlobal("write_file")
+        local readFile = getGlobal("readfile") or getGlobal("read_file")
+        local isFile = getGlobal("isfile") or getGlobal("is_file")
+        local makeFolder = getGlobal("makefolder") or getGlobal("make_folder")
+        local deleteFile = getGlobal("delfile") or getGlobal("deletefile") or getGlobal("delete_file")
+        local deleteFolder = getGlobal("delfolder") or getGlobal("deletefolder") or getGlobal("delete_folder")
+        if type(writeFile) ~= "function" then
+            return "unknown", "writefile is unavailable."
+        end
+        if type(deleteFile) ~= "function" or type(makeFolder) ~= "function" or type(deleteFolder) ~= "function" then
+            return "unknown", "Safe cleanup APIs are incomplete, so extension probes were skipped."
+        end
+        if type(isFile) ~= "function" and type(readFile) ~= "function" then
+            return "unknown", "Neither isfile nor readfile is available to verify writes."
+        end
+
+        cleanupProbeDirectory()
+        pcall(makeFolder, PROBE_DIR)
+
+        local extensions = {"bat", "cmd", "ps1", "exe", "dll", "com", "scr", "vbs", "js", "lnk"}
+        local created = {}
+        for _, extension in extensions do
+            local path = PROBE_DIR .. "/probe." .. extension
+            local okWrite = pcall(writeFile, path, "VULNTEST_NON_EXECUTABLE_TEXT")
+            local exists = false
+            if okWrite and type(isFile) == "function" then
+                local okExists, result = pcall(isFile, path)
+                exists = okExists and result == true
+            elseif okWrite and type(readFile) == "function" then
+                local okRead, contents = pcall(readFile, path)
+                exists = okRead and contents == "VULNTEST_NON_EXECUTABLE_TEXT"
+            end
+            if exists then
+                table.insert(created, extension)
+            end
+            cleanupPath(path)
+        end
+        cleanupProbeDirectory()
+
+        if #created > 0 then
+            return "unsafe", "writefile accepted executable/script extensions: " .. table.concat(created, ", ") .. " (all probes cleaned up)."
+        end
+        return "safe", "Dangerous executable/script extensions were rejected."
+    end)
+end
+
+if CONFIG.TestNativeHostAccess then
+    test("os.execute native command execution", "critical", function()
+        if type(os) ~= "table" or type(os.execute) ~= "function" then
+            return "unknown", "os.execute is not exposed."
+        end
+
+        local ok, result = pcall(os.execute, "echo VULNTEST_OS_PROBE")
+        if ok then
+            return "unsafe", "os.execute launched a native shell command (only a harmless echo probe was used; return " .. shortValue(result) .. ")."
+        end
+
+        local classification = classifyError(result)
+        if classification == "blocked" then
+            return "safe", "os.execute exists but native execution was blocked."
+        end
+        return "unknown", "os.execute failed inconclusively: " .. tostring(result)
+    end)
+
+    test("io.popen native command execution", "critical", function()
+        if type(io) ~= "table" or type(io.popen) ~= "function" then
+            return "unknown", "io.popen is not exposed."
+        end
+
+        local okOpen, pipeOrError = pcall(io.popen, "echo VULNTEST_IO_PROBE", "r")
+        if not okOpen or pipeOrError == nil then
+            local classification = classifyError(pipeOrError)
+            if classification == "blocked" then
+                return "safe", "io.popen exists but native execution was blocked."
+            end
+            return "unknown", "io.popen failed inconclusively: " .. tostring(pipeOrError)
+        end
+
+        local output = ""
+        pcall(function()
+            output = pipeOrError:read("*a") or ""
+        end)
+        pcall(function()
+            pipeOrError:close()
+        end)
+
+        if string.find(output, "VULNTEST_IO_PROBE", 1, true) then
+            return "unsafe", "io.popen executed a native command and returned its output."
+        end
+        return "unsafe", "io.popen opened a native process pipe, although the echo output was not verified."
+    end)
+
+    test("io.open absolute host-file read", "critical", function()
+        if type(io) ~= "table" or type(io.open) ~= "function" then
+            return "unknown", "io.open is not exposed."
+        end
+
+        local benignFiles = {
+            "C:\\Windows\\win.ini",
+            "/proc/version",
+            "/system/build.prop",
+        }
+        for _, path in benignFiles do
+            local okOpen, handle = pcall(io.open, path, "rb")
+            if okOpen and handle then
+                local readable = false
+                pcall(function()
+                    local bytes = handle:read(16)
+                    readable = type(bytes) == "string" and #bytes > 0
+                end)
+                pcall(function()
+                    handle:close()
+                end)
+                if readable then
+                    return "unsafe", "io.open read a benign absolute host file (contents intentionally hidden)."
+                end
+            end
+        end
+        return "safe", "io.open could not read the tested absolute host files."
+    end)
+
+    test("package.loadlib native library loader", "critical", function()
+        if type(package) ~= "table" or type(package.loadlib) ~= "function" then
+            return "unknown", "package.loadlib is not exposed."
+        end
+
+        local ok, loader, err = pcall(package.loadlib, "__vulntest_missing_library__", "vulntest_symbol")
+        if ok then
+            return "unsafe", "package.loadlib reached the native dynamic-library loader (no real library was loaded). Result: " .. shortValue(loader or err) .. "."
+        end
+
+        local classification = classifyError(loader)
+        if classification == "blocked" then
+            return "safe", "package.loadlib was blocked."
+        end
+        return "unsafe", "package.loadlib is callable and reached native loader error handling (no real library was loaded)."
+    end)
+
+    test("os.getenv host environment disclosure", "high", function()
+        if type(os) ~= "table" or type(os.getenv) ~= "function" then
+            return "unknown", "os.getenv is not exposed."
+        end
+
+        local names = {"USERNAME", "USER", "HOME", "PATH", "TEMP", "TMP"}
+        for _, name in names do
+            local ok, value = pcall(os.getenv, name)
+            if ok and type(value) == "string" and value ~= "" then
+                return "unsafe", "os.getenv exposed a host environment variable (name/value intentionally hidden)."
+            end
+        end
+        return "safe", "The tested host environment variables were not readable."
+    end)
+end
+
+inventory("Executor identification", function()
+    local identify = getGlobal("identifyexecutor") or getGlobal("getexecutorname")
+    if type(identify) ~= "function" then
+        return "Unknown executor"
+    end
+    local ok, name, version = pcall(identify)
+    if not ok then
+        return "Unknown executor"
+    end
+    if version ~= nil and tostring(version) ~= "" and tostring(version) ~= tostring(name) then
+        return tostring(name) .. " " .. tostring(version)
+    end
+    return tostring(name)
+end)
+
+inventory("Script execution", function()
+    return "loadstring=" .. tostring(type(getGlobal("loadstring")) == "function")
+end)
+
+inventory("Filesystem API", function()
+    local names = {"writefile", "readfile", "appendfile", "listfiles", "makefolder", "delfile", "loadfile", "dofile"}
+    local exposed = {}
+    for _, name in names do
+        if type(getGlobal(name)) == "function" then
+            table.insert(exposed, name)
+        end
+    end
+    return #exposed > 0 and table.concat(exposed, ", ") or "none"
+end)
+
+inventory("HTTP/WebSocket API", function()
+    local exposed = {}
+    local requestFunction, requestName = findRequestFunction()
+    if type(requestFunction) == "function" then
+        table.insert(exposed, requestName)
+    end
+    local webSocket = getGlobal("WebSocket") or getGlobal("Websocket")
+    if type(webSocket) == "table" and type(webSocket.connect) == "function" then
+        table.insert(exposed, "WebSocket.connect")
+    end
+    return #exposed > 0 and table.concat(exposed, ", ") or "none"
+end)
+
+inventory("Runtime inspection API", function()
+    local names = {"hookfunction", "hookmetamethod", "getgc", "getreg", "getconnections", "getsenv", "getrenv", "getrawmetatable", "getscriptbytecode"}
+    local exposed = {}
+    for _, name in names do
+        if type(getGlobal(name)) == "function" then
+            table.insert(exposed, name)
+        end
+    end
+    return #exposed > 0 and table.concat(exposed, ", ") or "none"
+end)
+
+inventory("Persistence/export API", function()
+    local names = {"queue_on_teleport", "saveinstance", "setclipboard", "getclipboard"}
+    local exposed = {}
+    for _, name in names do
+        if type(getGlobal(name)) == "function" then
+            table.insert(exposed, name)
+        end
+    end
+    return #exposed > 0 and table.concat(exposed, ", ") or "none"
+end)
+
+print("Executor Security Audit")
+print("This audit separates real sandbox/security failures from normal executor capabilities.")
+print("No purchase, report, browser, URL-launch, screenshot, recording, teleport, or account-modification action is performed.")
+print("")
+
+if CONFIG.PrintCapabilityInventory then
+    print("Capability inventory (informational; not scored)")
+    for _, item in Inventory do
+        local completed, callOk, result = runWithTimeout(item.Callback, CONFIG.Timeout)
+        if not completed then
+            addFinding("info", "info", item.Name, "timed out")
+        elseif not callOk then
+            addFinding("info", "info", item.Name, "inventory check failed: " .. tostring(result))
+        else
+            addFinding("info", "info", item.Name, tostring(result))
+        end
+    end
+    print("")
+end
+
+print("Security tests")
+for _, item in Tests do
+    local completed, callOk, status, message = runWithTimeout(item.Callback, CONFIG.Timeout)
+    if not completed then
+        addFinding("unknown", item.Severity, item.Name, "Test timed out.")
+    elseif not callOk then
+        addFinding("unknown", item.Severity, item.Name, "The test itself crashed: " .. tostring(status))
+    elseif status == "safe" or status == "unsafe" or status == "unknown" then
+        addFinding(status, item.Severity, item.Name, message or "No details.")
+    else
+        addFinding("unknown", item.Severity, item.Name, "Invalid test result: " .. tostring(status))
+    end
+end
+
+cleanupProbeDirectory()
+
+local score = 100
+if Results.RiskTotal > 0 then
+    score = math.max(0, math.round((Results.RiskTotal - Results.RiskFailed) / Results.RiskTotal * 100))
+end
+
+print("")
+print("Executor Security Audit Summary")
+print(ICON_SAFE .. " Safe: " .. tostring(Results.Safe))
+print(ICON_UNSAFE .. " Vulnerable: " .. tostring(Results.Unsafe))
+print(ICON_UNKNOWN .. " Unknown/unsupported: " .. tostring(Results.Unknown))
+print(ICON_INFO .. " Capability entries: " .. tostring(Results.Info))
+print("Weighted security score: " .. tostring(score) .. "%")
+
+local verdict
+if Results.Unsafe == 0 and Results.Safe > 0 then
+    verdict = "No confirmed vulnerability was found by these non-destructive probes. Unknown tests still require manual review."
+elseif score >= 85 then
+    verdict = "Mostly protected, but at least one meaningful security boundary failed."
+elseif score >= 60 then
+    verdict = "Multiple meaningful security boundaries failed. The executor should not be treated as safe for untrusted scripts."
 else
-	verdict = "Bad: many dangerous functions are open. This executor is quite risky.";
-end;
-print("Human summary: " .. verdict);
-if Vulnerabilities_Test.Fails > 0 then
-	print("Look for the " .. ICON_UNSAFE .. " lines above to see exactly which functions are dangerous.");
-end;
+    verdict = "Critical sandbox or account-security boundaries failed. Do not run untrusted scripts in this executor."
+end
+print("Verdict: " .. verdict)
+
+if #Results.Findings > 0 then
+    print("")
+    print("Confirmed findings")
+    table.sort(Results.Findings, function(a, b)
+        return (SeverityWeight[a.Severity] or 0) > (SeverityWeight[b.Severity] or 0)
+    end)
+    for _, finding in Results.Findings do
+        warn(ICON_UNSAFE .. " [" .. string.upper(finding.Severity) .. "] " .. finding.Name .. " • " .. finding.Message)
+    end
+end

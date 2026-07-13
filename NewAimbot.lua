@@ -186,6 +186,7 @@ local aimCamTween = nil;
 local lockCamLoop = nil;
 _G.__vyperiaLockOpt = type(_G.__vyperiaLockOpt) == "table" and _G.__vyperiaLockOpt or {};
 VLO = _G.__vyperiaLockOpt;
+VLO.aimOrigin = {};
 VLO.deathWatch = type(VLO.deathWatch) == "table" and VLO.deathWatch or {};
 VLO.scanGap = 0;
 VLO.partGap = 0;
@@ -783,7 +784,11 @@ _G.tbCPS = _G.tbCPS or 8;
 _G.aimPredict = _G.aimPredict or false;
 _G.aimLead = _G.aimLead or 0.12;
 _G.aimRadius = _G.aimRadius or 150;
-_G.targetPointMode = _G.targetPointMode or "Cursor";
+_G.targetPointMode = _G.targetPointMode or (isMobilePlatform() and "Center" or "Cursor");
+_G.customAimPoints = type(_G.customAimPoints) == "table" and _G.customAimPoints or {};
+_G.followGuiPaths = type(_G.followGuiPaths) == "table" and _G.followGuiPaths or {};
+_G.aimPointOffsetX = math.clamp(tonumber(_G.aimPointOffsetX) or 0, -500, 500);
+_G.aimPointOffsetY = math.clamp(tonumber(_G.aimPointOffsetY) or 0, -500, 500);
 _G.fovCircleEnabled = _G.fovCircleEnabled ~= nil and _G.fovCircleEnabled or false;
 _G.fovCircleAlpha = _G.fovCircleAlpha ~= nil and _G.fovCircleAlpha or 0.25;
 _G.fovCircleThickness = _G.fovCircleThickness or 2;
@@ -858,7 +863,9 @@ local OPT = {
 	},
 	TARGET_POINT_OPTIONS = {
 		"Cursor",
-		"Center"
+		"Center",
+		"Custom",
+		"Follow GUI"
 	},
 	TARGET_PRIORITY_OPTIONS = {
 		"Crosshair",
@@ -1055,7 +1062,11 @@ local DEFAULT_CONFIG = {
 	aimPredict = false,
 	aimLead = 0.12,
 	aimRadius = 150,
-	targetPointMode = "Cursor",
+	targetPointMode = isMobilePlatform() and "Center" or "Cursor",
+	customAimPoints = {},
+	followGuiPaths = {},
+	aimPointOffsetX = 0,
+	aimPointOffsetY = 0,
 	fovCircleEnabled = false,
 	fovCircleAlpha = 0.25,
 	fovCircleThickness = 2,
@@ -1214,6 +1225,8 @@ local refreshMobileUI = function() end;
 local rebuildMobileHelper = function() end;
 local clampMobileHelperToScreen = function() end;
 local updateFOVCircle = function() end;
+VLO.aimOrigin.saveCfg = nil;
+VLO.aimOrigin.toast = nil;
 local handleOptionBind = function()
 	return false;
 end;
@@ -1297,13 +1310,19 @@ local function applyCustomUI()
 		uiRefs.content.BackgroundTransparency = _G.uiContentAlpha;
 	end;
 	if uiRefs.centerDot then
-		uiRefs.centerDot.Size = UDim2.new(0, _G.centerDotSize, 0, _G.centerDotSize);
-		uiRefs.centerDot.BackgroundTransparency = _G.centerDotAlpha;
+		local editing = uiRefs.aimOverlayMode == "custom";
+		local dotSize = editing and math.max(32, _G.centerDotSize) or _G.centerDotSize;
+		uiRefs.centerDot.Size = UDim2.new(0, dotSize, 0, dotSize);
+		uiRefs.centerDot.BackgroundTransparency = editing and math.min(_G.centerDotAlpha, 0.15) or _G.centerDotAlpha;
 		uiRefs.centerDot.BackgroundColor3 = UI.acc2;
 		local st = uiRefs.centerDot:FindFirstChildOfClass("UIStroke");
 		if st then
 			st.Color = UI.acc;
+			st.Thickness = editing and 3 or 2;
 		end;
+	end;
+	if type(uiRefs.refreshAimMarker) == "function" then
+		uiRefs.refreshAimMarker();
 	end;
 	if uiRefs.mobileHolder then
 		if rebuildMobileHelper then
@@ -1497,29 +1516,302 @@ local function getInputScreenPos(input)
 	end;
 	return Vector2.zero;
 end;
+VLO.aimOrigin.getTargetPointMode = function()
+	local fallback = isMobilePlatform() and "Center" or "Cursor";
+	local picked = normChoice(_G.targetPointMode, OPT.TARGET_POINT_OPTIONS, fallback);
+	if isMobileDevice() and picked == "Cursor" then
+		return "Center";
+	end;
+	return picked;
+end;
+VLO.aimOrigin.getAimPlaceKey = function()
+	return tostring(game.PlaceId);
+end;
+VLO.aimOrigin.getCustomAimRecord = function()
+	_G.customAimPoints = type(_G.customAimPoints) == "table" and _G.customAimPoints or {};
+	local key = VLO.aimOrigin.getAimPlaceKey();
+	local rec = _G.customAimPoints[key];
+	if type(rec) ~= "table" then
+		rec = {
+			X = 0.5,
+			Y = 0.5
+		};
+		_G.customAimPoints[key] = rec;
+	end;
+	rec.X = math.clamp(tonumber(rec.X) or 0.5, 0, 1);
+	rec.Y = math.clamp(tonumber(rec.Y) or 0.5, 0, 1);
+	return rec;
+end;
+VLO.aimOrigin.getAimPointOffset = function()
+	_G.aimPointOffsetX = math.clamp(tonumber(_G.aimPointOffsetX) or 0, -500, 500);
+	_G.aimPointOffsetY = math.clamp(tonumber(_G.aimPointOffsetY) or 0, -500, 500);
+	return Vector2.new(_G.aimPointOffsetX, _G.aimPointOffsetY);
+end;
+VLO.aimOrigin.getCustomAimPoint = function()
+	local vp = getViewport();
+	local rec = VLO.aimOrigin.getCustomAimRecord();
+	return Vector2.new(rec.X * vp.X, rec.Y * vp.Y);
+end;
+VLO.aimOrigin.setCustomAimPoint = function(point, saveNow)
+	local vp = getViewport();
+	local off = VLO.aimOrigin.getAimPointOffset();
+	local base = Vector2.new(point.X - off.X, point.Y - off.Y);
+	local rec = VLO.aimOrigin.getCustomAimRecord();
+	rec.X = math.clamp(base.X / math.max(vp.X, 1), 0, 1);
+	rec.Y = math.clamp(base.Y / math.max(vp.Y, 1), 0, 1);
+	_G.customAimPoints[VLO.aimOrigin.getAimPlaceKey()] = rec;
+	if saveNow then
+		VLO.aimOrigin.saveCfg();
+	end;
+	if type(uiRefs.refreshAimMarker) == "function" then
+		uiRefs.refreshAimMarker();
+	end;
+	updateFOVCircle();
+end;
+VLO.aimOrigin.followGuiCache = nil;
+VLO.aimOrigin.guiObjectVisible = function(obj)
+	if not obj or not obj.Parent or not obj:IsA("GuiObject") then
+		return false;
+	end;
+	if not obj.Visible or obj.AbsoluteSize.X <= 1 or obj.AbsoluteSize.Y <= 1 then
+		return false;
+	end;
+	local node = obj.Parent;
+	while node do
+		if node:IsA("GuiObject") and not node.Visible then
+			return false;
+		end;
+		if node:IsA("LayerCollector") and not node.Enabled then
+			return false;
+		end;
+		if node:IsA("PlayerGui") then
+			break;
+		end;
+		node = node.Parent;
+	end;
+	return true;
+end;
+VLO.aimOrigin.makeGuiPath = function(obj)
+	local playerGui = plr:FindFirstChildOfClass("PlayerGui");
+	if not playerGui or not obj then
+		return nil;
+	end;
+	local parts = {};
+	local node = obj;
+	while node and node ~= playerGui do
+		local parent = node.Parent;
+		local siblingIndex = 0;
+		if parent then
+			for _, sibling in parent:GetChildren() do
+				if sibling.Name == node.Name and sibling.ClassName == node.ClassName then
+					siblingIndex += 1;
+					if sibling == node then
+						break;
+					end;
+				end;
+			end;
+		end;
+		table.insert(parts, 1, {
+			Name = node.Name,
+			ClassName = node.ClassName,
+			Index = math.max(1, siblingIndex)
+		});
+		node = parent;
+	end;
+	if node ~= playerGui or #parts == 0 then
+		return nil;
+	end;
+	return parts;
+end;
+VLO.aimOrigin.getFollowGuiPath = function()
+	_G.followGuiPaths = type(_G.followGuiPaths) == "table" and _G.followGuiPaths or {};
+	local path = _G.followGuiPaths[VLO.aimOrigin.getAimPlaceKey()];
+	return type(path) == "table" and path or nil;
+end;
+VLO.aimOrigin.resolveFollowGuiObject = function()
+	if VLO.aimOrigin.guiObjectVisible(VLO.aimOrigin.followGuiCache) then
+		return VLO.aimOrigin.followGuiCache;
+	end;
+	VLO.aimOrigin.followGuiCache = nil;
+	local path = VLO.aimOrigin.getFollowGuiPath();
+	local node = plr:FindFirstChildOfClass("PlayerGui");
+	if not path or not node then
+		return nil;
+	end;
+	for _, segment in path do
+		if type(segment) ~= "table" then
+			return nil;
+		end;
+		local found = nil;
+		local wantedIndex = math.max(1, math.floor(tonumber(segment.Index) or 1));
+		local matchIndex = 0;
+		for _, child in node:GetChildren() do
+			if child.Name == tostring(segment.Name or "") and child.ClassName == tostring(segment.ClassName or "") then
+				matchIndex += 1;
+				if matchIndex == wantedIndex then
+					found = child;
+					break;
+				end;
+			end;
+		end;
+		if not found then
+			return nil;
+		end;
+		node = found;
+	end;
+	if VLO.aimOrigin.guiObjectVisible(node) then
+		VLO.aimOrigin.followGuiCache = node;
+		return node;
+	end;
+	return nil;
+end;
+VLO.aimOrigin.getFollowGuiPoint = function()
+	local obj = VLO.aimOrigin.resolveFollowGuiObject();
+	if not obj then
+		return nil;
+	end;
+	local pos = obj.AbsolutePosition;
+	local size = obj.AbsoluteSize;
+	return Vector2.new(pos.X + size.X * 0.5, pos.Y + size.Y * 0.5);
+end;
+VLO.aimOrigin.pickGuiObjectAtPoint = function(point)
+	local playerGui = plr:FindFirstChildOfClass("PlayerGui");
+	if not playerGui then
+		return nil;
+	end;
+	local ok, objects = pcall(function()
+		return playerGui:GetGuiObjectsAtPosition(point.X, point.Y);
+	end);
+	if not ok or type(objects) ~= "table" then
+		return nil;
+	end;
+	local vp = getViewport();
+	local viewportArea = math.max(vp.X * vp.Y, 1);
+	local best = nil;
+	local bestScore = math.huge;
+	for index, obj in objects do
+		local ownGui = gui and obj:IsDescendantOf(gui);
+		if not ownGui and VLO.aimOrigin.guiObjectVisible(obj) then
+			local size = obj.AbsoluteSize;
+			local area = math.max(size.X * size.Y, 1);
+			local lower = obj.Name:lower();
+			local named = lower:find("cross", 1, true) or lower:find("reticle", 1, true) or lower:find("aim", 1, true) or lower:find("scope", 1, true) or lower:find("dot", 1, true);
+			local hugePenalty = area > viewportArea * 0.4 and viewportArea or 0;
+			local nameBonus = named and viewportArea * 0.5 or 0;
+			local score = area + hugePenalty - nameBonus - math.max(0, tonumber(obj.ZIndex) or 0) * 0.01 + index * 0.001;
+			if score < bestScore then
+				bestScore = score;
+				best = obj;
+			end;
+		end;
+	end;
+	return best;
+end;
 local function getAimPoint()
 	local vp = getViewport();
-	if isMobileDevice() or ((not isMobilePlatform()) and tostring(_G.targetPointMode or "Cursor") == "Center") then
-		return Vector2.new(vp.X * 0.5, vp.Y * 0.5);
+	local modeName = VLO.aimOrigin.getTargetPointMode();
+	local base;
+	if modeName == "Center" then
+		base = Vector2.new(vp.X * 0.5, vp.Y * 0.5);
+	elseif modeName == "Custom" then
+		base = VLO.aimOrigin.getCustomAimPoint();
+	elseif modeName == "Follow GUI" then
+		base = VLO.aimOrigin.getFollowGuiPoint() or VLO.aimOrigin.getCustomAimPoint();
+	else
+		local ok, ml = pcall(function()
+			return UIS:GetMouseLocation();
+		end);
+		base = ok and typeof(ml) == "Vector2" and ml or Vector2.new(vp.X * 0.5, vp.Y * 0.5);
 	end;
-	local ml = UIS:GetMouseLocation();
-	return Vector2.new(ml.X, ml.Y);
+	local off = VLO.aimOrigin.getAimPointOffset();
+	return Vector2.new(math.clamp(base.X + off.X, 0, vp.X), math.clamp(base.Y + off.Y, 0, vp.Y));
+end;
+VLO.aimOrigin.getAimCameraCFrame = function(targetPosition)
+	local currentCamera = workspace.CurrentCamera or cam;
+	if not currentCamera or typeof(targetPosition) ~= "Vector3" then
+		return currentCamera and currentCamera.CFrame or CFrame.new();
+	end;
+	local current = currentCamera.CFrame;
+	local origin = current.Position;
+	local targetVector = targetPosition - origin;
+	if targetVector.Magnitude <= 0.0001 then
+		return current;
+	end;
+	local point = getAimPoint();
+	local ray = currentCamera:ViewportPointToRay(point.X, point.Y, 0);
+	local fromDirection = ray.Direction.Unit;
+	local toDirection = targetVector.Unit;
+	local dot = math.clamp(fromDirection:Dot(toDirection), -1, 1);
+	if dot >= 0.999999 then
+		return current;
+	end;
+	local axis = fromDirection:Cross(toDirection);
+	if axis.Magnitude <= 0.000001 then
+		axis = fromDirection:Cross(current.UpVector);
+		if axis.Magnitude <= 0.000001 then
+			axis = fromDirection:Cross(current.RightVector);
+		end;
+	end;
+	if axis.Magnitude <= 0.000001 then
+		return current;
+	end;
+	local delta = CFrame.fromAxisAngle(axis.Unit, math.acos(dot));
+	return CFrame.new(origin) * delta * current.Rotation;
+end;
+VLO.aimOrigin.beginCustomAimCalibration = function()
+	_G.targetPointMode = "Custom";
+	if type(uiRefs.beginAimOverlay) == "function" then
+		uiRefs.beginAimOverlay("custom");
+	else
+		local vp = getViewport();
+		VLO.aimOrigin.setCustomAimPoint(Vector2.new(vp.X * 0.5, vp.Y * 0.5), true);
+	end;
+	updateFOVCircle();
+end;
+VLO.aimOrigin.setCustomAimFromCursor = function()
+	_G.targetPointMode = "Custom";
+	VLO.aimOrigin.setCustomAimPoint(getInputScreenPos(), true);
+	VLO.aimOrigin.toast("custom aim point set");
+end;
+VLO.aimOrigin.resetCustomAimPoint = function()
+	_G.targetPointMode = "Custom";
+	local vp = getViewport();
+	VLO.aimOrigin.setCustomAimPoint(Vector2.new(vp.X * 0.5, vp.Y * 0.5), true);
+	VLO.aimOrigin.toast("custom aim point reset");
+end;
+VLO.aimOrigin.beginFollowGuiPick = function()
+	if type(uiRefs.beginAimOverlay) == "function" then
+		uiRefs.beginAimOverlay("follow");
+	end;
+end;
+VLO.aimOrigin.clearFollowGui = function()
+	_G.followGuiPaths = type(_G.followGuiPaths) == "table" and _G.followGuiPaths or {};
+	_G.followGuiPaths[VLO.aimOrigin.getAimPlaceKey()] = nil;
+	VLO.aimOrigin.followGuiCache = nil;
+	if VLO.aimOrigin.getTargetPointMode() == "Follow GUI" then
+		_G.targetPointMode = "Custom";
+	end;
+	VLO.aimOrigin.saveCfg();
+	updateFOVCircle();
+	VLO.aimOrigin.toast("followed crosshair cleared");
 end;
 updateFOVCircle = function()
 	local circ = uiRefs.fovCircle;
-	if not circ then
-		return;
-	end;
-	local r = math.clamp(tonumber(_G.aimRadius) or 150, 10, 900);
 	local pos = getAimPoint();
-	circ.Visible = _G.fovCircleEnabled == true;
-	circ.Position = UDim2.new(0, pos.X, 0, pos.Y);
-	circ.Size = UDim2.new(0, r * 2, 0, r * 2);
-	local st = circ:FindFirstChildOfClass("UIStroke");
-	if st then
-		st.Color = UI.acc2;
-		st.Transparency = math.clamp(tonumber(_G.fovCircleAlpha) or 0.25, 0, 1);
-		st.Thickness = math.clamp(tonumber(_G.fovCircleThickness) or 2, 1, 8);
+	if circ then
+		local r = math.clamp(tonumber(_G.aimRadius) or 150, 10, 900);
+		circ.Visible = _G.fovCircleEnabled == true;
+		circ.Position = UDim2.new(0, pos.X, 0, pos.Y);
+		circ.Size = UDim2.new(0, r * 2, 0, r * 2);
+		local st = circ:FindFirstChildOfClass("UIStroke");
+		if st then
+			st.Color = UI.acc2;
+			st.Transparency = math.clamp(tonumber(_G.fovCircleAlpha) or 0.25, 0, 1);
+			st.Thickness = math.clamp(tonumber(_G.fovCircleThickness) or 2, 1, 8);
+		end;
+	end;
+	if type(uiRefs.refreshAimMarker) == "function" then
+		uiRefs.refreshAimMarker(pos);
 	end;
 end;
 local function frameSizeForViewport()
@@ -1986,7 +2278,7 @@ local function sanitizeNumber(txt, min, max, def)
 	end;
 	return num;
 end;
-local function toast(msg)
+VLO.aimOrigin.toast = function(msg)
 	if not gui or (not toastHolder) then
 		return;
 	end;
@@ -2113,7 +2405,7 @@ local function toast(msg)
 		end);
 	end);
 end;
-local function saveCfg(forceSave, nameOverride)
+VLO.aimOrigin.saveCfg = function(forceSave, nameOverride)
 	if not writefile or (not HS) then
 		return;
 	end;
@@ -2168,6 +2460,10 @@ local function saveCfg(forceSave, nameOverride)
 		aimLead = _G.aimLead,
 		aimRadius = _G.aimRadius,
 		targetPointMode = _G.targetPointMode,
+		customAimPoints = _G.customAimPoints,
+		followGuiPaths = _G.followGuiPaths,
+		aimPointOffsetX = _G.aimPointOffsetX,
+		aimPointOffsetY = _G.aimPointOffsetY,
 		fovCircleEnabled = _G.fovCircleEnabled,
 		fovCircleAlpha = _G.fovCircleAlpha,
 		fovCircleThickness = _G.fovCircleThickness,
@@ -2266,7 +2562,19 @@ local function applyCfg(obj)
 		obj.pendingBindAction = normChoice(obj.pendingBindAction, OPT.BIND_ACTION_OPTIONS, "Aimbot");
 	end;
 	if obj.targetPointMode then
-		obj.targetPointMode = normChoice(obj.targetPointMode, OPT.TARGET_POINT_OPTIONS, "Cursor");
+		obj.targetPointMode = normChoice(obj.targetPointMode, OPT.TARGET_POINT_OPTIONS, isMobilePlatform() and "Center" or "Cursor");
+	end;
+	if type(obj.customAimPoints) ~= "table" then
+		obj.customAimPoints = nil;
+	end;
+	if type(obj.followGuiPaths) ~= "table" then
+		obj.followGuiPaths = nil;
+	end;
+	if obj.aimPointOffsetX ~= nil then
+		obj.aimPointOffsetX = math.clamp(tonumber(obj.aimPointOffsetX) or 0, -500, 500);
+	end;
+	if obj.aimPointOffsetY ~= nil then
+		obj.aimPointOffsetY = math.clamp(tonumber(obj.aimPointOffsetY) or 0, -500, 500);
 	end;
 	if obj.selectedConfigName then
 		obj.selectedConfigName = cleanCfgName(obj.selectedConfigName);
@@ -2374,7 +2682,11 @@ end;
 loadCfg();
 _G.selectedConfigName = cleanCfgName(_G.selectedConfigName);
 _G.autoSaveConfigs = _G.autoSaveConfigs == true;
-_G.targetPointMode = normChoice(_G.targetPointMode, OPT.TARGET_POINT_OPTIONS, "Cursor");
+_G.targetPointMode = normChoice(_G.targetPointMode, OPT.TARGET_POINT_OPTIONS, isMobilePlatform() and "Center" or "Cursor");
+_G.customAimPoints = type(_G.customAimPoints) == "table" and _G.customAimPoints or {};
+_G.followGuiPaths = type(_G.followGuiPaths) == "table" and _G.followGuiPaths or {};
+_G.aimPointOffsetX = math.clamp(tonumber(_G.aimPointOffsetX) or 0, -500, 500);
+_G.aimPointOffsetY = math.clamp(tonumber(_G.aimPointOffsetY) or 0, -500, 500);
 _G.fovCircleAlpha = math.clamp(tonumber(_G.fovCircleAlpha) or 0.25, 0, 1);
 _G.fovCircleThickness = math.clamp(tonumber(_G.fovCircleThickness) or 2, 1, 8);
 _G.espRenderMode = normChoice(_G.espRenderMode, OPT.ESP_RENDER_OPTIONS, "Highlight");
@@ -3824,11 +4136,74 @@ local function addRowToggle(parent, labelText, var, desc)
 			resetAimCaches(false);
 		end;
 		if var == "autoSaveConfigs" then
-			saveCfg(true);
+			VLO.aimOrigin.saveCfg(true);
 			return;
 		end;
-		saveCfg();
+		VLO.aimOrigin.saveCfg();
 	end);
+	return row;
+end;
+VLO.aimOrigin.addRowButtons = function(parent, labelText, desc, buttons)
+	local row = newUi("Frame", parent);
+	setUiTag(row, "Row");
+	row.BackgroundTransparency = 1;
+	row.ZIndex = 8;
+	row.Size = UDim2.new(1, -24, 0, desc and (_G.uiCompact and 52 or 60) or (_G.uiCompact and 34 or 40));
+	local lbl = newUi("TextLabel", row);
+	lbl.Size = UDim2.new(0.48, -8, 0, 20);
+	lbl.Position = UDim2.new(0, 0, 0, 0);
+	lbl.BackgroundTransparency = 1;
+	lbl.Font = Enum.Font.GothamMedium;
+	lbl.TextSize = 14;
+	lbl.TextXAlignment = Enum.TextXAlignment.Left;
+	lbl.Text = labelText;
+	lbl.TextColor3 = UI.text;
+	if desc then
+		local dl = newUi("TextLabel", row);
+		dl.BackgroundTransparency = 1;
+		dl.Text = desc;
+		dl.TextColor3 = UI.sub;
+		dl.TextTransparency = 0.2;
+		dl.Font = Enum.Font.Gotham;
+		dl.TextSize = 12;
+		dl.TextWrapped = true;
+		dl.TextXAlignment = Enum.TextXAlignment.Left;
+		dl.TextYAlignment = Enum.TextYAlignment.Top;
+		dl.Position = UDim2.new(0, 0, 0, 22);
+		dl.Size = UDim2.new(0.48, -8, 0, 30);
+	end;
+	local holder = newUi("Frame", row);
+	holder.BackgroundTransparency = 1;
+	holder.Size = UDim2.new(0.5, 0, 0, 32);
+	holder.Position = UDim2.new(0.5, 0, 0.5, -16);
+	local layout = newUi("UIListLayout", holder);
+	layout.FillDirection = Enum.FillDirection.Horizontal;
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Right;
+	layout.VerticalAlignment = Enum.VerticalAlignment.Center;
+	layout.Padding = UDim.new(0, 6);
+	layout.SortOrder = Enum.SortOrder.LayoutOrder;
+	local count = math.max(1, #(buttons or {}));
+	local buttonOffset = -math.ceil((math.max(0, count - 1) * 6) / count);
+	for index, spec in buttons or {} do
+		local btn = newUi("TextButton", holder);
+		btn.LayoutOrder = index;
+		btn.Size = UDim2.new(1 / count, buttonOffset, 0, 30);
+		btn.BackgroundColor3 = spec.color or UI.bar2;
+		btn.BackgroundTransparency = 0.02;
+		btn.BorderSizePixel = 0;
+		btn.AutoButtonColor = false;
+		btn.Text = tostring(spec.text or "RUN");
+		btn.TextColor3 = UI.text;
+		btn.Font = Enum.Font.GothamBold;
+		btn.TextSize = 11;
+		round(btn, UDim.new(0, 12));
+		stroke(btn, 1, spec.stroke or UI.stroke2, 0.18);
+		bindClick(btn, function()
+			if type(spec.callback) == "function" then
+				spec.callback();
+			end;
+		end);
+	end;
 	return row;
 end;
 local function addRowDropdown(parent, labelText, var, options, desc, onChange)
@@ -3971,7 +4346,7 @@ local function addRowDropdown(parent, labelText, var, options, desc, onChange)
 		if onChange then
 			onChange(_G[var]);
 		end;
-		saveCfg();
+		VLO.aimOrigin.saveCfg();
 	end;
 	local closeOpenDropdown;
 	local function rebuildOptions()
@@ -4194,7 +4569,7 @@ local function addRowToggleSlider(parent, labelText, varToggle, valueVar, min, m
 		if valueVar == "fovValue" and _G.fovEnabled and cam then
 			cam.FieldOfView = n;
 		end;
-		saveCfg();
+		VLO.aimOrigin.saveCfg();
 		if not fromDrag then
 			tw(knob, TweenInfo.new(0.08), {
 				BackgroundColor3 = UI.knob
@@ -4311,7 +4686,7 @@ local function addRowSlider(parent, labelText, valueVar, min, max, decimals, des
 			onChange(n);
 		end;
 		if not fromDrag then
-			saveCfg();
+			VLO.aimOrigin.saveCfg();
 			tw(knob, TweenInfo.new(0.08), {
 				BackgroundColor3 = UI.knob
 			});
@@ -4803,12 +5178,46 @@ local function createUI()
 			bumpRandomAim();
 		end;
 	end);
-	if not isMobilePlatform() then
-		addRowDropdown(pgAim, "target point", "targetPointMode", OPT.TARGET_POINT_OPTIONS, "PC only: use cursor or screen center", function()
-			_G.targetPointMode = normChoice(_G.targetPointMode, OPT.TARGET_POINT_OPTIONS, "Cursor");
-			updateFOVCircle();
-		end);
-	end;
+	addRowDropdown(pgAim, "aim origin", "targetPointMode", OPT.TARGET_POINT_OPTIONS, "cursor, center, custom point, or a selected game crosshair", function()
+		_G.targetPointMode = normChoice(_G.targetPointMode, OPT.TARGET_POINT_OPTIONS, isMobilePlatform() and "Center" or "Cursor");
+		updateFOVCircle();
+		VLO.aimOrigin.saveCfg();
+	end);
+	VLO.aimOrigin.addRowButtons(pgAim, "custom position", "tap or drag a normalized per-game aim point", {
+		{
+			text = "EDIT",
+			color = UI.acc,
+			stroke = UI.acc2,
+			callback = VLO.aimOrigin.beginCustomAimCalibration
+		},
+		{
+			text = "CURSOR",
+			callback = VLO.aimOrigin.setCustomAimFromCursor
+		},
+		{
+			text = "CENTER",
+			callback = VLO.aimOrigin.resetCustomAimPoint
+		}
+	});
+	VLO.aimOrigin.addRowButtons(pgAim, "game crosshair", "select a PlayerGui object and follow its live center", {
+		{
+			text = "PICK",
+			color = UI.acc2,
+			stroke = UI.acc,
+			callback = VLO.aimOrigin.beginFollowGuiPick
+		},
+		{
+			text = "CLEAR",
+			color = UI.danger,
+			callback = VLO.aimOrigin.clearFollowGui
+		}
+	});
+	addRowSlider(pgAim, "aim origin X offset", "aimPointOffsetX", -500, 500, 0, "fine horizontal correction in pixels", function()
+		updateFOVCircle();
+	end);
+	addRowSlider(pgAim, "aim origin Y offset", "aimPointOffsetY", -500, 500, 0, "fine vertical correction in pixels", function()
+		updateFOVCircle();
+	end);
 	addRowToggle(pgAim, "lock to nearest", "lockToNearest");
 	addRowToggle(pgAim, "show FOV circle", "fovCircleEnabled", "draws the current target radius");
 	addRowSlider(pgAim, "FOV radius", "aimRadius", 10, 400, 0, "targeting circle radius (px)", function()
@@ -4861,7 +5270,7 @@ local function createUI()
 	addRowDropdown(pgTarget, "target priority", "targetPriorityMode", OPT.TARGET_PRIORITY_OPTIONS, "choose how targets are sorted", function(v)
 		_G.targetPriorityMode = normChoice(v, OPT.TARGET_PRIORITY_OPTIONS, "Crosshair");
 		_G.lockToNearest = _G.targetPriorityMode == "Distance";
-		saveCfg();
+		VLO.aimOrigin.saveCfg();
 	end);
 	addRowToggle(pgTarget, "sticky target", "stickyTarget", "keep the current target while it stays valid");
 	addRowSlider(pgTarget, "max target distance", "targetMaxDistance", 100, 5000, 0, "ignore targets farther than this");
@@ -4946,21 +5355,22 @@ local function createUI()
 		applyCustomUI();
 	end);
 	addRowToggle(pgCustom, "compact toasts", "toastCompact", "shorter notification cards");
+	addSection(pgCustom, "aim origin marker");
+	addRowToggle(pgCustom, "aim origin marker", "centerDotVisible", "show the selected non-cursor aim origin");
+	addRowSlider(pgCustom, "aim marker size", "centerDotSize", 4, 40, 0, "aim origin marker size", function()
+		applyCustomUI();
+	end);
+	addRowSlider(pgCustom, "aim marker transparency", "centerDotAlpha", 0, 1, 2, "0 = visible, 1 = hidden", function()
+		applyCustomUI();
+	end);
 	if isMobilePlatform() then
-	addSection(pgCustom, "mobile / center point");
-	addRowToggle(pgCustom, "center dot", "centerDotVisible", "show the mobile center lock point");
-	addRowSlider(pgCustom, "center dot size", "centerDotSize", 4, 40, 0, "center lock marker size", function()
-		applyCustomUI();
-	end);
-	addRowSlider(pgCustom, "center dot transparency", "centerDotAlpha", 0, 1, 2, "0 = visible, 1 = hidden", function()
-		applyCustomUI();
-	end);
-	addRowSlider(pgCustom, "mobile button scale", "mobileButtonScale", 0.7, 1.45, 2, "floating button size", function()
-		applyCustomUI();
-	end);
-	addRowSlider(pgCustom, "mobile button transparency", "mobileButtonAlpha", 0, 0.75, 2, "floating button transparency", function()
-		applyCustomUI();
-	end);
+		addSection(pgCustom, "mobile helper");
+		addRowSlider(pgCustom, "mobile button scale", "mobileButtonScale", 0.7, 1.45, 2, "floating button size", function()
+			applyCustomUI();
+		end);
+		addRowSlider(pgCustom, "mobile button transparency", "mobileButtonAlpha", 0, 0.75, 2, "floating button transparency", function()
+			applyCustomUI();
+		end);
 	end;
 	local function addRow(parent, labelText, valueText, copyFn)
 		local row = newUi("Frame", parent);
@@ -5003,7 +5413,7 @@ local function createUI()
 				if setclipboard then
 					setclipboard(v);
 				end;
-				toast("copied");
+				VLO.aimOrigin.toast("copied");
 			end);
 		end;
 		return val;
@@ -5072,7 +5482,7 @@ local function createUI()
 				end;
 				_G.toggleKeys = list;
 				rebindStrongInputs();
-				saveCfg();
+				VLO.aimOrigin.saveCfg();
 			end);
 		end;
 	end;
@@ -5130,7 +5540,7 @@ local function createUI()
 			return;
 		end;
 		capMode = true;
-		toast("press a key");
+		VLO.aimOrigin.toast("press a key");
 		capConn = UIS.InputBegan:Connect(function(i, gp)
 			if gp then
 				return;
@@ -5153,7 +5563,7 @@ local function createUI()
 				_G.toggleKeys = list;
 				rebuildChips();
 				rebindStrongInputs();
-				saveCfg();
+				VLO.aimOrigin.saveCfg();
 			end;
 			stopCap();
 		end);
@@ -5163,7 +5573,7 @@ local function createUI()
 		_G.toggleKeys = {};
 		rebuildChips();
 		rebindStrongInputs();
-		saveCfg();
+		VLO.aimOrigin.saveCfg();
 	end);
 	local lockLbl = newUi("TextLabel", pgSettings);
 	lockLbl.BackgroundTransparency = 1;
@@ -5192,7 +5602,7 @@ local function createUI()
 		end;
 		lockCapMode = true;
 		capMode = true;
-		toast("press key or mouse for lock");
+		VLO.aimOrigin.toast("press key or mouse for lock");
 		lockCapConn = UIS.InputBegan:Connect(function(i, gp)
 			if not lockCapMode then
 				return;
@@ -5212,7 +5622,7 @@ local function createUI()
 			_G.lockKey = name;
 			lockBtn.Text = name;
 			rebindStrongInputs();
-			saveCfg();
+			VLO.aimOrigin.saveCfg();
 			stopLockCap();
 		end);
 		table.insert(conns, lockCapConn);
@@ -5231,14 +5641,19 @@ local function createUI()
 		_G.lockKey = "MouseButton2";
 		lockBtn.Text = "MouseButton2";
 		rebindStrongInputs();
-		saveCfg();
-		toast("lock key reset to MouseButton2");
+		VLO.aimOrigin.saveCfg();
+		VLO.aimOrigin.toast("lock key reset to MouseButton2");
 	end);
 	addSection(pgSettings, "configs");
 	addRowToggle(pgSettings, "auto save configs", "autoSaveConfigs", "save changes instantly or only when you press save");
 	local function refreshLoadedConfigRuntime()
 		_G.selectedConfigName = cleanCfgName(_G.selectedConfigName);
-		_G.targetPointMode = normChoice(_G.targetPointMode, OPT.TARGET_POINT_OPTIONS, "Cursor");
+		_G.targetPointMode = normChoice(_G.targetPointMode, OPT.TARGET_POINT_OPTIONS, isMobilePlatform() and "Center" or "Cursor");
+		_G.customAimPoints = type(_G.customAimPoints) == "table" and _G.customAimPoints or {};
+		_G.followGuiPaths = type(_G.followGuiPaths) == "table" and _G.followGuiPaths or {};
+		_G.aimPointOffsetX = math.clamp(tonumber(_G.aimPointOffsetX) or 0, -500, 500);
+		_G.aimPointOffsetY = math.clamp(tonumber(_G.aimPointOffsetY) or 0, -500, 500);
+		VLO.aimOrigin.followGuiCache = nil;
 		_G.pendingBindAction = normChoice(_G.pendingBindAction, OPT.BIND_ACTION_OPTIONS, "Aimbot");
 		_G.pendingMobileAction = normChoice(_G.pendingMobileAction, OPT.MOBILE_ACTION_OPTIONS, "Aimbot");
 		_G.targetPriorityMode = normChoice(_G.targetPriorityMode, OPT.TARGET_PRIORITY_OPTIONS, "Crosshair");
@@ -5456,20 +5871,20 @@ local function createUI()
 	stroke(delCfgBtn, 1, UI.stroke2, 0.15);
 	bindClick(saveCfgBtn, function()
 		syncConfigNameBox();
-		saveCfg(true, _G.selectedConfigName);
+		VLO.aimOrigin.saveCfg(true, _G.selectedConfigName);
 		refreshConfigPicker();
-		toast("config saved");
+		VLO.aimOrigin.toast("config saved");
 	end);
 	bindClick(loadCfgBtn, function()
 		syncConfigNameBox();
 		if not loadNameCfg(_G.selectedConfigName) then
-			toast("config not found");
+			VLO.aimOrigin.toast("config not found");
 			return;
 		end;
 		cfgNameBox.Text = cleanCfgName(_G.selectedConfigName);
 		refreshLoadedConfigRuntime();
 		refreshConfigPicker();
-		toast("config loaded");
+		VLO.aimOrigin.toast("config loaded");
 	end);
 	bindClick(delCfgBtn, function()
 		syncConfigNameBox();
@@ -5483,7 +5898,7 @@ local function createUI()
 		saveMeta();
 		refreshLoadedConfigRuntime();
 		refreshConfigPicker();
-		toast("config reset to default");
+		VLO.aimOrigin.toast("config reset to default");
 	end);
 	addSection(pgSettings, "option binds");
 	_G.pendingBindAction = normChoice(_G.pendingBindAction, OPT.BIND_ACTION_OPTIONS, "Aimbot");
@@ -5564,7 +5979,7 @@ local function createUI()
 				_G.optionBinds[keyName] = nil;
 				rebuildOptionBindRows();
 				rebindStrongInputs();
-				saveCfg();
+				VLO.aimOrigin.saveCfg();
 			end);
 		end;
 		if not any then
@@ -5588,7 +6003,7 @@ local function createUI()
 		end;
 		capMode = true;
 		local action = normChoice(_G.pendingBindAction, OPT.BIND_ACTION_OPTIONS, "Aimbot");
-		toast("press key for " .. action);
+		VLO.aimOrigin.toast("press key for " .. action);
 		capConn = UIS.InputBegan:Connect(function(i, gp)
 			if gp then
 				return;
@@ -5604,7 +6019,7 @@ local function createUI()
 			_G.optionBinds[i.KeyCode.Name] = action;
 			rebuildOptionBindRows();
 			rebindStrongInputs();
-			saveCfg();
+			VLO.aimOrigin.saveCfg();
 			stopCap();
 		end);
 	end);
@@ -5612,13 +6027,13 @@ local function createUI()
 		_G.optionBinds = {};
 		rebuildOptionBindRows();
 		rebindStrongInputs();
-		saveCfg();
+		VLO.aimOrigin.saveCfg();
 	end);
 	if isMobilePlatform() then
 		addSection(pgSettings, "mobile helper");
 		addRowToggle(pgSettings, "mobile center aim", "mobileCenterAim", "touch devices use the exact screen center instead of cursor");
 		addRowToggle(pgSettings, "mobile buttons", "mobileButtons", "floating lock and menu buttons for touch devices");
-		addRowToggle(pgSettings, "center dot visible", "centerDotVisible", "show or hide the mobile center marker");
+		addRowToggle(pgSettings, "aim origin marker", "centerDotVisible", "show or hide the active non-cursor aim point");
 		addRowDropdown(pgSettings, "helper button", "pendingMobileAction", OPT.MOBILE_ACTION_OPTIONS, "pick what the add helper button action inserts");
 		local helperBox = newUi("Frame", pgSettings);
 		helperBox.BackgroundTransparency = 1;
@@ -5662,7 +6077,7 @@ local function createUI()
 					_G.mobileHelperButtons = nextList;
 					rebuildMobileHelperRows();
 					rebuildMobileHelper();
-					saveCfg();
+					VLO.aimOrigin.saveCfg();
 				end);
 			end;
 		end;
@@ -5709,20 +6124,20 @@ local function createUI()
 			local picked = normChoice(_G.pendingMobileAction, OPT.MOBILE_ACTION_OPTIONS, "Aimbot");
 			for _, existing in _G.mobileHelperButtons do
 				if existing == picked then
-					toast("helper button already added");
+					VLO.aimOrigin.toast("helper button already added");
 					return;
 				end;
 			end;
 			table.insert(_G.mobileHelperButtons, picked);
 			rebuildMobileHelperRows();
 			rebuildMobileHelper();
-			saveCfg();
+			VLO.aimOrigin.saveCfg();
 		end);
 		bindClick(resetHelper, function()
 			_G.mobileHelperButtons = normalizeActionList(nil, OPT.MOBILE_ACTION_OPTIONS, OPT.MOBILE_HELPER_DEFAULTS);
 			rebuildMobileHelperRows();
 			rebuildMobileHelper();
-			saveCfg();
+			VLO.aimOrigin.saveCfg();
 		end);
 		bindClick(resetHelperPos, function()
 			_G.mobileHelperPos = nil;
@@ -5730,7 +6145,7 @@ local function createUI()
 				uiRefs.mobileHolder.Position = defaultMobileHelperUDim(uiRefs.mobileHolder.AbsoluteSize);
 				rememberMobileHelperPos(uiRefs.mobileHolder.Position);
 				clampMobileHelperToScreen(uiRefs.mobileHolder);
-				saveCfg();
+				VLO.aimOrigin.saveCfg();
 			end;
 		end);
 	end;
@@ -5784,7 +6199,8 @@ local function createUI()
 	centerDot.BackgroundTransparency = _G.centerDotAlpha;
 	centerDot.BackgroundColor3 = UI.acc2;
 	centerDot.BorderSizePixel = 0;
-	centerDot.ZIndex = 25;
+	centerDot.ZIndex = 205;
+	centerDot.Visible = false;
 	round(centerDot, UDim.new(1, 0));
 	stroke(centerDot, 2, UI.acc, 0.15);
 	local dotIn = newUi("Frame", centerDot);
@@ -5793,8 +6209,159 @@ local function createUI()
 	dotIn.Size = UDim2.new(0, 4, 0, 4);
 	dotIn.BackgroundColor3 = UI.text;
 	dotIn.BorderSizePixel = 0;
+	dotIn.ZIndex = 206;
 	round(dotIn, UDim.new(1, 0));
+	local crossH = newUi("Frame", centerDot);
+	crossH.AnchorPoint = Vector2.new(0.5, 0.5);
+	crossH.Position = UDim2.new(0.5, 0, 0.5, 0);
+	crossH.Size = UDim2.new(1, 14, 0, 2);
+	crossH.BackgroundColor3 = UI.text;
+	crossH.BackgroundTransparency = 0.12;
+	crossH.BorderSizePixel = 0;
+	crossH.ZIndex = 205;
+	local crossV = newUi("Frame", centerDot);
+	crossV.AnchorPoint = Vector2.new(0.5, 0.5);
+	crossV.Position = UDim2.new(0.5, 0, 0.5, 0);
+	crossV.Size = UDim2.new(0, 2, 1, 14);
+	crossV.BackgroundColor3 = UI.text;
+	crossV.BackgroundTransparency = 0.12;
+	crossV.BorderSizePixel = 0;
+	crossV.ZIndex = 205;
 	uiRefs.centerDot = centerDot;
+	local aimOverlay = newUi("TextButton", gui);
+	setUiTag(aimOverlay, "AimOriginOverlay");
+	aimOverlay.Size = UDim2.new(1, 0, 1, 0);
+	aimOverlay.Position = UDim2.new(0, 0, 0, 0);
+	aimOverlay.BackgroundColor3 = Color3.new(0, 0, 0);
+	aimOverlay.BackgroundTransparency = 0.72;
+	aimOverlay.BorderSizePixel = 0;
+	aimOverlay.AutoButtonColor = false;
+	aimOverlay.Text = "";
+	aimOverlay.Visible = false;
+	aimOverlay.Active = true;
+	aimOverlay.ZIndex = 200;
+	local aimHint = newUi("TextLabel", aimOverlay);
+	aimHint.AnchorPoint = Vector2.new(0.5, 0);
+	aimHint.Position = UDim2.new(0.5, 0, 0, 18);
+	aimHint.Size = UDim2.new(0, math.clamp(getViewport().X - 30, 260, 520), 0, 46);
+	aimHint.BackgroundColor3 = UI.bar1;
+	aimHint.BackgroundTransparency = 0.04;
+	aimHint.BorderSizePixel = 0;
+	aimHint.TextColor3 = UI.text;
+	aimHint.Font = Enum.Font.GothamBold;
+	aimHint.TextSize = 14;
+	aimHint.TextWrapped = true;
+	aimHint.ZIndex = 202;
+	uiRefs.aimHint = aimHint;
+	round(aimHint, UDim.new(0, 16));
+	stroke(aimHint, 1, UI.acc2, 0.08);
+	local aimDone = newUi("TextButton", aimOverlay);
+	aimDone.AnchorPoint = Vector2.new(0.5, 1);
+	aimDone.Position = UDim2.new(0.5, 0, 1, -24);
+	aimDone.Size = UDim2.new(0, 150, 0, 40);
+	aimDone.BackgroundColor3 = UI.acc;
+	aimDone.BorderSizePixel = 0;
+	aimDone.AutoButtonColor = false;
+	aimDone.Text = "DONE";
+	aimDone.TextColor3 = UI.text;
+	aimDone.Font = Enum.Font.GothamBlack;
+	aimDone.TextSize = 13;
+	aimDone.ZIndex = 203;
+	round(aimDone, UDim.new(0, 14));
+	stroke(aimDone, 1, UI.acc2, 0.05);
+	uiRefs.aimPointOverlay = aimOverlay;
+	uiRefs.aimOverlayMode = nil;
+	local overlayDragging = false;
+	local function pointInsideObject(obj, point)
+		if not obj or not obj.Parent then
+			return false;
+		end;
+		local pos = obj.AbsolutePosition;
+		local size = obj.AbsoluteSize;
+		return point.X >= pos.X and point.X <= pos.X + size.X and point.Y >= pos.Y and point.Y <= pos.Y + size.Y;
+	end;
+	local function endAimOverlay(savePoint)
+		if savePoint and uiRefs.aimOverlayMode == "custom" then
+			VLO.aimOrigin.saveCfg();
+		end;
+		overlayDragging = false;
+		uiRefs.aimOverlayMode = nil;
+		aimOverlay.Visible = false;
+		openUI();
+		applyCustomUI();
+		updateFOVCircle();
+	end;
+	uiRefs.beginAimOverlay = function(modeName)
+		if modeName ~= "custom" and modeName ~= "follow" then
+			return;
+		end;
+		uiRefs.aimOverlayMode = modeName;
+		aimHint.Text = modeName == "custom" and "TAP OR DRAG ANYWHERE TO SET THE AIM ORIGIN" or "TAP THE GAME'S CROSSHAIR TO FOLLOW ITS GUI CENTER";
+		aimDone.Text = modeName == "custom" and "DONE" or "CANCEL";
+		aimOverlay.Visible = true;
+		centerDot.Visible = modeName == "custom";
+		closeUI();
+		applyCustomUI();
+		updateFOVCircle();
+	end;
+	uiRefs.refreshAimMarker = function(point)
+		local modeName = VLO.aimOrigin.getTargetPointMode();
+		local editing = uiRefs.aimOverlayMode == "custom";
+		local show = editing or (_G.centerDotVisible == true and modeName ~= "Cursor");
+		centerDot.Visible = show;
+		if show then
+			local p = point or getAimPoint();
+			centerDot.Position = UDim2.new(0, p.X, 0, p.Y);
+		end;
+	end;
+	bindClick(aimDone, function()
+		endAimOverlay(true);
+	end);
+	local overlayBegin = aimOverlay.InputBegan:Connect(function(input)
+		if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then
+			return;
+		end;
+		local point = getInputScreenPos(input);
+		if pointInsideObject(aimDone, point) or pointInsideObject(aimHint, point) then
+			return;
+		end;
+		if uiRefs.aimOverlayMode == "custom" then
+			overlayDragging = true;
+			VLO.aimOrigin.setCustomAimPoint(point, false);
+		elseif uiRefs.aimOverlayMode == "follow" then
+			local picked = VLO.aimOrigin.pickGuiObjectAtPoint(point);
+			if picked then
+				local path = VLO.aimOrigin.makeGuiPath(picked);
+				if path then
+					_G.followGuiPaths = type(_G.followGuiPaths) == "table" and _G.followGuiPaths or {};
+					_G.followGuiPaths[VLO.aimOrigin.getAimPlaceKey()] = path;
+					VLO.aimOrigin.followGuiCache = picked;
+					_G.targetPointMode = "Follow GUI";
+					VLO.aimOrigin.saveCfg();
+					endAimOverlay(false);
+					VLO.aimOrigin.toast("following " .. picked.Name);
+				end;
+			else
+				VLO.aimOrigin.toast("no usable crosshair gui found");
+			end;
+		end;
+	end);
+	local overlayMove = UIS.InputChanged:Connect(function(input)
+		if not overlayDragging or uiRefs.aimOverlayMode ~= "custom" then
+			return;
+		end;
+		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+			VLO.aimOrigin.setCustomAimPoint(getInputScreenPos(input), false);
+		end;
+	end);
+	local overlayEnd = UIS.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			overlayDragging = false;
+		end;
+	end);
+	table.insert(conns, overlayBegin);
+	table.insert(conns, overlayMove);
+	table.insert(conns, overlayEnd);
 	local mobHolder = newUi("Frame", gui);
 	setUiTag(mobHolder, "MobileButtons");
 	mobHolder.BackgroundColor3 = UI.bar1;
@@ -5964,15 +6531,17 @@ local function createUI()
 	end;
 	refreshMobileUI = function()
 		local touch = isMobilePlatform();
-		centerDot.Visible = touch and _G.mobileCenterAim == true and _G.centerDotVisible == true;
 		mobHolder.Visible = touch and _G.mobileButtons == true;
+		if type(uiRefs.refreshAimMarker) == "function" then
+			uiRefs.refreshAimMarker();
+		end;
 	end;
 	rebuildMobileHelper();
 	refreshMobileUI();
 	applyCustomUI();
 	local mobBarDrag = attachOffsetUIDrag(mobHolder, nil, function(holder)
 		clampMobileHelperToScreen(holder);
-		saveCfg();
+		VLO.aimOrigin.saveCfg();
 	end);
 	if mobBarDrag then
 		mobBarDrag.ReferenceUIInstance = mobBar;
@@ -5986,6 +6555,9 @@ local function createUI()
 			camVpCon = (cam:GetPropertyChangedSignal("ViewportSize")):Connect(function()
 				local w, h = frameSizeForViewport();
 				frame.Size = UDim2.new(0, w, 0, h);
+				if uiRefs.aimHint then
+					uiRefs.aimHint.Size = UDim2.new(0, math.clamp(getViewport().X - 30, 260, 520), 0, 46);
+				end;
 				if uiMin then
 					frame.Position = UDim2.new(0.5, 0, -0.65, 0);
 					frame.BackgroundTransparency = math.clamp((_G.uiWindowAlpha or 0.08) + 0.08, 0, 0.6);
@@ -5995,6 +6567,7 @@ local function createUI()
 				end;
 				rebuildMobileHelper();
 				refreshMobileUI();
+				updateFOVCircle();
 			end);
 			table.insert(conns, camVpCon);
 		end;
@@ -6043,7 +6616,7 @@ local function createUI()
 		if moved then
 			topClickBlock = time() + 0.18;
 		end;
-		saveCfg();
+		VLO.aimOrigin.saveCfg();
 	end);
 	local closeCon = bindClick(btnX, function()
 		for _, c in conns do
@@ -6075,7 +6648,7 @@ local function createUI()
 		end;
 		espMap = {};
 		unbindStrongInputs();
-		toast("Aimbot unloaded");
+		VLO.aimOrigin.toast("Aimbot unloaded");
 		task.delay(0.5, function()
 			if gui and gui.Parent then
 				gui:Destroy();
@@ -6280,8 +6853,8 @@ handleOptionBind = function(action)
 	elseif var == "ignoreFriends" then
 		resetAimCaches(true);
 	end;
-	saveCfg();
-	toast(action .. (_G[var] and " enabled" or " disabled"));
+	VLO.aimOrigin.saveCfg();
+	VLO.aimOrigin.toast(action .. (_G[var] and " enabled" or " disabled"));
 	return true;
 end;
 uiRefs.binds = function()
@@ -6472,7 +7045,7 @@ function lockCamera()
 		end;
 		if VLO.trackedCh and VLO.trackedPart then
 			VLO.tgtPos = getAimPos(VLO.trackedPart);
-			VLO.cf = CFrame.new(cam.CFrame.Position, VLO.tgtPos);
+			VLO.cf = VLO.aimOrigin.getAimCameraCFrame(VLO.tgtPos);
 			if aimCamTween then
 				pcall(function()
 					aimCamTween:Cancel();
@@ -6565,8 +7138,8 @@ uiRefs.setupPlayerMonitoring();
 if _G.espEnabled then
 	updateESP();
 end;
-toast("Aimbot loaded");
-saveCfg();
+VLO.aimOrigin.toast("Aimbot loaded");
+VLO.aimOrigin.saveCfg();
 uiRefs.chkMode = function()
 	local newMode;
 	if getPlrCount() > 0 and Players.LocalPlayer.Team == nil then

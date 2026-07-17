@@ -245,6 +245,12 @@ A.keys = {}
 A.upq = {}
 A.relq2 = {}
 A.apstate = false
+A.apdesired = false
+A.apfn = nil
+A.apidx = nil
+A.apcaptured = false
+A.aporiginal = false
+A.apnext = 0
 A.mode = "none"
 A.bind = "__rusher_obs_step"
 A.cfg = {
@@ -806,9 +812,165 @@ A.conf = function(k, v)
 	end
 end
 
+A.uvread = function(f, i)
+	if type(f) ~= "function" or type(i) ~= "number" or type(debug) ~= "table" then
+		return nil, false
+	end
+
+	if type(debug.getupvalue) == "function" then
+		local r = { pcall(debug.getupvalue, f, i) }
+		if r[1] then
+			if r[3] ~= nil or type(r[2]) == "string" then
+				return r[3], true
+			end
+			return r[2], r[2] ~= nil
+		end
+	end
+
+	if type(debug.getupvalues) == "function" then
+		local ok, uv = pcall(debug.getupvalues, f)
+		if ok and type(uv) == "table" and uv[i] ~= nil then
+			return uv[i], true
+		end
+	end
+
+	return nil, false
+end
+
+A.uvwrite = function(f, i, v)
+	if type(f) ~= "function" or type(i) ~= "number" or type(debug) ~= "table" or type(debug.setupvalue) ~= "function" then
+		return false
+	end
+
+	local ok = pcall(debug.setupvalue, f, i, v)
+	return ok
+end
+
+A.findap = function()
+	local s = A.scr("game")
+	local e = A.fenv(s)
+	local f = type(e) == "table" and e.playing or nil
+
+	if type(f) ~= "function" then
+		A.apfn = nil
+		A.apidx = nil
+		return nil, nil
+	end
+
+	A.envs.game = e
+
+	if A.apfn == f and type(A.apidx) == "number" then
+		local current, exists = A.uvread(f, A.apidx)
+		if exists and type(current) == "boolean" then
+			return f, A.apidx
+		end
+	end
+
+	A.apfn = nil
+	A.apidx = nil
+	local idx = nil
+
+	if type(debug) == "table" and type(debug.upvalueid) == "function" and type(e.release) == "function" then
+		local ok, releaseId = pcall(debug.upvalueid, e.release, 5)
+		if ok and releaseId ~= nil then
+			for i = 1, 80 do
+				local ok2, id = pcall(debug.upvalueid, f, i)
+				if not ok2 then
+					break
+				end
+				if id == releaseId then
+					local value, exists = A.uvread(f, i)
+					if exists and type(value) == "boolean" then
+						idx = i
+						break
+					end
+				end
+			end
+		end
+	end
+
+	if not idx then
+		local v12, e12 = A.uvread(f, 12)
+		local v13, e13 = A.uvread(f, 13)
+		local v14, e14 = A.uvread(f, 14)
+		local v15, e15 = A.uvread(f, 15)
+
+		if e12 and type(v12) == "table" and e13 and type(v13) == "boolean" and e14 and type(v14) == "boolean" and e15 and type(v15) == "boolean" then
+			idx = 13
+		end
+	end
+
+	if not idx then
+		return nil, nil
+	end
+
+	local original = A.uvread(f, idx)
+	A.apfn = f
+	A.apidx = idx
+
+	if not A.apcaptured and type(original) == "boolean" then
+		A.apcaptured = true
+		A.aporiginal = original
+	end
+
+	return f, idx
+end
+
+A.getap = function()
+	local f, i = A.findap()
+	if not f or not i then
+		return false, false
+	end
+
+	local value, exists = A.uvread(f, i)
+	if not exists or type(value) ~= "boolean" then
+		return false, false
+	end
+
+	A.apstate = value
+	return value, true
+end
+
 A.setap = function(v)
-	A.apstate = false
-	return false
+	v = v == true
+	A.apdesired = v
+
+	local f, i = A.findap()
+	if not f or not i then
+		A.apstate = false
+		A.apnext = 0
+		return false
+	end
+
+	local current, exists = A.uvread(f, i)
+	if exists and current == v then
+		A.apstate = v
+		A.apnext = os.clock() + 0.5
+		return true
+	end
+
+	if not A.uvwrite(f, i, v) then
+		A.apstate = false
+		A.apnext = 0
+		return false
+	end
+
+	local applied, verified = A.uvread(f, i)
+	local success = verified and applied == v
+	A.apstate = success and v or false
+	A.apnext = success and os.clock() + 0.5 or 0
+	return success
+end
+
+A.ensureap = function(v, force)
+	v = v == true
+	A.apdesired = v
+
+	if force or A.apstate ~= v or os.clock() >= A.apnext then
+		return A.setap(v)
+	end
+
+	return true
 end
 
 A.kpool = {
@@ -1814,6 +1976,7 @@ A.cln = function()
 	A.cfg.ap = false
 	A.cfg.cap = false
 	A.cfg.caj = false
+	A.apdesired = false
 	A.setap(false)
 	A.resetkeys()
 
@@ -1841,20 +2004,19 @@ A.step = function()
 	A.flush()
 	A.flushrel()
 
-	if A.apstate then
-		A.setap(false)
-	end
+	local native = A.cfg.ap == true
+	local fallback = not native and A.cfg.cap == true
 
-	local runchart = A.cfg.ap or A.cfg.cap
-
-	if runchart then
+	if native then
+		A.ensureap(true, false)
+		A.mode = A.apstate and "native" or "native_unavailable"
+	elseif fallback then
+		A.ensureap(false, false)
 		A.chartplay()
 		A.relplay()
-	end
-
-	if runchart then
 		A.mode = "chart"
 	else
+		A.ensureap(false, false)
 		A.mode = "none"
 	end
 
@@ -2486,12 +2648,20 @@ if Options and Options.MenuKeybind then
 end
 
 M1:AddToggle("RusherAutoPlay", {
-	Text = "Gameplay Auto Player",
+	Text = "Native Gameplay Auto Player",
 	Default = false,
-	Tooltip = "Runs the chart autoplayer path.",
+	Tooltip = "Uses the gameplay script's native note queues and judgment path.",
 	Callback = function(v)
 		A.cfg.ap = v
-		A.setap(false)
+
+		if v then
+			A.cfg.cap = false
+			if type(Toggles) == "table" and Toggles.RusherChartAuto and Toggles.RusherChartAuto.Value then
+				A.setctl(Toggles.RusherChartAuto, false)
+			end
+		end
+
+		A.setap(v)
 		A.chart.cur = nil
 		A.chart.seq = {}
 		A.chart.i = 1
@@ -2502,9 +2672,18 @@ M1:AddToggle("RusherAutoPlay", {
 M1:AddToggle("RusherChartAuto", {
 	Text = "Chart Fallback Auto Player",
 	Default = false,
-	Tooltip = "Runs the chart autoplayer path with type 3 handled as an actual release.",
+	Tooltip = "Uses the older synthetic input scheduler only when native autoplay is unavailable.",
 	Callback = function(v)
 		A.cfg.cap = v
+
+		if v then
+			A.cfg.ap = false
+			A.setap(false)
+			if type(Toggles) == "table" and Toggles.RusherAutoPlay and Toggles.RusherAutoPlay.Value then
+				A.setctl(Toggles.RusherAutoPlay, false)
+			end
+		end
+
 		A.chart.cur = nil
 		A.chart.seq = {}
 		A.chart.i = 1

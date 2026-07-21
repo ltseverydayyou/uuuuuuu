@@ -783,6 +783,8 @@ _G.espTeamColor = _G.espTeamColor ~= nil and _G.espTeamColor or true;
 _G.tbCPS = _G.tbCPS or 8;
 _G.aimPredict = _G.aimPredict or false;
 _G.aimLead = _G.aimLead or 0.12;
+_G.aimDropCompensation = _G.aimDropCompensation ~= nil and _G.aimDropCompensation or false;
+_G.aimDropStrength = math.clamp(tonumber(_G.aimDropStrength) or 1, 0, 3);
 _G.aimRadius = _G.aimRadius or 150;
 _G.targetPointMode = _G.targetPointMode or (isMobilePlatform() and "Center" or "Cursor");
 _G.customAimPoints = type(_G.customAimPoints) == "table" and _G.customAimPoints or {};
@@ -909,6 +911,7 @@ local OPT = {
 		"Lock FOV",
 		"Smooth Aim",
 		"Prediction",
+		"Bullet Drop",
 		"FOV Circle",
 		"Lock Nearest",
 		"Mobile Buttons",
@@ -926,6 +929,7 @@ local OPT = {
 		["Lock FOV"] = "fovEnabled",
 		["Smooth Aim"] = "aimTween",
 		["Prediction"] = "aimPredict",
+		["Bullet Drop"] = "aimDropCompensation",
 		["FOV Circle"] = "fovCircleEnabled",
 		["Lock Nearest"] = "lockToNearest",
 		["Mobile Buttons"] = "mobileButtons",
@@ -944,6 +948,7 @@ local OPT = {
 		"Alive Check",
 		"Lock FOV",
 		"Prediction",
+		"Bullet Drop",
 		"FOV Circle",
 		"Lock Nearest",
 		"Center Dot"
@@ -1061,6 +1066,8 @@ local DEFAULT_CONFIG = {
 	tbCPS = 8,
 	aimPredict = false,
 	aimLead = 0.12,
+	aimDropCompensation = false,
+	aimDropStrength = 1,
 	aimRadius = 150,
 	targetPointMode = isMobilePlatform() and "Center" or "Cursor",
 	customAimPoints = {},
@@ -2458,6 +2465,8 @@ VLO.aimOrigin.saveCfg = function(forceSave, nameOverride)
 		tbCPS = _G.tbCPS,
 		aimPredict = _G.aimPredict,
 		aimLead = _G.aimLead,
+		aimDropCompensation = _G.aimDropCompensation,
+		aimDropStrength = _G.aimDropStrength,
 		aimRadius = _G.aimRadius,
 		targetPointMode = _G.targetPointMode,
 		customAimPoints = _G.customAimPoints,
@@ -2569,6 +2578,9 @@ local function applyCfg(obj)
 	end;
 	if type(obj.followGuiPaths) ~= "table" then
 		obj.followGuiPaths = nil;
+	end;
+	if obj.aimDropStrength ~= nil then
+		obj.aimDropStrength = math.clamp(tonumber(obj.aimDropStrength) or 1, 0, 3);
 	end;
 	if obj.aimPointOffsetX ~= nil then
 		obj.aimPointOffsetX = math.clamp(tonumber(obj.aimPointOffsetX) or 0, -500, 500);
@@ -2685,6 +2697,7 @@ _G.autoSaveConfigs = _G.autoSaveConfigs == true;
 _G.targetPointMode = normChoice(_G.targetPointMode, OPT.TARGET_POINT_OPTIONS, isMobilePlatform() and "Center" or "Cursor");
 _G.customAimPoints = type(_G.customAimPoints) == "table" and _G.customAimPoints or {};
 _G.followGuiPaths = type(_G.followGuiPaths) == "table" and _G.followGuiPaths or {};
+_G.aimDropStrength = math.clamp(tonumber(_G.aimDropStrength) or 1, 0, 3);
 _G.aimPointOffsetX = math.clamp(tonumber(_G.aimPointOffsetX) or 0, -500, 500);
 _G.aimPointOffsetY = math.clamp(tonumber(_G.aimPointOffsetY) or 0, -500, 500);
 _G.fovCircleAlpha = math.clamp(tonumber(_G.fovCircleAlpha) or 0.25, 0, 1);
@@ -3247,6 +3260,27 @@ local function getPredictedAimPos(part)
 	end;
 	return base + off;
 end;
+local function getDropCompensatedAimPos(pos)
+	if _G.aimDropCompensation ~= true then
+		return pos;
+	end;
+	local currentCamera = workspace.CurrentCamera or cam;
+	if not currentCamera or typeof(pos) ~= "Vector3" then
+		return pos;
+	end;
+	local strength = math.clamp(tonumber(_G.aimDropStrength) or 1, 0, 3);
+	if strength <= 0 then
+		return pos;
+	end;
+	local distance = (pos - currentCamera.CFrame.Position).Magnitude;
+	if distance <= 25 then
+		return pos;
+	end;
+	local scaledDistance = (distance - 25) / 100;
+	local rise = scaledDistance * scaledDistance * 1.2 * strength;
+	local maxRise = math.clamp(distance * 0.1, 0, 60);
+	return pos + Vector3.new(0, math.min(rise, maxRise), 0);
+end;
 local function getAimPos(part)
 	local pos = _G.aimPredict and getPredictedAimPos(part) or part.Position;
 	local aimMode = normalizeAimMode(_G.aimTargetMode);
@@ -3254,7 +3288,7 @@ local function getAimPos(part)
 		local yOff = math.clamp((part.Size.Y or 1) * 0.18, 0.08, 0.35);
 		pos += Vector3.new(0, yOff, 0);
 	end;
-	return pos;
+	return getDropCompensatedAimPos(pos);
 end;
 local function topAimPart(m)
 	local aimMode = normalizeAimMode(_G.aimTargetMode);
@@ -5232,6 +5266,7 @@ local function createUI()
 	addRowToggle(pgAim, "wall check", "wallCheck");
 	addRowToggleSlider(pgAim, "smooth aim", "aimTween", "aimSmooth", 0.03, 1, 2, "smooth camera aim");
 	addRowToggleSlider(pgAim, "aim prediction", "aimPredict", "aimLead", 0.01, 1, 2, "adaptive prediction, dampens close targets");
+	addRowToggleSlider(pgAim, "bullet drop compensation", "aimDropCompensation", "aimDropStrength", 0, 3, 2, "raises the aim point more at longer distances");
 	addRowToggleSlider(pgAim, "lock fov", "fovEnabled", "fovValue", 1, 120, 0, "changes camera FOV");
 	addRowToggle(pgTarget, "team check", "teamCheck");
 	addRowToggle(pgTarget, "ignore friends", "ignoreFriends", "do not lock onto Roblox friends");
@@ -6430,6 +6465,7 @@ local function createUI()
 			["Ignore Friends"] = "FRIENDS",
 			["Alive Check"] = "ALIVE",
 			["Lock FOV"] = "FOV",
+			["Bullet Drop"] = "DROP",
 			["FOV Circle"] = "CIRCLE",
 			["Lock Nearest"] = "NEAREST",
 			["Center Dot"] = "DOT"

@@ -219,13 +219,31 @@ local function dcmAlreadyLoaded()
 	return false
 end
 
-if dcmAlreadyLoaded() then
-	return
+local __dcm_previousRuntime = rawget(__dcm_env, "__DeltaCustomizationV2Runtime")
+if type(__dcm_previousRuntime) == "table" and type(__dcm_previousRuntime.stop) == "function" then
+	pcall(__dcm_previousRuntime.stop)
 end
+__dcm_env.__DeltaCustomizationModuleLoaded = nil
+__dcm_shared.__DeltaCustomizationModuleLoaded = nil
+__dcm_env.__DeltaVisualPatchLoaded = nil
+__dcm_env.__DeltaThemeMenuPatchLoaded = nil
 
-local __dcm_flag = tick()
+local __dcm_flag = {
+	version = "2.4.1",
+	loadedAt = tick(),
+}
 __dcm_env.__DeltaCustomizationModuleLoaded = __dcm_flag
 __dcm_shared.__DeltaCustomizationModuleLoaded = __dcm_flag
+local httpTxt
+local UIS
+local root
+local settingsPath
+local notify
+local _naConns
+local NAlib
+local writeJsonFile
+
+do
 local deltaEnv = __dcm_boot.runtimeEnv
 local _ref = cloneref and type(cloneref) == "function" and cloneref or function(v)
 	return v
@@ -245,7 +263,7 @@ local function Svc(n)
 	return SRV[n]
 end
 
-local function httpTxt(u, hdr)
+httpTxt = function(u, hdr)
 	if type(u) ~= "string" or u == "" then
 		return nil, "bad url"
 	end
@@ -300,7 +318,7 @@ local function runUrl(u, name, hdr)
 	end
 	return pcall(fn)
 end
-local UIS = Svc("UserInputService")
+UIS = Svc("UserInputService")
 local CG = Svc("CoreGui")
 local HS = Svc("HttpService")
 local RS = Svc("RunService")
@@ -325,7 +343,7 @@ do
 		end
 	end
 end
-local settingsPath = "DeltaCustom/Settings.json"
+settingsPath = "DeltaCustom/Settings.json"
 local settingsConfig = {}
 do
 	if HS and type(isfile) == "function" and type(readfile) == "function" then
@@ -360,7 +378,7 @@ do
 		end
 	until n ~= nil or tries >= 5
 end
-local function notify(info)
+notify = function(info)
 	if not nt or type(info) ~= "table" then
 		return
 	end
@@ -368,8 +386,8 @@ local function notify(info)
 		nt(info)
 	end)
 end
-local _naConns = {}
-local NAlib = {}
+_naConns = {}
+NAlib = {}
 function NAlib.disconnect(n)
 	local t = _naConns[n]
 	if t then
@@ -510,7 +528,7 @@ uiLib.draggerV2 = function(ui, dragui)
 		NAlib.setProperty(dragui, "Active", true)
 	end
 end
-local root = gethui and gethui() or CG
+root = gethui and gethui() or CG
 local function isGib(n)
 	if typeof(n) ~= "string" or n == "" then
 		return false
@@ -518,16 +536,42 @@ local function isGib(n)
 	return not n:match("^[%w _%-]+$")
 end
 local function getMain()
+	local best
+	local bestScore = 0
 	for _, g in root:GetChildren() do
-		if g:IsA("ScreenGui") and isGib(g.Name) then
-			if
-				g:FindFirstChild("Executor", true)
-				and g:FindFirstChild("Scripthub", true)
-				and g:FindFirstChild("Sidebar", true)
-			then
-				return g
+		if g:IsA("ScreenGui") then
+			local score = 0
+			if g:FindFirstChild("Executor") then
+				score += 5
+			elseif g:FindFirstChild("Executor", true) then
+				score += 2
+			end
+			if g:FindFirstChild("Sidebar") then
+				score += 4
+			elseif g:FindFirstChild("Sidebar", true) then
+				score += 2
+			end
+			for _, name in { "Scripthub", "Settings", "Home", "Console" } do
+				if g:FindFirstChild(name) then
+					score += 2
+				elseif g:FindFirstChild(name, true) then
+					score += 1
+				end
+			end
+			if g:FindFirstChild("MainScript") then
+				score += 1
+			end
+			if isGib(g.Name) then
+				score += 1
+			end
+			if score > bestScore then
+				best = g
+				bestScore = score
 			end
 		end
+	end
+	if bestScore >= 11 then
+		return best
 	end
 end
 
@@ -561,31 +605,49 @@ local function fixNet(rootGui)
 	return over
 end
 local function getIconGui()
-	local function chk(g)
-		if not (g:IsA("ScreenGui") and isGib(g.Name)) then
-			return
-		end
-		local kids = g:GetChildren()
-		local img
-		local cnt = 0
-		for _, c in kids do
-			if c:IsA("ImageButton") then
-				cnt += 1
-				img = c
-			else
-				return
+	local bestGui
+	local bestButton
+	local bestScore = -math.huge
+	for _, g in root:GetChildren() do
+		if g:IsA("ScreenGui") and not g:FindFirstChild("Executor", true) then
+			local buttons = {}
+			local guiCount = 0
+			for _, d in g:GetDescendants() do
+				if d:IsA("GuiObject") then
+					guiCount += 1
+				end
+				if d:IsA("ImageButton") then
+					table.insert(buttons, d)
+				end
+			end
+			if #buttons == 1 and guiCount <= 12 then
+				local button = buttons[1]
+				local score = 0
+				if button.Parent == g then
+					score += 4
+				end
+				if type(button.Image) == "string" and button.Image ~= "" then
+					score += 3
+				end
+				local size = button.AbsoluteSize
+				if size.X > 0 and size.Y > 0 then
+					local ratio = size.X / size.Y
+					if ratio >= 0.7 and ratio <= 1.3 then
+						score += 3
+					end
+				end
+				if isGib(g.Name) then
+					score += 1
+				end
+				if score > bestScore then
+					bestScore = score
+					bestGui = g
+					bestButton = button
+				end
 			end
 		end
-		if cnt == 1 then
-			return g, img
-		end
 	end
-	for _, g in root:GetChildren() do
-		local ig, ib = chk(g)
-		if ig then
-			return ig, ib
-		end
-	end
+	return bestGui, bestButton
 end
 local mainGui = getMain()
 local _iconGui0, _iconBtn0 = getIconGui()
@@ -960,7 +1022,7 @@ local function ensureParentDir(path)
 	end
 	return ensureDir(dir)
 end
-local function writeJsonFile(path, payload)
+writeJsonFile = function(path, payload)
 	if not (HS and fsOk()) then
 		return false
 	end
@@ -4979,15 +5041,13 @@ task.defer(function()
 			pcall(setfpscap, n)
 		end
 		NAlib.disconnect("FpsCap_Enforce")
-		if RS and RS.RenderStepped then
-			NAlib.connect(
-				"FpsCap_Enforce",
-				RS.RenderStepped:Connect(function()
-					if fpsCapTarget then
-						pcall(setfpscap, fpsCapTarget)
-					end
-				end)
-			)
+		local function reapplyFpsCap()
+			if fpsCapTarget then
+				pcall(setfpscap, fpsCapTarget)
+			end
+		end
+		if UIS and UIS.WindowFocused then
+			NAlib.connect("FpsCap_Reapply", UIS.WindowFocused:Connect(reapplyFpsCap))
 		end
 		makeSizeSlider("FpsCap", "FPS cap", "set your FPS cap to anything you like", fpsCapValue, 1, 999, {
 			integer = true,
@@ -5176,52 +5236,6 @@ task.defer(function()
 		notify({ Title = "Delta Customization", Description = "Code frame not found.", Duration = 4 })
 		return
 	end
-	local btns = overlay:FindFirstChild("Buttons", true)
-	if btns then
-		local bl = {}
-		for _, v in btns:GetChildren() do
-			if v:IsA("ImageButton") or v:IsA("TextButton") then
-				table.insert(bl, v)
-			end
-		end
-		local tpl = btns:FindFirstChild("ExecuteClipboard") or btns:FindFirstChild("Execute") or bl[1]
-		if tpl then
-			local cp = tpl:Clone()
-			cp.Name = "CopyCode"
-			local tl = cp:FindFirstChild("Title", true) or cp:FindFirstChildWhichIsA("TextLabel")
-			if tl then
-				tl.Text = "COPY CODE"
-			end
-			cp.Parent = btns
-			table.insert(bl, cp)
-			local cnt = #bl
-			if cnt > 0 then
-				local w = cnt == 4 and 0.22 or (1 / cnt)
-				for _, b in bl do
-					b.Size = UDim2.new(w, 0, 1, 0)
-				end
-			end
-			cp.MouseButton1Click:Connect(function()
-				if type(setclipboard) ~= "function" then
-					return
-				end
-				local cur
-				for _, tb in codeSf:QueryDescendants("TextBox") do
-					if tb.Visible then						cur = tb
-						break
-					end
-				end
-				if cur then
-					setclipboard(cur.Text or "")
-					notify({
-						Title = "Delta Customization",
-						Description = "Copied code from the selected tab.",
-						Duration = 4,
-					})
-				end
-			end)
-		end
-	end
 	local hasFS = type(isfolder) == "function"
 		and type(makefolder) == "function"
 		and type(isfile) == "function"
@@ -5318,6 +5332,8 @@ task.defer(function()
 				if ok and type(data) == "string" then
 					box.Text = data
 				end
+			else
+				pcall(writefile, path, box.Text or "")
 			end
 			local last = 0
 			(box:GetPropertyChangedSignal("Text")):Connect(function()
@@ -5363,7 +5379,6 @@ task.defer(function()
 	end)
 end)
 
--- visual upgrade patch
 
 __lt.deltaPatchState = __lt.deltaPatchState or {}
 __lt.deltaPatchState.visualEnv = __dcm_env
@@ -5566,14 +5581,12 @@ if type(__lt.deltaPatchState.visualEnv) == "table" and not __lt.deltaPatchState.
 			or 0.28
 		local dimDesiredVisible = false
 		local dimDesiredTransparency = 1
-		local dimEnforceConn
-		local function stopDimEnforce()
-			if dimEnforceConn then
-				dimEnforceConn:Disconnect()
-				dimEnforceConn = nil
-			end
-		end
+		local dimGuardBusy = false
 		local function applyDimState(force)
+			if dimGuardBusy then
+				return
+			end
+			dimGuardBusy = true
 			pcall(function()
 				if force or dimFr.Visible ~= dimDesiredVisible then
 					dimFr.Visible = dimDesiredVisible
@@ -5586,17 +5599,29 @@ if type(__lt.deltaPatchState.visualEnv) == "table" and not __lt.deltaPatchState.
 					dimFr.BackgroundColor3 = Color3.new(0, 0, 0)
 				end
 			end)
+			dimGuardBusy = false
 		end
 		local function syncDimLoop()
-			if dimDesiredVisible and RS then
-				if not dimEnforceConn then
-					dimEnforceConn = RS.Heartbeat:Connect(function()
-						applyDimState(false)
-					end)
-				end
-			else
-				stopDimEnforce()
-			end
+			NAlib.disconnect("DeltaCustom_DimGuard")
+			NAlib.connect(
+				"DeltaCustom_DimGuard",
+				dimFr:GetPropertyChangedSignal("Visible"):Connect(function()
+					if not dimGuardBusy and dimFr.Visible ~= dimDesiredVisible then
+						task.defer(applyDimState, false)
+					end
+				end)
+			)
+			NAlib.connect(
+				"DeltaCustom_DimGuard",
+				dimFr:GetPropertyChangedSignal("BackgroundTransparency"):Connect(function()
+					if
+						not dimGuardBusy
+						and math.abs(dimFr.BackgroundTransparency - dimDesiredTransparency) > 0.001
+					then
+						task.defer(applyDimState, false)
+					end
+				end)
+			)
 		end
 		local function apRad()
 			capUi()
@@ -5865,8 +5890,10 @@ if type(__lt.deltaPatchState.visualEnv) == "table" and not __lt.deltaPatchState.
 	end)
 end
 
--- scripthub + music patch
 
+end
+
+do
 local __lt = __lt
 
 if (identifyexecutor and identifyexecutor() or ""):lower() ~= "delta" then
@@ -8962,847 +8989,2200 @@ musicState.setupSidebar()
 end
 
 st.fn.setupHubMusic();
+end
 
-(function()
-	__lt.deltaPatchState = __lt.deltaPatchState or {}
-	__lt.deltaPatchState.themeEnv = __dcm_env
-	if type(__lt.deltaPatchState.themeEnv) == "table" and not __lt.deltaPatchState.themeEnv.__DeltaThemeMenuPatchLoaded then
-		__lt.deltaPatchState.themeEnv.__DeltaThemeMenuPatchLoaded = true
+do
+	local previousThemeRuntime = rawget(__dcm_env, "__DeltaThemeRuntime")
+	if type(previousThemeRuntime) == "table" and type(previousThemeRuntime.stop) == "function" then
+		pcall(previousThemeRuntime.stop)
+	end
+	if (identifyexecutor and identifyexecutor() or ""):lower() == "delta" then
 		task.defer(function()
-		if (identifyexecutor and identifyexecutor() or ""):lower() ~= "delta" then
-			return
-		end
-
-		local function S(n)
-			local ok, s = pcall(function()
-				return __lt.cs(n, cloneref and cloneref or function(v)
-					return v
+			local themeRuntime = {
+				alive = true,
+				connections = {},
+				baseBackground = setmetatable({}, { __mode = "k" }),
+				baseText = setmetatable({}, { __mode = "k" }),
+				baseStroke = setmetatable({}, { __mode = "k" }),
+				baseImage = setmetatable({}, { __mode = "k" }),
+			}
+			__dcm_env.__DeltaThemeRuntime = themeRuntime
+			local function connectTheme(signal, callback)
+				if not signal then
+					return
+				end
+				local ok, connection = pcall(function()
+					return signal:Connect(callback)
 				end)
-			end)
-			if ok then
-				return s
+				if ok and connection then
+					table.insert(themeRuntime.connections, connection)
+				end
 			end
-		end
-
-		local HS = S("HttpService")
-		local CG = S("CoreGui")
-		local root = gethui and gethui() or CG
-		if not root then
-			return
-		end
-
-		local function isGib(n)
-			if typeof(n) ~= "string" or n == "" then
-				return false
+			local function getThemeRoot()
+				local service = cloneref and cloneref(game:GetService("CoreGui")) or game:GetService("CoreGui")
+				return gethui and gethui() or service
 			end
-			return not n:match("^[%w _%-]+$")
-		end
-
-		local function getMain()
-			for _, g in root:GetChildren() do
-				if g:IsA("ScreenGui") and isGib(g.Name) then
+			local function findMainGui()
+				local rootGui = getThemeRoot()
+				for _, gui in rootGui:GetChildren() do
 					if
-						g:FindFirstChild("Executor", true)
-						and g:FindFirstChild("Scripthub", true)
-						and g:FindFirstChild("Sidebar", true)
+						gui:IsA("ScreenGui")
+						and gui:FindFirstChild("Executor")
+						and gui:FindFirstChild("Settings")
+						and gui:FindFirstChild("Sidebar")
 					then
-						return g
+						return gui
 					end
 				end
 			end
-		end
-
-		local mainGui = getMain()
-		if not mainGui then
-			return
-		end
-		do
-			local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or mainGui.AbsoluteSize
-			if UIS and UIS.TouchEnabled and (vp.X <= 1100 or vp.Y <= 820) then
+			local mainGui = findMainGui()
+			local attempts = 0
+			while themeRuntime.alive and not mainGui and attempts < 100 do
+				attempts += 1
+				task.wait(0.1)
+				mainGui = findMainGui()
+			end
+			if not (themeRuntime.alive and mainGui) then
 				return
 			end
-		end
-
-		local settingsPath = "DeltaCustom/Settings.json"
-		local cfg = {}
-		if HS and type(isfile) == "function" and type(readfile) == "function" and isfile(settingsPath) then
-			local ok, data = pcall(readfile, settingsPath)
-			if ok and type(data) == "string" and data ~= "" then
-				local ok2, dec = pcall(function()
-					return __lt.cm("HttpService", "JSONDecode", data)
-				end)
-				if ok2 and type(dec) == "table" then
-					cfg = dec
+			local settingsPath = "DeltaCustom/Settings.json"
+			local function readThemeConfig()
+				if type(isfile) ~= "function" or type(readfile) ~= "function" or not isfile(settingsPath) then
+					return {}
 				end
+				local ok, raw = pcall(readfile, settingsPath)
+				if not ok or type(raw) ~= "string" or raw == "" then
+					return {}
+				end
+				local decodedOk, decoded = pcall(function()
+					return __lt.cm("HttpService", "JSONDecode", raw)
+				end)
+				return decodedOk and type(decoded) == "table" and decoded or {}
 			end
-		end
-
-		local function saveCfg(k, v)
-			if not (HS and type(writefile) == "function") then
-				return
+			local function saveTheme(name)
+				local config = readThemeConfig()
+				config.DeltaTheme = { name = name }
+				writeJsonFile(settingsPath, config)
 			end
-			cfg[k] = v
-			writeJsonFile(settingsPath, cfg)
-		end
-
-		local base = {
-			bg = {},
-			txt = {},
-			st = {},
-			img = {},
-			got = false,
-		}
-
-		local function isAccent(c)
-			local h, s, v = Color3.toHSV(c)
-			return s >= 0.35 and v >= 0.25 and h >= 0.50 and h <= 0.68
-		end
-
-		local function capBase()
-			if base.got then
-				return
-			end
-			for _, o in mainGui:QueryDescendants("Instance") do
+			local function capture(object)
+				if not object then
+					return
+				end
 				if
-					o:IsA("Frame")
-					or o:IsA("ImageButton")
-					or o:IsA("TextButton")
-					or o:IsA("TextBox")
-					or o:IsA("ScrollingFrame")
-					or o:IsA("ImageLabel")
+					object:IsA("Frame")
+					or object:IsA("ImageLabel")
+					or object:IsA("ImageButton")
+					or object:IsA("TextButton")
+					or object:IsA("TextBox")
+					or object:IsA("ScrollingFrame")
 				then
-					base.bg[o] = o.BackgroundColor3
+					if themeRuntime.baseBackground[object] == nil then
+						themeRuntime.baseBackground[object] = object.BackgroundColor3
+					end
 				end
-				if o:IsA("TextLabel") or o:IsA("TextButton") or o:IsA("TextBox") then
-					base.txt[o] = o.TextColor3
+				if object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox") then
+					if themeRuntime.baseText[object] == nil then
+						themeRuntime.baseText[object] = object.TextColor3
+					end
 				end
-				if o:IsA("UIStroke") then
-					base.st[o] = o.Color
+				if object:IsA("UIStroke") and themeRuntime.baseStroke[object] == nil then
+					themeRuntime.baseStroke[object] = object.Color
 				end
-				if o:IsA("ImageLabel") or o:IsA("ImageButton") then
-					base.img[o] = o.ImageColor3
-				end
-			end
-			base.got = true
-		end
-
-		local execRoot = mainGui:FindFirstChild("Executor")
-		local function inExec(o)
-			return execRoot and o and o.Parent and o:IsDescendantOf(execRoot)
-		end
-
-		local function lightBgFor(o)
-			local n = (o.Name or ""):lower()
-			local big = false
-			pcall(function()
-				local s = o.AbsoluteSize
-				big = s.X >= 180 or s.Y >= 60
-			end)
-			if n:find("sidebar") then
-				return Color3.fromRGB(214, 214, 214)
-			end
-			if
-				n:find("overlay")
-				or n:find("settings")
-				or n:find("console")
-				or n:find("home")
-				or n:find("scripthub")
-				or n:find("music")
-			then
-				return Color3.fromRGB(220, 220, 220)
-			end
-			if n:find("dropdown") or big then
-				return Color3.fromRGB(216, 216, 216)
-			end
-			if
-				n:find("button")
-				or n:find("card")
-				or n:find("script")
-				or n:find("search")
-				or n:find("top")
-				or n:find("bottom")
-				or n:find("list")
-			then
-				return Color3.fromRGB(210, 210, 210)
-			end
-			return Color3.fromRGB(215, 215, 215)
-		end
-
-		local function amoledBgFor(o)
-			local n = (o.Name or ""):lower()
-			local big = false
-			pcall(function()
-				local s = o.AbsoluteSize
-				big = s.X >= 180 or s.Y >= 60
-			end)
-			if n:find("sidebar") then
-				return Color3.fromRGB(5, 5, 7)
-			end
-			if
-				n:find("overlay")
-				or n:find("settings")
-				or n:find("console")
-				or n:find("home")
-				or n:find("scripthub")
-				or n:find("music")
-			then
-				return Color3.fromRGB(0, 0, 0)
-			end
-			if n:find("dropdown") or big then
-				return Color3.fromRGB(4, 4, 5)
-			end
-			if
-				n:find("button")
-				or n:find("card")
-				or n:find("script")
-				or n:find("search")
-				or n:find("top")
-				or n:find("bottom")
-				or n:find("list")
-			then
-				return Color3.fromRGB(10, 10, 12)
-			end
-			return Color3.fromRGB(8, 8, 10)
-		end
-
-		local function lightTxtFor(o, c)
-			if isAccent(c) then
-				return c
-			end
-			local n = (o.Name or ""):lower()
-			if n == "desc" or n:find("placeholder") then
-				return Color3.fromRGB(102, 112, 130)
-			end
-			return Color3.fromRGB(32, 39, 52)
-		end
-
-		local function amoledTxtFor(o, c)
-			if isAccent(c) then
-				return c
-			end
-			local n = (o.Name or ""):lower()
-			if n == "desc" or n:find("placeholder") then
-				return Color3.fromRGB(137, 144, 155)
-			end
-			return Color3.fromRGB(245, 247, 250)
-		end
-
-		local function lightStrokeFor(c)
-			if isAccent(c) then
-				return Color3.fromRGB(91, 147, 225)
-			end
-			return Color3.fromRGB(206, 214, 226)
-		end
-
-		local function amoledStrokeFor(c)
-			if isAccent(c) then
-				return c
-			end
-			return Color3.fromRGB(24, 24, 28)
-		end
-
-		local function lightImgFor(o, c)
-			if isAccent(c) then
-				return c
-			end
-			local h, s, v = Color3.toHSV(c)
-			local n = (o.Name or ""):lower()
-			if n == "checked" then
-				return Color3.fromRGB(79, 164, 242)
-			end
-			if s >= 0.30 then
-				return Color3.fromHSV(h, math.clamp(s * 0.65, 0, 1), math.clamp(math.min(v, 0.60) + 0.08, 0, 1))
-			end
-			if v >= 0.70 then
-				return Color3.fromRGB(78, 88, 104)
-			end
-			return Color3.fromRGB(102, 111, 126)
-		end
-
-		local function amoledImgFor(o, c)
-			if isAccent(c) then
-				return c
-			end
-			local h, s, v = Color3.toHSV(c)
-			local n = (o.Name or ""):lower()
-			if n == "checked" then
-				return Color3.fromRGB(79, 164, 242)
-			end
-			if s >= 0.30 then
-				return Color3.fromHSV(h, math.clamp(s * 0.75, 0, 1), math.clamp(math.max(v, 0.82), 0, 1))
-			end
-			if v <= 0.35 then
-				return Color3.fromRGB(232, 236, 241)
-			end
-			return Color3.fromRGB(214, 220, 228)
-		end
-
-		local function setBg(o, c)
-			if o and o.Parent and c then
-				pcall(function()
-					o.BackgroundColor3 = c
-				end)
-			end
-		end
-
-		local function setTxt(o, c)
-			if o and o.Parent and c and (o:IsA("TextLabel") or o:IsA("TextButton") or o:IsA("TextBox")) then
-				pcall(function()
-					o.TextColor3 = c
-				end)
-			end
-		end
-
-		local function setStroke(o, c)
-			if o and o.Parent and c and o:IsA("UIStroke") then
-				pcall(function()
-					o.Color = c
-				end)
-			end
-		end
-
-		local function setImg(o, c)
-			if o and o.Parent and c and (o:IsA("ImageLabel") or o:IsA("ImageButton")) then
-				pcall(function()
-					o.ImageColor3 = c
-				end)
-			end
-		end
-
-		local function restoreAll()
-			for o, c in base.bg do
-				if o and o.Parent then
-					setBg(o, c)
+				if (object:IsA("ImageLabel") or object:IsA("ImageButton")) and themeRuntime.baseImage[object] == nil then
+					themeRuntime.baseImage[object] = object.ImageColor3
 				end
 			end
-			for o, c in base.txt do
-				if o and o.Parent then
-					setTxt(o, c)
+			capture(mainGui)
+			for _, object in mainGui:GetDescendants() do
+				capture(object)
+			end
+			local palettes = {
+				Light = {
+					root = Color3.fromRGB(242, 244, 248),
+					panel = Color3.fromRGB(229, 232, 239),
+					card = Color3.fromRGB(216, 221, 230),
+					card2 = Color3.fromRGB(205, 211, 221),
+					text = Color3.fromRGB(27, 33, 44),
+					muted = Color3.fromRGB(91, 101, 118),
+					stroke = Color3.fromRGB(178, 188, 204),
+					icon = Color3.fromRGB(69, 79, 96),
+					accent = Color3.fromRGB(79, 164, 242),
+				},
+				Amoled = {
+					root = Color3.fromRGB(0, 0, 0),
+					panel = Color3.fromRGB(5, 5, 7),
+					card = Color3.fromRGB(10, 10, 13),
+					card2 = Color3.fromRGB(15, 15, 19),
+					text = Color3.fromRGB(244, 247, 250),
+					muted = Color3.fromRGB(143, 150, 162),
+					stroke = Color3.fromRGB(29, 30, 36),
+					icon = Color3.fromRGB(224, 229, 236),
+					accent = Color3.fromRGB(79, 164, 242),
+				},
+			}
+			local function isAccent(color)
+				local hue, saturation, value = Color3.toHSV(color)
+				return saturation >= 0.34 and value >= 0.28 and hue >= 0.48 and hue <= 0.72
+			end
+			local function isControlColorPart(object)
+				local current = object
+				while current and current ~= mainGui do
+					local name = current.Name
+					if
+						name == "Hue"
+						or name == "Sat"
+						or name == "Val"
+						or name == "Knob"
+						or name == "ColorSlider"
+						or name == "ColorValue"
+					then
+						return true
+					end
+					current = current.Parent
 				end
-			end
-			for o, c in base.st do
-				if o and o.Parent then
-					setStroke(o, c)
-				end
-			end
-			for o, c in base.img do
-				if o and o.Parent then
-					setImg(o, c)
-				end
-			end
-		end
-
-		local function restoreExec()
-			for o, c in base.bg do
-				if inExec(o) then
-					setBg(o, c)
-				end
-			end
-			for o, c in base.txt do
-				if inExec(o) then
-					setTxt(o, c)
-				end
-			end
-			for o, c in base.st do
-				if inExec(o) then
-					setStroke(o, c)
-				end
-			end
-			for o, c in base.img do
-				if inExec(o) then
-					setImg(o, c)
-				end
-			end
-		end
-
-		local function eachDesc(rootObj, fn)
-			if not rootObj then
-				return
-			end
-			for _, d in rootObj:QueryDescendants("Instance") do
-				fn(d)
-			end
-		end
-
-		local function isCustomSettingPart(o)
-			if not (o and o.Parent) then
 				return false
 			end
-			local nm = o.Name or ""
-			if
-				nm == "Dock"
-				or nm == "ValueBox"
-				or nm == "Slider"
-				or nm == "Bar"
-				or nm == "Fill"
-				or nm == "Knob"
-				or nm == "ColorSlider"
-				or nm == "ColorValue"
-				or nm == "Hue"
-				or nm == "Sat"
-				or nm == "Val"
-			then
-				return true
-			end
-			local p = o.Parent
-			while p and p ~= mainGui do
-				local pn = p.Name or ""
-				if pn == "Dock" or pn == "ColorSlider" or pn == "Slider" then
-					return true
+			local function backgroundRole(object, palette)
+				local name = string.lower(object.Name or "")
+				if name == "darkoverlay" then
+					return Color3.new(0, 0, 0)
 				end
-				p = p.Parent
-			end
-			return false
-		end
-
-		local function findText(rootObj, nm)
-			if not rootObj then
-				return
-			end
-			for _, d in rootObj:QueryDescendants("TextLabel") do
-				if d.Name == nm then					return d
+				if
+					name:find("overlay")
+					or name == "settings"
+					or name == "executor"
+					or name == "home"
+					or name == "scripthub"
+					or name == "console"
+					or name == "music"
+				then
+					return palette.root
 				end
-			end
-		end
-
-		local function styleCard(card, mainCol, mutedCol, innerCol)
-			if not card then
-				return
-			end
-			setBg(card, innerCol)
-			eachDesc(card, function(d)
-				if d:IsA("TextLabel") then
-					local nm = (d.Name or ""):lower()
-					if nm == "title" then
-						setTxt(d, mainCol)
-					elseif nm == "description" or nm == "desc" then
-						setTxt(d, mutedCol)
-					elseif nm == "memory" or nm == "ping" or nm == "players" then
-						setTxt(d, mutedCol)
-					end
-				elseif d:IsA("TextButton") then
-					setBg(d, innerCol)
+				if
+					name:find("button")
+					or name:find("tab")
+					or name:find("card")
+					or name:find("script")
+					or name:find("network")
+					or name:find("search")
+					or name:find("dropdown")
+					or name:find("setting")
+				then
+					return palette.card
 				end
-			end)
-		end
-
-		local function syncThemeChecks(themeName)
-			local ex = mainGui:FindFirstChild("Executor", true)
-			local over = ex and ex:FindFirstChild("Overlay", true)
-			local menu = over and over:FindFirstChild("Menu", true)
-			local dd = menu and menu:FindFirstChild("Dropdown", true)
-			local map = { Option1 = "Default", Option2 = "Light", Option3 = "Amoled" }
-			for key, nm in map do
-				local opt = dd and dd:FindFirstChild(key)
-				local chk = opt and opt:FindFirstChild("Checked", true)
-				if chk and chk:IsA("GuiObject") then
+				if object:IsA("TextBox") or object:IsA("TextButton") or object:IsA("ImageButton") then
+					return palette.card2
+				end
+				return palette.panel
+			end
+			local function restoreObject(object)
+				local background = themeRuntime.baseBackground[object]
+				if background ~= nil and object.Parent then
 					pcall(function()
-						chk.Visible = nm:lower() == themeName:lower()
+						object.BackgroundColor3 = background
+					end)
+				end
+				local textColor = themeRuntime.baseText[object]
+				if textColor ~= nil and object.Parent then
+					pcall(function()
+						object.TextColor3 = textColor
+					end)
+				end
+				local strokeColor = themeRuntime.baseStroke[object]
+				if strokeColor ~= nil and object.Parent then
+					pcall(function()
+						object.Color = strokeColor
+					end)
+				end
+				local imageColor = themeRuntime.baseImage[object]
+				if imageColor ~= nil and object.Parent then
+					pcall(function()
+						object.ImageColor3 = imageColor
 					end)
 				end
 			end
-		end
-
-		local function styleExecutorTheme(themeName)
-			restoreExec()
-			if not execRoot or themeName:lower() == "default" then
-				syncThemeChecks(themeName)
-				return
-			end
-
-			local exImage = execRoot:FindFirstChild("Executor")
-			local over = exImage and exImage:FindFirstChild("Overlay")
-			local menu = over and over:FindFirstChild("Menu", true)
-			local dd = menu and menu:FindFirstChild("Dropdown", true)
-			local tabs = over and over:FindFirstChild("Tabs", true)
-			local btns = over and over:FindFirstChild("Buttons", true)
-			local code = over and over:FindFirstChild("Code", true)
-			local side = execRoot:FindFirstChild("Sidemenu", true)
-			local net = side and side:FindFirstChild("Network", true)
-			local feat = side and side:FindFirstChild("Script", true)
-
-			local p
-			if themeName:lower() == "light" then
-				p = {
-					card = Color3.fromRGB(220, 220, 220),
-					card2 = Color3.fromRGB(212, 212, 212),
-					main = Color3.fromRGB(29, 36, 49),
-					muted = Color3.fromRGB(103, 112, 126),
-					tabBar = Color3.fromRGB(223, 223, 223),
-					tab = Color3.fromRGB(214, 214, 214),
-					tabTxt = Color3.fromRGB(69, 77, 92),
-					menu = Color3.fromRGB(218, 218, 218),
-					menuIcon = Color3.fromRGB(86, 95, 110),
-					drop = Color3.fromRGB(224, 224, 224),
-					div = Color3.fromRGB(218, 223, 232),
-					stroke = Color3.fromRGB(206, 214, 226),
-					accent = Color3.fromRGB(79, 164, 242),
-				}
-			else
-				p = {
-					card = Color3.fromRGB(0, 0, 0),
-					card2 = Color3.fromRGB(8, 8, 10),
-					main = Color3.fromRGB(245, 247, 250),
-					muted = Color3.fromRGB(142, 148, 158),
-					tabBar = Color3.fromRGB(0, 0, 0),
-					tab = Color3.fromRGB(9, 9, 12),
-					tabTxt = Color3.fromRGB(232, 236, 241),
-					menu = Color3.fromRGB(5, 5, 7),
-					menuIcon = Color3.fromRGB(220, 224, 230),
-					drop = Color3.fromRGB(7, 7, 9),
-					div = Color3.fromRGB(22, 22, 28),
-					stroke = Color3.fromRGB(24, 24, 28),
-					accent = Color3.fromRGB(79, 164, 242),
-				}
-			end
-
-			if net then
-				setBg(net, p.card)
-				local info = net:FindFirstChild("Information", true)
-				if info then
-					setBg(info, p.card2)
-				end
-				styleCard(net, p.main, p.muted, p.card)
-			end
-			if feat then
-				setBg(feat, p.card)
-				styleCard(feat, p.main, p.muted, p.card)
-				local show = feat:FindFirstChild("Showcase", true)
-				if show then
-					setBg(show, p.card)
-					local tt = findText(show, "Title")
-					local ds = findText(show, "Description")
-					setTxt(tt, p.main)
-					setTxt(ds, p.muted)
-				end
-			end
-
-			eachDesc(execRoot, function(d)
-				if (d:IsA("ImageLabel") or d:IsA("ImageButton")) and not isCustomSettingPart(d) then
-					local c = base.img[d] or d.ImageColor3
-					if themeName:lower() == "light" then
-						setImg(d, lightImgFor(d, c))
-					else
-						setImg(d, amoledImgFor(d, c))
-					end
-				end
-			end)
-
-			if menu then
-				setBg(menu, p.menu)
-				eachDesc(menu, function(d)
-					if
-						(d:IsA("ImageButton") or d:IsA("ImageLabel"))
-						and d ~= menu
-						and not d.Name:match("^Option%d+$")
-						and d.Name ~= "Checked"
-					then
-						setImg(d, p.menuIcon)
-					end
-				end)
-			end
-			if dd then
-				setBg(dd, p.drop)
-				for _, ch in dd:GetChildren() do
-					if ch:IsA("Frame") and ch.Name == "Divider" then
-						setBg(ch, p.div)
-					elseif ch:IsA("ImageButton") and ch.Name:match("^Option%d+$") then
-						setBg(ch, p.drop)
-						setTxt(findText(ch, "Title"), p.main)
-						local ck = ch:FindFirstChild("Checked", true)
-						if ck then
-							setImg(ck, p.accent)
-						end
-					end
-				end
-			end
-
-			if tabs then
-				setBg(tabs, p.tabBar)
-				eachDesc(tabs, function(d)
-					if d:IsA("ImageButton") then
-						if d.Name == "AddTab" or d.Name:match("^script%d+%.lua$") then
-							setBg(d, p.tab)
-						end
-						if d ~= tabs and d.Name ~= "AddTab" and not d.Name:match("^script%d+%.lua$") then
-							setImg(d, p.menuIcon)
-						end
-					elseif d:IsA("TextLabel") and d.Name == "Title" then
-						setTxt(d, p.tabTxt)
-					end
-				end)
-			end
-
-			if btns then
-				eachDesc(btns, function(d)
-					if d:IsA("TextLabel") or d:IsA("TextButton") or d:IsA("TextBox") then
-						local c = base.txt[d]
-						if c then
-							setTxt(d, c)
-						end
-					elseif d:IsA("Frame") or d:IsA("ImageButton") or d:IsA("ImageLabel") then
-						local c = base.bg[d]
-						if c then
-							setBg(d, c)
-						end
-						local ic = base.img[d]
-						if ic then
-							setImg(d, ic)
-						end
-					elseif d:IsA("UIStroke") then
-						local c = base.st[d]
-						if c then
-							setStroke(d, c)
-						end
-					end
-				end)
-			end
-
-			if code then
-				eachDesc(code, function(d)
-					if d:IsA("TextBox") or d:IsA("TextLabel") then
-						local c = base.txt[d]
-						if c then
-							setTxt(d, c)
-						end
-					elseif d:IsA("Frame") or d:IsA("ImageButton") or d:IsA("ImageLabel") or d:IsA("ScrollingFrame") then
-						local c = base.bg[d]
-						if c then
-							setBg(d, c)
-						end
-						local ic = base.img[d]
-						if ic then
-							setImg(d, ic)
-						end
-					end
-				end)
-			end
-
-			syncThemeChecks(themeName)
-		end
-
-		local function applyTheme(name)
-			capBase()
-			if not name or name == "" then
-				name = "Default"
-			end
-			curTheme = name
-			if name:lower() == "default" then
-				restoreAll()
-			elseif name:lower() == "light" then
-				for o, c in base.bg do
-					if o and o.Parent and not inExec(o) then
-						pcall(function()
-							if isCustomSettingPart(o) then
-								o.BackgroundColor3 = c
-							else
-								o.BackgroundColor3 = isAccent(c) and c or lightBgFor(o)
-							end
-						end)
-					end
-				end
-				for o, c in base.txt do
-					if o and o.Parent and not inExec(o) then
-						pcall(function()
-							if isCustomSettingPart(o) then
-								o.TextColor3 = c
-							else
-								o.TextColor3 = lightTxtFor(o, c)
-							end
-						end)
-					end
-				end
-				for o, c in base.st do
-					if o and o.Parent and not inExec(o) then
-						pcall(function()
-							if isCustomSettingPart(o) then
-								o.Color = c
-							else
-								o.Color = lightStrokeFor(c)
-							end
-						end)
-					end
-				end
-				for _, o in mainGui:QueryDescendants("Instance") do
-					if (o:IsA("ImageLabel") or o:IsA("ImageButton")) and o.Parent and not inExec(o) then
-						local c = base.img[o] or o.ImageColor3
-						pcall(function()
-							if isCustomSettingPart(o) then
-								o.ImageColor3 = c
-							else
-								o.ImageColor3 = lightImgFor(o, c)
-							end
-						end)
-					end
-				end
-			elseif name:lower() == "amoled" then
-				for o, c in base.bg do
-					if o and o.Parent and not inExec(o) then
-						pcall(function()
-							if isCustomSettingPart(o) then
-								o.BackgroundColor3 = c
-							else
-								o.BackgroundColor3 = isAccent(c) and c or amoledBgFor(o)
-							end
-						end)
-					end
-				end
-				for o, c in base.txt do
-					if o and o.Parent and not inExec(o) then
-						pcall(function()
-							if isCustomSettingPart(o) then
-								o.TextColor3 = c
-							else
-								o.TextColor3 = amoledTxtFor(o, c)
-							end
-						end)
-					end
-				end
-				for o, c in base.st do
-					if o and o.Parent and not inExec(o) then
-						pcall(function()
-							if isCustomSettingPart(o) then
-								o.Color = c
-							else
-								o.Color = amoledStrokeFor(c)
-							end
-						end)
-					end
-				end
-				for _, o in mainGui:QueryDescendants("Instance") do
-					if (o:IsA("ImageLabel") or o:IsA("ImageButton")) and o.Parent and not inExec(o) then
-						local c = base.img[o] or o.ImageColor3
-						pcall(function()
-							if isCustomSettingPart(o) then
-								o.ImageColor3 = c
-							else
-								o.ImageColor3 = amoledImgFor(o, c)
-							end
-						end)
-					end
-				end
-			end
-			styleExecutorTheme(name)
-			saveCfg("DeltaTheme", { name = name })
-		end
-
-		local function trim(s)
-			if type(s) ~= "string" then
-				return ""
-			end
-			return (s:gsub("^%s+", ""):gsub("%s+$", ""))
-		end
-
-		local function findThemeButtons()
-			local ex = mainGui:FindFirstChild("Executor", true)
-			local over = ex and ex:FindFirstChild("Overlay", true)
-			local menu = over and over:FindFirstChild("Menu", true)
-			local dd = menu and menu:FindFirstChild("Dropdown", true)
-			if not (dd and dd:IsA("GuiObject")) then
-				return
-			end
-			local out = {}
-			for _, o in dd:GetChildren() do
-				if o:IsA("ImageButton") and o.Name:match("^Option%d+$") then
-					local txt = ""
-					for _, d in o:QueryDescendants("TextLabel") do
-						if trim(d.Text or "") ~= "" then							txt = trim(d.Text)
-							break
-						end
-					end
-					if txt == "" then
-						local map = { Option1 = "Default", Option2 = "Light", Option3 = "Amoled" }
-						txt = map[o.Name] or o.Name
-					end
-					out[#out + 1] = { btn = o, name = txt }
-				end
-			end
-			return dd, out
-		end
-
-		local function detectCurrentTheme()
-			local ex = mainGui:FindFirstChild("Executor", true)
-			local over = ex and ex:FindFirstChild("Overlay", true)
-			local menu = over and over:FindFirstChild("Menu", true)
-			local dd = menu and menu:FindFirstChild("Dropdown", true)
-			local map = { Option1 = "Default", Option2 = "Light", Option3 = "Amoled" }
-			for key, name in map do
-				local opt = dd and dd:FindFirstChild(key)
-				local chk = opt and opt:FindFirstChild("Checked", true)
-				if chk and chk:IsA("GuiObject") and chk.Visible then
-					return name
-				end
-			end
-		end
-
-		local dd, opts = findThemeButtons()
-		if not dd or not opts or #opts == 0 then
-			return
-		end
-
-		local curTheme = "Default"
-		local hooked = {}
-		local function bindOpt(b, name)
-			if hooked[b] then
-				return
-			end
-			hooked[b] = true
-			b.MouseButton1Click:Connect(function()
-				applyTheme(name)
-			end)
-		end
-		for _, v in opts do
-			bindOpt(v.btn, v.name)
-		end
-
-		local themeReapplyPending = false
-		mainGui.DescendantAdded:Connect(function(o)
-			task.defer(function()
-				if not (o and o.Parent) then
+			local function applyObject(object, themeName)
+				if object:GetAttribute("LT_SyntaxOverlay") then
 					return
 				end
-				local detected = detectCurrentTheme()
-				if detected and detected ~= "" then
-					curTheme = detected
+				capture(object)
+				if themeName == "Default" then
+					restoreObject(object)
+					return
 				end
-				if o:IsA("ImageButton") and o.Name:match("^Option%d+$") then
-					local p = o.Parent
-					if p and p.Name == "Dropdown" and p:FindFirstAncestor("Menu") then
-						local txt = ""
-						for _, d in o:QueryDescendants("TextLabel") do
-							if trim(d.Text or "") ~= "" then								txt = trim(d.Text)
-								break
-							end
-						end
-						if txt == "" then
-							local map = { Option1 = "Default", Option2 = "Light", Option3 = "Amoled" }
-							txt = map[o.Name] or o.Name
-						end
-						bindOpt(o, txt)
-					end
+				local palette = palettes[themeName]
+				if not palette or isControlColorPart(object) then
+					return
 				end
-				if curTheme and curTheme:lower() ~= "default" then
-					if not themeReapplyPending then
-						themeReapplyPending = true
-						task.delay(0.05, function()
-							themeReapplyPending = false
-							applyTheme(curTheme)
+				local background = themeRuntime.baseBackground[object]
+				if background ~= nil then
+					pcall(function()
+						object.BackgroundColor3 = isAccent(background) and background or backgroundRole(object, palette)
+					end)
+				end
+				local textColor = themeRuntime.baseText[object]
+				if textColor ~= nil then
+					local name = string.lower(object.Name or "")
+					pcall(function()
+						object.TextColor3 = isAccent(textColor) and textColor
+							or ((name == "desc" or name:find("description") or name:find("placeholder")) and palette.muted or palette.text)
+					end)
+				end
+				local strokeColor = themeRuntime.baseStroke[object]
+				if strokeColor ~= nil then
+					pcall(function()
+						object.Color = isAccent(strokeColor) and strokeColor or palette.stroke
+					end)
+				end
+				local imageColor = themeRuntime.baseImage[object]
+				if imageColor ~= nil then
+					local _, saturation = Color3.toHSV(imageColor)
+					local name = string.lower(object.Name or "")
+					if saturation <= 0.28 or name == "checked" or name:find("icon") or name == "imagebutton" then
+						pcall(function()
+							object.ImageColor3 = isAccent(imageColor) and imageColor or (name == "checked" and palette.accent or palette.icon)
 						end)
 					end
 				end
-			end)
-		end)
-
-		if type(cfg.DeltaTheme) == "table" and type(cfg.DeltaTheme.name) == "string" and cfg.DeltaTheme.name ~= "" then
-			curTheme = cfg.DeltaTheme.name
-		end
-		task.defer(function()
-			local detected = detectCurrentTheme()
-			if detected and detected ~= "" then
-				curTheme = detected
 			end
-			applyTheme(curTheme)
-		end)
+			local function getThemeDropdown()
+				local executor = mainGui:FindFirstChild("Executor")
+				local image = executor and executor:FindFirstChild("Executor")
+				local overlay = image and image:FindFirstChild("Overlay")
+				local menu = overlay and overlay:FindFirstChild("Menu", true)
+				return menu and menu:FindFirstChild("Dropdown")
+			end
+			local themeMap = { Option1 = "Default", Option2 = "Light", Option3 = "Amoled" }
+			local function syncChecks(themeName)
+				local dropdown = getThemeDropdown()
+				for optionName, name in themeMap do
+					local option = dropdown and dropdown:FindFirstChild(optionName)
+					local checked = option and option:FindFirstChild("Checked", true)
+					if checked and checked:IsA("GuiObject") then
+						checked.Visible = name == themeName
+					end
+				end
+			end
+			local currentTheme = "Default"
+			local applying = false
+			local function applyTheme(themeName, persist)
+				if applying or not themeRuntime.alive then
+					return
+				end
+				themeName = themeName == "Light" and "Light" or themeName == "Amoled" and "Amoled" or "Default"
+				applying = true
+				currentTheme = themeName
+				applyObject(mainGui, themeName)
+				for _, object in mainGui:GetDescendants() do
+					applyObject(object, themeName)
+				end
+				syncChecks(themeName)
+				if persist then
+					saveTheme(themeName)
+				end
+				applying = false
+			end
+			themeRuntime.applyTheme = applyTheme
+			themeRuntime.stop = function()
+				if not themeRuntime.alive then
+					return
+				end
+				if currentTheme ~= "Default" then
+					applyTheme("Default", false)
+				end
+				themeRuntime.alive = false
+				for i = #themeRuntime.connections, 1, -1 do
+					pcall(function()
+						themeRuntime.connections[i]:Disconnect()
+					end)
+				end
+				table.clear(themeRuntime.connections)
+				if rawget(__dcm_env, "__DeltaThemeRuntime") == themeRuntime then
+					__dcm_env.__DeltaThemeRuntime = nil
+				end
+			end
+			local boundOptions = setmetatable({}, { __mode = "k" })
+			local function bindOption(option, themeName)
+				if not (option and option:IsA("GuiButton")) or boundOptions[option] then
+					return
+				end
+				boundOptions[option] = true
+				local locked = false
+				local function choose()
+					if locked then
+						return
+					end
+					locked = true
+					task.defer(applyTheme, themeName, true)
+					task.delay(0.12, function()
+						locked = false
+					end)
+				end
+				connectTheme(option.MouseButton1Click, choose)
+				connectTheme(option.Activated, choose)
+				connectTheme(option.TouchTap, choose)
+			end
+			local function bindThemeOptions()
+				local dropdown = getThemeDropdown()
+				if not dropdown then
+					return
+				end
+				for optionName, themeName in themeMap do
+					bindOption(dropdown:FindFirstChild(optionName), themeName)
+				end
+			end
+			bindThemeOptions()
+			connectTheme(mainGui.DescendantAdded, function(object)
+				task.defer(function()
+					if not (themeRuntime.alive and object and object.Parent) then
+						return
+					end
+					capture(object)
+					if object:IsA("GuiObject") or object:IsA("UIStroke") then
+						applyObject(object, currentTheme)
+					end
+					if object:IsA("GuiButton") and themeMap[object.Name] and object.Parent and object.Parent.Name == "Dropdown" then
+						bindOption(object, themeMap[object.Name])
+					end
+				end)
+			end)
+			local config = readThemeConfig()
+			local savedTheme = type(config.DeltaTheme) == "table" and config.DeltaTheme.name or nil
+			applyTheme(savedTheme, false)
 		end)
 	end
-end)()
+end
+
+do
+	local previous = rawget(__dcm_env, "__DeltaCustomizationV2Runtime")
+	if type(previous) == "table" and type(previous.stop) == "function" then
+		pcall(previous.stop)
+	end
+
+	local runtime = {
+		alive = true,
+		version = "2.4.0",
+		connections = {},
+		instances = {},
+		originalButtons = setmetatable({}, { __mode = "k" }),
+		restorers = {},
+	}
+	__dcm_env.__DeltaCustomizationV2Runtime = runtime
+	__dcm_shared.__DeltaCustomizationV2Runtime = runtime
+
+	local function addConnection(connection)
+		if connection then
+			table.insert(runtime.connections, connection)
+		end
+		return connection
+	end
+
+	local function connect(signal, callback)
+		if not signal then
+			return nil
+		end
+		local ok, connection = pcall(function()
+			return signal:Connect(callback)
+		end)
+		if ok then
+			return addConnection(connection)
+		end
+		return nil
+	end
+
+	local function addRestorer(callback)
+		if type(callback) == "function" then
+			table.insert(runtime.restorers, callback)
+		end
+	end
+
+	local function track(instance)
+		if instance then
+			table.insert(runtime.instances, instance)
+		end
+		return instance
+	end
+
+	local function restoreOriginalButtons()
+		for button, wasVisible in runtime.originalButtons do
+			if button and button.Parent then
+				pcall(function()
+					local nativeVisible = button:GetAttribute("LT_NativeVisible")
+					button.Visible = typeof(nativeVisible) == "boolean" and nativeVisible or wasVisible
+				end)
+			end
+		end
+		table.clear(runtime.originalButtons)
+	end
+
+	runtime.stop = function()
+		if not runtime.alive then
+			return
+		end
+		runtime.alive = false
+		restoreOriginalButtons()
+		for i = #runtime.restorers, 1, -1 do
+			pcall(runtime.restorers[i])
+		end
+		table.clear(runtime.restorers)
+		for name in _naConns do
+			NAlib.disconnect(name)
+		end
+		for i = #runtime.connections, 1, -1 do
+			local connection = runtime.connections[i]
+			pcall(function()
+				connection:Disconnect()
+			end)
+		end
+		table.clear(runtime.connections)
+		for i = #runtime.instances, 1, -1 do
+			local instance = runtime.instances[i]
+			if instance and instance.Parent then
+				pcall(function()
+					instance:Destroy()
+				end)
+			end
+		end
+		table.clear(runtime.instances)
+		if rawget(__dcm_env, "__DeltaCustomizationV2Runtime") == runtime then
+			__dcm_env.__DeltaCustomizationV2Runtime = nil
+		end
+		if rawget(__dcm_shared, "__DeltaCustomizationV2Runtime") == runtime then
+			__dcm_shared.__DeltaCustomizationV2Runtime = nil
+		end
+	end
+
+	NAlib.disconnect("FpsCap_Enforce")
+
+	local function findMainGui()
+		local best
+		local bestScore = 0
+		for _, gui in root:GetChildren() do
+			if gui:IsA("ScreenGui") then
+				local score = 0
+				for _, name in { "Executor", "Sidebar", "Scripthub", "Settings", "Home", "Console" } do
+					if gui:FindFirstChild(name) then
+						score += (name == "Executor" or name == "Sidebar") and 4 or 2
+					elseif gui:FindFirstChild(name, true) then
+						score += 1
+					end
+				end
+				if score > bestScore then
+					best = gui
+					bestScore = score
+				end
+			end
+		end
+		if bestScore >= 10 then
+			return best
+		end
+	end
+
+	local v2Main = findMainGui()
+	local attempts = 0
+	while runtime.alive and not v2Main and attempts < 80 do
+		attempts += 1
+		task.wait(0.1)
+		v2Main = findMainGui()
+	end
+	if not (runtime.alive and v2Main) then
+		return
+	end
+
+	local executorRoot = v2Main:FindFirstChild("Executor") or v2Main:FindFirstChild("Executor", true)
+	local executorImage = executorRoot and executorRoot:FindFirstChild("Executor")
+	local executorOverlay = executorImage and executorImage:FindFirstChild("Overlay")
+	local tabsFrame = executorOverlay and executorOverlay:FindFirstChild("Tabs", true)
+	local codeFrame = executorOverlay and executorOverlay:FindFirstChild("Code", true)
+	local buttonsFrame = executorOverlay and executorOverlay:FindFirstChild("Buttons", true)
+	if not (executorOverlay and tabsFrame and codeFrame and buttonsFrame) then
+		return
+	end
+
+	for _, object in codeFrame:GetChildren() do
+		if object:GetAttribute("LT_SyntaxOverlay") or object.Name:match("^LT_Syntax_") then
+			object:Destroy()
+		elseif object:IsA("TextBox") and object.Name:match("^script%d+%.lua$") then
+			local originalTransparency = object:GetAttribute("LT_SyntaxOriginalTransparency")
+			local originalZ = object:GetAttribute("LT_SyntaxOriginalZIndex")
+			object.TextTransparency = typeof(originalTransparency) == "number" and originalTransparency or 0
+			object.ZIndex = typeof(originalZ) == "number" and originalZ or 1
+			object:SetAttribute("LT_SyntaxOriginalTransparency", nil)
+			object:SetAttribute("LT_SyntaxOriginalZIndex", nil)
+		end
+	end
+	local staleToolbar = buttonsFrame:FindFirstChild("LT_EditorToolbar")
+	if staleToolbar then
+		staleToolbar:Destroy()
+	end
+	for _, name in { "Execute", "Clear", "ExecuteClipboard" } do
+		local button = buttonsFrame:FindFirstChild(name)
+		if button and button:IsA("GuiObject") then
+			button:SetAttribute("LT_NativeVisible", true)
+			button.Visible = true
+		end
+	end
+	buttonsFrame.Visible = true
+
+	local function readCurrentConfig()
+		local config = {}
+		if
+			type(isfile) == "function"
+			and type(readfile) == "function"
+			and isfile(settingsPath)
+		then
+			local ok, raw = pcall(readfile, settingsPath)
+			if ok and type(raw) == "string" and raw ~= "" then
+				local decodedOk, decoded = pcall(function()
+					return __lt.cm("HttpService", "JSONDecode", raw)
+				end)
+				if decodedOk and type(decoded) == "table" then
+					config = decoded
+				end
+			end
+		end
+		return config
+	end
+
+	local function readBool(key, defaultValue)
+		local config = readCurrentConfig()
+		local value = config[key]
+		if type(value) == "table" and value.enabled ~= nil then
+			return value.enabled and true or false
+		end
+		return defaultValue
+	end
+
+	local function saveBool(key, enabled)
+		local config = readCurrentConfig()
+		config[key] = { enabled = enabled and true or false }
+		writeJsonFile(settingsPath, config)
+	end
+
+	local function readNumber(key, defaultValue, minimum, maximum)
+		local config = readCurrentConfig()
+		local value = config[key]
+		local number = type(value) == "table" and tonumber(value.value) or nil
+		return math.clamp(number or defaultValue, minimum, maximum)
+	end
+
+	local function saveNumber(key, value)
+		local config = readCurrentConfig()
+		config[key] = { value = value }
+		writeJsonFile(settingsPath, config)
+	end
+
+	do
+		local config = readCurrentConfig()
+		if config.UiBlur ~= nil or config.UiBlurSize ~= nil then
+			config.UiBlur = nil
+			config.UiBlurSize = nil
+			writeJsonFile(settingsPath, config)
+		end
+	end
+
+	local autoRestoreEnabled = readBool("AutoRestoreTabs", true)
+	local editorToolbarEnabled = readBool("EditorToolbar", true)
+	local editorStatusEnabled = readBool("EditorStatus", true)
+	local wideEditorEnabled = readBool("WideEditor", false)
+	local compactTabsEnabled = readBool("CompactTabs", false)
+	local editorWordWrapEnabled = readBool("EditorWordWrap", false)
+	local syntaxHighlightEnabled = readBool("EditorSyntaxHighlight", true)
+	local exploitSyntaxEnabled = readBool("ExploitSyntaxHighlight", true)
+	local editorFontSize = math.floor(readNumber("EditorFontSize", 14, 10, 24) + 0.5)
+	local toolbar
+	local statusFrame
+	local statusLabel
+	local editorCanvas
+	local originalCodePosition = codeFrame.Position
+	local originalCodeSize = codeFrame.Size
+	local originalButtonsVisible = buttonsFrame.Visible
+	local statusUpdateQueued = false
+	local hookedBoxes = setmetatable({}, { __mode = "k" })
+
+	local function getCodeBoxes()
+		local boxes = {}
+		for _, object in codeFrame:GetDescendants() do
+			if object:IsA("TextBox") and object.Name:match("^script%d+%.lua$") then
+				table.insert(boxes, object)
+			end
+		end
+		table.sort(boxes, function(a, b)
+			local ai = tonumber(a.Name:match("%d+")) or math.huge
+			local bi = tonumber(b.Name:match("%d+")) or math.huge
+			return ai < bi
+		end)
+		return boxes
+	end
+
+	local function getActiveCodeBox()
+		local focused = UIS and UIS:GetFocusedTextBox()
+		if focused and focused:IsDescendantOf(codeFrame) then
+			return focused
+		end
+		for _, box in getCodeBoxes() do
+			if box.Visible then
+				return box
+			end
+		end
+		return getCodeBoxes()[1]
+	end
+
+	local function executeSource(source, chunkName)
+		if type(loadstring) ~= "function" then
+			notify({
+				Title = "Delta Customization",
+				Description = "loadstring is unavailable in this Delta build.",
+				Duration = 4,
+			})
+			return false
+		end
+		local chunk, compileError = loadstring(tostring(source or ""), chunkName or "@DeltaEditor")
+		if not chunk then
+			notify({
+				Title = "Execution error",
+				Description = tostring(compileError),
+				Duration = 6,
+			})
+			return false
+		end
+		task.spawn(function()
+			local ok, runtimeError = xpcall(chunk, function(message)
+				return debug.traceback(tostring(message), 2)
+			end)
+			if not ok then
+				notify({
+					Title = "Execution error",
+					Description = tostring(runtimeError),
+					Duration = 6,
+				})
+			end
+		end)
+		return true
+	end
+
+	local function executeActiveCode()
+		local box = getActiveCodeBox()
+		if box then
+			executeSource(box.Text or "", "@" .. box.Name)
+		end
+	end
+
+	local function clearActiveCode()
+		local box = getActiveCodeBox()
+		if box then
+			box.Text = ""
+		end
+	end
+
+	runtime.clipboardCache = tostring(runtime.clipboardCache or "")
+
+	local function writeClipboard(value)
+		value = tostring(value or "")
+		runtime.clipboardCache = value
+		local writer = type(setclipboard) == "function" and setclipboard
+			or type(toclipboard) == "function" and toclipboard
+			or type(setrbxclipboard) == "function" and setrbxclipboard
+		if writer then
+			pcall(writer, value)
+		end
+		return writer ~= nil
+	end
+
+	local function readClipboard()
+		local reader = type(getclipboard) == "function" and getclipboard
+			or type(readclipboard) == "function" and readclipboard
+		if reader then
+			local ok, value = pcall(reader)
+			if ok and type(value) == "string" then
+				runtime.clipboardCache = value
+				return value, true
+			end
+		end
+		if runtime.clipboardCache ~= "" then
+			return runtime.clipboardCache, false
+		end
+		return nil, false
+	end
+
+	local function executeClipboardCode()
+		local value = readClipboard()
+		if type(value) == "string" and value ~= "" then
+			executeSource(value, "@DeltaClipboard")
+			return
+		end
+		notify({
+			Title = "Delta Customization",
+			Description = "Delta cannot read Android's system clipboard. Use COPY first, then RUN CLIP.",
+			Duration = 5,
+		})
+	end
+
+	local function insertIntoActive(text)
+		local box = getActiveCodeBox()
+		if not box then
+			return false
+		end
+		text = tostring(text or "")
+		local current = box.Text or ""
+		local cursor = tonumber(box.CursorPosition) or -1
+		if cursor < 1 or cursor > #current + 1 then
+			cursor = #current + 1
+		end
+		box.Text = current:sub(1, cursor - 1) .. text .. current:sub(cursor)
+		local nextCursor = cursor + #text
+		task.defer(function()
+			if box and box.Parent then
+				pcall(function()
+					box:CaptureFocus()
+					box.CursorPosition = nextCursor
+					box.SelectionStart = nextCursor
+				end)
+			end
+		end)
+		return true
+	end
+
+	local function copyActiveCode()
+		local box = getActiveCodeBox()
+		if not box then
+			return
+		end
+		writeClipboard(box.Text or "")
+		notify({
+			Title = "Delta Customization",
+			Description = "Copied the active editor tab.",
+			Duration = 3,
+		})
+	end
+
+	local function pasteIntoActive()
+		local value = readClipboard()
+		if type(value) == "string" then
+			insertIntoActive(value)
+			return
+		end
+		notify({
+			Title = "Delta Customization",
+			Description = "Delta cannot read Android's system clipboard. Use COPY first, then PASTE.",
+			Duration = 5,
+		})
+	end
+
+	local function activateOriginal(button)
+		if not button then
+			return false
+		end
+		if type(firesignal) == "function" then
+			if type(getconnections) == "function" then
+				for _, signalName in { "MouseButton1Click", "Activated" } do
+					local signal = button[signalName]
+					local ok, connections = pcall(getconnections, signal)
+					if ok and type(connections) == "table" and #connections > 0 then
+						local fired = pcall(firesignal, signal)
+						if fired then
+							return true
+						end
+					end
+				end
+			end
+			local ok = pcall(firesignal, button.MouseButton1Click)
+			if ok then
+				return true
+			end
+		end
+		return pcall(function()
+			button:Activate()
+		end)
+	end
+
+	local function removeScripts(instance)
+		for _, object in instance:GetDescendants() do
+			if object:IsA("LuaSourceContainer") then
+				object:Destroy()
+			end
+		end
+	end
+
+	local function setButtonTitle(button, text)
+		local title = button:FindFirstChild("Title", true) or button:FindFirstChildWhichIsA("TextLabel", true)
+		if title and title:IsA("TextLabel") then
+			title.Text = text
+		end
+	end
+
+	local function createToolbarButton(parent, template, name, text, order, callback)
+		local button = template:Clone()
+		button.Name = name
+		removeScripts(button)
+		button.Visible = true
+		button.Active = true
+		button.Interactable = true
+		button.Selectable = true
+		button.AnchorPoint = Vector2.new(0, 0.5)
+		button.Position = UDim2.new(0, 0, 0.5, 0)
+		button.Size = UDim2.new(1 / 6, -4, 1, -6)
+		button.LayoutOrder = order
+		button.ZIndex = parent.ZIndex + 1
+		button.Parent = parent
+		for _, object in button:GetDescendants() do
+			if object:IsA("GuiObject") then
+				object.ZIndex = button.ZIndex + 1
+			end
+		end
+		setButtonTitle(button, text)
+		local title = button:FindFirstChild("Title", true) or button:FindFirstChildWhichIsA("TextLabel", true)
+		if title and title:IsA("TextLabel") then
+			title.TextScaled = false
+			title.TextSize = buttonsFrame.AbsoluteSize.X < 650 and 10 or 12
+			title.TextTruncate = Enum.TextTruncate.AtEnd
+		end
+		track(button)
+		local locked = false
+		local function activate()
+			if locked or not runtime.alive then
+				return
+			end
+			locked = true
+			callback()
+			task.delay(0.1, function()
+				locked = false
+			end)
+		end
+		if button:IsA("GuiButton") then
+			connect(button.MouseButton1Click, activate)
+			connect(button.Activated, activate)
+			connect(button.TouchTap, activate)
+		else
+			connect(button.InputEnded, function(input)
+				if
+					input.UserInputType == Enum.UserInputType.MouseButton1
+					or input.UserInputType == Enum.UserInputType.Touch
+				then
+					activate()
+				end
+			end)
+		end
+		return button
+	end
+
+	local function clearToolbar()
+		if toolbar and toolbar.Parent then
+			toolbar:Destroy()
+		end
+		toolbar = nil
+		restoreOriginalButtons()
+	end
+
+	local function buildToolbar()
+		clearToolbar()
+		local staleCopy = buttonsFrame:FindFirstChild("CopyCode")
+		if staleCopy then
+			staleCopy:Destroy()
+		end
+		if not editorToolbarEnabled then
+			return
+		end
+		local executeButton = buttonsFrame:FindFirstChild("Execute")
+		local clearButton = buttonsFrame:FindFirstChild("Clear")
+		local clipboardButton = buttonsFrame:FindFirstChild("ExecuteClipboard")
+		local template = clipboardButton or executeButton or clearButton
+		if not (template and template:IsA("GuiObject")) then
+			return
+		end
+		if executeButton then
+			executeButton.Size = UDim2.new(0.256158501, 0, 0.700000167, 0)
+		end
+		if clearButton then
+			clearButton.Size = UDim2.new(0.221383139, 0, 0.700000167, 0)
+		end
+		if clipboardButton then
+			clipboardButton.Size = UDim2.new(0.355288982, 0, 0.699999988, 0)
+		end
+		for _, object in buttonsFrame:GetChildren() do
+			if object:IsA("GuiButton") then
+				local nativeVisible = object:GetAttribute("LT_NativeVisible")
+				if typeof(nativeVisible) ~= "boolean" then
+					nativeVisible = object.Visible
+					if object.Name == "Execute" or object.Name == "Clear" or object.Name == "ExecuteClipboard" then
+						nativeVisible = true
+					end
+					object:SetAttribute("LT_NativeVisible", nativeVisible)
+				end
+				runtime.originalButtons[object] = nativeVisible
+				object.Visible = false
+			end
+		end
+		toolbar = Instance.new("Frame")
+		toolbar.Name = "LT_EditorToolbar"
+		toolbar.BackgroundTransparency = 1
+		toolbar.BorderSizePixel = 0
+		toolbar.Size = UDim2.new(1, -8, 1, -4)
+		toolbar.Position = UDim2.new(0, 4, 0, 2)
+		toolbar.ClipsDescendants = true
+		toolbar.Active = false
+		toolbar.Interactable = true
+		toolbar.ZIndex = buttonsFrame.ZIndex + 1
+		toolbar.Parent = buttonsFrame
+		track(toolbar)
+		local layout = Instance.new("UIListLayout")
+		layout.FillDirection = Enum.FillDirection.Horizontal
+		layout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+		layout.VerticalAlignment = Enum.VerticalAlignment.Center
+		layout.SortOrder = Enum.SortOrder.LayoutOrder
+		layout.Padding = UDim.new(0, 4)
+		layout.Parent = toolbar
+		track(layout)
+		createToolbarButton(toolbar, executeButton or template, "LT_Execute", "RUN", 1, executeActiveCode)
+		createToolbarButton(toolbar, clearButton or template, "LT_Clear", "CLEAR", 2, clearActiveCode)
+		createToolbarButton(
+			toolbar,
+			clipboardButton or template,
+			"LT_ExecuteClipboard",
+			"RUN CLIP",
+			3,
+			executeClipboardCode
+		)
+		createToolbarButton(toolbar, template, "LT_Copy", "COPY", 4, copyActiveCode)
+		createToolbarButton(toolbar, template, "LT_Paste", "PASTE", 5, pasteIntoActive)
+		createToolbarButton(toolbar, template, "LT_NewLine", "NEW LINE", 6, function()
+			insertIntoActive("\n")
+		end)
+	end
+
+	local function updateStatusPosition()
+		if not (statusFrame and statusFrame.Parent and codeFrame and codeFrame.Parent == executorOverlay) then
+			return
+		end
+		statusFrame.Position = UDim2.new(
+			codeFrame.Position.X.Scale + codeFrame.Size.X.Scale * (1 - codeFrame.AnchorPoint.X),
+			codeFrame.Position.X.Offset + codeFrame.Size.X.Offset * (1 - codeFrame.AnchorPoint.X) - 6,
+			codeFrame.Position.Y.Scale + codeFrame.Size.Y.Scale * (1 - codeFrame.AnchorPoint.Y),
+			codeFrame.Position.Y.Offset + codeFrame.Size.Y.Offset * (1 - codeFrame.AnchorPoint.Y) - 5
+		)
+		statusFrame.Size = UDim2.new(0, math.clamp(math.floor(codeFrame.AbsoluteSize.X * 0.58), 210, 360), 0, 22)
+	end
+
+	local function updateStatus()
+		statusUpdateQueued = false
+		if not (statusFrame and statusLabel) then
+			return
+		end
+		statusFrame.Visible = editorStatusEnabled
+		if not editorStatusEnabled then
+			return
+		end
+		local box = getActiveCodeBox()
+		if not box then
+			statusLabel.Text = "No active editor tab"
+			return
+		end
+		local text = box.Text or ""
+		local _, lineBreaks = text:gsub("\n", "\n")
+		local lines = lineBreaks + 1
+		statusLabel.Text = string.format("%s   •   %d lines   •   %d chars   •   autosave", box.Name, lines, #text)
+	end
+
+	local function queueStatusUpdate()
+		if statusUpdateQueued then
+			return
+		end
+		statusUpdateQueued = true
+		task.defer(updateStatus)
+	end
+
+	local saveTokens = setmetatable({}, { __mode = "k" })
+	local tabDirectory = "DeltaCustom/DeltaTabs"
+	editorCanvas = (function()
+		local TextService = game:GetService("TextService")
+		local hooked = setmetatable({}, { __mode = "k" })
+		local originals = setmetatable({}, { __mode = "k" })
+		local resizeTokens = setmetatable({}, { __mode = "k" })
+		local originalCanvasSize = codeFrame.CanvasSize
+		local originalAutomaticCanvasSize = codeFrame.AutomaticCanvasSize
+		local originalCanvasPosition = codeFrame.CanvasPosition
+
+		local function effectiveScale(object)
+			local scale = 1
+			local current = object
+			while current do
+				for _, child in current:GetChildren() do
+					if child:IsA("UIScale") then
+						scale *= child.Scale
+					end
+				end
+				current = current.Parent
+			end
+			return math.max(scale, 0.05)
+		end
+
+		local function remember(box)
+			if originals[box] == nil then
+				originals[box] = {
+					AutomaticSize = box.AutomaticSize,
+					Position = box.Position,
+					Size = box.Size,
+				}
+			end
+		end
+
+		local function resize(box)
+			if not (runtime.alive and box and box.Parent and box:IsA("TextBox")) then
+				return
+			end
+			remember(box)
+			local token = (resizeTokens[box] or 0) + 1
+			resizeTokens[box] = token
+			task.defer(function()
+				if not (runtime.alive and box.Parent and resizeTokens[box] == token) then
+					return
+				end
+				local scale = effectiveScale(codeFrame)
+				local windowWidth = math.max(140, math.floor(codeFrame.AbsoluteWindowSize.X / scale))
+				local windowHeight = math.max(100, math.floor(codeFrame.AbsoluteWindowSize.Y / scale))
+				local availableTextWidth = math.max(120, windowWidth - 20)
+				local text = box.Text ~= "" and box.Text or " "
+				local params = Instance.new("GetTextBoundsParams")
+				params.Text = text
+				params.Width = box.TextWrapped and availableTextWidth or 1000000
+				params.Font = box.FontFace
+				params.Size = box.TextSize
+				local ok, bounds = pcall(function()
+					return TextService:GetTextBoundsAsync(params)
+				end)
+				params:Destroy()
+				local _, lineBreaks = (box.Text or ""):gsub("\n", "\n")
+				local lineHeight = math.max(1, box.LineHeight) * box.TextSize
+				local minimumTextHeight = math.ceil((lineBreaks + 1) * lineHeight)
+				if not ok then
+					bounds = Vector2.new(availableTextWidth, minimumTextHeight)
+				end
+				if not (runtime.alive and box.Parent and resizeTokens[box] == token) then
+					return
+				end
+				local measuredWidth = math.ceil(bounds.X)
+				local measuredHeight = math.max(math.ceil(bounds.Y), minimumTextHeight)
+				local contentWidth = box.TextWrapped
+					and availableTextWidth
+					or math.max(availableTextWidth, measuredWidth + 28)
+				local contentHeight = math.max(windowHeight - 12, measuredHeight + math.ceil(lineHeight) + 28)
+				local canvasWidth = box.TextWrapped
+					and windowWidth
+					or math.max(windowWidth, 8 + contentWidth + 32)
+				local canvasHeight = math.max(windowHeight, 6 + contentHeight + 36)
+				box.AutomaticSize = Enum.AutomaticSize.None
+				box.Position = UDim2.fromOffset(8, 6)
+				box.Size = UDim2.fromOffset(contentWidth, contentHeight)
+				if box.Visible then
+					codeFrame.AutomaticCanvasSize = Enum.AutomaticSize.None
+					codeFrame.CanvasSize = UDim2.fromOffset(canvasWidth, canvasHeight)
+					local maximumX = math.max(0, canvasWidth - windowWidth)
+					local maximumY = math.max(0, canvasHeight - windowHeight)
+					codeFrame.CanvasPosition = Vector2.new(
+						math.clamp(codeFrame.CanvasPosition.X, 0, maximumX),
+						math.clamp(codeFrame.CanvasPosition.Y, 0, maximumY)
+					)
+				end
+			end)
+		end
+
+		local function hook(box)
+			if hooked[box] or not box:IsA("TextBox") or not box.Name:match("^script%d+%.lua$") then
+				return
+			end
+			hooked[box] = true
+			remember(box)
+			for _, property in { "Text", "Visible", "TextWrapped", "TextSize", "FontFace", "LineHeight" } do
+				connect(box:GetPropertyChangedSignal(property), function()
+					resize(box)
+				end)
+			end
+			resize(box)
+		end
+
+		local function resizeAll()
+			for _, box in getCodeBoxes() do
+				hook(box)
+				resize(box)
+			end
+		end
+
+		local function restore()
+			if codeFrame and codeFrame.Parent then
+				codeFrame.AutomaticCanvasSize = originalAutomaticCanvasSize
+				codeFrame.CanvasSize = originalCanvasSize
+				codeFrame.CanvasPosition = originalCanvasPosition
+			end
+			for box, values in originals do
+				if box and box.Parent then
+					box.AutomaticSize = values.AutomaticSize
+					box.Position = values.Position
+					box.Size = values.Size
+				end
+			end
+		end
+
+		connect(codeFrame:GetPropertyChangedSignal("AbsoluteSize"), resizeAll)
+		pcall(function()
+			connect(codeFrame:GetPropertyChangedSignal("AbsoluteWindowSize"), resizeAll)
+		end)
+		return { hook = hook, resize = resize, resizeAll = resizeAll, restore = restore }
+	end)()
+
+	local function applyToolbarLayout()
+		if editorToolbarEnabled then
+			buttonsFrame.Visible = true
+			codeFrame.Position = originalCodePosition
+			codeFrame.Size = originalCodeSize
+		else
+			buttonsFrame.Visible = false
+			local yScaleDelta = buttonsFrame.Position.Y.Scale - originalCodePosition.Y.Scale
+			local yOffsetDelta = buttonsFrame.Position.Y.Offset - originalCodePosition.Y.Offset
+			codeFrame.Position = UDim2.new(
+				originalCodePosition.X.Scale,
+				originalCodePosition.X.Offset,
+				buttonsFrame.Position.Y.Scale,
+				buttonsFrame.Position.Y.Offset - 4
+			)
+			codeFrame.Size = UDim2.new(
+				originalCodeSize.X.Scale,
+				originalCodeSize.X.Offset,
+				originalCodeSize.Y.Scale + yScaleDelta,
+				originalCodeSize.Y.Offset + yOffsetDelta - 4
+			)
+		end
+		task.defer(updateStatusPosition)
+		task.delay(0.05, function()
+			if runtime.alive then
+				editorCanvas.resizeAll()
+			end
+		end)
+	end
+
+	addRestorer(function()
+		if codeFrame and codeFrame.Parent then
+			codeFrame.Position = originalCodePosition
+			codeFrame.Size = originalCodeSize
+		end
+		if buttonsFrame and buttonsFrame.Parent then
+			buttonsFrame.Visible = originalButtonsVisible
+		end
+	end)
+
+	local syntaxHighlighter = (function()
+		local overlays = setmetatable({}, { __mode = "k" })
+		local updateTokens = setmetatable({}, { __mode = "k" })
+		local keywords = {
+			["and"] = true, ["break"] = true, ["continue"] = true, ["do"] = true,
+			["else"] = true, ["elseif"] = true, ["end"] = true, ["export"] = true,
+			["false"] = true, ["for"] = true, ["function"] = true, ["if"] = true,
+			["in"] = true, ["local"] = true, ["nil"] = true, ["not"] = true,
+			["or"] = true, ["repeat"] = true, ["return"] = true, ["then"] = true,
+			["true"] = true, ["type"] = true, ["until"] = true, ["while"] = true,
+		}
+		local builtins = {
+			assert = true, collectgarbage = true, error = true, getfenv = true, getmetatable = true,
+			ipairs = true, load = true, loadstring = true, next = true, pairs = true, pcall = true,
+			print = true, rawequal = true, rawget = true, rawlen = true, rawset = true, require = true,
+			select = true, setfenv = true, setmetatable = true, tonumber = true, tostring = true,
+			typeof = true, unpack = true, warn = true, xpcall = true,
+			bit32 = true, buffer = true, coroutine = true, debug = true, math = true, os = true,
+			string = true, table = true, task = true, utf8 = true, vector = true,
+			Axes = true, BrickColor = true, CFrame = true, Color3 = true, ColorSequence = true,
+			ColorSequenceKeypoint = true, DateTime = true, DockWidgetPluginGuiInfo = true,
+			Enum = true, Faces = true, Font = true, Instance = true, NumberRange = true,
+			NumberSequence = true, NumberSequenceKeypoint = true, OverlapParams = true,
+			PathWaypoint = true, PhysicalProperties = true, Random = true, Ray = true,
+			RaycastParams = true, Rect = true, Region3 = true, Region3int16 = true,
+			TweenInfo = true, UDim = true, UDim2 = true, Vector2 = true, Vector2int16 = true,
+			Vector3 = true, Vector3int16 = true,
+			any = true, boolean = true, never = true, number = true, string = true,
+			table = true, thread = true, unknown = true,
+		}
+		local globals = {
+			_G = true, game = true, plugin = true, script = true, shared = true, workspace = true,
+		}
+		local executorApis = {
+			appendfile = true, base64_decode = true, base64_encode = true, base64decode = true,
+			base64encode = true, checkcaller = true, checkclosure = true, cloneref = true,
+			clonefunction = true, compareinstances = true, crypt = true, decompile = true,
+			delfile = true, delfolder = true, dofile = true, Drawing = true, dumpstring = true,
+			fireclickdetector = true, fireproximityprompt = true, firesignal = true,
+			firetouchinterest = true, fluxus = true, getcallbackvalue = true, getcallingscript = true,
+			getclipboard = true, getconnections = true, getconstant = true, getconstants = true,
+			getcustomasset = true, getexecutorname = true, getfflag = true, getfflags = true,
+			getfpscap = true, getgc = true, getgenv = true, gethiddenproperties = true,
+			gethiddenproperty = true, gethui = true, getidentity = true, getinstances = true,
+			getloadedmodules = true, getnamecallmethod = true, getnilinstances = true,
+			getproto = true, getprotos = true, getrawmetatable = true, getreg = true,
+			getrenv = true, getrunningscripts = true, getscriptbytecode = true,
+			getscriptclosure = true, getscriptfromthread = true, getscriptfunction = true,
+			getscripts = true, getstack = true, getsynasset = true, getthreadidentity = true,
+			getupvalue = true, getupvalues = true, hookfunction = true, hookmetamethod = true,
+			http_request = true, identifyexecutor = true, is_c_closure = true, iscclosure = true,
+			isexecutorclosure = true, isfile = true, isfolder = true, iskrnlclosure = true,
+			islclosure = true, isourclosure = true, isreadonly = true, isscriptable = true,
+			listfiles = true, loadfile = true, lz4compress = true, lz4decompress = true,
+			make_readonly = true, make_writeable = true, makefolder = true, newcclosure = true,
+			protect_gui = true, queue_on_teleport = true, queueonteleport = true, readclipboard = true,
+			readfile = true, replaceclosure = true, request = true, saveinstance = true,
+			setclipboard = true, setconstant = true, setfflag = true, setfpscap = true,
+			sethiddenproperty = true, setidentity = true, setnamecallmethod = true,
+			setproto = true, setreadonly = true, setrbxclipboard = true, setscriptable = true,
+			setstack = true, setthreadidentity = true, setupvalue = true, syn = true,
+			toclipboard = true, unprotect_gui = true, WebSocket = true, websocket = true,
+			writeclipboard = true, writefile = true,
+		}
+
+		local function escape(value)
+			return tostring(value or ""):gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;")
+		end
+
+		local function palette()
+			local background = codeFrame.BackgroundColor3
+			local light = background.R * 0.299 + background.G * 0.587 + background.B * 0.114 > 0.58
+			if light then
+				return {
+					text = Color3.fromRGB(25, 30, 42), keyword = "#AF00DB", builtin = "#267F99",
+					global = "#001080", func = "#795E26", string = "#A31515",
+					number = "#098658", comment = "#008000", executor = "#B44700",
+				}
+			end
+			return {
+				text = Color3.fromRGB(218, 222, 232), keyword = "#C586C0", builtin = "#4EC9B0",
+				global = "#9CDCFE", func = "#DCDCAA", string = "#CE9178",
+				number = "#B5CEA8", comment = "#6A9955", executor = "#FF9E64",
+			}
+		end
+
+		local function paint(value, color)
+			return '<font color="' .. color .. '">' .. escape(value) .. "</font>"
+		end
+
+		local function longBracketAt(source, index)
+			local equals = source:sub(index):match("^%[(=*)%[")
+			if equals == nil then
+				return nil
+			end
+			local closing = "]" .. equals .. "]"
+			local finish = source:find(closing, index + #equals + 2, true)
+			return finish and finish + #closing - 1 or #source
+		end
+
+		local function tokenize(source)
+			local colors = palette()
+			local output = table.create(math.max(32, math.floor(#source / 6)))
+			local index = 1
+			local expectFunctionName = false
+			while index <= #source do
+				local char = source:sub(index, index)
+				local pair = source:sub(index, index + 1)
+				if pair == "--" then
+					local longFinish = longBracketAt(source, index + 2)
+					local finish = longFinish or ((source:find("\n", index + 2, true) or (#source + 1)) - 1)
+					output[#output + 1] = paint(source:sub(index, finish), colors.comment)
+					index = finish + 1
+				elseif char == "\"" or char == "'" then
+					local quote = char
+					local finish = index + 1
+					while finish <= #source do
+						local current = source:sub(finish, finish)
+						if current == "\\" then
+							finish += 2
+						elseif current == quote then
+							break
+						else
+							finish += 1
+						end
+					end
+					finish = math.min(finish, #source)
+					output[#output + 1] = paint(source:sub(index, finish), colors.string)
+					index = finish + 1
+				elseif char == "[" then
+					local finish = longBracketAt(source, index)
+					if finish then
+						output[#output + 1] = paint(source:sub(index, finish), colors.string)
+						index = finish + 1
+					else
+						output[#output + 1] = escape(char)
+						index += 1
+					end
+				elseif char:match("[%a_]") then
+					local finish = index
+					while finish < #source and source:sub(finish + 1, finish + 1):match("[%w_]") do
+						finish += 1
+					end
+					local word = source:sub(index, finish)
+					local color
+					if keywords[word] then
+						color = colors.keyword
+						expectFunctionName = word == "function"
+					elseif exploitSyntaxEnabled and executorApis[word] then
+						color = colors.executor
+					elseif builtins[word] then
+						color = colors.builtin
+					elseif globals[word] then
+						color = colors.global
+					else
+						local nextIndex = finish + 1
+						while nextIndex <= #source and source:sub(nextIndex, nextIndex):match("%s") do
+							nextIndex += 1
+						end
+						if expectFunctionName or source:sub(nextIndex, nextIndex) == "(" then
+							color = colors.func
+						end
+						expectFunctionName = false
+					end
+					output[#output + 1] = color and paint(word, color) or escape(word)
+					index = finish + 1
+				elseif char:match("%d") or (char == "." and source:sub(index + 1, index + 1):match("%d")) then
+					local rest = source:sub(index)
+					local number = rest:match("^0[xX][%da-fA-F_]+")
+						or rest:match("^0[bB][01_]+")
+						or rest:match("^%d[%d_]*%.?[%d_]*[eE][+-]?[%d_]+")
+						or rest:match("^%.%d[%d_]*[eE][+-]?[%d_]+")
+						or rest:match("^%d[%d_]*%.?[%d_]*")
+						or rest:match("^%.%d[%d_]*")
+					number = number ~= "" and number or char
+					output[#output + 1] = paint(number, colors.number)
+					index += #number
+				else
+					output[#output + 1] = escape(char)
+					index += 1
+				end
+			end
+			return table.concat(output), colors.text
+		end
+
+		local function sync(box)
+			local state = overlays[box]
+			if not state then
+				return
+			end
+			local label = state.label
+			if not (box.Parent and label.Parent) then
+				return
+			end
+			label.AnchorPoint = box.AnchorPoint
+			label.Position = box.Position
+			label.Size = box.Size
+			label.Rotation = box.Rotation
+			label.TextXAlignment = box.TextXAlignment
+			label.TextYAlignment = box.TextYAlignment
+			label.TextWrapped = box.TextWrapped
+			label.FontFace = box.FontFace
+			label.TextSize = box.TextSize
+			label.LineHeight = box.LineHeight
+			local showOverlay = syntaxHighlightEnabled and box.Visible and box.Text ~= ""
+			label.Visible = showOverlay
+			if showOverlay then
+				box.TextTransparency = 1
+				box.ZIndex = state.originalZ + 1
+				label.ZIndex = state.originalZ
+			else
+				box.TextTransparency = state.originalTransparency
+				box.ZIndex = state.originalZ
+			end
+		end
+
+		local function update(box)
+			local state = overlays[box]
+			if not state then
+				return
+			end
+			sync(box)
+			if not syntaxHighlightEnabled then
+				return
+			end
+			local richText, textColor = tokenize(box.Text or "")
+			state.label.TextColor3 = textColor
+			state.label.Text = richText
+		end
+
+		local function queue(box)
+			local token = (updateTokens[box] or 0) + 1
+			updateTokens[box] = token
+			task.delay(#(box.Text or "") > 60000 and 0.08 or 0.025, function()
+				if runtime.alive and box.Parent and updateTokens[box] == token then
+					update(box)
+				end
+			end)
+		end
+
+		local function hook(box)
+			if overlays[box] or not box:IsA("TextBox") or not box.Name:match("^script%d+%.lua$") then
+				return
+			end
+			local label = Instance.new("TextLabel")
+			label.Name = "LT_Syntax_" .. box.Name
+			label:SetAttribute("LT_SyntaxOverlay", true)
+			label.BackgroundTransparency = 1
+			label.BorderSizePixel = 0
+			label.RichText = true
+			label.TextScaled = false
+			label.TextTruncate = Enum.TextTruncate.None
+			label.Active = false
+			label.Interactable = false
+			label.Selectable = false
+			label.Parent = box.Parent
+			track(label)
+			local originalTransparency = box:GetAttribute("LT_SyntaxOriginalTransparency")
+			if typeof(originalTransparency) ~= "number" then
+				originalTransparency = box.TextTransparency < 1 and box.TextTransparency or 0
+			end
+			local originalZ = box:GetAttribute("LT_SyntaxOriginalZIndex")
+			if typeof(originalZ) ~= "number" then
+				originalZ = math.max(1, box.ZIndex)
+			end
+			box:SetAttribute("LT_SyntaxOriginalTransparency", originalTransparency)
+			box:SetAttribute("LT_SyntaxOriginalZIndex", originalZ)
+			overlays[box] = {
+				label = label,
+				originalTransparency = originalTransparency,
+				originalZ = originalZ,
+			}
+			for _, property in {
+				"Text", "Visible", "Position", "Size", "AnchorPoint", "Rotation", "TextWrapped",
+				"TextSize", "FontFace", "LineHeight", "TextXAlignment", "TextYAlignment",
+			} do
+				connect(box:GetPropertyChangedSignal(property), function()
+					queue(box)
+				end)
+			end
+			connect(box.Destroying, function()
+				local state = overlays[box]
+				if state and state.label and state.label.Parent then
+					state.label:Destroy()
+				end
+				overlays[box] = nil
+			end)
+			queue(box)
+		end
+
+		local function applyAll()
+			for _, box in getCodeBoxes() do
+				hook(box)
+				update(box)
+			end
+		end
+
+		local function restore()
+			for box, state in overlays do
+				if box and box.Parent then
+					box.TextTransparency = state.originalTransparency
+					box.ZIndex = state.originalZ
+					box:SetAttribute("LT_SyntaxOriginalTransparency", nil)
+					box:SetAttribute("LT_SyntaxOriginalZIndex", nil)
+				end
+				if state.label and state.label.Parent then
+					state.label:Destroy()
+				end
+			end
+			table.clear(overlays)
+		end
+
+		connect(codeFrame:GetPropertyChangedSignal("BackgroundColor3"), applyAll)
+		return { hook = hook, sync = queue, applyAll = applyAll, restore = restore }
+	end)()
+
+	local function hookCodeBox(box)
+		if
+			not (box and box:IsA("TextBox") and not hookedBoxes[box])
+			or not box.Name:match("^script%d+%.lua$")
+		then
+			return
+		end
+		hookedBoxes[box] = true
+		editorCanvas.hook(box)
+		syntaxHighlighter.hook(box)
+		local path = tabDirectory .. "/" .. box.Name
+		if type(isfile) == "function" and type(readfile) == "function" and isfile(path) then
+			local ok, data = pcall(readfile, path)
+			if ok and type(data) == "string" then
+				box.Text = data
+			end
+		elseif type(writefile) == "function" then
+			pcall(writefile, path, box.Text or "")
+		end
+		connect(box:GetPropertyChangedSignal("Text"), function()
+			queueStatusUpdate()
+			local token = (saveTokens[box] or 0) + 1
+			saveTokens[box] = token
+			task.delay(0.3, function()
+				if
+					runtime.alive
+					and box.Parent
+					and saveTokens[box] == token
+					and type(writefile) == "function"
+				then
+					pcall(writefile, tabDirectory .. "/" .. box.Name, box.Text or "")
+				end
+			end)
+		end)
+		connect(box:GetPropertyChangedSignal("Visible"), queueStatusUpdate)
+		connect(box:GetPropertyChangedSignal("Name"), queueStatusUpdate)
+		connect(box.Focused, queueStatusUpdate)
+	end
+
+	local function buildStatus()
+		if statusFrame and statusFrame.Parent then
+			statusFrame:Destroy()
+		end
+		statusFrame = Instance.new("Frame")
+		statusFrame.Name = "LT_EditorStatus"
+		statusFrame.AnchorPoint = Vector2.new(1, 1)
+		statusFrame.BackgroundColor3 = Color3.fromRGB(15, 17, 22)
+		statusFrame.BackgroundTransparency = 0.18
+		statusFrame.BorderSizePixel = 0
+		statusFrame.ZIndex = math.max(codeFrame.ZIndex + 50, 800)
+		statusFrame.Visible = editorStatusEnabled
+		statusFrame.Parent = executorOverlay
+		track(statusFrame)
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0, 7)
+		corner.Parent = statusFrame
+		track(corner)
+		local stroke = Instance.new("UIStroke")
+		stroke.Thickness = 1
+		stroke.Transparency = 0.45
+		stroke.Color = Color3.fromRGB(79, 164, 242)
+		stroke.Parent = statusFrame
+		track(stroke)
+		statusLabel = Instance.new("TextLabel")
+		statusLabel.Name = "Text"
+		statusLabel.BackgroundTransparency = 1
+		statusLabel.Size = UDim2.new(1, -12, 1, 0)
+		statusLabel.Position = UDim2.new(0, 6, 0, 0)
+		statusLabel.Font = Enum.Font.Gotham
+		statusLabel.TextSize = 11
+		statusLabel.TextColor3 = Color3.fromRGB(222, 228, 238)
+		statusLabel.TextXAlignment = Enum.TextXAlignment.Right
+		statusLabel.TextTruncate = Enum.TextTruncate.AtEnd
+		statusLabel.ZIndex = statusFrame.ZIndex + 1
+		statusLabel.Parent = statusFrame
+		track(statusLabel)
+		updateStatusPosition()
+		for _, box in getCodeBoxes() do
+			hookCodeBox(box)
+		end
+		queueStatusUpdate()
+	end
+
+	local function savedTabNames()
+		local names = {}
+		local directory = "DeltaCustom/DeltaTabs"
+		if type(isfolder) ~= "function" or type(listfiles) ~= "function" or not isfolder(directory) then
+			return names
+		end
+		local ok, files = pcall(listfiles, directory)
+		if not ok or type(files) ~= "table" then
+			return names
+		end
+		for _, path in files do
+			local name = tostring(path):match("([^/\\]+)$")
+			if name and name:match("^script%d+%.lua$") then
+				table.insert(names, name)
+			end
+		end
+		table.sort(names, function(a, b)
+			return (tonumber(a:match("%d+")) or math.huge) < (tonumber(b:match("%d+")) or math.huge)
+		end)
+		return names
+	end
+
+	local function fireAddTab(addButton)
+		local before = #getCodeBoxes()
+		local fired = activateOriginal(addButton)
+		if not fired then
+			return false
+		end
+		local deadline = os.clock() + 0.5
+		repeat
+			task.wait()
+		until #getCodeBoxes() > before or os.clock() >= deadline
+		return #getCodeBoxes() > before
+	end
+
+	local function selectTabByName(name)
+		for _, box in getCodeBoxes() do
+			box.Visible = box.Name == name
+		end
+		for _, tab in tabsFrame:GetChildren() do
+			if tab:IsA("GuiButton") and tab.Name:match("^script%d+%.lua$") then
+				tab.BackgroundTransparency = tab.Name == name and 0 or 1
+			end
+		end
+		queueStatusUpdate()
+	end
+
+	local function nextAvailableTabName()
+		local used = {}
+		for _, box in getCodeBoxes() do
+			used[tonumber(box.Name:match("%d+"))] = true
+		end
+		local index = 1
+		while used[index] do
+			index += 1
+		end
+		return "script" .. tostring(index) .. ".lua"
+	end
+
+	local function createFallbackTab(name)
+		if tabsFrame:FindFirstChild(name) and codeFrame:FindFirstChild(name, true) then
+			return true
+		end
+		local sourceTab
+		for _, object in tabsFrame:GetChildren() do
+			if object:IsA("GuiButton") and object.Name:match("^script%d+%.lua$") then
+				sourceTab = object
+				break
+			end
+		end
+		local sourceBox = getCodeBoxes()[1]
+		if not (sourceTab and sourceBox) then
+			return false
+		end
+		local index = tonumber(name:match("%d+")) or (#getCodeBoxes() + 1)
+		local tab = sourceTab:Clone()
+		tab.Name = name
+		tab.LayoutOrder = index
+		tab.BackgroundTransparency = 1
+		removeScripts(tab)
+		local title = tab:FindFirstChild("Title", true)
+		if title and title:IsA("TextLabel") then
+			title.Text = name
+		end
+		tab.Parent = tabsFrame
+		track(tab)
+		local box = sourceBox:Clone()
+		box.Name = name
+		box.Text = ""
+		box.Visible = false
+		box.Parent = sourceBox.Parent
+		track(box)
+		connect(tab.MouseButton1Click, function()
+			selectTabByName(name)
+		end)
+		local closeButton = tab:FindFirstChild("ImageButton")
+		if closeButton and closeButton:IsA("GuiButton") then
+			connect(closeButton.MouseButton1Click, function()
+				if #getCodeBoxes() <= 1 then
+					return
+				end
+				local wasVisible = box.Visible
+				if type(delfile) == "function" and type(isfile) == "function" then
+					local path = tabDirectory .. "/" .. name
+					if isfile(path) then
+						pcall(delfile, path)
+					end
+				end
+				if tab.Parent then
+					tab:Destroy()
+				end
+				if box.Parent then
+					box:Destroy()
+				end
+				if wasVisible then
+					local remaining = getCodeBoxes()[1]
+					if remaining then
+						selectTabByName(remaining.Name)
+					end
+				end
+				queueStatusUpdate()
+			end)
+		end
+		return true
+	end
+
+	local restoringTabs = false
+	local function restoreSavedTabs(showResult)
+		if restoringTabs or not runtime.alive then
+			return
+		end
+		restoringTabs = true
+		local saved = savedTabNames()
+		local addButton = tabsFrame:FindFirstChild("AddTab")
+		local before = #getCodeBoxes()
+		local target = 0
+		for _, name in saved do
+			target = math.max(target, tonumber(name:match("%d+")) or 0)
+		end
+		local attemptsMade = 0
+		while runtime.alive and #getCodeBoxes() < target and attemptsMade < math.max(target * 3, 8) do
+			attemptsMade += 1
+			local nextIndex = #getCodeBoxes() + 1
+			local created = addButton and fireAddTab(addButton) or false
+			if not created then
+				created = createFallbackTab("script" .. tostring(nextIndex) .. ".lua")
+			end
+			if not created then
+				break
+			end
+			task.wait(0.08)
+		end
+		local boxes = getCodeBoxes()
+		if type(isfile) == "function" and type(readfile) == "function" then
+			for _, box in boxes do
+				local path = "DeltaCustom/DeltaTabs/" .. box.Name
+				if isfile(path) then
+					local ok, text = pcall(readfile, path)
+					if ok and type(text) == "string" then
+						box.Text = text
+					end
+				end
+				hookCodeBox(box)
+			end
+		end
+		queueStatusUpdate()
+		if showResult then
+			local after = #boxes
+			local description
+			if #saved == 0 then
+				description = "No saved tabs were found."
+			elseif after >= target then
+				description = string.format("Restored %d saved tab%s.", #saved, #saved == 1 and "" or "s")
+			else
+				description = string.format("Restored %d of %d saved tabs.", math.max(after - before, 0), #saved)
+			end
+			notify({
+				Title = "Delta Customization",
+				Description = description,
+				Duration = 4,
+			})
+		end
+		restoringTabs = false
+	end
+
+	local function findSettingsTemplate()
+		local settings = v2Main:FindFirstChild("Settings") or v2Main:FindFirstChild("Settings", true)
+		local holder = settings and settings:FindFirstChild("Holder")
+		if not holder then
+			return nil, nil
+		end
+		local template
+		for _, child in holder:GetChildren() do
+			if child:IsA("Frame") and child.Name == "Button" then
+				template = child
+				break
+			end
+		end
+		return holder, template
+	end
+
+	local function createSettingRow(name, titleText, descText, buttonText, callback)
+		local holder, template = findSettingsTemplate()
+		if not (holder and template) then
+			return nil, nil
+		end
+		local existing = holder:FindFirstChild(name)
+		if existing then
+			existing:Destroy()
+		end
+		local row = template:Clone()
+		row.Name = name
+		row.Visible = true
+		row.LayoutOrder = -2
+		removeScripts(row)
+		local title = row:FindFirstChild("Title", true)
+		local desc = row:FindFirstChild("Desc", true)
+		if title and title:IsA("TextLabel") then
+			title.Text = titleText
+		end
+		if desc and desc:IsA("TextLabel") then
+			desc.Text = descText
+		end
+		local button = row:FindFirstChild("Button", true)
+		if button and button:IsA("GuiObject") then
+			setButtonTitle(button, buttonText)
+			if button:IsA("GuiButton") then
+				button.Active = true
+				button.Interactable = true
+				local locked = false
+				local function activate()
+					if locked or not runtime.alive then
+						return
+					end
+					locked = true
+					callback()
+					task.delay(0.1, function()
+						locked = false
+					end)
+				end
+				connect(button.MouseButton1Click, activate)
+				connect(button.Activated, activate)
+				connect(button.TouchTap, activate)
+			else
+				connect(button.InputEnded, function(input)
+					if
+						input.UserInputType == Enum.UserInputType.MouseButton1
+						or input.UserInputType == Enum.UserInputType.Touch
+					then
+						callback()
+					end
+				end)
+			end
+		end
+		row.Parent = holder
+		track(row)
+		return row, button
+	end
+
+	local function createToggleSetting(name, titleText, descText, initial, onChanged)
+		local enabled = initial
+		local row
+		local button
+		local function refresh()
+			if button and button.Parent then
+				local activeColor = Color3.fromRGB(79, 164, 242)
+				local sidebar = v2Main:FindFirstChild("Sidebar") or v2Main:FindFirstChild("Sidebar", true)
+				local activeValue = sidebar and sidebar:FindFirstChild("ActiveColor")
+				if activeValue and activeValue:IsA("Color3Value") then
+					activeColor = activeValue.Value
+				end
+				button.BackgroundColor3 = enabled and activeColor or Color3.fromRGB(30, 30, 30)
+				setButtonTitle(button, enabled and "ON" or "OFF")
+			end
+		end
+		row, button = createSettingRow(name, titleText, descText, "", function()
+			enabled = not enabled
+			refresh()
+			onChanged(enabled)
+		end)
+		refresh()
+		return row
+	end
+
+	local staleBlur = game:GetService("Lighting"):FindFirstChild("LT_DeltaBlur")
+	if staleBlur then
+		staleBlur:Destroy()
+	end
+	local oldSettings = v2Main:FindFirstChild("Settings") or v2Main:FindFirstChild("Settings", true)
+	local oldHolder = oldSettings and oldSettings:FindFirstChild("Holder")
+	if oldHolder then
+		for _, name in { "LT_BackgroundBlur", "LT_BlurStrength" } do
+			local row = oldHolder:FindFirstChild(name)
+			if row then
+				row:Destroy()
+			end
+		end
+	end
+	local editorSideMenu = executorRoot:FindFirstChild("Sidemenu")
+	local originalEditorSize = executorImage.Size
+	local originalEditorPosition = executorImage.Position
+	local originalEditorAnchor = executorImage.AnchorPoint
+	local originalSideVisible = editorSideMenu and editorSideMenu.Visible
+	local originalTabSizes = setmetatable({}, { __mode = "k" })
+	local originalEditorText = setmetatable({}, { __mode = "k" })
+	local function applyWideEditor()
+		if not (executorImage and executorImage.Parent) then
+			return
+		end
+		if wideEditorEnabled then
+			if editorSideMenu then
+				editorSideMenu.Visible = false
+			end
+			executorImage.AnchorPoint = Vector2.new(1, originalEditorAnchor.Y)
+			executorImage.Position = UDim2.new(1, 0, originalEditorPosition.Y.Scale, originalEditorPosition.Y.Offset)
+			executorImage.Size = UDim2.new(0.995, 0, originalEditorSize.Y.Scale, originalEditorSize.Y.Offset)
+		else
+			if editorSideMenu then
+				editorSideMenu.Visible = originalSideVisible
+			end
+			executorImage.AnchorPoint = originalEditorAnchor
+			executorImage.Position = originalEditorPosition
+			executorImage.Size = originalEditorSize
+		end
+		task.defer(updateStatusPosition)
+		task.defer(editorCanvas.resizeAll)
+	end
+	local function applyTabStyle(tab)
+		if not (tab and tab:IsA("ImageButton") and tab.Name:match("^script%d+%.lua$")) then
+			return
+		end
+		if originalTabSizes[tab] == nil then
+			originalTabSizes[tab] = tab.Size
+		end
+		if compactTabsEnabled then
+			tab.Size = UDim2.new(0, 126, originalTabSizes[tab].Y.Scale, originalTabSizes[tab].Y.Offset)
+		else
+			tab.Size = originalTabSizes[tab]
+		end
+		local title = tab:FindFirstChild("Title", true)
+		if title and title:IsA("TextLabel") then
+			title.TextSize = compactTabsEnabled and 11 or 14
+		end
+	end
+	local function applyCompactTabs()
+		for _, tab in tabsFrame:GetChildren() do
+			applyTabStyle(tab)
+		end
+	end
+	local function applyEditorStyle(box)
+		if not (box and box:IsA("TextBox") and box.Name:match("^script%d+%.lua$")) then
+			return
+		end
+		if originalEditorText[box] == nil then
+			originalEditorText[box] = { TextSize = box.TextSize, TextWrapped = box.TextWrapped }
+		end
+		box.TextSize = editorFontSize
+		box.TextWrapped = editorWordWrapEnabled
+		editorCanvas.resize(box)
+		syntaxHighlighter.sync(box)
+	end
+	local function applyEditorPreferences()
+		for _, box in getCodeBoxes() do
+			applyEditorStyle(box)
+		end
+	end
+	addRestorer(function()
+		if executorImage and executorImage.Parent then
+			executorImage.AnchorPoint = originalEditorAnchor
+			executorImage.Position = originalEditorPosition
+			executorImage.Size = originalEditorSize
+		end
+		if editorSideMenu and editorSideMenu.Parent then
+			editorSideMenu.Visible = originalSideVisible
+		end
+		for tab, size in originalTabSizes do
+			if tab and tab.Parent then
+				tab.Size = size
+			end
+		end
+		for box, values in originalEditorText do
+			if box and box.Parent then
+				box.TextSize = values.TextSize
+				box.TextWrapped = values.TextWrapped
+			end
+		end
+		syntaxHighlighter.restore()
+		editorCanvas.restore()
+	end)
+	connect(tabsFrame.ChildAdded, function(tab)
+		task.defer(applyTabStyle, tab)
+	end)
+	local function createCycleSetting(name, titleText, descText, values, getValue, setValue, formatValue)
+		local row
+		local button
+		local function refresh()
+			if button and button.Parent then
+				setButtonTitle(button, formatValue(getValue()))
+			end
+		end
+		row, button = createSettingRow(name, titleText, descText, "", function()
+			local current = getValue()
+			local index = table.find(values, current) or 0
+			local nextValue = values[(index % #values) + 1]
+			setValue(nextValue)
+			refresh()
+		end)
+		refresh()
+		return row
+	end
+
+	createToggleSetting(
+		"LT_AutoRestoreTabs",
+		"Auto restore saved tabs",
+		"Creates missing Delta tabs and loads their saved code automatically",
+		autoRestoreEnabled,
+		function(enabled)
+			autoRestoreEnabled = enabled
+			saveBool("AutoRestoreTabs", enabled)
+			if enabled then
+				task.spawn(restoreSavedTabs, true)
+			end
+		end
+	)
+
+	createToggleSetting(
+		"LT_EditorToolbarSetting",
+		"Enhanced editor toolbar",
+		"Adds mobile-friendly Execute, Copy, Paste and New Line controls",
+		editorToolbarEnabled,
+		function(enabled)
+			editorToolbarEnabled = enabled
+			saveBool("EditorToolbar", enabled)
+			buildToolbar()
+			applyToolbarLayout()
+		end
+	)
+
+	createToggleSetting(
+		"LT_EditorStatusSetting",
+		"Editor statistics",
+		"Shows the active tab, line count, character count and autosave state",
+		editorStatusEnabled,
+		function(enabled)
+			editorStatusEnabled = enabled
+			saveBool("EditorStatus", enabled)
+			queueStatusUpdate()
+		end
+	)
+
+	createSettingRow(
+		"LT_RestoreTabsNow",
+		"Restore saved tabs now",
+		"Rebuilds any missing tabs from DeltaCustom/DeltaTabs",
+		"RESTORE",
+		function()
+			task.spawn(restoreSavedTabs, true)
+		end
+	)
+
+	createToggleSetting(
+		"LT_WideEditor",
+		"Wide editor",
+		"Hides the executor side cards and gives the code editor more room",
+		wideEditorEnabled,
+		function(enabled)
+			wideEditorEnabled = enabled
+			saveBool("WideEditor", enabled)
+			applyWideEditor()
+		end
+	)
+
+	createToggleSetting(
+		"LT_CompactTabs",
+		"Compact editor tabs",
+		"Fits more script tabs across the executor tab bar",
+		compactTabsEnabled,
+		function(enabled)
+			compactTabsEnabled = enabled
+			saveBool("CompactTabs", enabled)
+			applyCompactTabs()
+		end
+	)
+
+
+	createToggleSetting(
+		"LT_SyntaxHighlight",
+		"Lua/Luau syntax highlighting",
+		"Highlights Luau keywords, strings, numbers, comments, globals and built-in APIs",
+		syntaxHighlightEnabled,
+		function(enabled)
+			syntaxHighlightEnabled = enabled
+			saveBool("EditorSyntaxHighlight", enabled)
+			syntaxHighlighter.applyAll()
+		end
+	)
+
+	createToggleSetting(
+		"LT_ExploitSyntaxHighlight",
+		"Executor API highlighting",
+		"Highlights common executor globals, filesystem, hook, debug and clipboard functions",
+		exploitSyntaxEnabled,
+		function(enabled)
+			exploitSyntaxEnabled = enabled
+			saveBool("ExploitSyntaxHighlight", enabled)
+			syntaxHighlighter.applyAll()
+		end
+	)
+
+	createToggleSetting(
+		"LT_EditorWordWrap",
+		"Editor word wrap",
+		"Wraps long code lines inside the editor viewport",
+		editorWordWrapEnabled,
+		function(enabled)
+			editorWordWrapEnabled = enabled
+			saveBool("EditorWordWrap", enabled)
+			applyEditorPreferences()
+		end
+	)
+
+	createCycleSetting(
+		"LT_EditorFontSize",
+		"Editor font size",
+		"Cycles the code editor font size",
+		{ 10, 12, 14, 16, 18, 20, 22, 24 },
+		function()
+			return editorFontSize
+		end,
+		function(value)
+			editorFontSize = value
+			saveNumber("EditorFontSize", value)
+			applyEditorPreferences()
+		end,
+		function(value)
+			return tostring(value) .. " PX"
+		end
+	)
+
+	connect(codeFrame.DescendantAdded, function(object)
+		if object:IsA("TextBox") then
+			task.defer(function()
+				hookCodeBox(object)
+				applyEditorStyle(object)
+				queueStatusUpdate()
+			end)
+		end
+	end)
+	local addTabButton = tabsFrame:FindFirstChild("AddTab")
+	if addTabButton and addTabButton:IsA("GuiButton") then
+		connect(addTabButton.MouseButton1Click, function()
+			local before = #getCodeBoxes()
+			task.delay(0.18, function()
+				if runtime.alive and #getCodeBoxes() == before then
+					createFallbackTab(nextAvailableTabName())
+				end
+			end)
+		end)
+	end
+	connect(codeFrame.DescendantRemoving, function(object)
+		queueStatusUpdate()
+		if not object:IsA("TextBox") or not object.Name:match("^script%d+%.lua$") then
+			return
+		end
+		local name = object.Name
+		task.delay(0.3, function()
+			if
+				not runtime.alive
+				or not v2Main.Parent
+				or not tabsFrame.Parent
+				or not codeFrame.Parent
+			then
+				return
+			end
+			for _, box in getCodeBoxes() do
+				if box.Name == name then
+					return
+				end
+			end
+			if type(delfile) == "function" and type(isfile) == "function" then
+				local path = tabDirectory .. "/" .. name
+				if isfile(path) then
+					pcall(delfile, path)
+				end
+			end
+		end)
+	end)
+	connect(codeFrame:GetPropertyChangedSignal("Position"), updateStatusPosition)
+	connect(codeFrame:GetPropertyChangedSignal("Size"), updateStatusPosition)
+	connect(codeFrame:GetPropertyChangedSignal("AbsoluteSize"), updateStatusPosition)
+	connect(buttonsFrame.ChildAdded, function(object)
+		if editorToolbarEnabled and object:IsA("GuiButton") and object.Name ~= "LT_EditorToolbar" then
+			local nativeVisible = object:GetAttribute("LT_NativeVisible")
+			if typeof(nativeVisible) ~= "boolean" then
+				nativeVisible = object.Visible
+				object:SetAttribute("LT_NativeVisible", nativeVisible)
+			end
+			runtime.originalButtons[object] = nativeVisible
+			object.Visible = false
+		end
+	end)
+
+	task.wait(0.7)
+	if not runtime.alive then
+		return
+	end
+	buildToolbar()
+	applyToolbarLayout()
+	buildStatus()
+	applyWideEditor()
+	applyCompactTabs()
+	applyEditorPreferences()
+	syntaxHighlighter.applyAll()
+	if autoRestoreEnabled then
+		task.spawn(restoreSavedTabs, false)
+	end
+end
+

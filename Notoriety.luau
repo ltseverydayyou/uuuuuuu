@@ -17,8 +17,6 @@ Environment.MaxEverythingEnabled = true
 local MAX_VALUE = 999999
 
 local MaxedValues = {
-	Health = MAX_VALUE,
-	Armor = MAX_VALUE,
 	Stamina = MAX_VALUE,
 	MaxStamina = MAX_VALUE,
 	PrimaryAmmo = MAX_VALUE,
@@ -39,8 +37,6 @@ local MaxedValues = {
 }
 
 local ValueSelector = table.concat({
-	"#Health",
-	"#Armor",
 	"#Stamina",
 	"#MaxStamina",
 	"#PrimaryAmmo",

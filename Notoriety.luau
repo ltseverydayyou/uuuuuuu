@@ -43,10 +43,10 @@ local RunService = ServiceResolver.cs("RunService", Reference)
 
 local LocalPlayer = Players.LocalPlayer
 
-local RS_Package = ReplicatedStorage:WaitForChild("RS_Package")
-local Assets = RS_Package:WaitForChild("Assets")
-local Remotes = Assets:WaitForChild("Remotes")
-local Event = Remotes:WaitForChild("Damage")
+local RS_Package = ReplicatedStorage:WaitForChild("RS_Package",math.huge)
+local Assets = RS_Package:WaitForChild("Assets",math.huge)
+local Remotes = Assets:WaitForChild("Remotes",math.huge)
+local Event = Remotes:WaitForChild("Damage",math.huge)
 
 local Icon = loadstring(
 	game:HttpGet(

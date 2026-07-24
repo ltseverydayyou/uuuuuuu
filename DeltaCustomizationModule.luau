@@ -6344,17 +6344,19 @@ end
 
 local function req(u)
 	local body
+	local status = 0
 	if type(rq) == "function" then
 		local ok, r = pcall(rq, {
 			Url = u,
 			Method = "GET",
 			Headers = {
 				["User-Agent"] = "Roblox/Http/1.1",
-				["Accept"] = "*/*",
+				["Accept"] = "application/json",
 			},
 		})
 		if ok and r then
 			body = r.Body or r.body
+			status = r.StatusCode or r.Status or r.status_code or 0
 		end
 	end
 	if type(body) ~= "string" or body == "" then
@@ -6363,17 +6365,19 @@ local function req(u)
 		end)
 		if ok2 and type(r2) == "string" and r2 ~= "" then
 			body = r2
+			status = 0
 		end
 	end
 	if type(body) ~= "string" or body == "" then
-		return nil
+		return nil, status
 	end
 	local ok3, dec = pcall(function()
 		return __lt.cm("HttpService", "JSONDecode", body)
 	end)
 	if ok3 then
-		return dec
+		return dec, status
 	end
+	return nil, status
 end
 
 local SCRIPTBLOX_BASE = "https://scriptblox.com"
@@ -6950,6 +6954,8 @@ local function downloadImageAsset(url)
 		local hdr
 		if host:find("rscripts%.net") then
 			hdr = { Referer = RSCRIPTS_BASE }
+		elseif host:find("robloxscripts%.com") then
+			hdr = { Referer = "https://robloxscripts.com" }
 		elseif host:find("rbxcdn%.com") then
 			hdr = { Referer = "https://www.roblox.com/" }
 		end
@@ -7094,7 +7100,7 @@ local engb = mk("TextButton", {
 	Name = "Engine",
 	BackgroundColor3 = col.bg,
 	BorderSizePixel = 0,
-	Size = UDim2.new(0, 148, 1, 0),
+	Size = UDim2.new(0, 168, 1, 0),
 	Text = "Engine: ScriptBlox",
 	TextColor3 = col.tx,
 	Font = Enum.Font.GothamSemibold,
@@ -7155,8 +7161,8 @@ local sbox = mk("TextBox", {
 	Name = "Search",
 	BackgroundColor3 = col.bg,
 	BorderSizePixel = 0,
-	Size = UDim2.new(1, -332, 1, 0),
-	Position = UDim2.new(0, 156, 0, 0),
+	Size = UDim2.new(1, -352, 1, 0),
+	Position = UDim2.new(0, 176, 0, 0),
 	ClearTextOnFocus = false,
 	Text = "",
 	PlaceholderText = "Search for scripts (scriptblox.com)",
@@ -7271,7 +7277,15 @@ local busy = false
 local data = {}
 
 local function pass(d)
-	local v = eng == "ScriptBlox" and d.key or d.keySystem
+	local v
+	if eng == "RScripts" then
+		v = d.keySystem
+	else
+		v = d.key
+	end
+	if v == nil and type(d.accessType) == "string" then
+		v = d.accessType:lower() == "key"
+	end
 	local k = false
 	if type(v) == "boolean" then
 		k = v
@@ -7341,7 +7355,17 @@ local function mkb(par, tx, c3)
 end
 
 local function getRw(d)
-	return eng == "ScriptBlox" and d.script or d.rawScript or d.scriptLink or d.raw or ""
+	if eng == "RScripts" then
+		return d.rawScript or d.scriptLink or d.raw or "", true
+	elseif eng == "RobloxScripts" then
+		local source = d.script or ""
+		if source ~= "" then
+			return source, false
+		end
+		local url = d.rawScriptUrl or d.scriptLink or d.raw or ""
+		return url, url ~= ""
+	end
+	return d.script or d.rawScript or d.scriptLink or d.raw or "", false
 end
 
 local function getTi(d)
@@ -7349,14 +7373,22 @@ local function getTi(d)
 end
 
 local function getGa(d)
-	if eng == "ScriptBlox" then
-		return d.game and d.game.name or "Unknown Game"
+	if eng == "RScripts" then
+		return d.game and d.game.title or "Unknown Game"
 	end
-	return d.game and d.game.title or "Unknown Game"
+	return d.game and d.game.name or "Unknown Game"
 end
 
 local function keyReq(d)
-	local v = eng == "ScriptBlox" and d.key or d.keySystem
+	local v
+	if eng == "RScripts" then
+		v = d.keySystem
+	else
+		v = d.key
+	end
+	if v == nil and type(d.accessType) == "string" then
+		v = d.accessType:lower() == "key"
+	end
 	local k = false
 	if type(v) == "boolean" then
 		k = v
@@ -7383,12 +7415,22 @@ end
 
 local function getInfo(d)
 	local v = tostring(d.views or d.viewCount or 0)
-	local l = tostring(d.likeCount or 0)
+	local l = tostring(d.likes or d.likeCount or 0)
 	local k = keyReq(d) and "Key" or "Keyless"
-	local s = d.isPatched and "Patched" or "Working"
+	if eng == "RobloxScripts" and type(d.accessType) == "string" then
+		local access = d.accessType:lower()
+		if access == "paid" then
+			k = "Paid"
+		elseif access == "free" then
+			k = "Free"
+		end
+	end
+	local s = eng == "RobloxScripts" and "Published" or d.isPatched and "Patched" or "Working"
 	local info = string.format("%s | Views %s | Likes %s | %s", k, v, l, s)
 	if eng == "RScripts" and d.discord and d.discord ~= "" then
 		info = info .. " | Discord"
+	elseif eng == "RobloxScripts" and d.author and d.author.verified == true then
+		info = info .. " | Verified"
 	end
 	return info
 end
@@ -7410,16 +7452,36 @@ local function mkRow()
 end
 
 local function mkCard(par, i, d)
-	local rw = getRw(d)
+	local rw, rwIsUrl = getRw(d)
 	local placeId
 	if eng == "ScriptBlox" then
 		placeId = d.game and d.game.gameId
-	else
+	elseif eng == "RScripts" then
 		placeId = d.game and (d.game.placeId or d.game.gameLink and d.game.gameLink:match("/games/(%d+)"))
 	end
 	placeId = tonumber(placeId)
 
-	local bgUrl = eng == "ScriptBlox" and resolveScriptBloxImage(d) or resolveRScriptsImage(d)
+	local bgUrl
+	if eng == "ScriptBlox" then
+		bgUrl = resolveScriptBloxImage(d)
+	elseif eng == "RScripts" then
+		bgUrl = resolveRScriptsImage(d)
+	else
+		local candidates = {
+			d.image,
+			d.imageUrl,
+			d.thumbnail,
+			d.game and d.game.iconUrl,
+			d.game and d.game.image,
+		}
+		for _, value in candidates do
+			local normalized = normalizeImageUrl(value, "https://robloxscripts.com")
+			if normalized and isMeaningfulImageUrl(normalized) then
+				bgUrl = normalized
+				break
+			end
+		end
+	end
 	if not bgUrl and placeId then
 		bgUrl = buildRobloxThumbnail(placeId)
 	end
@@ -7561,8 +7623,14 @@ local function mkCard(par, i, d)
 				error("loadstring unavailable")
 			end
 			local src = rw
-			if eng ~= "ScriptBlox" then
-				local got, gotEr = httpTxt(rw, eng == "RScripts" and { Referer = RSCRIPTS_BASE } or nil)
+			if rwIsUrl then
+				local headers
+				if eng == "RScripts" then
+					headers = { Referer = RSCRIPTS_BASE }
+				elseif eng == "RobloxScripts" then
+					headers = { Referer = "https://robloxscripts.com" }
+				end
+				local got, gotEr = httpTxt(rw, headers)
 				if type(got) ~= "string" or got == "" then
 					error(gotEr or "empty script source")
 				end
@@ -7590,13 +7658,18 @@ local function mkCard(par, i, d)
 	if cp then
 		con(cp.MouseButton1Click:Connect(function()
 			pcall(function()
-				if eng == "ScriptBlox" then
-					setclipboard(rw)
-				else
-					local src = httpTxt(rw, eng == "RScripts" and { Referer = RSCRIPTS_BASE } or nil)
-					if type(src) == "string" and src ~= "" then
-						setclipboard(src)
+				local src = rw
+				if rwIsUrl then
+					local headers
+					if eng == "RScripts" then
+						headers = { Referer = RSCRIPTS_BASE }
+					elseif eng == "RobloxScripts" then
+						headers = { Referer = "https://robloxscripts.com" }
 					end
+					src = httpTxt(rw, headers)
+				end
+				if type(src) == "string" and src ~= "" then
+					setclipboard(src)
 				end
 			end)
 			cp.Text = "Copied"
@@ -7679,11 +7752,22 @@ local function fetch(q2, tr2, p2)
 	setBusy(true)
 	shClr()
 	shMsg("Loading...", col.td)
-	local enc = __lt.cm("HttpService", "UrlEncode", q2)
+	local requestQuery = q2
+	if eng == "RobloxScripts" and #requestQuery > 100 then
+		requestQuery = requestQuery:sub(1, 100)
+	end
+	local enc = __lt.cm("HttpService", "UrlEncode", requestQuery)
 	local u
 	if eng == "RScripts" then
 		u = string.format("https://rscripts.net/api/v2/scripts?page=%d&orderBy=date&sort=desc", p2)
-		if q2 ~= "" then
+		if requestQuery ~= "" then
+			u = u .. "&q=" .. enc
+		end
+	elseif eng == "RobloxScripts" then
+		p2 = math.min(p2, 200)
+		cur = p2
+		u = string.format("https://robloxscripts.com/api/v1/scripts?page=%d&limit=24&sort=newest", p2)
+		if requestQuery ~= "" then
 			u = u .. "&q=" .. enc
 		end
 	elseif tr2 then
@@ -7691,9 +7775,21 @@ local function fetch(q2, tr2, p2)
 	else
 		u = string.format("https://scriptblox.com/api/script/search?q=%s&page=%d", enc, p2)
 	end
-	local dec = req(u)
+	local dec, status = req(u)
 	shClr()
-	if not dec then
+	if status == 429 then
+		shMsg("Rate limit reached. Try again shortly", col.wa)
+		setBusy(false)
+		return
+	elseif status == 503 then
+		shMsg("API temporarily unavailable", col.wa)
+		setBusy(false)
+		return
+	elseif status ~= 0 and (status < 200 or status >= 300) then
+		shMsg("Request failed (" .. tostring(status) .. ")", col.er)
+		setBusy(false)
+		return
+	elseif not dec then
 		shMsg("Request failed", col.er)
 		setBusy(false)
 		return
@@ -7702,6 +7798,17 @@ local function fetch(q2, tr2, p2)
 	if eng == "RScripts" then
 		arr = dec.scripts
 		maxp = math.max(dec.info and dec.info.maxPages or 1, 1)
+	elseif eng == "RobloxScripts" then
+		arr = dec.data
+		local pg = dec.pagination or {}
+		local total = tonumber(pg.total or pg.totalItems)
+		local limit = tonumber(pg.limit or pg.perPage) or 24
+		local pages = tonumber(pg.totalPages or pg.pages or pg.lastPage)
+		if not pages and total then
+			pages = math.ceil(total / math.max(limit, 1))
+		end
+		maxp = math.min(math.max(pages or 1, 1), 200)
+		cur = tonumber(pg.page or pg.currentPage) or p2
 	else
 		local r = dec.result or {}
 		arr = r.scripts
@@ -7721,17 +7828,19 @@ end
 con(engb.MouseButton1Click:Connect(function()
 	if eng == "ScriptBlox" then
 		eng = "RScripts"
-		engb.Text = "Engine: RScripts"
-		sbox.PlaceholderText = "Search for scripts (rscripts.net)"
 		engb.BackgroundColor3 = Color3.fromRGB(45, 49, 58)
-		toast("ScriptHub", "Switched to RScripts")
+		sbox.PlaceholderText = "Search for scripts (rscripts.net)"
+	elseif eng == "RScripts" then
+		eng = "RobloxScripts"
+		engb.BackgroundColor3 = Color3.fromRGB(38, 52, 68)
+		sbox.PlaceholderText = "Search for scripts (robloxscripts.com)"
 	else
 		eng = "ScriptBlox"
-		engb.Text = "Engine: ScriptBlox"
-		sbox.PlaceholderText = "Search for scripts (scriptblox.com)"
 		engb.BackgroundColor3 = col.bg
-		toast("ScriptHub", "Switched to ScriptBlox")
+		sbox.PlaceholderText = "Search for scripts (scriptblox.com)"
 	end
+	engb.Text = "Engine: " .. eng
+	toast("ScriptHub", "Switched to " .. eng)
 	data = {}
 	cur = 1
 	maxp = 1

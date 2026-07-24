@@ -96,42 +96,57 @@ local function main()
 	
 	local SaveInstanceArgs = {
 		__DEBUG_MODE = false,
+		Debug = false,
 		ReadMe = true,
 		SafeMode = true,
-		KillAllScripts = true,
-		BoostFPS = false,
 		ShutdownWhenDone = false,
 		AntiIdle = true,
 		Anonymous = false,
 		ShowStatus = true,
 		mode = "optimized",
-		Decompile = true,
+		noscripts = false,
 		scriptcache = true,
-		DecompileTimeout = 10,
+		timeout = 10,
 		DecompileJobless = false,
 		SaveBytecode = false,
 		DecompileIgnore = {"Chat", "CoreGui", "CorePackages"},
 		IgnoreList = {"CoreGui", "CorePackages"},
 		IgnoreProperties = {},
 		SaveCacheInterval = 0x1600 * 10,
-		AvoidFileOverwrite = true,
 		NilInstances = false,
 		IgnoreDefaultProperties = true,
 		IgnoreNotArchivable = true,
 		IgnorePropertiesOfNotScriptsOnScriptsMode = false,
 		IgnoreSpecialProperties = false,
+		UseUGCValidationService = true,
 		IsolateStarterPlayer = true,
 		IsolatePlayers = false,
 		IsolateLocalPlayer = false,
 		IsolateLocalPlayerCharacter = false,
-		SavePlayerCharacters = false,
+		RemovePlayerCharacters = true,
 		SaveNotCreatable = false,
 		AlternativeWritefile = true,
 		IgnoreDefaultPlayerScripts = true,
 		IgnoreSharedStrings = true,
 		SharedStringOverwrite = false,
 		TreatUnionsAsParts = false,
-		NotCreatableFixes = {"Player", "PlayerScripts", "PlayerGui", "TouchTransmitter"}
+		NotCreatableFixes = {"Player", "PlayerScripts", "PlayerGui", "TouchTransmitter"},
+		SetStreaming = false,
+		StreamingAreaSize = 10000,
+		StreamingRadius = 1024,
+		StreamingTimeout = 20,
+		StreamingConcurrency = false,
+		StreamingSlices = 2,
+		StreamingMaxTime = false,
+		StreamingChunkWait = 12,
+		StreamingSettleTime = 5,
+		NeutralizeLighting = false,
+		ExportObj = false,
+		DecompilePrepass = false,
+		PrepassConcurrency = 24,
+		PrepassRateGap = 0.12,
+		PrepassApiUrl = "https://api.lua.expert/decompile",
+		PrepassMaxScripts = 6000
 	}
 	local ExtraOptionsJson = ""
 	local cloneOptions
@@ -327,6 +342,14 @@ local function main()
 		return result
 	end
 
+	local function parseAutoNumber(text, current)
+		local clean = tostring(text or ""):gsub("^%s+", ""):gsub("%s+$", ""):lower()
+		if clean == "" or clean == "auto" or clean == "false" then
+			return false
+		end
+		return tonumber(clean) or current
+	end
+
 	cloneOptions = function(options)
 		local cloned = {}
 		for key, value in options do
@@ -430,18 +453,6 @@ local function main()
 			persistSaveConfig()
 		end))
 
-		local KillAllScripts = AddCheckbox("Kill All Scripts", SaveInstanceArgs.KillAllScripts)
-		trackConn(KillAllScripts.OnInput:Connect(function()
-			SaveInstanceArgs.KillAllScripts = KillAllScripts.Toggled
-			persistSaveConfig()
-		end))
-
-		local BoostFPS = AddCheckbox("Boost FPS", SaveInstanceArgs.BoostFPS)
-		trackConn(BoostFPS.OnInput:Connect(function()
-			SaveInstanceArgs.BoostFPS = BoostFPS.Toggled
-			persistSaveConfig()
-		end))
-
 		local AntiIdle = AddCheckbox("Anti Idle", SaveInstanceArgs.AntiIdle)
 		trackConn(AntiIdle.OnInput:Connect(function()
 			SaveInstanceArgs.AntiIdle = AntiIdle.Toggled
@@ -472,6 +483,12 @@ local function main()
 			persistSaveConfig()
 		end))
 
+		local DetailedDebug = AddCheckbox("Write Detailed Debug Log", SaveInstanceArgs.Debug)
+		trackConn(DetailedDebug.OnInput:Connect(function()
+			SaveInstanceArgs.Debug = DetailedDebug.Toggled
+			persistSaveConfig()
+		end))
+
 		local Anonymous = AddCheckbox("Anonymous", SaveInstanceArgs.Anonymous)
 		trackConn(Anonymous.OnInput:Connect(function()
 			SaveInstanceArgs.Anonymous = Anonymous.Toggled
@@ -486,9 +503,9 @@ local function main()
 			persistSaveConfig()
 		end))
 
-		local Decompile = AddCheckbox("Decompile Scripts (LocalScript and ModuleScript)", SaveInstanceArgs.Decompile)
+		local Decompile = AddCheckbox("Decompile Scripts", not SaveInstanceArgs.noscripts)
 		trackConn(Decompile.OnInput:Connect(function()
-			SaveInstanceArgs.Decompile = Decompile.Toggled
+			SaveInstanceArgs.noscripts = not Decompile.Toggled
 			persistSaveConfig()
 		end))
 
@@ -497,10 +514,11 @@ local function main()
 			SaveInstanceArgs.scriptcache = ScriptCache.Toggled
 			persistSaveConfig()
 		end))
-		
-		local decompileTimeout = AddTextbox("Decompile Timeout (s)", SaveInstanceArgs.DecompileTimeout, 15)
+
+		local decompileTimeout = AddTextbox("Decompile Timeout (s)", SaveInstanceArgs.timeout, 40)
 		trackConn(decompileTimeout.TextBox.FocusLost:Connect(function()
-			SaveInstanceArgs.DecompileTimeout = tonumber(decompileTimeout.TextBox.Text)
+			SaveInstanceArgs.timeout = tonumber(decompileTimeout.TextBox.Text) or SaveInstanceArgs.timeout
+			decompileTimeout.TextBox.Text = tostring(SaveInstanceArgs.timeout)
 			persistSaveConfig()
 		end))
 
@@ -515,36 +533,69 @@ local function main()
 			SaveInstanceArgs.SaveBytecode = SaveBytecode.Toggled
 			persistSaveConfig()
 		end))
-		
-		local decompileIgnore = AddTextbox("Decompile Ignore", table.concat(SaveInstanceArgs.DecompileIgnore, ","), 50)
+
+		local DecompilePrepass = AddCheckbox("Decompile Prepass", SaveInstanceArgs.DecompilePrepass)
+		trackConn(DecompilePrepass.OnInput:Connect(function()
+			SaveInstanceArgs.DecompilePrepass = DecompilePrepass.Toggled
+			persistSaveConfig()
+		end))
+
+		local PrepassConcurrency = AddTextbox("Prepass Concurrency", SaveInstanceArgs.PrepassConcurrency, 40)
+		trackConn(PrepassConcurrency.TextBox.FocusLost:Connect(function()
+			SaveInstanceArgs.PrepassConcurrency = tonumber(PrepassConcurrency.TextBox.Text) or SaveInstanceArgs.PrepassConcurrency
+			PrepassConcurrency.TextBox.Text = tostring(SaveInstanceArgs.PrepassConcurrency)
+			persistSaveConfig()
+		end))
+
+		local PrepassRateGap = AddTextbox("Prepass Rate Gap", SaveInstanceArgs.PrepassRateGap, 45)
+		trackConn(PrepassRateGap.TextBox.FocusLost:Connect(function()
+			SaveInstanceArgs.PrepassRateGap = tonumber(PrepassRateGap.TextBox.Text) or SaveInstanceArgs.PrepassRateGap
+			PrepassRateGap.TextBox.Text = tostring(SaveInstanceArgs.PrepassRateGap)
+			persistSaveConfig()
+		end))
+
+		local PrepassMaxScripts = AddTextbox("Prepass Max Scripts", SaveInstanceArgs.PrepassMaxScripts, 55)
+		trackConn(PrepassMaxScripts.TextBox.FocusLost:Connect(function()
+			SaveInstanceArgs.PrepassMaxScripts = tonumber(PrepassMaxScripts.TextBox.Text) or SaveInstanceArgs.PrepassMaxScripts
+			PrepassMaxScripts.TextBox.Text = tostring(SaveInstanceArgs.PrepassMaxScripts)
+			persistSaveConfig()
+		end))
+
+		local PrepassApiUrl = AddTextbox("Prepass API URL", SaveInstanceArgs.PrepassApiUrl, 180)
+		trackConn(PrepassApiUrl.TextBox.FocusLost:Connect(function()
+			local value = tostring(PrepassApiUrl.TextBox.Text or ""):gsub("^%s+", ""):gsub("%s+$", "")
+			if value ~= "" then
+				SaveInstanceArgs.PrepassApiUrl = value
+			else
+				PrepassApiUrl.TextBox.Text = SaveInstanceArgs.PrepassApiUrl
+			end
+			persistSaveConfig()
+		end))
+
+		local decompileIgnore = AddTextbox("Decompile Ignore", table.concat(SaveInstanceArgs.DecompileIgnore, ","), 90)
 		trackConn(decompileIgnore.TextBox.FocusLost:Connect(function()
 			SaveInstanceArgs.DecompileIgnore = parseSimpleList(decompileIgnore.TextBox.Text)
 			persistSaveConfig()
 		end))
 
-		local IgnoreList = AddTextbox("Ignore List", table.concat(SaveInstanceArgs.IgnoreList, ","), 50)
+		AddSeperator("Instances")
+
+		local IgnoreList = AddTextbox("Ignore List", table.concat(SaveInstanceArgs.IgnoreList, ","), 90)
 		trackConn(IgnoreList.TextBox.FocusLost:Connect(function()
 			SaveInstanceArgs.IgnoreList = parseSimpleList(IgnoreList.TextBox.Text)
 			persistSaveConfig()
 		end))
 
-		local IgnoreProperties = AddTextbox("Ignore Properties", table.concat(SaveInstanceArgs.IgnoreProperties, ","), 70)
+		local IgnoreProperties = AddTextbox("Ignore Properties", table.concat(SaveInstanceArgs.IgnoreProperties, ","), 90)
 		trackConn(IgnoreProperties.TextBox.FocusLost:Connect(function()
 			SaveInstanceArgs.IgnoreProperties = parseSimpleList(IgnoreProperties.TextBox.Text)
 			persistSaveConfig()
 		end))
 
-		AddSeperator("Instances")
-
-		local saveCacheInterval = AddTextbox("Save Cache Interval", SaveInstanceArgs.SaveCacheInterval, 55)
+		local saveCacheInterval = AddTextbox("Save Cache Interval", SaveInstanceArgs.SaveCacheInterval, 70)
 		trackConn(saveCacheInterval.TextBox.FocusLost:Connect(function()
-			SaveInstanceArgs.SaveCacheInterval = tonumber(saveCacheInterval.TextBox.Text)
-			persistSaveConfig()
-		end))
-
-		local AvoidFileOverwrite = AddCheckbox("Avoid File Overwrite", SaveInstanceArgs.AvoidFileOverwrite)
-		trackConn(AvoidFileOverwrite.OnInput:Connect(function()
-			SaveInstanceArgs.AvoidFileOverwrite = AvoidFileOverwrite.Toggled
+			SaveInstanceArgs.SaveCacheInterval = tonumber(saveCacheInterval.TextBox.Text) or SaveInstanceArgs.SaveCacheInterval
+			saveCacheInterval.TextBox.Text = tostring(SaveInstanceArgs.SaveCacheInterval)
 			persistSaveConfig()
 		end))
 
@@ -578,6 +629,12 @@ local function main()
 			persistSaveConfig()
 		end))
 
+		local UseUGCValidationService = AddCheckbox("Use UGC Validation Fallback", SaveInstanceArgs.UseUGCValidationService)
+		trackConn(UseUGCValidationService.OnInput:Connect(function()
+			SaveInstanceArgs.UseUGCValidationService = UseUGCValidationService.Toggled
+			persistSaveConfig()
+		end))
+
 		local IsolateStarterPlr = AddCheckbox("Isolate StarterPlayer", SaveInstanceArgs.IsolateStarterPlayer)
 		trackConn(IsolateStarterPlr.OnInput:Connect(function()
 			SaveInstanceArgs.IsolateStarterPlayer = IsolateStarterPlr.Toggled
@@ -602,9 +659,9 @@ local function main()
 			persistSaveConfig()
 		end))
 
-		local SavePlayerCharacters = AddCheckbox("Save Player Characters", SaveInstanceArgs.SavePlayerCharacters)
-		trackConn(SavePlayerCharacters.OnInput:Connect(function()
-			SaveInstanceArgs.SavePlayerCharacters = SavePlayerCharacters.Toggled
+		local RemovePlayerCharacters = AddCheckbox("Remove Player Characters", SaveInstanceArgs.RemovePlayerCharacters)
+		trackConn(RemovePlayerCharacters.OnInput:Connect(function()
+			SaveInstanceArgs.RemovePlayerCharacters = RemovePlayerCharacters.Toggled
 			persistSaveConfig()
 		end))
 
@@ -644,12 +701,89 @@ local function main()
 			persistSaveConfig()
 		end))
 
-		local NotCreatableFixes = AddTextbox("Not Creatable Fixes", table.concat(SaveInstanceArgs.NotCreatableFixes, ","), 90)
+		local NotCreatableFixes = AddTextbox("Not Creatable Fixes", table.concat(SaveInstanceArgs.NotCreatableFixes, ","), 110)
 		trackConn(NotCreatableFixes.TextBox.FocusLost:Connect(function()
 			SaveInstanceArgs.NotCreatableFixes = parseSimpleList(NotCreatableFixes.TextBox.Text)
 			persistSaveConfig()
 		end))
 
+		AddSeperator("Streaming")
+
+		local SetStreaming = AddCheckbox("Capture Entire Streaming Map", SaveInstanceArgs.SetStreaming)
+		trackConn(SetStreaming.OnInput:Connect(function()
+			SaveInstanceArgs.SetStreaming = SetStreaming.Toggled
+			persistSaveConfig()
+		end))
+
+		local StreamingAreaSize = AddTextbox("Streaming Area Size", SaveInstanceArgs.StreamingAreaSize, 55)
+		trackConn(StreamingAreaSize.TextBox.FocusLost:Connect(function()
+			SaveInstanceArgs.StreamingAreaSize = tonumber(StreamingAreaSize.TextBox.Text) or SaveInstanceArgs.StreamingAreaSize
+			StreamingAreaSize.TextBox.Text = tostring(SaveInstanceArgs.StreamingAreaSize)
+			persistSaveConfig()
+		end))
+
+		local StreamingRadius = AddTextbox("Streaming Radius", SaveInstanceArgs.StreamingRadius, 55)
+		trackConn(StreamingRadius.TextBox.FocusLost:Connect(function()
+			SaveInstanceArgs.StreamingRadius = tonumber(StreamingRadius.TextBox.Text) or SaveInstanceArgs.StreamingRadius
+			StreamingRadius.TextBox.Text = tostring(SaveInstanceArgs.StreamingRadius)
+			persistSaveConfig()
+		end))
+
+		local StreamingTimeout = AddTextbox("Streaming Request Timeout", SaveInstanceArgs.StreamingTimeout, 45)
+		trackConn(StreamingTimeout.TextBox.FocusLost:Connect(function()
+			SaveInstanceArgs.StreamingTimeout = tonumber(StreamingTimeout.TextBox.Text) or SaveInstanceArgs.StreamingTimeout
+			StreamingTimeout.TextBox.Text = tostring(SaveInstanceArgs.StreamingTimeout)
+			persistSaveConfig()
+		end))
+
+		local StreamingConcurrency = AddTextbox("Streaming Concurrency", SaveInstanceArgs.StreamingConcurrency or "auto", 45)
+		trackConn(StreamingConcurrency.TextBox.FocusLost:Connect(function()
+			SaveInstanceArgs.StreamingConcurrency = parseAutoNumber(StreamingConcurrency.TextBox.Text, SaveInstanceArgs.StreamingConcurrency)
+			StreamingConcurrency.TextBox.Text = SaveInstanceArgs.StreamingConcurrency == false and "auto" or tostring(SaveInstanceArgs.StreamingConcurrency)
+			persistSaveConfig()
+		end))
+
+		local StreamingSlices = AddTextbox("Streaming Slices", SaveInstanceArgs.StreamingSlices, 35)
+		trackConn(StreamingSlices.TextBox.FocusLost:Connect(function()
+			SaveInstanceArgs.StreamingSlices = tonumber(StreamingSlices.TextBox.Text) or SaveInstanceArgs.StreamingSlices
+			StreamingSlices.TextBox.Text = tostring(SaveInstanceArgs.StreamingSlices)
+			persistSaveConfig()
+		end))
+
+		local StreamingMaxTime = AddTextbox("Streaming Max Time", SaveInstanceArgs.StreamingMaxTime or "auto", 45)
+		trackConn(StreamingMaxTime.TextBox.FocusLost:Connect(function()
+			SaveInstanceArgs.StreamingMaxTime = parseAutoNumber(StreamingMaxTime.TextBox.Text, SaveInstanceArgs.StreamingMaxTime)
+			StreamingMaxTime.TextBox.Text = SaveInstanceArgs.StreamingMaxTime == false and "auto" or tostring(SaveInstanceArgs.StreamingMaxTime)
+			persistSaveConfig()
+		end))
+
+		local StreamingChunkWait = AddTextbox("Streaming Chunk Wait", SaveInstanceArgs.StreamingChunkWait, 40)
+		trackConn(StreamingChunkWait.TextBox.FocusLost:Connect(function()
+			SaveInstanceArgs.StreamingChunkWait = tonumber(StreamingChunkWait.TextBox.Text) or SaveInstanceArgs.StreamingChunkWait
+			StreamingChunkWait.TextBox.Text = tostring(SaveInstanceArgs.StreamingChunkWait)
+			persistSaveConfig()
+		end))
+
+		local StreamingSettleTime = AddTextbox("Streaming Settle Time", SaveInstanceArgs.StreamingSettleTime, 40)
+		trackConn(StreamingSettleTime.TextBox.FocusLost:Connect(function()
+			SaveInstanceArgs.StreamingSettleTime = tonumber(StreamingSettleTime.TextBox.Text) or SaveInstanceArgs.StreamingSettleTime
+			StreamingSettleTime.TextBox.Text = tostring(SaveInstanceArgs.StreamingSettleTime)
+			persistSaveConfig()
+		end))
+
+		AddSeperator("Output")
+
+		local NeutralizeLighting = AddCheckbox("Neutralize Lighting", SaveInstanceArgs.NeutralizeLighting)
+		trackConn(NeutralizeLighting.OnInput:Connect(function()
+			SaveInstanceArgs.NeutralizeLighting = NeutralizeLighting.Toggled
+			persistSaveConfig()
+		end))
+
+		local ExportObj = AddCheckbox("Export MeshParts To OBJ", SaveInstanceArgs.ExportObj)
+		trackConn(ExportObj.OnInput:Connect(function()
+			SaveInstanceArgs.ExportObj = ExportObj.Toggled
+			persistSaveConfig()
+		end))
 		AddSeperator("File")
 
 		local FileNameFormat = AddTextbox("File Name Format", getSaveInstanceFormat(), 140)
@@ -672,7 +806,7 @@ local function main()
 			end)
 		end))
 
-		AddText("Extra Options JSON can override top-level USSI options like Anonymous tables or custom IgnoreList maps.")
+		AddText("Extra Options JSON can override top-level SaveInstance420 options like Anonymous tables or custom IgnoreList maps.")
 		local ExtraOptions = AddTextbox("Extra Options JSON", ExtraOptionsJson, 180)
 		trackConn(ExtraOptions.TextBox.FocusLost:Connect(function()
 			ExtraOptionsJson = tostring(ExtraOptions.TextBox.Text or ""):gsub("^%s+", ""):gsub("%s+$", "")
@@ -725,7 +859,7 @@ local function main()
 			end
 			window:SetTitle("Save Instance - Saving")
 			saveOptions.FilePath = fileName
-			local s, result = pcall(env.saveinstance, game, saveOptions)
+			local s, result = pcall(env.saveinstance, saveOptions)
 			if s then
 				window:SetTitle("Save Instance - Saved")
 			else
@@ -734,7 +868,6 @@ local function main()
 			end
 			task.wait(5)
 			window:SetTitle("Save Instance")
-			---env.saveinstance(game, saveOptions)
 		end))
 	end
 

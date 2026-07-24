@@ -1303,14 +1303,14 @@ Main = (function()
 			if __lt.cs("RunService", cloneref):IsStudio() then return function() error("Cannot run in Roblox Studio!") end end
 
 			local cacheHost = (getgenv and getgenv()) or _G
-			local cacheKey = "__dex_ussi_saveinstance_v3"
+			local cacheKey = "__dex_saveinstance420_v1"
 			local cached = type(cacheHost) == "table" and rawget(cacheHost, cacheKey)
 			if type(cached) == "function" then
 				return cached
 			end
 
 			local Params = {
-				RepoURL = "https://raw.githubusercontent.com/luau/UniversalSynSaveInstance/main/",
+				RepoURL = "https://sirmemegithub.com/RealSlimShady2000/SaveInstance420Edition/raw/branch/main/",
 				SSI = "saveinstance",
 			}
 			local source = oldgame:HttpGet(Params.RepoURL .. Params.SSI .. ".luau", true)
@@ -1324,7 +1324,25 @@ Main = (function()
 				StatusGui.Parent = RobloxGui or CoreGui
 			end
 			]], 1)
-			local synsaveinstance = loadstring(source, Params.SSI)()
+			local compiled, compileError = loadstring(source, Params.SSI)
+			if type(compiled) ~= "function" then
+				error("Failed to compile SaveInstance420Edition: "..tostring(compileError), 0)
+			end
+			local synsaveinstance = compiled()
+			if type(synsaveinstance) ~= "function" then
+				error("SaveInstance420Edition did not return a function", 0)
+			end
+
+			local function copyOptionValue(value)
+				if type(value) ~= "table" then
+					return value
+				end
+				local copy = {}
+				for key, child in value do
+					copy[key] = child
+				end
+				return copy
+			end
 
 			local function applySavedSaveInstanceOptions(finalOptions)
 				local saveState = Settings and Settings.SaveInstance
@@ -1336,15 +1354,7 @@ Main = (function()
 				if type(savedOptions) == "table" then
 					for key, value in savedOptions do
 						if finalOptions[key] == nil then
-							if type(value) == "table" then
-								local copy = {}
-								for subKey, subValue in value do
-									copy[subKey] = subValue
-								end
-								finalOptions[key] = copy
-							else
-								finalOptions[key] = value
-							end
+							finalOptions[key] = copyOptionValue(value)
 						end
 					end
 				end
@@ -1355,7 +1365,7 @@ Main = (function()
 					if okDecode and type(decoded) == "table" then
 						for key, value in decoded do
 							if finalOptions[key] == nil then
-								finalOptions[key] = value
+								finalOptions[key] = copyOptionValue(value)
 							end
 						end
 					end
@@ -1368,10 +1378,55 @@ Main = (function()
 				if type(sourceOptions) ~= "table" then
 					return
 				end
-
 				for key, value in sourceOptions do
-					target[key] = value
+					target[key] = copyOptionValue(value)
 				end
+			end
+
+			local function normalizeSaveInstanceOptions(finalOptions)
+				local aliases = {
+					DecompileTimeout = "timeout",
+					FileName = "FilePath",
+					IgnoreArchivable = "IgnoreNotArchivable",
+					IgnoreDefaultProps = "IgnoreDefaultProperties",
+					SaveNonCreatable = "SaveNotCreatable",
+					SavePlayers = "IsolatePlayers",
+					Streaming = "SetStreaming",
+				}
+				for alias, canonical in aliases do
+					if finalOptions[alias] ~= nil then
+						finalOptions[canonical] = finalOptions[alias]
+					end
+					finalOptions[alias] = nil
+				end
+
+				if finalOptions.Decompile ~= nil then
+					finalOptions.noscripts = not finalOptions.Decompile
+				end
+				if finalOptions.SavePlayerCharacters ~= nil then
+					finalOptions.RemovePlayerCharacters = not finalOptions.SavePlayerCharacters
+				end
+				if finalOptions.RemovePlayers ~= nil then
+					finalOptions.IsolatePlayers = not finalOptions.RemovePlayers
+				end
+
+				finalOptions.Decompile = nil
+				finalOptions.SavePlayerCharacters = nil
+				finalOptions.RemovePlayers = nil
+				finalOptions.KillAllScripts = nil
+				finalOptions.BoostFPS = nil
+				finalOptions.AvoidFileOverwrite = nil
+				finalOptions.MaxThreads = nil
+
+				if typeof(finalOptions.Object) == "Instance" then
+					if finalOptions.Object == game then
+						finalOptions.Object = nil
+					elseif finalOptions.mode == nil or string.lower(tostring(finalOptions.mode)) == "optimized" then
+						finalOptions.mode = "full"
+					end
+				end
+
+				return finalOptions
 			end
 
 			local function getLocalHumanoid()
@@ -1386,7 +1441,6 @@ Main = (function()
 
 			local function captureClientState()
 				local state = {}
-
 				pcall(function()
 					local camera = workspace.CurrentCamera
 					state.Camera = camera
@@ -1395,14 +1449,12 @@ Main = (function()
 						state.CameraSubject = camera.CameraSubject
 					end
 				end)
-
 				pcall(function()
 					local userInput = __lt.cs("UserInputService", cloneref)
 					state.UserInput = userInput
 					state.MouseBehavior = userInput.MouseBehavior
 					state.MouseIconEnabled = userInput.MouseIconEnabled
 				end)
-
 				return state
 			end
 
@@ -1410,7 +1462,6 @@ Main = (function()
 				if type(state) ~= "table" then
 					return
 				end
-
 				pcall(function()
 					local userInput = state.UserInput or __lt.cs("UserInputService", cloneref)
 					if state.MouseBehavior then
@@ -1420,14 +1471,12 @@ Main = (function()
 						userInput.MouseIconEnabled = state.MouseIconEnabled
 					end
 				end)
-
 				pcall(function()
 					local runService = __lt.cs("RunService", cloneref)
 					if runService and runService.Set3dRenderingEnabled then
 						runService:Set3dRenderingEnabled(true)
 					end
 				end)
-
 				pcall(function()
 					local camera = state.Camera
 					if not camera or camera.Parent == nil then
@@ -1436,16 +1485,13 @@ Main = (function()
 					if not camera then
 						return
 					end
-
 					local subject = state.CameraSubject
 					if not subject or subject.Parent == nil then
 						subject = getLocalHumanoid()
 					end
-
 					if subject then
 						camera.CameraSubject = subject
 					end
-
 					if state.CameraType then
 						camera.CameraType = state.CameraType
 					elseif subject then
@@ -1467,14 +1513,13 @@ Main = (function()
 				end
 
 				mergeOptions(finalOptions, options)
-
 				if filepath ~= nil then
 					finalOptions.FilePath = filepath
 				end
-
-				if typeof(obj) == "Instance" then
+				if typeof(obj) == "Instance" and obj ~= game then
 					finalOptions.Object = obj
 				end
+				normalizeSaveInstanceOptions(finalOptions)
 
 				local clientState = captureClientState()
 				local ok, result = pcall(synsaveinstance, finalOptions)
@@ -1485,13 +1530,12 @@ Main = (function()
 				if not ok then
 					error(result, 0)
 				end
-
 				return result
 			end
 
 			if type(cacheHost) == "table" then
 				rawset(cacheHost, cacheKey, wrappedsaveinstance)
-				rawset(cacheHost, "__dex_ussi_saveinstance", wrappedsaveinstance)
+				rawset(cacheHost, "__dex_saveinstance420", wrappedsaveinstance)
 				rawset(cacheHost, "saveinstance", wrappedsaveinstance)
 			end
 			return wrappedsaveinstance

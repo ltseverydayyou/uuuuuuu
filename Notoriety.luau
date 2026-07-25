@@ -110,10 +110,18 @@ local PoliceOriginalSizes = Environment.NotorietyPoliceOriginalSizes
 local PoliceHitboxSize = Vector3.new(10, 10, 10)
 
 local function restorePolicePart(Object)
-	local OriginalSize = PoliceOriginalSizes[Object]
+	local Original = PoliceOriginalSizes[Object]
 
-	if OriginalSize and Object.Parent then
-		Object.Size = OriginalSize
+	if Original and Object.Parent then
+		if typeof(Original) == "Vector3" then
+			Object.Size = Original
+		else
+			Object.Size = Original.Size
+			Object.Transparency = Original.Transparency
+			Object.Massless = Original.Massless
+			Object.CanCollide = Original.CanCollide
+		end
+
 		PoliceOriginalSizes[Object] = nil
 	end
 end
@@ -132,11 +140,28 @@ local function resizePoliceNPC(NPC)
 	end
 
 	if Target and Target:IsA("BasePart") then
-		if not PoliceOriginalSizes[Target] then
-			PoliceOriginalSizes[Target] = Target.Size
+		local Original = PoliceOriginalSizes[Target]
+
+		if not Original then
+			PoliceOriginalSizes[Target] = {
+				Size = Target.Size,
+				Transparency = Target.Transparency,
+				Massless = Target.Massless,
+				CanCollide = Target.CanCollide,
+			}
+		elseif typeof(Original) == "Vector3" then
+			PoliceOriginalSizes[Target] = {
+				Size = Original,
+				Transparency = Target.Transparency,
+				Massless = Target.Massless,
+				CanCollide = Target.CanCollide,
+			}
 		end
 
 		Target.Size = PoliceHitboxSize
+		Target.Transparency = 0.5
+		Target.Massless = true
+		Target.CanCollide = false
 	end
 end
 

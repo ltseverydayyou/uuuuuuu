@@ -43,10 +43,10 @@ local RunService = ServiceResolver.cs("RunService", Reference)
 
 local LocalPlayer = Players.LocalPlayer
 
-local RS_Package = ReplicatedStorage:WaitForChild("RS_Package",math.huge)
-local Assets = RS_Package:WaitForChild("Assets",math.huge)
-local Remotes = Assets:WaitForChild("Remotes",math.huge)
-local Event = Remotes:WaitForChild("Damage",math.huge)
+local RS_Package = ReplicatedStorage:WaitForChild("RS_Package", math.huge)
+local Assets = RS_Package:WaitForChild("Assets", math.huge)
+local Remotes = Assets:WaitForChild("Remotes", math.huge)
+local Event = Remotes:WaitForChild("Damage", math.huge)
 
 local Icon = loadstring(
 	game:HttpGet(
@@ -64,6 +64,22 @@ if Environment.MaxEverythingCharacterConnection then
 	Environment.MaxEverythingCharacterConnection = nil
 end
 
+if type(Environment.NotorietyWeaponConnections) == "table" then
+	for _, Connection in ipairs(Environment.NotorietyWeaponConnections) do
+		pcall(function()
+			Connection:Disconnect()
+		end)
+	end
+end
+
+if Environment.NotorietyWeaponIcon then
+	pcall(function()
+		Environment.NotorietyWeaponIcon:destroy()
+	end)
+
+	Environment.NotorietyWeaponIcon = nil
+end
+
 if Environment.MaxEverythingIcon then
 	pcall(function()
 		Environment.MaxEverythingIcon:destroy()
@@ -74,6 +90,8 @@ end
 
 Environment.MaxEverythingEnabled = true
 Environment.KillPoliceRunning = false
+Environment.NotorietyWeaponEnabled = true
+Environment.NotorietyWeaponConnections = {}
 
 local MAX_VALUE = 999999
 
@@ -98,6 +116,462 @@ local MaxedValues = {
 	Capacity = MAX_VALUE,
 	AltAmmoMax = MAX_VALUE,
 }
+
+local WeaponState = {
+	RequireFunctions = {},
+	RequireUnavailable = false,
+	RequireFailures = 0,
+	FallbackQueued = false,
+	FallbackAttempts = 0,
+	ModuleCache = setmetatable({}, {
+		__mode = "k",
+	}),
+	Backups = {},
+}
+
+local function addRequireFunction(Value)
+	if type(Value) ~= "function" then
+		return
+	end
+
+	for _, Existing in ipairs(WeaponState.RequireFunctions) do
+		if Existing == Value then
+			return
+		end
+	end
+
+	table.insert(WeaponState.RequireFunctions, Value)
+end
+
+addRequireFunction(require)
+
+if type(getrenv) == "function" then
+	local Success, RuntimeEnvironment = pcall(getrenv)
+
+	if Success and type(RuntimeEnvironment) == "table" then
+		addRequireFunction(rawget(RuntimeEnvironment, "require"))
+	end
+end
+
+if type(getfenv) == "function" then
+	local Success, CurrentEnvironment = pcall(getfenv, 0)
+
+	if Success and type(CurrentEnvironment) == "table" then
+		addRequireFunction(rawget(CurrentEnvironment, "require"))
+	end
+end
+
+local function getWeaponBackup(Data)
+	local Backup = WeaponState.Backups[Data]
+
+	if Backup then
+		return Backup
+	end
+
+	Backup = {
+		Fields = {},
+		Patterns = {},
+		Steps = {},
+	}
+
+	WeaponState.Backups[Data] = Backup
+	return Backup
+end
+
+local function captureField(Data, Backup, Key)
+	if Backup.Fields[Key] then
+		return
+	end
+
+	local Value = rawget(Data, Key)
+
+	Backup.Fields[Key] = {
+		Exists = Value ~= nil,
+		Value = Value,
+	}
+end
+
+local function shortenSequence(Sequence, Backup)
+	if type(Sequence) ~= "table" then
+		return
+	end
+
+	for _, Step in pairs(Sequence) do
+		if type(Step) == "table" and type(Step[7]) == "number" then
+			if not Backup.Steps[Step] then
+				Backup.Steps[Step] = {
+					Exists = rawget(Step, 7) ~= nil,
+					Value = rawget(Step, 7),
+				}
+			end
+
+			Step[7] = 0.01
+		end
+	end
+end
+
+local function zeroVectorPattern(Pattern, Backup)
+	if type(Pattern) ~= "table" then
+		return
+	end
+
+	local PatternBackup = Backup.Patterns[Pattern]
+
+	if not PatternBackup then
+		PatternBackup = {}
+		Backup.Patterns[Pattern] = PatternBackup
+
+		for Index, Value in pairs(Pattern) do
+			PatternBackup[Index] = Value
+		end
+	end
+
+	for Index, Value in pairs(Pattern) do
+		if typeof(Value) == "Vector2" then
+			Pattern[Index] = Vector2.zero
+		end
+	end
+end
+
+local function restoreWeaponData(Data, Backup)
+	for Key, Field in pairs(Backup.Fields) do
+		if Field.Exists then
+			Data[Key] = Field.Value
+		else
+			Data[Key] = nil
+		end
+	end
+
+	for Pattern, Values in pairs(Backup.Patterns) do
+		for Index, Value in pairs(Values) do
+			Pattern[Index] = Value
+		end
+	end
+
+	for Step, Value in pairs(Backup.Steps) do
+		if Value.Exists then
+			Step[7] = Value.Value
+		else
+			Step[7] = nil
+		end
+	end
+end
+
+local function restoreAllWeaponData()
+	for Data, Backup in pairs(WeaponState.Backups) do
+		pcall(restoreWeaponData, Data, Backup)
+	end
+end
+
+local function applyWeaponData(Data)
+	if not Environment.NotorietyWeaponEnabled or type(Data) ~= "table" then
+		return false
+	end
+
+	local WeaponType = rawget(Data, "WeaponType")
+
+	if WeaponType == "Gun" then
+		local Backup = getWeaponBackup(Data)
+		for _, Key in ipairs({
+			"FireDelay",
+			"BoltDuration",
+			"FireMode",
+			"RecoilCameraDirection",
+			"MaxCameraRecoil",
+			"ShakeMagnitude",
+			"ShakeRoughness",
+			"PushBack",
+		}) do
+			captureField(Data, Backup, Key)
+		end
+
+		Data.FireDelay = 0.01
+		Data.BoltDuration = 0.005
+		Data.FireMode = "Auto"
+
+		zeroVectorPattern(Data.RecoilDirectionPattern, Backup)
+		zeroVectorPattern(Data.RecoilCameraDirectionPattern, Backup)
+
+		if typeof(Data.RecoilCameraDirection) == "Vector2" then
+			Data.RecoilCameraDirection = Vector2.zero
+		end
+
+		if type(Data.MaxCameraRecoil) == "number" then
+			Data.MaxCameraRecoil = 0
+		end
+
+		if type(Data.ShakeMagnitude) == "number" then
+			Data.ShakeMagnitude = 0
+		end
+
+		if type(Data.ShakeRoughness) == "number" then
+			Data.ShakeRoughness = 0
+		end
+
+		if type(Data.PushBack) == "number" then
+			Data.PushBack = 0
+		end
+
+		return true
+	end
+
+	if WeaponType == "Melee" then
+		local Backup = getWeaponBackup(Data)
+
+		for _, Key in ipairs({
+			"FireMode",
+			"MaxCharge",
+			"AttackSpeed",
+		}) do
+			captureField(Data, Backup, Key)
+		end
+
+		Data.FireMode = "Auto"
+		Data.MaxCharge = 0.01
+		Data.AttackSpeed = 100
+
+		shortenSequence(Data.ChargeAnim, Backup)
+		shortenSequence(Data.StrikeAnim, Backup)
+		shortenSequence(Data.StrikeAnim2, Backup)
+
+		return true
+	end
+
+	return false
+end
+
+local function getFunctionUpvalues(Function)
+	local DebugLibrary = debug
+
+	if type(DebugLibrary) ~= "table" then
+		return nil
+	end
+
+	if type(DebugLibrary.getupvalues) == "function" then
+		local Success, Upvalues = pcall(DebugLibrary.getupvalues, Function)
+
+		if Success and type(Upvalues) == "table" then
+			return Upvalues
+		end
+	end
+
+	if type(DebugLibrary.getupvalue) ~= "function" then
+		return nil
+	end
+
+	local Upvalues = {}
+
+	for Index = 1, 200 do
+		local Success, First, Second = pcall(DebugLibrary.getupvalue, Function, Index)
+
+		if not Success or First == nil then
+			break
+		end
+
+		if Second ~= nil then
+			Upvalues[Index] = Second
+		else
+			Upvalues[Index] = First
+		end
+	end
+
+	return Upvalues
+end
+
+local function getLocalGunsEnvironment()
+	local PlayerScripts = LocalPlayer:FindFirstChild("PlayerScripts")
+	local SPSPackage = PlayerScripts and PlayerScripts:FindFirstChild("SPS_Package")
+	local LocalGuns = SPSPackage and SPSPackage:FindFirstChild("LocalGuns")
+
+	if not LocalGuns then
+		return nil
+	end
+
+	local GetEnvironment = getsenv
+
+	if type(GetEnvironment) ~= "function" and type(getrenv) == "function" then
+		local Success, RuntimeEnvironment = pcall(getrenv)
+
+		if Success and type(RuntimeEnvironment) == "table" then
+			GetEnvironment = rawget(RuntimeEnvironment, "getsenv")
+		end
+	end
+
+	if type(GetEnvironment) ~= "function" then
+		return nil
+	end
+
+	local Success, ScriptEnvironment = pcall(GetEnvironment, LocalGuns)
+
+	if Success and type(ScriptEnvironment) == "table" then
+		return ScriptEnvironment
+	end
+
+	return nil
+end
+
+local function patchLoadedWeaponTables()
+	local ScriptEnvironment = getLocalGunsEnvironment()
+
+	if not ScriptEnvironment then
+		return 0
+	end
+
+	local Seen = {}
+	local Patched = 0
+	local Nodes = 0
+	local NodeLimit = 60000
+
+	local function Scan(Value, Depth)
+		if Nodes >= NodeLimit or Depth > 8 then
+			return
+		end
+
+		local ValueType = type(Value)
+
+		if ValueType ~= "table" and ValueType ~= "function" then
+			return
+		end
+
+		if Seen[Value] then
+			return
+		end
+
+		Seen[Value] = true
+		Nodes += 1
+
+		if ValueType == "table" then
+			if applyWeaponData(Value) then
+				Patched += 1
+			end
+
+			for Key, Item in pairs(Value) do
+				if type(Key) == "table" or type(Key) == "function" then
+					Scan(Key, Depth + 1)
+				end
+
+				Scan(Item, Depth + 1)
+
+				if Nodes >= NodeLimit then
+					break
+				end
+			end
+		else
+			local Upvalues = getFunctionUpvalues(Value)
+
+			if type(Upvalues) == "table" then
+				for _, Item in pairs(Upvalues) do
+					Scan(Item, Depth + 1)
+
+					if Nodes >= NodeLimit then
+						break
+					end
+				end
+			end
+		end
+	end
+
+	for _, Value in pairs(ScriptEnvironment) do
+		Scan(Value, 0)
+
+		if Nodes >= NodeLimit then
+			break
+		end
+	end
+
+	return Patched
+end
+
+local function queueLoadedWeaponFallback()
+	if not Environment.NotorietyWeaponEnabled or WeaponState.FallbackQueued then
+		return
+	end
+
+	WeaponState.FallbackQueued = true
+
+	task.delay(0.25, function()
+		WeaponState.FallbackQueued = false
+
+		if not Environment.NotorietyWeaponEnabled then
+			return
+		end
+
+		if patchLoadedWeaponTables() > 0 then
+			WeaponState.FallbackAttempts = 0
+		elseif WeaponState.RequireUnavailable and WeaponState.FallbackAttempts < 20 then
+			WeaponState.FallbackAttempts += 1
+			task.delay(0.75, queueLoadedWeaponFallback)
+		else
+			WeaponState.FallbackAttempts = 0
+		end
+	end)
+end
+
+local function getModuleData(Module)
+	local Cached = WeaponState.ModuleCache[Module]
+
+	if type(Cached) == "table" then
+		return Cached
+	end
+
+	if WeaponState.RequireUnavailable then
+		return nil
+	end
+
+	for _, RequireFunction in ipairs(WeaponState.RequireFunctions) do
+		local Success, Result = pcall(RequireFunction, Module)
+
+		if Success and type(Result) == "table" then
+			WeaponState.RequireFailures = 0
+			WeaponState.ModuleCache[Module] = Result
+			return Result
+		end
+	end
+
+	WeaponState.RequireFailures += 1
+
+	if #WeaponState.RequireFunctions == 0 or WeaponState.RequireFailures >= 3 then
+		WeaponState.RequireUnavailable = true
+	end
+
+	return nil
+end
+
+local function applyWeaponModule(Object)
+	if not Environment.NotorietyWeaponEnabled
+		or not Object:IsA("ModuleScript")
+		or Object.Name ~= "Data"
+	then
+		return
+	end
+
+	local Data = getModuleData(Object)
+
+	if Data then
+		applyWeaponData(Data)
+	else
+		queueLoadedWeaponFallback()
+	end
+end
+
+local function trackWeaponContainer(Container)
+	if not Container then
+		return
+	end
+
+	for _, Object in ipairs(Container:GetDescendants()) do
+		applyWeaponModule(Object)
+	end
+
+	table.insert(
+		Environment.NotorietyWeaponConnections,
+		Container.DescendantAdded:Connect(function(Object)
+			if Object:IsA("ModuleScript") and Object.Name == "Data" then
+				task.defer(applyWeaponModule, Object)
+			end
+		end)
+	)
+end
 
 local function setIconLabel(Label)
 	local CurrentIcon = Environment.MaxEverythingIcon
@@ -208,18 +682,84 @@ end
 Environment.MaxEverythingIcon = Icon.new()
 	:setName("Kill Police")
 	:setLabel("Kill Police [P]")
-	:setMid()
+	:setRight()
 	:bindToggleKey(Enum.KeyCode.P)
 	:bindEvent("selected", function()
 		task.spawn(runKill)
 	end)
 	:oneClick()
 
+local Weapons = Assets:FindFirstChild("Weapons")
+local Backpack = LocalPlayer:WaitForChild("Backpack", math.huge)
+
+local function applyAllWeaponModifications()
+	if not Environment.NotorietyWeaponEnabled then
+		return
+	end
+
+	for _, Container in ipairs({
+		Weapons,
+		Backpack,
+		LocalPlayer.Character,
+	}) do
+		if Container then
+			for _, Object in ipairs(Container:GetDescendants()) do
+				applyWeaponModule(Object)
+			end
+		end
+	end
+
+	patchLoadedWeaponTables()
+end
+
+local function setWeaponModificationsEnabled(Enabled)
+	Environment.NotorietyWeaponEnabled = Enabled == true
+
+	if Environment.NotorietyWeaponEnabled then
+		applyAllWeaponModifications()
+	else
+		restoreAllWeaponData()
+	end
+
+	local CurrentIcon = Environment.NotorietyWeaponIcon
+
+	if CurrentIcon then
+		pcall(function()
+			CurrentIcon:setLabel(
+				Environment.NotorietyWeaponEnabled and "Weapon Mods: ON" or "Weapon Mods: OFF"
+			)
+		end)
+	end
+end
+
+trackWeaponContainer(Weapons)
+trackWeaponContainer(Backpack)
+trackWeaponContainer(LocalPlayer.Character)
+
+Environment.NotorietyWeaponIcon = Icon.new()
+	:setName("Weapon Mods")
+	:setLabel("Weapon Mods: ON")
+	:setRight()
+	:bindEvent("selected", function()
+		setWeaponModificationsEnabled(true)
+	end)
+	:bindEvent("deselected", function()
+		setWeaponModificationsEnabled(false)
+	end)
+
+Environment.NotorietyWeaponIcon:select()
+setWeaponModificationsEnabled(true)
+
 Environment.MaxEverythingConnection = RunService.Heartbeat:Connect(Apply)
 
-Environment.MaxEverythingCharacterConnection = LocalPlayer.CharacterAdded:Connect(function()
+Environment.MaxEverythingCharacterConnection = LocalPlayer.CharacterAdded:Connect(function(Character)
 	task.wait(1)
 	Apply()
+	trackWeaponContainer(Character)
+
+	if Environment.NotorietyWeaponEnabled then
+		applyAllWeaponModifications()
+	end
 end)
 
 Apply()

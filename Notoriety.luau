@@ -64,6 +64,11 @@ if Environment.MaxEverythingCharacterConnection then
 	Environment.MaxEverythingCharacterConnection = nil
 end
 
+if Environment.NotorietyPoliceHitboxConnection then
+	Environment.NotorietyPoliceHitboxConnection:Disconnect()
+	Environment.NotorietyPoliceHitboxConnection = nil
+end
+
 if type(Environment.NotorietyWeaponConnections) == "table" then
 	for _, Connection in ipairs(Environment.NotorietyWeaponConnections) do
 		pcall(function()
@@ -94,6 +99,76 @@ Environment.NotorietyWeaponEnabled = true
 Environment.NotorietyWeaponConnections = {}
 
 local MAX_VALUE = 999999
+
+if type(Environment.NotorietyPoliceOriginalSizes) ~= "table" then
+	Environment.NotorietyPoliceOriginalSizes = setmetatable({}, {
+		__mode = "k",
+	})
+end
+
+local PoliceOriginalSizes = Environment.NotorietyPoliceOriginalSizes
+local PoliceHitboxSize = Vector3.new(10, 10, 10)
+
+local function restorePolicePart(Object)
+	local OriginalSize = PoliceOriginalSizes[Object]
+
+	if OriginalSize and Object.Parent then
+		Object.Size = OriginalSize
+		PoliceOriginalSizes[Object] = nil
+	end
+end
+
+local function resizePoliceNPC(NPC)
+	if not NPC or not NPC:IsA("Model") then
+		return
+	end
+
+	local Head = NPC:FindFirstChild("Head")
+	local Torso = NPC:FindFirstChild("Torso")
+	local Target = Head or Torso
+
+	if Head and Torso then
+		restorePolicePart(Torso)
+	end
+
+	if Target and Target:IsA("BasePart") then
+		if not PoliceOriginalSizes[Target] then
+			PoliceOriginalSizes[Target] = Target.Size
+		end
+
+		Target.Size = PoliceHitboxSize
+	end
+end
+
+local function getPoliceNPC(Object, PoliceFolder)
+	local Current = Object
+
+	while Current and Current.Parent ~= PoliceFolder do
+		Current = Current.Parent
+	end
+
+	if Current and Current:IsA("Model") then
+		return Current
+	end
+end
+
+local PoliceFolder = Workspace:FindFirstChild("Police")
+
+if PoliceFolder then
+	for _, NPC in ipairs(PoliceFolder:GetChildren()) do
+		resizePoliceNPC(NPC)
+	end
+
+	Environment.NotorietyPoliceHitboxConnection = PoliceFolder.DescendantAdded:Connect(
+		function(Object)
+			local NPC = getPoliceNPC(Object, PoliceFolder)
+
+			if NPC then
+				task.defer(resizePoliceNPC, NPC)
+			end
+		end
+	)
+end
 
 local MaxedValues = {
 	Stamina = MAX_VALUE,

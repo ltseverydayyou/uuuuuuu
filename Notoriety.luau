@@ -1,9 +1,9 @@
-local Environment = getgenv and getgenv() or _G
+local Environment = if type(getgenv) == "function" then getgenv() else _G
 
 local ServiceResolver = rawget(Environment, "__lt_service_resolver")
 
 if type(ServiceResolver) ~= "table" then
-	local Loader = loadstring or load
+	local Loader = loadstring
 
 	if type(Loader) ~= "function" then
 		error("ServiceResolver loader unavailable")
@@ -32,7 +32,7 @@ if type(ServiceResolver) ~= "table" then
 	Environment.__lt_service_resolver = ServiceResolver
 end
 
-local Reference = type(cloneref) == "function" and cloneref or function(Value)
+local Reference = if type(cloneref) == "function" then cloneref else function(Value)
 	return Value
 end
 
@@ -48,11 +48,22 @@ local Assets = RS_Package:WaitForChild("Assets", math.huge)
 local Remotes = Assets:WaitForChild("Remotes", math.huge)
 local Event = Remotes:WaitForChild("Damage", math.huge)
 
-local Icon = loadstring(
-	game:HttpGet(
-		"https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/refs/heads/main/Icon.luau"
-	)
-)()
+local IconSource = game:HttpGet(
+	"https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/refs/heads/main/Icon.luau"
+)
+local IconChunk, IconCompileError = loadstring(IconSource, "@Icon.luau")
+
+if type(IconChunk) ~= "function" then
+	error("Icon compile failed: " .. tostring(IconCompileError))
+end
+
+local IconSuccess, IconResult = pcall(IconChunk)
+
+if not IconSuccess or type(IconResult) ~= "table" then
+	error("Icon load failed: " .. tostring(IconResult))
+end
+
+local Icon = IconResult
 
 if Environment.MaxEverythingConnection then
 	Environment.MaxEverythingConnection:Disconnect()
@@ -70,7 +81,7 @@ if Environment.NotorietyPoliceHitboxConnection then
 end
 
 if type(Environment.NotorietyWeaponConnections) == "table" then
-	for _, Connection in ipairs(Environment.NotorietyWeaponConnections) do
+	for _, Connection in Environment.NotorietyWeaponConnections do
 		pcall(function()
 			Connection:Disconnect()
 		end)
@@ -180,7 +191,7 @@ end
 local PoliceFolder = Workspace:FindFirstChild("Police")
 
 if PoliceFolder then
-	for _, NPC in ipairs(PoliceFolder:GetChildren()) do
+	for _, NPC in PoliceFolder:GetChildren() do
 		resizePoliceNPC(NPC)
 	end
 
@@ -215,6 +226,16 @@ local MaxedValues = {
 	Detection = 0,
 	Capacity = MAX_VALUE,
 	AltAmmoMax = MAX_VALUE,
+	Ammo = MAX_VALUE,
+	Ammo2 = MAX_VALUE,
+	CurrentAmmo = MAX_VALUE,
+	CurrentAmmo2 = MAX_VALUE,
+	MagazineAmmo = MAX_VALUE,
+	MagazineAmmo2 = MAX_VALUE,
+	MagAmmo = MAX_VALUE,
+	MagAmmo2 = MAX_VALUE,
+	Clip = MAX_VALUE,
+	Clip2 = MAX_VALUE,
 }
 
 local WeaponState = {
@@ -227,6 +248,42 @@ local WeaponState = {
 		__mode = "k",
 	}),
 	Backups = {},
+	RuntimeAmmoTables = setmetatable({}, {
+		__mode = "k",
+	}),
+	RuntimeAmmoUpvalues = setmetatable({}, {
+		__mode = "k",
+	}),
+	RuntimeWeapons = setmetatable({}, {
+		__mode = "k",
+	}),
+	RuntimeRefresh = 0,
+	AmmoKeys = {
+		ammo = true,
+		ammo2 = true,
+		ammoleft = true,
+		ammoleft2 = true,
+		ammoinmag = true,
+		ammoinmag2 = true,
+		currentammo = true,
+		currentammo2 = true,
+		curammo = true,
+		curammo2 = true,
+		magammo = true,
+		magammo2 = true,
+		magazine = true,
+		magazine2 = true,
+		magazineammo = true,
+		magazineammo2 = true,
+		clip = true,
+		clip2 = true,
+		currentclip = true,
+		currentclip2 = true,
+		primaryammo = true,
+		secondaryammo = true,
+		ammocapacity = true,
+		spare = true,
+	},
 }
 
 local function addRequireFunction(Value)
@@ -234,7 +291,7 @@ local function addRequireFunction(Value)
 		return
 	end
 
-	for _, Existing in ipairs(WeaponState.RequireFunctions) do
+	for _, Existing in WeaponState.RequireFunctions do
 		if Existing == Value then
 			return
 		end
@@ -272,6 +329,7 @@ local function getWeaponBackup(Data)
 		Fields = {},
 		Patterns = {},
 		Steps = {},
+		NestedFields = {},
 	}
 
 	WeaponState.Backups[Data] = Backup
@@ -291,12 +349,46 @@ local function captureField(Data, Backup, Key)
 	}
 end
 
+local function normalizeAmmoKey(Key)
+	if type(Key) ~= "string" then
+		return nil
+	end
+
+	return string.lower(Key):gsub("[^%w]", "")
+end
+
+local function isRuntimeAmmoKey(Key)
+	local Normalized = normalizeAmmoKey(Key)
+
+	return Normalized ~= nil and WeaponState.AmmoKeys[Normalized] == true
+end
+
+local function captureNestedField(Backup, Container, Key)
+	local Fields = Backup.NestedFields[Container]
+
+	if not Fields then
+		Fields = {}
+		Backup.NestedFields[Container] = Fields
+	end
+
+	if Fields[Key] then
+		return
+	end
+
+	local Value = rawget(Container, Key)
+
+	Fields[Key] = {
+		Exists = Value ~= nil,
+		Value = Value,
+	}
+end
+
 local function shortenSequence(Sequence, Backup)
 	if type(Sequence) ~= "table" then
 		return
 	end
 
-	for _, Step in pairs(Sequence) do
+	for _, Step in Sequence do
 		if type(Step) == "table" and type(Step[7]) == "number" then
 			if not Backup.Steps[Step] then
 				Backup.Steps[Step] = {
@@ -306,6 +398,206 @@ local function shortenSequence(Sequence, Backup)
 			end
 
 			Step[7] = 0.01
+		end
+	end
+end
+
+local function shortenGunSequence(Value, Backup, Seen, Depth)
+	if type(Value) ~= "table" or Depth > 8 or Seen[Value] then
+		return
+	end
+
+	Seen[Value] = true
+
+	if type(Value[7]) == "number" then
+		if not Backup.Steps[Value] then
+			Backup.Steps[Value] = {
+				Exists = rawget(Value, 7) ~= nil,
+				Value = rawget(Value, 7),
+			}
+		end
+
+		Value[7] = 0.001
+	end
+
+	for Key, Item in Value do
+		local LowerKey = type(Key) == "string" and string.lower(Key) or nil
+
+		if LowerKey and type(Item) == "number" and (
+			LowerKey == "boltduration"
+			or LowerKey == "firedelay"
+			or LowerKey == "shotdelay"
+			or LowerKey == "cooldown"
+			or LowerKey == "duration"
+		) then
+			captureNestedField(Backup, Value, Key)
+			Value[Key] = 0.001
+		elseif LowerKey == "boltlock" and type(Item) == "boolean" then
+			captureNestedField(Backup, Value, Key)
+			Value[Key] = false
+		end
+
+		if type(Item) == "table" then
+			shortenGunSequence(Item, Backup, Seen, Depth + 1)
+		end
+	end
+end
+
+local function patchGunSequences(Data, Backup)
+	local Seen = {}
+
+	for Key, Value in Data do
+		if type(Key) == "string" and type(Value) == "table" then
+			local LowerKey = string.lower(Key)
+
+			if string.find(LowerKey, "shoot", 1, true)
+				or string.find(LowerKey, "bolt", 1, true)
+				or string.find(LowerKey, "fire", 1, true)
+			then
+				shortenGunSequence(Value, Backup, Seen, 0)
+			end
+		end
+	end
+end
+
+local applyWeaponData
+
+local function patchAmmoResult(Result)
+	if not Environment.NotorietyWeaponEnabled or type(Result) ~= "table" then
+		return Result
+	end
+
+	for Key, Value in Result do
+		if type(Value) == "number" and isRuntimeAmmoKey(Key) then
+			Result[Key] = MAX_VALUE
+		elseif typeof(Value) == "Instance" and Value:IsA("ValueBase") and isRuntimeAmmoKey(Key) then
+			if typeof(Value.Value) == "number" then
+				Value.Value = MAX_VALUE
+			end
+		end
+	end
+
+	return Result
+end
+
+local function patchRuntimeWeaponState(State)
+	if not Environment.NotorietyWeaponEnabled or type(State) ~= "table" then
+		return false
+	end
+
+	local GetAmmo = rawget(State, "getAmmo")
+	local Data = rawget(State, "data")
+
+	if type(GetAmmo) ~= "function" or type(Data) ~= "table" then
+		return false
+	end
+
+	WeaponState.RuntimeWeapons[State] = true
+	applyWeaponData(Data)
+
+	State.Ready = true
+	State.postshooting = false
+	State.postshooting2 = false
+	State.waspostshooting = false
+	State.waspostshooting2 = false
+	State.LastShot = 0
+	State.shoottick0 = 0
+	State.shoottick0_2 = 0
+	State.firemodeT0 = 0
+	State.ShakeMagnitude = 0
+	State.ShakeRoughness = 0
+	State.pushdist = 0
+
+	if type(Environment.NotorietyGetAmmoWrappers) ~= "table" then
+		Environment.NotorietyGetAmmoWrappers = setmetatable({}, {
+			__mode = "k",
+		})
+	end
+
+	local Record = Environment.NotorietyGetAmmoWrappers[State]
+
+	if not Record or State.getAmmo ~= Record.Wrapper then
+		local Original = State.getAmmo
+		local Wrapper
+
+		Wrapper = function(...)
+			local Result = Original(...)
+
+			return patchAmmoResult(Result)
+		end
+
+		Record = {
+			Original = Original,
+			Wrapper = Wrapper,
+		}
+
+		Environment.NotorietyGetAmmoWrappers[State] = Record
+		State.getAmmo = Wrapper
+	end
+
+	local Success, Result = pcall(State.getAmmo, State)
+
+	if Success then
+		patchAmmoResult(Result)
+	end
+
+	return true
+end
+
+local function patchRuntimeAmmoTable(Data)
+	if not Environment.NotorietyWeaponEnabled or type(Data) ~= "table" then
+		return false
+	end
+
+	local Found = false
+
+	for Key, Value in Data do
+		if type(Value) == "number" and isRuntimeAmmoKey(Key) then
+			Data[Key] = MAX_VALUE
+			Found = true
+		end
+	end
+
+	if Found then
+		WeaponState.RuntimeAmmoTables[Data] = true
+	end
+
+	return Found
+end
+
+local function registerRuntimeAmmoUpvalue(Function, Index)
+	local Indices = WeaponState.RuntimeAmmoUpvalues[Function]
+
+	if not Indices then
+		Indices = {}
+		WeaponState.RuntimeAmmoUpvalues[Function] = Indices
+	end
+
+	Indices[Index] = true
+
+	if type(debug) == "table" and type(debug.setupvalue) == "function" then
+		pcall(debug.setupvalue, Function, Index, MAX_VALUE)
+	end
+end
+
+local function refreshRuntimeAmmo()
+	if not Environment.NotorietyWeaponEnabled then
+		return
+	end
+
+	for Data in WeaponState.RuntimeAmmoTables do
+		patchRuntimeAmmoTable(Data)
+	end
+
+	for State in WeaponState.RuntimeWeapons do
+		patchRuntimeWeaponState(State)
+	end
+
+	if type(debug) == "table" and type(debug.setupvalue) == "function" then
+		for Function, Indices in WeaponState.RuntimeAmmoUpvalues do
+			for Index in Indices do
+				pcall(debug.setupvalue, Function, Index, MAX_VALUE)
+			end
 		end
 	end
 end
@@ -321,12 +613,12 @@ local function zeroVectorPattern(Pattern, Backup)
 		PatternBackup = {}
 		Backup.Patterns[Pattern] = PatternBackup
 
-		for Index, Value in pairs(Pattern) do
+		for Index, Value in Pattern do
 			PatternBackup[Index] = Value
 		end
 	end
 
-	for Index, Value in pairs(Pattern) do
+	for Index, Value in Pattern do
 		if typeof(Value) == "Vector2" then
 			Pattern[Index] = Vector2.zero
 		end
@@ -334,7 +626,7 @@ local function zeroVectorPattern(Pattern, Backup)
 end
 
 local function restoreWeaponData(Data, Backup)
-	for Key, Field in pairs(Backup.Fields) do
+	for Key, Field in Backup.Fields do
 		if Field.Exists then
 			Data[Key] = Field.Value
 		else
@@ -342,28 +634,38 @@ local function restoreWeaponData(Data, Backup)
 		end
 	end
 
-	for Pattern, Values in pairs(Backup.Patterns) do
-		for Index, Value in pairs(Values) do
+	for Pattern, Values in Backup.Patterns do
+		for Index, Value in Values do
 			Pattern[Index] = Value
 		end
 	end
 
-	for Step, Value in pairs(Backup.Steps) do
+	for Step, Value in Backup.Steps do
 		if Value.Exists then
 			Step[7] = Value.Value
 		else
 			Step[7] = nil
 		end
 	end
+
+	for Container, Fields in Backup.NestedFields do
+		for Key, Field in Fields do
+			if Field.Exists then
+				Container[Key] = Field.Value
+			else
+				Container[Key] = nil
+			end
+		end
+	end
 end
 
 local function restoreAllWeaponData()
-	for Data, Backup in pairs(WeaponState.Backups) do
+	for Data, Backup in WeaponState.Backups do
 		pcall(restoreWeaponData, Data, Backup)
 	end
 end
 
-local function applyWeaponData(Data)
+applyWeaponData = function(Data)
 	if not Environment.NotorietyWeaponEnabled or type(Data) ~= "table" then
 		return false
 	end
@@ -372,23 +674,53 @@ local function applyWeaponData(Data)
 
 	if WeaponType == "Gun" then
 		local Backup = getWeaponBackup(Data)
-		for _, Key in ipairs({
+		for _, Key in {
 			"FireDelay",
 			"BoltDuration",
+			"BoltLock",
 			"FireMode",
+			"FireModeList",
+			"MagazineSize",
+			"AmmoMax",
+			"AmmoSeparate",
+			"AmmoSwitch",
+			"ManualCasingEjection",
 			"RecoilCameraDirection",
 			"MaxCameraRecoil",
 			"ShakeMagnitude",
 			"ShakeRoughness",
 			"PushBack",
-		}) do
+		} do
 			captureField(Data, Backup, Key)
 		end
 
 		Data.FireDelay = 0.01
-		Data.BoltDuration = 0.005
+		Data.BoltDuration = 0.001
+		Data.BoltLock = false
 		Data.FireMode = "Auto"
 
+		if type(Data.FireModeList) ~= "table"
+			or Data.FireModeList[1] ~= "Auto"
+			or Data.FireModeList[2] ~= nil
+		then
+			Data.FireModeList = {
+				"Auto",
+			}
+		end
+
+		Data.MagazineSize = MAX_VALUE
+		Data.AmmoMax = MAX_VALUE
+
+		if Data.Dual == true then
+			Data.AmmoSeparate = false
+			Data.AmmoSwitch = false
+		end
+
+		if type(Data.ManualCasingEjection) == "boolean" then
+			Data.ManualCasingEjection = false
+		end
+
+		patchGunSequences(Data, Backup)
 		zeroVectorPattern(Data.RecoilDirectionPattern, Backup)
 		zeroVectorPattern(Data.RecoilCameraDirectionPattern, Backup)
 
@@ -418,11 +750,11 @@ local function applyWeaponData(Data)
 	if WeaponType == "Melee" then
 		local Backup = getWeaponBackup(Data)
 
-		for _, Key in ipairs({
+		for _, Key in {
 			"FireMode",
 			"MaxCharge",
 			"AttackSpeed",
-		}) do
+		} do
 			captureField(Data, Backup, Key)
 		end
 
@@ -447,6 +779,41 @@ local function getFunctionUpvalues(Function)
 		return nil
 	end
 
+	if type(DebugLibrary.getupvalue) == "function" then
+		local Upvalues = {}
+
+		for Index = 1, 200 do
+			local Success, First, Second = pcall(DebugLibrary.getupvalue, Function, Index)
+
+			if not Success or First == nil then
+				break
+			end
+
+			local Name
+			local Value
+
+			if type(First) == "string" and Second ~= nil then
+				Name = First
+				Value = Second
+			elseif Second ~= nil then
+				Value = Second
+			else
+				Value = First
+			end
+
+			if Name and type(Value) == "number" and isRuntimeAmmoKey(Name) then
+				registerRuntimeAmmoUpvalue(Function, Index)
+				Value = MAX_VALUE
+			end
+
+			Upvalues[Index] = Value
+		end
+
+		if next(Upvalues) ~= nil then
+			return Upvalues
+		end
+	end
+
 	if type(DebugLibrary.getupvalues) == "function" then
 		local Success, Upvalues = pcall(DebugLibrary.getupvalues, Function)
 
@@ -455,27 +822,7 @@ local function getFunctionUpvalues(Function)
 		end
 	end
 
-	if type(DebugLibrary.getupvalue) ~= "function" then
-		return nil
-	end
-
-	local Upvalues = {}
-
-	for Index = 1, 200 do
-		local Success, First, Second = pcall(DebugLibrary.getupvalue, Function, Index)
-
-		if not Success or First == nil then
-			break
-		end
-
-		if Second ~= nil then
-			Upvalues[Index] = Second
-		else
-			Upvalues[Index] = First
-		end
-	end
-
-	return Upvalues
+	return nil
 end
 
 local function getLocalGunsEnvironment()
@@ -545,7 +892,10 @@ local function patchLoadedWeaponTables()
 				Patched += 1
 			end
 
-			for Key, Item in pairs(Value) do
+			patchRuntimeAmmoTable(Value)
+			patchRuntimeWeaponState(Value)
+
+			for Key, Item in Value do
 				if type(Key) == "table" or type(Key) == "function" then
 					Scan(Key, Depth + 1)
 				end
@@ -560,7 +910,7 @@ local function patchLoadedWeaponTables()
 			local Upvalues = getFunctionUpvalues(Value)
 
 			if type(Upvalues) == "table" then
-				for _, Item in pairs(Upvalues) do
+				for _, Item in Upvalues do
 					Scan(Item, Depth + 1)
 
 					if Nodes >= NodeLimit then
@@ -571,7 +921,7 @@ local function patchLoadedWeaponTables()
 		end
 	end
 
-	for _, Value in pairs(ScriptEnvironment) do
+	for _, Value in ScriptEnvironment do
 		Scan(Value, 0)
 
 		if Nodes >= NodeLimit then
@@ -618,7 +968,7 @@ local function getModuleData(Module)
 		return nil
 	end
 
-	for _, RequireFunction in ipairs(WeaponState.RequireFunctions) do
+	for _, RequireFunction in WeaponState.RequireFunctions do
 		local Success, Result = pcall(RequireFunction, Module)
 
 		if Success and type(Result) == "table" then
@@ -659,7 +1009,7 @@ local function trackWeaponContainer(Container)
 		return
 	end
 
-	for _, Object in ipairs(Container:GetDescendants()) do
+	for _, Object in Container:GetDescendants() do
 		applyWeaponModule(Object)
 	end
 
@@ -667,7 +1017,10 @@ local function trackWeaponContainer(Container)
 		Environment.NotorietyWeaponConnections,
 		Container.DescendantAdded:Connect(function(Object)
 			if Object:IsA("ModuleScript") and Object.Name == "Data" then
-				task.defer(applyWeaponModule, Object)
+				task.defer(function()
+					applyWeaponModule(Object)
+					patchLoadedWeaponTables()
+				end)
 			end
 		end)
 	)
@@ -797,13 +1150,13 @@ local function applyAllWeaponModifications()
 		return
 	end
 
-	for _, Container in ipairs({
+	for _, Container in {
 		Weapons,
 		Backpack,
 		LocalPlayer.Character,
-	}) do
+	} do
 		if Container then
-			for _, Object in ipairs(Container:GetDescendants()) do
+			for _, Object in Container:GetDescendants() do
 				applyWeaponModule(Object)
 			end
 		end
@@ -850,7 +1203,24 @@ Environment.NotorietyWeaponIcon = Icon.new()
 Environment.NotorietyWeaponIcon:select()
 setWeaponModificationsEnabled(true)
 
-Environment.MaxEverythingConnection = RunService.Heartbeat:Connect(Apply)
+Environment.MaxEverythingConnection = RunService.Heartbeat:Connect(function(DeltaTime)
+	Apply()
+
+	if not Environment.NotorietyWeaponEnabled then
+		return
+	end
+
+	refreshRuntimeAmmo()
+	WeaponState.RuntimeRefresh += DeltaTime
+
+	if WeaponState.RuntimeRefresh >= 0.25 then
+		WeaponState.RuntimeRefresh = 0
+
+		for Data in WeaponState.Backups do
+			applyWeaponData(Data)
+		end
+	end
+end)
 
 Environment.MaxEverythingCharacterConnection = LocalPlayer.CharacterAdded:Connect(function(Character)
 	task.wait(1)

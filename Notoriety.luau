@@ -88,6 +88,22 @@ if type(Environment.NotorietyWeaponConnections) == "table" then
 	end
 end
 
+if type(Environment.NotorietyTopbarConnections) == "table" then
+	for _, Connection in Environment.NotorietyTopbarConnections do
+		pcall(function()
+			Connection:Disconnect()
+		end)
+	end
+end
+
+if type(Environment.NotorietyTopbarCharacterConnections) == "table" then
+	for _, Connection in Environment.NotorietyTopbarCharacterConnections do
+		pcall(function()
+			Connection:Disconnect()
+		end)
+	end
+end
+
 if Environment.NotorietyWeaponIcon then
 	pcall(function()
 		Environment.NotorietyWeaponIcon:destroy()
@@ -108,6 +124,11 @@ Environment.MaxEverythingEnabled = true
 Environment.KillPoliceRunning = false
 Environment.NotorietyWeaponEnabled = true
 Environment.NotorietyWeaponConnections = {}
+Environment.NotorietyTopbarConnections = {}
+Environment.NotorietyTopbarCharacterConnections = {}
+Environment.NotorietyTopbarRepairToken = 0
+Environment.NotorietyTopbarRebuilding = false
+Environment.NotorietyTopbarRefresh = 0
 
 local MAX_VALUE = 999999
 
@@ -1112,16 +1133,6 @@ local function runKill()
 	end
 end
 
-Environment.MaxEverythingIcon = Icon.new()
-	:setName("Kill Police")
-	:setLabel("Kill Police [P]")
-	:setRight()
-	:bindToggleKey(Enum.KeyCode.P)
-	:bindEvent("selected", function()
-		task.spawn(runKill)
-	end)
-	:oneClick()
-
 local Weapons = Assets:FindFirstChild("Weapons")
 local Backpack = LocalPlayer:WaitForChild("Backpack", math.huge)
 
@@ -1165,26 +1176,182 @@ local function setWeaponModificationsEnabled(Enabled)
 	end
 end
 
+local function isIconAlive(CurrentIcon)
+	if type(CurrentIcon) ~= "table" then
+		return false
+	end
+
+	local Widget = rawget(CurrentIcon, "widget")
+
+	return typeof(Widget) == "Instance" and Widget.Parent ~= nil
+end
+
+local function destroyIcon(CurrentIcon)
+	if type(CurrentIcon) ~= "table" then
+		return
+	end
+
+	pcall(function()
+		CurrentIcon:destroy()
+	end)
+end
+
+local function createKillPoliceIcon()
+	local CurrentIcon = Icon.new()
+		:setName("Kill Police")
+		:setLabel("Kill Police [P]")
+		:setRight()
+		:bindToggleKey(Enum.KeyCode.P)
+		:bindEvent("selected", function()
+			task.spawn(runKill)
+		end)
+		:oneClick()
+
+	Environment.MaxEverythingIcon = CurrentIcon
+end
+
+local function createWeaponModsIcon()
+	local CurrentIcon = Icon.new()
+		:setName("Weapon Mods")
+		:setLabel(
+			Environment.NotorietyWeaponEnabled and "Weapon Mods: ON" or "Weapon Mods: OFF"
+		)
+		:setRight()
+		:bindEvent("selected", function()
+			if not Environment.NotorietyTopbarRebuilding then
+				setWeaponModificationsEnabled(true)
+			end
+		end)
+		:bindEvent("deselected", function()
+			if not Environment.NotorietyTopbarRebuilding then
+				setWeaponModificationsEnabled(false)
+			end
+		end)
+
+	Environment.NotorietyWeaponIcon = CurrentIcon
+
+	if Environment.NotorietyWeaponEnabled then
+		CurrentIcon:select()
+	else
+		CurrentIcon:deselect()
+	end
+end
+
+local function rebuildTopbarIcons(Force)
+	local RebuildKill = Force == true or not isIconAlive(Environment.MaxEverythingIcon)
+	local RebuildWeapon = Force == true or not isIconAlive(Environment.NotorietyWeaponIcon)
+
+	if not RebuildKill and not RebuildWeapon then
+		return
+	end
+
+	local WeaponEnabled = Environment.NotorietyWeaponEnabled
+	Environment.NotorietyTopbarRebuilding = true
+
+	if RebuildKill then
+		destroyIcon(Environment.MaxEverythingIcon)
+		Environment.MaxEverythingIcon = nil
+		createKillPoliceIcon()
+	end
+
+	if RebuildWeapon then
+		destroyIcon(Environment.NotorietyWeaponIcon)
+		Environment.NotorietyWeaponIcon = nil
+		createWeaponModsIcon()
+	end
+
+	Environment.NotorietyTopbarRebuilding = false
+
+	local CurrentIcon = Environment.NotorietyWeaponIcon
+
+	if CurrentIcon then
+		pcall(function()
+			CurrentIcon:setLabel(WeaponEnabled and "Weapon Mods: ON" or "Weapon Mods: OFF")
+		end)
+	end
+end
+
+local function scheduleTopbarRepair()
+	Environment.NotorietyTopbarRepairToken += 1
+	local RepairToken = Environment.NotorietyTopbarRepairToken
+
+	task.spawn(function()
+		for _, Delay in {
+			0.1,
+			0.35,
+			0.8,
+		} do
+			task.wait(Delay)
+
+			if RepairToken ~= Environment.NotorietyTopbarRepairToken then
+				return
+			end
+
+			rebuildTopbarIcons(false)
+		end
+	end)
+end
+
+local function bindTopbarCharacter(Character)
+	for _, Connection in Environment.NotorietyTopbarCharacterConnections do
+		pcall(function()
+			Connection:Disconnect()
+		end)
+	end
+
+	table.clear(Environment.NotorietyTopbarCharacterConnections)
+
+	if not Character then
+		return
+	end
+
+	local function onCharacterToolChanged(Object)
+		if Object:IsA("Tool") then
+			scheduleTopbarRepair()
+		end
+	end
+
+	table.insert(
+		Environment.NotorietyTopbarCharacterConnections,
+		Character.ChildAdded:Connect(onCharacterToolChanged)
+	)
+	table.insert(
+		Environment.NotorietyTopbarCharacterConnections,
+		Character.ChildRemoved:Connect(onCharacterToolChanged)
+	)
+end
+
+local function onBackpackToolChanged(Object)
+	if Object:IsA("Tool") then
+		scheduleTopbarRepair()
+	end
+end
+
 trackWeaponContainer(Weapons)
 trackWeaponContainer(Backpack)
 trackWeaponContainer(LocalPlayer.Character)
+bindTopbarCharacter(LocalPlayer.Character)
 
-Environment.NotorietyWeaponIcon = Icon.new()
-	:setName("Weapon Mods")
-	:setLabel("Weapon Mods: ON")
-	:setRight()
-	:bindEvent("selected", function()
-		setWeaponModificationsEnabled(true)
-	end)
-	:bindEvent("deselected", function()
-		setWeaponModificationsEnabled(false)
-	end)
+table.insert(
+	Environment.NotorietyTopbarConnections,
+	Backpack.ChildAdded:Connect(onBackpackToolChanged)
+)
+table.insert(
+	Environment.NotorietyTopbarConnections,
+	Backpack.ChildRemoved:Connect(onBackpackToolChanged)
+)
 
-Environment.NotorietyWeaponIcon:select()
-setWeaponModificationsEnabled(true)
+rebuildTopbarIcons(true)
+setWeaponModificationsEnabled(Environment.NotorietyWeaponEnabled)
 
 Environment.MaxEverythingConnection = RunService.Heartbeat:Connect(function(DeltaTime)
 	Apply()
+	Environment.NotorietyTopbarRefresh += DeltaTime
+
+	if Environment.NotorietyTopbarRefresh >= 0.25 then
+		Environment.NotorietyTopbarRefresh = 0
+		rebuildTopbarIcons(false)
+	end
 
 	if not Environment.NotorietyWeaponEnabled then
 		return
@@ -1203,9 +1370,12 @@ Environment.MaxEverythingConnection = RunService.Heartbeat:Connect(function(Delt
 end)
 
 Environment.MaxEverythingCharacterConnection = LocalPlayer.CharacterAdded:Connect(function(Character)
+	bindTopbarCharacter(Character)
+	scheduleTopbarRepair()
 	task.wait(1)
 	Apply()
 	trackWeaponContainer(Character)
+	scheduleTopbarRepair()
 
 	if Environment.NotorietyWeaponEnabled then
 		applyAllWeaponModifications()

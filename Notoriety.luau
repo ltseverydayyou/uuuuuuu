@@ -1,5 +1,11 @@
 local Environment = if type(getgenv) == "function" then getgenv() else _G
 
+local PreviousUnload = rawget(Environment, "UnloadNotoriety")
+
+if type(PreviousUnload) == "function" then
+	pcall(PreviousUnload)
+end
+
 local ServiceResolver = rawget(Environment, "__lt_service_resolver")
 
 if type(ServiceResolver) ~= "table" then
@@ -104,6 +110,23 @@ if type(Environment.NotorietyTopbarCharacterConnections) == "table" then
 	end
 end
 
+if type(Environment.NotorietyGetAmmoWrappers) == "table" then
+	for State, Record in Environment.NotorietyGetAmmoWrappers do
+		if type(State) == "table" and type(Record) == "table" then
+			local Original = Record.Original
+			local Wrapper = Record.Wrapper
+
+			if type(Original) == "function" and State.getAmmo == Wrapper then
+				State.getAmmo = Original
+			end
+		end
+	end
+end
+
+Environment.NotorietyGetAmmoWrappers = setmetatable({}, {
+	__mode = "k",
+})
+
 if Environment.NotorietyWeaponIcon then
 	pcall(function()
 		Environment.NotorietyWeaponIcon:destroy()
@@ -129,6 +152,7 @@ Environment.NotorietyTopbarCharacterConnections = {}
 Environment.NotorietyTopbarRepairToken = 0
 Environment.NotorietyTopbarRebuilding = false
 Environment.NotorietyTopbarRefresh = 0
+Environment.NotorietyUnloaded = false
 
 local MAX_VALUE = 999999
 
@@ -234,10 +258,71 @@ local MaxedValues = {
 	PrimaryAmmoMax = MAX_VALUE,
 	SecondaryAmmo = MAX_VALUE,
 	SecondaryAmmoMax = MAX_VALUE,
+	GadgetAmmo = MAX_VALUE,
+	GadgetAmmoMax = MAX_VALUE,
+	EquipmentLeft = MAX_VALUE,
+	SecondEquipmentLeft = MAX_VALUE,
 	Crit = 100,
 	Dodge = 100,
 	Detection = 0,
 }
+
+local FiniteSupplyCaps = setmetatable({}, {
+	__mode = "k",
+})
+
+local function getFiniteSupplyCap(Value, SuggestedCap)
+	local ExistingCap = FiniteSupplyCaps[Value]
+	local CurrentValue = Value.Value
+
+	if type(SuggestedCap) == "number" and SuggestedCap > 0 then
+		if type(CurrentValue) == "number" and CurrentValue >= 0 and CurrentValue < 1000 then
+			SuggestedCap = math.max(SuggestedCap, CurrentValue)
+		end
+
+		if not ExistingCap or SuggestedCap > ExistingCap then
+			ExistingCap = SuggestedCap
+		end
+	elseif type(CurrentValue) == "number" and CurrentValue > 0 and CurrentValue < 1000 then
+		if not ExistingCap or CurrentValue > ExistingCap then
+			ExistingCap = CurrentValue
+		end
+	end
+
+	FiniteSupplyCaps[Value] = ExistingCap
+	return ExistingCap
+end
+
+local function replenishFiniteSupplies(Character)
+	local GadgetAmmoMax = Character:FindFirstChild("GadgetAmmoMax")
+
+	if GadgetAmmoMax and GadgetAmmoMax:IsA("ValueBase") and type(GadgetAmmoMax.Value) == "number" then
+		local Capacity = GadgetAmmoMax:FindFirstChild("Capacity")
+		local SuggestedCap = Capacity and Capacity:IsA("ValueBase") and type(Capacity.Value) == "number"
+			and Capacity.Value
+			or nil
+		local Cap = getFiniteSupplyCap(GadgetAmmoMax, SuggestedCap)
+
+		if Cap and GadgetAmmoMax.Value < Cap then
+			GadgetAmmoMax.Value = Cap
+		end
+	end
+
+	for _, Name in {
+		"EquipmentLeft",
+		"SecondEquipmentLeft",
+	} do
+		local Value = Character:FindFirstChild(Name)
+
+		if Value and Value:IsA("ValueBase") and type(Value.Value) == "number" then
+			local Cap = getFiniteSupplyCap(Value)
+
+			if Cap and Value.Value < Cap then
+				Value.Value = Cap
+			end
+		end
+	end
+end
 
 local WeaponState = {
 	RequireFunctions = {},
@@ -249,42 +334,10 @@ local WeaponState = {
 		__mode = "k",
 	}),
 	Backups = {},
-	RuntimeAmmoTables = setmetatable({}, {
-		__mode = "k",
-	}),
-	RuntimeAmmoUpvalues = setmetatable({}, {
-		__mode = "k",
-	}),
 	RuntimeWeapons = setmetatable({}, {
 		__mode = "k",
 	}),
 	RuntimeRefresh = 0,
-	AmmoKeys = {
-		ammo = true,
-		ammo2 = true,
-		ammoleft = true,
-		ammoleft2 = true,
-		ammoinmag = true,
-		ammoinmag2 = true,
-		currentammo = true,
-		currentammo2 = true,
-		curammo = true,
-		curammo2 = true,
-		magammo = true,
-		magammo2 = true,
-		magazine = true,
-		magazine2 = true,
-		magazineammo = true,
-		magazineammo2 = true,
-		clip = true,
-		clip2 = true,
-		currentclip = true,
-		currentclip2 = true,
-		primaryammo = true,
-		secondaryammo = true,
-		ammocapacity = true,
-		spare = true,
-	},
 }
 
 local function addRequireFunction(Value)
@@ -348,20 +401,6 @@ local function captureField(Data, Backup, Key)
 		Exists = Value ~= nil,
 		Value = Value,
 	}
-end
-
-local function normalizeAmmoKey(Key)
-	if type(Key) ~= "string" then
-		return nil
-	end
-
-	return string.lower(Key):gsub("[^%w]", "")
-end
-
-local function isRuntimeAmmoKey(Key)
-	local Normalized = normalizeAmmoKey(Key)
-
-	return Normalized ~= nil and WeaponState.AmmoKeys[Normalized] == true
 end
 
 local function captureNestedField(Backup, Container, Key)
@@ -463,22 +502,62 @@ end
 
 local applyWeaponData
 
-local function patchAmmoResult(Result)
+local function isInfiniteGunState(State, Data)
+	if type(State) ~= "table" or type(Data) ~= "table" or Data.WeaponType ~= "Gun" then
+		return false
+	end
+
+	local AmmoClass = Data.AmmoClass or rawget(State, "AmmoType")
+
+	return AmmoClass == "Primary" or AmmoClass == "Secondary"
+end
+
+local function patchAmmoResult(Result, State)
 	if not Environment.NotorietyWeaponEnabled or type(Result) ~= "table" then
 		return Result
 	end
 
+	local Data = type(State) == "table" and rawget(State, "data") or nil
+
+	if not isInfiniteGunState(State, Data) then
+		return Result
+	end
+
 	for Key, Value in Result do
-		if type(Value) == "number" and isRuntimeAmmoKey(Key) then
-			Result[Key] = MAX_VALUE
-		elseif typeof(Value) == "Instance" and Value:IsA("ValueBase") and isRuntimeAmmoKey(Key) then
-			if typeof(Value.Value) == "number" then
-				Value.Value = MAX_VALUE
+		if type(Key) == "string" and type(Value) == "number" then
+			local LowerKey = string.lower(Key)
+
+			if string.find(LowerKey, "ammo", 1, true)
+				or string.find(LowerKey, "mag", 1, true)
+				or LowerKey == "spare"
+			then
+				Result[Key] = MAX_VALUE
 			end
 		end
 	end
 
+	local AmmoMax = Result.AmmoMax
+
+	if typeof(AmmoMax) == "Instance" and AmmoMax:IsA("ValueBase") and typeof(AmmoMax.Value) == "number" then
+		AmmoMax.Value = MAX_VALUE
+	end
+
 	return Result
+end
+
+local function restoreAmmoWrapper(State)
+	local Wrappers = Environment.NotorietyGetAmmoWrappers
+	local Record = type(Wrappers) == "table" and Wrappers[State] or nil
+
+	if type(Record) ~= "table" then
+		return
+	end
+
+	if type(Record.Original) == "function" and State.getAmmo == Record.Wrapper then
+		State.getAmmo = Record.Original
+	end
+
+	Wrappers[State] = nil
 end
 
 local function patchRuntimeWeaponState(State)
@@ -493,9 +572,15 @@ local function patchRuntimeWeaponState(State)
 		return false
 	end
 
-	WeaponState.RuntimeWeapons[State] = true
-	applyWeaponData(Data)
+	local Patched = applyWeaponData(Data)
 
+	if not isInfiniteGunState(State, Data) then
+		restoreAmmoWrapper(State)
+		WeaponState.RuntimeWeapons[State] = nil
+		return Patched
+	end
+
+	WeaponState.RuntimeWeapons[State] = true
 	State.Ready = true
 	State.postshooting = false
 	State.postshooting2 = false
@@ -509,12 +594,6 @@ local function patchRuntimeWeaponState(State)
 	State.ShakeRoughness = 0
 	State.pushdist = 0
 
-	if type(Environment.NotorietyGetAmmoWrappers) ~= "table" then
-		Environment.NotorietyGetAmmoWrappers = setmetatable({}, {
-			__mode = "k",
-		})
-	end
-
 	local Record = Environment.NotorietyGetAmmoWrappers[State]
 
 	if not Record or State.getAmmo ~= Record.Wrapper then
@@ -524,7 +603,7 @@ local function patchRuntimeWeaponState(State)
 		Wrapper = function(...)
 			local Result = Original(...)
 
-			return patchAmmoResult(Result)
+			return patchAmmoResult(Result, State)
 		end
 
 		Record = {
@@ -539,46 +618,10 @@ local function patchRuntimeWeaponState(State)
 	local Success, Result = pcall(State.getAmmo, State)
 
 	if Success then
-		patchAmmoResult(Result)
+		patchAmmoResult(Result, State)
 	end
 
 	return true
-end
-
-local function patchRuntimeAmmoTable(Data)
-	if not Environment.NotorietyWeaponEnabled or type(Data) ~= "table" then
-		return false
-	end
-
-	local Found = false
-
-	for Key, Value in Data do
-		if type(Value) == "number" and isRuntimeAmmoKey(Key) then
-			Data[Key] = MAX_VALUE
-			Found = true
-		end
-	end
-
-	if Found then
-		WeaponState.RuntimeAmmoTables[Data] = true
-	end
-
-	return Found
-end
-
-local function registerRuntimeAmmoUpvalue(Function, Index)
-	local Indices = WeaponState.RuntimeAmmoUpvalues[Function]
-
-	if not Indices then
-		Indices = {}
-		WeaponState.RuntimeAmmoUpvalues[Function] = Indices
-	end
-
-	Indices[Index] = true
-
-	if type(debug) == "table" and type(debug.setupvalue) == "function" then
-		pcall(debug.setupvalue, Function, Index, MAX_VALUE)
-	end
 end
 
 local function refreshRuntimeAmmo()
@@ -586,20 +629,8 @@ local function refreshRuntimeAmmo()
 		return
 	end
 
-	for Data in WeaponState.RuntimeAmmoTables do
-		patchRuntimeAmmoTable(Data)
-	end
-
 	for State in WeaponState.RuntimeWeapons do
 		patchRuntimeWeaponState(State)
-	end
-
-	if type(debug) == "table" and type(debug.setupvalue) == "function" then
-		for Function, Indices in WeaponState.RuntimeAmmoUpvalues do
-			for Index in Indices do
-				pcall(debug.setupvalue, Function, Index, MAX_VALUE)
-			end
-		end
 	end
 end
 
@@ -709,12 +740,12 @@ applyWeaponData = function(Data)
 			}
 		end
 
-		Data.MagazineSize = MAX_VALUE
-		Data.AmmoMax = MAX_VALUE
+		local AmmoClass = Data.AmmoClass
+		local UsesInfiniteGunAmmo = AmmoClass == "Primary" or AmmoClass == "Secondary"
 
-		if Data.Dual == true then
-			Data.AmmoSeparate = false
-			Data.AmmoSwitch = false
+		if UsesInfiniteGunAmmo then
+			Data.MagazineSize = MAX_VALUE
+			Data.AmmoMax = MAX_VALUE
 		end
 
 		if type(Data.ManualCasingEjection) == "boolean" then
@@ -790,21 +821,14 @@ local function getFunctionUpvalues(Function)
 				break
 			end
 
-			local Name
 			local Value
 
 			if type(First) == "string" and Second ~= nil then
-				Name = First
 				Value = Second
 			elseif Second ~= nil then
 				Value = Second
 			else
 				Value = First
-			end
-
-			if Name and type(Value) == "number" and isRuntimeAmmoKey(Name) then
-				registerRuntimeAmmoUpvalue(Function, Index)
-				Value = MAX_VALUE
 			end
 
 			Upvalues[Index] = Value
@@ -871,13 +895,7 @@ local function patchLoadedWeaponTables()
 	local NodeLimit = 60000
 
 	local function Scan(Value, Depth)
-		if Nodes >= NodeLimit or Depth > 8 then
-			return
-		end
-
-		local ValueType = type(Value)
-
-		if ValueType ~= "table" and ValueType ~= "function" then
+		if Nodes >= NodeLimit or Depth > 8 or type(Value) ~= "table" then
 			return
 		end
 
@@ -888,42 +906,41 @@ local function patchLoadedWeaponTables()
 		Seen[Value] = true
 		Nodes += 1
 
-		if ValueType == "table" then
-			if applyWeaponData(Value) then
-				Patched += 1
+		if applyWeaponData(Value) then
+			Patched += 1
+		end
+
+		patchRuntimeWeaponState(Value)
+
+		for Key, Item in Value do
+			if type(Key) == "table" then
+				Scan(Key, Depth + 1)
 			end
 
-			patchRuntimeAmmoTable(Value)
-			patchRuntimeWeaponState(Value)
-
-			for Key, Item in Value do
-				if type(Key) == "table" or type(Key) == "function" then
-					Scan(Key, Depth + 1)
-				end
-
+			if type(Item) == "table" then
 				Scan(Item, Depth + 1)
-
-				if Nodes >= NodeLimit then
-					break
-				end
 			end
-		else
-			local Upvalues = getFunctionUpvalues(Value)
 
-			if type(Upvalues) == "table" then
-				for _, Item in Upvalues do
-					Scan(Item, Depth + 1)
-
-					if Nodes >= NodeLimit then
-						break
-					end
-				end
+			if Nodes >= NodeLimit then
+				break
 			end
 		end
 	end
 
 	for _, Value in ScriptEnvironment do
-		Scan(Value, 0)
+		if type(Value) == "table" then
+			Scan(Value, 0)
+		elseif type(Value) == "function" then
+			local Upvalues = getFunctionUpvalues(Value)
+
+			if type(Upvalues) == "table" then
+				for _, Item in Upvalues do
+					if type(Item) == "table" then
+						Scan(Item, 0)
+					end
+				end
+			end
+		end
 
 		if Nodes >= NodeLimit then
 			break
@@ -1006,7 +1023,7 @@ local function applyWeaponModule(Object)
 end
 
 local function trackWeaponContainer(Container)
-	if not Container then
+	if Environment.NotorietyUnloaded or not Container then
 		return
 	end
 
@@ -1017,6 +1034,10 @@ local function trackWeaponContainer(Container)
 	table.insert(
 		Environment.NotorietyWeaponConnections,
 		Container.DescendantAdded:Connect(function(Object)
+			if Environment.NotorietyUnloaded then
+				return
+			end
+
 			if Object:IsA("ModuleScript") and Object.Name == "Data" then
 				task.defer(function()
 					applyWeaponModule(Object)
@@ -1075,6 +1096,8 @@ local function Apply()
 			end
 		end
 	end
+
+	replenishFiniteSupplies(Character)
 end
 
 local function runKill()
@@ -1094,6 +1117,10 @@ local function runKill()
 		end
 
 		for _, Target in PoliceFolder:GetChildren() do
+			if Environment.NotorietyUnloaded then
+				break
+			end
+
 			if not Gun.Parent then
 				Gun = getEquippedGun()
 
@@ -1238,6 +1265,10 @@ local function createWeaponModsIcon()
 end
 
 local function rebuildTopbarIcons(Force)
+	if Environment.NotorietyUnloaded then
+		return
+	end
+
 	local RebuildKill = Force == true or not isIconAlive(Environment.MaxEverythingIcon)
 	local RebuildWeapon = Force == true or not isIconAlive(Environment.NotorietyWeaponIcon)
 
@@ -1272,6 +1303,10 @@ local function rebuildTopbarIcons(Force)
 end
 
 local function scheduleTopbarRepair()
+	if Environment.NotorietyUnloaded then
+		return
+	end
+
 	Environment.NotorietyTopbarRepairToken += 1
 	local RepairToken = Environment.NotorietyTopbarRepairToken
 
@@ -1293,6 +1328,10 @@ local function scheduleTopbarRepair()
 end
 
 local function bindTopbarCharacter(Character)
+	if Environment.NotorietyUnloaded then
+		return
+	end
+
 	for _, Connection in Environment.NotorietyTopbarCharacterConnections do
 		pcall(function()
 			Connection:Disconnect()
@@ -1327,6 +1366,82 @@ local function onBackpackToolChanged(Object)
 	end
 end
 
+local function disconnectConnection(Connection)
+	if Connection then
+		pcall(function()
+			Connection:Disconnect()
+		end)
+	end
+end
+
+local function disconnectConnections(Connections)
+	if type(Connections) ~= "table" then
+		return
+	end
+
+	for _, Connection in Connections do
+		disconnectConnection(Connection)
+	end
+
+	table.clear(Connections)
+end
+
+local function unloadNotoriety()
+	if Environment.NotorietyUnloaded then
+		return
+	end
+
+	Environment.NotorietyUnloaded = true
+	Environment.MaxEverythingEnabled = false
+	Environment.NotorietyWeaponEnabled = false
+	Environment.KillPoliceRunning = false
+	Environment.NotorietyTopbarRepairToken += 1
+
+	disconnectConnection(Environment.MaxEverythingConnection)
+	disconnectConnection(Environment.MaxEverythingCharacterConnection)
+	disconnectConnection(Environment.NotorietyPoliceHitboxConnection)
+
+	Environment.MaxEverythingConnection = nil
+	Environment.MaxEverythingCharacterConnection = nil
+	Environment.NotorietyPoliceHitboxConnection = nil
+
+	disconnectConnections(Environment.NotorietyWeaponConnections)
+	disconnectConnections(Environment.NotorietyTopbarConnections)
+	disconnectConnections(Environment.NotorietyTopbarCharacterConnections)
+
+	if type(Environment.NotorietyGetAmmoWrappers) == "table" then
+		for State, Record in Environment.NotorietyGetAmmoWrappers do
+			if type(State) == "table" and type(Record) == "table" then
+				local Original = Record.Original
+				local Wrapper = Record.Wrapper
+
+				if type(Original) == "function" and State.getAmmo == Wrapper then
+					State.getAmmo = Original
+				end
+			end
+		end
+	end
+
+	restoreAllWeaponData()
+
+	for Object in PoliceOriginalSizes do
+		pcall(restorePolicePart, Object)
+	end
+
+	destroyIcon(Environment.NotorietyWeaponIcon)
+	destroyIcon(Environment.MaxEverythingIcon)
+
+	Environment.NotorietyWeaponIcon = nil
+	Environment.MaxEverythingIcon = nil
+	Environment.NotorietyGetAmmoWrappers = setmetatable({}, {
+		__mode = "k",
+	})
+
+	table.clear(WeaponState.RuntimeWeapons)
+end
+
+Environment.UnloadNotoriety = unloadNotoriety
+
 trackWeaponContainer(Weapons)
 trackWeaponContainer(Backpack)
 trackWeaponContainer(LocalPlayer.Character)
@@ -1345,6 +1460,10 @@ rebuildTopbarIcons(true)
 setWeaponModificationsEnabled(Environment.NotorietyWeaponEnabled)
 
 Environment.MaxEverythingConnection = RunService.Heartbeat:Connect(function(DeltaTime)
+	if Environment.NotorietyUnloaded then
+		return
+	end
+
 	Apply()
 	Environment.NotorietyTopbarRefresh += DeltaTime
 
@@ -1370,9 +1489,18 @@ Environment.MaxEverythingConnection = RunService.Heartbeat:Connect(function(Delt
 end)
 
 Environment.MaxEverythingCharacterConnection = LocalPlayer.CharacterAdded:Connect(function(Character)
+	if Environment.NotorietyUnloaded then
+		return
+	end
+
 	bindTopbarCharacter(Character)
 	scheduleTopbarRepair()
 	task.wait(1)
+
+	if Environment.NotorietyUnloaded then
+		return
+	end
+
 	Apply()
 	trackWeaponContainer(Character)
 	scheduleTopbarRepair()

@@ -213,29 +213,9 @@ local MaxedValues = {
 	PrimaryAmmoMax = MAX_VALUE,
 	SecondaryAmmo = MAX_VALUE,
 	SecondaryAmmoMax = MAX_VALUE,
-	GadgetAmmo = MAX_VALUE,
-	GadgetAmmoMax = MAX_VALUE,
-	CableTies = MAX_VALUE,
-	BodyBags = MAX_VALUE,
-	Throwables = MAX_VALUE,
-	EquipmentLeft = MAX_VALUE,
-	SecondEquipmentLeft = MAX_VALUE,
-	Messiah = MAX_VALUE,
 	Crit = 100,
 	Dodge = 100,
 	Detection = 0,
-	Capacity = MAX_VALUE,
-	AltAmmoMax = MAX_VALUE,
-	Ammo = MAX_VALUE,
-	Ammo2 = MAX_VALUE,
-	CurrentAmmo = MAX_VALUE,
-	CurrentAmmo2 = MAX_VALUE,
-	MagazineAmmo = MAX_VALUE,
-	MagazineAmmo2 = MAX_VALUE,
-	MagAmmo = MAX_VALUE,
-	MagAmmo2 = MAX_VALUE,
-	Clip = MAX_VALUE,
-	Clip2 = MAX_VALUE,
 }
 
 local WeaponState = {
@@ -1066,7 +1046,7 @@ local function Apply()
 	end
 
 	for _, Object in Character:GetDescendants() do
-		if Object:IsA("ValueBase") then
+		if Object:IsA("ValueBase") and not Object:FindFirstAncestorWhichIsA("Tool") then
 			local Value = MaxedValues[Object.Name]
 
 			if Value ~= nil and typeof(Object.Value) == "number" and Object.Value ~= Value then

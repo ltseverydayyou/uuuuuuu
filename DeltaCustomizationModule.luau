@@ -9814,19 +9814,6 @@ do
 		return nil, false
 	end
 
-	local function executeClipboardCode()
-		local value = readClipboard()
-		if type(value) == "string" and value ~= "" then
-			executeSource(value, "@DeltaClipboard")
-			return
-		end
-		notify({
-			Title = "Delta Customization",
-			Description = "Delta cannot read Android's system clipboard. Use COPY first, then RUN CLIP.",
-			Duration = 5,
-		})
-	end
-
 	local function insertIntoActive(text)
 		local box = getActiveCodeBox()
 		if not box then
@@ -10044,14 +10031,18 @@ do
 		track(layout)
 		createToolbarButton(toolbar, executeButton or template, "LT_Execute", "RUN", 1, executeActiveCode)
 		createToolbarButton(toolbar, clearButton or template, "LT_Clear", "CLEAR", 2, clearActiveCode)
-		createToolbarButton(
-			toolbar,
-			clipboardButton or template,
-			"LT_ExecuteClipboard",
-			"RUN CLIP",
-			3,
-			executeClipboardCode
-		)
+		if clipboardButton then
+			createToolbarButton(
+				toolbar,
+				clipboardButton,
+				"LT_ExecuteClipboard",
+				"RUN CLIP",
+				3,
+				function()
+					activateOriginal(clipboardButton)
+				end
+			)
+		end
 		createToolbarButton(toolbar, template, "LT_Copy", "COPY", 4, copyActiveCode)
 		createToolbarButton(toolbar, template, "LT_Paste", "PASTE", 5, pasteIntoActive)
 		createToolbarButton(toolbar, template, "LT_NewLine", "NEW LINE", 6, function()

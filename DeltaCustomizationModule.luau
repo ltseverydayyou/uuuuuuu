@@ -219,9 +219,14 @@ local function dcmAlreadyLoaded()
 	return false
 end
 
-local __dcm_previousRuntime = rawget(__dcm_env, "__DeltaCustomizationV2Runtime")
-if type(__dcm_previousRuntime) == "table" and type(__dcm_previousRuntime.stop) == "function" then
-	pcall(__dcm_previousRuntime.stop)
+local __dcm_previousMasterRuntime = rawget(__dcm_env, "__DeltaCustomizationMasterRuntime")
+if type(__dcm_previousMasterRuntime) == "table" and type(__dcm_previousMasterRuntime.stop) == "function" then
+	pcall(__dcm_previousMasterRuntime.stop)
+else
+	local __dcm_previousRuntime = rawget(__dcm_env, "__DeltaCustomizationV2Runtime")
+	if type(__dcm_previousRuntime) == "table" and type(__dcm_previousRuntime.stop) == "function" then
+		pcall(__dcm_previousRuntime.stop)
+	end
 end
 __dcm_env.__DeltaCustomizationModuleLoaded = nil
 __dcm_shared.__DeltaCustomizationModuleLoaded = nil
@@ -229,7 +234,7 @@ __dcm_env.__DeltaVisualPatchLoaded = nil
 __dcm_env.__DeltaThemeMenuPatchLoaded = nil
 
 local __dcm_flag = {
-	version = "2.4.1",
+	version = "2.5.0",
 	loadedAt = tick(),
 }
 __dcm_env.__DeltaCustomizationModuleLoaded = __dcm_flag
@@ -651,6 +656,247 @@ local function getIconGui()
 end
 local mainGui = getMain()
 local _iconGui0, _iconBtn0 = getIconGui()
+local __dcm_masterRuntime = {
+	alive = true,
+	stopping = false,
+	objects = setmetatable({}, { __mode = "k" }),
+	baseline = setmetatable({}, { __mode = "k" }),
+	roots = {},
+}
+__dcm_env.__DeltaCustomizationMasterRuntime = __dcm_masterRuntime
+__dcm_shared.__DeltaCustomizationMasterRuntime = __dcm_masterRuntime
+
+local __dcm_snapshotProperties = {
+	"Name",
+	"Archivable",
+}
+local __dcm_guiProperties = {
+	"Visible",
+	"Active",
+	"Selectable",
+	"Interactable",
+	"Position",
+	"Size",
+	"AnchorPoint",
+	"AutomaticSize",
+	"BackgroundColor3",
+	"BackgroundTransparency",
+	"BorderColor3",
+	"BorderSizePixel",
+	"ClipsDescendants",
+	"LayoutOrder",
+	"Rotation",
+	"ZIndex",
+}
+local __dcm_textProperties = {
+	"Text",
+	"TextColor3",
+	"TextTransparency",
+	"TextStrokeColor3",
+	"TextStrokeTransparency",
+	"TextSize",
+	"TextScaled",
+	"TextWrapped",
+	"TextTruncate",
+	"TextXAlignment",
+	"TextYAlignment",
+	"FontFace",
+	"LineHeight",
+}
+local __dcm_imageProperties = {
+	"Image",
+	"ImageColor3",
+	"ImageTransparency",
+	"ScaleType",
+	"SliceCenter",
+	"SliceScale",
+	"ResampleMode",
+	"TileSize",
+}
+local __dcm_scrollingProperties = {
+	"AutomaticCanvasSize",
+	"CanvasPosition",
+	"CanvasSize",
+	"ElasticBehavior",
+	"HorizontalScrollBarInset",
+	"ScrollBarImageColor3",
+	"ScrollBarImageTransparency",
+	"ScrollBarThickness",
+	"ScrollingDirection",
+	"ScrollingEnabled",
+	"VerticalScrollBarInset",
+	"VerticalScrollBarPosition",
+}
+
+local function __dcm_captureProperty(object, values, property)
+	local ok, value = pcall(function()
+		return object[property]
+	end)
+	if ok then
+		values[property] = value
+	end
+end
+
+local function __dcm_captureObject(object)
+	if not object or __dcm_masterRuntime.baseline[object] then
+		return
+	end
+	local values = {}
+	for _, property in __dcm_snapshotProperties do
+		__dcm_captureProperty(object, values, property)
+	end
+	if object:IsA("GuiObject") then
+		for _, property in __dcm_guiProperties do
+			__dcm_captureProperty(object, values, property)
+		end
+	end
+	if object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox") then
+		for _, property in __dcm_textProperties do
+			__dcm_captureProperty(object, values, property)
+		end
+	end
+	if object:IsA("ImageLabel") or object:IsA("ImageButton") then
+		for _, property in __dcm_imageProperties do
+			__dcm_captureProperty(object, values, property)
+		end
+	end
+	if object:IsA("ScrollingFrame") then
+		for _, property in __dcm_scrollingProperties do
+			__dcm_captureProperty(object, values, property)
+		end
+	elseif object:IsA("UIListLayout") or object:IsA("UIGridLayout") then
+		for _, property in { "Padding", "FillDirection", "HorizontalAlignment", "VerticalAlignment", "SortOrder", "Wraps", "HorizontalFlex", "VerticalFlex" } do
+			__dcm_captureProperty(object, values, property)
+		end
+	elseif object:IsA("UIPadding") then
+		for _, property in { "PaddingLeft", "PaddingRight", "PaddingTop", "PaddingBottom" } do
+			__dcm_captureProperty(object, values, property)
+		end
+	elseif object:IsA("UIGradient") then
+		for _, property in { "Color", "Transparency", "Rotation", "Offset", "Enabled" } do
+			__dcm_captureProperty(object, values, property)
+		end
+	elseif object:IsA("UICorner") then
+		__dcm_captureProperty(object, values, "CornerRadius")
+	elseif object:IsA("UIStroke") then
+		for _, property in { "Color", "Thickness", "Transparency", "Enabled", "ApplyStrokeMode", "LineJoinMode" } do
+			__dcm_captureProperty(object, values, property)
+		end
+	elseif object:IsA("UIScale") then
+		__dcm_captureProperty(object, values, "Scale")
+	elseif object:IsA("ValueBase") then
+		__dcm_captureProperty(object, values, "Value")
+	end
+	__dcm_masterRuntime.baseline[object] = true
+	__dcm_masterRuntime.objects[object] = {
+		Parent = object.Parent,
+		Values = values,
+	}
+end
+
+local function __dcm_captureRoot(target)
+	if not target then
+		return
+	end
+	table.insert(__dcm_masterRuntime.roots, target)
+	__dcm_captureObject(target)
+	for _, object in target:GetDescendants() do
+		__dcm_captureObject(object)
+	end
+end
+
+__dcm_captureRoot(mainGui)
+if _iconGui0 and _iconGui0 ~= mainGui then
+	__dcm_captureRoot(_iconGui0)
+end
+
+local function __dcm_isCustomObject(object)
+	local name = object.Name
+	if name:sub(1, 3) == "LT_" or name == "LTIcon" or name:sub(1, 11) == "DeltaCustom" then
+		return true
+	end
+	return name == "SidebarGestureZone"
+		or name == "SidebarGradientColor1"
+		or name == "SidebarGradientColor2"
+		or name == "IconColorValue"
+		or name == "IconSizeValue"
+		or name == "IconRgbSpeedValue"
+		or name == "DeltaIconCorner"
+end
+
+local function __dcm_restoreSnapshot()
+	for object, snapshot in __dcm_masterRuntime.objects do
+		if object and snapshot.Parent then
+			pcall(function()
+				object.Parent = snapshot.Parent
+			end)
+		end
+	end
+	for _, target in __dcm_masterRuntime.roots do
+		if target and target.Parent then
+			local settings = target:FindFirstChild("Settings") or target:FindFirstChild("Settings", true)
+			local holder = settings and settings:FindFirstChild("Holder")
+			if holder then
+				for _, child in holder:GetChildren() do
+					if not __dcm_masterRuntime.baseline[child] then
+						pcall(function()
+							child:Destroy()
+						end)
+					end
+				end
+			end
+			for _, object in target:GetDescendants() do
+				if not __dcm_masterRuntime.baseline[object] and __dcm_isCustomObject(object) then
+					pcall(function()
+						object:Destroy()
+					end)
+				end
+			end
+		end
+	end
+	for object, snapshot in __dcm_masterRuntime.objects do
+		if object and object.Parent then
+			for property, value in snapshot.Values do
+				pcall(function()
+					object[property] = value
+				end)
+			end
+		end
+	end
+end
+
+__dcm_masterRuntime.stop = function()
+	if not __dcm_masterRuntime.alive or __dcm_masterRuntime.stopping then
+		return
+	end
+	__dcm_masterRuntime.stopping = true
+	for _, key in { "__DeltaCustomizationV2Runtime", "__DeltaThemeRuntime", "__DeltaHubMusicPatch" } do
+		local current = rawget(__dcm_env, key)
+		if type(current) == "table" and current ~= __dcm_masterRuntime and type(current.stop) == "function" then
+			pcall(current.stop)
+		end
+	end
+	if type(_naConns) == "table" and type(NAlib) == "table" then
+		for name in _naConns do
+			NAlib.disconnect(name)
+		end
+	end
+	__dcm_restoreSnapshot()
+	__dcm_masterRuntime.alive = false
+	__dcm_masterRuntime.stopping = false
+	if rawget(__dcm_env, "__DeltaCustomizationMasterRuntime") == __dcm_masterRuntime then
+		__dcm_env.__DeltaCustomizationMasterRuntime = nil
+	end
+	if rawget(__dcm_shared, "__DeltaCustomizationMasterRuntime") == __dcm_masterRuntime then
+		__dcm_shared.__DeltaCustomizationMasterRuntime = nil
+	end
+	__dcm_env.__DeltaCustomizationModuleLoaded = nil
+	__dcm_shared.__DeltaCustomizationModuleLoaded = nil
+	__dcm_env.__DeltaVisualPatchLoaded = nil
+	__dcm_env.__DeltaThemeMenuPatchLoaded = nil
+	__dcm_env.DeltaIcon = nil
+end
+
 local managedIcon = {
 	deltaGui = _iconGui0,
 	deltaBtn = _iconBtn0,
@@ -9470,7 +9716,7 @@ do
 
 	local runtime = {
 		alive = true,
-		version = "2.4.0",
+		version = "2.5.0",
 		connections = {},
 		instances = {},
 		originalButtons = setmetatable({}, { __mode = "k" }),
@@ -9699,7 +9945,10 @@ do
 	local syntaxHighlightEnabled = readBool("EditorSyntaxHighlight", true)
 	local exploitSyntaxEnabled = readBool("ExploitSyntaxHighlight", true)
 	local editorFontSize = math.floor(readNumber("EditorFontSize", 14, 10, 24) + 0.5)
-	local toolbar
+	local toolbarButtons = {}
+	local toolbarLayout = buttonsFrame:FindFirstChildOfClass("UIListLayout")
+	local originalToolbarPadding = toolbarLayout and toolbarLayout.Padding or nil
+	local nativeButtonOriginals = setmetatable({}, { __mode = "k" })
 	local statusFrame
 	local statusLabel
 	local editorCanvas
@@ -9708,6 +9957,90 @@ do
 	local originalButtonsVisible = buttonsFrame.Visible
 	local statusUpdateQueued = false
 	local hookedBoxes = setmetatable({}, { __mode = "k" })
+	local sidebar = v2Main:FindFirstChild("Sidebar") or v2Main:FindFirstChild("Sidebar", true)
+	local sidebarLayout = sidebar and sidebar:FindFirstChildOfClass("UIListLayout")
+	local originalSidebarSortOrder = sidebarLayout and sidebarLayout.SortOrder or nil
+	local sidebarNames = { "Home", "Executor", "Scripthub", "Console", "Settings", "ToggleUI" }
+	local sidebarNameSet = {}
+	local sidebarOriginalOrders = setmetatable({}, { __mode = "k" })
+	for _, name in sidebarNames do
+		sidebarNameSet[name] = true
+		local button = sidebar and sidebar:FindFirstChild(name)
+		if button and button:IsA("GuiObject") then
+			sidebarOriginalOrders[button] = button.LayoutOrder
+		end
+	end
+
+	local function normalizeSidebarOrder(value)
+		local result = {}
+		local used = {}
+		if type(value) == "table" then
+			for _, name in value do
+				if sidebarNameSet[name] and not used[name] then
+					used[name] = true
+					table.insert(result, name)
+				end
+			end
+		end
+		for _, name in sidebarNames do
+			if not used[name] then
+				table.insert(result, name)
+			end
+		end
+		return result
+	end
+
+	local function readSidebarOrder()
+		local config = readCurrentConfig()
+		local saved = config.SidebarButtonOrder
+		if type(saved) == "table" and type(saved.order) == "table" then
+			saved = saved.order
+		end
+		return normalizeSidebarOrder(saved)
+	end
+
+	local sidebarOrder = readSidebarOrder()
+	local sidebarApplyingOrder = false
+
+	local function saveSidebarOrder()
+		local config = readCurrentConfig()
+		config.SidebarButtonOrder = { order = table.clone(sidebarOrder) }
+		writeJsonFile(settingsPath, config)
+	end
+
+	local function applySidebarOrder()
+		if sidebarApplyingOrder or not sidebar then
+			return
+		end
+		sidebarApplyingOrder = true
+		if sidebarLayout then
+			sidebarLayout.SortOrder = Enum.SortOrder.LayoutOrder
+		end
+		for index, name in sidebarOrder do
+			local button = sidebar:FindFirstChild(name)
+			if button and button:IsA("GuiObject") then
+				if sidebarOriginalOrders[button] == nil then
+					sidebarOriginalOrders[button] = button.LayoutOrder
+				end
+				button.LayoutOrder = index
+			end
+		end
+		sidebarApplyingOrder = false
+	end
+
+	local function moveSidebarButton(name, direction)
+		local index = table.find(sidebarOrder, name)
+		if not index then
+			return
+		end
+		local target = math.clamp(index + direction, 1, #sidebarOrder)
+		if target == index then
+			return
+		end
+		sidebarOrder[index], sidebarOrder[target] = sidebarOrder[target], sidebarOrder[index]
+		applySidebarOrder()
+		saveSidebarOrder()
+	end
 
 	local function getCodeBoxes()
 		local boxes = {}
@@ -9737,52 +10070,6 @@ do
 		return getCodeBoxes()[1]
 	end
 
-	local function executeSource(source, chunkName)
-		if type(loadstring) ~= "function" then
-			notify({
-				Title = "Delta Customization",
-				Description = "loadstring is unavailable in this Delta build.",
-				Duration = 4,
-			})
-			return false
-		end
-		local chunk, compileError = loadstring(tostring(source or ""), chunkName or "@DeltaEditor")
-		if not chunk then
-			notify({
-				Title = "Execution error",
-				Description = tostring(compileError),
-				Duration = 6,
-			})
-			return false
-		end
-		task.spawn(function()
-			local ok, runtimeError = xpcall(chunk, function(message)
-				return debug.traceback(tostring(message), 2)
-			end)
-			if not ok then
-				notify({
-					Title = "Execution error",
-					Description = tostring(runtimeError),
-					Duration = 6,
-				})
-			end
-		end)
-		return true
-	end
-
-	local function executeActiveCode()
-		local box = getActiveCodeBox()
-		if box then
-			executeSource(box.Text or "", "@" .. box.Name)
-		end
-	end
-
-	local function clearActiveCode()
-		local box = getActiveCodeBox()
-		if box then
-			box.Text = ""
-		end
-	end
 
 	runtime.clipboardCache = tostring(runtime.clipboardCache or "")
 
@@ -9814,6 +10101,7 @@ do
 		return nil, false
 	end
 
+
 	local function insertIntoActive(text)
 		local box = getActiveCodeBox()
 		if not box then
@@ -9839,6 +10127,7 @@ do
 		return true
 	end
 
+
 	local function copyActiveCode()
 		local box = getActiveCodeBox()
 		if not box then
@@ -9860,7 +10149,7 @@ do
 		end
 		notify({
 			Title = "Delta Customization",
-			Description = "Delta cannot read Android's system clipboard. Use COPY first, then PASTE.",
+			Description = "Clipboard access is unavailable in this Delta build.",
 			Duration = 5,
 		})
 	end
@@ -9904,6 +10193,56 @@ do
 		local title = button:FindFirstChild("Title", true) or button:FindFirstChildWhichIsA("TextLabel", true)
 		if title and title:IsA("TextLabel") then
 			title.Text = text
+		end
+	end
+
+	local function captureNativeButton(button)
+		if not (button and button:IsA("GuiObject")) or nativeButtonOriginals[button] then
+			return
+		end
+		local title = button:FindFirstChild("Title", true) or button:FindFirstChildWhichIsA("TextLabel", true)
+		nativeButtonOriginals[button] = {
+			Size = button.Size,
+			LayoutOrder = button.LayoutOrder,
+			Title = title,
+			Text = title and title.Text or nil,
+			TextScaled = title and title.TextScaled or nil,
+			TextSize = title and title.TextSize or nil,
+			TextTruncate = title and title.TextTruncate or nil,
+		}
+	end
+
+	local function restoreNativeButton(button)
+		local original = nativeButtonOriginals[button]
+		if not (original and button and button.Parent) then
+			return
+		end
+		button.Size = original.Size
+		button.LayoutOrder = original.LayoutOrder
+		button.Visible = true
+		local title = original.Title
+		if title and title.Parent then
+			title.Text = original.Text
+			title.TextScaled = original.TextScaled
+			title.TextSize = original.TextSize
+			title.TextTruncate = original.TextTruncate
+		end
+	end
+
+	local function styleNativeButton(button, text, width, order)
+		if not (button and button:IsA("GuiObject")) then
+			return
+		end
+		captureNativeButton(button)
+		button.Visible = true
+		button.Size = UDim2.new(width, 0, 0.7, 0)
+		button.LayoutOrder = order
+		setButtonTitle(button, text)
+		local title = button:FindFirstChild("Title", true) or button:FindFirstChildWhichIsA("TextLabel", true)
+		if title and title:IsA("TextLabel") then
+			title.TextScaled = false
+			title.TextSize = buttonsFrame.AbsoluteSize.X < 650 and 10 or 12
+			title.TextTruncate = Enum.TextTruncate.AtEnd
 		end
 	end
 
@@ -9963,89 +10302,77 @@ do
 	end
 
 	local function clearToolbar()
-		if toolbar and toolbar.Parent then
-			toolbar:Destroy()
+		for i = #toolbarButtons, 1, -1 do
+			local button = toolbarButtons[i]
+			if button and button.Parent then
+				button:Destroy()
+			end
+			toolbarButtons[i] = nil
 		end
-		toolbar = nil
-		restoreOriginalButtons()
+		for _, name in { "LT_Copy", "LT_Paste", "LT_NewLine" } do
+			local stale = buttonsFrame:FindFirstChild(name)
+			if stale then
+				stale:Destroy()
+			end
+		end
+		for _, name in { "Execute", "Clear", "ExecuteClipboard" } do
+			restoreNativeButton(buttonsFrame:FindFirstChild(name))
+		end
+		if toolbarLayout and originalToolbarPadding then
+			toolbarLayout.Padding = originalToolbarPadding
+		end
+	end
+
+	local function addToolbarButton(template, name, text, order, width, callback)
+		local button = createToolbarButton(buttonsFrame, template, name, text, order, callback)
+		button.AnchorPoint = Vector2.new(0, 0)
+		button.Size = UDim2.new(width, 0, 0.7, 0)
+		table.insert(toolbarButtons, button)
+		return button
 	end
 
 	local function buildToolbar()
 		clearToolbar()
-		local staleCopy = buttonsFrame:FindFirstChild("CopyCode")
-		if staleCopy then
-			staleCopy:Destroy()
-		end
-		if not editorToolbarEnabled then
-			return
+		for _, name in {
+			"CopyCode",
+			"LT_EditorToolbar",
+			"LT_Execute",
+			"LT_Clear",
+			"LT_ExecuteClipboard",
+			"LT_Copy",
+			"LT_Paste",
+			"LT_NewLine",
+		} do
+			local stale = buttonsFrame:FindFirstChild(name)
+			if stale then
+				stale:Destroy()
+			end
 		end
 		local executeButton = buttonsFrame:FindFirstChild("Execute")
 		local clearButton = buttonsFrame:FindFirstChild("Clear")
 		local clipboardButton = buttonsFrame:FindFirstChild("ExecuteClipboard")
-		local template = clipboardButton or executeButton or clearButton
-		if not (template and template:IsA("GuiObject")) then
-			return
-		end
-		if executeButton then
-			executeButton.Size = UDim2.new(0.256158501, 0, 0.700000167, 0)
-		end
-		if clearButton then
-			clearButton.Size = UDim2.new(0.221383139, 0, 0.700000167, 0)
-		end
-		if clipboardButton then
-			clipboardButton.Size = UDim2.new(0.355288982, 0, 0.699999988, 0)
-		end
-		for _, object in buttonsFrame:GetChildren() do
-			if object:IsA("GuiButton") then
-				local nativeVisible = object:GetAttribute("LT_NativeVisible")
-				if typeof(nativeVisible) ~= "boolean" then
-					nativeVisible = object.Visible
-					if object.Name == "Execute" or object.Name == "Clear" or object.Name == "ExecuteClipboard" then
-						nativeVisible = true
-					end
-					object:SetAttribute("LT_NativeVisible", nativeVisible)
-				end
-				runtime.originalButtons[object] = nativeVisible
-				object.Visible = false
+		for _, button in { executeButton, clearButton, clipboardButton } do
+			if button and button:IsA("GuiObject") then
+				button:SetAttribute("LT_NativeVisible", true)
+				button.Visible = true
 			end
 		end
-		toolbar = Instance.new("Frame")
-		toolbar.Name = "LT_EditorToolbar"
-		toolbar.BackgroundTransparency = 1
-		toolbar.BorderSizePixel = 0
-		toolbar.Size = UDim2.new(1, -8, 1, -4)
-		toolbar.Position = UDim2.new(0, 4, 0, 2)
-		toolbar.ClipsDescendants = true
-		toolbar.Active = false
-		toolbar.Interactable = true
-		toolbar.ZIndex = buttonsFrame.ZIndex + 1
-		toolbar.Parent = buttonsFrame
-		track(toolbar)
-		local layout = Instance.new("UIListLayout")
-		layout.FillDirection = Enum.FillDirection.Horizontal
-		layout.HorizontalAlignment = Enum.HorizontalAlignment.Left
-		layout.VerticalAlignment = Enum.VerticalAlignment.Center
-		layout.SortOrder = Enum.SortOrder.LayoutOrder
-		layout.Padding = UDim.new(0, 4)
-		layout.Parent = toolbar
-		track(layout)
-		createToolbarButton(toolbar, executeButton or template, "LT_Execute", "RUN", 1, executeActiveCode)
-		createToolbarButton(toolbar, clearButton or template, "LT_Clear", "CLEAR", 2, clearActiveCode)
-		if clipboardButton then
-			createToolbarButton(
-				toolbar,
-				clipboardButton,
-				"LT_ExecuteClipboard",
-				"RUN CLIP",
-				3,
-				function()
-					activateOriginal(clipboardButton)
-				end
-			)
+		if not editorToolbarEnabled then
+			return
 		end
-		createToolbarButton(toolbar, template, "LT_Copy", "COPY", 4, copyActiveCode)
-		createToolbarButton(toolbar, template, "LT_Paste", "PASTE", 5, pasteIntoActive)
-		createToolbarButton(toolbar, template, "LT_NewLine", "NEW LINE", 6, function()
+		local template = clipboardButton or executeButton or clearButton
+		if not (executeButton and clearButton and clipboardButton and template and template:IsA("GuiObject")) then
+			return
+		end
+		if toolbarLayout then
+			toolbarLayout.Padding = UDim.new(0, 4)
+		end
+		styleNativeButton(executeButton, "RUN", 0.14, 0)
+		styleNativeButton(clearButton, "CLEAR", 0.13, 1)
+		styleNativeButton(clipboardButton, "RUN CLIP", 0.20, 2)
+		addToolbarButton(template, "LT_Copy", "COPY", 3, 0.13, copyActiveCode)
+		addToolbarButton(template, "LT_Paste", "PASTE", 4, 0.13, pasteIntoActive)
+		addToolbarButton(template, "LT_NewLine", "ADD LINE", 5, 0.16, function()
 			insertIntoActive("\n")
 		end)
 	end
@@ -10230,31 +10557,33 @@ do
 	end)()
 
 	local function applyToolbarLayout()
-		if editorToolbarEnabled then
-			buttonsFrame.Visible = true
-			codeFrame.Position = originalCodePosition
-			codeFrame.Size = originalCodeSize
-		else
-			buttonsFrame.Visible = false
-			local yScaleDelta = buttonsFrame.Position.Y.Scale - originalCodePosition.Y.Scale
-			local yOffsetDelta = buttonsFrame.Position.Y.Offset - originalCodePosition.Y.Offset
-			codeFrame.Position = UDim2.new(
-				originalCodePosition.X.Scale,
-				originalCodePosition.X.Offset,
-				buttonsFrame.Position.Y.Scale,
-				buttonsFrame.Position.Y.Offset - 4
-			)
-			codeFrame.Size = UDim2.new(
-				originalCodeSize.X.Scale,
-				originalCodeSize.X.Offset,
-				originalCodeSize.Y.Scale + yScaleDelta,
-				originalCodeSize.Y.Offset + yOffsetDelta - 4
-			)
-		end
+		buttonsFrame.Visible = true
+		codeFrame.Position = originalCodePosition
+		codeFrame.Size = originalCodeSize
 		task.defer(updateStatusPosition)
 		task.delay(0.05, function()
 			if runtime.alive then
 				editorCanvas.resizeAll()
+			end
+		end)
+	end
+
+	addRestorer(function()
+		for button, layoutOrder in sidebarOriginalOrders do
+			if button and button.Parent then
+				button.LayoutOrder = layoutOrder
+			end
+		end
+		if sidebarLayout and originalSidebarSortOrder then
+			sidebarLayout.SortOrder = originalSidebarSortOrder
+		end
+	end)
+
+	if sidebar then
+		applySidebarOrder()
+		connect(sidebar.ChildAdded, function(object)
+			if sidebarNameSet[object.Name] and object:IsA("GuiObject") then
+				task.defer(applySidebarOrder)
 			end
 		end)
 	end
@@ -10265,6 +10594,18 @@ do
 			codeFrame.Size = originalCodeSize
 		end
 		if buttonsFrame and buttonsFrame.Parent then
+			for _, name in { "LT_Copy", "LT_Paste", "LT_NewLine" } do
+				local button = buttonsFrame:FindFirstChild(name)
+				if button then
+					button:Destroy()
+				end
+			end
+			for _, name in { "Execute", "Clear", "ExecuteClipboard" } do
+				restoreNativeButton(buttonsFrame:FindFirstChild(name))
+			end
+			if toolbarLayout and originalToolbarPadding then
+				toolbarLayout.Padding = originalToolbarPadding
+			end
 			buttonsFrame.Visible = originalButtonsVisible
 		end
 	end)
@@ -10927,6 +11268,144 @@ do
 		return row, button
 	end
 
+	local sidebarSortMenu
+	local sidebarSortList
+	local refreshSidebarSortMenu
+
+	local function makeSortButton(parent, text, position, size, callback)
+		local button = Instance.new("TextButton")
+		button.BackgroundColor3 = Color3.fromRGB(31, 31, 36)
+		button.BorderSizePixel = 0
+		button.Position = position
+		button.Size = size
+		button.Font = Enum.Font.GothamMedium
+		button.Text = text
+		button.TextColor3 = Color3.new(1, 1, 1)
+		button.TextSize = 12
+		button.AutoButtonColor = true
+		button.ZIndex = 10003
+		button.Parent = parent
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0, 6)
+		corner.Parent = button
+		connect(button.Activated, callback)
+		return button
+	end
+
+	local function ensureSidebarSortMenu()
+		if sidebarSortMenu and sidebarSortMenu.Parent then
+			return sidebarSortMenu
+		end
+		local menu = Instance.new("Frame")
+		menu.Name = "LT_SidebarSortMenu"
+		menu.AnchorPoint = Vector2.new(0.5, 0.5)
+		menu.Position = UDim2.fromScale(0.5, 0.5)
+		menu.Size = UDim2.fromOffset(390, 410)
+		menu.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+		menu.BorderSizePixel = 0
+		menu.Visible = false
+		menu.ZIndex = 10000
+		menu.Parent = v2Main
+		track(menu)
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0, 12)
+		corner.Parent = menu
+		local stroke = Instance.new("UIStroke")
+		stroke.Color = Color3.fromRGB(72, 72, 82)
+		stroke.Thickness = 1
+		stroke.Parent = menu
+		local title = Instance.new("TextLabel")
+		title.BackgroundTransparency = 1
+		title.Position = UDim2.fromOffset(18, 12)
+		title.Size = UDim2.new(1, -76, 0, 30)
+		title.Font = Enum.Font.GothamBold
+		title.Text = "Sidebar button order"
+		title.TextColor3 = Color3.new(1, 1, 1)
+		title.TextSize = 17
+		title.TextXAlignment = Enum.TextXAlignment.Left
+		title.ZIndex = 10001
+		title.Parent = menu
+		local description = Instance.new("TextLabel")
+		description.BackgroundTransparency = 1
+		description.Position = UDim2.fromOffset(18, 44)
+		description.Size = UDim2.new(1, -36, 0, 34)
+		description.Font = Enum.Font.Gotham
+		description.Text = "Move Delta's native sidebar buttons. Changes save immediately."
+		description.TextColor3 = Color3.fromRGB(178, 178, 188)
+		description.TextSize = 12
+		description.TextWrapped = true
+		description.TextXAlignment = Enum.TextXAlignment.Left
+		description.TextYAlignment = Enum.TextYAlignment.Top
+		description.ZIndex = 10001
+		description.Parent = menu
+		makeSortButton(menu, "X", UDim2.new(1, -48, 0, 12), UDim2.fromOffset(34, 30), function()
+			menu.Visible = false
+		end)
+		local list = Instance.new("Frame")
+		list.Name = "List"
+		list.BackgroundTransparency = 1
+		list.Position = UDim2.fromOffset(16, 86)
+		list.Size = UDim2.new(1, -32, 1, -142)
+		list.ZIndex = 10001
+		list.Parent = menu
+		local layout = Instance.new("UIListLayout")
+		layout.Padding = UDim.new(0, 6)
+		layout.SortOrder = Enum.SortOrder.LayoutOrder
+		layout.Parent = list
+		makeSortButton(menu, "RESET", UDim2.new(0, 16, 1, -44), UDim2.new(1, -32, 0, 32), function()
+			sidebarOrder = table.clone(sidebarNames)
+			applySidebarOrder()
+			saveSidebarOrder()
+			if refreshSidebarSortMenu then
+				refreshSidebarSortMenu()
+			end
+		end)
+		sidebarSortMenu = menu
+		sidebarSortList = list
+		return menu
+	end
+
+	refreshSidebarSortMenu = function()
+		ensureSidebarSortMenu()
+		for _, child in sidebarSortList:GetChildren() do
+			if child:IsA("Frame") and child.Name:sub(1, 12) == "LT_OrderRow_" then
+				child:Destroy()
+			end
+		end
+		for index, name in sidebarOrder do
+			local row = Instance.new("Frame")
+			row.Name = "LT_OrderRow_" .. name
+			row.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+			row.BorderSizePixel = 0
+			row.Size = UDim2.new(1, 0, 0, 42)
+			row.LayoutOrder = index
+			row.ZIndex = 10002
+			row.Parent = sidebarSortList
+			local corner = Instance.new("UICorner")
+			corner.CornerRadius = UDim.new(0, 8)
+			corner.Parent = row
+			local label = Instance.new("TextLabel")
+			label.BackgroundTransparency = 1
+			label.Position = UDim2.fromOffset(12, 0)
+			label.Size = UDim2.new(1, -126, 1, 0)
+			label.Font = Enum.Font.GothamMedium
+			label.Text = string.format("%d. %s", index, name)
+			label.TextColor3 = Color3.new(1, 1, 1)
+			label.TextSize = 13
+			label.TextXAlignment = Enum.TextXAlignment.Left
+			label.ZIndex = 10003
+			label.Parent = row
+			makeSortButton(row, "UP", UDim2.new(1, -108, 0.5, -14), UDim2.fromOffset(48, 28), function()
+				moveSidebarButton(name, -1)
+				refreshSidebarSortMenu()
+			end)
+			makeSortButton(row, "DOWN", UDim2.new(1, -56, 0.5, -14), UDim2.fromOffset(52, 28), function()
+				moveSidebarButton(name, 1)
+				refreshSidebarSortMenu()
+			end)
+		end
+	end
+
 	local function createToggleSetting(name, titleText, descText, initial, onChanged)
 		local enabled = initial
 		local row
@@ -11095,14 +11574,26 @@ do
 
 	createToggleSetting(
 		"LT_EditorToolbarSetting",
-		"Enhanced editor toolbar",
-		"Adds mobile-friendly Execute, Copy, Paste and New Line controls",
+		"Extended editor toolbar",
+		"Resizes Delta's native controls and adds Copy, Paste, and Add Line",
 		editorToolbarEnabled,
 		function(enabled)
 			editorToolbarEnabled = enabled
 			saveBool("EditorToolbar", enabled)
 			buildToolbar()
 			applyToolbarLayout()
+		end
+	)
+
+	createSettingRow(
+		"LT_SidebarButtonOrder",
+		"Sidebar button order",
+		"Reorders Delta's native sidebar buttons and saves the selected order",
+		"SORT",
+		function()
+			local menu = ensureSidebarSortMenu()
+			refreshSidebarSortMenu()
+			menu.Visible = not menu.Visible
 		end
 	)
 
@@ -11189,6 +11680,21 @@ do
 		end
 	)
 
+	createSettingRow(
+		"LT_UnloadCustomization",
+		"Unload customization",
+		"Restores Delta's original interface and removes the active customization",
+		"UNLOAD",
+		function()
+			local master = rawget(__dcm_env, "__DeltaCustomizationMasterRuntime")
+			if type(master) == "table" and type(master.stop) == "function" then
+				task.defer(master.stop)
+			else
+				task.defer(runtime.stop)
+			end
+		end
+	)
+
 	createCycleSetting(
 		"LT_EditorFontSize",
 		"Editor font size",
@@ -11259,14 +11765,18 @@ do
 	connect(codeFrame:GetPropertyChangedSignal("Size"), updateStatusPosition)
 	connect(codeFrame:GetPropertyChangedSignal("AbsoluteSize"), updateStatusPosition)
 	connect(buttonsFrame.ChildAdded, function(object)
-		if editorToolbarEnabled and object:IsA("GuiButton") and object.Name ~= "LT_EditorToolbar" then
-			local nativeVisible = object:GetAttribute("LT_NativeVisible")
-			if typeof(nativeVisible) ~= "boolean" then
-				nativeVisible = object.Visible
-				object:SetAttribute("LT_NativeVisible", nativeVisible)
-			end
-			runtime.originalButtons[object] = nativeVisible
-			object.Visible = false
+		if not object:IsA("GuiButton") then
+			return
+		end
+		if object.Name == "Execute" or object.Name == "Clear" or object.Name == "ExecuteClipboard" then
+			object:SetAttribute("LT_NativeVisible", true)
+			runtime.originalButtons[object] = true
+			object.Visible = true
+			task.defer(function()
+				if runtime.alive and object.Parent == buttonsFrame then
+					buildToolbar()
+				end
+			end)
 		end
 	end)
 

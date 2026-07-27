@@ -234,7 +234,7 @@ __dcm_env.__DeltaVisualPatchLoaded = nil
 __dcm_env.__DeltaThemeMenuPatchLoaded = nil
 
 local __dcm_flag = {
-	version = "2.5.0",
+	version = "2.5.1",
 	loadedAt = tick(),
 }
 __dcm_env.__DeltaCustomizationModuleLoaded = __dcm_flag
@@ -895,6 +895,7 @@ __dcm_masterRuntime.stop = function()
 	__dcm_env.__DeltaVisualPatchLoaded = nil
 	__dcm_env.__DeltaThemeMenuPatchLoaded = nil
 	__dcm_env.DeltaIcon = nil
+	__dcm_env.__NewDeltaUIToggle = nil
 end
 
 local managedIcon = {
@@ -1846,6 +1847,15 @@ local deltaIconApi = {
 	scan = scanIcons,
 	removeEntry = removeIconEntry,
 	removeAll = removeAllIcons,
+	getButton = function()
+		refreshIconButtonState()
+		return iconBtn
+	end,
+	rebindToggle = function()
+		if bindManagedIconToggle then
+			bindManagedIconToggle()
+		end
+	end,
 	data = dIcons,
 }
 deltaEnv.DeltaIcon = deltaIconApi
@@ -3026,10 +3036,10 @@ task.defer(function()
 		updateManagedIconDisplay(instant)
 	end
 	local function setIconForcedHidden(hidden)
+		iconForcedHidden = hidden and true or false
 		if not iconBtn then
 			return
 		end
-		iconForcedHidden = hidden and true or false
 		updateManagedIconDisplay(false)
 	end
 	task.defer(function()
@@ -4680,6 +4690,13 @@ task.defer(function()
 			return
 		end
 		NAlib.connect("ManagedIcon_Toggle", MouseButtonFix(iconBtn, function()
+			local override = rawget(__dcm_env, "__NewDeltaUIToggle")
+			if type(override) == "function" then
+				local ok, handled = pcall(override)
+				if ok and handled ~= false then
+					return
+				end
+			end
 			if not sidebar then
 				return
 			end
@@ -4933,6 +4950,20 @@ task.defer(function()
 			end
 		end
 		return cur
+	end
+	do
+		local iconApi = rawget(__dcm_env, "DeltaIcon")
+		if type(iconApi) == "table" then
+			iconApi.getCurrentSectionName = getCurrentSectionName
+			iconApi.setForcedHidden = setIconForcedHidden
+			iconApi.openClassic = openDeltaFromIcon
+			iconApi.closeClassic = closeDeltaSidebar
+			iconApi.setCurrentSection = function(name)
+				if table.find(sectionsList, name) then
+					sidebarCurrentSection = name
+				end
+			end
+		end
 	end
 	local function bindSidebarSectionMemory()
 		NAlib.disconnect("SidebarSectionMemory")
@@ -9716,7 +9747,7 @@ do
 
 	local runtime = {
 		alive = true,
-		version = "2.5.0",
+		version = "2.5.1",
 		connections = {},
 		instances = {},
 		originalButtons = setmetatable({}, { __mode = "k" }),
@@ -9960,7 +9991,7 @@ do
 	local sidebar = v2Main:FindFirstChild("Sidebar") or v2Main:FindFirstChild("Sidebar", true)
 	local sidebarLayout = sidebar and sidebar:FindFirstChildOfClass("UIListLayout")
 	local originalSidebarSortOrder = sidebarLayout and sidebarLayout.SortOrder or nil
-	local sidebarNames = { "Home", "Executor", "Scripthub", "Console", "Settings", "ToggleUI" }
+	local sidebarNames = { "Home", "Executor", "Scripthub", "Music", "Console", "Settings", "ToggleUI" }
 	local sidebarNameSet = {}
 	local sidebarOriginalOrders = setmetatable({}, { __mode = "k" })
 	for _, name in sidebarNames do
@@ -9982,9 +10013,19 @@ do
 				end
 			end
 		end
+		local musicWasMissing = not used.Music
 		for _, name in sidebarNames do
 			if not used[name] then
+				used[name] = true
 				table.insert(result, name)
+			end
+		end
+		if musicWasMissing then
+			local musicIndex = table.find(result, "Music")
+			if musicIndex then
+				table.remove(result, musicIndex)
+				local hubIndex = table.find(result, "Scripthub") or math.min(3, #result)
+				table.insert(result, hubIndex + 1, "Music")
 			end
 		end
 		return result
@@ -10152,6 +10193,78 @@ do
 			Description = "Clipboard access is unavailable in this Delta build.",
 			Duration = 5,
 		})
+	end
+
+	local function executeSource(source, chunkName)
+		source = tostring(source or "")
+		if type(loadstring) ~= "function" then
+			notify({
+				Title = "Delta Customization",
+				Description = "Script execution is unavailable in this Delta build.",
+				Duration = 5,
+			})
+			return false
+		end
+		local compiled, compileError = loadstring(source, chunkName or "=Delta V2")
+		if not compiled then
+			notify({
+				Title = "Delta V2 compile error",
+				Description = tostring(compileError or "Unknown compile error"),
+				Duration = 7,
+			})
+			return false
+		end
+		task.spawn(function()
+			local ok, runtimeError = xpcall(compiled, function(message)
+				return tostring(message)
+			end)
+			if not ok then
+				notify({
+					Title = "Delta V2 runtime error",
+					Description = tostring(runtimeError or "Unknown runtime error"),
+					Duration = 7,
+				})
+			end
+		end)
+		return true
+	end
+
+	local function executeActiveCode()
+		local box = getActiveCodeBox()
+		if not box then
+			return false
+		end
+		return executeSource(box.Text or "", "=" .. tostring(box.Name))
+	end
+
+	local function clearActiveCode()
+		local box = getActiveCodeBox()
+		if not box then
+			return false
+		end
+		box.Text = ""
+		task.defer(function()
+			if box and box.Parent then
+				pcall(function()
+					box.CursorPosition = 1
+					box.SelectionStart = -1
+				end)
+			end
+		end)
+		return true
+	end
+
+	local function executeClipboardCode()
+		local value = readClipboard()
+		if type(value) ~= "string" then
+			notify({
+				Title = "Delta Customization",
+				Description = "Clipboard access is unavailable in this Delta build.",
+				Duration = 5,
+			})
+			return false
+		end
+		return executeSource(value, "=Delta V2 Clipboard")
 	end
 
 	local function activateOriginal(button)
@@ -11300,7 +11413,7 @@ do
 		menu.Name = "LT_SidebarSortMenu"
 		menu.AnchorPoint = Vector2.new(0.5, 0.5)
 		menu.Position = UDim2.fromScale(0.5, 0.5)
-		menu.Size = UDim2.fromOffset(390, 410)
+		menu.Size = UDim2.fromOffset(390, 520)
 		menu.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
 		menu.BorderSizePixel = 0
 		menu.Visible = false
@@ -11330,7 +11443,7 @@ do
 		description.Position = UDim2.fromOffset(18, 44)
 		description.Size = UDim2.new(1, -36, 0, 34)
 		description.Font = Enum.Font.Gotham
-		description.Text = "Move Delta's native sidebar buttons. Changes save immediately."
+		description.Text = "Reorders Home, Executor, Scripthub, Music, Console, Settings, and the classic ToggleUI button."
 		description.TextColor3 = Color3.fromRGB(178, 178, 188)
 		description.TextSize = 12
 		description.TextWrapped = true
@@ -11558,6 +11671,1637 @@ do
 		return row
 	end
 
+
+	local newUi = {
+		enabled = readBool("NewDeltaUI", false),
+		open = true,
+		activePage = "Executor",
+		applying = false,
+		railCollapsed = false,
+		originals = setmetatable({}, { __mode = "k" }),
+		created = {},
+		connections = {},
+		tabConnections = {},
+		locks = {},
+		detached = {},
+		pageNames = { "Home", "Executor", "Scripthub", "Music", "Console", "Settings" },
+		pageButtons = {},
+		codeBound = setmetatable({}, { __mode = "k" }),
+	}
+
+	newUi.colors = {
+		panelTop = Color3.fromRGB(32, 48, 59),
+		panelMiddle = Color3.fromRGB(27, 38, 45),
+		panelBottom = Color3.fromRGB(22, 32, 38),
+		railTop = Color3.fromRGB(31, 46, 57),
+		railBottom = Color3.fromRGB(22, 33, 40),
+		stroke = Color3.fromRGB(67, 91, 108),
+		button = Color3.fromRGB(34, 48, 61),
+		buttonStroke = Color3.fromRGB(67, 91, 108),
+		active = Color3.fromRGB(0, 120, 255),
+		text = Color3.fromRGB(247, 249, 252),
+		muted = Color3.fromRGB(218, 225, 232),
+	}
+
+	newUi.pageSet = {}
+	for _, pageName in newUi.pageNames do
+		newUi.pageSet[pageName] = true
+	end
+
+	newUi.getIconApi = function()
+		local iconApi = rawget(__dcm_env, "DeltaIcon")
+		if type(iconApi) == "table" then
+			return iconApi
+		end
+		return nil
+	end
+
+	newUi.getCurrentSectionName = function()
+		local iconApi = newUi.getIconApi()
+		if iconApi and type(iconApi.getCurrentSectionName) == "function" then
+			local ok, pageName = pcall(iconApi.getCurrentSectionName)
+			if ok and type(pageName) == "string" and newUi.pageSet[pageName] then
+				return pageName
+			end
+		end
+		for _, pageName in newUi.pageNames do
+			local page = newUi.getPage and newUi.getPage(pageName)
+			if page and page.Visible then
+				return pageName
+			end
+		end
+		return nil
+	end
+
+	newUi.setIconHidden = function(hidden)
+		local iconApi = newUi.getIconApi()
+		if iconApi and type(iconApi.setForcedHidden) == "function" then
+			local ok = pcall(iconApi.setForcedHidden, hidden and true or false)
+			if ok then
+				return
+			end
+		end
+		if iconApi and type(iconApi.getButton) == "function" then
+			local ok, button = pcall(iconApi.getButton)
+			if ok and button and button:IsA("GuiObject") then
+				button.Visible = not hidden
+			end
+		end
+	end
+
+	newUi.setClassicOpen = function(open)
+		local iconApi = newUi.getIconApi()
+		local callback = iconApi and (open and iconApi.openClassic or iconApi.closeClassic)
+		if type(callback) == "function" then
+			local ok = pcall(callback)
+			if ok then
+				return
+			end
+		end
+		for _, pageName in newUi.pageNames do
+			local page = newUi.getPage and newUi.getPage(pageName)
+			if page then
+				page.Visible = open and pageName == newUi.activePage
+			end
+		end
+		newUi.setIconHidden(open)
+	end
+
+	newUi.capture = function(object, properties)
+		if not object then
+			return
+		end
+		local state = newUi.originals[object]
+		if not state then
+			state = {}
+			newUi.originals[object] = state
+		end
+		for _, property in properties do
+			if state[property] == nil then
+				local ok, value = pcall(function()
+					return object[property]
+				end)
+				if ok then
+					state[property] = { value = value }
+				end
+			end
+		end
+	end
+
+	newUi.connect = function(signal, callback)
+		local ok, connection = pcall(function()
+			return signal:Connect(callback)
+		end)
+		if ok and connection then
+			table.insert(newUi.connections, connection)
+		end
+		return connection
+	end
+
+	newUi.connectTab = function(signal, callback)
+		local ok, connection = pcall(function()
+			return signal:Connect(callback)
+		end)
+		if ok and connection then
+			table.insert(newUi.tabConnections, connection)
+		end
+		return connection
+	end
+
+	newUi.bindClick = function(button, callback)
+		if not (button and button:IsA("GuiButton") and type(callback) == "function") then
+			return nil
+		end
+		local locked = false
+		return newUi.connect(button.Activated, function()
+			if locked or not (newUi.enabled and newUi.applied) then
+				return
+			end
+			locked = true
+			callback()
+			task.delay(0.08, function()
+				locked = false
+			end)
+		end)
+	end
+
+	newUi.bindTabClick = function(button, callback)
+		if not (button and button:IsA("GuiButton") and type(callback) == "function") then
+			return nil
+		end
+		local locked = false
+		return newUi.connectTab(button.Activated, function()
+			if locked or not (newUi.enabled and newUi.applied) then
+				return
+			end
+			locked = true
+			callback()
+			task.delay(0.08, function()
+				locked = false
+			end)
+		end)
+	end
+
+	newUi.make = function(className, name, parent)
+		local object = Instance.new(className)
+		object.Name = name
+		object.Parent = parent
+		table.insert(newUi.created, object)
+		track(object)
+		return object
+	end
+
+	newUi.makeTransient = function(className, name, parent)
+		local object = Instance.new(className)
+		object.Name = name
+		object.Parent = parent
+		return object
+	end
+
+	newUi.ensureCorner = function(object, radius)
+		local corner = object:FindFirstChildOfClass("UICorner")
+		if corner then
+			newUi.capture(corner, { "CornerRadius" })
+		else
+			corner = newUi.make("UICorner", "LT_NewUICorner", object)
+		end
+		corner.CornerRadius = UDim.new(0, radius)
+		return corner
+	end
+
+	newUi.ensureStroke = function(object, color, transparency, thickness)
+		local stroke = object:FindFirstChildOfClass("UIStroke")
+		if stroke then
+			newUi.capture(stroke, { "Color", "Transparency", "Thickness", "Enabled" })
+		else
+			stroke = newUi.make("UIStroke", "LT_NewUIStroke", object)
+		end
+		stroke.Color = color
+		stroke.Transparency = transparency
+		stroke.Thickness = thickness
+		stroke.Enabled = true
+		return stroke
+	end
+
+	newUi.makeCorner = function(object, radius, transient)
+		local corner = transient and newUi.makeTransient("UICorner", "Corner", object)
+			or newUi.make("UICorner", "Corner", object)
+		corner.CornerRadius = UDim.new(0, radius)
+		return corner
+	end
+
+	newUi.makeStroke = function(object, color, transparency, thickness, transient)
+		local stroke = transient and newUi.makeTransient("UIStroke", "Stroke", object)
+			or newUi.make("UIStroke", "Stroke", object)
+		stroke.Color = color
+		stroke.Transparency = transparency
+		stroke.Thickness = thickness
+		return stroke
+	end
+
+	newUi.lock = function(object, property, resolver)
+		if not object then
+			return nil
+		end
+		newUi.capture(object, { property })
+		local state = {
+			object = object,
+			property = property,
+			resolver = resolver,
+			busy = false,
+		}
+		state.apply = function()
+			if state.busy or not (newUi.enabled and newUi.applied and object.Parent) then
+				return
+			end
+			local value = type(resolver) == "function" and resolver() or resolver
+			local ok, current = pcall(function()
+				return object[property]
+			end)
+			if ok and current ~= value then
+				state.busy = true
+				pcall(function()
+					object[property] = value
+				end)
+				state.busy = false
+			end
+		end
+		table.insert(newUi.locks, state)
+		newUi.connect(object:GetPropertyChangedSignal(property), function()
+			if not state.busy then
+				task.defer(state.apply)
+			end
+		end)
+		state.apply()
+		return state
+	end
+
+	newUi.applyLocks = function()
+		for _, state in newUi.locks do
+			state.apply()
+		end
+	end
+
+	newUi.getPage = function(pageName)
+		local page = v2Main:FindFirstChild(pageName)
+		if page and page:IsA("GuiObject") then
+			return page
+		end
+		return nil
+	end
+
+	newUi.getOrderedPages = function()
+		local result = {}
+		local used = {}
+		for _, pageName in sidebarOrder do
+			if newUi.pageSet[pageName] and newUi.getPage(pageName) and not used[pageName] then
+				used[pageName] = true
+				table.insert(result, pageName)
+			end
+		end
+		for _, pageName in newUi.pageNames do
+			if newUi.getPage(pageName) and not used[pageName] then
+				used[pageName] = true
+				table.insert(result, pageName)
+			end
+		end
+		return result
+	end
+
+	newUi.findImage = function(object)
+		if not object then
+			return nil
+		end
+		for _, descendant in object:GetDescendants() do
+			if
+				(descendant:IsA("ImageLabel") or descendant:IsA("ImageButton"))
+				and type(descendant.Image) == "string"
+				and descendant.Image ~= ""
+			then
+				return descendant
+			end
+		end
+		return nil
+	end
+
+	newUi.findSourceIcon = function(pageName)
+		local sourceButton = sidebar and sidebar:FindFirstChild(pageName)
+		return newUi.findImage(sourceButton)
+	end
+
+	newUi.copyIcon = function(source, parent, size, zIndex, transient)
+		local icon = transient and newUi.makeTransient("ImageLabel", "Icon", parent)
+			or newUi.make("ImageLabel", "Icon", parent)
+		icon.AnchorPoint = Vector2.new(0.5, 0.5)
+		icon.Position = UDim2.fromScale(0.5, 0.5)
+		icon.Size = UDim2.fromOffset(size, size)
+		icon.BackgroundTransparency = 1
+		icon.BorderSizePixel = 0
+		icon.ScaleType = Enum.ScaleType.Fit
+		icon.ImageColor3 = Color3.new(1, 1, 1)
+		icon.ImageTransparency = 0
+		icon.ZIndex = zIndex
+		if source then
+			pcall(function()
+				icon.Image = source.Image
+			end)
+			pcall(function()
+				icon.ImageRectOffset = source.ImageRectOffset
+				icon.ImageRectSize = source.ImageRectSize
+			end)
+			pcall(function()
+				icon.ResampleMode = source.ResampleMode
+			end)
+		end
+		local constraint = transient and newUi.makeTransient("UIAspectRatioConstraint", "Aspect", icon)
+			or newUi.make("UIAspectRatioConstraint", "Aspect", icon)
+		constraint.AspectRatio = 1
+		constraint.DominantAxis = Enum.DominantAxis.Height
+		return icon
+	end
+
+	newUi.makeXIcon = function(parent, size, color, zIndex, transient)
+		local holder = transient and newUi.makeTransient("Frame", "Icon", parent)
+			or newUi.make("Frame", "Icon", parent)
+		holder.AnchorPoint = Vector2.new(0.5, 0.5)
+		holder.Position = UDim2.fromScale(0.5, 0.5)
+		holder.Size = UDim2.fromOffset(size, size)
+		holder.BackgroundTransparency = 1
+		holder.ZIndex = zIndex
+		for index, rotation in { 45, -45 } do
+			local line = transient and newUi.makeTransient("Frame", "Line" .. index, holder)
+				or newUi.make("Frame", "Line" .. index, holder)
+			line.AnchorPoint = Vector2.new(0.5, 0.5)
+			line.Position = UDim2.fromScale(0.5, 0.5)
+			line.Size = UDim2.fromOffset(2, math.floor(size * 0.72))
+			line.BackgroundColor3 = color
+			line.BorderSizePixel = 0
+			line.Rotation = rotation
+			line.ZIndex = zIndex
+			if transient then
+				newUi.makeCorner(line, 1, true)
+			else
+				newUi.makeCorner(line, 1, false)
+			end
+		end
+		return holder
+	end
+
+	newUi.makeDocumentIcon = function(parent, size, color, zIndex, withPlus, transient)
+		local holder = transient and newUi.makeTransient("Frame", "DocumentIcon", parent)
+			or newUi.make("Frame", "DocumentIcon", parent)
+		holder.AnchorPoint = Vector2.new(0.5, 0.5)
+		holder.Position = UDim2.fromScale(0.5, 0.5)
+		holder.Size = UDim2.fromOffset(size, size)
+		holder.BackgroundTransparency = 1
+		holder.ZIndex = zIndex
+		local body = transient and newUi.makeTransient("Frame", "Document", holder)
+			or newUi.make("Frame", "Document", holder)
+		body.AnchorPoint = Vector2.new(0.5, 0.5)
+		body.Position = UDim2.fromScale(0.5, 0.48)
+		body.Size = UDim2.fromScale(0.58, 0.72)
+		body.BackgroundTransparency = 1
+		body.ZIndex = zIndex
+		newUi.makeCorner(body, math.max(2, math.floor(size * 0.08)), transient)
+		newUi.makeStroke(body, color, 0, math.max(1.5, size * 0.075), transient)
+		local fold = transient and newUi.makeTransient("Frame", "Fold", holder)
+			or newUi.make("Frame", "Fold", holder)
+		fold.AnchorPoint = Vector2.new(1, 0)
+		fold.Position = UDim2.fromScale(0.79, 0.18)
+		fold.Size = UDim2.fromScale(0.22, 0.22)
+		fold.BackgroundColor3 = newUi.colors.panelTop
+		fold.BorderSizePixel = 0
+		fold.Rotation = 45
+		fold.ZIndex = zIndex + 1
+		if withPlus then
+			local plusHolder = transient and newUi.makeTransient("Frame", "Plus", holder)
+				or newUi.make("Frame", "Plus", holder)
+			plusHolder.AnchorPoint = Vector2.new(0.5, 0.5)
+			plusHolder.Position = UDim2.fromScale(0.27, 0.75)
+			plusHolder.Size = UDim2.fromScale(0.42, 0.42)
+			plusHolder.BackgroundColor3 = newUi.colors.active
+			plusHolder.BorderSizePixel = 0
+			plusHolder.ZIndex = zIndex + 2
+			newUi.makeCorner(plusHolder, math.floor(size * 0.2), transient)
+			for index, value in { Vector2.new(0.58, 0.12), Vector2.new(0.12, 0.58) } do
+				local line = transient and newUi.makeTransient("Frame", "PlusLine" .. index, plusHolder)
+					or newUi.make("Frame", "PlusLine" .. index, plusHolder)
+				line.AnchorPoint = Vector2.new(0.5, 0.5)
+				line.Position = UDim2.fromScale(0.5, 0.5)
+				line.Size = UDim2.fromScale(value.X, value.Y)
+				line.BackgroundColor3 = Color3.new(1, 1, 1)
+				line.BorderSizePixel = 0
+				line.ZIndex = zIndex + 3
+				newUi.makeCorner(line, 1, transient)
+			end
+		end
+		return holder
+	end
+
+	newUi.makePlayIcon = function(parent, size, color, zIndex, transient, withRing)
+		local holder = transient and newUi.makeTransient("Frame", "PlayIcon", parent)
+			or newUi.make("Frame", "PlayIcon", parent)
+		holder.AnchorPoint = Vector2.new(0.5, 0.5)
+		holder.Position = UDim2.fromScale(0.5, 0.5)
+		holder.Size = UDim2.fromOffset(size, size)
+		holder.BackgroundTransparency = 1
+		holder.ZIndex = zIndex
+		if withRing then
+			local ring = transient and newUi.makeTransient("Frame", "Ring", holder)
+				or newUi.make("Frame", "Ring", holder)
+			ring.AnchorPoint = Vector2.new(0.5, 0.5)
+			ring.Position = UDim2.fromScale(0.5, 0.5)
+			ring.Size = UDim2.fromScale(0.9, 0.9)
+			ring.BackgroundTransparency = 1
+			ring.ZIndex = zIndex
+			newUi.makeCorner(ring, size, transient)
+			newUi.makeStroke(ring, color, 0, math.max(1.4, size * 0.075), transient)
+		end
+		local arrow = transient and newUi.makeTransient("TextLabel", "Arrow", holder)
+			or newUi.make("TextLabel", "Arrow", holder)
+		arrow.AnchorPoint = Vector2.new(0.5, 0.5)
+		arrow.Position = UDim2.fromScale(withRing and 0.53 or 0.5, 0.48)
+		arrow.Size = UDim2.fromScale(0.7, 0.8)
+		arrow.BackgroundTransparency = 1
+		arrow.Font = Enum.Font.GothamBold
+		arrow.Text = ">"
+		arrow.TextColor3 = color
+		arrow.TextSize = math.floor(size * (withRing and 0.58 or 0.72))
+		arrow.ZIndex = zIndex + 1
+		return holder
+	end
+
+	newUi.makeTrashIcon = function(parent, size, color, zIndex, transient)
+		local holder = transient and newUi.makeTransient("Frame", "TrashIcon", parent)
+			or newUi.make("Frame", "TrashIcon", parent)
+		holder.AnchorPoint = Vector2.new(0.5, 0.5)
+		holder.Position = UDim2.fromScale(0.5, 0.5)
+		holder.Size = UDim2.fromOffset(size, size)
+		holder.BackgroundTransparency = 1
+		holder.ZIndex = zIndex
+		local body = transient and newUi.makeTransient("Frame", "Body", holder)
+			or newUi.make("Frame", "Body", holder)
+		body.AnchorPoint = Vector2.new(0.5, 1)
+		body.Position = UDim2.fromScale(0.5, 0.92)
+		body.Size = UDim2.fromScale(0.58, 0.58)
+		body.BackgroundTransparency = 1
+		body.ZIndex = zIndex
+		newUi.makeCorner(body, math.max(2, math.floor(size * 0.08)), transient)
+		newUi.makeStroke(body, color, 0, math.max(1.4, size * 0.07), transient)
+		local lid = transient and newUi.makeTransient("Frame", "Lid", holder)
+			or newUi.make("Frame", "Lid", holder)
+		lid.AnchorPoint = Vector2.new(0.5, 0.5)
+		lid.Position = UDim2.fromScale(0.5, 0.27)
+		lid.Size = UDim2.fromScale(0.72, 0.08)
+		lid.BackgroundColor3 = color
+		lid.BorderSizePixel = 0
+		lid.ZIndex = zIndex + 1
+		newUi.makeCorner(lid, 2, transient)
+		local handle = transient and newUi.makeTransient("Frame", "Handle", holder)
+			or newUi.make("Frame", "Handle", holder)
+		handle.AnchorPoint = Vector2.new(0.5, 1)
+		handle.Position = UDim2.fromScale(0.5, 0.23)
+		handle.Size = UDim2.fromScale(0.28, 0.14)
+		handle.BackgroundTransparency = 1
+		handle.ZIndex = zIndex + 1
+		newUi.makeCorner(handle, 2, transient)
+		newUi.makeStroke(handle, color, 0, math.max(1.2, size * 0.06), transient)
+		for index, x in { 0.4, 0.6 } do
+			local line = transient and newUi.makeTransient("Frame", "Slot" .. index, body)
+				or newUi.make("Frame", "Slot" .. index, body)
+			line.AnchorPoint = Vector2.new(0.5, 0.5)
+			line.Position = UDim2.fromScale(x, 0.53)
+			line.Size = UDim2.fromScale(0.08, 0.55)
+			line.BackgroundColor3 = color
+			line.BorderSizePixel = 0
+			line.ZIndex = zIndex + 1
+			newUi.makeCorner(line, 1, transient)
+		end
+		return holder
+	end
+
+	newUi.makeClipboardIcon = function(parent, size, color, zIndex, transient, withPlay)
+		local holder = transient and newUi.makeTransient("Frame", "ClipboardIcon", parent)
+			or newUi.make("Frame", "ClipboardIcon", parent)
+		holder.AnchorPoint = Vector2.new(0.5, 0.5)
+		holder.Position = UDim2.fromScale(0.5, 0.5)
+		holder.Size = UDim2.fromOffset(size, size)
+		holder.BackgroundTransparency = 1
+		holder.ZIndex = zIndex
+		local body = transient and newUi.makeTransient("Frame", "Body", holder)
+			or newUi.make("Frame", "Body", holder)
+		body.AnchorPoint = Vector2.new(0.5, 0.5)
+		body.Position = UDim2.fromScale(withPlay and 0.46 or 0.5, 0.54)
+		body.Size = UDim2.fromScale(0.62, 0.72)
+		body.BackgroundTransparency = 1
+		body.ZIndex = zIndex
+		newUi.makeCorner(body, math.max(2, math.floor(size * 0.08)), transient)
+		newUi.makeStroke(body, color, 0, math.max(1.4, size * 0.07), transient)
+		local clip = transient and newUi.makeTransient("Frame", "Clip", holder)
+			or newUi.make("Frame", "Clip", holder)
+		clip.AnchorPoint = Vector2.new(0.5, 0.5)
+		clip.Position = UDim2.fromScale(withPlay and 0.46 or 0.5, 0.2)
+		clip.Size = UDim2.fromScale(0.34, 0.17)
+		clip.BackgroundColor3 = newUi.colors.button
+		clip.BorderSizePixel = 0
+		clip.ZIndex = zIndex + 1
+		newUi.makeCorner(clip, math.max(2, math.floor(size * 0.07)), transient)
+		newUi.makeStroke(clip, color, 0, math.max(1.2, size * 0.06), transient)
+		if withPlay then
+			local badge = transient and newUi.makeTransient("Frame", "PlayBadge", holder)
+				or newUi.make("Frame", "PlayBadge", holder)
+			badge.AnchorPoint = Vector2.new(0.5, 0.5)
+			badge.Position = UDim2.fromScale(0.76, 0.73)
+			badge.Size = UDim2.fromScale(0.48, 0.48)
+			badge.BackgroundColor3 = newUi.colors.active
+			badge.BorderSizePixel = 0
+			badge.ZIndex = zIndex + 2
+			newUi.makeCorner(badge, size, transient)
+			newUi.makePlayIcon(badge, math.floor(size * 0.34), Color3.new(1, 1, 1), zIndex + 3, transient, false)
+		end
+		return holder
+	end
+
+	newUi.makeMusicIcon = function(parent, size, color, zIndex, transient)
+		local holder = transient and newUi.makeTransient("Frame", "MusicIcon", parent)
+			or newUi.make("Frame", "MusicIcon", parent)
+		holder.AnchorPoint = Vector2.new(0.5, 0.5)
+		holder.Position = UDim2.fromScale(0.5, 0.5)
+		holder.Size = UDim2.fromOffset(size, size)
+		holder.BackgroundTransparency = 1
+		holder.ZIndex = zIndex
+		local stem = transient and newUi.makeTransient("Frame", "Stem", holder)
+			or newUi.make("Frame", "Stem", holder)
+		stem.AnchorPoint = Vector2.new(0.5, 0)
+		stem.Position = UDim2.fromScale(0.62, 0.13)
+		stem.Size = UDim2.fromScale(0.11, 0.58)
+		stem.BackgroundColor3 = color
+		stem.BorderSizePixel = 0
+		stem.ZIndex = zIndex
+		newUi.makeCorner(stem, 2, transient)
+		local beam = transient and newUi.makeTransient("Frame", "Beam", holder)
+			or newUi.make("Frame", "Beam", holder)
+		beam.AnchorPoint = Vector2.new(1, 0)
+		beam.Position = UDim2.fromScale(0.68, 0.13)
+		beam.Size = UDim2.fromScale(0.43, 0.1)
+		beam.BackgroundColor3 = color
+		beam.BorderSizePixel = 0
+		beam.Rotation = -8
+		beam.ZIndex = zIndex
+		newUi.makeCorner(beam, 2, transient)
+		local note = transient and newUi.makeTransient("Frame", "Note", holder)
+			or newUi.make("Frame", "Note", holder)
+		note.AnchorPoint = Vector2.new(0.5, 0.5)
+		note.Position = UDim2.fromScale(0.45, 0.75)
+		note.Size = UDim2.fromScale(0.36, 0.28)
+		note.BackgroundColor3 = color
+		note.BorderSizePixel = 0
+		note.Rotation = -12
+		note.ZIndex = zIndex
+		newUi.makeCorner(note, size, transient)
+		return holder
+	end
+
+	newUi.makeChevronIcon = function(parent, size, color, zIndex, transient)
+		local holder = transient and newUi.makeTransient("Frame", "ChevronIcon", parent)
+			or newUi.make("Frame", "ChevronIcon", parent)
+		holder.AnchorPoint = Vector2.new(0.5, 0.5)
+		holder.Position = UDim2.fromScale(0.5, 0.5)
+		holder.Size = UDim2.fromOffset(size, size)
+		holder.BackgroundTransparency = 1
+		holder.ZIndex = zIndex
+		for index = 1, 2 do
+			local line = transient and newUi.makeTransient("Frame", "Line" .. index, holder)
+				or newUi.make("Frame", "Line" .. index, holder)
+			line.AnchorPoint = Vector2.new(0.5, 0.5)
+			line.Size = UDim2.fromOffset(2, math.floor(size * 0.55))
+			line.BackgroundColor3 = color
+			line.BorderSizePixel = 0
+			line.ZIndex = zIndex
+			newUi.makeCorner(line, 1, transient)
+		end
+		return holder
+	end
+
+	newUi.setChevronDirection = function(holder, pointsRight)
+		if not holder then
+			return
+		end
+		local first = holder:FindFirstChild("Line1")
+		local second = holder:FindFirstChild("Line2")
+		if first then
+			first.Position = UDim2.fromScale(0.5, 0.37)
+			first.Rotation = pointsRight and -42 or 42
+		end
+		if second then
+			second.Position = UDim2.fromScale(0.5, 0.63)
+			second.Rotation = pointsRight and 42 or -42
+		end
+	end
+
+	newUi.makeCopyIcon = function(parent, size, color, zIndex, transient)
+		local holder = transient and newUi.makeTransient("Frame", "CopyIcon", parent)
+			or newUi.make("Frame", "CopyIcon", parent)
+		holder.AnchorPoint = Vector2.new(0.5, 0.5)
+		holder.Position = UDim2.fromScale(0.5, 0.5)
+		holder.Size = UDim2.fromOffset(size, size)
+		holder.BackgroundTransparency = 1
+		holder.ZIndex = zIndex
+		local back = transient and newUi.makeTransient("Frame", "Back", holder)
+			or newUi.make("Frame", "Back", holder)
+		back.AnchorPoint = Vector2.new(0.5, 0.5)
+		back.Position = UDim2.fromScale(0.62, 0.38)
+		back.Size = UDim2.fromScale(0.58, 0.64)
+		back.BackgroundColor3 = newUi.colors.button
+		back.BorderSizePixel = 0
+		back.ZIndex = zIndex
+		newUi.makeCorner(back, math.max(2, math.floor(size * 0.08)), transient)
+		newUi.makeStroke(back, color, 0, math.max(1.3, size * 0.065), transient)
+		local front = transient and newUi.makeTransient("Frame", "Front", holder)
+			or newUi.make("Frame", "Front", holder)
+		front.AnchorPoint = Vector2.new(0.5, 0.5)
+		front.Position = UDim2.fromScale(0.4, 0.62)
+		front.Size = UDim2.fromScale(0.58, 0.64)
+		front.BackgroundColor3 = newUi.colors.button
+		front.BorderSizePixel = 0
+		front.ZIndex = zIndex + 1
+		newUi.makeCorner(front, math.max(2, math.floor(size * 0.08)), transient)
+		newUi.makeStroke(front, color, 0, math.max(1.3, size * 0.065), transient)
+		return holder
+	end
+
+	newUi.makeActionIcon = function(kind, parent, size, color, zIndex, transient)
+		if kind == "Execute" then
+			return newUi.makePlayIcon(parent, size, color, zIndex, transient, true)
+		elseif kind == "Clear" then
+			return newUi.makeTrashIcon(parent, size, color, zIndex, transient)
+		elseif kind == "ExecuteClipboard" then
+			return newUi.makeClipboardIcon(parent, size, color, zIndex, transient, true)
+		elseif kind == "Copy" then
+			return newUi.makeCopyIcon(parent, size, color, zIndex, transient)
+		end
+		return newUi.makeClipboardIcon(parent, size, color, zIndex, transient, false)
+	end
+
+	newUi.createNavButton = function(pageName)
+		local button = newUi.make("ImageButton", "LT_NewUINav_" .. pageName, newUi.navBar)
+		button.Size = UDim2.fromOffset(64, 64)
+		button.BackgroundColor3 = newUi.colors.active
+		button.BackgroundTransparency = 1
+		button.BorderSizePixel = 0
+		button.AutoButtonColor = false
+		button.Image = ""
+		button.ZIndex = 12002
+		newUi.makeCorner(button, 32, false)
+		local source = newUi.findSourceIcon(pageName)
+		local icon
+		if source then
+			icon = newUi.copyIcon(source, button, 25, 12003, false)
+		else
+			if pageName == "Music" then
+				icon = newUi.makeMusicIcon(button, 27, Color3.new(1, 1, 1), 12003, false)
+			else
+				icon = newUi.make("TextLabel", "Icon", button)
+				icon.AnchorPoint = Vector2.new(0.5, 0.5)
+				icon.Position = UDim2.fromScale(0.5, 0.5)
+				icon.Size = UDim2.fromOffset(32, 32)
+				icon.BackgroundTransparency = 1
+				icon.Font = pageName == "Executor" and Enum.Font.Code or Enum.Font.GothamBold
+				icon.Text = pageName == "Executor" and ">_" or pageName:sub(1, 1)
+				icon.TextColor3 = Color3.new(1, 1, 1)
+				icon.TextSize = pageName == "Executor" and 18 or 20
+				icon.ZIndex = 12003
+			end
+		end
+		newUi.pageButtons[pageName] = {
+			button = button,
+			icon = icon,
+		}
+		newUi.bindClick(button, function()
+			newUi.showPage(pageName)
+		end)
+		return button
+	end
+
+	newUi.refreshOrder = function()
+		if not (newUi.navBar and newUi.navBar.Parent) then
+			return
+		end
+		local ordered = newUi.getOrderedPages()
+		for index, pageName in ordered do
+			local entry = newUi.pageButtons[pageName]
+			if entry and entry.button then
+				entry.button.LayoutOrder = index
+			end
+		end
+		local width = (#ordered * 64) + (math.max(#ordered - 1, 0) * 4) + 24
+		newUi.navBar.Size = UDim2.fromOffset(width, 80)
+		if newUi.closeButton then
+			newUi.closeButton.Position = UDim2.new(0.53, -(math.floor(width / 2) + 49), 0.015, 0)
+		end
+	end
+
+	newUi.refreshNav = function()
+		local visible = newUi.enabled and newUi.applied and newUi.open
+		if newUi.navBar then
+			newUi.navBar.Visible = visible
+		end
+		if newUi.closeButton then
+			newUi.closeButton.Visible = visible
+		end
+		if newUi.rail then
+			newUi.rail.Visible = visible and newUi.activePage == "Executor"
+		end
+		for pageName, entry in newUi.pageButtons do
+			local active = visible and newUi.activePage == pageName
+			entry.button.BackgroundTransparency = active and 0 or 1
+			if entry.icon:IsA("ImageLabel") then
+				entry.icon.ImageColor3 = Color3.new(1, 1, 1)
+				entry.icon.ImageTransparency = active and 0 or 0.1
+			elseif entry.icon:IsA("TextLabel") then
+				entry.icon.TextColor3 = Color3.new(1, 1, 1)
+				entry.icon.TextTransparency = active and 0 or 0.1
+			end
+		end
+	end
+
+	newUi.syncPages = function()
+		if not (newUi.enabled and newUi.applied) then
+			return
+		end
+		newUi.applying = true
+		for _, pageName in newUi.pageNames do
+			local page = newUi.getPage(pageName)
+			if page then
+				page.Visible = newUi.open and pageName == newUi.activePage
+			end
+		end
+		if sidebar and sidebar.Parent then
+			sidebar.Visible = false
+		end
+		newUi.applying = false
+		newUi.refreshNav()
+		newUi.setIconHidden(newUi.open)
+	end
+
+	newUi.showPage = function(pageName)
+		if not (newUi.enabled and newUi.applied and newUi.pageSet[pageName]) then
+			return
+		end
+		newUi.activePage = pageName
+		newUi.open = true
+		newUi.syncPages()
+		newUi.applyLocks()
+		if pageName == "Executor" then
+			newUi.rebuildTabs()
+			task.defer(editorCanvas.resizeAll)
+			task.defer(updateStatusPosition)
+		end
+	end
+
+	newUi.setOpen = function(open)
+		if not (newUi.enabled and newUi.applied) then
+			return
+		end
+		newUi.open = open and true or false
+		newUi.syncPages()
+		newUi.applyLocks()
+	end
+
+	newUi.updateLineNumbers = function()
+		if not (newUi.lineGutter and newUi.lineNumbers and newUi.enabled and newUi.applied) then
+			return
+		end
+		local box = getActiveCodeBox()
+		if not box then
+			newUi.lineNumbers.Text = ""
+			return
+		end
+		local text = box.Text or ""
+		local _, breaks = text:gsub("\n", "\n")
+		local count = math.min(breaks + 1, 5000)
+		local numbers = table.create(count)
+		for index = 1, count do
+			numbers[index] = tostring(index)
+		end
+		local lineHeight = math.max(1, box.LineHeight)
+		newUi.lineNumbers.Text = table.concat(numbers, "\n")
+		newUi.lineNumbers.TextSize = box.TextSize
+		newUi.lineNumbers.LineHeight = lineHeight
+		newUi.lineNumbers.Position = UDim2.fromOffset(0, 6 - codeFrame.CanvasPosition.Y)
+		newUi.lineNumbers.Size = UDim2.new(1, -4, 0, math.max(newUi.lineGutter.AbsoluteSize.Y, math.ceil(count * box.TextSize * lineHeight) + 20))
+	end
+
+	newUi.clearTabConnections = function()
+		for i = #newUi.tabConnections, 1, -1 do
+			pcall(function()
+				newUi.tabConnections[i]:Disconnect()
+			end)
+		end
+		table.clear(newUi.tabConnections)
+	end
+
+	newUi.updateTabCanvas = function()
+		if not (newUi.tabBar and newUi.tabLayout) then
+			return
+		end
+		newUi.tabBar.CanvasSize = UDim2.fromOffset(newUi.tabLayout.AbsoluteContentSize.X + 4, 0)
+	end
+
+	newUi.getNativeTabTitle = function(tab)
+		local title = tab and (tab:FindFirstChild("Title", true) or tab:FindFirstChildWhichIsA("TextLabel", true))
+		local value = title and title:IsA("TextLabel") and title.Text ~= "" and title.Text or tab and tab.Name or "New tab"
+		local index = tostring(value):match("^script(%d+)%.lua$")
+		if index then
+			return tonumber(index) == 1 and "New tab" or "New tab " .. index
+		end
+		return value
+	end
+
+	newUi.getNativeClose = function(tab)
+		if not tab then
+			return nil
+		end
+		for _, descendant in tab:GetDescendants() do
+			if descendant:IsA("GuiButton") then
+				return descendant
+			end
+		end
+		return nil
+	end
+
+	newUi.rebuildTabs = function()
+		if not (newUi.enabled and newUi.applied and newUi.tabBar and newUi.tabBar.Parent) then
+			return
+		end
+		newUi.clearTabConnections()
+		for _, child in newUi.tabBar:GetChildren() do
+			if child:GetAttribute("LT_CustomTab") then
+				child:Destroy()
+			end
+		end
+		local nativeTabs = {}
+		for _, tab in tabsFrame:GetChildren() do
+			if tab:IsA("GuiButton") and tab.Name:match("^script%d+%.lua$") then
+				table.insert(nativeTabs, tab)
+			end
+		end
+		table.sort(nativeTabs, function(a, b)
+			return (a.LayoutOrder ~= b.LayoutOrder and a.LayoutOrder < b.LayoutOrder)
+				or (a.LayoutOrder == b.LayoutOrder and a.Name < b.Name)
+		end)
+		for index, nativeTab in nativeTabs do
+			local box = codeFrame:FindFirstChild(nativeTab.Name, true)
+			local active = box and box:IsA("TextBox") and box.Visible
+			local button = newUi.makeTransient("ImageButton", nativeTab.Name, newUi.tabBar)
+			button:SetAttribute("LT_CustomTab", true)
+			button.Size = UDim2.fromOffset(184, 54)
+			button.LayoutOrder = index
+			button.BackgroundColor3 = active and newUi.colors.active or newUi.colors.button
+			button.BackgroundTransparency = active and 0 or 0.12
+			button.BorderSizePixel = 0
+			button.AutoButtonColor = false
+			button.Image = ""
+			button.ZIndex = 12010
+			newUi.makeCorner(button, 16, true)
+			if not active then
+				newUi.makeStroke(button, newUi.colors.buttonStroke, 0.5, 1, true)
+			end
+			local documentHolder = newUi.makeTransient("Frame", "DocumentHolder", button)
+			documentHolder.AnchorPoint = Vector2.new(0, 0.5)
+			documentHolder.Position = UDim2.new(0, 14, 0.5, 0)
+			documentHolder.Size = UDim2.fromOffset(24, 24)
+			documentHolder.BackgroundTransparency = 1
+			documentHolder.ZIndex = 12011
+			newUi.makeDocumentIcon(documentHolder, 22, Color3.new(1, 1, 1), 12012, true, true)
+			local title = newUi.makeTransient("TextLabel", "Title", button)
+			title.AnchorPoint = Vector2.new(0, 0.5)
+			title.Position = UDim2.new(0, 45, 0.5, 0)
+			title.Size = UDim2.new(1, -78, 1, 0)
+			title.BackgroundTransparency = 1
+			title.Font = Enum.Font.GothamMedium
+			title.Text = newUi.getNativeTabTitle(nativeTab)
+			title.TextColor3 = newUi.colors.text
+			title.TextSize = 15
+			title.TextXAlignment = Enum.TextXAlignment.Left
+			title.TextTruncate = Enum.TextTruncate.AtEnd
+			title.ZIndex = 12011
+			local close = newUi.makeTransient("ImageButton", "Close", button)
+			close.AnchorPoint = Vector2.new(1, 0.5)
+			close.Position = UDim2.new(1, -10, 0.5, 0)
+			close.Size = UDim2.fromOffset(30, 30)
+			close.BackgroundTransparency = 1
+			close.BorderSizePixel = 0
+			close.AutoButtonColor = false
+			close.Image = ""
+			close.ZIndex = 12012
+			newUi.makeXIcon(close, 15, Color3.fromRGB(214, 223, 231), 12013, true)
+			newUi.bindTabClick(button, function()
+				selectTabByName(nativeTab.Name)
+				task.defer(newUi.rebuildTabs)
+				task.defer(editorCanvas.resizeAll)
+			end)
+			newUi.bindTabClick(close, function()
+				local nativeClose = newUi.getNativeClose(nativeTab)
+				if nativeClose then
+					activateOriginal(nativeClose)
+				else
+					local nativeBox = codeFrame:FindFirstChild(nativeTab.Name, true)
+					if nativeBox then
+						nativeBox:Destroy()
+					end
+					nativeTab:Destroy()
+				end
+				task.delay(0.08, function()
+					local activeBox = getActiveCodeBox()
+					if not activeBox then
+						local first = tabsFrame:FindFirstChildWhichIsA("GuiButton")
+						if first and first.Name:match("^script%d+%.lua$") then
+							selectTabByName(first.Name)
+						end
+					end
+					newUi.rebuildTabs()
+				end)
+			end)
+		end
+		newUi.updateTabCanvas()
+		newUi.updateLineNumbers()
+	end
+
+	newUi.refreshTabs = newUi.rebuildTabs
+
+	newUi.bindCodeBox = function(box)
+		if not (box and box:IsA("TextBox") and box.Name:match("^script%d+%.lua$") and not newUi.codeBound[box]) then
+			return
+		end
+		newUi.codeBound[box] = true
+		newUi.connect(box:GetPropertyChangedSignal("Visible"), function()
+			task.defer(newUi.rebuildTabs)
+		end)
+		newUi.connect(box:GetPropertyChangedSignal("Name"), function()
+			task.defer(newUi.rebuildTabs)
+		end)
+		for _, property in { "Text", "TextSize", "LineHeight" } do
+			newUi.connect(box:GetPropertyChangedSignal(property), function()
+				task.defer(newUi.updateLineNumbers)
+			end)
+		end
+	end
+
+	newUi.createActionButton = function(name, text, position, size, iconKind, callback)
+		local button = newUi.make("ImageButton", name, newUi.toolbar)
+		button.AnchorPoint = Vector2.new(position.X.Scale == 1 and 1 or 0, 0)
+		button.Position = position
+		button.Size = size
+		button.BackgroundColor3 = newUi.colors.button
+		button.BackgroundTransparency = 0.08
+		button.BorderSizePixel = 0
+		button.AutoButtonColor = false
+		button.Image = ""
+		button.ZIndex = 12010
+		newUi.makeCorner(button, 14, false)
+		newUi.makeStroke(button, newUi.colors.buttonStroke, 0.2, 1.5, false)
+		local holder = newUi.make("Frame", "IconHolder", button)
+		holder.AnchorPoint = Vector2.new(0, 0.5)
+		holder.Position = UDim2.new(0, 14, 0.5, 0)
+		holder.Size = UDim2.fromOffset(24, 24)
+		holder.BackgroundTransparency = 1
+		holder.ZIndex = 12012
+		newUi.makeActionIcon(iconKind, holder, 22, newUi.colors.text, 12013, false)
+		local label = newUi.make("TextLabel", "Text", button)
+		label.Position = UDim2.new(0, 48, 0, 0)
+		label.Size = UDim2.new(1, -58, 1, 0)
+		label.BackgroundTransparency = 1
+		label.Font = Enum.Font.GothamMedium
+		label.Text = text
+		label.TextColor3 = newUi.colors.text
+		label.TextSize = 14
+		label.TextXAlignment = Enum.TextXAlignment.Left
+		label.TextTruncate = Enum.TextTruncate.None
+		label.ZIndex = 12012
+		newUi.bindClick(button, callback)
+		return button
+	end
+
+	newUi.applyRailState = function()
+		newUi.applyLocks()
+		if newUi.addButton then
+			newUi.addButton.Visible = not newUi.railCollapsed
+		end
+		if newUi.railTop then
+			newUi.railTop.Visible = not newUi.railCollapsed
+		end
+		newUi.setChevronDirection(newUi.railToggleIcon, newUi.railCollapsed)
+	end
+
+	newUi.buildShell = function()
+		newUi.capture(sidebar, { "Visible" })
+		if sidebar then
+			sidebar.Visible = false
+			newUi.lock(sidebar, "Visible", false)
+		end
+		newUi.navBar = newUi.make("Frame", "LT_NewUINavBar", v2Main)
+		newUi.navBar.AnchorPoint = Vector2.new(0.5, 0)
+		newUi.navBar.Position = UDim2.new(0.53, 0, 0.015, 0)
+		newUi.navBar.BackgroundColor3 = Color3.fromRGB(20, 34, 47)
+		newUi.navBar.BackgroundTransparency = 0.01
+		newUi.navBar.BorderSizePixel = 0
+		newUi.navBar.ZIndex = 12000
+		newUi.makeCorner(newUi.navBar, 40, false)
+		newUi.makeStroke(newUi.navBar, Color3.fromRGB(58, 79, 95), 0.15, 1.5, false)
+		local layout = newUi.make("UIListLayout", "Layout", newUi.navBar)
+		layout.FillDirection = Enum.FillDirection.Horizontal
+		layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+		layout.VerticalAlignment = Enum.VerticalAlignment.Center
+		layout.Padding = UDim.new(0, 4)
+		layout.SortOrder = Enum.SortOrder.LayoutOrder
+		for _, pageName in newUi.pageNames do
+			if newUi.getPage(pageName) then
+				newUi.createNavButton(pageName)
+			end
+		end
+		newUi.closeButton = newUi.make("ImageButton", "LT_NewUIClose", v2Main)
+		newUi.closeButton.AnchorPoint = Vector2.new(0.5, 0)
+		newUi.closeButton.Size = UDim2.fromOffset(80, 80)
+		newUi.closeButton.BackgroundColor3 = Color3.fromRGB(24, 40, 51)
+		newUi.closeButton.BackgroundTransparency = 0.01
+		newUi.closeButton.BorderSizePixel = 0
+		newUi.closeButton.AutoButtonColor = false
+		newUi.closeButton.Image = ""
+		newUi.closeButton.ZIndex = 12000
+		newUi.makeCorner(newUi.closeButton, 40, false)
+		newUi.makeStroke(newUi.closeButton, Color3.fromRGB(58, 79, 95), 0.15, 1.5, false)
+		newUi.makeXIcon(newUi.closeButton, 30, newUi.colors.text, 12002, false)
+		newUi.bindClick(newUi.closeButton, function()
+			newUi.setOpen(false)
+		end)
+		newUi.refreshOrder()
+	end
+
+	newUi.buildPages = function()
+		for _, pageName in newUi.pageNames do
+			local page = newUi.getPage(pageName)
+			if page then
+				newUi.capture(page, { "Visible", "Position", "Size", "AnchorPoint", "ClipsDescendants" })
+				newUi.lock(page, "AnchorPoint", Vector2.zero)
+				newUi.lock(page, "Position", UDim2.new(0.012, 0, 0.16, 0))
+				newUi.lock(page, "Size", UDim2.new(0.976, 0, 0.828, 0))
+				newUi.lock(page, "ClipsDescendants", false)
+				newUi.connect(page:GetPropertyChangedSignal("Visible"), function()
+					if not newUi.applying then
+						task.defer(newUi.syncPages)
+					end
+				end)
+			end
+		end
+	end
+
+	newUi.buildExecutor = function()
+		newUi.capture(editorSideMenu, { "Visible" })
+		if editorSideMenu then
+			newUi.lock(editorSideMenu, "Visible", false)
+		end
+		newUi.capture(executorImage, {
+			"Position",
+			"Size",
+			"AnchorPoint",
+			"BackgroundColor3",
+			"BackgroundTransparency",
+			"ImageTransparency",
+			"ClipsDescendants",
+		})
+		newUi.lock(executorImage, "AnchorPoint", Vector2.zero)
+		newUi.lock(executorImage, "Position", UDim2.fromScale(0, 0))
+		newUi.lock(executorImage, "Size", function()
+			return newUi.railCollapsed and UDim2.new(0.974, 0, 1, 0) or UDim2.new(0.948, 0, 1, 0)
+		end)
+		newUi.lock(executorImage, "BackgroundColor3", newUi.colors.panelTop)
+		newUi.lock(executorImage, "BackgroundTransparency", 0)
+		newUi.lock(executorImage, "ImageTransparency", 1)
+		newUi.lock(executorImage, "ClipsDescendants", true)
+		newUi.ensureCorner(executorImage, 20)
+		newUi.ensureStroke(executorImage, newUi.colors.stroke, 0.22, 1.5)
+		for _, child in executorImage:GetChildren() do
+			if child:IsA("UIGradient") then
+				newUi.capture(child, { "Enabled" })
+				child.Enabled = false
+			end
+		end
+		local panelGradient = newUi.make("UIGradient", "LT_NewUIPanelGradient", executorImage)
+		panelGradient.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, newUi.colors.panelTop),
+			ColorSequenceKeypoint.new(0.5, newUi.colors.panelMiddle),
+			ColorSequenceKeypoint.new(1, newUi.colors.panelBottom),
+		})
+		panelGradient.Rotation = 90
+		newUi.capture(executorOverlay, { "BackgroundTransparency", "ImageTransparency" })
+		newUi.lock(executorOverlay, "BackgroundTransparency", 1)
+		newUi.lock(executorOverlay, "ImageTransparency", 1)
+		newUi.capture(tabsFrame, { "Visible" })
+		newUi.lock(tabsFrame, "Visible", false)
+		newUi.capture(buttonsFrame, { "Visible" })
+		buttonsFrame.Visible = false
+		if statusFrame then
+			newUi.capture(statusFrame, { "Visible" })
+			newUi.lock(statusFrame, "Visible", false)
+		end
+		local menu = executorOverlay:FindFirstChild("Menu")
+		if menu and menu:IsA("GuiObject") then
+			newUi.capture(menu, { "Visible" })
+			newUi.lock(menu, "Visible", false)
+		end
+		newUi.capture(codeFrame, {
+			"Position",
+			"Size",
+			"AnchorPoint",
+			"BackgroundColor3",
+			"BackgroundTransparency",
+			"BorderSizePixel",
+			"ScrollBarThickness",
+			"ScrollBarImageColor3",
+			"ScrollBarImageTransparency",
+		})
+		newUi.lock(codeFrame, "AnchorPoint", Vector2.zero)
+		newUi.lock(codeFrame, "Position", UDim2.new(0.035, 0, 0, 76))
+		newUi.lock(codeFrame, "Size", UDim2.new(0.945, 0, 1, -150))
+		newUi.lock(codeFrame, "BackgroundColor3", newUi.colors.panelMiddle)
+		newUi.lock(codeFrame, "BackgroundTransparency", 1)
+		newUi.lock(codeFrame, "BorderSizePixel", 0)
+		newUi.lock(codeFrame, "ScrollBarThickness", 3)
+		newUi.lock(codeFrame, "ScrollBarImageColor3", Color3.fromRGB(81, 101, 114))
+		newUi.lock(codeFrame, "ScrollBarImageTransparency", 0.35)
+		newUi.lineGutter = newUi.make("Frame", "LT_NewUILineGutter", executorOverlay)
+		newUi.lineGutter.Position = UDim2.new(0.008, 0, 0, 76)
+		newUi.lineGutter.Size = UDim2.new(0.025, 0, 1, -150)
+		newUi.lineGutter.BackgroundTransparency = 1
+		newUi.lineGutter.BorderSizePixel = 0
+		newUi.lineGutter.ClipsDescendants = true
+		newUi.lineGutter.ZIndex = 12008
+		newUi.lineNumbers = newUi.make("TextLabel", "Numbers", newUi.lineGutter)
+		newUi.lineNumbers.Position = UDim2.fromOffset(0, 6)
+		newUi.lineNumbers.Size = UDim2.new(1, -4, 1, 0)
+		newUi.lineNumbers.BackgroundTransparency = 1
+		newUi.lineNumbers.Font = Enum.Font.Code
+		newUi.lineNumbers.Text = ""
+		newUi.lineNumbers.TextColor3 = Color3.fromRGB(190, 201, 210)
+		newUi.lineNumbers.TextSize = editorFontSize
+		newUi.lineNumbers.TextXAlignment = Enum.TextXAlignment.Right
+		newUi.lineNumbers.TextYAlignment = Enum.TextYAlignment.Top
+		newUi.lineNumbers.ZIndex = 12009
+		newUi.connect(codeFrame:GetPropertyChangedSignal("CanvasPosition"), function()
+			newUi.updateLineNumbers()
+		end)
+		newUi.tabBar = newUi.make("ScrollingFrame", "LT_NewUITabs", executorOverlay)
+		newUi.tabBar.Position = UDim2.new(0.01, 0, 0, 14)
+		newUi.tabBar.Size = UDim2.new(1, -92, 0, 54)
+		newUi.tabBar.BackgroundTransparency = 1
+		newUi.tabBar.BorderSizePixel = 0
+		newUi.tabBar.ScrollBarThickness = 0
+		newUi.tabBar.ScrollingDirection = Enum.ScrollingDirection.X
+		newUi.tabBar.CanvasSize = UDim2.fromOffset(0, 0)
+		newUi.tabBar.ZIndex = 12009
+		newUi.tabLayout = newUi.make("UIListLayout", "Layout", newUi.tabBar)
+		newUi.tabLayout.FillDirection = Enum.FillDirection.Horizontal
+		newUi.tabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+		newUi.tabLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+		newUi.tabLayout.Padding = UDim.new(0, 8)
+		newUi.tabLayout.SortOrder = Enum.SortOrder.LayoutOrder
+		newUi.connect(newUi.tabLayout:GetPropertyChangedSignal("AbsoluteContentSize"), newUi.updateTabCanvas)
+		newUi.addButton = newUi.make("ImageButton", "LT_NewUIAddTab", executorOverlay)
+		newUi.addButton.AnchorPoint = Vector2.new(1, 0)
+		newUi.addButton.Position = UDim2.new(1, -14, 0, 14)
+		newUi.addButton.Size = UDim2.fromOffset(54, 54)
+		newUi.addButton.BackgroundColor3 = newUi.colors.button
+		newUi.addButton.BackgroundTransparency = 0.04
+		newUi.addButton.BorderSizePixel = 0
+		newUi.addButton.AutoButtonColor = false
+		newUi.addButton.Image = ""
+		newUi.addButton.ZIndex = 12010
+		newUi.makeCorner(newUi.addButton, 18, false)
+		newUi.makeStroke(newUi.addButton, newUi.colors.buttonStroke, 0.35, 1, false)
+		newUi.makeDocumentIcon(newUi.addButton, 26, newUi.colors.text, 12012, true, false)
+		local nativeAdd = tabsFrame:FindFirstChild("AddTab")
+		newUi.bindClick(newUi.addButton, function()
+			task.spawn(function()
+				local created = nativeAdd and fireAddTab(nativeAdd)
+				if not created then
+					createFallbackTab(nextAvailableTabName())
+				end
+				task.delay(0.05, function()
+					for _, box in getCodeBoxes() do
+						newUi.bindCodeBox(box)
+					end
+					newUi.rebuildTabs()
+					editorCanvas.resizeAll()
+				end)
+			end)
+		end)
+		local divider = newUi.make("Frame", "LT_NewUIHeaderDivider", executorOverlay)
+		divider.Position = UDim2.new(0, 0, 0, 72)
+		divider.Size = UDim2.new(1, 0, 0, 2)
+		divider.BackgroundColor3 = Color3.fromRGB(42, 59, 70)
+		divider.BackgroundTransparency = 0.55
+		divider.BorderSizePixel = 0
+		divider.ZIndex = 12007
+		newUi.toolbar = newUi.make("Frame", "LT_NewUIToolbar", executorOverlay)
+		newUi.toolbar.AnchorPoint = Vector2.new(0, 1)
+		newUi.toolbar.Position = UDim2.new(0.01, 0, 1, -14)
+		newUi.toolbar.Size = UDim2.new(0.97, 0, 0, 54)
+		newUi.toolbar.BackgroundTransparency = 1
+		newUi.toolbar.BorderSizePixel = 0
+		newUi.toolbar.ZIndex = 12009
+		newUi.createActionButton(
+			"LT_NewUIExecute",
+			"Execute",
+			UDim2.fromOffset(0, 0),
+			UDim2.fromOffset(142, 54),
+			"Execute",
+			executeActiveCode
+		)
+		newUi.createActionButton(
+			"LT_NewUIClear",
+			"Clear",
+			UDim2.fromOffset(150, 0),
+			UDim2.fromOffset(124, 54),
+			"Clear",
+			function()
+				clearActiveCode()
+				task.defer(newUi.rebuildTabs)
+				task.defer(newUi.updateLineNumbers)
+			end
+		)
+		newUi.createActionButton(
+			"LT_NewUICopy",
+			"Copy",
+			UDim2.fromOffset(282, 0),
+			UDim2.fromOffset(124, 54),
+			"Copy",
+			copyActiveCode
+		)
+		newUi.createActionButton(
+			"LT_NewUIPaste",
+			"Paste",
+			UDim2.fromOffset(414, 0),
+			UDim2.fromOffset(124, 54),
+			"Paste",
+			pasteIntoActive
+		)
+		local nativeExecuteButton = buttonsFrame:FindFirstChild("Execute")
+		local nativeClearButton = buttonsFrame:FindFirstChild("Clear")
+		local nativeClipboardButton = buttonsFrame:FindFirstChild("ExecuteClipboard")
+		local nativeButtonsLayout = buttonsFrame:FindFirstChildOfClass("UIListLayout")
+		newUi.capture(buttonsFrame, {
+			"AnchorPoint",
+			"Position",
+			"Size",
+			"BackgroundTransparency",
+			"BorderSizePixel",
+			"ZIndex",
+			"Active",
+		})
+		newUi.lock(buttonsFrame, "Visible", true)
+		newUi.lock(buttonsFrame, "AnchorPoint", Vector2.new(1, 1))
+		newUi.lock(buttonsFrame, "Position", UDim2.new(0.98, 0, 1, -14))
+		newUi.lock(buttonsFrame, "Size", UDim2.fromOffset(210, 54))
+		newUi.lock(buttonsFrame, "BackgroundTransparency", 1)
+		newUi.lock(buttonsFrame, "BorderSizePixel", 0)
+		newUi.lock(buttonsFrame, "ZIndex", 12020)
+		newUi.lock(buttonsFrame, "Active", false)
+		if nativeButtonsLayout then
+			newUi.capture(nativeButtonsLayout, { "Parent" })
+			table.insert(newUi.detached, nativeButtonsLayout)
+			nativeButtonsLayout.Parent = nil
+		end
+		for _, nativeButton in { nativeExecuteButton, nativeClearButton } do
+			if nativeButton and nativeButton:IsA("GuiObject") then
+				newUi.lock(nativeButton, "Visible", false)
+			end
+		end
+		if nativeClipboardButton and nativeClipboardButton:IsA("GuiButton") then
+			newUi.capture(nativeClipboardButton, {
+				"AnchorPoint",
+				"Position",
+				"Size",
+				"Visible",
+				"Active",
+				"Interactable",
+				"AutoButtonColor",
+				"BackgroundColor3",
+				"BackgroundTransparency",
+				"BorderSizePixel",
+				"Image",
+				"ImageTransparency",
+				"ZIndex",
+			})
+			newUi.lock(nativeClipboardButton, "AnchorPoint", Vector2.zero)
+			newUi.lock(nativeClipboardButton, "Position", UDim2.fromScale(0, 0))
+			newUi.lock(nativeClipboardButton, "Size", UDim2.fromScale(1, 1))
+			newUi.lock(nativeClipboardButton, "Visible", true)
+			newUi.lock(nativeClipboardButton, "Active", true)
+			newUi.lock(nativeClipboardButton, "Interactable", true)
+			newUi.lock(nativeClipboardButton, "AutoButtonColor", false)
+			newUi.lock(nativeClipboardButton, "BackgroundColor3", newUi.colors.button)
+			newUi.lock(nativeClipboardButton, "BackgroundTransparency", 0.08)
+			newUi.lock(nativeClipboardButton, "BorderSizePixel", 0)
+			newUi.lock(nativeClipboardButton, "Image", "")
+			newUi.lock(nativeClipboardButton, "ImageTransparency", 1)
+			newUi.lock(nativeClipboardButton, "ZIndex", 12021)
+			for _, descendant in nativeClipboardButton:GetDescendants() do
+				if descendant:IsA("GuiObject") then
+					newUi.lock(descendant, "Visible", false)
+				elseif descendant:IsA("UIStroke") or descendant:IsA("UIGradient") then
+					newUi.capture(descendant, { "Enabled" })
+					descendant.Enabled = false
+				end
+			end
+			newUi.ensureCorner(nativeClipboardButton, 14)
+			newUi.makeStroke(nativeClipboardButton, newUi.colors.buttonStroke, 0.2, 1.5, false)
+			local nativeIconHolder = newUi.make("Frame", "LT_NewUIClipboardIconHolder", nativeClipboardButton)
+			nativeIconHolder.AnchorPoint = Vector2.new(0, 0.5)
+			nativeIconHolder.Position = UDim2.new(0, 14, 0.5, 0)
+			nativeIconHolder.Size = UDim2.fromOffset(24, 24)
+			nativeIconHolder.BackgroundTransparency = 1
+			nativeIconHolder.ZIndex = 12023
+			newUi.makeActionIcon(
+				"ExecuteClipboard",
+				nativeIconHolder,
+				22,
+				newUi.colors.text,
+				12024,
+				false
+			)
+			local nativeLabel = newUi.make("TextLabel", "LT_NewUIClipboardText", nativeClipboardButton)
+			nativeLabel.Position = UDim2.new(0, 48, 0, 0)
+			nativeLabel.Size = UDim2.new(1, -58, 1, 0)
+			nativeLabel.BackgroundTransparency = 1
+			nativeLabel.Font = Enum.Font.GothamMedium
+			nativeLabel.Text = "Execute clipboard"
+			nativeLabel.TextColor3 = newUi.colors.text
+			nativeLabel.TextSize = 14
+			nativeLabel.TextXAlignment = Enum.TextXAlignment.Left
+			nativeLabel.TextTruncate = Enum.TextTruncate.None
+			nativeLabel.ZIndex = 12023
+		else
+			newUi.createActionButton(
+				"LT_NewUIExecuteClipboard",
+				"Execute clipboard",
+				UDim2.new(1, 0, 0, 0),
+				UDim2.fromOffset(210, 54),
+				"ExecuteClipboard",
+				executeClipboardCode
+			)
+		end
+		newUi.rail = newUi.make("Frame", "LT_NewUIRail", executorRoot)
+		newUi.rail.BackgroundColor3 = newUi.colors.railTop
+		newUi.rail.BackgroundTransparency = 0
+		newUi.rail.BorderSizePixel = 0
+		newUi.rail.ZIndex = 11900
+		newUi.makeCorner(newUi.rail, 20, false)
+		newUi.makeStroke(newUi.rail, newUi.colors.stroke, 0.22, 1.5, false)
+		local railGradient = newUi.make("UIGradient", "Gradient", newUi.rail)
+		railGradient.Color = ColorSequence.new(newUi.colors.railTop, newUi.colors.railBottom)
+		railGradient.Rotation = 90
+		newUi.lock(newUi.rail, "Position", function()
+			return newUi.railCollapsed and UDim2.new(0.982, 0, 0, 0) or UDim2.new(0.956, 0, 0, 0)
+		end)
+		newUi.lock(newUi.rail, "Size", function()
+			return newUi.railCollapsed and UDim2.new(0.018, 0, 1, 0) or UDim2.new(0.044, 0, 1, 0)
+		end)
+		newUi.railTop = newUi.make("TextLabel", "LT_NewUIRailTerminal", newUi.rail)
+		newUi.railTop.AnchorPoint = Vector2.new(0.5, 0)
+		newUi.railTop.Position = UDim2.new(0.5, 0, 0, 15)
+		newUi.railTop.Size = UDim2.new(1, -12, 0, 48)
+		newUi.railTop.BackgroundTransparency = 1
+		newUi.railTop.Font = Enum.Font.Code
+		newUi.railTop.Text = ">_"
+		newUi.railTop.TextColor3 = newUi.colors.text
+		newUi.railTop.TextSize = 22
+		newUi.railTop.ZIndex = 11902
+		newUi.railToggle = newUi.make("TextButton", "LT_NewUIRailToggle", newUi.rail)
+		newUi.railToggle.AnchorPoint = Vector2.new(0.5, 0.5)
+		newUi.railToggle.Position = UDim2.fromScale(0.5, 0.5)
+		newUi.railToggle.Size = UDim2.new(1, 0, 0, 56)
+		newUi.railToggle.BackgroundTransparency = 1
+		newUi.railToggle.Text = ""
+		newUi.railToggle.ZIndex = 11902
+		newUi.railToggleIcon = newUi.makeChevronIcon(
+			newUi.railToggle,
+			20,
+			newUi.colors.muted,
+			11903,
+			false
+		)
+		newUi.bindClick(newUi.railToggle, function()
+			newUi.railCollapsed = not newUi.railCollapsed
+			newUi.applyRailState()
+			task.defer(editorCanvas.resizeAll)
+		end)
+		newUi.connect(tabsFrame.ChildAdded, function(object)
+			if object:IsA("GuiButton") then
+				task.delay(0.05, newUi.rebuildTabs)
+			end
+		end)
+		newUi.connect(tabsFrame.ChildRemoved, function()
+			task.defer(newUi.rebuildTabs)
+		end)
+		newUi.connect(codeFrame.DescendantAdded, function(object)
+			if object:IsA("TextBox") then
+				task.defer(newUi.bindCodeBox, object)
+			end
+		end)
+		for _, box in getCodeBoxes() do
+			newUi.bindCodeBox(box)
+		end
+		newUi.applyRailState()
+		newUi.rebuildTabs()
+	end
+
+	newUi.bindIcon = function()
+		__dcm_env.__NewDeltaUIToggle = function()
+			if newUi.enabled and newUi.applied then
+				newUi.setOpen(not newUi.open)
+				return true
+			end
+			return false
+		end
+		local iconApi = rawget(__dcm_env, "DeltaIcon")
+		if type(iconApi) == "table" and type(iconApi.rebindToggle) == "function" then
+			pcall(iconApi.rebindToggle)
+		end
+	end
+
+	newUi.enable = function()
+		if newUi.applied then
+			newUi.enabled = true
+			newUi.setOpen(newUi.open)
+			return
+		end
+		local visiblePage = newUi.getCurrentSectionName()
+		newUi.enabled = true
+		newUi.applied = true
+		newUi.open = visiblePage ~= nil
+		if visiblePage and newUi.pageSet[visiblePage] then
+			newUi.activePage = visiblePage
+		else
+			for _, pageName in newUi.pageNames do
+				local page = newUi.getPage(pageName)
+				if page and page.Visible then
+					newUi.activePage = pageName
+					newUi.open = true
+					break
+				end
+			end
+		end
+		NAlib.disconnect("Sidebar_NormalizeGeometry")
+		NAlib.disconnect("SidebarGesture")
+		NAlib.disconnect("ManagedIcon_Toggle")
+		local gesture = v2Main:FindFirstChild("SidebarGestureZone", true)
+		if gesture and gesture:IsA("GuiObject") then
+			newUi.capture(gesture, { "Visible", "Active" })
+			gesture.Visible = false
+			gesture.Active = false
+		end
+		newUi.buildShell()
+		newUi.buildPages()
+		newUi.buildExecutor()
+		newUi.bindIcon()
+		newUi.syncPages()
+		newUi.applyLocks()
+		newUi.refreshOrder()
+		newUi.refreshNav()
+		task.defer(editorCanvas.resizeAll)
+		task.defer(updateStatusPosition)
+	end
+
+	newUi.disable = function()
+		if not newUi.applied then
+			newUi.enabled = false
+			return
+		end
+		local wasOpen = newUi.open
+		local lastPage = newUi.activePage
+		newUi.enabled = false
+		newUi.applied = false
+		newUi.clearTabConnections()
+		for i = #newUi.connections, 1, -1 do
+			pcall(function()
+				newUi.connections[i]:Disconnect()
+			end)
+		end
+		table.clear(newUi.connections)
+		for i = #newUi.created, 1, -1 do
+			local object = newUi.created[i]
+			if object and object.Parent then
+				pcall(function()
+					object:Destroy()
+				end)
+			end
+		end
+		table.clear(newUi.created)
+		for object, state in newUi.originals do
+			if object then
+				local parentState = state.Parent
+				if parentState then
+					pcall(function()
+						object.Parent = parentState.value
+					end)
+				end
+				for property, wrapped in state do
+					if property ~= "Parent" then
+						pcall(function()
+							object[property] = wrapped.value
+						end)
+					end
+				end
+			end
+		end
+		table.clear(newUi.detached)
+		newUi.originals = setmetatable({}, { __mode = "k" })
+		newUi.pageButtons = {}
+		newUi.codeBound = setmetatable({}, { __mode = "k" })
+		newUi.locks = {}
+		newUi.navBar = nil
+		newUi.closeButton = nil
+		newUi.tabBar = nil
+		newUi.tabLayout = nil
+		newUi.lineGutter = nil
+		newUi.lineNumbers = nil
+		newUi.addButton = nil
+		newUi.toolbar = nil
+		newUi.rail = nil
+		newUi.railTop = nil
+		newUi.railToggle = nil
+		newUi.railToggleIcon = nil
+		__dcm_env.__NewDeltaUIToggle = nil
+		if lastPage and newUi.pageSet[lastPage] then
+			local iconApi = newUi.getIconApi()
+			if iconApi and type(iconApi.setCurrentSection) == "function" then
+				pcall(iconApi.setCurrentSection, lastPage)
+			end
+		end
+		newUi.setClassicOpen(wasOpen)
+		local iconApi = rawget(__dcm_env, "DeltaIcon")
+		if type(iconApi) == "table" and type(iconApi.rebindToggle) == "function" then
+			task.defer(iconApi.rebindToggle)
+		end
+		task.defer(applySidebarOrder)
+		task.defer(applyWideEditor)
+		task.defer(applyCompactTabs)
+		task.defer(applyToolbarLayout)
+		task.defer(editorCanvas.resizeAll)
+		task.defer(updateStatusPosition)
+	end
+
+	local baseApplySidebarOrder = applySidebarOrder
+	applySidebarOrder = function()
+		baseApplySidebarOrder()
+		if newUi.enabled and newUi.applied then
+			newUi.refreshOrder()
+		end
+	end
+
+	addRestorer(function()
+		newUi.disable()
+	end)
+	local newUiSettingRow = createToggleSetting(
+		"LT_NewDeltaUI",
+		"Recreated new Delta UI (BETA)",
+		"BETA: Rebuilds Delta around the unreleased full-screen layout while retaining its native page and executor handlers",
+		newUi.enabled,
+		function(enabled)
+			saveBool("NewDeltaUI", enabled)
+			if enabled then
+				newUi.enable()
+			else
+				newUi.disable()
+			end
+		end
+	)
+	if newUiSettingRow then
+		local betaStroke = Instance.new("UIStroke")
+		betaStroke.Name = "LT_NewUIBetaStroke"
+		betaStroke.Color = Color3.fromRGB(0, 145, 255)
+		betaStroke.Transparency = 0.25
+		betaStroke.Thickness = 1.5
+		betaStroke.Parent = newUiSettingRow
+		local newBadge = Instance.new("TextLabel")
+		newBadge.Name = "LT_NewUIBadge"
+		newBadge.AnchorPoint = Vector2.new(1, 0)
+		newBadge.Position = UDim2.new(1, -92, 0, 8)
+		newBadge.Size = UDim2.fromOffset(54, 21)
+		newBadge.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+		newBadge.BorderSizePixel = 0
+		newBadge.Font = Enum.Font.GothamBold
+		newBadge.Text = "NEW!"
+		newBadge.TextColor3 = Color3.new(1, 1, 1)
+		newBadge.TextSize = 11
+		newBadge.ZIndex = newUiSettingRow.ZIndex + 4
+		newBadge.Parent = newUiSettingRow
+		local badgeCorner = Instance.new("UICorner")
+		badgeCorner.CornerRadius = UDim.new(0, 7)
+		badgeCorner.Parent = newBadge
+	end
+
 	createToggleSetting(
 		"LT_AutoRestoreTabs",
 		"Auto restore saved tabs",
@@ -11588,7 +13332,7 @@ do
 	createSettingRow(
 		"LT_SidebarButtonOrder",
 		"Sidebar button order",
-		"Reorders Delta's native sidebar buttons and saves the selected order",
+		"Reorders the classic sidebar and the recreated top navigation, including Music",
 		"SORT",
 		function()
 			local menu = ensureSidebarSortMenu()
@@ -11791,8 +13535,10 @@ do
 	applyCompactTabs()
 	applyEditorPreferences()
 	syntaxHighlighter.applyAll()
+	if newUi.enabled then
+		newUi.enable()
+	end
 	if autoRestoreEnabled then
 		task.spawn(restoreSavedTabs, false)
 	end
 end
-

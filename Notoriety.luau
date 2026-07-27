@@ -502,12 +502,22 @@ end
 
 local applyWeaponData
 
-local function isInfiniteGunState(State, Data)
-	if type(State) ~= "table" or type(Data) ~= "table" or Data.WeaponType ~= "Gun" then
+local function isStandardGunData(Data)
+	if type(Data) ~= "table" or rawget(Data, "WeaponType") ~= "Gun" then
 		return false
 	end
 
-	local AmmoClass = Data.AmmoClass or rawget(State, "AmmoType")
+	local AmmoClass = rawget(Data, "AmmoClass")
+
+	return AmmoClass == "Primary" or AmmoClass == "Secondary"
+end
+
+local function isInfiniteGunState(State, Data)
+	if type(State) ~= "table" or not isStandardGunData(Data) then
+		return false
+	end
+
+	local AmmoClass = rawget(Data, "AmmoClass") or rawget(State, "AmmoType")
 
 	return AmmoClass == "Primary" or AmmoClass == "Secondary"
 end
@@ -705,6 +715,10 @@ applyWeaponData = function(Data)
 	local WeaponType = rawget(Data, "WeaponType")
 
 	if WeaponType == "Gun" then
+		if not isStandardGunData(Data) then
+			return false
+		end
+
 		local Backup = getWeaponBackup(Data)
 		for _, Key in {
 			"FireDelay",

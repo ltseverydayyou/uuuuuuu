@@ -187,6 +187,310 @@ local lockCamLoop = nil;
 _G.__vyperiaLockOpt = type(_G.__vyperiaLockOpt) == "table" and _G.__vyperiaLockOpt or {};
 VLO = _G.__vyperiaLockOpt;
 VLO.aimOrigin = {};
+VLO.input = {};
+VLO.input.gamepadButtons = {
+	ButtonA = true,
+	ButtonB = true,
+	ButtonX = true,
+	ButtonY = true,
+	ButtonL1 = true,
+	ButtonR1 = true,
+	ButtonL2 = true,
+	ButtonR2 = true,
+	ButtonL3 = true,
+	ButtonR3 = true,
+	ButtonStart = true,
+	ButtonSelect = true,
+	DPadUp = true,
+	DPadDown = true,
+	DPadLeft = true,
+	DPadRight = true
+};
+VLO.input.gamepadAnalogButtons = {
+	ButtonL2 = true,
+	ButtonR2 = true
+};
+VLO.input.gamepadIconCodepoints = {
+	ButtonA = 0xF21E,
+	ButtonB = 0xF21F,
+	ButtonX = 0xF232,
+	ButtonY = 0xF233,
+	ButtonL1 = 0xF225,
+	ButtonR1 = 0xF228,
+	ButtonL2 = 0xF226,
+	ButtonR2 = 0xF229,
+	ButtonL3 = 0xF22A,
+	ButtonR3 = 0xF22D,
+	ButtonStart = 0xF227,
+	ButtonSelect = 0xF231,
+	DPadUp = 0xF224,
+	DPadDown = 0xF221,
+	DPadLeft = 0xF222,
+	DPadRight = 0xF223
+};
+VLO.input.bindingShortNames = {
+	MouseButton1 = "Mouse1",
+	MouseButton2 = "Mouse2",
+	MouseButton3 = "Mouse3",
+	ButtonA = "A",
+	ButtonB = "B",
+	ButtonX = "X",
+	ButtonY = "Y",
+	ButtonL1 = "LB",
+	ButtonR1 = "RB",
+	ButtonL2 = "LT",
+	ButtonR2 = "RT",
+	ButtonL3 = "L3",
+	ButtonR3 = "R3",
+	ButtonStart = "Menu",
+	ButtonSelect = "View",
+	DPadUp = "D-Pad Up",
+	DPadDown = "D-Pad Down",
+	DPadLeft = "D-Pad Left",
+	DPadRight = "D-Pad Right"
+};
+VLO.input.builderIconsFamily = "rbxasset://fonts/families/BuilderIcons.json";
+VLO.input.activeMode = "Unknown";
+VLO.input.activeGamepad = nil;
+VLO.input.isGamepadInputType = function(inputType)
+	if typeof(inputType) ~= "EnumItem" then
+		return false;
+	end;
+	local name = inputType.Name;
+	return type(name) == "string" and name:match("^Gamepad[1-8]$") ~= nil;
+end;
+VLO.input.isGamepadKeyCode = function(keyCode)
+	return typeof(keyCode) == "EnumItem" and VLO.input.gamepadButtons[keyCode.Name] == true;
+end;
+VLO.input.isGamepadBindingName = function(name)
+	return VLO.input.gamepadButtons[tostring(name or "")] == true;
+end;
+VLO.input.isAnalogBindingName = function(name)
+	return VLO.input.gamepadAnalogButtons[tostring(name or "")] == true;
+end;
+VLO.input.escapeRichText = function(textValue)
+	local s = tostring(textValue or "");
+	s = s:gsub("&", "&amp;");
+	s = s:gsub("<", "&lt;");
+	s = s:gsub(">", "&gt;");
+	s = s:gsub("\"", "&quot;");
+	s = s:gsub("'", "&apos;");
+	return s;
+end;
+VLO.input.getBindingLabel = function(name)
+	local raw = tostring(name or "");
+	if raw == "" then
+		return "";
+	end;
+	return VLO.input.bindingShortNames[raw] or raw;
+end;
+VLO.input.getBindingRichText = function(name, includeLabel)
+	local raw = tostring(name or "");
+	if raw == "" then
+		return "";
+	end;
+	local label = VLO.input.escapeRichText(VLO.input.getBindingLabel(raw));
+	local codepoint = VLO.input.gamepadIconCodepoints[raw];
+	if codepoint then
+		local ok, glyph = pcall(utf8.char, codepoint);
+		if ok and glyph then
+			local iconText = string.format('<font family="%s">%s</font>', VLO.input.builderIconsFamily, glyph);
+			if includeLabel == false then
+				return iconText;
+			end;
+			return iconText .. " " .. label;
+		end;
+	end;
+	return label;
+end;
+VLO.input.getModeFromInputType = function(inputType)
+	if VLO.input.isGamepadInputType(inputType) then
+		return "Gamepad";
+	end;
+	if inputType == Enum.UserInputType.Touch then
+		return "Touch";
+	end;
+	if inputType == Enum.UserInputType.Keyboard or inputType == Enum.UserInputType.MouseButton1 or inputType == Enum.UserInputType.MouseButton2 or inputType == Enum.UserInputType.MouseButton3 or inputType == Enum.UserInputType.MouseMovement or inputType == Enum.UserInputType.MouseWheel then
+		return "KeyboardAndMouse";
+	end;
+	return nil;
+end;
+VLO.input.setActiveMode = function(mode, gamepadType)
+	if mode ~= "Gamepad" and mode ~= "Touch" and mode ~= "KeyboardAndMouse" then
+		return false;
+	end;
+	if mode == "Gamepad" and VLO.input.isGamepadInputType(gamepadType) then
+		VLO.input.activeGamepad = gamepadType;
+	end;
+	local changed = VLO.input.activeMode ~= mode;
+	VLO.input.activeMode = mode;
+	if changed and type(VLO.input.onModeChanged) == "function" then
+		task.defer(VLO.input.onModeChanged, mode);
+	end;
+	return changed;
+end;
+VLO.input.syncPreferredMode = function(inputType)
+	local mode = VLO.input.getModeFromInputType(inputType);
+	if not mode then
+		pcall(function()
+			local preferred = UIS.PreferredInput;
+			if preferred == Enum.PreferredInput.Gamepad then
+				mode = "Gamepad";
+			elseif preferred == Enum.PreferredInput.Touch then
+				mode = "Touch";
+			elseif preferred == Enum.PreferredInput.KeyboardAndMouse then
+				mode = "KeyboardAndMouse";
+			end;
+		end);
+	end;
+	if not mode then
+		pcall(function()
+			mode = VLO.input.getModeFromInputType(UIS:GetLastInputType());
+		end);
+	end;
+	if not mode then
+		mode = UIS.TouchEnabled and "Touch" or "KeyboardAndMouse";
+	end;
+	VLO.input.setActiveMode(mode, inputType);
+	return mode;
+end;
+VLO.input.noteInput = function(input)
+	if not input then
+		return nil;
+	end;
+	if VLO.input.isGamepadKeyCode(input.KeyCode) or VLO.input.isGamepadInputType(input.UserInputType) then
+		VLO.input.setActiveMode("Gamepad", input.UserInputType);
+		return "Gamepad";
+	end;
+	local mode = VLO.input.getModeFromInputType(input.UserInputType);
+	if mode then
+		VLO.input.setActiveMode(mode, input.UserInputType);
+	end;
+	return mode;
+end;
+VLO.input.getBindableName = function(input, allowMouse)
+	if not input then
+		return nil;
+	end;
+	if VLO.input.isGamepadKeyCode(input.KeyCode) then
+		return input.KeyCode.Name;
+	end;
+	if input.UserInputType == Enum.UserInputType.Keyboard then
+		return input.KeyCode ~= Enum.KeyCode.Unknown and input.KeyCode.Name or nil;
+	end;
+	if VLO.input.isGamepadInputType(input.UserInputType) then
+		return VLO.input.isGamepadKeyCode(input.KeyCode) and input.KeyCode.Name or nil;
+	end;
+	if allowMouse and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2 or input.UserInputType == Enum.UserInputType.MouseButton3) then
+		return input.UserInputType.Name;
+	end;
+	return nil;
+end;
+VLO.input.getAnalogPressure = function(input)
+	if not input or not VLO.input.isAnalogBindingName(input.KeyCode and input.KeyCode.Name) then
+		return 0;
+	end;
+	local ok, pressure = pcall(function()
+		return tonumber(input.Position.Z) or 0;
+	end);
+	return ok and pressure or 0;
+end;
+VLO.input.isAnalogPressed = function(input)
+	return VLO.input.getAnalogPressure(input) >= 0.18;
+end;
+VLO.input.getCapturableName = function(input, allowMouse)
+	local name = VLO.input.getBindableName(input, allowMouse);
+	if name and VLO.input.isAnalogBindingName(name) and not VLO.input.isAnalogPressed(input) and input.UserInputState ~= Enum.UserInputState.Begin then
+		return nil;
+	end;
+	return name;
+end;
+VLO.input.connectCapture = function(allowMouse, callback)
+	local fired = false;
+	local function accept(input)
+		if fired then
+			return;
+		end;
+		local name = VLO.input.getCapturableName(input, allowMouse);
+		if not name then
+			return;
+		end;
+		fired = true;
+		VLO.input.noteInput(input);
+		callback(name, input);
+	end;
+	return UIS.InputBegan:Connect(accept), UIS.InputChanged:Connect(function(input)
+		if VLO.input.isAnalogBindingName(input.KeyCode and input.KeyCode.Name) then
+			accept(input);
+		end;
+	end);
+end;
+VLO.input.usesGamepadAim = function()
+	if VLO.input.activeMode == "Gamepad" then
+		return true;
+	end;
+	local preferred = false;
+	pcall(function()
+		preferred = UIS.PreferredInput == Enum.PreferredInput.Gamepad;
+	end);
+	return preferred;
+end;
+VLO.input.getConnectedGamepad = function()
+	local connected = {};
+	pcall(function()
+		connected = UIS:GetConnectedGamepads();
+	end);
+	return connected[1];
+end;
+VLO.input.bindModeTracking = function()
+	local initialGamepad = VLO.input.getConnectedGamepad();
+	if initialGamepad then
+		VLO.input.setActiveMode("Gamepad", initialGamepad);
+	else
+		VLO.input.syncPreferredMode();
+	end;
+	table.insert(conns, UIS.InputBegan:Connect(function(input)
+		VLO.input.noteInput(input);
+	end));
+	table.insert(conns, UIS.InputChanged:Connect(function(input)
+		if VLO.input.isGamepadKeyCode(input.KeyCode) and (not VLO.input.isAnalogBindingName(input.KeyCode.Name) or VLO.input.isAnalogPressed(input)) then
+			VLO.input.noteInput(input);
+		end;
+	end));
+	table.insert(conns, UIS.LastInputTypeChanged:Connect(function(inputType)
+		if VLO.input.isGamepadInputType(inputType) then
+			VLO.input.setActiveMode("Gamepad", inputType);
+		else
+			VLO.input.syncPreferredMode(inputType);
+		end;
+	end));
+	pcall(function()
+		table.insert(conns, UIS:GetPropertyChangedSignal("PreferredInput"):Connect(function()
+			local gamepadType = VLO.input.getConnectedGamepad();
+			if UIS.PreferredInput == Enum.PreferredInput.Gamepad or gamepadType and VLO.input.activeMode == "Gamepad" then
+				VLO.input.setActiveMode("Gamepad", gamepadType or VLO.input.activeGamepad);
+			else
+				VLO.input.syncPreferredMode();
+			end;
+		end));
+	end);
+	table.insert(conns, UIS.GamepadConnected:Connect(function(gamepadType)
+		VLO.input.activeGamepad = gamepadType;
+		VLO.input.setActiveMode("Gamepad", gamepadType);
+	end));
+	table.insert(conns, UIS.GamepadDisconnected:Connect(function(gamepadType)
+		if VLO.input.activeGamepad == gamepadType then
+			VLO.input.activeGamepad = nil;
+		end;
+		local remaining = VLO.input.getConnectedGamepad();
+		if remaining then
+			VLO.input.setActiveMode("Gamepad", remaining);
+		else
+			VLO.input.syncPreferredMode();
+		end;
+	end));
+end;
+VLO.input.bindModeTracking();
 VLO.deathWatch = type(VLO.deathWatch) == "table" and VLO.deathWatch or {};
 VLO.scanGap = 0;
 VLO.partGap = 0;
@@ -1524,9 +1828,10 @@ local function getInputScreenPos(input)
 	return Vector2.zero;
 end;
 VLO.aimOrigin.getTargetPointMode = function()
-	local fallback = isMobilePlatform() and "Center" or "Cursor";
+	local gamepadAim = VLO.input.usesGamepadAim();
+	local fallback = (isMobilePlatform() or gamepadAim) and "Center" or "Cursor";
 	local picked = normChoice(_G.targetPointMode, OPT.TARGET_POINT_OPTIONS, fallback);
-	if isMobileDevice() and picked == "Cursor" then
+	if picked == "Cursor" and (isMobileDevice() or gamepadAim) then
 		return "Center";
 	end;
 	return picked;
@@ -5033,11 +5338,14 @@ local function makeKeyChip(parent, keyName, onRemove)
 	tl.Size = UDim2.new(1, -30, 1, 0);
 	tl.Position = UDim2.new(0, 8, 0, 0);
 	tl.Font = Enum.Font.Gotham;
+	tl.RichText = true;
 	tl.TextSize = 13;
 	tl.TextColor3 = UI.text;
 	tl.TextXAlignment = Enum.TextXAlignment.Left;
 	tl.TextTruncate = Enum.TextTruncate.AtEnd;
-	tl.Text = keyName;
+	tl:SetAttribute("VLOBindingName", tostring(keyName));
+	tl:SetAttribute("VLOBindingChip", true);
+	tl.Text = VLO.input.getBindingRichText(keyName, true);
 	task.defer(function()
 		local w = math.clamp(tl.TextBounds.X + 36, 96, 200);
 		chip.Size = UDim2.new(0, w, 0, 24);
@@ -5059,6 +5367,41 @@ local function makeKeyChip(parent, keyName, onRemove)
 		end;
 	end);
 	return chip;
+end;
+uiRefs.refreshBindingVisuals = function()
+	if not gui or not gui.Parent then
+		return;
+	end;
+	for _, obj in gui:GetDescendants() do
+		if obj:IsA("TextLabel") or obj:IsA("TextButton") then
+			local bindingName = obj:GetAttribute("VLOBindingName");
+			if type(bindingName) == "string" and bindingName ~= "" then
+				local actionName = obj:GetAttribute("VLOBindingAction");
+				obj.RichText = true;
+				if type(actionName) == "string" and actionName ~= "" then
+					obj.Text = VLO.input.getBindingRichText(bindingName, true) .. " -> " .. VLO.input.escapeRichText(actionName);
+				else
+					obj.Text = VLO.input.getBindingRichText(bindingName, true);
+				end;
+				if obj:GetAttribute("VLOBindingChip") == true and obj.Parent and obj.Parent:IsA("Frame") then
+					task.defer(function()
+						if obj.Parent then
+							obj.Parent.Size = UDim2.new(0, math.clamp(obj.TextBounds.X + 36, 96, 200), 0, 24);
+						end;
+					end);
+				end;
+			end;
+		end;
+	end;
+end;
+VLO.input.onModeChanged = function()
+	uiRefs.refreshBindingVisuals();
+	if updateFOVCircle then
+		updateFOVCircle();
+	end;
+	if refreshMobileUI then
+		refreshMobileUI();
+	end;
 end;
 local function createUI()
 	cleanup();
@@ -5559,7 +5902,11 @@ local function createUI()
 		if capConn and capConn.Connected then
 			capConn:Disconnect();
 		end;
+		if uiRefs.capChangeConn and uiRefs.capChangeConn.Connected then
+			uiRefs.capChangeConn:Disconnect();
+		end;
 		capConn = nil;
+		uiRefs.capChangeConn = nil;
 	end;
 	local function stopLockCap()
 		lockCapMode = false;
@@ -5568,27 +5915,19 @@ local function createUI()
 		if lockCapConn and lockCapConn.Connected then
 			lockCapConn:Disconnect();
 		end;
+		if uiRefs.lockCapChangeConn and uiRefs.lockCapChangeConn.Connected then
+			uiRefs.lockCapChangeConn:Disconnect();
+		end;
 		lockCapConn = nil;
+		uiRefs.lockCapChangeConn = nil;
 	end;
 	local addCon = bindClick(addKey, function()
 		if capMode or lockCapMode then
 			return;
 		end;
 		capMode = true;
-		VLO.aimOrigin.toast("press a key");
-		capConn = UIS.InputBegan:Connect(function(i, gp)
-			if gp then
-				return;
-			end;
-			if i.UserInputType ~= Enum.UserInputType.Keyboard then
-				return;
-			end;
-			local kc = i.KeyCode;
-			if kc == Enum.KeyCode.Unknown then
-				stopCap();
-				return;
-			end;
-			local name = kc.Name;
+		VLO.aimOrigin.toast("press a key or controller button");
+		capConn, uiRefs.capChangeConn = VLO.input.connectCapture(false, function(name)
 			if not keysSet[name] then
 				keysSet[name] = true;
 				local list = {};
@@ -5619,13 +5958,15 @@ local function createUI()
 	lockLbl.TextXAlignment = Enum.TextXAlignment.Left;
 	lockLbl.Size = UDim2.new(1, -20, 0, 24);
 	local lockBtn = newUi("TextButton", pgSettings);
-	lockBtn.Text = _G.lockKey or "MouseButton2";
+	lockBtn.RichText = true;
+	lockBtn:SetAttribute("VLOBindingName", tostring(_G.lockKey or "MouseButton2"));
+	lockBtn.Text = VLO.input.getBindingRichText(_G.lockKey or "MouseButton2", true);
 	lockBtn.Font = Enum.Font.GothamSemibold;
 	lockBtn.TextSize = 13;
 	lockBtn.TextColor3 = UI.text;
 	lockBtn.AutoButtonColor = false;
 	lockBtn.BackgroundColor3 = UI.bar2;
-	lockBtn.Size = UDim2.new(0, 120, 0, 26);
+	lockBtn.Size = UDim2.new(0, 150, 0, 26);
 	round(lockBtn, UDim.new(0.2, 0));
 	stroke(lockBtn, 1, UI.stroke2, 0.25);
 	local lockCon = bindClick(lockBtn, function()
@@ -5637,30 +5978,20 @@ local function createUI()
 		end;
 		lockCapMode = true;
 		capMode = true;
-		VLO.aimOrigin.toast("press key or mouse for lock");
-		lockCapConn = UIS.InputBegan:Connect(function(i, gp)
+		VLO.aimOrigin.toast("press key, mouse, or controller button for lock");
+		lockCapConn, uiRefs.lockCapChangeConn = VLO.input.connectCapture(true, function(name)
 			if not lockCapMode then
 				return;
 			end;
-			local name;
-			if i.UserInputType == Enum.UserInputType.Keyboard then
-				if i.KeyCode == Enum.KeyCode.Unknown then
-					stopLockCap();
-					return;
-				end;
-				name = i.KeyCode.Name;
-			elseif i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.MouseButton2 or i.UserInputType == Enum.UserInputType.MouseButton3 then
-				name = i.UserInputType.Name;
-			else
-				return;
-			end;
 			_G.lockKey = name;
-			lockBtn.Text = name;
+			lockBtn:SetAttribute("VLOBindingName", name);
+			lockBtn.Text = VLO.input.getBindingRichText(name, true);
 			rebindStrongInputs();
 			VLO.aimOrigin.saveCfg();
 			stopLockCap();
 		end);
 		table.insert(conns, lockCapConn);
+		table.insert(conns, uiRefs.lockCapChangeConn);
 	end);
 	local lockReset = newUi("TextButton", pgSettings);
 	lockReset.Text = "reset lock key";
@@ -5674,7 +6005,8 @@ local function createUI()
 	stroke(lockReset, 1, UI.stroke2, 0.25);
 	local lockResetCon = bindClick(lockReset, function()
 		_G.lockKey = "MouseButton2";
-		lockBtn.Text = "MouseButton2";
+		lockBtn:SetAttribute("VLOBindingName", "MouseButton2");
+		lockBtn.Text = VLO.input.getBindingRichText("MouseButton2", true);
 		rebindStrongInputs();
 		VLO.aimOrigin.saveCfg();
 		VLO.aimOrigin.toast("lock key reset to MouseButton2");
@@ -5710,7 +6042,8 @@ local function createUI()
 			cam.FieldOfView = _G.fovValue;
 		end;
 		if lockBtn and lockBtn.Parent then
-			lockBtn.Text = tostring(_G.lockKey or "MouseButton2");
+			lockBtn:SetAttribute("VLOBindingName", tostring(_G.lockKey or "MouseButton2"));
+			lockBtn.Text = VLO.input.getBindingRichText(_G.lockKey or "MouseButton2", true);
 		end;
 	end;
 	local cfgNameRow = newUi("Frame", pgSettings);
@@ -5995,11 +6328,14 @@ local function createUI()
 			txt.Size = UDim2.new(1, -42, 1, 0);
 			txt.Position = UDim2.new(0, 10, 0, 0);
 			txt.Font = Enum.Font.GothamMedium;
+			txt.RichText = true;
 			txt.TextSize = 13;
 			txt.TextColor3 = UI.text;
 			txt.TextXAlignment = Enum.TextXAlignment.Left;
 			txt.TextTruncate = Enum.TextTruncate.AtEnd;
-			txt.Text = tostring(keyName) .. " -> " .. tostring(action);
+			txt:SetAttribute("VLOBindingName", tostring(keyName));
+			txt:SetAttribute("VLOBindingAction", tostring(action));
+			txt.Text = VLO.input.getBindingRichText(keyName, true) .. " -> " .. VLO.input.escapeRichText(action);
 			local rm = newUi("TextButton", row);
 			rm.Size = UDim2.new(0, 26, 0, 22);
 			rm.Position = UDim2.new(1, -30, 0.5, -11);
@@ -6038,20 +6374,10 @@ local function createUI()
 		end;
 		capMode = true;
 		local action = normChoice(_G.pendingBindAction, OPT.BIND_ACTION_OPTIONS, "Aimbot");
-		VLO.aimOrigin.toast("press key for " .. action);
-		capConn = UIS.InputBegan:Connect(function(i, gp)
-			if gp then
-				return;
-			end;
-			if i.UserInputType ~= Enum.UserInputType.Keyboard then
-				return;
-			end;
-			if i.KeyCode == Enum.KeyCode.Unknown then
-				stopCap();
-				return;
-			end;
+		VLO.aimOrigin.toast("press key or controller button for " .. action);
+		capConn, uiRefs.capChangeConn = VLO.input.connectCapture(false, function(name)
 			_G.optionBinds = type(_G.optionBinds) == "table" and _G.optionBinds or {};
-			_G.optionBinds[i.KeyCode.Name] = action;
+			_G.optionBinds[name] = action;
 			rebuildOptionBindRows();
 			rebindStrongInputs();
 			VLO.aimOrigin.saveCfg();
@@ -6782,6 +7108,10 @@ uiRefs.getBindInputEnum = function(name)
 		return Enum.KeyCode[raw];
 	end);
 	if okKey and keyCode and keyCode ~= Enum.KeyCode.Unknown then
+		local keyName = keyCode.Name;
+		if (keyName:match("^Button") or keyName:match("^DPad") or keyName:match("^Thumbstick")) and not VLO.input.isGamepadKeyCode(keyCode) then
+			return nil;
+		end;
 		return keyCode;
 	end;
 	local okInput, inputType = pcall(function()
@@ -6817,10 +7147,20 @@ unbindStrongInputs = function()
 	pcall(function()
 		CAS:UnbindAction("VyperiaBotHotkeys");
 	end);
-	if uiRefs.hotkeyRawCon and uiRefs.hotkeyRawCon.Connected then
-		uiRefs.hotkeyRawCon:Disconnect();
+	for _, fieldName in {
+		"hotkeyRawCon",
+		"hotkeyChangedCon",
+		"hotkeyEndedCon",
+		"gamepadPollCon"
+	} do
+		local connection = uiRefs[fieldName];
+		if connection and connection.Connected then
+			connection:Disconnect();
+		end;
+		uiRefs[fieldName] = nil;
 	end;
-	uiRefs.hotkeyRawCon = nil;
+	uiRefs.lockPressed = false;
+	uiRefs.hotkeyPressed = {};
 end;
 function startLockAction()
 	if UIS:GetFocusedTextBox() then
@@ -6898,97 +7238,123 @@ uiRefs.binds = function()
 end;
 rebindStrongInputs = function()
 	unbindStrongInputs();
-	local lockInput = uiRefs.getBindInputEnum(_G.lockKey or "MouseButton2");
+	uiRefs.lockInputName = tostring(_G.lockKey or "MouseButton2");
+	uiRefs.lockPressed = false;
+	uiRefs.hotkeyPressed = {};
+	uiRefs.runHotkey = function(name)
+		local now = os.clock();
+		if uiRefs.hotkeyName == name and (now - (uiRefs.hotkeyAt or 0)) < 0.12 then
+			return false;
+		end;
+		uiRefs.hotkeyName = name;
+		uiRefs.hotkeyAt = now;
+		local bindsMap = type(_G.optionBinds) == "table" and _G.optionBinds or {};
+		local action = bindsMap[name];
+		if action and handleOptionBind(action) then
+			return true;
+		end;
+		if table.find(type(_G.toggleKeys) == "table" and _G.toggleKeys or {}, name) then
+			if frm and frm.Parent then
+				if uiMin then
+					openUI();
+				else
+					closeUI();
+				end;
+			end;
+			return true;
+		end;
+		return false;
+	end;
+	uiRefs.beginBoundInput = function(name, inputObject)
+		if type(name) ~= "string" or name == "" then
+			return false;
+		end;
+		VLO.input.noteInput(inputObject);
+		if capMode or UIS:GetFocusedTextBox() then
+			return false;
+		end;
+		if name == uiRefs.lockInputName then
+			if not _G.isEnabled then
+				return false;
+			end;
+			if not uiRefs.lockPressed then
+				uiRefs.lockPressed = true;
+				startLockAction();
+			end;
+			return true;
+		end;
+		if time() < capCooldownUntil then
+			return false;
+		end;
+		if uiRefs.hotkeyPressed[name] then
+			return true;
+		end;
+		if uiRefs.runHotkey(name) then
+			uiRefs.hotkeyPressed[name] = true;
+			return true;
+		end;
+		return false;
+	end;
+	uiRefs.endBoundInput = function(name)
+		if type(name) ~= "string" or name == "" then
+			return false;
+		end;
+		uiRefs.hotkeyPressed[name] = nil;
+		if name == uiRefs.lockInputName and uiRefs.lockPressed then
+			uiRefs.lockPressed = false;
+			endLockAction();
+			return true;
+		end;
+		return false;
+	end;
+	uiRefs.handleBoundInput = function(inputObject, inputState)
+		if not inputObject then
+			return false;
+		end;
+		local name = VLO.input.getBindableName(inputObject, true);
+		if not name then
+			return false;
+		end;
+		if inputState == Enum.UserInputState.Begin then
+			return uiRefs.beginBoundInput(name, inputObject);
+		end;
+		if inputState == Enum.UserInputState.Change and VLO.input.isAnalogBindingName(name) then
+			if VLO.input.isAnalogPressed(inputObject) then
+				return uiRefs.beginBoundInput(name, inputObject);
+			end;
+			return uiRefs.endBoundInput(name);
+		end;
+		if inputState == Enum.UserInputState.End or inputState == Enum.UserInputState.Cancel then
+			return uiRefs.endBoundInput(name);
+		end;
+		return false;
+	end;
+	local lockInput = uiRefs.getBindInputEnum(uiRefs.lockInputName);
 	if lockInput then
-		local ok = pcall(function()
-			CAS:BindActionAtPriority("VyperiaBotLock", function(_, inputState)
-				if capMode or UIS:GetFocusedTextBox() then
-					return Enum.ContextActionResult.Pass;
-				end;
-				if inputState == Enum.UserInputState.Begin then
-					if not _G.isEnabled then
-						return Enum.ContextActionResult.Pass;
-					end;
-					startLockAction();
-					return Enum.ContextActionResult.Sink;
-				end;
-				if inputState == Enum.UserInputState.End or inputState == Enum.UserInputState.Cancel then
-					if not _G.isEnabled and (not isLock) then
-						return Enum.ContextActionResult.Pass;
-					end;
-					endLockAction();
-					return Enum.ContextActionResult.Sink;
-				end;
+		uiRefs.lockAct = function(_, inputState, inputObject)
+			local handled = uiRefs.handleBoundInput(inputObject, inputState);
+			if VLO.input.isGamepadKeyCode(inputObject and inputObject.KeyCode) or VLO.input.isGamepadInputType(inputObject and inputObject.UserInputType) then
 				return Enum.ContextActionResult.Pass;
-			end, false, Enum.ContextActionPriority.High.Value + 1000, lockInput);
+			end;
+			return handled and Enum.ContextActionResult.Sink or Enum.ContextActionResult.Pass;
+		end;
+		local ok = pcall(function()
+			CAS:BindActionAtPriority("VyperiaBotLock", uiRefs.lockAct, false, Enum.ContextActionPriority.High.Value + 1000, lockInput);
 		end);
 		if not ok then
 			pcall(function()
-				CAS:BindAction("VyperiaBotLock", function(_, inputState)
-					if capMode or UIS:GetFocusedTextBox() then
-						return Enum.ContextActionResult.Pass;
-					end;
-					if inputState == Enum.UserInputState.Begin then
-						if not _G.isEnabled then
-							return Enum.ContextActionResult.Pass;
-						end;
-						startLockAction();
-						return Enum.ContextActionResult.Sink;
-					end;
-					if inputState == Enum.UserInputState.End or inputState == Enum.UserInputState.Cancel then
-						if not _G.isEnabled and (not isLock) then
-							return Enum.ContextActionResult.Pass;
-						end;
-						endLockAction();
-						return Enum.ContextActionResult.Sink;
-					end;
-					return Enum.ContextActionResult.Pass;
-				end, false, lockInput);
+				CAS:BindAction("VyperiaBotLock", uiRefs.lockAct, false, lockInput);
 			end);
 		end;
 	end;
 	local hotkeyInputs = uiRefs.collectHotkeyInputs();
 	if #hotkeyInputs > 0 then
-		uiRefs.runHotkey = function(name)
-			local now = os.clock();
-			if uiRefs.hotkeyName == name and (now - (uiRefs.hotkeyAt or 0)) < 0.12 then
-				return false;
-			end;
-			uiRefs.hotkeyName = name;
-			uiRefs.hotkeyAt = now;
-			local bindsMap = type(_G.optionBinds) == "table" and _G.optionBinds or {};
-			local action = bindsMap[name];
-			if action and handleOptionBind(action) then
-				return true;
-			end;
-			if table.find(_G.toggleKeys, name) then
-				if frm and frm.Parent then
-					if uiMin then
-						openUI();
-					else
-						closeUI();
-					end;
-				end;
-				return true;
-			end;
-			return false;
-		end;
 		uiRefs.hotkeyAct = function(_, inputState, inputObject)
-			if inputState ~= Enum.UserInputState.Begin then
+			local handled = uiRefs.handleBoundInput(inputObject, inputState);
+			if VLO.input.isGamepadKeyCode(inputObject and inputObject.KeyCode) or VLO.input.isGamepadInputType(inputObject and inputObject.UserInputType) then
 				return Enum.ContextActionResult.Pass;
 			end;
-			if capMode or UIS:GetFocusedTextBox() or time() < capCooldownUntil then
-				return Enum.ContextActionResult.Pass;
-			end;
-			local keyCode = inputObject and inputObject.KeyCode or Enum.KeyCode.Unknown;
-			local name = keyCode ~= Enum.KeyCode.Unknown and keyCode.Name or (inputObject and inputObject.UserInputType and inputObject.UserInputType.Name or "");
-			if name == "" then
-				return Enum.ContextActionResult.Pass;
-			end;
-			if uiRefs.runHotkey(name) then
-				return Enum.ContextActionResult.Sink;
-			end;
-			return Enum.ContextActionResult.Pass;
+			return handled and Enum.ContextActionResult.Sink or Enum.ContextActionResult.Pass;
 		end;
 		local ok = pcall(function()
 			CAS:BindActionAtPriority("VyperiaBotHotkeys", uiRefs.hotkeyAct, false, Enum.ContextActionPriority.High.Value + 1000, unpack(hotkeyInputs));
@@ -6998,18 +7364,80 @@ rebindStrongInputs = function()
 				CAS:BindAction("VyperiaBotHotkeys", uiRefs.hotkeyAct, false, unpack(hotkeyInputs));
 			end);
 		end;
-		uiRefs.hotkeyRawCon = UIS.InputBegan:Connect(function(inputObject, _)
-			if capMode or UIS:GetFocusedTextBox() or time() < capCooldownUntil then
-				return;
-			end;
-			local keyCode = inputObject and inputObject.KeyCode or Enum.KeyCode.Unknown;
-			local name = keyCode ~= Enum.KeyCode.Unknown and keyCode.Name or (inputObject and inputObject.UserInputType and inputObject.UserInputType.Name or "");
-			if name == "" then
-				return;
-			end;
-			uiRefs.runHotkey(name);
-		end);
 	end;
+	uiRefs.hotkeyRawCon = UIS.InputBegan:Connect(function(inputObject)
+		uiRefs.handleBoundInput(inputObject, Enum.UserInputState.Begin);
+	end);
+	uiRefs.hotkeyChangedCon = UIS.InputChanged:Connect(function(inputObject)
+		if VLO.input.isAnalogBindingName(inputObject.KeyCode and inputObject.KeyCode.Name) then
+			uiRefs.handleBoundInput(inputObject, Enum.UserInputState.Change);
+		end;
+	end);
+	uiRefs.hotkeyEndedCon = UIS.InputEnded:Connect(function(inputObject)
+		uiRefs.handleBoundInput(inputObject, Enum.UserInputState.End);
+	end);
+	uiRefs.gamepadRelevant = {};
+	if VLO.input.isGamepadBindingName(uiRefs.lockInputName) then
+		uiRefs.gamepadRelevant[uiRefs.lockInputName] = true;
+	end;
+	for _, name in type(_G.toggleKeys) == "table" and _G.toggleKeys or {} do
+		if VLO.input.isGamepadBindingName(name) then
+			uiRefs.gamepadRelevant[name] = true;
+		end;
+	end;
+	for name, _ in type(_G.optionBinds) == "table" and _G.optionBinds or {} do
+		if VLO.input.isGamepadBindingName(name) then
+			uiRefs.gamepadRelevant[name] = true;
+		end;
+	end;
+	uiRefs.gamepadPolledDown = {};
+	uiRefs.gamepadPollElapsed = 0;
+	uiRefs.gamepadPollCon = RunService.Heartbeat:Connect(function(dt)
+		uiRefs.gamepadPollElapsed += dt or 0.016;
+		if uiRefs.gamepadPollElapsed < 0.04 then
+			return;
+		end;
+		uiRefs.gamepadPollElapsed = 0;
+		if next(uiRefs.gamepadRelevant) == nil then
+			return;
+		end;
+		local currentDown = {};
+		local connected = {};
+		pcall(function()
+			connected = UIS:GetConnectedGamepads();
+		end);
+		for _, gamepadType in connected do
+			local states = {};
+			pcall(function()
+				states = UIS:GetGamepadState(gamepadType);
+			end);
+			for _, inputObject in states do
+				local name = VLO.input.getBindableName(inputObject, false);
+				if name and uiRefs.gamepadRelevant[name] then
+					local pressed;
+					if VLO.input.isAnalogBindingName(name) then
+						pressed = VLO.input.isAnalogPressed(inputObject);
+					else
+						pressed = inputObject.UserInputState == Enum.UserInputState.Begin or inputObject.UserInputState == Enum.UserInputState.Change;
+					end;
+					if pressed then
+						currentDown[name] = inputObject;
+					end;
+				end;
+			end;
+		end;
+		for name, inputObject in currentDown do
+			if not uiRefs.gamepadPolledDown[name] then
+				uiRefs.beginBoundInput(name, inputObject);
+			end;
+		end;
+		for name, _ in uiRefs.gamepadPolledDown do
+			if not currentDown[name] then
+				uiRefs.endBoundInput(name);
+			end;
+		end;
+		uiRefs.gamepadPolledDown = currentDown;
+	end);
 end;
 function lockCamera()
 	if lockCamLoop and lockCamLoop.Connected then
@@ -7169,6 +7597,7 @@ uiRefs.setupPlayerMonitoring = function()
 	table.insert(conns, c);
 end;
 frm = createUI();
+uiRefs.refreshBindingVisuals();
 uiRefs.binds();
 uiRefs.setupPlayerMonitoring();
 if _G.espEnabled then

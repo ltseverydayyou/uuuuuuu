@@ -96,6 +96,21 @@ local starterGui = __lt.cs("StarterGui", __lt.cr)
 local http = __lt.cs("HttpService", __lt.cr)
 local scriptContext = __lt.cs("ScriptContext", __lt.cr)
 
+local moduleCache = (function()
+	local globalEnv = (getgenv and getgenv()) or _G or {}
+	local sharedEnv = rawget(_G, "shared")
+	local cacheHost = type(sharedEnv) == "table" and sharedEnv or (type(globalEnv) == "table" and globalEnv or nil)
+	if not cacheHost then
+		return setmetatable({}, {__mode = "k"})
+	end
+	local cache = rawget(cacheHost, "__lt_module_editor_require_cache")
+	if type(cache) ~= "table" then
+		cache = setmetatable({}, {__mode = "k"})
+		cacheHost.__lt_module_editor_require_cache = cache
+	end
+	return cache
+end)()
+
 local plr = players.LocalPlayer
 local cam = workspaceRef.CurrentCamera
 local pg = plr:WaitForChild("PlayerGui")
@@ -443,6 +458,28 @@ local function trim(s)
 	return (tostring(s):match("^%s*(.-)%s*$"))
 end
 
+local function readkey(t, k)
+	local v = rawget(t, k)
+	if v ~= nil then
+		return true, v
+	end
+	local ok, res = pcall(function()
+		return t[k]
+	end)
+	if not ok or res == nil then
+		return false, nil
+	end
+	return true, res
+end
+
+local function getkey(t, k)
+	local ok, v = readkey(t, k)
+	if ok then
+		return v
+	end
+	return nil
+end
+
 local function readnums(txt)
 	local out = {}
 	local i = 1
@@ -587,7 +624,7 @@ local function editvalue(v)
 end
 
 local function setvalue(t, k, nv)
-	local cur = t[k]
+	local cur = getkey(t, k)
 	if typeof(cur) == "Instance" then
 		if cur:IsA("Animation") then
 			local ok, err = pcall(function()
@@ -726,13 +763,11 @@ local function klist(t, fn)
 	local seen = {}
 
 	local function add(k, v)
-		if not fn or fn(k, v) then
-			if seen[k] then
-				return
-			end
-			seen[k] = true
-			out[#out + 1] = k
+		if v == nil or seen[k] or (fn and not fn(k, v)) then
+			return
 		end
+		seen[k] = true
+		out[#out + 1] = k
 	end
 
 	for k, v in t do
@@ -743,17 +778,10 @@ local function klist(t, fn)
 	local idx = mt and mt.__index
 	if type(idx) == "table" then
 		for k in idx do
-			local v = rawget(t, k)
-			if v == nil then
-				local ok, res = pcall(function()
-					return t[k]
-				end)
-				if ok then
-					v = res
-					pcall(rawset, t, k, res)
-				end
+			local ok, v = readkey(t, k)
+			if ok then
+				add(k, v)
 			end
-			add(k, v)
 		end
 	elseif type(idx) == "function" then
 		local ups
@@ -771,17 +799,10 @@ local function klist(t, fn)
 			for _, up in ups do
 				if type(up) == "table" then
 					for k in up do
-						local v = rawget(t, k)
-						if v == nil then
-							local ok, res = pcall(function()
-								return t[k]
-							end)
-							if ok then
-								v = res
-								pcall(rawset, t, k, res)
-							end
+						local ok, v = readkey(t, k)
+						if ok then
+							add(k, v)
 						end
-						add(k, v)
 					end
 				end
 			end
@@ -1366,16 +1387,9 @@ local function gettbl(depth)
 		if type(t) ~= "table" then
 			return nil
 		end
-		local v = rawget(t, k)
-		if v == nil then
-			local ok, res = pcall(function()
-				return t[k]
-			end)
-			if not ok then
-				return nil
-			end
-			v = res
-			pcall(rawset, t, k, res)
+		local ok, v = readkey(t, k)
+		if not ok then
+			return nil
 		end
 		t = v
 	end
@@ -1417,16 +1431,9 @@ local function gettblat(path, ent)
 		if type(t) ~= "table" then
 			return nil
 		end
-		local v = rawget(t, k)
-		if v == nil then
-			local ok, res = pcall(function()
-				return t[k]
-			end)
-			if not ok then
-				return nil
-			end
-			v = res
-			pcall(rawset, t, k, res)
+		local ok, v = readkey(t, k)
+		if not ok then
+			return nil
 		end
 		t = v
 	end
@@ -1448,16 +1455,9 @@ local function gettablechainat(path, ent)
 		if type(t) ~= "table" then
 			return nil
 		end
-		local v = rawget(t, k)
-		if v == nil then
-			local ok, res = pcall(function()
-				return t[k]
-			end)
-			if not ok then
-				return nil
-			end
-			v = res
-			pcall(rawset, t, k, res)
+		local ok, v = readkey(t, k)
+		if not ok then
+			return nil
 		end
 		chain[#chain + 1] = v
 		t = v
@@ -1576,15 +1576,9 @@ local function iscycletable(v, depth)
 		if type(t) ~= "table" then
 			return false
 		end
-		local nx = rawget(t, k)
-		if nx == nil then
-			local ok, res = pcall(function()
-				return t[k]
-			end)
-			if not ok then
-				return false
-			end
-			nx = res
+		local ok, nx = readkey(t, k)
+		if not ok then
+			return false
 		end
 		if nx == v then
 			return true
@@ -1598,7 +1592,8 @@ local function haschildtables(t)
 	if type(t) ~= "table" then
 		return false
 	end
-	for _, v in t do
+	for _, k in klist(t) do
+		local v = getkey(t, k)
 		if type(v) == "table" and not iscycletable(v) then
 			return true
 		end
@@ -1621,7 +1616,7 @@ local function tcnt(t)
 	local b = 0
 	local c = 0
 	for _, k in klist(t) do
-		local v = t[k]
+		local v = getkey(t, k)
 		local ty = typeof(v)
 		if ty == "table" and not iscycletable(v) then
 			a += 1
@@ -1845,6 +1840,14 @@ local function loadm(ent)
 	if not ent then
 		return false
 	end
+	local cached = moduleCache[ent.m]
+	if type(cached) == "table" then
+		ent.val = cached
+		ent.st = "ok"
+		ent.err = nil
+		draw()
+		return true
+	end
 	if ent.st == "ok" then
 		return true
 	end
@@ -1921,6 +1924,7 @@ local function loadm(ent)
 	ent.val = res
 
 	if type(res) == "table" then
+		moduleCache[ent.m] = res
 		ent.st = "ok"
 	else
 		ent.st = "type"
@@ -2295,7 +2299,7 @@ local function valrow(parent, y, k, v)
 			if not t then
 				return
 			end
-			local ok, err = setpathvalue(k, not editvalue(t[k]))
+			local ok, err = setpathvalue(k, not editvalue(getkey(t, k)))
 			if not ok then
 				stat.Text = "failed to set " .. tostring(k) .. ": " .. tostring(err)
 				return
@@ -2406,27 +2410,28 @@ local function valrow(parent, y, k, v)
 			if not t then
 				return
 			end
-			local nv, ok = parse(box.Text, t[k])
+			local current = getkey(t, k)
+			local nv, ok = parse(box.Text, current)
 			if not ok then
 				local msg = "bad value for " .. tostring(k)
-				local hx = hint(t[k])
+				local hx = hint(current)
 				if hx then
 					msg ..= " (" .. hx .. ")"
 				end
 				stat.Text = msg
-				box.Text = fmt(t[k])
+				box.Text = fmt(getkey(t, k))
 				pendingTexts[id] = nil
 				return
 			end
 			local wrote, err = setpathvalue(k, nv)
 			if not wrote then
 				stat.Text = "failed to set " .. tostring(k) .. ": " .. tostring(err)
-				box.Text = fmt(t[k])
+				box.Text = fmt(getkey(t, k))
 				pendingTexts[id] = nil
 				return
 			end
-			stat.Text = tostring(k) .. " = " .. fmt(t[k])
-			box.Text = fmt(t[k])
+			stat.Text = tostring(k) .. " = " .. fmt(getkey(t, k))
+			box.Text = fmt(getkey(t, k))
 			pendingTexts[id] = nil
 		end
 
@@ -2461,22 +2466,23 @@ local function valrow(parent, y, k, v)
 					if not t then
 						return
 					end
-					local nv, ok = parse(box.Text, t[k])
+					local current = getkey(t, k)
+					local nv, ok = parse(box.Text, current)
 					if not ok then
 						local msg = "bad value for " .. tostring(k)
-						local hx = hint(t[k])
+						local hx = hint(current)
 						if hx then
 							msg ..= " (" .. hx .. ")"
 						end
 						stat.Text = msg
-						box.Text = fmt(t[k])
+						box.Text = fmt(getkey(t, k))
 						pendingTexts[id] = nil
 						return
 					end
 					local wrote, err = setpathvalueat(path, k, nv, ent)
 					if not wrote then
 						stat.Text = "failed to loop " .. tostring(k) .. ": " .. tostring(err)
-						box.Text = fmt(t[k])
+						box.Text = fmt(getkey(t, k))
 						pendingTexts[id] = nil
 						return
 					end
@@ -2500,7 +2506,7 @@ local function valrow(parent, y, k, v)
 				end},
 				{"Copy", function()
 					local t = gettblat(path, ent)
-					local txt = t and fmt(t[k]) or box.Text
+					local txt = t and fmt(getkey(t, k)) or box.Text
 					local ok, err = copyvalue(txt)
 					stat.Text = ok and ("copied " .. tostring(k)) or tostring(err)
 					pendingTexts[id] = nil
@@ -2893,7 +2899,7 @@ draw = function()
 						kind = "other",
 						h = rowh("other"),
 						key = k,
-						val = entt[k],
+						val = getkey(entt, k),
 					}
 				end
 				setitems(items)
@@ -2915,7 +2921,7 @@ draw = function()
 				h = rowh("ent"),
 				baseDepth = depth,
 				key = k,
-				val = entt[k],
+				val = getkey(entt, k),
 			}
 		end
 		setitems(items)
@@ -2947,9 +2953,9 @@ draw = function()
 		for _, k in ks do
 			items[#items + 1] = {
 				kind = "val",
-				h = rowh("val", t[k], k),
+				h = rowh("val", getkey(t, k), k),
 				key = k,
-				val = t[k],
+				val = getkey(t, k),
 			}
 		end
 		setitems(items)

@@ -38,6 +38,38 @@ if type(ServiceResolver) ~= "table" then
 	Environment.__lt_service_resolver = ServiceResolver
 end
 
+local UIProtector = rawget(Environment, "__lt_ui_protector")
+
+if type(UIProtector) ~= "table" then
+	local Loader = loadstring
+
+	if type(Loader) ~= "function" then
+		error("UIProtector loader unavailable")
+	end
+
+	local ProtectorSource = game:HttpGet(
+		"https://raw.githubusercontent.com/ltseverydayyou/ltseverydayyou.github.io/refs/heads/main/UIprotector.luau"
+	)
+
+	local ProtectorChunk, ProtectorCompileError = Loader(
+		ProtectorSource,
+		"@UIprotector.luau"
+	)
+
+	if type(ProtectorChunk) ~= "function" then
+		error("UIProtector compile failed: " .. tostring(ProtectorCompileError))
+	end
+
+	local ProtectorSuccess, ProtectorResult = pcall(ProtectorChunk)
+
+	if not ProtectorSuccess or type(ProtectorResult) ~= "table" then
+		error("UIProtector load failed: " .. tostring(ProtectorResult))
+	end
+
+	UIProtector = ProtectorResult
+	Environment.__lt_ui_protector = UIProtector
+end
+
 local Reference = if type(cloneref) == "function" then cloneref else function(Value)
 	return Value
 end
@@ -46,6 +78,7 @@ local ReplicatedStorage = ServiceResolver.cs("ReplicatedStorage", Reference)
 local Workspace = ServiceResolver.cs("Workspace", Reference)
 local Players = ServiceResolver.cs("Players", Reference)
 local RunService = ServiceResolver.cs("RunService", Reference)
+local CollectionService = ServiceResolver.cs("CollectionService", Reference)
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -127,6 +160,14 @@ Environment.NotorietyGetAmmoWrappers = setmetatable({}, {
 	__mode = "k",
 })
 
+if Environment.NotorietyMenuIcon then
+	pcall(function()
+		Environment.NotorietyMenuIcon:destroy()
+	end)
+
+	Environment.NotorietyMenuIcon = nil
+end
+
 if Environment.NotorietyWeaponIcon then
 	pcall(function()
 		Environment.NotorietyWeaponIcon:destroy()
@@ -143,9 +184,25 @@ if Environment.MaxEverythingIcon then
 	Environment.MaxEverythingIcon = nil
 end
 
+if Environment.NotorietyItemESPIcon then
+	pcall(function()
+		Environment.NotorietyItemESPIcon:destroy()
+	end)
+
+	Environment.NotorietyItemESPIcon = nil
+end
+
+if type(Environment.NotorietyItemESPController) == "table"
+	and type(Environment.NotorietyItemESPController.Cleanup) == "function"
+then
+	pcall(Environment.NotorietyItemESPController.Cleanup)
+	Environment.NotorietyItemESPController = nil
+end
+
 Environment.MaxEverythingEnabled = true
 Environment.KillPoliceRunning = false
 Environment.NotorietyWeaponEnabled = true
+Environment.NotorietyItemESPEnabled = false
 Environment.NotorietyWeaponConnections = {}
 Environment.NotorietyTopbarConnections = {}
 Environment.NotorietyTopbarCharacterConnections = {}
@@ -1217,6 +1274,412 @@ local function setWeaponModificationsEnabled(Enabled)
 	end
 end
 
+local ItemESPColors = {
+	LOOT = Color3.fromRGB(255, 215, 50),
+	ITEM = Color3.fromRGB(60, 210, 255),
+	KEY = Color3.fromRGB(210, 80, 255),
+	CONTAINER = Color3.fromRGB(255, 125, 45),
+	CAMERA = Color3.fromRGB(255, 50, 50),
+	SECURITY = Color3.fromRGB(255, 65, 145),
+	ACCESS = Color3.fromRGB(140, 105, 255),
+	ESCAPE = Color3.fromRGB(70, 255, 130),
+}
+
+local ItemESPState = {
+	Definitions = nil,
+	Folder = nil,
+	Connections = {},
+	Tracked = setmetatable({}, {
+		__mode = "k",
+	}),
+}
+
+local function containsItemESPWord(Text, Words)
+	Text = string.lower(Text)
+
+	for _, Word in Words do
+		if string.find(Text, Word, 1, true) then
+			return true
+		end
+	end
+
+	return false
+end
+
+local function loadInteractionDefinitions()
+	if type(ItemESPState.Definitions) == "table" then
+		return ItemESPState.Definitions
+	end
+
+	local ReplicatedScripts = RS_Package:FindFirstChild("ReplicatedScripts")
+	local InteractListModule = ReplicatedScripts and ReplicatedScripts:FindFirstChild("InteractList")
+
+	if not InteractListModule or not InteractListModule:IsA("ModuleScript") then
+		return nil
+	end
+
+	local RequireSuccess, Factory = pcall(require, InteractListModule)
+
+	if not RequireSuccess then
+		return nil
+	end
+
+	local Definitions = Factory
+
+	if type(Factory) == "function" then
+		local FactorySuccess, FactoryResult = pcall(Factory)
+
+		if not FactorySuccess then
+			return nil
+		end
+
+		Definitions = FactoryResult
+	end
+
+	if type(Definitions) ~= "table" then
+		return nil
+	end
+
+	ItemESPState.Definitions = Definitions
+
+	return Definitions
+end
+
+local function resolveItemESPInteraction(Prompt)
+	local Definitions = loadInteractionDefinitions()
+
+	if not Definitions then
+		return nil
+	end
+
+	local Object = Prompt.Parent
+
+	while Object and Object ~= Workspace do
+		local Key = Object:GetAttribute("InteractType") or Object.Name
+		local Data = Definitions[Key]
+
+		if type(Data) == "table" then
+			return Object, Key, Data
+		end
+
+		local Normalized = string.gsub(Key, "%d+$", "")
+		Data = Definitions[Normalized]
+
+		if type(Data) == "table" then
+			return Object, Normalized, Data
+		end
+
+		Object = Object.Parent
+	end
+
+	return nil
+end
+
+local function classifyItemESPInteraction(Prompt, Key, Data)
+	local PromptAction = string.upper(Prompt.ActionText or "")
+	local KeyLower = string.lower(Key)
+	local RegistryAction = string.lower(Data.actiontext or "")
+	local Searchable = KeyLower .. " " .. RegistryAction
+
+	if PromptAction == "SECURE"
+		or containsItemESPWord(KeyLower, {
+			"safespot",
+			"escapecrate",
+		})
+	then
+		return "ESCAPE"
+	end
+
+	if containsItemESPWord(Searchable, {
+		"electrical box",
+		"power box",
+		"camera box",
+		"camera feed",
+		"rushhourelectricalbox",
+	}) then
+		return "SECURITY"
+	end
+
+	if containsItemESPWord(KeyLower, {
+		"cardreader",
+		"card reader",
+		"wirecutterfence",
+		"acunitcover",
+	}) or PromptAction == "INSERT" or PromptAction == "UNLOCK" then
+		return "ACCESS"
+	end
+
+	if containsItemESPWord(KeyLower, {
+		"keycard",
+		"key card",
+		"accesspass",
+		"access pass",
+	}) then
+		return "KEY"
+	end
+
+	if containsItemESPWord(KeyLower, {
+		"crowbar",
+		"wirecutters",
+		"thermal drill",
+		"drill bag",
+	}) then
+		return "ITEM"
+	end
+
+	if PromptAction == "DISABLE" or containsItemESPWord(KeyLower, {
+		"camera",
+	}) then
+		return "CAMERA"
+	end
+
+	if PromptAction == "START DRILL"
+		or containsItemESPWord(KeyLower, {
+			"rushcrate",
+			"randomcrate",
+			"folderopen",
+			"mini safe",
+			"depositbox",
+			"deposit box",
+			"lockbox",
+		})
+	then
+		return "CONTAINER"
+	end
+
+	local PickupActions = {
+		TAKE = true,
+		STEAL = true,
+		GRAB = true,
+		BAG = true,
+		REMOVE = true,
+	}
+
+	if (Data.value or 0) > 0 and PickupActions[PromptAction] then
+		return "LOOT"
+	end
+
+	if containsItemESPWord(RegistryAction, {
+		"take cash",
+		"take gold",
+		"take jewelry",
+		"bag ",
+		"steal ",
+		"grab gold",
+		"grab bag",
+		"grab bloxy cola",
+		"open cash register",
+	}) then
+		return "LOOT"
+	end
+
+	if PromptAction == "STEAL"
+		or PromptAction == "GRAB"
+		or PromptAction == "BAG"
+		or PromptAction == "REMOVE"
+	then
+		return "LOOT"
+	end
+
+	return nil
+end
+
+local function removeItemESPObject(Object)
+	local Entry = ItemESPState.Tracked[Object]
+
+	if not Entry then
+		return
+	end
+
+	if Entry.Connection then
+		pcall(function()
+			Entry.Connection:Disconnect()
+		end)
+	end
+
+	if Entry.Highlight then
+		pcall(function()
+			Entry.Highlight:Destroy()
+		end)
+	end
+
+	ItemESPState.Tracked[Object] = nil
+end
+
+local function addItemESPObject(Category, Object)
+	if not Category or not Object or ItemESPState.Tracked[Object] then
+		return
+	end
+
+	local Folder = ItemESPState.Folder
+	local Color = ItemESPColors[Category]
+
+	if not Folder or not Folder.Parent or not Color then
+		return
+	end
+
+	local Highlight = ServiceResolver.ns("Highlight")
+
+	if not Highlight then
+		return
+	end
+
+	Highlight.Name = Category .. "_Highlight"
+	Highlight.Adornee = Object
+	Highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+	Highlight.FillColor = Color
+	Highlight.FillTransparency = 0.62
+	Highlight.OutlineColor = Color3.new(1, 1, 1)
+	Highlight.OutlineTransparency = 0
+	Highlight.Parent = Folder
+
+	local AncestryConnection
+
+	AncestryConnection = Object.AncestryChanged:Connect(function(_, Parent)
+		if not Parent then
+			removeItemESPObject(Object)
+		end
+	end)
+
+	ItemESPState.Tracked[Object] = {
+		Category = Category,
+		Highlight = Highlight,
+		Connection = AncestryConnection,
+	}
+end
+
+local function inspectItemESPPrompt(Prompt)
+	if Environment.NotorietyUnloaded
+		or not Environment.NotorietyItemESPEnabled
+		or not Prompt:IsA("ProximityPrompt")
+		or not Prompt:IsDescendantOf(Workspace)
+	then
+		return
+	end
+
+	local CurrentCamera = Workspace.CurrentCamera
+
+	if CurrentCamera and Prompt:IsDescendantOf(CurrentCamera) then
+		return
+	end
+
+	local Object, Key, Data = resolveItemESPInteraction(Prompt)
+
+	if not Object then
+		return
+	end
+
+	local Category = classifyItemESPInteraction(Prompt, Key, Data)
+
+	addItemESPObject(Category, Object)
+end
+
+local function stopItemESP()
+	for _, Connection in ItemESPState.Connections do
+		pcall(function()
+			Connection:Disconnect()
+		end)
+	end
+
+	table.clear(ItemESPState.Connections)
+
+	local Objects = {}
+
+	for Object in ItemESPState.Tracked do
+		table.insert(Objects, Object)
+	end
+
+	for _, Object in Objects do
+		removeItemESPObject(Object)
+	end
+
+	local Folder = ItemESPState.Folder
+	ItemESPState.Folder = nil
+
+	if Folder then
+		pcall(UIProtector.cleanup, Folder)
+		pcall(function()
+			Folder:Destroy()
+		end)
+	end
+end
+
+local function startItemESP()
+	stopItemESP()
+
+	if not loadInteractionDefinitions() then
+		warn("Item ESP could not load InteractList")
+		return false
+	end
+
+	local Folder = ServiceResolver.ns("Folder")
+
+	if not Folder then
+		return false
+	end
+
+	Folder.Name = "NotorietyItemESP"
+
+	local ProtectSuccess, ProtectedFolder = pcall(UIProtector.protectUI, Folder, {
+		lockName = true,
+		name = "NotorietyItemESP",
+		harden = true,
+		deep = true,
+		watch = true,
+	})
+
+	if not ProtectSuccess or typeof(ProtectedFolder) ~= "Instance" then
+		pcall(function()
+			Folder:Destroy()
+		end)
+		return false
+	end
+
+	ItemESPState.Folder = ProtectedFolder
+
+	for _, Prompt in CollectionService:GetTagged("Prompt") do
+		inspectItemESPPrompt(Prompt)
+	end
+
+	table.insert(
+		ItemESPState.Connections,
+		CollectionService:GetInstanceAddedSignal("Prompt"):Connect(inspectItemESPPrompt)
+	)
+
+	return true
+end
+
+local function setItemESPEnabled(Enabled)
+	Environment.NotorietyItemESPEnabled = Enabled == true
+
+	if Environment.NotorietyItemESPEnabled then
+		if not startItemESP() then
+			Environment.NotorietyItemESPEnabled = false
+		end
+	else
+		stopItemESP()
+	end
+
+	local CurrentIcon = Environment.NotorietyItemESPIcon
+
+	if CurrentIcon then
+		pcall(function()
+			CurrentIcon:setLabel(
+				Environment.NotorietyItemESPEnabled and "Item ESP: ON" or "Item ESP: OFF"
+			)
+		end)
+	end
+end
+
+local ItemESPController = {}
+
+function ItemESPController.Cleanup()
+	Environment.NotorietyItemESPEnabled = false
+	stopItemESP()
+end
+
+Environment.NotorietyItemESPController = ItemESPController
+
 local function isIconAlive(CurrentIcon)
 	if type(CurrentIcon) ~= "table" then
 		return false
@@ -1242,6 +1705,7 @@ local function createKillPoliceIcon()
 		:setName("Kill Police")
 		:setLabel("Kill Police [P]")
 		:setRight()
+		:autoDeselect(false)
 		:bindToggleKey(Enum.KeyCode.P)
 		:bindEvent("selected", function()
 			task.spawn(runKill)
@@ -1249,6 +1713,8 @@ local function createKillPoliceIcon()
 		:oneClick()
 
 	Environment.MaxEverythingIcon = CurrentIcon
+
+	return CurrentIcon
 end
 
 local function createWeaponModsIcon()
@@ -1258,6 +1724,7 @@ local function createWeaponModsIcon()
 			Environment.NotorietyWeaponEnabled and "Weapon Mods: ON" or "Weapon Mods: OFF"
 		)
 		:setRight()
+		:autoDeselect(false)
 		:bindEvent("selected", function()
 			if not Environment.NotorietyTopbarRebuilding then
 				setWeaponModificationsEnabled(true)
@@ -1276,6 +1743,38 @@ local function createWeaponModsIcon()
 	else
 		CurrentIcon:deselect()
 	end
+
+	return CurrentIcon
+end
+
+local function createItemESPIcon()
+	local CurrentIcon = Icon.new()
+		:setName("Item ESP")
+		:setLabel(
+			Environment.NotorietyItemESPEnabled and "Item ESP: ON" or "Item ESP: OFF"
+		)
+		:setRight()
+		:autoDeselect(false)
+		:bindEvent("selected", function()
+			if not Environment.NotorietyTopbarRebuilding then
+				setItemESPEnabled(true)
+			end
+		end)
+		:bindEvent("deselected", function()
+			if not Environment.NotorietyTopbarRebuilding then
+				setItemESPEnabled(false)
+			end
+		end)
+
+	Environment.NotorietyItemESPIcon = CurrentIcon
+
+	if Environment.NotorietyItemESPEnabled then
+		CurrentIcon:select()
+	else
+		CurrentIcon:deselect()
+	end
+
+	return CurrentIcon
 end
 
 local function rebuildTopbarIcons(Force)
@@ -1283,27 +1782,46 @@ local function rebuildTopbarIcons(Force)
 		return
 	end
 
-	local RebuildKill = Force == true or not isIconAlive(Environment.MaxEverythingIcon)
-	local RebuildWeapon = Force == true or not isIconAlive(Environment.NotorietyWeaponIcon)
+	local RebuildMenu = Force == true
+		or not isIconAlive(Environment.NotorietyMenuIcon)
+		or not isIconAlive(Environment.MaxEverythingIcon)
+		or not isIconAlive(Environment.NotorietyWeaponIcon)
+		or not isIconAlive(Environment.NotorietyItemESPIcon)
 
-	if not RebuildKill and not RebuildWeapon then
+	if not RebuildMenu then
 		return
 	end
 
 	local WeaponEnabled = Environment.NotorietyWeaponEnabled
+	local ItemESPEnabled = Environment.NotorietyItemESPEnabled
 	Environment.NotorietyTopbarRebuilding = true
 
-	if RebuildKill then
-		destroyIcon(Environment.MaxEverythingIcon)
-		Environment.MaxEverythingIcon = nil
-		createKillPoliceIcon()
-	end
+	destroyIcon(Environment.MaxEverythingIcon)
+	destroyIcon(Environment.NotorietyWeaponIcon)
+	destroyIcon(Environment.NotorietyItemESPIcon)
+	destroyIcon(Environment.NotorietyMenuIcon)
 
-	if RebuildWeapon then
-		destroyIcon(Environment.NotorietyWeaponIcon)
-		Environment.NotorietyWeaponIcon = nil
-		createWeaponModsIcon()
-	end
+	Environment.MaxEverythingIcon = nil
+	Environment.NotorietyWeaponIcon = nil
+	Environment.NotorietyItemESPIcon = nil
+	Environment.NotorietyMenuIcon = nil
+
+	local MenuIcon = Icon.new()
+		:setName("Notoriety Menu")
+		:setLabel("Notoriety")
+		:setMid()
+		:autoDeselect(false)
+	local KillPoliceIcon = createKillPoliceIcon()
+	local WeaponModsIcon = createWeaponModsIcon()
+	local ItemESPIcon = createItemESPIcon()
+
+	MenuIcon:setMenu({
+		KillPoliceIcon,
+		WeaponModsIcon,
+		ItemESPIcon,
+	})
+
+	Environment.NotorietyMenuIcon = MenuIcon
 
 	Environment.NotorietyTopbarRebuilding = false
 
@@ -1312,6 +1830,14 @@ local function rebuildTopbarIcons(Force)
 	if CurrentIcon then
 		pcall(function()
 			CurrentIcon:setLabel(WeaponEnabled and "Weapon Mods: ON" or "Weapon Mods: OFF")
+		end)
+	end
+
+	local CurrentItemESPIcon = Environment.NotorietyItemESPIcon
+
+	if CurrentItemESPIcon then
+		pcall(function()
+			CurrentItemESPIcon:setLabel(ItemESPEnabled and "Item ESP: ON" or "Item ESP: OFF")
 		end)
 	end
 end
@@ -1408,6 +1934,7 @@ local function unloadNotoriety()
 	Environment.NotorietyUnloaded = true
 	Environment.MaxEverythingEnabled = false
 	Environment.NotorietyWeaponEnabled = false
+	Environment.NotorietyItemESPEnabled = false
 	Environment.KillPoliceRunning = false
 	Environment.NotorietyTopbarRepairToken += 1
 
@@ -1437,6 +1964,7 @@ local function unloadNotoriety()
 	end
 
 	restoreAllWeaponData()
+	ItemESPController.Cleanup()
 
 	for Object in PoliceOriginalSizes do
 		pcall(restorePolicePart, Object)
@@ -1444,9 +1972,14 @@ local function unloadNotoriety()
 
 	destroyIcon(Environment.NotorietyWeaponIcon)
 	destroyIcon(Environment.MaxEverythingIcon)
+	destroyIcon(Environment.NotorietyItemESPIcon)
+	destroyIcon(Environment.NotorietyMenuIcon)
 
 	Environment.NotorietyWeaponIcon = nil
 	Environment.MaxEverythingIcon = nil
+	Environment.NotorietyItemESPIcon = nil
+	Environment.NotorietyMenuIcon = nil
+	Environment.NotorietyItemESPController = nil
 	Environment.NotorietyGetAmmoWrappers = setmetatable({}, {
 		__mode = "k",
 	})

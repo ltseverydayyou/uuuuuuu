@@ -1285,7 +1285,7 @@ local ItemESPColors = {
 	ESCAPE = Color3.fromRGB(70, 255, 130),
 }
 
-local ITEM_ESP_PROMPT_SPEED = 1.2
+local ITEM_ESP_PROMPT_SPEED = 1.4
 
 local ItemESPState = {
 	Definitions = nil,

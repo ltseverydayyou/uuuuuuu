@@ -7375,10 +7375,10 @@ local top = mk("Frame", {
 
 local engb = mk("TextButton", {
 	Name = "Engine",
-	BackgroundColor3 = col.bg,
+	BackgroundColor3 = Color3.fromRGB(45, 49, 58),
 	BorderSizePixel = 0,
 	Size = UDim2.new(0, 168, 1, 0),
-	Text = "Engine: ScriptBlox",
+	Text = "Engine: RScripts",
 	TextColor3 = col.tx,
 	Font = Enum.Font.GothamSemibold,
 	TextSize = 13,
@@ -7442,7 +7442,7 @@ local sbox = mk("TextBox", {
 	Position = UDim2.new(0, 176, 0, 0),
 	ClearTextOnFocus = false,
 	Text = "",
-	PlaceholderText = "Search for scripts (scriptblox.com)",
+	PlaceholderText = "Search for scripts (rscripts.net)",
 	TextColor3 = col.tx,
 	PlaceholderColor3 = col.td,
 	TextXAlignment = Enum.TextXAlignment.Left,
@@ -7544,12 +7544,12 @@ local pgt = mk("TextLabel", {
 	ZIndex = 52,
 })
 
-local eng = "ScriptBlox"
+local eng = "RScripts"
 local flt = "all"
 local cur = 1
 local maxp = 1
 local q = ""
-local tr = true
+local tr = false
 local busy = false
 local data = {}
 

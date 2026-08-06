@@ -1285,15 +1285,10 @@ local ItemESPColors = {
 	ESCAPE = Color3.fromRGB(70, 255, 130),
 }
 
-local ITEM_ESP_PROMPT_SPEED = 1.4
-
 local ItemESPState = {
 	Definitions = nil,
 	Folder = nil,
 	Connections = {},
-	Prompts = setmetatable({}, {
-		__mode = "k",
-	}),
 	Tracked = setmetatable({}, {
 		__mode = "k",
 	}),
@@ -1519,44 +1514,6 @@ local function resolveItemESPBox(Object)
 	return nil
 end
 
-local function restoreItemESPPrompt(Prompt, Record)
-	if Record.Connection then
-		pcall(function()
-			Record.Connection:Disconnect()
-		end)
-	end
-
-	pcall(function()
-		Prompt.HoldDuration = Record.HoldDuration
-	end)
-end
-
-local function addItemESPPrompt(Prompt)
-	if not Prompt:IsA("ProximityPrompt")
-		or not Prompt:IsDescendantOf(Workspace)
-		or ItemESPState.Prompts[Prompt]
-	then
-		return
-	end
-
-	local Record = {
-		HoldDuration = Prompt.HoldDuration,
-	}
-
-	Prompt.HoldDuration = Record.HoldDuration / ITEM_ESP_PROMPT_SPEED
-	Record.Connection = Prompt.AncestryChanged:Connect(function(_, Parent)
-		if Parent and Prompt:IsDescendantOf(Workspace) then
-			return
-		end
-
-		if ItemESPState.Prompts[Prompt] == Record then
-			restoreItemESPPrompt(Prompt, Record)
-			ItemESPState.Prompts[Prompt] = nil
-		end
-	end)
-	ItemESPState.Prompts[Prompt] = Record
-end
-
 local function removeItemESPObject(Object)
 	local Entry = ItemESPState.Tracked[Object]
 
@@ -1681,12 +1638,6 @@ local function stopItemESP()
 		removeItemESPObject(Object)
 	end
 
-	for Prompt, Record in ItemESPState.Prompts do
-		restoreItemESPPrompt(Prompt, Record)
-	end
-
-	table.clear(ItemESPState.Prompts)
-
 	local Folder = ItemESPState.Folder
 	ItemESPState.Folder = nil
 
@@ -1731,12 +1682,6 @@ local function startItemESP()
 
 	ItemESPState.Folder = ProtectedFolder
 
-	for _, Object in Workspace:GetDescendants() do
-		if Object:IsA("ProximityPrompt") then
-			addItemESPPrompt(Object)
-		end
-	end
-
 	for _, Prompt in CollectionService:GetTagged("Prompt") do
 		inspectItemESPPrompt(Prompt)
 	end
@@ -1745,15 +1690,6 @@ local function startItemESP()
 		ItemESPState.Connections,
 		CollectionService:GetInstanceAddedSignal("Prompt"):Connect(inspectItemESPPrompt)
 	)
-	table.insert(
-		ItemESPState.Connections,
-		Workspace.DescendantAdded:Connect(function(Object)
-			if Object:IsA("ProximityPrompt") then
-				addItemESPPrompt(Object)
-			end
-		end)
-	)
-
 	return true
 end
 

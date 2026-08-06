@@ -1285,10 +1285,15 @@ local ItemESPColors = {
 	ESCAPE = Color3.fromRGB(70, 255, 130),
 }
 
+local ITEM_ESP_PROMPT_SPEED = 1.2
+
 local ItemESPState = {
 	Definitions = nil,
 	Folder = nil,
 	Connections = {},
+	Prompts = setmetatable({}, {
+		__mode = "k",
+	}),
 	Tracked = setmetatable({}, {
 		__mode = "k",
 	}),
@@ -1484,6 +1489,74 @@ local function classifyItemESPInteraction(Prompt, Key, Data)
 	return nil
 end
 
+local function resolveItemESPBox(Object)
+	if Object:IsA("BasePart") then
+		return Object, Object.Size, CFrame.new()
+	end
+
+	if Object:IsA("Model") then
+		local Adornee = Object.PrimaryPart or Object:FindFirstChildWhichIsA("BasePart", true)
+
+		if not Adornee then
+			return nil
+		end
+
+		local BoundsSuccess, BoundsCFrame, BoundsSize = pcall(Object.GetBoundingBox, Object)
+
+		if BoundsSuccess then
+			return Adornee, BoundsSize, Adornee.CFrame:ToObjectSpace(BoundsCFrame)
+		end
+
+		return Adornee, Adornee.Size, CFrame.new()
+	end
+
+	local Adornee = Object:FindFirstChildWhichIsA("BasePart", true)
+
+	if Adornee then
+		return Adornee, Adornee.Size, CFrame.new()
+	end
+
+	return nil
+end
+
+local function restoreItemESPPrompt(Prompt, Record)
+	if Record.Connection then
+		pcall(function()
+			Record.Connection:Disconnect()
+		end)
+	end
+
+	pcall(function()
+		Prompt.HoldDuration = Record.HoldDuration
+	end)
+end
+
+local function addItemESPPrompt(Prompt)
+	if not Prompt:IsA("ProximityPrompt")
+		or not Prompt:IsDescendantOf(Workspace)
+		or ItemESPState.Prompts[Prompt]
+	then
+		return
+	end
+
+	local Record = {
+		HoldDuration = Prompt.HoldDuration,
+	}
+
+	Prompt.HoldDuration = Record.HoldDuration / ITEM_ESP_PROMPT_SPEED
+	Record.Connection = Prompt.AncestryChanged:Connect(function(_, Parent)
+		if Parent and Prompt:IsDescendantOf(Workspace) then
+			return
+		end
+
+		if ItemESPState.Prompts[Prompt] == Record then
+			restoreItemESPPrompt(Prompt, Record)
+			ItemESPState.Prompts[Prompt] = nil
+		end
+	end)
+	ItemESPState.Prompts[Prompt] = Record
+end
+
 local function removeItemESPObject(Object)
 	local Entry = ItemESPState.Tracked[Object]
 
@@ -1497,9 +1570,9 @@ local function removeItemESPObject(Object)
 		end)
 	end
 
-	if Entry.Highlight then
+	if Entry.Box then
 		pcall(function()
-			Entry.Highlight:Destroy()
+			Entry.Box:Destroy()
 		end)
 	end
 
@@ -1507,7 +1580,13 @@ local function removeItemESPObject(Object)
 end
 
 local function addItemESPObject(Category, Object)
-	if not Category or not Object or ItemESPState.Tracked[Object] then
+	if not Category or not Object then
+		return
+	end
+
+	local ExistingEntry = ItemESPState.Tracked[Object]
+
+	if ExistingEntry then
 		return
 	end
 
@@ -1518,20 +1597,27 @@ local function addItemESPObject(Category, Object)
 		return
 	end
 
-	local Highlight = ServiceResolver.ns("Highlight")
+	local Adornee, Size, BoxCFrame = resolveItemESPBox(Object)
 
-	if not Highlight then
+	if not Adornee then
 		return
 	end
 
-	Highlight.Name = Category .. "_Highlight"
-	Highlight.Adornee = Object
-	Highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-	Highlight.FillColor = Color
-	Highlight.FillTransparency = 0.62
-	Highlight.OutlineColor = Color3.new(1, 1, 1)
-	Highlight.OutlineTransparency = 0
-	Highlight.Parent = Folder
+	local Box = ServiceResolver.ns("BoxHandleAdornment")
+
+	if not Box then
+		return
+	end
+
+	Box.Name = Category .. "_Box"
+	Box.Adornee = Adornee
+	Box.Size = Size
+	Box.CFrame = BoxCFrame
+	Box.Color3 = Color
+	Box.Transparency = 0.55
+	Box.AlwaysOnTop = true
+	Box.ZIndex = 10
+	Box.Parent = Folder
 
 	local AncestryConnection
 
@@ -1541,11 +1627,13 @@ local function addItemESPObject(Category, Object)
 		end
 	end)
 
-	ItemESPState.Tracked[Object] = {
+	local Entry = {
 		Category = Category,
-		Highlight = Highlight,
+		Box = Box,
 		Connection = AncestryConnection,
 	}
+
+	ItemESPState.Tracked[Object] = Entry
 end
 
 local function inspectItemESPPrompt(Prompt)
@@ -1593,6 +1681,12 @@ local function stopItemESP()
 		removeItemESPObject(Object)
 	end
 
+	for Prompt, Record in ItemESPState.Prompts do
+		restoreItemESPPrompt(Prompt, Record)
+	end
+
+	table.clear(ItemESPState.Prompts)
+
 	local Folder = ItemESPState.Folder
 	ItemESPState.Folder = nil
 
@@ -1637,6 +1731,12 @@ local function startItemESP()
 
 	ItemESPState.Folder = ProtectedFolder
 
+	for _, Object in Workspace:GetDescendants() do
+		if Object:IsA("ProximityPrompt") then
+			addItemESPPrompt(Object)
+		end
+	end
+
 	for _, Prompt in CollectionService:GetTagged("Prompt") do
 		inspectItemESPPrompt(Prompt)
 	end
@@ -1644,6 +1744,14 @@ local function startItemESP()
 	table.insert(
 		ItemESPState.Connections,
 		CollectionService:GetInstanceAddedSignal("Prompt"):Connect(inspectItemESPPrompt)
+	)
+	table.insert(
+		ItemESPState.Connections,
+		Workspace.DescendantAdded:Connect(function(Object)
+			if Object:IsA("ProximityPrompt") then
+				addItemESPPrompt(Object)
+			end
+		end)
 	)
 
 	return true

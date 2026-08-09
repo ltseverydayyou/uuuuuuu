@@ -772,10 +772,7 @@ applyWeaponData = function(Data)
 	local WeaponType = rawget(Data, "WeaponType")
 
 	if WeaponType == "Gun" then
-		if not isStandardGunData(Data) then
-			return false
-		end
-
+		local StandardGun = isStandardGunData(Data)
 		local Backup = getWeaponBackup(Data)
 		for _, Key in {
 			"FireDelay",
@@ -800,15 +797,18 @@ applyWeaponData = function(Data)
 		Data.FireDelay = 0.01
 		Data.BoltDuration = 0.001
 		Data.BoltLock = false
-		Data.FireMode = "Auto"
 
-		if type(Data.FireModeList) ~= "table"
-			or Data.FireModeList[1] ~= "Auto"
-			or Data.FireModeList[2] ~= nil
-		then
-			Data.FireModeList = {
-				"Auto",
-			}
+		if StandardGun then
+			Data.FireMode = "Auto"
+
+			if type(Data.FireModeList) ~= "table"
+				or Data.FireModeList[1] ~= "Auto"
+				or Data.FireModeList[2] ~= nil
+			then
+				Data.FireModeList = {
+					"Auto",
+				}
+			end
 		end
 
 		local AmmoClass = Data.AmmoClass

@@ -98,7 +98,7 @@ local NotorietyUI = {}
 
 do
 	local WindUISource = game:HttpGet(
-		"https://raw.githubusercontent.com/Footagesus/WindUI/refs/heads/main/dist/main.lua"
+		"https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"
 	)
 	local WindUIInputPatchCount
 	WindUISource, WindUIInputPatchCount = WindUISource:gsub(
@@ -219,15 +219,29 @@ Environment.KillPoliceRunning = false
 Environment.NotorietyWeaponEnabled = true
 Environment.NotorietyFireDelay = tonumber(Environment.NotorietyFireDelay) or 0.01
 Environment.NotorietyBoltDuration = tonumber(Environment.NotorietyBoltDuration) or 0.001
+Environment.NotorietyAccuracy = tonumber(Environment.NotorietyAccuracy) or 100
 Environment.NotorietyItemESPEnabled = false
 Environment.NotorietyEquipmentSpeedEnabled = Environment.NotorietyEquipmentSpeedEnabled ~= false
 Environment.NotorietyEquipmentSpeedMultiplier = tonumber(Environment.NotorietyEquipmentSpeedMultiplier) or 2
+Environment.NotorietyEquipmentPositionEnabled = Environment.NotorietyEquipmentPositionEnabled == true
+Environment.NotorietyEquipmentPositionX = tonumber(Environment.NotorietyEquipmentPositionX) or 0
+Environment.NotorietyEquipmentPositionY = tonumber(Environment.NotorietyEquipmentPositionY) or 0
+Environment.NotorietyEquipmentPositionZ = tonumber(Environment.NotorietyEquipmentPositionZ) or 0
 
 if Environment.NotorietyEquipmentSpeedMultiplier <= 0
 	or Environment.NotorietyEquipmentSpeedMultiplier == math.huge
 	or Environment.NotorietyEquipmentSpeedMultiplier ~= Environment.NotorietyEquipmentSpeedMultiplier
 then
 	Environment.NotorietyEquipmentSpeedMultiplier = 2
+end
+
+if Environment.NotorietyAccuracy ~= Environment.NotorietyAccuracy
+	or Environment.NotorietyAccuracy == math.huge
+	or Environment.NotorietyAccuracy == -math.huge
+then
+	Environment.NotorietyAccuracy = 100
+else
+	Environment.NotorietyAccuracy = math.clamp(Environment.NotorietyAccuracy, 0, 100)
 end
 
 Environment.NotorietyWeaponConnections = {}
@@ -245,6 +259,10 @@ local EquipmentSpeedState = {
 	RealAnchor = nil,
 	ScaledAnchor = nil,
 	LastMultiplier = nil,
+	OriginalCFrame = nil,
+	HadOwnCFrame = false,
+	WrappedCFrame = nil,
+	CFrameLookAtCount = 0,
 	Refresh = 0,
 }
 
@@ -269,6 +287,7 @@ end
 local function restoreEquipmentPlacementSpeed()
 	local FunctionEnvironment = EquipmentSpeedState.FunctionEnvironment
 	local WrappedTick = EquipmentSpeedState.WrappedTick
+	local WrappedCFrame = EquipmentSpeedState.WrappedCFrame
 
 	if type(FunctionEnvironment) == "table"
 		and type(WrappedTick) == "function"
@@ -278,6 +297,17 @@ local function restoreEquipmentPlacementSpeed()
 			rawset(FunctionEnvironment, "tick", EquipmentSpeedState.OriginalTick)
 		else
 			rawset(FunctionEnvironment, "tick", nil)
+		end
+	end
+
+	if type(FunctionEnvironment) == "table"
+		and type(WrappedCFrame) == "table"
+		and rawget(FunctionEnvironment, "CFrame") == WrappedCFrame
+	then
+		if EquipmentSpeedState.HadOwnCFrame then
+			rawset(FunctionEnvironment, "CFrame", EquipmentSpeedState.OriginalCFrame)
+		else
+			rawset(FunctionEnvironment, "CFrame", nil)
 		end
 	end
 
@@ -291,6 +321,10 @@ local function restoreEquipmentPlacementSpeed()
 	EquipmentSpeedState.RealAnchor = nil
 	EquipmentSpeedState.ScaledAnchor = nil
 	EquipmentSpeedState.LastMultiplier = nil
+	EquipmentSpeedState.OriginalCFrame = nil
+	EquipmentSpeedState.HadOwnCFrame = false
+	EquipmentSpeedState.WrappedCFrame = nil
+	EquipmentSpeedState.CFrameLookAtCount = 0
 	EquipmentSpeedState.Refresh = 0
 end
 
@@ -378,6 +412,11 @@ local function applyEquipmentPlacementSpeed()
 
 	local function WrappedTick(...)
 		local Now = OriginalTick(...)
+		local CallerSuccess, Caller = pcall(debug.info, 2, "f")
+
+		if CallerSuccess and Caller == Function then
+			EquipmentSpeedState.CFrameLookAtCount = 0
+		end
 
 		if Environment.NotorietyUnloaded
 			or typeof(EquipmentPercent) ~= "Instance"
@@ -415,6 +454,113 @@ local function applyEquipmentPlacementSpeed()
 	rawset(FunctionEnvironment, "tick", WrappedTick)
 
 	return rawget(FunctionEnvironment, "tick") == WrappedTick
+end
+
+local function getEquipmentPositionOffset()
+	local X = tonumber(Environment.NotorietyEquipmentPositionX) or 0
+	local Y = tonumber(Environment.NotorietyEquipmentPositionY) or 0
+	local Z = tonumber(Environment.NotorietyEquipmentPositionZ) or 0
+
+	if X == math.huge or X == -math.huge or X ~= X then
+		X = 0
+	end
+
+	if Y == math.huge or Y == -math.huge or Y ~= Y then
+		Y = 0
+	end
+
+	if Z == math.huge or Z == -math.huge or Z ~= Z then
+		Z = 0
+	end
+
+	return X, Y, Z
+end
+
+local function applyEquipmentPositioning()
+	if Environment.NotorietyUnloaded then
+		return false
+	end
+
+	local Function = findEquipmentPlacementFunction()
+
+	if not Function then
+		return false
+	end
+
+	local FunctionEnvironment = EquipmentSpeedState.FunctionEnvironment
+	local ExistingWrapper = EquipmentSpeedState.WrappedCFrame
+
+	if type(FunctionEnvironment) ~= "table" then
+		return false
+	end
+
+	if type(ExistingWrapper) == "table"
+		and rawget(FunctionEnvironment, "CFrame") == ExistingWrapper
+	then
+		return true
+	end
+
+	local OriginalCFrame = FunctionEnvironment.CFrame
+
+	if type(OriginalCFrame) ~= "table"
+		or type(OriginalCFrame.new) ~= "function"
+	then
+		return false
+	end
+
+	local HadOwnCFrame = rawget(FunctionEnvironment, "CFrame") ~= nil
+	local WrappedCFrame = {}
+
+	setmetatable(WrappedCFrame, {
+		__index = OriginalCFrame,
+	})
+
+	WrappedCFrame.new = function(...)
+		local Result = OriginalCFrame.new(...)
+
+		if not Environment.NotorietyEquipmentPositionEnabled
+			or Environment.NotorietyUnloaded
+		then
+			return Result
+		end
+
+		local CallerSuccess, Caller = pcall(debug.info, 2, "f")
+
+		if not CallerSuccess or Caller ~= Function then
+			return Result
+		end
+
+		local ArgumentCount = select("#", ...)
+		local Position, LookAt = ...
+
+		if ArgumentCount ~= 2
+			or typeof(Position) ~= "Vector3"
+			or typeof(LookAt) ~= "Vector3"
+		then
+			return Result
+		end
+
+		EquipmentSpeedState.CFrameLookAtCount += 1
+
+		if EquipmentSpeedState.CFrameLookAtCount ~= 2 then
+			return Result
+		end
+
+		local X, Y, Z = getEquipmentPositionOffset()
+
+		if X == 0 and Y == 0 and Z == 0 then
+			return Result
+		end
+
+		return Result * OriginalCFrame.new(X, Y, -Z)
+	end
+
+	EquipmentSpeedState.OriginalCFrame = OriginalCFrame
+	EquipmentSpeedState.HadOwnCFrame = HadOwnCFrame
+	EquipmentSpeedState.WrappedCFrame = WrappedCFrame
+	rawset(FunctionEnvironment, "CFrame", WrappedCFrame)
+
+	return rawget(FunctionEnvironment, "CFrame") == WrappedCFrame
 end
 
 local MAX_VALUE = 999999
@@ -598,6 +744,12 @@ local WeaponState = {
 	}),
 	Backups = {},
 	RuntimeWeapons = setmetatable({}, {
+		__mode = "k",
+	}),
+	RuntimeAccuracyBackups = setmetatable({}, {
+		__mode = "k",
+	}),
+	RuntimeSpreadBackups = setmetatable({}, {
 		__mode = "k",
 	}),
 	RuntimeRefresh = 0,
@@ -837,6 +989,65 @@ local function restoreAmmoWrapper(State)
 	Wrappers[State] = nil
 end
 
+local function getDebugUpvalue(Function, Index)
+	local DebugLibrary = debug
+
+	if type(DebugLibrary) ~= "table" or type(DebugLibrary.getupvalue) ~= "function" then
+		return nil
+	end
+
+	local Success, First, Second = pcall(DebugLibrary.getupvalue, Function, Index)
+
+	if not Success or First == nil then
+		return nil
+	end
+
+	if type(First) == "string" and Second ~= nil then
+		return Second
+	end
+
+	if Second ~= nil then
+		return Second
+	end
+
+	return First
+end
+
+local function patchRuntimeWeaponSpread(State, Spread)
+	local DebugLibrary = debug
+	local Shoot = type(State) == "table" and rawget(State, "shoot") or nil
+
+	if type(Shoot) ~= "function"
+		or type(DebugLibrary) ~= "table"
+		or type(DebugLibrary.setupvalue) ~= "function"
+	then
+		return false
+	end
+
+	local Index = 11
+	local Current = getDebugUpvalue(Shoot, Index)
+
+	if type(Current) ~= "number" or Current < 0 or Current > 10000 then
+		return false
+	end
+
+	local Record = WeaponState.RuntimeSpreadBackups[State]
+
+	if type(Record) ~= "table" or Record.Function ~= Shoot then
+		Record = {
+			Function = Shoot,
+			Index = Index,
+			Value = Current,
+		}
+
+		WeaponState.RuntimeSpreadBackups[State] = Record
+	end
+
+	local Success = pcall(DebugLibrary.setupvalue, Shoot, Index, Spread)
+
+	return Success
+end
+
 local function patchRuntimeWeaponState(State)
 	if not Environment.NotorietyWeaponEnabled or type(State) ~= "table" then
 		return false
@@ -851,6 +1062,21 @@ local function patchRuntimeWeaponState(State)
 
 	local Patched = applyWeaponData(Data)
 
+	if rawget(Data, "WeaponType") == "Gun" then
+		local DesiredAccuracy = math.clamp(tonumber(Environment.NotorietyAccuracy) or 100, 0, 100)
+		local DesiredSpread = 10000 - DesiredAccuracy * 100
+
+		if type(rawget(State, "Accuracy")) == "number" then
+			if WeaponState.RuntimeAccuracyBackups[State] == nil then
+				WeaponState.RuntimeAccuracyBackups[State] = State.Accuracy
+			end
+
+			State.Accuracy = DesiredSpread
+		end
+
+		patchRuntimeWeaponSpread(State, DesiredSpread)
+	end
+
 	if not isInfiniteGunState(State, Data) then
 		restoreAmmoWrapper(State)
 		WeaponState.RuntimeWeapons[State] = nil
@@ -858,15 +1084,6 @@ local function patchRuntimeWeaponState(State)
 	end
 
 	WeaponState.RuntimeWeapons[State] = true
-	State.Ready = true
-	State.postshooting = false
-	State.postshooting2 = false
-	State.waspostshooting = false
-	State.waspostshooting2 = false
-	State.LastShot = 0
-	State.shoottick0 = 0
-	State.shoottick0_2 = 0
-	State.firemodeT0 = 0
 	State.ShakeMagnitude = 0
 	State.ShakeRoughness = 0
 	State.pushdist = 0
@@ -974,6 +1191,31 @@ local function restoreAllWeaponData()
 	end
 end
 
+local function restoreRuntimeWeaponAccuracy()
+	for State, Accuracy in WeaponState.RuntimeAccuracyBackups do
+		if type(State) == "table" and type(Accuracy) == "number" then
+			State.Accuracy = Accuracy
+		end
+	end
+
+	local DebugLibrary = debug
+
+	if type(DebugLibrary) == "table" and type(DebugLibrary.setupvalue) == "function" then
+		for _, Record in WeaponState.RuntimeSpreadBackups do
+			if type(Record) == "table"
+				and type(Record.Function) == "function"
+				and type(Record.Index) == "number"
+				and type(Record.Value) == "number"
+			then
+				pcall(DebugLibrary.setupvalue, Record.Function, Record.Index, Record.Value)
+			end
+		end
+	end
+
+	table.clear(WeaponState.RuntimeAccuracyBackups)
+	table.clear(WeaponState.RuntimeSpreadBackups)
+end
+
 applyWeaponData = function(Data)
 	if not Environment.NotorietyWeaponEnabled or type(Data) ~= "table" then
 		return false
@@ -997,6 +1239,7 @@ applyWeaponData = function(Data)
 			"ManualCasingEjection",
 			"RecoilCameraDirection",
 			"MaxCameraRecoil",
+			"Accuracy",
 			"ShakeMagnitude",
 			"ShakeRoughness",
 			"PushBack",
@@ -1007,6 +1250,10 @@ applyWeaponData = function(Data)
 		Data.FireDelay = tonumber(Environment.NotorietyFireDelay) or 0.01
 		Data.BoltDuration = tonumber(Environment.NotorietyBoltDuration) or 0.001
 		Data.BoltLock = false
+
+		if type(Data.Accuracy) == "number" then
+			Data.Accuracy = math.clamp(tonumber(Environment.NotorietyAccuracy) or 100, 0, 100)
+		end
 
 		if StandardGun then
 			Data.FireMode = "Auto"
@@ -1468,6 +1715,7 @@ local function setWeaponModificationsEnabled(Enabled)
 		applyAllWeaponModifications()
 	else
 		restoreAllWeaponData()
+		restoreRuntimeWeaponAccuracy()
 	end
 end
 
@@ -1917,7 +2165,7 @@ local function createWindUI()
 		Title = "Notoriety",
 		Folder = "Notoriety",
 		Icon = "crosshair",
-		NewElements = true,
+		NewElements = false,
 		Size = UDim2.fromOffset(560, 430),
 		ToggleKey = Enum.KeyCode.RightShift,
 		HideSearchBar = true,
@@ -1993,7 +2241,7 @@ local function createWindUI()
 	NotorietyUI.FireDelayInput = WeaponTab:Input({
 		Flag = "FireDelay",
 		Title = "Fire Delay",
-		Desc = "Default: 0.01",
+		Desc = "Shot cooldown in seconds. Default: 0.01",
 		Value = tostring(Environment.NotorietyFireDelay),
 		Placeholder = "0.01",
 		Callback = function(Value)
@@ -2016,7 +2264,7 @@ local function createWindUI()
 	NotorietyUI.BoltDurationInput = WeaponTab:Input({
 		Flag = "BoltDuration",
 		Title = "Bolt Duration",
-		Desc = "Default: 0.001",
+		Desc = "Bolt animation/tween duration in seconds. Default: 0.001",
 		Value = tostring(Environment.NotorietyBoltDuration),
 		Placeholder = "0.001",
 		Callback = function(Value)
@@ -2036,19 +2284,47 @@ local function createWindUI()
 		end,
 	})
 
+	NotorietyUI.AccuracyInput = WeaponTab:Input({
+		Flag = "GunAccuracy",
+		Title = "Gun Accuracy",
+		Desc = "0-100, default: 100. Updates live weapon spread immediately.",
+		Value = tostring(Environment.NotorietyAccuracy),
+		Placeholder = "100",
+		Callback = function(Value)
+			local Number = tonumber(Value)
+
+			if Number == nil then
+				return
+			end
+
+			Number = math.clamp(Number, 0, 100)
+			Environment.NotorietyAccuracy = Number
+
+			if Environment.NotorietyWeaponEnabled then
+				applyAllWeaponModifications()
+			end
+
+			saveWindUIConfig()
+		end,
+	})
+
 	WeaponTab:Button({
-		Title = "Reset Timing Defaults",
-		Desc = "Fire Delay = 0.01, Bolt Duration = 0.001",
+		Title = "Reset Weapon Defaults",
+		Desc = "Fire Delay = 0.01, Bolt Duration = 0.001, Accuracy = 100",
 		Icon = "rotate-ccw",
 		Callback = function()
 			Environment.NotorietyFireDelay = 0.01
 			Environment.NotorietyBoltDuration = 0.001
+			Environment.NotorietyAccuracy = 100
 
 			pcall(function()
 				NotorietyUI.FireDelayInput:Set("0.01")
 			end)
 			pcall(function()
 				NotorietyUI.BoltDurationInput:Set("0.001")
+			end)
+			pcall(function()
+				NotorietyUI.AccuracyInput:Set("100")
 			end)
 
 			if Environment.NotorietyWeaponEnabled then
@@ -2118,6 +2394,95 @@ local function createWindUI()
 			if Environment.NotorietyEquipmentSpeedEnabled then
 				applyEquipmentPlacementSpeed()
 			end
+
+			saveWindUIConfig()
+		end,
+	})
+
+	EquipmentTab:Toggle({
+		Flag = "EquipmentPositionEnabled",
+		Title = "Custom Equipment Position",
+		Desc = "Offsets the equipment from its normal placement position",
+		Value = Environment.NotorietyEquipmentPositionEnabled,
+		Callback = function(Enabled)
+			Environment.NotorietyEquipmentPositionEnabled = Enabled == true
+			applyEquipmentPositioning()
+			saveWindUIConfig()
+		end,
+	})
+
+	NotorietyUI.EquipmentPositionXInput = EquipmentTab:Input({
+		Flag = "EquipmentPositionX",
+		Title = "Left / Right Offset",
+		Desc = "Positive = right, negative = left",
+		Value = tostring(Environment.NotorietyEquipmentPositionX),
+		Placeholder = "0",
+		Callback = function(Value)
+			local Number = tonumber(Value)
+
+			if Number == nil or Number == math.huge or Number == -math.huge or Number ~= Number then
+				return
+			end
+
+			Environment.NotorietyEquipmentPositionX = Number
+			saveWindUIConfig()
+		end,
+	})
+
+	NotorietyUI.EquipmentPositionYInput = EquipmentTab:Input({
+		Flag = "EquipmentPositionY",
+		Title = "Up / Down Offset",
+		Desc = "Positive = up, negative = down",
+		Value = tostring(Environment.NotorietyEquipmentPositionY),
+		Placeholder = "0",
+		Callback = function(Value)
+			local Number = tonumber(Value)
+
+			if Number == nil or Number == math.huge or Number == -math.huge or Number ~= Number then
+				return
+			end
+
+			Environment.NotorietyEquipmentPositionY = Number
+			saveWindUIConfig()
+		end,
+	})
+
+	NotorietyUI.EquipmentPositionZInput = EquipmentTab:Input({
+		Flag = "EquipmentPositionZ",
+		Title = "Forward / Back Offset",
+		Desc = "Positive = forward, negative = back",
+		Value = tostring(Environment.NotorietyEquipmentPositionZ),
+		Placeholder = "0",
+		Callback = function(Value)
+			local Number = tonumber(Value)
+
+			if Number == nil or Number == math.huge or Number == -math.huge or Number ~= Number then
+				return
+			end
+
+			Environment.NotorietyEquipmentPositionZ = Number
+			saveWindUIConfig()
+		end,
+	})
+
+	EquipmentTab:Button({
+		Title = "Reset Equipment Position",
+		Desc = "Resets X, Y, and Z offsets to 0",
+		Icon = "rotate-ccw",
+		Callback = function()
+			Environment.NotorietyEquipmentPositionX = 0
+			Environment.NotorietyEquipmentPositionY = 0
+			Environment.NotorietyEquipmentPositionZ = 0
+
+			pcall(function()
+				NotorietyUI.EquipmentPositionXInput:Set("0")
+			end)
+			pcall(function()
+				NotorietyUI.EquipmentPositionYInput:Set("0")
+			end)
+			pcall(function()
+				NotorietyUI.EquipmentPositionZInput:Set("0")
+			end)
 
 			saveWindUIConfig()
 		end,
@@ -2264,6 +2629,7 @@ local function unloadNotoriety()
 	end
 
 	restoreAllWeaponData()
+	restoreRuntimeWeaponAccuracy()
 	restoreEquipmentPlacementSpeed()
 	ItemESPController.Cleanup()
 
@@ -2299,6 +2665,7 @@ trackWeaponContainer(LocalPlayer.Character)
 createWindUI()
 setWeaponModificationsEnabled(Environment.NotorietyWeaponEnabled)
 applyEquipmentPlacementSpeed()
+applyEquipmentPositioning()
 
 Environment.MaxEverythingConnection = RunService.Heartbeat:Connect(function(DeltaTime)
 	if Environment.NotorietyUnloaded then
@@ -2311,6 +2678,7 @@ Environment.MaxEverythingConnection = RunService.Heartbeat:Connect(function(Delt
 	if EquipmentSpeedState.Refresh >= 1 then
 		EquipmentSpeedState.Refresh = 0
 		applyEquipmentPlacementSpeed()
+		applyEquipmentPositioning()
 	end
 
 	if not Environment.NotorietyWeaponEnabled then
@@ -2342,6 +2710,7 @@ Environment.MaxEverythingCharacterConnection = LocalPlayer.CharacterAdded:Connec
 
 	Apply()
 	applyEquipmentPlacementSpeed()
+	applyEquipmentPositioning()
 	trackWeaponContainer(Character)
 
 	if Environment.NotorietyWeaponEnabled then

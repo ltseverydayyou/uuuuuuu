@@ -236,47 +236,81 @@ Environment.NotorietyUnloaded = false
 
 local EquipmentSpeedState = {
 	Function = nil,
-	ConstantIndex = nil,
-	OriginalBase = nil,
-	AppliedBase = nil,
+	FunctionEnvironment = nil,
+	OriginalTick = nil,
+	HadOwnTick = false,
+	WrappedTick = nil,
+	EquipmentPercent = nil,
+	ClockActive = false,
+	RealAnchor = nil,
+	ScaledAnchor = nil,
+	LastMultiplier = nil,
 	Refresh = 0,
 }
 
-local function restoreEquipmentPlacementSpeed()
-	local Function = EquipmentSpeedState.Function
-	local ConstantIndex = EquipmentSpeedState.ConstantIndex
-	local OriginalBase = EquipmentSpeedState.OriginalBase
+local function getEquipmentSpeedMultiplier()
+	if not Environment.NotorietyEquipmentSpeedEnabled then
+		return 1
+	end
 
-	if type(Function) == "function"
-		and type(ConstantIndex) == "number"
-		and type(OriginalBase) == "number"
-		and type(debug) == "table"
-		and type(debug.setconstant) == "function"
+	local Multiplier = tonumber(Environment.NotorietyEquipmentSpeedMultiplier) or 2
+
+	if Multiplier <= 0
+		or Multiplier == math.huge
+		or Multiplier ~= Multiplier
 	then
-		pcall(debug.setconstant, Function, ConstantIndex, OriginalBase)
+		Multiplier = 2
+		Environment.NotorietyEquipmentSpeedMultiplier = Multiplier
+	end
+
+	return Multiplier
+end
+
+local function restoreEquipmentPlacementSpeed()
+	local FunctionEnvironment = EquipmentSpeedState.FunctionEnvironment
+	local WrappedTick = EquipmentSpeedState.WrappedTick
+
+	if type(FunctionEnvironment) == "table"
+		and type(WrappedTick) == "function"
+		and rawget(FunctionEnvironment, "tick") == WrappedTick
+	then
+		if EquipmentSpeedState.HadOwnTick then
+			rawset(FunctionEnvironment, "tick", EquipmentSpeedState.OriginalTick)
+		else
+			rawset(FunctionEnvironment, "tick", nil)
+		end
 	end
 
 	EquipmentSpeedState.Function = nil
-	EquipmentSpeedState.ConstantIndex = nil
-	EquipmentSpeedState.OriginalBase = nil
-	EquipmentSpeedState.AppliedBase = nil
+	EquipmentSpeedState.FunctionEnvironment = nil
+	EquipmentSpeedState.OriginalTick = nil
+	EquipmentSpeedState.HadOwnTick = false
+	EquipmentSpeedState.WrappedTick = nil
+	EquipmentSpeedState.EquipmentPercent = nil
+	EquipmentSpeedState.ClockActive = false
+	EquipmentSpeedState.RealAnchor = nil
+	EquipmentSpeedState.ScaledAnchor = nil
+	EquipmentSpeedState.LastMultiplier = nil
 	EquipmentSpeedState.Refresh = 0
 end
 
 local function findEquipmentPlacementFunction()
 	local Existing = EquipmentSpeedState.Function
+	local FunctionEnvironment = EquipmentSpeedState.FunctionEnvironment
+	local WrappedTick = EquipmentSpeedState.WrappedTick
 
 	if type(Existing) == "function"
-		and type(EquipmentSpeedState.ConstantIndex) == "number"
+		and type(FunctionEnvironment) == "table"
+		and type(WrappedTick) == "function"
+		and rawget(FunctionEnvironment, "tick") == WrappedTick
 	then
 		return Existing
 	end
 
 	if type(getgc) ~= "function"
+		or type(getfenv) ~= "function"
 		or type(debug) ~= "table"
 		or type(debug.getinfo) ~= "function"
-		or type(debug.getconstant) ~= "function"
-		or type(debug.setconstant) ~= "function"
 	then
 		return nil
 	end
@@ -290,35 +324,11 @@ local function findEquipmentPlacementFunction()
 				and Info.source == "=Players." .. LocalPlayer.Name .. ".PlayerGui.SG_Package.LocalMovement"
 				and Info.name == "placeEquipment"
 			then
-				local ConstantIndex
+				local EnvironmentSuccess, FunctionEnvironmentResult = pcall(getfenv, Function)
 
-				for Index = 1, 64 do
-					local ConstantSuccess, Value = pcall(debug.getconstant, Function, Index)
-
-					if not ConstantSuccess then
-						break
-					end
-
-					if Value == 2 then
-						local BeforeSuccess, Before = pcall(debug.getconstant, Function, Index - 3)
-						local AfterSuccess, After = pcall(debug.getconstant, Function, Index + 1)
-
-						if BeforeSuccess
-							and AfterSuccess
-							and Before == "Medical Kit"
-							and After == "Ammo Bag"
-						then
-							ConstantIndex = Index
-							break
-						end
-					end
-				end
-
-				if ConstantIndex then
+				if EnvironmentSuccess and type(FunctionEnvironmentResult) == "table" then
 					EquipmentSpeedState.Function = Function
-					EquipmentSpeedState.ConstantIndex = ConstantIndex
-					EquipmentSpeedState.OriginalBase = debug.getconstant(Function, ConstantIndex)
-					EquipmentSpeedState.AppliedBase = EquipmentSpeedState.OriginalBase
+					EquipmentSpeedState.FunctionEnvironment = FunctionEnvironmentResult
 					return Function
 				end
 			end
@@ -339,38 +349,72 @@ local function applyEquipmentPlacementSpeed()
 		return false
 	end
 
-	local Multiplier = 1
+	local FunctionEnvironment = EquipmentSpeedState.FunctionEnvironment
+	local ExistingWrapper = EquipmentSpeedState.WrappedTick
 
-	if Environment.NotorietyEquipmentSpeedEnabled then
-		Multiplier = tonumber(Environment.NotorietyEquipmentSpeedMultiplier) or 2
-
-		if Multiplier <= 0
-			or Multiplier == math.huge
-			or Multiplier ~= Multiplier
-		then
-			Multiplier = 2
-			Environment.NotorietyEquipmentSpeedMultiplier = Multiplier
-		end
+	if type(FunctionEnvironment) ~= "table" then
+		return false
 	end
 
-	local DesiredBase = EquipmentSpeedState.OriginalBase / Multiplier
-
-	if EquipmentSpeedState.AppliedBase == DesiredBase then
+	if type(ExistingWrapper) == "function"
+		and rawget(FunctionEnvironment, "tick") == ExistingWrapper
+	then
 		return true
 	end
 
-	local Success = pcall(
-		debug.setconstant,
-		Function,
-		EquipmentSpeedState.ConstantIndex,
-		DesiredBase
-	)
+	local OriginalTick = FunctionEnvironment.tick
 
-	if Success then
-		EquipmentSpeedState.AppliedBase = DesiredBase
+	if type(OriginalTick) ~= "function" then
+		return false
 	end
 
-	return Success
+	local HadOwnTick = rawget(FunctionEnvironment, "tick") ~= nil
+	local EquipmentPercent = LocalPlayer
+		:WaitForChild("PlayerGui", math.huge)
+		:WaitForChild("SG_Package", math.huge)
+		:WaitForChild("MainGui", math.huge)
+		:WaitForChild("Interaction", math.huge)
+		:WaitForChild("EquipmentPercent", math.huge)
+
+	local function WrappedTick(...)
+		local Now = OriginalTick(...)
+
+		if Environment.NotorietyUnloaded
+			or typeof(EquipmentPercent) ~= "Instance"
+			or EquipmentPercent.Parent == nil
+			or not EquipmentPercent.Visible
+		then
+			EquipmentSpeedState.ClockActive = false
+			EquipmentSpeedState.RealAnchor = nil
+			EquipmentSpeedState.ScaledAnchor = nil
+			EquipmentSpeedState.LastMultiplier = nil
+			return Now
+		end
+
+		local Multiplier = getEquipmentSpeedMultiplier()
+
+		if not EquipmentSpeedState.ClockActive then
+			EquipmentSpeedState.ClockActive = true
+			EquipmentSpeedState.RealAnchor = Now
+			EquipmentSpeedState.ScaledAnchor = Now
+			EquipmentSpeedState.LastMultiplier = Multiplier
+		elseif EquipmentSpeedState.LastMultiplier ~= Multiplier then
+			EquipmentSpeedState.ScaledAnchor += (Now - EquipmentSpeedState.RealAnchor) * EquipmentSpeedState.LastMultiplier
+			EquipmentSpeedState.RealAnchor = Now
+			EquipmentSpeedState.LastMultiplier = Multiplier
+		end
+
+		return EquipmentSpeedState.ScaledAnchor
+			+ (Now - EquipmentSpeedState.RealAnchor) * EquipmentSpeedState.LastMultiplier
+	end
+
+	EquipmentSpeedState.OriginalTick = OriginalTick
+	EquipmentSpeedState.HadOwnTick = HadOwnTick
+	EquipmentSpeedState.WrappedTick = WrappedTick
+	EquipmentSpeedState.EquipmentPercent = EquipmentPercent
+	rawset(FunctionEnvironment, "tick", WrappedTick)
+
+	return rawget(FunctionEnvironment, "tick") == WrappedTick
 end
 
 local MAX_VALUE = 999999

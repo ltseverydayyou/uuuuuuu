@@ -70,6 +70,12 @@ if type(UIProtector) ~= "table" then
 	Environment.__lt_ui_protector = UIProtector
 end
 
+if type(UIProtector.installGetHuiOverride) ~= "function"
+	or UIProtector.installGetHuiOverride() ~= true
+then
+	error("UIProtector gethui override failed")
+end
+
 local Reference = if type(cloneref) == "function" then cloneref else function(Value)
 	return Value
 end
@@ -79,6 +85,7 @@ local Workspace = ServiceResolver.cs("Workspace", Reference)
 local Players = ServiceResolver.cs("Players", Reference)
 local RunService = ServiceResolver.cs("RunService", Reference)
 local CollectionService = ServiceResolver.cs("CollectionService", Reference)
+local ContextActionService = ServiceResolver.cs("ContextActionService", Reference)
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -87,22 +94,62 @@ local Assets = RS_Package:WaitForChild("Assets", math.huge)
 local Remotes = Assets:WaitForChild("Remotes", math.huge)
 local Event = Remotes:WaitForChild("Damage", math.huge)
 
-local IconSource = game:HttpGet(
-	"https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/refs/heads/main/Icon.luau"
-)
-local IconChunk, IconCompileError = loadstring(IconSource, "@Icon.luau")
+local NotorietyUI = {}
 
-if type(IconChunk) ~= "function" then
-	error("Icon compile failed: " .. tostring(IconCompileError))
+do
+	local WindUISource = game:HttpGet(
+		"https://raw.githubusercontent.com/Footagesus/WindUI/refs/heads/main/dist/main.lua"
+	)
+	local WindUIInputPatchCount
+	WindUISource, WindUIInputPatchCount = WindUISource:gsub(
+		"if not ao then\nal%.Frame%.Frame%.TextBox%.Text=an\nend",
+		"if not ao then pcall(function() al.Frame.Frame.TextBox.Text=an end) end",
+		1
+	)
+
+	if WindUIInputPatchCount ~= 1 then
+		error("WindUI input compatibility patch failed")
+	end
+
+	local WindUIChunk, WindUICompileError = loadstring(WindUISource, "@WindUI.lua")
+
+	if type(WindUIChunk) ~= "function" then
+		error("WindUI compile failed: " .. tostring(WindUICompileError))
+	end
+
+	local WindUISuccess, WindUIResult = pcall(WindUIChunk)
+
+	if not WindUISuccess or type(WindUIResult) ~= "table" then
+		error("WindUI load failed: " .. tostring(WindUIResult))
+	end
+
+	NotorietyUI.Library = WindUIResult
+	NotorietyUI.ProtectedRoots = {
+		ScreenGui = "WindUI",
+		NotificationGui = "WindUI/Notifications",
+		DropdownGui = "WindUI/Dropdowns",
+		TooltipGui = "WindUI/Tooltips",
+	}
+
+	for Key, Name in NotorietyUI.ProtectedRoots do
+		local Root = WindUIResult[Key]
+
+		if typeof(Root) ~= "Instance"
+			or not Root:IsA("ScreenGui")
+		then
+			error("WindUI root unavailable for UIProtector: " .. tostring(Key))
+		end
+
+		if UIProtector.protectUI(Root, {
+			name = Name,
+			harden = true,
+			deep = true,
+			watch = true,
+		}) ~= Root then
+			error("UIProtector failed to protect WindUI root: " .. tostring(Key))
+		end
+	end
 end
-
-local IconSuccess, IconResult = pcall(IconChunk)
-
-if not IconSuccess or type(IconResult) ~= "table" then
-	error("Icon load failed: " .. tostring(IconResult))
-end
-
-local Icon = IconResult
 
 if Environment.MaxEverythingConnection then
 	Environment.MaxEverythingConnection:Disconnect()
@@ -127,22 +174,6 @@ if type(Environment.NotorietyWeaponConnections) == "table" then
 	end
 end
 
-if type(Environment.NotorietyTopbarConnections) == "table" then
-	for _, Connection in Environment.NotorietyTopbarConnections do
-		pcall(function()
-			Connection:Disconnect()
-		end)
-	end
-end
-
-if type(Environment.NotorietyTopbarCharacterConnections) == "table" then
-	for _, Connection in Environment.NotorietyTopbarCharacterConnections do
-		pcall(function()
-			Connection:Disconnect()
-		end)
-	end
-end
-
 if type(Environment.NotorietyGetAmmoWrappers) == "table" then
 	for State, Record in Environment.NotorietyGetAmmoWrappers do
 		if type(State) == "table" and type(Record) == "table" then
@@ -160,38 +191,6 @@ Environment.NotorietyGetAmmoWrappers = setmetatable({}, {
 	__mode = "k",
 })
 
-if Environment.NotorietyMenuIcon then
-	pcall(function()
-		Environment.NotorietyMenuIcon:destroy()
-	end)
-
-	Environment.NotorietyMenuIcon = nil
-end
-
-if Environment.NotorietyWeaponIcon then
-	pcall(function()
-		Environment.NotorietyWeaponIcon:destroy()
-	end)
-
-	Environment.NotorietyWeaponIcon = nil
-end
-
-if Environment.MaxEverythingIcon then
-	pcall(function()
-		Environment.MaxEverythingIcon:destroy()
-	end)
-
-	Environment.MaxEverythingIcon = nil
-end
-
-if Environment.NotorietyItemESPIcon then
-	pcall(function()
-		Environment.NotorietyItemESPIcon:destroy()
-	end)
-
-	Environment.NotorietyItemESPIcon = nil
-end
-
 if type(Environment.NotorietyItemESPController) == "table"
 	and type(Environment.NotorietyItemESPController.Cleanup) == "function"
 then
@@ -199,17 +198,180 @@ then
 	Environment.NotorietyItemESPController = nil
 end
 
+if Environment.NotorietyWindow then
+	pcall(function()
+		Environment.NotorietyWindow:Destroy()
+	end)
+
+	Environment.NotorietyWindow = nil
+end
+
+if type(Environment.NotorietyUIConnections) == "table" then
+	for _, Connection in Environment.NotorietyUIConnections do
+		pcall(function()
+			Connection:Disconnect()
+		end)
+	end
+end
+
 Environment.MaxEverythingEnabled = true
 Environment.KillPoliceRunning = false
 Environment.NotorietyWeaponEnabled = true
+Environment.NotorietyFireDelay = tonumber(Environment.NotorietyFireDelay) or 0.01
+Environment.NotorietyBoltDuration = tonumber(Environment.NotorietyBoltDuration) or 0.001
 Environment.NotorietyItemESPEnabled = false
+Environment.NotorietyEquipmentSpeedEnabled = Environment.NotorietyEquipmentSpeedEnabled ~= false
+Environment.NotorietyEquipmentSpeedMultiplier = tonumber(Environment.NotorietyEquipmentSpeedMultiplier) or 2
+
+if Environment.NotorietyEquipmentSpeedMultiplier <= 0
+	or Environment.NotorietyEquipmentSpeedMultiplier == math.huge
+	or Environment.NotorietyEquipmentSpeedMultiplier ~= Environment.NotorietyEquipmentSpeedMultiplier
+then
+	Environment.NotorietyEquipmentSpeedMultiplier = 2
+end
+
 Environment.NotorietyWeaponConnections = {}
-Environment.NotorietyTopbarConnections = {}
-Environment.NotorietyTopbarCharacterConnections = {}
-Environment.NotorietyTopbarRepairToken = 0
-Environment.NotorietyTopbarRebuilding = false
-Environment.NotorietyTopbarRefresh = 0
+Environment.NotorietyUIConnections = {}
 Environment.NotorietyUnloaded = false
+
+local EquipmentSpeedState = {
+	Function = nil,
+	ConstantIndex = nil,
+	OriginalBase = nil,
+	AppliedBase = nil,
+	Refresh = 0,
+}
+
+local function restoreEquipmentPlacementSpeed()
+	local Function = EquipmentSpeedState.Function
+	local ConstantIndex = EquipmentSpeedState.ConstantIndex
+	local OriginalBase = EquipmentSpeedState.OriginalBase
+
+	if type(Function) == "function"
+		and type(ConstantIndex) == "number"
+		and type(OriginalBase) == "number"
+		and type(debug) == "table"
+		and type(debug.setconstant) == "function"
+	then
+		pcall(debug.setconstant, Function, ConstantIndex, OriginalBase)
+	end
+
+	EquipmentSpeedState.Function = nil
+	EquipmentSpeedState.ConstantIndex = nil
+	EquipmentSpeedState.OriginalBase = nil
+	EquipmentSpeedState.AppliedBase = nil
+	EquipmentSpeedState.Refresh = 0
+end
+
+local function findEquipmentPlacementFunction()
+	local Existing = EquipmentSpeedState.Function
+
+	if type(Existing) == "function"
+		and type(EquipmentSpeedState.ConstantIndex) == "number"
+	then
+		return Existing
+	end
+
+	if type(getgc) ~= "function"
+		or type(debug) ~= "table"
+		or type(debug.getinfo) ~= "function"
+		or type(debug.getconstant) ~= "function"
+		or type(debug.setconstant) ~= "function"
+	then
+		return nil
+	end
+
+	for _, Function in getgc(true) do
+		if type(Function) == "function" then
+			local Success, Info = pcall(debug.getinfo, Function)
+
+			if Success
+				and type(Info) == "table"
+				and Info.source == "=Players." .. LocalPlayer.Name .. ".PlayerGui.SG_Package.LocalMovement"
+				and Info.name == "placeEquipment"
+			then
+				local ConstantIndex
+
+				for Index = 1, 64 do
+					local ConstantSuccess, Value = pcall(debug.getconstant, Function, Index)
+
+					if not ConstantSuccess then
+						break
+					end
+
+					if Value == 2 then
+						local BeforeSuccess, Before = pcall(debug.getconstant, Function, Index - 3)
+						local AfterSuccess, After = pcall(debug.getconstant, Function, Index + 1)
+
+						if BeforeSuccess
+							and AfterSuccess
+							and Before == "Medical Kit"
+							and After == "Ammo Bag"
+						then
+							ConstantIndex = Index
+							break
+						end
+					end
+				end
+
+				if ConstantIndex then
+					EquipmentSpeedState.Function = Function
+					EquipmentSpeedState.ConstantIndex = ConstantIndex
+					EquipmentSpeedState.OriginalBase = debug.getconstant(Function, ConstantIndex)
+					EquipmentSpeedState.AppliedBase = EquipmentSpeedState.OriginalBase
+					return Function
+				end
+			end
+		end
+	end
+
+	return nil
+end
+
+local function applyEquipmentPlacementSpeed()
+	if Environment.NotorietyUnloaded then
+		return false
+	end
+
+	local Function = findEquipmentPlacementFunction()
+
+	if not Function then
+		return false
+	end
+
+	local Multiplier = 1
+
+	if Environment.NotorietyEquipmentSpeedEnabled then
+		Multiplier = tonumber(Environment.NotorietyEquipmentSpeedMultiplier) or 2
+
+		if Multiplier <= 0
+			or Multiplier == math.huge
+			or Multiplier ~= Multiplier
+		then
+			Multiplier = 2
+			Environment.NotorietyEquipmentSpeedMultiplier = Multiplier
+		end
+	end
+
+	local DesiredBase = EquipmentSpeedState.OriginalBase / Multiplier
+
+	if EquipmentSpeedState.AppliedBase == DesiredBase then
+		return true
+	end
+
+	local Success = pcall(
+		debug.setconstant,
+		Function,
+		EquipmentSpeedState.ConstantIndex,
+		DesiredBase
+	)
+
+	if Success then
+		EquipmentSpeedState.AppliedBase = DesiredBase
+	end
+
+	return Success
+end
 
 local MAX_VALUE = 999999
 
@@ -499,7 +661,7 @@ local function shortenSequence(Sequence, Backup)
 	end
 end
 
-local function shortenGunSequence(Value, Backup, Seen, Depth)
+local function shortenGunSequence(Value, Backup, Seen, Depth, FireDelay, BoltDuration)
 	if type(Value) ~= "table" or Depth > 8 or Seen[Value] then
 		return
 	end
@@ -514,34 +676,38 @@ local function shortenGunSequence(Value, Backup, Seen, Depth)
 			}
 		end
 
-		Value[7] = 0.001
+		Value[7] = BoltDuration
 	end
 
 	for Key, Item in Value do
 		local LowerKey = type(Key) == "string" and string.lower(Key) or nil
 
-		if LowerKey and type(Item) == "number" and (
-			LowerKey == "boltduration"
-			or LowerKey == "firedelay"
-			or LowerKey == "shotdelay"
-			or LowerKey == "cooldown"
-			or LowerKey == "duration"
-		) then
-			captureNestedField(Backup, Value, Key)
-			Value[Key] = 0.001
+		if LowerKey and type(Item) == "number" then
+			if LowerKey == "firedelay"
+				or LowerKey == "shotdelay"
+				or LowerKey == "cooldown"
+			then
+				captureNestedField(Backup, Value, Key)
+				Value[Key] = FireDelay
+			elseif LowerKey == "boltduration" or LowerKey == "duration" then
+				captureNestedField(Backup, Value, Key)
+				Value[Key] = BoltDuration
+			end
 		elseif LowerKey == "boltlock" and type(Item) == "boolean" then
 			captureNestedField(Backup, Value, Key)
 			Value[Key] = false
 		end
 
 		if type(Item) == "table" then
-			shortenGunSequence(Item, Backup, Seen, Depth + 1)
+			shortenGunSequence(Item, Backup, Seen, Depth + 1, FireDelay, BoltDuration)
 		end
 	end
 end
 
 local function patchGunSequences(Data, Backup)
 	local Seen = {}
+	local FireDelay = tonumber(Environment.NotorietyFireDelay) or 0.01
+	local BoltDuration = tonumber(Environment.NotorietyBoltDuration) or 0.001
 
 	for Key, Value in Data do
 		if type(Key) == "string" and type(Value) == "table" then
@@ -551,7 +717,7 @@ local function patchGunSequences(Data, Backup)
 				or string.find(LowerKey, "bolt", 1, true)
 				or string.find(LowerKey, "fire", 1, true)
 			then
-				shortenGunSequence(Value, Backup, Seen, 0)
+				shortenGunSequence(Value, Backup, Seen, 0, FireDelay, BoltDuration)
 			end
 		end
 	end
@@ -794,8 +960,8 @@ applyWeaponData = function(Data)
 			captureField(Data, Backup, Key)
 		end
 
-		Data.FireDelay = 0.01
-		Data.BoltDuration = 0.001
+		Data.FireDelay = tonumber(Environment.NotorietyFireDelay) or 0.01
+		Data.BoltDuration = tonumber(Environment.NotorietyBoltDuration) or 0.001
 		Data.BoltLock = false
 
 		if StandardGun then
@@ -1119,18 +1285,6 @@ local function trackWeaponContainer(Container)
 	)
 end
 
-local function setIconLabel(Label)
-	local CurrentIcon = Environment.MaxEverythingIcon
-
-	if not CurrentIcon then
-		return
-	end
-
-	pcall(function()
-		CurrentIcon:setLabel(Label)
-	end)
-end
-
 local function getEquippedGun()
 	local Character = LocalPlayer.Character
 
@@ -1177,8 +1331,8 @@ local function runKill()
 	end
 
 	Environment.KillPoliceRunning = true
-	setIconLabel("Killing....")
 
+	local Killed = 0
 	local Success, Error = xpcall(function()
 		local PoliceFolder = Workspace:FindFirstChild("Police")
 		local Gun = getEquippedGun()
@@ -1218,16 +1372,25 @@ local function runKill()
 					{}
 				)
 
+				Killed += 1
 				task.wait(0.3)
 			end
 		end
 	end, debug.traceback)
 
 	Environment.KillPoliceRunning = false
-	setIconLabel("Kill Police [P]")
 
 	if not Success then
 		warn(Error)
+	elseif not Environment.NotorietyUnloaded then
+		pcall(function()
+			NotorietyUI.Library:Notify({
+				Title = "Kill Police",
+				Content = string.format("Finished. Killed %d police.", Killed),
+				Icon = "check",
+				Duration = 3,
+			})
+		end)
 	end
 end
 
@@ -1261,16 +1424,6 @@ local function setWeaponModificationsEnabled(Enabled)
 		applyAllWeaponModifications()
 	else
 		restoreAllWeaponData()
-	end
-
-	local CurrentIcon = Environment.NotorietyWeaponIcon
-
-	if CurrentIcon then
-		pcall(function()
-			CurrentIcon:setLabel(
-				Environment.NotorietyWeaponEnabled and "Weapon Mods: ON" or "Weapon Mods: OFF"
-			)
-		end)
 	end
 end
 
@@ -1703,16 +1856,6 @@ local function setItemESPEnabled(Enabled)
 	else
 		stopItemESP()
 	end
-
-	local CurrentIcon = Environment.NotorietyItemESPIcon
-
-	if CurrentIcon then
-		pcall(function()
-			CurrentIcon:setLabel(
-				Environment.NotorietyItemESPEnabled and "Item ESP: ON" or "Item ESP: OFF"
-			)
-		end)
-	end
 end
 
 local ItemESPController = {}
@@ -1724,230 +1867,293 @@ end
 
 Environment.NotorietyItemESPController = ItemESPController
 
-local function isIconAlive(CurrentIcon)
-	if type(CurrentIcon) ~= "table" then
-		return false
-	end
-
-	local Widget = rawget(CurrentIcon, "widget")
-
-	return typeof(Widget) == "Instance" and Widget.Parent ~= nil
-end
-
-local function destroyIcon(CurrentIcon)
-	if type(CurrentIcon) ~= "table" then
-		return
-	end
-
-	pcall(function()
-		CurrentIcon:destroy()
-	end)
-end
-
-local function createKillPoliceIcon()
-	local CurrentIcon = Icon.new()
-		:setName("Kill Police")
-		:setLabel("Kill Police [P]")
-		:setRight()
-		:autoDeselect(false)
-		:bindToggleKey(Enum.KeyCode.P)
-		:bindEvent("selected", function()
-			task.spawn(runKill)
-		end)
-		:oneClick()
-
-	Environment.MaxEverythingIcon = CurrentIcon
-
-	return CurrentIcon
-end
-
-local function createWeaponModsIcon()
-	local CurrentIcon = Icon.new()
-		:setName("Weapon Mods")
-		:setLabel(
-			Environment.NotorietyWeaponEnabled and "Weapon Mods: ON" or "Weapon Mods: OFF"
-		)
-		:setRight()
-		:autoDeselect(false)
-		:bindEvent("selected", function()
-			if not Environment.NotorietyTopbarRebuilding then
-				setWeaponModificationsEnabled(true)
-			end
-		end)
-		:bindEvent("deselected", function()
-			if not Environment.NotorietyTopbarRebuilding then
-				setWeaponModificationsEnabled(false)
-			end
-		end)
-
-	Environment.NotorietyWeaponIcon = CurrentIcon
-
-	if Environment.NotorietyWeaponEnabled then
-		CurrentIcon:select()
-	else
-		CurrentIcon:deselect()
-	end
-
-	return CurrentIcon
-end
-
-local function createItemESPIcon()
-	local CurrentIcon = Icon.new()
-		:setName("Item ESP")
-		:setLabel(
-			Environment.NotorietyItemESPEnabled and "Item ESP: ON" or "Item ESP: OFF"
-		)
-		:setRight()
-		:autoDeselect(false)
-		:bindEvent("selected", function()
-			if not Environment.NotorietyTopbarRebuilding then
-				setItemESPEnabled(true)
-			end
-		end)
-		:bindEvent("deselected", function()
-			if not Environment.NotorietyTopbarRebuilding then
-				setItemESPEnabled(false)
-			end
-		end)
-
-	Environment.NotorietyItemESPIcon = CurrentIcon
-
-	if Environment.NotorietyItemESPEnabled then
-		CurrentIcon:select()
-	else
-		CurrentIcon:deselect()
-	end
-
-	return CurrentIcon
-end
-
-local function rebuildTopbarIcons(Force)
-	if Environment.NotorietyUnloaded then
-		return
-	end
-
-	local RebuildMenu = Force == true
-		or not isIconAlive(Environment.NotorietyMenuIcon)
-		or not isIconAlive(Environment.MaxEverythingIcon)
-		or not isIconAlive(Environment.NotorietyWeaponIcon)
-		or not isIconAlive(Environment.NotorietyItemESPIcon)
-
-	if not RebuildMenu then
-		return
-	end
-
-	local WeaponEnabled = Environment.NotorietyWeaponEnabled
-	local ItemESPEnabled = Environment.NotorietyItemESPEnabled
-	Environment.NotorietyTopbarRebuilding = true
-
-	destroyIcon(Environment.MaxEverythingIcon)
-	destroyIcon(Environment.NotorietyWeaponIcon)
-	destroyIcon(Environment.NotorietyItemESPIcon)
-	destroyIcon(Environment.NotorietyMenuIcon)
-
-	Environment.MaxEverythingIcon = nil
-	Environment.NotorietyWeaponIcon = nil
-	Environment.NotorietyItemESPIcon = nil
-	Environment.NotorietyMenuIcon = nil
-
-	local MenuIcon = Icon.new()
-		:setName("Notoriety Menu")
-		:setLabel("Notoriety")
-		:setMid()
-		:autoDeselect(false)
-	local KillPoliceIcon = createKillPoliceIcon()
-	local WeaponModsIcon = createWeaponModsIcon()
-	local ItemESPIcon = createItemESPIcon()
-
-	MenuIcon:setMenu({
-		KillPoliceIcon,
-		WeaponModsIcon,
-		ItemESPIcon,
+local function createWindUI()
+	local WindUI = NotorietyUI.Library
+	local Window = WindUI:CreateWindow({
+		Title = "Notoriety",
+		Folder = "Notoriety",
+		Icon = "crosshair",
+		NewElements = true,
+		Size = UDim2.fromOffset(560, 430),
+		ToggleKey = Enum.KeyCode.RightShift,
+		HideSearchBar = true,
+		OpenButton = {
+			Title = "Notoriety",
+			Enabled = true,
+			Draggable = true,
+			OnlyMobile = false,
+		},
 	})
 
-	Environment.NotorietyMenuIcon = MenuIcon
+	Environment.NotorietyWindow = Window
+	NotorietyUI.Window = Window
 
-	Environment.NotorietyTopbarRebuilding = false
+	local ConfigManager = Window.ConfigManager
+	local ConfigName = "default"
 
-	local CurrentIcon = Environment.NotorietyWeaponIcon
+	local function saveWindUIConfig()
+		if NotorietyUI.ConfigLoading or not NotorietyUI.Config then
+			return
+		end
 
-	if CurrentIcon then
 		pcall(function()
-			CurrentIcon:setLabel(WeaponEnabled and "Weapon Mods: ON" or "Weapon Mods: OFF")
+			NotorietyUI.Config:Save()
 		end)
 	end
 
-	local CurrentItemESPIcon = Environment.NotorietyItemESPIcon
+	NotorietyUI.SaveConfig = saveWindUIConfig
 
-	if CurrentItemESPIcon then
-		pcall(function()
-			CurrentItemESPIcon:setLabel(ItemESPEnabled and "Item ESP: ON" or "Item ESP: OFF")
-		end)
-	end
-end
+	local MainTab = Window:Tab({
+		Title = "Main",
+		Icon = "house",
+		Border = true,
+	})
 
-local function scheduleTopbarRepair()
-	if Environment.NotorietyUnloaded then
-		return
-	end
+	MainTab:Button({
+		Title = "Kill Police [P]",
+		Desc = "Kills every currently spawned police NPC",
+		Icon = "crosshair",
+		Callback = function()
+			task.spawn(runKill)
+		end,
+	})
 
-	Environment.NotorietyTopbarRepairToken += 1
-	local RepairToken = Environment.NotorietyTopbarRepairToken
+	MainTab:Toggle({
+		Flag = "ItemESP",
+		Title = "Item ESP",
+		Desc = "Highlights supported loot and interaction objects",
+		Value = Environment.NotorietyItemESPEnabled,
+		Callback = function(Enabled)
+			setItemESPEnabled(Enabled)
+			saveWindUIConfig()
+		end,
+	})
 
-	task.spawn(function()
-		for _, Delay in {
-			0.1,
-			0.35,
-			0.8,
-		} do
-			task.wait(Delay)
+	local WeaponTab = Window:Tab({
+		Title = "Weapon Mods",
+		Icon = "crosshair",
+		Border = true,
+	})
 
-			if RepairToken ~= Environment.NotorietyTopbarRepairToken then
+	WeaponTab:Toggle({
+		Flag = "WeaponMods",
+		Title = "Weapon Mods",
+		Desc = "Enables the weapon stat and runtime modifications",
+		Value = Environment.NotorietyWeaponEnabled,
+		Callback = function(Enabled)
+			setWeaponModificationsEnabled(Enabled)
+			saveWindUIConfig()
+		end,
+	})
+
+	NotorietyUI.FireDelayInput = WeaponTab:Input({
+		Flag = "FireDelay",
+		Title = "Fire Delay",
+		Desc = "Default: 0.01",
+		Value = tostring(Environment.NotorietyFireDelay),
+		Placeholder = "0.01",
+		Callback = function(Value)
+			local Number = tonumber(Value)
+
+			if Number == nil then
 				return
 			end
 
-			rebuildTopbarIcons(false)
+			Environment.NotorietyFireDelay = Number
+
+			if Environment.NotorietyWeaponEnabled then
+				applyAllWeaponModifications()
+			end
+
+			saveWindUIConfig()
+		end,
+	})
+
+	NotorietyUI.BoltDurationInput = WeaponTab:Input({
+		Flag = "BoltDuration",
+		Title = "Bolt Duration",
+		Desc = "Default: 0.001",
+		Value = tostring(Environment.NotorietyBoltDuration),
+		Placeholder = "0.001",
+		Callback = function(Value)
+			local Number = tonumber(Value)
+
+			if Number == nil then
+				return
+			end
+
+			Environment.NotorietyBoltDuration = Number
+
+			if Environment.NotorietyWeaponEnabled then
+				applyAllWeaponModifications()
+			end
+
+			saveWindUIConfig()
+		end,
+	})
+
+	WeaponTab:Button({
+		Title = "Reset Timing Defaults",
+		Desc = "Fire Delay = 0.01, Bolt Duration = 0.001",
+		Icon = "rotate-ccw",
+		Callback = function()
+			Environment.NotorietyFireDelay = 0.01
+			Environment.NotorietyBoltDuration = 0.001
+
+			pcall(function()
+				NotorietyUI.FireDelayInput:Set("0.01")
+			end)
+			pcall(function()
+				NotorietyUI.BoltDurationInput:Set("0.001")
+			end)
+
+			if Environment.NotorietyWeaponEnabled then
+				applyAllWeaponModifications()
+			end
+
+			saveWindUIConfig()
+		end,
+	})
+
+	local EquipmentTab = Window:Tab({
+		Title = "Equipment",
+		Icon = "package",
+		Border = true,
+	})
+
+	EquipmentTab:Toggle({
+		Flag = "EquipmentSpeedEnabled",
+		Title = "Equipment Placement Speed",
+		Desc = "Speeds up the real 0% to 100% equipment placement timer",
+		Value = Environment.NotorietyEquipmentSpeedEnabled,
+		Callback = function(Enabled)
+			Environment.NotorietyEquipmentSpeedEnabled = Enabled == true
+			applyEquipmentPlacementSpeed()
+			saveWindUIConfig()
+		end,
+	})
+
+	NotorietyUI.EquipmentSpeedInput = EquipmentTab:Input({
+		Flag = "EquipmentSpeedMultiplier",
+		Title = "Placement Speed",
+		Desc = "Default: 2x. Use 1 for normal speed",
+		Value = tostring(Environment.NotorietyEquipmentSpeedMultiplier),
+		Placeholder = "2",
+		Callback = function(Value)
+			local Number = tonumber(Value)
+
+			if Number == nil
+				or Number <= 0
+				or Number == math.huge
+				or Number ~= Number
+			then
+				return
+			end
+
+			Environment.NotorietyEquipmentSpeedMultiplier = Number
+
+			if Environment.NotorietyEquipmentSpeedEnabled then
+				applyEquipmentPlacementSpeed()
+			end
+
+			saveWindUIConfig()
+		end,
+	})
+
+	EquipmentTab:Button({
+		Title = "Reset Placement Speed",
+		Desc = "Resets the multiplier to 2x",
+		Icon = "rotate-ccw",
+		Callback = function()
+			Environment.NotorietyEquipmentSpeedMultiplier = 2
+
+			pcall(function()
+				NotorietyUI.EquipmentSpeedInput:Set("2")
+			end)
+
+			if Environment.NotorietyEquipmentSpeedEnabled then
+				applyEquipmentPlacementSpeed()
+			end
+
+			saveWindUIConfig()
+		end,
+	})
+
+	local UtilityTab = Window:Tab({
+		Title = "Utility",
+		Icon = "settings",
+		Border = true,
+	})
+
+	UtilityTab:Keybind({
+		Flag = "ToggleUIKey",
+		Title = "Toggle UI",
+		Desc = "Default: RightShift",
+		Value = "RightShift",
+		Callback = function(Value)
+			local KeyCode = Enum.KeyCode[Value]
+
+			if KeyCode then
+				Window:SetToggleKey(KeyCode)
+			end
+
+			saveWindUIConfig()
+		end,
+	})
+
+	UtilityTab:Button({
+		Title = "Unload",
+		Desc = "Restores modified data and unloads Notoriety",
+		Icon = "log-out",
+		Callback = function()
+			saveWindUIConfig()
+
+			task.defer(function()
+				if type(Environment.UnloadNotoriety) == "function" then
+					Environment.UnloadNotoriety()
+				end
+			end)
+		end,
+	})
+
+	if type(ConfigManager) == "table" then
+		local Configs = ConfigManager:AllConfigs()
+		local Config = ConfigManager:Config(ConfigName)
+
+		Window.CurrentConfig = Config
+		NotorietyUI.Config = Config
+		NotorietyUI.ConfigLoading = true
+
+		if table.find(Configs, ConfigName) then
+			pcall(function()
+				Config:Load()
+			end)
+		else
+			pcall(function()
+				Config:Save()
+			end)
 		end
+
+		NotorietyUI.ConfigLoading = false
+	end
+
+	pcall(function()
+		ContextActionService:UnbindAction("NotorietyKillPolice")
 	end)
-end
 
-local function bindTopbarCharacter(Character)
-	if Environment.NotorietyUnloaded then
-		return
-	end
+	ContextActionService:BindActionAtPriority(
+		"NotorietyKillPolice",
+		function(_, InputState)
+			if InputState == Enum.UserInputState.Begin and not Environment.NotorietyUnloaded then
+				task.spawn(runKill)
+			end
 
-	for _, Connection in Environment.NotorietyTopbarCharacterConnections do
-		pcall(function()
-			Connection:Disconnect()
-		end)
-	end
-
-	table.clear(Environment.NotorietyTopbarCharacterConnections)
-
-	if not Character then
-		return
-	end
-
-	local function onCharacterToolChanged(Object)
-		if Object:IsA("Tool") then
-			scheduleTopbarRepair()
-		end
-	end
-
-	table.insert(
-		Environment.NotorietyTopbarCharacterConnections,
-		Character.ChildAdded:Connect(onCharacterToolChanged)
+			return Enum.ContextActionResult.Pass
+		end,
+		false,
+		Enum.ContextActionPriority.High.Value + 1,
+		Enum.KeyCode.P
 	)
-	table.insert(
-		Environment.NotorietyTopbarCharacterConnections,
-		Character.ChildRemoved:Connect(onCharacterToolChanged)
-	)
-end
-
-local function onBackpackToolChanged(Object)
-	if Object:IsA("Tool") then
-		scheduleTopbarRepair()
-	end
 end
 
 local function disconnectConnection(Connection)
@@ -1975,12 +2181,19 @@ local function unloadNotoriety()
 		return
 	end
 
+	if type(NotorietyUI.SaveConfig) == "function" then
+		NotorietyUI.SaveConfig()
+	end
+
 	Environment.NotorietyUnloaded = true
 	Environment.MaxEverythingEnabled = false
 	Environment.NotorietyWeaponEnabled = false
 	Environment.NotorietyItemESPEnabled = false
 	Environment.KillPoliceRunning = false
-	Environment.NotorietyTopbarRepairToken += 1
+
+	pcall(function()
+		ContextActionService:UnbindAction("NotorietyKillPolice")
+	end)
 
 	disconnectConnection(Environment.MaxEverythingConnection)
 	disconnectConnection(Environment.MaxEverythingCharacterConnection)
@@ -1991,8 +2204,7 @@ local function unloadNotoriety()
 	Environment.NotorietyPoliceHitboxConnection = nil
 
 	disconnectConnections(Environment.NotorietyWeaponConnections)
-	disconnectConnections(Environment.NotorietyTopbarConnections)
-	disconnectConnections(Environment.NotorietyTopbarCharacterConnections)
+	disconnectConnections(Environment.NotorietyUIConnections)
 
 	if type(Environment.NotorietyGetAmmoWrappers) == "table" then
 		for State, Record in Environment.NotorietyGetAmmoWrappers do
@@ -2008,22 +2220,26 @@ local function unloadNotoriety()
 	end
 
 	restoreAllWeaponData()
+	restoreEquipmentPlacementSpeed()
 	ItemESPController.Cleanup()
 
 	for Object in PoliceOriginalSizes do
 		pcall(restorePolicePart, Object)
 	end
-
-	destroyIcon(Environment.NotorietyWeaponIcon)
-	destroyIcon(Environment.MaxEverythingIcon)
-	destroyIcon(Environment.NotorietyItemESPIcon)
-	destroyIcon(Environment.NotorietyMenuIcon)
-
-	Environment.NotorietyWeaponIcon = nil
-	Environment.MaxEverythingIcon = nil
-	Environment.NotorietyItemESPIcon = nil
-	Environment.NotorietyMenuIcon = nil
 	Environment.NotorietyItemESPController = nil
+
+	local CurrentWindow = Environment.NotorietyWindow
+	Environment.NotorietyWindow = nil
+	NotorietyUI.Window = nil
+	NotorietyUI.Config = nil
+	NotorietyUI.SaveConfig = nil
+
+	if CurrentWindow then
+		pcall(function()
+			CurrentWindow:Destroy()
+		end)
+	end
+
 	Environment.NotorietyGetAmmoWrappers = setmetatable({}, {
 		__mode = "k",
 	})
@@ -2036,19 +2252,9 @@ Environment.UnloadNotoriety = unloadNotoriety
 trackWeaponContainer(Weapons)
 trackWeaponContainer(Backpack)
 trackWeaponContainer(LocalPlayer.Character)
-bindTopbarCharacter(LocalPlayer.Character)
-
-table.insert(
-	Environment.NotorietyTopbarConnections,
-	Backpack.ChildAdded:Connect(onBackpackToolChanged)
-)
-table.insert(
-	Environment.NotorietyTopbarConnections,
-	Backpack.ChildRemoved:Connect(onBackpackToolChanged)
-)
-
-rebuildTopbarIcons(true)
+createWindUI()
 setWeaponModificationsEnabled(Environment.NotorietyWeaponEnabled)
+applyEquipmentPlacementSpeed()
 
 Environment.MaxEverythingConnection = RunService.Heartbeat:Connect(function(DeltaTime)
 	if Environment.NotorietyUnloaded then
@@ -2056,11 +2262,11 @@ Environment.MaxEverythingConnection = RunService.Heartbeat:Connect(function(Delt
 	end
 
 	Apply()
-	Environment.NotorietyTopbarRefresh += DeltaTime
+	EquipmentSpeedState.Refresh += DeltaTime
 
-	if Environment.NotorietyTopbarRefresh >= 0.25 then
-		Environment.NotorietyTopbarRefresh = 0
-		rebuildTopbarIcons(false)
+	if EquipmentSpeedState.Refresh >= 1 then
+		EquipmentSpeedState.Refresh = 0
+		applyEquipmentPlacementSpeed()
 	end
 
 	if not Environment.NotorietyWeaponEnabled then
@@ -2084,8 +2290,6 @@ Environment.MaxEverythingCharacterConnection = LocalPlayer.CharacterAdded:Connec
 		return
 	end
 
-	bindTopbarCharacter(Character)
-	scheduleTopbarRepair()
 	task.wait(1)
 
 	if Environment.NotorietyUnloaded then
@@ -2093,8 +2297,8 @@ Environment.MaxEverythingCharacterConnection = LocalPlayer.CharacterAdded:Connec
 	end
 
 	Apply()
+	applyEquipmentPlacementSpeed()
 	trackWeaponContainer(Character)
-	scheduleTopbarRepair()
 
 	if Environment.NotorietyWeaponEnabled then
 		applyAllWeaponModifications()

@@ -1118,6 +1118,41 @@ local function patchRuntimeWeaponState(State)
 	return true
 end
 
+local function refreshRuntimeFireTiming(State)
+	if not Environment.NotorietyWeaponEnabled or type(State) ~= "table" then
+		return
+	end
+
+	local Data = rawget(State, "data")
+
+	if type(Data) ~= "table" or rawget(Data, "WeaponType") ~= "Gun" then
+		return
+	end
+
+	local FireDelay = math.max(tonumber(rawget(Data, "FireDelay")) or tonumber(Environment.NotorietyFireDelay) or 0.01, 0)
+	local LastShot = rawget(State, "LastShot")
+
+	if type(LastShot) ~= "number" or os.clock() - LastShot < FireDelay then
+		return
+	end
+
+	if rawget(State, "postshooting") == true then
+		State.postshooting = false
+	end
+
+	if rawget(State, "postshooting2") == true then
+		State.postshooting2 = false
+	end
+
+	if rawget(State, "waspostshooting") == true then
+		State.waspostshooting = false
+	end
+
+	if rawget(State, "waspostshooting2") == true then
+		State.waspostshooting2 = false
+	end
+end
+
 local function refreshRuntimeAmmo()
 	if not Environment.NotorietyWeaponEnabled then
 		return
@@ -1125,6 +1160,7 @@ local function refreshRuntimeAmmo()
 
 	for State in WeaponState.RuntimeWeapons do
 		patchRuntimeWeaponState(State)
+		refreshRuntimeFireTiming(State)
 	end
 end
 

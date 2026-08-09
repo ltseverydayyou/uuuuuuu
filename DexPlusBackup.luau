@@ -1313,8 +1313,20 @@ Main = (function()
 				RepoURL = "https://sirmemegithub.com/RealSlimShady2000/SaveInstance420Edition/raw/branch/main/",
 				SSI = "saveinstance",
 			}
-			local source = oldgame:HttpGet(Params.RepoURL .. Params.SSI .. ".luau", true)
-			source = source:gsub("StatusGui%.Parent = global_container%.gethui%(%)", [[
+			local loaderState = {Loading = false, Ready = false, Error = nil}
+			local synsaveinstance
+
+			local function startSaveInstance420()
+				if loaderState.Loading or loaderState.Ready then
+					return
+				end
+				loaderState.Loading = true
+				loaderState.Error = nil
+
+				task.spawn(function()
+					local ok, result = pcall(function()
+						local source = oldgame:HttpGet(Params.RepoURL .. Params.SSI .. ".luau", true)
+						source = source:gsub("StatusGui%.Parent = global_container%.gethui%(%)", [[
 			local huiOk, hui = pcall(global_container.gethui)
 			if huiOk and typeof(hui) == "Instance" then
 				StatusGui.Parent = hui
@@ -1324,13 +1336,42 @@ Main = (function()
 				StatusGui.Parent = RobloxGui or CoreGui
 			end
 			]], 1)
-			local compiled, compileError = loadstring(source, Params.SSI)
-			if type(compiled) ~= "function" then
-				error("Failed to compile SaveInstance420Edition: "..tostring(compileError), 0)
+						local compiled, compileError = loadstring(source, Params.SSI)
+						if type(compiled) ~= "function" then
+							error("Failed to compile SaveInstance420Edition: "..tostring(compileError), 0)
+						end
+						local loaded = compiled()
+						if type(loaded) ~= "function" then
+							error("SaveInstance420Edition did not return a function", 0)
+						end
+						synsaveinstance = loaded
+					end)
+
+					loaderState.Loading = false
+					if ok then
+						loaderState.Ready = true
+					else
+						loaderState.Error = result
+					end
+				end)
 			end
-			local synsaveinstance = compiled()
-			if type(synsaveinstance) ~= "function" then
-				error("SaveInstance420Edition did not return a function", 0)
+
+			local function getSaveInstance420()
+				startSaveInstance420()
+				while loaderState.Loading do
+					task.wait()
+				end
+				if not loaderState.Ready then
+					local previousError = loaderState.Error
+					startSaveInstance420()
+					while loaderState.Loading do
+						task.wait()
+					end
+					if not loaderState.Ready then
+						error(loaderState.Error or previousError or "Failed to load SaveInstance420Edition", 0)
+					end
+				end
+				return synsaveinstance
 			end
 
 			local function copyOptionValue(value)
@@ -1522,7 +1563,8 @@ Main = (function()
 				normalizeSaveInstanceOptions(finalOptions)
 
 				local clientState = captureClientState()
-				local ok, result = pcall(synsaveinstance, finalOptions)
+				local saveFunction = getSaveInstance420()
+				local ok, result = pcall(saveFunction, finalOptions)
 				restoreClientState(clientState)
 				task.defer(restoreClientState, clientState)
 				task.delay(1, restoreClientState, clientState)
@@ -1538,6 +1580,7 @@ Main = (function()
 				rawset(cacheHost, "__dex_saveinstance420", wrappedsaveinstance)
 				rawset(cacheHost, "saveinstance", wrappedsaveinstance)
 			end
+			startSaveInstance420()
 			return wrappedsaveinstance
 		end)()
 

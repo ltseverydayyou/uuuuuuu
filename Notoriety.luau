@@ -112,6 +112,28 @@ do
 		error("WindUI input compatibility patch failed")
 	end
 
+	local WindUIFontAddPatchCount
+	WindUISource, WindUIFontAddPatchCount = WindUISource:gsub(
+		"function r%.AddFontObject%(u%)\ntable%.insert%(r%.FontObjects,u%)\nr%.UpdateFont%(r%.Font%)\nend",
+		"function r.AddFontObject(u)\ntable.insert(r.FontObjects,u)\npcall(function() u.FontFace=Font.new(r.Font,u.FontFace.Weight,u.FontFace.Style) end)\nend",
+		1
+	)
+
+	if WindUIFontAddPatchCount ~= 1 then
+		error("WindUI font add compatibility patch failed")
+	end
+
+	local WindUIFontUpdatePatchCount
+	WindUISource, WindUIFontUpdatePatchCount = WindUISource:gsub(
+		"x%.FontFace=Font%.new%(u,x%.FontFace%.Weight,x%.FontFace%.Style%)",
+		"pcall(function() x.FontFace=Font.new(u,x.FontFace.Weight,x.FontFace.Style) end)",
+		1
+	)
+
+	if WindUIFontUpdatePatchCount ~= 1 then
+		error("WindUI font update compatibility patch failed")
+	end
+
 	local WindUIChunk, WindUICompileError = loadstring(WindUISource, "@WindUI.lua")
 
 	if type(WindUIChunk) ~= "function" then

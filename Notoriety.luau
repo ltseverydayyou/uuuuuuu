@@ -174,6 +174,16 @@ if type(Environment.NotorietyWeaponConnections) == "table" then
 	end
 end
 
+if type(Environment.NotorietyNoDelayConnections) == "table" then
+	for _, Connection in Environment.NotorietyNoDelayConnections do
+		pcall(function()
+			Connection:Disconnect()
+		end)
+	end
+end
+
+Environment.NotorietyNoDelayConnections = {}
+
 if type(Environment.NotorietyGetAmmoWrappers) == "table" then
 	for State, Record in Environment.NotorietyGetAmmoWrappers do
 		if type(State) == "table" and type(Record) == "table" then
@@ -227,6 +237,9 @@ Environment.NotorietyEquipmentPositionEnabled = Environment.NotorietyEquipmentPo
 Environment.NotorietyEquipmentPositionX = tonumber(Environment.NotorietyEquipmentPositionX) or 0
 Environment.NotorietyEquipmentPositionY = tonumber(Environment.NotorietyEquipmentPositionY) or 0
 Environment.NotorietyEquipmentPositionZ = tonumber(Environment.NotorietyEquipmentPositionZ) or 0
+Environment.NotorietyInfiniteYellMarkEnabled = Environment.NotorietyInfiniteYellMarkEnabled == true
+Environment.NotorietyAutoYellEnabled = Environment.NotorietyAutoYellEnabled == true
+Environment.NotorietyNoYellDelayEnabled = Environment.NotorietyNoYellDelayEnabled == true
 
 if Environment.NotorietyEquipmentSpeedMultiplier <= 0
 	or Environment.NotorietyEquipmentSpeedMultiplier == math.huge
@@ -561,6 +574,561 @@ local function applyEquipmentPositioning()
 	rawset(FunctionEnvironment, "CFrame", WrappedCFrame)
 
 	return rawget(FunctionEnvironment, "CFrame") == WrappedCFrame
+end
+
+local YellPatchState = {
+	Module = nil,
+	Original = nil,
+	Wrapper = nil,
+	AutoRefresh = 0,
+	AutoLastFire = 0,
+	AutoGeneration = 0,
+	AutoSeen = setmetatable({}, {
+		__mode = "k",
+	}),
+	NoDelayTargets = {},
+	NoDelayConnections = Environment.NotorietyNoDelayConnections,
+	TargetParts = setmetatable({}, {
+		__mode = "k",
+	}),
+	SkillCache = {},
+}
+
+local function getYellModule()
+	local ReplicatedScripts = RS_Package:FindFirstChild("ReplicatedScripts")
+	local YellScript = ReplicatedScripts and ReplicatedScripts:FindFirstChild("Yell")
+
+	if not YellScript or not YellScript:IsA("ModuleScript") then
+		return nil
+	end
+
+	local Success, Result = pcall(require, YellScript)
+
+	if Success and type(Result) == "table" and type(Result.Yell) == "function" then
+		return Result
+	end
+
+	return nil
+end
+
+local function isPartInViewport(Part, Camera)
+	if not Part or not Part:IsA("BasePart") then
+		return false
+	end
+
+	Camera = Camera or Workspace.CurrentCamera
+
+	if not Camera then
+		return false
+	end
+
+	local ViewportPoint, OnScreen = Camera:WorldToViewportPoint(Part.Position)
+	return OnScreen and ViewportPoint.Z > 0
+end
+
+local function hasYellSkill(PlayerName, TreeName, Skill)
+	local CacheKey = PlayerName .. "|" .. TreeName .. "|" .. Skill
+	local Cached = YellPatchState.SkillCache[CacheKey]
+
+	if Cached ~= nil then
+		return Cached
+	end
+
+	local PlayerData = ReplicatedStorage:FindFirstChild("PlayerData")
+	local PlayerFolder = PlayerData and PlayerData:FindFirstChild(PlayerName)
+	local Data = PlayerFolder and PlayerFolder:FindFirstChild(PlayerName .. "'s Data")
+	local SkillTree = Data and Data:FindFirstChild("SkillTree")
+	local Tree = SkillTree and SkillTree:FindFirstChild(TreeName .. "Tree")
+	local Result = Tree ~= nil
+		and type(Tree.Value) == "string"
+		and string.find(Tree.Value, Skill, 1, true) ~= nil
+
+	YellPatchState.SkillCache[CacheKey] = Result == true
+	return Result == true
+end
+
+local function getYellTargetPart(Object)
+	if not Object then
+		return nil
+	end
+
+	local Cached = YellPatchState.TargetParts[Object]
+
+	if Cached and Cached.Parent then
+		return Cached
+	end
+
+	if Object:IsA("BasePart") then
+		YellPatchState.TargetParts[Object] = Object
+		return Object
+	end
+
+	local Part = Object:FindFirstChild("Head")
+		or Object:FindFirstChild("HumanoidRootPart")
+		or Object:FindFirstChild("Torso")
+		or Object:FindFirstChild("UpperTorso")
+
+	if not Part and Object:IsA("Model") then
+		Part = Object.PrimaryPart
+	end
+
+	if Part and Part:IsA("BasePart") then
+		YellPatchState.TargetParts[Object] = Part
+		return Part
+	end
+
+	return nil
+end
+
+local function createViewportYellWrapper()
+	return function(_, Actor, _, MarkOnly, AutoMode)
+		local IsPlayer = typeof(Actor) == "Instance" and Actor:IsA("Player")
+
+		if IsPlayer then
+			Actor = Actor.Character
+		end
+
+		if typeof(Actor) ~= "Instance" or not Actor:IsA("Model") then
+			return 0, false
+		end
+
+		local Camera = Workspace.CurrentCamera
+
+		if not Camera then
+			return 0, false
+		end
+
+		local Targets = {}
+		local YellTier = 0
+		local GameStatus = RS_Package:FindFirstChild("ReplicatedGameStatus")
+		local Caught = GameStatus and GameStatus:FindFirstChild("Caught")
+		local IsCaught = Caught and Caught.Value == true
+
+		if not MarkOnly then
+			local Citizens = Workspace:FindFirstChild("Citizens")
+
+			if Citizens then
+				for _, Citizen in Citizens:GetChildren() do
+					local TargetPart = getYellTargetPart(Citizen)
+
+					if TargetPart and isPartInViewport(TargetPart, Camera) then
+						if Citizen:FindFirstChild("Alerted") then
+							table.insert(Targets, Citizen)
+							YellTier = math.max(YellTier, 1)
+						end
+
+						if Citizen:FindFirstChild("Cuffed") then
+							table.insert(Targets, Citizen)
+							YellTier = math.max(YellTier, 4)
+						end
+					end
+				end
+			end
+		end
+
+		if not IsCaught then
+			local Cameras = Workspace:FindFirstChild("Cameras")
+
+			if Cameras then
+				for _, CameraObject in Cameras:GetChildren() do
+					local TargetPart = getYellTargetPart(CameraObject)
+
+					if TargetPart and isPartInViewport(TargetPart, Camera) then
+						table.insert(Targets, CameraObject)
+						YellTier = 2
+					end
+				end
+			end
+		end
+
+		if not MarkOnly then
+			local Criminals = Workspace:FindFirstChild("Criminals")
+
+			if Criminals then
+				local CanBoost = hasYellSkill(Actor.Name, "Mastermind", "k")
+				local CanInspire = hasYellSkill(Actor.Name, "Mastermind", "s")
+				local ForceFollowTarget
+
+				for _, Criminal in Criminals:GetChildren() do
+					if Criminal ~= Actor then
+						local TargetPart = getYellTargetPart(Criminal)
+
+						if TargetPart and isPartInViewport(TargetPart, Camera) then
+							local Health = Criminal:FindFirstChild("Health")
+							local ShouldTarget = false
+
+							if Health
+								and Health.Value <= 0
+								and CanInspire
+								and Actor:GetAttribute("DIDINSPIRE") == nil
+							then
+								ShouldTarget = true
+								YellTier = 5
+							elseif CanBoost
+								and not (Criminal:GetAttribute("CHARISMA") or Criminal:GetAttribute("charisma"))
+							then
+								ShouldTarget = true
+								YellTier = math.max(YellTier, 3)
+							elseif IsCaught and Criminal:FindFirstChild("ForceFollow") and not ForceFollowTarget then
+								ForceFollowTarget = Criminal
+							end
+
+							if ShouldTarget then
+								table.insert(Targets, Criminal)
+							end
+						end
+					end
+				end
+
+				if ForceFollowTarget then
+					table.insert(Targets, ForceFollowTarget)
+					YellTier = 5
+				end
+			end
+		end
+
+		local Police = Workspace:FindFirstChild("Police")
+
+		if Police then
+			for _, Officer in Police:GetChildren() do
+				local TargetPart = getYellTargetPart(Officer)
+
+				if TargetPart and isPartInViewport(TargetPart, Camera) then
+					table.insert(Targets, Officer)
+					YellTier = math.max(YellTier, 4)
+				end
+			end
+		end
+
+		if AutoMode then
+			YellPatchState.AutoGeneration += 1
+			local Generation = YellPatchState.AutoGeneration
+			local HasNewTarget = false
+
+			for _, Target in Targets do
+				if YellPatchState.AutoSeen[Target] == nil then
+					HasNewTarget = true
+				end
+
+				YellPatchState.AutoSeen[Target] = Generation
+			end
+
+			for Target, SeenGeneration in YellPatchState.AutoSeen do
+				if SeenGeneration ~= Generation then
+					YellPatchState.AutoSeen[Target] = nil
+				end
+			end
+
+			if #Targets == 0 then
+				return YellTier, false
+			end
+
+			if not HasNewTarget and os.clock() - YellPatchState.AutoLastFire < 2 then
+				return YellTier, false
+			end
+		end
+
+		if IsPlayer and #Targets > 0 then
+			local YellRemotes = RS_Package:FindFirstChild("Remotes")
+			local PlayerYell = YellRemotes and YellRemotes:FindFirstChild("PlayerYell")
+
+			if PlayerYell and PlayerYell:IsA("RemoteEvent") then
+				PlayerYell:FireServer(Targets, MarkOnly)
+			end
+		end
+
+		if not MarkOnly and (not AutoMode or #Targets > 0) then
+			local GestureName = if YellTier == 6 then "Whistle"
+				elseif YellTier == 5 then "Inspire"
+				elseif YellTier == 3 then "Boost"
+				elseif YellTier == 1 then "StayDown"
+				else "Point"
+			local YellRemotes = RS_Package:FindFirstChild("Remotes")
+			local YellEvent = YellRemotes and YellRemotes:FindFirstChild("YellEvent")
+
+			if YellEvent and type(YellEvent.Fire) == "function" then
+				YellEvent:Fire({
+					Type = "Gesture",
+					Name = GestureName,
+					YellTier = YellTier,
+				})
+			end
+		end
+
+		if AutoMode and #Targets > 0 then
+			YellPatchState.AutoLastFire = os.clock()
+		end
+
+		return YellTier, #Targets > 0
+	end
+end
+
+local function restoreYellMarkPatch()
+	local Module = YellPatchState.Module
+	local Original = YellPatchState.Original
+	local Wrapper = YellPatchState.Wrapper
+
+	if type(Module) == "table"
+		and type(Original) == "function"
+		and Module.Yell == Wrapper
+	then
+		Module.Yell = Original
+	end
+
+	YellPatchState.Module = nil
+	YellPatchState.Original = nil
+	YellPatchState.Wrapper = nil
+end
+
+local function applyYellMarkPatch()
+	if Environment.NotorietyUnloaded or not Environment.NotorietyInfiniteYellMarkEnabled then
+		return false
+	end
+
+	local Module = getYellModule()
+
+	if not Module then
+		return false
+	end
+
+	if YellPatchState.Module == Module
+		and type(YellPatchState.Wrapper) == "function"
+		and Module.Yell == YellPatchState.Wrapper
+	then
+		return true
+	end
+
+	restoreYellMarkPatch()
+
+	local Original = Module.Yell
+
+	if type(Original) ~= "function" then
+		return false
+	end
+
+	local Wrapper = createViewportYellWrapper()
+	YellPatchState.Module = Module
+	YellPatchState.Original = Original
+	YellPatchState.Wrapper = Wrapper
+	Module.Yell = Wrapper
+
+	return Module.Yell == Wrapper
+end
+
+local function setYellMarkPatchEnabled(Enabled)
+	Environment.NotorietyInfiniteYellMarkEnabled = Enabled == true
+
+	if Environment.NotorietyInfiniteYellMarkEnabled then
+		applyYellMarkPatch()
+	else
+		restoreYellMarkPatch()
+	end
+end
+
+YellPatchState.RefreshNoDelayTargets = function()
+	table.clear(YellPatchState.NoDelayTargets)
+
+	if type(getgc) ~= "function"
+		or type(debug) ~= "table"
+		or type(debug.getupvalues) ~= "function"
+		or type(debug.setupvalue) ~= "function"
+	then
+		return false
+	end
+
+	local Module = getYellModule()
+
+	if not Module then
+		return false
+	end
+
+	local Success, Objects = pcall(getgc, true)
+
+	if not Success or type(Objects) ~= "table" then
+		return false
+	end
+
+	for _, Function in pairs(Objects) do
+		if type(Function) == "function" then
+			local UpvalueSuccess, Upvalues = pcall(debug.getupvalues, Function)
+
+			if UpvalueSuccess and type(Upvalues) == "table" then
+				local ModuleIndex
+
+				for Index, Value in pairs(Upvalues) do
+					if Value == Module then
+						ModuleIndex = Index
+						break
+					end
+				end
+
+				if ModuleIndex then
+					local Source = ""
+
+					if type(debug.getinfo) == "function" then
+						local InfoSuccess, Info = pcall(debug.getinfo, Function)
+
+						if InfoSuccess and type(Info) == "table" then
+							Source = tostring(Info.source or Info.short_src or "")
+						end
+					end
+
+					if Source == "" or string.find(Source, "HandleInteractionPrompts", 1, true) then
+						local DebounceIndex
+
+						if ModuleIndex == 9 and type(Upvalues[5]) == "boolean" then
+							DebounceIndex = 5
+						elseif ModuleIndex == 5 and type(Upvalues[1]) == "boolean" then
+							DebounceIndex = 1
+						end
+
+						if DebounceIndex then
+							table.insert(YellPatchState.NoDelayTargets, {
+								Function = Function,
+								Index = DebounceIndex,
+							})
+						end
+					end
+				end
+			end
+		end
+	end
+
+	return #YellPatchState.NoDelayTargets > 0
+end
+
+YellPatchState.ApplyNoDelay = function()
+	if Environment.NotorietyUnloaded or not Environment.NotorietyNoYellDelayEnabled then
+		return false
+	end
+
+	if #YellPatchState.NoDelayTargets == 0 then
+		YellPatchState.RefreshNoDelayTargets()
+	end
+
+	local Patched = false
+
+	for _, Target in YellPatchState.NoDelayTargets do
+		if type(Target) == "table"
+			and type(Target.Function) == "function"
+			and type(Target.Index) == "number"
+		then
+			local Success = pcall(debug.setupvalue, Target.Function, Target.Index, false)
+
+			if Success then
+				Patched = true
+			end
+		end
+	end
+
+	return Patched
+end
+
+YellPatchState.ClearNoDelayConnections = function()
+	for _, Connection in YellPatchState.NoDelayConnections do
+		pcall(function()
+			Connection:Disconnect()
+		end)
+	end
+
+	table.clear(YellPatchState.NoDelayConnections)
+end
+
+YellPatchState.ConnectNoDelaySignals = function()
+	YellPatchState.ClearNoDelayConnections()
+
+	if Environment.NotorietyUnloaded or not Environment.NotorietyNoYellDelayEnabled then
+		return
+	end
+
+	local function ResetDebounce()
+		if not Environment.NotorietyNoYellDelayEnabled then
+			return
+		end
+
+		YellPatchState.ApplyNoDelay()
+		task.defer(YellPatchState.ApplyNoDelay)
+	end
+
+	table.insert(
+		YellPatchState.NoDelayConnections,
+		UserInputService.InputBegan:Connect(function()
+			ResetDebounce()
+		end)
+	)
+
+	local PlayerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+	local SGPackage = PlayerGui and PlayerGui:FindFirstChild("SG_Package")
+	local MainGui = SGPackage and SGPackage:FindFirstChild("MainGui")
+	local MobileUI = MainGui and MainGui:FindFirstChild("MobileUI")
+	local Buttons = MobileUI and MobileUI:FindFirstChild("Buttons")
+	local Action = Buttons and Buttons:FindFirstChild("Action")
+	local YellButton = Action and Action:FindFirstChild("Yell")
+
+	if YellButton and YellButton:IsA("GuiButton") then
+		table.insert(
+			YellPatchState.NoDelayConnections,
+			YellButton.MouseButton1Down:Connect(ResetDebounce)
+		)
+	end
+end
+
+YellPatchState.SetNoDelayEnabled = function(Enabled)
+	Environment.NotorietyNoYellDelayEnabled = Enabled == true
+
+	if Environment.NotorietyNoYellDelayEnabled then
+		YellPatchState.RefreshNoDelayTargets()
+		YellPatchState.ApplyNoDelay()
+		YellPatchState.ConnectNoDelaySignals()
+	else
+		YellPatchState.ClearNoDelayConnections()
+		table.clear(YellPatchState.NoDelayTargets)
+	end
+end
+
+YellPatchState.SetAutoYellEnabled = function(Enabled)
+	Environment.NotorietyAutoYellEnabled = Enabled == true
+	YellPatchState.AutoRefresh = 0
+	YellPatchState.AutoLastFire = 0
+	YellPatchState.AutoGeneration = 0
+	table.clear(YellPatchState.AutoSeen)
+end
+
+YellPatchState.AutoYell = function()
+	if Environment.NotorietyUnloaded or not Environment.NotorietyAutoYellEnabled then
+		return false
+	end
+
+	local Module = getYellModule()
+	local Character = LocalPlayer.Character
+
+	if not Module
+		or not Character
+		or not Character.Parent
+	then
+		return false
+	end
+
+	local Success, _, Fired = pcall(function()
+		return Module:Yell(LocalPlayer, math.huge, nil, true)
+	end)
+
+	if not Success or Fired == false then
+		return false
+	end
+
+	local PlayerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+	local SGPackage = PlayerGui and PlayerGui:FindFirstChild("SG_Package")
+	local MaskOn = SGPackage and SGPackage:FindFirstChild("MaskOn")
+	local MainGui = SGPackage and SGPackage:FindFirstChild("MainGui")
+	local Events = MainGui and MainGui:FindFirstChild("Events")
+	local LocalYell = Events and Events:FindFirstChild("Yell")
+
+	if LocalYell and LocalYell:IsA("BindableEvent") then
+		LocalYell:Fire(Character, true, not (MaskOn and MaskOn.Value == true))
+	end
+
+	return true
 end
 
 local MAX_VALUE = 999999
@@ -2247,6 +2815,39 @@ local function createWindUI()
 	})
 
 	MainTab:Toggle({
+		Flag = "InfiniteYellMark",
+		Title = "Infinite Yell / Mark",
+		Desc = "Targets the full viewport through walls with no distance limit",
+		Value = Environment.NotorietyInfiniteYellMarkEnabled,
+		Callback = function(Enabled)
+			setYellMarkPatchEnabled(Enabled)
+			saveWindUIConfig()
+		end,
+	})
+
+	MainTab:Toggle({
+		Flag = "AutoYell",
+		Title = "Auto Yell",
+		Desc = "Automatically yells new viewport targets without spamming unchanged targets",
+		Value = Environment.NotorietyAutoYellEnabled,
+		Callback = function(Enabled)
+			YellPatchState.SetAutoYellEnabled(Enabled)
+			saveWindUIConfig()
+		end,
+	})
+
+	MainTab:Toggle({
+		Flag = "NoYellDelay",
+		Title = "No Yell / Mark Delay",
+		Desc = "Removes the native 0.5 second client yell debounce without per-frame scanning",
+		Value = Environment.NotorietyNoYellDelayEnabled,
+		Callback = function(Enabled)
+			YellPatchState.SetNoDelayEnabled(Enabled)
+			saveWindUIConfig()
+		end,
+	})
+
+	MainTab:Toggle({
 		Flag = "ItemESP",
 		Title = "Item ESP",
 		Desc = "Highlights supported loot and interaction objects",
@@ -2634,6 +3235,9 @@ local function unloadNotoriety()
 	Environment.MaxEverythingEnabled = false
 	Environment.NotorietyWeaponEnabled = false
 	Environment.NotorietyItemESPEnabled = false
+	Environment.NotorietyInfiniteYellMarkEnabled = false
+	Environment.NotorietyAutoYellEnabled = false
+	Environment.NotorietyNoYellDelayEnabled = false
 	Environment.KillPoliceRunning = false
 
 	pcall(function()
@@ -2667,6 +3271,12 @@ local function unloadNotoriety()
 	restoreAllWeaponData()
 	restoreRuntimeWeaponAccuracy()
 	restoreEquipmentPlacementSpeed()
+	restoreYellMarkPatch()
+	YellPatchState.ClearNoDelayConnections()
+	table.clear(YellPatchState.NoDelayTargets)
+	table.clear(YellPatchState.AutoSeen)
+	table.clear(YellPatchState.TargetParts)
+	table.clear(YellPatchState.SkillCache)
 	ItemESPController.Cleanup()
 
 	for Object in PoliceOriginalSizes do
@@ -2700,6 +3310,9 @@ trackWeaponContainer(Backpack)
 trackWeaponContainer(LocalPlayer.Character)
 createWindUI()
 setWeaponModificationsEnabled(Environment.NotorietyWeaponEnabled)
+setYellMarkPatchEnabled(Environment.NotorietyInfiniteYellMarkEnabled)
+YellPatchState.SetAutoYellEnabled(Environment.NotorietyAutoYellEnabled)
+YellPatchState.SetNoDelayEnabled(Environment.NotorietyNoYellDelayEnabled)
 applyEquipmentPlacementSpeed()
 applyEquipmentPositioning()
 
@@ -2709,12 +3322,28 @@ Environment.MaxEverythingConnection = RunService.Heartbeat:Connect(function(Delt
 	end
 
 	Apply()
+
+	if Environment.NotorietyAutoYellEnabled then
+		YellPatchState.AutoRefresh += DeltaTime
+
+		if YellPatchState.AutoRefresh >= 0.75 then
+			YellPatchState.AutoRefresh = 0
+			YellPatchState.AutoYell()
+		end
+	else
+		YellPatchState.AutoRefresh = 0
+	end
+
 	EquipmentSpeedState.Refresh += DeltaTime
 
 	if EquipmentSpeedState.Refresh >= 1 then
 		EquipmentSpeedState.Refresh = 0
 		applyEquipmentPlacementSpeed()
 		applyEquipmentPositioning()
+
+		if Environment.NotorietyInfiniteYellMarkEnabled then
+			applyYellMarkPatch()
+		end
 	end
 
 	if not Environment.NotorietyWeaponEnabled then
@@ -2748,6 +3377,14 @@ Environment.MaxEverythingCharacterConnection = LocalPlayer.CharacterAdded:Connec
 	applyEquipmentPlacementSpeed()
 	applyEquipmentPositioning()
 	trackWeaponContainer(Character)
+	table.clear(YellPatchState.TargetParts)
+	table.clear(YellPatchState.SkillCache)
+	table.clear(YellPatchState.AutoSeen)
+
+	if Environment.NotorietyNoYellDelayEnabled then
+		YellPatchState.RefreshNoDelayTargets()
+		YellPatchState.ConnectNoDelaySignals()
+	end
 
 	if Environment.NotorietyWeaponEnabled then
 		applyAllWeaponModifications()

@@ -86,6 +86,7 @@ local Players = ServiceResolver.cs("Players", Reference)
 local RunService = ServiceResolver.cs("RunService", Reference)
 local CollectionService = ServiceResolver.cs("CollectionService", Reference)
 local ContextActionService = ServiceResolver.cs("ContextActionService", Reference)
+local UserInputService = ServiceResolver.cs("UserInputService", Reference)
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -1050,10 +1051,28 @@ YellPatchState.ConnectNoDelaySignals = function()
 		task.defer(YellPatchState.ApplyNoDelay)
 	end
 
+	local PlayerData = ReplicatedStorage:FindFirstChild("PlayerData")
+	local PlayerFolder = PlayerData and PlayerData:FindFirstChild(LocalPlayer.Name)
+	local DataFolder = PlayerFolder and PlayerFolder:FindFirstChild(LocalPlayer.Name .. "'s Data")
+	local Options = DataFolder and DataFolder:FindFirstChild("Options")
+	local Keybinds = Options and Options:FindFirstChild("Keybinds")
+	local ControllerKeybinds = Options and Options:FindFirstChild("KeybindsController")
+	local InteractShout = Keybinds and Keybinds:FindFirstChild("InteractShout")
+	local ControllerShout = ControllerKeybinds and ControllerKeybinds:FindFirstChild("Shout/SecondaryInteract")
+
 	table.insert(
 		YellPatchState.NoDelayConnections,
-		UserInputService.InputBegan:Connect(function()
-			ResetDebounce()
+		UserInputService.InputBegan:Connect(function(Input, Processed)
+			if Processed then
+				return
+			end
+
+			local KeyboardKey = InteractShout and Enum.KeyCode[InteractShout.Value]
+			local ControllerKey = ControllerShout and Enum.KeyCode[ControllerShout.Value]
+
+			if Input.KeyCode == KeyboardKey or Input.KeyCode == ControllerKey then
+				ResetDebounce()
+			end
 		end)
 	)
 

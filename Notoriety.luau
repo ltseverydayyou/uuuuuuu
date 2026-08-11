@@ -1,7 +1,5 @@
 if not game:IsLoaded() then
-	repeat
-		task.wait()
-	until game:IsLoaded()
+	game.Loaded:Wait()
 end
 
 local Environment = if type(getgenv) == "function" then getgenv() else _G
@@ -40,6 +38,14 @@ local function isCurrentNotorietyRun()
 	return ownsNotorietyBootstrap() and not LoadState.Cancelled
 end
 
+local function ensureExecutorIdentity()
+	local Setter = if type(setthreadidentity) == "function" then setthreadidentity else setidentity
+
+	if type(Setter) == "function" then
+		pcall(Setter, 8)
+	end
+end
+
 local function startupCheckpoint(Stage)
 	LoadState.Stage = Stage
 
@@ -60,6 +66,86 @@ local function waitForStartupChild(Parent, Name)
 	end
 
 	error("Notoriety initialization cancelled while waiting for " .. tostring(Name), 0)
+end
+
+local function waitForRobloxRuntime()
+	startupCheckpoint("Roblox runtime readiness")
+
+	local BootstrapPlayers = game:GetService("Players")
+	local BootstrapReplicatedStorage = game:GetService("ReplicatedStorage")
+	local BootstrapRunService = game:GetService("RunService")
+	local BootstrapLocalPlayer = BootstrapPlayers.LocalPlayer
+
+	while BootstrapLocalPlayer == nil and isCurrentNotorietyRun() do
+		task.wait(0.05)
+		BootstrapLocalPlayer = BootstrapPlayers.LocalPlayer
+	end
+
+	if BootstrapLocalPlayer == nil then
+		error("Notoriety initialization cancelled while waiting for LocalPlayer", 0)
+	end
+
+	waitForStartupChild(BootstrapLocalPlayer, "PlayerScripts")
+	waitForStartupChild(BootstrapLocalPlayer, "PlayerGui")
+	waitForStartupChild(BootstrapLocalPlayer, "Backpack")
+
+	local BootstrapPackage = waitForStartupChild(BootstrapReplicatedStorage, "RS_Package")
+	local BootstrapAssets = waitForStartupChild(BootstrapPackage, "Assets")
+	local BootstrapRemotes = waitForStartupChild(BootstrapAssets, "Remotes")
+	waitForStartupChild(BootstrapRemotes, "Damage")
+
+	local StartedAt = os.clock()
+	local StableSince = StartedAt
+	local PreviousRunningCount
+	local PreviousModuleCount
+	local NextSampleAt = StartedAt
+
+	while isCurrentNotorietyRun() and os.clock() - StartedAt < 12 do
+		BootstrapRunService.Heartbeat:Wait()
+
+		if os.clock() < NextSampleAt then
+			continue
+		end
+
+		NextSampleAt = os.clock() + 0.25
+
+		local RunningCount
+		local ModuleCount
+
+		if type(getrunningscripts) == "function" then
+			local Success, Scripts = pcall(getrunningscripts)
+
+			if Success and type(Scripts) == "table" then
+				RunningCount = #Scripts
+			end
+		end
+
+		if type(getloadedmodules) == "function" then
+			local Success, Modules = pcall(getloadedmodules)
+
+			if Success and type(Modules) == "table" then
+				ModuleCount = #Modules
+			end
+		end
+
+		local CountsChanged = RunningCount ~= PreviousRunningCount
+			or ModuleCount ~= PreviousModuleCount
+
+		if CountsChanged then
+			PreviousRunningCount = RunningCount
+			PreviousModuleCount = ModuleCount
+			StableSince = os.clock()
+		end
+
+		local MinimumGraceElapsed = os.clock() - StartedAt >= 2
+		local CountsStable = os.clock() - StableSince >= 1
+
+		if MinimumGraceElapsed and CountsStable then
+			return
+		end
+	end
+
+	startupCheckpoint("Roblox runtime readiness timeout fallback")
 end
 
 local function disconnectBootstrapConnection(Connection)
@@ -130,15 +216,7 @@ local function cleanupPartialNotorietyRuntime()
 
 	if type(SilentState) == "table" then
 		SilentState.Enabled = false
-
-		if SilentState.Installed
-			and type(hookfunction) == "function"
-			and type(SilentState.Target) == "function"
-			and type(SilentState.Original) == "function"
-		then
-			pcall(hookfunction, SilentState.Target, SilentState.Original)
-			SilentState.Installed = false
-		end
+		SilentState.Handler = nil
 	end
 
 	for _, Name in {
@@ -153,6 +231,13 @@ local function cleanupPartialNotorietyRuntime()
 		end
 	end
 
+	local NamecallState = rawget(Environment, "NotorietyNamecallHookState")
+
+	if type(NamecallState) == "table" and NamecallState.Owner == LoadState then
+		NamecallState.Dispatch = nil
+		NamecallState.Owner = nil
+	end
+
 	local Window = rawget(Environment, "NotorietyWindow")
 
 	if Window ~= nil then
@@ -160,6 +245,15 @@ local function cleanupPartialNotorietyRuntime()
 			Window:Destroy()
 		end)
 		Environment.NotorietyWindow = nil
+	end
+
+	local ModalRoot = rawget(Environment, "NotorietyModalRoot")
+	Environment.NotorietyModalRoot = nil
+
+	if typeof(ModalRoot) == "Instance" then
+		pcall(function()
+			ModalRoot:Destroy()
+		end)
 	end
 end
 
@@ -180,6 +274,7 @@ end
 Environment.UnloadNotoriety = emergencyUnloadNotoriety
 
 local function initializeNotoriety()
+	ensureExecutorIdentity()
 	startupCheckpoint("previous runtime cleanup")
 
 	if type(PreviousUnload) == "function" and PreviousUnload ~= emergencyUnloadNotoriety then
@@ -190,96 +285,67 @@ local function initializeNotoriety()
 		end
 	end
 
+	waitForRobloxRuntime()
+
 	startupCheckpoint("dependency setup")
 
-local ServiceResolver = rawget(Environment, "__lt_service_resolver")
+local function getService(Name)
+	local Service = game:GetService(Name)
 
-if type(ServiceResolver) ~= "table" then
-	local Loader = loadstring
+	if type(cloneref) == "function" then
+		local Success, ClonedService = pcall(cloneref, Service)
 
-	if type(Loader) ~= "function" then
-		error("ServiceResolver loader unavailable")
+		if Success and typeof(ClonedService) == "Instance" then
+			return ClonedService
+		end
 	end
 
-	local ResolverSource = game:HttpGet(
-		"https://raw.githubusercontent.com/ltseverydayyou/ltseverydayyou.github.io/refs/heads/main/ServiceResolver.luau"
-	)
-	startupCheckpoint("ServiceResolver download")
-
-	local ResolverChunk, ResolverCompileError = Loader(
-		ResolverSource,
-		"@ServiceResolver.luau"
-	)
-
-	if type(ResolverChunk) ~= "function" then
-		error("ServiceResolver compile failed: " .. tostring(ResolverCompileError))
-	end
-
-	local ResolverSuccess, ResolverResult = pcall(ResolverChunk)
-	startupCheckpoint("ServiceResolver initialization")
-
-	if not ResolverSuccess or type(ResolverResult) ~= "table" then
-		error("ServiceResolver load failed: " .. tostring(ResolverResult))
-	end
-
-	ServiceResolver = ResolverResult
-	Environment.__lt_service_resolver = ServiceResolver
+	return Service
 end
 
-local UIProtector = rawget(Environment, "__lt_ui_protector")
-
-if type(UIProtector) ~= "table" then
-	local Loader = loadstring
-
-	if type(Loader) ~= "function" then
-		error("UIProtector loader unavailable")
-	end
-
-	local ProtectorSource = game:HttpGet(
-		"https://raw.githubusercontent.com/ltseverydayyou/ltseverydayyou.github.io/refs/heads/main/UIprotector.luau"
-	)
-	startupCheckpoint("UIProtector download")
-
-	local ProtectorChunk, ProtectorCompileError = Loader(
-		ProtectorSource,
-		"@UIprotector.luau"
-	)
-
-	if type(ProtectorChunk) ~= "function" then
-		error("UIProtector compile failed: " .. tostring(ProtectorCompileError))
-	end
-
-	local ProtectorSuccess, ProtectorResult = pcall(ProtectorChunk)
-	startupCheckpoint("UIProtector initialization")
-
-	if not ProtectorSuccess or type(ProtectorResult) ~= "table" then
-		error("UIProtector load failed: " .. tostring(ProtectorResult))
-	end
-
-	UIProtector = ProtectorResult
-	Environment.__lt_ui_protector = UIProtector
-end
-
-if type(UIProtector.installGetHuiOverride) ~= "function"
-	or UIProtector.installGetHuiOverride() ~= true
-then
-	error("UIProtector gethui override failed")
-end
-
-local Reference = if type(cloneref) == "function" then cloneref else function(Value)
-	return Value
-end
-
-local ReplicatedStorage = ServiceResolver.cs("ReplicatedStorage", Reference)
-local Workspace = ServiceResolver.cs("Workspace", Reference)
-local Players = ServiceResolver.cs("Players", Reference)
-local RunService = ServiceResolver.cs("RunService", Reference)
-local CollectionService = ServiceResolver.cs("CollectionService", Reference)
-local ContextActionService = ServiceResolver.cs("ContextActionService", Reference)
-local UserInputService = ServiceResolver.cs("UserInputService", Reference)
-local HttpService = ServiceResolver.cs("HttpService", Reference)
+local ReplicatedStorage = getService("ReplicatedStorage")
+local Workspace = getService("Workspace")
+local Players = getService("Players")
+local RunService = getService("RunService")
+local CollectionService = getService("CollectionService")
+local ContextActionService = getService("ContextActionService")
+local UserInputService = getService("UserInputService")
+local HttpService = getService("HttpService")
+local CoreGui = getService("CoreGui")
 
 local LocalPlayer = Players.LocalPlayer
+
+local function getNotorietyUIParent()
+	ensureExecutorIdentity()
+
+	if type(gethui) == "function" then
+		local Success, Parent = pcall(gethui)
+
+		if Success and typeof(Parent) == "Instance" then
+			return Parent
+		end
+	end
+
+	return CoreGui
+end
+
+local function parentNotorietyGui(Gui)
+	ensureExecutorIdentity()
+
+	local Parent = getNotorietyUIParent()
+	local ParentSuccess = typeof(Parent) == "Instance" and pcall(function()
+		Gui.Parent = Parent
+	end)
+
+	if ParentSuccess then
+		return Parent
+	end
+
+	local PlayerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+		or waitForStartupChild(LocalPlayer, "PlayerGui")
+	Gui.Parent = PlayerGui
+	return PlayerGui
+end
 
 local RS_Package = waitForStartupChild(ReplicatedStorage, "RS_Package")
 local Assets = waitForStartupChild(RS_Package, "Assets")
@@ -1655,8 +1721,6 @@ local SilentAimFOVCircleState = {}
 Environment.NotorietySilentAimFOVCircleState = SilentAimFOVCircleState
 
 local function createSilentAimFOVCircle()
-	local Parent = game:GetService("CoreGui")
-
 	local Root = Instance.new("ScreenGui")
 	Root.Name = "NotorietySilentAimFOV"
 	Root.DisplayOrder = 2147483647
@@ -1699,7 +1763,7 @@ local function createSilentAimFOVCircle()
 
 	local Shadow = CreateRing("Shadow", Color3.fromRGB(0, 0, 0), 4, 1)
 	local Circle = CreateRing("Circle", Color3.fromRGB(255, 255, 255), 2, 2)
-	Root.Parent = Parent
+	parentNotorietyGui(Root)
 
 	SilentAimFOVCircleState.Root = Root
 	SilentAimFOVCircleState.Circle = Circle
@@ -1751,14 +1815,18 @@ local function setSilentAimFOVVisible(Visible)
 	Environment.NotorietySilentAimFOVVisible = Visible == true
 
 	if SilentAimFOVCircleState.Root then
-		SilentAimFOVCircleState.Root.Enabled = Environment.NotorietySilentAimFOVVisible
+		local Success, SetError = pcall(function()
+			SilentAimFOVCircleState.Root.Enabled = Environment.NotorietySilentAimFOVVisible
+		end)
+
+		if not Success then
+			SilentAimFOVCircleState.LastError = tostring(SetError)
+		end
 	end
 end
 
 createSilentAimFOVCircle()
 
--- Older builds intercepted Mouse.Hit. LocalGuns replaces that value in its
--- first-person and shoulder calculations, so keep any persistent old hook inert.
 local LegacySilentAimState = rawget(Environment, "NotorietySilentAimHookState")
 
 if type(LegacySilentAimState) == "table" then
@@ -1775,25 +1843,42 @@ if type(SilentAimState) ~= "table" then
 	Environment.NotorietyProjectileAimState = SilentAimState
 end
 
-local WallBangState = rawget(Environment, "NotorietyWallBangHookState")
+local HasLegacyProjectileHook = SilentAimState.Installed == true
+	and SilentAimState.HookVersion ~= 2
 
-if type(WallBangState) ~= "table" then
-	WallBangState = {
-		Installed = false,
-	}
-	Environment.NotorietyWallBangHookState = WallBangState
+local PreviousWallBangState = rawget(Environment, "NotorietyWallBangHookState")
+
+if type(PreviousWallBangState) == "table" then
+	PreviousWallBangState.Enabled = false
 end
 
-local MeleeReachState = rawget(Environment, "NotorietyMeleeReachHookState")
+local WallBangState = {
+	Enabled = false,
+	Installed = false,
+}
+Environment.NotorietyWallBangHookState = WallBangState
 
-if type(MeleeReachState) ~= "table" then
-	MeleeReachState = {
-		Installed = false,
-	}
-	Environment.NotorietyMeleeReachHookState = MeleeReachState
+local PreviousMeleeReachState = rawget(Environment, "NotorietyMeleeReachHookState")
+
+if type(PreviousMeleeReachState) == "table" then
+	PreviousMeleeReachState.Enabled = false
 end
 
-MeleeReachState.Enabled = Environment.NotorietyMeleeReachEnabled
+local MeleeReachState = {
+	Enabled = false,
+	Installed = false,
+}
+Environment.NotorietyMeleeReachHookState = MeleeReachState
+
+local NamecallState = rawget(Environment, "NotorietyNamecallHookState")
+
+if type(NamecallState) ~= "table" then
+	NamecallState = {
+		Installed = false,
+		Version = 2,
+	}
+	Environment.NotorietyNamecallHookState = NamecallState
+end
 
 local function setMeleeReachEnabled(Enabled)
 	Environment.NotorietyMeleeReachEnabled = Enabled == true
@@ -2016,7 +2101,16 @@ local function findLocalProjectileConstructor()
 end
 
 local function installProjectileAimHook()
+	SilentAimState.Handler = redirectProjectile
+	SilentAimState.Owner = LoadState
+
+	if HasLegacyProjectileHook then
+		SilentAimState.Enabled = Environment.NotorietySilentAimEnabled
+		return true
+	end
+
 	if SilentAimState.Installed
+		and SilentAimState.HookVersion == 2
 		and type(SilentAimState.Target) == "function"
 		and type(SilentAimState.Wrapper) == "function"
 	then
@@ -2033,10 +2127,18 @@ local function installProjectileAimHook()
 		return false
 	end
 
-	local Original
 	local Wrapper = function(ShotData, ...)
-		redirectProjectile(ShotData)
-		return Original(ShotData, ...)
+		local Handler = SilentAimState.Handler
+
+		if SilentAimState.Enabled and type(Handler) == "function" then
+			local Success, HookError = pcall(Handler, ShotData)
+
+			if not Success then
+				SilentAimState.LastError = tostring(HookError)
+			end
+		end
+
+		return SilentAimState.Original(ShotData, ...)
 	end
 	local Success, Previous = pcall(hookfunction, Target, Wrapper)
 
@@ -2044,13 +2146,13 @@ local function installProjectileAimHook()
 		return false
 	end
 
-	Original = Previous
 	SilentAimState.Target = Target
 	SilentAimState.Original = Previous
 	SilentAimState.Wrapper = Wrapper
-	SilentAimState.RedirectProjectile = redirectProjectile
+	SilentAimState.Handler = redirectProjectile
 	SilentAimState.Enabled = Environment.NotorietySilentAimEnabled
 	SilentAimState.Installed = true
+	SilentAimState.HookVersion = 2
 	return true
 end
 
@@ -2064,69 +2166,6 @@ local function copyRaycastParameters(Parameters, ExtraIgnore)
 	table.insert(Ignore, ExtraIgnore)
 	Copy.FilterDescendantsInstances = Ignore
 	return Copy
-end
-
-local function installWallBangHook()
-	WallBangState.Enabled = Environment.NotorietyWallBangEnabled
-
-	if WallBangState.Installed then
-		return true
-	end
-
-	if type(hookmetamethod) ~= "function"
-		or type(newcclosure) ~= "function"
-		or type(checkcaller) ~= "function"
-		or type(getnamecallmethod) ~= "function"
-	then
-		return false
-	end
-
-	local OriginalNamecall
-	local Hook = newcclosure(function(Self, ...)
-		local Arguments = { ... }
-		local Parameters = Arguments[3]
-
-		if WallBangState.Enabled
-			and not checkcaller()
-			and Self == Workspace
-			and getnamecallmethod() == "Raycast"
-			and typeof(Parameters) == "RaycastParams"
-			and Parameters.CollisionGroup == "Projectile"
-		then
-			local Result = OriginalNamecall(Self, ...)
-			local Attempts = 0
-
-			while Result and Result.Instance and Attempts < 32 do
-				local Hit = Result.Instance
-				local Model = Hit:FindFirstAncestorOfClass("Model")
-				local Humanoid = Model and Model:FindFirstChildWhichIsA("Humanoid")
-
-				if Humanoid then
-					return Result
-				end
-
-				Attempts += 1
-				Parameters = copyRaycastParameters(Parameters, Hit)
-				Arguments[3] = Parameters
-				Result = OriginalNamecall(Self, table.unpack(Arguments))
-			end
-
-			return Result
-		end
-
-		return OriginalNamecall(Self, ...)
-	end)
-	local Success, Previous = pcall(hookmetamethod, game, "__namecall", Hook)
-
-	if not Success or type(Previous) ~= "function" then
-		return false
-	end
-
-	OriginalNamecall = Previous
-	WallBangState.OriginalNamecall = Previous
-	WallBangState.Hook = Hook
-	WallBangState.Installed = true
-	return true
 end
 
 local function isMeleeOverlapParameters(Parameters)
@@ -2145,32 +2184,51 @@ local function isMeleeOverlapParameters(Parameters)
 		and table.find(Filter, Character) ~= nil
 end
 
-local function installMeleeReachHook()
-	local HookVersion = 1
+local function dispatchNotorietyNamecall(State, Self, ...)
+	local OriginalNamecall = State.OriginalNamecall
 
-	if MeleeReachState.Installed and MeleeReachState.HookVersion == HookVersion then
-		return true
+	if type(OriginalNamecall) ~= "function" then
+		return nil
 	end
 
-	if type(hookmetamethod) ~= "function"
-		or type(newcclosure) ~= "function"
-		or type(checkcaller) ~= "function"
-		or type(getnamecallmethod) ~= "function"
-	then
-		return false
+	if Self ~= Workspace or checkcaller() then
+		return OriginalNamecall(Self, ...)
 	end
 
-	local OriginalNamecall
-	local Hook = newcclosure(function(Self, ...)
-		local Arguments = { ... }
+	local Method = getnamecallmethod()
+
+	if Method == "Raycast" and WallBangState.Enabled then
+		local Arguments = table.pack(...)
 		local Parameters = Arguments[3]
 
-		if MeleeReachState.Enabled
-			and not checkcaller()
-			and Self == Workspace
-			and getnamecallmethod() == "GetPartBoundsInBox"
-			and isMeleeOverlapParameters(Parameters)
+		if typeof(Parameters) == "RaycastParams"
+			and Parameters.CollisionGroup == "Projectile"
 		then
+			local Result = OriginalNamecall(Self, table.unpack(Arguments, 1, Arguments.n))
+			local Attempts = 0
+
+			while Result and Result.Instance and Attempts < 32 do
+				local Hit = Result.Instance
+				local Model = Hit:FindFirstAncestorOfClass("Model")
+				local Humanoid = Model and Model:FindFirstChildWhichIsA("Humanoid")
+
+				if Humanoid then
+					return Result
+				end
+
+				Attempts += 1
+				Parameters = copyRaycastParameters(Parameters, Hit)
+				Arguments[3] = Parameters
+				Result = OriginalNamecall(Self, table.unpack(Arguments, 1, Arguments.n))
+			end
+
+			return Result
+		end
+	elseif Method == "GetPartBoundsInBox" and MeleeReachState.Enabled then
+		local Arguments = table.pack(...)
+		local Parameters = Arguments[3]
+
+		if isMeleeOverlapParameters(Parameters) then
 			local Camera = Workspace.CurrentCamera
 			local Reach = math.clamp(tonumber(Environment.NotorietyMeleeReach) or 25, 5, 100)
 			local Width = math.clamp(Reach * 0.3, 5, 8)
@@ -2179,27 +2237,90 @@ local function installMeleeReachHook()
 			Arguments[2] = Vector3.new(Width, Width, Reach)
 			MeleeReachState.LastReach = Reach
 			MeleeReachState.ApplyCount = (MeleeReachState.ApplyCount or 0) + 1
+			return OriginalNamecall(Self, table.unpack(Arguments, 1, Arguments.n))
 		end
+	end
 
-		return OriginalNamecall(Self, table.unpack(Arguments))
-	end)
-	local Success, Previous = pcall(hookmetamethod, game, "__namecall", Hook)
+	return OriginalNamecall(Self, ...)
+end
 
-	if not Success or type(Previous) ~= "function" then
+local function installNamecallHook()
+	NamecallState.Dispatch = dispatchNotorietyNamecall
+	NamecallState.Owner = LoadState
+
+	if NamecallState.Installed
+		and NamecallState.Version == 2
+		and type(NamecallState.OriginalNamecall) == "function"
+		and type(NamecallState.Hook) == "function"
+	then
+		return true
+	end
+
+	if type(hookmetamethod) ~= "function"
+		or type(checkcaller) ~= "function"
+		or type(getnamecallmethod) ~= "function"
+	then
+		NamecallState.Dispatch = nil
 		return false
 	end
 
-	OriginalNamecall = Previous
-	MeleeReachState.OriginalNamecall = Previous
-	MeleeReachState.Hook = Hook
-	MeleeReachState.HookVersion = HookVersion
-	MeleeReachState.Installed = true
+	local Hook = function(Self, ...)
+		local Dispatch = NamecallState.Dispatch
+
+		if type(Dispatch) == "function" then
+			local Results = table.pack(pcall(Dispatch, NamecallState, Self, ...))
+
+			if Results[1] then
+				return table.unpack(Results, 2, Results.n)
+			end
+
+			NamecallState.LastError = tostring(Results[2])
+		end
+
+		local OriginalNamecall = NamecallState.OriginalNamecall
+
+		if type(OriginalNamecall) == "function" then
+			return OriginalNamecall(Self, ...)
+		end
+
+		return nil
+	end
+
+	if type(newcclosure) == "function" then
+		local WrapSuccess, WrappedHook = pcall(newcclosure, Hook)
+
+		if WrapSuccess and type(WrappedHook) == "function" then
+			Hook = WrappedHook
+		end
+	end
+
+	local Success, Previous = pcall(hookmetamethod, game, "__namecall", Hook)
+
+	if not Success or type(Previous) ~= "function" then
+		NamecallState.Dispatch = nil
+		NamecallState.LastError = tostring(Previous)
+		return false
+	end
+
+	NamecallState.OriginalNamecall = Previous
+	NamecallState.Hook = Hook
+	NamecallState.Installed = true
+	NamecallState.Version = 2
 	return true
 end
 
-installProjectileAimHook()
-installWallBangHook()
-installMeleeReachHook()
+local function installWallBangHook()
+	WallBangState.Enabled = Environment.NotorietyWallBangEnabled
+	WallBangState.Installed = installNamecallHook()
+	return WallBangState.Installed
+end
+
+local function installMeleeReachHook()
+	MeleeReachState.Enabled = Environment.NotorietyMeleeReachEnabled
+	MeleeReachState.Installed = installNamecallHook()
+	MeleeReachState.HookVersion = 2
+	return MeleeReachState.Installed
+end
 
 local MaxedValues = {
 	Stamina = MAX_VALUE,
@@ -3621,9 +3742,9 @@ local function addItemESPObject(Category, Object)
 		return
 	end
 
-	local Box = ServiceResolver.ns("BoxHandleAdornment")
+	local BoxSuccess, Box = pcall(Instance.new, "BoxHandleAdornment")
 
-	if not Box then
+	if not BoxSuccess or typeof(Box) ~= "Instance" then
 		return
 	end
 
@@ -3703,7 +3824,6 @@ local function stopItemESP()
 	ItemESPState.Folder = nil
 
 	if Folder then
-		pcall(UIProtector.cleanup, Folder)
 		pcall(function()
 			Folder:Destroy()
 		end)
@@ -3718,30 +3838,26 @@ local function startItemESP()
 		return false
 	end
 
-	local Folder = ServiceResolver.ns("Folder")
+	local FolderSuccess, Folder = pcall(Instance.new, "Folder")
 
-	if not Folder then
+	if not FolderSuccess or typeof(Folder) ~= "Instance" then
 		return false
 	end
 
 	Folder.Name = "NotorietyItemESP"
+	Folder.Archivable = false
 
-	local ProtectSuccess, ProtectedFolder = pcall(UIProtector.protectUI, Folder, {
-		lockName = true,
-		name = "NotorietyItemESP",
-		harden = true,
-		deep = true,
-		watch = true,
-	})
+	local Parent = getNotorietyUIParent()
 
-	if not ProtectSuccess or typeof(ProtectedFolder) ~= "Instance" then
+	if typeof(Parent) ~= "Instance" then
 		pcall(function()
 			Folder:Destroy()
 		end)
 		return false
 	end
 
-	ItemESPState.Folder = ProtectedFolder
+	Folder.Parent = Parent
+	ItemESPState.Folder = Folder
 
 	for _, Prompt in CollectionService:GetTagged("Prompt") do
 		inspectItemESPPrompt(Prompt)
@@ -3992,6 +4108,15 @@ local function createModalUI()
 		Environment.NotorietyToggleUIKey = Enum.KeyCode.RightShift
 	end
 
+	local WindowRoot = Instance.new("ScreenGui")
+	WindowRoot.Name = "NotorietyModal"
+	WindowRoot.IgnoreGuiInset = true
+	WindowRoot.ResetOnSpawn = false
+	WindowRoot.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	parentNotorietyGui(WindowRoot)
+	Environment.NotorietyModalRoot = WindowRoot
+	NotorietyUI.Root = WindowRoot
+
 	local Window = Modal:CreateWindow({
 		Title = "Notoriety",
 		SubTitle = "Gameplay tools",
@@ -3999,6 +4124,7 @@ local function createModalUI()
 		Size = UDim2.fromOffset(560, 430),
 		MinimumSize = Vector2.new(420, 320),
 		Transparency = 0,
+		Parent = WindowRoot,
 	})
 
 	Window:SetTheme("Midnight")
@@ -4488,12 +4614,6 @@ local function createModalUI()
 
 	Window:SetTab("Main")
 
-	local WindowRoot = Window.Object:FindFirstAncestorWhichIsA("ScreenGui")
-
-	if not WindowRoot then
-		error("Modal window root unavailable")
-	end
-
 	table.insert(
 		Environment.NotorietyUIConnections,
 		UserInputService.InputBegan:Connect(function(Input, Processed)
@@ -4590,19 +4710,13 @@ local function unloadNotoriety()
 	SilentAimFOVCircleState.Shadow = nil
 	SilentAimFOVCircleState.Connection = nil
 
-	if SilentAimState.Installed
-		and type(hookfunction) == "function"
-		and type(SilentAimState.Target) == "function"
-		and type(SilentAimState.Original) == "function"
-	then
-		pcall(hookfunction, SilentAimState.Target, SilentAimState.Original)
-	end
+	SilentAimState.Handler = nil
+	SilentAimState.Owner = nil
 
-	SilentAimState.Installed = false
-	SilentAimState.Target = nil
-	SilentAimState.Original = nil
-	SilentAimState.Wrapper = nil
-	SilentAimState.RedirectProjectile = nil
+	if NamecallState.Owner == LoadState then
+		NamecallState.Dispatch = nil
+		NamecallState.Owner = nil
+	end
 
 	pcall(function()
 		ContextActionService:UnbindAction("NotorietyKillPolice")
@@ -4653,13 +4767,22 @@ local function unloadNotoriety()
 	Environment.NotorietyYellPatchState = nil
 
 	local CurrentWindow = Environment.NotorietyWindow
+	local CurrentModalRoot = Environment.NotorietyModalRoot
 	Environment.NotorietyWindow = nil
+	Environment.NotorietyModalRoot = nil
 	NotorietyUI.Window = nil
+	NotorietyUI.Root = nil
 	NotorietyUI.SaveConfig = nil
 
 	if CurrentWindow then
 		pcall(function()
 			CurrentWindow:Destroy()
+		end)
+	end
+
+	if typeof(CurrentModalRoot) == "Instance" then
+		pcall(function()
+			CurrentModalRoot:Destroy()
 		end)
 	end
 

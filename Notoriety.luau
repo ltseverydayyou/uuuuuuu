@@ -1,3 +1,9 @@
+if not game:IsLoaded() then
+	repeat
+		task.wait()
+	until game:IsLoaded()
+end
+
 local Environment = if type(getgenv) == "function" then getgenv() else _G
 
 local PreviousUnload = rawget(Environment, "UnloadNotoriety")

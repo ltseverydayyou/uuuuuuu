@@ -215,9 +215,21 @@ Environment.NotorietySilentAimHitPart = if table.find(
 Environment.NotorietySilentAimVisibilityCheck = Environment.NotorietySilentAimVisibilityCheck ~= false
 Environment.NotorietySilentAimFOVVisible = Environment.NotorietySilentAimFOVVisible ~= false
 Environment.NotorietyWallBangEnabled = Environment.NotorietyWallBangEnabled == true
+Environment.NotorietyMeleeReachEnabled = Environment.NotorietyMeleeReachEnabled == true
+Environment.NotorietyMeleeReach = math.clamp(
+	tonumber(Environment.NotorietyMeleeReach) or 25,
+	5,
+	100
+)
+Environment.NotorietySawReachEnabled = Environment.NotorietySawReachEnabled == true
+Environment.NotorietySawReach = math.clamp(
+	tonumber(Environment.NotorietySawReach) or 25,
+	10,
+	250
+)
 Environment.NotorietyPoliceHeadScaleEnabled = Environment.NotorietyPoliceHeadScaleEnabled == true
 Environment.NotorietyPoliceHeadScale = math.clamp(
-	tonumber(Environment.NotorietyPoliceHeadScale) or 1,
+	tonumber(Environment.NotorietyPoliceHeadScale) or 10,
 	1,
 	20
 )
@@ -1150,17 +1162,105 @@ end
 
 local PoliceOriginalSizes = Environment.NotorietyPoliceOriginalSizes
 
+local DEFAULT_POLICE_HEAD_STATE = {
+	Size = Vector3.new(1.1908922, 1.1954262, 1.1909529),
+	Transparency = 0,
+	Massless = false,
+	CanCollide = false,
+}
+
+local function isReasonablePoliceHeadSize(Size)
+	return typeof(Size) == "Vector3"
+		and Size.X >= 0.25
+		and Size.Y >= 0.25
+		and Size.Z >= 0.25
+		and Size.X <= 4
+		and Size.Y <= 4
+		and Size.Z <= 4
+end
+
+local function looksLikeModifiedPoliceHead(Head)
+	return Head.Transparency == 0.5 and Head.Massless and not Head.CanCollide
+end
+
+local function copyPoliceHeadState(State)
+	return {
+		Size = State.Size,
+		Transparency = State.Transparency,
+		Massless = State.Massless,
+		CanCollide = State.CanCollide,
+	}
+end
+
+local function getReferencePoliceHeadState(ExcludedHead)
+	local Folder = Workspace:FindFirstChild("Police")
+
+	if Folder then
+		for _, NPC in Folder:GetChildren() do
+			local Head = NPC:FindFirstChild("Head")
+			local Stored = Head and PoliceOriginalSizes[Head]
+			local StoredSize = typeof(Stored) == "Vector3" and Stored
+				or (type(Stored) == "table" and Stored.Size or nil)
+
+			if Head ~= ExcludedHead and isReasonablePoliceHeadSize(StoredSize) then
+				if typeof(Stored) == "Vector3" then
+					return {
+						Size = Stored,
+						Transparency = Head.Transparency,
+						Massless = Head.Massless,
+						CanCollide = Head.CanCollide,
+					}
+				end
+
+				return copyPoliceHeadState(Stored)
+			end
+		end
+
+		for _, NPC in Folder:GetChildren() do
+			local Head = NPC:FindFirstChild("Head")
+
+			if Head ~= ExcludedHead
+				and Head
+				and Head:IsA("BasePart")
+				and isReasonablePoliceHeadSize(Head.Size)
+				and not looksLikeModifiedPoliceHead(Head)
+			then
+				return {
+					Size = Head.Size,
+					Transparency = Head.Transparency,
+					Massless = Head.Massless,
+					CanCollide = Head.CanCollide,
+				}
+			end
+		end
+	end
+
+	return copyPoliceHeadState(DEFAULT_POLICE_HEAD_STATE)
+end
+
+local function applyPoliceHeadState(Head, State)
+	Head.Size = State.Size
+	Head.Transparency = State.Transparency
+	Head.Massless = State.Massless
+	Head.CanCollide = State.CanCollide
+end
+
 local function restorePolicePart(Object)
 	local Original = PoliceOriginalSizes[Object]
 
-	if Original and Object.Parent then
+	if Object.Parent and Original then
 		if typeof(Original) == "Vector3" then
-			Object.Size = Original
+			if isReasonablePoliceHeadSize(Original) then
+				Object.Size = Original
+			else
+				applyPoliceHeadState(Object, getReferencePoliceHeadState(Object))
+			end
 		else
-			Object.Size = Original.Size
-			Object.Transparency = Original.Transparency
-			Object.Massless = Original.Massless
-			Object.CanCollide = Original.CanCollide
+			if not isReasonablePoliceHeadSize(Original.Size) then
+				Original = getReferencePoliceHeadState(Object)
+			end
+
+			applyPoliceHeadState(Object, Original)
 		end
 
 		PoliceOriginalSizes[Object] = nil
@@ -1176,7 +1276,11 @@ local function resizePoliceNPC(NPC)
 
 	if not Environment.NotorietyPoliceHeadScaleEnabled then
 		if Head and Head:IsA("BasePart") then
-			restorePolicePart(Head)
+			if PoliceOriginalSizes[Head] then
+				restorePolicePart(Head)
+			elseif not isReasonablePoliceHeadSize(Head.Size) or looksLikeModifiedPoliceHead(Head) then
+				applyPoliceHeadState(Head, getReferencePoliceHeadState(Head))
+			end
 		end
 
 		return
@@ -1184,14 +1288,20 @@ local function resizePoliceNPC(NPC)
 
 	if Head and Head:IsA("BasePart") then
 		local Original = PoliceOriginalSizes[Head]
+		local OriginalSize = typeof(Original) == "Vector3" and Original
+			or (type(Original) == "table" and Original.Size or nil)
 
-		if not Original then
-			PoliceOriginalSizes[Head] = {
-				Size = Head.Size,
-				Transparency = Head.Transparency,
-				Massless = Head.Massless,
-				CanCollide = Head.CanCollide,
-			}
+		if not isReasonablePoliceHeadSize(OriginalSize) then
+			if isReasonablePoliceHeadSize(Head.Size) and not looksLikeModifiedPoliceHead(Head) then
+				PoliceOriginalSizes[Head] = {
+					Size = Head.Size,
+					Transparency = Head.Transparency,
+					Massless = Head.Massless,
+					CanCollide = Head.CanCollide,
+				}
+			else
+				PoliceOriginalSizes[Head] = getReferencePoliceHeadState(Head)
+			end
 		elseif typeof(Original) == "Vector3" then
 			PoliceOriginalSizes[Head] = {
 				Size = Original,
@@ -1220,8 +1330,6 @@ local function applyPoliceHeadScale()
 		for Object in PoliceOriginalSizes do
 			pcall(restorePolicePart, Object)
 		end
-
-		return
 	end
 
 	for _, NPC in Folder:GetChildren() do
@@ -1388,6 +1496,22 @@ if type(WallBangState) ~= "table" then
 	Environment.NotorietyWallBangHookState = WallBangState
 end
 
+local MeleeReachState = rawget(Environment, "NotorietyMeleeReachHookState")
+
+if type(MeleeReachState) ~= "table" then
+	MeleeReachState = {
+		Installed = false,
+	}
+	Environment.NotorietyMeleeReachHookState = MeleeReachState
+end
+
+MeleeReachState.Enabled = Environment.NotorietyMeleeReachEnabled
+
+local function setMeleeReachEnabled(Enabled)
+	Environment.NotorietyMeleeReachEnabled = Enabled == true
+	MeleeReachState.Enabled = Environment.NotorietyMeleeReachEnabled
+end
+
 local function getSilentAimPart(Target)
 	local PreferredPart = Environment.NotorietySilentAimHitPart
 	local Part = Target:FindFirstChild(PreferredPart, true)
@@ -1547,9 +1671,25 @@ local function redirectProjectile(ShotData)
 
 		if Offset.Magnitude > 0 then
 			local Direction = Offset.Unit
+			local HitboxInfo = {}
+
+			if type(ShotData.HitboxInfo) == "table" then
+				for Key, Value in ShotData.HitboxInfo do
+					HitboxInfo[Key] = Value
+				end
+			end
+
+			HitboxInfo.Radius = math.max(tonumber(HitboxInfo.Radius) or 0, 2.5)
 			ShotData.TargetPosition = TargetPosition
 			ShotData.Direction = Direction
 			ShotData.Drop = 0
+			ShotData.HitboxInfo = HitboxInfo
+
+			if type(ShotData.Duration) == "number" then
+				local Speed = math.max(tonumber(ShotData.Speed) or 10, 1)
+				local RequiredDuration = Offset.Magnitude / (Speed * Speed) + 0.25
+				ShotData.Duration = math.max(ShotData.Duration, RequiredDuration)
+			end
 		end
 
 		SilentAimState.LastTarget = Target
@@ -1694,8 +1834,77 @@ local function installWallBangHook()
 	return true
 end
 
+local function isMeleeOverlapParameters(Parameters)
+	if typeof(Parameters) ~= "OverlapParams" or Parameters.MaxParts ~= 60 then
+		return false
+	end
+
+	local Filter = Parameters.FilterDescendantsInstances
+	local Camera = Workspace.CurrentCamera
+	local Character = LocalPlayer.Character
+
+	return type(Filter) == "table"
+		and Camera ~= nil
+		and Character ~= nil
+		and table.find(Filter, Camera) ~= nil
+		and table.find(Filter, Character) ~= nil
+end
+
+local function installMeleeReachHook()
+	local HookVersion = 1
+
+	if MeleeReachState.Installed and MeleeReachState.HookVersion == HookVersion then
+		return true
+	end
+
+	if type(hookmetamethod) ~= "function"
+		or type(newcclosure) ~= "function"
+		or type(checkcaller) ~= "function"
+		or type(getnamecallmethod) ~= "function"
+	then
+		return false
+	end
+
+	local OriginalNamecall
+	local Hook = newcclosure(function(Self, ...)
+		local Arguments = { ... }
+		local Parameters = Arguments[3]
+
+		if MeleeReachState.Enabled
+			and not checkcaller()
+			and Self == Workspace
+			and getnamecallmethod() == "GetPartBoundsInBox"
+			and isMeleeOverlapParameters(Parameters)
+		then
+			local Camera = Workspace.CurrentCamera
+			local Reach = math.clamp(tonumber(Environment.NotorietyMeleeReach) or 25, 5, 100)
+			local Width = math.clamp(Reach * 0.3, 5, 8)
+
+			Arguments[1] = Camera.CFrame * CFrame.new(0, 0, -Reach * 0.5)
+			Arguments[2] = Vector3.new(Width, Width, Reach)
+			MeleeReachState.LastReach = Reach
+			MeleeReachState.ApplyCount = (MeleeReachState.ApplyCount or 0) + 1
+		end
+
+		return OriginalNamecall(Self, table.unpack(Arguments))
+	end)
+	local Success, Previous = pcall(hookmetamethod, game, "__namecall", Hook)
+
+	if not Success or type(Previous) ~= "function" then
+		return false
+	end
+
+	OriginalNamecall = Previous
+	MeleeReachState.OriginalNamecall = Previous
+	MeleeReachState.Hook = Hook
+	MeleeReachState.HookVersion = HookVersion
+	MeleeReachState.Installed = true
+	return true
+end
+
 installProjectileAimHook()
 installWallBangHook()
+installMeleeReachHook()
 
 local MaxedValues = {
 	Stamina = MAX_VALUE,
@@ -1966,6 +2175,22 @@ local function isStandardGunData(Data)
 	local AmmoClass = rawget(Data, "AmmoClass")
 
 	return AmmoClass == "Primary" or AmmoClass == "Secondary"
+end
+
+local function isSawWeaponData(Data)
+	if type(Data) ~= "table" or rawget(Data, "WeaponType") ~= "Gun" then
+		return false
+	end
+
+	local BulletType = rawget(Data, "BulletType")
+	local FireMode = rawget(Data, "FireMode")
+
+	return BulletType == "saw"
+		or (type(FireMode) == "string" and string.find(FireMode, "Saw", 1, true) ~= nil)
+end
+
+local function shouldApplyWeaponData()
+	return Environment.NotorietyWeaponEnabled or Environment.NotorietySawReachEnabled
 end
 
 local function isInfiniteGunState(State, Data)
@@ -2290,15 +2515,30 @@ local function restoreRuntimeWeaponAccuracy()
 end
 
 applyWeaponData = function(Data)
-	if not Environment.NotorietyWeaponEnabled or type(Data) ~= "table" then
+	if type(Data) ~= "table" then
 		return false
 	end
 
 	local WeaponType = rawget(Data, "WeaponType")
+	local ApplySawReach = Environment.NotorietySawReachEnabled and isSawWeaponData(Data)
+
+	if not Environment.NotorietyWeaponEnabled and not ApplySawReach then
+		return false
+	end
 
 	if WeaponType == "Gun" then
 		local StandardGun = isStandardGunData(Data)
 		local Backup = getWeaponBackup(Data)
+
+		if ApplySawReach then
+			captureField(Data, Backup, "BulletRange")
+			Data.BulletRange = math.clamp(tonumber(Environment.NotorietySawReach) or 25, 10, 250)
+		end
+
+		if not Environment.NotorietyWeaponEnabled then
+			return ApplySawReach
+		end
+
 		for _, Key in {
 			"FireDelay",
 			"BoltDuration",
@@ -2552,7 +2792,7 @@ local function patchLoadedWeaponTables()
 end
 
 local function queueLoadedWeaponFallback()
-	if not Environment.NotorietyWeaponEnabled or WeaponState.FallbackQueued then
+	if not shouldApplyWeaponData() or WeaponState.FallbackQueued then
 		return
 	end
 
@@ -2561,7 +2801,7 @@ local function queueLoadedWeaponFallback()
 	task.delay(0.25, function()
 		WeaponState.FallbackQueued = false
 
-		if not Environment.NotorietyWeaponEnabled then
+		if not shouldApplyWeaponData() then
 			return
 		end
 
@@ -2607,7 +2847,7 @@ local function getModuleData(Module)
 end
 
 local function applyWeaponModule(Object)
-	if not Environment.NotorietyWeaponEnabled
+	if not shouldApplyWeaponData()
 		or not Object:IsA("ModuleScript")
 		or Object.Name ~= "Data"
 	then
@@ -2762,7 +3002,7 @@ local Weapons = Assets:FindFirstChild("Weapons")
 local Backpack = LocalPlayer:WaitForChild("Backpack", math.huge)
 
 local function applyAllWeaponModifications()
-	if not Environment.NotorietyWeaponEnabled then
+	if not shouldApplyWeaponData() then
 		return
 	end
 
@@ -2783,12 +3023,20 @@ end
 
 local function setWeaponModificationsEnabled(Enabled)
 	Environment.NotorietyWeaponEnabled = Enabled == true
+	restoreAllWeaponData()
+	restoreRuntimeWeaponAccuracy()
 
-	if Environment.NotorietyWeaponEnabled then
+	if shouldApplyWeaponData() then
 		applyAllWeaponModifications()
-	else
-		restoreAllWeaponData()
-		restoreRuntimeWeaponAccuracy()
+	end
+end
+
+local function setSawReachEnabled(Enabled)
+	Environment.NotorietySawReachEnabled = Enabled == true
+	restoreAllWeaponData()
+
+	if shouldApplyWeaponData() then
+		applyAllWeaponModifications()
 	end
 end
 
@@ -3292,6 +3540,8 @@ local function loadNotorietyConfig()
 		SilentAimVisibilityCheck = "NotorietySilentAimVisibilityCheck",
 		SilentAimFOVVisible = "NotorietySilentAimFOVVisible",
 		WallBang = "NotorietyWallBangEnabled",
+		MeleeReachEnabled = "NotorietyMeleeReachEnabled",
+		SawReachEnabled = "NotorietySawReachEnabled",
 		PoliceHeadScaleEnabled = "NotorietyPoliceHeadScaleEnabled",
 		EquipmentSpeedEnabled = "NotorietyEquipmentSpeedEnabled",
 		EquipmentPositionEnabled = "NotorietyEquipmentPositionEnabled",
@@ -3317,6 +3567,14 @@ local function loadNotorietyConfig()
 
 	if isFiniteNumber(Data.SilentAimFOV) then
 		Environment.NotorietySilentAimFOV = math.clamp(Data.SilentAimFOV, 25, 1000)
+	end
+
+	if isFiniteNumber(Data.MeleeReach) then
+		Environment.NotorietyMeleeReach = math.clamp(Data.MeleeReach, 5, 100)
+	end
+
+	if isFiniteNumber(Data.SawReach) then
+		Environment.NotorietySawReach = math.clamp(Data.SawReach, 10, 250)
 	end
 
 	if isFiniteNumber(Data.PoliceHeadScale) then
@@ -3375,6 +3633,10 @@ local function saveNotorietyConfig()
 		SilentAimVisibilityCheck = Environment.NotorietySilentAimVisibilityCheck,
 		SilentAimFOVVisible = Environment.NotorietySilentAimFOVVisible,
 		WallBang = Environment.NotorietyWallBangEnabled,
+		MeleeReachEnabled = Environment.NotorietyMeleeReachEnabled,
+		MeleeReach = Environment.NotorietyMeleeReach,
+		SawReachEnabled = Environment.NotorietySawReachEnabled,
+		SawReach = Environment.NotorietySawReach,
 		PoliceHeadScaleEnabled = Environment.NotorietyPoliceHeadScaleEnabled,
 		PoliceHeadScale = Environment.NotorietyPoliceHeadScale,
 		EquipmentSpeedEnabled = Environment.NotorietyEquipmentSpeedEnabled,
@@ -3398,6 +3660,22 @@ local function saveNotorietyConfig()
 	end)
 end
 
+local function applyLoadedNotorietyConfig()
+	setMeleeReachEnabled(Environment.NotorietyMeleeReachEnabled)
+	setSawReachEnabled(Environment.NotorietySawReachEnabled)
+	setWeaponModificationsEnabled(Environment.NotorietyWeaponEnabled)
+	setSilentAimEnabled(Environment.NotorietySilentAimEnabled)
+	setSilentAimFOVVisible(Environment.NotorietySilentAimFOVVisible)
+	WallBangState.Enabled = Environment.NotorietyWallBangEnabled
+	setPoliceHeadScaleEnabled(Environment.NotorietyPoliceHeadScaleEnabled)
+	setItemESPEnabled(Environment.NotorietyItemESPEnabled)
+	setYellMarkPatchEnabled(Environment.NotorietyInfiniteYellMarkEnabled)
+	YellPatchState.SetAutoYellEnabled(Environment.NotorietyAutoYellEnabled)
+	YellPatchState.SetNoDelayEnabled(Environment.NotorietyNoYellDelayEnabled)
+	applyEquipmentPlacementSpeed()
+	applyEquipmentPositioning()
+end
+
 local function setModalInputText(Component, Value)
 	if type(Component) ~= "table" or typeof(Component.Object) ~= "Instance" then
 		return
@@ -3416,12 +3694,6 @@ local function createModalUI()
 	if not isSupportedToggleInput(Environment.NotorietyToggleUIKey) then
 		Environment.NotorietyToggleUIKey = Enum.KeyCode.RightShift
 	end
-
-	loadNotorietyConfig()
-	setSilentAimEnabled(Environment.NotorietySilentAimEnabled)
-	setSilentAimFOVVisible(Environment.NotorietySilentAimFOVVisible)
-	WallBangState.Enabled = Environment.NotorietyWallBangEnabled
-	setPoliceHeadScaleEnabled(Environment.NotorietyPoliceHeadScaleEnabled)
 
 	local Window = Modal:CreateWindow({
 		Title = "Notoriety",
@@ -3520,6 +3792,69 @@ local function createModalUI()
 		DefaultValue = Environment.NotorietyWeaponEnabled,
 		Callback = function(Enabled)
 			setWeaponModificationsEnabled(Enabled)
+			saveNotorietyConfig()
+		end,
+	})
+
+	WeaponTab:New("Toggle")({
+		Title = "Melee Reach",
+		Description = "Extends the shared hitbox for every melee weapon",
+		DefaultValue = Environment.NotorietyMeleeReachEnabled,
+		Callback = function(Enabled)
+			setMeleeReachEnabled(Enabled)
+			saveNotorietyConfig()
+		end,
+	})
+
+	NotorietyUI.MeleeReachInput = WeaponTab:New("Input")({
+		Title = "Melee Reach Distance",
+		Description = "Forward reach in studs. Range: 5-100",
+		DefaultText = tostring(Environment.NotorietyMeleeReach),
+		Placeholder = "25",
+		Callback = function(Value)
+			local Number = tonumber(Value)
+
+			if not isFiniteNumber(Number) then
+				return
+			end
+
+			Number = math.clamp(Number, 5, 100)
+			Environment.NotorietyMeleeReach = Number
+			setModalInputText(NotorietyUI.MeleeReachInput, Number)
+			saveNotorietyConfig()
+		end,
+	})
+
+	WeaponTab:New("Toggle")({
+		Title = "SAW Reach",
+		Description = "Extends BulletRange for the SAW gadget",
+		DefaultValue = Environment.NotorietySawReachEnabled,
+		Callback = function(Enabled)
+			setSawReachEnabled(Enabled)
+			saveNotorietyConfig()
+		end,
+	})
+
+	NotorietyUI.SawReachInput = WeaponTab:New("Input")({
+		Title = "SAW Reach Distance",
+		Description = "SAW interaction reach in studs. Range: 10-250",
+		DefaultText = tostring(Environment.NotorietySawReach),
+		Placeholder = "25",
+		Callback = function(Value)
+			local Number = tonumber(Value)
+
+			if not isFiniteNumber(Number) then
+				return
+			end
+
+			Number = math.clamp(Number, 10, 250)
+			Environment.NotorietySawReach = Number
+			setModalInputText(NotorietyUI.SawReachInput, Number)
+
+			if Environment.NotorietySawReachEnabled then
+				setSawReachEnabled(true)
+			end
+
 			saveNotorietyConfig()
 		end,
 	})
@@ -3929,6 +4264,8 @@ local function unloadNotoriety()
 	Environment.NotorietySilentAimEnabled = false
 	Environment.NotorietySilentAimFOVVisible = false
 	Environment.NotorietyWallBangEnabled = false
+	Environment.NotorietyMeleeReachEnabled = false
+	Environment.NotorietySawReachEnabled = false
 	Environment.NotorietyPoliceHeadScaleEnabled = false
 	Environment.NotorietyItemESPEnabled = false
 	Environment.NotorietyInfiniteYellMarkEnabled = false
@@ -3938,6 +4275,7 @@ local function unloadNotoriety()
 	SilentAimState.Enabled = false
 	SilentAimState.LastTarget = nil
 	WallBangState.Enabled = false
+	MeleeReachState.Enabled = false
 
 	if SilentAimFOVCircleState.Root then
 		pcall(function()
@@ -4031,16 +4369,12 @@ end
 
 Environment.UnloadNotoriety = unloadNotoriety
 
+loadNotorietyConfig()
 trackWeaponContainer(Weapons)
 trackWeaponContainer(Backpack)
 trackWeaponContainer(LocalPlayer.Character)
+applyLoadedNotorietyConfig()
 createModalUI()
-setWeaponModificationsEnabled(Environment.NotorietyWeaponEnabled)
-setYellMarkPatchEnabled(Environment.NotorietyInfiniteYellMarkEnabled)
-YellPatchState.SetAutoYellEnabled(Environment.NotorietyAutoYellEnabled)
-YellPatchState.SetNoDelayEnabled(Environment.NotorietyNoYellDelayEnabled)
-applyEquipmentPlacementSpeed()
-applyEquipmentPositioning()
 
 Environment.MaxEverythingConnection = RunService.Heartbeat:Connect(function(DeltaTime)
 	if Environment.NotorietyUnloaded then

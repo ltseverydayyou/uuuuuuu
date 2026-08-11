@@ -94,58 +94,13 @@ local function waitForRobloxRuntime()
 	local BootstrapRemotes = waitForStartupChild(BootstrapAssets, "Remotes")
 	waitForStartupChild(BootstrapRemotes, "Damage")
 
-	local StartedAt = os.clock()
-	local StableSince = StartedAt
-	local PreviousRunningCount
-	local PreviousModuleCount
-	local NextSampleAt = StartedAt
+	local GraceDeadline = os.clock() + 1.5
 
-	while isCurrentNotorietyRun() and os.clock() - StartedAt < 12 do
+	repeat
 		BootstrapRunService.Heartbeat:Wait()
+	until not isCurrentNotorietyRun() or os.clock() >= GraceDeadline
 
-		if os.clock() < NextSampleAt then
-			continue
-		end
-
-		NextSampleAt = os.clock() + 0.25
-
-		local RunningCount
-		local ModuleCount
-
-		if type(getrunningscripts) == "function" then
-			local Success, Scripts = pcall(getrunningscripts)
-
-			if Success and type(Scripts) == "table" then
-				RunningCount = #Scripts
-			end
-		end
-
-		if type(getloadedmodules) == "function" then
-			local Success, Modules = pcall(getloadedmodules)
-
-			if Success and type(Modules) == "table" then
-				ModuleCount = #Modules
-			end
-		end
-
-		local CountsChanged = RunningCount ~= PreviousRunningCount
-			or ModuleCount ~= PreviousModuleCount
-
-		if CountsChanged then
-			PreviousRunningCount = RunningCount
-			PreviousModuleCount = ModuleCount
-			StableSince = os.clock()
-		end
-
-		local MinimumGraceElapsed = os.clock() - StartedAt >= 2
-		local CountsStable = os.clock() - StableSince >= 1
-
-		if MinimumGraceElapsed and CountsStable then
-			return
-		end
-	end
-
-	startupCheckpoint("Roblox runtime readiness timeout fallback")
+	startupCheckpoint("Roblox runtime ready")
 end
 
 local function disconnectBootstrapConnection(Connection)
@@ -176,6 +131,7 @@ local function cleanupPartialNotorietyRuntime()
 		"NotorietyWeaponConnections",
 		"NotorietyUIConnections",
 		"NotorietyNoDelayConnections",
+		"NotorietyMaxValueConnections",
 	} do
 		local Connections = rawget(Environment, Name)
 
@@ -200,35 +156,10 @@ local function cleanupPartialNotorietyRuntime()
 		pcall(PoliceState.SetEnabled, false)
 	end
 
-	local CircleState = rawget(Environment, "NotorietySilentAimFOVCircleState")
+	local MeleeState = rawget(Environment, "NotorietyMeleeReachHookState")
 
-	if type(CircleState) == "table" then
-		disconnectBootstrapConnection(CircleState.Connection)
-
-		if typeof(CircleState.Root) == "Instance" then
-			pcall(function()
-				CircleState.Root:Destroy()
-			end)
-		end
-	end
-
-	local SilentState = rawget(Environment, "NotorietyProjectileAimState")
-
-	if type(SilentState) == "table" then
-		SilentState.Enabled = false
-		SilentState.Handler = nil
-	end
-
-	for _, Name in {
-		"NotorietyWallBangHookState",
-		"NotorietyMeleeReachHookState",
-		"NotorietySilentAimHookState",
-	} do
-		local State = rawget(Environment, Name)
-
-		if type(State) == "table" then
-			State.Enabled = false
-		end
+	if type(MeleeState) == "table" then
+		MeleeState.Enabled = false
 	end
 
 	local NamecallState = rawget(Environment, "NotorietyNamecallHookState")
@@ -315,6 +246,27 @@ local CoreGui = getService("CoreGui")
 
 local LocalPlayer = Players.LocalPlayer
 
+local function queryDescendants(Root, Selector)
+	if typeof(Root) ~= "Instance" or type(Root.QueryDescendants) ~= "function" then
+		return {}
+	end
+
+	local Success, Results = pcall(Root.QueryDescendants, Root, Selector)
+	return if Success and type(Results) == "table" then Results else {}
+end
+
+local function processInBatches(Objects, Callback, BatchSize)
+	BatchSize = BatchSize or 40
+
+	for Index = 1, #Objects do
+		Callback(Objects[Index])
+
+		if Index % BatchSize == 0 then
+			RunService.Heartbeat:Wait()
+		end
+	end
+end
+
 local function getNotorietyUIParent()
 	ensureExecutorIdentity()
 
@@ -329,24 +281,6 @@ local function getNotorietyUIParent()
 	return CoreGui
 end
 
-local function parentNotorietyGui(Gui)
-	ensureExecutorIdentity()
-
-	local Parent = getNotorietyUIParent()
-	local ParentSuccess = typeof(Parent) == "Instance" and pcall(function()
-		Gui.Parent = Parent
-	end)
-
-	if ParentSuccess then
-		return Parent
-	end
-
-	local PlayerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
-		or waitForStartupChild(LocalPlayer, "PlayerGui")
-	Gui.Parent = PlayerGui
-	return PlayerGui
-end
-
 local RS_Package = waitForStartupChild(ReplicatedStorage, "RS_Package")
 local Assets = waitForStartupChild(RS_Package, "Assets")
 local Remotes = waitForStartupChild(Assets, "Remotes")
@@ -355,24 +289,222 @@ local Event = waitForStartupChild(Remotes, "Damage")
 local NotorietyUI = {}
 
 do
-	local ModalSource = game:HttpGet(
-		"https://github.com/yeku/Modal/releases/latest/download/main.lua"
+	local VibeUISource = game:HttpGet(
+		"https://sirmemegithub.com/RealSlimShady2000/VibeUI/raw/branch/main/VibeUI.luau"
 	)
-	startupCheckpoint("Modal download")
-	local ModalChunk, ModalCompileError = loadstring(ModalSource, "@Modal.lua")
+	startupCheckpoint("VibeUI download")
+	VibeUISource = VibeUISource:gsub("\r\n", "\n")
+	local VibeUIAnchorLoopPatchCount
+	VibeUISource, VibeUIAnchorLoopPatchCount = VibeUISource:gsub(
+		"LibMaid:GiveTask%(RunService%.RenderStepped:Connect%(function%(%)[\n]",
+		"LibMaid:GiveTask(RunService.RenderStepped:Connect(function()\n\tif next(Anchors) == nil then return end\n",
+		1
+	)
 
-	if type(ModalChunk) ~= "function" then
-		error("Modal compile failed: " .. tostring(ModalCompileError))
+	if VibeUIAnchorLoopPatchCount ~= 1 then
+		error("VibeUI idle anchor-loop compatibility patch failed")
 	end
 
-	local ModalSuccess, ModalResult = pcall(ModalChunk)
-	startupCheckpoint("Modal initialization")
+	local SharedEnvironment = shared
+	local PreviousSharedVibeUI = SharedEnvironment and rawget(SharedEnvironment, "VibeUI") or nil
+	local PreviousEnvironmentVibeUI = rawget(Environment, "VibeUI")
 
-	if not ModalSuccess or type(ModalResult) ~= "table" then
-		error("Modal load failed: " .. tostring(ModalResult))
+	if SharedEnvironment then
+		rawset(SharedEnvironment, "VibeUI", nil)
 	end
 
-	NotorietyUI.Library = ModalResult
+	rawset(Environment, "VibeUI", nil)
+
+	local VibeUIChunk, VibeUICompileError = loadstring(VibeUISource, "@VibeUI.lua")
+
+	if type(VibeUIChunk) ~= "function" then
+		if SharedEnvironment then
+			rawset(SharedEnvironment, "VibeUI", PreviousSharedVibeUI)
+		end
+
+		rawset(Environment, "VibeUI", PreviousEnvironmentVibeUI)
+		error("VibeUI compile failed: " .. tostring(VibeUICompileError))
+	end
+
+	local VibeUISuccess, VibeUI = pcall(VibeUIChunk)
+	startupCheckpoint("VibeUI initialization")
+
+	if SharedEnvironment then
+		rawset(SharedEnvironment, "VibeUI", PreviousSharedVibeUI)
+	end
+
+	rawset(Environment, "VibeUI", PreviousEnvironmentVibeUI)
+
+	if not VibeUISuccess or type(VibeUI) ~= "table" then
+		error("VibeUI load failed: " .. tostring(VibeUI))
+	end
+
+	local Adapter = {
+		IsVibeUIAdapter = true,
+		ScreenGui = nil,
+	}
+
+	function Adapter:IsCorrectInput(Input, Target)
+		return Input ~= nil
+			and typeof(Target) == "EnumItem"
+			and (Input.KeyCode == Target or Input.UserInputType == Target)
+	end
+
+	function Adapter:CreateWindow(Configuration)
+		local NativeWindow = VibeUI:Window({
+			Title = Configuration.Title,
+			Size = Configuration.Size,
+			Keybind = Environment.NotorietyToggleUIKey or Enum.KeyCode.RightShift,
+			Layout = "Side",
+			Resizable = true,
+		})
+		local Tabs = {}
+		local Window = {}
+		local NativeRoot = NativeWindow._root
+
+		Adapter.ScreenGui = if typeof(NativeRoot) == "Instance"
+			then NativeRoot:FindFirstAncestorOfClass("ScreenGui")
+			else nil
+
+		function Window:SetTheme(_Theme)
+		end
+
+		function Window:AddTab(Name)
+			local NativeTab = NativeWindow:Tab({
+				Name = Name,
+				Columns = 1,
+			})
+			local NativeSection = NativeTab:Section({
+				Name = Name,
+				Side = 1,
+			})
+			local Tab = {}
+			Tabs[Name] = NativeTab
+
+			function Tab:New(Kind)
+				return function(Config)
+					local FlagTitle = (Config.Title or "Control"):gsub("%W+", "_")
+					local Flag = string.format(
+						"Notoriety_%s_%s_%s",
+						Name,
+						Kind,
+						FlagTitle
+					)
+
+					if Kind == "Button" then
+						local Row = NativeSection:Button()
+						Row:Add(Config.Title, Config.Callback)
+						return Row
+					elseif Kind == "Toggle" then
+						return NativeSection:Toggle({
+							Name = Config.Title,
+							Flag = Flag,
+							Default = Config.DefaultValue,
+							Tooltip = Config.Description,
+							Callback = Config.Callback,
+						})
+					elseif Kind == "Input" then
+						return NativeSection:Textbox({
+							Name = Config.Title,
+							Flag = Flag,
+							Default = Config.DefaultText,
+							Placeholder = Config.Placeholder,
+							Finished = true,
+							Tooltip = Config.Description,
+							Callback = Config.Callback,
+						})
+					elseif Kind == "Slider" then
+						return NativeSection:Slider({
+							Name = Config.Title,
+							Flag = Flag,
+							Min = Config.Min,
+							Max = Config.Max,
+							Default = Config.DefaultValue,
+							Decimals = Config.Step,
+							Suffix = Config.Suffix,
+							Tooltip = Config.Description,
+							Callback = Config.Callback,
+						})
+					elseif Kind == "Dropdown" then
+						return NativeSection:Dropdown({
+							Name = Config.Title,
+							Flag = Flag,
+							Items = Config.Options,
+							Default = Config.Default,
+							Tooltip = Config.Description,
+							Callback = Config.Callback,
+						})
+					elseif Kind == "Keybind" then
+						local DefaultInput = Enum.KeyCode[Config.DefaultKeybind]
+							or Enum.UserInputType[Config.DefaultKeybind]
+							or Enum.KeyCode.RightShift
+						return NativeSection:Label(Config.Title):AddKeybind({
+							Name = Config.Title,
+							Flag = Flag,
+							Default = DefaultInput,
+							Mode = "Toggle",
+							OnChanged = function(Key)
+								local KeyName = tostring(Key):match("([^%.]+)$")
+								local Input = KeyName
+									and (Enum.KeyCode[KeyName] or Enum.UserInputType[KeyName])
+									or nil
+
+								if Input then
+									VibeUI.Config.MenuKeybind = Input
+									Config.Callback(Input)
+								end
+							end,
+						})
+					end
+
+					error("Unsupported VibeUI component: " .. tostring(Kind))
+				end
+			end
+
+			return Tab
+		end
+
+		function Window:SetTab(Name)
+			local Tab = Tabs[Name]
+
+			if Tab then
+				pcall(function()
+					Tab:Turn(true)
+				end)
+			end
+		end
+
+		function Window:Notify(Config)
+			return VibeUI:Notification({
+				Title = Config.Title,
+				Description = Config.Description,
+				Type = string.lower(Config.Type or "info"),
+				Duration = Config.Duration,
+			})
+		end
+
+		function Window:SetToggleKey(Key)
+			VibeUI.Config.MenuKeybind = Key
+		end
+
+		function Window:Destroy()
+			local Success, UnloadError = pcall(VibeUI.Unload, VibeUI)
+
+			if SharedEnvironment then
+				rawset(SharedEnvironment, "VibeUI", PreviousSharedVibeUI)
+			end
+
+			rawset(Environment, "VibeUI", PreviousEnvironmentVibeUI)
+
+			if not Success then
+				error(UnloadError)
+			end
+		end
+
+		return Window
+	end
+
+	NotorietyUI.Library = Adapter
 end
 
 startupCheckpoint("runtime construction")
@@ -409,6 +541,16 @@ if type(Environment.NotorietyNoDelayConnections) == "table" then
 end
 
 Environment.NotorietyNoDelayConnections = {}
+
+if type(Environment.NotorietyMaxValueConnections) == "table" then
+	for _, Connection in Environment.NotorietyMaxValueConnections do
+		pcall(function()
+			Connection:Disconnect()
+		end)
+	end
+end
+
+Environment.NotorietyMaxValueConnections = {}
 
 if type(Environment.NotorietyGetAmmoWrappers) == "table" then
 	for State, Record in Environment.NotorietyGetAmmoWrappers do
@@ -450,31 +592,12 @@ if type(Environment.NotorietyUIConnections) == "table" then
 	end
 end
 
-local SILENT_AIM_HIT_PARTS = {
-	"Head",
-	"UpperTorso",
-	"HumanoidRootPart",
-}
-
 Environment.MaxEverythingEnabled = true
 Environment.KillPoliceRunning = false
 Environment.NotorietyWeaponEnabled = true
-Environment.NotorietyFireDelay = tonumber(Environment.NotorietyFireDelay) or 0.01
-Environment.NotorietyBoltDuration = tonumber(Environment.NotorietyBoltDuration) or 0.001
+Environment.NotorietyFireDelay = math.clamp(tonumber(Environment.NotorietyFireDelay) or 0.01, 0, 1)
+Environment.NotorietyBoltDuration = math.clamp(tonumber(Environment.NotorietyBoltDuration) or 0.001, 0, 1)
 Environment.NotorietyAccuracy = tonumber(Environment.NotorietyAccuracy) or 100
-Environment.NotorietySilentAimEnabled = Environment.NotorietySilentAimEnabled == true
-Environment.NotorietySilentAimFOV = math.clamp(
-	tonumber(Environment.NotorietySilentAimFOV) or 150,
-	25,
-	1000
-)
-Environment.NotorietySilentAimHitPart = if table.find(
-	SILENT_AIM_HIT_PARTS,
-	Environment.NotorietySilentAimHitPart
-) then Environment.NotorietySilentAimHitPart else "Head"
-Environment.NotorietySilentAimVisibilityCheck = Environment.NotorietySilentAimVisibilityCheck ~= false
-Environment.NotorietySilentAimFOVVisible = Environment.NotorietySilentAimFOVVisible ~= false
-Environment.NotorietyWallBangEnabled = Environment.NotorietyWallBangEnabled == true
 Environment.NotorietyMeleeReachEnabled = Environment.NotorietyMeleeReachEnabled == true
 Environment.NotorietyMeleeReach = math.clamp(
 	tonumber(Environment.NotorietyMeleeReach) or 25,
@@ -495,11 +618,15 @@ Environment.NotorietyPoliceHeadScale = math.clamp(
 )
 Environment.NotorietyItemESPEnabled = false
 Environment.NotorietyEquipmentSpeedEnabled = Environment.NotorietyEquipmentSpeedEnabled ~= false
-Environment.NotorietyEquipmentSpeedMultiplier = tonumber(Environment.NotorietyEquipmentSpeedMultiplier) or 2
+Environment.NotorietyEquipmentSpeedMultiplier = math.clamp(
+	tonumber(Environment.NotorietyEquipmentSpeedMultiplier) or 2,
+	1,
+	10
+)
 Environment.NotorietyEquipmentPositionEnabled = Environment.NotorietyEquipmentPositionEnabled == true
-Environment.NotorietyEquipmentPositionX = tonumber(Environment.NotorietyEquipmentPositionX) or 0
-Environment.NotorietyEquipmentPositionY = tonumber(Environment.NotorietyEquipmentPositionY) or 0
-Environment.NotorietyEquipmentPositionZ = tonumber(Environment.NotorietyEquipmentPositionZ) or 0
+Environment.NotorietyEquipmentPositionX = math.clamp(tonumber(Environment.NotorietyEquipmentPositionX) or 0, -50, 50)
+Environment.NotorietyEquipmentPositionY = math.clamp(tonumber(Environment.NotorietyEquipmentPositionY) or 0, -50, 50)
+Environment.NotorietyEquipmentPositionZ = math.clamp(tonumber(Environment.NotorietyEquipmentPositionZ) or 0, -50, 50)
 Environment.NotorietyInfiniteYellMarkEnabled = Environment.NotorietyInfiniteYellMarkEnabled == true
 Environment.NotorietyAutoYellEnabled = Environment.NotorietyAutoYellEnabled == true
 Environment.NotorietyNoYellDelayEnabled = Environment.NotorietyNoYellDelayEnabled == true
@@ -540,6 +667,7 @@ local EquipmentSpeedState = {
 	WrappedCFrame = nil,
 	CFrameLookAtCount = 0,
 	Refresh = 0,
+	DiscoveryAttempted = false,
 }
 
 local function getEquipmentSpeedMultiplier()
@@ -602,6 +730,7 @@ local function restoreEquipmentPlacementSpeed()
 	EquipmentSpeedState.WrappedCFrame = nil
 	EquipmentSpeedState.CFrameLookAtCount = 0
 	EquipmentSpeedState.Refresh = 0
+	EquipmentSpeedState.DiscoveryAttempted = false
 end
 
 local function findEquipmentPlacementFunction()
@@ -609,7 +738,7 @@ local function findEquipmentPlacementFunction()
 	local FunctionEnvironment = EquipmentSpeedState.FunctionEnvironment
 	local WrappedTick = EquipmentSpeedState.WrappedTick
 
-	if type(Existing) == "function"
+	if typeof(Existing) == "Instance"
 		and type(FunctionEnvironment) == "table"
 		and type(WrappedTick) == "function"
 		and rawget(FunctionEnvironment, "tick") == WrappedTick
@@ -617,32 +746,29 @@ local function findEquipmentPlacementFunction()
 		return Existing
 	end
 
-	if type(getgc) ~= "function"
-		or type(getfenv) ~= "function"
-		or type(debug) ~= "table"
-		or type(debug.getinfo) ~= "function"
-	then
+	if type(getsenv) ~= "function" then
 		return nil
 	end
 
-	for _, Function in getgc(true) do
-		if type(Function) == "function" then
-			local Success, Info = pcall(debug.getinfo, Function)
+	if EquipmentSpeedState.DiscoveryAttempted then
+		return nil
+	end
 
-			if Success
-				and type(Info) == "table"
-				and Info.source == "=Players." .. LocalPlayer.Name .. ".PlayerGui.SG_Package.LocalMovement"
-				and Info.name == "placeEquipment"
-			then
-				local EnvironmentSuccess, FunctionEnvironmentResult = pcall(getfenv, Function)
+	EquipmentSpeedState.DiscoveryAttempted = true
+	local PlayerGui = LocalPlayer:FindFirstChild("PlayerGui")
+	local SGPackage = PlayerGui and PlayerGui:FindFirstChild("SG_Package")
+	local LocalMovement = SGPackage and SGPackage:FindFirstChild("LocalMovement")
 
-				if EnvironmentSuccess and type(FunctionEnvironmentResult) == "table" then
-					EquipmentSpeedState.Function = Function
-					EquipmentSpeedState.FunctionEnvironment = FunctionEnvironmentResult
-					return Function
-				end
-			end
-		end
+	if not LocalMovement or not LocalMovement:IsA("LocalScript") then
+		return nil
+	end
+
+	local EnvironmentSuccess, FunctionEnvironmentResult = pcall(getsenv, LocalMovement)
+
+	if EnvironmentSuccess and type(FunctionEnvironmentResult) == "table" then
+		EquipmentSpeedState.Function = LocalMovement
+		EquipmentSpeedState.FunctionEnvironment = FunctionEnvironmentResult
+		return LocalMovement
 	end
 
 	return nil
@@ -691,11 +817,6 @@ local function applyEquipmentPlacementSpeed()
 
 	local function WrappedTick(...)
 		local Now = OriginalTick(...)
-		local CallerSuccess, Caller = pcall(debug.info, 2, "f")
-
-		if CallerSuccess and Caller == Function then
-			EquipmentSpeedState.CFrameLookAtCount = 0
-		end
 
 		if Environment.NotorietyUnloaded
 			or typeof(EquipmentPercent) ~= "Instance"
@@ -712,6 +833,7 @@ local function applyEquipmentPlacementSpeed()
 		local Multiplier = getEquipmentSpeedMultiplier()
 
 		if not EquipmentSpeedState.ClockActive then
+			EquipmentSpeedState.CFrameLookAtCount = 0
 			EquipmentSpeedState.ClockActive = true
 			EquipmentSpeedState.RealAnchor = Now
 			EquipmentSpeedState.ScaledAnchor = Now
@@ -803,12 +925,6 @@ local function applyEquipmentPositioning()
 			return Result
 		end
 
-		local CallerSuccess, Caller = pcall(debug.info, 2, "f")
-
-		if not CallerSuccess or Caller ~= Function then
-			return Result
-		end
-
 		local ArgumentCount = select("#", ...)
 		local Position, LookAt = ...
 
@@ -854,6 +970,7 @@ local YellPatchState = {
 	}),
 	NoDelayTargets = {},
 	NoDelayConnections = Environment.NotorietyNoDelayConnections,
+	NoDelayDiscoveryAttempted = false,
 	TargetParts = setmetatable({}, {
 		__mode = "k",
 	}),
@@ -865,61 +982,9 @@ local function isYellModule(Module)
 	return type(Module) == "table" and type(rawget(Module, "Yell")) == "function"
 end
 
-local function findLiveYellModule()
+local function getYellModule()
 	if isYellModule(YellPatchState.LiveModule) then
 		return YellPatchState.LiveModule
-	end
-
-	if type(getgc) ~= "function"
-		or type(debug) ~= "table"
-		or type(debug.getupvalues) ~= "function"
-	then
-		return nil
-	end
-
-	local Success, Objects = pcall(getgc, true)
-
-	if not Success or type(Objects) ~= "table" then
-		return nil
-	end
-
-	for Index = 1, #Objects do
-		local Function = Objects[Index]
-
-		if type(Function) == "function" then
-			local Source = ""
-
-			if type(debug.getinfo) == "function" then
-				local InfoSuccess, Info = pcall(debug.getinfo, Function)
-
-				if InfoSuccess and type(Info) == "table" then
-					Source = tostring(Info.source or Info.short_src or "")
-				end
-			end
-
-			if string.find(Source, "HandleInteractionPrompts", 1, true) then
-				local UpvalueSuccess, Upvalues = pcall(debug.getupvalues, Function)
-
-				if UpvalueSuccess and type(Upvalues) == "table" then
-					for _, Value in Upvalues do
-						if isYellModule(Value) then
-							YellPatchState.LiveModule = Value
-							return Value
-						end
-					end
-				end
-			end
-		end
-	end
-
-	return nil
-end
-
-local function getYellModule()
-	local LiveModule = findLiveYellModule()
-
-	if LiveModule then
-		return LiveModule
 	end
 
 	local DirectStorage = game:GetService("ReplicatedStorage")
@@ -1265,7 +1330,7 @@ end
 YellPatchState.RefreshNoDelayTargets = function()
 	table.clear(YellPatchState.NoDelayTargets)
 
-	if type(getgc) ~= "function"
+	if type(getconnections) ~= "function"
 		or type(debug) ~= "table"
 		or type(debug.getupvalues) ~= "function"
 		or type(debug.setupvalue) ~= "function"
@@ -1279,13 +1344,26 @@ YellPatchState.RefreshNoDelayTargets = function()
 		return false
 	end
 
-	local Success, Objects = pcall(getgc, true)
+	if YellPatchState.NoDelayDiscoveryAttempted then
+		return false
+	end
+
+	YellPatchState.NoDelayDiscoveryAttempted = true
+	local Success, Objects = pcall(getconnections, UserInputService.InputBegan)
 
 	if not Success or type(Objects) ~= "table" then
 		return false
 	end
 
-	for _, Function in pairs(Objects) do
+	for _, Connection in pairs(Objects) do
+		local FunctionSuccess, Function = pcall(function()
+			return Connection.Function
+		end)
+
+		if not FunctionSuccess then
+			Function = nil
+		end
+
 		if type(Function) == "function" then
 			local UpvalueSuccess, Upvalues = pcall(debug.getupvalues, Function)
 
@@ -1432,6 +1510,7 @@ YellPatchState.SetNoDelayEnabled = function(Enabled)
 	Environment.NotorietyNoYellDelayEnabled = Enabled == true
 
 	if Environment.NotorietyNoYellDelayEnabled then
+		YellPatchState.NoDelayDiscoveryAttempted = false
 		YellPatchState.RefreshNoDelayTargets()
 		YellPatchState.ApplyNoDelay()
 		YellPatchState.ConnectNoDelaySignals()
@@ -1716,148 +1795,6 @@ if PoliceFolder then
 	Environment.NotorietyPoliceHitboxConnection = PoliceConnection
 end
 
-local SilentAimMouse = LocalPlayer:GetMouse()
-local SilentAimFOVCircleState = {}
-Environment.NotorietySilentAimFOVCircleState = SilentAimFOVCircleState
-
-local function createSilentAimFOVCircle()
-	local Root = Instance.new("ScreenGui")
-	Root.Name = "NotorietySilentAimFOV"
-	Root.DisplayOrder = 2147483647
-	Root.IgnoreGuiInset = true
-	Root.ResetOnSpawn = false
-	Root.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	Root.Enabled = Environment.NotorietySilentAimFOVVisible
-
-	local function CreateRing(Name, Color, Thickness, ZIndex)
-		local Ring = Instance.new("Frame")
-		Ring.Name = Name
-		Ring.AnchorPoint = Vector2.new(0.5, 0.5)
-		Ring.BackgroundTransparency = 1
-		Ring.BorderSizePixel = 0
-		Ring.ZIndex = ZIndex
-		Ring.Parent = Root
-
-		local SegmentCount = 128
-		local SegmentScale = math.sin(math.pi / SegmentCount) * 1.08
-
-		for Index = 0, SegmentCount - 1 do
-			local Angle = Index / SegmentCount * math.pi * 2
-			local Segment = Instance.new("Frame")
-			Segment.Name = "Segment"
-			Segment.AnchorPoint = Vector2.new(0.5, 0.5)
-			Segment.BackgroundColor3 = Color
-			Segment.BorderSizePixel = 0
-			Segment.Position = UDim2.fromScale(
-				0.5 + math.cos(Angle) * 0.5,
-				0.5 + math.sin(Angle) * 0.5
-			)
-			Segment.Rotation = math.deg(Angle) + 90
-			Segment.Size = UDim2.new(SegmentScale, 0, 0, Thickness)
-			Segment.ZIndex = ZIndex
-			Segment.Parent = Ring
-		end
-
-		return Ring
-	end
-
-	local Shadow = CreateRing("Shadow", Color3.fromRGB(0, 0, 0), 4, 1)
-	local Circle = CreateRing("Circle", Color3.fromRGB(255, 255, 255), 2, 2)
-	parentNotorietyGui(Root)
-
-	SilentAimFOVCircleState.Root = Root
-	SilentAimFOVCircleState.Circle = Circle
-	SilentAimFOVCircleState.Shadow = Shadow
-
-	local Connection
-
-	Connection = RunService.RenderStepped:Connect(function()
-		if not isCurrentNotorietyRun() then
-			disconnectBootstrapConnection(Connection)
-
-			if Root.Parent then
-				Root:Destroy()
-			end
-
-			return
-		end
-
-		if Environment.NotorietyUnloaded then
-			return
-		end
-
-		local Position = Vector2.new(SilentAimMouse.X, SilentAimMouse.Y)
-		local Radius = math.clamp(
-			tonumber(Environment.NotorietySilentAimFOV) or 150,
-			25,
-			1000
-		)
-		local Size = UDim2.fromOffset(Radius * 2, Radius * 2)
-		local GuiInset = game:GetService("GuiService"):GetGuiInset()
-		local ScreenPosition = UDim2.fromOffset(Position.X, Position.Y + GuiInset.Y)
-
-		Circle.Position = ScreenPosition
-		Circle.Size = Size
-		Shadow.Position = ScreenPosition
-		Shadow.Size = Size
-		Root.Enabled = Environment.NotorietySilentAimFOVVisible == true
-		SilentAimFOVCircleState.Position = Position
-		SilentAimFOVCircleState.GuiInset = GuiInset
-		SilentAimFOVCircleState.Radius = Radius
-	end)
-
-	SilentAimFOVCircleState.Connection = Connection
-	table.insert(Environment.NotorietyUIConnections, Connection)
-	return true
-end
-
-local function setSilentAimFOVVisible(Visible)
-	Environment.NotorietySilentAimFOVVisible = Visible == true
-
-	if SilentAimFOVCircleState.Root then
-		local Success, SetError = pcall(function()
-			SilentAimFOVCircleState.Root.Enabled = Environment.NotorietySilentAimFOVVisible
-		end)
-
-		if not Success then
-			SilentAimFOVCircleState.LastError = tostring(SetError)
-		end
-	end
-end
-
-createSilentAimFOVCircle()
-
-local LegacySilentAimState = rawget(Environment, "NotorietySilentAimHookState")
-
-if type(LegacySilentAimState) == "table" then
-	LegacySilentAimState.Enabled = false
-	LegacySilentAimState.GetTarget = nil
-	LegacySilentAimState.Mouse = nil
-	LegacySilentAimState.LastTarget = nil
-end
-
-local SilentAimState = rawget(Environment, "NotorietyProjectileAimState")
-
-if type(SilentAimState) ~= "table" then
-	SilentAimState = {}
-	Environment.NotorietyProjectileAimState = SilentAimState
-end
-
-local HasLegacyProjectileHook = SilentAimState.Installed == true
-	and SilentAimState.HookVersion ~= 2
-
-local PreviousWallBangState = rawget(Environment, "NotorietyWallBangHookState")
-
-if type(PreviousWallBangState) == "table" then
-	PreviousWallBangState.Enabled = false
-end
-
-local WallBangState = {
-	Enabled = false,
-	Installed = false,
-}
-Environment.NotorietyWallBangHookState = WallBangState
-
 local PreviousMeleeReachState = rawget(Environment, "NotorietyMeleeReachHookState")
 
 if type(PreviousMeleeReachState) == "table" then
@@ -1883,289 +1820,6 @@ end
 local function setMeleeReachEnabled(Enabled)
 	Environment.NotorietyMeleeReachEnabled = Enabled == true
 	MeleeReachState.Enabled = Environment.NotorietyMeleeReachEnabled
-end
-
-local function getSilentAimPart(Target)
-	local PreferredPart = Environment.NotorietySilentAimHitPart
-	local Part = Target:FindFirstChild(PreferredPart, true)
-
-	if Part and Part:IsA("BasePart") then
-		return Part
-	end
-
-	for _, Name in SILENT_AIM_HIT_PARTS do
-		Part = Target:FindFirstChild(Name, true)
-
-		if Part and Part:IsA("BasePart") then
-			return Part
-		end
-	end
-
-	return nil
-end
-
-local function isSilentAimTargetVisible(Target, Part, Camera)
-	if Environment.NotorietyWallBangEnabled
-		or not Environment.NotorietySilentAimVisibilityCheck
-	then
-		return true
-	end
-
-	local Origin = Camera.CFrame.Position
-	local Direction = Part.Position - Origin
-
-	if Direction.Magnitude <= 0 then
-		return true
-	end
-
-	local Parameters = RaycastParams.new()
-	Parameters.FilterType = Enum.RaycastFilterType.Exclude
-	Parameters.FilterDescendantsInstances = {
-		LocalPlayer.Character,
-		Camera,
-	}
-	Parameters.IgnoreWater = true
-
-	local Result = Workspace:Raycast(Origin, Direction, Parameters)
-	return Result == nil or Result.Instance:IsDescendantOf(Target)
-end
-
-local function getSilentAimTarget()
-	if not Environment.NotorietySilentAimEnabled or Environment.NotorietyUnloaded then
-		return nil
-	end
-
-	local Camera = Workspace.CurrentCamera
-	local Targets = Workspace:FindFirstChild("Police")
-
-	if not Camera or not Targets then
-		return nil
-	end
-
-	local Cursor = Vector2.new(SilentAimMouse.X, SilentAimMouse.Y)
-	local FOV = math.clamp(tonumber(Environment.NotorietySilentAimFOV) or 150, 25, 1000)
-	local BestPart
-	local BestDistance = FOV
-
-	for _, Target in Targets:GetChildren() do
-		local Humanoid = Target:FindFirstChildWhichIsA("Humanoid", true)
-		local Part = getSilentAimPart(Target)
-
-		if Humanoid and Humanoid.Health > 0 and Part then
-			local ScreenPosition, OnScreen = Camera:WorldToViewportPoint(Part.Position)
-
-			if OnScreen and ScreenPosition.Z > 0 then
-				local Distance = (Vector2.new(ScreenPosition.X, ScreenPosition.Y) - Cursor).Magnitude
-
-				if Distance <= BestDistance
-					and isSilentAimTargetVisible(Target, Part, Camera)
-				then
-					BestDistance = Distance
-					BestPart = Part
-				end
-			end
-		end
-	end
-
-	SilentAimState.LastTarget = BestPart
-	return BestPart
-end
-
-local function setSilentAimEnabled(Enabled)
-	Environment.NotorietySilentAimEnabled = Enabled == true
-	SilentAimState.Enabled = Environment.NotorietySilentAimEnabled
-
-	if not SilentAimState.Enabled then
-		SilentAimState.LastTarget = nil
-	end
-end
-
-local function isLocalProjectileConstructor(Function)
-	if type(Function) ~= "function" then
-		return false
-	end
-
-	local InfoSuccess, Info = pcall(debug.getinfo, Function)
-
-	if not InfoSuccess
-		or type(Info) ~= "table"
-		or not string.find(tostring(Info.source or Info.short_src), "LocalGuns", 1, true)
-	then
-		return false
-	end
-
-	local ConstantsSuccess, Constants = pcall(debug.getconstants, Function)
-
-	if not ConstantsSuccess or type(Constants) ~= "table" then
-		return false
-	end
-
-	local Required = {
-		StartPosition = false,
-		TargetPosition = false,
-		Direction = false,
-		Piercing = false,
-		EnemyPiercing = false,
-	}
-
-	for _, Constant in Constants do
-		if Required[Constant] ~= nil then
-			Required[Constant] = true
-		end
-	end
-
-	for _, Found in Required do
-		if not Found then
-			return false
-		end
-	end
-
-	return true
-end
-
-local function redirectProjectile(ShotData)
-	if type(ShotData) ~= "table" or Environment.NotorietyUnloaded then
-		return nil
-	end
-
-	local Target
-
-	if Environment.NotorietySilentAimEnabled then
-		local Success, Result = pcall(getSilentAimTarget)
-
-		if Success then
-			Target = Result
-		end
-	end
-
-	if Target and typeof(ShotData.StartPosition) == "Vector3" then
-		local TargetPosition = Target.Position
-		local Offset = TargetPosition - ShotData.StartPosition
-
-		if Offset.Magnitude > 0 then
-			local Direction = Offset.Unit
-			local HitboxInfo = {}
-
-			if type(ShotData.HitboxInfo) == "table" then
-				for Key, Value in ShotData.HitboxInfo do
-					HitboxInfo[Key] = Value
-				end
-			end
-
-			HitboxInfo.Radius = math.max(tonumber(HitboxInfo.Radius) or 0, 2.5)
-			ShotData.TargetPosition = TargetPosition
-			ShotData.Direction = Direction
-			ShotData.Drop = 0
-			ShotData.HitboxInfo = HitboxInfo
-
-			if type(ShotData.Duration) == "number" then
-				local Speed = math.max(tonumber(ShotData.Speed) or 10, 1)
-				local RequiredDuration = Offset.Magnitude / (Speed * Speed) + 0.25
-				ShotData.Duration = math.max(ShotData.Duration, RequiredDuration)
-			end
-		end
-
-		SilentAimState.LastTarget = Target
-		SilentAimState.RedirectCount = (SilentAimState.RedirectCount or 0) + 1
-	end
-
-	if Environment.NotorietyWallBangEnabled then
-		ShotData.Piercing = math.max(tonumber(ShotData.Piercing) or 0, 9999)
-	end
-
-	return Target
-end
-
-local function findLocalProjectileConstructor()
-	if type(getgc) ~= "function" then
-		return nil
-	end
-
-	local Success, Objects = pcall(getgc, true)
-
-	if not Success or type(Objects) ~= "table" then
-		return nil
-	end
-
-	for _, Object in Objects do
-		if type(Object) == "table" then
-			local Function = rawget(Object, "new")
-
-			if isLocalProjectileConstructor(Function) then
-				return Function
-			end
-		end
-	end
-
-	return nil
-end
-
-local function installProjectileAimHook()
-	SilentAimState.Handler = redirectProjectile
-	SilentAimState.Owner = LoadState
-
-	if HasLegacyProjectileHook then
-		SilentAimState.Enabled = Environment.NotorietySilentAimEnabled
-		return true
-	end
-
-	if SilentAimState.Installed
-		and SilentAimState.HookVersion == 2
-		and type(SilentAimState.Target) == "function"
-		and type(SilentAimState.Wrapper) == "function"
-	then
-		return true
-	end
-
-	if type(hookfunction) ~= "function" then
-		return false
-	end
-
-	local Target = findLocalProjectileConstructor()
-
-	if not Target then
-		return false
-	end
-
-	local Wrapper = function(ShotData, ...)
-		local Handler = SilentAimState.Handler
-
-		if SilentAimState.Enabled and type(Handler) == "function" then
-			local Success, HookError = pcall(Handler, ShotData)
-
-			if not Success then
-				SilentAimState.LastError = tostring(HookError)
-			end
-		end
-
-		return SilentAimState.Original(ShotData, ...)
-	end
-	local Success, Previous = pcall(hookfunction, Target, Wrapper)
-
-	if not Success or type(Previous) ~= "function" then
-		return false
-	end
-
-	SilentAimState.Target = Target
-	SilentAimState.Original = Previous
-	SilentAimState.Wrapper = Wrapper
-	SilentAimState.Handler = redirectProjectile
-	SilentAimState.Enabled = Environment.NotorietySilentAimEnabled
-	SilentAimState.Installed = true
-	SilentAimState.HookVersion = 2
-	return true
-end
-
-local function copyRaycastParameters(Parameters, ExtraIgnore)
-	local Copy = RaycastParams.new()
-	Copy.FilterType = Parameters.FilterType
-	Copy.CollisionGroup = Parameters.CollisionGroup
-	Copy.IgnoreWater = Parameters.IgnoreWater
-	Copy.RespectCanCollide = Parameters.RespectCanCollide
-	local Ignore = table.clone(Parameters.FilterDescendantsInstances)
-	table.insert(Ignore, ExtraIgnore)
-	Copy.FilterDescendantsInstances = Ignore
-	return Copy
 end
 
 local function isMeleeOverlapParameters(Parameters)
@@ -2197,34 +1851,7 @@ local function dispatchNotorietyNamecall(State, Self, ...)
 
 	local Method = getnamecallmethod()
 
-	if Method == "Raycast" and WallBangState.Enabled then
-		local Arguments = table.pack(...)
-		local Parameters = Arguments[3]
-
-		if typeof(Parameters) == "RaycastParams"
-			and Parameters.CollisionGroup == "Projectile"
-		then
-			local Result = OriginalNamecall(Self, table.unpack(Arguments, 1, Arguments.n))
-			local Attempts = 0
-
-			while Result and Result.Instance and Attempts < 32 do
-				local Hit = Result.Instance
-				local Model = Hit:FindFirstAncestorOfClass("Model")
-				local Humanoid = Model and Model:FindFirstChildWhichIsA("Humanoid")
-
-				if Humanoid then
-					return Result
-				end
-
-				Attempts += 1
-				Parameters = copyRaycastParameters(Parameters, Hit)
-				Arguments[3] = Parameters
-				Result = OriginalNamecall(Self, table.unpack(Arguments, 1, Arguments.n))
-			end
-
-			return Result
-		end
-	elseif Method == "GetPartBoundsInBox" and MeleeReachState.Enabled then
+	if Method == "GetPartBoundsInBox" and MeleeReachState.Enabled then
 		local Arguments = table.pack(...)
 		local Parameters = Arguments[3]
 
@@ -2309,12 +1936,6 @@ local function installNamecallHook()
 	return true
 end
 
-local function installWallBangHook()
-	WallBangState.Enabled = Environment.NotorietyWallBangEnabled
-	WallBangState.Installed = installNamecallHook()
-	return WallBangState.Installed
-end
-
 local function installMeleeReachHook()
 	MeleeReachState.Enabled = Environment.NotorietyMeleeReachEnabled
 	MeleeReachState.Installed = installNamecallHook()
@@ -2337,6 +1958,54 @@ local MaxedValues = {
 	Dodge = 100,
 	Detection = 0,
 }
+
+local MaxValueObjects = setmetatable({}, {
+	__mode = "k",
+})
+local MaxValueCharacter
+
+local function clearMaxValueTracking()
+	for _, Connection in Environment.NotorietyMaxValueConnections do
+		disconnectBootstrapConnection(Connection)
+	end
+
+	table.clear(Environment.NotorietyMaxValueConnections)
+	table.clear(MaxValueObjects)
+	MaxValueCharacter = nil
+end
+
+local function trackMaxValueObject(Object)
+	if not Object:IsA("ValueBase") or MaxedValues[Object.Name] == nil then
+		return
+	end
+
+	MaxValueObjects[Object] = if Object:FindFirstAncestorWhichIsA("Tool") then nil else true
+end
+
+local function setMaxValueCharacter(Character)
+	if Character == MaxValueCharacter then
+		return
+	end
+
+	clearMaxValueTracking()
+
+	if typeof(Character) ~= "Instance" then
+		return
+	end
+
+	MaxValueCharacter = Character
+	processInBatches(queryDescendants(Character, "ValueBase"), trackMaxValueObject, 80)
+	table.insert(
+		Environment.NotorietyMaxValueConnections,
+		Character.DescendantAdded:Connect(trackMaxValueObject)
+	)
+	table.insert(
+		Environment.NotorietyMaxValueConnections,
+		Character.DescendantRemoving:Connect(function(Object)
+			MaxValueObjects[Object] = nil
+		end)
+	)
+end
 
 local FiniteSupplyCaps = setmetatable({}, {
 	__mode = "k",
@@ -3140,6 +2809,11 @@ local function getLocalGunsEnvironment()
 end
 
 local function patchLoadedWeaponTables()
+	-- Requiring the targeted Data modules is the only supported path. Walking the
+	-- entire LocalGuns environment caused multi-second stalls on some executors.
+	return 0
+
+	--[[ Disabled legacy fallback retained below only for source-history context.
 	local ScriptEnvironment = getLocalGunsEnvironment()
 
 	if not ScriptEnvironment then
@@ -3149,19 +2823,50 @@ local function patchLoadedWeaponTables()
 	local Seen = {}
 	local Patched = 0
 	local Nodes = 0
-	local NodeLimit = 60000
+	local NodeLimit = 12000
+	local Pending = {}
+	local PendingIndex = 1
+	local Discovered = 0
 
-	local function Scan(Value, Depth)
-		if Nodes >= NodeLimit or Depth > 8 or type(Value) ~= "table" then
-			return
-		end
-
-		if Seen[Value] then
+	local function Queue(Value, Depth)
+		if Discovered >= NodeLimit
+			or Depth > 8
+			or type(Value) ~= "table"
+			or Seen[Value]
+		then
 			return
 		end
 
 		Seen[Value] = true
+		Discovered += 1
+		table.insert(Pending, {
+			Value = Value,
+			Depth = Depth,
+		})
+	end
+
+	for _, Value in ScriptEnvironment do
+		if type(Value) == "table" then
+			Queue(Value, 0)
+		elseif type(Value) == "function" then
+			local Upvalues = getFunctionUpvalues(Value)
+
+			if type(Upvalues) == "table" then
+				for _, Item in Upvalues do
+					if type(Item) == "table" then
+						Queue(Item, 0)
+					end
+				end
+			end
+		end
+	end
+
+	while PendingIndex <= #Pending and Nodes < NodeLimit do
+		local Record = Pending[PendingIndex]
+		PendingIndex += 1
 		Nodes += 1
+		local Value = Record.Value
+		local Depth = Record.Depth
 
 		if applyWeaponData(Value) then
 			Patched += 1
@@ -3170,41 +2875,16 @@ local function patchLoadedWeaponTables()
 		patchRuntimeWeaponState(Value)
 
 		for Key, Item in Value do
-			if type(Key) == "table" then
-				Scan(Key, Depth + 1)
-			end
+			Queue(Key, Depth + 1)
+			Queue(Item, Depth + 1)
+		end
 
-			if type(Item) == "table" then
-				Scan(Item, Depth + 1)
-			end
-
-			if Nodes >= NodeLimit then
-				break
-			end
+		if Nodes % 100 == 0 then
+			RunService.Heartbeat:Wait()
 		end
 	end
 
-	for _, Value in ScriptEnvironment do
-		if type(Value) == "table" then
-			Scan(Value, 0)
-		elseif type(Value) == "function" then
-			local Upvalues = getFunctionUpvalues(Value)
-
-			if type(Upvalues) == "table" then
-				for _, Item in Upvalues do
-					if type(Item) == "table" then
-						Scan(Item, 0)
-					end
-				end
-			end
-		end
-
-		if Nodes >= NodeLimit then
-			break
-		end
-	end
-
-	return Patched
+	return Patched ]]
 end
 
 local function queueLoadedWeaponFallback()
@@ -3215,17 +2895,19 @@ local function queueLoadedWeaponFallback()
 	WeaponState.FallbackQueued = true
 
 	task.delay(0.25, function()
-		WeaponState.FallbackQueued = false
-
 		if not shouldApplyWeaponData() then
+			WeaponState.FallbackQueued = false
 			return
 		end
 
-		if patchLoadedWeaponTables() > 0 then
+		local Patched = patchLoadedWeaponTables()
+		WeaponState.FallbackQueued = false
+
+		if Patched > 0 then
 			WeaponState.FallbackAttempts = 0
-		elseif WeaponState.RequireUnavailable and WeaponState.FallbackAttempts < 20 then
+		elseif WeaponState.RequireUnavailable and WeaponState.FallbackAttempts < 4 then
 			WeaponState.FallbackAttempts += 1
-			task.delay(0.75, queueLoadedWeaponFallback)
+			task.delay(2, queueLoadedWeaponFallback)
 		else
 			WeaponState.FallbackAttempts = 0
 		end
@@ -3274,8 +2956,6 @@ local function applyWeaponModule(Object)
 
 	if Data then
 		applyWeaponData(Data)
-	else
-		queueLoadedWeaponFallback()
 	end
 end
 
@@ -3284,9 +2964,7 @@ local function trackWeaponContainer(Container)
 		return
 	end
 
-	for _, Object in Container:GetDescendants() do
-		applyWeaponModule(Object)
-	end
+	processInBatches(queryDescendants(Container, "ModuleScript#Data"), applyWeaponModule)
 
 	table.insert(
 		Environment.NotorietyWeaponConnections,
@@ -3298,7 +2976,6 @@ local function trackWeaponContainer(Container)
 			if Object:IsA("ModuleScript") and Object.Name == "Data" then
 				task.defer(function()
 					applyWeaponModule(Object)
-					patchLoadedWeaponTables()
 				end)
 			end
 		end)
@@ -3332,8 +3009,14 @@ local function Apply()
 		return
 	end
 
-	for _, Object in Character:GetDescendants() do
-		if Object:IsA("ValueBase") and not Object:FindFirstAncestorWhichIsA("Tool") then
+	if Character ~= MaxValueCharacter then
+		setMaxValueCharacter(Character)
+	end
+
+	for Object in MaxValueObjects do
+		if Object.Parent == nil then
+			MaxValueObjects[Object] = nil
+		else
 			local Value = MaxedValues[Object.Name]
 
 			if Value ~= nil and typeof(Object.Value) == "number" and Object.Value ~= Value then
@@ -3428,13 +3111,22 @@ local function applyAllWeaponModifications()
 		LocalPlayer.Character,
 	} do
 		if Container then
-			for _, Object in Container:GetDescendants() do
-				applyWeaponModule(Object)
-			end
+			processInBatches(queryDescendants(Container, "ModuleScript#Data"), applyWeaponModule)
 		end
 	end
 
-	patchLoadedWeaponTables()
+end
+
+local function refreshTrackedWeaponModifications()
+	if not Environment.NotorietyWeaponEnabled then
+		return
+	end
+
+	for Data in WeaponState.Backups do
+		applyWeaponData(Data)
+	end
+
+	refreshRuntimeAmmo()
 end
 
 local function setWeaponModificationsEnabled(Enabled)
@@ -3949,10 +3641,6 @@ local function loadNotorietyConfig()
 		NoYellDelay = "NotorietyNoYellDelayEnabled",
 		ItemESP = "NotorietyItemESPEnabled",
 		WeaponMods = "NotorietyWeaponEnabled",
-		SilentAim = "NotorietySilentAimEnabled",
-		SilentAimVisibilityCheck = "NotorietySilentAimVisibilityCheck",
-		SilentAimFOVVisible = "NotorietySilentAimFOVVisible",
-		WallBang = "NotorietyWallBangEnabled",
 		MeleeReachEnabled = "NotorietyMeleeReachEnabled",
 		SawReachEnabled = "NotorietySawReachEnabled",
 		PoliceHeadScaleEnabled = "NotorietyPoliceHeadScaleEnabled",
@@ -3967,19 +3655,15 @@ local function loadNotorietyConfig()
 	end
 
 	if isFiniteNumber(Data.FireDelay) then
-		Environment.NotorietyFireDelay = Data.FireDelay
+		Environment.NotorietyFireDelay = math.clamp(Data.FireDelay, 0, 1)
 	end
 
 	if isFiniteNumber(Data.BoltDuration) then
-		Environment.NotorietyBoltDuration = Data.BoltDuration
+		Environment.NotorietyBoltDuration = math.clamp(Data.BoltDuration, 0, 1)
 	end
 
 	if isFiniteNumber(Data.GunAccuracy) then
 		Environment.NotorietyAccuracy = math.clamp(Data.GunAccuracy, 0, 100)
-	end
-
-	if isFiniteNumber(Data.SilentAimFOV) then
-		Environment.NotorietySilentAimFOV = math.clamp(Data.SilentAimFOV, 25, 1000)
 	end
 
 	if isFiniteNumber(Data.MeleeReach) then
@@ -3994,14 +3678,10 @@ local function loadNotorietyConfig()
 		Environment.NotorietyPoliceHeadScale = math.clamp(Data.PoliceHeadScale, 1, 20)
 	end
 
-	if table.find(SILENT_AIM_HIT_PARTS, Data.SilentAimHitPart) then
-		Environment.NotorietySilentAimHitPart = Data.SilentAimHitPart
-	end
-
 	if isFiniteNumber(Data.EquipmentSpeedMultiplier)
 		and Data.EquipmentSpeedMultiplier > 0
 	then
-		Environment.NotorietyEquipmentSpeedMultiplier = Data.EquipmentSpeedMultiplier
+		Environment.NotorietyEquipmentSpeedMultiplier = math.clamp(Data.EquipmentSpeedMultiplier, 1, 10)
 	end
 
 	for ConfigKey, EnvironmentKey in {
@@ -4010,7 +3690,7 @@ local function loadNotorietyConfig()
 		EquipmentPositionZ = "NotorietyEquipmentPositionZ",
 	} do
 		if isFiniteNumber(Data[ConfigKey]) then
-			Environment[EnvironmentKey] = Data[ConfigKey]
+			Environment[EnvironmentKey] = math.clamp(Data[ConfigKey], -50, 50)
 		end
 	end
 
@@ -4040,12 +3720,6 @@ local function saveNotorietyConfig()
 		FireDelay = Environment.NotorietyFireDelay,
 		BoltDuration = Environment.NotorietyBoltDuration,
 		GunAccuracy = Environment.NotorietyAccuracy,
-		SilentAim = Environment.NotorietySilentAimEnabled,
-		SilentAimFOV = Environment.NotorietySilentAimFOV,
-		SilentAimHitPart = Environment.NotorietySilentAimHitPart,
-		SilentAimVisibilityCheck = Environment.NotorietySilentAimVisibilityCheck,
-		SilentAimFOVVisible = Environment.NotorietySilentAimFOVVisible,
-		WallBang = Environment.NotorietyWallBangEnabled,
 		MeleeReachEnabled = Environment.NotorietyMeleeReachEnabled,
 		MeleeReach = Environment.NotorietyMeleeReach,
 		SawReachEnabled = Environment.NotorietySawReachEnabled,
@@ -4077,9 +3751,6 @@ local function applyLoadedNotorietyConfig()
 	setMeleeReachEnabled(Environment.NotorietyMeleeReachEnabled)
 	setSawReachEnabled(Environment.NotorietySawReachEnabled)
 	setWeaponModificationsEnabled(Environment.NotorietyWeaponEnabled)
-	setSilentAimEnabled(Environment.NotorietySilentAimEnabled)
-	setSilentAimFOVVisible(Environment.NotorietySilentAimFOVVisible)
-	WallBangState.Enabled = Environment.NotorietyWallBangEnabled
 	setPoliceHeadScaleEnabled(Environment.NotorietyPoliceHeadScaleEnabled)
 	setItemESPEnabled(Environment.NotorietyItemESPEnabled)
 	setYellMarkPatchEnabled(Environment.NotorietyInfiniteYellMarkEnabled)
@@ -4087,10 +3758,26 @@ local function applyLoadedNotorietyConfig()
 	YellPatchState.SetNoDelayEnabled(Environment.NotorietyNoYellDelayEnabled)
 	applyEquipmentPlacementSpeed()
 	applyEquipmentPositioning()
+
+	if Environment.NotorietyMeleeReachEnabled then
+		installMeleeReachHook()
+	end
 end
 
-local function setModalInputText(Component, Value)
-	if type(Component) ~= "table" or typeof(Component.Object) ~= "Instance" then
+local function setModalValue(Component, Value)
+	if type(Component) ~= "table" then
+		return
+	end
+
+	if type(Component.Set) == "function" then
+		local Success = pcall(Component.Set, Component, Value)
+
+		if Success then
+			return
+		end
+	end
+
+	if typeof(Component.Object) ~= "Instance" then
 		return
 	end
 
@@ -4108,15 +3795,6 @@ local function createModalUI()
 		Environment.NotorietyToggleUIKey = Enum.KeyCode.RightShift
 	end
 
-	local WindowRoot = Instance.new("ScreenGui")
-	WindowRoot.Name = "NotorietyModal"
-	WindowRoot.IgnoreGuiInset = true
-	WindowRoot.ResetOnSpawn = false
-	WindowRoot.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	parentNotorietyGui(WindowRoot)
-	Environment.NotorietyModalRoot = WindowRoot
-	NotorietyUI.Root = WindowRoot
-
 	local Window = Modal:CreateWindow({
 		Title = "Notoriety",
 		SubTitle = "Gameplay tools",
@@ -4124,8 +3802,16 @@ local function createModalUI()
 		Size = UDim2.fromOffset(560, 430),
 		MinimumSize = Vector2.new(420, 320),
 		Transparency = 0,
-		Parent = WindowRoot,
 	})
+	local WindowRoot = Modal.ScreenGui
+
+	if typeof(WindowRoot) ~= "Instance" then
+		error("VibeUI did not create a ScreenGui root")
+	end
+
+	Environment.NotorietyModalRoot = WindowRoot
+	NotorietyUI.Root = WindowRoot
+	Window:SetToggleKey(Environment.NotorietyToggleUIKey)
 
 	Window:SetTheme("Midnight")
 	Environment.NotorietyWindow = Window
@@ -4182,11 +3868,14 @@ local function createModalUI()
 		end,
 	})
 
-	NotorietyUI.PoliceHeadScaleInput = PoliceTab:New("Input")({
+	NotorietyUI.PoliceHeadScaleSlider = PoliceTab:New("Slider")({
 		Title = "Police Head Scale Amount",
-		Description = "Multiplier for each police Head. Range: 1-20",
-		DefaultText = tostring(Environment.NotorietyPoliceHeadScale),
-		Placeholder = "10",
+		Description = "Multiplier for each police Head",
+		Min = 1,
+		Max = 20,
+		Step = 1,
+		Suffix = "x",
+		DefaultValue = Environment.NotorietyPoliceHeadScale,
 		Callback = function(Value)
 			local Number = tonumber(Value)
 
@@ -4196,7 +3885,6 @@ local function createModalUI()
 
 			Number = math.clamp(Number, 1, 20)
 			Environment.NotorietyPoliceHeadScale = Number
-			setModalInputText(NotorietyUI.PoliceHeadScaleInput, Number)
 
 			if Environment.NotorietyPoliceHeadScaleEnabled then
 				applyPoliceHeadScale()
@@ -4206,7 +3894,6 @@ local function createModalUI()
 		end,
 	})
 
-	local TargetingTab = Window:AddTab("Targeting")
 	local WeaponTab = Window:AddTab("Weapons")
 
 	WeaponTab:New("Toggle")({
@@ -4225,15 +3912,23 @@ local function createModalUI()
 		DefaultValue = Environment.NotorietyMeleeReachEnabled,
 		Callback = function(Enabled)
 			setMeleeReachEnabled(Enabled)
+
+			if Environment.NotorietyMeleeReachEnabled then
+				installMeleeReachHook()
+			end
+
 			saveNotorietyConfig()
 		end,
 	})
 
-	NotorietyUI.MeleeReachInput = WeaponTab:New("Input")({
+	NotorietyUI.MeleeReachSlider = WeaponTab:New("Slider")({
 		Title = "Melee Reach Distance",
-		Description = "Forward reach in studs. Range: 5-100",
-		DefaultText = tostring(Environment.NotorietyMeleeReach),
-		Placeholder = "25",
+		Description = "Forward reach in studs",
+		Min = 5,
+		Max = 100,
+		Step = 1,
+		Suffix = " studs",
+		DefaultValue = Environment.NotorietyMeleeReach,
 		Callback = function(Value)
 			local Number = tonumber(Value)
 
@@ -4243,7 +3938,6 @@ local function createModalUI()
 
 			Number = math.clamp(Number, 5, 100)
 			Environment.NotorietyMeleeReach = Number
-			setModalInputText(NotorietyUI.MeleeReachInput, Number)
 			saveNotorietyConfig()
 		end,
 	})
@@ -4258,11 +3952,14 @@ local function createModalUI()
 		end,
 	})
 
-	NotorietyUI.SawReachInput = WeaponTab:New("Input")({
+	NotorietyUI.SawReachSlider = WeaponTab:New("Slider")({
 		Title = "SAW Reach Distance",
-		Description = "SAW interaction reach in studs. Range: 10-250",
-		DefaultText = tostring(Environment.NotorietySawReach),
-		Placeholder = "25",
+		Description = "SAW interaction reach in studs",
+		Min = 10,
+		Max = 250,
+		Step = 1,
+		Suffix = " studs",
+		DefaultValue = Environment.NotorietySawReach,
 		Callback = function(Value)
 			local Number = tonumber(Value)
 
@@ -4272,94 +3969,23 @@ local function createModalUI()
 
 			Number = math.clamp(Number, 10, 250)
 			Environment.NotorietySawReach = Number
-			setModalInputText(NotorietyUI.SawReachInput, Number)
 
 			if Environment.NotorietySawReachEnabled then
-				setSawReachEnabled(true)
+				refreshTrackedWeaponModifications()
 			end
 
 			saveNotorietyConfig()
 		end,
 	})
 
-	TargetingTab:New("Toggle")({
-		Title = "Silent Aim",
-		Description = "Redirects shots to the closest police target inside the configured FOV",
-		DefaultValue = Environment.NotorietySilentAimEnabled,
-		Callback = function(Enabled)
-			setSilentAimEnabled(Enabled)
-			saveNotorietyConfig()
-		end,
-	})
-
-	NotorietyUI.SilentAimFOVInput = TargetingTab:New("Input")({
-		Title = "Silent Aim FOV",
-		Description = "Targeting radius in screen pixels. Range: 25-1000",
-		DefaultText = tostring(Environment.NotorietySilentAimFOV),
-		Placeholder = "150",
-		Callback = function(Value)
-			local Number = tonumber(Value)
-
-			if not isFiniteNumber(Number) then
-				return
-			end
-
-			Number = math.clamp(Number, 25, 1000)
-			Environment.NotorietySilentAimFOV = Number
-			setModalInputText(NotorietyUI.SilentAimFOVInput, Number)
-			saveNotorietyConfig()
-		end,
-	})
-
-	TargetingTab:New("Toggle")({
-		Title = "Show Silent Aim FOV",
-		Description = "Draws the targeting radius around the mouse cursor",
-		DefaultValue = Environment.NotorietySilentAimFOVVisible,
-		Callback = function(Enabled)
-			setSilentAimFOVVisible(Enabled)
-			saveNotorietyConfig()
-		end,
-	})
-
-	TargetingTab:New("Dropdown")({
-		Title = "Silent Aim Hit Part",
-		Description = "Body part used as the redirected shot destination",
-		Options = SILENT_AIM_HIT_PARTS,
-		Default = Environment.NotorietySilentAimHitPart,
-		Callback = function(Value)
-			if table.find(SILENT_AIM_HIT_PARTS, Value) then
-				Environment.NotorietySilentAimHitPart = Value
-				saveNotorietyConfig()
-			end
-		end,
-	})
-
-	TargetingTab:New("Toggle")({
-		Title = "Silent Aim Visibility Check",
-		Description = "Only redirects shots when the selected target is unobstructed",
-		DefaultValue = Environment.NotorietySilentAimVisibilityCheck,
-		Callback = function(Enabled)
-			Environment.NotorietySilentAimVisibilityCheck = Enabled == true
-			saveNotorietyConfig()
-		end,
-	})
-
-	WeaponTab:New("Toggle")({
-		Title = "Wall Bang",
-		Description = "Lets weapon projectiles pass through map geometry and shields",
-		DefaultValue = Environment.NotorietyWallBangEnabled,
-		Callback = function(Enabled)
-			Environment.NotorietyWallBangEnabled = Enabled == true
-			WallBangState.Enabled = Environment.NotorietyWallBangEnabled
-			saveNotorietyConfig()
-		end,
-	})
-
-	NotorietyUI.FireDelayInput = WeaponTab:New("Input")({
+	NotorietyUI.FireDelaySlider = WeaponTab:New("Slider")({
 		Title = "Fire Delay",
 		Description = "Shot cooldown in seconds. Default: 0.01",
-		DefaultText = tostring(Environment.NotorietyFireDelay),
-		Placeholder = "0.01",
+		Min = 0,
+		Max = 1,
+		Step = 0.001,
+		Suffix = "s",
+		DefaultValue = math.clamp(Environment.NotorietyFireDelay, 0, 1),
 		Callback = function(Value)
 			local Number = tonumber(Value)
 
@@ -4367,21 +3993,22 @@ local function createModalUI()
 				return
 			end
 
-			Environment.NotorietyFireDelay = Number
+			Environment.NotorietyFireDelay = math.clamp(Number, 0, 1)
 
-			if Environment.NotorietyWeaponEnabled then
-				applyAllWeaponModifications()
-			end
+			refreshTrackedWeaponModifications()
 
 			saveNotorietyConfig()
 		end,
 	})
 
-	NotorietyUI.BoltDurationInput = WeaponTab:New("Input")({
+	NotorietyUI.BoltDurationSlider = WeaponTab:New("Slider")({
 		Title = "Bolt Duration",
 		Description = "Bolt animation/tween duration in seconds. Default: 0.001",
-		DefaultText = tostring(Environment.NotorietyBoltDuration),
-		Placeholder = "0.001",
+		Min = 0,
+		Max = 1,
+		Step = 0.001,
+		Suffix = "s",
+		DefaultValue = math.clamp(Environment.NotorietyBoltDuration, 0, 1),
 		Callback = function(Value)
 			local Number = tonumber(Value)
 
@@ -4389,21 +4016,22 @@ local function createModalUI()
 				return
 			end
 
-			Environment.NotorietyBoltDuration = Number
+			Environment.NotorietyBoltDuration = math.clamp(Number, 0, 1)
 
-			if Environment.NotorietyWeaponEnabled then
-				applyAllWeaponModifications()
-			end
+			refreshTrackedWeaponModifications()
 
 			saveNotorietyConfig()
 		end,
 	})
 
-	NotorietyUI.AccuracyInput = WeaponTab:New("Input")({
+	NotorietyUI.AccuracySlider = WeaponTab:New("Slider")({
 		Title = "Gun Accuracy",
-		Description = "0-100, default: 100. Updates live weapon spread immediately.",
-		DefaultText = tostring(Environment.NotorietyAccuracy),
-		Placeholder = "100",
+		Description = "Updates live weapon spread immediately",
+		Min = 0,
+		Max = 100,
+		Step = 1,
+		Suffix = "%",
+		DefaultValue = Environment.NotorietyAccuracy,
 		Callback = function(Value)
 			local Number = tonumber(Value)
 
@@ -4413,11 +4041,8 @@ local function createModalUI()
 
 			Number = math.clamp(Number, 0, 100)
 			Environment.NotorietyAccuracy = Number
-			setModalInputText(NotorietyUI.AccuracyInput, Number)
 
-			if Environment.NotorietyWeaponEnabled then
-				applyAllWeaponModifications()
-			end
+			refreshTrackedWeaponModifications()
 
 			saveNotorietyConfig()
 		end,
@@ -4430,13 +4055,11 @@ local function createModalUI()
 			Environment.NotorietyFireDelay = 0.01
 			Environment.NotorietyBoltDuration = 0.001
 			Environment.NotorietyAccuracy = 100
-			setModalInputText(NotorietyUI.FireDelayInput, "0.01")
-			setModalInputText(NotorietyUI.BoltDurationInput, "0.001")
-			setModalInputText(NotorietyUI.AccuracyInput, "100")
+			setModalValue(NotorietyUI.FireDelaySlider, 0.01)
+			setModalValue(NotorietyUI.BoltDurationSlider, 0.001)
+			setModalValue(NotorietyUI.AccuracySlider, 100)
 
-			if Environment.NotorietyWeaponEnabled then
-				applyAllWeaponModifications()
-			end
+			refreshTrackedWeaponModifications()
 
 			saveNotorietyConfig()
 		end,
@@ -4462,24 +4085,32 @@ local function createModalUI()
 		DefaultValue = Environment.NotorietyEquipmentSpeedEnabled,
 		Callback = function(Enabled)
 			Environment.NotorietyEquipmentSpeedEnabled = Enabled == true
+
+			if Environment.NotorietyEquipmentSpeedEnabled then
+				EquipmentSpeedState.DiscoveryAttempted = false
+			end
+
 			applyEquipmentPlacementSpeed()
 			saveNotorietyConfig()
 		end,
 	})
 
-	NotorietyUI.EquipmentSpeedInput = EquipmentTab:New("Input")({
+	NotorietyUI.EquipmentSpeedSlider = EquipmentTab:New("Slider")({
 		Title = "Placement Speed",
 		Description = "Default: 2x. Use 1 for normal speed",
-		DefaultText = tostring(Environment.NotorietyEquipmentSpeedMultiplier),
-		Placeholder = "2",
+		Min = 1,
+		Max = 10,
+		Step = 0.1,
+		Suffix = "x",
+		DefaultValue = math.clamp(Environment.NotorietyEquipmentSpeedMultiplier, 1, 10),
 		Callback = function(Value)
 			local Number = tonumber(Value)
 
-			if not isFiniteNumber(Number) or Number <= 0 then
+			if not isFiniteNumber(Number) then
 				return
 			end
 
-			Environment.NotorietyEquipmentSpeedMultiplier = Number
+			Environment.NotorietyEquipmentSpeedMultiplier = math.clamp(Number, 1, 10)
 
 			if Environment.NotorietyEquipmentSpeedEnabled then
 				applyEquipmentPlacementSpeed()
@@ -4494,7 +4125,7 @@ local function createModalUI()
 		Description = "Resets the multiplier to 2x",
 		Callback = function()
 			Environment.NotorietyEquipmentSpeedMultiplier = 2
-			setModalInputText(NotorietyUI.EquipmentSpeedInput, "2")
+			setModalValue(NotorietyUI.EquipmentSpeedSlider, 2)
 
 			if Environment.NotorietyEquipmentSpeedEnabled then
 				applyEquipmentPlacementSpeed()
@@ -4515,11 +4146,14 @@ local function createModalUI()
 		end,
 	})
 
-	NotorietyUI.EquipmentPositionXInput = EquipmentTab:New("Input")({
+	NotorietyUI.EquipmentPositionXSlider = EquipmentTab:New("Slider")({
 		Title = "Left / Right Offset",
 		Description = "Positive = right, negative = left",
-		DefaultText = tostring(Environment.NotorietyEquipmentPositionX),
-		Placeholder = "0",
+		Min = -50,
+		Max = 50,
+		Step = 0.5,
+		Suffix = " studs",
+		DefaultValue = math.clamp(Environment.NotorietyEquipmentPositionX, -50, 50),
 		Callback = function(Value)
 			local Number = tonumber(Value)
 
@@ -4527,17 +4161,20 @@ local function createModalUI()
 				return
 			end
 
-			Environment.NotorietyEquipmentPositionX = Number
+			Environment.NotorietyEquipmentPositionX = math.clamp(Number, -50, 50)
 			applyEquipmentPositioning()
 			saveNotorietyConfig()
 		end,
 	})
 
-	NotorietyUI.EquipmentPositionYInput = EquipmentTab:New("Input")({
+	NotorietyUI.EquipmentPositionYSlider = EquipmentTab:New("Slider")({
 		Title = "Up / Down Offset",
 		Description = "Positive = up, negative = down",
-		DefaultText = tostring(Environment.NotorietyEquipmentPositionY),
-		Placeholder = "0",
+		Min = -50,
+		Max = 50,
+		Step = 0.5,
+		Suffix = " studs",
+		DefaultValue = math.clamp(Environment.NotorietyEquipmentPositionY, -50, 50),
 		Callback = function(Value)
 			local Number = tonumber(Value)
 
@@ -4545,17 +4182,20 @@ local function createModalUI()
 				return
 			end
 
-			Environment.NotorietyEquipmentPositionY = Number
+			Environment.NotorietyEquipmentPositionY = math.clamp(Number, -50, 50)
 			applyEquipmentPositioning()
 			saveNotorietyConfig()
 		end,
 	})
 
-	NotorietyUI.EquipmentPositionZInput = EquipmentTab:New("Input")({
+	NotorietyUI.EquipmentPositionZSlider = EquipmentTab:New("Slider")({
 		Title = "Forward / Back Offset",
 		Description = "Positive = forward, negative = back",
-		DefaultText = tostring(Environment.NotorietyEquipmentPositionZ),
-		Placeholder = "0",
+		Min = -50,
+		Max = 50,
+		Step = 0.5,
+		Suffix = " studs",
+		DefaultValue = math.clamp(Environment.NotorietyEquipmentPositionZ, -50, 50),
 		Callback = function(Value)
 			local Number = tonumber(Value)
 
@@ -4563,7 +4203,7 @@ local function createModalUI()
 				return
 			end
 
-			Environment.NotorietyEquipmentPositionZ = Number
+			Environment.NotorietyEquipmentPositionZ = math.clamp(Number, -50, 50)
 			applyEquipmentPositioning()
 			saveNotorietyConfig()
 		end,
@@ -4576,9 +4216,9 @@ local function createModalUI()
 			Environment.NotorietyEquipmentPositionX = 0
 			Environment.NotorietyEquipmentPositionY = 0
 			Environment.NotorietyEquipmentPositionZ = 0
-			setModalInputText(NotorietyUI.EquipmentPositionXInput, "0")
-			setModalInputText(NotorietyUI.EquipmentPositionYInput, "0")
-			setModalInputText(NotorietyUI.EquipmentPositionZInput, "0")
+			setModalValue(NotorietyUI.EquipmentPositionXSlider, 0)
+			setModalValue(NotorietyUI.EquipmentPositionYSlider, 0)
+			setModalValue(NotorietyUI.EquipmentPositionZSlider, 0)
 			applyEquipmentPositioning()
 			saveNotorietyConfig()
 		end,
@@ -4613,19 +4253,6 @@ local function createModalUI()
 	})
 
 	Window:SetTab("Main")
-
-	table.insert(
-		Environment.NotorietyUIConnections,
-		UserInputService.InputBegan:Connect(function(Input, Processed)
-			if Processed or Environment.NotorietyUnloaded then
-				return
-			end
-
-			if Modal:IsCorrectInput(Input, Environment.NotorietyToggleUIKey) then
-				WindowRoot.Enabled = not WindowRoot.Enabled
-			end
-		end)
-	)
 
 	pcall(function()
 		ContextActionService:UnbindAction("NotorietyKillPolice")
@@ -4683,9 +4310,6 @@ local function unloadNotoriety()
 	Environment.NotorietyUnloaded = true
 	Environment.MaxEverythingEnabled = false
 	Environment.NotorietyWeaponEnabled = false
-	Environment.NotorietySilentAimEnabled = false
-	Environment.NotorietySilentAimFOVVisible = false
-	Environment.NotorietyWallBangEnabled = false
 	Environment.NotorietyMeleeReachEnabled = false
 	Environment.NotorietySawReachEnabled = false
 	Environment.NotorietyPoliceHeadScaleEnabled = false
@@ -4694,24 +4318,7 @@ local function unloadNotoriety()
 	Environment.NotorietyAutoYellEnabled = false
 	Environment.NotorietyNoYellDelayEnabled = false
 	Environment.KillPoliceRunning = false
-	SilentAimState.Enabled = false
-	SilentAimState.LastTarget = nil
-	WallBangState.Enabled = false
 	MeleeReachState.Enabled = false
-
-	if SilentAimFOVCircleState.Root then
-		pcall(function()
-			SilentAimFOVCircleState.Root:Destroy()
-		end)
-	end
-
-	SilentAimFOVCircleState.Root = nil
-	SilentAimFOVCircleState.Circle = nil
-	SilentAimFOVCircleState.Shadow = nil
-	SilentAimFOVCircleState.Connection = nil
-
-	SilentAimState.Handler = nil
-	SilentAimState.Owner = nil
 
 	if NamecallState.Owner == LoadState then
 		NamecallState.Dispatch = nil
@@ -4732,6 +4339,7 @@ local function unloadNotoriety()
 
 	disconnectConnections(Environment.NotorietyWeaponConnections)
 	disconnectConnections(Environment.NotorietyUIConnections)
+	clearMaxValueTracking()
 
 	if type(Environment.NotorietyGetAmmoWrappers) == "table" then
 		for State, Record in Environment.NotorietyGetAmmoWrappers do
@@ -4847,34 +4455,12 @@ HeartbeatConnection = RunService.Heartbeat:Connect(function(DeltaTime)
 			applyYellMarkPatch()
 		end
 
-		if Environment.NotorietySilentAimEnabled and not SilentAimState.Installed then
-			installProjectileAimHook()
-		end
-
-		if Environment.NotorietyWallBangEnabled and not WallBangState.Installed then
-			installWallBangHook()
-		end
-
-		if Environment.NotorietyMeleeReachEnabled and not MeleeReachState.Installed then
-			installMeleeReachHook()
-		end
-
 		if Environment.NotorietyItemESPEnabled
 			and (ItemESPState.Folder == nil or ItemESPState.Folder.Parent == nil)
 		then
 			startItemESP()
 		end
 
-		YellPatchState.RetryRefresh = (YellPatchState.RetryRefresh or 0) + 1
-
-		if Environment.NotorietyNoYellDelayEnabled
-			and #YellPatchState.NoDelayTargets == 0
-			and YellPatchState.RetryRefresh >= 3
-		then
-			YellPatchState.RetryRefresh = 0
-			YellPatchState.RefreshNoDelayTargets()
-			YellPatchState.ApplyNoDelay()
-		end
 	end
 
 	if not Environment.NotorietyWeaponEnabled then
@@ -4920,6 +4506,8 @@ CharacterConnection = LocalPlayer.CharacterAdded:Connect(function(Character)
 	table.clear(YellPatchState.TargetParts)
 	table.clear(YellPatchState.SkillCache)
 	table.clear(YellPatchState.AutoSeen)
+	EquipmentSpeedState.DiscoveryAttempted = false
+	YellPatchState.NoDelayDiscoveryAttempted = false
 
 	if Environment.NotorietyNoYellDelayEnabled then
 		YellPatchState.RefreshNoDelayTargets()
@@ -4933,6 +4521,7 @@ end)
 
 Environment.MaxEverythingCharacterConnection = CharacterConnection
 
+setMaxValueCharacter(LocalPlayer.Character)
 Apply()
 
 startupCheckpoint("startup completion")

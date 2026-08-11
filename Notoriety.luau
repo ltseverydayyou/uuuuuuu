@@ -87,6 +87,7 @@ local RunService = ServiceResolver.cs("RunService", Reference)
 local CollectionService = ServiceResolver.cs("CollectionService", Reference)
 local ContextActionService = ServiceResolver.cs("ContextActionService", Reference)
 local UserInputService = ServiceResolver.cs("UserInputService", Reference)
+local HttpService = ServiceResolver.cs("HttpService", Reference)
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -98,80 +99,22 @@ local Event = Remotes:WaitForChild("Damage", math.huge)
 local NotorietyUI = {}
 
 do
-	local WindUISource = game:HttpGet(
-		"https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"
+	local ModalSource = game:HttpGet(
+		"https://github.com/yeku/Modal/releases/latest/download/main.lua"
 	)
-	local WindUIInputPatchCount
-	WindUISource, WindUIInputPatchCount = WindUISource:gsub(
-		"if not ao then\nal%.Frame%.Frame%.TextBox%.Text=an\nend",
-		"if not ao then pcall(function() al.Frame.Frame.TextBox.Text=an end) end",
-		1
-	)
+	local ModalChunk, ModalCompileError = loadstring(ModalSource, "@Modal.lua")
 
-	if WindUIInputPatchCount ~= 1 then
-		error("WindUI input compatibility patch failed")
+	if type(ModalChunk) ~= "function" then
+		error("Modal compile failed: " .. tostring(ModalCompileError))
 	end
 
-	local WindUIFontAddPatchCount
-	WindUISource, WindUIFontAddPatchCount = WindUISource:gsub(
-		"function r%.AddFontObject%(u%)\ntable%.insert%(r%.FontObjects,u%)\nr%.UpdateFont%(r%.Font%)\nend",
-		"function r.AddFontObject(u)\ntable.insert(r.FontObjects,u)\npcall(function() u.FontFace=Font.new(r.Font,u.FontFace.Weight,u.FontFace.Style) end)\nend",
-		1
-	)
+	local ModalSuccess, ModalResult = pcall(ModalChunk)
 
-	if WindUIFontAddPatchCount ~= 1 then
-		error("WindUI font add compatibility patch failed")
+	if not ModalSuccess or type(ModalResult) ~= "table" then
+		error("Modal load failed: " .. tostring(ModalResult))
 	end
 
-	local WindUIFontUpdatePatchCount
-	WindUISource, WindUIFontUpdatePatchCount = WindUISource:gsub(
-		"x%.FontFace=Font%.new%(u,x%.FontFace%.Weight,x%.FontFace%.Style%)",
-		"pcall(function() x.FontFace=Font.new(u,x.FontFace.Weight,x.FontFace.Style) end)",
-		1
-	)
-
-	if WindUIFontUpdatePatchCount ~= 1 then
-		error("WindUI font update compatibility patch failed")
-	end
-
-	local WindUIChunk, WindUICompileError = loadstring(WindUISource, "@WindUI.lua")
-
-	if type(WindUIChunk) ~= "function" then
-		error("WindUI compile failed: " .. tostring(WindUICompileError))
-	end
-
-	local WindUISuccess, WindUIResult = pcall(WindUIChunk)
-
-	if not WindUISuccess or type(WindUIResult) ~= "table" then
-		error("WindUI load failed: " .. tostring(WindUIResult))
-	end
-
-	NotorietyUI.Library = WindUIResult
-	NotorietyUI.ProtectedRoots = {
-		ScreenGui = "WindUI",
-		NotificationGui = "WindUI/Notifications",
-		DropdownGui = "WindUI/Dropdowns",
-		TooltipGui = "WindUI/Tooltips",
-	}
-
-	for Key, Name in NotorietyUI.ProtectedRoots do
-		local Root = WindUIResult[Key]
-
-		if typeof(Root) ~= "Instance"
-			or not Root:IsA("ScreenGui")
-		then
-			error("WindUI root unavailable for UIProtector: " .. tostring(Key))
-		end
-
-		if UIProtector.protectUI(Root, {
-			name = Name,
-			harden = true,
-			deep = true,
-			watch = true,
-		}) ~= Root then
-			error("UIProtector failed to protect WindUI root: " .. tostring(Key))
-		end
-	end
+	NotorietyUI.Library = ModalResult
 end
 
 if Environment.MaxEverythingConnection then
@@ -247,12 +190,37 @@ if type(Environment.NotorietyUIConnections) == "table" then
 	end
 end
 
+local SILENT_AIM_HIT_PARTS = {
+	"Head",
+	"UpperTorso",
+	"HumanoidRootPart",
+}
+
 Environment.MaxEverythingEnabled = true
 Environment.KillPoliceRunning = false
 Environment.NotorietyWeaponEnabled = true
 Environment.NotorietyFireDelay = tonumber(Environment.NotorietyFireDelay) or 0.01
 Environment.NotorietyBoltDuration = tonumber(Environment.NotorietyBoltDuration) or 0.001
 Environment.NotorietyAccuracy = tonumber(Environment.NotorietyAccuracy) or 100
+Environment.NotorietySilentAimEnabled = Environment.NotorietySilentAimEnabled == true
+Environment.NotorietySilentAimFOV = math.clamp(
+	tonumber(Environment.NotorietySilentAimFOV) or 150,
+	25,
+	1000
+)
+Environment.NotorietySilentAimHitPart = if table.find(
+	SILENT_AIM_HIT_PARTS,
+	Environment.NotorietySilentAimHitPart
+) then Environment.NotorietySilentAimHitPart else "Head"
+Environment.NotorietySilentAimVisibilityCheck = Environment.NotorietySilentAimVisibilityCheck ~= false
+Environment.NotorietySilentAimFOVVisible = Environment.NotorietySilentAimFOVVisible ~= false
+Environment.NotorietyWallBangEnabled = Environment.NotorietyWallBangEnabled == true
+Environment.NotorietyPoliceHeadScaleEnabled = Environment.NotorietyPoliceHeadScaleEnabled == true
+Environment.NotorietyPoliceHeadScale = math.clamp(
+	tonumber(Environment.NotorietyPoliceHeadScale) or 1,
+	1,
+	20
+)
 Environment.NotorietyItemESPEnabled = false
 Environment.NotorietyEquipmentSpeedEnabled = Environment.NotorietyEquipmentSpeedEnabled ~= false
 Environment.NotorietyEquipmentSpeedMultiplier = tonumber(Environment.NotorietyEquipmentSpeedMultiplier) or 2
@@ -1181,7 +1149,6 @@ if type(Environment.NotorietyPoliceOriginalSizes) ~= "table" then
 end
 
 local PoliceOriginalSizes = Environment.NotorietyPoliceOriginalSizes
-local PoliceHitboxSize = Vector3.new(10, 10, 10)
 
 local function restorePolicePart(Object)
 	local Original = PoliceOriginalSizes[Object]
@@ -1206,38 +1173,72 @@ local function resizePoliceNPC(NPC)
 	end
 
 	local Head = NPC:FindFirstChild("Head")
-	local Torso = NPC:FindFirstChild("Torso")
-	local Target = Head or Torso
 
-	if Head and Torso then
-		restorePolicePart(Torso)
+	if not Environment.NotorietyPoliceHeadScaleEnabled then
+		if Head and Head:IsA("BasePart") then
+			restorePolicePart(Head)
+		end
+
+		return
 	end
 
-	if Target and Target:IsA("BasePart") then
-		local Original = PoliceOriginalSizes[Target]
+	if Head and Head:IsA("BasePart") then
+		local Original = PoliceOriginalSizes[Head]
 
 		if not Original then
-			PoliceOriginalSizes[Target] = {
-				Size = Target.Size,
-				Transparency = Target.Transparency,
-				Massless = Target.Massless,
-				CanCollide = Target.CanCollide,
+			PoliceOriginalSizes[Head] = {
+				Size = Head.Size,
+				Transparency = Head.Transparency,
+				Massless = Head.Massless,
+				CanCollide = Head.CanCollide,
 			}
 		elseif typeof(Original) == "Vector3" then
-			PoliceOriginalSizes[Target] = {
+			PoliceOriginalSizes[Head] = {
 				Size = Original,
-				Transparency = Target.Transparency,
-				Massless = Target.Massless,
-				CanCollide = Target.CanCollide,
+				Transparency = Head.Transparency,
+				Massless = Head.Massless,
+				CanCollide = Head.CanCollide,
 			}
 		end
 
-		Target.Size = PoliceHitboxSize
-		Target.Transparency = 0.5
-		Target.Massless = true
-		Target.CanCollide = false
+		Original = PoliceOriginalSizes[Head]
+		Head.Size = Original.Size * Environment.NotorietyPoliceHeadScale
+		Head.Transparency = 0.5
+		Head.Massless = true
+		Head.CanCollide = false
 	end
 end
+
+local function applyPoliceHeadScale()
+	local Folder = Workspace:FindFirstChild("Police")
+
+	if not Folder then
+		return
+	end
+
+	if not Environment.NotorietyPoliceHeadScaleEnabled then
+		for Object in PoliceOriginalSizes do
+			pcall(restorePolicePart, Object)
+		end
+
+		return
+	end
+
+	for _, NPC in Folder:GetChildren() do
+		resizePoliceNPC(NPC)
+	end
+end
+
+local function setPoliceHeadScaleEnabled(Enabled)
+	Environment.NotorietyPoliceHeadScaleEnabled = Enabled == true
+	applyPoliceHeadScale()
+end
+
+local PoliceHeadScaleState = {
+	Apply = applyPoliceHeadScale,
+	SetEnabled = setPoliceHeadScaleEnabled,
+}
+Environment.NotorietyPoliceHeadScaleState = PoliceHeadScaleState
 
 local function getPoliceNPC(Object, PoliceFolder)
 	local Current = Object
@@ -1254,10 +1255,6 @@ end
 local PoliceFolder = Workspace:FindFirstChild("Police")
 
 if PoliceFolder then
-	for _, NPC in PoliceFolder:GetChildren() do
-		resizePoliceNPC(NPC)
-	end
-
 	Environment.NotorietyPoliceHitboxConnection = PoliceFolder.DescendantAdded:Connect(
 		function(Object)
 			local NPC = getPoliceNPC(Object, PoliceFolder)
@@ -1268,6 +1265,437 @@ if PoliceFolder then
 		end
 	)
 end
+
+local SilentAimMouse = LocalPlayer:GetMouse()
+local SilentAimFOVCircleState = {}
+Environment.NotorietySilentAimFOVCircleState = SilentAimFOVCircleState
+
+local function createSilentAimFOVCircle()
+	local Parent = game:GetService("CoreGui")
+
+	local Root = Instance.new("ScreenGui")
+	Root.Name = "NotorietySilentAimFOV"
+	Root.DisplayOrder = 2147483647
+	Root.IgnoreGuiInset = true
+	Root.ResetOnSpawn = false
+	Root.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	Root.Enabled = Environment.NotorietySilentAimFOVVisible
+
+	local function CreateRing(Name, Color, Thickness, ZIndex)
+		local Ring = Instance.new("Frame")
+		Ring.Name = Name
+		Ring.AnchorPoint = Vector2.new(0.5, 0.5)
+		Ring.BackgroundTransparency = 1
+		Ring.BorderSizePixel = 0
+		Ring.ZIndex = ZIndex
+		Ring.Parent = Root
+
+		local SegmentCount = 128
+		local SegmentScale = math.sin(math.pi / SegmentCount) * 1.08
+
+		for Index = 0, SegmentCount - 1 do
+			local Angle = Index / SegmentCount * math.pi * 2
+			local Segment = Instance.new("Frame")
+			Segment.Name = "Segment"
+			Segment.AnchorPoint = Vector2.new(0.5, 0.5)
+			Segment.BackgroundColor3 = Color
+			Segment.BorderSizePixel = 0
+			Segment.Position = UDim2.fromScale(
+				0.5 + math.cos(Angle) * 0.5,
+				0.5 + math.sin(Angle) * 0.5
+			)
+			Segment.Rotation = math.deg(Angle) + 90
+			Segment.Size = UDim2.new(SegmentScale, 0, 0, Thickness)
+			Segment.ZIndex = ZIndex
+			Segment.Parent = Ring
+		end
+
+		return Ring
+	end
+
+	local Shadow = CreateRing("Shadow", Color3.fromRGB(0, 0, 0), 4, 1)
+	local Circle = CreateRing("Circle", Color3.fromRGB(255, 255, 255), 2, 2)
+	Root.Parent = Parent
+
+	SilentAimFOVCircleState.Root = Root
+	SilentAimFOVCircleState.Circle = Circle
+	SilentAimFOVCircleState.Shadow = Shadow
+
+	local Connection = RunService.RenderStepped:Connect(function()
+		if Environment.NotorietyUnloaded then
+			return
+		end
+
+		local Position = Vector2.new(SilentAimMouse.X, SilentAimMouse.Y)
+		local Radius = math.clamp(
+			tonumber(Environment.NotorietySilentAimFOV) or 150,
+			25,
+			1000
+		)
+		local Size = UDim2.fromOffset(Radius * 2, Radius * 2)
+		local GuiInset = game:GetService("GuiService"):GetGuiInset()
+		local ScreenPosition = UDim2.fromOffset(Position.X, Position.Y + GuiInset.Y)
+
+		Circle.Position = ScreenPosition
+		Circle.Size = Size
+		Shadow.Position = ScreenPosition
+		Shadow.Size = Size
+		Root.Enabled = Environment.NotorietySilentAimFOVVisible == true
+		SilentAimFOVCircleState.Position = Position
+		SilentAimFOVCircleState.GuiInset = GuiInset
+		SilentAimFOVCircleState.Radius = Radius
+	end)
+
+	SilentAimFOVCircleState.Connection = Connection
+	table.insert(Environment.NotorietyUIConnections, Connection)
+	return true
+end
+
+local function setSilentAimFOVVisible(Visible)
+	Environment.NotorietySilentAimFOVVisible = Visible == true
+
+	if SilentAimFOVCircleState.Root then
+		SilentAimFOVCircleState.Root.Enabled = Environment.NotorietySilentAimFOVVisible
+	end
+end
+
+createSilentAimFOVCircle()
+
+-- Older builds intercepted Mouse.Hit. LocalGuns replaces that value in its
+-- first-person and shoulder calculations, so keep any persistent old hook inert.
+local LegacySilentAimState = rawget(Environment, "NotorietySilentAimHookState")
+
+if type(LegacySilentAimState) == "table" then
+	LegacySilentAimState.Enabled = false
+	LegacySilentAimState.GetTarget = nil
+	LegacySilentAimState.Mouse = nil
+	LegacySilentAimState.LastTarget = nil
+end
+
+local SilentAimState = rawget(Environment, "NotorietyProjectileAimState")
+
+if type(SilentAimState) ~= "table" then
+	SilentAimState = {}
+	Environment.NotorietyProjectileAimState = SilentAimState
+end
+
+local WallBangState = rawget(Environment, "NotorietyWallBangHookState")
+
+if type(WallBangState) ~= "table" then
+	WallBangState = {
+		Installed = false,
+	}
+	Environment.NotorietyWallBangHookState = WallBangState
+end
+
+local function getSilentAimPart(Target)
+	local PreferredPart = Environment.NotorietySilentAimHitPart
+	local Part = Target:FindFirstChild(PreferredPart, true)
+
+	if Part and Part:IsA("BasePart") then
+		return Part
+	end
+
+	for _, Name in SILENT_AIM_HIT_PARTS do
+		Part = Target:FindFirstChild(Name, true)
+
+		if Part and Part:IsA("BasePart") then
+			return Part
+		end
+	end
+
+	return nil
+end
+
+local function isSilentAimTargetVisible(Target, Part, Camera)
+	if Environment.NotorietyWallBangEnabled
+		or not Environment.NotorietySilentAimVisibilityCheck
+	then
+		return true
+	end
+
+	local Origin = Camera.CFrame.Position
+	local Direction = Part.Position - Origin
+
+	if Direction.Magnitude <= 0 then
+		return true
+	end
+
+	local Parameters = RaycastParams.new()
+	Parameters.FilterType = Enum.RaycastFilterType.Exclude
+	Parameters.FilterDescendantsInstances = {
+		LocalPlayer.Character,
+		Camera,
+	}
+	Parameters.IgnoreWater = true
+
+	local Result = Workspace:Raycast(Origin, Direction, Parameters)
+	return Result == nil or Result.Instance:IsDescendantOf(Target)
+end
+
+local function getSilentAimTarget()
+	if not Environment.NotorietySilentAimEnabled or Environment.NotorietyUnloaded then
+		return nil
+	end
+
+	local Camera = Workspace.CurrentCamera
+	local Targets = Workspace:FindFirstChild("Police")
+
+	if not Camera or not Targets then
+		return nil
+	end
+
+	local Cursor = Vector2.new(SilentAimMouse.X, SilentAimMouse.Y)
+	local FOV = math.clamp(tonumber(Environment.NotorietySilentAimFOV) or 150, 25, 1000)
+	local BestPart
+	local BestDistance = FOV
+
+	for _, Target in Targets:GetChildren() do
+		local Humanoid = Target:FindFirstChildWhichIsA("Humanoid", true)
+		local Part = getSilentAimPart(Target)
+
+		if Humanoid and Humanoid.Health > 0 and Part then
+			local ScreenPosition, OnScreen = Camera:WorldToViewportPoint(Part.Position)
+
+			if OnScreen and ScreenPosition.Z > 0 then
+				local Distance = (Vector2.new(ScreenPosition.X, ScreenPosition.Y) - Cursor).Magnitude
+
+				if Distance <= BestDistance
+					and isSilentAimTargetVisible(Target, Part, Camera)
+				then
+					BestDistance = Distance
+					BestPart = Part
+				end
+			end
+		end
+	end
+
+	SilentAimState.LastTarget = BestPart
+	return BestPart
+end
+
+local function setSilentAimEnabled(Enabled)
+	Environment.NotorietySilentAimEnabled = Enabled == true
+	SilentAimState.Enabled = Environment.NotorietySilentAimEnabled
+
+	if not SilentAimState.Enabled then
+		SilentAimState.LastTarget = nil
+	end
+end
+
+local function isLocalProjectileConstructor(Function)
+	if type(Function) ~= "function" then
+		return false
+	end
+
+	local InfoSuccess, Info = pcall(debug.getinfo, Function)
+
+	if not InfoSuccess
+		or type(Info) ~= "table"
+		or not string.find(tostring(Info.source or Info.short_src), "LocalGuns", 1, true)
+	then
+		return false
+	end
+
+	local ConstantsSuccess, Constants = pcall(debug.getconstants, Function)
+
+	if not ConstantsSuccess or type(Constants) ~= "table" then
+		return false
+	end
+
+	local Required = {
+		StartPosition = false,
+		TargetPosition = false,
+		Direction = false,
+		Piercing = false,
+		EnemyPiercing = false,
+	}
+
+	for _, Constant in Constants do
+		if Required[Constant] ~= nil then
+			Required[Constant] = true
+		end
+	end
+
+	for _, Found in Required do
+		if not Found then
+			return false
+		end
+	end
+
+	return true
+end
+
+local function redirectProjectile(ShotData)
+	if type(ShotData) ~= "table" or Environment.NotorietyUnloaded then
+		return nil
+	end
+
+	local Target
+
+	if Environment.NotorietySilentAimEnabled then
+		local Success, Result = pcall(getSilentAimTarget)
+
+		if Success then
+			Target = Result
+		end
+	end
+
+	if Target and typeof(ShotData.StartPosition) == "Vector3" then
+		local TargetPosition = Target.Position
+		local Offset = TargetPosition - ShotData.StartPosition
+
+		if Offset.Magnitude > 0 then
+			local Direction = Offset.Unit
+			ShotData.TargetPosition = TargetPosition
+			ShotData.Direction = Direction
+			ShotData.Drop = 0
+		end
+
+		SilentAimState.LastTarget = Target
+		SilentAimState.RedirectCount = (SilentAimState.RedirectCount or 0) + 1
+	end
+
+	if Environment.NotorietyWallBangEnabled then
+		ShotData.Piercing = math.max(tonumber(ShotData.Piercing) or 0, 9999)
+	end
+
+	return Target
+end
+
+local function findLocalProjectileConstructor()
+	if type(getgc) ~= "function" then
+		return nil
+	end
+
+	local Success, Objects = pcall(getgc, true)
+
+	if not Success or type(Objects) ~= "table" then
+		return nil
+	end
+
+	for _, Object in Objects do
+		if type(Object) == "table" then
+			local Function = rawget(Object, "new")
+
+			if isLocalProjectileConstructor(Function) then
+				return Function
+			end
+		end
+	end
+
+	return nil
+end
+
+local function installProjectileAimHook()
+	if type(hookfunction) ~= "function" then
+		return false
+	end
+
+	local Target = findLocalProjectileConstructor()
+
+	if not Target then
+		return false
+	end
+
+	local Original
+	local Wrapper = function(ShotData, ...)
+		redirectProjectile(ShotData)
+		return Original(ShotData, ...)
+	end
+	local Success, Previous = pcall(hookfunction, Target, Wrapper)
+
+	if not Success or type(Previous) ~= "function" then
+		return false
+	end
+
+	Original = Previous
+	SilentAimState.Target = Target
+	SilentAimState.Original = Previous
+	SilentAimState.Wrapper = Wrapper
+	SilentAimState.RedirectProjectile = redirectProjectile
+	SilentAimState.Enabled = Environment.NotorietySilentAimEnabled
+	SilentAimState.Installed = true
+	return true
+end
+
+local function copyRaycastParameters(Parameters, ExtraIgnore)
+	local Copy = RaycastParams.new()
+	Copy.FilterType = Parameters.FilterType
+	Copy.CollisionGroup = Parameters.CollisionGroup
+	Copy.IgnoreWater = Parameters.IgnoreWater
+	Copy.RespectCanCollide = Parameters.RespectCanCollide
+	local Ignore = table.clone(Parameters.FilterDescendantsInstances)
+	table.insert(Ignore, ExtraIgnore)
+	Copy.FilterDescendantsInstances = Ignore
+	return Copy
+end
+
+local function installWallBangHook()
+	WallBangState.Enabled = Environment.NotorietyWallBangEnabled
+
+	if WallBangState.Installed then
+		return true
+	end
+
+	if type(hookmetamethod) ~= "function"
+		or type(newcclosure) ~= "function"
+		or type(checkcaller) ~= "function"
+		or type(getnamecallmethod) ~= "function"
+	then
+		return false
+	end
+
+	local OriginalNamecall
+	local Hook = newcclosure(function(Self, ...)
+		local Arguments = { ... }
+		local Parameters = Arguments[3]
+
+		if WallBangState.Enabled
+			and not checkcaller()
+			and Self == Workspace
+			and getnamecallmethod() == "Raycast"
+			and typeof(Parameters) == "RaycastParams"
+			and Parameters.CollisionGroup == "Projectile"
+		then
+			local Result = OriginalNamecall(Self, ...)
+			local Attempts = 0
+
+			while Result and Result.Instance and Attempts < 32 do
+				local Hit = Result.Instance
+				local Model = Hit:FindFirstAncestorOfClass("Model")
+				local Humanoid = Model and Model:FindFirstChildWhichIsA("Humanoid")
+
+				if Humanoid then
+					return Result
+				end
+
+				Attempts += 1
+				Parameters = copyRaycastParameters(Parameters, Hit)
+				Arguments[3] = Parameters
+				Result = OriginalNamecall(Self, table.unpack(Arguments))
+			end
+
+			return Result
+		end
+
+		return OriginalNamecall(Self, ...)
+	end)
+	local Success, Previous = pcall(hookmetamethod, game, "__namecall", Hook)
+
+	if not Success or type(Previous) ~= "function" then
+		return false
+	end
+
+	OriginalNamecall = Previous
+	WallBangState.OriginalNamecall = Previous
+	WallBangState.Hook = Hook
+	WallBangState.Installed = true
+	return true
+end
+
+installProjectileAimHook()
+installWallBangHook()
 
 local MaxedValues = {
 	Stamina = MAX_VALUE,
@@ -2320,11 +2748,11 @@ local function runKill()
 		warn(Error)
 	elseif not Environment.NotorietyUnloaded then
 		pcall(function()
-			NotorietyUI.Library:Notify({
+			NotorietyUI.Window:Notify({
 				Title = "Kill Police",
-				Content = string.format("Finished. Killed %d police.", Killed),
-				Icon = "check",
+				Description = string.format("Finished. Killed %d police.", Killed),
 				Duration = 3,
+				Type = "Success",
 			})
 		end)
 	end
@@ -2804,128 +3232,380 @@ end
 
 Environment.NotorietyItemESPController = ItemESPController
 
-local function createWindUI()
-	local WindUI = NotorietyUI.Library
-	local Window = WindUI:CreateWindow({
-		Title = "Notoriety",
-		Folder = "Notoriety",
-		Icon = "crosshair",
-		NewElements = false,
-		Size = UDim2.fromOffset(560, 430),
-		ToggleKey = Enum.KeyCode.RightShift,
-		HideSearchBar = true,
-		OpenButton = {
-			Title = "Notoriety",
-			Enabled = true,
-			Draggable = true,
-			OnlyMobile = false,
-		},
-	})
+local NOTORIETY_CONFIG_FOLDER = "Notoriety"
+local NOTORIETY_CONFIG_PATH = NOTORIETY_CONFIG_FOLDER .. "/default.json"
 
-	Environment.NotorietyWindow = Window
-	NotorietyUI.Window = Window
+local function isFiniteNumber(Value)
+	return type(Value) == "number"
+		and Value == Value
+		and Value ~= math.huge
+		and Value ~= -math.huge
+end
 
-	local ConfigManager = Window.ConfigManager
-	local ConfigName = "default"
-
-	local function saveWindUIConfig()
-		if NotorietyUI.ConfigLoading or not NotorietyUI.Config then
-			return
-		end
-
-		pcall(function()
-			NotorietyUI.Config:Save()
-		end)
+local function getSavedToggleInput(Name, InputType)
+	if type(Name) ~= "string" then
+		return nil
 	end
 
-	NotorietyUI.SaveConfig = saveWindUIConfig
+	local InputEnum = if InputType == "UserInputType"
+		then Enum.UserInputType
+		else Enum.KeyCode
 
-	local MainTab = Window:Tab({
-		Title = "Main",
-		Icon = "house",
-		Border = true,
+	for _, Input in InputEnum:GetEnumItems() do
+		if Input.Name == Name then
+			return Input
+		end
+	end
+
+	return nil
+end
+
+local function isSupportedToggleInput(Value)
+	if typeof(Value) ~= "EnumItem" then
+		return false
+	end
+
+	return table.find(Enum.KeyCode:GetEnumItems(), Value) ~= nil
+		or table.find(Enum.UserInputType:GetEnumItems(), Value) ~= nil
+end
+
+local function loadNotorietyConfig()
+	if type(readfile) ~= "function" then
+		return
+	end
+
+	local Success, Data = pcall(function()
+		return HttpService:JSONDecode(readfile(NOTORIETY_CONFIG_PATH))
+	end)
+
+	if not Success or type(Data) ~= "table" then
+		return
+	end
+
+	local BooleanFields = {
+		InfiniteYellMark = "NotorietyInfiniteYellMarkEnabled",
+		AutoYell = "NotorietyAutoYellEnabled",
+		NoYellDelay = "NotorietyNoYellDelayEnabled",
+		ItemESP = "NotorietyItemESPEnabled",
+		WeaponMods = "NotorietyWeaponEnabled",
+		SilentAim = "NotorietySilentAimEnabled",
+		SilentAimVisibilityCheck = "NotorietySilentAimVisibilityCheck",
+		SilentAimFOVVisible = "NotorietySilentAimFOVVisible",
+		WallBang = "NotorietyWallBangEnabled",
+		PoliceHeadScaleEnabled = "NotorietyPoliceHeadScaleEnabled",
+		EquipmentSpeedEnabled = "NotorietyEquipmentSpeedEnabled",
+		EquipmentPositionEnabled = "NotorietyEquipmentPositionEnabled",
+	}
+
+	for ConfigKey, EnvironmentKey in BooleanFields do
+		if type(Data[ConfigKey]) == "boolean" then
+			Environment[EnvironmentKey] = Data[ConfigKey]
+		end
+	end
+
+	if isFiniteNumber(Data.FireDelay) then
+		Environment.NotorietyFireDelay = Data.FireDelay
+	end
+
+	if isFiniteNumber(Data.BoltDuration) then
+		Environment.NotorietyBoltDuration = Data.BoltDuration
+	end
+
+	if isFiniteNumber(Data.GunAccuracy) then
+		Environment.NotorietyAccuracy = math.clamp(Data.GunAccuracy, 0, 100)
+	end
+
+	if isFiniteNumber(Data.SilentAimFOV) then
+		Environment.NotorietySilentAimFOV = math.clamp(Data.SilentAimFOV, 25, 1000)
+	end
+
+	if isFiniteNumber(Data.PoliceHeadScale) then
+		Environment.NotorietyPoliceHeadScale = math.clamp(Data.PoliceHeadScale, 1, 20)
+	end
+
+	if table.find(SILENT_AIM_HIT_PARTS, Data.SilentAimHitPart) then
+		Environment.NotorietySilentAimHitPart = Data.SilentAimHitPart
+	end
+
+	if isFiniteNumber(Data.EquipmentSpeedMultiplier)
+		and Data.EquipmentSpeedMultiplier > 0
+	then
+		Environment.NotorietyEquipmentSpeedMultiplier = Data.EquipmentSpeedMultiplier
+	end
+
+	for ConfigKey, EnvironmentKey in {
+		EquipmentPositionX = "NotorietyEquipmentPositionX",
+		EquipmentPositionY = "NotorietyEquipmentPositionY",
+		EquipmentPositionZ = "NotorietyEquipmentPositionZ",
+	} do
+		if isFiniteNumber(Data[ConfigKey]) then
+			Environment[EnvironmentKey] = Data[ConfigKey]
+		end
+	end
+
+	local ToggleInput = getSavedToggleInput(Data.ToggleUIKey, Data.ToggleUIInputType)
+
+	if ToggleInput then
+		Environment.NotorietyToggleUIKey = ToggleInput
+	end
+end
+
+local function saveNotorietyConfig()
+	if type(writefile) ~= "function" then
+		return
+	end
+
+	local ToggleInput = Environment.NotorietyToggleUIKey
+	local ToggleInputType = if table.find(Enum.UserInputType:GetEnumItems(), ToggleInput)
+		then "UserInputType"
+		else "KeyCode"
+
+	local Data = {
+		InfiniteYellMark = Environment.NotorietyInfiniteYellMarkEnabled,
+		AutoYell = Environment.NotorietyAutoYellEnabled,
+		NoYellDelay = Environment.NotorietyNoYellDelayEnabled,
+		ItemESP = Environment.NotorietyItemESPEnabled,
+		WeaponMods = Environment.NotorietyWeaponEnabled,
+		FireDelay = Environment.NotorietyFireDelay,
+		BoltDuration = Environment.NotorietyBoltDuration,
+		GunAccuracy = Environment.NotorietyAccuracy,
+		SilentAim = Environment.NotorietySilentAimEnabled,
+		SilentAimFOV = Environment.NotorietySilentAimFOV,
+		SilentAimHitPart = Environment.NotorietySilentAimHitPart,
+		SilentAimVisibilityCheck = Environment.NotorietySilentAimVisibilityCheck,
+		SilentAimFOVVisible = Environment.NotorietySilentAimFOVVisible,
+		WallBang = Environment.NotorietyWallBangEnabled,
+		PoliceHeadScaleEnabled = Environment.NotorietyPoliceHeadScaleEnabled,
+		PoliceHeadScale = Environment.NotorietyPoliceHeadScale,
+		EquipmentSpeedEnabled = Environment.NotorietyEquipmentSpeedEnabled,
+		EquipmentSpeedMultiplier = Environment.NotorietyEquipmentSpeedMultiplier,
+		EquipmentPositionEnabled = Environment.NotorietyEquipmentPositionEnabled,
+		EquipmentPositionX = Environment.NotorietyEquipmentPositionX,
+		EquipmentPositionY = Environment.NotorietyEquipmentPositionY,
+		EquipmentPositionZ = Environment.NotorietyEquipmentPositionZ,
+		ToggleUIKey = if typeof(ToggleInput) == "EnumItem" then ToggleInput.Name else "RightShift",
+		ToggleUIInputType = ToggleInputType,
+	}
+
+	pcall(function()
+		if type(makefolder) == "function"
+			and (type(isfolder) ~= "function" or not isfolder(NOTORIETY_CONFIG_FOLDER))
+		then
+			makefolder(NOTORIETY_CONFIG_FOLDER)
+		end
+
+		writefile(NOTORIETY_CONFIG_PATH, HttpService:JSONEncode(Data))
+	end)
+end
+
+local function setModalInputText(Component, Value)
+	if type(Component) ~= "table" or typeof(Component.Object) ~= "Instance" then
+		return
+	end
+
+	local TextBox = Component.Object:FindFirstChild("Toggle", true)
+
+	if TextBox and TextBox:IsA("TextBox") then
+		TextBox.Text = tostring(Value)
+	end
+end
+
+local function createModalUI()
+	local Modal = NotorietyUI.Library
+
+	if not isSupportedToggleInput(Environment.NotorietyToggleUIKey) then
+		Environment.NotorietyToggleUIKey = Enum.KeyCode.RightShift
+	end
+
+	loadNotorietyConfig()
+	setSilentAimEnabled(Environment.NotorietySilentAimEnabled)
+	setSilentAimFOVVisible(Environment.NotorietySilentAimFOVVisible)
+	WallBangState.Enabled = Environment.NotorietyWallBangEnabled
+	setPoliceHeadScaleEnabled(Environment.NotorietyPoliceHeadScaleEnabled)
+
+	local Window = Modal:CreateWindow({
+		Title = "Notoriety",
+		SubTitle = "Gameplay tools",
+		Icon = "rbxassetid://68073547",
+		Size = UDim2.fromOffset(560, 430),
+		MinimumSize = Vector2.new(420, 320),
+		Transparency = 0,
 	})
 
-	MainTab:Button({
+	Window:SetTheme("Midnight")
+	Environment.NotorietyWindow = Window
+	NotorietyUI.Window = Window
+	NotorietyUI.SaveConfig = saveNotorietyConfig
+
+	local PoliceTab = Window:AddTab("Main")
+
+	PoliceTab:New("Button")({
 		Title = "Kill Police [P]",
-		Desc = "Kills every currently spawned police NPC",
-		Icon = "crosshair",
+		Description = "Kills every currently spawned police NPC",
 		Callback = function()
 			task.spawn(runKill)
 		end,
 	})
 
-	MainTab:Toggle({
-		Flag = "InfiniteYellMark",
+	PoliceTab:New("Toggle")({
 		Title = "Infinite Yell / Mark",
-		Desc = "Targets the full viewport through walls with no distance limit",
-		Value = Environment.NotorietyInfiniteYellMarkEnabled,
+		Description = "Targets the full viewport through walls with no distance limit",
+		DefaultValue = Environment.NotorietyInfiniteYellMarkEnabled,
 		Callback = function(Enabled)
 			setYellMarkPatchEnabled(Enabled)
-			saveWindUIConfig()
+			saveNotorietyConfig()
 		end,
 	})
 
-	MainTab:Toggle({
-		Flag = "AutoYell",
+	PoliceTab:New("Toggle")({
 		Title = "Auto Yell",
-		Desc = "Automatically yells new viewport targets without spamming unchanged targets",
-		Value = Environment.NotorietyAutoYellEnabled,
+		Description = "Automatically yells new viewport targets without spamming unchanged targets",
+		DefaultValue = Environment.NotorietyAutoYellEnabled,
 		Callback = function(Enabled)
 			YellPatchState.SetAutoYellEnabled(Enabled)
-			saveWindUIConfig()
+			saveNotorietyConfig()
 		end,
 	})
 
-	MainTab:Toggle({
-		Flag = "NoYellDelay",
+	PoliceTab:New("Toggle")({
 		Title = "No Yell / Mark Delay",
-		Desc = "Removes the native 0.5 second client yell debounce without per-frame scanning",
-		Value = Environment.NotorietyNoYellDelayEnabled,
+		Description = "Removes the native 0.5 second client yell debounce without per-frame scanning",
+		DefaultValue = Environment.NotorietyNoYellDelayEnabled,
 		Callback = function(Enabled)
 			YellPatchState.SetNoDelayEnabled(Enabled)
-			saveWindUIConfig()
+			saveNotorietyConfig()
 		end,
 	})
 
-	MainTab:Toggle({
-		Flag = "ItemESP",
-		Title = "Item ESP",
-		Desc = "Highlights supported loot and interaction objects",
-		Value = Environment.NotorietyItemESPEnabled,
+	PoliceTab:New("Toggle")({
+		Title = "Police Head Scale",
+		Description = "Enlarges Head parts inside the Police folder",
+		DefaultValue = Environment.NotorietyPoliceHeadScaleEnabled,
 		Callback = function(Enabled)
-			setItemESPEnabled(Enabled)
-			saveWindUIConfig()
+			setPoliceHeadScaleEnabled(Enabled)
+			saveNotorietyConfig()
 		end,
 	})
 
-	local WeaponTab = Window:Tab({
-		Title = "Weapon Mods",
-		Icon = "crosshair",
-		Border = true,
+	NotorietyUI.PoliceHeadScaleInput = PoliceTab:New("Input")({
+		Title = "Police Head Scale Amount",
+		Description = "Multiplier for each police Head. Range: 1-20",
+		DefaultText = tostring(Environment.NotorietyPoliceHeadScale),
+		Placeholder = "10",
+		Callback = function(Value)
+			local Number = tonumber(Value)
+
+			if not isFiniteNumber(Number) then
+				return
+			end
+
+			Number = math.clamp(Number, 1, 20)
+			Environment.NotorietyPoliceHeadScale = Number
+			setModalInputText(NotorietyUI.PoliceHeadScaleInput, Number)
+
+			if Environment.NotorietyPoliceHeadScaleEnabled then
+				applyPoliceHeadScale()
+			end
+
+			saveNotorietyConfig()
+		end,
 	})
 
-	WeaponTab:Toggle({
-		Flag = "WeaponMods",
+	local TargetingTab = Window:AddTab("Targeting")
+	local WeaponTab = Window:AddTab("Weapons")
+
+	WeaponTab:New("Toggle")({
 		Title = "Weapon Mods",
-		Desc = "Enables the weapon stat and runtime modifications",
-		Value = Environment.NotorietyWeaponEnabled,
+		Description = "Enables the weapon stat and runtime modifications",
+		DefaultValue = Environment.NotorietyWeaponEnabled,
 		Callback = function(Enabled)
 			setWeaponModificationsEnabled(Enabled)
-			saveWindUIConfig()
+			saveNotorietyConfig()
 		end,
 	})
 
-	NotorietyUI.FireDelayInput = WeaponTab:Input({
-		Flag = "FireDelay",
+	TargetingTab:New("Toggle")({
+		Title = "Silent Aim",
+		Description = "Redirects shots to the closest police target inside the configured FOV",
+		DefaultValue = Environment.NotorietySilentAimEnabled,
+		Callback = function(Enabled)
+			setSilentAimEnabled(Enabled)
+			saveNotorietyConfig()
+		end,
+	})
+
+	NotorietyUI.SilentAimFOVInput = TargetingTab:New("Input")({
+		Title = "Silent Aim FOV",
+		Description = "Targeting radius in screen pixels. Range: 25-1000",
+		DefaultText = tostring(Environment.NotorietySilentAimFOV),
+		Placeholder = "150",
+		Callback = function(Value)
+			local Number = tonumber(Value)
+
+			if not isFiniteNumber(Number) then
+				return
+			end
+
+			Number = math.clamp(Number, 25, 1000)
+			Environment.NotorietySilentAimFOV = Number
+			setModalInputText(NotorietyUI.SilentAimFOVInput, Number)
+			saveNotorietyConfig()
+		end,
+	})
+
+	TargetingTab:New("Toggle")({
+		Title = "Show Silent Aim FOV",
+		Description = "Draws the targeting radius around the mouse cursor",
+		DefaultValue = Environment.NotorietySilentAimFOVVisible,
+		Callback = function(Enabled)
+			setSilentAimFOVVisible(Enabled)
+			saveNotorietyConfig()
+		end,
+	})
+
+	TargetingTab:New("Dropdown")({
+		Title = "Silent Aim Hit Part",
+		Description = "Body part used as the redirected shot destination",
+		Options = SILENT_AIM_HIT_PARTS,
+		Default = Environment.NotorietySilentAimHitPart,
+		Callback = function(Value)
+			if table.find(SILENT_AIM_HIT_PARTS, Value) then
+				Environment.NotorietySilentAimHitPart = Value
+				saveNotorietyConfig()
+			end
+		end,
+	})
+
+	TargetingTab:New("Toggle")({
+		Title = "Silent Aim Visibility Check",
+		Description = "Only redirects shots when the selected target is unobstructed",
+		DefaultValue = Environment.NotorietySilentAimVisibilityCheck,
+		Callback = function(Enabled)
+			Environment.NotorietySilentAimVisibilityCheck = Enabled == true
+			saveNotorietyConfig()
+		end,
+	})
+
+	WeaponTab:New("Toggle")({
+		Title = "Wall Bang",
+		Description = "Lets weapon projectiles pass through map geometry and shields",
+		DefaultValue = Environment.NotorietyWallBangEnabled,
+		Callback = function(Enabled)
+			Environment.NotorietyWallBangEnabled = Enabled == true
+			WallBangState.Enabled = Environment.NotorietyWallBangEnabled
+			saveNotorietyConfig()
+		end,
+	})
+
+	NotorietyUI.FireDelayInput = WeaponTab:New("Input")({
 		Title = "Fire Delay",
-		Desc = "Shot cooldown in seconds. Default: 0.01",
-		Value = tostring(Environment.NotorietyFireDelay),
+		Description = "Shot cooldown in seconds. Default: 0.01",
+		DefaultText = tostring(Environment.NotorietyFireDelay),
 		Placeholder = "0.01",
 		Callback = function(Value)
 			local Number = tonumber(Value)
 
-			if Number == nil then
+			if not isFiniteNumber(Number) then
 				return
 			end
 
@@ -2935,20 +3615,19 @@ local function createWindUI()
 				applyAllWeaponModifications()
 			end
 
-			saveWindUIConfig()
+			saveNotorietyConfig()
 		end,
 	})
 
-	NotorietyUI.BoltDurationInput = WeaponTab:Input({
-		Flag = "BoltDuration",
+	NotorietyUI.BoltDurationInput = WeaponTab:New("Input")({
 		Title = "Bolt Duration",
-		Desc = "Bolt animation/tween duration in seconds. Default: 0.001",
-		Value = tostring(Environment.NotorietyBoltDuration),
+		Description = "Bolt animation/tween duration in seconds. Default: 0.001",
+		DefaultText = tostring(Environment.NotorietyBoltDuration),
 		Placeholder = "0.001",
 		Callback = function(Value)
 			local Number = tonumber(Value)
 
-			if Number == nil then
+			if not isFiniteNumber(Number) then
 				return
 			end
 
@@ -2958,93 +3637,87 @@ local function createWindUI()
 				applyAllWeaponModifications()
 			end
 
-			saveWindUIConfig()
+			saveNotorietyConfig()
 		end,
 	})
 
-	NotorietyUI.AccuracyInput = WeaponTab:Input({
-		Flag = "GunAccuracy",
+	NotorietyUI.AccuracyInput = WeaponTab:New("Input")({
 		Title = "Gun Accuracy",
-		Desc = "0-100, default: 100. Updates live weapon spread immediately.",
-		Value = tostring(Environment.NotorietyAccuracy),
+		Description = "0-100, default: 100. Updates live weapon spread immediately.",
+		DefaultText = tostring(Environment.NotorietyAccuracy),
 		Placeholder = "100",
 		Callback = function(Value)
 			local Number = tonumber(Value)
 
-			if Number == nil then
+			if not isFiniteNumber(Number) then
 				return
 			end
 
 			Number = math.clamp(Number, 0, 100)
 			Environment.NotorietyAccuracy = Number
+			setModalInputText(NotorietyUI.AccuracyInput, Number)
 
 			if Environment.NotorietyWeaponEnabled then
 				applyAllWeaponModifications()
 			end
 
-			saveWindUIConfig()
+			saveNotorietyConfig()
 		end,
 	})
 
-	WeaponTab:Button({
+	WeaponTab:New("Button")({
 		Title = "Reset Weapon Defaults",
-		Desc = "Fire Delay = 0.01, Bolt Duration = 0.001, Accuracy = 100",
-		Icon = "rotate-ccw",
+		Description = "Fire Delay = 0.01, Bolt Duration = 0.001, Accuracy = 100",
 		Callback = function()
 			Environment.NotorietyFireDelay = 0.01
 			Environment.NotorietyBoltDuration = 0.001
 			Environment.NotorietyAccuracy = 100
-
-			pcall(function()
-				NotorietyUI.FireDelayInput:Set("0.01")
-			end)
-			pcall(function()
-				NotorietyUI.BoltDurationInput:Set("0.001")
-			end)
-			pcall(function()
-				NotorietyUI.AccuracyInput:Set("100")
-			end)
+			setModalInputText(NotorietyUI.FireDelayInput, "0.01")
+			setModalInputText(NotorietyUI.BoltDurationInput, "0.001")
+			setModalInputText(NotorietyUI.AccuracyInput, "100")
 
 			if Environment.NotorietyWeaponEnabled then
 				applyAllWeaponModifications()
 			end
 
-			saveWindUIConfig()
+			saveNotorietyConfig()
 		end,
 	})
 
-	local EquipmentTab = Window:Tab({
-		Title = "Equipment",
-		Icon = "package",
-		Border = true,
+	local VisualsTab = Window:AddTab("Visuals")
+
+	VisualsTab:New("Toggle")({
+		Title = "Item ESP",
+		Description = "Highlights supported loot and interaction objects",
+		DefaultValue = Environment.NotorietyItemESPEnabled,
+		Callback = function(Enabled)
+			setItemESPEnabled(Enabled)
+			saveNotorietyConfig()
+		end,
 	})
 
-	EquipmentTab:Toggle({
-		Flag = "EquipmentSpeedEnabled",
+	local EquipmentTab = Window:AddTab("Equipment")
+
+	EquipmentTab:New("Toggle")({
 		Title = "Equipment Placement Speed",
-		Desc = "Speeds up the real 0% to 100% equipment placement timer",
-		Value = Environment.NotorietyEquipmentSpeedEnabled,
+		Description = "Speeds up the real 0% to 100% equipment placement timer",
+		DefaultValue = Environment.NotorietyEquipmentSpeedEnabled,
 		Callback = function(Enabled)
 			Environment.NotorietyEquipmentSpeedEnabled = Enabled == true
 			applyEquipmentPlacementSpeed()
-			saveWindUIConfig()
+			saveNotorietyConfig()
 		end,
 	})
 
-	NotorietyUI.EquipmentSpeedInput = EquipmentTab:Input({
-		Flag = "EquipmentSpeedMultiplier",
+	NotorietyUI.EquipmentSpeedInput = EquipmentTab:New("Input")({
 		Title = "Placement Speed",
-		Desc = "Default: 2x. Use 1 for normal speed",
-		Value = tostring(Environment.NotorietyEquipmentSpeedMultiplier),
+		Description = "Default: 2x. Use 1 for normal speed",
+		DefaultText = tostring(Environment.NotorietyEquipmentSpeedMultiplier),
 		Placeholder = "2",
 		Callback = function(Value)
 			local Number = tonumber(Value)
 
-			if Number == nil
-				or Number <= 0
-				or Number == math.huge
-				or Number ~= Number
-			then
+			if not isFiniteNumber(Number) or Number <= 0 then
 				return
 			end
 
@@ -3054,146 +3727,124 @@ local function createWindUI()
 				applyEquipmentPlacementSpeed()
 			end
 
-			saveWindUIConfig()
+			saveNotorietyConfig()
 		end,
 	})
 
-	EquipmentTab:Button({
+	EquipmentTab:New("Button")({
 		Title = "Reset Placement Speed",
-		Desc = "Resets the multiplier to 2x",
-		Icon = "rotate-ccw",
+		Description = "Resets the multiplier to 2x",
 		Callback = function()
 			Environment.NotorietyEquipmentSpeedMultiplier = 2
-
-			pcall(function()
-				NotorietyUI.EquipmentSpeedInput:Set("2")
-			end)
+			setModalInputText(NotorietyUI.EquipmentSpeedInput, "2")
 
 			if Environment.NotorietyEquipmentSpeedEnabled then
 				applyEquipmentPlacementSpeed()
 			end
 
-			saveWindUIConfig()
+			saveNotorietyConfig()
 		end,
 	})
 
-	EquipmentTab:Toggle({
-		Flag = "EquipmentPositionEnabled",
+	EquipmentTab:New("Toggle")({
 		Title = "Custom Equipment Position",
-		Desc = "Offsets the equipment from its normal placement position",
-		Value = Environment.NotorietyEquipmentPositionEnabled,
+		Description = "Offsets the equipment from its normal placement position",
+		DefaultValue = Environment.NotorietyEquipmentPositionEnabled,
 		Callback = function(Enabled)
 			Environment.NotorietyEquipmentPositionEnabled = Enabled == true
 			applyEquipmentPositioning()
-			saveWindUIConfig()
+			saveNotorietyConfig()
 		end,
 	})
 
-	NotorietyUI.EquipmentPositionXInput = EquipmentTab:Input({
-		Flag = "EquipmentPositionX",
+	NotorietyUI.EquipmentPositionXInput = EquipmentTab:New("Input")({
 		Title = "Left / Right Offset",
-		Desc = "Positive = right, negative = left",
-		Value = tostring(Environment.NotorietyEquipmentPositionX),
+		Description = "Positive = right, negative = left",
+		DefaultText = tostring(Environment.NotorietyEquipmentPositionX),
 		Placeholder = "0",
 		Callback = function(Value)
 			local Number = tonumber(Value)
 
-			if Number == nil or Number == math.huge or Number == -math.huge or Number ~= Number then
+			if not isFiniteNumber(Number) then
 				return
 			end
 
 			Environment.NotorietyEquipmentPositionX = Number
-			saveWindUIConfig()
+			applyEquipmentPositioning()
+			saveNotorietyConfig()
 		end,
 	})
 
-	NotorietyUI.EquipmentPositionYInput = EquipmentTab:Input({
-		Flag = "EquipmentPositionY",
+	NotorietyUI.EquipmentPositionYInput = EquipmentTab:New("Input")({
 		Title = "Up / Down Offset",
-		Desc = "Positive = up, negative = down",
-		Value = tostring(Environment.NotorietyEquipmentPositionY),
+		Description = "Positive = up, negative = down",
+		DefaultText = tostring(Environment.NotorietyEquipmentPositionY),
 		Placeholder = "0",
 		Callback = function(Value)
 			local Number = tonumber(Value)
 
-			if Number == nil or Number == math.huge or Number == -math.huge or Number ~= Number then
+			if not isFiniteNumber(Number) then
 				return
 			end
 
 			Environment.NotorietyEquipmentPositionY = Number
-			saveWindUIConfig()
+			applyEquipmentPositioning()
+			saveNotorietyConfig()
 		end,
 	})
 
-	NotorietyUI.EquipmentPositionZInput = EquipmentTab:Input({
-		Flag = "EquipmentPositionZ",
+	NotorietyUI.EquipmentPositionZInput = EquipmentTab:New("Input")({
 		Title = "Forward / Back Offset",
-		Desc = "Positive = forward, negative = back",
-		Value = tostring(Environment.NotorietyEquipmentPositionZ),
+		Description = "Positive = forward, negative = back",
+		DefaultText = tostring(Environment.NotorietyEquipmentPositionZ),
 		Placeholder = "0",
 		Callback = function(Value)
 			local Number = tonumber(Value)
 
-			if Number == nil or Number == math.huge or Number == -math.huge or Number ~= Number then
+			if not isFiniteNumber(Number) then
 				return
 			end
 
 			Environment.NotorietyEquipmentPositionZ = Number
-			saveWindUIConfig()
+			applyEquipmentPositioning()
+			saveNotorietyConfig()
 		end,
 	})
 
-	EquipmentTab:Button({
+	EquipmentTab:New("Button")({
 		Title = "Reset Equipment Position",
-		Desc = "Resets X, Y, and Z offsets to 0",
-		Icon = "rotate-ccw",
+		Description = "Resets X, Y, and Z offsets to 0",
 		Callback = function()
 			Environment.NotorietyEquipmentPositionX = 0
 			Environment.NotorietyEquipmentPositionY = 0
 			Environment.NotorietyEquipmentPositionZ = 0
-
-			pcall(function()
-				NotorietyUI.EquipmentPositionXInput:Set("0")
-			end)
-			pcall(function()
-				NotorietyUI.EquipmentPositionYInput:Set("0")
-			end)
-			pcall(function()
-				NotorietyUI.EquipmentPositionZInput:Set("0")
-			end)
-
-			saveWindUIConfig()
+			setModalInputText(NotorietyUI.EquipmentPositionXInput, "0")
+			setModalInputText(NotorietyUI.EquipmentPositionYInput, "0")
+			setModalInputText(NotorietyUI.EquipmentPositionZInput, "0")
+			applyEquipmentPositioning()
+			saveNotorietyConfig()
 		end,
 	})
 
-	local UtilityTab = Window:Tab({
-		Title = "Utility",
-		Icon = "settings",
-		Border = true,
-	})
+	local UtilityTab = Window:AddTab("Utility")
 
-	UtilityTab:Keybind({
-		Flag = "ToggleUIKey",
+	UtilityTab:New("Keybind")({
 		Title = "Toggle UI",
-		Desc = "Default: RightShift",
-		Value = "RightShift",
+		Description = "Default: RightShift",
+		DefaultKeybind = Environment.NotorietyToggleUIKey.Name,
 		Callback = function(Value)
-			local KeyCode = Enum.KeyCode[Value]
-
-			if KeyCode then
-				Window:SetToggleKey(KeyCode)
+			if isSupportedToggleInput(Value) then
+				Environment.NotorietyToggleUIKey = Value
+				saveNotorietyConfig()
 			end
-
-			saveWindUIConfig()
 		end,
 	})
 
-	UtilityTab:Button({
+	UtilityTab:New("Button")({
 		Title = "Unload",
-		Desc = "Restores modified data and unloads Notoriety",
-		Icon = "log-out",
+		Description = "Restores modified data and unloads Notoriety",
 		Callback = function()
-			saveWindUIConfig()
+			saveNotorietyConfig()
 
 			task.defer(function()
 				if type(Environment.UnloadNotoriety) == "function" then
@@ -3203,26 +3854,26 @@ local function createWindUI()
 		end,
 	})
 
-	if type(ConfigManager) == "table" then
-		local Configs = ConfigManager:AllConfigs()
-		local Config = ConfigManager:Config(ConfigName)
+	Window:SetTab("Main")
 
-		Window.CurrentConfig = Config
-		NotorietyUI.Config = Config
-		NotorietyUI.ConfigLoading = true
+	local WindowRoot = Window.Object:FindFirstAncestorWhichIsA("ScreenGui")
 
-		if table.find(Configs, ConfigName) then
-			pcall(function()
-				Config:Load()
-			end)
-		else
-			pcall(function()
-				Config:Save()
-			end)
-		end
-
-		NotorietyUI.ConfigLoading = false
+	if not WindowRoot then
+		error("Modal window root unavailable")
 	end
+
+	table.insert(
+		Environment.NotorietyUIConnections,
+		UserInputService.InputBegan:Connect(function(Input, Processed)
+			if Processed or Environment.NotorietyUnloaded then
+				return
+			end
+
+			if Modal:IsCorrectInput(Input, Environment.NotorietyToggleUIKey) then
+				WindowRoot.Enabled = not WindowRoot.Enabled
+			end
+		end)
+	)
 
 	pcall(function()
 		ContextActionService:UnbindAction("NotorietyKillPolice")
@@ -3275,11 +3926,43 @@ local function unloadNotoriety()
 	Environment.NotorietyUnloaded = true
 	Environment.MaxEverythingEnabled = false
 	Environment.NotorietyWeaponEnabled = false
+	Environment.NotorietySilentAimEnabled = false
+	Environment.NotorietySilentAimFOVVisible = false
+	Environment.NotorietyWallBangEnabled = false
+	Environment.NotorietyPoliceHeadScaleEnabled = false
 	Environment.NotorietyItemESPEnabled = false
 	Environment.NotorietyInfiniteYellMarkEnabled = false
 	Environment.NotorietyAutoYellEnabled = false
 	Environment.NotorietyNoYellDelayEnabled = false
 	Environment.KillPoliceRunning = false
+	SilentAimState.Enabled = false
+	SilentAimState.LastTarget = nil
+	WallBangState.Enabled = false
+
+	if SilentAimFOVCircleState.Root then
+		pcall(function()
+			SilentAimFOVCircleState.Root:Destroy()
+		end)
+	end
+
+	SilentAimFOVCircleState.Root = nil
+	SilentAimFOVCircleState.Circle = nil
+	SilentAimFOVCircleState.Shadow = nil
+	SilentAimFOVCircleState.Connection = nil
+
+	if SilentAimState.Installed
+		and type(hookfunction) == "function"
+		and type(SilentAimState.Target) == "function"
+		and type(SilentAimState.Original) == "function"
+	then
+		pcall(hookfunction, SilentAimState.Target, SilentAimState.Original)
+	end
+
+	SilentAimState.Installed = false
+	SilentAimState.Target = nil
+	SilentAimState.Original = nil
+	SilentAimState.Wrapper = nil
+	SilentAimState.RedirectProjectile = nil
 
 	pcall(function()
 		ContextActionService:UnbindAction("NotorietyKillPolice")
@@ -3323,12 +4006,14 @@ local function unloadNotoriety()
 	for Object in PoliceOriginalSizes do
 		pcall(restorePolicePart, Object)
 	end
+	PoliceHeadScaleState.Apply = nil
+	PoliceHeadScaleState.SetEnabled = nil
+	Environment.NotorietyPoliceHeadScaleState = nil
 	Environment.NotorietyItemESPController = nil
 
 	local CurrentWindow = Environment.NotorietyWindow
 	Environment.NotorietyWindow = nil
 	NotorietyUI.Window = nil
-	NotorietyUI.Config = nil
 	NotorietyUI.SaveConfig = nil
 
 	if CurrentWindow then
@@ -3349,7 +4034,7 @@ Environment.UnloadNotoriety = unloadNotoriety
 trackWeaponContainer(Weapons)
 trackWeaponContainer(Backpack)
 trackWeaponContainer(LocalPlayer.Character)
-createWindUI()
+createModalUI()
 setWeaponModificationsEnabled(Environment.NotorietyWeaponEnabled)
 setYellMarkPatchEnabled(Environment.NotorietyInfiniteYellMarkEnabled)
 YellPatchState.SetAutoYellEnabled(Environment.NotorietyAutoYellEnabled)

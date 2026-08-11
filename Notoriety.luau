@@ -6,11 +6,191 @@ end
 
 local Environment = if type(getgenv) == "function" then getgenv() else _G
 
-local PreviousUnload = rawget(Environment, "UnloadNotoriety")
+local ExistingLoadState = rawget(Environment, "NotorietyLoadState")
 
-if type(PreviousUnload) == "function" then
-	pcall(PreviousUnload)
+if type(ExistingLoadState) == "table" and ExistingLoadState.Status == "loading" then
+	ExistingLoadState.Cancelled = true
+
+	if type(ExistingLoadState.Cancel) == "function" then
+		pcall(ExistingLoadState.Cancel)
+	end
+
+	local CancelDeadline = os.clock() + 2
+
+	repeat
+		task.wait(0.05)
+	until ExistingLoadState.Status ~= "loading" or os.clock() >= CancelDeadline
 end
+
+local PreviousUnload = rawget(Environment, "UnloadNotoriety")
+local LoadState = {
+	Status = "loading",
+	Stage = "bootstrap",
+	StartedAt = os.clock(),
+	Cancelled = false,
+}
+
+Environment.NotorietyLoadState = LoadState
+
+local function ownsNotorietyBootstrap()
+	return rawget(Environment, "NotorietyLoadState") == LoadState
+end
+
+local function isCurrentNotorietyRun()
+	return ownsNotorietyBootstrap() and not LoadState.Cancelled
+end
+
+local function startupCheckpoint(Stage)
+	LoadState.Stage = Stage
+
+	if not isCurrentNotorietyRun() then
+		error("Notoriety initialization superseded during " .. tostring(Stage), 0)
+	end
+end
+
+local function waitForStartupChild(Parent, Name)
+	while isCurrentNotorietyRun() do
+		local Child = Parent:FindFirstChild(Name)
+
+		if Child then
+			return Child
+		end
+
+		task.wait(0.1)
+	end
+
+	error("Notoriety initialization cancelled while waiting for " .. tostring(Name), 0)
+end
+
+local function disconnectBootstrapConnection(Connection)
+	if typeof(Connection) == "RBXScriptConnection" then
+		pcall(function()
+			Connection:Disconnect()
+		end)
+	end
+end
+
+local function cleanupPartialNotorietyRuntime()
+	if not ownsNotorietyBootstrap() then
+		return
+	end
+
+	Environment.NotorietyUnloaded = true
+
+	for _, Name in {
+		"MaxEverythingConnection",
+		"MaxEverythingCharacterConnection",
+		"NotorietyPoliceHitboxConnection",
+	} do
+		disconnectBootstrapConnection(rawget(Environment, Name))
+		Environment[Name] = nil
+	end
+
+	for _, Name in {
+		"NotorietyWeaponConnections",
+		"NotorietyUIConnections",
+		"NotorietyNoDelayConnections",
+	} do
+		local Connections = rawget(Environment, Name)
+
+		if type(Connections) == "table" then
+			for _, Connection in Connections do
+				disconnectBootstrapConnection(Connection)
+			end
+
+			table.clear(Connections)
+		end
+	end
+
+	local ItemController = rawget(Environment, "NotorietyItemESPController")
+
+	if type(ItemController) == "table" and type(ItemController.Cleanup) == "function" then
+		pcall(ItemController.Cleanup)
+	end
+
+	local PoliceState = rawget(Environment, "NotorietyPoliceHeadScaleState")
+
+	if type(PoliceState) == "table" and type(PoliceState.SetEnabled) == "function" then
+		pcall(PoliceState.SetEnabled, false)
+	end
+
+	local CircleState = rawget(Environment, "NotorietySilentAimFOVCircleState")
+
+	if type(CircleState) == "table" then
+		disconnectBootstrapConnection(CircleState.Connection)
+
+		if typeof(CircleState.Root) == "Instance" then
+			pcall(function()
+				CircleState.Root:Destroy()
+			end)
+		end
+	end
+
+	local SilentState = rawget(Environment, "NotorietyProjectileAimState")
+
+	if type(SilentState) == "table" then
+		SilentState.Enabled = false
+
+		if SilentState.Installed
+			and type(hookfunction) == "function"
+			and type(SilentState.Target) == "function"
+			and type(SilentState.Original) == "function"
+		then
+			pcall(hookfunction, SilentState.Target, SilentState.Original)
+			SilentState.Installed = false
+		end
+	end
+
+	for _, Name in {
+		"NotorietyWallBangHookState",
+		"NotorietyMeleeReachHookState",
+		"NotorietySilentAimHookState",
+	} do
+		local State = rawget(Environment, Name)
+
+		if type(State) == "table" then
+			State.Enabled = false
+		end
+	end
+
+	local Window = rawget(Environment, "NotorietyWindow")
+
+	if Window ~= nil then
+		pcall(function()
+			Window:Destroy()
+		end)
+		Environment.NotorietyWindow = nil
+	end
+end
+
+LoadState.Cancel = function()
+	LoadState.Cancelled = true
+end
+
+local function emergencyUnloadNotoriety()
+	LoadState.Cancelled = true
+
+	if type(LoadState.FinalUnload) == "function" then
+		pcall(LoadState.FinalUnload)
+	else
+		cleanupPartialNotorietyRuntime()
+	end
+end
+
+Environment.UnloadNotoriety = emergencyUnloadNotoriety
+
+local function initializeNotoriety()
+	startupCheckpoint("previous runtime cleanup")
+
+	if type(PreviousUnload) == "function" and PreviousUnload ~= emergencyUnloadNotoriety then
+		local UnloadSuccess, UnloadError = pcall(PreviousUnload)
+
+		if not UnloadSuccess then
+			error("Previous Notoriety cleanup failed: " .. tostring(UnloadError), 0)
+		end
+	end
+
+	startupCheckpoint("dependency setup")
 
 local ServiceResolver = rawget(Environment, "__lt_service_resolver")
 
@@ -24,6 +204,7 @@ if type(ServiceResolver) ~= "table" then
 	local ResolverSource = game:HttpGet(
 		"https://raw.githubusercontent.com/ltseverydayyou/ltseverydayyou.github.io/refs/heads/main/ServiceResolver.luau"
 	)
+	startupCheckpoint("ServiceResolver download")
 
 	local ResolverChunk, ResolverCompileError = Loader(
 		ResolverSource,
@@ -35,6 +216,7 @@ if type(ServiceResolver) ~= "table" then
 	end
 
 	local ResolverSuccess, ResolverResult = pcall(ResolverChunk)
+	startupCheckpoint("ServiceResolver initialization")
 
 	if not ResolverSuccess or type(ResolverResult) ~= "table" then
 		error("ServiceResolver load failed: " .. tostring(ResolverResult))
@@ -56,6 +238,7 @@ if type(UIProtector) ~= "table" then
 	local ProtectorSource = game:HttpGet(
 		"https://raw.githubusercontent.com/ltseverydayyou/ltseverydayyou.github.io/refs/heads/main/UIprotector.luau"
 	)
+	startupCheckpoint("UIProtector download")
 
 	local ProtectorChunk, ProtectorCompileError = Loader(
 		ProtectorSource,
@@ -67,6 +250,7 @@ if type(UIProtector) ~= "table" then
 	end
 
 	local ProtectorSuccess, ProtectorResult = pcall(ProtectorChunk)
+	startupCheckpoint("UIProtector initialization")
 
 	if not ProtectorSuccess or type(ProtectorResult) ~= "table" then
 		error("UIProtector load failed: " .. tostring(ProtectorResult))
@@ -97,10 +281,10 @@ local HttpService = ServiceResolver.cs("HttpService", Reference)
 
 local LocalPlayer = Players.LocalPlayer
 
-local RS_Package = ReplicatedStorage:WaitForChild("RS_Package", math.huge)
-local Assets = RS_Package:WaitForChild("Assets", math.huge)
-local Remotes = Assets:WaitForChild("Remotes", math.huge)
-local Event = Remotes:WaitForChild("Damage", math.huge)
+local RS_Package = waitForStartupChild(ReplicatedStorage, "RS_Package")
+local Assets = waitForStartupChild(RS_Package, "Assets")
+local Remotes = waitForStartupChild(Assets, "Remotes")
+local Event = waitForStartupChild(Remotes, "Damage")
 
 local NotorietyUI = {}
 
@@ -108,6 +292,7 @@ do
 	local ModalSource = game:HttpGet(
 		"https://github.com/yeku/Modal/releases/latest/download/main.lua"
 	)
+	startupCheckpoint("Modal download")
 	local ModalChunk, ModalCompileError = loadstring(ModalSource, "@Modal.lua")
 
 	if type(ModalChunk) ~= "function" then
@@ -115,6 +300,7 @@ do
 	end
 
 	local ModalSuccess, ModalResult = pcall(ModalChunk)
+	startupCheckpoint("Modal initialization")
 
 	if not ModalSuccess or type(ModalResult) ~= "table" then
 		error("Modal load failed: " .. tostring(ModalResult))
@@ -122,6 +308,8 @@ do
 
 	NotorietyUI.Library = ModalResult
 end
+
+startupCheckpoint("runtime construction")
 
 if Environment.MaxEverythingConnection then
 	Environment.MaxEverythingConnection:Disconnect()
@@ -425,12 +613,15 @@ local function applyEquipmentPlacementSpeed()
 	end
 
 	local HadOwnTick = rawget(FunctionEnvironment, "tick") ~= nil
-	local EquipmentPercent = LocalPlayer
-		:WaitForChild("PlayerGui", math.huge)
-		:WaitForChild("SG_Package", math.huge)
-		:WaitForChild("MainGui", math.huge)
-		:WaitForChild("Interaction", math.huge)
-		:WaitForChild("EquipmentPercent", math.huge)
+	local PlayerGui = LocalPlayer:FindFirstChild("PlayerGui")
+	local SGPackage = PlayerGui and PlayerGui:FindFirstChild("SG_Package")
+	local MainGui = SGPackage and SGPackage:FindFirstChild("MainGui")
+	local Interaction = MainGui and MainGui:FindFirstChild("Interaction")
+	local EquipmentPercent = Interaction and Interaction:FindFirstChild("EquipmentPercent")
+
+	if not EquipmentPercent then
+		return false
+	end
 
 	local function WrappedTick(...)
 		local Now = OriginalTick(...)
@@ -602,9 +793,72 @@ local YellPatchState = {
 	}),
 	SkillCache = {},
 }
+Environment.NotorietyYellPatchState = YellPatchState
+
+local function isYellModule(Module)
+	return type(Module) == "table" and type(rawget(Module, "Yell")) == "function"
+end
+
+local function findLiveYellModule()
+	if isYellModule(YellPatchState.LiveModule) then
+		return YellPatchState.LiveModule
+	end
+
+	if type(getgc) ~= "function"
+		or type(debug) ~= "table"
+		or type(debug.getupvalues) ~= "function"
+	then
+		return nil
+	end
+
+	local Success, Objects = pcall(getgc, true)
+
+	if not Success or type(Objects) ~= "table" then
+		return nil
+	end
+
+	for Index = 1, #Objects do
+		local Function = Objects[Index]
+
+		if type(Function) == "function" then
+			local Source = ""
+
+			if type(debug.getinfo) == "function" then
+				local InfoSuccess, Info = pcall(debug.getinfo, Function)
+
+				if InfoSuccess and type(Info) == "table" then
+					Source = tostring(Info.source or Info.short_src or "")
+				end
+			end
+
+			if string.find(Source, "HandleInteractionPrompts", 1, true) then
+				local UpvalueSuccess, Upvalues = pcall(debug.getupvalues, Function)
+
+				if UpvalueSuccess and type(Upvalues) == "table" then
+					for _, Value in Upvalues do
+						if isYellModule(Value) then
+							YellPatchState.LiveModule = Value
+							return Value
+						end
+					end
+				end
+			end
+		end
+	end
+
+	return nil
+end
 
 local function getYellModule()
-	local ReplicatedScripts = RS_Package:FindFirstChild("ReplicatedScripts")
+	local LiveModule = findLiveYellModule()
+
+	if LiveModule then
+		return LiveModule
+	end
+
+	local DirectStorage = game:GetService("ReplicatedStorage")
+	local DirectPackage = DirectStorage:FindFirstChild("RS_Package")
+	local ReplicatedScripts = DirectPackage and DirectPackage:FindFirstChild("ReplicatedScripts")
 	local YellScript = ReplicatedScripts and ReplicatedScripts:FindFirstChild("Yell")
 
 	if not YellScript or not YellScript:IsA("ModuleScript") then
@@ -613,7 +867,8 @@ local function getYellModule()
 
 	local Success, Result = pcall(require, YellScript)
 
-	if Success and type(Result) == "table" and type(Result.Yell) == "function" then
+	if Success and isYellModule(Result) then
+		YellPatchState.LiveModule = Result
 		return Result
 	end
 
@@ -890,13 +1145,17 @@ local function restoreYellMarkPatch()
 end
 
 local function applyYellMarkPatch()
+	YellPatchState.LastApplyAttempt = os.clock()
+
 	if Environment.NotorietyUnloaded or not Environment.NotorietyInfiniteYellMarkEnabled then
+		YellPatchState.LastApplySuccess = false
 		return false
 	end
 
 	local Module = getYellModule()
 
 	if not Module then
+		YellPatchState.LastApplySuccess = false
 		return false
 	end
 
@@ -904,6 +1163,7 @@ local function applyYellMarkPatch()
 		and type(YellPatchState.Wrapper) == "function"
 		and Module.Yell == YellPatchState.Wrapper
 	then
+		YellPatchState.LastApplySuccess = true
 		return true
 	end
 
@@ -912,6 +1172,7 @@ local function applyYellMarkPatch()
 	local Original = Module.Yell
 
 	if type(Original) ~= "function" then
+		YellPatchState.LastApplySuccess = false
 		return false
 	end
 
@@ -921,7 +1182,8 @@ local function applyYellMarkPatch()
 	YellPatchState.Wrapper = Wrapper
 	Module.Yell = Wrapper
 
-	return Module.Yell == Wrapper
+	YellPatchState.LastApplySuccess = Module.Yell == Wrapper
+	return YellPatchState.LastApplySuccess
 end
 
 local function setYellMarkPatchEnabled(Enabled)
@@ -1369,8 +1631,15 @@ end
 local PoliceFolder = Workspace:FindFirstChild("Police")
 
 if PoliceFolder then
-	Environment.NotorietyPoliceHitboxConnection = PoliceFolder.DescendantAdded:Connect(
+	local PoliceConnection
+
+	PoliceConnection = PoliceFolder.DescendantAdded:Connect(
 		function(Object)
+			if not isCurrentNotorietyRun() then
+				disconnectBootstrapConnection(PoliceConnection)
+				return
+			end
+
 			local NPC = getPoliceNPC(Object, PoliceFolder)
 
 			if NPC then
@@ -1378,6 +1647,7 @@ if PoliceFolder then
 			end
 		end
 	)
+	Environment.NotorietyPoliceHitboxConnection = PoliceConnection
 end
 
 local SilentAimMouse = LocalPlayer:GetMouse()
@@ -1435,7 +1705,19 @@ local function createSilentAimFOVCircle()
 	SilentAimFOVCircleState.Circle = Circle
 	SilentAimFOVCircleState.Shadow = Shadow
 
-	local Connection = RunService.RenderStepped:Connect(function()
+	local Connection
+
+	Connection = RunService.RenderStepped:Connect(function()
+		if not isCurrentNotorietyRun() then
+			disconnectBootstrapConnection(Connection)
+
+			if Root.Parent then
+				Root:Destroy()
+			end
+
+			return
+		end
+
 		if Environment.NotorietyUnloaded then
 			return
 		end
@@ -1734,6 +2016,13 @@ local function findLocalProjectileConstructor()
 end
 
 local function installProjectileAimHook()
+	if SilentAimState.Installed
+		and type(SilentAimState.Target) == "function"
+		and type(SilentAimState.Wrapper) == "function"
+	then
+		return true
+	end
+
 	if type(hookfunction) ~= "function" then
 		return false
 	end
@@ -3005,7 +3294,7 @@ local function runKill()
 end
 
 local Weapons = Assets:FindFirstChild("Weapons")
-local Backpack = LocalPlayer:WaitForChild("Backpack", math.huge)
+local Backpack = waitForStartupChild(LocalPlayer, "Backpack")
 
 local function applyAllWeaponModifications()
 	if not shouldApplyWeaponData() then
@@ -3469,9 +3758,7 @@ local function setItemESPEnabled(Enabled)
 	Environment.NotorietyItemESPEnabled = Enabled == true
 
 	if Environment.NotorietyItemESPEnabled then
-		if not startItemESP() then
-			Environment.NotorietyItemESPEnabled = false
-		end
+		startItemESP()
 	else
 		stopItemESP()
 	end
@@ -3482,6 +3769,10 @@ local ItemESPController = {}
 function ItemESPController.Cleanup()
 	Environment.NotorietyItemESPEnabled = false
 	stopItemESP()
+end
+
+function ItemESPController.IsRunning()
+	return ItemESPState.Folder ~= nil and ItemESPState.Folder.Parent ~= nil
 end
 
 Environment.NotorietyItemESPController = ItemESPController
@@ -4260,6 +4551,11 @@ local function unloadNotoriety()
 		return
 	end
 
+	if ownsNotorietyBootstrap() then
+		LoadState.Status = "unloading"
+		LoadState.Stage = "runtime cleanup"
+	end
+
 	if type(NotorietyUI.SaveConfig) == "function" then
 		NotorietyUI.SaveConfig()
 	end
@@ -4354,6 +4650,7 @@ local function unloadNotoriety()
 	PoliceHeadScaleState.SetEnabled = nil
 	Environment.NotorietyPoliceHeadScaleState = nil
 	Environment.NotorietyItemESPController = nil
+	Environment.NotorietyYellPatchState = nil
 
 	local CurrentWindow = Environment.NotorietyWindow
 	Environment.NotorietyWindow = nil
@@ -4371,18 +4668,33 @@ local function unloadNotoriety()
 	})
 
 	table.clear(WeaponState.RuntimeWeapons)
+
+	if ownsNotorietyBootstrap() then
+		LoadState.Status = "unloaded"
+		LoadState.FinishedAt = os.clock()
+	end
 end
 
+LoadState.FinalUnload = unloadNotoriety
 Environment.UnloadNotoriety = unloadNotoriety
 
+startupCheckpoint("configuration loading")
 loadNotorietyConfig()
 trackWeaponContainer(Weapons)
 trackWeaponContainer(Backpack)
 trackWeaponContainer(LocalPlayer.Character)
 applyLoadedNotorietyConfig()
 createModalUI()
+startupCheckpoint("runtime connection setup")
 
-Environment.MaxEverythingConnection = RunService.Heartbeat:Connect(function(DeltaTime)
+local HeartbeatConnection
+
+HeartbeatConnection = RunService.Heartbeat:Connect(function(DeltaTime)
+	if not isCurrentNotorietyRun() then
+		disconnectBootstrapConnection(HeartbeatConnection)
+		return
+	end
+
 	if Environment.NotorietyUnloaded then
 		return
 	end
@@ -4406,9 +4718,39 @@ Environment.MaxEverythingConnection = RunService.Heartbeat:Connect(function(Delt
 		EquipmentSpeedState.Refresh = 0
 		applyEquipmentPlacementSpeed()
 		applyEquipmentPositioning()
+		applyPoliceHeadScale()
 
 		if Environment.NotorietyInfiniteYellMarkEnabled then
 			applyYellMarkPatch()
+		end
+
+		if Environment.NotorietySilentAimEnabled and not SilentAimState.Installed then
+			installProjectileAimHook()
+		end
+
+		if Environment.NotorietyWallBangEnabled and not WallBangState.Installed then
+			installWallBangHook()
+		end
+
+		if Environment.NotorietyMeleeReachEnabled and not MeleeReachState.Installed then
+			installMeleeReachHook()
+		end
+
+		if Environment.NotorietyItemESPEnabled
+			and (ItemESPState.Folder == nil or ItemESPState.Folder.Parent == nil)
+		then
+			startItemESP()
+		end
+
+		YellPatchState.RetryRefresh = (YellPatchState.RetryRefresh or 0) + 1
+
+		if Environment.NotorietyNoYellDelayEnabled
+			and #YellPatchState.NoDelayTargets == 0
+			and YellPatchState.RetryRefresh >= 3
+		then
+			YellPatchState.RetryRefresh = 0
+			YellPatchState.RefreshNoDelayTargets()
+			YellPatchState.ApplyNoDelay()
 		end
 	end
 
@@ -4428,14 +4770,23 @@ Environment.MaxEverythingConnection = RunService.Heartbeat:Connect(function(Delt
 	end
 end)
 
-Environment.MaxEverythingCharacterConnection = LocalPlayer.CharacterAdded:Connect(function(Character)
+Environment.MaxEverythingConnection = HeartbeatConnection
+
+local CharacterConnection
+
+CharacterConnection = LocalPlayer.CharacterAdded:Connect(function(Character)
+	if not isCurrentNotorietyRun() then
+		disconnectBootstrapConnection(CharacterConnection)
+		return
+	end
+
 	if Environment.NotorietyUnloaded then
 		return
 	end
 
 	task.wait(1)
 
-	if Environment.NotorietyUnloaded then
+	if not isCurrentNotorietyRun() or Environment.NotorietyUnloaded then
 		return
 	end
 
@@ -4457,4 +4808,41 @@ Environment.MaxEverythingCharacterConnection = LocalPlayer.CharacterAdded:Connec
 	end
 end)
 
+Environment.MaxEverythingCharacterConnection = CharacterConnection
+
 Apply()
+
+startupCheckpoint("startup completion")
+LoadState.Status = "ready"
+LoadState.Stage = "running"
+LoadState.FinishedAt = os.clock()
+end
+
+local InitializeSuccess, InitializeError = xpcall(initializeNotoriety, debug.traceback)
+
+if not InitializeSuccess then
+	local FailureStage = LoadState.Stage
+	LoadState.Error = tostring(InitializeError)
+	LoadState.FinishedAt = os.clock()
+	local FailureStatus = if LoadState.Cancelled then "cancelled" else "failed"
+	LoadState.Status = FailureStatus
+
+	if ownsNotorietyBootstrap() then
+		if type(LoadState.FinalUnload) == "function" then
+			pcall(LoadState.FinalUnload)
+		else
+			cleanupPartialNotorietyRuntime()
+		end
+
+		if rawget(Environment, "UnloadNotoriety") == emergencyUnloadNotoriety
+			or rawget(Environment, "UnloadNotoriety") == LoadState.FinalUnload
+		then
+			Environment.UnloadNotoriety = nil
+		end
+
+		LoadState.Status = FailureStatus
+		LoadState.Stage = "rollback complete"
+	end
+
+	warn("Notoriety failed during " .. tostring(FailureStage) .. ":\n" .. tostring(InitializeError))
+end

@@ -356,6 +356,31 @@ local function KeyCodeFromName(name)
 	return nil
 end
 
+local function PCBindingFromName(name)
+	if name == "M3" or name == "MouseButton3" then
+		return Enum.UserInputType.MouseButton3
+	end
+	return KeyCodeFromName(name)
+end
+
+local function FormatPCBinding(binding)
+	if binding == Enum.UserInputType.MouseButton3 then
+		return "M3"
+	end
+	return binding and binding.Name or "None"
+end
+
+local function GetPCInputBinding(input)
+	if not input then return nil end
+	if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode ~= Enum.KeyCode.Unknown then
+		return input.KeyCode
+	end
+	if input.UserInputType == Enum.UserInputType.MouseButton3 then
+		return Enum.UserInputType.MouseButton3
+	end
+	return nil
+end
+
 local function SaveSettings(silent)
 	if not writefile then
 		if not silent then notify("Executor does not support writefile!", "Settings") end
@@ -363,7 +388,7 @@ local function SaveSettings(silent)
 	end
 	local data = {Keyboard = {}, Controller = {}}
 	for action, key in pairs(KeyboardBindings) do
-		data.Keyboard[action] = key.Name
+		data.Keyboard[action] = FormatPCBinding(key)
 	end
 	for action, binding in pairs(ControllerActionBindings) do
 		data.Controller[action] = {
@@ -394,7 +419,7 @@ local function LoadSettings()
 				if type(data) == "table" then
 					if type(data.Keyboard) == "table" then
 						for action, name in pairs(data.Keyboard) do
-							local key = KeyCodeFromName(name)
+							local key = PCBindingFromName(name)
 							if key and DefaultKeyboardBindings[action] then KeyboardBindings[action] = key end
 						end
 					end
@@ -481,33 +506,472 @@ local function FindControllerConflict(action, modifier, key)
 end
 
 
-local function makeDraggable(guiObject, dragHandle)
-	dragHandle = dragHandle or guiObject
-	local dragging, dragInput, dragStart, startPos
-	local function update(input)
-		local delta = input.Position - dragStart
-		guiObject.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+local NAgui = {
+	_dragState = {},
+	_touchGestureLock = {owner = nil, mode = nil, input = nil},
+	_draggerCleanups = setmetatable({}, {__mode = "k"}),
+	_resizeCleanup = setmetatable({}, {__mode = "k"}),
+	_resizeMap = {
+		Top = {Direction = Vector2.new(0, -1), Cursor = "rbxassetid://2911850935"},
+		Bottom = {Direction = Vector2.new(0, 1), Cursor = "rbxassetid://2911850935"},
+		Left = {Direction = Vector2.new(-1, 0), Cursor = "rbxassetid://2911851464"},
+		Right = {Direction = Vector2.new(1, 0), Cursor = "rbxassetid://2911851464"},
+		TopLeft = {Direction = Vector2.new(-1, -1), Cursor = "rbxassetid://2911852219"},
+		TopRight = {Direction = Vector2.new(1, -1), Cursor = "rbxassetid://2911851859"},
+		BottomLeft = {Direction = Vector2.new(-1, 1), Cursor = "rbxassetid://2911851859"},
+		BottomRight = {Direction = Vector2.new(1, 1), Cursor = "rbxassetid://2911852219"}
+	}
+}
+
+NAgui.tryLockTouchGesture = function(owner, mode, input)
+	if not (input and input.UserInputType == Enum.UserInputType.Touch) then
+		return true
 	end
-	
-	local inputConn
-	inputConn = UserInputService.InputChanged:Connect(function(input) 
-		if input == dragInput and dragging then update(input) end 
-	end)
-	
-	dragHandle.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-			dragging = true; dragStart = input.Position; startPos = guiObject.Position
-			input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragging = false end end)
+	local lock = NAgui._touchGestureLock
+	if lock.input and lock.input ~= input then
+		return false
+	end
+	if lock.input == input then
+		return lock.owner == owner and lock.mode == mode
+	end
+	lock.owner = owner
+	lock.mode = mode
+	lock.input = input
+	return true
+end
+
+NAgui.releaseTouchGesture = function(owner, mode, input)
+	if not (input and input.UserInputType == Enum.UserInputType.Touch) then
+		return
+	end
+	local lock = NAgui._touchGestureLock
+	if lock.input == input and lock.owner == owner and lock.mode == mode then
+		lock.owner = nil
+		lock.mode = nil
+		lock.input = nil
+	end
+end
+
+NAgui.dragger = function(ui, dragui)
+	if not ui or not ui:IsA("GuiObject") then return function() end end
+	dragui = dragui or ui
+	local previous = NAgui._draggerCleanups[ui]
+	if previous then
+		pcall(previous)
+		NAgui._draggerCleanups[ui] = nil
+	end
+
+	local dragging = false
+	local dragStart
+	local startPos
+	local dragPointer
+	local touchGestureLocked = false
+	local pendingInput
+	local moveConn
+	local endConn
+	local stepConn
+	local baseConns = {}
+	local cleaned = false
+
+	local function getOrder(gui)
+		local z = gui.ZIndex or 0
+		local layer = gui:FindFirstAncestorWhichIsA("LayerCollector")
+		local displayOrder = 0
+		if layer and layer:IsA("ScreenGui") then
+			displayOrder = layer.DisplayOrder or 0
 		end
-	end)
-	
-	dragHandle.InputChanged:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then dragInput = input end
+		return displayOrder * 10000 + z
+	end
+
+	local function isTopMost(root, input)
+		local list
+		local ok = pcall(function()
+			list = GuiService:GetGuiObjectsAtPosition(input.Position.X, input.Position.Y)
+		end)
+		if not ok or type(list) ~= "table" or #list == 0 then
+			return true
+		end
+		local top
+		local topOrder
+		for _, gui in ipairs(list) do
+			if typeof(gui) == "Instance" and gui:IsA("GuiObject") and gui.Active then
+				local order = getOrder(gui)
+				if not top or order > topOrder then
+					top = gui
+					topOrder = order
+				end
+			end
+		end
+		if not top then return true end
+		return top == root or top:IsDescendantOf(root)
+	end
+
+	local function disconnectLiveInput()
+		if moveConn then
+			pcall(function() moveConn:Disconnect() end)
+			moveConn = nil
+		end
+		if endConn then
+			pcall(function() endConn:Disconnect() end)
+			endConn = nil
+		end
+		if stepConn then
+			pcall(function() stepConn:Disconnect() end)
+			stepConn = nil
+		end
+		pendingInput = nil
+	end
+
+	local function stopDrag()
+		if touchGestureLocked then
+			NAgui.releaseTouchGesture(ui, "move", dragPointer)
+			touchGestureLocked = false
+		end
+		dragging = false
+		dragPointer = nil
+		pendingInput = nil
+		if NAgui._dragState.owner == ui then
+			NAgui._dragState.owner = nil
+			NAgui._dragState.input = nil
+		end
+		disconnectLiveInput()
+	end
+
+	local function cleanup()
+		if cleaned then return end
+		cleaned = true
+		stopDrag()
+		for _, conn in ipairs(baseConns) do
+			pcall(function() conn:Disconnect() end)
+		end
+		table.clear(baseConns)
+		if NAgui._draggerCleanups[ui] == cleanup then
+			NAgui._draggerCleanups[ui] = nil
+		end
+	end
+
+	local function getParentSize()
+		local parent = ui.Parent
+		if parent then
+			local ok, size = pcall(function()
+				return parent.AbsoluteSize
+			end)
+			if ok and typeof(size) == "Vector2" and size.X > 0 and size.Y > 0 then
+				return size
+			end
+		end
+		local camera = Workspace.CurrentCamera
+		return camera and camera.ViewportSize or Vector2.new(1280, 720)
+	end
+
+	local function update(input)
+		if not ui or not ui.Parent then return end
+		local delta = input.Position - dragStart
+		local screenSize = getParentSize()
+		if screenSize.X <= 0 or screenSize.Y <= 0 then return end
+		local newXScale = startPos.X.Scale + (startPos.X.Offset + delta.X) / screenSize.X
+		local newYScale = startPos.Y.Scale + (startPos.Y.Offset + delta.Y) / screenSize.Y
+		ui.Position = UDim2.new(newXScale, 0, newYScale, 0)
+	end
+
+	table.insert(baseConns, dragui.InputBegan:Connect(function(input)
+		if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch)
+			and (not NAgui._dragState.owner or NAgui._dragState.owner == ui)
+			and isTopMost(dragui, input) then
+			if input.UserInputType == Enum.UserInputType.Touch then
+				if not NAgui.tryLockTouchGesture(ui, "move", input) then
+					return
+				end
+				touchGestureLocked = true
+			end
+			NAgui._dragState.owner = ui
+			NAgui._dragState.input = input
+			dragging = true
+			dragPointer = input
+			dragStart = input.Position
+			startPos = ui.Position
+			disconnectLiveInput()
+
+			moveConn = UserInputService.InputChanged:Connect(function(changedInput)
+				if not dragging or NAgui._dragState.owner ~= ui then return end
+				local inputType = changedInput.UserInputType
+				if inputType == Enum.UserInputType.MouseMovement then
+					pendingInput = changedInput
+					return
+				end
+				if inputType == Enum.UserInputType.Touch and changedInput == dragPointer then
+					pendingInput = changedInput
+				end
+			end)
+
+			endConn = UserInputService.InputEnded:Connect(function(endedInput)
+				if not dragging then return end
+				local inputType = endedInput.UserInputType
+				if inputType == Enum.UserInputType.MouseButton1
+					or (inputType == Enum.UserInputType.Touch and endedInput == dragPointer) then
+					stopDrag()
+				end
+			end)
+
+			stepConn = RunService.RenderStepped:Connect(function()
+				local frameInput = pendingInput
+				if not frameInput then return end
+				pendingInput = nil
+				if not dragging or NAgui._dragState.owner ~= ui then return end
+				update(frameInput)
+			end)
+		end
+	end))
+
+	table.insert(baseConns, ui.AncestryChanged:Connect(function(_, parent)
+		if not parent then
+			task.defer(cleanup)
+		end
+	end))
+	pcall(function()
+		table.insert(baseConns, ui.Destroying:Connect(cleanup))
 	end)
 
-	guiObject.Destroying:Connect(function()
-		if inputConn then inputConn:Disconnect() end
+	ui.Active = true
+	dragui.Active = true
+	NAgui._draggerCleanups[ui] = cleanup
+	return cleanup
+end
+
+NAgui.resizeable = function(ui, minSize, maxSize)
+	if not ui or not ui:IsA("GuiObject") then return function() end end
+	local previous = NAgui._resizeCleanup[ui]
+	if previous then
+		pcall(previous)
+		NAgui._resizeCleanup[ui] = nil
+	end
+
+	local baseSize = ui.AbsoluteSize
+	if not minSize then
+		minSize = Vector2.new(
+			math.max(1, math.floor(baseSize.X * 0.5 + 0.5)),
+			math.max(1, math.floor(baseSize.Y * 0.5 + 0.5))
+		)
+	end
+	maxSize = maxSize or Vector2.new(5000, 5000)
+
+	local parent = ui.Parent
+	if not parent then return function() end end
+
+	local overlay = Instance.new("Frame")
+	overlay.Name = "TASResizeOverlay"
+	overlay.BackgroundTransparency = 1
+	overlay.BorderSizePixel = 0
+	overlay.Active = false
+	overlay.ClipsDescendants = false
+	overlay.ZIndex = 10000
+	overlay.Parent = parent
+
+	local handleSpecs = {
+		Top = {AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0, 0), Size = UDim2.new(1, -16, 0, 10)},
+		Bottom = {AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 1, 0), Size = UDim2.new(1, -16, 0, 10)},
+		Left = {AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0, 0, 0, 8), Size = UDim2.new(0, 10, 1, -16)},
+		Right = {AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(1, 0, 0, 8), Size = UDim2.new(0, 10, 1, -16)},
+		TopLeft = {AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 0, 0, 0), Size = UDim2.new(0, 16, 0, 16)},
+		TopRight = {AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(1, 0, 0, 0), Size = UDim2.new(0, 16, 0, 16)},
+		BottomLeft = {AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(0, 16, 0, 16)},
+		BottomRight = {AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(1, 0, 1, 0), Size = UDim2.new(0, 16, 0, 16)}
+	}
+
+	local handles = {}
+	for name, spec in pairs(handleSpecs) do
+		local handle = Instance.new("Frame")
+		handle.Name = name
+		handle.AnchorPoint = spec.AnchorPoint
+		handle.Position = spec.Position
+		handle.Size = spec.Size
+		handle.BackgroundTransparency = 1
+		handle.BorderSizePixel = 0
+		handle.Active = true
+		handle.Selectable = false
+		handle.ZIndex = 10001
+		handle.Parent = overlay
+		handles[name] = handle
+	end
+
+	local grip = Instance.new("TextLabel")
+	grip.Name = "ResizeGrip"
+	grip.AnchorPoint = Vector2.new(1, 1)
+	grip.Position = UDim2.new(1, -2, 1, -1)
+	grip.Size = UDim2.new(0, 14, 0, 14)
+	grip.BackgroundTransparency = 1
+	grip.BorderSizePixel = 0
+	grip.Active = false
+	grip.Font = Enum.Font.SourceSansBold
+	grip.Text = "⌟"
+	grip.TextColor3 = Color3.fromRGB(190, 190, 190)
+	grip.TextTransparency = 0.1
+	grip.TextSize = 15
+	grip.ZIndex = 10002
+	grip.Parent = overlay
+
+	local conns = {}
+	local dragging = false
+	local mode
+	local dragInput
+	local dragStart
+	local startAbsPos
+	local startAbsSize
+	local startPosition
+	local parentSize
+	local parentOrigin
+	local touchGestureLocked = false
+	local cleaned = false
+
+	local function getParentSize()
+		local ok, size = pcall(function()
+			return parent.AbsoluteSize
+		end)
+		if ok and typeof(size) == "Vector2" and size.X > 0 and size.Y > 0 then
+			return size
+		end
+		local camera = Workspace.CurrentCamera
+		return camera and camera.ViewportSize or Vector2.new(1280, 720)
+	end
+
+	local function syncOverlay()
+		if not ui or not ui.Parent or not overlay or not overlay.Parent then return end
+		overlay.AnchorPoint = ui.AnchorPoint
+		overlay.Position = ui.Position
+		overlay.Size = ui.Size
+		overlay.Visible = ui.Visible
+	end
+
+	local function finishResize()
+		if touchGestureLocked then
+			NAgui.releaseTouchGesture(ui, "resize", dragInput)
+			touchGestureLocked = false
+		end
+		dragging = false
+		mode = nil
+		dragInput = nil
+	end
+
+	local function updateResize(currentPos)
+		if not dragging or not mode then return end
+		local map = NAgui._resizeMap[mode.Name]
+		if not map then return end
+		local direction = map.Direction
+		local delta = currentPos - dragStart
+
+		local newWidth = startAbsSize.X
+		local newHeight = startAbsSize.Y
+		local newLeft = startAbsPos.X
+		local newTop = startAbsPos.Y
+
+		if direction.X < 0 then
+			newWidth = math.clamp(startAbsSize.X - delta.X, minSize.X, maxSize.X)
+			newLeft = startAbsPos.X + startAbsSize.X - newWidth
+		elseif direction.X > 0 then
+			newWidth = math.clamp(startAbsSize.X + delta.X, minSize.X, maxSize.X)
+		end
+
+		if direction.Y < 0 then
+			newHeight = math.clamp(startAbsSize.Y - delta.Y, minSize.Y, maxSize.Y)
+			newTop = startAbsPos.Y + startAbsSize.Y - newHeight
+		elseif direction.Y > 0 then
+			newHeight = math.clamp(startAbsSize.Y + delta.Y, minSize.Y, maxSize.Y)
+		end
+
+		ui.Size = UDim2.fromOffset(math.floor(newWidth + 0.5), math.floor(newHeight + 0.5))
+
+		local anchor = ui.AnchorPoint
+		local desiredAnchor = Vector2.new(
+			newLeft + newWidth * anchor.X,
+			newTop + newHeight * anchor.Y
+		)
+		local xOffset = desiredAnchor.X - parentOrigin.X - parentSize.X * startPosition.X.Scale
+		local yOffset = desiredAnchor.Y - parentOrigin.Y - parentSize.Y * startPosition.Y.Scale
+		ui.Position = UDim2.new(startPosition.X.Scale, math.floor(xOffset + 0.5), startPosition.Y.Scale, math.floor(yOffset + 0.5))
+	end
+
+	table.insert(conns, ui:GetPropertyChangedSignal("AbsoluteSize"):Connect(syncOverlay))
+	table.insert(conns, ui:GetPropertyChangedSignal("AbsolutePosition"):Connect(syncOverlay))
+	table.insert(conns, ui:GetPropertyChangedSignal("Visible"):Connect(syncOverlay))
+	table.insert(conns, ui:GetPropertyChangedSignal("AnchorPoint"):Connect(syncOverlay))
+	table.insert(conns, ui:GetPropertyChangedSignal("Position"):Connect(syncOverlay))
+	table.insert(conns, ui:GetPropertyChangedSignal("Size"):Connect(syncOverlay))
+
+	for _, handle in pairs(handles) do
+		table.insert(conns, handle.InputBegan:Connect(function(input)
+			if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then
+				return
+			end
+			if input.UserInputType == Enum.UserInputType.Touch then
+				if not NAgui.tryLockTouchGesture(ui, "resize", input) then
+					return
+				end
+				touchGestureLocked = true
+			end
+
+			mode = handle
+			dragging = true
+			dragInput = input
+			dragStart = Vector2.new(input.Position.X, input.Position.Y)
+			startAbsPos = ui.AbsolutePosition
+			startAbsSize = ui.AbsoluteSize
+			startPosition = ui.Position
+			parentSize = getParentSize()
+
+			local currentAnchor = startAbsPos + Vector2.new(startAbsSize.X * ui.AnchorPoint.X, startAbsSize.Y * ui.AnchorPoint.Y)
+			parentOrigin = currentAnchor - Vector2.new(
+				parentSize.X * startPosition.X.Scale + startPosition.X.Offset,
+				parentSize.Y * startPosition.Y.Scale + startPosition.Y.Offset
+			)
+		end))
+
+	end
+
+	table.insert(conns, UserInputService.InputChanged:Connect(function(input)
+		if not dragging then return end
+		if input.UserInputType == Enum.UserInputType.MouseMovement then
+			updateResize(Vector2.new(input.Position.X, input.Position.Y))
+		elseif input.UserInputType == Enum.UserInputType.Touch and input == dragInput then
+			updateResize(Vector2.new(input.Position.X, input.Position.Y))
+		end
+	end))
+
+	table.insert(conns, UserInputService.InputEnded:Connect(function(input)
+		if not dragging then return end
+		if input.UserInputType == Enum.UserInputType.MouseButton1
+			or (input.UserInputType == Enum.UserInputType.Touch and input == dragInput) then
+			updateResize(Vector2.new(input.Position.X, input.Position.Y))
+			finishResize()
+		end
+	end))
+
+	local function cleanup()
+		if cleaned then return end
+		cleaned = true
+		finishResize()
+		for _, conn in ipairs(conns) do
+			pcall(function() conn:Disconnect() end)
+		end
+		table.clear(conns)
+		pcall(function() overlay:Destroy() end)
+		if NAgui._resizeCleanup[ui] == cleanup then
+			NAgui._resizeCleanup[ui] = nil
+		end
+	end
+
+	table.insert(conns, ui.AncestryChanged:Connect(function(_, newParent)
+		if not newParent then
+			task.defer(cleanup)
+		end
+	end))
+	pcall(function()
+		table.insert(conns, ui.Destroying:Connect(cleanup))
 	end)
+
+	ui.Active = true
+	syncOverlay()
+	NAgui._resizeCleanup[ui] = cleanup
+	return cleanup
 end
 
 local function updateStatusColor()
@@ -667,6 +1131,7 @@ end
 	MainFrame.BackgroundTransparency = 0.2
 	MainFrame.BorderColor3 = Color3.fromRGB(200, 200, 200)
 	MainFrame.BorderSizePixel = 2
+	MainFrame.Active = true
 
 	local UIListLayout = Instance.new("UIListLayout", MainFrame)
 	UIListLayout.Padding = UDim.new(0, 4)
@@ -679,7 +1144,7 @@ end
 	Header.Size = UDim2.new(1, -8, 0, 24)
 	Header.BackgroundTransparency = 1
 	Header.Active = true
-	makeDraggable(MainFrame, Header)
+	NAgui.dragger(MainFrame, Header)
 
 	local HeaderTitle = Instance.new("TextLabel", Header)
 	RoundCorners(HeaderTitle, 3)
@@ -776,7 +1241,7 @@ end
 	KeyBindFrame.BackgroundTransparency = 0.2
 	KeyBindFrame.BorderColor3 = Color3.fromRGB(200, 200, 200)
 	KeyBindFrame.Visible = false
-	makeDraggable(KeyBindFrame)
+	KeyBindFrame.Active = true
 
 	KeyBindTitle = Instance.new("TextLabel", KeyBindFrame)
 	RoundCorners(KeyBindTitle, 3)
@@ -787,12 +1252,14 @@ end
 	KeyBindTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
 	KeyBindTitle.TextSize = 17
 	KeyBindTitle.TextXAlignment = Enum.TextXAlignment.Left
+	NAgui.dragger(KeyBindFrame, KeyBindTitle)
 
 	KeyBindContent = Instance.new("Frame", KeyBindFrame)
 	RoundCorners(KeyBindContent, 4)
 	KeyBindContent.Position = UDim2.new(0, 5, 0, 31)
 	KeyBindContent.Size = UDim2.new(1, -10, 1, -36)
 	KeyBindContent.BackgroundTransparency = 1
+	KeyBindContent.Active = true
 
 	local KBLayout = Instance.new("UIListLayout", KeyBindContent)
 	KBLayout.Padding = UDim.new(0, 1)
@@ -812,7 +1279,7 @@ end
 			elseif CurrentInputMode == "Touch" then
 				bindingText = TouchBindingLabels[action] or action
 			else
-				bindingText = KeyboardBindings[action] and KeyboardBindings[action].Name or "None"
+				bindingText = FormatPCBinding(KeyboardBindings[action])
 			end
 			local label = Instance.new("TextLabel", KeyBindContent)
 			RoundCorners(label, 3)
@@ -861,6 +1328,7 @@ end
 	SettingsFrame.BorderColor3 = Color3.fromRGB(200, 200, 200)
 	SettingsFrame.BorderSizePixel = 2
 	SettingsFrame.Visible = false
+	SettingsFrame.Active = true
 
 	local function resizeSettingsFrame()
 		local camera = Workspace.CurrentCamera
@@ -880,7 +1348,7 @@ end
 	SettingsHeader.Size = UDim2.new(1, 0, 0, 30)
 	SettingsHeader.BackgroundTransparency = 1
 	SettingsHeader.Active = true
-	makeDraggable(SettingsFrame, SettingsHeader)
+	NAgui.dragger(SettingsFrame, SettingsHeader)
 
 	local SettingsTitle = Instance.new("TextLabel", SettingsHeader)
 	RoundCorners(SettingsTitle, 3)
@@ -945,6 +1413,7 @@ end
 	SettingsList.ScrollBarThickness = 5
 	SettingsList.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	SettingsList.CanvasSize = UDim2.new()
+	SettingsList.Active = true
 
 	local SettingsLayout = Instance.new("UIListLayout", SettingsList)
 	SettingsLayout.Padding = UDim.new(0, 4)
@@ -952,7 +1421,7 @@ end
 
 	local function StartBindingCapture(action, kind, button)
 		BindingCapture = {Action = action, Kind = kind, Button = button, Started = os.clock()}
-		button.Text = kind == "Keyboard" and "Press a key..." or "Hold L1/R1 + button"
+		button.Text = kind == "Keyboard" and "Press key / M3..." or "Hold L1/R1 + button"
 	end
 
 	RefreshSettingsRows = function()
@@ -989,7 +1458,7 @@ end
 			bindButton.Font = Enum.Font.SourceSansBold
 			bindButton.TextSize = 13
 			if SettingsTab == "Keyboard" then
-				bindButton.Text = KeyboardBindings[action] and KeyboardBindings[action].Name or "None"
+				bindButton.Text = FormatPCBinding(KeyboardBindings[action])
 			else
 				bindButton.Text = FormatControllerBinding(ControllerActionBindings[action])
 			end
@@ -1061,6 +1530,7 @@ end
 		MobileControlsFrame.BorderColor3 = Color3.fromRGB(200, 200, 200)
 		MobileControlsFrame.BorderSizePixel = 2
 		MobileControlsFrame.Visible = true
+		MobileControlsFrame.Active = true
 
 		local mobileTitle = Instance.new("TextLabel", MobileControlsFrame)
 		RoundCorners(mobileTitle, 3)
@@ -1072,7 +1542,7 @@ end
 		mobileTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
 		mobileTitle.TextSize = 16
 		mobileTitle.Active = true
-		makeDraggable(MobileControlsFrame, mobileTitle)
+		NAgui.dragger(MobileControlsFrame, mobileTitle)
 
 		local function resizeMobileControls()
 			local camera = Workspace.CurrentCamera
@@ -1092,6 +1562,7 @@ end
 		mobileButtons.Position = UDim2.new(0, 6, 0, 31)
 		mobileButtons.Size = UDim2.new(1, -12, 1, -37)
 		mobileButtons.BackgroundTransparency = 1
+		mobileButtons.Active = true
 
 		local grid = Instance.new("UIGridLayout", mobileButtons)
 		grid.CellPadding = UDim2.new(0, 5, 0, 5)
@@ -1136,6 +1607,13 @@ end
 		TouchControlsButton.Activated:Connect(function()
 			MobileControlsFrame.Visible = not MobileControlsFrame.Visible
 		end)
+	end
+
+	NAgui.resizeable(MainFrame, Vector2.new(200, UserInputService.TouchEnabled and 160 or 140), Vector2.new(700, 600))
+	NAgui.resizeable(KeyBindFrame, Vector2.new(220, 180), Vector2.new(800, 900))
+	NAgui.resizeable(SettingsFrame, Vector2.new(280, 240), Vector2.new(1000, 1000))
+	if MobileControlsFrame then
+		NAgui.resizeable(MobileControlsFrame, Vector2.new(210, 210), Vector2.new(800, 900))
 	end
 
 	RefreshKeybindDisplay()
@@ -2230,13 +2708,14 @@ local function Initialize()
 			return
 		end
 		if BindingCapture and BindingCapture.Kind == "Keyboard" then
-			if Input.UserInputType == Enum.UserInputType.Keyboard and Key ~= Enum.KeyCode.Unknown and os.clock() - BindingCapture.Started > 0.1 then
+			local binding = GetPCInputBinding(Input)
+			if binding and os.clock() - BindingCapture.Started > 0.1 then
 				local action = BindingCapture.Action
-				local conflict = FindKeyboardConflict(action, Key)
+				local conflict = FindKeyboardConflict(action, binding)
 				if conflict then
 					notify("Already used by " .. ActionLabels[conflict], "TAS Settings", 2)
 				else
-					KeyboardBindings[action] = Key
+					KeyboardBindings[action] = binding
 					BindingCapture = nil
 					SaveSettings(true)
 					RefreshSettingsRows()
@@ -2246,9 +2725,10 @@ local function Initialize()
 			return
 		end
 		if Processed then return end
-		if Input.UserInputType == Enum.UserInputType.Keyboard then
-			local action = GetKeyboardActionForKey(Key)
-			if action then ActionRouter.Begin(action, "Keyboard:" .. Key.Name) end
+		local binding = GetPCInputBinding(Input)
+		if binding then
+			local action = GetKeyboardActionForKey(binding)
+			if action then ActionRouter.Begin(action, "PC:" .. FormatPCBinding(binding)) end
 		end
 	end))
 
@@ -2263,9 +2743,10 @@ local function Initialize()
 			EndControllerModifierActions("R1")
 			return
 		end
-		if Input.UserInputType == Enum.UserInputType.Keyboard then
-			local action = GetKeyboardActionForKey(Key)
-			if action then ActionRouter.End(action, "Keyboard:" .. Key.Name) end
+		local binding = GetPCInputBinding(Input)
+		if binding then
+			local action = GetKeyboardActionForKey(binding)
+			if action then ActionRouter.End(action, "PC:" .. FormatPCBinding(binding)) end
 		end
 	end))
 

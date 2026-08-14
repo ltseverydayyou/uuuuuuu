@@ -379,7 +379,7 @@ end
 
 local FOLDER = "FNP_Autoplayer"
 local SETTINGS_PATH = FOLDER .. "/settings.json"
-local WINDUI_URL = "https://github.com/Footagesus/WindUI/releases/download/1.6.65/main.lua"
+local VIBEUI_URL = "https://sirmemegithub.com/RealSlimShady2000/VibeUI/raw/branch/main/VibeUI.luau"
 
 local Layouts = {
     {Name = "4K", Keys = {Enum.KeyCode.D, Enum.KeyCode.F, Enum.KeyCode.J, Enum.KeyCode.K}},
@@ -401,12 +401,11 @@ local Defaults = {
     SkipHarmful = true,
     AutoplayerToggleKey = "RightShift",
     WindowKey = "Insert",
-    Theme = "Dark",
+    Theme = "Midnight",
     UIScale = 1,
     WindowWidth = 640,
     WindowHeight = 500,
     BackgroundTransparency = 0.15,
-    BackgroundImageTransparency = 0,
     SelectedMode = "4K",
     VisualSide = "Auto",
     Keybinds = {}
@@ -511,7 +510,6 @@ end
 local FiresignalFunction = type(firesignal) == "function" and firesignal or nil
 local GetGCFunction = type(getgc) == "function" and getgc or nil
 local HookFunction = type(hookfunction) == "function" and hookfunction or nil
-local GetConnectionsFunction = type(getconnections) == "function" and getconnections or nil
 local GetThreadIdentityFunction = type(getthreadidentity) == "function" and getthreadidentity or nil
 local SetThreadIdentityFunction = type(setthreadidentity) == "function" and setthreadidentity or nil
 local LoadstringFunction = type(loadstring) == "function" and loadstring or nil
@@ -583,12 +581,11 @@ local state = {
     SkipHarmful = Config.SkipHarmful ~= false,
     AutoplayerToggleKey = normalizeKey(Config.AutoplayerToggleKey) or Enum.KeyCode.RightShift,
     WindowKey = normalizeKey(Config.WindowKey) or Enum.KeyCode.Insert,
-    Theme = type(Config.Theme) == "string" and Config.Theme or "Dark",
+    Theme = table.find({"Midnight", "Crimson", "Indigo"}, Config.Theme) and Config.Theme or "Midnight",
     UIScale = tonumber(Config.UIScale) or 1,
     WindowWidth = tonumber(Config.WindowWidth) or 640,
     WindowHeight = tonumber(Config.WindowHeight) or 500,
     BackgroundTransparency = tonumber(Config.BackgroundTransparency) or 0.15,
-    BackgroundImageTransparency = tonumber(Config.BackgroundImageTransparency) or 0,
     SelectedMode = type(Config.SelectedMode) == "string" and Config.SelectedMode or "4K",
     VisualSide = table.find({"Auto", "BF", "Dad"}, Config.VisualSide) and Config.VisualSide or "Auto",
     DetectedSide = "Unknown",
@@ -667,7 +664,6 @@ local function queueSave()
             WindowWidth = state.WindowWidth,
             WindowHeight = state.WindowHeight,
             BackgroundTransparency = state.BackgroundTransparency,
-            BackgroundImageTransparency = state.BackgroundImageTransparency,
             SelectedMode = state.SelectedMode,
             VisualSide = state.VisualSide,
             Keybinds = keybinds
@@ -2219,68 +2215,7 @@ state.Connections[#state.Connections + 1] = UserInputService.InputBegan:Connect(
     end
 end)
 
-local function cleanupOrphanedWindUIInputs(oldGui, oldWindow)
-    local removed = 0
-    local function referencesOld(value)
-        if value == oldWindow then
-            return true
-        end
-        if typeof(value) == "Instance" and oldGui then
-            local ok, result = pcall(function()
-                return value == oldGui or value:IsDescendantOf(oldGui)
-            end)
-            if ok and result then
-                return true
-            end
-        end
-        if type(value) == "table" and value.__type == "Keybind" then
-            return true
-        end
-        if type(value) == "string" then
-            if value:match("^%d+K %- Lane %d+$") or value:match("^Lane %d+$") or value == "Autoplayer toggle key" then
-                return true
-            end
-        end
-        return false
-    end
-    if GetConnectionsFunction then
-        for _, signal in {UserInputService.InputBegan, UserInputService.InputEnded, UserInputService.InputChanged} do
-            local ok, connections = pcall(GetConnectionsFunction, signal)
-            if ok then
-                for _, connection in connections do
-                    local fn
-                    pcall(function()
-                        fn = connection.Function
-                    end)
-                    local remove = false
-                    if type(fn) == "function" and type(DebugLibrary.getupvalues) == "function" then
-                        local okUps, upvalues = pcall(DebugLibrary.getupvalues, fn)
-                        if okUps and type(upvalues) == "table" then
-                            for _, value in upvalues do
-                                if referencesOld(value) then
-                                    remove = true
-                                    break
-                                end
-                            end
-                        end
-                    end
-                    if remove then
-                        pcall(function()
-                            connection:Disconnect()
-                        end)
-                        removed += 1
-                    end
-                end
-            end
-        end
-    end
-    state.StaleInputListenersRemoved = (state.StaleInputListenersRemoved or 0) + removed
-    return removed
-end
-
-state.CleanupOrphanedWindUIInputs = cleanupOrphanedWindUIInputs
-
-local WindUI
+local VibeUI
 local Window
 
 local function fetchText(url)
@@ -2376,7 +2311,7 @@ local function buildFallbackUI(reason)
     reasonLabel.Position = UDim2.fromOffset(16, 143)
     reasonLabel.Size = UDim2.new(1, -32, 0, 42)
     reasonLabel.Font = Enum.Font.Gotham
-    reasonLabel.Text = "WindUI unavailable: " .. tostring(reason)
+    reasonLabel.Text = "VibeUI unavailable: " .. tostring(reason)
     reasonLabel.TextColor3 = Color3.fromRGB(155, 155, 164)
     reasonLabel.TextSize = 11
     reasonLabel.TextWrapped = true
@@ -2445,49 +2380,207 @@ local function buildFallbackUI(reason)
     end)
 end
 
+local VIBE_THEMES = {
+    Midnight = {
+        Background = Color3.fromRGB(14, 17, 15),
+        Border = Color3.fromRGB(12, 12, 12),
+        Inline = Color3.fromRGB(20, 24, 21),
+        ["Hovered Element"] = Color3.fromRGB(37, 42, 45),
+        ["Page Background"] = Color3.fromRGB(25, 30, 26),
+        Outline = Color3.fromRGB(42, 49, 45),
+        Element = Color3.fromRGB(30, 36, 31),
+        Gradient = Color3.fromRGB(208, 208, 208),
+        Text = Color3.fromRGB(235, 235, 235),
+        ["Text Stroke"] = Color3.fromRGB(0, 0, 0),
+        ["Placeholder Text"] = Color3.fromRGB(185, 185, 185),
+        Accent = Color3.fromRGB(202, 243, 255)
+    },
+    Crimson = {
+        Background = Color3.fromRGB(17, 14, 15),
+        Border = Color3.fromRGB(12, 12, 12),
+        Inline = Color3.fromRGB(24, 20, 21),
+        ["Hovered Element"] = Color3.fromRGB(45, 37, 40),
+        ["Page Background"] = Color3.fromRGB(30, 25, 26),
+        Outline = Color3.fromRGB(49, 42, 44),
+        Element = Color3.fromRGB(36, 30, 31),
+        Gradient = Color3.fromRGB(208, 208, 208),
+        Text = Color3.fromRGB(235, 235, 235),
+        ["Text Stroke"] = Color3.fromRGB(0, 0, 0),
+        ["Placeholder Text"] = Color3.fromRGB(185, 185, 185),
+        Accent = Color3.fromRGB(255, 105, 120)
+    },
+    Indigo = {
+        Background = Color3.fromRGB(15, 15, 19),
+        Border = Color3.fromRGB(12, 12, 12),
+        Inline = Color3.fromRGB(21, 21, 27),
+        ["Hovered Element"] = Color3.fromRGB(40, 40, 52),
+        ["Page Background"] = Color3.fromRGB(26, 26, 33),
+        Outline = Color3.fromRGB(44, 44, 56),
+        Element = Color3.fromRGB(31, 31, 40),
+        Gradient = Color3.fromRGB(208, 208, 208),
+        Text = Color3.fromRGB(235, 235, 235),
+        ["Text Stroke"] = Color3.fromRGB(0, 0, 0),
+        ["Placeholder Text"] = Color3.fromRGB(185, 185, 185),
+        Accent = Color3.fromRGB(150, 160, 255)
+    }
+}
+
+local function applyVibeTheme(name)
+    local theme = VIBE_THEMES[name] or VIBE_THEMES.Midnight
+    VibeUI:SetTheme(theme)
+end
+
+local function createVibeWindow(options)
+    local nativeWindow = VibeUI:Window({
+        Title = options.Title,
+        Size = options.Size,
+        Keybind = state.WindowKey,
+        Layout = "Side",
+        Resizable = true
+    })
+    local adapter = {Native = nativeWindow}
+
+    function adapter:SetToggleKey(key)
+        VibeUI.Config.MenuKeybind = key
+    end
+
+    function adapter:SetUIScale(value)
+        VibeUI:SetScale(value)
+    end
+
+    function adapter:SetBackgroundTransparency(value)
+        VibeUI:SetTransparency(value)
+    end
+
+    function adapter:SetSize(size)
+        if nativeWindow._root then
+            nativeWindow._root.Size = size
+        end
+    end
+
+    function adapter:SetToTheCenter()
+        if nativeWindow._root then
+            nativeWindow._root.Position = UDim2.fromScale(0.5, 0.5)
+        end
+    end
+
+    function adapter:Destroy()
+        VibeUI:Unload()
+    end
+
+    function adapter:Tab(tabOptions)
+        local nativeTab = nativeWindow:Tab({Name = tabOptions.Title, Columns = 2})
+        local tab = {Native = nativeTab, CurrentSection = nil, SectionCount = 0}
+
+        local function currentSection()
+            if not tab.CurrentSection then
+                tab.SectionCount += 1
+                tab.CurrentSection = nativeTab:Section({Name = tabOptions.Title, Side = 1})
+            end
+            return tab.CurrentSection
+        end
+
+        function tab:Section(sectionOptions)
+            self.SectionCount += 1
+            self.CurrentSection = nativeTab:Section({
+                Name = sectionOptions.Title,
+                Side = ((self.SectionCount - 1) % 2) + 1
+            })
+            return self.CurrentSection
+        end
+
+        function tab:Paragraph(data)
+            local paragraph = currentSection():Paragraph({Name = data.Title, Content = data.Desc})
+            paragraph.SetDesc = paragraph.SetText
+            return paragraph
+        end
+
+        function tab:Toggle(data)
+            return currentSection():Toggle({
+                Name = data.Title,
+                Default = data.Value,
+                Info = data.Desc,
+                InfoType = "tip",
+                Callback = data.Callback
+            })
+        end
+
+        function tab:Slider(data)
+            return currentSection():Slider({
+                Name = data.Title,
+                Min = data.Value.Min,
+                Max = data.Value.Max,
+                Default = data.Value.Default,
+                Decimals = data.Step,
+                Tooltip = data.Desc,
+                Callback = data.Callback
+            })
+        end
+
+        function tab:Dropdown(data)
+            local control = {
+                Name = data.Title,
+                Items = data.Values,
+                Default = data.Value,
+                Multi = data.Multi,
+                Tooltip = data.Desc,
+                Callback = data.Callback
+            }
+            if data.SearchBarEnabled then
+                return currentSection():Searchbox(control)
+            end
+            return currentSection():Dropdown(control)
+        end
+
+        function tab:Button(data)
+            return currentSection():Button():Add(data.Title, data.Callback)
+        end
+
+        return tab
+    end
+
+    return adapter
+end
+
 local function buildUI()
     if not LoadstringFunction then
         error("loadstring is unavailable")
     end
-    local source, sourceProvider = fetchText(WINDUI_URL)
+    local source, sourceProvider = fetchText(VIBEUI_URL)
     if not source then
-        error("WindUI download failed: " .. tostring(sourceProvider))
+        error("VibeUI download failed: " .. tostring(sourceProvider))
     end
     local chunk, compileError = LoadstringFunction(source)
     if type(chunk) ~= "function" then
-        error("WindUI compile failed: " .. tostring(compileError))
+        error("VibeUI compile failed: " .. tostring(compileError))
     end
     local runOk, library = pcall(chunk)
     if not runOk or type(library) ~= "table" then
-        error("WindUI startup failed: " .. tostring(library))
+        error("VibeUI startup failed: " .. tostring(library))
     end
-    WindUI = library
-    state.WindUISourceProvider = sourceProvider
-    Window = WindUI:CreateWindow({
+    VibeUI = library
+    state.VibeUISourceProvider = sourceProvider
+    applyVibeTheme(state.Theme)
+    Window = createVibeWindow({
         Title = "FNP Autoplayer",
         Icon = "music-2",
         Author = "Autoplayer",
         Folder = FOLDER,
         Size = UDim2.fromOffset(state.WindowWidth, state.WindowHeight),
         Transparent = false,
-        Theme = state.Theme,
-        Resizable = true,
-        SideBarWidth = 170,
-        HideSearchBar = false,
-        ScrollBarEnabled = true
+        Resizable = true
     })
     Window:SetToggleKey(state.WindowKey)
     Window:SetUIScale(state.UIScale)
     Window:SetBackgroundTransparency(state.BackgroundTransparency)
-    Window:SetBackgroundImageTransparency(state.BackgroundImageTransparency)
 
-    state.WindUI = WindUI
+    state.VibeUI = VibeUI
     state.Window = Window
 
     local Main = Window:Tab({Title = "Autoplayer", Icon = "play"})
     local Settings = Window:Tab({Title = "Settings", Icon = "settings"})
     local Mapper = Window:Tab({Title = "Keybind Mapper", Icon = "keyboard"})
-    local Interface = Window:Tab({Title = "WindUI", Icon = "panel-top"})
+    local Interface = Window:Tab({Title = "VibeUI", Icon = "panel-top"})
     local Advanced = Window:Tab({Title = "Advanced", Icon = "wrench"})
 
     state.MainTab = Main
@@ -2534,12 +2627,12 @@ local function buildUI()
         "Left", "Down", "Up", "Right", "LeftShift", "RightShift", "LeftControl", "RightControl"
     }
     local hotkeys = {"Insert", "Home", "End", "PageUp", "PageDown", "RightShift", "RightControl", "LeftControl", "F6", "F7", "F8", "F9", "F10", "F11", "F12"}
-    local themes = {"Dark", "Light", "Midnight", "MonokaiPro", "Indigo", "Violet", "Sky", "Emerald", "Amber", "Crimson", "Rose", "CottonCandy", "Mellowsi", "Plant", "Rainbow", "Red"}
+    local themes = {"Midnight", "Crimson", "Indigo"}
 
     local status = Main:Paragraph({Title = "Runtime", Desc = "Loading runtime state..."})
     local enabledToggle = Main:Toggle({
         Title = "Enabled",
-        Desc = "RightShift toggles the autoplayer. Insert opens or closes WindUI.",
+        Desc = "RightShift toggles the autoplayer. Insert opens or closes VibeUI.",
         Value = state.Enabled,
         Callback = function(value)
             if not ready then
@@ -2663,7 +2756,7 @@ local function buildUI()
     })
     Settings:Dropdown({
         Title = "Autoplayer toggle key",
-        Desc = "Separate from the WindUI window key.",
+        Desc = "Separate from the VibeUI window key.",
         Values = hotkeys,
         Value = keyName(state.AutoplayerToggleKey),
         Multi = false,
@@ -2826,8 +2919,8 @@ local function buildUI()
 
     Interface:Section({Title = "Window"})
     Interface:Dropdown({
-        Title = "WindUI window key",
-        Desc = "Opens and closes WindUI without toggling the autoplayer.",
+        Title = "VibeUI window key",
+        Desc = "Opens and closes VibeUI without toggling the autoplayer.",
         Values = hotkeys,
         Value = keyName(state.WindowKey),
         Multi = false,
@@ -2849,7 +2942,7 @@ local function buildUI()
     })
     Interface:Dropdown({
         Title = "Theme",
-        Desc = "Change the WindUI color theme.",
+        Desc = "Change the VibeUI color theme.",
         Values = themes,
         Value = state.Theme,
         Multi = false,
@@ -2861,14 +2954,14 @@ local function buildUI()
             local theme = pick(value)
             if table.find(themes, theme) then
                 state.Theme = theme
-                pcall(WindUI.SetTheme, WindUI, theme)
+                pcall(applyVibeTheme, theme)
                 queueSave()
             end
         end
     })
     Interface:Slider({
         Title = "UI scale",
-        Desc = "Scale the complete WindUI interface.",
+        Desc = "Scale the complete VibeUI interface.",
         Step = 0.05,
         Value = {Min = 0.65, Max = 1.4, Default = state.UIScale},
         Callback = function(value)
@@ -2907,7 +3000,7 @@ local function buildUI()
     })
     Interface:Slider({
         Title = "Background transparency",
-        Desc = "Adjust the main WindUI background transparency.",
+        Desc = "Adjust the complete VibeUI surface transparency.",
         Step = 0.05,
         Value = {Min = 0, Max = 0.9, Default = state.BackgroundTransparency},
         Callback = function(value)
@@ -2918,22 +3011,9 @@ local function buildUI()
             end
         end
     })
-    Interface:Slider({
-        Title = "Background image transparency",
-        Desc = "Adjust the optional background-image layer.",
-        Step = 0.05,
-        Value = {Min = 0, Max = 1, Default = state.BackgroundImageTransparency},
-        Callback = function(value)
-            if ready then
-                state.BackgroundImageTransparency = tonumber(value) or 0
-                Window:SetBackgroundImageTransparency(state.BackgroundImageTransparency)
-                queueSave()
-            end
-        end
-    })
     Interface:Button({
         Title = "Center window",
-        Desc = "Move WindUI back to the center of the screen.",
+        Desc = "Move VibeUI back to the center of the screen.",
         Icon = "move",
         Callback = function()
             Window:SetToTheCenter()
@@ -2941,22 +3021,20 @@ local function buildUI()
     })
     Interface:Button({
         Title = "Reset interface",
-        Desc = "Restore Insert, Dark theme, 100% scale, default size, and default transparency.",
+        Desc = "Restore Insert, Midnight theme, 100% scale, default size, and default transparency.",
         Icon = "rotate-ccw",
         Callback = function()
             state.WindowKey = Enum.KeyCode.Insert
-            state.Theme = "Dark"
+            state.Theme = "Midnight"
             state.UIScale = 1
             state.WindowWidth = 640
             state.WindowHeight = 500
             state.BackgroundTransparency = 0.15
-            state.BackgroundImageTransparency = 0
             Window:SetToggleKey(state.WindowKey)
-            pcall(WindUI.SetTheme, WindUI, state.Theme)
+            pcall(applyVibeTheme, state.Theme)
             Window:SetUIScale(state.UIScale)
             Window:SetSize(UDim2.fromOffset(state.WindowWidth, state.WindowHeight))
             Window:SetBackgroundTransparency(state.BackgroundTransparency)
-            Window:SetBackgroundImageTransparency(state.BackgroundImageTransparency)
             Window:SetToTheCenter()
             queueSave()
         end
@@ -2977,18 +3055,16 @@ local function buildUI()
         end
     })
     Advanced:Button({
-        Title = "Clear WindUI popups",
-        Desc = "Remove any currently visible WindUI popup or notification cards.",
-        Icon = "x",
+        Title = "Show VibeUI notification",
+        Desc = "Verify that the active VibeUI overlay and notification layer are responsive.",
+        Icon = "bell",
         Callback = function()
-            local robloxGui = CoreGui:FindFirstChild("RobloxGui")
-            local gui = robloxGui and robloxGui:FindFirstChild("WindUI")
-            local popups = gui and gui:FindFirstChild("Popups")
-            if popups then
-                for _, child in popups:GetChildren() do
-                    child:Destroy()
-                end
-            end
+            VibeUI:Notification({
+                Title = "FNP Autoplayer",
+                Description = "VibeUI is active.",
+                Type = "success",
+                Duration = 3
+            })
         end
     })
     Advanced:Button({
@@ -3002,7 +3078,7 @@ local function buildUI()
     })
     Advanced:Button({
         Title = "Destroy autoplayer",
-        Desc = "Release held lanes, restore wrapped functions, destroy WindUI, and disconnect every listener.",
+        Desc = "Release held lanes, restore wrapped functions, unload VibeUI, and disconnect every listener.",
         Icon = "trash-2",
         Callback = function()
             state.Destroy()
@@ -3019,10 +3095,10 @@ local function buildUI()
 
     ready = true
     state.UIReady = true
-    state.UIBuildVersion = 11
+    state.UIBuildVersion = 12
 
     local lastUpdate = 0
-    state.WindUIUpdateConnection = RunService.Heartbeat:Connect(function()
+    state.VibeUIUpdateConnection = RunService.Heartbeat:Connect(function()
         if state.Destroyed then
             return
         end
@@ -3065,11 +3141,10 @@ local function buildUI()
                 state.SkipHarmful and "On" or "Off"
             ))
             diagnostics:SetDesc(string.format(
-                "Core version: %d  |  UI build: %d\nRuntime connections: %d\nStale key-capture listeners removed: %d\nModule failures: %d\nWorkspace file: FNP_Autoplayer.luau",
+                "Core version: %d  |  UI build: %d\nRuntime connections: %d\nUI library: VibeUI\nModule failures: %d\nWorkspace file: FNP_Autoplayer.luau",
                 state.Version,
                 state.UIBuildVersion,
                 #state.Connections,
-                state.StaleInputListenersRemoved or 0,
                 #state.ModuleDiagnostics
             ))
         end)
@@ -3099,9 +3174,9 @@ local function destroy()
             connection:Disconnect()
         end)
     end
-    if state.WindUIUpdateConnection then
+    if state.VibeUIUpdateConnection then
         pcall(function()
-            state.WindUIUpdateConnection:Disconnect()
+            state.VibeUIUpdateConnection:Disconnect()
         end)
     end
     if state.FallbackUIConnection then
@@ -3114,19 +3189,13 @@ local function destroy()
             state.FallbackGui:Destroy()
         end)
     end
-    local oldGui
-    local robloxGui = CoreGui:FindFirstChild("RobloxGui")
-    if robloxGui then
-        oldGui = robloxGui:FindFirstChild("WindUI")
-    end
-    cleanupOrphanedWindUIInputs(oldGui, state.Window)
     if state.Window then
         withIdentity8(function()
             state.Window:Destroy()
         end)
-    elseif oldGui then
+    elseif VibeUI and type(VibeUI.Unload) == "function" then
         pcall(function()
-            oldGui:Destroy()
+            VibeUI:Unload()
         end)
     end
     if VirtualInputManager and VirtualInputOwned then
@@ -3143,7 +3212,10 @@ state.Destroy = destroy
 
 local ok, errorMessage = pcall(buildUI)
 if not ok then
-    warn("[FNP Autoplayer] WindUI failed:", errorMessage)
+    warn("[FNP Autoplayer] VibeUI failed:", errorMessage)
+    if VibeUI and type(VibeUI.Unload) == "function" then
+        pcall(VibeUI.Unload, VibeUI)
+    end
     local fallbackOk, fallbackError = pcall(buildFallbackUI, errorMessage)
     if not fallbackOk then
         showFatalCompatibility("UI initialization failed", tostring(errorMessage) .. "\n\nFallback UI: " .. tostring(fallbackError))

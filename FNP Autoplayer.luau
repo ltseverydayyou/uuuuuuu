@@ -562,7 +562,7 @@ end
 local Config = loadSettings()
 
 local state = {
-    Version = 15,
+    Version = 16,
     Enabled = Config.Enabled ~= false and #AvailableInputModes > 0,
     InputMode = chooseInputMode(Config.InputMode),
     BackendAvailability = BackendAvailability,
@@ -1055,24 +1055,14 @@ end
 
 state.ReleaseAll = releaseAll
 
-local harmfulTokens = {
-    "poison", "mine", "hurt", "death", "kill", "damage", "attack", "bullet", "trap", "black", "fake", "warning", "bomb", "danger"
+local visualHarmfulTokens = {
+    "poison", "mine", "hurt", "death", "kill", "damage", "attack", "trap", "black", "fake", "warning", "bomb", "danger"
 }
 
-local function isHarmful(note)
-    if not state.SkipHarmful then
-        return false
-    end
-    local noteType = string.lower(tostring(note.Type or ""))
-    if noteType == "" or noteType == "none" then
-        return false
-    end
-    for _, token in harmfulTokens do
-        if noteType:find(token, 1, true) then
-            return true
-        end
-    end
-    return false
+local function shouldAutoplayNote(note)
+    return type(note) == "table"
+        and note.MustPress == true
+        and note.shouldPress ~= false
 end
 
 local OriginalSpawn = type(NoteModule.SpawnNote) == "function" and NoteModule.SpawnNote or nil
@@ -1761,7 +1751,7 @@ local function isVisualHarmful(gui)
         return false
     end
 
-    for _, token in harmfulTokens do
+    for _, token in visualHarmfulTokens do
         if name:find(token, 1, true) then
             return true
         end
@@ -2067,7 +2057,7 @@ local function processNotes(deltaTime)
             state.Active[note] = nil
             state.Triggered[note] = nil
             state.Counted[note] = nil
-        elseif note.MustPress == true and note.shouldPress ~= false and not isHarmful(note) then
+        elseif shouldAutoplayNote(note) then
             local lane = (tonumber(note.NoteData) or 0) + 1
             local strumTime = tonumber(note.StrumTime)
 
@@ -2744,8 +2734,8 @@ local function buildUI()
         end
     })
     Settings:Toggle({
-        Title = "Skip harmful notes",
-        Desc = "Avoid poison, mine, hurt, death, and similar note types.",
+        Title = "Visual fallback harmful-note filter",
+        Desc = "In visual fallback only, avoid obvious danger-note names. Live mode follows the game's MustPress/shouldPress state.",
         Value = state.SkipHarmful,
         Callback = function(value)
             if ready then

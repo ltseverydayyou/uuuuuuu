@@ -509,6 +509,7 @@ end
 
 local FiresignalFunction = type(firesignal) == "function" and firesignal or nil
 local GetGCFunction = type(getgc) == "function" and getgc or nil
+local GetRegistryFunction = type(getreg) == "function" and getreg or nil
 local HookFunction = type(hookfunction) == "function" and hookfunction or nil
 local GetThreadIdentityFunction = type(getthreadidentity) == "function" and getthreadidentity or nil
 local SetThreadIdentityFunction = type(setthreadidentity) == "function" and setthreadidentity or nil
@@ -561,8 +562,25 @@ end
 
 local Config = loadSettings()
 
+local ExecutorName = "Unknown"
+local ExecutorVersion = ""
+
+if type(identifyexecutor) == "function" then
+    pcall(function()
+        ExecutorName, ExecutorVersion = identifyexecutor()
+    end)
+end
+
+local normalizedExecutorName = string.lower(tostring(ExecutorName or ""))
+local preferExternalVisualMode = ModuleAccessMode == "live"
+    and normalizedExecutorName:find("solara", 1, true) ~= nil
+    and GetGCFunction == nil
+    and FiresignalFunction == nil
+    and HookFunction == nil
+local initialModuleAccessMode = preferExternalVisualMode and "visual-external" or ModuleAccessMode
+
 local state = {
-    Version = 16,
+    Version = 27,
     Enabled = Config.Enabled ~= false and #AvailableInputModes > 0,
     InputMode = chooseInputMode(Config.InputMode),
     BackendAvailability = BackendAvailability,
@@ -570,8 +588,14 @@ local state = {
     RequireProviders = requireProviders,
     ClosureAttempts = closureAttempts,
     ModuleDiagnostics = moduleDiagnostics,
-    ModuleAccessMode = ModuleAccessMode,
-    VisualMode = ModuleAccessMode == "visual",
+    ModuleAccessMode = initialModuleAccessMode,
+    VisualMode = initialModuleAccessMode ~= "live",
+    RegistryMode = false,
+    RegistryAvailable = GetRegistryFunction ~= nil,
+    RegistryScans = 0,
+    RegistryNotesFound = 0,
+    LastRegistryScan = 0,
+    LiveConductor = nil,
     VirtualInputProvider = VirtualInputProvider,
     VirtualInputOwned = VirtualInputOwned,
     TimingOffset = tonumber(Config.TimingOffset) or 0,
@@ -619,11 +643,21 @@ local state = {
     FireHeld = {},
     Hits = 0,
     Misses = 0,
+    StackedTapCount = 0,
+    SustainTapRetriggers = 0,
+    SuppressedLaneCandidates = 0,
+    MaxLaneCandidates = 0,
     LastSongPos = 0,
     CurrentMania = nil,
     RuntimeBindsAdded = 0,
     SettingsFilled = 0,
     LastGCResolve = 0,
+    SpawnHookCalls = 0,
+    LastSpawnHookCall = 0,
+    UnmappedVisuals = 0,
+    RuntimeFallbackReason = preferExternalVisualMode and "Solara uses an isolated ModuleScript require cache" or nil,
+    ExecutorName = tostring(ExecutorName or "Unknown"),
+    ExecutorVersion = tostring(ExecutorVersion or ""),
     Destroyed = false,
     SaveQueued = false
 }
@@ -1055,9 +1089,63 @@ end
 
 state.ReleaseAll = releaseAll
 
+local function forcePhysicalInputBackend()
+    BackendAvailability.firesignal = false
+    BackendAvailability.getgc = false
+    table.clear(AvailableInputModes)
+
+    if BackendAvailability["Virtual Input"] then
+        AvailableInputModes[1] = "Virtual Input"
+        state.InputMode = "Virtual Input"
+        return true
+    end
+
+    state.Enabled = false
+    state.InputMode = "Unavailable"
+    return false
+end
+
 local visualHarmfulTokens = {
     "poison", "mine", "hurt", "death", "kill", "damage", "attack", "trap", "black", "fake", "warning", "bomb", "danger"
 }
+
+local visualDoNotPressNames = {
+    axe = true,
+    bone = true,
+    devil = true,
+    ebolanote = true,
+    extricky = true,
+    finnglitch = true,
+    firenote = true,
+    ghost = true,
+    grabnote = true,
+    halonotes = true,
+    hurtnote = true,
+    ice = true,
+    ink = true,
+    instahurtnote = true,
+    invisiblepotion = true,
+    jumpscarem = true,
+    karma = true,
+    killpizza = true,
+    missilenote = true,
+    mystery = true,
+    pnote = true,
+    phantom = true,
+    poisonpotion = true,
+    poisonnote = true,
+    rejected = true,
+    sin = true,
+    slashrumble = true,
+    spam = true,
+    speedpotion = true,
+    thorn = true,
+    trap = true
+}
+
+local function normalizedNoteTypeName(value)
+    return string.lower(tostring(value or "")):gsub("[^%w]", "")
+end
 
 local function shouldAutoplayNote(note)
     return type(note) == "table"
@@ -1097,6 +1185,8 @@ if not state.VisualMode and OriginalSpawn then
     wrappedSpawn = function(note)
         local result = OriginalSpawn(note)
         if result then
+            state.SpawnHookCalls += 1
+            state.LastSpawnHookCall = os.clock()
             trackNote(note)
         end
         return result
@@ -1122,6 +1212,63 @@ else
     state.SpawnHooked = false
 end
 
+local function resolveRegistryTracking(force)
+    if not GetRegistryFunction or state.Destroyed then
+        return 0
+    end
+
+    local now = os.clock()
+    if not force and now - state.LastRegistryScan < 0.2 then
+        return state.RegistryNotesFound
+    end
+    state.LastRegistryScan = now
+    state.RegistryScans += 1
+
+    local ok, registry = pcall(GetRegistryFunction)
+    if not ok or type(registry) ~= "table" then
+        return 0
+    end
+
+    local found = 0
+    local liveConductor = state.LiveConductor
+
+    for _, object in next, registry do
+        if type(object) == "table" then
+            if type(rawget(object, "SongPos")) == "number"
+                and type(rawget(object, "stepCrochet")) == "number"
+                and type(rawget(object, "getStep")) == "function"
+                and type(rawget(object, "recalculateStuff")) == "function"
+            then
+                if not liveConductor
+                    or (tonumber(object.SongPos) or -math.huge) > (tonumber(liveConductor.SongPos) or -math.huge)
+                then
+                    liveConductor = object
+                end
+            end
+
+            local noteObject = rawget(object, "NoteObject")
+            if typeof(noteObject) == "Instance"
+                and type(rawget(object, "StrumTime")) == "number"
+                and type(rawget(object, "NoteData")) == "number"
+                and type(rawget(object, "Mania")) == "number"
+                and type(rawget(object, "MustPress")) == "boolean"
+                and rawget(object, "Destroyed") ~= true
+            then
+                found += 1
+                if not state.Active[object] then
+                    trackNote(object)
+                end
+            end
+        end
+    end
+
+    state.LiveConductor = liveConductor
+    state.RegistryNotesFound = found
+    return found
+end
+
+state.ResolveRegistryTracking = resolveRegistryTracking
+
 local laneCountToLayout = {
     [4] = 1,
     [6] = 2,
@@ -1135,6 +1282,8 @@ local laneCountToLayout = {
 local supportedLaneCounts = {4, 5, 6, 7, 8, 9, 12}
 local detectVisualSide
 local refreshVisualReceptors
+local enableVisualFallback
+local enableExternalFallback
 
 local function normalizedGuiName(gui)
     return tostring(gui.Name or ""):gsub("%z", "")
@@ -1193,6 +1342,8 @@ local function registerVisualGui(gui)
             LastBottom = nil,
             LastTime = nil,
             Triggered = false,
+            Attempts = 0,
+            LastAttempt = 0,
             MissCounted = false
         }
     end
@@ -1452,8 +1603,14 @@ detectVisualSide = function(force)
     end
 
     if not side then
-        side = state.VisualContainers.BFNotes and "BF" or state.VisualContainers.DadNotes and "Dad" or nil
-        method = side and "Temporary default while waiting for a performing-spot match" or "Waiting for BFNotes or DadNotes"
+        local hasBF = state.VisualContainers.BFNotes ~= nil
+        local hasDad = state.VisualContainers.DadNotes ~= nil
+        if hasBF ~= hasDad then
+            side = hasBF and "BF" or "Dad"
+            method = "Only one note container is currently available"
+        else
+            method = hasBF and "Waiting for a reliable player-side signal" or "Waiting for BFNotes or DadNotes"
+        end
     end
 
     if not side then
@@ -1622,17 +1779,113 @@ refreshVisualReceptors = function(force)
     return true
 end
 
+enableVisualFallback = function(reason)
+    if state.VisualMode or state.Destroyed then
+        return false
+    end
+
+    state.VisualMode = true
+    state.ModuleAccessMode = "visual-runtime-fallback"
+    state.RuntimeFallbackReason = tostring(reason or "The live SpawnNote hook did not observe rendered notes")
+    state.SpawnHooked = false
+    releaseAll()
+
+    forcePhysicalInputBackend()
+
+    table.clear(state.Active)
+    table.clear(state.GuiToNote)
+    table.clear(state.PendingGui)
+    table.clear(state.Triggered)
+    table.clear(state.Counted)
+
+    warn("[FNP Autoplayer] Switching to runtime visual tracking:", state.RuntimeFallbackReason)
+    pcall(function()
+        StarterGui:SetCore("SendNotification", {
+            Title = "FNP Autoplayer",
+            Text = "External-executor fallback enabled.",
+            Duration = 6
+        })
+    end)
+
+    task.defer(function()
+        detectVisualSide(true)
+    end)
+    return true
+end
+
+enableExternalFallback = function(reason)
+    if state.RegistryMode or state.VisualMode or state.Destroyed then
+        return false
+    end
+
+    if GetRegistryFunction then
+        state.RegistryMode = true
+        state.ModuleAccessMode = "registry-runtime-fallback"
+        state.RuntimeFallbackReason = tostring(reason or "The live SpawnNote hook did not observe rendered notes")
+        state.SpawnHooked = false
+        releaseAll()
+        forcePhysicalInputBackend()
+
+        local found = resolveRegistryTracking(true)
+        if found > 0 and state.LiveConductor then
+            warn("[FNP Autoplayer] Switching to registry note tracking:", state.RuntimeFallbackReason)
+            pcall(function()
+                StarterGui:SetCore("SendNotification", {
+                    Title = "FNP Autoplayer",
+                    Text = "External-executor registry support enabled.",
+                    Duration = 6
+                })
+            end)
+            return true
+        end
+
+        state.RegistryMode = false
+        state.ModuleAccessMode = "live"
+    end
+
+    return enableVisualFallback(reason)
+end
+
 local function connectContainer(container)
     if state.ConnectedContainers[container] then
         return
     end
 
     state.ConnectedContainers[container] = true
+    state.VisualContainers[container.Name] = container
 
-    if state.VisualMode then
-        state.VisualContainers[container.Name] = container
+    local function considerUnmappedVisual(child)
+        if state.VisualMode
+            or state.RegistryMode
+            or not isVisualGui(child)
+            or normalizedGuiName(child) == ""
+        then
+            return
+        end
 
-        state.ContainerConnections[#state.ContainerConnections + 1] = container.ChildAdded:Connect(function(child)
+        task.delay(0.05, function()
+            if state.Destroyed
+                or state.VisualMode
+                or child.Parent ~= container
+                or state.PendingGui[child]
+                or state.GuiToNote[child]
+                or not child.Visible
+                or child.ImageTransparency >= 0.98
+            then
+                return
+            end
+
+            state.UnmappedVisuals += 1
+            enableExternalFallback(string.format(
+                "%s rendered an unmapped note named %s; the executor's require cache is isolated from GameHandler",
+                container:GetFullName(),
+                normalizedGuiName(child)
+            ))
+        end)
+    end
+
+    state.ContainerConnections[#state.ContainerConnections + 1] = container.ChildAdded:Connect(function(child)
+        if state.VisualMode then
             if container == state.VisualContainer then
                 registerVisualGui(child)
                 task.defer(function()
@@ -1649,9 +1902,21 @@ local function connectContainer(container)
                     task.defer(refreshVisualReceptors, true)
                 end
             end
-        end)
+            return
+        end
 
-        state.ContainerConnections[#state.ContainerConnections + 1] = container.ChildRemoved:Connect(function(child)
+        local note = state.PendingGui[child] or state.GuiToNote[child]
+        if note then
+            state.Active[note] = true
+            state.GuiToNote[child] = note
+            state.PendingGui[child] = nil
+        else
+            considerUnmappedVisual(child)
+        end
+    end)
+
+    state.ContainerConnections[#state.ContainerConnections + 1] = container.ChildRemoved:Connect(function(child)
+        if state.VisualMode then
             if container == state.VisualContainer then
                 local wasReceptor = table.find(state.VisualReceptors, child) ~= nil
                 removeVisualGui(child)
@@ -1659,30 +1924,30 @@ local function connectContainer(container)
                     task.defer(refreshVisualReceptors, true)
                 end
             end
-        end)
-
-        task.defer(detectVisualSide, true)
-        return
-    end
-
-    state.ContainerConnections[#state.ContainerConnections + 1] = container.ChildAdded:Connect(function(child)
-        local note = state.PendingGui[child] or state.GuiToNote[child]
-        if note then
-            state.Active[note] = true
-            state.GuiToNote[child] = note
-            state.PendingGui[child] = nil
+        else
+            removeGui(child)
         end
     end)
 
-    state.ContainerConnections[#state.ContainerConnections + 1] = container.ChildRemoved:Connect(removeGui)
-
     for _, child in container:GetChildren() do
-        local note = state.PendingGui[child] or state.GuiToNote[child]
-        if note then
-            state.Active[note] = true
-            state.GuiToNote[child] = note
-            state.PendingGui[child] = nil
+        if state.VisualMode then
+            if container == state.VisualContainer then
+                registerVisualGui(child)
+            end
+        else
+            local note = state.PendingGui[child] or state.GuiToNote[child]
+            if note then
+                state.Active[note] = true
+                state.GuiToNote[child] = note
+                state.PendingGui[child] = nil
+            else
+                considerUnmappedVisual(child)
+            end
         end
+    end
+
+    if state.VisualMode then
+        task.defer(detectVisualSide, true)
     end
 end
 
@@ -1749,6 +2014,10 @@ local function isVisualHarmful(gui)
     local name = string.lower(normalizedGuiName(gui))
     if name == "" or name == "none" or name == "default" or name == "original" then
         return false
+    end
+
+    if visualDoNotPressNames[normalizedNoteTypeName(name)] then
+        return true
     end
 
     for _, token in visualHarmfulTokens do
@@ -1839,6 +2108,7 @@ local function processVisualNotes()
 
     local now = os.clock()
     local activeSustain = {}
+    local tapCandidates = {}
     local dueCount = 0
 
     for gui, record in state.VisualNotes do
@@ -1873,9 +2143,10 @@ local function processVisualNotes()
                     local travel = deltaTime > 0 and math.abs(relativeVelocity) * deltaTime or 0
                     local baseThreshold = math.clamp(receptor.AbsoluteSize.Y * 0.52, 16, 52)
                     local dynamicThreshold = math.max(baseThreshold, math.min(baseThreshold * 4, travel * 1.5 + 10))
+                    local tapCenterThreshold = math.max(10, math.min(baseThreshold * 0.6, travel * 0.6 + 7))
                     local crossed = previous ~= nil
                         and ((previous > 0 and adjustedSigned <= 0) or (previous < 0 and adjustedSigned >= 0))
-                    local within = math.abs(adjustedSigned) <= dynamicThreshold
+                    local within = math.abs(adjustedSigned) <= tapCenterThreshold
                     local timeToHit = math.huge
 
                     if math.abs(relativeVelocity) > 1 then
@@ -1883,17 +2154,12 @@ local function processVisualNotes()
                     end
 
                     local predicted = timeToHit >= 0
-                        and timeToHit <= math.max(0.09, deltaTime * 3.5)
+                        and timeToHit <= math.max(0.012, deltaTime * 1.25)
                     local harmful = isVisualHarmful(gui)
                     local sustain = gui.ZIndex <= 1
                     local adjustedTop = gui.AbsolutePosition.Y - relativeVelocity * offsetSeconds
                     local adjustedBottom = adjustedTop + gui.AbsoluteSize.Y
-                    local tapThreshold = math.max(
-                        baseThreshold,
-                        math.min(baseThreshold * 2.75, travel * 2 + 14)
-                    )
-                    local tapOverlap = adjustedTop <= receptorY + tapThreshold
-                        and adjustedBottom >= receptorY - tapThreshold
+                    local tapThreshold = math.max(10, math.min(baseThreshold * 0.45, travel * 0.6 + 7))
                     local sweptTop = record.LastTop ~= nil
                         and math.min(record.LastTop, adjustedTop) <= receptorY + tapThreshold
                         and math.max(record.LastBottom, adjustedBottom) >= receptorY - tapThreshold
@@ -1920,39 +2186,36 @@ local function processVisualNotes()
                                 end
                             end
                         end
-                    elseif not record.Triggered
-                        and not harmful
-                        and movingTowardOrAcross
-                        and (within or crossed or predicted or tapOverlap or sweptTop)
+                    elseif not harmful
+                        and (
+                            not record.Triggered
+                                and movingTowardOrAcross
+                                and (within or crossed or predicted or sweptTop)
+                            or record.Triggered
+                                and (record.Attempts or 0) < 2
+                                and now - (record.LastAttempt or 0) >= 0.028
+                                and (within or crossed or sweptTop)
+                        )
                     then
                         dueCount += 1
                         if state.Enabled then
-                            local key = getLaneKey((state.CurrentMania or 0) + 1, lane)
-                            if key then
-                                if state.Pressed[lane] and not activeSustain[lane] then
-                                    releaseLane(lane)
-                                    state.RetriggerCount = (state.RetriggerCount or 0) + 1
-                                end
-
-                                if pressLane(lane, key) then
-                                    if hasFollowingVisualSustain(gui, lane, receptor, relativeVelocity) then
-                                        state.VisualHoldUntil[lane] = now + math.max(
-                                            0.22,
-                                            state.SustainBuffer / 1000 + math.max(deltaTime * 3, 0.05)
-                                        )
-                                        state.TapReleaseAt[lane] = nil
-                                    else
-                                        state.TapReleaseAt[lane] = now + math.max(
-                                            0.04,
-                                            state.TapDuration / 1000
-                                        )
-                                    end
-
-                                    record.Triggered = true
-                                    state.Hits += 1
-                                    state.ProcessedThisFrame = (state.ProcessedThisFrame or 0) + 1
-                                end
+                            local priority = timeToHit
+                            if priority == math.huge then
+                                priority = math.abs(adjustedSigned) / math.max(math.abs(relativeVelocity), 1)
                             end
+
+                            tapCandidates[lane] = tapCandidates[lane] or {}
+                            tapCandidates[lane][#tapCandidates[lane] + 1] = {
+                                Gui = gui,
+                                Record = record,
+                                Receptor = receptor,
+                                Lane = lane,
+                                Priority = priority,
+                                IsRetry = record.Triggered == true,
+                                AdjustedSigned = adjustedSigned,
+                                RelativeVelocity = relativeVelocity,
+                                DeltaTime = deltaTime
+                            }
                         end
                     elseif not record.Triggered
                         and state.Enabled
@@ -1977,6 +2240,113 @@ local function processVisualNotes()
 
             record.LastCenterY = centerY
             record.LastTime = now
+        end
+    end
+
+    for lane = 1, #state.VisualReceptors do
+        local laneCandidates = tapCandidates[lane]
+        if laneCandidates then
+            state.MaxLaneCandidates = math.max(state.MaxLaneCandidates or 0, #laneCandidates)
+            local hasFreshCandidate = false
+            for _, candidate in laneCandidates do
+                if not candidate.IsRetry then
+                    hasFreshCandidate = true
+                    break
+                end
+            end
+
+            local candidates = {}
+            for _, candidate in laneCandidates do
+                if not hasFreshCandidate or not candidate.IsRetry then
+                    candidates[#candidates + 1] = candidate
+                end
+            end
+
+            table.sort(candidates, function(a, b)
+                if a.Priority ~= b.Priority then
+                    return a.Priority < b.Priority
+                end
+                return math.abs(a.AdjustedSigned) < math.abs(b.AdjustedSigned)
+            end)
+
+            local primary = candidates[1]
+            local processedCandidates = 0
+            for index, candidate in candidates do
+                local stackTimeWindow = math.clamp(
+                    math.max(0.004, (primary.DeltaTime or 0) * 1.35),
+                    0.004,
+                    0.012
+                )
+                local stackDistanceWindow = math.clamp(
+                    math.max(8, math.abs(primary.RelativeVelocity or 0) * stackTimeWindow),
+                    8,
+                    32
+                )
+                local stacked = index == 1
+                    or not candidate.IsRetry
+                        and math.abs(candidate.Priority - primary.Priority) <= stackTimeWindow
+                        and math.abs(candidate.AdjustedSigned - primary.AdjustedSigned) <= stackDistanceWindow
+
+                if not stacked then
+                    break
+                end
+
+                processedCandidates += 1
+                if index > 1 then
+                    state.StackedTapCount = (state.StackedTapCount or 0) + 1
+                end
+
+                local gui = candidate.Gui
+                local record = candidate.Record
+                local receptor = candidate.Receptor
+                local key = getLaneKey((state.CurrentMania or 0) + 1, lane)
+
+                if key
+                    and gui.Parent == container
+                    and not isVisualHarmful(gui)
+                then
+                    if activeSustain[lane] then
+                        state.SustainTapRetriggers = (state.SustainTapRetriggers or 0) + 1
+                    end
+
+                    if state.Pressed[lane] then
+                        releaseLane(lane)
+                        state.RetriggerCount = (state.RetriggerCount or 0) + 1
+                    end
+
+                    if pressLane(lane, key) then
+                        if activeSustain[lane]
+                            or hasFollowingVisualSustain(gui, lane, receptor, candidate.RelativeVelocity)
+                        then
+                            state.VisualHoldUntil[lane] = math.max(
+                                state.VisualHoldUntil[lane] or 0,
+                                now + math.max(
+                                0.22,
+                                state.SustainBuffer / 1000 + math.max(candidate.DeltaTime * 3, 0.05)
+                                )
+                            )
+                            state.TapReleaseAt[lane] = nil
+                        else
+                            state.TapReleaseAt[lane] = now + math.max(
+                                0.06,
+                                state.TapDuration / 1000
+                            )
+                        end
+
+                        local firstAttempt = (record.Attempts or 0) == 0
+                        record.Attempts = (record.Attempts or 0) + 1
+                        record.LastAttempt = now
+                        record.Triggered = true
+                        if firstAttempt then
+                            state.Hits += 1
+                        end
+                        state.ProcessedThisFrame = (state.ProcessedThisFrame or 0) + 1
+                    end
+                end
+            end
+
+            state.SuppressedLaneCandidates = (state.SuppressedLaneCandidates or 0)
+                + math.max(0, #candidates - processedCandidates)
         end
     end
 
@@ -2022,10 +2392,13 @@ local function processNotes(deltaTime)
         processVisualNotes()
         return
     end
-    if not state.SpawnHooked and BackendAvailability.getgc and os.clock() - state.LastGCResolve >= 1 then
+    if state.RegistryMode then
+        resolveRegistryTracking(false)
+    elseif not state.SpawnHooked and BackendAvailability.getgc and os.clock() - state.LastGCResolve >= 1 then
         resolveGetGC(true)
     end
-    local songPosition = Conductor.SongPos
+    local activeConductor = state.RegistryMode and state.LiveConductor or Conductor
+    local songPosition = activeConductor and activeConductor.SongPos
     if type(songPosition) ~= "number" then
         return
     end
@@ -2148,7 +2521,7 @@ local function processNotes(deltaTime)
                     local holdLength = tonumber(note.SustainLength) or 0
 
                     if holdLength > 0 then
-                        local step = tonumber(Conductor.stepCrochet) or 0
+                        local step = tonumber(activeConductor and activeConductor.stepCrochet) or 0
                         state.HoldUntil[lane] = math.max(
                             state.HoldUntil[lane] or 0,
                             strumTime + holdLength + step + state.SustainBuffer
@@ -3111,14 +3484,17 @@ local function buildUI()
                 getAccuracy()
             ))
             backend:SetDesc(string.format(
-                "Tracking: %s\nMethod: %s\nSide detector: %s\nGameSettings: %s\nVirtualInputManager: %s\nfiresignal: %s\ngetgc cache: %s",
+                "Tracking: %s\nMethod: %s\nSide detector: %s\nGameSettings: %s\nVirtualInputManager: %s\nfiresignal: %s\ngetgc cache: %s\nRegistry: %s (%d scans, %d notes)",
                 state.ModuleAccessMode,
                 state.InputMode,
                 state.DetectedSideMethod,
                 ReconstructedGameSettingsStatus,
                 state.VirtualInput and state.VirtualInput.ClassName or "Unavailable",
                 BackendAvailability.firesignal and "Available" or "Unavailable",
-                type(state.GCGoodhit) == "function" and "Resolved" or "Not resolved"
+                type(state.GCGoodhit) == "function" and "Resolved" or "Not resolved",
+                state.RegistryAvailable and (state.RegistryMode and "Active" or "Available") or "Unavailable",
+                state.RegistryScans,
+                state.RegistryNotesFound
             ))
             settingsState:SetDesc(string.format(
                 "Autoplayer key: %s\nWindow key: %s\nTiming: %+d ms  |  Tap: %d ms  |  Sustain buffer: %d ms\nMissing-bind repair: %s  |  Harmful-note filter: %s",
@@ -3131,9 +3507,14 @@ local function buildUI()
                 state.SkipHarmful and "On" or "Off"
             ))
             diagnostics:SetDesc(string.format(
-                "Core version: %d  |  UI build: %d\nRuntime connections: %d\nUI library: VibeUI\nModule failures: %d\nWorkspace file: FNP_Autoplayer.luau",
+                "Core version: %d  |  UI build: %d\nExecutor: %s %s\nSpawn hook calls: %d  |  Unmapped visuals: %d\nRuntime fallback: %s\nRuntime connections: %d\nUI library: VibeUI\nModule failures: %d\nWorkspace file: FNP_Autoplayer.luau",
                 state.Version,
                 state.UIBuildVersion,
+                state.ExecutorName,
+                state.ExecutorVersion,
+                state.SpawnHookCalls,
+                state.UnmappedVisuals,
+                state.RuntimeFallbackReason or "Not needed",
                 #state.Connections,
                 #state.ModuleDiagnostics
             ))

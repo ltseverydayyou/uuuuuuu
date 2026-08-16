@@ -855,6 +855,56 @@ local function main()
 		local OutputLimit = Console.Output.OutputLimit
 		local displayedOutput = {}
 
+		consoleApp.GetLogs = function(limit, filter)
+			limit = math.clamp(math.floor(tonumber(limit) or 100), 1, 1000)
+			local wanted = tostring(filter or ""):lower()
+			local out = {}
+			local startIndex = math.max(1, #displayedOutput - limit + 1)
+			for i = startIndex, #displayedOutput do
+				local inst = displayedOutput[i]
+				if inst and inst.Parent then
+					local message = tostring(inst:GetAttribute("RawMessage") or inst.Text or "")
+					local messageType = tostring(inst:GetAttribute("MessageType") or "")
+					if wanted == "" or message:lower():find(wanted, 1, true) or messageType:lower():find(wanted, 1, true) then
+						out[#out + 1] = {
+							message = message,
+							messageType = messageType,
+							timestamp = inst:GetAttribute("Timestamp"),
+						}
+					end
+				end
+			end
+			return out
+		end
+
+		consoleApp.Run = function(source)
+			source = tostring(source or "")
+			if source == "" then
+				return {ok = false, error = "empty source"}
+			end
+			local loader = loadstring or load
+			if type(loader) ~= "function" then
+				return {ok = false, error = "loadstring unavailable"}
+			end
+			local fn, compileErr = loader(source, "@DexConsoleMCP")
+			if type(fn) ~= "function" then
+				return {ok = false, error = tostring(compileErr)}
+			end
+			local results = table.pack(pcall(fn))
+			if not results[1] then
+				return {ok = false, error = tostring(results[2])}
+			end
+			local out = {}
+			for i = 2, math.min(results.n, 9) do
+				out[#out + 1] = {
+					type = typeof(results[i]),
+					value = tostring(results[i]),
+				}
+			end
+			return {ok = true, results = out, count = math.max(0, results.n - 1)}
+		end
+
+
 		CtrlScroll = getUserBool("ConsoleCtrlScroll", false)
 		AutoScroll = getUserBool("ConsoleAutoScroll", false)
 		OutputTextSize.Value = getUserNumber("ConsoleTextSize", OutputTextSize.Value, 1, 64)
@@ -1104,6 +1154,8 @@ local function main()
 			end))
 
 			newOutputText:SetAttribute("MessageType", msgtype.Name or "MessageOutput")
+			newOutputText:SetAttribute("RawMessage", tostring(msg))
+			newOutputText:SetAttribute("Timestamp", tonumber(timestamp) or os.time())
 
 			trackConn(newOutputText.Focused:Connect(function()
 				focussedOutput = newOutputText

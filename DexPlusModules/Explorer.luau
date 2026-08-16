@@ -1133,6 +1133,56 @@ local function main()
 		Explorer.ViewNode(nodes[obj])
 	end
 
+	Explorer.GetNode = function(obj)
+		return nodes[obj]
+	end
+
+	Explorer.GetSelectedObjects = function(limit)
+		limit = math.clamp(math.floor(tonumber(limit) or 25), 1, 250)
+		local out = {}
+		if not selection or type(selection.List) ~= "table" then
+			return out
+		end
+		for i, node in ipairs(selection.List) do
+			if i > limit then
+				break
+			end
+			if type(node) == "table" and typeof(node.Obj) == "Instance" then
+				out[#out + 1] = node.Obj
+			end
+		end
+		return out
+	end
+
+	Explorer.SelectObject = function(obj, additive)
+		if typeof(obj) ~= "Instance" then
+			return false, "expected Instance"
+		end
+		if not selection then
+			return false, "Explorer selection is not initialized"
+		end
+
+		local node = nodes[obj]
+		if not node then
+			return false, "instance is not indexed"
+		end
+
+		if additive == true then
+			if not selection.Map[node] then
+				selection:Add(node)
+			end
+		else
+			selection.ShiftSet = {}
+			selection:Set(node)
+			selection.Piviot = node
+		end
+
+		Explorer.ViewNode(node)
+		Explorer.Refresh()
+		return true
+	end
+
+
 	Explorer.MakeNodeVisible = function(node,expandRoot)
 		if not node then return end
 

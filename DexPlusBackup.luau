@@ -3214,6 +3214,680 @@ Main = (function()
 		return moduleData
 	end
 
+
+	Main.InstallMCPBridge = function()
+		local state = Main.__DexState or getDexState(true)
+		Main.__DexState = state
+
+		local bridge = type(Main.MCP) == "table" and Main.MCP or {}
+		local options = type(bridge._options) == "table" and bridge._options or {
+			allowUIAccess = false,
+			actor = "",
+		}
+		local history = type(bridge._history) == "table" and bridge._history or {}
+
+		bridge._options = options
+		bridge._history = history
+		bridge.name = "Dex++ MCP Bridge"
+		bridge.version = 1
+		bridge.kind = "dex-plus-plus"
+		bridge.ready = true
+		bridge.helpers = {
+			"ping",
+			"snapshot",
+			"apps",
+			"load",
+			"app",
+			"selection",
+			"select",
+			"view",
+			"path",
+			"search",
+			"script",
+			"consoleLogs",
+			"consoleRun",
+			"getSetting",
+			"setSetting",
+			"menu",
+			"ui",
+			"activity",
+			"options",
+			"reload",
+			"exit",
+		}
+
+		local function record(action, detail, isRead)
+			history[#history + 1] = {
+				t = os.clock(),
+				action = tostring(action or "activity"),
+				detail = tostring(detail or ""),
+				read = isRead == true,
+				actor = tostring(options.actor or ""),
+			}
+			while #history > 50 do
+				table.remove(history, 1)
+			end
+		end
+
+		local function normalizeName(value)
+			return tostring(value or ""):lower():gsub("[%s_%-]+", "")
+		end
+
+		local appAliases = {
+			explorer = "Explorer",
+			properties = "Properties",
+			scriptviewer = "ScriptViewer",
+			executor = "ScriptViewer",
+			console = "Console",
+			saveinstance = "SaveInstance",
+			modelviewer = "ModelViewer",
+			viewer3d = "ModelViewer",
+			settings = "SettingsWindow",
+			settingswindow = "SettingsWindow",
+			thememanager = "ThemeManager",
+			envexplorer = "EnvExplorer",
+			environmentexplorer = "EnvExplorer",
+			dataexplorer = "DataExplorer",
+			debugexplorer = "DebugExplorer",
+		}
+
+		local function resolveModuleName(value)
+			local raw = tostring(value or "")
+			if Apps[raw] or table.find(Main.StartupModuleList or {}, raw) or table.find(Main.DeferredModuleList or {}, raw) or table.find(Main.OptionalModuleList or {}, raw) then
+				return raw
+			end
+			return appAliases[normalizeName(raw)]
+		end
+
+		local function windowVisible(window)
+			if type(window) ~= "table" then
+				return false
+			end
+			if type(window.IsVisible) == "function" then
+				local ok, value = pcall(window.IsVisible, window)
+				if ok then
+					return value == true
+				end
+			end
+			return window.Closed == false
+		end
+
+		local function summarizeInstance(obj)
+			if typeof(obj) ~= "Instance" then
+				return nil
+			end
+			local info = {
+				name = obj.Name,
+				className = obj.ClassName,
+			}
+			local okFull, fullName = pcall(obj.GetFullName, obj)
+			if okFull then
+				info.fullName = fullName
+			end
+			local explorer = Apps.Explorer
+			if explorer and type(explorer.GetInstancePath) == "function" then
+				local okPath, path = pcall(explorer.GetInstancePath, obj)
+				if okPath then
+					info.path = path
+				end
+			end
+			local okDebug, debugId = pcall(obj.GetDebugId, obj)
+			if okDebug then
+				info.debugId = debugId
+			end
+			return info
+		end
+
+		local function moduleSummary(moduleName)
+			local moduleData = Apps[moduleName]
+			local window = moduleData and moduleData.Window
+			return {
+				name = moduleName,
+				loaded = type(moduleData) == "table",
+				initialized = type(moduleData) == "table" and moduleData.__DexInitDone == true or false,
+				hasWindow = type(window) == "table",
+				visible = windowVisible(window),
+			}
+		end
+
+		local function ensureModule(moduleName)
+			moduleName = resolveModuleName(moduleName)
+			if not moduleName then
+				return nil, "unknown module"
+			end
+			if Apps[moduleName] then
+				return Apps[moduleName], moduleName
+			end
+
+			local moduleData = Main.LoadOptionalModule(moduleName)
+			if not moduleData then
+				return nil, "failed to load " .. tostring(moduleName)
+			end
+			if type(Main.RegisterDeferredApps) == "function" then
+				pcall(Main.RegisterDeferredApps)
+			end
+			if type(Main.SyncModuleDependencies) == "function" then
+				pcall(Main.SyncModuleDependencies)
+			end
+			return moduleData, moduleName
+		end
+
+		bridge.ping = function()
+			record("ping", "", true)
+			return {
+				ok = true,
+				name = bridge.name,
+				version = bridge.version,
+				kind = bridge.kind,
+				ready = bridge.ready == true,
+				dexVersion = Main.Version,
+				sessionId = Main.SessionId,
+				state = state.State,
+				loaded = Main.__DexLoaded == true,
+				elevated = Main.Elevated == true,
+			}
+		end
+
+		bridge.snapshot = function()
+			record("snapshot", "", true)
+			local selected = {}
+			local explorer = Apps.Explorer
+			if explorer and explorer.Selection and type(explorer.Selection.List) == "table" then
+				for i, node in ipairs(explorer.Selection.List) do
+					if i > 25 then
+						break
+					end
+					local info = summarizeInstance(type(node) == "table" and node.Obj or nil)
+					if info then
+						selected[#selected + 1] = info
+					end
+				end
+			end
+
+			local loadedCount = 0
+			for _ in Apps do
+				loadedCount += 1
+			end
+
+			return {
+				ok = true,
+				state = state.State,
+				loaded = Main.__DexLoaded == true,
+				sessionId = Main.SessionId,
+				mainGuiOpen = Main.MainGuiOpen == true,
+				loadedModules = loadedCount,
+				selected = selected,
+			}
+		end
+
+		bridge.apps = function(filter)
+			record("apps", tostring(filter or ""), true)
+			local wanted = normalizeName(filter)
+			local names = {}
+			local seen = {}
+
+			local function addList(list)
+				for _, moduleName in list or {} do
+					if not seen[moduleName] then
+						seen[moduleName] = true
+						names[#names + 1] = moduleName
+					end
+				end
+			end
+
+			addList(Main.StartupModuleList)
+			addList(Main.DeferredModuleList)
+			addList(Main.OptionalModuleList)
+			for moduleName in Apps do
+				if not seen[moduleName] then
+					seen[moduleName] = true
+					names[#names + 1] = moduleName
+				end
+			end
+			table.sort(names)
+
+			local result = {}
+			for _, moduleName in names do
+				if wanted == "" or normalizeName(moduleName):find(wanted, 1, true) then
+					result[#result + 1] = moduleSummary(moduleName)
+				end
+			end
+			return {ok = true, apps = result, count = #result}
+		end
+
+		bridge.load = function(name)
+			local moduleData, moduleNameOrErr = ensureModule(name)
+			if not moduleData then
+				record("load error", tostring(name) .. ": " .. tostring(moduleNameOrErr))
+				return {ok = false, error = moduleNameOrErr}
+			end
+			record("load", moduleNameOrErr)
+			return {ok = true, app = moduleSummary(moduleNameOrErr)}
+		end
+
+		bridge.app = function(name, action)
+			action = tostring(action or "toggle"):lower()
+			local moduleData, moduleNameOrErr = ensureModule(name)
+			if not moduleData then
+				record("app error", tostring(name) .. ": " .. tostring(moduleNameOrErr))
+				return {ok = false, error = moduleNameOrErr}
+			end
+
+			local window = moduleData.Window
+			if type(window) ~= "table" then
+				return {ok = false, error = tostring(moduleNameOrErr) .. " has no window"}
+			end
+
+			local visible = windowVisible(window)
+			if action == "show" or action == "open" then
+				if type(window.Show) == "function" then
+					window:Show()
+				end
+			elseif action == "hide" or action == "close" then
+				if type(window.Hide) == "function" then
+					window:Hide()
+				end
+			elseif action == "toggle" then
+				if visible then
+					if type(window.Hide) == "function" then
+						window:Hide()
+					end
+				elseif type(window.Show) == "function" then
+					window:Show()
+				end
+			else
+				return {ok = false, error = "action must be open/show, close/hide, or toggle"}
+			end
+
+			record("app " .. action, moduleNameOrErr)
+			return {ok = true, app = moduleSummary(moduleNameOrErr)}
+		end
+
+		bridge.selection = function(limit)
+			record("selection", "", true)
+			local explorer = Apps.Explorer
+			if not explorer or not explorer.Selection then
+				return {ok = false, error = "Explorer is unavailable"}
+			end
+			limit = math.clamp(math.floor(tonumber(limit) or 25), 1, 250)
+			local out = {}
+			for i, node in ipairs(explorer.Selection.List or {}) do
+				if i > limit then
+					break
+				end
+				local info = summarizeInstance(type(node) == "table" and node.Obj or nil)
+				if info then
+					out[#out + 1] = info
+				end
+			end
+			return {ok = true, selected = out, count = #(explorer.Selection.List or {})}
+		end
+
+		bridge.select = function(obj, additive)
+			if typeof(obj) ~= "Instance" then
+				return {ok = false, error = "expected Instance"}
+			end
+			local explorer = Apps.Explorer
+			if not explorer then
+				return {ok = false, error = "Explorer is unavailable"}
+			end
+
+			if type(explorer.SelectObject) == "function" then
+				local okCall, selected, err = pcall(explorer.SelectObject, obj, additive == true)
+				if not okCall then
+					return {ok = false, error = tostring(selected)}
+				end
+				if selected ~= true then
+					return {ok = false, error = tostring(err or "instance is not indexed")}
+				end
+			else
+				if type(explorer.ViewObj) == "function" then
+					pcall(explorer.ViewObj, obj)
+				end
+				return {
+					ok = false,
+					error = "this Explorer module does not expose SelectObject; update Explorer MCP module",
+					viewed = true,
+				}
+			end
+
+			record("select", obj:GetFullName())
+			return {ok = true, object = summarizeInstance(obj)}
+		end
+
+		bridge.view = function(obj)
+			if typeof(obj) ~= "Instance" then
+				return {ok = false, error = "expected Instance"}
+			end
+			local explorer = Apps.Explorer
+			if not explorer or type(explorer.ViewObj) ~= "function" then
+				return {ok = false, error = "Explorer.ViewObj unavailable"}
+			end
+			local okCall, err = pcall(explorer.ViewObj, obj)
+			if not okCall then
+				return {ok = false, error = tostring(err)}
+			end
+			if explorer.Window and type(explorer.Window.Show) == "function" then
+				pcall(explorer.Window.Show, explorer.Window)
+			end
+			record("view", obj:GetFullName())
+			return {ok = true, object = summarizeInstance(obj)}
+		end
+
+		bridge.path = function(obj)
+			record("path", "", true)
+			if typeof(obj) ~= "Instance" then
+				return {ok = false, error = "expected Instance"}
+			end
+			local explorer = Apps.Explorer
+			if not explorer or type(explorer.GetInstancePath) ~= "function" then
+				return {ok = false, error = "Explorer.GetInstancePath unavailable"}
+			end
+			local okPath, path = pcall(explorer.GetInstancePath, obj)
+			return okPath and {ok = true, path = path} or {ok = false, error = tostring(path)}
+		end
+
+		bridge.search = function(query)
+			local explorer = Apps.Explorer
+			if not explorer or type(explorer.DoSearch) ~= "function" then
+				return {ok = false, error = "Explorer search unavailable"}
+			end
+			query = tostring(query or "")
+			if explorer.GuiElems and explorer.GuiElems.SearchBar then
+				explorer.GuiElems.SearchBar.Text = query
+			end
+			local okCall, err = pcall(explorer.DoSearch, query)
+			if not okCall then
+				return {ok = false, error = tostring(err)}
+			end
+			record("search", query)
+			return {ok = true, query = query}
+		end
+
+		bridge.script = function(scr)
+			if typeof(scr) ~= "Instance" or not scr:IsA("LuaSourceContainer") then
+				return {ok = false, error = "expected LuaSourceContainer"}
+			end
+			local viewer = Apps.ScriptViewer
+			if not viewer or type(viewer.ViewScript) ~= "function" then
+				return {ok = false, error = "ScriptViewer unavailable"}
+			end
+			local okCall, err = pcall(viewer.ViewScript, scr)
+			if not okCall then
+				return {ok = false, error = tostring(err)}
+			end
+			if viewer.Window and type(viewer.Window.Show) == "function" then
+				pcall(viewer.Window.Show, viewer.Window)
+			end
+			record("script", scr:GetFullName())
+			return {ok = true, object = summarizeInstance(scr)}
+		end
+
+		bridge.consoleLogs = function(limit, filter)
+			local console, err = ensureModule("Console")
+			if not console then
+				return {ok = false, error = err}
+			end
+			limit = math.clamp(math.floor(tonumber(limit) or 100), 1, 1000)
+			filter = tostring(filter or "")
+			record("console logs", filter .. " / " .. tostring(limit), true)
+
+			if type(console.GetLogs) == "function" then
+				local okCall, logs = pcall(console.GetLogs, limit, filter)
+				if okCall then
+					return {ok = true, logs = logs, count = #logs}
+				end
+			end
+
+			local logService = service and service.LogService
+			if not logService then
+				return {ok = false, error = "LogService unavailable"}
+			end
+			local okHistory, historyData = pcall(logService.GetLogHistory, logService)
+			if not okHistory or type(historyData) ~= "table" then
+				return {ok = false, error = tostring(historyData)}
+			end
+			local out = {}
+			local wanted = filter:lower()
+			local startIndex = math.max(1, #historyData - limit + 1)
+			for i = startIndex, #historyData do
+				local entry = historyData[i]
+				local msg = tostring(entry.message or entry.Message or "")
+				local msgType = entry.messageType or entry.MessageType
+				local typeName = typeof(msgType) == "EnumItem" and msgType.Name or tostring(msgType or "")
+				if wanted == "" or msg:lower():find(wanted, 1, true) or typeName:lower():find(wanted, 1, true) then
+					out[#out + 1] = {
+						message = msg,
+						messageType = typeName,
+						timestamp = entry.timestamp or entry.time,
+					}
+				end
+			end
+			return {ok = true, logs = out, count = #out, fallback = true}
+		end
+
+		bridge.consoleRun = function(source)
+			source = tostring(source or "")
+			if source == "" then
+				return {ok = false, error = "empty source"}
+			end
+			local console = Apps.Console
+			if console and type(console.Run) == "function" then
+				local okCall, result = pcall(console.Run, source)
+				if not okCall then
+					return {ok = false, error = tostring(result)}
+				end
+				record("console run", source:sub(1, 120))
+				return result
+			end
+
+			local loader = loadstring or load
+			if type(loader) ~= "function" then
+				return {ok = false, error = "loadstring unavailable"}
+			end
+			local fn, compileErr = loader(source, "@DexMCP")
+			if type(fn) ~= "function" then
+				return {ok = false, error = tostring(compileErr)}
+			end
+			local results = table.pack(pcall(fn))
+			if not results[1] then
+				return {ok = false, error = tostring(results[2])}
+			end
+			local out = {}
+			for i = 2, math.min(results.n, 9) do
+				out[#out + 1] = {
+					type = typeof(results[i]),
+					value = tostring(results[i]),
+				}
+			end
+			record("console run", source:sub(1, 120))
+			return {ok = true, results = out, count = math.max(0, results.n - 1)}
+		end
+
+		local function getSettingParent(path)
+			path = tostring(path or "")
+			if path == "" then
+				return nil, nil, "empty setting path"
+			end
+			local parts = string.split(path, ".")
+			local current = Settings
+			for i = 1, #parts - 1 do
+				if type(current) ~= "table" then
+					return nil, nil, "invalid setting path"
+				end
+				current = current[parts[i]]
+			end
+			return current, parts[#parts]
+		end
+
+		bridge.getSetting = function(path)
+			record("get setting", tostring(path or ""), true)
+			local parent, key, err = getSettingParent(path)
+			if not parent then
+				return {ok = false, error = err}
+			end
+			local value = parent[key]
+			return {
+				ok = true,
+				path = tostring(path),
+				type = typeof(value),
+				value = value,
+			}
+		end
+
+		bridge.setSetting = function(path, value)
+			local parent, key, err = getSettingParent(path)
+			if not parent then
+				return {ok = false, error = err}
+			end
+			parent[key] = value
+			if type(Main.SaveCurrentSettings) == "function" then
+				pcall(Main.SaveCurrentSettings)
+			end
+			record("set setting", tostring(path))
+			return {
+				ok = true,
+				path = tostring(path),
+				type = typeof(value),
+				value = value,
+			}
+		end
+
+		bridge.menu = function(open)
+			if type(Main.SetMainGuiOpen) ~= "function" then
+				return {ok = false, error = "main menu unavailable"}
+			end
+			if open == nil then
+				open = not Main.MainGuiOpen
+			end
+			Main.SetMainGuiOpen(open == true)
+			record("menu", tostring(open == true))
+			return {ok = true, open = Main.MainGuiOpen == true}
+		end
+
+		bridge.ui = function()
+			record("ui", options.allowUIAccess == true and "granted" or "summary", true)
+			local gui = Main.MainGui
+			local out = {
+				ok = true,
+				hasUI = typeof(gui) == "Instance",
+				allowUIAccess = options.allowUIAccess == true,
+				mainGuiOpen = Main.MainGuiOpen == true,
+			}
+			if typeof(gui) == "Instance" then
+				out.name = gui.Name
+				out.className = gui.ClassName
+				out.enabled = gui.Enabled
+				if options.allowUIAccess == true then
+					out.instance = gui
+				end
+			end
+			return out
+		end
+
+		bridge.activity = function(limit)
+			record("activity", "", true)
+			limit = math.clamp(math.floor(tonumber(limit) or 25), 1, 100)
+			local out = {}
+			local startIndex = math.max(1, #history - limit + 1)
+			for i = startIndex, #history do
+				local item = history[i]
+				out[#out + 1] = {
+					t = item.t,
+					action = item.action,
+					detail = item.detail,
+					read = item.read,
+					actor = item.actor,
+				}
+			end
+			return {ok = true, activity = out, count = #history}
+		end
+
+		bridge.options = function(nextOptions)
+			if type(nextOptions) == "table" then
+				if nextOptions.allowUIAccess ~= nil then
+					options.allowUIAccess = nextOptions.allowUIAccess == true
+				end
+				if nextOptions.actor ~= nil or nextOptions.clientName ~= nil then
+					options.actor = tostring(nextOptions.actor or nextOptions.clientName or "")
+				end
+				record("options", "updated")
+			end
+			return {
+				allowUIAccess = options.allowUIAccess == true,
+				actor = options.actor,
+			}
+		end
+
+		bridge.reload = function()
+			if type(Main.Reinit) ~= "function" then
+				return {ok = false, error = "reload unavailable"}
+			end
+			record("reload", "queued")
+			task.spawn(function()
+				local okReload, reloadErr = pcall(Main.Reinit)
+				if not okReload then
+					warn("[Dex MCP] Reload failed: " .. tostring(reloadErr))
+				end
+			end)
+			return {ok = true, queued = true}
+		end
+
+		bridge.exit = function()
+			record("exit", "")
+			task.defer(function()
+				Main.Exit()
+			end)
+			return {ok = true, queued = true}
+		end
+
+		Main.MCP = bridge
+		state.MCP = bridge
+		state.Main = Main
+
+		local stores = {}
+		local seenStores = {}
+		local function addStore(store)
+			if type(store) == "table" and not seenStores[store] then
+				seenStores[store] = true
+				stores[#stores + 1] = store
+			end
+		end
+		for _, store in globalStores do
+			addStore(store)
+		end
+		addStore(rawget(_G, "shared"))
+
+		for _, store in stores do
+			rawset(store, "DEXPP_MCP", bridge)
+			rawset(store, "DexPlusMCP", bridge)
+			rawset(store, "DEX_MCP", bridge)
+		end
+
+		Main.UninstallMCPBridge = function()
+			if type(Main.MCP) == "table" then
+				Main.MCP.ready = false
+			end
+			for _, store in stores do
+				if rawget(store, "DEXPP_MCP") == bridge then
+					rawset(store, "DEXPP_MCP", nil)
+				end
+				if rawget(store, "DexPlusMCP") == bridge then
+					rawset(store, "DexPlusMCP", nil)
+				end
+				if rawget(store, "DEX_MCP") == bridge then
+					rawset(store, "DEX_MCP", nil)
+				end
+			end
+			if state.MCP == bridge then
+				state.MCP = nil
+			end
+			return true
+		end
+
+		return bridge
+	end
+
 	Main.SetMainGuiOpen = function(val)
 		if not Main.MainGui or not Main.MainGui:FindFirstChild("OpenButton") then
 			return
@@ -3263,6 +3937,9 @@ Main = (function()
 			return
 		end
 		Main.__DexExiting = true
+		if keepDexState ~= true and type(Main.UninstallMCPBridge) == "function" then
+			pcall(Main.UninstallMCPBridge)
+		end
 		Main.__DexLoaded = false
 		Main.__DexInitStarted = keepDexState == true
 
@@ -3373,6 +4050,9 @@ Main = (function()
 			dexState.Main = Main
 			dexState.State = "ready"
 			dexState.StartedAt = os.clock()
+			if type(Main.InstallMCPBridge) == "function" then
+				pcall(Main.InstallMCPBridge)
+			end
 			if Main.SessionId then
 				dexState.SessionId = Main.SessionId
 			end
@@ -4321,6 +5001,9 @@ if okInit then
 	Main.__DexLoaded = true
 	Main.__DexInitStarted = false
 	dexState.State = "ready"
+	if type(Main.InstallMCPBridge) == "function" then
+		Main.InstallMCPBridge()
+	end
 else
 	Main.__DexLoaded = false
 	Main.__DexInitStarted = false

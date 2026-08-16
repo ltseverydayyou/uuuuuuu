@@ -357,6 +357,18 @@ tstate.connections = connections
 local unstacked = {}
 tstate.unstacked = unstacked
 
+local function syncTurtleStateCollections()
+	tstate.remotes = remotes
+	tstate.remoteArgs = remoteArgs
+	tstate.remoteButtons = remoteButtons
+	tstate.remoteScripts = remoteScripts
+	tstate.remoteLogs = remoteLogs
+	tstate.IgnoreList = IgnoreList
+	tstate.BlockList = BlockList
+	tstate.connections = connections
+	tstate.unstacked = unstacked
+end
+
 local clientEventConns = {}
 tstate.clientEventConns = clientEventConns
 
@@ -2087,6 +2099,7 @@ Clear.MouseButton1Click:Connect(function()
 	BlockList = {};
 	unstacked = {};
 	connections = {};
+	syncTurtleStateCollections();
 	RemoteScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 287);
 	ButtonEffect(Clear, "Cleared!");
 end);
@@ -2490,9 +2503,795 @@ tstate.handler = function(self, method, args, results)
 		end
 	end
 end
+
+local function installTurtleSpyMCP()
+	local options = type(tstate.mcpOptions) == "table" and tstate.mcpOptions or {}
+	tstate.mcpOptions = options
+	if options.allowUIAccess == nil then
+		options.allowUIAccess = false
+	end
+	if options.maxPreviewDepth == nil then
+		options.maxPreviewDepth = 3
+	end
+	if options.maxPreviewItems == nil then
+		options.maxPreviewItems = 50
+	end
+	if options.actor == nil then
+		options.actor = ""
+	end
+
+	local activity = type(tstate.mcpActivity) == "table" and tstate.mcpActivity or {}
+	tstate.mcpActivity = activity
+
+	local function record(action, detail)
+		activity[#activity + 1] = {
+			t = os.time and os.time() or nil,
+			action = tostring(action or "activity"),
+			detail = tostring(detail or ""),
+			actor = tostring(options.actor or ""),
+		}
+		while #activity > 50 do
+			table.remove(activity, 1)
+		end
+	end
+
+	local function safePath(instance)
+		if typeof(instance) ~= "Instance" then
+			return nil
+		end
+		local ok, value = pcall(GetFullPathOfAnInstance, instance)
+		if ok then
+			return value
+		end
+		return nil
+	end
+
+	local function safeDebugId(instance)
+		if typeof(instance) ~= "Instance" then
+			return nil
+		end
+		local ok, value = pcall(function()
+			return instance:GetDebugId()
+		end)
+		if ok then
+			return value
+		end
+		return nil
+	end
+
+	local function previewValue(value, depth, seen)
+		depth = tonumber(depth) or 0
+		seen = seen or {}
+		local maxDepth = math.clamp(math.floor(tonumber(options.maxPreviewDepth) or 3), 1, 8)
+		local maxItems = math.clamp(math.floor(tonumber(options.maxPreviewItems) or 50), 1, 250)
+		local valueType = typeof(value)
+
+		if value == nil then
+			return { type = "nil" }
+		end
+		if valueType == "boolean" or valueType == "number" or valueType == "string" then
+			return value
+		end
+		if valueType == "Instance" then
+			return {
+				type = "Instance",
+				name = value.Name,
+				className = value.ClassName,
+				path = safePath(value),
+				debugId = safeDebugId(value),
+			}
+		end
+		if valueType == "Vector2" then
+			return { type = "Vector2", x = value.X, y = value.Y }
+		end
+		if valueType == "Vector3" then
+			return { type = "Vector3", x = value.X, y = value.Y, z = value.Z }
+		end
+		if valueType == "Color3" then
+			return { type = "Color3", r = value.R, g = value.G, b = value.B }
+		end
+		if valueType == "UDim" then
+			return { type = "UDim", scale = value.Scale, offset = value.Offset }
+		end
+		if valueType == "UDim2" then
+			return {
+				type = "UDim2",
+				xScale = value.X.Scale,
+				xOffset = value.X.Offset,
+				yScale = value.Y.Scale,
+				yOffset = value.Y.Offset,
+			}
+		end
+		if valueType == "CFrame" then
+			local values = table.pack(value:GetComponents())
+			local out = {}
+			for i = 1, values.n do
+				out[i] = values[i]
+			end
+			return { type = "CFrame", components = out }
+		end
+		if valueType == "EnumItem" then
+			return { type = "EnumItem", value = tostring(value) }
+		end
+		if type(value) == "table" then
+			if seen[value] then
+				return { type = "table", cycle = true }
+			end
+			if depth >= maxDepth then
+				return { type = "table", truncated = true }
+			end
+			seen[value] = true
+			local entries = {}
+			local count = 0
+			local truncated = false
+			for key, child in next, value do
+				count = count + 1
+				if count > maxItems then
+					truncated = true
+					break
+				end
+				entries[#entries + 1] = {
+					key = previewValue(key, depth + 1, seen),
+					value = previewValue(child, depth + 1, seen),
+				}
+			end
+			seen[value] = nil
+			return {
+				type = "table",
+				entries = entries,
+				truncated = truncated,
+			}
+		end
+		return {
+			type = valueType,
+			value = tostring(value),
+		}
+	end
+
+	local function previewPack(pack)
+		if type(pack) ~= "table" then
+			return { count = 0, values = {} }
+		end
+		local n = pack.n or #pack
+		local maxItems = math.clamp(math.floor(tonumber(options.maxPreviewItems) or 50), 1, 250)
+		local values = {}
+		for i = 1, math.min(n, maxItems) do
+			values[#values + 1] = {
+				index = i,
+				value = previewValue(pack[i], 0, {}),
+			}
+		end
+		return {
+			count = n,
+			values = values,
+			truncated = n > maxItems,
+		}
+	end
+
+	local function describeRemote(remote, index)
+		if not isRemoteInstance(remote) then
+			return nil
+		end
+		local logs = index and remoteLogs[index] or nil
+		local latest = logs and logs[#logs] or nil
+		local scriptPath = nil
+		if index and typeof(remoteScripts[index]) == "Instance" then
+			scriptPath = safePath(remoteScripts[index])
+		end
+		return {
+			index = index,
+			name = remote.Name,
+			className = remote.ClassName,
+			path = safePath(remote),
+			debugId = safeDebugId(remote),
+			callCount = logs and #logs or 0,
+			latestCallType = latest and latest.callType or nil,
+			blocked = table.find(BlockList, remote) ~= nil,
+			ignored = table.find(IgnoreList, remote) ~= nil,
+			scriptPath = scriptPath,
+		}
+	end
+
+	local function resolveRemote(ref)
+		if isRemoteInstance(ref) then
+			return ref, table.find(remotes, ref)
+		end
+
+		if type(ref) == "number" then
+			local index = math.floor(ref)
+			local remote = remotes[index]
+			if remote then
+				return remote, index
+			end
+			return nil, nil, "remote index not found"
+		end
+
+		if type(ref) == "table" then
+			if ref.index ~= nil then
+				return resolveRemote(ref.index)
+			end
+			ref = ref.debugId or ref.path or ref.name
+		end
+
+		if type(ref) ~= "string" or ref == "" then
+			return nil, nil, "remote reference required"
+		end
+
+		local numeric = tonumber(ref)
+		if numeric and tostring(math.floor(numeric)) == ref:gsub("^%s+", ""):gsub("%s+$", "") then
+			return resolveRemote(math.floor(numeric))
+		end
+
+		local lowered = ref:lower()
+		local firstNameMatch = nil
+		local firstNameIndex = nil
+		for index, remote in remotes do
+			if remote and remote.Parent ~= nil or remote then
+				local path = safePath(remote)
+				local debugId = safeDebugId(remote)
+				if path == ref or debugId == ref then
+					return remote, index
+				end
+				if remote.Name:lower() == lowered and not firstNameMatch then
+					firstNameMatch = remote
+					firstNameIndex = index
+				end
+			end
+		end
+		if firstNameMatch then
+			return firstNameMatch, firstNameIndex
+		end
+
+		for _, remote in getRemoteInstances() do
+			local path = safePath(remote)
+			local debugId = safeDebugId(remote)
+			if path == ref or debugId == ref or remote.Name:lower() == lowered then
+				return remote, table.find(remotes, remote)
+			end
+		end
+
+		return nil, nil, "remote not found"
+	end
+
+	local function packFromArgs(args)
+		if args == nil then
+			return nil
+		end
+		if type(args) ~= "table" then
+			return table.pack(args)
+		end
+		if args.n ~= nil then
+			return args
+		end
+		local out = {}
+		out.n = #args
+		for i = 1, out.n do
+			out[i] = args[i]
+		end
+		return out
+	end
+
+	local function invokeRemote(remote, argsPack)
+		argsPack = argsPack or table.pack()
+		local n = argsPack.n or #argsPack
+		if table.find(BlockList, remote) then
+			return false, "remote is blocked"
+		end
+		if isA(remote, "RemoteFunction") then
+			local results = table.pack(pcall(function()
+				return remote:InvokeServer(table.unpack(argsPack, 1, n))
+			end))
+			if not results[1] then
+				return false, tostring(results[2])
+			end
+			local out = { n = results.n - 1 }
+			for i = 2, results.n do
+				out[i - 1] = results[i]
+			end
+			return true, out
+		end
+		if isRemoteEvent(remote) then
+			local ok, err = pcall(function()
+				remote:FireServer(table.unpack(argsPack, 1, n))
+			end)
+			if not ok then
+				return false, tostring(err)
+			end
+			return true, table.pack()
+		end
+		return false, "unsupported remote type"
+	end
+
+	local function buildCode(remote, entry)
+		if not remote then
+			return nil, "remote not found"
+		end
+		entry = type(entry) == "table" and entry or {}
+		local args = entry.args or table.pack()
+		local isClientEvent = entry.isClientEvent == true
+		local callType = entry.callType
+		local ok, codeText = pcall(function()
+			local path = GetFullPathOfAnInstance(remote)
+			local okDesc, inGame = pcall(function()
+				return remote:IsDescendantOf(game)
+			end)
+			local needsNil = not (okDesc and inGame)
+			local n = args.n or #args
+			local text
+			if callType == "OnClientInvoke" then
+				text = buildArgsTable(args) .. path .. ".OnClientInvoke = function(...)\n\treturn nil\nend"
+			elseif isClientEvent or callType == "OnClientEvent" then
+				local evtPath = path .. ".OnClientEvent"
+				if n == 0 then
+					text = "firesignal(" .. evtPath .. ")"
+				else
+					text = buildArgsTable(args) .. "firesignal(" .. evtPath .. ", unpack(args, 1, args.n or #args))"
+				end
+			else
+				local call = (callType == "InvokeServer" and ":InvokeServer") or ":FireServer"
+				if callType == nil and isA(remote, "RemoteFunction") then
+					call = ":InvokeServer"
+				end
+				if n == 0 then
+					text = path .. call .. "()"
+				else
+					text = buildArgsTable(args) .. path .. call .. "(unpack(args, 1, args.n or #args))"
+				end
+			end
+			if needsNil then
+				text = getNilSource .. text
+			end
+			return text
+		end)
+		if not ok then
+			return nil, tostring(codeText)
+		end
+		return codeText
+	end
+
+	local bridge = type(tstate.mcp) == "table" and tstate.mcp or {}
+	tstate.mcp = bridge
+
+	bridge.name = "Turtle Spy MCP Bridge"
+	bridge.version = 1
+	bridge.kind = "turtle-spy"
+	bridge.ready = true
+	bridge.helpers = {
+		"ping",
+		"options",
+		"snapshot",
+		"remotes",
+		"browser",
+		"calls",
+		"code",
+		"fire",
+		"replay",
+		"block",
+		"unblock",
+		"ignore",
+		"unignore",
+		"incoming",
+		"pathMode",
+		"clear",
+		"ui",
+		"activity",
+	}
+
+	bridge.ping = function()
+		record("ping")
+		return {
+			ok = true,
+			name = bridge.name,
+			version = bridge.version,
+			kind = bridge.kind,
+			ready = bridge.ready == true and tstate.enabled == true,
+			placeId = game.PlaceId,
+			gameId = game.GameId,
+			remoteCount = #remotes,
+			incoming = logClientEvents == true,
+			pathMode = pathMode,
+			time = os.time and os.time() or nil,
+		}
+	end
+
+	bridge.options = function(nextOptions)
+		if type(nextOptions) == "table" then
+			if nextOptions.allowUIAccess ~= nil then
+				options.allowUIAccess = nextOptions.allowUIAccess == true
+			end
+			if nextOptions.actor ~= nil or nextOptions.clientName ~= nil then
+				options.actor = tostring(nextOptions.actor or nextOptions.clientName or "")
+			end
+			if nextOptions.maxPreviewDepth ~= nil then
+				options.maxPreviewDepth = math.clamp(math.floor(tonumber(nextOptions.maxPreviewDepth) or options.maxPreviewDepth), 1, 8)
+			end
+			if nextOptions.maxPreviewItems ~= nil then
+				options.maxPreviewItems = math.clamp(math.floor(tonumber(nextOptions.maxPreviewItems) or options.maxPreviewItems), 1, 250)
+			end
+			record("options", "updated")
+		end
+		return {
+			allowUIAccess = options.allowUIAccess == true,
+			actor = options.actor,
+			maxPreviewDepth = options.maxPreviewDepth,
+			maxPreviewItems = options.maxPreviewItems,
+		}
+	end
+
+	bridge.snapshot = function()
+		local totalCalls = 0
+		for _, logs in remoteLogs do
+			totalCalls = totalCalls + #logs
+		end
+		record("snapshot", tostring(#remotes) .. " remotes")
+		return {
+			ok = true,
+			enabled = tstate.enabled == true,
+			remoteCount = #remotes,
+			totalCalls = totalCalls,
+			blockedCount = #BlockList,
+			ignoredCount = #IgnoreList,
+			incoming = logClientEvents == true,
+			pathMode = pathMode,
+			hooks = {
+				namecall = tstate.hooked == true,
+				fireServer = directHookState.fireServer == true,
+				unreliableFireServer = directHookState.unreliableFireServer == true,
+				invokeServer = directHookState.invokeServer == true,
+				newIndex = tstate.newIndexHooked == true,
+			},
+		}
+	end
+
+	bridge.remotes = function(filter, limit)
+		filter = tostring(filter or ""):lower()
+		limit = math.clamp(math.floor(tonumber(limit) or 100), 1, 1000)
+		local out = {}
+		for index, remote in remotes do
+			if remote and (filter == "" or remote.Name:lower():find(filter, 1, true) or tostring(safePath(remote) or ""):lower():find(filter, 1, true)) then
+				out[#out + 1] = describeRemote(remote, index)
+				if #out >= limit then
+					break
+				end
+			end
+		end
+		record("remotes", tostring(filter) .. " / " .. tostring(limit))
+		return { ok = true, remotes = out, count = #remotes }
+	end
+
+	bridge.browser = function(filter, limit)
+		filter = tostring(filter or ""):lower()
+		limit = math.clamp(math.floor(tonumber(limit) or 100), 1, 1000)
+		local out = {}
+		local all = getRemoteInstances()
+		for _, remote in all do
+			if filter == "" or remote.Name:lower():find(filter, 1, true) or tostring(safePath(remote) or ""):lower():find(filter, 1, true) then
+				out[#out + 1] = describeRemote(remote, table.find(remotes, remote))
+				if #out >= limit then
+					break
+				end
+			end
+		end
+		record("browser", tostring(filter) .. " / " .. tostring(limit))
+		return { ok = true, remotes = out, count = #all }
+	end
+
+	bridge.calls = function(ref, limit)
+		local remote, index, err = resolveRemote(ref)
+		if not remote then
+			return { ok = false, error = err or "remote not found" }
+		end
+		if not index then
+			return { ok = true, remote = describeRemote(remote, nil), calls = {}, count = 0 }
+		end
+		local logs = remoteLogs[index] or {}
+		limit = math.clamp(math.floor(tonumber(limit) or 25), 1, 250)
+		local out = {}
+		local first = math.max(1, #logs - limit + 1)
+		for callIndex = first, #logs do
+			local entry = logs[callIndex]
+			out[#out + 1] = {
+				callIndex = callIndex,
+				callType = entry.callType,
+				isClientEvent = entry.isClientEvent == true,
+				args = previewPack(entry.args),
+				results = previewPack(entry.results),
+			}
+		end
+		record("calls", tostring(index) .. " / " .. tostring(limit))
+		return {
+			ok = true,
+			remote = describeRemote(remote, index),
+			calls = out,
+			count = #logs,
+		}
+	end
+
+	bridge.code = function(ref, callIndex)
+		local remote, index, err = resolveRemote(ref)
+		if not remote then
+			return { ok = false, error = err or "remote not found" }
+		end
+		local logs = index and remoteLogs[index] or nil
+		local entry
+		if logs and #logs > 0 then
+			local wanted = math.floor(tonumber(callIndex) or #logs)
+			entry = logs[wanted]
+			if not entry then
+				return { ok = false, error = "call index not found" }
+			end
+		else
+			entry = { args = table.pack(), callType = isA(remote, "RemoteFunction") and "InvokeServer" or "FireServer" }
+		end
+		local codeText, codeErr = buildCode(remote, entry)
+		if not codeText then
+			return { ok = false, error = codeErr or "render failed" }
+		end
+		record("code", tostring(index or remote.Name))
+		return { ok = true, code = codeText, remote = describeRemote(remote, index) }
+	end
+
+	bridge.fire = function(ref, args, times)
+		local remote, index, err = resolveRemote(ref)
+		if not remote then
+			return { ok = false, error = err or "remote not found" }
+		end
+		local argsPack = packFromArgs(args)
+		if not argsPack and index then
+			argsPack = remoteArgs[index]
+		end
+		argsPack = argsPack or table.pack()
+		times = math.clamp(math.floor(tonumber(times) or 1), 1, 1000)
+		local lastResults = table.pack()
+		for _ = 1, times do
+			local ok, resultOrErr = invokeRemote(remote, argsPack)
+			if not ok then
+				record("fire error", tostring(resultOrErr))
+				return { ok = false, error = resultOrErr, remote = describeRemote(remote, index) }
+			end
+			lastResults = resultOrErr
+		end
+		record("fire", tostring(index or remote.Name) .. " x" .. tostring(times))
+		return {
+			ok = true,
+			times = times,
+			remote = describeRemote(remote, index),
+			results = previewPack(lastResults),
+		}
+	end
+
+	bridge.replay = function(ref, callIndex, times)
+		local remote, index, err = resolveRemote(ref)
+		if not remote then
+			return { ok = false, error = err or "remote not found" }
+		end
+		if not index then
+			return { ok = false, error = "remote has no captured calls" }
+		end
+		local logs = remoteLogs[index] or {}
+		local wanted = math.floor(tonumber(callIndex) or #logs)
+		local entry = logs[wanted]
+		if not entry then
+			return { ok = false, error = "call index not found" }
+		end
+		times = math.clamp(math.floor(tonumber(times) or 1), 1, 1000)
+		if entry.isClientEvent or entry.callType == "OnClientEvent" then
+			if type(firesignal) ~= "function" or not isRemoteEvent(remote) then
+				return { ok = false, error = "firesignal unavailable for incoming event replay" }
+			end
+			local n = entry.args and (entry.args.n or #entry.args) or 0
+			for _ = 1, times do
+				firesignal(remote.OnClientEvent, table.unpack(entry.args or {}, 1, n))
+			end
+			record("replay incoming", tostring(index) .. "#" .. tostring(wanted) .. " x" .. tostring(times))
+			return { ok = true, times = times, remote = describeRemote(remote, index), callIndex = wanted }
+		end
+		if entry.callType == "OnClientInvoke" then
+			return { ok = false, error = "OnClientInvoke replay is not supported" }
+		end
+		local lastResults = table.pack()
+		for _ = 1, times do
+			local ok, resultOrErr = invokeRemote(remote, entry.args or table.pack())
+			if not ok then
+				record("replay error", tostring(resultOrErr))
+				return { ok = false, error = resultOrErr, remote = describeRemote(remote, index) }
+			end
+			lastResults = resultOrErr
+		end
+		record("replay", tostring(index) .. "#" .. tostring(wanted) .. " x" .. tostring(times))
+		return {
+			ok = true,
+			times = times,
+			callIndex = wanted,
+			remote = describeRemote(remote, index),
+			results = previewPack(lastResults),
+		}
+	end
+
+	local function setMembership(list, ref, enabled, label)
+		local remote, index, err = resolveRemote(ref)
+		if not remote then
+			return { ok = false, error = err or "remote not found" }
+		end
+		local existing = table.find(list, remote)
+		if enabled and not existing then
+			table.insert(list, remote)
+		elseif not enabled and existing then
+			table.remove(list, existing)
+		end
+		record(label, tostring(index or remote.Name) .. "=" .. tostring(enabled))
+		return {
+			ok = true,
+			enabled = table.find(list, remote) ~= nil,
+			remote = describeRemote(remote, index),
+		}
+	end
+
+	bridge.block = function(ref)
+		return setMembership(BlockList, ref, true, "block")
+	end
+
+	bridge.unblock = function(ref)
+		return setMembership(BlockList, ref, false, "block")
+	end
+
+	bridge.ignore = function(ref)
+		return setMembership(IgnoreList, ref, true, "ignore")
+	end
+
+	bridge.unignore = function(ref)
+		return setMembership(IgnoreList, ref, false, "ignore")
+	end
+
+	bridge.incoming = function(enabled)
+		if enabled ~= nil then
+			if enabled == true then
+				enableIncomingHooks()
+				ClientEventToggle.Text = "Log OnClientEvent: ON"
+				ClientEventToggle.TextColor3 = Color3.fromRGB(76, 209, 55)
+			else
+				disableIncomingHooks()
+				ClientEventToggle.Text = "Log OnClientEvent: OFF"
+				ClientEventToggle.TextColor3 = Color3.fromRGB(250, 251, 255)
+			end
+			record("incoming", tostring(enabled == true))
+		end
+		return { ok = true, enabled = logClientEvents == true }
+	end
+
+	bridge.pathMode = function(mode)
+		if mode ~= nil then
+			mode = tostring(mode):lower()
+			if mode ~= "dot" and mode ~= "wait" and mode ~= "find" then
+				return { ok = false, error = "path mode must be dot, wait, or find" }
+			end
+			pathMode = mode
+			if pathMode == "dot" then
+				PathModeBtn.Text = "Path: ."
+			elseif pathMode == "wait" then
+				PathModeBtn.Text = "Path: WaitForChild"
+			else
+				PathModeBtn.Text = "Path: FindFirstChild"
+			end
+			record("pathMode", mode)
+		end
+		return { ok = true, mode = pathMode }
+	end
+
+	bridge.clear = function()
+		for _, child in RemoteScrollFrame:GetChildren() do
+			if child:IsA("TextButton") and child ~= RemoteButton then
+				child:Destroy()
+			end
+		end
+		buttonOffset = -25
+		scrollSizeOffset = 0
+		remotes = {}
+		remoteArgs = {}
+		remoteButtons = {}
+		remoteScripts = {}
+		remoteLogs = {}
+		IgnoreList = {}
+		BlockList = {}
+		unstacked = {}
+		lookingAt = nil
+		lookingAtArgs = nil
+		lookingAtButton = nil
+		callLocked = false
+		RemoteScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 287)
+		CallsScroll.Visible = false
+		syncTurtleStateCollections()
+		record("clear", "logs and rules")
+		return { ok = true }
+	end
+
+	bridge.ui = function()
+		record("ui", options.allowUIAccess == true and "granted" or "metadata")
+		local info = {
+			ok = true,
+			hasUI = typeof(TurtleSpyGUI) == "Instance",
+			enabled = typeof(TurtleSpyGUI) == "Instance" and TurtleSpyGUI.Enabled or false,
+			allowUIAccess = options.allowUIAccess == true,
+		}
+		if typeof(TurtleSpyGUI) == "Instance" then
+			info.name = TurtleSpyGUI.Name
+			info.parentClassName = TurtleSpyGUI.Parent and TurtleSpyGUI.Parent.ClassName or nil
+			if options.allowUIAccess == true then
+				info.instance = TurtleSpyGUI
+			end
+		end
+		return info
+	end
+
+	bridge.activity = function(limit)
+		limit = math.clamp(math.floor(tonumber(limit) or 25), 1, 50)
+		local out = {}
+		local first = math.max(1, #activity - limit + 1)
+		for i = first, #activity do
+			local item = activity[i]
+			out[#out + 1] = {
+				t = item.t,
+				action = item.action,
+				detail = item.detail,
+				actor = item.actor,
+			}
+		end
+		return { ok = true, activity = out, count = #activity }
+	end
+
+	local targets = {}
+	local seenTargets = {}
+	local function addTarget(target)
+		if type(target) == "table" and not seenTargets[target] then
+			seenTargets[target] = true
+			targets[#targets + 1] = target
+		end
+	end
+	addTarget(G)
+	addTarget(_G)
+	if type(shared) == "table" then
+		addTarget(shared)
+	end
+
+	for _, target in targets do
+		pcall(function()
+			target.TURTLESPY_MCP = bridge
+			target.TurtleSpyMCP = bridge
+			target.TSPY_MCP = bridge
+			target.TURTLESPY_MCP_OPTIONS = options
+		end)
+	end
+
+	tstate.mcpTargets = targets
+	record("installed", bridge.name)
+	return bridge
+end
+
+syncTurtleStateCollections()
+installTurtleSpyMCP()
 runAdonisBypass()
 tstate.cleanup = function()
 	tstate.enabled = false;
+	local mcpBridge = tstate.mcp
+	if type(mcpBridge) == "table" then
+		mcpBridge.ready = false
+		local targets = type(tstate.mcpTargets) == "table" and tstate.mcpTargets or {}
+		for _, target in targets do
+			if type(target) == "table" then
+				pcall(function()
+					if rawget(target, "TURTLESPY_MCP") == mcpBridge then
+						target.TURTLESPY_MCP = nil
+					end
+					if rawget(target, "TurtleSpyMCP") == mcpBridge then
+						target.TurtleSpyMCP = nil
+					end
+					if rawget(target, "TSPY_MCP") == mcpBridge then
+						target.TSPY_MCP = nil
+					end
+				end)
+			end
+		end
+	end
 	tstate.spamRemote.disconnect()
 	for _, c in connections do
 		pcall(function()

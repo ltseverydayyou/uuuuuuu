@@ -351,6 +351,22 @@ local GameSettings = type(loadedModules.GameSettings) == "table"
     or {settings = {Keybinds = {}}}
 local UserInputBindables = type(loadedModules.UserInputBindables) == "table" and loadedModules.UserInputBindables or {}
 
+local Icons = {}
+local IconsProvider = "Unavailable"
+
+do
+    local iconsModule = Modules:FindFirstChild("Icons")
+    if iconsModule and iconsModule:IsA("ModuleScript") then
+        local result, providerOrError = safeRequireModule(iconsModule)
+        if type(result) == "table" then
+            Icons = result
+            IconsProvider = providerOrError
+        else
+            IconsProvider = tostring(providerOrError)
+        end
+    end
+end
+
 if type(GameSettings.settings) ~= "table" then
     GameSettings.settings = {Keybinds = {}}
 end
@@ -408,6 +424,8 @@ local Defaults = {
     BackgroundTransparency = 0.15,
     SelectedMode = "4K",
     VisualSide = "Auto",
+    HiddenAnimation = "Auto-Apply",
+    HiddenIcon = "Auto-Apply",
     Keybinds = {}
 }
 
@@ -580,7 +598,7 @@ local preferExternalVisualMode = ModuleAccessMode == "live"
 local initialModuleAccessMode = preferExternalVisualMode and "visual-external" or ModuleAccessMode
 
 local state = {
-    Version = 27,
+    Version = 28,
     Enabled = Config.Enabled ~= false and #AvailableInputModes > 0,
     InputMode = chooseInputMode(Config.InputMode),
     BackendAvailability = BackendAvailability,
@@ -612,6 +630,8 @@ local state = {
     BackgroundTransparency = tonumber(Config.BackgroundTransparency) or 0.15,
     SelectedMode = type(Config.SelectedMode) == "string" and Config.SelectedMode or "4K",
     VisualSide = table.find({"Auto", "BF", "Dad"}, Config.VisualSide) and Config.VisualSide or "Auto",
+    HiddenAnimation = type(Config.HiddenAnimation) == "string" and Config.HiddenAnimation or "Auto-Apply",
+    HiddenIcon = type(Config.HiddenIcon) == "string" and Config.HiddenIcon or "Auto-Apply",
     DetectedSide = "Unknown",
     DetectedSideMethod = "Waiting for gameplay",
     ConfigKeybinds = type(Config.Keybinds) == "table" and Config.Keybinds or {},
@@ -700,6 +720,8 @@ local function queueSave()
             BackgroundTransparency = state.BackgroundTransparency,
             SelectedMode = state.SelectedMode,
             VisualSide = state.VisualSide,
+            HiddenAnimation = state.HiddenAnimation,
+            HiddenIcon = state.HiddenIcon,
             Keybinds = keybinds
         }
         if type(writefile) == "function" then
@@ -884,6 +906,302 @@ local function saveGameBinds()
 end
 
 state.SaveGameBinds = saveGameBinds
+
+local function isCompleteCharacterAnimation(folder)
+    return typeof(folder) == "Instance"
+        and (folder:IsA("Folder") or folder:IsA("Model"))
+        and folder:FindFirstChild("Idle") ~= nil
+        and folder:FindFirstChild("SingDown") ~= nil
+        and folder:FindFirstChild("SingLeft") ~= nil
+        and folder:FindFirstChild("SingRight") ~= nil
+        and folder:FindFirstChild("SingUp") ~= nil
+end
+
+local hiddenCosmeticRegistry = env.FNP_AutoplayerHiddenCosmeticRegistry
+if type(hiddenCosmeticRegistry) ~= "table" then
+    hiddenCosmeticRegistry = {Animations = {}, Icons = {}}
+    env.FNP_AutoplayerHiddenCosmeticRegistry = hiddenCosmeticRegistry
+end
+if type(hiddenCosmeticRegistry.Animations) ~= "table" then
+    hiddenCosmeticRegistry.Animations = {}
+end
+if type(hiddenCosmeticRegistry.Icons) ~= "table" then
+    hiddenCosmeticRegistry.Icons = {}
+end
+
+local function getLiveCosmeticGameSettings(waitForLoaded)
+    local live = nil
+    local gameSettingsModule = Modules:FindFirstChild("GameSettings")
+
+    if gameSettingsModule and gameSettingsModule:IsA("ModuleScript") then
+        local ok, result = pcall(require, gameSettingsModule)
+        if ok and type(result) == "table" then
+            live = result
+        end
+    end
+
+    if type(live) ~= "table" and type(GameSettings) == "table" then
+        live = GameSettings
+    end
+
+    if type(live) ~= "table" then
+        return nil, "GameSettings module is unavailable"
+    end
+
+    if waitForLoaded then
+        local deadline = os.clock() + 20
+        while type(live.loaded) == "table"
+            and live.loaded.finished ~= true
+            and os.clock() < deadline do
+            task.wait()
+        end
+    end
+
+    if type(live.settings) ~= "table" then
+        return nil, "Live GameSettings.settings is unavailable"
+    end
+
+    return live
+end
+
+local function getVisibleSettingSet(ruleName)
+    local visible = {}
+    local live = getLiveCosmeticGameSettings(false)
+    local rules = live and type(live.settingsRules) == "table" and live.settingsRules or nil
+    local rule = rules and rules[ruleName] or nil
+    local contents = type(rule) == "table" and rule.Contents or nil
+
+    if type(contents) == "table" then
+        for _, name in contents do
+            if type(name) == "string" then
+                visible[name] = true
+            end
+        end
+    end
+
+    return visible
+end
+
+local function getHiddenAnimationNames()
+    local names = {}
+    local seen = {}
+    local visible = getVisibleSettingSet("ForcePlayerAnim")
+    local animations = ReplicatedStorage:FindFirstChild("Animations")
+    local songsAnim = animations and animations:FindFirstChild("SongsAnim")
+    local characterAnims = animations and animations:FindFirstChild("CharacterAnims")
+
+    if songsAnim then
+        for _, folder in songsAnim:GetChildren() do
+            local injected = characterAnims and characterAnims:FindFirstChild(folder.Name)
+            injected = injected and injected:GetAttribute("FNP_AutoplayerHiddenAnimation") == true
+            if isCompleteCharacterAnimation(folder)
+                and (not visible[folder.Name] or injected or hiddenCosmeticRegistry.Animations[folder.Name] == true)
+                and not seen[folder.Name] then
+                seen[folder.Name] = true
+                names[#names + 1] = folder.Name
+            end
+        end
+    end
+
+    table.sort(names, function(a, b)
+        return a:upper() < b:upper()
+    end)
+    table.insert(names, 1, "Auto-Apply")
+    return names
+end
+
+local function getHiddenIconNames()
+    local names = {}
+    local visible = getVisibleSettingSet("CustomIcon")
+
+    for name, data in Icons do
+        if type(name) == "string"
+            and name ~= "Auto-Apply"
+            and (not visible[name] or hiddenCosmeticRegistry.Icons[name] == true)
+            and (type(data) ~= "table" or data.Whitelist == nil) then
+            names[#names + 1] = name
+        end
+    end
+
+    table.sort(names, function(a, b)
+        return a:upper() < b:upper()
+    end)
+    table.insert(names, 1, "Auto-Apply")
+    return names
+end
+
+local function injectHiddenAnimation(name)
+    if name == "Auto-Apply" then
+        return true
+    end
+
+    local animations = ReplicatedStorage:FindFirstChild("Animations")
+    local characterAnims = animations and animations:FindFirstChild("CharacterAnims")
+    local songsAnim = animations and animations:FindFirstChild("SongsAnim")
+
+    if not characterAnims or not songsAnim then
+        return false, "Animation folders are unavailable"
+    end
+
+    local existing = characterAnims:FindFirstChild(name)
+    if existing then
+        if songsAnim:FindFirstChild(name) then
+            existing:SetAttribute("FNP_AutoplayerHiddenAnimation", true)
+        end
+        return true
+    end
+
+    local source = songsAnim:FindFirstChild(name)
+    if not isCompleteCharacterAnimation(source) then
+        return false, "Hidden animation set was not found or is incomplete"
+    end
+
+    local clone = source:Clone()
+    clone:SetAttribute("FNP_AutoplayerHiddenAnimation", true)
+    clone.Parent = characterAnims
+    return true
+end
+
+local function addSettingRuleChoice(live, ruleName, name)
+    if name == "Auto-Apply" or type(live) ~= "table" then
+        return
+    end
+
+    local rules = type(live.settingsRules) == "table" and live.settingsRules or nil
+    local rule = rules and rules[ruleName] or nil
+    local contents = type(rule) == "table" and rule.Contents or nil
+
+    if type(contents) == "table" and not table.find(contents, name) then
+        table.insert(contents, name)
+        table.sort(contents, function(a, b)
+            return tostring(a):upper() < tostring(b):upper()
+        end)
+    end
+end
+
+local function saveCosmeticSetting(field, value, live)
+    if state.VisualMode then
+        return false, "Live game settings are unavailable in visual fallback mode"
+    end
+
+    live = live or getLiveCosmeticGameSettings(true)
+    if type(live) ~= "table" or type(live.settings) ~= "table" then
+        return false, "Live GameSettings are unavailable"
+    end
+
+    local rawSettings = LocalPlayer:GetAttribute("Settings")
+    if type(rawSettings) ~= "string" or rawSettings == "" then
+        return false, "Player Settings attribute is unavailable"
+    end
+
+    local decodeOk, saveSettings = pcall(HttpService.JSONDecode, HttpService, rawSettings)
+    if not decodeOk or type(saveSettings) ~= "table" then
+        return false, "Could not decode the Player Settings attribute"
+    end
+
+    saveSettings[field] = value
+
+    local remote = ReplicatedStorage:FindFirstChild("InfoRetriever") or RunService:FindFirstChild("InfoRetriever")
+    if not remote or not remote:IsA("RemoteFunction") then
+        return false, "InfoRetriever is unavailable"
+    end
+
+    local ok, result = pcall(function()
+        return remote:InvokeServer(2, saveSettings)
+    end)
+
+    if ok and type(live.settings) == "table" then
+        live.settings[field] = value
+    end
+
+    return ok, result
+end
+
+local function saveCosmeticSettings()
+    local live, reason = getLiveCosmeticGameSettings(true)
+    if not live then
+        return false, reason
+    end
+
+    local rawSettings = LocalPlayer:GetAttribute("Settings")
+    if type(rawSettings) ~= "string" or rawSettings == "" then
+        return false, "Player Settings attribute is unavailable"
+    end
+
+    local decodeOk, saveSettings = pcall(HttpService.JSONDecode, HttpService, rawSettings)
+    if not decodeOk or type(saveSettings) ~= "table" then
+        return false, "Could not decode the Player Settings attribute"
+    end
+
+    saveSettings.ForcePlayerAnim = live.settings.ForcePlayerAnim or "Auto-Apply"
+    saveSettings.CustomIcon = live.settings.CustomIcon or "Auto-Apply"
+
+    local remote = ReplicatedStorage:FindFirstChild("InfoRetriever") or RunService:FindFirstChild("InfoRetriever")
+    if not remote or not remote:IsA("RemoteFunction") then
+        return false, "InfoRetriever is unavailable"
+    end
+
+    local ok, result = pcall(function()
+        return remote:InvokeServer(2, saveSettings)
+    end)
+
+    if ok then
+        live.settings.ForcePlayerAnim = saveSettings.ForcePlayerAnim
+        live.settings.CustomIcon = saveSettings.CustomIcon
+    end
+
+    return ok, result
+end
+
+local function applyHiddenAnimation(name)
+    local live, reason = getLiveCosmeticGameSettings(true)
+    if not live then
+        return false, reason
+    end
+
+    local ok, injectReason = injectHiddenAnimation(name)
+    if not ok then
+        return false, injectReason
+    end
+
+    live.settings.ForcePlayerAnim = name
+    hiddenCosmeticRegistry.Animations[name] = name ~= "Auto-Apply" or nil
+    addSettingRuleChoice(live, "ForcePlayerAnim", name)
+
+    local saved, result = saveCosmeticSetting("ForcePlayerAnim", name, live)
+    live.settings.ForcePlayerAnim = name
+    return saved, result
+end
+
+local function applyHiddenIcon(name)
+    local live, reason = getLiveCosmeticGameSettings(true)
+    if not live then
+        return false, reason
+    end
+
+    if name ~= "Auto-Apply" and Icons[name] == nil then
+        return false, "Hidden icon was not found"
+    end
+
+    local icon = Icons[name]
+    if name ~= "Auto-Apply" and type(icon) == "table" and icon.Whitelist ~= nil then
+        return false, "Whitelisted icons are intentionally excluded"
+    end
+
+    live.settings.CustomIcon = name
+    hiddenCosmeticRegistry.Icons[name] = name ~= "Auto-Apply" or nil
+    addSettingRuleChoice(live, "CustomIcon", name)
+
+    local saved, result = saveCosmeticSetting("CustomIcon", name, live)
+    live.settings.CustomIcon = name
+    return saved, result
+end
+
+state.GetHiddenAnimationNames = getHiddenAnimationNames
+state.GetHiddenIconNames = getHiddenIconNames
+state.ApplyHiddenAnimation = applyHiddenAnimation
+state.ApplyHiddenIcon = applyHiddenIcon
+state.SaveCosmeticSettings = saveCosmeticSettings
 
 if state.AutoFillBinds then
     fillMissingBinds()
@@ -3160,6 +3478,142 @@ local function buildUI()
         end
     })
 
+    Settings:Section({Title = "Hidden cosmetics"})
+
+    local liveCosmeticSettings = getLiveCosmeticGameSettings(true)
+    local hiddenAnimations = getHiddenAnimationNames()
+    local hiddenIcons = getHiddenIconNames()
+    local hiddenCosmeticsStatus = Settings:Paragraph({
+        Title = "Hidden asset scanner",
+        Desc = string.format(
+            "%d song-only animation sets and %d non-whitelisted hidden icons found. Changes apply to the game settings and are saved through InfoRetriever.",
+            math.max(0, #hiddenAnimations - 1),
+            math.max(0, #hiddenIcons - 1)
+        )
+    })
+
+    local cosmeticSettingsTable = liveCosmeticSettings and liveCosmeticSettings.settings or GameSettings.settings
+    local currentHiddenAnimation = state.HiddenAnimation ~= "Auto-Apply" and state.HiddenAnimation
+        or (type(cosmeticSettingsTable) == "table" and cosmeticSettingsTable.ForcePlayerAnim or "Auto-Apply")
+    if currentHiddenAnimation ~= "Auto-Apply" and not table.find(hiddenAnimations, currentHiddenAnimation) then
+        local songsAnim = ReplicatedStorage:FindFirstChild("Animations")
+        songsAnim = songsAnim and songsAnim:FindFirstChild("SongsAnim")
+        if songsAnim and isCompleteCharacterAnimation(songsAnim:FindFirstChild(currentHiddenAnimation)) then
+            hiddenAnimations[#hiddenAnimations + 1] = currentHiddenAnimation
+            table.sort(hiddenAnimations, function(a, b)
+                if a == "Auto-Apply" then
+                    return true
+                elseif b == "Auto-Apply" then
+                    return false
+                end
+                return a:upper() < b:upper()
+            end)
+        else
+            currentHiddenAnimation = "Auto-Apply"
+        end
+    end
+
+    local currentHiddenIcon = state.HiddenIcon ~= "Auto-Apply" and state.HiddenIcon
+        or (type(cosmeticSettingsTable) == "table" and cosmeticSettingsTable.CustomIcon or "Auto-Apply")
+    if currentHiddenIcon ~= "Auto-Apply" and not table.find(hiddenIcons, currentHiddenIcon) then
+        local icon = Icons[currentHiddenIcon]
+        if icon ~= nil and (type(icon) ~= "table" or icon.Whitelist == nil) then
+            hiddenIcons[#hiddenIcons + 1] = currentHiddenIcon
+            table.sort(hiddenIcons, function(a, b)
+                if a == "Auto-Apply" then
+                    return true
+                elseif b == "Auto-Apply" then
+                    return false
+                end
+                return a:upper() < b:upper()
+            end)
+        else
+            currentHiddenIcon = "Auto-Apply"
+        end
+    end
+
+    Settings:Dropdown({
+        Title = "Hidden character animation",
+        Desc = "Search song-only animation sets omitted from the normal Character Animation picker. The selected set is mirrored into CharacterAnims and used by the normal game loader. Takes effect on the next character/song load.",
+        Values = #hiddenAnimations > 1 and hiddenAnimations or {"Unavailable"},
+        Value = #hiddenAnimations > 1 and currentHiddenAnimation or "Unavailable",
+        Multi = false,
+        SearchBarEnabled = true,
+        Callback = function(value)
+            if not ready then
+                return
+            end
+            local selected = pick(value)
+            if type(selected) ~= "string" or selected == "Unavailable" then
+                return
+            end
+            local ok, result = applyHiddenAnimation(selected)
+            if ok then
+                state.HiddenAnimation = selected
+                queueSave()
+                hiddenCosmeticsStatus:SetDesc(string.format(
+                    "Animation equipped: %s\nIcon: %s\nSaved through InfoRetriever. Animation changes take effect on the next character/song load.",
+                    selected,
+                    tostring((getLiveCosmeticGameSettings(false) or GameSettings).settings.CustomIcon or "Auto-Apply")
+                ))
+                VibeUI:Notification({
+                    Title = "Hidden animation",
+                    Description = selected .. " equipped for the next character load.",
+                    Type = "success",
+                    Duration = 3
+                })
+            else
+                VibeUI:Notification({
+                    Title = "Hidden animation failed",
+                    Description = tostring(result),
+                    Type = "error",
+                    Duration = 4
+                })
+            end
+        end
+    })
+
+    Settings:Dropdown({
+        Title = "Hidden icon",
+        Desc = "Search non-whitelisted icon definitions omitted from the normal Icons picker. Explicitly whitelisted/locked icons are excluded.",
+        Values = #hiddenIcons > 1 and hiddenIcons or {"Unavailable"},
+        Value = #hiddenIcons > 1 and currentHiddenIcon or "Unavailable",
+        Multi = false,
+        SearchBarEnabled = true,
+        Callback = function(value)
+            if not ready then
+                return
+            end
+            local selected = pick(value)
+            if type(selected) ~= "string" or selected == "Unavailable" then
+                return
+            end
+            local ok, result = applyHiddenIcon(selected)
+            if ok then
+                state.HiddenIcon = selected
+                queueSave()
+                hiddenCosmeticsStatus:SetDesc(string.format(
+                    "Animation: %s\nIcon equipped: %s\nSaved through InfoRetriever.",
+                    tostring((getLiveCosmeticGameSettings(false) or GameSettings).settings.ForcePlayerAnim or "Auto-Apply"),
+                    selected
+                ))
+                VibeUI:Notification({
+                    Title = "Hidden icon",
+                    Description = selected .. " equipped.",
+                    Type = "success",
+                    Duration = 3
+                })
+            else
+                VibeUI:Notification({
+                    Title = "Hidden icon failed",
+                    Description = tostring(result),
+                    Type = "error",
+                    Duration = 4
+                })
+            end
+        end
+    })
+
     local selectedMode = table.find(modeNames, state.SelectedMode) and state.SelectedMode or "4K"
     local selectedLane = 1
     local selectedKey = keyName(getLaneKey(getModeIndex(selectedMode), selectedLane))
@@ -3458,7 +3912,7 @@ local function buildUI()
 
     ready = true
     state.UIReady = true
-    state.UIBuildVersion = 12
+    state.UIBuildVersion = 15
 
     local lastUpdate = 0
     state.VibeUIUpdateConnection = RunService.Heartbeat:Connect(function()
@@ -3484,11 +3938,12 @@ local function buildUI()
                 getAccuracy()
             ))
             backend:SetDesc(string.format(
-                "Tracking: %s\nMethod: %s\nSide detector: %s\nGameSettings: %s\nVirtualInputManager: %s\nfiresignal: %s\ngetgc cache: %s\nRegistry: %s (%d scans, %d notes)",
+                "Tracking: %s\nMethod: %s\nSide detector: %s\nGameSettings: %s\nIcons: %s\nVirtualInputManager: %s\nfiresignal: %s\ngetgc cache: %s\nRegistry: %s (%d scans, %d notes)",
                 state.ModuleAccessMode,
                 state.InputMode,
                 state.DetectedSideMethod,
                 ReconstructedGameSettingsStatus,
+                IconsProvider,
                 state.VirtualInput and state.VirtualInput.ClassName or "Unavailable",
                 BackendAvailability.firesignal and "Available" or "Unavailable",
                 type(state.GCGoodhit) == "function" and "Resolved" or "Not resolved",
@@ -3580,6 +4035,24 @@ local function destroy()
 end
 
 state.Destroy = destroy
+
+do
+    local live = getLiveCosmeticGameSettings(true)
+    if live then
+        if type(state.HiddenAnimation) == "string" and state.HiddenAnimation ~= "Auto-Apply" then
+            local ok = applyHiddenAnimation(state.HiddenAnimation)
+            if not ok then
+                state.HiddenAnimation = "Auto-Apply"
+            end
+        end
+        if type(state.HiddenIcon) == "string" and state.HiddenIcon ~= "Auto-Apply" then
+            local ok = applyHiddenIcon(state.HiddenIcon)
+            if not ok then
+                state.HiddenIcon = "Auto-Apply"
+            end
+        end
+    end
+end
 
 local ok, errorMessage = pcall(buildUI)
 if not ok then

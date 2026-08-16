@@ -49,6 +49,7 @@ local RunService = ServiceResolver.cs("RunService", Reference)
 local CollectionService = ServiceResolver.cs("CollectionService", Reference)
 local ContextActionService = ServiceResolver.cs("ContextActionService", Reference)
 local UserInputService = ServiceResolver.cs("UserInputService", Reference)
+local SoundService = ServiceResolver.cs("SoundService", Reference)
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -127,6 +128,20 @@ do
 			then NativeRoot:FindFirstAncestorOfClass("ScreenGui")
 			else nil
 
+		local function wrapControlCallback(Control, Callback)
+			return function(...)
+				if type(Callback) == "function" then
+					Callback(...)
+				end
+
+				local RequestSave = NotorietyUI.RequestConfigSave
+
+				if type(RequestSave) == "function" then
+					RequestSave()
+				end
+			end
+		end
+
 		function Window:Tab(TabConfig)
 			local NativeTab = NativeWindow:Tab({
 				Name = TabConfig.Title,
@@ -150,7 +165,7 @@ do
 					Flag = Control.Flag,
 					Default = Control.Value,
 					Tooltip = Control.Desc,
-					Callback = Control.Callback,
+					Callback = wrapControlCallback(Control, Control.Callback),
 				})
 			end
 
@@ -162,7 +177,20 @@ do
 					Placeholder = Control.Placeholder,
 					Finished = true,
 					Tooltip = Control.Desc,
-					Callback = Control.Callback,
+					Callback = wrapControlCallback(Control, Control.Callback),
+				})
+			end
+
+			function Tab:Dropdown(Control)
+				return NativeSection:Dropdown({
+					Name = Control.Title,
+					Flag = Control.Flag,
+					Items = Control.Values or Control.Items or {},
+					Default = Control.Value,
+					Multi = false,
+					Search = false,
+					Tooltip = Control.Desc,
+					Callback = wrapControlCallback(Control, Control.Callback),
 				})
 			end
 
@@ -176,7 +204,7 @@ do
 					Decimals = Control.Step,
 					Suffix = Control.Suffix,
 					Tooltip = Control.Desc,
-					Callback = Control.Callback,
+					Callback = wrapControlCallback(Control, Control.Callback),
 				})
 			end
 
@@ -190,7 +218,7 @@ do
 						local KeyName = typeof(Key) == "EnumItem" and Key.Name or tostring(Key):match("([^%.]+)$")
 
 						if KeyName then
-							Control.Callback(KeyName)
+							wrapControlCallback(Control, Control.Callback)(KeyName)
 						end
 					end,
 				})
@@ -227,7 +255,13 @@ do
 		function ConfigManager:Config(Name)
 			return {
 				Save = function()
-					return VibeUI:SaveConfig(Name)
+					local Success, SaveError = VibeUI:SaveConfig(Name)
+
+					if not Success then
+						error(SaveError or "VibeUI config save failed", 0)
+					end
+
+					return true
 				end,
 				Load = function()
 					local Data = VibeUI:ReadConfig(Name)
@@ -343,8 +377,27 @@ Environment.NotorietyEquipmentPositionX = math.clamp(tonumber(Environment.Notori
 Environment.NotorietyEquipmentPositionY = math.clamp(tonumber(Environment.NotorietyEquipmentPositionY) or 0, -50, 50)
 Environment.NotorietyEquipmentPositionZ = math.clamp(tonumber(Environment.NotorietyEquipmentPositionZ) or 0, -50, 50)
 Environment.NotorietyInfiniteYellMarkEnabled = Environment.NotorietyInfiniteYellMarkEnabled == true
+Environment.NotorietyYellThroughWalls = Environment.NotorietyYellThroughWalls ~= false
+Environment.NotorietyTeammateYellInfiniteRange = Environment.NotorietyTeammateYellInfiniteRange ~= false
+Environment.NotorietyTeammateYellThroughWalls = Environment.NotorietyTeammateYellThroughWalls ~= false
+Environment.NotorietyYellMarkMethod = tostring(Environment.NotorietyYellMarkMethod or "Viewport")
+
+if Environment.NotorietyYellMarkMethod ~= "Viewport"
+	and Environment.NotorietyYellMarkMethod ~= "Whole Game"
+	and Environment.NotorietyYellMarkMethod ~= "Original"
+then
+	Environment.NotorietyYellMarkMethod = "Viewport"
+end
+
 Environment.NotorietyAutoYellEnabled = Environment.NotorietyAutoYellEnabled == true
 Environment.NotorietyNoYellDelayEnabled = Environment.NotorietyNoYellDelayEnabled == true
+Environment.NotorietyMusicVolume = math.clamp(tonumber(Environment.NotorietyMusicVolume) or 100, 0, 100)
+Environment.NotorietySFXVolume = math.clamp(tonumber(Environment.NotorietySFXVolume) or 100, 0, 100)
+Environment.NotorietyLocalGunshotsVolume = math.clamp(tonumber(Environment.NotorietyLocalGunshotsVolume) or 100, 0, 100)
+Environment.NotorietyGunshotsVolume = math.clamp(tonumber(Environment.NotorietyGunshotsVolume) or 100, 0, 100)
+Environment.NotorietyMapAmbienceVolume = math.clamp(tonumber(Environment.NotorietyMapAmbienceVolume) or 100, 0, 100)
+Environment.NotorietyVoicesVolume = math.clamp(tonumber(Environment.NotorietyVoicesVolume) or 100, 0, 100)
+Environment.NotorietyUIVolume = math.clamp(tonumber(Environment.NotorietyUIVolume) or 100, 0, 100)
 
 if Environment.NotorietyEquipmentSpeedMultiplier <= 0
 	or Environment.NotorietyEquipmentSpeedMultiplier == math.huge
@@ -370,9 +423,10 @@ local EquipmentSpeedState = {
 	Function = nil,
 	FunctionEnvironment = nil,
 	OriginalTick = nil,
-	HadOwnTick = false,
+	TickTarget = nil,
 	WrappedTick = nil,
 	EquipmentPercent = nil,
+	VisibilityConnection = nil,
 	ClockActive = false,
 	RealAnchor = nil,
 	ScaledAnchor = nil,
@@ -402,21 +456,30 @@ local function getEquipmentSpeedMultiplier()
 	return Multiplier
 end
 
-local function restoreEquipmentPlacementSpeed()
-	local FunctionEnvironment = EquipmentSpeedState.FunctionEnvironment
-	local WrappedTick = EquipmentSpeedState.WrappedTick
-	local WrappedCFrame = EquipmentSpeedState.WrappedCFrame
+local function resetEquipmentClock()
+	EquipmentSpeedState.ClockActive = false
+	EquipmentSpeedState.RealAnchor = nil
+	EquipmentSpeedState.ScaledAnchor = nil
+	EquipmentSpeedState.LastMultiplier = nil
+end
 
-	if type(FunctionEnvironment) == "table"
-		and type(WrappedTick) == "function"
-		and rawget(FunctionEnvironment, "tick") == WrappedTick
-	then
-		if EquipmentSpeedState.HadOwnTick then
-			rawset(FunctionEnvironment, "tick", EquipmentSpeedState.OriginalTick)
-		else
-			rawset(FunctionEnvironment, "tick", nil)
-		end
+local function restoreEquipmentPlacementSpeed()
+	if EquipmentSpeedState.VisibilityConnection then
+		pcall(function()
+			EquipmentSpeedState.VisibilityConnection:Disconnect()
+		end)
+		EquipmentSpeedState.VisibilityConnection = nil
 	end
+
+	if type(hookfunction) == "function"
+		and type(EquipmentSpeedState.TickTarget) == "function"
+		and type(EquipmentSpeedState.OriginalTick) == "function"
+	then
+		pcall(hookfunction, EquipmentSpeedState.TickTarget, EquipmentSpeedState.OriginalTick)
+	end
+
+	local FunctionEnvironment = EquipmentSpeedState.FunctionEnvironment
+	local WrappedCFrame = EquipmentSpeedState.WrappedCFrame
 
 	if type(FunctionEnvironment) == "table"
 		and type(WrappedCFrame) == "table"
@@ -432,13 +495,10 @@ local function restoreEquipmentPlacementSpeed()
 	EquipmentSpeedState.Function = nil
 	EquipmentSpeedState.FunctionEnvironment = nil
 	EquipmentSpeedState.OriginalTick = nil
-	EquipmentSpeedState.HadOwnTick = false
+	EquipmentSpeedState.TickTarget = nil
 	EquipmentSpeedState.WrappedTick = nil
 	EquipmentSpeedState.EquipmentPercent = nil
-	EquipmentSpeedState.ClockActive = false
-	EquipmentSpeedState.RealAnchor = nil
-	EquipmentSpeedState.ScaledAnchor = nil
-	EquipmentSpeedState.LastMultiplier = nil
+	resetEquipmentClock()
 	EquipmentSpeedState.OriginalCFrame = nil
 	EquipmentSpeedState.HadOwnCFrame = false
 	EquipmentSpeedState.WrappedCFrame = nil
@@ -446,48 +506,132 @@ local function restoreEquipmentPlacementSpeed()
 	EquipmentSpeedState.Refresh = 0
 end
 
-local function findEquipmentPlacementFunction()
-	local Existing = EquipmentSpeedState.Function
-	local FunctionEnvironment = EquipmentSpeedState.FunctionEnvironment
-	local WrappedTick = EquipmentSpeedState.WrappedTick
-
-	if type(Existing) == "function"
-		and type(FunctionEnvironment) == "table"
-		and type(WrappedTick) == "function"
-		and rawget(FunctionEnvironment, "tick") == WrappedTick
-	then
-		return Existing
-	end
-
-	if type(getgc) ~= "function"
-		or type(getfenv) ~= "function"
+local function inspectMobilePlacementFunction()
+	if type(getconnections) ~= "function"
 		or type(debug) ~= "table"
+		or type(debug.getupvalues) ~= "function"
 		or type(debug.getinfo) ~= "function"
 	then
 		return nil
 	end
 
-	for _, Function in getgc(true) do
-		if type(Function) == "function" then
-			local Success, Info = pcall(debug.getinfo, Function)
+	local PlayerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+	local SGPackage = PlayerGui and PlayerGui:FindFirstChild("SG_Package")
+	local MainGui = SGPackage and SGPackage:FindFirstChild("MainGui")
+	local MobileUI = MainGui and MainGui:FindFirstChild("MobileUI")
+	local Hotbar = MobileUI and MobileUI:FindFirstChild("Hotbar")
+	local Equipment = Hotbar and Hotbar:FindFirstChild("Equipment")
+	local SelectButton = Equipment and Equipment:FindFirstChild("SelectButton")
 
-			if Success
-				and type(Info) == "table"
-				and Info.source == "=Players." .. LocalPlayer.Name .. ".PlayerGui.SG_Package.LocalMovement"
-				and Info.name == "placeEquipment"
-			then
-				local EnvironmentSuccess, FunctionEnvironmentResult = pcall(getfenv, Function)
+	if not SelectButton or not SelectButton:IsA("GuiButton") then
+		return nil
+	end
 
-				if EnvironmentSuccess and type(FunctionEnvironmentResult) == "table" then
+	local Success, Connections = pcall(getconnections, SelectButton.MouseButton1Down)
+
+	if not Success or type(Connections) ~= "table" then
+		return nil
+	end
+
+	local function scanFunction(Function, Depth)
+		if type(Function) ~= "function" or Depth > 2 then
+			return nil
+		end
+
+		local InfoSuccess, Info = pcall(debug.getinfo, Function)
+
+		if InfoSuccess
+			and type(Info) == "table"
+			and Info.source == "=Players." .. LocalPlayer.Name .. ".PlayerGui.SG_Package.LocalMovement"
+			and Info.name == "placeEquipment"
+		then
+			return Function
+		end
+
+		local UpvalueSuccess, Upvalues = pcall(debug.getupvalues, Function)
+
+		if not UpvalueSuccess or type(Upvalues) ~= "table" then
+			return nil
+		end
+
+		for _, Value in pairs(Upvalues) do
+			if type(Value) == "function" then
+				local Found = scanFunction(Value, Depth + 1)
+
+				if Found then
+					return Found
+				end
+			end
+		end
+
+		return nil
+	end
+
+	for _, Connection in Connections do
+		local Callback
+		pcall(function()
+			Callback = Connection.Function
+		end)
+
+		local Found = scanFunction(Callback, 0)
+
+		if Found then
+			return Found
+		end
+	end
+
+	return nil
+end
+
+local function findEquipmentPlacementFunction()
+	local Existing = EquipmentSpeedState.Function
+
+	if type(Existing) == "function" then
+		return Existing
+	end
+
+	if type(getgc) == "function"
+		and type(getfenv) == "function"
+		and type(debug) == "table"
+		and type(debug.getinfo) == "function"
+	then
+		for _, Function in getgc(true) do
+			if type(Function) == "function" then
+				local Success, Info = pcall(debug.getinfo, Function)
+
+				if Success
+					and type(Info) == "table"
+					and Info.source == "=Players." .. LocalPlayer.Name .. ".PlayerGui.SG_Package.LocalMovement"
+					and Info.name == "placeEquipment"
+				then
 					EquipmentSpeedState.Function = Function
-					EquipmentSpeedState.FunctionEnvironment = FunctionEnvironmentResult
+					local EnvironmentSuccess, FunctionEnvironmentResult = pcall(getfenv, Function)
+
+					if EnvironmentSuccess and type(FunctionEnvironmentResult) == "table" then
+						EquipmentSpeedState.FunctionEnvironment = FunctionEnvironmentResult
+					end
+
 					return Function
 				end
 			end
 		end
 	end
 
-	return nil
+	local MobileFunction = inspectMobilePlacementFunction()
+
+	if type(MobileFunction) == "function" then
+		EquipmentSpeedState.Function = MobileFunction
+
+		if type(getfenv) == "function" then
+			local EnvironmentSuccess, FunctionEnvironmentResult = pcall(getfenv, MobileFunction)
+
+			if EnvironmentSuccess and type(FunctionEnvironmentResult) == "table" then
+				EquipmentSpeedState.FunctionEnvironment = FunctionEnvironmentResult
+			end
+		end
+	end
+
+	return MobileFunction
 end
 
 local function applyEquipmentPlacementSpeed()
@@ -497,54 +641,57 @@ local function applyEquipmentPlacementSpeed()
 
 	local Function = findEquipmentPlacementFunction()
 
-	if not Function then
+	if type(Function) ~= "function" or type(hookfunction) ~= "function" or type(tick) ~= "function" then
 		return false
 	end
 
-	local FunctionEnvironment = EquipmentSpeedState.FunctionEnvironment
-	local ExistingWrapper = EquipmentSpeedState.WrappedTick
-
-	if type(FunctionEnvironment) ~= "table" then
-		return false
-	end
-
-	if type(ExistingWrapper) == "function"
-		and rawget(FunctionEnvironment, "tick") == ExistingWrapper
+	if type(EquipmentSpeedState.WrappedTick) == "function"
+		and type(EquipmentSpeedState.OriginalTick) == "function"
 	then
 		return true
 	end
 
-	local OriginalTick = FunctionEnvironment.tick
-
-	if type(OriginalTick) ~= "function" then
-		return false
-	end
-
-	local HadOwnTick = rawget(FunctionEnvironment, "tick") ~= nil
 	local EquipmentPercent = LocalPlayer
 		:WaitForChild("PlayerGui", math.huge)
 		:WaitForChild("SG_Package", math.huge)
 		:WaitForChild("MainGui", math.huge)
 		:WaitForChild("Interaction", math.huge)
 		:WaitForChild("EquipmentPercent", math.huge)
+	local TickTarget = tick
+	local OriginalTick
 
 	local function WrappedTick(...)
 		local Now = OriginalTick(...)
-		local CallerSuccess, Caller = pcall(debug.info, 2, "f")
 
-		if CallerSuccess and Caller == Function then
-			EquipmentSpeedState.CFrameLookAtCount = 0
+		if Environment.NotorietyUnloaded or not Environment.NotorietyEquipmentSpeedEnabled then
+			return Now
 		end
 
-		if Environment.NotorietyUnloaded
-			or typeof(EquipmentPercent) ~= "Instance"
+		local IsEquipmentCaller = false
+
+		for Level = 2, 6 do
+			local SourceSuccess, Source = pcall(debug.info, Level, "s")
+			local NameSuccess, Name = pcall(debug.info, Level, "n")
+
+			if SourceSuccess
+				and NameSuccess
+				and Source == "Players." .. LocalPlayer.Name .. ".PlayerGui.SG_Package.LocalMovement"
+				and Name == "placeEquipment"
+			then
+				IsEquipmentCaller = true
+				break
+			end
+		end
+
+		if not IsEquipmentCaller then
+			return Now
+		end
+
+		if typeof(EquipmentPercent) ~= "Instance"
 			or EquipmentPercent.Parent == nil
 			or not EquipmentPercent.Visible
 		then
-			EquipmentSpeedState.ClockActive = false
-			EquipmentSpeedState.RealAnchor = nil
-			EquipmentSpeedState.ScaledAnchor = nil
-			EquipmentSpeedState.LastMultiplier = nil
+			resetEquipmentClock()
 			return Now
 		end
 
@@ -565,13 +712,26 @@ local function applyEquipmentPlacementSpeed()
 			+ (Now - EquipmentSpeedState.RealAnchor) * EquipmentSpeedState.LastMultiplier
 	end
 
+	local HookSuccess, HookResult = pcall(hookfunction, TickTarget, WrappedTick)
+
+	if not HookSuccess or type(HookResult) ~= "function" then
+		return false
+	end
+
+	OriginalTick = HookResult
 	EquipmentSpeedState.OriginalTick = OriginalTick
-	EquipmentSpeedState.HadOwnTick = HadOwnTick
+	EquipmentSpeedState.TickTarget = TickTarget
 	EquipmentSpeedState.WrappedTick = WrappedTick
 	EquipmentSpeedState.EquipmentPercent = EquipmentPercent
-	rawset(FunctionEnvironment, "tick", WrappedTick)
+	resetEquipmentClock()
 
-	return rawget(FunctionEnvironment, "tick") == WrappedTick
+	EquipmentSpeedState.VisibilityConnection = EquipmentPercent:GetPropertyChangedSignal("Visible"):Connect(function()
+		if not EquipmentPercent.Visible then
+			resetEquipmentClock()
+		end
+	end)
+
+	return true
 end
 
 local function getEquipmentPositionOffset()
@@ -681,6 +841,431 @@ local function applyEquipmentPositioning()
 	return rawget(FunctionEnvironment, "CFrame") == WrappedCFrame
 end
 
+local AudioState = {
+	Groups = {},
+	OriginalVolumes = setmetatable({}, {
+		__mode = "k",
+	}),
+	DirectOriginalVolumes = setmetatable({}, {
+		__mode = "k",
+	}),
+	DirectConnections = setmetatable({}, {
+		__mode = "k",
+	}),
+	DescendantConnection = nil,
+	Applying = false,
+	ApplyingDirect = false,
+}
+
+local AudioDefinitions = {
+	{
+		Key = "Music",
+		EnvironmentKey = "NotorietyMusicVolume",
+	},
+	{
+		Key = "SFX",
+		EnvironmentKey = "NotorietySFXVolume",
+	},
+	{
+		Key = "LocalGunshots",
+		EnvironmentKey = "NotorietyLocalGunshotsVolume",
+	},
+	{
+		Key = "Gunshots",
+		EnvironmentKey = "NotorietyGunshotsVolume",
+	},
+	{
+		Key = "MapAmbience",
+		EnvironmentKey = "NotorietyMapAmbienceVolume",
+	},
+	{
+		Key = "Voices",
+		EnvironmentKey = "NotorietyVoicesVolume",
+	},
+	{
+		Key = "UI",
+		EnvironmentKey = "NotorietyUIVolume",
+	},
+}
+
+local function resolveAudioGroups()
+	local SoundPackage = SoundService:FindFirstChild("Sound_Package")
+	local GlobalSounds = SoundPackage and SoundPackage:FindFirstChild("GlobalSounds")
+	local GameAudio = GlobalSounds and GlobalSounds:FindFirstChild("GameAudio")
+	local SFX = GameAudio and GameAudio:FindFirstChild("SFX")
+
+	AudioState.Groups.Music = GlobalSounds and GlobalSounds:FindFirstChild("Music")
+	AudioState.Groups.SFX = SFX
+	AudioState.Groups.LocalGunshots = SFX and SFX:FindFirstChild("LocalGunshots")
+	AudioState.Groups.Gunshots = SFX and SFX:FindFirstChild("Gunshots")
+	AudioState.Groups.MapAmbience = SFX and SFX:FindFirstChild("MapAmbience")
+	AudioState.Groups.Voices = GameAudio and GameAudio:FindFirstChild("Voices")
+	AudioState.Groups.UI = GlobalSounds and GlobalSounds:FindFirstChild("UI")
+
+	for _, Definition in AudioDefinitions do
+		local Group = AudioState.Groups[Definition.Key]
+
+		if typeof(Group) == "Instance"
+			and Group:IsA("SoundGroup")
+			and AudioState.OriginalVolumes[Group] == nil
+		then
+			AudioState.OriginalVolumes[Group] = Group.Volume
+		end
+	end
+end
+
+local function isGunshotSound(Sound)
+	if typeof(Sound) ~= "Instance" or not Sound:IsA("Sound") then
+		return false
+	end
+
+	local Name = string.lower(Sound.Name)
+	local ParentName = Sound.Parent and string.lower(Sound.Parent.Name) or ""
+
+	return ParentName:find("muzzle", 1, true) ~= nil
+		or Name:find("gunshot", 1, true) ~= nil
+		or Name:find("gunfire", 1, true) ~= nil
+		or Name == "fire"
+		or Name == "firesound"
+		or Name:find("suppressedsound", 1, true) ~= nil
+end
+
+local function isLocalGunshotSound(Sound)
+	if not isGunshotSound(Sound) then
+		return false
+	end
+
+	local Camera = Workspace.CurrentCamera
+	local CameraModel = Camera and Camera:FindFirstChild("CameraModel")
+	local Character = LocalPlayer.Character
+
+	return (CameraModel and Sound:IsDescendantOf(CameraModel))
+		or (Character and Sound:IsDescendantOf(Character))
+end
+
+local function getDirectGunshotPercent(Sound)
+	local SFXPercent = math.clamp(tonumber(Environment.NotorietySFXVolume) or 100, 0, 100) / 100
+	local GunPercent
+
+	if isLocalGunshotSound(Sound) then
+		GunPercent = math.clamp(tonumber(Environment.NotorietyLocalGunshotsVolume) or 100, 0, 100) / 100
+	else
+		GunPercent = math.clamp(tonumber(Environment.NotorietyGunshotsVolume) or 100, 0, 100) / 100
+	end
+
+	return SFXPercent * GunPercent
+end
+
+local function applyDirectGunshotVolume(Sound)
+	if Environment.NotorietyUnloaded
+		or typeof(Sound) ~= "Instance"
+		or not Sound:IsA("Sound")
+		or Sound.Parent == nil
+		or not isGunshotSound(Sound)
+	then
+		return false
+	end
+
+	local LocalGroup = AudioState.Groups.LocalGunshots
+	local OtherGroup = AudioState.Groups.Gunshots
+
+	if Sound.SoundGroup == LocalGroup or Sound.SoundGroup == OtherGroup then
+		return false
+	end
+
+	if AudioState.DirectOriginalVolumes[Sound] == nil then
+		AudioState.DirectOriginalVolumes[Sound] = Sound.Volume
+	end
+
+	local BaseVolume = AudioState.DirectOriginalVolumes[Sound]
+	local TargetVolume = BaseVolume * getDirectGunshotPercent(Sound)
+
+	if math.abs(Sound.Volume - TargetVolume) > 0.0001 then
+		AudioState.ApplyingDirect = true
+		Sound.Volume = TargetVolume
+		AudioState.ApplyingDirect = false
+	end
+
+	return true
+end
+
+local function trackDirectGunshotSound(Sound)
+	if not isGunshotSound(Sound) then
+		return false
+	end
+
+	if AudioState.DirectOriginalVolumes[Sound] == nil then
+		AudioState.DirectOriginalVolumes[Sound] = Sound.Volume
+	end
+
+	if AudioState.DirectConnections[Sound] == nil then
+		AudioState.DirectConnections[Sound] = Sound:GetPropertyChangedSignal("Volume"):Connect(function()
+			if Environment.NotorietyUnloaded or AudioState.ApplyingDirect then
+				return
+			end
+
+			local Percent = getDirectGunshotPercent(Sound)
+
+			if Percent >= 0.9999 then
+				AudioState.DirectOriginalVolumes[Sound] = Sound.Volume
+				return
+			end
+
+			-- The game rewrites weapon volumes during equip/fire. Treat that value as
+			-- the new unscaled base, then immediately re-apply the user's slider.
+			AudioState.DirectOriginalVolumes[Sound] = Sound.Volume
+			applyDirectGunshotVolume(Sound)
+		end)
+	end
+
+	return applyDirectGunshotVolume(Sound)
+end
+
+local function scanDirectGunshotSounds()
+	local Camera = Workspace.CurrentCamera
+	local CameraModel = Camera and Camera:FindFirstChild("CameraModel")
+	local Character = LocalPlayer.Character
+
+	if CameraModel then
+		for _, Descendant in CameraModel:GetDescendants() do
+			if Descendant:IsA("Sound") then
+				trackDirectGunshotSound(Descendant)
+			end
+		end
+	end
+
+	if Character then
+		for _, Descendant in Character:GetDescendants() do
+			if Descendant:IsA("Sound") then
+				trackDirectGunshotSound(Descendant)
+			end
+		end
+	end
+
+	-- Other players/NPCs may also use ungrouped muzzle sounds.
+	for _, ContainerName in { "Criminals", "Police" } do
+		local Container = Workspace:FindFirstChild(ContainerName)
+
+		if Container then
+			for _, Descendant in Container:GetDescendants() do
+				if Descendant:IsA("Sound") and isGunshotSound(Descendant) then
+					trackDirectGunshotSound(Descendant)
+				end
+			end
+		end
+	end
+end
+
+local function ensureDirectAudioWatcher()
+	if AudioState.DescendantConnection then
+		return
+	end
+
+	AudioState.DescendantConnection = Workspace.DescendantAdded:Connect(function(Descendant)
+		if Environment.NotorietyUnloaded or not Descendant:IsA("Sound") then
+			return
+		end
+
+		if isGunshotSound(Descendant) then
+			task.defer(trackDirectGunshotSound, Descendant)
+		end
+	end)
+end
+
+local function applyAudioVolumes()
+	if Environment.NotorietyUnloaded or AudioState.Applying then
+		return false
+	end
+
+	resolveAudioGroups()
+	ensureDirectAudioWatcher()
+	AudioState.Applying = true
+	local Applied = false
+
+	for _, Definition in AudioDefinitions do
+		local Group = AudioState.Groups[Definition.Key]
+		local Percent = math.clamp(tonumber(Environment[Definition.EnvironmentKey]) or 100, 0, 100)
+		Environment[Definition.EnvironmentKey] = Percent
+
+		if typeof(Group) == "Instance" and Group:IsA("SoundGroup") then
+			Group.Volume = Percent / 100
+			Applied = true
+		end
+	end
+
+	AudioState.Applying = false
+	scanDirectGunshotSounds()
+	return Applied
+end
+
+local function restoreAudioVolumes()
+	AudioState.Applying = true
+	AudioState.ApplyingDirect = true
+
+	if AudioState.DescendantConnection then
+		pcall(function()
+			AudioState.DescendantConnection:Disconnect()
+		end)
+		AudioState.DescendantConnection = nil
+	end
+
+	for Sound, Connection in AudioState.DirectConnections do
+		pcall(function()
+			Connection:Disconnect()
+		end)
+
+		local Original = AudioState.DirectOriginalVolumes[Sound]
+
+		if typeof(Sound) == "Instance" and Sound.Parent ~= nil and type(Original) == "number" then
+			pcall(function()
+				Sound.Volume = Original
+			end)
+		end
+	end
+
+	for Group, Volume in AudioState.OriginalVolumes do
+		if typeof(Group) == "Instance" and Group.Parent ~= nil then
+			pcall(function()
+				Group.Volume = Volume
+			end)
+		end
+	end
+
+	AudioState.ApplyingDirect = false
+	AudioState.Applying = false
+	table.clear(AudioState.Groups)
+	table.clear(AudioState.OriginalVolumes)
+	table.clear(AudioState.DirectOriginalVolumes)
+	table.clear(AudioState.DirectConnections)
+end
+
+local MobileEquipmentState = {
+	Targets = {},
+	Refresh = 0,
+}
+
+local function getFunctionUpvalues(Function)
+	if type(debug) ~= "table" or type(debug.getupvalues) ~= "function" then
+		return nil
+	end
+
+	local Success, Upvalues = pcall(debug.getupvalues, Function)
+	return if Success and type(Upvalues) == "table" then Upvalues else nil
+end
+
+local function getConnectionFunction(Connection)
+	local Success, Function = pcall(function()
+		return Connection.Function
+	end)
+
+	return if Success and type(Function) == "function" then Function else nil
+end
+
+local function restoreMobileEquipmentPlacementFix()
+	if type(debug) == "table" and type(debug.setupvalue) == "function" then
+		for _, Record in MobileEquipmentState.Targets do
+			if type(Record) == "table"
+				and type(Record.Callback) == "function"
+				and type(Record.Index) == "number"
+				and type(Record.Original) == "function"
+			then
+				local Upvalues = getFunctionUpvalues(Record.Callback)
+
+				if Upvalues and Upvalues[Record.Index] == Record.Wrapper then
+					pcall(debug.setupvalue, Record.Callback, Record.Index, Record.Original)
+				end
+			end
+		end
+	end
+
+	table.clear(MobileEquipmentState.Targets)
+	MobileEquipmentState.Refresh = 0
+end
+
+local function hasMobileEquipmentTarget(Callback, Index)
+	for _, Record in MobileEquipmentState.Targets do
+		if Record.Callback == Callback and Record.Index == Index then
+			return true
+		end
+	end
+
+	return false
+end
+
+local function applyMobileEquipmentPlacementFix()
+	if Environment.NotorietyUnloaded
+		or type(getconnections) ~= "function"
+		or type(debug) ~= "table"
+		or type(debug.getupvalues) ~= "function"
+		or type(debug.setupvalue) ~= "function"
+	then
+		return false
+	end
+
+	local PlaceEquipment = findEquipmentPlacementFunction()
+
+	if type(PlaceEquipment) ~= "function" then
+		return false
+	end
+
+	local PlayerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+	local SGPackage = PlayerGui and PlayerGui:FindFirstChild("SG_Package")
+	local MainGui = SGPackage and SGPackage:FindFirstChild("MainGui")
+	local MobileUI = MainGui and MainGui:FindFirstChild("MobileUI")
+	local Buttons = MobileUI and MobileUI:FindFirstChild("Hotbar")
+	local Equipment = Buttons and Buttons:FindFirstChild("Equipment")
+	local SelectButton = Equipment and Equipment:FindFirstChild("SelectButton")
+
+	if not SelectButton or not SelectButton:IsA("GuiButton") then
+		return false
+	end
+
+	local Success, Connections = pcall(getconnections, SelectButton.MouseButton1Down)
+
+	if not Success or type(Connections) ~= "table" then
+		return false
+	end
+
+	local Patched = false
+
+	for _, Connection in Connections do
+		local Callback = getConnectionFunction(Connection)
+		local Upvalues = Callback and getFunctionUpvalues(Callback) or nil
+
+		if Upvalues then
+			for Index, Value in pairs(Upvalues) do
+				if Value == PlaceEquipment then
+					if hasMobileEquipmentTarget(Callback, Index) then
+						Patched = true
+						break
+					end
+
+					local Original = PlaceEquipment
+					local Wrapper = function(...)
+						applyEquipmentPlacementSpeed()
+						return Original(...)
+					end
+					local SetupSuccess = pcall(debug.setupvalue, Callback, Index, Wrapper)
+
+					if SetupSuccess then
+						table.insert(MobileEquipmentState.Targets, {
+							Callback = Callback,
+							Index = Index,
+							Original = Original,
+							Wrapper = Wrapper,
+						})
+						Patched = true
+					end
+
+					break
+				end
+			end
+		end
+	end
+
+	return Patched
+end
+
 local YellPatchState = {
 	Module = nil,
 	Original = nil,
@@ -785,7 +1370,122 @@ local function getYellTargetPart(Object)
 	return nil
 end
 
-local function createViewportYellWrapper()
+local function canYellSeeTarget(Actor, TargetPart, Camera)
+	if not Actor or not TargetPart then
+		return false
+	end
+
+	Camera = Camera or Workspace.CurrentCamera
+
+	local OriginCFrame
+
+	if Actor == LocalPlayer.Character and Camera then
+		OriginCFrame = Camera.CFrame
+	else
+		local Root = Actor:FindFirstChild("HumanoidRootPart")
+
+		if not Root or not Root:IsA("BasePart") then
+			return false
+		end
+
+		OriginCFrame = Root.CFrame * CFrame.new(0, 1.5, 0)
+	end
+
+	local Origin = OriginCFrame.Position
+	local Direction = TargetPart.Position - Origin
+
+	if Direction.Magnitude <= 0.01 then
+		return true
+	end
+
+	local Ignore = {
+		Actor,
+		Camera,
+		Workspace:FindFirstChild("Tracers"),
+		Workspace:FindFirstChild("Bodies"),
+		Workspace:FindFirstChild("InvisibleParts"),
+		Workspace:FindFirstChild("MapZones"),
+		Workspace:FindFirstChild("NonPoliceObjectives"),
+		Workspace:FindFirstChild("Bags"),
+	}
+	local FilteredIgnore = {}
+
+	for _, Object in Ignore do
+		if Object then
+			table.insert(FilteredIgnore, Object)
+		end
+	end
+
+	local Hit, HitPosition = Workspace:FindPartOnRayWithIgnoreList(
+		Ray.new(Origin, Direction),
+		FilteredIgnore
+	)
+
+	if not Hit then
+		return true
+	end
+
+	if Hit:IsDescendantOf(TargetPart.Parent) then
+		return true
+	end
+
+	return HitPosition ~= nil and (HitPosition - TargetPart.Position).Magnitude < 2
+end
+
+local function shouldIncludeYellTarget(Actor, TargetPart, Camera)
+	if not TargetPart then
+		return false
+	end
+
+	local Method = Environment.NotorietyYellMarkMethod
+
+	if Method == "Viewport" and not isPartInViewport(TargetPart, Camera) then
+		return false
+	end
+
+	if Method ~= "Viewport" and Method ~= "Whole Game" then
+		return false
+	end
+
+	if Environment.NotorietyYellThroughWalls then
+		return true
+	end
+
+	return canYellSeeTarget(Actor, TargetPart, Camera)
+end
+
+local function shouldIncludeTeammateYellTarget(Actor, TargetPart, Camera)
+	if not TargetPart then
+		return false
+	end
+
+	local Method = Environment.NotorietyYellMarkMethod
+
+	if Method == "Viewport" and not isPartInViewport(TargetPart, Camera) then
+		return false
+	end
+
+	if Method ~= "Viewport" and Method ~= "Whole Game" then
+		return false
+	end
+
+	local OriginPart = Actor:FindFirstChild("HumanoidRootPart") or Actor.PrimaryPart
+
+	if not Environment.NotorietyTeammateYellInfiniteRange
+		and OriginPart
+		and (TargetPart.Position - OriginPart.Position).Magnitude > 100
+	then
+		return false
+	end
+
+	if Environment.NotorietyTeammateYellThroughWalls then
+		return true
+	end
+
+	return canYellSeeTarget(Actor, TargetPart, Camera)
+end
+
+local function createYellMarkWrapper()
 	return function(_, Actor, _, MarkOnly, AutoMode)
 		local IsPlayer = typeof(Actor) == "Instance" and Actor:IsA("Player")
 
@@ -816,7 +1516,7 @@ local function createViewportYellWrapper()
 				for _, Citizen in Citizens:GetChildren() do
 					local TargetPart = getYellTargetPart(Citizen)
 
-					if TargetPart and isPartInViewport(TargetPart, Camera) then
+					if TargetPart and shouldIncludeYellTarget(Actor, TargetPart, Camera) then
 						if Citizen:FindFirstChild("Alerted") then
 							table.insert(Targets, Citizen)
 							YellTier = math.max(YellTier, 1)
@@ -838,7 +1538,7 @@ local function createViewportYellWrapper()
 				for _, CameraObject in Cameras:GetChildren() do
 					local TargetPart = getYellTargetPart(CameraObject)
 
-					if TargetPart and isPartInViewport(TargetPart, Camera) then
+					if TargetPart and shouldIncludeYellTarget(Actor, TargetPart, Camera) then
 						table.insert(Targets, CameraObject)
 						YellTier = 2
 					end
@@ -858,7 +1558,7 @@ local function createViewportYellWrapper()
 					if Criminal ~= Actor then
 						local TargetPart = getYellTargetPart(Criminal)
 
-						if TargetPart and isPartInViewport(TargetPart, Camera) then
+						if TargetPart and shouldIncludeTeammateYellTarget(Actor, TargetPart, Camera) then
 							local Health = Criminal:FindFirstChild("Health")
 							local ShouldTarget = false
 
@@ -898,7 +1598,7 @@ local function createViewportYellWrapper()
 			for _, Officer in Police:GetChildren() do
 				local TargetPart = getYellTargetPart(Officer)
 
-				if TargetPart and isPartInViewport(TargetPart, Camera) then
+				if TargetPart and shouldIncludeYellTarget(Actor, TargetPart, Camera) then
 					table.insert(Targets, Officer)
 					YellTier = math.max(YellTier, 4)
 				end
@@ -990,6 +1690,11 @@ local function applyYellMarkPatch()
 		return false
 	end
 
+	if Environment.NotorietyYellMarkMethod == "Original" then
+		restoreYellMarkPatch()
+		return true
+	end
+
 	local Module = getYellModule()
 
 	if not Module then
@@ -1011,7 +1716,7 @@ local function applyYellMarkPatch()
 		return false
 	end
 
-	local Wrapper = createViewportYellWrapper()
+	local Wrapper = createYellMarkWrapper()
 	YellPatchState.Module = Module
 	YellPatchState.Original = Original
 	YellPatchState.Wrapper = Wrapper
@@ -1028,6 +1733,46 @@ local function setYellMarkPatchEnabled(Enabled)
 	else
 		restoreYellMarkPatch()
 	end
+end
+
+local function setYellMarkMethod(Method)
+	Method = tostring(Method)
+
+	if Method ~= "Viewport" and Method ~= "Whole Game" and Method ~= "Original" then
+		Method = "Viewport"
+	end
+
+	Environment.NotorietyYellMarkMethod = Method
+	YellPatchState.AutoGeneration = 0
+	YellPatchState.AutoLastFire = 0
+	table.clear(YellPatchState.AutoSeen)
+
+	if Environment.NotorietyInfiniteYellMarkEnabled then
+		applyYellMarkPatch()
+	elseif Method == "Original" then
+		restoreYellMarkPatch()
+	end
+end
+
+local function setYellThroughWalls(Enabled)
+	Environment.NotorietyYellThroughWalls = Enabled == true
+	YellPatchState.AutoGeneration = 0
+	YellPatchState.AutoLastFire = 0
+	table.clear(YellPatchState.AutoSeen)
+end
+
+local function setTeammateYellInfiniteRange(Enabled)
+	Environment.NotorietyTeammateYellInfiniteRange = Enabled == true
+	YellPatchState.AutoGeneration = 0
+	YellPatchState.AutoLastFire = 0
+	table.clear(YellPatchState.AutoSeen)
+end
+
+local function setTeammateYellThroughWalls(Enabled)
+	Environment.NotorietyTeammateYellThroughWalls = Enabled == true
+	YellPatchState.AutoGeneration = 0
+	YellPatchState.AutoLastFire = 0
+	table.clear(YellPatchState.AutoSeen)
 end
 
 YellPatchState.RefreshNoDelayTargets = function()
@@ -1233,6 +1978,15 @@ YellPatchState.AutoYell = function()
 	end
 
 	local Success, _, Fired = pcall(function()
+		if Environment.NotorietyYellMarkMethod == "Original" then
+			if os.clock() - YellPatchState.AutoLastFire < 2 then
+				return 0, false
+			end
+
+			YellPatchState.AutoLastFire = os.clock()
+			return Module:Yell(LocalPlayer, math.huge, nil), true
+		end
+
 		return Module:Yell(LocalPlayer, math.huge, nil, true)
 	end)
 
@@ -2977,17 +3731,47 @@ local function createVibeUI()
 	local ConfigManager = Window.ConfigManager
 	local ConfigName = "default"
 
+	local SaveGeneration = 0
+
 	local function saveVibeUIConfig()
+		if NotorietyUI.ConfigLoading or not NotorietyUI.Config then
+			return false
+		end
+
+		local Success, SaveError = pcall(function()
+			return NotorietyUI.Config:Save()
+		end)
+
+		if not Success then
+			warn("[Notoriety] VibeUI config save failed: " .. tostring(SaveError))
+			return false
+		end
+
+		return true
+	end
+
+	local function requestVibeUIConfigSave()
 		if NotorietyUI.ConfigLoading or not NotorietyUI.Config then
 			return
 		end
 
-		pcall(function()
-			NotorietyUI.Config:Save()
+		SaveGeneration += 1
+		local Generation = SaveGeneration
+
+		task.delay(0.12, function()
+			if Generation ~= SaveGeneration
+				or NotorietyUI.ConfigLoading
+				or not NotorietyUI.Config
+			then
+				return
+			end
+
+			saveVibeUIConfig()
 		end)
 	end
 
 	NotorietyUI.SaveConfig = saveVibeUIConfig
+	NotorietyUI.RequestConfigSave = requestVibeUIConfigSave
 
 	local MainTab = Window:Tab({
 		Title = "Main",
@@ -3007,22 +3791,71 @@ local function createVibeUI()
 	MainTab:Toggle({
 		Flag = "InfiniteYellMark",
 		Title = "Infinite Yell / Mark",
-		Desc = "Targets the full viewport through walls with no distance limit",
+		Desc = "Enables the selected custom yell / mark targeting method",
 		Value = Environment.NotorietyInfiniteYellMarkEnabled,
 		Callback = function(Enabled)
 			setYellMarkPatchEnabled(Enabled)
-			saveVibeUIConfig()
+			requestVibeUIConfigSave()
+		end,
+	})
+
+	MainTab:Dropdown({
+		Flag = "YellMarkMethod",
+		Title = "Yell / Mark Method",
+		Desc = "Viewport targets the screen, Whole Game targets every eligible object, Original restores the native 25-degree/range behavior",
+		Values = {
+			"Viewport",
+			"Whole Game",
+			"Original",
+		},
+		Value = Environment.NotorietyYellMarkMethod,
+		Callback = function(Method)
+			setYellMarkMethod(Method)
+			requestVibeUIConfigSave()
+		end,
+	})
+
+	MainTab:Toggle({
+		Flag = "YellThroughWalls",
+		Title = "Yell / Mark Through Walls",
+		Desc = "When disabled, Viewport and Whole Game require line of sight; Original always keeps the game's native visibility rules",
+		Value = Environment.NotorietyYellThroughWalls,
+		Callback = function(Enabled)
+			setYellThroughWalls(Enabled)
+			requestVibeUIConfigSave()
+		end,
+	})
+
+	MainTab:Toggle({
+		Flag = "TeammateYellInfiniteRange",
+		Title = "Boost / Inspire Infinite Range",
+		Desc = "Custom Viewport/Whole Game modes can boost or inspire teammates beyond 100 studs; Original keeps the game's native behavior",
+		Value = Environment.NotorietyTeammateYellInfiniteRange,
+		Callback = function(Enabled)
+			setTeammateYellInfiniteRange(Enabled)
+			requestVibeUIConfigSave()
+		end,
+	})
+
+	MainTab:Toggle({
+		Flag = "TeammateYellThroughWalls",
+		Title = "Boost / Inspire Through Walls",
+		Desc = "Custom Viewport/Whole Game modes can boost or inspire teammates through walls; Original keeps the game's native behavior",
+		Value = Environment.NotorietyTeammateYellThroughWalls,
+		Callback = function(Enabled)
+			setTeammateYellThroughWalls(Enabled)
+			requestVibeUIConfigSave()
 		end,
 	})
 
 	MainTab:Toggle({
 		Flag = "AutoYell",
 		Title = "Auto Yell",
-		Desc = "Automatically yells new viewport targets without spamming unchanged targets",
+		Desc = "Automatically yells new targets from the selected method without spamming unchanged custom targets",
 		Value = Environment.NotorietyAutoYellEnabled,
 		Callback = function(Enabled)
 			YellPatchState.SetAutoYellEnabled(Enabled)
-			saveVibeUIConfig()
+			requestVibeUIConfigSave()
 		end,
 	})
 
@@ -3033,7 +3866,7 @@ local function createVibeUI()
 		Value = Environment.NotorietyNoYellDelayEnabled,
 		Callback = function(Enabled)
 			YellPatchState.SetNoDelayEnabled(Enabled)
-			saveVibeUIConfig()
+			requestVibeUIConfigSave()
 		end,
 	})
 
@@ -3044,7 +3877,7 @@ local function createVibeUI()
 		Value = Environment.NotorietyPoliceHeadScaleEnabled,
 		Callback = function(Enabled)
 			setPoliceHeadScaleEnabled(Enabled)
-			saveVibeUIConfig()
+			requestVibeUIConfigSave()
 		end,
 	})
 
@@ -3070,7 +3903,7 @@ local function createVibeUI()
 				applyPoliceHeadScale()
 			end
 
-			saveVibeUIConfig()
+			requestVibeUIConfigSave()
 		end,
 	})
 
@@ -3081,7 +3914,7 @@ local function createVibeUI()
 		Value = Environment.NotorietyItemESPEnabled,
 		Callback = function(Enabled)
 			setItemESPEnabled(Enabled)
-			saveVibeUIConfig()
+			requestVibeUIConfigSave()
 		end,
 	})
 
@@ -3098,7 +3931,7 @@ local function createVibeUI()
 		Value = Environment.NotorietyWeaponEnabled,
 		Callback = function(Enabled)
 			setWeaponModificationsEnabled(Enabled)
-			saveVibeUIConfig()
+			requestVibeUIConfigSave()
 		end,
 	})
 
@@ -3124,7 +3957,7 @@ local function createVibeUI()
 				applyAllWeaponModifications()
 			end
 
-			saveVibeUIConfig()
+			requestVibeUIConfigSave()
 		end,
 	})
 
@@ -3150,7 +3983,7 @@ local function createVibeUI()
 				applyAllWeaponModifications()
 			end
 
-			saveVibeUIConfig()
+			requestVibeUIConfigSave()
 		end,
 	})
 
@@ -3177,7 +4010,7 @@ local function createVibeUI()
 				applyAllWeaponModifications()
 			end
 
-			saveVibeUIConfig()
+			requestVibeUIConfigSave()
 		end,
 	})
 
@@ -3204,7 +4037,112 @@ local function createVibeUI()
 				applyAllWeaponModifications()
 			end
 
-			saveVibeUIConfig()
+			requestVibeUIConfigSave()
+		end,
+	})
+
+	local AudioTab = Window:Tab({
+		Title = "Audio",
+		Icon = "volume-2",
+		Border = true,
+	})
+
+	local function addAudioSlider(Flag, Title, Desc, EnvironmentKey)
+		return AudioTab:Slider({
+			Flag = Flag,
+			Title = Title,
+			Desc = Desc,
+			Min = 0,
+			Max = 100,
+			Step = 1,
+			Suffix = "%",
+			Value = math.clamp(tonumber(Environment[EnvironmentKey]) or 100, 0, 100),
+			Callback = function(Value)
+				local Number = tonumber(Value)
+
+				if Number == nil or Number ~= Number then
+					return
+				end
+
+				Environment[EnvironmentKey] = math.clamp(Number, 0, 100)
+				applyAudioVolumes()
+				requestVibeUIConfigSave()
+			end,
+		})
+	end
+
+	NotorietyUI.MusicVolumeSlider = addAudioSlider(
+		"MusicVolume",
+		"Music Volume",
+		"Heist/background music only",
+		"NotorietyMusicVolume"
+	)
+	NotorietyUI.LocalGunshotsVolumeSlider = addAudioSlider(
+		"LocalGunshotsVolume",
+		"Your Gunshots",
+		"Local weapon firing audio. Set to 0% to mute your shots without muting music",
+		"NotorietyLocalGunshotsVolume"
+	)
+	NotorietyUI.GunshotsVolumeSlider = addAudioSlider(
+		"GunshotsVolume",
+		"Other Gunshots",
+		"World/NPC/other-player gunfire",
+		"NotorietyGunshotsVolume"
+	)
+	NotorietyUI.SFXVolumeSlider = addAudioSlider(
+		"SFXVolume",
+		"All SFX",
+		"Master game SFX group. This also scales gunshots and map ambience",
+		"NotorietySFXVolume"
+	)
+	NotorietyUI.MapAmbienceVolumeSlider = addAudioSlider(
+		"MapAmbienceVolume",
+		"Map Ambience",
+		"Environmental/map ambience",
+		"NotorietyMapAmbienceVolume"
+	)
+	NotorietyUI.VoicesVolumeSlider = addAudioSlider(
+		"VoicesVolume",
+		"Voices",
+		"Character/police voice audio",
+		"NotorietyVoicesVolume"
+	)
+	NotorietyUI.UIVolumeSlider = addAudioSlider(
+		"UIVolume",
+		"UI Sounds",
+		"Interface sound effects",
+		"NotorietyUIVolume"
+	)
+
+	AudioTab:Button({
+		Title = "Reset Audio Volumes",
+		Desc = "Resets all script audio sliders to 100%",
+		Icon = "rotate-ccw",
+		Callback = function()
+			Environment.NotorietyMusicVolume = 100
+			Environment.NotorietySFXVolume = 100
+			Environment.NotorietyLocalGunshotsVolume = 100
+			Environment.NotorietyGunshotsVolume = 100
+			Environment.NotorietyMapAmbienceVolume = 100
+			Environment.NotorietyVoicesVolume = 100
+			Environment.NotorietyUIVolume = 100
+
+			for _, Slider in {
+				NotorietyUI.MusicVolumeSlider,
+				NotorietyUI.SFXVolumeSlider,
+				NotorietyUI.LocalGunshotsVolumeSlider,
+				NotorietyUI.GunshotsVolumeSlider,
+				NotorietyUI.MapAmbienceVolumeSlider,
+				NotorietyUI.VoicesVolumeSlider,
+				NotorietyUI.UIVolumeSlider,
+			} do
+				pcall(function()
+					Slider:Set(100)
+				end)
+			end
+
+			applyAudioVolumes()
+			requestVibeUIConfigSave()
 		end,
 	})
 
@@ -3222,7 +4160,7 @@ local function createVibeUI()
 		Callback = function(Enabled)
 			Environment.NotorietyEquipmentSpeedEnabled = Enabled == true
 			applyEquipmentPlacementSpeed()
-			saveVibeUIConfig()
+			requestVibeUIConfigSave()
 		end,
 	})
 
@@ -3252,7 +4190,7 @@ local function createVibeUI()
 				applyEquipmentPlacementSpeed()
 			end
 
-			saveVibeUIConfig()
+			requestVibeUIConfigSave()
 		end,
 	})
 
@@ -3271,7 +4209,7 @@ local function createVibeUI()
 				applyEquipmentPlacementSpeed()
 			end
 
-			saveVibeUIConfig()
+			requestVibeUIConfigSave()
 		end,
 	})
 
@@ -3283,7 +4221,7 @@ local function createVibeUI()
 		Callback = function(Enabled)
 			Environment.NotorietyEquipmentPositionEnabled = Enabled == true
 			applyEquipmentPositioning()
-			saveVibeUIConfig()
+			requestVibeUIConfigSave()
 		end,
 	})
 
@@ -3304,7 +4242,7 @@ local function createVibeUI()
 			end
 
 			Environment.NotorietyEquipmentPositionX = Number
-			saveVibeUIConfig()
+			requestVibeUIConfigSave()
 		end,
 	})
 
@@ -3325,7 +4263,7 @@ local function createVibeUI()
 			end
 
 			Environment.NotorietyEquipmentPositionY = Number
-			saveVibeUIConfig()
+			requestVibeUIConfigSave()
 		end,
 	})
 
@@ -3346,7 +4284,7 @@ local function createVibeUI()
 			end
 
 			Environment.NotorietyEquipmentPositionZ = Number
-			saveVibeUIConfig()
+			requestVibeUIConfigSave()
 		end,
 	})
 
@@ -3369,7 +4307,7 @@ local function createVibeUI()
 				NotorietyUI.EquipmentPositionZSlider:Set(0)
 			end)
 
-			saveVibeUIConfig()
+			requestVibeUIConfigSave()
 		end,
 	})
 
@@ -3391,7 +4329,7 @@ local function createVibeUI()
 				Window:SetToggleKey(KeyCode)
 			end
 
-			saveVibeUIConfig()
+			requestVibeUIConfigSave()
 		end,
 	})
 
@@ -3400,7 +4338,7 @@ local function createVibeUI()
 		Desc = "Restores modified data and unloads Notoriety",
 		Icon = "log-out",
 		Callback = function()
-			saveVibeUIConfig()
+			requestVibeUIConfigSave()
 
 			task.defer(function()
 				if type(Environment.UnloadNotoriety) == "function" then
@@ -3520,6 +4458,8 @@ local function unloadNotoriety()
 	restoreAllWeaponData()
 	restoreRuntimeWeaponAccuracy()
 	restoreEquipmentPlacementSpeed()
+	restoreMobileEquipmentPlacementFix()
+	restoreAudioVolumes()
 	restoreYellMarkPatch()
 	YellPatchState.ClearNoDelayConnections()
 	table.clear(YellPatchState.NoDelayTargets)
@@ -3538,6 +4478,7 @@ local function unloadNotoriety()
 	NotorietyUI.Window = nil
 	NotorietyUI.Config = nil
 	NotorietyUI.SaveConfig = nil
+	NotorietyUI.RequestConfigSave = nil
 
 	if CurrentWindow then
 		pcall(function()
@@ -3564,6 +4505,8 @@ YellPatchState.SetAutoYellEnabled(Environment.NotorietyAutoYellEnabled)
 YellPatchState.SetNoDelayEnabled(Environment.NotorietyNoYellDelayEnabled)
 applyEquipmentPlacementSpeed()
 applyEquipmentPositioning()
+applyMobileEquipmentPlacementFix()
+applyAudioVolumes()
 
 Environment.MaxEverythingConnection = RunService.Heartbeat:Connect(function(DeltaTime)
 	if Environment.NotorietyUnloaded then
@@ -3589,6 +4532,8 @@ Environment.MaxEverythingConnection = RunService.Heartbeat:Connect(function(Delt
 		EquipmentSpeedState.Refresh = 0
 		applyEquipmentPlacementSpeed()
 		applyEquipmentPositioning()
+		applyMobileEquipmentPlacementFix()
+		applyAudioVolumes()
 
 		if Environment.NotorietyInfiniteYellMarkEnabled then
 			applyYellMarkPatch()
@@ -3625,6 +4570,8 @@ Environment.MaxEverythingCharacterConnection = LocalPlayer.CharacterAdded:Connec
 	Apply()
 	applyEquipmentPlacementSpeed()
 	applyEquipmentPositioning()
+	applyMobileEquipmentPlacementFix()
+	applyAudioVolumes()
 	trackWeaponContainer(Character)
 	table.clear(YellPatchState.TargetParts)
 	table.clear(YellPatchState.SkillCache)

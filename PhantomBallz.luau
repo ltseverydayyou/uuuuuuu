@@ -164,344 +164,68 @@ end
 
 local TSFolder = waitChild(RSrv, "TS", 10)
 local Remotes = waitChild(RSrv, "Remotes", 10)
-local GenRemotes = TSFolder and TSFolder:FindFirstChild("GeneratedNetworkRemotes")
-local BallSyncRemote = Remotes and Remotes:FindFirstChild("BallSyncData")
 
-local bmMod = TSFolder and safeReq(TSFolder:FindFirstChild("BindableManager"))
-local BM = bmMod and bmMod.BindableManager or nil
-local enumFolder = TSFolder and TSFolder:FindFirstChild("Enums")
-local abMod = enumFolder and safeReq(enumFolder:FindFirstChild("AbilityID"))
-local AbilityID = abMod and abMod.AbilityID or { Deflect = "Deflect" }
-local abilFolder = TSFolder and TSFolder:FindFirstChild("Abilities")
-local defMod = abilFolder and safeReq(abilFolder:FindFirstChild("DeflectAbility"))
-local Def = defMod and defMod.DeflectAbility or {}
 local PNotif = __lt.cm("ReplicatedStorage", "FindFirstChild", "PromptNotification")
-
-local function refreshRefs()
-	if not RSrv then
-		return
-	end
-	if not (TSFolder and TSFolder.Parent) then
-		TSFolder = RSrv:FindFirstChild("TS")
-	end
-	if not (Remotes and Remotes.Parent) then
-		Remotes = RSrv:FindFirstChild("Remotes")
-	end
-	if TSFolder and not (GenRemotes and GenRemotes.Parent) then
-		GenRemotes = TSFolder:FindFirstChild("GeneratedNetworkRemotes")
-	end
-	if Remotes and not (BallSyncRemote and BallSyncRemote.Parent) then
-		BallSyncRemote = Remotes:FindFirstChild("BallSyncData")
-	end
-end
-
-local oAvail
-if type(hookfunction) == "function" and type(Def.IsAvailable) == "function" then
-	pcall(function()
-		oAvail = hookfunction(Def.IsAvailable, function(self, ...)
-			return true
-		end)
-	end)
-end
-if not oAvail and type(Def) == "table" and type(Def.IsAvailable) == "function" then
-	pcall(function()
-		Def.IsAvailable = function(self, ...)
-			return true
-		end
-	end)
-end
 
 local cleanup
 local notify
 local parryRemote
-local parryMode
-local parryInitDone = false
-local parryRemoteLocked = false
-local cooldownFrame
-local probingRemote = false
+local parryPacket = buffer.create(1)
+buffer.writeu8(parryPacket, 0, 1)
 
-local function getCooldownFrame()
-	if cooldownFrame and cooldownFrame.Parent then
-		return cooldownFrame
+local function isParryRemote(v)
+	return typeof(v) == "Instance" and v:IsA("RemoteEvent") and v.Parent ~= nil
+end
+
+local function resolveParryRemote()
+	if isParryRemote(parryRemote) then
+		return parryRemote
 	end
 
-	local pg = lp:FindFirstChild("PlayerGui")
-	if not pg then
+	parryRemote = nil
+
+	local touchTap = RSrv and RSrv:FindFirstChild("TouchTap") or nil
+	if not touchTap or not touchTap:IsA("BindableEvent") or type(getconnections) ~= "function" then
 		return nil
 	end
 
-	local ok, frame = pcall(function()
-		return (((((pg:WaitForChild("Interface", 1)):WaitForChild("HUD", 1)):WaitForChild("Bottom", 1)):WaitForChild("Deflect", 1)):WaitForChild("Button", 1)):WaitForChild("CooldownClipping", 1):WaitForChild("Cooldown", 1)
-	end)
-	if ok and frame then
-		cooldownFrame = frame
-		return cooldownFrame
-	end
-	return nil
-end
-
-local function sameSize(a, b)
-	return a
-		and b
-		and a.X.Scale == b.X.Scale
-		and a.X.Offset == b.X.Offset
-		and a.Y.Scale == b.Y.Scale
-		and a.Y.Offset == b.Y.Offset
-end
-
-local function validRemote(remote)
-	return typeof(remote) == "Instance" and remote.Parent ~= nil and remote:IsA("RemoteEvent")
-end
-
-local gameEnv
-local gameG
-
-local function getGameGlobal()
-	if type(gameG) == "table" then
-		return gameG, gameEnv
+	local okConnections, connections = pcall(getconnections, touchTap.Event)
+	if not okConnections or type(connections) ~= "table" then
+		return nil
 	end
 
-	if type(getfenv) == "function" then
-		local fns = {}
-		if type(Def) == "table" then
-			fns[#fns + 1] = Def.Deflect
-			fns[#fns + 1] = Def.OnClientCreate
-			fns[#fns + 1] = Def.OnServerCreate
-			fns[#fns + 1] = Def.constructor
-		end
+	for _, connection in ipairs(connections) do
+		local fn = connection.Function
+		if type(fn) == "function" then
+			if type(getfenv) == "function" then
+				local okEnv, env = pcall(getfenv, fn)
+				if okEnv and type(env) == "table" then
+					local globalEnv = rawget(env, "_G")
+					local did = type(globalEnv) == "table" and rawget(globalEnv, "did2") or nil
+					if isParryRemote(did) then
+						parryRemote = did
+						return parryRemote
+					end
+				end
+			end
 
-		for i = 1, #fns do
-			local fn = fns[i]
-			if type(fn) == "function" then
-				local ok, env = pcall(getfenv, fn)
-				if ok and type(env) == "table" then
-					gameEnv = env
-					local g = rawget(env, "_G")
-					gameG = type(g) == "table" and g or env
-					return gameG, gameEnv
+			if debug and type(debug.getupvalues) == "function" then
+				local okUps, upvalues = pcall(debug.getupvalues, fn)
+				if okUps and type(upvalues) == "table" then
+					for _, value in pairs(upvalues) do
+						if type(value) == "table" and rawget(value, "Owner") == lp and rawget(value, "BaseDistance") == 8.5 then
+							local did = rawget(value, "did")
+							if isParryRemote(did) then
+								parryRemote = did
+								return parryRemote
+							end
+						end
+					end
 				end
 			end
 		end
 	end
 
-	gameEnv = type(_G) == "table" and _G or {}
-	gameG = gameEnv
-	return gameG, gameEnv
-end
-
-local function getGameDid()
-	local g, env = getGameGlobal()
-	local did = type(g) == "table" and rawget(g, "did") or nil
-	if validRemote(did) then
-		return did
-	end
-
-	did = type(env) == "table" and rawget(env, "did") or nil
-	if validRemote(did) then
-		return did
-	end
-
-	return nil
-end
-
-local function setGameDid(remote)
-	local g, env = getGameGlobal()
-	if type(g) == "table" then
-		rawset(g, "did", remote)
-	end
-	if type(env) == "table" and env ~= g and rawget(env, "_G") == nil then
-		rawset(env, "did", remote)
-	end
-end
-
-local function cacheParryRemote(remote, mode, locked)
-	if not validRemote(remote) then
-		return nil
-	end
-
-	parryRemote = remote
-	parryMode = mode
-
-	if locked ~= nil then
-		parryRemoteLocked = locked and true or false
-	end
-
-	if mode == "buffer" then
-		setGameDid(remote)
-	end
-
-	return parryRemote, parryMode
-end
-
-local function getGeneratedRemote(id)
-	refreshRefs()
-	if not TSFolder then
-		return nil
-	end
-	if not (GenRemotes and GenRemotes.Parent) then
-		GenRemotes = TSFolder:FindFirstChild("GeneratedNetworkRemotes")
-	end
-
-	if not GenRemotes then
-		return nil
-	end
-
-	local remote = GenRemotes:FindFirstChild("RE_" .. tostring(id))
-	if validRemote(remote) then
-		return remote
-	end
-
-	return nil
-end
-
-local function resolveParryRemote()
-	refreshRefs()
-	if parryRemoteLocked then
-		if validRemote(parryRemote) then
-			return parryRemote, parryMode
-		end
-		return nil
-	end
-
-	if validRemote(parryRemote) then
-		return parryRemote, parryMode
-	end
-
-	local globalDid = getGameDid()
-	if validRemote(globalDid) then
-		return cacheParryRemote(globalDid, "buffer")
-	end
-
-	local byName = Remotes and Remotes:FindFirstChild("pr_" .. tostring(lp.UserId))
-	if validRemote(byName) then
-		return cacheParryRemote(byName, "buffer")
-	end
-
-	local generated = getGeneratedRemote(1)
-	if validRemote(generated) then
-		return cacheParryRemote(generated, "event")
-	end
-
-	return nil
-end
-
-local function makeDeflectBuffer(flag)
-	if type(buffer) == "table" and type(buffer.fromstring) == "function" then
-		if flag == 2 then
-			return buffer.fromstring("\2")
-		end
-		return buffer.fromstring("\1")
-	end
-	if type(buffer) == "table" and type(buffer.create) == "function" and type(buffer.writeu8) == "function" then
-		local payload = buffer.create(1)
-		buffer.writeu8(payload, 0, flag)
-		return payload
-	end
-	return nil
-end
-
-local function ensureParryInitialized()
-	if parryInitDone then
-		return true
-	end
-
-	local remote, mode = resolveParryRemote()
-	if not remote then
-		return false
-	end
-
-	if mode == "event" then
-		parryInitDone = true
-		return true
-	end
-
-	local payload = makeDeflectBuffer(2)
-	if not payload then
-		return false
-	end
-
-	local ok = pcall(function()
-		remote:FireServer(payload)
-	end)
-	if ok then
-		parryInitDone = true
-	end
-	return ok
-end
-
-local function probeNamedRemoteEvents()
-	refreshRefs()
-	if probingRemote or not Remotes then
-		return nil
-	end
-
-	local cd = getCooldownFrame()
-	local payloadInit = makeDeflectBuffer(2)
-	local payloadFire = makeDeflectBuffer(1)
-	if not (cd and payloadInit and payloadFire) then
-		return nil
-	end
-
-	probingRemote = true
-	local baseline = cd.Size
-
-	local candidates = {}
-	local direct = Remotes:FindFirstChild("pr_" .. tostring(lp.UserId))
-	if typeof(direct) == "Instance" and type(direct.FireServer) == "function" then
-		candidates[#candidates + 1] = direct
-	end
-	for _, remote in Remotes:GetChildren() do
-		if remote.Name == "RemoteEvent" and typeof(remote) == "Instance" and type(remote.FireServer) == "function" then
-			candidates[#candidates + 1] = remote
-		end
-	end
-
-	for i = 1, #candidates do
-		local remote = candidates[i]
-		if remote and remote.Parent then
-			pcall(function()
-				remote:FireServer(payloadInit)
-			end)
-			task.wait(0.03)
-			pcall(function()
-				remote:FireServer(payloadFire)
-			end)
-			task.wait(0.08)
-
-			local sz = cd.Size
-			local changed = not sameSize(sz, baseline)
-			if changed then
-				cacheParryRemote(remote, "buffer", true)
-				parryInitDone = true
-				notify("Parry remote found: " .. remote.Name, true)
-				probingRemote = false
-				return parryRemote, parryMode
-			end
-		end
-	end
-
-	probingRemote = false
-	return nil
-end
-
-local function getDeflectAbility()
-	if not BM or not AbilityID or AbilityID.Deflect == nil then
-		return nil
-	end
-
-	local okFn, fn = pcall(function()
-		return BM:GetFunction("AbilityManager::GetAbility")
-	end)
-	if not okFn or not fn then
-		return nil
-	end
-
-	local okAbility, ability = pcall(function()
-		return fn:Invoke(AbilityID.Deflect)
-	end)
-	if okAbility and type(ability) == "table" then
-		return ability
-	end
 	return nil
 end
 
@@ -527,73 +251,20 @@ function notify(txt, okv)
 	end)
 end
 
-local function fireParryRemote(remote, mode, flag)
-	if not validRemote(remote) then
+local function sendParry()
+	local remote = resolveParryRemote()
+	if not remote then
 		return false
 	end
 
-	if mode == "event" then
-		local ok = pcall(function()
-			remote:FireServer()
-		end)
-		return ok
+	local ok = pcall(remote.FireServer, remote, parryPacket)
+	if not ok then
+		parryRemote = nil
 	end
-
-	local payload = makeDeflectBuffer(flag or 1)
-	if not payload then
-		return false
-	end
-
-	ensureParryInitialized()
-
-	local ok = pcall(function()
-		remote:FireServer(payload)
-	end)
 	return ok
 end
 
-local function sendParry()
-	local remote, mode = resolveParryRemote()
-	if remote and fireParryRemote(remote, mode, 1) then
-		return
-	end
-
-	local ability = getDeflectAbility()
-	if ability then
-		local did = rawget(ability, "did")
-		if validRemote(did) and fireParryRemote((cacheParryRemote(did, "buffer")), "buffer", 1) then
-			return
-		end
-	end
-
-	remote, mode = probeNamedRemoteEvents()
-	if remote and fireParryRemote(remote, mode, 1) then
-		return
-	end
-
-	if ability and type(ability.Deflect) == "function" and validRemote(getGameDid()) then
-		pcall(function()
-			ability:Deflect()
-		end)
-	end
-end
-
-notify("super scuffed autoparry loaded 💀💀💀", true)
-task.defer(function()
-	local found, mode = resolveParryRemote()
-	if found then
-		ensureParryInitialized()
-		notify("Parry remote detected successfully: " .. tostring(mode), true)
-		return
-	end
-
-	found, mode = probeNamedRemoteEvents()
-	if found then
-		notify("Parry remote detected successfully: " .. tostring(mode), true)
-	else
-		ensureParryInitialized()
-	end
-end)
+notify("Auto Parry loaded (Remote)", true)
 
 do
 	local mas = __lt.cm("SoundService", "FindFirstChild", "Master")
@@ -833,7 +504,7 @@ local simConn
 local spamConn
 local spamAcc = 0
 local spamLast = 0
-local spamStep = 1 / 28
+local spamStep = 1 / 20
 local spamBurst = 4
 local ancConn
 local charConn
@@ -873,22 +544,14 @@ local function getBall()
 	return WS:FindFirstChild("GameBall", true) or WS:FindFirstChild("GameBall")
 end
 
-local function tgtOn(ch)
-	if ch and ch:FindFirstChild("Highlight") then
-		return true
-	end
-
-	local t = WS:GetAttribute("GameBallTarget")
-	if t == lp.UserId then
-		return true
+local function tgtOn()
+	local target = WS:GetAttribute("GameBallTarget")
+	if target ~= nil then
+		return target == lp.UserId
 	end
 
 	local sd = br and br.syncData
-	if sd and sd.HighlightTargetPlayerID == lp.UserId then
-		return true
-	end
-
-	return false
+	return sd ~= nil and sd.HighlightTargetPlayerID == lp.UserId
 end
 
 local function setRingOn(v)
@@ -1051,11 +714,11 @@ local function bind(ch)
 	local lastT
 	local vel = Vector3.zero
 	local tau = 0.05
-	local minR = 9
-	local maxR = 90
-	local cd = 0.3
-	local lastFire = 0
 	local flashT = 0
+	local armed = true
+	local lastTargeted = false
+	local ping = 0
+	local pingAt = 0
 
 	local ball
 	local ballAt = 0
@@ -1078,6 +741,16 @@ local function bind(ch)
 
 		local now = os.clock()
 
+		if now - pingAt >= 1 then
+			pingAt = now
+			local okPing, value = pcall(function()
+				return lp:GetNetworkPing()
+			end)
+			if okPing and type(value) == "number" and value >= 0 then
+				ping = value
+			end
+		end
+
 		if not (ball and ball.Parent) or now - ballAt >= ballCd then
 			ball = getBall()
 			ballAt = now
@@ -1086,6 +759,8 @@ local function bind(ch)
 		if not (ball and ball.Parent) then
 			ring.Color = cfg.spam and red or white
 			ring.CFrame = CFrame.new(hrp.Position)
+			armed = true
+			lastTargeted = false
 			return
 		end
 
@@ -1105,7 +780,8 @@ local function bind(ch)
 				local dtt = now - lastT
 				if dtt > 0 then
 					raw = (bp - lastPos) / dtt
-					local a = dt / (tau + dt)
+					local frameDt = type(dt) == "number" and math.max(dt, 1 / 240) or 1 / 60
+					local a = frameDt / (tau + frameDt)
 					vel = vel + (raw - vel) * a
 				end
 			end
@@ -1114,45 +790,40 @@ local function bind(ch)
 		end
 
 		local hrpPos = hrp.Position
-		local spd = vel.Magnitude
-		local rad = spd * 0.32 + 6
-
-		if rad < minR then
-			rad = minR
-		elseif rad > maxR then
-			rad = maxR
-		end
-
-		local parryRad = rad + 8
-		ring.Size = Vector3.new(rad * 2, rad * 2, rad * 2)
-		ring.CFrame = CFrame.new(hrpPos)
-
 		local off = hrpPos - bp
-		local d = off.Magnitude
-		local app = vel:Dot(off) > 0
-		local ok = tgtOn(ch)
+		local distance = off.Magnitude
+		local speed = vel.Magnitude
+		local targeted = tgtOn()
+		local approaching = distance > 0 and vel:Dot(off) > 0
 
-		local tImp = 1e6
-		if spd > 1 then
-			tImp = d / spd
+		if not targeted then
+			armed = true
+		elseif not lastTargeted then
+			armed = true
 		end
+		lastTargeted = targeted
 
-		local can = ok and app and spd > 5 and d <= parryRad and tImp <= 0.35
+		local leadTime = math.clamp(0.20 + ping * 0.5, 0.24, 0.42)
+		leadTime = math.floor(leadTime * 100 + 0.5) / 100
+		local parryRadius = math.clamp(speed * leadTime + 9.25, 12, 240)
+
+		ring.Size = Vector3.new(parryRadius * 2, parryRadius * 2, parryRadius * 2)
+		ring.CFrame = CFrame.new(hrpPos)
 
 		if cfg.spam then
 			ring.Color = red
 		elseif now - flashT <= 0.12 then
 			ring.Color = softRed
-		elseif not ok then
+		elseif not targeted then
 			ring.Color = white
-		elseif d <= rad then
+		elseif distance <= parryRadius then
 			ring.Color = green
 		else
 			ring.Color = yellow
 		end
 
-		if can and now - lastFire >= cd then
-			lastFire = now
+		if armed and targeted and approaching and speed > 5 and distance <= parryRadius then
+			armed = false
 			flashT = now
 			task.defer(sendParry)
 		end

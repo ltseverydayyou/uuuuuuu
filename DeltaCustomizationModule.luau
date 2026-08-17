@@ -234,7 +234,7 @@ __dcm_env.__DeltaVisualPatchLoaded = nil
 __dcm_env.__DeltaThemeMenuPatchLoaded = nil
 
 local __dcm_flag = {
-	version = "2.5.3",
+	version = "2.5.8",
 	loadedAt = tick(),
 }
 __dcm_env.__DeltaCustomizationModuleLoaded = __dcm_flag
@@ -659,9 +659,10 @@ local _iconGui0, _iconBtn0 = getIconGui()
 local __dcm_masterRuntime = {
 	alive = true,
 	stopping = false,
-	objects = setmetatable({}, { __mode = "k" }),
-	baseline = setmetatable({}, { __mode = "k" }),
+	objects = {},
+	baseline = {},
 	mutations = setmetatable({}, { __mode = "k" }),
+	customObjects = {},
 	roots = {},
 }
 __dcm_env.__DeltaCustomizationMasterRuntime = __dcm_masterRuntime
@@ -862,8 +863,16 @@ local function __dcm_setTracked(object, property, value)
 	end)
 end
 
+local function __dcm_registerCustom(object)
+	if object then
+		__dcm_masterRuntime.customObjects[object] = true
+	end
+	return object
+end
+
 __dcm_masterRuntime.captureMutation = __dcm_captureMutation
 __dcm_masterRuntime.setTracked = __dcm_setTracked
+__dcm_masterRuntime.registerCustom = __dcm_registerCustom
 
 __dcm_captureRoot(mainGui)
 if _iconGui0 and _iconGui0 ~= mainGui then
@@ -875,7 +884,9 @@ local function __dcm_isCustomObject(object)
 	if name:sub(1, 3) == "LT_" or name == "LTIcon" or name:sub(1, 11) == "DeltaCustom" then
 		return true
 	end
-	return name == "SidebarGestureZone"
+	return name == "Section_Customization"
+		or name == "Section_Delta"
+		or name == "SidebarGestureZone"
 		or name == "SidebarGradientColor1"
 		or name == "SidebarGradientColor2"
 		or name == "IconColorValue"
@@ -885,6 +896,13 @@ local function __dcm_isCustomObject(object)
 end
 
 local function __dcm_restoreSnapshot()
+	for object in __dcm_masterRuntime.customObjects do
+		if object and object.Parent then
+			pcall(function()
+				object:Destroy()
+			end)
+		end
+	end
 	for object, snapshot in __dcm_masterRuntime.objects do
 		if object and snapshot.Parent then
 			pcall(function()
@@ -898,7 +916,7 @@ local function __dcm_restoreSnapshot()
 			local holder = settings and settings:FindFirstChild("Holder")
 			if holder then
 				for _, child in holder:GetChildren() do
-					if not __dcm_masterRuntime.baseline[child] then
+					if not __dcm_masterRuntime.baseline[child] and __dcm_isCustomObject(child) then
 						pcall(function()
 							child:Destroy()
 						end)
@@ -925,10 +943,15 @@ local function __dcm_restoreSnapshot()
 	end
 	for object, state in __dcm_masterRuntime.mutations do
 		if object and object.Parent then
+			local baselineSnapshot = __dcm_masterRuntime.objects[object]
 			for property, wrapped in state do
-				pcall(function()
-					object[property] = wrapped.value
-				end)
+				local ownedByBaseline = baselineSnapshot
+					and (property == "Parent" or baselineSnapshot.Values[property] ~= nil)
+				if not ownedByBaseline then
+					pcall(function()
+						object[property] = wrapped.value
+					end)
+				end
 			end
 		end
 	end
@@ -995,7 +1018,8 @@ __dcm_masterRuntime.stop = function()
 	end
 	task.defer(stabilizeRestore)
 	task.delay(0.05, stabilizeRestore)
-	task.delay(0.2, function()
+	task.delay(0.2, stabilizeRestore)
+	task.delay(0.6, function()
 		stabilizeRestore()
 		if rawget(__dcm_env, "__DeltaCustomizationRestoreToken") == restoreToken then
 			__dcm_env.__DeltaCustomizationRestoreToken = nil
@@ -2249,6 +2273,9 @@ task.defer(function()
 			end
 		end
 		local function upd()
+			if not __dcm_masterRuntime.alive or __dcm_masterRuntime.stopping then
+				return
+			end
 			applyRows()
 			local uiScaleFactor = getUiScaleFactor()
 			local size = lay.AbsoluteContentSize
@@ -2630,7 +2657,7 @@ task.defer(function()
 	end
 	if settingsHolder and settingTemplate then
 		local function makeSectionTitle(text, order, isCustom)
-			local f = settingTemplate:Clone()
+			local f = __dcm_registerCustom(settingTemplate:Clone())
 			f.Name = isCustom and "Section_Customization" or "Section_Delta"
 			f.Parent = settingsHolder
 			f.LayoutOrder = order
@@ -3167,7 +3194,7 @@ task.defer(function()
 		local key = id or tt or "Color_" .. tostring(math.random(1, 1000000000))
 		local slId = "ColorSlider_" .. key
 		local isIc = id == "IconColor" and iconStroke ~= nil
-		local fr = settingTemplate:Clone()
+		local fr = __dcm_registerCustom(settingTemplate:Clone())
 		fr.Parent = settingsHolder
 		fr.Visible = true
 		fr.LayoutOrder = -2
@@ -3502,7 +3529,7 @@ task.defer(function()
 		local slId = "SizeSlider_" .. key
 		minV = minV or 0.5
 		maxV = maxV or 5
-		local fr = settingTemplate:Clone()
+		local fr = __dcm_registerCustom(settingTemplate:Clone())
 		fr.Parent = settingsHolder
 		fr.Visible = true
 		fr.LayoutOrder = -2
@@ -3664,7 +3691,7 @@ task.defer(function()
 		fr.BorderSizePixel = 0
 		fr.ClipsDescendants = false
 		fr.Size = UDim2.new(1, 0, 0, baseHeight)
-		local card = settingTemplate:Clone()
+		local card = __dcm_registerCustom(settingTemplate:Clone())
 		card.Name = "Card"
 		card.Parent = fr
 		card.Visible = true
@@ -3950,7 +3977,7 @@ task.defer(function()
 			return
 		end
 		local key = "IconRGB"
-		local frame = settingTemplate:Clone()
+		local frame = __dcm_registerCustom(settingTemplate:Clone())
 		frame.Parent = settingsHolder
 		frame.Visible = true
 		frame.LayoutOrder = -2
@@ -4045,7 +4072,7 @@ task.defer(function()
 			return
 		end
 		local key = "IconVisible"
-		local frame = settingTemplate:Clone()
+		local frame = __dcm_registerCustom(settingTemplate:Clone())
 		frame.Parent = settingsHolder
 		frame.Visible = true
 		frame.LayoutOrder = -2
@@ -4104,7 +4131,7 @@ task.defer(function()
 			return
 		end
 		local key = "IconStrokeEnabled"
-		local frame = settingTemplate:Clone()
+		local frame = __dcm_registerCustom(settingTemplate:Clone())
 		frame.Parent = settingsHolder
 		frame.Visible = true
 		frame.LayoutOrder = -2
@@ -4160,7 +4187,7 @@ task.defer(function()
 			return
 		end
 		local key = "IconPositionSave"
-		local frame = settingTemplate:Clone()
+		local frame = __dcm_registerCustom(settingTemplate:Clone())
 		frame.Parent = settingsHolder
 		frame.Visible = true
 		frame.LayoutOrder = -2
@@ -4221,7 +4248,7 @@ task.defer(function()
 			return
 		end
 		local key = "TabNotifications"
-		local frame = settingTemplate:Clone()
+		local frame = __dcm_registerCustom(settingTemplate:Clone())
 		frame.Parent = settingsHolder
 		frame.Visible = true
 		frame.LayoutOrder = -2
@@ -4278,7 +4305,7 @@ task.defer(function()
 		if not (settingsHolder and settingTemplate) then
 			return
 		end
-		local frame = settingTemplate:Clone()
+		local frame = __dcm_registerCustom(settingTemplate:Clone())
 		frame.Parent = settingsHolder
 		frame.Visible = true
 		frame.LayoutOrder = -2
@@ -4337,7 +4364,7 @@ task.defer(function()
 			return
 		end
 		local key = "IconEnabled"
-		local frame = settingTemplate:Clone()
+		local frame = __dcm_registerCustom(settingTemplate:Clone())
 		frame.Parent = settingsHolder
 		frame.Visible = true
 		frame.LayoutOrder = -2
@@ -4398,7 +4425,7 @@ task.defer(function()
 		if not (settingsHolder and settingTemplate and iconBtn) then
 			return
 		end
-		local frame = settingTemplate:Clone()
+		local frame = __dcm_registerCustom(settingTemplate:Clone())
 		frame.Parent = settingsHolder
 		frame.Visible = true
 		frame.LayoutOrder = -2
@@ -4531,7 +4558,7 @@ task.defer(function()
 		if not (settingsHolder and settingTemplate) then
 			return
 		end
-		local frame = settingTemplate:Clone()
+		local frame = __dcm_registerCustom(settingTemplate:Clone())
 		frame.Parent = settingsHolder
 		frame.Visible = true
 		frame.LayoutOrder = -2
@@ -4872,7 +4899,7 @@ task.defer(function()
 		if not (settingsHolder and settingTemplate and sidebar) then
 			return
 		end
-		local frame = settingTemplate:Clone()
+		local frame = __dcm_registerCustom(settingTemplate:Clone())
 		frame.Parent = settingsHolder
 		frame.Visible = true
 		frame.LayoutOrder = -2
@@ -4929,7 +4956,7 @@ task.defer(function()
 		if not (settingsHolder and settingTemplate) then
 			return
 		end
-		local frame = settingTemplate:Clone()
+		local frame = __dcm_registerCustom(settingTemplate:Clone())
 		frame.Parent = settingsHolder
 		frame.Visible = true
 		frame.LayoutOrder = -2
@@ -4983,7 +5010,7 @@ task.defer(function()
 			return
 		end
 		local key = "AutoCloseOnLoad"
-		local frame = settingTemplate:Clone()
+		local frame = __dcm_registerCustom(settingTemplate:Clone())
 		frame.Parent = settingsHolder
 		frame.Visible = true
 		frame.LayoutOrder = -2
@@ -6162,7 +6189,7 @@ if type(__lt.deltaPatchState.visualEnv) == "table" and not __lt.deltaPatchState.
 				return s, bar, fill, kb
 			end
 			local function makeSizeSlider(id, titleText, descText, numValue, minV, maxV)
-				local fr = template:Clone()
+				local fr = __dcm_registerCustom(template:Clone())
 				fr.Parent = holder
 				fr.Visible = true
 				fr.LayoutOrder = -2
@@ -9341,7 +9368,7 @@ musicState.setupSidebar = function()
 		or sidebarRefs.executor
 	if musicState.sourceButton then
 		musicState.button = musicState.sourceButton:Clone()
-		musicState.button.Name = "LT_MusicSidebar"
+		musicState.button.Name = "Music"
 		musicState.button.Parent = musicState.sourceButton.Parent
 		st.pg.musicButton = musicState.button
 		musicState.textLabel = txtOf(musicState.button)
@@ -9860,7 +9887,7 @@ do
 
 	local runtime = {
 		alive = true,
-		version = "2.5.2",
+		version = "2.5.5",
 		connections = {},
 		instances = {},
 		originalButtons = setmetatable({}, { __mode = "k" }),
@@ -13286,7 +13313,7 @@ do
 		task.defer(updateStatusPosition)
 	end
 
-	newUi.disable = function()
+	newUi.disable = function(fullUnload)
 		if not newUi.applied then
 			newUi.enabled = false
 			return
@@ -13346,23 +13373,25 @@ do
 		newUi.railToggle = nil
 		newUi.railToggleIcon = nil
 		__dcm_env.__NewDeltaUIToggle = nil
-		if lastPage and newUi.pageSet[lastPage] then
-			local iconApi = newUi.getIconApi()
-			if iconApi and type(iconApi.setCurrentSection) == "function" then
-				pcall(iconApi.setCurrentSection, lastPage)
+		if not fullUnload then
+			if lastPage and newUi.pageSet[lastPage] then
+				local iconApi = newUi.getIconApi()
+				if iconApi and type(iconApi.setCurrentSection) == "function" then
+					pcall(iconApi.setCurrentSection, lastPage)
+				end
 			end
+			newUi.setClassicOpen(wasOpen)
+			local iconApi = rawget(__dcm_env, "DeltaIcon")
+			if type(iconApi) == "table" and type(iconApi.rebindToggle) == "function" then
+				task.defer(iconApi.rebindToggle)
+			end
+			task.defer(applySidebarOrder)
+			task.defer(applyWideEditor)
+			task.defer(applyCompactTabs)
+			task.defer(applyToolbarLayout)
+			task.defer(editorCanvas.resizeAll)
+			task.defer(updateStatusPosition)
 		end
-		newUi.setClassicOpen(wasOpen)
-		local iconApi = rawget(__dcm_env, "DeltaIcon")
-		if type(iconApi) == "table" and type(iconApi.rebindToggle) == "function" then
-			task.defer(iconApi.rebindToggle)
-		end
-		task.defer(applySidebarOrder)
-		task.defer(applyWideEditor)
-		task.defer(applyCompactTabs)
-		task.defer(applyToolbarLayout)
-		task.defer(editorCanvas.resizeAll)
-		task.defer(updateStatusPosition)
 	end
 
 	local baseApplySidebarOrder = applySidebarOrder
@@ -13374,7 +13403,7 @@ do
 	end
 
 	addRestorer(function()
-		newUi.disable()
+		newUi.disable(true)
 	end)
 	local newUiSettingRow = createToggleSetting(
 		"LT_NewDeltaUI",

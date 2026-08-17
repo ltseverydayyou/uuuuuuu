@@ -234,7 +234,7 @@ __dcm_env.__DeltaVisualPatchLoaded = nil
 __dcm_env.__DeltaThemeMenuPatchLoaded = nil
 
 local __dcm_flag = {
-	version = "2.5.1",
+	version = "2.5.3",
 	loadedAt = tick(),
 }
 __dcm_env.__DeltaCustomizationModuleLoaded = __dcm_flag
@@ -661,6 +661,7 @@ local __dcm_masterRuntime = {
 	stopping = false,
 	objects = setmetatable({}, { __mode = "k" }),
 	baseline = setmetatable({}, { __mode = "k" }),
+	mutations = setmetatable({}, { __mode = "k" }),
 	roots = {},
 }
 __dcm_env.__DeltaCustomizationMasterRuntime = __dcm_masterRuntime
@@ -687,6 +688,7 @@ local __dcm_guiProperties = {
 	"LayoutOrder",
 	"Rotation",
 	"ZIndex",
+	"Draggable",
 }
 local __dcm_textProperties = {
 	"Text",
@@ -745,6 +747,26 @@ local function __dcm_captureObject(object)
 	for _, property in __dcm_snapshotProperties do
 		__dcm_captureProperty(object, values, property)
 	end
+	if object:IsA("LayerCollector") then
+		for _, property in { "Enabled", "ResetOnSpawn", "ZIndexBehavior" } do
+			__dcm_captureProperty(object, values, property)
+		end
+	end
+	if object:IsA("ScreenGui") then
+		for _, property in { "DisplayOrder", "IgnoreGuiInset", "ScreenInsets", "SafeAreaCompatibility", "ClipToDeviceSafeArea" } do
+			__dcm_captureProperty(object, values, property)
+		end
+	end
+	if object:IsA("CanvasGroup") then
+		for _, property in { "GroupColor3", "GroupTransparency" } do
+			__dcm_captureProperty(object, values, property)
+		end
+	end
+	if object:IsA("GuiButton") then
+		for _, property in { "AutoButtonColor", "Modal", "Selected" } do
+			__dcm_captureProperty(object, values, property)
+		end
+	end
 	if object:IsA("GuiObject") then
 		for _, property in __dcm_guiProperties do
 			__dcm_captureProperty(object, values, property)
@@ -788,9 +810,14 @@ local function __dcm_captureObject(object)
 		__dcm_captureProperty(object, values, "Value")
 	end
 	__dcm_masterRuntime.baseline[object] = true
+	local attributes = {}
+	pcall(function()
+		attributes = object:GetAttributes()
+	end)
 	__dcm_masterRuntime.objects[object] = {
 		Parent = object.Parent,
 		Values = values,
+		Attributes = attributes,
 	}
 end
 
@@ -804,6 +831,39 @@ local function __dcm_captureRoot(target)
 		__dcm_captureObject(object)
 	end
 end
+
+local function __dcm_captureMutation(object, property)
+	if not (object and type(property) == "string") then
+		return
+	end
+	local state = __dcm_masterRuntime.mutations[object]
+	if not state then
+		state = {}
+		__dcm_masterRuntime.mutations[object] = state
+	end
+	if state[property] ~= nil then
+		return
+	end
+	local ok, value = pcall(function()
+		return object[property]
+	end)
+	if ok then
+		state[property] = { value = value }
+	end
+end
+
+local function __dcm_setTracked(object, property, value)
+	if not object then
+		return false
+	end
+	__dcm_captureMutation(object, property)
+	return pcall(function()
+		object[property] = value
+	end)
+end
+
+__dcm_masterRuntime.captureMutation = __dcm_captureMutation
+__dcm_masterRuntime.setTracked = __dcm_setTracked
 
 __dcm_captureRoot(mainGui)
 if _iconGui0 and _iconGui0 ~= mainGui then
@@ -863,6 +923,30 @@ local function __dcm_restoreSnapshot()
 			end
 		end
 	end
+	for object, state in __dcm_masterRuntime.mutations do
+		if object and object.Parent then
+			for property, wrapped in state do
+				pcall(function()
+					object[property] = wrapped.value
+				end)
+			end
+		end
+	end
+	for object, snapshot in __dcm_masterRuntime.objects do
+		if object and object.Parent then
+			pcall(function()
+				local original = snapshot.Attributes or {}
+				for name in object:GetAttributes() do
+					if original[name] == nil then
+						object:SetAttribute(name, nil)
+					end
+				end
+				for name, value in original do
+					object:SetAttribute(name, value)
+				end
+			end)
+		end
+	end
 end
 
 __dcm_masterRuntime.stop = function()
@@ -896,6 +980,31 @@ __dcm_masterRuntime.stop = function()
 	__dcm_env.__DeltaThemeMenuPatchLoaded = nil
 	__dcm_env.DeltaIcon = nil
 	__dcm_env.__NewDeltaUIToggle = nil
+
+	local restoreToken = {}
+	__dcm_env.__DeltaCustomizationRestoreToken = restoreToken
+	__dcm_shared.__DeltaCustomizationRestoreToken = restoreToken
+	local function stabilizeRestore()
+		if rawget(__dcm_env, "__DeltaCustomizationRestoreToken") ~= restoreToken then
+			return
+		end
+		if rawget(__dcm_env, "__DeltaCustomizationMasterRuntime") ~= nil then
+			return
+		end
+		__dcm_restoreSnapshot()
+	end
+	task.defer(stabilizeRestore)
+	task.delay(0.05, stabilizeRestore)
+	task.delay(0.2, function()
+		stabilizeRestore()
+		if rawget(__dcm_env, "__DeltaCustomizationRestoreToken") == restoreToken then
+			__dcm_env.__DeltaCustomizationRestoreToken = nil
+		end
+		if rawget(__dcm_shared, "__DeltaCustomizationRestoreToken") == restoreToken then
+			__dcm_shared.__DeltaCustomizationRestoreToken = nil
+		end
+		table.clear(__dcm_masterRuntime.mutations)
+	end)
 end
 
 local managedIcon = {
@@ -1058,22 +1167,16 @@ local function MouseButtonFix(button, clickCallback)
 end
 local function hideOriginalDeltaIcon()
 	if managedIcon.deltaGui then
-		pcall(function()
-			managedIcon.deltaGui.Enabled = false
-		end)
+		__dcm_setTracked(managedIcon.deltaGui, "Enabled", false)
 	end
 	if managedIcon.deltaBtn then
-		pcall(function()
-			managedIcon.deltaBtn.Visible = false
-			managedIcon.deltaBtn.Active = false
-			managedIcon.deltaBtn.ImageTransparency = 1
-			managedIcon.deltaBtn.BackgroundTransparency = 1
-		end)
+		__dcm_setTracked(managedIcon.deltaBtn, "Visible", false)
+		__dcm_setTracked(managedIcon.deltaBtn, "Active", false)
+		__dcm_setTracked(managedIcon.deltaBtn, "ImageTransparency", 1)
+		__dcm_setTracked(managedIcon.deltaBtn, "BackgroundTransparency", 1)
 	end
 	if managedIcon.deltaStroke then
-		pcall(function()
-			managedIcon.deltaStroke.Enabled = false
-		end)
+		__dcm_setTracked(managedIcon.deltaStroke, "Enabled", false)
 	end
 end
 local function refreshIconRefs()
@@ -1877,9 +1980,7 @@ task.defer(function()
 		})
 		return
 	end
-	pcall(function()
-		mainGui.IgnoreGuiInset = true
-	end)
+	__dcm_setTracked(mainGui, "IgnoreGuiInset", true)
 	fixNet(mainGui)
 	NAlib.disconnect("DeltaCustom_NetworkOverlayFix")
 	NAlib.connect("DeltaCustom_NetworkOverlayFix", mainGui.DescendantAdded:Connect(function(d)
@@ -1965,21 +2066,15 @@ task.defer(function()
 		)
 	end
 	if iconGui and iconGui:IsA("ScreenGui") then
-		pcall(function()
-			iconGui.IgnoreGuiInset = true
-		end)
+		__dcm_setTracked(iconGui, "IgnoreGuiInset", true)
 	end
 	if iconBtn then
-		pcall(function()
-			iconBtn.Draggable = false
-		end)
+		__dcm_setTracked(iconBtn, "Draggable", false)
 		uiLib.draggerV2(iconBtn, iconBtn)
 	end
 	if darkOverlay then
-		darkOverlay.Visible = false
-		pcall(function()
-			darkOverlay.Active = false
-		end)
+		__dcm_setTracked(darkOverlay, "Visible", false)
+		__dcm_setTracked(darkOverlay, "Active", false)
 		NAlib.connect(
 			"DarkOverlay_Hide",
 			darkOverlay:GetPropertyChangedSignal("Visible"):Connect(function()
@@ -2471,10 +2566,9 @@ task.defer(function()
 		if not (child and child.Parent and child:IsA("Frame")) then
 			return
 		end
-		pcall(function()
-			child.Visible = false
-			child.Size = UDim2.new(child.Size.X.Scale, child.Size.X.Offset, 0, 0)
-		end)
+		local size = child.Size
+		__dcm_setTracked(child, "Visible", false)
+		__dcm_setTracked(child, "Size", UDim2.new(size.X.Scale, size.X.Offset, 0, 0))
 	end
 	local function bindHiddenStockDropdownRow(child)
 		if not (child and child:IsA("Frame") and child.Name == "SettingDropdown") then
@@ -2721,7 +2815,10 @@ task.defer(function()
 		sidebarGrad2.Name = "SidebarGradientColor2"
 		sidebarGrad2.Value = c2
 		local sidebarSnapPending = false
-		(sidebar:GetPropertyChangedSignal("Position")):Connect(function()
+		NAlib.disconnect("Sidebar_OvershootSnap")
+		NAlib.connect(
+			"Sidebar_OvershootSnap",
+			(sidebar:GetPropertyChangedSignal("Position")):Connect(function()
 			local p = sidebar.Position
 			if p.X.Scale > sidebarOpenPos.X.Scale and not sidebarSnapPending then
 				sidebarSnapPending = true
@@ -2747,6 +2844,7 @@ task.defer(function()
 				end)
 			end
 		end)
+		)
 	end
 	local iconColorValue
 	if iconStroke then
@@ -5169,9 +5267,13 @@ task.defer(function()
 		saveSidebarGesture()
 	end
 	if toggleUIBtn and toggleUIBtn:IsA("GuiButton") then
-		toggleUIBtn.MouseButton1Click:Connect(function()
-			setIconForcedHidden(sidebarGestureEnabled)
-		end)
+		NAlib.disconnect("ManagedToggleUI_ForcedHidden")
+		NAlib.connect(
+			"ManagedToggleUI_ForcedHidden",
+			toggleUIBtn.MouseButton1Click:Connect(function()
+				setIconForcedHidden(sidebarGestureEnabled)
+			end)
+		)
 	end
 	if activeColorValue then
 		makeColorSlider("ActiveColor", "Active Color", "Sidebar active button color", activeColorValue)
@@ -5398,9 +5500,9 @@ task.defer(function()
 		if oldCard and oldCard:IsA("ImageLabel") then
 			local parent = oldCard.Parent
 			local newCard = oldCard:Clone()
-			oldCard:Destroy()
+			__dcm_setTracked(oldCard, "Parent", nil)
+			newCard.Name = "LT_FeaturedScriptCard"
 			newCard.Parent = parent
-			newCard.Name = "Script"
 			local labs = {}
 			for _, d in newCard:QueryDescendants("TextLabel") do
 				table.insert(labs, d)
@@ -6254,6 +6356,12 @@ local function stop()
 			st.pg.music:Destroy()
 		end)
 	end
+	if st.pg.musicButton then
+		pcall(function()
+			st.pg.musicButton:Destroy()
+		end)
+		st.pg.musicButton = nil
+	end
 	if st.pg.sh and st.pg.sh:FindFirstChild("LT_ScriptHub") then
 		pcall(function()
 			st.pg.sh.LT_ScriptHub:Destroy()
@@ -6572,9 +6680,14 @@ local function muteObj(d)
 	if st.muted[d] == nil then
 		st.muted[d] = d.Visible
 	end
-	pcall(function()
-		d.Visible = false
-	end)
+	local master = rawget(__dcm_env, "__DeltaCustomizationMasterRuntime")
+	if type(master) == "table" and type(master.setTracked) == "function" then
+		master.setTracked(d, "Visible", false)
+	else
+		pcall(function()
+			d.Visible = false
+		end)
+	end
 	if d.GetPropertyChangedSignal then
 		con(d:GetPropertyChangedSignal("Visible"):Connect(function()
 			if d.Parent and not d:FindFirstAncestor("LT_ScriptHub") then
@@ -6587,7 +6700,6 @@ local function muteObj(d)
 end
 
 local function muteSh()
-	st.muted = {}
 	for _, d in sh:QueryDescendants("Instance") do
 		muteObj(d)
 	end
@@ -9229,8 +9341,9 @@ musicState.setupSidebar = function()
 		or sidebarRefs.executor
 	if musicState.sourceButton then
 		musicState.button = musicState.sourceButton:Clone()
-		musicState.button.Name = "Music"
+		musicState.button.Name = "LT_MusicSidebar"
 		musicState.button.Parent = musicState.sourceButton.Parent
+		st.pg.musicButton = musicState.button
 		musicState.textLabel = txtOf(musicState.button)
 		if musicState.textLabel then
 			musicState.textLabel.Text = "Music"
@@ -9747,7 +9860,7 @@ do
 
 	local runtime = {
 		alive = true,
-		version = "2.5.1",
+		version = "2.5.2",
 		connections = {},
 		instances = {},
 		originalButtons = setmetatable({}, { __mode = "k" }),

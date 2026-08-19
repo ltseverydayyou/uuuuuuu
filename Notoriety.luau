@@ -38,6 +38,57 @@ if type(ServiceResolver) ~= "table" then
 	Environment.__lt_service_resolver = ServiceResolver
 end
 
+local UIProtectorURL = "https://raw.githubusercontent.com/ltseverydayyou/ltseverydayyou.github.io/refs/heads/main/UIprotector.luau"
+
+local function loadUIProtector()
+	local Loader = loadstring
+
+	if type(Loader) ~= "function" then
+		error("UIProtector loader unavailable")
+	end
+
+	local ProtectorSource = game:HttpGet(UIProtectorURL)
+	local ProtectorChunk, ProtectorCompileError = Loader(ProtectorSource, "@UIprotector.luau")
+
+	if type(ProtectorChunk) ~= "function" then
+		error("UIProtector compile failed: " .. tostring(ProtectorCompileError))
+	end
+
+	local ProtectorSuccess, ProtectorResult = pcall(ProtectorChunk)
+
+	if not ProtectorSuccess or type(ProtectorResult) ~= "table" then
+		error("UIProtector load failed: " .. tostring(ProtectorResult))
+	end
+
+	return ProtectorResult
+end
+
+local UIProtector = loadUIProtector()
+
+local function resolveProtectedUIParent()
+	local ResolveParent = UIProtector.resolveParent
+
+	if type(ResolveParent) == "function" then
+		local Success, Parent = pcall(ResolveParent)
+
+		if Success and typeof(Parent) == "Instance" then
+			return Parent
+		end
+	end
+
+	local ParentFunction = UIProtector.parent
+
+	if type(ParentFunction) == "function" then
+		local Success, Parent = pcall(ParentFunction)
+
+		if Success and typeof(Parent) == "Instance" then
+			return Parent
+		end
+	end
+
+	return nil
+end
+
 local Reference = if type(cloneref) == "function" then cloneref else function(Value)
 	return Value
 end
@@ -64,6 +115,20 @@ do
 	local VibeUISource = game:HttpGet(
 		"https://sirmemegithub.com/RealSlimShady2000/VibeUI/raw/branch/main/VibeUI.luau"
 	):gsub("\r\n", "\n")
+
+	local ParentPatchCount
+	VibeUISource, ParentPatchCount = VibeUISource:gsub(
+		"local function GetParentGui%(%): Instance.-\nend",
+		[[local function GetParentGui(): Instance
+	return LocalPlayer:WaitForChild("PlayerGui")
+end]],
+		1
+	)
+
+	if ParentPatchCount ~= 1 then
+		error("VibeUI staging parent patch failed")
+	end
+
 	local AnchorPatchCount
 	VibeUISource, AnchorPatchCount = VibeUISource:gsub(
 		"LibMaid:GiveTask%(RunService%.RenderStepped:Connect%(function%(%)[\n]",
@@ -128,6 +193,38 @@ do
 			then NativeRoot:FindFirstAncestorOfClass("ScreenGui")
 			else nil
 
+		local MouseUnlockButton
+
+		if typeof(NativeRoot) == "Instance" then
+			MouseUnlockButton = ServiceResolver.ns("TextButton")
+
+			if MouseUnlockButton then
+				MouseUnlockButton.Name = "VibeUIMouseUnlock"
+				MouseUnlockButton.BackgroundTransparency = 1
+				MouseUnlockButton.TextTransparency = 1
+				MouseUnlockButton.AutoButtonColor = false
+				MouseUnlockButton.Active = false
+				MouseUnlockButton.Selectable = false
+				MouseUnlockButton.Modal = true
+				MouseUnlockButton.Size = UDim2.fromOffset(1, 1)
+				MouseUnlockButton.Position = UDim2.fromOffset(0, 0)
+				MouseUnlockButton.Visible = NativeWindow.IsOpen == true
+				MouseUnlockButton.Parent = NativeRoot
+
+				local NativeSetOpen = NativeWindow.SetOpen
+
+				if type(NativeSetOpen) == "function" then
+					NativeWindow.SetOpen = function(Self, Open, ...)
+						local Results = table.pack(NativeSetOpen(Self, Open, ...))
+						MouseUnlockButton.Visible = Open == true
+						return table.unpack(Results, 1, Results.n)
+					end
+				end
+			end
+		end
+
+		NotorietyUI.MouseUnlockButton = MouseUnlockButton
+
 		local function wrapControlCallback(Control, Callback)
 			return function(...)
 				if type(Callback) == "function" then
@@ -164,7 +261,6 @@ do
 					Name = Control.Title,
 					Flag = Control.Flag,
 					Default = Control.Value,
-					Tooltip = Control.Desc,
 					Callback = wrapControlCallback(Control, Control.Callback),
 				})
 			end
@@ -176,7 +272,6 @@ do
 					Default = Control.Value,
 					Placeholder = Control.Placeholder,
 					Finished = true,
-					Tooltip = Control.Desc,
 					Callback = wrapControlCallback(Control, Control.Callback),
 				})
 			end
@@ -189,7 +284,6 @@ do
 					Default = Control.Value,
 					Multi = false,
 					Search = false,
-					Tooltip = Control.Desc,
 					Callback = wrapControlCallback(Control, Control.Callback),
 				})
 			end
@@ -203,7 +297,6 @@ do
 					Default = Control.Value,
 					Decimals = Control.Step,
 					Suffix = Control.Suffix,
-					Tooltip = Control.Desc,
 					Callback = wrapControlCallback(Control, Control.Callback),
 				})
 			end
@@ -355,23 +448,46 @@ end
 
 Environment.MaxEverythingEnabled = true
 Environment.KillPoliceRunning = false
-Environment.NotorietyWeaponEnabled = true
+Environment.NotorietyWeaponEnabled = Environment.NotorietyWeaponEnabled ~= false
+Environment.NotorietyRapidFireEnabled = Environment.NotorietyRapidFireEnabled ~= false
+Environment.NotorietyNoRecoilEnabled = Environment.NotorietyNoRecoilEnabled ~= false
+Environment.NotorietyInfiniteAmmoEnabled = Environment.NotorietyInfiniteAmmoEnabled ~= false
+Environment.NotorietyFullAutoEnabled = Environment.NotorietyFullAutoEnabled ~= false
+Environment.NotorietyAccuracyModEnabled = Environment.NotorietyAccuracyModEnabled ~= false
 Environment.NotorietyFireDelay = math.clamp(tonumber(Environment.NotorietyFireDelay) or 0.01, 0, 1)
 Environment.NotorietyBoltDuration = math.clamp(tonumber(Environment.NotorietyBoltDuration) or 0.001, 0, 1)
 Environment.NotorietyAccuracy = tonumber(Environment.NotorietyAccuracy) or 100
-Environment.NotorietyItemESPEnabled = false
-Environment.NotorietyPoliceHeadScaleEnabled = Environment.NotorietyPoliceHeadScaleEnabled ~= false
+Environment.NotorietyItemESPEnabled = Environment.NotorietyItemESPEnabled == true
+Environment.NotorietyESPTextEnabled = Environment.NotorietyESPTextEnabled ~= false
+Environment.NotorietyItemESPLabels = Environment.NotorietyItemESPLabels ~= false
+Environment.NotorietyItemESPTransparency = math.clamp(tonumber(Environment.NotorietyItemESPTransparency) or 55, 0, 100)
+Environment.NotorietyItemESPMaxDistance = math.clamp(tonumber(Environment.NotorietyItemESPMaxDistance) or 2500, 0, 10000)
+Environment.NotorietyItemESPCategories = type(Environment.NotorietyItemESPCategories) == "table" and Environment.NotorietyItemESPCategories or {}
+for _, Category in { "LOOT", "ITEM", "KEY", "CONTAINER", "CAMERA", "SECURITY", "ACCESS", "ESCAPE" } do
+	if Environment.NotorietyItemESPCategories[Category] == nil then
+		Environment.NotorietyItemESPCategories[Category] = true
+	end
+end
+Environment.NotorietyPoliceESPEnabled = Environment.NotorietyPoliceESPEnabled == true
+Environment.NotorietyPoliceESPNames = Environment.NotorietyPoliceESPNames ~= false
+Environment.NotorietyPoliceESPHealth = Environment.NotorietyPoliceESPHealth ~= false
+Environment.NotorietyPoliceESPMaxDistance = math.clamp(tonumber(Environment.NotorietyPoliceESPMaxDistance) or 2500, 0, 10000)
+Environment.NotorietyPoliceHeadScaleEnabled = Environment.NotorietyPoliceHeadScaleEnabled == true
 Environment.NotorietyPoliceHeadScale = math.clamp(
 	tonumber(Environment.NotorietyPoliceHeadScale) or 10,
 	1,
 	20
 )
-Environment.NotorietyEquipmentSpeedEnabled = Environment.NotorietyEquipmentSpeedEnabled ~= false
+Environment.NotorietyEquipmentSpeedEnabled = Environment.NotorietyEquipmentSpeedEnabled == true
+Environment.NotorietyEquipmentInstantEnabled = Environment.NotorietyEquipmentInstantEnabled == true
 Environment.NotorietyEquipmentSpeedMultiplier = math.clamp(
 	tonumber(Environment.NotorietyEquipmentSpeedMultiplier) or 2,
 	1,
 	10
 )
+Environment.NotorietyEquipmentRangeEnabled = Environment.NotorietyEquipmentRangeEnabled == true
+Environment.NotorietyEquipmentPlacementRange = math.clamp(tonumber(Environment.NotorietyEquipmentPlacementRange) or 10, 10, 100)
+Environment.NotorietyInfiniteEquipmentEnabled = Environment.NotorietyInfiniteEquipmentEnabled == true
 Environment.NotorietyEquipmentPositionEnabled = Environment.NotorietyEquipmentPositionEnabled == true
 Environment.NotorietyEquipmentPositionX = math.clamp(tonumber(Environment.NotorietyEquipmentPositionX) or 0, -50, 50)
 Environment.NotorietyEquipmentPositionY = math.clamp(tonumber(Environment.NotorietyEquipmentPositionY) or 0, -50, 50)
@@ -392,6 +508,8 @@ end
 Environment.NotorietyAutoYellEnabled = Environment.NotorietyAutoYellEnabled == true
 Environment.NotorietyNoYellDelayEnabled = Environment.NotorietyNoYellDelayEnabled == true
 Environment.NotorietyMusicVolume = math.clamp(tonumber(Environment.NotorietyMusicVolume) or 100, 0, 100)
+Environment.NotorietyMusicTrack = tostring(Environment.NotorietyMusicTrack or "Game Selection")
+Environment.NotorietyMusicMode = tostring(Environment.NotorietyMusicMode or "Follow Game")
 Environment.NotorietySFXVolume = math.clamp(tonumber(Environment.NotorietySFXVolume) or 100, 0, 100)
 Environment.NotorietyLocalGunshotsVolume = math.clamp(tonumber(Environment.NotorietyLocalGunshotsVolume) or 100, 0, 100)
 Environment.NotorietyGunshotsVolume = math.clamp(tonumber(Environment.NotorietyGunshotsVolume) or 100, 0, 100)
@@ -420,35 +538,39 @@ Environment.NotorietyUIConnections = {}
 Environment.NotorietyUnloaded = false
 
 local EquipmentSpeedState = {
-	Function = nil,
-	FunctionEnvironment = nil,
-	OriginalTick = nil,
-	TickTarget = nil,
-	WrappedTick = nil,
-	EquipmentPercent = nil,
-	VisibilityConnection = nil,
-	ClockActive = false,
-	RealAnchor = nil,
-	ScaledAnchor = nil,
-	LastMultiplier = nil,
-	OriginalCFrame = nil,
-	HadOwnCFrame = false,
-	WrappedCFrame = nil,
-	CFrameLookAtCount = 0,
 	Refresh = 0,
 }
 
+local EquipmentPlacementState = {
+	HookInstalled = false,
+	Target = nil,
+	Original = nil,
+	Active = false,
+}
+
+local function getEquipmentPositionOffset()
+	local X = tonumber(Environment.NotorietyEquipmentPositionX) or 0
+	local Y = tonumber(Environment.NotorietyEquipmentPositionY) or 0
+	local Z = tonumber(Environment.NotorietyEquipmentPositionZ) or 0
+
+	if X == math.huge or X == -math.huge or X ~= X then X = 0 end
+	if Y == math.huge or Y == -math.huge or Y ~= Y then Y = 0 end
+	if Z == math.huge or Z == -math.huge or Z ~= Z then Z = 0 end
+
+	return X, Y, Z
+end
+
 local function getEquipmentSpeedMultiplier()
+	if Environment.NotorietyEquipmentInstantEnabled then
+		return math.huge
+	end
+
 	if not Environment.NotorietyEquipmentSpeedEnabled then
 		return 1
 	end
 
 	local Multiplier = tonumber(Environment.NotorietyEquipmentSpeedMultiplier) or 2
-
-	if Multiplier <= 0
-		or Multiplier == math.huge
-		or Multiplier ~= Multiplier
-	then
+	if Multiplier <= 0 or Multiplier == math.huge or Multiplier ~= Multiplier then
 		Multiplier = 2
 		Environment.NotorietyEquipmentSpeedMultiplier = Multiplier
 	end
@@ -456,472 +578,590 @@ local function getEquipmentSpeedMultiplier()
 	return Multiplier
 end
 
-local function resetEquipmentClock()
-	EquipmentSpeedState.ClockActive = false
-	EquipmentSpeedState.RealAnchor = nil
-	EquipmentSpeedState.ScaledAnchor = nil
-	EquipmentSpeedState.LastMultiplier = nil
+local function shouldOverrideEquipmentPlacement()
+	return not Environment.NotorietyUnloaded and (
+		Environment.NotorietyEquipmentInstantEnabled
+		or Environment.NotorietyEquipmentSpeedEnabled
+		or Environment.NotorietyEquipmentRangeEnabled
+		or Environment.NotorietyEquipmentPositionEnabled
+	)
 end
 
-local function restoreEquipmentPlacementSpeed()
-	if EquipmentSpeedState.VisibilityConnection then
-		pcall(function()
-			EquipmentSpeedState.VisibilityConnection:Disconnect()
-		end)
-		EquipmentSpeedState.VisibilityConnection = nil
+local function getEquipmentInputKeys()
+	local PlayerData = ReplicatedStorage:FindFirstChild("PlayerData")
+	local DataFolder = PlayerData and PlayerData:FindFirstChild(LocalPlayer.Name)
+	local Data = DataFolder and DataFolder:FindFirstChild(LocalPlayer.Name .. "'s Data")
+	local Options = Data and Data:FindFirstChild("Options")
+
+	local KeyboardKey = Enum.KeyCode.G
+	local ControllerKey = nil
+
+	local Keybinds = Options and Options:FindFirstChild("Keybinds")
+	local KeyboardValue = Keybinds and Keybinds:FindFirstChild("MaskEquipment")
+	if KeyboardValue and Enum.KeyCode[KeyboardValue.Value] then
+		KeyboardKey = Enum.KeyCode[KeyboardValue.Value]
 	end
 
-	if type(hookfunction) == "function"
-		and type(EquipmentSpeedState.TickTarget) == "function"
-		and type(EquipmentSpeedState.OriginalTick) == "function"
-	then
-		pcall(hookfunction, EquipmentSpeedState.TickTarget, EquipmentSpeedState.OriginalTick)
+	local Controller = Options and Options:FindFirstChild("KeybindsController")
+	local ControllerValue = Controller and Controller:FindFirstChild("Throw/Equipment")
+	if ControllerValue and Enum.KeyCode[ControllerValue.Value] then
+		ControllerKey = Enum.KeyCode[ControllerValue.Value]
 	end
 
-	local FunctionEnvironment = EquipmentSpeedState.FunctionEnvironment
-	local WrappedCFrame = EquipmentSpeedState.WrappedCFrame
-
-	if type(FunctionEnvironment) == "table"
-		and type(WrappedCFrame) == "table"
-		and rawget(FunctionEnvironment, "CFrame") == WrappedCFrame
-	then
-		if EquipmentSpeedState.HadOwnCFrame then
-			rawset(FunctionEnvironment, "CFrame", EquipmentSpeedState.OriginalCFrame)
-		else
-			rawset(FunctionEnvironment, "CFrame", nil)
-		end
-	end
-
-	EquipmentSpeedState.Function = nil
-	EquipmentSpeedState.FunctionEnvironment = nil
-	EquipmentSpeedState.OriginalTick = nil
-	EquipmentSpeedState.TickTarget = nil
-	EquipmentSpeedState.WrappedTick = nil
-	EquipmentSpeedState.EquipmentPercent = nil
-	resetEquipmentClock()
-	EquipmentSpeedState.OriginalCFrame = nil
-	EquipmentSpeedState.HadOwnCFrame = false
-	EquipmentSpeedState.WrappedCFrame = nil
-	EquipmentSpeedState.CFrameLookAtCount = 0
-	EquipmentSpeedState.Refresh = 0
+	return KeyboardKey, ControllerKey
 end
 
-local function inspectMobilePlacementFunction()
-	if type(getconnections) ~= "function"
-		or type(debug) ~= "table"
-		or type(debug.getupvalues) ~= "function"
-		or type(debug.getinfo) ~= "function"
-	then
-		return nil
+local function isNativeEquipmentInputHeld(IsMobile)
+	if IsMobile then
+		return true
 	end
 
-	local PlayerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
-	local SGPackage = PlayerGui and PlayerGui:FindFirstChild("SG_Package")
-	local MainGui = SGPackage and SGPackage:FindFirstChild("MainGui")
-	local MobileUI = MainGui and MainGui:FindFirstChild("MobileUI")
-	local Hotbar = MobileUI and MobileUI:FindFirstChild("Hotbar")
-	local Equipment = Hotbar and Hotbar:FindFirstChild("Equipment")
-	local SelectButton = Equipment and Equipment:FindFirstChild("SelectButton")
-
-	if not SelectButton or not SelectButton:IsA("GuiButton") then
-		return nil
+	local KeyboardKey, ControllerKey = getEquipmentInputKeys()
+	if KeyboardKey and UserInputService:IsKeyDown(KeyboardKey) then
+		return true
 	end
 
-	local Success, Connections = pcall(getconnections, SelectButton.MouseButton1Down)
+	if ControllerKey then
+		for Index = 1, 8 do
+			local GamepadType = Enum.UserInputType["Gamepad" .. Index]
+			if GamepadType then
+				local Success, Held = pcall(
+					UserInputService.IsGamepadButtonDown,
+					UserInputService,
+					GamepadType,
+					ControllerKey
+				)
 
-	if not Success or type(Connections) ~= "table" then
-		return nil
-	end
-
-	local function scanFunction(Function, Depth)
-		if type(Function) ~= "function" or Depth > 2 then
-			return nil
-		end
-
-		local InfoSuccess, Info = pcall(debug.getinfo, Function)
-
-		if InfoSuccess
-			and type(Info) == "table"
-			and Info.source == "=Players." .. LocalPlayer.Name .. ".PlayerGui.SG_Package.LocalMovement"
-			and Info.name == "placeEquipment"
-		then
-			return Function
-		end
-
-		local UpvalueSuccess, Upvalues = pcall(debug.getupvalues, Function)
-
-		if not UpvalueSuccess or type(Upvalues) ~= "table" then
-			return nil
-		end
-
-		for _, Value in pairs(Upvalues) do
-			if type(Value) == "function" then
-				local Found = scanFunction(Value, Depth + 1)
-
-				if Found then
-					return Found
+				if Success and Held then
+					return true
 				end
 			end
 		end
+	end
 
+	return false
+end
+
+local function readFunctionUpvalue(Function, Index)
+	if type(debug) ~= "table" then
 		return nil
 	end
 
-	for _, Connection in Connections do
-		local Callback
-		pcall(function()
-			Callback = Connection.Function
-		end)
+	if type(debug.getupvalue) == "function" then
+		local Success, Value = pcall(debug.getupvalue, Function, Index)
+		if Success then
+			return Value
+		end
+	end
 
-		local Found = scanFunction(Callback, 0)
-
-		if Found then
-			return Found
+	if type(debug.getupvalues) == "function" then
+		local Success, Values = pcall(debug.getupvalues, Function)
+		if Success and type(Values) == "table" then
+			return Values[Index]
 		end
 	end
 
 	return nil
 end
 
-local function findEquipmentPlacementFunction()
-	local Existing = EquipmentSpeedState.Function
-
-	if type(Existing) == "function" then
-		return Existing
+local function writeFunctionUpvalue(Function, Index, Value)
+	if type(debug) ~= "table" or type(debug.setupvalue) ~= "function" then
+		return false
 	end
 
-	if type(getgc) == "function"
-		and type(getfenv) == "function"
-		and type(debug) == "table"
-		and type(debug.getinfo) == "function"
-	then
-		for _, Function in getgc(true) do
-			if type(Function) == "function" then
-				local Success, Info = pcall(debug.getinfo, Function)
-
-				if Success
-					and type(Info) == "table"
-					and Info.source == "=Players." .. LocalPlayer.Name .. ".PlayerGui.SG_Package.LocalMovement"
-					and Info.name == "placeEquipment"
-				then
-					EquipmentSpeedState.Function = Function
-					local EnvironmentSuccess, FunctionEnvironmentResult = pcall(getfenv, Function)
-
-					if EnvironmentSuccess and type(FunctionEnvironmentResult) == "table" then
-						EquipmentSpeedState.FunctionEnvironment = FunctionEnvironmentResult
-					end
-
-					return Function
-				end
-			end
-		end
-	end
-
-	local MobileFunction = inspectMobilePlacementFunction()
-
-	if type(MobileFunction) == "function" then
-		EquipmentSpeedState.Function = MobileFunction
-
-		if type(getfenv) == "function" then
-			local EnvironmentSuccess, FunctionEnvironmentResult = pcall(getfenv, MobileFunction)
-
-			if EnvironmentSuccess and type(FunctionEnvironmentResult) == "table" then
-				EquipmentSpeedState.FunctionEnvironment = FunctionEnvironmentResult
-			end
-		end
-	end
-
-	return MobileFunction
+	return pcall(debug.setupvalue, Function, Index, Value)
 end
 
-local function applyEquipmentPlacementSpeed()
-	if Environment.NotorietyUnloaded then
-		return false
+local function findNativePlaceEquipment()
+	if type(EquipmentPlacementState.Target) == "function" then
+		return EquipmentPlacementState.Target
 	end
 
-	local Function = findEquipmentPlacementFunction()
-
-	if type(Function) ~= "function" or type(hookfunction) ~= "function" or type(tick) ~= "function" then
-		return false
+	if type(getgc) ~= "function" or type(debug) ~= "table" or type(debug.getinfo) ~= "function" then
+		return nil
 	end
 
-	if type(EquipmentSpeedState.WrappedTick) == "function"
-		and type(EquipmentSpeedState.OriginalTick) == "function"
+	local SourceSuffix = "Players." .. LocalPlayer.Name .. ".PlayerGui.SG_Package.LocalMovement"
+
+	local Success, Objects = pcall(getgc, true)
+	if not Success or type(Objects) ~= "table" then
+		return nil
+	end
+
+	for _, Function in pairs(Objects) do
+		if type(Function) == "function" then
+			local InfoSuccess, Info = pcall(debug.getinfo, Function)
+
+			if InfoSuccess
+				and type(Info) == "table"
+				and Info.name == "placeEquipment"
+				and tostring(Info.source or Info.short_src or ""):find(SourceSuffix, 1, true)
+			then
+				EquipmentPlacementState.Target = Function
+				return Function
+			end
+		end
+	end
+
+	return nil
+end
+
+local function runNativeEquipmentPlacement(Original, IsMobile)
+	if EquipmentPlacementState.Active then
+		return
+	end
+
+	local Preview = readFunctionUpvalue(Original, 2)
+	local EquipmentName = readFunctionUpvalue(Original, 3)
+	local HasSkill = readFunctionUpvalue(Original, 4)
+	local Humanoid = readFunctionUpvalue(Original, 6)
+	local MainGui = readFunctionUpvalue(Original, 7)
+	local UseCenter = readFunctionUpvalue(Original, 8)
+	local Mouse = readFunctionUpvalue(Original, 9)
+	local CurrentCamera = readFunctionUpvalue(Original, 10)
+	local ColorEquipment = readFunctionUpvalue(Original, 11)
+	local EquipmentColors = readFunctionUpvalue(Original, 12)
+	local Remotes = readFunctionUpvalue(Original, 13)
+
+	if typeof(Preview) ~= "Instance"
+		or not Preview:IsA("Model")
+		or not Preview.PrimaryPart
+		or type(EquipmentName) ~= "string"
+		or EquipmentName == ""
+		or type(HasSkill) ~= "function"
+		or typeof(Humanoid) ~= "Instance"
+		or not Humanoid:IsA("Humanoid")
+		or typeof(MainGui) ~= "Instance"
+		or typeof(CurrentCamera) ~= "Instance"
+		or not CurrentCamera:IsA("Camera")
+		or type(ColorEquipment) ~= "function"
+		or type(EquipmentColors) ~= "table"
+		or typeof(Remotes) ~= "Instance"
 	then
+		return Original(IsMobile)
+	end
+
+	local PlaceEquipmentRemote = Remotes:FindFirstChild("PlaceEquipment")
+	if not PlaceEquipmentRemote or not PlaceEquipmentRemote:IsA("RemoteEvent") then
+		return Original(IsMobile)
+	end
+
+	EquipmentPlacementState.Active = true
+	writeFunctionUpvalue(Original, 1, true)
+
+	local function IsStillActive()
+		local NativeFlag = readFunctionUpvalue(Original, 1)
+		if NativeFlag == false then
+			return false
+		end
+
+		if not IsMobile and not isNativeEquipmentInputHeld(false) then
+			return false
+		end
+
 		return true
 	end
 
-	local EquipmentPercent = LocalPlayer
-		:WaitForChild("PlayerGui", math.huge)
-		:WaitForChild("SG_Package", math.huge)
-		:WaitForChild("MainGui", math.huge)
-		:WaitForChild("Interaction", math.huge)
-		:WaitForChild("EquipmentPercent", math.huge)
-	local TickTarget = tick
-	local OriginalTick
+	local Success, ErrorMessage = xpcall(function()
+		task.wait(IsMobile and 0 or 0.5)
 
-	local function WrappedTick(...)
-		local Now = OriginalTick(...)
-
-		if Environment.NotorietyUnloaded or not Environment.NotorietyEquipmentSpeedEnabled then
-			return Now
+		if not IsStillActive() then
+			return
 		end
 
-		local IsEquipmentCaller = false
+		local PlayerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+		local SGPackage = PlayerGui and PlayerGui:FindFirstChild("SG_Package")
+		local RuntimeMainGui = SGPackage and SGPackage:FindFirstChild("MainGui")
+		local Interaction = RuntimeMainGui and RuntimeMainGui:FindFirstChild("Interaction")
+		local EquipmentPercent = Interaction and Interaction:FindFirstChild("EquipmentPercent")
 
-		for Level = 2, 6 do
-			local SourceSuccess, Source = pcall(debug.info, Level, "s")
-			local NameSuccess, Name = pcall(debug.info, Level, "n")
-
-			if SourceSuccess
-				and NameSuccess
-				and Source == "Players." .. LocalPlayer.Name .. ".PlayerGui.SG_Package.LocalMovement"
-				and Name == "placeEquipment"
-			then
-				IsEquipmentCaller = true
-				break
-			end
+		if not EquipmentPercent or not EquipmentPercent:IsA("TextLabel") then
+			return Original(IsMobile)
 		end
 
-		if not IsEquipmentCaller then
-			return Now
+		Preview.Parent = Workspace
+
+		local Duration = 2
+		if EquipmentName == "Medical Kit" and HasSkill("Mastermind", "j") then
+			Duration /= 2
+		elseif EquipmentName == "Ammo Bag" and HasSkill("Enforcer", "b") then
+			Duration /= 2
 		end
 
-		if typeof(EquipmentPercent) ~= "Instance"
-			or EquipmentPercent.Parent == nil
-			or not EquipmentPercent.Visible
-		then
-			resetEquipmentClock()
-			return Now
+		if HasSkill("Technician", "n") then
+			Duration /= 2
 		end
 
 		local Multiplier = getEquipmentSpeedMultiplier()
-
-		if not EquipmentSpeedState.ClockActive then
-			EquipmentSpeedState.ClockActive = true
-			EquipmentSpeedState.RealAnchor = Now
-			EquipmentSpeedState.ScaledAnchor = Now
-			EquipmentSpeedState.LastMultiplier = Multiplier
-		elseif EquipmentSpeedState.LastMultiplier ~= Multiplier then
-			EquipmentSpeedState.ScaledAnchor += (Now - EquipmentSpeedState.RealAnchor) * EquipmentSpeedState.LastMultiplier
-			EquipmentSpeedState.RealAnchor = Now
-			EquipmentSpeedState.LastMultiplier = Multiplier
+		if Multiplier == math.huge then
+			Duration = 0
+		else
+			Duration /= Multiplier
 		end
 
-		return EquipmentSpeedState.ScaledAnchor
-			+ (Now - EquipmentSpeedState.RealAnchor) * EquipmentSpeedState.LastMultiplier
-	end
+		local Ignore = {
+			Preview,
+			Workspace.CurrentCamera,
+			Workspace:FindFirstChild("Police"),
+			Workspace:FindFirstChild("Criminals"),
+			Workspace:FindFirstChild("Citizens"),
+			Workspace:FindFirstChild("InvisibleParts"),
+			Workspace:FindFirstChild("Lootables"),
+			Workspace:FindFirstChild("Bags"),
+			Workspace:FindFirstChild("Bodies"),
+			Workspace:FindFirstChild("Tracers"),
+			Workspace:FindFirstChild("ShatteredGlass"),
+			Workspace:FindFirstChild("MapZones"),
+		}
 
-	local HookSuccess, HookResult = pcall(hookfunction, TickTarget, WrappedTick)
-
-	if not HookSuccess or type(HookResult) ~= "function" then
-		return false
-	end
-
-	OriginalTick = HookResult
-	EquipmentSpeedState.OriginalTick = OriginalTick
-	EquipmentSpeedState.TickTarget = TickTarget
-	EquipmentSpeedState.WrappedTick = WrappedTick
-	EquipmentSpeedState.EquipmentPercent = EquipmentPercent
-	resetEquipmentClock()
-
-	EquipmentSpeedState.VisibilityConnection = EquipmentPercent:GetPropertyChangedSignal("Visible"):Connect(function()
-		if not EquipmentPercent.Visible then
-			resetEquipmentClock()
+		for Index = #Ignore, 1, -1 do
+			if Ignore[Index] == nil then
+				table.remove(Ignore, Index)
+			end
 		end
-	end)
 
-	return true
+		EquipmentPercent.Visible = true
+		EquipmentPercent.Text = "0%"
+
+		local IsGroundEquipment = EquipmentName == "Medical Kit"
+			or EquipmentName == "Ammo Bag"
+			or EquipmentName == "Body Bags"
+			or EquipmentName == "Sentry Gun"
+		local IsTripMine = EquipmentName == "Trip Mine"
+		local StartTime = os.clock()
+		local HitPart = false
+		local UsefulTarget = false
+		local PlacementCFrame = nil
+
+		repeat
+			if Environment.NotorietyUnloaded
+				or not IsStillActive()
+				or Humanoid.PlatformStand
+				or not Preview.Parent
+			then
+				break
+			end
+
+			task.wait()
+
+			local ViewSize = MainGui.AbsoluteSize / 2
+			local ScreenPoint
+
+			if UseCenter or IsMobile then
+				ScreenPoint = Vector2.new(ViewSize.X, ViewSize.Y)
+			else
+				local MouseX = typeof(Mouse) == "Instance" and Mouse.X or ViewSize.X
+				local MouseY = typeof(Mouse) == "Instance" and Mouse.Y or ViewSize.Y
+				ScreenPoint = Vector2.new(MouseX, MouseY)
+			end
+
+			local ScreenRay = CurrentCamera:ScreenPointToRay(ScreenPoint.X, ScreenPoint.Y, 0)
+			local Range = Environment.NotorietyEquipmentRangeEnabled
+				and math.clamp(tonumber(Environment.NotorietyEquipmentPlacementRange) or 10, 10, 100)
+				or 10
+
+			local HitPosition
+			local HitNormal
+			HitPart, HitPosition, HitNormal = Workspace:FindPartOnRayWithIgnoreList(
+				Ray.new(ScreenRay.Origin, ScreenRay.Direction * Range),
+				Ignore
+			)
+
+			if HitPosition then
+				PlacementCFrame = CFrame.new(
+					HitPosition + Vector3.new(0, Preview.PrimaryPart.Size.Y / 2, 0),
+					CurrentCamera.CFrame.Position
+				)
+
+				local SurfacePosition = HitPosition + Vector3.new(0, Preview.PrimaryPart.Size.Y / 2, 0)
+
+				if not IsGroundEquipment and HitPart then
+					PlacementCFrame = CFrame.new(
+						SurfacePosition,
+						SurfacePosition + (HitNormal or Vector3.new(0, 1, 0))
+					) * CFrame.new(0, 0, -Preview.PrimaryPart.Size.X / 2)
+				end
+
+				UsefulTarget = false
+
+				if IsGroundEquipment then
+					local GroundPart, GroundPosition = Workspace:FindPartOnRayWithIgnoreList(
+						Ray.new(
+							PlacementCFrame.Position,
+							Vector3.new(0, -Preview.PrimaryPart.Size.Y - 5, 0)
+						),
+						Ignore
+					)
+
+					HitPart = GroundPart
+
+					if GroundPart and GroundPosition then
+						PlacementCFrame = CFrame.new(
+							GroundPosition + Vector3.new(0, Preview.PrimaryPart.Size.Y / 2, 0),
+							Vector3.new(
+								CurrentCamera.CFrame.Position.X,
+								GroundPosition.Y + Preview.PrimaryPart.Size.Y / 2,
+								CurrentCamera.CFrame.Position.Z
+							)
+						)
+					else
+						HitPart = false
+						PlacementCFrame = nil
+					end
+				elseif HitPart and IsTripMine and HitPart.Parent then
+					local TargetPart = HitPart
+
+					if TargetPart.Parent.Name == "KickDoor" then
+						table.insert(Ignore, TargetPart.Parent)
+
+						if TargetPart.Parent.Parent and TargetPart.Parent.Parent.PrimaryPart then
+							TargetPart = TargetPart.Parent.Parent.PrimaryPart
+						end
+					end
+
+					local Parent = TargetPart.Parent
+					local Grandparent = Parent and Parent.Parent
+					local Door = nil
+
+					if Parent and Parent:HasTag("Door") then
+						Door = Parent
+					elseif Grandparent and Grandparent:HasTag("Door") then
+						Door = Grandparent
+					end
+
+					if not Door then
+						local DoorModule = (Parent and Parent:FindFirstChild("DoorModule"))
+							or (Grandparent and Grandparent:FindFirstChild("DoorModule"))
+						Door = DoorModule and DoorModule.Parent or nil
+					end
+
+					if Door and (Door:GetAttribute("NoC4") or Door.Name ~= "Door") then
+						Door = nil
+					end
+
+					if (Parent and Parent.Name == "Safe") or (Grandparent and Grandparent.Name == "Safe") then
+						if TargetPart.Name ~= "SafeWall" then
+							UsefulTarget = Parent and Parent.Name == "Safe" and Parent or Grandparent
+						end
+					elseif Door then
+						UsefulTarget = Door
+					end
+				end
+
+				if PlacementCFrame and Environment.NotorietyEquipmentPositionEnabled then
+					local X, Y, Z = getEquipmentPositionOffset()
+					PlacementCFrame += CurrentCamera.CFrame.RightVector * X
+						+ Vector3.new(0, Y, 0)
+						+ CurrentCamera.CFrame.LookVector * Z
+				end
+
+				if PlacementCFrame then
+					if HitPart and not UsefulTarget then
+						pcall(ColorEquipment, EquipmentColors.Good)
+					elseif HitPart and UsefulTarget then
+						pcall(ColorEquipment, EquipmentColors.Useful)
+					else
+						pcall(ColorEquipment, EquipmentColors.Bad)
+					end
+
+					Preview:SetPrimaryPartCFrame(PlacementCFrame)
+				else
+					pcall(ColorEquipment, EquipmentColors.Bad)
+				end
+			else
+				HitPart = false
+				PlacementCFrame = nil
+				pcall(ColorEquipment, EquipmentColors.Bad)
+			end
+
+			local Elapsed = os.clock() - StartTime
+			local Progress = Duration <= 0 and 1 or math.clamp(Elapsed / Duration, 0, 1)
+			EquipmentPercent.Text = tostring(math.floor(Progress * 100)) .. "%"
+
+			if Duration <= 0 or Elapsed >= Duration then
+				break
+			end
+		until false
+
+		if IsStillActive() then
+			EquipmentPercent.Visible = false
+
+			if HitPart and PlacementCFrame and Preview.PrimaryPart then
+				PlaceEquipmentRemote:FireServer(
+					EquipmentName,
+					Preview.PrimaryPart.CFrame,
+					UsefulTarget
+				)
+			end
+		end
+
+		writeFunctionUpvalue(Original, 1, false)
+		Preview.Parent = nil
+	end, debug.traceback)
+
+	writeFunctionUpvalue(Original, 1, false)
+
+	if typeof(Preview) == "Instance" then
+		pcall(function()
+			Preview.Parent = nil
+		end)
+	end
+
+	EquipmentPlacementState.Active = false
+
+	if not Success then
+		warn("[Notoriety Equipment] " .. tostring(ErrorMessage))
+	end
 end
 
-local function getEquipmentPositionOffset()
-	local X = tonumber(Environment.NotorietyEquipmentPositionX) or 0
-	local Y = tonumber(Environment.NotorietyEquipmentPositionY) or 0
-	local Z = tonumber(Environment.NotorietyEquipmentPositionZ) or 0
-
-	if X == math.huge or X == -math.huge or X ~= X then
-		X = 0
-	end
-
-	if Y == math.huge or Y == -math.huge or Y ~= Y then
-		Y = 0
-	end
-
-	if Z == math.huge or Z == -math.huge or Z ~= Z then
-		Z = 0
-	end
-
-	return X, Y, Z
-end
-
-local function applyEquipmentPositioning()
-	if Environment.NotorietyUnloaded then
-		return false
-	end
-
-	local Function = findEquipmentPlacementFunction()
-
-	if not Function then
-		return false
-	end
-
-	local FunctionEnvironment = EquipmentSpeedState.FunctionEnvironment
-	local ExistingWrapper = EquipmentSpeedState.WrappedCFrame
-
-	if type(FunctionEnvironment) ~= "table" then
-		return false
-	end
-
-	if type(ExistingWrapper) == "table"
-		and rawget(FunctionEnvironment, "CFrame") == ExistingWrapper
+local function installEquipmentPlacementHook()
+	if EquipmentPlacementState.HookInstalled
+		and type(EquipmentPlacementState.Original) == "function"
 	then
 		return true
 	end
 
-	local OriginalCFrame = FunctionEnvironment.CFrame
-
-	if type(OriginalCFrame) ~= "table"
-		or type(OriginalCFrame.new) ~= "function"
-	then
+	if type(hookfunction) ~= "function" then
 		return false
 	end
 
-	local HadOwnCFrame = rawget(FunctionEnvironment, "CFrame") ~= nil
-	local WrappedCFrame = {}
-
-	setmetatable(WrappedCFrame, {
-		__index = OriginalCFrame,
-	})
-
-	WrappedCFrame.new = function(...)
-		local Result = OriginalCFrame.new(...)
-
-		if not Environment.NotorietyEquipmentPositionEnabled
-			or Environment.NotorietyUnloaded
-		then
-			return Result
-		end
-
-		local CallerSuccess, Caller = pcall(debug.info, 2, "f")
-
-		if not CallerSuccess or Caller ~= Function then
-			return Result
-		end
-
-		local ArgumentCount = select("#", ...)
-		local Position, LookAt = ...
-
-		if ArgumentCount ~= 2
-			or typeof(Position) ~= "Vector3"
-			or typeof(LookAt) ~= "Vector3"
-		then
-			return Result
-		end
-
-		EquipmentSpeedState.CFrameLookAtCount += 1
-
-		if EquipmentSpeedState.CFrameLookAtCount ~= 2 then
-			return Result
-		end
-
-		local X, Y, Z = getEquipmentPositionOffset()
-
-		if X == 0 and Y == 0 and Z == 0 then
-			return Result
-		end
-
-		return Result * OriginalCFrame.new(X, Y, -Z)
+	local Target = findNativePlaceEquipment()
+	if type(Target) ~= "function" then
+		return false
 	end
 
-	EquipmentSpeedState.OriginalCFrame = OriginalCFrame
-	EquipmentSpeedState.HadOwnCFrame = HadOwnCFrame
-	EquipmentSpeedState.WrappedCFrame = WrappedCFrame
-	rawset(FunctionEnvironment, "CFrame", WrappedCFrame)
+	local Original
+	local function Wrapped(IsMobile, ...)
+		if not shouldOverrideEquipmentPlacement() then
+			return Original(IsMobile, ...)
+		end
 
-	return rawget(FunctionEnvironment, "CFrame") == WrappedCFrame
+		return runNativeEquipmentPlacement(Original, IsMobile)
+	end
+
+	local Success, Result = pcall(hookfunction, Target, Wrapped)
+	if not Success or type(Result) ~= "function" then
+		return false
+	end
+
+	Original = Result
+	EquipmentPlacementState.Target = Target
+	EquipmentPlacementState.Original = Result
+	EquipmentPlacementState.HookInstalled = true
+	return true
+end
+
+local function restoreEquipmentPlacementSpeed()
+	EquipmentPlacementState.Active = false
+
+	if EquipmentPlacementState.HookInstalled
+		and type(EquipmentPlacementState.Target) == "function"
+		and type(EquipmentPlacementState.Original) == "function"
+		and type(hookfunction) == "function"
+	then
+		pcall(hookfunction, EquipmentPlacementState.Target, EquipmentPlacementState.Original)
+	end
+
+	EquipmentPlacementState.HookInstalled = false
+	EquipmentPlacementState.Target = nil
+	EquipmentPlacementState.Original = nil
+end
+
+local function applyEquipmentPlacementSpeed()
+	return installEquipmentPlacementHook()
+end
+
+local function applyEquipmentPositioning()
+	return installEquipmentPlacementHook()
+end
+
+local function applyEquipmentPlacementRange()
+	return installEquipmentPlacementHook()
+end
+
+local function restoreMobileEquipmentPlacementFix()
+end
+
+local function applyMobileEquipmentPlacementFix()
+	return installEquipmentPlacementHook()
+end
+
+local PersistentAudioOriginalVolumes = rawget(Environment, "NotorietyAudioOriginalVolumes")
+if type(PersistentAudioOriginalVolumes) ~= "table" then
+	PersistentAudioOriginalVolumes = setmetatable({}, { __mode = "k" })
+	Environment.NotorietyAudioOriginalVolumes = PersistentAudioOriginalVolumes
+end
+
+local PersistentAudioGroupVolumes = rawget(Environment, "NotorietyAudioGroupVolumes")
+if type(PersistentAudioGroupVolumes) ~= "table" then
+	PersistentAudioGroupVolumes = setmetatable({}, { __mode = "k" })
+	Environment.NotorietyAudioGroupVolumes = PersistentAudioGroupVolumes
 end
 
 local AudioState = {
 	Groups = {},
-	OriginalVolumes = setmetatable({}, {
-		__mode = "k",
-	}),
-	DirectOriginalVolumes = setmetatable({}, {
-		__mode = "k",
-	}),
-	DirectConnections = setmetatable({}, {
-		__mode = "k",
-	}),
-	DescendantConnection = nil,
+	OriginalVolumes = PersistentAudioGroupVolumes,
+	DirectOriginalVolumes = PersistentAudioOriginalVolumes,
+	RootConnections = {},
 	Applying = false,
-	ApplyingDirect = false,
+	ScanGeneration = 0,
 }
 
-local AudioDefinitions = {
-	{
-		Key = "Music",
-		EnvironmentKey = "NotorietyMusicVolume",
-	},
-	{
-		Key = "SFX",
-		EnvironmentKey = "NotorietySFXVolume",
-	},
-	{
-		Key = "LocalGunshots",
-		EnvironmentKey = "NotorietyLocalGunshotsVolume",
-	},
-	{
-		Key = "Gunshots",
-		EnvironmentKey = "NotorietyGunshotsVolume",
-	},
-	{
-		Key = "MapAmbience",
-		EnvironmentKey = "NotorietyMapAmbienceVolume",
-	},
-	{
-		Key = "Voices",
-		EnvironmentKey = "NotorietyVoicesVolume",
-	},
-	{
-		Key = "UI",
-		EnvironmentKey = "NotorietyUIVolume",
-	},
-}
+local function addAudioGroup(Key, Group)
+	if typeof(Group) ~= "Instance" or not Group:IsA("SoundGroup") then
+		return
+	end
+
+	AudioState.Groups[Key] = AudioState.Groups[Key] or {}
+	if not table.find(AudioState.Groups[Key], Group) then
+		table.insert(AudioState.Groups[Key], Group)
+	end
+	if AudioState.OriginalVolumes[Group] == nil then
+		AudioState.OriginalVolumes[Group] = Group.Volume
+	end
+end
 
 local function resolveAudioGroups()
+	table.clear(AudioState.Groups)
 	local SoundPackage = SoundService:FindFirstChild("Sound_Package")
 	local GlobalSounds = SoundPackage and SoundPackage:FindFirstChild("GlobalSounds")
 	local GameAudio = GlobalSounds and GlobalSounds:FindFirstChild("GameAudio")
 	local SFX = GameAudio and GameAudio:FindFirstChild("SFX")
+	local GlobalVolume = SoundService:FindFirstChild("GlobalVolume")
 
-	AudioState.Groups.Music = GlobalSounds and GlobalSounds:FindFirstChild("Music")
-	AudioState.Groups.SFX = SFX
-	AudioState.Groups.LocalGunshots = SFX and SFX:FindFirstChild("LocalGunshots")
-	AudioState.Groups.Gunshots = SFX and SFX:FindFirstChild("Gunshots")
-	AudioState.Groups.MapAmbience = SFX and SFX:FindFirstChild("MapAmbience")
-	AudioState.Groups.Voices = GameAudio and GameAudio:FindFirstChild("Voices")
-	AudioState.Groups.UI = GlobalSounds and GlobalSounds:FindFirstChild("UI")
+	addAudioGroup("Music", GlobalSounds and GlobalSounds:FindFirstChild("Music"))
+	addAudioGroup("SFX", SFX)
+	addAudioGroup("SFXSibling", GameAudio and GameAudio:FindFirstChild("CueSFX"))
+	addAudioGroup("SFXSibling", GameAudio and GameAudio:FindFirstChild("SubtleCueSFX"))
+	addAudioGroup("LocalGunshots", SFX and SFX:FindFirstChild("LocalGunshots"))
+	addAudioGroup("Gunshots", SFX and SFX:FindFirstChild("Gunshots"))
+	addAudioGroup("MapAmbience", SFX and SFX:FindFirstChild("MapAmbience"))
+	addAudioGroup("Voices", GameAudio and GameAudio:FindFirstChild("Voices"))
+	addAudioGroup("Voices", GameAudio and GameAudio:FindFirstChild("NarratorVoice"))
+	addAudioGroup("Voices", GlobalVolume and GlobalVolume:FindFirstChild("Voices"))
+	addAudioGroup("UI", GlobalSounds and GlobalSounds:FindFirstChild("UI"))
+end
 
-	for _, Definition in AudioDefinitions do
-		local Group = AudioState.Groups[Definition.Key]
+local function soundUsesManagedGroup(Sound)
+	local Group = Sound.SoundGroup
+	if not Group then return false end
 
-		if typeof(Group) == "Instance"
-			and Group:IsA("SoundGroup")
-			and AudioState.OriginalVolumes[Group] == nil
-		then
-			AudioState.OriginalVolumes[Group] = Group.Volume
+	for _, Groups in pairs(AudioState.Groups) do
+		for _, Managed in Groups do
+			local Current = Group
+			while Current and Current:IsA("SoundGroup") do
+				if Current == Managed then return true end
+				Current = Current.Parent
+			end
 		end
 	end
+
+	return false
 end
 
 local function isGunshotSound(Sound)
-	if typeof(Sound) ~= "Instance" or not Sound:IsA("Sound") then
-		return false
-	end
-
 	local Name = string.lower(Sound.Name)
 	local ParentName = Sound.Parent and string.lower(Sound.Parent.Name) or ""
-
 	return ParentName:find("muzzle", 1, true) ~= nil
 		or Name:find("gunshot", 1, true) ~= nil
 		or Name:find("gunfire", 1, true) ~= nil
@@ -931,340 +1171,292 @@ local function isGunshotSound(Sound)
 end
 
 local function isLocalGunshotSound(Sound)
-	if not isGunshotSound(Sound) then
-		return false
-	end
-
+	if not isGunshotSound(Sound) then return false end
 	local Camera = Workspace.CurrentCamera
 	local CameraModel = Camera and Camera:FindFirstChild("CameraModel")
 	local Character = LocalPlayer.Character
-
 	return (CameraModel and Sound:IsDescendantOf(CameraModel))
 		or (Character and Sound:IsDescendantOf(Character))
 end
 
-local function getDirectGunshotPercent(Sound)
-	local SFXPercent = math.clamp(tonumber(Environment.NotorietySFXVolume) or 100, 0, 100) / 100
-	local GunPercent
-
-	if isLocalGunshotSound(Sound) then
-		GunPercent = math.clamp(tonumber(Environment.NotorietyLocalGunshotsVolume) or 100, 0, 100) / 100
-	else
-		GunPercent = math.clamp(tonumber(Environment.NotorietyGunshotsVolume) or 100, 0, 100) / 100
-	end
-
-	return SFXPercent * GunPercent
+local function isVoiceSound(Sound)
+	local Camera = Workspace.CurrentCamera
+	local AudioFolder = Camera and Camera:FindFirstChild("AudioFolder")
+	local PlayerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+	local SGPackage = PlayerGui and PlayerGui:FindFirstChild("SG_Package")
+	local Voices = SGPackage and SGPackage:FindFirstChild("Voices")
+	local CharVoice = SGPackage and SGPackage:FindFirstChild("CharVoice")
+	return (AudioFolder and Sound:IsDescendantOf(AudioFolder))
+		or (Voices and Sound:IsDescendantOf(Voices))
+		or Sound == CharVoice
 end
 
-local function applyDirectGunshotVolume(Sound)
+local function isMapAmbienceSound(Sound)
+	local Map = Workspace:FindFirstChild("Map")
+	return Map ~= nil and Sound:IsDescendantOf(Map) and not isGunshotSound(Sound)
+end
+
+local function isUISound(Sound)
+	local PlayerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+	if not PlayerGui or not Sound:IsDescendantOf(PlayerGui) or isVoiceSound(Sound) then
+		return false
+	end
+
+	local SGPackage = PlayerGui:FindFirstChild("SG_Package")
+	local MainGui = SGPackage and SGPackage:FindFirstChild("MainGui")
+	local RankUp = SGPackage and SGPackage:FindFirstChild("RankUp")
+	local SFXFolder = SGPackage and SGPackage:FindFirstChild("SFX")
+	local UISFXNames = {
+		Hover = true,
+		Click = true,
+		secondaryUpdate = true,
+	}
+
+	return (MainGui and Sound:IsDescendantOf(MainGui))
+		or (RankUp and Sound:IsDescendantOf(RankUp))
+		or (SFXFolder and Sound.Parent == SFXFolder and UISFXNames[Sound.Name] == true)
+end
+
+local function isGeneralSFXSound(Sound)
+	local PlayerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+	local SGPackage = PlayerGui and PlayerGui:FindFirstChild("SG_Package")
+	local SFX = SGPackage and SGPackage:FindFirstChild("SFX")
+	return SFX ~= nil and Sound:IsDescendantOf(SFX)
+end
+
+local function getDirectAudioPercent(Sound)
 	if Environment.NotorietyUnloaded
 		or typeof(Sound) ~= "Instance"
 		or not Sound:IsA("Sound")
 		or Sound.Parent == nil
-		or not isGunshotSound(Sound)
+		or soundUsesManagedGroup(Sound)
 	then
-		return false
-	end
-
-	local LocalGroup = AudioState.Groups.LocalGunshots
-	local OtherGroup = AudioState.Groups.Gunshots
-
-	if Sound.SoundGroup == LocalGroup or Sound.SoundGroup == OtherGroup then
-		return false
-	end
-
-	if AudioState.DirectOriginalVolumes[Sound] == nil then
-		AudioState.DirectOriginalVolumes[Sound] = Sound.Volume
-	end
-
-	local BaseVolume = AudioState.DirectOriginalVolumes[Sound]
-	local TargetVolume = BaseVolume * getDirectGunshotPercent(Sound)
-
-	if math.abs(Sound.Volume - TargetVolume) > 0.0001 then
-		AudioState.ApplyingDirect = true
-		Sound.Volume = TargetVolume
-		AudioState.ApplyingDirect = false
-	end
-
-	return true
-end
-
-local function trackDirectGunshotSound(Sound)
-	if not isGunshotSound(Sound) then
-		return false
-	end
-
-	if AudioState.DirectOriginalVolumes[Sound] == nil then
-		AudioState.DirectOriginalVolumes[Sound] = Sound.Volume
-	end
-
-	if AudioState.DirectConnections[Sound] == nil then
-		AudioState.DirectConnections[Sound] = Sound:GetPropertyChangedSignal("Volume"):Connect(function()
-			if Environment.NotorietyUnloaded or AudioState.ApplyingDirect then
-				return
-			end
-
-			local Percent = getDirectGunshotPercent(Sound)
-
-			if Percent >= 0.9999 then
-				AudioState.DirectOriginalVolumes[Sound] = Sound.Volume
-				return
-			end
-
-			-- The game rewrites weapon volumes during equip/fire. Treat that value as
-			-- the new unscaled base, then immediately re-apply the user's slider.
-			AudioState.DirectOriginalVolumes[Sound] = Sound.Volume
-			applyDirectGunshotVolume(Sound)
-		end)
-	end
-
-	return applyDirectGunshotVolume(Sound)
-end
-
-local function scanDirectGunshotSounds()
-	local Camera = Workspace.CurrentCamera
-	local CameraModel = Camera and Camera:FindFirstChild("CameraModel")
-	local Character = LocalPlayer.Character
-
-	if CameraModel then
-		for _, Descendant in CameraModel:GetDescendants() do
-			if Descendant:IsA("Sound") then
-				trackDirectGunshotSound(Descendant)
-			end
-		end
-	end
-
-	if Character then
-		for _, Descendant in Character:GetDescendants() do
-			if Descendant:IsA("Sound") then
-				trackDirectGunshotSound(Descendant)
-			end
-		end
-	end
-
-	-- Other players/NPCs may also use ungrouped muzzle sounds.
-	for _, ContainerName in { "Criminals", "Police" } do
-		local Container = Workspace:FindFirstChild(ContainerName)
-
-		if Container then
-			for _, Descendant in Container:GetDescendants() do
-				if Descendant:IsA("Sound") and isGunshotSound(Descendant) then
-					trackDirectGunshotSound(Descendant)
-				end
-			end
-		end
-	end
-end
-
-local function ensureDirectAudioWatcher()
-	if AudioState.DescendantConnection then
-		return
-	end
-
-	AudioState.DescendantConnection = Workspace.DescendantAdded:Connect(function(Descendant)
-		if Environment.NotorietyUnloaded or not Descendant:IsA("Sound") then
-			return
-		end
-
-		if isGunshotSound(Descendant) then
-			task.defer(trackDirectGunshotSound, Descendant)
-		end
-	end)
-end
-
-local function applyAudioVolumes()
-	if Environment.NotorietyUnloaded or AudioState.Applying then
-		return false
-	end
-
-	resolveAudioGroups()
-	ensureDirectAudioWatcher()
-	AudioState.Applying = true
-	local Applied = false
-
-	for _, Definition in AudioDefinitions do
-		local Group = AudioState.Groups[Definition.Key]
-		local Percent = math.clamp(tonumber(Environment[Definition.EnvironmentKey]) or 100, 0, 100)
-		Environment[Definition.EnvironmentKey] = Percent
-
-		if typeof(Group) == "Instance" and Group:IsA("SoundGroup") then
-			Group.Volume = Percent / 100
-			Applied = true
-		end
-	end
-
-	AudioState.Applying = false
-	scanDirectGunshotSounds()
-	return Applied
-end
-
-local function restoreAudioVolumes()
-	AudioState.Applying = true
-	AudioState.ApplyingDirect = true
-
-	if AudioState.DescendantConnection then
-		pcall(function()
-			AudioState.DescendantConnection:Disconnect()
-		end)
-		AudioState.DescendantConnection = nil
-	end
-
-	for Sound, Connection in AudioState.DirectConnections do
-		pcall(function()
-			Connection:Disconnect()
-		end)
-
-		local Original = AudioState.DirectOriginalVolumes[Sound]
-
-		if typeof(Sound) == "Instance" and Sound.Parent ~= nil and type(Original) == "number" then
-			pcall(function()
-				Sound.Volume = Original
-			end)
-		end
-	end
-
-	for Group, Volume in AudioState.OriginalVolumes do
-		if typeof(Group) == "Instance" and Group.Parent ~= nil then
-			pcall(function()
-				Group.Volume = Volume
-			end)
-		end
-	end
-
-	AudioState.ApplyingDirect = false
-	AudioState.Applying = false
-	table.clear(AudioState.Groups)
-	table.clear(AudioState.OriginalVolumes)
-	table.clear(AudioState.DirectOriginalVolumes)
-	table.clear(AudioState.DirectConnections)
-end
-
-local MobileEquipmentState = {
-	Targets = {},
-	Refresh = 0,
-}
-
-local function getFunctionUpvalues(Function)
-	if type(debug) ~= "table" or type(debug.getupvalues) ~= "function" then
 		return nil
 	end
 
-	local Success, Upvalues = pcall(debug.getupvalues, Function)
-	return if Success and type(Upvalues) == "table" then Upvalues else nil
-end
-
-local function getConnectionFunction(Connection)
-	local Success, Function = pcall(function()
-		return Connection.Function
-	end)
-
-	return if Success and type(Function) == "function" then Function else nil
-end
-
-local function restoreMobileEquipmentPlacementFix()
-	if type(debug) == "table" and type(debug.setupvalue) == "function" then
-		for _, Record in MobileEquipmentState.Targets do
-			if type(Record) == "table"
-				and type(Record.Callback) == "function"
-				and type(Record.Index) == "number"
-				and type(Record.Original) == "function"
-			then
-				local Upvalues = getFunctionUpvalues(Record.Callback)
-
-				if Upvalues and Upvalues[Record.Index] == Record.Wrapper then
-					pcall(debug.setupvalue, Record.Callback, Record.Index, Record.Original)
-				end
-			end
-		end
+	if isVoiceSound(Sound) then
+		return math.clamp(tonumber(Environment.NotorietyVoicesVolume) or 100, 0, 100) / 100
 	end
 
-	table.clear(MobileEquipmentState.Targets)
-	MobileEquipmentState.Refresh = 0
-end
+	local SFX = math.clamp(tonumber(Environment.NotorietySFXVolume) or 100, 0, 100) / 100
 
-local function hasMobileEquipmentTarget(Callback, Index)
-	for _, Record in MobileEquipmentState.Targets do
-		if Record.Callback == Callback and Record.Index == Index then
-			return true
-		end
+	if isGunshotSound(Sound) then
+		local Gun = if isLocalGunshotSound(Sound)
+			then math.clamp(tonumber(Environment.NotorietyLocalGunshotsVolume) or 100, 0, 100) / 100
+			else math.clamp(tonumber(Environment.NotorietyGunshotsVolume) or 100, 0, 100) / 100
+		return SFX * Gun
 	end
 
-	return false
-end
-
-local function applyMobileEquipmentPlacementFix()
-	if Environment.NotorietyUnloaded
-		or type(getconnections) ~= "function"
-		or type(debug) ~= "table"
-		or type(debug.getupvalues) ~= "function"
-		or type(debug.setupvalue) ~= "function"
-	then
-		return false
+	if isMapAmbienceSound(Sound) then
+		return SFX * (math.clamp(tonumber(Environment.NotorietyMapAmbienceVolume) or 100, 0, 100) / 100)
 	end
 
-	local PlaceEquipment = findEquipmentPlacementFunction()
+	if isUISound(Sound) then
+		return SFX * (math.clamp(tonumber(Environment.NotorietyUIVolume) or 100, 0, 100) / 100)
+	end
 
-	if type(PlaceEquipment) ~= "function" then
-		return false
+	if isGeneralSFXSound(Sound) then
+		return SFX
+	end
+
+	return nil
+end
+
+local function getLegacyV5DirectAudioPercent(Sound)
+	if typeof(Sound) ~= "Instance" or not Sound:IsA("Sound") or Sound.Parent == nil or soundUsesManagedGroup(Sound) then
+		return nil
+	end
+
+	if isVoiceSound(Sound) then
+		return math.clamp(tonumber(Environment.NotorietyVoicesVolume) or 100, 0, 100) / 100
+	end
+
+	local SFX = math.clamp(tonumber(Environment.NotorietySFXVolume) or 100, 0, 100) / 100
+	if isGunshotSound(Sound) then
+		local Gun = if isLocalGunshotSound(Sound)
+			then math.clamp(tonumber(Environment.NotorietyLocalGunshotsVolume) or 100, 0, 100) / 100
+			else math.clamp(tonumber(Environment.NotorietyGunshotsVolume) or 100, 0, 100) / 100
+		return SFX * Gun
+	end
+
+	if isMapAmbienceSound(Sound) then
+		return SFX * (math.clamp(tonumber(Environment.NotorietyMapAmbienceVolume) or 100, 0, 100) / 100)
 	end
 
 	local PlayerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
 	local SGPackage = PlayerGui and PlayerGui:FindFirstChild("SG_Package")
 	local MainGui = SGPackage and SGPackage:FindFirstChild("MainGui")
-	local MobileUI = MainGui and MainGui:FindFirstChild("MobileUI")
-	local Buttons = MobileUI and MobileUI:FindFirstChild("Hotbar")
-	local Equipment = Buttons and Buttons:FindFirstChild("Equipment")
-	local SelectButton = Equipment and Equipment:FindFirstChild("SelectButton")
-
-	if not SelectButton or not SelectButton:IsA("GuiButton") then
-		return false
+	local RankUp = SGPackage and SGPackage:FindFirstChild("RankUp")
+	if (MainGui and Sound:IsDescendantOf(MainGui)) or (RankUp and Sound:IsDescendantOf(RankUp)) then
+		return SFX * (math.clamp(tonumber(Environment.NotorietyUIVolume) or 100, 0, 100) / 100)
 	end
 
-	local Success, Connections = pcall(getconnections, SelectButton.MouseButton1Down)
-
-	if not Success or type(Connections) ~= "table" then
-		return false
+	if isGeneralSFXSound(Sound) then
+		return SFX
 	end
 
-	local Patched = false
+	return nil
+end
 
-	for _, Connection in Connections do
-		local Callback = getConnectionFunction(Connection)
-		local Upvalues = Callback and getFunctionUpvalues(Callback) or nil
+local function applyDirectAudioVolume(Sound)
+	local Percent = getDirectAudioPercent(Sound)
+	if Percent == nil then return false end
 
-		if Upvalues then
-			for Index, Value in pairs(Upvalues) do
-				if Value == PlaceEquipment then
-					if hasMobileEquipmentTarget(Callback, Index) then
-						Patched = true
-						break
+	if AudioState.DirectOriginalVolumes[Sound] == nil then
+		local BaseVolume = Sound.Volume
+
+		if Environment.NotorietyAudioMigrateFromV5Double == true then
+			local LegacyPercent = getLegacyV5DirectAudioPercent(Sound)
+			local CurrentPercent = getDirectAudioPercent(Sound)
+			local Combined = type(LegacyPercent) == "number" and type(CurrentPercent) == "number"
+				and LegacyPercent * CurrentPercent or nil
+			if type(Combined) == "number" and Combined > 0.000001 then
+				BaseVolume /= Combined
+			end
+		elseif Environment.NotorietyAudioMigrateFromV5 == true then
+			local LegacyPercent = getLegacyV5DirectAudioPercent(Sound)
+			if type(LegacyPercent) == "number" and LegacyPercent > 0.000001 then
+				BaseVolume /= LegacyPercent
+			end
+		end
+
+		AudioState.DirectOriginalVolumes[Sound] = BaseVolume
+	end
+
+	local Base = AudioState.DirectOriginalVolumes[Sound]
+	local Target = Base * Percent
+	if math.abs(Sound.Volume - Target) > 0.0001 then
+		Sound.Volume = Target
+	end
+	return true
+end
+
+local function getSafeAudioRoots()
+	local Roots = {}
+	local PlayerGui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+	local Camera = Workspace.CurrentCamera
+	for _, Root in {
+		PlayerGui,
+		Workspace:FindFirstChild("Map"),
+		Workspace:FindFirstChild("Police"),
+		Workspace:FindFirstChild("Criminals"),
+		Camera,
+		LocalPlayer.Character,
+	} do
+		if Root then table.insert(Roots, Root) end
+	end
+	return Roots
+end
+
+local function scanSafeAudioRoots()
+	AudioState.ScanGeneration += 1
+	local Generation = AudioState.ScanGeneration
+
+	task.spawn(function()
+		local Queue = getSafeAudioRoots()
+		local Index = 1
+		local Visited = 0
+
+		while Index <= #Queue and Generation == AudioState.ScanGeneration and not Environment.NotorietyUnloaded do
+			local Object = Queue[Index]
+			Index += 1
+
+			if typeof(Object) == "Instance" and Object.Parent ~= nil then
+				if Object:IsA("Sound") then
+					applyDirectAudioVolume(Object)
+				end
+
+				local Success, Children = pcall(Object.GetChildren, Object)
+				if Success then
+					for _, Child in Children do
+						table.insert(Queue, Child)
 					end
-
-					local Original = PlaceEquipment
-					local Wrapper = function(...)
-						applyEquipmentPlacementSpeed()
-						return Original(...)
-					end
-					local SetupSuccess = pcall(debug.setupvalue, Callback, Index, Wrapper)
-
-					if SetupSuccess then
-						table.insert(MobileEquipmentState.Targets, {
-							Callback = Callback,
-							Index = Index,
-							Original = Original,
-							Wrapper = Wrapper,
-						})
-						Patched = true
-					end
-
-					break
 				end
 			end
+
+			Visited += 1
+			if Visited % 200 == 0 then
+				task.wait()
+			end
+		end
+
+		if Generation == AudioState.ScanGeneration then
+			Environment.NotorietyAudioMigrateFromV5 = nil
+			Environment.NotorietyAudioMigrateFromV5Double = nil
+		end
+	end)
+end
+
+local function ensureSafeAudioWatchers()
+	if #AudioState.RootConnections > 0 then return end
+
+	for _, Root in getSafeAudioRoots() do
+		table.insert(AudioState.RootConnections, Root.DescendantAdded:Connect(function(Descendant)
+			if not Environment.NotorietyUnloaded and Descendant:IsA("Sound") then
+				task.defer(applyDirectAudioVolume, Descendant)
+			end
+		end))
+	end
+end
+
+local function setAudioGroups(Groups, Volume)
+	for _, Group in Groups or {} do
+		if Group.Parent then
+			Group.Volume = Volume
+		end
+	end
+end
+
+local function applyAudioVolumes()
+	if Environment.NotorietyUnloaded or AudioState.Applying then return end
+	AudioState.Applying = true
+	resolveAudioGroups()
+	ensureSafeAudioWatchers()
+
+	local Music = math.clamp(tonumber(Environment.NotorietyMusicVolume) or 100, 0, 100) / 100
+	local SFX = math.clamp(tonumber(Environment.NotorietySFXVolume) or 100, 0, 100) / 100
+	local LocalGunshots = math.clamp(tonumber(Environment.NotorietyLocalGunshotsVolume) or 100, 0, 100) / 100
+	local Gunshots = math.clamp(tonumber(Environment.NotorietyGunshotsVolume) or 100, 0, 100) / 100
+	local MapAmbience = math.clamp(tonumber(Environment.NotorietyMapAmbienceVolume) or 100, 0, 100) / 100
+	local Voices = math.clamp(tonumber(Environment.NotorietyVoicesVolume) or 100, 0, 100) / 100
+	local UI = math.clamp(tonumber(Environment.NotorietyUIVolume) or 100, 0, 100) / 100
+
+	setAudioGroups(AudioState.Groups.Music, Music)
+	setAudioGroups(AudioState.Groups.SFX, SFX)
+	setAudioGroups(AudioState.Groups.SFXSibling, SFX)
+	setAudioGroups(AudioState.Groups.LocalGunshots, LocalGunshots)
+	setAudioGroups(AudioState.Groups.Gunshots, Gunshots)
+	setAudioGroups(AudioState.Groups.MapAmbience, MapAmbience)
+	setAudioGroups(AudioState.Groups.Voices, Voices)
+	setAudioGroups(AudioState.Groups.UI, SFX * UI)
+
+	scanSafeAudioRoots()
+	AudioState.Applying = false
+end
+
+local function restoreAudioVolumes()
+	for _, Connection in AudioState.RootConnections do
+		pcall(function() Connection:Disconnect() end)
+	end
+	table.clear(AudioState.RootConnections)
+
+	for Sound, Volume in AudioState.DirectOriginalVolumes do
+		if typeof(Sound) == "Instance" and Sound.Parent ~= nil and type(Volume) == "number" then
+			pcall(function() Sound.Volume = Volume end)
 		end
 	end
 
-	return Patched
+	for Group, Volume in AudioState.OriginalVolumes do
+		if typeof(Group) == "Instance" and Group.Parent ~= nil then
+			pcall(function() Group.Volume = Volume end)
+		end
+	end
+
+	table.clear(AudioState.Groups)
+	AudioState.ScanGeneration += 1
+	AudioState.Applying = false
 end
+
 
 local YellPatchState = {
 	Module = nil,
@@ -2153,8 +2345,6 @@ local function setPoliceHeadScaleEnabled(Enabled)
 end
 
 if PoliceFolder then
-	applyPoliceHeadScale()
-
 	Environment.NotorietyPoliceHitboxConnection = PoliceFolder.DescendantAdded:Connect(
 		function(Object)
 			local NPC = getPoliceNPC(Object, PoliceFolder)
@@ -2253,6 +2443,9 @@ local WeaponState = {
 		__mode = "k",
 	}),
 	RuntimeAccuracyBackups = setmetatable({}, {
+		__mode = "k",
+	}),
+	RuntimeRecoilBackups = setmetatable({}, {
 		__mode = "k",
 	}),
 	RuntimeSpreadBackups = setmetatable({}, {
@@ -2448,7 +2641,10 @@ local function isInfiniteGunState(State, Data)
 end
 
 local function patchAmmoResult(Result, State)
-	if not Environment.NotorietyWeaponEnabled or type(Result) ~= "table" then
+	if not Environment.NotorietyWeaponEnabled
+		or not Environment.NotorietyInfiniteAmmoEnabled
+		or type(Result) ~= "table"
+	then
 		return Result
 	end
 
@@ -2569,30 +2765,49 @@ local function patchRuntimeWeaponState(State)
 	local Patched = applyWeaponData(Data)
 
 	if rawget(Data, "WeaponType") == "Gun" then
-		local DesiredAccuracy = math.clamp(tonumber(Environment.NotorietyAccuracy) or 100, 0, 100)
-		local DesiredSpread = 10000 - DesiredAccuracy * 100
+		if Environment.NotorietyAccuracyModEnabled then
+			local DesiredAccuracy = math.clamp(tonumber(Environment.NotorietyAccuracy) or 100, 0, 100)
+			local DesiredSpread = 10000 - DesiredAccuracy * 100
 
-		if type(rawget(State, "Accuracy")) == "number" then
-			if WeaponState.RuntimeAccuracyBackups[State] == nil then
-				WeaponState.RuntimeAccuracyBackups[State] = State.Accuracy
+			if type(rawget(State, "Accuracy")) == "number" then
+				if WeaponState.RuntimeAccuracyBackups[State] == nil then
+					WeaponState.RuntimeAccuracyBackups[State] = State.Accuracy
+				end
+
+				State.Accuracy = DesiredSpread
 			end
 
-			State.Accuracy = DesiredSpread
+			patchRuntimeWeaponSpread(State, DesiredSpread)
 		end
 
-		patchRuntimeWeaponSpread(State, DesiredSpread)
+		if Environment.NotorietyNoRecoilEnabled then
+			local RecoilBackup = WeaponState.RuntimeRecoilBackups[State]
+
+			if not RecoilBackup then
+				RecoilBackup = {}
+
+				for _, Key in { "ShakeMagnitude", "ShakeRoughness", "pushdist" } do
+					local Value = rawget(State, Key)
+					RecoilBackup[Key] = { Exists = Value ~= nil, Value = Value }
+				end
+
+				WeaponState.RuntimeRecoilBackups[State] = RecoilBackup
+			end
+
+			State.ShakeMagnitude = 0
+			State.ShakeRoughness = 0
+			State.pushdist = 0
+		end
+
+		WeaponState.RuntimeWeapons[State] = true
+	else
+		WeaponState.RuntimeWeapons[State] = nil
 	end
 
-	if not isInfiniteGunState(State, Data) then
+	if not isInfiniteGunState(State, Data) or not Environment.NotorietyInfiniteAmmoEnabled then
 		restoreAmmoWrapper(State)
-		WeaponState.RuntimeWeapons[State] = nil
 		return Patched
 	end
-
-	WeaponState.RuntimeWeapons[State] = true
-	State.ShakeMagnitude = 0
-	State.ShakeRoughness = 0
-	State.pushdist = 0
 
 	local Record = Environment.NotorietyGetAmmoWrappers[State]
 
@@ -2625,7 +2840,10 @@ local function patchRuntimeWeaponState(State)
 end
 
 local function refreshRuntimeFireTiming(State)
-	if not Environment.NotorietyWeaponEnabled or type(State) ~= "table" then
+	if not Environment.NotorietyWeaponEnabled
+		or not Environment.NotorietyRapidFireEnabled
+		or type(State) ~= "table"
+	then
 		return
 	end
 
@@ -2758,6 +2976,33 @@ local function restoreRuntimeWeaponAccuracy()
 	table.clear(WeaponState.RuntimeSpreadBackups)
 end
 
+local function restoreRuntimeWeaponRecoil()
+	for State, Backup in WeaponState.RuntimeRecoilBackups do
+		if type(State) == "table" and type(Backup) == "table" then
+			for Key, Field in Backup do
+				if type(Field) == "table" and Field.Exists then
+					State[Key] = Field.Value
+				else
+					State[Key] = nil
+				end
+			end
+		end
+	end
+
+	table.clear(WeaponState.RuntimeRecoilBackups)
+end
+
+local function restoreAllAmmoWrappers()
+	if type(Environment.NotorietyGetAmmoWrappers) ~= "table" then
+		return
+	end
+
+	local States = {}
+	for State in Environment.NotorietyGetAmmoWrappers do States[#States + 1] = State end
+	for _, State in States do restoreAmmoWrapper(State) end
+	table.clear(WeaponState.RuntimeWeapons)
+end
+
 applyWeaponData = function(Data)
 	if not Environment.NotorietyWeaponEnabled or type(Data) ~= "table" then
 		return false
@@ -2789,61 +3034,65 @@ applyWeaponData = function(Data)
 			captureField(Data, Backup, Key)
 		end
 
-		Data.FireDelay = tonumber(Environment.NotorietyFireDelay) or 0.01
-		Data.BoltDuration = tonumber(Environment.NotorietyBoltDuration) or 0.001
-		Data.BoltLock = false
+		if Environment.NotorietyRapidFireEnabled then
+			Data.FireDelay = tonumber(Environment.NotorietyFireDelay) or 0.01
+			Data.BoltDuration = tonumber(Environment.NotorietyBoltDuration) or 0.001
+			Data.BoltLock = false
+			patchGunSequences(Data, Backup)
 
-		if type(Data.Accuracy) == "number" then
+			if type(Data.ManualCasingEjection) == "boolean" then
+				Data.ManualCasingEjection = false
+			end
+		end
+
+		if Environment.NotorietyAccuracyModEnabled and type(Data.Accuracy) == "number" then
 			Data.Accuracy = math.clamp(tonumber(Environment.NotorietyAccuracy) or 100, 0, 100)
 		end
 
-		if StandardGun then
+		if Environment.NotorietyFullAutoEnabled and StandardGun then
 			Data.FireMode = "Auto"
 
 			if type(Data.FireModeList) ~= "table"
 				or Data.FireModeList[1] ~= "Auto"
 				or Data.FireModeList[2] ~= nil
 			then
-				Data.FireModeList = {
-					"Auto",
-				}
+				Data.FireModeList = { "Auto" }
 			end
 		end
 
-		local AmmoClass = Data.AmmoClass
-		local UsesInfiniteGunAmmo = AmmoClass == "Primary" or AmmoClass == "Secondary"
+		if Environment.NotorietyInfiniteAmmoEnabled then
+			local AmmoClass = Data.AmmoClass
+			local UsesInfiniteGunAmmo = AmmoClass == "Primary" or AmmoClass == "Secondary"
 
-		if UsesInfiniteGunAmmo then
-			Data.MagazineSize = MAX_VALUE
-			Data.AmmoMax = MAX_VALUE
+			if UsesInfiniteGunAmmo then
+				Data.MagazineSize = MAX_VALUE
+				Data.AmmoMax = MAX_VALUE
+			end
 		end
 
-		if type(Data.ManualCasingEjection) == "boolean" then
-			Data.ManualCasingEjection = false
-		end
+		if Environment.NotorietyNoRecoilEnabled then
+			zeroVectorPattern(Data.RecoilDirectionPattern, Backup)
+			zeroVectorPattern(Data.RecoilCameraDirectionPattern, Backup)
 
-		patchGunSequences(Data, Backup)
-		zeroVectorPattern(Data.RecoilDirectionPattern, Backup)
-		zeroVectorPattern(Data.RecoilCameraDirectionPattern, Backup)
+			if typeof(Data.RecoilCameraDirection) == "Vector2" then
+				Data.RecoilCameraDirection = Vector2.zero
+			end
 
-		if typeof(Data.RecoilCameraDirection) == "Vector2" then
-			Data.RecoilCameraDirection = Vector2.zero
-		end
+			if type(Data.MaxCameraRecoil) == "number" then
+				Data.MaxCameraRecoil = 0
+			end
 
-		if type(Data.MaxCameraRecoil) == "number" then
-			Data.MaxCameraRecoil = 0
-		end
+			if type(Data.ShakeMagnitude) == "number" then
+				Data.ShakeMagnitude = 0
+			end
 
-		if type(Data.ShakeMagnitude) == "number" then
-			Data.ShakeMagnitude = 0
-		end
+			if type(Data.ShakeRoughness) == "number" then
+				Data.ShakeRoughness = 0
+			end
 
-		if type(Data.ShakeRoughness) == "number" then
-			Data.ShakeRoughness = 0
-		end
-
-		if type(Data.PushBack) == "number" then
-			Data.PushBack = 0
+			if type(Data.PushBack) == "number" then
+				Data.PushBack = 0
+			end
 		end
 
 		return true
@@ -3135,13 +3384,22 @@ local function getEquippedGun()
 end
 
 local function Apply()
-	if not Environment.MaxEverythingEnabled then
-		return
-	end
-
 	local Character = LocalPlayer.Character
 
 	if not Character then
+		return
+	end
+
+	if Environment.NotorietyInfiniteEquipmentEnabled then
+		for _, Name in { "EquipmentLeft", "SecondEquipmentLeft" } do
+			local Value = Character:FindFirstChild(Name)
+			if Value and Value:IsA("ValueBase") and type(Value.Value) == "number" and Value.Value ~= MAX_VALUE then
+				Value.Value = MAX_VALUE
+			end
+		end
+	end
+
+	if not Environment.MaxEverythingEnabled then
 		return
 	end
 
@@ -3250,15 +3508,20 @@ local function applyAllWeaponModifications()
 	patchLoadedWeaponTables()
 end
 
-local function setWeaponModificationsEnabled(Enabled)
-	Environment.NotorietyWeaponEnabled = Enabled == true
+local function refreshWeaponModifications()
+	restoreAllWeaponData()
+	restoreRuntimeWeaponAccuracy()
+	restoreRuntimeWeaponRecoil()
+	restoreAllAmmoWrappers()
 
 	if Environment.NotorietyWeaponEnabled then
 		applyAllWeaponModifications()
-	else
-		restoreAllWeaponData()
-		restoreRuntimeWeaponAccuracy()
 	end
+end
+
+local function setWeaponModificationsEnabled(Enabled)
+	Environment.NotorietyWeaponEnabled = Enabled == true
+	refreshWeaponModifications()
 end
 
 local ItemESPColors = {
@@ -3279,7 +3542,13 @@ local ItemESPState = {
 	Tracked = setmetatable({}, {
 		__mode = "k",
 	}),
+	Refresh = 0,
 }
+
+local function isItemESPCategoryEnabled(Category)
+	local Categories = Environment.NotorietyItemESPCategories
+	return type(Categories) ~= "table" or Categories[Category] ~= false
+end
 
 local function containsItemESPWord(Text, Words)
 	Text = string.lower(Text)
@@ -3520,11 +3789,28 @@ local function removeItemESPObject(Object)
 		end)
 	end
 
+	if Entry.Label then
+		pcall(function()
+			Entry.Label:Destroy()
+		end)
+	end
+
 	ItemESPState.Tracked[Object] = nil
 end
 
+local function resolveESPMaxDistance(Value, DefaultValue)
+	local Distance = tonumber(Value)
+
+	if Distance == nil or Distance ~= Distance or Distance == math.huge or Distance == -math.huge then
+		Distance = DefaultValue or 2500
+	end
+
+	Distance = math.clamp(Distance, 0, 10000)
+	return Distance <= 0 and math.huge or Distance
+end
+
 local function addItemESPObject(Category, Object)
-	if not Category or not Object then
+	if not Category or not Object or not isItemESPCategoryEnabled(Category) then
 		return
 	end
 
@@ -3558,10 +3844,40 @@ local function addItemESPObject(Category, Object)
 	Box.Size = Size
 	Box.CFrame = BoxCFrame
 	Box.Color3 = Color
-	Box.Transparency = 0.55
+	Box.Transparency = math.clamp((tonumber(Environment.NotorietyItemESPTransparency) or 55) / 100, 0, 1)
 	Box.AlwaysOnTop = true
 	Box.ZIndex = 10
 	Box.Parent = Folder
+
+	local Label
+
+	if Environment.NotorietyItemESPLabels then
+		Label = ServiceResolver.ns("BillboardGui")
+
+		if Label then
+			Label.Name = Category .. "_Label"
+			Label.Adornee = Adornee
+			Label.AlwaysOnTop = true
+			Label.Size = UDim2.fromOffset(220, 30)
+			Label.StudsOffsetWorldSpace = Vector3.new(0, math.max(Size.Y * 0.5 + 1, 2), 0)
+			Label.MaxDistance = resolveESPMaxDistance(Environment.NotorietyItemESPMaxDistance, 2500)
+			Label.Parent = Folder
+
+			local Text = ServiceResolver.ns("TextLabel")
+
+			if Text then
+				Text.BackgroundTransparency = 1
+				Text.Size = UDim2.fromScale(1, 1)
+				Text.Text = string.format("%s • %s", Category, Object.Name)
+				Text.TextColor3 = Color
+				Text.TextStrokeTransparency = 0.2
+				Text.TextScaled = false
+				Text.TextSize = 14
+				Text.Font = Enum.Font.GothamSemibold
+				Text.Parent = Label
+			end
+		end
+	end
 
 	local AncestryConnection
 
@@ -3571,13 +3887,43 @@ local function addItemESPObject(Category, Object)
 		end
 	end)
 
-	local Entry = {
+	ItemESPState.Tracked[Object] = {
 		Category = Category,
+		Adornee = Adornee,
 		Box = Box,
+		Label = Label,
 		Connection = AncestryConnection,
 	}
+end
 
-	ItemESPState.Tracked[Object] = Entry
+local function updateItemESPVisibility()
+	local Character = LocalPlayer.Character
+	local Root = Character and Character:FindFirstChild("HumanoidRootPart")
+	local MaxDistance = resolveESPMaxDistance(Environment.NotorietyItemESPMaxDistance, 2500)
+	local Transparency = math.clamp((tonumber(Environment.NotorietyItemESPTransparency) or 55) / 100, 0, 1)
+
+	for Object, Entry in ItemESPState.Tracked do
+		local Adornee = Entry.Adornee
+		local Visible = isItemESPCategoryEnabled(Entry.Category)
+
+		if Visible and Root and typeof(Adornee) == "Instance" and Adornee:IsA("BasePart") then
+			Visible = (Root.Position - Adornee.Position).Magnitude <= MaxDistance
+		end
+
+		if Entry.Box then
+			Entry.Box.Visible = Visible
+			Entry.Box.Transparency = Transparency
+		end
+
+		if Entry.Label then
+			Entry.Label.Enabled = Visible and Environment.NotorietyESPTextEnabled and Environment.NotorietyItemESPLabels
+			Entry.Label.MaxDistance = MaxDistance
+		end
+
+		if not Object.Parent then
+			removeItemESPObject(Object)
+		end
+	end
 end
 
 local function inspectItemESPPrompt(Prompt)
@@ -3635,6 +3981,10 @@ local function stopItemESP()
 	end
 end
 
+local function resolveESPParent()
+	return resolveProtectedUIParent() or LocalPlayer:FindFirstChildOfClass("PlayerGui")
+end
+
 local function startItemESP()
 	stopItemESP()
 
@@ -3651,17 +4001,7 @@ local function startItemESP()
 
 	Folder.Name = "NotorietyItemESP"
 	Folder.Archivable = false
-	local Parent
-
-	if type(gethui) == "function" then
-		local ParentSuccess, HiddenUI = pcall(gethui)
-
-		if ParentSuccess and typeof(HiddenUI) == "Instance" then
-			Parent = HiddenUI
-		end
-	end
-
-	Parent = Parent or LocalPlayer:FindFirstChildOfClass("PlayerGui")
+	local Parent = resolveESPParent()
 	local ParentSuccess = typeof(Parent) == "Instance" and pcall(function()
 		Folder.Parent = Parent
 	end)
@@ -3706,6 +4046,463 @@ function ItemESPController.Cleanup()
 end
 
 Environment.NotorietyItemESPController = ItemESPController
+
+local PoliceESPState = {
+	Folder = nil,
+	Connections = {},
+	Tracked = setmetatable({}, { __mode = "k" }),
+	Refresh = 0,
+}
+
+local function removePoliceESP(Model)
+	local Entry = PoliceESPState.Tracked[Model]
+
+	if not Entry then
+		return
+	end
+
+	for _, Connection in Entry.Connections or {} do
+		pcall(function() Connection:Disconnect() end)
+	end
+
+	for _, InstanceObject in { Entry.Highlight, Entry.Label } do
+		if InstanceObject then
+			pcall(function() InstanceObject:Destroy() end)
+		end
+	end
+
+	PoliceESPState.Tracked[Model] = nil
+end
+
+local function addPoliceESP(Model)
+	if not Environment.NotorietyPoliceESPEnabled
+		or typeof(Model) ~= "Instance"
+		or not Model:IsA("Model")
+		or PoliceESPState.Tracked[Model]
+	then
+		return
+	end
+
+	local Humanoid = Model:FindFirstChildWhichIsA("Humanoid", true)
+	local Head = Model:FindFirstChild("Head", true)
+	local Root = Model:FindFirstChild("HumanoidRootPart", true) or Head
+
+	if not Humanoid or not Root or not Root:IsA("BasePart") then
+		return
+	end
+
+	local Folder = PoliceESPState.Folder
+
+	if not Folder then
+		return
+	end
+
+	local Highlight = ServiceResolver.ns("Highlight")
+	local Label = ServiceResolver.ns("BillboardGui")
+	local Connections = {}
+
+	if Highlight then
+		Highlight.Name = "PoliceHighlight"
+		Highlight.Adornee = Model
+		Highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+		Highlight.FillColor = Color3.fromRGB(255, 70, 70)
+		Highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+		Highlight.FillTransparency = 0.72
+		Highlight.OutlineTransparency = 0.05
+		Highlight.Parent = Folder
+	end
+
+	local Text
+
+	if Label then
+		Label.Name = "PoliceLabel"
+		Label.Adornee = Head or Root
+		Label.AlwaysOnTop = true
+		Label.Size = UDim2.fromOffset(220, 34)
+		Label.StudsOffsetWorldSpace = Vector3.new(0, 2.5, 0)
+		Label.MaxDistance = resolveESPMaxDistance(Environment.NotorietyPoliceESPMaxDistance, 2500)
+		Label.Parent = Folder
+
+		Text = ServiceResolver.ns("TextLabel")
+
+		if Text then
+			Text.BackgroundTransparency = 1
+			Text.Size = UDim2.fromScale(1, 1)
+			Text.TextColor3 = Color3.fromRGB(255, 90, 90)
+			Text.TextStrokeTransparency = 0.2
+			Text.TextSize = 14
+			Text.Font = Enum.Font.GothamSemibold
+			Text.Parent = Label
+		end
+	end
+
+	local function refreshText()
+		if not Text then
+			return
+		end
+
+		local Parts = {}
+
+		if Environment.NotorietyPoliceESPNames then
+			Parts[#Parts + 1] = Model.Name
+		end
+
+		if Environment.NotorietyPoliceESPHealth then
+			Parts[#Parts + 1] = string.format("%d HP", math.max(math.floor(Humanoid.Health + 0.5), 0))
+		end
+
+		Text.Text = table.concat(Parts, " • ")
+		Label.Enabled = Environment.NotorietyESPTextEnabled and #Parts > 0
+	end
+
+	Connections[#Connections + 1] = Humanoid.HealthChanged:Connect(refreshText)
+	Connections[#Connections + 1] = Model.AncestryChanged:Connect(function(_, Parent)
+		if not Parent then removePoliceESP(Model) end
+	end)
+
+	PoliceESPState.Tracked[Model] = {
+		Humanoid = Humanoid,
+		Root = Root,
+		Highlight = Highlight,
+		Label = Label,
+		Text = Text,
+		Connections = Connections,
+		RefreshText = refreshText,
+	}
+
+	refreshText()
+end
+
+local function stopPoliceESP()
+	for _, Connection in PoliceESPState.Connections do
+		pcall(function() Connection:Disconnect() end)
+	end
+	table.clear(PoliceESPState.Connections)
+
+	local Models = {}
+	for Model in PoliceESPState.Tracked do Models[#Models + 1] = Model end
+	for _, Model in Models do removePoliceESP(Model) end
+
+	if PoliceESPState.Folder then
+		pcall(function() PoliceESPState.Folder:Destroy() end)
+	end
+
+	PoliceESPState.Folder = nil
+end
+
+local function startPoliceESP()
+	stopPoliceESP()
+
+	local PoliceFolder = Workspace:FindFirstChild("Police")
+
+	if not PoliceFolder then
+		return false
+	end
+
+	local Folder = ServiceResolver.ns("Folder")
+	if not Folder then return false end
+	Folder.Name = "NotorietyPoliceESP"
+	Folder.Archivable = false
+
+	local Parent = resolveESPParent()
+	local ParentSuccess = typeof(Parent) == "Instance" and pcall(function()
+		Folder.Parent = Parent
+	end)
+
+	if not ParentSuccess then
+		pcall(function()
+			Folder:Destroy()
+		end)
+		return false
+	end
+
+	PoliceESPState.Folder = Folder
+
+	for _, Model in PoliceFolder:GetChildren() do addPoliceESP(Model) end
+	PoliceESPState.Connections[#PoliceESPState.Connections + 1] = PoliceFolder.ChildAdded:Connect(function(Model)
+		task.defer(addPoliceESP, Model)
+	end)
+	return true
+end
+
+local function updatePoliceESP()
+	if not Environment.NotorietyPoliceESPEnabled then return end
+
+	local Character = LocalPlayer.Character
+	local LocalRoot = Character and Character:FindFirstChild("HumanoidRootPart")
+	local MaxDistance = resolveESPMaxDistance(Environment.NotorietyPoliceESPMaxDistance, 2500)
+
+	for Model, Entry in PoliceESPState.Tracked do
+		local Visible = Model.Parent ~= nil
+
+		if Visible and LocalRoot and Entry.Root and Entry.Root.Parent then
+			Visible = (LocalRoot.Position - Entry.Root.Position).Magnitude <= MaxDistance
+		end
+
+		if Entry.Highlight then Entry.Highlight.Enabled = Visible end
+		if Entry.Label then
+			Entry.Label.MaxDistance = MaxDistance
+			Entry.RefreshText()
+			Entry.Label.Enabled = Visible and Entry.Label.Enabled
+		end
+	end
+end
+
+local function setPoliceESPEnabled(Enabled)
+	Environment.NotorietyPoliceESPEnabled = Enabled == true
+	if Environment.NotorietyPoliceESPEnabled then
+		if not startPoliceESP() then Environment.NotorietyPoliceESPEnabled = false end
+	else
+		stopPoliceESP()
+	end
+end
+
+local function refreshPoliceESP()
+	if Environment.NotorietyPoliceESPEnabled then startPoliceESP() end
+end
+
+local MusicOverrideState = {
+	MusicInfo = nil,
+	Tracks = { "Game Selection" },
+	Folder = nil,
+	LastAppliedTrack = nil,
+	PlaySoundtrackFunction = nil,
+	OriginalPlaySoundtrack = nil,
+	WrappedPlaySoundtrack = nil,
+	HookInstalled = false,
+	Refresh = 0,
+}
+
+local function initializeMusicOverride()
+	local ReplicatedScripts = RS_Package:FindFirstChild("ReplicatedScripts")
+	local MusicInfoModule = ReplicatedScripts and ReplicatedScripts:FindFirstChild("MusicInfo")
+
+	if not MusicInfoModule then return end
+
+	local Success, MusicInfo = pcall(require, MusicInfoModule)
+	if not Success or type(MusicInfo) ~= "table" then return end
+	MusicOverrideState.MusicInfo = MusicInfo
+
+	local Keys
+	if type(MusicInfo.GetKeys) == "function" then
+		local KeysSuccess, Result = pcall(MusicInfo.GetKeys, MusicInfo)
+		if not KeysSuccess then KeysSuccess, Result = pcall(MusicInfo.GetKeys) end
+		if KeysSuccess and type(Result) == "table" then Keys = Result end
+	end
+
+	if not Keys and type(MusicInfo.Soundtracks) == "table" then
+		Keys = {}
+		for Name, Data in MusicInfo.Soundtracks do
+			if type(Name) == "string" and (type(Data) ~= "table" or Data.Enabled ~= false) then Keys[#Keys + 1] = Name end
+		end
+		table.sort(Keys)
+	end
+
+	if Keys then
+		for _, Name in Keys do
+			if Name ~= "Off" then MusicOverrideState.Tracks[#MusicOverrideState.Tracks + 1] = Name end
+		end
+	end
+end
+
+local function getMusicFolder()
+	local PlayerScripts = LocalPlayer:FindFirstChild("PlayerScripts")
+	local SPSPackage = PlayerScripts and PlayerScripts:FindFirstChild("SPS_Package")
+	local Music = SPSPackage and SPSPackage:FindFirstChild("Music")
+	if Music then MusicOverrideState.Folder = Music end
+	return Music
+end
+
+local function getMusicTrackEntryValue(Entry)
+	if typeof(Entry) == "table" then
+		return Entry.SoundId or Entry.ModFilePath, Entry.ModFilePath
+	end
+	return Entry, nil
+end
+
+local function isMusicTrackSelectionApplied(Track, Music)
+	local MusicInfo = MusicOverrideState.MusicInfo
+	local Soundtracks = MusicInfo and MusicInfo.Soundtracks
+	local TrackData = Soundtracks and Soundtracks[Track]
+
+	if type(TrackData) ~= "table" then
+		return false
+	end
+
+	local Checked = false
+	for Name, Entry in TrackData do
+		local Sound = Music:FindFirstChild(Name)
+		if Sound and Sound:IsA("Sound") then
+			local Expected, ModFilePath = getMusicTrackEntryValue(Entry)
+			if type(Expected) == "string" then
+				Checked = true
+				if ModFilePath then
+					if Sound:GetAttribute("MOD_FilePath") ~= ModFilePath then return false end
+				elseif Sound.SoundId ~= Expected then
+					return false
+				end
+			end
+		end
+	end
+
+	return Checked
+end
+
+local function applyMusicTrackSelection(Force)
+	local Music = getMusicFolder()
+	if not Music then return false end
+
+	local Track = tostring(Environment.NotorietyMusicTrack or "Game Selection")
+
+	if Track == "Game Selection" then
+		MusicOverrideState.LastAppliedTrack = nil
+		return true
+	end
+
+	if not Force
+		and MusicOverrideState.LastAppliedTrack == Track
+		and isMusicTrackSelectionApplied(Track, Music)
+	then
+		return true
+	end
+
+	local Finalize = Music:FindFirstChild("FinalizeSoundtrack")
+	if not Finalize or not Finalize:IsA("BindableEvent") then return false end
+	Finalize:Fire(Track)
+	MusicOverrideState.LastAppliedTrack = Track
+	return true
+end
+
+local function getNativeMusicMode()
+	local Status = RS_Package:FindFirstChild("ReplicatedGameStatus")
+	if not Status then return "Stealth" end
+	local Assault = Status:FindFirstChild("PoliceAssault")
+	local Anticipate = Status:FindFirstChild("Anticipate")
+	local Caught = Status:FindFirstChild("Caught")
+	if Assault and Assault.Value then return "Assault" end
+	if Anticipate and Anticipate.Value then return "Anticipation" end
+	if Caught and Caught.Value then return "Control" end
+	return "Stealth"
+end
+
+local function getForcedNativeMusicMode()
+	local RequestedMode = tostring(Environment.NotorietyMusicMode or "Follow Game")
+	local ModeMap = {
+		Stealth = "Stealth",
+		Control = "Control",
+		["Build Up"] = "Anticipation",
+		Loud = "Assault",
+	}
+	return ModeMap[RequestedMode]
+end
+
+local function remapMusicModeRequest(Mode)
+	local ForcedMode = getForcedNativeMusicMode()
+	if not ForcedMode or type(Mode) ~= "string" then return Mode end
+
+	if Mode == "Stealth" or Mode == "Control" or Mode == "Anticipation" or Mode == "Assault" then
+		return ForcedMode
+	end
+
+	return Mode
+end
+
+local function findGamePlaySoundtrackFunction()
+	if type(MusicOverrideState.PlaySoundtrackFunction) == "function" then
+		return MusicOverrideState.PlaySoundtrackFunction
+	end
+
+	if type(getgc) ~= "function" or type(debug) ~= "table" or type(debug.getinfo) ~= "function" then
+		return nil
+	end
+
+	local SourceSuffix = "Players." .. LocalPlayer.Name .. ".PlayerScripts.SPS_Package.Music.RunMusic"
+
+	for _, Function in getgc(true) do
+		if type(Function) == "function" then
+			local Success, Info = pcall(debug.getinfo, Function)
+			if Success
+				and type(Info) == "table"
+				and Info.name == "play_soundtrack"
+				and tostring(Info.source):find(SourceSuffix, 1, true)
+			then
+				MusicOverrideState.PlaySoundtrackFunction = Function
+				return Function
+			end
+		end
+	end
+end
+
+local function installMusicModeHook()
+	if MusicOverrideState.HookInstalled
+		and type(MusicOverrideState.OriginalPlaySoundtrack) == "function"
+	then
+		return true
+	end
+
+	if type(hookfunction) ~= "function" then return false end
+	local Target = findGamePlaySoundtrackFunction()
+	if type(Target) ~= "function" then return false end
+
+	local Original
+	local function Wrapped(Mode, ...)
+		return Original(remapMusicModeRequest(Mode), ...)
+	end
+
+	local Success, Result = pcall(hookfunction, Target, Wrapped)
+	if not Success or type(Result) ~= "function" then return false end
+
+	Original = Result
+	MusicOverrideState.OriginalPlaySoundtrack = Result
+	MusicOverrideState.WrappedPlaySoundtrack = Wrapped
+	MusicOverrideState.HookInstalled = true
+	return true
+end
+
+local function applyMusicModeOverride()
+	applyMusicTrackSelection(false)
+	if not installMusicModeHook() then return false end
+
+	local Original = MusicOverrideState.OriginalPlaySoundtrack
+	if type(Original) ~= "function" then return false end
+
+	local RequestedMode = tostring(Environment.NotorietyMusicMode or "Follow Game")
+	local TargetMode = RequestedMode == "Follow Game" and getNativeMusicMode() or getForcedNativeMusicMode()
+	if not TargetMode then return false end
+
+	task.spawn(function()
+		pcall(Original, TargetMode)
+	end)
+	return true
+end
+
+local function restoreNativeMusicMode()
+	if not installMusicModeHook() then return end
+	local Original = MusicOverrideState.OriginalPlaySoundtrack
+	if type(Original) == "function" then
+		local NativeMode = getNativeMusicMode()
+		task.spawn(function()
+			pcall(Original, NativeMode)
+		end)
+	end
+end
+
+local function restoreMusicModeHook()
+	if MusicOverrideState.HookInstalled
+		and type(hookfunction) == "function"
+		and type(MusicOverrideState.PlaySoundtrackFunction) == "function"
+		and type(MusicOverrideState.OriginalPlaySoundtrack) == "function"
+	then
+		pcall(hookfunction, MusicOverrideState.PlaySoundtrackFunction, MusicOverrideState.OriginalPlaySoundtrack)
+	end
+
+	MusicOverrideState.PlaySoundtrackFunction = nil
+	MusicOverrideState.OriginalPlaySoundtrack = nil
+	MusicOverrideState.WrappedPlaySoundtrack = nil
+	MusicOverrideState.HookInstalled = false
+end
+
+initializeMusicOverride()
 
 local function createVibeUI()
 	local UIAdapter = NotorietyUI.Library
@@ -3777,6 +4574,18 @@ local function createVibeUI()
 		Title = "Main",
 		Icon = "house",
 		Border = true,
+	})
+
+	MainTab:Toggle({
+		Flag = "MaxEverything",
+		Title = "Max Everything",
+		Desc = "Keeps supported character values and finite supplies maxed",
+		Value = Environment.MaxEverythingEnabled,
+		Callback = function(Enabled)
+			Environment.MaxEverythingEnabled = Enabled == true
+			if Environment.MaxEverythingEnabled then Apply() end
+			requestVibeUIConfigSave()
+		end,
 	})
 
 	MainTab:Button({
@@ -3907,13 +4716,135 @@ local function createVibeUI()
 		end,
 	})
 
-	MainTab:Toggle({
+	local ESPTab = Window:Tab({
+		Title = "ESP",
+		Icon = "eye",
+		Border = true,
+	})
+
+	ESPTab:Toggle({
+		Flag = "ESPText",
+		Title = "ESP Text",
+		Desc = "Master text switch. Disable this for box/highlight-only ESP",
+		Value = Environment.NotorietyESPTextEnabled,
+		Callback = function(Enabled)
+			Environment.NotorietyESPTextEnabled = Enabled == true
+			updateItemESPVisibility()
+			updatePoliceESP()
+			requestVibeUIConfigSave()
+		end,
+	})
+
+	ESPTab:Toggle({
 		Flag = "ItemESP",
-		Title = "Item ESP",
-		Desc = "Highlights supported loot and interaction objects",
+		Title = "Item / Interaction ESP",
+		Desc = "Highlights supported loot, keys, access objects, cameras, containers, and escape points",
 		Value = Environment.NotorietyItemESPEnabled,
 		Callback = function(Enabled)
 			setItemESPEnabled(Enabled)
+			requestVibeUIConfigSave()
+		end,
+	})
+
+	ESPTab:Toggle({
+		Flag = "ItemESPLabels",
+		Title = "Item ESP Text Details",
+		Desc = "Controls item names/category text when the master ESP Text toggle is enabled",
+		Value = Environment.NotorietyItemESPLabels,
+		Callback = function(Enabled)
+			Environment.NotorietyItemESPLabels = Enabled == true
+			if Environment.NotorietyItemESPEnabled and not NotorietyUI.ConfigLoading then startItemESP() end
+			requestVibeUIConfigSave()
+		end,
+	})
+
+	NotorietyUI.ItemESPTransparencySlider = ESPTab:Slider({
+		Flag = "ItemESPTransparency",
+		Title = "Item Box Transparency",
+		Desc = "0 = solid, 100 = invisible",
+		Min = 0, Max = 100, Step = 1, Suffix = "%",
+		Value = Environment.NotorietyItemESPTransparency,
+		Callback = function(Value)
+			Environment.NotorietyItemESPTransparency = math.clamp(tonumber(Value) or 55, 0, 100)
+			updateItemESPVisibility()
+			requestVibeUIConfigSave()
+		end,
+	})
+
+	NotorietyUI.ItemESPDistanceSlider = ESPTab:Slider({
+		Flag = "ItemESPDistance",
+		Title = "Item ESP Distance",
+		Desc = "Maximum display distance. 0 = infinite",
+		Min = 0, Max = 10000, Step = 50, Suffix = " studs",
+		Value = Environment.NotorietyItemESPMaxDistance,
+		Callback = function(Value)
+			Environment.NotorietyItemESPMaxDistance = math.clamp(tonumber(Value) or 2500, 0, 10000)
+			updateItemESPVisibility()
+			requestVibeUIConfigSave()
+		end,
+	})
+
+	local CategoryTitles = {
+		LOOT = "Loot", ITEM = "Tools / Items", KEY = "Keys / Passes", CONTAINER = "Containers",
+		CAMERA = "Cameras", SECURITY = "Security Systems", ACCESS = "Access Objects", ESCAPE = "Escape / Secure",
+	}
+
+	for _, Category in { "LOOT", "ITEM", "KEY", "CONTAINER", "CAMERA", "SECURITY", "ACCESS", "ESCAPE" } do
+		ESPTab:Toggle({
+			Flag = "ItemESP_" .. Category,
+			Title = "Show " .. CategoryTitles[Category],
+			Desc = "Include this category in Item ESP",
+			Value = Environment.NotorietyItemESPCategories[Category] ~= false,
+			Callback = function(Enabled)
+				Environment.NotorietyItemESPCategories[Category] = Enabled == true
+				if Environment.NotorietyItemESPEnabled and not NotorietyUI.ConfigLoading then startItemESP() end
+				requestVibeUIConfigSave()
+			end,
+		})
+	end
+
+	ESPTab:Toggle({
+		Flag = "PoliceESP",
+		Title = "Police ESP",
+		Desc = "Highlights spawned police through walls",
+		Value = Environment.NotorietyPoliceESPEnabled,
+		Callback = function(Enabled)
+			setPoliceESPEnabled(Enabled)
+			requestVibeUIConfigSave()
+		end,
+	})
+
+	ESPTab:Toggle({
+		Flag = "PoliceESPNames",
+		Title = "Police Names",
+		Value = Environment.NotorietyPoliceESPNames,
+		Callback = function(Enabled)
+			Environment.NotorietyPoliceESPNames = Enabled == true
+			if not NotorietyUI.ConfigLoading then refreshPoliceESP() end
+			requestVibeUIConfigSave()
+		end,
+	})
+
+	ESPTab:Toggle({
+		Flag = "PoliceESPHealth",
+		Title = "Police Health",
+		Value = Environment.NotorietyPoliceESPHealth,
+		Callback = function(Enabled)
+			Environment.NotorietyPoliceESPHealth = Enabled == true
+			if not NotorietyUI.ConfigLoading then refreshPoliceESP() end
+			requestVibeUIConfigSave()
+		end,
+	})
+
+	NotorietyUI.PoliceESPDistanceSlider = ESPTab:Slider({
+		Flag = "PoliceESPDistance",
+		Title = "Police ESP Distance",
+		Desc = "Maximum display distance. 0 = infinite",
+		Min = 0, Max = 10000, Step = 50, Suffix = " studs",
+		Value = Environment.NotorietyPoliceESPMaxDistance,
+		Callback = function(Value)
+			Environment.NotorietyPoliceESPMaxDistance = math.clamp(tonumber(Value) or 2500, 0, 10000)
+			updatePoliceESP()
 			requestVibeUIConfigSave()
 		end,
 	})
@@ -3927,13 +4858,33 @@ local function createVibeUI()
 	WeaponTab:Toggle({
 		Flag = "WeaponMods",
 		Title = "Weapon Mods",
-		Desc = "Enables the weapon stat and runtime modifications",
+		Desc = "Master switch for the weapon modifications below",
 		Value = Environment.NotorietyWeaponEnabled,
 		Callback = function(Enabled)
 			setWeaponModificationsEnabled(Enabled)
 			requestVibeUIConfigSave()
 		end,
 	})
+
+	local function addWeaponFeatureToggle(Flag, Title, Desc, EnvironmentKey)
+		WeaponTab:Toggle({
+			Flag = Flag,
+			Title = Title,
+			Desc = Desc,
+			Value = Environment[EnvironmentKey] == true,
+			Callback = function(Enabled)
+				Environment[EnvironmentKey] = Enabled == true
+				if not NotorietyUI.ConfigLoading then refreshWeaponModifications() end
+				requestVibeUIConfigSave()
+			end,
+		})
+	end
+
+	addWeaponFeatureToggle("RapidFire", "Rapid Fire", "Applies custom fire delay and bolt duration", "NotorietyRapidFireEnabled")
+	addWeaponFeatureToggle("NoRecoil", "No Recoil", "Removes recoil, camera kick, shake, and pushback", "NotorietyNoRecoilEnabled")
+	addWeaponFeatureToggle("InfiniteAmmo", "Infinite Ammo", "Keeps primary/secondary magazine and reserve ammo effectively infinite", "NotorietyInfiniteAmmoEnabled")
+	addWeaponFeatureToggle("FullAuto", "Force Full Auto", "Forces supported guns into automatic fire mode", "NotorietyFullAutoEnabled")
+	addWeaponFeatureToggle("AccuracyMod", "Accuracy Override", "Enables the custom accuracy slider independently of recoil", "NotorietyAccuracyModEnabled")
 
 	NotorietyUI.FireDelaySlider = WeaponTab:Slider({
 		Flag = "FireDelay",
@@ -3953,8 +4904,8 @@ local function createVibeUI()
 
 			Environment.NotorietyFireDelay = Number
 
-			if Environment.NotorietyWeaponEnabled then
-				applyAllWeaponModifications()
+			if Environment.NotorietyWeaponEnabled and not NotorietyUI.ConfigLoading then
+				refreshWeaponModifications()
 			end
 
 			requestVibeUIConfigSave()
@@ -3979,8 +4930,8 @@ local function createVibeUI()
 
 			Environment.NotorietyBoltDuration = Number
 
-			if Environment.NotorietyWeaponEnabled then
-				applyAllWeaponModifications()
+			if Environment.NotorietyWeaponEnabled and not NotorietyUI.ConfigLoading then
+				refreshWeaponModifications()
 			end
 
 			requestVibeUIConfigSave()
@@ -4006,8 +4957,8 @@ local function createVibeUI()
 			Number = math.clamp(Number, 0, 100)
 			Environment.NotorietyAccuracy = Number
 
-			if Environment.NotorietyWeaponEnabled then
-				applyAllWeaponModifications()
+			if Environment.NotorietyWeaponEnabled and not NotorietyUI.ConfigLoading then
+				refreshWeaponModifications()
 			end
 
 			requestVibeUIConfigSave()
@@ -4033,8 +4984,8 @@ local function createVibeUI()
 				NotorietyUI.AccuracySlider:Set(100)
 			end)
 
-			if Environment.NotorietyWeaponEnabled then
-				applyAllWeaponModifications()
+			if Environment.NotorietyWeaponEnabled and not NotorietyUI.ConfigLoading then
+				refreshWeaponModifications()
 			end
 
 			requestVibeUIConfigSave()
@@ -4045,6 +4996,43 @@ local function createVibeUI()
 		Title = "Audio",
 		Icon = "volume-2",
 		Border = true,
+	})
+
+	AudioTab:Dropdown({
+		Flag = "MusicTrack",
+		Title = "Soundtrack",
+		Desc = "Game Selection follows the game's chosen track; selecting another track changes only your local soundtrack",
+		Values = MusicOverrideState.Tracks,
+		Value = table.find(MusicOverrideState.Tracks, Environment.NotorietyMusicTrack) and Environment.NotorietyMusicTrack or "Game Selection",
+		Callback = function(Value)
+			Environment.NotorietyMusicTrack = tostring(Value or "Game Selection")
+			MusicOverrideState.LastAppliedTrack = nil
+			if not NotorietyUI.ConfigLoading then
+				applyMusicTrackSelection(true)
+				applyMusicModeOverride()
+			end
+			requestVibeUIConfigSave()
+		end,
+	})
+
+	AudioTab:Dropdown({
+		Flag = "MusicMode",
+		Title = "Force Music Mode",
+		Desc = "Changes only the local soundtrack layer. Example: Loud music can play while the actual heist remains in Stealth",
+		Values = { "Follow Game", "Stealth", "Control", "Build Up", "Loud" },
+		Value = Environment.NotorietyMusicMode,
+		Callback = function(Value)
+			local Previous = Environment.NotorietyMusicMode
+			Environment.NotorietyMusicMode = tostring(Value or "Follow Game")
+			if not NotorietyUI.ConfigLoading then
+				if Environment.NotorietyMusicMode == "Follow Game" and Previous ~= "Follow Game" then
+					restoreNativeMusicMode()
+				else
+					applyMusicModeOverride()
+				end
+			end
+			requestVibeUIConfigSave()
+		end,
 	})
 
 	local function addAudioSlider(Flag, Title, Desc, EnvironmentKey)
@@ -4092,25 +5080,25 @@ local function createVibeUI()
 	NotorietyUI.SFXVolumeSlider = addAudioSlider(
 		"SFXVolume",
 		"All SFX",
-		"Master game SFX group. This also scales gunshots and map ambience",
+		"Master multiplier for grouped and ungrouped runtime SFX",
 		"NotorietySFXVolume"
 	)
 	NotorietyUI.MapAmbienceVolumeSlider = addAudioSlider(
 		"MapAmbienceVolume",
 		"Map Ambience",
-		"Environmental/map ambience",
+		"Environmental map loops, including ungrouped map sounds",
 		"NotorietyMapAmbienceVolume"
 	)
 	NotorietyUI.VoicesVolumeSlider = addAudioSlider(
 		"VoicesVolume",
 		"Voices",
-		"Character/police voice audio",
+		"Character, narrator, and police voice audio",
 		"NotorietyVoicesVolume"
 	)
 	NotorietyUI.UIVolumeSlider = addAudioSlider(
 		"UIVolume",
 		"UI Sounds",
-		"Interface sound effects",
+		"PlayerGui/interface sounds; also follows the All SFX master",
 		"NotorietyUIVolume"
 	)
 
@@ -4155,10 +5143,22 @@ local function createVibeUI()
 	EquipmentTab:Toggle({
 		Flag = "EquipmentSpeedEnabled",
 		Title = "Equipment Placement Speed",
-		Desc = "Speeds up the real 0% to 100% equipment placement timer",
+		Desc = "Uses the game\'s native equipment keybind/hold behavior with the selected speed multiplier",
 		Value = Environment.NotorietyEquipmentSpeedEnabled,
 		Callback = function(Enabled)
 			Environment.NotorietyEquipmentSpeedEnabled = Enabled == true
+			applyEquipmentPlacementSpeed()
+			requestVibeUIConfigSave()
+		end,
+	})
+
+	EquipmentTab:Toggle({
+		Flag = "EquipmentInstantEnabled",
+		Title = "Instant Equipment Placement",
+		Desc = "Keeps the game\'s native 0.5s hold delay, then completes placement immediately",
+		Value = Environment.NotorietyEquipmentInstantEnabled,
+		Callback = function(Enabled)
+			Environment.NotorietyEquipmentInstantEnabled = Enabled == true
 			applyEquipmentPlacementSpeed()
 			requestVibeUIConfigSave()
 		end,
@@ -4214,9 +5214,51 @@ local function createVibeUI()
 	})
 
 	EquipmentTab:Toggle({
+		Flag = "InfiniteEquipment",
+		Title = "Infinite Equipment",
+		Desc = "Keeps primary and secondary equipment uses full independently of Max Everything",
+		Value = Environment.NotorietyInfiniteEquipmentEnabled,
+		Callback = function(Enabled)
+			Environment.NotorietyInfiniteEquipmentEnabled = Enabled == true
+			Apply()
+			requestVibeUIConfigSave()
+		end,
+	})
+
+	EquipmentTab:Toggle({
+		Flag = "EquipmentRangeEnabled",
+		Title = "Extended Placement Range",
+		Desc = "Extends the equipment placement ray beyond the normal 10 studs",
+		Value = Environment.NotorietyEquipmentRangeEnabled,
+		Callback = function(Enabled)
+			Environment.NotorietyEquipmentRangeEnabled = Enabled == true
+			applyEquipmentPlacementRange()
+			requestVibeUIConfigSave()
+		end,
+	})
+
+	NotorietyUI.EquipmentRangeSlider = EquipmentTab:Slider({
+		Flag = "EquipmentPlacementRange",
+		Title = "Placement Range",
+		Desc = "Game default: 10 studs",
+		Min = 10,
+		Max = 100,
+		Step = 1,
+		Suffix = " studs",
+		Value = math.clamp(Environment.NotorietyEquipmentPlacementRange, 10, 100),
+		Callback = function(Value)
+			local Number = tonumber(Value)
+			if Number == nil or Number ~= Number then return end
+			Environment.NotorietyEquipmentPlacementRange = math.clamp(Number, 10, 100)
+			applyEquipmentPlacementRange()
+			requestVibeUIConfigSave()
+		end,
+	})
+
+	EquipmentTab:Toggle({
 		Flag = "EquipmentPositionEnabled",
 		Title = "Custom Equipment Position",
-		Desc = "Offsets the equipment from its normal placement position",
+		Desc = "Offsets the preview and final placement position",
 		Value = Environment.NotorietyEquipmentPositionEnabled,
 		Callback = function(Enabled)
 			Environment.NotorietyEquipmentPositionEnabled = Enabled == true
@@ -4421,6 +5463,7 @@ local function unloadNotoriety()
 	Environment.MaxEverythingEnabled = false
 	Environment.NotorietyWeaponEnabled = false
 	Environment.NotorietyItemESPEnabled = false
+	Environment.NotorietyPoliceESPEnabled = false
 	Environment.NotorietyPoliceHeadScaleEnabled = false
 	Environment.NotorietyInfiniteYellMarkEnabled = false
 	Environment.NotorietyAutoYellEnabled = false
@@ -4457,6 +5500,8 @@ local function unloadNotoriety()
 
 	restoreAllWeaponData()
 	restoreRuntimeWeaponAccuracy()
+	restoreRuntimeWeaponRecoil()
+	restoreAllAmmoWrappers()
 	restoreEquipmentPlacementSpeed()
 	restoreMobileEquipmentPlacementFix()
 	restoreAudioVolumes()
@@ -4467,6 +5512,9 @@ local function unloadNotoriety()
 	table.clear(YellPatchState.TargetParts)
 	table.clear(YellPatchState.SkillCache)
 	ItemESPController.Cleanup()
+	stopPoliceESP()
+	restoreNativeMusicMode()
+	restoreMusicModeHook()
 
 	for Object in PoliceOriginalSizes do
 		pcall(restorePolicePart, Object)
@@ -4479,6 +5527,7 @@ local function unloadNotoriety()
 	NotorietyUI.Config = nil
 	NotorietyUI.SaveConfig = nil
 	NotorietyUI.RequestConfigSave = nil
+	NotorietyUI.MouseUnlockButton = nil
 
 	if CurrentWindow then
 		pcall(function()
@@ -4499,14 +5548,33 @@ trackWeaponContainer(Weapons)
 trackWeaponContainer(Backpack)
 trackWeaponContainer(LocalPlayer.Character)
 createVibeUI()
+
+if typeof(NotorietyUI.Root) == "Instance" and type(UIProtector.protectUI) == "function" then
+	local ProtectedParent = resolveProtectedUIParent()
+	local Success, ProtectedRoot = pcall(UIProtector.protectUI, NotorietyUI.Root, {
+		keepName = true,
+		parent = ProtectedParent,
+	})
+
+	if Success and typeof(ProtectedRoot) == "Instance" then
+		NotorietyUI.Root = ProtectedRoot
+	end
+end
+
+applyPoliceHeadScale()
 setWeaponModificationsEnabled(Environment.NotorietyWeaponEnabled)
 setYellMarkPatchEnabled(Environment.NotorietyInfiniteYellMarkEnabled)
 YellPatchState.SetAutoYellEnabled(Environment.NotorietyAutoYellEnabled)
 YellPatchState.SetNoDelayEnabled(Environment.NotorietyNoYellDelayEnabled)
 applyEquipmentPlacementSpeed()
 applyEquipmentPositioning()
+applyEquipmentPlacementRange()
 applyMobileEquipmentPlacementFix()
 applyAudioVolumes()
+if Environment.NotorietyItemESPEnabled then setItemESPEnabled(true) end
+if Environment.NotorietyPoliceESPEnabled then setPoliceESPEnabled(true) end
+applyMusicTrackSelection(true)
+applyMusicModeOverride()
 
 Environment.MaxEverythingConnection = RunService.Heartbeat:Connect(function(DeltaTime)
 	if Environment.NotorietyUnloaded then
@@ -4526,14 +5594,31 @@ Environment.MaxEverythingConnection = RunService.Heartbeat:Connect(function(Delt
 		YellPatchState.AutoRefresh = 0
 	end
 
+	ItemESPState.Refresh += DeltaTime
+	if ItemESPState.Refresh >= 0.25 then
+		ItemESPState.Refresh = 0
+		if Environment.NotorietyItemESPEnabled then updateItemESPVisibility() end
+	end
+
+	PoliceESPState.Refresh += DeltaTime
+	if PoliceESPState.Refresh >= 0.25 then
+		PoliceESPState.Refresh = 0
+		if Environment.NotorietyPoliceESPEnabled then updatePoliceESP() end
+	end
+
+	MusicOverrideState.Refresh += DeltaTime
+	if MusicOverrideState.Refresh >= 1 then
+		MusicOverrideState.Refresh = 0
+		if Environment.NotorietyMusicTrack ~= "Game Selection" then applyMusicTrackSelection(false) end
+		if Environment.NotorietyMusicMode ~= "Follow Game" and not MusicOverrideState.HookInstalled then
+			applyMusicModeOverride()
+		end
+	end
+
 	EquipmentSpeedState.Refresh += DeltaTime
 
 	if EquipmentSpeedState.Refresh >= 1 then
 		EquipmentSpeedState.Refresh = 0
-		applyEquipmentPlacementSpeed()
-		applyEquipmentPositioning()
-		applyMobileEquipmentPlacementFix()
-		applyAudioVolumes()
 
 		if Environment.NotorietyInfiniteYellMarkEnabled then
 			applyYellMarkPatch()
@@ -4570,8 +5655,12 @@ Environment.MaxEverythingCharacterConnection = LocalPlayer.CharacterAdded:Connec
 	Apply()
 	applyEquipmentPlacementSpeed()
 	applyEquipmentPositioning()
+	applyEquipmentPlacementRange()
 	applyMobileEquipmentPlacementFix()
 	applyAudioVolumes()
+	if Environment.NotorietyPoliceESPEnabled then refreshPoliceESP() end
+	applyMusicTrackSelection(true)
+	applyMusicModeOverride()
 	trackWeaponContainer(Character)
 	table.clear(YellPatchState.TargetParts)
 	table.clear(YellPatchState.SkillCache)

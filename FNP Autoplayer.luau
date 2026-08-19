@@ -11,13 +11,18 @@ if env.FNP_AutoPlayer and type(env.FNP_AutoPlayer.Destroy) == "function" then
     pcall(env.FNP_AutoPlayer.Destroy)
 end
 
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local HttpService = game:GetService("HttpService")
-local CoreGui = game:GetService("CoreGui")
-local StarterGui = game:GetService("StarterGui")
+local SERVICE_RESOLVER_URL = "https://ltseverydayyou.github.io/ServiceResolver.luau"
+local ServiceResolver = assert(loadstring(game:HttpGet(SERVICE_RESOLVER_URL)))()
+
+assert(type(ServiceResolver) == "table" and type(ServiceResolver.gs) == "function", "ServiceResolver failed to load")
+
+local Players = assert(ServiceResolver.gs("Players"), "Players service unavailable")
+local RunService = assert(ServiceResolver.gs("RunService"), "RunService service unavailable")
+local UserInputService = assert(ServiceResolver.gs("UserInputService"), "UserInputService service unavailable")
+local ReplicatedStorage = assert(ServiceResolver.gs("ReplicatedStorage"), "ReplicatedStorage service unavailable")
+local HttpService = assert(ServiceResolver.gs("HttpService"), "HttpService service unavailable")
+local CoreGui = assert(ServiceResolver.gs("CoreGui"), "CoreGui service unavailable")
+local StarterGui = assert(ServiceResolver.gs("StarterGui"), "StarterGui service unavailable")
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
@@ -557,9 +562,9 @@ local function resolveVirtualInputManager()
         end
     end
 
-    local serviceOk, service = pcall(game.GetService, game, "VirtualInputManager")
-    if serviceOk and typeof(service) == "Instance" and type(service.SendKeyEvent) == "function" then
-        return service, false, "game:GetService", "VirtualInputManager"
+    local service = ServiceResolver.gs("VirtualInputManager")
+    if typeof(service) == "Instance" and type(service.SendKeyEvent) == "function" then
+        return service, service.Parent == nil, "ServiceResolver.gs", "VirtualInputManager"
     end
 
     return nil, false, tostring(service or virtualInput), "Unavailable"
@@ -610,7 +615,7 @@ local preferExternalVisualMode = ModuleAccessMode == "live"
 local initialModuleAccessMode = preferExternalVisualMode and "visual-external" or ModuleAccessMode
 
 local state = {
-    Version = 32,
+    Version = 34,
     Enabled = Config.Enabled ~= false and #AvailableInputModes > 0,
     InputMode = chooseInputMode(Config.InputMode),
     BackendAvailability = BackendAvailability,
@@ -628,6 +633,8 @@ local state = {
     LiveConductor = nil,
     VirtualInputProvider = VirtualInputProvider,
     VirtualInputOwned = VirtualInputOwned,
+    ServiceResolver = ServiceResolver,
+    ServiceResolverURL = SERVICE_RESOLVER_URL,
     TimingOffset = tonumber(Config.TimingOffset) or 0,
     TapDuration = tonumber(Config.TapDuration) or 24,
     SustainBuffer = tonumber(Config.SustainBuffer) or 80,

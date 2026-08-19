@@ -833,10 +833,6 @@ if game.GameId == 847722000 then
 		zeroBasePartVelocity(obj)
 	end)
 
-	bind(Ws.DescendantRemoving, function(obj)
-		zeroBasePartVelocity(obj)
-	end)
-
 	if type(task) == "table" and type(task.defer) == "function" then
 		task.defer(zeroWorkspaceBasePartVelocities)
 	else
@@ -1598,13 +1594,13 @@ if game.GameId == 847722000 then
 
 	function clientBypass.restoreDeviceSpoof()
 		local orig = clientBypass.deviceGlobalOrig
+		if type(orig) ~= "table" and next(clientBypass.chDeviceOrig) == nil then
+			return true
+		end
 		if type(orig) == "table" then
 			setScriptGlobal("deviceType", orig.deviceType)
 			setScriptGlobal("deviceType2", orig.deviceType2)
 			setScriptGlobal("inputType", orig.inputType)
-		end
-		if clientBypass.scanCH then
-			pcall(clientBypass.scanCH)
 		end
 		for t, old in clientBypass.chDeviceOrig do
 			if type(t) == "table" and type(old) == "table" then
@@ -1615,7 +1611,9 @@ if game.GameId == 847722000 then
 					t.isMobile = old.isMobile
 				end)
 			end
+			clientBypass.chDeviceOrig[t] = nil
 		end
+		clientBypass.deviceGlobalOrig = nil
 		return true
 	end
 
@@ -2482,6 +2480,12 @@ if game.GameId == 847722000 then
 	end
 
 	function clientBypass.applyStaminaSignals()
+		if st.infStamina ~= true then
+			if clientBypass.gstmnaOwned == true or next(clientBypass.stamTk) ~= nil then
+				clientBypass.restoreStaminaSignals()
+			end
+			return false
+		end
 		local gst = ffc(Rep, "GSTMNA")
 		if gst and gst:IsA("BindableFunction") then
 			if st.infStamina == true then
@@ -2717,6 +2721,9 @@ if game.GameId == 847722000 then
 	end
 
 	function clientBypass.applyCharBypasses()
+		if st.noDowned ~= true and st.noMoveLock ~= true and st.noTrapLock ~= true then
+			return false
+		end
 		local hum = getHum()
 		local ch = getChar()
 		if not ch or not hum then
@@ -2827,22 +2834,24 @@ if game.GameId == 847722000 then
 	end
 
 	function clientBypass.scanCH()
-		if type(filtergc) == "function" then
-			pcall(function()
-				local one = filtergc("table", {
-					Keys = { "plr", "vars", "funcs", "CONFIG" },
-				}, true)
-				clientBypass.addCH(one)
-			end)
-		end
 		if type(getgc) == "function" then
 			local ok, list = pcall(getgc, true)
 			if ok and type(list) == "table" then
 				for _, t in list do
 					clientBypass.addCH(t)
 				end
+				return true
 			end
 		end
+		if type(filtergc) == "function" then
+			local ok, one = pcall(filtergc, "table", {
+				Keys = { "plr", "vars", "funcs", "CONFIG" },
+			}, true)
+			if ok then
+				clientBypass.addCH(one)
+			end
+		end
+		return false
 	end
 
 	function clientBypass.resetFx(x, hard)
@@ -7140,13 +7149,21 @@ if game.GameId == 847722000 then
 			pcall(clientBypass.applyPromptUiBypass)
 			pcall(clientBypass.applyLookFreeze)
 			pcall(clientBypass.cleanupPromptModals)
-			pcall(clientBypass.applyDeviceSpoof)
-			pcall(clientBypass.applyCharBypasses)
-			pcall(clientBypass.applySafeRecover)
+			if st.forcePcDevice == true or type(clientBypass.deviceGlobalOrig) == "table" or next(clientBypass.chDeviceOrig) ~= nil then
+				pcall(clientBypass.applyDeviceSpoof)
+			end
+			if st.noDowned == true or st.noMoveLock == true or st.noTrapLock == true then
+				pcall(clientBypass.applyCharBypasses)
+			end
+			if st.safeRecover == true then
+				pcall(clientBypass.applySafeRecover)
+			end
 			pcall(clientBypass.applyClientPopupBypasses)
 			pcall(clientBypass.removeIntroClones)
 			pcall(clientBypass.forceCoreParts)
-			pcall(clientBypass.applyStaminaSignals)
+			if st.infStamina == true or clientBypass.gstmnaOwned == true or next(clientBypass.stamTk) ~= nil then
+				pcall(clientBypass.applyStaminaSignals)
+			end
 			if clientBypass.chBootScan ~= true then
 				clientBypass.chBootScan = true
 				pcall(clientBypass.applyCH, true)
@@ -7171,8 +7188,12 @@ if game.GameId == 847722000 then
 		if _G.NoFog == true then
 			setFogOff()
 		end
-		pcall(clientBypass.applySafeRecover)
-		pcall(clientBypass.applyCharBypasses)
+		if st.safeRecover == true then
+			pcall(clientBypass.applySafeRecover)
+		end
+		if st.noDowned == true or st.noMoveLock == true or st.noTrapLock == true then
+			pcall(clientBypass.applyCharBypasses)
+		end
 		pcall(clientBypass.applyCH, false)
 	end)
 
@@ -7182,8 +7203,12 @@ if game.GameId == 847722000 then
 		pcall(clientBypass.applyFullbright, true)
 	end
 	pcall(clientBypass.fetchRootModule)
-	pcall(clientBypass.applyStaminaModuleBypass)
-	pcall(clientBypass.applyStaminaSignals)
+	if st.infStamina == true or st.infNight == true then
+		pcall(clientBypass.applyStaminaModuleBypass)
+	end
+	if st.infStamina == true then
+		pcall(clientBypass.applyStaminaSignals)
+	end
 
 	pcall(function()
 		bind(Ws:GetPropertyChangedSignal("CurrentCamera"), function()

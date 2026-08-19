@@ -668,7 +668,7 @@ end
 local function nearestDigZone(islandId)
 	local root = rootPart()
 	if not root then
-		return nil
+		return nil, math.huge
 	end
 
 	local best
@@ -690,10 +690,29 @@ local function nearestDigZone(islandId)
 			end
 		end
 	end
-	return best
+	return best, bestDistance
 end
 
-local function selectBuriedNode()
+local function positionInIslandDigZone(position, islandId)
+	if typeof(position) ~= "Vector3" or islandId == nil then
+		return true
+	end
+
+	for _, zone in CollectionService:GetTagged(ShovelConstants.DIG_ZONE_TAG) do
+		if zone:IsA("BasePart") and zone:GetAttribute(IslandConstants.ISLAND_ID_ATTRIBUTE) == islandId then
+			local point = zone.CFrame:PointToObjectSpace(position)
+			local margin = 8
+			if math.abs(point.X) <= zone.Size.X * 0.5 + margin
+				and math.abs(point.Z) <= zone.Size.Z * 0.5 + margin then
+				return true
+			end
+		end
+	end
+
+	return false
+end
+
+local function selectBuriedNode(islandId)
 	local root = rootPart()
 	if not root or type(DetectorSweepController) ~= "table" or type(DetectorSweepController.nodes) ~= "table" then
 		return nil, nil
@@ -705,7 +724,10 @@ local function selectBuriedNode()
 	local bestDistance = math.huge
 
 	for id, node in DetectorSweepController.nodes do
-		if type(id) == "string" and type(node) == "table" and typeof(node.position) == "Vector3" then
+		if type(id) == "string"
+			and type(node) == "table"
+			and typeof(node.position) == "Vector3"
+			and positionInIslandDigZone(node.position, islandId) then
 			local rank = RarityRank[node.rarity] or math.huge
 			local distance = (node.position - root.Position).Magnitude
 			if rank < bestRank or (rank == bestRank and distance < bestDistance) then
@@ -718,6 +740,30 @@ local function selectBuriedNode()
 	end
 
 	return bestId, bestNode
+end
+
+local function acquireBuriedNodes(islandId)
+	if not Hub.Settings.AutoMove or type(DetectorSweepController) ~= "table" or type(DetectorSweepController.nodes) ~= "table" then
+		return false
+	end
+
+	local nodeId = selectBuriedNode(islandId)
+	if nodeId then
+		return true
+	end
+
+	local target = nearestDigZone(islandId)
+	if not target or not moveToPosition(target) then
+		return false
+	end
+
+	local deadline = os.clock() + 2.25
+	repeat
+		task.wait(0.05)
+		nodeId = selectBuriedNode(islandId)
+	until nodeId ~= nil or not Hub.Alive or os.clock() >= deadline
+
+	return nodeId ~= nil
 end
 
 local function canDigSurfaced(item, data)
@@ -745,8 +791,11 @@ local function selectSafeSurfaced(data)
 	local best
 	local bestOneIn = -math.huge
 	local bestDistance = math.huge
+	local islandId = data and data.CurrentIsland
 	for _, item in items do
-		if canDigSurfaced(item, data) and typeof(item.position) == "Vector3" then
+		if canDigSurfaced(item, data)
+			and typeof(item.position) == "Vector3"
+			and positionInIslandDigZone(item.position, islandId) then
 			local oneIn = tonumber(item.oneIn) or 0
 			local distance = root and (item.position - root.Position).Magnitude or math.huge
 			if oneIn > bestOneIn or (oneIn == bestOneIn and distance < bestDistance) then
@@ -775,7 +824,7 @@ local function beginControllerDig(before)
 			end
 			task.wait(0.12)
 		else
-			local nodeId, node = selectBuriedNode()
+			local nodeId, node = selectBuriedNode(before.CurrentIsland)
 			if not nodeId or not node then
 				return false
 			end
@@ -872,7 +921,7 @@ local function riskyInstantDig(before)
 		return nil
 	end
 
-	local nodeId, node = selectBuriedNode()
+	local nodeId, node = selectBuriedNode(before.CurrentIsland)
 	if not nodeId or not node then
 		return nil
 	end
@@ -963,10 +1012,15 @@ local function digOnce()
 		end
 	end
 	local restoreChar, restoreCFrame = capturePivot()
+	local _, restoreIslandDistance = nearestDigZone(before.CurrentIsland)
+	local restoreOriginalPivot = restoreIslandDistance <= 500
+	acquireBuriedNodes(before.CurrentIsland)
 	local instantResult = riskyInstantDig(before)
 
 	if instantResult == false then
-		restorePivot(restoreChar, restoreCFrame)
+		if restoreOriginalPivot then
+			restorePivot(restoreChar, restoreCFrame)
+		end
 		Hub.BusyDig = false
 		releaseAction("dig")
 		return false
@@ -984,7 +1038,9 @@ local function digOnce()
 		after = getData()
 	end
 
-	restorePivot(restoreChar, restoreCFrame)
+	if restoreOriginalPivot then
+		restorePivot(restoreChar, restoreCFrame)
+	end
 	Hub.BusyDig = false
 	releaseAction("dig")
 	local success = after and (after.ItemsDug or 0) > beforeDug or false
@@ -1357,15 +1413,27 @@ local function unlockNextIsland()
 	if not data then
 		return false
 	end
+
+	local highestUnlocked = nil
 	for _, id in IslandConstants.ISLAND_ORDER do
-		if not contains(data.UnlockedIslands, id) then
+		if contains(data.UnlockedIslands, id) then
+			highestUnlocked = id
+		else
 			local config = IslandConstants.Islands[id]
 			if config and (data.Gold or 0) >= (config.cost or math.huge) then
 				return travelTo(id)
 			end
-			return false
+			break
 		end
 	end
+
+	if highestUnlocked then
+		local _, distance = nearestDigZone(highestUnlocked)
+		if data.CurrentIsland ~= highestUnlocked or distance > 500 then
+			return travelTo(highestUnlocked)
+		end
+	end
+
 	return false
 end
 

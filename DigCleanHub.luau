@@ -301,6 +301,7 @@ local DefaultSettings = {
 	AutoFreePack = false,
 	AutoPyramid = false,
 	AntiAFK = false,
+	QueueOnTeleport = true,
 	TravelIsland = "starterIsland",
 	DigInterval = Risky.Requested and 0.20 or 0.6,
 	SellInterval = 3,
@@ -418,6 +419,62 @@ Hub.SaveSettings = saveSettings
 Hub.SetSetting = setSetting
 Hub.SettingsFile = SETTINGS_FILE
 Hub.SettingsPersistence = type(writefile) == "function" and type(readfile) == "function" and type(isfile) == "function"
+
+local QueueTeleport = queue_on_teleport or queueonteleport
+if type(QueueTeleport) ~= "function" and type(syn) == "table" then
+	QueueTeleport = syn.queue_on_teleport
+end
+if type(QueueTeleport) ~= "function" and type(fluxus) == "table" then
+	QueueTeleport = fluxus.queue_on_teleport
+end
+
+local TELEPORT_LOADER_URL = "https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/refs/heads/main/DigCleanHub.luau"
+local TeleportQueueRegistered = env.__DigCleanHubTeleportQueueRegistered == true
+local TeleportBootstrap = ([=[
+local env = getgenv()
+env.__DigCleanHubTeleportQueueRegistered = nil
+
+local enabled = true
+if type(isfile) == "function" and type(readfile) == "function" and isfile(%q) then
+	pcall(function()
+		local HttpService = game:GetService("HttpService")
+		local settings = HttpService:JSONDecode(readfile(%q))
+		if type(settings) == "table" and settings.QueueOnTeleport == false then
+			enabled = false
+		end
+	end)
+end
+
+if enabled then
+	local source = game:HttpGet(%q .. "?v=" .. tostring(os.clock()))
+	local chunk = loadstring(source)
+	if chunk then
+		pcall(chunk)
+	end
+end
+]=]):format(SETTINGS_FILE, SETTINGS_FILE, TELEPORT_LOADER_URL)
+
+local function registerTeleportQueue()
+	if TeleportQueueRegistered then
+		return true
+	end
+	if type(QueueTeleport) ~= "function" then
+		return false
+	end
+	local ok = pcall(QueueTeleport, TeleportBootstrap)
+	if ok then
+		TeleportQueueRegistered = true
+		env.__DigCleanHubTeleportQueueRegistered = true
+	end
+	return ok
+end
+
+Hub.QueueOnTeleportSupported = type(QueueTeleport) == "function"
+Hub.RegisterTeleportQueue = registerTeleportQueue
+if Hub.Settings.QueueOnTeleport then
+	registerTeleportQueue()
+end
+
 Hub.CleanCooldownUntil = 0
 Hub.CleanCooldownDelay = 1.05
 Hub.LootStats = { cleaned = 0, museum = 0, sold = 0, cleanRejected = 0 }
@@ -2615,6 +2672,19 @@ Misc:Toggle({
 	Default = Hub.Settings.AntiAFK,
 	Callback = function(v)
 		setSetting("AntiAFK", v)
+	end,
+})
+
+Misc:Toggle({
+	Name = "Queue on Teleport",
+	Flag = "DCQueueOnTeleport",
+	Default = Hub.Settings.QueueOnTeleport,
+	Callback = function(v)
+		setSetting("QueueOnTeleport", v)
+		saveSettings()
+		if v then
+			registerTeleportQueue()
+		end
 	end,
 })
 

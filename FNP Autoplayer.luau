@@ -542,18 +542,30 @@ if not RequestFunction and type(syn) == "table" and type(syn.request) == "functi
 end
 
 local function resolveVirtualInputManager()
-    local ok, service = pcall(game.GetService, game, "VirtualInputManager")
-    if ok and typeof(service) == "Instance" and type(service.SendKeyEvent) == "function" then
-        return service, false, "game:GetService"
+    local createOk, virtualInput = pcall(function()
+        if type(UserInputService.CreateVirtualInput) == "function" then
+            return UserInputService:CreateVirtualInput()
+        end
+    end)
+
+    if createOk and virtualInput ~= nil then
+        local sendOk, sendMethod = pcall(function()
+            return virtualInput.SendKey
+        end)
+        if sendOk and type(sendMethod) == "function" then
+            return virtualInput, true, "UserInputService:CreateVirtualInput", "VirtualInput"
+        end
     end
-    local createdOk, created = pcall(Instance.new, "VirtualInputManager")
-    if createdOk and typeof(created) == "Instance" and type(created.SendKeyEvent) == "function" then
-        return created, true, "Instance.new"
+
+    local serviceOk, service = pcall(game.GetService, game, "VirtualInputManager")
+    if serviceOk and typeof(service) == "Instance" and type(service.SendKeyEvent) == "function" then
+        return service, false, "game:GetService", "VirtualInputManager"
     end
-    return nil, false, tostring(service or created)
+
+    return nil, false, tostring(service or virtualInput), "Unavailable"
 end
 
-local VirtualInputManager, VirtualInputOwned, VirtualInputProvider = resolveVirtualInputManager()
+local VirtualInputManager, VirtualInputOwned, VirtualInputProvider, VirtualInputKind = resolveVirtualInputManager()
 local BackendAvailability = {
     ["Virtual Input"] = VirtualInputManager ~= nil,
     firesignal = ModuleAccessMode == "live"
@@ -598,7 +610,7 @@ local preferExternalVisualMode = ModuleAccessMode == "live"
 local initialModuleAccessMode = preferExternalVisualMode and "visual-external" or ModuleAccessMode
 
 local state = {
-    Version = 28,
+    Version = 32,
     Enabled = Config.Enabled ~= false and #AvailableInputModes > 0,
     InputMode = chooseInputMode(Config.InputMode),
     BackendAvailability = BackendAvailability,
@@ -1279,9 +1291,53 @@ local function sendVirtual(key, down)
     if not BackendAvailability["Virtual Input"] or not VirtualInputManager then
         return false
     end
-    return withIdentity8(function()
-        VirtualInputManager:SendKeyEvent(down, key, false, game)
-    end)
+
+    if VirtualInputKind == "VirtualInput" then
+        local ok, result = pcall(function()
+            VirtualInputManager:SendKey(down, key, false)
+        end)
+
+        if not ok then
+            state.VirtualInputFailures = (state.VirtualInputFailures or 0) + 1
+            state.LastVirtualInputError = tostring(result)
+        end
+
+        return ok
+    end
+
+    if VirtualInputKind == "VirtualInputManager" then
+        task.spawn(function()
+            local previousIdentity
+            if GetThreadIdentityFunction and SetThreadIdentityFunction then
+                local identityOk, identity = pcall(GetThreadIdentityFunction)
+                if identityOk then
+                    previousIdentity = identity
+                end
+                pcall(SetThreadIdentityFunction, 8)
+            end
+
+            local ok, result = pcall(function()
+                VirtualInputManager:SendKeyEvent(down, key, false, game)
+            end)
+
+            if previousIdentity ~= nil and SetThreadIdentityFunction then
+                pcall(SetThreadIdentityFunction, previousIdentity)
+            end
+
+            if not ok then
+                state.VirtualInputFailures = (state.VirtualInputFailures or 0) + 1
+                state.LastVirtualInputError = tostring(result)
+
+                if BackendAvailability.firesignal then
+                    state.RuntimeFallbackReason = "Legacy VirtualInputManager failed: " .. tostring(result)
+                end
+            end
+        end)
+
+        return true
+    end
+
+    return false
 end
 
 local function sendFireSignal(lane, down)
@@ -2505,35 +2561,39 @@ local function processVisualNotes()
                             end
                         end
                     elseif not harmful
-                        and (
-                            not record.Triggered
-                                and movingTowardOrAcross
-                                and (within or crossed or predicted or sweptTop)
-                            or record.Triggered
-                                and (record.Attempts or 0) < 2
-                                and now - (record.LastAttempt or 0) >= 0.028
-                                and (within or crossed or sweptTop)
-                        )
+                        and not record.Triggered
                     then
-                        dueCount += 1
-                        if state.Enabled then
-                            local priority = timeToHit
-                            if priority == math.huge then
-                                priority = math.abs(adjustedSigned) / math.max(math.abs(relativeVelocity), 1)
+                        if not record.AccurateArmed then
+                            if movingTowardOrAcross and (within or crossed or predicted or sweptTop) then
+                                -- v29's original first/early pass is intentionally ARM-ONLY.
+                                -- No key is sent here. The actual press is deferred to the
+                                -- original second/accurate pass below.
+                                record.AccurateArmed = true
+                                record.AccurateArmTime = now
                             end
+                        elseif now - (record.AccurateArmTime or now) >= 0.028
+                            and (within or crossed or sweptTop)
+                        then
+                            dueCount += 1
+                            if state.Enabled then
+                                local priority = timeToHit
+                                if priority == math.huge then
+                                    priority = math.abs(adjustedSigned) / math.max(math.abs(relativeVelocity), 1)
+                                end
 
-                            tapCandidates[lane] = tapCandidates[lane] or {}
-                            tapCandidates[lane][#tapCandidates[lane] + 1] = {
-                                Gui = gui,
-                                Record = record,
-                                Receptor = receptor,
-                                Lane = lane,
-                                Priority = priority,
-                                IsRetry = record.Triggered == true,
-                                AdjustedSigned = adjustedSigned,
-                                RelativeVelocity = relativeVelocity,
-                                DeltaTime = deltaTime
-                            }
+                                tapCandidates[lane] = tapCandidates[lane] or {}
+                                tapCandidates[lane][#tapCandidates[lane] + 1] = {
+                                    Gui = gui,
+                                    Record = record,
+                                    Receptor = receptor,
+                                    Lane = lane,
+                                    Priority = priority,
+                                    IsRetry = false,
+                                    AdjustedSigned = adjustedSigned,
+                                    RelativeVelocity = relativeVelocity,
+                                    DeltaTime = deltaTime
+                                }
+                            end
                         end
                     elseif not record.Triggered
                         and state.Enabled
@@ -3944,7 +4004,8 @@ local function buildUI()
                 state.DetectedSideMethod,
                 ReconstructedGameSettingsStatus,
                 IconsProvider,
-                state.VirtualInput and state.VirtualInput.ClassName or "Unavailable",
+                VirtualInputProvider,
+                VirtualInputKind,
                 BackendAvailability.firesignal and "Available" or "Unavailable",
                 type(state.GCGoodhit) == "function" and "Resolved" or "Not resolved",
                 state.RegistryAvailable and (state.RegistryMode and "Active" or "Available") or "Unavailable",

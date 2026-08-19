@@ -31,7 +31,7 @@ if Env.TSB_AutoCombat and type(Env.TSB_AutoCombat.Stop) == "function" then
 end
 
 local Bot = {
-    Version = "1.5.1",
+    Version = "1.7.0",
     BaseVersion = "1.3.0",
     UsingServiceResolver = true,
     MovementDriver = "Humanoid:Move",
@@ -49,9 +49,20 @@ local Bot = {
     },
     Config = {
         TargetRadius = 120,
-        ThreatRadius = 20,
-        M1Range = 8.2,
-        ApproachRange = 9.5,
+        TargetScanRate = 0.14,
+        TargetSwitchAdvantage = 12,
+        TargetLockTime = 0.60,
+        ThreatRadius = 24,
+        GlobalThreatRadius = 105,
+        UltimateDangerRadius = 135,
+        ThreatMemory = 0.34,
+        RangedThreatMemory = 0.72,
+        UltimateGrace = 1.25,
+        FleeEnemyUltimates = true,
+        MultiThreatAwareness = true,
+        M1Range = 8.4,
+        M1ComboLimit = 4,
+        ApproachRange = 10,
         RetreatRange = 4.8,
         PlayersOnly = true,
         AutoMovement = true,
@@ -62,49 +73,30 @@ local Bot = {
         AutoUltimate = true,
         AutoCamera = true,
         CounterPriority = true,
-        BlockChance = 0.42,
-        DodgeChance = 0.58,
-        DecisionRate = 1 / 30,
-        M1Interval = 0.10,
-        SkillInterval = 0.30,
-        DashInterval = 0.62,
-        BlockDuration = 0.28,
-        CameraLead = 0.075,
-        FacingLead = 0.055,
+        DecisionRate = 1 / 45,
+        UIRate = 0.20,
+        M1Interval = 0.085,
+        SkillInterval = 0.22,
+        DashInterval = 0.54,
+        DefenseInterval = 0.075,
+        BlockDuration = 0.20,
+        CameraLead = 0.070,
+        CameraSmoothing = 0.72,
+        CameraUpdateRate = 1 / 60,
+        MovementUpdateRate = 1 / 45,
+        MovementSmoothing = 0.42,
+        MovementModeHold = 0.14,
+        FacingLead = 0.050,
         ObstacleDistance = 4.25,
-        JumpCooldown = 0.45,
-        DodgeMoveDuration = 0.18
+        ObstacleCheckRate = 0.10,
+        JumpCooldown = 0.42,
+        DodgeDistance = 7.5,
+        DodgeMoveDuration = 0.24,
+        UltimateCheckRate = 0.25
     }
 }
 
 Env.TSB_AutoCombat = Bot
-
-local Character
-local Humanoid
-local Root
-local FacingAttachment
-local FacingAlign
-local TargetHighlight
-local Hud
-local StateLabel
-local TargetLabel
-local StatsLabel
-local LastDecision = 0
-local LastM1 = 0
-local LastSkill = 0
-local LastDash = 0
-local LastUltimate = 0
-local LastHealth = 100
-local StrafeSide = 1
-local NextStrafeSwap = 0
-local Blocking = false
-local TargetSnapshots = {}
-local DesiredMoveDirection = Vector3.zero
-local MovementOverrideDirection = nil
-local MovementOverrideUntil = 0
-local LastObstacleJump = 0
-local RenderBindName = "TSB_AutoCombat_Camera_" .. tostring(LocalPlayer.UserId)
-local MovementBindName = "TSB_AutoCombat_Movement_" .. tostring(LocalPlayer.UserId)
 
 local CounterNames = {
     ["Prey's Peril"] = true,
@@ -112,7 +104,8 @@ local CounterNames = {
     ["Death Counter"] = true,
     ["Death Blow"] = true,
     ["Spiraling Storm"] = true,
-    ["Crossfire"] = true
+    ["Crossfire"] = true,
+    ["Infinity"] = true
 }
 
 local ReservedSkillNames = {
@@ -124,20 +117,22 @@ for name in pairs(CounterNames) do
 end
 
 local CharacterProfiles = {
-    Bald = {Name = "The Strongest Hero", Approach = 8.5, Retreat = 4.8, SkillRange = 14},
-    Batter = {Name = "Brutal Demon", Approach = 9.5, Retreat = 5.0, SkillRange = 18},
-    Blade = {Name = "Blade Master", Approach = 10.5, Retreat = 5.0, SkillRange = 18},
-    Cyborg = {Name = "Destructive Cyborg", Approach = 13.5, Retreat = 7.0, SkillRange = 48},
-    Esper = {Name = "Wild Psychic", Approach = 14.0, Retreat = 7.5, SkillRange = 34},
-    Hunter = {Name = "Hero Hunter", Approach = 8.5, Retreat = 4.8, SkillRange = 16},
-    KJ = {Name = "KJ", Approach = 9.5, Retreat = 5.0, SkillRange = 20},
-    Monster = {Name = "Monster Form", Approach = 10.0, Retreat = 5.0, SkillRange = 28},
-    Ninja = {Name = "Deadly Ninja", Approach = 10.5, Retreat = 5.5, SkillRange = 30},
-    Purple = {Name = "Martial Artist", Approach = 9.5, Retreat = 5.0, SkillRange = 20},
-    Tech = {Name = "Tech Prodigy", Approach = 15.0, Retreat = 8.0, SkillRange = 55},
-    Zombie = {Name = "Undying Hero", Approach = 11.0, Retreat = 5.5, SkillRange = 24},
-    Sorcerer = {Name = "Sorcerer", Approach = 18.0, Retreat = 9.0, SkillRange = 70},
-    Pirate = {Name = "The Strongest Pirate", Approach = 10.0, Retreat = 5.0, SkillRange = 24}
+    Bald = {Name = "The Strongest Hero", Style = "Melee", Approach = 9.0, Retreat = 4.8, SkillRange = 16},
+    Batter = {Name = "Brutal Demon", Style = "Melee", Approach = 10.0, Retreat = 5.0, SkillRange = 18},
+    Blade = {Name = "Blade Master", Style = "Melee", Approach = 10.5, Retreat = 5.0, SkillRange = 18},
+    Cyborg = {Name = "Destructive Cyborg", Style = "Ranged", Approach = 20.0, Retreat = 8.0, SkillRange = 65},
+    Esper = {Name = "Wild Psychic", Style = "Ranged", Approach = 19.0, Retreat = 8.0, SkillRange = 38},
+    Hunter = {Name = "Hero Hunter", Style = "Melee", Approach = 9.0, Retreat = 4.8, SkillRange = 16},
+    KJ = {Name = "KJ", Style = "Melee", Approach = 10.0, Retreat = 5.0, SkillRange = 22},
+    Monster = {Name = "Monster Form", Style = "Hybrid", Approach = 12.0, Retreat = 5.5, SkillRange = 34},
+    Ninja = {Name = "Deadly Ninja", Style = "Hybrid", Approach = 14.0, Retreat = 6.0, SkillRange = 38},
+    Purple = {Name = "Martial Artist", Style = "Melee", Approach = 10.0, Retreat = 5.0, SkillRange = 22},
+    Tech = {Name = "Tech Prodigy", Style = "Ranged", Approach = 23.0, Retreat = 9.0, SkillRange = 70},
+    Zombie = {Name = "Undying Hero", Style = "Hybrid", Approach = 12.0, Retreat = 5.5, SkillRange = 28},
+    Sorcerer = {Name = "Sorcerer", Style = "Ranged", Approach = 24.0, Retreat = 10.0, SkillRange = 80},
+    Pirate = {Name = "The Strongest Pirate", Style = "Hybrid", Approach = 11.0, Retreat = 5.0, SkillRange = 26},
+    ["Crab Boss"] = {Name = "Crab Boss", Style = "Hybrid", Approach = 13.0, Retreat = 6.0, SkillRange = 36},
+    Royale = {Name = "Royale", Style = "Hybrid", Approach = 12.0, Retreat = 5.5, SkillRange = 32}
 }
 
 local MoveProfiles = {
@@ -250,6 +245,7 @@ local MoveProfiles = {
     ["Spine Splitter"] = {Max = 11, Priority = 1, ComboMin = 2}
 }
 
+
 local Skillsets = {}
 pcall(function()
     local info = require(ReplicatedStorage:WaitForChild("Info"))
@@ -258,17 +254,136 @@ pcall(function()
     end
 end)
 
-local function getCharacterKey()
-    return Character and Character:GetAttribute("Character") or nil
+local function horizontal(vector)
+    return Vector3.new(vector.X, 0, vector.Z)
 end
 
+local function disconnectList(list)
+    for i = #list, 1, -1 do
+        local connection = list[i]
+        list[i] = nil
+        pcall(function()
+            connection:Disconnect()
+        end)
+    end
+end
+
+local function addConnection(list, connection)
+    list[#list + 1] = connection
+    return connection
+end
+
+local CharacterConnections = {}
+local TargetConnections = {}
+local HotbarConnections = {}
+local LiveConnections = {}
+local ThreatConnectionsByModel = {}
+local ThreatStates = {}
+
+local Character
+local Humanoid
+local Root
+local CharacterKey
+local CurrentProfile
+local FacingAttachment
+local FacingAlign
+local TargetHumanoid
+local TargetRoot
+local TargetAnimator
+local LiveFolder
+local LiveModels = {}
+local HotbarRoot
+local HotbarSlots = {}
+local DesiredMoveDirection = Vector3.zero
+local SmoothedMoveDirection = Vector3.zero
+local MovementOverrideDirection
+local MovementOverrideUntil = 0
+local MovementMode = "IDLE"
+local MovementModeUntil = 0
+local CameraOverrideDirection
+local CameraOverrideUntil = 0
+local LastFacingDirection
+local LastDecision = 0
+local LastTargetScan = 0
+local LastHudUpdate = 0
+local LastM1 = 0
+local LastSkill = 0
+local LastDash = 0
+local LastDefense = 0
+local LastUltimate = 0
+local LastUltimateCheck = 0
+local UltimateReady = false
+local LastObstacleJump = 0
+local LastObstacleCheck = 0
+local LastCameraUpdate = 0
+local LastMovementApply = 0
+local LastHotbarBind = 0
+local LastHealth = 100
+local NextStrafeSwap = 0
+local StrafeSide = 1
+local Blocking = false
+local BlockUntil = 0
+local MouseDown = false
+local MouseReleaseAt = 0
+local LastDefendedSerial = 0
+local GeometryThreatAt = 0
+local TargetDistance = math.huge
+local LastTargetSwitch = 0
+local RenderBindName = "TSB_AutoCombat_Camera_" .. tostring(LocalPlayer.UserId)
+local MovementBindName = "TSB_AutoCombat_Movement_" .. tostring(LocalPlayer.UserId)
+
+local Perf = {
+    CombatSamples = 0,
+    CombatTotalMs = 0,
+    CombatAvgMs = 0,
+    TargetScans = 0,
+    ThreatEvents = 0,
+    AnimationEvents = 0,
+    HotbarUpdates = 0,
+    ObservedPlayers = 0,
+    GlobalThreatChecks = 0,
+    UltimateThreats = 0
+}
+Bot.Perf = Perf
+
+local Threat = {
+    Level = 0,
+    Until = 0,
+    Serial = 0,
+    Source = "NONE",
+    AnimationId = "",
+    At = 0,
+    Model = nil,
+    Root = nil,
+    Distance = math.huge,
+    Facing = 0,
+    Ultimate = false,
+    UltimateName = ""
+}
+
+local VibeUI
+local Window
+local StatusLabel
+local TargetLabel
+local CharacterLabel
+local ThreatLabel
+local PerfLabel
+local StatsLabel
+
 local function getCharacterProfile()
-    local key = getCharacterKey()
-    return CharacterProfiles[key] or {
-        Name = tostring(key or "Unknown"),
+    local key = CharacterKey or (Character and Character:GetAttribute("Character"))
+    local profile = CharacterProfiles[key]
+    if profile then
+        return profile
+    end
+
+    local skillset = key and Skillsets[key]
+    return {
+        Name = skillset and skillset.Name or tostring(key or "Unknown"),
+        Style = "Hybrid",
         Approach = Bot.Config.ApproachRange,
         Retreat = Bot.Config.RetreatRange,
-        SkillRange = 14
+        SkillRange = 24
     }
 end
 
@@ -278,11 +393,13 @@ local function getMoveProfile(name)
         return direct
     end
 
-    local profile = getCharacterProfile()
+    local profile = CurrentProfile or getCharacterProfile()
+    local maxRange = profile.SkillRange or 24
     return {
-        Max = profile.SkillRange or 14,
+        Max = maxRange,
         Priority = 5,
-        ComboMin = 1
+        ComboMin = profile.Style == "Ranged" and 0 or 1,
+        Opener = profile.Style == "Ranged" and maxRange > Bot.Config.M1Range
     }
 end
 
@@ -291,18 +408,64 @@ Bot.MoveProfiles = MoveProfiles
 Bot.CounterNames = CounterNames
 Bot.Skillsets = Skillsets
 
-local function disconnectAll()
-    for _, connection in ipairs(Bot.Connections) do
-        pcall(function()
-            connection:Disconnect()
-        end)
-    end
-    table.clear(Bot.Connections)
-end
-
 local function releaseKey(key)
     pcall(function()
         VirtualInputManager:SendKeyEvent(false, key, false, game)
+    end)
+end
+
+local function pressKey(key)
+    pcall(function()
+        VirtualInputManager:SendKeyEvent(true, key, false, game)
+    end)
+end
+
+local function pulseKey(key, holdTime)
+    pressKey(key)
+    task.delay(holdTime or 0.03, function()
+        releaseKey(key)
+    end)
+end
+
+local function releaseMouse()
+    if not MouseDown then
+        return
+    end
+
+    MouseDown = false
+    pcall(function()
+        local camera = Workspace.CurrentCamera
+        local viewport = camera and camera.ViewportSize or Vector2.new(800, 600)
+        VirtualInputManager:SendMouseButtonEvent(
+            math.floor(viewport.X * 0.5),
+            math.floor(viewport.Y * 0.5),
+            0,
+            false,
+            game,
+            0
+        )
+    end)
+end
+
+local function mouse1()
+    if MouseDown then
+        return
+    end
+
+    local camera = Workspace.CurrentCamera
+    local viewport = camera and camera.ViewportSize or Vector2.new(800, 600)
+    MouseDown = true
+    MouseReleaseAt = os.clock() + 0.018
+
+    pcall(function()
+        VirtualInputManager:SendMouseButtonEvent(
+            math.floor(viewport.X * 0.5),
+            math.floor(viewport.Y * 0.5),
+            0,
+            true,
+            game,
+            0
+        )
     end)
 end
 
@@ -313,6 +476,7 @@ local function cleanupFacing()
         end)
         FacingAlign = nil
     end
+
     if FacingAttachment then
         pcall(function()
             FacingAttachment:Destroy()
@@ -321,28 +485,8 @@ local function cleanupFacing()
     end
 end
 
-local function ensureCharacter()
-    Character = LocalPlayer.Character
-    if not Character or not Character.Parent then
-        Humanoid = nil
-        Root = nil
-        cleanupFacing()
-        return false
-    end
-
-    Humanoid = Character:FindFirstChildOfClass("Humanoid")
-    Root = Character:FindFirstChild("HumanoidRootPart")
-
-    if not Humanoid or not Root or Humanoid.Health <= 0 then
-        cleanupFacing()
-        return false
-    end
-
-    return true
-end
-
 local function ensureFacing()
-    if not Root then
+    if not Root or not Humanoid then
         return
     end
 
@@ -361,221 +505,14 @@ local function ensureFacing()
         FacingAlign.Name = "TSBAutoCombatFacing"
         FacingAlign.Mode = Enum.OrientationAlignmentMode.OneAttachment
         FacingAlign.Attachment0 = FacingAttachment
-        FacingAlign.RigidityEnabled = true
-        FacingAlign.Responsiveness = 200
+        FacingAlign.RigidityEnabled = false
+        FacingAlign.Responsiveness = 72
+        FacingAlign.MaxAngularVelocity = 32
         FacingAlign.MaxTorque = math.huge
         FacingAlign.Parent = Root
     end
 
     Humanoid.AutoRotate = false
-end
-
-local function makeHud()
-    pcall(function()
-        local old = CoreGui:FindFirstChild("TSBAutoCombatHUD")
-        if old then
-            old:Destroy()
-        end
-    end)
-
-    local parent = CoreGui
-    local ok = pcall(function()
-        local test = Instance.new("Folder")
-        test.Name = "_TSBHudTest"
-        test.Parent = CoreGui
-        test:Destroy()
-    end)
-
-    if not ok then
-        parent = LocalPlayer:WaitForChild("PlayerGui")
-    end
-
-    Hud = Instance.new("ScreenGui")
-    Hud.Name = "TSBAutoCombatHUD"
-    Hud.ResetOnSpawn = false
-    Hud.IgnoreGuiInset = true
-    Hud.Parent = parent
-
-    local frame = Instance.new("Frame")
-    frame.Name = "Main"
-    frame.AnchorPoint = Vector2.new(0.5, 0)
-    frame.Position = UDim2.fromScale(0.5, 0.03)
-    frame.Size = UDim2.fromOffset(330, 98)
-    frame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-    frame.BackgroundTransparency = 0.18
-    frame.BorderSizePixel = 0
-    frame.Parent = Hud
-
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 8)
-    corner.Parent = frame
-
-    local title = Instance.new("TextLabel")
-    title.BackgroundTransparency = 1
-    title.Position = UDim2.fromOffset(8, 5)
-    title.Size = UDim2.new(1, -16, 0, 22)
-    title.Font = Enum.Font.GothamBold
-    title.TextSize = 15
-    title.TextColor3 = Color3.fromRGB(255, 255, 255)
-    title.TextXAlignment = Enum.TextXAlignment.Left
-    title.Text = "TSB AUTO COMBAT " .. Bot.Version
-    title.Parent = frame
-
-    StateLabel = Instance.new("TextLabel")
-    StateLabel.BackgroundTransparency = 1
-    StateLabel.Position = UDim2.fromOffset(8, 29)
-    StateLabel.Size = UDim2.new(1, -16, 0, 19)
-    StateLabel.Font = Enum.Font.Gotham
-    StateLabel.TextSize = 13
-    StateLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    StateLabel.TextXAlignment = Enum.TextXAlignment.Left
-    StateLabel.Text = "STATE: IDLE"
-    StateLabel.Parent = frame
-
-    TargetLabel = Instance.new("TextLabel")
-    TargetLabel.BackgroundTransparency = 1
-    TargetLabel.Position = UDim2.fromOffset(8, 49)
-    TargetLabel.Size = UDim2.new(1, -16, 0, 19)
-    TargetLabel.Font = Enum.Font.Gotham
-    TargetLabel.TextSize = 13
-    TargetLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    TargetLabel.TextXAlignment = Enum.TextXAlignment.Left
-    TargetLabel.Text = "TARGET: NONE"
-    TargetLabel.Parent = frame
-
-    StatsLabel = Instance.new("TextLabel")
-    StatsLabel.BackgroundTransparency = 1
-    StatsLabel.Position = UDim2.fromOffset(8, 69)
-    StatsLabel.Size = UDim2.new(1, -16, 0, 19)
-    StatsLabel.Font = Enum.Font.Gotham
-    StatsLabel.TextSize = 12
-    StatsLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
-    StatsLabel.TextXAlignment = Enum.TextXAlignment.Left
-    StatsLabel.Text = "M1 0 | SKILL 0 | BLOCK 0 | DODGE 0 | COUNTER 0 | ULT 0"
-    StatsLabel.Parent = frame
-
-    TargetHighlight = Instance.new("Highlight")
-    TargetHighlight.Name = "TSBAutoCombatTarget"
-    TargetHighlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    TargetHighlight.FillTransparency = 0.75
-    TargetHighlight.OutlineTransparency = 0
-    TargetHighlight.Enabled = false
-    TargetHighlight.Parent = Hud
-end
-
-local function updateHud()
-    if StateLabel then
-        StateLabel.Text = "STATE: " .. tostring(Bot.Action)
-    end
-
-    if TargetLabel then
-        if Bot.Target and Bot.Target.Parent and Root then
-            local targetRoot = Bot.Target:FindFirstChild("HumanoidRootPart")
-            if targetRoot then
-                TargetLabel.Text = string.format("TARGET: %s | %.1f STUDS", Bot.Target.Name, (targetRoot.Position - Root.Position).Magnitude)
-            else
-                TargetLabel.Text = "TARGET: NONE"
-            end
-        else
-            TargetLabel.Text = "TARGET: NONE"
-        end
-    end
-
-    if StatsLabel then
-        local s = Bot.Stats
-        StatsLabel.Text = string.format(
-            "M1 %d | SKILL %d | BLOCK %d | DODGE %d | COUNTER %d | ULT %d",
-            s.M1,
-            s.Skills,
-            s.Blocks,
-            s.Dodges,
-            s.Counters,
-            s.Ultimates
-        )
-    end
-
-    if TargetHighlight then
-        if Bot.Target and Bot.Target.Parent then
-            TargetHighlight.Adornee = Bot.Target
-            TargetHighlight.Enabled = true
-        else
-            TargetHighlight.Adornee = nil
-            TargetHighlight.Enabled = false
-        end
-    end
-end
-
-local function horizontal(vector)
-    return Vector3.new(vector.X, 0, vector.Z)
-end
-
-local function getTargetParts(model)
-    if not model or not model.Parent then
-        return nil
-    end
-
-    local humanoid = model:FindFirstChildOfClass("Humanoid")
-    local root = model:FindFirstChild("HumanoidRootPart")
-
-    if not humanoid or not root or humanoid.Health <= 0 then
-        return nil
-    end
-
-    if model:FindFirstChildOfClass("ForceField") then
-        return nil
-    end
-
-    return humanoid, root
-end
-
-local function isValidTarget(model, maxDistance)
-    if not Root or not model or model == Character then
-        return false
-    end
-
-    local humanoid, root = getTargetParts(model)
-    if not humanoid or not root then
-        return false
-    end
-
-    if Bot.Config.PlayersOnly and not Players:GetPlayerFromCharacter(model) then
-        return false
-    end
-
-    return (root.Position - Root.Position).Magnitude <= maxDistance
-end
-
-local function acquireTarget()
-    if Bot.Target and isValidTarget(Bot.Target, Bot.Config.TargetRadius + 12) then
-        return Bot.Target
-    end
-
-    local live = workspace:FindFirstChild("Live")
-    if not live then
-        Bot.Target = nil
-        return nil
-    end
-
-    local nearest
-    local nearestDistance = Bot.Config.TargetRadius
-
-    for _, model in ipairs(live:GetChildren()) do
-        if model:IsA("Model") and model ~= Character then
-            if not Bot.Config.PlayersOnly or Players:GetPlayerFromCharacter(model) then
-                local humanoid, root = getTargetParts(model)
-                if humanoid and root then
-                    local distance = (root.Position - Root.Position).Magnitude
-                    if distance < nearestDistance then
-                        nearestDistance = distance
-                        nearest = model
-                    end
-                end
-            end
-        end
-    end
-
-    Bot.Target = nearest
-    return nearest
 end
 
 local function setFacing(targetRoot)
@@ -589,38 +526,11 @@ local function setFacing(targetRoot)
     local direction = horizontal(predicted - Root.Position)
 
     if direction.Magnitude > 0.001 and FacingAlign then
-        FacingAlign.CFrame = CFrame.lookAt(Vector3.zero, direction.Unit)
-    end
-end
-
-local function updateCamera()
-    if not Bot.Enabled or not Bot.Config.AutoCamera then
-        return
-    end
-
-    if not ensureCharacter() then
-        return
-    end
-
-    local target = acquireTarget()
-    if not target then
-        return
-    end
-
-    local _, targetRoot = getTargetParts(target)
-    local camera = Workspace.CurrentCamera
-
-    if not targetRoot or not camera then
-        return
-    end
-
-    local predicted = targetRoot.Position + targetRoot.AssemblyLinearVelocity * Bot.Config.CameraLead
-    local focus = predicted + Vector3.new(0, 1.35, 0)
-    local position = camera.CFrame.Position
-    local delta = focus - position
-
-    if delta.Magnitude > 0.001 then
-        camera.CFrame = CFrame.lookAt(position, focus, Vector3.yAxis)
+        local unit = direction.Unit
+        if not LastFacingDirection or LastFacingDirection:Dot(unit) < 0.9994 then
+            LastFacingDirection = unit
+            FacingAlign.CFrame = CFrame.lookAt(Vector3.zero, unit)
+        end
     end
 end
 
@@ -663,10 +573,15 @@ local function requestJump()
     return true
 end
 
-local function tryAutoJump(direction)
+local function tryAutoJump(direction, now)
     if not Bot.Config.AutoJump or not Character or not Humanoid or not Root then
         return
     end
+
+    if now - LastObstacleCheck < Bot.Config.ObstacleCheckRate then
+        return
+    end
+    LastObstacleCheck = now
 
     local flat = horizontal(direction)
     if flat.Magnitude < 0.15 then
@@ -675,7 +590,7 @@ local function tryAutoJump(direction)
 
     local filters = {Character}
     if Bot.Target then
-        table.insert(filters, Bot.Target)
+        filters[#filters + 1] = Bot.Target
     end
 
     local params = RaycastParams.new()
@@ -684,9 +599,12 @@ local function tryAutoJump(direction)
     params.IgnoreWater = true
 
     local directionUnit = flat.Unit
-    local castDistance = Bot.Config.ObstacleDistance
     local lowerOrigin = Root.Position - Vector3.new(0, 0.85, 0)
-    local lowerHit = Workspace:Raycast(lowerOrigin, directionUnit * castDistance, params)
+    local lowerHit = Workspace:Raycast(
+        lowerOrigin,
+        directionUnit * Bot.Config.ObstacleDistance,
+        params
+    )
 
     if not lowerHit then
         return
@@ -702,169 +620,702 @@ end
 
 local function applyMovement()
     if not Bot.Enabled or not Bot.Config.AutoMovement then
-        if Humanoid then
-            Humanoid:Move(Vector3.zero, false)
-        end
         return
     end
 
-    if not ensureCharacter() then
+    if not Humanoid or Humanoid.Health <= 0 or not Root or not Root.Parent then
         return
     end
 
     local now = os.clock()
+    if now - LastMovementApply < Bot.Config.MovementUpdateRate then
+        return
+    end
+    LastMovementApply = now
+
     local direction = DesiredMoveDirection
+    local hardOverride = false
 
     if MovementOverrideDirection and now < MovementOverrideUntil then
         direction = MovementOverrideDirection
+        hardOverride = true
     elseif MovementOverrideDirection then
         MovementOverrideDirection = nil
         MovementOverrideUntil = 0
     end
 
     direction = horizontal(direction)
-
     if direction.Magnitude > 1 then
         direction = direction.Unit
     end
 
-    Humanoid:Move(direction, false)
-    tryAutoJump(direction)
-end
-
-local function moveCombat(targetRoot, distance)
-    if not Bot.Config.AutoMovement or not Humanoid or not Root or not targetRoot then
+    if direction.Magnitude <= 0.03 then
+        SmoothedMoveDirection = Vector3.zero
+        Humanoid:Move(Vector3.zero, false)
         return
     end
 
-    setFacing(targetRoot)
-
-    local delta = horizontal(targetRoot.Position - Root.Position)
-    if delta.Magnitude <= 0.001 then
-        setDesiredMovement(Vector3.zero)
-        return
+    local targetDirection = direction.Unit
+    if hardOverride or SmoothedMoveDirection.Magnitude <= 0.03 then
+        SmoothedMoveDirection = targetDirection
+    else
+        local alpha = math.clamp(Bot.Config.MovementSmoothing, 0.08, 1)
+        local blended = SmoothedMoveDirection:Lerp(targetDirection, alpha)
+        SmoothedMoveDirection = blended.Magnitude > 0.03 and blended.Unit or targetDirection
     end
 
-    local profile = getCharacterProfile()
-    local approachRange = profile.Approach or Bot.Config.ApproachRange
-    local retreatRange = profile.Retreat or Bot.Config.RetreatRange
-    local toward = delta.Unit
-
-    if distance > approachRange then
-        Bot.Action = "APPROACH " .. Bot.Target.Name
-        setDesiredMovement(toward)
-        return
-    end
-
-    if distance < retreatRange then
-        Bot.Action = "RETREAT " .. Bot.Target.Name
-        setDesiredMovement(-toward)
-        return
-    end
-
-    if os.clock() >= NextStrafeSwap then
-        StrafeSide = -StrafeSide
-        NextStrafeSwap = os.clock() + 0.72 + math.random() * 0.22
-    end
-
-    local right = Vector3.new(-toward.Z, 0, toward.X)
-    local pressure = toward * 0.22
-    local strafe = right * StrafeSide
-    local move = strafe + pressure
-
-    if move.Magnitude > 0.001 then
-        move = move.Unit
-    end
-
-    Bot.Action = "PRESSURE/STRAFE " .. Bot.Target.Name
-    setDesiredMovement(move)
+    Humanoid:Move(SmoothedMoveDirection, false)
+    tryAutoJump(SmoothedMoveDirection, now)
 end
 
-local function tapKey(key, holdTime)
-    holdTime = holdTime or 0.035
+local function getTargetParts(model)
+    if not model or not model.Parent then
+        return nil
+    end
 
-    task.spawn(function()
-        pcall(function()
-            VirtualInputManager:SendKeyEvent(true, key, false, game)
-        end)
-        task.wait(holdTime)
-        pcall(function()
-            VirtualInputManager:SendKeyEvent(false, key, false, game)
-        end)
-    end)
+    local humanoid = model:FindFirstChildOfClass("Humanoid")
+    local root = model:FindFirstChild("HumanoidRootPart")
+
+    if not humanoid or not root or humanoid.Health <= 0 then
+        return nil
+    end
+
+    if model:FindFirstChildOfClass("ForceField") then
+        return nil
+    end
+
+    return humanoid, root
 end
 
-local function mouse1()
-    local camera = Workspace.CurrentCamera
-    local viewport = camera and camera.ViewportSize or Vector2.new(800, 600)
-    local x = math.floor(viewport.X * 0.5)
-    local y = math.floor(viewport.Y * 0.5)
-
-    task.spawn(function()
-        pcall(function()
-            VirtualInputManager:SendMouseButtonEvent(x, y, 0, true, game, 0)
-        end)
-        task.wait(0.018)
-        pcall(function()
-            VirtualInputManager:SendMouseButtonEvent(x, y, 0, false, game, 0)
-        end)
-    end)
-end
-
-local function canAct()
-    if not Character or not Humanoid or Humanoid.Health <= 0 then
+local function isValidTarget(model, maxDistance)
+    if not Root or not model or model == Character then
         return false
     end
 
-    if Character:GetAttribute("Ragdoll") then
-        Bot.Action = "STUNNED / RAGDOLLED"
+    local humanoid, root = getTargetParts(model)
+    if not humanoid or not root then
         return false
     end
 
-    if Character:GetAttribute("Freeze") or Character:GetAttribute("Slowed") or Character:GetAttribute("GlobalStun") then
-        Bot.Action = "STUNNED / RAGDOLLED"
+    if Bot.Config.PlayersOnly and not Players:GetPlayerFromCharacter(model) then
         return false
     end
 
+    return (root.Position - Root.Position).Magnitude <= maxDistance
+end
+
+local ThreatSerialCounter = 0
+
+local function nextThreatSerial()
+    ThreatSerialCounter += 1
+    return ThreatSerialCounter
+end
+
+local function facingToUsFrom(enemyRoot)
+    if not enemyRoot or not Root then
+        return 0
+    end
+
+    local towardUs = horizontal(Root.Position - enemyRoot.Position)
+    local look = horizontal(enemyRoot.CFrame.LookVector)
+
+    if towardUs.Magnitude <= 0.001 or look.Magnitude <= 0.001 then
+        return 0
+    end
+
+    return look.Unit:Dot(towardUs.Unit)
+end
+
+local function getThreatState(model)
+    local state = ThreatStates[model]
+    if not state then
+        state = {
+            Model = model,
+            Root = nil,
+            Humanoid = nil,
+            Level = 0,
+            Source = "NONE",
+            Until = 0,
+            Serial = 0,
+            AnimationId = "",
+            At = 0,
+            UltimateUntil = 0,
+            UltimateName = "",
+            GeometryAt = 0
+        }
+        ThreatStates[model] = state
+    end
+    return state
+end
+
+local function ultimateWindow(model, now)
+    if not model or model == Character or not model.Parent then
+        return 0, ""
+    end
+
+    local duration = tonumber(model:GetAttribute("UltimateTime")) or 45
+    duration = math.clamp(duration, 8, 90)
+
+    local used = tonumber(model:GetAttribute("UsedUltimate"))
+        or tonumber(model:GetAttribute("JustUlted"))
+
+    local ultimateName = tostring(model:GetAttribute("UltimateName") or "ULTIMATE")
+    local serverNow = Workspace:GetServerTimeNow()
+
+    if model:GetAttribute("Ulted") == true then
+        if used then
+            local remaining = used + duration + Bot.Config.UltimateGrace - serverNow
+            return now + math.max(0.5, remaining), ultimateName
+        end
+        return now + duration, ultimateName
+    end
+
+    if used then
+        local remaining = used + duration + Bot.Config.UltimateGrace - serverNow
+        if remaining > 0 then
+            return now + remaining, ultimateName
+        end
+    end
+
+    return 0, ultimateName
+end
+
+local function raiseThreat(model, level, source, ttl, animationId)
+    if not Root or not model or model == Character or not model.Parent then
+        return false
+    end
+
+    local humanoid, enemyRoot = getTargetParts(model)
+    if not humanoid or not enemyRoot then
+        return false
+    end
+
+    local distance = (enemyRoot.Position - Root.Position).Magnitude
+    local maxRange = Bot.Config.ThreatRadius
+
+    if source == "SKILL" or (source == "ANIMATION" and level >= 3) then
+        maxRange = Bot.Config.GlobalThreatRadius
+    elseif source == "ULTIMATE" then
+        maxRange = Bot.Config.UltimateDangerRadius
+    elseif source == "DASH" or source == "RUSH" then
+        maxRange = math.max(Bot.Config.ThreatRadius, 28)
+    elseif source == "M1" then
+        maxRange = 14
+    end
+
+    if distance > maxRange then
+        return false
+    end
+
+    local facing = facingToUsFrom(enemyRoot)
+    if distance > Bot.Config.ThreatRadius
+        and source ~= "ULTIMATE"
+        and facing < -0.15 then
+        return false
+    end
+
+    local now = os.clock()
+    local state = getThreatState(model)
+    state.Root = enemyRoot
+    state.Humanoid = humanoid
+    state.Level = math.max(level, now <= state.Until and state.Level or 0)
+    state.Source = source or "UNKNOWN"
+    state.Until = math.max(state.Until, now + (ttl or Bot.Config.ThreatMemory))
+    state.Serial = nextThreatSerial()
+    state.AnimationId = animationId or state.AnimationId
+    state.At = now
+
+    Perf.ThreatEvents += 1
     return true
 end
 
-local function hotbar()
-    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
-    local hotbarGui = playerGui
-        and playerGui:FindFirstChild("Hotbar")
-        and playerGui.Hotbar:FindFirstChild("Backpack")
-        and playerGui.Hotbar.Backpack:FindFirstChild("Hotbar")
-
-    if not hotbarGui then
-        return {}
+local function markUltimateThreat(model)
+    if not Bot.Config.FleeEnemyUltimates or not model or model == Character then
+        return
     end
 
-    local result = {}
-
-    for i = 1, 13 do
-        local slot = hotbarGui:FindFirstChild(tostring(i))
-        local base = slot and slot:FindFirstChild("Base")
-        local toolName = base and base:FindFirstChild("ToolName")
-        local cooldown = base and base:FindFirstChild("Cooldown")
-
-        if base and toolName and toolName:IsA("TextLabel") then
-            table.insert(result, {
-                Index = i,
-                Name = toolName.Text,
-                Ready = cooldown == nil
-            })
-        end
+    local now = os.clock()
+    local finish, ultimateName = ultimateWindow(model, now)
+    if finish <= now then
+        return
     end
 
-    return result
+    local state = getThreatState(model)
+    local wasActive = state.UltimateUntil > now
+    state.UltimateUntil = math.max(state.UltimateUntil, finish)
+    state.UltimateName = ultimateName
+    state.Level = 5
+    state.Source = "ULTIMATE"
+    state.Until = math.max(state.Until, finish)
+    state.Serial = nextThreatSerial()
+    state.At = now
+
+    local humanoid, enemyRoot = getTargetParts(model)
+    state.Humanoid = humanoid
+    state.Root = enemyRoot
+
+    if not wasActive then
+        Perf.UltimateThreats += 1
+    end
 end
 
-local function findSkillByName(name)
-    for _, slot in ipairs(hotbar()) do
-        if slot.Name == name and slot.Ready then
-            return slot
+local function clearThreatState(model)
+    ThreatStates[model] = nil
+    if Threat.Model == model then
+        Threat.Level = 0
+        Threat.Until = 0
+        Threat.Source = "NONE"
+        Threat.AnimationId = ""
+        Threat.Model = nil
+        Threat.Root = nil
+        Threat.Distance = math.huge
+        Threat.Facing = 0
+        Threat.Ultimate = false
+        Threat.UltimateName = ""
+    end
+end
+
+local function disconnectThreatModel(model)
+    local list = ThreatConnectionsByModel[model]
+    if list then
+        disconnectList(list)
+        ThreatConnectionsByModel[model] = nil
+    end
+    clearThreatState(model)
+
+    local count = 0
+    for _ in pairs(ThreatConnectionsByModel) do
+        count += 1
+    end
+    Perf.ObservedPlayers = count
+end
+
+local function priorityThreat(priority)
+    if priority == Enum.AnimationPriority.Action4 then
+        return 4
+    elseif priority == Enum.AnimationPriority.Action3 then
+        return 3
+    elseif priority == Enum.AnimationPriority.Action2 then
+        return 2
+    elseif priority == Enum.AnimationPriority.Action then
+        return 1
+    end
+    return 0
+end
+
+local function bindThreatModel(model)
+    if not model or not model.Parent or model == Character then
+        return
+    end
+
+    local owner = Players:GetPlayerFromCharacter(model)
+    if owner == LocalPlayer then
+        return
+    end
+
+    if Bot.Config.PlayersOnly and not owner then
+        return
+    end
+
+    disconnectThreatModel(model)
+
+    local humanoid = model:FindFirstChildOfClass("Humanoid")
+    local enemyRoot = model:FindFirstChild("HumanoidRootPart")
+    if not humanoid or not enemyRoot then
+        task.delay(0.15, function()
+            if model.Parent and LiveModels[model] then
+                bindThreatModel(model)
+            end
+        end)
+        return
+    end
+
+    local list = {}
+    ThreatConnectionsByModel[model] = list
+    local state = getThreatState(model)
+    state.Humanoid = humanoid
+    state.Root = enemyRoot
+
+    local boundAnimator
+    local function attachAnimator(animator)
+        if not animator or animator == boundAnimator or not animator:IsA("Animator") then
+            return
         end
+        boundAnimator = animator
+
+        addConnection(list, animator.AnimationPlayed:Connect(function(track)
+            local level = priorityThreat(track.Priority)
+            if level <= 0 then
+                return
+            end
+            Perf.AnimationEvents += 1
+
+            local animation = track.Animation
+            local animationId = animation and animation.AnimationId or ""
+            local ttl = math.clamp(
+                tonumber(track.Length) or Bot.Config.ThreatMemory,
+                0.16,
+                level >= 3 and Bot.Config.RangedThreatMemory or 0.55
+            )
+
+            raiseThreat(model, level, "ANIMATION", ttl, animationId)
+        end))
+    end
+
+    attachAnimator(humanoid:FindFirstChildOfClass("Animator"))
+
+    addConnection(list, humanoid.ChildAdded:Connect(function(child)
+        if child:IsA("Animator") then
+            attachAnimator(child)
+        end
+    end))
+
+    local lastM1 = model:GetAttribute("LastM1Fire")
+    local lastSkill = model:GetAttribute("LastSkill")
+    local lastDash = model:GetAttribute("JustForwardDashed")
+    local lastJustUlted = model:GetAttribute("JustUlted")
+    local lastUsedUltimate = model:GetAttribute("UsedUltimate")
+    local lastUlted = model:GetAttribute("Ulted")
+
+    addConnection(list, model:GetAttributeChangedSignal("LastM1Fire"):Connect(function()
+        local value = model:GetAttribute("LastM1Fire")
+        if value == lastM1 then
+            return
+        end
+        lastM1 = value
+        raiseThreat(model, 3, "M1", 0.24)
+    end))
+
+    addConnection(list, model:GetAttributeChangedSignal("LastSkill"):Connect(function()
+        local value = model:GetAttribute("LastSkill")
+        if value == lastSkill then
+            return
+        end
+        lastSkill = value
+        raiseThreat(model, 4, "SKILL", Bot.Config.RangedThreatMemory)
+    end))
+
+    addConnection(list, model:GetAttributeChangedSignal("JustForwardDashed"):Connect(function()
+        local value = model:GetAttribute("JustForwardDashed")
+        if value == lastDash then
+            return
+        end
+        lastDash = value
+        raiseThreat(model, 3, "DASH", 0.32)
+    end))
+
+    addConnection(list, model:GetAttributeChangedSignal("JustUlted"):Connect(function()
+        local value = model:GetAttribute("JustUlted")
+        if value == lastJustUlted then
+            return
+        end
+        lastJustUlted = value
+        markUltimateThreat(model)
+    end))
+
+    addConnection(list, model:GetAttributeChangedSignal("UsedUltimate"):Connect(function()
+        local value = model:GetAttribute("UsedUltimate")
+        if value == lastUsedUltimate then
+            return
+        end
+        lastUsedUltimate = value
+        markUltimateThreat(model)
+    end))
+
+    addConnection(list, model:GetAttributeChangedSignal("Ulted"):Connect(function()
+        local value = model:GetAttribute("Ulted")
+        if value == lastUlted then
+            return
+        end
+        lastUlted = value
+        markUltimateThreat(model)
+    end))
+
+    addConnection(list, humanoid.Died:Connect(function()
+        clearThreatState(model)
+    end))
+
+    addConnection(list, model.AncestryChanged:Connect(function(_, parent)
+        if not parent then
+            disconnectThreatModel(model)
+        end
+    end))
+
+    markUltimateThreat(model)
+
+    local count = 0
+    for _ in pairs(ThreatConnectionsByModel) do
+        count += 1
+    end
+    Perf.ObservedPlayers = count
+end
+
+local function clearTarget()
+    disconnectList(TargetConnections)
+    Bot.Target = nil
+    TargetHumanoid = nil
+    TargetRoot = nil
+    TargetAnimator = nil
+    TargetDistance = math.huge
+end
+
+local function bindTarget(model, humanoid, root)
+    if Bot.Target == model and TargetHumanoid == humanoid and TargetRoot == root then
+        return
+    end
+
+    disconnectList(TargetConnections)
+    Bot.Target = model
+    TargetHumanoid = humanoid
+    TargetRoot = root
+    TargetAnimator = humanoid:FindFirstChildOfClass("Animator")
+    LastTargetSwitch = os.clock()
+
+    addConnection(TargetConnections, humanoid.Died:Connect(function()
+        if Bot.Target == model then
+            clearTarget()
+        end
+    end))
+
+    addConnection(TargetConnections, model.AncestryChanged:Connect(function(_, parent)
+        if not parent and Bot.Target == model then
+            clearTarget()
+        end
+    end))
+end
+
+local function refreshTarget(now, force)
+    if not Root then
+        clearTarget()
+        return nil
+    end
+
+    local currentValid = Bot.Target and isValidTarget(
+        Bot.Target,
+        Bot.Config.TargetRadius + Bot.Config.TargetSwitchAdvantage
+    )
+
+    if currentValid
+        and not force
+        and now - LastTargetSwitch < Bot.Config.TargetLockTime then
+        TargetDistance = TargetRoot and (TargetRoot.Position - Root.Position).Magnitude or TargetDistance
+        return Bot.Target
+    end
+
+    if currentValid and not force and now - LastTargetScan < Bot.Config.TargetScanRate then
+        return Bot.Target
+    end
+
+    if not currentValid and now - LastTargetScan < Bot.Config.TargetScanRate * 0.5 then
+        return nil
+    end
+
+    LastTargetScan = now
+    Perf.TargetScans += 1
+
+    local nearest
+    local nearestHumanoid
+    local nearestRoot
+    local nearestDistance = Bot.Config.TargetRadius
+
+    for model in pairs(LiveModels) do
+        if model ~= Character and model.Parent then
+            if not Bot.Config.PlayersOnly or Players:GetPlayerFromCharacter(model) then
+                local humanoid, root = getTargetParts(model)
+                if humanoid and root then
+                    local distance = (root.Position - Root.Position).Magnitude
+                    if distance < nearestDistance then
+                        nearest = model
+                        nearestHumanoid = humanoid
+                        nearestRoot = root
+                        nearestDistance = distance
+                    end
+                end
+            end
+        end
+    end
+
+    if currentValid and Bot.Target and TargetRoot then
+        local currentDistance = (TargetRoot.Position - Root.Position).Magnitude
+        if not nearest
+            or nearest == Bot.Target
+            or nearestDistance + Bot.Config.TargetSwitchAdvantage >= currentDistance then
+            TargetDistance = currentDistance
+            return Bot.Target
+        end
+    end
+
+    if nearest then
+        bindTarget(nearest, nearestHumanoid, nearestRoot)
+        TargetDistance = nearestDistance
+        return nearest
+    end
+
+    clearTarget()
+    return nil
+end
+
+local function bindLiveFolder(folder)
+    disconnectList(LiveConnections)
+
+    for model in pairs(ThreatConnectionsByModel) do
+        disconnectThreatModel(model)
+    end
+
+    table.clear(LiveModels)
+    LiveFolder = folder
+
+    if not folder then
+        return
+    end
+
+    for _, child in ipairs(folder:GetChildren()) do
+        if child:IsA("Model") then
+            LiveModels[child] = true
+            task.defer(bindThreatModel, child)
+        end
+    end
+
+    addConnection(LiveConnections, folder.ChildAdded:Connect(function(child)
+        if child:IsA("Model") then
+            LiveModels[child] = true
+            task.defer(bindThreatModel, child)
+        end
+    end))
+
+    addConnection(LiveConnections, folder.ChildRemoved:Connect(function(child)
+        LiveModels[child] = nil
+        disconnectThreatModel(child)
+        if child == Bot.Target then
+            clearTarget()
+        end
+    end))
+end
+
+local function raiseHitThreat()
+    if not Root then
+        return
+    end
+
+    local bestModel
+    local bestDistance = math.huge
+
+    for model in pairs(LiveModels) do
+        if model ~= Character and model.Parent then
+            local humanoid, enemyRoot = getTargetParts(model)
+            if humanoid and enemyRoot then
+                local distance = (enemyRoot.Position - Root.Position).Magnitude
+                if distance < bestDistance and distance <= 20 then
+                    bestDistance = distance
+                    bestModel = model
+                end
+            end
+        end
+    end
+
+    if not bestModel then
+        bestModel = Bot.Target
+    end
+
+    if bestModel then
+        raiseThreat(bestModel, 4, "HIT", 0.30)
+    end
+end
+
+local function isUsableSkillName(name)
+    return type(name) == "string"
+        and name ~= ""
+        and name ~= "N/A"
+        and name ~= "None"
+        and name ~= "NONE"
+        and name ~= "-"
+end
+
+local function refreshSlot(index)
+    local cached = HotbarSlots[index]
+    if not cached then
+        return
+    end
+
+    local base = cached.Base
+    local toolName = base and base:FindFirstChild("ToolName")
+    cached.Name = toolName and toolName:IsA("TextLabel") and toolName.Text or ""
+    cached.Ready = base ~= nil
+        and base:FindFirstChild("Cooldown") == nil
+        and isUsableSkillName(cached.Name)
+    Perf.HotbarUpdates += 1
+end
+
+local function bindHotbar()
+    local now = os.clock()
+    if now - LastHotbarBind < 0.4 then
+        return
+    end
+    LastHotbarBind = now
+
+    disconnectList(HotbarConnections)
+    table.clear(HotbarSlots)
+    HotbarRoot = nil
+
+    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+    local backpack = playerGui
+        and playerGui:FindFirstChild("Hotbar")
+        and playerGui.Hotbar:FindFirstChild("Backpack")
+    local hotbar = backpack and backpack:FindFirstChild("Hotbar")
+
+    if not hotbar then
+        return
+    end
+
+    HotbarRoot = hotbar
+
+    for i = 1, 13 do
+        local slot = hotbar:FindFirstChild(tostring(i))
+        local base = slot and slot:FindFirstChild("Base")
+
+        if base then
+            local entry = {
+                Index = i,
+                Base = base,
+                Name = "",
+                Ready = false
+            }
+            HotbarSlots[i] = entry
+            refreshSlot(i)
+
+            local toolName = base:FindFirstChild("ToolName")
+            if toolName and toolName:IsA("TextLabel") then
+                addConnection(HotbarConnections, toolName:GetPropertyChangedSignal("Text"):Connect(function()
+                    refreshSlot(i)
+                end))
+            end
+
+            addConnection(HotbarConnections, base.ChildAdded:Connect(function(child)
+                if child.Name == "Cooldown" or child.Name == "ToolName" then
+                    refreshSlot(i)
+                end
+            end))
+
+            addConnection(HotbarConnections, base.ChildRemoved:Connect(function(child)
+                if child.Name == "Cooldown" or child.Name == "ToolName" then
+                    refreshSlot(i)
+                end
+            end))
+        end
+    end
+
+    addConnection(HotbarConnections, hotbar.ChildAdded:Connect(function()
+        task.defer(bindHotbar)
+    end))
+
+    addConnection(HotbarConnections, hotbar.ChildRemoved:Connect(function()
+        task.defer(bindHotbar)
+    end))
+end
+
+local function ensureHotbar()
+    if not HotbarRoot or not HotbarRoot.Parent then
+        bindHotbar()
     end
 end
 
@@ -886,7 +1337,7 @@ local function keyForSlot(index)
 end
 
 local function useSlot(slot, action)
-    if not slot or not slot.Ready then
+    if not slot or not slot.Ready or slot.Name == "" then
         return false
     end
 
@@ -895,201 +1346,413 @@ local function useSlot(slot, action)
         return false
     end
 
-    tapKey(key)
+    pulseKey(key, 0.035)
     Bot.Action = action or ("SKILL " .. tostring(slot.Index))
     Bot.Stats.Skills += 1
     LastSkill = os.clock()
     return true
 end
 
-local function getCounterSkill()
-    for _, slot in ipairs(hotbar()) do
-        if slot.Ready and CounterNames[slot.Name] then
-            return slot
-        end
-    end
-end
+local function getCounterSkill(distance)
+    ensureHotbar()
 
-local function getAnimationThreat(targetHumanoid)
-    local threat = 0
-
-    pcall(function()
-        local animator = targetHumanoid:FindFirstChildOfClass("Animator")
-        if not animator then
-            return
-        end
-
-        for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
-            if track.IsPlaying then
-                local priority = track.Priority
-                if priority == Enum.AnimationPriority.Action4 then
-                    threat = math.max(threat, 4)
-                elseif priority == Enum.AnimationPriority.Action3 then
-                    threat = math.max(threat, 3)
-                elseif priority == Enum.AnimationPriority.Action2 then
-                    threat = math.max(threat, 2)
-                elseif priority == Enum.AnimationPriority.Action then
-                    threat = math.max(threat, 1)
+    local best
+    for i = 1, 13 do
+        local slot = HotbarSlots[i]
+        if slot and slot.Ready and CounterNames[slot.Name] then
+            local move = getMoveProfile(slot.Name)
+            if distance <= (move.Max or 16) + 2 then
+                if not best or slot.Index < best.Index then
+                    best = slot
                 end
             end
         end
-    end)
-
-    return threat
+    end
+    return best
 end
 
-local function detectThreat(target, targetHumanoid, targetRoot, distance)
-    if distance > Bot.Config.ThreatRadius then
-        TargetSnapshots[target] = nil
-        return 0
+local function targetFacingUs(enemyRoot)
+    return facingToUsFrom(enemyRoot or TargetRoot)
+end
+
+local function scoreThreatCandidate(model, enemyRoot, level, source, distance, facing, ultimate)
+    local score = level * 100
+    score -= distance * (ultimate and 0.18 or 0.55)
+    score += math.max(facing, -0.5) * 18
+
+    if source == "ULTIMATE" then
+        score += 1000
+    elseif source == "SKILL" then
+        score += 42
+    elseif source == "HIT" then
+        score += 36
+    elseif source == "M1" then
+        score += 18
+    elseif source == "DASH" or source == "RUSH" then
+        score += 24
     end
 
-    local snapshot = TargetSnapshots[target]
-    if not snapshot then
-        snapshot = {
-            LastM1Fire = target:GetAttribute("LastM1Fire"),
-            LastSkill = target:GetAttribute("LastSkill"),
-            JustForwardDashed = target:GetAttribute("JustForwardDashed")
-        }
-        TargetSnapshots[target] = snapshot
+    if model == Bot.Target then
+        score += 6
     end
 
-    local threat = getAnimationThreat(targetHumanoid)
-    local currentM1 = target:GetAttribute("LastM1Fire")
-    local currentSkill = target:GetAttribute("LastSkill")
-    local currentDash = target:GetAttribute("JustForwardDashed")
+    return score
+end
 
-    if currentM1 ~= nil and currentM1 ~= snapshot.LastM1Fire then
-        threat = math.max(threat, distance <= 9.5 and 3 or 2)
-        snapshot.LastM1Fire = currentM1
+local function detectThreat(now)
+    if not Root then
+        return nil
     end
 
-    if currentSkill ~= nil and currentSkill ~= snapshot.LastSkill then
-        threat = math.max(threat, 4)
-        snapshot.LastSkill = currentSkill
-    end
+    Perf.GlobalThreatChecks += 1
 
-    if currentDash ~= nil and currentDash ~= snapshot.JustForwardDashed then
-        threat = math.max(threat, 3)
-        snapshot.JustForwardDashed = currentDash
-    end
+    local best
+    local bestScore = -math.huge
 
-    local towardUs = horizontal(Root.Position - targetRoot.Position)
-    local enemyLook = horizontal(targetRoot.CFrame.LookVector)
+    local function consider(model, state, level, source, serial, ultimate, ultimateName)
+        if not model or model == Character or not model.Parent then
+            return
+        end
 
-    if towardUs.Magnitude > 0.001 and enemyLook.Magnitude > 0.001 then
-        local facingDot = enemyLook.Unit:Dot(towardUs.Unit)
-        if facingDot < 0.25 then
-            threat = math.max(0, threat - 1)
-        elseif facingDot > 0.72 and distance <= 10 then
-            threat = math.max(threat, 1)
+        if not Bot.Config.MultiThreatAwareness and model ~= Bot.Target and not ultimate then
+            return
+        end
+
+        local humanoid, enemyRoot = getTargetParts(model)
+        if not humanoid or not enemyRoot then
+            return
+        end
+
+        local distance = (enemyRoot.Position - Root.Position).Magnitude
+        local maxRange = ultimate and Bot.Config.UltimateDangerRadius or Bot.Config.GlobalThreatRadius
+        if distance > maxRange then
+            return
+        end
+
+        local facing = facingToUsFrom(enemyRoot)
+        local score = scoreThreatCandidate(model, enemyRoot, level, source, distance, facing, ultimate)
+
+        if score > bestScore then
+            bestScore = score
+            best = {
+                Model = model,
+                Root = enemyRoot,
+                Humanoid = humanoid,
+                Level = level,
+                Source = source,
+                Serial = serial,
+                Distance = distance,
+                Facing = facing,
+                Ultimate = ultimate,
+                UltimateName = ultimateName or "",
+                State = state
+            }
         end
     end
 
-    local health = Humanoid.Health
-    if health < LastHealth - 0.1 then
-        threat = math.max(threat, 4)
-    end
-    LastHealth = health
+    for model, state in pairs(ThreatStates) do
+        if not model.Parent then
+            ThreatStates[model] = nil
+        else
+            local finish, ultimateName = ultimateWindow(model, now)
+            if Bot.Config.FleeEnemyUltimates and finish > now then
+                if finish > state.UltimateUntil then
+                    state.UltimateUntil = finish
+                    state.UltimateName = ultimateName
+                    state.Serial = nextThreatSerial()
+                end
+            end
 
-    return threat
+            if Bot.Config.FleeEnemyUltimates and state.UltimateUntil > now then
+                consider(model, state, 5, "ULTIMATE", state.Serial, true, state.UltimateName)
+            elseif state.Until > now and state.Level > 0 then
+                consider(model, state, state.Level, state.Source, state.Serial, false, "")
+            end
+        end
+    end
+
+    for model in pairs(LiveModels) do
+        if model ~= Character and model.Parent then
+            local humanoid, enemyRoot = getTargetParts(model)
+            if humanoid and enemyRoot then
+                local distance = (enemyRoot.Position - Root.Position).Magnitude
+                if distance <= math.max(Bot.Config.ThreatRadius, 18) then
+                    local towardUs = horizontal(Root.Position - enemyRoot.Position)
+                    local velocity = horizontal(enemyRoot.AssemblyLinearVelocity)
+                    local facing = facingToUsFrom(enemyRoot)
+
+                    if towardUs.Magnitude > 0.001 and velocity.Magnitude > 0.001 then
+                        local closingSpeed = velocity:Dot(towardUs.Unit)
+                        if closingSpeed > 20 and distance <= 16 and facing > 0.12 then
+                            local state = getThreatState(model)
+                            if now - state.GeometryAt > 0.25 then
+                                state.GeometryAt = now
+                                state.Serial = nextThreatSerial()
+                            end
+                            consider(model, state, 3, "RUSH", state.Serial, false, "")
+                        elseif closingSpeed > 12 and distance <= 11 and facing > 0.45 then
+                            local state = getThreatState(model)
+                            if now - state.GeometryAt > 0.30 then
+                                state.GeometryAt = now
+                                state.Serial = nextThreatSerial()
+                            end
+                            consider(model, state, 2, "CLOSING", state.Serial, false, "")
+                        end
+                    end
+
+                    if distance <= 8.5 and facing > 0.75 then
+                        local state = getThreatState(model)
+                        if now - state.GeometryAt > 0.32 then
+                            state.GeometryAt = now
+                            state.Serial = nextThreatSerial()
+                        end
+                        consider(model, state, 1, "PRESSURE", state.Serial, false, "")
+                    end
+                end
+            end
+        end
+    end
+
+    if best then
+        Threat.Level = best.Level
+        Threat.Until = best.Ultimate and (best.State and best.State.UltimateUntil or now + 0.5)
+            or (best.State and best.State.Until or now + Bot.Config.ThreatMemory)
+        Threat.Serial = best.Serial
+        Threat.Source = best.Source
+        Threat.AnimationId = best.State and best.State.AnimationId or ""
+        Threat.At = now
+        Threat.Model = best.Model
+        Threat.Root = best.Root
+        Threat.Distance = best.Distance
+        Threat.Facing = best.Facing
+        Threat.Ultimate = best.Ultimate
+        Threat.UltimateName = best.UltimateName
+        return best
+    end
+
+    Threat.Level = 0
+    Threat.Until = 0
+    Threat.Source = "NONE"
+    Threat.AnimationId = ""
+    Threat.Model = nil
+    Threat.Root = nil
+    Threat.Distance = math.huge
+    Threat.Facing = 0
+    Threat.Ultimate = false
+    Threat.UltimateName = ""
+    return nil
 end
 
-local function doBlock(level)
-    if Blocking then
-        return
+local function canAct()
+    if not Character or not Humanoid or Humanoid.Health <= 0 then
+        return false
     end
 
-    Blocking = true
-    Bot.Action = "BLOCK / PARRY"
-    Bot.Stats.Blocks += 1
-
-    local duration = Bot.Config.BlockDuration
-    if level >= 4 then
-        duration = math.max(duration, 0.36)
-    elseif level <= 2 then
-        duration = math.min(duration, 0.22)
+    if Character:GetAttribute("Ragdoll")
+        or Character:GetAttribute("Freeze")
+        or Character:GetAttribute("Slowed")
+        or Character:GetAttribute("GlobalStun") then
+        Bot.Action = "STUNNED / RAGDOLLED"
+        return false
     end
 
-    task.spawn(function()
-        pcall(function()
-            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.F, false, game)
-        end)
-        task.wait(duration)
-        pcall(function()
-            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.F, false, game)
-        end)
-        Blocking = false
-    end)
+    return true
 end
 
-local function doDodge(targetRoot, level)
-    if os.clock() - LastDash < Bot.Config.DashInterval then
-        return false
+local function chooseDodgeDirection(threatRoot)
+    if not Root then
+        return nil, "NONE"
     end
 
-    if not Humanoid or not Root or not targetRoot then
-        return false
+    threatRoot = threatRoot or TargetRoot
+    if not threatRoot then
+        return nil, "NONE"
     end
 
-    local relative = horizontal(targetRoot.Position - Root.Position)
-    if relative.Magnitude <= 0.001 then
-        return false
+    local toward = horizontal(threatRoot.Position - Root.Position)
+    if toward.Magnitude <= 0.001 then
+        return nil, "NONE"
     end
+    toward = toward.Unit
 
-    LastDash = os.clock()
-
-    local toward = relative.Unit
     local right = Vector3.new(-toward.Z, 0, toward.X)
-    local choice
-    local dodgeDirection
+    local back = -toward
+    local candidates = {
+        {Name = "RIGHT", Direction = right},
+        {Name = "LEFT", Direction = -right},
+        {Name = "BACK-RIGHT", Direction = (back + right * 0.68).Unit},
+        {Name = "BACK-LEFT", Direction = (back - right * 0.68).Unit},
+        {Name = "BACK", Direction = back}
+    }
 
-    local roll = math.random()
-    if level >= 4 and roll < 0.35 then
-        choice = "BACK"
-        dodgeDirection = -toward
-    elseif StrafeSide > 0 then
-        choice = "RIGHT"
-        dodgeDirection = right
-    else
-        choice = "LEFT"
-        dodgeDirection = -right
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = {Character}
+    params.IgnoreWater = true
+
+    local predictedEnemy = threatRoot.Position + horizontal(threatRoot.AssemblyLinearVelocity) * 0.18
+    local best
+    local bestScore = -math.huge
+    local now = os.clock()
+
+    for _, candidate in ipairs(candidates) do
+        local direction = candidate.Direction
+        local hit = Workspace:Raycast(
+            Root.Position + Vector3.new(0, 0.5, 0),
+            direction * Bot.Config.DodgeDistance,
+            params
+        )
+
+        local endpoint = Root.Position + direction * Bot.Config.DodgeDistance
+        local score = (horizontal(endpoint - predictedEnemy)).Magnitude * 1.8
+
+        if hit and hit.Instance and hit.Instance:IsA("BasePart") and hit.Instance.CanCollide then
+            score -= 55
+        else
+            score += 12
+        end
+
+        local nearestOther = math.huge
+        for model in pairs(LiveModels) do
+            if model ~= Character and model.Parent then
+                local _, otherRoot = getTargetParts(model)
+                if otherRoot then
+                    local separation = horizontal(endpoint - otherRoot.Position).Magnitude
+                    nearestOther = math.min(nearestOther, separation)
+
+                    local state = ThreatStates[model]
+                    if state and state.UltimateUntil > now then
+                        score += math.min(separation, 60) * 0.42
+                    end
+                end
+            end
+        end
+
+        if nearestOther < math.huge then
+            score += math.min(nearestOther, 24) * 0.26
+        end
+
+        if candidate.Name == "RIGHT" and StrafeSide > 0 then
+            score += 1.5
+        elseif candidate.Name == "LEFT" and StrafeSide < 0 then
+            score += 1.5
+        end
+
+        if score > bestScore then
+            bestScore = score
+            best = candidate
+        end
     end
 
-    dodgeDirection = horizontal(dodgeDirection)
-    if dodgeDirection.Magnitude <= 0.001 then
+    return best and best.Direction or nil, best and best.Name or "NONE"
+end
+
+local function doDodge(level, threatRoot)
+    local now = os.clock()
+    if now - LastDash < Bot.Config.DashInterval then
         return false
     end
 
-    dodgeDirection = dodgeDirection.Unit
-    MovementOverrideDirection = dodgeDirection
-    MovementOverrideUntil = os.clock() + Bot.Config.DodgeMoveDuration
+    if not Humanoid or not Root then
+        return false
+    end
 
-    Bot.Action = "ESCAPE: " .. choice
+    local direction, name = chooseDodgeDirection(threatRoot)
+    if not direction then
+        return false
+    end
+
+    LastDash = now
+    MovementOverrideDirection = direction
+    MovementOverrideUntil = now + Bot.Config.DodgeMoveDuration
+    CameraOverrideDirection = direction
+    CameraOverrideUntil = now + 0.16
+    setDesiredMovement(direction)
+    SmoothedMoveDirection = direction
+    Bot.Action = "DODGE: " .. name
     Bot.Stats.Dodges += 1
 
-    Humanoid:Move(dodgeDirection, false)
+    task.delay(0.025, function()
+        if not Bot.Enabled then
+            return
+        end
 
-    task.spawn(function()
-        if level >= 4 and math.random() < 0.28 then
+        if level >= 4 and math.random() < 0.18 then
             requestJump()
         end
 
-        task.wait(0.025)
-        tapKey(Enum.KeyCode.Q, 0.03)
+        pulseKey(Enum.KeyCode.Q, 0.035)
     end)
 
     return true
 end
 
-local function defend(targetRoot, threat)
-    if not Bot.Config.AutoDefense or threat <= 0 then
+local function doBlock(level, threatRoot)
+    if not Bot.Enabled then
         return false
     end
 
-    if Bot.Config.CounterPriority and threat >= 3 then
-        local counter = getCounterSkill()
-        if counter and os.clock() - LastSkill >= Bot.Config.SkillInterval then
+    local now = os.clock()
+    local duration = Bot.Config.BlockDuration
+
+    if level >= 4 then
+        duration = math.max(duration, 0.31)
+    elseif level <= 1 then
+        duration = math.min(duration, 0.15)
+    end
+
+    if threatRoot and Root then
+        setFacing(threatRoot)
+        local towardThreat = horizontal(threatRoot.Position - Root.Position)
+        if towardThreat.Magnitude > 0.001 then
+            CameraOverrideDirection = towardThreat.Unit
+            CameraOverrideUntil = now + math.max(duration, 0.16)
+        end
+    end
+
+    if not Blocking then
+        pressKey(Enum.KeyCode.F)
+        Blocking = true
+        Bot.Stats.Blocks += 1
+    end
+
+    BlockUntil = math.max(BlockUntil, now + duration)
+    Bot.Action = "BLOCK"
+    return true
+end
+
+local function defend(threat)
+    if not Bot.Config.AutoDefense or not threat or threat.Level <= 0 then
+        return false
+    end
+
+    local now = os.clock()
+    if now - LastDefense < Bot.Config.DefenseInterval then
+        return false
+    end
+
+    if threat.Serial == LastDefendedSerial and threat.Source ~= "HIT" then
+        return false
+    end
+
+    LastDefense = now
+    LastDefendedSerial = threat.Serial
+
+    local level = threat.Level
+    local source = threat.Source
+    local distance = threat.Distance
+    local facing = threat.Facing
+    local threatRoot = threat.Root
+
+    if threatRoot then
+        setFacing(threatRoot)
+    end
+
+    if Bot.Config.CounterPriority
+        and level >= 4
+        and threat.Model == Bot.Target then
+        local counter = getCounterSkill(distance)
+        if counter and now - LastSkill >= Bot.Config.SkillInterval then
             if useSlot(counter, "COUNTER: " .. counter.Name) then
                 Bot.Stats.Counters += 1
                 return true
@@ -1097,45 +1760,116 @@ local function defend(targetRoot, threat)
         end
     end
 
-    local dodgeWeight = Bot.Config.DodgeChance
-    local blockWeight = Bot.Config.BlockChance
-    local total = math.max(0.001, dodgeWeight + blockWeight)
-
-    if math.random() < dodgeWeight / total then
-        if doDodge(targetRoot, threat) then
-            return true
-        end
-        doBlock(threat)
-        return true
+    if source == "M1" and distance <= 10 and facing > 0.20 then
+        return doBlock(level, threatRoot)
     end
 
-    doBlock(threat)
+    if source == "DASH" or source == "RUSH" then
+        if doDodge(level, threatRoot) then
+            return true
+        end
+        return doBlock(level, threatRoot)
+    end
+
+    if level >= 4 then
+        if doDodge(level, threatRoot) then
+            return true
+        end
+        return doBlock(level, threatRoot)
+    end
+
+    if level == 3 then
+        if distance <= 8.5 and facing > 0.42 then
+            return doBlock(level, threatRoot)
+        end
+        if doDodge(level, threatRoot) then
+            return true
+        end
+        return doBlock(level, threatRoot)
+    end
+
+    if facing > 0.55 and distance <= 9 then
+        return doBlock(level, threatRoot)
+    end
+
+    return false
+end
+
+local function fleeUltimate(threat, now)
+    if not Bot.Config.FleeEnemyUltimates
+        or not threat
+        or not threat.Ultimate
+        or not threat.Root
+        or not Root then
+        return false
+    end
+
+    local away = horizontal(Root.Position - threat.Root.Position)
+    if away.Magnitude <= 0.001 then
+        away = -horizontal(threat.Root.CFrame.LookVector)
+    end
+    if away.Magnitude <= 0.001 then
+        return false
+    end
+
+    away = away.Unit
+    local right = Vector3.new(-away.Z, 0, away.X)
+    local escape = away + right * StrafeSide * 0.24
+    escape = escape.Magnitude > 0.001 and escape.Unit or away
+
+    MovementMode = "ULTIMATE_ESCAPE"
+    MovementModeUntil = now + 0.25
+    MovementOverrideDirection = escape
+    MovementOverrideUntil = now + 0.14
+    CameraOverrideDirection = escape
+    CameraOverrideUntil = now + 0.22
+    setDesiredMovement(escape)
+
+    local name = threat.UltimateName ~= "" and threat.UltimateName or "ULTIMATE"
+    Bot.Action = string.format("FLEE ULT: %s", name)
+
+    if threat.Distance <= 70 then
+        doDodge(5, threat.Root)
+    end
+
     return true
 end
 
-local function useUltimateIfReady(distance)
-    if not Bot.Config.AutoUltimate or distance > 18 then
-        return false
+local function checkUltimateReady(now)
+    if now - LastUltimateCheck < Bot.Config.UltimateCheckRate then
+        return UltimateReady
     end
-
-    if os.clock() - LastUltimate < 3 then
-        return false
-    end
+    LastUltimateCheck = now
 
     local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
     local bar = playerGui and playerGui:FindFirstChild("Bar")
     local magic = bar and bar:FindFirstChild("MagicHealth")
     local ult = magic and magic:FindFirstChild("Ult")
 
-    if ult and ult:IsA("GuiObject") and ult.Visible then
-        tapKey(Enum.KeyCode.G, 0.04)
-        LastUltimate = os.clock()
-        Bot.Stats.Ultimates += 1
-        Bot.Action = "ULTIMATE"
-        return true
+    UltimateReady = ult ~= nil and ult:IsA("GuiObject") and ult.Visible
+    return UltimateReady
+end
+
+local function useUltimateIfReady(now)
+    if not Bot.Config.AutoUltimate or now - LastUltimate < 4 then
+        return false
     end
 
-    return false
+    if not checkUltimateReady(now) then
+        return false
+    end
+
+    local profile = CurrentProfile or getCharacterProfile()
+    local maxActivationRange = profile.Style == "Ranged" and 38 or 24
+    if TargetDistance > maxActivationRange then
+        return false
+    end
+
+    pulseKey(Enum.KeyCode.G, 0.04)
+    LastUltimate = now
+    Bot.Stats.Ultimates += 1
+    Bot.Action = "ULTIMATE"
+    return true
 end
 
 local function chooseOffensiveSkill(distance, target)
@@ -1143,21 +1877,25 @@ local function chooseOffensiveSkill(distance, target)
         return false
     end
 
-    local slots = hotbar()
-    if #slots == 0 then
+    ensureHotbar()
+    if not HotbarRoot then
         return false
     end
 
     local targetRagdolled = target:GetAttribute("Ragdoll") == true
     local targetBlocking = target:GetAttribute("Blocking") == true
     local combo = tonumber(Character:GetAttribute("Combo")) or 0
-    local candidates = {}
+    local profile = CurrentProfile or getCharacterProfile()
 
-    for _, slot in ipairs(slots) do
-        if slot.Ready and not ReservedSkillNames[slot.Name] then
+    local best
+    local bestScore = math.huge
+
+    for i = 1, 13 do
+        local slot = HotbarSlots[i]
+        if slot and slot.Ready and slot.Name ~= "" and not ReservedSkillNames[slot.Name] then
             local move = getMoveProfile(slot.Name)
             local minRange = move.Min or 0
-            local maxRange = move.Max or getCharacterProfile().SkillRange or 14
+            local maxRange = move.Max or profile.SkillRange or 24
             local comboMin = move.ComboMin or 0
 
             if distance >= minRange and distance <= maxRange then
@@ -1171,7 +1909,7 @@ local function chooseOffensiveSkill(distance, target)
                     allowed = false
                 end
 
-                if targetBlocking and not move.BlockPunish and distance <= Bot.Config.M1Range then
+                if targetBlocking and not move.BlockPunish and distance <= Bot.Config.M1Range + 1 then
                     allowed = false
                 end
 
@@ -1179,44 +1917,43 @@ local function chooseOffensiveSkill(distance, target)
                     local score = (move.Priority or 5) * 10 + slot.Index
 
                     if move.PreferRagdoll and targetRagdolled then
-                        score -= 24
+                        score -= 26
                     end
 
                     if move.Opener and distance > Bot.Config.M1Range then
-                        score -= 18
-                    end
-
-                    if move.BlockPunish and targetBlocking then
                         score -= 22
                     end
 
-                    if combo >= 2 and not move.Opener then
-                        score -= math.min(combo, 3) * 3
+                    if move.BlockPunish and targetBlocking then
+                        score -= 28
+                    end
+
+                    if combo >= 2 and combo >= comboMin and not move.Opener then
+                        score -= math.min(combo, 4) * 4
+                    end
+
+                    if profile.Style == "Ranged" and maxRange >= 25 and distance >= 10 then
+                        score -= 8
                     end
 
                     if targetRagdolled and not move.PreferRagdoll then
                         score += 3
                     end
 
-                    table.insert(candidates, {
-                        Slot = slot,
-                        Score = score
-                    })
+                    local rangeFit = math.abs(distance - math.min(maxRange * 0.62, maxRange - 1))
+                    score += rangeFit * 0.08
+
+                    if score < bestScore then
+                        bestScore = score
+                        best = slot
+                    end
                 end
             end
         end
     end
 
-    table.sort(candidates, function(a, b)
-        if a.Score == b.Score then
-            return a.Slot.Index < b.Slot.Index
-        end
-        return a.Score < b.Score
-    end)
-
-    if candidates[1] then
-        local slot = candidates[1].Slot
-        return useSlot(slot, "SKILL " .. slot.Index .. ": " .. slot.Name)
+    if best then
+        return useSlot(best, "SKILL " .. best.Index .. ": " .. best.Name)
     end
 
     return false
@@ -1227,7 +1964,8 @@ local function doM1(distance, target)
         return false
     end
 
-    if os.clock() - LastM1 < Bot.Config.M1Interval then
+    local now = os.clock()
+    if now - LastM1 < Bot.Config.M1Interval then
         return false
     end
 
@@ -1235,15 +1973,292 @@ local function doM1(distance, target)
         return false
     end
 
-    if target:GetAttribute("Blocking") then
+    if target:GetAttribute("Blocking") or target:GetAttribute("Ragdoll") then
         return false
     end
 
-    LastM1 = os.clock()
+    LastM1 = now
     mouse1()
     Bot.Stats.M1 += 1
     Bot.Action = "M1"
     return true
+end
+
+local function tacticalRanges()
+    local profile = CurrentProfile or getCharacterProfile()
+    local approach = profile.Approach or Bot.Config.ApproachRange
+    local retreat = profile.Retreat or Bot.Config.RetreatRange
+
+    if profile.Style == "Ranged" then
+        ensureHotbar()
+        for i = 1, 13 do
+            local slot = HotbarSlots[i]
+            if slot and slot.Ready and slot.Name ~= "" and not ReservedSkillNames[slot.Name] then
+                local move = getMoveProfile(slot.Name)
+                if move.Opener and (move.Max or 0) >= 24 then
+                    approach = math.max(approach, math.min(26, (move.Max or 24) * 0.42))
+                    break
+                end
+            end
+        end
+    end
+
+    return approach, retreat
+end
+
+local function moveCombat(now)
+    if not Bot.Config.AutoMovement or not Humanoid or not Root or not TargetRoot then
+        return
+    end
+
+    setFacing(TargetRoot)
+
+    local delta = horizontal(TargetRoot.Position - Root.Position)
+    if delta.Magnitude <= 0.001 then
+        MovementMode = "IDLE"
+        setDesiredMovement(Vector3.zero)
+        return
+    end
+
+    local approachRange, retreatRange = tacticalRanges()
+    local toward = delta.Unit
+    local targetBlocking = Bot.Target and Bot.Target:GetAttribute("Blocking") == true
+    local requestedMode
+
+    if targetBlocking and TargetDistance < Bot.Config.M1Range + 1 then
+        requestedMode = "RETREAT"
+    elseif MovementMode == "APPROACH" and TargetDistance > approachRange - 0.65 then
+        requestedMode = "APPROACH"
+    elseif MovementMode == "RETREAT" and TargetDistance < retreatRange + 0.85 then
+        requestedMode = "RETREAT"
+    elseif TargetDistance > approachRange + 0.45 then
+        requestedMode = "APPROACH"
+    elseif TargetDistance < retreatRange - 0.15 then
+        requestedMode = "RETREAT"
+    else
+        requestedMode = "STRAFE"
+    end
+
+    if requestedMode ~= MovementMode and now < MovementModeUntil then
+        requestedMode = MovementMode
+    elseif requestedMode ~= MovementMode then
+        MovementMode = requestedMode
+        MovementModeUntil = now + Bot.Config.MovementModeHold
+    end
+
+    if MovementMode == "APPROACH" then
+        Bot.Action = "APPROACH"
+        setDesiredMovement(toward)
+        return
+    end
+
+    if MovementMode == "RETREAT" then
+        Bot.Action = targetBlocking and "RESET VS BLOCK" or "RETREAT"
+        setDesiredMovement(-toward)
+        return
+    end
+
+    if now >= NextStrafeSwap then
+        StrafeSide = -StrafeSide
+        NextStrafeSwap = now + 0.72 + math.random() * 0.30
+    end
+
+    local right = Vector3.new(-toward.Z, 0, toward.X)
+    local pressure = toward * ((CurrentProfile and CurrentProfile.Style == "Ranged") and 0.07 or 0.18)
+    local strafe = right * StrafeSide
+    local movement = strafe + pressure
+
+    if movement.Magnitude > 0.001 then
+        movement = movement.Unit
+    end
+
+    MovementMode = "STRAFE"
+    Bot.Action = "PRESSURE / STRAFE"
+    setDesiredMovement(movement)
+end
+
+local function updateCamera()
+    if not Bot.Enabled or not Bot.Config.AutoCamera then
+        return
+    end
+
+    if not Root or not Root.Parent then
+        return
+    end
+
+    local now = os.clock()
+    if now - LastCameraUpdate < Bot.Config.CameraUpdateRate then
+        return
+    end
+    LastCameraUpdate = now
+
+    local camera = Workspace.CurrentCamera
+    if not camera then
+        return
+    end
+
+    local position = camera.CFrame.Position
+    local focus
+
+    if CameraOverrideDirection and now < CameraOverrideUntil then
+        local direction = horizontal(CameraOverrideDirection)
+        if direction.Magnitude > 0.001 then
+            focus = position + direction.Unit * 55 + Vector3.new(0, 1.1, 0)
+        end
+    elseif CameraOverrideDirection then
+        CameraOverrideDirection = nil
+        CameraOverrideUntil = 0
+    end
+
+    if not focus then
+        if not TargetRoot or not TargetRoot.Parent then
+            return
+        end
+        local predicted = TargetRoot.Position + TargetRoot.AssemblyLinearVelocity * Bot.Config.CameraLead
+        focus = predicted + Vector3.new(0, 1.35, 0)
+    end
+
+    local delta = focus - position
+    if delta.Magnitude <= 0.001 then
+        return
+    end
+
+    local desired = CFrame.lookAt(position, focus, Vector3.yAxis)
+    local alpha = math.clamp(Bot.Config.CameraSmoothing, 0.05, 1)
+    camera.CFrame = camera.CFrame:Lerp(desired, alpha)
+end
+
+local function processInputState(now)
+    if MouseDown and now >= MouseReleaseAt then
+        releaseMouse()
+    end
+
+    if Blocking and now >= BlockUntil then
+        releaseKey(Enum.KeyCode.F)
+        Blocking = false
+        BlockUntil = 0
+    end
+end
+
+local function updateHud(now)
+    if not VibeUI or now - LastHudUpdate < Bot.Config.UIRate then
+        return
+    end
+    LastHudUpdate = now
+
+    local targetName = Bot.Target and Bot.Target.Parent and Bot.Target.Name or "NONE"
+    local profile = CurrentProfile or getCharacterProfile()
+    local s = Bot.Stats
+
+    pcall(function()
+        if StatusLabel then
+            StatusLabel:Set("State: " .. tostring(Bot.Action))
+        end
+        if TargetLabel then
+            if targetName ~= "NONE" and TargetDistance < math.huge then
+                TargetLabel:Set(string.format("Target: %s | %.1f studs", targetName, TargetDistance))
+            else
+                TargetLabel:Set("Target: NONE")
+            end
+        end
+        if CharacterLabel then
+            CharacterLabel:Set(string.format(
+                "Character: %s | %s",
+                profile.Name or tostring(CharacterKey or "Unknown"),
+                profile.Style or "Hybrid"
+            ))
+        end
+        if ThreatLabel then
+            local threatName = Threat.Model and Threat.Model.Parent and Threat.Model.Name or "NONE"
+            local threatSource = now <= Threat.Until and Threat.Source or "NONE"
+            if Threat.Ultimate and Threat.UltimateName ~= "" then
+                threatSource = "ULT: " .. Threat.UltimateName
+            end
+            ThreatLabel:Set(string.format(
+                "Threat: %d | %s | %s | %.0f studs",
+                now <= Threat.Until and Threat.Level or 0,
+                threatSource,
+                threatName,
+                Threat.Distance < math.huge and Threat.Distance or 0
+            ))
+        end
+        if PerfLabel then
+            PerfLabel:Set(string.format(
+                "Logic: %.3f ms avg | targets %d | anim %d | threats %d | watching %d",
+                Perf.CombatAvgMs,
+                Perf.TargetScans,
+                Perf.AnimationEvents,
+                Perf.ThreatEvents,
+                Perf.ObservedPlayers
+            ))
+        end
+        if StatsLabel then
+            StatsLabel:Set(string.format(
+                "M1 %d | Skills %d | Blocks %d | Dodges %d | Counters %d | Ults %d",
+                s.M1,
+                s.Skills,
+                s.Blocks,
+                s.Dodges,
+                s.Counters,
+                s.Ultimates
+            ))
+        end
+    end)
+end
+
+local function bindCharacter(character)
+    disconnectList(CharacterConnections)
+    clearTarget()
+    cleanupFacing()
+    releaseKey(Enum.KeyCode.F)
+    releaseKey(Enum.KeyCode.Q)
+    releaseMouse()
+
+    Character = character
+    Humanoid = nil
+    Root = nil
+    CharacterKey = nil
+    CurrentProfile = nil
+    LastHealth = 100
+    Blocking = false
+    BlockUntil = 0
+
+    if not character then
+        return
+    end
+
+    Humanoid = character:FindFirstChildOfClass("Humanoid") or character:WaitForChild("Humanoid", 5)
+    Root = character:FindFirstChild("HumanoidRootPart") or character:WaitForChild("HumanoidRootPart", 5)
+
+    if not Humanoid or not Root then
+        return
+    end
+
+    CharacterKey = character:GetAttribute("Character")
+    CurrentProfile = getCharacterProfile()
+    LastHealth = Humanoid.Health
+
+    addConnection(CharacterConnections, character:GetAttributeChangedSignal("Character"):Connect(function()
+        CharacterKey = character:GetAttribute("Character")
+        CurrentProfile = getCharacterProfile()
+        bindHotbar()
+    end))
+
+    addConnection(CharacterConnections, Humanoid.HealthChanged:Connect(function(health)
+        if health < LastHealth - 0.05 then
+            raiseHitThreat()
+        end
+        LastHealth = health
+    end))
+
+    addConnection(CharacterConnections, Humanoid.Died:Connect(function()
+        Bot.Action = "DEAD"
+        setDesiredMovement(Vector3.zero)
+        clearTarget()
+        cleanupFacing()
+    end))
+
+    task.defer(bindHotbar)
 end
 
 local function combatStep()
@@ -1251,54 +2266,61 @@ local function combatStep()
         return
     end
 
-    if os.clock() - LastDecision < Bot.Config.DecisionRate then
+    local start = os.clock()
+    local now = start
+
+    processInputState(now)
+
+    if now - LastDecision < Bot.Config.DecisionRate then
+        updateHud(now)
         return
     end
-    LastDecision = os.clock()
+    LastDecision = now
 
-    if not ensureCharacter() then
+    if not Character or not Character.Parent or not Humanoid or Humanoid.Health <= 0 or not Root or not Root.Parent then
         Bot.Action = "NO CHARACTER"
-        Bot.Target = nil
         setDesiredMovement(Vector3.zero)
-        updateHud()
+        updateHud(now)
         return
     end
 
-    local target = acquireTarget()
-    if not target then
-        Bot.Action = "IDLE"
-        Bot.Target = nil
-        setDesiredMovement(Vector3.zero)
-        updateHud()
-        return
-    end
+    local activeThreat = detectThreat(now)
 
-    local targetHumanoid, targetRoot = getTargetParts(target)
-    if not targetHumanoid or not targetRoot then
-        Bot.Target = nil
-        Bot.Action = "IDLE"
-        setDesiredMovement(Vector3.zero)
-        updateHud()
-        return
+    if activeThreat and activeThreat.Ultimate then
+        if fleeUltimate(activeThreat, now) then
+            updateHud(now)
+            return
+        end
     end
-
-    local distance = (targetRoot.Position - Root.Position).Magnitude
-    setFacing(targetRoot)
-    moveCombat(targetRoot, distance)
 
     if not canAct() then
-        updateHud()
+        updateHud(now)
         return
     end
 
-    local threat = detectThreat(target, targetHumanoid, targetRoot, distance)
-    if threat > 0 and defend(targetRoot, threat) then
-        updateHud()
+    if Blocking then
+        updateHud(now)
         return
     end
 
-    if useUltimateIfReady(distance) then
-        updateHud()
+    if activeThreat and defend(activeThreat) then
+        updateHud(now)
+        return
+    end
+
+    local target = refreshTarget(now, false)
+    if not target or not TargetRoot or not TargetHumanoid then
+        Bot.Action = activeThreat and ("EVADE: " .. activeThreat.Source) or "IDLE"
+        setDesiredMovement(Vector3.zero)
+        updateHud(now)
+        return
+    end
+
+    TargetDistance = (TargetRoot.Position - Root.Position).Magnitude
+    moveCombat(now)
+
+    if useUltimateIfReady(now) then
+        updateHud(now)
         return
     end
 
@@ -1306,20 +2328,35 @@ local function combatStep()
     local targetRagdolled = target:GetAttribute("Ragdoll") == true
     local targetBlocking = target:GetAttribute("Blocking") == true
 
-    if distance <= Bot.Config.M1Range and combo < 3 and not targetRagdolled and not targetBlocking then
-        if doM1(distance, target) then
-            updateHud()
+    if TargetDistance <= Bot.Config.M1Range
+        and combo <= 1
+        and not targetRagdolled
+        and not targetBlocking then
+        if doM1(TargetDistance, target) then
+            updateHud(now)
             return
         end
     end
 
-    if chooseOffensiveSkill(distance, target) then
-        updateHud()
+    if chooseOffensiveSkill(TargetDistance, target) then
+        updateHud(now)
         return
     end
 
-    doM1(distance, target)
-    updateHud()
+    if combo < Bot.Config.M1ComboLimit then
+        doM1(TargetDistance, target)
+    end
+
+    local elapsed = (os.clock() - start) * 1000
+    Perf.CombatSamples += 1
+    Perf.CombatTotalMs += elapsed
+    if Perf.CombatSamples >= 90 then
+        Perf.CombatAvgMs = Perf.CombatTotalMs / Perf.CombatSamples
+        Perf.CombatSamples = 0
+        Perf.CombatTotalMs = 0
+    end
+
+    updateHud(now)
 end
 
 function Bot.SetEnabled(state)
@@ -1327,26 +2364,359 @@ function Bot.SetEnabled(state)
 
     if not Bot.Enabled then
         Bot.Action = "DISABLED"
-        DesiredMoveDirection = Vector3.zero
+        setDesiredMovement(Vector3.zero)
         MovementOverrideDirection = nil
         MovementOverrideUntil = 0
+        SmoothedMoveDirection = Vector3.zero
+        MovementMode = "IDLE"
+        MovementModeUntil = 0
+        CameraOverrideDirection = nil
+        CameraOverrideUntil = 0
+
         if Humanoid then
             Humanoid:Move(Vector3.zero, false)
             Humanoid.AutoRotate = true
         end
+
         releaseKey(Enum.KeyCode.F)
         releaseKey(Enum.KeyCode.Q)
+        releaseMouse()
+        Blocking = false
         cleanupFacing()
+    else
+        Bot.Action = "IDLE"
     end
 
-    updateHud()
+    updateHud(os.clock())
+end
+
+local function makeUI()
+    local url = "https://sirmemegithub.com/RealSlimShady2000/VibeUI/raw/branch/main/VibeUI.luau"
+    local loader = loadstring(game:HttpGet(url))
+    assert(type(loader) == "function", "Failed to compile VibeUI")
+    VibeUI = loader()
+    assert(type(VibeUI) == "table", "VibeUI did not return a table")
+
+    Window = VibeUI:Window({
+        Title = "TSB Auto Combat " .. Bot.Version,
+        Keybind = Enum.KeyCode.RightControl,
+        Size = UDim2.fromOffset(760, 560)
+    })
+
+    local CombatTab = Window:Tab({Name = "Combat", Columns = 2})
+    local Main = CombatTab:Section({Name = "Automation", Side = 1})
+    local Defense = CombatTab:Section({Name = "Defense", Side = 1})
+    local Movement = CombatTab:Section({Name = "Movement", Side = 2})
+    local Tuning = CombatTab:Section({Name = "Tuning", Side = 2})
+
+    Main:Toggle({
+        Name = "Auto Combat",
+        Flag = "TSB_Enabled",
+        Default = Bot.Enabled,
+        Info = "Master combat loop. Right Ctrl toggles the VibeUI window.",
+        InfoType = "tip",
+        Callback = function(value)
+            Bot.SetEnabled(value)
+        end
+    })
+
+    Main:Toggle({
+        Name = "Auto M1",
+        Flag = "TSB_AutoM1",
+        Default = Bot.Config.AutoM1,
+        Callback = function(value)
+            Bot.Config.AutoM1 = value
+        end
+    })
+
+    Main:Toggle({
+        Name = "Auto Skills",
+        Flag = "TSB_AutoSkills",
+        Default = Bot.Config.AutoSkills,
+        Callback = function(value)
+            Bot.Config.AutoSkills = value
+        end
+    })
+
+    Main:Toggle({
+        Name = "Auto Ultimate",
+        Flag = "TSB_AutoUltimate",
+        Default = Bot.Config.AutoUltimate,
+        Callback = function(value)
+            Bot.Config.AutoUltimate = value
+        end
+    })
+
+    Defense:Toggle({
+        Name = "Auto Defense",
+        Flag = "TSB_AutoDefense",
+        Default = Bot.Config.AutoDefense,
+        Callback = function(value)
+            Bot.Config.AutoDefense = value
+        end
+    })
+
+    Defense:Toggle({
+        Name = "Counter Priority",
+        Flag = "TSB_CounterPriority",
+        Default = Bot.Config.CounterPriority,
+        Info = "Uses character counter moves first on high-confidence skill threats.",
+        InfoType = "info",
+        Callback = function(value)
+            Bot.Config.CounterPriority = value
+        end
+    })
+
+    Defense:Toggle({
+        Name = "Multi-Threat Awareness",
+        Flag = "TSB_MultiThreatAwareness",
+        Default = Bot.Config.MultiThreatAwareness,
+        Info = "Observes every player character for attacks instead of only the selected combat target.",
+        InfoType = "tip",
+        Callback = function(value)
+            Bot.Config.MultiThreatAwareness = value
+        end
+    })
+
+    Defense:Toggle({
+        Name = "Flee Enemy Ultimates",
+        Flag = "TSB_FleeEnemyUltimates",
+        Default = Bot.Config.FleeEnemyUltimates,
+        Info = "Uses TSB's UsedUltimate/JustUlted/UltimateTime attributes to keep distance from awakened players.",
+        InfoType = "warning",
+        Callback = function(value)
+            Bot.Config.FleeEnemyUltimates = value
+        end
+    })
+
+
+    Defense:Slider({
+        Name = "Threat Radius",
+        Flag = "TSB_ThreatRadius",
+        Min = 8,
+        Max = 40,
+        Default = Bot.Config.ThreatRadius,
+        Decimals = 1,
+        Suffix = " studs",
+        Callback = function(value)
+            Bot.Config.ThreatRadius = value
+        end
+    })
+
+    Defense:Slider({
+        Name = "Ranged Threat Radius",
+        Flag = "TSB_GlobalThreatRadius",
+        Min = 40,
+        Max = 180,
+        Default = Bot.Config.GlobalThreatRadius,
+        Decimals = 1,
+        Suffix = " studs",
+        Callback = function(value)
+            Bot.Config.GlobalThreatRadius = value
+        end
+    })
+
+    Defense:Slider({
+        Name = "Ultimate Danger Radius",
+        Flag = "TSB_UltimateDangerRadius",
+        Min = 60,
+        Max = 220,
+        Default = Bot.Config.UltimateDangerRadius,
+        Decimals = 1,
+        Suffix = " studs",
+        Callback = function(value)
+            Bot.Config.UltimateDangerRadius = value
+        end
+    })
+
+
+    Defense:Slider({
+        Name = "Block Hold",
+        Flag = "TSB_BlockDuration",
+        Min = 0.10,
+        Max = 0.45,
+        Default = Bot.Config.BlockDuration,
+        Decimals = 0.01,
+        Suffix = "s",
+        Callback = function(value)
+            Bot.Config.BlockDuration = value
+        end
+    })
+
+    Movement:Toggle({
+        Name = "Auto Movement",
+        Flag = "TSB_AutoMovement",
+        Default = Bot.Config.AutoMovement,
+        Callback = function(value)
+            Bot.Config.AutoMovement = value
+            if not value then
+                setDesiredMovement(Vector3.zero)
+                cleanupFacing()
+                if Humanoid then
+                    Humanoid.AutoRotate = true
+                end
+            end
+        end
+    })
+
+    Movement:Toggle({
+        Name = "Auto Camera",
+        Flag = "TSB_AutoCamera",
+        Default = Bot.Config.AutoCamera,
+        Callback = function(value)
+            Bot.Config.AutoCamera = value
+        end
+    })
+
+    Movement:Toggle({
+        Name = "Auto Jump",
+        Flag = "TSB_AutoJump",
+        Default = Bot.Config.AutoJump,
+        Callback = function(value)
+            Bot.Config.AutoJump = value
+        end
+    })
+
+    Movement:Slider({
+        Name = "Camera Update Rate",
+        Flag = "TSB_CameraHz",
+        Min = 30,
+        Max = 144,
+        Default = math.floor(1 / Bot.Config.CameraUpdateRate + 0.5),
+        Decimals = 1,
+        Suffix = " Hz",
+        Callback = function(value)
+            Bot.Config.CameraUpdateRate = 1 / math.max(1, value)
+        end
+    })
+
+    Movement:Slider({
+        Name = "Movement Update Rate",
+        Flag = "TSB_MovementHz",
+        Min = 30,
+        Max = 120,
+        Default = math.floor(1 / Bot.Config.MovementUpdateRate + 0.5),
+        Decimals = 1,
+        Suffix = " Hz",
+        Callback = function(value)
+            Bot.Config.MovementUpdateRate = 1 / math.max(1, value)
+        end
+    })
+
+    Movement:Slider({
+        Name = "Movement Smoothing",
+        Flag = "TSB_MovementSmoothing",
+        Min = 0.10,
+        Max = 1.00,
+        Default = Bot.Config.MovementSmoothing,
+        Decimals = 0.01,
+        Callback = function(value)
+            Bot.Config.MovementSmoothing = value
+        end
+    })
+
+
+    Movement:Slider({
+        Name = "Target Radius",
+        Flag = "TSB_TargetRadius",
+        Min = 20,
+        Max = 250,
+        Default = Bot.Config.TargetRadius,
+        Decimals = 1,
+        Suffix = " studs",
+        Callback = function(value)
+            Bot.Config.TargetRadius = value
+        end
+    })
+
+    Tuning:Slider({
+        Name = "Decision Rate",
+        Flag = "TSB_DecisionHz",
+        Min = 15,
+        Max = 60,
+        Default = math.floor(1 / Bot.Config.DecisionRate + 0.5),
+        Decimals = 1,
+        Suffix = " Hz",
+        Callback = function(value)
+            Bot.Config.DecisionRate = 1 / math.max(1, value)
+        end
+    })
+
+    Tuning:Slider({
+        Name = "Target Scan Rate",
+        Flag = "TSB_TargetScanRate",
+        Min = 0.05,
+        Max = 0.50,
+        Default = Bot.Config.TargetScanRate,
+        Decimals = 0.01,
+        Suffix = "s",
+        Callback = function(value)
+            Bot.Config.TargetScanRate = value
+        end
+    })
+
+    Tuning:Slider({
+        Name = "M1 Interval",
+        Flag = "TSB_M1Interval",
+        Min = 0.06,
+        Max = 0.20,
+        Default = Bot.Config.M1Interval,
+        Decimals = 0.005,
+        Suffix = "s",
+        Callback = function(value)
+            Bot.Config.M1Interval = value
+        end
+    })
+
+    Tuning:Slider({
+        Name = "Skill Interval",
+        Flag = "TSB_SkillInterval",
+        Min = 0.10,
+        Max = 0.70,
+        Default = Bot.Config.SkillInterval,
+        Decimals = 0.01,
+        Suffix = "s",
+        Callback = function(value)
+            Bot.Config.SkillInterval = value
+        end
+    })
+
+    local InfoTab = Window:Tab({Name = "Info", Columns = 1})
+    local Status = InfoTab:Section({Name = "Live Status", Side = 1})
+    local Details = InfoTab:Section({Name = "Performance", Side = 1})
+
+    StatusLabel = Status:Label("State: IDLE")
+    TargetLabel = Status:Label("Target: NONE")
+    CharacterLabel = Status:Label("Character: Unknown")
+    ThreatLabel = Status:Label("Threat: 0 | NONE")
+
+    PerfLabel = Details:Label("Logic: 0.000 ms avg")
+    StatsLabel = Details:Label("M1 0 | Skills 0 | Blocks 0 | Dodges 0 | Counters 0 | Ults 0")
+    Details:Paragraph({
+        Name = "Optimization",
+        Content = "Threat detection is event-driven across every observed player: AnimationPlayed + attack/ultimate attributes, with no GetPlayingAnimationTracks polling. Enemy ultimate windows are tracked from UsedUltimate/JustUlted/UltimateTime, ranged skills can trigger defense without target-lock, and movement uses hysteresis + direction smoothing to avoid micro-jitter."
+    })
+
+    VibeUI:CreateSettingsPage(Window)
+    Bot.UI = {Library = VibeUI, Window = Window}
+
+    VibeUI:Notification({
+        Title = "TSB Auto Combat",
+        Description = "Loaded " .. Bot.Version .. " with global threat awareness, ultimate escape, and stabilized movement.",
+        Type = "success",
+        Duration = 4
+    })
 end
 
 function Bot.Stop()
     Bot.Enabled = false
-    DesiredMoveDirection = Vector3.zero
+    Bot.Action = "STOPPED"
+    setDesiredMovement(Vector3.zero)
     MovementOverrideDirection = nil
     MovementOverrideUntil = 0
+    SmoothedMoveDirection = Vector3.zero
+    CameraOverrideDirection = nil
+    CameraOverrideUntil = 0
 
     pcall(function()
         RunService:UnbindFromRenderStep(RenderBindName)
@@ -1356,7 +2726,14 @@ function Bot.Stop()
         RunService:UnbindFromRenderStep(MovementBindName)
     end)
 
-    disconnectAll()
+    disconnectList(Bot.Connections)
+    disconnectList(CharacterConnections)
+    disconnectList(TargetConnections)
+    disconnectList(HotbarConnections)
+    disconnectList(LiveConnections)
+    for model in pairs(ThreatConnectionsByModel) do
+        disconnectThreatModel(model)
+    end
 
     if Humanoid then
         pcall(function()
@@ -1367,46 +2744,42 @@ function Bot.Stop()
 
     releaseKey(Enum.KeyCode.F)
     releaseKey(Enum.KeyCode.Q)
-
+    releaseMouse()
     cleanupFacing()
 
-    if TargetHighlight then
+    if VibeUI then
         pcall(function()
-            TargetHighlight:Destroy()
+            VibeUI:Unload()
         end)
     end
-
-    if Hud then
-        pcall(function()
-            Hud:Destroy()
-        end)
-    end
-
-    Bot.Action = "STOPPED"
 end
 
-makeHud()
-ensureCharacter()
+bindLiveFolder(Workspace:FindFirstChild("Live"))
+bindCharacter(LocalPlayer.Character)
+makeUI()
 
-table.insert(Bot.Connections, RunService.Heartbeat:Connect(combatStep))
+addConnection(Bot.Connections, Workspace.ChildAdded:Connect(function(child)
+    if child.Name == "Live" and child:IsA("Folder") then
+        bindLiveFolder(child)
+    end
+end))
+
+addConnection(Bot.Connections, LocalPlayer.CharacterAdded:Connect(function(character)
+    task.defer(function()
+        bindCharacter(character)
+    end)
+end))
+
+addConnection(Bot.Connections, RunService.Heartbeat:Connect(combatStep))
 
 pcall(function()
     RunService:UnbindFromRenderStep(MovementBindName)
 end)
-
 RunService:BindToRenderStep(MovementBindName, Enum.RenderPriority.Last.Value - 1, applyMovement)
 
 pcall(function()
     RunService:UnbindFromRenderStep(RenderBindName)
 end)
-
 RunService:BindToRenderStep(RenderBindName, Enum.RenderPriority.Camera.Value + 1, updateCamera)
 
-table.insert(Bot.Connections, LocalPlayer.CharacterAdded:Connect(function()
-    task.wait(0.15)
-    cleanupFacing()
-    ensureCharacter()
-    LastHealth = Humanoid and Humanoid.Health or 100
-end))
-
-print("[TSB AutoCombat] v" .. Bot.Version .. " enabled | base " .. Bot.BaseVersion .. " | ServiceResolver + late Humanoid:Move + auto-jump + universal profiles + camera lock")
+print("[TSB AutoCombat] v" .. Bot.Version .. " enabled | global event-driven threats + ultimate escape + smoothed movement + VibeUI")

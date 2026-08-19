@@ -448,6 +448,8 @@ end
 
 Environment.MaxEverythingEnabled = true
 Environment.KillPoliceRunning = false
+Environment.KillTeammatesRunning = false
+Environment.NotorietyTeammateTarget = tostring(Environment.NotorietyTeammateTarget or "All")
 Environment.NotorietyWeaponEnabled = Environment.NotorietyWeaponEnabled ~= false
 Environment.NotorietyRapidFireEnabled = Environment.NotorietyRapidFireEnabled ~= false
 Environment.NotorietyNoRecoilEnabled = Environment.NotorietyNoRecoilEnabled ~= false
@@ -3416,6 +3418,148 @@ local function Apply()
 	replenishFiniteSupplies(Character)
 end
 
+local function isTeammatePlayer(Player)
+	if not Player or Player == LocalPlayer then
+		return false
+	end
+
+	local Criminals = Workspace:FindFirstChild("Criminals")
+	local Character = Player.Character
+	return Criminals ~= nil and Character ~= nil and Character:IsDescendantOf(Criminals)
+end
+
+local function getTeammatePlayers()
+	local Teammates = {}
+
+	for _, Player in Players:GetPlayers() do
+		if isTeammatePlayer(Player) then
+			table.insert(Teammates, Player)
+		end
+	end
+
+	table.sort(Teammates, function(Left, Right)
+		return string.lower(Left.Name) < string.lower(Right.Name)
+	end)
+
+	return Teammates
+end
+
+local function getTeammatePickerValues()
+	local Names = {}
+
+	for _, Player in Players:GetPlayers() do
+		if Player ~= LocalPlayer then
+			table.insert(Names, Player.Name)
+		end
+	end
+
+	table.sort(Names, function(Left, Right)
+		return string.lower(Left) < string.lower(Right)
+	end)
+
+	local Values = { "All" }
+	for _, Name in Names do
+		table.insert(Values, Name)
+	end
+
+	return Values
+end
+
+local function runKillTeammates(TargetName)
+	if Environment.KillTeammatesRunning then
+		return
+	end
+
+	Environment.KillTeammatesRunning = true
+
+	local Killed = 0
+	local Attempted = 0
+	local Success, Error = xpcall(function()
+		local Gun = getEquippedGun()
+
+		if not Gun then
+			return
+		end
+
+		local Targets = {}
+		TargetName = tostring(TargetName or Environment.NotorietyTeammateTarget or "All")
+
+		if TargetName == "All" then
+			Targets = getTeammatePlayers()
+		else
+			local Player = Players:FindFirstChild(TargetName)
+			if isTeammatePlayer(Player) then
+				table.insert(Targets, Player)
+			end
+		end
+
+		for _, Player in Targets do
+			if Environment.NotorietyUnloaded then
+				break
+			end
+
+			if not Gun.Parent then
+				Gun = getEquippedGun()
+				if not Gun then
+					break
+				end
+			end
+
+			local Character = Player.Character
+			local Humanoid = Character and Character:FindFirstChildWhichIsA("Humanoid", true)
+			local Health = Character and Character:FindFirstChild("Health")
+			local HitPart = Character and (
+				Character:FindFirstChild("Head", true)
+				or Character:FindFirstChild("UpperTorso", true)
+				or Character:FindFirstChild("Torso", true)
+				or Character:FindFirstChild("HumanoidRootPart", true)
+			)
+
+			local IsAlive = Humanoid ~= nil and HitPart ~= nil
+			if Health and Health:IsA("ValueBase") and type(Health.Value) == "number" then
+				IsAlive = IsAlive and Health.Value > 0
+			end
+
+			if IsAlive then
+				Attempted += 1
+				Event:FireServer(
+					"Damage",
+					Gun,
+					Humanoid,
+					99999999999999,
+					HitPart,
+					Gun.Name,
+					Vector3.new(4.3659992218018, -2.7754878997803, -0.7671462893486),
+					{}
+				)
+
+				task.wait(0.3)
+
+				if not Health or not Health.Parent or Health.Value <= 0 then
+					Killed += 1
+				end
+			end
+		end
+	end, debug.traceback)
+
+	Environment.KillTeammatesRunning = false
+
+	if not Success then
+		warn(Error)
+	elseif not Environment.NotorietyUnloaded then
+		pcall(function()
+			NotorietyUI.Library:Notify({
+				Title = "Kill Teammates",
+				Content = Attempted == 0
+					and "No valid teammate target was available."
+					or string.format("Targeted %d teammate(s); %d reached zero health.", Attempted, Killed),
+				Icon = Killed > 0 and "check" or "triangle-alert",
+				Duration = 3,
+			})
+		end)
+	end
+end
+
 local function runKill()
 	if Environment.KillPoliceRunning then
 		return
@@ -4597,6 +4741,66 @@ local function createVibeUI()
 		end,
 	})
 
+	local TeammateTargetValues = getTeammatePickerValues()
+	if not table.find(TeammateTargetValues, Environment.NotorietyTeammateTarget) then
+		Environment.NotorietyTeammateTarget = "All"
+	end
+
+	NotorietyUI.TeammateTargetDropdown = MainTab:Dropdown({
+		Flag = "TeammateTarget",
+		Title = "Teammate Target",
+		Desc = "Pick All or a specific current teammate",
+		Values = TeammateTargetValues,
+		Value = Environment.NotorietyTeammateTarget,
+		Callback = function(Value)
+			Environment.NotorietyTeammateTarget = tostring(Value or "All")
+			requestVibeUIConfigSave()
+		end,
+	})
+
+	local function refreshTeammateTargetDropdown()
+		if Environment.NotorietyUnloaded then
+			return
+		end
+
+		local Dropdown = NotorietyUI.TeammateTargetDropdown
+		if type(Dropdown) ~= "table" or type(Dropdown.Refresh) ~= "function" then
+			return
+		end
+
+		local Values = getTeammatePickerValues()
+		Dropdown:Refresh(Values)
+
+		if not table.find(Values, Environment.NotorietyTeammateTarget) then
+			Environment.NotorietyTeammateTarget = "All"
+			pcall(function()
+				Dropdown:Set("All")
+			end)
+		end
+	end
+
+	local function queueTeammateTargetRefresh()
+		task.defer(refreshTeammateTargetDropdown)
+	end
+
+	table.insert(Environment.NotorietyUIConnections, Players.PlayerAdded:Connect(queueTeammateTargetRefresh))
+	table.insert(Environment.NotorietyUIConnections, Players.PlayerRemoving:Connect(queueTeammateTargetRefresh))
+
+	local Criminals = Workspace:FindFirstChild("Criminals")
+	if Criminals then
+		table.insert(Environment.NotorietyUIConnections, Criminals.ChildAdded:Connect(queueTeammateTargetRefresh))
+		table.insert(Environment.NotorietyUIConnections, Criminals.ChildRemoved:Connect(queueTeammateTargetRefresh))
+	end
+
+	MainTab:Button({
+		Title = "Kill Teammate(s)",
+		Desc = "Uses the selected teammate target; All targets every current teammate",
+		Icon = "user-x",
+		Callback = function()
+			task.spawn(runKillTeammates, Environment.NotorietyTeammateTarget)
+		end,
+	})
+
 	MainTab:Toggle({
 		Flag = "InfiniteYellMark",
 		Title = "Infinite Yell / Mark",
@@ -5469,6 +5673,7 @@ local function unloadNotoriety()
 	Environment.NotorietyAutoYellEnabled = false
 	Environment.NotorietyNoYellDelayEnabled = false
 	Environment.KillPoliceRunning = false
+	Environment.KillTeammatesRunning = false
 
 	pcall(function()
 		ContextActionService:UnbindAction("NotorietyKillPolice")

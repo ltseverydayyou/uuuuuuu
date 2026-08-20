@@ -452,6 +452,8 @@ Environment.KillTeammatesRunning = false
 Environment.NotorietyTeammateTarget = tostring(Environment.NotorietyTeammateTarget or "All")
 Environment.NotorietyWeaponEnabled = Environment.NotorietyWeaponEnabled ~= false
 Environment.NotorietyFriendlyFireEnabled = Environment.NotorietyFriendlyFireEnabled ~= false
+Environment.NotorietyRealismModeEnabled = Environment.NotorietyRealismModeEnabled == true
+Environment.NotorietyBugFeatureEnabled = Environment.NotorietyBugFeatureEnabled == true
 Environment.NotorietyRapidFireEnabled = Environment.NotorietyRapidFireEnabled ~= false
 Environment.NotorietyNoRecoilEnabled = Environment.NotorietyNoRecoilEnabled ~= false
 Environment.NotorietyInfiniteAmmoEnabled = Environment.NotorietyInfiniteAmmoEnabled ~= false
@@ -3987,6 +3989,211 @@ local function setFriendlyFireEnabled(Enabled)
 	end
 end
 
+local ClientMutatorState = {
+	Records = {},
+	BugFeatureParts = setmetatable({}, {
+		__mode = "k",
+	}),
+	BugFeatureConnection = nil,
+}
+
+local function createClientMutatorValue(Name)
+	local Value = ServiceResolver.ns("BoolValue")
+
+	if not Value then
+		Value = Instance.new("BoolValue")
+	end
+
+	Value.Name = Name
+	Value.Value = true
+	Value:SetAttribute("NotorietyClientMutatorOwned", true)
+
+	return Value
+end
+
+local function setClientBooleanMutator(Name, Enabled)
+	local ActiveMutators = getActiveMutators()
+
+	if not ActiveMutators then
+		return false
+	end
+
+	local Record = ClientMutatorState.Records[Name]
+	local Existing = ActiveMutators:FindFirstChild(Name)
+
+	if Enabled then
+		if Existing then
+			ClientMutatorState.Records[Name] = {
+				Instance = Existing,
+				Owned = Existing:GetAttribute("NotorietyClientMutatorOwned") == true,
+			}
+			return true
+		end
+
+		local Value = createClientMutatorValue(Name)
+		Value.Parent = ActiveMutators
+
+		ClientMutatorState.Records[Name] = {
+			Instance = Value,
+			Owned = true,
+		}
+
+		return true
+	end
+
+	if Record and Record.Owned and typeof(Record.Instance) == "Instance" and Record.Instance.Parent then
+		pcall(function()
+			Record.Instance:Destroy()
+		end)
+	elseif Existing and Existing:GetAttribute("NotorietyClientMutatorOwned") == true then
+		pcall(function()
+			Existing:Destroy()
+		end)
+	end
+
+	ClientMutatorState.Records[Name] = nil
+	return false
+end
+
+local function isBugFeatureJumpPart(Object)
+	if typeof(Object) ~= "Instance" or not Object:IsA("BasePart") or Object.Name ~= "JumpPart" then
+		return false
+	end
+
+	local Current = Object.Parent
+
+	for _ = 1, 6 do
+		if not Current then
+			break
+		end
+
+		if Current.Name == "SAW" or Current.Name == "Chainsaw" then
+			return true
+		end
+
+		Current = Current.Parent
+	end
+
+	return false
+end
+
+local function applyBugFeaturePart(Part)
+	if not Environment.NotorietyBugFeatureEnabled or not isBugFeatureJumpPart(Part) then
+		return
+	end
+
+	if ClientMutatorState.BugFeatureParts[Part] == nil then
+		local Highlight = Part:FindFirstChild("Highlight")
+		ClientMutatorState.BugFeatureParts[Part] = {
+			CanCollide = Part.CanCollide,
+			Transparency = Part.Transparency,
+			Highlight = Highlight,
+			HighlightEnabled = Highlight and Highlight:IsA("Highlight") and Highlight.Enabled or nil,
+		}
+	end
+
+	Part.CanCollide = true
+	Part.Transparency = 0
+
+	local Highlight = Part:FindFirstChild("Highlight")
+	if Highlight and Highlight:IsA("Highlight") then
+		Highlight.Enabled = true
+	end
+end
+
+local function restoreBugFeatureParts()
+	for Part, Original in ClientMutatorState.BugFeatureParts do
+		if typeof(Part) == "Instance" and Part.Parent and type(Original) == "table" then
+			pcall(function()
+				Part.CanCollide = Original.CanCollide
+				Part.Transparency = Original.Transparency
+			end)
+
+			local Highlight = Original.Highlight
+			if typeof(Highlight) == "Instance" and Highlight.Parent and Original.HighlightEnabled ~= nil then
+				pcall(function()
+					Highlight.Enabled = Original.HighlightEnabled
+				end)
+			end
+		end
+	end
+
+	table.clear(ClientMutatorState.BugFeatureParts)
+end
+
+local function scanBugFeatureParts()
+	if not Environment.NotorietyBugFeatureEnabled then
+		return
+	end
+
+	for _, Object in Workspace:GetDescendants() do
+		if isBugFeatureJumpPart(Object) then
+			applyBugFeaturePart(Object)
+		end
+	end
+end
+
+local function setRealismModeEnabled(Enabled)
+	Environment.NotorietyRealismModeEnabled = Enabled == true
+	setClientBooleanMutator("RealismMode", Environment.NotorietyRealismModeEnabled)
+end
+
+local function setBugFeatureEnabled(Enabled)
+	Environment.NotorietyBugFeatureEnabled = Enabled == true
+	setClientBooleanMutator("BugFeature", Environment.NotorietyBugFeatureEnabled)
+
+	if Environment.NotorietyBugFeatureEnabled then
+		if not ClientMutatorState.BugFeatureConnection then
+			ClientMutatorState.BugFeatureConnection = Workspace.DescendantAdded:Connect(function(Object)
+				if Environment.NotorietyUnloaded or not Environment.NotorietyBugFeatureEnabled then
+					return
+				end
+
+				if isBugFeatureJumpPart(Object) then
+					task.defer(applyBugFeaturePart, Object)
+				end
+			end)
+		end
+
+		scanBugFeatureParts()
+		return
+	end
+
+	if ClientMutatorState.BugFeatureConnection then
+		pcall(function()
+			ClientMutatorState.BugFeatureConnection:Disconnect()
+		end)
+		ClientMutatorState.BugFeatureConnection = nil
+	end
+
+	restoreBugFeatureParts()
+end
+
+local function restoreClientMutators()
+	if ClientMutatorState.BugFeatureConnection then
+		pcall(function()
+			ClientMutatorState.BugFeatureConnection:Disconnect()
+		end)
+		ClientMutatorState.BugFeatureConnection = nil
+	end
+
+	restoreBugFeatureParts()
+
+	for Name, Record in ClientMutatorState.Records do
+		if type(Record) == "table"
+			and Record.Owned
+			and typeof(Record.Instance) == "Instance"
+			and Record.Instance.Parent
+		then
+			pcall(function()
+				Record.Instance:Destroy()
+			end)
+		end
+
+		ClientMutatorState.Records[Name] = nil
+	end
+end
+
 local function isTeammatePlayer(Player)
 	if not Player or Player == LocalPlayer then
 		return false
@@ -5892,6 +6099,44 @@ local function createVibeUI()
 		end,
 	})
 
+	local MutatorsTab = Window:Tab({
+		Title = "Mutators",
+		Icon = "flask-conical",
+		Border = true,
+	})
+
+	MutatorsTab:Toggle({
+		Flag = "RealismMode",
+		Title = "Tactical / Realism Mode",
+		Desc = "Activates the client-observed RealismMode branches: no armor regeneration/iFrames, hidden native highlights, and 8x default headshots. Server-only Tactical Mode effects are not faked",
+		Value = Environment.NotorietyRealismModeEnabled,
+		Callback = function(Enabled)
+			setRealismModeEnabled(Enabled)
+			requestVibeUIConfigSave()
+		end,
+	})
+
+	MutatorsTab:Toggle({
+		Flag = "BugFeature",
+		Title = "Legacy Glitches / Bug Feature",
+		Desc = "Activates the client-backed BugFeature mutator and enables the native SAW/Chainsaw jump-part collision behavior, including already spawned weapon models",
+		Value = Environment.NotorietyBugFeatureEnabled,
+		Callback = function(Enabled)
+			setBugFeatureEnabled(Enabled)
+			requestVibeUIConfigSave()
+		end,
+	})
+
+	MutatorsTab:Button({
+		Title = "Refresh Client Mutators",
+		Desc = "Re-applies enabled client mutators and rescans runtime SAW/Chainsaw parts",
+		Icon = "refresh-cw",
+		Callback = function()
+			setRealismModeEnabled(Environment.NotorietyRealismModeEnabled)
+			setBugFeatureEnabled(Environment.NotorietyBugFeatureEnabled)
+		end,
+	})
+
 	local AudioTab = Window:Tab({
 		Title = "Audio",
 		Icon = "volume-2",
@@ -6363,6 +6608,8 @@ local function unloadNotoriety()
 	Environment.MaxEverythingEnabled = false
 	Environment.NotorietyWeaponEnabled = false
 	Environment.NotorietyFriendlyFireEnabled = false
+	Environment.NotorietyRealismModeEnabled = false
+	Environment.NotorietyBugFeatureEnabled = false
 	Environment.NotorietySilentAimEnabled = false
 	Environment.NotorietyWallBangEnabled = false
 	Environment.NotorietyItemESPEnabled = false
@@ -6403,6 +6650,7 @@ local function unloadNotoriety()
 	end
 
 	restoreFriendlyFire()
+	restoreClientMutators()
 	restoreRuntimeSilentAimWrappers()
 	restoreAllWeaponData()
 	restoreRuntimeWeaponAccuracy()
@@ -6470,6 +6718,8 @@ end
 
 applyPoliceHeadScale()
 setFriendlyFireEnabled(Environment.NotorietyFriendlyFireEnabled)
+setRealismModeEnabled(Environment.NotorietyRealismModeEnabled)
+setBugFeatureEnabled(Environment.NotorietyBugFeatureEnabled)
 setWeaponModificationsEnabled(Environment.NotorietyWeaponEnabled)
 setYellMarkPatchEnabled(Environment.NotorietyInfiniteYellMarkEnabled)
 YellPatchState.SetAutoYellEnabled(Environment.NotorietyAutoYellEnabled)

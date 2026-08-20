@@ -451,6 +451,7 @@ Environment.KillPoliceRunning = false
 Environment.KillTeammatesRunning = false
 Environment.NotorietyTeammateTarget = tostring(Environment.NotorietyTeammateTarget or "All")
 Environment.NotorietyWeaponEnabled = Environment.NotorietyWeaponEnabled ~= false
+Environment.NotorietyFriendlyFireEnabled = Environment.NotorietyFriendlyFireEnabled ~= false
 Environment.NotorietyRapidFireEnabled = Environment.NotorietyRapidFireEnabled ~= false
 Environment.NotorietyNoRecoilEnabled = Environment.NotorietyNoRecoilEnabled ~= false
 Environment.NotorietyInfiniteAmmoEnabled = Environment.NotorietyInfiniteAmmoEnabled ~= false
@@ -3418,6 +3419,85 @@ local function Apply()
 	replenishFiniteSupplies(Character)
 end
 
+local FriendlyFireState = {
+	Instance = nil,
+	Owned = false,
+}
+
+local function getActiveMutators()
+	return RS_Package:FindFirstChild("ActiveMutators")
+end
+
+local function restoreFriendlyFire()
+	local Instance = FriendlyFireState.Instance
+
+	if FriendlyFireState.Owned and typeof(Instance) == "Instance" and Instance.Parent then
+		pcall(function()
+			Instance:Destroy()
+		end)
+	end
+
+	FriendlyFireState.Instance = nil
+	FriendlyFireState.Owned = false
+end
+
+local function applyFriendlyFire()
+	local ActiveMutators = getActiveMutators()
+
+	if not ActiveMutators then
+		return false
+	end
+
+	if not Environment.NotorietyFriendlyFireEnabled then
+		restoreFriendlyFire()
+		return false
+	end
+
+	local Existing = ActiveMutators:FindFirstChild("FriendlyFire")
+
+	if Existing then
+		if Existing:GetAttribute("NotorietyFriendlyFireOwned") == true then
+			FriendlyFireState.Instance = Existing
+			FriendlyFireState.Owned = true
+		elseif FriendlyFireState.Owned and FriendlyFireState.Instance ~= Existing then
+			restoreFriendlyFire()
+		end
+
+		if FriendlyFireState.Instance == Existing and FriendlyFireState.Owned and Existing:IsA("ValueBase") then
+			Existing.Value = 100
+		end
+
+		return true
+	end
+
+	restoreFriendlyFire()
+
+	local FriendlyFire = ServiceResolver.ns("NumberValue")
+	if not FriendlyFire then
+		FriendlyFire = Instance.new("NumberValue")
+	end
+
+	FriendlyFire.Name = "FriendlyFire"
+	FriendlyFire.Value = 100
+	FriendlyFire:SetAttribute("NotorietyFriendlyFireOwned", true)
+	FriendlyFire.Parent = ActiveMutators
+
+	FriendlyFireState.Instance = FriendlyFire
+	FriendlyFireState.Owned = true
+
+	return true
+end
+
+local function setFriendlyFireEnabled(Enabled)
+	Environment.NotorietyFriendlyFireEnabled = Enabled == true
+
+	if Environment.NotorietyFriendlyFireEnabled then
+		applyFriendlyFire()
+	else
+		restoreFriendlyFire()
+	end
+end
+
 local function isTeammatePlayer(Player)
 	if not Player or Player == LocalPlayer then
 		return false
@@ -5084,6 +5164,17 @@ local function createVibeUI()
 		})
 	end
 
+	WeaponTab:Toggle({
+		Flag = "FriendlyFire",
+		Title = "Friendly Fire",
+		Desc = "Lets normal gunfire hit teammates using the game\'s native FriendlyFire path",
+		Value = Environment.NotorietyFriendlyFireEnabled,
+		Callback = function(Enabled)
+			setFriendlyFireEnabled(Enabled)
+			requestVibeUIConfigSave()
+		end,
+	})
+
 	addWeaponFeatureToggle("RapidFire", "Rapid Fire", "Applies custom fire delay and bolt duration", "NotorietyRapidFireEnabled")
 	addWeaponFeatureToggle("NoRecoil", "No Recoil", "Removes recoil, camera kick, shake, and pushback", "NotorietyNoRecoilEnabled")
 	addWeaponFeatureToggle("InfiniteAmmo", "Infinite Ammo", "Keeps primary/secondary magazine and reserve ammo effectively infinite", "NotorietyInfiniteAmmoEnabled")
@@ -5666,6 +5757,7 @@ local function unloadNotoriety()
 	Environment.NotorietyUnloaded = true
 	Environment.MaxEverythingEnabled = false
 	Environment.NotorietyWeaponEnabled = false
+	Environment.NotorietyFriendlyFireEnabled = false
 	Environment.NotorietyItemESPEnabled = false
 	Environment.NotorietyPoliceESPEnabled = false
 	Environment.NotorietyPoliceHeadScaleEnabled = false
@@ -5703,6 +5795,7 @@ local function unloadNotoriety()
 		end
 	end
 
+	restoreFriendlyFire()
 	restoreAllWeaponData()
 	restoreRuntimeWeaponAccuracy()
 	restoreRuntimeWeaponRecoil()
@@ -5767,6 +5860,7 @@ if typeof(NotorietyUI.Root) == "Instance" and type(UIProtector.protectUI) == "fu
 end
 
 applyPoliceHeadScale()
+setFriendlyFireEnabled(Environment.NotorietyFriendlyFireEnabled)
 setWeaponModificationsEnabled(Environment.NotorietyWeaponEnabled)
 setYellMarkPatchEnabled(Environment.NotorietyInfiniteYellMarkEnabled)
 YellPatchState.SetAutoYellEnabled(Environment.NotorietyAutoYellEnabled)

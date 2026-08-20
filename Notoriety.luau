@@ -694,7 +694,7 @@ NState.findNativePlaceEquipment = function()
 		return nil
 	end
 
-	local SourceSuffix = "Players." .. LocalPlayer.Name .. ".PlayerGui.SG_Package.LocalMovement"
+	local SourceSuffix = "Players." .. NState.LocalPlayer.Name .. ".PlayerGui.SG_Package.LocalMovement"
 
 	local Success, Objects = pcall(getgc, true)
 	if not Success or type(Objects) ~= "table" then
@@ -5382,7 +5382,7 @@ NState.findGamePlaySoundtrackFunction = function()
 		return nil
 	end
 
-	local SourceSuffix = "Players." .. LocalPlayer.Name .. ".PlayerScripts.SPS_Package.Music.RunMusic"
+	local SourceSuffix = "Players." .. NState.LocalPlayer.Name .. ".PlayerScripts.SPS_Package.Music.RunMusic"
 
 	for _, Function in getgc(true) do
 		if type(Function) == "function" then

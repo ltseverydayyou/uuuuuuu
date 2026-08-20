@@ -678,8 +678,14 @@ local function nearestDigZone(islandId)
 			local taggedIsland = zone:GetAttribute(IslandConstants.ISLAND_ID_ATTRIBUTE)
 			if taggedIsland == nil or islandId == nil or taggedIsland == islandId then
 				local localPoint = zone.CFrame:PointToObjectSpace(root.Position)
-				local x = math.clamp(localPoint.X, -zone.Size.X * 0.5 + 2, zone.Size.X * 0.5 - 2)
-				local z = math.clamp(localPoint.Z, -zone.Size.Z * 0.5 + 2, zone.Size.Z * 0.5 - 2)
+				local halfX = zone.Size.X * 0.5
+				local halfZ = zone.Size.Z * 0.5
+				local insetX = math.min(2, math.max(0, halfX - 0.05))
+				local insetZ = math.min(2, math.max(0, halfZ - 0.05))
+				local minX, maxX = -halfX + insetX, halfX - insetX
+				local minZ, maxZ = -halfZ + insetZ, halfZ - insetZ
+				local x = minX <= maxX and math.clamp(localPoint.X, minX, maxX) or 0
+				local z = minZ <= maxZ and math.clamp(localPoint.Z, minZ, maxZ) or 0
 				local worldPoint = zone.CFrame:PointToWorldSpace(Vector3.new(x, 0, z))
 				local target = Vector3.new(worldPoint.X, root.Position.Y, worldPoint.Z)
 				local distance = (target - root.Position).Magnitude
@@ -2940,6 +2946,10 @@ task.spawn(function()
 			end
 			if not throttled then
 				local ok, success, uid = pcall(digOnce)
+				if not ok then
+					Hub.BusyDig = false
+					releaseAction("dig")
+				end
 				if ok and success and type(uid) == "string" and (Hub.Settings.AutoClean or Hub.Settings.AutoSell or Hub.Settings.AutoFillMuseum) then
 					task.spawn(function()
 						pcall(lootPipelineStep, uid)

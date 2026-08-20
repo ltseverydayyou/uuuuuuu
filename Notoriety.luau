@@ -457,6 +457,13 @@ Environment.NotorietyNoRecoilEnabled = Environment.NotorietyNoRecoilEnabled ~= f
 Environment.NotorietyInfiniteAmmoEnabled = Environment.NotorietyInfiniteAmmoEnabled ~= false
 Environment.NotorietyFullAutoEnabled = Environment.NotorietyFullAutoEnabled ~= false
 Environment.NotorietyAccuracyModEnabled = Environment.NotorietyAccuracyModEnabled ~= false
+Environment.NotorietySilentAimEnabled = Environment.NotorietySilentAimEnabled == true
+Environment.NotorietyWallBangEnabled = Environment.NotorietyWallBangEnabled == true
+Environment.NotorietySilentAimTargetPolice = Environment.NotorietySilentAimTargetPolice ~= false
+Environment.NotorietySilentAimTargetCriminals = Environment.NotorietySilentAimTargetCriminals == true
+Environment.NotorietyWallBangTargetPolice = Environment.NotorietyWallBangTargetPolice ~= false
+Environment.NotorietyWallBangTargetCriminals = Environment.NotorietyWallBangTargetCriminals == true
+Environment.NotorietySilentAimFOV = math.clamp(tonumber(Environment.NotorietySilentAimFOV) or 250, 0, 2000)
 Environment.NotorietyFireDelay = math.clamp(tonumber(Environment.NotorietyFireDelay) or 0.01, 0, 1)
 Environment.NotorietyBoltDuration = math.clamp(tonumber(Environment.NotorietyBoltDuration) or 0.001, 0, 1)
 Environment.NotorietyAccuracy = tonumber(Environment.NotorietyAccuracy) or 100
@@ -2454,6 +2461,10 @@ local WeaponState = {
 	RuntimeSpreadBackups = setmetatable({}, {
 		__mode = "k",
 	}),
+	RuntimeSilentAimBackups = setmetatable({}, {
+		__mode = "k",
+	}),
+	ProjectileSilentAim = nil,
 	RuntimeRefresh = 0,
 }
 
@@ -2718,9 +2729,436 @@ local function getDebugUpvalue(Function, Index)
 	return First
 end
 
+local Targeting = {}
+
+function Targeting.getCategory(TargetModel)
+	if not TargetModel or TargetModel == LocalPlayer.Character then
+		return nil
+	end
+
+	local PoliceFolder = Workspace:FindFirstChild("Police")
+	if PoliceFolder and TargetModel:IsDescendantOf(PoliceFolder) then
+		return "Police"
+	end
+
+	local CriminalsFolder = Workspace:FindFirstChild("Criminals")
+	if CriminalsFolder and TargetModel:IsDescendantOf(CriminalsFolder) then
+		local Player = Players:GetPlayerFromCharacter(TargetModel)
+		if Player and Player ~= LocalPlayer then
+			return "Criminals"
+		end
+	end
+
+	return nil
+end
+
+function Targeting.isCategoryEnabled(Category, PoliceEnabled, CriminalsEnabled)
+	if Category == "Police" then
+		return PoliceEnabled == true
+	end
+
+	if Category == "Criminals" then
+		return CriminalsEnabled == true
+	end
+
+	return false
+end
+
+function Targeting.isSilentAimCategoryEnabled(Category)
+	return Targeting.isCategoryEnabled(
+		Category,
+		Environment.NotorietySilentAimTargetPolice,
+		Environment.NotorietySilentAimTargetCriminals
+	)
+end
+
+function Targeting.isWallBangCategoryEnabled(Category)
+	return Targeting.isCategoryEnabled(
+		Category,
+		Environment.NotorietyWallBangTargetPolice,
+		Environment.NotorietyWallBangTargetCriminals
+	)
+end
+
+function Targeting.getPart(Target)
+	return Target and (
+		Target:FindFirstChild("Head", true)
+		or Target:FindFirstChild("UpperTorso", true)
+		or Target:FindFirstChild("Torso", true)
+		or Target:FindFirstChild("HumanoidRootPart", true)
+	) or nil
+end
+
+function Targeting.isAlive(Target)
+	if not Target then
+		return false
+	end
+
+	local Humanoid = Target:FindFirstChildWhichIsA("Humanoid", true)
+	if not Humanoid or Humanoid.Health <= 0 then
+		return false
+	end
+
+	local Health = Target:FindFirstChild("Health")
+	if Health and Health:IsA("ValueBase") and type(Health.Value) == "number" and Health.Value <= 0 then
+		return false
+	end
+
+	return true
+end
+
+function Targeting.forEach(PoliceEnabled, CriminalsEnabled, Callback)
+	if PoliceEnabled then
+		local PoliceFolder = Workspace:FindFirstChild("Police")
+		if PoliceFolder then
+			for _, Target in PoliceFolder:GetChildren() do
+				Callback(Target, "Police")
+			end
+		end
+	end
+
+	if CriminalsEnabled then
+		local CriminalsFolder = Workspace:FindFirstChild("Criminals")
+		if CriminalsFolder then
+			for _, Player in Players:GetPlayers() do
+				if Player ~= LocalPlayer then
+					local Target = Player.Character
+					if Target and Target:IsDescendantOf(CriminalsFolder) then
+						Callback(Target, "Criminals")
+					end
+				end
+			end
+		end
+	end
+end
+
+function Targeting.isWallBangAllowed(TargetModel)
+	if not Environment.NotorietyWallBangEnabled then
+		return false
+	end
+
+	return Targeting.isWallBangCategoryEnabled(Targeting.getCategory(TargetModel))
+end
+
+function Targeting.isVisible(TargetModel, TargetPart)
+	if Targeting.isWallBangAllowed(TargetModel) then
+		return true
+	end
+
+	local Camera = Workspace.CurrentCamera
+
+	if not Camera or not TargetPart then
+		return false
+	end
+
+	local Origin = Camera.CFrame.Position
+	local Direction = TargetPart.Position - Origin
+
+	if Direction.Magnitude <= 0.001 then
+		return true
+	end
+
+	local Params = RaycastParams.new()
+	Params.FilterType = Enum.RaycastFilterType.Exclude
+	Params.IgnoreWater = true
+
+	local Filter = {}
+	local Character = LocalPlayer.Character
+
+	if Character then
+		table.insert(Filter, Character)
+	end
+
+	table.insert(Filter, Camera)
+	Params.FilterDescendantsInstances = Filter
+
+	local Result = Workspace:Raycast(Origin, Direction, Params)
+
+	return Result == nil
+		or Result.Instance == TargetPart
+		or Result.Instance:IsDescendantOf(TargetModel)
+end
+
+function Targeting.getSilentAimTargetPart()
+	if not Environment.NotorietySilentAimEnabled then
+		return nil
+	end
+
+	local Camera = Workspace.CurrentCamera
+	if not Camera then
+		return nil
+	end
+
+	local MousePosition = UserInputService:GetMouseLocation()
+	local MaxFOV = math.clamp(tonumber(Environment.NotorietySilentAimFOV) or 250, 0, 2000)
+	local BestPart
+	local BestDistance = math.huge
+
+	Targeting.forEach(
+		Environment.NotorietySilentAimTargetPolice,
+		Environment.NotorietySilentAimTargetCriminals,
+		function(Target, Category)
+			if not Targeting.isSilentAimCategoryEnabled(Category) or not Targeting.isAlive(Target) then
+				return
+			end
+
+			local HitPart = Targeting.getPart(Target)
+			if not HitPart or not HitPart:IsA("BasePart") then
+				return
+			end
+
+			local ScreenPosition, OnScreen = Camera:WorldToViewportPoint(HitPart.Position)
+			if not OnScreen or ScreenPosition.Z <= 0 then
+				return
+			end
+
+			local ScreenDistance = (Vector2.new(ScreenPosition.X, ScreenPosition.Y) - MousePosition).Magnitude
+			if (MaxFOV <= 0 or ScreenDistance <= MaxFOV)
+				and ScreenDistance < BestDistance
+				and Targeting.isVisible(Target, HitPart)
+			then
+				BestDistance = ScreenDistance
+				BestPart = HitPart
+			end
+		end
+	)
+
+	return BestPart
+end
+
+function Targeting.getWallBangTargetPartFromShot(StartPosition, Direction)
+	if not Environment.NotorietyWallBangEnabled
+		or typeof(StartPosition) ~= "Vector3"
+		or typeof(Direction) ~= "Vector3"
+		or Direction.Magnitude <= 0.001
+	then
+		return nil
+	end
+
+	local UnitDirection = Direction.Unit
+	local BestPart
+	local BestAngle = math.rad(5)
+	local BestAlong = math.huge
+
+	Targeting.forEach(
+		Environment.NotorietyWallBangTargetPolice,
+		Environment.NotorietyWallBangTargetCriminals,
+		function(Target, Category)
+			if not Targeting.isWallBangCategoryEnabled(Category) or not Targeting.isAlive(Target) then
+				return
+			end
+
+			local HitPart = Targeting.getPart(Target)
+			if not HitPart or not HitPart:IsA("BasePart") then
+				return
+			end
+
+			local Offset = HitPart.Position - StartPosition
+			local Along = Offset:Dot(UnitDirection)
+			if Along <= 0 then
+				return
+			end
+
+			local Perpendicular = (Offset - UnitDirection * Along).Magnitude
+			local Angle = math.atan2(Perpendicular, Along)
+
+			if Angle < BestAngle or (math.abs(Angle - BestAngle) <= 1e-5 and Along < BestAlong) then
+				BestAngle = Angle
+				BestAlong = Along
+				BestPart = HitPart
+			end
+		end
+	)
+
+	return BestPart
+end
+
+local function restoreRuntimeSilentAimWrapper(State)
+	local Record = WeaponState.RuntimeSilentAimBackups[State]
+
+	if type(Record) ~= "table" then
+		return
+	end
+
+	if type(Record.Original) == "function" and State.shoot == Record.Wrapper then
+		State.shoot = Record.Original
+	end
+
+	WeaponState.RuntimeSilentAimBackups[State] = nil
+end
+
+local function restoreProjectileSilentAimWrapper()
+	local Record = WeaponState.ProjectileSilentAim
+
+	if type(Record) ~= "table" then
+		return
+	end
+
+	if type(Record.Projectile) == "table"
+		and type(Record.Original) == "function"
+		and Record.Projectile.new == Record.Wrapper
+	then
+		Record.Projectile.new = Record.Original
+	end
+
+	WeaponState.ProjectileSilentAim = nil
+end
+
+local function restoreRuntimeSilentAimWrappers()
+	local States = {}
+
+	for State in WeaponState.RuntimeSilentAimBackups do
+		States[#States + 1] = State
+	end
+
+	for _, State in States do
+		restoreRuntimeSilentAimWrapper(State)
+	end
+
+	restoreProjectileSilentAimWrapper()
+end
+
+local function getProjectileTableFromShoot(Shoot)
+	if type(Shoot) ~= "function" then
+		return nil
+	end
+
+	local Direct = getDebugUpvalue(Shoot, 28)
+
+	if type(Direct) == "table" and type(rawget(Direct, "new")) == "function" then
+		return Direct
+	end
+
+	local PossibleOriginal = getDebugUpvalue(Shoot, 2)
+
+	if type(PossibleOriginal) == "function" then
+		local FromOriginal = getDebugUpvalue(PossibleOriginal, 28)
+
+		if type(FromOriginal) == "table" and type(rawget(FromOriginal, "new")) == "function" then
+			return FromOriginal
+		end
+	end
+
+	return nil
+end
+
+local function patchRuntimeSilentAim(State)
+	if type(State) ~= "table" then
+		return false
+	end
+
+	if not Environment.NotorietyWeaponEnabled
+		or (not Environment.NotorietySilentAimEnabled and not Environment.NotorietyWallBangEnabled)
+	then
+		restoreRuntimeSilentAimWrapper(State)
+		restoreProjectileSilentAimWrapper()
+		return false
+	end
+
+	restoreRuntimeSilentAimWrapper(State)
+
+	local Shoot = rawget(State, "shoot")
+	local ProjectileTable = getProjectileTableFromShoot(Shoot)
+
+	if type(ProjectileTable) ~= "table" then
+		return false
+	end
+
+	local Existing = WeaponState.ProjectileSilentAim
+
+	if type(Existing) == "table"
+		and Existing.Projectile == ProjectileTable
+		and ProjectileTable.new == Existing.Wrapper
+	then
+		return true
+	end
+
+	if type(Existing) == "table" then
+		restoreProjectileSilentAimWrapper()
+	end
+
+	local OriginalNew = rawget(ProjectileTable, "new")
+
+	if type(OriginalNew) ~= "function" then
+		return false
+	end
+
+	local Wrapper
+	Wrapper = function(Data, ...)
+		if not Environment.NotorietyUnloaded
+			and Environment.NotorietyWeaponEnabled
+			and type(Data) == "table"
+			and Data.Player == LocalPlayer
+			and not Data.IsNPC
+			and typeof(Data.StartPosition) == "Vector3"
+		then
+			local RedirectedTarget
+
+			if Environment.NotorietySilentAimEnabled then
+				local TargetPart = Targeting.getSilentAimTargetPart()
+
+				if TargetPart and TargetPart.Parent then
+					local Delta = TargetPart.Position - Data.StartPosition
+
+					if Delta.Magnitude > 0.001 then
+						Data.TargetPosition = TargetPart.Position
+						Data.Direction = Delta.Unit
+						RedirectedTarget = TargetPart
+						Environment.NotorietySilentAimLastTarget = TargetPart:GetFullName()
+						Environment.NotorietySilentAimLastRedirect = TargetPart.Position
+					end
+				end
+			end
+
+			if Environment.NotorietyWallBangEnabled and typeof(Data.Direction) == "Vector3" then
+				local WallBangTarget = RedirectedTarget
+
+				if WallBangTarget then
+					local TargetModel = WallBangTarget:FindFirstAncestorOfClass("Model")
+					if not TargetModel or not Targeting.isWallBangAllowed(TargetModel) then
+						WallBangTarget = nil
+					end
+				end
+
+				if not WallBangTarget then
+					WallBangTarget = Targeting.getWallBangTargetPartFromShot(Data.StartPosition, Data.Direction)
+				end
+
+				if WallBangTarget then
+					Data.Piercing = math.max(tonumber(Data.Piercing) or 0, 1000)
+
+					if type(Data.GunData) == "table" then
+						local GunData = table.clone(Data.GunData)
+						GunData.EnemyPiercing = math.max(tonumber(GunData.EnemyPiercing) or 0, 1000)
+						Data.GunData = GunData
+					end
+
+					Environment.NotorietyWallBangLastTarget = WallBangTarget:GetFullName()
+				end
+			end
+		end
+
+		return OriginalNew(Data, ...)
+	end
+
+	WeaponState.ProjectileSilentAim = {
+		Projectile = ProjectileTable,
+		Original = OriginalNew,
+		Wrapper = Wrapper,
+	}
+
+	ProjectileTable.new = Wrapper
+	return true
+end
+
 local function patchRuntimeWeaponSpread(State, Spread)
 	local DebugLibrary = debug
 	local Shoot = type(State) == "table" and rawget(State, "shoot") or nil
+	local AimRecord = type(State) == "table" and WeaponState.RuntimeSilentAimBackups[State] or nil
+
+	if type(AimRecord) == "table" and Shoot == AimRecord.Wrapper then
+		Shoot = AimRecord.Original
+	end
 
 	if type(Shoot) ~= "function"
 		or type(DebugLibrary) ~= "table"
@@ -2782,6 +3220,8 @@ local function patchRuntimeWeaponState(State)
 
 			patchRuntimeWeaponSpread(State, DesiredSpread)
 		end
+
+		patchRuntimeSilentAim(State)
 
 		if Environment.NotorietyNoRecoilEnabled then
 			local RecoilBackup = WeaponState.RuntimeRecoilBackups[State]
@@ -3020,6 +3460,8 @@ applyWeaponData = function(Data)
 			"FireDelay",
 			"BoltDuration",
 			"BoltLock",
+			"Piercing",
+			"EnemyPiercing",
 			"FireMode",
 			"FireModeList",
 			"MagazineSize",
@@ -3422,6 +3864,8 @@ end
 local FriendlyFireState = {
 	Instance = nil,
 	Owned = false,
+	Captured = false,
+	OriginalValue = nil,
 }
 
 local function getActiveMutators()
@@ -3431,14 +3875,22 @@ end
 local function restoreFriendlyFire()
 	local Instance = FriendlyFireState.Instance
 
-	if FriendlyFireState.Owned and typeof(Instance) == "Instance" and Instance.Parent then
-		pcall(function()
-			Instance:Destroy()
-		end)
+	if typeof(Instance) == "Instance" and Instance.Parent then
+		if FriendlyFireState.Owned then
+			pcall(function()
+				Instance:Destroy()
+			end)
+		elseif FriendlyFireState.Captured and Instance:IsA("NumberValue") then
+			pcall(function()
+				Instance.Value = FriendlyFireState.OriginalValue
+			end)
+		end
 	end
 
 	FriendlyFireState.Instance = nil
 	FriendlyFireState.Owned = false
+	FriendlyFireState.Captured = false
+	FriendlyFireState.OriginalValue = nil
 end
 
 local function applyFriendlyFire()
@@ -3456,14 +3908,18 @@ local function applyFriendlyFire()
 	local Existing = ActiveMutators:FindFirstChild("FriendlyFire")
 
 	if Existing then
-		if Existing:GetAttribute("NotorietyFriendlyFireOwned") == true then
-			FriendlyFireState.Instance = Existing
-			FriendlyFireState.Owned = true
-		elseif FriendlyFireState.Owned and FriendlyFireState.Instance ~= Existing then
+		if FriendlyFireState.Instance ~= Existing then
 			restoreFriendlyFire()
+			FriendlyFireState.Instance = Existing
+			FriendlyFireState.Owned = Existing:GetAttribute("NotorietyFriendlyFireOwned") == true
+
+			if not FriendlyFireState.Owned and Existing:IsA("NumberValue") then
+				FriendlyFireState.Captured = true
+				FriendlyFireState.OriginalValue = Existing.Value
+			end
 		end
 
-		if FriendlyFireState.Instance == Existing and FriendlyFireState.Owned and Existing:IsA("ValueBase") then
+		if Existing:IsA("NumberValue") then
 			Existing.Value = 100
 		end
 
@@ -3493,8 +3949,41 @@ local function setFriendlyFireEnabled(Enabled)
 
 	if Environment.NotorietyFriendlyFireEnabled then
 		applyFriendlyFire()
-	else
+		return
+	end
+
+	local ActiveMutators = getActiveMutators()
+	local Existing = ActiveMutators and ActiveMutators:FindFirstChild("FriendlyFire")
+
+	if not Existing then
 		restoreFriendlyFire()
+		return
+	end
+
+	if Existing:GetAttribute("NotorietyFriendlyFireOwned") == true then
+		if FriendlyFireState.Instance ~= Existing then
+			restoreFriendlyFire()
+			FriendlyFireState.Instance = Existing
+			FriendlyFireState.Owned = true
+		end
+
+		restoreFriendlyFire()
+		return
+	end
+
+	if FriendlyFireState.Instance ~= Existing then
+		restoreFriendlyFire()
+		FriendlyFireState.Instance = Existing
+		FriendlyFireState.Owned = false
+
+		if Existing:IsA("NumberValue") then
+			FriendlyFireState.Captured = true
+			FriendlyFireState.OriginalValue = Existing.Value
+		end
+	end
+
+	if Existing:IsA("NumberValue") then
+		Existing.Value = 0
 	end
 end
 
@@ -3733,6 +4222,7 @@ local function applyAllWeaponModifications()
 end
 
 local function refreshWeaponModifications()
+	restoreRuntimeSilentAimWrappers()
 	restoreAllWeaponData()
 	restoreRuntimeWeaponAccuracy()
 	restoreRuntimeWeaponRecoil()
@@ -3767,6 +4257,10 @@ local ItemESPState = {
 		__mode = "k",
 	}),
 	Refresh = 0,
+	Rescan = 0,
+	ScanRefresh = 0,
+	ScanCursor = 1,
+	ScanList = {},
 }
 
 local function isItemESPCategoryEnabled(Category)
@@ -4144,7 +4638,10 @@ local function updateItemESPVisibility()
 			Entry.Label.MaxDistance = MaxDistance
 		end
 
-		if not Object.Parent then
+		if not Object.Parent
+			or typeof(Adornee) ~= "Instance"
+			or not Adornee.Parent
+		then
 			removeItemESPObject(Object)
 		end
 	end
@@ -4184,6 +4681,10 @@ local function stopItemESP()
 	end
 
 	table.clear(ItemESPState.Connections)
+	table.clear(ItemESPState.ScanList)
+	ItemESPState.ScanCursor = 1
+	ItemESPState.Rescan = 0
+	ItemESPState.ScanRefresh = 0
 
 	local Objects = {}
 
@@ -4238,8 +4739,12 @@ local function startItemESP()
 	end
 
 	ItemESPState.Folder = Folder
+	ItemESPState.ScanList = CollectionService:GetTagged("Prompt")
+	ItemESPState.ScanCursor = 1
+	ItemESPState.Rescan = 0
+	ItemESPState.ScanRefresh = 0
 
-	for _, Prompt in CollectionService:GetTagged("Prompt") do
+	for _, Prompt in ItemESPState.ScanList do
 		inspectItemESPPrompt(Prompt)
 	end
 
@@ -4273,9 +4778,12 @@ Environment.NotorietyItemESPController = ItemESPController
 
 local PoliceESPState = {
 	Folder = nil,
+	PoliceFolder = nil,
 	Connections = {},
 	Tracked = setmetatable({}, { __mode = "k" }),
 	Refresh = 0,
+	Rescan = 0,
+	ScanCursor = 1,
 }
 
 local function removePoliceESP(Model)
@@ -4412,6 +4920,9 @@ local function stopPoliceESP()
 	end
 
 	PoliceESPState.Folder = nil
+	PoliceESPState.PoliceFolder = nil
+	PoliceESPState.Rescan = 0
+	PoliceESPState.ScanCursor = 1
 end
 
 local function startPoliceESP()
@@ -4441,10 +4952,24 @@ local function startPoliceESP()
 	end
 
 	PoliceESPState.Folder = Folder
+	PoliceESPState.PoliceFolder = PoliceFolder
+	PoliceESPState.Rescan = 0
+	PoliceESPState.ScanCursor = 1
 
 	for _, Model in PoliceFolder:GetChildren() do addPoliceESP(Model) end
 	PoliceESPState.Connections[#PoliceESPState.Connections + 1] = PoliceFolder.ChildAdded:Connect(function(Model)
 		task.defer(addPoliceESP, Model)
+	end)
+	PoliceESPState.Connections[#PoliceESPState.Connections + 1] = PoliceFolder.DescendantAdded:Connect(function(Descendant)
+		local Model = Descendant
+
+		while Model and Model.Parent ~= PoliceFolder do
+			Model = Model.Parent
+		end
+
+		if Model and Model:IsA("Model") and not PoliceESPState.Tracked[Model] then
+			task.defer(addPoliceESP, Model)
+		end
 	end)
 	return true
 end
@@ -4457,17 +4982,26 @@ local function updatePoliceESP()
 	local MaxDistance = resolveESPMaxDistance(Environment.NotorietyPoliceESPMaxDistance, 2500)
 
 	for Model, Entry in PoliceESPState.Tracked do
-		local Visible = Model.Parent ~= nil
+		if not Model.Parent
+			or not Entry.Humanoid
+			or not Entry.Humanoid.Parent
+			or not Entry.Root
+			or not Entry.Root.Parent
+		then
+			removePoliceESP(Model)
+		else
+			local Visible = true
 
-		if Visible and LocalRoot and Entry.Root and Entry.Root.Parent then
-			Visible = (LocalRoot.Position - Entry.Root.Position).Magnitude <= MaxDistance
-		end
+			if LocalRoot then
+				Visible = (LocalRoot.Position - Entry.Root.Position).Magnitude <= MaxDistance
+			end
 
-		if Entry.Highlight then Entry.Highlight.Enabled = Visible end
-		if Entry.Label then
-			Entry.Label.MaxDistance = MaxDistance
-			Entry.RefreshText()
-			Entry.Label.Enabled = Visible and Entry.Label.Enabled
+			if Entry.Highlight then Entry.Highlight.Enabled = Visible end
+			if Entry.Label then
+				Entry.Label.MaxDistance = MaxDistance
+				Entry.RefreshText()
+				Entry.Label.Enabled = Visible and Entry.Label.Enabled
+			end
 		end
 	end
 end
@@ -5022,7 +5556,7 @@ local function createVibeUI()
 	ESPTab:Toggle({
 		Flag = "ItemESP",
 		Title = "Item / Interaction ESP",
-		Desc = "Highlights supported loot, keys, access objects, cameras, containers, and escape points",
+		Desc = "Highlights supported interactions and incrementally re-scans tagged prompts to catch late-loaded items",
 		Value = Environment.NotorietyItemESPEnabled,
 		Callback = function(Enabled)
 			setItemESPEnabled(Enabled)
@@ -5090,7 +5624,7 @@ local function createVibeUI()
 	ESPTab:Toggle({
 		Flag = "PoliceESP",
 		Title = "Police ESP",
-		Desc = "Highlights spawned police through walls",
+		Desc = "Highlights police through walls with event-driven late-load retries plus a bounded reconciliation scan",
 		Value = Environment.NotorietyPoliceESPEnabled,
 		Callback = function(Enabled)
 			setPoliceESPEnabled(Enabled)
@@ -5167,10 +5701,81 @@ local function createVibeUI()
 	WeaponTab:Toggle({
 		Flag = "FriendlyFire",
 		Title = "Friendly Fire",
-		Desc = "Lets normal gunfire hit teammates using the game\'s native FriendlyFire path",
+		Desc = "Lets normal gunfire hit teammates; the toggle now forces the native FriendlyFire value to match the visible state",
 		Value = Environment.NotorietyFriendlyFireEnabled,
 		Callback = function(Enabled)
 			setFriendlyFireEnabled(Enabled)
+			requestVibeUIConfigSave()
+		end,
+	})
+
+	WeaponTab:Toggle({
+		Flag = "SilentAim",
+		Title = "Silent Aim",
+		Desc = "Redirects each native gun shot toward the nearest enabled target group without moving the camera",
+		Value = Environment.NotorietySilentAimEnabled,
+		Callback = function(Enabled)
+			Environment.NotorietySilentAimEnabled = Enabled == true
+			if not NotorietyUI.ConfigLoading then refreshWeaponModifications() end
+			requestVibeUIConfigSave()
+		end,
+	})
+
+	addWeaponFeatureToggle(
+		"SilentAimPolice",
+		"Silent Aim: Police",
+		"Allows Silent Aim to target police NPCs",
+		"NotorietySilentAimTargetPolice"
+	)
+	addWeaponFeatureToggle(
+		"SilentAimCriminals",
+		"Silent Aim: Criminals / Teammates",
+		"Allows Silent Aim to target other player criminals; Friendly Fire must permit teammate damage",
+		"NotorietySilentAimTargetCriminals"
+	)
+
+	WeaponTab:Toggle({
+		Flag = "WallBang",
+		Title = "Wall Bang",
+		Desc = "Raises native projectile penetration only when the shot is aimed at an enabled target group",
+		Value = Environment.NotorietyWallBangEnabled,
+		Callback = function(Enabled)
+			Environment.NotorietyWallBangEnabled = Enabled == true
+			if not NotorietyUI.ConfigLoading then refreshWeaponModifications() end
+			requestVibeUIConfigSave()
+		end,
+	})
+
+	addWeaponFeatureToggle(
+		"WallBangPolice",
+		"Wall Bang: Police",
+		"Allows wall penetration when the shot is aimed at police",
+		"NotorietyWallBangTargetPolice"
+	)
+	addWeaponFeatureToggle(
+		"WallBangCriminals",
+		"Wall Bang: Criminals / Teammates",
+		"Allows wall penetration when the shot is aimed at another player criminal",
+		"NotorietyWallBangTargetCriminals"
+	)
+
+	NotorietyUI.SilentAimFOVSlider = WeaponTab:Slider({
+		Flag = "SilentAimFOV",
+		Title = "Silent Aim FOV",
+		Desc = "Maximum cursor distance in pixels. 0 = any on-screen enabled Silent Aim target",
+		Min = 0,
+		Max = 2000,
+		Step = 1,
+		Suffix = " px",
+		Value = Environment.NotorietySilentAimFOV,
+		Callback = function(Value)
+			local Number = tonumber(Value)
+
+			if Number == nil then
+				return
+			end
+
+			Environment.NotorietySilentAimFOV = math.clamp(Number, 0, 2000)
 			requestVibeUIConfigSave()
 		end,
 	})
@@ -5758,6 +6363,8 @@ local function unloadNotoriety()
 	Environment.MaxEverythingEnabled = false
 	Environment.NotorietyWeaponEnabled = false
 	Environment.NotorietyFriendlyFireEnabled = false
+	Environment.NotorietySilentAimEnabled = false
+	Environment.NotorietyWallBangEnabled = false
 	Environment.NotorietyItemESPEnabled = false
 	Environment.NotorietyPoliceESPEnabled = false
 	Environment.NotorietyPoliceHeadScaleEnabled = false
@@ -5796,6 +6403,7 @@ local function unloadNotoriety()
 	end
 
 	restoreFriendlyFire()
+	restoreRuntimeSilentAimWrappers()
 	restoreAllWeaponData()
 	restoreRuntimeWeaponAccuracy()
 	restoreRuntimeWeaponRecoil()
@@ -5838,6 +6446,7 @@ local function unloadNotoriety()
 	})
 
 	table.clear(WeaponState.RuntimeWeapons)
+	table.clear(WeaponState.RuntimeSilentAimBackups)
 end
 
 Environment.UnloadNotoriety = unloadNotoriety
@@ -5894,15 +6503,75 @@ Environment.MaxEverythingConnection = RunService.Heartbeat:Connect(function(Delt
 	end
 
 	ItemESPState.Refresh += DeltaTime
+	ItemESPState.Rescan += DeltaTime
+	ItemESPState.ScanRefresh += DeltaTime
 	if ItemESPState.Refresh >= 0.25 then
 		ItemESPState.Refresh = 0
 		if Environment.NotorietyItemESPEnabled then updateItemESPVisibility() end
 	end
 
+	if Environment.NotorietyItemESPEnabled and ItemESPState.Rescan >= 0.5 then
+		ItemESPState.Rescan = 0
+
+		if ItemESPState.ScanRefresh >= 2 or #ItemESPState.ScanList == 0 then
+			ItemESPState.ScanRefresh = 0
+			ItemESPState.ScanList = CollectionService:GetTagged("Prompt")
+			if ItemESPState.ScanCursor > #ItemESPState.ScanList then
+				ItemESPState.ScanCursor = 1
+			end
+		end
+
+		local ScanCount = #ItemESPState.ScanList
+		local ScanBudget = math.min(24, ScanCount)
+
+		for _ = 1, ScanBudget do
+			if ItemESPState.ScanCursor > ScanCount then
+				ItemESPState.ScanCursor = 1
+			end
+
+			local Prompt = ItemESPState.ScanList[ItemESPState.ScanCursor]
+			ItemESPState.ScanCursor += 1
+
+			if typeof(Prompt) == "Instance" and Prompt.Parent then
+				inspectItemESPPrompt(Prompt)
+			end
+		end
+	elseif not Environment.NotorietyItemESPEnabled then
+		ItemESPState.Rescan = 0
+		ItemESPState.ScanRefresh = 0
+	end
+
 	PoliceESPState.Refresh += DeltaTime
+	PoliceESPState.Rescan += DeltaTime
 	if PoliceESPState.Refresh >= 0.25 then
 		PoliceESPState.Refresh = 0
 		if Environment.NotorietyPoliceESPEnabled then updatePoliceESP() end
+	end
+
+	if Environment.NotorietyPoliceESPEnabled and PoliceESPState.Rescan >= 0.75 then
+		PoliceESPState.Rescan = 0
+		local PoliceFolder = PoliceESPState.PoliceFolder
+
+		if PoliceFolder and PoliceFolder.Parent then
+			local Models = PoliceFolder:GetChildren()
+			local ModelCount = #Models
+			local ScanBudget = math.min(12, ModelCount)
+
+			for _ = 1, ScanBudget do
+				if PoliceESPState.ScanCursor > ModelCount then
+					PoliceESPState.ScanCursor = 1
+				end
+
+				local Model = Models[PoliceESPState.ScanCursor]
+				PoliceESPState.ScanCursor += 1
+
+				if Model and not PoliceESPState.Tracked[Model] then
+					addPoliceESP(Model)
+				end
+			end
+		end
+	elseif not Environment.NotorietyPoliceESPEnabled then
+		PoliceESPState.Rescan = 0
 	end
 
 	MusicOverrideState.Refresh += DeltaTime

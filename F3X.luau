@@ -18021,6 +18021,99 @@ function setMobileMultiSelect(v)
 		setp(MobileMultiButton, "TextColor3", mobile_multi_select and Color3.new(0.5, 1, 0.5) or Color3.new(1, 1, 1))
 	end
 end
+function isTouchPointerMode()
+	if UserInputService.TouchEnabled and not UserInputService.MouseEnabled then
+		return true
+	end
+	local okLast, lastType = pcall(function()
+		return UserInputService:GetLastInputType()
+	end)
+	if okLast and lastType == Enum.UserInputType.Touch then
+		return true
+	end
+	if touch_selection_input then
+		return true
+	end
+	return tick() - (last_touch_input_time or 0) <= 0.2
+end
+function isPrimaryPointerRelease(input)
+	if not input then
+		return false
+	end
+	return input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch
+end
+function connectPrimaryRelease(callback)
+	local connection
+	local released = false
+	connection = UserInputService.InputEnded:Connect(function(input)
+		if released or not isPrimaryPointerRelease(input) then
+			return
+		end
+		released = true
+		if connection then
+			connection:Disconnect()
+			connection = nil
+		end
+		callback(input)
+	end)
+	return connection
+end
+function suppressTouchSelection(duration)
+	touch_selection_suppressed_until = math.max(touch_selection_suppressed_until or 0, tick() + (duration or 0.25))
+	clicking = false
+	touch_selection_input = nil
+	touch_selection_start = nil
+	last_touch_selection_time = tick()
+	if Select2D and Select2D.enabled then
+		Select2D:finish()
+	end
+end
+function setTransformTouchInputSink(enabled)
+	local sink = touch_transform_input_sink
+	if enabled and (not sink or not sink.Parent) then
+		sink = Instance.new("Frame")
+		setp(sink, "Name", "F3XTouchInputSink")
+		setp(sink, "BackgroundTransparency", 1)
+		setp(sink, "BorderSizePixel", 0)
+		setp(sink, "Position", UDim2.new(0, 0, 0, 0))
+		setp(sink, "Size", UDim2.new(1, 0, 1, 0))
+		setp(sink, "ZIndex", 1)
+		setp(sink, "Visible", false)
+		setp(sink, "Active", false)
+		setp(sink, "Parent", UI)
+		touch_transform_input_sink = sink
+	end
+	if sink and sink.Parent then
+		setp(sink, "Active", enabled and true or false)
+		setp(sink, "Visible", enabled and true or false)
+	end
+end
+function beginTransformPointerCapture()
+	override_selection = true
+	touch_transform_active = true
+	local usingTouch = isTouchPointerMode()
+	touch_transform_was_touch = usingTouch
+	if not usingTouch then
+		setTransformTouchInputSink(false)
+		return
+	end
+	suppressTouchSelection(0.12)
+	setTransformTouchInputSink(true)
+end
+function endTransformPointerCapture()
+	local wasTouch = touch_transform_was_touch
+	touch_transform_active = false
+	touch_transform_was_touch = false
+	setTransformTouchInputSink(false)
+	if wasTouch then
+		suppressTouchSelection(0.12)
+	end
+	task.defer(function()
+		if not touch_transform_active then
+			override_selection = false
+		end
+	end)
+end
 function isKeyboardSelectionModifierDown()
 	local keys = {
 		Enum.KeyCode.LeftShift,
@@ -18261,6 +18354,11 @@ touch_selection_start = nil
 last_touch_selection_time = 0
 mobile_multi_select = false
 MobileMultiButton = nil
+touch_transform_active = false
+touch_transform_input_sink = nil
+touch_transform_was_touch = false
+touch_selection_suppressed_until = 0
+last_touch_input_time = 0
 SelectionBoxes = {}
 SelectionExistenceListeners = {}
 SelectionBoxColor = BrickColor.new("Cyan")
@@ -20274,6 +20372,10 @@ function equipBT(O)
 			if input.UserInputType ~= Enum.UserInputType.Touch or touch_selection_input then
 				return
 			end
+			last_touch_input_time = tick()
+			if tick() <= (touch_selection_suppressed_until or 0) or touch_transform_active then
+				return
+			end
 			if gameProcessed then
 				return
 			end
@@ -20332,6 +20434,9 @@ function equipBT(O)
 	table.insert(
 		Connections,
 		Mouse.Button1Down:Connect(function()
+			if isTouchPointerMode() then
+				return
+			end
 			if touch_selection_input or tick() - last_touch_selection_time < 0.25 then
 				return
 			end
@@ -20348,6 +20453,9 @@ function equipBT(O)
 	table.insert(
 		Connections,
 		Mouse.Move:Connect(function()
+			if isTouchPointerMode() then
+				return
+			end
 			if touch_selection_input then
 				return
 			end
@@ -20372,6 +20480,9 @@ function equipBT(O)
 	table.insert(
 		Connections,
 		Mouse.Button1Up:Connect(function()
+			if isTouchPointerMode() then
+				return
+			end
 			if touch_selection_input or tick() - last_touch_selection_time < 0.25 then
 				return
 			end
@@ -20404,6 +20515,9 @@ function equipBT(O)
 	)
 end
 function unequipBT()
+	if touch_transform_active or (touch_transform_input_sink and touch_transform_input_sink.Active) then
+		endTransformPointerCapture()
+	end
 	Mouse = nil
 	if TargetBox then
 		TargetBox:Destroy()
@@ -22089,6 +22203,7 @@ local q = {
 				j3Fn.State.HistoryRecord = nil
 			end
 			Tools.Move.StartDragging = function(JDyNU5, cMv6ou)
+				beginTransformPointerCapture()
 				for HPZKRJ, cn in pairs(Selection.Items) do
 					setp(cn, "RotVelocity", Vector3.new(0, 0, 0))
 					setp(cn, "Velocity", Vector3.new(0, 0, 0))
@@ -22102,10 +22217,8 @@ local q = {
 					(cMv6ou.CFrame:toObjectSpace(CFrame.new(Mouse.Hit.p))).p,
 					Selection.Items
 				)
-				JDyNU5.Connections.DraggerConnection = UserInputService.InputEnded:Connect(function(_Yf)
-					if _Yf.UserInputType == Enum.UserInputType.MouseButton1 then
-						JDyNU5:FinishDragging()
-					end
+				JDyNU5.Connections.DraggerConnection = connectPrimaryRelease(function()
+					JDyNU5:FinishDragging()
 				end)
 			end
 			Tools.Move.FinishDragging = function(rl)
@@ -22115,6 +22228,7 @@ local q = {
 					rl.Connections.DraggerConnection = nil
 				end
 				if not rl.Dragger then
+					endTransformPointerCapture()
 					return
 				end
 				rl.Dragger:MouseUp()
@@ -22122,6 +22236,7 @@ local q = {
 				rl.Dragger:Destroy()
 				rl.Dragger = nil
 				rl:finishHistoryRecord()
+				endTransformPointerCapture()
 			end
 			Tools.Move.Listeners.Button1Down = function()
 				local Z = Tools.Move
@@ -22236,6 +22351,7 @@ local q = {
 						Parent = GUIContainer,
 					})
 					xa78yAit.Handles.MouseButton1Down:Connect(function()
+						beginTransformPointerCapture()
 						override_selection = true
 						xa78yAit.State.moving = true
 						xa78yAit.State.distance_moved = 0
@@ -22244,16 +22360,10 @@ local q = {
 							xa78yAit.State.PreMove[wqRzXIG7] = wqRzXIG7:Clone()
 							setp(wqRzXIG7, "Anchored", true)
 						end
-						xa78yAit.Connections.HandleReleaseListener = UserInputService.InputEnded:Connect(function(w3nHh)
-							if w3nHh.UserInputType ~= Enum.UserInputType.MouseButton1 then
-								return
-							end
+						xa78yAit.Connections.HandleReleaseListener = connectPrimaryRelease(function()
 							override_selection = true
 							xa78yAit.State.moving = false
-							if xa78yAit.Connections.HandleReleaseListener then
-								xa78yAit.Connections.HandleReleaseListener:Disconnect()
-								xa78yAit.Connections.HandleReleaseListener = nil
-							end
+							xa78yAit.Connections.HandleReleaseListener = nil
 							xa78yAit:finishHistoryRecord()
 							for bo0I, lK5ogD in pairs(xa78yAit.State.PreMove) do
 								setp(bo0I, "Anchored", lK5ogD.Anchored)
@@ -22262,6 +22372,7 @@ local q = {
 								setp(bo0I, "Velocity", Vector3.new(0, 0, 0))
 								setp(bo0I, "RotVelocity", Vector3.new(0, 0, 0))
 							end
+							endTransformPointerCapture()
 						end)
 					end)
 					xa78yAit.Handles.MouseDrag:Connect(function(I8F, Y3NU)
@@ -23109,6 +23220,7 @@ local q = {
 						Parent = GUIContainer,
 					})
 					nr6uCL.Handles.MouseButton1Down:Connect(function()
+						beginTransformPointerCapture()
 						override_selection = true
 						nr6uCL.State.resizing = true
 						nr6uCL.State.length_resized = 0
@@ -23122,19 +23234,17 @@ local q = {
 							end
 							setp(sHA_0P, "Anchored", true)
 						end
-						nr6uCL.Connections.HandleReleaseListener = Mouse.Button1Up:Connect(function()
+						nr6uCL.Connections.HandleReleaseListener = connectPrimaryRelease(function()
 							override_selection = true
 							nr6uCL.State.resizing = false
-							if nr6uCL.Connections.HandleReleaseListener then
-								nr6uCL.Connections.HandleReleaseListener:Disconnect()
-								nr6uCL.Connections.HandleReleaseListener = nil
-							end
+							nr6uCL.Connections.HandleReleaseListener = nil
 							nr6uCL:finishHistoryRecord()
 							for z37Qz, MUu in pairs(nr6uCL.State.PreResize) do
 								setp(z37Qz, "Anchored", MUu.Anchored)
 								nr6uCL.State.PreResize[z37Qz] = nil
 								z37Qz:MakeJoints()
 							end
+							endTransformPointerCapture()
 						end)
 					end)
 					nr6uCL.Handles.MouseDrag:Connect(function(rRNsXW, zslu25lH)
@@ -23805,6 +23915,7 @@ local q = {
 						Parent = GUIContainer,
 					})
 					oZy.Handles.MouseButton1Down:Connect(function()
+						beginTransformPointerCapture()
 						override_selection = true
 						oZy.State.rotating = true
 						oZy.State.degrees_rotated = 0
@@ -23816,19 +23927,17 @@ local q = {
 						end
 						local ndeNBp, o76bqPp = calculateExtents(oZy.State.PreRotation)
 						oZy.State.PreRotationPosition = o76bqPp
-						oZy.Connections.HandleReleaseListener = Mouse.Button1Up:Connect(function()
+						oZy.Connections.HandleReleaseListener = connectPrimaryRelease(function()
 							override_selection = true
 							oZy.State.rotating = false
-							if oZy.Connections.HandleReleaseListener then
-								oZy.Connections.HandleReleaseListener:Disconnect()
-								oZy.Connections.HandleReleaseListener = nil
-							end
+							oZy.Connections.HandleReleaseListener = nil
 							oZy:finishHistoryRecord()
 							for ZawK6, bK in pairs(oZy.State.PreRotation) do
 								setp(ZawK6, "Anchored", bK.Anchored)
 								oZy.State.PreRotation[ZawK6] = nil
 								ZawK6:MakeJoints()
 							end
+							endTransformPointerCapture()
 						end)
 					end)
 					oZy.Handles.MouseDrag:Connect(function(OJGVLn, UzgoE5O)

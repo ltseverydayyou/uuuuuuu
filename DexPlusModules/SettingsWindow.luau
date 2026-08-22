@@ -1072,7 +1072,7 @@ local function main()
 		AddText("If executor does not support decompile, it will use the fallback option.")
 		AddText("Enable 'Prefer Fallback Decompiler' to force fallback first even when built-in decompile exists.")
 		AddText("'getscriptbytecode' is mandatory to use fallback decompilers.")
-		local decompilerOption = {"lua.expert", "Konstant"}
+		local decompilerOption = {"lua.expert", "Luacid", "Konstant"}
 		local decompiler = AddDropdown("Decompiler Fallback", decompilerOption, Settings.Decompiler.DecompilerFallback, false, 125)
 		trackConn(decompiler.OnSelect:Connect(function()
 			Settings.Decompiler.DecompilerFallback = decompiler.Selected

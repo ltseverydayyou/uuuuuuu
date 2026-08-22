@@ -333,7 +333,7 @@ DefaultSettings = (function()
 			OpenProperties = true
 		},
 		Decompiler = {
-			DecompilerFallback = "lua.expert", -- lua.expert, Konstant
+			DecompilerFallback = "lua.expert", -- lua.expert, Luacid, Konstant
 			PreferDecompilerFallback = false,
 		},
 		Files = {
@@ -1859,6 +1859,46 @@ Main = (function()
 			end
 		end)()
 
+		local luacidDecompile = (function()
+			if not env.getscriptbytecode then
+				return
+			end
+			local request = env.request
+			if type(request) ~= "function" then
+				return
+			end
+
+			return function(scriptInstance)
+				local okBytecode, bytecode = pcall(env.getscriptbytecode, scriptInstance)
+				if not okBytecode then
+					return nil, "Luacid fallback failed to get bytecode: "..tostring(bytecode)
+				end
+				if type(bytecode) ~= "string" or bytecode == "" then
+					return nil, "Luacid fallback bytecode is empty."
+				end
+
+				local response = request({
+					Url = "https://api.luacid.dev/decompile",
+					Method = "POST",
+					Headers = {
+						["Content-Type"] = "application/octet-stream"
+					},
+					Body = bytecode
+				})
+
+				if type(response) ~= "table" then
+					return nil, "Luacid fallback returned an invalid HTTP response."
+				end
+				if response.StatusCode and response.StatusCode ~= 200 then
+					return nil, "Luacid fallback HTTP error ("..tostring(response.StatusCode).."): "..tostring(response.Body)
+				end
+				if type(response.Body) ~= "string" or response.Body == "" then
+					return nil, "Luacid fallback returned an empty response body."
+				end
+				return response.Body
+			end
+		end)()
+
 		env.decompile = function(...)
 			local builtInDecompiler = getNativeDecompiler()
 			local fallbackMode = (Settings and Settings.Decompiler and Settings.Decompiler.DecompilerFallback) or "lua.expert"
@@ -1878,6 +1918,8 @@ Main = (function()
 			local function queueFallback(mode)
 				if mode == "lua.expert" then
 					queueAttempt("lua.expert", luaExpertDecompile)
+				elseif mode == "Luacid" then
+					queueAttempt("Luacid", luacidDecompile)
 				elseif mode == "Konstant" then
 					queueAttempt("Konstant", fallbackDecompile)
 				end
@@ -1891,7 +1933,7 @@ Main = (function()
 				queueFallback(fallbackMode)
 			end
 
-			for _, mode in {"lua.expert", "Konstant"} do
+			for _, mode in {"lua.expert", "Luacid", "Konstant"} do
 				if mode ~= fallbackMode then
 					queueFallback(mode)
 				end
@@ -2324,7 +2366,7 @@ Main = (function()
 			Settings.Decompiler = {}
 		end
 		local fallbackMode = Settings.Decompiler.DecompilerFallback
-		if fallbackMode ~= "lua.expert" and fallbackMode ~= "Konstant" then
+		if fallbackMode ~= "lua.expert" and fallbackMode ~= "Luacid" and fallbackMode ~= "Konstant" then
 			Settings.Decompiler.DecompilerFallback = DefaultSettings.Decompiler.DecompilerFallback
 		end
 		if type(Settings.Decompiler.PreferDecompilerFallback) ~= "boolean" then

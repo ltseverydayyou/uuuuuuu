@@ -6118,7 +6118,44 @@ local EmbeddedModules = {
 					return response.Body;
 				end;
 			end)();
+			local luacidDecompile = (function()
+				if not env or type(env.getscriptbytecode) ~= "function" or type(env.request) ~= "function" then
+					return nil;
+				end;
+				return function(scr)
+					local okBytecode, bytecode = pcall(env.getscriptbytecode, scr);
+					if not okBytecode then
+						return nil, "Luacid failed to get bytecode: " .. tostring(bytecode);
+					end;
+					if type(bytecode) ~= "string" or bytecode == "" then
+						return nil, "Luacid bytecode is empty.";
+					end;
+					local response = env.request({
+						Url = "https://api.luacid.dev/decompile",
+						Method = "POST",
+						Headers = {
+							["Content-Type"] = "application/octet-stream"
+						},
+						Body = bytecode
+					});
+					if type(response) ~= "table" then
+						return nil, "Luacid returned an invalid HTTP response.";
+					end;
+					if response.StatusCode and response.StatusCode ~= 200 then
+						return nil, "Luacid HTTP error (" .. tostring(response.StatusCode) .. "): " .. tostring(response.Body);
+					end;
+					if type(response.Body) ~= "string" or response.Body == "" then
+						return nil, "Luacid returned an empty response body.";
+					end;
+					return response.Body;
+				end;
+			end)();
 			local function getDecompiler()
+				if Settings and Settings.Decompiler and Settings.Decompiler.UseLuacid == true then
+					return luacidDecompile or function()
+						return nil, "Luacid requires request and getscriptbytecode.";
+					end;
+				end;
 				if Settings and Settings.Decompiler and Settings.Decompiler.UseLuaExpert == true then
 					return luaExpertDecompile or function()
 						return nil, "lua.expert requires request and getscriptbytecode.";
@@ -15707,7 +15744,8 @@ DefaultSettings = (function()
 		},
 		Decompiler = {
 			_Recurse = true,
-			UseLuaExpert = false
+			UseLuaExpert = false,
+			UseLuacid = false
 		},
 		Theme = {
 			_Recurse = true,
@@ -16273,6 +16311,9 @@ Main = (function()
 		end;
 		if type(Settings.Decompiler.UseLuaExpert) ~= "boolean" then
 			Settings.Decompiler.UseLuaExpert = DefaultSettings.Decompiler.UseLuaExpert;
+		end;
+		if type(Settings.Decompiler.UseLuacid) ~= "boolean" then
+			Settings.Decompiler.UseLuacid = DefaultSettings.Decompiler.UseLuacid;
 		end;
 		if type(Settings._Migrations) ~= "table" then
 			Settings._Migrations = {};
@@ -18078,6 +18119,22 @@ Main = (function()
 				NoHide = true,
 				OnClick = function()
 					Settings.Decompiler.UseLuaExpert = not Settings.Decompiler.UseLuaExpert;
+					if Settings.Decompiler.UseLuaExpert then
+						Settings.Decompiler.UseLuacid = false;
+					end;
+					persistCurrentSettings();
+					rebuildSettingsMenu();
+					settingsMenu:Refresh();
+				end
+			});
+			settingsMenu:Add({
+				Name = makeToggleLabel("Use Luacid Decompiler", Settings.Decompiler.UseLuacid),
+				NoHide = true,
+				OnClick = function()
+					Settings.Decompiler.UseLuacid = not Settings.Decompiler.UseLuacid;
+					if Settings.Decompiler.UseLuacid then
+						Settings.Decompiler.UseLuaExpert = false;
+					end;
 					persistCurrentSettings();
 					rebuildSettingsMenu();
 					settingsMenu:Refresh();

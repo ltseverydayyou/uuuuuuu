@@ -33,6 +33,13 @@ local State = {
     LocalParryConnection = nil,
     ImpactDefenseToken = 0,
     DefenseBusyUntil = 0,
+    AntiParryUntil = 0,
+    AntiParryAttacker = nil,
+    AntiParryRetreatPoint = nil,
+    AntiParryToken = 0,
+    LastQueuedAttackAt = 0,
+    LastQueuedAttackTarget = nil,
+    LastParryStaggerAction = nil,
 }
 
 local function disconnect(conn)
@@ -247,6 +254,40 @@ DefenseExtra:Toggle({
     Default = true,
     Info = "If an enemy Action animation is not in its weapon attack map, dodge it instead of ignoring it.",
     InfoType = "info",
+})
+DefenseExtra:Toggle({
+    Name = "Anti-Parry Safety",
+    Flag = "DG_AntiParry",
+    Default = true,
+    Info = "Stops attacking into a fresh enemy parry and defends immediately if they successfully parry you.",
+    InfoType = "tip",
+})
+DefenseExtra:Slider({
+    Name = "Fresh Guard Avoid",
+    Flag = "DG_FreshGuardAvoid",
+    Min = 0.12,
+    Max = 0.45,
+    Default = 0.28,
+    Decimals = 0.01,
+    Suffix = "s",
+})
+DefenseExtra:Slider({
+    Name = "Parried Recovery",
+    Flag = "DG_ParriedRecovery",
+    Min = 0.35,
+    Max = 1.5,
+    Default = 0.9,
+    Decimals = 0.05,
+    Suffix = "s",
+})
+DefenseExtra:Slider({
+    Name = "Anti-Parry Retreat",
+    Flag = "DG_AntiParryRetreat",
+    Min = 3,
+    Max = 18,
+    Default = 9,
+    Decimals = 0.5,
+    Suffix = " studs",
 })
 DefenseExtra:Toggle({
     Name = "Auto Counter After Parry",
@@ -824,6 +865,220 @@ local function applyImpactDefense(impactData)
     return true
 end
 
+local function cancelQueuedOffense(handler)
+    handler = handler or getLocalHandler()
+    if not handler then
+        return
+    end
+
+    handler._desiredQueuedAction = nil
+    handler._desiredQueuedActionDuration = nil
+
+    local manager = handler.ActionManager
+    if manager and manager._clearQueuedAction then
+        pcall(manager._clearQueuedAction, manager)
+    end
+end
+
+local function isParryStaggerAction(action)
+    if not action or action.ActionType ~= "Stagger" then
+        return false
+    end
+
+    local properties = action.Properties
+    local staggerType = properties and properties.staggerType
+    if staggerType and string.find(string.lower(tostring(staggerType)), "parry", 1, true) then
+        return true
+    end
+
+    return false
+end
+
+local function recordInFreshParryWindow(record)
+    if not flag("DG_AntiParry", true) or not record then
+        return false
+    end
+
+    local now = os.clock()
+    return now < (record.guardDangerUntil or 0)
+        or now < (record.parryPunishUntil or 0)
+end
+
+local function beginAntiParryRecovery(record, reason)
+    if not State.Alive or not flag("DG_AntiParry", true) then
+        return
+    end
+
+    local handler = getLocalHandler()
+    if localPaused(handler) or not handler then
+        return
+    end
+
+    local attacker = record and record.handler or State.LastQueuedAttackTarget or State.CurrentTargetHandler
+    local now = os.clock()
+    local recovery = flag("DG_ParriedRecovery", 0.9)
+
+    State.AntiParryUntil = math.max(State.AntiParryUntil, now + recovery)
+    State.AntiParryAttacker = attacker
+    State.DefenseBusyUntil = math.max(State.DefenseBusyUntil, State.AntiParryUntil)
+
+    if record then
+        record.parryPunishUntil = math.max(record.parryPunishUntil or 0, State.AntiParryUntil)
+    end
+
+    cancelQueuedOffense(handler)
+
+    if handler.Root and attacker and attacker.Root then
+        local away = handler.Root.Position - attacker.Root.Position
+        away = Vector3.new(away.X, 0, away.Z)
+        if away.Magnitude > 0.001 then
+            State.AntiParryRetreatPoint = handler.Root.Position
+                + away.Unit * flag("DG_AntiParryRetreat", 9)
+        end
+    end
+
+    State.AntiParryToken += 1
+    local token = State.AntiParryToken
+
+    task.spawn(function()
+        while State.Alive
+            and token == State.AntiParryToken
+            and os.clock() < State.AntiParryUntil
+        do
+            local current = getLocalHandler()
+            if localPaused(current) or current ~= handler then
+                return
+            end
+
+            cancelQueuedOffense(current)
+
+            local manager = current.ActionManager
+            local action = manager and manager.CurrentAction
+
+            if isParryStaggerAction(action) then
+                local acted = false
+
+                if flag("DG_AutoParry", true) then
+                    acted = pressParry()
+                end
+
+                if not acted and flag("DG_AutoDodge", true) then
+                    acted = dodge(attacker)
+                end
+
+                if acted then
+                    State.DefenseBusyUntil = math.max(State.DefenseBusyUntil, os.clock() + 0.4)
+                    return
+                end
+            elseif action and action.ActionType == "BasicAttack" and action.CanCancel then
+                if flag("DG_AutoDodge", true) and dodge(attacker) then
+                    State.DefenseBusyUntil = math.max(State.DefenseBusyUntil, os.clock() + 0.4)
+                    return
+                end
+            elseif not action then
+                local acted = false
+
+                if flag("DG_AutoParry", true) then
+                    acted = pressParry()
+                end
+
+                if not acted and flag("DG_AutoDodge", true) then
+                    acted = dodge(attacker)
+                end
+
+                if acted then
+                    State.DefenseBusyUntil = math.max(State.DefenseBusyUntil, os.clock() + 0.4)
+                    return
+                end
+            end
+
+            task.wait(0.025)
+        end
+    end)
+
+    debugNotify("Anti-parry: " .. tostring(reason or "enemy parry"))
+end
+
+local function markFreshEnemyGuard(record)
+    if not record or not flag("DG_AntiParry", true) then
+        return
+    end
+
+    local now = os.clock()
+    local avoid = flag("DG_FreshGuardAvoid", 0.28)
+    record.guardStartedAt = now
+    record.guardDangerUntil = math.max(record.guardDangerUntil or 0, now + avoid)
+
+    local localHandler = getLocalHandler()
+    local recentlyAttacked = State.LastQueuedAttackTarget == record.handler
+        and now - State.LastQueuedAttackAt <= 0.8
+    local selected = State.CurrentTargetHandler == record.handler
+
+    if (recentlyAttacked or selected)
+        and localHandler
+        and handlerDistance(localHandler, record.handler) <= flag("DG_AttackRange", 10) + 4
+    then
+        cancelQueuedOffense(localHandler)
+        State.DefenseBusyUntil = math.max(State.DefenseBusyUntil, record.guardDangerUntil)
+
+        local action = localHandler.ActionManager and localHandler.ActionManager.CurrentAction
+        if action
+            and action.ActionType == "BasicAttack"
+            and action.CanCancel
+            and flag("DG_AutoDodge", true)
+        then
+            dodge(record.handler)
+        end
+
+        debugNotify("Avoiding fresh enemy parry")
+    end
+end
+
+local function enemyParryLikelyOurs(record)
+    if not record or not record.handler then
+        return false
+    end
+
+    local handler = getLocalHandler()
+    if not handler then
+        return false
+    end
+
+    local action = handler.ActionManager and handler.ActionManager.CurrentAction
+    if isParryStaggerAction(action) then
+        return true
+    end
+
+    local now = os.clock()
+    return State.LastQueuedAttackTarget == record.handler
+        and now - State.LastQueuedAttackAt <= 1.1
+        and handlerDistance(handler, record.handler) <= flag("DG_AttackRange", 10) + 6
+end
+
+local function pollLocalParryStagger()
+    if not flag("DG_AntiParry", true) then
+        State.LastParryStaggerAction = nil
+        return
+    end
+
+    local handler = getLocalHandler()
+    local action = handler and handler.ActionManager and handler.ActionManager.CurrentAction
+
+    if action == State.LastParryStaggerAction then
+        return
+    end
+
+    if isParryStaggerAction(action) then
+        State.LastParryStaggerAction = action
+
+        local attacker = State.LastQueuedAttackTarget or State.CurrentTargetHandler
+        local record = attacker and State.EnemyRecords[attacker] or nil
+        beginAntiParryRecovery(record, "you were parried")
+    elseif not action then
+        State.LastParryStaggerAction = nil
+    end
+end
+
 local function untrackEnemy(handler)
     local record = State.EnemyRecords[handler]
     if not record then
@@ -852,6 +1107,9 @@ local function trackEnemy(handler)
         model = handler.OriginalModel,
         attackMap = {},
         connections = {},
+        guardStartedAt = 0,
+        guardDangerUntil = 0,
+        parryPunishUntil = 0,
     }
     State.EnemyRecords[handler] = record
 
@@ -860,6 +1118,25 @@ local function trackEnemy(handler)
     if handler.EquippedWeaponChanged and handler.EquippedWeaponChanged.Connect then
         record.connections[#record.connections + 1] = handler.EquippedWeaponChanged:Connect(function()
             task.defer(refreshAttackMap, record)
+        end)
+    end
+
+    local model = record.model
+    if model then
+        if model:GetAttribute("IsBlocking") then
+            markFreshEnemyGuard(record)
+        end
+
+        record.connections[#record.connections + 1] = model:GetAttributeChangedSignal("IsBlocking"):Connect(function()
+            if model:GetAttribute("IsBlocking") then
+                markFreshEnemyGuard(record)
+            end
+        end)
+
+        record.connections[#record.connections + 1] = model:GetAttributeChangedSignal("ParriedEvent"):Connect(function()
+            if enemyParryLikelyOurs(record) then
+                beginAntiParryRecovery(record, "enemy landed a parry")
+            end
         end)
     end
 
@@ -1055,7 +1332,18 @@ local function tryAttack()
         return
     end
 
-    if os.clock() < State.DefenseBusyUntil then
+    local now = os.clock()
+    if now < State.DefenseBusyUntil then
+        return
+    end
+
+    local record = State.EnemyRecords[target]
+    if recordInFreshParryWindow(record)
+        or (flag("DG_AntiParry", true)
+            and State.AntiParryAttacker == target
+            and now < State.AntiParryUntil)
+    then
+        cancelQueuedOffense(handler)
         return
     end
 
@@ -1072,6 +1360,8 @@ local function tryAttack()
     then
         handler._desiredQueuedAction = "Ultimate"
         handler._desiredQueuedActionDuration = nil
+        State.LastQueuedAttackAt = os.clock()
+        State.LastQueuedAttackTarget = target
         return
     end
 
@@ -1101,6 +1391,8 @@ local function tryAttack()
 
     handler._desiredQueuedAction = desired
     handler._desiredQueuedActionDuration = nil
+    State.LastQueuedAttackAt = os.clock()
+    State.LastQueuedAttackTarget = target
 end
 
 local function tryEquip()
@@ -1125,6 +1417,19 @@ local function updateMovement()
         handler.DesiredMoveTo = nil
         State.MovementOverride = false
         return
+    end
+
+    local now = os.clock()
+    if flag("DG_AntiParry", true) and now < State.AntiParryUntil then
+        local point = State.AntiParryRetreatPoint
+        if point and handler.Root then
+            handler.DesiredMoveTo = point
+            State.MovementOverride = true
+            return
+        end
+    elseif State.AntiParryRetreatPoint then
+        State.AntiParryRetreatPoint = nil
+        State.AntiParryAttacker = nil
     end
 
     if not flag("DG_AutoChase", true) then
@@ -1207,6 +1512,7 @@ keep(RunService.Heartbeat:Connect(function()
         clearForcedTarget()
     end
 
+    pollLocalParryStagger()
     tryEquip()
 
     local retry = flag("DG_AttackRetry", 0.06)
@@ -1247,6 +1553,12 @@ local function cleanup()
     if handler then
         handler.DesiredMoveTo = nil
     end
+
+    State.AntiParryToken += 1
+    State.AntiParryUntil = 0
+    State.AntiParryAttacker = nil
+    State.AntiParryRetreatPoint = nil
+    State.LastQueuedAttackTarget = nil
 
     if InputController and InputController.CurrentInput and State.MovementOverride then
         InputController.CurrentInput.MoveDirection = Vector3.zero

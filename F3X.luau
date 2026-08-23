@@ -17920,6 +17920,66 @@ function getSelectionPointerPosition(input)
 		return Vector2.new(Mouse.X, Mouse.Y)
 	end
 end
+function getPointerUnitRay(input)
+	local pointerPosition = getSelectionPointerPosition(input)
+	local camera = Workspace.CurrentCamera
+	if pointerPosition and camera then
+		local okRay, ray = pcall(function()
+			return camera:ScreenPointToRay(pointerPosition.X, pointerPosition.Y)
+		end)
+		if not okRay or not ray then
+			okRay, ray = pcall(function()
+				return camera:ViewportPointToRay(pointerPosition.X, pointerPosition.Y)
+			end)
+		end
+		if okRay and ray then
+			return Ray.new(ray.Origin, ray.Direction)
+		end
+	end
+	if Mouse then
+		return Mouse.UnitRay
+	end
+end
+function getPointerWorldHit(input)
+	local ray = getPointerUnitRay(input)
+	if not ray then
+		return Mouse and Mouse.Hit and Mouse.Hit.p or nil, Mouse and Mouse.Target or nil
+	end
+	local ignoreList = {}
+	if Player and Player.Character then
+		table.insert(ignoreList, Player.Character)
+	end
+	if Mouse and Mouse.TargetFilter then
+		table.insert(ignoreList, Mouse.TargetFilter)
+	end
+	if Workspace.Raycast and RaycastParams then
+		local okCast, result = pcall(function()
+			local params = RaycastParams.new()
+			local okFilter = pcall(function()
+				params.FilterType = Enum.RaycastFilterType.Exclude
+			end)
+			if not okFilter then
+				pcall(function()
+					params.FilterType = Enum.RaycastFilterType.Blacklist
+				end)
+			end
+			params.FilterDescendantsInstances = ignoreList
+			return Workspace:Raycast(ray.Origin, ray.Direction * 10000, params)
+		end)
+		if okCast and result then
+			return result.Position, result.Instance, result.Normal
+		end
+	end
+	if Workspace.FindPartOnRayWithIgnoreList then
+		local okLegacy, hitPart, hitPosition, hitNormal = pcall(function()
+			return Workspace:FindPartOnRayWithIgnoreList(Ray.new(ray.Origin, ray.Direction * 10000), ignoreList, false, true)
+		end)
+		if okLegacy and hitPosition then
+			return hitPosition, hitPart, hitNormal
+		end
+	end
+	return ray.Origin + ray.Direction * 32, nil, nil
+end
 function raycastSelectionTargetAt(pointerPosition)
 	if not pointerPosition then
 		return Mouse and Mouse.Target or nil
@@ -18042,11 +18102,14 @@ function isPrimaryPointerRelease(input)
 	end
 	return input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch
 end
-function connectPrimaryRelease(callback)
+function connectPrimaryRelease(callback, expectedInput)
 	local connection
 	local released = false
 	connection = UserInputService.InputEnded:Connect(function(input)
 		if released or not isPrimaryPointerRelease(input) then
+			return
+		end
+		if expectedInput and input ~= expectedInput then
 			return
 		end
 		released = true
@@ -18070,22 +18133,9 @@ function suppressTouchSelection(duration)
 end
 function setTransformTouchInputSink(enabled)
 	local sink = touch_transform_input_sink
-	if enabled and (not sink or not sink.Parent) then
-		sink = Instance.new("Frame")
-		setp(sink, "Name", "F3XTouchInputSink")
-		setp(sink, "BackgroundTransparency", 1)
-		setp(sink, "BorderSizePixel", 0)
-		setp(sink, "Position", UDim2.new(0, 0, 0, 0))
-		setp(sink, "Size", UDim2.new(1, 0, 1, 0))
-		setp(sink, "ZIndex", 1)
-		setp(sink, "Visible", false)
-		setp(sink, "Active", false)
-		setp(sink, "Parent", UI)
-		touch_transform_input_sink = sink
-	end
 	if sink and sink.Parent then
-		setp(sink, "Active", enabled and true or false)
-		setp(sink, "Visible", enabled and true or false)
+		setp(sink, "Active", false)
+		setp(sink, "Visible", false)
 	end
 end
 function beginTransformPointerCapture()
@@ -18093,6 +18143,9 @@ function beginTransformPointerCapture()
 	touch_transform_active = true
 	local usingTouch = isTouchPointerMode()
 	touch_transform_was_touch = usingTouch
+	if usingTouch and not touch_transform_input and touch_selection_input then
+		touch_transform_input = touch_selection_input
+	end
 	if not usingTouch then
 		setTransformTouchInputSink(false)
 		return
@@ -18103,6 +18156,7 @@ end
 function endTransformPointerCapture()
 	local wasTouch = touch_transform_was_touch
 	touch_transform_active = false
+	touch_transform_input = nil
 	touch_transform_was_touch = false
 	setTransformTouchInputSink(false)
 	if wasTouch then
@@ -18356,6 +18410,7 @@ mobile_multi_select = false
 MobileMultiButton = nil
 touch_transform_active = false
 touch_transform_input_sink = nil
+touch_transform_input = nil
 touch_transform_was_touch = false
 touch_selection_suppressed_until = 0
 last_touch_input_time = 0
@@ -20369,7 +20424,7 @@ function equipBT(O)
 	table.insert(
 		Connections,
 		UserInputService.InputBegan:Connect(function(input, gameProcessed)
-			if input.UserInputType ~= Enum.UserInputType.Touch or touch_selection_input then
+			if input.UserInputType ~= Enum.UserInputType.Touch or touch_selection_input or touch_transform_input then
 				return
 			end
 			last_touch_input_time = tick()
@@ -20389,13 +20444,35 @@ function equipBT(O)
 			if touch_selection_start then
 				click_x, click_y = touch_selection_start.X, touch_selection_start.Y
 			end
+			local touchTool = CurrentTool
+			if touchTool and touchTool.Listeners and touchTool.Listeners.Button1Down
+				and (touchTool == Tools.NewPart) then
+				touch_transform_input = input
+				override_selection = true
+				touchTool.Listeners.Button1Down(input)
+				if touch_transform_active or (Tools.Move and Tools.Move.Dragger) then
+					touch_selection_input = nil
+					touch_selection_start = nil
+					return
+				end
+				touch_transform_input = nil
+			end
 			updateSelectionTargetBox(input)
 		end)
 	)
 	table.insert(
 		Connections,
 		UserInputService.InputChanged:Connect(function(input)
-			if input.UserInputType ~= Enum.UserInputType.Touch or input ~= touch_selection_input then
+			if input.UserInputType ~= Enum.UserInputType.Touch then
+				return
+			end
+			if touch_transform_input and input == touch_transform_input then
+				if CurrentTool and CurrentTool.Listeners and CurrentTool.Listeners.Move then
+					CurrentTool.Listeners.Move(input)
+				end
+				return
+			end
+			if input ~= touch_selection_input then
 				return
 			end
 			local pointerPosition = getSelectionPointerPosition(input)
@@ -20412,7 +20489,18 @@ function equipBT(O)
 	table.insert(
 		Connections,
 		UserInputService.InputEnded:Connect(function(input)
-			if input.UserInputType ~= Enum.UserInputType.Touch or input ~= touch_selection_input then
+			if input.UserInputType ~= Enum.UserInputType.Touch then
+				return
+			end
+			if touch_transform_input and input == touch_transform_input then
+				clicking = false
+				touch_transform_input = nil
+				touch_selection_input = nil
+				touch_selection_start = nil
+				last_touch_selection_time = tick()
+				return
+			end
+			if input ~= touch_selection_input then
 				return
 			end
 			clicking = false
@@ -20515,6 +20603,11 @@ function equipBT(O)
 	)
 end
 function unequipBT()
+	if BTMobileGizmo and BTMobileGizmo.Drag then
+		pcall(function()
+			BTMobileGizmo:endDrag()
+		end)
+	end
 	if touch_transform_active or (touch_transform_input_sink and touch_transform_input_sink.Active) then
 		endTransformPointerCapture()
 	end
@@ -20643,6 +20736,12 @@ function destroyF3XInstance(reason)
 			TargetBox:Destroy()
 		end)
 		TargetBox = nil
+	end
+	if F3XRuntime and F3XRuntime.MobileGizmoUI then
+		pcall(function()
+			F3XRuntime.MobileGizmoUI:Destroy()
+		end)
+		F3XRuntime.MobileGizmoUI = nil
 	end
 	if UI then
 		pcall(function()
@@ -22202,7 +22301,10 @@ local q = {
 				History:add(j3Fn.State.HistoryRecord)
 				j3Fn.State.HistoryRecord = nil
 			end
-			Tools.Move.StartDragging = function(JDyNU5, cMv6ou)
+			Tools.Move.StartDragging = function(JDyNU5, cMv6ou, pointerInput)
+				if pointerInput and pointerInput.UserInputType == Enum.UserInputType.Touch then
+					touch_transform_input = pointerInput
+				end
 				beginTransformPointerCapture()
 				for HPZKRJ, cn in pairs(Selection.Items) do
 					setp(cn, "RotVelocity", Vector3.new(0, 0, 0))
@@ -22212,14 +22314,19 @@ local q = {
 				JDyNU5.State.dragging = true
 				override_selection = true
 				JDyNU5.Dragger = Instance.new("Dragger")
+				local pointerHit = getPointerWorldHit(pointerInput)
+				if not pointerHit and Mouse and Mouse.Hit then
+					pointerHit = Mouse.Hit.p
+				end
+				pointerHit = pointerHit or cMv6ou.Position
 				JDyNU5.Dragger:MouseDown(
 					cMv6ou,
-					(cMv6ou.CFrame:toObjectSpace(CFrame.new(Mouse.Hit.p))).p,
+					(cMv6ou.CFrame:toObjectSpace(CFrame.new(pointerHit))).p,
 					Selection.Items
 				)
 				JDyNU5.Connections.DraggerConnection = connectPrimaryRelease(function()
 					JDyNU5:FinishDragging()
-				end)
+				end, touch_transform_input)
 			end
 			Tools.Move.FinishDragging = function(rl)
 				override_selection = true
@@ -22238,9 +22345,9 @@ local q = {
 				rl:finishHistoryRecord()
 				endTransformPointerCapture()
 			end
-			Tools.Move.Listeners.Button1Down = function()
+			Tools.Move.Listeners.Button1Down = function(pointerInput)
 				local Z = Tools.Move
-				local jOFP = Z.ManualTarget or Mouse.Target
+				local jOFP = Z.ManualTarget or getSelectionTarget(pointerInput) or (Mouse and Mouse.Target)
 				Z.ManualTarget = nil
 				if not Selection:find(jOFP) and isSelectable(jOFP) then
 					Selection:clear()
@@ -22249,15 +22356,19 @@ local q = {
 				if not Selection:find(jOFP) then
 					return
 				end
-				Z:StartDragging(jOFP)
+				Z:StartDragging(jOFP, pointerInput)
 			end
-			Tools.Move.Listeners.Move = function()
+			Tools.Move.Listeners.Move = function(pointerInput)
 				local LCqNO = Tools.Move
 				if not LCqNO.Dragger then
 					return
 				end
+				local pointerRay = getPointerUnitRay(pointerInput) or (Mouse and Mouse.UnitRay)
+				if not pointerRay then
+					return
+				end
 				override_selection = true
-				LCqNO.Dragger:MouseMove(Mouse.UnitRay)
+				LCqNO.Dragger:MouseMove(pointerRay)
 			end
 			Tools.Move.Listeners.KeyUp = function(jF4YoB)
 				local nROZ = Tools.Move
@@ -22373,7 +22484,7 @@ local q = {
 								setp(bo0I, "RotVelocity", Vector3.new(0, 0, 0))
 							end
 							endTransformPointerCapture()
-						end)
+						end, touch_transform_input)
 					end)
 					xa78yAit.Handles.MouseDrag:Connect(function(I8F, Y3NU)
 						local Avel7IrZ = Y3NU % xa78yAit.Options.increment
@@ -22750,7 +22861,7 @@ local q = {
 				SelectionBoxColor = B.State.PreviousSelectionBoxColor
 				updateSelectionBoxColor()
 			end
-			Tools.NewPart.Listeners.Button1Down = function()
+			Tools.NewPart.Listeners.Button1Down = function(pointerInput)
 				local RKBSOvv = Tools.NewPart
 				local make = RKBSOvv.Types[RKBSOvv.Options.type] or RKBSOvv.Types.block
 				local GxQqHPYH = make()
@@ -22775,9 +22886,14 @@ local q = {
 				History:add(KEhfU)
 				equipTool(Tools.Move)
 				Tools.Move.ManualTarget = GxQqHPYH
-				setp(GxQqHPYH, "CFrame", CFrame.new(Mouse.Hit.p))
-				Tools.Move.Listeners.Button1Down()
-				Tools.Move.Listeners.Move()
+				local placementPosition = getPointerWorldHit(pointerInput)
+				if not placementPosition and Mouse and Mouse.Hit then
+					placementPosition = Mouse.Hit.p
+				end
+				placementPosition = placementPosition or Vector3.new(0, 5, 0)
+				setp(GxQqHPYH, "CFrame", CFrame.new(placementPosition))
+				Tools.Move.Listeners.Button1Down(pointerInput)
+				Tools.Move.Listeners.Move(pointerInput)
 			end
 			Tools.NewPart.changeType = function(zufQE, QwSnT)
 				zufQE.Options.type = QwSnT
@@ -23245,7 +23361,7 @@ local q = {
 								z37Qz:MakeJoints()
 							end
 							endTransformPointerCapture()
-						end)
+						end, touch_transform_input)
 					end)
 					nr6uCL.Handles.MouseDrag:Connect(function(rRNsXW, zslu25lH)
 						local K = zslu25lH % nr6uCL.Options.increment
@@ -23938,7 +24054,7 @@ local q = {
 								ZawK6:MakeJoints()
 							end
 							endTransformPointerCapture()
-						end)
+						end, touch_transform_input)
 					end)
 					oZy.Handles.MouseDrag:Connect(function(OJGVLn, UzgoE5O)
 						local UzgoE5O = math.floor(math.deg(UzgoE5O))
@@ -27376,6 +27492,510 @@ for XWU, t in ipairs(q) do
 		Tools[toolName].LoadError = err
 	end
 end
+BTMobileGizmo = {
+	Buttons = {},
+	Drag = nil,
+	Overlay = nil,
+}
+function BTMobileGizmo:hideButtons()
+	for _, button in pairs(self.Buttons) do
+		setp(button, "Visible", false)
+	end
+end
+function BTMobileGizmo:getKind()
+	if CurrentTool == Tools.Move then
+		return "Move"
+	elseif CurrentTool == Tools.Resize then
+		return "Resize"
+	elseif CurrentTool == Tools.Rotate then
+		return "Rotate"
+	end
+end
+function BTMobileGizmo:getAdornee()
+	local tool = CurrentTool
+	if tool and tool.Handles and tool.Handles.Adornee then
+		return tool.Handles.Adornee
+	end
+	return Selection and Selection.Last or nil
+end
+function BTMobileGizmo:project(worldPosition)
+	local camera = Workspace.CurrentCamera
+	if not camera then
+		return nil
+	end
+	local screen, visible = camera:WorldToViewportPoint(worldPosition)
+	if screen.Z <= 0 then
+		return nil
+	end
+	return Vector2.new(screen.X, screen.Y), visible
+end
+function BTMobileGizmo:getFaceData(adornee, key)
+	local cf = adornee.CFrame
+	local size = adornee.Size
+	if key == "Right" then
+		return cf.RightVector, size.X / 2, "X", 1
+	elseif key == "Left" then
+		return -cf.RightVector, size.X / 2, "X", -1
+	elseif key == "Top" then
+		return cf.UpVector, size.Y / 2, "Y", 1
+	elseif key == "Bottom" then
+		return -cf.UpVector, size.Y / 2, "Y", -1
+	elseif key == "Front" then
+		return cf.LookVector, size.Z / 2, "Z", -1
+	elseif key == "Back" then
+		return -cf.LookVector, size.Z / 2, "Z", 1
+	end
+end
+function BTMobileGizmo:getAxisLocal(key)
+	if key == "RX" then
+		return Vector3.new(1, 0, 0), "X"
+	elseif key == "RY" then
+		return Vector3.new(0, 1, 0), "Y"
+	elseif key == "RZ" then
+		return Vector3.new(0, 0, 1), "Z"
+	end
+end
+function BTMobileGizmo:snap(value, increment)
+	increment = tonumber(increment) or 0
+	if increment <= 0 then
+		return value
+	end
+	if value >= 0 then
+		return math.floor(value / increment + 0.5) * increment
+	end
+	return math.ceil(value / increment - 0.5) * increment
+end
+function BTMobileGizmo:getWorldOffset(adornee)
+	local camera = Workspace.CurrentCamera
+	if not camera then
+		return 2
+	end
+	local distance = (camera.CFrame.Position - adornee.Position).Magnitude
+	return math.clamp(distance * 0.032, 1.2, 7)
+end
+function BTMobileGizmo:getPixelsPerStud(worldCenter, axisWorld)
+	local camera = Workspace.CurrentCamera
+	if not camera then
+		return 20, Vector2.new(1, 0)
+	end
+	local c0 = camera:WorldToViewportPoint(worldCenter)
+	local c1 = camera:WorldToViewportPoint(worldCenter + axisWorld)
+	local delta = Vector2.new(c1.X - c0.X, c1.Y - c0.Y)
+	local depth = math.max((worldCenter - camera.CFrame.Position).Magnitude, 1)
+	local general = camera.ViewportSize.Y / (2 * math.tan(math.rad(camera.FieldOfView) / 2) * depth)
+	local pixels = delta.Magnitude
+	if pixels < math.max(general * 0.18, 1.25) then
+		return math.max(general * 0.55, 2), Vector2.new(0, -1)
+	end
+	return pixels, delta.Unit
+end
+function BTMobileGizmo:getRotationButtonPoint(adornee, key)
+	local cf = adornee.CFrame
+	local radius = math.max(adornee.Size.X, adornee.Size.Y, adornee.Size.Z) * 0.62 + self:getWorldOffset(adornee) * 1.25
+	if key == "RX" then
+		return adornee.Position + cf.UpVector * radius, cf.UpVector
+	elseif key == "RY" then
+		return adornee.Position + cf.RightVector * radius, cf.RightVector
+	elseif key == "RZ" then
+		local radial = (-cf.RightVector + cf.UpVector).Unit
+		return adornee.Position + radial * radius, radial
+	end
+end
+function BTMobileGizmo:makeButton(name, text)
+	local button = Instance.new("TextButton")
+	setp(button, "Name", "F3XTouch" .. name)
+	setp(button, "AnchorPoint", Vector2.new(0.5, 0.5))
+	setp(button, "Size", UDim2.fromOffset(42, 42))
+	setp(button, "BackgroundTransparency", 1)
+	setp(button, "BorderSizePixel", 0)
+	setp(button, "Text", text)
+	setp(button, "TextScaled", true)
+	setp(button, "TextTransparency", 1)
+	setp(button, "TextColor3", Color3.new(1, 1, 1))
+	setp(button, "TextStrokeTransparency", 1)
+	setp(button, "Font", Enum.Font.SourceSansBold)
+	setp(button, "AutoButtonColor", false)
+	setp(button, "Active", true)
+	setp(button, "Visible", false)
+	setp(button, "ZIndex", 50)
+	setp(button, "Parent", self.Overlay)
+	local corner = Instance.new("UICorner")
+	setp(corner, "CornerRadius", UDim.new(1, 0))
+	setp(corner, "Parent", button)
+	button.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.Touch then
+			self:beginDrag(name, input)
+		end
+	end)
+	self.Buttons[name] = button
+	return button
+end
+function BTMobileGizmo:create()
+	if self.Overlay and self.Overlay.Parent then
+		return
+	end
+	local overlay = Instance.new("ScreenGui")
+	setp(overlay, "Name", "F3X Mobile Transform Touch Layer")
+	setp(overlay, "ResetOnSpawn", false)
+	setp(overlay, "IgnoreGuiInset", true)
+	setp(overlay, "ZIndexBehavior", Enum.ZIndexBehavior.Sibling)
+	pcall(function()
+		setp(overlay, "DisplayOrder", 10000)
+	end)
+	overlay = LTProtectUI(overlay, {
+		name = "F3X Mobile Transform Touch Layer",
+		keepName = true,
+		harden = false,
+		deep = false,
+		watch = false,
+		rename = false,
+	}) or overlay
+	if not overlay.Parent then
+		setp(overlay, "Parent", GUIContainer)
+	end
+	self.Overlay = overlay
+	F3XRuntime.MobileGizmoUI = overlay
+	self:makeButton("Right", "+X")
+	self:makeButton("Left", "-X")
+	self:makeButton("Top", "+Y")
+	self:makeButton("Bottom", "-Y")
+	self:makeButton("Front", "-Z")
+	self:makeButton("Back", "+Z")
+	self:makeButton("RX", "RX")
+	self:makeButton("RY", "RY")
+	self:makeButton("RZ", "RZ")
+end
+function BTMobileGizmo:getSnapshot()
+	local out = {}
+	for _, part in pairs(Selection.Items) do
+		if part and part.Parent and part:IsA("BasePart") then
+			out[#out + 1] = {
+				Part = part,
+				CFrame = part.CFrame,
+				Size = part.Size,
+				Anchored = part.Anchored,
+			}
+		end
+	end
+	return out
+end
+function BTMobileGizmo:beginDrag(key, input)
+	if self.Drag or not input or input.UserInputType ~= Enum.UserInputType.Touch then
+		return
+	end
+	local kind = self:getKind()
+	local tool = CurrentTool
+	local adornee = self:getAdornee()
+	if not kind or not tool or not adornee or #Selection.Items == 0 then
+		return
+	end
+	if kind == "Rotate" then
+		if key ~= "RX" and key ~= "RY" and key ~= "RZ" then
+			return
+		end
+	else
+		if key == "RX" or key == "RY" or key == "RZ" then
+			return
+		end
+	end
+	local snapshots = self:getSnapshot()
+	if #snapshots == 0 then
+		return
+	end
+	local drag = {
+		Kind = kind,
+		Tool = tool,
+		Adornee = adornee,
+		Key = key,
+		Input = input,
+		StartPointer = Vector2.new(input.Position.X, input.Position.Y),
+		Snapshots = snapshots,
+	}
+	self.Drag = drag
+	touch_transform_input = input
+	beginTransformPointerCapture()
+	override_selection = true
+	if tool.startHistoryRecord then
+		tool:startHistoryRecord()
+	end
+	for _, item in ipairs(snapshots) do
+		setp(item.Part, "Anchored", true)
+	end
+	if kind == "Move" or kind == "Resize" then
+		local axisWorld, _, dimension, localSign = self:getFaceData(adornee, key)
+		if not axisWorld then
+			self:endDrag()
+			return
+		end
+		drag.AxisWorld = axisWorld
+		drag.Dimension = dimension
+		drag.LocalSign = localSign
+		drag.PixelsPerStud, drag.ScreenAxis = self:getPixelsPerStud(adornee.Position, axisWorld)
+		if kind == "Move" then
+			setp(tool.State, "moving", true)
+			setp(tool.State, "distance_moved", 0)
+		else
+			setp(tool.State, "resizing", true)
+			setp(tool.State, "length_resized", 0)
+		end
+	else
+		local axisLocal, dimension = self:getAxisLocal(key)
+		drag.AxisLocal = axisLocal
+		drag.Dimension = dimension
+		local pivot = nil
+		if tool.Options.pivot == "center" then
+			local _, centerCF = calculateExtents(Selection.Items)
+			pivot = centerCF
+		elseif tool.Options.pivot == "last" then
+			pivot = tool.Options.PivotPoint or (Selection.Last and Selection.Last.CFrame)
+		end
+		drag.Pivot = pivot or adornee.CFrame
+		local centerScreen = self:project(drag.Pivot.Position)
+		if not centerScreen then
+			self:endDrag()
+			return
+		end
+		drag.CenterScreen = centerScreen
+		drag.StartAngle = math.atan2(drag.StartPointer.Y - centerScreen.Y, drag.StartPointer.X - centerScreen.X)
+		local _, radialWorld = self:getRotationButtonPoint(adornee, key)
+		local axisWorld = adornee.CFrame:VectorToWorldSpace(axisLocal)
+		local tangentWorld = axisWorld:Cross(radialWorld)
+		local radialScreen = self:project(adornee.Position + radialWorld)
+		local tangentScreen = self:project(adornee.Position + tangentWorld)
+		local originScreen = self:project(adornee.Position)
+		drag.RotationSign = 1
+		if radialScreen and tangentScreen and originScreen then
+			local u = radialScreen - originScreen
+			local v = tangentScreen - originScreen
+			local cross = u.X * v.Y - u.Y * v.X
+			if cross < 0 then
+				drag.RotationSign = -1
+			end
+		end
+		setp(tool.State, "rotating", true)
+		setp(tool.State, "degrees_rotated", 0)
+	end
+end
+function BTMobileGizmo:applyMove(drag, pointer)
+	local deltaPixels = pointer - drag.StartPointer
+	local rawDistance = deltaPixels:Dot(drag.ScreenAxis) / math.max(drag.PixelsPerStud, 0.001)
+	local distance = self:snap(rawDistance, drag.Tool.Options.increment)
+	local deltaWorld = drag.AxisWorld * distance
+	for _, item in ipairs(drag.Snapshots) do
+		if item.Part and item.Part.Parent then
+			setp(item.Part, "CFrame", item.CFrame + deltaWorld)
+		end
+	end
+	setp(drag.Tool.State, "distance_moved", distance)
+end
+function BTMobileGizmo:applyResize(drag, pointer)
+	local deltaPixels = pointer - drag.StartPointer
+	local rawDistance = deltaPixels:Dot(drag.ScreenAxis) / math.max(drag.PixelsPerStud, 0.001)
+	local snapped = self:snap(rawDistance, drag.Tool.Options.increment)
+	local sizeAmount = snapped * (drag.Tool.Options.directions == "both" and 2 or 1)
+	local requiredMin = -math.huge
+	for _, item in ipairs(drag.Snapshots) do
+		local part = item.Part
+		local round = false
+		pcall(function()
+			round = part.Shape == Enum.PartType.Ball or part.Shape == Enum.PartType.Cylinder
+		end)
+		if round then
+			requiredMin = math.max(requiredMin, 0.05 - item.Size.X, 0.05 - item.Size.Y, 0.05 - item.Size.Z)
+		elseif drag.Dimension == "X" then
+			requiredMin = math.max(requiredMin, 0.05 - item.Size.X)
+		elseif drag.Dimension == "Y" then
+			requiredMin = math.max(requiredMin, 0.05 - item.Size.Y)
+		else
+			requiredMin = math.max(requiredMin, 0.05 - item.Size.Z)
+		end
+	end
+	sizeAmount = math.max(sizeAmount, requiredMin)
+	for _, item in ipairs(drag.Snapshots) do
+		local part = item.Part
+		if part and part.Parent then
+			local round = false
+			pcall(function()
+				round = part.Shape == Enum.PartType.Ball or part.Shape == Enum.PartType.Cylinder
+			end)
+			local deltaSize
+			if round then
+				deltaSize = Vector3.new(sizeAmount, sizeAmount, sizeAmount)
+			elseif drag.Dimension == "X" then
+				deltaSize = Vector3.new(sizeAmount, 0, 0)
+			elseif drag.Dimension == "Y" then
+				deltaSize = Vector3.new(0, sizeAmount, 0)
+			else
+				deltaSize = Vector3.new(0, 0, sizeAmount)
+			end
+			setp(part, "Size", item.Size + deltaSize)
+			if drag.Tool.Options.directions == "normal" then
+				local offset
+				if drag.Dimension == "X" then
+					offset = Vector3.new(drag.LocalSign * sizeAmount / 2, 0, 0)
+				elseif drag.Dimension == "Y" then
+					offset = Vector3.new(0, drag.LocalSign * sizeAmount / 2, 0)
+				else
+					offset = Vector3.new(0, 0, drag.LocalSign * sizeAmount / 2)
+				end
+				setp(part, "CFrame", item.CFrame:ToWorldSpace(CFrame.new(offset)))
+			else
+				setp(part, "CFrame", item.CFrame)
+			end
+		end
+	end
+	setp(drag.Tool.State, "length_resized", sizeAmount)
+	setp(drag.Tool.State, "previous_distance", snapped)
+end
+function BTMobileGizmo:applyRotate(drag, pointer)
+	local currentAngle = math.atan2(pointer.Y - drag.CenterScreen.Y, pointer.X - drag.CenterScreen.X)
+	local delta = currentAngle - drag.StartAngle
+	while delta > math.pi do
+		delta = delta - math.pi * 2
+	end
+	while delta < -math.pi do
+		delta = delta + math.pi * 2
+	end
+	delta = delta * drag.RotationSign
+	local degrees = self:snap(math.deg(delta), drag.Tool.Options.increment)
+	local radians = math.rad(degrees)
+	local rotation
+	if drag.Dimension == "X" then
+		rotation = CFrame.Angles(radians, 0, 0)
+	elseif drag.Dimension == "Y" then
+		rotation = CFrame.Angles(0, radians, 0)
+	else
+		rotation = CFrame.Angles(0, 0, radians)
+	end
+	for _, item in ipairs(drag.Snapshots) do
+		local part = item.Part
+		if part and part.Parent then
+			if drag.Tool.Options.pivot == "local" then
+				setp(part, "CFrame", item.CFrame:ToWorldSpace(rotation))
+			else
+				setp(part, "CFrame", drag.Pivot:ToWorldSpace(rotation):ToWorldSpace(item.CFrame:ToObjectSpace(drag.Pivot):Inverse()))
+			end
+		end
+	end
+	setp(drag.Tool.State, "degrees_rotated", degrees)
+end
+function BTMobileGizmo:updateDrag(input)
+	local drag = self.Drag
+	if not drag or input ~= drag.Input then
+		return
+	end
+	local pointer = Vector2.new(input.Position.X, input.Position.Y)
+	if drag.Kind == "Move" then
+		self:applyMove(drag, pointer)
+	elseif drag.Kind == "Resize" then
+		self:applyResize(drag, pointer)
+	elseif drag.Kind == "Rotate" then
+		self:applyRotate(drag, pointer)
+	end
+end
+function BTMobileGizmo:endDrag(input)
+	local drag = self.Drag
+	if not drag then
+		return
+	end
+	if input and drag.Input and input ~= drag.Input then
+		return
+	end
+	self.Drag = nil
+	local tool = drag.Tool
+	if drag.Kind == "Move" then
+		setp(tool.State, "moving", false)
+	elseif drag.Kind == "Resize" then
+		setp(tool.State, "resizing", false)
+	elseif drag.Kind == "Rotate" then
+		setp(tool.State, "rotating", false)
+	end
+	if tool.finishHistoryRecord then
+		tool:finishHistoryRecord()
+	end
+	for _, item in ipairs(drag.Snapshots) do
+		local part = item.Part
+		if part then
+			setp(part, "Anchored", item.Anchored)
+			pcall(function()
+				part:MakeJoints()
+			end)
+			if drag.Kind == "Move" then
+				setp(part, "Velocity", Vector3.new(0, 0, 0))
+				setp(part, "RotVelocity", Vector3.new(0, 0, 0))
+			end
+		end
+	end
+	override_selection = true
+	endTransformPointerCapture()
+end
+function BTMobileGizmo:updateButtons()
+	if not UserInputService.TouchEnabled or not Mouse or self.Drag then
+		if self.Drag then
+			return
+		end
+		self:hideButtons()
+		return
+	end
+	local kind = self:getKind()
+	local adornee = self:getAdornee()
+	if not kind or not adornee or not adornee.Parent or #Selection.Items == 0 then
+		self:hideButtons()
+		return
+	end
+	local toolColor = Color3.new(1, 1, 1)
+	pcall(function()
+		toolColor = CurrentTool.Color.Color
+	end)
+	for name, button in pairs(self.Buttons) do
+		local isRotation = name == "RX" or name == "RY" or name == "RZ"
+		local shouldShow = (kind == "Rotate" and isRotation) or (kind ~= "Rotate" and not isRotation)
+		if shouldShow then
+			local worldPoint
+			if isRotation then
+				worldPoint = self:getRotationButtonPoint(adornee, name)
+			else
+				local axisWorld, half = self:getFaceData(adornee, name)
+				if axisWorld then
+					worldPoint = adornee.Position + axisWorld * (half + self:getWorldOffset(adornee))
+				end
+			end
+			local screenPoint, visible = worldPoint and self:project(worldPoint) or nil, false
+			if worldPoint then
+				screenPoint, visible = self:project(worldPoint)
+			end
+			if screenPoint and visible then
+				local fakeInput = { Position = Vector3.new(screenPoint.X, screenPoint.Y, 0) }
+				if not isPointerOverBTUI(fakeInput) then
+					setp(button, "Position", UDim2.fromOffset(screenPoint.X, screenPoint.Y))
+					setp(button, "BackgroundColor3", toolColor)
+					setp(button, "Visible", true)
+				else
+					setp(button, "Visible", false)
+				end
+			else
+				setp(button, "Visible", false)
+			end
+		else
+			setp(button, "Visible", false)
+		end
+	end
+end
+BTMobileGizmo:create()
+F3XTrackConnection(UserInputService.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.Touch then
+		BTMobileGizmo:updateDrag(input)
+	end
+end))
+F3XTrackConnection(UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.Touch then
+		BTMobileGizmo:endDrag(input)
+	end
+end))
+F3XTrackConnection(RunService.RenderStepped:Connect(function()
+	BTMobileGizmo:updateButtons()
+end))
+
 if next(ToolLoadErrors) then
 	F3XWarn("F3X loaded with tool errors. Inspect _G.BTCoreEnv.tool.ToolLoadErrors.")
 end

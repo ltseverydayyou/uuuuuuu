@@ -7,7 +7,7 @@ local LocalPlayer = Players.LocalPlayer
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local PlayerCharacter = Remotes:WaitForChild("PlayerCharacter")
 
-local ENV = getgenv()
+local ENV = (type(getgenv) == "function" and getgenv()) or _G
 if ENV.DuelingAutoEverything and ENV.DuelingAutoEverything.Cleanup then
     pcall(ENV.DuelingAutoEverything.Cleanup)
 end
@@ -55,24 +55,483 @@ local function keep(conn)
     return conn
 end
 
+local Compat = {
+    External = false,
+    NativeControllers = false,
+    VirtualInput = nil,
+    PressedKeys = {},
+    KeyTokens = {},
+    HandlerCache = setmetatable({}, { __mode = "k" }),
+    WeaponInfoCache = {},
+    MovementKeys = {
+        W = false,
+        A = false,
+        S = false,
+        D = false,
+    },
+}
+
+local function cleanWeaponName(name)
+    if type(name) ~= "string" or name == "" then
+        return nil
+    end
+    if string.sub(name, 1, 1) == "*" then
+        name = string.sub(name, 2)
+    end
+    return name ~= "" and name or nil
+end
+
+local function externalVisualModel(model)
+    if not model then
+        return nil
+    end
+
+    local uid = model:GetAttribute("UserId")
+    if model == LocalPlayer.Character or uid == LocalPlayer.UserId then
+        local camera = workspace.CurrentCamera
+        local subject = camera and camera.CameraSubject
+        local subjectModel = subject and subject:FindFirstAncestorWhichIsA("Model")
+        if subjectModel and subjectModel:IsDescendantOf(workspace) then
+            return subjectModel
+        end
+
+        local clientModel = workspace:FindFirstChild(model.Name .. "_Client")
+        if clientModel and clientModel:IsA("Model") then
+            return clientModel
+        end
+    end
+
+    return model
+end
+
+local function externalRoot(model)
+    local visual = externalVisualModel(model)
+    if not visual then
+        return nil
+    end
+    return visual:FindFirstChild("HumanoidRootPart") or visual.PrimaryPart
+end
+
+local function externalAnimator(model)
+    local visual = externalVisualModel(model)
+    if not visual then
+        return nil
+    end
+    local humanoid = visual:FindFirstChildOfClass("Humanoid")
+    return humanoid and humanoid:FindFirstChildOfClass("Animator") or nil
+end
+
+local function externalPlayer(model)
+    if not model then
+        return nil
+    end
+    local uid = model:GetAttribute("UserId")
+    if type(uid) == "number" then
+        return Players:GetPlayerByUserId(uid)
+    end
+    return nil
+end
+
+local function getExternalWeaponInfo(weaponName)
+    weaponName = cleanWeaponName(weaponName)
+    if not weaponName then
+        return nil
+    end
+
+    if Compat.WeaponInfoCache[weaponName] ~= nil then
+        return Compat.WeaponInfoCache[weaponName] or nil
+    end
+
+    local weaponModules = ReplicatedStorage:FindFirstChild("WeaponModulesShared")
+    local weaponModule = weaponModules and weaponModules:FindFirstChild(weaponName)
+    local attacksFolder = weaponModule and weaponModule:FindFirstChild("BasicAttackTypes")
+    if not attacksFolder then
+        Compat.WeaponInfoCache[weaponName] = false
+        return nil
+    end
+
+    local attacks = {}
+    if type(require) == "function" then
+        for _, child in ipairs(attacksFolder:GetChildren()) do
+            if child:IsA("ModuleScript") then
+                local ok, info = pcall(require, child)
+                if ok and type(info) == "table" then
+                    attacks[child.Name] = info
+                end
+            end
+        end
+    end
+
+    local wrapped = {
+        WeaponInfo = {
+            BasicAttackTypes = attacks,
+        },
+    }
+    Compat.WeaponInfoCache[weaponName] = wrapped
+    return wrapped
+end
+
+local ExternalHandlerMethods = {}
+
+function ExternalHandlerMethods:GetEquippedWeaponHandler()
+    return getExternalWeaponInfo(self.OriginalModel and self.OriginalModel:GetAttribute("EquippedWeapon"))
+end
+
+local function makeExternalHandler(model)
+    if not model then
+        return nil
+    end
+
+    local cached = Compat.HandlerCache[model]
+    if cached then
+        return cached
+    end
+
+    local handler = {
+        OriginalModel = model,
+        External = true,
+    }
+
+    setmetatable(handler, {
+        __index = function(self, key)
+            local method = ExternalHandlerMethods[key]
+            if method then
+                return method
+            end
+            if key == "Root" then
+                return externalRoot(model)
+            elseif key == "Animator" then
+                return externalAnimator(model)
+            elseif key == "Player" then
+                return externalPlayer(model)
+            elseif key == "EquippedWeapon" then
+                return cleanWeaponName(model:GetAttribute("EquippedWeapon"))
+            elseif key == "EquippedWeaponChanged" then
+                return model:GetAttributeChangedSignal("EquippedWeapon")
+            elseif key == "Destroyed" then
+                return model.Destroying
+            elseif key == "Parried" then
+                return model:GetAttributeChangedSignal("ParriedEvent")
+            end
+            return rawget(self, key)
+        end,
+    })
+
+    Compat.HandlerCache[model] = handler
+    return handler
+end
+
+local function getInputActionsRoot()
+    local controllers = ReplicatedStorage:FindFirstChild("Controllers")
+    local inputControllerModule = controllers and controllers:FindFirstChild("PlayerInputController")
+    return inputControllerModule and inputControllerModule:FindFirstChild("InputActions") or nil
+end
+
+local function getInputAction(kind)
+    local root = getInputActionsRoot()
+    if not root then
+        return nil
+    end
+
+    local character = root:FindFirstChild("CharacterGameplayContext")
+    local camera = root:FindFirstChild("CameraGameplayContext")
+    local equipped = character and character:FindFirstChild("EquippedWeaponContext")
+
+    if kind == "Light" then
+        return equipped and equipped:FindFirstChild("LightAttackAction")
+    elseif kind == "Heavy" then
+        return equipped and equipped:FindFirstChild("HeavyAttackAction")
+    elseif kind == "Guard" then
+        return equipped and equipped:FindFirstChild("GuardAction")
+    elseif kind == "Dodge" then
+        return character and character:FindFirstChild("DodgeAction")
+    elseif kind == "Ultimate" then
+        local ultimateContext = equipped and equipped:FindFirstChild("UltimateAvailableContext")
+        return ultimateContext and ultimateContext:FindFirstChild("UltimateAbility")
+    elseif kind == "Lock" then
+        return camera and camera:FindFirstChild("LockToTarget")
+    end
+
+    return nil
+end
+
+local DefaultActionKeys = {
+    Light = Enum.KeyCode.MouseLeftButton,
+    Heavy = Enum.KeyCode.MouseRightButton,
+    Guard = Enum.KeyCode.F,
+    Dodge = Enum.KeyCode.Q,
+    Ultimate = Enum.KeyCode.R,
+    Lock = Enum.KeyCode.T,
+}
+
+local function externalActionKey(kind)
+    local action = getInputAction(kind)
+    if action then
+        for _, bindingName in ipairs({ "KeyboardBinding", "KeyboardBinding2" }) do
+            local binding = action:FindFirstChild(bindingName)
+            if binding and binding:IsA("InputBinding") then
+                local bound = binding:GetAttribute("CustomBoundKeyCode")
+                if typeof(bound) ~= "EnumItem" then
+                    local ok, value = pcall(function()
+                        return binding.KeyCode
+                    end)
+                    if ok then
+                        bound = value
+                    end
+                end
+                if typeof(bound) == "EnumItem"
+                    and bound ~= Enum.KeyCode.Unknown
+                    and bound ~= Enum.KeyCode.None
+                then
+                    return bound
+                end
+            end
+        end
+    end
+
+    return DefaultActionKeys[kind]
+end
+
+local function externalSendKey(keyCode, isDown)
+    if not Compat.VirtualInput or not keyCode then
+        return false
+    end
+
+    local ok = pcall(function()
+        if keyCode == Enum.KeyCode.MouseLeftButton
+            or keyCode == Enum.KeyCode.MouseRightButton
+            or keyCode == Enum.KeyCode.MouseMiddleButton
+        then
+            local camera = workspace.CurrentCamera
+            local size = camera and camera.ViewportSize or Vector2.new(800, 600)
+            local button = keyCode == Enum.KeyCode.MouseLeftButton and 0
+                or keyCode == Enum.KeyCode.MouseRightButton and 1
+                or 2
+            Compat.VirtualInput:SendMouseButtonEvent(
+                math.floor(size.X * 0.5),
+                math.floor(size.Y * 0.5),
+                button,
+                isDown,
+                game,
+                0
+            )
+        else
+            Compat.VirtualInput:SendKeyEvent(isDown, keyCode, false, game)
+        end
+    end)
+
+    if ok then
+        Compat.PressedKeys[keyCode] = isDown or nil
+    end
+    return ok
+end
+
+local function externalTap(kind, hold)
+    local key = externalActionKey(kind)
+    if not key then
+        return false
+    end
+
+    Compat.KeyTokens[key] = (Compat.KeyTokens[key] or 0) + 1
+    local token = Compat.KeyTokens[key]
+    if not externalSendKey(key, true) then
+        return false
+    end
+
+    task.delay(hold or 0.035, function()
+        if Compat.KeyTokens[key] == token then
+            externalSendKey(key, false)
+        end
+    end)
+    return true
+end
+
+local function externalReleaseAction(kind)
+    local key = externalActionKey(kind)
+    if key then
+        Compat.KeyTokens[key] = (Compat.KeyTokens[key] or 0) + 1
+        externalSendKey(key, false)
+    end
+end
+
+local function externalSetMovementKey(name, down)
+    local key = Enum.KeyCode[name]
+    if not key or Compat.MovementKeys[name] == down then
+        return
+    end
+    Compat.MovementKeys[name] = down
+    externalSendKey(key, down)
+end
+
+local function externalReleaseMovement()
+    externalSetMovementKey("W", false)
+    externalSetMovementKey("A", false)
+    externalSetMovementKey("S", false)
+    externalSetMovementKey("D", false)
+end
+
+local function externalMoveDirection(direction)
+    if not direction or direction.Magnitude < 0.05 then
+        externalReleaseMovement()
+        return
+    end
+
+    local camera = workspace.CurrentCamera
+    local cf = camera and camera.CFrame or CFrame.new()
+    local forward = Vector3.new(cf.LookVector.X, 0, cf.LookVector.Z)
+    local right = Vector3.new(cf.RightVector.X, 0, cf.RightVector.Z)
+    if forward.Magnitude < 0.001 or right.Magnitude < 0.001 then
+        externalReleaseMovement()
+        return
+    end
+
+    forward = forward.Unit
+    right = right.Unit
+    local flat = Vector3.new(direction.X, 0, direction.Z)
+    if flat.Magnitude < 0.001 then
+        externalReleaseMovement()
+        return
+    end
+    flat = flat.Unit
+
+    local f = flat:Dot(forward)
+    local r = flat:Dot(right)
+    externalSetMovementKey("W", f > 0.28)
+    externalSetMovementKey("S", f < -0.28)
+    externalSetMovementKey("D", r > 0.28)
+    externalSetMovementKey("A", r < -0.28)
+end
+
+local GameManager
+local CharacterController
+local TargetLockController
+local InputController
+local MatchController
+
 local oldIdentity = getthreadidentity and getthreadidentity() or nil
 if setthreadidentity then
     pcall(setthreadidentity, 2)
 end
 
-local GameManager = require(ReplicatedStorage:WaitForChild("GameManager"))
-local CharacterController = GameManager:GetController("CharacterController")
-local TargetLockController = GameManager:GetController("TargetLockController")
-local InputController = GameManager:GetController("PlayerInputController")
-local MatchController = GameManager:GetController("MatchController")
+do
+    local nativeOk = false
+    if type(require) == "function" then
+        local okManager, manager = pcall(require, ReplicatedStorage:WaitForChild("GameManager"))
+        if okManager and type(manager) == "table" then
+            local okCharacter, characterController = pcall(manager.GetController, manager, "CharacterController")
+            if okCharacter and characterController then
+                GameManager = manager
+                CharacterController = characterController
+                local okTarget, targetController = pcall(manager.GetController, manager, "TargetLockController")
+                local okInput, inputController = pcall(manager.GetController, manager, "PlayerInputController")
+                local okMatch, matchController = pcall(manager.GetController, manager, "MatchController")
+                TargetLockController = okTarget and targetController or nil
+                InputController = okInput and inputController or nil
+                MatchController = okMatch and matchController or nil
+                nativeOk = true
+            end
+        end
+    end
+
+    Compat.NativeControllers = nativeOk
+    Compat.External = not nativeOk
+end
 
 if setthreadidentity and oldIdentity then
     pcall(setthreadidentity, oldIdentity)
 end
 
-local VibeUI = loadstring(game:HttpGet(
-    "https://sirmemegithub.com/RealSlimShady2000/VibeUI/raw/branch/main/VibeUI.luau"
-))()
+if Compat.External then
+    pcall(function()
+        Compat.VirtualInput = Instance.new("VirtualInputManager")
+    end)
+
+    CharacterController = {
+        GetLocalCharacterHandler = function()
+            return makeExternalHandler(LocalPlayer.Character)
+        end,
+        GetCharacterHandler = function(_, model)
+            return makeExternalHandler(model)
+        end,
+    }
+
+    CharacterController.CharacterLoaded = {
+        Connect = function(_, callback)
+            return CollectionService:GetInstanceAddedSignal("CustomCharacter"):Connect(function(model)
+                callback(makeExternalHandler(model))
+            end)
+        end,
+    }
+
+    CharacterController.LocalCharacterLoaded = {
+        Connect = function(_, callback)
+            return LocalPlayer.CharacterAdded:Connect(function(model)
+                task.defer(callback, makeExternalHandler(model))
+            end)
+        end,
+    }
+
+    TargetLockController = {
+        _Target = nil,
+        _ForcedTarget = nil,
+        SetForcedTargetLock = function(self, target)
+            self._ForcedTarget = target
+            if target == nil then
+                self._Target = nil
+                pcall(function()
+                    PlayerCharacter.Request.SetTargetLock:FireServer(nil)
+                end)
+            end
+        end,
+        SetTarget = function(self, target)
+            if self._Target == target then
+                return
+            end
+            self._Target = target
+            pcall(function()
+                PlayerCharacter.Request.SetTargetLock:FireServer(target)
+            end)
+        end,
+    }
+
+    InputController = {
+        CurrentInput = {
+            MoveDirection = Vector3.zero,
+        },
+    }
+
+    MatchController = {
+        IsCharacterEnemyOfLocalPlayer = function(_, model)
+            if not model then
+                return true
+            end
+            local uid = model:GetAttribute("UserId")
+            if uid and uid == LocalPlayer.UserId then
+                return false
+            end
+
+            local localModel = LocalPlayer.Character
+            local localTeam = localModel and localModel:GetAttribute("TeamGroup")
+            local targetTeam = model:GetAttribute("TeamGroup")
+            if localTeam and targetTeam and localTeam == targetTeam then
+                return false
+            end
+            return true
+        end,
+    }
+end
+
+local loadSource = loadstring or load
+assert(type(loadSource) == "function", "Executor does not provide loadstring/load")
+
+local okVibeSource, vibeSource = pcall(function()
+    return game:HttpGet("https://sirmemegithub.com/RealSlimShady2000/VibeUI/raw/branch/main/VibeUI.luau")
+end)
+assert(okVibeSource and type(vibeSource) == "string", "Executor does not provide a working game:HttpGet")
+
+local vibeChunk, vibeCompileError = loadSource(vibeSource)
+assert(type(vibeChunk) == "function", "Failed to compile VibeUI: " .. tostring(vibeCompileError))
+local VibeUI = vibeChunk()
 
 local Window = VibeUI:Window({
     Title = "Dueling Grounds • Auto Everything",
@@ -359,7 +818,8 @@ DodgeMovement:Slider({
 local MiscSection = MiscTab:Section({ Name = "Utilities", Side = 1 })
 MiscSection:Paragraph({
     Name = "Engine",
-    Content = "Event-driven attack recognition. Uses equipped-weapon animation IDs and exact impact markers; no GetDescendants/GetPlayingAnimationTracks polling.",
+    Content = (Compat.External and "External VM compatibility mode. " or "Native controller mode. ")
+        .. "Event-driven attack recognition uses equipped-weapon animation IDs and exact impact markers; no GetDescendants/GetPlayingAnimationTracks polling.",
 })
 
 local function flag(name, fallback)
@@ -462,6 +922,11 @@ local function handlerDistance(a, b)
 end
 
 local function releaseBlock(handler)
+    if Compat.External then
+        externalReleaseAction("Guard")
+        return
+    end
+
     if not handler or not handler.ActionManager then
         return
     end
@@ -488,6 +953,36 @@ local function pressParry()
     local handler = getLocalHandler()
     if localPaused(handler) or not flag("DG_AutoParry", true) then
         return false
+    end
+
+    if Compat.External then
+        if not handler.EquippedWeapon then
+            return false
+        end
+
+        local key = externalActionKey("Guard")
+        if not key or not externalSendKey(key, true) then
+            return false
+        end
+
+        local hold = flag("DG_BlockHold", 220) / 1000
+        State.BlockHoldUntil = math.max(State.BlockHoldUntil, os.clock() + hold)
+        State.ParryToken += 1
+        local token = State.ParryToken
+
+        task.delay(hold, function()
+            if not State.Alive then
+                return
+            end
+            if token ~= State.ParryToken and os.clock() < State.BlockHoldUntil then
+                return
+            end
+            if os.clock() >= State.BlockHoldUntil - 0.01 then
+                externalReleaseAction("Guard")
+            end
+        end)
+
+        return true
     end
 
     local manager = handler.ActionManager
@@ -573,6 +1068,15 @@ local function dodge(attacker)
     local handler = getLocalHandler()
     if localPaused(handler) or not flag("DG_AutoDodge", true) then
         return false
+    end
+
+    if Compat.External then
+        local dir = computeDodgeDirection(attacker)
+        local hold = flag("DG_DodgeInputHold", 0.12)
+        State.ForcedMoveDirection = dir
+        State.ForcedMoveUntil = math.max(State.ForcedMoveUntil, os.clock() + hold)
+        externalMoveDirection(dir)
+        return externalTap("Dodge", 0.04)
     end
 
     local manager = handler.ActionManager
@@ -826,6 +1330,23 @@ local function applyImpactDefense(impactData)
     end
 
     State.DefenseBusyUntil = math.max(State.DefenseBusyUntil, os.clock() + 0.3)
+
+    if Compat.External then
+        local acted
+        if useDodge then
+            acted = dodge(nil)
+        else
+            acted = pressParry()
+            if not acted and autoDodge then
+                acted = dodge(nil)
+            end
+        end
+        if acted then
+            debugNotify(useDodge and "Impact dodge" or "Impact parry")
+        end
+        return acted == true
+    end
+
     handler._desiredQueuedAction = nil
     handler._desiredQueuedActionDuration = nil
 
@@ -868,6 +1389,13 @@ end
 local function cancelQueuedOffense(handler)
     handler = handler or getLocalHandler()
     if not handler then
+        return
+    end
+
+    if Compat.External then
+        externalReleaseAction("Light")
+        externalReleaseAction("Heavy")
+        externalReleaseAction("Ultimate")
         return
     end
 
@@ -1195,6 +1723,12 @@ local function bindLocalHandler(handler)
     end
 
     State.LocalParryConnection = handler.Parried:Connect(function()
+        if Compat.External
+            and handler.OriginalModel
+            and not handler.OriginalModel:GetAttribute("ParriedEvent")
+        then
+            return
+        end
         if not State.Alive or localPaused(handler) or not flag("DG_AutoCounter", true) then
             return
         end
@@ -1211,8 +1745,12 @@ local function bindLocalHandler(handler)
             end
 
             local counter = flag("DG_CounterAttack", "Heavy")
-            h._desiredQueuedAction = counter == "Heavy" and "HeavyAttack" or "LightAttack"
-            h._desiredQueuedActionDuration = nil
+            if Compat.External then
+                externalTap(counter == "Heavy" and "Heavy" or "Light", 0.04)
+            else
+                h._desiredQueuedAction = counter == "Heavy" and "HeavyAttack" or "LightAttack"
+                h._desiredQueuedActionDuration = nil
+            end
             debugNotify("Countered after parry")
         end)
     end)
@@ -1297,7 +1835,17 @@ local function tryCritical()
         return false
     end
 
-    local critical = TargetLockController.CriticalStrikeTarget
+    local critical
+    if Compat.External then
+        local target = State.CurrentTargetHandler
+        critical = target and target.Root or nil
+        if critical and not critical:GetAttribute("OpenForCritical") then
+            critical = nil
+        end
+    else
+        critical = TargetLockController.CriticalStrikeTarget
+    end
+
     if not critical or os.clock() - State.LastCritical < 0.35 then
         return false
     end
@@ -1358,8 +1906,12 @@ local function tryAttack()
     if flag("DG_AutoUltimate", true)
         and (handler.OriginalModel:GetAttribute("UltimateEnergy") or 0) >= 100
     then
-        handler._desiredQueuedAction = "Ultimate"
-        handler._desiredQueuedActionDuration = nil
+        if Compat.External then
+            externalTap("Ultimate", 0.04)
+        else
+            handler._desiredQueuedAction = "Ultimate"
+            handler._desiredQueuedActionDuration = nil
+        end
         State.LastQueuedAttackAt = os.clock()
         State.LastQueuedAttackTarget = target
         return
@@ -1389,8 +1941,12 @@ local function tryAttack()
         end
     end
 
-    handler._desiredQueuedAction = desired
-    handler._desiredQueuedActionDuration = nil
+    if Compat.External then
+        externalTap(desired == "HeavyAttack" and "Heavy" or "Light", 0.04)
+    else
+        handler._desiredQueuedAction = desired
+        handler._desiredQueuedActionDuration = nil
+    end
     State.LastQueuedAttackAt = os.clock()
     State.LastQueuedAttackTarget = target
 end
@@ -1410,16 +1966,81 @@ end
 local function updateMovement()
     local handler = getLocalHandler()
     if not handler then
+        if Compat.External then
+            externalReleaseMovement()
+        end
         return
     end
 
     if localPaused(handler) then
-        handler.DesiredMoveTo = nil
+        if Compat.External then
+            externalReleaseMovement()
+        else
+            handler.DesiredMoveTo = nil
+        end
         State.MovementOverride = false
         return
     end
 
     local now = os.clock()
+
+    if Compat.External then
+        if now < State.ForcedMoveUntil and State.ForcedMoveDirection.Magnitude > 0.01 then
+            externalMoveDirection(State.ForcedMoveDirection)
+            State.MovementOverride = true
+            return
+        end
+
+        if flag("DG_AntiParry", true) and now < State.AntiParryUntil then
+            local point = State.AntiParryRetreatPoint
+            if point and handler.Root then
+                local retreat = point - handler.Root.Position
+                externalMoveDirection(retreat)
+                State.MovementOverride = true
+                return
+            end
+        elseif State.AntiParryRetreatPoint then
+            State.AntiParryRetreatPoint = nil
+            State.AntiParryAttacker = nil
+        end
+
+        if not flag("DG_AutoChase", true) then
+            externalReleaseMovement()
+            State.MovementOverride = false
+            return
+        end
+
+        local target = State.CurrentTargetHandler
+        if not target or not target.Root or not handler.Root then
+            externalReleaseMovement()
+            State.MovementOverride = false
+            return
+        end
+
+        local delta = target.Root.Position - handler.Root.Position
+        local flat = Vector3.new(delta.X, 0, delta.Z)
+        if flat.Magnitude < 0.01 then
+            externalReleaseMovement()
+            State.MovementOverride = false
+            return
+        end
+
+        local preferred = flag("DG_PreferredDistance", 7)
+        if flat.Magnitude > preferred then
+            externalMoveDirection(flat)
+            State.MovementOverride = true
+        elseif flag("DG_AutoStrafe", true) then
+            local side = Vector3.new(-flat.Z, 0, flat.X).Unit
+            local sign = (math.floor(now * 1.35) % 2 == 0) and 1 or -1
+            externalMoveDirection(side * sign)
+            State.MovementOverride = true
+        else
+            externalReleaseMovement()
+            State.MovementOverride = false
+        end
+        return
+    end
+
     if flag("DG_AntiParry", true) and now < State.AntiParryUntil then
         local point = State.AntiParryRetreatPoint
         if point and handler.Root then
@@ -1550,7 +2171,17 @@ local function cleanup()
         handler.IsParrying = false
     end
 
-    if handler then
+    if Compat.External then
+        externalReleaseMovement()
+        externalReleaseAction("Light")
+        externalReleaseAction("Heavy")
+        externalReleaseAction("Guard")
+        externalReleaseAction("Dodge")
+        externalReleaseAction("Ultimate")
+        for key in pairs(Compat.PressedKeys) do
+            externalSendKey(key, false)
+        end
+    elseif handler then
         handler.DesiredMoveTo = nil
     end
 
@@ -1560,7 +2191,11 @@ local function cleanup()
     State.AntiParryRetreatPoint = nil
     State.LastQueuedAttackTarget = nil
 
-    if InputController and InputController.CurrentInput and State.MovementOverride then
+    if not Compat.External
+        and InputController
+        and InputController.CurrentInput
+        and State.MovementOverride
+    then
         InputController.CurrentInput.MoveDirection = Vector3.zero
     end
 
@@ -1595,7 +2230,8 @@ end)
 
 notify(
     "Dueling Grounds Automation",
-    "Loaded. Timed defense + incoming-impact fallback are active; safe-zone pause is ON.",
-    "success",
+    (Compat.External and "Loaded in external compatibility mode. " or "Loaded with native controllers. ")
+        .. "Timed defense + incoming-impact fallback are active; safe-zone pause is ON.",
+    Compat.External and (Compat.VirtualInput and "success" or "warning") or "success",
     4
 )

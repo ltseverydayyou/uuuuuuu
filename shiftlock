@@ -120,25 +120,16 @@ local function getNativeShiftLockOffset()
 	nativeShiftLockOffset = offset;
 	return offset;
 end;
+local offsetMode = "Middle";
 local function getConfiguredOffset()
-	local native = getNativeShiftLockOffset();
-	local env = (getgenv and getgenv()) or _G;
-	local value = type(env) == "table" and rawget(env, "MobileShiftLockOffset") or nil;
-	if typeof(value) == "Vector3" then
-		return value;
-	elseif type(value) == "number" then
-		return Vector3.new(value, 0, 0);
-	elseif type(value) == "string" then
-		local side = string.lower(value);
-		if side == "left" or side == "l" then
-			return Vector3.new(-math.abs(native.X), native.Y, native.Z);
-		elseif side == "right" or side == "r" then
-			return Vector3.new(math.abs(native.X), native.Y, native.Z);
-		elseif side == "center" or side == "centre" or side == "none" then
-			return ZERO3;
-		end;
+	if offsetMode == "Middle" then
+		return ZERO3;
 	end;
-	return native;
+	local native = getNativeShiftLockOffset();
+	if offsetMode == "Left" then
+		return Vector3.new(-math.abs(native.X), native.Y, native.Z);
+	end;
+	return Vector3.new(math.abs(native.X), native.Y, native.Z);
 end;
 local OFFSET_BIND_NAME = "MobileShiftLockCameraOffset";
 local offsetBound = false;
@@ -337,6 +328,36 @@ local xS = Instance.new("UIStroke");
 xS.Thickness = 1;
 xS.Transparency = 0.3;
 xS.Parent = xBtn;
+local modeBtn = Instance.new("TextButton");
+modeBtn.Name = "OffsetMode";
+modeBtn.AnchorPoint = Vector2.new(0, 0);
+modeBtn.Position = UDim2.new(0, -6, 0, -6);
+modeBtn.Size = UDim2.fromOffset(22, 22);
+modeBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 66);
+modeBtn.AutoButtonColor = true;
+modeBtn.Text = "M";
+modeBtn.TextScaled = true;
+modeBtn.TextColor3 = Color3.new(1, 1, 1);
+modeBtn.Parent = btn;
+local modeC = Instance.new("UICorner");
+modeC.CornerRadius = UDim.new(1, 0);
+modeC.Parent = modeBtn;
+local modeS = Instance.new("UIStroke");
+modeS.Thickness = 1;
+modeS.Transparency = 0.3;
+modeS.Parent = modeBtn;
+local function updateModeButton()
+	if offsetMode == "Middle" then
+		modeBtn.Text = "M";
+		modeBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 66);
+	elseif offsetMode == "Right" then
+		modeBtn.Text = "R";
+		modeBtn.BackgroundColor3 = Color3.fromRGB(45, 105, 175);
+	else
+		modeBtn.Text = "L";
+		modeBtn.BackgroundColor3 = Color3.fromRGB(145, 80, 155);
+	end;
+end;
 local sc = Instance.new("UIScale");
 sc.Scale = 0.9;
 sc.Parent = btn;
@@ -493,6 +514,16 @@ local function apply(v)
 end;
 btn.Activated:Connect(function()
 	apply(not on);
+end);
+modeBtn.Activated:Connect(function()
+	if offsetMode == "Middle" then
+		offsetMode = "Right";
+	elseif offsetMode == "Right" then
+		offsetMode = "Left";
+	else
+		offsetMode = "Middle";
+	end;
+	updateModeButton();
 end);
 xBtn.Activated:Connect(function()
 	if on then

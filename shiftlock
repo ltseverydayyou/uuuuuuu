@@ -95,10 +95,33 @@ local Plrs, Tw, UIS, RS, Wk, CG = S("Players"), S("TweenService"), S("UserInputS
 local plr = Plrs.LocalPlayer;
 
 -- Roblox PlayerModule uses a camera-local Vector3 for shift-lock shoulder offset.
--- X > 0 = right shoulder, X < 0 = left shoulder. Legacy Roblox default is +1.75.
-local DEFAULT_SHIFTLOCK_OFFSET = Vector3.new(1.75, 0, 0);
+-- X > 0 = right shoulder, X < 0 = left shoulder.
+local FALLBACK_SHIFTLOCK_OFFSET = Vector3.new(1.75, 0, 0);
 local ZERO3 = Vector3.new();
+local nativeShiftLockOffset;
+local function getNativeShiftLockOffset()
+	if nativeShiftLockOffset then
+		return nativeShiftLockOffset;
+	end;
+	local offset = FALLBACK_SHIFTLOCK_OFFSET;
+	local ps = plr and plr:FindFirstChildOfClass("PlayerScripts");
+	local pm = ps and ps:FindFirstChild("PlayerModule");
+	local cm = pm and pm:FindFirstChild("CameraModule");
+	local ml = cm and cm:FindFirstChild("MouseLockController");
+	if ml and ml:IsA("ModuleScript") then
+		local okModule, controller = pcall(require, ml);
+		if okModule and type(controller) == "table" and type(controller.GetMouseLockOffset) == "function" then
+			local okOffset, value = pcall(controller.GetMouseLockOffset, controller);
+			if okOffset and typeof(value) == "Vector3" then
+				offset = value;
+			end;
+		end;
+	end;
+	nativeShiftLockOffset = offset;
+	return offset;
+end;
 local function getConfiguredOffset()
+	local native = getNativeShiftLockOffset();
 	local env = (getgenv and getgenv()) or _G;
 	local value = type(env) == "table" and rawget(env, "MobileShiftLockOffset") or nil;
 	if typeof(value) == "Vector3" then
@@ -108,55 +131,52 @@ local function getConfiguredOffset()
 	elseif type(value) == "string" then
 		local side = string.lower(value);
 		if side == "left" or side == "l" then
-			return Vector3.new(-DEFAULT_SHIFTLOCK_OFFSET.X, 0, 0);
+			return Vector3.new(-math.abs(native.X), native.Y, native.Z);
 		elseif side == "right" or side == "r" then
-			return DEFAULT_SHIFTLOCK_OFFSET;
+			return Vector3.new(math.abs(native.X), native.Y, native.Z);
 		elseif side == "center" or side == "centre" or side == "none" then
 			return ZERO3;
 		end;
 	end;
-	return DEFAULT_SHIFTLOCK_OFFSET;
+	return native;
 end;
-
-local cameraModule;
-local function getActiveCameraController()
-	local ps = plr and plr:FindFirstChildOfClass("PlayerScripts");
-	local pm = ps and ps:FindFirstChild("PlayerModule");
-	if not (pm and pm:IsA("ModuleScript")) then
-		return nil;
-	end;
-	if not cameraModule then
-		local okPlayerModule, playerModule = pcall(require, pm);
-		if okPlayerModule and type(playerModule) == "table" and type(playerModule.GetCameras) == "function" then
-			local okCameras, cameras = pcall(playerModule.GetCameras, playerModule);
-			if okCameras and type(cameras) == "table" then
-				cameraModule = cameras;
-			end;
-		end;
-	end;
-	if cameraModule and type(cameraModule.GetActiveCameraController) == "function" then
-		local okController, controller = pcall(cameraModule.GetActiveCameraController, cameraModule);
-		if okController and type(controller) == "table" then
-			return controller;
-		end;
-	end;
-	return nil;
+local OFFSET_BIND_NAME = "MobileShiftLockCameraOffset";
+local offsetBound = false;
+local function unbindCameraOffset()
+	pcall(RS.UnbindFromRenderStep, RS, OFFSET_BIND_NAME);
+	offsetBound = false;
 end;
-
+local function bindCameraOffset()
+	unbindCameraOffset();
+	local ok = pcall(RS.BindToRenderStep, RS, OFFSET_BIND_NAME, Enum.RenderPriority.Camera.Value + 1, function()
+		local cam = Wk.CurrentCamera;
+		if not cam then
+			return;
+		end;
+		local focusDistance = (cam.CFrame.Position - cam.Focus.Position).Magnitude;
+		if focusDistance <= 1 then
+			return;
+		end;
+		local offset = getConfiguredOffset();
+		if offset == ZERO3 then
+			return;
+		end;
+		local cf = cam.CFrame;
+		local delta = offset.X * cf.RightVector + offset.Y * cf.UpVector + offset.Z * cf.LookVector;
+		if delta.X == delta.X and delta.Y == delta.Y and delta.Z == delta.Z then
+			cam.CFrame = cf + delta;
+			cam.Focus = cam.Focus + delta;
+		end;
+	end);
+	offsetBound = ok;
+	return ok;
+end;
 local function applyPlayerModuleShiftLock(enabled)
-	local controller = getActiveCameraController();
-	if not controller then
-		return false;
+	if enabled then
+		bindCameraOffset();
+	else
+		unbindCameraOffset();
 	end;
-	local hasLockSetter = type(controller.SetIsMouseLocked) == "function";
-	local hasOffsetSetter = type(controller.SetMouseLockOffset) == "function";
-	if not (hasLockSetter and hasOffsetSetter) then
-		return false;
-	end;
-	local offset = enabled and getConfiguredOffset() or ZERO3;
-	local okLock = pcall(controller.SetIsMouseLocked, controller, enabled);
-	local okOffset = pcall(controller.SetMouseLockOffset, controller, offset);
-	return okLock and okOffset;
 end;
 local function NA(i)
 	if not i then
@@ -477,6 +497,8 @@ end);
 xBtn.Activated:Connect(function()
 	if on then
 		apply(false);
+	else
+		unbindCameraOffset();
 	end;
 	(Tw:Create(sc, TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
 		Scale = 0.8

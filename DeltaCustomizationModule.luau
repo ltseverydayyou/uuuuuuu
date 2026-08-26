@@ -6798,6 +6798,7 @@ end
 
 local SCRIPTBLOX_BASE = "https://scriptblox.com"
 local RSCRIPTS_BASE = "https://rscripts.net"
+local HAXHELL_BASE = "https://haxhell.com"
 local IMAGE_CACHE_DIR = "DeltaCustom/ScriptHubImages"
 local MUSIC_CACHE_DIR = "DeltaCustom/DeltaMusic"
 local MUSIC_CFG_PATH = MUSIC_CACHE_DIR .. "/_config.json"
@@ -7372,6 +7373,8 @@ local function downloadImageAsset(url)
 			hdr = { Referer = RSCRIPTS_BASE }
 		elseif host:find("robloxscripts%.com") then
 			hdr = { Referer = "https://robloxscripts.com" }
+		elseif host:find("haxhell%.com") then
+			hdr = { Referer = HAXHELL_BASE }
 		elseif host:find("rbxcdn%.com") then
 			hdr = { Referer = "https://www.roblox.com/" }
 		end
@@ -7443,6 +7446,32 @@ local function resolveRScriptsImage(d)
 		d.game and d.game.cover,
 		d.game and d.game.banner,
 		d.game and d.game.gameLogo,
+	})
+end
+
+local function resolveHaxHellImage(d)
+	if not d then
+		return nil
+	end
+	local media = type(d.media) == "table" and d.media or {}
+	local gameData = type(d.game) == "table" and d.game or {}
+	local function pick(vals)
+		for _, v in vals do
+			local n = normalizeImageUrl(v, HAXHELL_BASE)
+			if n and isMeaningfulImageUrl(n) then
+				return n
+			end
+		end
+	end
+	return pick({
+		media.thumbnailUrl,
+		d.image,
+		d.imageUrl,
+		d.thumbnail,
+		gameData.thumbnailUrl,
+		gameData.iconUrl,
+		gameData.imageUrl,
+		gameData.image,
 	})
 end
 
@@ -7696,6 +7725,9 @@ local function pass(d)
 	local v
 	if eng == "RScripts" then
 		v = d.keySystem
+	elseif eng == "HaxHell" then
+		local flags = type(d.flags) == "table" and d.flags or {}
+		v = flags.keySystem
 	else
 		v = d.key
 	end
@@ -7780,6 +7812,11 @@ local function getRw(d)
 		end
 		local url = d.rawScriptUrl or d.scriptLink or d.raw or ""
 		return url, url ~= ""
+	elseif eng == "HaxHell" then
+		local links = type(d.links) == "table" and d.links or {}
+		local sourceData = type(d.source) == "table" and d.source or {}
+		local source = links.raw or sourceData.rawUrl or sourceData.code or d.rawScriptUrl or d.script or ""
+		return source, type(source) == "string" and source:match("^https?://") ~= nil
 	end
 	return d.script or d.rawScript or d.scriptLink or d.raw or "", false
 end
@@ -7799,6 +7836,9 @@ local function keyReq(d)
 	local v
 	if eng == "RScripts" then
 		v = d.keySystem
+	elseif eng == "HaxHell" then
+		local flags = type(d.flags) == "table" and d.flags or {}
+		v = flags.keySystem
 	else
 		v = d.key
 	end
@@ -7830,8 +7870,10 @@ local function keyReq(d)
 end
 
 local function getInfo(d)
-	local v = tostring(d.views or d.viewCount or 0)
-	local l = tostring(d.likes or d.likeCount or 0)
+	local stats = type(d.stats) == "table" and d.stats or {}
+	local flags = type(d.flags) == "table" and d.flags or {}
+	local v = tostring(d.views or d.viewCount or stats.views or 0)
+	local l = tostring(d.likes or d.likeCount or stats.likes or 0)
 	local k = keyReq(d) and "Key" or "Keyless"
 	if eng == "RobloxScripts" and type(d.accessType) == "string" then
 		local access = d.accessType:lower()
@@ -7840,13 +7882,23 @@ local function getInfo(d)
 		elseif access == "free" then
 			k = "Free"
 		end
+	elseif eng == "HaxHell" and flags.isPaid == true then
+		k = "Paid"
 	end
-	local s = eng == "RobloxScripts" and "Published" or d.isPatched and "Patched" or "Working"
+	local s = eng == "RobloxScripts" and "Published" or (d.isPatched == true or flags.patched == true) and "Patched" or "Working"
 	local info = string.format("%s | Views %s | Likes %s | %s", k, v, l, s)
 	if eng == "RScripts" and d.discord and d.discord ~= "" then
 		info = info .. " | Discord"
 	elseif eng == "RobloxScripts" and d.author and d.author.verified == true then
 		info = info .. " | Verified"
+	elseif eng == "HaxHell" then
+		local verified = flags.verified == true or type(d.author) == "table" and d.author.isScripterVerified == true
+		if verified then
+			info = info .. " | Verified"
+		end
+		if flags.mobileSupported == true then
+			info = info .. " | Mobile"
+		end
 	end
 	return info
 end
@@ -7874,6 +7926,8 @@ local function mkCard(par, i, d)
 		placeId = d.game and d.game.gameId
 	elseif eng == "RScripts" then
 		placeId = d.game and (d.game.placeId or d.game.gameLink and d.game.gameLink:match("/games/(%d+)"))
+	elseif eng == "HaxHell" then
+		placeId = d.game and d.game.placeId or d.placeId
 	end
 	placeId = tonumber(placeId)
 
@@ -7882,6 +7936,8 @@ local function mkCard(par, i, d)
 		bgUrl = resolveScriptBloxImage(d)
 	elseif eng == "RScripts" then
 		bgUrl = resolveRScriptsImage(d)
+	elseif eng == "HaxHell" then
+		bgUrl = resolveHaxHellImage(d)
 	else
 		local candidates = {
 			d.image,
@@ -8045,6 +8101,8 @@ local function mkCard(par, i, d)
 					headers = { Referer = RSCRIPTS_BASE }
 				elseif eng == "RobloxScripts" then
 					headers = { Referer = "https://robloxscripts.com" }
+				elseif eng == "HaxHell" then
+					headers = { Referer = HAXHELL_BASE }
 				end
 				local got, gotEr = httpTxt(rw, headers)
 				if type(got) ~= "string" or got == "" then
@@ -8081,6 +8139,8 @@ local function mkCard(par, i, d)
 						headers = { Referer = RSCRIPTS_BASE }
 					elseif eng == "RobloxScripts" then
 						headers = { Referer = "https://robloxscripts.com" }
+					elseif eng == "HaxHell" then
+						headers = { Referer = HAXHELL_BASE }
 					end
 					src = httpTxt(rw, headers)
 				end
@@ -8171,6 +8231,11 @@ local function fetch(q2, tr2, p2)
 	local requestQuery = q2
 	if eng == "RobloxScripts" and #requestQuery > 100 then
 		requestQuery = requestQuery:sub(1, 100)
+	elseif eng == "HaxHell" and requestQuery ~= "" and #requestQuery < 2 then
+		shClr()
+		shMsg("HaxHell search requires at least 2 characters", col.wa)
+		setBusy(false)
+		return
 	end
 	local enc = __lt.cm("HttpService", "UrlEncode", requestQuery)
 	local u
@@ -8185,6 +8250,12 @@ local function fetch(q2, tr2, p2)
 		u = string.format("https://robloxscripts.com/api/v1/scripts?page=%d&limit=24&sort=newest", p2)
 		if requestQuery ~= "" then
 			u = u .. "&q=" .. enc
+		end
+	elseif eng == "HaxHell" then
+		if requestQuery == "" then
+			u = string.format("https://haxhell.com/api/v1/scripts?page=%d&limit=24&sort=latest", p2)
+		else
+			u = string.format("https://haxhell.com/api/v1/search/scripts?q=%s&page=%d&limit=24&sort=latest", enc, p2)
 		end
 	elseif tr2 then
 		u = string.format("https://scriptblox.com/api/script/fetch?page=%d", p2)
@@ -8225,6 +8296,20 @@ local function fetch(q2, tr2, p2)
 		end
 		maxp = math.min(math.max(pages or 1, 1), 200)
 		cur = tonumber(pg.page or pg.currentPage) or p2
+	elseif eng == "HaxHell" then
+		arr = dec.data
+		local pg = dec.pagination or {}
+		local total = tonumber(pg.total or pg.totalItems)
+		local limit = tonumber(pg.limit or pg.perPage) or 24
+		local pages = tonumber(pg.totalPages or pg.pages or pg.lastPage)
+		if not pages and total then
+			pages = math.ceil(total / math.max(limit, 1))
+		end
+		cur = tonumber(pg.page or pg.currentPage) or p2
+		if not pages then
+			pages = pg.hasMore == true and (cur + 1) or cur
+		end
+		maxp = math.max(math.floor(pages or 1), 1)
 	else
 		local r = dec.result or {}
 		arr = r.scripts
@@ -8250,6 +8335,10 @@ con(engb.MouseButton1Click:Connect(function()
 		eng = "RobloxScripts"
 		engb.BackgroundColor3 = Color3.fromRGB(38, 52, 68)
 		sbox.PlaceholderText = "Search for scripts (robloxscripts.com)"
+	elseif eng == "RobloxScripts" then
+		eng = "HaxHell"
+		engb.BackgroundColor3 = Color3.fromRGB(58, 42, 74)
+		sbox.PlaceholderText = "Search for scripts (haxhell.com)"
 	else
 		eng = "ScriptBlox"
 		engb.BackgroundColor3 = col.bg

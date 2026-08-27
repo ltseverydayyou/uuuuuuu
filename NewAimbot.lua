@@ -1129,6 +1129,7 @@ _G.pendingMobileAction = _G.pendingMobileAction or "Aimbot";
 _G.topTogglePos = type(_G.topTogglePos) == "table" and _G.topTogglePos or { XScale = 0.5, XOffset = -76, YScale = 0, YOffset = 8 };
 _G.optionBinds = type(_G.optionBinds) == "table" and _G.optionBinds or {};
 _G.pendingBindAction = _G.pendingBindAction or "Aimbot";
+_G.espBackend = _G.espBackend or "Normal";
 _G.espRenderMode = _G.espRenderMode or "Highlight";
 _G.espAlwaysOnTop = _G.espAlwaysOnTop ~= nil and _G.espAlwaysOnTop or true;
 _G.espShowDistance = _G.espShowDistance or false;
@@ -1190,6 +1191,10 @@ local OPT = {
 		"randomWeightLowerTorso",
 		"randomWeightTorso",
 		"randomWeightOther"
+	},
+	ESP_BACKEND_OPTIONS = {
+		"Normal",
+		"Drawing API"
 	},
 	ESP_RENDER_OPTIONS = {
 		"Highlight",
@@ -1423,6 +1428,7 @@ local DEFAULT_CONFIG = {
 		"P",
 		"RightControl"
 	},
+	espBackend = "Normal",
 	espRenderMode = "Highlight",
 	espAlwaysOnTop = true,
 	espShowDistance = false,
@@ -2809,6 +2815,7 @@ VLO.aimOrigin.saveCfg = function(forceSave, nameOverride)
 		topTogglePos = _G.topTogglePos,
 		optionBinds = _G.optionBinds,
 		toggleKeys = _G.toggleKeys,
+		espBackend = _G.espBackend,
 		espRenderMode = _G.espRenderMode,
 		espAlwaysOnTop = _G.espAlwaysOnTop,
 		espShowDistance = _G.espShowDistance,
@@ -2865,6 +2872,9 @@ local function applyCfg(obj)
 	end;
 	if obj.randWtOn == nil and obj.randomTargetWeightsEnabled ~= nil then
 		obj.randWtOn = obj.randomTargetWeightsEnabled == true;
+	end;
+	if obj.espBackend then
+		obj.espBackend = normChoice(obj.espBackend, OPT.ESP_BACKEND_OPTIONS, "Normal");
 	end;
 	if obj.espRenderMode then
 		obj.espRenderMode = normChoice(obj.espRenderMode, OPT.ESP_RENDER_OPTIONS, "Highlight");
@@ -3007,6 +3017,7 @@ _G.aimPointOffsetX = math.clamp(tonumber(_G.aimPointOffsetX) or 0, -500, 500);
 _G.aimPointOffsetY = math.clamp(tonumber(_G.aimPointOffsetY) or 0, -500, 500);
 _G.fovCircleAlpha = math.clamp(tonumber(_G.fovCircleAlpha) or 0.25, 0, 1);
 _G.fovCircleThickness = math.clamp(tonumber(_G.fovCircleThickness) or 2, 1, 8);
+_G.espBackend = normChoice(_G.espBackend, OPT.ESP_BACKEND_OPTIONS, "Normal");
 _G.espRenderMode = normChoice(_G.espRenderMode, OPT.ESP_RENDER_OPTIONS, "Highlight");
 _G.pendingMobileAction = normChoice(_G.pendingMobileAction, OPT.MOBILE_ACTION_OPTIONS, "Aimbot");
 _G.targetPriorityMode = normChoice(_G.targetPriorityMode, OPT.TARGET_PRIORITY_OPTIONS, "Crosshair");
@@ -4073,9 +4084,186 @@ function VLO.acquire(aimMode)
 		lastLockedPart = nil;
 	end;
 end;
+VLO.espDraw = type(VLO.espDraw) == "table" and VLO.espDraw or {};
+function VLO.espDraw.api()
+	local env = (getgenv and getgenv()) or _G or {};
+	local d = rawget(env, "Drawing") or rawget(_G, "Drawing") or Drawing;
+	if type(d) == "table" and type(d.new) == "function" then
+		return d;
+	end;
+	return nil;
+end;
+function VLO.espDraw.removeObject(obj)
+	if not obj then
+		return;
+	end;
+	local ok = pcall(function()
+		obj:Remove();
+	end);
+	if not ok then
+		pcall(function()
+			obj:Destroy();
+		end);
+	end;
+end;
+function VLO.espDraw.setVisible(rec, state)
+	if not rec or type(rec.draw) ~= "table" then
+		return;
+	end;
+	for _, obj in rec.draw do
+		if obj then
+			pcall(function()
+				obj.Visible = state == true;
+			end);
+		end;
+	end;
+end;
+function VLO.espDraw.remove(rec)
+	if not rec or type(rec.draw) ~= "table" then
+		return;
+	end;
+	for _, obj in rec.draw do
+		VLO.espDraw.removeObject(obj);
+	end;
+	rec.draw = nil;
+end;
+function VLO.espDraw.make(kind)
+	local d = VLO.espDraw.api();
+	if not d then
+		return nil;
+	end;
+	local ok, obj = pcall(d.new, kind);
+	return ok and obj or nil;
+end;
+function VLO.espDraw.ensure(rec)
+	if type(rec.draw) == "table" and rec.draw.box and rec.draw.outline and rec.draw.text then
+		return true;
+	end;
+	VLO.espDraw.remove(rec);
+	local outline = VLO.espDraw.make("Square");
+	local box = VLO.espDraw.make("Square");
+	local text = VLO.espDraw.make("Text");
+	if not outline or not box or not text then
+		VLO.espDraw.removeObject(outline);
+		VLO.espDraw.removeObject(box);
+		VLO.espDraw.removeObject(text);
+		return false;
+	end;
+	rec.draw = {
+		outline = outline,
+		box = box,
+		text = text
+	};
+	pcall(function()
+		outline.Filled = false;
+		outline.Thickness = 3;
+		outline.Color = Color3.new(0, 0, 0);
+		outline.Transparency = 0.9;
+		outline.ZIndex = 1;
+		outline.Visible = false;
+		box.Filled = false;
+		box.Thickness = 1;
+		box.ZIndex = 2;
+		box.Visible = false;
+		text.Center = true;
+		text.Outline = true;
+		text.Color = Color3.new(1, 1, 1);
+		text.ZIndex = 3;
+		text.Visible = false;
+	end);
+	return true;
+end;
+function VLO.espDraw.bounds(ch)
+	if not ch or not cam then
+		return nil;
+	end;
+	local ok, cf, sz = pcall(ch.GetBoundingBox, ch);
+	if not ok or not cf or not sz then
+		return nil;
+	end;
+	local center = cam:WorldToViewportPoint(cf.Position);
+	if center.Z <= 0 then
+		return nil;
+	end;
+	local hx, hy, hz = sz.X * 0.5, sz.Y * 0.5, sz.Z * 0.5;
+	local minX, minY = math.huge, math.huge;
+	local maxX, maxY = -math.huge, -math.huge;
+	local count = 0;
+	for xi = -1, 1, 2 do
+		for yi = -1, 1, 2 do
+			for zi = -1, 1, 2 do
+				local world = cf:PointToWorldSpace(Vector3.new(hx * xi, hy * yi, hz * zi));
+				local v = cam:WorldToViewportPoint(world);
+				if v.Z > 0 then
+					minX = math.min(minX, v.X);
+					minY = math.min(minY, v.Y);
+					maxX = math.max(maxX, v.X);
+					maxY = math.max(maxY, v.Y);
+					count += 1;
+				end;
+			end;
+		end;
+	end;
+	if count < 2 or minX == math.huge then
+		return nil;
+	end;
+	return minX, minY, maxX, maxY;
+end;
+function VLO.espDraw.update(rec, p, ch)
+	if not rec or not p or not ch or not VLO.espDraw.ensure(rec) then
+		return false;
+	end;
+	local distPart = topAimPart(ch);
+	local dist = distPart and cam and (distPart.Position - cam.CFrame.Position).Magnitude or math.huge;
+	if not ch.Parent or dist > math.clamp(tonumber(_G.espMaxDistance) or 2500, 100, 5000) then
+		VLO.espDraw.setVisible(rec, false);
+		return false;
+	end;
+	local minX, minY, maxX, maxY = VLO.espDraw.bounds(ch);
+	if not minX then
+		VLO.espDraw.setVisible(rec, false);
+		return false;
+	end;
+	local col = mode == "FFA" and UI.fallback or getTeamColor(p);
+	local alpha = 1 - math.clamp(tonumber(_G.espTransparency) or 0.3, 0, 1);
+	local w = math.max(2, maxX - minX);
+	local h = math.max(2, maxY - minY);
+	pcall(function()
+		rec.draw.outline.Position = Vector2.new(minX - 1, minY - 1);
+		rec.draw.outline.Size = Vector2.new(w + 2, h + 2);
+		rec.draw.outline.Visible = true;
+		rec.draw.box.Position = Vector2.new(minX, minY);
+		rec.draw.box.Size = Vector2.new(w, h);
+		rec.draw.box.Color = col;
+		rec.draw.box.Transparency = alpha;
+		rec.draw.box.Visible = true;
+		rec.draw.text.Position = Vector2.new(minX + w * 0.5, math.max(2, minY - math.clamp(tonumber(_G.espTextSize) or 14, 10, 24) - 2));
+		rec.draw.text.Size = math.clamp(tonumber(_G.espTextSize) or 14, 10, 24);
+		rec.draw.text.Visible = rec.draw.text.Text ~= nil and rec.draw.text.Text ~= "";
+	end);
+	return true;
+end;
+function VLO.espDraw.step()
+	if _G.espBackend ~= "Drawing API" or not _G.espEnabled then
+		return;
+	end;
+	for p, rec in espMap do
+		local ch = p and p.Character;
+		if rec and ch and rec.character == ch then
+			local hum = _G.aliveCheck and getHumanoid(ch) or nil;
+			if (_G.teamCheck and not isEnemy(p)) or (_G.aliveCheck and (not hum or hum.Health <= 0)) then
+				VLO.espDraw.setVisible(rec, false);
+			else
+				VLO.espDraw.update(rec, p, ch);
+			end;
+		else
+			VLO.espDraw.setVisible(rec, false);
+		end;
+	end;
+end;
 local function updateESPText(p)
 	local rec = espMap[p];
-	if not rec or (not rec.tx) then
+	if not rec then
 		return;
 	end;
 	local nameStr = _G.espShowName and p.Name or "";
@@ -4109,9 +4297,21 @@ local function updateESPText(p)
 	if distStr ~= "" then
 		table.insert(lines, distStr);
 	end;
-	rec.tx.Text = table.concat(lines, "\n");
-	rec.tx.TextSize = math.clamp(tonumber(_G.espTextSize) or 14, 10, 24);
-	rec.bb.Enabled = #lines > 0;
+	local textValue = table.concat(lines, "\n");
+	if rec.tx then
+		rec.tx.Text = textValue;
+		rec.tx.TextSize = math.clamp(tonumber(_G.espTextSize) or 14, 10, 24);
+		if rec.bb then
+			rec.bb.Enabled = #lines > 0;
+		end;
+	end;
+	if rec.draw and rec.draw.text then
+		pcall(function()
+			rec.draw.text.Text = textValue;
+			rec.draw.text.Size = math.clamp(tonumber(_G.espTextSize) or 14, 10, 24);
+			rec.draw.text.Visible = #lines > 0;
+		end);
+	end;
 end;
 local function espDetach(p)
 	local rec = espMap[p];
@@ -4125,6 +4325,7 @@ local function espDetach(p)
 			end;
 		end;
 	end;
+	VLO.espDraw.remove(rec);
 	if rec.hi and rec.hi.Parent then
 		rec.hi:Destroy();
 	end;
@@ -4174,6 +4375,31 @@ local function ensureESPBillboard(rec, ch)
 	rec.tx.TextSize = math.clamp(tonumber(_G.espTextSize) or 14, 10, 24);
 end;
 local function ensureESPVisual(rec, p, ch)
+	local backend = normChoice(_G.espBackend, OPT.ESP_BACKEND_OPTIONS, "Normal");
+	_G.espBackend = backend;
+	if backend == "Drawing API" then
+		if not VLO.espDraw.api() then
+			_G.espBackend = "Normal";
+			VLO.aimOrigin.toast("Drawing API unavailable; using Normal ESP");
+		else
+			if rec.hi and rec.hi.Parent then
+				rec.hi:Destroy();
+			end;
+			rec.hi = nil;
+			if rec.box and rec.box.Parent then
+				rec.box:Destroy();
+			end;
+			rec.box = nil;
+			if rec.bb and rec.bb.Parent then
+				rec.bb:Destroy();
+			end;
+			rec.bb = nil;
+			rec.tx = nil;
+			VLO.espDraw.ensure(rec);
+			return;
+		end;
+	end;
+	VLO.espDraw.remove(rec);
 	local col = getTeamColorSafe(p);
 	local tr = math.clamp(_G.espTransparency or 0.3, 0, 1);
 	local modeName = normChoice(_G.espRenderMode, OPT.ESP_RENDER_OPTIONS, "Highlight");
@@ -4265,9 +4491,14 @@ local function espAttach(p)
 	end;
 	rec.character = ch;
 	ensureESPVisual(rec, p, ch);
-	ensureESPBillboard(rec, ch);
+	if _G.espBackend == "Normal" then
+		ensureESPBillboard(rec, ch);
+	end;
 	espMap[p] = rec;
 	updateESPText(p);
+	if _G.espBackend == "Drawing API" then
+		VLO.espDraw.update(rec, p, ch);
+	end;
 end;
 local function updateESP()
 	if not gui then
@@ -4304,6 +4535,11 @@ local function refreshESPTransparency()
 		end;
 		if rec.box then
 			rec.box.Transparency = tr;
+		end;
+		if rec.draw and rec.draw.box then
+			pcall(function()
+				rec.draw.box.Transparency = 1 - tr;
+			end);
 		end;
 	end;
 end;
@@ -5436,6 +5672,9 @@ local function createUI()
 	uiRefs.fovCircle = fovCircle;
 	local fovLoop = RunService.RenderStepped:Connect(function()
 		updateFOVCircle();
+		if _G.espEnabled and _G.espBackend == "Drawing API" then
+			VLO.espDraw.step();
+		end;
 	end);
 	table.insert(conns, fovLoop);
 	local espPulse = 0;
@@ -5448,7 +5687,7 @@ local function createUI()
 			return;
 		end;
 		espPulse = 0;
-		if _G.espRenderMode == "BoxHandleAdornment" or _G.espShowDistance or ((_G.espMaxDistance or 2500) < 5000) then
+		if _G.espBackend == "Drawing API" or _G.espRenderMode == "BoxHandleAdornment" or _G.espShowDistance or ((_G.espMaxDistance or 2500) < 5000) then
 			updateESP();
 		end;
 	end);
@@ -5683,7 +5922,15 @@ local function createUI()
 		resetAimCaches(false);
 	end);
 	addSection(pgESP, "render");
-	addRowDropdown(pgESP, "esp mode", "espRenderMode", OPT.ESP_RENDER_OPTIONS, "swap between highlight and boxhandleadornment", function(v)
+	addRowDropdown(pgESP, "esp backend", "espBackend", OPT.ESP_BACKEND_OPTIONS, "normal Roblox instances or executor Drawing.new ESP", function(v)
+		_G.espBackend = normChoice(v, OPT.ESP_BACKEND_OPTIONS, "Normal");
+		for p, _ in espMap do
+			espDetach(p);
+		end;
+		espMap = {};
+		updateESP();
+	end);
+	addRowDropdown(pgESP, "normal esp mode", "espRenderMode", OPT.ESP_RENDER_OPTIONS, "normal backend renderer: highlight or boxhandleadornment", function(v)
 		_G.espRenderMode = normChoice(v, OPT.ESP_RENDER_OPTIONS, "Highlight");
 		updateESP();
 	end);
@@ -6026,6 +6273,7 @@ local function createUI()
 		_G.targetPriorityMode = normChoice(_G.targetPriorityMode, OPT.TARGET_PRIORITY_OPTIONS, "Crosshair");
 		_G.entMode = normChoice(_G.entMode, OPT.TARGET_ENTITY_OPTIONS, "Player");
 		_G.randWtOn = _G.randWtOn == true;
+		_G.espBackend = normChoice(_G.espBackend, OPT.ESP_BACKEND_OPTIONS, "Normal");
 		_G.espRenderMode = normChoice(_G.espRenderMode, OPT.ESP_RENDER_OPTIONS, "Highlight");
 		_G.mobileHelperButtons = normalizeActionList(_G.mobileHelperButtons, OPT.MOBILE_ACTION_OPTIONS, OPT.MOBILE_HELPER_DEFAULTS);
 		normalizeRandomWeights();

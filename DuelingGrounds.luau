@@ -40,6 +40,13 @@ local State = {
     LastQueuedAttackAt = 0,
     LastQueuedAttackTarget = nil,
     LastParryStaggerAction = nil,
+    AntiParryActive = false,
+    AntiParryStartedAt = 0,
+    AntiParryHardStop = 0,
+    AntiParryReadySince = 0,
+    AntiParryPostureAtStart = nil,
+    AntiParryPostureMax = nil,
+    AntiParryLastDefense = 0,
 }
 
 local function disconnect(conn)
@@ -731,11 +738,29 @@ DefenseExtra:Slider({
     Suffix = "s",
 })
 DefenseExtra:Slider({
-    Name = "Parried Recovery",
+    Name = "Parried Recovery Max",
     Flag = "DG_ParriedRecovery",
-    Min = 0.35,
-    Max = 1.5,
+    Min = 0.75,
+    Max = 5,
+    Default = 2.5,
+    Decimals = 0.05,
+    Suffix = "s",
+})
+DefenseExtra:Slider({
+    Name = "Recovery Posture",
+    Flag = "DG_RecoveryPosture",
+    Min = 0.5,
+    Max = 1,
     Default = 0.9,
+    Decimals = 0.05,
+    Suffix = " ratio",
+})
+DefenseExtra:Slider({
+    Name = "Recovery Stable",
+    Flag = "DG_RecoveryStable",
+    Min = 0.1,
+    Max = 0.5,
+    Default = 0.2,
     Decimals = 0.05,
     Suffix = "s",
 })
@@ -1251,6 +1276,19 @@ local function scheduleDefense(record, attackDef)
             return
         end
 
+        if State.AntiParryActive then
+            local now = os.clock()
+            State.DefenseBusyUntil = math.max(State.DefenseBusyUntil, now + 0.18)
+            if flag("DG_AutoDodge", true)
+                and now - (State.AntiParryLastDefense or 0) >= 0.14
+            then
+                if dodge(record.handler) then
+                    State.AntiParryLastDefense = now
+                end
+            end
+            return
+        end
+
         State.DefenseBusyUntil = math.max(State.DefenseBusyUntil, os.clock() + 0.35)
 
         local mode = flag("DG_DefenseMode", "Hybrid")
@@ -1326,6 +1364,10 @@ local function applyImpactDefense(impactData)
     elseif isHeavy and flag("DG_DodgeHeavy", false) and autoDodge then
         useDodge = true
     elseif not autoParry and autoDodge then
+        useDodge = true
+    end
+
+    if State.AntiParryActive and autoDodge then
         useDodge = true
     end
 
@@ -1432,6 +1474,117 @@ local function recordInFreshParryWindow(record)
         or now < (record.parryPunishUntil or 0)
 end
 
+local function getRecoveryPosture(handler)
+    local model = handler and handler.OriginalModel
+    if not model then
+        return nil, nil
+    end
+
+    local posture = model:GetAttribute("Posture")
+    local maxPosture = model:GetAttribute("MaxPosture")
+    if type(posture) ~= "number"
+        or type(maxPosture) ~= "number"
+        or maxPosture <= 0
+    then
+        return nil, nil
+    end
+
+    return posture, maxPosture
+end
+
+local function antiParryShieldRecovered(handler, now)
+    now = now or os.clock()
+
+    local startedAt = State.AntiParryStartedAt or now
+    if now - startedAt < 0.55 then
+        State.AntiParryReadySince = 0
+        return false
+    end
+
+    local posture, maxPosture = getRecoveryPosture(handler)
+    if not posture or not maxPosture then
+        local fallback = tonumber(flag("DG_ParriedRecovery", 2.5)) or 2.5
+        return now - startedAt >= math.max(0.75, fallback)
+    end
+
+    local threshold = tonumber(flag("DG_RecoveryPosture", 0.9)) or 0.9
+    if threshold < 0.5 then
+        threshold = 0.5
+    elseif threshold > 1 then
+        threshold = 1
+    end
+
+    if posture < maxPosture * threshold then
+        State.AntiParryReadySince = 0
+        return false
+    end
+
+    if not State.AntiParryReadySince or State.AntiParryReadySince == 0 then
+        State.AntiParryReadySince = now
+        return false
+    end
+
+    local stable = tonumber(flag("DG_RecoveryStable", 0.2)) or 0.2
+    return now - State.AntiParryReadySince >= math.max(0.05, stable)
+end
+
+local function finishAntiParryRecovery()
+    if not State.AntiParryActive then
+        return
+    end
+
+    local attacker = State.AntiParryAttacker
+    local record = attacker and State.EnemyRecords[attacker]
+    if record then
+        record.parryPunishUntil = 0
+    end
+
+    State.AntiParryActive = false
+    State.AntiParryStartedAt = 0
+    State.AntiParryHardStop = 0
+    State.AntiParryReadySince = 0
+    State.AntiParryPostureAtStart = nil
+    State.AntiParryPostureMax = nil
+    State.AntiParryUntil = 0
+    State.AntiParryAttacker = nil
+    State.AntiParryRetreatPoint = nil
+    State.AntiParryToken += 1
+    State.DefenseBusyUntil = math.max(State.DefenseBusyUntil, os.clock() + 0.12)
+    debugNotify("Anti-parry recovery complete")
+end
+
+local function refreshAntiParryRetreatPoint(handler)
+    if not State.AntiParryActive
+        or not handler
+        or not handler.Root
+    then
+        return
+    end
+
+    local attacker = State.AntiParryAttacker
+    local attackerRoot = attacker and attacker.Root
+    local away
+
+    if attackerRoot then
+        away = handler.Root.Position - attackerRoot.Position
+        away = Vector3.new(away.X, 0, away.Z)
+    end
+
+    if not away or away.Magnitude < 0.001 then
+        away = computeDodgeDirection(attacker)
+    end
+
+    if away.Magnitude < 0.001 then
+        return
+    end
+
+    local point = State.AntiParryRetreatPoint
+    if not point or (point - handler.Root.Position).Magnitude < 2 then
+        State.AntiParryRetreatPoint = handler.Root.Position
+            + away.Unit * math.max(8, flag("DG_AntiParryRetreat", 9))
+    end
+end
+
 local function beginAntiParryRecovery(record, reason)
     if not State.Alive or not flag("DG_AntiParry", true) then
         return
@@ -1444,26 +1597,40 @@ local function beginAntiParryRecovery(record, reason)
 
     local attacker = record and record.handler or State.LastQueuedAttackTarget or State.CurrentTargetHandler
     local now = os.clock()
-    local recovery = flag("DG_ParriedRecovery", 0.9)
+    local alreadyRecovering = State.AntiParryActive
+        and now < (State.AntiParryHardStop or 0)
 
-    State.AntiParryUntil = math.max(State.AntiParryUntil, now + recovery)
+    if not alreadyRecovering then
+        State.AntiParryStartedAt = now
+        State.AntiParryReadySince = 0
+        State.AntiParryPostureAtStart, State.AntiParryPostureMax =
+            getRecoveryPosture(handler)
+    else
+        State.AntiParryReadySince = 0
+    end
+
+    State.AntiParryActive = true
     State.AntiParryAttacker = attacker
+
+    local recoveryMax = tonumber(flag("DG_ParriedRecovery", 2.5)) or 2.5
+    recoveryMax = math.max(0.75, recoveryMax)
+    State.AntiParryHardStop = math.max(
+        State.AntiParryHardStop or 0,
+        now + recoveryMax
+    )
+    State.AntiParryUntil = State.AntiParryHardStop
     State.DefenseBusyUntil = math.max(State.DefenseBusyUntil, State.AntiParryUntil)
 
     if record then
-        record.parryPunishUntil = math.max(record.parryPunishUntil or 0, State.AntiParryUntil)
+        record.parryPunishUntil = math.max(
+            record.parryPunishUntil or 0,
+            State.AntiParryUntil
+        )
     end
 
     cancelQueuedOffense(handler)
-
-    if handler.Root and attacker and attacker.Root then
-        local away = handler.Root.Position - attacker.Root.Position
-        away = Vector3.new(away.X, 0, away.Z)
-        if away.Magnitude > 0.001 then
-            State.AntiParryRetreatPoint = handler.Root.Position
-                + away.Unit * flag("DG_AntiParryRetreat", 9)
-        end
-    end
+    releaseBlock(handler)
+    refreshAntiParryRetreatPoint(handler)
 
     State.AntiParryToken += 1
     local token = State.AntiParryToken
@@ -1471,10 +1638,22 @@ local function beginAntiParryRecovery(record, reason)
     task.spawn(function()
         while State.Alive
             and token == State.AntiParryToken
-            and os.clock() < State.AntiParryUntil
+            and State.AntiParryActive
+            and os.clock() < State.AntiParryHardStop
         do
             local current = getLocalHandler()
-            if localPaused(current) or current ~= handler then
+            if not current or current ~= handler then
+                return
+            end
+
+            if localPaused(current) then
+                finishAntiParryRecovery()
+                return
+            end
+
+            local now = os.clock()
+            if antiParryShieldRecovered(current, now) then
+                finishAntiParryRecovery()
                 return
             end
 
@@ -1482,45 +1661,31 @@ local function beginAntiParryRecovery(record, reason)
 
             local manager = current.ActionManager
             local action = manager and manager.CurrentAction
+            local canDodge = flag("DG_AutoDodge", true)
+                and now - (State.AntiParryLastDefense or 0) >= 0.16
 
-            if isParryStaggerAction(action) then
-                local acted = false
-
-                if flag("DG_AutoParry", true) then
-                    acted = pressParry()
-                end
-
-                if not acted and flag("DG_AutoDodge", true) then
-                    acted = dodge(attacker)
-                end
-
-                if acted then
-                    State.DefenseBusyUntil = math.max(State.DefenseBusyUntil, os.clock() + 0.4)
-                    return
-                end
-            elseif action and action.ActionType == "BasicAttack" and action.CanCancel then
-                if flag("DG_AutoDodge", true) and dodge(attacker) then
-                    State.DefenseBusyUntil = math.max(State.DefenseBusyUntil, os.clock() + 0.4)
-                    return
-                end
-            elseif not action then
-                local acted = false
-
-                if flag("DG_AutoParry", true) then
-                    acted = pressParry()
-                end
-
-                if not acted and flag("DG_AutoDodge", true) then
-                    acted = dodge(attacker)
-                end
-
-                if acted then
-                    State.DefenseBusyUntil = math.max(State.DefenseBusyUntil, os.clock() + 0.4)
-                    return
+            if canDodge and (
+                isParryStaggerAction(action)
+                or (
+                    action
+                    and action.ActionType == "BasicAttack"
+                    and action.CanCancel
+                )
+            ) then
+                if dodge(attacker) then
+                    State.AntiParryLastDefense = now
                 end
             end
 
             task.wait(0.025)
+        end
+
+        if State.Alive
+            and token == State.AntiParryToken
+            and State.AntiParryActive
+        then
+            finishAntiParryRecovery()
+            debugNotify("Anti-parry recovery timeout")
         end
     end)
 
@@ -1886,7 +2051,8 @@ local function tryAttack()
     end
 
     local record = State.EnemyRecords[target]
-    if recordInFreshParryWindow(record)
+    if State.AntiParryActive
+        or recordInFreshParryWindow(record)
         or (flag("DG_AntiParry", true)
             and State.AntiParryAttacker == target
             and now < State.AntiParryUntil)
@@ -1985,13 +2151,18 @@ local function updateMovement()
     local now = os.clock()
 
     if Compat.External then
+        if State.AntiParryActive then
+            refreshAntiParryRetreatPoint(handler)
+        end
+
         if now < State.ForcedMoveUntil and State.ForcedMoveDirection.Magnitude > 0.01 then
             externalMoveDirection(State.ForcedMoveDirection)
             State.MovementOverride = true
             return
         end
 
-        if flag("DG_AntiParry", true) and now < State.AntiParryUntil then
+        if State.AntiParryActive and now < State.AntiParryUntil then
+            refreshAntiParryRetreatPoint(handler)
             local point = State.AntiParryRetreatPoint
             if point and handler.Root then
                 local retreat = point - handler.Root.Position
@@ -2041,7 +2212,8 @@ local function updateMovement()
         return
     end
 
-    if flag("DG_AntiParry", true) and now < State.AntiParryUntil then
+    if State.AntiParryActive and now < State.AntiParryUntil then
+        refreshAntiParryRetreatPoint(handler)
         local point = State.AntiParryRetreatPoint
         if point and handler.Root then
             handler.DesiredMoveTo = point
@@ -2185,8 +2357,10 @@ local function cleanup()
         handler.DesiredMoveTo = nil
     end
 
+    State.AntiParryActive = false
     State.AntiParryToken += 1
     State.AntiParryUntil = 0
+    State.AntiParryHardStop = 0
     State.AntiParryAttacker = nil
     State.AntiParryRetreatPoint = nil
     State.LastQueuedAttackTarget = nil

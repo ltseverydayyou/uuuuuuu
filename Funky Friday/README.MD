@@ -1,26 +1,18 @@
-# NOTICE:
-## This script has been DISCONTINUED. I am no longer affiliated with the Roblox exploiting community.
+# Funky Friday Autoplayer
 
-Was upported:
-- Velocity / Sonar (finally a good free exec for y'all 🙏)
-- Wave
-- Arceus X
-- Codex
-- Delta
-- Trigon
-- Evon
-- Vega X
-- Hydrogen
+`SexyPlayer.lua` is the current Funky Friday autoplayer.
 
-Did NOT support:
-- Wave Lite (idfk what they messed up but its so bad rn it fails on a debug value cuz of a CClosure)
-- Fluxus (literally fails on a PRINT💀)
-- Solara
-- Celery (the main deal or every exec that utilizes their API)
-- Incognito (is it even still developed)
-- Lunar
-- Vulkan Beta (discontinued)
-and every free PC exploit you can imagine (at least for now)
+## Features
+- Handles normal notes, spam, chords, and hold notes.
+- Tracks notes separately so overlapping notes do not interfere with each other.
+- Supports `firesignal` and Virtual Input.
+- Adjustable hit accuracy, timing offset, spawn-to-hit delay, and tap hold time.
+- Automatically rebinds when a new song starts.
+- Includes manual Rebind and Unload buttons.
 
-Exit scam shamewall:
-- Electron V3 - Fake story about Hyperion V5 (there was no update lmao)
+## Usage
+Run `SexyPlayer.lua`, enable Autoplay, and start a song.
+
+`firesignal` is the default input mode. Use Virtual Input if your executor handles it better.
+
+If notes feel early or late on your executor, adjust **Timing Offset** or **Spawn-to-Hit Delay** slightly.

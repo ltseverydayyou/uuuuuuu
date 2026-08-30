@@ -76,7 +76,14 @@ local st = {
 	Session = {},
 	VibeUI = nil,
 	FieldWatch = nil,
-	ActiveTasks = 0
+	ActiveTasks = 0,
+	ConfigWatch = nil,
+	SpecialNotes = {
+		Death = {Images = {}, Signatures = {}},
+		Poison = {Images = {}, Signatures = {}},
+		Ready = false,
+		Refreshing = false,
+	}
 }
 
 ENV.__FunkyFridayVibeAutoplayer = st
@@ -141,6 +148,285 @@ end
 local function isHold(Arrow)
 	local tail = getHoldTail(Arrow)
 	return tail and tail.Parent and tail.Visible and math.abs(tail.AbsoluteSize.Y) > 0.5 or false
+end
+
+local function imageSignature(imageObject)
+	if not imageObject then
+		return nil
+	end
+
+	local image = imageObject.Image
+	if not image or image == "" then
+		return nil
+	end
+
+	local color = imageObject.ImageColor3
+	return table.concat({
+		image,
+		tostring(math.round(color.R * 255)),
+		tostring(math.round(color.G * 255)),
+		tostring(math.round(color.B * 255)),
+	}, "|")
+end
+
+local function collectSpecialPreview(root)
+	local data = {
+		Images = {},
+		Signatures = {},
+	}
+
+	if not root then
+		return data
+	end
+
+	for _, direction in ipairs({"Left", "Down", "Up", "Right"}) do
+		local frame = root:FindFirstChild(direction)
+		local layered = frame and frame:FindFirstChild("LayeredSprite")
+
+		if layered then
+			for _, imageObject in ipairs(layered:GetChildren()) do
+				if imageObject:IsA("ImageLabel") or imageObject:IsA("ImageButton") then
+					local image = imageObject.Image
+					local signature = imageSignature(imageObject)
+
+					if image and image ~= "" then
+						data.Images[image] = true
+					end
+
+					if signature then
+						data.Signatures[signature] = true
+					end
+				end
+			end
+		end
+	end
+
+	return data
+end
+
+local function withGameIdentity(callback)
+	local oldIdentity
+	local canSet = type(setthreadidentity) == "function"
+
+	if type(getthreadidentity) == "function" then
+		pcall(function()
+			oldIdentity = getthreadidentity()
+		end)
+	end
+
+	if canSet then
+		pcall(setthreadidentity, 2)
+	end
+
+	local results = table.pack(pcall(callback))
+
+	if canSet and oldIdentity ~= nil then
+		pcall(setthreadidentity, oldIdentity)
+	end
+
+	return table.unpack(results, 1, results.n)
+end
+
+local function clickSettingsButton(button)
+	if not button or type(firesignal) ~= "function" then
+		return false
+	end
+
+	local ok = withGameIdentity(function()
+		firesignal(button.MouseButton1Click)
+	end)
+
+	return ok == true
+end
+
+local function getSpecialSettingsUi()
+	local gameGui = PlayerGui:FindFirstChild("GameGui")
+	local windows = gameGui and gameGui:FindFirstChild("Windows")
+	local configuration = windows and windows:FindFirstChild("Configuration")
+	local frame = configuration and configuration:FindFirstChild("Frame")
+	local body = frame and frame:FindFirstChild("Body")
+	local content = body and body:FindFirstChild("Content")
+	local arrows = content and content:FindFirstChild("Arrows")
+	local arrowsContent = arrows and arrows:FindFirstChild("Content")
+	local notesPage = arrowsContent and arrowsContent:FindFirstChild("Notes")
+	local notesList = notesPage and notesPage:FindFirstChild("Notes")
+	local scrolling = notesList and notesList:FindFirstChild("ScrollingFrame")
+	local options = notesPage and notesPage:FindFirstChild("Options")
+	local bottom = options and options:FindFirstChild("Bottom")
+	local arrowsPreview = bottom and bottom:FindFirstChild("Arrows")
+	local inner = arrowsPreview and arrowsPreview:FindFirstChild("Inner")
+	local previewRoot = inner and inner:FindFirstChild("Arrows")
+	local top = options and options:FindFirstChild("Top")
+	local title = top and top:FindFirstChild("Title")
+
+	return {
+		Configuration = configuration,
+		Death = scrolling and scrolling:FindFirstChild("Death"),
+		Poison = scrolling and scrolling:FindFirstChild("Poison"),
+		Preview = previewRoot,
+		Title = title,
+	}
+end
+
+local function ensureSpecialSettingsInitialized(ui)
+	if not ui or not ui.Configuration then
+		return false, false
+	end
+
+	if ui.Preview then
+		for _, child in ipairs(ui.Preview:GetChildren()) do
+			if child:FindFirstChild("LayeredSprite") then
+				return true, false
+			end
+		end
+	end
+
+	local topBar = PlayerGui:FindFirstChild("TopBar")
+	local topFrame = topBar and topBar:FindFirstChild("Frame")
+	local left = topFrame and topFrame:FindFirstChild("Left")
+	local configButton = left and left:FindFirstChild("Configuration")
+
+	if not configButton then
+		return false, false
+	end
+
+	local wasVisible = ui.Configuration.Visible
+
+	if not wasVisible then
+		clickSettingsButton(configButton)
+		RunService.RenderStepped:Wait()
+		RunService.RenderStepped:Wait()
+	end
+
+	local ready = false
+	if ui.Preview then
+		for _, child in ipairs(ui.Preview:GetChildren()) do
+			if child:FindFirstChild("LayeredSprite") then
+				ready = true
+				break
+			end
+		end
+	end
+
+	return ready, not wasVisible
+end
+
+local function refreshSpecialNoteSkins()
+	if st.SpecialNotes.Refreshing or not st.alive then
+		return st.SpecialNotes.Ready
+	end
+
+	st.SpecialNotes.Refreshing = true
+
+	local ui = getSpecialSettingsUi()
+	local ready, openedByUs = ensureSpecialSettingsInitialized(ui)
+
+	if not ready then
+		st.SpecialNotes.Refreshing = false
+		return false
+	end
+
+	local originalTitle = ui.Title and ui.Title.Text or ""
+	local originalSelection
+
+	if string.find(originalTitle, "Poison", 1, true) then
+		originalSelection = "Poison"
+	elseif string.find(originalTitle, "Death", 1, true) then
+		originalSelection = "Death"
+	end
+
+	local function capture(name)
+		local button = ui[name]
+		if not button or not clickSettingsButton(button) then
+			return nil
+		end
+
+		RunService.RenderStepped:Wait()
+		return collectSpecialPreview(ui.Preview)
+	end
+
+	local death = capture("Death")
+	local poison = capture("Poison")
+
+	if death and next(death.Images) then
+		st.SpecialNotes.Death = death
+	end
+
+	if poison and next(poison.Images) then
+		st.SpecialNotes.Poison = poison
+	end
+
+	if originalSelection and ui[originalSelection] then
+		clickSettingsButton(ui[originalSelection])
+		RunService.RenderStepped:Wait()
+	end
+
+	if openedByUs then
+		local topBar = PlayerGui:FindFirstChild("TopBar")
+		local topFrame = topBar and topBar:FindFirstChild("Frame")
+		local left = topFrame and topFrame:FindFirstChild("Left")
+		local configButton = left and left:FindFirstChild("Configuration")
+
+		if configButton and ui.Configuration.Visible then
+			clickSettingsButton(configButton)
+		end
+	end
+
+	st.SpecialNotes.Ready =
+		next(st.SpecialNotes.Death.Images) ~= nil
+		and next(st.SpecialNotes.Poison.Images) ~= nil
+
+	st.SpecialNotes.Refreshing = false
+	return st.SpecialNotes.Ready
+end
+
+local function getSpecialNoteType(Arrow)
+	if not Arrow then
+		return nil
+	end
+
+	local head
+	for _, child in ipairs(Arrow:GetChildren()) do
+		if child:IsA("GuiObject") and child.ZIndex == 2 then
+			head = child
+			break
+		end
+	end
+
+	if not head then
+		return nil
+	end
+
+	local death = st.SpecialNotes.Death
+	local poison = st.SpecialNotes.Poison
+
+	for _, imageObject in ipairs(head:GetChildren()) do
+		if imageObject:IsA("ImageLabel") or imageObject:IsA("ImageButton") then
+			local image = imageObject.Image
+			local signature = imageSignature(imageObject)
+
+			if signature and death.Signatures[signature] then
+				return "Death"
+			end
+
+			if signature and poison.Signatures[signature] then
+				return "Poison"
+			end
+
+			local inDeath = image and death.Images[image] or false
+			local inPoison = image and poison.Images[image] or false
+
+			if inDeath and not inPoison then
+				return "Death"
+			end
+
+			if inPoison and not inDeath then
+				return "Poison"
+			end
+		end
+	end
+
+	return nil
 end
 
 local function playSeq(Holder, Arrow, keyCode, AutoCtx)
@@ -290,6 +576,12 @@ local function bindSong()
 				if not Arrow or not Arrow.Visible then
 					return
 				end
+				if not st.SpecialNotes.Ready then
+					refreshSpecialNoteSkins()
+				end
+				if getSpecialNoteType(Arrow) then
+					return
+				end
 				if not st.auto then
 					return
 				end
@@ -353,6 +645,12 @@ function st:Unload()
 			self.FieldWatch:Disconnect()
 		end)
 		self.FieldWatch = nil
+	end
+	if self.ConfigWatch then
+		pcall(function()
+			self.ConfigWatch:Disconnect()
+		end)
+		self.ConfigWatch = nil
 	end
 	if self.VibeUI then
 		pcall(function()
@@ -477,6 +775,17 @@ Unload:Add("Unload", function()
 end)
 
 VibeUI:CreateSettingsPage(Window)
+
+task.defer(refreshSpecialNoteSkins)
+
+local specialUi = getSpecialSettingsUi()
+if specialUi.Configuration then
+	st.ConfigWatch = specialUi.Configuration:GetPropertyChangedSignal("Visible"):Connect(function()
+		if not specialUi.Configuration.Visible then
+			task.defer(refreshSpecialNoteSkins)
+		end
+	end)
+end
 
 bindSong()
 st.FieldWatch = RunService.Heartbeat:Connect(fieldWatch)

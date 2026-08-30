@@ -37,8 +37,35 @@ end)()
 local Players = __lt.cs("Players", cloneref)
 local RunService = __lt.cs("RunService", cloneref)
 local VirtualInputManager = __lt.cs("VirtualInputManager", cloneref)
+local UserInputService = __lt.cs("UserInputService", cloneref)
 local Client = Players.LocalPlayer
 local PlayerGui = Client:WaitForChild("PlayerGui")
+local IsDesktop = UserInputService.KeyboardEnabled and not UserInputService.TouchEnabled
+local HasFireSignal = type(firesignal) == "function"
+local HasVirtualInput = VirtualInputManager ~= nil
+
+local HasScriptableInput = pcall(function()
+	local binding = Instance.new("InputBinding")
+	binding.Type = Enum.InputBindingType.Scriptable
+	binding:Destroy()
+end)
+
+local IsExternal = IsDesktop and not HasFireSignal
+
+local InputModes = {}
+if IsDesktop and HasScriptableInput then
+	InputModes[#InputModes + 1] = IsExternal and "Scriptable Input" or "firesignal"
+elseif HasFireSignal then
+	InputModes[#InputModes + 1] = "firesignal"
+end
+if HasVirtualInput then
+	InputModes[#InputModes + 1] = "Virtual Input"
+end
+if #InputModes == 0 then
+	error("No supported input method found")
+end
+
+local DefaultInputMode = InputModes[1]
 
 local connections = {
 	_list = {},
@@ -61,7 +88,7 @@ local connections = {
 
 local st = {
 	auto = true,
-	inMode = "firesignal",
+	inMode = DefaultInputMode,
 	accuracy = 100,
 	off = 0,
 	baseMs = 230,
@@ -77,11 +104,59 @@ local st = {
 	VibeUI = nil,
 	FieldWatch = nil,
 	ActiveTasks = 0,
+	ScriptBindings = setmetatable({}, {__mode = "k"}),
 	ConfigWatch = nil,
+	SpecialPageWatch = nil,
+	Capabilities = {
+		External = IsExternal,
+		FireSignal = HasFireSignal,
+		VirtualInput = HasVirtualInput,
+		ScriptableInput = HasScriptableInput,
+	},
 	SpecialNotes = {
-		Death = {Images = {}, Signatures = {}},
-		Poison = {Images = {}, Signatures = {}},
-		Ready = false,
+		Death = {
+			Images = {
+				["rbxassetid://135247410719619"] = true,
+				["rbxassetid://97859679023673"] = true,
+				["rbxassetid://117950128749630"] = true,
+				["rbxassetid://100522630100836"] = true,
+				["rbxassetid://120077286622596"] = true,
+				["rbxassetid://125973904904727"] = true,
+				["rbxassetid://88815830295612"] = true,
+				["rbxassetid://125614392730801"] = true,
+				["rbxassetid://83024668935378"] = true,
+				["rbxassetid://88623923653538"] = true,
+				["rbxassetid://98258294634474"] = true,
+				["rbxassetid://139899676689264"] = true,
+				["rbxassetid://77051531406087"] = true,
+				["rbxassetid://110522238640680"] = true,
+				["rbxassetid://90996043647752"] = true,
+				["rbxassetid://81712944045829"] = true,
+			},
+			Signatures = {}
+		},
+		Poison = {
+			Images = {
+				["rbxassetid://111487370594144"] = true,
+				["rbxassetid://131745893889601"] = true,
+				["rbxassetid://100742885063153"] = true,
+				["rbxassetid://77685821387703"] = true,
+				["rbxassetid://111041789521373"] = true,
+				["rbxassetid://116314392120560"] = true,
+				["rbxassetid://113965432917318"] = true,
+				["rbxassetid://70953070004200"] = true,
+				["rbxassetid://140256897187364"] = true,
+				["rbxassetid://90821649912069"] = true,
+				["rbxassetid://74368611517676"] = true,
+				["rbxassetid://78030893318791"] = true,
+				["rbxassetid://88103203842978"] = true,
+				["rbxassetid://99615237411475"] = true,
+				["rbxassetid://102776439587029"] = true,
+				["rbxassetid://73919843476639"] = true,
+			},
+			Signatures = {}
+		},
+		Ready = true,
 		Refreshing = false,
 	}
 }
@@ -103,15 +178,55 @@ local function getLaneKeyCode(action)
 	return nil
 end
 
-local function pressLane(name, action)
-	if st.inMode == "firesignal" then
-		if type(firesignal) == "function" and action then
-			pcall(firesignal, action.Pressed)
+local function getScriptBinding(action)
+	if not action then
+		return nil
+	end
+
+	local binding = st.ScriptBindings[action]
+	if binding and binding.Parent == action then
+		return binding
+	end
+
+	binding = Instance.new("InputBinding")
+	binding.Name = "SexyPlayerScriptBinding"
+	binding.Type = Enum.InputBindingType.Scriptable
+	binding.Parent = action
+	st.ScriptBindings[action] = binding
+
+	return binding
+end
+
+local function fireAction(action, down)
+	if not action then
+		return false
+	end
+
+	if IsDesktop and HasScriptableInput then
+		local binding = getScriptBinding(action)
+		if not binding then
+			return false
 		end
+		return pcall(function()
+			binding:Fire(down)
+		end)
+	end
+
+	if not HasFireSignal then
+		return false
+	end
+
+	return pcall(firesignal, down and action.Pressed or action.Released)
+end
+
+local function pressLane(name, action)
+	if st.inMode ~= "Virtual Input" then
+		fireAction(action, true)
 		return
 	end
+
 	local keyCode = getLaneKeyCode(action)
-	if keyCode then
+	if keyCode and HasVirtualInput then
 		pcall(function()
 			VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
 		end)
@@ -119,14 +234,13 @@ local function pressLane(name, action)
 end
 
 local function releaseLane(name, action)
-	if st.inMode == "firesignal" then
-		if type(firesignal) == "function" and action then
-			pcall(firesignal, action.Released)
-		end
+	if st.inMode ~= "Virtual Input" then
+		fireAction(action, false)
 		return
 	end
+
 	local keyCode = getLaneKeyCode(action)
-	if keyCode then
+	if keyCode and HasVirtualInput then
 		pcall(function()
 			VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
 		end)
@@ -228,15 +342,43 @@ local function withGameIdentity(callback)
 end
 
 local function clickSettingsButton(button)
-	if not button or type(firesignal) ~= "function" then
+	if not button then
 		return false
 	end
 
-	local ok = withGameIdentity(function()
-		firesignal(button.MouseButton1Click)
+	if HasFireSignal then
+		local ok = withGameIdentity(function()
+			firesignal(button.MouseButton1Click)
+		end)
+		return ok == true
+	end
+
+	if not HasVirtualInput or not button:IsA("GuiButton") or not button.Visible then
+		return false
+	end
+
+	local pos = button.AbsolutePosition
+	local size = button.AbsoluteSize
+	local x = math.floor(pos.X + size.X * 0.5)
+	local y = math.floor(pos.Y + size.Y * 0.5)
+	local camera = workspace.CurrentCamera
+	local viewport = camera and camera.ViewportSize
+
+	if size.X <= 0 or size.Y <= 0 or x < 0 or y < 0 then
+		return false
+	end
+	if viewport and (x > viewport.X or y > viewport.Y) then
+		return false
+	end
+
+	local ok = pcall(function()
+		VirtualInputManager:SendMouseMoveEvent(x, y, game)
+		VirtualInputManager:SendMouseButtonEvent(x, y, 0, true, game, 0)
+		RunService.RenderStepped:Wait()
+		VirtualInputManager:SendMouseButtonEvent(x, y, 0, false, game, 0)
 	end)
 
-	return ok == true
+	return ok
 end
 
 local function getSpecialSettingsUi()
@@ -265,6 +407,7 @@ local function getSpecialSettingsUi()
 		Poison = scrolling and scrolling:FindFirstChild("Poison"),
 		Preview = previewRoot,
 		Title = title,
+		NotesPage = notesPage,
 	}
 end
 
@@ -652,6 +795,20 @@ function st:Unload()
 		end)
 		self.ConfigWatch = nil
 	end
+	if self.SpecialPageWatch then
+		pcall(function()
+			self.SpecialPageWatch:Disconnect()
+		end)
+		self.SpecialPageWatch = nil
+	end
+	for _, binding in pairs(self.ScriptBindings or {}) do
+		if binding and binding.Parent then
+			pcall(function()
+				binding:Destroy()
+			end)
+		end
+	end
+	table.clear(self.ScriptBindings)
 	if self.VibeUI then
 		pcall(function()
 			self.VibeUI:Unload()
@@ -696,16 +853,36 @@ Controls:Toggle({
 	end
 })
 
-Controls:Dropdown({
-	Name = "Input Mode",
-	Flag = "FF_InputMode",
-	Items = {"firesignal", "Virtual Input"},
-	Default = "firesignal",
-	Callback = function(value)
-		releaseAll()
-		st.inMode = value == "Virtual Input" and "Virtual Input" or "firesignal"
-	end
-})
+if #InputModes > 1 then
+	Controls:Dropdown({
+		Name = "Input Mode",
+		Flag = IsExternal and "FF_ExternalInputMode" or "FF_InputMode",
+		Items = InputModes,
+		Default = DefaultInputMode,
+		Callback = function(value)
+			releaseAll()
+			if table.find(InputModes, value) then
+				st.inMode = value
+			else
+				st.inMode = DefaultInputMode
+			end
+		end
+	})
+end
+
+if IsDesktop then
+	Controls:Paragraph({
+		Name = "PC Warning",
+		Content = "Funky Friday stops reading gameplay inputs whenever Roblox loses focus. If you tab out or click another window, the autoplayer won’t work until Roblox is focused again."
+	})
+end
+
+if IsExternal then
+	Controls:Paragraph({
+		Name = "External Executor",
+		Content = "Some executor-only input methods aren’t available here, so the autoplayer only shows the input modes this executor can actually use."
+	})
+end
 
 Controls:Slider({
 	Name = "Hit Accuracy",
@@ -786,13 +963,20 @@ if specialUi.Configuration then
 		end
 	end)
 end
+if specialUi.NotesPage then
+	st.SpecialPageWatch = specialUi.NotesPage:GetPropertyChangedSignal("Visible"):Connect(function()
+		if specialUi.NotesPage.Visible then
+			task.defer(refreshSpecialNoteSkins)
+		end
+	end)
+end
 
 bindSong()
 st.FieldWatch = RunService.Heartbeat:Connect(fieldWatch)
 
 VibeUI:Notification({
 	Title = "Funky Friday Autoplayer",
-	Description = "Loaded direct FNB playSeq port.",
+	Description = IsExternal and "External executor support loaded." or "Autoplayer loaded.",
 	Type = "success",
 	Duration = 4
 })

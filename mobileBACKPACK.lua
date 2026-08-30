@@ -341,6 +341,7 @@ local lastEquippedSlot: any = nil
 
 local BPX = {}
 BPX.MultiMode = false
+BPX.MultiSelected = setmetatable({}, { __mode = "k" })
 BPX.SelectedTool = nil
 BPX.Collapsed = false
 BPX.Unloaded = false
@@ -679,6 +680,7 @@ local function MakeSlot(parent: Instance, initIndex: number?): GuiObject
 			end
 		end
 
+		BPX.MultiSelected[self.Tool] = nil
 		SlotsByTool[self.Tool] = nil
 		self.Tool = nil
 		LowestEmptySlot = FindLowestEmpty()
@@ -787,10 +789,16 @@ local function MakeSlot(parent: Instance, initIndex: number?): GuiObject
 		if tool then
 			BPX.SelectedTool = tool
 			if BPX.MultiMode then
-				if tool.Parent == Character then
-					tool.Parent = Backpack
-				elseif tool.Parent == Backpack then
-					tool.Parent = Character
+				if BPX.MultiSelected[tool] then
+					BPX.MultiSelected[tool] = nil
+					if tool.Parent == Character then
+						tool.Parent = Backpack
+					end
+				else
+					BPX.MultiSelected[tool] = true
+					if tool.Parent == Backpack then
+						tool.Parent = Character
+					end
 				end
 				BPX.UpdateControls()
 				return
@@ -1243,6 +1251,7 @@ local function OnCharacterAdded(character: Model): ()
 
 
 	Character = character
+	BPX.MultiSelected = setmetatable({}, { __mode = "k" })
 	table.insert(CharConns, character.ChildRemoved:Connect(OnChildRemoved))
 	table.insert(CharConns, character.ChildAdded:Connect(OnChildAdded))
 	for _, child: Instance in pairs(character:GetChildren()) do
@@ -2165,6 +2174,9 @@ end
 
 BPX.MultiButton.MouseButton1Click:Connect(function(): ()
 	BPX.MultiMode = not BPX.MultiMode
+	if not BPX.MultiMode then
+		table.clear(BPX.MultiSelected)
+	end
 	BPX.UpdateControls()
 end)
 
@@ -2725,6 +2737,22 @@ end
 BPX.LastControlRefresh = 0
 BPX.TrackConnection(RunService.Heartbeat:Connect(function(): ()
 	OnIconChanged(BackpackEnabled)
+	pcall(function()
+		if StarterGui:GetCoreGuiEnabled(Enum.CoreGuiType.Backpack) then
+			StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
+		end
+	end)
+	if BPX.MultiMode and Character and Backpack then
+		for tool in pairs(BPX.MultiSelected) do
+			if not SlotsByTool[tool] or not tool.Parent then
+				BPX.MultiSelected[tool] = nil
+			elseif tool.Parent == Backpack then
+				tool.Parent = Character
+			elseif tool.Parent ~= Character then
+				BPX.MultiSelected[tool] = nil
+			end
+		end
+	end
 	BPX.LastControlRefresh += 1
 	if BPX.LastControlRefresh >= 30 then
 		BPX.LastControlRefresh = 0

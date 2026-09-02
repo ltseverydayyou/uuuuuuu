@@ -27,6 +27,8 @@ local S = {
 	unloaded = false,
 	simClock = 0,
 	lastTouch = nil,
+	distanceInput = {pull = false, push = false},
+	physicsOwners = {service = nil, original = nil, changed = false},
 	ui = {},
 }
 
@@ -256,8 +258,21 @@ local function clearMotionExtras(data)
 	end
 	destroy(data.spinner)
 	destroy(data.rotationLock)
+	destroy(data.flingMover)
+	if data.part and data.part.Parent and data.flingOriginalCanCollide ~= nil then
+		pcall(function()
+			data.part.CanCollide = data.flingOriginalCanCollide
+		end)
+	end
+	if data.bodyPosition and data.bodyPosition.Parent then
+		pcall(function()
+			data.bodyPosition.P = data.flingOriginalP or 26000
+			data.bodyPosition.D = data.flingOriginalD or 1150
+		end)
+	end
 	data.spinner = nil
 	data.rotationLock = nil
+	data.flingMover = nil
 end
 
 local function releaseHeld(keepBodyPosition)
@@ -361,6 +376,11 @@ local function grab(part)	if not controlActive() or not part or not part.Parent 
 		beamA1 = a1,
 		spinner = nil,
 		rotationLock = nil,
+		fling = false,
+		flingMover = nil,
+		flingOriginalCanCollide = part.CanCollide,
+		flingOriginalP = bodyPosition.P,
+		flingOriginalD = bodyPosition.D,
 	}
 	if S.ui.selection then
 		S.ui.selection.Adornee = part
@@ -524,7 +544,100 @@ local function throwAction(power)
 	pcall(function()
 		part.AssemblyLinearVelocity = direction * power + Vector3.new(0, power * 0.08, 0)
 	end)
-	setStatus(power >= 300 and "LAUNCHED " .. safeName(part) or "Threw " .. safeName(part), "accent")
+	setStatus("Threw " .. safeName(part), "accent")
+	return true
+end
+
+local function setFlingActive(data, enabled)
+	if not data or not data.part or not data.part.Parent then
+		return false
+	end
+	data.fling = enabled == true
+	if data.fling then
+		if not data.flingMover or not data.flingMover.Parent then
+			local mover = Instance.new("BodyAngularVelocity")
+			mover.Name = "TelekinesisFling"
+			mover.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
+			mover.P = 1e9
+			mover.AngularVelocity = Vector3.new(0, 5000, 0)
+			mover.Parent = data.part
+			data.flingMover = mover
+		end
+		pcall(function()
+			data.part.CanCollide = true
+			if data.bodyPosition and data.bodyPosition.Parent then
+				data.bodyPosition.P = 65000
+				data.bodyPosition.D = 2600
+			end
+		end)
+	else
+		destroy(data.flingMover)
+		data.flingMover = nil
+		pcall(function()
+			data.part.AssemblyAngularVelocity = Vector3.zero
+			data.part.RotVelocity = Vector3.zero
+		end)
+		if data.flingOriginalCanCollide ~= nil then
+			pcall(function()
+				data.part.CanCollide = data.flingOriginalCanCollide
+			end)
+		end
+		if data.bodyPosition and data.bodyPosition.Parent then
+			pcall(function()
+				data.bodyPosition.P = data.flingOriginalP or 26000
+				data.bodyPosition.D = data.flingOriginalD or 1150
+			end)
+		end
+	end
+	return true
+end
+
+local function flingAction()
+	local data = S.hold
+	if not data or not data.part or not data.part.Parent then
+		setStatus("Grab something first", "warn")
+		return false
+	end
+	setFlingActive(data, not data.fling)
+	setStatus((data.fling and "Fling on  •  " or "Fling off  •  ") .. safeName(data.part), data.fling and "accent" or "good")
+	return true
+end
+
+local function togglePhysicsOwners()
+	local state = S.physicsOwners
+	if not state.service then
+		local ok, service = pcall(function()
+			return settings():GetService("PhysicsSettings")
+		end)
+		if not ok or not service then
+			setStatus("PhysicsSettings unavailable", "bad")
+			return false
+		end
+		state.service = service
+		local readOk, original = pcall(function()
+			return service.AreOwnersShown
+		end)
+		if readOk then
+			state.original = original
+		end
+	end
+	local currentOk, current = pcall(function()
+		return state.service.AreOwnersShown
+	end)
+	if not currentOk then
+		setStatus("Could not read physics owners", "bad")
+		return false
+	end
+	local nextValue = not current
+	local setOk = pcall(function()
+		state.service.AreOwnersShown = nextValue
+	end)
+	if not setOk then
+		setStatus("Could not change physics owners", "bad")
+		return false
+	end
+	state.changed = true
+	setStatus("Physics owners " .. (nextValue and "shown" or "hidden"), nextValue and "accent" or "good")
 	return true
 end
 
@@ -538,9 +651,11 @@ local function perform(action)
 	elseif action == "near" then
 		return setNear()
 	elseif action == "throw" then
-		return throwAction(145)
-	elseif action == "launch" then
 		return throwAction(425)
+	elseif action == "fling" then
+		return flingAction()
+	elseif action == "owners" then
+		return togglePhysicsOwners()
 	elseif action == "spin" then
 		return spinAction()
 	elseif action == "lock" then
@@ -627,8 +742,8 @@ screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
 local main = Instance.new("Frame")
 main.Name = "Main"
-main.AnchorPoint = Vector2.new(0.5, 0.5)
-main.Position = UDim2.fromScale(0.5, 0.5)
+main.AnchorPoint = Vector2.new(1, 0.5)
+main.Position = UDim2.new(1, -20, 0.5, 0)
 main.Size = UDim2.fromOffset(310, 400)
 main.BackgroundColor3 = COLORS.bg
 main.BorderSizePixel = 0
@@ -656,7 +771,7 @@ headerMask.Parent = header
 local title = Instance.new("TextLabel")
 title.BackgroundTransparency = 1
 title.Position = UDim2.fromOffset(12, 5)
-title.Size = UDim2.new(1, -92, 0, 21)
+title.Size = UDim2.new(1, -134, 0, 21)
 title.Font = Enum.Font.GothamBold
 title.Text = "TELEKINESIS"
 title.TextColor3 = COLORS.text
@@ -667,7 +782,7 @@ title.Parent = header
 local subtitle = Instance.new("TextLabel")
 subtitle.BackgroundTransparency = 1
 subtitle.Position = UDim2.fromOffset(12, 24)
-subtitle.Size = UDim2.new(1, -92, 0, 15)
+subtitle.Size = UDim2.new(1, -134, 0, 15)
 subtitle.Font = Enum.Font.Gotham
 subtitle.Text = S.mobile and "MOBILE" or "DESKTOP"
 subtitle.TextColor3 = COLORS.muted
@@ -675,6 +790,20 @@ subtitle.TextSize = 9
 subtitle.TextXAlignment = Enum.TextXAlignment.Left
 subtitle.Parent = header
 
+local hide = Instance.new("TextButton")
+hide.Name = "Hide"
+hide.AnchorPoint = Vector2.new(1, 0.5)
+hide.Position = UDim2.new(1, -68, 0.5, 0)
+hide.Size = UDim2.fromOffset(42, 25)
+hide.BackgroundColor3 = COLORS.panel2
+hide.BorderSizePixel = 0
+hide.AutoButtonColor = false
+hide.Font = Enum.Font.GothamBold
+hide.Text = "HIDE H"
+hide.TextColor3 = COLORS.muted
+hide.TextSize = 8
+hide.Parent = header
+rounded(hide, 7)
 local minimize = Instance.new("TextButton")
 minimize.Name = "Minimize"
 minimize.AnchorPoint = Vector2.new(1, 0.5)
@@ -879,12 +1008,13 @@ createActionButton(1, "freeze", "Freeze", "F", "Lock / unlock")
 createActionButton(2, "pull", "Pull", "Q", "5 studs closer")
 createActionButton(3, "push", "Push", "E", "5 studs farther")
 createActionButton(4, "near", "Near", "X", "Reset to 15 studs")
-createActionButton(5, "throw", "Throw", "Y", "Throw forward")
-createActionButton(6, "launch", "Launch", "J", "Maximum force")
+createActionButton(5, "throw", "Throw", "Y", "Maximum force")
+createActionButton(6, "fling", "Fling", "J", "Toggle active fling")
 createActionButton(7, "spin", "Spin", "U", "Toggle rotation")
 createActionButton(8, "lock", "Lock Rot.", "L", "Hold orientation")
-createActionButton(9, "lift", "Lift", "P", "+10 studs")
-createActionButton(10, "lower", "Lower", "O", "-10 studs")
+createActionButton(9, "lower", "Lower", "[", "-10 studs")
+createActionButton(10, "lift", "Lift", "]", "+10 studs")
+createActionButton(11, "owners", "Phys Owners", "K", "Toggle ownership view")
 
 local selection = Instance.new("SelectionBox")selection.Name = "TelekinesisSelection"
 selection.LineThickness = 0.035
@@ -1129,6 +1259,21 @@ bind(minimize.Activated, function()
 	end
 end)
 
+local function toggleUIVisibility(forceVisible)
+	if not main or not main.Parent then
+		return false
+	end
+	if forceVisible == nil then
+		main.Visible = not main.Visible
+	else
+		main.Visible = forceVisible == true
+	end
+	return main.Visible
+end
+
+bind(hide.Activated, function()
+	toggleUIVisibility(false)
+end)
 bind(grabButton.Activated, function()
 	perform("grab")
 end)
@@ -1148,16 +1293,29 @@ local keyActions = {
 	[Enum.KeyCode.E] = "push",
 	[Enum.KeyCode.X] = "near",
 	[Enum.KeyCode.Y] = "throw",
-	[Enum.KeyCode.J] = "launch",
+	[Enum.KeyCode.J] = "fling",
+	[Enum.KeyCode.K] = "owners",
 	[Enum.KeyCode.U] = "spin",
 	[Enum.KeyCode.L] = "lock",
-	[Enum.KeyCode.P] = "lift",
-	[Enum.KeyCode.O] = "lower",
+	[Enum.KeyCode.LeftBracket] = "lower",
+	[Enum.KeyCode.RightBracket] = "lift",
 }
 
 bind(UIS.InputBegan, function(input, processed)
-	if processed or S.unloaded or not controlActive() then
+	if S.unloaded then
 		return
+	end
+	if input.KeyCode == Enum.KeyCode.H and not processed then
+		toggleUIVisibility()
+		return
+	end
+	if processed or not controlActive() then
+		return
+	end
+	if input.KeyCode == Enum.KeyCode.Q then
+		S.distanceInput.pull = true
+	elseif input.KeyCode == Enum.KeyCode.E then
+		S.distanceInput.push = true
 	end
 	local action = keyActions[input.KeyCode]
 	if action then
@@ -1175,6 +1333,11 @@ bind(UIS.InputBegan, function(input, processed)
 end)
 
 bind(UIS.InputEnded, function(input)
+	if input.KeyCode == Enum.KeyCode.Q then
+		S.distanceInput.pull = false
+	elseif input.KeyCode == Enum.KeyCode.E then
+		S.distanceInput.push = false
+	end
 	if S.unloaded or S.mobile then
 		return
 	end
@@ -1201,10 +1364,14 @@ if S.mobile then
 	end)
 end
 
-bind(RunService.RenderStepped, function()
+bind(RunService.RenderStepped, function(dt)
 	local data = S.hold
 	if not data then
 		return
+	end
+	local distanceDirection = (S.distanceInput.push and 1 or 0) - (S.distanceInput.pull and 1 or 0)
+	if distanceDirection ~= 0 then
+		data.distance = math.clamp(data.distance + distanceDirection * 35 * dt, 3, 500)
 	end
 	if not data.part or not data.part.Parent or not data.bodyPosition or not data.bodyPosition.Parent then
 		releaseHeld(false)
@@ -1219,6 +1386,14 @@ bind(RunService.RenderStepped, function()
 end)
 
 bind(RunService.Heartbeat, function(dt)
+	local data = S.hold
+	if data and data.part and data.part.Parent then
+		if data.fling then
+			setFlingActive(data, true)
+		elseif data.flingMover then
+			setFlingActive(data, false)
+		end
+	end
 	if not hiddenProperty then
 		return
 	end
@@ -1267,6 +1442,13 @@ function S.Unload(skipToolDestroy)
 	S.unloaded = true
 	releaseHeld(false)
 	clearFrozen()
+	S.distanceInput.pull = false
+	S.distanceInput.push = false
+	if S.physicsOwners.changed and S.physicsOwners.service and S.physicsOwners.original ~= nil then
+		pcall(function()
+			S.physicsOwners.service.AreOwnersShown = S.physicsOwners.original
+		end)
+	end
 	for _, connection in ipairs(S.connections) do
 		pcall(function()
 			connection:Disconnect()
@@ -1309,6 +1491,8 @@ S.API = {
 }
 
 ENV.__Telekinesis = S
-bind(close.Activated, S.Unload)
+bind(close.Activated, function()
+	S.Unload()
+end)
 createTool()
 updateStatus()

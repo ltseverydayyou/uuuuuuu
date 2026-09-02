@@ -29,11 +29,15 @@ local S = {
 	lastTouch = nil,
 	distanceInput = {pull = false, push = false},
 	physicsOwners = {service = nil, original = nil, changed = false},
+	keybinds = {},
+	keyLabels = {},
+	keyActions = {},
+	bindingCapture = nil,
 	ui = {},
 }
 
 local Services = {}
-for _, name in ipairs({"Players", "RunService", "UserInputService", "Workspace", "TweenService", "GuiService", "CoreGui"}) do
+for _, name in ipairs({"Players", "RunService", "UserInputService", "Workspace", "TweenService", "GuiService", "CoreGui", "HttpService"}) do
 	Services[name] = SR.cs(name, ref) or SR.gs(name)
 	assert(Services[name], "Telekinesis: missing service " .. name)
 end
@@ -45,27 +49,135 @@ local Workspace = Services.Workspace
 local TweenService = Services.TweenService
 local GuiService = Services.GuiService
 local CoreGui = Services.CoreGui
+local HttpService = Services.HttpService
 local LocalPlayer = Players.LocalPlayer
 local Backpack = LocalPlayer:WaitForChild("Backpack")
 local hiddenProperty = type(sethiddenproperty) == "function" and sethiddenproperty or nil
 
-S.mobile = UIS.TouchEnabled and not UIS.KeyboardEnabled
+S.mobile = UIS.TouchEnabled and (not UIS.KeyboardEnabled or not UIS.MouseEnabled)
 S.character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 
 local COLORS = {
-	bg = Color3.fromRGB(15, 17, 21),
-	panel = Color3.fromRGB(22, 25, 31),
-	panel2 = Color3.fromRGB(29, 33, 41),
-	panelHover = Color3.fromRGB(37, 42, 52),
-	line = Color3.fromRGB(53, 60, 74),
-	text = Color3.fromRGB(240, 244, 252),
-	muted = Color3.fromRGB(145, 155, 174),
-	accent = Color3.fromRGB(87, 164, 255),
-	accent2 = Color3.fromRGB(113, 186, 255),
-	good = Color3.fromRGB(92, 220, 144),
-	warn = Color3.fromRGB(255, 194, 92),
-	bad = Color3.fromRGB(255, 102, 112),
+	bg = Color3.fromRGB(10, 6, 18),
+	bg2 = Color3.fromRGB(16, 9, 29),
+	panel = Color3.fromRGB(22, 13, 38),
+	panel2 = Color3.fromRGB(31, 18, 52),
+	panelHover = Color3.fromRGB(45, 27, 73),
+	line = Color3.fromRGB(78, 48, 116),
+	lineSoft = Color3.fromRGB(53, 31, 82),
+	text = Color3.fromRGB(247, 242, 255),
+	muted = Color3.fromRGB(167, 145, 193),
+	accent = Color3.fromRGB(161, 91, 255),
+	accent2 = Color3.fromRGB(208, 151, 255),
+	accentDark = Color3.fromRGB(91, 43, 153),
+	good = Color3.fromRGB(116, 231, 174),
+	warn = Color3.fromRGB(255, 198, 110),
+	bad = Color3.fromRGB(255, 105, 137),
 }
+
+local ACTION_META = {
+	{action = "freeze", name = "Freeze", description = "Lock / unlock", default = "F"},
+	{action = "pull", name = "Pull", description = "Bring closer", default = "Q"},
+	{action = "push", name = "Push", description = "Move farther", default = "E"},
+	{action = "near", name = "Near", description = "Reset distance", default = "X"},
+	{action = "throw", name = "Throw", description = "Maximum force", default = "Y"},
+	{action = "fling", name = "Fling", description = "Toggle active fling", default = "J"},
+	{action = "spin", name = "Spin", description = "Toggle rotation", default = "U"},
+	{action = "lock", name = "Lock Rot.", description = "Hold orientation", default = "L"},
+	{action = "lower", name = "Lower", description = "-10 studs", default = "LeftBracket"},
+	{action = "lift", name = "Lift", description = "+10 studs", default = "RightBracket"},
+	{action = "owners", name = "Phys Owners", description = "Ownership view", default = "K"},
+	{action = "ui", name = "Show / Hide UI", description = "Toggle interface", default = "H", settingsOnly = true},
+}
+
+local DEFAULT_KEYBINDS = {}
+local ACTION_BY_NAME = {}
+for _, meta in ipairs(ACTION_META) do
+	DEFAULT_KEYBINDS[meta.action] = meta.default
+	ACTION_BY_NAME[meta.action] = meta
+end
+
+local CONFIG_DIR = "Telekinesis"
+local CONFIG_FILE = CONFIG_DIR .. "/settings.json"
+
+local function keyDisplay(keyName)
+	if keyName == "LeftBracket" then return "[" end
+	if keyName == "RightBracket" then return "]" end
+	if keyName == "Semicolon" then return ";" end
+	if keyName == "Quote" then return "'" end
+	if keyName == "BackSlash" then return "\\" end
+	return tostring(keyName or "?"):gsub("Keypad", "Num ")
+end
+
+local function rebuildKeyActions()
+	table.clear(S.keyActions)
+	for action, keyName in pairs(S.keybinds) do
+		if action ~= "ui" then
+			local keyCode = Enum.KeyCode[keyName]
+			if keyCode then
+				S.keyActions[keyCode] = action
+			end
+		end
+	end
+end
+
+local function loadSettings()
+	for action, keyName in pairs(DEFAULT_KEYBINDS) do
+		S.keybinds[action] = keyName
+	end
+	if type(isfile) == "function" and type(readfile) == "function" then
+		local okExists, exists = pcall(isfile, CONFIG_FILE)
+		if okExists and exists then
+			local okRead, raw = pcall(readfile, CONFIG_FILE)
+			if okRead and type(raw) == "string" then
+				local okDecode, data = pcall(function() return HttpService:JSONDecode(raw) end)
+				if okDecode and type(data) == "table" and type(data.keybinds) == "table" then
+					for action, keyName in pairs(data.keybinds) do
+						if DEFAULT_KEYBINDS[action] and type(keyName) == "string" and Enum.KeyCode[keyName] then
+							S.keybinds[action] = keyName
+						end
+					end
+				end
+			end
+		end
+	end
+	rebuildKeyActions()
+end
+
+local function saveSettings()
+	if type(writefile) ~= "function" then
+		return false
+	end
+	if type(makefolder) == "function" then
+		pcall(makefolder, CONFIG_DIR)
+	end
+	local okEncode, raw = pcall(function()
+		return HttpService:JSONEncode({version = 1, keybinds = S.keybinds})
+	end)
+	if not okEncode then
+		return false
+	end
+	return pcall(writefile, CONFIG_FILE, raw)
+end
+
+local function refreshKeyLabels(action)
+	local labels = S.keyLabels[action]
+	if not labels then return end
+	local textValue = keyDisplay(S.keybinds[action])
+	for _, label in ipairs(labels) do
+		if label and label.Parent then
+			label.Text = textValue
+		end
+	end
+end
+
+local function registerKeyLabel(action, label)
+	S.keyLabels[action] = S.keyLabels[action] or {}
+	table.insert(S.keyLabels[action], label)
+	label.Text = keyDisplay(S.keybinds[action])
+end
+
+loadSettings()
 
 local function bind(signal, callback)
 	local connection = signal:Connect(callback)
@@ -181,6 +293,62 @@ local function updateStatus()
 			setStatus("Ready", "good")
 		end
 	end
+end
+
+local function cancelBindingCapture(message)
+	local capture = S.bindingCapture
+	S.bindingCapture = nil
+	if capture then
+		refreshKeyLabels(capture.action)
+	end
+	if message then
+		setStatus(message, "good")
+	end
+end
+
+local function beginBindingCapture(action)
+	if not DEFAULT_KEYBINDS[action] then return end
+	if S.bindingCapture then
+		refreshKeyLabels(S.bindingCapture.action)
+	end
+	S.bindingCapture = {action = action}
+	local labels = S.keyLabels[action] or {}
+	for _, label in ipairs(labels) do
+		if label and label.Parent then label.Text = "..." end
+	end
+	local meta = ACTION_BY_NAME[action]
+	setStatus("Press a key for " .. (meta and meta.name or action) .. "  •  Esc to cancel", "accent")
+end
+
+local function assignKeybind(action, keyCode)
+	if not keyCode or keyCode == Enum.KeyCode.Unknown then return false end
+	local keyName = keyCode.Name
+	for otherAction, otherKey in pairs(S.keybinds) do
+		if otherAction ~= action and otherKey == keyName then
+			local otherMeta = ACTION_BY_NAME[otherAction]
+			setStatus(keyDisplay(keyName) .. " is already bound to " .. (otherMeta and otherMeta.name or otherAction), "warn")
+			return false
+		end
+	end
+	S.keybinds[action] = keyName
+	rebuildKeyActions()
+	refreshKeyLabels(action)
+	S.bindingCapture = nil
+	local saved = saveSettings()
+	local meta = ACTION_BY_NAME[action]
+	setStatus((meta and meta.name or action) .. " → " .. keyDisplay(keyName) .. (saved and "  •  saved" or ""), "good")
+	return true
+end
+
+local function resetKeybinds()
+	for action, keyName in pairs(DEFAULT_KEYBINDS) do
+		S.keybinds[action] = keyName
+	end
+	rebuildKeyActions()
+	for action in pairs(S.keyLabels) do refreshKeyLabels(action) end
+	S.bindingCapture = nil
+	saveSettings()
+	setStatus("Keybinds reset to defaults", "good")
 end
 
 local function currentCamera()	return Workspace.CurrentCamera
@@ -740,38 +908,86 @@ screen.IgnoreGuiInset = true
 screen.DisplayOrder = 999998
 screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
+local reopen = Instance.new("TextButton")
+reopen.Name = "Reopen"
+reopen.AnchorPoint = Vector2.new(1, 1)
+reopen.Position = UDim2.new(1, -16, 1, -16)
+reopen.Size = UDim2.fromOffset(54, 38)
+reopen.BackgroundColor3 = COLORS.panel2
+reopen.BorderSizePixel = 0
+reopen.AutoButtonColor = false
+reopen.Font = Enum.Font.GothamBold
+reopen.Text = "TK"
+reopen.TextColor3 = COLORS.accent2
+reopen.TextSize = 12
+reopen.Visible = false
+reopen.Parent = screen
+rounded(reopen, 12)
+stroke(reopen, COLORS.accentDark, 1, 0.12)
+local reopenScale = Instance.new("UIScale")
+reopenScale.Parent = reopen
+
 local main = Instance.new("Frame")
 main.Name = "Main"
 main.AnchorPoint = Vector2.new(1, 0.5)
-main.Position = UDim2.new(1, -20, 0.5, 0)
-main.Size = UDim2.fromOffset(310, 400)
+main.Position = UDim2.new(1, -18, 0.5, 0)
+main.Size = UDim2.fromOffset(340, 454)
 main.BackgroundColor3 = COLORS.bg
 main.BorderSizePixel = 0
 main.Active = true
+main.ClipsDescendants = true
 main.Parent = screen
-rounded(main, 12)
-stroke(main, COLORS.line, 1, 0.18)
+rounded(main, 16)
+local mainStroke = stroke(main, COLORS.accentDark, 1, 0.12)
+local mainScale = Instance.new("UIScale")
+mainScale.Scale = 0.94
+mainScale.Parent = main
+
+local mainGradient = Instance.new("UIGradient")
+mainGradient.Rotation = 35
+mainGradient.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, COLORS.bg),
+	ColorSequenceKeypoint.new(0.55, COLORS.bg2),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(24, 12, 39)),
+})
+mainGradient.Parent = main
+pcall(function()
+	TweenService:Create(mainGradient, TweenInfo.new(6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {Offset = Vector2.new(0.08, 0)}):Play()
+end)
 
 local header = Instance.new("Frame")
 header.Name = "Header"
 header.BackgroundColor3 = COLORS.panel
 header.BorderSizePixel = 0
-header.Size = UDim2.new(1, 0, 0, 46)
+header.Size = UDim2.new(1, 0, 0, 54)
 header.Active = true
 header.Parent = main
-rounded(header, 12)
+rounded(header, 16)
+
+local headerGradient = Instance.new("UIGradient")
+headerGradient.Rotation = 12
+headerGradient.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(40, 19, 65)),
+	ColorSequenceKeypoint.new(0.6, COLORS.panel),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(25, 13, 43)),
+})
+headerGradient.Parent = header
+pcall(function()
+	TweenService:Create(headerGradient, TweenInfo.new(4.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {Offset = Vector2.new(-0.12, 0)}):Play()
+end)
 
 local headerMask = Instance.new("Frame")
 headerMask.BackgroundColor3 = COLORS.panel
+headerMask.BackgroundTransparency = 0.15
 headerMask.BorderSizePixel = 0
-headerMask.Position = UDim2.new(0, 0, 1, -12)
-headerMask.Size = UDim2.new(1, 0, 0, 12)
+headerMask.Position = UDim2.new(0, 0, 1, -14)
+headerMask.Size = UDim2.new(1, 0, 0, 14)
 headerMask.Parent = header
 
 local title = Instance.new("TextLabel")
 title.BackgroundTransparency = 1
-title.Position = UDim2.fromOffset(12, 5)
-title.Size = UDim2.new(1, -134, 0, 21)
+title.Position = UDim2.fromOffset(14, 7)
+title.Size = UDim2.new(1, -150, 0, 21)
 title.Font = Enum.Font.GothamBold
 title.Text = "TELEKINESIS"
 title.TextColor3 = COLORS.text
@@ -781,88 +997,84 @@ title.Parent = header
 
 local subtitle = Instance.new("TextLabel")
 subtitle.BackgroundTransparency = 1
-subtitle.Position = UDim2.fromOffset(12, 24)
-subtitle.Size = UDim2.new(1, -134, 0, 15)
-subtitle.Font = Enum.Font.Gotham
-subtitle.Text = S.mobile and "MOBILE" or "DESKTOP"
-subtitle.TextColor3 = COLORS.muted
-subtitle.TextSize = 9
+subtitle.Position = UDim2.fromOffset(14, 28)
+subtitle.Size = UDim2.new(1, -150, 0, 15)
+subtitle.Font = Enum.Font.GothamMedium
+subtitle.Text = S.mobile and "TOUCH CONTROL" or "DESKTOP CONTROL"
+subtitle.TextColor3 = COLORS.accent2
+subtitle.TextSize = 8
 subtitle.TextXAlignment = Enum.TextXAlignment.Left
 subtitle.Parent = header
 
-local hide = Instance.new("TextButton")
-hide.Name = "Hide"
-hide.AnchorPoint = Vector2.new(1, 0.5)
-hide.Position = UDim2.new(1, -68, 0.5, 0)
-hide.Size = UDim2.fromOffset(42, 25)
-hide.BackgroundColor3 = COLORS.panel2
-hide.BorderSizePixel = 0
-hide.AutoButtonColor = false
-hide.Font = Enum.Font.GothamBold
-hide.Text = "HIDE H"
-hide.TextColor3 = COLORS.muted
-hide.TextSize = 8
-hide.Parent = header
-rounded(hide, 7)
-local minimize = Instance.new("TextButton")
-minimize.Name = "Minimize"
-minimize.AnchorPoint = Vector2.new(1, 0.5)
-minimize.Position = UDim2.new(1, -38, 0.5, 0)
-minimize.Size = UDim2.fromOffset(25, 25)
-minimize.BackgroundColor3 = COLORS.panel2
-minimize.BorderSizePixel = 0
-minimize.AutoButtonColor = false
-minimize.Font = Enum.Font.GothamBold
-minimize.Text = "−"
-minimize.TextColor3 = COLORS.muted
-minimize.TextSize = 16
-minimize.Parent = header
-rounded(minimize, 7)
+local function headerButton(name, textValue, xOffset, width)
+	local button = Instance.new("TextButton")
+	button.Name = name
+	button.AnchorPoint = Vector2.new(1, 0.5)
+	button.Position = UDim2.new(1, xOffset, 0.5, 0)
+	button.Size = UDim2.fromOffset(width or 28, 28)
+	button.BackgroundColor3 = COLORS.panel2
+	button.BorderSizePixel = 0
+	button.AutoButtonColor = false
+	button.Font = Enum.Font.GothamBold
+	button.Text = textValue
+	button.TextColor3 = COLORS.muted
+	button.TextSize = 9
+	button.Parent = header
+	rounded(button, 9)
+	local scale = Instance.new("UIScale")
+	scale.Parent = button
+	bind(button.InputBegan, function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			tween(scale, {Scale = 0.9}, 0.08)
+		end
+	end)
+	bind(button.InputEnded, function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			tween(scale, {Scale = 1}, 0.16)
+		end
+	end)
+	if not S.mobile then
+		bind(button.MouseEnter, function() tween(button, {BackgroundColor3 = COLORS.panelHover, TextColor3 = COLORS.text}, 0.12) end)
+		bind(button.MouseLeave, function() tween(button, {BackgroundColor3 = COLORS.panel2, TextColor3 = COLORS.muted}, 0.16) end)
+	end
+	return button
+end
 
-local close = Instance.new("TextButton")
-close.Name = "Unload"
-close.AnchorPoint = Vector2.new(1, 0.5)
-close.Position = UDim2.new(1, -8, 0.5, 0)
-close.Size = UDim2.fromOffset(25, 25)
-close.BackgroundColor3 = COLORS.panel2
-close.BorderSizePixel = 0
-close.AutoButtonColor = false
-close.Font = Enum.Font.GothamBold
-close.Text = "×"
-close.TextColor3 = COLORS.muted
+local hide = headerButton("Hide", "HIDE", -74, 44)
+local minimize = headerButton("Minimize", "—", -40, 28)
+minimize.TextSize = 14
+local close = headerButton("Unload", "×", -8, 28)
 close.TextSize = 16
-close.Parent = header
-rounded(close, 7)
 
 local content = Instance.new("Frame")
 content.Name = "Content"
 content.BackgroundTransparency = 1
-content.Position = UDim2.fromOffset(10, 54)
-content.Size = UDim2.new(1, -20, 1, -64)
+content.Position = UDim2.fromOffset(12, 64)
+content.Size = UDim2.new(1, -24, 1, -76)
 content.Parent = main
 
 local statusFrame = Instance.new("Frame")
 statusFrame.Name = "Status"
 statusFrame.BackgroundColor3 = COLORS.panel
 statusFrame.BorderSizePixel = 0
-statusFrame.Size = UDim2.new(1, 0, 0, 30)
+statusFrame.Size = UDim2.new(1, 0, 0, 34)
 statusFrame.Parent = content
-rounded(statusFrame, 8)
-stroke(statusFrame, COLORS.line, 1, 0.4)
+rounded(statusFrame, 10)
+stroke(statusFrame, COLORS.lineSoft, 1, 0.2)
 
 local statusDot = Instance.new("Frame")
 statusDot.AnchorPoint = Vector2.new(0, 0.5)
-statusDot.Position = UDim2.new(0, 10, 0.5, 0)
-statusDot.Size = UDim2.fromOffset(7, 7)
+statusDot.Position = UDim2.new(0, 11, 0.5, 0)
+statusDot.Size = UDim2.fromOffset(8, 8)
 statusDot.BackgroundColor3 = COLORS.warn
 statusDot.BorderSizePixel = 0
 statusDot.Parent = statusFrame
-rounded(statusDot, 7)
+rounded(statusDot, 8)
 
 local statusText = Instance.new("TextLabel")
 statusText.BackgroundTransparency = 1
-statusText.Position = UDim2.fromOffset(24, 0)
-statusText.Size = UDim2.new(1, -32, 1, 0)
+statusText.Position = UDim2.fromOffset(27, 0)
+statusText.Size = UDim2.new(1, -38, 1, 0)
 statusText.Font = Enum.Font.GothamMedium
 statusText.Text = "Loading"
 statusText.TextColor3 = COLORS.text
@@ -874,27 +1086,39 @@ statusText.Parent = statusFrame
 local grabWrap = Instance.new("Frame")
 grabWrap.Name = "GrabWrap"
 grabWrap.BackgroundTransparency = 1
-grabWrap.Position = UDim2.fromOffset(0, 37)
-grabWrap.Size = UDim2.new(1, 0, 0, 50)
+grabWrap.Position = UDim2.fromOffset(0, 42)
+grabWrap.Size = UDim2.new(1, 0, 0, 54)
 grabWrap.Parent = content
 
 local grabButton = Instance.new("TextButton")
 grabButton.Name = "Grab"
 grabButton.BackgroundColor3 = COLORS.panel2
 grabButton.BorderSizePixel = 0
-grabButton.Size = UDim2.new(1, 0, 0, 32)
+grabButton.Size = UDim2.new(1, 0, 0, 36)
 grabButton.AutoButtonColor = false
 grabButton.Font = Enum.Font.GothamBold
 grabButton.Text = "GRAB"
 grabButton.TextColor3 = COLORS.text
 grabButton.TextSize = 11
 grabButton.Parent = grabWrap
-rounded(grabButton, 8)
-stroke(grabButton, COLORS.line, 1, 0.3)
+rounded(grabButton, 10)
+stroke(grabButton, COLORS.line, 1, 0.2)
+local grabScale = Instance.new("UIScale")
+grabScale.Parent = grabButton
+bind(grabButton.InputBegan, function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		tween(grabScale, {Scale = 0.975}, 0.07)
+	end
+end)
+bind(grabButton.InputEnded, function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		tween(grabScale, {Scale = 1}, 0.15)
+	end
+end)
 
 local grabSub = Instance.new("TextLabel")
 grabSub.BackgroundTransparency = 1
-grabSub.Position = UDim2.fromOffset(2, 33)
+grabSub.Position = UDim2.fromOffset(2, 37)
 grabSub.Size = UDim2.new(1, -4, 0, 15)
 grabSub.Font = Enum.Font.Gotham
 grabSub.Text = ""
@@ -904,117 +1128,269 @@ grabSub.TextXAlignment = Enum.TextXAlignment.Center
 grabSub.TextTruncate = Enum.TextTruncate.AtEnd
 grabSub.Parent = grabWrap
 
-local sectionTitle = Instance.new("TextLabel")
-sectionTitle.BackgroundTransparency = 1
-sectionTitle.Position = UDim2.fromOffset(2, 91)
-sectionTitle.Size = UDim2.new(1, -4, 0, 14)
-sectionTitle.Font = Enum.Font.GothamBold
-sectionTitle.Text = "CONTROLS"
-sectionTitle.TextColor3 = COLORS.muted
-sectionTitle.TextSize = 8
-sectionTitle.TextXAlignment = Enum.TextXAlignment.Left
-sectionTitle.Parent = content
+local tabBar = Instance.new("Frame")
+tabBar.Name = "Tabs"
+tabBar.BackgroundColor3 = COLORS.panel
+tabBar.BorderSizePixel = 0
+tabBar.Position = UDim2.fromOffset(0, 103)
+tabBar.Size = UDim2.new(1, 0, 0, 32)
+tabBar.Parent = content
+rounded(tabBar, 10)
+
+local controlsTab = Instance.new("TextButton")
+controlsTab.Name = "Controls"
+controlsTab.Position = UDim2.fromOffset(3, 3)
+controlsTab.Size = UDim2.new(0.5, -5, 1, -6)
+controlsTab.BackgroundColor3 = COLORS.accentDark
+controlsTab.BorderSizePixel = 0
+controlsTab.AutoButtonColor = false
+controlsTab.Font = Enum.Font.GothamBold
+controlsTab.Text = "CONTROLS"
+controlsTab.TextColor3 = COLORS.text
+controlsTab.TextSize = 8
+controlsTab.Parent = tabBar
+rounded(controlsTab, 8)
+
+local keybindsTab = Instance.new("TextButton")
+keybindsTab.Name = "Keybinds"
+keybindsTab.AnchorPoint = Vector2.new(1, 0)
+keybindsTab.Position = UDim2.new(1, -3, 0, 3)
+keybindsTab.Size = UDim2.new(0.5, -5, 1, -6)
+keybindsTab.BackgroundColor3 = COLORS.panel2
+keybindsTab.BorderSizePixel = 0
+keybindsTab.AutoButtonColor = false
+keybindsTab.Font = Enum.Font.GothamBold
+keybindsTab.Text = "KEYBINDS"
+keybindsTab.TextColor3 = COLORS.muted
+keybindsTab.TextSize = 8
+keybindsTab.Parent = tabBar
+rounded(keybindsTab, 8)
 
 local grid = Instance.new("ScrollingFrame")
 grid.Name = "Actions"
 grid.BackgroundTransparency = 1
 grid.BorderSizePixel = 0
-grid.Position = UDim2.fromOffset(0, 108)
-grid.Size = UDim2.new(1, 0, 1, -108)
+grid.Position = UDim2.fromOffset(0, 143)
+grid.Size = UDim2.new(1, 0, 1, -143)
 grid.CanvasSize = UDim2.fromOffset(0, 0)
-grid.ScrollBarThickness = 2
-grid.ScrollBarImageColor3 = COLORS.line
+grid.ScrollBarThickness = S.mobile and 0 or 2
+grid.ScrollBarImageColor3 = COLORS.accentDark
 grid.ScrollingDirection = Enum.ScrollingDirection.Y
 grid.Parent = content
+local controlsPageScale = Instance.new("UIScale")
+controlsPageScale.Parent = grid
 
-local layout = Instance.new("UIListLayout")
-layout.Padding = UDim.new(0, 5)
-layout.SortOrder = Enum.SortOrder.LayoutOrder
-layout.Parent = grid
-bind(layout:GetPropertyChangedSignal("AbsoluteContentSize"), function()
-	grid.CanvasSize = UDim2.fromOffset(0, layout.AbsoluteContentSize.Y + 2)
+local actionLayout = Instance.new("UIGridLayout")
+actionLayout.SortOrder = Enum.SortOrder.LayoutOrder
+actionLayout.CellPadding = UDim2.fromOffset(0, 6)
+actionLayout.CellSize = UDim2.new(1, -4, 0, 40)
+actionLayout.Parent = grid
+bind(actionLayout:GetPropertyChangedSignal("AbsoluteContentSize"), function()
+	grid.CanvasSize = UDim2.fromOffset(0, actionLayout.AbsoluteContentSize.Y + 4)
 end)
 
-local function createActionButton(order, action, name, key, description)
+local keybindPage = Instance.new("ScrollingFrame")
+keybindPage.Name = "KeybindSettings"
+keybindPage.BackgroundTransparency = 1
+keybindPage.BorderSizePixel = 0
+keybindPage.Position = grid.Position
+keybindPage.Size = grid.Size
+keybindPage.CanvasSize = UDim2.fromOffset(0, 0)
+keybindPage.ScrollBarThickness = S.mobile and 0 or 2
+keybindPage.ScrollBarImageColor3 = COLORS.accentDark
+keybindPage.Visible = false
+keybindPage.Parent = content
+local keybindPageScale = Instance.new("UIScale")
+keybindPageScale.Parent = keybindPage
+
+local keybindLayout = Instance.new("UIListLayout")
+keybindLayout.Padding = UDim.new(0, 6)
+keybindLayout.SortOrder = Enum.SortOrder.LayoutOrder
+keybindLayout.Parent = keybindPage
+bind(keybindLayout:GetPropertyChangedSignal("AbsoluteContentSize"), function()
+	keybindPage.CanvasSize = UDim2.fromOffset(0, keybindLayout.AbsoluteContentSize.Y + 8)
+end)
+
+local function pulseControl(button, scale, down)
+	if scale then tween(scale, {Scale = down and 0.975 or 1}, down and 0.06 or 0.14) end
+	if not down then tween(button, {BackgroundColor3 = COLORS.panel}, 0.15) end
+end
+
+local function createActionButton(order, meta)
+	local action = meta.action
 	local button = Instance.new("TextButton")
-	button.Name = name:gsub("%s", "")
+	button.Name = meta.name:gsub("%W", "")
 	button.LayoutOrder = order
-	button.Size = UDim2.new(1, -4, 0, 34)
 	button.BackgroundColor3 = COLORS.panel
 	button.BorderSizePixel = 0
 	button.AutoButtonColor = false
 	button.Text = ""
 	button.Parent = grid
-	rounded(button, 8)
-	stroke(button, COLORS.line, 1, 0.4)
+	rounded(button, 11)
+	stroke(button, COLORS.lineSoft, 1, 0.18)
+	local scale = Instance.new("UIScale")
+	scale.Parent = button
 
 	local keyLabel = Instance.new("TextLabel")
-	keyLabel.AnchorPoint = Vector2.new(0, 0.5)
+	keyLabel.AnchorPoint = S.mobile and Vector2.new(1, 0) or Vector2.new(0, 0.5)
 	keyLabel.BackgroundColor3 = COLORS.panel2
 	keyLabel.BorderSizePixel = 0
-	keyLabel.Position = UDim2.new(0, 7, 0.5, 0)
-	keyLabel.Size = UDim2.fromOffset(24, 20)
+	keyLabel.Position = S.mobile and UDim2.new(1, -8, 0, 7) or UDim2.new(0, 8, 0.5, 0)
+	keyLabel.Size = UDim2.fromOffset(S.mobile and 30 or 28, 22)
 	keyLabel.Font = Enum.Font.GothamBold
-	keyLabel.Text = key
 	keyLabel.TextColor3 = COLORS.accent2
 	keyLabel.TextSize = 9
 	keyLabel.Parent = button
-	rounded(keyLabel, 5)
+	rounded(keyLabel, 6)
+	registerKeyLabel(action, keyLabel)
 
 	local nameLabel = Instance.new("TextLabel")
 	nameLabel.BackgroundTransparency = 1
-	nameLabel.Position = UDim2.fromOffset(39, 0)
-	nameLabel.Size = UDim2.fromOffset(72, 34)
+	nameLabel.Position = S.mobile and UDim2.fromOffset(10, 5) or UDim2.fromOffset(44, 0)
+	nameLabel.Size = S.mobile and UDim2.new(1, -50, 0, 22) or UDim2.fromOffset(92, 40)
 	nameLabel.Font = Enum.Font.GothamSemibold
-	nameLabel.Text = name
+	nameLabel.Text = meta.name
 	nameLabel.TextColor3 = COLORS.text
-	nameLabel.TextSize = 10
+	nameLabel.TextSize = S.mobile and 10 or 10
 	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
 	nameLabel.Parent = button
 
 	local desc = Instance.new("TextLabel")
 	desc.BackgroundTransparency = 1
-	desc.Position = UDim2.fromOffset(112, 0)
-	desc.Size = UDim2.new(1, -120, 1, 0)
+	desc.Position = S.mobile and UDim2.fromOffset(10, 27) or UDim2.fromOffset(137, 0)
+	desc.Size = S.mobile and UDim2.new(1, -18, 0, 18) or UDim2.new(1, -145, 1, 0)
 	desc.Font = Enum.Font.Gotham
-	desc.Text = description
+	desc.Text = meta.description
 	desc.TextColor3 = COLORS.muted
 	desc.TextSize = 8
-	desc.TextXAlignment = Enum.TextXAlignment.Right
+	desc.TextXAlignment = S.mobile and Enum.TextXAlignment.Left or Enum.TextXAlignment.Right
 	desc.TextTruncate = Enum.TextTruncate.AtEnd
 	desc.Parent = button
 
-	bind(button.Activated, function()
-		tween(button, {BackgroundColor3 = COLORS.panelHover}, 0.06)
+	local isDistance = action == "pull" or action == "push"
+	local distanceHeld = false
+	local function beginDistanceHold()
+		if not (S.mobile and isDistance) or distanceHeld then return end
+		distanceHeld = true
+		S.distanceInput[action] = true
 		perform(action)
-		task.delay(0.09, function()
-			if button and button.Parent then
-				tween(button, {BackgroundColor3 = COLORS.panel}, 0.12)
-			end
-		end)
+	end
+	local function endDistanceHold()
+		if not isDistance then return end
+		distanceHeld = false
+		S.distanceInput[action] = false
+	end
+	bind(button.InputBegan, function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			tween(scale, {Scale = 0.97}, 0.06)
+			tween(button, {BackgroundColor3 = COLORS.panelHover}, 0.08)
+			beginDistanceHold()
+		end
+	end)
+	bind(button.InputEnded, function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			pulseControl(button, scale, false)
+			endDistanceHold()
+		end
+	end)
+	if S.mobile and isDistance then
+		bind(button.MouseButton1Down, beginDistanceHold)
+		bind(button.MouseButton1Up, endDistanceHold)
+	end
+	bind(button.Activated, function()
+		if not (S.mobile and isDistance) then perform(action) end
 	end)
 	if not S.mobile then
-		bind(button.MouseEnter, function()
-			tween(button, {BackgroundColor3 = COLORS.panelHover}, 0.12)
-		end)
-		bind(button.MouseLeave, function()
-			tween(button, {BackgroundColor3 = COLORS.panel}, 0.12)
-		end)
+		bind(button.MouseEnter, function() tween(button, {BackgroundColor3 = COLORS.panelHover}, 0.12); tween(scale, {Scale = 1.012}, 0.12) end)
+		bind(button.MouseLeave, function() tween(button, {BackgroundColor3 = COLORS.panel}, 0.16); tween(scale, {Scale = 1}, 0.16) end)
 	end
 	return button
 end
 
-createActionButton(1, "freeze", "Freeze", "F", "Lock / unlock")
-createActionButton(2, "pull", "Pull", "Q", "5 studs closer")
-createActionButton(3, "push", "Push", "E", "5 studs farther")
-createActionButton(4, "near", "Near", "X", "Reset to 15 studs")
-createActionButton(5, "throw", "Throw", "Y", "Maximum force")
-createActionButton(6, "fling", "Fling", "J", "Toggle active fling")
-createActionButton(7, "spin", "Spin", "U", "Toggle rotation")
-createActionButton(8, "lock", "Lock Rot.", "L", "Hold orientation")
-createActionButton(9, "lower", "Lower", "[", "-10 studs")
-createActionButton(10, "lift", "Lift", "]", "+10 studs")
-createActionButton(11, "owners", "Phys Owners", "K", "Toggle ownership view")
+local controlOrder = 0
+for _, meta in ipairs(ACTION_META) do
+	if not meta.settingsOnly then
+		controlOrder += 1
+		createActionButton(controlOrder, meta)
+	end
+end
+
+local function createKeybindRow(order, meta)
+	local row = Instance.new("Frame")
+	row.Name = meta.action
+	row.LayoutOrder = order
+	row.Size = UDim2.new(1, -4, 0, S.mobile and 46 or 40)
+	row.BackgroundColor3 = COLORS.panel
+	row.BorderSizePixel = 0
+	row.Parent = keybindPage
+	rounded(row, 10)
+	stroke(row, COLORS.lineSoft, 1, 0.25)
+
+	local label = Instance.new("TextLabel")
+	label.BackgroundTransparency = 1
+	label.Position = UDim2.fromOffset(11, 0)
+	label.Size = UDim2.new(1, -106, 1, 0)
+	label.Font = Enum.Font.GothamSemibold
+	label.Text = meta.name
+	label.TextColor3 = COLORS.text
+	label.TextSize = 9
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.Parent = row
+
+	local bindButton = Instance.new("TextButton")
+	bindButton.AnchorPoint = Vector2.new(1, 0.5)
+	bindButton.Position = UDim2.new(1, -8, 0.5, 0)
+	bindButton.Size = UDim2.fromOffset(78, S.mobile and 32 or 28)
+	bindButton.BackgroundColor3 = COLORS.panel2
+	bindButton.BorderSizePixel = 0
+	bindButton.AutoButtonColor = false
+	bindButton.Font = Enum.Font.GothamBold
+	bindButton.TextColor3 = COLORS.accent2
+	bindButton.TextSize = 9
+	bindButton.Parent = row
+	rounded(bindButton, 8)
+	registerKeyLabel(meta.action, bindButton)
+	bind(bindButton.Activated, function() beginBindingCapture(meta.action) end)
+	if not S.mobile then
+		bind(bindButton.MouseEnter, function() tween(bindButton, {BackgroundColor3 = COLORS.panelHover}, 0.12) end)
+		bind(bindButton.MouseLeave, function() tween(bindButton, {BackgroundColor3 = COLORS.panel2}, 0.15) end)
+	end
+end
+
+for order, meta in ipairs(ACTION_META) do createKeybindRow(order, meta) end
+
+local resetBinds = Instance.new("TextButton")
+resetBinds.Name = "ResetKeybinds"
+resetBinds.LayoutOrder = #ACTION_META + 1
+resetBinds.Size = UDim2.new(1, -4, 0, 34)
+resetBinds.BackgroundColor3 = Color3.fromRGB(53, 24, 70)
+resetBinds.BorderSizePixel = 0
+resetBinds.AutoButtonColor = false
+resetBinds.Font = Enum.Font.GothamBold
+resetBinds.Text = "RESET KEYBINDS"
+resetBinds.TextColor3 = COLORS.accent2
+resetBinds.TextSize = 8
+resetBinds.Parent = keybindPage
+rounded(resetBinds, 10)
+bind(resetBinds.Activated, resetKeybinds)
+
+local activeTab = "controls"
+local function setTab(name, instant)
+	activeTab = name == "keybinds" and "keybinds" or "controls"
+	local controlsOpen = activeTab == "controls"
+	grid.Visible = controlsOpen
+	keybindPage.Visible = not controlsOpen
+	tween(controlsTab, {BackgroundColor3 = controlsOpen and COLORS.accentDark or COLORS.panel2, TextColor3 = controlsOpen and COLORS.text or COLORS.muted}, instant and 0 or 0.14)
+	tween(keybindsTab, {BackgroundColor3 = controlsOpen and COLORS.panel2 or COLORS.accentDark, TextColor3 = controlsOpen and COLORS.muted or COLORS.text}, instant and 0 or 0.14)
+	local page = controlsOpen and grid or keybindPage
+	local pageScale = controlsOpen and controlsPageScale or keybindPageScale
+	page.CanvasPosition = Vector2.zero
+	pageScale.Scale = instant and 1 or 0.965
+	if not instant then tween(pageScale, {Scale = 1}, 0.2) end
+end
+bind(controlsTab.Activated, function() setTab("controls") end)
+bind(keybindsTab.Activated, function() setTab("keybinds") end)
+setTab("controls", true)
 
 local selection = Instance.new("SelectionBox")selection.Name = "TelekinesisSelection"
 selection.LineThickness = 0.035
@@ -1030,6 +1406,11 @@ S.ui.statusDot = statusDot
 S.ui.grabButton = grabButton
 S.ui.grabSub = grabSub
 S.ui.selection = selection
+S.ui.reopen = reopen
+S.ui.mainScale = mainScale
+S.ui.actionLayout = actionLayout
+S.ui.grid = grid
+S.ui.keybindPage = keybindPage
 
 local protected = false
 local okProtect = pcall(function()
@@ -1047,18 +1428,48 @@ if not protected then
 	screen.Parent = LocalPlayer:WaitForChild("PlayerGui")
 end
 
-local function applyResponsiveSize()
+local function getResponsiveSize()
 	local camera = currentCamera()
-	if not camera or not main or not main.Parent then
-		return
-	end
+	if not camera then return main.Size end
 	local viewport = camera.ViewportSize
-	local width = math.clamp(viewport.X - 20, 270, 310)
-	local height = math.clamp(viewport.Y - 70, 320, 400)
-	main.Size = UDim2.fromOffset(width, height)
+	if S.mobile then
+		local width = math.clamp(viewport.X - 14, 300, 430)
+		local height = math.clamp(viewport.Y * 0.72, 390, 560)
+		actionLayout.CellPadding = UDim2.fromOffset(6, 6)
+		actionLayout.CellSize = UDim2.new(0.5, -5, 0, 54)
+		reopen.AnchorPoint = Vector2.new(1, 1)
+		reopen.Position = UDim2.new(1, -12, 1, -12)
+		reopen.Size = UDim2.fromOffset(58, 42)
+		return UDim2.fromOffset(width, math.min(height, viewport.Y - 20))
+	end
+	local width = math.clamp(viewport.X - 24, 310, 340)
+	local height = math.clamp(viewport.Y - 80, 390, 454)
+	actionLayout.CellPadding = UDim2.fromOffset(0, 6)
+	actionLayout.CellSize = UDim2.new(1, -4, 0, 40)
+	return UDim2.fromOffset(width, height)
 end
 
-applyResponsiveSize()
+local function applyResponsiveSize(resetPosition)
+	if not main or not main.Parent then return end
+	if resetPosition then
+		if S.mobile then
+			main.AnchorPoint = Vector2.new(0.5, 1)
+			main.Position = UDim2.new(0.5, 0, 1, -10)
+		else
+			main.AnchorPoint = Vector2.new(1, 0.5)
+			main.Position = UDim2.new(1, -18, 0.5, 0)
+		end
+	end
+	main.Size = getResponsiveSize()
+	S.ui.openPosition = main.Position
+end
+
+applyResponsiveSize(true)
+task.defer(function()
+	mainScale.Scale = 0.94
+	tween(mainScale, {Scale = 1}, 0.32)
+	tween(mainStroke, {Transparency = 0.32}, 0.45)
+end)
 
 local NAgui = {
 	_dragState = {owner = nil, input = nil},
@@ -1250,33 +1661,73 @@ table.insert(S.connections, {Disconnect = dragCleanup})
 local collapsed = false
 bind(minimize.Activated, function()
 	collapsed = not collapsed
-	content.Visible = not collapsed
-	minimize.Text = collapsed and "+" or "−"
 	if collapsed then
-		tween(main, {Size = UDim2.fromOffset(main.AbsoluteSize.X, 46)}, 0.18)
+		S.ui.expandedPosition = main.Position
+		S.ui.expandedSize = getResponsiveSize()
+		S.ui.openPosition = main.Position
+		tween(mainScale, {Scale = 0.985}, 0.1)
+		tween(main, {Size = UDim2.fromOffset(main.AbsoluteSize.X, 54)}, 0.22)
+		task.delay(0.12, function()
+			if collapsed and content and content.Parent then content.Visible = false end
+		end)
+		minimize.Text = "+"
 	else
-		applyResponsiveSize()
+		local restorePosition = S.ui.expandedPosition or main.Position
+		local restoreSize = getResponsiveSize()
+		main.Position = restorePosition
+		S.ui.openPosition = restorePosition
+		content.Visible = false
+		tween(main, {Size = restoreSize}, 0.26)
+		tween(mainScale, {Scale = 1}, 0.22)
+		task.delay(0.08, function()
+			if not collapsed and content and content.Parent then
+				content.Visible = true
+			end
+		end)
+		minimize.Text = "—"
 	end
 end)
 
-local function toggleUIVisibility(forceVisible)
-	if not main or not main.Parent then
-		return false
+local function offsetHidden(position)
+	if S.mobile then
+		return UDim2.new(position.X.Scale, position.X.Offset, position.Y.Scale, position.Y.Offset + 72)
 	end
-	if forceVisible == nil then
-		main.Visible = not main.Visible
-	else
-		main.Visible = forceVisible == true
-	end
-	return main.Visible
+	return UDim2.new(position.X.Scale, position.X.Offset + 54, position.Y.Scale, position.Y.Offset)
 end
 
-bind(hide.Activated, function()
-	toggleUIVisibility(false)
-end)
-bind(grabButton.Activated, function()
-	perform("grab")
-end)
+local function toggleUIVisibility(forceVisible)
+	local targetVisible = forceVisible
+	if targetVisible == nil then targetVisible = not (S.ui.visibleWanted ~= false and main.Visible) end
+	S.ui.visibleWanted = targetVisible == true
+	if targetVisible then
+		main.Visible = true
+		reopen.Visible = false
+		local target = S.ui.openPosition or main.Position
+		main.Position = offsetHidden(target)
+		mainScale.Scale = 0.92
+		tween(main, {Position = target}, 0.24)
+		tween(mainScale, {Scale = 1}, 0.3)
+	else
+		S.ui.openPosition = main.Position
+		local hidden = offsetHidden(main.Position)
+		tween(main, {Position = hidden}, 0.2)
+		tween(mainScale, {Scale = 0.93}, 0.18)
+		task.delay(0.2, function()
+			if S.ui.visibleWanted == false and main and main.Parent then
+				main.Visible = false
+				reopen.Visible = true
+				reopenScale.Scale = 0.7
+				tween(reopenScale, {Scale = 1}, 0.24)
+			end
+		end)
+	end
+	return targetVisible
+end
+
+S.ui.visibleWanted = true
+bind(hide.Activated, function() toggleUIVisibility(false) end)
+bind(reopen.Activated, function() toggleUIVisibility(true) end)
+bind(grabButton.Activated, function() perform("grab") end)
 
 local function pointInsideMain(point)
 	if not point or not main or not main.Parent or not main.Visible then
@@ -1287,37 +1738,41 @@ local function pointInsideMain(point)
 	return point.X >= position.X and point.Y >= position.Y and point.X <= position.X + size.X and point.Y <= position.Y + size.Y
 end
 
-local keyActions = {
-	[Enum.KeyCode.F] = "freeze",
-	[Enum.KeyCode.Q] = "pull",
-	[Enum.KeyCode.E] = "push",
-	[Enum.KeyCode.X] = "near",
-	[Enum.KeyCode.Y] = "throw",
-	[Enum.KeyCode.J] = "fling",
-	[Enum.KeyCode.K] = "owners",
-	[Enum.KeyCode.U] = "spin",
-	[Enum.KeyCode.L] = "lock",
-	[Enum.KeyCode.LeftBracket] = "lower",
-	[Enum.KeyCode.RightBracket] = "lift",
-}
 
 bind(UIS.InputBegan, function(input, processed)
-	if S.unloaded then
+	if S.unloaded then return end
+	if S.bindingCapture then
+		if input.UserInputType == Enum.UserInputType.Keyboard then
+			if input.KeyCode == Enum.KeyCode.Escape then
+				cancelBindingCapture("Keybind change cancelled")
+			elseif input.KeyCode == Enum.KeyCode.Backspace then
+				local action = S.bindingCapture.action
+				S.keybinds[action] = DEFAULT_KEYBINDS[action]
+				rebuildKeyActions()
+				S.bindingCapture = nil
+				refreshKeyLabels(action)
+				saveSettings()
+				setStatus((ACTION_BY_NAME[action] and ACTION_BY_NAME[action].name or action) .. " reset", "good")
+			elseif input.KeyCode ~= Enum.KeyCode.Unknown then
+				assignKeybind(S.bindingCapture.action, input.KeyCode)
+			end
+		end
 		return
 	end
-	if input.KeyCode == Enum.KeyCode.H and not processed then
+	local uiKey = Enum.KeyCode[S.keybinds.ui]
+	if uiKey and input.KeyCode == uiKey and not processed then
 		toggleUIVisibility()
 		return
 	end
-	if processed or not controlActive() then
-		return
-	end
-	if input.KeyCode == Enum.KeyCode.Q then
+	if processed or not controlActive() then return end
+	local pullKey = Enum.KeyCode[S.keybinds.pull]
+	local pushKey = Enum.KeyCode[S.keybinds.push]
+	if pullKey and input.KeyCode == pullKey then
 		S.distanceInput.pull = true
-	elseif input.KeyCode == Enum.KeyCode.E then
+	elseif pushKey and input.KeyCode == pushKey then
 		S.distanceInput.push = true
 	end
-	local action = keyActions[input.KeyCode]
+	local action = S.keyActions[input.KeyCode]
 	if action then
 		perform(action)
 		return
@@ -1333,9 +1788,11 @@ bind(UIS.InputBegan, function(input, processed)
 end)
 
 bind(UIS.InputEnded, function(input)
-	if input.KeyCode == Enum.KeyCode.Q then
+	local pullKey = Enum.KeyCode[S.keybinds.pull]
+	local pushKey = Enum.KeyCode[S.keybinds.push]
+	if pullKey and input.KeyCode == pullKey then
 		S.distanceInput.pull = false
-	elseif input.KeyCode == Enum.KeyCode.E then
+	elseif pushKey and input.KeyCode == pushKey then
 		S.distanceInput.push = false
 	end
 	if S.unloaded or S.mobile then
@@ -1444,6 +1901,7 @@ function S.Unload(skipToolDestroy)
 	clearFrozen()
 	S.distanceInput.pull = false
 	S.distanceInput.push = false
+	S.bindingCapture = nil
 	if S.physicsOwners.changed and S.physicsOwners.service and S.physicsOwners.original ~= nil then
 		pcall(function()
 			S.physicsOwners.service.AreOwnersShown = S.physicsOwners.original
@@ -1486,6 +1944,8 @@ S.API = {
 			frozen = countFrozen(),
 			uiParent = screen.Parent and screen.Parent:GetFullName() or nil,
 			toolParent = S.tool and S.tool.Parent and S.tool.Parent:GetFullName() or nil,
+			keybinds = table.clone(S.keybinds),
+			uiVisible = main and main.Visible or false,
 		}
 	end,
 }

@@ -4,6 +4,7 @@ if G.DeltaRhythmAutoplayer and type(G.DeltaRhythmAutoplayer.Unload) == "function
 end
 local L = loadstring or load
 assert(type(L) == "function", "loadstring/load unavailable")
+local HAS_FIRESIGNAL = type(firesignal) == "function"
 local SR = L(game:HttpGet("https://ltseverydayyou.github.io/ServiceResolver.luau"), "@ServiceResolver.luau")()
 local R = cloneref or function(v)
 	return v
@@ -503,7 +504,10 @@ local function enabled(v)
 end
 AP.SetEnabled = enabled
 AP.SetMode = function(v)
-	if v == "Virtual Input" or v == "firesignal" then
+	if v == "firesignal" and not HAS_FIRESIGNAL then
+		v = "Virtual Input"
+	end
+	if v == "Virtual Input" or (v == "firesignal" and HAS_FIRESIGNAL) then
 		relAll()
 		AP.Mode = v
 		AP.PC = nil
@@ -554,13 +558,18 @@ local M = T:Section({ Name = "Main", Side = 1 })
 AP.Controls = {}
 AP.Controls.Enabled =
 	M:Toggle({ Name = "Enabled", Flag = "DeltaRhythmAutoplayerEnabled", Default = false, Callback = enabled })
-AP.Controls.Mode = M:Dropdown({
-	Name = "Input Mode",
-	Flag = "DeltaRhythmAutoplayerMode",
-	Items = { "Virtual Input", "firesignal" },
-	Default = "Virtual Input",
-	Callback = AP.SetMode,
-})
+if HAS_FIRESIGNAL then
+	AP.Controls.Mode = M:Dropdown({
+		Name = "Input Mode",
+		Flag = "DeltaRhythmAutoplayerMode",
+		Items = { "Virtual Input", "firesignal" },
+		Default = "Virtual Input",
+		Callback = AP.SetMode,
+	})
+else
+	AP.Mode = "Virtual Input"
+	AP.Controls.Mode = nil
+end
 AP.Controls.Tap = M:Slider({
 	Name = "Tap Release",
 	Flag = "DeltaRhythmTapRelease",
@@ -575,6 +584,7 @@ AP.Controls.Tap = M:Slider({
 UI:CreateSettingsPage(W)
 UI:Notification({
 	Title = "Autoplayer loaded",
-	Description = "Live Lane_* tracking with per-round input refresh.",
+	Description = HAS_FIRESIGNAL and "Live Lane_* tracking with per-round input refresh."
+		or "Virtual Input mode enabled; firesignal is unavailable on this executor.",
 	Type = "success",
 })

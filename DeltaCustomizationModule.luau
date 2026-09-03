@@ -11352,6 +11352,102 @@ do
 	end
 
 	local normalizingTabs = false
+	local managedCloseBound = setmetatable({}, { __mode = "k" })
+	local managedCloseBusy = setmetatable({}, { __mode = "k" })
+	local normalizeTabSequence
+
+	local function getOrderedTabButtons()
+		local entries = {}
+		for ordinal, tab in tabsFrame:GetChildren() do
+			if tab:IsA("GuiButton") and tab.Name:match("^script%d+%.lua$") then
+				table.insert(entries, { tab = tab, ordinal = ordinal })
+			end
+		end
+		table.sort(entries, function(a, b)
+			local ao = a.tab.LayoutOrder
+			local bo = b.tab.LayoutOrder
+			if ao ~= bo then
+				return ao < bo
+			end
+			local ai = tonumber(a.tab.Name:match("%d+")) or math.huge
+			local bi = tonumber(b.tab.Name:match("%d+")) or math.huge
+			if ai ~= bi then
+				return ai < bi
+			end
+			return a.ordinal < b.ordinal
+		end)
+		local result = {}
+		for _, entry in entries do
+			table.insert(result, entry.tab)
+		end
+		return result
+	end
+
+	local function closeManagedTab(tab)
+		if not (runtime.alive and tab and tab.Parent) then
+			return
+		end
+		local tabs = getOrderedTabButtons()
+		if #tabs <= 1 then
+			return
+		end
+		local index = table.find(tabs, tab)
+		if not index then
+			return
+		end
+		local boxes = getCodeBoxes()
+		local box = boxes[index]
+		local wasVisible = box and box.Visible or false
+		if tab.Parent then
+			tab:Destroy()
+		end
+		if box and box.Parent then
+			box:Destroy()
+		end
+		task.defer(function()
+			if not runtime.alive then
+				return
+			end
+			normalizeTabSequence()
+			if wasVisible then
+				local remaining = getCodeBoxes()
+				local nextBox = remaining[math.min(index, #remaining)] or remaining[#remaining]
+				if nextBox then
+					for _, current in remaining do
+						current.Visible = current == nextBox
+					end
+					for _, currentTab in getOrderedTabButtons() do
+						currentTab.BackgroundTransparency = currentTab.Name == nextBox.Name and 0 or 1
+					end
+				end
+			end
+			queueStatusUpdate()
+		end)
+	end
+
+	local function bindManagedClose(tab)
+		if not (tab and tab:IsA("GuiButton")) or managedCloseBound[tab] then
+			return
+		end
+		local closeButton = tab:FindFirstChild("ImageButton")
+		if not (closeButton and closeButton:IsA("GuiButton")) then
+			return
+		end
+		managedCloseBound[tab] = true
+		local function activateClose()
+			if managedCloseBusy[tab] then
+				return
+			end
+			managedCloseBusy[tab] = true
+			closeManagedTab(tab)
+			task.delay(0.1, function()
+				managedCloseBusy[tab] = nil
+			end)
+		end
+		connect(closeButton.MouseButton1Click, activateClose)
+		connect(closeButton.Activated, activateClose)
+	end
+
 	local function normalizeSavedTabFiles()
 		local directory = tabDirectory
 		if
@@ -11399,25 +11495,50 @@ do
 		end
 	end
 
-	local function normalizeTabSequence()
+	normalizeTabSequence = function()
 		if normalizingTabs or not runtime.alive then
 			return
 		end
 		normalizingTabs = true
 		local boxes = getCodeBoxes()
+		local tabs = getOrderedTabButtons()
+		local usedTabs = setmetatable({}, { __mode = "k" })
 		local entries = {}
 		local keep = {}
 		for index, box in boxes do
 			local oldName = box.Name
 			local newName = "script" .. tostring(index) .. ".lua"
 			keep[newName] = true
+			local tab
+			for _, candidate in tabs do
+				if not usedTabs[candidate] and candidate.Name == oldName then
+					tab = candidate
+					break
+				end
+			end
+			if not tab then
+				for _, candidate in tabs do
+					if not usedTabs[candidate] then
+						tab = candidate
+						break
+					end
+				end
+			end
+			if tab then
+				usedTabs[tab] = true
+			end
 			table.insert(entries, {
 				box = box,
-				tab = tabsFrame:FindFirstChild(oldName),
+				tab = tab,
 				oldName = oldName,
 				newName = newName,
 				text = box.Text or "",
 			})
+		end
+		for _, tab in tabs do
+			if not usedTabs[tab] and tab.Parent then
+				tab:Destroy()
+			end
 		end
 		for index, entry in entries do
 			if entry.box.Parent then
@@ -11431,6 +11552,7 @@ do
 				if title and title:IsA("TextLabel") then
 					title.Text = entry.newName
 				end
+				bindManagedClose(tab)
 			end
 		end
 		if type(writefile) == "function" then

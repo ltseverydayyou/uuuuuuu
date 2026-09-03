@@ -1,0 +1,26 @@
+name: Patch Delta Duplicate Tabs
+
+on:
+  push:
+    paths:
+      - .github/scripts/patch_delta_duplicate_tabs.py
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - run: python .github/scripts/patch_delta_duplicate_tabs.py
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add DeltaCustomizationModule.luau
+          git rm .github/scripts/patch_delta_duplicate_tabs.py .github/workflows/patch-delta-duplicate-tabs.yml
+          git commit -m "fix: prevent duplicate Delta tabs"
+          git push

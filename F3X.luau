@@ -27982,6 +27982,26 @@ function BTMobileGizmo:updateButtons()
 	end
 end
 BTMobileGizmo:create()
+F3XTrackConnection(UserInputService.TouchTapInWorld:Connect(function(position)
+	if not UserInputService.TouchEnabled or CurrentTool ~= Tools.NewPart then
+		return
+	end
+	local fakeInput = {
+		Position = Vector3.new(position.X, position.Y, 0),
+		UserInputType = Enum.UserInputType.Touch,
+	}
+	if isPointerOverBTUI(fakeInput) then
+		return
+	end
+	local listener = Tools.NewPart.Listeners and Tools.NewPart.Listeners.Button1Down
+	if not listener then
+		return
+	end
+	listener(fakeInput)
+	if Tools.Move and Tools.Move.Dragger then
+		Tools.Move:FinishDragging()
+	end
+end))
 F3XTrackConnection(UserInputService.InputChanged:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.Touch then
 		BTMobileGizmo:updateDrag(input)

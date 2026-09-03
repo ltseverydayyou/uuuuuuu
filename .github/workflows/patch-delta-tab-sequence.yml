@@ -1,5 +1,5 @@
 name: Patch Delta Tab Sequence
-on:
+"on":
   workflow_dispatch:
 permissions:
   contents: write

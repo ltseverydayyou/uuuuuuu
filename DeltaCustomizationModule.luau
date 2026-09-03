@@ -11351,7 +11351,109 @@ do
 		queueStatusUpdate()
 	end
 
+	local normalizingTabs = false
+	local function normalizeSavedTabFiles()
+		local directory = tabDirectory
+		if
+			type(isfolder) ~= "function"
+			or type(listfiles) ~= "function"
+			or type(readfile) ~= "function"
+			or type(writefile) ~= "function"
+			or not isfolder(directory)
+		then
+			return
+		end
+		local ok, files = pcall(listfiles, directory)
+		if not ok or type(files) ~= "table" then
+			return
+		end
+		local saved = {}
+		for _, path in files do
+			local name = tostring(path):match("([^/\\]+)$")
+			local index = name and tonumber(name:match("^script(%d+)%.lua$"))
+			if index then
+				local readOk, text = pcall(readfile, path)
+				if readOk and type(text) == "string" then
+					table.insert(saved, { index = index, name = name, text = text })
+				end
+			end
+		end
+		table.sort(saved, function(a, b)
+			return a.index < b.index
+		end)
+		local keep = {}
+		for index, item in saved do
+			local name = "script" .. tostring(index) .. ".lua"
+			keep[name] = true
+			pcall(writefile, directory .. "/" .. name, item.text)
+		end
+		if type(delfile) == "function" and type(isfile) == "function" then
+			for _, item in saved do
+				if not keep[item.name] then
+					local path = directory .. "/" .. item.name
+					if isfile(path) then
+						pcall(delfile, path)
+					end
+				end
+			end
+		end
+	end
+
+	local function normalizeTabSequence()
+		if normalizingTabs or not runtime.alive then
+			return
+		end
+		normalizingTabs = true
+		local boxes = getCodeBoxes()
+		local entries = {}
+		local keep = {}
+		for index, box in boxes do
+			local oldName = box.Name
+			local newName = "script" .. tostring(index) .. ".lua"
+			keep[newName] = true
+			table.insert(entries, {
+				box = box,
+				tab = tabsFrame:FindFirstChild(oldName),
+				oldName = oldName,
+				newName = newName,
+				text = box.Text or "",
+			})
+		end
+		for index, entry in entries do
+			if entry.box.Parent then
+				entry.box.Name = entry.newName
+			end
+			local tab = entry.tab
+			if tab and tab.Parent then
+				tab.Name = entry.newName
+				tab.LayoutOrder = index
+				local title = tab:FindFirstChild("Title", true)
+				if title and title:IsA("TextLabel") then
+					title.Text = entry.newName
+				end
+			end
+		end
+		if type(writefile) == "function" then
+			for _, entry in entries do
+				pcall(writefile, tabDirectory .. "/" .. entry.newName, entry.text)
+			end
+		end
+		if type(delfile) == "function" and type(isfile) == "function" then
+			for _, entry in entries do
+				if entry.oldName ~= entry.newName and not keep[entry.oldName] then
+					local path = tabDirectory .. "/" .. entry.oldName
+					if isfile(path) then
+						pcall(delfile, path)
+					end
+				end
+			end
+		end
+		queueStatusUpdate()
+		normalizingTabs = false
+	end
+
 	local function savedTabNames()
+		normalizeSavedTabFiles()
 		local names = {}
 		local directory = "DeltaCustom/DeltaTabs"
 		if type(isfolder) ~= "function" or type(listfiles) ~= "function" or not isfolder(directory) then
@@ -11483,6 +11585,7 @@ do
 			return
 		end
 		restoringTabs = true
+		normalizeTabSequence()
 		local saved = savedTabNames()
 		local addButton = tabsFrame:FindFirstChild("AddTab")
 		local before = #getCodeBoxes()
@@ -13695,6 +13798,7 @@ do
 				applyEditorStyle(object)
 				queueStatusUpdate()
 			end)
+			task.delay(0.12, normalizeTabSequence)
 		end
 	end)
 	local addTabButton = tabsFrame:FindFirstChild("AddTab")
@@ -13710,6 +13814,7 @@ do
 	end
 	connect(codeFrame.DescendantRemoving, function(object)
 		queueStatusUpdate()
+		task.delay(0.12, normalizeTabSequence)
 		if not object:IsA("TextBox") or not object.Name:match("^script%d+%.lua$") then
 			return
 		end
@@ -13759,6 +13864,7 @@ do
 	if not runtime.alive then
 		return
 	end
+	normalizeTabSequence()
 	buildToolbar()
 	applyToolbarLayout()
 	buildStatus()

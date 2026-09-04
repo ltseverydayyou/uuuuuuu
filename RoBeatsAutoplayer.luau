@@ -51,12 +51,19 @@ local VirtualInputManager = __lt.cs("VirtualInputManager", clone)
 local LocalPlayer = Players.LocalPlayer
 local HasFireSignal = type(firesignal) == "function"
 local HasVirtualInput = VirtualInputManager ~= nil
+local HasInternalDiscovery = type(getconnections) == "function"
+    and type(debug) == "table"
+    and type(debug.getupvalue) == "function"
+    and type(debug.getconstants) == "function"
+local IsExternalExecutor = not HasInternalDiscovery
+
+local ExternalVIMCompensationMs = IsExternalExecutor and HasVirtualInput and 75 or 0
 
 local InputModes = {}
 if HasVirtualInput then
     InputModes[#InputModes + 1] = "Virtual Input"
 end
-if HasFireSignal then
+if HasFireSignal and HasInternalDiscovery then
     InputModes[#InputModes + 1] = "firesignal"
 end
 if #InputModes == 0 then
@@ -76,15 +83,16 @@ if not IsMobile then
     IsMobile = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
 end
 
-local DefaultInputMode = (IsMobile and HasFireSignal) and "firesignal" or InputModes[1]
+local DefaultInputMode = (IsMobile and HasFireSignal and HasInternalDiscovery) and "firesignal" or InputModes[1]
 
 local st = {
-    buildTag = "dual-backend-playseq-v6",
+    buildTag = "external-chart-playseq-v9",
+    external = IsExternalExecutor,
     alive = true,
     enabled = true,
     mode = DefaultInputMode,
     offset = 0,
-    vimCompensationMs = IsMobile and -20 or -10,
+    vimCompensationMs = IsExternalExecutor and ExternalVIMCompensationMs or (IsMobile and -20 or -10),
     tapMs = 35,
     services = nil,
     game = nil,
@@ -107,6 +115,15 @@ local st = {
     UpdateConnection = nil,
     Bridge = nil,
     BridgeConnection = nil,
+    externalChart = nil,
+    externalChartSource = nil,
+    externalChartCapturedAt = 0,
+    externalSongKey = nil,
+    externalSound = nil,
+    externalSoundScanAt = 0,
+    externalRemoteConnections = {},
+    externalChartVersion = 0,
+    externalLastSound = nil,
 }
 
 ENV.__RoBeatsAuto = st
@@ -291,9 +308,19 @@ local fallbackKeys = IsMobile and {
     Enum.KeyCode.K,
 }
 
+for lane = 1, 4 do
+    st.laneKeys[lane] = fallbackKeys[lane]
+end
+
 local function refreshLaneKeys()
     local input = st.input
     if not input then
+        if st.external then
+            for lane = 1, 4 do
+                st.laneKeys[lane] = st.laneKeys[lane] or fallbackKeys[lane]
+            end
+            st.lastKeyRefresh = os.clock()
+        end
         return
     end
 
@@ -309,6 +336,32 @@ local function refreshLaneKeys()
     end
 
     st.lastKeyRefresh = os.clock()
+end
+
+local function setExternalLaneKey(lane, value)
+    if not st.external or type(lane) ~= "number" then
+        return false
+    end
+    local text = tostring(value or ""):gsub("%s+", "")
+    if text == "" then
+        st.laneKeys[lane] = fallbackKeys[lane]
+        return true
+    end
+    local key
+    pcall(function()
+        key = Enum.KeyCode[text]
+    end)
+    if not key then
+        local upper = text:upper()
+        pcall(function()
+            key = Enum.KeyCode[upper]
+        end)
+    end
+    if key then
+        st.laneKeys[lane] = key
+        return true
+    end
+    return false
 end
 
 st.Bridge = Instance.new("BindableEvent")
@@ -354,6 +407,225 @@ local function sendLane(lane, keyCode, down)
     end)
 end
 
+
+local function queryByClass(root, className)
+    local ok, result = pcall(function()
+        if type(root.QueryDescendants) == "function" then
+            return root:QueryDescendants(className)
+        end
+    end)
+    if ok and type(result) == "table" then
+        return result
+    end
+
+    local fallback = {}
+    local okDesc, descendants = pcall(root.GetDescendants, root)
+    if okDesc and type(descendants) == "table" then
+        for _, item in ipairs(descendants) do
+            if item:IsA(className) then
+                fallback[#fallback + 1] = item
+            end
+        end
+    end
+    return fallback
+end
+
+local releaseAll
+
+local function normalizeExternalChart(candidate, sourceName)
+    if type(candidate) ~= "table" then
+        return nil
+    end
+
+    local raw = candidate.HitObjects
+    local compressed = false
+    if type(raw) ~= "table" then
+        raw = candidate.Notes
+        compressed = type(raw) == "table"
+    end
+    if type(raw) ~= "table" then
+        return nil
+    end
+
+    local notes = {}
+    for _, item in pairs(raw) do
+        if type(item) == "table" then
+            local track
+            local hitTime
+            local duration
+            local noteType
+
+            if compressed then
+                track = tonumber(item[1])
+                hitTime = tonumber(item[2])
+                duration = tonumber(item[3])
+                noteType = duration and duration > 0 and 2 or 1
+            else
+                track = tonumber(item.Track)
+                hitTime = tonumber(item.Time)
+                duration = tonumber(item.Duration)
+                noteType = tonumber(item.Type) or (duration and duration > 0 and 2 or 1)
+            end
+
+            if track and track >= 1 and track <= 4 and hitTime and hitTime >= -5000 then
+                notes[#notes + 1] = {
+                    Track = track,
+                    Time = hitTime,
+                    Duration = duration and duration > 0 and duration or nil,
+                    Type = noteType,
+                }
+            end
+        end
+    end
+
+    if #notes < 8 then
+        return nil
+    end
+
+    table.sort(notes, function(a, b)
+        if a.Time == b.Time then
+            return a.Track < b.Track
+        end
+        return a.Time < b.Time
+    end)
+
+    return {
+        Notes = notes,
+        Source = sourceName or "RemoteEvent",
+        FirstTime = notes[1].Time,
+        LastTime = notes[#notes].Time + (notes[#notes].Duration or 0),
+    }
+end
+
+local function commitExternalChart(chart)
+    if not chart or type(chart.Notes) ~= "table" then
+        return
+    end
+
+    local current = st.externalChart
+    if current and #current.Notes > #chart.Notes and os.clock() - st.externalChartCapturedAt < 3 then
+        return
+    end
+
+    releaseAll()
+    table.clear(st.seen)
+    st.externalChart = chart
+    st.externalChartSource = chart.Source
+    st.externalChartCapturedAt = os.clock()
+    st.externalChartVersion += 1
+    st.externalSound = nil
+    st.externalLastSound = nil
+    st.status = string.format("External chart captured (%d notes)", #chart.Notes)
+end
+
+local function scanExternalPayload(value, sourceName, depth, visited, best)
+    if depth > 7 or type(value) ~= "table" or visited[value] then
+        return best
+    end
+    visited[value] = true
+
+    local chart = normalizeExternalChart(value, sourceName)
+    if chart and (not best or #chart.Notes > #best.Notes) then
+        best = chart
+    end
+
+    for key, child in pairs(value) do
+        local keyText = tostring(key)
+        if (keyText == "RequestedSongKey" or keyText == "SongKey") and type(child) == "number" and child > 0 then
+            if keyText == "RequestedSongKey" or st.externalSongKey == nil then
+                st.externalSongKey = child
+            end
+        end
+        if type(child) == "table" then
+            best = scanExternalPayload(child, sourceName, depth + 1, visited, best)
+        end
+    end
+
+    return best
+end
+
+local function attachExternalRemoteCapture()
+    if not st.external then
+        return
+    end
+
+    for _, connection in ipairs(st.externalRemoteConnections) do
+        pcall(function()
+            connection:Disconnect()
+        end)
+    end
+    table.clear(st.externalRemoteConnections)
+
+    local remoteEvents = queryByClass(game:GetService("ReplicatedStorage"), "RemoteEvent")
+    for _, remote in ipairs(remoteEvents) do
+        local connection = remote.OnClientEvent:Connect(function(...)
+            local args = table.pack(...)
+            local best
+            local visited = {}
+            for i = 1, args.n do
+                if type(args[i]) == "table" then
+                    best = scanExternalPayload(args[i], remote:GetFullName(), 0, visited, best)
+                end
+            end
+            if best then
+                commitExternalChart(best)
+            end
+        end)
+        st.externalRemoteConnections[#st.externalRemoteConnections + 1] = connection
+    end
+end
+
+local function findExternalSongSound()
+    local cached = st.externalSound
+    if cached and cached.Parent and cached.IsPlaying then
+        return cached
+    end
+
+    if os.clock() - st.externalSoundScanAt < 0.35 then
+        return nil
+    end
+    st.externalSoundScanAt = os.clock()
+
+    local expectedLength = st.externalChart and st.externalChart.LastTime and st.externalChart.LastTime / 1000 or nil
+    local best
+    local bestScore = math.huge
+
+    for _, sound in ipairs(queryByClass(game:GetService("Workspace"), "Sound")) do
+        local okPlaying, playing = pcall(function()
+            return sound.IsPlaying
+        end)
+        if okPlaying and playing then
+            local timeLength = 0
+            local timePosition = 0
+            local rolloff = 0
+            pcall(function()
+                timeLength = sound.TimeLength
+                timePosition = sound.TimePosition
+                rolloff = sound.RollOffMaxDistance
+            end)
+
+            if timePosition >= 0 and (timeLength > 20 or rolloff >= 1000) then
+                local score
+                if expectedLength and timeLength > 0 then
+                    score = math.abs(timeLength - expectedLength)
+                else
+                    score = -(timeLength + math.min(rolloff, 10000) / 10000)
+                end
+
+                if not best or score < bestScore then
+                    best = sound
+                    bestScore = score
+                end
+            end
+        end
+    end
+
+    if best then
+        st.externalSound = best
+    end
+    return best
+end
+
 local function getAudioManager()
     local currentGame = st.game
     if not currentGame or type(currentGame._qXGQXwqL9SzcZAiaQtmu) ~= "function" then
@@ -364,6 +636,20 @@ local function getAudioManager()
 end
 
 local function getTrackTimeMs()
+    if st.external then
+        local sound = findExternalSongSound()
+        if not sound then
+            return nil
+        end
+        local ok, timePosition = pcall(function()
+            return sound.TimePosition
+        end)
+        if ok and type(timePosition) == "number" then
+            return timePosition * 1000
+        end
+        return nil
+    end
+
     local audio = getAudioManager()
     if not audio then
         return nil
@@ -380,6 +666,9 @@ local function getTrackTimeMs()
 end
 
 local function getPreStartClockOffsetMs()
+    if st.external then
+        return 0
+    end
     local audio = getAudioManager()
     if not audio then
         return 0
@@ -404,7 +693,7 @@ for lane = 1, 4 do
     st.laneHolders[lane] = {Name = lane}
 end
 
-local function releaseAll()
+releaseAll = function()
     st.sequenceGeneration += 1
     for lane = 1, 4 do
         local Holder = st.laneHolders[lane]
@@ -572,11 +861,7 @@ local function resetRuntime(currentGame)
     end
 end
 
-local function updateAutoplayer()
-    if not st.alive then
-        return
-    end
-
+local function updateInternalAutoplayer()
     local currentGame = getCurrentGame()
     if currentGame ~= st.game then
         resetRuntime(currentGame)
@@ -657,7 +942,7 @@ local function updateAutoplayer()
                         local Holder = st.laneHolders[lane]
                         local keyCode = st.laneKeys[lane]
                         if Holder and keyCode then
-                            local Arrow = {
+                            playSeq(Holder, {
                                 Index = noteIndex,
                                 Lane = lane,
                                 HitTime = hitTime,
@@ -666,8 +951,7 @@ local function updateAutoplayer()
                                 TargetOffsetMs = targetOffset,
                                 Key = noteKey,
                                 Generation = generation,
-                            }
-                            local NoteCtx = {
+                            }, keyCode, {
                                 enabled = true,
                                 tapMs = st.tapMs,
                                 relMs = AutoCtx.relMs,
@@ -676,8 +960,7 @@ local function updateAutoplayer()
                                 laneCount = st.laneCount,
                                 press = AutoCtx.press,
                                 release = AutoCtx.release,
-                            }
-                            playSeq(Holder, Arrow, keyCode, NoteCtx)
+                            })
                         end
                     end
                 end
@@ -686,7 +969,98 @@ local function updateAutoplayer()
     end
 end
 
+local function updateExternalAutoplayer()
+    if not st.enabled then
+        st.status = "Paused"
+        releaseAll()
+        return
+    end
+
+    local chart = st.externalChart
+    if not chart or type(chart.Notes) ~= "table" then
+        st.status = "External - waiting for chart (start a song)"
+        return
+    end
+
+    local currentMs = getTrackTimeMs()
+    if type(currentMs) ~= "number" then
+        st.status = "External - waiting for BGM"
+        return
+    end
+
+    local sound = st.externalSound
+    if sound ~= st.externalLastSound then
+        releaseAll()
+        table.clear(st.seen)
+        st.externalLastSound = sound
+    end
+
+    st.status = string.format("Playing - External Virtual Input (%d notes)", #chart.Notes)
+    local targetOffset = (tonumber(st.offset) or 0) + st.vimCompensationMs
+    local generation = st.sequenceGeneration
+    local lookAheadMs = 2500
+
+    for index, note in ipairs(chart.Notes) do
+        local hitTime = note.Time
+        if hitTime > currentMs + lookAheadMs then
+            break
+        end
+        if hitTime >= currentMs - 90 then
+            local lane = note.Track
+            local noteKey = string.format("ext|%d|%.3f|%d", lane, hitTime, index)
+            if not st.seen[noteKey] then
+                st.seen[noteKey] = true
+                local Holder = st.laneHolders[lane]
+                local keyCode = st.laneKeys[lane]
+                if Holder and keyCode then
+                    playSeq(Holder, {
+                        Index = index,
+                        Lane = lane,
+                        HitTime = hitTime,
+                        TailHitTime = note.Duration and (hitTime + note.Duration) or nil,
+                        TailClockOffset = 0,
+                        TargetOffsetMs = targetOffset,
+                        Key = noteKey,
+                        Generation = generation,
+                    }, keyCode, {
+                        enabled = true,
+                        tapMs = st.tapMs,
+                        relMs = AutoCtx.relMs,
+                        maxHold = AutoCtx.maxHold,
+                        laneDown = st.laneDown,
+                        laneCount = st.laneCount,
+                        press = AutoCtx.press,
+                        release = AutoCtx.release,
+                    })
+                end
+            end
+        end
+    end
+end
+
+local function updateAutoplayer()
+    if not st.alive then
+        return
+    end
+    if st.external then
+        updateExternalAutoplayer()
+    else
+        updateInternalAutoplayer()
+    end
+end
+
 function st:Rebind()
+    releaseAll()
+    table.clear(self.seen)
+    if self.external then
+        self.externalChart = nil
+        self.externalChartSource = nil
+        self.externalSound = nil
+        self.externalLastSound = nil
+        attachExternalRemoteCapture()
+        self.status = "External - waiting for chart (start a song)"
+        return
+    end
     self.services = nil
     resetRuntime(nil)
     findLocalServices()
@@ -722,6 +1096,13 @@ function st:Unload()
         self.Bridge = nil
     end
 
+    for _, connection in ipairs(self.externalRemoteConnections or {}) do
+        pcall(function()
+            connection:Disconnect()
+        end)
+    end
+    table.clear(self.externalRemoteConnections or {})
+
     if self.VibeUI then
         pcall(function()
             self.VibeUI:Unload()
@@ -735,7 +1116,9 @@ end
 
 local VibeUI = loadstring(game:HttpGet("https://sirmemegithub.com/RealSlimShady2000/VibeUI/raw/branch/main/VibeUI.luau"))()
 st.VibeUI = VibeUI
-VibeUI.Config.MobileToggle = true
+if type(VibeUI.Config) == "table" then
+    VibeUI.Config.MobileToggle = true
+end
 
 local Window = VibeUI:Window({
     Title = "RoBeats Autoplayer",
@@ -767,25 +1150,38 @@ Playback:Toggle({
     end,
 })
 
-Playback:Dropdown({
-    Name = "Input Mode",
-    Flag = "RoBeats_InputMode",
-    Items = InputModes,
-    Default = DefaultInputMode,
-    Callback = function(value)
-        if table.find(InputModes, value) then
-            releaseAll()
-            st.mode = value
-            table.clear(st.seen)
-        end
-    end,
-})
+if #InputModes > 1 then
+    Playback:Dropdown({
+        Name = "Input Mode",
+        Flag = "RoBeats_InputMode",
+        Items = InputModes,
+        Default = DefaultInputMode,
+        Callback = function(value)
+            if table.find(InputModes, value) then
+                releaseAll()
+                st.mode = value
+                table.clear(st.seen)
+            end
+        end,
+    })
+else
+    Playback:Paragraph({
+        Name = "Input Mode",
+        Content = "",
+    })
+    if st.external then
+        Playback:Paragraph({
+            Name = "External Calibration",
+            Content = "",
+        })
+    end
+end
 
 Playback:Slider({
-    Name = "Timing Offset",
+    Name = "Fine Offset (+ later / - earlier)",
     Flag = "RoBeats_TimingOffset",
-    Min = -50,
-    Max = 50,
+    Min = -100,
+    Max = 100,
     Default = 0,
     Decimals = 1,
     Suffix = "ms",
@@ -809,8 +1205,22 @@ Playback:Slider({
 
 Playback:Paragraph({
     Name = "Keybinds",
-    Content = "Uses RoBeats' KEY_TRACK mapping and live custom bindings. Track order is resolved per platform/client mapping, and custom binds refresh while the script runs.",
+    Content = "",
 })
+
+if st.external then
+    for lane = 1, 4 do
+        Playback:Textbox({
+            Name = "Track " .. lane .. " key",
+            Flag = "RoBeats_ExternalKey_" .. lane,
+            Default = fallbackKeys[lane].Name,
+            Finished = true,
+            Callback = function(value)
+                setExternalLaneKey(lane, value)
+            end,
+        })
+    end
+end
 
 local Runtime = Main:Section({
     Name = "Runtime",
@@ -819,12 +1229,12 @@ local Runtime = Main:Section({
 
 Runtime:Paragraph({
     Name = "Playtest",
-    Content = "Virtual Input uses RoBeats' platform-specific track mapping with backend latency compensation. firesignal uses RoBeats' native track dispatcher. Both share per-note playSeq scheduling.",
+    Content = "",
 })
 
 Runtime:Paragraph({
     Name = "Input behavior",
-    Content = "Virtual Input sends real key events with a mobile-only timing compensation. firesignal triggers RoBeats' native track press/release path. Long-note tails are converted from the pre-start clock before release.",
+    Content = "",
 })
 
 local RebindButton = Runtime:Button()
@@ -845,12 +1255,17 @@ end)
 
 VibeUI:CreateSettingsPage(Window)
 
-findLocalServices()
+if st.external then
+    attachExternalRemoteCapture()
+    st.status = "External - waiting for chart (start a song)"
+else
+    findLocalServices()
+end
 st.UpdateConnection = RunService.RenderStepped:Connect(updateAutoplayer)
 
 VibeUI:Notification({
     Title = "RoBeats Autoplayer",
-    Description = "Per-note playSeq autoplayer loaded.",
+    Description = st.external and "External backend armed. Start a song to capture its chart." or "Per-note playSeq autoplayer loaded.",
     Type = "success",
     Duration = 4,
 })

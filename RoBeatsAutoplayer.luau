@@ -79,12 +79,12 @@ end
 local DefaultInputMode = (IsMobile and HasFireSignal) and "firesignal" or InputModes[1]
 
 local st = {
-    buildTag = "dual-backend-playseq-v5",
+    buildTag = "dual-backend-playseq-v6",
     alive = true,
     enabled = true,
     mode = DefaultInputMode,
     offset = 0,
-    vimCompensationMs = IsMobile and -20 or 0,
+    vimCompensationMs = IsMobile and -20 or -10,
     tapMs = 35,
     services = nil,
     game = nil,
@@ -278,12 +278,17 @@ local function findNoteList(slot)
     return nil
 end
 
-local trackControlIds = {2, 3, 0, 1}
-local fallbackKeys = {
+local trackControlIds = IsMobile and {2, 3, 0, 1} or {0, 1, 2, 3}
+local fallbackKeys = IsMobile and {
     Enum.KeyCode.J,
     Enum.KeyCode.K,
     Enum.KeyCode.D,
     Enum.KeyCode.F,
+} or {
+    Enum.KeyCode.D,
+    Enum.KeyCode.F,
+    Enum.KeyCode.J,
+    Enum.KeyCode.K,
 }
 
 local function refreshLaneKeys()
@@ -804,7 +809,7 @@ Playback:Slider({
 
 Playback:Paragraph({
     Name = "Keybinds",
-    Content = "Uses RoBeats' KEY_TRACK mapping and live custom bindings. Track order is resolved as J / K / D / F with default binds, and custom binds refresh while the script runs.",
+    Content = "Uses RoBeats' KEY_TRACK mapping and live custom bindings. Track order is resolved per platform/client mapping, and custom binds refresh while the script runs.",
 })
 
 local Runtime = Main:Section({
@@ -814,7 +819,7 @@ local Runtime = Main:Section({
 
 Runtime:Paragraph({
     Name = "Playtest",
-    Content = "Virtual Input uses the RoBeats track mapping with mobile input-latency compensation. firesignal uses RoBeats' native track dispatcher. Both share per-note playSeq scheduling.",
+    Content = "Virtual Input uses RoBeats' platform-specific track mapping with backend latency compensation. firesignal uses RoBeats' native track dispatcher. Both share per-note playSeq scheduling.",
 })
 
 Runtime:Paragraph({

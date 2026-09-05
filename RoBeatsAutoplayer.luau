@@ -86,7 +86,7 @@ end
 local DefaultInputMode = (IsMobile and HasFireSignal and HasInternalDiscovery) and "firesignal" or InputModes[1]
 
 local st = {
-    buildTag = "external-chart-playseq-v9",
+    buildTag = "dynamic-runtime-discovery-v10",
     external = IsExternalExecutor,
     alive = true,
     enabled = true,
@@ -99,6 +99,12 @@ local st = {
     slot = nil,
     noteList = nil,
     pressFunction = nil,
+    releaseFunction = nil,
+    slotResolverFunction = nil,
+    audioResolverFunction = nil,
+    audioManager = nil,
+    audioTrackFunction = nil,
+    audioPreFunction = nil,
     input = nil,
     laneKeys = {},
     laneHolders = {},
@@ -199,19 +205,33 @@ local function getCurrentGame()
     return current
 end
 
+local function isTrackSystem(value)
+    return type(value) == "table"
+        and type(value.get_active_note_display_mode) == "function"
+        and type(value.tracksystem_update_all_active_notes_display_mode) == "function"
+end
+
 local function getLocalSlot(currentGame)
     if not currentGame then
         return nil
     end
 
-    local fn = currentGame._3MkXorqP8choIVYMa5JJ
-    if type(fn) ~= "function" then
-        return nil
+    if type(st.slotResolverFunction) == "function" then
+        local ok, slot = pcall(st.slotResolverFunction, currentGame)
+        if ok and isTrackSystem(slot) then
+            return slot
+        end
+        st.slotResolverFunction = nil
     end
 
-    local ok, slot = pcall(fn, currentGame)
-    if ok and type(slot) == "table" then
-        return slot
+    for key, fn in pairs(currentGame) do
+        if type(key) == "string" and key:sub(1, 1) == "_" and type(fn) == "function" then
+            local ok, slot = pcall(fn, currentGame)
+            if ok and isTrackSystem(slot) then
+                st.slotResolverFunction = fn
+                return slot
+            end
+        end
     end
 
     return nil
@@ -244,50 +264,67 @@ local function isNoteObject(value)
         and type(value.get_state) == "function"
 end
 
-local function findNoteList(slot)
-    if not slot or type(debug) ~= "table" or type(debug.getupvalue) ~= "function" then
+local function findSlotInputFunctions(slot)
+    if not slot then
+        return nil, nil
+    end
+
+    if type(st.pressFunction) == "function" and type(st.releaseFunction) == "function" then
+        return st.pressFunction, st.releaseFunction
+    end
+
+    for _, fn in pairs(slot) do
+        if type(fn) == "function" then
+            if not st.pressFunction and constantsContain(fn, "press") then
+                st.pressFunction = fn
+            end
+            if not st.releaseFunction and constantsContain(fn, "release") then
+                st.releaseFunction = fn
+            end
+        end
+    end
+
+    return st.pressFunction, st.releaseFunction
+end
+
+local function noteListFromFunction(fn)
+    if type(fn) ~= "function" then
         return nil
     end
 
-    if st.pressFunction then
-        for i = 1, 16 do
-            local ok, value = pcall(debug.getupvalue, st.pressFunction, i)
-            if not ok or value == nil then
-                break
-            end
+    for i = 1, 24 do
+        local ok, value = pcall(debug.getupvalue, fn, i)
+        if not ok or value == nil then
+            break
+        end
 
-            if type(value) == "table" and type(value.count) == "function" and type(value.get) == "function" then
-                local okCount, count = pcall(value.count, value)
-                if okCount and count > 0 then
-                    local okFirst, first = pcall(value.get, value, 1)
-                    if okFirst and isNoteObject(first) then
-                        st.noteList = value
-                        return value
-                    end
+        if type(value) == "table" and type(value.count) == "function" and type(value.get) == "function" then
+            local okCount, count = pcall(value.count, value)
+            if okCount and type(count) == "number" and count > 0 then
+                local okFirst, first = pcall(value.get, value, 1)
+                if okFirst and isNoteObject(first) then
+                    return value
                 end
             end
         end
     end
 
-    for _, fn in pairs(slot) do
-        if type(fn) == "function" and constantsContain(fn, "press") then
-            for i = 1, 16 do
-                local ok, value = pcall(debug.getupvalue, fn, i)
-                if not ok or value == nil then
-                    break
-                end
+    return nil
+end
 
-                if type(value) == "table" and type(value.count) == "function" and type(value.get) == "function" then
-                    local okCount, count = pcall(value.count, value)
-                    if okCount and count > 0 then
-                        local okFirst, first = pcall(value.get, value, 1)
-                        if okFirst and isNoteObject(first) then
-                            st.pressFunction = fn
-                            st.noteList = value
-                            return value
-                        end
-                    end
-                end
+local function findNoteList(slot)
+    if not slot or type(debug) ~= "table" or type(debug.getupvalue) ~= "function" then
+        return nil
+    end
+
+    findSlotInputFunctions(slot)
+
+    for _, fn in pairs(slot) do
+        if type(fn) == "function" then
+            local value = noteListFromFunction(fn)
+            if value then
+                st.noteList = value
+                return value
             end
         end
     end
@@ -373,13 +410,12 @@ st.BridgeConnection = st.Bridge.Event:Connect(function(lane, down)
         return
     end
 
+    local press, release = findSlotInputFunctions(slot)
     if down then
-        local press = slot._kr2nQnuij4fHyYHwtYxj
         if type(press) == "function" then
             pcall(press, slot, currentGame, lane)
         end
     else
-        local release = slot._zSKGj4zY7YYAZ471PQSa
         if type(release) == "function" then
             pcall(release, slot, currentGame, lane)
         end
@@ -626,13 +662,83 @@ local function findExternalSongSound()
     return best
 end
 
+local function isAudioManager(value)
+    return type(value) == "table"
+        and type(value.get_audio_time_offset_ms) == "function"
+        and type(value.get_bgm) == "function"
+        and type(value.get_pre_start_time_ms) == "function"
+        and type(value.get_song_length_ms) == "function"
+end
+
 local function getAudioManager()
     local currentGame = st.game
-    if not currentGame or type(currentGame._qXGQXwqL9SzcZAiaQtmu) ~= "function" then
+    if not currentGame then
         return nil
     end
-    local ok, audio = pcall(currentGame._qXGQXwqL9SzcZAiaQtmu, currentGame)
-    return ok and type(audio) == "table" and audio or nil
+
+    if isAudioManager(st.audioManager) then
+        return st.audioManager
+    end
+
+    if type(st.audioResolverFunction) == "function" then
+        local ok, audio = pcall(st.audioResolverFunction, currentGame)
+        if ok and isAudioManager(audio) then
+            st.audioManager = audio
+            return audio
+        end
+        st.audioResolverFunction = nil
+    end
+
+    for key, fn in pairs(currentGame) do
+        if type(key) == "string" and key:sub(1, 1) == "_" and type(fn) == "function" then
+            local ok, audio = pcall(fn, currentGame)
+            if ok and isAudioManager(audio) then
+                st.audioResolverFunction = fn
+                st.audioManager = audio
+                return audio
+            end
+        end
+    end
+
+    return nil
+end
+
+local function getAudioClockFunctions(audio)
+    if type(st.audioTrackFunction) == "function" and type(st.audioPreFunction) == "function" then
+        return st.audioTrackFunction, st.audioPreFunction
+    end
+
+    local numericPrivate = {}
+    for key, fn in pairs(audio) do
+        if type(key) == "string" and key:sub(1, 1) == "_" and type(fn) == "function" then
+            local okValue, value = pcall(fn, audio)
+            if okValue and type(value) == "number" then
+                numericPrivate[#numericPrivate + 1] = fn
+
+                if type(debug) == "table" and type(debug.getupvalue) == "function" then
+                    local ok1, up1 = pcall(debug.getupvalue, fn, 1)
+                    if ok1 and type(up1) == "number" and not st.audioTrackFunction then
+                        st.audioTrackFunction = fn
+                    elseif ok1 and rawequal(up1, audio) and not st.audioPreFunction then
+                        st.audioPreFunction = fn
+                    end
+                end
+            end
+        end
+    end
+
+    st.audioTrackFunction = st.audioTrackFunction or numericPrivate[1]
+    if not st.audioPreFunction then
+        for _, fn in ipairs(numericPrivate) do
+            if fn ~= st.audioTrackFunction then
+                st.audioPreFunction = fn
+                break
+            end
+        end
+    end
+    st.audioPreFunction = st.audioPreFunction or st.audioTrackFunction
+
+    return st.audioTrackFunction, st.audioPreFunction
 end
 
 local function getTrackTimeMs()
@@ -654,15 +760,26 @@ local function getTrackTimeMs()
     if not audio then
         return nil
     end
-    local fn = audio._kcHOjddK0oxsHBsscsMV
-    if type(fn) ~= "function" then
-        fn = audio._1aeaJt0hbKst8XoaDZ17
+
+    local trackFn = getAudioClockFunctions(audio)
+    if type(trackFn) == "function" then
+        local ok, value = pcall(trackFn, audio)
+        if ok and type(value) == "number" then
+            return value
+        end
     end
-    if type(fn) ~= "function" then
-        return nil
+
+    local okBgm, bgm = pcall(audio.get_bgm, audio)
+    if okBgm and typeof(bgm) == "Instance" and bgm:IsA("Sound") then
+        local okTime, timePosition = pcall(function()
+            return bgm.TimePosition
+        end)
+        if okTime and type(timePosition) == "number" then
+            return timePosition * 1000
+        end
     end
-    local ok, value = pcall(fn, audio)
-    return ok and type(value) == "number" and value or nil
+
+    return nil
 end
 
 local function getPreStartClockOffsetMs()
@@ -673,11 +790,12 @@ local function getPreStartClockOffsetMs()
     if not audio then
         return 0
     end
-    local trackFn = audio._kcHOjddK0oxsHBsscsMV
-    local preFn = audio._1aeaJt0hbKst8XoaDZ17
+
+    local trackFn, preFn = getAudioClockFunctions(audio)
     if type(trackFn) ~= "function" or type(preFn) ~= "function" then
         return 0
     end
+
     local okTrack, trackTime = pcall(trackFn, audio)
     local okPre, preTime = pcall(preFn, audio)
     if okTrack and okPre and type(trackTime) == "number" and type(preTime) == "number" then
@@ -852,6 +970,12 @@ local function resetRuntime(currentGame)
     st.slot = nil
     st.noteList = nil
     st.pressFunction = nil
+    st.releaseFunction = nil
+    st.slotResolverFunction = nil
+    st.audioResolverFunction = nil
+    st.audioManager = nil
+    st.audioTrackFunction = nil
+    st.audioPreFunction = nil
     st.input = currentGame and currentGame._input or nil
     st.lastKeyRefresh = 0
 

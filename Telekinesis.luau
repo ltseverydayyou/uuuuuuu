@@ -20,6 +20,11 @@ local S = {
 	connections = {},
 	frozen = {},
 	hold = nil,
+	holds = {},
+	multi = false,
+	noclip = false,
+	groupDistance = 15,
+	groupLift = 0,
 	tool = nil,
 	character = nil,
 	equipped = false,
@@ -76,6 +81,8 @@ local COLORS = {
 }
 
 local ACTION_META = {
+	{action = "multi", name = "Multi", description = "Toggle multi-part selection", default = "M"},
+	{action = "noclip", name = "Noclip", description = "Toggle held-part collision", default = "N"},
 	{action = "freeze", name = "Freeze", description = "Lock / unlock", default = "F"},
 	{action = "pull", name = "Pull", description = "Bring closer", default = "Q"},
 	{action = "push", name = "Push", description = "Move farther", default = "E"},
@@ -100,13 +107,30 @@ end
 local CONFIG_DIR = "Telekinesis"
 local CONFIG_FILE = CONFIG_DIR .. "/settings.json"
 
+local KEY_DISPLAY = {
+	LeftBracket = "[",
+	RightBracket = "]",
+	Semicolon = ";",
+	Quote = "'",
+	BackSlash = "\\",
+	Backquote = "`",
+	LeftControl = "LCtrl",
+	RightControl = "RCtrl",
+	LeftShift = "LShift",
+	RightShift = "RShift",
+	LeftAlt = "LAlt",
+	RightAlt = "RAlt",
+	CapsLock = "Caps",
+	PageUp = "PgUp",
+	PageDown = "PgDn",
+	Insert = "Ins",
+	Delete = "Del",
+	Return = "Enter",
+}
+
 local function keyDisplay(keyName)
-	if keyName == "LeftBracket" then return "[" end
-	if keyName == "RightBracket" then return "]" end
-	if keyName == "Semicolon" then return ";" end
-	if keyName == "Quote" then return "'" end
-	if keyName == "BackSlash" then return "\\" end
-	return tostring(keyName or "?"):gsub("Keypad", "Num ")
+	if KEY_DISPLAY[keyName] then return KEY_DISPLAY[keyName] end
+	return tostring(keyName or "?"):gsub("Keypad", "Num")
 end
 
 local function rebuildKeyActions()
@@ -225,6 +249,39 @@ local function safeName(instance)
 	return ok and tostring(value) or "object"
 end
 
+local function heldCount()
+	local count = 0
+	for i = #S.holds, 1, -1 do
+		local data = S.holds[i]
+		if data and data.part and data.part.Parent then
+			count += 1
+		else
+			table.remove(S.holds, i)
+		end
+	end
+	S.hold = S.holds[1]
+	return count
+end
+
+local function heldDataForPart(part)
+	for index, data in ipairs(S.holds) do
+		if data.part == part then
+			return data, index
+		end
+	end
+	return nil, nil
+end
+
+local function heldSummary()
+	local count = heldCount()
+	if count == 0 then
+		return nil, 0
+	elseif count == 1 then
+		return safeName(S.hold.part), 1
+	end
+	return tostring(count) .. " parts", count
+end
+
 local function countFrozen()
 	local count = 0
 	for part, data in pairs(S.frozen) do
@@ -264,13 +321,18 @@ local function updateGrabButton()
 	if not button or not sub then
 		return
 	end
-	if S.hold and S.hold.part and S.hold.part.Parent then
+	local summary, count = heldSummary()
+	if count > 0 then
 		button.Text = "RELEASE"
-		sub.Text = safeName(S.hold.part) .. "  •  " .. tostring(math.floor(S.hold.distance + 0.5)) .. " studs"
+		sub.Text = summary .. "  •  " .. tostring(math.floor(S.groupDistance + 0.5)) .. " studs" .. (S.multi and "  •  MULTI" or "") .. (S.noclip and "  •  NOCLIP" or "")
 		tween(button, {BackgroundColor3 = COLORS.accent}, 0.12)
 	elseif S.equipped then
 		button.Text = "GRAB"
-		sub.Text = S.mobile and "Tap a world part to grab it" or "Hold left click on an unanchored part"
+		if S.multi then
+			sub.Text = S.mobile and "Tap parts to add / remove them" or "Click parts to add / remove them"
+		else
+			sub.Text = S.mobile and "Tap a world part to grab it" or "Hold left click on an unanchored part"
+		end
 		tween(button, {BackgroundColor3 = COLORS.panel2}, 0.12)
 	else
 		button.Text = "EQUIP TOOL"
@@ -281,16 +343,18 @@ end
 
 local function updateStatus()
 	updateGrabButton()
-	if S.hold and S.hold.part and S.hold.part.Parent then
-		setStatus("Holding " .. safeName(S.hold.part), "accent")
+	local summary, count = heldSummary()
+	if count > 0 then
+		setStatus("Holding " .. summary .. (S.multi and "  •  MULTI" or "") .. (S.noclip and "  •  NOCLIP" or ""), "accent")
 	elseif not S.equipped then
 		setStatus("Equip Telekinesis to begin", "warn")
 	else
 		local frozen = countFrozen()
+		local prefix = "Ready" .. (S.multi and "  •  MULTI" or "") .. (S.noclip and "  •  NOCLIP" or "")
 		if frozen > 0 then
-			setStatus("Ready  •  " .. frozen .. " frozen", "good")
+			setStatus(prefix .. "  •  " .. frozen .. " frozen", "good")
 		else
-			setStatus("Ready", "good")
+			setStatus(prefix, "good")
 		end
 	end
 end
@@ -420,6 +484,27 @@ local function clearBeam(data)
 	data.beamA1 = nil
 end
 
+local function restoreOriginalCollision(data)
+	if data and data.part and data.part.Parent and data.originalCanCollide ~= nil then
+		pcall(function()
+			data.part.CanCollide = data.originalCanCollide
+		end)
+	end
+end
+
+local function applyHeldCollision(data)
+	if not data or not data.part or not data.part.Parent then return end
+	pcall(function()
+		if S.noclip then
+			data.part.CanCollide = false
+		elseif data.fling then
+			data.part.CanCollide = true
+		elseif data.originalCanCollide ~= nil then
+			data.part.CanCollide = data.originalCanCollide
+		end
+	end)
+end
+
 local function clearMotionExtras(data)
 	if not data then
 		return
@@ -427,11 +512,7 @@ local function clearMotionExtras(data)
 	destroy(data.spinner)
 	destroy(data.rotationLock)
 	destroy(data.flingMover)
-	if data.part and data.part.Parent and data.flingOriginalCanCollide ~= nil then
-		pcall(function()
-			data.part.CanCollide = data.flingOriginalCanCollide
-		end)
-	end
+	restoreOriginalCollision(data)
 	if data.bodyPosition and data.bodyPosition.Parent then
 		pcall(function()
 			data.bodyPosition.P = data.flingOriginalP or 26000
@@ -443,21 +524,55 @@ local function clearMotionExtras(data)
 	data.flingMover = nil
 end
 
-local function releaseHeld(keepBodyPosition)
-	local data = S.hold
-	if not data then
-		return
-	end
+local function createHeldSelection(part)
+	local box = Instance.new("SelectionBox")
+	box.Name = "TelekinesisHeld"
+	box.LineThickness = 0.035
+	box.Color3 = COLORS.accent2
+	box.SurfaceTransparency = 1
+	box.Adornee = part
+	box.Parent = part
+	return box
+end
+
+local function releaseData(data, keepBodyPosition)
+	if not data then return end
 	clearBeam(data)
 	clearMotionExtras(data)
+	destroy(data.selection)
+	data.selection = nil
 	if not keepBodyPosition then
 		destroy(data.bodyPosition)
+	end
+end
+
+local function releaseHeld(keepBodyPosition)
+	if #S.holds == 0 then
+		S.hold = nil
+		return
+	end
+	for i = #S.holds, 1, -1 do
+		releaseData(S.holds[i], keepBodyPosition)
+		table.remove(S.holds, i)
 	end
 	S.hold = nil
 	if S.ui.selection then
 		S.ui.selection.Adornee = nil
 	end
 	updateStatus()
+end
+
+local function removeHeldPart(part, keepBodyPosition)
+	local data, index = heldDataForPart(part)
+	if not data then return false end
+	releaseData(data, keepBodyPosition)
+	table.remove(S.holds, index)
+	S.hold = S.holds[1]
+	if S.ui.selection then
+		S.ui.selection.Adornee = S.hold and S.hold.part or nil
+	end
+	updateStatus()
+	return true
 end
 
 local function unfreeze(part)
@@ -512,17 +627,28 @@ local function attachBeam(part)
 	return beam, a0, a1
 end
 
-local function grab(part)	if not controlActive() or not part or not part.Parent or not part:IsA("BasePart") or part.Anchored then
+local function grab(part, additive, point)
+	if not controlActive() or not part or not part.Parent or not part:IsA("BasePart") or part.Anchored then
 		return false
+	end
+	local existing = heldDataForPart(part)
+	if existing then
+		if additive then
+			removeHeldPart(part, false)
+			setStatus("Removed " .. safeName(part) .. " from multi hold", "good")
+			return true
+		end
+		return true
 	end
 	if S.frozen[part] then
 		unfreeze(part)
 	end
-	if S.hold then
+	if not additive then
 		releaseHeld(false)
 	end
 	local camera = currentCamera()
-	if not camera then
+	local ray = rayFromPoint(point or aimPoint())
+	if not camera or not ray then
 		return false
 	end
 	local bodyPosition = Instance.new("BodyPosition")
@@ -532,32 +658,40 @@ local function grab(part)	if not controlActive() or not part or not part.Parent 
 	bodyPosition.D = 1150
 	bodyPosition.Position = part.Position
 	bodyPosition.Parent = part
-	local distance = math.clamp((part.Position - camera.CFrame.Position).Magnitude, 5, 500)
+	if #S.holds == 0 then
+		S.groupDistance = math.clamp((part.Position - camera.CFrame.Position).Magnitude, 5, 500)
+		S.groupLift = 0
+	end
+	local groupTarget = ray.Origin + ray.Direction.Unit * S.groupDistance + Vector3.new(0, S.groupLift, 0)
 	local beam, a0, a1 = attachBeam(part)
-	S.hold = {
+	local data = {
 		part = part,
 		bodyPosition = bodyPosition,
-		distance = distance,
-		lift = 0,
+		offset = part.Position - groupTarget,
 		beam = beam,
 		beamA0 = a0,
 		beamA1 = a1,
+		selection = createHeldSelection(part),
 		spinner = nil,
 		rotationLock = nil,
 		fling = false,
 		flingMover = nil,
+		originalCanCollide = part.CanCollide,
 		flingOriginalCanCollide = part.CanCollide,
 		flingOriginalP = bodyPosition.P,
 		flingOriginalD = bodyPosition.D,
 	}
+	table.insert(S.holds, data)
+	applyHeldCollision(data)
+	S.hold = S.holds[1]
 	if S.ui.selection then
-		S.ui.selection.Adornee = part
+		S.ui.selection.Adornee = S.hold and S.hold.part or nil
 	end
 	updateStatus()
 	return true
 end
 
-local function grabAt(point)
+local function grabAt(point, additive)
 	if not controlActive() then
 		updateStatus()
 		return false
@@ -571,32 +705,38 @@ local function grabAt(point)
 		setStatus("That part is anchored", "bad")
 		return false
 	end
-	return grab(part)
+	return grab(part, additive == true, point)
 end
 
 local function freezeAction()
-	if S.hold and S.hold.part and S.hold.part.Parent then
-		local data = S.hold
-		local part = data.part
-		clearBeam(data)
-		clearMotionExtras(data)
-		local box = Instance.new("SelectionBox")
-		box.Name = "TelekinesisFrozen"
-		box.LineThickness = 0.035
-		box.Color3 = COLORS.good
-		box.SurfaceTransparency = 1
-		box.Adornee = part
-		box.Parent = part
-		S.frozen[part] = {
-			bodyPosition = data.bodyPosition,
-			box = box,
-		}
-		S.hold = nil
-		if S.ui.selection then
-			S.ui.selection.Adornee = nil
+	if heldCount() > 0 then
+		local frozenCount = 0
+		for i = #S.holds, 1, -1 do
+			local data = S.holds[i]
+			local part = data.part
+			if part and part.Parent then
+				clearBeam(data)
+				clearMotionExtras(data)
+				destroy(data.selection)
+				local box = Instance.new("SelectionBox")
+				box.Name = "TelekinesisFrozen"
+				box.LineThickness = 0.035
+				box.Color3 = COLORS.good
+				box.SurfaceTransparency = 1
+				box.Adornee = part
+				box.Parent = part
+				S.frozen[part] = {bodyPosition = data.bodyPosition, box = box}
+				frozenCount += 1
+			else
+				releaseData(data, false)
+			end
+			table.remove(S.holds, i)
 		end
+		S.hold = nil
+		if S.ui.selection then S.ui.selection.Adornee = nil end
 		updateStatus()
-		return true
+		setStatus("Froze " .. tostring(frozenCount) .. (frozenCount == 1 and " part" or " parts"), "good")
+		return frozenCount > 0
 	end
 	local part = targetFromPoint(aimPoint())
 	if part and S.frozen[part] then
@@ -609,117 +749,122 @@ local function freezeAction()
 end
 
 local function changeDistance(delta)
-	local data = S.hold
-	if not data then
+	if heldCount() == 0 then
 		setStatus("Grab something first", "warn")
 		return false
 	end
-	data.distance = math.clamp(data.distance + delta, 3, 500)
+	S.groupDistance = math.clamp(S.groupDistance + delta, 3, 500)
 	updateStatus()
 	return true
 end
 
 local function setNear()
-	local data = S.hold
-	if not data then
+	if heldCount() == 0 then
 		setStatus("Grab something first", "warn")
 		return false
 	end
-	data.distance = 15
-	data.lift = 0
+	S.groupDistance = 15
+	S.groupLift = 0
 	updateStatus()
 	return true
 end
 
 local function adjustLift(delta)
-	local data = S.hold
-	if not data then
+	if heldCount() == 0 then
 		setStatus("Grab something first", "warn")
 		return false
 	end
-	data.lift = math.clamp(data.lift + delta, -100, 100)
-	setStatus((delta > 0 and "Lifted " or "Lowered ") .. safeName(data.part), "accent")
+	S.groupLift = math.clamp(S.groupLift + delta, -100, 100)
+	setStatus((delta > 0 and "Lifted " or "Lowered ") .. tostring(heldCount()) .. (heldCount() == 1 and " part" or " parts"), "accent")
 	return true
 end
 
 local function spinAction()
-	local data = S.hold
-	if not data or not data.part or not data.part.Parent then
+	if heldCount() == 0 then
 		setStatus("Grab something first", "warn")
 		return false
 	end
-	if data.spinner then
-		destroy(data.spinner)
-		data.spinner = nil
-		setStatus("Spin off", "good")
-		return true
+	local allSpinning = true
+	for _, data in ipairs(S.holds) do
+		if not data.spinner or not data.spinner.Parent then allSpinning = false break end
 	end
-	destroy(data.rotationLock)
-	data.rotationLock = nil
-	local spinner = Instance.new("BodyAngularVelocity")
-	spinner.Name = "TelekinesisSpin"
-	spinner.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
-	spinner.P = 1250
-	spinner.AngularVelocity = Vector3.new(0, 7.5, 0)
-	spinner.Parent = data.part
-	data.spinner = spinner
-	setStatus("Spin on", "accent")
+	for _, data in ipairs(S.holds) do
+		if allSpinning then
+			destroy(data.spinner)
+			data.spinner = nil
+		else
+			destroy(data.rotationLock)
+			data.rotationLock = nil
+			if not data.spinner or not data.spinner.Parent then
+				local spinner = Instance.new("BodyAngularVelocity")
+				spinner.Name = "TelekinesisSpin"
+				spinner.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
+				spinner.P = 1250
+				spinner.AngularVelocity = Vector3.new(0, 7.5, 0)
+				spinner.Parent = data.part
+				data.spinner = spinner
+			end
+		end
+	end
+	setStatus(allSpinning and "Spin off" or "Spin on", allSpinning and "good" or "accent")
 	return true
 end
 
 local function lockRotationAction()
-	local data = S.hold
-	if not data or not data.part or not data.part.Parent then
+	if heldCount() == 0 then
 		setStatus("Grab something first", "warn")
 		return false
 	end
-	if data.rotationLock then
-		destroy(data.rotationLock)
-		data.rotationLock = nil
-		setStatus("Rotation unlocked", "good")
-		return true
+	local allLocked = true
+	for _, data in ipairs(S.holds) do
+		if not data.rotationLock or not data.rotationLock.Parent then allLocked = false break end
 	end
-	destroy(data.spinner)
-	data.spinner = nil
-	pcall(function()
-		data.part.AssemblyAngularVelocity = Vector3.zero
-	end)
-	local gyro = Instance.new("BodyGyro")
-	gyro.Name = "TelekinesisRotationLock"
-	gyro.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
-	gyro.P = 18000
-	gyro.D = 700
-	gyro.CFrame = data.part.CFrame
-	gyro.Parent = data.part
-	data.rotationLock = gyro
-	setStatus("Rotation locked", "accent")
+	for _, data in ipairs(S.holds) do
+		if allLocked then
+			destroy(data.rotationLock)
+			data.rotationLock = nil
+		else
+			destroy(data.spinner)
+			data.spinner = nil
+			pcall(function() data.part.AssemblyAngularVelocity = Vector3.zero end)
+			if not data.rotationLock or not data.rotationLock.Parent then
+				local gyro = Instance.new("BodyGyro")
+				gyro.Name = "TelekinesisRotationLock"
+				gyro.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
+				gyro.P = 18000
+				gyro.D = 700
+				gyro.CFrame = data.part.CFrame
+				gyro.Parent = data.part
+				data.rotationLock = gyro
+			end
+		end
+	end
+	setStatus(allLocked and "Rotation unlocked" or "Rotation locked", allLocked and "good" or "accent")
 	return true
 end
 
 local function throwAction(power)
-	local data = S.hold
-	if not data or not data.part or not data.part.Parent then
+	if heldCount() == 0 then
 		setStatus("Grab something first", "warn")
 		return false
 	end
-	local part = data.part
 	local ray = rayFromPoint(aimPoint())
-	if not ray then
-		return false
-	end
+	if not ray then return false end
 	local direction = ray.Direction.Unit
+	local parts = {}
+	for _, data in ipairs(S.holds) do
+		if data.part and data.part.Parent then table.insert(parts, data.part) end
+	end
 	releaseHeld(false)
-	pcall(function()
-		part.AssemblyLinearVelocity = direction * power + Vector3.new(0, power * 0.08, 0)
-	end)
-	setStatus("Threw " .. safeName(part), "accent")
-	return true
+	for _, part in ipairs(parts) do
+		pcall(function() part.AssemblyLinearVelocity = direction * power + Vector3.new(0, power * 0.08, 0) end)
+	end
+	setStatus("Threw " .. tostring(#parts) .. (#parts == 1 and " part" or " parts"), "accent")
+	return #parts > 0
 end
 
 local function setFlingActive(data, enabled)
-	if not data or not data.part or not data.part.Parent then
-		return false
-	end
+	if not data or not data.part or not data.part.Parent then return false end
 	data.fling = enabled == true
 	if data.fling then
 		if not data.flingMover or not data.flingMover.Parent then
@@ -732,7 +877,7 @@ local function setFlingActive(data, enabled)
 			data.flingMover = mover
 		end
 		pcall(function()
-			data.part.CanCollide = true
+			data.part.CanCollide = not S.noclip
 			if data.bodyPosition and data.bodyPosition.Parent then
 				data.bodyPosition.P = 65000
 				data.bodyPosition.D = 2600
@@ -745,11 +890,7 @@ local function setFlingActive(data, enabled)
 			data.part.AssemblyAngularVelocity = Vector3.zero
 			data.part.RotVelocity = Vector3.zero
 		end)
-		if data.flingOriginalCanCollide ~= nil then
-			pcall(function()
-				data.part.CanCollide = data.flingOriginalCanCollide
-			end)
-		end
+		applyHeldCollision(data)
 		if data.bodyPosition and data.bodyPosition.Parent then
 			pcall(function()
 				data.bodyPosition.P = data.flingOriginalP or 26000
@@ -761,14 +902,37 @@ local function setFlingActive(data, enabled)
 end
 
 local function flingAction()
-	local data = S.hold
-	if not data or not data.part or not data.part.Parent then
+	if heldCount() == 0 then
 		setStatus("Grab something first", "warn")
 		return false
 	end
-	setFlingActive(data, not data.fling)
-	setStatus((data.fling and "Fling on  •  " or "Fling off  •  ") .. safeName(data.part), data.fling and "accent" or "good")
+	local allFlinging = true
+	for _, data in ipairs(S.holds) do if not data.fling then allFlinging = false break end end
+	local enabled = not allFlinging
+	for _, data in ipairs(S.holds) do setFlingActive(data, enabled) end
+	setStatus((enabled and "Fling on  •  " or "Fling off  •  ") .. tostring(heldCount()) .. (heldCount() == 1 and " part" or " parts"), enabled and "accent" or "good")
 	return true
+end
+
+local function multiAction()
+	S.multi = not S.multi
+	updateStatus()
+	setStatus("Multi-part " .. (S.multi and "enabled" or "disabled"), S.multi and "accent" or "good")
+	return true
+end
+
+local function noclipAction(forceState)
+	if forceState == nil then
+		S.noclip = not S.noclip
+	else
+		S.noclip = forceState == true
+	end
+	for _, data in ipairs(S.holds) do
+		applyHeldCollision(data)
+	end
+	updateStatus()
+	setStatus("Held-part noclip " .. (S.noclip and "enabled" or "disabled") .. "  •  collision restores on release", S.noclip and "accent" or "good")
+	return S.noclip
 end
 
 local function togglePhysicsOwners()
@@ -810,7 +974,11 @@ local function togglePhysicsOwners()
 end
 
 local function perform(action)
-	if action == "freeze" then
+	if action == "multi" then
+		return multiAction()
+	elseif action == "noclip" then
+		return noclipAction()
+	elseif action == "freeze" then
 		return freezeAction()
 	elseif action == "pull" then
 		return changeDistance(-5)
@@ -1240,7 +1408,13 @@ local function createActionButton(order, meta)
 	keyLabel.Font = Enum.Font.GothamBold
 	keyLabel.TextColor3 = COLORS.accent2
 	keyLabel.TextSize = 9
+	keyLabel.TextScaled = true
+	keyLabel.TextTruncate = Enum.TextTruncate.AtEnd
 	keyLabel.Parent = button
+	local keySizeConstraint = Instance.new("UITextSizeConstraint")
+	keySizeConstraint.MinTextSize = 6
+	keySizeConstraint.MaxTextSize = 9
+	keySizeConstraint.Parent = keyLabel
 	rounded(keyLabel, 6)
 	registerKeyLabel(action, keyLabel)
 
@@ -1347,6 +1521,7 @@ local function createKeybindRow(order, meta)
 	bindButton.Font = Enum.Font.GothamBold
 	bindButton.TextColor3 = COLORS.accent2
 	bindButton.TextSize = 9
+	bindButton.TextTruncate = Enum.TextTruncate.AtEnd
 	bindButton.Parent = row
 	rounded(bindButton, 8)
 	registerKeyLabel(meta.action, bindButton)
@@ -1778,12 +1953,8 @@ bind(UIS.InputBegan, function(input, processed)
 		return
 	end
 	if not S.mobile and input.UserInputType == Enum.UserInputType.MouseButton1 then
-		if pointInsideMain(input.Position) then
-			return
-		end
-		if not S.hold then
-			grabAt(Vector2.new(input.Position.X, input.Position.Y))
-		end
+		if pointInsideMain(input.Position) then return end
+		grabAt(Vector2.new(input.Position.X, input.Position.Y), S.multi)
 	end
 end)
 
@@ -1798,7 +1969,7 @@ bind(UIS.InputEnded, function(input)
 	if S.unloaded or S.mobile then
 		return
 	end
-	if input.UserInputType == Enum.UserInputType.MouseButton1 and S.hold then
+	if input.UserInputType == Enum.UserInputType.MouseButton1 and S.hold and not S.multi then
 		releaseHeld(false)
 	end
 end)
@@ -1813,42 +1984,48 @@ if S.mobile then
 			return
 		end
 		S.lastTouch = point
-		if S.hold then
+		if S.multi then
+			grabAt(point, true)
+		elseif S.hold then
 			releaseHeld(false)
 		else
-			grabAt(point)
+			grabAt(point, false)
 		end
 	end)
 end
 
 bind(RunService.RenderStepped, function(dt)
-	local data = S.hold
-	if not data then
-		return
-	end
+	if heldCount() == 0 then return end
 	local distanceDirection = (S.distanceInput.push and 1 or 0) - (S.distanceInput.pull and 1 or 0)
 	if distanceDirection ~= 0 then
-		data.distance = math.clamp(data.distance + distanceDirection * 35 * dt, 3, 500)
-	end
-	if not data.part or not data.part.Parent or not data.bodyPosition or not data.bodyPosition.Parent then
-		releaseHeld(false)
-		return
+		S.groupDistance = math.clamp(S.groupDistance + distanceDirection * 35 * dt, 3, 500)
 	end
 	local ray = rayFromPoint(aimPoint())
-	if not ray then
-		return
+	if not ray then return end
+	local target = ray.Origin + ray.Direction.Unit * S.groupDistance + Vector3.new(0, S.groupLift, 0)
+	for i = #S.holds, 1, -1 do
+		local data = S.holds[i]
+		if not data.part or not data.part.Parent or not data.bodyPosition or not data.bodyPosition.Parent then
+			releaseData(data, false)
+			table.remove(S.holds, i)
+		else
+			data.bodyPosition.Position = target + (data.offset or Vector3.zero)
+		end
 	end
-	local target = ray.Origin + ray.Direction.Unit * data.distance + Vector3.new(0, data.lift, 0)
-	data.bodyPosition.Position = target
+	S.hold = S.holds[1]
 end)
 
 bind(RunService.Heartbeat, function(dt)
-	local data = S.hold
-	if data and data.part and data.part.Parent then
-		if data.fling then
-			setFlingActive(data, true)
-		elseif data.flingMover then
-			setFlingActive(data, false)
+	for _, data in ipairs(S.holds) do
+		if data and data.part and data.part.Parent then
+			if S.noclip and data.part.CanCollide then
+				pcall(function() data.part.CanCollide = false end)
+			end
+			if data.fling then
+				setFlingActive(data, true)
+			elseif data.flingMover then
+				setFlingActive(data, false)
+			end
 		end
 	end
 	if not hiddenProperty then
@@ -1930,6 +2107,8 @@ end
 S.API = {
 	Grab = grab,
 	GrabAt = grabAt,
+	SetMulti = function(enabled) S.multi = enabled == true; updateStatus(); return S.multi end,
+	SetNoclip = function(enabled) return noclipAction(enabled) end,
 	Release = function()
 		releaseHeld(false)
 	end,
@@ -1941,6 +2120,9 @@ S.API = {
 			equipped = S.equipped,
 			mobile = S.mobile,
 			holding = S.hold and safeName(S.hold.part) or nil,
+			heldCount = heldCount(),
+			multi = S.multi,
+			noclip = S.noclip,
 			frozen = countFrozen(),
 			uiParent = screen.Parent and screen.Parent:GetFullName() or nil,
 			toolParent = S.tool and S.tool.Parent and S.tool.Parent:GetFullName() or nil,

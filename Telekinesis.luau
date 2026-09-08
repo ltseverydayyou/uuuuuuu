@@ -22,6 +22,8 @@ local S = {
 	hold = nil,
 	holds = {},
 	multi = false,
+	pickViewArmed = false,
+	skipMouseReleaseOnce = false,
 	noclip = false,
 	groupDistance = 15,
 	groupLift = 0,
@@ -82,6 +84,7 @@ local COLORS = {
 
 local ACTION_META = {
 	{action = "multi", name = "Multi", description = "Toggle multi-part selection", default = "M"},
+	{action = "pickview", name = "Pick View", description = "Click to grab / click again to drop", default = "P"},
 	{action = "noclip", name = "Noclip", description = "Toggle held-part collision", default = "N"},
 	{action = "freeze", name = "Freeze", description = "Lock / unlock", default = "F"},
 	{action = "pull", name = "Pull", description = "Bring closer", default = "Q"},
@@ -324,11 +327,13 @@ local function updateGrabButton()
 	local summary, count = heldSummary()
 	if count > 0 then
 		button.Text = "RELEASE"
-		sub.Text = summary .. "  •  " .. tostring(math.floor(S.groupDistance + 0.5)) .. " studs" .. (S.multi and "  •  MULTI" or "") .. (S.noclip and "  •  NOCLIP" or "")
+		sub.Text = summary .. "  •  " .. tostring(math.floor(S.groupDistance + 0.5)) .. " studs" .. (S.multi and "  •  MULTI" or "") .. (S.pickViewArmed and "  •  PICK VIEW" or "") .. (S.noclip and "  •  NOCLIP" or "")
 		tween(button, {BackgroundColor3 = COLORS.accent}, 0.12)
 	elseif S.equipped then
 		button.Text = "GRAB"
-		if S.multi then
+		if S.pickViewArmed then
+			sub.Text = S.hold and (S.mobile and "Tap the world again to drop the group" or "Click the world again to drop the group") or (S.mobile and "Tap the world to grab all viewport parts" or "Click the world to grab all viewport parts")
+		elseif S.multi then
 			sub.Text = S.mobile and "Tap parts to add / remove them" or "Click parts to add / remove them"
 		else
 			sub.Text = S.mobile and "Tap a world part to grab it" or "Hold left click on an unanchored part"
@@ -345,12 +350,12 @@ local function updateStatus()
 	updateGrabButton()
 	local summary, count = heldSummary()
 	if count > 0 then
-		setStatus("Holding " .. summary .. (S.multi and "  •  MULTI" or "") .. (S.noclip and "  •  NOCLIP" or ""), "accent")
+		setStatus("Holding " .. summary .. (S.multi and "  •  MULTI" or "") .. (S.pickViewArmed and "  •  PICK VIEW" or "") .. (S.noclip and "  •  NOCLIP" or ""), "accent")
 	elseif not S.equipped then
 		setStatus("Equip Telekinesis to begin", "warn")
 	else
 		local frozen = countFrozen()
-		local prefix = "Ready" .. (S.multi and "  •  MULTI" or "") .. (S.noclip and "  •  NOCLIP" or "")
+		local prefix = "Ready" .. (S.multi and "  •  MULTI" or "") .. (S.pickViewArmed and "  •  PICK VIEW" or "") .. (S.noclip and "  •  NOCLIP" or "")
 		if frozen > 0 then
 			setStatus(prefix .. "  •  " .. frozen .. " frozen", "good")
 		else
@@ -914,6 +919,120 @@ local function flingAction()
 	return true
 end
 
+local PICK_VIEW_RANGE = 500
+
+local function pickViewAction()
+	if not controlActive() then
+		setStatus("Equip Telekinesis first", "warn")
+		return false
+	end
+
+	local camera = currentCamera()
+	if not camera then
+		setStatus("Camera unavailable", "bad")
+		return false
+	end
+
+	local origin = camera.CFrame.Position
+	local viewport = camera.ViewportSize
+
+	local overlap = OverlapParams.new()
+	overlap.FilterType = Enum.RaycastFilterType.Exclude
+	local excludes = {}
+	if S.character then
+		table.insert(excludes, S.character)
+	end
+	if S.tool then
+		table.insert(excludes, S.tool)
+	end
+	overlap.FilterDescendantsInstances = excludes
+
+	local candidates = {}
+	local seen = {}
+	local ok, nearby = pcall(function()
+		return Workspace:GetPartBoundsInRadius(origin, PICK_VIEW_RANGE, overlap)
+	end)
+	if not ok or type(nearby) ~= "table" then
+		setStatus("Viewport scan unavailable", "bad")
+		return false
+	end
+
+	for _, part in ipairs(nearby) do
+		if part
+			and part:IsA("BasePart")
+			and part.Parent
+			and not part.Anchored
+			and not seen[part]
+			and (not S.character or not part:IsDescendantOf(S.character))
+			and (not S.tool or not part:IsDescendantOf(S.tool))
+		then
+			local screenPoint, onScreen = camera:WorldToViewportPoint(part.Position)
+			if onScreen
+				and screenPoint.Z > 0
+				and screenPoint.X >= 0
+				and screenPoint.Y >= 0
+				and screenPoint.X <= viewport.X
+				and screenPoint.Y <= viewport.Y
+			then
+				local delta = part.Position - origin
+				if delta.Magnitude <= PICK_VIEW_RANGE and delta.Magnitude > 0.01 then
+					seen[part] = true
+					table.insert(candidates, {
+						part = part,
+						distance = delta.Magnitude,
+					})
+				end
+			end
+		end
+	end
+
+	if #candidates == 0 then
+		setStatus("No visible unanchored parts in viewport", "warn")
+		return false
+	end
+
+	table.sort(candidates, function(a, b)
+		return a.distance < b.distance
+	end)
+
+	releaseHeld(false)
+
+	local commonPoint = aimPoint()
+	local grabbed = 0
+	for _, candidate in ipairs(candidates) do
+		if grab(candidate.part, true, commonPoint) then
+			grabbed += 1
+		end
+	end
+
+	if grabbed > 0 then
+		setStatus("Picked " .. tostring(grabbed) .. (grabbed == 1 and " visible part" or " visible parts"), "accent")
+		return true
+	end
+
+	setStatus("Could not grab visible parts", "bad")
+	return false
+end
+
+local function pickViewToggle(forceState)
+	if not controlActive() then
+		setStatus("Equip Telekinesis first", "warn")
+		return false
+	end
+	if forceState == nil then
+		S.pickViewArmed = not S.pickViewArmed
+	else
+		S.pickViewArmed = forceState == true
+	end
+	updateStatus()
+	if S.pickViewArmed then
+		setStatus(S.mobile and "Pick View enabled  •  tap to grab, tap again to drop" or "Pick View enabled  •  click to grab, click again to drop", "accent")
+	else
+		setStatus("Pick View disabled", "good")
+	end
+	return S.pickViewArmed
+end
+
 local function multiAction()
 	S.multi = not S.multi
 	updateStatus()
@@ -976,6 +1095,8 @@ end
 local function perform(action)
 	if action == "multi" then
 		return multiAction()
+	elseif action == "pickview" then
+		return pickViewToggle()
 	elseif action == "noclip" then
 		return noclipAction()
 	elseif action == "freeze" then
@@ -1954,6 +2075,17 @@ bind(UIS.InputBegan, function(input, processed)
 	end
 	if not S.mobile and input.UserInputType == Enum.UserInputType.MouseButton1 then
 		if pointInsideMain(input.Position) then return end
+		if S.pickViewArmed then
+			S.skipMouseReleaseOnce = true
+			if heldCount() > 0 then
+				releaseHeld(false)
+				setStatus("Dropped Pick View group", "good")
+			else
+				pickViewAction()
+			end
+			updateGrabButton()
+			return
+		end
 		grabAt(Vector2.new(input.Position.X, input.Position.Y), S.multi)
 	end
 end)
@@ -1969,8 +2101,14 @@ bind(UIS.InputEnded, function(input)
 	if S.unloaded or S.mobile then
 		return
 	end
-	if input.UserInputType == Enum.UserInputType.MouseButton1 and S.hold and not S.multi then
-		releaseHeld(false)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		if S.skipMouseReleaseOnce then
+			S.skipMouseReleaseOnce = false
+			return
+		end
+		if S.hold and not S.multi then
+			releaseHeld(false)
+		end
 	end
 end)
 
@@ -1984,7 +2122,16 @@ if S.mobile then
 			return
 		end
 		S.lastTouch = point
-		if S.multi then
+		if S.pickViewArmed then
+			if heldCount() > 0 then
+				releaseHeld(false)
+				setStatus("Dropped Pick View group", "good")
+			else
+				pickViewAction()
+			end
+			updateGrabButton()
+			return
+		elseif S.multi then
 			grabAt(point, true)
 		elseif S.hold then
 			releaseHeld(false)
@@ -2078,6 +2225,8 @@ function S.Unload(skipToolDestroy)
 	clearFrozen()
 	S.distanceInput.pull = false
 	S.distanceInput.push = false
+	S.pickViewArmed = false
+	S.skipMouseReleaseOnce = false
 	S.bindingCapture = nil
 	if S.physicsOwners.changed and S.physicsOwners.service and S.physicsOwners.original ~= nil then
 		pcall(function()
@@ -2107,6 +2256,9 @@ end
 S.API = {
 	Grab = grab,
 	GrabAt = grabAt,
+	PickView = pickViewToggle,
+	PickViewNow = pickViewAction,
+	SetPickView = function(enabled) return pickViewToggle(enabled) end,
 	SetMulti = function(enabled) S.multi = enabled == true; updateStatus(); return S.multi end,
 	SetNoclip = function(enabled) return noclipAction(enabled) end,
 	Release = function()
@@ -2121,6 +2273,7 @@ S.API = {
 			mobile = S.mobile,
 			holding = S.hold and safeName(S.hold.part) or nil,
 			heldCount = heldCount(),
+			pickViewArmed = S.pickViewArmed,
 			multi = S.multi,
 			noclip = S.noclip,
 			frozen = countFrozen(),

@@ -1398,3 +1398,65 @@ if game.ReplicatedStorage:WaitForChild("GameData"):WaitForChild("Floor").Value =
     
     window_rooms.toggle("auto a-1000",false,function(val)
         flags.autorooms = val
+        
+        if val then
+            local hide = false
+
+            local function getrecentroom(index)
+                local rooms = workspace.CurrentRooms:GetChildren() 
+                table.sort(rooms,function(a,b)
+                    return tonumber(a.Name) > tonumber(b.Name) 
+                end)
+                
+                return rooms[index]
+            end
+            
+            local entconnections = {}
+            local function watchentity(v)
+                if v:IsA("Model") and (v.Name == "A60" or v.Name == "A120") then
+                    task.spawn(function()
+                        hide = true
+                        repeat task.wait() until not v:IsDescendantOf(workspace) or not flags.autorooms
+                        hide = false
+                    end)
+                end
+            end
+            table.insert(entconnections,workspace.ChildAdded:Connect(watchentity))
+            local liveentities = workspace:FindFirstChild("LiveEntities")
+            if liveentities then
+                table.insert(entconnections,liveentities.ChildAdded:Connect(watchentity))
+            end
+            
+            while flags.autorooms do
+                local room = getrecentroom(2)
+                local door = room:WaitForChild("Door")
+                local dpos = door:GetPivot()
+                
+                if hide then
+                    repeat task.wait()
+                        char:PivotTo(dpos+Vector3.new(0,150,0))
+                    until not hide
+                else
+                    repeat task.wait()
+                        char:PivotTo(dpos)
+                    until lastroom ~= room or not flags.autorooms
+                end
+                
+                task.wait()
+            end
+            for _,connection in pairs(entconnections) do
+                connection:Disconnect()
+            end
+        end
+    end)
+end
+
+window_misc.button("close gui",function()
+    for k,v in pairs(DELFLAGS) do
+        flags[k] = v
+    end
+    
+    char:SetAttribute("SpeedBoost",0)
+    task.wait()
+    library.delete()
+end)

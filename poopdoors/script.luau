@@ -42,12 +42,13 @@ function esp(what,color,core,name)
             table.insert(boxes,box)
             
             task.spawn(function()
-                while box do
+                while box.Parent do
                     if box.Adornee == nil or not box.Adornee:IsDescendantOf(workspace) then
                         box.Adornee = nil
                         box.Visible = false
                         box:Destroy()
-                    end  
+                        break
+                    end
                     task.wait()
                 end
             end)
@@ -80,12 +81,13 @@ function esp(what,color,core,name)
         Instance.new("UIStroke",txt)
         
         task.spawn(function()
-            while bill do
+            while bill.Parent do
                 if bill.Adornee == nil or not bill.Adornee:IsDescendantOf(workspace) then
                     bill.Enabled = false
                     bill.Adornee = nil
-                    bill:Destroy() 
-                end  
+                    bill:Destroy()
+                    break
+                end
                 task.wait()
             end
         end)
@@ -95,15 +97,17 @@ function esp(what,color,core,name)
     
     ret.delete = function()
         for i,v in pairs(boxes) do
-            v.Adornee = nil
-            v.Visible = false
-            v:Destroy()
+            if v and v.Parent then
+                v.Adornee = nil
+                v.Visible = false
+                v:Destroy()
+            end
         end
         
-        if bill then
+        if bill and bill.Parent then
             bill.Enabled = false
             bill.Adornee = nil
-            bill:Destroy() 
+            bill:Destroy()
         end
     end
     
@@ -147,7 +151,10 @@ local flags = {
     autorooms = false,
 }
 
-local DELFLAGS = {table.unpack(flags)}
+local DELFLAGS = {}
+for k,v in pairs(flags) do
+    DELFLAGS[k] = v
+end
 local esptable = {doors={},keys={},items={},books={},entity={},chests={},lockers={},people={},gold={}}
 
 local window_player = library.window("player")
@@ -180,19 +187,10 @@ window_player.toggle("instant use",false,function(val)
     holdconnect:Disconnect()
 end)
 
-local walkspeedslider = window_player.slider("walkspeed",16,25,1,16,function(val)
-    hum.WalkSpeed = val
+local basewalkspeed = 15
+local walkspeedslider = window_player.slider("walkspeed",16,21.5,0.5,16,function(val)
     flags.speed = val
-end)
-
-task.spawn(function()
-    while true do
-        if hum.WalkSpeed < flags.speed then
-            hum.WalkSpeed = flags.speed
-        end
-        
-        task.wait()
-    end
+    char:SetAttribute("SpeedBoost", val-basewalkspeed)
 end)
 
 window_esp.toggle("door esp",false,function(val)
@@ -200,17 +198,25 @@ window_esp.toggle("door esp",false,function(val)
     
     if val then
         local function setup(room)
-            local door = room:WaitForChild("Door"):WaitForChild("Door")
+            local doormodel = room:FindFirstChild("Door") or room:WaitForChild("Door",2)
+            local door = doormodel and doormodel:FindFirstChild("Door")
+            
+            if not door or not door:IsA("BasePart") then
+                return
+            end
             
             task.wait(0.1)
             local h = esp(door,Color3.fromRGB(255,240,0),door,"Door")
             table.insert(esptable.doors,h)
             
-            door:WaitForChild("Open").Played:Connect(function()
-                h.delete()
-            end)
+            local opensound = doormodel:FindFirstChild("Open")
+            if opensound and opensound:IsA("Sound") then
+                opensound.Played:Connect(function()
+                    h.delete()
+                end)
+            end
             
-            door.AncestryChanged:Connect(function()
+            doormodel.AncestryChanged:Connect(function()
                 h.delete()
             end)
         end
@@ -243,20 +249,26 @@ window_esp.toggle("key/lever esp",false,function(val)
             if v:IsA("Model") and (v.Name == "LeverForGate" or v.Name == "KeyObtain") then
                 task.wait(0.1)
                 if v.Name == "KeyObtain" then
-                    local hitbox = v:WaitForChild("Hitbox")
-                    local parts = hitbox:GetChildren()
-                    table.remove(parts,table.find(parts,hitbox:WaitForChild("PromptHitbox")))
+                    local hitbox = v.PrimaryPart or v:FindFirstChild("Hitbox")
                     
-                    local h = esp(parts,Color3.fromRGB(90,255,40),hitbox,"Key")
-                    table.insert(esptable.keys,h)
+                    if hitbox and hitbox:IsA("BasePart") then
+                        local h = esp(hitbox,Color3.fromRGB(90,255,40),hitbox,"Key")
+                        table.insert(esptable.keys,h)
+                    end
                     
                 elseif v.Name == "LeverForGate" then
-                    local h = esp(v,Color3.fromRGB(90,255,40),v.PrimaryPart,"Lever")
-                    table.insert(esptable.keys,h)
-                    
-                    v.PrimaryPart:WaitForChild("SoundToPlay").Played:Connect(function()
-                        h.delete()
-                    end) 
+                    local core = v.PrimaryPart or v:FindFirstChildWhichIsA("BasePart",true)
+                    if core then
+                        local h = esp(v:GetDescendants(),Color3.fromRGB(90,255,40),core,"Lever")
+                        table.insert(esptable.keys,h)
+                        
+                        local sound = core:FindFirstChild("SoundToPlay") or v:FindFirstChild("SoundToPlay",true)
+                        if sound and sound:IsA("Sound") then
+                            sound.Played:Connect(function()
+                                h.delete()
+                            end)
+                        end
+                    end
                 end
             end
         end
@@ -298,12 +310,22 @@ window_esp.toggle("item esp",false,function(val)
     
     if val then
         local function check(v)
-            if v:IsA("Model") and (v:GetAttribute("Pickup") or v:GetAttribute("PropType")) then
+            if not v:IsA("Model") or v.Name == "KeyObtain" or v:GetAttribute("IsKey") then
+                return
+            end
+            
+            local prompt = v:FindFirstChild("ModulePrompt")
+            local isobtain = prompt and prompt:IsA("ProximityPrompt") and (prompt.ActionText == "Obtain" or v.Name:sub(-6) == "Obtain")
+            
+            if isobtain then
                 task.wait(0.1)
+                local part = v.PrimaryPart or v:FindFirstChild("Hitbox") or v:FindFirstChildWhichIsA("BasePart",true)
                 
-                local part = (v:FindFirstChild("Handle") or v:FindFirstChild("Prop"))
-                local h = esp(part,Color3.fromRGB(160,190,255),part,v.Name)
-                table.insert(esptable.items,h)
+                if part then
+                    local label = prompt.ObjectText ~= "" and prompt.ObjectText or v.Name:gsub("Obtain$","")
+                    local h = esp(v:GetDescendants(),Color3.fromRGB(160,190,255),part,label)
+                    table.insert(esptable.items,h)
+                end
             end
         end
         
@@ -351,7 +373,7 @@ window_esp.toggle("book/breaker esp",false,function(val)
     flags.espbooks = val
     
     if val then
-        local function check(v)
+        local function check(v,room)
             if v:IsA("Model") and (v.Name == "LiveHintBook" or v.Name == "LiveBreakerPolePickup") then
                 task.wait(0.1)
                 
@@ -369,11 +391,11 @@ window_esp.toggle("book/breaker esp",false,function(val)
         local function setup(room)
             if room.Name == "50" or room.Name == "100" then
                 room.DescendantAdded:Connect(function(v)
-                    check(v) 
+                    check(v,room)
                 end)
                 
                 for i,v in pairs(room:GetDescendants()) do
-                    check(v)
+                    check(v,room)
                 end
             end
         end
@@ -396,72 +418,105 @@ window_esp.toggle("book/breaker esp",false,function(val)
     end
 end)
 
-local entitynames = {"RushMoving","AmbushMoving","Snare","A60","A120"}
+local entitynames = {
+    RushMoving = "Rush",
+    AmbushMoving = "Ambush",
+    Eyes = "Eyes",
+    A60 = "A60",
+    A120 = "A120",
+    FigureRig = "Figure",
+    GiggleCeiling = "Giggle",
+    Snare = "Snare",
+    Dread = "Dread",
+    Blitz = "Blitz",
+    Lookman = "Lookman",
+    Surge = "Surge",
+    Bramble = "Bramble",
+    Groundskeeper = "Groundskeeper",
+    Monument = "Monument",
+    Gloombats = "Gloombats",
+    Sally = "Sally",
+    JeffTheKiller = "Jeff The Killer",
+}
+
+local function entitytarget(v)
+    if not v:IsA("Model") then
+        return
+    end
+    
+    local display = entitynames[v.Name]
+    if not display then
+        return
+    end
+    
+    local core = v.PrimaryPart or v:FindFirstChild("Base") or v:FindFirstChildWhichIsA("BasePart",true)
+    if not core then
+        return
+    end
+    
+    return core,display
+end
 
 window_player.label("credits: zoophiliaphobic#6287\noh my dayyzz",20)
 window_esp.toggle("entity esp",false,function(val)
     flags.esprush = val
     
     if val then
-        local addconnect
-        addconnect = workspace:WaitForChild("LiveEntities").ChildAdded:Connect(function(v)
-            if table.find(entitynames,v.Name) then
-                task.wait(0.1)
-                
-                local h = esp(v,Color3.fromRGB(255,25,25),v.PrimaryPart,v.Name:gsub("Moving",""))
+        local connections = {}
+        local seen = {}
+        
+        local function check(v)
+            if seen[v] then
+                return
+            end
+            
+            local core,display = entitytarget(v)
+            if core then
+                seen[v] = true
+                task.wait(0.05)
+                if not v:IsDescendantOf(workspace) then
+                    return
+                end
+                local h = esp(v:GetDescendants(),Color3.fromRGB(255,25,25),core,display)
                 table.insert(esptable.entity,h)
             end
-        end)
-        
-        local function setup(room)
-            if room.Name == "50" or room.Name == "100" then
-                local figuresetup = room:WaitForChild("FigureSetup")
-            
-                if figuresetup then
-                    local fig = figuresetup:WaitForChild("FigureRagdoll")
-                    task.wait(0.1)
-                    
-                    local h = esp(fig,Color3.fromRGB(255,25,25),fig.PrimaryPart,"Figure")
-                    table.insert(esptable.entity,h)
-                end 
-            else
-                local assets = room:WaitForChild("Assets")
-                
-                local function check(v)
-                    if v:IsA("Model") and table.find(entitynames,v.Name) then
-                        task.wait(0.1)
-                        
-                        local h = esp(v:WaitForChild("Base"),Color3.fromRGB(255,25,25),v.Base,"Snare")
-                        table.insert(esptable.entity,h)
-                    end
-                end
-                
-                assets.DescendantAdded:Connect(function(v)
-                    check(v) 
-                end)
-                
-                for i,v in pairs(assets:GetDescendants()) do
-                    check(v)
-                end
-            end 
         end
         
-        local roomconnect
-        roomconnect = workspace.CurrentRooms.ChildAdded:Connect(function(room)
-            setup(room)
-        end)
+        table.insert(connections,workspace.ChildAdded:Connect(check))
         
-        for i,v in pairs(workspace.CurrentRooms:GetChildren()) do
-            setup(room) 
+        local liveentities = workspace:FindFirstChild("LiveEntities")
+        if liveentities then
+            table.insert(connections,liveentities.ChildAdded:Connect(check))
+            for _,v in pairs(liveentities:GetChildren()) do
+                check(v)
+            end
+        end
+        
+        local function setup(room)
+            table.insert(connections,room.DescendantAdded:Connect(check))
+            for _,v in pairs(room:GetDescendants()) do
+                check(v)
+            end
+        end
+        
+        table.insert(connections,workspace.CurrentRooms.ChildAdded:Connect(setup))
+        
+        for _,v in pairs(workspace:GetChildren()) do
+            check(v)
+        end
+        for _,room in pairs(workspace.CurrentRooms:GetChildren()) do
+            setup(room)
         end
         
         repeat task.wait() until not flags.esprush
-        addconnect:Disconnect()
-        roomconnect:Disconnect()
+        for _,connection in pairs(connections) do
+            connection:Disconnect()
+        end
         
-        for i,v in pairs(esptable.entity) do
+        for _,v in pairs(esptable.entity) do
             v.delete()
-        end 
+        end
+        table.clear(esptable.entity)
     end
 end)
 
@@ -508,7 +563,7 @@ window_esp.toggle("locker esp",false,function(val)
         end)
         
         for i,v in pairs(workspace.CurrentRooms:GetChildren()) do
-            setup(room) 
+            setup(v)
         end
         
         repeat task.wait() until not flags.esplocker
@@ -651,7 +706,7 @@ window_esp.toggle("goldpile esp",false,function(val)
             end
             
             task.spawn(function()
-                repeat task.wait() until not flags.espchest
+                repeat task.wait() until not flags.espgold
                 subaddcon:Disconnect()  
             end)  
         end
@@ -684,19 +739,38 @@ window_misc.toggle("notify entities",false,function(val)
     flags.hintrush = val
     
     if val then
-        local addconnect
-        addconnect = workspace:WaitForChild("LiveEntities").ChildAdded:Connect(function(v)
-            if table.find(entitynames,v.Name) then
-                repeat task.wait() until plr:DistanceFromCharacter(v:GetPivot().Position) < 1000 or not v:IsDescendantOf(workspace)
-                
-                if v:IsDescendantOf(workspace) then
-                    message(v.Name:gsub("Moving",""):lower().." is coming go hide")
-                end
+        local connections = {}
+        local warningnames = {RushMoving=true,AmbushMoving=true,A60=true,A120=true,Blitz=true,Surge=true}
+        
+        local function check(v)
+            if not warningnames[v.Name] then
+                return
             end
-        end) 
+            
+            task.spawn(function()
+                local core = v.PrimaryPart or v:FindFirstChildWhichIsA("BasePart",true)
+                if not core then
+                    return
+                end
+                
+                repeat task.wait() until plr:DistanceFromCharacter(core.Position) < 1000 or not v:IsDescendantOf(workspace) or not flags.hintrush
+                
+                if flags.hintrush and v:IsDescendantOf(workspace) then
+                    message((entitynames[v.Name] or v.Name):lower().." is coming go hide")
+                end
+            end)
+        end
+        
+        table.insert(connections,workspace.ChildAdded:Connect(check))
+        local liveentities = workspace:FindFirstChild("LiveEntities")
+        if liveentities then
+            table.insert(connections,liveentities.ChildAdded:Connect(check))
+        end
         
         repeat task.wait() until not flags.hintrush
-        addconnect:Disconnect()
+        for _,connection in pairs(connections) do
+            connection:Disconnect()
+        end
     end
 end)
 
@@ -763,16 +837,22 @@ window_misc.toggle("delete puzzle door",false,function(val)
     end
 end)
 
-local screechremote = entityinfo:FindFirstChild("Screech")
+local screechdisable = game.ReplicatedStorage:WaitForChild("GameData"):FindFirstChild("EntityDisableScreech")
 
-if screechremote then
+if screechdisable then
     window_misc.toggle("harmless screech",false,function(val)
         flags.noscreech = val
         
         if val then
-            screechremote.Parent = nil
-            repeat task.wait() until not flags.noscreech
-            screechremote.Parent = entityinfo
+            local oldvalue = screechdisable.Value
+            screechdisable.Value = true
+            repeat
+                task.wait(0.1)
+                if flags.noscreech and not screechdisable.Value then
+                    screechdisable.Value = true
+                end
+            until not flags.noscreech
+            screechdisable.Value = oldvalue
         end
     end)
 end
@@ -861,7 +941,7 @@ window_misc.toggle("A-000 door no locks",false,function(val)
         end)
         
         for i,v in pairs(workspace.CurrentRooms:GetChildren()) do
-            check(room)
+            check(v)
         end
         
         repeat task.wait() until not flags.roomsnolock
@@ -967,42 +1047,24 @@ window_misc.toggle("loot aura",false,function(val)
     end
 end)
 
-window_misc.label("bypass anticheat makes it so you CANT pick up ANYTHING so only do this in multiplayer or in the rooms area",32)
-
-window_misc.button("bypass anticheat",function()
-    local newhum = hum:Clone()
-    newhum.Name = "humlol"
-    newhum.Parent = char
-    task.wait()
-    hum.Parent = nil
+window_misc.toggle("harmless Ransom/A90",false,function(val)
+    flags.noa90 = val
     
-    hum = newhum
-    walkspeedslider.setmax(100)
+    if val then
+        local oldvalue = plr:GetAttribute("Invincibility")
+        plr:SetAttribute("Invincibility",true)
+        repeat
+            task.wait(0.1)
+            if flags.noa90 and plr:GetAttribute("Invincibility") ~= true then
+                plr:SetAttribute("Invincibility",true)
+            end
+        until not flags.noa90
+        plr:SetAttribute("Invincibility",oldvalue)
+    end
 end)
 
 if game.ReplicatedStorage:WaitForChild("GameData"):WaitForChild("Floor").Value == "Rooms" then
     local window_rooms = library.window("the rooms")
-    
-    local a90remote = game.ReplicatedStorage:WaitForChild("RemotesFolder"):WaitForChild("A90")
-    
-    window_rooms.toggle("harmless A90",false,function(val)
-        flags.noa90 = val
-        
-        if val  then
-            local jumpscare = plr.PlayerGui:WaitForChild("MainUI"):WaitForChild("Jumpscare"):FindFirstChild("Jumpscare_A90")
-           
-            if jumpscare then
-                jumpscare.Parent = nil
-                
-                a90remote.Parent = nil
-                repeat task.wait()
-                    game.SoundService.Main.Volume = 1 
-                until not flags.noa90
-                jumpscare.Parent = plr.PlayerGui.MainUI.Jumpscare
-                a90remote.Parent = entityinfo 
-            end
-        end
-    end)
     
     window_rooms.toggle("auto a-1000",false,function(val)
         flags.autorooms = val
@@ -1019,17 +1081,21 @@ if game.ReplicatedStorage:WaitForChild("GameData"):WaitForChild("Floor").Value =
                 return rooms[index]
             end
             
-            local entconnect
-            entconnect = workspace:WaitForChild("LiveEntities").ChildAdded:Connect(function(v)
-                if v:IsA("Model") then
-                    if v.Name == "A60" or v.Name == "A120" then
+            local entconnections = {}
+            local function watchentity(v)
+                if v:IsA("Model") and (v.Name == "A60" or v.Name == "A120") then
+                    task.spawn(function()
                         hide = true
-                        
-                        repeat task.wait() until not v:IsDescendantOf(workspace)
+                        repeat task.wait() until not v:IsDescendantOf(workspace) or not flags.autorooms
                         hide = false
-                    end
+                    end)
                 end
-            end)
+            end
+            table.insert(entconnections,workspace.ChildAdded:Connect(watchentity))
+            local liveentities = workspace:FindFirstChild("LiveEntities")
+            if liveentities then
+                table.insert(entconnections,liveentities.ChildAdded:Connect(watchentity))
+            end
             
             while flags.autorooms do
                 local room = getrecentroom(2)
@@ -1048,14 +1114,19 @@ if game.ReplicatedStorage:WaitForChild("GameData"):WaitForChild("Floor").Value =
                 
                 task.wait()
             end
-            entconnect:Disconnect()
+            for _,connection in pairs(entconnections) do
+                connection:Disconnect()
+            end
         end
     end)
 end
 
 window_misc.button("close gui",function()
-    flags = DELFLAGS
+    for k,v in pairs(DELFLAGS) do
+        flags[k] = v
+    end
     
+    char:SetAttribute("SpeedBoost",0)
     task.wait()
     library.delete()
 end)

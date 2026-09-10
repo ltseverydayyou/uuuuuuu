@@ -617,7 +617,7 @@ library.window = function(text)
         
         local slidervalue
         local function setslider(value)
-            local trueval = math.floor(value/roundto)*roundto
+            local trueval = math.clamp(math.floor(value/roundto)*roundto,min,max)
             local norm = (trueval-min)/(max-min)
             slideball.Position = UDim2.new(norm,0,0.5,0)
             txtholder.Text = tostring(text).." [".. tostring(math.floor(trueval*100)/100).."]"
@@ -627,26 +627,49 @@ library.window = function(text)
         end
         
         local holding = false
-        button.MouseButton1Down:Connect(function()
-            holdingmouse = true
+        local activeInput
+        
+        local function updateFromX(x)
+            local abpos = slidepart.AbsolutePosition
+            local absize = slidepart.AbsoluteSize
+            if absize.X <= 0 then
+                return
+            end
             
-            task.spawn(function()
-                while holdingmouse and windowalive and libalive do
-                    local abpos = slidepart.AbsolutePosition
-                    local absize = slidepart.AbsoluteSize
-                    local x = mouse.X
-                    
-                    local p = math.clamp((x-abpos.X)/(absize.X),0,1)
-                    local value = p*max+(1-p)*min
-                    
-                    setslider(value)
-                    task.wait() 
-                end 
-            end)
+            local p = math.clamp((x-abpos.X)/(absize.X),0,1)
+            local value = p*max+(1-p)*min
+            setslider(value)
+        end
+        
+        button.InputBegan:Connect(function(input)
+            if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then
+                return
+            end
+            
+            holding = true
+            activeInput = input
+            updateFromX(input.Position.X)
         end)
         
-        button.MouseButton1Up:Connect(function()
-            holding = false 
+        us.InputChanged:Connect(function(input)
+            if not holding or not windowalive or not libalive then
+                return
+            end
+            
+            if activeInput and activeInput.UserInputType == Enum.UserInputType.Touch then
+                if input == activeInput then
+                    updateFromX(input.Position.X)
+                end
+            elseif activeInput and activeInput.UserInputType == Enum.UserInputType.MouseButton1 and input.UserInputType == Enum.UserInputType.MouseMovement then
+                updateFromX(input.Position.X)
+            end
+        end)
+        
+        us.InputEnded:Connect(function(input)
+            if input == activeInput or (activeInput and activeInput.UserInputType == Enum.UserInputType.MouseButton1 and input.UserInputType == Enum.UserInputType.MouseButton1) then
+                holding = false
+                activeInput = nil
+            end
         end)
         
         frame.Size = frame.Size + UDim2.new(0,0,0,elementsize+3+5)

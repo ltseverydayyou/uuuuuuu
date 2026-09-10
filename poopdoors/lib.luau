@@ -68,6 +68,22 @@ end
 
 local library = {}
 local windows = {}
+local nativeWindow
+
+local function getNativeWindow()
+    if nativeWindow then
+        return nativeWindow
+    end
+    nativeWindow = VibeUI:Window({
+        Title = "DOORS",
+        Size = UDim2.fromOffset(560, 640),
+        Keybind = Enum.KeyCode.RightShift,
+        Layout = "Side",
+        Resizable = true,
+    })
+    table.insert(windows, nativeWindow)
+    return nativeWindow
+end
 
 local function decimalPlaces(step)
     step = tonumber(step) or 1
@@ -82,14 +98,8 @@ local function decimalPlaces(step)
 end
 
 function library.window(title)
-    local nativeWindow = VibeUI:Window({
-        Title = "DOORS | " .. tostring(title),
-        Size = UDim2.fromOffset(520, 620),
-        Keybind = Enum.KeyCode.RightShift,
-        Layout = "Side",
-        Resizable = true,
-    })
-    local nativeTab = nativeWindow:Tab({Name = tostring(title), Columns = 1})
+    local rootWindow = getNativeWindow()
+    local nativeTab = rootWindow:Tab({Name = tostring(title), Columns = 1})
     local nativeSection = nativeTab:Section({Name = tostring(title), Side = 1})
     local window = {}
 
@@ -165,7 +175,6 @@ function library.window(title)
         end)
     end
 
-    table.insert(windows, nativeWindow)
     return window
 end
 
@@ -181,6 +190,7 @@ function library.delete()
     pcall(function()
         VibeUI:Unload()
     end)
+    nativeWindow = nil
     rawset(Environment, "DoorsVibeUIUnload", nil)
 end
 

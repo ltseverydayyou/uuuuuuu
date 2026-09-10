@@ -4,6 +4,40 @@ local PreviousUnload = rawget(Environment, "DoorsVibeUIUnload")
 if type(PreviousUnload) == "function" then
     pcall(PreviousUnload)
 end
+local PreviousScriptCleanup = rawget(Environment, "DoorsScriptCleanup")
+if type(PreviousScriptCleanup) == "function" then
+    pcall(PreviousScriptCleanup)
+end
+
+local function cleanupStaleVibeUI()
+    local roots = {}
+    local playerGui = game.Players.LocalPlayer:FindFirstChild("PlayerGui")
+    if playerGui then
+        table.insert(roots,playerGui)
+    end
+    local ok,hui = pcall(function()
+        if gethui then
+            return gethui()
+        end
+        local coreGui = game:GetService("CoreGui")
+        return cloneref and cloneref(coreGui) or coreGui
+    end)
+    if ok and hui then
+        table.insert(roots,hui)
+    end
+    for _,root in ipairs(roots) do
+        for _,child in ipairs(root:GetChildren()) do
+            local displayOrder = child:IsA("ScreenGui") and child.DisplayOrder or nil
+            if child:IsA("ScreenGui") and child.Name == ""
+                and (displayOrder == 0 or displayOrder == 999 or displayOrder == 1000)
+            then
+                pcall(child.Destroy,child)
+            end
+        end
+    end
+end
+
+cleanupStaleVibeUI()
 
 local VibeUISource = game:HttpGet(
     "https://sirmemegithub.com/RealSlimShady2000/VibeUI/raw/branch/main/VibeUI.luau"
@@ -15,22 +49,6 @@ local function replacePlainOnce(source, old, new)
         return source, false
     end
     return string.sub(source, 1, startIndex - 1) .. new .. string.sub(source, endIndex + 1), true
-end
-
-local function replaceParentGui(source)
-    local startIndex = string.find(source, "local function GetParentGui(): Instance", 1, true)
-    local endIndex = startIndex and string.find(source, "\nend", startIndex, true)
-    if not startIndex or not endIndex then
-        return source, false
-    end
-    local replacement = "local function GetParentGui(): Instance\n\treturn LocalPlayer:WaitForChild(\"PlayerGui\")\nend"
-    return string.sub(source, 1, startIndex - 1) .. replacement .. string.sub(source, endIndex + 4), true
-end
-
-local patched
-VibeUISource, patched = replaceParentGui(VibeUISource)
-if not patched then
-    error("VibeUI PlayerGui compatibility patch failed")
 end
 
 local anchorCount
@@ -81,6 +99,10 @@ local function getNativeWindow()
         Layout = "Side",
         Resizable = true,
     })
+    local settingsOk, settingsError = pcall(VibeUI.CreateSettingsPage, VibeUI, nativeWindow)
+    if not settingsOk then
+        error("VibeUI settings page failed: " .. tostring(settingsError))
+    end
     table.insert(windows, nativeWindow)
     return nativeWindow
 end

@@ -1,4 +1,5 @@
 local library = loadstring(game:HttpGet('https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/refs/heads/main/poopdoors/lib.luau'))()
+local scriptEnvironment = type(getgenv) == "function" and getgenv() or _G
 local plr = game.Players.LocalPlayer
 local char = plr.Character or plr.CharacterAdded:Wait()
 local hum = char:FindFirstChildOfClass("Humanoid") or char:WaitForChild("Humanoid")
@@ -155,7 +156,11 @@ local flags = {
     itemloot = true,
     itemlights = true,
     itemedible = true,
+    itemhealing = true,
+    itemobjective = true,
     itemutility = true,
+    itemmagical = true,
+    itembattle = true,
     itemmisc = true,
     aurarange = 12,
     doorreach = false,
@@ -179,6 +184,7 @@ local promptRegistry = setmetatable({}, {__mode = "k"})
 local promptLastFired = setmetatable({}, {__mode = "k"})
 local promptConnections = {}
 local promptAuraRunning = false
+local itemVisualsByRoot = setmetatable({}, {__mode = "k"})
 
 local lightSourceNames = {
     lighter = true,
@@ -191,17 +197,28 @@ local lightSourceNames = {
     lantern = true,
     candle = true,
     candlejar = true,
-    laserpointer = true,
+    riftcandle = true,
 }
 
 local function getPromptModel(prompt)
     local current = prompt and prompt.Parent
     while current and current ~= workspace do
-        if current:IsA("Model") then
+        if current:IsA("Model") or current:IsA("Tool") then
             return current
         end
         current = current.Parent
     end
+end
+
+local function isInDropsFolder(instance)
+    local current = instance
+    while current and current ~= workspace do
+        if current.Name == "Drops" then
+            return true
+        end
+        current = current.Parent
+    end
+    return false
 end
 
 local function getPromptPosition(prompt,model)
@@ -211,7 +228,14 @@ local function getPromptPosition(prompt,model)
     elseif parent and parent:IsA("BasePart") then
         return parent.Position
     elseif model then
-        return model:GetPivot().Position
+        local part = model:IsA("BasePart") and model or model:FindFirstChildWhichIsA("BasePart",true)
+        if part then
+            return part.Position
+        end
+        local ok,pivot = pcall(model.GetPivot,model)
+        if ok then
+            return pivot.Position
+        end
     end
 end
 
@@ -222,6 +246,17 @@ local function getPromptLabel(prompt,model)
         return objectText
     end
     return modelName:gsub("Obtain$", "")
+end
+
+local function getItemAttribute(model,name)
+    if not model then
+        return nil
+    end
+    local value = model:GetAttribute(name)
+    if value ~= nil then
+        return value
+    end
+    return model:GetAttribute("Tool_" .. name)
 end
 
 local function normalizeText(value)
@@ -245,7 +280,14 @@ local function itemMatchesFilter(prompt,model)
     if filter:gsub("[%s,]", "") == "" then
         return true
     end
-    local label = (getPromptLabel(prompt,model) .. " " .. (model and model.Name or "")):lower()
+    local modelLabel = getItemAttribute(model,"Pickup") or getItemAttribute(model,"NameSingular")
+        or (model and model.Name or "")
+    -- Admin-panel prompts can retain a generic/stale ObjectText. Prefer the
+    -- model's catalog identity whenever it is available.
+    local label = (tostring(modelLabel) .. " " .. (model and model.Name or "")):lower()
+    if not model then
+        label = getPromptLabel(prompt,model):lower()
+    end
     for token in filter:gmatch("[^,]+") do
         token = token:gsub("^%s+", ""):gsub("%s+$", "")
         if token ~= "" and label:find(token,1,true) then
@@ -279,14 +321,50 @@ local itemCategoryNames = {
     loot = {goldpile=true, gold=true, coins=true, coin=true, coinroll=true, treasure=true, tipjar=true, goldgun=true},
     light = {lighter=true, flashlight=true, glowstick=true, glowsticks=true, bulklight=true, straplight=true, shakelight=true, lantern=true, candle=true, candlejar=true, laserpointer=true},
     edible = {apple=true, banana=true, nanner=true, candy=true, chocolate=true, gummyflashlight=true, vitamins=true, vitamin=true, smoothie=true, donut=true, gweensoda=true, bread=true, cheese=true, pizza=true, starbottle=true, starjug=true, starvial=true, riftsmoothie=true, riftjar=true},
+    healing = {bandagepack=true, aloevera=true, vitamins=true, vitamin=true},
+    objective = {libraryhintpaperhard=true, keyretro=true, holygrenade=true, keyelectrical=true, key=true, skeletonkey=true, keybackdoor=true, keyiron=true, hintbook=true, libraryhintpaper=true, generatorfuse=true},
     utility = {lockpick=true, skeletonkey=true, crucifix=true, bandage=true, bandagepack=true, aloevera=true, batterypack=true, shears=true, plant=true, multitool=true, compass=true, pocketmirror=true},
+    magical = {starbottle=true, starjug=true, starvial=true, riftcandle=true, riftsmoothie=true, riftjar=true},
+    battle = {goldgun=true, bigbomb=true, bigproptool=true, bomb=true, knockbomb=true, nanner=true, nannerpeel=true, snakebox=true, stopsign=true, boxinggloves=true},
+}
+
+-- Mirrors the live admin-panel catalog. This takes priority over generic
+-- attributes because some items intentionally carry another system's flags
+-- (for example Shears has a LightSource flag but belongs under Utility).
+local itemAdminCategories = {
+    lighter="light", straplight="light", shakelight="light", candle="light",
+    glowsticks="light", bulklight="light", flashlight="light", lantern="light",
+    bandagepack="healing", vitamins="healing", aloevera="healing",
+    batterypack="utility", lockpick="utility", laserpointer="utility", shears="utility",
+    alarmclock="utility", tipjar="utility", multitool="utility", compass="utility",
+    pocketmirror="utility", crucifix="utility",
+    smoothie="edible", donut="edible", gweensoda="edible", bread="edible",
+    cheese="edible", pizza="edible",
+    starbottle="magical", starjug="magical", starvial="magical", riftcandle="magical",
+    riftsmoothie="magical", riftjar="magical",
+    goldgun="battle", bigbomb="battle", bigproptool="battle", bomb="battle",
+    knockbomb="battle", nanner="battle", nannerpeel="battle", snakebox="battle",
+    stopsign="battle", boxinggloves="battle",
+    libraryhintpaperhard="objective", keyretro="objective", holygrenade="objective",
+    keyelectrical="objective", key="objective", skeletonkey="objective",
+    keybackdoor="objective", keyiron="objective", hintbook="objective",
+    libraryhintpaper="objective", generatorfuse="objective",
+    coinroll="loot",
+    knockbackstick="misc",
 }
 
 local function itemCategory(prompt,model)
+    local label = normalizeText(getPromptLabel(prompt,model))
+    local name = normalizeText(model and model.Name or ""):gsub("obtain$", "")
+    local adminCategory = itemAdminCategories[name] or itemAdminCategories[label]
+    if adminCategory then
+        return adminCategory
+    end
+
     local values = {
-        model and model:GetAttribute("ItemType"),
-        model and model:GetAttribute("Category"),
-        model and model:GetAttribute("ItemCategory"),
+        getItemAttribute(model,"ItemType"),
+        getItemAttribute(model,"Category"),
+        getItemAttribute(model,"ItemCategory"),
         prompt and prompt:GetAttribute("ItemType"),
         prompt and prompt:GetAttribute("Category"),
     }
@@ -303,8 +381,18 @@ local function itemCategory(prompt,model)
         end
     end
 
-    local label = normalizeText(getPromptLabel(prompt,model))
-    local name = normalizeText(model and model.Name or ""):gsub("obtain$", "")
+    if model then
+        if getItemAttribute(model,"LightSource") == true or getItemAttribute(model,"LightSourceBeam") == true then
+            return "light"
+        end
+        if getItemAttribute(model,"Essential") == true
+            or getItemAttribute(model,"ToolModuleName") == "Key"
+            or getItemAttribute(model,"LockID") ~= nil
+        then
+            return "objective"
+        end
+    end
+
     local function matches(names)
         for token in pairs(names) do
             if label == token or name == token then
@@ -315,10 +403,18 @@ local function itemCategory(prompt,model)
     end
     if isLightSource(prompt,model) or matches(itemCategoryNames.light) then
         return "light"
+    elseif matches(itemCategoryNames.objective) then
+        return "objective"
     elseif matches(itemCategoryNames.edible) then
         return "edible"
+    elseif matches(itemCategoryNames.healing) then
+        return "healing"
     elseif matches(itemCategoryNames.utility) then
         return "utility"
+    elseif matches(itemCategoryNames.magical) then
+        return "magical"
+    elseif matches(itemCategoryNames.battle) then
+        return "battle"
     elseif matches(itemCategoryNames.loot) then
         return "loot"
     end
@@ -335,7 +431,11 @@ local itemCategoryColors = {
     loot = Color3.fromRGB(255,205,60),
     light = Color3.fromRGB(255,245,145),
     edible = Color3.fromRGB(110,255,130),
+    healing = Color3.fromRGB(100,255,190),
+    objective = Color3.fromRGB(255,150,80),
     utility = Color3.fromRGB(100,190,255),
+    magical = Color3.fromRGB(210,120,255),
+    battle = Color3.fromRGB(255,90,90),
     misc = Color3.fromRGB(210,180,255),
 }
 
@@ -343,7 +443,11 @@ local function itemCategoryEnabled(category)
     return (category == "loot" and flags.itemloot)
         or (category == "light" and flags.itemlights)
         or (category == "edible" and flags.itemedible)
+        or (category == "healing" and flags.itemhealing)
+        or (category == "objective" and flags.itemobjective)
         or (category == "utility" and flags.itemutility)
+        or (category == "magical" and flags.itemmagical)
+        or (category == "battle" and flags.itembattle)
         or (category == "misc" and flags.itemmisc)
 end
 
@@ -378,14 +482,25 @@ local function startPromptRegistry()
         return
     end
     promptAuraRunning = true
-    bindPromptRoot(CurrentRooms)
-    table.insert(promptConnections,CurrentRooms.ChildAdded:Connect(function(room)
-        bindPromptRoot(room)
-    end))
+    -- Workspace also contains admin-panel drops (for example Workspace.Drops),
+    -- while CurrentRooms only covers room assets.
+    bindPromptRoot(workspace)
     table.insert(promptConnections,ProximityPromptService.PromptShown:Connect(registerPrompt))
     task.spawn(function()
+        local lastPromptScan = 0
         while flags.itemaura or flags.keyaura do
             local now = os.clock()
+            if now-lastPromptScan >= 0.5 then
+                -- Admin-panel drops can be inserted outside CurrentRooms and
+                -- may not emit the same child events as normal room assets.
+                local drops = workspace:FindFirstChild("Drops")
+                if drops then
+                    for _,instance in ipairs(drops:GetDescendants()) do
+                        registerPrompt(instance)
+                    end
+                end
+                lastPromptScan = now
+            end
             for prompt in pairs(promptRegistry) do
                 if not prompt.Parent then
                     promptRegistry[prompt] = nil
@@ -393,6 +508,9 @@ local function startPromptRegistry()
                     local model = getPromptModel(prompt)
                     local item = flags.itemaura and isItemPrompt(prompt,model)
                     local key = flags.keyaura and isKeyPrompt(prompt,model)
+                    if item and isInDropsFolder(model) then
+                        item = false
+                    end
                     local allowed = item or key
                     if item and not flags.itemallowlights and isLightSource(prompt,model) then
                         allowed = false
@@ -568,21 +686,33 @@ window_esp.toggle("item esp",false,function(val)
     
     if val then
         local function check(v)
-            if not v:IsA("Model") or v.Name == "KeyObtain" or v:GetAttribute("IsKey") then
+            if not (v:IsA("Model") or v:IsA("Tool")) or v.Name == "KeyObtain" or v:GetAttribute("IsKey") then
                 return
             end
             
             local prompt = v:FindFirstChildWhichIsA("ProximityPrompt",true)
+            if prompt and getPromptModel(prompt) ~= v then
+                return
+            end
             local isobtain = prompt and (isItemPrompt(prompt,v) or v.Name == "GoldPile" or v:GetAttribute("IsItem") == true)
             
             if isobtain and itemCategoryEnabled(itemCategory(prompt,v)) then
                 task.wait(0.1)
-                local part = v.PrimaryPart or v:FindFirstChild("Hitbox") or v:FindFirstChildWhichIsA("BasePart",true)
+                local previous = itemVisualsByRoot[v]
+                if previous and previous.isalive() then
+                    return
+                end
+                local part = (v:IsA("Model") and v.PrimaryPart)
+                    or v:FindFirstChild("Hitbox")
+                    or v:FindFirstChildWhichIsA("BasePart",true)
                 
                 if part then
                     local category = itemCategory(prompt,v)
-                    local label = prompt.ObjectText ~= "" and prompt.ObjectText or v.Name:gsub("Obtain$","")
+                    local label = getItemAttribute(v,"NameSingular") or getItemAttribute(v,"Pickup")
+                        or (prompt.ObjectText ~= "" and prompt.ObjectText)
+                        or v.Name:gsub("Obtain$","")
                     local h = esp(v,itemCategoryColors[category] or itemCategoryColors.misc,part,"["..category:upper().."] "..label)
+                    itemVisualsByRoot[v] = h
                     table.insert(esptable.items,h)
                 end
             end
@@ -618,13 +748,32 @@ window_esp.toggle("item esp",false,function(val)
                 setup(room) 
             end
         end
+
+        local worldconnect = workspace.DescendantAdded:Connect(function(v)
+            if v:IsA("ProximityPrompt") then
+                local root = getPromptModel(v)
+                if root then
+                    task.defer(check,root)
+                end
+            elseif v:IsA("Model") or v:IsA("Tool") then
+                task.defer(check,v)
+            end
+        end)
+
+        for _,v in ipairs(workspace:GetDescendants()) do
+            if v:IsA("Model") or v:IsA("Tool") then
+                check(v)
+            end
+        end
         
         repeat task.wait() until not flags.espitems
         addconnect:Disconnect()
+        worldconnect:Disconnect()
         
         for i,v in pairs(esptable.items) do
             v.delete()
         end 
+        table.clear(itemVisualsByRoot)
     end
 end)
 
@@ -1092,8 +1241,24 @@ window_esp.toggle("edible item esp",true,function(val)
     flags.itemedible = val
 end)
 
+window_esp.toggle("healing item esp",true,function(val)
+    flags.itemhealing = val
+end)
+
+window_esp.toggle("objective item esp",true,function(val)
+    flags.itemobjective = val
+end)
+
 window_esp.toggle("utility item esp",true,function(val)
     flags.itemutility = val
+end)
+
+window_esp.toggle("magical item esp",true,function(val)
+    flags.itemmagical = val
+end)
+
+window_esp.toggle("battle item esp",true,function(val)
+    flags.itembattle = val
 end)
 
 window_esp.toggle("misc item esp",true,function(val)
@@ -1718,12 +1883,34 @@ if game.ReplicatedStorage:WaitForChild("GameData"):WaitForChild("Floor").Value =
     end)
 end
 
-window_misc.button("close gui",function()
+local scriptCleaned = false
+local function cleanupScript()
+    if scriptCleaned then
+        return
+    end
+    scriptCleaned = true
     for k,v in pairs(DELFLAGS) do
         flags[k] = v
     end
-    
-    char:SetAttribute("SpeedBoost",0)
+    pcall(stopPromptRegistry)
+    pcall(stopDoorReach)
+    pcall(stopAntiDupe)
+    pcall(stopSnareBypass)
+    for _,bucket in pairs(esptable) do
+        for _,visual in pairs(bucket) do
+            pcall(visual.delete)
+        end
+        table.clear(bucket)
+    end
+    if char then
+        char:SetAttribute("SpeedBoost",0)
+    end
+    rawset(scriptEnvironment,"DoorsScriptCleanup",nil)
+end
+rawset(scriptEnvironment,"DoorsScriptCleanup",cleanupScript)
+
+window_misc.button("close gui",function()
+    cleanupScript()
     task.wait()
     library.delete()
 end)

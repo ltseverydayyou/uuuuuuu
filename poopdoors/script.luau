@@ -110,7 +110,7 @@ function esp(what,color,core,name)
     return ret 
 end
 
-local entityinfo = game.ReplicatedStorage:WaitForChild("EntityInfo")
+local entityinfo = game.ReplicatedStorage:WaitForChild("RemotesFolder")
 function message(text)
     local msg = Instance.new("Message",workspace)
     msg.Text = tostring(text)
@@ -404,7 +404,7 @@ window_esp.toggle("entity esp",false,function(val)
     
     if val then
         local addconnect
-        addconnect = workspace.ChildAdded:Connect(function(v)
+        addconnect = workspace:WaitForChild("LiveEntities").ChildAdded:Connect(function(v)
             if table.find(entitynames,v.Name) then
                 task.wait(0.1)
                 
@@ -685,7 +685,7 @@ window_misc.toggle("notify entities",false,function(val)
     
     if val then
         local addconnect
-        addconnect = workspace.ChildAdded:Connect(function(v)
+        addconnect = workspace:WaitForChild("LiveEntities").ChildAdded:Connect(function(v)
             if table.find(entitynames,v.Name) then
                 repeat task.wait() until plr:DistanceFromCharacter(v:GetPivot().Position) < 1000 or not v:IsDescendantOf(workspace)
                 
@@ -983,7 +983,7 @@ end)
 if game.ReplicatedStorage:WaitForChild("GameData"):WaitForChild("Floor").Value == "Rooms" then
     local window_rooms = library.window("the rooms")
     
-    local a90remote = game.ReplicatedStorage:WaitForChild("EntityInfo"):WaitForChild("A90")
+    local a90remote = game.ReplicatedStorage:WaitForChild("RemotesFolder"):WaitForChild("A90")
     
     window_rooms.toggle("harmless A90",false,function(val)
         flags.noa90 = val
@@ -1020,7 +1020,7 @@ if game.ReplicatedStorage:WaitForChild("GameData"):WaitForChild("Floor").Value =
             end
             
             local entconnect
-            entconnect = workspace.ChildAdded:Connect(function(v)
+            entconnect = workspace:WaitForChild("LiveEntities").ChildAdded:Connect(function(v)
                 if v:IsA("Model") then
                     if v.Name == "A60" or v.Name == "A120" then
                         hide = true

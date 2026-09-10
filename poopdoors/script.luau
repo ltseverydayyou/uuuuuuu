@@ -143,11 +143,7 @@ local flags = {
     hintrush = false,
     light = false,
     instapp = false,
-    noseek = false,
-    nogates = false,
-    nopuzzle = false,
     noa90 = false,
-    noskeledoors = false,
     noscreech = false,
     getcode = false,
     roomsnolock = false,
@@ -156,7 +152,17 @@ local flags = {
     keyaura = false,
     itemfilter = "",
     itemallowlights = false,
+    itemloot = true,
+    itemlights = true,
+    itemedible = true,
+    itemutility = true,
+    itemmisc = true,
     aurarange = 12,
+    doorreach = false,
+    doorreachrange = 0,
+    doorreachdelay = 0.05,
+    antidupe = false,
+    snarebypass = false,
     autorooms = false,
 }
 
@@ -164,7 +170,10 @@ local DELFLAGS = {}
 for k,v in pairs(flags) do
     DELFLAGS[k] = v
 end
-local esptable = {doors={},keys={},items={},books={},entity={},chests={},lockers={},people={},gold={}}
+local esptable = {doors={},keys={},items={},books={},entity={},chests={},lockers={},people={},gold={},dupe={}}
+local dupeConnections = {}
+local snareConnections = {}
+local snareStates = setmetatable({}, {__mode = "k"})
 
 local promptRegistry = setmetatable({}, {__mode = "k"})
 local promptLastFired = setmetatable({}, {__mode = "k"})
@@ -262,6 +271,78 @@ local function isItemPrompt(prompt,model)
     end
     local action = tostring(prompt.ActionText or ""):lower()
     return prompt.Name == "ModulePrompt" or action == "obtain" or model.Name:sub(-6) == "Obtain"
+end
+
+local itemCategoryNames = {
+    loot = {goldpile=true, gold=true, coins=true, coin=true, treasure=true},
+    light = {lighter=true, flashlight=true, glowstick=true, glowsticks=true, bulklight=true, straplight=true, candle=true, candlejar=true, laserpointer=true},
+    edible = {apple=true, banana=true, candy=true, chocolate=true, gummyflashlight=true, vitamins=true, vitamin=true, jerky=true, pretzel=true, bread=true, cheese=true},
+    utility = {lockpick=true, skeletonkey=true, crucifix=true, bandage=true, bandagepack=true, shears=true, plant=true},
+}
+
+local function itemCategory(prompt,model)
+    local values = {
+        model and model:GetAttribute("ItemType"),
+        model and model:GetAttribute("Category"),
+        model and model:GetAttribute("ItemCategory"),
+        prompt and prompt:GetAttribute("ItemType"),
+        prompt and prompt:GetAttribute("Category"),
+    }
+    for _,value in ipairs(values) do
+        local normalized = normalizeText(value)
+        if normalized == "lightsource" or normalized == "light" then
+            return "light"
+        elseif normalized == "edible" or normalized == "food" or normalized == "consumable" then
+            return "edible"
+        elseif normalized == "loot" or normalized == "treasure" then
+            return "loot"
+        elseif normalized == "utility" or normalized == "tool" then
+            return "utility"
+        end
+    end
+
+    local label = normalizeText(getPromptLabel(prompt,model))
+    local name = normalizeText(model and model.Name or ""):gsub("obtain$", "")
+    local function matches(names)
+        for token in pairs(names) do
+            if label == token or name == token then
+                return true
+            end
+        end
+        return false
+    end
+    if isLightSource(prompt,model) or matches(itemCategoryNames.light) then
+        return "light"
+    elseif matches(itemCategoryNames.edible) then
+        return "edible"
+    elseif matches(itemCategoryNames.utility) then
+        return "utility"
+    elseif matches(itemCategoryNames.loot) then
+        return "loot"
+    end
+    if model and model.Name == "GoldPile" then
+        return "loot"
+    end
+    if isLightSource(prompt,model) then
+        return "light"
+    end
+    return "misc"
+end
+
+local itemCategoryColors = {
+    loot = Color3.fromRGB(255,205,60),
+    light = Color3.fromRGB(255,245,145),
+    edible = Color3.fromRGB(110,255,130),
+    utility = Color3.fromRGB(100,190,255),
+    misc = Color3.fromRGB(210,180,255),
+}
+
+local function itemCategoryEnabled(category)
+    return (category == "loot" and flags.itemloot)
+        or (category == "light" and flags.itemlights)
+        or (category == "edible" and flags.itemedible)
+        or (category == "utility" and flags.itemutility)
+        or (category == "misc" and flags.itemmisc)
 end
 
 local function registerPrompt(instance)
@@ -489,16 +570,17 @@ window_esp.toggle("item esp",false,function(val)
                 return
             end
             
-            local prompt = v:FindFirstChild("ModulePrompt")
-            local isobtain = prompt and prompt:IsA("ProximityPrompt") and (prompt.ActionText == "Obtain" or v.Name:sub(-6) == "Obtain")
+            local prompt = v:FindFirstChildWhichIsA("ProximityPrompt",true)
+            local isobtain = prompt and (isItemPrompt(prompt,v) or v.Name == "GoldPile" or v:GetAttribute("IsItem") == true)
             
-            if isobtain then
+            if isobtain and itemCategoryEnabled(itemCategory(prompt,v)) then
                 task.wait(0.1)
                 local part = v.PrimaryPart or v:FindFirstChild("Hitbox") or v:FindFirstChildWhichIsA("BasePart",true)
                 
                 if part then
+                    local category = itemCategory(prompt,v)
                     local label = prompt.ObjectText ~= "" and prompt.ObjectText or v.Name:gsub("Obtain$","")
-                    local h = esp(v,Color3.fromRGB(160,190,255),part,label)
+                    local h = esp(v,itemCategoryColors[category] or itemCategoryColors.misc,part,"["..category:upper().."] "..label)
                     table.insert(esptable.items,h)
                 end
             end
@@ -996,120 +1078,286 @@ window_misc.toggle("notify entities",false,function(val)
     end
 end)
 
-local suppressedParts = setmetatable({}, {__mode = "k"})
+window_esp.toggle("loot item esp",true,function(val)
+    flags.itemloot = val
+end)
 
-local function suppressRoot(root,owner)
+window_esp.toggle("light source item esp",true,function(val)
+    flags.itemlights = val
+end)
+
+window_esp.toggle("edible item esp",true,function(val)
+    flags.itemedible = val
+end)
+
+window_esp.toggle("utility item esp",true,function(val)
+    flags.itemutility = val
+end)
+
+window_esp.toggle("misc item esp",true,function(val)
+    flags.itemmisc = val
+end)
+
+local function getRootPart(instance)
+    if not instance then
+        return
+    end
+    if instance:IsA("BasePart") then
+        return instance
+    end
+    return instance.PrimaryPart or instance:FindFirstChild("Hitbox") or instance:FindFirstChildWhichIsA("BasePart",true)
+end
+
+local function getDoorPosition(door)
+    local part = getRootPart(door)
+    if part then
+        return part.Position
+    end
+    local ok,pivot = pcall(door.GetPivot,door)
+    return ok and pivot.Position or nil
+end
+
+local function isFakeDoor(instance)
+    local current = instance
+    while current and current ~= workspace do
+        if current.Name == "DoorFake" then
+            return true
+        end
+        current = current.Parent
+    end
+    return false
+end
+
+local function getCurrentDoor()
+    local gameData = game.ReplicatedStorage:FindFirstChild("GameData")
+    local latestRoom = gameData and gameData:FindFirstChild("LatestRoom")
+    local room = latestRoom and CurrentRooms:FindFirstChild(tostring(latestRoom.Value))
+    local door = room and room:FindFirstChild("Door")
+    local remote = door and door:FindFirstChild("ClientOpen")
+    if remote and remote:IsA("RemoteEvent") and not isFakeDoor(door) then
+        return door,remote
+    end
+end
+
+local doorReachConnection
+local function stopDoorReach()
+    if doorReachConnection then
+        doorReachConnection:Disconnect()
+        doorReachConnection = nil
+    end
+end
+
+local function startDoorReach()
+    stopDoorReach()
+    doorReachConnection = RunService.Heartbeat:Connect(function()
+        if not flags.doorreach then
+            return
+        end
+        local door,remote = getCurrentDoor()
+        if not door or not remote then
+            return
+        end
+        local range = tonumber(flags.doorreachrange) or 0
+        if range > 0 then
+            local root = char and (char.PrimaryPart or char:FindFirstChild("HumanoidRootPart"))
+            local position = getDoorPosition(door)
+            if not root or not position or (root.Position - position).Magnitude > range then
+                return
+            end
+        end
+        local now = os.clock()
+        if now - (flags._lastDoorReach or 0) < math.max(0.01,tonumber(flags.doorreachdelay) or 0.05) then
+            return
+        end
+        flags._lastDoorReach = now
+        pcall(remote.FireServer,remote)
+    end)
+end
+
+window_misc.toggle("door reach",false,function(val)
+    flags.doorreach = val
+    if val then
+        startDoorReach()
+    else
+        stopDoorReach()
+    end
+end)
+
+window_misc.slider("door reach range (0 = infinite)",0,1000,5,0,function(value)
+    flags.doorreachrange = value
+end)
+
+window_misc.slider("door reach delay",0.01,0.5,0.01,0.05,function(value)
+    flags.doorreachdelay = value
+end)
+
+local dupePromptStates = setmetatable({}, {__mode = "k"})
+local dupeVisuals = setmetatable({}, {__mode = "k"})
+
+local function findFakeDoor(instance)
+    local current = instance
+    while current and current ~= workspace do
+        if current.Name == "DoorFake" then
+            return current
+        end
+        current = current.Parent
+    end
+end
+
+local function markFakeDoor(fake)
+    if not flags.antidupe or not fake or not fake.Parent then
+        return
+    end
+    for _,instance in ipairs(fake:GetDescendants()) do
+        if instance:IsA("ProximityPrompt") then
+            if dupePromptStates[instance] == nil then
+                dupePromptStates[instance] = instance.Enabled
+            end
+            instance.Enabled = false
+        end
+    end
+    if not dupeVisuals[fake] then
+        local core = getRootPart(fake)
+        if core then
+            dupeVisuals[fake] = esp(fake,Color3.fromRGB(255,120,50),core,"FAKE DOOR")
+        end
+    end
+end
+
+local function restoreFakeDoors()
+    for prompt,enabled in pairs(dupePromptStates) do
+        if prompt and prompt.Parent then
+            prompt.Enabled = enabled
+        end
+        dupePromptStates[prompt] = nil
+    end
+    for fake,visual in pairs(dupeVisuals) do
+        if visual then
+            visual.delete()
+        end
+        dupeVisuals[fake] = nil
+    end
+end
+
+local function stopAntiDupe()
+    for _,connection in ipairs(dupeConnections) do
+        connection:Disconnect()
+    end
+    table.clear(dupeConnections)
+    restoreFakeDoors()
+end
+
+local function startAntiDupe()
+    stopAntiDupe()
+    local function check(instance)
+        local fake = findFakeDoor(instance)
+        if fake then
+            markFakeDoor(fake)
+        end
+    end
+    for _,room in ipairs(CurrentRooms:GetChildren()) do
+        for _,instance in ipairs(room:GetDescendants()) do
+            check(instance)
+        end
+    end
+    table.insert(dupeConnections,CurrentRooms.DescendantAdded:Connect(check))
+end
+
+window_misc.toggle("anti dupe doors",false,function(val)
+    flags.antidupe = val
+    if val then
+        startAntiDupe()
+    else
+        stopAntiDupe()
+    end
+end)
+
+local function findSnareRoot(instance)
+    local current = instance
+    while current and current ~= workspace do
+        if current.Name == "Snare" or current.Name == "BrambleSnare" then
+            return current
+        end
+        current = current.Parent
+    end
+end
+
+local function suppressSnare(snare)
+    if not flags.snarebypass or not snare or not snare.Parent then
+        return
+    end
     local function suppress(instance)
         if not instance:IsA("BasePart") then
             return
         end
-        local state = suppressedParts[instance]
-        if not state then
-            state = {
-                owners = {},
+        if not snareStates[instance] then
+            snareStates[instance] = {
                 cancollide = instance.CanCollide,
                 cantouch = instance.CanTouch,
                 canquery = instance.CanQuery,
                 transparency = instance.LocalTransparencyModifier,
             }
-            suppressedParts[instance] = state
         end
-        state.owners[owner] = true
         instance.CanCollide = false
         instance.CanTouch = false
         instance.CanQuery = false
         instance.LocalTransparencyModifier = 1
     end
-    suppress(root)
-    for _,instance in ipairs(root:GetDescendants()) do
+    suppress(snare)
+    for _,instance in ipairs(snare:GetDescendants()) do
         suppress(instance)
-    end
-end
-
-local function restoreSuppression(owner)
-    for instance,state in pairs(suppressedParts) do
-        state.owners[owner] = nil
-        if not next(state.owners) then
-            if instance and instance.Parent then
-                instance.CanCollide = state.cancollide
-                instance.CanTouch = state.cantouch
-                instance.CanQuery = state.canquery
-                instance.LocalTransparencyModifier = state.transparency
-            end
-            suppressedParts[instance] = nil
+        if instance:IsA("ParticleEmitter") or instance:IsA("Beam") or instance:IsA("Trail") then
+            instance.Enabled = false
         end
     end
 end
 
-window_misc.toggle("disable seek chase",false,function(val)
-    flags.noseek = val
-    
-    if val then
-        local function check(room)
-            local trigger = room:FindFirstChild("TriggerEventCollision")
-            if trigger then
-                suppressRoot(trigger,"noseek")
-            end
+local function restoreSnares()
+    for instance,state in pairs(snareStates) do
+        if instance and instance.Parent then
+            instance.CanCollide = state.cancollide
+            instance.CanTouch = state.cantouch
+            instance.CanQuery = state.canquery
+            instance.LocalTransparencyModifier = state.transparency
         end
-        local addconnect
-        addconnect = workspace.CurrentRooms.ChildAdded:Connect(function(room)
-            task.defer(check,room)
-        end)
-        for _,room in ipairs(CurrentRooms:GetChildren()) do
-            check(room)
-        end
-        repeat task.wait() until not flags.noseek
-        addconnect:Disconnect()
-        restoreSuppression("noseek")
+        snareStates[instance] = nil
     end
-end)
+end
 
-window_misc.toggle("delete gates",false,function(val)
-    flags.nogates = val
-    
-    if val then
-        local function check(room)
-            local gate = room:FindFirstChild("Gate")
-            local door = gate and gate:FindFirstChild("ThingToOpen")
-            if door then
-                suppressRoot(door,"nogates")
-            end
-        end
-        local addconnect
-        addconnect = workspace.CurrentRooms.ChildAdded:Connect(function(room)
-            task.defer(check,room)
-        end)
-        for _,room in ipairs(CurrentRooms:GetChildren()) do
-            check(room)
-        end
-        repeat task.wait() until not flags.nogates
-        addconnect:Disconnect()
-        restoreSuppression("nogates")
+local function stopSnareBypass()
+    for _,connection in ipairs(snareConnections) do
+        connection:Disconnect()
     end
-end)
+    table.clear(snareConnections)
+    restoreSnares()
+end
 
-window_misc.toggle("delete puzzle door",false,function(val)
-    flags.nopuzzle = val
-    
+local function startSnareBypass()
+    stopSnareBypass()
+    local function check(instance)
+        local snare = findSnareRoot(instance)
+        if snare then
+            suppressSnare(snare)
+        end
+    end
+    for _,room in ipairs(CurrentRooms:GetChildren()) do
+        for _,instance in ipairs(room:GetDescendants()) do
+            check(instance)
+        end
+    end
+    table.insert(snareConnections,CurrentRooms.DescendantAdded:Connect(check))
+    local liveEntities = workspace:FindFirstChild("LiveEntities")
+    if liveEntities then
+        table.insert(snareConnections,liveEntities.DescendantAdded:Connect(check))
+    end
+end
+
+window_misc.toggle("snare bypass",false,function(val)
+    flags.snarebypass = val
     if val then
-        local function check(room)
-            local assets = room:FindFirstChild("Assets")
-            local paintings = assets and assets:FindFirstChild("Paintings")
-            local door = paintings and paintings:FindFirstChild("MovingDoor")
-            if door then
-                suppressRoot(door,"nopuzzle")
-            end
-        end
-        local addconnect
-        addconnect = workspace.CurrentRooms.ChildAdded:Connect(function(room)
-            task.defer(check,room)
-        end)
-        for _,room in ipairs(CurrentRooms:GetChildren()) do
-            check(room)
-        end
-        repeat task.wait() until not flags.nopuzzle
-        addconnect:Disconnect()
-        restoreSuppression("nopuzzle")
+        startSnareBypass()
+    else
+        stopSnareBypass()
     end
 end)
 
@@ -1155,29 +1403,6 @@ if screechdisable then
         end
     end)
 end
-
-window_misc.toggle("no skeleton doors",false,function(val)
-    flags.noskeledoors = val
-    
-    if val then
-        local function check(room)
-            local door = room:FindFirstChild("Wax_Door")
-            if door then
-                suppressRoot(door,"noskeledoors")
-            end
-        end
-        local addconnect
-        addconnect = workspace.CurrentRooms.ChildAdded:Connect(function(room)
-            task.defer(check,room)
-        end)
-        for _,room in ipairs(CurrentRooms:GetChildren()) do
-            check(room)
-        end
-        repeat task.wait() until not flags.noskeledoors
-        addconnect:Disconnect()
-        restoreSuppression("noskeledoors")
-    end
-end)
 
 window_misc.toggle("auto library code",false,function(val)
     flags.getcode = val

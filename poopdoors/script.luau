@@ -2,6 +2,16 @@ local library = loadstring(game:HttpGet('https://raw.githubusercontent.com/ltsev
 local plr = game.Players.LocalPlayer
 local char = plr.Character or plr.CharacterAdded:Wait()
 local hum = char:FindFirstChildOfClass("Humanoid") or char:WaitForChild("Humanoid")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ProximityPromptService = game:GetService("ProximityPromptService")
+local CurrentRooms = workspace:WaitForChild("CurrentRooms")
+local guiParent = (gethui and gethui()) or game.CoreGui
+
+plr.CharacterAdded:Connect(function(newchar)
+    char = newchar
+    hum = char:WaitForChild("Humanoid")
+end)
 
 if not fireproximityprompt then
     local msg = Instance.new("Message",workspace)
@@ -12,56 +22,44 @@ if not fireproximityprompt then
 end
 
 function esp(what,color,core,name)
-    local parts
-    
-    if typeof(what) == "Instance" then
-        if what:IsA("Model") then
-            parts = what:GetChildren()
-        elseif what:IsA("BasePart") then
-            parts = {what,table.unpack(what:GetChildren())}
-        end
-    elseif typeof(what) == "table" then
-        parts = what
+    local target = typeof(what) == "Instance" and what or core
+    local model = target and target:IsA("Model") and target or nil
+    local adorn = model and Instance.new("Highlight") or nil
+    local box = nil
+    local bill = nil
+    local txt = nil
+    local alive = true
+    local ancestry
+
+    if adorn then
+        adorn.Adornee = model
+        adorn.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        adorn.FillColor = color
+        adorn.FillTransparency = 0.82
+        adorn.OutlineColor = color
+        adorn.OutlineTransparency = 0.05
+        adorn.Parent = guiParent
+    elseif core and core:IsA("BasePart") then
+        box = Instance.new("BoxHandleAdornment")
+        box.Size = core.Size
+        box.AlwaysOnTop = true
+        box.ZIndex = 1
+        box.AdornCullingMode = Enum.AdornCullingMode.Never
+        box.Color3 = color
+        box.Transparency = 0.7
+        box.Adornee = core
+        box.Parent = guiParent
     end
-    
-    local bill
-    local boxes = {}
-    
-    for i,v in pairs(parts) do
-        if v:IsA("BasePart") then
-            local box = Instance.new("BoxHandleAdornment")
-            box.Size = v.Size
-            box.AlwaysOnTop = true
-            box.ZIndex = 1
-            box.AdornCullingMode = Enum.AdornCullingMode.Never
-            box.Color3 = color
-            box.Transparency = 0.7
-            box.Adornee = v
-            box.Parent = game.CoreGui
-            
-            table.insert(boxes,box)
-            
-            task.spawn(function()
-                while box.Parent do
-                    if box.Adornee == nil or not box.Adornee:IsDescendantOf(workspace) then
-                        box.Adornee = nil
-                        box.Visible = false
-                        box:Destroy()
-                        break
-                    end
-                    task.wait()
-                end
-            end)
-        end
-    end
-    
-    if core and name then
-        bill = Instance.new("BillboardGui",game.CoreGui)
+
+    if core and core:IsA("BasePart") and name then
+        bill = Instance.new("BillboardGui")
         bill.AlwaysOnTop = true
         bill.Size = UDim2.new(0,400,0,100)
         bill.Adornee = core
         bill.MaxDistance = 2000
-        
+        bill.StudsOffset = Vector3.new(0,2.5,0)
+        bill.Parent = guiParent
+
         local mid = Instance.new("Frame",bill)
         mid.AnchorPoint = Vector2.new(0.5,0.5)
         mid.BackgroundColor3 = color
@@ -69,49 +67,55 @@ function esp(what,color,core,name)
         mid.Position = UDim2.new(0.5,0,0.5,0)
         Instance.new("UICorner",mid).CornerRadius = UDim.new(1,0)
         Instance.new("UIStroke",mid)
-        
-        local txt = Instance.new("TextLabel",bill)
+
+        txt = Instance.new("TextLabel",bill)
         txt.AnchorPoint = Vector2.new(0.5,0.5)
         txt.BackgroundTransparency = 1
-        txt.BackgroundColor3 = color
         txt.TextColor3 = color
         txt.Size = UDim2.new(1,0,0,20)
         txt.Position = UDim2.new(0.5,0,0.7,0)
-        txt.Text = name
+        txt.Text = tostring(name)
+        txt.TextScaled = true
         Instance.new("UIStroke",txt)
-        
-        task.spawn(function()
-            while bill.Parent do
-                if bill.Adornee == nil or not bill.Adornee:IsDescendantOf(workspace) then
-                    bill.Enabled = false
-                    bill.Adornee = nil
-                    bill:Destroy()
-                    break
-                end
-                task.wait()
-            end
-        end)
     end
-    
-    local ret = {}
-    
-    ret.delete = function()
-        for i,v in pairs(boxes) do
-            if v and v.Parent then
-                v.Adornee = nil
-                v.Visible = false
-                v:Destroy()
-            end
+
+    local root = model or core
+    local function destroyVisuals()
+        alive = false
+        if ancestry then ancestry:Disconnect() end
+        if adorn then
+            adorn.Adornee = nil
+            adorn:Destroy()
         end
-        
-        if bill and bill.Parent then
-            bill.Enabled = false
+        if box then
+            box.Adornee = nil
+            box.Visible = false
+            box:Destroy()
+        end
+        if bill then
             bill.Adornee = nil
+            bill.Enabled = false
             bill:Destroy()
         end
     end
-    
-    return ret 
+
+    if root then
+        ancestry = root.AncestryChanged:Connect(function(_,parent)
+            if not parent then
+                task.defer(destroyVisuals)
+            end
+        end)
+    end
+
+    local ret = {}
+    ret.delete = destroyVisuals
+    ret.settext = function(value)
+        if txt and txt.Parent then txt.Text = tostring(value) end
+    end
+    ret.isalive = function()
+        return alive and root and root:IsDescendantOf(workspace)
+    end
+    return ret
 end
 
 local entityinfo = game.ReplicatedStorage:WaitForChild("RemotesFolder")
@@ -148,6 +152,11 @@ local flags = {
     getcode = false,
     roomsnolock = false,
     draweraura = false,
+    itemaura = false,
+    keyaura = false,
+    itemfilter = "",
+    itemallowlights = false,
+    aurarange = 12,
     autorooms = false,
 }
 
@@ -156,6 +165,172 @@ for k,v in pairs(flags) do
     DELFLAGS[k] = v
 end
 local esptable = {doors={},keys={},items={},books={},entity={},chests={},lockers={},people={},gold={}}
+
+local promptRegistry = setmetatable({}, {__mode = "k"})
+local promptLastFired = setmetatable({}, {__mode = "k"})
+local promptConnections = {}
+local promptAuraRunning = false
+
+local lightSourceNames = {
+    lighter = true,
+    flashlight = true,
+    glowstick = true,
+    glowsticks = true,
+    bulklight = true,
+    straplight = true,
+    candle = true,
+    candlejar = true,
+    laserpointer = true,
+}
+
+local function getPromptModel(prompt)
+    local current = prompt and prompt.Parent
+    while current and current ~= workspace do
+        if current:IsA("Model") then
+            return current
+        end
+        current = current.Parent
+    end
+end
+
+local function getPromptPosition(prompt,model)
+    local parent = prompt and prompt.Parent
+    if parent and parent:IsA("Attachment") then
+        return parent.WorldPosition
+    elseif parent and parent:IsA("BasePart") then
+        return parent.Position
+    elseif model then
+        return model:GetPivot().Position
+    end
+end
+
+local function getPromptLabel(prompt,model)
+    local objectText = prompt.ObjectText or ""
+    local modelName = model and model.Name or ""
+    if objectText ~= "" then
+        return objectText
+    end
+    return modelName:gsub("Obtain$", "")
+end
+
+local function normalizeText(value)
+    return tostring(value or ""):lower():gsub("[%p%s]+", "")
+end
+
+local function isLightSource(prompt,model)
+    local label = normalizeText(getPromptLabel(prompt,model))
+    local modelName = normalizeText(model and model.Name or "")
+    for name in pairs(lightSourceNames) do
+        local normalized = normalizeText(name)
+        if label:find(normalized,1,true) or modelName:find(normalized,1,true) then
+            return true
+        end
+    end
+    return false
+end
+
+local function itemMatchesFilter(prompt,model)
+    local filter = tostring(flags.itemfilter or ""):lower()
+    if filter:gsub("[%s,]", "") == "" then
+        return true
+    end
+    local label = (getPromptLabel(prompt,model) .. " " .. (model and model.Name or "")):lower()
+    for token in filter:gmatch("[^,]+") do
+        token = token:gsub("^%s+", ""):gsub("%s+$", "")
+        if token ~= "" and label:find(token,1,true) then
+            return true
+        end
+    end
+    return false
+end
+
+local function isKeyPrompt(prompt,model)
+    if not prompt or not model then
+        return false
+    end
+    local name = model.Name
+    local objectText = tostring(prompt.ObjectText or ""):lower()
+    return name == "KeyObtain" or model:GetAttribute("IsKey") == true or name == "LeverForGate" or objectText:find("key",1,true) ~= nil
+end
+
+local function isItemPrompt(prompt,model)
+    if not prompt or not model or isKeyPrompt(prompt,model) then
+        return false
+    end
+    if model.Name == "GoldPile" or model.Name:sub(1,8) == "ChestBox" or model.Name == "DrawerContainer" then
+        return false
+    end
+    local action = tostring(prompt.ActionText or ""):lower()
+    return prompt.Name == "ModulePrompt" or action == "obtain" or model.Name:sub(-6) == "Obtain"
+end
+
+local function registerPrompt(instance)
+    if instance:IsA("ProximityPrompt") then
+        promptRegistry[instance] = true
+    end
+end
+
+local function bindPromptRoot(root)
+    if not root then
+        return
+    end
+    for _,instance in ipairs(root:GetDescendants()) do
+        registerPrompt(instance)
+    end
+    table.insert(promptConnections,root.DescendantAdded:Connect(registerPrompt))
+end
+
+local function stopPromptRegistry()
+    for _,connection in ipairs(promptConnections) do
+        connection:Disconnect()
+    end
+    table.clear(promptConnections)
+    table.clear(promptRegistry)
+    table.clear(promptLastFired)
+    promptAuraRunning = false
+end
+
+local function startPromptRegistry()
+    if promptAuraRunning then
+        return
+    end
+    promptAuraRunning = true
+    bindPromptRoot(CurrentRooms)
+    table.insert(promptConnections,CurrentRooms.ChildAdded:Connect(function(room)
+        bindPromptRoot(room)
+    end))
+    table.insert(promptConnections,ProximityPromptService.PromptShown:Connect(registerPrompt))
+    task.spawn(function()
+        while flags.itemaura or flags.keyaura do
+            local now = os.clock()
+            for prompt in pairs(promptRegistry) do
+                if not prompt.Parent then
+                    promptRegistry[prompt] = nil
+                elseif prompt.Enabled then
+                    local model = getPromptModel(prompt)
+                    local item = flags.itemaura and isItemPrompt(prompt,model)
+                    local key = flags.keyaura and isKeyPrompt(prompt,model)
+                    local allowed = item or key
+                    if item and not flags.itemallowlights and isLightSource(prompt,model) then
+                        allowed = false
+                    end
+                    if item and allowed and not itemMatchesFilter(prompt,model) then
+                        allowed = false
+                    end
+                    local position = allowed and getPromptPosition(prompt,model) or nil
+                    local root = char and (char.PrimaryPart or char:FindFirstChild("HumanoidRootPart"))
+                    local inRange = position and root and (flags.aurarange <= 0 or (root.Position-position).Magnitude <= flags.aurarange)
+                    if allowed and inRange and now-(promptLastFired[prompt] or 0) >= 0.35 then
+                        promptLastFired[prompt] = now
+                        pcall(fireproximityprompt,prompt)
+                    end
+                end
+            end
+            task.wait(0.12)
+        end
+        stopPromptRegistry()
+    end)
+end
 
 local window_player = library.window("player")
 local window_esp = library.window("esp")
@@ -259,7 +434,7 @@ window_esp.toggle("key/lever esp",false,function(val)
                 elseif v.Name == "LeverForGate" then
                     local core = v.PrimaryPart or v:FindFirstChildWhichIsA("BasePart",true)
                     if core then
-                        local h = esp(v:GetDescendants(),Color3.fromRGB(90,255,40),core,"Lever")
+                        local h = esp(v,Color3.fromRGB(90,255,40),core,"Lever")
                         table.insert(esptable.keys,h)
                         
                         local sound = core:FindFirstChild("SoundToPlay") or v:FindFirstChild("SoundToPlay",true)
@@ -323,7 +498,7 @@ window_esp.toggle("item esp",false,function(val)
                 
                 if part then
                     local label = prompt.ObjectText ~= "" and prompt.ObjectText or v.Name:gsub("Obtain$","")
-                    local h = esp(v:GetDescendants(),Color3.fromRGB(160,190,255),part,label)
+                    local h = esp(v,Color3.fromRGB(160,190,255),part,label)
                     table.insert(esptable.items,h)
                 end
             end
@@ -420,31 +595,78 @@ end)
 
 local entitynames = {
     RushMoving = "Rush",
+    Rush = "Rush",
+    RushMovingEntity = "Rush",
     AmbushMoving = "Ambush",
+    Ambush = "Ambush",
+    AmbushMovingEntity = "Ambush",
     Eyes = "Eyes",
     A60 = "A60",
     A120 = "A120",
     FigureRig = "Figure",
+    Figure = "Figure",
+    FigureRagdoll = "Figure",
     GiggleCeiling = "Giggle",
+    Giggle = "Giggle",
     Snare = "Snare",
     Dread = "Dread",
     Blitz = "Blitz",
+    BlitzMoving = "Blitz",
+    BlitzMovingEntity = "Blitz",
+    BackdoorRush = "Blitz",
     Lookman = "Lookman",
+    BackdoorLookman = "Lookman",
     Surge = "Surge",
+    SurgeWarning = "Surge",
+    SurgeMoving = "Surge",
     Bramble = "Bramble",
     Groundskeeper = "Groundskeeper",
     Monument = "Monument",
     Gloombats = "Gloombats",
+    GloombatSwarm = "Gloombats",
+    LiveEntityBramble = "Bramble",
+    BrambleSnare = "Snare",
+    MonumentEntity = "Monument",
     Sally = "Sally",
+    SallyLingering = "Sally",
     JeffTheKiller = "Jeff The Killer",
+    Screech = "Screech",
+    Halt = "Halt",
+    SeekMoving = "Seek",
+    Seek = "Seek",
+    Jack = "Jack",
+    Grumble = "Grumble",
+    QueenGrumble = "Queen Grumble",
 }
+
+local entityattributes = {
+    EntityName = true,
+    Entity = true,
+    EntityType = true,
+}
+
+local function resolveEntityName(v)
+    local exact = entitynames[v.Name]
+    if exact then
+        return exact
+    end
+    for attribute in pairs(entityattributes) do
+        local value = v:GetAttribute(attribute)
+        if typeof(value) == "string" then
+            local attributeName = entitynames[value]
+            if attributeName then
+                return attributeName
+            end
+        end
+    end
+end
 
 local function entitytarget(v)
     if not v:IsA("Model") then
         return
     end
     
-    local display = entitynames[v.Name]
+    local display = resolveEntityName(v)
     if not display then
         return
     end
@@ -477,7 +699,7 @@ window_esp.toggle("entity esp",false,function(val)
                 if not v:IsDescendantOf(workspace) then
                     return
                 end
-                local h = esp(v:GetDescendants(),Color3.fromRGB(255,25,25),core,display)
+                local h = esp(v,Color3.fromRGB(255,25,25),core,display)
                 table.insert(esptable.entity,h)
             end
         end
@@ -774,21 +996,71 @@ window_misc.toggle("notify entities",false,function(val)
     end
 end)
 
+local suppressedParts = setmetatable({}, {__mode = "k"})
+
+local function suppressRoot(root,owner)
+    local function suppress(instance)
+        if not instance:IsA("BasePart") then
+            return
+        end
+        local state = suppressedParts[instance]
+        if not state then
+            state = {
+                owners = {},
+                cancollide = instance.CanCollide,
+                cantouch = instance.CanTouch,
+                canquery = instance.CanQuery,
+                transparency = instance.LocalTransparencyModifier,
+            }
+            suppressedParts[instance] = state
+        end
+        state.owners[owner] = true
+        instance.CanCollide = false
+        instance.CanTouch = false
+        instance.CanQuery = false
+        instance.LocalTransparencyModifier = 1
+    end
+    suppress(root)
+    for _,instance in ipairs(root:GetDescendants()) do
+        suppress(instance)
+    end
+end
+
+local function restoreSuppression(owner)
+    for instance,state in pairs(suppressedParts) do
+        state.owners[owner] = nil
+        if not next(state.owners) then
+            if instance and instance.Parent then
+                instance.CanCollide = state.cancollide
+                instance.CanTouch = state.cantouch
+                instance.CanQuery = state.canquery
+                instance.LocalTransparencyModifier = state.transparency
+            end
+            suppressedParts[instance] = nil
+        end
+    end
+end
+
 window_misc.toggle("disable seek chase",false,function(val)
     flags.noseek = val
     
     if val then
+        local function check(room)
+            local trigger = room:FindFirstChild("TriggerEventCollision")
+            if trigger then
+                suppressRoot(trigger,"noseek")
+            end
+        end
         local addconnect
         addconnect = workspace.CurrentRooms.ChildAdded:Connect(function(room)
-            local trigger = room:WaitForChild("TriggerEventCollision",2)
-            
-            if trigger then
-                trigger:Destroy() 
-            end
+            task.defer(check,room)
         end)
-        
+        for _,room in ipairs(CurrentRooms:GetChildren()) do
+            check(room)
+        end
         repeat task.wait() until not flags.noseek
         addconnect:Disconnect()
+        restoreSuppression("noseek")
     end
 end)
 
@@ -796,21 +1068,23 @@ window_misc.toggle("delete gates",false,function(val)
     flags.nogates = val
     
     if val then
+        local function check(room)
+            local gate = room:FindFirstChild("Gate")
+            local door = gate and gate:FindFirstChild("ThingToOpen")
+            if door then
+                suppressRoot(door,"nogates")
+            end
+        end
         local addconnect
         addconnect = workspace.CurrentRooms.ChildAdded:Connect(function(room)
-            local gate = room:WaitForChild("Gate",2)
-            
-            if gate then
-                local door = gate:WaitForChild("ThingToOpen",2)
-                
-                if door then
-                    door:Destroy() 
-                end
-            end
+            task.defer(check,room)
         end)
-        
+        for _,room in ipairs(CurrentRooms:GetChildren()) do
+            check(room)
+        end
         repeat task.wait() until not flags.nogates
         addconnect:Disconnect()
+        restoreSuppression("nogates")
     end
 end)
 
@@ -818,22 +1092,24 @@ window_misc.toggle("delete puzzle door",false,function(val)
     flags.nopuzzle = val
     
     if val then
+        local function check(room)
+            local assets = room:FindFirstChild("Assets")
+            local paintings = assets and assets:FindFirstChild("Paintings")
+            local door = paintings and paintings:FindFirstChild("MovingDoor")
+            if door then
+                suppressRoot(door,"nopuzzle")
+            end
+        end
         local addconnect
         addconnect = workspace.CurrentRooms.ChildAdded:Connect(function(room)
-            local assets = room:WaitForChild("Assets")
-            local paintings = assets:WaitForChild("Paintings",2)
-            
-            if paintings then
-                local door = paintings:WaitForChild("MovingDoor",2)
-            
-                if door then
-                    door:Destroy() 
-                end 
-            end
+            task.defer(check,room)
         end)
-        
+        for _,room in ipairs(CurrentRooms:GetChildren()) do
+            check(room)
+        end
         repeat task.wait() until not flags.nopuzzle
         addconnect:Disconnect()
+        restoreSuppression("nopuzzle")
     end
 end)
 
@@ -845,14 +1121,37 @@ if screechdisable then
         
         if val then
             local oldvalue = screechdisable.Value
-            screechdisable.Value = true
-            repeat
-                task.wait(0.1)
-                if flags.noscreech and not screechdisable.Value then
+            local connections = {}
+            local function removeScreech(instance)
+                if not flags.noscreech or not instance:IsA("Model") then
+                    return
+                end
+                local lower = instance.Name:lower()
+                if lower == "screech" or lower:find("screech",1,true) then
+                    pcall(instance.Destroy,instance)
+                end
+            end
+            local function reinforce()
+                if flags.noscreech and screechdisable.Parent and screechdisable.Value ~= true then
                     screechdisable.Value = true
                 end
-            until not flags.noscreech
-            screechdisable.Value = oldvalue
+            end
+            screechdisable.Value = true
+            table.insert(connections,screechdisable.Changed:Connect(reinforce))
+            table.insert(connections,workspace.DescendantAdded:Connect(removeScreech))
+            task.spawn(function()
+                while flags.noscreech and screechdisable.Parent do
+                    reinforce()
+                    task.wait(0.05)
+                end
+            end)
+            repeat task.wait() until not flags.noscreech
+            for _,connection in ipairs(connections) do
+                connection:Disconnect()
+            end
+            if screechdisable.Parent then
+                screechdisable.Value = oldvalue
+            end
         end
     end)
 end
@@ -861,17 +1160,22 @@ window_misc.toggle("no skeleton doors",false,function(val)
     flags.noskeledoors = val
     
     if val then
+        local function check(room)
+            local door = room:FindFirstChild("Wax_Door")
+            if door then
+                suppressRoot(door,"noskeledoors")
+            end
+        end
         local addconnect
         addconnect = workspace.CurrentRooms.ChildAdded:Connect(function(room)
-            local door = room:WaitForChild("Wax_Door",2)
-            
-            if door then
-                door:Destroy() 
-            end
+            task.defer(check,room)
         end)
-        
+        for _,room in ipairs(CurrentRooms:GetChildren()) do
+            check(room)
+        end
         repeat task.wait() until not flags.noskeledoors
         addconnect:Disconnect()
+        restoreSuppression("noskeledoors")
     end
 end)
 
@@ -947,6 +1251,32 @@ window_misc.toggle("A-000 door no locks",false,function(val)
         repeat task.wait() until not flags.roomsnolock
         addconnect:Disconnect()
     end
+end)
+
+window_misc.toggle("item prompt aura",false,function(val)
+    flags.itemaura = val
+    if val then
+        startPromptRegistry()
+    end
+end)
+
+window_misc.toggle("key prompt aura",false,function(val)
+    flags.keyaura = val
+    if val then
+        startPromptRegistry()
+    end
+end)
+
+window_misc.toggle("include light source items",false,function(val)
+    flags.itemallowlights = val
+end)
+
+window_misc.textbox("item names, comma separated; blank = all",function(value)
+    flags.itemfilter = tostring(value or "")
+end)
+
+window_misc.slider("item/key aura range",0,100,1,12,function(value)
+    flags.aurarange = value
 end)
 
 window_misc.toggle("loot aura",false,function(val)
@@ -1068,65 +1398,3 @@ if game.ReplicatedStorage:WaitForChild("GameData"):WaitForChild("Floor").Value =
     
     window_rooms.toggle("auto a-1000",false,function(val)
         flags.autorooms = val
-        
-        if val then
-            local hide = false
-
-            local function getrecentroom(index)
-                local rooms = workspace.CurrentRooms:GetChildren() 
-                table.sort(rooms,function(a,b)
-                    return tonumber(a.Name) > tonumber(b.Name) 
-                end)
-                
-                return rooms[index]
-            end
-            
-            local entconnections = {}
-            local function watchentity(v)
-                if v:IsA("Model") and (v.Name == "A60" or v.Name == "A120") then
-                    task.spawn(function()
-                        hide = true
-                        repeat task.wait() until not v:IsDescendantOf(workspace) or not flags.autorooms
-                        hide = false
-                    end)
-                end
-            end
-            table.insert(entconnections,workspace.ChildAdded:Connect(watchentity))
-            local liveentities = workspace:FindFirstChild("LiveEntities")
-            if liveentities then
-                table.insert(entconnections,liveentities.ChildAdded:Connect(watchentity))
-            end
-            
-            while flags.autorooms do
-                local room = getrecentroom(2)
-                local door = room:WaitForChild("Door")
-                local dpos = door:GetPivot()
-                
-                if hide then
-                    repeat task.wait()
-                        char:PivotTo(dpos+Vector3.new(0,150,0))
-                    until not hide
-                else
-                    repeat task.wait()
-                        char:PivotTo(dpos)
-                    until lastroom ~= room or not flags.autorooms
-                end
-                
-                task.wait()
-            end
-            for _,connection in pairs(entconnections) do
-                connection:Disconnect()
-            end
-        end
-    end)
-end
-
-window_misc.button("close gui",function()
-    for k,v in pairs(DELFLAGS) do
-        flags[k] = v
-    end
-    
-    char:SetAttribute("SpeedBoost",0)
-    task.wait()
-    library.delete()
-end)

@@ -1367,6 +1367,11 @@ local screechdisable = game.ReplicatedStorage:WaitForChild("GameData"):FindFirst
 
 if screechdisable then
     local screechStates = setmetatable({}, {__mode = "k"})
+    local function clearScreechRenderSteps()
+        for index = 1,2000 do
+            pcall(RunService.UnbindFromRenderStep,RunService,"screechStuff"..index)
+        end
+    end
     window_misc.toggle("harmless screech",false,function(val)
         flags.noscreech = val
         
@@ -1408,6 +1413,7 @@ if screechdisable then
                 end
             end
             screechdisable.Value = true
+            clearScreechRenderSteps()
             table.insert(connections,screechdisable.Changed:Connect(reinforce))
             table.insert(connections,workspace.DescendantAdded:Connect(hideScreech))
             for _,instance in ipairs(workspace:GetDescendants()) do
@@ -1416,6 +1422,7 @@ if screechdisable then
             task.spawn(function()
                 while flags.noscreech and screechdisable.Parent do
                     reinforce()
+                    clearScreechRenderSteps()
                     task.wait(0.05)
                 end
             end)

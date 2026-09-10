@@ -187,6 +187,8 @@ local lightSourceNames = {
     glowsticks = true,
     bulklight = true,
     straplight = true,
+    shakelight = true,
+    lantern = true,
     candle = true,
     candlejar = true,
     laserpointer = true,
@@ -274,10 +276,10 @@ local function isItemPrompt(prompt,model)
 end
 
 local itemCategoryNames = {
-    loot = {goldpile=true, gold=true, coins=true, coin=true, treasure=true},
-    light = {lighter=true, flashlight=true, glowstick=true, glowsticks=true, bulklight=true, straplight=true, candle=true, candlejar=true, laserpointer=true},
-    edible = {apple=true, banana=true, candy=true, chocolate=true, gummyflashlight=true, vitamins=true, vitamin=true, jerky=true, pretzel=true, bread=true, cheese=true},
-    utility = {lockpick=true, skeletonkey=true, crucifix=true, bandage=true, bandagepack=true, shears=true, plant=true},
+    loot = {goldpile=true, gold=true, coins=true, coin=true, coinroll=true, treasure=true, tipjar=true, goldgun=true},
+    light = {lighter=true, flashlight=true, glowstick=true, glowsticks=true, bulklight=true, straplight=true, shakelight=true, lantern=true, candle=true, candlejar=true, laserpointer=true},
+    edible = {apple=true, banana=true, nanner=true, candy=true, chocolate=true, gummyflashlight=true, vitamins=true, vitamin=true, smoothie=true, donut=true, gweensoda=true, bread=true, cheese=true, pizza=true, starbottle=true, starjug=true, starvial=true, riftsmoothie=true, riftjar=true},
+    utility = {lockpick=true, skeletonkey=true, crucifix=true, bandage=true, bandagepack=true, aloevera=true, batterypack=true, shears=true, plant=true, multitool=true, compass=true, pocketmirror=true},
 }
 
 local function itemCategory(prompt,model)

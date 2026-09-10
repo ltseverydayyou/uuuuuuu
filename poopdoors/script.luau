@@ -1366,19 +1366,40 @@ end)
 local screechdisable = game.ReplicatedStorage:WaitForChild("GameData"):FindFirstChild("EntityDisableScreech")
 
 if screechdisable then
+    local screechStates = setmetatable({}, {__mode = "k"})
     window_misc.toggle("harmless screech",false,function(val)
         flags.noscreech = val
         
         if val then
             local oldvalue = screechdisable.Value
             local connections = {}
-            local function removeScreech(instance)
+            local function hideScreech(instance)
                 if not flags.noscreech or not instance:IsA("Model") then
                     return
                 end
                 local lower = instance.Name:lower()
                 if lower == "screech" or lower:find("screech",1,true) then
-                    pcall(instance.Destroy,instance)
+                    for _,descendant in ipairs(instance:GetDescendants()) do
+                        if descendant:IsA("BasePart") then
+                            if not screechStates[descendant] then
+                                screechStates[descendant] = {
+                                    cancollide = descendant.CanCollide,
+                                    cantouch = descendant.CanTouch,
+                                    canquery = descendant.CanQuery,
+                                    transparency = descendant.LocalTransparencyModifier,
+                                }
+                            end
+                            descendant.CanCollide = false
+                            descendant.CanTouch = false
+                            descendant.CanQuery = false
+                            descendant.LocalTransparencyModifier = 1
+                        elseif descendant:IsA("ParticleEmitter") or descendant:IsA("Beam") or descendant:IsA("Trail") then
+                            descendant.Enabled = false
+                        elseif descendant:IsA("Sound") then
+                            descendant.Volume = 0
+                            pcall(descendant.Stop,descendant)
+                        end
+                    end
                 end
             end
             local function reinforce()
@@ -1388,7 +1409,10 @@ if screechdisable then
             end
             screechdisable.Value = true
             table.insert(connections,screechdisable.Changed:Connect(reinforce))
-            table.insert(connections,workspace.DescendantAdded:Connect(removeScreech))
+            table.insert(connections,workspace.DescendantAdded:Connect(hideScreech))
+            for _,instance in ipairs(workspace:GetDescendants()) do
+                hideScreech(instance)
+            end
             task.spawn(function()
                 while flags.noscreech and screechdisable.Parent do
                     reinforce()
@@ -1401,6 +1425,15 @@ if screechdisable then
             end
             if screechdisable.Parent then
                 screechdisable.Value = oldvalue
+            end
+            for part,state in pairs(screechStates) do
+                if part and part.Parent then
+                    part.CanCollide = state.cancollide
+                    part.CanTouch = state.cantouch
+                    part.CanQuery = state.canquery
+                    part.LocalTransparencyModifier = state.transparency
+                end
+                screechStates[part] = nil
             end
         end
     end)

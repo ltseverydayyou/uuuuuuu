@@ -1,8 +1,8 @@
 local ENV = (getgenv and getgenv()) or _G
 
-if type(ENV.__FunkyFridayVibeAutoplayer) == "table" and type(ENV.__FunkyFridayVibeAutoplayer.Unload) == "function" then
+if type(ENV.__FunkyFridayAutoplayer) == "table" and type(ENV.__FunkyFridayAutoplayer.Unload) == "function" then
 	pcall(function()
-		ENV.__FunkyFridayVibeAutoplayer:Unload()
+		ENV.__FunkyFridayAutoplayer:Unload()
 	end)
 end
 
@@ -101,7 +101,7 @@ local st = {
 	laneDown = {},
 	laneCount = {},
 	Session = {},
-	VibeUI = nil,
+	RayfieldWindow = nil,
 	FieldWatch = nil,
 	ActiveTasks = 0,
 	ScriptBindings = setmetatable({}, {__mode = "k"}),
@@ -161,7 +161,7 @@ local st = {
 	}
 }
 
-ENV.__FunkyFridayVibeAutoplayer = st
+ENV.__FunkyFridayAutoplayer = st
 
 local function getLaneKeyCode(action)
 	if not action then
@@ -809,43 +809,48 @@ function st:Unload()
 		end
 	end
 	table.clear(self.ScriptBindings)
-	if self.VibeUI then
+	if self.RayfieldWindow and not self.RayfieldWindow.unloaded then
 		pcall(function()
-			self.VibeUI:Unload()
+			self.RayfieldWindow:Unload()
 		end)
 	end
-	if ENV.__FunkyFridayVibeAutoplayer == self then
-		ENV.__FunkyFridayVibeAutoplayer = nil
+	self.RayfieldWindow = nil
+	if ENV.__FunkyFridayAutoplayer == self then
+		ENV.__FunkyFridayAutoplayer = nil
 	end
 end
 
-local VibeUI = loadstring(game:HttpGet("https://sirmemegithub.com/RealSlimShady2000/VibeUI/raw/branch/main/VibeUI.luau"))()
-st.VibeUI = VibeUI
-VibeUI.Config.MobileToggle = true
+local Rayfield = loadstring(game:HttpGet("https://sirius.menu/gen2"))()
 
-local Window = VibeUI:Window({
-	Title = "Funky Friday Autoplayer",
-	Size = UDim2.fromOffset(680, 470),
-	Keybind = Enum.KeyCode.RightControl,
-	Layout = "Side",
-	Resizable = true
+local Window = Rayfield:CreateWindow({
+	name = "Funky Friday Autoplayer",
+	subtitle = "Rayfield Gen2",
+	sidebarLayout = true,
+	showName = "Funky Friday",
+	showIcon = 0,
+	configuration = {
+		autoSave = true,
+		autoLoad = true,
+		fileName = "FunkyFridayAutoplayer",
+	}
+})
+st.RayfieldWindow = Window
+
+local Main = Window:CreateTab({
+	name = "Autoplayer"
 })
 
-local Main = Window:Tab({
-	Name = "Autoplayer",
-	Columns = 2
-})
+local Grid = Main:CreateGroup()
+local Controls = Grid:CreateGroup({ direction = "column" })
+local Runtime = Grid:CreateGroup({ direction = "column" })
 
-local Controls = Main:Section({
-	Name = "Playback",
-	Side = 1
-})
+Controls:CreateSection({ name = "Playback" })
 
-Controls:Toggle({
-	Name = "Autoplay",
-	Flag = "FF_Autoplay",
-	Default = true,
-	Callback = function(value)
+Controls:CreateToggle({
+	name = "Autoplay",
+	flag = "FF_Autoplay",
+	value = true,
+	callback = function(value)
 		st.auto = value
 		if not value then
 			releaseAll()
@@ -854,12 +859,13 @@ Controls:Toggle({
 })
 
 if #InputModes > 1 then
-	Controls:Dropdown({
-		Name = "Input Mode",
-		Flag = IsExternal and "FF_ExternalInputMode" or "FF_InputMode",
-		Items = InputModes,
-		Default = DefaultInputMode,
-		Callback = function(value)
+	Controls:CreateDropdown({
+		name = "Input Mode",
+		flag = IsExternal and "FF_ExternalInputMode" or "FF_InputMode",
+		options = InputModes,
+		value = DefaultInputMode,
+		multiSelect = false,
+		callback = function(value)
 			releaseAll()
 			if table.find(InputModes, value) then
 				st.inMode = value
@@ -871,87 +877,91 @@ if #InputModes > 1 then
 end
 
 if IsDesktop then
-	Controls:Paragraph({
-		Name = "PC Warning",
-		Content = "Funky Friday stops reading gameplay inputs whenever Roblox loses focus. If you tab out or click another window, the autoplayer won’t work until Roblox is focused again."
+	Controls:CreateText({
+		name = "PC Warning",
+		text = "Funky Friday stops reading gameplay inputs whenever Roblox loses focus. If you tab out or click another window, the autoplayer won’t work until Roblox is focused again."
 	})
 end
 
 if IsExternal then
-	Controls:Paragraph({
-		Name = "External Executor",
-		Content = "Some executor-only input methods aren’t available here, so the autoplayer only shows the input modes this executor can actually use."
+	Controls:CreateText({
+		name = "External Executor",
+		text = "Some executor-only input methods aren’t available here, so the autoplayer only shows the input modes this executor can actually use."
 	})
 end
 
-Controls:Slider({
-	Name = "Hit Accuracy",
-	Flag = "FF_Accuracy",
-	Min = 0,
-	Max = 100,
-	Default = 100,
-	Decimals = 1,
-	Suffix = "%",
-	Callback = function(value)
+Controls:CreateSlider({
+	name = "Hit Accuracy",
+	flag = "FF_Accuracy",
+	range = { 0, 100 },
+	increment = 1,
+	value = 100,
+	suffix = "%",
+	callback = function(value)
 		st.accuracy = math.clamp(tonumber(value) or 100, 0, 100)
 	end
 })
 
-Controls:Slider({
-	Name = "Timing Offset",
-	Flag = "FF_TimingOffset",
-	Min = -100,
-	Max = 100,
-	Default = 0,
-	Decimals = 1,
-	Suffix = "ms",
-	Callback = function(value)
+Controls:CreateSlider({
+	name = "Timing Offset",
+	flag = "FF_TimingOffset",
+	range = { -100, 100 },
+	increment = 1,
+	value = 0,
+	suffix = "ms",
+	callback = function(value)
 		st.off = tonumber(value) or 0
 	end
 })
 
-Controls:Slider({
-	Name = "Spawn-to-Hit Delay",
-	Flag = "FF_BaseDelay",
-	Min = 150,
-	Max = 320,
-	Default = 230,
-	Decimals = 1,
-	Suffix = "ms",
-	Callback = function(value)
+Controls:CreateSlider({
+	name = "Spawn-to-Hit Delay",
+	flag = "FF_BaseDelay",
+	range = { 150, 320 },
+	increment = 1,
+	value = 230,
+	suffix = "ms",
+	callback = function(value)
 		st.baseMs = math.clamp(tonumber(value) or 230, 100, 500)
 	end
 })
 
-Controls:Slider({
-	Name = "Tap Hold Time",
-	Flag = "FF_TapMs",
-	Min = 5,
-	Max = 100,
-	Default = 35,
-	Decimals = 1,
-	Suffix = "ms",
-	Callback = function(value)
+Controls:CreateSlider({
+	name = "Tap Hold Time",
+	flag = "FF_TapMs",
+	range = { 5, 100 },
+	increment = 1,
+	value = 35,
+	suffix = "ms",
+	callback = function(value)
 		st.tapMs = math.clamp(tonumber(value) or 35, 5, 250)
 	end
 })
 
-local Runtime = Main:Section({
-	Name = "Runtime",
-	Side = 2
+Runtime:CreateSection({ name = "Runtime" })
+
+Runtime:CreateButton({
+	name = "Rebind Song",
+	callback = function()
+		task.defer(bindSong)
+	end
 })
 
-local Buttons = Runtime:Button()
-Buttons:Add("Rebind Song", function()
-	task.defer(bindSong)
-end)
+Runtime:CreateButton({
+	name = "Unload",
+	callback = function()
+		st:Unload()
+	end
+})
 
-local Unload = Runtime:Button()
-Unload:Add("Unload", function()
-	st:Unload()
+connections:add(UserInputService.InputBegan, function(input, gameProcessed)
+	if gameProcessed or input.KeyCode ~= Enum.KeyCode.RightControl then
+		return
+	end
+	if st.RayfieldWindow and not st.RayfieldWindow.unloaded then
+		st.RayfieldWindow:ToggleHide()
+	end
 end)
-
-VibeUI:CreateSettingsPage(Window)
 
 task.defer(refreshSpecialNoteSkins)
 
@@ -974,9 +984,8 @@ end
 bindSong()
 st.FieldWatch = RunService.Heartbeat:Connect(fieldWatch)
 
-VibeUI:Notification({
-	Title = "Funky Friday Autoplayer",
-	Description = IsExternal and "External executor support loaded." or "Autoplayer loaded.",
-	Type = "success",
-	Duration = 4
+Window:Notify({
+	title = "Funky Friday Autoplayer",
+	content = IsExternal and "External executor support loaded." or "Autoplayer loaded.",
+	duration = 4
 })

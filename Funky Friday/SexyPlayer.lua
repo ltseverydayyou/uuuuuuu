@@ -53,10 +53,11 @@ end)
 local IsExternal = IsDesktop and not HasFireSignal
 
 local InputModes = {}
-if IsDesktop and HasScriptableInput then
-	InputModes[#InputModes + 1] = IsExternal and "Scriptable Input" or "firesignal"
-elseif HasFireSignal then
+if HasFireSignal then
 	InputModes[#InputModes + 1] = "firesignal"
+end
+if HasScriptableInput then
+	InputModes[#InputModes + 1] = "Scriptable Input"
 end
 if HasVirtualInput then
 	InputModes[#InputModes + 1] = "Virtual Input"
@@ -107,6 +108,7 @@ local st = {
 	ScriptBindings = setmetatable({}, {__mode = "k"}),
 	ConfigWatch = nil,
 	SpecialPageWatch = nil,
+	InputModes = InputModes,
 	Capabilities = {
 		External = IsExternal,
 		FireSignal = HasFireSignal,
@@ -202,21 +204,30 @@ local function fireAction(action, down)
 		return false
 	end
 
-	if IsDesktop and HasScriptableInput then
+	if st.inMode == "Scriptable Input" then
+		if not HasScriptableInput then
+			return false
+		end
+
 		local binding = getScriptBinding(action)
 		if not binding then
 			return false
 		end
+
 		return pcall(function()
 			binding:Fire(down)
 		end)
 	end
 
-	if not HasFireSignal then
-		return false
+	if st.inMode == "firesignal" then
+		if not HasFireSignal then
+			return false
+		end
+
+		return pcall(firesignal, down and action.Pressed or action.Released)
 	end
 
-	return pcall(firesignal, down and action.Pressed or action.Released)
+	return false
 end
 
 local function pressLane(name, action)
@@ -861,9 +872,10 @@ Controls:CreateToggle({
 if #InputModes > 1 then
 	Controls:CreateDropdown({
 		name = "Input Mode",
-		flag = IsExternal and "FF_ExternalInputMode" or "FF_InputMode",
+		flag = "FF_InputMode",
 		options = InputModes,
 		value = DefaultInputMode,
+		forgetState = true,
 		multiSelect = false,
 		callback = function(value)
 			releaseAll()

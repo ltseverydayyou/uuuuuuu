@@ -1,4 +1,41 @@
-local library = loadstring(game:HttpGet('https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/refs/heads/main/poopdoors/lib.luau'))()
+local Rayfield = loadstring(game:HttpGet("https://sirius.menu/gen2"))()
+local rayWindow = Rayfield:CreateWindow({
+    name = "DOORS",
+    subtitle = "Rayfield Gen2",
+    sidebarLayout = true,
+})
+local library = {tabs = {}}
+function library.window(name)
+    local key = tostring(name):lower()
+    if library.tabs[key] then
+        return library.tabs[key]
+    end
+    local tab = rayWindow:CreateTab({name = tostring(name)})
+    local wrapper = {}
+    function wrapper.toggle(label,default,callback)
+        return tab:CreateToggle({name = label,value = default == true,callback = callback})
+    end
+    function wrapper.slider(label,min,max,step,default,callback)
+        return tab:CreateSlider({name = label,range = {min,max},increment = step,value = default,callback = callback})
+    end
+    function wrapper.button(label,callback)
+        return tab:CreateButton({name = label,callback = callback})
+    end
+    function wrapper.textbox(label,callback)
+        return tab:CreateInput({name = label,value = "",callback = callback})
+    end
+    function wrapper.dropdown(label,options,default,multi,callback)
+        return tab:CreateDropdown({name = label,options = options,value = default or (multi and {} or nil),multiSelect = multi == true,callback = callback})
+    end
+    function wrapper.label(text)
+        return tab:CreateButton({name = tostring(text),callback = function() end})
+    end
+    library.tabs[key] = wrapper
+    return wrapper
+end
+function library.delete()
+    pcall(function() rayWindow:Destroy() end)
+end
 local scriptEnvironment = type(getgenv) == "function" and getgenv() or _G
 local plr = game.Players.LocalPlayer
 local char = plr.Character or plr.CharacterAdded:Wait()
@@ -8,19 +45,150 @@ local RunService = game:GetService("RunService")
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local CurrentRooms = workspace:WaitForChild("CurrentRooms")
 local guiParent = (gethui and gethui()) or game.CoreGui
+local runtime = {}
+runtime.originalFireProximityPrompt = type(fireproximityprompt) == "function" and fireproximityprompt or nil
+runtime.promptFireStates = setmetatable({}, {__mode = "k"})
+
+function runtime.getFirePromptPart(prompt)
+    if not prompt then
+        return nil
+    end
+    local parent = prompt.Parent
+    if parent then
+        if parent:IsA("Attachment") and parent.Parent and parent.Parent:IsA("BasePart") then
+            return parent.Parent
+        elseif parent:IsA("BasePart") then
+            return parent
+        end
+    end
+    local model = prompt:FindFirstAncestorWhichIsA("Model")
+    if model then
+        return model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart",true)
+    end
+    return prompt:FindFirstAncestorWhichIsA("BasePart")
+end
+
+function runtime.firePromptOne(prompt,options)
+    if not (prompt and prompt.Parent and prompt:IsA("ProximityPrompt")) then
+        return false
+    end
+    local state = runtime.promptFireStates[prompt]
+    if state and state.inFlight then
+        return false
+    end
+    state = {
+        inFlight = true,
+        enabled = prompt.Enabled,
+        hold = prompt.HoldDuration,
+        los = prompt.RequiresLineOfSight,
+        distance = prompt.MaxActivationDistance,
+        exclusivity = prompt.Exclusivity,
+        parent = prompt.Parent,
+    }
+    runtime.promptFireStates[prompt] = state
+    local opts = typeof(options) == "table" and options or {hold = tonumber(options) or 0}
+    local proxy
+    local ok = pcall(function()
+        prompt.HoldDuration = 0
+        if opts.disableLoS ~= false then
+            prompt.RequiresLineOfSight = false
+        end
+        prompt.MaxActivationDistance = tonumber(opts.distance) or 1000000000
+        prompt.Exclusivity = opts.exclusivity or Enum.ProximityPromptExclusivity.AlwaysShow
+        if opts.forceEnable ~= false then
+            prompt.Enabled = true
+        end
+
+        local camera = workspace.CurrentCamera
+        local part = runtime.getFirePromptPart(prompt)
+        local shouldProxy = opts.relocate ~= false
+        if shouldProxy and camera and part then
+            local viewport,onScreen = camera:WorldToViewportPoint(part.Position)
+            local direction = part.Position-camera.CFrame.Position
+            shouldProxy = viewport.Z <= 0 or not onScreen or direction.Magnitude <= 0 or direction.Unit:Dot(camera.CFrame.LookVector) < 0.05
+        end
+        if shouldProxy and camera then
+            proxy = Instance.new("Part")
+            proxy.Name = "_doorsPromptProxy"
+            proxy.Size = Vector3.new(0.05,0.05,0.05)
+            proxy.Anchored = true
+            proxy.CanCollide = false
+            proxy.CanTouch = false
+            proxy.CanQuery = false
+            proxy.CastShadow = false
+            proxy.Transparency = 1
+            local distance = math.clamp(tonumber(opts.relocateDistance) or 5,1,50)
+            local position = camera.CFrame.Position + camera.CFrame.LookVector*distance - camera.CFrame.UpVector*0.35
+            proxy.CFrame = CFrame.new(position,position+camera.CFrame.LookVector)
+            proxy.Parent = workspace
+            prompt.Enabled = false
+            prompt.Parent = proxy
+            task.wait()
+            if opts.forceEnable ~= false then
+                prompt.Enabled = true
+            end
+        end
+
+        prompt:InputHoldBegin()
+        local hold = tonumber(opts.hold) or 0
+        if hold > 0 then
+            task.wait(hold)
+        else
+            RunService.Heartbeat:Wait()
+        end
+        prompt:InputHoldEnd()
+        RunService.Heartbeat:Wait()
+    end)
+
+    pcall(function()
+        if prompt and state.parent and state.parent.Parent then
+            prompt.Parent = state.parent
+        end
+    end)
+    if proxy then
+        pcall(proxy.Destroy,proxy)
+    end
+    if prompt and prompt.Parent then
+        pcall(function()
+            prompt.Enabled = state.enabled
+            prompt.HoldDuration = state.hold
+            prompt.RequiresLineOfSight = state.los
+            prompt.MaxActivationDistance = state.distance
+            prompt.Exclusivity = state.exclusivity
+        end)
+    end
+    runtime.promptFireStates[prompt] = nil
+
+    if not ok and runtime.originalFireProximityPrompt then
+        return pcall(runtime.originalFireProximityPrompt,prompt,0,true)
+    end
+    return ok
+end
+
+function runtime.customFireProximityPrompt(target,options)
+    if typeof(target) == "Instance" and target:IsA("ProximityPrompt") then
+        task.spawn(runtime.firePromptOne,target,options)
+        return true
+    elseif typeof(target) == "table" then
+        local fired = false
+        for _,prompt in ipairs(target) do
+            if typeof(prompt) == "Instance" and prompt:IsA("ProximityPrompt") then
+                fired = true
+                task.spawn(runtime.firePromptOne,prompt,options)
+            end
+        end
+        return fired
+    end
+    return false
+end
+
+rawset(scriptEnvironment,"fireproximityprompt",runtime.customFireProximityPrompt)
+fireproximityprompt = runtime.customFireProximityPrompt
 
 plr.CharacterAdded:Connect(function(newchar)
     char = newchar
     hum = char:WaitForChild("Humanoid")
 end)
-
-if not fireproximityprompt then
-    local msg = Instance.new("Message",workspace)
-    msg.Text = "you have fireproximityprompt function bro get better executor"
-    task.wait(6)
-    msg:Destroy()
-    error("no prox") 
-end
 
 function esp(what,color,core,name)
     local target = typeof(what) == "Instance" and what or core
@@ -131,6 +299,9 @@ end
 
 local flags = {
     speed = 0,
+    godmode = false,
+    autoprompts = false,
+    ladderbypass = true,
     espdoors = false,
     espkeys = false,
     espitems = false,
@@ -162,6 +333,7 @@ local flags = {
     itemmagical = true,
     itembattle = true,
     itemmisc = true,
+    itemexcludedcategories = {},
     aurarange = 12,
     doorreach = false,
     doorreachrange = 0,
@@ -180,11 +352,24 @@ local dupeConnections = {}
 local snareConnections = {}
 local snareStates = setmetatable({}, {__mode = "k"})
 
-local promptRegistry = setmetatable({}, {__mode = "k"})
+local promptRegistry = {list = {}, idx = setmetatable({}, {__mode = "k"})}
 local promptLastFired = setmetatable({}, {__mode = "k"})
+local promptFireBusy = setmetatable({}, {__mode = "k"})
 local promptConnections = {}
 local promptAuraRunning = false
+local promptCursor = 0
+local promptMaxFiresPerBatch = 18
+local promptScanPerBatch = 64
 local itemVisualsByRoot = setmetatable({}, {__mode = "k"})
+local autoPromptExactTargets = {
+    goldpile=true, lock=true, door=true, toolbox=true, lever=true, bandage=true, button=true,
+    metal=true, knobs=true, knob=true, livebreakerpolepickup=true, drawerdoors=true, hole=true,
+    rolltopcontainer=true, lockpick=true, chestbox=true, crucifix=true, skeletonkey=true, plant=true,
+    shears=true, cellar=true, cuttablevines=true, skulllock=true, wheel=true, starvial=true,
+    starbottle=true, livehintbook=true, libraryhintpaper=true, pizza=true,
+}
+local autoPromptFindTargets = {"stardust","fuse","keyobtain","lotus"}
+
 
 local lightSourceNames = {
     lighter = true,
@@ -440,6 +625,9 @@ local itemCategoryColors = {
 }
 
 local function itemCategoryEnabled(category)
+    if flags.itemexcludedcategories and flags.itemexcludedcategories[category] then
+        return false
+    end
     return (category == "loot" and flags.itemloot)
         or (category == "light" and flags.itemlights)
         or (category == "edible" and flags.itemedible)
@@ -451,86 +639,576 @@ local function itemCategoryEnabled(category)
         or (category == "misc" and flags.itemmisc)
 end
 
-local function registerPrompt(instance)
-    if instance:IsA("ProximityPrompt") then
-        promptRegistry[instance] = true
+local function isAutoPromptTarget(prompt)
+    if not prompt or isInDropsFolder(prompt) then
+        return false
     end
+    local current = prompt
+    while current and current ~= workspace do
+        local name = tostring(current.Name or ""):lower()
+        if autoPromptExactTargets[name] then
+            return true
+        end
+        for _,term in ipairs(autoPromptFindTargets) do
+            if name:find(term,1,true) then
+                return true
+            end
+        end
+        current = current.Parent
+    end
+    return false
+end
+
+local function registerPrompt(instance)
+    if not (instance and instance:IsA("ProximityPrompt")) or promptRegistry.idx[instance] then
+        return
+    end
+    promptRegistry.list[#promptRegistry.list+1] = instance
+    promptRegistry.idx[instance] = #promptRegistry.list
+end
+
+local function removePrompt(instance)
+    local index = promptRegistry.idx[instance]
+    if not index then return end
+    local last = promptRegistry.list[#promptRegistry.list]
+    promptRegistry.list[index] = last
+    promptRegistry.list[#promptRegistry.list] = nil
+    promptRegistry.idx[instance] = nil
+    if last and last ~= instance then
+        promptRegistry.idx[last] = index
+    end
+    promptLastFired[instance] = nil
+    promptFireBusy[instance] = nil
 end
 
 local function bindPromptRoot(root)
-    if not root then
+    if not root then return end
+    for _,instance in ipairs(root:GetDescendants()) do
+        if instance:IsA("ProximityPrompt") then
+            registerPrompt(instance)
+        end
+    end
+    table.insert(promptConnections,root.DescendantAdded:Connect(function(instance)
+        if instance:IsA("ProximityPrompt") then
+            registerPrompt(instance)
+        end
+    end))
+    table.insert(promptConnections,root.DescendantRemoving:Connect(function(instance)
+        if promptRegistry.idx[instance] then
+            removePrompt(instance)
+        end
+    end))
+end
+
+local function promptAllowedByJobs(prompt,model)
+    local auto = flags.autoprompts and isAutoPromptTarget(prompt)
+    local item = flags.itemaura and isItemPrompt(prompt,model)
+    local key = flags.keyaura and isKeyPrompt(prompt,model)
+    if item and isInDropsFolder(model) then
+        item = false
+    end
+    if item and not flags.itemallowlights and isLightSource(prompt,model) then
+        item = false
+    end
+    if item and not itemMatchesFilter(prompt,model) then
+        item = false
+    end
+    if item and not itemCategoryEnabled(itemCategory(prompt,model)) then
+        item = false
+    end
+    return auto,item,key
+end
+
+local function dispatchPromptFire(prompt,now)
+    if promptFireBusy[prompt] then return false end
+    promptFireBusy[prompt] = true
+    promptLastFired[prompt] = now
+    task.spawn(function()
+        pcall(runtime.customFireProximityPrompt,prompt)
+        promptFireBusy[prompt] = nil
+    end)
+    return true
+end
+
+local function runPromptBatch()
+    local tracked = promptRegistry.list
+    local count = #tracked
+    if count == 0 then
+        promptCursor = 0
         return
     end
-    for _,instance in ipairs(root:GetDescendants()) do
-        registerPrompt(instance)
+    local root = char and (char.PrimaryPart or char:FindFirstChild("HumanoidRootPart"))
+    local now = os.clock()
+    local scanBudget = math.min(count,math.max(promptMaxFiresPerBatch,promptScanPerBatch))
+    local fired = 0
+    local stale = {}
+    for step = 1,scanBudget do
+        if fired >= promptMaxFiresPerBatch then break end
+        local index = ((promptCursor + step - 1) % count) + 1
+        local prompt = tracked[index]
+        if not (prompt and prompt.Parent) then
+            if prompt then stale[#stale+1] = prompt end
+        elseif prompt.Enabled then
+            local model = getPromptModel(prompt)
+            local auto,item,key = promptAllowedByJobs(prompt,model)
+            local allowed = auto or item or key
+            local inRange = auto
+            if allowed and not auto then
+                local position = getPromptPosition(prompt,model)
+                inRange = position and root and (flags.aurarange <= 0 or (root.Position-position).Magnitude <= flags.aurarange)
+            end
+            local cooldown = auto and 0.1 or 0.35
+            if allowed and inRange and not promptFireBusy[prompt] and now-(promptLastFired[prompt] or 0) >= cooldown then
+                if dispatchPromptFire(prompt,now) then
+                    fired += 1
+                end
+            end
+        end
     end
-    table.insert(promptConnections,root.DescendantAdded:Connect(registerPrompt))
+    promptCursor = (promptCursor + scanBudget) % math.max(1,count)
+    for _,prompt in ipairs(stale) do
+        removePrompt(prompt)
+    end
 end
 
 local function stopPromptRegistry()
     for _,connection in ipairs(promptConnections) do
-        connection:Disconnect()
+        pcall(function() connection:Disconnect() end)
     end
     table.clear(promptConnections)
-    table.clear(promptRegistry)
+    table.clear(promptRegistry.list)
+    promptRegistry.idx = setmetatable({}, {__mode = "k"})
     table.clear(promptLastFired)
+    promptFireBusy = setmetatable({}, {__mode = "k"})
     promptAuraRunning = false
+    promptCursor = 0
 end
 
 local function startPromptRegistry()
-    if promptAuraRunning then
-        return
-    end
+    if promptAuraRunning then return end
     promptAuraRunning = true
-    -- Workspace also contains admin-panel drops (for example Workspace.Drops),
-    -- while CurrentRooms only covers room assets.
     bindPromptRoot(workspace)
     table.insert(promptConnections,ProximityPromptService.PromptShown:Connect(registerPrompt))
     task.spawn(function()
-        local lastPromptScan = 0
-        while flags.itemaura or flags.keyaura do
-            local now = os.clock()
-            if now-lastPromptScan >= 0.5 then
-                -- Admin-panel drops can be inserted outside CurrentRooms and
-                -- may not emit the same child events as normal room assets.
-                local drops = workspace:FindFirstChild("Drops")
-                if drops then
-                    for _,instance in ipairs(drops:GetDescendants()) do
-                        registerPrompt(instance)
-                    end
-                end
-                lastPromptScan = now
-            end
-            for prompt in pairs(promptRegistry) do
-                if not prompt.Parent then
-                    promptRegistry[prompt] = nil
-                elseif prompt.Enabled then
-                    local model = getPromptModel(prompt)
-                    local item = flags.itemaura and isItemPrompt(prompt,model)
-                    local key = flags.keyaura and isKeyPrompt(prompt,model)
-                    if item and isInDropsFolder(model) then
-                        item = false
-                    end
-                    local allowed = item or key
-                    if item and not flags.itemallowlights and isLightSource(prompt,model) then
-                        allowed = false
-                    end
-                    if item and allowed and not itemMatchesFilter(prompt,model) then
-                        allowed = false
-                    end
-                    local position = allowed and getPromptPosition(prompt,model) or nil
-                    local root = char and (char.PrimaryPart or char:FindFirstChild("HumanoidRootPart"))
-                    local inRange = position and root and (flags.aurarange <= 0 or (root.Position-position).Magnitude <= flags.aurarange)
-                    if allowed and inRange and now-(promptLastFired[prompt] or 0) >= 0.35 then
-                        promptLastFired[prompt] = now
-                        pcall(fireproximityprompt,prompt)
-                    end
-                end
-            end
-            task.wait(0.12)
+        while promptAuraRunning and (flags.itemaura or flags.keyaura or flags.autoprompts) do
+            runPromptBatch()
+            task.wait(0.05)
         end
-        stopPromptRegistry()
+        if promptAuraRunning then
+            stopPromptRegistry()
+        end
     end)
+end
+
+runtime.doorSpeed = {
+    max = 60,
+    interval = 0.1,
+    bindName = "DoorsScript_DoorsSpeedOffset",
+    externalTeleportDistance = 4,
+    godOffset = Vector3.new(0,-3,0),
+    value = 0,
+}
+
+function runtime.getRoot()
+    local current = plr.Character
+    return current and (current.PrimaryPart or current:FindFirstChild("HumanoidRootPart"))
+end
+
+function runtime.getHumanoid()
+    local current = plr.Character
+    return current and current:FindFirstChildOfClass("Humanoid")
+end
+
+function runtime.doorSpeedCFrameNear(a,b,distance)
+    return typeof(a) == "CFrame" and typeof(b) == "CFrame" and (a.Position-b.Position).Magnitude <= (distance or 0.05)
+end
+
+function runtime.getReplicatedOffsetCFrame(baseCFrame)
+    if typeof(baseCFrame) ~= "CFrame" then
+        return baseCFrame
+    end
+    if flags.godmode then
+        return baseCFrame + runtime.doorSpeed.godOffset
+    end
+    return baseCFrame
+end
+
+function runtime.adoptDoorSpeedExternalCFrame(root,observed)
+    local state = runtime.doorSpeed
+    if not root or typeof(observed) ~= "CFrame" then
+        return false
+    end
+    if typeof(state.localCFrame) ~= "CFrame" then
+        state.localCFrame = observed
+        state.serverCFrame = observed
+        state.lastBurst = os.clock()
+        state.lastWriteCFrame = runtime.getReplicatedOffsetCFrame(observed)
+        return true
+    end
+    local written = state.lastWriteCFrame or runtime.getReplicatedOffsetCFrame(state.serverCFrame)
+    if runtime.doorSpeedCFrameNear(observed,written) then
+        return false
+    end
+    if (observed.Position-state.localCFrame.Position).Magnitude < state.externalTeleportDistance then
+        return false
+    end
+    state.localCFrame = observed
+    state.serverCFrame = observed
+    state.lastBurst = os.clock()
+    state.lastWriteCFrame = runtime.getReplicatedOffsetCFrame(observed)
+    return true
+end
+
+function runtime.stopDoorOffsetReplication()
+    local state = runtime.doorSpeed
+    local localCFrame = state.localCFrame
+    state.active = false
+    if state.heartbeat then
+        state.heartbeat:Disconnect()
+        state.heartbeat = nil
+    end
+    pcall(RunService.UnbindFromRenderStep,RunService,state.bindName)
+    local root = runtime.getRoot()
+    if root and typeof(localCFrame) == "CFrame" then
+        pcall(function() root.CFrame = localCFrame end)
+    end
+    local currentHum = runtime.getHumanoid()
+    if currentHum and tonumber(state.originalWalkSpeed) then
+        pcall(function() currentHum.WalkSpeed = state.originalWalkSpeed end)
+    end
+    state.root = nil
+    state.humanoid = nil
+    state.originalWalkSpeed = nil
+    state.localCFrame = nil
+    state.serverCFrame = nil
+    state.lastBurst = nil
+    state.lastWriteCFrame = nil
+    state.value = 0
+end
+
+function runtime.ensureDoorOffsetReplication()
+    local state = runtime.doorSpeed
+    local root = runtime.getRoot()
+    local currentHum = runtime.getHumanoid()
+    if not (root and currentHum) then
+        return nil
+    end
+    if not state.active then
+        state.root = root
+        state.humanoid = currentHum
+        state.localCFrame = root.CFrame
+        state.serverCFrame = root.CFrame
+        state.lastBurst = os.clock()
+        state.lastWriteCFrame = runtime.getReplicatedOffsetCFrame(root.CFrame)
+        state.active = true
+    end
+    if state.heartbeat then
+        state.heartbeat:Disconnect()
+    end
+    pcall(RunService.UnbindFromRenderStep,RunService,state.bindName)
+    state.heartbeat = RunService.Heartbeat:Connect(function()
+        if not state.active then
+            return
+        end
+        local currentRoot = runtime.getRoot()
+        local currentHumanoid = runtime.getHumanoid()
+        if not (currentRoot and currentHumanoid) then
+            return
+        end
+        if state.root ~= currentRoot then
+            state.root = currentRoot
+            state.humanoid = currentHumanoid
+            state.localCFrame = currentRoot.CFrame
+            state.serverCFrame = currentRoot.CFrame
+            state.lastBurst = os.clock()
+            state.lastWriteCFrame = runtime.getReplicatedOffsetCFrame(currentRoot.CFrame)
+            if (tonumber(state.value) or 0) > 0 then
+                state.originalWalkSpeed = currentHumanoid.WalkSpeed
+            else
+                state.originalWalkSpeed = nil
+            end
+        end
+        local speed = tonumber(state.value) or 0
+        if speed > 0 then
+            currentHumanoid.WalkSpeed = speed
+        end
+        local observed = currentRoot.CFrame
+        local written = state.lastWriteCFrame or runtime.getReplicatedOffsetCFrame(state.serverCFrame)
+        if not runtime.doorSpeedCFrameNear(observed,written) then
+            runtime.adoptDoorSpeedExternalCFrame(currentRoot,observed)
+        end
+        written = state.lastWriteCFrame or runtime.getReplicatedOffsetCFrame(state.serverCFrame)
+        if not runtime.doorSpeedCFrameNear(observed,written) then
+            state.localCFrame = observed
+        end
+        local now = os.clock()
+        if speed <= 0 and flags.godmode then
+            state.serverCFrame = state.localCFrame or observed
+            state.lastBurst = now
+        elseif now-(state.lastBurst or 0) >= math.max(0.1,tonumber(state.interval) or 0.1) then
+            state.serverCFrame = state.localCFrame or observed
+            state.lastBurst = now
+        end
+        local serverCFrame = state.serverCFrame or observed
+        local replicatedCFrame = runtime.getReplicatedOffsetCFrame(serverCFrame)
+        state.lastWriteCFrame = replicatedCFrame
+        pcall(function() currentRoot.CFrame = replicatedCFrame end)
+    end)
+    RunService:BindToRenderStep(state.bindName,Enum.RenderPriority.First.Value,function()
+        if not state.active then
+            return
+        end
+        local currentRoot = runtime.getRoot()
+        if not currentRoot then
+            return
+        end
+        local observed = currentRoot.CFrame
+        local written = state.lastWriteCFrame or runtime.getReplicatedOffsetCFrame(state.serverCFrame)
+        if not runtime.doorSpeedCFrameNear(observed,written) then
+            runtime.adoptDoorSpeedExternalCFrame(currentRoot,observed)
+        end
+        local localCFrame = state.localCFrame or observed
+        state.localCFrame = localCFrame
+        pcall(function() currentRoot.CFrame = localCFrame end)
+    end)
+    return true
+end
+
+function runtime.stopDoorSpeed()
+    local state = runtime.doorSpeed
+    state.value = 0
+    local currentHum = runtime.getHumanoid()
+    if currentHum and tonumber(state.originalWalkSpeed) then
+        pcall(function() currentHum.WalkSpeed = state.originalWalkSpeed end)
+    end
+    state.originalWalkSpeed = nil
+    if flags.godmode then
+        runtime.ensureDoorOffsetReplication()
+    else
+        runtime.stopDoorOffsetReplication()
+    end
+end
+
+function runtime.startDoorSpeed(value)
+    local state = runtime.doorSpeed
+    local speed = math.clamp(tonumber(value) or 0,0,state.max)
+    if speed <= 0 then
+        runtime.stopDoorSpeed()
+        return 0
+    end
+    local currentHum = runtime.getHumanoid()
+    if not currentHum then
+        return nil
+    end
+    if (tonumber(state.value) or 0) <= 0 then
+        state.originalWalkSpeed = currentHum.WalkSpeed
+    end
+    state.value = speed
+    runtime.ensureDoorOffsetReplication()
+    currentHum.WalkSpeed = speed
+    return speed
+end
+
+function runtime.setGodMode(enabled)
+    flags.godmode = enabled == true
+    local state = runtime.doorSpeed
+    if flags.godmode then
+        runtime.ensureDoorOffsetReplication()
+        local root = runtime.getRoot()
+        if root and typeof(state.localCFrame) ~= "CFrame" then
+            state.localCFrame = root.CFrame
+            state.serverCFrame = root.CFrame
+        end
+        return true
+    end
+    state.lastWriteCFrame = state.serverCFrame
+    if (tonumber(state.value) or 0) > 0 then
+        runtime.ensureDoorOffsetReplication()
+        return false
+    end
+    runtime.stopDoorOffsetReplication()
+    return false
+end
+
+runtime.ladder = {connections = {}}
+
+function runtime.stopLadderBypass()
+    for _,connection in ipairs(runtime.ladder.connections) do
+        if connection and connection.Connected then
+            connection:Disconnect()
+        end
+    end
+    table.clear(runtime.ladder.connections)
+end
+
+function runtime.dropFromLadder(currentChar)
+    if not (flags.ladderbypass and currentChar and currentChar.Parent) then
+        return
+    end
+    local currentHum = currentChar:FindFirstChildOfClass("Humanoid")
+    local root = currentChar.PrimaryPart or currentChar:FindFirstChild("HumanoidRootPart")
+    currentChar:SetAttribute("Climbing",false)
+    if root then
+        root.Anchored = false
+        root.Velocity = Vector3.new()
+        root.CFrame = root.CFrame*CFrame.new(0,0,-3)
+    end
+    if currentHum then
+        currentHum:ChangeState(Enum.HumanoidStateType.Running)
+        local animator = currentHum:FindFirstChildOfClass("Animator") or currentHum
+        for _,track in ipairs(animator:GetPlayingAnimationTracks()) do
+            if tostring(track.Name or ""):lower():find("climb",1,true) then
+                track:Stop()
+            end
+        end
+    end
+end
+
+function runtime.bindLadderCharacter(currentChar)
+    if not (flags.ladderbypass and currentChar) then
+        return
+    end
+    table.insert(runtime.ladder.connections,currentChar:GetAttributeChangedSignal("Climbing"):Connect(function()
+        if flags.ladderbypass and currentChar:GetAttribute("Climbing") == true then
+            task.defer(runtime.dropFromLadder,currentChar)
+        end
+    end))
+    if currentChar:GetAttribute("Climbing") == true then
+        task.defer(runtime.dropFromLadder,currentChar)
+    end
+end
+
+function runtime.startLadderBypass()
+    runtime.stopLadderBypass()
+    runtime.bindLadderCharacter(plr.Character)
+    table.insert(runtime.ladder.connections,plr.CharacterAdded:Connect(function(currentChar)
+        task.defer(runtime.bindLadderCharacter,currentChar)
+    end))
+end
+
+runtime.figure = {running = false}
+
+function runtime.figureSlotIndex(image)
+    if not image or not image:IsA("ImageLabel") then
+        return nil
+    end
+    local offset = image.ImageRectOffset
+    local index = math.floor((offset.X or 0)/50+0.5)
+    if index >= 0 and index <= 7 then
+        return index
+    end
+end
+
+function runtime.readFigureCode()
+    local pg = plr:FindFirstChildOfClass("PlayerGui")
+    local perm = pg and pg:FindFirstChild("PermUI")
+    local hints = perm and perm:FindFirstChild("Hints")
+    local map = {}
+    if hints then
+        for _,icon in ipairs(hints:GetChildren()) do
+            if icon.Name == "Icon" and icon:IsA("ImageLabel") then
+                local index = runtime.figureSlotIndex(icon)
+                local label = icon:FindFirstChild("TextLabel")
+                local digit = label and tonumber(label.Text)
+                if index ~= nil and digit and digit >= 0 and digit <= 9 then
+                    map[index] = tostring(math.floor(digit))
+                end
+            elseif icon:IsA("ImageLabel") then
+                local index = runtime.figureSlotIndex(icon)
+                local label = icon:FindFirstChild("TextLabel")
+                local digit = label and tonumber(label.Text)
+                if icon.Visible and index ~= nil and digit and digit >= 0 and digit <= 9 then
+                    map[index] = tostring(math.floor(digit))
+                end
+            end
+        end
+    end
+    local currentChar = plr.Character
+    local paper = currentChar and currentChar:FindFirstChild("LibraryHintPaper")
+    if not paper then
+        local workspacePlayer = workspace:FindFirstChild(plr.Name)
+        paper = workspacePlayer and workspacePlayer:FindFirstChild("LibraryHintPaper")
+    end
+    local ui = paper and paper:FindFirstChild("UI")
+    if not ui then
+        return nil
+    end
+    local code = {}
+    for i = 1,5 do
+        local image = ui:FindFirstChild(tostring(i))
+        local index = runtime.figureSlotIndex(image)
+        if index == nil or map[index] == nil then
+            return nil
+        end
+        code[i] = map[index]
+    end
+    return table.concat(code)
+end
+
+function runtime.trySolveFigure()
+    local state = runtime.figure
+    if state.busy then
+        return
+    end
+    local room = CurrentRooms:FindFirstChild("50")
+    local door = room and room:FindFirstChild("Door")
+    local padlock = door and door:FindFirstChild("Padlock")
+    local locked = padlock and padlock:FindFirstChild("Padlocked")
+    if not (room and padlock and locked and locked.Value == true) then
+        return
+    end
+    local code = runtime.readFigureCode()
+    if not code then
+        return
+    end
+    if code == state.lastCode and state.lastRoom == room and os.clock()-(state.lastAttempt or 0) < 5 then
+        return
+    end
+    local remotes = game.ReplicatedStorage:FindFirstChild("RemotesFolder")
+    local remote = remotes and remotes:FindFirstChild("PL")
+    if not (remote and remote:IsA("RemoteEvent")) then
+        return
+    end
+    state.busy = true
+    state.lastAttempt = os.clock()
+    state.lastRoom = room
+    state.lastCode = code
+    pcall(function()
+        local prompt = padlock:FindFirstChild("ActivateEventPrompt")
+        local pg = plr:FindFirstChildOfClass("PlayerGui")
+        local main = pg and pg:FindFirstChild("MainUI")
+        local backout = main and main:FindFirstChild("MinigameBackout")
+        if prompt and prompt.Enabled and not (backout and backout.Visible) then
+            runtime.customFireProximityPrompt(prompt)
+            task.wait(0.2)
+        end
+        remote:FireServer(code)
+    end)
+    state.busy = false
+end
+
+function runtime.stopFigureSolver()
+    runtime.figure.running = false
+    runtime.figure.busy = false
+end
+
+function runtime.startFigureSolver()
+    local state = runtime.figure
+    if state.running then
+        return
+    end
+    state.running = true
+    state.lastRoom = nil
+    state.lastCode = nil
+    state.lastAttempt = 0
+    state.busy = false
+    task.spawn(function()
+        while state.running and flags.getcode do
+            runtime.trySolveFigure()
+            task.wait(0.5)
+        end
+    end)
+    runtime.trySolveFigure()
 end
 
 local window_player = library.window("player")
@@ -564,10 +1242,31 @@ window_player.toggle("instant use",false,function(val)
 end)
 
 local basewalkspeed = 15
-local walkspeedslider = window_player.slider("walkspeed",16,21.5,0.5,16,function(val)
+local walkspeedslider = window_player.slider("walkspeed",0,60,0.5,16,function(val)
     flags.speed = val
-    char:SetAttribute("SpeedBoost", val-basewalkspeed)
+    if char and char.Parent then
+        char:SetAttribute("SpeedBoost", math.max(0,val-basewalkspeed))
+    end
+    if val <= 0 then
+        runtime.stopDoorSpeed()
+    else
+        runtime.startDoorSpeed(val)
+    end
 end)
+
+window_player.toggle("God Mode",false,function(val)
+    runtime.setGodMode(val)
+end)
+
+window_player.toggle("ladder anti-cheat bypass",true,function(val)
+    flags.ladderbypass = val
+    if val then
+        runtime.startLadderBypass()
+    else
+        runtime.stopLadderBypass()
+    end
+end)
+runtime.startLadderBypass()
 
 window_esp.toggle("door esp",false,function(val)
     flags.espdoors = val
@@ -1229,40 +1928,14 @@ window_misc.toggle("notify entities",false,function(val)
     end
 end)
 
-window_esp.toggle("loot item esp",true,function(val)
-    flags.itemloot = val
-end)
-
-window_esp.toggle("light source item esp",true,function(val)
-    flags.itemlights = val
-end)
-
-window_esp.toggle("edible item esp",true,function(val)
-    flags.itemedible = val
-end)
-
-window_esp.toggle("healing item esp",true,function(val)
-    flags.itemhealing = val
-end)
-
-window_esp.toggle("objective item esp",true,function(val)
-    flags.itemobjective = val
-end)
-
-window_esp.toggle("utility item esp",true,function(val)
-    flags.itemutility = val
-end)
-
-window_esp.toggle("magical item esp",true,function(val)
-    flags.itemmagical = val
-end)
-
-window_esp.toggle("battle item esp",true,function(val)
-    flags.itembattle = val
-end)
-
-window_esp.toggle("misc item esp",true,function(val)
-    flags.itemmisc = val
+window_esp.dropdown("exclude item categories",{
+    "loot","light","edible","healing","objective","utility","magical","battle","misc"
+},{},true,function(selected)
+    local excluded = {}
+    for _,category in ipairs(selected or {}) do
+        excluded[tostring(category):lower()] = true
+    end
+    flags.itemexcludedcategories = excluded
 end)
 
 local function getRootPart(instance)
@@ -1528,133 +2201,104 @@ window_misc.toggle("snare bypass",false,function(val)
     end
 end)
 
-local screechdisable = game.ReplicatedStorage:WaitForChild("GameData"):FindFirstChild("EntityDisableScreech")
-
-if screechdisable then
-    local screechStates = setmetatable({}, {__mode = "k"})
-    local function clearScreechRenderSteps()
-        for index = 1,2000 do
-            pcall(RunService.UnbindFromRenderStep,RunService,"screechStuff"..index)
-        end
-    end
-    window_misc.toggle("harmless screech",false,function(val)
-        flags.noscreech = val
-        
-        if val then
-            local oldvalue = screechdisable.Value
-            local connections = {}
-            local function hideScreech(instance)
-                if not flags.noscreech or not instance:IsA("Model") then
-                    return
-                end
-                local lower = instance.Name:lower()
-                if lower == "screech" or lower:find("screech",1,true) then
-                    for _,descendant in ipairs(instance:GetDescendants()) do
-                        if descendant:IsA("BasePart") then
-                            if not screechStates[descendant] then
-                                screechStates[descendant] = {
-                                    cancollide = descendant.CanCollide,
-                                    cantouch = descendant.CanTouch,
-                                    canquery = descendant.CanQuery,
-                                    transparency = descendant.LocalTransparencyModifier,
-                                }
-                            end
-                            descendant.CanCollide = false
-                            descendant.CanTouch = false
-                            descendant.CanQuery = false
-                            descendant.LocalTransparencyModifier = 1
-                        elseif descendant:IsA("ParticleEmitter") or descendant:IsA("Beam") or descendant:IsA("Trail") then
-                            descendant.Enabled = false
-                        elseif descendant:IsA("Sound") then
-                            descendant.Volume = 0
-                            pcall(descendant.Stop,descendant)
-                        end
-                    end
-                end
-            end
-            local function reinforce()
-                if flags.noscreech and screechdisable.Parent and screechdisable.Value ~= true then
-                    screechdisable.Value = true
-                end
-            end
-            screechdisable.Value = true
-            clearScreechRenderSteps()
-            table.insert(connections,screechdisable.Changed:Connect(reinforce))
-            table.insert(connections,workspace.DescendantAdded:Connect(hideScreech))
-            for _,instance in ipairs(workspace:GetDescendants()) do
-                hideScreech(instance)
-            end
-            task.spawn(function()
-                while flags.noscreech and screechdisable.Parent do
-                    reinforce()
-                    clearScreechRenderSteps()
-                    task.wait(0.05)
-                end
-            end)
-            repeat task.wait() until not flags.noscreech
-            for _,connection in ipairs(connections) do
-                connection:Disconnect()
-            end
-            if screechdisable.Parent then
-                screechdisable.Value = oldvalue
-            end
-            for part,state in pairs(screechStates) do
-                if part and part.Parent then
-                    part.CanCollide = state.cancollide
-                    part.CanTouch = state.cantouch
-                    part.CanQuery = state.canquery
-                    part.LocalTransparencyModifier = state.transparency
-                end
-                screechStates[part] = nil
-            end
-        end
-    end)
+local screechRuntime = {connections = {}, originalFlag = nil, flag = nil, hookedRemote = false}
+local function getMainGameModules()
+    local pg = plr:FindFirstChildOfClass("PlayerGui")
+    local mainUI = pg and pg:FindFirstChild("MainUI")
+    local initiator = mainUI and mainUI:FindFirstChild("Initiator")
+    local mainGame = initiator and initiator:FindFirstChild("Main_Game")
+    local remoteListener = mainGame and mainGame:FindFirstChild("RemoteListener")
+    return remoteListener and remoteListener:FindFirstChild("Modules")
 end
+local function disconnectScreechConnections()
+    for _,connection in ipairs(screechRuntime.connections) do
+        pcall(function() connection:Disconnect() end)
+    end
+    table.clear(screechRuntime.connections)
+end
+local function fixScreech()
+    local gameData = game.ReplicatedStorage:FindFirstChild("GameData")
+    local flag = gameData and gameData:FindFirstChild("EntityDisableScreech")
+    if flag and flag:IsA("BoolValue") then
+        if screechRuntime.flag ~= flag then
+            screechRuntime.flag = flag
+            screechRuntime.originalFlag = flag.Value
+            table.insert(screechRuntime.connections,flag:GetPropertyChangedSignal("Value"):Connect(function()
+                if flags.noscreech and flag.Parent and flag.Value ~= true then
+                    task.defer(function()
+                        if flags.noscreech and flag.Parent and flag.Value ~= true then
+                            pcall(function() flag.Value = true end)
+                        end
+                    end)
+                end
+            end))
+        end
+        if flag.Value ~= true then
+            pcall(function() flag.Value = true end)
+        end
+        return true
+    end
+    local modules = getMainGameModules()
+    if not modules then return false end
+    local screech = modules:FindFirstChild("Screech") or modules:FindFirstChild("Screech_Noob")
+    if screech and screech.Name ~= "Screech_Noob" then
+        screech.Name = "Screech_Noob"
+    end
+    return screech ~= nil
+end
+local function hookScreechRemote()
+    if screechRuntime.hookedRemote then return end
+    local remotes = game.ReplicatedStorage:FindFirstChild("RemotesFolder")
+    local remote = remotes and remotes:FindFirstChild("Screech")
+    if not (remote and remote:IsA("RemoteEvent")) then return end
+    table.insert(screechRuntime.connections,remote.OnClientEvent:Connect(function()
+        if flags.noscreech then
+            pcall(function() remote:FireServer(true) end)
+        end
+    end))
+    screechRuntime.hookedRemote = true
+end
+local function startScreechBypass()
+    disconnectScreechConnections()
+    screechRuntime.hookedRemote = false
+    fixScreech()
+    hookScreechRemote()
+    local pg = plr:FindFirstChildOfClass("PlayerGui")
+    if pg then
+        table.insert(screechRuntime.connections,pg.DescendantAdded:Connect(function(inst)
+            if flags.noscreech and (inst.Name == "Modules" or inst.Name == "Screech") then
+                task.defer(fixScreech)
+                task.defer(hookScreechRemote)
+            end
+        end))
+    end
+end
+local function stopScreechBypass()
+    local flag = screechRuntime.flag
+    local original = screechRuntime.originalFlag
+    disconnectScreechConnections()
+    screechRuntime.hookedRemote = false
+    if flag and flag.Parent and type(original) == "boolean" then
+        pcall(function() flag.Value = original end)
+    end
+    screechRuntime.flag = nil
+    screechRuntime.originalFlag = nil
+end
+window_misc.toggle("harmless screech",false,function(val)
+    flags.noscreech = val
+    if val then
+        startScreechBypass()
+    else
+        stopScreechBypass()
+    end
+end)
 
 window_misc.toggle("auto library code",false,function(val)
     flags.getcode = val
-    
     if val then
-        local function deciphercode()
-        local paper = char:FindFirstChild("LibraryHintPaper")
-        local hints = plr.PlayerGui:WaitForChild("PermUI"):WaitForChild("Hints")
-        
-        local code = {[1]="_",[2]="_",[3]="_",[4]="_",[5]="_"}
-            
-            if paper then
-                for i,v in pairs(paper:WaitForChild("UI"):GetChildren()) do
-                    if v:IsA("ImageLabel") and v.Name ~= "Image" then
-                        for i,img in pairs(hints:GetChildren()) do
-                            if img:IsA("ImageLabel") and img.Visible and v.ImageRectOffset == img.ImageRectOffset then
-                                local num = img:FindFirstChild("TextLabel").Text
-                                
-                                code[tonumber(v.Name)] = num 
-                            end
-                        end
-                    end
-                end 
-            end
-            
-            return code
-        end
-        
-        local addconnect
-        addconnect = char.ChildAdded:Connect(function(v)
-            if v:IsA("Tool") and v.Name == "LibraryHintPaper" then
-                task.wait()
-                
-                local code = table.concat(deciphercode())
-                
-                if code:find("_") then
-                    message("get all hints first")
-                else
-                    message("the code is ".. code)
-                end
-            end
-        end)
-        
-        repeat task.wait() until not flags.getcode
-        addconnect:Disconnect()
+        runtime.startFigureSolver()
+    else
+        runtime.stopFigureSolver()
     end
 end)
 
@@ -1685,10 +2329,21 @@ window_misc.toggle("A-000 door no locks",false,function(val)
     end
 end)
 
+window_misc.toggle("doors auto prompts",false,function(val)
+    flags.autoprompts = val
+    if val then
+        startPromptRegistry()
+    elseif not flags.itemaura and not flags.keyaura then
+        stopPromptRegistry()
+    end
+end)
+
 window_misc.toggle("item prompt aura",false,function(val)
     flags.itemaura = val
     if val then
         startPromptRegistry()
+    elseif not flags.keyaura and not flags.autoprompts then
+        stopPromptRegistry()
     end
 end)
 
@@ -1696,6 +2351,8 @@ window_misc.toggle("key prompt aura",false,function(val)
     flags.keyaura = val
     if val then
         startPromptRegistry()
+    elseif not flags.itemaura and not flags.autoprompts then
+        stopPromptRegistry()
     end
 end)
 
@@ -1896,6 +2553,14 @@ local function cleanupScript()
     pcall(stopDoorReach)
     pcall(stopAntiDupe)
     pcall(stopSnareBypass)
+    pcall(runtime.stopDoorOffsetReplication)
+    pcall(runtime.stopLadderBypass)
+    pcall(runtime.stopFigureSolver)
+    pcall(stopScreechBypass)
+    if rawget(scriptEnvironment,"fireproximityprompt") == runtime.customFireProximityPrompt then
+        rawset(scriptEnvironment,"fireproximityprompt",runtime.originalFireProximityPrompt)
+        fireproximityprompt = runtime.originalFireProximityPrompt
+    end
     for _,bucket in pairs(esptable) do
         for _,visual in pairs(bucket) do
             pcall(visual.delete)

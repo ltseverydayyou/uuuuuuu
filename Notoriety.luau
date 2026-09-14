@@ -113,127 +113,74 @@ NState.Event = NState.Remotes:WaitForChild("Damage", math.huge)
 NState.NotorietyUI = {}
 
 do
-	local VibeUISource = game:HttpGet(
-		"https://sirmemegithub.com/RealSlimShady2000/VibeUI/raw/branch/main/VibeUI.luau"
-	):gsub("\r\n", "\n")
+	local Loader = loadstring
 
-	local ParentPatchCount
-	VibeUISource, ParentPatchCount = VibeUISource:gsub(
-		"local function GetParentGui%(%): Instance.-\nend",
-		[[local function GetParentGui(): Instance
-	return LocalPlayer:WaitForChild("PlayerGui")
-end]],
-		1
-	)
-
-	if ParentPatchCount ~= 1 then
-		error("VibeUI staging parent patch failed")
+	if type(Loader) ~= "function" then
+		error("Rayfield Gen2 loader unavailable")
 	end
 
-	local AnchorPatchCount
-	VibeUISource, AnchorPatchCount = VibeUISource:gsub(
-		"LibMaid:GiveTask%(RunService%.RenderStepped:Connect%(function%(%)[\n]",
-		"LibMaid:GiveTask(RunService.RenderStepped:Connect(function()\n\tif next(Anchors) == nil then return end\n",
-		1
-	)
+	local RayfieldSource = game:HttpGet("https://sirius.menu/gen2")
+	local RayfieldChunk, RayfieldCompileError = Loader(RayfieldSource, "@RayfieldGen2.luau")
 
-	if AnchorPatchCount ~= 1 then
-		error("VibeUI idle-loop compatibility patch failed")
+	if type(RayfieldChunk) ~= "function" then
+		error("Rayfield Gen2 compile failed: " .. tostring(RayfieldCompileError))
 	end
 
-	local SharedEnvironment = shared
-	local PreviousSharedVibeUI = SharedEnvironment and rawget(SharedEnvironment, "VibeUI") or nil
-	local PreviousEnvironmentVibeUI = rawget(NState.Environment, "VibeUI")
+	local RayfieldSuccess, Rayfield = pcall(RayfieldChunk)
 
-	if SharedEnvironment then
-		rawset(SharedEnvironment, "VibeUI", nil)
+	if not RayfieldSuccess or type(Rayfield) ~= "table" then
+		error("Rayfield Gen2 load failed: " .. tostring(Rayfield))
 	end
 
-	rawset(NState.Environment, "VibeUI", nil)
-	local VibeUIChunk, VibeUICompileError = loadstring(VibeUISource, "@VibeUI.lua")
-
-	if type(VibeUIChunk) ~= "function" then
-		error("VibeUI compile failed: " .. tostring(VibeUICompileError))
-	end
-
-	local VibeUISuccess, VibeUI = pcall(VibeUIChunk)
-
-	if SharedEnvironment then
-		rawset(SharedEnvironment, "VibeUI", PreviousSharedVibeUI)
-	end
-
-	rawset(NState.Environment, "VibeUI", PreviousEnvironmentVibeUI)
-
-	if not VibeUISuccess or type(VibeUI) ~= "table" then
-		error("VibeUI load failed: " .. tostring(VibeUI))
-	end
-
-	local Adapter = {}
+	local Adapter = {
+		Rayfield = Rayfield,
+		NativeWindow = nil,
+	}
 
 	function Adapter:Notify(Config)
-		return VibeUI:Notification({
-			Title = Config.Title,
-			Description = Config.Content or Config.Description,
-			Duration = Config.Duration,
-			Type = "success",
+		local NativeWindow = self.NativeWindow
+		if not NativeWindow or NativeWindow.unloaded then
+			return
+		end
+
+		return NativeWindow:Notify({
+			title = Config.Title or "Notoriety",
+			content = Config.Content or Config.Description or "",
+			duration = Config.Duration,
 		})
 	end
 
 	function Adapter:CreateWindow(Config)
-		local NativeWindow = VibeUI:Window({
-			Title = Config.Title,
-			Size = Config.Size,
-			Keybind = Config.ToggleKey or Enum.KeyCode.RightShift,
-			Layout = "Side",
-			Resizable = true,
+		local NativeWindow = Rayfield:CreateWindow({
+			name = Config.Title or "Notoriety",
+			icon = Config.Icon,
+			sidebarLayout = true,
+			configuration = {
+				autoSave = false,
+				autoLoad = false,
+				fileName = "default",
+				customFolder = Config.Folder or "Notoriety",
+			},
 		})
-		local Window = {}
 
-		local NativeRoot = NativeWindow._root
-		NState.NotorietyUI.Root = if typeof(NativeRoot) == "Instance"
-			then NativeRoot:FindFirstAncestorOfClass("ScreenGui")
-			else nil
+		self.NativeWindow = NativeWindow
+		NState.NotorietyUI.Root = NativeWindow.screenGui
 
-		local MouseUnlockButton
+		local Window = {
+			Native = NativeWindow,
+		}
 
-		if typeof(NativeRoot) == "Instance" then
-			MouseUnlockButton = NState.ServiceResolver.ns("TextButton")
-
-			if MouseUnlockButton then
-				MouseUnlockButton.Name = "VibeUIMouseUnlock"
-				MouseUnlockButton.BackgroundTransparency = 1
-				MouseUnlockButton.TextTransparency = 1
-				MouseUnlockButton.AutoButtonColor = false
-				MouseUnlockButton.Active = false
-				MouseUnlockButton.Selectable = false
-				MouseUnlockButton.Modal = true
-				MouseUnlockButton.Size = UDim2.fromOffset(1, 1)
-				MouseUnlockButton.Position = UDim2.fromOffset(0, 0)
-				MouseUnlockButton.Visible = NativeWindow.IsOpen == true
-				MouseUnlockButton.Parent = NativeRoot
-
-				local NativeSetOpen = NativeWindow.SetOpen
-
-				if type(NativeSetOpen) == "function" then
-					NativeWindow.SetOpen = function(Self, Open, ...)
-						local Results = table.pack(NativeSetOpen(Self, Open, ...))
-						MouseUnlockButton.Visible = Open == true
-						return table.unpack(Results, 1, Results.n)
-					end
+		local function wrapControlCallback(Callback, Transform)
+			return function(Value)
+				if Transform then
+					Value = Transform(Value)
 				end
-			end
-		end
 
-		NState.NotorietyUI.MouseUnlockButton = MouseUnlockButton
-
-		local function wrapControlCallback(Control, Callback)
-			return function(...)
 				if type(Callback) == "function" then
-					Callback(...)
+					Callback(Value)
 				end
 
 				local RequestSave = NState.NotorietyUI.RequestConfigSave
-
 				if type(RequestSave) == "function" then
 					RequestSave()
 				end
@@ -241,80 +188,81 @@ end]],
 		end
 
 		function Window:Tab(TabConfig)
-			local NativeTab = NativeWindow:Tab({
-				Name = TabConfig.Title,
-				Columns = 1,
+			local NativeTab = NativeWindow:CreateTab({
+				name = TabConfig.Title,
+				icon = TabConfig.Icon,
 			})
-			local NativeSection = NativeTab:Section({
-				Name = TabConfig.Title,
-				Side = 1,
-			})
-			local Tab = {}
+
+			local Tab = {
+				Native = NativeTab,
+			}
 
 			function Tab:Button(Control)
-				local Row = NativeSection:Button()
-				Row:Add(Control.Title, Control.Callback)
-				return Row
+				return NativeTab:CreateButton({
+					name = Control.Title,
+					description = Control.Desc,
+					icon = Control.Icon,
+					callback = Control.Callback,
+				})
 			end
 
 			function Tab:Toggle(Control)
-				return NativeSection:Toggle({
-					Name = Control.Title,
-					Flag = Control.Flag,
-					Default = Control.Value,
-					Callback = wrapControlCallback(Control, Control.Callback),
+				return NativeTab:CreateToggle({
+					name = Control.Title,
+					description = Control.Desc,
+					flag = Control.Flag,
+					value = Control.Value == true,
+					callback = wrapControlCallback(Control.Callback),
 				})
 			end
 
 			function Tab:Input(Control)
-				return NativeSection:Textbox({
-					Name = Control.Title,
-					Flag = Control.Flag,
-					Default = Control.Value,
-					Placeholder = Control.Placeholder,
-					Finished = true,
-					Callback = wrapControlCallback(Control, Control.Callback),
+				return NativeTab:CreateInput({
+					name = Control.Title,
+					description = Control.Desc,
+					flag = Control.Flag,
+					value = tostring(Control.Value or ""),
+					placeholder = Control.Placeholder,
+					callback = wrapControlCallback(Control.Callback),
 				})
 			end
 
 			function Tab:Dropdown(Control)
-				return NativeSection:Dropdown({
-					Name = Control.Title,
-					Flag = Control.Flag,
-					Items = Control.Values or Control.Items or {},
-					Default = Control.Value,
-					Multi = false,
-					Search = false,
-					Callback = wrapControlCallback(Control, Control.Callback),
+				return NativeTab:CreateDropdown({
+					name = Control.Title,
+					description = Control.Desc,
+					flag = Control.Flag,
+					options = Control.Values or Control.Items or {},
+					value = Control.Value,
+					multiSelect = false,
+					callback = wrapControlCallback(Control.Callback),
 				})
 			end
 
 			function Tab:Slider(Control)
-				return NativeSection:Slider({
-					Name = Control.Title,
-					Flag = Control.Flag,
-					Min = Control.Min,
-					Max = Control.Max,
-					Default = Control.Value,
-					Decimals = Control.Step,
-					Suffix = Control.Suffix,
-					Callback = wrapControlCallback(Control, Control.Callback),
+				return NativeTab:CreateSlider({
+					name = Control.Title,
+					description = Control.Desc,
+					flag = Control.Flag,
+					range = { Control.Min, Control.Max },
+					increment = Control.Step,
+					suffix = Control.Suffix,
+					value = Control.Value,
+					callback = wrapControlCallback(Control.Callback),
 				})
 			end
 
 			function Tab:Keybind(Control)
 				local DefaultKey = Enum.KeyCode[Control.Value] or Enum.KeyCode.RightShift
-				return NativeSection:Label(Control.Title):AddKeybind({
-					Flag = Control.Flag,
-					Default = DefaultKey,
-					Mode = "Toggle",
-					OnChanged = function(Key)
-						local KeyName = typeof(Key) == "EnumItem" and Key.Name or tostring(Key):match("([^%.]+)$")
 
-						if KeyName then
-							wrapControlCallback(Control, Control.Callback)(KeyName)
-						end
-					end,
+				return NativeTab:CreateKeybind({
+					name = Control.Title,
+					description = Control.Desc,
+					flag = Control.Flag,
+					value = DefaultKey,
+					onChanged = wrapControlCallback(Control.Callback, function(Key)
+						return typeof(Key) == "EnumItem" and Key.Name or tostring(Key):match("([^%.]+)$")
+					end),
 				})
 			end
 
@@ -322,47 +270,40 @@ end]],
 		end
 
 		function Window:SetToggleKey(Key)
-			VibeUI.Config.MenuKeybind = Key
+			if typeof(Key) == "EnumItem" then
+				NativeWindow.settings.toggleKeybind = Key
+				NativeWindow:SaveSettings()
+			end
 		end
 
 		function Window:Destroy()
-			local Success, UnloadError = pcall(VibeUI.Unload, VibeUI)
-
-			if SharedEnvironment then
-				rawset(SharedEnvironment, "VibeUI", PreviousSharedVibeUI)
-			end
-
-			rawset(NState.Environment, "VibeUI", PreviousEnvironmentVibeUI)
-
-			if not Success then
-				error(UnloadError)
+			if not NativeWindow.unloaded then
+				NativeWindow:Unload()
 			end
 		end
 
 		local ConfigManager = {}
 
 		function ConfigManager:AllConfigs()
-			local Success, Configs = pcall(VibeUI.ListConfigs, VibeUI)
+			local Success, Configs = pcall(NativeWindow.ListConfigs, NativeWindow)
 			return if Success and type(Configs) == "table" then Configs else {}
 		end
 
 		function ConfigManager:Config(Name)
 			return {
 				Save = function()
-					local Success, SaveError = VibeUI:SaveConfig(Name)
-
-					if not Success then
-						error(SaveError or "VibeUI config save failed", 0)
+					local Success, Result = pcall(NativeWindow.Save, NativeWindow, Name)
+					if not Success or Result == false then
+						error("Rayfield Gen2 config save failed: " .. tostring(Result), 0)
 					end
-
-					return true
+					return Result
 				end,
 				Load = function()
-					local Data = VibeUI:ReadConfig(Name)
-
-					if type(Data) == "string" then
-						return VibeUI:LoadConfig(Data)
+					local Success, Result = pcall(NativeWindow.Load, NativeWindow, Name)
+					if not Success or Result == false then
+						error("Rayfield Gen2 config load failed: " .. tostring(Result), 0)
 					end
+					return Result
 				end,
 			}
 		end
@@ -5470,7 +5411,7 @@ end
 
 NState.initializeMusicOverride()
 
-NState.createVibeUI = function()
+NState.createRayfieldUI = function()
 	local UIAdapter = NState.NotorietyUI.Library
 	local Window = UIAdapter:CreateWindow({
 		Title = "Notoriety",
@@ -5496,7 +5437,7 @@ NState.createVibeUI = function()
 
 	local SaveGeneration = 0
 
-	local function saveVibeUIConfig()
+	local function saveRayfieldConfig()
 		if NState.NotorietyUI.ConfigLoading or not NState.NotorietyUI.Config then
 			return false
 		end
@@ -5506,14 +5447,14 @@ NState.createVibeUI = function()
 		end)
 
 		if not Success then
-			warn("[Notoriety] VibeUI config save failed: " .. tostring(SaveError))
+			warn("[Notoriety] Rayfield Gen2 config save failed: " .. tostring(SaveError))
 			return false
 		end
 
 		return true
 	end
 
-	local function requestVibeUIConfigSave()
+	local function requestRayfieldConfigSave()
 		if NState.NotorietyUI.ConfigLoading or not NState.NotorietyUI.Config then
 			return
 		end
@@ -5529,12 +5470,12 @@ NState.createVibeUI = function()
 				return
 			end
 
-			saveVibeUIConfig()
+			saveRayfieldConfig()
 		end)
 	end
 
-	NState.NotorietyUI.SaveConfig = saveVibeUIConfig
-	NState.NotorietyUI.RequestConfigSave = requestVibeUIConfigSave
+	NState.NotorietyUI.SaveConfig = saveRayfieldConfig
+	NState.NotorietyUI.RequestConfigSave = requestRayfieldConfigSave
 
 	local MainTab = Window:Tab({
 		Title = "Main",
@@ -5550,7 +5491,7 @@ NState.createVibeUI = function()
 		Callback = function(Enabled)
 			NState.Environment.MaxEverythingEnabled = Enabled == true
 			if NState.Environment.MaxEverythingEnabled then NState.Apply() end
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -5576,7 +5517,7 @@ NState.createVibeUI = function()
 		Value = NState.Environment.NotorietyTeammateTarget,
 		Callback = function(Value)
 			NState.Environment.NotorietyTeammateTarget = tostring(Value or "All")
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -5630,7 +5571,7 @@ NState.createVibeUI = function()
 		Value = NState.Environment.NotorietyInfiniteYellMarkEnabled,
 		Callback = function(Enabled)
 			NState.setYellMarkPatchEnabled(Enabled)
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -5646,7 +5587,7 @@ NState.createVibeUI = function()
 		Value = NState.Environment.NotorietyYellMarkMethod,
 		Callback = function(Method)
 			NState.setYellMarkMethod(Method)
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -5657,7 +5598,7 @@ NState.createVibeUI = function()
 		Value = NState.Environment.NotorietyYellThroughWalls,
 		Callback = function(Enabled)
 			NState.setYellThroughWalls(Enabled)
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -5668,7 +5609,7 @@ NState.createVibeUI = function()
 		Value = NState.Environment.NotorietyTeammateYellInfiniteRange,
 		Callback = function(Enabled)
 			NState.setTeammateYellInfiniteRange(Enabled)
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -5679,7 +5620,7 @@ NState.createVibeUI = function()
 		Value = NState.Environment.NotorietyTeammateYellThroughWalls,
 		Callback = function(Enabled)
 			NState.setTeammateYellThroughWalls(Enabled)
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -5690,7 +5631,7 @@ NState.createVibeUI = function()
 		Value = NState.Environment.NotorietyAutoYellEnabled,
 		Callback = function(Enabled)
 			NState.YellPatchState.SetAutoYellEnabled(Enabled)
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -5701,7 +5642,7 @@ NState.createVibeUI = function()
 		Value = NState.Environment.NotorietyNoYellDelayEnabled,
 		Callback = function(Enabled)
 			NState.YellPatchState.SetNoDelayEnabled(Enabled)
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -5712,7 +5653,7 @@ NState.createVibeUI = function()
 		Value = NState.Environment.NotorietyPoliceHeadScaleEnabled,
 		Callback = function(Enabled)
 			NState.setPoliceHeadScaleEnabled(Enabled)
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -5738,7 +5679,7 @@ NState.createVibeUI = function()
 				NState.applyPoliceHeadScale()
 			end
 
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -5757,7 +5698,7 @@ NState.createVibeUI = function()
 			NState.Environment.NotorietyESPTextEnabled = Enabled == true
 			NState.updateItemESPVisibility()
 			NState.updatePoliceESP()
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -5768,7 +5709,7 @@ NState.createVibeUI = function()
 		Value = NState.Environment.NotorietyItemESPEnabled,
 		Callback = function(Enabled)
 			NState.setItemESPEnabled(Enabled)
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -5780,7 +5721,7 @@ NState.createVibeUI = function()
 		Callback = function(Enabled)
 			NState.Environment.NotorietyItemESPLabels = Enabled == true
 			if NState.Environment.NotorietyItemESPEnabled and not NState.NotorietyUI.ConfigLoading then NState.startItemESP() end
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -5793,7 +5734,7 @@ NState.createVibeUI = function()
 		Callback = function(Value)
 			NState.Environment.NotorietyItemESPTransparency = math.clamp(tonumber(Value) or 55, 0, 100)
 			NState.updateItemESPVisibility()
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -5806,7 +5747,7 @@ NState.createVibeUI = function()
 		Callback = function(Value)
 			NState.Environment.NotorietyItemESPMaxDistance = math.clamp(tonumber(Value) or 2500, 0, 10000)
 			NState.updateItemESPVisibility()
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -5824,7 +5765,7 @@ NState.createVibeUI = function()
 			Callback = function(Enabled)
 				NState.Environment.NotorietyItemESPCategories[Category] = Enabled == true
 				if NState.Environment.NotorietyItemESPEnabled and not NState.NotorietyUI.ConfigLoading then NState.startItemESP() end
-				requestVibeUIConfigSave()
+				requestRayfieldConfigSave()
 			end,
 		})
 	end
@@ -5836,7 +5777,7 @@ NState.createVibeUI = function()
 		Value = NState.Environment.NotorietyPoliceESPEnabled,
 		Callback = function(Enabled)
 			NState.setPoliceESPEnabled(Enabled)
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -5847,7 +5788,7 @@ NState.createVibeUI = function()
 		Callback = function(Enabled)
 			NState.Environment.NotorietyPoliceESPNames = Enabled == true
 			if not NState.NotorietyUI.ConfigLoading then NState.refreshPoliceESP() end
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -5858,7 +5799,7 @@ NState.createVibeUI = function()
 		Callback = function(Enabled)
 			NState.Environment.NotorietyPoliceESPHealth = Enabled == true
 			if not NState.NotorietyUI.ConfigLoading then NState.refreshPoliceESP() end
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -5871,7 +5812,7 @@ NState.createVibeUI = function()
 		Callback = function(Value)
 			NState.Environment.NotorietyPoliceESPMaxDistance = math.clamp(tonumber(Value) or 2500, 0, 10000)
 			NState.updatePoliceESP()
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -5888,7 +5829,7 @@ NState.createVibeUI = function()
 		Value = NState.Environment.NotorietyWeaponEnabled,
 		Callback = function(Enabled)
 			NState.setWeaponModificationsEnabled(Enabled)
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -5901,7 +5842,7 @@ NState.createVibeUI = function()
 			Callback = function(Enabled)
 				NState.Environment[EnvironmentKey] = Enabled == true
 				if not NState.NotorietyUI.ConfigLoading then NState.refreshWeaponModifications() end
-				requestVibeUIConfigSave()
+				requestRayfieldConfigSave()
 			end,
 		})
 	end
@@ -5913,7 +5854,7 @@ NState.createVibeUI = function()
 		Value = NState.Environment.NotorietyFriendlyFireEnabled,
 		Callback = function(Enabled)
 			NState.setFriendlyFireEnabled(Enabled)
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -5925,7 +5866,7 @@ NState.createVibeUI = function()
 		Callback = function(Enabled)
 			NState.Environment.NotorietySilentAimEnabled = Enabled == true
 			if not NState.NotorietyUI.ConfigLoading then NState.refreshWeaponModifications() end
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -5950,7 +5891,7 @@ NState.createVibeUI = function()
 		Callback = function(Enabled)
 			NState.Environment.NotorietyWallBangEnabled = Enabled == true
 			if not NState.NotorietyUI.ConfigLoading then NState.refreshWeaponModifications() end
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -5984,7 +5925,7 @@ NState.createVibeUI = function()
 			end
 
 			NState.Environment.NotorietySilentAimFOV = math.clamp(Number, 0, 2000)
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -6016,7 +5957,7 @@ NState.createVibeUI = function()
 				NState.refreshWeaponModifications()
 			end
 
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -6042,7 +5983,7 @@ NState.createVibeUI = function()
 				NState.refreshWeaponModifications()
 			end
 
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -6069,7 +6010,7 @@ NState.createVibeUI = function()
 				NState.refreshWeaponModifications()
 			end
 
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -6096,7 +6037,7 @@ NState.createVibeUI = function()
 				NState.refreshWeaponModifications()
 			end
 
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -6113,7 +6054,7 @@ NState.createVibeUI = function()
 		Value = NState.Environment.NotorietyRealismModeEnabled,
 		Callback = function(Enabled)
 			NState.setRealismModeEnabled(Enabled)
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -6124,7 +6065,7 @@ NState.createVibeUI = function()
 		Value = NState.Environment.NotorietyBugFeatureEnabled,
 		Callback = function(Enabled)
 			NState.setBugFeatureEnabled(Enabled)
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -6157,7 +6098,7 @@ NState.createVibeUI = function()
 				NState.applyMusicTrackSelection(true)
 				NState.applyMusicModeOverride()
 			end
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -6177,7 +6118,7 @@ NState.createVibeUI = function()
 					NState.applyMusicModeOverride()
 				end
 			end
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -6200,7 +6141,7 @@ NState.createVibeUI = function()
 
 				NState.Environment[EnvironmentKey] = math.clamp(Number, 0, 100)
 				NState.applyAudioVolumes()
-				requestVibeUIConfigSave()
+				requestRayfieldConfigSave()
 			end,
 		})
 	end
@@ -6276,7 +6217,7 @@ NState.createVibeUI = function()
 			end
 
 			NState.applyAudioVolumes()
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -6294,7 +6235,7 @@ NState.createVibeUI = function()
 		Callback = function(Enabled)
 			NState.Environment.NotorietyEquipmentSpeedEnabled = Enabled == true
 			NState.applyEquipmentPlacementSpeed()
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -6306,7 +6247,7 @@ NState.createVibeUI = function()
 		Callback = function(Enabled)
 			NState.Environment.NotorietyEquipmentInstantEnabled = Enabled == true
 			NState.applyEquipmentPlacementSpeed()
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -6336,7 +6277,7 @@ NState.createVibeUI = function()
 				NState.applyEquipmentPlacementSpeed()
 			end
 
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -6355,7 +6296,7 @@ NState.createVibeUI = function()
 				NState.applyEquipmentPlacementSpeed()
 			end
 
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -6367,7 +6308,7 @@ NState.createVibeUI = function()
 		Callback = function(Enabled)
 			NState.Environment.NotorietyInfiniteEquipmentEnabled = Enabled == true
 			NState.Apply()
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -6379,7 +6320,7 @@ NState.createVibeUI = function()
 		Callback = function(Enabled)
 			NState.Environment.NotorietyEquipmentRangeEnabled = Enabled == true
 			NState.applyEquipmentPlacementRange()
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -6397,7 +6338,7 @@ NState.createVibeUI = function()
 			if Number == nil or Number ~= Number then return end
 			NState.Environment.NotorietyEquipmentPlacementRange = math.clamp(Number, 10, 100)
 			NState.applyEquipmentPlacementRange()
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -6409,7 +6350,7 @@ NState.createVibeUI = function()
 		Callback = function(Enabled)
 			NState.Environment.NotorietyEquipmentPositionEnabled = Enabled == true
 			NState.applyEquipmentPositioning()
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -6430,7 +6371,7 @@ NState.createVibeUI = function()
 			end
 
 			NState.Environment.NotorietyEquipmentPositionX = Number
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -6451,7 +6392,7 @@ NState.createVibeUI = function()
 			end
 
 			NState.Environment.NotorietyEquipmentPositionY = Number
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -6472,7 +6413,7 @@ NState.createVibeUI = function()
 			end
 
 			NState.Environment.NotorietyEquipmentPositionZ = Number
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -6495,7 +6436,7 @@ NState.createVibeUI = function()
 				NState.NotorietyUI.EquipmentPositionZSlider:Set(0)
 			end)
 
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -6517,7 +6458,7 @@ NState.createVibeUI = function()
 				Window:SetToggleKey(KeyCode)
 			end
 
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 		end,
 	})
 
@@ -6526,7 +6467,7 @@ NState.createVibeUI = function()
 		Desc = "Restores modified data and unloads Notoriety",
 		Icon = "log-out",
 		Callback = function()
-			requestVibeUIConfigSave()
+			requestRayfieldConfigSave()
 
 			task.defer(function()
 				if type(NState.Environment.UnloadNotoriety) == "function" then
@@ -6703,7 +6644,7 @@ NState.Environment.UnloadNotoriety = NState.unloadNotoriety
 NState.trackWeaponContainer(NState.Weapons)
 NState.trackWeaponContainer(NState.Backpack)
 NState.trackWeaponContainer(NState.LocalPlayer.Character)
-NState.createVibeUI()
+NState.createRayfieldUI()
 
 if typeof(NState.NotorietyUI.Root) == "Instance" and type(NState.UIProtector.protectUI) == "function" then
 	local ProtectedParent = NState.resolveProtectedUIParent()

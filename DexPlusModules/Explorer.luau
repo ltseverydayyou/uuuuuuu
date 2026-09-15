@@ -3615,7 +3615,7 @@ return search]==]
 			Explorer.Refresh()
 		end))
 
-		local window = Lib.Window.new()
+		local window = Lib.Window.new({ignoreGuiInset = false})
 		Explorer.Window = window
 		window:SetTitle("Explorer")
 		window.GuiElems.Line.Position = UDim2.new(0,0,0,22)

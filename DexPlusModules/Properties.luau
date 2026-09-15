@@ -3362,7 +3362,7 @@ local function main()
         end
         expanded["Sound.SoundId"] = true
 
-        window = Lib.Window.new()
+        window = Lib.Window.new({ignoreGuiInset = false})
         Properties.Window = window
         window:SetTitle("Properties")
 

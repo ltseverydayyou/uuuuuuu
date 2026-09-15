@@ -86,10 +86,32 @@ local gethui = function()
 	return nil;
 end;
 local function __NAProtectUI(gui, options)
-	if __NAUIProtector and type(__NAUIProtector.protectUI) == "function" then
-		local ok, protected = pcall(__NAUIProtector.protectUI, gui, options);
-		if ok and protected then
-			return protected;
+	if not (__NAUIProtector and typeof(gui) == "Instance") then
+		return nil;
+	end;
+	options = type(options) == "table" and options or {};
+	if type(__NAUIProtector.nativeProtect) == "function" then
+		pcall(__NAUIProtector.nativeProtect, gui);
+	end;
+	local parent = options.parent;
+	if typeof(parent) ~= "Instance" and type(__NAUIProtector.parent) == "function" then
+		local ok, resolved = pcall(__NAUIProtector.parent);
+		if ok and typeof(resolved) == "Instance" then
+			parent = resolved;
+		end;
+	end;
+	if typeof(parent) == "Instance" then
+		if type(__NAUIProtector.lockInstance) == "function" then
+			local ok = pcall(__NAUIProtector.lockInstance, gui, { Parent = parent });
+			if ok then
+				return gui;
+			end;
+		end;
+		local ok = pcall(function()
+			gui.Parent = parent;
+		end);
+		if ok then
+			return gui;
 		end;
 	end;
 	return nil;
@@ -705,7 +727,9 @@ Main = (function()
 			Main.TrackGui(gui)
 		end
 
-		if gethui then
+		if __NAProtectUI(gui) then
+			return
+		elseif gethui then
 			gui.Parent = gethui()
 		elseif syn and syn.protect_gui then
 			syn.protect_gui(gui)

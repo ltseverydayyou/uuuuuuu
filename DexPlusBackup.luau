@@ -722,14 +722,21 @@ Main = (function()
 	end
 
 	Main.SecureGui = function(gui)
-		gui.Name = Main.GetRandomString()
 		if Main.TrackGui then
 			Main.TrackGui(gui)
 		end
 
-		if __NAProtectUI(gui) then
+		if __NAProtectUI(gui, {
+			harden = true,
+			deep = true,
+			watch = true,
+			rename = false,
+		}) then
 			return
-		elseif gethui then
+		end
+
+		gui.Name = Main.GetRandomString()
+		if gethui then
 			gui.Parent = gethui()
 		elseif syn and syn.protect_gui then
 			syn.protect_gui(gui)

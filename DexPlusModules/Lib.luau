@@ -3292,7 +3292,7 @@ local function main()
 				local isEnd = i == #side.Windows
 				local size = UDim2.new(0,side.Width,0,v.SizeY)
 				local pos = UDim2.new(sideFramePos.X.Scale,sideFramePos.X.Offset,0,currentPos)
-				Lib.ShowGui(v.Gui)
+				Lib.ShowGui(v.Gui, v.ProtectOptions)
 				--v.GuiElems.Main:TweenSizeAndPosition(size,pos,Enum.EasingDirection.Out,Enum.EasingStyle.Quad,0.3,true)
 				if noTween then
 					v.GuiElems.Main.Size = size
@@ -3376,7 +3376,7 @@ local function main()
 			local count = 0
 			for i = #visibleWindows,1,-1 do
 				visibleWindows[i].Gui.DisplayOrder = displayOrderStart + count
-				Lib.ShowGui(visibleWindows[i].Gui)
+				Lib.ShowGui(visibleWindows[i].Gui, visibleWindows[i].ProtectOptions)
 				count = count + 1
 			end
 
@@ -3852,7 +3852,7 @@ local function main()
 		end
 
 		local mt = {__index = funcs}
-		static.new = function()
+		static.new = function(protectOptions)
 			local obj = setmetatable({
 				Minimized = false,
 				Dragging = false,
@@ -3863,6 +3863,7 @@ local function main()
 				ResizableInternal = true,
 				Alignable = true,
 				RestoreLastSide = true,
+				ProtectOptions = type(protectOptions) == "table" and protectOptions or nil,
 				Closed = true,
 				SizeX = 300,
 				SizeY = 300,

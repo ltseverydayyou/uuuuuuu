@@ -704,17 +704,24 @@ Main = (function()
 		return assetId
 	end
 
-	Main.SecureGui = function(gui)
+	Main.SecureGui = function(gui, options)
 		if Main.TrackGui then
 			Main.TrackGui(gui)
 		end
 
-		if __NAProtectUI(gui, {
+		local protectionOptions = {
 			harden = true,
 			deep = true,
 			watch = true,
 			rename = false,
-		}) then
+		}
+		if type(options) == "table" then
+			for key, value in options do
+				protectionOptions[key] = value
+			end
+		end
+
+		if __NAProtectUI(gui, protectionOptions) then
 			return
 		end
 

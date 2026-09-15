@@ -1,9 +1,68 @@
 -- BETA: Arceus X customization module is unfinished and may break after Arceus UI updates.
 --!nocheck
-local hostEnv = (getgenv and getgenv()) or _G
-if type(hostEnv) ~= "table" then
-    hostEnv = _G
+local __acm_boot = {}
+__acm_boot.hostEnv = (getgenv and getgenv()) or _G or {}
+__acm_boot.hostGetfenv = type(__acm_boot.hostEnv.getfenv) == "function" and __acm_boot.hostEnv.getfenv or getfenv
+__acm_boot.hostSetfenv = type(__acm_boot.hostEnv.setfenv) == "function" and __acm_boot.hostEnv.setfenv or setfenv
+__acm_boot.debug = rawget(__acm_boot.hostEnv, "debug") or debug
+__acm_boot.registry = nil
+if type(getreg) == "function" then
+    pcall(function()
+        __acm_boot.registry = getreg()
+    end)
 end
+if type(__acm_boot.registry) ~= "table" and type(__acm_boot.debug) == "table" and type(__acm_boot.debug.getregistry) == "function" then
+    pcall(function()
+        __acm_boot.registry = __acm_boot.debug.getregistry()
+    end)
+end
+if type(__acm_boot.registry) ~= "table" then
+    __acm_boot.registry = {}
+end
+local function __acm_privateTable(parent, key)
+    local value = rawget(parent, key)
+    if type(value) ~= "table" then
+        value = {}
+        rawset(parent, key, value)
+    end
+    return value
+end
+__acm_boot.privateRoot = __acm_privateTable(__acm_boot.registry, "__nameless_admin_private")
+local __acm_env = __acm_privateTable(__acm_boot.privateRoot, "arceus_customization")
+local __acm_shared = __acm_privateTable(__acm_env, "shared")
+local __acm_runtimeEnv = __acm_privateTable(__acm_env, "runtime")
+__acm_runtimeEnv._G = __acm_runtimeEnv
+__acm_runtimeEnv.shared = __acm_shared
+__acm_runtimeEnv.getgenv = function()
+    return __acm_runtimeEnv
+end
+__acm_runtimeEnv.getfenv = function(target)
+    if target == nil or target == 0 then
+        return __acm_runtimeEnv
+    end
+    if type(__acm_boot.hostGetfenv) == "function" then
+        return __acm_boot.hostGetfenv(target)
+    end
+    return __acm_runtimeEnv
+end
+setmetatable(__acm_runtimeEnv, {
+    __index = function(_, key)
+        if key == "_G" then
+            return __acm_runtimeEnv
+        elseif key == "shared" then
+            return __acm_shared
+        elseif key == "getgenv" then
+            return __acm_runtimeEnv.getgenv
+        elseif key == "getfenv" then
+            return __acm_runtimeEnv.getfenv
+        end
+        return __acm_boot.hostEnv[key]
+    end,
+})
+if type(__acm_boot.hostSetfenv) == "function" then
+    pcall(__acm_boot.hostSetfenv, 1, __acm_runtimeEnv)
+end
+local hostEnv = __acm_boot.hostEnv
 
 local executorName = ""
 pcall(function()
@@ -13,8 +72,8 @@ if executorName ~= "" and not executorName:find("arceus", 1, true) then
     return
 end
 
-if type(hostEnv.__ArceusCustomizationRuntime) == "table" and type(hostEnv.__ArceusCustomizationRuntime.stop) == "function" then
-    pcall(hostEnv.__ArceusCustomizationRuntime.stop)
+if type(__acm_env.__ArceusCustomizationRuntime) == "table" and type(__acm_env.__ArceusCustomizationRuntime.stop) == "function" then
+    pcall(__acm_env.__ArceusCustomizationRuntime.stop)
 end
 
 local function getLoader()
@@ -36,6 +95,9 @@ local function loadRemoteModule(url, chunkName)
     local fn = loader(source, chunkName)
     if type(fn) ~= "function" then
         return nil
+    end
+    if type(__acm_boot.hostSetfenv) == "function" then
+        pcall(__acm_boot.hostSetfenv, fn, __acm_runtimeEnv)
     end
     local ok2, result = pcall(fn)
     if ok2 then
@@ -76,7 +138,7 @@ local StarterGui = services.StarterGui
 local TweenService = services.TweenService
 
 local runtime = {
-    version = "0.1.4",
+    version = "0.1.5",
     alive = true,
     conns = {},
     originals = setmetatable({}, { __mode = "k" }),
@@ -84,7 +146,7 @@ local runtime = {
     refs = {},
     applying = {},
 }
-hostEnv.__ArceusCustomizationRuntime = runtime
+__acm_env.__ArceusCustomizationRuntime = runtime
 
 local function notify(title, text)
     pcall(function()
@@ -1520,11 +1582,11 @@ runtime.stop = function()
     runtime.alive = false
     clearConnections()
     restore()
-    if hostEnv.__ArceusCustomizationRuntime == runtime then
-        hostEnv.__ArceusCustomizationRuntime = nil
+    if __acm_env.__ArceusCustomizationRuntime == runtime then
+        __acm_env.__ArceusCustomizationRuntime = nil
     end
-    if hostEnv.ArceusCustomization and hostEnv.ArceusCustomization.runtime == runtime then
-        hostEnv.ArceusCustomization = nil
+    if __acm_env.ArceusCustomization and __acm_env.ArceusCustomization.runtime == runtime then
+        __acm_env.ArceusCustomization = nil
     end
     notify("Arceus Customization", "Customization unloaded and native properties restored.")
 end
@@ -1563,7 +1625,7 @@ end
 local ok, reason = locate()
 if not ok then
     runtime.alive = false
-    hostEnv.__ArceusCustomizationRuntime = nil
+    __acm_env.__ArceusCustomizationRuntime = nil
     notify("Arceus Customization", reason)
     return
 end
@@ -1605,7 +1667,7 @@ connect(runtime.refs.gui.AncestryChanged, function(_, parent)
     end
 end)
 
-hostEnv.ArceusCustomization = {
+__acm_env.ArceusCustomization = {
     runtime = runtime,
     settings = config,
     unload = runtime.stop,
@@ -1614,4 +1676,4 @@ hostEnv.ArceusCustomization = {
 }
 
 notify("Arceus Customization", "Loaded. Use the C-badged sidebar button to open customization.")
-return hostEnv.ArceusCustomization
+return __acm_env.ArceusCustomization

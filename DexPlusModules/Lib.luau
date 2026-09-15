@@ -2764,37 +2764,42 @@ local function main()
 			tweens = {}
 		end
 
+		local function resolveLocalPosition(guiObject)
+			local position = guiObject.Position
+			local layer = guiObject.Parent
+			local size = layer and layer.AbsoluteSize or Vector2.zero
+			return position.X.Scale * size.X + position.X.Offset, position.Y.Scale * size.Y + position.Y.Offset
+		end
+
 		local function resizeHook(self,resizer,dir)
 			local pressing = false
-			
 			local guiMain = self.GuiElems.Main
-			
+
 			trackConn(resizer.MouseEnter:Connect(function() resizer.BackgroundTransparency = 0.5 end))
 			trackConn(resizer.MouseButton1Down:Connect(function() pressing = true resizer.BackgroundTransparency = 0.5 end))
 			trackConn(resizer.MouseButton1Up:Connect(function() pressing = false resizer.BackgroundTransparency = 1 end))
-			
-			
-			
+
 			trackConn(resizer.InputBegan:Connect(function(input)
 				if not self.Dragging and not self.Resizing and self.Resizable and self.ResizableInternal and pressing then
 					local isH = dir:find("[WE]") and true
 					local isV = dir:find("[NS]") and true
-					local signX = dir:find("W",1,true) and -1 or 1
-					local signY = dir:find("N",1,true) and -1 or 1
+					local fromWest = dir:find("W",1,true) ~= nil
+					local fromNorth = dir:find("N",1,true) ~= nil
 
 					if self.Minimized and isV then return end
-					
-					if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-						
-						local releaseEvent, mouseEvent
 
-						local offX = input.Position.X - resizer.AbsolutePosition.X
-						local offY = input.Position.Y - resizer.AbsolutePosition.Y
+					if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+						local releaseEvent, mouseEvent
+						local startPointer = input.Position
+						local startPosition = guiMain.Position
+						local startSizeX = self.SizeX
+						local startSizeY = self.SizeY
+						local startLocalX, startLocalY = resolveLocalPosition(guiMain)
 
 						self.Resizing = resizer
-						
-						releaseEvent = trackConn(service.UserInputService.InputEnded:Connect(function(input)
-							if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+
+						releaseEvent = trackConn(service.UserInputService.InputEnded:Connect(function(changedInput)
+							if changedInput.UserInputType == Enum.UserInputType.MouseButton1 or changedInput.UserInputType == Enum.UserInputType.Touch then
 								releaseEvent:Disconnect()
 								if mouseEvent then mouseEvent:Disconnect() end
 								self.Resizing = false
@@ -2802,19 +2807,45 @@ local function main()
 							end
 						end))
 
-						mouseEvent = trackConn(service.UserInputService.InputChanged:Connect(function(input)
-							if self.Resizable and self.ResizableInternal and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+						mouseEvent = trackConn(service.UserInputService.InputChanged:Connect(function(changedInput)
+							if self.Resizable and self.ResizableInternal and (changedInput.UserInputType == Enum.UserInputType.MouseMovement or changedInput.UserInputType == Enum.UserInputType.Touch) then
 								self:StopTweens()
-								local deltaX = input.Position.X - resizer.AbsolutePosition.X - offX
-								local deltaY = input.Position.Y - resizer.AbsolutePosition.Y - offY
+								local pointerDeltaX = changedInput.Position.X - startPointer.X
+								local pointerDeltaY = changedInput.Position.Y - startPointer.Y
+								local moveX = 0
+								local moveY = 0
+								local newSizeX = startSizeX
+								local newSizeY = startSizeY
 
-								if guiMain.AbsoluteSize.X + deltaX * signX < self.MinX then deltaX = signX * (self.MinX - guiMain.AbsoluteSize.X) end
-								if guiMain.AbsoluteSize.Y + deltaY * signY < self.MinY then deltaY = signY * (self.MinY - guiMain.AbsoluteSize.Y) end
-								if signY < 0 and guiMain.AbsolutePosition.Y + deltaY < 0 then deltaY = -guiMain.AbsolutePosition.Y end
+								if isH then
+									if fromWest then
+										moveX = math.min(pointerDeltaX, startSizeX - self.MinX)
+										newSizeX = startSizeX - moveX
+									else
+										newSizeX = math.max(self.MinX, startSizeX + pointerDeltaX)
+									end
+								end
 
-								guiMain.Position = guiMain.Position + UDim2.new(0, (signX < 0 and deltaX or 0), 0, (signY < 0 and deltaY or 0))
-								self.SizeX = self.SizeX + (isH and deltaX * signX or 0)
-								self.SizeY = self.SizeY + (isV and deltaY * signY or 0)
+								if isV then
+									if fromNorth then
+										moveY = math.clamp(pointerDeltaY, -startLocalY, startSizeY - self.MinY)
+										newSizeY = startSizeY - moveY
+									else
+										newSizeY = math.max(self.MinY, startSizeY + pointerDeltaY)
+									end
+								end
+
+								if fromWest and startLocalX + moveX < 0 then
+									moveX = -startLocalX
+									newSizeX = startSizeX - moveX
+								end
+
+								guiMain.Position = UDim2.new(
+									startPosition.X.Scale, startPosition.X.Offset + moveX,
+									startPosition.Y.Scale, startPosition.Y.Offset + moveY
+								)
+								self.SizeX = newSizeX
+								self.SizeY = newSizeY
 								guiMain.Size = UDim2.new(0, self.SizeX, 0, self.Minimized and 20 or self.SizeY)
 							end
 						end))
@@ -2823,7 +2854,6 @@ local function main()
 			end))
 
 			trackConn(resizer.InputEnded:Connect(function(input)
-				--if input.UserInputType == Enum.UserInputType.Touch and Main.AllowDraggableOnMobile == false then return end
 				if (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) and self.Resizing ~= resizer then
 					resizer.BackgroundTransparency = 1
 				end
@@ -2962,19 +2992,15 @@ local function main()
 				if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 					if self.Draggable then
 						local releaseEvent, mouseEvent
-
 						local maxX = sidesGui.AbsoluteSize.X
-						local initX = guiMain.AbsolutePosition.X
-						local initY = guiMain.AbsolutePosition.Y
-						local offX = input.Position.X - initX
-						local offY = input.Position.Y - initY
-
+						local dragStartPointer = input.Position
+						local dragStartPosition = guiMain.Position
 						local alignInsertPos, alignInsertSide
 
 						guiDragging = true
 
-						releaseEvent = trackConn(service.UserInputService.InputEnded:Connect(function(input)
-							if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+						releaseEvent = trackConn(service.UserInputService.InputEnded:Connect(function(changedInput)
+							if changedInput.UserInputType == Enum.UserInputType.MouseButton1 or changedInput.UserInputType == Enum.UserInputType.Touch then
 								releaseEvent:Disconnect()
 								if mouseEvent then mouseEvent:Disconnect() end
 								guiDragging = false
@@ -2986,21 +3012,31 @@ local function main()
 							end
 						end))
 
-						mouseEvent = trackConn(service.UserInputService.InputChanged:Connect(function(input)
-							if (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) and self.Draggable and not self.Closed and ButtonDown then
+						mouseEvent = trackConn(service.UserInputService.InputChanged:Connect(function(changedInput)
+							if (changedInput.UserInputType == Enum.UserInputType.MouseMovement or changedInput.UserInputType == Enum.UserInputType.Touch) and self.Draggable and not self.Closed and ButtonDown then
+								local deltaX = changedInput.Position.X - dragStartPointer.X
+								local deltaY = changedInput.Position.Y - dragStartPointer.Y
+
 								if self.Aligned then
 									if leftSide.Resizing or rightSide.Resizing then return end
-									local posX, posY = input.Position.X - offX, input.Position.Y - offY
-									local delta = math.sqrt((posX - initX)^2 + (posY - initY)^2)
-									if delta >= 5 then
+									if math.sqrt(deltaX * deltaX + deltaY * deltaY) >= 5 then
 										self:SetAligned(false)
+										dragStartPointer = changedInput.Position
+										dragStartPosition = guiMain.Position
 									end
 								else
-									local inputX, inputY = input.Position.X, input.Position.Y
-									local posX, posY = inputX - offX, inputY - offY
-									if posY < 0 then posY = 0 end
-									guiMain.Position = UDim2.new(0, posX, 0, posY)
+									local rootSize = guiMain.Parent and guiMain.Parent.AbsoluteSize or sidesGui.AbsoluteSize
+									local startLocalY = dragStartPosition.Y.Scale * rootSize.Y + dragStartPosition.Y.Offset
+									if startLocalY + deltaY < 0 then
+										deltaY = -startLocalY
+									end
 
+									guiMain.Position = UDim2.new(
+										dragStartPosition.X.Scale, dragStartPosition.X.Offset + deltaX,
+										dragStartPosition.Y.Scale, dragStartPosition.Y.Offset + deltaY
+									)
+
+									local inputX, inputY = changedInput.Position.X, changedInput.Position.Y
 									if self.Resizable and self.Alignable then
 										if inputX < 25 then
 											if sideHasRoom(leftSide, self.MinY or 100) then
@@ -3064,11 +3100,11 @@ local function main()
 				end
 			end))
 
-			trackConn(guiMain:GetPropertyChangedSignal("AbsolutePosition"):Connect(function()
-				local absPos = guiMain.AbsolutePosition
-				self.PosX = absPos.X
-				self.PosY = absPos.Y
-			end))
+			local function syncLocalPosition()
+				self.PosX, self.PosY = resolveLocalPosition(guiMain)
+			end
+			trackConn(guiMain:GetPropertyChangedSignal("Position"):Connect(syncLocalPosition))
+			syncLocalPosition()
 
 			resizeHook(self,guiResizeControls.North,"N")
 			resizeHook(self,guiResizeControls.NorthEast,"NE")
@@ -3405,7 +3441,8 @@ local function main()
 				if mode == 1 then
 					self.GuiElems.Main:TweenSize(UDim2.new(0,self.SizeX,0,newVal and 20 or self.SizeY),Enum.EasingDirection.Out,Enum.EasingStyle.Quart,0.25,true)
 				else
-					local maxY = sidesGui.AbsoluteSize.Y
+					local bounds = self.Gui and self.Gui.AbsoluteSize or sidesGui.AbsoluteSize
+					local maxY = bounds.Y
 					local newPos = UDim2.new(0,self.PosX,0,newVal and math.min(maxY-20,self.PosY + self.SizeY - 20) or math.max(0,self.PosY - self.SizeY + 20))
 
 					self.GuiElems.Main:TweenPosition(newPos,Enum.EasingDirection.Out,Enum.EasingStyle.Quart,0.25,true)
@@ -3612,9 +3649,10 @@ local function main()
 
 		funcs.MoveInBoundary = function(self)
 			local posX,posY = self.PosX,self.PosY
-			local maxX,maxY = sidesGui.AbsoluteSize.X,sidesGui.AbsoluteSize.Y
-			posX = math.min(posX,maxX-self.SizeX)
-			posY = math.min(posY,maxY-20)
+			local bounds = self.Gui and self.Gui.AbsoluteSize or sidesGui.AbsoluteSize
+			local maxX,maxY = bounds.X,bounds.Y
+			posX = math.max(0,math.min(posX,maxX-self.SizeX))
+			posY = math.max(0,math.min(posY,maxY-20))
 			self.GuiElems.Main.Position = UDim2.new(0,posX,0,posY)
 		end
 

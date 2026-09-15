@@ -2978,7 +2978,7 @@ local function main()
 								releaseEvent:Disconnect()
 								if mouseEvent then mouseEvent:Disconnect() end
 								guiDragging = false
-								alignIndicator.Parent = nil
+								alignIndicator.Enabled = false
 								if alignInsertSide then
 									local targetSide = (alignInsertSide == "left" and leftSide) or (alignInsertSide == "right" and rightSide)
 									self:AlignTo(targetSide, alignInsertPos)
@@ -3007,6 +3007,7 @@ local function main()
 												local insertPos, range = getSideInsertPos(leftSide, inputY)
 												alignIndicator.Indicator.Position = UDim2.new(0, -15, 0, range[1])
 												alignIndicator.Indicator.Size = UDim2.new(0, 40, 0, range[2] - range[1])
+												alignIndicator.Enabled = true
 												Lib.ShowGui(alignIndicator)
 												alignInsertPos = insertPos
 												alignInsertSide = "left"
@@ -3017,6 +3018,7 @@ local function main()
 												local insertPos, range = getSideInsertPos(rightSide, inputY)
 												alignIndicator.Indicator.Position = UDim2.new(0, maxX - 25, 0, range[1])
 												alignIndicator.Indicator.Size = UDim2.new(0, 40, 0, range[2] - range[1])
+												alignIndicator.Enabled = true
 												Lib.ShowGui(alignIndicator)
 												alignInsertPos = insertPos
 												alignInsertSide = "right"
@@ -3024,7 +3026,7 @@ local function main()
 											end
 										end
 									end
-									alignIndicator.Parent = nil
+									alignIndicator.Enabled = false
 									alignInsertPos = nil
 									alignInsertSide = nil
 								end
@@ -3548,7 +3550,7 @@ local function main()
 			end
 
 			self.Aligned = false
-			self.Gui.Parent = nil
+			self.Gui.Enabled = false
 			updateWindows(true)
 		end
 		
@@ -3656,6 +3658,7 @@ local function main()
 			end
 
 			window.Closed = false
+			window.Gui.Enabled = true
 			window.LastClose = tick()
 			window.GuiElems.Title.TextTransparency = 0
 			local minimizeImage = getButtonImage(window.GuiElems.Minimize)
@@ -4157,6 +4160,7 @@ local function main()
 			elems.Main.Position = UDim2.new(0,x,0,y)
 			elems.Main.Size = UDim2.new(0,self.Width,0,0)
 			self.Gui.DisplayOrder = Main.DisplayOrders.Menu
+			self.Gui.Enabled = true
 			Lib.ShowGui(self.Gui)
 
 			-- Size adjustment
@@ -4199,7 +4203,7 @@ local function main()
 		end
 
 		funcs.Hide = function(self)
-			self.Gui.Parent = nil
+			self.Gui.Enabled = false
 		end
 
 		funcs.ApplyTheme = function(self,data)
@@ -5999,6 +6003,7 @@ local function main()
 
 			local x,y = x or mouse.X, y or mouse.Y
 			local maxX,maxY = mouse.ViewSizeX,mouse.ViewSizeY
+			self.Gui.Enabled = true
 			Lib.ShowGui(self.Gui)
 			local sizeX,sizeY = self.Gui.Frame.AbsoluteSize.X,self.Gui.Frame.AbsoluteSize.Y
 
@@ -6032,7 +6037,7 @@ local function main()
 		end
 
 		funcs.Close = function(self)
-			self.Gui.Parent = nil
+			self.Gui.Enabled = false
 			self.OnCancel:Fire()
 		end
 

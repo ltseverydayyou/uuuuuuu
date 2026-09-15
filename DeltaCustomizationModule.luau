@@ -29,7 +29,7 @@ __dcm_boot.getPrivateRegistry = function()
 		end)
 	end
 	if type(registry) ~= "table" then
-		registry = __dcm_boot.hostEnv
+		registry = {}
 	end
 	return registry
 end
@@ -77,14 +77,6 @@ __dcm_boot.privateRoot = __dcm_boot.ensureTable(__dcm_boot.privateRegistry, "__n
 local __dcm_env = __dcm_boot.ensureTable(__dcm_boot.privateRoot, "delta_customization")
 local __dcm_shared = __dcm_boot.ensureTable(__dcm_env, "shared")
 __dcm_boot.runtimeEnv = __dcm_boot.ensureTable(__dcm_env, "runtime")
-
-__dcm_boot.clearLegacyGlobals(__dcm_boot.hostEnv)
-if type(_G) == "table" and _G ~= __dcm_boot.hostEnv then
-	__dcm_boot.clearLegacyGlobals(_G)
-end
-if type(shared) == "table" and shared ~= __dcm_boot.hostEnv and shared ~= _G then
-	__dcm_boot.clearLegacyGlobals(shared)
-end
 
 __dcm_boot.runtimeEnv.shared = __dcm_shared
 __dcm_boot.runtimeEnv._G = __dcm_boot.runtimeEnv
@@ -139,6 +131,9 @@ local __lt = (function()
 	if type(resolver) ~= "function" then
 		error("Service resolver failed to compile")
 	end
+	if type(__dcm_boot.hostSetfenv) == "function" then
+		pcall(__dcm_boot.hostSetfenv, resolver, __dcm_boot.runtimeEnv)
+	end
 	local loaded = resolver()
 	if type(loaded) ~= "table" then
 		error("Service resolver failed to load")
@@ -147,9 +142,7 @@ local __lt = (function()
 	return loaded
 end)()
 local __NAUIProtector = (function()
-	local globalEnv = (getgenv and getgenv()) or _G or {};
-	local sharedEnv = rawget(_G, "shared");
-	local cacheHost = type(sharedEnv) == "table" and sharedEnv or (type(globalEnv) == "table" and globalEnv or nil);
+	local cacheHost = __dcm_env;
 	if cacheHost then
 		local cached = rawget(cacheHost, "__lt_ui_protector");
 		if type(cached) == "table" then
@@ -169,6 +162,9 @@ local __NAUIProtector = (function()
 	local chunk = loader(source, "@UIprotector.luau");
 	if type(chunk) ~= "function" then
 		return nil;
+	end;
+	if type(__dcm_boot.hostSetfenv) == "function" then
+		pcall(__dcm_boot.hostSetfenv, chunk, __dcm_boot.runtimeEnv);
 	end;
 	local okLoaded, loaded = pcall(chunk);
 	if okLoaded and type(loaded) == "table" then

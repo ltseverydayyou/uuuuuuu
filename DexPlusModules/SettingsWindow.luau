@@ -482,6 +482,10 @@ local function main()
 			end
 		end
 
+		SettingsWindow.ApplyLiveSettings = function()
+			pcall(applyLiveSettings)
+		end
+
 		local function updateQuickTabState(selectedName)
 			currentSectionName = selectedName
 			for name, button in quickTabButtons do
@@ -1215,6 +1219,13 @@ local function main()
 			
 			window:SetTitle("Settings")
 		end))
+
+		SettingsWindow.ApplyLiveSettings()
+		task.delay(0.5, function()
+			if SettingsWindow.ApplyLiveSettings then
+				SettingsWindow.ApplyLiveSettings()
+			end
+		end)
 	end
 
 	return SettingsWindow

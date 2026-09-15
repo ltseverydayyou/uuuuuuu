@@ -3044,7 +3044,7 @@ local function main()
 												alignIndicator.Indicator.Position = UDim2.new(0, -15, 0, range[1])
 												alignIndicator.Indicator.Size = UDim2.new(0, 40, 0, range[2] - range[1])
 												alignIndicator.Enabled = true
-												Lib.ShowGui(alignIndicator)
+												Lib.ShowGui(alignIndicator,{ignoreGuiInset = false})
 												alignInsertPos = insertPos
 												alignInsertSide = "left"
 												return
@@ -3055,7 +3055,7 @@ local function main()
 												alignIndicator.Indicator.Position = UDim2.new(0, maxX - 25, 0, range[1])
 												alignIndicator.Indicator.Size = UDim2.new(0, 40, 0, range[2] - range[1])
 												alignIndicator.Enabled = true
-												Lib.ShowGui(alignIndicator)
+												Lib.ShowGui(alignIndicator,{ignoreGuiInset = false})
 												alignInsertPos = insertPos
 												alignInsertSide = "right"
 												return
@@ -3885,7 +3885,7 @@ local function main()
 			end))
 
 			sidesGui.DisplayOrder = sideDisplayOrder - 1
-			Lib.ShowGui(sidesGui)
+			Lib.ShowGui(sidesGui,{ignoreGuiInset = false})
 			updateSideFrames()
 		end
 

@@ -1324,7 +1324,7 @@ local EmbeddedModules = {
 				for i = 1, #context.Items do
 					local item = context.Items[i];
 					if (not item.Divider) and (not item.Disabled) and ShortcutMatchesInput(input, item.Shortcut) then
-						if context.Gui.Parent then
+						if context.Gui.Enabled then
 							context:Hide();
 						end;
 						if item.OnClick then
@@ -3234,7 +3234,7 @@ local EmbeddedModules = {
 				scrollH.Scrolled:Connect(function()
 					Explorer.Refresh();
 				end);
-				local window = Lib.Window.new();
+				local window = Lib.Window.new({ignoreGuiInset = false});
 				Explorer.Window = window;
 				window:SetTitle("Explorer");
 				window.GuiElems.Line.Position = UDim2.new(0, 0, 0, 22);
@@ -5936,7 +5936,7 @@ local EmbeddedModules = {
 					end;
 				end;
 				expanded["Sound.SoundId"] = true;
-				window = Lib.Window.new();
+				window = Lib.Window.new({ignoreGuiInset = false});
 				Properties.Window = window;
 				window:SetTitle("Properties");
 				toolBar = guiItems.ToolBar;
@@ -6846,9 +6846,23 @@ local EmbeddedModules = {
 				};
 			end;
 			Lib.ProtectedGuis = {};
-			Lib.ShowGui = function(gui)
+			Lib.ShowGui = function(gui, options)
 				if Main and Main.TrackGui then
 					Main.TrackGui(gui);
+				end;
+				local protectionOptions = {
+					harden = true,
+					deep = true,
+					watch = true,
+					rename = false
+				};
+				if type(options) == "table" then
+					for key, value in options do
+						protectionOptions[key] = value;
+					end;
+				end;
+				if __NAProtectUI(gui, protectionOptions) then
+					return;
 				end;
 				if env.gethui then
 					gui.Parent = env.gethui();
@@ -7867,24 +7881,32 @@ local EmbeddedModules = {
 					setResizeCtrl(ctrls, "SouthEast", UDim2.new(1, -p, 1, -p), UDim2.new(0, p, 0, p));
 					setResizeCtrl(ctrls, "SouthWest", UDim2.new(0, 0, 1, -p), UDim2.new(0, p, 0, p));
 				end;
+				local function resolveLocalPosition(guiObject)
+					local position = guiObject.Position;
+					local layer = guiObject.Parent;
+					local size = layer and layer.AbsoluteSize or Vector2.zero;
+					return position.X.Scale * size.X + position.X.Offset, position.Y.Scale * size.Y + position.Y.Offset;
+				end;
 				local function resizeHook(self, resizer, dir)
 					local guiMain = self.GuiElems.Main;
 					resizer.InputBegan:Connect(function(input)
 						if not self.Dragging and (not self.Resizing) and self.Resizable and self.ResizableInternal then
 							local isH = dir:find("[WE]") and true;
 							local isV = dir:find("[NS]") and true;
-							local signX = dir:find("W", 1, true) and (-1) or 1;
-							local signY = dir:find("N", 1, true) and (-1) or 1;
+							local fromWest = dir:find("W", 1, true) ~= nil;
+							local fromNorth = dir:find("N", 1, true) ~= nil;
 							if self.Minimized and isV then
 								return;
 							end;
 							if input.UserInputType == Enum.UserInputType.MouseMovement then
 								resizer.BackgroundTransparency = 0.5;
 							elseif input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-								local releaseEvent, mouseEvent, touchEvent;
-								local offX = input.Position.X - resizer.AbsolutePosition.X;
-								local offY = input.Position.Y - resizer.AbsolutePosition.Y;
-								local lastX, lastY;
+								local releaseEvent, mouseEvent;
+								local startPointer = input.Position;
+								local startPosition = guiMain.Position;
+								local startSizeX = self.SizeX;
+								local startSizeY = self.SizeY;
+								local startLocalX, startLocalY = resolveLocalPosition(guiMain);
 								self.Resizing = resizer;
 								resizer.BackgroundTransparency = 1;
 								local function stopResize()
@@ -7896,49 +7918,51 @@ local EmbeddedModules = {
 										mouseEvent:Disconnect();
 										mouseEvent = nil;
 									end;
-									if touchEvent then
-										touchEvent:Disconnect();
-										touchEvent = nil;
-									end;
 									self.Resizing = false;
 									resizer.BackgroundTransparency = 1;
 								end;
-								local function resizeFromInput(moveInput)
-									if not (self.Resizable and self.ResizableInternal) then
-										return;
-									end;
-									if moveInput.UserInputType ~= Enum.UserInputType.MouseMovement and moveInput.UserInputType ~= Enum.UserInputType.Touch then
-										return;
-									end;
-									local pos = moveInput.Position;
-									if lastX == pos.X and lastY == pos.Y then
-										return;
-									end;
-									lastX, lastY = pos.X, pos.Y;
-									self:StopTweens();
-									local deltaX = pos.X - resizer.AbsolutePosition.X - offX;
-									local deltaY = pos.Y - resizer.AbsolutePosition.Y - offY;
-									if guiMain.AbsoluteSize.X + deltaX * signX < self.MinX then
-										deltaX = signX * (self.MinX - guiMain.AbsoluteSize.X);
-									end;
-									if guiMain.AbsoluteSize.Y + deltaY * signY < self.MinY then
-										deltaY = signY * (self.MinY - guiMain.AbsoluteSize.Y);
-									end;
-									if signY < 0 and guiMain.AbsolutePosition.Y + deltaY < 0 then
-										deltaY = -guiMain.AbsolutePosition.Y;
-									end;
-									guiMain.Position = guiMain.Position + UDim2.new(0, (signX < 0 and deltaX or 0), 0, (signY < 0 and deltaY or 0));
-									self.SizeX = self.SizeX + (isH and deltaX * signX or 0);
-									self.SizeY = self.SizeY + (isV and deltaY * signY or 0);
-									guiMain.Size = UDim2.new(0, self.SizeX, 0, self.Minimized and 20 or self.SizeY);
-								end;
-								releaseEvent = Main.TrackConn(service.UserInputService.InputEnded:Connect(function(endInput)
-									if endInput.UserInputType == Enum.UserInputType.MouseButton1 or endInput.UserInputType == Enum.UserInputType.Touch then
+								releaseEvent = Main.TrackConn(service.UserInputService.InputEnded:Connect(function(changedInput)
+									if changedInput.UserInputType == Enum.UserInputType.MouseButton1 or changedInput.UserInputType == Enum.UserInputType.Touch then
 										stopResize();
 									end;
 								end));
-								mouseEvent = Main.TrackConn(service.UserInputService.InputChanged:Connect(resizeFromInput));
-								touchEvent = Main.TrackConn(service.UserInputService.TouchMoved:Connect(resizeFromInput));
+								mouseEvent = Main.TrackConn(service.UserInputService.InputChanged:Connect(function(changedInput)
+									if not (self.Resizable and self.ResizableInternal) then
+										return;
+									end;
+									if changedInput.UserInputType ~= Enum.UserInputType.MouseMovement and changedInput.UserInputType ~= Enum.UserInputType.Touch then
+										return;
+									end;
+									self:StopTweens();
+									local pointerDeltaX = changedInput.Position.X - startPointer.X;
+									local pointerDeltaY = changedInput.Position.Y - startPointer.Y;
+									local moveX, moveY = 0, 0;
+									local newSizeX, newSizeY = startSizeX, startSizeY;
+									if isH then
+										if fromWest then
+											moveX = math.min(pointerDeltaX, startSizeX - self.MinX);
+											newSizeX = startSizeX - moveX;
+										else
+											newSizeX = math.max(self.MinX, startSizeX + pointerDeltaX);
+										end;
+									end;
+									if isV then
+										if fromNorth then
+											moveY = math.clamp(pointerDeltaY, -startLocalY, startSizeY - self.MinY);
+											newSizeY = startSizeY - moveY;
+										else
+											newSizeY = math.max(self.MinY, startSizeY + pointerDeltaY);
+										end;
+									end;
+									if fromWest and startLocalX + moveX < 0 then
+										moveX = -startLocalX;
+										newSizeX = startSizeX - moveX;
+									end;
+									guiMain.Position = UDim2.new(startPosition.X.Scale, startPosition.X.Offset + moveX, startPosition.Y.Scale, startPosition.Y.Offset + moveY);
+									self.SizeX = newSizeX;
+									self.SizeY = newSizeY;
+									guiMain.Size = UDim2.new(0, self.SizeX, 0, self.Minimized and 20 or self.SizeY);
+								end));
 							end;
 						end;
 					end);
@@ -8392,51 +8416,53 @@ local EmbeddedModules = {
 							if self.Draggable then
 								local releaseEvent, mouseEvent;
 								local maxX = sidesGui.AbsoluteSize.X;
-								local initX = guiMain.AbsolutePosition.X;
-								local initY = guiMain.AbsolutePosition.Y;
-								local offX = input.Position.X - initX;
-								local offY = input.Position.Y - initY;
+								local dragStartPointer = input.Position;
+								local dragStartPosition = guiMain.Position;
 								local alignInsertPos, alignInsertSide;
 								guiDragging = true;
-								releaseEvent = Main.TrackConn(service.UserInputService.InputEnded:Connect(function(input)
-									if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+								releaseEvent = Main.TrackConn(service.UserInputService.InputEnded:Connect(function(changedInput)
+									if changedInput.UserInputType == Enum.UserInputType.MouseButton1 or changedInput.UserInputType == Enum.UserInputType.Touch then
 										releaseEvent:Disconnect();
 										if mouseEvent then
 											mouseEvent:Disconnect();
 										end;
 										guiDragging = false;
-										alignIndicator.Parent = nil;
+										alignIndicator.Enabled = false;
 										if alignInsertSide then
 											local targetSide = alignInsertSide == "left" and leftSide or alignInsertSide == "right" and rightSide;
 											self:AlignTo(targetSide, alignInsertPos);
 										end;
 									end;
 								end));
-								mouseEvent = Main.TrackConn(service.UserInputService.InputChanged:Connect(function(input)
-									if (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) and self.Draggable and (not self.Closed) and ButtonDown then
+								mouseEvent = Main.TrackConn(service.UserInputService.InputChanged:Connect(function(changedInput)
+									if (changedInput.UserInputType == Enum.UserInputType.MouseMovement or changedInput.UserInputType == Enum.UserInputType.Touch) and self.Draggable and (not self.Closed) and ButtonDown then
+										local deltaX = changedInput.Position.X - dragStartPointer.X;
+										local deltaY = changedInput.Position.Y - dragStartPointer.Y;
 										if self.Aligned then
 											if leftSide.Resizing or rightSide.Resizing then
 												return;
 											end;
-											local posX, posY = input.Position.X - offX, input.Position.Y - offY;
-											local delta = math.sqrt((posX - initX) ^ 2 + (posY - initY) ^ 2);
-											if delta >= 5 then
+											if math.sqrt(deltaX * deltaX + deltaY * deltaY) >= 5 then
 												self:SetAligned(false);
+												dragStartPointer = changedInput.Position;
+												dragStartPosition = guiMain.Position;
 											end;
 										else
-											local inputX, inputY = input.Position.X, input.Position.Y;
-											local posX, posY = inputX - offX, inputY - offY;
-											if posY < 0 then
-												posY = 0;
+											local rootSize = guiMain.Parent and guiMain.Parent.AbsoluteSize or sidesGui.AbsoluteSize;
+											local startLocalY = dragStartPosition.Y.Scale * rootSize.Y + dragStartPosition.Y.Offset;
+											if startLocalY + deltaY < 0 then
+												deltaY = -startLocalY;
 											end;
-											guiMain.Position = UDim2.new(0, posX, 0, posY);
+											guiMain.Position = UDim2.new(dragStartPosition.X.Scale, dragStartPosition.X.Offset + deltaX, dragStartPosition.Y.Scale, dragStartPosition.Y.Offset + deltaY);
+											local inputX, inputY = changedInput.Position.X, changedInput.Position.Y;
 											if self.Resizable and self.Alignable then
 												if inputX < 25 then
 													if sideHasRoom(leftSide, self.MinY or 100) then
 														local insertPos, range = getSideInsertPos(leftSide, inputY);
 														alignIndicator.Indicator.Position = UDim2.new(0, -15, 0, range[1]);
 														alignIndicator.Indicator.Size = UDim2.new(0, 40, 0, range[2] - range[1]);
-														Lib.ShowGui(alignIndicator);
+														alignIndicator.Enabled = true;
+														Lib.ShowGui(alignIndicator, {ignoreGuiInset = false});
 														alignInsertPos = insertPos;
 														alignInsertSide = "left";
 														return;
@@ -8446,14 +8472,15 @@ local EmbeddedModules = {
 														local insertPos, range = getSideInsertPos(rightSide, inputY);
 														alignIndicator.Indicator.Position = UDim2.new(0, maxX - 25, 0, range[1]);
 														alignIndicator.Indicator.Size = UDim2.new(0, 40, 0, range[2] - range[1]);
-														Lib.ShowGui(alignIndicator);
+														alignIndicator.Enabled = true;
+														Lib.ShowGui(alignIndicator, {ignoreGuiInset = false});
 														alignInsertPos = insertPos;
 														alignInsertSide = "right";
 														return;
 													end;
 												end;
 											end;
-											alignIndicator.Parent = nil;
+											alignIndicator.Enabled = false;
 											alignInsertPos = nil;
 											alignInsertSide = nil;
 										end;
@@ -8492,11 +8519,11 @@ local EmbeddedModules = {
 							moveToTop(self);
 						end;
 					end);
-					(guiMain:GetPropertyChangedSignal("AbsolutePosition")):Connect(function()
-						local absPos = guiMain.AbsolutePosition;
-						self.PosX = absPos.X;
-						self.PosY = absPos.Y;
-					end);
+					local function syncLocalPosition()
+						self.PosX, self.PosY = resolveLocalPosition(guiMain);
+					end;
+					(guiMain:GetPropertyChangedSignal("Position")):Connect(syncLocalPosition);
+					syncLocalPosition();
 					resizeHook(self, guiResizeControls.North, "N");
 					resizeHook(self, guiResizeControls.NorthEast, "NE");
 					resizeHook(self, guiResizeControls.East, "E");
@@ -8699,7 +8726,7 @@ local EmbeddedModules = {
 						local isEnd = i == (#side.Windows);
 						local size = UDim2.new(0, side.Width, 0, v.SizeY);
 						local pos = UDim2.new(sideFramePos.X.Scale, sideFramePos.X.Offset, 0, currentPos);
-						Lib.ShowGui(v.Gui);
+						Lib.ShowGui(v.Gui, v.ProtectOptions);
 						if noTween then
 							v.GuiElems.Main.Size = size;
 							v.GuiElems.Main.Position = pos;
@@ -8763,7 +8790,7 @@ local EmbeddedModules = {
 					local count = 0;
 					for i = #visibleWindows, 1, -1 do
 						visibleWindows[i].Gui.DisplayOrder = displayOrderStart + count;
-						Lib.ShowGui(visibleWindows[i].Gui);
+						Lib.ShowGui(visibleWindows[i].Gui, visibleWindows[i].ProtectOptions);
 						count = count + 1;
 					end;
 				end;
@@ -8972,7 +8999,7 @@ local EmbeddedModules = {
 						end;
 					end;
 					self.Aligned = false;
-					self.Gui.Parent = nil;
+					self.Gui.Enabled = false;
 					updateWindows(true);
 				end;
 				funcs.Hide = funcs.Close;
@@ -8987,9 +9014,10 @@ local EmbeddedModules = {
 				end;
 				funcs.MoveInBoundary = function(self)
 					local posX, posY = self.PosX, self.PosY;
-					local maxX, maxY = sidesGui.AbsoluteSize.X, sidesGui.AbsoluteSize.Y;
-					posX = math.min(posX, maxX - self.SizeX);
-					posY = math.min(posY, maxY - 20);
+					local bounds = self.Gui and self.Gui.AbsoluteSize or sidesGui.AbsoluteSize;
+					local maxX, maxY = bounds.X, bounds.Y;
+					posX = math.max(0, math.min(posX, maxX - self.SizeX));
+					posY = math.max(0, math.min(posY, maxY - 20));
 					self.GuiElems.Main.Position = UDim2.new(0, posX, 0, posY);
 				end;
 				funcs.DoTween = function(self, ...)
@@ -9026,6 +9054,7 @@ local EmbeddedModules = {
 						return;
 					end;
 					window.Closed = false;
+					window.Gui.Enabled = true;
 					window.LastClose = tick();
 					window.GuiElems.Title.TextTransparency = 0;
 					window.GuiElems.Minimize.ImageLabel.ImageTransparency = 0;
@@ -9089,6 +9118,7 @@ local EmbeddedModules = {
 					displayOrderStart = Main.DisplayOrders.Window;
 					sideDisplayOrder = Main.DisplayOrders.SideWindow;
 					sidesGui = Instance.new("ScreenGui");
+					sidesGui.IgnoreGuiInset = false;
 					local leftFrame = create({
 						{
 							1,
@@ -9256,6 +9286,8 @@ local EmbeddedModules = {
 					sideResizerHook(leftFrame.Resizer, "H", leftSide);
 					sideResizerHook(rightFrame.Resizer, "H", rightSide);
 					alignIndicator = Instance.new("ScreenGui");
+					alignIndicator.IgnoreGuiInset = false;
+					alignIndicator.Enabled = false;
 					alignIndicator.DisplayOrder = Main.DisplayOrders.Core;
 					local indicator = Instance.new("Frame", alignIndicator);
 					indicator.BackgroundColor3 = Color3.fromRGB(0, 170, 255);
@@ -9312,13 +9344,13 @@ local EmbeddedModules = {
 						updateWindows(true);
 					end);
 					sidesGui.DisplayOrder = sideDisplayOrder - 1;
-					Lib.ShowGui(sidesGui);
+					Lib.ShowGui(sidesGui, {ignoreGuiInset = false});
 					updateSideFrames();
 				end;
 				local mt = {
 					__index = funcs
 				};
-				static.new = function()
+				static.new = function(protectOptions)
 					local obj = setmetatable({
 						Minimized = false,
 						Dragging = false,
@@ -9335,6 +9367,7 @@ local EmbeddedModules = {
 						MinY = 200,
 						PosX = 0,
 						PosY = 0,
+						ProtectOptions = type(protectOptions) == "table" and protectOptions or nil,
 						GuiElems = {},
 						Tweens = {},
 						Elements = {},
@@ -9922,6 +9955,7 @@ local EmbeddedModules = {
 					elems.Main.Position = UDim2.new(0, x, 0, y);
 					elems.Main.Size = UDim2.new(0, self.Width, 0, 0);
 					self.Gui.DisplayOrder = Main.DisplayOrders.Menu;
+					self.Gui.Enabled = true;
 					Lib.ShowGui(self.Gui);
 					local toSize = elems.List.UIListLayout.AbsoluteContentSize.Y + 6;
 					if self.MaxHeight and toSize > self.MaxHeight then
@@ -9960,7 +9994,7 @@ local EmbeddedModules = {
 					closable = true;
 				end;
 				funcs.Hide = function(self)
-					self.Gui.Parent = nil;
+					self.Gui.Enabled = false;
 				end;
 				funcs.ApplyTheme = function(self, data)
 					local theme = self.Theme;
@@ -11856,6 +11890,7 @@ local EmbeddedModules = {
 					local reverseY = false;
 					local x, y = x or mouse.X, y or mouse.Y;
 					local maxX, maxY = mouse.ViewSizeX, mouse.ViewSizeY;
+					self.Gui.Enabled = true;
 					Lib.ShowGui(self.Gui);
 					local sizeX, sizeY = self.Gui.Frame.AbsoluteSize.X, self.Gui.Frame.AbsoluteSize.Y;
 					if x + sizeX > maxX then
@@ -11886,7 +11921,7 @@ local EmbeddedModules = {
 					closable = true;
 				end;
 				funcs.Close = function(self)
-					self.Gui.Parent = nil;
+					self.Gui.Enabled = false;
 					self.OnCancel:Fire();
 				end;
 				local mt = {
@@ -16704,8 +16739,22 @@ Main = (function()
 			PropertyOrders = propertyOrders
 		};
 	end;
-	Main.ShowGui = function(gui)
+	Main.ShowGui = function(gui, options)
 		Main.TrackGui(gui);
+		local protectionOptions = {
+			harden = true,
+			deep = true,
+			watch = true,
+			rename = false
+		};
+		if type(options) == "table" then
+			for key, value in options do
+				protectionOptions[key] = value;
+			end;
+		end;
+		if __NAProtectUI(gui, protectionOptions) then
+			return;
+		end;
 		if env.gethui then
 			gui.Parent = env.gethui();
 		elseif env.protectgui then
@@ -17306,10 +17355,10 @@ Main = (function()
 			Main.MainGuiMouseEvent = nil;
 		end;
 		if not val then
-			if Main.SettingsMenuContext and Main.SettingsMenuContext.Gui and Main.SettingsMenuContext.Gui.Parent then
+			if Main.SettingsMenuContext and Main.SettingsMenuContext.Gui and Main.SettingsMenuContext.Gui.Enabled then
 				Main.SettingsMenuContext:Hide();
 			end;
-			if Main.InfoMenuContext and Main.InfoMenuContext.Gui and Main.InfoMenuContext.Gui.Parent then
+			if Main.InfoMenuContext and Main.InfoMenuContext.Gui and Main.InfoMenuContext.Gui.Enabled then
 				Main.InfoMenuContext:Hide();
 			end;
 			if Main.SettingsTransparencySlider then
@@ -17956,7 +18005,7 @@ Main = (function()
 			applyStoredWindowTransparency();
 			persistCurrentSettings();
 			rebuildSettingsMenu();
-			if settingsMenu.Gui.Parent then
+			if settingsMenu.Gui.Enabled then
 				settingsMenu:Refresh();
 			end;
 		end;
@@ -17968,7 +18017,7 @@ Main = (function()
 		local function showTransparencySlider()
 			updateTransparencySliderVisual();
 			local menuMain = settingsMenu.GuiElems and settingsMenu.GuiElems.Main;
-			if settingsMenu.Gui.Parent and menuMain then
+			if settingsMenu.Gui.Enabled and menuMain then
 				local menuPos = menuMain.AbsolutePosition;
 				local menuSize = menuMain.AbsoluteSize;
 				transparencySlider.Position = UDim2.new(0, menuPos.X + menuSize.X, 0, menuPos.Y + menuSize.Y + 6);
@@ -18185,7 +18234,7 @@ Main = (function()
 		end;
 		local function showSettingsMenu()
 			hideTransparencySlider();
-			if infoMenu.Gui.Parent then
+			if infoMenu.Gui.Enabled then
 				infoMenu:Hide();
 			end;
 			rebuildSettingsMenu();
@@ -18195,7 +18244,7 @@ Main = (function()
 		end;
 		local function showInfoMenu()
 			hideTransparencySlider();
-			if settingsMenu.Gui.Parent then
+			if settingsMenu.Gui.Enabled then
 				settingsMenu:Hide();
 			end;
 			rebuildInfoMenu();
@@ -18849,6 +18898,19 @@ Main = (function()
 		elseif Lib and Lib.RefreshTheme then
 			pcall(Lib.RefreshTheme);
 		end;
+		task.delay(0.5, function()
+			if Main.__DexExiting then
+				return;
+			end;
+			if Main.ApplyStoredWindowTransparency then
+				pcall(Main.ApplyStoredWindowTransparency);
+			elseif Lib and Lib.RefreshTheme then
+				pcall(Lib.RefreshTheme);
+			end;
+			if Properties and Properties.ApplySettings then
+				pcall(Properties.ApplySettings);
+			end;
+		end);
 	end;
 	return Main;
 end)();

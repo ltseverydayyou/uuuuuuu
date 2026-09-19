@@ -115,6 +115,16 @@ local function apWarn(err)
 		_apErr.t = now;
 	end;
 end;
+local function setSpamKeyState(isDown)
+	local ok, err = pcall(function()
+		VirtualInputManager:SendKeyEvent(isDown == true, "F", false, game);
+	end);
+	if not ok then
+		apWarn(err);
+		return false;
+	end;
+	return true;
+end;
 local function sendFKey()
 	local ok, err = pcall(fireVim);
 	if not ok then
@@ -435,6 +445,7 @@ local parryState = {
 	spamFastUntil = 0,
 	spamBurstUntil = 0,
 	spamNextAt = 0,
+	spamKeyDown = false,
 	directParryWindowAt = 0,
 	directParryWindowCount = 0,
 	apEnabled = true,
@@ -667,6 +678,10 @@ local function setApEnabled(value)
 		parryState.spamFastUntil = 0;
 		parryState.spamBurstUntil = 0;
 		parryState.spamNextAt = 0;
+		if parryState.spamKeyDown then
+			setSpamKeyState(false);
+			parryState.spamKeyDown = false;
+		end;
 		parryState.directParryWindowAt = 0;
 		parryState.directParryWindowCount = 0;
 		if parryState.clearActiveParryLock then
@@ -702,6 +717,11 @@ local function setApEnabled(value)
 end;
 local function toggleSpam()
 	parryState.spam = not parryState.spam;
+	if not parryState.spam and parryState.spamKeyDown then
+		setSpamKeyState(false);
+		parryState.spamKeyDown = false;
+		parryState.spamNextAt = 0;
+	end;
 	updateSpamLabel();
 	updateRingColors();
 	saveTopbarConfig();
@@ -1388,6 +1408,10 @@ local function cleanup()
 		topbarState.debugCooldownOption = nil;
 	end);
 	topbarState.touchLock = false;
+	if parryState.spamKeyDown then
+		setSpamKeyState(false);
+		parryState.spamKeyDown = false;
+	end;
 	RevertLastInputPatch();
 	purgeOldAutoParryArtifacts();
 	table.clear(connections);
@@ -2831,24 +2855,29 @@ trackConnection(StepSignal:Connect(function(dt)
 	end;
 end));
 trackConnection(StepSignal:Connect(function()
-	if parryState.spam then
-		local now = tick();
-		local windowUntil = parryState.spamWindowUntil or 0;
-		local fastUntil = parryState.spamFastUntil or 0;
-		local burstUntil = parryState.spamBurstUntil or 0;
-		if now > windowUntil then
-			return;
+	local now = tick();
+	local windowUntil = parryState.spamWindowUntil or 0;
+	local active = parryState.spam and now <= windowUntil;
+	if not active then
+		if parryState.spamKeyDown then
+			setSpamKeyState(false);
+			parryState.spamKeyDown = false;
 		end;
-		local burstSpam = now <= burstUntil;
-		local fastSpam = burstSpam or now <= fastUntil;
-		local interval = burstSpam and 0.004 or (fastSpam and 0.007 or 0.013);
-		if now < (parryState.spamNextAt or 0) then
-			return;
-		end;
-		parryState.spamNextAt = now + interval;
-		local shots = burstSpam and 4 or (fastSpam and 3 or 2);
-		for _ = 1, shots do
-			task.defer(DoParry, true);
-		end;
+		parryState.spamNextAt = 0;
+		return;
+	end;
+	if now < (parryState.spamNextAt or 0) then
+		return;
+	end;
+	local burstSpam = now <= (parryState.spamBurstUntil or 0);
+	local fastSpam = burstSpam or now <= (parryState.spamFastUntil or 0);
+	local nextDownDelay = burstSpam and 0.010 or (fastSpam and 0.014 or 0.020);
+	local nextUpDelay = burstSpam and 0.006 or (fastSpam and 0.007 or 0.009);
+	local nextState = not parryState.spamKeyDown;
+	if setSpamKeyState(nextState) then
+		parryState.spamKeyDown = nextState;
+		parryState.spamNextAt = now + (nextState and nextUpDelay or nextDownDelay);
+	else
+		parryState.spamNextAt = now + 0.03;
 	end;
 end));

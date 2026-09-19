@@ -471,6 +471,11 @@ local ballState = {
 	targetStateCache = {},
 	targetStateQueued = {},
 	targetStateDirty = {},
+	targetSignalDirty = {},
+	targetSignalConns = {},
+	targetCharConns = {},
+	targetSignalCharacter = nil,
+	targetCharacterRevision = 0,
 	baitUntil = {},
 	awaySince = {},
 	lastAwayFlag = {},
@@ -481,6 +486,110 @@ local ballState = {
 	containerConns = {},
 	trackedConnections = {}
 };
+local function disconnectTargetSignalList(list)
+	if not list then
+		return;
+	end;
+	for _, conn in list do
+		pcall(function()
+			conn:Disconnect();
+		end);
+	end;
+end;
+
+local function markBallTargetSignalDirty(ball)
+	if ball then
+		ballState.targetSignalDirty[ball] = true;
+	end;
+end;
+
+local function bindTargetHighlightSignals(highlight, conns, dirtyFn)
+	if not (highlight and highlight:IsA("Highlight")) then
+		return;
+	end;
+	for _, prop in {
+		"FillColor",
+		"FillTransparency",
+		"Enabled"
+	} do
+		table.insert(conns, highlight:GetPropertyChangedSignal(prop):Connect(dirtyFn));
+	end;
+end;
+
+local function detachBallTargetSignals(ball)
+	disconnectTargetSignalList(ballState.targetSignalConns[ball]);
+	ballState.targetSignalConns[ball] = nil;
+	ballState.targetSignalDirty[ball] = nil;
+end;
+
+local function attachBallTargetSignals(ball)
+	if not (ball and ball:IsA("BasePart") and ball.Parent) then
+		return;
+	end;
+	detachBallTargetSignals(ball);
+	local conns = {};
+	local function dirty()
+		markBallTargetSignalDirty(ball);
+	end;
+	table.insert(conns, ball:GetPropertyChangedSignal("Color"):Connect(dirty));
+	table.insert(conns, ball.AttributeChanged:Connect(function(name)
+		if typeof(name) == "string" and name:lower() == "target" then
+			dirty();
+		end;
+	end));
+	for _, child in ball:GetChildren() do
+		if child:IsA("Highlight") then
+			bindTargetHighlightSignals(child, conns, dirty);
+		end;
+	end;
+	table.insert(conns, ball.ChildAdded:Connect(function(child)
+		if child:IsA("Highlight") then
+			bindTargetHighlightSignals(child, conns, dirty);
+			dirty();
+		end;
+	end));
+	table.insert(conns, ball.ChildRemoved:Connect(function(child)
+		if child:IsA("Highlight") then
+			dirty();
+		end;
+	end));
+	ballState.targetSignalConns[ball] = conns;
+	markBallTargetSignalDirty(ball);
+end;
+
+local function ensureCharacterTargetSignals(char)
+	if ballState.targetSignalCharacter == char then
+		return;
+	end;
+	disconnectTargetSignalList(ballState.targetCharConns);
+	ballState.targetCharConns = {};
+	ballState.targetSignalCharacter = char;
+	ballState.targetCharacterRevision = (ballState.targetCharacterRevision or 0) + 1;
+	if not (char and char.Parent) then
+		return;
+	end;
+	local conns = ballState.targetCharConns;
+	local function dirty()
+		ballState.targetCharacterRevision = (ballState.targetCharacterRevision or 0) + 1;
+	end;
+	for _, child in char:GetChildren() do
+		if child:IsA("Highlight") then
+			bindTargetHighlightSignals(child, conns, dirty);
+		end;
+	end;
+	table.insert(conns, char.ChildAdded:Connect(function(child)
+		if child:IsA("Highlight") then
+			bindTargetHighlightSignals(child, conns, dirty);
+			dirty();
+		end;
+	end));
+	table.insert(conns, char.ChildRemoved:Connect(function(child)
+		if child:IsA("Highlight") then
+			dirty();
+		end;
+	end));
+end;
+
 local function refreshVisualizerDerived()
 	local cfg = visualizerConfig;
 	visualizerState.speedScale = cfg.speedScale or VisualizerDefaults.speedScale;
@@ -1010,6 +1119,7 @@ local function addBall(b)
 		return;
 	end;
 	ballState.ballsMap[b] = true;
+	attachBallTargetSignals(b);
 end;
 local function removeBall(b)
 	if not ballState.ballsMap[b] then
@@ -1020,7 +1130,9 @@ local function removeBall(b)
 	ballState.targetStateCache[b] = nil;
 	ballState.targetStateQueued[b] = nil;
 	ballState.targetStateDirty[b] = nil;
+	ballState.targetSignalDirty[b] = nil;
 	ballState.targetConfirmActive[b] = nil;
+	detachBallTargetSignals(b);
 end;
 local function cleanupBallVisual(ball)
 	local v = visualizerState.ballVis[ball];
@@ -1372,6 +1484,14 @@ local function cleanup()
 		end;
 	end;
 	ballState.containerConns = {};
+	for ball, list in ballState.targetSignalConns do
+		disconnectTargetSignalList(list);
+		ballState.targetSignalConns[ball] = nil;
+	end;
+	disconnectTargetSignalList(ballState.targetCharConns);
+	ballState.targetCharConns = {};
+	ballState.targetSignalCharacter = nil;
+	ballState.targetSignalDirty = {};
 	ballState.ballsMap = {};
 	ballState.ballList = {};
 	ballState.mainRealBall = {};
@@ -1813,23 +1933,30 @@ local function refreshBallTargetState(ball, char, frameId)
 		ballColor = okTarget and ballColor or nil,
 		charColor = okTarget and charColor or nil,
 		frameId = frameId,
+		charRevision = ballState.targetCharacterRevision or 0,
 		t = tick()
 	};
+	ballState.targetSignalDirty[ball] = nil;
 	ballState.targetStateCache[ball] = state;
 	return state;
 end;
 local function getBallTargetState(ball, char, frameId, forceSync)
-	if forceSync then
+	local cached = getCachedBallTargetState(ball, char);
+	local signalDirty = ballState.targetSignalDirty[ball] == true;
+	local charRevision = ballState.targetCharacterRevision or 0;
+	local charStateDirty = cached and cached.charRevision ~= charRevision or false;
+	if forceSync or signalDirty or charStateDirty or (not cached) then
 		return refreshBallTargetState(ball, char, frameId);
 	end;
 	queueBallTargetStateCheck(ball, char, frameId);
-	return getCachedBallTargetState(ball, char);
+	return cached;
 end;
 queueBallTargetStateCheck = function(ball, char, frameId)
 	if not (ball and ball.Parent and char and char.Parent) then
 		ballState.targetStateCache[ball] = nil;
 		ballState.targetStateDirty[ball] = nil;
 		ballState.targetStateQueued[ball] = nil;
+		ballState.targetSignalDirty[ball] = nil;
 		return;
 	end;
 	ballState.targetStateDirty[ball] = {
@@ -2129,6 +2256,7 @@ local function AutoParryStep(dt)
 	local bs = ballState;
 	ps.curFrame = ps.curFrame + 1;
 	character = localPlayer.Character or character;
+	ensureCharacterTargetSignals(character);
 	local hrp = waitForChildFast(character, "HumanoidRootPart");
 	local balls = getBalls();
 	local hasBalls = #balls > 0;
@@ -2776,6 +2904,7 @@ local function AutoParryStep(dt)
 		bs.targetStateCache = {};
 		bs.targetStateQueued = {};
 		bs.targetStateDirty = {};
+		bs.targetSignalDirty = {};
 		bs.lastParryPerBall = {};
 		bs.baitUntil = {};
 		bs.awaySince = {};

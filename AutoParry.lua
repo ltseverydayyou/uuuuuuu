@@ -458,6 +458,8 @@ local ballState = {
 	lastDistToPlayer = {},
 	lastBallVel = {},
 	lastBallMoveTime = {},
+	motionHistory = {},
+	curveState = {},
 	closeParryBlocked = {},
 	smoothedSpeed = {},
 	lastHighlightMatch = {},
@@ -801,6 +803,8 @@ local function setApEnabled(value)
 		table.clear(ballState.lastDistToPlayer);
 		table.clear(ballState.lastBallVel);
 		table.clear(ballState.lastBallMoveTime);
+		table.clear(ballState.motionHistory);
+		table.clear(ballState.curveState);
 		table.clear(ballState.smoothedSpeed);
 		table.clear(ballState.closeParryBlocked);
 		table.clear(ballState.predictEnterAt);
@@ -1355,15 +1359,40 @@ local function appendPrimaryBall(list)
 		end;
 	end;
 	local winner;
-	if #invis > 0 then
-		winner = anyMain or invis[1];
-	elseif anyMain then
-		winner = anyMain;
-	elseif #vis > 0 then
-		winner = vis[1];
-	else
-		winner = list[1];
+	local bestScore = -math.huge;
+	for i = 1, count do
+		local part = list[i];
+		local score = 0;
+		if ballState.mainRealBall[part] then
+			score = score + 12;
+		end;
+		local vel = getTrackedBallVelocity(part);
+		local speed = vel.Magnitude;
+		score = score + math.min(speed, 250) * 0.025;
+		if not isVisualizerPart(part) then
+			score = score + 2;
+		end;
+		local hasTargetAttr = false;
+		pcall(function()
+			for name, value in part:GetAttributes() do
+				if type(name) == "string" and name:lower() == "target" and value ~= nil and value ~= false then
+					hasTargetAttr = true;
+					break;
+				end;
+			end;
+		end);
+		if hasTargetAttr then
+			score = score + 6;
+		end;
+		if part:FindFirstChildWhichIsA("Highlight") then
+			score = score + 3;
+		end;
+		if score > bestScore then
+			bestScore = score;
+			winner = part;
+		end;
 	end;
+	winner = winner or anyMain or invis[1] or vis[1] or list[1];
 	if winner then
 		ballState.mainRealBall[winner] = true;
 		for i = 1, count do
@@ -2355,6 +2384,31 @@ local function AutoParryStep(dt)
 				speed = prevSpeed + (speed - prevSpeed) * speedLerp;
 				bs.smoothedSpeed[ball] = speed;
 				bs.lastBallVel[ball] = velocity;
+				local history = bs.motionHistory[ball];
+				local curveStrength = 0;
+				local lateralAccel = 0;
+				local directionTurn = 0;
+				if history and sampleDt > 0.001 then
+					local prevVel = history.vel or Vector3.zero;
+					local prevSpeedHist = prevVel.Magnitude;
+					if prevSpeedHist > 2 and directionVelocity.Magnitude > 2 then
+						local dirDot = math.clamp(prevVel.Unit:Dot(directionVelocity.Unit), -1, 1);
+						directionTurn = math.acos(dirDot);
+						local accel = (directionVelocity - prevVel) / math.max(sampleDt, 0.001);
+						local along = directionVelocity.Unit * accel:Dot(directionVelocity.Unit);
+						lateralAccel = (accel - along).Magnitude;
+						curveStrength = math.max(directionTurn / math.max(sampleDt, 0.001), lateralAccel / math.max(directionVelocity.Magnitude, 1));
+					end;
+				end;
+				bs.motionHistory[ball] = {
+					vel = directionVelocity,
+					pos = ball.Position,
+					t = now
+				};
+				local prevCurve = bs.curveState[ball] or 0;
+				local curveAlpha = math.clamp((sampleDt > 0 and sampleDt or (dt or 0.016)) / 0.05, 0.2, 0.8);
+				local smoothedCurve = prevCurve + (curveStrength - prevCurve) * curveAlpha;
+				bs.curveState[ball] = smoothedCurve;
 				local baseSize = 10 + speed * vs.speedScale * 2;
 				local multiplier = 0.12;
 				if speed < 60 then
@@ -2505,6 +2559,18 @@ local function AutoParryStep(dt)
 				local towardSpeed = 0;
 				local movingAway = false;
 				local directionSpeed = directionVelocity.Magnitude;
+				local hrpVelocity = hrp.AssemblyLinearVelocity or Vector3.zero;
+				local relPos = ball.Position - hrp.Position;
+				local relVel = directionVelocity - hrpVelocity;
+				local relSpeedSq = relVel:Dot(relVel);
+				local closestTime = 0;
+				local closestDist = rawDist;
+				if relSpeedSq > 1 then
+					closestTime = math.clamp(-(relPos:Dot(relVel)) / relSpeedSq, 0, 0.35);
+					closestDist = (relPos + relVel * closestTime).Magnitude;
+				end;
+				local curveMetric = bs.curveState[ball] or 0;
+				local activelyCurving = directionSpeed > 10 and curveMetric > 2.5;
 				local flatDirection = Vector3.new(directionVelocity.X, 0, directionVelocity.Z);
 				local flatSpeed = flatDirection.Magnitude;
 				local upwardSpeed = math.max(directionVelocity.Y, 0);
@@ -2553,7 +2619,9 @@ local function AutoParryStep(dt)
 					local fastRadialToward = towardSpeed > math.max(9, directionSpeed * 0.18);
 					local fastClosing = closingSpeed > math.max(14, directionSpeed * 0.24);
 					local closeAndClosing = rawDist <= math.max(22, parryPredictRadius * 0.9) and closingSpeed > 8;
-					forceToward = fastRadialToward or fastClosing or closeAndClosing;
+					local predictedIntercept = closestTime > 0 and closestDist <= math.max(8, parryPredictRadius * 0.72);
+					local curveIntercept = activelyCurving and closestTime > 0 and closestDist <= math.max(11, parryPredictRadius * 0.9);
+					forceToward = fastRadialToward or fastClosing or closeAndClosing or predictedIntercept or curveIntercept;
 				end;
 				if forceToward then
 					approaching = true;
@@ -2576,7 +2644,8 @@ local function AutoParryStep(dt)
 					end;
 				end;
 				local ignoreMovingAwayForClash = bs.targetStartDist[ball] ~= nil and bs.targetStartDist[ball] <= 50;
-				local movingAwayBlocked = movingAway and (not ignoreMovingAwayForClash) and (not forceToward);
+				local curveStillThreatening = activelyCurving and closestTime > 0 and closestDist <= math.max(12, parryPredictRadius);
+				local movingAwayBlocked = movingAway and (not ignoreMovingAwayForClash) and (not forceToward) and (not curveStillThreatening);
 				local timingSpeed = math.max(speed, directionSpeed * 0.9);
 				local toRingTime = approaching and timingSpeed > 1 and math.max((rawDist - parryPredictRadius), 0) / timingSpeed or math.huge;
 				local closeHit = targeted and rawDist <= math.max(10, parryPredictRadius * 0.45);

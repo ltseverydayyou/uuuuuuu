@@ -2854,7 +2854,7 @@ trackConnection(StepSignal:Connect(function(dt)
 		apWarn(err);
 	end;
 end));
-trackConnection(StepSignal:Connect(function()
+trackConnection(StepSignal:Connect(function(dt)
 	local now = tick();
 	local windowUntil = parryState.spamWindowUntil or 0;
 	local active = parryState.spam and now <= windowUntil;
@@ -2866,14 +2866,18 @@ trackConnection(StepSignal:Connect(function()
 		parryState.spamNextAt = 0;
 		return;
 	end;
+
 	local burstSpam = now <= (parryState.spamBurstUntil or 0);
 	local fastSpam = burstSpam or now <= (parryState.spamFastUntil or 0);
-	local downDelay = burstSpam and 0.010 or (fastSpam and 0.014 or 0.020);
-	local upDelay = burstSpam and 0.006 or (fastSpam and 0.007 or 0.009);
+	local downDelay = burstSpam and 0.009 or (fastSpam and 0.013 or 0.019);
+	local upDelay = burstSpam and 0.005 or (fastSpam and 0.0065 or 0.008);
 	local nextAt = parryState.spamNextAt or 0;
 	if nextAt <= 0 then
 		nextAt = now;
+	elseif now - nextAt > 0.08 then
+		nextAt = now;
 	end;
+
 	local transitions = 0;
 	local maxTransitions = 3;
 	while now >= nextAt and transitions < maxTransitions do
@@ -2886,8 +2890,13 @@ trackConnection(StepSignal:Connect(function()
 		transitions += 1;
 		nextAt += nextState and upDelay or downDelay;
 	end;
-	if now - nextAt > 0.08 then
-		nextAt = now;
+
+	if type(dt) == "number" and dt >= 0.020 and parryState.spamKeyDown and now >= nextAt then
+		if setSpamKeyState(false) then
+			parryState.spamKeyDown = false;
+			nextAt += downDelay;
+		end;
 	end;
+
 	parryState.spamNextAt = nextAt;
 end));

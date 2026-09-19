@@ -2866,18 +2866,28 @@ trackConnection(StepSignal:Connect(function()
 		parryState.spamNextAt = 0;
 		return;
 	end;
-	if now < (parryState.spamNextAt or 0) then
-		return;
-	end;
 	local burstSpam = now <= (parryState.spamBurstUntil or 0);
 	local fastSpam = burstSpam or now <= (parryState.spamFastUntil or 0);
-	local nextDownDelay = burstSpam and 0.010 or (fastSpam and 0.014 or 0.020);
-	local nextUpDelay = burstSpam and 0.006 or (fastSpam and 0.007 or 0.009);
-	local nextState = not parryState.spamKeyDown;
-	if setSpamKeyState(nextState) then
-		parryState.spamKeyDown = nextState;
-		parryState.spamNextAt = now + (nextState and nextUpDelay or nextDownDelay);
-	else
-		parryState.spamNextAt = now + 0.03;
+	local downDelay = burstSpam and 0.010 or (fastSpam and 0.014 or 0.020);
+	local upDelay = burstSpam and 0.006 or (fastSpam and 0.007 or 0.009);
+	local nextAt = parryState.spamNextAt or 0;
+	if nextAt <= 0 then
+		nextAt = now;
 	end;
+	local transitions = 0;
+	local maxTransitions = 3;
+	while now >= nextAt and transitions < maxTransitions do
+		local nextState = not parryState.spamKeyDown;
+		if not setSpamKeyState(nextState) then
+			nextAt = now + 0.03;
+			break;
+		end;
+		parryState.spamKeyDown = nextState;
+		transitions += 1;
+		nextAt += nextState and upDelay or downDelay;
+	end;
+	if now - nextAt > 0.08 then
+		nextAt = now;
+	end;
+	parryState.spamNextAt = nextAt;
 end));

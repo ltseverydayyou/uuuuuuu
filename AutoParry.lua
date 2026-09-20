@@ -184,7 +184,13 @@ local topbarState = {
 	debugStateOption = nil,
 	debugTargetOption = nil,
 	debugBallsOption = nil,
-	debugCooldownOption = nil
+	debugCooldownOption = nil,
+	debugLastState = nil,
+	debugLastTarget = nil,
+	debugLastBalls = nil,
+	debugLastCooldown = nil,
+	debugNextCooldownUpdate = 0,
+	debugCooldownInterval = 0.1
 };
 local connect = function(name, connection)
 	connections[name] = connections[name] or {};
@@ -747,26 +753,44 @@ local function updateModeLabel()
 	topbarState.modeOption:setLabel("Mode: " .. profileName);
 	updateTopbarCaption();
 end;
-local function updateDebugMenu(numBalls, anyTargeted, nowTime)
-	if not topbarState.debugIconInstance then
+local function updateDebugMenu(numBalls, anyTargeted, nowTime, force)
+	if not topbarState.debugEnabled or not topbarState.debugIconInstance then
 		return;
 	end;
-	if topbarState.debugStateOption then
-		topbarState.debugStateOption:setLabel("State: " .. parryState.apState);
+	local state = parryState.apState or "Idle";
+	if force or topbarState.debugLastState ~= state then
+		topbarState.debugLastState = state;
+		if topbarState.debugStateOption then
+			topbarState.debugStateOption:setLabel("State: " .. state);
+		end;
+		if topbarState.debugIconInstance.setCaption then
+			topbarState.debugIconInstance:setCaption(state);
+		end;
 	end;
-	if topbarState.debugTargetOption then
-		topbarState.debugTargetOption:setLabel("Targeted: " .. (anyTargeted and "Yes" or "No"));
+	local targeted = anyTargeted == true;
+	if force or topbarState.debugLastTarget ~= targeted then
+		topbarState.debugLastTarget = targeted;
+		if topbarState.debugTargetOption then
+			topbarState.debugTargetOption:setLabel("Targeted: " .. (targeted and "Yes" or "No"));
+		end;
 	end;
-	if topbarState.debugBallsOption then
-		topbarState.debugBallsOption:setLabel("Balls: " .. tostring((numBalls or 0)));
+	local ballCount = numBalls or 0;
+	if force or topbarState.debugLastBalls ~= ballCount then
+		topbarState.debugLastBalls = ballCount;
+		if topbarState.debugBallsOption then
+			topbarState.debugBallsOption:setLabel("Balls: " .. tostring(ballCount));
+		end;
 	end;
-	if topbarState.debugCooldownOption then
-		local nowT = nowTime or tick();
-		local cd = math.max((parryState.nextPar or 0) - nowT, 0);
-		topbarState.debugCooldownOption:setLabel(string.format("CD: %.2fs", cd));
-	end;
-	if topbarState.debugIconInstance.setCaption then
-		topbarState.debugIconInstance:setCaption(parryState.apState);
+	local nowT = nowTime or tick();
+	if force or nowT >= (topbarState.debugNextCooldownUpdate or 0) then
+		topbarState.debugNextCooldownUpdate = nowT + (topbarState.debugCooldownInterval or 0.1);
+		local cooldownText = string.format("CD: %.2fs", math.max((parryState.nextPar or 0) - nowT, 0));
+		if force or topbarState.debugLastCooldown ~= cooldownText then
+			topbarState.debugLastCooldown = cooldownText;
+			if topbarState.debugCooldownOption then
+				topbarState.debugCooldownOption:setLabel(cooldownText);
+			end;
+		end;
 	end;
 end;
 local function iconHide(ico)
@@ -902,9 +926,15 @@ local function setDebugEnabled(value, IconModule)
 		elseif IconModule then
 			setupDebugIcon(IconModule);
 		end;
-		updateDebugMenu(0, false, tick());
+		topbarState.debugLastState = nil;
+		topbarState.debugLastTarget = nil;
+		topbarState.debugLastBalls = nil;
+		topbarState.debugLastCooldown = nil;
+		topbarState.debugNextCooldownUpdate = 0;
+		updateDebugMenu(0, false, tick(), true);
 	else
 		iconHide(topbarState.debugIconInstance);
+		topbarState.debugNextCooldownUpdate = 0;
 	end;
 	if topbarState.debugToggleOption then
 		topbarState.debugToggleOption:setLabel("Debug: " .. (topbarState.debugEnabled and "ON" or "OFF"));
@@ -3019,7 +3049,9 @@ local function AutoParryStep(dt)
 		state = "Active";
 	end;
 	ps.apState = state;
-	updateDebugMenu(#balls, anyTargeted, nowStateTime);
+	if topbarState.debugEnabled then
+		updateDebugMenu(#balls, anyTargeted, nowStateTime);
+	end;
 	updateRingColors();
 	applyVisualizerVisible(showViz);
 end;

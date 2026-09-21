@@ -175,6 +175,7 @@ local topbarState = {
 	apOption = nil,
 	spamOption = nil,
 	preclickOption = nil,
+	pingDetectOption = nil,
 	visualizerOption = nil,
 	modeOption = nil,
 	modeDropdown = nil,
@@ -456,6 +457,7 @@ local parryState = {
 	directParryWindowCount = 0,
 	apEnabled = true,
 	preclick = true,
+	pingBasedDetection = true,
 	apState = "Idle"
 };
 local ballState = {
@@ -652,6 +654,7 @@ local function buildTopbarConfigSnapshot()
 	return {
 		apEnabled = parryState.apEnabled,
 		preclick = parryState.preclick,
+		pingBasedDetection = parryState.pingBasedDetection,
 		visualizerEnabled = isVisualizerEnabled(),
 		visualizerProfile = visualizerConfig.profile or VisualizerDefaults.profile,
 		debugEnabled = topbarState.debugEnabled,
@@ -671,6 +674,7 @@ local function normalizeTopbarConfig(raw)
 	return {
 		apEnabled = raw.apEnabled ~= false,
 		preclick = raw.preclick ~= false,
+		pingBasedDetection = raw.pingBasedDetection ~= false,
 		visualizerEnabled = visualizerEnabled,
 		visualizerProfile = visualizerProfile,
 		debugEnabled = raw.debugEnabled == true,
@@ -719,6 +723,7 @@ local loadedTopbarConfig = loadTopbarConfig();
 parryState.apEnabled = loadedTopbarConfig.apEnabled;
 parryState.spam = false;
 parryState.preclick = loadedTopbarConfig.preclick;
+parryState.pingBasedDetection = loadedTopbarConfig.pingBasedDetection;
 topbarState.debugEnabled = loadedTopbarConfig.debugEnabled;
 topbarState.touchLock = loadedTopbarConfig.touchLock;
 applyVisualizerProfileValues(loadedTopbarConfig.visualizerProfile);
@@ -738,6 +743,12 @@ local function updateApLabel()
 		return;
 	end;
 	topbarState.apOption:setLabel("AP: " .. (parryState.apEnabled and "ON" or "OFF"));
+end;
+local function updatePingDetectLabel()
+	if not topbarState.pingDetectOption then
+		return;
+	end;
+	topbarState.pingDetectOption:setLabel("Ping Detect: " .. (parryState.pingBasedDetection and "ON" or "OFF"));
 end;
 local function updateVisualizerLabel()
 	if not topbarState.visualizerOption then
@@ -868,6 +879,11 @@ local function togglePreclick()
 	updatePreclickLabel();
 	saveTopbarConfig();
 end;
+local function togglePingBasedDetection()
+	parryState.pingBasedDetection = not parryState.pingBasedDetection;
+	updatePingDetectLabel();
+	saveTopbarConfig();
+end;
 local function getPreclickLead(pingMs)
 	local pingLead = math.clamp((pingMs or 0) * 0.0002, 0, 0.04);
 	return math.clamp(0.055 + pingLead, 0.055, 0.11);
@@ -989,6 +1005,10 @@ local function setupTopbarIcon()
 	topbarState.preclickOption:oneClick(function()
 		togglePreclick();
 	end);
+	topbarState.pingDetectOption = (dropdown:new()):setLabel("Ping Detect: ON");
+	topbarState.pingDetectOption:oneClick(function()
+		togglePingBasedDetection();
+	end);
 	topbarState.debugToggleOption = (dropdown:new()):setLabel("Debug: OFF");
 	topbarState.debugToggleOption:oneClick(function()
 		setDebugEnabled(not topbarState.debugEnabled, IconModule);
@@ -1011,6 +1031,7 @@ local function setupTopbarIcon()
 	updateApLabel();
 	updateSpamLabel();
 	updatePreclickLabel();
+	updatePingDetectLabel();
 	updateVisualizerLabel();
 	updateModeLabel();
 	updateDebugMenu(0, false, tick());
@@ -2331,7 +2352,7 @@ local function AutoParryStep(dt)
 	attachVisualizer(hasBalls);
 	local showViz = isVisualizerEnabled() and hasBalls;
 	local nowFrame = tick();
-	local pingFrame = getPing();
+	local pingFrame = ps.pingBasedDetection and getPing() or 0;
 	if not (hrp and hrp.Position) then
 		return;
 	end;

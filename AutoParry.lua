@@ -1639,14 +1639,15 @@ local function resolveRemote()
 	if not r then
 		return nil, nil;
 	end;
+	local fallbackArgs = cfg and cfg.remoteArgs;
 	local function resolveOne(x)
 		if typeof(x) == "Instance" then
 			if x.Parent then
-				return x, nil;
+				return x, fallbackArgs;
 			end;
 		elseif type(x) == "table" then
 			local inst = x.inst or x[1];
-			local args = x.args or x[2];
+			local args = x.args or x[2] or fallbackArgs;
 			if typeof(inst) == "Instance" and inst.Parent then
 				return inst, args;
 			end;
@@ -1678,6 +1679,13 @@ local function fireRemote(rem, args)
 		return false;
 	end;
 	local a = args;
+	if typeof(a) == "function" then
+		local okArgs, dynamicArgs = pcall(a, rem);
+		if not okArgs or dynamicArgs == nil then
+			return false;
+		end;
+		a = dynamicArgs;
+	end;
 	if a == nil then
 		a = {};
 	end;
@@ -1686,32 +1694,33 @@ local function fireRemote(rem, args)
 			a
 		};
 	end;
+	local count = type(a.n) == "number" and a.n or #a;
 	local t = rem.ClassName;
 	local ok = false;
 	if t == "RemoteEvent" then
 		local s = pcall(function()
-			rem:FireServer(unpack(a));
+			rem:FireServer(unpack(a, 1, count));
 		end);
 		if s then
 			ok = true;
 		end;
 	elseif t == "RemoteFunction" then
 		local s = pcall(function()
-			rem:InvokeServer(unpack(a));
+			rem:InvokeServer(unpack(a, 1, count));
 		end);
 		if s then
 			ok = true;
 		end;
 	elseif t == "BindableEvent" then
 		local s = pcall(function()
-			rem:Fire(unpack(a));
+			rem:Fire(unpack(a, 1, count));
 		end);
 		if s then
 			ok = true;
 		end;
 	elseif t == "BindableFunction" then
 		local s = pcall(function()
-			rem:Invoke(unpack(a));
+			rem:Invoke(unpack(a, 1, count));
 		end);
 		if s then
 			ok = true;
@@ -3099,6 +3108,30 @@ trackConnection(StepSignal:Connect(function(dt)
 
 	local burstSpam = now <= (parryState.spamBurstUntil or 0);
 	local fastSpam = burstSpam or now <= (parryState.spamFastUntil or 0);
+	local remote, remoteArgs = resolveRemote();
+	if remote then
+		if parryState.spamKeyDown then
+			setSpamKeyState(false);
+			parryState.spamKeyDown = false;
+		end;
+		local remoteDelay = burstSpam and 0.014 or (fastSpam and 0.0195 or 0.027);
+		local nextRemoteAt = parryState.spamNextAt or 0;
+		if nextRemoteAt <= 0 or now - nextRemoteAt > 0.08 then
+			nextRemoteAt = now;
+		end;
+		local fired = 0;
+		while now >= nextRemoteAt and fired < 3 do
+			if not fireRemote(remote, remoteArgs) then
+				break;
+			end;
+			fired += 1;
+			nextRemoteAt += remoteDelay;
+		end;
+		if fired > 0 then
+			parryState.spamNextAt = nextRemoteAt;
+			return;
+		end;
+	end;
 	local downDelay = burstSpam and 0.009 or (fastSpam and 0.013 or 0.019);
 	local upDelay = burstSpam and 0.005 or (fastSpam and 0.0065 or 0.008);
 	local nextAt = parryState.spamNextAt or 0;

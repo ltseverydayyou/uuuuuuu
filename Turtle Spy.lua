@@ -395,15 +395,34 @@ local directHookState = {
 }
 tstate.directHookState = directHookState
 
+local function findLiveMethodInstance(className)
+	local roots = {
+		ClonedService("ReplicatedStorage"),
+		workspace,
+		ClonedService("Players"),
+	}
+	for _, root in ipairs(roots) do
+		if root then
+			local ok, found = pcall(root.FindFirstChildWhichIsA, root, className, true)
+			if ok and found then
+				return found
+			end
+		end
+	end
+end
+
 local _tmpRemoteEvent = Instance.new("RemoteEvent")
 local _tmpRemoteFunction = Instance.new("RemoteFunction")
 local _tmpUnreliableRemoteEvent
 pcall(function()
 	_tmpUnreliableRemoteEvent = Instance.new("UnreliableRemoteEvent")
 end)
-local baseFireServer = _tmpRemoteEvent.FireServer
-local baseInvokeServer = _tmpRemoteFunction.InvokeServer
-local baseUnreliableFireServer = _tmpUnreliableRemoteEvent and _tmpUnreliableRemoteEvent.FireServer or nil
+local liveRemoteEvent = findLiveMethodInstance("RemoteEvent") or _tmpRemoteEvent
+local liveRemoteFunction = findLiveMethodInstance("RemoteFunction") or _tmpRemoteFunction
+local liveUnreliableRemoteEvent = findLiveMethodInstance("UnreliableRemoteEvent") or _tmpUnreliableRemoteEvent
+local baseFireServer = liveRemoteEvent.FireServer
+local baseInvokeServer = liveRemoteFunction.InvokeServer
+local baseUnreliableFireServer = liveUnreliableRemoteEvent and liveUnreliableRemoteEvent.FireServer or nil
 if baseUnreliableFireServer == baseFireServer then
 	baseUnreliableFireServer = nil
 end
@@ -413,56 +432,139 @@ if _tmpUnreliableRemoteEvent then
 	_tmpUnreliableRemoteEvent:Destroy()
 end
 
-tstate.blockNamecallHooked = false
-tstate.oldBlockNamecall = nil
+tstate.namecallHooked = false
+tstate.oldNamecall = nil
+tstate.namecallMode = nil
+tstate.namecallTarget = nil
+tstate.namecallLoggingRequired = false
+tstate.directColonSupported = nil
 
-local function installBlockNamecall()
-	if tstate.blockNamecallHooked then
-		return true
-	end
-	if type(hookMetaMethod) ~= "function" or type(getnamecallmethod) ~= "function" then
+local function probeDirectNamecall()
+	if type(hookFunction) ~= "function" or type(baseFireServer) ~= "function" then
 		return false
 	end
+	local probe = Instance.new("RemoteEvent")
+	probe.Name = "__TurtleSpyDirectHookProbe"
+	probe.Parent = ClonedService("ReplicatedStorage")
+	local hit = false
 	local old
 	local replacement = hookClone(function(self, ...)
-		local method = ((getnamecallmethod and getnamecallmethod()) or ""):lower()
-		if tstate.enabled and not safeCheckCaller() and (method == "fireserver" or method == "invokeserver") and table.find(BlockList, self) then
+		if self == probe then
+			hit = true
 			return nil
 		end
 		return old(self, ...)
 	end)
-	local ok, previous = pcall(hookMetaMethod, game, "__namecall", replacement)
+	local ok, previous = pcall(hookFunction, baseFireServer, replacement)
 	if ok and type(previous) == "function" then
 		old = previous
-		tstate.oldBlockNamecall = previous
-		tstate.blockNamecallHooked = true
-		return true
+		pcall(function()
+			probe:FireServer("__probe__")
+		end)
+		pcall(hookFunction, baseFireServer, previous)
 	end
-	return false
+	probe:Destroy()
+	return hit
 end
 
-local function uninstallBlockNamecall()
-	if not tstate.blockNamecallHooked then
+local function installNamecall(allowMetaFallback)
+	if tstate.namecallHooked then
 		return true
 	end
-	local old = tstate.oldBlockNamecall
-	if type(old) ~= "function" or type(hookMetaMethod) ~= "function" then
+	if type(getnamecallmethod) ~= "function" then
 		return false
 	end
-	local ok = pcall(hookMetaMethod, game, "__namecall", old)
-	if ok then
-		tstate.blockNamecallHooked = false
-		tstate.oldBlockNamecall = nil
+
+	local old
+	local target
+	local mode
+	local replacement = hookClone(function(self, ...)
+		local method = ((getnamecallmethod and getnamecallmethod()) or ""):lower()
+		if tstate.enabled and not safeCheckCaller() and typeof(self) == "Instance" then
+			local className = self.ClassName
+			local outbound = (method == "fireserver" and (className == "RemoteEvent" or className == "UnreliableRemoteEvent"))
+				or (method == "invokeserver" and className == "RemoteFunction")
+			if outbound then
+				if table.find(BlockList, self) then
+					return nil
+				end
+				if tstate.namecallLoggingRequired then
+					local args = table.pack(...)
+					local results = table.pack(old(self, ...))
+					if tstate.handler then
+						task.spawn(function()
+							pcall(tstate.handler, self, method, args, results)
+						end)
+					end
+					return table.unpack(results, 1, results.n)
+				end
+			end
+		end
+		return old(self, ...)
+	end)
+
+	if type(hookFunction) == "function" and type(getrawmetatable) == "function" then
+		local mt = getrawmetatable(game)
+		target = mt and mt.__namecall or nil
+		if type(target) == "function" then
+			local ok, previous = pcall(hookFunction, target, replacement)
+			if ok and type(previous) == "function" then
+				old = previous
+				mode = "hookfunction"
+			end
+		end
 	end
-	return ok
+
+	if type(old) ~= "function" and allowMetaFallback and type(hookMetaMethod) == "function" then
+		local ok, previous = pcall(hookMetaMethod, game, "__namecall", replacement)
+		if ok and type(previous) == "function" then
+			old = previous
+			mode = "hookmetamethod"
+		end
+	end
+
+	if type(old) ~= "function" then
+		return false
+	end
+	tstate.oldNamecall = old
+	tstate.namecallTarget = target
+	tstate.namecallMode = mode
+	tstate.namecallHooked = true
+	return true
+end
+
+local function uninstallNamecall(force)
+	if not tstate.namecallHooked then
+		return true
+	end
+	if not force and (tstate.namecallLoggingRequired or #BlockList > 0) then
+		return true
+	end
+	local old = tstate.oldNamecall
+	if type(old) ~= "function" then
+		return false
+	end
+	local restored = false
+	if tstate.namecallMode == "hookfunction" and type(hookFunction) == "function" and type(tstate.namecallTarget) == "function" then
+		restored = pcall(hookFunction, tstate.namecallTarget, old)
+	elseif tstate.namecallMode == "hookmetamethod" and type(hookMetaMethod) == "function" then
+		restored = pcall(hookMetaMethod, game, "__namecall", old)
+	end
+	if restored then
+		tstate.namecallHooked = false
+		tstate.oldNamecall = nil
+		tstate.namecallTarget = nil
+		tstate.namecallMode = nil
+	end
+	return restored
 end
 
 local function refreshBlockNamecall()
-	if #BlockList > 0 then
-		return installBlockNamecall()
+	local blocking = #BlockList > 0
+	if tstate.namecallLoggingRequired or blocking then
+		return installNamecall(blocking)
 	end
-	uninstallBlockNamecall()
-	return true
+	return uninstallNamecall(false)
 end
 
 local function resolveAdonisEnv()
@@ -2446,9 +2548,10 @@ table.insert(connections, mouse.KeyDown:Connect(function(key)
 		TurtleSpyGUI.Enabled = not TurtleSpyGUI.Enabled;
 	end;
 end));
-if #BlockList > 0 then
-	refreshBlockNamecall()
+if tstate.directColonSupported == nil then
+	tstate.directColonSupported = probeDirectNamecall()
 end
+tstate.namecallLoggingRequired = tstate.directColonSupported ~= true
 if not directHookState.fireServer and hookFunction then
 	local oldFireServer
 	local hookedFireServer = hookClone(function(self, ...)
@@ -2535,6 +2638,7 @@ tstate.handler = function(self, method, args, results)
 		end
 	end
 end
+refreshBlockNamecall()
 
 local function installTurtleSpyMCP()
 	local options = type(tstate.mcpOptions) == "table" and tstate.mcpOptions or {}
@@ -2966,7 +3070,8 @@ local function installTurtleSpyMCP()
 			incoming = logClientEvents == true,
 			pathMode = pathMode,
 			hooks = {
-				namecallBlock = tstate.blockNamecallHooked == true,
+				namecall = tstate.namecallHooked == true,
+				namecallLogging = tstate.namecallLoggingRequired == true,
 				fireServer = directHookState.fireServer == true,
 				unreliableFireServer = directHookState.unreliableFireServer == true,
 				invokeServer = directHookState.invokeServer == true,
@@ -3357,7 +3462,7 @@ tstate.cleanup = function()
 		end)
 		descAddedConn = nil
 	end
-	uninstallBlockNamecall()
+	uninstallNamecall(true)
 	if directHookState.fireServer and tstate.oldFireServer then
 		local restored = false
 		if type(restoreFunction) == "function" then

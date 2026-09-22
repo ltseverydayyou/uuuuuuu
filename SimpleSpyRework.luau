@@ -1242,34 +1242,42 @@ local descAddedInvokeConn
 local oldIncomingNewIndex
 local incomingHooksEnabled = false
 
-local originalEvent = remoteEvent.FireServer
-local originalFunction = remoteFunction.InvokeServer
-local baseRemoteEvent = Instance.new('RemoteEvent')
-local baseRemoteFunction = Instance.new('RemoteFunction')
+local function findLiveMethodInstance(className)
+    local roots = {
+        SafeGetService('ReplicatedStorage'),
+        workspace,
+        SafeGetService('Players'),
+    }
+    for _, root in next, roots do
+        if root then
+            local ok, found = pcall(root.FindFirstChildWhichIsA, root, className, true)
+            if ok and found then
+                return found
+            end
+        end
+    end
+end
+
+local liveRemoteEvent = findLiveMethodInstance('RemoteEvent') or remoteEvent
+local liveRemoteFunction = findLiveMethodInstance('RemoteFunction') or remoteFunction
+local liveUnreliableRemoteEvent = findLiveMethodInstance('UnreliableRemoteEvent')
 local baseBindableEvent = Instance.new('BindableEvent')
 local baseBindableFunction = Instance.new('BindableFunction')
-local baseUnreliableRemoteEvent
-pcall(function()
-    baseUnreliableRemoteEvent = Instance.new('UnreliableRemoteEvent')
-end)
-local baseFireServer = baseRemoteEvent.FireServer
-local baseInvokeServer = baseRemoteFunction.InvokeServer
+local baseFireServer = liveRemoteEvent.FireServer
+local baseInvokeServer = liveRemoteFunction.InvokeServer
 local baseBindableFire = baseBindableEvent.Fire
 local baseBindableInvoke = baseBindableFunction.Invoke
-local baseUnreliableFireServer = baseUnreliableRemoteEvent and baseUnreliableRemoteEvent.FireServer or nil
+local baseUnreliableFireServer = liveUnreliableRemoteEvent and liveUnreliableRemoteEvent.FireServer or nil
 if baseUnreliableFireServer == baseFireServer then
     baseUnreliableFireServer = nil
 end
+local originalEvent = baseFireServer
+local originalFunction = baseInvokeServer
 local originalUnreliableEvent = baseUnreliableFireServer
 local originalBindableFire = baseBindableFire
 local originalBindableInvoke = baseBindableInvoke
-baseRemoteEvent:Destroy()
-baseRemoteFunction:Destroy()
 baseBindableEvent:Destroy()
 baseBindableFunction:Destroy()
-if baseUnreliableRemoteEvent then
-    baseUnreliableRemoteEvent:Destroy()
-end
 local GetDebugIDInvoke = GetDebugIdHandler.Invoke
 local internalRemotes = {}
 local function getNilInstancesSafe()
@@ -4766,10 +4774,12 @@ end
 RuntimeState.newnamecall = function(self, ...)
     local method = caps.getNamecallMethod and getnamecallmethod() or nil
     local normalizedMethod = RuntimeState.normalizeMethod(method)
-    if normalizedMethod ~= 'fireserver' and normalizedMethod ~= 'invokeserver' then
+    if internalRemotes[self] or typeof(self) ~= 'Instance' then
         return RuntimeState.call_original_namecall(method, self, ...)
     end
-    if internalRemotes[self] or typeof(self) ~= 'Instance' then
+
+    local classData = RuntimeState.RemoteClassData[self.ClassName]
+    if not RuntimeState.methodAllowed(classData, 'Send', normalizedMethod) then
         return RuntimeState.call_original_namecall(method, self, ...)
     end
     if not configs.logcheckcaller and safeCheckCaller() then
@@ -4784,23 +4794,30 @@ RuntimeState.newnamecall = function(self, ...)
         blocked = true
     end
 
+    local options = {
+        remote = cloneref(self),
+        method = normalizedMethod,
+        args = { ... },
+        argsLength = select('#', ...),
+        metaMethod = '__namecall',
+        callingscript = getcallingscript(),
+        infofunc = RuntimeState.getCallingInfo('f'),
+        infoline = RuntimeState.getCallingInfo('l'),
+        infosource = RuntimeState.getCallingInfo('s'),
+        isexecutor = safeCheckCaller(),
+    }
+
     if blocked then
-        local args = { ... }
-        local argsLength = select('#', ...)
-        captureRemoteCall({
-            remote = cloneref(self),
-            method = normalizedMethod,
-            args = args,
-            argsLength = argsLength,
-            metaMethod = '__namecall',
-            callingscript = getcallingscript(),
-            infofunc = RuntimeState.getCallingInfo('f'),
-            infoline = RuntimeState.getCallingInfo('l'),
-            infosource = RuntimeState.getCallingInfo('s'),
-            isexecutor = safeCheckCaller(),
-        })
-        return nil
+        return captureRemoteCall(options)
     end
+
+    if RuntimeState.namecallLoggingRequired then
+        options.callOriginal = function(...)
+            return RuntimeState.call_original_namecall(method, self, ...)
+        end
+        return captureRemoteCall(options)
+    end
+
     return RuntimeState.call_original_namecall(method, self, ...)
 end
 
@@ -4921,13 +4938,47 @@ end)
 
 RuntimeState.hookState = {
     active = false,
-    blockNamecall = false,
+    namecall = false,
+    namecallMode = nil,
+    namecallTarget = nil,
     fireServer = false,
     unreliableFireServer = false,
     invokeServer = false,
     bindableFire = false,
     bindableInvoke = false,
 }
+RuntimeState.namecallLoggingRequired = false
+RuntimeState.directColonSupported = nil
+
+RuntimeState.probeDirectNamecall = function()
+    if not caps.hookFunction or type(baseFireServer) ~= 'function' then
+        return false
+    end
+
+    local probe = Instance.new('RemoteEvent')
+    probe.Name = '__SimpleSpyDirectHookProbe'
+    probe.Parent = ui.Storage
+    local hit = false
+    local previous
+    local replacement = RuntimeState.wrapHook(function(self, ...)
+        if self == probe then
+            hit = true
+            return nil
+        end
+        return previous(self, ...)
+    end)
+
+    local okHook, old = pcall(hookfunction, baseFireServer, replacement)
+    if okHook and type(old) == 'function' then
+        previous = old
+        pcall(function()
+            probe:FireServer('__probe__')
+        end)
+        pcall(hookfunction, baseFireServer, old)
+    end
+    probe:Destroy()
+    return hit
+end
 
 RuntimeState.tryHookInvokeServer = function(hooker)
     if type(hooker) ~= 'function' or RuntimeState.hookState.invokeServer then
@@ -4966,99 +5017,135 @@ RuntimeState.hasOutboundBlocking = function()
     return next(blocklist) ~= nil
 end
 
-RuntimeState.ensureBlockNamecall = function()
-    if RuntimeState.hookState.blockNamecall then
+RuntimeState.ensureNamecall = function(allowMetaFallback)
+    if RuntimeState.hookState.namecall then
         return true
     end
-    if not caps.namecallHook then
+    if not caps.getNamecallMethod then
         return false
     end
 
     local previous
+    local target
+    local mode
     local installed = false
-    local okIdentity = pcall(function()
+
+    pcall(function()
         SimpleSpy._withThreadIdentity(8, function()
-            if type(hookmetamethod) == 'function' then
+            if caps.hookFunction and caps.rawMetatable then
+                local mt = getrawmetatable(game)
+                target = mt and mt.__namecall or nil
+                if type(target) == 'function' then
+                    local ok, old = pcall(
+                        hookfunction,
+                        target,
+                        RuntimeState.cloneHook(RuntimeState.newnamecall)
+                    )
+                    if ok and type(old) == 'function' then
+                        previous = old
+                        mode = 'hookfunction'
+                        installed = true
+                    end
+                end
+            end
+
+            if not installed and synv3 and caps.hookAPI and caps.rawMetatable then
+                local mt = getrawmetatable(game)
+                target = mt and mt.__namecall or nil
+                if type(target) == 'function' then
+                    local ok, old = pcall(
+                        hook,
+                        target,
+                        RuntimeState.cloneHook(RuntimeState.newnamecall)
+                    )
+                    if ok and type(old) == 'function' then
+                        previous = old
+                        mode = 'synhook'
+                        installed = true
+                    end
+                end
+            end
+
+            if not installed and allowMetaFallback and type(nativeHookMetamethod) == 'function' then
                 local ok, old = pcall(
-                    hookmetamethod,
+                    nativeHookMetamethod,
                     game,
                     '__namecall',
                     RuntimeState.cloneHook(RuntimeState.newnamecall)
                 )
                 if ok and type(old) == 'function' then
                     previous = old
-                    installed = true
-                end
-            elseif caps.hookFunction and caps.rawMetatable then
-                local ok, old = pcall(
-                    hookfunction,
-                    getrawmetatable(game).__namecall,
-                    RuntimeState.cloneHook(RuntimeState.newnamecall)
-                )
-                if ok and type(old) == 'function' then
-                    previous = old
-                    installed = true
-                end
-            elseif synv3 and caps.hookAPI and caps.rawMetatable then
-                local ok, old = pcall(
-                    hook,
-                    getrawmetatable(game).__namecall,
-                    RuntimeState.cloneHook(RuntimeState.newnamecall)
-                )
-                if ok and type(old) == 'function' then
-                    previous = old
+                    mode = 'hookmetamethod'
                     installed = true
                 end
             end
         end)
     end)
 
-    if not okIdentity or not installed or type(previous) ~= 'function' then
+    if not installed or type(previous) ~= 'function' then
         return false
     end
 
     RuntimeState.originalnamecall = previous
-    RuntimeState.hookState.blockNamecall = true
+    RuntimeState.hookState.namecall = true
+    RuntimeState.hookState.namecallMode = mode
+    RuntimeState.hookState.namecallTarget = target
     RuntimeState.hookState.active = true
     return true
 end
 
-RuntimeState.disableBlockNamecall = function()
-    if not RuntimeState.hookState.blockNamecall then
+RuntimeState.disableNamecall = function()
+    if not RuntimeState.hookState.namecall then
         return true
     end
+
     local original = RuntimeState.originalnamecall
     if type(original) ~= 'function' then
-        RuntimeState.hookState.blockNamecall = false
+        RuntimeState.hookState.namecall = false
         return false
     end
 
     local restored = false
     pcall(function()
         SimpleSpy._withThreadIdentity(8, function()
-            if type(hookmetamethod) == 'function' then
-                restored = pcall(hookmetamethod, game, '__namecall', original)
-            elseif caps.hookFunction and caps.rawMetatable then
-                restored = pcall(hookfunction, getrawmetatable(game).__namecall, original)
-            elseif synv3 and caps.hookAPI and caps.rawMetatable then
-                restored = pcall(hook, getrawmetatable(game).__namecall, original)
+            local mode = RuntimeState.hookState.namecallMode
+            local target = RuntimeState.hookState.namecallTarget
+            if mode == 'hookfunction' and type(target) == 'function' and caps.hookFunction then
+                restored = pcall(hookfunction, target, original)
+            elseif mode == 'synhook' and type(target) == 'function' and synv3 and caps.hookAPI then
+                restored = pcall(hook, target, original)
+            elseif mode == 'hookmetamethod' and type(nativeHookMetamethod) == 'function' then
+                restored = pcall(nativeHookMetamethod, game, '__namecall', original)
             end
         end)
     end)
 
     if restored then
-        RuntimeState.hookState.blockNamecall = false
+        RuntimeState.hookState.namecall = false
+        RuntimeState.hookState.namecallMode = nil
+        RuntimeState.hookState.namecallTarget = nil
         RuntimeState.originalnamecall = nil
     end
     return restored
 end
 
-RuntimeState.refreshBlockNamecall = function()
-    if RuntimeState.hasOutboundBlocking() then
-        return RuntimeState.ensureBlockNamecall()
+RuntimeState.ensureBlockNamecall = function()
+    return RuntimeState.ensureNamecall(true)
+end
+
+RuntimeState.disableBlockNamecall = function()
+    if RuntimeState.namecallLoggingRequired then
+        return true
     end
-    RuntimeState.disableBlockNamecall()
-    return true
+    return RuntimeState.disableNamecall()
+end
+
+RuntimeState.refreshBlockNamecall = function()
+    local blocking = RuntimeState.hasOutboundBlocking()
+    if RuntimeState.namecallLoggingRequired or blocking then
+        return RuntimeState.ensureNamecall(blocking)
+    end
+    return RuntimeState.disableNamecall()
 end
 
 RuntimeState.disablehooks = function()
@@ -5067,7 +5154,7 @@ RuntimeState.disablehooks = function()
     end
     RuntimeState.hookState.active = false
 
-    RuntimeState.disableBlockNamecall()
+    RuntimeState.disableNamecall()
 
     SimpleSpy._withThreadIdentity(8, function()
         if synv3 and not caps.hookFunction then
@@ -5130,7 +5217,9 @@ RuntimeState.disablehooks = function()
     RuntimeState.hookState.invokeServer = false
     RuntimeState.hookState.bindableFire = false
     RuntimeState.hookState.bindableInvoke = false
-    RuntimeState.hookState.blockNamecall = false
+    RuntimeState.hookState.namecall = false
+    RuntimeState.hookState.namecallMode = nil
+    RuntimeState.hookState.namecallTarget = nil
 end
 
 --- Toggles on and off the remote spy
@@ -5141,6 +5230,10 @@ function toggleSpy()
 
     if not toggle then
         SimpleSpy._withThreadIdentity(8, function()
+            if RuntimeState.directColonSupported == nil then
+                RuntimeState.directColonSupported = RuntimeState.probeDirectNamecall()
+            end
+            RuntimeState.namecallLoggingRequired = RuntimeState.directColonSupported ~= true
             RuntimeState.hookState.fireServer = false
             RuntimeState.hookState.unreliableFireServer = false
             RuntimeState.hookState.invokeServer = false
@@ -5189,8 +5282,9 @@ function toggleSpy()
                 or RuntimeState.hookState.bindableFire
                 or RuntimeState.hookState.bindableInvoke
         end)
-        if RuntimeState.hasOutboundBlocking() then
-            RuntimeState.ensureBlockNamecall()
+        local namecallReady = RuntimeState.refreshBlockNamecall()
+        if RuntimeState.namecallLoggingRequired and not namecallReady then
+            ErrorPrompt('Direct hooks do not receive NAMECALL traffic on this executor, and raw __namecall hookfunction fallback is unavailable.', true)
         end
     else
         RuntimeState.disablehooks()

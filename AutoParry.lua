@@ -3135,13 +3135,13 @@ trackConnection(StepSignal:Connect(function(dt)
 			setSpamKeyState(false);
 			parryState.spamKeyDown = false;
 		end;
-		local remoteDelay = burstSpam and 0.014 or (fastSpam and 0.0195 or 0.027);
+		local remoteDelay = burstSpam and 0.007 or (fastSpam and 0.00975 or 0.0135);
 		local nextRemoteAt = parryState.spamNextAt or 0;
 		if nextRemoteAt <= 0 or now - nextRemoteAt > 0.08 then
 			nextRemoteAt = now;
 		end;
 		local fired = 0;
-		while now >= nextRemoteAt and fired < 3 do
+		while now >= nextRemoteAt and fired < 6 do
 			if not fireRemote(remote, remoteArgs) then
 				break;
 			end;

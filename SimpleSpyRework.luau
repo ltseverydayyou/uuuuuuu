@@ -1246,10 +1246,30 @@ local originalEvent = remoteEvent.FireServer
 local originalFunction = remoteFunction.InvokeServer
 local baseRemoteEvent = Instance.new('RemoteEvent')
 local baseRemoteFunction = Instance.new('RemoteFunction')
+local baseBindableEvent = Instance.new('BindableEvent')
+local baseBindableFunction = Instance.new('BindableFunction')
+local baseUnreliableRemoteEvent
+pcall(function()
+    baseUnreliableRemoteEvent = Instance.new('UnreliableRemoteEvent')
+end)
 local baseFireServer = baseRemoteEvent.FireServer
 local baseInvokeServer = baseRemoteFunction.InvokeServer
+local baseBindableFire = baseBindableEvent.Fire
+local baseBindableInvoke = baseBindableFunction.Invoke
+local baseUnreliableFireServer = baseUnreliableRemoteEvent and baseUnreliableRemoteEvent.FireServer or nil
+if baseUnreliableFireServer == baseFireServer then
+    baseUnreliableFireServer = nil
+end
+local originalUnreliableEvent = baseUnreliableFireServer
+local originalBindableFire = baseBindableFire
+local originalBindableInvoke = baseBindableInvoke
 baseRemoteEvent:Destroy()
 baseRemoteFunction:Destroy()
+baseBindableEvent:Destroy()
+baseBindableFunction:Destroy()
+if baseUnreliableRemoteEvent then
+    baseUnreliableRemoteEvent:Destroy()
+end
 local GetDebugIDInvoke = GetDebugIdHandler.Invoke
 local internalRemotes = {}
 local function getNilInstancesSafe()
@@ -1411,8 +1431,7 @@ caps.anyHookMetamethod = type(hookmetamethod) == 'function'
     or (type(setreadonly) == 'function' and caps.rawMetatable)
 caps.namecallHook = caps.getNamecallMethod
     and ((synv3 and caps.hookAPI and caps.rawMetatable) or caps.anyHookMetamethod)
-caps.sendHooks = caps.namecallHook
-    or ((synv3 and caps.hookAPI) or caps.hookFunction)
+caps.sendHooks = (synv3 and caps.hookAPI) or caps.hookFunction
 caps.newIndexHook = caps.anyHookMetamethod
 
 local function safeCheckCaller()
@@ -4747,34 +4766,42 @@ end
 RuntimeState.newnamecall = function(self, ...)
     local method = caps.getNamecallMethod and getnamecallmethod() or nil
     local normalizedMethod = RuntimeState.normalizeMethod(method)
-    if
-        normalizedMethod ~= 'fireserver'
-        and normalizedMethod ~= 'invokeserver'
-        and normalizedMethod ~= 'fire'
-        and normalizedMethod ~= 'invoke'
-    then
+    if normalizedMethod ~= 'fireserver' and normalizedMethod ~= 'invokeserver' then
         return RuntimeState.call_original_namecall(method, self, ...)
     end
-    local args = { ... }
-    local argsLength = select('#', ...)
-    if internalRemotes[self] then
+    if internalRemotes[self] or typeof(self) ~= 'Instance' then
         return RuntimeState.call_original_namecall(method, self, ...)
     end
-    return captureRemoteCall({
-        remote = cloneref(self),
-        method = normalizedMethod,
-        args = args,
-        argsLength = argsLength,
-        metaMethod = '__namecall',
-        callingscript = getcallingscript(),
-        infofunc = RuntimeState.getCallingInfo('f'),
-        infoline = RuntimeState.getCallingInfo('l'),
-        infosource = RuntimeState.getCallingInfo('s'),
-        isexecutor = safeCheckCaller(),
-        callOriginal = function(...)
-            return RuntimeState.call_original_namecall(method, self, ...)
-        end,
-    })
+    if not configs.logcheckcaller and safeCheckCaller() then
+        return RuntimeState.call_original_namecall(method, self, ...)
+    end
+
+    local id = ThreadGetDebugId(self)
+    local blocked = RuntimeState.tablecheck(blocklist, self, id)
+    if normalizedMethod == 'fireserver' and not configs.call_FireServer then
+        blocked = true
+    elseif normalizedMethod == 'invokeserver' and not configs.call_InvokeServer then
+        blocked = true
+    end
+
+    if blocked then
+        local args = { ... }
+        local argsLength = select('#', ...)
+        captureRemoteCall({
+            remote = cloneref(self),
+            method = normalizedMethod,
+            args = args,
+            argsLength = argsLength,
+            metaMethod = '__namecall',
+            callingscript = getcallingscript(),
+            infofunc = RuntimeState.getCallingInfo('f'),
+            infoline = RuntimeState.getCallingInfo('l'),
+            infosource = RuntimeState.getCallingInfo('s'),
+            isexecutor = safeCheckCaller(),
+        })
+        return nil
+    end
+    return RuntimeState.call_original_namecall(method, self, ...)
 end
 
 RuntimeState.newFire = RuntimeState.wrapHook(function(self, ...)
@@ -4796,6 +4823,29 @@ RuntimeState.newFire = RuntimeState.wrapHook(function(self, ...)
         isexecutor = safeCheckCaller(),
         callOriginal = function(...)
             return originalEvent(self, ...)
+        end,
+    })
+end)
+
+RuntimeState.newUnreliableFire = RuntimeState.wrapHook(function(self, ...)
+    local args = { ... }
+    local argsLength = select('#', ...)
+    if internalRemotes[self] then
+        return originalUnreliableEvent(self, ...)
+    end
+    return captureRemoteCall({
+        remote = cloneref(self),
+        method = 'FireServer',
+        args = args,
+        argsLength = argsLength,
+        metaMethod = '__index',
+        callingscript = getcallingscript(),
+        infofunc = RuntimeState.getCallingInfo('f'),
+        infoline = RuntimeState.getCallingInfo('l'),
+        infosource = RuntimeState.getCallingInfo('s'),
+        isexecutor = safeCheckCaller(),
+        callOriginal = function(...)
+            return originalUnreliableEvent(self, ...)
         end,
     })
 end)
@@ -4823,11 +4873,60 @@ RuntimeState.newInvoke = RuntimeState.wrapHook(function(self, ...)
     })
 end)
 
+RuntimeState.newBindableFire = RuntimeState.wrapHook(function(self, ...)
+    local args = { ... }
+    local argsLength = select('#', ...)
+    if internalRemotes[self] then
+        return originalBindableFire(self, ...)
+    end
+    return captureRemoteCall({
+        remote = cloneref(self),
+        method = 'Fire',
+        args = args,
+        argsLength = argsLength,
+        metaMethod = '__index',
+        callingscript = getcallingscript(),
+        infofunc = RuntimeState.getCallingInfo('f'),
+        infoline = RuntimeState.getCallingInfo('l'),
+        infosource = RuntimeState.getCallingInfo('s'),
+        isexecutor = safeCheckCaller(),
+        callOriginal = function(...)
+            return originalBindableFire(self, ...)
+        end,
+    })
+end)
+
+RuntimeState.newBindableInvoke = RuntimeState.wrapHook(function(self, ...)
+    local args = { ... }
+    local argsLength = select('#', ...)
+    if internalRemotes[self] then
+        return originalBindableInvoke(self, ...)
+    end
+    return captureRemoteCall({
+        remote = cloneref(self),
+        method = 'Invoke',
+        args = args,
+        argsLength = argsLength,
+        metaMethod = '__index',
+        callingscript = getcallingscript(),
+        infofunc = RuntimeState.getCallingInfo('f'),
+        infoline = RuntimeState.getCallingInfo('l'),
+        infosource = RuntimeState.getCallingInfo('s'),
+        isexecutor = safeCheckCaller(),
+        callOriginal = function(...)
+            return originalBindableInvoke(self, ...)
+        end,
+    })
+end)
+
 RuntimeState.hookState = {
     active = false,
-    namecall = false,
+    blockNamecall = false,
     fireServer = false,
+    unreliableFireServer = false,
     invokeServer = false,
+    bindableFire = false,
+    bindableInvoke = false,
 }
 
 RuntimeState.tryHookInvokeServer = function(hooker)
@@ -4845,56 +4944,193 @@ RuntimeState.tryHookInvokeServer = function(hooker)
     end
 end
 
+RuntimeState.tryHookBindableInvoke = function(hooker)
+    if type(hooker) ~= 'function' or RuntimeState.hookState.bindableInvoke then
+        return
+    end
+    local okInvoke, oldInvoke = pcall(
+        hooker,
+        baseBindableInvoke,
+        RuntimeState.cloneHook(RuntimeState.newBindableInvoke)
+    )
+    if okInvoke and oldInvoke then
+        originalBindableInvoke = oldInvoke
+        RuntimeState.hookState.bindableInvoke = true
+    end
+end
+
+RuntimeState.hasOutboundBlocking = function()
+    if not configs.call_FireServer or not configs.call_InvokeServer then
+        return true
+    end
+    return next(blocklist) ~= nil
+end
+
+RuntimeState.ensureBlockNamecall = function()
+    if RuntimeState.hookState.blockNamecall then
+        return true
+    end
+    if not caps.namecallHook then
+        return false
+    end
+
+    local previous
+    local installed = false
+    local okIdentity = pcall(function()
+        SimpleSpy._withThreadIdentity(8, function()
+            if type(hookmetamethod) == 'function' then
+                local ok, old = pcall(
+                    hookmetamethod,
+                    game,
+                    '__namecall',
+                    RuntimeState.cloneHook(RuntimeState.newnamecall)
+                )
+                if ok and type(old) == 'function' then
+                    previous = old
+                    installed = true
+                end
+            elseif caps.hookFunction and caps.rawMetatable then
+                local ok, old = pcall(
+                    hookfunction,
+                    getrawmetatable(game).__namecall,
+                    RuntimeState.cloneHook(RuntimeState.newnamecall)
+                )
+                if ok and type(old) == 'function' then
+                    previous = old
+                    installed = true
+                end
+            elseif synv3 and caps.hookAPI and caps.rawMetatable then
+                local ok, old = pcall(
+                    hook,
+                    getrawmetatable(game).__namecall,
+                    RuntimeState.cloneHook(RuntimeState.newnamecall)
+                )
+                if ok and type(old) == 'function' then
+                    previous = old
+                    installed = true
+                end
+            end
+        end)
+    end)
+
+    if not okIdentity or not installed or type(previous) ~= 'function' then
+        return false
+    end
+
+    RuntimeState.originalnamecall = previous
+    RuntimeState.hookState.blockNamecall = true
+    RuntimeState.hookState.active = true
+    return true
+end
+
+RuntimeState.disableBlockNamecall = function()
+    if not RuntimeState.hookState.blockNamecall then
+        return true
+    end
+    local original = RuntimeState.originalnamecall
+    if type(original) ~= 'function' then
+        RuntimeState.hookState.blockNamecall = false
+        return false
+    end
+
+    local restored = false
+    pcall(function()
+        SimpleSpy._withThreadIdentity(8, function()
+            if type(hookmetamethod) == 'function' then
+                restored = pcall(hookmetamethod, game, '__namecall', original)
+            elseif caps.hookFunction and caps.rawMetatable then
+                restored = pcall(hookfunction, getrawmetatable(game).__namecall, original)
+            elseif synv3 and caps.hookAPI and caps.rawMetatable then
+                restored = pcall(hook, getrawmetatable(game).__namecall, original)
+            end
+        end)
+    end)
+
+    if restored then
+        RuntimeState.hookState.blockNamecall = false
+        RuntimeState.originalnamecall = nil
+    end
+    return restored
+end
+
+RuntimeState.refreshBlockNamecall = function()
+    if RuntimeState.hasOutboundBlocking() then
+        return RuntimeState.ensureBlockNamecall()
+    end
+    RuntimeState.disableBlockNamecall()
+    return true
+end
+
 RuntimeState.disablehooks = function()
     if not RuntimeState.hookState.active then
         return
     end
     RuntimeState.hookState.active = false
 
+    RuntimeState.disableBlockNamecall()
+
     SimpleSpy._withThreadIdentity(8, function()
-        if synv3 then
-            if RuntimeState.hookState.namecall and caps.unhookAPI and caps.rawMetatable and RuntimeState.originalnamecall then
-                pcall(unhook, getrawmetatable(game).__namecall, RuntimeState.originalnamecall)
-            end
-            if RuntimeState.hookState.fireServer and caps.unhookAPI and originalEvent then
-                pcall(unhook, baseFireServer, originalEvent)
-            end
-            if RuntimeState.hookState.invokeServer and caps.unhookAPI and originalFunction then
-                pcall(unhook, baseInvokeServer, originalFunction)
-            end
-            if RuntimeState.hookState.namecall and caps.restoreFunction and RuntimeState.originalnamecall then
-                pcall(restorefunction, RuntimeState.originalnamecall)
-            end
-            if RuntimeState.hookState.fireServer and caps.restoreFunction and originalEvent then
-                pcall(restorefunction, originalEvent)
-            end
-            if RuntimeState.hookState.invokeServer and caps.restoreFunction and originalFunction then
-                pcall(restorefunction, originalFunction)
-            end
-        else
-            if RuntimeState.hookState.namecall and RuntimeState.originalnamecall then
-                if type(hookmetamethod) == 'function' then
-                    pcall(hookmetamethod, game, '__namecall', RuntimeState.originalnamecall)
-                elseif caps.hookFunction and caps.rawMetatable then
-                    pcall(
-                        hookfunction,
-                        getrawmetatable(game).__namecall,
-                        RuntimeState.originalnamecall
-                    )
+        if synv3 and not caps.hookFunction then
+            if RuntimeState.hookState.fireServer and originalEvent then
+                if caps.unhookAPI then
+                    pcall(unhook, baseFireServer, originalEvent)
+                elseif caps.restoreFunction then
+                    pcall(restorefunction, baseFireServer)
                 end
             end
+            if RuntimeState.hookState.unreliableFireServer and originalUnreliableEvent and type(baseUnreliableFireServer) == 'function' then
+                if caps.unhookAPI then
+                    pcall(unhook, baseUnreliableFireServer, originalUnreliableEvent)
+                elseif caps.restoreFunction then
+                    pcall(restorefunction, baseUnreliableFireServer)
+                end
+            end
+            if RuntimeState.hookState.invokeServer and originalFunction then
+                if caps.unhookAPI then
+                    pcall(unhook, baseInvokeServer, originalFunction)
+                elseif caps.restoreFunction then
+                    pcall(restorefunction, baseInvokeServer)
+                end
+            end
+            if RuntimeState.hookState.bindableFire and originalBindableFire then
+                if caps.unhookAPI then
+                    pcall(unhook, baseBindableFire, originalBindableFire)
+                elseif caps.restoreFunction then
+                    pcall(restorefunction, baseBindableFire)
+                end
+            end
+            if RuntimeState.hookState.bindableInvoke and originalBindableInvoke then
+                if caps.unhookAPI then
+                    pcall(unhook, baseBindableInvoke, originalBindableInvoke)
+                elseif caps.restoreFunction then
+                    pcall(restorefunction, baseBindableInvoke)
+                end
+            end
+        else
             if RuntimeState.hookState.fireServer and caps.hookFunction and originalEvent then
                 pcall(hookfunction, baseFireServer, originalEvent)
+            end
+            if RuntimeState.hookState.unreliableFireServer and caps.hookFunction and originalUnreliableEvent and type(baseUnreliableFireServer) == 'function' then
+                pcall(hookfunction, baseUnreliableFireServer, originalUnreliableEvent)
             end
             if RuntimeState.hookState.invokeServer and caps.hookFunction and originalFunction then
                 pcall(hookfunction, baseInvokeServer, originalFunction)
             end
+            if RuntimeState.hookState.bindableFire and caps.hookFunction and originalBindableFire then
+                pcall(hookfunction, baseBindableFire, originalBindableFire)
+            end
+            if RuntimeState.hookState.bindableInvoke and caps.hookFunction and originalBindableInvoke then
+                pcall(hookfunction, baseBindableInvoke, originalBindableInvoke)
+            end
         end
     end)
 
-    RuntimeState.hookState.namecall = false
     RuntimeState.hookState.fireServer = false
+    RuntimeState.hookState.unreliableFireServer = false
     RuntimeState.hookState.invokeServer = false
+    RuntimeState.hookState.bindableFire = false
+    RuntimeState.hookState.bindableInvoke = false
+    RuntimeState.hookState.blockNamecall = false
 end
 
 --- Toggles on and off the remote spy
@@ -4905,83 +5141,57 @@ function toggleSpy()
 
     if not toggle then
         SimpleSpy._withThreadIdentity(8, function()
-            RuntimeState.hookState.namecall = false
             RuntimeState.hookState.fireServer = false
+            RuntimeState.hookState.unreliableFireServer = false
             RuntimeState.hookState.invokeServer = false
+            RuntimeState.hookState.bindableFire = false
+            RuntimeState.hookState.bindableInvoke = false
 
-            local oldnamecall
-            if synv3 then
-                if caps.namecallHook and caps.hookAPI and caps.rawMetatable then
-                    local ok, previous = pcall(
-                        hook,
-                        getrawmetatable(game).__namecall,
-                        RuntimeState.cloneHook(RuntimeState.newnamecall)
+            local hooker = caps.hookFunction and hookfunction or (synv3 and caps.hookAPI and hook or nil)
+            if type(hooker) == 'function' then
+                local okFire, oldFire = pcall(
+                    hooker,
+                    baseFireServer,
+                    RuntimeState.cloneHook(RuntimeState.newFire)
+                )
+                if okFire and oldFire then
+                    originalEvent = oldFire
+                    RuntimeState.hookState.fireServer = true
+                end
+                if type(baseUnreliableFireServer) == 'function' then
+                    local okUnreliable, oldUnreliable = pcall(
+                        hooker,
+                        baseUnreliableFireServer,
+                        RuntimeState.cloneHook(RuntimeState.newUnreliableFire)
                     )
-                    if ok then
-                        oldnamecall = previous
-                        RuntimeState.hookState.namecall = true
+                    if okUnreliable and oldUnreliable then
+                        originalUnreliableEvent = oldUnreliable
+                        RuntimeState.hookState.unreliableFireServer = true
                     end
                 end
-                if caps.hookAPI then
-                    local okFire, oldFire = pcall(
-                        hook,
-                        baseFireServer,
-                        RuntimeState.cloneHook(RuntimeState.newFire)
-                    )
-                    if okFire and oldFire then
-                        originalEvent = oldFire
-                        RuntimeState.hookState.fireServer = true
-                    end
-                    RuntimeState.tryHookInvokeServer(hook)
+                RuntimeState.tryHookInvokeServer(hooker)
+
+                local okBindableFire, oldBindableFire = pcall(
+                    hooker,
+                    baseBindableFire,
+                    RuntimeState.cloneHook(RuntimeState.newBindableFire)
+                )
+                if okBindableFire and oldBindableFire then
+                    originalBindableFire = oldBindableFire
+                    RuntimeState.hookState.bindableFire = true
                 end
-            else
-                if caps.namecallHook then
-                    if type(hookmetamethod) == 'function' then
-                        local ok, previous = pcall(
-                            hookmetamethod,
-                            game,
-                            '__namecall',
-                            RuntimeState.cloneHook(RuntimeState.newnamecall)
-                        )
-                        if ok then
-                            oldnamecall = previous
-                            RuntimeState.hookState.namecall = true
-                        end
-                    elseif caps.hookFunction and caps.rawMetatable then
-                        local ok, previous = pcall(
-                            hookfunction,
-                            getrawmetatable(game).__namecall,
-                            RuntimeState.cloneHook(RuntimeState.newnamecall)
-                        )
-                        if ok then
-                            oldnamecall = previous
-                            RuntimeState.hookState.namecall = true
-                        end
-                    end
-                end
-                if caps.hookFunction then
-                    local okFire, oldFire = pcall(
-                        hookfunction,
-                        baseFireServer,
-                        RuntimeState.cloneHook(RuntimeState.newFire)
-                    )
-                    if okFire and oldFire then
-                        originalEvent = oldFire
-                        RuntimeState.hookState.fireServer = true
-                    end
-                    RuntimeState.tryHookInvokeServer(hookfunction)
-                end
+                RuntimeState.tryHookBindableInvoke(hooker)
             end
-            if oldnamecall then
-                RuntimeState.originalnamecall = RuntimeState.originalnamecall
-                    or function(...)
-                        return oldnamecall(...)
-                    end
-            end
-            RuntimeState.hookState.active = RuntimeState.hookState.namecall
-                or RuntimeState.hookState.fireServer
+
+            RuntimeState.hookState.active = RuntimeState.hookState.fireServer
+                or RuntimeState.hookState.unreliableFireServer
                 or RuntimeState.hookState.invokeServer
+                or RuntimeState.hookState.bindableFire
+                or RuntimeState.hookState.bindableInvoke
         end)
+        if RuntimeState.hasOutboundBlocking() then
+            RuntimeState.ensureBlockNamecall()
+        end
     else
         RuntimeState.disablehooks()
     end
@@ -4989,7 +5199,7 @@ function toggleSpy()
     return true
 end
 
---- Toggles between the two remotespy methods (hookfunction currently = disabled)
+--- Toggles the direct-hook outbound spy
 function toggleSpyMethod()
     toggleSpy()
     toggle = not toggle
@@ -5068,12 +5278,7 @@ RuntimeState.initializeSimpleSpy = function()
     end
     if not caps.sendHooks then
         ErrorPrompt(
-            'Outbound hooks are unavailable.',
-            true
-        )
-    elseif not caps.namecallHook then
-        ErrorPrompt(
-            'Namecall hook is unavailable. Using direct FireServer/InvokeServer hooks only.',
+            'Direct outbound hooks are unavailable.',
             true
         )
     end
@@ -5466,7 +5671,13 @@ if caps.sendHooks then
             configs.call_FireServer and 'ON' or 'OFF'
         )
     end, function()
+        local previous = configs.call_FireServer
         configs.call_FireServer = not configs.call_FireServer
+        if not RuntimeState.refreshBlockNamecall() then
+            configs.call_FireServer = previous
+            ui.TextLabel.Text = 'FireServer block unavailable: __namecall interception is unsupported'
+            return
+        end
         ui.TextLabel.Text = ('FireServer calls: %s'):format(
             configs.call_FireServer and 'ALLOWED' or 'BLOCKED'
         )
@@ -5477,7 +5688,13 @@ if caps.sendHooks then
             configs.call_InvokeServer and 'ON' or 'OFF'
         )
     end, function()
+        local previous = configs.call_InvokeServer
         configs.call_InvokeServer = not configs.call_InvokeServer
+        if not RuntimeState.refreshBlockNamecall() then
+            configs.call_InvokeServer = previous
+            ui.TextLabel.Text = 'InvokeServer block unavailable: __namecall interception is unsupported'
+            return
+        end
         ui.TextLabel.Text = ('InvokeServer calls: %s'):format(
             configs.call_InvokeServer and 'ALLOWED' or 'BLOCKED'
         )
@@ -5684,8 +5901,14 @@ newButton('Block (i)', function()
     return "Click to stop this remote from firing.\nBlocking a remote won't remove it from SimpleSpy logs, but it will not continue to fire the server."
 end, function()
     if selected then
-        blocklist[OldDebugId(selected.Remote)] = true
-        ui.TextLabel.Text = 'Excluded!'
+        local key = OldDebugId(selected.Remote)
+        blocklist[key] = true
+        if not RuntimeState.refreshBlockNamecall() then
+            blocklist[key] = nil
+            ui.TextLabel.Text = 'Block unavailable: __namecall interception is unsupported'
+            return
+        end
+        ui.TextLabel.Text = 'Blocked!'
     end
 end)
 
@@ -5694,8 +5917,14 @@ newButton('Block (n)', function()
     return "Click to stop remotes with this name from firing.\nBlocking a remote won't remove it from SimpleSpy logs, but it will not continue to fire the server."
 end, function()
     if selected then
-        blocklist[selected.Name] = true
-        ui.TextLabel.Text = 'Excluded!'
+        local key = selected.Name
+        blocklist[key] = true
+        if not RuntimeState.refreshBlockNamecall() then
+            blocklist[key] = nil
+            ui.TextLabel.Text = 'Block unavailable: __namecall interception is unsupported'
+            return
+        end
+        ui.TextLabel.Text = 'Blocked!'
     end
 end)
 
@@ -5704,6 +5933,7 @@ newButton('Clr Blocklist', function()
     return "Click to stop blocking remotes.\nBlocking a remote won't remove it from SimpleSpy logs, but it will not continue to fire the server."
 end, function()
     blocklist = {}
+    RuntimeState.refreshBlockNamecall()
     ui.TextLabel.Text = 'Blocklist cleared!'
 end)
 

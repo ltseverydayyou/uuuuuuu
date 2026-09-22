@@ -413,6 +413,58 @@ if _tmpUnreliableRemoteEvent then
 	_tmpUnreliableRemoteEvent:Destroy()
 end
 
+tstate.blockNamecallHooked = false
+tstate.oldBlockNamecall = nil
+
+local function installBlockNamecall()
+	if tstate.blockNamecallHooked then
+		return true
+	end
+	if type(hookMetaMethod) ~= "function" or type(getnamecallmethod) ~= "function" then
+		return false
+	end
+	local old
+	local replacement = hookClone(function(self, ...)
+		local method = ((getnamecallmethod and getnamecallmethod()) or ""):lower()
+		if tstate.enabled and not safeCheckCaller() and (method == "fireserver" or method == "invokeserver") and table.find(BlockList, self) then
+			return nil
+		end
+		return old(self, ...)
+	end)
+	local ok, previous = pcall(hookMetaMethod, game, "__namecall", replacement)
+	if ok and type(previous) == "function" then
+		old = previous
+		tstate.oldBlockNamecall = previous
+		tstate.blockNamecallHooked = true
+		return true
+	end
+	return false
+end
+
+local function uninstallBlockNamecall()
+	if not tstate.blockNamecallHooked then
+		return true
+	end
+	local old = tstate.oldBlockNamecall
+	if type(old) ~= "function" or type(hookMetaMethod) ~= "function" then
+		return false
+	end
+	local ok = pcall(hookMetaMethod, game, "__namecall", old)
+	if ok then
+		tstate.blockNamecallHooked = false
+		tstate.oldBlockNamecall = nil
+	end
+	return ok
+end
+
+local function refreshBlockNamecall()
+	if #BlockList > 0 then
+		return installBlockNamecall()
+	end
+	uninstallBlockNamecall()
+	return true
+end
+
 local function resolveAdonisEnv()
 	local gc = getgc or (debug and debug.getgc)
 	local hookf = hookfunction
@@ -2010,6 +2062,12 @@ BlockRemote.MouseButton1Click:Connect(function()
 	local idx = table.find(BlockList, lookingAt)
 	if lookingAt and not idx then
 		table.insert(BlockList, lookingAt)
+		if not refreshBlockNamecall() then
+			table.remove(BlockList, #BlockList)
+			BlockRemote.Text = "Block unavailable (__namecall unsupported)"
+			BlockRemote.TextColor3 = Color3.fromRGB(232, 65, 24)
+			return
+		end
 		BlockRemote.Text = "Unblock remote"
 		BlockRemote.TextColor3 = Color3.fromRGB(251, 197, 49)
 		local rIndex = table.find(remotes, lookingAt)
@@ -2024,6 +2082,7 @@ BlockRemote.MouseButton1Click:Connect(function()
 		end
 	elseif lookingAt and idx then
 		table.remove(BlockList, idx)
+		refreshBlockNamecall()
 		BlockRemote.Text = "Block remote from firing"
 		BlockRemote.TextColor3 = Color3.fromRGB(250, 251, 255)
 		local rIndex = table.find(remotes, lookingAt)
@@ -2097,6 +2156,7 @@ Clear.MouseButton1Click:Connect(function()
 	remoteLogs = {};
 	IgnoreList = {};
 	BlockList = {};
+	refreshBlockNamecall();
 	unstacked = {};
 	connections = {};
 	syncTurtleStateCollections();
@@ -2386,36 +2446,8 @@ table.insert(connections, mouse.KeyDown:Connect(function(key)
 		TurtleSpyGUI.Enabled = not TurtleSpyGUI.Enabled;
 	end;
 end));
-if not tstate.hooked and hookMetaMethod then
-	local old
-	local ok, previous = pcall(hookMetaMethod, game, "__namecall", function(self, ...)
-		local method = ((getnamecallmethod and getnamecallmethod()) or ""):lower()
-		if tstate.enabled then
-			if not safeCheckCaller() and (method == "fireserver" or method == "invokeserver") then
-				if table.find(BlockList, self) then
-					if method == "invokeserver" then
-						return nil
-					else
-						return
-					end
-				end
-				local args = table.pack(...)
-				local results = table.pack(old(self, ...))
-				if tstate.handler then
-					task.spawn(function()
-						pcall(tstate.handler, self, method, args, results)
-					end)
-				end
-				return table.unpack(results, 1, results.n)
-			end
-		end
-		return old(self, ...)
-	end)
-	if ok and previous then
-		old = previous
-		tstate.hooked = true
-		tstate.old = tstate.old or previous
-	end
+if #BlockList > 0 then
+	refreshBlockNamecall()
 end
 if not directHookState.fireServer and hookFunction then
 	local oldFireServer
@@ -2934,7 +2966,7 @@ local function installTurtleSpyMCP()
 			incoming = logClientEvents == true,
 			pathMode = pathMode,
 			hooks = {
-				namecall = tstate.hooked == true,
+				namecallBlock = tstate.blockNamecallHooked == true,
 				fireServer = directHookState.fireServer == true,
 				unreliableFireServer = directHookState.unreliableFireServer == true,
 				invokeServer = directHookState.invokeServer == true,
@@ -3119,6 +3151,15 @@ local function installTurtleSpyMCP()
 		elseif not enabled and existing then
 			table.remove(list, existing)
 		end
+		if list == BlockList then
+			if not refreshBlockNamecall() then
+				local current = table.find(BlockList, remote)
+				if enabled and current then
+					table.remove(BlockList, current)
+				end
+				return { ok = false, error = "remote blocking requires __namecall interception" }
+			end
+		end
 		record(label, tostring(index or remote.Name) .. "=" .. tostring(enabled))
 		return {
 			ok = true,
@@ -3193,6 +3234,7 @@ local function installTurtleSpyMCP()
 		remoteLogs = {}
 		IgnoreList = {}
 		BlockList = {}
+		refreshBlockNamecall()
 		unstacked = {}
 		lookingAt = nil
 		lookingAtArgs = nil
@@ -3315,14 +3357,7 @@ tstate.cleanup = function()
 		end)
 		descAddedConn = nil
 	end
-	if tstate.old and hookMetaMethod then
-		local restored = pcall(function()
-			hookMetaMethod(game, "__namecall", tstate.old)
-		end)
-		if restored then
-			tstate.hooked = false
-		end
-	end
+	uninstallBlockNamecall()
 	if directHookState.fireServer and tstate.oldFireServer then
 		local restored = false
 		if type(restoreFunction) == "function" then

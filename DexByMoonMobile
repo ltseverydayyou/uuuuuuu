@@ -3357,6 +3357,8 @@ local EmbeddedModules = {
 		end;
 		local function main()
 			local Properties = {};
+			local getHiddenProperty = env and (env.gethiddenproperty or env.gethiddenprop) or gethiddenproperty or gethiddenprop;
+			local setHiddenProperty = env and (env.sethiddenproperty or env.sethiddenprop) or sethiddenproperty or sethiddenprop;
 			local window, toolBar, propsFrame;
 			local scrollV, scrollH;
 			local categoryOrder;
@@ -3730,6 +3732,15 @@ local EmbeddedModules = {
 											firstObj = obj;
 											firstSet = true;
 										end;
+									elseif prop.IsHiddenProperty then
+										if getHiddenProperty then
+											local okHidden, hiddenValue = pcall(getHiddenProperty, obj, propName);
+											if okHidden then
+												firstVal = hiddenValue;
+												firstObj = obj;
+												firstSet = true;
+											end;
+										end;
 									else
 										firstVal = obj[propName];
 										firstObj = obj;
@@ -3743,6 +3754,17 @@ local EmbeddedModules = {
 									if isAttribute then
 										propVal = getAttribute(obj, attributeName);
 										if propVal == nil then
+											skip = true;
+										end;
+									elseif prop.IsHiddenProperty then
+										if getHiddenProperty then
+											local okHidden, hiddenValue = pcall(getHiddenProperty, obj, propName);
+											if okHidden then
+												propVal = hiddenValue;
+											else
+												skip = true;
+											end;
+										else
 											skip = true;
 										end;
 									else
@@ -3852,6 +3874,17 @@ local EmbeddedModules = {
 								if (not tags.Deprecated or showDeprecated) and (not tags.Hidden or showHidden) then
 									props[propCount] = prop;
 									propCount = propCount + 1;
+								end;
+							end;
+							local hiddenList = API.HiddenProperties and API.HiddenProperties[APIClassName];
+							if hiddenList and getHiddenProperty then
+								for i = 1, #hiddenList do
+									local hiddenProp = hiddenList[i];
+									local ok = pcall(getHiddenProperty, obj, hiddenProp.Name);
+									if ok then
+										props[propCount] = hiddenProp;
+										propCount = propCount + 1;
+									end;
 								end;
 							end;
 							foundClasses[APIClassName] = true;
@@ -4765,6 +4798,15 @@ local EmbeddedModules = {
 					elseif prop.ValueType.Name ~= currentType then
 						return nil;
 					end;
+				elseif prop.IsHiddenProperty then
+					if not getHiddenProperty then
+						return nil;
+					end;
+					local ok, value = pcall(getHiddenProperty, obj, prop.Name);
+					if not ok then
+						return nil;
+					end;
+					propVal = value;
 				else
 					propVal = obj[prop.Name];
 				end;
@@ -4989,7 +5031,7 @@ local EmbeddedModules = {
 										propCons[(#propCons) + 1] = (getAttributeChangedSignal(propObj, prop.AttributeName)):Connect(function()
 											Properties.DisplayProp(prop, i);
 										end);
-									else
+									elseif not prop.IsHiddenProperty then
 										propCons[(#propCons) + 1] = (getPropChangedSignal(propObj, propName)):Connect(function()
 											Properties.DisplayProp(prop, i);
 										end);
@@ -5074,6 +5116,15 @@ local EmbeddedModules = {
 							local root;
 							if prop.IsAttribute then
 								root = getAttribute(obj, attributeName);
+							elseif prop.IsHiddenProperty then
+								if not getHiddenProperty then
+									return;
+								end;
+								local ok, hiddenRoot = pcall(getHiddenProperty, obj, propName);
+								if not ok then
+									return;
+								end;
+								root = hiddenRoot;
 							else
 								root = obj[propName];
 							end;
@@ -5170,6 +5221,10 @@ local EmbeddedModules = {
 							end;
 							if prop.IsAttribute then
 								setAttribute(obj, attributeName, setVal);
+							elseif prop.IsHiddenProperty then
+								if setHiddenProperty then
+									setHiddenProperty(obj, propName, setVal);
+								end;
 							else
 								obj[propName] = setVal;
 							end;
@@ -16435,6 +16490,7 @@ Main = (function()
 				Classes = {},
 				Enums = {},
 				CategoryOrder = {},
+				HiddenProperties = {},
 				GetMember = function()
 					return {};
 				end,
@@ -16485,6 +16541,7 @@ Main = (function()
 		api = service.HttpService:JSONDecode(rawAPI);
 		local classes, enums = {}, {};
 		local categoryOrder, seenCategories = {}, {};
+		local hiddenProperties = {};
 		local function insertAbove(t, item, aboveItem)
 			local findPos = table.find(t, item);
 			if not findPos then
@@ -16560,6 +16617,61 @@ Main = (function()
 		for _, class in classes do
 			class.Superclass = classes[class.Superclass];
 		end;
+		if Main.Elevated then
+			local fullAPIUrls = {
+				"https://raw.githubusercontent.com/MaximumADHD/Roblox-Client-Tracker/refs/heads/roblox/Full-API-Dump.json",
+				"https://raw.githubusercontent.com/RobloxClient/Roblox-Client/refs/heads/roblox/Full-API-Dump.json"
+			};
+			local fullAPI;
+			for _, url in fullAPIUrls do
+				local ok, body = pcall(game.HttpGet, game, url);
+				if ok and type(body) == "string" and #body > 0 then
+					local decodeOk, decoded = pcall(service.HttpService.JSONDecode, service.HttpService, body);
+					if decodeOk and type(decoded) == "table" and type(decoded.Classes) == "table" then
+						fullAPI = decoded;
+						break;
+					end;
+				end;
+			end;
+			if fullAPI then
+				for _, class in fullAPI.Classes do
+					local normalClass = classes[class.Name];
+					local normalProps = {};
+					if normalClass then
+						for _, prop in normalClass.Properties do
+							normalProps[prop.Name] = true;
+						end;
+					end;
+					for _, member in class.Members do
+						if member.MemberType == "Property" and not normalProps[member.Name] then
+							local tags = {};
+							if member.Tags then
+								for _, tag in member.Tags do
+									tags[tag] = true;
+								end;
+							end;
+							if tags.Hidden or tags.NotScriptable then
+								local list = hiddenProperties[class.Name];
+								if not list then
+									list = {};
+									hiddenProperties[class.Name] = list;
+								end;
+								list[(#list) + 1] = {
+									Name = member.Name,
+									Class = class.Name,
+									Security = member.Security,
+									Tags = tags,
+									ValueType = member.ValueType or {Name = "string", Category = "Other"},
+									Serialization = member.Serialization,
+									Category = "Hidden Properties",
+									IsHiddenProperty = true
+								};
+							end;
+						end;
+					end;
+				end;
+			end;
+		end;
 		for _, enum in api.Enums do
 			local newEnum = {};
 			newEnum.Name = enum.Name;
@@ -16611,10 +16723,12 @@ Main = (function()
 		for i = 1, #categoryOrder do
 			categoryOrderMap[categoryOrder[i]] = i;
 		end;
+		categoryOrderMap["Hidden Properties"] = #categoryOrder + 1;
 		return {
 			Classes = classes,
 			Enums = enums,
 			CategoryOrder = categoryOrderMap,
+			HiddenProperties = hiddenProperties,
 			GetMember = getMember
 		};
 	end;

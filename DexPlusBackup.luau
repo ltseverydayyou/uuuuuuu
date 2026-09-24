@@ -2550,6 +2550,7 @@ Main = (function()
 
 		local classes,enums = {},{}
 		local categoryOrder,seenCategories = {},{}
+		local hiddenProperties = {}
 
 		local function insertAbove(t,item,aboveItem)
 			local findPos = table.find(t,item)
@@ -2615,6 +2616,66 @@ Main = (function()
 			class.Superclass = classes[class.Superclass]
 		end
 
+		if Main.Elevated then
+			local fullAPIUrls = {
+				"https://raw.githubusercontent.com/MaximumADHD/Roblox-Client-Tracker/refs/heads/roblox/Full-API-Dump.json",
+				"https://raw.githubusercontent.com/RobloxClient/Roblox-Client/refs/heads/roblox/Full-API-Dump.json"
+			}
+			local fullAPI
+			for _, url in fullAPIUrls do
+				local ok, body = pcall(oldgame.HttpGet, game, url)
+				if ok and type(body) == "string" and #body > 0 then
+					local decodeOk, decoded = pcall(service.HttpService.JSONDecode, service.HttpService, body)
+					if decodeOk and type(decoded) == "table" and type(decoded.Classes) == "table" then
+						fullAPI = decoded
+						break
+					end
+				end
+			end
+
+			if fullAPI then
+				for _, class in fullAPI.Classes do
+					local normalClass = classes[class.Name]
+					local normalProps = {}
+					if normalClass then
+						for _, prop in normalClass.Properties do
+							normalProps[prop.Name] = true
+						end
+					end
+
+					for _, member in class.Members do
+						if member.MemberType == "Property" and not normalProps[member.Name] then
+							local tags = {}
+							if member.Tags then
+								for _, tag in member.Tags do
+									tags[tag] = true
+								end
+							end
+
+							if tags.Hidden or tags.NotScriptable then
+								local list = hiddenProperties[class.Name]
+								if not list then
+									list = {}
+									hiddenProperties[class.Name] = list
+								end
+
+								list[#list + 1] = {
+									Name = member.Name,
+									Class = class.Name,
+									Security = member.Security,
+									Tags = tags,
+									ValueType = member.ValueType or {Name = "string", Category = "Other"},
+									Serialization = member.Serialization,
+									Category = "Hidden Properties",
+									IsHiddenProperty = true
+								}
+							end
+						end
+					end
+				end
+			end
+		end
+
 		for _,enum in api.Enums do
 			local newEnum = {}
 			newEnum.Name = enum.Name
@@ -2666,10 +2727,13 @@ Main = (function()
 			categoryOrderMap[categoryOrder[i]] = i
 		end
 
+		categoryOrderMap["Hidden Properties"] = #categoryOrder + 1
+
 		return {
 			Classes = classes,
 			Enums = enums,
 			CategoryOrder = categoryOrderMap,
+			HiddenProperties = hiddenProperties,
 			GetMember = getMember
 		}
 	end

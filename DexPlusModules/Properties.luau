@@ -49,6 +49,9 @@ end
 local function main()
     local Properties = {}
 
+    local getHiddenProperty = env and (env.gethiddenproperty or env.gethiddenprop) or gethiddenproperty or gethiddenprop
+    local setHiddenProperty = env and (env.sethiddenproperty or env.sethiddenprop) or sethiddenproperty or sethiddenprop
+
     local window, toolBar, propsFrame
     local scrollV, scrollH
     local categoryOrder
@@ -701,6 +704,18 @@ local function main()
                         if (not tags.Deprecated or showDeprecated) and (not tags.Hidden or showHidden) then
                             props[propCount] = prop
                             propCount = propCount + 1
+                        end
+                    end
+
+                    local hiddenList = API.HiddenProperties and API.HiddenProperties[APIClassName]
+                    if hiddenList and getHiddenProperty then
+                        for i = 1, #hiddenList do
+                            local hiddenProp = hiddenList[i]
+                            local ok = pcall(getHiddenProperty, obj, hiddenProp.Name)
+                            if ok then
+                                props[propCount] = hiddenProp
+                                propCount = propCount + 1
+                            end
                         end
                     end
                     foundClasses[APIClassName] = true
@@ -2022,6 +2037,15 @@ local function main()
             elseif prop.ValueType.Name ~= currentType then
                 return nil
             end
+        elseif prop.IsHiddenProperty then
+            if not getHiddenProperty then
+                return nil
+            end
+            local ok, value = pcall(getHiddenProperty, obj, prop.Name)
+            if not ok then
+                return nil
+            end
+            propVal = value
         else
             propVal = obj[prop.Name]
         end
@@ -2478,6 +2502,15 @@ local function main()
                         local root
                         if prop.IsAttribute then
                             root = getAttribute(obj, attributeName)
+                        elseif prop.IsHiddenProperty then
+                            if not getHiddenProperty then
+                                return
+                            end
+                            local ok, hiddenRoot = pcall(getHiddenProperty, obj, propName)
+                            if not ok then
+                                return
+                            end
+                            root = hiddenRoot
                         else
                             root = obj[propName]
                         end
@@ -2658,6 +2691,10 @@ local function main()
 
                         if prop.IsAttribute then
                             setAttribute(obj, attributeName, setVal)
+                        elseif prop.IsHiddenProperty then
+                            if setHiddenProperty then
+                                setHiddenProperty(obj, propName, setVal)
+                            end
                         else
                             obj[propName] = setVal
                         end

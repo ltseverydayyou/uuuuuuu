@@ -566,6 +566,15 @@ local function main()
                                     firstObj = obj
                                     firstSet = true
                                 end
+                            elseif prop.IsHiddenProperty then
+                                if getHiddenProperty then
+                                    local okHidden, hiddenValue = pcall(getHiddenProperty, obj, propName)
+                                    if okHidden then
+                                        firstVal = hiddenValue
+                                        firstObj = obj
+                                        firstSet = true
+                                    end
+                                end
                             else
                                 firstVal = obj[propName]
                                 firstObj = obj
@@ -579,6 +588,17 @@ local function main()
                             if isAttribute then
                                 propVal = getAttribute(obj, attributeName)
                                 if propVal == nil then
+                                    skip = true
+                                end
+                            elseif prop.IsHiddenProperty then
+                                if getHiddenProperty then
+                                    local okHidden, hiddenValue = pcall(getHiddenProperty, obj, propName)
+                                    if okHidden then
+                                        propVal = hiddenValue
+                                    else
+                                        skip = true
+                                    end
+                                else
                                     skip = true
                                 end
                             else
@@ -2376,7 +2396,7 @@ local function main()
                                         Properties.DisplayProp(prop, i)
                                     end
                                 ))
-                            else
+                            elseif not prop.IsHiddenProperty then
                                 propCons[#propCons + 1] =
                                     trackConn(getPropChangedSignal(propObj, propName):Connect(
                                     function()

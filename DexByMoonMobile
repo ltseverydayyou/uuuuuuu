@@ -2902,6 +2902,7 @@ local EmbeddedModules = {
 					holder = Instance.new("ScreenGui");
 					holder.Name = "ExplorerSelections";
 					holder.DisplayOrder = Main.DisplayOrders.Core;
+					holder.IgnoreGuiInset = true;
 					Lib.ShowGui(holder);
 					Explorer.SelectionVisualsHolder = holder;
 					Explorer.SelectionVisualCons = {};
@@ -3006,7 +3007,8 @@ local EmbeddedModules = {
 							local newVisual = clone(svg);
 							attachCons[count] = attachTo(newVisual, {
 								Target = obj,
-								Resize = true
+								Resize = true,
+								ScreenSpace = true
 							});
 							count = count + 1;
 							newVisual.Parent = holder;
@@ -7105,14 +7107,32 @@ local EmbeddedModules = {
 				end;
 			end;
 			Lib.AttachTo = function(obj, data)
-				local target, posOffX, posOffY, sizeOffX, sizeOffY, resize, con;
+				local target, posOffX, posOffY, sizeOffX, sizeOffY, resize, screenSpace, con;
 				local disabled = false;
+				local function getScreenGui(inst)
+					local cur = inst;
+					while cur do
+						if cur:IsA("ScreenGui") then
+							return cur;
+						end;
+						cur = cur.Parent;
+					end;
+				end;
 				local function update()
 					if not obj or (not target) then
 						return;
 					end;
 					local targetPos = target.AbsolutePosition;
 					local targetSize = target.AbsoluteSize;
+					if screenSpace then
+						local root = getScreenGui(target);
+						if root and not root.IgnoreGuiInset then
+							local ok, inset = pcall(service.GuiService.GetGuiInset, service.GuiService);
+							if ok and typeof(inset) == "Vector2" then
+								targetPos = targetPos + inset;
+							end;
+						end;
+					end;
 					obj.Position = UDim2.new(0, targetPos.X + posOffX, 0, targetPos.Y + posOffY);
 					if resize then
 						obj.Size = UDim2.new(0, targetSize.X + sizeOffX, 0, targetSize.Y + sizeOffY);
@@ -7127,13 +7147,14 @@ local EmbeddedModules = {
 					sizeOffX = data.SizeOffX or 0;
 					sizeOffY = data.SizeOffY or 0;
 					resize = data.Resize or false;
+					screenSpace = data.ScreenSpace or false;
 					if con then
 						con:Disconnect();
 						con = nil;
 					end;
 					if target then
 						con = target.Changed:Connect(function(prop)
-							if not disabled and prop == "AbsolutePosition" or prop == "AbsoluteSize" then
+							if not disabled and (prop == "AbsolutePosition" or prop == "AbsoluteSize") then
 								update();
 							end;
 						end);

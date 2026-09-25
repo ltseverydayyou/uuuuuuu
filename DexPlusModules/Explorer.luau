@@ -3452,6 +3452,7 @@ return search]==]
 			holder = Instance.new("ScreenGui")
 			holder.Name = "ExplorerSelections"
 			holder.DisplayOrder = Main.DisplayOrders.Core
+			holder.IgnoreGuiInset = true
 			Lib.ShowGui(holder)
 			Explorer.SelectionVisualsHolder = holder
 			Explorer.SelectionVisualCons = {}
@@ -3503,7 +3504,7 @@ return search]==]
 			if node ~= workspaceNode then
 				if isa(obj,"GuiObject") and guiEnabled then
 					local newVisual = clone(svg)
-					attachCons[count] = attachTo(newVisual,{Target = obj, Resize = true})
+					attachCons[count] = attachTo(newVisual,{Target = obj, Resize = true, ScreenSpace = true})
 					count = count + 1
 					newVisual.Parent = holder
 					boxCount = boxCount + 1

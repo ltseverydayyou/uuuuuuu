@@ -2337,23 +2337,42 @@ local EmbeddedModules = {
 					return (Obj.Name:lower()):find(str, 1, true);
 				end;
 				local function searchTable(root, str, func)
-					local expandedpar = false;
-					for _, node in root do
-						if func(node.Obj, str) then
-							expandTable[node] = 0;
-							searchResults[node] = true;
-							if not expandedpar then
-								local parnode = node.Parent;
-								while parnode and (not searchResults[parnode] or expandTable[parnode] == 0) do
-									expanded[parnode] = true;
-									searchResults[parnode] = true;
-									parnode = parnode.Parent;
+					local visited = { [root] = true };
+					local stack = {
+						{
+							Root = root,
+							Index = 1,
+							ExpandedPar = false
+						}
+					};
+					while #stack > 0 do
+						local frame = stack[#stack];
+						local node = frame.Root[frame.Index];
+						if not node then
+							stack[#stack] = nil;
+						else
+							frame.Index = frame.Index + 1;
+							if func(node.Obj, str) then
+								expandTable[node] = 0;
+								searchResults[node] = true;
+								if not frame.ExpandedPar then
+									local parnode = node.Parent;
+									while parnode and (not searchResults[parnode] or expandTable[parnode] == 0) do
+										expanded[parnode] = true;
+										searchResults[parnode] = true;
+										parnode = parnode.Parent;
+									end;
+									frame.ExpandedPar = true;
 								end;
-								expandedpar = true;
 							end;
-						end;
-						if #node > 0 then
-							searchTable(node, str, func);
+							if #node > 0 and not visited[node] then
+								visited[node] = true;
+								stack[#stack + 1] = {
+									Root = node,
+									Index = 1,
+									ExpandedPar = false
+								};
+							end;
 						end;
 					end;
 				end;

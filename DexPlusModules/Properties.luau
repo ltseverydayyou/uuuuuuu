@@ -50,7 +50,19 @@ local function main()
     local Properties = {}
 
     local getHiddenProperty = env and (env.gethiddenproperty or env.gethiddenprop) or gethiddenproperty or gethiddenprop
+    local getHiddenProperties = env and (env.gethiddenproperties or env.getspecialinfo or env.gethiddenprops) or gethiddenproperties or getspecialinfo or gethiddenprops
+    local getProperties = env and env.getproperties or getproperties
+    local isScriptable = env and env.isscriptable or isscriptable
     local setHiddenProperty = env and (env.sethiddenproperty or env.sethiddenprop) or sethiddenproperty or sethiddenprop
+
+    if not getHiddenProperty and type(getHiddenProperties) == "function" then
+        getHiddenProperty = function(obj, propName)
+            local hidden = getHiddenProperties(obj)
+            if type(hidden) == "table" then
+                return hidden[propName]
+            end
+        end
+    end
 
     local window, toolBar, propsFrame
     local scrollV, scrollH
@@ -250,6 +262,128 @@ local function main()
         ["float"] = true,
         ["double"] = true
     }
+
+    Properties.GetExecutorHiddenProps = function(obj)
+        local result, seen = {}, {}
+
+        local function valueTypeFor(value, descriptor)
+            if type(descriptor) == "table" and type(descriptor.ValueType) == "table" then
+                return descriptor.ValueType
+            end
+
+            local valueType = typeof(value)
+            local category = "Other"
+            local name = Properties.TypeNameConvert[valueType] or valueType
+
+            if valueType == "Instance" then
+                category = "Class"
+                local okClass, className = pcall(function()
+                    return value.ClassName
+                end)
+                name = okClass and className or "Instance"
+            elseif valueType == "EnumItem" then
+                category = "Enum"
+                local okEnum, enumType = pcall(function()
+                    return value.EnumType
+                end)
+                if okEnum and enumType then
+                    name = tostring(enumType):gsub("^Enum%.", "")
+                end
+            elseif valueType == "nil" then
+                name = "string"
+            end
+
+            return {Name = name, Category = category}
+        end
+
+        local function addHidden(name, value, descriptor)
+            if type(name) ~= "string" or name == "" or seen[name] then
+                return
+            end
+
+            if type(getHiddenProperty) == "function" then
+                local okValue, fetchedValue = pcall(getHiddenProperty, obj, name)
+                if okValue then
+                    value = fetchedValue
+                end
+            end
+
+            local okClass, className = pcall(function()
+                return obj.ClassName
+            end)
+
+            seen[name] = true
+            result[#result + 1] = {
+                Name = name,
+                DisplayName = name,
+                Class = okClass and className or "Instance",
+                Security = type(descriptor) == "table" and descriptor.Security or nil,
+                Tags = {Hidden = true, NotScriptable = true},
+                ValueType = valueTypeFor(value, descriptor),
+                Serialization = type(descriptor) == "table" and descriptor.Serialization or nil,
+                Category = "Hidden Properties",
+                IsHiddenProperty = true,
+                IsExecutorHiddenProperty = true
+            }
+        end
+
+        local function consumeProperties(propertyTable, hiddenOnly)
+            if type(propertyTable) ~= "table" then
+                return
+            end
+
+            for key, value in propertyTable do
+                local name, descriptor, propertyValue
+
+                if type(key) == "string" then
+                    name = key
+                    propertyValue = value
+                    if type(value) == "table" and type(value.Name) == "string" and
+                        (value.ValueType or value.Tags or value.Security or value.Serialization or value.Category) then
+                        descriptor = value
+                        propertyValue = value.Value
+                    end
+                elseif type(value) == "string" then
+                    name = value
+                elseif type(value) == "table" and type(value.Name) == "string" then
+                    name = value.Name
+                    descriptor = value
+                    propertyValue = value.Value
+                end
+
+                if name and not seen[name] then
+                    if hiddenOnly then
+                        addHidden(name, propertyValue, descriptor)
+                    elseif type(isScriptable) == "function" then
+                        local okScriptable, scriptable = pcall(isScriptable, obj, name)
+                        if okScriptable and scriptable == false then
+                            addHidden(name, propertyValue, descriptor)
+                        end
+                    end
+                end
+            end
+        end
+
+        if type(getHiddenProperties) == "function" then
+            local okHidden, hidden = pcall(getHiddenProperties, obj)
+            if okHidden then
+                consumeProperties(hidden, true)
+            end
+        end
+
+        if type(getProperties) == "function" and type(isScriptable) == "function" then
+            local okProperties, allProperties = pcall(getProperties, obj)
+            if okProperties then
+                consumeProperties(allProperties, false)
+            end
+        end
+
+        table.sort(result, function(a, b)
+            return string.lower(a.Name) < string.lower(b.Name)
+        end)
+
+        return result
+    end
 
     Properties.DefaultPropValue = {
         string = "",
@@ -749,6 +883,38 @@ local function main()
                 classList[#classList + 1] = obj
 
                 apiClass = apiClass.Superclass
+            end
+
+            if type(getHiddenProperty) == "function" and
+                (type(getHiddenProperties) == "function" or (type(getProperties) == "function" and type(isScriptable) == "function")) then
+                local executorHidden = Properties.GetExecutorHiddenProps(obj)
+                if #executorHidden > 0 then
+                    local existingNames = {}
+                    for propIndex = 1, propCount - 1 do
+                        local existingProp = props[propIndex]
+                        if existingProp and existingProp.Name then
+                            existingNames[existingProp.Name] = true
+                        end
+                    end
+
+                    local dynamicClassList = classLists[class]
+                    if not dynamicClassList then
+                        dynamicClassList = {}
+                        classLists[class] = dynamicClassList
+                    end
+                    if not table.find(dynamicClassList, obj) then
+                        dynamicClassList[#dynamicClassList + 1] = obj
+                    end
+
+                    for hiddenIndex = 1, #executorHidden do
+                        local hiddenProp = executorHidden[hiddenIndex]
+                        if not existingNames[hiddenProp.Name] then
+                            props[propCount] = hiddenProp
+                            propCount = propCount + 1
+                            existingNames[hiddenProp.Name] = true
+                        end
+                    end
+                end
             end
 
             if showingAttrs and attrCount < maxAttrs then

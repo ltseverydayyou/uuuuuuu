@@ -535,7 +535,8 @@ Main = (function()
 	Main.GitModulesPath = "DexPlusModules"
 	Main.ModuleHashData = {} -- prevent remote hash fetch; prefer local modules
 	Main.ModuleForceRefresh = false
-	Main.ModuleCacheVersion = "2026-06-12-safe-user-tostring"
+	Main.ForceRemoteModules = {Properties = true}
+	Main.ModuleCacheVersion = "2026-09-25-hidden-properties"
 	Main.ModuleRefreshFlagFile = "DexPlusPlus/RefreshModules.txt"
 	Main.SettingsFile = "DexPlusSettings.json"
 	Main.UserSettingsFile = "DexPlusUserSettings.json"
@@ -995,14 +996,23 @@ Main = (function()
 					return true, nil, loadErr
 				end
 
-				for _, modulePathLocal in modulePathCandidates do
-					local localExists, localControl, localErr = tryFile(modulePathLocal, "Local module")
-					if localControl then
-						control = localControl
-						break
-					elseif localExists then
-						addLoadError("local", localErr)
+				local forceRemote = Main.ModuleForceRefresh == true or
+					(Main.ForceRemoteModules and Main.ForceRemoteModules[name] == true)
+
+				local function tryLocalModuleCandidates()
+					for _, modulePathLocal in modulePathCandidates do
+						local localExists, localControl, localErr = tryFile(modulePathLocal, "Local module")
+						if localControl then
+							control = localControl
+							return
+						elseif localExists then
+							addLoadError("local", localErr)
+						end
 					end
+				end
+
+				if not forceRemote then
+					tryLocalModuleCandidates()
 				end
 
 				if not control then
@@ -1028,6 +1038,10 @@ Main = (function()
 							addLoadError("remote", moduleStr)
 						end
 					end
+				end
+
+				if not control and forceRemote then
+					tryLocalModuleCandidates()
 				end
 
 				if not control then
@@ -1691,6 +1705,15 @@ Main = (function()
 		env.setclipboard = setclipboard
 		env.getnilinstances = getnilinstances or get_nil_instances
 		env.getloadedmodules = getloadedmodules
+		env.gethiddenproperty = gethiddenproperty or gethiddenprop
+		env.gethiddenprop = gethiddenprop or gethiddenproperty
+		env.gethiddenproperties = gethiddenproperties or getspecialinfo or gethiddenprops
+		env.getspecialinfo = getspecialinfo or gethiddenproperties or gethiddenprops
+		env.gethiddenprops = gethiddenprops or gethiddenproperties or getspecialinfo
+		env.getproperties = getproperties
+		env.isscriptable = isscriptable
+		env.sethiddenproperty = sethiddenproperty or sethiddenprop
+		env.sethiddenprop = sethiddenprop or sethiddenproperty
 
 		env.isViableDecompileScript = function(obj)
 			if obj:IsA("ModuleScript") then

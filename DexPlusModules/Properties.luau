@@ -876,14 +876,11 @@ local function main()
                     end
 
                     local hiddenList = API.HiddenProperties and API.HiddenProperties[APIClassName]
-                    if hiddenList and getHiddenProperty then
+                    if hiddenList then
                         for i = 1, #hiddenList do
                             local hiddenProp = hiddenList[i]
-                            local ok = pcall(getHiddenProperty, obj, hiddenProp.Name)
-                            if ok then
-                                props[propCount] = hiddenProp
-                                propCount = propCount + 1
-                            end
+                            props[propCount] = hiddenProp
+                            propCount = propCount + 1
                         end
                     end
                     foundClasses[APIClassName] = true
@@ -899,8 +896,8 @@ local function main()
                 apiClass = apiClass.Superclass
             end
 
-            if type(getHiddenProperty) == "function" and
-                (type(getHiddenProperties) == "function" or (type(getProperties) == "function" and type(isScriptable) == "function")) then
+            if type(getHiddenProperties) == "function" or
+                (type(getProperties) == "function" and type(isScriptable) == "function") then
                 local executorHidden = Properties.GetExecutorHiddenProps(obj)
                 if #executorHidden > 0 then
                     local existingNames = {}

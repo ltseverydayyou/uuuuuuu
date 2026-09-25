@@ -54,6 +54,7 @@ local function main()
     local getProperties = env and env.getproperties or getproperties
     local isScriptable = env and env.isscriptable or isscriptable
     local setHiddenProperty = env and (env.sethiddenproperty or env.sethiddenprop) or sethiddenproperty or sethiddenprop
+    local hasDirectHiddenGetter = type(getHiddenProperty) == "function"
 
     if not getHiddenProperty and type(getHiddenProperties) == "function" then
         getHiddenProperty = function(obj, propName)
@@ -71,6 +72,19 @@ local function main()
     local inputBox, inputTextBox, inputProp
     local checkboxes, propCons = {}, {}
     local rowCons, rowChk, rowIco, winCons = {}, {}, {}, {}
+    local hiddenPollRows = {}
+    local hiddenPollToken = 0
+    local HIDDEN_POLL_INTERVAL = 0.15
+    local HIDDEN_NIL = {}
+    local HIDDEN_ABSENT = {}
+
+    local function hiddenPropReadOnly(prop)
+        local tags = prop and prop.Tags
+        if not tags or not tags.ReadOnly then
+            return false
+        end
+        return not (prop.IsHiddenProperty and type(setHiddenProperty) == "function")
+    end
 
     local function disc(c)
         if c then
@@ -2308,7 +2322,7 @@ local function main()
             endOffset = 24 + (typeName == "ColorSequence" and 20 or 0)
         elseif typeData.Category == "Enum" then
             colorButton.Visible = false
-            enumArrow.Visible = not prop.Tags.ReadOnly
+            enumArrow.Visible = not hiddenPropReadOnly(prop)
             endOffset = 22
         elseif (gName == inputFullName and typeData.Category == "Class") or typeName == "NumberSequence" then
             colorButton.Visible = false
@@ -2339,7 +2353,7 @@ local function main()
             valueBox.Visible = false
             checkbox.Visible = true
             soundPreview.Visible = false
-            checkboxes[entryIndex].Disabled = tags.ReadOnly
+            checkboxes[entryIndex].Disabled = hiddenPropReadOnly(prop)
             if typeName == "PhysicalProperties" and autoUpdateObjs[gName] then
                 checkboxes[entryIndex]:SetState(propVal and true or false)
             else
@@ -2377,8 +2391,103 @@ local function main()
                 valueBox.Text = ""
             end
 
-            valueBox.TextColor3 = tags.ReadOnly and Settings.Theme.PlaceholderText or Settings.Theme.Text
+            valueBox.TextColor3 = hiddenPropReadOnly(prop) and Settings.Theme.PlaceholderText or Settings.Theme.Text
         end
+    end
+
+    local function hiddenPollValuesEqual(a, b)
+        if a == b then
+            return true
+        end
+        local typeA, typeB = typeof(a), typeof(b)
+        if typeA ~= typeB or typeA == "Instance" or typeA == "table" then
+            return false
+        end
+        local okA, strA = pcall(tostring, a)
+        local okB, strB = pcall(tostring, b)
+        return okA and okB and strA == strB
+    end
+
+    local function findBulkHiddenValue(hidden, propName)
+        if type(hidden) ~= "table" then
+            return false, nil
+        end
+        local direct = rawget(hidden, propName)
+        if direct ~= nil then
+            return true, direct
+        end
+        for key, value in hidden do
+            if key == propName then
+                return true, value
+            elseif type(value) == "string" and value == propName then
+                return true, nil
+            elseif type(value) == "table" and value.Name == propName then
+                return true, value.Value
+            end
+        end
+        return false, nil
+    end
+
+    local function hiddenPollCanRun(rows)
+        local sList = Explorer and Explorer.Selection and Explorer.Selection.List
+        if not sList or #sList == 0 or not rows or #rows == 0 or not window then
+            return false
+        end
+        local okVisible, visible = pcall(window.IsContentVisible, window)
+        return okVisible and visible == true
+    end
+
+    local function updateHiddenPoller()
+        hiddenPollToken = hiddenPollToken + 1
+        local token = hiddenPollToken
+        local rows = hiddenPollRows
+        if not hiddenPollCanRun(rows) then
+            return
+        end
+
+        task.spawn(function()
+            local snapshots, seen = {}, {}
+            while token == hiddenPollToken and hiddenPollRows == rows and hiddenPollCanRun(rows) do
+                local bulkCache = {}
+                for rowIndex = 1, #rows do
+                    if token ~= hiddenPollToken or hiddenPollRows ~= rows then
+                        break
+                    end
+
+                    local row = rows[rowIndex]
+                    local prop, obj = row.Prop, row.Obj
+                    local found, value = false, nil
+
+                    if prop and obj then
+                        if hasDirectHiddenGetter then
+                            local okValue, hiddenValue = pcall(getHiddenProperty, obj, prop.Name)
+                            found, value = okValue, hiddenValue
+                        elseif type(getHiddenProperties) == "function" then
+                            local hidden = bulkCache[obj]
+                            if hidden == nil then
+                                local okBulk, bulk = pcall(getHiddenProperties, obj)
+                                hidden = okBulk and type(bulk) == "table" and bulk or false
+                                bulkCache[obj] = hidden
+                            end
+                            if hidden then
+                                found, value = findBulkHiddenValue(hidden, prop.Name)
+                            end
+                        end
+                    end
+
+                    local snapshot = found and (value == nil and HIDDEN_NIL or value) or HIDDEN_ABSENT
+                    if seen[rowIndex] and not hiddenPollValuesEqual(snapshots[rowIndex], snapshot) then
+                        local currentObj = autoUpdateObjs[row.FullName]
+                        if currentObj and propEntries[row.EntryIndex] then
+                            pcall(Properties.DisplayProp, prop, row.EntryIndex)
+                        end
+                    end
+                    snapshots[rowIndex] = snapshot
+                    seen[rowIndex] = true
+                end
+                task.wait(HIDDEN_POLL_INTERVAL)
+            end
+        end)
     end
 
     local rf = false
@@ -2433,6 +2542,7 @@ local function main()
         local UDim2 = UDim2
         local stringSplit = string.split
         local scaleType = Settings.Properties.ScaleType
+        local nextHiddenPollRows = {}
 
         for i = 1, #propCons do
             local c = propCons[i]
@@ -2551,9 +2661,20 @@ local function main()
                         expand.Visible =
                             typeData.Category == "DataType" and Properties.ExpandableTypes[typeName] or
                             Properties.ExpandableProps[gName]
-                        propNameBox.TextColor3 = tags.ReadOnly and Settings.Theme.PlaceholderText or Settings.Theme.Text
+                        propNameBox.TextColor3 = hiddenPropReadOnly(prop) and Settings.Theme.PlaceholderText or Settings.Theme.Text
 
                         Properties.DisplayProp(prop, i)
+                        if prop.IsHiddenProperty then
+                            local pollObj = propObj or Properties.FindFirstObjWhichIsA(prop.Class)
+                            if pollObj then
+                                nextHiddenPollRows[#nextHiddenPollRows + 1] = {
+                                    Prop = prop,
+                                    EntryIndex = i,
+                                    Obj = pollObj,
+                                    FullName = gName
+                                }
+                            end
+                        end
                         if propObj then
                             if prop.IsAttribute then
                                 propCons[#propCons + 1] =
@@ -2646,6 +2767,9 @@ local function main()
             )
             propEntries[i] = nil
         end
+
+        hiddenPollRows = nextHiddenPollRows
+        updateHiddenPoller()
     end
 
     Properties.Refresh = function()
@@ -2985,7 +3109,7 @@ local function main()
         local propObj = autoUpdateObjs[fullName]
         local propVal = Properties.GetPropVal(prop, propObj)
 
-        if prop.Tags.ReadOnly then
+        if hiddenPropReadOnly(prop) then
             return
         end
 
@@ -3683,6 +3807,8 @@ local function main()
     end
 
     Properties.Destroy = function()
+        hiddenPollToken = hiddenPollToken + 1
+        hiddenPollRows = {}
         local pt = Properties.SoundPreviewTime
         Properties.SoundPreviewTime = (pt and (pt + 1)) or tick()
 

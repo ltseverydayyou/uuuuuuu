@@ -2903,6 +2903,12 @@ local EmbeddedModules = {
 					holder.Name = "ExplorerSelections";
 					holder.DisplayOrder = Main.DisplayOrders.Core;
 					holder.IgnoreGuiInset = true;
+					pcall(function()
+						holder.ScreenInsets = Enum.ScreenInsets.None;
+					end);
+					pcall(function()
+						holder.ClipToDeviceSafeArea = false;
+					end);
 					Lib.ShowGui(holder);
 					Explorer.SelectionVisualsHolder = holder;
 					Explorer.SelectionVisualCons = {};
@@ -3005,13 +3011,13 @@ local EmbeddedModules = {
 					if node ~= workspaceNode then
 						if isa(obj, "GuiObject") and guiEnabled then
 							local newVisual = clone(svg);
+							newVisual.Parent = holder;
 							attachCons[count] = attachTo(newVisual, {
 								Target = obj,
 								Resize = true,
 								ScreenSpace = true
 							});
 							count = count + 1;
-							newVisual.Parent = holder;
 							boxCount = boxCount + 1;
 						elseif isa(obj, "PVInstance") and partEnabled then
 							local newBox = clone(svb);
@@ -7125,11 +7131,22 @@ local EmbeddedModules = {
 					local targetPos = target.AbsolutePosition;
 					local targetSize = target.AbsoluteSize;
 					if screenSpace then
-						local root = getScreenGui(target);
-						if root and not root.IgnoreGuiInset then
-							local ok, inset = pcall(service.GuiService.GetGuiInset, service.GuiService);
-							if ok and typeof(inset) == "Vector2" then
-								targetPos = targetPos + inset;
+						local root = getScreenGui(obj);
+						if root then
+							local insetMode = Enum.ScreenInsets.CoreUISafeInsets;
+							local okIgnore, ignoreGuiInset = pcall(function()
+								return root.IgnoreGuiInset;
+							end);
+							if okIgnore and ignoreGuiInset then
+								insetMode = Enum.ScreenInsets.None;
+							else
+								pcall(function()
+									insetMode = root.ScreenInsets;
+								end);
+							end;
+							local okArea, area = pcall(service.GuiService.GetInsetArea, service.GuiService, insetMode);
+							if okArea and typeof(area) == "Rect" then
+								targetPos = targetPos - area.Min;
 							end;
 						end;
 					end;

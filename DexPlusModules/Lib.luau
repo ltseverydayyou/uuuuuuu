@@ -638,11 +638,18 @@ local function main()
 			local targetPos = target.AbsolutePosition
 			local targetSize = target.AbsoluteSize
 			if screenSpace then
-				local root = getScreenGui(target)
-				if root and not root.IgnoreGuiInset then
-					local ok,inset = pcall(service.GuiService.GetGuiInset,service.GuiService)
-					if ok and typeof(inset) == "Vector2" then
-						targetPos = targetPos + inset
+				local root = getScreenGui(obj)
+				if root then
+					local insetMode = Enum.ScreenInsets.CoreUISafeInsets
+					local okIgnore,ignoreGuiInset = pcall(function() return root.IgnoreGuiInset end)
+					if okIgnore and ignoreGuiInset then
+						insetMode = Enum.ScreenInsets.None
+					else
+						pcall(function() insetMode = root.ScreenInsets end)
+					end
+					local okArea,area = pcall(service.GuiService.GetInsetArea,service.GuiService,insetMode)
+					if okArea and typeof(area) == "Rect" then
+						targetPos = targetPos - area.Min
 					end
 				end
 			end

@@ -3453,6 +3453,8 @@ return search]==]
 			holder.Name = "ExplorerSelections"
 			holder.DisplayOrder = Main.DisplayOrders.Core
 			holder.IgnoreGuiInset = true
+			pcall(function() holder.ScreenInsets = Enum.ScreenInsets.None end)
+			pcall(function() holder.ClipToDeviceSafeArea = false end)
 			Lib.ShowGui(holder)
 			Explorer.SelectionVisualsHolder = holder
 			Explorer.SelectionVisualCons = {}
@@ -3504,9 +3506,9 @@ return search]==]
 			if node ~= workspaceNode then
 				if isa(obj,"GuiObject") and guiEnabled then
 					local newVisual = clone(svg)
+					newVisual.Parent = holder
 					attachCons[count] = attachTo(newVisual,{Target = obj, Resize = true, ScreenSpace = true})
 					count = count + 1
-					newVisual.Parent = holder
 					boxCount = boxCount + 1
 				elseif isa(obj,"PVInstance") and partEnabled then
 					local newBox = clone(svb)

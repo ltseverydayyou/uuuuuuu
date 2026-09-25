@@ -2667,7 +2667,7 @@ Main = (function()
 					end
 
 					for _, member in class.Members do
-						if member.MemberType == "Property" and not normalProps[member.Name] then
+						if member.MemberType == "Property" then
 							local tags = {}
 							if member.Tags then
 								for _, tag in member.Tags do
@@ -2682,16 +2682,26 @@ Main = (function()
 									hiddenProperties[class.Name] = list
 								end
 
-								list[#list + 1] = {
-									Name = member.Name,
-									Class = class.Name,
-									Security = member.Security,
-									Tags = tags,
-									ValueType = member.ValueType or {Name = "string", Category = "Other"},
-									Serialization = member.Serialization,
-									Category = "Hidden Properties",
-									IsHiddenProperty = true
-								}
+								local alreadyAdded = false
+								for i = 1, #list do
+									if list[i].Name == member.Name then
+										alreadyAdded = true
+										break
+									end
+								end
+
+								if not alreadyAdded then
+									list[#list + 1] = {
+										Name = member.Name,
+										Class = class.Name,
+										Security = member.Security,
+										Tags = tags,
+										ValueType = member.ValueType or {Name = "string", Category = "Other"},
+										Serialization = member.Serialization,
+										Category = "Hidden Properties",
+										IsHiddenProperty = true
+									}
+								end
 							end
 						end
 					end

@@ -56,11 +56,52 @@ local function main()
     local setHiddenProperty = env and (env.sethiddenproperty or env.sethiddenprop) or sethiddenproperty or sethiddenprop
     local hasDirectHiddenGetter = type(getHiddenProperty) == "function"
 
-    if not getHiddenProperty and type(getHiddenProperties) == "function" then
+    local function findBulkPropertyValue(propertyTable, propName)
+        if type(propertyTable) ~= "table" then
+            return false, nil
+        end
+
+        local direct = rawget(propertyTable, propName)
+        if direct ~= nil then
+            if type(direct) == "table" and direct.Name == propName and direct.Value ~= nil then
+                return true, direct.Value
+            end
+            return true, direct
+        end
+
+        for key, value in propertyTable do
+            if key == propName then
+                return true, value
+            end
+            if type(value) == "table" and value.Name == propName then
+                if rawget(value, "Value") ~= nil then
+                    return true, value.Value
+                end
+                if rawget(value, "value") ~= nil then
+                    return true, value.value
+                end
+            end
+        end
+
+        return false, nil
+    end
+
+    if not getHiddenProperty and
+        (type(getHiddenProperties) == "function" or type(getProperties) == "function") then
         getHiddenProperty = function(obj, propName)
-            local hidden = getHiddenProperties(obj)
-            if type(hidden) == "table" then
-                return hidden[propName]
+            if type(getHiddenProperties) == "function" then
+                local hidden = getHiddenProperties(obj)
+                local found, value = findBulkPropertyValue(hidden, propName)
+                if found then
+                    return value
+                end
+            end
+            if type(getProperties) == "function" then
+                local allProperties = getProperties(obj)
+                local found, value = findBulkPropertyValue(allProperties, propName)
+                if found then
+                    return value
+                end
             end
         end
     end
@@ -866,12 +907,14 @@ local function main()
                         indexableProps[APIClassName] = apiProps
                     end
 
+                    local classVisibleNames = {}
                     for i = 1, #apiProps do
                         local prop = apiProps[i]
                         local tags = prop.Tags
                         if (not tags.Deprecated or showDeprecated) and (not tags.Hidden or showHidden) then
                             props[propCount] = prop
                             propCount = propCount + 1
+                            classVisibleNames[prop.Name] = true
                         end
                     end
 
@@ -879,8 +922,11 @@ local function main()
                     if hiddenList then
                         for i = 1, #hiddenList do
                             local hiddenProp = hiddenList[i]
-                            props[propCount] = hiddenProp
-                            propCount = propCount + 1
+                            if not classVisibleNames[hiddenProp.Name] then
+                                props[propCount] = hiddenProp
+                                propCount = propCount + 1
+                                classVisibleNames[hiddenProp.Name] = true
+                            end
                         end
                     end
                     foundClasses[APIClassName] = true

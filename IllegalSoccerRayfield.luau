@@ -16,12 +16,14 @@ local Hub = { Alive = true, Connections = {}, Patches = {}, Errors = {}, Control
 ENV[KEY] = Hub
 local S = {
     AutoPlay = false, AutoDribble = false, KickPredictionThreshold = 0.15,
-    AutoPass = false, TackleAssist = false, AutoSprint = false, InfiniteStamina = false,
-    NoBallSlowdown = false, NoKickSlow = false, SpeedBoost = false, SpeedMultiplier = 1.25,
-    IgnorePositionCorrections = false, TackleSpeed = false, TackleSpeedMultiplier = 1.5,
-    ShotRedirect = false, AutoCurve = true, AdaptiveCurveStrength = 1,
+    AutoPass = false, TackleAssist = false, SmartDodge = false, AutoToolUse = false,
+    AutoSprint = false, InfiniteStamina = false, NoBallSlowdown = false, NoKickSlow = false,
+    SpeedBoost = false, SpeedMultiplier = 1.25, IgnorePositionCorrections = false,
+    TackleSpeed = false, TackleSpeedMultiplier = 1.5, AutoJoinFriendTeam = false,
+    LooseBallTeleport = false, ShotRedirect = false, AutoCurve = true, AdaptiveCurveStrength = 1,
     RedirectDistance = 60, SuperchargeRedirectDistance = 90, ShotTargetPicker = "Adaptive",
     ShotSide = "Best", ShotTargetMarker = false, VolleyAssist = false, VolleyAssistDistance = 60,
+    FakeShotBait = false, AutoBicycleKick = false, BicycleKickChance = 35,
     AutoGoalkeeper = false, DiveTimingThreshold = 0.08, LooseBallDiveDistance = 15,
     SlowShotDiveThreshold = 0.25, BackwardDive = false, SilentAim = false,
     HitboxExpander = false, HitboxSize = 10, HitboxTransparency = 1,
@@ -37,13 +39,17 @@ local highlights = {}
 local disabledCorrections, disabledGoalEffects = {}, {}
 local goalEffectRelay
 local ballSkins = {}
-local autoSnapshot, sprintSnapshot, shotInput, passInput, forcedPass
-local moveIntent, tackleIntent, diveIntent, pendingShot
+local autoSnapshot, sprintSnapshot, shotInput, passInput, forcedPass, forcedShotTarget
+local moveIntent, tackleIntent, diveIntent, pendingShot, smartDodgeIntent
 local lastShot, lastVolley, lastDribble, lastJoin, lastDive = 0, 0, 0, 0, 0
-local lastPass, lastTackle, correctionScale = 0, 0, 1
-local cachedActors, trajectory, landing, savePlan, shotPlan = {}, {}, nil, nil, nil
+local lastPass, lastTackle, lastToolUse, correctionScale = 0, 0, 0, 1
+local cachedActors, trajectory, landing, savePlan, shotPlan, keeperAnticipation = {}, {}, nil, nil, nil, nil
 local originalTackleDistance, originalTackleStartup
 local sampleTime, sampleState, sampleWorld
+local goalPauseUntil, ballOwnedSince, looseBallSince, lastLooseTeleport = 0, 0, nil, 0
+local previousOwner, fakeBaitState, smartDodgeUntil = nil, nil, 0
+local bicycleBusy, internalShot, autoToolSlot = false, false, 0
+local toolActionId = math.floor(workspace:GetServerTimeNow() * 1000)
 local function flat(v) return Vector3.new(v.X, 0, v.Z) end
 local function unit(v, fallback) return v.Magnitude > 0.001 and v.Unit or fallback or Vector3.zAxis end
 local function rootOf(ch) return ch and ch:FindFirstChild("HumanoidRootPart") end
@@ -114,6 +120,7 @@ local function stopOwnedInputs()
     if shotInput then safe("cancel kick", M.Shoot.CancelCharge); shotInput = nil end
     if passInput then safe("cancel pass", M.Pass.CancelCharge); passInput = nil end
     forcedPass, pendingShot, moveIntent, tackleIntent, diveIntent = nil, nil, nil, nil, nil
+    forcedShotTarget, smartDodgeIntent, fakeBaitState = nil, nil, nil
     local ch = LP.Character
     if ch then safe("stop movement", M.Controllers.SetMoveCommand, ch, ZERO, false) end
 end
@@ -171,9 +178,11 @@ local function initialize()
         Protocol = module("Modules.Actions.ActionRemoteProtocol"), Volley = module("Client.Gameplay.Actions.VolleyOpportunity"),
         Keeper = module("Client.Gameplay.Player.GoalkeeperRole"), Dive = module("Modules.Actions.GoalkeeperDive"),
         Powerups = module("Modules.Actions.KickPowerups"), Charge = module("Modules.Actions.ActionChargeState"),
-        Catalog = module("Modules.Cosmetics.Catalog"), GoalEffect = module("Client.Gameplay.Visual.GoalEffect"),
-        ItemCommands = module("Modules.Items.ItemCommands"), Match = module("Modules.Gameplay.MatchSettings"),
-        Smooth = module("Client.Player.CharacterMotionSmoothing"), Curves = module("Modules.CurvedKicks"),
+        Bicycle = module("Modules.Actions.BicycleKick"), Catalog = module("Modules.Cosmetics.Catalog"),
+        GoalEffect = module("Client.Gameplay.Visual.GoalEffect"), GoalReplay = module("Client.Gameplay.Replay.GoalReplay"),
+        ItemCommands = module("Modules.Items.ItemCommands"), ItemUse = module("Client.Gameplay.ItemUseState"),
+        Match = module("Modules.Gameplay.MatchSettings"), Smooth = module("Client.Player.CharacterMotionSmoothing"),
+        Curves = module("Modules.CurvedKicks"),
     }
     Hub.Runtime = M
     originalTackleDistance = M.Slide.Constants.Distance
@@ -337,6 +346,16 @@ local function initialize()
     end
     local function redirectCommand(command)
         if not Hub.Alive or command.PassType ~= M.Commands.PassTypes.Shot then return command end
+        if forcedShotTarget then
+            local origin, target = ballPosition(), forcedShotTarget
+            forcedShotTarget = nil
+            if origin and target then
+                command = table.clone(command)
+                command.AimDirection, command.TargetPosition = nil, target
+                command.KickDirection, command.Curve = unit(flat(target - origin)), 0
+            end
+            return command
+        end
         local volley = command.Mode == M.Commands.Modes.Volley
         if not ((S.ShotRedirect and not volley) or (S.VolleyAssist and volley)) then return command end
         local _, goal = goals()
@@ -378,7 +397,13 @@ local function initialize()
     end)
     patch(M.Controllers, "SetMoveCommand", function(original)
         return function(ch, direction, ...)
-            if Hub.Alive and ch == LP.Character and moveIntent and S.AutoPlay then direction = moveIntent end
+            if Hub.Alive and ch == LP.Character then
+                if smartDodgeIntent and os.clock() < smartDodgeUntil then
+                    direction = smartDodgeIntent
+                elseif moveIntent and S.AutoPlay then
+                    direction = moveIntent
+                end
+            end
             return original(ch, direction, ...)
         end
     end)
@@ -399,6 +424,7 @@ local function initialize()
         return function(ch, ...)
             if Hub.Alive and ch == LP.Character then
                 if diveIntent then return diveIntent end
+                if smartDodgeIntent and os.clock() < smartDodgeUntil then return smartDodgeIntent end
                 if S.TackleAssist and (tackleIntent or M.SlideInput.IsSlideTackling()) then
                     return tackleDirection() or original(ch, ...)
                 end
@@ -449,6 +475,16 @@ local function initialize()
         end
     end)
     local goalRemote = RS.Remotes.Ball:FindFirstChild("GoalAnnouncement")
+    if goalRemote then
+        connect(goalRemote.OnClientEvent, function()
+            goalPauseUntil = os.clock() + math.max(3.5, safe("goal replay duration", M.Match.GetGoalReplaySeconds) or 3.5)
+            fakeBaitState, smartDodgeIntent, forcedShotTarget = nil, nil, nil
+            stopOwnedInputs()
+            moveIntent = ZERO
+            local ch = LP.Character
+            if ch then safe("goal movement stop", M.Controllers.SetMoveCommand, ch, ZERO, false) end
+        end)
+    end
     local function updateGoalEffectRelay()
         restoreGoalEffects()
         if S.GoalEffect == "Default" then return end
@@ -564,6 +600,9 @@ local function initialize()
     slider(ballTab, "Kick Prediction Threshold", "KickPredictionThreshold", 0, 0.3, 0.01, "s")
     toggle(ballTab, "Auto Pass", "AutoPass", "Responds to teammate requests and lobs over blocked lanes.")
     toggle(ballTab, "Tackle Assist", "TackleAssist")
+    toggle(ballTab, "Smart Dodge", "SmartDodge", "Dodges approaching tackles and steers away from the threat.")
+    toggle(ballTab, "Join Friend Team", "AutoJoinFriendTeam", "Prefers a friend's team when joining; falls back to the other team if it is full.")
+    toggle(ballTab, "Recover Loose Ball", "LooseBallTeleport", "Recovers a slow, unowned stuck ball after a short delay.")
     local movementTab = window:CreateTab({name = "Movement"})
     toggle(movementTab, "Auto Sprint", "AutoSprint")
     toggle(movementTab, "Infinite Stamina", "InfiniteStamina")
@@ -585,6 +624,9 @@ local function initialize()
     toggle(shooting, "Shot Target Marker", "ShotTargetMarker")
     toggle(shooting, "Volley Assist", "VolleyAssist")
     slider(shooting, "Volley Assist Distance", "VolleyAssistDistance", 1, 300, 1, " studs")
+    toggle(shooting, "Fake Shot Bait", "FakeShotBait", "Banks the first shot off a nearby wall, then takes the real shot after you regain possession.")
+    toggle(shooting, "Automatic Bicycle Kick", "AutoBicycleKick", "Chance-based rainbow flick, jump and volley when a shot is requested.")
+    slider(shooting, "Bicycle Kick Chance", "BicycleKickChance", 0, 100, 1, "%")
     local keeperTab = window:CreateTab({name = "Goalkeeper"})
     toggle(keeperTab, "Auto Goalkeeper", "AutoGoalkeeper")
     slider(keeperTab, "Dive Timing Threshold", "DiveTimingThreshold", 0.04, 0.2, 0.01, "s")
@@ -606,6 +648,8 @@ local function initialize()
     toggle(pitchTab, "Tackle Warning", "TackleWarning")
     toggle(pitchTab, "Keeper Reach", "KeeperReach")
     toggle(pitchTab, "Save Marker", "SaveMarker")
+    local itemTab = window:CreateTab({name = "Items"})
+    toggle(itemTab, "Auto Use Tools", "AutoToolUse", "Automatically equips available item slots and activates the equipped item.")
     local function catalog(category)
         local choices = {"Default"}
         for _, asset in ipairs(M.Catalog.GetFolder(category):GetChildren()) do
@@ -639,20 +683,68 @@ local function initialize()
     local function canAct(name)
         return M.Controls.IsAvailable(name) and not M.Controls.IsOnCooldown(name)
     end
-    local function beginShot(volley)
-        if shotInput or M.Shoot.IsCharging() or not canAct("Kick") then return end
+    local function beginShot(volley, duration, target)
+        if shotInput or M.Shoot.IsCharging() or not canAct("Kick") then return false end
         local input = M.Controls.CreateInput("Kick")
         shotInput = input
-        M.Shoot.HandleInputBegan(input, false)
-        local duration = volley and 0.08 or M.Shot.Constants.Kick.MaximumChargeSeconds
+        if target then forcedShotTarget = target end
+        internalShot = true
+        local ok, err = pcall(M.Shoot.HandleInputBegan, input, false)
+        internalShot = false
+        if not ok then
+            shotInput = nil
+            if target and forcedShotTarget == target then forcedShotTarget = nil end
+            error(err)
+        end
+        duration = duration or (volley and 0.08 or M.Shot.Constants.Kick.MaximumChargeSeconds)
         task.delay(duration, function()
             if Hub.Alive and shotInput == input then
                 safe("kick release", M.Shoot.HandleInputEnded, input)
                 shotInput = nil
             end
+            if target and forcedShotTarget == target then forcedShotTarget = nil end
         end)
         Hub.Stats.Actions += 1
+        return true
     end
+    local function tryBicycleKick()
+        if not S.AutoBicycleKick or bicycleBusy or not ownBall() or M.Keeper.IsGoalkeeper() or M.GoalReplay.IsActive() then return false end
+        if S.BicycleKickChance <= 0 or math.random(1, 100) > S.BicycleKickChance or not canAct("Kick") then return false end
+        local rp = root()
+        if not rp then return false end
+        local camera = workspace.CurrentCamera
+        local direction = unit(flat(rp.CFrame.LookVector))
+        local command = M.Commands.RainbowFlick({
+            ShotTime = M.Smooth.GetSmoothedServerTime(),
+            AimDirection = {
+                Origin = rp.Position,
+                Direction = direction,
+                CameraCFrame = camera and camera.CFrame or rp.CFrame,
+                IsAirborne = false,
+            },
+        })
+        local ok, err = pcall(M.Protocol.Send, command)
+        if not ok then report("bicycle flick", err); return false end
+        bicycleBusy = true
+        task.spawn(function()
+            task.wait(0.12)
+            if not Hub.Alive or not S.AutoBicycleKick then bicycleBusy = false; return end
+            safe("bicycle jump", M.Movement.Jump)
+            local deadline = os.clock() + 1.25
+            repeat task.wait(0.03) until not Hub.Alive or M.Volley.IsAvailable(LP.Character) or os.clock() >= deadline
+            if Hub.Alive and S.AutoBicycleKick and M.Volley.IsAvailable(LP.Character) then
+                safe("bicycle volley", beginShot, true, 0.12)
+            end
+            task.delay(0.35, function() bicycleBusy = false end)
+        end)
+        return true
+    end
+    patch(M.Shoot, "HandleInputBegan", function(original)
+        return function(input, processed, ...)
+            if not internalShot and not processed and S.AutoBicycleKick and ownBall() and tryBicycleKick() then return end
+            return original(input, processed, ...)
+        end
+    end)
     local function passTo(actor)
         if not actor or not actor.Root.Parent or actor.Enemy or not ownBall() or shotInput or passInput or M.Shoot.IsCharging() or not canAct("Pass") then return end
         if os.clock() - lastPass < 1.1 then return end
@@ -713,13 +805,37 @@ local function initialize()
             end
         end)
     end
-    local function threat(actor)
+    local function threatScore(actor)
         local rp = root()
-        if not rp or not actor.Enemy then return false end
+        if not rp or not actor.Enemy then return nil end
         local relative = actor.Root.Position - rp.Position
+        if relative.Magnitude > 24 then return nil end
         local relativeVelocity = M.Motion.GetVelocity(actor.Character) - M.Motion.GetVelocity(LP.Character)
-        local predicted = relative + relativeVelocity * S.KickPredictionThreshold
-        return predicted.Magnitude < 15 and (M.Slide.GetSlidingUntil(actor.Character) ~= nil or M.Charge.IsCharging(actor.Actor))
+        local predicted = relative + relativeVelocity * math.max(S.KickPredictionThreshold, 0.18)
+        local sliding = M.Slide.GetSlidingUntil(actor.Character) ~= nil
+        local charging = M.Charge.IsCharging(actor.Actor)
+        local approaching = relative:Dot(relativeVelocity) < -4
+        if not sliding and not charging and not (approaching and relative.Magnitude < 9) then return nil end
+        if predicted.Magnitude > 18 and not sliding then return nil end
+        return (24 - math.min(24, predicted.Magnitude)) + (sliding and 12 or 0) + (charging and 6 or 0) + (approaching and 3 or 0)
+    end
+    local function threat(actor) return threatScore(actor) ~= nil end
+    local function smartDodge(actor, now)
+        local rp = root()
+        if not rp or not actor then return end
+        local away = unit(flat(rp.Position - actor.Root.Position))
+        local side = Vector3.new(-away.Z, 0, away.X)
+        local velocity = flat(M.Motion.GetVelocity(actor.Character))
+        if velocity.Magnitude > 1 and side:Dot(velocity) > 0 then side = -side end
+        smartDodgeIntent = unit(away * 0.78 + side * 0.62, away)
+        smartDodgeUntil = now + 0.55
+        local input = M.Controls.CreateInput("Dribble")
+        safe("smart dodge", M.Dodge.HandleInputBegan, input, false)
+        task.delay(0.12, function()
+            if Hub.Alive then safe("smart dodge release", M.Dodge.HandleInputEnded, input) end
+        end)
+        lastDribble = now
+        Hub.Stats.Dribbles += 1
     end
     local function updatePrediction()
         table.clear(trajectory)
@@ -743,10 +859,40 @@ local function initialize()
             if hit then landing = hit.Position end
         end
     end
+    local function predictShooterTarget(goal)
+        local ballOwner = owner()
+        if not ballOwner then return nil end
+        local shooter
+        for _, actor in ipairs(cachedActors) do
+            if actor.Id == ballOwner and actor.Enemy then shooter = actor; break end
+        end
+        if not shooter then return nil end
+        local origin = shooter.Root.Position + Vector3.new(0, 1.5, 0)
+        local distance = (goal.Position - origin).Magnitude
+        local charging = M.Charge.IsCharging(shooter.Actor)
+        if not charging and distance > 70 then return nil end
+        local toGoal = unit(flat(goal.Position - origin))
+        local facing = unit(flat(shooter.Root.CFrame.LookVector), toGoal)
+        local velocity = flat(M.Motion.GetVelocity(shooter.Character))
+        if velocity.Magnitude > 3 then facing = unit(facing * 0.82 + velocity.Unit * 0.18, toGoal) end
+        local direction = unit(facing * (charging and 0.9 or 0.68) + toGoal * (charging and 0.1 or 0.32), toGoal)
+        local localOrigin = goal.CFrame:PointToObjectSpace(origin)
+        local localDirection = goal.CFrame:VectorToObjectSpace(direction)
+        if math.abs(localDirection.Z) < 0.001 then return nil end
+        local targetZ = localOrigin.Z >= 0 and goal.Size.Z * 0.5 or -goal.Size.Z * 0.5
+        local t = (targetZ - localOrigin.Z) / localDirection.Z
+        if t <= 0 then return nil end
+        local hit = localOrigin + localDirection * t
+        local x = math.clamp(hit.X, -goal.Size.X * 0.45, goal.Size.X * 0.45)
+        local y = math.clamp(hit.Y, -goal.Size.Y * 0.42, goal.Size.Y * 0.42)
+        return goal.CFrame:PointToWorldSpace(Vector3.new(x, y, targetZ))
+    end
     local function updateKeeper()
-        if not S.AutoGoalkeeper or not M.Keeper.IsGoalkeeper() or ownBall() or not sampleState then return end
+        if not S.AutoGoalkeeper or not M.Keeper.IsGoalkeeper() or ownBall() then keeperAnticipation = nil; return end
         local rp, ownGoal = root(), goals()
-        if not rp or not ownGoal then return end
+        if not rp or not ownGoal then keeperAnticipation = nil; return end
+        keeperAnticipation = predictShooterTarget(ownGoal)
+        if not sampleState then return end
         local incoming = false
         for _, point in ipairs(trajectory) do
             local p = ownGoal.CFrame:PointToObjectSpace(point.Position)
@@ -763,8 +909,10 @@ local function initialize()
                 if canReach and (incoming or distance <= S.LooseBallDiveDistance) and (S.BackwardDive or not backward) then
                     local needed = math.clamp(distance / (M.Dive.Constants.Distance / M.Dive.Constants.DurationSeconds), 0.03, 0.8)
                     local margin = point.Time - needed
-                    if margin >= -0.12 and (not best or point.Time < best.Time) then
-                        best = {Position = point.Position, Time = point.Time, Margin = margin, Direction = unit(flat(offset)), Incoming = incoming}
+                    local anticipationError = keeperAnticipation and flat(point.Position - keeperAnticipation).Magnitude or 0
+                    local score = point.Time + anticipationError * 0.002
+                    if margin >= -0.14 and (not best or score < best.Score) then
+                        best = {Position = point.Position, Time = point.Time, Margin = margin, Direction = unit(flat(offset)), Incoming = incoming, Score = score}
                     end
                 end
             end
@@ -772,46 +920,176 @@ local function initialize()
         savePlan = best
         if not best or now - lastDive < M.Dive.Constants.RepeatDelaySeconds then return end
         local slow = sampleState.Velocity.Magnitude < 40
-        local threshold = slow and S.SlowShotDiveThreshold or S.DiveTimingThreshold
+        local threshold = slow and S.SlowShotDiveThreshold or math.max(S.DiveTimingThreshold, best.Incoming and 0.1 or S.DiveTimingThreshold)
         if best.Margin <= threshold then
-            if best.Position.Y - rp.Position.Y > 4 and best.Time > 0.2 then M.Movement.Jump() end
+            if best.Position.Y - rp.Position.Y > 4 and best.Time > 0.16 then safe("keeper jump", M.Movement.Jump) end
             diveIntent = best.Direction
             local success = M.Keeper.Dive()
             diveIntent = nil
             if success then lastDive = now; Hub.Stats.Dives += 1 end
         end
     end
+    local function pickJoinTeam()
+        local counts = {Team1 = 0, Team2 = 0}
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LP then
+                local teamName = M.Teams.GetActorTeamName(player)
+                if counts[teamName] then counts[teamName] += 1 end
+            end
+        end
+        if S.AutoJoinFriendTeam then
+            local maximum = M.Match.Constants.MaximumRealTeamMembers or 5
+            for _, player in ipairs(Players:GetPlayers()) do
+                if player ~= LP then
+                    local ok, isFriend = pcall(LP.IsFriendsWith, LP, player.UserId)
+                    if ok and isFriend then
+                        local friendTeam = M.Teams.GetActorTeamName(player)
+                        if counts[friendTeam] then
+                            if counts[friendTeam] < maximum then return friendTeam end
+                            return friendTeam == "Team1" and "Team2" or "Team1"
+                        end
+                    end
+                end
+            end
+        end
+        return counts.Team1 <= counts.Team2 and "Team1" or "Team2"
+    end
+    local function updateAutoTool(now)
+        if not S.AutoToolUse or now - lastToolUse < 0.75 or M.GoalReplay.IsActive() then return end
+        lastToolUse = now
+        if M.ItemUse.IsEquipped() then
+            safe("tool hold", M.ItemUse.BeginActivationHold)
+            task.delay(0.06, function()
+                if Hub.Alive and S.AutoToolUse then
+                    safe("tool activate", M.ItemUse.ActivateEquipped)
+                    safe("tool release", M.ItemUse.ReleaseActivationHold)
+                end
+            end)
+            return
+        end
+        autoToolSlot = autoToolSlot % M.ItemCommands.Constants.SlotCount + 1
+        toolActionId += 1
+        safe("tool equip", RS.Remotes.Items.Request.FireServer, RS.Remotes.Items.Request, M.ItemCommands.UseSlot(autoToolSlot, toolActionId))
+        task.delay(0.16, function()
+            if Hub.Alive and S.AutoToolUse and M.ItemUse.IsEquipped() then
+                safe("tool hold", M.ItemUse.BeginActivationHold)
+                task.delay(0.06, function()
+                    if Hub.Alive and S.AutoToolUse then
+                        safe("tool activate", M.ItemUse.ActivateEquipped)
+                        safe("tool release", M.ItemUse.ReleaseActivationHold)
+                    end
+                end)
+            end
+        end)
+    end
+    local function updateLooseBall(now)
+        local ballOwner = owner()
+        if ballOwner ~= nil then looseBallSince = nil; return end
+        if not looseBallSince then looseBallSince = now; return end
+        if not S.LooseBallTeleport or now - looseBallSince < 0.75 or now - lastLooseTeleport < 1.5 then return end
+        local rp = root()
+        if not rp then return end
+        local state = M.Renderer.GetMovementState()
+        if state and state.Velocity and state.Velocity.Magnitude > 8 then return end
+        local remote = RS.Remotes.Ball:FindFirstChild("DebugTeleport")
+        if not remote then return end
+        lastLooseTeleport = now
+        local target = rp.Position + unit(flat(rp.CFrame.LookVector)) * 3 + Vector3.new(0, 2, 0)
+        safe("loose ball recover", remote.FireServer, remote, target)
+    end
+    local function findWallTarget(origin, ownGoal, opponentGoal)
+        local forward = unit(flat(opponentGoal.Position - ownGoal.Position))
+        local side = Vector3.new(-forward.Z, 0, forward.X)
+        local params = RaycastParams.new()
+        params.FilterType = Enum.RaycastFilterType.Exclude
+        params.FilterDescendantsInstances = {LP.Character, visuals, M.Renderer.GetBall()}
+        local best
+        for _, sign in ipairs({-1, 1}) do
+            local direction = side * sign
+            local result = workspace:Raycast(origin + Vector3.new(0, 1, 0), direction * 180, params)
+            if result and result.Distance > 8 and (not best or result.Distance < best.Distance) then
+                best = {Position = result.Position - direction * 1.5, Distance = result.Distance}
+            end
+        end
+        return best and best.Position or origin + side * 40
+    end
     local function updateAutomation()
         local rp, now, team = root(), os.clock(), myTeam()
         if not rp then return end
-        if S.AutoPlay and not team then
-            if now - lastJoin > 5 then
+
+        local ballOwner = owner()
+        if ballOwner ~= previousOwner then
+            previousOwner = ballOwner
+            if ballOwner == LP.UserId then
+                ballOwnedSince = now
+                looseBallSince = nil
+            elseif ballOwner == nil then
+                looseBallSince = now
+            else
+                looseBallSince = nil
+            end
+        end
+
+        if not team then
+            if S.AutoPlay then
+                moveIntent = ZERO
+                M.Controllers.SetMoveCommand(LP.Character, ZERO, false)
+            end
+            if (S.AutoPlay or S.AutoJoinFriendTeam) and now - lastJoin > 5 then
                 lastJoin = now
-                local counts = {Team1 = 0, Team2 = 0}
-                for _, actor in ipairs(cachedActors) do if counts[actor.Team] then counts[actor.Team] += 1 end end
-                RS.Remotes.Match.Action:FireServer(M.Match.Constants.NewModeName, counts.Team1 <= counts.Team2 and "Team1" or "Team2")
+                RS.Remotes.Match.Action:FireServer(M.Match.Constants.NewModeName, pickJoinTeam())
             end
             return
         end
-        if not team then return end
+
+        if now < goalPauseUntil or M.GoalReplay.IsActive() then
+            if S.AutoPlay then
+                moveIntent = ZERO
+                M.Controllers.SetMoveCommand(LP.Character, ZERO, false)
+            end
+            return
+        end
+
+        updateAutoTool(now)
+        updateLooseBall(now)
+
         if S.AutoSprint and not M.Keeper.IsGoalkeeper() and M.Sprint.IsSprintButtonUsable() and not M.Sprint.IsSprintButtonToggled() then M.Sprint.ToggleSprintButton() end
-        if S.AutoDribble and ownBall() and now - lastDribble > 0.2 and canAct("Dribble") then
-            for _, actor in ipairs(cachedActors) do if threat(actor) then
-                M.Dodge.HandleInputBegan(M.Controls.CreateInput("Dribble"), false)
-                lastDribble = now; Hub.Stats.Dribbles += 1; break
-            end end
+
+        if (S.AutoDribble or S.SmartDodge) and ownBall() and now - lastDribble > 0.2 and canAct("Dribble") then
+            local best, score
+            for _, actor in ipairs(cachedActors) do
+                local value = threatScore(actor)
+                if value and (not score or value > score) then best, score = actor, value end
+            end
+            if best then smartDodge(best, now) end
         end
+
         if S.VolleyAssist and not ownBall() and now - lastVolley > 0.8 and M.Volley.IsAvailable(LP.Character) then
-            lastVolley = now; beginShot(true)
+            lastVolley = now
+            beginShot(true)
         end
+
+        if fakeBaitState then
+            if ballOwner ~= LP.UserId then fakeBaitState.Released = true end
+            if now - fakeBaitState.Started > 5 then
+                fakeBaitState = nil
+            elseif fakeBaitState.Released and ballOwner == LP.UserId and now - ballOwnedSince > 0.28 and not shotInput then
+                fakeBaitState = nil
+                lastShot = now
+                if not tryBicycleKick() then beginShot(false) end
+                return
+            end
+        end
+
         if not S.AutoPlay then return end
         local pos = ballPosition()
         local ownGoal, opponentGoal = goals()
         if not pos or not opponentGoal then moveIntent = ZERO; return end
         local destination
         if M.Keeper.IsGoalkeeper() then
-            local localBall = ownGoal.CFrame:PointToObjectSpace(pos)
-            destination = ownGoal.CFrame:PointToWorldSpace(Vector3.new(math.clamp(localBall.X, -ownGoal.Size.X * 0.4, ownGoal.Size.X * 0.4), 0, -ownGoal.Size.Z / 2 - 4))
+            local tracked = keeperAnticipation or pos
+            local localTarget = ownGoal.CFrame:PointToObjectSpace(tracked)
+            destination = ownGoal.CFrame:PointToWorldSpace(Vector3.new(math.clamp(localTarget.X, -ownGoal.Size.X * 0.44, ownGoal.Size.X * 0.44), 0, -ownGoal.Size.Z / 2 - 4))
             if savePlan then destination = savePlan.Position end
             if ownBall() and now - lastPass > 2 then
                 for _, actor in ipairs(cachedActors) do
@@ -820,8 +1098,18 @@ local function initialize()
             end
         elseif ownBall() then
             destination = opponentGoal.Position
-            if (pos - opponentGoal.Position).Magnitude < activeRange() and now - lastShot > 1.4 then lastShot = now; beginShot(false) end
-            if not shotInput then
+            local readyToShoot = now - ballOwnedSince > 0.65 and not shotInput and not bicycleBusy
+            if readyToShoot and not fakeBaitState and (pos - opponentGoal.Position).Magnitude < activeRange() and now - lastShot > 1.4 then
+                lastShot = now
+                if S.FakeShotBait then
+                    local target = findWallTarget(pos, ownGoal, opponentGoal)
+                    fakeBaitState = {Started = now, Released = false}
+                    if not beginShot(false, 0.18, target) then fakeBaitState = nil end
+                elseif not tryBicycleKick() then
+                    beginShot(false)
+                end
+            end
+            if not shotInput and not fakeBaitState then
                 local nearest, score
                 for _, actor in ipairs(cachedActors) do
                     if not actor.Enemy and not actor.Keeper and (actor.Root.Position - opponentGoal.Position).Magnitude + 20 < (rp.Position - opponentGoal.Position).Magnitude then
@@ -838,8 +1126,8 @@ local function initialize()
                 local predicted = M.Physics.GetStateAtTime(table.clone(sampleState), sampleTime + travel, sampleWorld)
                 destination = predicted.Position
             end
-            if (pos - rp.Position).Magnitude < 19 and owner() and now - lastTackle > 3 and canAct("Tackle") then
-                for _, actor in ipairs(cachedActors) do if actor.Id == owner() and actor.Enemy then
+            if (pos - rp.Position).Magnitude < 19 and ballOwner and now - lastTackle > 3 and canAct("Tackle") then
+                for _, actor in ipairs(cachedActors) do if actor.Id == ballOwner and actor.Enemy then
                     M.SlideInput.HandleInputBegan(M.Controls.CreateInput("Tackle"), false); lastTackle = now; break
                 end end
             end
@@ -967,7 +1255,8 @@ local function initialize()
     function Hub:Status()
         return {Alive = self.Alive, Version = game.PlaceVersion, Team = myTeam(), Stats = self.Stats,
             Errors = self.Errors, Actors = #cachedActors, Predictions = #trajectory, Landing = landing,
-            SavePlan = savePlan, ShotPlan = shotPlan, CorrectionListenersDisabled = #disabledCorrections}
+            SavePlan = savePlan, ShotPlan = shotPlan, KeeperAnticipation = keeperAnticipation,
+            CorrectionListenersDisabled = #disabledCorrections}
     end
     Hub.PlanShot = planShot
     refreshActors()

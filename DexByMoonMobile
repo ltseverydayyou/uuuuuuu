@@ -4126,6 +4126,9 @@ local EmbeddedModules = {
 						end;
 					end;
 				end;
+				if #props > 0 then
+					props[(#props) + 1] = Properties.AddAttributeProp;
+				end;
 				table.sort(props, function(a, b)
 					if a.Category ~= b.Category then
 						return (categoryOrder[a.Category] or 9999) < (categoryOrder[b.Category] or 9999);
@@ -4141,9 +4144,6 @@ local EmbeddedModules = {
 				end);
 				Properties.ClassLists = classLists;
 				Properties.ComputeConflicts();
-				if #props > 0 then
-					props[(#props) + 1] = Properties.AddAttributeProp;
-				end;
 				Properties.Update();
 				Properties.Refresh();
 			end;
@@ -17033,7 +17033,9 @@ Main = (function()
 		insertAbove(categoryOrder, "Assembly", "Surface Inputs");
 		insertAbove(categoryOrder, "Character", "Controls");
 		categoryOrder[(#categoryOrder) + 1] = "Unscriptable";
-		categoryOrder[(#categoryOrder) + 1] = "Attributes";
+		if not table.find(categoryOrder, "Attributes") then
+			categoryOrder[(#categoryOrder) + 1] = "Attributes";
+		end;
 		local categoryOrderMap = {};
 		for i = 1, #categoryOrder do
 			categoryOrderMap[categoryOrder[i]] = i;

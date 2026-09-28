@@ -1034,6 +1034,11 @@ local function main()
             end
         end
 
+        if #props > 0 then
+            props[#props + 1] = Properties.AddAttributeProp
+            props[#props + 1] = Properties.AddTagProp
+        end
+
         table.sort(
             props,
             function(a, b)
@@ -1053,10 +1058,6 @@ local function main()
 
         Properties.ClassLists = classLists
         Properties.ComputeConflicts()
-        if #props > 0 then
-            props[#props + 1] = Properties.AddAttributeProp
-            props[#props + 1] = Properties.AddTagProp
-        end
 
         Properties.Update()
         Properties.Refresh()

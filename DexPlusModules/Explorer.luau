@@ -1885,6 +1885,22 @@ local function main()
 
 		end})]]
 
+		local function saveSelectedObject(obj, filename)
+			local options = {
+				FilePath = filename,
+				Decompile = true,
+				RemovePlayerCharacters = false
+			}
+			local nativeSave = env.native_saveinstance
+			if type(nativeSave) == "function" then
+				local ok = pcall(nativeSave, obj, options)
+				if ok then
+					return
+				end
+			end
+			env.saveinstance(obj, options)
+		end
+
 		context:Register("SAVE_INST",{Name = "Save to File", IconMap = Explorer.MiscIcons, Icon = "Save", OnClick = function()
 			local sList = selection.List
 			if #sList == 1 then
@@ -1895,11 +1911,7 @@ local function main()
 					count = 1
 				})
 				Lib.SaveAsPrompt(saveName, function(filename)
-					env.saveinstance(sList[1].Obj, {
-						FilePath = filename,
-						Decompile = true,
-						RemovePlayerCharacters = false
-					})
+					saveSelectedObject(sList[1].Obj, filename)
 				end)
 			elseif #sList > 1 then
 				for i = 1,#sList do
@@ -1910,11 +1922,7 @@ local function main()
 						count = #sList
 					})
 					Lib.SaveAsPrompt(saveName, function(filename)
-						env.saveinstance(sList[i].Obj, {
-							FilePath = filename,
-							Decompile = true,
-							RemovePlayerCharacters = false
-						})
+						saveSelectedObject(sList[i].Obj, filename)
 					end)
 					
 					task.wait(0.1)

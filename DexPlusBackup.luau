@@ -2753,7 +2753,9 @@ Main = (function()
 		insertAbove(categoryOrder,"Assembly","Surface Inputs")
 		insertAbove(categoryOrder,"Character","Controls")
 		categoryOrder[#categoryOrder+1] = "Unscriptable"
-		categoryOrder[#categoryOrder+1] = "Attributes"
+		if not table.find(categoryOrder, "Attributes") then
+			categoryOrder[#categoryOrder+1] = "Attributes"
+		end
 
 		local categoryOrderMap = {}
 		for i = 1,#categoryOrder do

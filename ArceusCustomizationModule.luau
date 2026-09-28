@@ -1777,10 +1777,6 @@ local function buildSidebarButtons()
                 pcall(function() child:Destroy() end)
             end
         end
-        if state.layout then
-            remember(state.layout, "Padding")
-            setTracked(state.layout, "Padding", UDim.new(0.045, 0))
-        end
         local function addButton(name, badgeText, order, callback)
             local button = registerCustom(state.template:Clone())
             button.Name = name
@@ -1804,7 +1800,7 @@ local function buildSidebarButtons()
             connect(button.Activated, callback)
             sidebarButtons[#sidebarButtons + 1] = button
         end
-        addButton("LT_ArceusCustomizationSidebar", "C", state.maxOrder + 1, openCustomization)
+        addButton("LT_ArceusCustomizationSidebar", "S", state.maxOrder + 1, openCustomization)
         addButton("LT_ArceusHubSidebar", "H", state.maxOrder + 2, openScriptHub)
     end
 end
@@ -1852,7 +1848,7 @@ local function buildSettingsPanel()
     })
     grad.Rotation = 0
     grad.Parent = header
-    local title = makeText(header, "Customization", 16, true)
+    local title = makeText(header, "Settings & Customization", 16, true)
     title.Position = UDim2.new(0, 12, 0, 8)
     title.Size = UDim2.new(1, -24, 0, 22)
     local desc = makeText(header, "Extra Arceus X controls that survive randomized instance names", 10, false)
@@ -2299,5 +2295,5 @@ __acm_env.ArceusCustomization = {
     save = saveConfig,
 }
 
-notify("Arceus Customization", "Loaded. Use the C-badged sidebar button to open customization.")
+notify("Arceus Customization", "Loaded. Use the S button in the sidebar to open settings.")
 return __acm_env.ArceusCustomization

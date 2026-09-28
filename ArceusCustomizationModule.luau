@@ -138,7 +138,7 @@ local StarterGui = services.StarterGui
 local TweenService = services.TweenService
 
 local runtime = {
-    version = "0.1.5",
+    version = "0.2.0",
     alive = true,
     conns = {},
     originals = setmetatable({}, { __mode = "k" }),
@@ -572,6 +572,10 @@ local defaults = {
     uiScale = 1,
     windowTransparency = -1,
     cornerRadius = -1,
+    accentColor = "#4FA4F2",
+    windowColor = "",
+    hubProvider = "RScripts",
+    hubFilter = "all",
     iconVisible = true,
     iconSize = 1,
     iconShape = "Default",
@@ -626,6 +630,14 @@ local function saveConfig()
 end
 
 loadConfig()
+
+if type(config.accentColor) ~= "string" or not config.accentColor:match("^#?%x%x%x%x%x%x$") then config.accentColor = defaults.accentColor end
+if type(config.hubProvider) ~= "string" or not table.find({ "RScripts", "ScriptBlox", "RobloxScripts", "HaxHell" }, config.hubProvider) then
+    config.hubProvider = defaults.hubProvider
+end
+if type(config.hubFilter) ~= "string" or not table.find({ "all", "keyless", "key" }, config.hubFilter) then
+    config.hubFilter = defaults.hubFilter
+end
 
 local requestFn = rawget(hostEnv, "request") or rawget(hostEnv, "http_request") or request or http_request
 local assetFn = rawget(hostEnv, "getcustomasset") or rawget(hostEnv, "getsynasset") or getcustomasset or getsynasset
@@ -690,6 +702,81 @@ local backgroundImage
 local settingsPanel
 local settingsLayout
 local sidebarButtons = {}
+local hubPage
+local hubList
+local hubStatus
+local hubSearch
+local hubProviderButton
+local hubFilterButton
+local hubPrevButton
+local hubNextButton
+local hubPageLabel
+local hubBusy = false
+local hubResults = {}
+local hubCurrentPage = 1
+local hubMaxPage = 1
+local hubSearchGeneration = 0
+
+local function colorFromHex(value)
+    if type(value) ~= "string" then
+        return nil
+    end
+    local hex = value:gsub("^%s+", ""):gsub("%s+$", ""):gsub("^#", "")
+    if #hex ~= 6 or not hex:match("^%x%x%x%x%x%x$") then
+        return nil
+    end
+    return Color3.fromRGB(tonumber(hex:sub(1, 2), 16), tonumber(hex:sub(3, 4), 16), tonumber(hex:sub(5, 6), 16))
+end
+
+local function accentColor()
+    return colorFromHex(config.accentColor) or Color3.fromRGB(79, 164, 242)
+end
+
+local function isNativeAccent(color)
+    if typeof(color) ~= "Color3" then
+        return false
+    end
+    local r, g, b = color.R * 255, color.G * 255, color.B * 255
+    return b >= 170 and g >= 100 and b - r >= 45 and math.abs(b - g) <= 105
+end
+
+local function applyAccentToObject(object)
+    if not object or object.Parent == nil then
+        return
+    end
+    local original = runtime.originals[object]
+    if object:IsA("GuiObject") then
+        local ok, color = pcall(function() return object.BackgroundColor3 end)
+        local prior = original and original.BackgroundColor3 and original.BackgroundColor3.value
+        if ok and (isNativeAccent(color) or isNativeAccent(prior)) then
+            setTracked(object, "BackgroundColor3", accentColor())
+        end
+    end
+    if object:IsA("UIStroke") then
+        local ok, color = pcall(function() return object.Color end)
+        local prior = original and original.Color and original.Color.value
+        if ok and (isNativeAccent(color) or isNativeAccent(prior)) then
+            setTracked(object, "Color", accentColor())
+        end
+    end
+end
+
+local function applyAccentColor()
+    local gui = runtime.refs.gui
+    if not gui then
+        return
+    end
+    for _, object in ipairs(gui:GetDescendants()) do
+        applyAccentToObject(object)
+        if object.Name == "LT_CustomBadge" or object:GetAttribute("LT_AccentFill") == true then
+            pcall(function() object.BackgroundColor3 = accentColor() end)
+        elseif object.Name == "LT_HubAccent" then
+            pcall(function() object.TextColor3 = accentColor() end)
+        elseif object.Name == "LT_HubResults" then
+            pcall(function() object.ScrollBarImageColor3 = accentColor() end)
+        end
+    end
+end
 
 local function applyUiScale()
     local main = runtime.refs.main
@@ -727,6 +814,19 @@ local function applyWindowTransparency()
         return
     end
     setTracked(main, "BackgroundTransparency", math.clamp(value, 0, 0.95))
+end
+
+local function applyWindowColor()
+    local main = runtime.refs.main
+    if not main then return end
+    local value = tostring(config.windowColor or "")
+    if value == "" then
+        local original = runtime.originals[main] and runtime.originals[main].BackgroundColor3
+        if original then pcall(function() main.BackgroundColor3 = original.value end) end
+        return
+    end
+    local color = colorFromHex(value)
+    if color then setTracked(main, "BackgroundColor3", color) end
 end
 
 local function applyCornerRadius()
@@ -931,8 +1031,10 @@ local function applyBackground()
 end
 
 local function applyAll()
+    applyAccentColor()
     applyUiScale()
     applyWindowTransparency()
+    applyWindowColor()
     applyCornerRadius()
     applyIconVisible()
     applyIconSize()
@@ -1027,7 +1129,7 @@ local function makeToggle(parent, getter, setter)
     local function refresh()
         local enabled = getter() == true
         button.Text = enabled and "Enabled" or "Disabled"
-        button.BackgroundColor3 = enabled and Color3.fromRGB(40, 92, 143) or Color3.fromRGB(38, 43, 54)
+        button.BackgroundColor3 = enabled and accentColor() or Color3.fromRGB(38, 43, 54)
     end
     connect(button.Activated, function()
         setter(not getter())
@@ -1042,22 +1144,25 @@ local function makeStepper(parent, getter, setter, min, max, step, formatter)
     wrap.BackgroundTransparency = 1
     wrap.AnchorPoint = Vector2.new(1, 0.5)
     wrap.Position = UDim2.new(1, 0, 0.5, 0)
-    wrap.Size = UDim2.fromOffset(138, 28)
+    wrap.Size = UDim2.new(1, 0, 0, 28)
     wrap.Parent = parent
     local minus = makeButton(wrap, "-", 30)
-    minus.Position = UDim2.fromOffset(0, 0)
+    minus.Position = UDim2.new(0, 0, 0, 0)
+    minus.Size = UDim2.new(0, 28, 1, 0)
     local value = Instance.new("TextLabel")
     value.BackgroundColor3 = Color3.fromRGB(30, 34, 43)
     value.BorderSizePixel = 0
-    value.Position = UDim2.fromOffset(34, 0)
-    value.Size = UDim2.fromOffset(70, 28)
+    value.Position = UDim2.new(0, 32, 0, 0)
+    value.Size = UDim2.new(1, -64, 1, 0)
     value.TextColor3 = Color3.fromRGB(235, 239, 247)
     value.TextSize = 11
     value.Font = Enum.Font.GothamSemibold
     value.Parent = wrap
     makeCorner(value, 7)
     local plus = makeButton(wrap, "+", 30)
-    plus.Position = UDim2.fromOffset(108, 0)
+    plus.AnchorPoint = Vector2.new(1, 0)
+    plus.Position = UDim2.new(1, 0, 0, 0)
+    plus.Size = UDim2.new(0, 28, 1, 0)
     local function refresh()
         local v = tonumber(getter()) or min
         value.Text = formatter and formatter(v) or tostring(v)
@@ -1079,6 +1184,8 @@ local function makeCycle(parent, getter, setter, values)
     local button = makeButton(parent, "", 118)
     button.AnchorPoint = Vector2.new(1, 0.5)
     button.Position = UDim2.new(1, 0, 0.5, 0)
+    button.Size = UDim2.new(1, 0, 0, 28)
+    button.TextTruncate = Enum.TextTruncate.AtEnd
     local function indexOf(value)
         for i, item in ipairs(values) do
             if item == value then
@@ -1170,6 +1277,467 @@ local function openCustomization()
     end
 end
 
+local hubProviders = { "RScripts", "ScriptBlox", "RobloxScripts", "HaxHell" }
+local hubFilters = { "all", "keyless", "key" }
+
+local function hubToast(message)
+    notify("Arceus Script Hub", tostring(message))
+end
+
+local function hubRequest(url, headers)
+    local body, status
+    if type(requestFn) == "function" then
+        local ok, response = pcall(requestFn, {
+            Url = url,
+            Method = "GET",
+            Headers = headers or { ["Accept"] = "application/json" },
+        })
+        if ok and type(response) == "table" then
+            body = response.Body or response.body
+            status = tonumber(response.StatusCode or response.Status or response.status_code) or 0
+        end
+    end
+    if type(body) ~= "string" or body == "" then
+        local ok, result = pcall(function() return game:HttpGet(url) end)
+        if ok and type(result) == "string" and result ~= "" then
+            body = result
+            status = 0
+        end
+    end
+    if type(body) ~= "string" or body == "" then
+        return nil, status or 0, "No response from script provider"
+    end
+    local ok, decoded = pcall(HttpService.JSONDecode, HttpService, body)
+    if not ok or type(decoded) ~= "table" then
+        return nil, status or 0, "Provider returned invalid JSON"
+    end
+    return decoded, status or 0
+end
+
+local function hubGetText(url)
+    if type(requestFn) == "function" then
+        local ok, response = pcall(requestFn, {
+            Url = url,
+            Method = "GET",
+            Headers = { ["Accept"] = "text/plain" },
+        })
+        if ok and type(response) == "table" then
+            local body = response.Body or response.body
+            local status = tonumber(response.StatusCode or response.Status or response.status_code) or 0
+            if type(body) == "string" and body ~= "" and (status == 0 or status >= 200 and status < 300) then
+                return body
+            end
+        end
+    end
+    local ok, body = pcall(function() return game:HttpGet(url) end)
+    if ok and type(body) == "string" and body ~= "" then
+        return body
+    end
+    return nil
+end
+
+local function hubSource(entry, provider)
+    local source, isUrl
+    if provider == "RScripts" then
+        source = entry.rawScript or entry.scriptLink or entry.raw
+        isUrl = type(source) == "string" and source:match("^https?://") ~= nil
+    elseif provider == "RobloxScripts" then
+        source = entry.script
+        if type(source) == "string" and source ~= "" and not source:match("^https?://") then
+            return source, false
+        end
+        source = entry.rawScriptUrl or entry.scriptLink or entry.raw or source
+        isUrl = type(source) == "string" and source:match("^https?://") ~= nil
+    elseif provider == "HaxHell" then
+        local links = type(entry.links) == "table" and entry.links or {}
+        local sourceData = type(entry.source) == "table" and entry.source or {}
+        source = links.raw or sourceData.rawUrl or sourceData.code or entry.rawScriptUrl or entry.script
+        isUrl = type(source) == "string" and source:match("^https?://") ~= nil
+    else
+        source = entry.script or entry.rawScript or entry.scriptLink or entry.raw
+        isUrl = type(source) == "string" and source:match("^https?://") ~= nil
+    end
+    return type(source) == "string" and source or nil, isUrl == true
+end
+
+local function hubNeedsKey(entry, provider)
+    local value
+    if provider == "RScripts" then
+        value = entry.keySystem
+    elseif provider == "HaxHell" then
+        value = type(entry.flags) == "table" and entry.flags.keySystem
+    else
+        value = entry.key
+    end
+    if value == nil and type(entry.accessType) == "string" then
+        value = entry.accessType:lower() == "key"
+    end
+    if type(value) == "boolean" then return value end
+    if type(value) == "number" then return value ~= 0 end
+    if type(value) == "string" then
+        local normalized = value:lower()
+        return normalized ~= "" and normalized ~= "false" and normalized ~= "0"
+            and normalized ~= "none" and normalized ~= "n/a"
+            and not normalized:find("no key", 1, true) and not normalized:find("keyless", 1, true)
+    end
+    return value ~= nil and value ~= false
+end
+
+local function setHubStatus(message, color)
+    if hubStatus then
+        hubStatus.Text = tostring(message or "")
+        hubStatus.TextColor3 = color or Color3.fromRGB(154, 162, 177)
+        hubStatus.Visible = message ~= nil and message ~= ""
+    end
+end
+
+local function clearHubCards()
+    if not hubList then return end
+    for _, child in ipairs(hubList:GetChildren()) do
+        if child:IsA("GuiObject") and child.Name ~= "LT_HubLayout" then
+            child:Destroy()
+        end
+    end
+end
+
+local function makeHubButton(parent, label, x, width, callback, primary)
+    local button = Instance.new("TextButton")
+    button.Name = "LT_HubButton"
+    button.AnchorPoint = Vector2.new(1, 0.5)
+    button.Position = UDim2.new(1, x, 0.5, 0)
+    button.Size = UDim2.fromOffset(width, 30)
+    button.BackgroundColor3 = primary and accentColor() or Color3.fromRGB(36, 41, 51)
+    button.BorderSizePixel = 0
+    button.AutoButtonColor = true
+    button.Text = label
+    button.TextColor3 = Color3.fromRGB(248, 250, 253)
+    button.TextSize = 11
+    button.Font = Enum.Font.GothamSemibold
+    button.Parent = parent
+    if primary then button:SetAttribute("LT_AccentFill", true) end
+    makeCorner(button, 7)
+    makeStroke(button, primary and accentColor() or Color3.fromRGB(66, 74, 90))
+    if callback then connect(button.Activated, callback) end
+    return button
+end
+
+local function renderHubResults()
+    if not hubList then return end
+    clearHubCards()
+    local provider = tostring(config.hubProvider or "RScripts")
+    local filter = tostring(config.hubFilter or "all")
+    local count = 0
+    for _, entry in ipairs(hubResults) do
+        if type(entry) == "table" then
+            local key = hubNeedsKey(entry, provider)
+            local allowed = filter == "all" or (filter == "keyless" and not key) or (filter == "key" and key)
+            if allowed then
+                count += 1
+                local card = Instance.new("Frame")
+                card.Name = "LT_HubCard"
+                card.Size = UDim2.new(1, -8, 0, 92)
+                card.BackgroundColor3 = Color3.fromRGB(23, 27, 35)
+                card.BorderSizePixel = 0
+                card.LayoutOrder = count
+                card.Parent = hubList
+                makeCorner(card, 9)
+                makeStroke(card, Color3.fromRGB(53, 62, 78))
+
+                local title = makeText(card, tostring(entry.title or entry.name or "Untitled script"), 13, true)
+                title.Position = UDim2.fromOffset(12, 7)
+                title.Size = UDim2.new(1, -174, 0, 20)
+                title.TextTruncate = Enum.TextTruncate.AtEnd
+                local gameInfo = type(entry.game) == "table" and (entry.game.title or entry.game.name) or nil
+                local gameLabel = makeText(card, tostring(gameInfo or "Unknown game"), 11, true)
+                gameLabel.Name = "LT_HubAccent"
+                gameLabel.TextColor3 = accentColor()
+                gameLabel.Position = UDim2.fromOffset(12, 29)
+                gameLabel.Size = UDim2.new(1, -174, 0, 18)
+                gameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+                local stats = type(entry.stats) == "table" and entry.stats or {}
+                local details = string.format("%s  •  Views %s  •  Likes %s",
+                    key and "Key required" or "Keyless",
+                    tostring(entry.views or entry.viewCount or stats.views or 0),
+                    tostring(entry.likes or entry.likeCount or stats.likes or 0))
+                local detail = makeText(card, details, 10, false)
+                detail.TextColor3 = Color3.fromRGB(154, 162, 177)
+                detail.Position = UDim2.fromOffset(12, 51)
+                detail.Size = UDim2.new(1, -174, 0, 18)
+                detail.TextTruncate = Enum.TextTruncate.AtEnd
+
+                local run = makeHubButton(card, "Run", -12, 64, function()
+                    local source, isUrl = hubSource(entry, provider)
+                    if not source or source == "" then
+                        hubToast("This entry does not include a script source.")
+                        return
+                    end
+                    task.spawn(function()
+                        local ok, err = pcall(function()
+                            if isUrl then
+                                source = hubGetText(source)
+                                if type(source) ~= "string" or source == "" then error("Could not download script source") end
+                            end
+                            local loader = getLoader()
+                            if type(loader) ~= "function" then error("loadstring is unavailable") end
+                            local chunk, compileError = loader(source, "@ArceusScriptHub")
+                            if type(chunk) ~= "function" then error(compileError or "Script compilation failed") end
+                            if type(__acm_boot.hostSetfenv) == "function" then
+                                pcall(__acm_boot.hostSetfenv, chunk, __acm_runtimeEnv)
+                            end
+                            chunk()
+                        end)
+                        hubToast(ok and "Script executed." or tostring(err))
+                    end)
+                end, true)
+                run.ZIndex = 2
+                local copy = makeHubButton(card, "Copy", -84, 64, function()
+                    local source, isUrl = hubSource(entry, provider)
+                    if type(setclipboard) ~= "function" then
+                        hubToast("Clipboard access is unavailable.")
+                        return
+                    end
+                    task.spawn(function()
+                        if isUrl then
+                            local result = hubGetText(source)
+                            if type(result) ~= "string" or result == "" then
+                                hubToast("Could not download the script source.")
+                                return
+                            end
+                            source = result
+                        end
+                        local ok = pcall(setclipboard, source)
+                        hubToast(ok and "Script source copied." or "Could not copy script source.")
+                    end)
+                end, false)
+                copy.ZIndex = 2
+            end
+        end
+    end
+    if count == 0 then
+        local label = makeText(hubList, #hubResults == 0 and "No scripts found." or "No scripts match this filter.", 12, true)
+        label.Name = "LT_HubEmpty"
+        label.Size = UDim2.new(1, -8, 0, 42)
+        label.TextColor3 = Color3.fromRGB(180, 188, 200)
+    end
+end
+
+local function fetchHubPage(page)
+    if hubBusy or not hubList or not HttpService then return end
+    local provider = tostring(config.hubProvider or "RScripts")
+    local query = hubSearch and hubSearch.Text or ""
+    query = query:gsub("^%s+", ""):gsub("%s+$", "")
+    page = math.max(tonumber(page) or 1, 1)
+    local encoded = HttpService:UrlEncode(query)
+    local url
+    if provider == "RScripts" then
+        url = string.format("https://rscripts.net/api/v2/scripts?page=%d&orderBy=date&sort=desc", page)
+        if query ~= "" then url = url .. "&q=" .. encoded end
+    elseif provider == "RobloxScripts" then
+        page = math.min(page, 200)
+        url = string.format("https://robloxscripts.com/api/v1/scripts?page=%d&limit=24&sort=newest", page)
+        if query ~= "" then url = url .. "&q=" .. encoded end
+    elseif provider == "HaxHell" then
+        if query == "" then
+            url = string.format("https://haxhell.com/api/v1/scripts?page=%d&limit=24&sort=latest", page)
+        else
+            url = string.format("https://haxhell.com/api/v1/search/scripts?q=%s&page=%d&limit=24&sort=latest", encoded, page)
+        end
+    else
+        url = query == "" and string.format("https://scriptblox.com/api/script/fetch?page=%d", page)
+            or string.format("https://scriptblox.com/api/script/search?q=%s&page=%d", encoded, page)
+    end
+    hubBusy = true
+    hubSearchGeneration += 1
+    local generation = hubSearchGeneration
+    if hubProviderButton then hubProviderButton.Active = false end
+    if hubFilterButton then hubFilterButton.Active = false end
+    if hubPrevButton then hubPrevButton.Active = false end
+    if hubNextButton then hubNextButton.Active = false end
+    clearHubCards()
+    setHubStatus("Loading " .. provider .. "…", accentColor())
+    task.spawn(function()
+        local decoded, status, err = hubRequest(url, { ["Accept"] = "application/json" })
+        if not runtime.alive or generation ~= hubSearchGeneration then return end
+        hubBusy = false
+        if hubProviderButton then hubProviderButton.Active = true end
+        if hubFilterButton then hubFilterButton.Active = true end
+        if hubPrevButton then hubPrevButton.Active = true end
+        if hubNextButton then hubNextButton.Active = true end
+        if not decoded or (status ~= 0 and (status < 200 or status >= 300)) then
+            setHubStatus(err or ("Request failed (" .. tostring(status) .. ")"), Color3.fromRGB(236, 119, 119))
+            return
+        end
+        local data, pages = {}, 1
+        if provider == "RScripts" then
+            data = decoded.scripts or {}
+            pages = tonumber(decoded.info and decoded.info.maxPages) or 1
+        elseif provider == "RobloxScripts" or provider == "HaxHell" then
+            data = decoded.data or {}
+            local pagination = decoded.pagination or {}
+            pages = tonumber(pagination.totalPages or pagination.pages or pagination.lastPage) or 1
+            local total = tonumber(pagination.total or pagination.totalItems)
+            local limit = tonumber(pagination.limit or pagination.perPage) or 24
+            if not pagination.totalPages and total then pages = math.ceil(total / math.max(1, limit)) end
+            page = tonumber(pagination.page or pagination.currentPage) or page
+        else
+            local result = decoded.result or {}
+            data = result.scripts or {}
+            pages = tonumber(result.totalPages) or 1
+        end
+        hubResults = type(data) == "table" and data or {}
+        hubCurrentPage = page
+        hubMaxPage = math.max(math.floor(pages), 1)
+        if hubPageLabel then hubPageLabel.Text = string.format("Page %d / %d", hubCurrentPage, hubMaxPage) end
+        setHubStatus(#hubResults > 0 and (tostring(#hubResults) .. " results · " .. provider) or "No scripts found.", nil)
+        renderHubResults()
+    end)
+end
+
+local function buildScriptHubPage()
+    local parent = runtime.refs.pageHost
+    if not parent then return false end
+    for _, child in ipairs(parent:GetChildren()) do
+        if child.Name == "LT_ArceusScriptHub" then pcall(function() child:Destroy() end) end
+    end
+    hubPage = registerCustom(Instance.new("Frame"))
+    hubPage.Name = "LT_ArceusScriptHub"
+    hubPage.BackgroundColor3 = Color3.fromRGB(16, 19, 25)
+    hubPage.BackgroundTransparency = 0.02
+    hubPage.BorderSizePixel = 0
+    hubPage.Size = UDim2.fromScale(1, 1)
+    hubPage.LayoutOrder = 900
+    hubPage.Visible = parent:FindFirstChildWhichIsA("UIPageLayout") ~= nil
+    hubPage.Parent = parent
+    makeCorner(hubPage, 12)
+    makeStroke(hubPage, Color3.fromRGB(55, 64, 80))
+    local pad = Instance.new("UIPadding")
+    pad.PaddingTop = UDim.new(0, 12)
+    pad.PaddingBottom = UDim.new(0, 10)
+    pad.PaddingLeft = UDim.new(0, 12)
+    pad.PaddingRight = UDim.new(0, 12)
+    pad.Parent = hubPage
+
+    local title = makeText(hubPage, "Script Hub", 17, true)
+    title.Position = UDim2.fromOffset(16, 11)
+    title.Size = UDim2.new(1, -32, 0, 24)
+    local subtitle = makeText(hubPage, "Search scripts from community providers. Review entries before running.", 10, false)
+    subtitle.TextColor3 = Color3.fromRGB(151, 161, 177)
+    subtitle.Position = UDim2.fromOffset(16, 34)
+    subtitle.Size = UDim2.new(1, -32, 0, 16)
+
+    local controls = Instance.new("Frame")
+    controls.BackgroundTransparency = 1
+    controls.Position = UDim2.fromOffset(14, 57)
+    controls.Size = UDim2.new(1, -28, 0, 74)
+    controls.Parent = hubPage
+    hubProviderButton = makeButton(controls, "RScripts", 128)
+    hubProviderButton.AnchorPoint = Vector2.new(0, 0)
+    hubProviderButton.Position = UDim2.fromOffset(0, 0)
+    connect(hubProviderButton.Activated, function()
+        local index = table.find(hubProviders, config.hubProvider) or 1
+        index = index % #hubProviders + 1
+        config.hubProvider = hubProviders[index]
+        hubProviderButton.Text = config.hubProvider
+        hubResults = {}
+        hubCurrentPage = 1
+        hubMaxPage = 1
+        if hubPageLabel then hubPageLabel.Text = "Page 1 / 1" end
+        clearHubCards()
+        setHubStatus("Press Search to load scripts from " .. config.hubProvider .. ".", nil)
+        saveConfig()
+    end)
+    hubFilterButton = makeButton(controls, "All", 82)
+    hubFilterButton.AnchorPoint = Vector2.new(1, 0)
+    hubFilterButton.Position = UDim2.new(1, 0, 0, 0)
+    local filterLabels = { all = "All", keyless = "Keyless", key = "Key required" }
+    hubFilterButton.Text = filterLabels[config.hubFilter] or "All"
+    connect(hubFilterButton.Activated, function()
+        local index = table.find(hubFilters, config.hubFilter) or 1
+        index = index % #hubFilters + 1
+        config.hubFilter = hubFilters[index]
+        hubFilterButton.Text = filterLabels[config.hubFilter]
+        saveConfig()
+        renderHubResults()
+    end)
+    hubSearch = Instance.new("TextBox")
+    hubSearch.Name = "LT_HubSearch"
+    hubSearch.BackgroundColor3 = Color3.fromRGB(29, 34, 43)
+    hubSearch.BorderSizePixel = 0
+    hubSearch.ClearTextOnFocus = false
+    hubSearch.PlaceholderText = "Search scripts…"
+    hubSearch.PlaceholderColor3 = Color3.fromRGB(130, 140, 157)
+    hubSearch.Text = ""
+    hubSearch.TextColor3 = Color3.fromRGB(236, 240, 247)
+    hubSearch.TextSize = 12
+    hubSearch.Font = Enum.Font.Gotham
+    hubSearch.TextXAlignment = Enum.TextXAlignment.Left
+    hubSearch.Position = UDim2.new(0, 0, 0, 38)
+    hubSearch.Size = UDim2.new(1, -82, 0, 32)
+    hubSearch.Parent = controls
+    makeCorner(hubSearch, 7)
+    makeStroke(hubSearch, Color3.fromRGB(57, 67, 83))
+    local searchButton = makeButton(controls, "Search", 74)
+    searchButton.AnchorPoint = Vector2.new(1, 0)
+    searchButton.Position = UDim2.new(1, 0, 0, 38)
+    connect(searchButton.Activated, function() fetchHubPage(1) end)
+    connect(hubSearch.FocusLost, function(enterPressed) if enterPressed then fetchHubPage(1) end end)
+
+    hubStatus = makeText(hubPage, "Choose a provider and search for scripts.", 10, false)
+    hubStatus.TextColor3 = Color3.fromRGB(151, 161, 177)
+    hubStatus.Position = UDim2.new(0, 16, 1, -27)
+    hubStatus.Size = UDim2.new(0.62, -16, 0, 18)
+    hubList = Instance.new("ScrollingFrame")
+    hubList.Name = "LT_HubResults"
+    hubList.BackgroundTransparency = 1
+    hubList.BorderSizePixel = 0
+    hubList.Position = UDim2.fromOffset(14, 139)
+    hubList.Size = UDim2.new(1, -28, 1, -174)
+    hubList.CanvasSize = UDim2.new()
+    hubList.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    hubList.ScrollBarThickness = 4
+    hubList.ScrollBarImageColor3 = accentColor()
+    hubList.Parent = hubPage
+    local layout = Instance.new("UIListLayout")
+    layout.Name = "LT_HubLayout"
+    layout.Padding = UDim.new(0, 7)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Parent = hubList
+
+    local pager = Instance.new("Frame")
+    pager.BackgroundTransparency = 1
+    pager.AnchorPoint = Vector2.new(1, 0)
+    pager.Position = UDim2.new(1, -12, 1, -30)
+    pager.Size = UDim2.new(0.36, 0, 0, 24)
+    pager.Parent = hubPage
+    hubNextButton = makeButton(pager, ">", 32)
+    hubNextButton.AnchorPoint = Vector2.new(1, 0)
+    hubNextButton.Position = UDim2.new(1, 0, 0, 0)
+    hubPrevButton = makeButton(pager, "<", 32)
+    hubPrevButton.AnchorPoint = Vector2.new(1, 0)
+    hubPrevButton.Position = UDim2.new(1, -38, 0, 0)
+    hubPageLabel = makeText(pager, "Page 1 / 1", 10, false)
+    hubPageLabel.TextXAlignment = Enum.TextXAlignment.Right
+    hubPageLabel.Position = UDim2.new(0, 0, 0, 0)
+    hubPageLabel.Size = UDim2.new(1, -78, 1, 0)
+    connect(hubPrevButton.Activated, function() if hubCurrentPage > 1 then fetchHubPage(hubCurrentPage - 1) end end)
+    connect(hubNextButton.Activated, function() if hubCurrentPage < hubMaxPage then fetchHubPage(hubCurrentPage + 1) end end)
+    setHubStatus("Choose a provider and search for scripts.", nil)
+    return true
+end
+
+local function openScriptHub()
+    local pageHost = runtime.refs.pageHost
+    if not (pageHost and hubPage and hubPage.Parent == pageHost) then return end
+    local pageLayout = pageHost:FindFirstChildWhichIsA("UIPageLayout")
+    if pageLayout then
+        pcall(function() pageLayout:JumpTo(hubPage) end)
+    else
+        for _, child in ipairs(pageHost:GetChildren()) do
+            if child:IsA("GuiObject") then child.Visible = child == hubPage end
+        end
+    end
+end
+
 local function findSidebarStates()
     local main = runtime.refs.main
     if not main then
@@ -1216,10 +1784,10 @@ end
 local function buildSidebarButtons()
     sidebarButtons = {}
     local states = findSidebarStates()
-    for index, state in ipairs(states) do
+    for _, state in ipairs(states) do
         local frame = state.frame
         for _, child in ipairs(frame:GetChildren()) do
-            if child.Name == "LT_ArceusCustomizationSidebar" then
+            if child.Name == "LT_ArceusCustomizationSidebar" or child.Name == "LT_ArceusHubSidebar" then
                 pcall(function() child:Destroy() end)
             end
         end
@@ -1227,27 +1795,31 @@ local function buildSidebarButtons()
             remember(state.layout, "Padding")
             setTracked(state.layout, "Padding", UDim.new(0.045, 0))
         end
-        local button = registerCustom(state.template:Clone())
-        button.Name = "LT_ArceusCustomizationSidebar"
-        button.LayoutOrder = state.maxOrder + 1
-        button.Parent = frame
-        local badge = Instance.new("TextLabel")
-        badge.Name = "LT_CustomBadge"
-        badge.AnchorPoint = Vector2.new(1, 1)
-        badge.Position = UDim2.new(1, 1, 1, 1)
-        badge.Size = UDim2.fromOffset(12, 12)
-        badge.BackgroundColor3 = Color3.fromRGB(42, 132, 214)
-        badge.BackgroundTransparency = 0
-        badge.BorderSizePixel = 0
-        badge.Text = "C"
-        badge.TextColor3 = Color3.new(1, 1, 1)
-        badge.TextSize = 8
-        badge.Font = Enum.Font.GothamBold
-        badge.ZIndex = button.ZIndex + 2
-        badge.Parent = button
-        makeCorner(badge, 6)
-        connect(button.Activated, openCustomization)
-        sidebarButtons[#sidebarButtons + 1] = button
+        local function addButton(name, badgeText, order, callback)
+            local button = registerCustom(state.template:Clone())
+            button.Name = name
+            button.LayoutOrder = order
+            button.Parent = frame
+            local badge = Instance.new("TextLabel")
+            badge.Name = "LT_CustomBadge"
+            badge.AnchorPoint = Vector2.new(1, 1)
+            badge.Position = UDim2.new(1, 1, 1, 1)
+            badge.Size = UDim2.fromOffset(12, 12)
+            badge.BackgroundColor3 = accentColor()
+            badge.BackgroundTransparency = 0
+            badge.BorderSizePixel = 0
+            badge.Text = badgeText
+            badge.TextColor3 = Color3.new(1, 1, 1)
+            badge.TextSize = 8
+            badge.Font = Enum.Font.GothamBold
+            badge.ZIndex = button.ZIndex + 2
+            badge.Parent = button
+            makeCorner(badge, 6)
+            connect(button.Activated, callback)
+            sidebarButtons[#sidebarButtons + 1] = button
+        end
+        addButton("LT_ArceusCustomizationSidebar", "C", state.maxOrder + 1, openCustomization)
+        addButton("LT_ArceusHubSidebar", "H", state.maxOrder + 2, openScriptHub)
     end
 end
 
@@ -1308,6 +1880,49 @@ local function buildSettingsPanel()
         r.LayoutOrder = order
         order += 1
         return r, c
+    end
+
+    do
+        local _, c = row("Accent color", "Set a hex color for highlights and custom controls", 62)
+        makeAssetInput(c, config.accentColor, function(value)
+            local parsed = colorFromHex(value)
+            if not parsed then
+                notify("Arceus Customization", "Enter a six digit hex color, such as #4FA4F2.")
+                return
+            end
+            config.accentColor = string.format("#%02X%02X%02X", math.floor(parsed.R * 255 + 0.5), math.floor(parsed.G * 255 + 0.5), math.floor(parsed.B * 255 + 0.5))
+            applyAccentColor()
+            saveConfig()
+            notify("Arceus Customization", "Accent color updated.")
+        end, "#RRGGBB")
+    end
+
+    do
+        local _, c = row("Accent presets", "Quickly switch the UI highlight color")
+        makeCycle(c, function()
+            local colors = { "#4FA4F2", "#A875F5", "#38C995", "#F06474", "#F2A84F", "#E7EAF0" }
+            for _, value in ipairs(colors) do if value == config.accentColor then return value end end
+            return "Custom"
+        end, function(value)
+            if value == "Custom" then return end
+            config.accentColor = value
+            applyAccentColor()
+            saveConfig()
+        end, { "#4FA4F2", "#A875F5", "#38C995", "#F06474", "#F2A84F", "#E7EAF0" })
+    end
+
+    do
+        local _, c = row("Window color", "Set the main window color; blank + Apply restores native", 62)
+        makeAssetInput(c, config.windowColor, function(value)
+            value = tostring(value or ""):gsub("^%s+", ""):gsub("%s+$", "")
+            if value ~= "" and not colorFromHex(value) then
+                notify("Arceus Customization", "Enter a six digit hex color, such as #171A21.")
+                return
+            end
+            config.windowColor = value == "" and "" or ("#" .. value:gsub("^#", ""):upper())
+            applyWindowColor()
+            saveConfig()
+        end, "#RRGGBB or blank")
     end
 
     do
@@ -1455,6 +2070,14 @@ end
 local function bindDynamicBehavior()
     local main = runtime.refs.main
     local icon = runtime.refs.icon
+    local gui = runtime.refs.gui
+    if gui then
+        connect(gui.DescendantAdded, function(object)
+            task.defer(function()
+                if runtime.alive then applyAccentToObject(object) end
+            end)
+        end)
+    end
     if main then
         connect(main.AncestryChanged, function(_, parent)
             if runtime.alive and parent == nil then
@@ -1526,6 +2149,7 @@ local function captureBases()
     local iconImage = runtime.refs.iconImage
     if main then
         remember(main, "BackgroundTransparency")
+        remember(main, "BackgroundColor3")
     end
     if mainCorner then
         mainCornerBase = mainCorner.CornerRadius
@@ -1604,6 +2228,18 @@ runtime.refresh = function()
     backgroundImage = nil
     settingsPanel = nil
     settingsLayout = nil
+    hubPage = nil
+    hubList = nil
+    hubStatus = nil
+    hubSearch = nil
+    hubProviderButton = nil
+    hubFilterButton = nil
+    hubPrevButton = nil
+    hubNextButton = nil
+    hubPageLabel = nil
+    hubResults = {}
+    hubBusy = false
+    hubSearchGeneration += 1
     sidebarButtons = {}
     mainScale = nil
     mainCornerBase = nil
@@ -1615,8 +2251,9 @@ runtime.refresh = function()
         return false, reason
     end
     captureBases()
-    buildSettingsPanel()
-    buildSidebarButtons()
+            buildSettingsPanel()
+            buildScriptHubPage()
+            buildSidebarButtons()
     bindDynamicBehavior()
     applyAll()
     return true
@@ -1632,6 +2269,7 @@ end
 
 captureBases()
 buildSettingsPanel()
+buildScriptHubPage()
 buildSidebarButtons()
 bindDynamicBehavior()
 applyAll()

@@ -238,10 +238,10 @@ A.cfg = {
 	ninp = false,
 	keep = false,
 	cwin = 55,
-	tlead = 18,
+	tlead = 0,
 	tdur = 12,
 	hlate = 45,
-	clead = 45,
+	clead = 0,
 	ctail = 160,
 	late = 180,
 	rhold = 65,
@@ -1536,7 +1536,7 @@ A.addseq = function(t, k, a, lead)
 		t = t,
 		k = k,
 		a = a,
-		lead = lead or 0.018
+		lead = lead or 0
 	})
 end
 
@@ -1571,14 +1571,14 @@ A.buildcatch = function(catches)
 		if t - e <= 0.35 then
 			e = t
 		else
-			A.addseq(s - A.cfg.clead / 1000, "cstart", nil, 0.01)
+			A.addseq(s, "cstart", nil, 0)
 			A.addseq(e + A.cfg.ctail / 1000, "cend", nil, 0)
 			s = t
 			e = t
 		end
 	end
 
-	A.addseq(s - A.cfg.clead / 1000, "cstart", nil, 0.01)
+	A.addseq(s, "cstart", nil, 0)
 	A.addseq(e + A.cfg.ctail / 1000, "cend", nil, 0)
 end
 
@@ -1622,10 +1622,10 @@ A.loadchart = function()
 			elseif nt == 3 then
 				relid = relid + 1
 			elseif en and en > 0 then
-				A.addseq(ts, "hstart", id, A.cfg.tlead / 1000)
+				A.addseq(ts, "hstart", id, 0)
 				A.addseq(en * bps + A.cfg.hlate / 1000, "hend", id, 0)
 			else
-				A.addseq(ts, "tap", id, A.cfg.tlead / 1000)
+				A.addseq(ts, "tap", id, 0)
 			end
 		end
 	end
@@ -2619,19 +2619,6 @@ M1:AddSlider("RusherCajonWindow", {
 	Suffix = "ms",
 	Callback = function(v)
 		A.cfg.cwin = v
-	end
-})
-
-M1:AddSlider("RusherTapLead", {
-	Text = "Tap Lead",
-	Default = 18,
-	Min = 0,
-	Max = 60,
-	Rounding = 0,
-	Suffix = "ms",
-	Callback = function(v)
-		A.cfg.tlead = v
-		A.chart.cur = nil
 	end
 })
 

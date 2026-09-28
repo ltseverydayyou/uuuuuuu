@@ -642,52 +642,6 @@ A.req = function(m)
 	return false, nil, "unavailable"
 end
 
-A.gcf = function(kind, pred, one)
-	if type(pred) ~= "function" then
-		return one and nil or {}
-	end
-
-	if type(filtergc) == "function" then
-		local opt = {}
-		local ok, res = pcall(filtergc, kind or "table", opt, one == true)
-		if ok then
-			if one and pred(res) then
-				return res
-			end
-			if type(res) == "table" then
-				local out = {}
-				for _, v in res do
-					if pred(v) then
-						if one then
-							return v
-						end
-						table.insert(out, v)
-					end
-				end
-				return out
-			end
-		end
-	end
-
-	if type(getgc) == "function" then
-		local ok, res = pcall(getgc, true)
-		if ok and type(res) == "table" then
-			local out = {}
-			for _, v in res do
-				if (not kind or type(v) == kind) and pred(v) then
-					if one then
-						return v
-					end
-					table.insert(out, v)
-				end
-			end
-			return out
-		end
-	end
-
-	return one and nil or {}
-end
-
 A.guv = function(f, n)
 	if type(f) ~= "function" or type(debug) ~= "table" then
 		return nil, nil
@@ -1184,10 +1138,10 @@ end
 
 A.inputmodes = {
 	"Auto",
-	"Game Env",
 	"Virtual Input",
 	"FireSignal",
-	"Connections"
+	"Connections",
+	"Game Env"
 }
 
 A.inputsignal = function(down)
@@ -1412,142 +1366,91 @@ A.tap = function(k, dur)
 	return true
 end
 
-A.chart = {
-	cur = nil,
-	seq = {},
-	i = 1,
-	bpms = nil,
-	last = 0,
+A.live = {
 	holds = {},
-	rkeys = {},
-	catch = false
+	catchkey = nil,
+	lastclock = 0,
+	lasttap = nil,
+	lastcatch = nil,
+	lastrelease = nil,
+	slots = {},
+	qrefs = {},
+	cursor = { tap = 1, catch = 1, release = 1, bomb = 1 },
+	clockslot = nil
 }
 
-A.same = function(a, b)
-	return math.abs((a or 0) - (b or 0)) <= 0.004
+A.upvalues = function(fn)
+	if type(fn) ~= "function" or type(debug) ~= "table" or type(debug.getupvalues) ~= "function" then
+		return nil
+	end
+	local ok, uv = pcall(debug.getupvalues, fn)
+	if ok and type(uv) == "table" then
+		return uv
+	end
+	return nil
 end
 
-A.bps = function(ch)
-	return 60 / (tonumber(ch and ch.basebpm) or 120)
-end
-
-A.mkbpm = function(ch)
-	local b = tonumber(ch and ch.basebpm) or 120
-	local src = type(ch and ch.bpms) == "table" and ch.bpms or {
-		{ beat = 0, bpm = b },
-		{ beat = 999999, bpm = b }
-	}
-
-	if #src == 0 then
-		src = {
-			{ beat = 0, bpm = b },
-			{ beat = 999999, bpm = b }
-		}
+A.uvindex = function(fn, idx)
+	if type(fn) ~= "function" or type(idx) ~= "number" or type(debug) ~= "table" or type(debug.getupvalue) ~= "function" then
+		return nil
 	end
-
-	local out = {}
-	local last = {
-		sum = 0,
-		mul = 1,
-		ms = tonumber(src[1] and src[1].beat) or 0,
-		bpm = tonumber(src[1] and src[1].bpm) or b
-	}
-
-	last.mul = last.bpm / b
-	table.insert(out, last)
-
-	for i = 2, #src do
-		local it = src[i]
-		local ms = tonumber(it.beat) or last.ms
-		local bpm = tonumber(it.bpm) or b
-		local sum = last.sum + (ms - last.ms) * last.mul
-
-		last = {
-			ms = ms,
-			sum = sum,
-			mul = bpm / b,
-			bpm = bpm
-		}
-
-		table.insert(out, last)
+	local ok, v = pcall(debug.getupvalue, fn, idx)
+	if ok then
+		return v
 	end
-
-	table.insert(out, {
-		ms = 99999999,
-		sum = last.sum + (99999999 - last.ms) * last.mul,
-		mul = last.mul,
-		bpm = last.bpm
-	})
-
-	return out
-end
-
-A.bpmnow = function(ch, pos)
-	local map = A.chart.bpms
-	if type(map) ~= "table" then
-		return pos
-	end
-
-	local old = map[1]
-	for i = 2, #map do
-		local nxt = map[i]
-		if pos <= nxt.ms then
-			return old.sum + (pos - old.ms) * old.mul
-		end
-		old = nxt
-	end
-
-	return pos
+	return nil
 end
 
 A.gnow = function()
 	local e = A.env("game")
+	local gs = A.scr("game")
+	local snd = gs and gs:FindFirstChild("Sound")
+	local spos = snd and snd.TimePosition or nil
+	local slot = A.live.clockslot
 
-	if e and type(e.playing) == "function" then
-		local v = A.guv(e.playing, "v30")
-		if type(v) == "number" then
+	if slot and slot.fn then
+		local v = A.uvindex(slot.fn, slot.idx)
+		if type(v) == "number" and (type(spos) ~= "number" or math.abs(v - spos) < 3) then
 			return v
 		end
 	end
 
-	local gs = A.scr("game")
-	local snd = gs and gs:FindFirstChild("Sound")
-	local ch = A.gget("currentchart")
-
-	if not snd or type(ch) ~= "table" then
-		return nil
+	if e and type(spos) == "number" then
+		local best = nil
+		for _, fnn in { "input", "playing" } do
+			local fn = e[fnn]
+			local uv = A.upvalues(fn)
+			if uv then
+				for idx, v in uv do
+					if type(idx) == "number" and type(v) == "number" and v >= 0 then
+						local d = math.abs(v - spos)
+						if d < 3 and (not best or d < best.d) then
+							best = { fn = fn, idx = idx, d = d, val = v }
+						end
+					end
+				end
+			end
+		end
+		if best then
+			A.live.clockslot = { fn = best.fn, idx = best.idx }
+			return best.val
+		end
 	end
 
-	local c = A.gget("CONFIGURATIONS")
-	local song = A.gget("currentsong")
-	local off = 0
-
-	off = off + (tonumber(ch.offset) or 0) / 1000
-
-	if type(c) == "table" then
-		off = off + (tonumber(c.offset) or 0) / 1000
-	end
-
-	if type(song) == "table" then
-		off = off - (tonumber(song.offset) or 0) / 1000
-	end
-
-	return A.bpmnow(ch, snd.TimePosition + off)
-end
-
-A.addseq = function(t, k, a, lead)
-	table.insert(A.chart.seq, {
-		t = t,
-		k = k,
-		a = a,
-		lead = lead or 0
-	})
+	return spos
 end
 
 A.resetkeys = function()
-	A.chart.holds = {}
-	A.chart.rkeys = {}
-	A.chart.catch = false
+	A.live.holds = {}
+	A.live.catchkey = nil
+	A.live.lastclock = 0
+	A.live.lasttap = nil
+	A.live.lastcatch = nil
+	A.live.lastrelease = nil
+	A.live.slots = {}
+	A.live.qrefs = {}
+	A.live.cursor = { tap = 1, catch = 1, release = 1, bomb = 1 }
+	A.live.clockslot = nil
 	A.upq = {}
 	A.relq2 = {}
 
@@ -1558,332 +1461,269 @@ A.resetkeys = function()
 	A.keys = {}
 end
 
-A.buildcatch = function(catches)
-	if #catches == 0 then
-		return
+A.livewindow = function()
+	local tw = tonumber(A.cfg.tw) or 2
+	if tw == 1 then
+		return 0.09
+	elseif tw == 2 then
+		return 0.075
 	end
-
-	table.sort(catches, function(a, b)
-		return a < b
-	end)
-
-	local s = catches[1]
-	local e = catches[1]
-
-	for i = 2, #catches do
-		local t = catches[i]
-		if t - e <= 0.35 then
-			e = t
-		else
-			A.addseq(s, "cstart", nil, 0)
-			A.addseq(e + A.cfg.ctail / 1000, "cend", nil, 0)
-			s = t
-			e = t
-		end
-	end
-
-	A.addseq(s, "cstart", nil, 0)
-	A.addseq(e + A.cfg.ctail / 1000, "cend", nil, 0)
+	return 0.05
 end
 
-A.loadchart = function()
-	local ch = A.gget("currentchart")
-	if type(ch) ~= "table" or type(ch.notes) ~= "table" then
-		return false
+A.queuescore = function(q, name)
+	if type(q) ~= "table" or #q == 0 then
+		return nil
 	end
 
-	if A.chart.cur == ch then
-		return true
+	local first = q[1]
+	if type(first) ~= "table" or type(first.notetype) ~= "string" or type(first.real_stime) ~= "number" then
+		return nil
 	end
 
-	A.resetkeys()
-	A.chart.cur = ch
-	A.chart.seq = {}
-	A.chart.i = 1
-	A.chart.bpms = A.mkbpm(ch)
-	A.chart.last = 0
-	A.chart.rkeys = {}
-
-	local bps = A.bps(ch)
-	local catches = {}
-	local rels = {}
-	local id = 0
-	local relid = 0
-
-	for _, n in ch.notes do
-		local nt = tonumber(n[1]) or 1
-		local st = tonumber(n[2])
-		local en = tonumber(n[3]) or -1
-		local layer = tonumber(n[5]) or 0
-
-		if st and layer >= 0 then
-			id = id + 1
-			local ts = st * bps
-
-			if nt == 4 then
-			elseif nt == 2 then
-				table.insert(catches, ts)
-			elseif nt == 3 then
-				relid = relid + 1
-			elseif en and en > 0 then
-				A.addseq(ts, "hstart", id, 0)
-				A.addseq(en * bps + A.cfg.hlate / 1000, "hend", id, 0)
+	local good = 0
+	local bad = 0
+	local lim = math.min(#q, 48)
+	for i = 1, lim do
+		local n = q[i]
+		if type(n) == "table" then
+			local nt = n.notetype
+			local match = if name == "tap" then nt == "tap" or nt == "ln" else nt == name
+			if match then
+				good += 1
 			else
-				A.addseq(ts, "tap", id, 0)
+				bad += 1
 			end
 		end
 	end
 
-	A.buildcatch(catches)
-
-	table.sort(A.chart.seq, function(a, b)
-		if a.t == b.t then
-			local o = {
-				hstart = 1,
-				cstart = 2,
-				rprep = 3,
-				tap = 4,
-				release = 5,
-				hend = 6,
-				cend = 7
-			}
-			if (o[a.k] or 99) == (o[b.k] or 99) then
-				return (a.a or 0) < (b.a or 0)
-			end
-			return (o[a.k] or 99) < (o[b.k] or 99)
-		end
-		return a.t < b.t
-	end)
-
-	return true
-end
-
-A.rprep = function(id)
-	return true
-end
-
-A.setrelidx = function(v)
-	local e = A.env("game")
-	if not e or type(v) ~= "number" then
-		return false
+	if good == 0 then
+		return nil
 	end
 
-	local ok = false
-
-	for _, n in { "release", "playing" } do
-		local fn = e[n]
-		if type(fn) == "function" and A.suv(fn, "v67", v) then
-			ok = true
-		end
-	end
-
-	return ok
+	return good / (good + bad), #q
 end
 
-A.relcur = function()
+A.livequeue = function(name)
 	local e = A.env("game")
 	if not e then
 		return nil
 	end
 
-	local t34 = nil
-	local v67 = nil
-	local v30 = nil
-	local v29 = nil
+	local cached = A.live.slots[name]
+	if cached and cached.fn then
+		local q = A.uvindex(cached.fn, cached.idx)
+		if type(q) == "table" then
+			return q
+		end
+	end
 
-	for _, n in { "release", "playing" } do
-		local fn = e[n]
-		if type(fn) == "function" then
-			if type(t34) ~= "table" then
-				t34 = A.guv(fn, "t34")
-			end
-			if type(v67) ~= "number" then
-				v67 = A.guv(fn, "v67")
-			end
-			if type(v30) ~= "number" then
-				v30 = A.guv(fn, "v30")
-			end
-			if type(v29) ~= "number" then
-				v29 = A.guv(fn, "v29")
+	local best = nil
+	for _, fnn in { "playing", "input" } do
+		local fn = e[fnn]
+		local uv = A.upvalues(fn)
+		if uv then
+			for idx, v in uv do
+				if type(idx) == "number" and type(v) == "table" then
+					local purity, len = A.queuescore(v, name)
+					if purity and (not best or purity > best.purity or purity == best.purity and len < best.len) then
+						best = { fn = fn, idx = idx, purity = purity, len = len }
+					end
+				end
 			end
 		end
 	end
 
-	if type(t34) ~= "table" or type(v67) ~= "number" then
-		return nil
-	end
-
-	if type(v30) ~= "number" then
-		v30 = A.gnow()
-	end
-
-	if type(v30) ~= "number" then
-		return nil
-	end
-
-	local start = v67
-
-	while true do
-		local note = t34[v67]
-		if type(note) ~= "table" then
-			return nil
-		end
-		if note.obj == nil or note.hitted == true or note.miss == true then
-			v67 = v67 + 1
-		else
-			break
+	if best then
+		A.live.slots[name] = { fn = best.fn, idx = best.idx }
+		local q = A.uvindex(best.fn, best.idx)
+		if type(q) == "table" then
+			return q
 		end
 	end
 
-	if v67 ~= start then
-		A.setrelidx(v67)
-	end
-
-	local note = t34[v67]
-	if type(note) ~= "table" or note.notetype ~= "release" or type(note.hit) ~= "function" then
-		return nil
-	end
-
-	return e, t34, v67, note, v30, v29
+	return nil
 end
 
-A.relplay = function()
-	local any = false
-
-	for _ = 1, 4 do
-		local e, t34, v67, note, v30, v29 = A.relcur()
-		if not e or type(note) ~= "table" then
-			break
-		end
-
-		local st = tonumber(note.real_stime)
-		if type(st) ~= "number" then
-			break
-		end
-
-		local prep = math.max(0, (tonumber(A.cfg.rhold) or 0) / 1000)
-		if st - v30 > prep then
-			break
-		end
-
-		local eps = 0
-		if type(v29) == "number" then
-			eps = math.min(math.max(v29 * 0.125, 0), 1 / 240)
-		end
-
-		if v30 + eps < st then
-			break
-		end
-
-		local ok = pcall(function()
-			note:hit(v30, false)
-		end)
-
-		if not ok then
-			break
-		end
-
-		local acc = tonumber(note.acc) or 0
-		if note.hitted == true or acc > 0 then
-			A.setrelidx(v67 + 1)
-			any = true
-		else
-			break
-		end
+A.livenote = function(name)
+	local q = A.livequeue(name)
+	if type(q) ~= "table" then
+		return nil, nil, nil
 	end
 
-	return any
+	if A.live.qrefs[name] ~= q then
+		A.live.qrefs[name] = q
+		A.live.cursor[name] = 1
+	end
+
+	local i = math.max(1, tonumber(A.live.cursor[name]) or 1)
+	local n = q[i]
+	while type(n) == "table" and (n.obj == nil or n.miss == true or n.hitted == true) do
+		i += 1
+		n = q[i]
+	end
+	A.live.cursor[name] = i
+	return n, i, q
 end
 
-A.dirrel = function()
-	return A.relplay()
+A.notetime = function(n)
+	return type(n) == "table" and tonumber(n.real_stime) or nil
 end
 
-A.relhit = function(id)
-	return A.relplay()
+A.noteend = function(n)
+	return type(n) == "table" and tonumber(n.real_etime) or nil
 end
 
-A.doev = function(ev)
-	local k = ev.k
-	local id = ev.a
+A.visualoffset = function()
+	local c = A.gget("CONFIGURATIONS")
+	return type(c) == "table" and (tonumber(c.offsetvisual) or 0) / 1000 or 0
+end
 
-	if k == "tap" then
-		A.tap()
-	elseif k == "rprep" then
-		A.rprep(id)
-	elseif k == "release" then
-		A.relhit(id)
-	elseif k == "hstart" then
-		local hk = A.nexthold()
-		if not hk then
+A.bombblocked = function(now, win)
+	local bomb = A.livenote("bomb")
+	local bt = A.notetime(bomb)
+	if not bt then
+		return false
+	end
+	return math.abs(bt - now) < win * 2.05
+end
+
+A.liveholdend = function(now)
+	for id, h in A.live.holds do
+		local n = h and h.note
+		local k = h and h.key
+		local et = A.noteend(n)
+		if not n or n.obj == nil or n.miss == true then
+			if k then
+				A.grel(k, true)
+			end
+			A.live.holds[id] = nil
+		elseif et and et > 0 and now >= et + (tonumber(A.cfg.hlate) or 0) / 1000 then
+			A.grel(k, true)
+			A.live.holds[id] = nil
+		end
+	end
+end
+
+A.livecatch = function(now, win)
+	local n = A.livenote("catch")
+	local st = A.notetime(n)
+	local ck = A.live.catchkey
+
+	if st and not A.bombblocked(now, win) then
+		local lead = math.max(win * 1.15, 0.025)
+		if st - now <= lead and st - now > -win * 2 then
+			if not ck or not A.keys[ck] then
+				ck = A.ckey
+				if A.gpress(ck, true) then
+					A.live.catchkey = ck
+				end
+			end
 			return
 		end
-		A.chart.holds[id] = hk
-		A.gpress(hk, true)
-	elseif k == "hend" then
-		local hk = A.chart.holds[id]
-		if hk then
-			A.chart.holds[id] = nil
-			A.grel(hk, true)
-		end
-	elseif k == "cstart" then
-		if not A.chart.catch then
-			A.chart.catch = true
-			A.gpress(A.ckey, true)
-		end
-	elseif k == "cend" then
-		if A.chart.catch then
-			A.chart.catch = false
-			A.grel(A.ckey, true)
+	end
+
+	if ck and A.keys[ck] then
+		local tail = math.max((tonumber(A.cfg.ctail) or 0) / 1000, win * 1.5)
+		if not st or st - now > tail then
+			A.grel(ck, true)
+			A.live.catchkey = nil
 		end
 	end
 end
 
-A.chartplay = function()
+A.liverelease = function(now, win)
+	local n = A.livenote("release")
+	local st = A.notetime(n)
+	if not st then
+		return
+	end
+
+	local vo = A.visualoffset()
+	local target = st - vo
+	if now < target then
+		return
+	end
+	if now - target > math.max(win * 1.8, 0.12) then
+		return
+	end
+
+	local id = tostring(n.id or n)
+	if A.live.lastrelease == id then
+		return
+	end
+
+	local ok = false
+	if type(n.hit) == "function" then
+		ok = pcall(function()
+			n:hit(now, false)
+		end)
+	end
+	if ok and ((tonumber(n.acc) or 0) > 0 or n.hitted == true) then
+		A.live.lastrelease = id
+	end
+end
+
+A.livetap = function(now, win)
+	local n = A.livenote("tap")
+	local st = A.notetime(n)
+	if not st or n.fake == true then
+		return
+	end
+	if A.bombblocked(now, win) then
+		return
+	end
+
+	local vo = A.visualoffset()
+	local target = st - vo
+	local early = math.max((tonumber(A.cfg.tlead) or 0) / 1000, 0)
+	if now + early < target then
+		return
+	end
+	if now - target > math.max((tonumber(A.cfg.late) or 180) / 1000, win * 1.8) then
+		return
+	end
+
+	local id = tostring(n.id or n)
+	if A.live.lasttap == id then
+		return
+	end
+
+	if n.notetype == "ln" then
+		local k = A.nexthold()
+		if not k then
+			return
+		end
+		if A.gpress(k, true) then
+			A.live.holds[id] = { note = n, key = k }
+			A.live.lasttap = id
+		end
+	else
+		local k = A.nextkey(A.kpool)
+		if k and A.tap(k, A.cfg.tdur) then
+			A.live.lasttap = id
+		end
+	end
+end
+
+A.liveplay = function()
 	A.flush()
-
-	if not A.loadchart() then
-		return
-	end
-
 	local now = A.gnow()
-	if not now then
-		return
+	if type(now) ~= "number" then
+		return false
 	end
 
-	local c = A.gget("CONFIGURATIONS")
-	local vo = 0
-
-	if type(c) == "table" then
-		vo = (tonumber(c.offsetvisual) or 0) / 1000
-	end
-
-	now = now + vo
-
-	if A.chart.last > 0 and now < A.chart.last - 1 then
-		A.chart.i = 1
+	if A.live.lastclock > 0 and now < A.live.lastclock - 0.25 then
 		A.resetkeys()
 	end
+	A.live.lastclock = now
 
-	A.chart.last = now
-
-	while true do
-		local ev = A.chart.seq[A.chart.i]
-		if not ev then
-			break
-		end
-
-		local lead = ev.lead or 0
-		if ev.t - now > lead then
-			break
-		end
-
-		if now - ev.t <= math.clamp(A.cfg.late / 1000, 0.04, 0.35) then
-			A.doev(ev)
-		end
-
-		A.chart.i = A.chart.i + 1
-	end
+	local win = A.livewindow()
+	A.liveholdend(now)
+	A.liverelease(now, win)
+	A.livecatch(now, win)
+	A.livetap(now, win)
+	return true
 end
 
 A.cajon = function()
@@ -1998,9 +1838,8 @@ A.step = function()
 
 	if enabled then
 		A.ensureap(false, false)
-		A.chartplay()
-		A.relplay()
-		A.mode = "chart:" .. tostring(A.cfg.imode or "Auto")
+		A.liveplay()
+		A.mode = "live:" .. tostring(A.cfg.imode or "Auto")
 	else
 		A.ensureap(false, false)
 		A.mode = "none"
@@ -2581,14 +2420,11 @@ end
 M1:AddToggle("RusherAutoPlay", {
 	Text = "Auto Player",
 	Default = false,
-	Tooltip = "Uses the chart scheduler with the selected input mode.",
+	Tooltip = "Tracks the game's live note queues and timing with the selected input mode.",
 	Callback = function(v)
 		A.cfg.ap = v
 		A.cfg.cap = false
 		A.setap(false)
-		A.chart.cur = nil
-		A.chart.seq = {}
-		A.chart.i = 1
 		A.resetkeys()
 	end
 })
@@ -2647,7 +2483,6 @@ M1:AddSlider("RusherHoldLate", {
 	Suffix = "ms",
 	Callback = function(v)
 		A.cfg.hlate = v
-		A.chart.cur = nil
 	end
 })
 
@@ -2660,7 +2495,6 @@ M1:AddSlider("RusherReleasePrep", {
 	Suffix = "ms",
 	Callback = function(v)
 		A.cfg.rhold = v
-		A.chart.cur = nil
 	end
 })
 
@@ -2673,7 +2507,6 @@ M1:AddSlider("RusherReleaseDelay", {
 	Suffix = "ms",
 	Callback = function(v)
 		A.cfg.rgap = v
-		A.chart.cur = nil
 	end
 })
 
@@ -2685,7 +2518,6 @@ M1:AddSlider("RusherReleaseRetries", {
 	Rounding = 0,
 	Callback = function(v)
 		A.cfg.rretry = v
-		A.chart.cur = nil
 	end
 })
 
@@ -2709,7 +2541,6 @@ M1:AddSlider("RusherCatchLead", {
 	Suffix = "ms",
 	Callback = function(v)
 		A.cfg.clead = v
-		A.chart.cur = nil
 	end
 })
 
@@ -2722,7 +2553,6 @@ M1:AddSlider("RusherCatchTail", {
 	Suffix = "ms",
 	Callback = function(v)
 		A.cfg.ctail = v
-		A.chart.cur = nil
 	end
 })
 

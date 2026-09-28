@@ -1,4 +1,4 @@
-local __lt, __lt_uip = (function()
+local __lt = (function()
 	local ge = {}
 	pcall(function()
 		if type(getgenv) == "function" then
@@ -23,7 +23,6 @@ local __lt, __lt_uip = (function()
 
 	local host = type(sh) == "table" and sh or (type(ge) == "table" and ge or nil)
 	local srUrl = "https://raw.githubusercontent.com/ltseverydayyou/ltseverydayyou.github.io/refs/heads/main/ServiceResolver.luau"
-	local uipUrl = "https://raw.githubusercontent.com/ltseverydayyou/ltseverydayyou.github.io/refs/heads/main/UIprotector.luau"
 
 	local geturl = function(url)
 		local ok, body = pcall(function()
@@ -88,7 +87,6 @@ local __lt, __lt_uip = (function()
 	end
 
 	local sr = nil
-	local uip = nil
 
 	if host then
 		pcall(function()
@@ -96,34 +94,15 @@ local __lt, __lt_uip = (function()
 			if type(old) == "table" then
 				sr = old
 			end
-			local oldUip = rawget(host, "__lt_ui_protector")
-			if type(oldUip) == "table" then
-				uip = oldUip
-			end
 		end)
 	end
 
 	sr = sr or loadurl(srUrl, "@ServiceResolver.luau")
-	uip = uip or loadurl(uipUrl, "@UIprotector.luau")
-
-	if type(uip) == "table" then
-		if type(uip.install) == "function" then
-			pcall(uip.install)
-		end
-		if type(uip.parent) == "function" then
-			pcall(uip.parent)
-		end
-	end
 
 	if host then
 		if type(sr) == "table" then
 			pcall(function()
 				host.__lt_service_resolver = sr
-			end)
-		end
-		if type(uip) == "table" then
-			pcall(function()
-				host.__lt_ui_protector = uip
 			end)
 		end
 	end
@@ -169,12 +148,10 @@ local __lt, __lt_uip = (function()
 		}
 	end
 
-	return sr, uip
+	return sr
 end)()
 
 local A = {}
-A.UIP = __lt_uip
-
 A.ex = {}
 pcall(function()
 	if type(getfenv) == "function" then
@@ -2402,60 +2379,6 @@ A.ldurl = function(url, name)
 end
 
 
-A.protectui = function(obj, name)
-	if typeof(obj) ~= "Instance" or type(A.UIP) ~= "table" or type(A.UIP.protectUI) ~= "function" then
-		return false
-	end
-
-	local opts = {
-		name = name or obj.Name,
-		keepName = true,
-		harden = true,
-		deep = true,
-		watch = true
-	}
-
-	if not obj:IsA("ScreenGui") then
-		opts.lockName = true
-	end
-
-	local ok = pcall(A.UIP.protectUI, obj, opts)
-	return ok
-end
-
-A.protectlib = function(lib, win, name)
-	local seen = {}
-
-	local function scan(t, depth)
-		if type(t) ~= "table" or depth > 2 then
-			return false
-		end
-
-		local found = false
-		for _, v in t do
-			if typeof(v) == "Instance" and not seen[v] then
-				seen[v] = true
-				if v:IsA("ScreenGui") then
-					found = A.protectui(v, name) or found
-				elseif v:IsA("GuiObject") then
-					local sg = v:FindFirstAncestorWhichIsA("ScreenGui")
-					if sg and not seen[sg] then
-						seen[sg] = true
-						found = A.protectui(sg, name) or found
-					end
-				end
-			elseif type(v) == "table" then
-				found = scan(v, depth + 1) or found
-			end
-		end
-
-		return found
-	end
-
-	return scan(lib, 0) or scan(win, 0)
-end
-
-
 local okLib, Library = A.ldurl("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/Library.lua", "@Obsidian.lua")
 if not okLib or type(Library) ~= "table" or type(Library.CreateWindow) ~= "function" then
 	warn("Rusher Autoplayer: UI library unavailable, runtime loaded without menu")
@@ -2574,7 +2497,6 @@ local W = Library:CreateWindow({
 	ToggleKeybind = Enum.KeyCode.RightControl
 })
 
-A.protectlib(Library, W, "Rusher Autoplayer")
 
 local T = {
 	Main = W:AddTab("Main", "play"),

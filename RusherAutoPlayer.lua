@@ -1216,10 +1216,6 @@ A.inputkey = function(k, down)
 		return A.connkey(sig, k, down)
 	end
 
-	if A.envkeyready() and A.evk(k, down) then
-		return true
-	end
-
 	if A.vkey(k, down) then
 		return true
 	end
@@ -1228,7 +1224,15 @@ A.inputkey = function(k, down)
 		return true
 	end
 
-	return A.connkey(sig, k, down)
+	if A.connkey(sig, k, down) then
+		return true
+	end
+
+	if A.envkeyready() then
+		return A.evk(k, down)
+	end
+
+	return false
 end
 
 A.hasin = function(list, k)
@@ -2594,7 +2598,7 @@ M1:AddDropdown("RusherInputMode", {
 	Values = A.inputmodes,
 	Default = 1,
 	Multi = false,
-	Tooltip = "Auto prefers direct Game Env input, then Virtual Input, FireSignal, and Connections.",
+	Tooltip = "Auto prefers Virtual Input, then FireSignal, Connections, and Game Env.",
 	Callback = function(v)
 		A.cfg.imode = tostring(v or "Auto")
 		A.resetkeys()

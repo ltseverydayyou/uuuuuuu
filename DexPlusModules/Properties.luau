@@ -721,11 +721,14 @@ local function main()
         if #sList > 0 then
             for i = 1, #propList do
                 local prop = propList[i]
-                if prop.IsTag then
+                if prop.IsTag or prop.SpecialRow then
                     continue
                 end
                 local propName, propClass = prop.Name, prop.Class
                 local typeData = prop.RootType or prop.ValueType
+                if not typeData then
+                    continue
+                end
                 local typeName = typeData.Name
                 local attributeName = prop.AttributeName
                 local gName = propClass .. "." .. propName
@@ -1034,6 +1037,9 @@ local function main()
             end
         end
 
+        Properties.ClassLists = classLists
+        Properties.ComputeConflicts()
+
         if #props > 0 then
             props[#props + 1] = Properties.AddAttributeProp
             props[#props + 1] = Properties.AddTagProp
@@ -1055,9 +1061,6 @@ local function main()
                 end
             end
         )
-
-        Properties.ClassLists = classLists
-        Properties.ComputeConflicts()
 
         Properties.Update()
         Properties.Refresh()

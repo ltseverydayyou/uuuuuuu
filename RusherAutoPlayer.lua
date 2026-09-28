@@ -1077,7 +1077,10 @@ A.evk = function(k, down)
 		return false
 	end
 
-	local fn = if down == false then e.release else e.input
+	local fn = e.input
+	if down == false and type(e.release) == "function" then
+		fn = e.release
+	end
 	if type(fn) ~= "function" then
 		return false
 	end
@@ -1192,7 +1195,7 @@ A.inputsignal = function(down)
 end
 
 A.envkeyready = function()
-	return A.hasenv("input") and A.hasenv("release")
+	return A.hasenv("input")
 end
 
 A.inputkey = function(k, down)
@@ -1213,19 +1216,19 @@ A.inputkey = function(k, down)
 		return A.connkey(sig, k, down)
 	end
 
-	if A.vkey(k, down) then
-		return true
-	end
-
 	if A.envkeyready() and A.evk(k, down) then
 		return true
 	end
 
-	if A.connkey(sig, k, down) then
+	if A.vkey(k, down) then
 		return true
 	end
 
-	return A.firesig(sig, k, down)
+	if A.firesig(sig, k, down) then
+		return true
+	end
+
+	return A.connkey(sig, k, down)
 end
 
 A.hasin = function(list, k)
@@ -1987,13 +1990,9 @@ A.step = function()
 	A.flush()
 	A.flushrel()
 
-	local native = A.cfg.ap == true
-	local fallback = not native and A.cfg.cap == true
+	local enabled = A.cfg.ap == true
 
-	if native then
-		A.ensureap(true, false)
-		A.mode = A.apstate and "native" or "native_unavailable"
-	elseif fallback then
+	if enabled then
 		A.ensureap(false, false)
 		A.chartplay()
 		A.relplay()
@@ -2576,42 +2575,13 @@ if Options and Options.MenuKeybind then
 end
 
 M1:AddToggle("RusherAutoPlay", {
-	Text = "Native Gameplay Auto Player",
+	Text = "Auto Player",
 	Default = false,
-	Tooltip = "Uses the gameplay script's native note queues and judgment path.",
+	Tooltip = "Uses the chart scheduler with the selected input mode.",
 	Callback = function(v)
 		A.cfg.ap = v
-
-		if v then
-			A.cfg.cap = false
-			if type(Toggles) == "table" and Toggles.RusherChartAuto and Toggles.RusherChartAuto.Value then
-				A.setctl(Toggles.RusherChartAuto, false)
-			end
-		end
-
-		A.setap(v)
-		A.chart.cur = nil
-		A.chart.seq = {}
-		A.chart.i = 1
-		A.resetkeys()
-	end
-})
-
-M1:AddToggle("RusherChartAuto", {
-	Text = "Chart Fallback Auto Player",
-	Default = false,
-	Tooltip = "Uses the chart scheduler with the selected input mode when native autoplay is unavailable.",
-	Callback = function(v)
-		A.cfg.cap = v
-
-		if v then
-			A.cfg.ap = false
-			A.setap(false)
-			if type(Toggles) == "table" and Toggles.RusherAutoPlay and Toggles.RusherAutoPlay.Value then
-				A.setctl(Toggles.RusherAutoPlay, false)
-			end
-		end
-
+		A.cfg.cap = false
+		A.setap(false)
 		A.chart.cur = nil
 		A.chart.seq = {}
 		A.chart.i = 1
@@ -2620,11 +2590,11 @@ M1:AddToggle("RusherChartAuto", {
 })
 
 M1:AddDropdown("RusherInputMode", {
-	Text = "Chart Input Mode",
+	Text = "Input Mode",
 	Values = A.inputmodes,
 	Default = 1,
 	Multi = false,
-	Tooltip = "Auto prefers Virtual Input, then a complete Game Env input/release pair, Connections, and FireSignal last. Pick a specific method when needed.",
+	Tooltip = "Auto prefers direct Game Env input, then Virtual Input, FireSignal, and Connections.",
 	Callback = function(v)
 		A.cfg.imode = tostring(v or "Auto")
 		A.resetkeys()

@@ -257,6 +257,7 @@ A.cfg = {
 	ap = false,
 	cap = false,
 	caj = false,
+	imode = "Auto",
 	ninp = false,
 	keep = false,
 	cwin = 55,
@@ -1141,26 +1142,16 @@ A.vkey = function(k, down)
 	return ok
 end
 
-A.firecons = function(sig, k, down)
-	if not sig or not k then
+A.firesig = function(sig, k, down)
+	if not sig or not k or type(firesignal) ~= "function" then
 		return false
 	end
 
-	local inp = A.fake(k, down)
-	local fired = false
+	return pcall(firesignal, sig, A.fake(k, down), false)
+end
 
-	if type(firesignal) == "function" then
-		local ok = pcall(firesignal, sig, inp, false)
-		if ok then
-			fired = true
-		end
-	end
-
-	if fired then
-		return true
-	end
-
-	if type(getconnections) ~= "function" then
+A.connkey = function(sig, k, down)
+	if not sig or not k or type(getconnections) ~= "function" then
 		return false
 	end
 
@@ -1168,6 +1159,9 @@ A.firecons = function(sig, k, down)
 	if not ok or type(cons) ~= "table" then
 		return false
 	end
+
+	local inp = A.fake(k, down)
+	local fired = false
 
 	for _, c in cons do
 		local enabled = true
@@ -1206,6 +1200,55 @@ A.firecons = function(sig, k, down)
 	end
 
 	return fired
+end
+
+A.inputmodes = {
+	"Auto",
+	"Game Env",
+	"Virtual Input",
+	"FireSignal",
+	"Connections"
+}
+
+A.inputsignal = function(down)
+	return down == false and A.uis.InputEnded or A.uis.InputBegan
+end
+
+A.envkeyready = function()
+	return A.hasenv("input") and A.hasenv("release")
+end
+
+A.inputkey = function(k, down)
+	if not k then
+		return false
+	end
+
+	local mode = tostring(A.cfg.imode or "Auto")
+	local sig = A.inputsignal(down)
+
+	if mode == "Game Env" then
+		return A.evk(k, down)
+	elseif mode == "Virtual Input" then
+		return A.vkey(k, down)
+	elseif mode == "FireSignal" then
+		return A.firesig(sig, k, down)
+	elseif mode == "Connections" then
+		return A.connkey(sig, k, down)
+	end
+
+	if A.vkey(k, down) then
+		return true
+	end
+
+	if A.envkeyready() and A.evk(k, down) then
+		return true
+	end
+
+	if A.connkey(sig, k, down) then
+		return true
+	end
+
+	return A.firesig(sig, k, down)
 end
 
 A.hasin = function(list, k)
@@ -1288,17 +1331,7 @@ A.rawpress = function(k)
 		return false
 	end
 
-	if A.evk(k, true) then
-		A.keys[k] = true
-		return true
-	end
-
-	if A.firecons(A.uis.InputBegan, k, true) then
-		A.keys[k] = true
-		return true
-	end
-
-	if A.vkey(k, true) then
+	if A.inputkey(k, true) then
 		A.keys[k] = true
 		return true
 	end
@@ -1312,20 +1345,7 @@ A.rawrel = function(k)
 	end
 
 	A.keys[k] = nil
-
-	if A.evk(k, false) then
-		return true
-	end
-
-	if A.firecons(A.uis.InputEnded, k, false) then
-		return true
-	end
-
-	if A.vkey(k, false) then
-		return true
-	end
-
-	return false
+	return A.inputkey(k, false)
 end
 
 A.gpress = function(k, force)
@@ -1338,12 +1358,7 @@ A.gpress = function(k, force)
 		return true
 	end
 
-	if A.evk(k, true) then
-		A.keys[k] = true
-		return true
-	end
-
-	if A.vkey(k, true) then
+	if A.inputkey(k, true) then
 		A.keys[k] = true
 		return true
 	end
@@ -1357,16 +1372,7 @@ A.grel = function(k, force)
 	end
 
 	A.keys[k] = nil
-
-	if A.evk(k, false) then
-		return true
-	end
-
-	if A.vkey(k, false) then
-		return true
-	end
-
-	return false
+	return A.inputkey(k, false)
 end
 
 A.relq = function(k, t)
@@ -2014,7 +2020,7 @@ A.step = function()
 		A.ensureap(false, false)
 		A.chartplay()
 		A.relplay()
-		A.mode = "chart"
+		A.mode = "chart:" .. tostring(A.cfg.imode or "Auto")
 	else
 		A.ensureap(false, false)
 		A.mode = "none"
@@ -2672,7 +2678,7 @@ M1:AddToggle("RusherAutoPlay", {
 M1:AddToggle("RusherChartAuto", {
 	Text = "Chart Fallback Auto Player",
 	Default = false,
-	Tooltip = "Uses the older synthetic input scheduler only when native autoplay is unavailable.",
+	Tooltip = "Uses the chart scheduler with the selected input mode when native autoplay is unavailable.",
 	Callback = function(v)
 		A.cfg.cap = v
 
@@ -2687,6 +2693,18 @@ M1:AddToggle("RusherChartAuto", {
 		A.chart.cur = nil
 		A.chart.seq = {}
 		A.chart.i = 1
+		A.resetkeys()
+	end
+})
+
+M1:AddDropdown("RusherInputMode", {
+	Text = "Chart Input Mode",
+	Values = A.inputmodes,
+	Default = 1,
+	Multi = false,
+	Tooltip = "Auto prefers Virtual Input, then a complete Game Env input/release pair, Connections, and FireSignal last. Pick a specific method when needed.",
+	Callback = function(v)
+		A.cfg.imode = tostring(v or "Auto")
 		A.resetkeys()
 	end
 })

@@ -4,21 +4,7 @@ local __acm_boot = {}
 __acm_boot.hostEnv = (getgenv and getgenv()) or _G or {}
 __acm_boot.hostGetfenv = type(__acm_boot.hostEnv.getfenv) == "function" and __acm_boot.hostEnv.getfenv or getfenv
 __acm_boot.hostSetfenv = type(__acm_boot.hostEnv.setfenv) == "function" and __acm_boot.hostEnv.setfenv or setfenv
-__acm_boot.debug = rawget(__acm_boot.hostEnv, "debug") or debug
-__acm_boot.registry = nil
-if type(getreg) == "function" then
-    pcall(function()
-        __acm_boot.registry = getreg()
-    end)
-end
-if type(__acm_boot.registry) ~= "table" and type(__acm_boot.debug) == "table" and type(__acm_boot.debug.getregistry) == "function" then
-    pcall(function()
-        __acm_boot.registry = __acm_boot.debug.getregistry()
-    end)
-end
-if type(__acm_boot.registry) ~= "table" then
-    __acm_boot.registry = {}
-end
+__acm_boot.registry = __acm_boot.hostEnv
 local function __acm_privateTable(parent, key)
     local value = rawget(parent, key)
     if type(value) ~= "table" then
@@ -338,6 +324,13 @@ local function scoreArceusGui(gui)
 end
 
 local function findArceusGui()
+    local preferredRootName = "ay3/_x3Jx._XQPY-k_8.u59/z1Ro_9gg4\204\182\205\162\205\159\204\182u\205\159\205\156l\205\159\205\147\205\158\204\184T\204\186\205\158\205\158\204\187l\205\158\205\152B\204\187\205\148)_\204\183\204\185\204\184\205\158cJ\204\147"
+    local preferredGuiName = "\\1tQ\192\127\136k\163%\145B\145\222\179H\154\165d)\138\148\1614"
+    local preferredRoot = CoreGui and CoreGui:FindFirstChild(preferredRootName)
+    local preferredGui = preferredRoot and preferredRoot:FindFirstChild(preferredGuiName)
+    if preferredGui and preferredGui:IsA("ScreenGui") and scoreArceusGui(preferredGui) >= 20 then
+        return preferredGui
+    end
     local best
     local bestScore = 0
     for _, gui in ipairs(gatherScreenGuis()) do

@@ -1201,14 +1201,14 @@ local reopen = Instance.new("TextButton")
 reopen.Name = "Reopen"
 reopen.AnchorPoint = Vector2.new(1, 1)
 reopen.Position = UDim2.new(1, -16, 1, -16)
-reopen.Size = UDim2.fromOffset(54, 38)
+reopen.Size = UDim2.fromOffset(S.mobile and 64 or 54, S.mobile and 48 or 38)
 reopen.BackgroundColor3 = COLORS.panel2
 reopen.BorderSizePixel = 0
 reopen.AutoButtonColor = false
 reopen.Font = Enum.Font.GothamBold
 reopen.Text = "TK"
 reopen.TextColor3 = COLORS.accent2
-reopen.TextSize = 12
+reopen.TextSize = S.mobile and 14 or 12
 reopen.Visible = false
 reopen.Parent = screen
 rounded(reopen, 12)
@@ -1248,7 +1248,7 @@ local header = Instance.new("Frame")
 header.Name = "Header"
 header.BackgroundColor3 = COLORS.panel
 header.BorderSizePixel = 0
-header.Size = UDim2.new(1, 0, 0, 54)
+header.Size = UDim2.new(1, 0, 0, S.mobile and 48 or 54)
 header.Active = true
 header.Parent = main
 rounded(header, 16)
@@ -1275,23 +1275,23 @@ headerMask.Parent = header
 
 local title = Instance.new("TextLabel")
 title.BackgroundTransparency = 1
-title.Position = UDim2.fromOffset(14, 7)
-title.Size = UDim2.new(1, -150, 0, 21)
+title.Position = UDim2.fromOffset(S.mobile and 12 or 14, S.mobile and 5 or 7)
+title.Size = UDim2.new(1, S.mobile and -188 or -150, 0, 21)
 title.Font = Enum.Font.GothamBold
 title.Text = "TELEKINESIS"
 title.TextColor3 = COLORS.text
-title.TextSize = 14
+title.TextSize = S.mobile and 15 or 14
 title.TextXAlignment = Enum.TextXAlignment.Left
 title.Parent = header
 
 local subtitle = Instance.new("TextLabel")
 subtitle.BackgroundTransparency = 1
-subtitle.Position = UDim2.fromOffset(14, 28)
-subtitle.Size = UDim2.new(1, -150, 0, 15)
+subtitle.Position = UDim2.fromOffset(S.mobile and 12 or 14, S.mobile and 26 or 28)
+subtitle.Size = UDim2.new(1, S.mobile and -188 or -150, 0, 15)
 subtitle.Font = Enum.Font.GothamMedium
 subtitle.Text = S.mobile and "TOUCH CONTROL" or "DESKTOP CONTROL"
 subtitle.TextColor3 = COLORS.accent2
-subtitle.TextSize = 8
+subtitle.TextSize = S.mobile and 9 or 8
 subtitle.TextXAlignment = Enum.TextXAlignment.Left
 subtitle.Parent = header
 
@@ -1300,14 +1300,14 @@ local function headerButton(name, textValue, xOffset, width)
 	button.Name = name
 	button.AnchorPoint = Vector2.new(1, 0.5)
 	button.Position = UDim2.new(1, xOffset, 0.5, 0)
-	button.Size = UDim2.fromOffset(width or 28, 28)
+	button.Size = UDim2.fromOffset(width or 28, S.mobile and 36 or 28)
 	button.BackgroundColor3 = COLORS.panel2
 	button.BorderSizePixel = 0
 	button.AutoButtonColor = false
 	button.Font = Enum.Font.GothamBold
 	button.Text = textValue
 	button.TextColor3 = COLORS.muted
-	button.TextSize = 9
+	button.TextSize = S.mobile and 10 or 9
 	button.Parent = header
 	rounded(button, 9)
 	local scale = Instance.new("UIScale")
@@ -1329,24 +1329,24 @@ local function headerButton(name, textValue, xOffset, width)
 	return button
 end
 
-local hide = headerButton("Hide", "HIDE", -74, 44)
-local minimize = headerButton("Minimize", "—", -40, 28)
-minimize.TextSize = 14
-local close = headerButton("Unload", "×", -8, 28)
-close.TextSize = 16
+local hide = headerButton("Hide", "HIDE", S.mobile and -104 or -74, S.mobile and 54 or 44)
+local minimize = headerButton("Minimize", "—", S.mobile and -55 or -40, S.mobile and 38 or 28)
+minimize.TextSize = S.mobile and 16 or 14
+local close = headerButton("Unload", "×", S.mobile and -10 or -8, S.mobile and 38 or 28)
+close.TextSize = S.mobile and 18 or 16
 
 local content = Instance.new("Frame")
 content.Name = "Content"
 content.BackgroundTransparency = 1
-content.Position = UDim2.fromOffset(12, 64)
-content.Size = UDim2.new(1, -24, 1, -76)
+content.Position = UDim2.fromOffset(S.mobile and 10 or 12, S.mobile and 54 or 64)
+content.Size = UDim2.new(1, S.mobile and -20 or -24, 1, S.mobile and -64 or -76)
 content.Parent = main
 
 local statusFrame = Instance.new("Frame")
 statusFrame.Name = "Status"
 statusFrame.BackgroundColor3 = COLORS.panel
 statusFrame.BorderSizePixel = 0
-statusFrame.Size = UDim2.new(1, 0, 0, 34)
+statusFrame.Size = UDim2.new(1, 0, 0, S.mobile and 36 or 34)
 statusFrame.Parent = content
 rounded(statusFrame, 10)
 stroke(statusFrame, COLORS.lineSoft, 1, 0.2)
@@ -1367,7 +1367,7 @@ statusText.Size = UDim2.new(1, -38, 1, 0)
 statusText.Font = Enum.Font.GothamMedium
 statusText.Text = "Loading"
 statusText.TextColor3 = COLORS.text
-statusText.TextSize = 10
+statusText.TextSize = S.mobile and 11 or 10
 statusText.TextXAlignment = Enum.TextXAlignment.Left
 statusText.TextTruncate = Enum.TextTruncate.AtEnd
 statusText.Parent = statusFrame
@@ -1375,20 +1375,20 @@ statusText.Parent = statusFrame
 local grabWrap = Instance.new("Frame")
 grabWrap.Name = "GrabWrap"
 grabWrap.BackgroundTransparency = 1
-grabWrap.Position = UDim2.fromOffset(0, 42)
-grabWrap.Size = UDim2.new(1, 0, 0, 54)
+grabWrap.Position = UDim2.fromOffset(0, S.mobile and 42 or 42)
+grabWrap.Size = UDim2.new(1, 0, 0, S.mobile and 48 or 54)
 grabWrap.Parent = content
 
 local grabButton = Instance.new("TextButton")
 grabButton.Name = "Grab"
 grabButton.BackgroundColor3 = COLORS.panel2
 grabButton.BorderSizePixel = 0
-grabButton.Size = UDim2.new(1, 0, 0, 36)
+grabButton.Size = UDim2.new(1, 0, 0, S.mobile and 34 or 36)
 grabButton.AutoButtonColor = false
 grabButton.Font = Enum.Font.GothamBold
 grabButton.Text = "GRAB"
 grabButton.TextColor3 = COLORS.text
-grabButton.TextSize = 11
+grabButton.TextSize = S.mobile and 12 or 11
 grabButton.Parent = grabWrap
 rounded(grabButton, 10)
 stroke(grabButton, COLORS.line, 1, 0.2)
@@ -1407,12 +1407,12 @@ end)
 
 local grabSub = Instance.new("TextLabel")
 grabSub.BackgroundTransparency = 1
-grabSub.Position = UDim2.fromOffset(2, 37)
-grabSub.Size = UDim2.new(1, -4, 0, 15)
+grabSub.Position = UDim2.fromOffset(2, S.mobile and 34 or 37)
+grabSub.Size = UDim2.new(1, -4, 0, S.mobile and 13 or 15)
 grabSub.Font = Enum.Font.Gotham
 grabSub.Text = ""
 grabSub.TextColor3 = COLORS.muted
-grabSub.TextSize = 8
+grabSub.TextSize = S.mobile and 9 or 8
 grabSub.TextXAlignment = Enum.TextXAlignment.Center
 grabSub.TextTruncate = Enum.TextTruncate.AtEnd
 grabSub.Parent = grabWrap
@@ -1421,8 +1421,8 @@ local tabBar = Instance.new("Frame")
 tabBar.Name = "Tabs"
 tabBar.BackgroundColor3 = COLORS.panel
 tabBar.BorderSizePixel = 0
-tabBar.Position = UDim2.fromOffset(0, 103)
-tabBar.Size = UDim2.new(1, 0, 0, 32)
+tabBar.Position = UDim2.fromOffset(0, S.mobile and 96 or 103)
+tabBar.Size = UDim2.new(1, 0, 0, S.mobile and 36 or 32)
 tabBar.Parent = content
 rounded(tabBar, 10)
 
@@ -1436,7 +1436,7 @@ controlsTab.AutoButtonColor = false
 controlsTab.Font = Enum.Font.GothamBold
 controlsTab.Text = "CONTROLS"
 controlsTab.TextColor3 = COLORS.text
-controlsTab.TextSize = 8
+controlsTab.TextSize = S.mobile and 9 or 8
 controlsTab.Parent = tabBar
 rounded(controlsTab, 8)
 
@@ -1451,7 +1451,7 @@ keybindsTab.AutoButtonColor = false
 keybindsTab.Font = Enum.Font.GothamBold
 keybindsTab.Text = "KEYBINDS"
 keybindsTab.TextColor3 = COLORS.muted
-keybindsTab.TextSize = 8
+keybindsTab.TextSize = S.mobile and 9 or 8
 keybindsTab.Parent = tabBar
 rounded(keybindsTab, 8)
 
@@ -1459,10 +1459,10 @@ local grid = Instance.new("ScrollingFrame")
 grid.Name = "Actions"
 grid.BackgroundTransparency = 1
 grid.BorderSizePixel = 0
-grid.Position = UDim2.fromOffset(0, 143)
-grid.Size = UDim2.new(1, 0, 1, -143)
+grid.Position = UDim2.fromOffset(0, S.mobile and 138 or 143)
+grid.Size = UDim2.new(1, 0, 1, S.mobile and -138 or -143)
 grid.CanvasSize = UDim2.fromOffset(0, 0)
-grid.ScrollBarThickness = S.mobile and 0 or 2
+grid.ScrollBarThickness = S.mobile and 3 or 2
 grid.ScrollBarImageColor3 = COLORS.accentDark
 grid.ScrollingDirection = Enum.ScrollingDirection.Y
 grid.Parent = content
@@ -1485,7 +1485,7 @@ keybindPage.BorderSizePixel = 0
 keybindPage.Position = grid.Position
 keybindPage.Size = grid.Size
 keybindPage.CanvasSize = UDim2.fromOffset(0, 0)
-keybindPage.ScrollBarThickness = S.mobile and 0 or 2
+keybindPage.ScrollBarThickness = S.mobile and 3 or 2
 keybindPage.ScrollBarImageColor3 = COLORS.accentDark
 keybindPage.Visible = false
 keybindPage.Parent = content
@@ -1524,40 +1524,40 @@ local function createActionButton(order, meta)
 	keyLabel.AnchorPoint = S.mobile and Vector2.new(1, 0) or Vector2.new(0, 0.5)
 	keyLabel.BackgroundColor3 = COLORS.panel2
 	keyLabel.BorderSizePixel = 0
-	keyLabel.Position = S.mobile and UDim2.new(1, -8, 0, 7) or UDim2.new(0, 8, 0.5, 0)
-	keyLabel.Size = UDim2.fromOffset(S.mobile and 30 or 28, 22)
+	keyLabel.Position = S.mobile and UDim2.new(1, -8, 0, 6) or UDim2.new(0, 8, 0.5, 0)
+	keyLabel.Size = UDim2.fromOffset(S.mobile and 34 or 28, S.mobile and 24 or 22)
 	keyLabel.Font = Enum.Font.GothamBold
 	keyLabel.TextColor3 = COLORS.accent2
-	keyLabel.TextSize = 9
+	keyLabel.TextSize = S.mobile and 10 or 9
 	keyLabel.TextScaled = true
 	keyLabel.TextTruncate = Enum.TextTruncate.AtEnd
 	keyLabel.Parent = button
 	local keySizeConstraint = Instance.new("UITextSizeConstraint")
-	keySizeConstraint.MinTextSize = 6
-	keySizeConstraint.MaxTextSize = 9
+	keySizeConstraint.MinTextSize = S.mobile and 7 or 6
+	keySizeConstraint.MaxTextSize = S.mobile and 10 or 9
 	keySizeConstraint.Parent = keyLabel
 	rounded(keyLabel, 6)
 	registerKeyLabel(action, keyLabel)
 
 	local nameLabel = Instance.new("TextLabel")
 	nameLabel.BackgroundTransparency = 1
-	nameLabel.Position = S.mobile and UDim2.fromOffset(10, 5) or UDim2.fromOffset(44, 0)
-	nameLabel.Size = S.mobile and UDim2.new(1, -50, 0, 22) or UDim2.fromOffset(92, 40)
+	nameLabel.Position = S.mobile and UDim2.fromOffset(10, 4) or UDim2.fromOffset(44, 0)
+	nameLabel.Size = S.mobile and UDim2.new(1, -56, 0, 22) or UDim2.fromOffset(92, 40)
 	nameLabel.Font = Enum.Font.GothamSemibold
 	nameLabel.Text = meta.name
 	nameLabel.TextColor3 = COLORS.text
-	nameLabel.TextSize = S.mobile and 10 or 10
+	nameLabel.TextSize = S.mobile and 11 or 10
 	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
 	nameLabel.Parent = button
 
 	local desc = Instance.new("TextLabel")
 	desc.BackgroundTransparency = 1
-	desc.Position = S.mobile and UDim2.fromOffset(10, 27) or UDim2.fromOffset(137, 0)
-	desc.Size = S.mobile and UDim2.new(1, -18, 0, 18) or UDim2.new(1, -145, 1, 0)
+	desc.Position = S.mobile and UDim2.fromOffset(10, 25) or UDim2.fromOffset(137, 0)
+	desc.Size = S.mobile and UDim2.new(1, -18, 0, 20) or UDim2.new(1, -145, 1, 0)
 	desc.Font = Enum.Font.Gotham
 	desc.Text = meta.description
 	desc.TextColor3 = COLORS.muted
-	desc.TextSize = 8
+	desc.TextSize = S.mobile and 9 or 8
 	desc.TextXAlignment = S.mobile and Enum.TextXAlignment.Left or Enum.TextXAlignment.Right
 	desc.TextTruncate = Enum.TextTruncate.AtEnd
 	desc.Parent = button
@@ -1614,7 +1614,7 @@ local function createKeybindRow(order, meta)
 	local row = Instance.new("Frame")
 	row.Name = meta.action
 	row.LayoutOrder = order
-	row.Size = UDim2.new(1, -4, 0, S.mobile and 46 or 40)
+	row.Size = UDim2.new(1, -4, 0, S.mobile and 44 or 40)
 	row.BackgroundColor3 = COLORS.panel
 	row.BorderSizePixel = 0
 	row.Parent = keybindPage
@@ -1628,20 +1628,20 @@ local function createKeybindRow(order, meta)
 	label.Font = Enum.Font.GothamSemibold
 	label.Text = meta.name
 	label.TextColor3 = COLORS.text
-	label.TextSize = 9
+	label.TextSize = S.mobile and 11 or 9
 	label.TextXAlignment = Enum.TextXAlignment.Left
 	label.Parent = row
 
 	local bindButton = Instance.new("TextButton")
 	bindButton.AnchorPoint = Vector2.new(1, 0.5)
 	bindButton.Position = UDim2.new(1, -8, 0.5, 0)
-	bindButton.Size = UDim2.fromOffset(78, S.mobile and 32 or 28)
+	bindButton.Size = UDim2.fromOffset(S.mobile and 88 or 78, S.mobile and 34 or 28)
 	bindButton.BackgroundColor3 = COLORS.panel2
 	bindButton.BorderSizePixel = 0
 	bindButton.AutoButtonColor = false
 	bindButton.Font = Enum.Font.GothamBold
 	bindButton.TextColor3 = COLORS.accent2
-	bindButton.TextSize = 9
+	bindButton.TextSize = S.mobile and 10 or 9
 	bindButton.TextTruncate = Enum.TextTruncate.AtEnd
 	bindButton.Parent = row
 	rounded(bindButton, 8)
@@ -1658,14 +1658,14 @@ for order, meta in ipairs(ACTION_META) do createKeybindRow(order, meta) end
 local resetBinds = Instance.new("TextButton")
 resetBinds.Name = "ResetKeybinds"
 resetBinds.LayoutOrder = #ACTION_META + 1
-resetBinds.Size = UDim2.new(1, -4, 0, 34)
+resetBinds.Size = UDim2.new(1, -4, 0, S.mobile and 40 or 34)
 resetBinds.BackgroundColor3 = Color3.fromRGB(53, 24, 70)
 resetBinds.BorderSizePixel = 0
 resetBinds.AutoButtonColor = false
 resetBinds.Font = Enum.Font.GothamBold
 resetBinds.Text = "RESET KEYBINDS"
 resetBinds.TextColor3 = COLORS.accent2
-resetBinds.TextSize = 8
+resetBinds.TextSize = S.mobile and 10 or 8
 resetBinds.Parent = keybindPage
 rounded(resetBinds, 10)
 bind(resetBinds.Activated, resetKeybinds)
@@ -1729,14 +1729,47 @@ local function getResponsiveSize()
 	if not camera then return main.Size end
 	local viewport = camera.ViewportSize
 	if S.mobile then
-		local width = math.clamp(viewport.X - 14, 300, 430)
-		local height = math.clamp(viewport.Y * 0.72, 390, 560)
+		local landscape = viewport.X > viewport.Y
+		local width = math.max(1, math.min(viewport.X - 16, landscape and 760 or 560))
+		local height = math.max(1, math.min(viewport.Y - 16, landscape and 366 or 620))
+		local wide = landscape and width >= 620
+		local columns = wide and 3 or (width >= 430 and 2 or 1)
 		actionLayout.CellPadding = UDim2.fromOffset(6, 6)
-		actionLayout.CellSize = UDim2.new(0.5, -5, 0, 54)
-		reopen.AnchorPoint = Vector2.new(1, 1)
-		reopen.Position = UDim2.new(1, -12, 1, -12)
-		reopen.Size = UDim2.fromOffset(58, 42)
-		return UDim2.fromOffset(width, math.min(height, viewport.Y - 20))
+		if columns == 3 then
+			actionLayout.CellSize = UDim2.new(1 / 3, -6, 0, 52)
+		elseif columns == 2 then
+			actionLayout.CellSize = UDim2.new(0.5, -5, 0, 52)
+		else
+			actionLayout.CellSize = UDim2.new(1, -4, 0, 52)
+		end
+
+		header.Size = UDim2.new(1, 0, 0, 48)
+		content.Position = UDim2.fromOffset(10, 54)
+		content.Size = UDim2.new(1, -20, 1, -64)
+		if wide then
+			statusFrame.Position = UDim2.fromOffset(0, 0)
+			statusFrame.Size = UDim2.new(0.42, -4, 0, 44)
+			grabWrap.Position = UDim2.new(0.42, 4, 0, 0)
+			grabWrap.Size = UDim2.new(0.58, -4, 0, 47)
+			tabBar.Position = UDim2.fromOffset(0, 52)
+			grid.Position = UDim2.fromOffset(0, 94)
+			grid.Size = UDim2.new(1, 0, 1, -94)
+		else
+			statusFrame.Position = UDim2.fromOffset(0, 0)
+			statusFrame.Size = UDim2.new(1, 0, 0, 36)
+			grabWrap.Position = UDim2.fromOffset(0, 42)
+			grabWrap.Size = UDim2.new(1, 0, 0, 48)
+			tabBar.Position = UDim2.fromOffset(0, 96)
+			grid.Position = UDim2.fromOffset(0, 138)
+			grid.Size = UDim2.new(1, 0, 1, -138)
+		end
+		keybindPage.Position = grid.Position
+		keybindPage.Size = grid.Size
+
+		reopen.AnchorPoint = Vector2.new(1, 0.5)
+		reopen.Position = UDim2.new(1, -12, 0.5, 0)
+		reopen.Size = UDim2.fromOffset(64, 48)
+		return UDim2.fromOffset(width, height)
 	end
 	local width = math.clamp(viewport.X - 24, 310, 340)
 	local height = math.clamp(viewport.Y - 80, 390, 454)
@@ -1750,7 +1783,7 @@ local function applyResponsiveSize(resetPosition)
 	if resetPosition then
 		if S.mobile then
 			main.AnchorPoint = Vector2.new(0.5, 1)
-			main.Position = UDim2.new(0.5, 0, 1, -10)
+			main.Position = UDim2.new(0.5, 0, 1, -18)
 		else
 			main.AnchorPoint = Vector2.new(1, 0.5)
 			main.Position = UDim2.new(1, -18, 0.5, 0)
@@ -1962,7 +1995,7 @@ bind(minimize.Activated, function()
 		S.ui.expandedSize = getResponsiveSize()
 		S.ui.openPosition = main.Position
 		tween(mainScale, {Scale = 0.985}, 0.1)
-		tween(main, {Size = UDim2.fromOffset(main.AbsoluteSize.X, 54)}, 0.22)
+		tween(main, {Size = UDim2.fromOffset(main.AbsoluteSize.X, S.mobile and 48 or 54)}, 0.22)
 		task.delay(0.12, function()
 			if collapsed and content and content.Parent then content.Visible = false end
 		end)

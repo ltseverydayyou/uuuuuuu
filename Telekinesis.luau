@@ -1094,7 +1094,8 @@ local function togglePhysicsOwners()
 	return true
 end
 
-local function perform(action)
+local perform
+perform = function(action)
 	if action == "multi" then
 		return multiAction()
 	elseif action == "pickview" then
@@ -1759,6 +1760,76 @@ bind(pickerLayout:GetPropertyChangedSignal("AbsoluteContentSize"), function()
 end)
 
 local floatingRows = {}
+local FLOATING_TOGGLE_ACTIONS = {
+	multi = true,
+	pickview = true,
+	noclip = true,
+	fling = true,
+	spin = true,
+	lock = true,
+	owners = true,
+}
+
+local function floatingActionEnabled(action)
+	if action == "multi" then
+		return S.multi == true
+	elseif action == "pickview" then
+		return S.pickViewArmed == true
+	elseif action == "noclip" then
+		return S.noclip == true
+	elseif action == "fling" then
+		local count = heldCount()
+		if count == 0 then return false end
+		for _, data in ipairs(S.holds) do
+			if not data.fling then return false end
+		end
+		return true
+	elseif action == "spin" then
+		local count = heldCount()
+		if count == 0 then return false end
+		for _, data in ipairs(S.holds) do
+			if not data.spinner or not data.spinner.Parent then return false end
+		end
+		return true
+	elseif action == "lock" then
+		local count = heldCount()
+		if count == 0 then return false end
+		for _, data in ipairs(S.holds) do
+			if not data.rotationLock or not data.rotationLock.Parent then return false end
+		end
+		return true
+	elseif action == "owners" then
+		local state = S.physicsOwners
+		if not state.service then return false end
+		local ok, value = pcall(function() return state.service.AreOwnersShown end)
+		return ok and value == true
+	end
+	return false
+end
+
+local function refreshFloatingShortcut(action)
+	local button = S.floatingButtons[action]
+	if not button or not button.Parent then return end
+	local meta = ACTION_BY_NAME[action]
+	local baseText = action == "grab" and "Grab / Release" or (meta and meta.name or action)
+	if FLOATING_TOGGLE_ACTIONS[action] then
+		local enabled = floatingActionEnabled(action)
+		button.Text = baseText .. (enabled and "  ON" or "  OFF")
+		button.BackgroundColor3 = enabled and COLORS.accentDark or COLORS.panel2
+		button.TextColor3 = enabled and COLORS.text or COLORS.muted
+	else
+		button.Text = baseText
+		button.BackgroundColor3 = COLORS.panel2
+		button.TextColor3 = COLORS.text
+	end
+end
+
+local function refreshFloatingStates()
+	for action in pairs(S.floatingButtons) do
+		refreshFloatingShortcut(action)
+	end
+end
+
 local function updateFloatingRow(action)
 	local row = floatingRows[action]
 	if not row then return end
@@ -1794,6 +1865,7 @@ local function makeFloatingShortcut(action, labelText)
 	rounded(button, 10)
 	stroke(button, COLORS.accentDark, 1, 0.1)
 	S.floatingButtons[action] = button
+	refreshFloatingShortcut(action)
 
 	local dragging = false
 	local moved = false
@@ -1811,7 +1883,11 @@ local function makeFloatingShortcut(action, labelText)
 	end)
 	bind(UIS.InputChanged, function(input)
 		if not dragging then return end
-		if input.UserInputType ~= Enum.UserInputType.Touch and input.UserInputType ~= Enum.UserInputType.MouseMovement then return end
+		if dragInput and dragInput.UserInputType == Enum.UserInputType.Touch then
+			if input ~= dragInput or input.UserInputType ~= Enum.UserInputType.Touch then return end
+		elseif input.UserInputType ~= Enum.UserInputType.MouseMovement then
+			return
+		end
 		local delta = input.Position - dragStart
 		if delta.Magnitude >= 8 then moved = true end
 		if moved then
@@ -1822,10 +1898,17 @@ local function makeFloatingShortcut(action, labelText)
 		if not dragging then return end
 		if input ~= dragInput and input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
 		dragging = false
-		tween(button, {BackgroundColor3 = COLORS.panel2}, 0.12)
 		if not moved then perform(action) end
+		refreshFloatingShortcut(action)
 	end)
 	updateFloatingRow(action)
+end
+
+local performRaw = perform
+perform = function(action)
+	local result = performRaw(action)
+	refreshFloatingStates()
+	return result
 end
 
 local pickerActions = {{action = "grab", name = "Grab / Release"}}
@@ -2272,7 +2355,11 @@ bind(reopen.InputBegan, function(input)
 end)
 bind(UIS.InputChanged, function(input)
 	if not (S.mobile and reopenDragging) then return end
-	if input.UserInputType ~= Enum.UserInputType.Touch and input.UserInputType ~= Enum.UserInputType.MouseMovement then return end
+	if reopenInput and reopenInput.UserInputType == Enum.UserInputType.Touch then
+		if input ~= reopenInput or input.UserInputType ~= Enum.UserInputType.Touch then return end
+	elseif input.UserInputType ~= Enum.UserInputType.MouseMovement then
+		return
+	end
 	local delta = input.Position - reopenStart
 	if delta.Magnitude >= 8 then reopenMoved = true end
 	if reopenMoved and reopenStartPosition then

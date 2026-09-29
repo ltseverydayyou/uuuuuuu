@@ -31,6 +31,8 @@ local S = {
 	character = nil,
 	equipped = false,
 	mobile = false,
+	mobileKeyboardDetected = false,
+	floatingButtons = {},
 	unloaded = false,
 	simClock = 0,
 	lastTouch = nil,
@@ -1276,7 +1278,7 @@ headerMask.Parent = header
 local title = Instance.new("TextLabel")
 title.BackgroundTransparency = 1
 title.Position = UDim2.fromOffset(S.mobile and 12 or 14, S.mobile and 5 or 7)
-title.Size = UDim2.new(1, S.mobile and -188 or -150, 0, 21)
+title.Size = UDim2.new(1, S.mobile and -238 or -150, 0, 21)
 title.Font = Enum.Font.GothamBold
 title.Text = "TELEKINESIS"
 title.TextColor3 = COLORS.text
@@ -1287,7 +1289,7 @@ title.Parent = header
 local subtitle = Instance.new("TextLabel")
 subtitle.BackgroundTransparency = 1
 subtitle.Position = UDim2.fromOffset(S.mobile and 12 or 14, S.mobile and 26 or 28)
-subtitle.Size = UDim2.new(1, S.mobile and -188 or -150, 0, 15)
+subtitle.Size = UDim2.new(1, S.mobile and -238 or -150, 0, 15)
 subtitle.Font = Enum.Font.GothamMedium
 subtitle.Text = S.mobile and "TOUCH CONTROL" or "DESKTOP CONTROL"
 subtitle.TextColor3 = COLORS.accent2
@@ -1329,6 +1331,11 @@ local function headerButton(name, textValue, xOffset, width)
 	return button
 end
 
+local floatingPickerButton
+if S.mobile then
+	floatingPickerButton = headerButton("FloatingPicker", "+", -153, 38)
+	floatingPickerButton.TextSize = 18
+end
 local hide = headerButton("Hide", "HIDE", S.mobile and -104 or -74, S.mobile and 54 or 44)
 local minimize = headerButton("Minimize", "—", S.mobile and -55 or -40, S.mobile and 38 or 28)
 minimize.TextSize = S.mobile and 16 or 14
@@ -1454,6 +1461,22 @@ keybindsTab.TextColor3 = COLORS.muted
 keybindsTab.TextSize = S.mobile and 9 or 8
 keybindsTab.Parent = tabBar
 rounded(keybindsTab, 8)
+
+local function refreshMobileKeyboardUI()
+	if not S.mobile then
+		keybindsTab.Visible = true
+		controlsTab.Size = UDim2.new(0.5, -5, 1, -6)
+		return
+	end
+	local show = S.mobileKeyboardDetected == true
+	keybindsTab.Visible = show
+	if show then
+		controlsTab.Size = UDim2.new(0.5, -5, 1, -6)
+	else
+		controlsTab.Size = UDim2.new(1, -6, 1, -6)
+	end
+end
+refreshMobileKeyboardUI()
 
 local grid = Instance.new("ScrollingFrame")
 grid.Name = "Actions"
@@ -1670,8 +1693,194 @@ resetBinds.Parent = keybindPage
 rounded(resetBinds, 10)
 bind(resetBinds.Activated, resetKeybinds)
 
+local floatingLayer = Instance.new("Frame")
+floatingLayer.Name = "FloatingControls"
+floatingLayer.BackgroundTransparency = 1
+floatingLayer.BorderSizePixel = 0
+floatingLayer.Size = UDim2.fromScale(1, 1)
+floatingLayer.Active = false
+floatingLayer.Parent = screen
+
+local floatingPicker = Instance.new("Frame")
+floatingPicker.Name = "FloatingPicker"
+floatingPicker.AnchorPoint = Vector2.new(0.5, 0.5)
+floatingPicker.Position = UDim2.fromScale(0.5, 0.5)
+floatingPicker.Size = UDim2.fromOffset(300, 300)
+floatingPicker.BackgroundColor3 = COLORS.bg2
+floatingPicker.BorderSizePixel = 0
+floatingPicker.Visible = false
+floatingPicker.ZIndex = 80
+floatingPicker.Parent = main
+rounded(floatingPicker, 14)
+stroke(floatingPicker, COLORS.accentDark, 1, 0.08)
+
+local pickerTitle = Instance.new("TextLabel")
+pickerTitle.BackgroundTransparency = 1
+pickerTitle.Position = UDim2.fromOffset(12, 8)
+pickerTitle.Size = UDim2.new(1, -54, 0, 28)
+pickerTitle.Font = Enum.Font.GothamBold
+pickerTitle.Text = "FLOATING BUTTONS"
+pickerTitle.TextColor3 = COLORS.text
+pickerTitle.TextSize = 12
+pickerTitle.TextXAlignment = Enum.TextXAlignment.Left
+pickerTitle.ZIndex = 81
+pickerTitle.Parent = floatingPicker
+
+local pickerClose = Instance.new("TextButton")
+pickerClose.AnchorPoint = Vector2.new(1, 0)
+pickerClose.Position = UDim2.new(1, -8, 0, 8)
+pickerClose.Size = UDim2.fromOffset(34, 28)
+pickerClose.BackgroundColor3 = COLORS.panel2
+pickerClose.BorderSizePixel = 0
+pickerClose.Text = "×"
+pickerClose.TextColor3 = COLORS.text
+pickerClose.TextSize = 16
+pickerClose.Font = Enum.Font.GothamBold
+pickerClose.ZIndex = 81
+pickerClose.Parent = floatingPicker
+rounded(pickerClose, 8)
+
+local pickerList = Instance.new("ScrollingFrame")
+pickerList.BackgroundTransparency = 1
+pickerList.BorderSizePixel = 0
+pickerList.Position = UDim2.fromOffset(10, 44)
+pickerList.Size = UDim2.new(1, -20, 1, -54)
+pickerList.CanvasSize = UDim2.fromOffset(0, 0)
+pickerList.ScrollBarThickness = 3
+pickerList.ScrollBarImageColor3 = COLORS.accentDark
+pickerList.ZIndex = 81
+pickerList.Parent = floatingPicker
+local pickerLayout = Instance.new("UIListLayout")
+pickerLayout.Padding = UDim.new(0, 6)
+pickerLayout.SortOrder = Enum.SortOrder.LayoutOrder
+pickerLayout.Parent = pickerList
+bind(pickerLayout:GetPropertyChangedSignal("AbsoluteContentSize"), function()
+	pickerList.CanvasSize = UDim2.fromOffset(0, pickerLayout.AbsoluteContentSize.Y + 6)
+end)
+
+local floatingRows = {}
+local function updateFloatingRow(action)
+	local row = floatingRows[action]
+	if not row then return end
+	local enabled = S.floatingButtons[action] ~= nil
+	row.Text = enabled and "REMOVE" or "ADD"
+	row.TextColor3 = enabled and COLORS.bad or COLORS.good
+end
+
+local function makeFloatingShortcut(action, labelText)
+	if S.floatingButtons[action] then
+		S.floatingButtons[action]:Destroy()
+		S.floatingButtons[action] = nil
+		updateFloatingRow(action)
+		return
+	end
+	local button = Instance.new("TextButton")
+	button.Name = "Floating_" .. action
+	button.AnchorPoint = Vector2.new(1, 0.5)
+	local index = 0
+	for _ in pairs(S.floatingButtons) do index += 1 end
+	button.Position = UDim2.new(1, -84 - (index % 3) * 72, 0.5, (math.floor(index / 3) * 52) - 52)
+	button.Size = UDim2.fromOffset(66, 44)
+	button.BackgroundColor3 = COLORS.panel2
+	button.BorderSizePixel = 0
+	button.AutoButtonColor = false
+	button.Font = Enum.Font.GothamBold
+	button.Text = labelText
+	button.TextColor3 = COLORS.text
+	button.TextSize = 10
+	button.TextTruncate = Enum.TextTruncate.AtEnd
+	button.ZIndex = 70
+	button.Parent = floatingLayer
+	rounded(button, 10)
+	stroke(button, COLORS.accentDark, 1, 0.1)
+	S.floatingButtons[action] = button
+
+	local dragging = false
+	local moved = false
+	local dragStart
+	local startPosition
+	local dragInput
+	bind(button.InputBegan, function(input)
+		if input.UserInputType ~= Enum.UserInputType.Touch and input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+		dragging = true
+		moved = false
+		dragStart = input.Position
+		startPosition = button.Position
+		dragInput = input
+		tween(button, {BackgroundColor3 = COLORS.panelHover}, 0.08)
+	end)
+	bind(UIS.InputChanged, function(input)
+		if not dragging then return end
+		if input.UserInputType ~= Enum.UserInputType.Touch and input.UserInputType ~= Enum.UserInputType.MouseMovement then return end
+		local delta = input.Position - dragStart
+		if delta.Magnitude >= 8 then moved = true end
+		if moved then
+			button.Position = UDim2.new(startPosition.X.Scale, startPosition.X.Offset + delta.X, startPosition.Y.Scale, startPosition.Y.Offset + delta.Y)
+		end
+	end)
+	bind(UIS.InputEnded, function(input)
+		if not dragging then return end
+		if input ~= dragInput and input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+		dragging = false
+		tween(button, {BackgroundColor3 = COLORS.panel2}, 0.12)
+		if not moved then perform(action) end
+	end)
+	updateFloatingRow(action)
+end
+
+local pickerActions = {{action = "grab", name = "Grab / Release"}}
+for _, meta in ipairs(ACTION_META) do
+	if not meta.settingsOnly then table.insert(pickerActions, {action = meta.action, name = meta.name}) end
+end
+for order, item in ipairs(pickerActions) do
+	local row = Instance.new("Frame")
+	row.LayoutOrder = order
+	row.Size = UDim2.new(1, -4, 0, 42)
+	row.BackgroundColor3 = COLORS.panel
+	row.BorderSizePixel = 0
+	row.ZIndex = 81
+	row.Parent = pickerList
+	rounded(row, 9)
+	local label = Instance.new("TextLabel")
+	label.BackgroundTransparency = 1
+	label.Position = UDim2.fromOffset(10, 0)
+	label.Size = UDim2.new(1, -92, 1, 0)
+	label.Font = Enum.Font.GothamSemibold
+	label.Text = item.name
+	label.TextColor3 = COLORS.text
+	label.TextSize = 10
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.ZIndex = 82
+	label.Parent = row
+	local toggle = Instance.new("TextButton")
+	toggle.AnchorPoint = Vector2.new(1, 0.5)
+	toggle.Position = UDim2.new(1, -7, 0.5, 0)
+	toggle.Size = UDim2.fromOffset(72, 30)
+	toggle.BackgroundColor3 = COLORS.panel2
+	toggle.BorderSizePixel = 0
+	toggle.AutoButtonColor = false
+	toggle.Font = Enum.Font.GothamBold
+	toggle.TextSize = 9
+	toggle.ZIndex = 82
+	toggle.Parent = row
+	rounded(toggle, 8)
+	floatingRows[item.action] = toggle
+	updateFloatingRow(item.action)
+	bind(toggle.Activated, function() makeFloatingShortcut(item.action, item.name) end)
+end
+
+bind(pickerClose.Activated, function() floatingPicker.Visible = false end)
+if floatingPickerButton then
+	bind(floatingPickerButton.Activated, function()
+		floatingPicker.Visible = not floatingPicker.Visible
+	end)
+end
+
 local activeTab = "controls"
 local function setTab(name, instant)
+	if S.mobile and name == "keybinds" and not S.mobileKeyboardDetected then
+		name = "controls"
+	end
 	activeTab = name == "keybinds" and "keybinds" or "controls"
 	local controlsOpen = activeTab == "controls"
 	grid.Visible = controlsOpen
@@ -1733,15 +1942,8 @@ local function getResponsiveSize()
 		local width = math.max(1, math.min(viewport.X - 16, landscape and 760 or 560))
 		local height = math.max(1, math.min(viewport.Y - 16, landscape and 366 or 620))
 		local wide = landscape and width >= 620
-		local columns = wide and 3 or (width >= 430 and 2 or 1)
-		actionLayout.CellPadding = UDim2.fromOffset(6, 6)
-		if columns == 3 then
-			actionLayout.CellSize = UDim2.new(1 / 3, -6, 0, 52)
-		elseif columns == 2 then
-			actionLayout.CellSize = UDim2.new(0.5, -5, 0, 52)
-		else
-			actionLayout.CellSize = UDim2.new(1, -4, 0, 52)
-		end
+		actionLayout.CellPadding = UDim2.fromOffset(0, 6)
+		actionLayout.CellSize = UDim2.new(1, -4, 0, 52)
 
 		header.Size = UDim2.new(1, 0, 0, 48)
 		content.Position = UDim2.fromOffset(10, 54)
@@ -1766,8 +1968,6 @@ local function getResponsiveSize()
 		keybindPage.Position = grid.Position
 		keybindPage.Size = grid.Size
 
-		reopen.AnchorPoint = Vector2.new(1, 0.5)
-		reopen.Position = UDim2.new(1, -12, 0.5, 0)
 		reopen.Size = UDim2.fromOffset(64, 48)
 		return UDim2.fromOffset(width, height)
 	end
@@ -1784,6 +1984,8 @@ local function applyResponsiveSize(resetPosition)
 		if S.mobile then
 			main.AnchorPoint = Vector2.new(0.5, 1)
 			main.Position = UDim2.new(0.5, 0, 1, -18)
+			reopen.AnchorPoint = Vector2.new(1, 0.5)
+			reopen.Position = UDim2.new(1, -12, 0.5, 0)
 		else
 			main.AnchorPoint = Vector2.new(1, 0.5)
 			main.Position = UDim2.new(1, -18, 0.5, 0)
@@ -2054,8 +2256,48 @@ local function toggleUIVisibility(forceVisible)
 end
 
 S.ui.visibleWanted = true
+local reopenDragging = false
+local reopenMoved = false
+local reopenStart
+local reopenStartPosition
+local reopenInput
+bind(reopen.InputBegan, function(input)
+	if not S.mobile then return end
+	if input.UserInputType ~= Enum.UserInputType.Touch and input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+	reopenDragging = true
+	reopenMoved = false
+	reopenStart = input.Position
+	reopenStartPosition = reopen.Position
+	reopenInput = input
+end)
+bind(UIS.InputChanged, function(input)
+	if not (S.mobile and reopenDragging) then return end
+	if input.UserInputType ~= Enum.UserInputType.Touch and input.UserInputType ~= Enum.UserInputType.MouseMovement then return end
+	local delta = input.Position - reopenStart
+	if delta.Magnitude >= 8 then reopenMoved = true end
+	if reopenMoved and reopenStartPosition then
+		reopen.Position = UDim2.new(
+			reopenStartPosition.X.Scale,
+			reopenStartPosition.X.Offset + delta.X,
+			reopenStartPosition.Y.Scale,
+			reopenStartPosition.Y.Offset + delta.Y
+		)
+	end
+end)
+bind(UIS.InputEnded, function(input)
+	if not reopenDragging then return end
+	if input ~= reopenInput and input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+	reopenDragging = false
+end)
+
 bind(hide.Activated, function() toggleUIVisibility(false) end)
-bind(reopen.Activated, function() toggleUIVisibility(true) end)
+bind(reopen.Activated, function()
+	if reopenMoved then
+		reopenMoved = false
+		return
+	end
+	toggleUIVisibility(true)
+end)
 bind(grabButton.Activated, function() perform("grab") end)
 
 local function pointInsideMain(point)
@@ -2070,6 +2312,11 @@ end
 
 bind(UIS.InputBegan, function(input, processed)
 	if S.unloaded then return end
+	if S.mobile and not S.mobileKeyboardDetected and input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode ~= Enum.KeyCode.Unknown then
+		S.mobileKeyboardDetected = true
+		refreshMobileKeyboardUI()
+		setStatus("Keyboard detected  •  keybinds enabled", "good")
+	end
 	if S.bindingCapture then
 		if input.UserInputType == Enum.UserInputType.Keyboard then
 			if input.KeyCode == Enum.KeyCode.Escape then

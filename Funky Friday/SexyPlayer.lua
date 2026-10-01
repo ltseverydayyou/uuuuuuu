@@ -41,7 +41,6 @@ local UserInputService = __lt.cs("UserInputService", cloneref)
 local Client = Players.LocalPlayer
 local PlayerGui = Client:WaitForChild("PlayerGui")
 local IsDesktop = UserInputService.KeyboardEnabled and not UserInputService.TouchEnabled
-local HasFireSignal = type(firesignal) == "function"
 local HasVirtualInput = VirtualInputManager ~= nil
 
 local HasScriptableInput = pcall(function()
@@ -50,12 +49,9 @@ local HasScriptableInput = pcall(function()
 	binding:Destroy()
 end)
 
-local IsExternal = IsDesktop and not HasFireSignal
+local IsExternal = IsDesktop and not HasScriptableInput
 
 local InputModes = {}
-if HasFireSignal then
-	InputModes[#InputModes + 1] = "firesignal"
-end
 if HasScriptableInput then
 	InputModes[#InputModes + 1] = "Scriptable Input"
 end
@@ -111,7 +107,6 @@ local st = {
 	InputModes = InputModes,
 	Capabilities = {
 		External = IsExternal,
-		FireSignal = HasFireSignal,
 		VirtualInput = HasVirtualInput,
 		ScriptableInput = HasScriptableInput,
 	},
@@ -219,14 +214,6 @@ local function fireAction(action, down)
 		end)
 	end
 
-	if st.inMode == "firesignal" then
-		if not HasFireSignal then
-			return false
-		end
-
-		return pcall(firesignal, down and action.Pressed or action.Released)
-	end
-
 	return false
 end
 
@@ -329,39 +316,9 @@ local function collectSpecialPreview(root)
 	return data
 end
 
-local function withGameIdentity(callback)
-	local oldIdentity
-	local canSet = type(setthreadidentity) == "function"
-
-	if type(getthreadidentity) == "function" then
-		pcall(function()
-			oldIdentity = getthreadidentity()
-		end)
-	end
-
-	if canSet then
-		pcall(setthreadidentity, 2)
-	end
-
-	local results = table.pack(pcall(callback))
-
-	if canSet and oldIdentity ~= nil then
-		pcall(setthreadidentity, oldIdentity)
-	end
-
-	return table.unpack(results, 1, results.n)
-end
-
 local function clickSettingsButton(button)
 	if not button then
 		return false
-	end
-
-	if HasFireSignal then
-		local ok = withGameIdentity(function()
-			firesignal(button.MouseButton1Click)
-		end)
-		return ok == true
 	end
 
 	if not HasVirtualInput or not button:IsA("GuiButton") or not button.Visible then

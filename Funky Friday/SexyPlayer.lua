@@ -870,7 +870,7 @@ Controls:CreateToggle({
 })
 
 if #InputModes > 1 then
-	Controls:CreateDropdown({
+	local InputModeDropdown = Controls:CreateDropdown({
 		name = "Input Mode",
 		flag = "FF_InputMode",
 		options = InputModes,
@@ -886,6 +886,37 @@ if #InputModes > 1 then
 			end
 		end
 	})
+
+	if type(InputModeDropdown) == "table" then
+		InputModeDropdown._bringIntoView = function(self)
+			local page = self.main and self.main:FindFirstAncestorWhichIsA("ScrollingFrame")
+			if not page then
+				return
+			end
+
+			local view = page.AbsoluteWindowSize
+			local at = page.CanvasPosition
+			local pageAt = page.AbsolutePosition
+			local cardAt = self.main.AbsolutePosition
+			if view.Y <= 0 then
+				return
+			end
+
+			local top = cardAt.Y - pageAt.Y + at.Y
+			local bottom = top + self:_openHeight()
+			local overflow = bottom - (at.Y + view.Y)
+			if overflow <= 0 then
+				return
+			end
+
+			local target = math.min(at.Y + overflow + 8, top)
+			game:GetService("TweenService"):Create(
+				page,
+				TweenInfo.new(0.4, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+				{ CanvasPosition = Vector2.new(at.X, target) }
+			):Play()
+		end
+	end
 end
 
 if IsDesktop then

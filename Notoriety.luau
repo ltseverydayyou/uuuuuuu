@@ -740,6 +740,7 @@ NState.CameraState = {
 
 NState.NetworkState = {
 	Radius = 12,
+	ClaimOffset = CFrame.new(0, 2, 6),
 	Running = false,
 }
 
@@ -836,7 +837,7 @@ NState.claimNetworkPart = function(Part, UseTeleport, Fast)
 		and (Root.Position - Part.Position).Magnitude > Radius
 	then
 		pcall(function()
-			Character:PivotTo(Part.CFrame + Vector3.new(0, 2, 0))
+			Character:PivotTo(Part.CFrame * NState.NetworkState.ClaimOffset)
 		end)
 
 		task.wait(Fast and 0.02 or 0.08)
@@ -896,6 +897,8 @@ NState.teleportBags = function()
 
 	NState.NetworkState.Running = true
 
+	local Character = NState.LocalPlayer.Character
+	local OriginalCFrame = Character and Character:GetPivot()
 	local Moved = 0
 
 	pcall(function()
@@ -917,6 +920,12 @@ NState.teleportBags = function()
 			end
 		end
 	end)
+
+	if Character and OriginalCFrame then
+		pcall(function()
+			Character:PivotTo(OriginalCFrame)
+		end)
+	end
 
 	NState.NetworkState.Running = false
 	return Moved
@@ -965,6 +974,8 @@ NState.movePoliceToVoid = function(SkipVoid, Fast)
 
 	NState.NetworkState.Running = true
 
+	local Character = NState.LocalPlayer.Character
+	local OriginalCFrame = Character and Character:GetPivot()
 	local Moved = 0
 	local Attempted = 0
 	local Index = 0
@@ -1007,6 +1018,12 @@ NState.movePoliceToVoid = function(SkipVoid, Fast)
 		end
 	end)
 
+	if Character and OriginalCFrame then
+		pcall(function()
+			Character:PivotTo(OriginalCFrame)
+		end)
+	end
+
 	NState.NetworkState.Running = false
 	return Moved, Attempted
 end
@@ -1024,6 +1041,8 @@ NState.moveCitizensToVoid = function(SkipVoid, Fast)
 
 	NState.NetworkState.Running = true
 
+	local Character = NState.LocalPlayer.Character
+	local OriginalCFrame = Character and Character:GetPivot()
 	local Targets = {}
 
 	for _, Target in Folder:GetChildren() do
@@ -1149,6 +1168,12 @@ NState.moveCitizensToVoid = function(SkipVoid, Fast)
 				Process(Retry)
 			end
 		end
+	end
+
+	if Character and OriginalCFrame then
+		pcall(function()
+			Character:PivotTo(OriginalCFrame)
+		end)
 	end
 
 	NState.NetworkState.Running = false

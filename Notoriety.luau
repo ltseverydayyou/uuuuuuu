@@ -898,7 +898,10 @@ NState.teleportBags = function()
 	NState.NetworkState.Running = true
 
 	local Character = NState.LocalPlayer.Character
-	local OriginalCFrame = Character and Character:GetPivot()
+	local OriginalCFrame = NState.Environment.NotorietyVoidTeleportEnabled == true
+		and Character
+		and Character:GetPivot()
+		or nil
 	local Moved = 0
 
 	pcall(function()
@@ -907,7 +910,11 @@ NState.teleportBags = function()
 				if Object.Name ~= "KEEPER" then
 					local Root = NState.getModelRoot(Object)
 
-					if Root and NState.claimNetworkPart(Root, nil, NState.Environment.NotorietyBagAutoTeleportEnabled) then
+					if Root and NState.claimNetworkPart(
+							Root,
+							NState.Environment.NotorietyVoidTeleportEnabled,
+							NState.Environment.NotorietyBagAutoTeleportEnabled
+						) then
 						if Object:IsA("Model") then
 							Object:PivotTo(TargetCFrame)
 						else
@@ -961,7 +968,7 @@ NState.teleportToExit = function()
 	return Success
 end
 
-NState.movePoliceToVoid = function(SkipVoid, Fast)
+NState.movePoliceToVoid = function(SkipVoid, Fast, NearestOnly)
 	if NState.NetworkState.Running then
 		return 0, 0
 	end
@@ -975,13 +982,43 @@ NState.movePoliceToVoid = function(SkipVoid, Fast)
 	NState.NetworkState.Running = true
 
 	local Character = NState.LocalPlayer.Character
-	local OriginalCFrame = Character and Character:GetPivot()
+	local OriginalCFrame = NState.Environment.NotorietyVoidTeleportEnabled == true
+		and Character
+		and Character:GetPivot()
+		or nil
 	local Moved = 0
 	local Attempted = 0
 	local Index = 0
+	local Targets = PoliceFolder:GetChildren()
+
+	if NearestOnly then
+		local CharacterRoot = Character and NState.getModelRoot(Character)
+		local Nearest
+		local NearestDistance = math.huge
+
+		if CharacterRoot then
+			for _, Candidate in Targets do
+				local CandidateRoot = NState.getModelRoot(Candidate)
+
+				if CandidateRoot
+					and (not SkipVoid or CandidateRoot.Position.Y > -500)
+					and not CandidateRoot.Anchored
+				then
+					local Distance = (CandidateRoot.Position - CharacterRoot.Position).Magnitude
+
+					if Distance < NearestDistance then
+						Nearest = Candidate
+						NearestDistance = Distance
+					end
+				end
+			end
+		end
+
+		Targets = Nearest and {Nearest} or {}
+	end
 
 	pcall(function()
-		for _, Target in PoliceFolder:GetChildren() do
+		for _, Target in Targets do
 			if NState.Environment.NotorietyUnloaded then
 				break
 			end
@@ -1042,7 +1079,10 @@ NState.moveCitizensToVoid = function(SkipVoid, Fast)
 	NState.NetworkState.Running = true
 
 	local Character = NState.LocalPlayer.Character
-	local OriginalCFrame = Character and Character:GetPivot()
+	local OriginalCFrame = NState.Environment.NotorietyVoidTeleportEnabled == true
+		and Character
+		and Character:GetPivot()
+		or nil
 	local Targets = {}
 
 	for _, Target in Folder:GetChildren() do
@@ -1211,7 +1251,12 @@ NState.queuePolice = function()
 	State.Running = true
 
 	task.spawn(function()
-		pcall(NState.movePoliceToVoid, true, true)
+		pcall(
+				NState.movePoliceToVoid,
+				true,
+				true,
+				NState.Environment.NotorietyVoidTeleportEnabled ~= true
+			)
 		State.Running = false
 	end)
 end

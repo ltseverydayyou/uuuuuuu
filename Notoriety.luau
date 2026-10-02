@@ -1,6 +1,18 @@
 local NState = {}
 NState.Environment = if type(getgenv) == "function" then getgenv() else _G
 
+local HookState = rawget(NState.Environment, "NotorietyDamageHookState")
+local OldHook = type(HookState) == "table" and HookState.Original or nil
+local Restored = type(OldHook) ~= "function"
+
+if type(OldHook) == "function" and type(hookmetamethod) == "function" then
+	Restored = pcall(hookmetamethod, game, "__namecall", OldHook)
+end
+
+if Restored then
+	NState.Environment.NotorietyDamageHookState = nil
+end
+
 NState.PreviousUnload = rawget(NState.Environment, "UnloadNotoriety")
 
 if type(NState.PreviousUnload) == "function" then
@@ -116,154 +128,337 @@ do
 	local Loader = loadstring
 
 	if type(Loader) ~= "function" then
-		error("Rayfield Gen2 loader unavailable")
+		error("Obsidian loader unavailable")
 	end
 
-	local RayfieldSource = game:HttpGet("https://sirius.menu/gen2")
-	local RayfieldChunk, RayfieldCompileError = Loader(RayfieldSource, "@RayfieldGen2.luau")
+	local Repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/refs/heads/main/"
 
-	if type(RayfieldChunk) ~= "function" then
-		error("Rayfield Gen2 compile failed: " .. tostring(RayfieldCompileError))
+	local function LoadModule(Path)
+		local Source = game:HttpGet(Repo .. Path)
+		local Chunk, CompileError = Loader(Source, "@" .. Path)
+
+		if type(Chunk) ~= "function" then
+			error("Obsidian module compile failed: " .. tostring(CompileError))
+		end
+
+		local Success, Result = pcall(Chunk)
+
+		if not Success then
+			error("Obsidian module load failed: " .. tostring(Result))
+		end
+
+		return Result
 	end
 
-	local RayfieldSuccess, Rayfield = pcall(RayfieldChunk)
-
-	if not RayfieldSuccess or type(Rayfield) ~= "table" then
-		error("Rayfield Gen2 load failed: " .. tostring(Rayfield))
-	end
+	local Library = LoadModule("Library.lua")
+	local SaveManager = LoadModule("addons/SaveManager.lua")
+	local ThemeManager = LoadModule("addons/ThemeManager.lua")
 
 	local Adapter = {
-		Rayfield = Rayfield,
+		Library = Library,
+		SaveManager = SaveManager,
+		ThemeManager = ThemeManager,
 		NativeWindow = nil,
 	}
 
 	function Adapter:Notify(Config)
-		local NativeWindow = self.NativeWindow
-		if not NativeWindow or NativeWindow.unloaded then
+		if not self.Library or self.Library.Unloaded then
 			return
 		end
 
-		return NativeWindow:Notify({
-			title = Config.Title or "Notoriety",
-			content = Config.Content or Config.Description or "",
-			duration = Config.Duration,
+		return self.Library:Notify({
+			Title = Config.Title or "Notoriety",
+			Description = Config.Content or Config.Description or "",
+			Icon = Config.Icon,
+			Time = Config.Duration or Config.Time or 3,
 		})
 	end
 
 	function Adapter:CreateWindow(Config)
-		local NativeWindow = Rayfield:CreateWindow({
-			name = Config.Title or "Notoriety",
-			icon = Config.Icon,
-			sidebarLayout = true,
-			configuration = {
-				autoSave = false,
-				autoLoad = false,
-				fileName = "default",
-				customFolder = Config.Folder or "Notoriety",
-			},
+		local Folder = Config.Folder or "Notoriety"
+
+		self.SaveManager:SetLibrary(self.Library)
+		self.SaveManager:IgnoreThemeSettings()
+		self.SaveManager:SetIgnoreIndexes({"ToggleUIKey"})
+		self.SaveManager:SetFolder(Folder)
+		pcall(function()
+			self.SaveManager:SetSubFolder(tostring(game.GameId))
+		end)
+
+		self.ThemeManager:SetLibrary(self.Library)
+		self.ThemeManager:SetFolder(Folder)
+
+		local NativeWindow = self.Library:CreateWindow({
+			Title = Config.Title or "Notoriety",
+			Footer = "Notoriety",
+			Icon = Config.Icon or "crosshair",
+			Size = Config.Size or UDim2.fromOffset(760, 520),
+			ToggleKeybind = Config.ToggleKey or Enum.KeyCode.RightShift,
+			AutoShow = true,
+			NotifySide = "Right",
+			Resizable = true,
+			ShowMobileButtons = true,
+			AlwaysOnTop = true,
+			CornerRadius = 6,
+			DisableSearch = false,
+			EnableCompacting = true,
 		})
 
 		self.NativeWindow = NativeWindow
-		NState.NotorietyUI.Root = NativeWindow.screenGui
+		NState.NotorietyUI.Root = nil
 
 		local Window = {
 			Native = NativeWindow,
+			ToggleKeyPicker = nil,
 		}
 
-		local function wrapControlCallback(Callback, Transform)
-			return function(Value)
-				if Transform then
-					Value = Transform(Value)
-				end
+		local function Has(Value, Needle)
+			return string.find(
+				string.lower(tostring(Value or "")),
+				string.lower(Needle),
+				1,
+				true
+			) ~= nil
+		end
 
-				if type(Callback) == "function" then
-					Callback(Value)
-				end
+		local function MakeBox(NativeTab, Side, Name, Description, IconName)
+			return NativeTab:AddGroupbox({
+				Side = Side,
+				Name = Name,
+				Description = Description,
+				IconName = IconName,
+			})
+		end
 
-				local RequestSave = NState.NotorietyUI.RequestConfigSave
-				if type(RequestSave) == "function" then
-					RequestSave()
-				end
+		local function BuildGroups(NativeTab, Title)
+			if Title == "Main" then
+				return {
+					Heist = MakeBox(NativeTab, "Left", "Heist Control", "Core character and police controls", "crosshair"),
+					Team = MakeBox(NativeTab, "Left", "Team & Yell", "Teammate and yell controls", "users"),
+					Movement = MakeBox(NativeTab, "Right", "Movement & Loot", "Ownership, loot, cameras, and visual map controls", "package"),
+				}
+			elseif Title == "ESP" then
+				return {
+					Item = MakeBox(NativeTab, "Left", "Item ESP", "Loot and item overlays", "scan-search"),
+					Police = MakeBox(NativeTab, "Right", "Police ESP", "Police overlays and labels", "shield-alert"),
+				}
+			elseif Title == "Weapon Mods" then
+				return {
+					Core = MakeBox(NativeTab, "Left", "Core Weapon", "Weapon behavior and ammunition", "swords"),
+					Timing = MakeBox(NativeTab, "Left", "Timing & Accuracy", "Fire timing and accuracy controls", "timer"),
+					Targeting = MakeBox(NativeTab, "Right", "Targeting", "Silent aim and wallbang controls", "crosshair"),
+				}
+			elseif Title == "Mutators" then
+				return {
+					Mutators = MakeBox(NativeTab, "Left", "Mutators", "Client-side mutator controls", "settings-2"),
+				}
+			elseif Title == "Audio" then
+				return {
+					Music = MakeBox(NativeTab, "Left", "Music", "Soundtrack and playback mode", "music"),
+					Volumes = MakeBox(NativeTab, "Right", "Volumes", "Sound and music levels", "volume-2"),
+				}
+			elseif Title == "Equipment" then
+				return {
+					Placement = MakeBox(NativeTab, "Left", "Placement", "Equipment speed and range", "move-3d"),
+					Offsets = MakeBox(NativeTab, "Right", "Position Offsets", "Custom equipment placement offsets", "move"),
+				}
 			end
+
+			return {
+				Utility = MakeBox(NativeTab, "Left", "Menu & Cleanup", "Menu, configuration, and unload controls", "settings"),
+			}
+		end
+
+		local function SelectGroup(Groups, Title, Control)
+			local Flag = tostring(Control.Flag or "")
+			local ControlTitle = tostring(Control.Title or "")
+
+			if Title == "Main" then
+				if Flag == "MaxEverything" or Flag == "PoliceHeadScale" then
+					return Groups.Heist
+				end
+
+				if Has(Flag, "Teammate")
+					or Has(ControlTitle, "Teammate")
+					or Has(ControlTitle, "Yell")
+					or Has(ControlTitle, "Inspire")
+					or Has(ControlTitle, "Boost")
+				then
+					return Groups.Team
+				end
+
+				return Groups.Movement
+			elseif Title == "ESP" then
+				if Has(Flag, "ItemESP") or Has(ControlTitle, "Item") then
+					return Groups.Item
+				end
+
+				return Groups.Police
+			elseif Title == "Weapon Mods" then
+				if Has(Flag, "SilentAim")
+					or Has(Flag, "WallBang")
+					or Has(ControlTitle, "FOV")
+				then
+					return Groups.Targeting
+				end
+
+				if Has(Flag, "FireDelay")
+					or Has(Flag, "BoltDuration")
+					or Has(Flag, "Accuracy")
+				then
+					return Groups.Timing
+				end
+
+				return Groups.Core
+			elseif Title == "Audio" then
+				if Flag == "MusicTrack"
+					or Flag == "MusicMode"
+					or Has(ControlTitle, "Soundtrack")
+					or Has(ControlTitle, "Music Mode")
+				then
+					return Groups.Music
+				end
+
+				return Groups.Volumes
+			elseif Title == "Equipment" then
+				if Has(Flag, "EquipmentPosition")
+					or Has(ControlTitle, "Offset")
+					or Has(ControlTitle, "Custom Equipment Position")
+					or Has(ControlTitle, "Reset Equipment Position")
+				then
+					return Groups.Offsets
+				end
+
+				return Groups.Placement
+			elseif Title == "Mutators" then
+				return Groups.Mutators
+			end
+
+			return Groups.Utility
 		end
 
 		function Window:Tab(TabConfig)
-			local NativeTab = NativeWindow:CreateTab({
-				name = TabConfig.Title,
-				icon = TabConfig.Icon,
-			})
-
+			local NativeTab = NativeWindow:AddTab(
+				TabConfig.Title,
+				TabConfig.Icon,
+				TabConfig.Desc
+			)
+			local Groups = BuildGroups(NativeTab, TabConfig.Title)
 			local Tab = {
 				Native = NativeTab,
 			}
 
+			local function GetBox(Control)
+				return SelectGroup(Groups, TabConfig.Title, Control)
+			end
+
 			function Tab:Button(Control)
-				return NativeTab:CreateButton({
-					name = Control.Title,
-					description = Control.Desc,
-					icon = Control.Icon,
-					callback = Control.Callback,
+				return GetBox(Control):AddButton({
+					Text = Control.Title,
+					Tooltip = Control.Desc,
+					Icon = Control.Icon,
+					Func = Control.Callback,
 				})
 			end
 
 			function Tab:Toggle(Control)
-				return NativeTab:CreateToggle({
-					name = Control.Title,
-					description = Control.Desc,
-					flag = Control.Flag,
-					value = Control.Value == true,
-					callback = wrapControlCallback(Control.Callback),
+				return GetBox(Control):AddToggle(Control.Flag, {
+					Text = Control.Title,
+					Tooltip = Control.Desc,
+					Default = Control.Value == true,
+					Callback = Control.Callback,
 				})
 			end
 
 			function Tab:Input(Control)
-				return NativeTab:CreateInput({
-					name = Control.Title,
-					description = Control.Desc,
-					flag = Control.Flag,
-					value = tostring(Control.Value or ""),
-					placeholder = Control.Placeholder,
-					callback = wrapControlCallback(Control.Callback),
+				return GetBox(Control):AddInput(Control.Flag, {
+					Text = Control.Title,
+					Tooltip = Control.Desc,
+					Default = tostring(Control.Value or ""),
+					Placeholder = Control.Placeholder,
+					Callback = Control.Callback,
 				})
 			end
 
 			function Tab:Dropdown(Control)
-				return NativeTab:CreateDropdown({
-					name = Control.Title,
-					description = Control.Desc,
-					flag = Control.Flag,
-					options = Control.Values or Control.Items or {},
-					value = Control.Value,
-					multiSelect = false,
-					callback = wrapControlCallback(Control.Callback),
+				return GetBox(Control):AddDropdown(Control.Flag, {
+					Text = Control.Title,
+					Tooltip = Control.Desc,
+					Values = Control.Values or Control.Items or {},
+					Default = Control.Value,
+					Multi = false,
+					Callback = Control.Callback,
 				})
 			end
 
 			function Tab:Slider(Control)
-				return NativeTab:CreateSlider({
-					name = Control.Title,
-					description = Control.Desc,
-					flag = Control.Flag,
-					range = { Control.Min, Control.Max },
-					increment = Control.Step,
-					suffix = Control.Suffix,
-					value = Control.Value,
-					callback = wrapControlCallback(Control.Callback),
+				local Step = tonumber(Control.Step)
+				local Rounding = 0
+
+				if Step and Step > 0 and Step < 1 then
+					if Step <= 0.001 then
+						Rounding = 3
+					elseif Step <= 0.01 then
+						Rounding = 2
+					else
+						Rounding = 1
+					end
+				end
+
+				return GetBox(Control):AddSlider(Control.Flag, {
+					Text = Control.Title,
+					Tooltip = Control.Desc,
+					Min = Control.Min,
+					Max = Control.Max,
+					Default = Control.Value,
+					Rounding = Rounding,
+					Suffix = Control.Suffix,
+					Callback = Control.Callback,
 				})
 			end
 
 			function Tab:Keybind(Control)
-				local DefaultKey = Enum.KeyCode[Control.Value] or Enum.KeyCode.RightShift
+				local Label = GetBox(Control):AddLabel(Control.Title)
+				local Keybind
 
-				return NativeTab:CreateKeybind({
-					name = Control.Title,
-					description = Control.Desc,
-					flag = Control.Flag,
-					value = DefaultKey,
-					onChanged = wrapControlCallback(Control.Callback, function(Key)
-						return typeof(Key) == "EnumItem" and Key.Name or tostring(Key):match("([^%.]+)$")
-					end),
+				local function HandleChanged(NewKeyCode)
+					if not Keybind or type(Control.Callback) ~= "function" then
+						return
+					end
+
+					local Value = NewKeyCode
+					if Value == nil then
+						Value = Keybind.Value
+					end
+
+					local Name
+					if typeof(Value) == "EnumItem" then
+						Name = Value.Name
+				elseif type(Value) == "string" and Value ~= "" and Value ~= "None" and Value ~= "Unknown" then
+						Name = Value:match("([^%.]+)$") or Value
+				else
+						return
+					end
+
+					Control.Callback(Name)
+				end
+
+				Keybind = Label:AddKeyPicker(Control.Flag, {
+					Default = Control.Value or "RightShift",
+					Text = Control.Title,
+					Mode = "Toggle",
+					SyncToggleState = false,
+					NoUI = true,
+					ChangedCallback = HandleChanged,
 				})
+
+				if Control.Flag == "ToggleUIKey" then
+					local RegisteredKeybind = Library.Options and Library.Options[Control.Flag] or Keybind
+					Window.ToggleKeyPicker = RegisteredKeybind
+					Library.ToggleKeybind = RegisteredKeybind
+				end
+
+				return Keybind
 			end
 
 			return Tab
@@ -271,38 +466,49 @@ do
 
 		function Window:SetToggleKey(Key)
 			if typeof(Key) == "EnumItem" then
-				NativeWindow.settings.toggleKeybind = Key
-				NativeWindow:SaveSettings()
+				Window.ToggleKey = Key
 			end
 		end
 
 		function Window:Destroy()
-			if not NativeWindow.unloaded then
-				NativeWindow:Unload()
+			if self.Native and not Library.Unloaded then
+				Library:Unload()
 			end
 		end
 
 		local ConfigManager = {}
+		local SaveManagerRef = self.SaveManager
 
 		function ConfigManager:AllConfigs()
-			local Success, Configs = pcall(NativeWindow.ListConfigs, NativeWindow)
+			local Success, Configs = pcall(function()
+				return SaveManagerRef:RefreshConfigList()
+			end)
+
 			return if Success and type(Configs) == "table" then Configs else {}
 		end
 
 		function ConfigManager:Config(Name)
 			return {
 				Save = function()
-					local Success, Result = pcall(NativeWindow.Save, NativeWindow, Name)
+					local Success, Result, Message = pcall(function()
+						return SaveManagerRef:Save(Name)
+					end)
+
 					if not Success or Result == false then
-						error("Rayfield Gen2 config save failed: " .. tostring(Result), 0)
+						error("Obsidian config save failed: " .. tostring(Message or Result), 0)
 					end
+
 					return Result
 				end,
 				Load = function()
-					local Success, Result = pcall(NativeWindow.Load, NativeWindow, Name)
+					local Success, Result, Message = pcall(function()
+						return SaveManagerRef:Load(Name)
+					end)
+
 					if not Success or Result == false then
-						error("Rayfield Gen2 config load failed: " .. tostring(Result), 0)
+						error("Obsidian config load failed: " .. tostring(Message or Result), 0)
 					end
+
 					return Result
 				end,
 			}
@@ -310,6 +516,12 @@ do
 
 		Window.ConfigManager = ConfigManager
 		return Window
+	end
+
+	function Adapter:BuildSettings(Tab)
+		self.ThemeManager:ApplyToTab(Tab.Native, "palette")
+		self.SaveManager:BuildConfigSection(Tab.Native, "folder-cog")
+		self.ThemeManager:LoadDefault()
 	end
 
 	NState.NotorietyUI.Library = Adapter
@@ -399,7 +611,14 @@ NState.Environment.NotorietyBugFeatureEnabled = NState.Environment.NotorietyBugF
 NState.Environment.NotorietyRapidFireEnabled = NState.Environment.NotorietyRapidFireEnabled ~= false
 NState.Environment.NotorietyNoRecoilEnabled = NState.Environment.NotorietyNoRecoilEnabled ~= false
 NState.Environment.NotorietyInfiniteAmmoEnabled = NState.Environment.NotorietyInfiniteAmmoEnabled ~= false
+NState.Environment.NotorietyInfiniteDamageEnabled = NState.Environment.NotorietyInfiniteDamageEnabled == true
+NState.Environment.NotorietyInstantReloadEnabled = NState.Environment.NotorietyInstantReloadEnabled == true
 NState.Environment.NotorietyFullAutoEnabled = NState.Environment.NotorietyFullAutoEnabled ~= false
+NState.Environment.NotorietyBagAutoTeleportEnabled = NState.Environment.NotorietyBagAutoTeleportEnabled == true
+NState.Environment.NotorietyAutoVoidPoliceEnabled = NState.Environment.NotorietyAutoVoidPoliceEnabled == true
+NState.Environment.NotorietyVoidTeleportEnabled = NState.Environment.NotorietyVoidTeleportEnabled ~= false
+NState.Environment.NotorietyCamerasDisabled = NState.Environment.NotorietyCamerasDisabled == true
+NState.Environment.NotorietyCitizensCleared = NState.Environment.NotorietyCitizensCleared == true
 NState.Environment.NotorietyAccuracyModEnabled = NState.Environment.NotorietyAccuracyModEnabled ~= false
 NState.Environment.NotorietySilentAimEnabled = NState.Environment.NotorietySilentAimEnabled == true
 NState.Environment.NotorietyWallBangEnabled = NState.Environment.NotorietyWallBangEnabled == true
@@ -502,6 +721,45 @@ NState.EquipmentPlacementState = {
 	Active = false,
 }
 
+NState.BagTeleportState = {
+	Refresh = 0,
+	Running = false,
+}
+
+NState.PoliceVoidState = {
+	Refresh = 0,
+	Running = false,
+}
+
+NState.CameraState = {
+	Refresh = 0,
+	Records = setmetatable({}, {
+		__mode = "k",
+	}),
+}
+
+NState.NetworkState = {
+	Radius = 12,
+	Running = false,
+}
+
+NState.CitizenState = {
+	Parts = {},
+	Decals = {},
+	Effects = {},
+	Guis = {},
+	Items = {},
+	Active = false,
+	Connection = nil,
+}
+
+NState.GlassState = {
+	Parts = {},
+	Decals = {},
+	Effects = {},
+	Guis = {},
+}
+
 NState.getEquipmentPositionOffset = function()
 	local X = tonumber(NState.Environment.NotorietyEquipmentPositionX) or 0
 	local Y = tonumber(NState.Environment.NotorietyEquipmentPositionY) or 0
@@ -512,6 +770,726 @@ NState.getEquipmentPositionOffset = function()
 	if Z == math.huge or Z == -math.huge or Z ~= Z then Z = 0 end
 
 	return X, Y, Z
+end
+
+NState.getModelRoot = function(Object)
+	if not Object then
+		return nil
+	end
+
+	if Object:IsA("BasePart") then
+		return Object
+	end
+
+	if not Object:IsA("Model") then
+		return nil
+	end
+
+	if Object.PrimaryPart then
+		return Object.PrimaryPart
+	end
+
+	return Object:FindFirstChild("HumanoidRootPart", true)
+		or Object:FindFirstChild("RootPart", true)
+		or Object:FindFirstChildWhichIsA("BasePart", true)
+end
+
+NState.getNetworkRadius = function()
+	if #NState.Players:GetPlayers() <= 1 then
+		return math.huge
+	end
+
+	return NState.NetworkState.Radius
+end
+
+NState.applyNetworkRadius = function()
+	local Setter = sethiddenproperty
+
+	if type(Setter) ~= "function" then
+		return
+	end
+
+	local Radius = NState.getNetworkRadius()
+
+	pcall(Setter, NState.LocalPlayer, "SimulationRadius", Radius)
+	pcall(Setter, NState.LocalPlayer, "MaximumSimulationRadius", Radius)
+end
+
+NState.claimNetworkPart = function(Part, UseTeleport, Fast)
+	if NState.Environment.NotorietyUnloaded
+		or not Part
+		or not Part:IsA("BasePart")
+		or Part.Anchored
+	then
+		return false
+	end
+
+	NState.applyNetworkRadius()
+
+	local Radius = UseTeleport ~= false and NState.getNetworkRadius() or nil
+	local Character = UseTeleport ~= false and NState.LocalPlayer.Character or nil
+	local Root = Character and NState.getModelRoot(Character)
+
+	if UseTeleport ~= false
+		and Radius ~= math.huge
+		and Root
+		and (Root.Position - Part.Position).Magnitude > Radius
+	then
+		pcall(function()
+			Character:PivotTo(Part.CFrame + Vector3.new(0, 2, 0))
+		end)
+
+		task.wait(Fast and 0.02 or 0.08)
+	end
+
+	local OwnerCheck = isnetworkowner
+
+	if type(OwnerCheck) ~= "function" then
+		return true
+	end
+
+	local Max = Fast and 4 or 12
+	local Delay = Fast and 0.015 or 0.05
+
+	for _ = 1, Max do
+		if NState.Environment.NotorietyUnloaded then
+			return false
+		end
+
+		local Success, Owned = pcall(OwnerCheck, Part)
+
+		if Success and Owned then
+			return true
+		end
+
+		task.wait(Delay)
+	end
+
+	return false
+end
+
+NState.getBagTargetCFrame = function()
+	local Area = NState.Workspace:FindFirstChild("BagSecuredArea")
+	local Floor = Area and Area:FindFirstChild("FloorPart", true)
+
+	if Floor and Floor:IsA("BasePart") then
+		return Floor.CFrame + Vector3.new(0, 3, 0)
+	end
+
+	local Character = NState.LocalPlayer.Character
+	local Root = Character and Character:FindFirstChild("HumanoidRootPart")
+
+	return Root and Root.CFrame or nil
+end
+
+NState.teleportBags = function()
+	if NState.NetworkState.Running then
+		return 0
+	end
+
+	local Bags = NState.Workspace:FindFirstChild("Bags")
+	local TargetCFrame = NState.getBagTargetCFrame()
+
+	if not Bags or not TargetCFrame then
+		return 0
+	end
+
+	NState.NetworkState.Running = true
+
+	local Moved = 0
+
+	pcall(function()
+		for _, Object in Bags:GetChildren() do
+			if Object:IsA("Model") or Object:IsA("BasePart") then
+				if Object.Name ~= "KEEPER" then
+					local Root = NState.getModelRoot(Object)
+
+					if Root and NState.claimNetworkPart(Root, nil, NState.Environment.NotorietyBagAutoTeleportEnabled) then
+						if Object:IsA("Model") then
+							Object:PivotTo(TargetCFrame)
+						else
+							Object.CFrame = TargetCFrame
+						end
+
+						Moved += 1
+					end
+				end
+			end
+		end
+	end)
+
+	NState.NetworkState.Running = false
+	return Moved
+end
+
+NState.getExitCFrame = function()
+	local Van = NState.Workspace:FindFirstChild("EscapeVan")
+	local VanPart = Van and Van:FindFirstChild("ClientCar", true)
+
+	if VanPart and VanPart:IsA("BasePart") then
+		return VanPart.CFrame + Vector3.new(0, 4, 0)
+	end
+
+	if Van and Van:IsA("Model") then
+		return Van:GetPivot() + Vector3.new(0, 4, 0)
+	end
+
+	return nil
+end
+
+NState.teleportToExit = function()
+	local Character = NState.LocalPlayer.Character
+	local TargetCFrame = NState.getExitCFrame()
+
+	if not Character or not TargetCFrame then
+		return false
+	end
+
+	local Success = pcall(function()
+		Character:PivotTo(TargetCFrame)
+	end)
+
+	return Success
+end
+
+NState.movePoliceToVoid = function(SkipVoid, Fast)
+	if NState.NetworkState.Running then
+		return 0, 0
+	end
+
+	local PoliceFolder = NState.Workspace:FindFirstChild("Police")
+
+	if not PoliceFolder then
+		return 0, 0
+	end
+
+	NState.NetworkState.Running = true
+
+	local Moved = 0
+	local Attempted = 0
+	local Index = 0
+
+	pcall(function()
+		for _, Target in PoliceFolder:GetChildren() do
+			if NState.Environment.NotorietyUnloaded then
+				break
+			end
+
+			local Root = NState.getModelRoot(Target)
+
+			if Root
+				and (not SkipVoid or Root.Position.Y > -500)
+				and NState.claimNetworkPart(Root, NState.Environment.NotorietyVoidTeleportEnabled, Fast)
+			then
+				Attempted += 1
+				Index += 1
+
+				local VoidCFrame = CFrame.new(
+					0,
+					-1000 - Index * 25,
+					0
+				)
+
+				local Success = pcall(function()
+					if Target:IsA("Model") then
+						Target:PivotTo(VoidCFrame)
+					else
+						Root.CFrame = VoidCFrame
+					end
+				end)
+
+				if Success then
+					Moved += 1
+				end
+
+				task.wait(if Fast then 0.02 elseif #NState.Players:GetPlayers() <= 1 then 0.05 else 0.14)
+			end
+		end
+	end)
+
+	NState.NetworkState.Running = false
+	return Moved, Attempted
+end
+
+NState.moveCitizensToVoid = function(SkipVoid, Fast)
+	if NState.NetworkState.Running then
+		return 0, 0
+	end
+
+	local Folder = NState.Workspace:FindFirstChild("Citizens")
+
+	if not Folder then
+		return 0, 0
+	end
+
+	NState.NetworkState.Running = true
+
+	local Targets = {}
+
+	for _, Target in Folder:GetChildren() do
+		if NState.Environment.NotorietyUnloaded then
+			break
+		end
+
+		local Root = NState.getModelRoot(Target)
+
+		if Root
+			and (not SkipVoid or Root.Position.Y > -500)
+			and not Root.Anchored
+		then
+			local Index = #Targets + 1
+
+			Targets[Index] = {
+				Model = Target,
+				Root = Root,
+				VoidCFrame = CFrame.new(0, -1000 - Index * 25, 0),
+			}
+		end
+	end
+
+	local Attempted = #Targets
+	local Moved = 0
+	local Pending = {}
+	local UseTeleport = NState.Environment.NotorietyVoidTeleportEnabled == true
+	local TeleportClaim = UseTeleport and #NState.Players:GetPlayers() > 1
+	local ClaimFast = Fast == true
+
+	local function Claim(Entry)
+		local Success, Owned = pcall(
+			NState.claimNetworkPart,
+			Entry.Root,
+			UseTeleport,
+			ClaimFast
+		)
+
+		return Success and Owned == true
+	end
+
+	local function RunBatch(Batch, AlreadyClaimed)
+		local Completed = 0
+
+		for _, Entry in Batch do
+			task.spawn(function()
+				local Success, DidMove = pcall(function()
+					if NState.Environment.NotorietyUnloaded
+						or not Entry.Model.Parent
+						or not Entry.Root.Parent
+					then
+						return false
+					end
+
+					if not AlreadyClaimed and not Claim(Entry) then
+						return false
+					end
+
+					if not Entry.Model.Parent or not Entry.Root.Parent then
+						return false
+					end
+
+					if Entry.Model:IsA("Model") then
+						Entry.Model:PivotTo(Entry.VoidCFrame)
+					else
+						Entry.Root.CFrame = Entry.VoidCFrame
+					end
+
+					return true
+				end)
+
+				if Success and DidMove then
+					Moved += 1
+					Pending[Entry] = nil
+				else
+					Pending[Entry] = true
+				end
+
+				Completed += 1
+			end)
+		end
+
+		while Completed < #Batch do
+			task.wait()
+		end
+	end
+
+	local function Process(Batch)
+		if #Batch == 0 then
+			return
+		end
+
+		if TeleportClaim then
+			local Claimed = {}
+
+			for _, Entry in Batch do
+				if Claim(Entry) then
+					table.insert(Claimed, Entry)
+				else
+					Pending[Entry] = true
+				end
+			end
+
+			RunBatch(Claimed, true)
+		else
+			RunBatch(Batch, false)
+		end
+	end
+
+	if Attempted > 0 then
+		Process(Targets)
+
+		if not NState.Environment.NotorietyUnloaded then
+			local Retry = {}
+
+			for _, Entry in Targets do
+				if Pending[Entry] then
+					table.insert(Retry, Entry)
+				end
+			end
+
+			if #Retry > 0 then
+				Process(Retry)
+			end
+		end
+	end
+
+	NState.NetworkState.Running = false
+	return Moved, Attempted
+end
+
+NState.queueBags = function()
+	local State = NState.BagTeleportState
+
+	if NState.Environment.NotorietyUnloaded
+		or State.Running
+		or NState.NetworkState.Running
+	then
+		return
+	end
+
+	State.Running = true
+
+	task.spawn(function()
+		pcall(NState.teleportBags)
+		State.Running = false
+	end)
+end
+
+NState.queuePolice = function()
+	local State = NState.PoliceVoidState
+
+	if NState.Environment.NotorietyUnloaded
+		or State.Running
+		or NState.NetworkState.Running
+	then
+		return
+	end
+
+	State.Running = true
+
+	task.spawn(function()
+		pcall(NState.movePoliceToVoid, true, true)
+		State.Running = false
+	end)
+end
+
+NState.hideCameraModel = function(Model)
+	if not Model or not Model:IsA("Model") then
+		return false
+	end
+
+	local Record = NState.CameraState.Records[Model]
+
+	if not Record then
+		Record = {
+			Parent = Model.Parent,
+			Parts = {},
+			Scripts = {},
+			Prompts = {},
+			Guis = {},
+		}
+
+		for _, Object in Model:GetDescendants() do
+			if Object:IsA("BasePart") then
+				Record.Parts[Object] = Object.LocalTransparencyModifier
+			elseif Object:IsA("Script") or Object:IsA("LocalScript") then
+				Record.Scripts[Object] = Object.Disabled
+			elseif Object:IsA("ProximityPrompt") then
+				Record.Prompts[Object] = Object.Enabled
+			elseif Object:IsA("BillboardGui") then
+				Record.Guis[Object] = Object.Enabled
+			end
+		end
+
+		NState.CameraState.Records[Model] = Record
+	end
+
+	for Part in Record.Parts do
+		if Part.Parent and Part.LocalTransparencyModifier ~= 1 then
+			Part.LocalTransparencyModifier = 1
+		end
+	end
+
+	for Script in Record.Scripts do
+		if Script.Parent and not Script.Disabled then
+			Script.Disabled = true
+		end
+	end
+
+	for Prompt in Record.Prompts do
+		if Prompt.Parent and Prompt.Enabled then
+			Prompt.Enabled = false
+		end
+	end
+
+	for Gui in Record.Guis do
+		if Gui.Parent and Gui.Enabled then
+			Gui.Enabled = false
+		end
+	end
+
+	return true
+end
+
+NState.disableAllCameras = function()
+	local Cameras = NState.Workspace:FindFirstChild("Cameras")
+
+	if not Cameras then
+		return 0
+	end
+
+	local Disabled = 0
+
+	for _, Model in Cameras:GetChildren() do
+		if NState.hideCameraModel(Model) then
+			Disabled += 1
+		end
+	end
+
+	return Disabled
+end
+
+NState.restoreAllCameras = function()
+	for Model, Record in NState.CameraState.Records do
+		if typeof(Model) == "Instance" and type(Record) == "table" then
+			for Part, Value in Record.Parts do
+				if Part.Parent then
+					pcall(function()
+						if Part.LocalTransparencyModifier ~= Value then
+							Part.LocalTransparencyModifier = Value
+						end
+					end)
+				end
+			end
+
+			for Script, Enabled in Record.Scripts do
+				if Script.Parent then
+					pcall(function()
+						if Script.Disabled ~= Enabled then
+							Script.Disabled = Enabled
+						end
+					end)
+				end
+			end
+
+			for Prompt, Enabled in Record.Prompts do
+				if Prompt.Parent then
+					pcall(function()
+						if Prompt.Enabled ~= Enabled then
+							Prompt.Enabled = Enabled
+						end
+					end)
+				end
+			end
+
+			for Gui, Enabled in Record.Guis do
+				if Gui.Parent then
+					pcall(function()
+						if Gui.Enabled ~= Enabled then
+							Gui.Enabled = Enabled
+						end
+					end)
+				end
+			end
+		end
+	end
+
+	table.clear(NState.CameraState.Records)
+end
+
+NState.setCamerasDisabled = function(Enabled)
+	NState.Environment.NotorietyCamerasDisabled = Enabled == true
+
+	if NState.Environment.NotorietyCamerasDisabled then
+		NState.disableAllCameras()
+	else
+		NState.restoreAllCameras()
+	end
+end
+
+NState.clearVisualState = function(Folder, State)
+	if not Folder then
+		return 0
+	end
+
+	local Count = 0
+
+	for _, Object in Folder:GetDescendants() do
+		if Object:IsA("BasePart") then
+			if State.Parts[Object] == nil then
+				State.Parts[Object] = Object.LocalTransparencyModifier
+			end
+
+			if Object.LocalTransparencyModifier ~= 1 then
+				Object.LocalTransparencyModifier = 1
+			end
+
+			Count += 1
+		elseif Object:IsA("Decal") or Object:IsA("Texture") then
+			if State.Decals[Object] == nil then
+				State.Decals[Object] = Object.Transparency
+			end
+
+			if Object.Transparency ~= 1 then
+				Object.Transparency = 1
+			end
+		elseif Object:IsA("ParticleEmitter")
+			or Object:IsA("Beam")
+			or Object:IsA("Trail")
+			or Object:IsA("Smoke")
+			or Object:IsA("Fire")
+			or Object:IsA("Sparkles")
+		then
+			if State.Effects[Object] == nil then
+				State.Effects[Object] = Object.Enabled
+			end
+
+			if Object.Enabled then
+				Object.Enabled = false
+			end
+		elseif Object:IsA("BillboardGui") or Object:IsA("SurfaceGui") then
+			if State.Guis[Object] == nil then
+				State.Guis[Object] = Object.Enabled
+			end
+
+			if Object.Enabled then
+				Object.Enabled = false
+			end
+		end
+	end
+
+	return Count
+end
+
+NState.restoreVisualState = function(State)
+	for Object, Original in State.Parts do
+		if Object.Parent then
+			pcall(function()
+				if Object.LocalTransparencyModifier ~= Original then
+					Object.LocalTransparencyModifier = Original
+				end
+			end)
+		end
+	end
+
+	for Object, Original in State.Decals do
+		if Object.Parent then
+			pcall(function()
+				if Object.Transparency ~= Original then
+					Object.Transparency = Original
+				end
+			end)
+		end
+	end
+
+	for Object, Original in State.Effects do
+		if Object.Parent then
+			pcall(function()
+				if Object.Enabled ~= Original then
+					Object.Enabled = Original
+				end
+			end)
+		end
+	end
+
+	for Object, Original in State.Guis do
+		if Object.Parent then
+			pcall(function()
+				if Object.Enabled ~= Original then
+					Object.Enabled = Original
+				end
+			end)
+		end
+	end
+
+	table.clear(State.Parts)
+	table.clear(State.Decals)
+	table.clear(State.Effects)
+	table.clear(State.Guis)
+end
+
+NState.setCitizensCleared = function(Enabled)
+	local State = NState.CitizenState
+	local Folder = NState.Workspace:FindFirstChild("Citizens")
+
+	if Enabled then
+		if State.Active then
+			return #State.Items
+		end
+
+		State.Active = true
+		NState.Environment.NotorietyCitizensCleared = true
+
+		local function Remove(Object)
+			if State.Active and Object.Parent then
+				State.Items[#State.Items + 1] = {
+					Object = Object,
+					Parent = Object.Parent,
+				}
+				Object.Parent = nil
+			end
+		end
+
+		if Folder then
+			for _, Object in Folder:GetChildren() do
+				Remove(Object)
+			end
+
+			State.Connection = Folder.ChildAdded:Connect(Remove)
+		end
+
+		return #State.Items
+	end
+
+	if State.Connection then
+		pcall(function()
+			State.Connection:Disconnect()
+		end)
+		State.Connection = nil
+	end
+
+	local Restored = 0
+
+	for _, Entry in State.Items do
+		local Object = Entry.Object
+
+		if Object and not Object.Parent and Entry.Parent then
+			Object.Parent = Entry.Parent
+			Restored += 1
+		end
+	end
+
+	table.clear(State.Items)
+	State.Active = false
+	NState.Environment.NotorietyCitizensCleared = false
+
+	return Restored
+end
+
+NState.clearGlass = function()
+	return NState.clearVisualState(NState.Workspace:FindFirstChild("Glass"), NState.GlassState)
+end
+
+NState.restoreGlassVisuals = function()
+	NState.restoreVisualState(NState.GlassState)
 end
 
 NState.getEquipmentSpeedMultiplier = function()
@@ -3412,6 +4390,11 @@ NState.applyWeaponData = function(Data)
 			"AmmoMax",
 			"AmmoSeparate",
 			"AmmoSwitch",
+			"Damage",
+			"ReloadTime",
+			"LongerReloadTime",
+			"BulletDuration",
+			"ReloadInterruption",
 			"ManualCasingEjection",
 			"RecoilCameraDirection",
 			"MaxCameraRecoil",
@@ -3432,6 +4415,25 @@ NState.applyWeaponData = function(Data)
 			if type(Data.ManualCasingEjection) == "boolean" then
 				Data.ManualCasingEjection = false
 			end
+		end
+
+		if NState.Environment.NotorietyInfiniteDamageEnabled and type(Data.Damage) == "number" then
+			Data.Damage = NState.MAX_VALUE
+		end
+
+		if NState.Environment.NotorietyInstantReloadEnabled then
+			for _, Key in { "ReloadTime", "LongerReloadTime", "BulletDuration" } do
+				if type(Data[Key]) == "number" then
+					Data[Key] = 0.01
+				end
+			end
+
+			if type(Data.ReloadInterruption) == "boolean" then
+				Data.ReloadInterruption = false
+			end
+
+			NState.shortenSequence(Data.ReloadSequence, Backup)
+			NState.shortenSequence(Data.LongerReloadSequence, Backup)
 		end
 
 		if NState.Environment.NotorietyAccuracyModEnabled and type(Data.Accuracy) == "number" then
@@ -4286,6 +5288,7 @@ NState.runKill = function()
 	NState.Environment.KillPoliceRunning = true
 
 	local Killed = 0
+	local Attempted = 0
 	local Success, Error = xpcall(function()
 		local PoliceFolder = NState.Workspace:FindFirstChild("Police")
 		local Gun = NState.getEquippedGun()
@@ -4294,7 +5297,25 @@ NState.runKill = function()
 			return
 		end
 
+		local Targets = {}
+
 		for _, Target in PoliceFolder:GetChildren() do
+			local Humanoid = Target:FindFirstChildWhichIsA("Humanoid", true)
+			local HitPart = Target:FindFirstChild("Head", true)
+				or Target:FindFirstChild("UpperTorso", true)
+				or Target:FindFirstChild("Torso", true)
+				or Target:FindFirstChild("HumanoidRootPart", true)
+
+			if Humanoid and HitPart and Humanoid.Health > 0 then
+				Targets[#Targets + 1] = {
+					Model = Target,
+					Humanoid = Humanoid,
+					HitPart = HitPart,
+				}
+			end
+		end
+
+		for _, Entry in Targets do
 			if NState.Environment.NotorietyUnloaded then
 				break
 			end
@@ -4307,13 +5328,10 @@ NState.runKill = function()
 				end
 			end
 
-			local Humanoid = Target:FindFirstChildWhichIsA("Humanoid", true)
-			local HitPart = Target:FindFirstChild("Head", true)
-				or Target:FindFirstChild("UpperTorso", true)
-				or Target:FindFirstChild("Torso", true)
-				or Target:FindFirstChild("HumanoidRootPart", true)
+			local Humanoid = Entry.Humanoid
+			local HitPart = Entry.HitPart
 
-			if Humanoid and HitPart and Humanoid.Health > 0 then
+			if Humanoid.Parent and HitPart.Parent and Humanoid.Health > 0 then
 				NState.Event:FireServer(
 					"Damage",
 					Gun,
@@ -4325,8 +5343,12 @@ NState.runKill = function()
 					{}
 				)
 
-				Killed += 1
-				task.wait(0.3)
+				Attempted += 1
+				task.wait(0.16)
+
+				if not Humanoid.Parent or Humanoid.Health <= 0 then
+					Killed += 1
+				end
 			end
 		end
 	end, debug.traceback)
@@ -4339,8 +5361,8 @@ NState.runKill = function()
 		pcall(function()
 			NState.NotorietyUI.Library:Notify({
 				Title = "Kill Police",
-				Content = string.format("Finished. Killed %d police.", Killed),
-				Icon = "check",
+				Content = string.format("Finished. %d/%d police reached zero health.", Killed, Attempted),
+				Icon = Killed > 0 and "check" or "triangle-alert",
 				Duration = 3,
 			})
 		end)
@@ -5411,22 +6433,14 @@ end
 
 NState.initializeMusicOverride()
 
-NState.createRayfieldUI = function()
+NState.createObsidianUI = function()
 	local UIAdapter = NState.NotorietyUI.Library
 	local Window = UIAdapter:CreateWindow({
 		Title = "Notoriety",
 		Folder = "Notoriety",
 		Icon = "crosshair",
-		NewElements = false,
-		Size = UDim2.fromOffset(560, 430),
+		Size = UDim2.fromOffset(760, 520),
 		ToggleKey = Enum.KeyCode.RightShift,
-		HideSearchBar = true,
-		OpenButton = {
-			Title = "Notoriety",
-			Enabled = true,
-			Draggable = true,
-			OnlyMobile = false,
-		},
 	})
 
 	NState.Environment.NotorietyWindow = Window
@@ -5437,7 +6451,7 @@ NState.createRayfieldUI = function()
 
 	local SaveGeneration = 0
 
-	local function saveRayfieldConfig()
+	local function saveConfig()
 		if NState.NotorietyUI.ConfigLoading or not NState.NotorietyUI.Config then
 			return false
 		end
@@ -5447,14 +6461,14 @@ NState.createRayfieldUI = function()
 		end)
 
 		if not Success then
-			warn("[Notoriety] Rayfield Gen2 config save failed: " .. tostring(SaveError))
+			warn("[Notoriety] Obsidian config save failed: " .. tostring(SaveError))
 			return false
 		end
 
 		return true
 	end
 
-	local function requestRayfieldConfigSave()
+	local function requestConfigSave()
 		if NState.NotorietyUI.ConfigLoading or not NState.NotorietyUI.Config then
 			return
 		end
@@ -5470,12 +6484,12 @@ NState.createRayfieldUI = function()
 				return
 			end
 
-			saveRayfieldConfig()
+			saveConfig()
 		end)
 	end
 
-	NState.NotorietyUI.SaveConfig = saveRayfieldConfig
-	NState.NotorietyUI.RequestConfigSave = requestRayfieldConfigSave
+	NState.NotorietyUI.SaveConfig = saveConfig
+	NState.NotorietyUI.RequestConfigSave = requestConfigSave
 
 	local MainTab = Window:Tab({
 		Title = "Main",
@@ -5491,16 +6505,158 @@ NState.createRayfieldUI = function()
 		Callback = function(Enabled)
 			NState.Environment.MaxEverythingEnabled = Enabled == true
 			if NState.Environment.MaxEverythingEnabled then NState.Apply() end
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
 	MainTab:Button({
-		Title = "Kill Police [P]",
-		Desc = "Kills every currently spawned police NPC",
+		Title = "Void Police [P]",
+		Desc = "Moves police below the map using the ownership and teleport options below",
 		Icon = "crosshair",
 		Callback = function()
-			task.spawn(NState.runKill)
+			task.spawn(function()
+				local Moved, Attempted = NState.movePoliceToVoid()
+				NState.NotorietyUI.Library:Notify({
+					Title = "Void Police",
+					Content = string.format("Moved %d/%d police model(s).", Moved, Attempted),
+					Icon = Moved > 0 and "check" or "triangle-alert",
+					Duration = 3,
+				})
+			end)
+		end,
+	})
+
+	MainTab:Button({
+		Title = "Void Citizens (Partial)",
+		Desc = "Best-effort batch void: moves eligible citizens in parallel, but ownership can prevent some from moving",
+		Icon = "user-round-x",
+		Callback = function()
+			task.spawn(function()
+				local Moved, Attempted = NState.moveCitizensToVoid(true, true)
+				NState.NotorietyUI.Library:Notify({
+					Title = "Void Citizens (Partial)",
+					Content = string.format("Moved %d/%d citizen model(s); some may resist due to network ownership.", Moved, Attempted),
+					Icon = Moved > 0 and "check" or "triangle-alert",
+					Duration = 3,
+				})
+			end)
+		end,
+	})
+
+	MainTab:Toggle({
+		Flag = "AutoVoidPolice",
+		Title = "Auto Void Police",
+		Desc = "Automatically moves newly spawned police below the map",
+		Value = NState.Environment.NotorietyAutoVoidPoliceEnabled,
+		Callback = function(Enabled)
+			NState.Environment.NotorietyAutoVoidPoliceEnabled = Enabled == true
+
+			if NState.Environment.NotorietyAutoVoidPoliceEnabled then
+				NState.queuePolice()
+			end
+
+			requestConfigSave()
+		end,
+	})
+
+	MainTab:Toggle({
+		Flag = "VoidPoliceTeleport",
+		Title = "Teleport To Claim Void Targets",
+		Desc = "Teleports you to police or citizens when other players are present so ownership can be claimed; default ON",
+		Value = NState.Environment.NotorietyVoidTeleportEnabled,
+		Callback = function(Enabled)
+			NState.Environment.NotorietyVoidTeleportEnabled = Enabled == true
+			requestConfigSave()
+		end,
+	})
+
+	MainTab:Button({
+		Title = "Teleport Bags to Secure Zone",
+		Desc = "Moves currently spawned loot bags to the secure bag area",
+		Icon = "package-check",
+		Callback = function()
+			local Moved = NState.teleportBags()
+			NState.NotorietyUI.Library:Notify({
+				Title = "Bag Teleport",
+				Content = string.format("Moved %d bag object(s).", Moved),
+				Icon = Moved > 0 and "check" or "triangle-alert",
+				Duration = 3,
+			})
+		end,
+	})
+
+	MainTab:Toggle({
+		Flag = "BagAutoTeleport",
+		Title = "Auto Teleport Bags",
+		Desc = "Automatically moves new and existing loot bags to the secure area",
+		Value = NState.Environment.NotorietyBagAutoTeleportEnabled,
+		Callback = function(Enabled)
+			NState.Environment.NotorietyBagAutoTeleportEnabled = Enabled == true
+
+			if NState.Environment.NotorietyBagAutoTeleportEnabled then
+				NState.queueBags()
+			end
+
+			requestConfigSave()
+		end,
+	})
+
+	MainTab:Button({
+		Title = "Teleport to Exit Van",
+		Desc = "Teleports your character to the current escape van",
+		Icon = "log-in",
+		Callback = function()
+			local Success = NState.teleportToExit()
+
+			NState.NotorietyUI.Library:Notify({
+				Title = "Exit Teleport",
+				Content = Success and "Teleported to the escape van." or "Escape van was not available.",
+				Icon = Success and "check" or "triangle-alert",
+				Duration = 3,
+			})
+		end,
+	})
+
+	MainTab:Toggle({
+		Flag = "DisableCameras",
+		Title = "Hide Cameras Locally (Visual)",
+		Desc = "Hides local camera visuals only; cameras remain server-sided and may still target you",
+		Value = NState.Environment.NotorietyCamerasDisabled,
+		Callback = function(Enabled)
+			NState.setCamerasDisabled(Enabled)
+			requestConfigSave()
+		end,
+	})
+
+	MainTab:Toggle({
+		Flag = "ClearCitizens",
+		Title = "Clear Citizens (Visual)",
+		Desc = "Removes every child from Workspace.Citizens locally; turning it off restores the saved instances",
+		Value = NState.Environment.NotorietyCitizensCleared,
+		Callback = function(Enabled)
+			local Count = NState.setCitizensCleared(Enabled)
+			NState.NotorietyUI.Library:Notify({
+				Title = Enabled and "Citizens Cleared" or "Citizens Restored",
+				Content = string.format(Enabled and "Removed %d citizen instance(s) locally." or "Restored %d citizen instance(s).", Count),
+				Icon = Count > 0 and "check" or "triangle-alert",
+				Duration = 3,
+			})
+			requestConfigSave()
+		end,
+	})
+
+	MainTab:Button({
+		Title = "Break All Glass (Visual)",
+		Desc = "Hides all map glass locally; server glass state is unchanged",
+		Icon = "square-x",
+		Callback = function()
+			local Count = NState.clearGlass()
+			NState.NotorietyUI.Library:Notify({
+				Title = "Glass Cleared",
+				Content = string.format("Hid %d glass part(s) locally.", Count),
+				Icon = Count > 0 and "check" or "triangle-alert",
+				Duration = 3,
+			})
 		end,
 	})
 
@@ -5517,7 +6673,7 @@ NState.createRayfieldUI = function()
 		Value = NState.Environment.NotorietyTeammateTarget,
 		Callback = function(Value)
 			NState.Environment.NotorietyTeammateTarget = tostring(Value or "All")
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -5532,12 +6688,12 @@ NState.createRayfieldUI = function()
 		end
 
 		local Values = NState.getTeammatePickerValues()
-		Dropdown:Refresh(Values)
+		Dropdown:SetValues(Values)
 
 		if not table.find(Values, NState.Environment.NotorietyTeammateTarget) then
 			NState.Environment.NotorietyTeammateTarget = "All"
 			pcall(function()
-				Dropdown:Set("All")
+				Dropdown:SetValue("All")
 			end)
 		end
 	end
@@ -5571,7 +6727,7 @@ NState.createRayfieldUI = function()
 		Value = NState.Environment.NotorietyInfiniteYellMarkEnabled,
 		Callback = function(Enabled)
 			NState.setYellMarkPatchEnabled(Enabled)
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -5587,7 +6743,7 @@ NState.createRayfieldUI = function()
 		Value = NState.Environment.NotorietyYellMarkMethod,
 		Callback = function(Method)
 			NState.setYellMarkMethod(Method)
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -5598,7 +6754,7 @@ NState.createRayfieldUI = function()
 		Value = NState.Environment.NotorietyYellThroughWalls,
 		Callback = function(Enabled)
 			NState.setYellThroughWalls(Enabled)
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -5609,7 +6765,7 @@ NState.createRayfieldUI = function()
 		Value = NState.Environment.NotorietyTeammateYellInfiniteRange,
 		Callback = function(Enabled)
 			NState.setTeammateYellInfiniteRange(Enabled)
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -5620,7 +6776,7 @@ NState.createRayfieldUI = function()
 		Value = NState.Environment.NotorietyTeammateYellThroughWalls,
 		Callback = function(Enabled)
 			NState.setTeammateYellThroughWalls(Enabled)
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -5631,7 +6787,7 @@ NState.createRayfieldUI = function()
 		Value = NState.Environment.NotorietyAutoYellEnabled,
 		Callback = function(Enabled)
 			NState.YellPatchState.SetAutoYellEnabled(Enabled)
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -5642,7 +6798,7 @@ NState.createRayfieldUI = function()
 		Value = NState.Environment.NotorietyNoYellDelayEnabled,
 		Callback = function(Enabled)
 			NState.YellPatchState.SetNoDelayEnabled(Enabled)
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -5653,7 +6809,7 @@ NState.createRayfieldUI = function()
 		Value = NState.Environment.NotorietyPoliceHeadScaleEnabled,
 		Callback = function(Enabled)
 			NState.setPoliceHeadScaleEnabled(Enabled)
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -5679,7 +6835,7 @@ NState.createRayfieldUI = function()
 				NState.applyPoliceHeadScale()
 			end
 
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -5698,7 +6854,7 @@ NState.createRayfieldUI = function()
 			NState.Environment.NotorietyESPTextEnabled = Enabled == true
 			NState.updateItemESPVisibility()
 			NState.updatePoliceESP()
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -5709,7 +6865,7 @@ NState.createRayfieldUI = function()
 		Value = NState.Environment.NotorietyItemESPEnabled,
 		Callback = function(Enabled)
 			NState.setItemESPEnabled(Enabled)
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -5721,7 +6877,7 @@ NState.createRayfieldUI = function()
 		Callback = function(Enabled)
 			NState.Environment.NotorietyItemESPLabels = Enabled == true
 			if NState.Environment.NotorietyItemESPEnabled and not NState.NotorietyUI.ConfigLoading then NState.startItemESP() end
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -5734,7 +6890,7 @@ NState.createRayfieldUI = function()
 		Callback = function(Value)
 			NState.Environment.NotorietyItemESPTransparency = math.clamp(tonumber(Value) or 55, 0, 100)
 			NState.updateItemESPVisibility()
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -5747,7 +6903,7 @@ NState.createRayfieldUI = function()
 		Callback = function(Value)
 			NState.Environment.NotorietyItemESPMaxDistance = math.clamp(tonumber(Value) or 2500, 0, 10000)
 			NState.updateItemESPVisibility()
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -5765,7 +6921,7 @@ NState.createRayfieldUI = function()
 			Callback = function(Enabled)
 				NState.Environment.NotorietyItemESPCategories[Category] = Enabled == true
 				if NState.Environment.NotorietyItemESPEnabled and not NState.NotorietyUI.ConfigLoading then NState.startItemESP() end
-				requestRayfieldConfigSave()
+				requestConfigSave()
 			end,
 		})
 	end
@@ -5777,7 +6933,7 @@ NState.createRayfieldUI = function()
 		Value = NState.Environment.NotorietyPoliceESPEnabled,
 		Callback = function(Enabled)
 			NState.setPoliceESPEnabled(Enabled)
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -5788,7 +6944,7 @@ NState.createRayfieldUI = function()
 		Callback = function(Enabled)
 			NState.Environment.NotorietyPoliceESPNames = Enabled == true
 			if not NState.NotorietyUI.ConfigLoading then NState.refreshPoliceESP() end
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -5799,7 +6955,7 @@ NState.createRayfieldUI = function()
 		Callback = function(Enabled)
 			NState.Environment.NotorietyPoliceESPHealth = Enabled == true
 			if not NState.NotorietyUI.ConfigLoading then NState.refreshPoliceESP() end
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -5812,7 +6968,7 @@ NState.createRayfieldUI = function()
 		Callback = function(Value)
 			NState.Environment.NotorietyPoliceESPMaxDistance = math.clamp(tonumber(Value) or 2500, 0, 10000)
 			NState.updatePoliceESP()
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -5829,7 +6985,7 @@ NState.createRayfieldUI = function()
 		Value = NState.Environment.NotorietyWeaponEnabled,
 		Callback = function(Enabled)
 			NState.setWeaponModificationsEnabled(Enabled)
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -5842,7 +6998,7 @@ NState.createRayfieldUI = function()
 			Callback = function(Enabled)
 				NState.Environment[EnvironmentKey] = Enabled == true
 				if not NState.NotorietyUI.ConfigLoading then NState.refreshWeaponModifications() end
-				requestRayfieldConfigSave()
+				requestConfigSave()
 			end,
 		})
 	end
@@ -5854,7 +7010,7 @@ NState.createRayfieldUI = function()
 		Value = NState.Environment.NotorietyFriendlyFireEnabled,
 		Callback = function(Enabled)
 			NState.setFriendlyFireEnabled(Enabled)
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -5866,7 +7022,7 @@ NState.createRayfieldUI = function()
 		Callback = function(Enabled)
 			NState.Environment.NotorietySilentAimEnabled = Enabled == true
 			if not NState.NotorietyUI.ConfigLoading then NState.refreshWeaponModifications() end
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -5891,7 +7047,7 @@ NState.createRayfieldUI = function()
 		Callback = function(Enabled)
 			NState.Environment.NotorietyWallBangEnabled = Enabled == true
 			if not NState.NotorietyUI.ConfigLoading then NState.refreshWeaponModifications() end
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -5925,13 +7081,15 @@ NState.createRayfieldUI = function()
 			end
 
 			NState.Environment.NotorietySilentAimFOV = math.clamp(Number, 0, 2000)
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
-	addWeaponFeatureToggle("RapidFire", "Rapid Fire", "Applies custom fire delay and bolt duration", "NotorietyRapidFireEnabled")
+	addWeaponFeatureToggle("RapidFire", "Rapid Fire", "Applies custom fire delay and bolt duration to guns and the chainsaw", "NotorietyRapidFireEnabled")
 	addWeaponFeatureToggle("NoRecoil", "No Recoil", "Removes recoil, camera kick, shake, and pushback", "NotorietyNoRecoilEnabled")
 	addWeaponFeatureToggle("InfiniteAmmo", "Infinite Ammo", "Keeps primary/secondary magazine and reserve ammo effectively infinite", "NotorietyInfiniteAmmoEnabled")
+	addWeaponFeatureToggle("InfiniteDamage", "Infinite Damage", "Sets supported weapon damage values to the maximum safe number", "NotorietyInfiniteDamageEnabled")
+	addWeaponFeatureToggle("InstantReload", "Instant Reload", "Shortens reload timers and reload animation sequences, including the chainsaw", "NotorietyInstantReloadEnabled")
 	addWeaponFeatureToggle("FullAuto", "Force Full Auto", "Forces supported guns into automatic fire mode", "NotorietyFullAutoEnabled")
 	addWeaponFeatureToggle("AccuracyMod", "Accuracy Override", "Enables the custom accuracy slider independently of recoil", "NotorietyAccuracyModEnabled")
 
@@ -5957,7 +7115,7 @@ NState.createRayfieldUI = function()
 				NState.refreshWeaponModifications()
 			end
 
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -5983,7 +7141,7 @@ NState.createRayfieldUI = function()
 				NState.refreshWeaponModifications()
 			end
 
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -6010,7 +7168,7 @@ NState.createRayfieldUI = function()
 				NState.refreshWeaponModifications()
 			end
 
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -6024,20 +7182,20 @@ NState.createRayfieldUI = function()
 			NState.Environment.NotorietyAccuracy = 100
 
 			pcall(function()
-				NState.NotorietyUI.FireDelaySlider:Set(0.01)
+				NState.NotorietyUI.FireDelaySlider:SetValue(0.01)
 			end)
 			pcall(function()
-				NState.NotorietyUI.BoltDurationSlider:Set(0.001)
+				NState.NotorietyUI.BoltDurationSlider:SetValue(0.001)
 			end)
 			pcall(function()
-				NState.NotorietyUI.AccuracySlider:Set(100)
+				NState.NotorietyUI.AccuracySlider:SetValue(100)
 			end)
 
 			if NState.Environment.NotorietyWeaponEnabled and not NState.NotorietyUI.ConfigLoading then
 				NState.refreshWeaponModifications()
 			end
 
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -6054,7 +7212,7 @@ NState.createRayfieldUI = function()
 		Value = NState.Environment.NotorietyRealismModeEnabled,
 		Callback = function(Enabled)
 			NState.setRealismModeEnabled(Enabled)
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -6065,7 +7223,7 @@ NState.createRayfieldUI = function()
 		Value = NState.Environment.NotorietyBugFeatureEnabled,
 		Callback = function(Enabled)
 			NState.setBugFeatureEnabled(Enabled)
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -6098,7 +7256,7 @@ NState.createRayfieldUI = function()
 				NState.applyMusicTrackSelection(true)
 				NState.applyMusicModeOverride()
 			end
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -6118,7 +7276,7 @@ NState.createRayfieldUI = function()
 					NState.applyMusicModeOverride()
 				end
 			end
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -6141,7 +7299,7 @@ NState.createRayfieldUI = function()
 
 				NState.Environment[EnvironmentKey] = math.clamp(Number, 0, 100)
 				NState.applyAudioVolumes()
-				requestRayfieldConfigSave()
+				requestConfigSave()
 			end,
 		})
 	end
@@ -6212,12 +7370,12 @@ NState.createRayfieldUI = function()
 				NState.NotorietyUI.UIVolumeSlider,
 			} do
 				pcall(function()
-					Slider:Set(100)
+					Slider:SetValue(100)
 				end)
 			end
 
 			NState.applyAudioVolumes()
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -6235,7 +7393,7 @@ NState.createRayfieldUI = function()
 		Callback = function(Enabled)
 			NState.Environment.NotorietyEquipmentSpeedEnabled = Enabled == true
 			NState.applyEquipmentPlacementSpeed()
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -6247,7 +7405,7 @@ NState.createRayfieldUI = function()
 		Callback = function(Enabled)
 			NState.Environment.NotorietyEquipmentInstantEnabled = Enabled == true
 			NState.applyEquipmentPlacementSpeed()
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -6277,7 +7435,7 @@ NState.createRayfieldUI = function()
 				NState.applyEquipmentPlacementSpeed()
 			end
 
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -6289,14 +7447,14 @@ NState.createRayfieldUI = function()
 			NState.Environment.NotorietyEquipmentSpeedMultiplier = 2
 
 			pcall(function()
-				NState.NotorietyUI.EquipmentSpeedSlider:Set(2)
+				NState.NotorietyUI.EquipmentSpeedSlider:SetValue(2)
 			end)
 
 			if NState.Environment.NotorietyEquipmentSpeedEnabled then
 				NState.applyEquipmentPlacementSpeed()
 			end
 
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -6308,7 +7466,7 @@ NState.createRayfieldUI = function()
 		Callback = function(Enabled)
 			NState.Environment.NotorietyInfiniteEquipmentEnabled = Enabled == true
 			NState.Apply()
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -6320,7 +7478,7 @@ NState.createRayfieldUI = function()
 		Callback = function(Enabled)
 			NState.Environment.NotorietyEquipmentRangeEnabled = Enabled == true
 			NState.applyEquipmentPlacementRange()
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -6338,7 +7496,7 @@ NState.createRayfieldUI = function()
 			if Number == nil or Number ~= Number then return end
 			NState.Environment.NotorietyEquipmentPlacementRange = math.clamp(Number, 10, 100)
 			NState.applyEquipmentPlacementRange()
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -6350,7 +7508,7 @@ NState.createRayfieldUI = function()
 		Callback = function(Enabled)
 			NState.Environment.NotorietyEquipmentPositionEnabled = Enabled == true
 			NState.applyEquipmentPositioning()
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -6371,7 +7529,7 @@ NState.createRayfieldUI = function()
 			end
 
 			NState.Environment.NotorietyEquipmentPositionX = Number
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -6392,7 +7550,7 @@ NState.createRayfieldUI = function()
 			end
 
 			NState.Environment.NotorietyEquipmentPositionY = Number
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -6413,7 +7571,7 @@ NState.createRayfieldUI = function()
 			end
 
 			NState.Environment.NotorietyEquipmentPositionZ = Number
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -6427,16 +7585,16 @@ NState.createRayfieldUI = function()
 			NState.Environment.NotorietyEquipmentPositionZ = 0
 
 			pcall(function()
-				NState.NotorietyUI.EquipmentPositionXSlider:Set(0)
+				NState.NotorietyUI.EquipmentPositionXSlider:SetValue(0)
 			end)
 			pcall(function()
-				NState.NotorietyUI.EquipmentPositionYSlider:Set(0)
+				NState.NotorietyUI.EquipmentPositionYSlider:SetValue(0)
 			end)
 			pcall(function()
-				NState.NotorietyUI.EquipmentPositionZSlider:Set(0)
+				NState.NotorietyUI.EquipmentPositionZSlider:SetValue(0)
 			end)
 
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -6452,13 +7610,27 @@ NState.createRayfieldUI = function()
 		Desc = "Default: RightShift",
 		Value = "RightShift",
 		Callback = function(Value)
-			local KeyCode = Enum.KeyCode[Value]
+			local KeyCode
+
+			if typeof(Value) == "EnumItem" then
+				KeyCode = Value
+			elseif type(Value) == "string" then
+				local Name = Value:match("([^%.]+)$") or Value
+				if Name ~= "" and Name ~= "None" and Name ~= "Unknown" then
+					local Success, Resolved = pcall(function()
+						return Enum.KeyCode[Name]
+					end)
+				if Success then
+						KeyCode = Resolved
+					end
+				end
+			end
 
 			if KeyCode then
 				Window:SetToggleKey(KeyCode)
 			end
 
-			requestRayfieldConfigSave()
+			requestConfigSave()
 		end,
 	})
 
@@ -6467,7 +7639,7 @@ NState.createRayfieldUI = function()
 		Desc = "Restores modified data and unloads Notoriety",
 		Icon = "log-out",
 		Callback = function()
-			requestRayfieldConfigSave()
+			requestConfigSave()
 
 			task.defer(function()
 				if type(NState.Environment.UnloadNotoriety) == "function" then
@@ -6476,6 +7648,8 @@ NState.createRayfieldUI = function()
 			end)
 		end,
 	})
+
+	UIAdapter:BuildSettings(UtilityTab)
 
 	if type(ConfigManager) == "table" then
 		local Configs = ConfigManager:AllConfigs()
@@ -6506,7 +7680,7 @@ NState.createRayfieldUI = function()
 		"NotorietyKillPolice",
 		function(_, InputState)
 			if InputState == Enum.UserInputState.Begin and not NState.Environment.NotorietyUnloaded then
-				task.spawn(NState.runKill)
+				task.spawn(NState.movePoliceToVoid)
 			end
 
 			return Enum.ContextActionResult.Pass
@@ -6549,6 +7723,13 @@ NState.unloadNotoriety = function()
 	NState.Environment.NotorietyUnloaded = true
 	NState.Environment.MaxEverythingEnabled = false
 	NState.Environment.NotorietyWeaponEnabled = false
+	NState.Environment.NotorietyInfiniteDamageEnabled = false
+	NState.Environment.NotorietyInstantReloadEnabled = false
+	NState.Environment.NotorietyBagAutoTeleportEnabled = false
+	NState.Environment.NotorietyAutoVoidPoliceEnabled = false
+	NState.Environment.NotorietyVoidTeleportEnabled = true
+	NState.Environment.NotorietyCamerasDisabled = false
+	NState.Environment.NotorietyCitizensCleared = false
 	NState.Environment.NotorietyFriendlyFireEnabled = false
 	NState.Environment.NotorietyRealismModeEnabled = false
 	NState.Environment.NotorietyBugFeatureEnabled = false
@@ -6592,6 +7773,9 @@ NState.unloadNotoriety = function()
 	end
 
 	NState.restoreFriendlyFire()
+	NState.restoreAllCameras()
+	NState.setCitizensCleared(false)
+	NState.restoreGlassVisuals()
 	NState.restoreClientMutators()
 	NState.restoreRuntimeSilentAimWrappers()
 	NState.restoreAllWeaponData()
@@ -6644,7 +7828,7 @@ NState.Environment.UnloadNotoriety = NState.unloadNotoriety
 NState.trackWeaponContainer(NState.Weapons)
 NState.trackWeaponContainer(NState.Backpack)
 NState.trackWeaponContainer(NState.LocalPlayer.Character)
-NState.createRayfieldUI()
+NState.createObsidianUI()
 
 if typeof(NState.NotorietyUI.Root) == "Instance" and type(NState.UIProtector.protectUI) == "function" then
 	local ProtectedParent = NState.resolveProtectedUIParent()
@@ -6663,6 +7847,14 @@ NState.setFriendlyFireEnabled(NState.Environment.NotorietyFriendlyFireEnabled)
 NState.setRealismModeEnabled(NState.Environment.NotorietyRealismModeEnabled)
 NState.setBugFeatureEnabled(NState.Environment.NotorietyBugFeatureEnabled)
 NState.setWeaponModificationsEnabled(NState.Environment.NotorietyWeaponEnabled)
+NState.setCamerasDisabled(NState.Environment.NotorietyCamerasDisabled)
+NState.setCitizensCleared(NState.Environment.NotorietyCitizensCleared)
+if NState.Environment.NotorietyBagAutoTeleportEnabled then
+	NState.queueBags()
+end
+if NState.Environment.NotorietyAutoVoidPoliceEnabled then
+	NState.queuePolice()
+end
 NState.setYellMarkPatchEnabled(NState.Environment.NotorietyInfiniteYellMarkEnabled)
 NState.YellPatchState.SetAutoYellEnabled(NState.Environment.NotorietyAutoYellEnabled)
 NState.YellPatchState.SetNoDelayEnabled(NState.Environment.NotorietyNoYellDelayEnabled)
@@ -6682,6 +7874,34 @@ NState.Environment.MaxEverythingConnection = NState.RunService.Heartbeat:Connect
 	end
 
 	NState.Apply()
+
+	if NState.Environment.NotorietyBagAutoTeleportEnabled then
+		NState.queueBags()
+	else
+		NState.BagTeleportState.Refresh = 0
+	end
+
+	if NState.Environment.NotorietyAutoVoidPoliceEnabled then
+		NState.PoliceVoidState.Refresh += DeltaTime
+
+		if NState.PoliceVoidState.Refresh >= 0.1 then
+			NState.PoliceVoidState.Refresh = 0
+			NState.queuePolice()
+		end
+	else
+		NState.PoliceVoidState.Refresh = 0
+	end
+
+	if NState.Environment.NotorietyCamerasDisabled then
+		NState.CameraState.Refresh += DeltaTime
+
+		if NState.CameraState.Refresh >= 0.5 then
+			NState.CameraState.Refresh = 0
+			NState.disableAllCameras()
+		end
+	else
+		NState.CameraState.Refresh = 0
+	end
 
 	if NState.Environment.NotorietyAutoYellEnabled then
 		NState.YellPatchState.AutoRefresh += DeltaTime

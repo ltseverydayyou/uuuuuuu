@@ -7338,6 +7338,9 @@ uiRefs.cursorInsideModel = function(m, pad)
 	local p = pad or 2;
 	return x >= a - p and x <= c + p and y >= b - p and y <= d + p;
 end;
+uiRefs.isMouseButtonInput = function(inputType)
+	return inputType == Enum.UserInputType.MouseButton1 or inputType == Enum.UserInputType.MouseButton2 or inputType == Enum.UserInputType.MouseButton3;
+end;
 uiRefs.getBindInputEnum = function(name)
 	local raw = tostring(name or "");
 	if raw == "" then
@@ -7375,7 +7378,7 @@ uiRefs.collectHotkeyInputs = function()
 	local seen = {};
 	local function push(name)
 		local enumItem = uiRefs.getBindInputEnum(name);
-		if enumItem and (not seen[enumItem]) then
+		if enumItem and (not uiRefs.isMouseButtonInput(enumItem)) and (not seen[enumItem]) then
 			seen[enumItem] = true;
 			out[#out + 1] = enumItem;
 		end;
@@ -7578,7 +7581,7 @@ rebindStrongInputs = function()
 		return false;
 	end;
 	local lockInput = uiRefs.getBindInputEnum(uiRefs.lockInputName);
-	if lockInput then
+	if lockInput and (not uiRefs.isMouseButtonInput(lockInput)) then
 		uiRefs.lockAct = function(_, inputState, inputObject)
 			local handled = uiRefs.handleBoundInput(inputObject, inputState);
 			if VLO.input.isGamepadKeyCode(inputObject and inputObject.KeyCode) or VLO.input.isGamepadInputType(inputObject and inputObject.UserInputType) then
@@ -7614,7 +7617,9 @@ rebindStrongInputs = function()
 		end;
 	end;
 	uiRefs.hotkeyRawCon = UIS.InputBegan:Connect(function(inputObject)
-		uiRefs.handleBoundInput(inputObject, Enum.UserInputState.Begin);
+		if uiRefs.isMouseButtonInput(inputObject.UserInputType) or VLO.input.isGamepadInputType(inputObject.UserInputType) or VLO.input.isGamepadKeyCode(inputObject.KeyCode) then
+			uiRefs.handleBoundInput(inputObject, Enum.UserInputState.Begin);
+		end;
 	end);
 	uiRefs.hotkeyChangedCon = UIS.InputChanged:Connect(function(inputObject)
 		if VLO.input.isAnalogBindingName(inputObject.KeyCode and inputObject.KeyCode.Name) then
@@ -7622,7 +7627,9 @@ rebindStrongInputs = function()
 		end;
 	end);
 	uiRefs.hotkeyEndedCon = UIS.InputEnded:Connect(function(inputObject)
-		uiRefs.handleBoundInput(inputObject, Enum.UserInputState.End);
+		if uiRefs.isMouseButtonInput(inputObject.UserInputType) or VLO.input.isGamepadInputType(inputObject.UserInputType) or VLO.input.isGamepadKeyCode(inputObject.KeyCode) then
+			uiRefs.handleBoundInput(inputObject, Enum.UserInputState.End);
+		end;
 	end);
 	uiRefs.gamepadRelevant = {};
 	if VLO.input.isGamepadBindingName(uiRefs.lockInputName) then

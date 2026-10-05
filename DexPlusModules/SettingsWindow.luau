@@ -1,4 +1,5 @@
 --!nonstrict
+local task, coroutine, TweenInfo = task, coroutine, TweenInfo
 local unpack = table.unpack or unpack
 local loadstring = loadstring or load
 local newproxy = newproxy or function()
@@ -22,6 +23,9 @@ local API,RMD,env,service,plr,create,createSimple -- Main Locals
 
 local function initDeps(data)
 	Main = data.Main
+	task = Main.Tasks or task
+	coroutine = Main.Coroutine or coroutine
+	TweenInfo = Main.TweenInfo or TweenInfo
 	Lib = data.Lib
 	Apps = data.Apps
 	Settings = data.Settings
@@ -70,187 +74,76 @@ local function main()
 		end)
 	end
 	
+	local function makeRow(title, width, height)
+		local frame = Lib.Frame.new()
+		frame.Gui.Parent = ListFrame
+		frame.Gui.BackgroundTransparency = 1
+		frame.Gui.Size = UDim2.new(1, -8, 0, height or 26)
+		local label = Lib.Label.new()
+		label.Gui.Parent = frame.Gui
+		label.Gui.Size = UDim2.new(1, -(width or 0) - 10, 1, 0)
+		label.Gui.Text = title
+		label.Gui.TextTruncate = Enum.TextTruncate.AtEnd
+		Lib.BindTheme(label.Gui, {TextColor3 = "Text"})
+		return frame.Gui
+	end
 	local function AddCheckbox(title, default)
-		local frame = Lib.Frame.new()
-		frame.Gui.Parent = ListFrame
-		frame.Gui.Transparency = 1
-		frame.Gui.Size = UDim2.new(1,0,0,20)
-		
-		local listlayout = Instance.new("UIListLayout")
-		listlayout.Parent = frame.Gui
-		listlayout.FillDirection = Enum.FillDirection.Horizontal
-		listlayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
-		listlayout.VerticalAlignment = Enum.VerticalAlignment.Center
-		listlayout.Padding = UDim.new(0, 10)
-		
-		-- Checkbox
-		local checkbox = Lib.Checkbox.new()
-		
-		checkbox.Gui.Parent = frame.Gui
-		checkbox.Gui.Size = UDim2.new(0,15,0,15)
-		
-		-- Label
-		local label = Lib.Label.new()
-		
-		label.Gui.Parent = frame.Gui
-		label.Gui.Size = UDim2.new(1, 0,1, -15)
-		label.Gui.Text = title
-		label.TextTruncate = Enum.TextTruncate.AtEnd
-		
-		checkbox:SetState(default or false)
-		
-		return checkbox
+		local row = makeRow(title, 18)
+		local box = Lib.Checkbox.new()
+		box.Gui.Size = UDim2.new(0, 18, 0, 18)
+		box.Gui.Position = UDim2.new(1, -18, 0.5, -9)
+		box.Gui.Parent = row
+		box:SetState(default == true)
+		return box
 	end
-	
 	local function AddTextbox(title, default, sizeX)
-		default = default and tostring(default) or ""
-		local frame = Lib.Frame.new()
-		frame.Gui.Parent = ListFrame
-		frame.Gui.Transparency = 1
-		frame.Gui.Size = UDim2.new(1,0,0,20)
-
-		local listlayout = Instance.new("UIListLayout")
-		listlayout.Parent = frame.Gui
-		listlayout.FillDirection = Enum.FillDirection.Horizontal
-		listlayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
-		listlayout.VerticalAlignment = Enum.VerticalAlignment.Center
-		listlayout.Padding = UDim.new(0, 10)
-
-		-- Textbox
-		local textbox = Instance.new("TextBox") -- replaced cuz why Moon make every inputs only work on mouse/pc users >:( 
-		textbox.BackgroundColor3 = Settings.Theme.TextBox
-		textbox.BorderColor3 = Settings.Theme.Outline3
-		textbox.ClearTextOnFocus = false
-		textbox.TextColor3 = Settings.Theme.Text
-		textbox.Font = Enum.Font.SourceSans
-		textbox.TextSize = 14
-		textbox.ZIndex = 2
-
-		textbox.Parent = frame.Gui
-		if sizeX and type(sizeX) == "number" then
-			textbox.Size = UDim2.new(0,sizeX,0,15)
-		else
-			textbox.Size = UDim2.new(0,45,0,15)
-		end
-		
-		frame.Gui.AutomaticSize = Enum.AutomaticSize.X
-		textbox.AutomaticSize = Enum.AutomaticSize.X
-
-		-- Label
-		local label = Lib.Label.new()
-
-		label.Parent = frame.Gui
-		label.Size = UDim2.new(1, 0,1, -15)
-		label.Text = title
-		label.TextTruncate = Enum.TextTruncate.AtEnd
-
-		textbox.Text = default
-
-		return textbox
+		local width = math.max(60, sizeX or 70)
+		local row = makeRow(title, width)
+		local box = Instance.new("TextBox")
+		box.Size = UDim2.new(0, width, 0, 22)
+		box.Position = UDim2.new(1, -width, 0.5, -11)
+		box.ClearTextOnFocus = false
+		box.Font = Lib.GetUIFont()
+		box.TextSize = 14
+		box.Text = default == nil and "" or tostring(default)
+		Lib.BindTheme(box, {BackgroundColor3 = "TextBox", TextColor3 = "Text", BorderColor3 = "Outline3"})
+		box.Parent = row
+		return box
 	end
-	
 	local function AddDropdown(title, options, default, allowEmpty, sizeX)
-		if allowEmpty == nil then allowEmpty = true end
-		
-		local frame = Lib.Frame.new()
-		frame.Gui.Parent = ListFrame
-		frame.Gui.Transparency = 1
-		frame.Gui.Size = UDim2.new(1,0,0,20)
-
-		local listlayout = Instance.new("UIListLayout")
-		listlayout.Parent = frame.Gui
-		listlayout.FillDirection = Enum.FillDirection.Horizontal
-		listlayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
-		listlayout.VerticalAlignment = Enum.VerticalAlignment.Center
-		listlayout.Padding = UDim.new(0, 10)
-
-		-- Textbox
-		local dropdown = Lib.DropDown.new()
-		dropdown.CanBeEmpty = allowEmpty
-		dropdown.Size = UDim2.new(0,sizeX or 75,0,15)
-		dropdown:SetOptions(options)
-		if default then dropdown:SetSelected(default) end
-		dropdown.Gui.Parent = frame.Gui
-
-		frame.Gui.AutomaticSize = Enum.AutomaticSize.X
-
-		-- Label
-		local label = Lib.Label.new()
-
-		label.Parent = frame.Gui
-		label.Size = UDim2.new(1, 0,1, -15)
-		label.Text = title
-		label.TextTruncate = Enum.TextTruncate.AtEnd
-		
-		return dropdown
+		local width = math.max(80, sizeX or 100)
+		local row = makeRow(title, width)
+		local box = Lib.DropDown.new()
+		box.CanBeEmpty = allowEmpty ~= false
+		box.Size = UDim2.new(0, width, 0, 22)
+		box.Position = UDim2.new(1, -width, 0.5, -11)
+		box:SetOptions(options)
+		if default then box:SetSelected(default) end
+		box.Gui.Parent = row
+		return box
 	end
-
 	local function AddButton(title, buttonText, sizeX)
-		local frame = Lib.Frame.new()
-		frame.Gui.Parent = ListFrame
-		frame.Gui.Transparency = 1
-		frame.Gui.Size = UDim2.new(1,0,0,24)
-
-		local listlayout = Instance.new("UIListLayout")
-		listlayout.Parent = frame.Gui
-		listlayout.FillDirection = Enum.FillDirection.Horizontal
-		listlayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
-		listlayout.VerticalAlignment = Enum.VerticalAlignment.Center
-		listlayout.Padding = UDim.new(0, 10)
-
-		local button = Lib.Button.new()
-		button.Gui.Parent = frame.Gui
-		button.Size = UDim2.new(0,sizeX or 70,0,20)
-		button.Text = buttonText or "Run"
-
-		local label = Lib.Label.new()
-		label.Gui.Parent = frame.Gui
-		label.Gui.Size = UDim2.new(1, 0,1, -20)
-		label.Gui.Text = title
-		label.TextTruncate = Enum.TextTruncate.AtEnd
-
-		return button
+		local width = math.max(60, sizeX or 70)
+		local row = makeRow(title, width)
+		local btn = Lib.Button.new()
+		btn.Size = UDim2.new(0, width, 0, 22)
+		btn.Position = UDim2.new(1, -width, 0.5, -11)
+		btn.Text = buttonText or "Run"
+		btn.Gui.Parent = row
+		return btn
 	end
-	
 	local function AddSeperator(title)
-
-		local frame = Lib.Frame.new()
-		frame.Gui.Parent = ListFrame
-		frame.Gui.Transparency = 1
-		frame.Gui.Size = UDim2.new(1,0,0,20)
-		
-		-- Label
-		local label = Lib.Label.new()
-
-		label.Parent = frame.Gui
-		--label.AnchorPoint = Vector2.new(0,1)
-		--label.Position = UDim2.new(0,0,0,0)
-		label.Size = UDim2.new(1, 0,1, 0)
-		label.Text = title
-		label.TextSize = 16
-		label.TextTruncate = Enum.TextTruncate.AtEnd
-
-		return frame
+		local row = makeRow(title, 0, 28)
+		return row
 	end
-	
 	local function AddText(text)
-		local frame = Lib.Frame.new()
-		frame.Gui.Parent = ListFrame
-		frame.Gui.Transparency = 1
-		frame.Gui.Size = UDim2.new(1,0,0,15)
-
-		-- Label
+		local row = makeRow("", 0, 36)
 		local label = Lib.Label.new()
-
-		label.Parent = frame.Gui
-		--label.AnchorPoint = Vector2.new(0,1)
-		--label.Position = UDim2.new(0,0,0,0)
-		label.Size = UDim2.new(1, 0,1, 0)
-		label.TextColor3 = Color3.fromRGB(185,185,185)
+		label.Gui.Parent = row
+		label.Size = UDim2.new(1, 0, 1, 0)
 		label.Text = text
-		label.TextSize = 14
-		label.TextTruncate = Enum.TextTruncate.AtEnd
-
+		label.Gui.TextWrapped = true
+		Lib.BindTheme(label.Gui, {TextColor3 = "PlaceholderText"})
 		return label
 	end
 
@@ -357,7 +250,10 @@ local function main()
 	SettingsWindow.Init = function()
 		window = Lib.Window.new()
 		window:SetTitle("Settings")
-		window:Resize(Settings.Window.SettingsWidth or 250, Settings.Window.SettingsHeight or 375)
+		local w, h = Lib.FitSize(Settings.Window.SettingsWidth or 380, Settings.Window.SettingsHeight or 520)
+		window.MinX = math.min(340, w)
+		window.MinY = math.min(280, h)
+		window:Resize(w, h)
 		SettingsWindow.Window = window
 
 		trackConn(window.GuiElems.Main:GetPropertyChangedSignal("Size"):Connect(function()
@@ -367,7 +263,7 @@ local function main()
 
 			local sizeX = math.floor(tonumber(window.SizeX) or window.GuiElems.Main.AbsoluteSize.X or Settings.Window.SettingsWidth or 250)
 			local sizeY = math.floor(tonumber(window.SizeY) or window.GuiElems.Main.AbsoluteSize.Y or Settings.Window.SettingsHeight or 375)
-			sizeX = math.clamp(sizeX, 220, 550)
+			sizeX = math.clamp(sizeX, 340, 800)
 			sizeY = math.clamp(sizeY, 280, 700)
 
 			Settings.Window.SettingsWidth = sizeX
@@ -427,7 +323,7 @@ local function main()
 		ListFrame.BackgroundTransparency = 1
 		ListFrame.CanvasSize = UDim2.new(0,0,0,0)
 		ListFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
-		ListFrame.ScrollBarThickness = 16
+		ListFrame.ScrollBarThickness = 6
 		ListFrame.BottomImage = ""
 		ListFrame.TopImage = ""
 		ListFrame.ScrollBarImageColor3 = Color3.fromRGB(70, 70, 70)
@@ -511,7 +407,7 @@ local function main()
 				persistUserSettings()
 			end
 
-			local anchorGui = anchor.Gui or anchor
+			local anchorGui = typeof(anchor) == "Instance" and anchor or anchor.Gui
 			local maxY = math.max(0, ListFrame.AbsoluteCanvasSize.Y - ListFrame.AbsoluteWindowSize.Y)
 			local targetY = ListFrame.CanvasPosition.Y + (anchorGui.AbsolutePosition.Y - ListFrame.AbsolutePosition.Y) - 4
 			ListFrame.CanvasPosition = Vector2.new(ListFrame.CanvasPosition.X, math.clamp(targetY, 0, maxY))
@@ -565,6 +461,24 @@ local function main()
 			end
 		end))
 		
+		local textSize = AddTextbox("UI Text Size", Settings.Window.TextSize, 60)
+		trackConn(textSize.FocusLost:Connect(function()
+			Settings.Window.TextSize = math.clamp(math.floor(tonumber(textSize.Text) or Settings.Window.TextSize), 12, 20)
+			textSize.Text = tostring(Settings.Window.TextSize)
+			persistSettings()
+		end))
+		local radius = AddTextbox("Corner Radius", Settings.Window.CornerRadius, 60)
+		trackConn(radius.FocusLost:Connect(function()
+			Settings.Window.CornerRadius = math.clamp(math.floor(tonumber(radius.Text) or Settings.Window.CornerRadius), 0, 12)
+			radius.Text = tostring(Settings.Window.CornerRadius)
+			persistSettings()
+		end))
+		local motion = AddCheckbox("Reduced Motion", Settings.Window.ReducedMotion)
+		trackConn(motion.OnInput:Connect(function()
+			Settings.Window.ReducedMotion = motion.Toggled
+			persistSettings()
+		end))
+
 		local classIcon = AddDropdown("Class Icons", {"NewDark", "Vanilla3", "Old"}, Settings.ClassIcon, false, 100)
 		trackConn(classIcon.OnSelect:Connect(function()
 			Settings.ClassIcon = classIcon.Selected
@@ -1104,15 +1018,16 @@ local function main()
 		local saveThemeButton = AddButton("Save Current Theme", "Save", 70)
 		trackConn(saveThemeButton.OnClick:Connect(function()
 			if Main and Main.SaveThemeSettings then
-				pcall(Main.SaveThemeSettings)
-				setWindowTitleSuffix("Theme Saved")
+				local ok, err = Main.SaveThemeSettings()
+				setWindowTitleSuffix(ok and "Theme Saved" or (err or "Save Failed"))
 			end
 		end))
 
 		local reloadThemeButton = AddButton("Reload Theme File", "Load", 70)
 		trackConn(reloadThemeButton.OnClick:Connect(function()
 			if Main and Main.LoadThemeSettings then
-				pcall(Main.LoadThemeSettings)
+				local ok, err = Main.LoadThemeSettings()
+				if not ok then setWindowTitleSuffix(err or "Load Failed") return end
 				if Lib and Lib.RefreshTheme then
 					pcall(Lib.RefreshTheme)
 				end
@@ -1128,7 +1043,7 @@ local function main()
 		trackConn(saveInstanceFormat.FocusLost:Connect(function()
 			local value = tostring(saveInstanceFormat.Text or "")
 			if value == "" then
-				value = DefaultSettings.Files.SaveInstanceNameFormat
+				value = "{placeName}_{timestamp}"
 			end
 			Settings.Files.SaveInstanceNameFormat = value
 			saveInstanceFormat.Text = value
@@ -1139,7 +1054,7 @@ local function main()
 		trackConn(objectSaveFormat.FocusLost:Connect(function()
 			local value = tostring(objectSaveFormat.Text or "")
 			if value == "" then
-				value = DefaultSettings.Files.ObjectSaveNameFormat
+				value = "{className}_{name}_{timestamp}"
 			end
 			Settings.Files.ObjectSaveNameFormat = value
 			objectSaveFormat.Text = value

@@ -327,8 +327,11 @@ DefaultSettings = (function()
 			TitleOnMiddle = false,
 			Transparency = .2,
 			Font = "SourceSans",
-			SettingsWidth = 250,
-			SettingsHeight = 375
+			TextSize = 14,
+			CornerRadius = 4,
+			ReducedMotion = false,
+			SettingsWidth = 380,
+			SettingsHeight = 520
 		},
 		Startup = {
 			_Recurse = true,
@@ -421,7 +424,11 @@ local plr = service.Players.LocalPlayer or service.Players.PlayerAdded:Wait()
 
 local create = function(data)
 	local insts = {}
-	for i,v in data do insts[v[1]] = Instance.new(v[2]) end
+	for i,v in data do
+		local obj = Instance.new(v[2])
+		if Main and Main.TrackResource then Main.TrackResource(obj) end
+		insts[v[1]] = obj
+	end
 
 	for _,v in data do
 		for prop,val in v[3] do
@@ -438,6 +445,7 @@ end
 
 local createSimple = function(class,props)
 	local inst = Instance.new(class)
+	if Main and Main.TrackResource then Main.TrackResource(inst) end
 	for i,v in next,props do
 		inst[i] = v
 	end
@@ -466,10 +474,102 @@ Main = (function()
 	Main.GuiList = Main.GuiList or {}
 	Main.ConnList = Main.ConnList or {}
 	Main.ConnSet = Main.ConnSet or {}
-	Main.TrackGui = function(gui)
-		if gui and gui.Destroy then
-			table.insert(Main.GuiList, gui)
+
+	Main.Generation = 0
+	Main.Threads = {}
+	Main.Resources = {}
+	Main.Exports = {}
+	local nativeTask, nativeCo = task, coroutine
+	Main.TrackTask = function(thread)
+		if type(thread) == "thread" and nativeCo.status(thread) ~= "dead" then
+			if Main.__DexExiting and thread ~= nativeCo.running() then
+				pcall(nativeTask.cancel, thread)
+			else
+				Main.Threads[thread] = true
+			end
 		end
+		return thread
+	end
+	local function schedule(mode, span, fn, ...)
+		if Main.__DexExiting then return end
+		local gen = Main.Generation
+		local thread
+		if type(fn) == "thread" then
+			thread = fn
+		else
+			thread = nativeCo.create(function(...)
+				if gen ~= Main.Generation or Main.__DexExiting then return end
+				local out = table.pack(pcall(fn, ...))
+				Main.Threads[nativeCo.running()] = nil
+				if not out[1] then error(out[2], 0) end
+				return table.unpack(out, 2, out.n)
+			end)
+		end
+		Main.TrackTask(thread)
+		if mode == "delay" then
+			nativeTask.delay(span, thread, ...)
+		else
+			nativeTask[mode](thread, ...)
+		end
+		if nativeCo.status(thread) == "dead" then Main.Threads[thread] = nil end
+		return thread
+	end
+	Main.Tasks = setmetatable({
+		spawn = function(fn, ...) return schedule("spawn", 0, fn, ...) end,
+		defer = function(fn, ...) return schedule("defer", 0, fn, ...) end,
+		delay = function(span, fn, ...) return schedule("delay", span, fn, ...) end,
+		cancel = function(thread)
+			Main.Threads[thread] = nil
+			return nativeTask.cancel(thread)
+		end
+	}, {__index = nativeTask})
+	Main.Coroutine = setmetatable({wrap = function(fn)
+		local thread
+		thread = nativeCo.create(function(...)
+			local out = table.pack(pcall(fn, ...))
+			Main.Threads[thread] = nil
+			if not out[1] then error(out[2], 0) end
+			return table.unpack(out, 2, out.n)
+		end)
+		return function(...)
+			if Main.__DexExiting then return end
+			Main.TrackTask(thread)
+			local out = table.pack(nativeCo.resume(thread, ...))
+			if nativeCo.status(thread) == "dead" then Main.Threads[thread] = nil end
+			if not out[1] then error(out[2], 0) end
+			return table.unpack(out, 2, out.n)
+		end
+	end}, {__index = nativeCo})
+	local task, coroutine = Main.Tasks, Main.Coroutine
+	Main.TrackResource = function(obj)
+		if typeof(obj) == "Instance" then
+			if Main.__DexExiting then obj:Destroy() else Main.Resources[obj] = true end
+		end
+		return obj
+	end
+	Main.SetExport = function(host, key, val)
+		if type(host) ~= "table" then return end
+		Main.Exports[#Main.Exports + 1] = {host, key, rawget(host, key), val}
+		rawset(host, key, val)
+	end
+	Main.PruneConnections = function()
+		local count = 0
+		for _, conn in Main.ConnList do
+			if conn.Connected ~= false then
+				count += 1
+				Main.ConnList[count] = conn
+			else
+				Main.ConnSet[conn] = nil
+			end
+		end
+		for i = #Main.ConnList, count + 1, -1 do Main.ConnList[i] = nil end
+	end
+	Main.TrackGui = function(gui)
+		if typeof(gui) ~= "Instance" then return gui end
+		if Main.__DexExiting then gui:Destroy() return gui end
+		if not table.find(Main.GuiList, gui) then table.insert(Main.GuiList, gui) end
+		if Lib and Lib.WatchGui then Lib.WatchGui(gui) end
+		return gui
 	end
 	Main.TrackConn = function(c)
 		if not c then
@@ -488,6 +588,7 @@ Main = (function()
 		if Main.ConnSet[c] then
 			return c
 		end
+		if #Main.ConnList % 256 == 255 then Main.PruneConnections() end
 		Main.ConnSet[c] = true
 		table.insert(Main.ConnList, c)
 		return c
@@ -499,6 +600,11 @@ Main = (function()
 	local Apps = {}
 	local env = {}
 	local DefaultSettingsOrig = deepCopy(DefaultSettings)
+	local nativeTi = TweenInfo
+	Main.TweenInfo = {new = function(span, ...)
+		return nativeTi.new(Settings.Window.ReducedMotion and 0 or span, ...)
+	end}
+	local TweenInfo = Main.TweenInfo
 
 	Main.UserSettings = {
 		ConsoleFilters = {
@@ -515,7 +621,7 @@ Main = (function()
 		RememberLastSettingsTab = true,
 		SettingsLastTab = "UI"
 	}
-	Main.ThemeSettings = {}
+	Main.DefaultTheme = deepCopy(DefaultSettingsOrig.Theme)
 
 	Main.StartupModuleList = {"Explorer","Properties","ScriptViewer"}
 	Main.DeferredModuleList = {"Console","SaveInstance","ModelViewer","ThemeManager","SettingsWindow"}
@@ -536,7 +642,7 @@ Main = (function()
 	Main.ModuleHashData = {} -- prevent remote hash fetch; prefer local modules
 	Main.ModuleForceRefresh = false
 	Main.ForceRemoteModules = {Properties = true}
-	Main.ModuleCacheVersion = "2026-09-25-hidden-properties"
+	Main.ModuleCacheVersion = "2026-10-06-themes-cleanup"
 	Main.ModuleRefreshFlagFile = "DexPlusPlus/RefreshModules.txt"
 	Main.SettingsFile = "DexPlusSettings.json"
 	Main.UserSettingsFile = "DexPlusUserSettings.json"
@@ -1611,11 +1717,10 @@ Main = (function()
 			end
 
 			if type(cacheHost) == "table" then
-				rawset(cacheHost, cacheKey, wrappedsaveinstance)
-				rawset(cacheHost, "__dex_saveinstance420", wrappedsaveinstance)
-				rawset(cacheHost, "saveinstance", wrappedsaveinstance)
+					Main.SetExport(cacheHost, cacheKey, wrappedsaveinstance)
+				Main.SetExport(cacheHost, "__dex_saveinstance420", wrappedsaveinstance)
+				Main.SetExport(cacheHost, "saveinstance", wrappedsaveinstance)
 			end
-			startSaveInstance420()
 			return wrappedsaveinstance
 		end)()
 
@@ -2005,7 +2110,7 @@ Main = (function()
 			pcall(function()
 				local genv = ggv()
 				if type(genv.decompile) ~= "function" then
-					genv.decompile = env.decompile
+					Main.SetExport(genv, "decompile", env.decompile)
 				end
 			end)
 		end
@@ -2154,59 +2259,101 @@ Main = (function()
 		end
 	end
 
-	Main.SaveThemeSettings = function()
-		if not (env and env.writefile) then return end
-		local function recur(tbl)
-			local newTbl = {}
-			for i, v in tbl do
-				if typeof(v) == "table" then
-					newTbl[i] = recur(v)
+	Main.ThemeSettings = {Name = "Custom", Saved = {}, AutoSave = true}
+	Main.NormalizeTheme = function(src)
+		if type(src) ~= "table" then src = {} end
+		local function color(val, fallback)
+			if typeof(val) == "Color3" then return val end
+			if type(val) == "string" then
+				local hex = val:gsub("^#", "")
+				if hex:match("^%x%x%x$") then
+					hex = hex:gsub("(.)", "%1%1")
+				end
+				if hex:match("^%x%x%x%x%x%x$") then
+					return Color3.fromRGB(tonumber(hex:sub(1,2),16), tonumber(hex:sub(3,4),16), tonumber(hex:sub(5,6),16))
+				end
+			elseif type(val) == "table" then
+				local r, g, b = tonumber(val.R or val.r or val[1]), tonumber(val.G or val.g or val[2]), tonumber(val.B or val.b or val[3])
+				if r and g and b and r == r and g == g and b == b then
+					local scale = (r > 1 or g > 1 or b > 1) and 255 or 1
+					return Color3.new(math.clamp(r/scale,0,1), math.clamp(g/scale,0,1), math.clamp(b/scale,0,1))
+				end
+			end
+			return fallback
+		end
+		local function merge(data, schema)
+			local out = {}
+			for key, val in schema do
+				local input = data[key]
+				if typeof(val) == "Color3" then
+					out[key] = color(input, val)
+				elseif type(val) == "table" then
+					out[key] = merge(type(input) == "table" and input or {}, val)
 				else
-					newTbl[i] = serialize(v)
+					out[key] = type(input) == type(val) and input or val
 				end
 			end
-			return newTbl
+			return out
 		end
-
-		local themePayload = recur({
-			Theme = Settings and Settings.Theme or {}
-		})
-		local ok, encoded = pcall(service.HttpService.JSONEncode, service.HttpService, themePayload)
-		if ok and encoded then
-			pcall(env.writefile, Main.ThemeFile, encoded)
-		end
+		return merge(src, DefaultSettingsOrig.Theme)
 	end
-
+	Main.ApplyTheme = function(src, name, quiet)
+		local theme = Main.NormalizeTheme(src)
+		local function copy(dst, from)
+			for key in dst do if from[key] == nil then dst[key] = nil end end
+			for key, val in from do
+				if type(val) == "table" then
+					if type(dst[key]) ~= "table" then dst[key] = {} end
+					copy(dst[key], val)
+				else
+					dst[key] = val
+				end
+			end
+		end
+		if type(Settings.Theme) ~= "table" then Settings.Theme = {} end
+		copy(Settings.Theme, theme)
+		Main.ThemeSettings.Name = type(name) == "string" and name or "Custom"
+		if not quiet and Lib and Lib.RefreshTheme then Lib.RefreshTheme() end
+		return true
+	end
+	Main.ResetTheme = function()
+		return Main.ApplyTheme(DefaultSettingsOrig.Theme, "Default")
+	end
+	Main.SaveThemeSettings = function()
+		if not (env and env.writefile) then return false, "File writing is unavailable" end
+		local function pack(src)
+			local out = {}
+			for key, val in src do
+				out[key] = type(val) == "table" and pack(val) or serialize(val)
+			end
+			return out
+		end
+		local payload = pack({Version = 2, Theme = Main.NormalizeTheme(Settings.Theme), Name = Main.ThemeSettings.Name, Saved = Main.ThemeSettings.Saved, AutoSave = Main.ThemeSettings.AutoSave})
+		local ok, encoded = pcall(service.HttpService.JSONEncode, service.HttpService, payload)
+		if not ok then return false, tostring(encoded) end
+		local wrote, err = pcall(env.writefile, Main.ThemeFile, encoded)
+		if wrote then return true end
+		return false, tostring(err)
+	end
 	Main.LoadThemeSettings = function()
-		local fileData
-		if env and env.readfile then
-			local s, data = pcall(env.readfile, Main.ThemeFile)
-			if s and data and #data > 0 then
-				fileData = data
-			end
-		end
-		if fileData then
-			local ok, decoded = pcall(service.HttpService.JSONDecode, service.HttpService, fileData)
-			if ok and type(decoded) == "table" then
-				local function recur(tbl)
-					local newTbl = {}
-					for k,v in tbl do
-						if typeof(v) == "table" and v.R and v.G and v.B then
-							newTbl[k] = deserialize(v)
-						elseif typeof(v) == "table" then
-							newTbl[k] = recur(v)
-						else
-							newTbl[k] = deserialize(v)
-						end
-					end
-					return newTbl
-				end
-
-				if decoded.Theme and type(decoded.Theme) == "table" then
-					Settings.Theme = recur(decoded.Theme)
+		if not (env and env.readfile) then return false, "File reading is unavailable" end
+		local read, data = pcall(env.readfile, Main.ThemeFile)
+		if not read or type(data) ~= "string" or data == "" then return false, "No saved theme file" end
+		local ok, payload = pcall(service.HttpService.JSONDecode, service.HttpService, data)
+		if not ok or type(payload) ~= "table" or type(payload.Theme) ~= "table" then return false, "Invalid theme file" end
+		local saved, count = {}, 0
+		if type(payload.Saved) == "table" then
+			for name, theme in payload.Saved do
+				if type(name) == "string" and #name > 0 and #name <= 48 and type(theme) == "table" and count < 50 then
+					saved[name] = Main.NormalizeTheme(theme)
+					count += 1
 				end
 			end
 		end
+		Main.ThemeSettings.Saved = saved
+		Main.ThemeSettings.AutoSave = payload.AutoSave ~= false
+		Main.ApplyTheme(payload.Theme, payload.Name or "Custom")
+		return true
 	end
 
 	Main.SaveCurrentSettings = function()
@@ -2356,8 +2503,12 @@ Main = (function()
 		if fontName ~= "SourceSans" and fontName ~= "Gotham" and fontName ~= "GothamMedium" and fontName ~= "GothamSemibold" and fontName ~= "GothamBold" and fontName ~= "RobotoMono" and fontName ~= "Code" and fontName ~= "Ubuntu" then
 			Settings.Window.Font = DefaultSettings.Window.Font or "SourceSans"
 		end
+		Settings.Window.TextSize = math.clamp(math.floor(tonumber(Settings.Window.TextSize) or 14), 12, 20)
+		Settings.Window.CornerRadius = math.clamp(math.floor(tonumber(Settings.Window.CornerRadius) or 4), 0, 12)
+		Settings.Window.ReducedMotion = Settings.Window.ReducedMotion == true
+		Main.ApplyTheme(Settings.Theme, Main.ThemeSettings.Name, true)
 		local settingsWidth = math.floor(tonumber(Settings.Window.SettingsWidth) or DefaultSettings.Window.SettingsWidth or 250)
-		Settings.Window.SettingsWidth = math.clamp(settingsWidth, 220, 550)
+		Settings.Window.SettingsWidth = math.clamp(settingsWidth, 340, 800)
 		local settingsHeight = math.floor(tonumber(Settings.Window.SettingsHeight) or DefaultSettings.Window.SettingsHeight or 375)
 		Settings.Window.SettingsHeight = math.clamp(settingsHeight, 280, 700)
 
@@ -4060,7 +4211,7 @@ Main = (function()
 
 		openButton.Text = val and "Close" or "Dex++"
 		if val then openButton.MainFrame.Visible = true end
-		openButton.MainFrame:TweenSize(val and UDim2.new(0,224,0,200) or UDim2.new(0,0,0,0),Enum.EasingDirection.Out,Enum.EasingStyle.Quad,0.2,true)
+		openButton.MainFrame:TweenSize(val and UDim2.new(0,224,0,200) or UDim2.new(0,0,0,0),Enum.EasingDirection.Out,Enum.EasingStyle.Quad,Settings.Window.ReducedMotion and 0 or 0.2,true)
 		service.TweenService:Create(openButton,TweenInfo.new(0.2,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{BackgroundTransparency = val and 0 or (Lib.CheckMouseInGui(openButton) and 0 or 0.2)}):Play()
 
 		if Main.MainGuiMouseEvent then
@@ -4099,6 +4250,34 @@ Main = (function()
 			return
 		end
 		Main.__DexExiting = true
+		Main.Generation += 1
+		local current = nativeCo.running()
+		for thread in Main.Threads do
+			if thread ~= current and nativeCo.status(thread) ~= "dead" then
+				pcall(nativeTask.cancel, thread)
+			end
+		end
+		table.clear(Main.Threads)
+		for name, app in Apps do
+			if type(app) == "table" and type(app.Destroy) == "function" then
+				local ok, err = pcall(app.Destroy, app)
+				if not ok then warn("[Dex] Cleanup " .. tostring(name) .. ": " .. tostring(err)) end
+			end
+		end
+		for _, plugin in Main.Plugins do
+			if type(plugin) == "table" then
+				local close = plugin.Unload or plugin.Destroy or plugin.Cleanup
+				if type(close) == "function" then pcall(close, plugin) end
+			end
+		end
+		if Lib and type(Lib.Destroy) == "function" then pcall(Lib.Destroy) end
+		for obj in Main.Resources do pcall(obj.Destroy, obj) end
+		table.clear(Main.Resources)
+		for i = #Main.Exports, 1, -1 do
+			local entry = Main.Exports[i]
+			if rawget(entry[1], entry[2]) == entry[4] then rawset(entry[1], entry[2], entry[3]) end
+		end
+		table.clear(Main.Exports)
 		if keepDexState ~= true and type(Main.UninstallMCPBridge) == "function" then
 			pcall(Main.UninstallMCPBridge)
 		end
@@ -4156,6 +4335,7 @@ Main = (function()
 		Main.AppControls = {}
 		Main.Plugins = {}
 		Main.MenuApps = {}
+		Main.MCP = nil
 		Main.SettingsButtonBound = false
 		Main.DeferredModulesStarted = false
 
@@ -4222,9 +4402,7 @@ Main = (function()
 		else
 			Main.__DexLoaded = false
 			Main.__DexInitStarted = false
-			dexState.State = "dead"
-			clearDexState(dexState)
-			Main.__DexState = nil
+			Main.Exit()
 			error(initErr)
 		end
 	end
@@ -5169,8 +5347,7 @@ if okInit then
 else
 	Main.__DexLoaded = false
 	Main.__DexInitStarted = false
-	dexState.State = "dead"
-	clearDexState(dexState)
+	Main.Exit()
 	error(initErr)
 end
 

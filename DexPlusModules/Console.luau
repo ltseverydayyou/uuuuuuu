@@ -1,4 +1,5 @@
 --!nonstrict
+local task, coroutine, TweenInfo = task, coroutine, TweenInfo
 local unpack = table.unpack or unpack
 local loadstring = loadstring or load
 local newproxy = newproxy or function()
@@ -47,6 +48,9 @@ local API,RMD,env,service,plr,create,createSimple -- Main Locals
 
 local function initDeps(data)
 	Main = data.Main
+	task = Main.Tasks or task
+	coroutine = Main.Coroutine or coroutine
+	TweenInfo = Main.TweenInfo or TweenInfo
 	Lib = data.Lib
 	Apps = data.Apps
 	Settings = data.Settings
@@ -1199,7 +1203,9 @@ local function main()
 		trackConn(Console.CommandLine.ScrollingFrame.TextBox:GetPropertyChangedSignal("Text"):Connect(function()
 
 			local oneliner = string.gsub(Console.CommandLine.ScrollingFrame.TextBox.Text, "\n", "    ")
-			Console.CommandLine.ScrollingFrame.TextBox.Text = oneliner
+			if Console.CommandLine.ScrollingFrame.TextBox.Text ~= oneliner then
+				Console.CommandLine.ScrollingFrame.TextBox.Text = oneliner
+			end
 
 			Console.CommandLine.ScrollingFrame.Highlight.Text = SyntaxHighlightingModule.run(Console.CommandLine.ScrollingFrame.TextBox.Text)
 		end))

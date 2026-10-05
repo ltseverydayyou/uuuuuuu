@@ -1,4 +1,5 @@
 --!nonstrict
+local task, coroutine, TweenInfo = task, coroutine, TweenInfo
 local unpack = table.unpack or unpack
 local loadstring = loadstring or load
 local newproxy = newproxy or function()
@@ -22,6 +23,9 @@ local env, service, plr
 
 local function InitDeps(Data)
 	Main, Lib, Apps, Settings = Data.Main, Data.Lib, Data.Apps, Data.Settings
+	task = Main.Tasks or task
+	coroutine = Main.Coroutine or coroutine
+	TweenInfo = Main.TweenInfo or TweenInfo
 	env, service, plr = Data.env, Data.service, Data.plr
 end
 
@@ -222,14 +226,14 @@ local function MainFunc()
 			DotsBtn.Size = UDim2.new(0, 20, 0.8, 0)
 			DotsBtn.Image = (getcustomasset and isfile and isfile("DEX_REContinued/more_vert_1000dp_FFFFFF_FILL0_wght400_GRAD0_opsz48.png")) and getcustomasset("DEX_REContinued/more_vert_1000dp_FFFFFF_FILL0_wght400_GRAD0_opsz48.png") or 'rbxassetid://71826111118631'
 
-			Btn.MouseEnter:Connect(function() Btn.BackgroundColor3 = Settings.Theme.ButtonHover end)
-			Btn.MouseLeave:Connect(function() Btn.BackgroundColor3 = Settings.Theme.Main1 end)
+			Main.TrackConn(Btn.MouseEnter:Connect(function() Btn.BackgroundColor3 = Settings.Theme.ButtonHover end))
+			Main.TrackConn(Btn.MouseLeave:Connect(function() Btn.BackgroundColor3 = Settings.Theme.Main1 end))
 
-			Btn.MouseButton1Click:Connect(function()
+			Main.TrackConn(Btn.MouseButton1Click:Connect(function()
 				if IsTable then ViewTableDetail(ObjRef, Name) else ViewFunctionDetail(ObjRef, Name, GetHash(ObjRef)) end
-			end)
+			end))
 
-			DotsBtn.MouseButton1Click:Connect(function()
+			Main.TrackConn(DotsBtn.MouseButton1Click:Connect(function()
 				local MouseX, MouseY = Main.Mouse.X, Main.Mouse.Y
 				ContextMenu:Clear()
 				if IsTable then
@@ -344,7 +348,7 @@ end)
 					end})
 				end
 				ContextMenu:Show(MouseX, MouseY)
-			end)
+			end))
 
 			if CurrentSearch ~= "" then
 				if not (Name:lower():find(CurrentSearch, 1, true) or TypeNote:lower():find(CurrentSearch, 1, true)) then
@@ -496,14 +500,14 @@ end)
 		DepthSave.Text = "Set"
 		DepthSave.Position = UDim2.new(0, 5, 1, -25)
 		DepthSave.Size = UDim2.new(1, -10, 0, 20)
-		DepthSave.OnClick:Connect(function()
+		Main.TrackConn(DepthSave.OnClick:Connect(function()
 			local Num = tonumber(DepthInput:GetText())
 			if Num then
 			    EnvExplorer.MaxDepth = Num
 			    BuildFilterMenu()
 			    DepthWindow:Hide()
 			end
-		end)
+		end))
 		DepthWindow:Add(DepthSave)
 
 		DetailWindow = Lib.Window.new()
@@ -516,9 +520,9 @@ end)
 		DetailCopyBtn.BackgroundTransparency = 1
 		DetailCopyBtn.Text = "Copy to Clipboard"
 		DetailCopyBtn.TextColor3 = Color3.new(1,1,1)
-		DetailCopyBtn.MouseButton1Click:Connect(function()
+		Main.TrackConn(DetailCopyBtn.MouseButton1Click:Connect(function()
 			if env.setclipboard then env.setclipboard(DetailCodeFrame:GetText()) end
-		end)
+		end))
 
 		DetailCodeFrame = Lib.CodeFrame.new()
 		DetailCodeFrame.Frame.Position = UDim2.new(0, 0, 0, 20)
@@ -544,9 +548,9 @@ end)
 		HookCopyBtn.Text = "Copy to Clipboard"
 		HookCopyBtn.TextColor3 = Color3.new(1, 1, 1)
 
-		HookCopyBtn.MouseButton1Click:Connect(function()
+		Main.TrackConn(HookCopyBtn.MouseButton1Click:Connect(function()
 			if env.setclipboard then env.setclipboard(HookCodeFrame:GetText()) end
-		end)
+		end))
 
 		local HookExecuteBtn = Instance.new("TextButton", HookWindow.GuiElems.Content)
 		HookExecuteBtn.Size = UDim2.new(1, 0, 0, 20)
@@ -555,9 +559,9 @@ end)
 		HookExecuteBtn.BorderSizePixel = 0
 		HookExecuteBtn.Text = "Execute"
 		HookExecuteBtn.TextColor3 = Color3.new(1, 1, 1)
-		HookExecuteBtn.MouseButton1Click:Connect(function()
+		Main.TrackConn(HookExecuteBtn.MouseButton1Click:Connect(function()
 			if env.loadstring then env.loadstring(HookCodeFrame:GetText(), "DEX")() end
-		end)
+		end))
 
 		local TopBar = Instance.new("Frame", Window.GuiElems.Content)
 		TopBar.Size = UDim2.new(1, 0, 0, 24)
@@ -575,9 +579,9 @@ end)
 		RefreshBtn.Position = UDim2.new(1, -22, 0, 3)
 		RefreshBtn.BackgroundTransparency = 1
 		RefreshBtn.Image = (getcustomasset and isfile and isfile("DEX_REContinued/Images/refresh-icon3.png")) and getcustomasset("DEX_REContinued/Images/refresh-icon3.png") or "rbxassetid://5642310344"
-		RefreshBtn.MouseButton1Click:Connect(function()
+		Main.TrackConn(RefreshBtn.MouseButton1Click:Connect(function()
 			EnvExplorer.Refresh()
-		end)
+		end))
 
 		FilterBtn = Instance.new("TextButton", TopBar)
 		FilterBtn.Size = UDim2.new(0, 42, 0, 18)
@@ -589,10 +593,10 @@ end)
 		FilterBtn.TextSize = 14
 		FilterBtn.Text = "Filter"
 
-		FilterBtn.MouseButton1Click:Connect(function()
+		Main.TrackConn(FilterBtn.MouseButton1Click:Connect(function()
 			local MouseX, MouseY = Main.Mouse.X, Main.Mouse.Y
 			FilterMenu:Show(MouseX, MouseY)
-		end)
+		end))
 
 		ListFrame = Instance.new("ScrollingFrame", Window.GuiElems.Content)
 		ListFrame.Size = UDim2.new(1, 0, 1, -24)
@@ -604,11 +608,11 @@ end)
 
 		local ListLayout = Instance.new("UIListLayout", ListFrame)
 		ListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-		ListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+		Main.TrackConn(ListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
 			ListFrame.CanvasSize = UDim2.new(0, 0, 0, ListLayout.AbsoluteContentSize.Y)
-		end)
+		end))
 
-		SearchBox.TextBox:GetPropertyChangedSignal("Text"):Connect(function()
+		Main.TrackConn(SearchBox.TextBox:GetPropertyChangedSignal("Text"):Connect(function()
 			local Txt = SearchBox.TextBox.Text:lower()
 			for _, Item in pairs(ListItems) do
 				if Txt == "" or Item.Name:lower():find(Txt, 1, true) or Item.Note:lower():find(Txt, 1, true) then
@@ -617,7 +621,7 @@ end)
 					Item.Gui.Visible = false
 				end
 			end
-		end)
+		end))
 	end
 
 	return EnvExplorer

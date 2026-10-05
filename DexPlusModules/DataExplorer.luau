@@ -1,4 +1,5 @@
 --!nonstrict
+local task, coroutine, TweenInfo = task, coroutine, TweenInfo
 local unpack = table.unpack or unpack
 local loadstring = loadstring or load
 local newproxy = newproxy or function()
@@ -18,6 +19,9 @@ local env, service, plr
 
 local function InitDeps(Data)
 	Main, Lib, Apps, Settings = Data.Main, Data.Lib, Data.Apps, Data.Settings
+	task = Main.Tasks or task
+	coroutine = Main.Coroutine or coroutine
+	TweenInfo = Main.TweenInfo or TweenInfo
 	env, service, plr = Data.env, Data.service, Data.plr
 end
 
@@ -82,10 +86,10 @@ local function MainFunc()
 		Btn.Text = "Confirm"
 		Btn.Position = UDim2.new(0, 5, 1, -25)
 		Btn.Size = UDim2.new(1, -10, 0, 20)
-		Btn.OnClick:Connect(function()
+		Main.TrackConn(Btn.OnClick:Connect(function()
 			Callback(Box:GetText())
 			PromptWin:Close()
-		end)
+		end))
 		PromptWin:Add(Btn)
 		PromptWin:Show()
 	end
@@ -403,10 +407,10 @@ local function ViewTableDetail(Tab, Name)
 		end
 
 		local function SetupLongPress(btn, callback)
-			btn.MouseButton2Click:Connect(callback)
+			Main.TrackConn(btn.MouseButton2Click:Connect(callback))
 			local holding = false
 			local pressPos = nil
-			btn.InputBegan:Connect(function(input)
+			Main.TrackConn(btn.InputBegan:Connect(function(input)
 				if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
 					holding = true
 					pressPos = input.Position
@@ -417,19 +421,19 @@ local function ViewTableDetail(Tab, Name)
 						end
 					end)
 				end
-			end)
-			btn.InputEnded:Connect(function(input)
+			end))
+			Main.TrackConn(btn.InputEnded:Connect(function(input)
 				if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
 					holding = false
 				end
-			end)
-			btn.InputChanged:Connect(function(input)
+			end))
+			Main.TrackConn(btn.InputChanged:Connect(function(input)
 				if holding and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) then
 					if pressPos and (input.Position - pressPos).Magnitude > 10 then
 						holding = false
 					end
 				end
-			end)
+			end))
 		end
 
 		for _, Result in pairs(DataExplorer.CurrentResults) do
@@ -455,13 +459,13 @@ local function ViewTableDetail(Tab, Name)
 			HeaderBtn.TextXAlignment = Enum.TextXAlignment.Left
 			HeaderBtn.AutoButtonColor = false
 
-			HeaderBtn.MouseButton1Click:Connect(function()
+			Main.TrackConn(HeaderBtn.MouseButton1Click:Connect(function()
 				if Result.Type == "Function" then
 					ViewFunctionDetail(Result.Ref, Result.Name, GetHash(Result.Ref))
 				else
 					ViewTableDetail(Result.Ref, Result.Name)
 				end
-			end)
+			end))
 
 			SetupLongPress(HeaderBtn, function()
 				DataExplorer.SelectedResult = Result
@@ -511,10 +515,10 @@ local MatchesContainer = Instance.new("Frame", MainBox)
 					MatchBtn.Text = "    " .. DisplayVal .. " " .. DisplayName .. "(" .. Match.ValueType .. ") - " .. Match.LocationType .. " " .. tostring(Match.Index)
 				end)
 
-				MatchBtn.MouseEnter:Connect(function() MatchBtn.BackgroundColor3 = Settings.Theme.ButtonHover end)
-				MatchBtn.MouseLeave:Connect(function() MatchBtn.BackgroundColor3 = Settings.Theme.Button end)
+				Main.TrackConn(MatchBtn.MouseEnter:Connect(function() MatchBtn.BackgroundColor3 = Settings.Theme.ButtonHover end))
+				Main.TrackConn(MatchBtn.MouseLeave:Connect(function() MatchBtn.BackgroundColor3 = Settings.Theme.Button end))
 
-				MatchBtn.MouseButton1Click:Connect(function()
+				Main.TrackConn(MatchBtn.MouseButton1Click:Connect(function()
 					if Match.ValueType == "function" then
 						ViewFunctionDetail(Match.Value, Match.ValueName or "Match", GetHash(Match.Value))
 					elseif Match.ValueType == "table" then
@@ -530,7 +534,7 @@ local MatchesContainer = Instance.new("Frame", MainBox)
 						DetailCodeFrame:SetText("-- Unsupported Type for Detailed View: " .. Match.ValueType .. "\n-- Please view the parent container instead.")
 						DetailWindow:Show()
 					end
-				end)
+				end))
 
 				SetupLongPress(MatchBtn, function()
 					DataExplorer.SelectedResult = Result
@@ -979,9 +983,9 @@ local func = findfunc("]] .. tostring(Result.Ref) .. [[")
 		DetailCopyBtn.BackgroundTransparency = 1
 		DetailCopyBtn.Text = "Copy to Clipboard"
 		DetailCopyBtn.TextColor3 = Color3.new(1,1,1)
-		DetailCopyBtn.MouseButton1Click:Connect(function()
+		Main.TrackConn(DetailCopyBtn.MouseButton1Click:Connect(function()
 			if env.setclipboard then env.setclipboard(DetailCodeFrame:GetText()) end
-		end)
+		end))
 
 		DetailCodeFrame = Lib.CodeFrame.new()
 		DetailCodeFrame.Frame.Position = UDim2.new(0, 0, 0, 20)
@@ -1064,7 +1068,7 @@ local func = findfunc("]] .. tostring(Result.Ref) .. [[")
 		RefreshBtn.Position = UDim2.new(1, -22, 0, 3)
 		RefreshBtn.BackgroundTransparency = 1
 		RefreshBtn.Image = (getcustomasset and isfile and isfile("DEX_REContinued/Images/refresh-icon3.png")) and getcustomasset("DEX_REContinued/Images/refresh-icon3.png") or "rbxassetid://5642310344"
-		RefreshBtn.MouseButton1Click:Connect(DataExplorer.Refresh)
+		Main.TrackConn(RefreshBtn.MouseButton1Click:Connect(DataExplorer.Refresh))
 
 		FilterBtn = Instance.new("TextButton", TopBar)
 		FilterBtn.Size = UDim2.new(0, 42, 0, 18)
@@ -1075,9 +1079,9 @@ local func = findfunc("]] .. tostring(Result.Ref) .. [[")
 		FilterBtn.Font = Enum.Font.SourceSans
 		FilterBtn.TextSize = 14
 		FilterBtn.Text = "Filter"
-		FilterBtn.MouseButton1Click:Connect(function()
+		Main.TrackConn(FilterBtn.MouseButton1Click:Connect(function()
 			FilterMenu:Show(Main.Mouse.X, Main.Mouse.Y)
-		end)
+		end))
 
 		ListFrame = Instance.new("ScrollingFrame", Window.GuiElems.Content)
 		ListFrame.Size = UDim2.new(1, 0, 1, -24)
@@ -1090,9 +1094,9 @@ local func = findfunc("]] .. tostring(Result.Ref) .. [[")
 		local ListLayout = Instance.new("UIListLayout", ListFrame)
 		ListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 		ListLayout.Padding = UDim.new(0, 4)
-		ListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+		Main.TrackConn(ListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
 			ListFrame.CanvasSize = UDim2.new(0, 0, 0, ListLayout.AbsoluteContentSize.Y + 10)
-		end)
+		end))
 
 		local Padding = Instance.new("UIPadding", ListFrame)
 		Padding.PaddingTop = UDim.new(0, 4)
@@ -1100,9 +1104,9 @@ local func = findfunc("]] .. tostring(Result.Ref) .. [[")
 		Padding.PaddingLeft = UDim.new(0, 4)
 		Padding.PaddingRight = UDim.new(0, 4)
 
-		SearchBox.TextBox.FocusLost:Connect(function(Enter)
+		Main.TrackConn(SearchBox.TextBox.FocusLost:Connect(function(Enter)
 			if Enter then DataExplorer.Refresh() end
-		end)
+		end))
 	end
 
 	return DataExplorer

@@ -1,4 +1,5 @@
 --!nonstrict
+local task, coroutine, TweenInfo = task, coroutine, TweenInfo
 local unpack = table.unpack or unpack
 local loadstring = loadstring or load
 local newproxy = newproxy or function()
@@ -108,6 +109,9 @@ local API,RMD,env,service,plr,create,createSimple -- Main Locals
 
 local function initDeps(data)
 	Main = data.Main
+	task = Main.Tasks or task
+	coroutine = Main.Coroutine or coroutine
+	TweenInfo = Main.TweenInfo or TweenInfo
 	Lib = data.Lib
 	Apps = data.Apps
 	Settings = data.Settings
@@ -216,7 +220,13 @@ local function main()
 		end
 
 		local okFallback, fallback = pcall(function()
-			return root:QueryDescendants("Instance")
+			local out, stack = {}, root:GetChildren()
+			while #stack > 0 do
+				local obj = table.remove(stack)
+				out[#out + 1] = obj
+				for _, child in obj:GetChildren() do stack[#stack + 1] = child end
+			end
+			return out
 		end)
 		if okFallback and type(fallback) == "table" then
 			return fallback
@@ -239,6 +249,11 @@ local function main()
 	Lib.GetUIFont = function()
 		local fontName = Settings and Settings.Window and Settings.Window.Font
 		return uiFontMap[fontName] or uiFontMap.SourceSans
+	end
+	Lib.FitSize = function(w, h, size)
+		local cam = service.Workspace.CurrentCamera
+		size = size or (cam and cam.ViewportSize) or Vector2.new(1920, 1080)
+		return math.min(w, math.max(220, size.X - 16)), math.min(h, math.max(240, size.Y - 40))
 	end
 
 	Lib.ApplyUIFont = function(root)
@@ -271,89 +286,151 @@ local function main()
 		end
 	end
 
+	Lib.ThemeRefs = setmetatable({}, {__mode = "k"})
+	Lib.ThemeRoots = setmetatable({}, {__mode = "k"})
+	Lib.ThemeText = setmetatable({}, {__mode = "k"})
+	Lib.ThemeWindows = setmetatable({}, {__mode = "k"})
+	Lib.CodeBoxes = setmetatable({}, {__mode = "k"})
+	Lib.ThemeCheckboxes = setmetatable({}, {__mode = "k"})
+	Lib.ThemeCorners = setmetatable({}, {__mode = "k"})
+	Lib.BindTheme = function(obj, props)
+		local refs = Lib.ThemeRefs[obj] or {}
+		Lib.ThemeRefs[obj] = refs
+		for prop, path in props do
+			refs[prop] = path
+			local val = Settings.Theme
+			for key in path:gmatch("[^.]+") do val = type(val) == "table" and val[key] or nil end
+			if val ~= nil and obj[prop] ~= val then obj[prop] = val end
+		end
+		return obj
+	end
+	Lib.StyleGui = function(obj)
+		if Main.__DexExiting or obj:GetAttribute("DexColorLiteral") then return end
+		if obj:IsA("UICorner") then
+			if obj.CornerRadius.Scale == 0 then
+				Lib.ThemeCorners[obj] = true
+				obj.CornerRadius = UDim.new(0, Settings.Window.CornerRadius or 4)
+			end
+			return
+		end
+		if obj:IsA("UIStroke") then
+			Lib.BindTheme(obj, Lib.ThemeRefs[obj] or {Color = "Outline3"})
+			return
+		end
+		if not obj:IsA("GuiObject") then return end
+		local refs = Lib.ThemeRefs[obj]
+		if not refs then
+			refs = {}
+			local theme = Settings.Theme
+			local defaults = Main.DefaultTheme or theme
+			local order = {"Main1","Main2","TextBox","Menu","Button","ButtonHover","ButtonPress","ListSelection","Highlight","Outline1","Outline2","Outline3"}
+			local literal = obj.Name:find("Color") or obj.Name:find("Preview") or obj:IsA("ViewportFrame")
+			if obj.Parent and obj.Parent.Name == "Arrow" then refs.BackgroundColor3 = "Text" end
+			if not literal then
+				for _, key in order do
+					if obj.BackgroundColor3:ToHex() == defaults[key]:ToHex() or obj.BackgroundColor3:ToHex() == theme[key]:ToHex() then
+						refs.BackgroundColor3 = key
+						break
+					end
+				end
+				if obj:IsA("TextBox") then refs.BackgroundColor3 = "TextBox" end
+				if obj.Name == "SearchFrame" then refs.BackgroundColor3 = "TextBox" end
+			end
+			if obj:IsA("TextBox") or obj:IsA("TextButton") or obj:IsA("TextLabel") then
+				local code = obj.Font == Enum.Font.Code or obj.Font == Enum.Font.RobotoMono
+				if not code then
+					refs.TextColor3 = obj.TextColor3:ToHex() == defaults.Important:ToHex() and "Important" or "Text"
+					Lib.ThemeText[obj] = {Size = obj.TextSize, Code = false}
+				end
+				if obj:IsA("TextBox") then refs.PlaceholderColor3 = "PlaceholderText" end
+			end
+			if obj.BorderSizePixel > 0 then refs.BorderColor3 = obj:IsA("TextBox") and "Outline3" or "Outline2" end
+			if obj:IsA("ScrollingFrame") then refs.ScrollBarImageColor3 = "ButtonHover" end
+			if obj:IsA("ImageLabel") or obj:IsA("ImageButton") then
+				local parent = obj.Parent
+				if parent and (parent.Name == "Expand" or parent.Name == "Refresh") then refs.ImageColor3 = "Text" end
+				if parent and parent.Name == "Reset" then refs.ImageColor3 = "PlaceholderText" end
+			end
+			if obj.Parent and obj.Parent.Name == "Arrow" then refs.BackgroundColor3 = "Text" end
+			Lib.ThemeRefs[obj] = refs
+		end
+		Lib.BindTheme(obj, refs)
+		if not Lib.ThemeText[obj] and (obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox")) then
+			if obj:GetAttribute("DexUIFont") or (obj.Font ~= Enum.Font.Code and obj.Font ~= Enum.Font.RobotoMono) then
+				Lib.ThemeText[obj] = {Size = obj.TextSize}
+			end
+		end
+		local text = Lib.ThemeText[obj]
+		if text then
+			if obj.Font ~= Lib.GetUIFont() then obj.Font = Lib.GetUIFont() end
+			if text.Size >= 12 and text.Size <= 20 then
+				local size = math.clamp(text.Size + (Settings.Window.TextSize or 14) - 14, 10, 26)
+				if obj.TextSize ~= size then obj.TextSize = size end
+			end
+		end
+	end
+	Lib.WatchGui = function(root)
+		if Lib.ThemeRoots[root] or root:GetAttribute("DexSelectionOverlay") then return end
+		Lib.ThemeRoots[root] = true
+		Lib.StyleGui(root)
+		for _, obj in Lib.QueryDescendants(root) do Lib.StyleGui(obj) end
+		Main.TrackConn(root.DescendantAdded:Connect(function(obj)
+			Lib.StyleGui(obj)
+		end))
+	end
 	Lib.RefreshTheme = function()
-		local theme = Settings and Settings.Theme
-		if not theme then return end
-		local winTransparency = tonumber(Settings and Settings.Window and Settings.Window.Transparency)
-		if winTransparency == nil then
-			winTransparency = 0
+		if Main.__DexExiting or not Settings.Theme then return end
+		for _, root in Main.GuiList do
+			if root.Parent then Lib.WatchGui(root) end
 		end
-		winTransparency = math.clamp(winTransparency, 0, 1)
-
-		local function applyWindow(win)
-			local elems = win and win.GuiElems
-			if elems and elems.Main then
-				elems.Main.BackgroundColor3 = theme.Outline1 or elems.Main.BackgroundColor3
-				if elems.TopBar then elems.TopBar.BackgroundColor3 = theme.Main2 or elems.TopBar.BackgroundColor3 end
-				if elems.Content then
-					elems.Content.BackgroundColor3 = theme.Main1 or elems.Content.BackgroundColor3
-					elems.Content.BackgroundTransparency = winTransparency
-				end
-				if elems.Title then
-					if Settings and Settings.Window and Settings.Window.TitleOnMiddle then
-						elems.Title.TextXAlignment = Enum.TextXAlignment.Center
-						elems.Title.Size = UDim2.new(1,-20,0,20)
-					else
-						elems.Title.TextXAlignment = Enum.TextXAlignment.Left
-						elems.Title.Size = UDim2.new(1,-10,0,20)
-					end
-				end
-				Lib.ApplyUIFont(elems.Main)
+		for obj in Lib.ThemeRefs do
+			if obj.Parent then Lib.StyleGui(obj) end
+		end
+		for win in Lib.ThemeWindows do
+			local elems = win.GuiElems
+			if elems and elems.Main and elems.Main.Parent then
+				win:ApplyTheme()
+				elems.Content.BackgroundTransparency = Settings.Window.Transparency
+				elems.Title.TextXAlignment = Settings.Window.TitleOnMiddle and Enum.TextXAlignment.Center or Enum.TextXAlignment.Left
+				elems.Title.Position = UDim2.new(0, Settings.Window.TitleOnMiddle and 44 or 8, 0, 0)
+				elems.Title.Size = UDim2.new(1, Settings.Window.TitleOnMiddle and -88 or -56, 0, 20)
 			end
 		end
-
-		if Main and Main.MainGui and Main.MainGui.OpenButton then
-			local open = Main.MainGui.OpenButton
-			open.BackgroundColor3 = theme.Button or open.BackgroundColor3
-			local mf = open.MainFrame
-			if mf then
-				mf.BackgroundColor3 = theme.Button or mf.BackgroundColor3
-				local bf = mf:FindFirstChild("BottomFrame")
-				if bf then
-					bf.BackgroundColor3 = theme.Menu or bf.BackgroundColor3
-				end
-			end
-			Lib.ApplyUIFont(open)
-		end
-
-		if Main and Main.AppControls then
-			for _, ctrl in Main.AppControls do
-				if type(ctrl) == "table" then
-					local okApply, applyFunc = pcall(function() return ctrl.ApplyTheme end)
-					if okApply and type(applyFunc) == "function" then
-						pcall(function() ctrl:ApplyTheme() end)
-					else
-						local okWin, win = pcall(function() return ctrl.Window end)
-						if okWin and win and win.ApplyTheme then
-							pcall(function() win:ApplyTheme() end)
-						end
-					end
-				end
-
-				local win = (type(ctrl) == "table" and ctrl.Window) or nil
-				applyWindow(win)
+		for _, app in Main.Apps do
+			if type(app) == "table" and type(app.ApplyTheme) == "function" then
+				local ok, err = pcall(app.ApplyTheme, app)
+				if not ok then warn("[Dex] Theme: " .. tostring(err)) end
 			end
 		end
-
-		if Main and Main.Apps then
-			for _, app in Main.Apps do
-				if type(app) == "table" then
-					local okApply, applyFunc = pcall(function() return app.ApplyTheme end)
-					if okApply and type(applyFunc) == "function" then
-						pcall(function() app:ApplyTheme() end)
-					elseif app.Window and app.Window.ApplyTheme then
-						pcall(function() app.Window:ApplyTheme() end)
-					end
-				end
-
-				local win = (type(app) == "table" and app.Window) or nil
-				applyWindow(win)
+		for box in Lib.CodeBoxes do
+			if box.Frame.Parent then
+				box:ApplyTheme()
+				box:MakeRichTemplates()
+				table.clear(box.ColoredLines)
+				box:Refresh()
 			end
 		end
-
-		if Main and Main.MainGui then
-			Lib.ApplyUIFont(Main.MainGui)
+		for box in Lib.ThemeCheckboxes do
+			if box.Gui.Parent then box:ApplyTheme() end
 		end
+		for corner in Lib.ThemeCorners do
+			if corner.Parent then Lib.StyleGui(corner) end
+		end
+	end
+	Lib.Destroy = function()
+		for box in Lib.CodeBoxes do box.Editable = false box.Editing = false end
+		for box in Lib.ThemeCheckboxes do
+			if box.OutlineColorTween then box.OutlineColorTween:Cancel() end
+		end
+		for win in Lib.ThemeWindows do win:StopTweens() end
+		if Lib.Window and Lib.Window.Shutdown then Lib.Window.Shutdown() end
+		table.clear(Lib.ThemeRefs)
+		table.clear(Lib.ThemeRoots)
+		table.clear(Lib.ThemeText)
+		table.clear(Lib.ThemeWindows)
+		table.clear(Lib.CodeBoxes)
+		table.clear(Lib.ThemeCheckboxes)
+		table.clear(Lib.ThemeCorners)
 	end
 
 	Lib.CreateArrow = function(size,num,dir)
@@ -693,8 +770,9 @@ local function main()
 				disabled = true
 			end,
 			Destroy = function()
-				con:Disconnect()
-				con = nil
+				if con then con:Disconnect() con = nil end
+				target = nil
+				obj = nil
 			end,
 		}
 	end
@@ -844,8 +922,11 @@ local function main()
 		local funcs = {}
 
 		local disconnect = function(con)
-			local pos = table.find(con.Signal.Connections,con)
-			if pos then table.remove(con.Signal.Connections,pos) end
+			if not con.Connected then return end
+			con.Connected = false
+			local pos = table.find(con.Signal.Connections, con)
+			if pos then table.remove(con.Signal.Connections, pos) end
+			con.Func = nil
 		end
 
 		funcs.Connect = function(self,func)
@@ -853,15 +934,18 @@ local function main()
 			local con = {
 				Signal = self,
 				Func = func,
-				Disconnect = disconnect
+				Disconnect = disconnect,
+				Connected = true
 			}
 			self.Connections[#self.Connections+1] = con
 			return con
 		end
 
 		funcs.Fire = function(self,...)
-			for i,v in next,self.Connections do
-				xpcall(coroutine.wrap(v.Func),function(e) warn(e.."\n"..debug.traceback()) end,...)
+			for _, con in table.clone(self.Connections) do
+				if con.Connected and not Main.__DexExiting then
+					xpcall(coroutine.wrap(con.Func), function(err) warn(tostring(err)) end, ...)
+				end
 			end
 		end
 
@@ -2947,7 +3031,7 @@ local function main()
 				{6,"TextLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Font=3,Name="Title",Parent={5},Position=UDim2.new(0,5,0,0),Size=UDim2.new(1,-10,0,20),Text="Window",TextColor3=Color3.new(1,1,1),TextSize=14,TextXAlignment=0}},
 				{7,"TextButton",{AutoButtonColor=false,BackgroundColor3=Color3.new(0.12549020349979,0.12549020349979,0.12549020349979),BackgroundTransparency=1,BorderSizePixel=0,Font=3,Name="Close",Parent={5},Position=UDim2.new(1,-18,0,2),Size=UDim2.new(0,16,0,16),Text="",TextColor3=Color3.new(1,1,1),TextSize=14,}},
 				{8,"ImageLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Image=Main.ResolveAsset("rbxassetid://5054663650"),Parent={7},Position=UDim2.new(0,3,0,3),Size=UDim2.new(0,10,0,10),}},
-				{9,"UICorner",{CornerRadius=UDim.new(0,4),Parent={7},}},
+				{23,"UICorner",{CornerRadius=UDim.new(0,4),Parent={7},}},
 				--[[lol mod]]	{9,"UICorner",{CornerRadius=UDim.new(0,4),Parent={2},}},
 				{10,"TextButton",{AutoButtonColor=false,BackgroundColor3=Color3.new(0.12549020349979,0.12549020349979,0.12549020349979),BackgroundTransparency=1,BorderSizePixel=0,Font=3,Name="Minimize",Parent={5},Position=UDim2.new(1,-36,0,2),Size=UDim2.new(0,16,0,16),Text="",TextColor3=Color3.new(1,1,1),TextSize=14,}},
 				{11,"ImageLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,Image=Main.ResolveAsset("rbxassetid://5034768003"),Parent={10},Position=UDim2.new(0,3,0,3),Size=UDim2.new(0,10,0,10),}},
@@ -2990,6 +3074,10 @@ local function main()
 				if obj.GuiElems.Title then obj.GuiElems.Title.TextColor3 = t.Text or obj.GuiElems.Title.TextColor3 end
 				if obj.GuiElems.Close then obj.GuiElems.Close.BackgroundColor3 = t.Button or obj.GuiElems.Close.BackgroundColor3 end
 				if obj.GuiElems.Minimize then obj.GuiElems.Minimize.BackgroundColor3 = t.Button or obj.GuiElems.Minimize.BackgroundColor3 end
+				for _, key in {"Close", "Minimize"} do
+					local icon = getButtonImage(obj.GuiElems[key])
+					if icon then icon.ImageColor3 = t.Text end
+				end
 			end
 			self:ApplyTheme()
 			
@@ -3240,15 +3328,15 @@ local function main()
 			local mouse = Main.Mouse
 			local windows = side.Windows
 
-			trackConn(resizer.MouseEnter:Connect(function() resizer.BackgroundColor3 = theme.MainColor2 end))
-			trackConn(resizer.MouseButton1Down:Connect(function() pressing = true resizer.BackgroundColor3 = theme.MainColor2 end))
-			trackConn(resizer.MouseButton1Up:Connect(function() pressing = false resizer.BackgroundColor3 = theme.Button end))
+			trackConn(resizer.MouseEnter:Connect(function() resizer.BackgroundColor3 = Settings.Theme.ButtonHover end))
+			trackConn(resizer.MouseButton1Down:Connect(function() pressing = true resizer.BackgroundColor3 = Settings.Theme.ButtonHover end))
+			trackConn(resizer.MouseButton1Up:Connect(function() pressing = false resizer.BackgroundColor3 = Settings.Theme.Button end))
 
 
 			trackConn(resizer.InputBegan:Connect(function(input)
 				if not side.Resizing and pressing then
 					if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-						resizer.BackgroundColor3 = theme.MainColor2
+						resizer.BackgroundColor3 = Settings.Theme.ButtonHover
 					end 
 					if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 						local releaseEvent,mouseEvent
@@ -3257,14 +3345,14 @@ local function main()
 						local offY = mouse.Y - resizer.AbsolutePosition.Y
 
 						side.Resizing = resizer
-						resizer.BackgroundColor3 = theme.MainColor2
+						resizer.BackgroundColor3 = Settings.Theme.ButtonHover
 
 						releaseEvent = trackConn(service.UserInputService.InputEnded:Connect(function(input)
 							if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 								releaseEvent:Disconnect()
 								mouseEvent:Disconnect()
 								side.Resizing = false
-								resizer.BackgroundColor3 = theme.Button
+								resizer.BackgroundColor3 = Settings.Theme.Button
 							end
 						end))
 
@@ -3333,7 +3421,7 @@ local function main()
 
 			trackConn(resizer.InputEnded:Connect(function(input)
 				if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch and side.Resizing ~= resizer then
-					resizer.BackgroundColor3 = theme.Button
+					resizer.BackgroundColor3 = Settings.Theme.Button
 				end
 			end))
 		end
@@ -3359,7 +3447,7 @@ local function main()
 					v.GuiElems.Main.Size = size
 					v.GuiElems.Main.Position = pos
 				else
-					local tween = service.TweenService:Create(v.GuiElems.Main,sideTweenInfo,{Size = size, Position = pos})
+					local tween = service.TweenService:Create(v.GuiElems.Main,Settings.Window.ReducedMotion and TweenInfo.new(0) or sideTweenInfo,{Size = size, Position = pos})
 					tweens[#tweens+1] = tween
 					tween:Play()
 				end
@@ -3378,6 +3466,8 @@ local function main()
 					newTemplate.Parent = side.Frame
 				end
 			end
+
+			template:Destroy()
 
 			--side.Frame.Back.Position = UDim2.new(0,0,0,0)
 			--side.Frame.Back.Size = UDim2.new(0,side.Width,1,0)
@@ -3464,14 +3554,14 @@ local function main()
 			if mode == 1 or mode == 2 then
 				self:StopTweens()
 				if mode == 1 then
-					self.GuiElems.Main:TweenSize(UDim2.new(0,self.SizeX,0,newVal and 20 or self.SizeY),Enum.EasingDirection.Out,Enum.EasingStyle.Quart,0.25,true)
+					self.GuiElems.Main:TweenSize(UDim2.new(0,self.SizeX,0,newVal and 20 or self.SizeY),Enum.EasingDirection.Out,Enum.EasingStyle.Quart,Settings.Window.ReducedMotion and 0 or 0.25,true)
 				else
 					local bounds = self.Gui and self.Gui.AbsoluteSize or sidesGui.AbsoluteSize
 					local maxY = bounds.Y
 					local newPos = UDim2.new(0,self.PosX,0,newVal and math.min(maxY-20,self.PosY + self.SizeY - 20) or math.max(0,self.PosY - self.SizeY + 20))
 
-					self.GuiElems.Main:TweenPosition(newPos,Enum.EasingDirection.Out,Enum.EasingStyle.Quart,0.25,true)
-					self.GuiElems.Main:TweenSize(UDim2.new(0,self.SizeX,0,newVal and 20 or self.SizeY),Enum.EasingDirection.Out,Enum.EasingStyle.Quart,0.25,true)
+					self.GuiElems.Main:TweenPosition(newPos,Enum.EasingDirection.Out,Enum.EasingStyle.Quart,Settings.Window.ReducedMotion and 0 or 0.25,true)
+					self.GuiElems.Main:TweenSize(UDim2.new(0,self.SizeX,0,newVal and 20 or self.SizeY),Enum.EasingDirection.Out,Enum.EasingStyle.Quart,Settings.Window.ReducedMotion and 0 or 0.25,true)
 				end
 				local minimizeImage = getButtonImage(self.GuiElems.Minimize)
 				if minimizeImage then
@@ -3617,45 +3707,18 @@ local function main()
 		end
 		
 		funcs.Destroy = function(self)
+			if self.Destroyed then return end
+			self.Destroyed = true
 			self.Closed = true
-			self:SetResizableInternal(false)
-
-			Lib.FindAndRemove(leftSide.Windows,self)
-			Lib.FindAndRemove(rightSide.Windows,self)
-			Lib.FindAndRemove(visibleWindows,self)
-
-			self.MinimizeAnim.Disable()
-			self.CloseAnim.Disable()
-			self.ClosedSide = (self.RestoreLastSide == false) and nil or self.Side
-			self.Side = nil
-			self.OnDeactivate:Fire()
-
-			if not self.Aligned then
-				self:StopTweens()
-				local ti = TweenInfo.new(0.2,Enum.EasingStyle.Quad,Enum.EasingDirection.Out)
-
-				local closeTime = tick()
-				self.LastClose = closeTime
-
-				self:DoTween(self.GuiElems.Main,ti,{Size = UDim2.new(0,self.SizeX,0,20)})
-				self:DoTween(self.GuiElems.Title,ti,{TextTransparency = 1})
-				local minimizeImage = getButtonImage(self.GuiElems.Minimize)
-				local closeImage = getButtonImage(self.GuiElems.Close)
-				if minimizeImage then self:DoTween(minimizeImage,ti,{ImageTransparency = 1}) end
-				if closeImage then self:DoTween(closeImage,ti,{ImageTransparency = 1}) end
-				Lib.FastWait(0.2)
-				if closeTime ~= self.LastClose then return end
-
-				self:DoTween(self.GuiElems.TopBar,ti,{BackgroundTransparency = 1})
-				self:DoTween(self.GuiElems.Outlines,ti,{ImageTransparency = 1})
-				Lib.FastWait(0.2)
-				if closeTime ~= self.LastClose then return end
-			end
-
+			self:StopTweens()
+			Lib.FindAndRemove(leftSide.Windows, self)
+			Lib.FindAndRemove(rightSide.Windows, self)
+			Lib.FindAndRemove(visibleWindows, self)
+			Lib.ThemeWindows[self] = nil
 			self.Aligned = false
-			--self.Gui.Parent = nil
-			updateWindows(true)
+			self.Side = nil
 			self.Gui:Destroy()
+			if not Main.__DexExiting then updateWindows(true) end
 		end
 
 		funcs.Hide = funcs.Close
@@ -3943,6 +4006,7 @@ local function main()
 				OnRestore = Lib.Signal.new()
 			},mt)
 			obj.Gui = createGui(obj)
+			Lib.ThemeWindows[obj] = true
 			return obj
 		end
 
@@ -4256,9 +4320,9 @@ local function main()
 				elems.Main.Position = UDim2.new(0,x,0,y-(self.ReverseYOffset or 0))
 				local newY = y - toSize - (self.ReverseYOffset or 0)
 				y = newY >= 0 and newY or 0
-				elems.Main:TweenSizeAndPosition(UDim2.new(0,self.Width,0,toSize),UDim2.new(0,x,0,y),Enum.EasingDirection.Out,Enum.EasingStyle.Quart,0.2,true)
+				elems.Main:TweenSizeAndPosition(UDim2.new(0,self.Width,0,toSize),UDim2.new(0,x,0,y),Enum.EasingDirection.Out,Enum.EasingStyle.Quart,Settings.Window.ReducedMotion and 0 or 0.2,true)
 			else
-				elems.Main:TweenSize(UDim2.new(0,self.Width,0,toSize),Enum.EasingDirection.Out,Enum.EasingStyle.Quart,0.2,true)
+				elems.Main:TweenSize(UDim2.new(0,self.Width,0,toSize),Enum.EasingDirection.Out,Enum.EasingStyle.Quart,Settings.Window.ReducedMotion and 0 or 0.2,true)
 			end
 
 			-- Close debounce
@@ -5662,6 +5726,7 @@ local function main()
 			end))
 
 			makeFrame(obj)
+			Lib.CodeBoxes[obj] = true
 			obj:MakeRichTemplates()
 			obj:ApplyTheme()
 			scrollV:SetScrollFrame(obj.Frame.Lines)
@@ -5689,9 +5754,11 @@ local function main()
 		local ud = UDim.new
 		local max = math.max
 		local new = Instance.new
-		local TweenSize = new("Frame").TweenSize
+		local function TweenSize(obj, size, direction, style, span, ...)
+			return obj:TweenSize(size, direction, style, Settings.Window.ReducedMotion and 0 or span, ...)
+		end
 		local ti = TweenInfo.new
-		local delay = delay
+		local delay = task.delay
 
 		local function ripple(object, color)
 			local circle = new('Frame')
@@ -5812,7 +5879,8 @@ local function main()
 				end
 			end))]]
 
-			self:Paint()
+			Lib.ThemeCheckboxes[self] = true
+			self:ApplyTheme()
 		end
 
 		funcs.Collapse = function(self,anim)
@@ -5862,8 +5930,20 @@ local function main()
 				guiElems.Checkmark2.ImageColor3 = self.Disabled and self.Colors.DisabledCheck or self.Colors.Primary
 			end
 		end
+		funcs.ApplyTheme = function(self)
+			local theme = Settings.Theme
+			self.Colors.Background = theme.TextBox
+			self.Colors.Primary = theme.ListSelection
+			self.Colors.Secondary = theme.Outline3
+			self.Colors.Disabled = theme.Button
+			self.Colors.DisabledBackground = theme.Main2
+			self.Colors.DisabledCheck = theme.PlaceholderText
+			if self.OutlineColorTween then self.OutlineColorTween:Cancel() end
+			self:Paint()
+		end
 
 		funcs.SetState = function(self,val,anim)
+			if Settings.Window.ReducedMotion then anim = false end
 			self.Toggled = val
 
 			if self.OutlineColorTween then self.OutlineColorTween:Cancel() end
@@ -7722,8 +7802,11 @@ local function main()
 		local tostring = tostring
 
 		local disconnect = function(con)
-			local pos = table.find(con.Signal.Connections,con)
-			if pos then table.remove(con.Signal.Connections,pos) end
+			if not con.Connected then return end
+			con.Connected = false
+			local pos = table.find(con.Signal.Connections, con)
+			if pos then table.remove(con.Signal.Connections, pos) end
+			con.Func = nil
 		end
 
 		funcs.Trigger = function(self, item, button, X, Y)
@@ -7743,9 +7826,9 @@ local function main()
 					else
 						self.InputDown = tick()
 
-						local Connection = item.MouseButton1Up:Once(function()
+						local Connection = trackConn(item.MouseButton1Up:Once(function()
 							self.InputDown = false
-						end)
+						end))
 
 						while self.InputDown and not Explorer.Dragging do
 							if (tick() - self.InputDown) >= 0.4 then

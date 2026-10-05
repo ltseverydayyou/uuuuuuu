@@ -1,4 +1,5 @@
 --!nonstrict
+local task, coroutine, TweenInfo = task, coroutine, TweenInfo
 local unpack = table.unpack or unpack
 local loadstring = loadstring or load
 local newproxy = newproxy or function()
@@ -20,6 +21,9 @@ local API, RMD, env, service, plr, create, createSimple
 
 local function initDeps(data)
     Main = data.Main
+    task = Main.Tasks or task
+    coroutine = Main.Coroutine or coroutine
+	TweenInfo = Main.TweenInfo or TweenInfo
     Lib = data.Lib
     Apps = data.Apps
     Settings = data.Settings
@@ -3850,6 +3854,7 @@ local function main()
             if g.ScrollCorner then
                 g.ScrollCorner.BackgroundColor3 = t.Main1 or g.ScrollCorner.BackgroundColor3
             end
+            Properties.Refresh()
         end
     end
 

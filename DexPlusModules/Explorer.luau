@@ -1,4 +1,5 @@
 --!nonstrict
+local task, coroutine, TweenInfo = task, coroutine, TweenInfo
 local unpack = table.unpack or unpack
 local loadstring = loadstring or load
 local newproxy = newproxy or function()
@@ -80,6 +81,9 @@ local API,RMD,env,service,plr,create,createSimple -- Main Locals
 
 local function initDeps(data)
 	Main = data.Main
+	task = Main.Tasks or task
+	coroutine = Main.Coroutine or coroutine
+	TweenInfo = Main.TweenInfo or TweenInfo
 	Lib = data.Lib
 	Apps = data.Apps
 	Settings = data.Settings
@@ -135,8 +139,8 @@ local function main()
 	local getDescendants = queryDescendants
 	local getTextSize = service.TextService.GetTextSize
 	local updateDebounce,refreshDebounce = false,false
-	local nilNode = {Obj = Instance.new("Folder")}
-	local pinnedNode = {Obj = Instance.new("Folder")}
+	local nilNode = {Obj = Main.TrackResource(Instance.new("Folder"))}
+	local pinnedNode = {Obj = Main.TrackResource(Instance.new("Folder"))}
 	local idCounter = 0
 	local scrollV,scrollH,clipboard
 	local renameBox,renamingNode,searchFunc,shortcutInputCon
@@ -183,12 +187,9 @@ local function main()
 	end
 
 	local function disconnectNilCons()
-		local dummyCon = Instance.new("Folder").ChildAdded:Connect(function() end)
-		local disconnectCon = dummyCon.Disconnect
-		dummyCon:Disconnect()
 		for _, cons in next,nilCons do
-			if cons[1] then disconnectCon(cons[1]) end
-			if cons[2] then disconnectCon(cons[2]) end
+			if cons[1] then cons[1]:Disconnect() end
+			if cons[2] then cons[2]:Disconnect() end
 		end
 		table.clear(nilCons)
 	end
@@ -198,7 +199,7 @@ local function main()
 	end
 
 	local function rebuildPinnedNodes()
-		table.clear(pinnedNode)
+		for i = #pinnedNode, 1, -1 do pinnedNode[i] = nil end
 		if not isPinnedEnabled() then
 			return
 		end
@@ -941,7 +942,12 @@ local function main()
 		end
 		if subject then
 			pcall(function()
-				workspace.CurrentCamera.CameraSubject = subject
+				local cam = workspace.CurrentCamera
+				if cam then
+					if not Explorer.OldCamera then Explorer.OldCamera = {cam, cam.CameraSubject} end
+					Explorer.LastSubject = subject
+					cam.CameraSubject = subject
+				end
 			end)
 		end
 	end
@@ -3459,6 +3465,7 @@ return search]==]
 		if not holder then
 			holder = Instance.new("ScreenGui")
 			holder.Name = "ExplorerSelections"
+			holder:SetAttribute("DexSelectionOverlay", true)
 			holder.DisplayOrder = Main.DisplayOrders.Core
 			holder.IgnoreGuiInset = true
 			pcall(function() holder.ScreenInsets = Enum.ScreenInsets.None end)
@@ -3525,6 +3532,38 @@ return search]==]
 					boxCount = boxCount + 1
 				end
 			end
+		end
+	end
+
+	Explorer.Destroy = function()
+		Explorer.Active = false
+		Explorer.Dragging = false
+		if selection then
+			table.clear(selection.List)
+			table.clear(selection.Map)
+		end
+		for _, attach in Explorer.SelectionVisualCons or {} do pcall(attach.Destroy) end
+		for _, name in {"SelectionVisualsHolder", "SelectionVisualGui", "SelectionVisualBox"} do
+			local obj = Explorer[name]
+			if obj then pcall(obj.Destroy, obj) Explorer[name] = nil end
+		end
+		local old = Explorer.OldCamera
+		if old and old[1].Parent and old[1].CameraSubject == Explorer.LastSubject then
+			local target = old[2]
+			if target and target.Parent then old[1].CameraSubject = target end
+		end
+		Explorer.OldCamera = nil
+		Explorer.LastSubject = nil
+		table.clear(nodes)
+		table.clear(tree)
+		table.clear(listEntries)
+		table.clear(nilMap)
+		table.clear(nilCons)
+		table.clear(pinnedObjects)
+		table.clear(pinnedMap)
+		if entryTemplate then entryTemplate:Destroy() entryTemplate = nil end
+		for _, node in {nilNode, pinnedNode} do
+			if node.Obj then node.Obj:Destroy() end
 		end
 	end
 
@@ -3653,6 +3692,7 @@ return search]==]
 			end
 			if g.ScrollCorner then g.ScrollCorner.BackgroundColor3 = t.Main1 or g.ScrollCorner.BackgroundColor3 end
 			if g.SearchBar then g.SearchBar.BackgroundColor3 = t.TextBox or g.SearchBar.BackgroundColor3 end
+			Explorer.Refresh()
 		end
 
 		-- Init stuff that requires the window

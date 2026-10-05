@@ -1,4 +1,5 @@
 --!nonstrict
+local task, coroutine, TweenInfo = task, coroutine, TweenInfo
 local unpack = table.unpack or unpack
 local loadstring = loadstring or load
 local newproxy = newproxy or function()
@@ -49,6 +50,9 @@ local API,RMD,env,service,plr,create,createSimple -- Main Locals
 
 	local function initDeps(data)
 	Main = data.Main
+	task = Main.Tasks or task
+	coroutine = Main.Coroutine or coroutine
+	TweenInfo = Main.TweenInfo or TweenInfo
 	Lib = data.Lib
 	Apps = data.Apps
 	Settings = data.Settings
@@ -700,7 +704,10 @@ end
 				ScriptViewer.Window:ApplyTheme()
 			end
 			if codeFrame and codeFrame.Frame then
-				codeFrame.Frame.BackgroundColor3 = t.TextBox or codeFrame.Frame.BackgroundColor3
+				codeFrame:ApplyTheme()
+				codeFrame:MakeRichTemplates()
+				table.clear(codeFrame.ColoredLines)
+				codeFrame:Refresh()
 			end
 			if textSizeFrame then
 				textSizeFrame.BackgroundColor3 = t.TextBox or textSizeFrame.BackgroundColor3

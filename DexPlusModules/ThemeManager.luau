@@ -1,4 +1,5 @@
 --!nonstrict
+local task, coroutine, TweenInfo = task, coroutine, TweenInfo
 local unpack = table.unpack or unpack
 local loadstring = loadstring or load
 local newproxy = newproxy or function()
@@ -16,6 +17,9 @@ local Main,Lib,Apps,Settings
 
 local function initDeps(data)
 	Main = data.Main
+	task = Main.Tasks or task
+	coroutine = Main.Coroutine or coroutine
+	TweenInfo = Main.TweenInfo or TweenInfo
 	Lib = data.Lib
 	Apps = data.Apps
 	Settings = data.Settings
@@ -380,222 +384,299 @@ local function main()
 		}
 	}
 
+	presets[#presets + 1] = {name = "Light", apply = function()
+		local t = Settings.Theme
+		t.Main1 = Color3.fromRGB(246,247,250)
+		t.Main2 = Color3.fromRGB(230,232,238)
+		t.Outline1 = Color3.fromRGB(194,198,210)
+		t.Outline2 = Color3.fromRGB(176,182,196)
+		t.Outline3 = Color3.fromRGB(150,158,176)
+		t.TextBox = Color3.fromRGB(255,255,255)
+		t.Menu = Color3.fromRGB(238,240,245)
+		t.Button = Color3.fromRGB(218,224,236)
+		t.ButtonHover = Color3.fromRGB(198,212,234)
+		t.ButtonPress = Color3.fromRGB(178,198,228)
+		t.Text = Color3.fromRGB(24,30,42)
+		t.PlaceholderText = Color3.fromRGB(90,98,116)
+		t.ListSelection = Color3.fromRGB(138,182,242)
+		t.Highlight = Color3.fromRGB(206,218,240)
+		t.Important = Color3.fromRGB(180,24,48)
+		local s = t.Syntax
+		s.Background = Color3.fromRGB(250,251,253)
+		s.Text = t.Text
+		s.Operator = t.Text
+		s.Selection = t.Text
+		s.SelectionBack = t.ListSelection
+		s.Number = Color3.fromRGB(152,92,12)
+		s.String = Color3.fromRGB(38,120,46)
+		s.Comment = Color3.fromRGB(104,110,126)
+		s.Keyword = Color3.fromRGB(144,38,132)
+		s.BuiltIn = Color3.fromRGB(22,102,156)
+		s.Error = t.Important
+		s.CurrentLine = Color3.fromRGB(230,236,246)
+		s.FunctionName = Color3.fromRGB(120,72,20)
+		s.LocalMethod = s.FunctionName
+		s.LocalProperty = s.BuiltIn
+		s.Nil = s.Number
+		s.Bool = s.Number
+		s.Function = s.Keyword
+		s.Local = s.Keyword
+		s.Self = s.Keyword
+		s.Bracket = t.Text
+		s.FindBackground = Color3.fromRGB(248,220,132)
+		s.MatchingWord = Color3.fromRGB(202,216,240)
+	end}
+	local undo = {}
+	local tab = "Presets"
+	local rows, tabs = {}, {}
+	local scroll, search, status, active, picker, activeKey, nameBox, autoBtn
+	local function clone(src)
+		local out = {}
+		for key, val in src do out[key] = type(val) == "table" and clone(val) or val end
+		return out
+	end
+	local function getColor(src, path)
+		for key in path:gmatch("[^.]+") do src = type(src) == "table" and src[key] or nil end
+		return src
+	end
+	local function message(text, bad)
+		if not status then return end
+		status.Text = text
+		Lib.BindTheme(status, {TextColor3 = bad and "Important" or "PlaceholderText"})
+	end
+	local function save()
+		local ok, err = Main.SaveThemeSettings()
+		message(ok and "Theme saved" or (err or "Could not save theme"), not ok)
+		return ok
+	end
+	local function remember()
+		undo[#undo + 1] = {Theme = clone(Settings.Theme), Name = Main.ThemeSettings.Name}
+		if #undo > 30 then table.remove(undo, 1) end
+	end
+	local function changed(name)
+		Main.ApplyTheme(Settings.Theme, name or "Custom")
+		if Main.ThemeSettings.AutoSave then save() else message("Unsaved changes") end
+		if refreshRows then refreshRows() end
+	end
+	local function setColor(path, col)
+		if typeof(col) ~= "Color3" or getColor(Settings.Theme, path) == col then return end
+		remember()
+		local parts = string.split(path, ".")
+		local ref = Settings.Theme
+		for i = 1, #parts - 1 do ref = ref[parts[i]] end
+		ref[parts[#parts]] = col
+		changed()
+	end
+	local function parseHex(text)
+		local hex = text:gsub("%s+", ""):gsub("^#", "")
+		if hex:match("^%x%x%x$") then hex = hex:gsub("(.)", "%1%1") end
+		if not hex:match("^%x%x%x%x%x%x$") then return nil end
+		return Color3.fromRGB(tonumber(hex:sub(1,2),16), tonumber(hex:sub(3,4),16), tonumber(hex:sub(5,6),16))
+	end
+	local function create(class, parent, props, theme)
+		local obj = Instance.new(class)
+		for key, val in props do obj[key] = val end
+		if theme then Lib.BindTheme(obj, theme) end
+		if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
+			if obj.Name ~= "Hex" then obj:SetAttribute("DexUIFont", true) end
+		end
+		obj.Parent = parent
+		return obj
+	end
+	local function corner(obj)
+		create("UICorner", obj, {CornerRadius = UDim.new(0, Settings.Window.CornerRadius or 4)})
+	end
+	local function button(parent, text, size, pos, fn)
+		local obj = create("TextButton", parent, {Text = text, Name = text, Size = size, Position = pos or UDim2.new(), BorderSizePixel = 0, Font = Lib.GetUIFont(), TextSize = 14, AutoButtonColor = false}, {BackgroundColor3 = "Button", TextColor3 = "Text"})
+		corner(obj)
+		trackConn(obj.Activated:Connect(fn))
+		trackConn(obj.MouseEnter:Connect(function() Lib.BindTheme(obj, {BackgroundColor3 = "ButtonHover"}) end))
+		trackConn(obj.MouseLeave:Connect(function() Lib.BindTheme(obj, {BackgroundColor3 = tabs[obj.Text] == obj and obj.Text == tab and "ListSelection" or "Button"}) end))
+		return obj
+	end
+	local function row(key, section, height)
+		local obj = create("Frame", scroll, {Name = key, BackgroundTransparency = 1, Size = UDim2.new(1, -8, 0, height or 34), LayoutOrder = #rows + 1})
+		rows[#rows + 1] = {Gui = obj, Key = key, Tab = section}
+		return obj, rows[#rows]
+	end
+	local function label(parent, text, size, pos)
+		return create("TextLabel", parent, {BackgroundTransparency = 1, Text = text, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Font = Lib.GetUIFont(), TextSize = 14, Size = size, Position = pos or UDim2.new()}, {TextColor3 = "Text"})
+	end
+	local function rebuildSaved()
+		for i = #rows, 1, -1 do
+			if rows[i].Tab == "Saved" and rows[i].Saved then rows[i].Gui:Destroy() table.remove(rows, i) end
+		end
+		local names = {}
+		for name in Main.ThemeSettings.Saved do names[#names + 1] = name end
+		table.sort(names)
+		for _, name in names do
+			local frame, data = row(name, "Saved")
+			data.Saved = true
+			button(frame, name, UDim2.new(1, -82, 1, 0), nil, function()
+				remember()
+				Main.ApplyTheme(Main.ThemeSettings.Saved[name], name)
+				changed(name)
+			end)
+			button(frame, "Delete", UDim2.new(0, 76, 1, 0), UDim2.new(1, -76, 0, 0), function()
+				Main.ThemeSettings.Saved[name] = nil
+				save()
+				rebuildSaved()
+				refreshRows()
+			end)
+		end
+	end
+	refreshRows = function()
+		if not window or Main.__DexExiting then return end
+		local query = search.Text:lower()
+		for _, data in rows do
+			data.Gui.Visible = data.Tab == tab and (data.Always or query == "" or data.Key:lower():find(query, 1, true) ~= nil)
+			if data.Path then
+				local col = getColor(Settings.Theme, data.Path)
+				data.Swatch.BackgroundColor3 = col
+				if not data.Hex:IsFocused() then data.Hex.Text = "#" .. col:ToHex():upper() end
+			end
+		end
+		for name, obj in tabs do Lib.BindTheme(obj, {BackgroundColor3 = name == tab and "ListSelection" or "Button"}) end
+		active.Text = "Current: " .. (Main.ThemeSettings.Name or "Custom")
+		if autoBtn then autoBtn.Text = "Auto save changes: " .. (Main.ThemeSettings.AutoSave and "On" or "Off") end
+	end
+	ThemeManager.ApplyTheme = function()
+		if refreshRows then refreshRows() end
+	end
+	ThemeManager.Destroy = function()
+		activeKey = nil
+		table.clear(rows)
+		table.clear(tabs)
+		table.clear(undo)
+		refreshRows = nil
+	end
 	ThemeManager.Init = function()
 		window = Lib.Window.new()
 		window:SetTitle("Themes")
-		window:Resize(360,360)
+		local w, h = Lib.FitSize(500, 580)
+		window.MinX = math.min(360, w)
+		window.MinY = math.min(400, h)
+		window:Resize(w, h)
 		ThemeManager.Window = window
-		
 		local content = window.GuiElems.Content
-		local padding = Instance.new("UIPadding")
-		padding.PaddingTop = UDim.new(0,8)
-		padding.PaddingLeft = UDim.new(0,8)
-		padding.PaddingRight = UDim.new(0,8)
-		padding.Parent = content
-
-		local function makeButton(text, posY, onClick)
-			local btn = Instance.new("TextButton")
-			btn.Size = UDim2.new(1,-16,0,28)
-			btn.Position = UDim2.new(0,8,0,posY)
-			btn.Text = text
-			btn.TextColor3 = Color3.new(1,1,1)
-			btn.AutoButtonColor = false
-			btn.BackgroundTransparency = 0
-			btn.BackgroundColor3 = Settings.Theme.Button
-			Lib.ButtonAnim(btn,{PressColor = Settings.Theme.ButtonPress})
-			btn.Parent = content
-			trackConn(btn.MouseButton1Click:Connect(onClick))
-			return btn
-		end
-
-		makeButton("Reload Theme File",10,function()
-			Main.LoadThemeSettings()
-			Lib.RefreshTheme()
-		end)
-
-		makeButton("Save Current Theme",44,function()
-			Main.SaveThemeSettings()
-		end)
-
-		makeButton("Reset to Default",78,function()
-			Main.ResetSettings()
-			if refreshRows then
-				refreshRows()
-			end
-			Main.SaveThemeSettings()
-			Lib.RefreshTheme()
-		end)
-
-		local scroll = Instance.new("ScrollingFrame")
-		scroll.Name = "ThemeContent"
-		scroll.Size = UDim2.new(1,-16,1,-120)
-		scroll.Position = UDim2.new(0,8,0,120)
-		scroll.BackgroundTransparency = 0.1
-		scroll.BackgroundColor3 = Settings.Theme.Main1
-		scroll.CanvasSize = UDim2.new(0,0,0,0)
-		scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-		scroll.ScrollBarThickness = 6
-		scroll.Parent = content
-
-		local innerPad = Instance.new("UIPadding")
-		innerPad.PaddingTop = UDim.new(0,6)
-		innerPad.PaddingLeft = UDim.new(0,4)
-		innerPad.PaddingRight = UDim.new(0,4)
-		innerPad.Parent = scroll
-
-		local list = Instance.new("UIListLayout", scroll)
-		list.Padding = UDim.new(0,6)
-		list.SortOrder = Enum.SortOrder.LayoutOrder
-
-		local pLabel = Instance.new("TextLabel")
-		pLabel.BackgroundTransparency = 1
-		pLabel.Text = "Presets"
-		pLabel.TextXAlignment = Enum.TextXAlignment.Left
-		pLabel.TextColor3 = Color3.new(1,1,1)
-		pLabel.Font = Enum.Font.SourceSans
-		pLabel.TextSize = 14
-		pLabel.Size = UDim2.new(1,0,0,18)
-		pLabel.LayoutOrder = 1
-		pLabel.Parent = scroll
-
-		for i,p in presets do
-			local b = Instance.new("TextButton")
-			b.Size = UDim2.new(1,0,0,24)
-			b.BackgroundTransparency = 0
-			b.BackgroundColor3 = Settings.Theme.Button
-			b.Text = p.name
-			b.TextColor3 = Color3.new(1,1,1)
-			b.Font = Enum.Font.SourceSans
-			b.TextSize = 14
-			b.AutoButtonColor = false
-			b.LayoutOrder = 10 + i
-			b.Parent = scroll
-			Lib.ButtonAnim(b,{PressColor = Settings.Theme.ButtonPress})
-			trackConn(b.MouseButton1Click:Connect(function()
-				p.apply()
-				if refreshRows then
+		picker = Lib.ColorPicker.new()
+		local actions = create("Frame", content, {BackgroundTransparency = 1, Size = UDim2.new(1, -16, 0, 30), Position = UDim2.new(0, 8, 0, 8)})
+		local funcs = {
+			{"Save", save},
+			{"Reload", function()
+				local snap = {Theme = clone(Settings.Theme), Name = Main.ThemeSettings.Name}
+				local ok, err = Main.LoadThemeSettings()
+				if ok then
+					undo[#undo + 1] = snap
+					if #undo > 30 then table.remove(undo, 1) end
+					rebuildSaved()
 					refreshRows()
 				end
-				Main.SaveThemeSettings()
-				Lib.RefreshTheme()
-			end))
-		end
-
-		local sep = Instance.new("Frame")
-		sep.BackgroundColor3 = Color3.fromRGB(80,80,80)
-		sep.BorderSizePixel = 0
-		sep.Size = UDim2.new(1,0,0,1)
-		sep.LayoutOrder = 100
-		sep.Parent = scroll
-
-		local cLabel = Instance.new("TextLabel")
-		cLabel.BackgroundTransparency = 1
-		cLabel.Text = "Colors"
-		cLabel.TextXAlignment = Enum.TextXAlignment.Left
-		cLabel.TextColor3 = Color3.new(1,1,1)
-		cLabel.Font = Enum.Font.SourceSans
-		cLabel.TextSize = 14
-		cLabel.Size = UDim2.new(1,0,0,18)
-		cLabel.LayoutOrder = 101
-		cLabel.Parent = scroll
-
-		local themeEntries = {
-			{"Main1"},{"Main2"},{"Outline1"},{"Outline2"},{"Outline3"},{"TextBox"},{"Menu"},
-			{"ListSelection"},{"Button"},{"ButtonHover"},{"ButtonPress"},{"Highlight"},
-			{"Text"},{"PlaceholderText"},{"Important"},
-			{"Syntax","Text"},{"Syntax","Background"},{"Syntax","Selection"},{"Syntax","SelectionBack"},
-			{"Syntax","Operator"},{"Syntax","Number"},{"Syntax","String"},{"Syntax","Comment"},
-			{"Syntax","Keyword"},{"Syntax","Error"},{"Syntax","FindBackground"},{"Syntax","MatchingWord"},
-			{"Syntax","BuiltIn"},{"Syntax","CurrentLine"},{"Syntax","LocalMethod"},{"Syntax","LocalProperty"},
-			{"Syntax","Nil"},{"Syntax","Bool"},{"Syntax","Function"},{"Syntax","Local"},{"Syntax","Self"},
-			{"Syntax","FunctionName"},{"Syntax","Bracket"}
+				message(ok and "Theme reloaded" or err, not ok)
+			end},
+			{"Reset", function() remember() Main.ResetTheme() changed("Default") end},
+			{"Undo", function()
+				local snap = table.remove(undo)
+				if not snap then message("Nothing to undo") return end
+				Main.ApplyTheme(snap.Theme, snap.Name)
+				changed(snap.Name)
+			end}
 		}
-
-		local rows = {}
-		local activeKey
-
-		local colorPicker = Lib.ColorPicker.new()
-		local function getThemeColor(path)
-			local ref = Settings.Theme
-			for i = 1,#path do
-				if type(ref) ~= "table" then return nil end
-				ref = ref[path[i]]
-			end
-			return ref
+		for i, data in funcs do button(actions, data[1], UDim2.new(0.25, -5, 1, 0), UDim2.new((i-1)/4, i == 1 and 0 or 2, 0, 0), data[2]) end
+		active = label(content, "", UDim2.new(1, -16, 0, 24), UDim2.new(0, 8, 0, 44))
+		status = label(content, "Choose a preset or edit individual colors", UDim2.new(1, -16, 0, 22), UDim2.new(0, 8, 0, 69))
+		Lib.BindTheme(status, {TextColor3 = "PlaceholderText"})
+		local bar = create("Frame", content, {BackgroundTransparency = 1, Size = UDim2.new(1, -16, 0, 28), Position = UDim2.new(0, 8, 0, 96)})
+		for i, name in {"Presets", "Colors", "Saved", "Options"} do
+			tabs[name] = button(bar, name, UDim2.new(0.25, -4, 1, 0), UDim2.new((i-1)/4, 0, 0, 0), function()
+				tab = name
+				scroll.CanvasPosition = Vector2.zero
+				refreshRows()
+			end)
 		end
-
-		local function setThemeColor(path, col)
-			local ref = Settings.Theme
-			for i = 1,#path-1 do
-				if type(ref[path[i]]) ~= "table" then ref[path[i]] = {} end
-				ref = ref[path[i]]
+		search = create("TextBox", content, {Name = "SearchThemes", Size = UDim2.new(1, -16, 0, 28), Position = UDim2.new(0, 8, 0, 132), Text = "", PlaceholderText = "Search presets, colors or saved themes", ClearTextOnFocus = false, Font = Lib.GetUIFont(), TextSize = 14, TextXAlignment = Enum.TextXAlignment.Left, BorderSizePixel = 0}, {BackgroundColor3 = "TextBox", TextColor3 = "Text", PlaceholderColor3 = "PlaceholderText"})
+		corner(search)
+		create("UIPadding", search, {PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8)})
+		scroll = create("ScrollingFrame", content, {Name = "ThemeContent", Size = UDim2.new(1, -16, 1, -176), Position = UDim2.new(0, 8, 0, 168), BackgroundTransparency = 1, BorderSizePixel = 0, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollingDirection = Enum.ScrollingDirection.Y, ScrollBarThickness = 6}, {ScrollBarImageColor3 = "ButtonHover"})
+		create("UIListLayout", scroll, {Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder})
+		create("UIPadding", scroll, {PaddingBottom = UDim.new(0, 8)})
+		trackConn(search:GetPropertyChangedSignal("Text"):Connect(refreshRows))
+		for _, preset in presets do
+			local frame = row(preset.name, "Presets", 42)
+			local base = Settings.Theme
+			Settings.Theme = clone(base)
+			preset.apply()
+			local palette = clone(Settings.Theme)
+			Settings.Theme = base
+			local btn = button(frame, "", UDim2.new(1, 0, 1, 0), nil, function()
+				remember()
+				Main.ApplyTheme(palette, preset.name)
+				changed(preset.name)
+			end)
+			btn.Name = preset.name
+			label(btn, preset.name, UDim2.new(1, -150, 1, 0), UDim2.new(0, 10, 0, 0))
+			for i, key in {"Main1", "Main2", "ListSelection", "Text"} do
+				local swatch = create("Frame", btn, {Name = "ColorSwatch", Size = UDim2.new(0, 24, 0, 24), Position = UDim2.new(1, -130 + (i-1)*30, 0.5, -12), BackgroundColor3 = palette[key], BorderSizePixel = 0})
+				swatch:SetAttribute("DexColorLiteral", true)
 			end
-			ref[path[#path]] = col
 		end
-
-		function refreshRows()
-			for _, row in rows do
-				local col = getThemeColor(row.path) or Color3.fromRGB(60,60,60)
-				row.preview.BackgroundColor3 = col
-			end
+		local keys = {}
+		for key, val in Main.DefaultTheme do
+			if typeof(val) == "Color3" then keys[#keys + 1] = key end
 		end
-
-		for i,path in themeEntries do
-			local keyLabel = table.concat(path,".")
-			local row = Instance.new("Frame")
-			row.Name = keyLabel
-			row.BackgroundTransparency = 1
-			row.Size = UDim2.new(1,0,0,24)
-			row.LayoutOrder = 200 + i
-			row.Parent = scroll
-
-			local label = Instance.new("TextLabel")
-			label.BackgroundTransparency = 1
-			label.Text = keyLabel
-			label.TextXAlignment = Enum.TextXAlignment.Left
-			label.TextColor3 = Color3.new(1,1,1)
-			label.Font = Enum.Font.SourceSans
-			label.TextSize = 14
-			label.Size = UDim2.new(0,120,1,0)
-			label.Parent = row
-
-			local preview = Instance.new("Frame")
-			preview.BorderSizePixel = 0
-			preview.Size = UDim2.new(0,24,0,24)
-			preview.Position = UDim2.new(0,124,0,0)
-			preview.BackgroundColor3 = getThemeColor(path) or Color3.fromRGB(60,60,60)
-			preview.Parent = row
-
-			local pickBtn = Instance.new("TextButton")
-			pickBtn.BackgroundTransparency = 1
-			pickBtn.Text = ""
-			pickBtn.Size = preview.Size
-			pickBtn.Position = preview.Position
-			pickBtn.Parent = row
-			rows[#rows+1] = {key=keyLabel, path=path, preview=preview}
-
-			trackConn(pickBtn.MouseButton1Click:Connect(function()
-				activeKey = path
-				colorPicker:SetColor(preview.BackgroundColor3)
-				colorPicker:Show()
+		table.sort(keys)
+		local syntax = {}
+		for key, val in Main.DefaultTheme.Syntax do
+			if typeof(val) == "Color3" then syntax[#syntax + 1] = "Syntax." .. key end
+		end
+		table.sort(syntax)
+		for _, path in syntax do keys[#keys + 1] = path end
+		for _, path in keys do
+			local frame, data = row(path, "Colors")
+			data.Path = path
+			label(frame, path, UDim2.new(1, -126, 1, 0))
+			local swatch = create("TextButton", frame, {Name = "ColorSwatch", Text = "", AutoButtonColor = false, Size = UDim2.new(0, 30, 0, 30), Position = UDim2.new(1, -120, 0, 2), BackgroundColor3 = getColor(Settings.Theme, path), BorderSizePixel = 1}, {BorderColor3 = "Outline2"})
+			swatch:SetAttribute("DexColorLiteral", true)
+			local hex = create("TextBox", frame, {Name = "Hex", Size = UDim2.new(0, 84, 0, 30), Position = UDim2.new(1, -84, 0, 2), Text = "", ClearTextOnFocus = false, Font = Enum.Font.RobotoMono, TextSize = 13, BorderSizePixel = 0}, {BackgroundColor3 = "TextBox", TextColor3 = "Text"})
+			data.Swatch, data.Hex = swatch, hex
+			trackConn(swatch.Activated:Connect(function() activeKey = path picker:SetColor(getColor(Settings.Theme, path)) picker:Show() end))
+			trackConn(swatch.MouseButton2Click:Connect(function() setColor(path, getColor(Main.DefaultTheme, path)) end))
+			trackConn(hex.FocusLost:Connect(function()
+				local col = parseHex(hex.Text)
+				if col then setColor(path, col) else message("Use a hex color such as #4C8DFF", true) end
+				hex.Text = "#" .. getColor(Settings.Theme, path):ToHex():upper()
 			end))
 		end
-
-		trackConn(colorPicker.OnSelect:Connect(function(col)
-			if not activeKey then return end
-			setThemeColor(activeKey, col)
-			for _, row in rows do
-				if row.path == activeKey then
-					row.preview.BackgroundColor3 = col
-					break
-				end
-			end
-			Main.SaveThemeSettings()
-			Lib.RefreshTheme()
-			activeKey = nil
+		local frame, data = row("Save named theme", "Saved", 34)
+		data.Always = true
+		nameBox = create("TextBox", frame, {Name = "ThemeName", Size = UDim2.new(1, -98, 1, 0), Text = "", PlaceholderText = "Name for this theme", ClearTextOnFocus = false, Font = Lib.GetUIFont(), TextSize = 14, BorderSizePixel = 0}, {BackgroundColor3 = "TextBox", TextColor3 = "Text", PlaceholderColor3 = "PlaceholderText"})
+		button(frame, "Save as", UDim2.new(0, 90, 1, 0), UDim2.new(1, -90, 0, 0), function()
+			local name = nameBox.Text:match("^%s*(.-)%s*$")
+			if #name == 0 or #name > 48 then message("Use a name between 1 and 48 characters", true) return end
+			local count = 0
+			for _ in Main.ThemeSettings.Saved do count += 1 end
+			if count >= 50 and not Main.ThemeSettings.Saved[name] then message("You can save up to 50 themes", true) return end
+			Main.ThemeSettings.Saved[name] = clone(Settings.Theme)
+			Main.ThemeSettings.Name = name
+			save()
+			rebuildSaved()
 			refreshRows()
+		end)
+		local auto = row("Auto save changes", "Options")
+		autoBtn = button(auto, "", UDim2.new(1, 0, 1, 0), nil, function()
+			Main.ThemeSettings.AutoSave = not Main.ThemeSettings.AutoSave
+			autoBtn.Text = "Auto save changes: " .. (Main.ThemeSettings.AutoSave and "On" or "Off")
+			save()
+		end)
+		autoBtn.Text = "Auto save changes: " .. (Main.ThemeSettings.AutoSave and "On" or "Off")
+		local note = row("Color controls", "Options", 70)
+		local text = label(note, "Enter #RGB or #RRGGBB colors, or tap a swatch to open the picker. Right click a swatch to restore its default color. Reset changes only the theme.", UDim2.new(1, 0, 1, 0))
+		text.TextWrapped = true
+		text.TextTruncate = Enum.TextTruncate.None
+		trackConn(picker.OnSelect:Connect(function(col)
+			if activeKey then setColor(activeKey, col) activeKey = nil end
 		end))
-
+		rebuildSaved()
 		refreshRows()
 	end
 

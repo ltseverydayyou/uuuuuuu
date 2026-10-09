@@ -1,4 +1,129 @@
 --!nonstrict
+local _dex_boot = {
+	hostEnv = type(__NARootHost) == "table" and __NARootHost or ((getgenv and getgenv()) or _G or {}),
+	launch = getfenv(),
+	patch = "2026-10-09-private-cleanup",
+	kind = "mobile",
+}
+_dex_boot.hostGetfenv = _dex_boot.hostEnv.getfenv or getfenv
+_dex_boot.hostSetfenv = _dex_boot.hostEnv.setfenv or setfenv
+_dex_boot.hostGetgenv = _dex_boot.hostEnv.getgenv or getgenv
+_dex_boot.hostLoadstring = _dex_boot.hostEnv.loadstring or loadstring or load
+_dex_boot.hostLoadfile = _dex_boot.hostEnv.loadfile or loadfile
+if type(_dex_boot.hostSetfenv) ~= "function" then
+	error("Dex requires setfenv for its private environment", 0)
+end
+_dex_boot.ensureTable = function(host, key)
+	local value = rawget(host, key)
+	if type(value) ~= "table" then
+		value = {}
+		rawset(host, key, value)
+	end
+	return value
+end
+do
+	local dbg = _dex_boot.hostEnv.debug or debug
+	for _, reader in {getreg, getregistry, dbg and dbg.getregistry} do
+		if type(reader) == "function" then
+			local ok, reg = pcall(reader)
+			if ok and type(reg) == "table" then
+				local saved, value = pcall(_dex_boot.ensureTable, reg, "__dexplusplus_private")
+				local again, check = pcall(reader)
+				if saved and again and type(check) == "table" and rawget(check, "__dexplusplus_private") == value then
+					_dex_boot.privateRoot = value
+					_dex_boot.regHost = reg
+					break
+				end
+			end
+		end
+	end
+	if not _dex_boot.privateRoot then
+		_dex_boot.privateRoot = _dex_boot.ensureTable(_dex_boot.hostEnv, "__dexplusplus_private")
+		_dex_boot.regHost = _dex_boot.hostEnv
+	end
+end
+do
+	local slot = rawget(_dex_boot.privateRoot, "dex")
+	local seen = {}
+	for _, host in {slot, _dex_boot.hostEnv, _dex_boot.launch, _G, shared} do
+		if type(host) == "table" then
+			local state = rawget(host, "__DEXPP_STATE") or rawget(host, "__DEXPP")
+			local main = type(state) == "table" and rawget(state, "Main")
+			if type(main) == "table" and not seen[main] then
+				seen[main] = true
+				local gui = rawget(main, "MainGui")
+				local live = false
+				if typeof(gui) == "Instance" then
+					local ok, parent = pcall(function() return gui.Parent end)
+					live = ok and parent ~= nil
+				end
+				local age = os.clock() - (tonumber(state.StartedAt) or -math.huge)
+				live = live or (main.__DexInitStarted == true and age <= 30)
+				if host == slot and state.Patch == _dex_boot.patch and state.Build == _dex_boot.kind and live and not main.__DexExiting then
+					if main.__DexLoaded and main.SetMainGuiOpen then pcall(main.SetMainGuiOpen, true) end
+					return state
+				end
+				if type(main.Exit) == "function" then
+					local ok, err = pcall(main.Exit)
+					if not ok then error("Dex previous session cleanup failed: " .. tostring(err), 0) end
+				end
+				for _, key in {"__DEXPP_STATE", "__DEXPP"} do
+					if rawget(host, key) == state then rawset(host, key, nil) end
+				end
+			end
+		end
+	end
+end
+local _dex_env = {shared = {}, runtime = {}}
+local _dex_shared = _dex_env.shared
+_dex_boot.privateRoot.dex = _dex_env
+_dex_boot.runtimeEnv = _dex_env.runtime
+_dex_boot.runtimeEnv._G = _dex_boot.runtimeEnv
+_dex_boot.runtimeEnv.shared = _dex_shared
+_dex_boot.runtimeEnv.getgenv = function()
+	return _dex_boot.runtimeEnv
+end
+_dex_boot.runtimeEnv.getfenv = function(target)
+	if target == 0 then return _dex_boot.runtimeEnv end
+	if target == nil then target = 1 end
+	if type(target) == "number" and target > 0 then target += 1 end
+	return _dex_boot.hostGetfenv(target)
+end
+_dex_boot.compile = function(source, name)
+	if type(_dex_boot.hostLoadstring) ~= "function" then return nil, "loadstring unavailable" end
+	local fn, err = _dex_boot.hostLoadstring(source, name)
+	if type(fn) ~= "function" then return nil, err end
+	local ok, envErr = pcall(_dex_boot.hostSetfenv, fn, _dex_boot.runtimeEnv)
+	if not ok then return nil, tostring(envErr) end
+	return fn
+end
+_dex_boot.runtimeEnv.loadstring = _dex_boot.compile
+_dex_boot.runtimeEnv.load = _dex_boot.compile
+_dex_boot.runtimeEnv.loadfile = function(path)
+	local reader = _dex_boot.hostEnv.readfile or _dex_boot.launch.readfile
+	if type(reader) == "function" then return _dex_boot.compile(reader(path), "@" .. tostring(path)) end
+	if type(_dex_boot.hostLoadfile) ~= "function" then return nil, "loadfile unavailable" end
+	local fn, err = _dex_boot.hostLoadfile(path)
+	if type(fn) ~= "function" then return nil, err end
+	local ok, envErr = pcall(_dex_boot.hostSetfenv, fn, _dex_boot.runtimeEnv)
+	if not ok then return nil, tostring(envErr) end
+	return fn
+end
+setmetatable(_dex_boot.runtimeEnv, {
+	__index = function(_, key)
+		local value = _dex_boot.hostEnv[key]
+		if value ~= nil then return value end
+		return _dex_boot.launch[key]
+	end,
+	__metatable = "Dex environment",
+})
+_dex_boot.runtimeEnv.Instance = setmetatable({new = function(...)
+	local obj = Instance.new(...)
+	local main = _dex_boot.main
+	if main and main.TrackResource then main.TrackResource(obj) end
+	return obj
+end}, {__index = Instance})
+local function _dex_run()
 local unpack = table.unpack or unpack;
 local newproxy = newproxy or function()
 	return {};
@@ -104,13 +229,9 @@ local DexState = (function()
 		end;
 	end;
 
-	local okGenv, genv = pcall(function()
-		return (getgenv and getgenv()) or nil;
-	end);
-	if okGenv then
-		api.AddStore(genv);
-	end;
-	api.AddStore(_G);
+	api.AddStore(_dex_env)
+	api.AddStore(_dex_shared)
+	api.AddStore(_dex_boot.runtimeEnv)
 
 	api.Sync = function(state)
 		for _, store in stores do
@@ -263,7 +384,7 @@ local EmbeddedModules = {
 					return result;
 				end;
 				local okFallback, fallback = pcall(function()
-					return root:QueryDescendants("Instance");
+					return root:GetDescendants();
 				end);
 				if okFallback and type(fallback) == "table" then
 					return fallback;
@@ -283,7 +404,10 @@ local EmbeddedModules = {
 			local sortingEnabled, autoUpdateSearch;
 			local table, math = table, math;
 			local nilMap, nilCons = {}, {};
-			local connectSignal = game.DescendantAdded.Connect;
+			local dirty = {};
+			local function connectSignal(sig, fn)
+				return Main.Connect(sig, fn)
+			end
 			local addObject, removeObject, moveObject = nil, nil, nil;
 			addObject = function(root)
 				if nodes[root] then
@@ -393,6 +517,7 @@ local EmbeddedModules = {
 				local par = node.Parent;
 				if par then
 					par.HasDel = true;
+					dirty[par] = true;
 				end;
 				local function recur(root)
 					for i = 1, #root do
@@ -521,7 +646,7 @@ local EmbeddedModules = {
 					}
 				});
 				renameBox.Parent = Explorer.Window.GuiElems.Content.List;
-				renameBox.FocusLost:Connect(function()
+				Main.Connect(renameBox.FocusLost, function()
 					if not renamingNode then
 						return;
 					end;
@@ -531,7 +656,7 @@ local EmbeddedModules = {
 					renamingNode = nil;
 					Explorer.Refresh();
 				end);
-				renameBox.Focused:Connect(function()
+				Main.Connect(renameBox.Focused, function()
 					renameBox.SelectionStart = 1;
 					renameBox.CursorPosition = (#renameBox.Text) + 1;
 				end);
@@ -838,12 +963,12 @@ local EmbeddedModules = {
 				move();
 				local input = service.UserInputService;
 				local mouseEvent, releaseEvent;
-				mouseEvent = input.InputChanged:Connect(function(input)
+				mouseEvent = Main.Connect(input.InputChanged, function(input)
 					if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 						move();
 					end;
 				end);
-				releaseEvent = input.InputEnded:Connect(function(input)
+				releaseEvent = Main.Connect(input.InputEnded, function(input)
 					if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 						releaseEvent:Disconnect();
 						mouseEvent:Disconnect();
@@ -877,7 +1002,7 @@ local EmbeddedModules = {
 				local newEntry = entryTemplate:Clone();
 				newEntry.Position = UDim2.new(0, 0, 0, 20 * (index - 1));
 				local isRenaming = false;
-				newEntry.InputBegan:Connect(function(input)
+				Main.Connect(newEntry.InputBegan, function(input)
 					local node = tree[index + Explorer.Index];
 					if not node or selection.Map[node] or input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then
 						return;
@@ -886,18 +1011,18 @@ local EmbeddedModules = {
 					newEntry.Indent.BorderSizePixel = 0;
 					newEntry.Indent.BackgroundTransparency = 0;
 				end);
-				newEntry.InputEnded:Connect(function(input)
+				Main.Connect(newEntry.InputEnded, function(input)
 					local node = tree[index + Explorer.Index];
 					if not node or selection.Map[node] or input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then
 						return;
 					end;
 					newEntry.Indent.BackgroundTransparency = 1;
 				end);
-				newEntry.MouseButton1Down:Connect(function()
+				Main.Connect(newEntry.MouseButton1Down, function()
 				end);
-				newEntry.MouseButton1Up:Connect(function()
+				Main.Connect(newEntry.MouseButton1Up, function()
 				end);
-				newEntry.InputBegan:Connect(function(input)
+				Main.Connect(newEntry.InputBegan, function(input)
 					if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 						local releaseEvent, mouseEvent;
 						local mouse = Main.Mouse or plr:GetMouse();
@@ -911,13 +1036,13 @@ local EmbeddedModules = {
 						end;
 						local listOffsetX = startX - treeFrame.AbsolutePosition.X;
 						local listOffsetY = startY - treeFrame.AbsolutePosition.Y;
-						releaseEvent = Main.TrackConn(service.UserInputService.InputEnded:Connect(function(input)
+						releaseEvent = Main.Connect(service.UserInputService.InputEnded, function(input)
 							if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 								releaseEvent:Disconnect();
 								mouseEvent:Disconnect();
 							end;
-						end));
-						mouseEvent = Main.TrackConn(service.UserInputService.InputChanged:Connect(function(input)
+						end);
+						mouseEvent = Main.Connect(service.UserInputService.InputChanged, function(input)
 							if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 								local currentX, currentY;
 								if input.UserInputType == Enum.UserInputType.Touch then
@@ -937,12 +1062,12 @@ local EmbeddedModules = {
 									Explorer.StartDrag(listOffsetX, listOffsetY);
 								end;
 							end;
-						end));
+						end);
 					end;
 				end);
-				newEntry.MouseButton2Down:Connect(function()
+				Main.Connect(newEntry.MouseButton2Down, function()
 				end);
-				newEntry.Indent.Expand.InputBegan:Connect(function(input)
+				Main.Connect(newEntry.Indent.Expand.InputBegan, function(input)
 					local node = tree[index + Explorer.Index];
 					if not node or input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then
 						return;
@@ -953,7 +1078,7 @@ local EmbeddedModules = {
 						Explorer.MiscIcons:DisplayByKey(newEntry.Indent.Expand.Icon, expanded[node] and "Collapse_Over" or "Expand_Over");
 					end;
 				end);
-				newEntry.Indent.Expand.InputEnded:Connect(function(input)
+				Main.Connect(newEntry.Indent.Expand.InputEnded, function(input)
 					local node = tree[index + Explorer.Index];
 					if not node or input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then
 						return;
@@ -964,7 +1089,7 @@ local EmbeddedModules = {
 						Explorer.MiscIcons:DisplayByKey(newEntry.Indent.Expand.Icon, expanded[node] and "Collapse" or "Expand");
 					end;
 				end);
-				newEntry.Indent.Expand.MouseButton1Down:Connect(function()
+				Main.Connect(newEntry.Indent.Expand.MouseButton1Down, function()
 					local node = tree[index + Explorer.Index];
 					if not node or #node == 0 then
 						return;
@@ -1104,18 +1229,18 @@ local EmbeddedModules = {
 					itemChangedCon:Disconnect();
 				end;
 				if Main.Elevated then
-					descendantAddedCon = game.DescendantAdded:Connect(addObject);
-					descendantRemovingCon = game.DescendantRemoving:Connect(removeObject);
+					descendantAddedCon = Main.Connect(game.DescendantAdded, addObject);
+					descendantRemovingCon = Main.Connect(game.DescendantRemoving, removeObject);
 				else
-					descendantAddedCon = game.DescendantAdded:Connect(function(obj)
+					descendantAddedCon = Main.Connect(game.DescendantAdded, function(obj)
 						pcall(addObject, obj);
 					end);
-					descendantRemovingCon = game.DescendantRemoving:Connect(function(obj)
+					descendantRemovingCon = Main.Connect(game.DescendantRemoving, function(obj)
 						pcall(removeObject, obj);
 					end);
 				end;
 				if Settings.Explorer.UseNameWidth then
-					itemChangedCon = game.ItemChanged:Connect(function(obj, prop)
+					itemChangedCon = Main.Connect(game.ItemChanged, function(obj, prop)
 						if prop == "Parent" and nodes[obj] then
 							moveObject(obj);
 						elseif prop == "Name" and nodes[obj] then
@@ -1123,7 +1248,7 @@ local EmbeddedModules = {
 						end;
 					end);
 				else
-					itemChangedCon = game.ItemChanged:Connect(function(obj, prop)
+					itemChangedCon = Main.Connect(game.ItemChanged, function(obj, prop)
 						if prop == "Parent" and nodes[obj] then
 							moveObject(obj);
 						end;
@@ -2033,16 +2158,16 @@ local EmbeddedModules = {
 				if shortcutInputCon then
 					shortcutInputCon:Disconnect();
 				end;
-				shortcutInputCon = Main.TrackConn(service.UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
+				shortcutInputCon = Main.Connect(service.UserInputService.InputBegan, function(input, gameProcessedEvent)
 					if gameProcessedEvent then
 						return;
 					end;
 					Explorer.TryHandleShortcut(input);
-				end));
+				end);
 			end;
 			Explorer.HideNilInstances = function()
 				table.clear(nilMap);
-				local disconnectCon = ((Instance.new("Folder")).ChildAdded:Connect(function()
+				local disconnectCon = (Main.Connect((Instance.new("Folder")).ChildAdded, function()
 				end)).Disconnect;
 				for i, v in next, nilCons do
 					disconnectCon(v[1]);
@@ -2444,10 +2569,10 @@ local EmbeddedModules = {
 					Parent = suggestionFrame,
 					Thickness = 1
 				});
-				suggestionFrame.MouseEnter:Connect(function()
+				Main.Connect(suggestionFrame.MouseEnter, function()
 					suggestionHover = true;
 				end);
-				suggestionFrame.MouseLeave:Connect(function()
+				Main.Connect(suggestionFrame.MouseLeave, function()
 					suggestionHover = false;
 				end);
 				local function setSuggestionButtonStyle(button, index, hovering)
@@ -2567,18 +2692,18 @@ local EmbeddedModules = {
 						CornerRadius = UDim.new(0, 6),
 						Parent = button
 					});
-					button.MouseEnter:Connect(function()
+					Main.Connect(button.MouseEnter, function()
 						suggestionHover = true;
 						setSuggestionButtonStyle(button, index, true);
 					end);
-					button.MouseLeave:Connect(function()
+					Main.Connect(button.MouseLeave, function()
 						suggestionHover = false;
 						setSuggestionButtonStyle(button, index, false);
 					end);
-					button.MouseButton1Down:Connect(function()
+					Main.Connect(button.MouseButton1Down, function()
 						suggestionPicking = true;
 					end);
-					button.MouseButton1Click:Connect(function()
+					Main.Connect(button.MouseButton1Click, function()
 						local selected = suggestionEntries[index];
 						if selected then
 							applySuggestion(selected);
@@ -2625,7 +2750,7 @@ local EmbeddedModules = {
 						Color = Color3.fromRGB(42, 42, 42)
 					})
 				};
-				searchBox.FocusLost:Connect(function()
+				Main.Connect(searchBox.FocusLost, function()
 					searchFocused = false;
 					Tweens.End:Play();
 					task.delay(0.1, function()
@@ -2635,19 +2760,19 @@ local EmbeddedModules = {
 						suggestionPicking = false;
 					end);
 				end);
-				searchBox.Focused:Connect(function()
+				Main.Connect(searchBox.Focused, function()
 					searchFocused = true;
 					Tweens.Start:Play();
 					updateSuggestions();
 				end);
 				Lib.ViewportTextBox.convert(searchBox);
-				searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+				Main.Connect(searchBox:GetPropertyChangedSignal("Text"), function()
 					updateSuggestions();
 					if autoUpdateSearch then
 						Explorer.DoSearch(searchBox.Text);
 					end;
 				end);
-				searchBox.FocusLost:Connect(function()
+				Main.Connect(searchBox.FocusLost, function()
 					Explorer.DoSearch(searchBox.Text);
 				end);
 			end;
@@ -2763,7 +2888,7 @@ local EmbeddedModules = {
 					1,
 					2
 				};
-				sys.OnDown:Connect(function(item, combo, button)
+				Main.Connect(sys.OnDown, function(item, combo, button)
 					local ind = table.find(listEntries, item);
 					if not ind then
 						return;
@@ -2842,7 +2967,7 @@ local EmbeddedModules = {
 					end;
 					Explorer.Refresh();
 				end);
-				sys.OnRelease:Connect(function(item, combo, button, position)
+				Main.Connect(sys.OnRelease, function(item, combo, button, position)
 					local ind = table.find(listEntries, item);
 					if not ind then
 						return;
@@ -2870,48 +2995,26 @@ local EmbeddedModules = {
 				Explorer.ClickSystem = sys;
 			end;
 			Explorer.InitDelCleaner = function()
-				(coroutine.wrap(function()
-					local fw = Lib.FastWait;
-					while true do
-						local processed = false;
-						local c = 0;
-						for _, node in next, nodes do
-							if node.HasDel then
-								local delInd;
-								for i = 1, #node do
-									if node[i].Del then
-										delInd = i;
-										break;
-									end;
-								end;
-								if delInd then
-									for i = delInd + 1, #node do
-										local cn = node[i];
-										if not cn.Del then
-											node[delInd] = cn;
-											delInd = delInd + 1;
-										end;
-									end;
-									for i = delInd, #node do
-										node[i] = nil;
-									end;
-								end;
-								node.HasDel = false;
-								processed = true;
-								fw();
-							end;
-							c = c + 1;
-							if c > 10000 then
-								c = 0;
-								fw();
-							end;
-						end;
-						if processed and (not refreshDebounce) then
-							Explorer.PerformRefresh();
-						end;
-						fw(0.5);
-					end;
-				end))();
+				coroutine.wrap(function()
+					while not Main.__DexExiting do
+						local count = 0
+						for node in dirty do
+							dirty[node] = nil
+							local size = #node
+							local at = 1
+							for i = 1, size do
+								local child = node[i]
+								if not child.Del then node[at] = child at += 1 end
+							end
+							for i = at, size do node[i] = nil end
+							node.HasDel = false
+							count += 1
+							if count % 128 == 0 then task.wait() end
+						end
+						if count > 0 and not refreshDebounce then Explorer.PerformRefresh() end
+						task.wait(0.5)
+					end
+				end)()
 			end;
 			Explorer.UpdateSelectionVisuals = function()
 				local holder = Explorer.SelectionVisualsHolder;
@@ -3047,13 +3150,29 @@ local EmbeddedModules = {
 					end;
 				end;
 			end;
+			Explorer.Destroy = function()
+				Explorer.Active = false
+				for _, con in Explorer.SelectionVisualCons or {} do pcall(con.Destroy) end
+				for _, name in {"SelectionVisualsHolder", "SelectionVisualGui", "SelectionVisualBox"} do
+					local obj = Explorer[name]
+					if obj then pcall(obj.Destroy, obj) Explorer[name] = nil end
+				end
+				table.clear(dirty)
+				table.clear(nodes)
+				table.clear(tree)
+				table.clear(listEntries)
+				table.clear(nilMap)
+				table.clear(nilCons)
+				if entryTemplate then entryTemplate:Destroy() end
+				if nilNode.Obj then nilNode.Obj:Destroy() end
+			end
 			Explorer.Init = function()
 				Explorer.ClassIcons = Lib.IconMap.newLinear("rbxasset://textures/ClassImages.PNG", 16, 16);
 				Explorer.MiscIcons = Main.MiscIcons;
 				clipboard = {};
 				selection = Lib.Set.new();
 				selection.ShiftSet = {};
-				selection.Changed:Connect(Properties.ShowExplorerProps);
+				Main.Connect(selection.Changed, Properties.ShowExplorerProps);
 				Explorer.Selection = selection;
 				Explorer.InitRightClick();
 				Explorer.InitInsertObject();
@@ -3250,7 +3369,7 @@ local EmbeddedModules = {
 				scrollV.WheelIncrement = 3;
 				scrollV.Gui.Position = UDim2.new(1, -16, 0, 23);
 				scrollV:SetScrollFrame(treeFrame);
-				scrollV.Scrolled:Connect(function()
+				Main.Connect(scrollV.Scrolled, function()
 					Explorer.Index = scrollV.Index;
 					Explorer.Refresh();
 				end);
@@ -3258,7 +3377,7 @@ local EmbeddedModules = {
 				scrollH.Increment = 5;
 				scrollH.WheelIncrement = Explorer.EntryIndent;
 				scrollH.Gui.Position = UDim2.new(0, 0, 1, -16);
-				scrollH.Scrolled:Connect(function()
+				Main.Connect(scrollH.Scrolled, function()
 					Explorer.Refresh();
 				end);
 				local window = Lib.Window.new({ignoreGuiInset = false});
@@ -3285,29 +3404,29 @@ local EmbeddedModules = {
 				Explorer.InitRenameBox();
 				Explorer.InitSearch();
 				Explorer.InitDelCleaner();
-				selection.Changed:Connect(Explorer.UpdateSelectionVisuals);
-				(window.GuiElems.Main:GetPropertyChangedSignal("AbsoluteSize")):Connect(function()
+				Main.Connect(selection.Changed, Explorer.UpdateSelectionVisuals);
+				Main.Connect((window.GuiElems.Main:GetPropertyChangedSignal("AbsoluteSize")), function()
 					if Explorer.Active then
 						Explorer.UpdateView();
 						Explorer.Refresh();
 					end;
 				end);
-				window.OnActivate:Connect(function()
+				Main.Connect(window.OnActivate, function()
 					Explorer.Active = true;
 					Explorer.UpdateView();
 					Explorer.Update();
 					Explorer.Refresh();
 				end);
-				window.OnRestore:Connect(function()
+				Main.Connect(window.OnRestore, function()
 					Explorer.Active = true;
 					Explorer.UpdateView();
 					Explorer.Update();
 					Explorer.Refresh();
 				end);
-				window.OnDeactivate:Connect(function()
+				Main.Connect(window.OnDeactivate, function()
 					Explorer.Active = false;
 				end);
-				window.OnMinimize:Connect(function()
+				Main.Connect(window.OnMinimize, function()
 					Explorer.Active = false;
 				end);
 				autoUpdateSearch = Settings.Explorer.AutoUpdateSearch;
@@ -4428,7 +4547,7 @@ local EmbeddedModules = {
 				local newCheckbox = Lib.Checkbox.new(1);
 				newCheckbox.Gui.Position = UDim2.new(0, 3, 0, 3);
 				newCheckbox.Gui.Parent = valueFrame;
-				newCheckbox.OnInput:Connect(function()
+				Main.Connect(newCheckbox.OnInput, function()
 					local prop = viewList[index + Properties.Index];
 					if not prop then
 						return;
@@ -4444,7 +4563,7 @@ local EmbeddedModules = {
 				iconFrame.Position = UDim2.new(0, 2, 0, 3);
 				iconFrame.Parent = newEntry.ValueFrame.RightButton;
 				newEntry.Position = UDim2.new(0, 0, 0, 23 * (index - 1));
-				nameFrame.Expand.InputBegan:Connect(function(input)
+				Main.Connect(nameFrame.Expand.InputBegan, function(input)
 					local prop = viewList[index + Properties.Index];
 					if not prop or input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then
 						return;
@@ -4452,7 +4571,7 @@ local EmbeddedModules = {
 					local fullName = prop.CategoryName and "CAT_" .. prop.CategoryName or prop.Class .. "." .. prop.Name .. (prop.SubName or "");
 					Main.MiscIcons:DisplayByKey(newEntry.NameFrame.Expand.Icon, expanded[fullName] and "Collapse_Over" or "Expand_Over");
 				end);
-				nameFrame.Expand.InputEnded:Connect(function(input)
+				Main.Connect(nameFrame.Expand.InputEnded, function(input)
 					local prop = viewList[index + Properties.Index];
 					if not prop or input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then
 						return;
@@ -4460,7 +4579,7 @@ local EmbeddedModules = {
 					local fullName = prop.CategoryName and "CAT_" .. prop.CategoryName or prop.Class .. "." .. prop.Name .. (prop.SubName or "");
 					Main.MiscIcons:DisplayByKey(newEntry.NameFrame.Expand.Icon, expanded[fullName] and "Collapse" or "Expand");
 				end);
-				nameFrame.Expand.MouseButton1Down:Connect(function()
+				Main.Connect(nameFrame.Expand.MouseButton1Down, function()
 					local prop = viewList[index + Properties.Index];
 					if not prop then
 						return;
@@ -4473,7 +4592,7 @@ local EmbeddedModules = {
 					Properties.Update();
 					Properties.Refresh();
 				end);
-				nameFrame.PropName.InputBegan:Connect(function(input)
+				Main.Connect(nameFrame.PropName.InputBegan, function(input)
 					local prop = viewList[index + Properties.Index];
 					if not prop then
 						return;
@@ -4493,27 +4612,27 @@ local EmbeddedModules = {
 						Properties.FullNameFrameAttach.Enable();
 					end;
 				end);
-				nameFrame.PropName.InputEnded:Connect(function(input)
+				Main.Connect(nameFrame.PropName.InputEnded, function(input)
 					if (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) and Properties.FullNameFrameIndex == index then
 						Properties.FullNameFrame.Visible = false;
 						Properties.FullNameFrameAttach.Disable();
 					end;
 				end);
-				valueFrame.ValueBox.MouseButton1Down:Connect(function()
+				Main.Connect(valueFrame.ValueBox.MouseButton1Down, function()
 					local prop = viewList[index + Properties.Index];
 					if not prop then
 						return;
 					end;
 					Properties.SetInputProp(prop, index);
 				end);
-				valueFrame.ColorButton.MouseButton1Down:Connect(function()
+				Main.Connect(valueFrame.ColorButton.MouseButton1Down, function()
 					local prop = viewList[index + Properties.Index];
 					if not prop then
 						return;
 					end;
 					Properties.SetInputProp(prop, index, "color");
 				end);
-				valueFrame.RightButton.MouseButton1Click:Connect(function()
+				Main.Connect(valueFrame.RightButton.MouseButton1Click, function()
 					local prop = viewList[index + Properties.Index];
 					if not prop then
 						return;
@@ -4527,21 +4646,21 @@ local EmbeddedModules = {
 						Properties.SetInputProp(prop, index, "right");
 					end;
 				end);
-				nameFrame.ToggleAttributes.MouseButton1Click:Connect(function()
+				Main.Connect(nameFrame.ToggleAttributes.MouseButton1Click, function()
 					Settings.Properties.ShowAttributes = not Settings.Properties.ShowAttributes;
 					Properties.ShowExplorerProps();
 				end);
-				newEntry.RowButton.MouseButton1Click:Connect(function()
+				Main.Connect(newEntry.RowButton.MouseButton1Click, function()
 					Properties.DisplayAddAttributeWindow();
 				end);
-				newEntry.EditAttributeButton.MouseButton1Down:Connect(function()
+				Main.Connect(newEntry.EditAttributeButton.MouseButton1Down, function()
 					local prop = viewList[index + Properties.Index];
 					if not prop then
 						return;
 					end;
 					Properties.DisplayAttributeContext(prop);
 				end);
-				valueFrame.SoundPreview.ControlButton.MouseButton1Click:Connect(function()
+				Main.Connect(valueFrame.SoundPreview.ControlButton.MouseButton1Click, function()
 					if Properties.PreviewSound and Properties.PreviewSound.Playing then
 						Properties.SetSoundPreview(false);
 					else
@@ -4551,19 +4670,19 @@ local EmbeddedModules = {
 						end;
 					end;
 				end);
-				valueFrame.SoundPreview.InputBegan:Connect(function(input)
+				Main.Connect(valueFrame.SoundPreview.InputBegan, function(input)
 					if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then
 						return;
 					end;
 					local releaseEvent, inputEvent;
-					releaseEvent = Main.TrackConn(service.UserInputService.InputEnded:Connect(function(input)
+					releaseEvent = Main.Connect(service.UserInputService.InputEnded, function(input)
 						if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 							releaseEvent:Disconnect();
 							if inputEvent then
 								inputEvent:Disconnect();
 							end;
 						end;
-					end));
+					end);
 					local timeLine = newEntry.ValueFrame.SoundPreview.TimeLine;
 					local soundObj = Properties.FindFirstObjWhichIsA("Sound");
 					if soundObj then
@@ -4590,11 +4709,11 @@ local EmbeddedModules = {
 						timeLine.Slider.Position = UDim2.new(perc, -4, 0, -8);
 					end;
 					update(input);
-					inputEvent = Main.TrackConn(service.UserInputService.InputChanged:Connect(function(input)
+					inputEvent = Main.Connect(service.UserInputService.InputChanged, function(input)
 						if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 							update(input);
 						end;
-					end));
+					end);
 				end);
 				newEntry.Parent = propsFrame;
 				return {
@@ -4632,16 +4751,16 @@ local EmbeddedModules = {
 				if not sound then
 					sound = Instance.new("Sound");
 					sound.Name = "Preview";
-					sound.Paused:Connect(function()
+					Main.Connect(sound.Paused, function()
 						local entry = Properties.GetSoundPreviewEntry();
 						if entry then
 							Main.MiscIcons:DisplayByKey(entry.GuiElems.SoundPreview.ControlButton.Icon, "Play");
 						end;
 					end);
-					sound.Resumed:Connect(function()
+					Main.Connect(sound.Resumed, function()
 						Properties.Refresh();
 					end);
-					sound.Ended:Connect(function()
+					Main.Connect(sound.Ended, function()
 						local entry = Properties.GetSoundPreviewEntry();
 						if entry then
 							entry.GuiElems.SoundPreviewSlider.Position = UDim2.new(0, -4, 0, -8);
@@ -4721,7 +4840,7 @@ local EmbeddedModules = {
 					nameBox.Position = UDim2.new(0, 75, 0, 10);
 					nameBox.Size = UDim2.new(0, 120, 0, 20);
 					win:Add(nameBox, "NameBox");
-					(nameBox.TextBox:GetPropertyChangedSignal("Text")):Connect(function()
+					Main.Connect((nameBox.TextBox:GetPropertyChangedSignal("Text")), function()
 						saveButton:SetDisabled(#nameBox:GetText() == 0);
 					end);
 					local typeLabel = Lib.Label.new();
@@ -4746,14 +4865,14 @@ local EmbeddedModules = {
 					cancelButton.Text = "Cancel";
 					cancelButton.Position = UDim2.new(1, -97, 1, -25);
 					cancelButton.Size = UDim2.new(0, 92, 0, 20);
-					cancelButton.OnClick:Connect(function()
+					Main.Connect(cancelButton.OnClick, function()
 						win:Close();
 					end);
 					win:Add(cancelButton);
 					saveButton.Text = "Save";
 					saveButton.Position = UDim2.new(0, 5, 1, -25);
 					saveButton.Size = UDim2.new(0, 92, 0, 20);
-					saveButton.OnClick:Connect(function()
+					Main.Connect(saveButton.OnClick, function()
 						local name = nameBox:GetText();
 						if #name > 100 then
 							errorLabel.Text = "Error: Name over 100 chars";
@@ -4849,7 +4968,7 @@ local EmbeddedModules = {
 					editor = Lib.BrickColorPicker.new();
 					editor.Gui.DisplayOrder = Main.DisplayOrders.Menu;
 					editor.ReverseYOffset = 22;
-					editor.OnSelect:Connect(function(col)
+					Main.Connect(editor.OnSelect, function(col)
 						if not editor.CurrentProp or editor.CurrentProp.ValueType.Name ~= "BrickColor" then
 							return;
 						end;
@@ -4858,7 +4977,7 @@ local EmbeddedModules = {
 						end;
 						Properties.SetProp(editor.CurrentProp, BrickColor.new(col));
 					end);
-					editor.OnMoreColors:Connect(function()
+					Main.Connect(editor.OnMoreColors, function()
 						editor:Close();
 						local colProp;
 						for i, v in API.Classes.BasePart.Properties do
@@ -4886,7 +5005,7 @@ local EmbeddedModules = {
 				local editor = Properties.ColorEditor;
 				if not editor then
 					editor = Lib.ColorPicker.new();
-					editor.OnSelect:Connect(function(col)
+					Main.Connect(editor.OnSelect, function(col)
 						if not editor.CurrentProp then
 							return;
 						end;
@@ -4917,7 +5036,7 @@ local EmbeddedModules = {
 				local editor = Properties.NumberSequenceEditor;
 				if not editor then
 					editor = Lib.NumberSequenceEditor.new();
-					editor.OnSelect:Connect(function(val)
+					Main.Connect(editor.OnSelect, function(val)
 						if not editor.CurrentProp or editor.CurrentProp.ValueType.Name ~= "NumberSequence" then
 							return;
 						end;
@@ -4943,7 +5062,7 @@ local EmbeddedModules = {
 				local editor = Properties.ColorSequenceEditor;
 				if not editor then
 					editor = Lib.ColorSequenceEditor.new();
-					editor.OnSelect:Connect(function(val)
+					Main.Connect(editor.OnSelect, function(val)
 						if not editor.CurrentProp or editor.CurrentProp.ValueType.Name ~= "ColorSequence" then
 							return;
 						end;
@@ -5317,11 +5436,11 @@ local EmbeddedModules = {
 								end;
 								if propObj then
 									if prop.IsAttribute then
-										propCons[(#propCons) + 1] = (getAttributeChangedSignal(propObj, prop.AttributeName)):Connect(function()
+										propCons[(#propCons) + 1] = Main.Connect((getAttributeChangedSignal(propObj, prop.AttributeName)), function()
 											Properties.DisplayProp(prop, i);
 										end);
 									elseif not prop.IsHiddenProperty then
-										propCons[(#propCons) + 1] = (getPropChangedSignal(propObj, propName)):Connect(function()
+										propCons[(#propCons) + 1] = Main.Connect((getPropChangedSignal(propObj, propName)), function()
 											Properties.DisplayProp(prop, i);
 										end);
 									end;
@@ -5567,7 +5686,7 @@ local EmbeddedModules = {
 				inputTextBox = inputBox.TextBox;
 				inputBox.BackgroundColor3 = Settings.Theme.TextBox;
 				inputBox.Parent = Properties.Window.GuiElems.Content.List;
-				inputTextBox.FocusLost:Connect(function()
+				Main.Connect(inputTextBox.FocusLost, function()
 					if not inputProp then
 						return;
 					end;
@@ -5580,7 +5699,7 @@ local EmbeddedModules = {
 						Properties.Refresh();
 					end;
 				end);
-				inputTextBox.Focused:Connect(function()
+				Main.Connect(inputTextBox.Focused, function()
 					inputTextBox.SelectionStart = 1;
 					inputTextBox.CursorPosition = (#inputTextBox.Text) + 1;
 				end);
@@ -5640,13 +5759,13 @@ local EmbeddedModules = {
 					})
 				};
 				Lib.ViewportTextBox.convert(searchBox);
-				searchBox.FocusLost:Connect(function()
+				Main.Connect(searchBox.FocusLost, function()
 					Tweens.End:Play();
 				end);
-				searchBox.Focused:Connect(function()
+				Main.Connect(searchBox.Focused, function()
 					Tweens.Start:Play();
 				end);
-				(searchBox:GetPropertyChangedSignal("Text")):Connect(function()
+				Main.Connect((searchBox:GetPropertyChangedSignal("Text")), function()
 					Properties.SearchText = searchBox.Text;
 					Properties.Update();
 					Properties.Refresh();
@@ -6290,18 +6409,18 @@ local EmbeddedModules = {
 				Properties.GuiElems.ToolBar = toolBar;
 				Properties.GuiElems.PropsFrame = propsFrame;
 				Properties.InitEntryStuff();
-				(window.GuiElems.Main:GetPropertyChangedSignal("AbsoluteSize")):Connect(function()
+				Main.Connect((window.GuiElems.Main:GetPropertyChangedSignal("AbsoluteSize")), function()
 					if Properties.Window:IsContentVisible() then
 						Properties.UpdateView();
 						Properties.Refresh();
 					end;
 				end);
-				window.OnActivate:Connect(function()
+				Main.Connect(window.OnActivate, function()
 					Properties.UpdateView();
 					Properties.Update();
 					Properties.Refresh();
 				end);
-				window.OnRestore:Connect(function()
+				Main.Connect(window.OnRestore, function()
 					Properties.UpdateView();
 					Properties.Update();
 					Properties.Refresh();
@@ -6310,7 +6429,7 @@ local EmbeddedModules = {
 				scrollV.WheelIncrement = 3;
 				scrollV.Gui.Position = UDim2.new(1, -16, 0, 23);
 				scrollV:SetScrollFrame(propsFrame);
-				scrollV.Scrolled:Connect(function()
+				Main.Connect(scrollV.Scrolled, function()
 					Properties.Index = scrollV.Index;
 					Properties.Refresh();
 				end);
@@ -6318,7 +6437,7 @@ local EmbeddedModules = {
 				scrollH.Increment = 5;
 				scrollH.WheelIncrement = 20;
 				scrollH.Gui.Position = UDim2.new(0, 0, 1, -16);
-				scrollH.Scrolled:Connect(function()
+				Main.Connect(scrollH.Scrolled, function()
 					Properties.Refresh();
 				end);
 				window.GuiElems.Line.Position = UDim2.new(0, 0, 0, 22);
@@ -6610,7 +6729,7 @@ local EmbeddedModules = {
 				copy.Size = UDim2.new(0.2, 0, 0, 20);
 				copy.Text = "Copy All";
 				copy.TextColor3 = Color3.new(1, 1, 1);
-				copy.MouseButton1Click:Connect(function()
+				Main.Connect(copy.MouseButton1Click, function()
 					if not env.setclipboard then
 						return;
 					end;
@@ -6623,7 +6742,7 @@ local EmbeddedModules = {
 				copySelection.Size = UDim2.new(0.2, 0, 0, 20);
 				copySelection.Text = "Copy Sel";
 				copySelection.TextColor3 = Color3.new(1, 1, 1);
-				copySelection.MouseButton1Click:Connect(function()
+				Main.Connect(copySelection.MouseButton1Click, function()
 					if not env.setclipboard then
 						return;
 					end;
@@ -6649,7 +6768,7 @@ local EmbeddedModules = {
 				save.Size = UDim2.new(0.2, 0, 0, 20);
 				save.Text = "Save";
 				save.TextColor3 = Color3.new(1, 1, 1);
-				save.MouseButton1Click:Connect(function()
+				Main.Connect(save.MouseButton1Click, function()
 					if not env.writefile then
 						return;
 					end;
@@ -6666,7 +6785,7 @@ local EmbeddedModules = {
 				viewMode.Size = UDim2.new(0.2, 0, 0, 20);
 				viewMode.Text = "Select Text";
 				viewMode.TextColor3 = Color3.new(1, 1, 1);
-				viewMode.MouseButton1Click:Connect(function()
+				Main.Connect(viewMode.MouseButton1Click, function()
 					setRawView(not useRawView);
 					viewMode.Text = useRawView and "Syntax View" or "Select Text";
 					if useRawView and rawSourceBox then
@@ -6682,7 +6801,7 @@ local EmbeddedModules = {
 				dumpbtn.Size = UDim2.new(0.2, 0, 0, 20);
 				dumpbtn.Text = "Dump";
 				dumpbtn.TextColor3 = Color3.new(1, 1, 1);
-				dumpbtn.MouseButton1Click:Connect(function()
+				Main.Connect(dumpbtn.MouseButton1Click, function()
 					if PreviousScr ~= nil then
 						pcall(function()
 							local getgc = getgc or get_gc_objects;
@@ -7047,15 +7166,7 @@ local EmbeddedModules = {
 				setfenv(func, newEnv);
 				return func();
 			end)();
-			Lib.FastWait = function(s)
-				if not s then
-					return signalWait(renderStepped);
-				end;
-				local start = tick();
-				while tick() - start < s do
-					signalWait(renderStepped);
-				end;
-			end;
+			Lib.FastWait = task.wait;
 			Lib.ButtonAnim = function(button, data)
 				local holding = false;
 				local disabled = false;
@@ -7069,7 +7180,7 @@ local EmbeddedModules = {
 					control.HoverColor = data.HoverColor or control.StartColor:lerp(control.PressColor, 0.6);
 					control.OutlineColor = data.OutlineColor;
 				end;
-				button.InputBegan:Connect(function(input)
+				Main.Connect(button.InputBegan, function(input)
 					if disabled then
 						return;
 					end;
@@ -7093,7 +7204,7 @@ local EmbeddedModules = {
 						end;
 					end;
 				end);
-				button.InputEnded:Connect(function(input)
+				Main.Connect(button.InputEnded, function(input)
 					if disabled then
 						return;
 					end;
@@ -7195,7 +7306,7 @@ local EmbeddedModules = {
 						con = nil;
 					end;
 					if target then
-						con = target.Changed:Connect(function(prop)
+						con = Main.Connect(target.Changed, function(prop)
 							if not disabled and (prop == "AbsolutePosition" or prop == "AbsoluteSize") then
 								update();
 							end;
@@ -7216,8 +7327,9 @@ local EmbeddedModules = {
 						disabled = true;
 					end,
 					Destroy = function()
-						con:Disconnect();
-						con = nil;
+						if con then con:Disconnect() con = nil end
+						target = nil
+						obj = nil
 					end
 				};
 			end;
@@ -7263,7 +7375,7 @@ local EmbeddedModules = {
 				end;
 			end;
 			Lib.DeferFunc = function(f, ...)
-				signalWait(renderStepped);
+				task.wait();
 				return f(...);
 			end;
 			Lib.LoadCustomAsset = function(filepath)
@@ -7284,46 +7396,40 @@ local EmbeddedModules = {
 				return Lib.LoadCustomAsset(filepath);
 			end;
 			Lib.Signal = (function()
-				local funcs = {};
-				local disconnect = function(con)
-					local pos = table.find(con.Signal.Connections, con);
-					if pos then
-						table.remove(con.Signal.Connections, pos);
-					end;
-				end;
-				funcs.Connect = function(self, func)
-					if type(func) ~= "function" then
-						error("Attempt to connect a non-function");
-					end;
-					local con = {
-						Signal = self,
-						Func = func,
-						Disconnect = disconnect
-					};
-					self.Connections[(#self.Connections) + 1] = con;
-					return con;
-				end;
-				funcs.Fire = function(self, ...)
-					for i, v in next, self.Connections do
-						xpcall(coroutine.wrap(v.Func), function(e)
-							warn(e .. "\n" .. debug.traceback());
-						end, ...);
-					end;
-				end;
-				local mt = {
-					__index = funcs,
-					__tostring = function(self)
-						return "Signal: " .. tostring(#self.Connections) .. " Connections";
+				local funcs = {}
+				local function disconnect(con)
+					if not con.Connected then return end
+					con.Connected = false
+					local parent = con.Signal
+					if parent then
+						local pos = table.find(parent.Connections, con)
+						if pos then table.remove(parent.Connections, pos) end
 					end
-				};
-				local function new()
-					local obj = {};
-					obj.Connections = {};
-					return setmetatable(obj, mt);
-				end;
-				return {
-					new = new
-				};
+					con.Func = nil
+					con.Signal = nil
+				end
+				funcs.Connect = function(self, fn)
+					if type(fn) ~= "function" then error("Attempt to connect a non-function") end
+					local con = {Signal = self, Func = fn, Disconnect = disconnect, Connected = not self.Destroyed}
+					if con.Connected then self.Connections[#self.Connections + 1] = con else con.Func = nil con.Signal = nil end
+					return Main.TrackConn(con)
+				end
+				funcs.Fire = function(self, ...)
+					if self.Destroyed or Main.__DexExiting then return end
+					for _, con in table.clone(self.Connections) do
+						if con.Connected and con.Func then
+							xpcall(coroutine.wrap(con.Func), function(err) warn(tostring(err)) end, ...)
+						end
+					end
+				end
+				funcs.Destroy = function(self)
+					if self.Destroyed then return end
+					self.Destroyed = true
+					for _, con in table.clone(self.Connections) do disconnect(con) end
+				end
+				return {new = function()
+					return setmetatable({Connections = {}}, {__index = funcs})
+				end}
 			end)();
 			Lib.Set = (function()
 				local funcs = {};
@@ -7872,13 +7978,13 @@ local EmbeddedModules = {
 							self.Scrolled:Fire();
 							local buttonTick = tick();
 							local releaseEvent;
-							releaseEvent = Main.TrackConn(user.InputEnded:Connect(function(input)
+							releaseEvent = Main.Connect(user.InputEnded, function(input)
 								if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 									releaseEvent:Disconnect();
 									button.BackgroundTransparency = checkMouseInGui(button) and 0.8 or 1;
 									buttonPress = false;
 								end;
-							end));
+							end);
 							while buttonPress do
 								if isShuttingDown() then
 									buttonPress = false;
@@ -7892,31 +7998,31 @@ local EmbeddedModules = {
 							end;
 						end;
 					end;
-					Main.TrackConn(button1.MouseButton1Down:Connect(function(input)
+					Main.Connect(button1.MouseButton1Down, function(input)
 						if isShuttingDown() then
 							return;
 						end;
 						buttonPress = true;
 						handleButtonPress(button1, "Up");
-					end));
-					Main.TrackConn(button1.InputEnded:Connect(function(input)
+					end);
+					Main.Connect(button1.InputEnded, function(input)
 						if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 							button1.BackgroundTransparency = 1;
 						end;
-					end));
-					Main.TrackConn(button2.MouseButton1Down:Connect(function(input)
+					end);
+					Main.Connect(button2.MouseButton1Down, function(input)
 						if isShuttingDown() then
 							return;
 						end;
 						buttonPress = true;
 						handleButtonPress(button2, "Down");
-					end));
-					Main.TrackConn(button2.InputEnded:Connect(function(input)
+					end);
+					Main.Connect(button2.InputEnded, function(input)
 						if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 							button2.BackgroundTransparency = 1;
 						end;
-					end));
-					Main.TrackConn(scrollThumb.InputBegan:Connect(function(input)
+					end);
+					Main.Connect(scrollThumb.InputBegan, function(input)
 						if isShuttingDown() then
 							return;
 						end;
@@ -7928,7 +8034,7 @@ local EmbeddedModules = {
 							local mouseOffset = mouse[dir] - scrollThumb.AbsolutePosition[dir];
 							local releaseEvent;
 							local mouseEvent;
-							releaseEvent = Main.TrackConn(user.InputEnded:Connect(function(input)
+							releaseEvent = Main.Connect(user.InputEnded, function(input)
 								if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 									releaseEvent:Disconnect();
 									if mouseEvent then
@@ -7937,8 +8043,8 @@ local EmbeddedModules = {
 									scrollThumb.BackgroundTransparency = 0.2;
 									thumbPress = false;
 								end;
-							end));
-							mouseEvent = Main.TrackConn(user.InputChanged:Connect(function(input)
+							end);
+							mouseEvent = Main.Connect(user.InputChanged, function(input)
 								if isShuttingDown() then
 									thumbPress = false;
 									return;
@@ -7956,15 +8062,15 @@ local EmbeddedModules = {
 										self:ScrollTo(math.floor(0.5 + pos / thumbFrameSize * (self.TotalSpace - self.VisibleSpace)));
 									end;
 								end;
-							end));
+							end);
 						end;
-					end));
-					Main.TrackConn(scrollThumb.InputEnded:Connect(function(input)
+					end);
+					Main.Connect(scrollThumb.InputEnded, function(input)
 						if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 							scrollThumb.BackgroundTransparency = 0;
 						end;
-					end));
-					Main.TrackConn(scrollThumbFrame.InputBegan:Connect(function(input)
+					end);
+					Main.Connect(scrollThumbFrame.InputBegan, function(input)
 						if isShuttingDown() then
 							return;
 						end;
@@ -7984,12 +8090,12 @@ local EmbeddedModules = {
 							doTick();
 							local thumbFrameTick = tick();
 							local releaseEvent;
-							releaseEvent = Main.TrackConn(user.InputEnded:Connect(function(input)
+							releaseEvent = Main.Connect(user.InputEnded, function(input)
 								if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 									releaseEvent:Disconnect();
 									thumbFramePress = false;
 								end;
-							end));
+							end);
 							while thumbFramePress do
 								if isShuttingDown() then
 									thumbFramePress = false;
@@ -8001,19 +8107,19 @@ local EmbeddedModules = {
 								task.wait();
 							end;
 						end;
-					end));
-					Main.TrackConn(newFrame.MouseWheelForward:Connect(function()
+					end);
+					Main.Connect(newFrame.MouseWheelForward, function()
 						if isShuttingDown() then
 							return;
 						end;
 						self:ScrollTo(self.Index - self.WheelIncrement);
-					end));
-					Main.TrackConn(newFrame.MouseWheelBackward:Connect(function()
+					end);
+					Main.Connect(newFrame.MouseWheelBackward, function()
 						if isShuttingDown() then
 							return;
 						end;
 						self:ScrollTo(self.Index + self.WheelIncrement);
-					end));
+					end);
 					self.GuiElems.ScrollThumb = scrollThumb;
 					self.GuiElems.ScrollThumbFrame = scrollThumbFrame;
 					self.GuiElems.Button1 = button1;
@@ -8149,10 +8255,10 @@ local EmbeddedModules = {
 						self.ScrollDownEvent:Disconnect();
 						self.ScrollDownEvent = nil;
 					end;
-					self.ScrollUpEvent = frame.MouseWheelForward:Connect(function()
+					self.ScrollUpEvent = Main.Connect(frame.MouseWheelForward, function()
 						self:ScrollTo(self.Index - self.WheelIncrement);
 					end);
-					self.ScrollDownEvent = frame.MouseWheelBackward:Connect(function()
+					self.ScrollDownEvent = Main.Connect(frame.MouseWheelBackward, function()
 						self:ScrollTo(self.Index + self.WheelIncrement);
 					end);
 				end;
@@ -8265,7 +8371,7 @@ local EmbeddedModules = {
 				end;
 				local function resizeHook(self, resizer, dir)
 					local guiMain = self.GuiElems.Main;
-					resizer.InputBegan:Connect(function(input)
+					Main.Connect(resizer.InputBegan, function(input)
 						if not self.Dragging and (not self.Resizing) and self.Resizable and self.ResizableInternal then
 							local isH = dir:find("[WE]") and true;
 							local isV = dir:find("[NS]") and true;
@@ -8297,12 +8403,12 @@ local EmbeddedModules = {
 									self.Resizing = false;
 									resizer.BackgroundTransparency = 1;
 								end;
-								releaseEvent = Main.TrackConn(service.UserInputService.InputEnded:Connect(function(changedInput)
+								releaseEvent = Main.Connect(service.UserInputService.InputEnded, function(changedInput)
 									if changedInput.UserInputType == Enum.UserInputType.MouseButton1 or changedInput.UserInputType == Enum.UserInputType.Touch then
 										stopResize();
 									end;
-								end));
-								mouseEvent = Main.TrackConn(service.UserInputService.InputChanged:Connect(function(changedInput)
+								end);
+								mouseEvent = Main.Connect(service.UserInputService.InputChanged, function(changedInput)
 									if not (self.Resizable and self.ResizableInternal) then
 										return;
 									end;
@@ -8338,11 +8444,11 @@ local EmbeddedModules = {
 									self.SizeX = newSizeX;
 									self.SizeY = newSizeY;
 									guiMain.Size = UDim2.new(0, self.SizeX, 0, self.Minimized and 20 or self.SizeY);
-								end));
+								end);
 							end;
 						end;
 					end);
-					resizer.InputEnded:Connect(function(input)
+					Main.Connect(resizer.InputEnded, function(input)
 						if (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) and self.Resizing ~= resizer then
 							resizer.BackgroundTransparency = 1;
 						end;
@@ -8388,11 +8494,11 @@ local EmbeddedModules = {
 				end;
 				local function focusInput(self, obj)
 					if isA(obj, "GuiButton") then
-						obj.MouseButton1Down:Connect(function()
+						Main.Connect(obj.MouseButton1Down, function()
 							moveToTop(self);
 						end);
 					elseif isA(obj, "TextBox") then
-						obj.Focused:Connect(function()
+						Main.Connect(obj.Focused, function()
 							moveToTop(self);
 						end);
 					end;
@@ -8781,13 +8887,13 @@ local EmbeddedModules = {
 					self.GuiElems.ResizeControls = guiResizeControls;
 					self.ContentPane = guiMain.Content;
 					local ButtonDown = false;
-					guiTopBar.MouseButton1Down:Connect(function()
+					Main.Connect(guiTopBar.MouseButton1Down, function()
 						ButtonDown = true;
 					end);
-					guiTopBar.MouseButton1Up:Connect(function()
+					Main.Connect(guiTopBar.MouseButton1Up, function()
 						ButtonDown = false;
 					end);
-					guiTopBar.InputBegan:Connect(function(input)
+					Main.Connect(guiTopBar.InputBegan, function(input)
 						if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 							if self.Draggable then
 								local releaseEvent, mouseEvent;
@@ -8796,7 +8902,7 @@ local EmbeddedModules = {
 								local dragStartPosition = guiMain.Position;
 								local alignInsertPos, alignInsertSide;
 								guiDragging = true;
-								releaseEvent = Main.TrackConn(service.UserInputService.InputEnded:Connect(function(changedInput)
+								releaseEvent = Main.Connect(service.UserInputService.InputEnded, function(changedInput)
 									if changedInput.UserInputType == Enum.UserInputType.MouseButton1 or changedInput.UserInputType == Enum.UserInputType.Touch then
 										releaseEvent:Disconnect();
 										if mouseEvent then
@@ -8809,8 +8915,8 @@ local EmbeddedModules = {
 											self:AlignTo(targetSide, alignInsertPos);
 										end;
 									end;
-								end));
-								mouseEvent = Main.TrackConn(service.UserInputService.InputChanged:Connect(function(changedInput)
+								end);
+								mouseEvent = Main.Connect(service.UserInputService.InputChanged, function(changedInput)
 									if (changedInput.UserInputType == Enum.UserInputType.MouseMovement or changedInput.UserInputType == Enum.UserInputType.Touch) and self.Draggable and (not self.Closed) and ButtonDown then
 										local deltaX = changedInput.Position.X - dragStartPointer.X;
 										local deltaY = changedInput.Position.Y - dragStartPointer.Y;
@@ -8861,17 +8967,17 @@ local EmbeddedModules = {
 											alignInsertSide = nil;
 										end;
 									end;
-								end));
+								end);
 							end;
 						end;
 					end);
-					guiTopBar.Close.MouseButton1Click:Connect(function()
+					Main.Connect(guiTopBar.Close.MouseButton1Click, function()
 						if self.Closed then
 							return;
 						end;
 						self:Close();
 					end);
-					guiTopBar.Minimize.MouseButton1Click:Connect(function()
+					Main.Connect(guiTopBar.Minimize.MouseButton1Click, function()
 						if self.Closed then
 							return;
 						end;
@@ -8881,7 +8987,7 @@ local EmbeddedModules = {
 							self:SetMinimized();
 						end;
 					end);
-					guiTopBar.Minimize.MouseButton2Click:Connect(function()
+					Main.Connect(guiTopBar.Minimize.MouseButton2Click, function()
 						if self.Closed then
 							return;
 						end;
@@ -8890,7 +8996,7 @@ local EmbeddedModules = {
 							guiTopBar.Minimize.BackgroundTransparency = 1;
 						end;
 					end);
-					guiMain.InputBegan:Connect(function(input)
+					Main.Connect(guiMain.InputBegan, function(input)
 						if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and (not self.Aligned) and (not self.Closed) then
 							moveToTop(self);
 						end;
@@ -8898,7 +9004,7 @@ local EmbeddedModules = {
 					local function syncLocalPosition()
 						self.PosX, self.PosY = resolveLocalPosition(guiMain);
 					end;
-					(guiMain:GetPropertyChangedSignal("Position")):Connect(syncLocalPosition);
+					Main.Connect((guiMain:GetPropertyChangedSignal("Position")), syncLocalPosition);
 					syncLocalPosition();
 					resizeHook(self, guiResizeControls.North, "N");
 					resizeHook(self, guiResizeControls.NorthEast, "NE");
@@ -8909,7 +9015,7 @@ local EmbeddedModules = {
 					resizeHook(self, guiResizeControls.West, "W");
 					resizeHook(self, guiResizeControls.NorthWest, "NW");
 					guiMain.Size = UDim2.new(0, self.SizeX, 0, self.SizeY);
-					gui.DescendantAdded:Connect(function(obj)
+					Main.Connect(gui.DescendantAdded, function(obj)
 						focusInput(self, obj);
 					end);
 					local okQuery, descs = pcall(function()
@@ -8995,7 +9101,7 @@ local EmbeddedModules = {
 				local function sideResizerHook(resizer, dir, side, pos)
 					local mouse = Main.Mouse;
 					local windows = side.Windows;
-					resizer.InputBegan:Connect(function(input)
+					Main.Connect(resizer.InputBegan, function(input)
 						if not side.Resizing then
 							if input.UserInputType == Enum.UserInputType.MouseMovement then
 								resizer.BackgroundColor3 = theme.MainColor2;
@@ -9005,7 +9111,7 @@ local EmbeddedModules = {
 								local offY = input.Position.Y - resizer.AbsolutePosition.Y;
 								side.Resizing = resizer;
 								resizer.BackgroundColor3 = theme.MainColor2;
-								releaseEvent = Main.TrackConn(service.UserInputService.InputEnded:Connect(function(input)
+								releaseEvent = Main.Connect(service.UserInputService.InputEnded, function(input)
 									if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 										releaseEvent:Disconnect();
 										if inputEvent then
@@ -9014,8 +9120,8 @@ local EmbeddedModules = {
 										side.Resizing = false;
 										resizer.BackgroundColor3 = theme.Button;
 									end;
-								end));
-								inputEvent = Main.TrackConn(service.UserInputService.InputChanged:Connect(function(input)
+								end);
+								inputEvent = Main.Connect(service.UserInputService.InputChanged, function(input)
 									if not resizer.Parent then
 										releaseEvent:Disconnect();
 										if inputEvent then
@@ -9071,11 +9177,11 @@ local EmbeddedModules = {
 											sideResized(otherSide);
 										end;
 									end;
-								end));
+								end);
 							end;
 						end;
 					end);
-					resizer.InputEnded:Connect(function(input)
+					Main.Connect(resizer.InputEnded, function(input)
 						if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 							if side.Resizing ~= resizer then
 								resizer.BackgroundColor3 = theme.Button;
@@ -9118,10 +9224,10 @@ local EmbeddedModules = {
 						if not isEnd then
 							local newTemplate = template:Clone();
 							newTemplate.Position = UDim2.new(1, -side.Width, 0, currentPos - 4);
-							side.ResizeCons[(#side.ResizeCons) + 1] = (v.Gui.Main:GetPropertyChangedSignal("Size")):Connect(function()
+							side.ResizeCons[(#side.ResizeCons) + 1] = Main.Connect((v.Gui.Main:GetPropertyChangedSignal("Size")), function()
 								newTemplate.Position = UDim2.new(1, -side.Width, 0, v.GuiElems.Main.Position.Y.Offset + v.GuiElems.Main.Size.Y.Offset);
 							end);
-							side.ResizeCons[(#side.ResizeCons) + 1] = (v.Gui.Main:GetPropertyChangedSignal("Position")):Connect(function()
+							side.ResizeCons[(#side.ResizeCons) + 1] = Main.Connect((v.Gui.Main:GetPropertyChangedSignal("Position")), function()
 								newTemplate.Position = UDim2.new(1, -side.Width, 0, v.GuiElems.Main.Position.Y.Offset + v.GuiElems.Main.Size.Y.Offset);
 							end);
 							sideResizerHook(newTemplate, "V", side, i);
@@ -9412,7 +9518,7 @@ local EmbeddedModules = {
 				end;
 				funcs.ShowAndFocus = function(self, data)
 					static.ShowWindow(self, data);
-					service.RunService.RenderStepped:wait();
+					task.wait();
 					self:Focus();
 				end;
 				static.ShowWindow = function(window, data)
@@ -9702,15 +9808,15 @@ local EmbeddedModules = {
 						Mode = 2,
 						PressColor = Color3.fromRGB(32, 32, 32)
 					});
-					leftToggle.MouseButton1Click:Connect(function()
+					Main.Connect(leftToggle.MouseButton1Click, function()
 						static.ToggleSide("left");
 					end);
-					rightToggle.MouseButton1Click:Connect(function()
+					Main.Connect(rightToggle.MouseButton1Click, function()
 						static.ToggleSide("right");
 					end);
 					leftToggle.Parent = sidesGui;
 					rightToggle.Parent = sidesGui;
-					(sidesGui:GetPropertyChangedSignal("AbsoluteSize")):Connect(function()
+					Main.Connect((sidesGui:GetPropertyChangedSignal("AbsoluteSize")), function()
 						local maxWidth = math.max(300, sidesGui.AbsoluteSize.X - static.FreeWidth);
 						leftSide.Width = math.max(static.MinWidth, math.min(leftSide.Width, maxWidth - rightSide.Width));
 						rightSide.Width = math.max(static.MinWidth, math.min(rightSide.Width, maxWidth - leftSide.Width));
@@ -10109,7 +10215,7 @@ local EmbeddedModules = {
 					self.GuiElems.SearchFrame = contextGui.Main.Container.SearchFrame;
 					self.GuiElems.SearchBar = self.GuiElems.SearchFrame.SearchContainer.SearchBox;
 					Lib.ViewportTextBox.convert(self.GuiElems.SearchBar);
-					(self.GuiElems.SearchBar:GetPropertyChangedSignal("Text")):Connect(function()
+					Main.Connect((self.GuiElems.SearchBar:GetPropertyChangedSignal("Text")), function()
 						local lower, find = string.lower, string.find;
 						local searchText = lower(self.GuiElems.SearchBar.Text);
 						local items = self.Items;
@@ -10277,7 +10383,7 @@ local EmbeddedModules = {
 							end;
 							if not item.Disabled then
 								if item.OnClick then
-									newEntry.MouseButton1Click:Connect(function()
+									Main.Connect(newEntry.MouseButton1Click, function()
 										item.OnClick(item.Name);
 										if not item.NoHide then
 											self:Hide();
@@ -10285,7 +10391,7 @@ local EmbeddedModules = {
 									end);
 								end;
 								if item.OnRightClick then
-									newEntry.MouseButton2Click:Connect(function()
+									Main.Connect(newEntry.MouseButton2Click, function()
 										item.OnRightClick(item.Name);
 										if not item.NoHide then
 											self:Hide();
@@ -10293,12 +10399,12 @@ local EmbeddedModules = {
 									end);
 								end;
 							end;
-							newEntry.InputBegan:Connect(function(input)
+							Main.Connect(newEntry.InputBegan, function(input)
 								if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 									newEntry.BackgroundTransparency = 0;
 								end;
 							end);
-							newEntry.InputEnded:Connect(function(input)
+							Main.Connect(newEntry.InputEnded, function(input)
 								if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 									newEntry.BackgroundTransparency = 1;
 								end;
@@ -10347,7 +10453,7 @@ local EmbeddedModules = {
 					if self.CloseEvent then
 						self.CloseEvent:Disconnect();
 					end;
-					self.CloseEvent = Main.TrackConn(service.UserInputService.InputBegan:Connect(function(input)
+					self.CloseEvent = Main.Connect(service.UserInputService.InputBegan, function(input)
 						if not closable then
 							return;
 						end;
@@ -10357,7 +10463,7 @@ local EmbeddedModules = {
 								self:Hide();
 							end;
 						end;
-					end));
+					end);
 					if reverseY then
 						elems.Main.Position = UDim2.new(0, x, 0, y - (self.ReverseYOffset or 0));
 						local newY = y - toSize - (self.ReverseYOffset or 0);
@@ -10583,15 +10689,15 @@ local EmbeddedModules = {
 				end;
 				local function setupEditBox(obj)
 					local editBox = obj.GuiElems.EditBox;
-					editBox.Focused:Connect(function()
+					Main.Connect(editBox.Focused, function()
 						obj:ConnectEditBoxEvent();
 						obj.Editing = true;
 					end);
-					editBox.FocusLost:Connect(function()
+					Main.Connect(editBox.FocusLost, function()
 						obj:DisconnectEditBoxEvent();
 						obj.Editing = false;
 					end);
-					(editBox:GetPropertyChangedSignal("Text")):Connect(function()
+					Main.Connect((editBox:GetPropertyChangedSignal("Text")), function()
 						local text = editBox.Text;
 						if #text == 0 or obj.EditBoxCopying then
 							return;
@@ -10604,7 +10710,7 @@ local EmbeddedModules = {
 					local mouse = plr:GetMouse();
 					local codeFrame = obj.GuiElems.LinesFrame;
 					local lines = obj.Lines;
-					codeFrame.InputBegan:Connect(function(input)
+					Main.Connect(codeFrame.InputBegan, function(input)
 						if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 							local fontSizeX, fontSizeY = math.ceil(obj.FontSize / 2), obj.FontSize;
 							local relX = input.Position.X - codeFrame.AbsolutePosition.X;
@@ -10663,15 +10769,15 @@ local EmbeddedModules = {
 								obj.FloatCursorX = sel2X;
 								obj:Refresh();
 							end;
-							releaseEvent = Main.TrackConn(service.UserInputService.InputEnded:Connect(function(input)
+							releaseEvent = Main.Connect(service.UserInputService.InputEnded, function(input)
 								if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 									releaseEvent:Disconnect();
 									inputEvent:Disconnect();
 									scrollEvent:Disconnect();
 									obj:SetCopyableSelection();
 								end;
-							end));
-							inputEvent = Main.TrackConn(service.UserInputService.InputChanged:Connect(function(input)
+							end);
+							inputEvent = Main.Connect(service.UserInputService.InputChanged, function(input)
 								if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 									local upDelta = input.Position.Y - codeFrame.AbsolutePosition.Y;
 									local downDelta = input.Position.Y - codeFrame.AbsolutePosition.Y - codeFrame.AbsoluteSize.Y;
@@ -10691,13 +10797,13 @@ local EmbeddedModules = {
 									end;
 									updateSelection();
 								end;
-							end));
-							scrollEvent = Main.TrackConn(service.RunService.RenderStepped:Connect(function()
+							end);
+							scrollEvent = Main.Connect(service.RunService.RenderStepped, function()
 								if scrollPowerV ~= 0 or scrollPowerH ~= 0 then
 									obj:ScrollDelta(scrollPowerH, scrollPowerV);
 									updateSelection();
 								end;
-							end));
+							end);
 							obj:Refresh();
 						end;
 					end);
@@ -10766,7 +10872,7 @@ local EmbeddedModules = {
 						}
 					});
 					elems.ScrollCorner.Parent = frame;
-					linesFrame.InputBegan:Connect(function(input)
+					Main.Connect(linesFrame.InputBegan, function(input)
 						if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 							obj:SetEditing(true, input);
 						end;
@@ -10815,7 +10921,7 @@ local EmbeddedModules = {
 					if self.EditBoxEvent then
 						self.EditBoxEvent:Disconnect();
 					end;
-					self.EditBoxEvent = Main.TrackConn(service.UserInputService.InputBegan:Connect(function(input)
+					self.EditBoxEvent = Main.Connect(service.UserInputService.InputBegan, function(input)
 						if input.UserInputType ~= Enum.UserInputType.Keyboard then
 							return;
 						end;
@@ -10823,13 +10929,13 @@ local EmbeddedModules = {
 						local keycode = input.KeyCode;
 						local function setupMove(key, func)
 							local endCon, finished;
-							endCon = Main.TrackConn(service.UserInputService.InputEnded:Connect(function(input)
+							endCon = Main.Connect(service.UserInputService.InputEnded, function(input)
 								if input.KeyCode ~= key then
 									return;
 								end;
 								endCon:Disconnect();
 								finished = true;
-							end));
+							end);
 							func();
 							Lib.FastWait(0.5);
 							while not finished do
@@ -10959,7 +11065,7 @@ local EmbeddedModules = {
 								self:Refresh();
 							end;
 						end;
-					end));
+					end);
 				end;
 				funcs.DisconnectEditBoxEvent = function(self)
 					if self.EditBoxEvent then
@@ -11691,11 +11797,11 @@ local EmbeddedModules = {
 					scrollV.WheelIncrement = 3;
 					scrollH.Increment = 2;
 					scrollH.WheelIncrement = 7;
-					scrollV.Scrolled:Connect(function()
+					Main.Connect(scrollV.Scrolled, function()
 						obj.ViewY = scrollV.Index;
 						obj:Refresh();
 					end);
-					scrollH.Scrolled:Connect(function()
+					Main.Connect(scrollH.Scrolled, function()
 						obj.ViewX = scrollH.Index;
 						obj:Refresh();
 					end);
@@ -11706,7 +11812,7 @@ local EmbeddedModules = {
 					scrollV.Gui.Parent = obj.Frame;
 					scrollH.Gui.Parent = obj.Frame;
 					obj:UpdateView();
-					(obj.Frame:GetPropertyChangedSignal("AbsoluteSize")):Connect(function()
+					Main.Connect((obj.Frame:GetPropertyChangedSignal("AbsoluteSize")), function()
 						obj:UpdateView();
 						obj:Refresh();
 					end);
@@ -11957,7 +12063,7 @@ local EmbeddedModules = {
 						Checkmark2 = filler.checkmark2,
 						Middle = filler.middle
 					};
-					checkbox.Activated:Connect(function()
+					Main.Connect(checkbox.Activated, function()
 						if Lib.CheckMouseInGui(checkbox) then
 							if self.Style == 0 then
 								ripple(ripples_container, self.Disabled and self.Colors.Disabled or self.Colors.Primary);
@@ -12149,7 +12255,7 @@ local EmbeddedModules = {
 					return false;
 				end;
 				local function hexInput(self, hex, color)
-					hex.InputBegan:Connect(function(input)
+					Main.Connect(hex.InputBegan, function(input)
 						if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 							if isMouseInHexagon(hex, input.Position) then
 								self.OnSelect:Fire(color);
@@ -12157,7 +12263,7 @@ local EmbeddedModules = {
 							end;
 						end;
 					end);
-					hex.InputChanged:Connect(function(input)
+					Main.Connect(hex.InputChanged, function(input)
 						if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 							if isMouseInHexagon(hex, input.Position) then
 								self.OnPreview:Fire(color);
@@ -12250,7 +12356,7 @@ local EmbeddedModules = {
 						newHex.Parent = colorFrame;
 						paletteCount = paletteCount + 1;
 					end;
-					colorFrame.MoreColors.MouseButton1Click:Connect(function()
+					Main.Connect(colorFrame.MoreColors.MouseButton1Click, function()
 						self.OnMoreColors:Fire();
 						self:Close();
 					end);
@@ -12279,7 +12385,7 @@ local EmbeddedModules = {
 					if self.CloseEvent then
 						self.CloseEvent:Disconnect();
 					end;
-					self.CloseEvent = Main.TrackConn(service.UserInputService.InputBegan:Connect(function(input)
+					self.CloseEvent = Main.Connect(service.UserInputService.InputBegan, function(input)
 						if not closable or input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then
 							return;
 						end;
@@ -12287,7 +12393,7 @@ local EmbeddedModules = {
 							self.CloseEvent:Disconnect();
 							self:Close();
 						end;
-					end));
+					end);
 					if reverseY then
 						local newY = y - sizeY - (self.ReverseYOffset or 0);
 						y = newY >= 0 and newY or 0;
@@ -14025,14 +14131,14 @@ local EmbeddedModules = {
 						red, green, blue = hsvColor.R, hsvColor.G, hsvColor.B;
 						updateColor();
 					end;
-					colorSpace.InputBegan:Connect(function(input)
+					Main.Connect(colorSpace.InputBegan, function(input)
 						handleInputBegan(input, colorSpaceInput);
 					end);
-					colorStrip.InputBegan:Connect(function(input)
+					Main.Connect(colorStrip.InputBegan, function(input)
 						handleInputBegan(input, colorStripInput);
 					end);
 					local function hookButtons(frame, func)
-						frame.ArrowFrame.Up.InputBegan:Connect(function(input)
+						Main.Connect(frame.ArrowFrame.Up.InputBegan, function(input)
 							if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 								local releaseEvent, runEvent;
 								local startTime = tick();
@@ -14041,7 +14147,7 @@ local EmbeddedModules = {
 								if not startNum then
 									return;
 								end;
-								releaseEvent = user.InputEnded:Connect(function(endInput)
+								releaseEvent = Main.Connect(user.InputEnded, function(endInput)
 									if endInput.UserInputType == Enum.UserInputType.MouseButton1 or endInput.UserInputType == Enum.UserInputType.Touch then
 										releaseEvent:Disconnect();
 										pressing = false;
@@ -14059,7 +14165,7 @@ local EmbeddedModules = {
 								end;
 							end;
 						end);
-						frame.ArrowFrame.Down.InputBegan:Connect(function(input)
+						Main.Connect(frame.ArrowFrame.Down.InputBegan, function(input)
 							if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 								local releaseEvent, runEvent;
 								local startTime = tick();
@@ -14068,7 +14174,7 @@ local EmbeddedModules = {
 								if not startNum then
 									return;
 								end;
-								releaseEvent = user.InputEnded:Connect(function(endInput)
+								releaseEvent = Main.Connect(user.InputEnded, function(endInput)
 									if endInput.UserInputType == Enum.UserInputType.MouseButton1 or endInput.UserInputType == Enum.UserInputType.Touch then
 										releaseEvent:Disconnect();
 										pressing = false;
@@ -14097,7 +14203,7 @@ local EmbeddedModules = {
 							updateColor(1);
 						end;
 					end;
-					hueInput.FocusLost:Connect(function()
+					Main.Connect(hueInput.FocusLost, function()
 						updateHue(hueInput.Text);
 					end);
 					hookButtons(hueInput, hueInput);
@@ -14111,7 +14217,7 @@ local EmbeddedModules = {
 							updateColor(1);
 						end;
 					end;
-					satInput.FocusLost:Connect(function()
+					Main.Connect(satInput.FocusLost, function()
 						updateSat(satInput.Text);
 					end);
 					hookButtons(satInput, updateSat);
@@ -14125,7 +14231,7 @@ local EmbeddedModules = {
 							updateColor(1);
 						end;
 					end;
-					valInput.FocusLost:Connect(function()
+					Main.Connect(valInput.FocusLost, function()
 						updateVal(valInput.Text);
 					end);
 					hookButtons(valInput, updateVal);
@@ -14139,7 +14245,7 @@ local EmbeddedModules = {
 							updateColor(2);
 						end;
 					end;
-					redInput.FocusLost:Connect(function()
+					Main.Connect(redInput.FocusLost, function()
 						updateRed(redInput.Text);
 					end);
 					hookButtons(redInput, updateRed);
@@ -14153,7 +14259,7 @@ local EmbeddedModules = {
 							updateColor(2);
 						end;
 					end;
-					greenInput.FocusLost:Connect(function()
+					Main.Connect(greenInput.FocusLost, function()
 						updateGreen(greenInput.Text);
 					end);
 					hookButtons(greenInput, updateGreen);
@@ -14167,7 +14273,7 @@ local EmbeddedModules = {
 							updateColor(2);
 						end;
 					end;
-					blueInput.FocusLost:Connect(function()
+					Main.Connect(blueInput.FocusLost, function()
 						updateBlue(blueInput.Text);
 					end);
 					hookButtons(blueInput, updateBlue);
@@ -14183,7 +14289,7 @@ local EmbeddedModules = {
 						local newColor = colorChoice:Clone();
 						newColor.BackgroundColor3 = v;
 						newColor.Position = UDim2.new(0, 1 + 30 * column, 0, 21 + 23 * row);
-						newColor.MouseButton1Click:Connect(function()
+						Main.Connect(newColor.MouseButton1Click, function()
 							red, green, blue = v.r, v.g, v.b;
 							local newColor = Color3.new(red, green, blue);
 							hue, sat, val = Color3.toHSV(newColor);
@@ -14203,13 +14309,13 @@ local EmbeddedModules = {
 						local newColor = colorChoice:Clone();
 						newColor.BackgroundColor3 = color;
 						newColor.Position = UDim2.new(0, 1 + 30 * column, 0, 20 + 23 * row);
-						newColor.MouseButton1Click:Connect(function()
+						Main.Connect(newColor.MouseButton1Click, function()
 							local curColor = customColors[i] or Color3.new(0, 0, 0);
 							red, green, blue = curColor.r, curColor.g, curColor.b;
 							hue, sat, val = Color3.toHSV(curColor);
 							updateColor();
 						end);
-						newColor.MouseButton2Click:Connect(function()
+						Main.Connect(newColor.MouseButton2Click, function()
 							customColors[i] = chosenColor;
 							newColor.BackgroundColor3 = chosenColor;
 						end);
@@ -14220,30 +14326,30 @@ local EmbeddedModules = {
 							column = 0;
 						end;
 					end;
-					okButton.MouseButton1Click:Connect(function()
+					Main.Connect(okButton.MouseButton1Click, function()
 						newMt.OnSelect:Fire(chosenColor);
 						window:Close();
 					end);
-					okButton.InputBegan:Connect(function(input)
+					Main.Connect(okButton.InputBegan, function(input)
 						if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 							okButton.BackgroundTransparency = 0.4;
 						end;
 					end);
-					okButton.InputEnded:Connect(function(input)
+					Main.Connect(okButton.InputEnded, function(input)
 						if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 							okButton.BackgroundTransparency = 0;
 						end;
 					end);
-					cancelButton.MouseButton1Click:Connect(function()
+					Main.Connect(cancelButton.MouseButton1Click, function()
 						newMt.OnCancel:Fire();
 						window:Close();
 					end);
-					cancelButton.InputBegan:Connect(function(input)
+					Main.Connect(cancelButton.InputBegan, function(input)
 						if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 							cancelButton.BackgroundTransparency = 0.4;
 						end;
 					end);
-					cancelButton.InputEnded:Connect(function(input)
+					Main.Connect(cancelButton.InputEnded, function(input)
 						if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 							cancelButton.BackgroundTransparency = 0;
 						end;
@@ -14674,7 +14780,7 @@ local EmbeddedModules = {
 							envelopeDragBottom.Visible = true;
 						end;
 					end;
-					envelopeDragTop.InputBegan:Connect(function(input)
+					Main.Connect(envelopeDragTop.InputBegan, function(input)
 						if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch or (not currentPoint) or Lib.CheckMouseInGui(currentPoint[4].Select) then
 							return;
 						end;
@@ -14683,7 +14789,7 @@ local EmbeddedModules = {
 						local mouseDelta = math.abs(envelopeDragTop.AbsolutePosition.Y - mouse.Y);
 						envelopeDragTop.Line.Position = UDim2.new(0, 2, 0, 0);
 						envelopeDragTop.Line.Size = UDim2.new(0, 3, 0, 20);
-						releaseEvent = user.InputEnded:Connect(function(input)
+						releaseEvent = Main.Connect(user.InputEnded, function(input)
 							if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then
 								return;
 							end;
@@ -14692,7 +14798,7 @@ local EmbeddedModules = {
 							envelopeDragTop.Line.Position = UDim2.new(0, 3, 0, 0);
 							envelopeDragTop.Line.Size = UDim2.new(0, 1, 0, 20);
 						end);
-						mouseEvent = user.InputChanged:Connect(function(input)
+						mouseEvent = Main.Connect(user.InputChanged, function(input)
 							if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 								local topDiff = currentPoint[4].AbsolutePosition.Y + 2 - (mouse.Y - mouseDelta) - 19;
 								local newEnvelope = 10 * (math.max(topDiff, 0) / maxSize);
@@ -14704,7 +14810,7 @@ local EmbeddedModules = {
 							end;
 						end);
 					end);
-					envelopeDragBottom.InputBegan:Connect(function(input)
+					Main.Connect(envelopeDragBottom.InputBegan, function(input)
 						if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch or (not currentPoint) or Lib.CheckMouseInGui(currentPoint[4].Select) then
 							return;
 						end;
@@ -14713,7 +14819,7 @@ local EmbeddedModules = {
 						local mouseDelta = math.abs(envelopeDragBottom.AbsolutePosition.Y - mouse.Y);
 						envelopeDragBottom.Line.Position = UDim2.new(0, 2, 0, 0);
 						envelopeDragBottom.Line.Size = UDim2.new(0, 3, 0, 20);
-						releaseEvent = user.InputEnded:Connect(function(input)
+						releaseEvent = Main.Connect(user.InputEnded, function(input)
 							if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then
 								return;
 							end;
@@ -14722,7 +14828,7 @@ local EmbeddedModules = {
 							envelopeDragBottom.Line.Position = UDim2.new(0, 3, 0, 0);
 							envelopeDragBottom.Line.Size = UDim2.new(0, 1, 0, 20);
 						end);
-						mouseEvent = user.InputChanged:Connect(function(input)
+						mouseEvent = Main.Connect(user.InputChanged, function(input)
 							if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 								local bottomDiff = mouse.Y + (20 - mouseDelta) - (currentPoint[4].AbsolutePosition.Y + 2) - 19;
 								local newEnvelope = 10 * (math.max(bottomDiff, 0) / maxSize);
@@ -14749,7 +14855,7 @@ local EmbeddedModules = {
 						newSelect.Size = UDim2.new(0, 9, 0, 9);
 						newSelect.Parent = newPoint;
 						newPoint.Parent = numberLine;
-						newSelect.InputBegan:Connect(function(input)
+						Main.Connect(newSelect.InputBegan, function(input)
 							if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 								for i, v in points do
 									v[4].Select.BackgroundTransparency = 1;
@@ -14763,7 +14869,7 @@ local EmbeddedModules = {
 								currentlySelected = true;
 								newSelect.BackgroundColor3 = Color3.new(249 / 255, 191 / 255, 59 / 255);
 								local oldEnvelope = point[3];
-								releaseEvent = user.InputEnded:Connect(function(input)
+								releaseEvent = Main.Connect(user.InputEnded, function(input)
 									if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then
 										return;
 									end;
@@ -14772,7 +14878,7 @@ local EmbeddedModules = {
 									currentlySelected = nil;
 									newSelect.BackgroundColor3 = Color3.new(199 / 255, 44 / 255, 28 / 255);
 								end);
-								mouseEvent = user.InputChanged:Connect(function(input)
+								mouseEvent = Main.Connect(user.InputChanged, function(input)
 									if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 										local maxX = numberLine.AbsoluteSize.X - 1;
 										local relativeX = input.Position.X - numberLine.AbsolutePosition.X;
@@ -14891,7 +14997,7 @@ local EmbeddedModules = {
 						envelopeDragBottom.Visible = false;
 					end;
 					newMt.SetSequence = loadSequence;
-					timeBox.FocusLost:Connect(function()
+					Main.Connect(timeBox.FocusLost, function()
 						local point = currentPoint;
 						local num = tonumber(timeBox.Text);
 						if point and num and point ~= beginPoint and point ~= endPoint then
@@ -14902,7 +15008,7 @@ local EmbeddedModules = {
 							updateInputs(point);
 						end;
 					end);
-					valueBox.FocusLost:Connect(function()
+					Main.Connect(valueBox.FocusLost, function()
 						local point = currentPoint;
 						local num = tonumber(valueBox.Text);
 						if point and num then
@@ -14916,7 +15022,7 @@ local EmbeddedModules = {
 							updateInputs(point);
 						end;
 					end);
-					envelopeBox.FocusLost:Connect(function()
+					Main.Connect(envelopeBox.FocusLost, function()
 						local point = currentPoint;
 						local num = tonumber(envelopeBox.Text);
 						if point and num then
@@ -14929,18 +15035,18 @@ local EmbeddedModules = {
 						end;
 					end);
 					local function buttonAnimations(button, inverse)
-						button.InputBegan:Connect(function(input)
+						Main.Connect(button.InputBegan, function(input)
 							if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 								button.BackgroundTransparency = inverse and 0.5 or 0.4;
 							end;
 						end);
-						button.InputEnded:Connect(function(input)
+						Main.Connect(button.InputEnded, function(input)
 							if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 								button.BackgroundTransparency = inverse and 1 or 0;
 							end;
 						end);
 					end;
-					numberLine.InputBegan:Connect(function(input)
+					Main.Connect(numberLine.InputBegan, function(input)
 						if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and #points < 20 then
 							if Lib.CheckMouseInGui(envelopeDragTop) or Lib.CheckMouseInGui(envelopeDragBottom) then
 								return;
@@ -14978,7 +15084,7 @@ local EmbeddedModules = {
 							buildSequence();
 						end;
 					end);
-					deleteButton.MouseButton1Click:Connect(function()
+					Main.Connect(deleteButton.MouseButton1Click, function()
 						if currentPoint and currentPoint ~= beginPoint and currentPoint ~= endPoint then
 							for i, v in points do
 								if v == currentPoint then
@@ -14993,13 +15099,13 @@ local EmbeddedModules = {
 							updateInputs(points[1]);
 						end;
 					end);
-					resetButton.MouseButton1Click:Connect(function()
+					Main.Connect(resetButton.MouseButton1Click, function()
 						if resetSequence then
 							newMt:SetSequence(resetSequence);
 							buildSequence();
 						end;
 					end);
-					closeButton.MouseButton1Click:Connect(function()
+					Main.Connect(closeButton.MouseButton1Click, function()
 						window:Close();
 					end);
 					buttonAnimations(deleteButton);
@@ -15411,7 +15517,7 @@ local EmbeddedModules = {
 						newArrow.Position = UDim2.new(0, ind - 1, 0, 0);
 						newArrow.Visible = true;
 						newArrow.Parent = arrowFrame;
-						newArrow.InputBegan:Connect(function(input)
+						Main.Connect(newArrow.InputBegan, function(input)
 							if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 								cursor.Visible = true;
 								cursor.Position = UDim2.new(0, 9 + newArrow.Position.X.Offset, 0, 0);
@@ -15423,7 +15529,7 @@ local EmbeddedModules = {
 								end;
 								local mouseEvent, releaseEvent;
 								currentlySelected = true;
-								releaseEvent = user.InputEnded:Connect(function(input)
+								releaseEvent = Main.Connect(user.InputEnded, function(input)
 									if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then
 										return;
 									end;
@@ -15432,7 +15538,7 @@ local EmbeddedModules = {
 									currentlySelected = nil;
 									cursor.Visible = false;
 								end);
-								mouseEvent = user.InputChanged:Connect(function(input)
+								mouseEvent = Main.Connect(user.InputChanged, function(input)
 									if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 										local maxSize = colorLine.AbsoluteSize.X - 1;
 										local relativeX = input.Position.X - colorLine.AbsolutePosition.X;
@@ -15453,7 +15559,7 @@ local EmbeddedModules = {
 								end);
 							end;
 						end);
-						newArrow.InputEnded:Connect(function(input)
+						Main.Connect(newArrow.InputEnded, function(input)
 							if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 								cursor.Visible = false;
 							end;
@@ -15500,18 +15606,18 @@ local EmbeddedModules = {
 					end;
 					newMt.SetSequence = loadSequence;
 					local function buttonAnimations(button, inverse)
-						button.InputBegan:Connect(function(input)
+						Main.Connect(button.InputBegan, function(input)
 							if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 								button.BackgroundTransparency = inverse and 0.5 or 0.4;
 							end;
 						end);
-						button.InputEnded:Connect(function(input)
+						Main.Connect(button.InputEnded, function(input)
 							if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 								button.BackgroundTransparency = inverse and 1 or 0;
 							end;
 						end);
 					end;
-					colorLine.InputBegan:Connect(function(input)
+					Main.Connect(colorLine.InputBegan, function(input)
 						if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and #colors < 20 then
 							local maxSize = colorLine.AbsoluteSize.X - 1;
 							local relativeX = input.Position.X - colorLine.AbsolutePosition.X;
@@ -15543,7 +15649,7 @@ local EmbeddedModules = {
 							redraw();
 						end;
 					end);
-					colorLine.InputChanged:Connect(function(input)
+					Main.Connect(colorLine.InputChanged, function(input)
 						if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 							local maxSize = colorLine.AbsoluteSize.X - 1;
 							local relativeX = input.Position.X - colorLine.AbsolutePosition.X;
@@ -15557,7 +15663,7 @@ local EmbeddedModules = {
 							cursor.Position = UDim2.new(0, 10 + relativeX, 0, 0);
 						end;
 					end);
-					colorLine.InputEnded:Connect(function(input)
+					Main.Connect(colorLine.InputEnded, function(input)
 						if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 							local inArrow = false;
 							for i, v in colors do
@@ -15571,7 +15677,7 @@ local EmbeddedModules = {
 							end;
 						end;
 					end);
-					(timeBox:GetPropertyChangedSignal("Text")):Connect(function()
+					Main.Connect((timeBox:GetPropertyChangedSignal("Text")), function()
 						local point = currentPoint;
 						local num = tonumber(timeBox.Text);
 						if point and num and point ~= beginPoint and point ~= endPoint then
@@ -15581,13 +15687,13 @@ local EmbeddedModules = {
 							redraw();
 						end;
 					end);
-					colorBox.InputBegan:Connect(function(input)
+					Main.Connect(colorBox.InputBegan, function(input)
 						if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 							local editor = newMt.ColorPicker;
 							if not editor then
 								editor = Lib.ColorPicker.new();
 								editor.Window:SetTitle("ColorSequence Color Picker");
-								editor.OnSelect:Connect(function(col)
+								Main.Connect(editor.OnSelect, function(col)
 									if currentPoint then
 										currentPoint[1] = col;
 									end;
@@ -15599,7 +15705,7 @@ local EmbeddedModules = {
 							editor.Window:ShowAndFocus();
 						end;
 					end);
-					deleteButton.MouseButton1Click:Connect(function()
+					Main.Connect(deleteButton.MouseButton1Click, function()
 						if currentPoint and currentPoint ~= beginPoint and currentPoint ~= endPoint then
 							for i, v in colors do
 								if v == currentPoint then
@@ -15614,15 +15720,15 @@ local EmbeddedModules = {
 							redraw();
 						end;
 					end);
-					resetButton.MouseButton1Click:Connect(function()
+					Main.Connect(resetButton.MouseButton1Click, function()
 						if resetSequence then
 							newMt:SetSequence(resetSequence);
 						end;
 					end);
-					closeButton.MouseButton1Click:Connect(function()
+					Main.Connect(closeButton.MouseButton1Click, function()
 						window:Close();
 					end);
-					topClose.MouseButton1Click:Connect(function()
+					Main.Connect(topClose.MouseButton1Click, function()
 						window:Close();
 					end);
 					buttonAnimations(deleteButton);
@@ -15703,7 +15809,7 @@ local EmbeddedModules = {
 					obj.TextBox = textbox;
 					obj.View = view;
 					obj.Gui = view;
-					textbox.Changed:Connect(function(prop)
+					Main.Connect(textbox.Changed, function(prop)
 						if prop == "Text" or prop == "CursorPosition" or prop == "AbsoluteSize" then
 							local cursorPos = obj.TextBox.CursorPosition;
 							if cursorPos ~= (-1) then
@@ -15821,22 +15927,22 @@ local EmbeddedModules = {
 						PressColor = Settings.Theme.ButtonPress,
 						OutlineColor = Settings.Theme.Outline2
 					});
-					b.MouseButton1Click:Connect(function()
+					Main.Connect(b.MouseButton1Click, function()
 						obj:Trigger("Click", 1);
 					end);
-					b.MouseButton1Down:Connect(function()
+					Main.Connect(b.MouseButton1Down, function()
 						obj:Trigger("Down", 1);
 					end);
-					b.MouseButton1Up:Connect(function()
+					Main.Connect(b.MouseButton1Up, function()
 						obj:Trigger("Up", 1);
 					end);
-					b.MouseButton2Click:Connect(function()
+					Main.Connect(b.MouseButton2Click, function()
 						obj:Trigger("Click", 2);
 					end);
-					b.MouseButton2Down:Connect(function()
+					Main.Connect(b.MouseButton2Down, function()
 						obj:Trigger("Down", 2);
 					end);
-					b.MouseButton2Up:Connect(function()
+					Main.Connect(b.MouseButton2Up, function()
 						obj:Trigger("Up", 2);
 					end);
 					return obj;
@@ -15993,7 +16099,7 @@ local EmbeddedModules = {
 					obj.GuiElems = {
 						Label = label
 					};
-					f.MouseButton1Down:Connect(function()
+					Main.Connect(f.MouseButton1Down, function()
 						obj:ShowOptions();
 					end);
 					obj:Update();
@@ -16061,14 +16167,14 @@ local EmbeddedModules = {
 							end);
 						end;
 						local release;
-						release = Main.TrackConn(service.UserInputService.InputEnded:Connect(function(input)
+						release = Main.Connect(service.UserInputService.InputEnded, function(input)
 							if input.UserInputType == Enum.UserInputType["MouseButton" .. button] then
 								release:Disconnect();
 								if Lib.CheckMouseInGui(item) and self.LastButton == button and self.LastItem == item then
 									self.OnRelease:Fire(item, self.Combo, button);
 								end;
 							end;
-						end));
+						end);
 						self.OnDown:Fire(item, self.Combo, button);
 					end;
 				end;
@@ -16077,10 +16183,10 @@ local EmbeddedModules = {
 						return;
 					end;
 					local cons = {};
-					cons[1] = item.MouseButton1Down:Connect(function(X, Y)
+					cons[1] = Main.Connect(item.MouseButton1Down, function(X, Y)
 						self:Trigger(item, 1, X, Y);
 					end);
-					cons[2] = item.MouseButton2Down:Connect(function(X, Y)
+					cons[2] = Main.Connect(item.MouseButton2Down, function(X, Y)
 						self:Trigger(item, 2, X, Y);
 					end);
 					self.ItemCons[item] = cons;
@@ -16286,39 +16392,144 @@ Main = (function()
 		Menu = 100000,
 		Core = 101000
 	};
+	Main.Generation = 0
+	Main.Threads = setmetatable({}, {__mode = "k"})
+	Main.Resources = setmetatable({}, {__mode = "k"})
+	Main.Exports = {}
+	local nativeTask, nativeCo = task, coroutine
+	Main.TrackTask = function(thread)
+		if type(thread) == "thread" and nativeCo.status(thread) ~= "dead" then
+			if Main.__DexExiting and thread ~= nativeCo.running() then
+				pcall(nativeTask.cancel, thread)
+			else
+				Main.Threads[thread] = true
+			end
+		end
+		return thread
+	end
+	local function schedule(mode, span, fn, ...)
+		if Main.__DexExiting then return end
+		local gen = Main.Generation
+		local thread
+		if type(fn) == "thread" then
+			if nativeCo.status(fn) == "dead" then return end
+			thread = fn
+		else
+			thread = nativeCo.create(function(...)
+				if gen ~= Main.Generation or Main.__DexExiting then return end
+				local out = table.pack(pcall(fn, ...))
+				Main.Threads[nativeCo.running()] = nil
+				if not out[1] then error(out[2], 0) end
+				return table.unpack(out, 2, out.n)
+			end)
+		end
+		Main.TrackTask(thread)
+		if mode == "delay" then nativeTask.delay(span, thread, ...) else nativeTask[mode](thread, ...) end
+		if nativeCo.status(thread) == "dead" then Main.Threads[thread] = nil end
+		return thread
+	end
+	Main.Tasks = setmetatable({
+		spawn = function(fn, ...) return schedule("spawn", 0, fn, ...) end,
+		defer = function(fn, ...) return schedule("defer", 0, fn, ...) end,
+		delay = function(span, fn, ...) return schedule("delay", span, fn, ...) end,
+		cancel = function(thread)
+			Main.Threads[thread] = nil
+			if type(thread) == "thread" and nativeCo.status(thread) ~= "dead" then return nativeTask.cancel(thread) end
+		end,
+	}, {__index = nativeTask})
+	Main.Coroutine = setmetatable({
+		create = function(fn) return Main.TrackTask(nativeCo.create(fn)) end,
+		wrap = function(fn)
+			local gen = Main.Generation
+			local thread
+			thread = nativeCo.create(function(...)
+				if gen ~= Main.Generation or Main.__DexExiting then return end
+				local out = table.pack(pcall(fn, ...))
+				Main.Threads[thread] = nil
+				if not out[1] then error(out[2], 0) end
+				return table.unpack(out, 2, out.n)
+			end)
+			return function(...)
+				if gen ~= Main.Generation or Main.__DexExiting then return end
+				Main.TrackTask(thread)
+				local out = table.pack(nativeCo.resume(thread, ...))
+				if nativeCo.status(thread) == "dead" then Main.Threads[thread] = nil end
+				if not out[1] then error(out[2], 0) end
+				return table.unpack(out, 2, out.n)
+			end
+		end,
+	}, {__index = nativeCo})
+	_dex_boot.main = Main
+	rawset(_dex_boot.runtimeEnv, "task", Main.Tasks)
+	rawset(_dex_boot.runtimeEnv, "coroutine", Main.Coroutine)
+	local task, coroutine = Main.Tasks, Main.Coroutine
+	Main.TrackResource = function(obj)
+		if typeof(obj) == "Instance" then
+			if Main.__DexExiting then obj:Destroy() else Main.Resources[obj] = true end
+		end
+		return obj
+	end
+	Main.SetExport = function(host, key, val)
+		if type(host) ~= "table" then return end
+		Main.Exports[#Main.Exports + 1] = {host, key, rawget(host, key), val}
+		rawset(host, key, val)
+	end
+	Main.PruneConnections = function()
+		local count = 0
+		for _, conn in Main.ConnList do
+			if conn.Connected ~= false then
+				count += 1
+				Main.ConnList[count] = conn
+			else
+				Main.ConnSet[conn] = nil
+			end
+		end
+		for i = #Main.ConnList, count + 1, -1 do Main.ConnList[i] = nil end
+	end
 	Main.TrackConn = function(conn)
-		if not conn then
-			return conn;
-		end;
+		if not conn then return conn end
 		if Main.__DexExiting then
-			pcall(function()
-				if conn.Disconnect then
-					conn:Disconnect();
-				elseif conn.disconnect then
-					conn:disconnect();
-				end;
-			end);
-			return conn;
-		end;
-		if Main.ConnSet[conn] then
-			return conn;
-		end;
-		Main.ConnSet[conn] = true;
-		Main.ConnList[(#Main.ConnList) + 1] = conn;
-		return conn;
-	end;
+			pcall(function() conn:Disconnect() end)
+			return conn
+		end
+		if Main.ConnSet[conn] then return conn end
+		if #Main.ConnList % 256 == 255 then Main.PruneConnections() end
+		Main.ConnSet[conn] = true
+		Main.ConnList[#Main.ConnList + 1] = conn
+		return conn
+	end
+	Main.WrapCall = function(fn)
+		local gen = Main.Generation
+		return function(...)
+			if gen ~= Main.Generation or Main.__DexExiting then return end
+			local current = nativeCo.running()
+			local tracked = current and Main.Threads[current]
+			if current then Main.Threads[current] = true end
+			local out = table.pack(pcall(fn, ...))
+			if current and not tracked then Main.Threads[current] = nil end
+			if not out[1] then error(out[2], 0) end
+			return table.unpack(out, 2, out.n)
+		end
+	end
+	Main.Connect = function(sig, fn)
+		local connect = sig.Connect or sig.connect
+		return Main.TrackConn(connect(sig, Main.WrapCall(fn)))
+	end
 	Main.TrackGui = function(gui)
-		if typeof(gui) ~= "Instance" then
-			return gui;
-		end;
-		for _, trackedGui in Main.GuiList do
-			if trackedGui == gui then
-				return gui;
-			end;
-		end;
-		Main.GuiList[(#Main.GuiList) + 1] = gui;
-		return gui;
-	end;
+		if typeof(gui) ~= "Instance" then return gui end
+		if Main.__DexExiting then gui:Destroy() return gui end
+		if table.find(Main.GuiList, gui) then return gui end
+		Main.GuiList[#Main.GuiList + 1] = gui
+		Main.TrackResource(gui)
+		Main.Connect(gui.Destroying, function()
+			local pos = table.find(Main.GuiList, gui)
+			if pos then table.remove(Main.GuiList, pos) end
+			Main.Resources[gui] = nil
+			if Main.MainGui == gui and not Main.__DexExiting then nativeTask.defer(Main.Exit) end
+		end)
+		if Lib and Lib.WatchGui then Lib.WatchGui(gui) end
+		return gui
+	end
 	Main.ResolveAsset = function(assetId)
 		local override = Main.IconOverrides and Main.IconOverrides[assetId];
 		if override then
@@ -17482,23 +17693,23 @@ Main = (function()
 		local signalWait = renderStepped.wait;
 		local fastwait = function(s)
 			if not s then
-				return signalWait(renderStepped);
+				return task.wait();
 			end;
 			local start = tick();
 			while tick() - start < s do
-				signalWait(renderStepped);
+				task.wait();
 			end;
 		end;
 		statusText.Text = initStatus;
 		local function tweenNumber(n, ti, func)
 			local tweenVal = Instance.new("IntValue");
 			tweenVal.Value = 0;
-			tweenVal.Changed:Connect(func);
+			Main.Connect(tweenVal.Changed, func);
 			local tween = tweenS:Create(tweenVal, ti, {
 				Value = n
 			});
 			tween:Play();
-			tween.Completed:Connect(function()
+			Main.Connect(tween.Completed, function()
 				tweenVal:Destroy();
 			end);
 		end;
@@ -17736,19 +17947,19 @@ Main = (function()
 		local ySize = (service.TextService:GetTextSize(data.Name, 14, Enum.Font.SourceSans, Vector2.new(62, 999999))).Y;
 		app.Main.Size = UDim2.new(1, 0, 0, math.clamp(46 + ySize, 60, 74));
 		app.Main.AppName.Text = data.Name;
-		app.Main.InputBegan:Connect(function(input)
+		Main.Connect(app.Main.InputBegan, function(input)
 			if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 				app.Main.BackgroundTransparency = 0;
 				app.Main.BackgroundColor3 = Settings.Theme.ButtonHover;
 			end;
 		end);
-		app.Main.InputEnded:Connect(function(input)
+		Main.Connect(app.Main.InputEnded, function(input)
 			if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 				app.Main.BackgroundTransparency = data.Open and 0 or 1;
 				app.Main.BackgroundColor3 = Settings.Theme.Button;
 			end;
 		end);
-		app.Main.MouseButton1Click:Connect(function()
+		Main.Connect(app.Main.MouseButton1Click, function()
 			if data.Open then
 				disable();
 			else
@@ -17757,10 +17968,10 @@ Main = (function()
 		end);
 		local window = data.Window;
 		if window then
-			window.OnActivate:Connect(function()
+			Main.Connect(window.OnActivate, function()
 				enable(true);
 			end);
-			window.OnDeactivate:Connect(function()
+			Main.Connect(window.OnDeactivate, function()
 				disable(true);
 			end);
 		end;
@@ -17810,7 +18021,7 @@ Main = (function()
 				end;
 			end))();
 		else
-			Main.MainGuiMouseEvent = Main.TrackConn(service.UserInputService.InputBegan:Connect(function(input)
+			Main.MainGuiMouseEvent = Main.Connect(service.UserInputService.InputBegan, function(input)
 				local clickedSettingsMenu = Main.SettingsMenuContext and Main.SettingsMenuContext.GuiElems and Main.SettingsMenuContext.GuiElems.Main and Lib.CheckMouseInGui(Main.SettingsMenuContext.GuiElems.Main);
 				local clickedInfoMenu = Main.InfoMenuContext and Main.InfoMenuContext.GuiElems and Main.InfoMenuContext.GuiElems.Main and Lib.CheckMouseInGui(Main.InfoMenuContext.GuiElems.Main);
 				local clickedTransparencySlider = Main.SettingsTransparencySlider and Main.SettingsTransparencySlider.Visible and Lib.CheckMouseInGui(Main.SettingsTransparencySlider);
@@ -17820,7 +18031,7 @@ Main = (function()
 					end;
 					Main.SetMainGuiOpen(false);
 				end;
-			end));
+			end);
 		end;
 	end;
 	Main.Exit = function(keepDexState)
@@ -17828,6 +18039,26 @@ Main = (function()
 			return;
 		end;
 		Main.__DexExiting = true;
+		Main.Generation += 1
+		for _, conn in Main.ConnList do pcall(function() conn:Disconnect() end) end
+		table.clear(Main.ConnList)
+		table.clear(Main.ConnSet)
+		local current = nativeCo.running()
+		for thread in Main.Threads do
+			if thread ~= current and nativeCo.status(thread) ~= "dead" then pcall(nativeTask.cancel, thread) end
+		end
+		table.clear(Main.Threads)
+		for _, app in Apps do
+			if type(app.Destroy) == "function" then pcall(app.Destroy, app) end
+		end
+		if Lib and Lib.Window and Lib.Window.Shutdown then pcall(Lib.Window.Shutdown) end
+		if __NAUIProtector and type(__NAUIProtector.cleanup) == "function" then pcall(__NAUIProtector.cleanup) end
+		for obj in Main.Resources do pcall(obj.Destroy, obj) end
+		table.clear(Main.Resources)
+		table.clear(nodes)
+		if selection then table.clear(selection.List) table.clear(selection.Map) end
+		selection = nil
+		table.clear(Apps)
 		Main.__DexLoaded = false;
 		Main.__DexInitStarted = keepDexState == true;
 
@@ -17915,6 +18146,7 @@ Main = (function()
 		Properties = nil;
 		ScriptViewer = nil;
 		Notebook = nil;
+		Lib = nil;
 
 		if Main.__DexState then
 			if keepDexState == true then
@@ -17929,6 +18161,11 @@ Main = (function()
 				Main.__DexState.State = "dead";
 				DexState.Clear(Main.__DexState);
 				Main.__DexState = nil;
+				_dex_boot.main = nil
+				if _dex_boot.privateRoot.dex == _dex_env then _dex_boot.privateRoot.dex = nil end
+				if not next(_dex_boot.privateRoot) and rawget(_dex_boot.regHost, "__dexplusplus_private") == _dex_boot.privateRoot then
+					rawset(_dex_boot.regHost, "__dexplusplus_private", nil)
+				end
 			end;
 		end;
 	end;
@@ -18260,17 +18497,17 @@ Main = (function()
 		openButton.BackgroundTransparency = 0.2;
 		openButton.MainFrame.Size = UDim2.new(0, 0, 0, 0);
 		openButton.MainFrame.Visible = false;
-		openButton.MouseButton1Click:Connect(function()
+		Main.Connect(openButton.MouseButton1Click, function()
 			Main.SetMainGuiOpen(not Main.MainGuiOpen);
 		end);
-		openButton.InputBegan:Connect(function(input)
+		Main.Connect(openButton.InputBegan, function(input)
 			if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 				(service.TweenService:Create(Main.MainGui.OpenButton, TweenInfo.new(0, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 					BackgroundTransparency = 0
 				})):Play();
 			end;
 		end);
-		openButton.InputEnded:Connect(function(input)
+		Main.Connect(openButton.InputEnded, function(input)
 			if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 				(service.TweenService:Create(Main.MainGui.OpenButton, TweenInfo.new(0, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 					BackgroundTransparency = Main.MainGuiOpen and 0 or 0.2
@@ -18479,32 +18716,32 @@ Main = (function()
 				Name = "Fixed, updated, and reworked by ltseverydayyou"
 			});
 		end;
-		transparencyTrack.InputBegan:Connect(function(input)
+		Main.Connect(transparencyTrack.InputBegan, function(input)
 			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 				transparencyDragging = true;
 				setTransparencyFromPosition(input.Position.X);
 			end;
 		end);
-		transparencyTrack.InputChanged:Connect(function(input)
+		Main.Connect(transparencyTrack.InputChanged, function(input)
 			if transparencyDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
 				setTransparencyFromPosition(input.Position.X);
 			end;
 		end);
-		transparencyTrack.InputEnded:Connect(function(input)
+		Main.Connect(transparencyTrack.InputEnded, function(input)
 			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 				transparencyDragging = false;
 			end;
 		end);
-		Main.TrackConn(service.UserInputService.InputChanged:Connect(function(input)
+		Main.Connect(service.UserInputService.InputChanged, function(input)
 			if transparencyDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
 				setTransparencyFromPosition(input.Position.X);
 			end;
-		end));
-		Main.TrackConn(service.UserInputService.InputEnded:Connect(function(input)
+		end);
+		Main.Connect(service.UserInputService.InputEnded, function(input)
 			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 				transparencyDragging = false;
 			end;
-		end));
+		end);
 		local guiSelectorScopes = {
 			"PlayerGui",
 			"CoreGui",
@@ -18689,8 +18926,8 @@ Main = (function()
 			local btnSize = infoButton.AbsoluteSize;
 			infoMenu:Show(btnPos.X - 236 + btnSize.X, btnPos.Y + btnSize.Y + 2);
 		end;
-		settingsButton.MouseButton1Click:Connect(showSettingsMenu);
-		infoButton.MouseButton1Click:Connect(showInfoMenu);
+		Main.Connect(settingsButton.MouseButton1Click, showSettingsMenu);
+		Main.Connect(infoButton.MouseButton1Click, showInfoMenu);
 		if Explorer and Explorer.Window and (not isStubModule(Explorer)) then
 			Main.CreateApp({
 				Name = "Explorer",
@@ -19026,7 +19263,7 @@ Main = (function()
 				OnClick = function(callback)
 					if callback then
 						local mouse = Main.Mouse;
-						cptsOnMouseClick = Main.TrackConn(mouse.Button1Down:Connect(function()
+						cptsOnMouseClick = Main.Connect(mouse.Button1Down, function()
 							pcall(function()
 								local object = mouse.Target;
 								if nodes[object] then
@@ -19034,7 +19271,7 @@ Main = (function()
 									Explorer.ViewNode(nodes[object]);
 								end;
 							end);
-						end));
+						end);
 					elseif cptsOnMouseClick ~= nil then
 						cptsOnMouseClick:Disconnect();
 						cptsOnMouseClick = nil;
@@ -19108,7 +19345,7 @@ Main = (function()
 				OnClick = function(callback)
 					if callback then
 						guiSelStop();
-						cgtsBegan = Main.TrackConn(service.UserInputService.InputBegan:Connect(function(input)
+						cgtsBegan = Main.Connect(service.UserInputService.InputBegan, function(input)
 							if not guiSelInput(input) then
 								return;
 							end;
@@ -19121,8 +19358,8 @@ Main = (function()
 							cgtsInput = input;
 							cgtsStart = Vector2.new(x, y);
 							cgtsMoved = false;
-						end));
-						cgtsChanged = Main.TrackConn(service.UserInputService.InputChanged:Connect(function(input)
+						end);
+						cgtsChanged = Main.Connect(service.UserInputService.InputChanged, function(input)
 							if not cgtsStart then
 								return;
 							end;
@@ -19137,8 +19374,8 @@ Main = (function()
 							if dx * dx + dy * dy > 100 then
 								cgtsMoved = true;
 							end;
-						end));
-						cgtsEnded = Main.TrackConn(service.UserInputService.InputEnded:Connect(function(input)
+						end);
+						cgtsEnded = Main.Connect(service.UserInputService.InputEnded, function(input)
 							if input ~= cgtsInput then
 								return;
 							end;
@@ -19150,7 +19387,7 @@ Main = (function()
 							if not moved then
 								pcall(guiSelPick, x, y);
 							end;
-						end));
+						end);
 					else
 						guiSelStop();
 					end;
@@ -19358,6 +19595,8 @@ Main.__DexInitStarted = true;
 Main.SessionId = Main.SessionId or tostring(math.random(1, 1000000000));
 
 dexState.Main = Main;
+dexState.Patch = _dex_boot.patch
+dexState.Build = _dex_boot.kind
 dexState.State = "starting";
 dexState.StartedAt = os.clock();
 dexState.SessionId = Main.SessionId;
@@ -19375,8 +19614,10 @@ if okInit then
 else
 	Main.__DexLoaded = false;
 	Main.__DexInitStarted = false;
-	dexState.State = "dead";
-	DexState.Clear(dexState);
-	Main.__DexState = nil;
+	Main.Exit();
 	error(initErr);
 end;
+return dexState
+end
+_dex_boot.hostSetfenv(_dex_run, _dex_boot.runtimeEnv)
+return _dex_run()

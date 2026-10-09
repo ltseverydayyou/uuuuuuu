@@ -128,7 +128,7 @@ local function main()
 		end
 
 		local okFallback, fallback = pcall(function()
-			return root:QueryDescendants("Instance")
+			return root:GetDescendants()
 		end)
 		if okFallback and type(fallback) == "table" then
 			return fallback
@@ -147,11 +147,12 @@ local function main()
 	local sortingEnabled,autoUpdateSearch
 	local table,math = table,math
 	local nilMap,nilCons = {},{}
+	local dirty = {}
 	local pinnedObjects,pinnedMap,pinnedNodeMap = {},{},{}
 	local stickyHeader
 	local allowFrozenNilSnapshotAdd = false
 	local function connectSignal(signal, func)
-		return trackConn(signal:Connect(func))
+		return Main.Connect(signal, func)
 	end
 	local addObject,removeObject,moveObject = nil,nil,nil
 
@@ -382,6 +383,7 @@ local function main()
 		local par = node.Parent
 		if par then
 			par.HasDel = true
+			dirty[par] = true
 		end
 
 		local function recur(root)
@@ -500,18 +502,18 @@ local function main()
 
 		renameBox.Parent = Explorer.Window.GuiElems.Content.List
 
-		trackConn(renameBox.FocusLost:Connect(function()
+		Main.Connect(renameBox.FocusLost, function()
 			if not renamingNode then return end
 
 			pcall(function() renamingNode.Obj.Name = renameBox.Text end)
 			renamingNode = nil
 			Explorer.Refresh()
-		end))
+		end)
 
-		trackConn(renameBox.Focused:Connect(function()
+		Main.Connect(renameBox.Focused, function()
 			renameBox.SelectionStart = 1
 			renameBox.CursorPosition = #renameBox.Text + 1
-		end))
+		end)
 	end
 
 	Explorer.SetRenamingNode = function(node)
@@ -737,13 +739,13 @@ local function main()
 		local input = service.UserInputService
 		local mouseEvent,releaseEvent
 
-		mouseEvent = trackConn(input.InputChanged:Connect(function(input)
+		mouseEvent = Main.Connect(input.InputChanged, function(input)
 			if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 				move()
 			end
-		end))
+		end)
 
-		releaseEvent = trackConn(input.InputEnded:Connect(function(input)
+		releaseEvent = Main.Connect(input.InputEnded, function(input)
 			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 				releaseEvent:Disconnect()
 				mouseEvent:Disconnect()
@@ -768,7 +770,7 @@ local function main()
 					end
 				end
 			end
-		end))
+		end)
 	end
 
 	Explorer.NewListEntry = function(index)
@@ -777,31 +779,31 @@ local function main()
 
 		local isRenaming = false
 
-		trackConn(newEntry.InputBegan:Connect(function(input)
+		Main.Connect(newEntry.InputBegan, function(input)
 			local node = tree[index + Explorer.Index]
 			if not node or selection.Map[node] or (input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch) then return end
 
 			newEntry.Indent.BackgroundColor3 = Settings.Theme.Button
 			newEntry.Indent.BorderSizePixel = 0
 			newEntry.Indent.BackgroundTransparency = 0
-		end))
+		end)
 
-		trackConn(newEntry.InputEnded:Connect(function(input)
+		Main.Connect(newEntry.InputEnded, function(input)
 			local node = tree[index + Explorer.Index]
 			if not node or selection.Map[node] or (input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch) then return end
 
 			newEntry.Indent.BackgroundTransparency = 1
-		end))
+		end)
 
-		trackConn(newEntry.MouseButton1Down:Connect(function()
+		Main.Connect(newEntry.MouseButton1Down, function()
 
-		end))
+		end)
 
-		trackConn(newEntry.MouseButton1Up:Connect(function()
+		Main.Connect(newEntry.MouseButton1Up, function()
 
-		end))
+		end)
 
-		trackConn(newEntry.InputBegan:Connect(function(input)
+		Main.Connect(newEntry.InputBegan, function(input)
 			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 				local releaseEvent, mouseEvent
 
@@ -819,14 +821,14 @@ local function main()
 				local listOffsetX = startX - treeFrame.AbsolutePosition.X
 				local listOffsetY = startY - treeFrame.AbsolutePosition.Y
 
-				releaseEvent = trackConn(service.UserInputService.InputEnded:Connect(function(input)
+				releaseEvent = Main.Connect(service.UserInputService.InputEnded, function(input)
 					if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 						releaseEvent:Disconnect()
 						mouseEvent:Disconnect()
 					end
-				end))
+				end)
 
-				mouseEvent = trackConn(service.UserInputService.InputChanged:Connect(function(input)
+				mouseEvent = Main.Connect(service.UserInputService.InputChanged, function(input)
 					if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 						local currentX, currentY
 
@@ -849,15 +851,15 @@ local function main()
 							Explorer.StartDrag(listOffsetX, listOffsetY)
 						end
 					end
-				end))
+				end)
 			end
-		end))
+		end)
 
-		trackConn(newEntry.MouseButton2Down:Connect(function()
+		Main.Connect(newEntry.MouseButton2Down, function()
 
-		end))
+		end)
 
-		trackConn(newEntry.Indent.Expand.InputBegan:Connect(function(input)
+		Main.Connect(newEntry.Indent.Expand.InputBegan, function(input)
 			local node = tree[index + Explorer.Index]
 			if not node or (input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch) then return end
 
@@ -866,9 +868,9 @@ local function main()
 			elseif input.UserInputType == Enum.UserInputType.MouseMovement then
 				Explorer.MiscIcons:DisplayByKey(newEntry.Indent.Expand.Icon, expanded[node] and "Collapse_Over" or "Expand_Over")
 			end
-		end))
+		end)
 
-		trackConn(newEntry.Indent.Expand.InputEnded:Connect(function(input)
+		Main.Connect(newEntry.Indent.Expand.InputEnded, function(input)
 			local node = tree[index + Explorer.Index]
 			if not node or (input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch) then return end
 
@@ -877,16 +879,16 @@ local function main()
 			elseif input.UserInputType == Enum.UserInputType.MouseMovement then
 				Explorer.MiscIcons:DisplayByKey(newEntry.Indent.Expand.Icon, expanded[node] and "Collapse" or "Expand")
 			end
-		end))
+		end)
 
-		trackConn(newEntry.Indent.Expand.MouseButton1Down:Connect(function()
+		Main.Connect(newEntry.Indent.Expand.MouseButton1Down, function()
 			local node = tree[index + Explorer.Index]
 			if not node or #node == 0 then return end
 
 			expanded[node] = not expanded[node]
 			Explorer.Update()
 			Explorer.Refresh()
-		end))
+		end)
 
 		newEntry.Parent = treeFrame
 		return newEntry
@@ -1086,29 +1088,29 @@ local function main()
 
 		if autoUpdateMode < 2 then
 			if Main.Elevated then
-				descendantAddedCon = trackConn(game.DescendantAdded:Connect(addObject))
-				descendantRemovingCon = trackConn(game.DescendantRemoving:Connect(removeObject))
+				descendantAddedCon = Main.Connect(game.DescendantAdded, addObject)
+				descendantRemovingCon = Main.Connect(game.DescendantRemoving, removeObject)
 			else
-				descendantAddedCon = trackConn(game.DescendantAdded:Connect(function(obj) pcall(addObject,obj) end))
-				descendantRemovingCon = trackConn(game.DescendantRemoving:Connect(function(obj) pcall(removeObject,obj) end))
+				descendantAddedCon = Main.Connect(game.DescendantAdded, function(obj) pcall(addObject,obj) end)
+				descendantRemovingCon = Main.Connect(game.DescendantRemoving, function(obj) pcall(removeObject,obj) end)
 			end
 		end
 
 		if autoUpdateMode < 3 then
 			if Settings.Explorer.UseNameWidth then
-				itemChangedCon = trackConn(game.ItemChanged:Connect(function(obj,prop)
+				itemChangedCon = Main.Connect(game.ItemChanged, function(obj,prop)
 					if prop == "Parent" and nodes[obj] then
 						moveObject(obj)
 					elseif prop == "Name" and nodes[obj] then
 						nodes[obj].NameWidth = nil
 					end
-				end))
+				end)
 			else
-				itemChangedCon = trackConn(game.ItemChanged:Connect(function(obj,prop)
+				itemChangedCon = Main.Connect(game.ItemChanged, function(obj,prop)
 					if prop == "Parent" and nodes[obj] then
 						moveObject(obj)
 					end
-				end))
+				end)
 			end
 		end
 	end
@@ -2219,10 +2221,10 @@ local function main()
 		if shortcutInputCon then
 			shortcutInputCon:Disconnect()
 		end
-		shortcutInputCon = trackConn(service.UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
+		shortcutInputCon = Main.Connect(service.UserInputService.InputBegan, function(input, gameProcessedEvent)
 			if gameProcessedEvent then return end
 			Explorer.TryHandleShortcut(input)
-		end))
+		end)
 	end
 
 	Explorer.HideNilInstances = function()
@@ -3085,12 +3087,12 @@ return search]==]
 			Parent = suggestionFrame,
 			Thickness = 1
 		})
-		trackConn(suggestionFrame.MouseEnter:Connect(function()
+		Main.Connect(suggestionFrame.MouseEnter, function()
 			suggestionHover = true
-		end))
-		trackConn(suggestionFrame.MouseLeave:Connect(function()
+		end)
+		Main.Connect(suggestionFrame.MouseLeave, function()
 			suggestionHover = false
-		end))
+		end)
 
 		local function setSuggestionButtonStyle(button, index, hovering)
 			local isPrimary = index == 1
@@ -3220,23 +3222,23 @@ return search]==]
 				CornerRadius = UDim.new(0,6),
 				Parent = button
 			})
-			trackConn(button.MouseEnter:Connect(function()
+			Main.Connect(button.MouseEnter, function()
 				suggestionHover = true
 				setSuggestionButtonStyle(button, index, true)
-			end))
-			trackConn(button.MouseLeave:Connect(function()
+			end)
+			Main.Connect(button.MouseLeave, function()
 				suggestionHover = false
 				setSuggestionButtonStyle(button, index, false)
-			end))
-			trackConn(button.MouseButton1Down:Connect(function()
+			end)
+			Main.Connect(button.MouseButton1Down, function()
 				suggestionPicking = true
-			end))
-			trackConn(button.MouseButton1Click:Connect(function()
+			end)
+			Main.Connect(button.MouseButton1Click, function()
 				local selected = suggestionEntries[index]
 				if selected then
 					applySuggestion(selected)
 				end
-			end))
+			end)
 			suggestionButtons[index] = button
 			return button
 		end
@@ -3276,19 +3278,19 @@ return search]==]
 
 		Lib.ViewportTextBox.convert(searchBox)
 
-		trackConn(searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+		Main.Connect(searchBox:GetPropertyChangedSignal("Text"), function()
 			updateSuggestions()
 			if autoUpdateSearch then
 				Explorer.DoSearch(searchBox.Text)
 			end
-		end))
+		end)
 
-		trackConn(searchBox.Focused:Connect(function()
+		Main.Connect(searchBox.Focused, function()
 			searchFocused = true
 			updateSuggestions()
-		end))
+		end)
 
-		trackConn(searchBox.FocusLost:Connect(function()
+		Main.Connect(searchBox.FocusLost, function()
 			searchFocused = false
 			Explorer.DoSearch(searchBox.Text)
 			task.delay(0.1, function()
@@ -3297,7 +3299,7 @@ return search]==]
 				end
 				suggestionPicking = false
 			end)
-		end))
+		end)
 	end
 
 	Explorer.InitEntryTemplate = function()
@@ -3312,7 +3314,7 @@ return search]==]
 
 		local sys = Lib.ClickSystem.new()
 		sys.AllowedButtons = {1,2}
-		trackConn(sys.OnDown:Connect(function(item,combo,button)
+		Main.Connect(sys.OnDown, function(item,combo,button)
 			local ind = table.find(listEntries,item)
 			if not ind then return end
 			local node = tree[ind + Explorer.Index]
@@ -3387,9 +3389,9 @@ return search]==]
 			end
 
 			Explorer.Refresh()
-		end))
+		end)
 
-		trackConn(sys.OnRelease:Connect(function(item,combo,button,position)
+		Main.Connect(sys.OnRelease, function(item,combo,button,position)
 			local ind = table.find(listEntries,item)
 			if not ind then return end
 			local node = tree[ind + Explorer.Index]
@@ -3411,49 +3413,29 @@ return search]==]
 			elseif button == 2 then
 				Explorer.ShowRightClick(position)
 			end
-		end))
+		end)
 		Explorer.ClickSystem = sys
 	end
 
 	Explorer.InitDelCleaner = function()
 		coroutine.wrap(function()
-			local fw = Lib.FastWait
-			while true do
-				local processed = false
-				local c = 0
-				for _,node in next,nodes do
-					if node.HasDel then
-						local delInd
-						for i = 1,#node do
-							if node[i].Del then
-								delInd = i
-								break
-							end
-						end
-						if delInd then
-							for i = delInd+1,#node do
-								local cn = node[i]
-								if not cn.Del then
-									node[delInd] = cn
-									delInd = delInd+1
-								end
-							end
-							for i = delInd,#node do
-								node[i] = nil
-							end
-						end
-						node.HasDel = false
-						processed = true
-						fw()
+			while not Main.__DexExiting do
+				local count = 0
+				for node in dirty do
+					dirty[node] = nil
+					local size = #node
+					local at = 1
+					for i = 1, size do
+						local child = node[i]
+						if not child.Del then node[at] = child at += 1 end
 					end
-					c = c + 1
-					if c > 10000 then
-						c = 0
-						fw()
-					end
+					for i = at, size do node[i] = nil end
+					node.HasDel = false
+					count += 1
+					if count % 128 == 0 then task.wait() end
 				end
-				if processed and not refreshDebounce then Explorer.PerformRefresh() end
-				fw(0.5)
+				if count > 0 and not refreshDebounce then Explorer.PerformRefresh() end
+				task.wait(0.5)
 			end
 		end)()
 	end
@@ -3554,6 +3536,7 @@ return search]==]
 		end
 		Explorer.OldCamera = nil
 		Explorer.LastSubject = nil
+		table.clear(dirty)
 		table.clear(nodes)
 		table.clear(tree)
 		table.clear(listEntries)
@@ -3592,7 +3575,7 @@ return search]==]
 
 		selection = Lib.Set.new()
 		selection.ShiftSet = {}
-		trackConn(selection.Changed:Connect(Properties.ShowExplorerProps))
+		Main.Connect(selection.Changed, Properties.ShowExplorerProps)
 		Explorer.Selection = selection
 
 		Explorer.InitRightClick()
@@ -3652,18 +3635,18 @@ return search]==]
 		scrollV.WheelIncrement = 3
 		scrollV.Gui.Position = UDim2.new(1,-16,0,23)
 		scrollV:SetScrollFrame(treeFrame)
-		trackConn(scrollV.Scrolled:Connect(function()
+		Main.Connect(scrollV.Scrolled, function()
 			Explorer.Index = scrollV.Index
 			Explorer.Refresh()
-		end))
+		end)
 
 		scrollH = Lib.ScrollBar.new(true)
 		scrollH.Increment = 5
 		scrollH.WheelIncrement = Explorer.EntryIndent
 		scrollH.Gui.Position = UDim2.new(0,0,1,-16)
-		trackConn(scrollH.Scrolled:Connect(function()
+		Main.Connect(scrollH.Scrolled, function()
 			Explorer.Refresh()
-		end))
+		end)
 
 		local window = Lib.Window.new({ignoreGuiInset = false})
 		Explorer.Window = window
@@ -3699,30 +3682,30 @@ return search]==]
 		Explorer.InitRenameBox()
 		Explorer.InitSearch()
 		Explorer.InitDelCleaner()
-		trackConn(selection.Changed:Connect(Explorer.UpdateSelectionVisuals))
-		trackConn(selection.Changed:Connect(Explorer.UpdateCameraFollow))
+		Main.Connect(selection.Changed, Explorer.UpdateSelectionVisuals)
+		Main.Connect(selection.Changed, Explorer.UpdateCameraFollow)
 
 		-- Window events
-		trackConn(window.GuiElems.Main:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+		Main.Connect(window.GuiElems.Main:GetPropertyChangedSignal("AbsoluteSize"), function()
 			if Explorer.Active then
 				Explorer.UpdateView()
 				Explorer.Refresh()
 			end
-		end))
-		trackConn(window.OnActivate:Connect(function()
+		end)
+		Main.Connect(window.OnActivate, function()
 			Explorer.Active = true
 			Explorer.UpdateView()
 			Explorer.Update()
 			Explorer.Refresh()
-		end))
-		trackConn(window.OnRestore:Connect(function()
+		end)
+		Main.Connect(window.OnRestore, function()
 			Explorer.Active = true
 			Explorer.UpdateView()
 			Explorer.Update()
 			Explorer.Refresh()
-		end))
-		trackConn(window.OnDeactivate:Connect(function() Explorer.Active = false end))
-		trackConn(window.OnMinimize:Connect(function() Explorer.Active = false end))
+		end)
+		Main.Connect(window.OnDeactivate, function() Explorer.Active = false end)
+		Main.Connect(window.OnMinimize, function() Explorer.Active = false end)
 
 		-- Settings
 		autoUpdateSearch = Settings.Explorer.AutoUpdateSearch

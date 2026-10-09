@@ -226,14 +226,14 @@ local function MainFunc()
 			DotsBtn.Size = UDim2.new(0, 20, 0.8, 0)
 			DotsBtn.Image = (getcustomasset and isfile and isfile("DEX_REContinued/more_vert_1000dp_FFFFFF_FILL0_wght400_GRAD0_opsz48.png")) and getcustomasset("DEX_REContinued/more_vert_1000dp_FFFFFF_FILL0_wght400_GRAD0_opsz48.png") or 'rbxassetid://71826111118631'
 
-			Main.TrackConn(Btn.MouseEnter:Connect(function() Btn.BackgroundColor3 = Settings.Theme.ButtonHover end))
-			Main.TrackConn(Btn.MouseLeave:Connect(function() Btn.BackgroundColor3 = Settings.Theme.Main1 end))
+			Main.Connect(Btn.MouseEnter, function() Btn.BackgroundColor3 = Settings.Theme.ButtonHover end)
+			Main.Connect(Btn.MouseLeave, function() Btn.BackgroundColor3 = Settings.Theme.Main1 end)
 
-			Main.TrackConn(Btn.MouseButton1Click:Connect(function()
+			Main.Connect(Btn.MouseButton1Click, function()
 				if IsTable then ViewTableDetail(ObjRef, Name) else ViewFunctionDetail(ObjRef, Name, GetHash(ObjRef)) end
-			end))
+			end)
 
-			Main.TrackConn(DotsBtn.MouseButton1Click:Connect(function()
+			Main.Connect(DotsBtn.MouseButton1Click, function()
 				local MouseX, MouseY = Main.Mouse.X, Main.Mouse.Y
 				ContextMenu:Clear()
 				if IsTable then
@@ -348,7 +348,7 @@ end)
 					end})
 				end
 				ContextMenu:Show(MouseX, MouseY)
-			end))
+			end)
 
 			if CurrentSearch ~= "" then
 				if not (Name:lower():find(CurrentSearch, 1, true) or TypeNote:lower():find(CurrentSearch, 1, true)) then
@@ -500,14 +500,14 @@ end)
 		DepthSave.Text = "Set"
 		DepthSave.Position = UDim2.new(0, 5, 1, -25)
 		DepthSave.Size = UDim2.new(1, -10, 0, 20)
-		Main.TrackConn(DepthSave.OnClick:Connect(function()
+		Main.Connect(DepthSave.OnClick, function()
 			local Num = tonumber(DepthInput:GetText())
 			if Num then
 			    EnvExplorer.MaxDepth = Num
 			    BuildFilterMenu()
 			    DepthWindow:Hide()
 			end
-		end))
+		end)
 		DepthWindow:Add(DepthSave)
 
 		DetailWindow = Lib.Window.new()
@@ -520,9 +520,9 @@ end)
 		DetailCopyBtn.BackgroundTransparency = 1
 		DetailCopyBtn.Text = "Copy to Clipboard"
 		DetailCopyBtn.TextColor3 = Color3.new(1,1,1)
-		Main.TrackConn(DetailCopyBtn.MouseButton1Click:Connect(function()
+		Main.Connect(DetailCopyBtn.MouseButton1Click, function()
 			if env.setclipboard then env.setclipboard(DetailCodeFrame:GetText()) end
-		end))
+		end)
 
 		DetailCodeFrame = Lib.CodeFrame.new()
 		DetailCodeFrame.Frame.Position = UDim2.new(0, 0, 0, 20)
@@ -548,9 +548,9 @@ end)
 		HookCopyBtn.Text = "Copy to Clipboard"
 		HookCopyBtn.TextColor3 = Color3.new(1, 1, 1)
 
-		Main.TrackConn(HookCopyBtn.MouseButton1Click:Connect(function()
+		Main.Connect(HookCopyBtn.MouseButton1Click, function()
 			if env.setclipboard then env.setclipboard(HookCodeFrame:GetText()) end
-		end))
+		end)
 
 		local HookExecuteBtn = Instance.new("TextButton", HookWindow.GuiElems.Content)
 		HookExecuteBtn.Size = UDim2.new(1, 0, 0, 20)
@@ -559,9 +559,9 @@ end)
 		HookExecuteBtn.BorderSizePixel = 0
 		HookExecuteBtn.Text = "Execute"
 		HookExecuteBtn.TextColor3 = Color3.new(1, 1, 1)
-		Main.TrackConn(HookExecuteBtn.MouseButton1Click:Connect(function()
+		Main.Connect(HookExecuteBtn.MouseButton1Click, function()
 			if env.loadstring then env.loadstring(HookCodeFrame:GetText(), "DEX")() end
-		end))
+		end)
 
 		local TopBar = Instance.new("Frame", Window.GuiElems.Content)
 		TopBar.Size = UDim2.new(1, 0, 0, 24)
@@ -579,9 +579,9 @@ end)
 		RefreshBtn.Position = UDim2.new(1, -22, 0, 3)
 		RefreshBtn.BackgroundTransparency = 1
 		RefreshBtn.Image = (getcustomasset and isfile and isfile("DEX_REContinued/Images/refresh-icon3.png")) and getcustomasset("DEX_REContinued/Images/refresh-icon3.png") or "rbxassetid://5642310344"
-		Main.TrackConn(RefreshBtn.MouseButton1Click:Connect(function()
+		Main.Connect(RefreshBtn.MouseButton1Click, function()
 			EnvExplorer.Refresh()
-		end))
+		end)
 
 		FilterBtn = Instance.new("TextButton", TopBar)
 		FilterBtn.Size = UDim2.new(0, 42, 0, 18)
@@ -593,10 +593,10 @@ end)
 		FilterBtn.TextSize = 14
 		FilterBtn.Text = "Filter"
 
-		Main.TrackConn(FilterBtn.MouseButton1Click:Connect(function()
+		Main.Connect(FilterBtn.MouseButton1Click, function()
 			local MouseX, MouseY = Main.Mouse.X, Main.Mouse.Y
 			FilterMenu:Show(MouseX, MouseY)
-		end))
+		end)
 
 		ListFrame = Instance.new("ScrollingFrame", Window.GuiElems.Content)
 		ListFrame.Size = UDim2.new(1, 0, 1, -24)
@@ -608,11 +608,11 @@ end)
 
 		local ListLayout = Instance.new("UIListLayout", ListFrame)
 		ListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-		Main.TrackConn(ListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+		Main.Connect(ListLayout:GetPropertyChangedSignal("AbsoluteContentSize"), function()
 			ListFrame.CanvasSize = UDim2.new(0, 0, 0, ListLayout.AbsoluteContentSize.Y)
-		end))
+		end)
 
-		Main.TrackConn(SearchBox.TextBox:GetPropertyChangedSignal("Text"):Connect(function()
+		Main.Connect(SearchBox.TextBox:GetPropertyChangedSignal("Text"), function()
 			local Txt = SearchBox.TextBox.Text:lower()
 			for _, Item in pairs(ListItems) do
 				if Txt == "" or Item.Name:lower():find(Txt, 1, true) or Item.Note:lower():find(Txt, 1, true) then
@@ -621,7 +621,7 @@ end)
 					Item.Gui.Visible = false
 				end
 			end
-		end))
+		end)
 	end
 
 	return EnvExplorer

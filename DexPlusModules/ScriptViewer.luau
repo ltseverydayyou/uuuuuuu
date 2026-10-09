@@ -90,7 +90,7 @@ local function safeConnect(signal, callback)
 		return nil
 	end
 
-	local ok, conn = pcall(connect, signal, callback)
+	local ok, conn = pcall(Main.Connect, signal, callback)
 	if ok then
 		return trackConn(conn)
 	end

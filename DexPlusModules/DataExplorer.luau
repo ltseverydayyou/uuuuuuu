@@ -86,10 +86,10 @@ local function MainFunc()
 		Btn.Text = "Confirm"
 		Btn.Position = UDim2.new(0, 5, 1, -25)
 		Btn.Size = UDim2.new(1, -10, 0, 20)
-		Main.TrackConn(Btn.OnClick:Connect(function()
+		Main.Connect(Btn.OnClick, function()
 			Callback(Box:GetText())
 			PromptWin:Close()
-		end))
+		end)
 		PromptWin:Add(Btn)
 		PromptWin:Show()
 	end
@@ -407,10 +407,10 @@ local function ViewTableDetail(Tab, Name)
 		end
 
 		local function SetupLongPress(btn, callback)
-			Main.TrackConn(btn.MouseButton2Click:Connect(callback))
+			Main.Connect(btn.MouseButton2Click, callback)
 			local holding = false
 			local pressPos = nil
-			Main.TrackConn(btn.InputBegan:Connect(function(input)
+			Main.Connect(btn.InputBegan, function(input)
 				if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
 					holding = true
 					pressPos = input.Position
@@ -421,19 +421,19 @@ local function ViewTableDetail(Tab, Name)
 						end
 					end)
 				end
-			end))
-			Main.TrackConn(btn.InputEnded:Connect(function(input)
+			end)
+			Main.Connect(btn.InputEnded, function(input)
 				if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
 					holding = false
 				end
-			end))
-			Main.TrackConn(btn.InputChanged:Connect(function(input)
+			end)
+			Main.Connect(btn.InputChanged, function(input)
 				if holding and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) then
 					if pressPos and (input.Position - pressPos).Magnitude > 10 then
 						holding = false
 					end
 				end
-			end))
+			end)
 		end
 
 		for _, Result in pairs(DataExplorer.CurrentResults) do
@@ -459,13 +459,13 @@ local function ViewTableDetail(Tab, Name)
 			HeaderBtn.TextXAlignment = Enum.TextXAlignment.Left
 			HeaderBtn.AutoButtonColor = false
 
-			Main.TrackConn(HeaderBtn.MouseButton1Click:Connect(function()
+			Main.Connect(HeaderBtn.MouseButton1Click, function()
 				if Result.Type == "Function" then
 					ViewFunctionDetail(Result.Ref, Result.Name, GetHash(Result.Ref))
 				else
 					ViewTableDetail(Result.Ref, Result.Name)
 				end
-			end))
+			end)
 
 			SetupLongPress(HeaderBtn, function()
 				DataExplorer.SelectedResult = Result
@@ -515,10 +515,10 @@ local MatchesContainer = Instance.new("Frame", MainBox)
 					MatchBtn.Text = "    " .. DisplayVal .. " " .. DisplayName .. "(" .. Match.ValueType .. ") - " .. Match.LocationType .. " " .. tostring(Match.Index)
 				end)
 
-				Main.TrackConn(MatchBtn.MouseEnter:Connect(function() MatchBtn.BackgroundColor3 = Settings.Theme.ButtonHover end))
-				Main.TrackConn(MatchBtn.MouseLeave:Connect(function() MatchBtn.BackgroundColor3 = Settings.Theme.Button end))
+				Main.Connect(MatchBtn.MouseEnter, function() MatchBtn.BackgroundColor3 = Settings.Theme.ButtonHover end)
+				Main.Connect(MatchBtn.MouseLeave, function() MatchBtn.BackgroundColor3 = Settings.Theme.Button end)
 
-				Main.TrackConn(MatchBtn.MouseButton1Click:Connect(function()
+				Main.Connect(MatchBtn.MouseButton1Click, function()
 					if Match.ValueType == "function" then
 						ViewFunctionDetail(Match.Value, Match.ValueName or "Match", GetHash(Match.Value))
 					elseif Match.ValueType == "table" then
@@ -534,7 +534,7 @@ local MatchesContainer = Instance.new("Frame", MainBox)
 						DetailCodeFrame:SetText("-- Unsupported Type for Detailed View: " .. Match.ValueType .. "\n-- Please view the parent container instead.")
 						DetailWindow:Show()
 					end
-				end))
+				end)
 
 				SetupLongPress(MatchBtn, function()
 					DataExplorer.SelectedResult = Result
@@ -983,9 +983,9 @@ local func = findfunc("]] .. tostring(Result.Ref) .. [[")
 		DetailCopyBtn.BackgroundTransparency = 1
 		DetailCopyBtn.Text = "Copy to Clipboard"
 		DetailCopyBtn.TextColor3 = Color3.new(1,1,1)
-		Main.TrackConn(DetailCopyBtn.MouseButton1Click:Connect(function()
+		Main.Connect(DetailCopyBtn.MouseButton1Click, function()
 			if env.setclipboard then env.setclipboard(DetailCodeFrame:GetText()) end
-		end))
+		end)
 
 		DetailCodeFrame = Lib.CodeFrame.new()
 		DetailCodeFrame.Frame.Position = UDim2.new(0, 0, 0, 20)
@@ -1068,7 +1068,7 @@ local func = findfunc("]] .. tostring(Result.Ref) .. [[")
 		RefreshBtn.Position = UDim2.new(1, -22, 0, 3)
 		RefreshBtn.BackgroundTransparency = 1
 		RefreshBtn.Image = (getcustomasset and isfile and isfile("DEX_REContinued/Images/refresh-icon3.png")) and getcustomasset("DEX_REContinued/Images/refresh-icon3.png") or "rbxassetid://5642310344"
-		Main.TrackConn(RefreshBtn.MouseButton1Click:Connect(DataExplorer.Refresh))
+		Main.Connect(RefreshBtn.MouseButton1Click, DataExplorer.Refresh)
 
 		FilterBtn = Instance.new("TextButton", TopBar)
 		FilterBtn.Size = UDim2.new(0, 42, 0, 18)
@@ -1079,9 +1079,9 @@ local func = findfunc("]] .. tostring(Result.Ref) .. [[")
 		FilterBtn.Font = Enum.Font.SourceSans
 		FilterBtn.TextSize = 14
 		FilterBtn.Text = "Filter"
-		Main.TrackConn(FilterBtn.MouseButton1Click:Connect(function()
+		Main.Connect(FilterBtn.MouseButton1Click, function()
 			FilterMenu:Show(Main.Mouse.X, Main.Mouse.Y)
-		end))
+		end)
 
 		ListFrame = Instance.new("ScrollingFrame", Window.GuiElems.Content)
 		ListFrame.Size = UDim2.new(1, 0, 1, -24)
@@ -1094,9 +1094,9 @@ local func = findfunc("]] .. tostring(Result.Ref) .. [[")
 		local ListLayout = Instance.new("UIListLayout", ListFrame)
 		ListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 		ListLayout.Padding = UDim.new(0, 4)
-		Main.TrackConn(ListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+		Main.Connect(ListLayout:GetPropertyChangedSignal("AbsoluteContentSize"), function()
 			ListFrame.CanvasSize = UDim2.new(0, 0, 0, ListLayout.AbsoluteContentSize.Y + 10)
-		end))
+		end)
 
 		local Padding = Instance.new("UIPadding", ListFrame)
 		Padding.PaddingTop = UDim.new(0, 4)
@@ -1104,9 +1104,9 @@ local func = findfunc("]] .. tostring(Result.Ref) .. [[")
 		Padding.PaddingLeft = UDim.new(0, 4)
 		Padding.PaddingRight = UDim.new(0, 4)
 
-		Main.TrackConn(SearchBox.TextBox.FocusLost:Connect(function(Enter)
+		Main.Connect(SearchBox.TextBox.FocusLost, function(Enter)
 			if Enter then DataExplorer.Refresh() end
-		end))
+		end)
 	end
 
 	return DataExplorer

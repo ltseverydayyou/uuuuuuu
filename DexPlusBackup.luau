@@ -1,4 +1,129 @@
 --!nonstrict
+local _dex_boot = {
+	hostEnv = type(__NARootHost) == "table" and __NARootHost or ((getgenv and getgenv()) or _G or {}),
+	launch = getfenv(),
+	patch = "2026-10-09-private-cleanup",
+	kind = "modular",
+}
+_dex_boot.hostGetfenv = _dex_boot.hostEnv.getfenv or getfenv
+_dex_boot.hostSetfenv = _dex_boot.hostEnv.setfenv or setfenv
+_dex_boot.hostGetgenv = _dex_boot.hostEnv.getgenv or getgenv
+_dex_boot.hostLoadstring = _dex_boot.hostEnv.loadstring or loadstring or load
+_dex_boot.hostLoadfile = _dex_boot.hostEnv.loadfile or loadfile
+if type(_dex_boot.hostSetfenv) ~= "function" then
+	error("Dex requires setfenv for its private environment", 0)
+end
+_dex_boot.ensureTable = function(host, key)
+	local value = rawget(host, key)
+	if type(value) ~= "table" then
+		value = {}
+		rawset(host, key, value)
+	end
+	return value
+end
+do
+	local dbg = _dex_boot.hostEnv.debug or debug
+	for _, reader in {getreg, getregistry, dbg and dbg.getregistry} do
+		if type(reader) == "function" then
+			local ok, reg = pcall(reader)
+			if ok and type(reg) == "table" then
+				local saved, value = pcall(_dex_boot.ensureTable, reg, "__dexplusplus_private")
+				local again, check = pcall(reader)
+				if saved and again and type(check) == "table" and rawget(check, "__dexplusplus_private") == value then
+					_dex_boot.privateRoot = value
+					_dex_boot.regHost = reg
+					break
+				end
+			end
+		end
+	end
+	if not _dex_boot.privateRoot then
+		_dex_boot.privateRoot = _dex_boot.ensureTable(_dex_boot.hostEnv, "__dexplusplus_private")
+		_dex_boot.regHost = _dex_boot.hostEnv
+	end
+end
+do
+	local slot = rawget(_dex_boot.privateRoot, "dex")
+	local seen = {}
+	for _, host in {slot, _dex_boot.hostEnv, _dex_boot.launch, _G, shared} do
+		if type(host) == "table" then
+			local state = rawget(host, "__DEXPP_STATE") or rawget(host, "__DEXPP")
+			local main = type(state) == "table" and rawget(state, "Main")
+			if type(main) == "table" and not seen[main] then
+				seen[main] = true
+				local gui = rawget(main, "MainGui")
+				local live = false
+				if typeof(gui) == "Instance" then
+					local ok, parent = pcall(function() return gui.Parent end)
+					live = ok and parent ~= nil
+				end
+				local age = os.clock() - (tonumber(state.StartedAt) or -math.huge)
+				live = live or (main.__DexInitStarted == true and age <= 30)
+				if host == slot and state.Patch == _dex_boot.patch and state.Build == _dex_boot.kind and live and not main.__DexExiting then
+					if main.__DexLoaded and main.SetMainGuiOpen then pcall(main.SetMainGuiOpen, true) end
+					return state
+				end
+				if type(main.Exit) == "function" then
+					local ok, err = pcall(main.Exit)
+					if not ok then error("Dex previous session cleanup failed: " .. tostring(err), 0) end
+				end
+				for _, key in {"__DEXPP_STATE", "__DEXPP"} do
+					if rawget(host, key) == state then rawset(host, key, nil) end
+				end
+			end
+		end
+	end
+end
+local _dex_env = {shared = {}, runtime = {}}
+local _dex_shared = _dex_env.shared
+_dex_boot.privateRoot.dex = _dex_env
+_dex_boot.runtimeEnv = _dex_env.runtime
+_dex_boot.runtimeEnv._G = _dex_boot.runtimeEnv
+_dex_boot.runtimeEnv.shared = _dex_shared
+_dex_boot.runtimeEnv.getgenv = function()
+	return _dex_boot.runtimeEnv
+end
+_dex_boot.runtimeEnv.getfenv = function(target)
+	if target == 0 then return _dex_boot.runtimeEnv end
+	if target == nil then target = 1 end
+	if type(target) == "number" and target > 0 then target += 1 end
+	return _dex_boot.hostGetfenv(target)
+end
+_dex_boot.compile = function(source, name)
+	if type(_dex_boot.hostLoadstring) ~= "function" then return nil, "loadstring unavailable" end
+	local fn, err = _dex_boot.hostLoadstring(source, name)
+	if type(fn) ~= "function" then return nil, err end
+	local ok, envErr = pcall(_dex_boot.hostSetfenv, fn, _dex_boot.runtimeEnv)
+	if not ok then return nil, tostring(envErr) end
+	return fn
+end
+_dex_boot.runtimeEnv.loadstring = _dex_boot.compile
+_dex_boot.runtimeEnv.load = _dex_boot.compile
+_dex_boot.runtimeEnv.loadfile = function(path)
+	local reader = _dex_boot.hostEnv.readfile or _dex_boot.launch.readfile
+	if type(reader) == "function" then return _dex_boot.compile(reader(path), "@" .. tostring(path)) end
+	if type(_dex_boot.hostLoadfile) ~= "function" then return nil, "loadfile unavailable" end
+	local fn, err = _dex_boot.hostLoadfile(path)
+	if type(fn) ~= "function" then return nil, err end
+	local ok, envErr = pcall(_dex_boot.hostSetfenv, fn, _dex_boot.runtimeEnv)
+	if not ok then return nil, tostring(envErr) end
+	return fn
+end
+setmetatable(_dex_boot.runtimeEnv, {
+	__index = function(_, key)
+		local value = _dex_boot.hostEnv[key]
+		if value ~= nil then return value end
+		return _dex_boot.launch[key]
+	end,
+	__metatable = "Dex environment",
+})
+_dex_boot.runtimeEnv.Instance = setmetatable({new = function(...)
+	local obj = Instance.new(...)
+	local main = _dex_boot.main
+	if main and main.TrackResource then main.TrackResource(obj) end
+	return obj
+end}, {__index = Instance})
+local function _dex_run()
 local unpack = table.unpack or unpack
 local loadstring = loadstring or load
 local newproxy = newproxy or function()
@@ -102,25 +227,7 @@ end;
 
 local DEXPP_STATE_KEY = "__DEXPP_STATE"
 local DEXPP_LEGACY_KEY = "__DEXPP"
-local globalStores = {}
-
-do
-	local seen = {}
-	local function addStore(store)
-		if type(store) == "table" and not seen[store] then
-			seen[store] = true
-			table.insert(globalStores, store)
-		end
-	end
-
-	local okGenv, genv = pcall(function()
-		return (getgenv and getgenv()) or nil
-	end)
-	if okGenv then
-		addStore(genv)
-	end
-	addStore(_G)
-end
+local globalStores = {_dex_env, _dex_shared, _dex_boot.runtimeEnv}
 
 local function syncDexStateReferences(state)
 	for _, store in globalStores do
@@ -207,6 +314,7 @@ do
 		end)
 		return existingState
 	elseif existingState then
+		if existingState.Main and existingState.Main.Exit then pcall(existingState.Main.Exit) end
 		clearDexState(existingState)
 	end
 end
@@ -476,8 +584,8 @@ Main = (function()
 	Main.ConnSet = Main.ConnSet or {}
 
 	Main.Generation = 0
-	Main.Threads = {}
-	Main.Resources = {}
+	Main.Threads = setmetatable({}, {__mode = "k"})
+	Main.Resources = setmetatable({}, {__mode = "k"})
 	Main.Exports = {}
 	local nativeTask, nativeCo = task, coroutine
 	Main.TrackTask = function(thread)
@@ -495,6 +603,7 @@ Main = (function()
 		local gen = Main.Generation
 		local thread
 		if type(fn) == "thread" then
+			if nativeCo.status(fn) == "dead" then return end
 			thread = fn
 		else
 			thread = nativeCo.create(function(...)
@@ -506,11 +615,7 @@ Main = (function()
 			end)
 		end
 		Main.TrackTask(thread)
-		if mode == "delay" then
-			nativeTask.delay(span, thread, ...)
-		else
-			nativeTask[mode](thread, ...)
-		end
+		if mode == "delay" then nativeTask.delay(span, thread, ...) else nativeTask[mode](thread, ...) end
 		if nativeCo.status(thread) == "dead" then Main.Threads[thread] = nil end
 		return thread
 	end
@@ -520,26 +625,34 @@ Main = (function()
 		delay = function(span, fn, ...) return schedule("delay", span, fn, ...) end,
 		cancel = function(thread)
 			Main.Threads[thread] = nil
-			return nativeTask.cancel(thread)
-		end
+			if type(thread) == "thread" and nativeCo.status(thread) ~= "dead" then return nativeTask.cancel(thread) end
+		end,
 	}, {__index = nativeTask})
-	Main.Coroutine = setmetatable({wrap = function(fn)
-		local thread
-		thread = nativeCo.create(function(...)
-			local out = table.pack(pcall(fn, ...))
-			Main.Threads[thread] = nil
-			if not out[1] then error(out[2], 0) end
-			return table.unpack(out, 2, out.n)
-		end)
-		return function(...)
-			if Main.__DexExiting then return end
-			Main.TrackTask(thread)
-			local out = table.pack(nativeCo.resume(thread, ...))
-			if nativeCo.status(thread) == "dead" then Main.Threads[thread] = nil end
-			if not out[1] then error(out[2], 0) end
-			return table.unpack(out, 2, out.n)
-		end
-	end}, {__index = nativeCo})
+	Main.Coroutine = setmetatable({
+		create = function(fn) return Main.TrackTask(nativeCo.create(fn)) end,
+		wrap = function(fn)
+			local gen = Main.Generation
+			local thread
+			thread = nativeCo.create(function(...)
+				if gen ~= Main.Generation or Main.__DexExiting then return end
+				local out = table.pack(pcall(fn, ...))
+				Main.Threads[thread] = nil
+				if not out[1] then error(out[2], 0) end
+				return table.unpack(out, 2, out.n)
+			end)
+			return function(...)
+				if gen ~= Main.Generation or Main.__DexExiting then return end
+				Main.TrackTask(thread)
+				local out = table.pack(nativeCo.resume(thread, ...))
+				if nativeCo.status(thread) == "dead" then Main.Threads[thread] = nil end
+				if not out[1] then error(out[2], 0) end
+				return table.unpack(out, 2, out.n)
+			end
+		end,
+	}, {__index = nativeCo})
+	_dex_boot.main = Main
+	rawset(_dex_boot.runtimeEnv, "task", Main.Tasks)
+	rawset(_dex_boot.runtimeEnv, "coroutine", Main.Coroutine)
 	local task, coroutine = Main.Tasks, Main.Coroutine
 	Main.TrackResource = function(obj)
 		if typeof(obj) == "Instance" then
@@ -564,34 +677,49 @@ Main = (function()
 		end
 		for i = #Main.ConnList, count + 1, -1 do Main.ConnList[i] = nil end
 	end
+	Main.TrackConn = function(conn)
+		if not conn then return conn end
+		if Main.__DexExiting then
+			pcall(function() conn:Disconnect() end)
+			return conn
+		end
+		if Main.ConnSet[conn] then return conn end
+		if #Main.ConnList % 256 == 255 then Main.PruneConnections() end
+		Main.ConnSet[conn] = true
+		Main.ConnList[#Main.ConnList + 1] = conn
+		return conn
+	end
+	Main.WrapCall = function(fn)
+		local gen = Main.Generation
+		return function(...)
+			if gen ~= Main.Generation or Main.__DexExiting then return end
+			local current = nativeCo.running()
+			local tracked = current and Main.Threads[current]
+			if current then Main.Threads[current] = true end
+			local out = table.pack(pcall(fn, ...))
+			if current and not tracked then Main.Threads[current] = nil end
+			if not out[1] then error(out[2], 0) end
+			return table.unpack(out, 2, out.n)
+		end
+	end
+	Main.Connect = function(sig, fn)
+		local connect = sig.Connect or sig.connect
+		return Main.TrackConn(connect(sig, Main.WrapCall(fn)))
+	end
 	Main.TrackGui = function(gui)
 		if typeof(gui) ~= "Instance" then return gui end
 		if Main.__DexExiting then gui:Destroy() return gui end
-		if not table.find(Main.GuiList, gui) then table.insert(Main.GuiList, gui) end
+		if table.find(Main.GuiList, gui) then return gui end
+		Main.GuiList[#Main.GuiList + 1] = gui
+		Main.TrackResource(gui)
+		Main.Connect(gui.Destroying, function()
+			local pos = table.find(Main.GuiList, gui)
+			if pos then table.remove(Main.GuiList, pos) end
+			Main.Resources[gui] = nil
+			if Main.MainGui == gui and not Main.__DexExiting then nativeTask.defer(Main.Exit) end
+		end)
 		if Lib and Lib.WatchGui then Lib.WatchGui(gui) end
 		return gui
-	end
-	Main.TrackConn = function(c)
-		if not c then
-			return c
-		end
-		if Main.__DexExiting then
-			pcall(function()
-				if c.Disconnect then
-					c:Disconnect()
-				elseif c.disconnect then
-					c:disconnect()
-				end
-			end)
-			return c
-		end
-		if Main.ConnSet[c] then
-			return c
-		end
-		if #Main.ConnList % 256 == 255 then Main.PruneConnections() end
-		Main.ConnSet[c] = true
-		table.insert(Main.ConnList, c)
-		return c
 	end
 	local function trackConn(c)
 		return Main.TrackConn(c)
@@ -642,7 +770,7 @@ Main = (function()
 	Main.ModuleHashData = {} -- prevent remote hash fetch; prefer local modules
 	Main.ModuleForceRefresh = false
 	Main.ForceRemoteModules = {Properties = true}
-	Main.ModuleCacheVersion = "2026-10-06-themes-cleanup"
+	Main.ModuleCacheVersion = "2026-10-09-private-cleanup"
 	Main.ModuleRefreshFlagFile = "DexPlusPlus/RefreshModules.txt"
 	Main.SettingsFile = "DexPlusSettings.json"
 	Main.UserSettingsFile = "DexPlusUserSettings.json"
@@ -1029,6 +1157,14 @@ Main = (function()
 				if type(chunk) ~= "function" then
 					return nil, sourceName .. " compile failed: " .. tostring(compileErr)
 				end
+				local setter = _dex_boot.hostSetfenv
+				if type(setter) ~= "function" then
+					return nil, sourceName .. " requires setfenv"
+				end
+				local okEnv, envErr = pcall(setter, chunk, _dex_boot.runtimeEnv)
+				if not okEnv then
+					return nil, sourceName .. " environment failed: " .. tostring(envErr)
+				end
 				local okRun, result = pcall(chunk)
 				if not okRun then
 					return nil, sourceName .. " runtime failed: " .. tostring(result)
@@ -1223,6 +1359,14 @@ Main = (function()
 			chunkLoader = loader
 		end
 
+		local setter = _dex_boot.hostSetfenv
+		if type(setter) ~= "function" then
+			return nil, "plugin requires setfenv"
+		end
+		local okEnv, envErr = pcall(setter, chunkLoader, _dex_boot.runtimeEnv)
+		if not okEnv then
+			return nil, "plugin environment failed: "..tostring(envErr)
+		end
 		local okControl, control = pcall(chunkLoader)
 		if not okControl or type(control) ~= "table" then
 			return nil, "plugin entry returned invalid control object"
@@ -1744,7 +1888,7 @@ Main = (function()
 		env.checkcaller = checkcaller
 		env.getreg = getreg
 		env.getgc = getgc
-		env.getgenv = getgenv
+		env.getgenv = _dex_boot.hostGetgenv or getgenv
 		env.getrenv = getrenv
 		env.getsenv = getsenv
 		env.getscripts = getscripts
@@ -1754,22 +1898,9 @@ Main = (function()
 
 		-- hooks
 		env.ResolveExecutorFunction = function(name)
-			local value
-			if type(getgenv) == "function" then
-				local ok, genv = pcall(getgenv)
-				if ok and type(genv) == "table" then
-					value = rawget(genv, name)
-					if value ~= nil then return value end
-				end
-			end
-			if type(getrenv) == "function" then
-				local ok, renv = pcall(getrenv)
-				if ok and type(renv) == "table" then
-					value = rawget(renv, name)
-					if value ~= nil then return value end
-				end
-			end
-			return rawget(_G, name)
+			local value = _dex_boot.hostEnv[name]
+			if value ~= nil then return value end
+			return _dex_boot.launch[name]
 		end
 
 		env.GetHookFunction = function()
@@ -3136,26 +3267,19 @@ Main = (function()
 
 		applyTheme()
 
-		local rs = service.RunService
-		local fastwait = function(t)
-			if not t then
-				return rs.RenderStepped:Wait()
-			end
-			local st = tick()
-			repeat rs.RenderStepped:Wait() until (tick() - st) >= t
-		end
+		local fastwait = task.wait
 
 		statusText.Text = initStatus
 
 		local function tweenNumber(n,ti,func)
 			local tweenVal = Instance.new("IntValue")
 			tweenVal.Value = 0
-			trackConn(tweenVal.Changed:Connect(func))
+			Main.Connect(tweenVal.Changed, func)
 			local tween = tweenS:Create(tweenVal,ti,{Value = n})
 			tween:Play()
-			trackConn(tween.Completed:Connect(function()
+			Main.Connect(tween.Completed, function()
 				tweenVal:Destroy()
-			end))
+			end)
 		end
 
 		local ti = TweenInfo.new(0.4,Enum.EasingStyle.Quad,Enum.EasingDirection.Out)
@@ -3359,8 +3483,8 @@ Main = (function()
 				return
 			end
 			boundWindow = window
-			trackConn(window.OnActivate:Connect(function() enable(true) end))
-			trackConn(window.OnDeactivate:Connect(function() disable(true) end))
+			Main.Connect(window.OnActivate, function() enable(true) end)
+			Main.Connect(window.OnDeactivate, function() disable(true) end)
 		end
 
 		updateState()
@@ -3369,24 +3493,24 @@ Main = (function()
 		app.Main.Size = UDim2.new(1,0,0,math.clamp(46+ySize,60,74))
 		app.Main.AppName.Text = data.Name
 
-		trackConn(app.Main.InputBegan:Connect(function(input)
+		Main.Connect(app.Main.InputBegan, function(input)
 			if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 				app.Main.BackgroundTransparency = 0
 				app.Main.BackgroundColor3 = Settings.Theme.ButtonHover
 			end
-		end))
+		end)
 
 
-		trackConn(app.Main.InputEnded:Connect(function(input)
+		Main.Connect(app.Main.InputEnded, function(input)
 			if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 				app.Main.BackgroundTransparency = data.Open and 0 or 1
 				app.Main.BackgroundColor3 = Settings.Theme.Button
 			end
-		end))
+		end)
 
-		trackConn(app.Main.MouseButton1Click:Connect(function()
+		Main.Connect(app.Main.MouseButton1Click, function()
 			if data.Open then disable() else enable() end
-		end))
+		end)
 
 		bindWindow(data.Window)
 
@@ -3416,7 +3540,7 @@ Main = (function()
 
 		if settingsWindow and not Main.SettingsButtonBound then
 			Main.SettingsButtonBound = true
-			trackConn(settingsButton.MouseButton1Click:Connect(function()
+			Main.Connect(settingsButton.MouseButton1Click, function()
 				local activeWindow = SettingsWindow and SettingsWindow.Window
 				if not activeWindow then
 					return
@@ -3427,7 +3551,7 @@ Main = (function()
 				else
 					activeWindow:Show()
 				end
-			end))
+			end)
 		end
 	end
 
@@ -4169,12 +4293,16 @@ Main = (function()
 		for _, store in globalStores do
 			addStore(store)
 		end
+		local cfg = rawget(_dex_boot.hostEnv, "DEXPP_MCP_OPTIONS")
+		if type(cfg) == "table" and cfg.publish == true then
+			addStore(_dex_boot.hostEnv)
+		end
 		addStore(rawget(_G, "shared"))
 
 		for _, store in stores do
-			rawset(store, "DEXPP_MCP", bridge)
-			rawset(store, "DexPlusMCP", bridge)
-			rawset(store, "DEX_MCP", bridge)
+			Main.SetExport(store, "DEXPP_MCP", bridge)
+			Main.SetExport(store, "DexPlusMCP", bridge)
+			Main.SetExport(store, "DEX_MCP", bridge)
 		end
 
 		Main.UninstallMCPBridge = function()
@@ -4231,7 +4359,7 @@ Main = (function()
 				end
 			end)()
 		else
-			Main.MainGuiMouseEvent = Main.TrackConn(service.UserInputService.InputBegan:Connect(function(input)
+			Main.MainGuiMouseEvent = Main.Connect(service.UserInputService.InputBegan, function(input)
 				if not Main.MainGui or not openButton then
 					return
 				end
@@ -4241,7 +4369,7 @@ Main = (function()
 
 					Main.SetMainGuiOpen(false)
 				end
-			end))
+			end)
 		end
 	end
 
@@ -4251,6 +4379,9 @@ Main = (function()
 		end
 		Main.__DexExiting = true
 		Main.Generation += 1
+		for _, conn in Main.ConnList do pcall(function() conn:Disconnect() end) end
+		table.clear(Main.ConnList)
+		table.clear(Main.ConnSet)
 		local current = nativeCo.running()
 		for thread in Main.Threads do
 			if thread ~= current and nativeCo.status(thread) ~= "dead" then
@@ -4271,6 +4402,7 @@ Main = (function()
 			end
 		end
 		if Lib and type(Lib.Destroy) == "function" then pcall(Lib.Destroy) end
+		if __NAUIProtector and type(__NAUIProtector.cleanup) == "function" then pcall(__NAUIProtector.cleanup) end
 		for obj in Main.Resources do pcall(obj.Destroy, obj) end
 		table.clear(Main.Resources)
 		for i = #Main.Exports, 1, -1 do
@@ -4278,7 +4410,7 @@ Main = (function()
 			if rawget(entry[1], entry[2]) == entry[4] then rawset(entry[1], entry[2], entry[3]) end
 		end
 		table.clear(Main.Exports)
-		if keepDexState ~= true and type(Main.UninstallMCPBridge) == "function" then
+		if type(Main.UninstallMCPBridge) == "function" then
 			pcall(Main.UninstallMCPBridge)
 		end
 		Main.__DexLoaded = false
@@ -4351,6 +4483,7 @@ Main = (function()
 		DataExplorer = nil
 		DebugExplorer = nil
 		Notebook = nil
+		Lib = nil
 
 		if Main.__DexState then
 			if keepDexState == true then
@@ -4365,6 +4498,13 @@ Main = (function()
 				Main.__DexState.State = "dead"
 				clearDexState(Main.__DexState)
 				Main.__DexState = nil
+				_dex_boot.main = nil
+				if _dex_boot.privateRoot.dex == _dex_env then
+					_dex_boot.privateRoot.dex = nil
+				end
+				if not next(_dex_boot.privateRoot) and rawget(_dex_boot.regHost, "__dexplusplus_private") == _dex_boot.privateRoot then
+					rawset(_dex_boot.regHost, "__dexplusplus_private", nil)
+				end
 			end
 		end
 	end
@@ -4431,12 +4571,7 @@ Main = (function()
 			{20,"TextLabel",{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=1,BorderSizePixel=0,Font=3,Name="AppName",Parent={18},Position=UDim2.new(0,2,0,38),Size=UDim2.new(1,-4,1,-40),Text="Explorer",TextColor3=Color3.new(1,1,1),TextSize=14,TextTransparency=0.10000000149012,TextTruncate=1,TextWrapped=true,TextYAlignment=0,}},
 			{21,"Frame",{BackgroundColor3=Color3.new(0,0.66666668653488,1),BorderSizePixel=0,Name="Highlight",Parent={18},Position=UDim2.new(0,0,1,-2),Size=UDim2.new(1,0,0,2),}},
 		})
-		pcall(function()
-			gui:SetAttribute("DexPlusLoaded", true)
-			if Main.SessionId then
-				gui:SetAttribute("DexPlusSessionId", Main.SessionId)
-			end
-		end)
+
 		Main.MainGui = gui
 		Main.AppsFrame = gui.OpenButton.MainFrame.AppsFrame
 		Main.AppsContainer = Main.AppsFrame.Container
@@ -4448,28 +4583,28 @@ Main = (function()
 		openButton.BackgroundTransparency = 0.2
 		openButton.MainFrame.Size = UDim2.new(0,0,0,0)
 		openButton.MainFrame.Visible = false
-		Main.TrackConn(openButton.MouseButton1Click:Connect(function()
+		Main.Connect(openButton.MouseButton1Click, function()
 			Main.SetMainGuiOpen(not Main.MainGuiOpen)
-		end))
+		end)
 
-		trackConn(openButton.InputBegan:Connect(function(input)
+		Main.Connect(openButton.InputBegan, function(input)
 			if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 				service.TweenService:Create(Main.MainGui.OpenButton,TweenInfo.new(0,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{BackgroundTransparency = 0}):Play()
 			end
-		end))
+		end)
 
-		trackConn(openButton.InputEnded:Connect(function(input)
+		Main.Connect(openButton.InputEnded, function(input)
 			if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
 				service.TweenService:Create(Main.MainGui.OpenButton,TweenInfo.new(0,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{BackgroundTransparency = Main.MainGuiOpen and 0 or 0.2}):Play()
 			end
-		end))
+		end)
 
 		local infoDexIntro, isInfoCD
 
 		openButton.MainFrame.BottomFrame.Settings.Visible = false
 		Main.UpdateSettingsButton()
 
-		trackConn(openButton.MainFrame.BottomFrame.Information.MouseButton1Click:Connect(function()
+		Main.Connect(openButton.MainFrame.BottomFrame.Information.MouseButton1Click, function()
 			local duration = 1
 			local Infos = {
 				"Contributors >>",
@@ -4505,7 +4640,7 @@ Main = (function()
 					isInfoCD = false
 				end)()
 			end
-		end))
+		end)
 
 		-- Create Main Apps
 		local startupSettings = (Settings and Settings.Startup) or (DefaultSettings and DefaultSettings.Startup) or {}
@@ -4873,7 +5008,7 @@ Main = (function()
 		Main.CreateApp({Name = "Click part to select", IconMap = Main.LargeIcons, Icon = 6, OnClick = function(callback)
 			if callback then
 				local mouse = Main.Mouse
-				cptsOnMouseClick = Main.TrackConn(mouse.Button1Down:Connect(function()
+				cptsOnMouseClick = Main.Connect(mouse.Button1Down, function()
 					pcall(function()
 						local object = mouse.Target
 						if nodes[object] then
@@ -4881,7 +5016,7 @@ Main = (function()
 							Explorer.ViewNode(nodes[object])
 						end
 					end)
-				end))
+				end)
 			elseif cptsOnMouseClick ~= nil then
 				cptsOnMouseClick:Disconnect()
 				cptsOnMouseClick = nil
@@ -4955,7 +5090,7 @@ Main = (function()
 		Main.CreateApp({Name = "Click GUI to select", IconMap = Main.MiscIcons, Icon = "SelectChildren", IconSize = UDim2.new(0,32,0,32), IconPosition = UDim2.new(0.5,-16,0,4), OnClick = function(callback)
 			if callback then
 				guiSelStop()
-				cgtsBegan = Main.TrackConn(service.UserInputService.InputBegan:Connect(function(input)
+				cgtsBegan = Main.Connect(service.UserInputService.InputBegan, function(input)
 					if not guiSelInput(input) then
 						return
 					end
@@ -4968,8 +5103,8 @@ Main = (function()
 					cgtsInput = input
 					cgtsStart = Vector2.new(x, y)
 					cgtsMoved = false
-				end))
-				cgtsChanged = Main.TrackConn(service.UserInputService.InputChanged:Connect(function(input)
+				end)
+				cgtsChanged = Main.Connect(service.UserInputService.InputChanged, function(input)
 					if not cgtsStart then
 						return
 					end
@@ -4984,8 +5119,8 @@ Main = (function()
 					if dx * dx + dy * dy > 100 then
 						cgtsMoved = true
 					end
-				end))
-				cgtsEnded = Main.TrackConn(service.UserInputService.InputEnded:Connect(function(input)
+				end)
+				cgtsEnded = Main.Connect(service.UserInputService.InputEnded, function(input)
 					if input ~= cgtsInput then
 						return
 					end
@@ -4997,7 +5132,7 @@ Main = (function()
 					if not moved then
 						pcall(guiSelPick, x, y)
 					end
-				end))
+				end)
 			else
 				guiSelStop()
 			end
@@ -5332,6 +5467,8 @@ Main.__DexInitStarted = true
 Main.SessionId = Main.SessionId or ((Main.GetRandomString and Main.GetRandomString()) or tostring(math.random(1, 1e9)))
 
 dexState.Main = Main
+dexState.Patch = _dex_boot.patch
+dexState.Build = _dex_boot.kind
 dexState.State = "loading"
 dexState.StartedAt = os.clock()
 dexState.SessionId = Main.SessionId
@@ -5352,3 +5489,7 @@ else
 end
 
 --for i,v in Main.MissingEnv do print(i,v) end
+return dexState
+end
+_dex_boot.hostSetfenv(_dex_run, _dex_boot.runtimeEnv)
+return _dex_run()

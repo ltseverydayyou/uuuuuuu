@@ -429,13 +429,13 @@ local function main()
 		scrollbar.Gui.Up.ZIndex = 3
 		scrollbar.Gui.Down.ZIndex = 3
 		
-		trackConn(ListFrame:GetPropertyChangedSignal("AbsoluteWindowSize"):Connect(function()
+		Main.Connect(ListFrame:GetPropertyChangedSignal("AbsoluteWindowSize"), function()
 			if ListFrame.AbsoluteCanvasSize ~= ListFrame.AbsoluteWindowSize then
 				scrollbar.Gui.Visible = true
 			else
 				scrollbar.Gui.Visible = false
 			end
-		end))
+		end)
 		
 		local ListLayout = Instance.new("UIListLayout")
 		ListLayout.Parent = ListFrame
@@ -452,121 +452,121 @@ local function main()
 		AddSeperator("Protection")
 
 		local SafeMode = AddCheckbox("Safe Mode", SaveInstanceArgs.SafeMode)
-		trackConn(SafeMode.OnInput:Connect(function()
+		Main.Connect(SafeMode.OnInput, function()
 			SaveInstanceArgs.SafeMode = SafeMode.Toggled
 			persistSaveConfig()
-		end))
+		end)
 
 		local AntiIdle = AddCheckbox("Anti Idle", SaveInstanceArgs.AntiIdle)
-		trackConn(AntiIdle.OnInput:Connect(function()
+		Main.Connect(AntiIdle.OnInput, function()
 			SaveInstanceArgs.AntiIdle = AntiIdle.Toggled
 			persistSaveConfig()
-		end))
+		end)
 
 		local ShutdownWhenDone = AddCheckbox("Shutdown When Done", SaveInstanceArgs.ShutdownWhenDone)
-		trackConn(ShutdownWhenDone.OnInput:Connect(function()
+		Main.Connect(ShutdownWhenDone.OnInput, function()
 			SaveInstanceArgs.ShutdownWhenDone = ShutdownWhenDone.Toggled
 			persistSaveConfig()
-		end))
+		end)
 
 		local ShowStat = AddCheckbox("Show Status", SaveInstanceArgs.ShowStatus)
-		trackConn(ShowStat.OnInput:Connect(function()
+		Main.Connect(ShowStat.OnInput, function()
 			SaveInstanceArgs.ShowStatus = ShowStat.Toggled
 			persistSaveConfig()
-		end))
+		end)
 
 		local ReadMe = AddCheckbox("Write ReadMe", SaveInstanceArgs.ReadMe)
-		trackConn(ReadMe.OnInput:Connect(function()
+		Main.Connect(ReadMe.OnInput, function()
 			SaveInstanceArgs.ReadMe = ReadMe.Toggled
 			persistSaveConfig()
-		end))
+		end)
 
 		local DebugMode = AddCheckbox("Debug Mode", SaveInstanceArgs.__DEBUG_MODE)
-		trackConn(DebugMode.OnInput:Connect(function()
+		Main.Connect(DebugMode.OnInput, function()
 			SaveInstanceArgs.__DEBUG_MODE = DebugMode.Toggled
 			persistSaveConfig()
-		end))
+		end)
 
 		local DetailedDebug = AddCheckbox("Write Detailed Debug Log", SaveInstanceArgs.Debug)
-		trackConn(DetailedDebug.OnInput:Connect(function()
+		Main.Connect(DetailedDebug.OnInput, function()
 			SaveInstanceArgs.Debug = DetailedDebug.Toggled
 			persistSaveConfig()
-		end))
+		end)
 
 		local Anonymous = AddCheckbox("Anonymous", SaveInstanceArgs.Anonymous)
-		trackConn(Anonymous.OnInput:Connect(function()
+		Main.Connect(Anonymous.OnInput, function()
 			SaveInstanceArgs.Anonymous = Anonymous.Toggled
 			persistSaveConfig()
-		end))
+		end)
 
 		AddSeperator("Decompile")
 
 		local Mode = AddDropdown("Save Mode", {"optimized", "full", "scripts"}, SaveInstanceArgs.mode, false, 90)
-		trackConn(Mode.OnSelect:Connect(function()
+		Main.Connect(Mode.OnSelect, function()
 			SaveInstanceArgs.mode = Mode.Selected or "optimized"
 			persistSaveConfig()
-		end))
+		end)
 
 		local Decompile = AddCheckbox("Decompile Scripts", not SaveInstanceArgs.noscripts)
-		trackConn(Decompile.OnInput:Connect(function()
+		Main.Connect(Decompile.OnInput, function()
 			SaveInstanceArgs.noscripts = not Decompile.Toggled
 			persistSaveConfig()
-		end))
+		end)
 
 		local ScriptCache = AddCheckbox("Use Script Cache", SaveInstanceArgs.scriptcache)
-		trackConn(ScriptCache.OnInput:Connect(function()
+		Main.Connect(ScriptCache.OnInput, function()
 			SaveInstanceArgs.scriptcache = ScriptCache.Toggled
 			persistSaveConfig()
-		end))
+		end)
 
 		local decompileTimeout = AddTextbox("Decompile Timeout (s)", SaveInstanceArgs.timeout, 40)
-		trackConn(decompileTimeout.TextBox.FocusLost:Connect(function()
+		Main.Connect(decompileTimeout.TextBox.FocusLost, function()
 			SaveInstanceArgs.timeout = tonumber(decompileTimeout.TextBox.Text) or SaveInstanceArgs.timeout
 			decompileTimeout.TextBox.Text = tostring(SaveInstanceArgs.timeout)
 			persistSaveConfig()
-		end))
+		end)
 
 		local DecompileJobless = AddCheckbox("Decompile Jobless", SaveInstanceArgs.DecompileJobless)
-		trackConn(DecompileJobless.OnInput:Connect(function()
+		Main.Connect(DecompileJobless.OnInput, function()
 			SaveInstanceArgs.DecompileJobless = DecompileJobless.Toggled
 			persistSaveConfig()
-		end))
+		end)
 
 		local SaveBytecode = AddCheckbox("Save Bytecode", SaveInstanceArgs.SaveBytecode)
-		trackConn(SaveBytecode.OnInput:Connect(function()
+		Main.Connect(SaveBytecode.OnInput, function()
 			SaveInstanceArgs.SaveBytecode = SaveBytecode.Toggled
 			persistSaveConfig()
-		end))
+		end)
 
 		local DecompilePrepass = AddCheckbox("Decompile Prepass", SaveInstanceArgs.DecompilePrepass)
-		trackConn(DecompilePrepass.OnInput:Connect(function()
+		Main.Connect(DecompilePrepass.OnInput, function()
 			SaveInstanceArgs.DecompilePrepass = DecompilePrepass.Toggled
 			persistSaveConfig()
-		end))
+		end)
 
 		local PrepassConcurrency = AddTextbox("Prepass Concurrency", SaveInstanceArgs.PrepassConcurrency, 40)
-		trackConn(PrepassConcurrency.TextBox.FocusLost:Connect(function()
+		Main.Connect(PrepassConcurrency.TextBox.FocusLost, function()
 			SaveInstanceArgs.PrepassConcurrency = tonumber(PrepassConcurrency.TextBox.Text) or SaveInstanceArgs.PrepassConcurrency
 			PrepassConcurrency.TextBox.Text = tostring(SaveInstanceArgs.PrepassConcurrency)
 			persistSaveConfig()
-		end))
+		end)
 
 		local PrepassRateGap = AddTextbox("Prepass Rate Gap", SaveInstanceArgs.PrepassRateGap, 45)
-		trackConn(PrepassRateGap.TextBox.FocusLost:Connect(function()
+		Main.Connect(PrepassRateGap.TextBox.FocusLost, function()
 			SaveInstanceArgs.PrepassRateGap = tonumber(PrepassRateGap.TextBox.Text) or SaveInstanceArgs.PrepassRateGap
 			PrepassRateGap.TextBox.Text = tostring(SaveInstanceArgs.PrepassRateGap)
 			persistSaveConfig()
-		end))
+		end)
 
 		local PrepassMaxScripts = AddTextbox("Prepass Max Scripts", SaveInstanceArgs.PrepassMaxScripts, 55)
-		trackConn(PrepassMaxScripts.TextBox.FocusLost:Connect(function()
+		Main.Connect(PrepassMaxScripts.TextBox.FocusLost, function()
 			SaveInstanceArgs.PrepassMaxScripts = tonumber(PrepassMaxScripts.TextBox.Text) or SaveInstanceArgs.PrepassMaxScripts
 			PrepassMaxScripts.TextBox.Text = tostring(SaveInstanceArgs.PrepassMaxScripts)
 			persistSaveConfig()
-		end))
+		end)
 
 		local PrepassApiUrl = AddTextbox("Prepass API URL", SaveInstanceArgs.PrepassApiUrl, 180)
-		trackConn(PrepassApiUrl.TextBox.FocusLost:Connect(function()
+		Main.Connect(PrepassApiUrl.TextBox.FocusLost, function()
 			local value = tostring(PrepassApiUrl.TextBox.Text or ""):gsub("^%s+", ""):gsub("%s+$", "")
 			if value ~= "" then
 				SaveInstanceArgs.PrepassApiUrl = value
@@ -574,224 +574,224 @@ local function main()
 				PrepassApiUrl.TextBox.Text = SaveInstanceArgs.PrepassApiUrl
 			end
 			persistSaveConfig()
-		end))
+		end)
 
 		local decompileIgnore = AddTextbox("Decompile Ignore", table.concat(SaveInstanceArgs.DecompileIgnore, ","), 90)
-		trackConn(decompileIgnore.TextBox.FocusLost:Connect(function()
+		Main.Connect(decompileIgnore.TextBox.FocusLost, function()
 			SaveInstanceArgs.DecompileIgnore = parseSimpleList(decompileIgnore.TextBox.Text)
 			persistSaveConfig()
-		end))
+		end)
 
 		AddSeperator("Instances")
 
 		local IgnoreList = AddTextbox("Ignore List", table.concat(SaveInstanceArgs.IgnoreList, ","), 90)
-		trackConn(IgnoreList.TextBox.FocusLost:Connect(function()
+		Main.Connect(IgnoreList.TextBox.FocusLost, function()
 			SaveInstanceArgs.IgnoreList = parseSimpleList(IgnoreList.TextBox.Text)
 			persistSaveConfig()
-		end))
+		end)
 
 		local IgnoreProperties = AddTextbox("Ignore Properties", table.concat(SaveInstanceArgs.IgnoreProperties, ","), 90)
-		trackConn(IgnoreProperties.TextBox.FocusLost:Connect(function()
+		Main.Connect(IgnoreProperties.TextBox.FocusLost, function()
 			SaveInstanceArgs.IgnoreProperties = parseSimpleList(IgnoreProperties.TextBox.Text)
 			persistSaveConfig()
-		end))
+		end)
 
 		local saveCacheInterval = AddTextbox("Save Cache Interval", SaveInstanceArgs.SaveCacheInterval, 70)
-		trackConn(saveCacheInterval.TextBox.FocusLost:Connect(function()
+		Main.Connect(saveCacheInterval.TextBox.FocusLost, function()
 			SaveInstanceArgs.SaveCacheInterval = tonumber(saveCacheInterval.TextBox.Text) or SaveInstanceArgs.SaveCacheInterval
 			saveCacheInterval.TextBox.Text = tostring(SaveInstanceArgs.SaveCacheInterval)
 			persistSaveConfig()
-		end))
+		end)
 
 		local NilObj = AddCheckbox("Save Nil Instances", SaveInstanceArgs.NilInstances)
-		trackConn(NilObj.OnInput:Connect(function()
+		Main.Connect(NilObj.OnInput, function()
 			SaveInstanceArgs.NilInstances = NilObj.Toggled
 			persistSaveConfig()
-		end))
+		end)
 
 		local IgnoreDefaultProperties = AddCheckbox("Ignore Default Properties", SaveInstanceArgs.IgnoreDefaultProperties)
-		trackConn(IgnoreDefaultProperties.OnInput:Connect(function()
+		Main.Connect(IgnoreDefaultProperties.OnInput, function()
 			SaveInstanceArgs.IgnoreDefaultProperties = IgnoreDefaultProperties.Toggled
 			persistSaveConfig()
-		end))
+		end)
 
 		local IgnoreNotArchivable = AddCheckbox("Ignore Not Archivable", SaveInstanceArgs.IgnoreNotArchivable)
-		trackConn(IgnoreNotArchivable.OnInput:Connect(function()
+		Main.Connect(IgnoreNotArchivable.OnInput, function()
 			SaveInstanceArgs.IgnoreNotArchivable = IgnoreNotArchivable.Toggled
 			persistSaveConfig()
-		end))
+		end)
 
 		local IgnorePropsScriptsMode = AddCheckbox("Ignore Non-Script Props In Scripts Mode", SaveInstanceArgs.IgnorePropertiesOfNotScriptsOnScriptsMode)
-		trackConn(IgnorePropsScriptsMode.OnInput:Connect(function()
+		Main.Connect(IgnorePropsScriptsMode.OnInput, function()
 			SaveInstanceArgs.IgnorePropertiesOfNotScriptsOnScriptsMode = IgnorePropsScriptsMode.Toggled
 			persistSaveConfig()
-		end))
+		end)
 
 		local IgnoreSpecialProperties = AddCheckbox("Ignore Special Properties", SaveInstanceArgs.IgnoreSpecialProperties)
-		trackConn(IgnoreSpecialProperties.OnInput:Connect(function()
+		Main.Connect(IgnoreSpecialProperties.OnInput, function()
 			SaveInstanceArgs.IgnoreSpecialProperties = IgnoreSpecialProperties.Toggled
 			persistSaveConfig()
-		end))
+		end)
 
 		local UseUGCValidationService = AddCheckbox("Use UGC Validation Fallback", SaveInstanceArgs.UseUGCValidationService)
-		trackConn(UseUGCValidationService.OnInput:Connect(function()
+		Main.Connect(UseUGCValidationService.OnInput, function()
 			SaveInstanceArgs.UseUGCValidationService = UseUGCValidationService.Toggled
 			persistSaveConfig()
-		end))
+		end)
 
 		local IsolateStarterPlr = AddCheckbox("Isolate StarterPlayer", SaveInstanceArgs.IsolateStarterPlayer)
-		trackConn(IsolateStarterPlr.OnInput:Connect(function()
+		Main.Connect(IsolateStarterPlr.OnInput, function()
 			SaveInstanceArgs.IsolateStarterPlayer = IsolateStarterPlr.Toggled
 			persistSaveConfig()
-		end))
+		end)
 
 		local IsolatePlayers = AddCheckbox("Isolate Players", SaveInstanceArgs.IsolatePlayers)
-		trackConn(IsolatePlayers.OnInput:Connect(function()
+		Main.Connect(IsolatePlayers.OnInput, function()
 			SaveInstanceArgs.IsolatePlayers = IsolatePlayers.Toggled
 			persistSaveConfig()
-		end))
+		end)
 
 		local IsolateLocalPlayer = AddCheckbox("Isolate Local Player", SaveInstanceArgs.IsolateLocalPlayer)
-		trackConn(IsolateLocalPlayer.OnInput:Connect(function()
+		Main.Connect(IsolateLocalPlayer.OnInput, function()
 			SaveInstanceArgs.IsolateLocalPlayer = IsolateLocalPlayer.Toggled
 			persistSaveConfig()
-		end))
+		end)
 
 		local IsolateLocalPlayerCharacter = AddCheckbox("Isolate Local Player Character", SaveInstanceArgs.IsolateLocalPlayerCharacter)
-		trackConn(IsolateLocalPlayerCharacter.OnInput:Connect(function()
+		Main.Connect(IsolateLocalPlayerCharacter.OnInput, function()
 			SaveInstanceArgs.IsolateLocalPlayerCharacter = IsolateLocalPlayerCharacter.Toggled
 			persistSaveConfig()
-		end))
+		end)
 
 		local RemovePlayerCharacters = AddCheckbox("Remove Player Characters", SaveInstanceArgs.RemovePlayerCharacters)
-		trackConn(RemovePlayerCharacters.OnInput:Connect(function()
+		Main.Connect(RemovePlayerCharacters.OnInput, function()
 			SaveInstanceArgs.RemovePlayerCharacters = RemovePlayerCharacters.Toggled
 			persistSaveConfig()
-		end))
+		end)
 
 		local SaveNotCreatable = AddCheckbox("Save Not Creatable", SaveInstanceArgs.SaveNotCreatable)
-		trackConn(SaveNotCreatable.OnInput:Connect(function()
+		Main.Connect(SaveNotCreatable.OnInput, function()
 			SaveInstanceArgs.SaveNotCreatable = SaveNotCreatable.Toggled
 			persistSaveConfig()
-		end))
+		end)
 
 		local AlternativeWritefile = AddCheckbox("Alternative Writefile", SaveInstanceArgs.AlternativeWritefile)
-		trackConn(AlternativeWritefile.OnInput:Connect(function()
+		Main.Connect(AlternativeWritefile.OnInput, function()
 			SaveInstanceArgs.AlternativeWritefile = AlternativeWritefile.Toggled
 			persistSaveConfig()
-		end))
+		end)
 
 		local IgnoreDefaultPlayerScripts = AddCheckbox("Ignore Default PlayerScripts", SaveInstanceArgs.IgnoreDefaultPlayerScripts)
-		trackConn(IgnoreDefaultPlayerScripts.OnInput:Connect(function()
+		Main.Connect(IgnoreDefaultPlayerScripts.OnInput, function()
 			SaveInstanceArgs.IgnoreDefaultPlayerScripts = IgnoreDefaultPlayerScripts.Toggled
 			persistSaveConfig()
-		end))
+		end)
 
 		local IgnoreSharedStrings = AddCheckbox("Ignore SharedStrings", SaveInstanceArgs.IgnoreSharedStrings)
-		trackConn(IgnoreSharedStrings.OnInput:Connect(function()
+		Main.Connect(IgnoreSharedStrings.OnInput, function()
 			SaveInstanceArgs.IgnoreSharedStrings = IgnoreSharedStrings.Toggled
 			persistSaveConfig()
-		end))
+		end)
 
 		local SharedStringOverwrite = AddCheckbox("SharedString Overwrite", SaveInstanceArgs.SharedStringOverwrite)
-		trackConn(SharedStringOverwrite.OnInput:Connect(function()
+		Main.Connect(SharedStringOverwrite.OnInput, function()
 			SaveInstanceArgs.SharedStringOverwrite = SharedStringOverwrite.Toggled
 			persistSaveConfig()
-		end))
+		end)
 
 		local TreatUnionsAsParts = AddCheckbox("Treat Unions As Parts", SaveInstanceArgs.TreatUnionsAsParts)
-		trackConn(TreatUnionsAsParts.OnInput:Connect(function()
+		Main.Connect(TreatUnionsAsParts.OnInput, function()
 			SaveInstanceArgs.TreatUnionsAsParts = TreatUnionsAsParts.Toggled
 			persistSaveConfig()
-		end))
+		end)
 
 		local NotCreatableFixes = AddTextbox("Not Creatable Fixes", table.concat(SaveInstanceArgs.NotCreatableFixes, ","), 110)
-		trackConn(NotCreatableFixes.TextBox.FocusLost:Connect(function()
+		Main.Connect(NotCreatableFixes.TextBox.FocusLost, function()
 			SaveInstanceArgs.NotCreatableFixes = parseSimpleList(NotCreatableFixes.TextBox.Text)
 			persistSaveConfig()
-		end))
+		end)
 
 		AddSeperator("Streaming")
 
 		local SetStreaming = AddCheckbox("Capture Entire Streaming Map", SaveInstanceArgs.SetStreaming)
-		trackConn(SetStreaming.OnInput:Connect(function()
+		Main.Connect(SetStreaming.OnInput, function()
 			SaveInstanceArgs.SetStreaming = SetStreaming.Toggled
 			persistSaveConfig()
-		end))
+		end)
 
 		local StreamingAreaSize = AddTextbox("Streaming Area Size", SaveInstanceArgs.StreamingAreaSize, 55)
-		trackConn(StreamingAreaSize.TextBox.FocusLost:Connect(function()
+		Main.Connect(StreamingAreaSize.TextBox.FocusLost, function()
 			SaveInstanceArgs.StreamingAreaSize = tonumber(StreamingAreaSize.TextBox.Text) or SaveInstanceArgs.StreamingAreaSize
 			StreamingAreaSize.TextBox.Text = tostring(SaveInstanceArgs.StreamingAreaSize)
 			persistSaveConfig()
-		end))
+		end)
 
 		local StreamingRadius = AddTextbox("Streaming Radius", SaveInstanceArgs.StreamingRadius, 55)
-		trackConn(StreamingRadius.TextBox.FocusLost:Connect(function()
+		Main.Connect(StreamingRadius.TextBox.FocusLost, function()
 			SaveInstanceArgs.StreamingRadius = tonumber(StreamingRadius.TextBox.Text) or SaveInstanceArgs.StreamingRadius
 			StreamingRadius.TextBox.Text = tostring(SaveInstanceArgs.StreamingRadius)
 			persistSaveConfig()
-		end))
+		end)
 
 		local StreamingTimeout = AddTextbox("Streaming Request Timeout", SaveInstanceArgs.StreamingTimeout, 45)
-		trackConn(StreamingTimeout.TextBox.FocusLost:Connect(function()
+		Main.Connect(StreamingTimeout.TextBox.FocusLost, function()
 			SaveInstanceArgs.StreamingTimeout = tonumber(StreamingTimeout.TextBox.Text) or SaveInstanceArgs.StreamingTimeout
 			StreamingTimeout.TextBox.Text = tostring(SaveInstanceArgs.StreamingTimeout)
 			persistSaveConfig()
-		end))
+		end)
 
 		local StreamingConcurrency = AddTextbox("Streaming Concurrency", SaveInstanceArgs.StreamingConcurrency or "auto", 45)
-		trackConn(StreamingConcurrency.TextBox.FocusLost:Connect(function()
+		Main.Connect(StreamingConcurrency.TextBox.FocusLost, function()
 			SaveInstanceArgs.StreamingConcurrency = parseAutoNumber(StreamingConcurrency.TextBox.Text, SaveInstanceArgs.StreamingConcurrency)
 			StreamingConcurrency.TextBox.Text = SaveInstanceArgs.StreamingConcurrency == false and "auto" or tostring(SaveInstanceArgs.StreamingConcurrency)
 			persistSaveConfig()
-		end))
+		end)
 
 		local StreamingSlices = AddTextbox("Streaming Slices", SaveInstanceArgs.StreamingSlices, 35)
-		trackConn(StreamingSlices.TextBox.FocusLost:Connect(function()
+		Main.Connect(StreamingSlices.TextBox.FocusLost, function()
 			SaveInstanceArgs.StreamingSlices = tonumber(StreamingSlices.TextBox.Text) or SaveInstanceArgs.StreamingSlices
 			StreamingSlices.TextBox.Text = tostring(SaveInstanceArgs.StreamingSlices)
 			persistSaveConfig()
-		end))
+		end)
 
 		local StreamingMaxTime = AddTextbox("Streaming Max Time", SaveInstanceArgs.StreamingMaxTime or "auto", 45)
-		trackConn(StreamingMaxTime.TextBox.FocusLost:Connect(function()
+		Main.Connect(StreamingMaxTime.TextBox.FocusLost, function()
 			SaveInstanceArgs.StreamingMaxTime = parseAutoNumber(StreamingMaxTime.TextBox.Text, SaveInstanceArgs.StreamingMaxTime)
 			StreamingMaxTime.TextBox.Text = SaveInstanceArgs.StreamingMaxTime == false and "auto" or tostring(SaveInstanceArgs.StreamingMaxTime)
 			persistSaveConfig()
-		end))
+		end)
 
 		local StreamingChunkWait = AddTextbox("Streaming Chunk Wait", SaveInstanceArgs.StreamingChunkWait, 40)
-		trackConn(StreamingChunkWait.TextBox.FocusLost:Connect(function()
+		Main.Connect(StreamingChunkWait.TextBox.FocusLost, function()
 			SaveInstanceArgs.StreamingChunkWait = tonumber(StreamingChunkWait.TextBox.Text) or SaveInstanceArgs.StreamingChunkWait
 			StreamingChunkWait.TextBox.Text = tostring(SaveInstanceArgs.StreamingChunkWait)
 			persistSaveConfig()
-		end))
+		end)
 
 		local StreamingSettleTime = AddTextbox("Streaming Settle Time", SaveInstanceArgs.StreamingSettleTime, 40)
-		trackConn(StreamingSettleTime.TextBox.FocusLost:Connect(function()
+		Main.Connect(StreamingSettleTime.TextBox.FocusLost, function()
 			SaveInstanceArgs.StreamingSettleTime = tonumber(StreamingSettleTime.TextBox.Text) or SaveInstanceArgs.StreamingSettleTime
 			StreamingSettleTime.TextBox.Text = tostring(SaveInstanceArgs.StreamingSettleTime)
 			persistSaveConfig()
-		end))
+		end)
 
 		AddSeperator("Output")
 
 		local NeutralizeLighting = AddCheckbox("Neutralize Lighting", SaveInstanceArgs.NeutralizeLighting)
-		trackConn(NeutralizeLighting.OnInput:Connect(function()
+		Main.Connect(NeutralizeLighting.OnInput, function()
 			SaveInstanceArgs.NeutralizeLighting = NeutralizeLighting.Toggled
 			persistSaveConfig()
-		end))
+		end)
 
 		local ExportObj = AddCheckbox("Export MeshParts To OBJ", SaveInstanceArgs.ExportObj)
-		trackConn(ExportObj.OnInput:Connect(function()
+		Main.Connect(ExportObj.OnInput, function()
 			SaveInstanceArgs.ExportObj = ExportObj.Toggled
 			persistSaveConfig()
-		end))
+		end)
 		AddSeperator("File")
 
 		local FileNameFormat = AddTextbox("File Name Format", getSaveInstanceFormat(), 140)
-		trackConn(FileNameFormat.TextBox.FocusLost:Connect(function()
+		Main.Connect(FileNameFormat.TextBox.FocusLost, function()
 			local newFormat = tostring(FileNameFormat.TextBox.Text or "")
 			if newFormat == "" then
 				newFormat = "{placeName}_{timestamp}"
@@ -808,14 +808,14 @@ local function main()
 			task.spawn(function()
 				refreshFileNamePreview(false, Main.GetPlaceDisplayName())
 			end)
-		end))
+		end)
 
 		AddText("Extra Options JSON can override top-level SaveInstance420 options like Anonymous tables or custom IgnoreList maps.")
 		local ExtraOptions = AddTextbox("Extra Options JSON", ExtraOptionsJson, 180)
-		trackConn(ExtraOptions.TextBox.FocusLost:Connect(function()
+		Main.Connect(ExtraOptions.TextBox.FocusLost, function()
 			ExtraOptionsJson = tostring(ExtraOptions.TextBox.Text or ""):gsub("^%s+", ""):gsub("%s+$", "")
 			persistSaveConfig()
-		end))
+		end)
 		
 		
 		-- Decompile buttons below
@@ -851,7 +851,7 @@ local function main()
 		task.spawn(function()
 			refreshFileNamePreview(false, Main.GetPlaceDisplayName())
 		end)
-		trackConn(Button.MouseButton1Click:Connect(function()
+		Main.Connect(Button.MouseButton1Click, function()
 			local fileName = Main.FormatFileName(FilenameTextBox.TextBox.Text)
 			persistSaveConfig()
 			local saveOptions, optionsErr = buildSaveOptions()
@@ -872,7 +872,7 @@ local function main()
 			end
 			task.wait(5)
 			window:SetTitle("Save Instance")
-		end))
+		end)
 	end
 
 return SaveInstance

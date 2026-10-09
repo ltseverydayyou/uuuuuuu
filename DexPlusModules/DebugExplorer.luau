@@ -131,13 +131,13 @@ local function MainFunc()
 				Lbl.RichText = true
 				Lbl.Text = string.format("<b><font color='%s'>[%s]</font></b> %s <font color='rgb(150,150,150)'>- %s</font>", TypeColor, Hook.Type, Hook.Name, Hook.Action)
 
-				Main.TrackConn(Btn.MouseEnter:Connect(function() Btn.BackgroundColor3 = Settings.Theme.ButtonHover end))
-				Main.TrackConn(Btn.MouseLeave:Connect(function() Btn.BackgroundColor3 = Settings.Theme.Main1 end))
+				Main.Connect(Btn.MouseEnter, function() Btn.BackgroundColor3 = Settings.Theme.ButtonHover end)
+				Main.Connect(Btn.MouseLeave, function() Btn.BackgroundColor3 = Settings.Theme.Main1 end)
 
-				Main.TrackConn(Btn.MouseButton2Click:Connect(function()
+				Main.Connect(Btn.MouseButton2Click, function()
 					DebugExplorer.SelectedHookIndex = Idx
 					LeftContextMenu:Show(Main.Mouse.X, Main.Mouse.Y)
-				end))
+				end)
 
 				Btn.Parent = LeftList
 			end
@@ -194,18 +194,18 @@ local function MainFunc()
 			DotsBtn.Size = UDim2.new(0, 20, 0.8, 0)
 			DotsBtn.Image = (getcustomasset and isfile and isfile("DEX_REContinued/more_vert_1000dp_FFFFFF_FILL0_wght400_GRAD0_opsz48.png")) and getcustomasset("DEX_REContinued/more_vert_1000dp_FFFFFF_FILL0_wght400_GRAD0_opsz48.png") or 'rbxassetid://71826111118631'
 
-			Main.TrackConn(Btn.MouseEnter:Connect(function() Btn.BackgroundColor3 = Settings.Theme.ButtonHover end))
-			Main.TrackConn(Btn.MouseLeave:Connect(function() Btn.BackgroundColor3 = Settings.Theme.Main1 end))
+			Main.Connect(Btn.MouseEnter, function() Btn.BackgroundColor3 = Settings.Theme.ButtonHover end)
+			Main.Connect(Btn.MouseLeave, function() Btn.BackgroundColor3 = Settings.Theme.Main1 end)
 
-			Main.TrackConn(Btn.MouseButton2Click:Connect(function()
+			Main.Connect(Btn.MouseButton2Click, function()
 				DebugExplorer.SelectedConnection = Conn
 				ConnContextMenu:Show(Main.Mouse.X, Main.Mouse.Y)
-			end))
+			end)
 
-			Main.TrackConn(DotsBtn.MouseButton1Click:Connect(function()
+			Main.Connect(DotsBtn.MouseButton1Click, function()
 				DebugExplorer.SelectedConnection = Conn
 				ConnContextMenu:Show(Main.Mouse.X, Main.Mouse.Y)
-			end))
+			end)
 
 			Btn.Parent = ConnList
 		end
@@ -231,10 +231,10 @@ local function MainFunc()
 		Btn.Text = "Confirm"
 		Btn.Position = UDim2.new(0, 5, 1, -25)
 		Btn.Size = UDim2.new(1, -10, 0, 20)
-		Main.TrackConn(Btn.OnClick:Connect(function()
+		Main.Connect(Btn.OnClick, function()
 			Callback(Box:GetText())
 			PromptWin:Close()
-		end))
+		end)
 		PromptWin:Add(Btn)
 		PromptWin:Show()
 	end
@@ -326,8 +326,8 @@ local function MainFunc()
 			DotsBtn.Size = UDim2.new(0, 20, 0.8, 0)
 			DotsBtn.Image = (getcustomasset and isfile and isfile("DEX_REContinued/more_vert_1000dp_FFFFFF_FILL0_wght400_GRAD0_opsz48.png")) and getcustomasset("DEX_REContinued/more_vert_1000dp_FFFFFF_FILL0_wght400_GRAD0_opsz48.png") or 'rbxassetid://71826111118631'
 
-			Main.TrackConn(Btn.MouseEnter:Connect(function() Btn.BackgroundColor3 = Settings.Theme.ButtonHover end))
-			Main.TrackConn(Btn.MouseLeave:Connect(function() Btn.BackgroundColor3 = Settings.Theme.Main1 end))
+			Main.Connect(Btn.MouseEnter, function() Btn.BackgroundColor3 = Settings.Theme.ButtonHover end)
+			Main.Connect(Btn.MouseLeave, function() Btn.BackgroundColor3 = Settings.Theme.Main1 end)
 
 			local function HandleClick()
 				DebugExplorer.SelectedMember = {Type = Type, Name = Name, Target = Target, ApiData = ApiData}
@@ -474,8 +474,8 @@ end))]], TargetPath, Name)
 				end
 			end
 
-			Main.TrackConn(DotsBtn.MouseButton1Click:Connect(HandleClick))
-			Main.TrackConn(Btn.MouseButton2Click:Connect(HandleClick))
+			Main.Connect(DotsBtn.MouseButton1Click, HandleClick)
+			Main.Connect(Btn.MouseButton2Click, HandleClick)
 			Btn.Parent = RightList
 		end
 
@@ -576,9 +576,9 @@ end))]], TargetPath, Name)
 
 		local LeftLayout = Instance.new("UIListLayout", LeftList)
 		LeftLayout.SortOrder = Enum.SortOrder.LayoutOrder
-		Main.TrackConn(LeftLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+		Main.Connect(LeftLayout:GetPropertyChangedSignal("AbsoluteContentSize"), function()
 			LeftList.CanvasSize = UDim2.new(0, 0, 0, LeftLayout.AbsoluteContentSize.Y)
-		end))
+		end)
 
 		RightPane = Instance.new("Frame", Content)
 		RightPane.Size = UDim2.new(0.65, 0, 1, -80)
@@ -606,9 +606,9 @@ end))]], TargetPath, Name)
 
 		local RightLayout = Instance.new("UIListLayout", RightList)
 		RightLayout.SortOrder = Enum.SortOrder.LayoutOrder
-		Main.TrackConn(RightLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+		Main.Connect(RightLayout:GetPropertyChangedSignal("AbsoluteContentSize"), function()
 			RightList.CanvasSize = UDim2.new(0, 0, 0, RightLayout.AbsoluteContentSize.Y)
-		end))
+		end)
 
 		FuncContextMenu = Lib.ContextMenu.new()
 		FuncContextMenu.Iconless = true
@@ -814,9 +814,9 @@ end))]], TargetPath, Mem.Name, ValCode)
 		HookCopyBtn.Text = "Copy to Clipboard"
 		HookCopyBtn.TextColor3 = Color3.new(1, 1, 1)
 
-		Main.TrackConn(HookCopyBtn.MouseButton1Click:Connect(function()
+		Main.Connect(HookCopyBtn.MouseButton1Click, function()
 			if env.setclipboard then env.setclipboard(HookCodeFrame:GetText()) end
-		end))
+		end)
 
 		local HookExecuteBtn = Instance.new("TextButton", HookWindow.GuiElems.Content)
 		HookExecuteBtn.Size = UDim2.new(0.5, 0, 0, 20)
@@ -826,7 +826,7 @@ end))]], TargetPath, Mem.Name, ValCode)
 		HookExecuteBtn.Text = "Execute & Save Hook"
 		HookExecuteBtn.TextColor3 = Color3.new(1, 1, 1)
 
-		Main.TrackConn(HookExecuteBtn.MouseButton1Click:Connect(function()
+		Main.Connect(HookExecuteBtn.MouseButton1Click, function()
 			local Source = HookCodeFrame:GetText()
 			if env.loadstring then
 				if DebugExplorer.SelectedHookIndex then
@@ -853,7 +853,7 @@ end))]], TargetPath, Mem.Name, ValCode)
 				end
 				HookWindow:Close()
 			end
-		end))
+		end)
 
 		ConnWindow = Lib.Window.new()
 		ConnWindow:SetTitle("Connections")
@@ -867,9 +867,9 @@ end))]], TargetPath, Mem.Name, ValCode)
 
 		local ConnLayout = Instance.new("UIListLayout", ConnList)
 		ConnLayout.SortOrder = Enum.SortOrder.LayoutOrder
-		Main.TrackConn(ConnLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+		Main.Connect(ConnLayout:GetPropertyChangedSignal("AbsoluteContentSize"), function()
 			ConnList.CanvasSize = UDim2.new(0, 0, 0, ConnLayout.AbsoluteContentSize.Y)
-		end))
+		end)
 
 		SpoofWindow = Lib.Window.new()
 		SpoofWindow.Alignable = false
@@ -906,7 +906,7 @@ end))]], TargetPath, Mem.Name, ValCode)
 		ConfirmSpoofBtn.Text = "Confirm Spoof"
 		ConfirmSpoofBtn.Position = UDim2.new(0, 5, 1, -25)
 		ConfirmSpoofBtn.Size = UDim2.new(1, -10, 0, 20)
-		Main.TrackConn(ConfirmSpoofBtn.OnClick:Connect(function()
+		Main.Connect(ConfirmSpoofBtn.OnClick, function()
 			local StrType = SpoofDrop.Selected
 			local StrVal = SpoofBox:GetText()
 			local ValCode = StrVal
@@ -934,10 +934,10 @@ end))]], TargetPath, Mem.Name, ValCode)
 
 			ApplyInstantHook("Spoofed: " .. tostring(ValCode), Code)
 			SpoofWindow:Close()
-		end))
+		end)
 		SpoofWindow:Add(ConfirmSpoofBtn)
 
-		Main.TrackConn(Explorer.Selection.Changed:Connect(function()
+		Main.Connect(Explorer.Selection.Changed, function()
 			local Selected = Explorer.Selection.List[1]
 			if Selected then
 				DebugExplorer.CurrentInstance = Selected.Obj
@@ -948,11 +948,11 @@ end))]], TargetPath, Mem.Name, ValCode)
 			if Window:IsVisible() then
 				DebugExplorer.Refresh()
 			end
-		end))
+		end)
 
-		Main.TrackConn(Window.OnActivate:Connect(function()
+		Main.Connect(Window.OnActivate, function()
 			DebugExplorer.Refresh()
-		end))
+		end)
 	end
 
 	return DebugExplorer

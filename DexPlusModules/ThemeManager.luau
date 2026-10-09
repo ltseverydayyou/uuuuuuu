@@ -489,9 +489,9 @@ local function main()
 	local function button(parent, text, size, pos, fn)
 		local obj = create("TextButton", parent, {Text = text, Name = text, Size = size, Position = pos or UDim2.new(), BorderSizePixel = 0, Font = Lib.GetUIFont(), TextSize = 14, AutoButtonColor = false}, {BackgroundColor3 = "Button", TextColor3 = "Text"})
 		corner(obj)
-		trackConn(obj.Activated:Connect(fn))
-		trackConn(obj.MouseEnter:Connect(function() Lib.BindTheme(obj, {BackgroundColor3 = "ButtonHover"}) end))
-		trackConn(obj.MouseLeave:Connect(function() Lib.BindTheme(obj, {BackgroundColor3 = tabs[obj.Text] == obj and obj.Text == tab and "ListSelection" or "Button"}) end))
+		Main.Connect(obj.Activated, fn)
+		Main.Connect(obj.MouseEnter, function() Lib.BindTheme(obj, {BackgroundColor3 = "ButtonHover"}) end)
+		Main.Connect(obj.MouseLeave, function() Lib.BindTheme(obj, {BackgroundColor3 = tabs[obj.Text] == obj and obj.Text == tab and "ListSelection" or "Button"}) end)
 		return obj
 	end
 	local function row(key, section, height)
@@ -600,7 +600,7 @@ local function main()
 		scroll = create("ScrollingFrame", content, {Name = "ThemeContent", Size = UDim2.new(1, -16, 1, -176), Position = UDim2.new(0, 8, 0, 168), BackgroundTransparency = 1, BorderSizePixel = 0, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollingDirection = Enum.ScrollingDirection.Y, ScrollBarThickness = 6}, {ScrollBarImageColor3 = "ButtonHover"})
 		create("UIListLayout", scroll, {Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder})
 		create("UIPadding", scroll, {PaddingBottom = UDim.new(0, 8)})
-		trackConn(search:GetPropertyChangedSignal("Text"):Connect(refreshRows))
+		Main.Connect(search:GetPropertyChangedSignal("Text"), refreshRows)
 		for _, preset in presets do
 			local frame = row(preset.name, "Presets", 42)
 			local base = Settings.Theme
@@ -639,13 +639,13 @@ local function main()
 			swatch:SetAttribute("DexColorLiteral", true)
 			local hex = create("TextBox", frame, {Name = "Hex", Size = UDim2.new(0, 84, 0, 30), Position = UDim2.new(1, -84, 0, 2), Text = "", ClearTextOnFocus = false, Font = Enum.Font.RobotoMono, TextSize = 13, BorderSizePixel = 0}, {BackgroundColor3 = "TextBox", TextColor3 = "Text"})
 			data.Swatch, data.Hex = swatch, hex
-			trackConn(swatch.Activated:Connect(function() activeKey = path picker:SetColor(getColor(Settings.Theme, path)) picker:Show() end))
-			trackConn(swatch.MouseButton2Click:Connect(function() setColor(path, getColor(Main.DefaultTheme, path)) end))
-			trackConn(hex.FocusLost:Connect(function()
+			Main.Connect(swatch.Activated, function() activeKey = path picker:SetColor(getColor(Settings.Theme, path)) picker:Show() end)
+			Main.Connect(swatch.MouseButton2Click, function() setColor(path, getColor(Main.DefaultTheme, path)) end)
+			Main.Connect(hex.FocusLost, function()
 				local col = parseHex(hex.Text)
 				if col then setColor(path, col) else message("Use a hex color such as #4C8DFF", true) end
 				hex.Text = "#" .. getColor(Settings.Theme, path):ToHex():upper()
-			end))
+			end)
 		end
 		local frame, data = row("Save named theme", "Saved", 34)
 		data.Always = true
@@ -673,9 +673,9 @@ local function main()
 		local text = label(note, "Enter #RGB or #RRGGBB colors, or tap a swatch to open the picker. Right click a swatch to restore its default color. Reset changes only the theme.", UDim2.new(1, 0, 1, 0))
 		text.TextWrapped = true
 		text.TextTruncate = Enum.TextTruncate.None
-		trackConn(picker.OnSelect:Connect(function(col)
+		Main.Connect(picker.OnSelect, function(col)
 			if activeKey then setColor(activeKey, col) activeKey = nil end
-		end))
+		end)
 		rebuildSaved()
 		refreshRows()
 	end

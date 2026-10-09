@@ -1310,7 +1310,7 @@ local function main()
         rowChk[index] = newCheckbox
 
         local c =
-            trackConn(newCheckbox.OnInput:Connect(
+            Main.Connect(newCheckbox.OnInput,
             function()
                 local prop = viewList[index + Properties.Index]
                 if not prop then
@@ -1323,7 +1323,7 @@ local function main()
                     Properties.SetProp(prop, newCheckbox.Toggled)
                 end
             end
-        ))
+        )
 
         rowCons[index] = rowCons[index] or {}
         local function addCon(x)
@@ -1341,7 +1341,7 @@ local function main()
         newEntry.Position = UDim2.new(0, 0, 0, 23 * (index - 1))
 
         addCon(
-            trackConn(nameFrame.Expand.InputBegan:Connect(
+            Main.Connect(nameFrame.Expand.InputBegan,
                 function(input)
                     local prop = viewList[index + Properties.Index]
                     if not prop or input.UserInputType ~= Enum.UserInputType.MouseMovement then
@@ -1357,11 +1357,11 @@ local function main()
                         expanded[fullName] and "Collapse_Over" or "Expand_Over"
                     )
                 end
-            ))
+            )
         )
 
         addCon(
-            trackConn(nameFrame.Expand.InputEnded:Connect(
+            Main.Connect(nameFrame.Expand.InputEnded,
                 function(input)
                     local prop = viewList[index + Properties.Index]
                     if not prop or input.UserInputType ~= Enum.UserInputType.MouseMovement then
@@ -1377,11 +1377,11 @@ local function main()
                         expanded[fullName] and "Collapse" or "Expand"
                     )
                 end
-            ))
+            )
         )
 
         addCon(
-            trackConn(nameFrame.Expand.MouseButton1Down:Connect(
+            Main.Connect(nameFrame.Expand.MouseButton1Down,
                 function()
                     local prop = viewList[index + Properties.Index]
                     if not prop then
@@ -1402,11 +1402,11 @@ local function main()
                     Properties.Update()
                     Properties.Refresh()
                 end
-            ))
+            )
         )
 
         addCon(
-            trackConn(nameFrame.PropName.InputBegan:Connect(
+            Main.Connect(nameFrame.PropName.InputBegan,
                 function(input)
                     local prop = viewList[index + Properties.Index]
                     if not prop then
@@ -1432,11 +1432,11 @@ local function main()
                         Properties.FullNameFrameAttach.Enable()
                     end
                 end
-            ))
+            )
         )
 
         addCon(
-            trackConn(nameFrame.PropName.InputEnded:Connect(
+            Main.Connect(nameFrame.PropName.InputEnded,
                 function(input)
                     if
                         input.UserInputType == Enum.UserInputType.MouseMovement and
@@ -1446,11 +1446,11 @@ local function main()
                         Properties.FullNameFrameAttach.Disable()
                     end
                 end
-            ))
+            )
         )
 
         addCon(
-            trackConn(valueFrame.ValueBox.MouseButton1Down:Connect(
+            Main.Connect(valueFrame.ValueBox.MouseButton1Down,
                 function()
                     local prop = viewList[index + Properties.Index]
                     if not prop then
@@ -1458,11 +1458,11 @@ local function main()
                     end
                     Properties.SetInputProp(prop, index)
                 end
-            ))
+            )
         )
 
         addCon(
-            trackConn(valueFrame.ColorButton.MouseButton1Down:Connect(
+            Main.Connect(valueFrame.ColorButton.MouseButton1Down,
                 function()
                     local prop = viewList[index + Properties.Index]
                     if not prop then
@@ -1470,11 +1470,11 @@ local function main()
                     end
                     Properties.SetInputProp(prop, index, "color")
                 end
-            ))
+            )
         )
 
         addCon(
-            trackConn(valueFrame.RightButton.MouseButton1Click:Connect(
+            Main.Connect(valueFrame.RightButton.MouseButton1Click,
                 function()
                     local prop = viewList[index + Properties.Index]
                     if not prop then
@@ -1492,20 +1492,20 @@ local function main()
                         Properties.SetInputProp(prop, index, "right")
                     end
                 end
-            ))
+            )
         )
 
         addCon(
-            trackConn(nameFrame.ToggleAttributes.MouseButton1Click:Connect(
+            Main.Connect(nameFrame.ToggleAttributes.MouseButton1Click,
                 function()
                     Settings.Properties.ShowAttributes = not Settings.Properties.ShowAttributes
                     Properties.ShowExplorerProps()
                 end
-            ))
+            )
         )
 
         addCon(
-            trackConn(newEntry.RowButton.MouseButton1Click:Connect(
+            Main.Connect(newEntry.RowButton.MouseButton1Click,
                 function()
                     local prop = viewList[index + Properties.Index]
                     if prop and prop.SpecialRow == "AddTag" then
@@ -1514,11 +1514,11 @@ local function main()
                         Properties.DisplayAddAttributeWindow()
                     end
                 end
-            ))
+            )
         )
 
         addCon(
-            trackConn(newEntry.EditAttributeButton.MouseButton1Down:Connect(
+            Main.Connect(newEntry.EditAttributeButton.MouseButton1Down,
                 function()
                     local prop = viewList[index + Properties.Index]
                     if not prop then
@@ -1526,11 +1526,11 @@ local function main()
                     end
                     Properties.DisplayAttributeContext(prop)
                 end
-            ))
+            )
         )
 
         addCon(
-            trackConn(valueFrame.SoundPreview.ControlButton.MouseButton1Click:Connect(
+            Main.Connect(valueFrame.SoundPreview.ControlButton.MouseButton1Click,
                 function()
                     if Properties.PreviewSound and Properties.PreviewSound.Playing then
                         Properties.SetSoundPreview(false)
@@ -1541,11 +1541,11 @@ local function main()
                         end
                     end
                 end
-            ))
+            )
         )
 
         addCon(
-            trackConn(valueFrame.SoundPreview.InputBegan:Connect(
+            Main.Connect(valueFrame.SoundPreview.InputBegan,
                 function(input)
                     if input.UserInputType ~= Enum.UserInputType.MouseButton1 then
                         return
@@ -1554,7 +1554,7 @@ local function main()
                     local releaseEvent, mouseEvent
                     releaseEvent =
                         addCon(
-                        trackConn(service.UserInputService.InputEnded:Connect(
+                        Main.Connect(service.UserInputService.InputEnded,
                             function(input)
                                 if input.UserInputType ~= Enum.UserInputType.MouseButton1 then
                                     return
@@ -1562,7 +1562,7 @@ local function main()
                                 disc(releaseEvent)
                                 disc(mouseEvent)
                             end
-                        ))
+                        )
                     )
 
                     local timeLine = newEntry.ValueFrame.SoundPreview.TimeLine
@@ -1599,16 +1599,16 @@ local function main()
 
                     mouseEvent =
                         addCon(
-                        trackConn(service.UserInputService.InputChanged:Connect(
+                        Main.Connect(service.UserInputService.InputChanged,
                             function(input)
                                 if input.UserInputType == Enum.UserInputType.MouseMovement then
                                     update(input)
                                 end
                             end
-                        ))
+                        )
                     )
                 end
-            ))
+            )
         )
 
         newEntry.Parent = propsFrame
@@ -1651,24 +1651,24 @@ local function main()
             sound = Instance.new("Sound")
             sound.Name = "Preview"
             addWinCon(
-                trackConn(sound.Paused:Connect(
+                Main.Connect(sound.Paused,
                     function()
                         local entry = Properties.GetSoundPreviewEntry()
                         if entry then
                             Main.MiscIcons:DisplayByKey(entry.GuiElems.SoundPreview.ControlButton.Icon, "Play")
                         end
                     end
-                ))
+                )
             )
             addWinCon(
-                trackConn(sound.Resumed:Connect(
+                Main.Connect(sound.Resumed,
                     function()
                         Properties.Refresh()
                     end
-                ))
+                )
             )
             addWinCon(
-                trackConn(sound.Ended:Connect(
+                Main.Connect(sound.Ended,
                     function()
                         local entry = Properties.GetSoundPreviewEntry()
                         if entry then
@@ -1676,7 +1676,7 @@ local function main()
                         end
                         Properties.Refresh()
                     end
-                ))
+                )
             )
             sound.Parent = window.Gui
             Properties.PreviewSound = sound
@@ -1853,11 +1853,11 @@ local function main()
             nameBox.Position = UDim2.new(0, 65, 0, 10)
             nameBox.Size = UDim2.new(1, -70, 0, 20)
             win:Add(nameBox, "NameBox")
-            trackConn(nameBox.TextBox:GetPropertyChangedSignal("Text"):Connect(
+            Main.Connect(nameBox.TextBox:GetPropertyChangedSignal("Text"),
                 function()
                     saveButton:SetDisabled(#nameBox:GetText() == 0)
                 end
-            ))
+            )
 
             local errorLabel = Lib.Label.new()
             errorLabel.Text = ""
@@ -1870,17 +1870,17 @@ local function main()
             cancelButton.Text = "Cancel"
             cancelButton.Position = UDim2.new(1, -97, 1, -25)
             cancelButton.Size = UDim2.new(0, 92, 0, 20)
-            trackConn(cancelButton.OnClick:Connect(
+            Main.Connect(cancelButton.OnClick,
                 function()
                     win:Close()
                 end
-            ))
+            )
             win:Add(cancelButton)
 
             saveButton.Text = "Save"
             saveButton.Position = UDim2.new(0, 5, 1, -25)
             saveButton.Size = UDim2.new(0, 92, 0, 20)
-            trackConn(saveButton.OnClick:Connect(
+            Main.Connect(saveButton.OnClick,
                 function()
                     if not collectionService then
                         errorLabel.Text = "Error: CollectionService unavailable"
@@ -1898,7 +1898,7 @@ local function main()
                     Properties.ShowExplorerProps()
                     win:Close()
                 end
-            ))
+            )
             win:Add(saveButton, "SaveButton")
 
             Properties.AddTagWindow = win
@@ -1931,11 +1931,11 @@ local function main()
             nameBox.Position = UDim2.new(0, 75, 0, 10)
             nameBox.Size = UDim2.new(0, 120, 0, 20)
             win:Add(nameBox, "NameBox")
-            trackConn(nameBox.TextBox:GetPropertyChangedSignal("Text"):Connect(
+            Main.Connect(nameBox.TextBox:GetPropertyChangedSignal("Text"),
                 function()
                     saveButton:SetDisabled(#nameBox:GetText() == 0)
                 end
-            ))
+            )
 
             local typeLabel = Lib.Label.new()
             typeLabel.Text = "Type"
@@ -1962,17 +1962,17 @@ local function main()
             cancelButton.Text = "Cancel"
             cancelButton.Position = UDim2.new(1, -97, 1, -25)
             cancelButton.Size = UDim2.new(0, 92, 0, 20)
-            trackConn(cancelButton.OnClick:Connect(
+            Main.Connect(cancelButton.OnClick,
                 function()
                     win:Close()
                 end
-            ))
+            )
             win:Add(cancelButton)
 
             saveButton.Text = "Save"
             saveButton.Position = UDim2.new(0, 5, 1, -25)
             saveButton.Size = UDim2.new(0, 92, 0, 20)
-            trackConn(saveButton.OnClick:Connect(
+            Main.Connect(saveButton.OnClick,
                 function()
                     local name = nameBox:GetText()
                     if #name > 100 then
@@ -2006,7 +2006,7 @@ local function main()
                     Properties.ShowExplorerProps()
                     win:Close()
                 end
-            ))
+            )
             win:Add(saveButton, "SaveButton")
 
             Properties.AddAttributeWindow = win
@@ -2090,7 +2090,7 @@ local function main()
             editor.Gui.DisplayOrder = Main.DisplayOrders.Menu
             editor.ReverseYOffset = 22
 
-            trackConn(editor.OnSelect:Connect(
+            Main.Connect(editor.OnSelect,
                 function(col)
                     if not editor.CurrentProp or editor.CurrentProp.ValueType.Name ~= "BrickColor" then
                         return
@@ -2100,9 +2100,9 @@ local function main()
                     end
                     Properties.SetProp(editor.CurrentProp, BrickColor.new(col))
                 end
-            ))
+            )
 
-            trackConn(editor.OnMoreColors:Connect(
+            Main.Connect(editor.OnMoreColors,
                 function()
                     editor:Close()
                     if
@@ -2125,7 +2125,7 @@ local function main()
                         Properties.DisplayColorEditor(colProp, editor.SavedColor.Color)
                     end
                 end
-            ))
+            )
 
             Properties.BrickColorEditor = editor
         end
@@ -2147,7 +2147,7 @@ local function main()
         local editor = Properties.ColorEditor
         if not editor then
             editor = Lib.ColorPicker.new()
-            trackConn(editor.OnSelect:Connect(
+            Main.Connect(editor.OnSelect,
                 function(col)
                     if not editor.CurrentProp then
                         return
@@ -2163,7 +2163,7 @@ local function main()
                     end
                     Properties.SetProp(editor.CurrentProp, colVal)
                 end
-            ))
+            )
             Properties.ColorEditor = editor
         end
 
@@ -2183,7 +2183,7 @@ local function main()
         local editor = Properties.NumberSequenceEditor
         if not editor then
             editor = Lib.NumberSequenceEditor.new()
-            trackConn(editor.OnSelect:Connect(
+            Main.Connect(editor.OnSelect,
                 function(val)
                     if not editor.CurrentProp or editor.CurrentProp.ValueType.Name ~= "NumberSequence" then
                         return
@@ -2193,7 +2193,7 @@ local function main()
                     end
                     Properties.SetProp(editor.CurrentProp, val)
                 end
-            ))
+            )
             Properties.NumberSequenceEditor = editor
         end
 
@@ -2213,7 +2213,7 @@ local function main()
         local editor = Properties.ColorSequenceEditor
         if not editor then
             editor = Lib.ColorSequenceEditor.new()
-            trackConn(editor.OnSelect:Connect(
+            Main.Connect(editor.OnSelect,
                 function(val)
                     if not editor.CurrentProp or editor.CurrentProp.ValueType.Name ~= "ColorSequence" then
                         return
@@ -2223,7 +2223,7 @@ local function main()
                     end
                     Properties.SetProp(editor.CurrentProp, val)
                 end
-            ))
+            )
             Properties.ColorSequenceEditor = editor
         end
 
@@ -2729,18 +2729,18 @@ local function main()
                         if propObj then
                             if prop.IsAttribute then
                                 propCons[#propCons + 1] =
-                                    trackConn(getAttributeChangedSignal(propObj, prop.AttributeName):Connect(
+                                    Main.Connect(getAttributeChangedSignal(propObj, prop.AttributeName),
                                     function()
                                         Properties.DisplayProp(prop, i)
                                     end
-                                ))
+                                )
                             elseif not prop.IsHiddenProperty then
                                 propCons[#propCons + 1] =
-                                    trackConn(getPropChangedSignal(propObj, propName):Connect(
+                                    Main.Connect(getPropChangedSignal(propObj, propName),
                                     function()
                                         Properties.DisplayProp(prop, i)
                                     end
-                                ))
+                                )
                             end
                         end
 
@@ -3113,7 +3113,7 @@ local function main()
         inputBox.Parent = Properties.Window.GuiElems.Content.List
 
         addWinCon(
-            trackConn(inputTextBox.FocusLost:Connect(
+            Main.Connect(inputTextBox.FocusLost,
                 function()
                     if not inputProp then
                         return
@@ -3128,16 +3128,16 @@ local function main()
                         Properties.Refresh()
                     end
                 end
-            ))
+            )
         )
 
         addWinCon(
-            trackConn(inputTextBox.Focused:Connect(
+            Main.Connect(inputTextBox.Focused,
                 function()
                     inputTextBox.SelectionStart = 1
                     inputTextBox.CursorPosition = #inputTextBox.Text + 1
                 end
-            ))
+            )
         )
 
         Lib.ViewportTextBox.convert(inputTextBox)
@@ -3202,13 +3202,13 @@ local function main()
         local searchBox = Properties.GuiElems.ToolBar.SearchFrame.SearchBox
         Lib.ViewportTextBox.convert(searchBox)
         addWinCon(
-            trackConn(searchBox:GetPropertyChangedSignal("Text"):Connect(
+            Main.Connect(searchBox:GetPropertyChangedSignal("Text"),
                 function()
                     Properties.SearchText = searchBox.Text
                     Properties.Update()
                     Properties.Refresh()
                 end
-            ))
+            )
         )
     end
 
@@ -3774,44 +3774,44 @@ local function main()
         Properties.InitEntryStuff()
 
         winCons[#winCons + 1] =
-            trackConn(window.GuiElems.Main:GetPropertyChangedSignal("AbsoluteSize"):Connect(
+            Main.Connect(window.GuiElems.Main:GetPropertyChangedSignal("AbsoluteSize"),
             function()
                 if Properties.Window:IsContentVisible() then
                     Properties.UpdateView()
                     Properties.Refresh()
                 end
             end
-        ))
+        )
 
         winCons[#winCons + 1] =
-            trackConn(window.OnActivate:Connect(
+            Main.Connect(window.OnActivate,
             function()
                 Properties.UpdateView()
                 Properties.Update()
                 Properties.Refresh()
             end
-        ))
+        )
 
         winCons[#winCons + 1] =
-            trackConn(window.OnRestore:Connect(
+            Main.Connect(window.OnRestore,
             function()
                 Properties.UpdateView()
                 Properties.Update()
                 Properties.Refresh()
             end
-        ))
+        )
 
         scrollV = Lib.ScrollBar.new()
         scrollV.WheelIncrement = 3
         scrollV.Gui.Position = UDim2.new(1, -16, 0, 23)
         scrollV:SetScrollFrame(propsFrame)
         addWinCon(
-            trackConn(scrollV.Scrolled:Connect(
+            Main.Connect(scrollV.Scrolled,
                 function()
                     Properties.Index = scrollV.Index
                     Properties.Refresh()
                 end
-            ))
+            )
         )
 
         scrollH = Lib.ScrollBar.new(true)
@@ -3819,11 +3819,11 @@ local function main()
         scrollH.WheelIncrement = 20
         scrollH.Gui.Position = UDim2.new(0, 0, 1, -16)
         addWinCon(
-            trackConn(scrollH.Scrolled:Connect(
+            Main.Connect(scrollH.Scrolled,
                 function()
                     Properties.Refresh()
                 end
-            ))
+            )
         )
 
         window.GuiElems.Line.Position = UDim2.new(0, 0, 0, 22)

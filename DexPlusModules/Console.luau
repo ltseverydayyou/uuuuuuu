@@ -594,12 +594,13 @@ local function main()
 
 
 	-- StarterGui.ScreenGui.ConsoleHandler
-	G2L["1c"] = Instance.new("LocalScript", G2L["1"]);
+	G2L["1c"] = {};
 	G2L["1c"]["Name"] = [[ConsoleHandler]];
 
 
 	-- StarterGui.ScreenGui.ConsoleHandler.SyntaxHighlighter
-	G2L["1d"] = Instance.new("ModuleScript", G2L["1c"]);
+	G2L["1d"] = {};
+	G2L["1c"].SyntaxHighlighter = G2L["1d"];
 	G2L["1d"]["Name"] = [[SyntaxHighlighter]];
 
 
@@ -1067,7 +1068,7 @@ local function main()
 		local scrollConsoleInput
 		-- Console part
 		Console.TextSizeBox.TextBox.Text = tostring(OutputTextSize.Value)
-		Console.Destroy = function()
+		consoleApp.Destroy = function()
 			if scrollConsoleInput then scrollConsoleInput:Disconnect() end
 			for _, row in displayedOutput do row:Destroy() end
 			table.clear(displayedOutput)

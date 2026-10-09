@@ -117,23 +117,33 @@ local function main()
 	local expanded
 	local entryTemplate,treeFrame,toolBar,descendantAddedCon,descendantRemovingCon,itemChangedCon
 	local ffa = game.FindFirstAncestorWhichIsA
+	local function pruneRefs(objs)
+		local size = #objs
+		local count = 0
+		for i = 1, size do
+			local obj = objs[i]
+			if obj.ClassName ~= "NetworkClient" then
+				count += 1
+				objs[count] = obj
+			end
+		end
+		for i = count + 1, size do objs[i] = nil end
+		return objs
+	end
 	local function queryDescendants(root)
-		if not root then return {} end
-
+		if not root or root.ClassName == "NetworkClient" then return {} end
 		local okQuery, result = pcall(function()
 			return root:QueryDescendants("Instance")
 		end)
 		if okQuery and type(result) == "table" then
-			return result
+			return pruneRefs(result)
 		end
-
 		local okFallback, fallback = pcall(function()
 			return root:GetDescendants()
 		end)
 		if okFallback and type(fallback) == "table" then
-			return fallback
+			return pruneRefs(fallback)
 		end
-
 		return {}
 	end
 	local getDescendants = queryDescendants
@@ -263,7 +273,7 @@ local function main()
 	end
 
 	addObject = function(root)
-		if nodes[root] then return end
+		if root.ClassName == "NetworkClient" or nodes[root] then return end
 		if shouldFreezeForObject(root) then
 			freezeExplorerUpdates()
 			return
@@ -2246,7 +2256,7 @@ local function main()
 
 		nodes[nilNode.Obj] = nilNode
 
-		local nilInsts = env.getnilinstances()
+		local nilInsts = pruneRefs(env.getnilinstances())
 		local game = game
 		local getDescs = queryDescendants
 		local oldAllowFrozenNilSnapshotAdd = allowFrozenNilSnapshotAdd

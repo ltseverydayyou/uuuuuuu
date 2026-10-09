@@ -2,7 +2,7 @@
 local _dex_boot = {
 	hostEnv = type(__NARootHost) == "table" and __NARootHost or ((getgenv and getgenv()) or _G or {}),
 	launch = getfenv(),
-	patch = "2026-10-09-private-cleanup",
+	patch = "2026-10-09-gc-refs-3",
 	kind = "modular",
 }
 _dex_boot.hostGetfenv = _dex_boot.hostEnv.getfenv or getfenv
@@ -770,7 +770,7 @@ Main = (function()
 	Main.ModuleHashData = {} -- prevent remote hash fetch; prefer local modules
 	Main.ModuleForceRefresh = false
 	Main.ForceRemoteModules = {Properties = true}
-	Main.ModuleCacheVersion = "2026-10-09-private-cleanup"
+	Main.ModuleCacheVersion = "2026-10-09-gc-refs-3"
 	Main.ModuleRefreshFlagFile = "DexPlusPlus/RefreshModules.txt"
 	Main.SettingsFile = "DexPlusSettings.json"
 	Main.UserSettingsFile = "DexPlusUserSettings.json"

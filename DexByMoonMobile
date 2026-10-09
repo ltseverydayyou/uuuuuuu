@@ -2,7 +2,7 @@
 local _dex_boot = {
 	hostEnv = type(__NARootHost) == "table" and __NARootHost or ((getgenv and getgenv()) or _G or {}),
 	launch = getfenv(),
-	patch = "2026-10-09-private-cleanup",
+	patch = "2026-10-09-gc-refs-3",
 	kind = "mobile",
 }
 _dex_boot.hostGetfenv = _dex_boot.hostEnv.getfenv or getfenv
@@ -373,24 +373,35 @@ local EmbeddedModules = {
 			local expanded;
 			local entryTemplate, treeFrame, toolBar, descendantAddedCon, descendantRemovingCon, itemChangedCon;
 			local ffa = game.FindFirstAncestorWhichIsA;
+			local function pruneRefs(objs)
+				local size = #objs
+				local count = 0
+				for i = 1, size do
+					local obj = objs[i]
+					if obj.ClassName ~= "NetworkClient" then
+						count += 1
+						objs[count] = obj
+					end
+				end
+				for i = count + 1, size do objs[i] = nil end
+				return objs
+			end
 			local function queryDescendants(root)
-				if not root then
-					return {};
-				end;
+				if not root or root.ClassName == "NetworkClient" then return {} end
 				local okQuery, result = pcall(function()
-					return root:QueryDescendants("Instance");
-				end);
+					return root:QueryDescendants("Instance")
+				end)
 				if okQuery and type(result) == "table" then
-					return result;
-				end;
+					return pruneRefs(result)
+				end
 				local okFallback, fallback = pcall(function()
-					return root:GetDescendants();
-				end);
+					return root:GetDescendants()
+				end)
 				if okFallback and type(fallback) == "table" then
-					return fallback;
-				end;
-				return {};
-			end;
+					return pruneRefs(fallback)
+				end
+				return {}
+			end
 			local getDescendants = queryDescendants;
 			local getTextSize = service.TextService.GetTextSize;
 			local updateDebounce, refreshDebounce = false, false;
@@ -410,7 +421,7 @@ local EmbeddedModules = {
 			end
 			local addObject, removeObject, moveObject = nil, nil, nil;
 			addObject = function(root)
-				if nodes[root] then
+				if root.ClassName == "NetworkClient" or nodes[root] then
 					return;
 				end;
 				local isNil = false;
@@ -2184,7 +2195,7 @@ local EmbeddedModules = {
 				if not env.getnilinstances then
 					return;
 				end;
-				local nilInsts = env.getnilinstances();
+				local nilInsts = pruneRefs(env.getnilinstances());
 				local game = game;
 				local getDescs = queryDescendants;
 				for i = 1, #nilInsts do
